@@ -1,0 +1,11 @@
+**/*_test.go
+**/*.a
+**/*.dylib
+**/*.o
+**/*.dSYM
+
+build
+tests/testdata
+tests/.git
+cmd/prometheus
+
