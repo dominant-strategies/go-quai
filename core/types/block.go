@@ -37,7 +37,7 @@ import (
 var (
 	EmptyRootHash  = []common.Hash{common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"), common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"), common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")}
 	EmptyUncleHash = []common.Hash{rlpHash([]*Header(nil)), rlpHash([]*Header(nil)), rlpHash([]*Header(nil))}
-	ContextDepth   = 2
+	ContextDepth   = 3
 )
 
 // A BlockNonce is a 64-bit hash which proves (combined with the
@@ -172,8 +172,8 @@ func (h Header) EncodingSize() int {
 
 func (h Header) EncodeRLP(w io.Writer) error {
 	// Precompute the size of the encoding
-	encodingSize := 33 /* ParentHash */ + 33 /* UncleHash */ + 21 /* Coinbase */ + 33 /* Root */ + 33 /* TxHash */ +
-		33 /* ReceiptHash */ + 259 /* Bloom */
+	encodingSize := 96 /* ParentHash */ + 96 /* UncleHash */ + 63 /* Coinbase */ + 96 /* Root */ + 96 /* TxHash */ +
+		96 /* ReceiptHash */ + 777 /* Bloom */
 
 	var sealListLen int
 	if h.WithSeal {
@@ -413,75 +413,109 @@ func (h *Header) DecodeRLP(s *rlp.Stream) error {
 		// return fmt.Errorf("open header struct: %w", err)
 	}
 	var b []byte
-	if b, err = s.Bytes(); err != nil {
-		return fmt.Errorf("read ParentHash: %w", err)
+
+	for i := 0; i < ContextDepth; i++ {
+		if b, err = s.Bytes(); err != nil {
+			return fmt.Errorf("read ParentHash: %w", err)
+		}
+		if len(b) != 32 {
+			return fmt.Errorf("wrong size for ParentHash: %d", len(b))
+		}
+		copy(h.ParentHash[i][:], b)
 	}
-	if len(b) != 32 {
-		return fmt.Errorf("wrong size for ParentHash: %d", len(b))
+
+	for i := 0; i < ContextDepth; i++ {
+		if b, err = s.Bytes(); err != nil {
+			return fmt.Errorf("read UncleHash: %w", err)
+		}
+		if len(b) != 32 {
+			return fmt.Errorf("wrong size for UncleHash: %d", len(b))
+		}
+		copy(h.UncleHash[i][:], b)
 	}
-	copy(h.ParentHash[:], b)
-	if b, err = s.Bytes(); err != nil {
-		return fmt.Errorf("read UncleHash: %w", err)
+
+	for i := 0; i < ContextDepth; i++ {
+		if b, err = s.Bytes(); err != nil {
+			return fmt.Errorf("read Coinbase: %w", err)
+		}
+		if len(b) != 20 {
+			return fmt.Errorf("wrong size for Coinbase: %d", len(b))
+		}
+		copy(h.Coinbase[i][:], b)
 	}
-	if len(b) != 32 {
-		return fmt.Errorf("wrong size for UncleHash: %d", len(b))
+
+	for i := 0; i < ContextDepth; i++ {
+		if b, err = s.Bytes(); err != nil {
+			return fmt.Errorf("read Root: %w", err)
+		}
+		if len(b) != 32 {
+			return fmt.Errorf("wrong size for Root: %d", len(b))
+		}
+		copy(h.Root[i][:], b)
 	}
-	copy(h.UncleHash[:], b)
-	if b, err = s.Bytes(); err != nil {
-		return fmt.Errorf("read Coinbase: %w", err)
+
+	for i := 0; i < ContextDepth; i++ {
+		if b, err = s.Bytes(); err != nil {
+			return fmt.Errorf("read TxHash: %w", err)
+		}
+		if len(b) != 32 {
+			return fmt.Errorf("wrong size for TxHash: %d", len(b))
+		}
+		copy(h.TxHash[i][:], b)
 	}
-	if len(b) != 20 {
-		return fmt.Errorf("wrong size for Coinbase: %d", len(b))
+
+	for i := 0; i < ContextDepth; i++ {
+		if b, err = s.Bytes(); err != nil {
+			return fmt.Errorf("read ReceiptHash: %w", err)
+		}
+		if len(b) != 32 {
+			return fmt.Errorf("wrong size for ReceiptHash: %d", len(b))
+		}
+		copy(h.ReceiptHash[i][:], b)
 	}
-	copy(h.Coinbase[:], b)
-	if b, err = s.Bytes(); err != nil {
-		return fmt.Errorf("read Root: %w", err)
+
+	for i := 0; i < ContextDepth; i++ {
+		if b, err = s.Bytes(); err != nil {
+			return fmt.Errorf("read Bloom: %w", err)
+		}
+		if len(b) != 256 {
+			return fmt.Errorf("wrong size for Bloom: %d", len(b))
+		}
+		copy(h.Bloom[i][:], b)
 	}
-	if len(b) != 32 {
-		return fmt.Errorf("wrong size for Root: %d", len(b))
+
+	for i := 0; i < ContextDepth; i++ {
+		if b, err = s.Bytes(); err != nil {
+			return fmt.Errorf("read Difficulty: %w", err)
+		}
+		if len(b) > 32 {
+			return fmt.Errorf("wrong size for Difficulty: %d", len(b))
+		}
+		h.Difficulty[i] = new(big.Int).SetBytes(b)
 	}
-	copy(h.Root[:], b)
-	if b, err = s.Bytes(); err != nil {
-		return fmt.Errorf("read TxHash: %w", err)
+
+	for i := 0; i < ContextDepth; i++ {
+		if b, err = s.Bytes(); err != nil {
+			return fmt.Errorf("read Number: %w", err)
+		}
+		if len(b) > 32 {
+			return fmt.Errorf("wrong size for Number: %d", len(b))
+		}
+		h.Number[i] = new(big.Int).SetBytes(b)
 	}
-	if len(b) != 32 {
-		return fmt.Errorf("wrong size for TxHash: %d", len(b))
+
+	for i := 0; i < ContextDepth; i++ {
+		if h.GasLimit[i], err = s.Uint(); err != nil {
+			return fmt.Errorf("read GasLimit: %w", err)
+		}
 	}
-	copy(h.TxHash[:], b)
-	if b, err = s.Bytes(); err != nil {
-		return fmt.Errorf("read ReceiptHash: %w", err)
+
+	for i := 0; i < ContextDepth; i++ {
+		if h.GasUsed[i], err = s.Uint(); err != nil {
+			return fmt.Errorf("read GasUsed: %w", err)
+		}
 	}
-	if len(b) != 32 {
-		return fmt.Errorf("wrong size for ReceiptHash: %d", len(b))
-	}
-	copy(h.ReceiptHash[:], b)
-	if b, err = s.Bytes(); err != nil {
-		return fmt.Errorf("read Bloom: %w", err)
-	}
-	if len(b) != 256 {
-		return fmt.Errorf("wrong size for Bloom: %d", len(b))
-	}
-	copy(h.Bloom[:], b)
-	if b, err = s.Bytes(); err != nil {
-		return fmt.Errorf("read Difficulty: %w", err)
-	}
-	if len(b) > 32 {
-		return fmt.Errorf("wrong size for Difficulty: %d", len(b))
-	}
-	h.Difficulty = new(big.Int).SetBytes(b)
-	if b, err = s.Bytes(); err != nil {
-		return fmt.Errorf("read Number: %w", err)
-	}
-	if len(b) > 32 {
-		return fmt.Errorf("wrong size for Number: %d", len(b))
-	}
-	h.Number = new(big.Int).SetBytes(b)
-	if h.GasLimit, err = s.Uint(); err != nil {
-		return fmt.Errorf("read GasLimit: %w", err)
-	}
-	if h.GasUsed, err = s.Uint(); err != nil {
-		return fmt.Errorf("read GasUsed: %w", err)
-	}
+
 	if h.Time, err = s.Uint(); err != nil {
 		return fmt.Errorf("read Time: %w", err)
 	}
@@ -498,13 +532,17 @@ func (h *Header) DecodeRLP(s *rlp.Stream) error {
 			return fmt.Errorf("open accessTuple: %d %w", len(h.Seal), err)
 		}
 	} else {
-		if b, err = s.Bytes(); err != nil {
-			return fmt.Errorf("read MixDigest: %w", err)
+
+		for i := 0; i < ContextDepth; i++ {
+			if b, err = s.Bytes(); err != nil {
+				return fmt.Errorf("read MixDigest: %w", err)
+			}
+			if len(b) != 32 {
+				return fmt.Errorf("wrong size for MixDigest: %d", len(b))
+			}
+			copy(h.MixDigest[i][:], b)
 		}
-		if len(b) != 32 {
-			return fmt.Errorf("wrong size for MixDigest: %d", len(b))
-		}
-		copy(h.MixDigest[:], b)
+
 		if b, err = s.Bytes(); err != nil {
 			return fmt.Errorf("read Nonce: %w", err)
 		}
@@ -557,8 +595,9 @@ var headerSize = common.StorageSize(reflect.TypeOf(Header{}).Size())
 
 // Size returns the approximate memory used by all internal contents. It is used
 // to approximate and limit the memory consumption of various caches.
-func (h *Header) Size() common.StorageSize {
-	return headerSize + common.StorageSize(len(h.Extra)+(h.Difficulty.BitLen()+h.Number.BitLen())/8)
+// Context must be passed to find the specific number height
+func (h *Header) Size(context int) common.StorageSize {
+	return headerSize + common.StorageSize(len(h.Extra)+(TotalBitLen(h.Difficulty)+h.Number[context].BitLen())/8)
 }
 
 // SanityCheck checks a few basic things -- these checks are way beyond what
@@ -566,11 +605,13 @@ func (h *Header) Size() common.StorageSize {
 // that the unbounded fields are stuffed with junk data to add processing
 // overhead
 func (h *Header) SanityCheck() error {
-	if h.Number != nil && !h.Number.IsUint64() {
-		return fmt.Errorf("too large block number: bitlen %d", h.Number.BitLen())
+	for i := 0; i < ContextDepth; i++ {
+		if h.Number[i] != nil && !h.Number[i].IsUint64() {
+			return fmt.Errorf("too large block number: bitlen %d", h.Number[i].BitLen())
+		}
 	}
 	if h.Difficulty != nil {
-		if diffLen := h.Difficulty.BitLen(); diffLen > 80 {
+		if diffLen := TotalBitLen(h.Difficulty); diffLen > 80 {
 			return fmt.Errorf("too large block difficulty: bitlen %d", diffLen)
 		}
 	}
