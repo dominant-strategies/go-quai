@@ -158,6 +158,9 @@ type Config struct {
 	AllowUnprotectedTxs bool `toml:",omitempty"`
 	TLSKeyFile          string
 	TLSCACert           string
+
+	// Set chain context for lookup across node
+	ChainContext int
 }
 
 // IPCEndpoint resolves an IPC endpoint based on a configured value, taking into

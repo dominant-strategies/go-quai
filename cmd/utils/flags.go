@@ -518,6 +518,13 @@ var (
 		Usage: "a path to clique db folder",
 		Value: "",
 	}
+
+	// Chain Context Setting
+	ChainContext = cli.IntFlag{
+		Name:  "chain.context",
+		Usage: "Chain context index value. Used in block header lookup, difficulty acceptance, peer set, and rewards.",
+		Value: node.DefaultConfig.ChainContext,
+	}
 )
 
 var MetricFlags = []cli.Flag{MetricsEnabledFlag, MetricsEnabledExpensiveFlag, MetricsHTTPFlag, MetricsPortFlag}

@@ -35,8 +35,9 @@ import (
 )
 
 var (
-	EmptyRootHash  = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
-	EmptyUncleHash = rlpHash([]*Header(nil))
+	EmptyRootHash  = []common.Hash{common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"), common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"), common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")}
+	EmptyUncleHash = []common.Hash{rlpHash([]*Header(nil)), rlpHash([]*Header(nil)), rlpHash([]*Header(nil))}
+	ContextDepth   = 2
 )
 
 // A BlockNonce is a 64-bit hash which proves (combined with the
@@ -71,30 +72,37 @@ func (n *BlockNonce) UnmarshalText(input []byte) error {
 // Header represents a block header in the Ethereum blockchain.
 // DESCRIBED: docs/programmers_guide/guide.md#organising-ethereum-state-into-a-merkle-tree
 type Header struct {
-	ParentHash  common.Hash    `json:"parentHash"       gencodec:"required"`
-	UncleHash   common.Hash    `json:"sha3Uncles"       gencodec:"required"`
-	Coinbase    common.Address `json:"miner"            gencodec:"required"`
-	Root        common.Hash    `json:"stateRoot"        gencodec:"required"`
-	TxHash      common.Hash    `json:"transactionsRoot" gencodec:"required"`
-	ReceiptHash common.Hash    `json:"receiptsRoot"     gencodec:"required"`
-	Bloom       Bloom          `json:"logsBloom"        gencodec:"required"`
-	Difficulty  *big.Int       `json:"difficulty"       gencodec:"required"`
-	Number      *big.Int       `json:"number"           gencodec:"required"`
-	GasLimit    uint64         `json:"gasLimit"         gencodec:"required"`
-	GasUsed     uint64         `json:"gasUsed"          gencodec:"required"`
-	Time        uint64         `json:"timestamp"        gencodec:"required"`
-	Extra       []byte         `json:"extraData"        gencodec:"required"`
-	MixDigest   common.Hash    `json:"mixHash"`
-	Nonce       BlockNonce     `json:"nonce"`
-	BaseFee     *big.Int       `json:"baseFeePerGas"`
-	Eip1559     bool           // to avoid relying on BaseFee != nil for that
-	Seal        []rlp.RawValue // AuRa POA network field
-	WithSeal    bool           // to avoid relying on Seal != nil for that
+	ParentHash  []common.Hash    `json:"parentHash"       gencodec:"required"`
+	UncleHash   []common.Hash    `json:"sha3Uncles"       gencodec:"required"`
+	Coinbase    []common.Address `json:"miner"            gencodec:"required"`
+	Root        []common.Hash    `json:"stateRoot"        gencodec:"required"`
+	TxHash      []common.Hash    `json:"transactionsRoot" gencodec:"required"`
+	ReceiptHash []common.Hash    `json:"receiptsRoot"     gencodec:"required"`
+	Bloom       []Bloom          `json:"logsBloom"        gencodec:"required"`
+	Difficulty  []*big.Int       `json:"difficulty"       gencodec:"required"`
+	Number      []*big.Int       `json:"number"           gencodec:"required"`
+	GasLimit    []uint64         `json:"gasLimit"         gencodec:"required"`
+	GasUsed     []uint64         `json:"gasUsed"          gencodec:"required"`
+	Time        uint64           `json:"timestamp"        gencodec:"required"`
+	Extra       []byte           `json:"extraData"        gencodec:"required"`
+	MixDigest   []common.Hash    `json:"mixHash"`
+	Nonce       BlockNonce       `json:"nonce"`
+
+	// BaseFee was added by EIP-1559 and is ignored in legacy headers.
+	BaseFee *big.Int `json:"baseFeePerGas" rlp:"optional"`
+
+	// Map the current Region / Zone
+	MapContext []byte
+	Location   []byte
+
+	Eip1559  bool           // to avoid relying on BaseFee != nil for that
+	Seal     []rlp.RawValue // AuRa POA network field
+	WithSeal bool           // to avoid relying on Seal != nil for that
 }
 
 func (h Header) EncodingSize() int {
-	encodingSize := 33 /* ParentHash */ + 33 /* UncleHash */ + 21 /* Coinbase */ + 33 /* Root */ + 33 /* TxHash */ +
-		33 /* ReceiptHash */ + 259 /* Bloom */
+	encodingSize := 96 /* ParentHash */ + 96 /* UncleHash */ + 63 /* Coinbase */ + 96 /* Root */ + 96 /* TxHash */ +
+		96 /* ReceiptHash */ + 777 /* Bloom */
 
 	var sealListLen int
 	if h.WithSeal {
@@ -577,15 +585,36 @@ func (h *Header) SanityCheck() error {
 	return nil
 }
 
+func TotalBitLen(array []*big.Int) int {
+	bitLen := 0
+	for i := 0; i < ContextDepth; i++ {
+		item := array[i]
+		bitLen += item.BitLen()
+	}
+	return bitLen
+}
+
 // EmptyBody returns true if there is no additional 'body' to complete the header
 // that is: no transactions and no uncles.
 func (h *Header) EmptyBody() bool {
-	return h.TxHash == EmptyRootHash && h.UncleHash == EmptyUncleHash
+	return IsEqualHashSlice(h.TxHash, EmptyRootHash) && IsEqualHashSlice(h.UncleHash, EmptyUncleHash)
 }
 
 // EmptyReceipts returns true if there are no receipts for this header/block.
 func (h *Header) EmptyReceipts() bool {
-	return h.ReceiptHash == EmptyRootHash
+	return IsEqualHashSlice(h.ReceiptHash, EmptyRootHash)
+}
+
+func IsEqualHashSlice(a, b []common.Hash) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // Body is a simple (mutable, non-safe) data container for storing and moving
@@ -910,32 +939,36 @@ func (bb *Body) DecodeRLP(s *rlp.Stream) error {
 // The values of TxHash, UncleHash, ReceiptHash and Bloom in header
 // are ignored and set to values derived from the given txs, uncles
 // and receipts.
-func NewBlock(header *Header, txs []Transaction, uncles []*Header, receipts []*Receipt) *Block {
+func NewBlock(header *Header, txs [][]Transaction, uncles [][]*Header, receipts [][]*Receipt) *Block {
 	b := &Block{header: CopyHeader(header), td: new(big.Int)}
 
 	// TODO: panic if len(txs) != len(receipts)
 	if len(txs) == 0 {
 		b.header.TxHash = EmptyRootHash
 	} else {
-		b.header.TxHash = DeriveSha(Transactions(txs))
-		b.transactions = make(Transactions, len(txs))
-		copy(b.transactions, txs)
+		b.header.TxHash = []common.Hash{DeriveSha(Transactions(txs[0])), DeriveSha(Transactions(txs[1])), DeriveSha(Transactions(txs[2]))}
+		for i := 0; i < ContextDepth; i++ {
+			b.transactions[i] = make(Transactions, len(txs[0]))
+			copy(b.transactions[i], txs[i])
+		}
 	}
 
 	if len(receipts) == 0 {
 		b.header.ReceiptHash = EmptyRootHash
 	} else {
-		b.header.ReceiptHash = DeriveSha(Receipts(receipts))
-		b.header.Bloom = CreateBloom(receipts)
+		b.header.ReceiptHash = []common.Hash{DeriveSha(Receipts(receipts[0])), DeriveSha(Receipts(receipts[1])), DeriveSha(Receipts(receipts[2]))}
+		b.header.Bloom = []Bloom{CreateBloom(receipts[0]), CreateBloom(receipts[1]), CreateBloom(receipts[2])}
 	}
 
 	if len(uncles) == 0 {
 		b.header.UncleHash = EmptyUncleHash
 	} else {
-		b.header.UncleHash = CalcUncleHash(uncles)
-		b.uncles = make([]*Header, len(uncles))
-		for i := range uncles {
-			b.uncles[i] = CopyHeader(uncles[i])
+		b.header.UncleHash = []common.Hash{CalcUncleHash(uncles[0]), CalcUncleHash(uncles[1]), CalcUncleHash(uncles[2])}
+		for i := 0; i < ContextDepth; i++ {
+			b.uncles = make([]*Header, len(uncles[i]))
+			for j := range uncles {
+				b.uncles[j] = CopyHeader(uncles[i][j])
+			}
 		}
 	}
 
@@ -961,12 +994,19 @@ func NewBlockWithHeader(header *Header) *Block {
 // modifying a header variable.
 func CopyHeader(h *Header) *Header {
 	cpy := *h
-	if cpy.Difficulty = new(big.Int); h.Difficulty != nil {
-		cpy.Difficulty.Set(h.Difficulty)
+
+	for i := 0; i < ContextDepth; i++ {
+		if cpy.Difficulty[i] = new(big.Int); h.Difficulty[i] != nil {
+			cpy.Difficulty[i].Set(h.Difficulty[i])
+		}
 	}
-	if cpy.Number = new(big.Int); h.Number != nil {
-		cpy.Number.Set(h.Number)
+
+	for i := 0; i < ContextDepth; i++ {
+		if cpy.Number[i] = new(big.Int); h.Number[i] != nil {
+			cpy.Number[i].Set(h.Number[i])
+		}
 	}
+
 	if h.BaseFee != nil {
 		cpy.BaseFee = new(big.Int)
 		cpy.BaseFee.Set(h.BaseFee)
@@ -1154,24 +1194,26 @@ func (b *Block) Transaction(hash common.Hash) Transaction {
 	return nil
 }
 
-func (b *Block) Number() *big.Int     { return b.header.Number }
-func (b *Block) GasLimit() uint64     { return b.header.GasLimit }
-func (b *Block) GasUsed() uint64      { return b.header.GasUsed }
-func (b *Block) Difficulty() *big.Int { return new(big.Int).Set(b.header.Difficulty) }
-func (b *Block) Time() uint64         { return b.header.Time }
+func (b *Block) Number(context int) *big.Int { return b.header.Number[context] }
+func (b *Block) GasLimit(context int) uint64 { return b.header.GasLimit[context] }
+func (b *Block) GasUsed(context int) uint64  { return b.header.GasUsed[context] }
+func (b *Block) Difficulty(context int) *big.Int {
+	return new(big.Int).Set(b.header.Difficulty[context])
+}
+func (b *Block) Time(context int) uint64 { return b.header.Time }
 
-func (b *Block) NumberU64() uint64        { return b.header.Number.Uint64() }
-func (b *Block) MixDigest() common.Hash   { return b.header.MixDigest }
-func (b *Block) Nonce() uint64            { return binary.BigEndian.Uint64(b.header.Nonce[:]) }
-func (b *Block) Bloom() Bloom             { return b.header.Bloom }
-func (b *Block) Coinbase() common.Address { return b.header.Coinbase }
-func (b *Block) Root() common.Hash        { return b.header.Root }
-func (b *Block) ParentHash() common.Hash  { return b.header.ParentHash }
-func (b *Block) TxHash() common.Hash      { return b.header.TxHash }
-func (b *Block) ReceiptHash() common.Hash { return b.header.ReceiptHash }
-func (b *Block) UncleHash() common.Hash   { return b.header.UncleHash }
-func (b *Block) Extra() []byte            { return common.CopyBytes(b.header.Extra) }
-func (b *Block) BaseFee() *big.Int {
+func (b *Block) NumberU64(context int) uint64        { return b.header.Number[context].Uint64() }
+func (b *Block) MixDigest(context int) common.Hash   { return b.header.MixDigest[context] }
+func (b *Block) Nonce() uint64                       { return binary.BigEndian.Uint64(b.header.Nonce[:]) }
+func (b *Block) Bloom(context int) Bloom             { return b.header.Bloom[context] }
+func (b *Block) Coinbase(context int) common.Address { return b.header.Coinbase[context] }
+func (b *Block) Root(context int) common.Hash        { return b.header.Root[context] }
+func (b *Block) ParentHash(context int) common.Hash  { return b.header.ParentHash[context] }
+func (b *Block) TxHash(context int) common.Hash      { return b.header.TxHash[context] }
+func (b *Block) ReceiptHash(context int) common.Hash { return b.header.ReceiptHash[context] }
+func (b *Block) UncleHash(context int) common.Hash   { return b.header.UncleHash[context] }
+func (b *Block) Extra(context int) []byte            { return common.CopyBytes(b.header.Extra) }
+func (b *Block) BaseFee(context int) *big.Int {
 	if b.header.BaseFee == nil {
 		return nil
 	}

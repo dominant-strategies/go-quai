@@ -460,7 +460,7 @@ func (g *Genesis) Write(tx kv.RwTx) (*types.Block, *state.IntraBlockState, error
 	if err := config.CheckConfigForkOrder(); err != nil {
 		return nil, nil, err
 	}
-	if err := rawdb.WriteTd(tx, block.Hash(), block.NumberU64(), g.Difficulty); err != nil {
+	if err := rawdb.WriteTd(tx, block.Hash(), block.NumberU64(g.Config.ChainContext), g.Difficulty); err != nil {
 		return nil, nil, err
 	}
 	if err := rawdb.WriteBlock(tx, block); err != nil {

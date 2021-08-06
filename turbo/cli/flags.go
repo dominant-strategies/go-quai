@@ -155,6 +155,13 @@ var (
 		Usage: "Marks block with given number bad and forces initial reorg before normal staged sync",
 		Value: 0,
 	}
+
+	// Quai Context Flags
+	ChainContext = cli.IntFlag{
+		Name:  "chain.context",
+		Usage: "Chain context index value. Used in block header lookup, difficulty acceptance, peer set, and rewards.",
+		Value: node.DefaultConfig.ChainContext,
+	}
 )
 
 func ApplyFlagsForEthConfig(ctx *cli.Context, cfg *ethconfig.Config) {
