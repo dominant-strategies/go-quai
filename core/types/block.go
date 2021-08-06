@@ -257,6 +257,13 @@ func (h Header) EncodeRLP(w io.Writer) error {
 	if _, err := w.Write(b[:1]); err != nil {
 		return err
 	}
+
+	for i := 0; i < ContextDepth; i++ {
+		if _, err := w.Write(h.ParentHash[i].Bytes()); err != nil {
+			return err
+		}
+	}
+
 	if _, err := w.Write(h.ParentHash.Bytes()); err != nil {
 		return err
 	}
