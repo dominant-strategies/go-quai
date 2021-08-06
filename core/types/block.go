@@ -100,6 +100,7 @@ type Header struct {
 	WithSeal bool           // to avoid relying on Seal != nil for that
 }
 
+//TODO: #11 Adjust encoding size and how BitLen is calculated
 func (h Header) EncodingSize() int {
 	encodingSize := 96 /* ParentHash */ + 96 /* UncleHash */ + 63 /* Coinbase */ + 96 /* Root */ + 96 /* TxHash */ +
 		96 /* ReceiptHash */ + 777 /* Bloom */
@@ -115,26 +116,30 @@ func (h Header) EncodingSize() int {
 	}
 	encodingSize++
 	var diffLen int
-	if h.Difficulty != nil && h.Difficulty.BitLen() >= 8 {
-		diffLen = (h.Difficulty.BitLen() + 7) / 8
+	if h.Difficulty != nil && TotalBitLen(h.Difficulty) >= 24 {
+		diffLen = (TotalBitLen(h.Difficulty) + 21) / 24
 	}
 	encodingSize += diffLen
 	encodingSize++
 	var numberLen int
-	if h.Number != nil && h.Number.BitLen() >= 8 {
-		numberLen = (h.Number.BitLen() + 7) / 8
+	if h.Number != nil && TotalBitLen(h.Number) >= 24 {
+		numberLen = (TotalBitLen(h.Number) + 21) / 24
 	}
 	encodingSize += numberLen
 	encodingSize++
 	var gasLimitLen int
-	if h.GasLimit >= 128 {
-		gasLimitLen = (bits.Len64(h.GasLimit) + 7) / 8
+	for i := 0; i < ContextDepth; i++ {
+		if h.GasLimit[i] >= 128 {
+			gasLimitLen += (bits.Len64(h.GasLimit[i]) + 7) / 8
+		}
 	}
 	encodingSize += gasLimitLen
 	encodingSize++
 	var gasUsedLen int
-	if h.GasUsed >= 128 {
-		gasUsedLen = (bits.Len64(h.GasUsed) + 7) / 8
+	for i := 0; i < ContextDepth; i++ {
+		if h.GasUsed[i] >= 128 {
+			gasUsedLen += (bits.Len64(h.GasUsed[i]) + 7) / 8
+		}
 	}
 	encodingSize += gasUsedLen
 	encodingSize++
@@ -170,6 +175,7 @@ func (h Header) EncodingSize() int {
 	return encodingSize
 }
 
+// TODO: #12 EncodeRLP with proper header byte size
 func (h Header) EncodeRLP(w io.Writer) error {
 	// Precompute the size of the encoding
 	encodingSize := 96 /* ParentHash */ + 96 /* UncleHash */ + 63 /* Coinbase */ + 96 /* Root */ + 96 /* TxHash */ +
@@ -187,32 +193,32 @@ func (h Header) EncodeRLP(w io.Writer) error {
 
 	encodingSize++
 	var diffLen int
-	if h.Difficulty != nil && h.Difficulty.BitLen() >= 8 {
-		diffLen = (h.Difficulty.BitLen() + 7) / 8
+	if h.Difficulty != nil && TotalBitLen(h.Difficulty) >= 24 {
+		diffLen = (TotalBitLen(h.Difficulty) + 21) / 24
 	}
 	encodingSize += diffLen
-
 	encodingSize++
 	var numberLen int
-	if h.Number != nil && h.Number.BitLen() >= 8 {
-		numberLen = (h.Number.BitLen() + 7) / 8
+	if h.Number != nil && TotalBitLen(h.Number) >= 24 {
+		numberLen = (TotalBitLen(h.Number) + 21) / 24
 	}
 	encodingSize += numberLen
-
 	encodingSize++
 	var gasLimitLen int
-	if h.GasLimit >= 128 {
-		gasLimitLen = (bits.Len64(h.GasLimit) + 7) / 8
+	for i := 0; i < ContextDepth; i++ {
+		if h.GasLimit[i] >= 128 {
+			gasLimitLen += (bits.Len64(h.GasLimit[i]) + 7) / 8
+		}
 	}
 	encodingSize += gasLimitLen
-
 	encodingSize++
 	var gasUsedLen int
-	if h.GasUsed >= 128 {
-		gasUsedLen = (bits.Len64(h.GasUsed) + 7) / 8
+	for i := 0; i < ContextDepth; i++ {
+		if h.GasUsed[i] >= 128 {
+			gasUsedLen += (bits.Len64(h.GasUsed[i]) + 7) / 8
+		}
 	}
 	encodingSize += gasUsedLen
-
 	encodingSize++
 	var timeLen int
 	if h.Time >= 128 {
@@ -1241,7 +1247,7 @@ func (b *Block) GasUsed(context int) uint64  { return b.header.GasUsed[context] 
 func (b *Block) Difficulty(context int) *big.Int {
 	return new(big.Int).Set(b.header.Difficulty[context])
 }
-func (b *Block) Time(context int) uint64 { return b.header.Time }
+func (b *Block) Time() uint64 { return b.header.Time }
 
 func (b *Block) NumberU64(context int) uint64        { return b.header.Number[context].Uint64() }
 func (b *Block) MixDigest(context int) common.Hash   { return b.header.MixDigest[context] }
