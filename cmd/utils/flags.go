@@ -147,18 +147,6 @@ var (
 		Name:  "mainnet",
 		Usage: "Ethereum mainnet",
 	}
-	GoerliFlag = cli.BoolFlag{
-		Name:  "goerli",
-		Usage: "Görli network: pre-configured proof-of-authority test network",
-	}
-	CalaverasFlag = cli.BoolFlag{
-		Name:  "calaveras",
-		Usage: "Calaveras network: pre-configured proof-of-authority shortlived test network.",
-	}
-	RinkebyFlag = cli.BoolFlag{
-		Name:  "rinkeby",
-		Usage: "Rinkeby network: pre-configured proof-of-authority test network",
-	}
 	RopstenFlag = cli.BoolFlag{
 		Name:  "ropsten",
 		Usage: "Ropsten network: pre-configured proof-of-work test network",
@@ -764,6 +752,17 @@ var (
 	CatalystFlag = cli.BoolFlag{
 		Name:  "catalyst",
 		Usage: "Catalyst mode (eth2 integration testing)",
+	}
+
+	RegionFlag = cli.IntFlag{
+		Name:  "region",
+		Usage: "Quai Region flag",
+		Value: ethconfig.Defaults.Region,
+	}
+	ZoneFlag = cli.IntFlag{
+		Name:  "zone",
+		Usage: "Quai Zone flag",
+		Value: ethconfig.Defaults.Zone,
 	}
 )
 
@@ -1603,7 +1602,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1
 		}
-		cfg.Genesis = core.DefaultGenesisBlock()
+		cfg.Genesis = core.MainnetPrimeGenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, params.MainnetGenesisHash)
 	case ctx.GlobalBool(RopstenFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
@@ -1611,23 +1610,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		}
 		cfg.Genesis = core.DefaultRopstenGenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, params.RopstenGenesisHash)
-	case ctx.GlobalBool(RinkebyFlag.Name):
-		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 4
-		}
-		cfg.Genesis = core.DefaultRinkebyGenesisBlock()
-		SetDNSDiscoveryDefaults(cfg, params.RinkebyGenesisHash)
-	case ctx.GlobalBool(GoerliFlag.Name):
-		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 5
-		}
-		cfg.Genesis = core.DefaultGoerliGenesisBlock()
-		SetDNSDiscoveryDefaults(cfg, params.GoerliGenesisHash)
-	case ctx.GlobalBool(CalaverasFlag.Name):
-		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 123 // https://gist.github.com/holiman/c5697b041b3dc18c50a5cdd382cbdd16
-		}
-		cfg.Genesis = core.DefaultCalaverasGenesisBlock()
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1337
@@ -1810,17 +1792,42 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 	var genesis *core.Genesis
 	switch {
 	case ctx.GlobalBool(MainnetFlag.Name):
-		genesis = core.DefaultGenesisBlock()
-	case ctx.GlobalBool(RopstenFlag.Name):
-		genesis = core.DefaultRopstenGenesisBlock()
-	case ctx.GlobalBool(RinkebyFlag.Name):
-		genesis = core.DefaultRinkebyGenesisBlock()
-	case ctx.GlobalBool(GoerliFlag.Name):
-		genesis = core.DefaultGoerliGenesisBlock()
-	case ctx.GlobalBool(CalaverasFlag.Name):
-		genesis = core.DefaultCalaverasGenesisBlock()
-	case ctx.GlobalBool(DeveloperFlag.Name):
-		Fatalf("Developer chains are ephemeral")
+		switch {
+		case ctx.GlobalBool(ZoneFlag.Name):
+			switch ZoneFlag.Value {
+			case 1:
+				genesis = core.MainnetZoneGenesisBlock(params.MainnetZoneOneChainConfig)
+			case 2:
+				genesis = core.MainnetZoneGenesisBlock(params.MainnetZoneOneChainConfig)
+			case 3:
+				genesis = core.MainnetZoneGenesisBlock(params.MainnetZoneOneChainConfig)
+			case 4:
+				genesis = core.MainnetZoneGenesisBlock(params.MainnetZoneOneChainConfig)
+			case 5:
+				genesis = core.MainnetZoneGenesisBlock(params.MainnetZoneOneChainConfig)
+			case 6:
+				genesis = core.MainnetZoneGenesisBlock(params.MainnetZoneOneChainConfig)
+			case 7:
+				genesis = core.MainnetZoneGenesisBlock(params.MainnetZoneOneChainConfig)
+
+			case 8:
+				genesis = core.MainnetZoneGenesisBlock(params.MainnetZoneOneChainConfig)
+
+			case 9:
+				genesis = core.MainnetZoneGenesisBlock(params.MainnetZoneOneChainConfig)
+			}
+		case ctx.GlobalBool(RegionFlag.Name):
+			switch RegionFlag.Value {
+			case 1:
+				genesis = core.MainnetRegionGenesisBlock(params.MainnetRegionOneChainConfig)
+			case 2:
+				genesis = core.MainnetRegionGenesisBlock(params.MainnetRegionTwoChainConfig)
+			case 3:
+				genesis = core.MainnetRegionGenesisBlock(params.MainnetRegionThreeChainConfig)
+			}
+		}
+	default:
+		genesis = core.MainnetPrimeGenesisBlock()
 	}
 	return genesis
 }
