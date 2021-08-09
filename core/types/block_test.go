@@ -31,9 +31,8 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
-// from bcValidBlockTest.json, "SimpleTx"
-func TestBlockEncoding(t *testing.T) {
-	blockEnc := common.FromHex("f90260f901f9a083cafc574e1f51ba9dc0568fc617a08ea2429fb384059c972f13b19fa1c8dd55a01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347948888f1f195afa192cfee860698584c030f4c9db1a0ef1552a40b7165c3cd773806b9e0c165b75356e0314bf0706f279c729f51e017a05fe50b260da6308036625b850b5d6ced6d0a9f814c0688bc91ffb7b7a3a54b67a0bc37d79753ad738a6dac4921e57392f145d8887476de3f783dfa7edae9283e52b90100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008302000001832fefd8825208845506eb0780a0bd4472abb6659ebe3ee06ee4d7b72a00a9f4d001caca51342001075469aff49888a13a5a8c8f2bb1c4f861f85f800a82c35094095e7baea6a6c7c4c2dfeb977efac326af552d870a801ba09bea4c4daac7c7c52e093e6a4c35dbbcf8856f1af7b059ba20253e70848d094fa08a8fae537ce25ed8cb5af9adac3f141af69bd515bd2ba031522df09b97dd72b1c0")
+func TestHeaderBlockEncoding(t *testing.T) {
+	blockEnc := common.FromHex("f902c8f902c3c0f863a01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347a01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347a01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347f83f948888f1f195afa192cfee860698584c030f4c9db1948888f1f195afa192cfee860698584c030f4c9db1948888f1f195afa192cfee860698584c030f4c9db1f863a0ef1552a40b7165c3cd773806b9e0c165b75356e0314bf0706f279c729f51e017a0ef1552a40b7165c3cd773806b9e0c165b75356e0314bf0706f279c729f51e017a0ef1552a40b7165c3cd773806b9e0c165b75356e0314bf0706f279c729f51e017f863a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421f863a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421c0cc830200008302000083020000c9820200820200820200cc83bc614e83bc614e83bc614ecc831686e2831686e2831686e28396b43ff845960000000000000000000000000000000000000000000096000000000000000000000000000000000000000000009600000000000000000000000000000000000000000000f863a0bd4472abb6659ebe3ee06ee4d7b72a00a9f4d001caca51342001075469aff498a0bd4472abb6659ebe3ee06ee4d7b72a00a9f4d001caca51342001075469aff498a0bd4472abb6659ebe3ee06ee4d7b72a00a9f4d001caca51342001075469aff4988800000000000000008080c0c0")
 	var block Block
 	if err := rlp.DecodeBytes(blockEnc, &block); err != nil {
 		t.Fatal("decode error: ", err)
@@ -44,15 +43,52 @@ func TestBlockEncoding(t *testing.T) {
 			t.Errorf("%s mismatch: got %v, want %v", f, got, want)
 		}
 	}
-	check("Difficulty", block.Difficulty(), big.NewInt(131072))
-	check("GasLimit", block.GasLimit(), uint64(3141592))
-	check("GasUsed", block.GasUsed(), uint64(21000))
-	check("Coinbase", block.Coinbase(), common.HexToAddress("8888f1f195afa192cfee860698584c030f4c9db1"))
-	check("MixDigest", block.MixDigest(), common.HexToHash("bd4472abb6659ebe3ee06ee4d7b72a00a9f4d001caca51342001075469aff498"))
-	check("Root", block.Root(), common.HexToHash("ef1552a40b7165c3cd773806b9e0c165b75356e0314bf0706f279c729f51e017"))
-	check("Hash", block.Hash(), common.HexToHash("0a5843ac1cb04865017cb35a57b50b07084e5fcee39b5acadade33149f4fff9e"))
-	check("Nonce", block.Nonce(), uint64(0xa13a5a8c8f2bb1c4))
-	check("Time", block.Time(), uint64(1426516743))
+
+	context := 0
+	check("Difficulty", block.Difficulty(context), big.NewInt(131072))
+	check("GasLimit", block.GasLimit(context), uint64(12345678))
+	check("GasUsed", block.GasUsed(context), uint64(1476322))
+	check("Coinbase", block.Coinbase(context), common.HexToAddress("8888f1f195afa192cfee860698584c030f4c9db1"))
+	check("MixDigest", block.MixDigest(context), common.HexToHash("bd4472abb6659ebe3ee06ee4d7b72a00a9f4d001caca51342001075469aff498"))
+	check("Root", block.Root(context), common.HexToHash("ef1552a40b7165c3cd773806b9e0c165b75356e0314bf0706f279c729f51e017"))
+	check("Hash", block.Hash(), common.HexToHash("0x4f4545c805c893e07e552b93151a4d031401ca71e0ab25971cb0a81babf1e742"))
+	check("Nonce", block.Nonce(), uint64(0))
+	check("Time", block.Time(), uint64(9876543))
+	check("Size", block.Size(), common.StorageSize(len(blockEnc)))
+
+	ourBlockEnc, err := rlp.EncodeToBytes(&block)
+	if err != nil {
+		t.Fatal("encode error: ", err)
+	}
+	if !bytes.Equal(ourBlockEnc, blockEnc) {
+		t.Errorf("encoded block mismatch:\ngot:  %x\nwant: %x", ourBlockEnc, blockEnc)
+	}
+}
+
+// from bcValidBlockTest.json, "SimpleTx"
+func TestBlockEncoding(t *testing.T) {
+	blockEnc := common.FromHex("f9032af902c3c0f863a01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347a01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347a01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347f83f948888f1f195afa192cfee860698584c030f4c9db1948888f1f195afa192cfee860698584c030f4c9db1948888f1f195afa192cfee860698584c030f4c9db1f863a0ef1552a40b7165c3cd773806b9e0c165b75356e0314bf0706f279c729f51e017a0ef1552a40b7165c3cd773806b9e0c165b75356e0314bf0706f279c729f51e017a0ef1552a40b7165c3cd773806b9e0c165b75356e0314bf0706f279c729f51e017f863a0e9f854e59857fa20c0aa5dd78860fe1d45099c56086eb417c07be95fc51a8096a0e9f854e59857fa20c0aa5dd78860fe1d45099c56086eb417c07be95fc51a8096a0e9f854e59857fa20c0aa5dd78860fe1d45099c56086eb417c07be95fc51a8096f863a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421c0cc830200008302000083020000c9820200820200820200cc83bc614e83bc614e83bc614ecc831686e2831686e2831686e28396b43ff845960000000000000000000000000000000000000000000096000000000000000000000000000000000000000000009600000000000000000000000000000000000000000000f863a0bd4472abb6659ebe3ee06ee4d7b72a00a9f4d001caca51342001075469aff498a0bd4472abb6659ebe3ee06ee4d7b72a00a9f4d001caca51342001075469aff498a0bd4472abb6659ebe3ee06ee4d7b72a00a9f4d001caca51342001075469aff4988800000000000000008080f861f85f800a82c35094095e7baea6a6c7c4c2dfeb977efac326af552d870a801ba09bea4c4daac7c7c52e093e6a4c35dbbcf8856f1af7b059ba20253e70848d094fa08a8fae537ce25ed8cb5af9adac3f141af69bd515bd2ba031522df09b97dd72b1c0")
+	var block Block
+	if err := rlp.DecodeBytes(blockEnc, &block); err != nil {
+		t.Fatal("decode error: ", err)
+	}
+
+	check := func(f string, got, want interface{}) {
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("%s mismatch: got %v, want %v", f, got, want)
+		}
+	}
+
+	context := 0
+	check("Difficulty", block.Difficulty(context), big.NewInt(131072))
+	check("GasLimit", block.GasLimit(context), uint64(12345678))
+	check("GasUsed", block.GasUsed(context), uint64(1476322))
+	check("Coinbase", block.Coinbase(context), common.HexToAddress("8888f1f195afa192cfee860698584c030f4c9db1"))
+	check("MixDigest", block.MixDigest(context), common.HexToHash("bd4472abb6659ebe3ee06ee4d7b72a00a9f4d001caca51342001075469aff498"))
+	check("Root", block.Root(context), common.HexToHash("ef1552a40b7165c3cd773806b9e0c165b75356e0314bf0706f279c729f51e017"))
+	check("Hash", block.Hash(), common.HexToHash("0x2d6ef4ffff178d40bb3759a2c2ec41dff373e207ec6cccb8e12437bc8f821c70"))
+	check("Nonce", block.Nonce(), uint64(0))
+	check("Time", block.Time(), uint64(9876543))
 	check("Size", block.Size(), common.StorageSize(len(blockEnc)))
 
 	tx1 := NewTransaction(0, common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87"), big.NewInt(10), 50000, big.NewInt(10), nil)
@@ -63,6 +99,58 @@ func TestBlockEncoding(t *testing.T) {
 	if err != nil {
 		t.Fatal("encode error: ", err)
 	}
+	if !bytes.Equal(ourBlockEnc, blockEnc) {
+		t.Errorf("encoded block mismatch:\ngot:  %x\nwant: %x", ourBlockEnc, blockEnc)
+	}
+}
+
+func TestBlockDecoding(t *testing.T) {
+	var (
+		key, _   = crypto.GenerateKey()
+		txs      = make([]*Transaction, 0)
+		receipts = make([]*Receipt, len(txs))
+		signer   = LatestSigner(params.TestChainConfig)
+		uncles   = make([]*Header, 0)
+	)
+	header := &Header{
+		Coinbase:   []common.Address{common.HexToAddress("8888f1f195afa192cfee860698584c030f4c9db1"), common.HexToAddress("8888f1f195afa192cfee860698584c030f4c9db1"), common.HexToAddress("8888f1f195afa192cfee860698584c030f4c9db1")},
+		Root:       []common.Hash{common.HexToHash("ef1552a40b7165c3cd773806b9e0c165b75356e0314bf0706f279c729f51e017"), common.HexToHash("ef1552a40b7165c3cd773806b9e0c165b75356e0314bf0706f279c729f51e017"), common.HexToHash("ef1552a40b7165c3cd773806b9e0c165b75356e0314bf0706f279c729f51e017")},
+		MixDigest:  []common.Hash{common.HexToHash("bd4472abb6659ebe3ee06ee4d7b72a00a9f4d001caca51342001075469aff498"), common.HexToHash("bd4472abb6659ebe3ee06ee4d7b72a00a9f4d001caca51342001075469aff498"), common.HexToHash("bd4472abb6659ebe3ee06ee4d7b72a00a9f4d001caca51342001075469aff498")},
+		Difficulty: []*big.Int{big.NewInt(131072), big.NewInt(131072), big.NewInt(131072)},
+		Number:     []*big.Int{math.BigPow(2, 9), math.BigPow(2, 9), math.BigPow(2, 9)},
+		GasLimit:   []uint64{12345678, 12345678, 12345678},
+		GasUsed:    []uint64{1476322, 1476322, 1476322},
+		Time:       9876543,
+		Extra:      [][]byte{[]byte("coolest block on chain"), []byte("coolest block on chain"), []byte("coolest block on chain")},
+	}
+	for i := range txs {
+		amount := math.BigPow(2, int64(i))
+		price := big.NewInt(300000)
+		data := make([]byte, 100)
+		tx := NewTransaction(uint64(i), common.Address{}, amount, 123457, price, data)
+		signedTx, err := SignTx(tx, signer, key)
+		if err != nil {
+			panic(err)
+		}
+		txs[i] = signedTx
+		receipts[i] = NewReceipt(make([]byte, 32), false, tx.Gas())
+	}
+
+	block := NewBlock(header, txs, uncles, receipts, newHasher())
+
+	ourBlockEnc, err := rlp.EncodeToBytes(&block)
+	if err != nil {
+		t.Fatal("encode error: ", err)
+	}
+
+	hex := common.Bytes2Hex(ourBlockEnc)
+	t.Fatal(hex)
+	blockEnc := common.FromHex(hex)
+
+	if err := rlp.DecodeBytes(blockEnc, &block); err != nil {
+		t.Fatal("decode error: ", err)
+	}
+
 	if !bytes.Equal(ourBlockEnc, blockEnc) {
 		t.Errorf("encoded block mismatch:\ngot:  %x\nwant: %x", ourBlockEnc, blockEnc)
 	}
@@ -81,17 +169,18 @@ func TestEIP1559BlockEncoding(t *testing.T) {
 		}
 	}
 
-	check("Difficulty", block.Difficulty(), big.NewInt(131072))
-	check("GasLimit", block.GasLimit(), uint64(3141592))
-	check("GasUsed", block.GasUsed(), uint64(21000))
-	check("Coinbase", block.Coinbase(), common.HexToAddress("8888f1f195afa192cfee860698584c030f4c9db1"))
-	check("MixDigest", block.MixDigest(), common.HexToHash("bd4472abb6659ebe3ee06ee4d7b72a00a9f4d001caca51342001075469aff498"))
-	check("Root", block.Root(), common.HexToHash("ef1552a40b7165c3cd773806b9e0c165b75356e0314bf0706f279c729f51e017"))
+	context := 0
+	check("Difficulty", block.Difficulty(context), big.NewInt(131072))
+	check("GasLimit", block.GasLimit(context), uint64(3141592))
+	check("GasUsed", block.GasUsed(context), uint64(21000))
+	check("Coinbase", block.Coinbase(context), common.HexToAddress("8888f1f195afa192cfee860698584c030f4c9db1"))
+	check("MixDigest", block.MixDigest(context), common.HexToHash("bd4472abb6659ebe3ee06ee4d7b72a00a9f4d001caca51342001075469aff498"))
+	check("Root", block.Root(context), common.HexToHash("ef1552a40b7165c3cd773806b9e0c165b75356e0314bf0706f279c729f51e017"))
 	check("Hash", block.Hash(), common.HexToHash("c7252048cd273fe0dac09650027d07f0e3da4ee0675ebbb26627cea92729c372"))
 	check("Nonce", block.Nonce(), uint64(0xa13a5a8c8f2bb1c4))
 	check("Time", block.Time(), uint64(1426516743))
 	check("Size", block.Size(), common.StorageSize(len(blockEnc)))
-	check("BaseFee", block.BaseFee(), new(big.Int).SetUint64(params.InitialBaseFee))
+	check("BaseFee", block.BaseFee(context), new(big.Int).SetUint64(params.InitialBaseFee))
 
 	tx1 := NewTransaction(0, common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87"), big.NewInt(10), 50000, big.NewInt(10), nil)
 	tx1, _ = tx1.WithSignature(HomesteadSigner{}, common.Hex2Bytes("9bea4c4daac7c7c52e093e6a4c35dbbcf8856f1af7b059ba20253e70848d094f8a8fae537ce25ed8cb5af9adac3f141af69bd515bd2ba031522df09b97dd72b100"))
@@ -109,7 +198,7 @@ func TestEIP1559BlockEncoding(t *testing.T) {
 		Nonce:      0,
 		To:         &to,
 		Gas:        123457,
-		GasFeeCap:  new(big.Int).Set(block.BaseFee()),
+		GasFeeCap:  new(big.Int).Set(block.BaseFee(context)),
 		GasTipCap:  big.NewInt(0),
 		AccessList: accesses,
 		Data:       []byte{},
@@ -145,12 +234,13 @@ func TestEIP2718BlockEncoding(t *testing.T) {
 			t.Errorf("%s mismatch: got %v, want %v", f, got, want)
 		}
 	}
-	check("Difficulty", block.Difficulty(), big.NewInt(131072))
-	check("GasLimit", block.GasLimit(), uint64(3141592))
-	check("GasUsed", block.GasUsed(), uint64(42000))
-	check("Coinbase", block.Coinbase(), common.HexToAddress("8888f1f195afa192cfee860698584c030f4c9db1"))
-	check("MixDigest", block.MixDigest(), common.HexToHash("bd4472abb6659ebe3ee06ee4d7b72a00a9f4d001caca51342001075469aff498"))
-	check("Root", block.Root(), common.HexToHash("ef1552a40b7165c3cd773806b9e0c165b75356e0314bf0706f279c729f51e017"))
+	context := 0
+	check("Difficulty", block.Difficulty(context), big.NewInt(131072))
+	check("GasLimit", block.GasLimit(context), uint64(3141592))
+	check("GasUsed", block.GasUsed(context), uint64(42000))
+	check("Coinbase", block.Coinbase(context), common.HexToAddress("8888f1f195afa192cfee860698584c030f4c9db1"))
+	check("MixDigest", block.MixDigest(context), common.HexToHash("bd4472abb6659ebe3ee06ee4d7b72a00a9f4d001caca51342001075469aff498"))
+	check("Root", block.Root(context), common.HexToHash("ef1552a40b7165c3cd773806b9e0c165b75356e0314bf0706f279c729f51e017"))
 	check("Nonce", block.Nonce(), uint64(0xa13a5a8c8f2bb1c4))
 	check("Time", block.Time(), uint64(1426516743))
 	check("Size", block.Size(), common.StorageSize(len(blockEnc)))
@@ -250,12 +340,12 @@ func makeBenchBlock() *Block {
 		uncles   = make([]*Header, 3)
 	)
 	header := &Header{
-		Difficulty: math.BigPow(11, 11),
-		Number:     math.BigPow(2, 9),
-		GasLimit:   12345678,
-		GasUsed:    1476322,
+		Difficulty: []*big.Int{math.BigPow(11, 11), math.BigPow(11, 11), math.BigPow(11, 11)},
+		Number:     []*big.Int{math.BigPow(2, 9), math.BigPow(2, 9), math.BigPow(2, 9)},
+		GasLimit:   []uint64{12345678, 12345678, 12345678},
+		GasUsed:    []uint64{1476322, 1476322, 1476322},
 		Time:       9876543,
-		Extra:      []byte("coolest block on chain"),
+		Extra:      [][]byte{[]byte("coolest block on chain"), []byte("coolest block on chain"), []byte("coolest block on chain")},
 	}
 	for i := range txs {
 		amount := math.BigPow(2, int64(i))
@@ -271,12 +361,12 @@ func makeBenchBlock() *Block {
 	}
 	for i := range uncles {
 		uncles[i] = &Header{
-			Difficulty: math.BigPow(11, 11),
-			Number:     math.BigPow(2, 9),
-			GasLimit:   12345678,
-			GasUsed:    1476322,
+			Difficulty: []*big.Int{math.BigPow(11, 11), math.BigPow(11, 11), math.BigPow(11, 11)},
+			Number:     []*big.Int{math.BigPow(2, 9), math.BigPow(2, 9), math.BigPow(2, 9)},
+			GasLimit:   []uint64{12345678, 12345678, 12345678},
+			GasUsed:    []uint64{1476322, 1476322, 1476322},
 			Time:       9876543,
-			Extra:      []byte("benchmark uncle"),
+			Extra:      [][]byte{[]byte("benchmark uncle"), []byte("benchmark uncle"), []byte("benchmark uncle")},
 		}
 	}
 	return NewBlock(header, txs, uncles, receipts, newHasher())

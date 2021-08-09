@@ -83,9 +83,10 @@ type freezer struct {
 
 	trigger chan chan struct{} // Manual blocking freeze trigger, test determinism
 
-	quit      chan struct{}
-	wg        sync.WaitGroup
-	closeOnce sync.Once
+	quit         chan struct{}
+	wg           sync.WaitGroup
+	closeOnce    sync.Once
+	chainContext int
 }
 
 // newFreezer creates a chain freezer that moves ancient chain data into
@@ -111,6 +112,7 @@ func newFreezer(datadir string, namespace string, readonly bool) (*freezer, erro
 		return nil, err
 	}
 	// Open all the supported data tables
+	// TODO: #15 Import cfg to set chainContext in freezer
 	freezer := &freezer{
 		readonly:     readonly,
 		threshold:    params.FullImmutabilityThreshold,
@@ -118,6 +120,7 @@ func newFreezer(datadir string, namespace string, readonly bool) (*freezer, erro
 		instanceLock: lock,
 		trigger:      make(chan chan struct{}),
 		quit:         make(chan struct{}),
+		chainContext: 0,
 	}
 	for name, disableSnappy := range FreezerNoSnappy {
 		table, err := newTable(datadir, name, readMeter, writeMeter, sizeGauge, disableSnappy)
@@ -436,7 +439,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 						log.Error("Missing dangling header", "number", tip, "hash", children[i])
 						continue
 					}
-					if _, ok := drop[child.ParentHash]; !ok {
+					if _, ok := drop[child.ParentHash[f.chainContext]]; !ok {
 						children = append(children[:i], children[i+1:]...)
 						i--
 						continue
