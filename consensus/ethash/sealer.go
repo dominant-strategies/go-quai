@@ -52,7 +52,7 @@ func (ethash *Ethash) Seal(chain consensus.ChainHeaderReader, block *types.Block
 	// If we're running a fake PoW, simply return a 0 nonce immediately
 	if ethash.config.PowMode == ModeFake || ethash.config.PowMode == ModeFullFake {
 		header := block.Header()
-		header.Nonce, header.MixDigest = types.BlockNonce{}, common.Hash{}
+		header.Nonce, header.MixDigest = types.BlockNonce{}, []common.Hash{common.Hash{}, common.Hash{}, common.Hash{}}
 		select {
 		case results <- block.WithSeal(header):
 		default:
