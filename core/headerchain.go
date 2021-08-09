@@ -110,7 +110,7 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine c
 		}
 	}
 	hc.currentHeaderHash = hc.CurrentHeader().Hash()
-	headHeaderGauge.Update(hc.CurrentHeader().Number.Int64())
+	headHeaderGauge.Update(hc.CurrentHeader().Number[config.Context].Int64())
 
 	return hc, nil
 }
@@ -150,14 +150,14 @@ func (hc *HeaderChain) writeHeaders(headers []*types.Header) (result *headerWrit
 	if len(headers) == 0 {
 		return &headerWriteResult{}, nil
 	}
-	ptd := hc.GetTd(headers[0].ParentHash, headers[0].Number.Uint64()-1)
+	ptd := hc.GetTd(headers[0].ParentHash[hc.config.Context], headers[0].Number[hc.config.Context].Uint64()-1)
 	if ptd == nil {
 		return &headerWriteResult{}, consensus.ErrUnknownAncestor
 	}
 	var (
-		lastNumber = headers[0].Number.Uint64() - 1 // Last successfully imported number
-		lastHash   = headers[0].ParentHash          // Last imported header hash
-		newTD      = new(big.Int).Set(ptd)          // Total difficulty of inserted chain
+		lastNumber = headers[0].Number[hc.config.Context].Uint64() - 1 // Last successfully imported number
+		lastHash   = headers[0].ParentHash[hc.config.Context]          // Last imported header hash
+		newTD      = new(big.Int).Set(ptd)                             // Total difficulty of inserted chain
 
 		lastHeader    *types.Header
 		inserted      []numberHash // Ephemeral lookup of number/hash for the chain
@@ -172,12 +172,12 @@ func (hc *HeaderChain) writeHeaders(headers []*types.Header) (result *headerWrit
 		// know that it's a contiguous chain, where
 		// headers[i].Hash() == headers[i+1].ParentHash
 		if i < len(headers)-1 {
-			hash = headers[i+1].ParentHash
+			hash = headers[i+1].ParentHash[hc.config.Context]
 		} else {
 			hash = header.Hash()
 		}
-		number := header.Number.Uint64()
-		newTD.Add(newTD, header.Difficulty)
+		number := header.Number[hc.config.Context].Uint64()
+		newTD.Add(newTD, header.Difficulty[hc.config.Context])
 
 		// If the parent was not present, store it
 		// If the header is already known, skip it, otherwise store
@@ -187,7 +187,7 @@ func (hc *HeaderChain) writeHeaders(headers []*types.Header) (result *headerWrit
 			rawdb.WriteTd(batch, hash, number, newTD)
 			hc.tdCache.Add(hash, new(big.Int).Set(newTD))
 
-			rawdb.WriteHeader(batch, header)
+			rawdb.WriteHeader(batch, header, hc.config.Context)
 			inserted = append(inserted, numberHash{number, hash})
 			hc.headerCache.Add(hash, header)
 			hc.numberCache.Add(hash, number)
@@ -211,7 +211,7 @@ func (hc *HeaderChain) writeHeaders(headers []*types.Header) (result *headerWrit
 	batch.Reset()
 
 	var (
-		head    = hc.CurrentHeader().Number.Uint64()
+		head    = hc.CurrentHeader().Number[hc.config.Context].Uint64()
 		localTD = hc.GetTd(hc.currentHeaderHash, head)
 		status  = SideStatTy
 	)
@@ -229,7 +229,7 @@ func (hc *HeaderChain) writeHeaders(headers []*types.Header) (result *headerWrit
 	// If the parent of the (first) block is already the canon header,
 	// we don't have to go backwards to delete canon blocks, but
 	// simply pile them onto the existing chain
-	chainAlreadyCanon := headers[0].ParentHash == hc.currentHeaderHash
+	chainAlreadyCanon := headers[0].ParentHash[hc.config.Context] == hc.currentHeaderHash
 	if reorg {
 		// If the header can be added into canonical chain, adjust the
 		// header chain markers(canonical indexes and head header flag).
@@ -248,14 +248,14 @@ func (hc *HeaderChain) writeHeaders(headers []*types.Header) (result *headerWrit
 			// Overwrite any stale canonical number assignments, going
 			// backwards from the first header in this import
 			var (
-				headHash   = headers[0].ParentHash          // inserted[0].parent?
-				headNumber = headers[0].Number.Uint64() - 1 // inserted[0].num-1 ?
+				headHash   = headers[0].ParentHash[hc.config.Context]          // inserted[0].parent?
+				headNumber = headers[0].Number[hc.config.Context].Uint64() - 1 // inserted[0].num-1 ?
 				headHeader = hc.GetHeader(headHash, headNumber)
 			)
 			for rawdb.ReadCanonicalHash(hc.chainDb, headNumber) != headHash {
 				rawdb.WriteCanonicalHash(markerBatch, headHash, headNumber)
-				headHash = headHeader.ParentHash
-				headNumber = headHeader.Number.Uint64() - 1
+				headHash = headHeader.ParentHash[hc.config.Context]
+				headNumber = headHeader.Number[hc.config.Context].Uint64() - 1
 				headHeader = hc.GetHeader(headHash, headNumber)
 			}
 			// If some of the older headers were already known, but obtained canon-status
@@ -264,7 +264,7 @@ func (hc *HeaderChain) writeHeaders(headers []*types.Header) (result *headerWrit
 			// were not already known
 			for i := 0; i < firstInserted; i++ {
 				hash := headers[i].Hash()
-				num := headers[i].Number.Uint64()
+				num := headers[i].Number[hc.config.Context].Uint64()
 				rawdb.WriteCanonicalHash(markerBatch, hash, num)
 				rawdb.WriteHeadHeaderHash(markerBatch, hash)
 			}
@@ -281,7 +281,7 @@ func (hc *HeaderChain) writeHeaders(headers []*types.Header) (result *headerWrit
 		// Last step update all in-memory head header markers
 		hc.currentHeaderHash = lastHash
 		hc.currentHeader.Store(types.CopyHeader(lastHeader))
-		headHeaderGauge.Update(lastHeader.Number.Int64())
+		headHeaderGauge.Update(lastHeader.Number[hc.config.Context].Int64())
 
 		// Chain status is canonical since this insert was a reorg.
 		// Note that all inserts which have higher TD than existing are 'reorg'.
@@ -303,7 +303,7 @@ func (hc *HeaderChain) writeHeaders(headers []*types.Header) (result *headerWrit
 func (hc *HeaderChain) ValidateHeaderChain(chain []*types.Header, checkFreq int) (int, error) {
 	// Do a sanity check that the provided chain is actually ordered and linked
 	for i := 1; i < len(chain); i++ {
-		if chain[i].Number.Uint64() != chain[i-1].Number.Uint64()+1 {
+		if chain[i].Number[hc.config.Context].Uint64() != chain[i-1].Number[hc.config.Context].Uint64()+1 {
 			hash := chain[i].Hash()
 			parentHash := chain[i-1].Hash()
 			// Chain broke ancestry, log a message (programming error) and skip insertion
@@ -314,7 +314,7 @@ func (hc *HeaderChain) ValidateHeaderChain(chain []*types.Header, checkFreq int)
 				parentHash.Bytes()[:4], i, chain[i].Number, hash.Bytes()[:4], chain[i].ParentHash[:4])
 		}
 		// If the header is a banned one, straight out abort
-		if BadHashes[chain[i].ParentHash] {
+		if BadHashes[chain[i].ParentHash[hc.config.Context]] {
 			return i - 1, ErrBannedHash
 		}
 		// If it's the last header in the cunk, we need to check it too
@@ -405,12 +405,12 @@ func (hc *HeaderChain) GetBlockHashesFromHash(hash common.Hash, max uint64) []co
 	// Iterate the headers until enough is collected or the genesis reached
 	chain := make([]common.Hash, 0, max)
 	for i := uint64(0); i < max; i++ {
-		next := header.ParentHash
-		if header = hc.GetHeader(next, header.Number.Uint64()-1); header == nil {
+		next := header.ParentHash[hc.config.Context]
+		if header = hc.GetHeader(next, header.Number[hc.config.Context].Uint64()-1); header == nil {
 			break
 		}
 		chain = append(chain, next)
-		if header.Number.Sign() == 0 {
+		if header.Number[hc.config.Context].Sign() == 0 {
 			break
 		}
 	}
@@ -429,7 +429,7 @@ func (hc *HeaderChain) GetAncestor(hash common.Hash, number, ancestor uint64, ma
 	if ancestor == 1 {
 		// in this case it is cheaper to just read the header
 		if header := hc.GetHeader(hash, number); header != nil {
-			return header.ParentHash, number - 1
+			return header.ParentHash[hc.config.Context], number - 1
 		}
 		return common.Hash{}, 0
 	}
@@ -450,7 +450,7 @@ func (hc *HeaderChain) GetAncestor(hash common.Hash, number, ancestor uint64, ma
 		if header == nil {
 			return common.Hash{}, 0
 		}
-		hash = header.ParentHash
+		hash = header.ParentHash[hc.config.Context]
 		number--
 	}
 	return hash, number
@@ -543,7 +543,7 @@ func (hc *HeaderChain) CurrentHeader() *types.Header {
 func (hc *HeaderChain) SetCurrentHeader(head *types.Header) {
 	hc.currentHeader.Store(head)
 	hc.currentHeaderHash = head.Hash()
-	headHeaderGauge.Update(head.Number.Int64())
+	headHeaderGauge.Update(head.Number[hc.config.Context].Int64())
 }
 
 type (
@@ -566,11 +566,11 @@ func (hc *HeaderChain) SetHead(head uint64, updateFn UpdateHeadBlocksCallback, d
 		batch      = hc.chainDb.NewBatch()
 		origin     = true
 	)
-	for hdr := hc.CurrentHeader(); hdr != nil && hdr.Number.Uint64() > head; hdr = hc.CurrentHeader() {
-		num := hdr.Number.Uint64()
+	for hdr := hc.CurrentHeader(); hdr != nil && hdr.Number[hc.config.Context].Uint64() > head; hdr = hc.CurrentHeader() {
+		num := hdr.Number[hc.config.Context].Uint64()
 
 		// Rewind block chain to new head.
-		parent := hc.GetHeader(hdr.ParentHash, num-1)
+		parent := hc.GetHeader(hdr.ParentHash[hc.config.Context], num-1)
 		if parent == nil {
 			parent = hc.genesisHeader
 		}
@@ -598,7 +598,7 @@ func (hc *HeaderChain) SetHead(head uint64, updateFn UpdateHeadBlocksCallback, d
 		}
 		hc.currentHeader.Store(parent)
 		hc.currentHeaderHash = parentHash
-		headHeaderGauge.Update(parent.Number.Int64())
+		headHeaderGauge.Update(parent.Number[hc.config.Context].Int64())
 
 		// If this is the first iteration, wipe any leftover data upwards too so
 		// we don't end up with dangling daps in the database

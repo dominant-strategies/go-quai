@@ -72,14 +72,14 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 		bc, _ := NewBlockChain(db, nil, &conConf, ethash.NewFaker(), vm.Config{}, nil, nil)
 		defer bc.Stop()
 
-		blocks := conBc.GetBlocksFromHash(conBc.CurrentBlock().Hash(), int(conBc.CurrentBlock().NumberU64()))
+		blocks := conBc.GetBlocksFromHash(conBc.CurrentBlock().Hash(), int(conBc.CurrentBlock().NumberU64(params.TestChainConfig.Context)))
 		for j := 0; j < len(blocks)/2; j++ {
 			blocks[j], blocks[len(blocks)-1-j] = blocks[len(blocks)-1-j], blocks[j]
 		}
 		if _, err := bc.InsertChain(blocks); err != nil {
 			t.Fatalf("failed to import contra-fork chain for expansion: %v", err)
 		}
-		if err := bc.stateCache.TrieDB().Commit(bc.CurrentHeader().Root, true, nil); err != nil {
+		if err := bc.stateCache.TrieDB().Commit(bc.CurrentHeader().Root[params.TestChainConfig.Context], true, nil); err != nil {
 			t.Fatalf("failed to commit contra-fork head for expansion: %v", err)
 		}
 		blocks, _ = GenerateChain(&proConf, conBc.CurrentBlock(), ethash.NewFaker(), db, 1, func(i int, gen *BlockGen) {})
@@ -97,14 +97,14 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 		bc, _ = NewBlockChain(db, nil, &proConf, ethash.NewFaker(), vm.Config{}, nil, nil)
 		defer bc.Stop()
 
-		blocks = proBc.GetBlocksFromHash(proBc.CurrentBlock().Hash(), int(proBc.CurrentBlock().NumberU64()))
+		blocks = proBc.GetBlocksFromHash(proBc.CurrentBlock().Hash(), int(proBc.CurrentBlock().NumberU64(params.TestChainConfig.Context)))
 		for j := 0; j < len(blocks)/2; j++ {
 			blocks[j], blocks[len(blocks)-1-j] = blocks[len(blocks)-1-j], blocks[j]
 		}
 		if _, err := bc.InsertChain(blocks); err != nil {
 			t.Fatalf("failed to import pro-fork chain for expansion: %v", err)
 		}
-		if err := bc.stateCache.TrieDB().Commit(bc.CurrentHeader().Root, true, nil); err != nil {
+		if err := bc.stateCache.TrieDB().Commit(bc.CurrentHeader().Root[params.TestChainConfig.Context], true, nil); err != nil {
 			t.Fatalf("failed to commit pro-fork head for expansion: %v", err)
 		}
 		blocks, _ = GenerateChain(&conConf, proBc.CurrentBlock(), ethash.NewFaker(), db, 1, func(i int, gen *BlockGen) {})
@@ -123,14 +123,14 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 	bc, _ := NewBlockChain(db, nil, &conConf, ethash.NewFaker(), vm.Config{}, nil, nil)
 	defer bc.Stop()
 
-	blocks := conBc.GetBlocksFromHash(conBc.CurrentBlock().Hash(), int(conBc.CurrentBlock().NumberU64()))
+	blocks := conBc.GetBlocksFromHash(conBc.CurrentBlock().Hash(), int(conBc.CurrentBlock().NumberU64(params.TestChainConfig.Context)))
 	for j := 0; j < len(blocks)/2; j++ {
 		blocks[j], blocks[len(blocks)-1-j] = blocks[len(blocks)-1-j], blocks[j]
 	}
 	if _, err := bc.InsertChain(blocks); err != nil {
 		t.Fatalf("failed to import contra-fork chain for expansion: %v", err)
 	}
-	if err := bc.stateCache.TrieDB().Commit(bc.CurrentHeader().Root, true, nil); err != nil {
+	if err := bc.stateCache.TrieDB().Commit(bc.CurrentHeader().Root[params.TestChainConfig.Context], true, nil); err != nil {
 		t.Fatalf("failed to commit contra-fork head for expansion: %v", err)
 	}
 	blocks, _ = GenerateChain(&proConf, conBc.CurrentBlock(), ethash.NewFaker(), db, 1, func(i int, gen *BlockGen) {})
@@ -143,14 +143,14 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 	bc, _ = NewBlockChain(db, nil, &proConf, ethash.NewFaker(), vm.Config{}, nil, nil)
 	defer bc.Stop()
 
-	blocks = proBc.GetBlocksFromHash(proBc.CurrentBlock().Hash(), int(proBc.CurrentBlock().NumberU64()))
+	blocks = proBc.GetBlocksFromHash(proBc.CurrentBlock().Hash(), int(proBc.CurrentBlock().NumberU64(params.TestChainConfig.Context)))
 	for j := 0; j < len(blocks)/2; j++ {
 		blocks[j], blocks[len(blocks)-1-j] = blocks[len(blocks)-1-j], blocks[j]
 	}
 	if _, err := bc.InsertChain(blocks); err != nil {
 		t.Fatalf("failed to import pro-fork chain for expansion: %v", err)
 	}
-	if err := bc.stateCache.TrieDB().Commit(bc.CurrentHeader().Root, true, nil); err != nil {
+	if err := bc.stateCache.TrieDB().Commit(bc.CurrentHeader().Root[params.TestChainConfig.Context], true, nil); err != nil {
 		t.Fatalf("failed to commit pro-fork head for expansion: %v", err)
 	}
 	blocks, _ = GenerateChain(&conConf, proBc.CurrentBlock(), ethash.NewFaker(), db, 1, func(i int, gen *BlockGen) {})

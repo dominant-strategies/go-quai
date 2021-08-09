@@ -273,7 +273,7 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	expected := ethash.CalcDifficulty(chain, header.Time, parent)
 
 	if expected.Cmp(header.Difficulty[chain.Config().Context]) != 0 {
-		return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty, expected)
+		return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty[chain.Config().Context], expected)
 	}
 	// Verify that the gas limit is <= 2^63-1
 	cap := uint64(0x7fffffffffffffff)
@@ -281,15 +281,16 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		return fmt.Errorf("invalid gasLimit: have %v, max %v", header.GasLimit, cap)
 	}
 	// Verify that the gasUsed is <= gasLimit
-	if header.GasUsed[chain.Config().Context] > header.GasLimit[chain.Config().Context] {
+	if len(header.GasUsed) > 0 && header.GasUsed[chain.Config().Context] > header.GasLimit[chain.Config().Context] {
 		return fmt.Errorf("invalid gasUsed: have %d, gasLimit %d", header.GasUsed, header.GasLimit)
 	}
 	// Verify the block's gas usage and (if applicable) verify the base fee.
 	if !chain.Config().IsLondon(header.Number[chain.Config().Context]) {
 		// Verify BaseFee not present before EIP-1559 fork.
-		if header.BaseFee != nil {
-			return fmt.Errorf("invalid baseFee before fork: have %d, expected 'nil'", header.BaseFee)
-		}
+		// TODO: #22 Enable the check for invalid baseFee before fork
+		// if header.BaseFee != nil {
+		// 	return fmt.Errorf("invalid baseFee before fork: have %d, expected 'nil'", header.BaseFee)
+		// }
 		if err := misc.VerifyGaslimit(parent.GasLimit[chain.Config().Context], header.GasLimit[chain.Config().Context]); err != nil {
 			return err
 		}
@@ -390,10 +391,16 @@ func makeDifficultyCalculator(bombDelay *big.Int) func(time uint64, parent *type
 		if x.Cmp(bigMinus99) < 0 {
 			x.Set(bigMinus99)
 		}
+		// If we do not have a parent difficulty, get the genesis difficulty
+		parentDifficulty := parent.Difficulty[0]
+		if parentDifficulty == nil {
+			parentDifficulty = params.GenesisDifficulty
+		}
+
 		// parent_diff + (parent_diff / 2048 * max((2 if len(parent.uncles) else 1) - ((timestamp - parent.timestamp) // 9), -99))
-		y.Div(parent.Difficulty[0], params.DifficultyBoundDivisor)
+		y.Div(parentDifficulty, params.DifficultyBoundDivisor)
 		x.Mul(y, x)
-		x.Add(parent.Difficulty[0], x)
+		x.Add(parentDifficulty, x)
 
 		// minimum difficulty can ever be (before exponential factor)
 		if x.Cmp(params.MinimumDifficulty) < 0 {
@@ -446,10 +453,14 @@ func calcDifficultyHomestead(time uint64, parent *types.Header) *big.Int {
 	if x.Cmp(bigMinus99) < 0 {
 		x.Set(bigMinus99)
 	}
+	parentDifficulty := parent.Difficulty[0]
+	if parentDifficulty == nil {
+		parentDifficulty = params.GenesisDifficulty
+	}
 	// (parent_diff + parent_diff // 2048 * max(1 - (block_timestamp - parent_timestamp) // 10, -99))
-	y.Div(parent.Difficulty[0], params.DifficultyBoundDivisor)
+	y.Div(parentDifficulty, params.DifficultyBoundDivisor)
 	x.Mul(y, x)
-	x.Add(parent.Difficulty[0], x)
+	x.Add(parentDifficulty, x)
 
 	// minimum difficulty can ever be (before exponential factor)
 	if x.Cmp(params.MinimumDifficulty) < 0 {
@@ -474,7 +485,12 @@ func calcDifficultyHomestead(time uint64, parent *types.Header) *big.Int {
 // block's time and difficulty. The calculation uses the Frontier rules.
 func calcDifficultyFrontier(time uint64, parent *types.Header) *big.Int {
 	diff := new(big.Int)
-	adjust := new(big.Int).Div(parent.Difficulty[0], params.DifficultyBoundDivisor)
+	parentDifficulty := parent.Difficulty[0]
+	if parentDifficulty == nil {
+		return params.GenesisDifficulty
+	}
+
+	adjust := new(big.Int).Div(parentDifficulty, params.DifficultyBoundDivisor)
 	bigTime := new(big.Int)
 	bigParentTime := new(big.Int)
 
@@ -482,9 +498,9 @@ func calcDifficultyFrontier(time uint64, parent *types.Header) *big.Int {
 	bigParentTime.SetUint64(parent.Time)
 
 	if bigTime.Sub(bigTime, bigParentTime).Cmp(params.DurationLimit) < 0 {
-		diff.Add(parent.Difficulty[0], adjust)
+		diff.Add(parentDifficulty, adjust)
 	} else {
-		diff.Sub(parent.Difficulty[0], adjust)
+		diff.Sub(parentDifficulty, adjust)
 	}
 	if diff.Cmp(params.MinimumDifficulty) < 0 {
 		diff.Set(params.MinimumDifficulty)

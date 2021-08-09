@@ -57,13 +57,13 @@ func (b *BlockGen) SetCoinbase(addr common.Address) {
 		}
 		panic("coinbase can only be set once")
 	}
-	b.header.Coinbase = addr
-	b.gasPool = new(GasPool).AddGas(b.header.GasLimit)
+	b.header.Coinbase[b.config.Context] = addr
+	b.gasPool = new(GasPool).AddGas(b.header.GasLimit[b.config.Context])
 }
 
 // SetExtra sets the extra data field of the generated block.
 func (b *BlockGen) SetExtra(data []byte) {
-	b.header.Extra = data
+	b.header.Extra[b.config.Context] = data
 }
 
 // SetNonce sets the nonce field of the generated block.
@@ -75,7 +75,7 @@ func (b *BlockGen) SetNonce(nonce types.BlockNonce) {
 // useful for Clique tests where the difficulty does not depend on time. For the
 // ethash tests, please use OffsetTime, which implicitly recalculates the diff.
 func (b *BlockGen) SetDifficulty(diff *big.Int) {
-	b.header.Difficulty = diff
+	b.header.Difficulty[b.config.Context] = diff
 }
 
 // AddTx adds a transaction to the generated block. If no coinbase has
@@ -103,7 +103,11 @@ func (b *BlockGen) AddTxWithChain(bc *BlockChain, tx *types.Transaction) {
 		b.SetCoinbase(common.Address{})
 	}
 	b.statedb.Prepare(tx.Hash(), len(b.txs))
-	receipt, err := ApplyTransaction(b.config, bc, &b.header.Coinbase, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed, vm.Config{})
+	gasUsed := uint64(0)
+	if len(b.header.GasUsed) > b.config.Context {
+		gasUsed = b.header.GasUsed[b.config.Context]
+	}
+	receipt, err := ApplyTransaction(b.config, bc, &b.header.Coinbase[b.config.Context], b.gasPool, b.statedb, b.header, tx, &gasUsed, vm.Config{})
 	if err != nil {
 		panic(err)
 	}
@@ -127,12 +131,12 @@ func (b *BlockGen) AddUncheckedTx(tx *types.Transaction) {
 
 // Number returns the block number of the block being generated.
 func (b *BlockGen) Number() *big.Int {
-	return new(big.Int).Set(b.header.Number)
+	return new(big.Int).Set(b.header.Number[b.config.Context])
 }
 
 // BaseFee returns the EIP-1559 base fee of the block being generated.
 func (b *BlockGen) BaseFee() *big.Int {
-	return new(big.Int).Set(b.header.BaseFee)
+	return new(big.Int).Set(b.header.BaseFee[b.config.Context])
 }
 
 // AddUncheckedReceipt forcefully adds a receipts to the block without a
@@ -180,7 +184,7 @@ func (b *BlockGen) OffsetTime(seconds int64) {
 		panic("block time out of range")
 	}
 	chainreader := &fakeChainReader{config: b.config}
-	b.header.Difficulty = b.engine.CalcDifficulty(chainreader, b.header.Time, b.parent.Header())
+	b.header.Difficulty[b.config.Context] = b.engine.CalcDifficulty(chainreader, b.header.Time, b.parent.Header())
 }
 
 // GenerateChain creates a chain of n blocks. The first block's
@@ -203,18 +207,18 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	chainreader := &fakeChainReader{config: config}
 	genblock := func(i int, parent *types.Block, statedb *state.StateDB) (*types.Block, types.Receipts) {
 		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: config, engine: engine}
-		b.header = makeHeader(chainreader, parent, statedb, b.engine)
+		b.header = makeHeader(chainreader, parent, statedb, b.engine, config.Context)
 
 		// Mutate the state and block according to any hard-fork specs
 		if daoBlock := config.DAOForkBlock; daoBlock != nil {
 			limit := new(big.Int).Add(daoBlock, params.DAOForkExtraRange)
-			if b.header.Number.Cmp(daoBlock) >= 0 && b.header.Number.Cmp(limit) < 0 {
+			if b.header.Number[b.config.Context].Cmp(daoBlock) >= 0 && b.header.Number[b.config.Context].Cmp(limit) < 0 {
 				if config.DAOForkSupport {
-					b.header.Extra = common.CopyBytes(params.DAOForkBlockExtra)
+					b.header.Extra[b.config.Context] = common.CopyBytes(params.DAOForkBlockExtra)
 				}
 			}
 		}
-		if config.DAOForkSupport && config.DAOForkBlock != nil && config.DAOForkBlock.Cmp(b.header.Number) == 0 {
+		if config.DAOForkSupport && config.DAOForkBlock != nil && config.DAOForkBlock.Cmp(b.header.Number[b.config.Context]) == 0 {
 			misc.ApplyDAOHardFork(statedb)
 		}
 		// Execute any user modifications to the block
@@ -226,7 +230,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			block, _ := b.engine.FinalizeAndAssemble(chainreader, b.header, statedb, b.txs, b.uncles, b.receipts)
 
 			// Write state changes to db
-			root, err := statedb.Commit(config.IsEIP158(b.header.Number))
+			root, err := statedb.Commit(config.IsEIP158(b.header.Number[b.config.Context]))
 			if err != nil {
 				panic(fmt.Sprintf("state write error: %v", err))
 			}
@@ -238,7 +242,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		return nil, nil
 	}
 	for i := 0; i < n; i++ {
-		statedb, err := state.New(parent.Root(), state.NewDatabase(db), nil)
+		statedb, err := state.New(parent.Root(config.Context), state.NewDatabase(db), nil)
 		if err != nil {
 			panic(err)
 		}
@@ -250,35 +254,55 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	return blocks, receipts
 }
 
-func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.StateDB, engine consensus.Engine) *types.Header {
+func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.StateDB, engine consensus.Engine, context int) *types.Header {
 	var time uint64
 	if parent.Time() == 0 {
 		time = 10
 	} else {
 		time = parent.Time() + 10 // block time is fixed at 10 seconds
 	}
+
+	baseFee := misc.CalcBaseFee(chain.Config(), parent.Header())
+
 	header := &types.Header{
-		Root:       state.IntermediateRoot(chain.Config().IsEIP158(parent.Number())),
-		ParentHash: parent.Hash(),
-		Coinbase:   parent.Coinbase(),
-		Difficulty: engine.CalcDifficulty(chain, time, &types.Header{
-			Number:     parent.Number(),
-			Time:       time - 10,
-			Difficulty: parent.Difficulty(),
-			UncleHash:  parent.UncleHash(),
-		}),
-		GasLimit: parent.GasLimit(),
-		Number:   new(big.Int).Add(parent.Number(), common.Big1),
-		Time:     time,
+		Coinbase:    []common.Address{common.Address{}, common.Address{}, common.Address{}},
+		Number:      []*big.Int{big.NewInt(int64(1)), big.NewInt(int64(1)), big.NewInt(int64(1))},
+		ParentHash:  []common.Hash{common.Hash{}, common.Hash{}, common.Hash{}},
+		Root:        []common.Hash{common.Hash{}, common.Hash{}, common.Hash{}},
+		Difficulty:  []*big.Int{big.NewInt(1), big.NewInt(1), big.NewInt(1)},
+		UncleHash:   types.EmptyUncleHash,
+		TxHash:      types.EmptyRootHash,
+		ReceiptHash: types.EmptyRootHash,
+		Time:        time,
+		BaseFee:     []*big.Int{baseFee, baseFee, baseFee},
+		GasLimit:    []uint64{0, 0, 0},
 	}
-	if chain.Config().IsLondon(header.Number) {
-		header.BaseFee = misc.CalcBaseFee(chain.Config(), parent.Header())
-		parentGasLimit := parent.GasLimit()
-		if !chain.Config().IsLondon(parent.Number()) {
-			parentGasLimit = parent.GasLimit() * params.ElasticityMultiplier
+	header.GasLimit[chain.Config().Context] = parent.GasLimit(chain.Config().Context)
+
+	parentDiff := &types.Header{
+		Number:     []*big.Int{big.NewInt(int64(1)), big.NewInt(int64(1)), big.NewInt(int64(1))},
+		Difficulty: []*big.Int{big.NewInt(1), big.NewInt(1), big.NewInt(1)},
+		UncleHash:  types.EmptyUncleHash,
+		Time:       time - 10,
+	}
+
+	if chain.Config().IsLondon(header.Number[chain.Config().Context]) {
+		if !chain.Config().IsLondon(parent.Number(chain.Config().Context)) {
+			parentGasLimit := parent.GasLimit(chain.Config().Context) * params.ElasticityMultiplier
+			header.GasLimit[chain.Config().Context] = CalcGasLimit1559(parentGasLimit, parentGasLimit)
 		}
-		header.GasLimit = CalcGasLimit1559(parentGasLimit, parentGasLimit)
 	}
+
+	parentDiff.Number[context] = new(big.Int).Add(parent.Number(chain.Config().Context), common.Big1)
+	parentDiff.Difficulty[context] = parent.Difficulty(context)
+	parentDiff.UncleHash[context] = parent.UncleHash(context)
+
+	header.Root[context] = state.IntermediateRoot(chain.Config().IsEIP158(parent.Number(context)))
+	header.ParentHash[context] = parent.Hash()
+	header.Coinbase[context] = parent.Coinbase(context)
+	header.Difficulty[context] = engine.CalcDifficulty(chain, time, parentDiff)
+	header.Number[context] = new(big.Int).Add(parent.Number(context), common.Big1)
+
 	return header
 }
 

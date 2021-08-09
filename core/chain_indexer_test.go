@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // Runs multiple tests with randomized parameters.
@@ -60,7 +61,7 @@ func testChainIndexer(t *testing.T, count int) {
 			confirmsReq = uint64(rand.Intn(10))
 		)
 		backends[i] = &testChainIndexBackend{t: t, processCh: make(chan uint64)}
-		backends[i].indexer = NewChainIndexer(db, rawdb.NewTable(db, string([]byte{byte(i)})), backends[i], sectionSize, confirmsReq, 0, fmt.Sprintf("indexer-%d", i))
+		backends[i].indexer = NewChainIndexer(db, rawdb.NewTable(db, string([]byte{byte(i)})), backends[i], sectionSize, confirmsReq, 0, fmt.Sprintf("indexer-%d", i), params.TestChainConfig.Context)
 
 		if sections, _, _ := backends[i].indexer.Sections(); sections != 0 {
 			t.Fatalf("Canonical section count mismatch: have %v, want %v", sections, 0)
@@ -92,11 +93,12 @@ func testChainIndexer(t *testing.T, count int) {
 	}
 	// inject inserts a new random canonical header into the database directly
 	inject := func(number uint64) {
-		header := &types.Header{Number: big.NewInt(int64(number)), Extra: big.NewInt(rand.Int63()).Bytes()}
+		header := &types.Header{Number: []*big.Int{big.NewInt(int64(number)), big.NewInt(int64(number)), big.NewInt(int64(number))},
+			Extra: [][]byte{big.NewInt(rand.Int63()).Bytes(), big.NewInt(rand.Int63()).Bytes(), big.NewInt(rand.Int63()).Bytes()}}
 		if number > 0 {
-			header.ParentHash = rawdb.ReadCanonicalHash(db, number-1)
+			header.ParentHash[params.TestChainConfig.Context] = rawdb.ReadCanonicalHash(db, number-1)
 		}
-		rawdb.WriteHeader(db, header)
+		rawdb.WriteHeader(db, header, params.TestChainConfig.Context)
 		rawdb.WriteCanonicalHash(db, header.Hash(), number)
 	}
 	// Start indexer with an already existing chain
@@ -229,7 +231,7 @@ func (b *testChainIndexBackend) Process(ctx context.Context, header *types.Heade
 		// Can't use Fatal since this is not the test's goroutine.
 		// Returning error stops the chainIndexer's updateLoop
 		return errors.New("Unexpected call to Process")
-	case b.processCh <- header.Number.Uint64():
+	case b.processCh <- header.Number[params.TestChainConfig.Context].Uint64():
 	}
 	return nil
 }

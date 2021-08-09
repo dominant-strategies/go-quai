@@ -292,27 +292,27 @@ func TestStateProcessorErrors(t *testing.T) {
 // - valid pow (fake), ancestry, difficulty, gaslimit etc
 func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Transactions, config *params.ChainConfig) *types.Block {
 	header := &types.Header{
-		ParentHash: parent.Hash(),
-		Coinbase:   parent.Coinbase(),
-		Difficulty: engine.CalcDifficulty(&fakeChainReader{config}, parent.Time()+10, &types.Header{
-			Number:     parent.Number(),
-			Time:       parent.Time(),
-			Difficulty: parent.Difficulty(),
-			UncleHash:  parent.UncleHash(),
-		}),
-		GasLimit:  parent.GasLimit(),
-		Number:    new(big.Int).Add(parent.Number(), common.Big1),
 		Time:      parent.Time() + 10,
 		UncleHash: types.EmptyUncleHash,
 	}
-	if config.IsLondon(header.Number) {
-		header.BaseFee = misc.CalcBaseFee(config, parent.Header())
-	}
+
+	header.ParentHash[config.Context] = parent.Hash()
+	header.Coinbase[config.Context] = parent.Coinbase(config.Context)
+	parentDiff := &types.Header{Time: parent.Time()}
+	parentDiff.Number[config.Context] = parent.Number(config.Context)
+	parentDiff.Difficulty[config.Context] = parent.Difficulty(config.Context)
+	parentDiff.UncleHash[config.Context] = parent.UncleHash(config.Context)
+	header.Difficulty[config.Context] = engine.CalcDifficulty(&fakeChainReader{config}, parent.Time()+10, parentDiff)
+	header.GasLimit[config.Context] = parent.GasLimit(config.Context)
+	header.Number[config.Context] = new(big.Int).Add(parent.Number(config.Context), common.Big1)
+
+	header.BaseFee[config.Context] = misc.CalcBaseFee(config, parent.Header())
+
 	var receipts []*types.Receipt
 	// The post-state result doesn't need to be correct (this is a bad block), but we do need something there
 	// Preferably something unique. So let's use a combo of blocknum + txhash
 	hasher := sha3.NewLegacyKeccak256()
-	hasher.Write(header.Number.Bytes())
+	hasher.Write(header.Number[config.Context].Bytes())
 	var cumulativeGas uint64
 	for _, tx := range txs {
 		txh := tx.Hash()
@@ -323,7 +323,7 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		receipts = append(receipts, receipt)
 		cumulativeGas += tx.Gas()
 	}
-	header.Root = common.BytesToHash(hasher.Sum(nil))
+	header.Root[config.Context] = common.BytesToHash(hasher.Sum(nil))
 	// Assemble and return the final block for sealing
 	return types.NewBlock(header, txs, nil, receipts, trie.NewStackTrie(nil))
 }

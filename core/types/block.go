@@ -271,9 +271,11 @@ func CopyHeader(h *Header) *Header {
 		if h.BaseFee != nil && h.BaseFee[i] != nil {
 			cpy.BaseFee[i] = new(big.Int).Set(h.BaseFee[i])
 		}
-		if len(h.Extra[i]) > 0 {
-			cpy.Extra[i] = make([]byte, len(h.Extra[i]))
-			copy(cpy.Extra[i], h.Extra[i])
+		if len(h.Extra) > i {
+			if len(h.Extra[i]) > 0 {
+				cpy.Extra[i] = make([]byte, len(h.Extra[i]))
+				copy(cpy.Extra[i], h.Extra[i])
+			}
 		}
 	}
 	return &cpy
@@ -318,7 +320,10 @@ func (b *Block) Number(context int) *big.Int { return b.header.Number[context] }
 func (b *Block) GasLimit(context int) uint64 { return b.header.GasLimit[context] }
 func (b *Block) GasUsed(context int) uint64  { return b.header.GasUsed[context] }
 func (b *Block) Difficulty(context int) *big.Int {
-	return new(big.Int).Set(b.header.Difficulty[context])
+	if b.header.Difficulty[context] != nil {
+		new(big.Int).Set(b.header.Difficulty[context])
+	}
+	return nil
 }
 func (b *Block) Time() uint64 { return b.header.Time }
 
@@ -327,7 +332,13 @@ func (b *Block) MixDigest(context int) common.Hash   { return b.header.MixDigest
 func (b *Block) Nonce() uint64                       { return binary.BigEndian.Uint64(b.header.Nonce[:]) }
 func (b *Block) Bloom(context int) Bloom             { return b.header.Bloom[context] }
 func (b *Block) Coinbase(context int) common.Address { return b.header.Coinbase[context] }
-func (b *Block) Root(context int) common.Hash        { return b.header.Root[context] }
+func (b *Block) Root(context int) common.Hash {
+	if len(b.header.Root) > context {
+		return b.header.Root[context]
+	}
+	return common.Hash{}
+}
+
 func (b *Block) ParentHash(context int) common.Hash  { return b.header.ParentHash[context] }
 func (b *Block) TxHash(context int) common.Hash      { return b.header.TxHash[context] }
 func (b *Block) ReceiptHash(context int) common.Hash { return b.header.ReceiptHash[context] }

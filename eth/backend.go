@@ -151,7 +151,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		gasPrice:          config.Miner.GasPrice,
 		etherbase:         config.Miner.Etherbase,
 		bloomRequests:     make(chan chan *bloombits.Retrieval),
-		bloomIndexer:      core.NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms),
+		bloomIndexer:      core.NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms, config.Genesis.Config.Context),
 		p2pServer:         stack.Server(),
 	}
 
@@ -381,7 +381,7 @@ func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 func (s *Ethereum) isLocalBlock(block *types.Block) bool {
 	author, err := s.engine.Author(block.Header())
 	if err != nil {
-		log.Warn("Failed to retrieve block author", "number", block.NumberU64(), "hash", block.Hash(), "err", err)
+		log.Warn("Failed to retrieve block author", "number", block.Header().Number, "hash", block.Hash(), "err", err)
 		return false
 	}
 	// Check whether the given address is etherbase.

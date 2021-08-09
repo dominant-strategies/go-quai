@@ -70,10 +70,10 @@ func ExampleGenerateChain() {
 		case 3:
 			// Block 4 includes blocks 2 and 3 as uncle headers (with modified extra data).
 			b2 := gen.PrevBlock(1).Header()
-			b2.Extra = []byte("foo")
+			b2.Extra = [][]byte{[]byte("foo"), []byte("foo"), []byte("foo")}
 			gen.AddUncle(b2)
 			b3 := gen.PrevBlock(2).Header()
-			b3.Extra = []byte("foo")
+			b3.Extra = [][]byte{[]byte("foo"), []byte("foo"), []byte("foo")}
 			gen.AddUncle(b3)
 		}
 	})
@@ -83,12 +83,12 @@ func ExampleGenerateChain() {
 	defer blockchain.Stop()
 
 	if i, err := blockchain.InsertChain(chain); err != nil {
-		fmt.Printf("insert error (block %d): %v\n", chain[i].NumberU64(), err)
+		fmt.Printf("insert error (block %d): %v\n", chain[i].NumberU64(params.TestChainConfig.Context), err)
 		return
 	}
 
 	state, _ := blockchain.State()
-	fmt.Printf("last block: #%d\n", blockchain.CurrentBlock().Number())
+	fmt.Printf("last block: #%d\n", blockchain.CurrentBlock().Number(params.TestChainConfig.Context))
 	fmt.Println("balance of addr1:", state.GetBalance(addr1))
 	fmt.Println("balance of addr2:", state.GetBalance(addr2))
 	fmt.Println("balance of addr3:", state.GetBalance(addr3))

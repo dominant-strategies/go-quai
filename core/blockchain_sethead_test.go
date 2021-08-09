@@ -1977,6 +1977,7 @@ func testSetHead(t *testing.T, tt *rewindTest, snapshots bool) {
 			TrieTimeLimit:  5 * time.Minute,
 			SnapshotLimit:  0, // Disable snapshot
 		}
+		context = 0
 	)
 	if snapshots {
 		config.SnapshotLimit = 256
@@ -2004,9 +2005,9 @@ func testSetHead(t *testing.T, tt *rewindTest, snapshots bool) {
 		t.Fatalf("Failed to import canonical chain start: %v", err)
 	}
 	if tt.commitBlock > 0 {
-		chain.stateCache.TrieDB().Commit(canonblocks[tt.commitBlock-1].Root(), true, nil)
+		chain.stateCache.TrieDB().Commit(canonblocks[tt.commitBlock-1].Root(context), true, nil)
 		if snapshots {
-			if err := chain.snaps.Cap(canonblocks[tt.commitBlock-1].Root(), 0); err != nil {
+			if err := chain.snaps.Cap(canonblocks[tt.commitBlock-1].Root(context), 0); err != nil {
 				t.Fatalf("Failed to flatten snapshots: %v", err)
 			}
 		}
@@ -2016,10 +2017,10 @@ func testSetHead(t *testing.T, tt *rewindTest, snapshots bool) {
 	}
 	// Manually dereference anything not committed to not have to work with 128+ tries
 	for _, block := range sideblocks {
-		chain.stateCache.TrieDB().Dereference(block.Root())
+		chain.stateCache.TrieDB().Dereference(block.Root(context))
 	}
 	for _, block := range canonblocks {
-		chain.stateCache.TrieDB().Dereference(block.Root())
+		chain.stateCache.TrieDB().Dereference(block.Root(context))
 	}
 	// Force run a freeze cycle
 	type freezer interface {
@@ -2041,14 +2042,14 @@ func testSetHead(t *testing.T, tt *rewindTest, snapshots bool) {
 	verifyCutoff(t, chain, true, canonblocks, tt.expCanonicalBlocks)
 	verifyCutoff(t, chain, false, sideblocks, tt.expSidechainBlocks)
 
-	if head := chain.CurrentHeader(); head.Number.Uint64() != tt.expHeadHeader {
+	if head := chain.CurrentHeader(); head.Number[context].Uint64() != tt.expHeadHeader {
 		t.Errorf("Head header mismatch: have %d, want %d", head.Number, tt.expHeadHeader)
 	}
-	if head := chain.CurrentFastBlock(); head.NumberU64() != tt.expHeadFastBlock {
-		t.Errorf("Head fast block mismatch: have %d, want %d", head.NumberU64(), tt.expHeadFastBlock)
+	if head := chain.CurrentFastBlock(); head.NumberU64(context) != tt.expHeadFastBlock {
+		t.Errorf("Head fast block mismatch: have %d, want %d", head.NumberU64(context), tt.expHeadFastBlock)
 	}
-	if head := chain.CurrentBlock(); head.NumberU64() != tt.expHeadBlock {
-		t.Errorf("Head block mismatch: have %d, want %d", head.NumberU64(), tt.expHeadBlock)
+	if head := chain.CurrentBlock(); head.NumberU64(context) != tt.expHeadBlock {
+		t.Errorf("Head block mismatch: have %d, want %d", head.NumberU64(context), tt.expHeadBlock)
 	}
 	if frozen, err := db.(freezer).Ancients(); err != nil {
 		t.Errorf("Failed to retrieve ancient count: %v\n", err)
@@ -2114,49 +2115,50 @@ func verifyNoGaps(t *testing.T, chain *BlockChain, canonical bool, inserted type
 func verifyCutoff(t *testing.T, chain *BlockChain, canonical bool, inserted types.Blocks, head int) {
 	t.Helper()
 
+	context := 0
 	for i := 1; i <= len(inserted); i++ {
 		if i <= head {
 			if header := chain.GetHeader(inserted[i-1].Hash(), uint64(i)); header == nil {
 				if canonical {
-					t.Errorf("Canonical header   #%2d [%x...] missing before cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)
+					t.Errorf("Canonical header   #%2d [%x...] missing before cap %d", inserted[i-1].Number(context), inserted[i-1].Hash().Bytes()[:3], head)
 				} else {
-					t.Errorf("Sidechain header   #%2d [%x...] missing before cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)
+					t.Errorf("Sidechain header   #%2d [%x...] missing before cap %d", inserted[i-1].Number(context), inserted[i-1].Hash().Bytes()[:3], head)
 				}
 			}
 			if block := chain.GetBlock(inserted[i-1].Hash(), uint64(i)); block == nil {
 				if canonical {
-					t.Errorf("Canonical block    #%2d [%x...] missing before cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)
+					t.Errorf("Canonical block    #%2d [%x...] missing before cap %d", inserted[i-1].Number(context), inserted[i-1].Hash().Bytes()[:3], head)
 				} else {
-					t.Errorf("Sidechain block    #%2d [%x...] missing before cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)
+					t.Errorf("Sidechain block    #%2d [%x...] missing before cap %d", inserted[i-1].Number(context), inserted[i-1].Hash().Bytes()[:3], head)
 				}
 			}
 			if receipts := chain.GetReceiptsByHash(inserted[i-1].Hash()); receipts == nil {
 				if canonical {
-					t.Errorf("Canonical receipts #%2d [%x...] missing before cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)
+					t.Errorf("Canonical receipts #%2d [%x...] missing before cap %d", inserted[i-1].Number(context), inserted[i-1].Hash().Bytes()[:3], head)
 				} else {
-					t.Errorf("Sidechain receipts #%2d [%x...] missing before cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)
+					t.Errorf("Sidechain receipts #%2d [%x...] missing before cap %d", inserted[i-1].Number(context), inserted[i-1].Hash().Bytes()[:3], head)
 				}
 			}
 		} else {
 			if header := chain.GetHeader(inserted[i-1].Hash(), uint64(i)); header != nil {
 				if canonical {
-					t.Errorf("Canonical header   #%2d [%x...] present after cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)
+					t.Errorf("Canonical header   #%2d [%x...] present after cap %d", inserted[i-1].Number(context), inserted[i-1].Hash().Bytes()[:3], head)
 				} else {
-					t.Errorf("Sidechain header   #%2d [%x...] present after cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)
+					t.Errorf("Sidechain header   #%2d [%x...] present after cap %d", inserted[i-1].Number(context), inserted[i-1].Hash().Bytes()[:3], head)
 				}
 			}
 			if block := chain.GetBlock(inserted[i-1].Hash(), uint64(i)); block != nil {
 				if canonical {
-					t.Errorf("Canonical block    #%2d [%x...] present after cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)
+					t.Errorf("Canonical block    #%2d [%x...] present after cap %d", inserted[i-1].Number(context), inserted[i-1].Hash().Bytes()[:3], head)
 				} else {
-					t.Errorf("Sidechain block    #%2d [%x...] present after cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)
+					t.Errorf("Sidechain block    #%2d [%x...] present after cap %d", inserted[i-1].Number(context), inserted[i-1].Hash().Bytes()[:3], head)
 				}
 			}
 			if receipts := chain.GetReceiptsByHash(inserted[i-1].Hash()); receipts != nil {
 				if canonical {
-					t.Errorf("Canonical receipts #%2d [%x...] present after cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)
+					t.Errorf("Canonical receipts #%2d [%x...] present after cap %d", inserted[i-1].Number(context), inserted[i-1].Hash().Bytes()[:3], head)
 				} else {
-					t.Errorf("Sidechain receipts #%2d [%x...] present after cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)
+					t.Errorf("Sidechain receipts #%2d [%x...] present after cap %d", inserted[i-1].Number(context), inserted[i-1].Hash().Bytes()[:3], head)
 				}
 			}
 		}
