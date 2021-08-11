@@ -37,24 +37,23 @@ const (
 // BloomIndexer implements a core.ChainIndexer, building up a rotated bloom bits index
 // for the Ethereum header bloom filters, permitting blazing fast filtering.
 type BloomIndexer struct {
-	size        uint64               // section size to generate bloombits for
-	db          ethdb.Database       // database instance to write index data and metadata into
-	gen         *bloombits.Generator // generator to rotate the bloom bits crating the bloom index
-	section     uint64               // Section is the section number being processed currently
-	head        common.Hash          // Head is the hash of the last header processed
-	nodeContext int                  // Index for header lookup
+	size    uint64               // section size to generate bloombits for
+	db      ethdb.Database       // database instance to write index data and metadata into
+	gen     *bloombits.Generator // generator to rotate the bloom bits crating the bloom index
+	section uint64               // Section is the section number being processed currently
+	head    common.Hash          // Head is the hash of the last header processed
 }
 
 // NewBloomIndexer returns a chain indexer that generates bloom bits data for the
 // canonical chain for fast logs filtering.
-func NewBloomIndexer(db ethdb.Database, size, confirms uint64, nodeContext int) *ChainIndexer {
+func NewBloomIndexer(db ethdb.Database, size, confirms uint64) *ChainIndexer {
 	backend := &BloomIndexer{
 		db:   db,
 		size: size,
 	}
 	table := rawdb.NewTable(db, string(rawdb.BloomBitsIndexPrefix))
 
-	return NewChainIndexer(db, table, backend, size, confirms, bloomThrottling, "bloombits", nodeContext)
+	return NewChainIndexer(db, table, backend, size, confirms, bloomThrottling, "bloombits")
 }
 
 // Reset implements core.ChainIndexerBackend, starting a new bloombits index
@@ -68,7 +67,7 @@ func (b *BloomIndexer) Reset(ctx context.Context, section uint64, lastSectionHea
 // Process implements core.ChainIndexerBackend, adding a new header's bloom into
 // the index.
 func (b *BloomIndexer) Process(ctx context.Context, header *types.Header) error {
-	b.gen.AddBloom(uint(header.Number[b.nodeContext].Uint64()-b.section*b.size), header.Bloom[b.nodeContext])
+	b.gen.AddBloom(uint(header.Number[types.QuaiNetworkContext].Uint64()-b.section*b.size), header.Bloom[types.QuaiNetworkContext])
 	b.head = header.Hash()
 	return nil
 }

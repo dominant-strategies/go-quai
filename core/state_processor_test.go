@@ -296,23 +296,23 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		UncleHash: types.EmptyUncleHash,
 	}
 
-	header.ParentHash[config.Context] = parent.Hash()
-	header.Coinbase[config.Context] = parent.Coinbase(config.Context)
+	header.ParentHash[types.QuaiNetworkContext] = parent.Hash()
+	header.Coinbase[types.QuaiNetworkContext] = parent.Coinbase()
 	parentDiff := &types.Header{Time: parent.Time()}
-	parentDiff.Number[config.Context] = parent.Number(config.Context)
-	parentDiff.Difficulty[config.Context] = parent.Difficulty(config.Context)
-	parentDiff.UncleHash[config.Context] = parent.UncleHash(config.Context)
-	header.Difficulty[config.Context] = engine.CalcDifficulty(&fakeChainReader{config}, parent.Time()+10, parentDiff)
-	header.GasLimit[config.Context] = parent.GasLimit(config.Context)
-	header.Number[config.Context] = new(big.Int).Add(parent.Number(config.Context), common.Big1)
+	parentDiff.Number[types.QuaiNetworkContext] = parent.Number()
+	parentDiff.Difficulty[types.QuaiNetworkContext] = parent.Difficulty()
+	parentDiff.UncleHash[types.QuaiNetworkContext] = parent.UncleHash()
+	header.Difficulty[types.QuaiNetworkContext] = engine.CalcDifficulty(&fakeChainReader{config}, parent.Time()+10, parentDiff)
+	header.GasLimit[types.QuaiNetworkContext] = parent.GasLimit()
+	header.Number[types.QuaiNetworkContext] = new(big.Int).Add(parent.Number(), common.Big1)
 
-	header.BaseFee[config.Context] = misc.CalcBaseFee(config, parent.Header())
+	header.BaseFee[types.QuaiNetworkContext] = misc.CalcBaseFee(config, parent.Header())
 
 	var receipts []*types.Receipt
 	// The post-state result doesn't need to be correct (this is a bad block), but we do need something there
 	// Preferably something unique. So let's use a combo of blocknum + txhash
 	hasher := sha3.NewLegacyKeccak256()
-	hasher.Write(header.Number[config.Context].Bytes())
+	hasher.Write(header.Number[types.QuaiNetworkContext].Bytes())
 	var cumulativeGas uint64
 	for _, tx := range txs {
 		txh := tx.Hash()
@@ -323,7 +323,7 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		receipts = append(receipts, receipt)
 		cumulativeGas += tx.Gas()
 	}
-	header.Root[config.Context] = common.BytesToHash(hasher.Sum(nil))
+	header.Root[types.QuaiNetworkContext] = common.BytesToHash(hasher.Sum(nil))
 	// Assemble and return the final block for sealing
 	return types.NewBlock(header, txs, nil, receipts, trie.NewStackTrie(nil))
 }

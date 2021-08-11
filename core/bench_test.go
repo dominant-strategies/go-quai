@@ -112,7 +112,7 @@ func genTxRing(naccounts int) func(int, *BlockGen) {
 	from := 0
 	return func(i int, gen *BlockGen) {
 		block := gen.PrevBlock(i - 1)
-		gas := block.GasLimit(0)
+		gas := block.GasLimit()
 		for {
 			gas -= params.TxGas
 			if gas < params.TxGas {
@@ -238,7 +238,7 @@ func makeChainForBench(db ethdb.Database, full bool, count uint64) {
 		}
 		hash = header.Hash()
 
-		rawdb.WriteHeader(db, header, 0)
+		rawdb.WriteHeader(db, header)
 		rawdb.WriteCanonicalHash(db, hash, n)
 		rawdb.WriteTd(db, hash, n, big.NewInt(int64(n+1)))
 

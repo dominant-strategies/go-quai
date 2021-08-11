@@ -32,9 +32,10 @@ import (
 )
 
 var (
-	EmptyRootHash  = []common.Hash{common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"), common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"), common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")}
-	EmptyUncleHash = []common.Hash{rlpHash([]*Header(nil)), rlpHash([]*Header(nil)), rlpHash([]*Header(nil))}
-	ContextDepth   = 3
+	EmptyRootHash      = []common.Hash{common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"), common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"), common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")}
+	EmptyUncleHash     = []common.Hash{rlpHash([]*Header(nil)), rlpHash([]*Header(nil)), rlpHash([]*Header(nil))}
+	ContextDepth       = 3
+	QuaiNetworkContext = 0
 )
 
 // A BlockNonce is a 64-bit hash which proves (combined with the
@@ -316,39 +317,30 @@ func (b *Block) Transaction(hash common.Hash) *Transaction {
 	return nil
 }
 
-func (b *Block) Number(context int) *big.Int { return b.header.Number[context] }
-func (b *Block) GasLimit(context int) uint64 { return b.header.GasLimit[context] }
-func (b *Block) GasUsed(context int) uint64  { return b.header.GasUsed[context] }
-func (b *Block) Difficulty(context int) *big.Int {
-	if b.header.Difficulty[context] != nil {
-		new(big.Int).Set(b.header.Difficulty[context])
-	}
-	return nil
+func (b *Block) Number() *big.Int { return b.header.Number[QuaiNetworkContext] }
+func (b *Block) GasLimit() uint64 { return b.header.GasLimit[QuaiNetworkContext] }
+func (b *Block) GasUsed() uint64  { return b.header.GasUsed[QuaiNetworkContext] }
+func (b *Block) Difficulty() *big.Int {
+	return new(big.Int).Set(b.header.Difficulty[QuaiNetworkContext])
 }
 func (b *Block) Time() uint64 { return b.header.Time }
 
-func (b *Block) NumberU64(context int) uint64        { return b.header.Number[context].Uint64() }
-func (b *Block) MixDigest(context int) common.Hash   { return b.header.MixDigest[context] }
-func (b *Block) Nonce() uint64                       { return binary.BigEndian.Uint64(b.header.Nonce[:]) }
-func (b *Block) Bloom(context int) Bloom             { return b.header.Bloom[context] }
-func (b *Block) Coinbase(context int) common.Address { return b.header.Coinbase[context] }
-func (b *Block) Root(context int) common.Hash {
-	if len(b.header.Root) > context {
-		return b.header.Root[context]
-	}
-	return common.Hash{}
-}
-
-func (b *Block) ParentHash(context int) common.Hash  { return b.header.ParentHash[context] }
-func (b *Block) TxHash(context int) common.Hash      { return b.header.TxHash[context] }
-func (b *Block) ReceiptHash(context int) common.Hash { return b.header.ReceiptHash[context] }
-func (b *Block) UncleHash(context int) common.Hash   { return b.header.UncleHash[context] }
-func (b *Block) Extra(context int) []byte            { return common.CopyBytes(b.header.Extra[context]) }
-func (b *Block) BaseFee(context int) *big.Int {
+func (b *Block) NumberU64() uint64        { return b.header.Number[QuaiNetworkContext].Uint64() }
+func (b *Block) MixDigest() common.Hash   { return b.header.MixDigest[QuaiNetworkContext] }
+func (b *Block) Nonce() uint64            { return binary.BigEndian.Uint64(b.header.Nonce[:]) }
+func (b *Block) Bloom() Bloom             { return b.header.Bloom[QuaiNetworkContext] }
+func (b *Block) Coinbase() common.Address { return b.header.Coinbase[QuaiNetworkContext] }
+func (b *Block) Root() common.Hash        { return b.header.Root[QuaiNetworkContext] }
+func (b *Block) ParentHash() common.Hash  { return b.header.ParentHash[QuaiNetworkContext] }
+func (b *Block) TxHash() common.Hash      { return b.header.TxHash[QuaiNetworkContext] }
+func (b *Block) ReceiptHash() common.Hash { return b.header.ReceiptHash[QuaiNetworkContext] }
+func (b *Block) UncleHash() common.Hash   { return b.header.UncleHash[QuaiNetworkContext] }
+func (b *Block) Extra() []byte            { return common.CopyBytes(b.header.Extra[QuaiNetworkContext]) }
+func (b *Block) BaseFee() *big.Int {
 	if b.header.BaseFee == nil {
 		return nil
 	}
-	return new(big.Int).Set(b.header.BaseFee[context])
+	return new(big.Int).Set(b.header.BaseFee[QuaiNetworkContext])
 }
 
 func (b *Block) Header() *Header { return CopyHeader(b.header) }

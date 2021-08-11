@@ -305,16 +305,16 @@ func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
 		config = params.AllEthashProtocolChanges
 	}
 
-	if block.Number(config.Context).Sign() != 0 {
+	if block.Number().Sign() != 0 {
 		return nil, fmt.Errorf("can't commit genesis block with number > 0")
 	}
 	if err := config.CheckConfigForkOrder(); err != nil {
 		return nil, err
 	}
-	rawdb.WriteTd(db, block.Hash(), block.NumberU64(config.Context), g.Difficulty)
-	rawdb.WriteBlock(db, block, config.Context)
-	rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(config.Context), nil)
-	rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64(config.Context))
+	rawdb.WriteTd(db, block.Hash(), block.NumberU64(), g.Difficulty)
+	rawdb.WriteBlock(db, block)
+	rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), nil)
+	rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())
 	rawdb.WriteHeadBlockHash(db, block.Hash())
 	rawdb.WriteHeadFastBlockHash(db, block.Hash())
 	rawdb.WriteHeadHeaderHash(db, block.Hash())

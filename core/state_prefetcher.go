@@ -50,20 +50,20 @@ func newStatePrefetcher(config *params.ChainConfig, bc *BlockChain, engine conse
 func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, cfg vm.Config, interrupt *uint32) {
 	var (
 		header       = block.Header()
-		gaspool      = new(GasPool).AddGas(block.GasLimit(p.config.Context))
-		blockContext = NewEVMBlockContext(header, p.bc, nil, p.config.Context)
+		gaspool      = new(GasPool).AddGas(block.GasLimit())
+		blockContext = NewEVMBlockContext(header, p.bc, nil)
 		evm          = vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
-		signer       = types.MakeSigner(p.config, header.Number[p.config.Context])
+		signer       = types.MakeSigner(p.config, header.Number[types.QuaiNetworkContext])
 	)
 	// Iterate over and process the individual transactions
-	byzantium := p.config.IsByzantium(block.Number(p.config.Context))
+	byzantium := p.config.IsByzantium(block.Number())
 	for i, tx := range block.Transactions() {
 		// If block precaching was interrupted, abort
 		if interrupt != nil && atomic.LoadUint32(interrupt) == 1 {
 			return
 		}
 		// Convert the transaction into an executable message and pre-cache its sender
-		msg, err := tx.AsMessage(signer, header.BaseFee[p.config.Context])
+		msg, err := tx.AsMessage(signer, header.BaseFee[types.QuaiNetworkContext])
 		if err != nil {
 			return // Also invalid block, bail out
 		}

@@ -36,7 +36,7 @@ type ChainContext interface {
 }
 
 // NewEVMBlockContext creates a new context for use in the EVM.
-func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common.Address, headerContext int) vm.BlockContext {
+func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common.Address) vm.BlockContext {
 	var (
 		beneficiary common.Address
 		baseFee     *big.Int
@@ -44,23 +44,23 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 
 	// If we don't have an explicit author (i.e. not mining), extract from the header
 	if author == nil {
-		beneficiary, _ = chain.Engine().Author(header, headerContext) // Ignore error, we're past header validation
+		beneficiary, _ = chain.Engine().Author(header) // Ignore error, we're past header validation
 	} else {
 		beneficiary = *author
 	}
 	if header.BaseFee != nil {
-		baseFee = new(big.Int).Set(header.BaseFee[headerContext])
+		baseFee = new(big.Int).Set(header.BaseFee[types.QuaiNetworkContext])
 	}
 	return vm.BlockContext{
 		CanTransfer: CanTransfer,
 		Transfer:    Transfer,
-		GetHash:     GetHashFn(header, chain, headerContext),
+		GetHash:     GetHashFn(header, chain),
 		Coinbase:    beneficiary,
-		BlockNumber: new(big.Int).Set(header.Number[headerContext]),
+		BlockNumber: new(big.Int).Set(header.Number[types.QuaiNetworkContext]),
 		Time:        new(big.Int).SetUint64(header.Time),
-		Difficulty:  new(big.Int).Set(header.Difficulty[headerContext]),
+		Difficulty:  new(big.Int).Set(header.Difficulty[types.QuaiNetworkContext]),
 		BaseFee:     baseFee,
-		GasLimit:    header.GasLimit[headerContext],
+		GasLimit:    header.GasLimit[types.QuaiNetworkContext],
 	}
 }
 
@@ -73,7 +73,7 @@ func NewEVMTxContext(msg Message) vm.TxContext {
 }
 
 // GetHashFn returns a GetHashFunc which retrieves header hashes by number
-func GetHashFn(ref *types.Header, chain ChainContext, headerContext int) func(n uint64) common.Hash {
+func GetHashFn(ref *types.Header, chain ChainContext) func(n uint64) common.Hash {
 	// Cache will initially contain [refHash.parent],
 	// Then fill up with [refHash.p, refHash.pp, refHash.ppp, ...]
 	var cache []common.Hash
@@ -81,23 +81,23 @@ func GetHashFn(ref *types.Header, chain ChainContext, headerContext int) func(n 
 	return func(n uint64) common.Hash {
 		// If there's no hash cache yet, make one
 		if len(cache) == 0 {
-			cache = append(cache, ref.ParentHash[headerContext])
+			cache = append(cache, ref.ParentHash[types.QuaiNetworkContext])
 		}
-		if idx := ref.Number[headerContext].Uint64() - n - 1; idx < uint64(len(cache)) {
+		if idx := ref.Number[types.QuaiNetworkContext].Uint64() - n - 1; idx < uint64(len(cache)) {
 			return cache[idx]
 		}
 		// No luck in the cache, but we can start iterating from the last element we already know
 		lastKnownHash := cache[len(cache)-1]
-		lastKnownNumber := ref.Number[headerContext].Uint64() - uint64(len(cache))
+		lastKnownNumber := ref.Number[types.QuaiNetworkContext].Uint64() - uint64(len(cache))
 
 		for {
 			header := chain.GetHeader(lastKnownHash, lastKnownNumber)
 			if header == nil {
 				break
 			}
-			cache = append(cache, header.ParentHash[headerContext])
-			lastKnownHash = header.ParentHash[headerContext]
-			lastKnownNumber = header.Number[headerContext].Uint64() - 1
+			cache = append(cache, header.ParentHash[types.QuaiNetworkContext])
+			lastKnownHash = header.ParentHash[types.QuaiNetworkContext]
+			lastKnownNumber = header.Number[types.QuaiNetworkContext].Uint64() - 1
 			if n == lastKnownNumber {
 				return lastKnownHash
 			}

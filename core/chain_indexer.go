@@ -95,25 +95,22 @@ type ChainIndexer struct {
 
 	log  log.Logger
 	lock sync.Mutex
-
-	chainContext int // Index to look up header information
 }
 
 // NewChainIndexer creates a new chain indexer to do background processing on
 // chain segments of a given size after certain number of confirmations passed.
 // The throttling parameter might be used to prevent database thrashing.
-func NewChainIndexer(chainDb ethdb.Database, indexDb ethdb.Database, backend ChainIndexerBackend, section, confirm uint64, throttling time.Duration, kind string, chainContext int) *ChainIndexer {
+func NewChainIndexer(chainDb ethdb.Database, indexDb ethdb.Database, backend ChainIndexerBackend, section, confirm uint64, throttling time.Duration, kind string) *ChainIndexer {
 	c := &ChainIndexer{
-		chainDb:      chainDb,
-		indexDb:      indexDb,
-		backend:      backend,
-		update:       make(chan struct{}, 1),
-		quit:         make(chan chan error),
-		sectionSize:  section,
-		confirmsReq:  confirm,
-		throttling:   throttling,
-		log:          log.New("type", kind),
-		chainContext: chainContext,
+		chainDb:     chainDb,
+		indexDb:     indexDb,
+		backend:     backend,
+		update:      make(chan struct{}, 1),
+		quit:        make(chan chan error),
+		sectionSize: section,
+		confirmsReq: confirm,
+		throttling:  throttling,
+		log:         log.New("type", kind),
 	}
 	// Initialize database dependent fields and start the updater
 	c.loadValidSections()
@@ -204,7 +201,7 @@ func (c *ChainIndexer) eventLoop(currentHeader *types.Header, events chan ChainH
 	defer sub.Unsubscribe()
 
 	// Fire the initial new head event to start any outstanding processing
-	c.newHead(currentHeader.Number[c.chainContext].Uint64(), false)
+	c.newHead(currentHeader.Number[types.QuaiNetworkContext].Uint64(), false)
 
 	var (
 		prevHeader = currentHeader
@@ -225,17 +222,17 @@ func (c *ChainIndexer) eventLoop(currentHeader *types.Header, events chan ChainH
 				return
 			}
 			header := ev.Block.Header()
-			if header.ParentHash[c.chainContext] != prevHash {
+			if header.ParentHash[types.QuaiNetworkContext] != prevHash {
 				// Reorg to the common ancestor if needed (might not exist in light sync mode, skip reorg then)
 				// TODO(karalabe, zsfelfoldi): This seems a bit brittle, can we detect this case explicitly?
 
-				if rawdb.ReadCanonicalHash(c.chainDb, prevHeader.Number[c.chainContext].Uint64()) != prevHash {
-					if h := rawdb.FindCommonAncestor(c.chainDb, prevHeader, header, c.chainContext); h != nil {
-						c.newHead(h.Number[c.chainContext].Uint64(), true)
+				if rawdb.ReadCanonicalHash(c.chainDb, prevHeader.Number[types.QuaiNetworkContext].Uint64()) != prevHash {
+					if h := rawdb.FindCommonAncestor(c.chainDb, prevHeader, header); h != nil {
+						c.newHead(h.Number[types.QuaiNetworkContext].Uint64(), true)
 					}
 				}
 			}
-			c.newHead(header.Number[c.chainContext].Uint64(), false)
+			c.newHead(header.Number[types.QuaiNetworkContext].Uint64(), false)
 
 			prevHeader, prevHash = header, header.Hash()
 		}
@@ -405,7 +402,7 @@ func (c *ChainIndexer) processSection(section uint64, lastHead common.Hash) (com
 		header := rawdb.ReadHeader(c.chainDb, hash, number)
 		if header == nil {
 			return common.Hash{}, fmt.Errorf("block #%d [%x..] not found", number, hash[:4])
-		} else if header.ParentHash[c.chainContext] != lastHead {
+		} else if header.ParentHash[types.QuaiNetworkContext] != lastHead {
 			return common.Hash{}, fmt.Errorf("chain reorged during section processing")
 		}
 		if err := c.backend.Process(c.ctx, header); err != nil {

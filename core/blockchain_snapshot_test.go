@@ -79,7 +79,6 @@ func (basic *snapshotTestBasic) prepare(t *testing.T) (*BlockChain, []*types.Blo
 		// The snapshot memory allowance is 256MB, it means no snapshot flush
 		// will happen during the block insertion.
 		cacheConfig = defaultCacheConfig
-		context     = 0
 	)
 	chain, err := NewBlockChain(db, cacheConfig, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
 	if err != nil {
@@ -102,14 +101,14 @@ func (basic *snapshotTestBasic) prepare(t *testing.T) (*BlockChain, []*types.Blo
 		startPoint = point
 
 		if basic.commitBlock > 0 && basic.commitBlock == point {
-			chain.stateCache.TrieDB().Commit(blocks[point-1].Root(context), true, nil)
+			chain.stateCache.TrieDB().Commit(blocks[point-1].Root(), true, nil)
 		}
 		if basic.snapshotBlock > 0 && basic.snapshotBlock == point {
 			// Flushing the entire snap tree into the disk, the
 			// relavant (a) snapshot root and (b) snapshot generator
 			// will be persisted atomically.
-			chain.snaps.Cap(blocks[point-1].Root(context), 0)
-			diskRoot, blockRoot := chain.snaps.DiskRoot(), blocks[point-1].Root(context)
+			chain.snaps.Cap(blocks[point-1].Root(), 0)
+			diskRoot, blockRoot := chain.snaps.DiskRoot(), blocks[point-1].Root()
 			if !bytes.Equal(diskRoot.Bytes(), blockRoot.Bytes()) {
 				t.Fatalf("Failed to flush disk layer change, want %x, got %x", blockRoot, diskRoot)
 			}
@@ -132,26 +131,26 @@ func (basic *snapshotTestBasic) verify(t *testing.T, chain *BlockChain, blocks [
 	verifyNoGaps(t, chain, true, blocks)
 	verifyCutoff(t, chain, true, blocks, basic.expCanonicalBlocks)
 
-	if head := chain.CurrentHeader(); head.Number[chain.chainConfig.Context].Uint64() != basic.expHeadHeader {
+	if head := chain.CurrentHeader(); head.Number[types.QuaiNetworkContext].Uint64() != basic.expHeadHeader {
 		t.Errorf("Head header mismatch: have %d, want %d", head.Number, basic.expHeadHeader)
 	}
-	if head := chain.CurrentFastBlock(); head.NumberU64(chain.chainConfig.Context) != basic.expHeadFastBlock {
-		t.Errorf("Head fast block mismatch: have %d, want %d", head.NumberU64(chain.chainConfig.Context), basic.expHeadFastBlock)
+	if head := chain.CurrentFastBlock(); head.NumberU64() != basic.expHeadFastBlock {
+		t.Errorf("Head fast block mismatch: have %d, want %d", head.NumberU64(), basic.expHeadFastBlock)
 	}
-	if head := chain.CurrentBlock(); head.NumberU64(chain.chainConfig.Context) != basic.expHeadBlock {
-		t.Errorf("Head block mismatch: have %d, want %d", head.NumberU64(chain.chainConfig.Context), basic.expHeadBlock)
+	if head := chain.CurrentBlock(); head.NumberU64() != basic.expHeadBlock {
+		t.Errorf("Head block mismatch: have %d, want %d", head.NumberU64(), basic.expHeadBlock)
 	}
 
 	// Check the disk layer, ensure they are matched
 	block := chain.GetBlockByNumber(basic.expSnapshotBottom)
 	if block == nil {
 		t.Errorf("The correspnding block[%d] of snapshot disk layer is missing", basic.expSnapshotBottom)
-	} else if !bytes.Equal(chain.snaps.DiskRoot().Bytes(), block.Root(chain.chainConfig.Context).Bytes()) {
-		t.Errorf("The snapshot disk layer root is incorrect, want %x, get %x", block.Root(chain.chainConfig.Context), chain.snaps.DiskRoot())
+	} else if !bytes.Equal(chain.snaps.DiskRoot().Bytes(), block.Root().Bytes()) {
+		t.Errorf("The snapshot disk layer root is incorrect, want %x, get %x", block.Root(), chain.snaps.DiskRoot())
 	}
 
 	// Check the snapshot, ensure it's integrated
-	if err := chain.snaps.Verify(block.Root(chain.chainConfig.Context)); err != nil {
+	if err := chain.snaps.Verify(block.Root()); err != nil {
 		t.Errorf("The disk layer is not integrated %v", err)
 	}
 }
@@ -379,7 +378,7 @@ func (snaptest *restartCrashSnapshotTest) test(t *testing.T) {
 	// Commit the entire snapshot into the disk if requested. Note only
 	// (a) snapshot root and (b) snapshot generator will be committed,
 	// the diff journal is not.
-	newchain.Snapshots().Cap(newBlocks[len(newBlocks)-1].Root(chain.chainConfig.Context), 0)
+	newchain.Snapshots().Cap(newBlocks[len(newBlocks)-1].Root(), 0)
 
 	// Simulate the blockchain crash
 	// Don't call chain.Stop here, so that no snapshot
