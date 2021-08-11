@@ -1778,21 +1778,21 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 			case 1:
 				genesis = core.MainnetZoneGenesisBlock(params.MainnetZoneOneChainConfig)
 			case 2:
-				genesis = core.MainnetZoneGenesisBlock(params.MainnetZoneOneChainConfig)
+				genesis = core.MainnetZoneGenesisBlock(params.MainnetZoneTwoChainConfig)
 			case 3:
-				genesis = core.MainnetZoneGenesisBlock(params.MainnetZoneOneChainConfig)
+				genesis = core.MainnetZoneGenesisBlock(params.MainnetZoneThreeChainConfig)
 			case 4:
-				genesis = core.MainnetZoneGenesisBlock(params.MainnetZoneOneChainConfig)
+				genesis = core.MainnetZoneGenesisBlock(params.MainnetZoneFourChainConfig)
 			case 5:
-				genesis = core.MainnetZoneGenesisBlock(params.MainnetZoneOneChainConfig)
+				genesis = core.MainnetZoneGenesisBlock(params.MainnetZoneFiveChainConfig)
 			case 6:
-				genesis = core.MainnetZoneGenesisBlock(params.MainnetZoneOneChainConfig)
+				genesis = core.MainnetZoneGenesisBlock(params.MainnetZoneSixChainConfig)
 			case 7:
-				genesis = core.MainnetZoneGenesisBlock(params.MainnetZoneOneChainConfig)
+				genesis = core.MainnetZoneGenesisBlock(params.MainnetZoneSevenChainConfig)
 			case 8:
-				genesis = core.MainnetZoneGenesisBlock(params.MainnetZoneOneChainConfig)
+				genesis = core.MainnetZoneGenesisBlock(params.MainnetZoneEightChainConfig)
 			case 9:
-				genesis = core.MainnetZoneGenesisBlock(params.MainnetZoneOneChainConfig)
+				genesis = core.MainnetZoneGenesisBlock(params.MainnetZoneNineChainConfig)
 			}
 		case ctx.GlobalBool(RegionFlag.Name):
 			switch RegionFlag.Value {
