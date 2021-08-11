@@ -279,7 +279,7 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 	}
 	header.GasLimit[types.QuaiNetworkContext] = parent.GasLimit()
 
-	parentDiff := &types.Header{
+	parentHeader := &types.Header{
 		Number:     []*big.Int{big.NewInt(int64(1)), big.NewInt(int64(1)), big.NewInt(int64(1))},
 		Difficulty: []*big.Int{big.NewInt(1), big.NewInt(1), big.NewInt(1)},
 		UncleHash:  types.EmptyUncleHash,
@@ -293,14 +293,14 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 		}
 	}
 
-	parentDiff.Number[types.QuaiNetworkContext] = new(big.Int).Add(parent.Number(), common.Big1)
-	parentDiff.Difficulty[types.QuaiNetworkContext] = parent.Difficulty()
-	parentDiff.UncleHash[types.QuaiNetworkContext] = parent.UncleHash()
+	parentHeader.Number[types.QuaiNetworkContext] = new(big.Int).Add(parent.Number(), common.Big1)
+	parentHeader.Difficulty[types.QuaiNetworkContext] = parent.Difficulty()
+	parentHeader.UncleHash[types.QuaiNetworkContext] = parent.UncleHash()
 
 	header.Root[types.QuaiNetworkContext] = state.IntermediateRoot(chain.Config().IsEIP158(parent.Number()))
 	header.ParentHash[types.QuaiNetworkContext] = parent.Hash()
 	header.Coinbase[types.QuaiNetworkContext] = parent.Coinbase()
-	header.Difficulty[types.QuaiNetworkContext] = engine.CalcDifficulty(chain, time, parentDiff)
+	header.Difficulty[types.QuaiNetworkContext] = engine.CalcDifficulty(chain, time, parentHeader)
 	header.Number[types.QuaiNetworkContext] = new(big.Int).Add(parent.Number(), common.Big1)
 
 	return header

@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/params"
 )
 
 // Runs multiple tests with randomized parameters.
@@ -96,7 +95,7 @@ func testChainIndexer(t *testing.T, count int) {
 		header := &types.Header{Number: []*big.Int{big.NewInt(int64(number)), big.NewInt(int64(number)), big.NewInt(int64(number))},
 			Extra: [][]byte{big.NewInt(rand.Int63()).Bytes(), big.NewInt(rand.Int63()).Bytes(), big.NewInt(rand.Int63()).Bytes()}}
 		if number > 0 {
-			header.ParentHash[params.TestChainConfig.Context] = rawdb.ReadCanonicalHash(db, number-1)
+			header.ParentHash[types.QuaiNetworkContext] = rawdb.ReadCanonicalHash(db, number-1)
 		}
 		rawdb.WriteHeader(db, header)
 		rawdb.WriteCanonicalHash(db, header.Hash(), number)
@@ -231,7 +230,7 @@ func (b *testChainIndexBackend) Process(ctx context.Context, header *types.Heade
 		// Can't use Fatal since this is not the test's goroutine.
 		// Returning error stops the chainIndexer's updateLoop
 		return errors.New("Unexpected call to Process")
-	case b.processCh <- header.Number[params.TestChainConfig.Context].Uint64():
+	case b.processCh <- header.Number[types.QuaiNetworkContext].Uint64():
 	}
 	return nil
 }

@@ -291,9 +291,18 @@ func TestStateProcessorErrors(t *testing.T) {
 // valid to be considered for import:
 // - valid pow (fake), ancestry, difficulty, gaslimit etc
 func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Transactions, config *params.ChainConfig) *types.Block {
+	hash := common.Hash{}
 	header := &types.Header{
-		Time:      parent.Time() + 10,
-		UncleHash: types.EmptyUncleHash,
+		Time:       parent.Time() + 10,
+		UncleHash:  types.EmptyUncleHash,
+		Number:     []*big.Int{new(big.Int).SetUint64(0), new(big.Int).SetUint64(0), new(big.Int).SetUint64(0)},
+		ParentHash: []common.Hash{hash, hash, hash},
+		GasLimit:   []uint64{parent.GasLimit(), parent.GasLimit(), parent.GasLimit()},
+		Difficulty: []*big.Int{new(big.Int).SetUint64(0), new(big.Int).SetUint64(0), new(big.Int).SetUint64(0)},
+		MixDigest:  []common.Hash{hash, hash, hash},
+		Coinbase:   []common.Address{common.Address{}, common.Address{}, common.Address{}},
+		BaseFee:    []*big.Int{new(big.Int).SetUint64(0), new(big.Int).SetUint64(0), new(big.Int).SetUint64(0)},
+		Root:       []common.Hash{hash, hash, hash},
 	}
 
 	header.ParentHash[types.QuaiNetworkContext] = parent.Hash()

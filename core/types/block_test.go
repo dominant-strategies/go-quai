@@ -142,7 +142,7 @@ func TestBlockDecoding(t *testing.T) {
 	}
 
 	hex := common.Bytes2Hex(ourBlockEnc)
-	t.Fatal(hex)
+
 	blockEnc := common.FromHex(hex)
 
 	if err := rlp.DecodeBytes(blockEnc, &block); err != nil {

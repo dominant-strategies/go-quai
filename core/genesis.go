@@ -290,6 +290,10 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		Root:       []common.Hash{root, root, root},
 	}
 
+	if g.GasLimit == 0 {
+		head.GasLimit[types.QuaiNetworkContext] = params.GenesisGasLimit
+	}
+
 	statedb.Commit(false)
 	statedb.Database().TrieDB().Commit(root, true, nil)
 

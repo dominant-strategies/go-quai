@@ -263,13 +263,13 @@ func NewBlockWithHeader(header *Header) *Block {
 func CopyHeader(h *Header) *Header {
 	cpy := *h
 	for i := 0; i < ContextDepth; i++ {
-		if h.Difficulty[i] != nil {
+		if len(h.Difficulty) > i && h.Difficulty[i] != nil {
 			cpy.Difficulty[i].Set(h.Difficulty[i])
 		}
-		if h.Number[i] != nil {
+		if len(h.Number) > i && h.Number[i] != nil {
 			cpy.Number[i].Set(h.Number[i])
 		}
-		if h.BaseFee != nil && h.BaseFee[i] != nil {
+		if len(h.BaseFee) > i && h.BaseFee != nil && h.BaseFee[i] != nil {
 			cpy.BaseFee[i] = new(big.Int).Set(h.BaseFee[i])
 		}
 		if len(h.Extra) > i {
@@ -343,6 +343,9 @@ func (b *Block) Difficulty(params ...int) *big.Int {
 	if len(params) > 0 {
 		context = params[0]
 	}
+	if b.header.Difficulty[context] == nil {
+		return nil
+	}
 	return new(big.Int).Set(b.header.Difficulty[context])
 }
 func (b *Block) Time() uint64 { return b.header.Time }
@@ -350,6 +353,9 @@ func (b *Block) NumberU64(params ...int) uint64 {
 	context := QuaiNetworkContext
 	if len(params) > 0 {
 		context = params[0]
+	}
+	if b.header.Number[context] == nil {
+		return 0
 	}
 	return b.header.Number[context].Uint64()
 }
@@ -389,6 +395,7 @@ func (b *Block) ParentHash(params ...int) common.Hash {
 	if len(params) > 0 {
 		context = params[0]
 	}
+
 	return b.header.ParentHash[context]
 }
 func (b *Block) TxHash(params ...int) common.Hash {
