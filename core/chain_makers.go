@@ -103,11 +103,7 @@ func (b *BlockGen) AddTxWithChain(bc *BlockChain, tx *types.Transaction) {
 		b.SetCoinbase(common.Address{})
 	}
 	b.statedb.Prepare(tx.Hash(), len(b.txs))
-	gasUsed := uint64(0)
-	if len(b.header.GasUsed) > types.QuaiNetworkContext {
-		gasUsed = b.header.GasUsed[types.QuaiNetworkContext]
-	}
-	receipt, err := ApplyTransaction(b.config, bc, &b.header.Coinbase[types.QuaiNetworkContext], b.gasPool, b.statedb, b.header, tx, &gasUsed, vm.Config{})
+	receipt, err := ApplyTransaction(b.config, bc, &b.header.Coinbase[types.QuaiNetworkContext], b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed[types.QuaiNetworkContext], vm.Config{})
 	if err != nil {
 		panic(err)
 	}
@@ -276,6 +272,8 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 		Time:        time,
 		BaseFee:     []*big.Int{baseFee, baseFee, baseFee},
 		GasLimit:    []uint64{0, 0, 0},
+		GasUsed:     []uint64{0, 0, 0},
+		Extra:       [][]byte{[]byte(nil), []byte(nil), []byte(nil)},
 	}
 	header.GasLimit[types.QuaiNetworkContext] = parent.GasLimit()
 
