@@ -40,7 +40,7 @@ func TestCreation(t *testing.T) {
 	}{
 		// Mainnet test cases
 		{
-			params.MainnetChainConfig,
+			params.MainnetPrimeChainConfig,
 			params.MainnetPrimeGenesisHash,
 			[]testcase{
 				{0, ID{Hash: checksumToBytes(0xfc64ec04), Next: 1150000}},         // Unsynced

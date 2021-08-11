@@ -261,7 +261,7 @@ func NewBlockWithHeader(header *Header) *Block {
 // modifying a header variable.
 func CopyHeader(h *Header) *Header {
 	cpy := *h
-	for i := 0; i < 3; i++ {
+	for i := 0; i < ContextDepth; i++ {
 		if h.Difficulty[i] != nil {
 			cpy.Difficulty[i].Set(h.Difficulty[i])
 		}
