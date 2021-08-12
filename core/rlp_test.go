@@ -60,7 +60,8 @@ func getBlock(transactions int, uncles int, dataSize int) *types.Block {
 				}
 				for i := 0; i < uncles; i++ {
 					b.AddUncle(&types.Header{ParentHash: []common.Hash{b.PrevBlock(n - 1 - i).Hash(), b.PrevBlock(n - 1 - i).Hash(), b.PrevBlock(n - 1 - i).Hash()},
-						Number: []*big.Int{big.NewInt(int64(n - i)), big.NewInt(int64(n - i)), big.NewInt(int64(n - i))}})
+						Coinbase: []common.Address{common.Address{}, common.Address{}, common.Address{}},
+						Number:   []*big.Int{big.NewInt(int64(n - i)), big.NewInt(int64(n - i)), big.NewInt(int64(n - i))}})
 				}
 			}
 		})

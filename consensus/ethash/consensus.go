@@ -329,7 +329,7 @@ func (ethash *Ethash) CalcDifficulty(chain consensus.ChainHeaderReader, time uin
 // the difficulty that a new block should have when created at time
 // given the parent block's time and difficulty.
 func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Header) *big.Int {
-	next := new(big.Int).Add(parent.Number[config.Context], big1)
+	next := new(big.Int).Add(parent.Number[types.QuaiNetworkContext], big1)
 	switch {
 	case config.IsCatalyst(next):
 		return big.NewInt(1)
@@ -656,29 +656,29 @@ var (
 // included uncles. The coinbase of each uncle block is also rewarded.
 func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
 	// Skip block reward in catalyst mode
-	if config.IsCatalyst(header.Number[config.Context]) {
+	if config.IsCatalyst(header.Number[types.QuaiNetworkContext]) {
 		return
 	}
 	// Select the correct block reward based on chain progression
 	blockReward := FrontierBlockReward
-	if config.IsByzantium(header.Number[config.Context]) {
+	if config.IsByzantium(header.Number[types.QuaiNetworkContext]) {
 		blockReward = ByzantiumBlockReward
 	}
-	if config.IsConstantinople(header.Number[config.Context]) {
+	if config.IsConstantinople(header.Number[types.QuaiNetworkContext]) {
 		blockReward = ConstantinopleBlockReward
 	}
 	// Accumulate the rewards for the miner and any included uncles
 	reward := new(big.Int).Set(blockReward)
 	r := new(big.Int)
 	for _, uncle := range uncles {
-		r.Add(uncle.Number[config.Context], big8)
-		r.Sub(r, header.Number[config.Context])
+		r.Add(uncle.Number[types.QuaiNetworkContext], big8)
+		r.Sub(r, header.Number[types.QuaiNetworkContext])
 		r.Mul(r, blockReward)
 		r.Div(r, big8)
-		state.AddBalance(uncle.Coinbase[config.Context], r)
+		state.AddBalance(uncle.Coinbase[types.QuaiNetworkContext], r)
 
 		r.Div(blockReward, big32)
 		reward.Add(reward, r)
 	}
-	state.AddBalance(header.Coinbase[config.Context], reward)
+	state.AddBalance(header.Coinbase[types.QuaiNetworkContext], reward)
 }
