@@ -602,8 +602,7 @@ func (bc *BlockChain) SetHeadBeyondRoot(head uint64, root common.Hash) (uint64, 
 	}
 	// If SetHead was only called as a chain reparation method, try to skip
 	// touching the header chain altogether, unless the freezer is broken
-	block := bc.CurrentBlock()
-	if block.NumberU64() == head {
+	if block := bc.CurrentBlock(); block.NumberU64() == head {
 		if target, force := updateFn(bc.db, block.Header()); force {
 			bc.hc.SetHead(target, updateFn, delFn)
 		}
