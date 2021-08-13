@@ -78,9 +78,9 @@ func TestCalcDifficulty(t *testing.T) {
 	for name, test := range tests {
 		number := new(big.Int).Sub(test.CurrentBlocknumber, big.NewInt(1))
 		diff := CalcDifficulty(config, test.CurrentTimestamp, &types.Header{
-			Number:     number,
+			Number:     []*big.Int{number, number, number},
 			Time:       test.ParentTimestamp,
-			Difficulty: test.ParentDifficulty,
+			Difficulty: []*big.Int{test.ParentDifficulty, test.ParentDifficulty, test.ParentDifficulty},
 		})
 		if diff.Cmp(test.CurrentDifficulty) != 0 {
 			t.Error(name, "failed. Expected", test.CurrentDifficulty, "and calculated", diff)
@@ -109,8 +109,8 @@ func TestDifficultyCalculators(t *testing.T) {
 		}
 		//rand.Read(difficulty)
 		header := &types.Header{
-			Difficulty: diffBig,
-			Number:     new(big.Int).SetUint64(rand.Uint64() % 50_000_000),
+			Difficulty: []*big.Int{diffBig, diffBig, diffBig},
+			Number:     []*big.Int{new(big.Int).SetUint64(rand.Uint64() % 50_000_000), new(big.Int).SetUint64(rand.Uint64() % 50_000_000), new(big.Int).SetUint64(rand.Uint64() % 50_000_000)},
 			Time:       rand.Uint64() - timeDelta,
 		}
 		if rand.Uint32()&1 == 0 {
@@ -143,10 +143,10 @@ func BenchmarkDifficultyCalculator(b *testing.B) {
 	x1 := makeDifficultyCalculator(big.NewInt(1000000))
 	x2 := MakeDifficultyCalculatorU256(big.NewInt(1000000))
 	h := &types.Header{
-		ParentHash: common.Hash{},
+		ParentHash: []common.Hash{common.Hash{}, common.Hash{}, common.Hash{}},
 		UncleHash:  types.EmptyUncleHash,
-		Difficulty: big.NewInt(0xffffff),
-		Number:     big.NewInt(500000),
+		Difficulty: []*big.Int{big.NewInt(0xffffff), big.NewInt(0xffffff), big.NewInt(0xffffff)},
+		Number:     []*big.Int{big.NewInt(500000), big.NewInt(500000), big.NewInt(500000)},
 		Time:       1000000,
 	}
 	b.Run("big-frontier", func(b *testing.B) {
