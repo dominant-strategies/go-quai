@@ -269,6 +269,7 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 		UncleHash:   types.EmptyUncleHash,
 		TxHash:      types.EmptyRootHash,
 		ReceiptHash: types.EmptyRootHash,
+		Bloom:       []types.Bloom{types.Bloom{}, types.Bloom{}, types.Bloom{}},
 		Time:        time,
 		BaseFee:     []*big.Int{baseFee, baseFee, baseFee},
 		GasLimit:    []uint64{0, 0, 0},
