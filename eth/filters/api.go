@@ -240,6 +240,36 @@ func (api *PublicFilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, er
 	return rpcSub, nil
 }
 
+// PendingBlock sends a notification each time a new pending block is created.
+func (api *PublicFilterAPI) PendingBlock(ctx context.Context) (*rpc.Subscription, error) {
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+
+	rpcSub := notifier.CreateSubscription()
+
+	go func() {
+		blocks := make(chan *types.Header)
+		blockSub := api.events.SubscribePendingBlock(blocks)
+
+		for {
+			select {
+			case b := <-blocks:
+				notifier.Notify(rpcSub.ID, b)
+			case <-rpcSub.Err():
+				blockSub.Unsubscribe()
+				return
+			case <-notifier.Closed():
+				blockSub.Unsubscribe()
+				return
+			}
+		}
+	}()
+
+	return rpcSub, nil
+}
+
 // Logs creates a subscription that fires for all new log that match the given filter criteria.
 func (api *PublicFilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)

@@ -281,7 +281,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		GasLimit:   []uint64{g.GasLimit, g.GasLimit, g.GasLimit},
 		GasUsed:    []uint64{g.GasUsed, g.GasUsed, g.GasUsed},
 		Difficulty: []*big.Int{g.Difficulty, g.Difficulty, g.Difficulty},
-		MixDigest:  []common.Hash{g.Mixhash, g.Mixhash, g.Mixhash},
+		MixDigest:  g.Mixhash,
 		Coinbase:   []common.Address{g.Coinbase, g.Coinbase, g.Coinbase},
 		Nonce:      types.EncodeNonce(g.Nonce),
 		Time:       g.Timestamp,
@@ -350,7 +350,7 @@ func MainnetPrimeGenesisBlock() *Genesis {
 		Nonce:      66,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
 		GasLimit:   500000,
-		Difficulty: big.NewInt(1717986918400),
+		Difficulty: big.NewInt(30485760),
 		Alloc:      decodePrealloc(mainnetAllocData),
 	}
 }
@@ -362,7 +362,7 @@ func MainnetRegionGenesisBlock(regionParams *params.ChainConfig) *Genesis {
 		Nonce:      66,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
 		GasLimit:   50000,
-		Difficulty: big.NewInt(171798691840),
+		Difficulty: big.NewInt(2048576),
 		Alloc:      decodePrealloc(mainnetAllocData),
 	}
 }
@@ -374,7 +374,7 @@ func MainnetZoneGenesisBlock(regionParams *params.ChainConfig) *Genesis {
 		Nonce:      66,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
 		GasLimit:   5000,
-		Difficulty: big.NewInt(17179869184),
+		Difficulty: big.NewInt(104857),
 		Alloc:      decodePrealloc(mainnetAllocData),
 	}
 }

@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -87,6 +88,11 @@ func (ec *Client) BlockByNumber(ctx context.Context, number *big.Int) (*types.Bl
 	return ec.getBlock(ctx, "eth_getBlockByNumber", toBlockNumArg(number), true)
 }
 
+// Pending block returns a pending block if one exists
+func (ec *Client) GetPendingBlock(ctx context.Context) (*types.Block, error) {
+	return ec.getBlock(ctx, "eth_pendingBlock")
+}
+
 // BlockNumber returns the most recent block number
 func (ec *Client) BlockNumber(ctx context.Context) (uint64, error) {
 	var result hexutil.Uint64
@@ -118,16 +124,16 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 		return nil, err
 	}
 	// Quick-verify transaction and uncle lists. This mostly helps with debugging the server.
-	if head.UncleHash == types.EmptyUncleHash && len(body.UncleHashes) > 0 {
+	if types.IsEqualHashSlice(head.UncleHash, types.EmptyUncleHash) && len(body.UncleHashes) > 0 {
 		return nil, fmt.Errorf("server returned non-empty uncle list but block header indicates no uncles")
 	}
-	if head.UncleHash != types.EmptyUncleHash && len(body.UncleHashes) == 0 {
+	if !types.IsEqualHashSlice(head.UncleHash, types.EmptyUncleHash) && len(body.UncleHashes) == 0 {
 		return nil, fmt.Errorf("server returned empty uncle list but block header indicates uncles")
 	}
-	if head.TxHash == types.EmptyRootHash && len(body.Transactions) > 0 {
+	if !types.IsEqualHashSlice(head.TxHash, types.EmptyRootHash) && len(body.Transactions) > 0 {
 		return nil, fmt.Errorf("server returned non-empty transaction list but block header indicates no transactions")
 	}
-	if head.TxHash != types.EmptyRootHash && len(body.Transactions) == 0 {
+	if !types.IsEqualHashSlice(head.TxHash, types.EmptyRootHash) && len(body.Transactions) == 0 {
 		return nil, fmt.Errorf("server returned empty transaction list but block header indicates transactions")
 	}
 	// Load uncles because they are not included in the block response.
@@ -321,6 +327,11 @@ func (ec *Client) SyncProgress(ctx context.Context) (*ethereum.SyncProgress, err
 // on the given channel.
 func (ec *Client) SubscribeNewHead(ctx context.Context, ch chan<- *types.Header) (ethereum.Subscription, error) {
 	return ec.c.EthSubscribe(ctx, ch, "newHeads")
+}
+
+// SubscribePendingBlock subscribes to notifications about the current pending block on the node.
+func (ec *Client) SubscribePendingBlock(ctx context.Context, ch chan<- *types.Header) (ethereum.Subscription, error) {
+	return ec.c.EthSubscribe(ctx, ch, "pendingBlock")
 }
 
 // State Access
@@ -522,6 +533,15 @@ func (ec *Client) SendTransaction(ctx context.Context, tx *types.Transaction) er
 		return err
 	}
 	return ec.c.CallContext(ctx, nil, "eth_sendRawTransaction", hexutil.Encode(data))
+}
+
+// SendMinedBlock sends a mined block back to the node
+func (ec *Client) SendMinedBlock(ctx context.Context, block *types.Block, inclTx bool, fullTx bool) error {
+	data, err := ethapi.RPCMarshalBlock(block, inclTx, fullTx)
+	if err != nil {
+		return err
+	}
+	return ec.c.CallContext(ctx, nil, "eth_sendMinedBlock", data)
 }
 
 func toBlockNumArg(number *big.Int) string {

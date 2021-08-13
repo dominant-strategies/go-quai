@@ -108,6 +108,18 @@ func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumbe
 	return b.eth.blockchain.GetBlockByNumber(uint64(number)), nil
 }
 
+func (b *EthAPIBackend) PendingBlock(ctx context.Context) (*types.Block, error) {
+	block := b.eth.miner.PendingBlock()
+	if block == nil {
+		return nil, errors.New("no pending block")
+	}
+	return block, nil
+}
+
+func (b *EthAPIBackend) InsertBlock(ctx context.Context, block *types.Block) (int, error) {
+	return b.eth.blockchain.InsertChain([]*types.Block{block})
+}
+
 func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
 	return b.eth.blockchain.GetBlockByHash(hash), nil
 }
@@ -212,6 +224,10 @@ func (b *EthAPIBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEven
 
 func (b *EthAPIBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription {
 	return b.eth.miner.SubscribePendingLogs(ch)
+}
+
+func (b *EthAPIBackend) SubscribePendingBlockEvent(ch chan<- *types.Header) event.Subscription {
+	return b.eth.miner.SubscribePendingBlock(ch)
 }
 
 func (b *EthAPIBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {

@@ -42,9 +42,6 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.SmartCardDaemonPathFlag,
 			utils.NetworkIdFlag,
 			utils.MainnetFlag,
-			utils.GoerliFlag,
-			utils.RinkebyFlag,
-			utils.CalaverasFlag,
 			utils.RopstenFlag,
 			utils.SyncModeFlag,
 			utils.ExitWhenSyncedFlag,
@@ -235,6 +232,13 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.BloomFilterSizeFlag,
 			cli.HelpFlag,
 			utils.CatalystFlag,
+		},
+	},
+	{
+		Name: "QUAI CONTEXT",
+		Flags: []cli.Flag{
+			utils.RegionFlag,
+			utils.ZoneFlag,
 		},
 	},
 }

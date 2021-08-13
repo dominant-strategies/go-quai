@@ -1017,10 +1017,11 @@ func (bc *BlockChain) Stop() {
 		for _, offset := range []uint64{0, 1, TriesInMemory - 1} {
 			if number := bc.CurrentBlock().NumberU64(); number > offset {
 				recent := bc.GetBlockByNumber(number - offset)
-
-				log.Info("Writing cached state to disk", "block", recent.Number(), "hash", recent.Hash(), "root", recent.Root())
-				if err := triedb.Commit(recent.Root(), true, nil); err != nil {
-					log.Error("Failed to commit recent state trie", "err", err)
+				if recent != nil {
+					log.Info("Writing cached state to disk", "block", recent.Number(), "hash", recent.Hash(), "root", recent.Root())
+					if err := triedb.Commit(recent.Root(), true, nil); err != nil {
+						log.Error("Failed to commit recent state trie", "err", err)
+					}
 				}
 			}
 		}
@@ -1758,7 +1759,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		// If there are any still remaining, mark as ignored
 		return it.index, err
 
-	// Some other error occurred, abort
+		// Some other error occurred, abort
 	case err != nil:
 		bc.futureBlocks.Remove(block.Hash())
 		stats.ignored += len(it.chain)
@@ -2418,9 +2419,9 @@ func (bc *BlockChain) GetTdByHash(hash common.Hash) *big.Int {
 // caching it if found.
 func (bc *BlockChain) GetHeader(hash common.Hash, number uint64) *types.Header {
 	// Blockchain might have cached the whole block, only if not go to headerchain
-	if block, ok := bc.blockCache.Get(hash); ok {
-		return block.(*types.Block).Header()
-	}
+	// if block, ok := bc.blockCache.Get(hash); ok {
+	// 	return block.(*types.Block).Header()
+	// }
 
 	return bc.hc.GetHeader(hash, number)
 }

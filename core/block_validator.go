@@ -60,7 +60,7 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 		return err
 	}
 	if hash := types.CalcUncleHash(block.Uncles()); hash != header.UncleHash[types.QuaiNetworkContext] {
-		return fmt.Errorf("uncle root hash mismatch: have %x, want %x", hash, header.UncleHash)
+		return fmt.Errorf("uncle root hash mismatch: have %x, want %x", hash, header.UncleHash[types.QuaiNetworkContext])
 	}
 	if hash := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil)); hash != header.TxHash[types.QuaiNetworkContext] {
 		return fmt.Errorf("transaction root hash mismatch: have %x, want %x", hash, header.TxHash)

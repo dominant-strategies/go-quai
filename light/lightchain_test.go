@@ -124,7 +124,7 @@ func testHeaderChainImport(chain []*types.Header, lightchain *LightChain) error 
 		}
 		// Manually insert the header into the database, but don't reorganize (allows subsequent testing)
 		lightchain.chainmu.Lock()
-		rawdb.WriteTd(lightchain.chainDb, header.Hash(), header.Number.Uint64(), new(big.Int).Add(header.Difficulty, lightchain.GetTdByHash(header.ParentHash)))
+		rawdb.WriteTd(lightchain.chainDb, header.Hash(), header.Number[types.QuaiNetworkContext].Uint64(), new(big.Int).Add(header.Difficulty[types.QuaiNetworkContext], lightchain.GetTdByHash(header.ParentHash[types.QuaiNetworkContext])))
 		rawdb.WriteHeader(lightchain.chainDb, header)
 		lightchain.chainmu.Unlock()
 	}
@@ -247,17 +247,17 @@ func makeHeaderChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.
 	var chain []*types.Header
 	for i, difficulty := range d {
 		header := &types.Header{
-			Coinbase:    common.Address{seed},
-			Number:      big.NewInt(int64(i + 1)),
-			Difficulty:  big.NewInt(int64(difficulty)),
+			Coinbase:    []common.Address{common.Address{seed}, common.Address{seed}, common.Address{seed}},
+			Number:      []*big.Int{big.NewInt(int64(i + 1)), big.NewInt(int64(i + 1)), big.NewInt(int64(i + 1))},
+			Difficulty:  []*big.Int{big.NewInt(int64(difficulty)), big.NewInt(int64(difficulty)), big.NewInt(int64(difficulty))},
 			UncleHash:   types.EmptyUncleHash,
 			TxHash:      types.EmptyRootHash,
 			ReceiptHash: types.EmptyRootHash,
 		}
 		if i == 0 {
-			header.ParentHash = genesis.Hash()
+			header.ParentHash[types.QuaiNetworkContext] = genesis.Hash()
 		} else {
-			header.ParentHash = chain[i-1].Hash()
+			header.ParentHash[types.QuaiNetworkContext] = chain[i-1].Hash()
 		}
 		chain = append(chain, types.CopyHeader(header))
 	}
@@ -302,8 +302,8 @@ func testReorg(t *testing.T, first, second []int, td int64) {
 	bc.InsertHeaderChain(makeHeaderChainWithDiff(bc.genesisBlock, second, 22), 1)
 	// Check that the chain is valid number and link wise
 	prev := bc.CurrentHeader()
-	for header := bc.GetHeaderByNumber(bc.CurrentHeader().Number.Uint64() - 1); header.Number.Uint64() != 0; prev, header = header, bc.GetHeaderByNumber(header.Number.Uint64()-1) {
-		if prev.ParentHash != header.Hash() {
+	for header := bc.GetHeaderByNumber(bc.CurrentHeader().Number[types.QuaiNetworkContext].Uint64() - 1); header.Number[types.QuaiNetworkContext].Uint64() != 0; prev, header = header, bc.GetHeaderByNumber(header.Number[types.QuaiNetworkContext].Uint64()-1) {
+		if prev.ParentHash[types.QuaiNetworkContext] != header.Hash() {
 			t.Errorf("parent header hash mismatch: have %x, want %x", prev.ParentHash, header.Hash())
 		}
 	}

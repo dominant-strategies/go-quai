@@ -32,7 +32,11 @@ import (
 
 // Tests that ethash works correctly in test mode.
 func TestTestMode(t *testing.T) {
-	header := &types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(100)}
+	header := &types.Header{
+		Number:     []*big.Int{big.NewInt(1), big.NewInt(1), big.NewInt(1)},
+		Difficulty: []*big.Int{big.NewInt(100), big.NewInt(100), big.NewInt(100)},
+		MixDigest:  common.Hash{},
+	}
 
 	ethash := NewTester(nil, false)
 	defer ethash.Close()
@@ -92,7 +96,7 @@ func verifyTest(wg *sync.WaitGroup, e *Ethash, workerIndex, epochs int) {
 		if block < 0 {
 			block = 0
 		}
-		header := &types.Header{Number: big.NewInt(block), Difficulty: big.NewInt(100)}
+		header := &types.Header{Number: []*big.Int{big.NewInt(block), big.NewInt(block), big.NewInt(block)}, Difficulty: []*big.Int{big.NewInt(100), big.NewInt(100), big.NewInt(100)}}
 		e.verifySeal(nil, header, false)
 	}
 }
@@ -105,7 +109,7 @@ func TestRemoteSealer(t *testing.T) {
 	if _, err := api.GetWork(); err != errNoMiningWork {
 		t.Error("expect to return an error indicate there is no mining work")
 	}
-	header := &types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(100)}
+	header := &types.Header{Number: []*big.Int{big.NewInt(1), big.NewInt(1), big.NewInt(1)}, Difficulty: []*big.Int{big.NewInt(100), big.NewInt(100), big.NewInt(100)}}
 	block := types.NewBlockWithHeader(header)
 	sealhash := ethash.SealHash(header)
 
@@ -125,7 +129,7 @@ func TestRemoteSealer(t *testing.T) {
 		t.Error("expect to return false when submit a fake solution")
 	}
 	// Push new block with same block number to replace the original one.
-	header = &types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(1000)}
+	header = &types.Header{Number: []*big.Int{big.NewInt(1), big.NewInt(1), big.NewInt(1)}, Difficulty: []*big.Int{big.NewInt(1000), big.NewInt(1000), big.NewInt(1000)}}
 	block = types.NewBlockWithHeader(header)
 	sealhash = ethash.SealHash(header)
 	ethash.Seal(nil, block, results, nil)
