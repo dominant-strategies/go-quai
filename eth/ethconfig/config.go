@@ -34,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -82,18 +81,12 @@ var Defaults = Config{
 	TrieDirtyCache:          256,
 	TrieTimeout:             60 * time.Minute,
 	SnapshotCache:           102,
-	Miner: miner.Config{
-		GasFloor: 8000000,
-		GasCeil:  8000000,
-		GasPrice: big.NewInt(params.GWei),
-		Recommit: 3 * time.Second,
-	},
-	TxPool:      core.DefaultTxPoolConfig,
-	RPCGasCap:   50000000,
-	GPO:         FullNodeGPO,
-	RPCTxFeeCap: 1, // 1 ether
-	Region:      0,
-	Zone:        0,
+	TxPool:                  core.DefaultTxPoolConfig,
+	RPCGasCap:               50000000,
+	GPO:                     FullNodeGPO,
+	RPCTxFeeCap:             1, // 1 ether
+	Region:                  0,
+	Zone:                    0,
 }
 
 func init() {
@@ -169,9 +162,6 @@ type Config struct {
 	TrieTimeout             time.Duration
 	SnapshotCache           int
 	Preimages               bool
-
-	// Mining options
-	Miner miner.Config
 
 	// Ethash options
 	Ethash ethash.Config

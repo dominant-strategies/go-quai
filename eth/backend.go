@@ -47,7 +47,6 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/dnsdisc"
@@ -85,7 +84,6 @@ type Ethereum struct {
 
 	APIBackend *EthAPIBackend
 
-	miner     *miner.Miner
 	gasPrice  *big.Int
 	etherbase common.Address
 
@@ -107,10 +105,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if !config.SyncMode.IsValid() {
 		return nil, fmt.Errorf("invalid sync mode %d", config.SyncMode)
 	}
-	if config.Miner.GasPrice == nil || config.Miner.GasPrice.Cmp(common.Big0) <= 0 {
-		log.Warn("Sanitizing invalid miner gas price", "provided", config.Miner.GasPrice, "updated", ethconfig.Defaults.Miner.GasPrice)
-		config.Miner.GasPrice = new(big.Int).Set(ethconfig.Defaults.Miner.GasPrice)
-	}
 	if config.NoPruning && config.TrieDirtyCache > 0 {
 		if config.SnapshotCache > 0 {
 			config.TrieCleanCache += config.TrieDirtyCache * 3 / 5
@@ -124,7 +118,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 
 	// Transfer mining-related config to the ethash config.
 	ethashConfig := config.Ethash
-	ethashConfig.NotifyFull = config.Miner.NotifyFull
 
 	// Assemble the Ethereum object
 	chainDb, err := stack.OpenDatabaseWithFreezer("chaindata", config.DatabaseCache, config.DatabaseHandles, config.DatabaseFreezer, "eth/db/chaindata/", false)
@@ -145,11 +138,9 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		chainDb:           chainDb,
 		eventMux:          stack.EventMux(),
 		accountManager:    stack.AccountManager(),
-		engine:            ethconfig.CreateConsensusEngine(stack, chainConfig, &ethashConfig, config.Miner.Notify, config.Miner.Noverify, chainDb),
+		engine:            ethconfig.CreateConsensusEngine(stack, chainConfig, &ethashConfig, nil, false, chainDb),
 		closeBloomHandler: make(chan struct{}),
 		networkID:         config.NetworkId,
-		gasPrice:          config.Miner.GasPrice,
-		etherbase:         config.Miner.Etherbase,
 		bloomRequests:     make(chan chan *bloombits.Retrieval),
 		bloomIndexer:      core.NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms),
 		p2pServer:         stack.Server(),
@@ -225,17 +216,17 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		return nil, err
 	}
 
-	eth.miner = miner.New(eth, &config.Miner, chainConfig, eth.EventMux(), eth.engine, eth.isLocalBlock)
-	eth.miner.SetExtra(makeExtraData(config.Miner.ExtraData))
+	// eth.miner = miner.New(eth, &config.Miner, chainConfig, eth.EventMux(), eth.engine, eth.isLocalBlock)
+	// eth.miner.SetExtra(makeExtraData(config.Miner.ExtraData))
 
 	eth.APIBackend = &EthAPIBackend{stack.Config().ExtRPCEnabled(), stack.Config().AllowUnprotectedTxs, eth, nil}
 	if eth.APIBackend.allowUnprotectedTxs {
 		log.Info("Unprotected transactions allowed")
 	}
 	gpoParams := config.GPO
-	if gpoParams.Default == nil {
-		gpoParams.Default = config.Miner.GasPrice
-	}
+	// if gpoParams.Default == nil {
+	// 	gpoParams.Default = config.Miner.GasPrice
+	// }
 	eth.APIBackend.gpo = gasprice.NewOracle(eth.APIBackend, gpoParams)
 
 	// Setup DNS discovery iterators.
@@ -433,7 +424,7 @@ func (s *Ethereum) SetEtherbase(etherbase common.Address) {
 	s.etherbase = etherbase
 	s.lock.Unlock()
 
-	s.miner.SetEtherbase(etherbase)
+	// s.miner.SetEtherbase(etherbase)
 }
 
 // StartMining starts the miner with the given number of CPU threads. If mining
@@ -451,34 +442,34 @@ func (s *Ethereum) StartMining(threads int) error {
 		}
 		th.SetThreads(threads)
 	}
-	// If the miner was not running, initialize it
-	if !s.IsMining() {
-		// Propagate the initial price point to the transaction pool
-		s.lock.RLock()
-		price := s.gasPrice
-		s.lock.RUnlock()
-		s.txPool.SetGasPrice(price)
+	// // If the miner was not running, initialize it
+	// if !s.IsMining() {
+	// 	// Propagate the initial price point to the transaction pool
+	// 	s.lock.RLock()
+	// 	price := s.gasPrice
+	// 	s.lock.RUnlock()
+	// 	s.txPool.SetGasPrice(price)
 
-		// Configure the local mining address
-		eb, err := s.Etherbase()
-		if err != nil {
-			log.Error("Cannot start mining without etherbase", "err", err)
-			return fmt.Errorf("etherbase missing: %v", err)
-		}
-		if clique, ok := s.engine.(*clique.Clique); ok {
-			wallet, err := s.accountManager.Find(accounts.Account{Address: eb})
-			if wallet == nil || err != nil {
-				log.Error("Etherbase account unavailable locally", "err", err)
-				return fmt.Errorf("signer missing: %v", err)
-			}
-			clique.Authorize(eb, wallet.SignData)
-		}
-		// If mining is started, we can disable the transaction rejection mechanism
-		// introduced to speed sync times.
-		atomic.StoreUint32(&s.handler.acceptTxs, 1)
+	// 	// Configure the local mining address
+	// 	eb, err := s.Etherbase()
+	// 	if err != nil {
+	// 		log.Error("Cannot start mining without etherbase", "err", err)
+	// 		return fmt.Errorf("etherbase missing: %v", err)
+	// 	}
+	// 	if clique, ok := s.engine.(*clique.Clique); ok {
+	// 		wallet, err := s.accountManager.Find(accounts.Account{Address: eb})
+	// 		if wallet == nil || err != nil {
+	// 			log.Error("Etherbase account unavailable locally", "err", err)
+	// 			return fmt.Errorf("signer missing: %v", err)
+	// 		}
+	// 		clique.Authorize(eb, wallet.SignData)
+	// 	}
+	// 	// If mining is started, we can disable the transaction rejection mechanism
+	// 	// introduced to speed sync times.
+	// 	atomic.StoreUint32(&s.handler.acceptTxs, 1)
 
-		go s.miner.Start(eb)
-	}
+	// 	// go s.miner.Start(eb)
+	// }
 	return nil
 }
 
@@ -493,11 +484,8 @@ func (s *Ethereum) StopMining() {
 		th.SetThreads(-1)
 	}
 	// Stop the block creating itself
-	s.miner.Stop()
+	// s.miner.Stop()
 }
-
-func (s *Ethereum) IsMining() bool      { return s.miner.Mining() }
-func (s *Ethereum) Miner() *miner.Miner { return s.miner }
 
 func (s *Ethereum) AccountManager() *accounts.Manager  { return s.accountManager }
 func (s *Ethereum) BlockChain() *core.BlockChain       { return s.blockchain }
@@ -554,7 +542,6 @@ func (s *Ethereum) Stop() error {
 	s.bloomIndexer.Close()
 	close(s.closeBloomHandler)
 	s.txPool.Stop()
-	s.miner.Stop()
 	s.blockchain.Stop()
 	s.engine.Close()
 	rawdb.PopUncleanShutdownMarker(s.chainDb)
