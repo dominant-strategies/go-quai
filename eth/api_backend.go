@@ -34,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -64,8 +63,9 @@ func (b *EthAPIBackend) SetHead(number uint64) {
 func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
 	// Pending block is only known by the miner
 	if number == rpc.PendingBlockNumber {
-		block := b.eth.miner.PendingBlock()
-		return block.Header(), nil
+		// NEW: Block is no longer local in miners
+		// block := b.eth.miner.PendingBlock()
+		// return block.Header(), nil
 	}
 	// Otherwise resolve and return the block
 	if number == rpc.LatestBlockNumber {
@@ -98,8 +98,9 @@ func (b *EthAPIBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*ty
 func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
 	// Pending block is only known by the miner
 	if number == rpc.PendingBlockNumber {
-		block := b.eth.miner.PendingBlock()
-		return block, nil
+		// NEW: Block is no longer local in miners
+		// block := b.eth.miner.PendingBlock()
+		// return block.Header(), nil
 	}
 	// Otherwise resolve and return the block
 	if number == rpc.LatestBlockNumber {
@@ -134,14 +135,16 @@ func (b *EthAPIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash r
 }
 
 func (b *EthAPIBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
-	return b.eth.miner.PendingBlockAndReceipts()
+	// return b.eth.miner.PendingBlockAndReceipts()
+	return nil, nil
 }
 
 func (b *EthAPIBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.Header, error) {
 	// Pending state is only known by the miner
 	if number == rpc.PendingBlockNumber {
-		block, state := b.eth.miner.Pending()
-		return state, block.Header(), nil
+		// NEW: Block is no longer local in miners
+		// block := b.eth.miner.PendingBlock()
+		// return block.Header(), nil
 	}
 	// Otherwise resolve the block number and return its state
 	header, err := b.HeaderByNumber(ctx, number)
@@ -211,7 +214,8 @@ func (b *EthAPIBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEven
 }
 
 func (b *EthAPIBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription {
-	return b.eth.miner.SubscribePendingLogs(ch)
+	// return b.eth.miner.SubscribePendingLogs(ch)
+	return nil
 }
 
 func (b *EthAPIBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
@@ -338,9 +342,9 @@ func (b *EthAPIBackend) CurrentHeader() *types.Header {
 	return b.eth.blockchain.CurrentHeader()
 }
 
-func (b *EthAPIBackend) Miner() *miner.Miner {
-	return b.eth.Miner()
-}
+// func (b *EthAPIBackend) Miner() *miner.Miner {
+// 	return b.eth.Miner()
+// }
 
 func (b *EthAPIBackend) StartMining(threads int) error {
 	return b.eth.StartMining(threads)
