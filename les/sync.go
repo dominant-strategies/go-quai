@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
@@ -95,7 +96,7 @@ func (h *clientHandler) synchronise(peer *serverPeer) {
 	}
 	// Make sure the peer's TD is higher than our own.
 	latest := h.backend.blockchain.CurrentHeader()
-	currentTd := rawdb.ReadTd(h.backend.chainDb, latest.Hash(), latest.Number.Uint64())
+	currentTd := rawdb.ReadTd(h.backend.chainDb, latest.Hash(), latest.Number[types.QuaiNetworkContext].Uint64())
 	if currentTd != nil && peer.Td().Cmp(currentTd) < 0 {
 		return
 	}
@@ -140,7 +141,7 @@ func (h *clientHandler) synchronise(peer *serverPeer) {
 	case checkpoint.Empty():
 		mode = lightSync
 		log.Debug("Disable checkpoint syncing", "reason", "empty checkpoint")
-	case latest.Number.Uint64() >= (checkpoint.SectionIndex+1)*h.backend.iConfig.ChtSize-1:
+	case latest.Number[types.QuaiNetworkContext].Uint64() >= (checkpoint.SectionIndex+1)*h.backend.iConfig.ChtSize-1:
 		mode = lightSync
 		log.Debug("Disable checkpoint syncing", "reason", "local chain beyond the checkpoint")
 	case local:

@@ -115,7 +115,7 @@ func (h *serverHandler) handle(p *clientPeer) error {
 	var (
 		head   = h.blockchain.CurrentHeader()
 		hash   = head.Hash()
-		number = head.Number.Uint64()
+		number = head.Number[types.QuaiNetworkContext].Uint64()
 		td     = h.blockchain.GetTd(hash, number)
 		forkID = forkid.NewID(h.blockchain.Config(), h.blockchain.Genesis().Hash(), h.blockchain.CurrentBlock().NumberU64())
 	)
@@ -415,14 +415,14 @@ func (h *serverHandler) broadcastLoop() {
 		select {
 		case ev := <-headCh:
 			header := ev.Block.Header()
-			hash, number := header.Hash(), header.Number.Uint64()
+			hash, number := header.Hash(), header.Number[types.QuaiNetworkContext].Uint64()
 			td := h.blockchain.GetTd(hash, number)
 			if td == nil || td.Cmp(lastTd) <= 0 {
 				continue
 			}
 			var reorg uint64
 			if lastHead != nil {
-				reorg = lastHead.Number.Uint64() - rawdb.FindCommonAncestor(h.chainDb, header, lastHead).Number.Uint64()
+				reorg = lastHead.Number[types.QuaiNetworkContext].Uint64() - rawdb.FindCommonAncestor(h.chainDb, header, lastHead).Number[types.QuaiNetworkContext].Uint64()
 			}
 			lastHead, lastTd = header, td
 			log.Debug("Announcing block to peers", "number", number, "hash", hash, "td", td, "reorg", reorg)

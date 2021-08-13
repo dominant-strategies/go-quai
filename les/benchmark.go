@@ -56,7 +56,7 @@ type benchmarkBlockHeaders struct {
 func (b *benchmarkBlockHeaders) init(h *serverHandler, count int) error {
 	d := int64(b.amount-1) * int64(b.skip+1)
 	b.offset = 0
-	b.randMax = h.blockchain.CurrentHeader().Number.Int64() + 1 - d
+	b.randMax = h.blockchain.CurrentHeader().Number[types.QuaiNetworkContext].Int64() + 1 - d
 	if b.randMax < 0 {
 		return fmt.Errorf("chain is too short")
 	}
@@ -86,7 +86,7 @@ type benchmarkBodiesOrReceipts struct {
 }
 
 func (b *benchmarkBodiesOrReceipts) init(h *serverHandler, count int) error {
-	randMax := h.blockchain.CurrentHeader().Number.Int64() + 1
+	randMax := h.blockchain.CurrentHeader().Number[types.QuaiNetworkContext].Int64() + 1
 	b.hashes = make([]common.Hash, count)
 	for i := range b.hashes {
 		b.hashes[i] = rawdb.ReadCanonicalHash(h.chainDb, uint64(rand.Int63n(randMax)))
