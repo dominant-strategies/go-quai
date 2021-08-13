@@ -1498,7 +1498,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		var (
 			developer  accounts.Account
 			passphrase string
-			err        error
 		)
 		if list := MakePasswordList(ctx); len(list) > 0 {
 			// Just take the first value. Although the function returns a possible multiple values and

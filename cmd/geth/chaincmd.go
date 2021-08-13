@@ -66,9 +66,6 @@ It expects the genesis file as argument.`,
 		Flags: []cli.Flag{
 			utils.MainnetFlag,
 			utils.RopstenFlag,
-			utils.RinkebyFlag,
-			utils.GoerliFlag,
-			utils.CalaverasFlag,
 		},
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
@@ -379,11 +376,11 @@ func exportPreimages(ctx *cli.Context) error {
 	return nil
 }
 
-func parseDumpConfig(ctx *cli.Context, stack *node.Node) (*state.DumpConfig, ethdb.Database, common.Hash, error) {
+func parseDumpConfig(ctx *cli.Context, stack *node.Node) (*state.DumpConfig, ethdb.Database, []common.Hash, error) {
 	db := utils.MakeChainDatabase(ctx, stack, true)
 	var header *types.Header
 	if ctx.NArg() > 1 {
-		return nil, nil, common.Hash{}, fmt.Errorf("expected 1 argument (number or hash), got %d", ctx.NArg())
+		return nil, nil, make([]common.Hash, 3), fmt.Errorf("expected 1 argument (number or hash), got %d", ctx.NArg())
 	}
 	if ctx.NArg() == 1 {
 		arg := ctx.Args().First()
@@ -392,17 +389,17 @@ func parseDumpConfig(ctx *cli.Context, stack *node.Node) (*state.DumpConfig, eth
 			if number := rawdb.ReadHeaderNumber(db, hash); number != nil {
 				header = rawdb.ReadHeader(db, hash, *number)
 			} else {
-				return nil, nil, common.Hash{}, fmt.Errorf("block %x not found", hash)
+				return nil, nil, make([]common.Hash, 3), fmt.Errorf("block %x not found", hash)
 			}
 		} else {
 			number, err := strconv.Atoi(arg)
 			if err != nil {
-				return nil, nil, common.Hash{}, err
+				return nil, nil, make([]common.Hash, 3), err
 			}
 			if hash := rawdb.ReadCanonicalHash(db, uint64(number)); hash != (common.Hash{}) {
 				header = rawdb.ReadHeader(db, hash, uint64(number))
 			} else {
-				return nil, nil, common.Hash{}, fmt.Errorf("header for block %d not found", number)
+				return nil, nil, make([]common.Hash, 3), fmt.Errorf("header for block %d not found", number)
 			}
 		}
 	} else {
@@ -410,7 +407,7 @@ func parseDumpConfig(ctx *cli.Context, stack *node.Node) (*state.DumpConfig, eth
 		header = rawdb.ReadHeadHeader(db)
 	}
 	if header == nil {
-		return nil, nil, common.Hash{}, errors.New("no head block found")
+		return nil, nil, make([]common.Hash, 3), errors.New("no head block found")
 	}
 	startArg := common.FromHex(ctx.String(utils.StartKeyFlag.Name))
 	var start common.Hash
@@ -422,7 +419,7 @@ func parseDumpConfig(ctx *cli.Context, stack *node.Node) (*state.DumpConfig, eth
 		start = crypto.Keccak256Hash(startArg)
 		log.Info("Converting start-address to hash", "address", common.BytesToAddress(startArg), "hash", start.Hex())
 	default:
-		return nil, nil, common.Hash{}, fmt.Errorf("invalid start argument: %x. 20 or 32 hex-encoded bytes required", startArg)
+		return nil, nil, make([]common.Hash, 3), fmt.Errorf("invalid start argument: %x. 20 or 32 hex-encoded bytes required", startArg)
 	}
 	var conf = &state.DumpConfig{
 		SkipCode:          ctx.Bool(utils.ExcludeCodeFlag.Name),
@@ -445,7 +442,7 @@ func dump(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	state, err := state.New(root, state.NewDatabase(db), nil)
+	state, err := state.New(root[types.QuaiNetworkContext], state.NewDatabase(db), nil)
 	if err != nil {
 		return err
 	}

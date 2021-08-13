@@ -772,9 +772,6 @@ func (s *Service) reportStats(conn *connWrapper) error {
 	// check if backend is a full node
 	fullBackend, ok := s.backend.(fullNodeBackend)
 	if ok {
-		mining = fullBackend.Miner().Mining()
-		hashrate = int(fullBackend.Miner().Hashrate())
-
 		sync := fullBackend.Downloader().Progress()
 		syncing = fullBackend.CurrentHeader().Number[types.QuaiNetworkContext].Uint64() >= sync.HighestBlock
 

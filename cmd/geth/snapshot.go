@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/state/pruner"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -61,8 +62,6 @@ var (
 					utils.DataDirFlag,
 					utils.AncientFlag,
 					utils.RopstenFlag,
-					utils.RinkebyFlag,
-					utils.GoerliFlag,
 					utils.CacheTrieJournalFlag,
 					utils.BloomFilterSizeFlag,
 				},
@@ -91,8 +90,6 @@ the trie clean cache with default directory will be deleted.
 					utils.DataDirFlag,
 					utils.AncientFlag,
 					utils.RopstenFlag,
-					utils.RinkebyFlag,
-					utils.GoerliFlag,
 				},
 				Description: `
 geth snapshot verify-state <state-root>
@@ -111,8 +108,6 @@ In other words, this command does the snapshot to trie conversion.
 					utils.DataDirFlag,
 					utils.AncientFlag,
 					utils.RopstenFlag,
-					utils.RinkebyFlag,
-					utils.GoerliFlag,
 				},
 				Description: `
 geth snapshot traverse-state <state-root>
@@ -133,8 +128,6 @@ It's also usable without snapshot enabled.
 					utils.DataDirFlag,
 					utils.AncientFlag,
 					utils.RopstenFlag,
-					utils.RinkebyFlag,
-					utils.GoerliFlag,
 				},
 				Description: `
 geth snapshot traverse-rawstate <state-root>
@@ -156,8 +149,6 @@ It's also usable without snapshot enabled.
 					utils.DataDirFlag,
 					utils.AncientFlag,
 					utils.RopstenFlag,
-					utils.RinkebyFlag,
-					utils.GoerliFlag,
 					utils.ExcludeCodeFlag,
 					utils.ExcludeStorageFlag,
 					utils.StartKeyFlag,
@@ -466,11 +457,11 @@ func dumpState(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	snaptree, err := snapshot.New(db, trie.NewDatabase(db), 256, root, false, false, false)
+	snaptree, err := snapshot.New(db, trie.NewDatabase(db), 256, root[types.QuaiNetworkContext], false, false, false)
 	if err != nil {
 		return err
 	}
-	accIt, err := snaptree.AccountIterator(root, common.BytesToHash(conf.Start))
+	accIt, err := snaptree.AccountIterator(root[types.QuaiNetworkContext], common.BytesToHash(conf.Start))
 	if err != nil {
 		return err
 	}
@@ -485,7 +476,7 @@ func dumpState(ctx *cli.Context) error {
 	enc := json.NewEncoder(os.Stdout)
 	enc.Encode(struct {
 		Root common.Hash `json:"root"`
-	}{root})
+	}{root[types.QuaiNetworkContext]})
 	for accIt.Next() {
 		account, err := snapshot.FullAccount(accIt.Account())
 		if err != nil {
@@ -504,7 +495,7 @@ func dumpState(ctx *cli.Context) error {
 		if !conf.SkipStorage {
 			da.Storage = make(map[common.Hash]string)
 
-			stIt, err := snaptree.StorageIterator(root, accIt.Hash(), common.Hash{})
+			stIt, err := snaptree.StorageIterator(root[types.QuaiNetworkContext], accIt.Hash(), common.Hash{})
 			if err != nil {
 				return err
 			}
