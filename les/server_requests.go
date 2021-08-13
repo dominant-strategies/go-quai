@@ -174,7 +174,7 @@ func handleGetBlockHeaders(msg Decoder) (serveRequestFn, uint64, uint64, error) 
 				if first {
 					origin = bc.GetHeaderByHash(r.Query.Origin.Hash)
 					if origin != nil {
-						r.Query.Origin.Number = origin.Number.Uint64()
+						r.Query.Origin.Number = origin.Number[types.QuaiNetworkContext].Uint64()
 					}
 				} else {
 					origin = bc.GetHeader(r.Query.Origin.Hash, r.Query.Origin.Number)
@@ -202,7 +202,7 @@ func handleGetBlockHeaders(msg Decoder) (serveRequestFn, uint64, uint64, error) 
 			case hashMode && !r.Query.Reverse:
 				// Hash based traversal towards the leaf block
 				var (
-					current = origin.Number.Uint64()
+					current = origin.Number[types.QuaiNetworkContext].Uint64()
 					next    = current + r.Query.Skip + 1
 				)
 				if next <= current {
@@ -296,15 +296,15 @@ func handleGetCode(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 			}
 			// Refuse to search stale state data in the database since looking for
 			// a non-exist key is kind of expensive.
-			local := bc.CurrentHeader().Number.Uint64()
-			if !backend.ArchiveMode() && header.Number.Uint64()+core.TriesInMemory <= local {
-				p.Log().Debug("Reject stale code request", "number", header.Number.Uint64(), "head", local)
+			local := bc.CurrentHeader().Number[types.QuaiNetworkContext].Uint64()
+			if !backend.ArchiveMode() && header.Number[types.QuaiNetworkContext].Uint64()+core.TriesInMemory <= local {
+				p.Log().Debug("Reject stale code request", "number", header.Number[types.QuaiNetworkContext].Uint64(), "head", local)
 				p.bumpInvalid()
 				continue
 			}
 			triedb := bc.StateCache().TrieDB()
 
-			account, err := getAccount(triedb, header.Root, common.BytesToHash(request.AccKey))
+			account, err := getAccount(triedb, header.Root[types.QuaiNetworkContext], common.BytesToHash(request.AccKey))
 			if err != nil {
 				p.Log().Warn("Failed to retrieve account for code", "block", header.Number, "hash", header.Hash(), "account", common.BytesToHash(request.AccKey), "err", err)
 				p.bumpInvalid()
@@ -347,7 +347,7 @@ func handleGetReceipts(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 			// Retrieve the requested block's receipts, skipping if unknown to us
 			results := bc.GetReceiptsByHash(hash)
 			if results == nil {
-				if header := bc.GetHeaderByHash(hash); header == nil || header.ReceiptHash != types.EmptyRootHash {
+				if header := bc.GetHeaderByHash(hash); header == nil || header.ReceiptHash[types.QuaiNetworkContext] != types.EmptyRootHash[types.QuaiNetworkContext] {
 					p.bumpInvalid()
 					continue
 				}
@@ -395,13 +395,13 @@ func handleGetProofs(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 				}
 				// Refuse to search stale state data in the database since looking for
 				// a non-exist key is kind of expensive.
-				local := bc.CurrentHeader().Number.Uint64()
-				if !backend.ArchiveMode() && header.Number.Uint64()+core.TriesInMemory <= local {
-					p.Log().Debug("Reject stale trie request", "number", header.Number.Uint64(), "head", local)
+				local := bc.CurrentHeader().Number[types.QuaiNetworkContext].Uint64()
+				if !backend.ArchiveMode() && header.Number[types.QuaiNetworkContext].Uint64()+core.TriesInMemory <= local {
+					p.Log().Debug("Reject stale trie request", "number", header.Number[types.QuaiNetworkContext].Uint64(), "head", local)
 					p.bumpInvalid()
 					continue
 				}
-				root = header.Root
+				root = header.Root[types.QuaiNetworkContext]
 			}
 			// If a header lookup failed (non existent), ignore subsequent requests for the same header
 			if root == (common.Hash{}) {
