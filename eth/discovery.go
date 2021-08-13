@@ -19,6 +19,7 @@ package eth
 import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/forkid"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -59,5 +60,5 @@ func (eth *Ethereum) startEthEntryUpdate(ln *enode.LocalNode) {
 
 func (eth *Ethereum) currentEthEntry() *ethEntry {
 	return &ethEntry{ForkID: forkid.NewID(eth.blockchain.Config(), eth.blockchain.Genesis().Hash(),
-		eth.blockchain.CurrentHeader().Number.Uint64())}
+		eth.blockchain.CurrentHeader().Number[types.QuaiNetworkContext].Uint64())}
 }

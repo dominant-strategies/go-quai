@@ -135,12 +135,12 @@ func TestEth66Messages(t *testing.T) {
 		err error
 	)
 	header = &types.Header{
-		Difficulty: big.NewInt(2222),
-		Number:     big.NewInt(3333),
-		GasLimit:   4444,
-		GasUsed:    5555,
+		Difficulty: []*big.Int{big.NewInt(2222), big.NewInt(2222), big.NewInt(2222)},
+		Number:     []*big.Int{big.NewInt(3333), big.NewInt(3333), big.NewInt(3333)},
+		GasLimit:   []uint64{4444, 4444, 4444},
+		GasUsed:    []uint64{5555, 5555, 5555},
 		Time:       6666,
-		Extra:      []byte{0x77, 0x88},
+		Extra:      [][]byte{[]byte{0x77, 0x88}, []byte{0x77, 0x88}, []byte{0x77, 0x88}},
 	}
 	// Init the transactions, taken from a different test
 	{
