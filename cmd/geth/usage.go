@@ -218,6 +218,13 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.CatalystFlag,
 		},
 	},
+	{
+		Name: "QUAI CONTEXT",
+		Flags: []cli.Flag{
+			utils.RegionFlag,
+			utils.ZoneFlag,
+		},
+	},
 }
 
 func init() {
