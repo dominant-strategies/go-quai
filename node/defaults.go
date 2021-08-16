@@ -80,27 +80,54 @@ func DefaultDataDir() string {
 	return ""
 }
 
-// QuaiContextDataDir is the default data directory to use for the databases and other
+// QuaiRegionDataDir is the default data directory to use for the databases and other
 // persistence requirements.
-func QuaiContextDataDir(contextType string, contextNumber string) string {
+func QuaiRegionDataDir(contextNumber string) string {
 	// Try to place the data folder in the user's home dir
 	home := homeDir()
 	if home != "" {
 		switch runtime.GOOS {
 		case "darwin":
-			return filepath.Join(home, "Library", "Quai", contextType+contextNumber)
+			return filepath.Join(home, "Library", "Quai", "Region"+contextNumber)
 		case "windows":
 			// We used to put everything in %HOME%\AppData\Roaming, but this caused
 			// problems with non-typical setups. If this fallback location exists and
 			// is non-empty, use it, otherwise DTRT and check %LOCALAPPDATA%.
-			fallback := filepath.Join(home, "AppData", "Roaming", "Quai", contextType+contextNumber)
+			fallback := filepath.Join(home, "AppData", "Roaming", "Quai", "Region"+contextNumber)
 			appdata := windowsAppData()
 			if appdata == "" || isNonEmptyDir(fallback) {
 				return fallback
 			}
-			return filepath.Join(appdata, "Quai", contextType+contextNumber)
+			return filepath.Join(appdata, "Quai", "Region"+contextNumber)
 		default:
-			return filepath.Join(home, ".quai", contextType+contextNumber)
+			return filepath.Join(home, ".quai", "region"+contextNumber)
+		}
+	}
+	// As we cannot guess a stable location, return empty and handle later
+	return ""
+}
+
+// QuaiZoneDataDir is the default data directory to use for the databases and other
+// persistence requirements.
+func QuaiZoneDataDir(regionNumber string, zoneNumber string) string {
+	// Try to place the data folder in the user's home dir
+	home := homeDir()
+	if home != "" {
+		switch runtime.GOOS {
+		case "darwin":
+			return filepath.Join(home, "Library", "Quai", "Region"+regionNumber, "Zone"+zoneNumber)
+		case "windows":
+			// We used to put everything in %HOME%\AppData\Roaming, but this caused
+			// problems with non-typical setups. If this fallback location exists and
+			// is non-empty, use it, otherwise DTRT and check %LOCALAPPDATA%.
+			fallback := filepath.Join(home, "AppData", "Roaming", "Quai", "Region"+regionNumber, "Zone"+zoneNumber)
+			appdata := windowsAppData()
+			if appdata == "" || isNonEmptyDir(fallback) {
+				return fallback
+			}
+			return filepath.Join(appdata, "Quai", "Region"+regionNumber, "Zone"+zoneNumber)
+		default:
+			return filepath.Join(home, ".quai", "region"+regionNumber, "zone"+zoneNumber)
 		}
 	}
 	// As we cannot guess a stable location, return empty and handle later

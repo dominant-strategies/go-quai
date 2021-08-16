@@ -777,13 +777,13 @@ func MakeDataDir(ctx *cli.Context) string {
 			// Ropsten database in `testnet` instead of `ropsten`.
 			return filepath.Join(path, "ropsten")
 		}
-		if ctx.GlobalIsSet(ZoneFlag.Name) {
-			dir := node.QuaiContextDataDir("Zone", strconv.Itoa(ctx.GlobalInt(ZoneFlag.Name)))
+		if ctx.GlobalIsSet(RegionFlag.Name) && !ctx.GlobalIsSet(ZoneFlag.Name) {
+			dir := node.QuaiRegionDataDir(strconv.Itoa(ctx.GlobalInt(RegionFlag.Name)))
 			log.Info("Setting dir path", dir)
 			return dir
 		}
-		if ctx.GlobalIsSet(RegionFlag.Name) {
-			dir := node.QuaiContextDataDir("Region", strconv.Itoa(ctx.GlobalInt(RegionFlag.Name)))
+		if ctx.GlobalIsSet(RegionFlag.Name) && ctx.GlobalIsSet(ZoneFlag.Name) {
+			dir := node.QuaiZoneDataDir(strconv.Itoa(ctx.GlobalInt(RegionFlag.Name)), strconv.Itoa(ctx.GlobalInt(ZoneFlag.Name)))
 			log.Info("Setting dir path", dir)
 			return dir
 		}
@@ -1274,16 +1274,14 @@ func setDataDir(ctx *cli.Context, cfg *node.Config) {
 		}
 
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "ropsten")
-	case ctx.GlobalIsSet(ZoneFlag.Name):
-		dir := node.QuaiContextDataDir("Zone", strconv.Itoa(ctx.GlobalInt(ZoneFlag.Name)))
+	case ctx.GlobalIsSet(RegionFlag.Name) && !ctx.GlobalIsSet(ZoneFlag.Name):
+		dir := node.QuaiRegionDataDir(strconv.Itoa(ctx.GlobalInt(RegionFlag.Name)))
 		log.Info("Setting dir path", dir)
 		cfg.DataDir = dir
-
-	case ctx.GlobalIsSet(RegionFlag.Name):
-		dir := node.QuaiContextDataDir("Region", strconv.Itoa(ctx.GlobalInt(RegionFlag.Name)))
+	case ctx.GlobalIsSet(RegionFlag.Name) && ctx.GlobalIsSet(ZoneFlag.Name):
+		dir := node.QuaiZoneDataDir(strconv.Itoa(ctx.GlobalInt(RegionFlag.Name)), strconv.Itoa(ctx.GlobalInt(ZoneFlag.Name)))
 		log.Info("Setting dir path", dir)
 		cfg.DataDir = dir
-
 	}
 }
 
@@ -1610,6 +1608,20 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		}
 		cfg.Genesis = core.DefaultRopstenGenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, params.RopstenGenesisHash)
+	case ctx.GlobalIsSet(RegionFlag.Name) && !ctx.GlobalIsSet(ZoneFlag.Name):
+		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
+			cfg.NetworkId = params.MainnetRegionChainConfigs[ctx.GlobalInt(RegionFlag.Name)-1].ChainID.Uint64()
+		}
+		cfg.Genesis = core.MainnetRegionGenesisBlock(&params.MainnetRegionChainConfigs[ctx.GlobalInt(RegionFlag.Name)-1])
+		types.QuaiNetworkContext = cfg.Genesis.Config.Context
+		SetDNSDiscoveryDefaults(cfg, params.MainnetPrimeGenesisHash)
+	case ctx.GlobalIsSet(RegionFlag.Name) && ctx.GlobalIsSet(ZoneFlag.Name):
+		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
+			cfg.NetworkId = params.MainnetZoneChainConfigs[ctx.GlobalInt(RegionFlag.Name)-1][ctx.GlobalInt(ZoneFlag.Name)-1].ChainID.Uint64()
+		}
+		cfg.Genesis = core.MainnetZoneGenesisBlock(&params.MainnetZoneChainConfigs[ctx.GlobalInt(RegionFlag.Name)-1][ctx.GlobalInt(ZoneFlag.Name)-1])
+		types.QuaiNetworkContext = cfg.Genesis.Config.Context
+		SetDNSDiscoveryDefaults(cfg, params.MainnetPrimeGenesisHash)
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1337
@@ -1791,39 +1803,10 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly bool) ethdb.
 func MakeGenesis(ctx *cli.Context) *core.Genesis {
 	var genesis *core.Genesis
 	switch {
-	case ctx.GlobalBool(MainnetFlag.Name):
-		switch {
-		case ctx.GlobalBool(ZoneFlag.Name):
-			switch ZoneFlag.Value {
-			case 1:
-				genesis = core.MainnetZoneGenesisBlock(params.MainnetZoneOneChainConfig)
-			case 2:
-				genesis = core.MainnetZoneGenesisBlock(params.MainnetZoneTwoChainConfig)
-			case 3:
-				genesis = core.MainnetZoneGenesisBlock(params.MainnetZoneThreeChainConfig)
-			case 4:
-				genesis = core.MainnetZoneGenesisBlock(params.MainnetZoneFourChainConfig)
-			case 5:
-				genesis = core.MainnetZoneGenesisBlock(params.MainnetZoneFiveChainConfig)
-			case 6:
-				genesis = core.MainnetZoneGenesisBlock(params.MainnetZoneSixChainConfig)
-			case 7:
-				genesis = core.MainnetZoneGenesisBlock(params.MainnetZoneSevenChainConfig)
-			case 8:
-				genesis = core.MainnetZoneGenesisBlock(params.MainnetZoneEightChainConfig)
-			case 9:
-				genesis = core.MainnetZoneGenesisBlock(params.MainnetZoneNineChainConfig)
-			}
-		case ctx.GlobalBool(RegionFlag.Name):
-			switch RegionFlag.Value {
-			case 1:
-				genesis = core.MainnetRegionGenesisBlock(params.MainnetRegionOneChainConfig)
-			case 2:
-				genesis = core.MainnetRegionGenesisBlock(params.MainnetRegionTwoChainConfig)
-			case 3:
-				genesis = core.MainnetRegionGenesisBlock(params.MainnetRegionThreeChainConfig)
-			}
-		}
+	case ctx.GlobalBool(RegionFlag.Name) && ctx.GlobalBool(ZoneFlag.Name):
+		genesis = core.MainnetZoneGenesisBlock(&params.MainnetZoneChainConfigs[ctx.GlobalInt(RegionFlag.Name)-1][ctx.GlobalInt(ZoneFlag.Name)-1])
+	case ctx.GlobalBool(RegionFlag.Name) && !ctx.GlobalBool(ZoneFlag.Name):
+		genesis = core.MainnetRegionGenesisBlock(&params.MainnetRegionChainConfigs[ctx.GlobalInt(RegionFlag.Name)-1])
 	default:
 		genesis = core.MainnetPrimeGenesisBlock()
 	}
