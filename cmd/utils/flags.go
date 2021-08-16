@@ -777,6 +777,16 @@ func MakeDataDir(ctx *cli.Context) string {
 			// Ropsten database in `testnet` instead of `ropsten`.
 			return filepath.Join(path, "ropsten")
 		}
+		if ctx.GlobalIsSet(ZoneFlag.Name) {
+			dir := node.QuaiContextDataDir("Zone", strconv.Itoa(ctx.GlobalInt(ZoneFlag.Name)))
+			log.Info("Setting dir path", dir)
+			return dir
+		}
+		if ctx.GlobalIsSet(RegionFlag.Name) {
+			dir := node.QuaiContextDataDir("Region", strconv.Itoa(ctx.GlobalInt(RegionFlag.Name)))
+			log.Info("Setting dir path", dir)
+			return dir
+		}
 		return path
 	}
 	Fatalf("Cannot determine default data directory, please set manually (--datadir)")
@@ -1264,6 +1274,16 @@ func setDataDir(ctx *cli.Context, cfg *node.Config) {
 		}
 
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "ropsten")
+	case ctx.GlobalIsSet(ZoneFlag.Name):
+		dir := node.QuaiContextDataDir("Zone", strconv.Itoa(ctx.GlobalInt(ZoneFlag.Name)))
+		log.Info("Setting dir path", dir)
+		cfg.DataDir = dir
+
+	case ctx.GlobalIsSet(RegionFlag.Name):
+		dir := node.QuaiContextDataDir("Region", strconv.Itoa(ctx.GlobalInt(RegionFlag.Name)))
+		log.Info("Setting dir path", dir)
+		cfg.DataDir = dir
+
 	}
 }
 

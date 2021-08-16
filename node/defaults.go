@@ -80,6 +80,33 @@ func DefaultDataDir() string {
 	return ""
 }
 
+// QuaiContextDataDir is the default data directory to use for the databases and other
+// persistence requirements.
+func QuaiContextDataDir(contextType string, contextNumber string) string {
+	// Try to place the data folder in the user's home dir
+	home := homeDir()
+	if home != "" {
+		switch runtime.GOOS {
+		case "darwin":
+			return filepath.Join(home, "Library", "Quai", contextType+contextNumber)
+		case "windows":
+			// We used to put everything in %HOME%\AppData\Roaming, but this caused
+			// problems with non-typical setups. If this fallback location exists and
+			// is non-empty, use it, otherwise DTRT and check %LOCALAPPDATA%.
+			fallback := filepath.Join(home, "AppData", "Roaming", "Quai", contextType+contextNumber)
+			appdata := windowsAppData()
+			if appdata == "" || isNonEmptyDir(fallback) {
+				return fallback
+			}
+			return filepath.Join(appdata, "Quai", contextType+contextNumber)
+		default:
+			return filepath.Join(home, ".quai", contextType+contextNumber)
+		}
+	}
+	// As we cannot guess a stable location, return empty and handle later
+	return ""
+}
+
 func windowsAppData() string {
 	v := os.Getenv("LOCALAPPDATA")
 	if v == "" {
