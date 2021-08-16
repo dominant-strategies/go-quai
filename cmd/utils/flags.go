@@ -726,14 +726,14 @@ func MakeDataDir(ctx *cli.Context) string {
 			return filepath.Join(path, "ropsten")
 		}
 		if ctx.GlobalIsSet(ZoneFlag.Name) {
-			path = filepath.Join(path, "zone", strconv.Itoa(ctx.GlobalInt(ZoneFlag.Name)))
-			log.Info("Setting dir path", path)
-			return path
+			dir := node.QuaiContextDataDir("Zone", strconv.Itoa(ctx.GlobalInt(ZoneFlag.Name)))
+			log.Info("Setting dir path", dir)
+			return dir
 		}
 		if ctx.GlobalIsSet(RegionFlag.Name) {
-			path = filepath.Join(path, "region", strconv.Itoa(ctx.GlobalInt(RegionFlag.Name)))
-			log.Info("Setting dir path", path)
-			return path
+			dir := node.QuaiContextDataDir("Region", strconv.Itoa(ctx.GlobalInt(RegionFlag.Name)))
+			log.Info("Setting dir path", dir)
+			return dir
 		}
 		return path
 	}
@@ -1200,6 +1200,16 @@ func setDataDir(ctx *cli.Context, cfg *node.Config) {
 		}
 
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "ropsten")
+	case ctx.GlobalIsSet(ZoneFlag.Name):
+		dir := node.QuaiContextDataDir("Zone", strconv.Itoa(ctx.GlobalInt(ZoneFlag.Name)))
+		log.Info("Setting dir path", dir)
+		cfg.DataDir = dir
+
+	case ctx.GlobalIsSet(RegionFlag.Name):
+		dir := node.QuaiContextDataDir("Region", strconv.Itoa(ctx.GlobalInt(RegionFlag.Name)))
+		log.Info("Setting dir path", dir)
+		cfg.DataDir = dir
+
 	}
 }
 
