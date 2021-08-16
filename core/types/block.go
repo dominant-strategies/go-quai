@@ -433,6 +433,8 @@ func (b *Block) BaseFee(params ...int) *big.Int {
 
 	return new(big.Int).Set(b.header.BaseFee[context])
 }
+func (b *Block) MapContext() []byte { return b.header.MapContext }
+func (b *Block) Location() []byte   { return b.header.Location }
 
 func (b *Block) Header() *Header { return CopyHeader(b.header) }
 

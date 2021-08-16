@@ -63,6 +63,8 @@ type Genesis struct {
 	GasUsed    uint64      `json:"gasUsed"`
 	ParentHash common.Hash `json:"parentHash"`
 	BaseFee    *big.Int    `json:"baseFeePerGas"`
+	MapContext []byte      `json:"mapContext"        gencodec:"required"`
+	Location   []byte      `json:"location"        	gencodec:"required"`
 }
 
 // GenesisAlloc specifies the initial state that is part of the genesis block.
@@ -287,6 +289,8 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		Time:       g.Timestamp,
 		BaseFee:    []*big.Int{baseFee, baseFee, baseFee},
 		Root:       []common.Hash{root, root, root},
+		MapContext: g.MapContext,
+		Location:   g.Location,
 	}
 
 	if g.GasLimit == 0 {
@@ -352,6 +356,8 @@ func MainnetPrimeGenesisBlock() *Genesis {
 		GasLimit:   500000,
 		Difficulty: big.NewInt(1717986918400),
 		Alloc:      decodePrealloc(mainnetAllocData),
+		MapContext: []byte{3, 3},
+		Location:   []byte{0, 0},
 	}
 }
 
@@ -364,18 +370,22 @@ func MainnetRegionGenesisBlock(regionParams *params.ChainConfig) *Genesis {
 		GasLimit:   50000,
 		Difficulty: big.NewInt(171798691840),
 		Alloc:      decodePrealloc(mainnetAllocData),
+		MapContext: []byte{3, 3},
+		Location:   regionParams.Location,
 	}
 }
 
 // MainnetPrimeGenesisBlock returns the Ethereum main net genesis block.
-func MainnetZoneGenesisBlock(regionParams *params.ChainConfig) *Genesis {
+func MainnetZoneGenesisBlock(zoneParams *params.ChainConfig) *Genesis {
 	return &Genesis{
-		Config:     regionParams,
+		Config:     zoneParams,
 		Nonce:      66,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
 		GasLimit:   5000,
 		Difficulty: big.NewInt(17179869184),
 		Alloc:      decodePrealloc(mainnetAllocData),
+		MapContext: []byte{3, 3},
+		Location:   zoneParams.Location,
 	}
 }
 
