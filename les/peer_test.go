@@ -98,11 +98,13 @@ func TestPeerSubscription(t *testing.T) {
 
 type fakeChain struct{}
 
-func (f *fakeChain) Config() *params.ChainConfig { return params.MainnetChainConfig }
+func (f *fakeChain) Config() *params.ChainConfig { return params.MainnetPrimeChainConfig }
 func (f *fakeChain) Genesis() *types.Block {
-	return core.DefaultGenesisBlock().ToBlock(rawdb.NewMemoryDatabase())
+	return core.MainnetPrimeGenesisBlock().ToBlock(rawdb.NewMemoryDatabase())
 }
-func (f *fakeChain) CurrentHeader() *types.Header { return &types.Header{Number: big.NewInt(10000000)} }
+func (f *fakeChain) CurrentHeader() *types.Header {
+	return &types.Header{Number: []*big.Int{big.NewInt(10000000), big.NewInt(10000000), big.NewInt(10000000)}}
+}
 
 func TestHandshake(t *testing.T) {
 	// Create a message pipe to communicate through
@@ -125,8 +127,8 @@ func TestHandshake(t *testing.T) {
 		genesis = common.HexToHash("cafebabe")
 
 		chain1, chain2   = &fakeChain{}, &fakeChain{}
-		forkID1          = forkid.NewID(chain1.Config(), chain1.Genesis().Hash(), chain1.CurrentHeader().Number.Uint64())
-		forkID2          = forkid.NewID(chain2.Config(), chain2.Genesis().Hash(), chain2.CurrentHeader().Number.Uint64())
+		forkID1          = forkid.NewID(chain1.Config(), chain1.Genesis().Hash(), chain1.CurrentHeader().Number[types.QuaiNetworkContext].Uint64())
+		forkID2          = forkid.NewID(chain2.Config(), chain2.Genesis().Hash(), chain2.CurrentHeader().Number[types.QuaiNetworkContext].Uint64())
 		filter1, filter2 = forkid.NewFilter(chain1), forkid.NewFilter(chain2)
 	)
 
