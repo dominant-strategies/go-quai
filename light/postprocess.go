@@ -201,7 +201,7 @@ func (c *ChtIndexerBackend) Reset(ctx context.Context, section uint64, lastSecti
 
 // Process implements core.ChainIndexerBackend
 func (c *ChtIndexerBackend) Process(ctx context.Context, header *types.Header) error {
-	hash, num := header.Hash(), header.Number.Uint64()
+	hash, num := header.Hash(), header.Number[types.QuaiNetworkContext].Uint64()
 	c.lastHash = hash
 
 	td := rawdb.ReadTd(c.diskdb, hash, num)
@@ -417,7 +417,7 @@ func (b *BloomTrieIndexerBackend) Reset(ctx context.Context, section uint64, las
 
 // Process implements core.ChainIndexerBackend
 func (b *BloomTrieIndexerBackend) Process(ctx context.Context, header *types.Header) error {
-	num := header.Number.Uint64() - b.section*b.size
+	num := header.Number[types.QuaiNetworkContext].Uint64() - b.section*b.size
 	if (num+1)%b.parentSize == 0 {
 		b.sectionHeads[num/b.parentSize] = header.Hash()
 	}
