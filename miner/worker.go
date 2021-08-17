@@ -895,13 +895,19 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	}
 	num := parent.Number()
 	header := &types.Header{
-		ParentHash: make([]common.Hash, 3),
-		Number:     make([]*big.Int, 3),
-		Extra:      make([][]byte, 3),
-		Time:       uint64(timestamp),
-		BaseFee:    make([]*big.Int, 3),
-		GasLimit:   make([]uint64, 3),
-		Coinbase:   make([]common.Address, 3),
+		ParentHash:  make([]common.Hash, 3),
+		Number:      make([]*big.Int, 3),
+		Extra:       make([][]byte, 3),
+		Time:        uint64(timestamp),
+		BaseFee:     make([]*big.Int, 3),
+		GasLimit:    make([]uint64, 3),
+		Coinbase:    make([]common.Address, 3),
+		Difficulty:  make([]*big.Int, 3),
+		Root:        make([]common.Hash, 3),
+		TxHash:      make([]common.Hash, 3),
+		ReceiptHash: make([]common.Hash, 3),
+		GasUsed:     make([]uint64, 3),
+		Bloom:       make([]types.Bloom, 3),
 	}
 	header.ParentHash[types.QuaiNetworkContext] = parent.Hash()
 	header.Number[types.QuaiNetworkContext] = num.Add(num, common.Big1)
