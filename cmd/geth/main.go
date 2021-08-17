@@ -182,6 +182,8 @@ var (
 		utils.RPCGlobalGasCapFlag,
 		utils.RPCGlobalTxFeeCapFlag,
 		utils.AllowUnprotectedTxs,
+		utils.RegionFlag,
+		utils.ZoneFlag,
 	}
 
 	metricsFlags = []cli.Flag{
