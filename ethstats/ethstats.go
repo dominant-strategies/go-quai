@@ -563,18 +563,18 @@ func (s *Service) reportLatency(conn *connWrapper) error {
 
 // blockStats is the information to report about individual blocks.
 type blockStats struct {
-	Number     *big.Int       `json:"number"`
+	Number     []*big.Int     `json:"number"`
 	Hash       common.Hash    `json:"hash"`
-	ParentHash common.Hash    `json:"parentHash"`
+	ParentHash []common.Hash  `json:"parentHash"`
 	Timestamp  *big.Int       `json:"timestamp"`
 	Miner      common.Address `json:"miner"`
-	GasUsed    uint64         `json:"gasUsed"`
-	GasLimit   uint64         `json:"gasLimit"`
-	Diff       string         `json:"difficulty"`
+	GasUsed    []uint64       `json:"gasUsed"`
+	GasLimit   []uint64       `json:"gasLimit"`
+	Diff       []*big.Int     `json:"difficulty"`
 	TotalDiff  string         `json:"totalDifficulty"`
 	Txs        []txStats      `json:"transactions"`
-	TxHash     common.Hash    `json:"transactionsRoot"`
-	Root       common.Hash    `json:"stateRoot"`
+	TxHash     []common.Hash  `json:"transactionsRoot"`
+	Root       []common.Hash  `json:"stateRoot"`
 	Uncles     uncleStats     `json:"uncles"`
 }
 
@@ -659,7 +659,7 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		Miner:      author,
 		GasUsed:    header.GasUsed,
 		GasLimit:   header.GasLimit,
-		Diff:       header.Difficulty.String(),
+		Diff:       header.Difficulty,
 		TotalDiff:  td.String(),
 		Txs:        txs,
 		TxHash:     header.TxHash,
@@ -678,7 +678,7 @@ func (s *Service) reportHistory(conn *connWrapper, list []uint64) error {
 		indexes = append(indexes, list...)
 	} else {
 		// No indexes requested, send back the top ones
-		head := s.backend.CurrentHeader().Number.Int64()
+		head := s.backend.CurrentHeader().Number[types.QuaiNetworkContext].Int64()
 		start := head - historyUpdateRange + 1
 		if start < 0 {
 			start = 0
@@ -778,16 +778,16 @@ func (s *Service) reportStats(conn *connWrapper) error {
 		hashrate = int(fullBackend.Miner().Hashrate())
 
 		sync := fullBackend.Downloader().Progress()
-		syncing = fullBackend.CurrentHeader().Number.Uint64() >= sync.HighestBlock
+		syncing = fullBackend.CurrentHeader().Number[types.QuaiNetworkContext].Uint64() >= sync.HighestBlock
 
 		price, _ := fullBackend.SuggestGasTipCap(context.Background())
 		gasprice = int(price.Uint64())
 		if basefee := fullBackend.CurrentHeader().BaseFee; basefee != nil {
-			gasprice += int(basefee.Uint64())
+			gasprice += int(basefee[types.QuaiNetworkContext].Uint64())
 		}
 	} else {
 		sync := s.backend.Downloader().Progress()
-		syncing = s.backend.CurrentHeader().Number.Uint64() >= sync.HighestBlock
+		syncing = s.backend.CurrentHeader().Number[types.QuaiNetworkContext].Uint64() >= sync.HighestBlock
 	}
 	// Assemble the node stats and send it to the server
 	log.Trace("Sending node details to ethstats")
