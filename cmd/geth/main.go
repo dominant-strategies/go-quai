@@ -136,6 +136,11 @@ var (
 		utils.DeveloperFlag,
 		utils.DeveloperPeriodFlag,
 		utils.RopstenFlag,
+<<<<<<< HEAD
+=======
+		utils.RinkebyFlag,
+		utils.GoerliFlag,
+>>>>>>> cmd, core: remove calaveras testnet (#23366)
 		utils.VMEnableDebugFlag,
 		utils.NetworkIdFlag,
 		utils.EthStatsURLFlag,
@@ -271,6 +276,15 @@ func prepare(ctx *cli.Context) {
 	case ctx.GlobalIsSet(utils.RopstenFlag.Name):
 		log.Info("Starting Geth on Ropsten testnet...")
 
+<<<<<<< HEAD
+=======
+	case ctx.GlobalIsSet(utils.RinkebyFlag.Name):
+		log.Info("Starting Geth on Rinkeby testnet...")
+
+	case ctx.GlobalIsSet(utils.GoerliFlag.Name):
+		log.Info("Starting Geth on Görli testnet...")
+
+>>>>>>> cmd, core: remove calaveras testnet (#23366)
 	case ctx.GlobalIsSet(utils.DeveloperFlag.Name):
 		log.Info("Starting Geth in ephemeral dev mode...")
 
