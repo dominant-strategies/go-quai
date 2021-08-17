@@ -322,6 +322,10 @@ func (b *Block) Number(params ...int) *big.Int {
 	if len(params) > 0 {
 		context = params[0]
 	}
+	// Temp check
+	if len(b.header.Number) < context {
+		return nil
+	}
 	return b.header.Number[context]
 }
 func (b *Block) GasLimit(params ...int) uint64 {
