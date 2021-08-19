@@ -123,7 +123,9 @@ func TotalBitLen(array []*big.Int) int {
 	bitLen := 0
 	for i := 0; i < ContextDepth; i++ {
 		item := array[i]
-		bitLen += item.BitLen()
+		if item != nil {
+			bitLen += item.BitLen()
+		}
 	}
 	return bitLen
 }

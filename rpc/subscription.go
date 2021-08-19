@@ -24,6 +24,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/rand"
 	"reflect"
 	"strings"
@@ -175,6 +176,7 @@ func (n *Notifier) activate() error {
 func (n *Notifier) send(sub *Subscription, data json.RawMessage) error {
 	params, _ := json.Marshal(&subscriptionResult{ID: string(sub.ID), Result: data})
 	ctx := context.Background()
+	fmt.Println("SENDING DATA", data)
 	return n.h.conn.writeJSON(ctx, &jsonrpcMessage{
 		Version: vsn,
 		Method:  n.namespace + notificationMethodSuffix,

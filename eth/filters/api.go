@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -232,6 +233,38 @@ func (api *PublicFilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, er
 				return
 			case <-notifier.Closed():
 				headersSub.Unsubscribe()
+				return
+			}
+		}
+	}()
+
+	return rpcSub, nil
+}
+
+// PendingBlock sends a notification each time a new pending block is created.
+func (api *PublicFilterAPI) PendingBlock(ctx context.Context) (*rpc.Subscription, error) {
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+
+	fmt.Println("IN PENDING BLOCK")
+	rpcSub := notifier.CreateSubscription()
+
+	go func() {
+		blocks := make(chan *types.Block)
+		blockSub := api.events.SubscribePendingBlock(blocks)
+
+		for {
+			select {
+			case b := <-blocks:
+				fmt.Println(ethapi.RPCMarshalBlock(b, true, true))
+				notifier.Notify(rpcSub.ID, b)
+			case <-rpcSub.Err():
+				blockSub.Unsubscribe()
+				return
+			case <-notifier.Closed():
+				blockSub.Unsubscribe()
 				return
 			}
 		}

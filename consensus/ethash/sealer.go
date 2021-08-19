@@ -134,8 +134,8 @@ func (ethash *Ethash) mine(block *types.Block, id int, seed uint64, abort chan s
 	var (
 		header  = block.Header()
 		hash    = ethash.SealHash(header).Bytes()
-		target  = new(big.Int).Div(two256, header.Difficulty[0])
-		number  = header.Number[0].Uint64()
+		target  = new(big.Int).Div(two256, header.Difficulty[types.QuaiNetworkContext])
+		number  = header.Number[types.QuaiNetworkContext].Uint64()
 		dataset = ethash.dataset(number, false)
 	)
 	// Start generating random nonces until we abort or find a good one
