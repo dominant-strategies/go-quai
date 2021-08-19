@@ -232,3 +232,8 @@ func (miner *Miner) DisablePreseal() {
 func (miner *Miner) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscription {
 	return miner.worker.pendingLogsFeed.Subscribe(ch)
 }
+
+// SubscribePendingBlock starts delivering the pending block to the given chanel.
+func (miner *Miner) SubscribePendingBlock(ch chan<- *types.Block) event.Subscription {
+	return miner.worker.pendingBlockFeed.Subscribe(ch)
+}
