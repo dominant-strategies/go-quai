@@ -330,7 +330,7 @@ func (ec *Client) SubscribeNewHead(ctx context.Context, ch chan<- *types.Header)
 }
 
 // SubscribePendingBlock subscribes to notifications about the current pending block on the node.
-func (ec *Client) SubscribePendingBlock(ctx context.Context, ch chan<- *types.Block) (ethereum.Subscription, error) {
+func (ec *Client) SubscribePendingBlock(ctx context.Context, ch chan<- *types.Header) (ethereum.Subscription, error) {
 	return ec.c.EthSubscribe(ctx, ch, "pendingBlock")
 }
 

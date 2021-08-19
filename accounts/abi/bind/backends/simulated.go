@@ -859,7 +859,7 @@ func (fb *filterBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event
 	return nullSubscription()
 }
 
-func (fb *filterBackend) SubscribePendingBlockEvent(ch chan<- *types.Block) event.Subscription {
+func (fb *filterBackend) SubscribePendingBlockEvent(ch chan<- *types.Header) event.Subscription {
 	return nullSubscription()
 }
 

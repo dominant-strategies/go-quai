@@ -588,7 +588,7 @@ func (w *worker) taskLoop() {
 			fmt.Println("Snapshot block prev hashes", w.snapshotBlock.Header().ParentHash)
 			fmt.Println("Snapshot block number", w.snapshotBlock.Header().Number[types.QuaiNetworkContext])
 			fmt.Println("Sending block to feed")
-			w.pendingBlockFeed.Send(w.snapshotBlock)
+			w.pendingBlockFeed.Send(w.snapshotBlock.Header())
 
 			// if err := w.engine.Seal(w.chain, task.block, w.resultCh, stopCh); err != nil {
 			// 	log.Warn("Block sealing failed", "err", err)

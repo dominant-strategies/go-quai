@@ -257,7 +257,7 @@ func (b *LesApiBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.
 	})
 }
 
-func (b *LesApiBackend) SubscribePendingBlockEvent(ch chan<- *types.Block) event.Subscription {
+func (b *LesApiBackend) SubscribePendingBlockEvent(ch chan<- *types.Header) event.Subscription {
 	return event.NewSubscription(func(quit <-chan struct{}) error {
 		<-quit
 		return nil

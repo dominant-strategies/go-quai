@@ -226,7 +226,7 @@ func (b *EthAPIBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.
 	return b.eth.miner.SubscribePendingLogs(ch)
 }
 
-func (b *EthAPIBackend) SubscribePendingBlockEvent(ch chan<- *types.Block) event.Subscription {
+func (b *EthAPIBackend) SubscribePendingBlockEvent(ch chan<- *types.Header) event.Subscription {
 	return b.eth.miner.SubscribePendingBlock(ch)
 }
 
