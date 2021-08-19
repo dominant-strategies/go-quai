@@ -78,7 +78,7 @@ type subscription struct {
 	logs      chan []*types.Log
 	hashes    chan []common.Hash
 	headers   chan *types.Header
-	block     chan *types.Block
+	block     chan *types.Header
 	installed chan struct{} // closed when the filter is installed
 	err       chan error    // closed when the filter is uninstalled
 }
@@ -104,7 +104,7 @@ type EventSystem struct {
 	txsCh          chan core.NewTxsEvent      // Channel to receive new transactions event
 	logsCh         chan []*types.Log          // Channel to receive new log event
 	pendingLogsCh  chan []*types.Log          // Channel to receive new log event
-	pendingBlockCh chan *types.Block          // Channel to receive new pending block event
+	pendingBlockCh chan *types.Header         // Channel to receive new pending block event
 	rmLogsCh       chan core.RemovedLogsEvent // Channel to receive removed log event
 	chainCh        chan core.ChainEvent       // Channel to receive new chain event
 }
@@ -125,7 +125,7 @@ func NewEventSystem(backend Backend, lightMode bool) *EventSystem {
 		logsCh:         make(chan []*types.Log, logsChanSize),
 		rmLogsCh:       make(chan core.RemovedLogsEvent, rmLogsChanSize),
 		pendingLogsCh:  make(chan []*types.Log, logsChanSize),
-		pendingBlockCh: make(chan *types.Block),
+		pendingBlockCh: make(chan *types.Header),
 		chainCh:        make(chan core.ChainEvent, chainEvChanSize),
 	}
 
@@ -282,7 +282,7 @@ func (es *EventSystem) subscribePendingLogs(crit ethereum.FilterQuery, logs chan
 }
 
 // SubscribePendingBlock creates a subscription that writes pending block that are created in the miner.
-func (es *EventSystem) SubscribePendingBlock(block chan *types.Block) *Subscription {
+func (es *EventSystem) SubscribePendingBlock(block chan *types.Header) *Subscription {
 	sub := &subscription{
 		id:        rpc.NewID(),
 		typ:       PendingBlockSubscription,
@@ -355,7 +355,7 @@ func (es *EventSystem) handlePendingLogs(filters filterIndex, ev []*types.Log) {
 	}
 }
 
-func (es *EventSystem) handlePendingBlock(filters filterIndex, ev *types.Block) {
+func (es *EventSystem) handlePendingBlock(filters filterIndex, ev *types.Header) {
 	for _, f := range filters[PendingBlockSubscription] {
 		f.block <- ev
 	}

@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -252,13 +251,12 @@ func (api *PublicFilterAPI) PendingBlock(ctx context.Context) (*rpc.Subscription
 	rpcSub := notifier.CreateSubscription()
 
 	go func() {
-		blocks := make(chan *types.Block)
+		blocks := make(chan *types.Header)
 		blockSub := api.events.SubscribePendingBlock(blocks)
 
 		for {
 			select {
 			case b := <-blocks:
-				fmt.Println(ethapi.RPCMarshalBlock(b, true, true))
 				notifier.Notify(rpcSub.ID, b)
 			case <-rpcSub.Err():
 				blockSub.Unsubscribe()

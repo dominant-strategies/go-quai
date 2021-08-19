@@ -234,6 +234,6 @@ func (miner *Miner) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscript
 }
 
 // SubscribePendingBlock starts delivering the pending block to the given chanel.
-func (miner *Miner) SubscribePendingBlock(ch chan<- *types.Block) event.Subscription {
+func (miner *Miner) SubscribePendingBlock(ch chan<- *types.Header) event.Subscription {
 	return miner.worker.pendingBlockFeed.Subscribe(ch)
 }
