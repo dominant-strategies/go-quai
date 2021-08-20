@@ -168,7 +168,7 @@ search:
 				// Correct nonce found, create a new header with it
 				header = types.CopyHeader(header)
 				header.Nonce = types.EncodeNonce(nonce)
-				header.MixDigest[0] = common.BytesToHash(digest)
+				header.MixDigest[types.QuaiNetworkContext] = common.BytesToHash(digest)
 
 				// Seal and return a block (if still needed)
 				select {

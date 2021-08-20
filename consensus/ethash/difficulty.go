@@ -52,7 +52,7 @@ func CalcDifficultyFrontierU256(time uint64, parent *types.Header) *big.Int {
 		- num = block.number
 	*/
 
-	pDiff, _ := uint256.FromBig(parent.Difficulty[0]) // pDiff: pdiff
+	pDiff, _ := uint256.FromBig(parent.Difficulty[types.QuaiNetworkContext]) // pDiff: pdiff
 	adjust := pDiff.Clone()
 	adjust.Rsh(adjust, difficultyBoundDivisor) // adjust: pDiff / 2048
 
@@ -146,7 +146,7 @@ func MakeDifficultyCalculatorU256(bombDelay *big.Int) func(time uint64, parent *
 		*/
 		x := (time - parent.Time) / 9 // (block_timestamp - parent_timestamp) // 9
 		c := uint64(1)                // if parent.unclehash == emptyUncleHashHash
-		if types.IsEqualHashSlice(parent.UncleHash, types.EmptyUncleHash) {
+		if !types.IsEqualHashSlice(parent.UncleHash, types.EmptyUncleHash) {
 			c = 2
 		}
 		xNeg := x >= c
