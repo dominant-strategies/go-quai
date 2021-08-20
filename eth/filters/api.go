@@ -247,7 +247,6 @@ func (api *PublicFilterAPI) PendingBlock(ctx context.Context) (*rpc.Subscription
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
 	}
 
-	fmt.Println("IN PENDING BLOCK")
 	rpcSub := notifier.CreateSubscription()
 
 	go func() {

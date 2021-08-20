@@ -585,9 +585,7 @@ func (w *worker) taskLoop() {
 			w.pendingMu.Unlock()
 
 			w.updateSnapshot()
-			fmt.Println("Snapshot block prev hashes", w.snapshotBlock.Header().ParentHash)
-			fmt.Println("Snapshot block number", w.snapshotBlock.Header().Number[types.QuaiNetworkContext])
-			fmt.Println("Sending block to feed")
+			log.Info("Sending pending block to feed")
 			w.pendingBlockFeed.Send(w.snapshotBlock.Header())
 
 			// if err := w.engine.Seal(w.chain, task.block, w.resultCh, stopCh); err != nil {
