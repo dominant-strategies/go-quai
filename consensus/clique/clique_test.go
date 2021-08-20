@@ -76,13 +76,13 @@ func TestReimportMirroredState(t *testing.T) {
 	for i, block := range blocks {
 		header := block.Header()
 		if i > 0 {
-			header.ParentHash = blocks[i-1].Hash()
+			header.ParentHash[types.QuaiNetworkContext] = blocks[i-1].Hash()
 		}
-		header.Extra = make([]byte, extraVanity+extraSeal)
-		header.Difficulty = diffInTurn
+		header.Extra[types.QuaiNetworkContext] = make([]byte, extraVanity+extraSeal)
+		header.Difficulty[types.QuaiNetworkContext] = diffInTurn
 
 		sig, _ := crypto.Sign(SealHash(header).Bytes(), key)
-		copy(header.Extra[len(header.Extra)-extraSeal:], sig)
+		copy(header.Extra[types.QuaiNetworkContext][len(header.Extra)-extraSeal:], sig)
 		blocks[i] = block.WithSeal(header)
 	}
 	// Insert the first two blocks and make sure the chain is valid
@@ -115,11 +115,12 @@ func TestReimportMirroredState(t *testing.T) {
 
 func TestSealHash(t *testing.T) {
 	have := SealHash(&types.Header{
-		Difficulty: new(big.Int),
-		Number:     new(big.Int),
-		Extra:      make([]byte, 32+65),
-		BaseFee:    new(big.Int),
+		Difficulty: []*big.Int{new(big.Int), new(big.Int), new(big.Int)},
+		Number:     []*big.Int{new(big.Int), new(big.Int), new(big.Int)},
+		Extra:      [][]byte{make([]byte, 32+65), make([]byte, 32+65), make([]byte, 32+65)},
+		BaseFee:    []*big.Int{new(big.Int), new(big.Int), new(big.Int)},
 	})
+
 	want := common.HexToHash("0xbd3d1fa43fbc4c5bfcc91b179ec92e2861df3654de60468beb908ff805359e8f")
 	if have != want {
 		t.Errorf("have %x, want %x", have, want)
