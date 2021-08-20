@@ -304,8 +304,8 @@ func testHeader(t *testing.T, chain []*types.Block, client *rpc.Client) {
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("HeaderByNumber(%v) error = %q, want %q", tt.block, err, tt.wantErr)
 			}
-			if got != nil && got.Number != nil && got.Number.Sign() == 0 {
-				got.Number = big.NewInt(0) // hack to make DeepEqual work
+			if got != nil && got.Number[types.QuaiNetworkContext] != nil && got.Number[types.QuaiNetworkContext].Sign() == 0 {
+				got.Number[types.QuaiNetworkContext] = big.NewInt(0) // hack to make DeepEqual work
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Fatalf("HeaderByNumber(%v)\n   = %v\nwant %v", tt.block, got, tt.want)
