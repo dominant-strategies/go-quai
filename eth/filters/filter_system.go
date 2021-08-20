@@ -376,13 +376,13 @@ func (es *EventSystem) lightFilterNewHead(newHeader *types.Header, callBack func
 	// find common ancestor, create list of rolled back and new block hashes
 	var oldHeaders, newHeaders []*types.Header
 	for oldh.Hash() != newh.Hash() {
-		if oldh.Number.Uint64() >= newh.Number.Uint64() {
+		if oldh.Number[types.QuaiNetworkContext].Uint64() >= newh.Number[types.QuaiNetworkContext].Uint64() {
 			oldHeaders = append(oldHeaders, oldh)
-			oldh = rawdb.ReadHeader(es.backend.ChainDb(), oldh.ParentHash, oldh.Number.Uint64()-1)
+			oldh = rawdb.ReadHeader(es.backend.ChainDb(), oldh.ParentHash[types.QuaiNetworkContext], oldh.Number[types.QuaiNetworkContext].Uint64()-1)
 		}
-		if oldh.Number.Uint64() < newh.Number.Uint64() {
+		if oldh.Number[types.QuaiNetworkContext].Uint64() < newh.Number[types.QuaiNetworkContext].Uint64() {
 			newHeaders = append(newHeaders, newh)
-			newh = rawdb.ReadHeader(es.backend.ChainDb(), newh.ParentHash, newh.Number.Uint64()-1)
+			newh = rawdb.ReadHeader(es.backend.ChainDb(), newh.ParentHash[types.QuaiNetworkContext], newh.Number[types.QuaiNetworkContext].Uint64()-1)
 			if newh == nil {
 				// happens when CHT syncing, nothing to do
 				newh = oldh
@@ -401,7 +401,7 @@ func (es *EventSystem) lightFilterNewHead(newHeader *types.Header, callBack func
 
 // filter logs of a single header in light client mode
 func (es *EventSystem) lightFilterLogs(header *types.Header, addresses []common.Address, topics [][]common.Hash, remove bool) []*types.Log {
-	if bloomFilter(header.Bloom, addresses, topics) {
+	if bloomFilter(header.Bloom[types.QuaiNetworkContext], addresses, topics) {
 		// Get the logs of the block
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 		defer cancel()
