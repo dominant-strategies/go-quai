@@ -111,7 +111,7 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 	for hash := range core.BadHashes {
 		if header := bc.GetHeaderByHash(hash); header != nil {
 			log.Error("Found bad hash, rewinding chain", "number", header.Number, "hash", header.ParentHash)
-			bc.SetHead(header.Number.Uint64() - 1)
+			bc.SetHead(header.Number[types.QuaiNetworkContext].Uint64() - 1)
 			log.Info("Chain rewind was successful, resuming normal operation")
 		}
 	}
@@ -165,7 +165,7 @@ func (lc *LightChain) loadLastState() error {
 	}
 	// Issue a status log and return
 	header := lc.hc.CurrentHeader()
-	headerTd := lc.GetTd(header.Hash(), header.Number.Uint64())
+	headerTd := lc.GetTd(header.Hash(), header.Number[types.QuaiNetworkContext].Uint64())
 	log.Info("Loaded most recent local header", "number", header.Number, "hash", header.Hash(), "td", headerTd, "age", common.PrettyAge(time.Unix(int64(header.Time), 0)))
 	return nil
 }
@@ -182,7 +182,7 @@ func (lc *LightChain) SetHead(head uint64) error {
 
 // GasLimit returns the gas limit of the current HEAD block.
 func (lc *LightChain) GasLimit() uint64 {
-	return lc.hc.CurrentHeader().GasLimit
+	return lc.hc.CurrentHeader().GasLimit[types.QuaiNetworkContext]
 }
 
 // Reset purges the entire blockchain, restoring it to its genesis state.
@@ -344,8 +344,8 @@ func (lc *LightChain) Rollback(chain []common.Hash) {
 		// last step, however the direction of rollback is from high
 		// to low, so it's safe the update in-memory markers directly.
 		if head := lc.hc.CurrentHeader(); head.Hash() == hash {
-			rawdb.WriteHeadHeaderHash(batch, head.ParentHash)
-			lc.hc.SetCurrentHeader(lc.GetHeader(head.ParentHash, head.Number.Uint64()-1))
+			rawdb.WriteHeadHeaderHash(batch, head.ParentHash[types.QuaiNetworkContext])
+			lc.hc.SetCurrentHeader(lc.GetHeader(head.ParentHash[types.QuaiNetworkContext], head.Number[types.QuaiNetworkContext].Uint64()-1))
 		}
 	}
 	if err := batch.Write(); err != nil {
@@ -510,7 +510,7 @@ func (lc *LightChain) Config() *params.ChainConfig { return lc.hc.Config() }
 // which covered by checkpoint.
 func (lc *LightChain) SyncCheckpoint(ctx context.Context, checkpoint *params.TrustedCheckpoint) bool {
 	// Ensure the remote checkpoint head is ahead of us
-	head := lc.CurrentHeader().Number.Uint64()
+	head := lc.CurrentHeader().Number[types.QuaiNetworkContext].Uint64()
 
 	latest := (checkpoint.SectionIndex+1)*lc.indexerConfig.ChtSize - 1
 	if clique := lc.hc.Config().Clique; clique != nil {
@@ -525,7 +525,7 @@ func (lc *LightChain) SyncCheckpoint(ctx context.Context, checkpoint *params.Tru
 		defer lc.chainmu.Unlock()
 
 		// Ensure the chain didn't move past the latest block while retrieving it
-		if lc.hc.CurrentHeader().Number.Uint64() < header.Number.Uint64() {
+		if lc.hc.CurrentHeader().Number[types.QuaiNetworkContext].Uint64() < header.Number[types.QuaiNetworkContext].Uint64() {
 			log.Info("Updated latest header based on CHT", "number", header.Number, "hash", header.Hash(), "age", common.PrettyAge(time.Unix(int64(header.Time), 0)))
 			rawdb.WriteHeadHeaderHash(lc.chainDb, header.Hash())
 			lc.hc.SetCurrentHeader(header)

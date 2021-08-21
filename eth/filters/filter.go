@@ -133,7 +133,7 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	if header == nil {
 		return nil, nil
 	}
-	head := header.Number.Uint64()
+	head := header.Number[types.QuaiNetworkContext].Uint64()
 
 	if f.begin == -1 {
 		f.begin = int64(head)
@@ -231,7 +231,7 @@ func (f *Filter) unindexedLogs(ctx context.Context, end uint64) ([]*types.Log, e
 
 // blockLogs returns the logs matching the filter criteria within a single block.
 func (f *Filter) blockLogs(ctx context.Context, header *types.Header) (logs []*types.Log, err error) {
-	if bloomFilter(header.Bloom, f.addresses, f.topics) {
+	if bloomFilter(header.Bloom[types.QuaiNetworkContext], f.addresses, f.topics) {
 		found, err := f.checkMatches(ctx, header)
 		if err != nil {
 			return logs, err

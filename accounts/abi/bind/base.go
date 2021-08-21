@@ -269,7 +269,7 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 		if opts.GasFeeCap == nil {
 			gasFeeCap := new(big.Int).Add(
 				opts.GasTipCap,
-				new(big.Int).Mul(head.BaseFee, big.NewInt(2)),
+				new(big.Int).Mul(head.BaseFee[types.QuaiNetworkContext], big.NewInt(2)),
 			)
 			opts.GasFeeCap = gasFeeCap
 		}
