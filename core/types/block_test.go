@@ -113,7 +113,7 @@ func TestBlockDecoding(t *testing.T) {
 	header := &Header{
 		Coinbase:   []common.Address{common.HexToAddress("8888f1f195afa192cfee860698584c030f4c9db1"), common.HexToAddress("8888f1f195afa192cfee860698584c030f4c9db1"), common.HexToAddress("8888f1f195afa192cfee860698584c030f4c9db1")},
 		Root:       []common.Hash{common.HexToHash("ef1552a40b7165c3cd773806b9e0c165b75356e0314bf0706f279c729f51e017"), common.HexToHash("ef1552a40b7165c3cd773806b9e0c165b75356e0314bf0706f279c729f51e017"), common.HexToHash("ef1552a40b7165c3cd773806b9e0c165b75356e0314bf0706f279c729f51e017")},
-		MixDigest:  []common.Hash{common.HexToHash("bd4472abb6659ebe3ee06ee4d7b72a00a9f4d001caca51342001075469aff498"), common.HexToHash("bd4472abb6659ebe3ee06ee4d7b72a00a9f4d001caca51342001075469aff498"), common.HexToHash("bd4472abb6659ebe3ee06ee4d7b72a00a9f4d001caca51342001075469aff498")},
+		MixDigest:  common.HexToHash("bd4472abb6659ebe3ee06ee4d7b72a00a9f4d001caca51342001075469aff498"),
 		Difficulty: []*big.Int{big.NewInt(131072), big.NewInt(131072), big.NewInt(131072)},
 		Number:     []*big.Int{math.BigPow(2, 9), math.BigPow(2, 9), math.BigPow(2, 9)},
 		GasLimit:   []uint64{12345678, 12345678, 12345678},

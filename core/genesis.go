@@ -281,7 +281,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		GasLimit:   []uint64{g.GasLimit, g.GasLimit, g.GasLimit},
 		GasUsed:    []uint64{g.GasUsed, g.GasUsed, g.GasUsed},
 		Difficulty: []*big.Int{g.Difficulty, g.Difficulty, g.Difficulty},
-		MixDigest:  []common.Hash{g.Mixhash, g.Mixhash, g.Mixhash},
+		MixDigest:  g.Mixhash,
 		Coinbase:   []common.Address{g.Coinbase, g.Coinbase, g.Coinbase},
 		Nonce:      types.EncodeNonce(g.Nonce),
 		Time:       g.Timestamp,

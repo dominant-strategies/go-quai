@@ -717,7 +717,11 @@ func TestConcurrentDiskCacheGeneration(t *testing.T) {
 		GasLimit:    4015682,
 		GasUsed:     0,
 		Time:        1488928920,
+<<<<<<< HEAD
 		Extra:       []byte("www.bw.com"),
+=======
+		Extra:       [][]byte{[]byte("www.bw.com"), []byte("www.bw.com"), []byte("www.bw.com")},
+>>>>>>> 794079e (Remove array for MixDigest)
 		MixDigest:   common.HexToHash("0x3e140b0784516af5e5ec6730f2fb20cca22f32be399b9e4ad77d32541f798cd0"),
 		Nonce:       types.EncodeNonce(0xf400cd0006070c49),
 	})
