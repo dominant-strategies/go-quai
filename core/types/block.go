@@ -82,7 +82,7 @@ type Header struct {
 	GasUsed     []uint64         `json:"gasUsed"          gencodec:"required"`
 	Time        uint64           `json:"timestamp"        gencodec:"required"`
 	Extra       [][]byte         `json:"extraData"        gencodec:"required"`
-	MixDigest   []common.Hash    `json:"mixHash"`
+	MixDigest   common.Hash      `json:"mixHash"`
 	Nonce       BlockNonce       `json:"nonce"`
 	// Map the current Region / Zone
 	MapContext []byte `json:"mapContext"        gencodec:"required"`
@@ -365,12 +365,8 @@ func (b *Block) NumberU64(params ...int) uint64 {
 	}
 	return b.header.Number[context].Uint64()
 }
-func (b *Block) MixDigest(params ...int) common.Hash {
-	context := QuaiNetworkContext
-	if len(params) > 0 {
-		context = params[0]
-	}
-	return b.header.MixDigest[context]
+func (b *Block) MixDigest() common.Hash {
+	return b.header.MixDigest
 }
 func (b *Block) Nonce(params ...int) uint64 {
 	return binary.BigEndian.Uint64(b.header.Nonce[:])

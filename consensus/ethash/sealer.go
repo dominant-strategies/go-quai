@@ -52,7 +52,7 @@ func (ethash *Ethash) Seal(chain consensus.ChainHeaderReader, block *types.Block
 	// If we're running a fake PoW, simply return a 0 nonce immediately
 	if ethash.config.PowMode == ModeFake || ethash.config.PowMode == ModeFullFake {
 		header := block.Header()
-		header.Nonce, header.MixDigest = types.BlockNonce{}, []common.Hash{common.Hash{}, common.Hash{}, common.Hash{}}
+		header.Nonce, header.MixDigest = types.BlockNonce{}, common.Hash{}
 		select {
 		case results <- block.WithSeal(header):
 		default:
@@ -168,7 +168,7 @@ search:
 				// Correct nonce found, create a new header with it
 				header = types.CopyHeader(header)
 				header.Nonce = types.EncodeNonce(nonce)
-				header.MixDigest[0] = common.BytesToHash(digest)
+				header.MixDigest = common.BytesToHash(digest)
 
 				// Seal and return a block (if still needed)
 				select {
@@ -192,7 +192,7 @@ search:
 func (ethash *Ethash) MergedMineSeal(header *types.Header, results chan<- *types.Header, stop <-chan struct{}) error {
 	// If we're running a fake PoW, simply return a 0 nonce immediately
 	if ethash.config.PowMode == ModeFake || ethash.config.PowMode == ModeFullFake {
-		header.Nonce, header.MixDigest = types.BlockNonce{}, []common.Hash{common.Hash{}, common.Hash{}, common.Hash{}}
+		header.Nonce, header.MixDigest = types.BlockNonce{}, common.Hash{}
 		select {
 		case results <- header:
 		default:
@@ -314,7 +314,7 @@ search:
 				// Correct nonce found, create a new header with it
 				header = types.CopyHeader(header)
 				header.Nonce = types.EncodeNonce(nonce)
-				header.MixDigest[0] = common.BytesToHash(digest)
+				header.MixDigest = common.BytesToHash(digest)
 
 				// Seal and return a block (if still needed)
 				select {
@@ -560,7 +560,7 @@ func (s *remoteSealer) submitWork(nonce types.BlockNonce, mixDigest common.Hash,
 	// Verify the correctness of submitted result.
 	header := block.Header()
 	header.Nonce = nonce
-	header.MixDigest[0] = mixDigest
+	header.MixDigest = mixDigest
 
 	start := time.Now()
 	if !s.noverify {

@@ -299,7 +299,7 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		ParentHash: []common.Hash{hash, hash, hash},
 		GasLimit:   []uint64{parent.GasLimit(), parent.GasLimit(), parent.GasLimit()},
 		Difficulty: []*big.Int{new(big.Int).SetUint64(0), new(big.Int).SetUint64(0), new(big.Int).SetUint64(0)},
-		MixDigest:  []common.Hash{hash, hash, hash},
+		MixDigest:  hash,
 		Coinbase:   []common.Address{common.Address{}, common.Address{}, common.Address{}},
 		BaseFee:    []*big.Int{new(big.Int).SetUint64(0), new(big.Int).SetUint64(0), new(big.Int).SetUint64(0)},
 		Root:       []common.Hash{hash, hash, hash},

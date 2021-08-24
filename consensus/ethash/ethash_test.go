@@ -35,7 +35,7 @@ func TestTestMode(t *testing.T) {
 	header := &types.Header{
 		Number:     []*big.Int{big.NewInt(1), big.NewInt(1), big.NewInt(1)},
 		Difficulty: []*big.Int{big.NewInt(100), big.NewInt(100), big.NewInt(100)},
-		MixDigest:  []common.Hash{common.Hash{}, common.Hash{}, common.Hash{}},
+		MixDigest:  common.Hash{},
 	}
 
 	ethash := NewTester(nil, false)
@@ -49,7 +49,7 @@ func TestTestMode(t *testing.T) {
 	select {
 	case block := <-results:
 		header.Nonce = types.EncodeNonce(block.Nonce())
-		header.MixDigest[types.QuaiNetworkContext] = block.MixDigest()
+		header.MixDigest = block.MixDigest()
 		if err := ethash.verifySeal(nil, header, false); err != nil {
 			t.Fatalf("unexpected verification error: %v", err)
 		}
