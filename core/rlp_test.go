@@ -55,11 +55,13 @@ func getBlock(transactions int, uncles int, dataSize int) *types.Block {
 				// Add transactions and stuff on the last block
 				for i := 0; i < transactions; i++ {
 					tx, _ := types.SignTx(types.NewTransaction(uint64(i), aa,
-						big.NewInt(0), 50000, b.header.BaseFee, make([]byte, dataSize)), types.HomesteadSigner{}, key)
+						big.NewInt(0), 50000, b.header.BaseFee[params.TestChainConfig.Context], make([]byte, dataSize)), types.HomesteadSigner{}, key)
 					b.AddTx(tx)
 				}
 				for i := 0; i < uncles; i++ {
-					b.AddUncle(&types.Header{ParentHash: b.PrevBlock(n - 1 - i).Hash(), Number: big.NewInt(int64(n - i))})
+					b.AddUncle(&types.Header{ParentHash: []common.Hash{b.PrevBlock(n - 1 - i).Hash(), b.PrevBlock(n - 1 - i).Hash(), b.PrevBlock(n - 1 - i).Hash()},
+						Coinbase: []common.Address{common.Address{}, common.Address{}, common.Address{}},
+						Number:   []*big.Int{big.NewInt(int64(n - i)), big.NewInt(int64(n - i)), big.NewInt(int64(n - i))}})
 				}
 			}
 		})

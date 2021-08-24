@@ -92,7 +92,7 @@ func TestDAOForkBlockNewChain(t *testing.T) {
 		expectVote  bool
 	}{
 		// Test DAO Default Mainnet
-		{"", params.MainnetChainConfig.DAOForkBlock, true},
+		{"", params.MainnetPrimeChainConfig.DAOForkBlock, true},
 		// test DAO Init Old Privnet
 		{daoOldGenesis, nil, false},
 		// test DAO Default No Fork Privnet

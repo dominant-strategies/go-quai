@@ -201,7 +201,7 @@ func (c *ChainIndexer) eventLoop(currentHeader *types.Header, events chan ChainH
 	defer sub.Unsubscribe()
 
 	// Fire the initial new head event to start any outstanding processing
-	c.newHead(currentHeader.Number.Uint64(), false)
+	c.newHead(currentHeader.Number[types.QuaiNetworkContext].Uint64(), false)
 
 	var (
 		prevHeader = currentHeader
@@ -222,17 +222,17 @@ func (c *ChainIndexer) eventLoop(currentHeader *types.Header, events chan ChainH
 				return
 			}
 			header := ev.Block.Header()
-			if header.ParentHash != prevHash {
+			if header.ParentHash[types.QuaiNetworkContext] != prevHash {
 				// Reorg to the common ancestor if needed (might not exist in light sync mode, skip reorg then)
 				// TODO(karalabe, zsfelfoldi): This seems a bit brittle, can we detect this case explicitly?
 
-				if rawdb.ReadCanonicalHash(c.chainDb, prevHeader.Number.Uint64()) != prevHash {
+				if rawdb.ReadCanonicalHash(c.chainDb, prevHeader.Number[types.QuaiNetworkContext].Uint64()) != prevHash {
 					if h := rawdb.FindCommonAncestor(c.chainDb, prevHeader, header); h != nil {
-						c.newHead(h.Number.Uint64(), true)
+						c.newHead(h.Number[types.QuaiNetworkContext].Uint64(), true)
 					}
 				}
 			}
-			c.newHead(header.Number.Uint64(), false)
+			c.newHead(header.Number[types.QuaiNetworkContext].Uint64(), false)
 
 			prevHeader, prevHash = header, header.Hash()
 		}
@@ -402,7 +402,7 @@ func (c *ChainIndexer) processSection(section uint64, lastHead common.Hash) (com
 		header := rawdb.ReadHeader(c.chainDb, hash, number)
 		if header == nil {
 			return common.Hash{}, fmt.Errorf("block #%d [%x..] not found", number, hash[:4])
-		} else if header.ParentHash != lastHead {
+		} else if header.ParentHash[types.QuaiNetworkContext] != lastHead {
 			return common.Hash{}, fmt.Errorf("chain reorged during section processing")
 		}
 		if err := c.backend.Process(c.ctx, header); err != nil {

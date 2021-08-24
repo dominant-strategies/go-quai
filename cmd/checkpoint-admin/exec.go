@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/contracts/checkpointoracle"
 	"github.com/ethereum/go-ethereum/contracts/checkpointoracle/contract"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
@@ -164,7 +165,7 @@ func sign(ctx *cli.Context) error {
 		if err != nil {
 			return err
 		}
-		num := head.Number.Uint64()
+		num := head.Number[types.QuaiNetworkContext].Uint64()
 		if num < ((cindex+1)*params.CheckpointFrequency + params.CheckpointProcessConfirmations) {
 			utils.Fatalf("Invalid future checkpoint")
 		}
@@ -287,7 +288,7 @@ func publish(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	num := head.Number.Uint64()
+	num := head.Number[types.QuaiNetworkContext].Uint64()
 	recent, err := ethclient.NewClient(client).HeaderByNumber(reqCtx, big.NewInt(int64(num-128)))
 	if err != nil {
 		return err
@@ -298,11 +299,11 @@ func publish(ctx *cli.Context) error {
 		fmt.Printf("Signer %d => %s\n", i+1, ecrecover(sighash, sig).Hex())
 	}
 	fmt.Println()
-	fmt.Printf("Sentry number => %d\nSentry hash   => %s\n", recent.Number, recent.Hash().Hex())
+	fmt.Printf("Sentry number => %d\nSentry hash   => %s\n", recent.Number[types.QuaiNetworkContext], recent.Hash().Hex())
 
 	// Publish the checkpoint into the oracle
 	fmt.Println("Sending publish request to Clef...")
-	tx, err := oracle.RegisterCheckpoint(newClefSigner(ctx), checkpoint.SectionIndex, checkpoint.Hash().Bytes(), recent.Number, recent.Hash(), sigs)
+	tx, err := oracle.RegisterCheckpoint(newClefSigner(ctx), checkpoint.SectionIndex, checkpoint.Hash().Bytes(), recent.Number[types.QuaiNetworkContext], recent.Hash(), sigs)
 	if err != nil {
 		utils.Fatalf("Register contract failed %v", err)
 	}

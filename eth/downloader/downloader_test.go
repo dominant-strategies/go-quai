@@ -258,13 +258,13 @@ func (dl *downloadTester) InsertHeaderChain(headers []*types.Header, checkFreq i
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
 	// Do a quick check, as the blockchain.InsertHeaderChain doesn't insert anything in case of errors
-	if dl.getHeaderByHash(headers[0].ParentHash) == nil {
+	if dl.getHeaderByHash(headers[0].ParentHash[types.QuaiNetworkContext]) == nil {
 		return 0, fmt.Errorf("InsertHeaderChain: unknown parent at first position, parent of number %d", headers[0].Number)
 	}
 	var hashes []common.Hash
 	for i := 1; i < len(headers); i++ {
 		hash := headers[i-1].Hash()
-		if headers[i].ParentHash != headers[i-1].Hash() {
+		if headers[i].ParentHash[types.QuaiNetworkContext] != headers[i-1].Hash() {
 			return i, fmt.Errorf("non-contiguous import at position %d", i)
 		}
 		hashes = append(hashes, hash)
@@ -276,15 +276,15 @@ func (dl *downloadTester) InsertHeaderChain(headers []*types.Header, checkFreq i
 		if dl.getHeaderByHash(hash) != nil {
 			continue
 		}
-		if dl.getHeaderByHash(header.ParentHash) == nil {
+		if dl.getHeaderByHash(header.ParentHash[types.QuaiNetworkContext]) == nil {
 			// This _should_ be impossible, due to precheck and induction
 			return i, fmt.Errorf("InsertHeaderChain: unknown parent at position %d", i)
 		}
 		dl.ownHashes = append(dl.ownHashes, hash)
 		dl.ownHeaders[hash] = header
 
-		td := dl.getTd(header.ParentHash)
-		dl.ownChainTd[hash] = new(big.Int).Add(td, header.Difficulty)
+		td := dl.getTd(header.ParentHash[types.QuaiNetworkContext])
+		dl.ownChainTd[hash] = new(big.Int).Add(td, header.Difficulty[types.QuaiNetworkContext])
 	}
 	return len(headers), nil
 }
@@ -351,12 +351,12 @@ func (dl *downloadTester) SetHead(head uint64) error {
 	// Find the hash of the head to reset to
 	var hash common.Hash
 	for h, header := range dl.ownHeaders {
-		if header.Number.Uint64() == head {
+		if header.Number[types.QuaiNetworkContext].Uint64() == head {
 			hash = h
 		}
 	}
 	for h, header := range dl.ancientHeaders {
-		if header.Number.Uint64() == head {
+		if header.Number[types.QuaiNetworkContext].Uint64() == head {
 			hash = h
 		}
 	}
@@ -1046,7 +1046,7 @@ func testInvalidHeaderRollback(t *testing.T, protocol uint, mode SyncMode) {
 	if err := tester.sync("fast-attack", nil, mode); err == nil {
 		t.Fatalf("succeeded fast attacker synchronisation")
 	}
-	if head := tester.CurrentHeader().Number.Int64(); int(head) > MaxHeaderFetch {
+	if head := tester.CurrentHeader().Number[types.QuaiNetworkContext].Int64(); int(head) > MaxHeaderFetch {
 		t.Errorf("rollback head mismatch: have %v, want at most %v", head, MaxHeaderFetch)
 	}
 
@@ -1062,7 +1062,7 @@ func testInvalidHeaderRollback(t *testing.T, protocol uint, mode SyncMode) {
 	if err := tester.sync("block-attack", nil, mode); err == nil {
 		t.Fatalf("succeeded block attacker synchronisation")
 	}
-	if head := tester.CurrentHeader().Number.Int64(); int(head) > 2*fsHeaderSafetyNet+MaxHeaderFetch {
+	if head := tester.CurrentHeader().Number[types.QuaiNetworkContext].Int64(); int(head) > 2*fsHeaderSafetyNet+MaxHeaderFetch {
 		t.Errorf("rollback head mismatch: have %v, want at most %v", head, 2*fsHeaderSafetyNet+MaxHeaderFetch)
 	}
 	if mode == FastSync {
@@ -1085,7 +1085,7 @@ func testInvalidHeaderRollback(t *testing.T, protocol uint, mode SyncMode) {
 	if err := tester.sync("withhold-attack", nil, mode); err == nil {
 		t.Fatalf("succeeded withholding attacker synchronisation")
 	}
-	if head := tester.CurrentHeader().Number.Int64(); int(head) > 2*fsHeaderSafetyNet+MaxHeaderFetch {
+	if head := tester.CurrentHeader().Number[types.QuaiNetworkContext].Int64(); int(head) > 2*fsHeaderSafetyNet+MaxHeaderFetch {
 		t.Errorf("rollback head mismatch: have %v, want at most %v", head, 2*fsHeaderSafetyNet+MaxHeaderFetch)
 	}
 	if mode == FastSync {

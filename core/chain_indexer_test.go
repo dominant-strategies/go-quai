@@ -92,9 +92,10 @@ func testChainIndexer(t *testing.T, count int) {
 	}
 	// inject inserts a new random canonical header into the database directly
 	inject := func(number uint64) {
-		header := &types.Header{Number: big.NewInt(int64(number)), Extra: big.NewInt(rand.Int63()).Bytes()}
+		header := &types.Header{Number: []*big.Int{big.NewInt(int64(number)), big.NewInt(int64(number)), big.NewInt(int64(number))},
+			Extra: [][]byte{big.NewInt(rand.Int63()).Bytes(), big.NewInt(rand.Int63()).Bytes(), big.NewInt(rand.Int63()).Bytes()}}
 		if number > 0 {
-			header.ParentHash = rawdb.ReadCanonicalHash(db, number-1)
+			header.ParentHash[types.QuaiNetworkContext] = rawdb.ReadCanonicalHash(db, number-1)
 		}
 		rawdb.WriteHeader(db, header)
 		rawdb.WriteCanonicalHash(db, header.Hash(), number)
@@ -229,7 +230,7 @@ func (b *testChainIndexBackend) Process(ctx context.Context, header *types.Heade
 		// Can't use Fatal since this is not the test's goroutine.
 		// Returning error stops the chainIndexer's updateLoop
 		return errors.New("Unexpected call to Process")
-	case b.processCh <- header.Number.Uint64():
+	case b.processCh <- header.Number[types.QuaiNetworkContext].Uint64():
 	}
 	return nil
 }

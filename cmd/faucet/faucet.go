@@ -564,10 +564,10 @@ func (f *faucet) refresh(head *types.Header) error {
 		nonce   uint64
 		price   *big.Int
 	)
-	if balance, err = f.client.BalanceAt(ctx, f.account.Address, head.Number); err != nil {
+	if balance, err = f.client.BalanceAt(ctx, f.account.Address, head.Number[types.QuaiNetworkContext]); err != nil {
 		return err
 	}
-	if nonce, err = f.client.NonceAt(ctx, f.account.Address, head.Number); err != nil {
+	if nonce, err = f.client.NonceAt(ctx, f.account.Address, head.Number[types.QuaiNetworkContext]); err != nil {
 		return err
 	}
 	if price, err = f.client.SuggestGasPrice(ctx); err != nil {
@@ -892,10 +892,6 @@ func getGenesis(genesisFlag *string, goerliFlag bool, rinkebyFlag bool) (*core.G
 		var genesis core.Genesis
 		err := common.LoadJSON(*genesisFlag, &genesis)
 		return &genesis, err
-	case goerliFlag:
-		return core.DefaultGoerliGenesisBlock(), nil
-	case rinkebyFlag:
-		return core.DefaultRinkebyGenesisBlock(), nil
 	default:
 		return nil, fmt.Errorf("no genesis flag provided")
 	}

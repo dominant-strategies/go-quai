@@ -85,16 +85,16 @@ func TestBlockGasLimits(t *testing.T) {
 		{40000000, 5, 39960938, false}, // Lower limit -1
 	} {
 		parent := &types.Header{
-			GasUsed:  tc.pGasLimit / 2,
-			GasLimit: tc.pGasLimit,
-			BaseFee:  initial,
-			Number:   big.NewInt(tc.pNum),
+			GasUsed:  []uint64{tc.pGasLimit / 2, tc.pGasLimit / 2, tc.pGasLimit / 2},
+			GasLimit: []uint64{tc.pGasLimit, tc.pGasLimit, tc.pGasLimit},
+			BaseFee:  []*big.Int{initial, initial, initial},
+			Number:   []*big.Int{big.NewInt(tc.pNum), big.NewInt(tc.pNum), big.NewInt(tc.pNum)},
 		}
 		header := &types.Header{
-			GasUsed:  tc.gasLimit / 2,
-			GasLimit: tc.gasLimit,
-			BaseFee:  initial,
-			Number:   big.NewInt(tc.pNum + 1),
+			GasUsed:  []uint64{tc.pGasLimit / 2, tc.pGasLimit / 2, tc.pGasLimit / 2},
+			GasLimit: []uint64{tc.pGasLimit, tc.pGasLimit, tc.pGasLimit},
+			BaseFee:  []*big.Int{initial, initial, initial},
+			Number:   []*big.Int{big.NewInt(tc.pNum + 1), big.NewInt(tc.pNum + 1), big.NewInt(tc.pNum + 1)},
 		}
 		err := VerifyEip1559Header(config(), parent, header)
 		if tc.ok && err != nil {
@@ -120,10 +120,10 @@ func TestCalcBaseFee(t *testing.T) {
 	}
 	for i, test := range tests {
 		parent := &types.Header{
-			Number:   common.Big32,
-			GasLimit: test.parentGasLimit,
-			GasUsed:  test.parentGasUsed,
-			BaseFee:  big.NewInt(test.parentBaseFee),
+			Number:   []*big.Int{common.Big32, common.Big32, common.Big32},
+			GasLimit: []uint64{test.parentGasLimit, test.parentGasLimit, test.parentGasLimit},
+			GasUsed:  []uint64{test.parentGasUsed, test.parentGasUsed, test.parentGasUsed},
+			BaseFee:  []*big.Int{big.NewInt(test.parentBaseFee), big.NewInt(test.parentBaseFee), big.NewInt(test.parentBaseFee)},
 		}
 		if have, want := CalcBaseFee(config(), parent), big.NewInt(test.expectedBaseFee); have.Cmp(want) != 0 {
 			t.Errorf("test %d: have %d  want %d, ", i, have, want)

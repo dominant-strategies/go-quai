@@ -57,13 +57,13 @@ func (b *BlockGen) SetCoinbase(addr common.Address) {
 		}
 		panic("coinbase can only be set once")
 	}
-	b.header.Coinbase = addr
-	b.gasPool = new(GasPool).AddGas(b.header.GasLimit)
+	b.header.Coinbase[types.QuaiNetworkContext] = addr
+	b.gasPool = new(GasPool).AddGas(b.header.GasLimit[types.QuaiNetworkContext])
 }
 
 // SetExtra sets the extra data field of the generated block.
 func (b *BlockGen) SetExtra(data []byte) {
-	b.header.Extra = data
+	b.header.Extra[types.QuaiNetworkContext] = data
 }
 
 // SetNonce sets the nonce field of the generated block.
@@ -75,7 +75,7 @@ func (b *BlockGen) SetNonce(nonce types.BlockNonce) {
 // useful for Clique tests where the difficulty does not depend on time. For the
 // ethash tests, please use OffsetTime, which implicitly recalculates the diff.
 func (b *BlockGen) SetDifficulty(diff *big.Int) {
-	b.header.Difficulty = diff
+	b.header.Difficulty[types.QuaiNetworkContext] = diff
 }
 
 // AddTx adds a transaction to the generated block. If no coinbase has
@@ -103,7 +103,7 @@ func (b *BlockGen) AddTxWithChain(bc *BlockChain, tx *types.Transaction) {
 		b.SetCoinbase(common.Address{})
 	}
 	b.statedb.Prepare(tx.Hash(), len(b.txs))
-	receipt, err := ApplyTransaction(b.config, bc, &b.header.Coinbase, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed, vm.Config{})
+	receipt, err := ApplyTransaction(b.config, bc, &b.header.Coinbase[types.QuaiNetworkContext], b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed[types.QuaiNetworkContext], vm.Config{})
 	if err != nil {
 		panic(err)
 	}
@@ -127,12 +127,12 @@ func (b *BlockGen) AddUncheckedTx(tx *types.Transaction) {
 
 // Number returns the block number of the block being generated.
 func (b *BlockGen) Number() *big.Int {
-	return new(big.Int).Set(b.header.Number)
+	return new(big.Int).Set(b.header.Number[types.QuaiNetworkContext])
 }
 
 // BaseFee returns the EIP-1559 base fee of the block being generated.
 func (b *BlockGen) BaseFee() *big.Int {
-	return new(big.Int).Set(b.header.BaseFee)
+	return new(big.Int).Set(b.header.BaseFee[types.QuaiNetworkContext])
 }
 
 // AddUncheckedReceipt forcefully adds a receipts to the block without a
@@ -180,7 +180,7 @@ func (b *BlockGen) OffsetTime(seconds int64) {
 		panic("block time out of range")
 	}
 	chainreader := &fakeChainReader{config: b.config}
-	b.header.Difficulty = b.engine.CalcDifficulty(chainreader, b.header.Time, b.parent.Header())
+	b.header.Difficulty[types.QuaiNetworkContext] = b.engine.CalcDifficulty(chainreader, b.header.Time, b.parent.Header())
 }
 
 // GenerateChain creates a chain of n blocks. The first block's
@@ -208,13 +208,13 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		// Mutate the state and block according to any hard-fork specs
 		if daoBlock := config.DAOForkBlock; daoBlock != nil {
 			limit := new(big.Int).Add(daoBlock, params.DAOForkExtraRange)
-			if b.header.Number.Cmp(daoBlock) >= 0 && b.header.Number.Cmp(limit) < 0 {
+			if b.header.Number[types.QuaiNetworkContext].Cmp(daoBlock) >= 0 && b.header.Number[types.QuaiNetworkContext].Cmp(limit) < 0 {
 				if config.DAOForkSupport {
-					b.header.Extra = common.CopyBytes(params.DAOForkBlockExtra)
+					b.header.Extra[types.QuaiNetworkContext] = common.CopyBytes(params.DAOForkBlockExtra)
 				}
 			}
 		}
-		if config.DAOForkSupport && config.DAOForkBlock != nil && config.DAOForkBlock.Cmp(b.header.Number) == 0 {
+		if config.DAOForkSupport && config.DAOForkBlock != nil && config.DAOForkBlock.Cmp(b.header.Number[types.QuaiNetworkContext]) == 0 {
 			misc.ApplyDAOHardFork(statedb)
 		}
 		// Execute any user modifications to the block
@@ -226,7 +226,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			block, _ := b.engine.FinalizeAndAssemble(chainreader, b.header, statedb, b.txs, b.uncles, b.receipts)
 
 			// Write state changes to db
-			root, err := statedb.Commit(config.IsEIP158(b.header.Number))
+			root, err := statedb.Commit(config.IsEIP158(b.header.Number[types.QuaiNetworkContext]))
 			if err != nil {
 				panic(fmt.Sprintf("state write error: %v", err))
 			}
@@ -257,28 +257,51 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 	} else {
 		time = parent.Time() + 10 // block time is fixed at 10 seconds
 	}
+
+	baseFee := misc.CalcBaseFee(chain.Config(), parent.Header())
+
 	header := &types.Header{
-		Root:       state.IntermediateRoot(chain.Config().IsEIP158(parent.Number())),
-		ParentHash: parent.Hash(),
-		Coinbase:   parent.Coinbase(),
-		Difficulty: engine.CalcDifficulty(chain, time, &types.Header{
-			Number:     parent.Number(),
-			Time:       time - 10,
-			Difficulty: parent.Difficulty(),
-			UncleHash:  parent.UncleHash(),
-		}),
-		GasLimit: parent.GasLimit(),
-		Number:   new(big.Int).Add(parent.Number(), common.Big1),
-		Time:     time,
+		Coinbase:    []common.Address{common.Address{}, common.Address{}, common.Address{}},
+		Number:      []*big.Int{big.NewInt(int64(1)), big.NewInt(int64(1)), big.NewInt(int64(1))},
+		ParentHash:  []common.Hash{common.Hash{}, common.Hash{}, common.Hash{}},
+		Root:        []common.Hash{common.Hash{}, common.Hash{}, common.Hash{}},
+		Difficulty:  []*big.Int{big.NewInt(1), big.NewInt(1), big.NewInt(1)},
+		UncleHash:   types.EmptyUncleHash,
+		TxHash:      types.EmptyRootHash,
+		ReceiptHash: types.EmptyRootHash,
+		Bloom:       []types.Bloom{types.Bloom{}, types.Bloom{}, types.Bloom{}},
+		Time:        time,
+		BaseFee:     []*big.Int{baseFee, baseFee, baseFee},
+		GasLimit:    []uint64{0, 0, 0},
+		GasUsed:     []uint64{0, 0, 0},
+		Extra:       [][]byte{[]byte(nil), []byte(nil), []byte(nil)},
 	}
-	if chain.Config().IsLondon(header.Number) {
-		header.BaseFee = misc.CalcBaseFee(chain.Config(), parent.Header())
-		parentGasLimit := parent.GasLimit()
+	header.GasLimit[types.QuaiNetworkContext] = parent.GasLimit()
+
+	parentHeader := &types.Header{
+		Number:     []*big.Int{big.NewInt(int64(1)), big.NewInt(int64(1)), big.NewInt(int64(1))},
+		Difficulty: []*big.Int{big.NewInt(1), big.NewInt(1), big.NewInt(1)},
+		UncleHash:  types.EmptyUncleHash,
+		Time:       time - 10,
+	}
+
+	if chain.Config().IsLondon(header.Number[types.QuaiNetworkContext]) {
 		if !chain.Config().IsLondon(parent.Number()) {
-			parentGasLimit = parent.GasLimit() * params.ElasticityMultiplier
+			parentGasLimit := parent.GasLimit() * params.ElasticityMultiplier
+			header.GasLimit[types.QuaiNetworkContext] = CalcGasLimit1559(parentGasLimit, parentGasLimit)
 		}
-		header.GasLimit = CalcGasLimit1559(parentGasLimit, parentGasLimit)
 	}
+
+	parentHeader.Number[types.QuaiNetworkContext] = new(big.Int).Add(parent.Number(), common.Big1)
+	parentHeader.Difficulty[types.QuaiNetworkContext] = parent.Difficulty()
+	parentHeader.UncleHash[types.QuaiNetworkContext] = parent.UncleHash()
+
+	header.Root[types.QuaiNetworkContext] = state.IntermediateRoot(chain.Config().IsEIP158(parent.Number()))
+	header.ParentHash[types.QuaiNetworkContext] = parent.Hash()
+	header.Coinbase[types.QuaiNetworkContext] = parent.Coinbase()
+	header.Difficulty[types.QuaiNetworkContext] = engine.CalcDifficulty(chain, time, parentHeader)
+	header.Number[types.QuaiNetworkContext] = new(big.Int).Add(parent.Number(), common.Big1)
+
 	return header
 }
 

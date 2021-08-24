@@ -81,7 +81,7 @@ type blockExecutionEnv struct {
 func (env *blockExecutionEnv) commitTransaction(tx *types.Transaction, coinbase common.Address) error {
 	vmconfig := *env.chain.GetVMConfig()
 	snap := env.state.Snapshot()
-	receipt, err := core.ApplyTransaction(env.chain.Config(), env.chain, &coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, vmconfig)
+	receipt, err := core.ApplyTransaction(env.chain.Config(), env.chain, &coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed[types.QuaiNetworkContext], vmconfig)
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
 		return err
@@ -100,7 +100,7 @@ func (api *consensusAPI) makeEnv(parent *types.Block, header *types.Header) (*bl
 		chain:   api.eth.BlockChain(),
 		state:   state,
 		header:  header,
-		gasPool: new(core.GasPool).AddGas(header.GasLimit),
+		gasPool: new(core.GasPool).AddGas(header.GasLimit[types.QuaiNetworkContext]),
 	}
 	return env, nil
 }
@@ -138,16 +138,17 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 		return nil, err
 	}
 	num := parent.Number()
-	header := &types.Header{
-		ParentHash: parent.Hash(),
-		Number:     num.Add(num, common.Big1),
-		Coinbase:   coinbase,
-		GasLimit:   parent.GasLimit(), // Keep the gas limit constant in this prototype
-		Extra:      []byte{},
-		Time:       params.Timestamp,
-	}
-	if config := api.eth.BlockChain().Config(); config.IsLondon(header.Number) {
-		header.BaseFee = misc.CalcBaseFee(config, parent.Header())
+
+	header := types.NewEmptyHeader()
+
+	header.Time = params.Timestamp
+	header.GasLimit[types.QuaiNetworkContext] = parent.GasLimit()
+	header.ParentHash[types.QuaiNetworkContext] = parent.Hash()
+	header.Number[types.QuaiNetworkContext] = num.Add(num, common.Big1)
+	header.Coinbase[types.QuaiNetworkContext] = coinbase
+
+	if config := api.eth.BlockChain().Config(); config.IsLondon(header.Number[types.QuaiNetworkContext]) {
+		header.BaseFee[types.QuaiNetworkContext] = misc.CalcBaseFee(config, parent.Header())
 	}
 	err = api.eth.Engine().Prepare(bc, header)
 	if err != nil {
@@ -160,7 +161,7 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 	}
 
 	var (
-		signer       = types.MakeSigner(bc.Config(), header.Number)
+		signer       = types.MakeSigner(bc.Config(), header.Number[types.QuaiNetworkContext])
 		txHeap       = types.NewTransactionsByPriceAndNonce(signer, pending, nil)
 		transactions []*types.Transaction
 	)
@@ -258,22 +259,35 @@ func insertBlockParamsToBlock(config *chainParams.ChainConfig, parent *types.Hea
 
 	number := big.NewInt(0)
 	number.SetUint64(params.Number)
+
+	emptyHash := common.Hash{}
+	emptyAddress := common.Address{}
 	header := &types.Header{
-		ParentHash:  params.ParentHash,
+		ParentHash:  []common.Hash{emptyHash, emptyHash, emptyHash},
+		TxHash:      []common.Hash{emptyHash, emptyHash, emptyHash},
+		ReceiptHash: []common.Hash{emptyHash, emptyHash, emptyHash},
 		UncleHash:   types.EmptyUncleHash,
-		Coinbase:    params.Miner,
-		Root:        params.StateRoot,
-		TxHash:      types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)),
-		ReceiptHash: params.ReceiptRoot,
-		Bloom:       types.BytesToBloom(params.LogsBloom),
-		Difficulty:  big.NewInt(1),
-		Number:      number,
-		GasLimit:    params.GasLimit,
-		GasUsed:     params.GasUsed,
+		Number:      []*big.Int{big.NewInt(0), big.NewInt(0), big.NewInt(0)},
+		Coinbase:    []common.Address{emptyAddress, emptyAddress, emptyAddress},
+		Difficulty:  []*big.Int{big.NewInt(1), big.NewInt(1), big.NewInt(1)},
+		GasLimit:    []uint64{params.GasLimit, params.GasLimit, params.GasLimit},
+		GasUsed:     []uint64{0, 0, 0},
+		BaseFee:     []*big.Int{big.NewInt(0), big.NewInt(0), big.NewInt(0)},
+		Extra:       [][]byte{[]byte{}, []byte{}, []byte{}},
 		Time:        params.Timestamp,
 	}
+
+	header.ParentHash[types.QuaiNetworkContext] = params.ParentHash
+	header.Coinbase[types.QuaiNetworkContext] = params.Miner
+	header.Root[types.QuaiNetworkContext] = params.StateRoot
+	header.TxHash[types.QuaiNetworkContext] = types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil))
+	header.ReceiptHash[types.QuaiNetworkContext] = params.ReceiptRoot
+	header.Bloom[types.QuaiNetworkContext] = types.BytesToBloom(params.LogsBloom)
+	header.Number[types.QuaiNetworkContext] = number
+	header.GasUsed[types.QuaiNetworkContext] = params.GasUsed
+
 	if config.IsLondon(number) {
-		header.BaseFee = misc.CalcBaseFee(config, parent)
+		header.BaseFee[types.QuaiNetworkContext] = misc.CalcBaseFee(config, parent)
 	}
 	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */)
 	return block, nil

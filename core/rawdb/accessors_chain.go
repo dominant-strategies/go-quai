@@ -321,10 +321,10 @@ func ReadHeader(db ethdb.Reader, hash common.Hash, number uint64) *types.Header 
 
 // WriteHeader stores a block header into the database and also stores the hash-
 // to-number mapping.
-func WriteHeader(db ethdb.KeyValueWriter, header *types.Header, context int) {
+func WriteHeader(db ethdb.KeyValueWriter, header *types.Header) {
 	var (
 		hash   = header.Hash()
-		number = header.Number[context].Uint64()
+		number = header.Number[types.QuaiNetworkContext].Uint64()
 	)
 	// Write the hash -> number mapping
 	WriteHeaderNumber(db, hash, number)
@@ -650,13 +650,13 @@ func ReadBlock(db ethdb.Reader, hash common.Hash, number uint64) *types.Block {
 }
 
 // WriteBlock serializes a block into the database, header and body separately.
-func WriteBlock(db ethdb.KeyValueWriter, block *types.Block, context int) {
-	WriteBody(db, block.Hash(), block.NumberU64(context), block.Body())
-	WriteHeader(db, block.Header(), context)
+func WriteBlock(db ethdb.KeyValueWriter, block *types.Block) {
+	WriteBody(db, block.Hash(), block.NumberU64(), block.Body())
+	WriteHeader(db, block.Header())
 }
 
 // WriteAncientBlock writes entire block data into ancient store and returns the total written size.
-func WriteAncientBlock(db ethdb.AncientWriter, block *types.Block, receipts types.Receipts, td *big.Int, context int) int {
+func WriteAncientBlock(db ethdb.AncientWriter, block *types.Block, receipts types.Receipts, td *big.Int) int {
 	// Encode all block components to RLP format.
 	headerBlob, err := rlp.EncodeToBytes(block.Header())
 	if err != nil {
@@ -679,7 +679,7 @@ func WriteAncientBlock(db ethdb.AncientWriter, block *types.Block, receipts type
 		log.Crit("Failed to RLP encode block total difficulty", "err", err)
 	}
 	// Write all blob to flatten files.
-	err = db.AppendAncient(block.NumberU64(context), block.Hash().Bytes(), headerBlob, bodyBlob, receiptBlob, tdBlob)
+	err = db.AppendAncient(block.NumberU64(), block.Hash().Bytes(), headerBlob, bodyBlob, receiptBlob, tdBlob)
 	if err != nil {
 		log.Crit("Failed to write block data to ancient store", "err", err)
 	}
@@ -758,7 +758,7 @@ func ReadAllBadBlocks(db ethdb.Reader) []*types.Block {
 
 // WriteBadBlock serializes the bad block into the database. If the cumulated
 // bad blocks exceeds the limitation, the oldest will be dropped.
-func WriteBadBlock(db ethdb.KeyValueStore, block *types.Block, context int) {
+func WriteBadBlock(db ethdb.KeyValueStore, block *types.Block) {
 	blob, err := db.Get(badBlockKey)
 	if err != nil {
 		log.Warn("Failed to load old bad blocks", "error", err)
@@ -770,8 +770,8 @@ func WriteBadBlock(db ethdb.KeyValueStore, block *types.Block, context int) {
 		}
 	}
 	for _, b := range badBlocks {
-		if b.Header.Number[context].Uint64() == block.NumberU64(context) && b.Header.Hash() == block.Hash() {
-			log.Info("Skip duplicated bad block", "number", block.NumberU64(context), "hash", block.Hash())
+		if b.Header.Number[types.QuaiNetworkContext].Uint64() == block.NumberU64() && b.Header.Hash() == block.Hash() {
+			log.Info("Skip duplicated bad block", "number", block.NumberU64(), "hash", block.Hash())
 			return
 		}
 	}
@@ -800,25 +800,25 @@ func DeleteBadBlocks(db ethdb.KeyValueWriter) {
 }
 
 // FindCommonAncestor returns the last common ancestor of two block headers
-func FindCommonAncestor(db ethdb.Reader, a, b *types.Header, context int) *types.Header {
-	for bn := b.Number[context].Uint64(); a.Number[context].Uint64() > bn; {
-		a = ReadHeader(db, a.ParentHash[context], a.Number[context].Uint64()-1)
+func FindCommonAncestor(db ethdb.Reader, a, b *types.Header) *types.Header {
+	for bn := b.Number[types.QuaiNetworkContext].Uint64(); a.Number[types.QuaiNetworkContext].Uint64() > bn; {
+		a = ReadHeader(db, a.ParentHash[types.QuaiNetworkContext], a.Number[types.QuaiNetworkContext].Uint64()-1)
 		if a == nil {
 			return nil
 		}
 	}
-	for an := a.Number[context].Uint64(); an < b.Number[context].Uint64(); {
-		b = ReadHeader(db, b.ParentHash[context], b.Number[context].Uint64()-1)
+	for an := a.Number[types.QuaiNetworkContext].Uint64(); an < b.Number[types.QuaiNetworkContext].Uint64(); {
+		b = ReadHeader(db, b.ParentHash[types.QuaiNetworkContext], b.Number[types.QuaiNetworkContext].Uint64()-1)
 		if b == nil {
 			return nil
 		}
 	}
 	for a.Hash() != b.Hash() {
-		a = ReadHeader(db, a.ParentHash[context], a.Number[context].Uint64()-1)
+		a = ReadHeader(db, a.ParentHash[types.QuaiNetworkContext], a.Number[types.QuaiNetworkContext].Uint64()-1)
 		if a == nil {
 			return nil
 		}
-		b = ReadHeader(db, b.ParentHash[context], b.Number[context].Uint64()-1)
+		b = ReadHeader(db, b.ParentHash[types.QuaiNetworkContext], b.Number[types.QuaiNetworkContext].Uint64()-1)
 		if b == nil {
 			return nil
 		}

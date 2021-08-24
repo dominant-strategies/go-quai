@@ -35,7 +35,7 @@ var (
 )
 
 func NewState(ctx context.Context, head *types.Header, odr OdrBackend) *state.StateDB {
-	state, _ := state.New(head.Root, NewStateDatabase(ctx, head, odr), nil)
+	state, _ := state.New(head.Root[types.QuaiNetworkContext], NewStateDatabase(ctx, head, odr), nil)
 	return state
 }
 

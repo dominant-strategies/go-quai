@@ -180,7 +180,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 	// We have the genesis block in database(perhaps in ancient database)
 	// but the corresponding state is missing.
 	header := rawdb.ReadHeader(db, stored, 0)
-	if _, err := state.New(header.Root[genesis.Config.Context], state.NewDatabaseWithConfig(db, nil), nil); err != nil {
+	if _, err := state.New(header.Root[types.QuaiNetworkContext], state.NewDatabaseWithConfig(db, nil), nil); err != nil {
 		if genesis == nil {
 			genesis = MainnetPrimeGenesisBlock()
 		}
@@ -195,6 +195,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 		}
 		return genesis.Config, block.Hash(), nil
 	}
+
 	// Check whether the genesis block is already written.
 	if genesis != nil {
 		hash := genesis.ToBlock(nil).Hash()
@@ -219,7 +220,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 	// Special case: don't change the existing config of a non-mainnet chain if no new
 	// config is supplied. These chains would get AllProtocolChanges (and a compat error)
 	// if we just continued here.
-	if genesis == nil && stored != params.MainnetGenesisHash {
+	if genesis == nil && stored != params.MainnetPrimeGenesisHash {
 		return storedcfg, stored, nil
 	}
 	// Check config compatibility and write the config. Compatibility errors
@@ -240,7 +241,7 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 	switch {
 	case g != nil:
 		return g.Config
-	case ghash == params.MainnetGenesisHash:
+	case ghash == params.MainnetPrimeGenesisHash:
 		return params.MainnetPrimeChainConfig
 	case ghash == params.RopstenGenesisHash:
 		return params.RopstenChainConfig
@@ -268,33 +269,30 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		}
 	}
 	root := statedb.IntermediateRoot(false)
+	baseFee := new(big.Int).SetUint64(params.InitialBaseFee)
+	if g.BaseFee != nil {
+		baseFee = g.BaseFee
+	}
+
 	head := &types.Header{
-		Nonce: types.EncodeNonce(g.Nonce),
-		Time:  g.Timestamp,
+		Number:     []*big.Int{new(big.Int).SetUint64(g.Number), new(big.Int).SetUint64(g.Number), new(big.Int).SetUint64(g.Number)},
+		ParentHash: []common.Hash{g.ParentHash, g.ParentHash, g.ParentHash},
+		Extra:      [][]byte{g.ExtraData, g.ExtraData, g.ExtraData},
+		GasLimit:   []uint64{g.GasLimit, g.GasLimit, g.GasLimit},
+		GasUsed:    []uint64{g.GasUsed, g.GasUsed, g.GasUsed},
+		Difficulty: []*big.Int{g.Difficulty, g.Difficulty, g.Difficulty},
+		MixDigest:  []common.Hash{g.Mixhash, g.Mixhash, g.Mixhash},
+		Coinbase:   []common.Address{g.Coinbase, g.Coinbase, g.Coinbase},
+		Nonce:      types.EncodeNonce(g.Nonce),
+		Time:       g.Timestamp,
+		BaseFee:    []*big.Int{baseFee, baseFee, baseFee},
+		Root:       []common.Hash{root, root, root},
 	}
-	head.Number[g.Config.Context] = new(big.Int).SetUint64(g.Number)
-	head.ParentHash[g.Config.Context] = g.ParentHash
-	head.Extra[g.Config.Context] = g.ExtraData
-	head.GasLimit[g.Config.Context] = g.GasLimit
-	head.GasUsed[g.Config.Context] = g.GasUsed
-	head.BaseFee[g.Config.Context] = g.BaseFee
-	head.Difficulty[g.Config.Context] = g.Difficulty
-	head.MixDigest[g.Config.Context] = g.Mixhash
-	head.Coinbase[g.Config.Context] = g.Coinbase
-	head.Root[g.Config.Context] = root
+
 	if g.GasLimit == 0 {
-		head.GasLimit[g.Config.Context] = params.GenesisGasLimit
+		head.GasLimit[types.QuaiNetworkContext] = params.GenesisGasLimit
 	}
-	if g.Difficulty == nil {
-		head.Difficulty[g.Config.Context] = params.GenesisDifficulty
-	}
-	if g.Config != nil && g.Config.IsLondon(common.Big0) {
-		if g.BaseFee != nil {
-			head.BaseFee[g.Config.Context] = g.BaseFee
-		} else {
-			head.BaseFee[g.Config.Context] = new(big.Int).SetUint64(params.InitialBaseFee)
-		}
-	}
+
 	statedb.Commit(false)
 	statedb.Database().TrieDB().Commit(root, true, nil)
 
@@ -305,7 +303,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 // The block is committed as the canonical head block.
 func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
 	block := g.ToBlock(db)
-	if block.Number(g.Config.Context).Sign() != 0 {
+	if block.Number().Sign() != 0 {
 		return nil, fmt.Errorf("can't commit genesis block with number > 0")
 	}
 	config := g.Config
@@ -315,10 +313,10 @@ func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
 	if err := config.CheckConfigForkOrder(); err != nil {
 		return nil, err
 	}
-	rawdb.WriteTd(db, block.Hash(), block.NumberU64(g.Config.Context), g.Difficulty)
-	rawdb.WriteBlock(db, block, g.Config.Context)
-	rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(g.Config.Context), nil)
-	rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64(g.Config.Context))
+	rawdb.WriteTd(db, block.Hash(), block.NumberU64(), g.Difficulty)
+	rawdb.WriteBlock(db, block)
+	rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), nil)
+	rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())
 	rawdb.WriteHeadBlockHash(db, block.Hash())
 	rawdb.WriteHeadFastBlockHash(db, block.Hash())
 	rawdb.WriteHeadHeaderHash(db, block.Hash())

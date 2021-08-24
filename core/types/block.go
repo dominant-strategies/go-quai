@@ -32,9 +32,10 @@ import (
 )
 
 var (
-	EmptyRootHash  = []common.Hash{common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"), common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"), common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")}
-	EmptyUncleHash = []common.Hash{rlpHash([]*Header(nil)), rlpHash([]*Header(nil)), rlpHash([]*Header(nil))}
-	ContextDepth   = 3
+	EmptyRootHash      = []common.Hash{common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"), common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"), common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")}
+	EmptyUncleHash     = []common.Hash{rlpHash([]*Header(nil)), rlpHash([]*Header(nil)), rlpHash([]*Header(nil))}
+	ContextDepth       = 3
+	QuaiNetworkContext = 0
 )
 
 // A BlockNonce is a 64-bit hash which proves (combined with the
@@ -257,23 +258,47 @@ func NewBlockWithHeader(header *Header) *Block {
 	return &Block{header: CopyHeader(header)}
 }
 
+// NewEmptyHeader returns a header with intialized fields ContextDepth deep
+func NewEmptyHeader() *Header {
+	header := &Header{
+		ParentHash:  make([]common.Hash, ContextDepth),
+		Number:      make([]*big.Int, ContextDepth),
+		Extra:       make([][]byte, ContextDepth),
+		Time:        uint64(0),
+		BaseFee:     make([]*big.Int, ContextDepth),
+		GasLimit:    make([]uint64, ContextDepth),
+		Coinbase:    make([]common.Address, ContextDepth),
+		Difficulty:  make([]*big.Int, ContextDepth),
+		Root:        make([]common.Hash, ContextDepth),
+		TxHash:      make([]common.Hash, ContextDepth),
+		UncleHash:   make([]common.Hash, ContextDepth),
+		ReceiptHash: make([]common.Hash, ContextDepth),
+		GasUsed:     make([]uint64, ContextDepth),
+		Bloom:       make([]Bloom, ContextDepth),
+	}
+
+	return header
+}
+
 // CopyHeader creates a deep copy of a block header to prevent side effects from
 // modifying a header variable.
 func CopyHeader(h *Header) *Header {
 	cpy := *h
-	for i := 0; i < 3; i++ {
-		if h.Difficulty[i] != nil {
+	for i := 0; i < ContextDepth; i++ {
+		if len(h.Difficulty) > i && h.Difficulty[i] != nil {
 			cpy.Difficulty[i].Set(h.Difficulty[i])
 		}
-		if h.Number[i] != nil {
+		if len(h.Number) > i && h.Number[i] != nil {
 			cpy.Number[i].Set(h.Number[i])
 		}
-		if h.BaseFee != nil && h.BaseFee[i] != nil {
+		if len(h.BaseFee) > i && h.BaseFee != nil && h.BaseFee[i] != nil {
 			cpy.BaseFee[i] = new(big.Int).Set(h.BaseFee[i])
 		}
-		if len(h.Extra[i]) > 0 {
-			cpy.Extra[i] = make([]byte, len(h.Extra[i]))
-			copy(cpy.Extra[i], h.Extra[i])
+		if len(h.Extra) > i {
+			if len(h.Extra[i]) > 0 {
+				cpy.Extra[i] = make([]byte, len(h.Extra[i]))
+				copy(cpy.Extra[i], h.Extra[i])
+			}
 		}
 	}
 	return &cpy
@@ -314,29 +339,124 @@ func (b *Block) Transaction(hash common.Hash) *Transaction {
 	return nil
 }
 
-func (b *Block) Number(context int) *big.Int { return b.header.Number[context] }
-func (b *Block) GasLimit(context int) uint64 { return b.header.GasLimit[context] }
-func (b *Block) GasUsed(context int) uint64  { return b.header.GasUsed[context] }
-func (b *Block) Difficulty(context int) *big.Int {
+func (b *Block) Number(params ...int) *big.Int {
+	context := QuaiNetworkContext
+	if len(params) > 0 {
+		context = params[0]
+	}
+	// Temp check
+	if len(b.header.Number) < context {
+		return nil
+	}
+	return b.header.Number[context]
+}
+func (b *Block) GasLimit(params ...int) uint64 {
+	context := QuaiNetworkContext
+	if len(params) > 0 {
+		context = params[0]
+	}
+	return b.header.GasLimit[context]
+}
+func (b *Block) GasUsed(params ...int) uint64 {
+	context := QuaiNetworkContext
+	if len(params) > 0 {
+		context = params[0]
+	}
+	return b.header.GasUsed[context]
+}
+func (b *Block) Difficulty(params ...int) *big.Int {
+	context := QuaiNetworkContext
+	if len(params) > 0 {
+		context = params[0]
+	}
+	if b.header.Difficulty[context] == nil {
+		return nil
+	}
 	return new(big.Int).Set(b.header.Difficulty[context])
 }
 func (b *Block) Time() uint64 { return b.header.Time }
+func (b *Block) NumberU64(params ...int) uint64 {
+	context := QuaiNetworkContext
+	if len(params) > 0 {
+		context = params[0]
+	}
+	if b.header.Number[context] == nil {
+		return 0
+	}
+	return b.header.Number[context].Uint64()
+}
+func (b *Block) MixDigest(params ...int) common.Hash {
+	context := QuaiNetworkContext
+	if len(params) > 0 {
+		context = params[0]
+	}
+	return b.header.MixDigest[context]
+}
+func (b *Block) Nonce(params ...int) uint64 {
+	return binary.BigEndian.Uint64(b.header.Nonce[:])
+}
+func (b *Block) Bloom(params ...int) Bloom {
+	context := QuaiNetworkContext
+	if len(params) > 0 {
+		context = params[0]
+	}
+	return b.header.Bloom[context]
+}
+func (b *Block) Coinbase(params ...int) common.Address {
+	context := QuaiNetworkContext
+	if len(params) > 0 {
+		context = params[0]
+	}
+	return b.header.Coinbase[context]
+}
+func (b *Block) Root(params ...int) common.Hash {
+	context := QuaiNetworkContext
+	if len(params) > 0 {
+		context = params[0]
+	}
+	return b.header.Root[context]
+}
+func (b *Block) ParentHash(params ...int) common.Hash {
+	context := QuaiNetworkContext
+	if len(params) > 0 {
+		context = params[0]
+	}
 
-func (b *Block) NumberU64(context int) uint64        { return b.header.Number[context].Uint64() }
-func (b *Block) MixDigest(context int) common.Hash   { return b.header.MixDigest[context] }
-func (b *Block) Nonce() uint64                       { return binary.BigEndian.Uint64(b.header.Nonce[:]) }
-func (b *Block) Bloom(context int) Bloom             { return b.header.Bloom[context] }
-func (b *Block) Coinbase(context int) common.Address { return b.header.Coinbase[context] }
-func (b *Block) Root(context int) common.Hash        { return b.header.Root[context] }
-func (b *Block) ParentHash(context int) common.Hash  { return b.header.ParentHash[context] }
-func (b *Block) TxHash(context int) common.Hash      { return b.header.TxHash[context] }
-func (b *Block) ReceiptHash(context int) common.Hash { return b.header.ReceiptHash[context] }
-func (b *Block) UncleHash(context int) common.Hash   { return b.header.UncleHash[context] }
-func (b *Block) Extra(context int) []byte            { return common.CopyBytes(b.header.Extra[context]) }
-func (b *Block) BaseFee(context int) *big.Int {
+	return b.header.ParentHash[context]
+}
+func (b *Block) TxHash(params ...int) common.Hash {
+	context := QuaiNetworkContext
+	if len(params) > 0 {
+		context = params[0]
+	}
+	return b.header.TxHash[context]
+}
+func (b *Block) ReceiptHash(params ...int) common.Hash {
+	return b.header.ReceiptHash[QuaiNetworkContext]
+}
+func (b *Block) UncleHash(params ...int) common.Hash {
+	context := QuaiNetworkContext
+	if len(params) > 0 {
+		context = params[0]
+	}
+	return b.header.UncleHash[context]
+}
+func (b *Block) Extra(params ...int) []byte {
+	context := QuaiNetworkContext
+	if len(params) > 0 {
+		context = params[0]
+	}
+	return common.CopyBytes(b.header.Extra[context])
+}
+func (b *Block) BaseFee(params ...int) *big.Int {
 	if b.header.BaseFee == nil {
 		return nil
 	}
+	context := QuaiNetworkContext
+	if len(params) > 0 {
+		context = params[0]
+	}
+
 	return new(big.Int).Set(b.header.BaseFee[context])
 }
 

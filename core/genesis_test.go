@@ -31,16 +31,17 @@ import (
 )
 
 func TestDefaultGenesisBlock(t *testing.T) {
-	block := DefaultGenesisBlock().ToBlock(nil)
-	if block.Hash() != params.MainnetGenesisHash {
-		t.Errorf("wrong mainnet genesis hash, got %v, want %v", block.Hash(), params.MainnetGenesisHash)
+	block := MainnetPrimeGenesisBlock().ToBlock(nil)
+	if block.Hash() != params.MainnetPrimeGenesisHash {
+		t.Errorf("wrong mainnet genesis hash, got %v, want %v", block.Hash(), params.MainnetPrimeGenesisHash)
 	}
-	block = DefaultRopstenGenesisBlock().ToBlock(nil)
-	if block.Hash() != params.RopstenGenesisHash {
-		t.Errorf("wrong ropsten genesis hash, got %v, want %v", block.Hash(), params.RopstenGenesisHash)
-	}
+	// block = DefaultRopstenGenesisBlock().ToBlock(nil)
+	// if block.Hash() != params.RopstenGenesisHash {
+	// 	t.Errorf("wrong ropsten genesis hash, got %v, want %v", block.Hash(), params.RopstenGenesisHash)
+	// }
 }
 
+// TODO: #20 Hanging on Homestead block config test
 func TestSetupGenesis(t *testing.T) {
 	var (
 		customghash = common.HexToHash("0x89c99d90b79719238d2645c7642f2c9295246e80775b38cfd162b696817fbd50")
@@ -73,17 +74,17 @@ func TestSetupGenesis(t *testing.T) {
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
 				return SetupGenesisBlock(db, nil)
 			},
-			wantHash:   params.MainnetGenesisHash,
-			wantConfig: params.MainnetChainConfig,
+			wantHash:   params.MainnetPrimeGenesisHash,
+			wantConfig: params.MainnetPrimeChainConfig,
 		},
 		{
 			name: "mainnet block in DB, genesis == nil",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
-				DefaultGenesisBlock().MustCommit(db)
+				MainnetPrimeGenesisBlock().MustCommit(db)
 				return SetupGenesisBlock(db, nil)
 			},
-			wantHash:   params.MainnetGenesisHash,
-			wantConfig: params.MainnetChainConfig,
+			wantHash:   params.MainnetPrimeGenesisHash,
+			wantConfig: params.MainnetPrimeChainConfig,
 		},
 		{
 			name: "custom block in DB, genesis == nil",
@@ -170,25 +171,17 @@ func TestGenesisHashes(t *testing.T) {
 		hash    common.Hash
 	}{
 		{
-			genesis: DefaultGenesisBlock(),
-			hash:    params.MainnetGenesisHash,
+			genesis: MainnetPrimeGenesisBlock(),
+			hash:    params.MainnetPrimeGenesisHash,
 		},
-		{
-			genesis: DefaultGoerliGenesisBlock(),
-			hash:    params.GoerliGenesisHash,
-		},
-		{
-			genesis: DefaultRopstenGenesisBlock(),
-			hash:    params.RopstenGenesisHash,
-		},
-		{
-			genesis: DefaultRinkebyGenesisBlock(),
-			hash:    params.RinkebyGenesisHash,
-		},
-		{
-			genesis: DefaultCalaverasGenesisBlock(),
-			hash:    params.CalaverasGenesisHash,
-		},
+		// {
+		// 	genesis: MainnetRegionGenesisBlock(params.MainnetRegionOneChainConfig),
+		// 	hash:    params.GoerliGenesisHash,
+		// },
+		// {
+		// 	genesis: DefaultRopstenGenesisBlock(),
+		// 	hash:    params.RopstenGenesisHash,
+		// },
 	}
 	for i, c := range cases {
 		b := c.genesis.MustCommit(rawdb.NewMemoryDatabase())
