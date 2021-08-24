@@ -510,7 +510,7 @@ func testCheckpointChallenge(t *testing.T, syncmode downloader.SyncMode, checkpo
 	var response *types.Header
 	if checkpoint {
 		number := (uint64(rand.Intn(500))+1)*params.CHTFrequency - 1
-		response = &types.Header{Number: big.NewInt(int64(number)), Extra: []byte("valid")}
+		response = &types.Header{Number: []*big.Int{big.NewInt(int64(number)), big.NewInt(int64(number)), big.NewInt(int64(number))}, Extra: [][]byte{[]byte("valid"), []byte("valid"), []byte("valid")}}
 
 		handler.handler.checkpointNumber = number
 		handler.handler.checkpointHash = response.Hash()
@@ -546,7 +546,7 @@ func testCheckpointChallenge(t *testing.T, syncmode downloader.SyncMode, checkpo
 
 	// Connect a new peer and check that we receive the checkpoint challenge.
 	if checkpoint {
-		if err := remote.ExpectRequestHeadersByNumber(response.Number.Uint64(), 1, 0, false); err != nil {
+		if err := remote.ExpectRequestHeadersByNumber(response.Number[types.QuaiNetworkContext].Uint64(), 1, 0, false); err != nil {
 			t.Fatalf("challenge mismatch: %v", err)
 		}
 		// Create a block to reply to the challenge if no timeout is simulated.
@@ -717,12 +717,12 @@ func testBroadcastMalformedBlock(t *testing.T, protocol uint) {
 	head := source.chain.CurrentBlock()
 
 	malformedUncles := head.Header()
-	malformedUncles.UncleHash[0]++
+	malformedUncles.UncleHash[types.QuaiNetworkContext][0]++
 	malformedTransactions := head.Header()
-	malformedTransactions.TxHash[0]++
+	malformedTransactions.TxHash[types.QuaiNetworkContext][0]++
 	malformedEverything := head.Header()
-	malformedEverything.UncleHash[0]++
-	malformedEverything.TxHash[0]++
+	malformedEverything.UncleHash[types.QuaiNetworkContext][0]++
+	malformedEverything.TxHash[types.QuaiNetworkContext][0]++
 
 	// Try to broadcast all malformations and ensure they all get discarded
 	for _, header := range []*types.Header{malformedUncles, malformedTransactions, malformedEverything} {

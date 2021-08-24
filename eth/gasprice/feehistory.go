@@ -82,7 +82,7 @@ func (s sortGasAndReward) Less(i, j int) bool {
 // fills in the rest of the fields.
 func (oracle *Oracle) processBlock(bf *blockFees, percentiles []float64) {
 	chainconfig := oracle.backend.ChainConfig()
-	if bf.baseFee = bf.header.BaseFee; bf.baseFee == nil {
+	if bf.baseFee = bf.header.BaseFee[types.QuaiNetworkContext]; bf.baseFee == nil {
 		bf.baseFee = new(big.Int)
 	}
 	if chainconfig.IsLondon(big.NewInt(int64(bf.blockNumber + 1))) {
@@ -90,7 +90,7 @@ func (oracle *Oracle) processBlock(bf *blockFees, percentiles []float64) {
 	} else {
 		bf.nextBaseFee = new(big.Int)
 	}
-	bf.gasUsedRatio = float64(bf.header.GasUsed) / float64(bf.header.GasLimit)
+	bf.gasUsedRatio = float64(bf.header.GasUsed[types.QuaiNetworkContext]) / float64(bf.header.GasLimit[types.QuaiNetworkContext])
 	if len(percentiles) == 0 {
 		// rewards were not requested, return null
 		return
@@ -157,7 +157,7 @@ func (oracle *Oracle) resolveBlockRange(ctx context.Context, lastBlock rpc.Block
 	if pendingBlock == nil {
 		// if pending block is not fetched then we retrieve the head header to get the head block number
 		if latestHeader, err := oracle.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber); err == nil {
-			headBlock = rpc.BlockNumber(latestHeader.Number.Uint64())
+			headBlock = rpc.BlockNumber(latestHeader.Number[types.QuaiNetworkContext].Uint64())
 		} else {
 			return nil, nil, 0, 0, err
 		}

@@ -291,28 +291,37 @@ func TestStateProcessorErrors(t *testing.T) {
 // valid to be considered for import:
 // - valid pow (fake), ancestry, difficulty, gaslimit etc
 func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Transactions, config *params.ChainConfig) *types.Block {
+	hash := common.Hash{}
 	header := &types.Header{
-		ParentHash: parent.Hash(),
-		Coinbase:   parent.Coinbase(),
-		Difficulty: engine.CalcDifficulty(&fakeChainReader{config}, parent.Time()+10, &types.Header{
-			Number:     parent.Number(),
-			Time:       parent.Time(),
-			Difficulty: parent.Difficulty(),
-			UncleHash:  parent.UncleHash(),
-		}),
-		GasLimit:  parent.GasLimit(),
-		Number:    new(big.Int).Add(parent.Number(), common.Big1),
-		Time:      parent.Time() + 10,
-		UncleHash: types.EmptyUncleHash,
+		Time:       parent.Time() + 10,
+		UncleHash:  types.EmptyUncleHash,
+		Number:     []*big.Int{new(big.Int).SetUint64(0), new(big.Int).SetUint64(0), new(big.Int).SetUint64(0)},
+		ParentHash: []common.Hash{hash, hash, hash},
+		GasLimit:   []uint64{parent.GasLimit(), parent.GasLimit(), parent.GasLimit()},
+		Difficulty: []*big.Int{new(big.Int).SetUint64(0), new(big.Int).SetUint64(0), new(big.Int).SetUint64(0)},
+		MixDigest:  []common.Hash{hash, hash, hash},
+		Coinbase:   []common.Address{common.Address{}, common.Address{}, common.Address{}},
+		BaseFee:    []*big.Int{new(big.Int).SetUint64(0), new(big.Int).SetUint64(0), new(big.Int).SetUint64(0)},
+		Root:       []common.Hash{hash, hash, hash},
 	}
-	if config.IsLondon(header.Number) {
-		header.BaseFee = misc.CalcBaseFee(config, parent.Header())
-	}
+
+	header.ParentHash[types.QuaiNetworkContext] = parent.Hash()
+	header.Coinbase[types.QuaiNetworkContext] = parent.Coinbase()
+	parentDiff := &types.Header{Time: parent.Time()}
+	parentDiff.Number[types.QuaiNetworkContext] = parent.Number()
+	parentDiff.Difficulty[types.QuaiNetworkContext] = parent.Difficulty()
+	parentDiff.UncleHash[types.QuaiNetworkContext] = parent.UncleHash()
+	header.Difficulty[types.QuaiNetworkContext] = engine.CalcDifficulty(&fakeChainReader{config}, parent.Time()+10, parentDiff)
+	header.GasLimit[types.QuaiNetworkContext] = parent.GasLimit()
+	header.Number[types.QuaiNetworkContext] = new(big.Int).Add(parent.Number(), common.Big1)
+
+	header.BaseFee[types.QuaiNetworkContext] = misc.CalcBaseFee(config, parent.Header())
+
 	var receipts []*types.Receipt
 	// The post-state result doesn't need to be correct (this is a bad block), but we do need something there
 	// Preferably something unique. So let's use a combo of blocknum + txhash
 	hasher := sha3.NewLegacyKeccak256()
-	hasher.Write(header.Number.Bytes())
+	hasher.Write(header.Number[types.QuaiNetworkContext].Bytes())
 	var cumulativeGas uint64
 	for _, tx := range txs {
 		txh := tx.Hash()
@@ -323,7 +332,7 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		receipts = append(receipts, receipt)
 		cumulativeGas += tx.Gas()
 	}
-	header.Root = common.BytesToHash(hasher.Sum(nil))
+	header.Root[types.QuaiNetworkContext] = common.BytesToHash(hasher.Sum(nil))
 	// Assemble and return the final block for sealing
 	return types.NewBlock(header, txs, nil, receipts, trie.NewStackTrie(nil))
 }

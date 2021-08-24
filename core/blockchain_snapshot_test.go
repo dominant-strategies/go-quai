@@ -131,7 +131,7 @@ func (basic *snapshotTestBasic) verify(t *testing.T, chain *BlockChain, blocks [
 	verifyNoGaps(t, chain, true, blocks)
 	verifyCutoff(t, chain, true, blocks, basic.expCanonicalBlocks)
 
-	if head := chain.CurrentHeader(); head.Number.Uint64() != basic.expHeadHeader {
+	if head := chain.CurrentHeader(); head.Number[types.QuaiNetworkContext].Uint64() != basic.expHeadHeader {
 		t.Errorf("Head header mismatch: have %d, want %d", head.Number, basic.expHeadHeader)
 	}
 	if head := chain.CurrentFastBlock(); head.NumberU64() != basic.expHeadFastBlock {

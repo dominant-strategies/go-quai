@@ -39,7 +39,9 @@ var (
 	testKey, _   = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	testAddress  = crypto.PubkeyToAddress(testKey.PublicKey)
 	genesis      = core.GenesisBlockForTesting(testdb, testAddress, big.NewInt(1000000000000000))
-	unknownBlock = types.NewBlock(&types.Header{GasLimit: params.GenesisGasLimit, BaseFee: big.NewInt(params.InitialBaseFee)}, nil, nil, nil, trie.NewStackTrie(nil))
+	unknownBlock = types.NewBlock(&types.Header{
+		GasLimit: []uint64{params.GenesisGasLimit, params.GenesisGasLimit, params.GenesisGasLimit},
+		BaseFee:  []*big.Int{big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee)}}, nil, nil, nil, trie.NewStackTrie(nil))
 )
 
 // makeChain creates a chain of n blocks starting at and including parent.
@@ -61,7 +63,10 @@ func makeChain(n int, seed byte, parent *types.Block) ([]common.Hash, map[common
 		}
 		// If the block number is a multiple of 5, add a bonus uncle to the block
 		if i%5 == 0 {
-			block.AddUncle(&types.Header{ParentHash: block.PrevBlock(i - 1).Hash(), Number: big.NewInt(int64(i - 1))})
+			block.AddUncle(&types.Header{
+				ParentHash: []common.Hash{block.PrevBlock(i - 1).Hash(), block.PrevBlock(i - 1).Hash(), block.PrevBlock(i - 1).Hash()},
+				Number:     []*big.Int{big.NewInt(int64(i - 1)), big.NewInt(int64(i - 1)), big.NewInt(int64(i - 1))},
+			})
 		}
 	})
 	hashes := make([]common.Hash, n+1)
@@ -132,7 +137,7 @@ func (f *fetcherTester) chainHeight() uint64 {
 	defer f.lock.RUnlock()
 
 	if f.fetcher.light {
-		return f.headers[f.hashes[len(f.hashes)-1]].Number.Uint64()
+		return f.headers[f.hashes[len(f.hashes)-1]].Number[types.QuaiNetworkContext].Uint64()
 	}
 	return f.blocks[f.hashes[len(f.hashes)-1]].NumberU64()
 }
@@ -144,11 +149,11 @@ func (f *fetcherTester) insertHeaders(headers []*types.Header) (int, error) {
 
 	for i, header := range headers {
 		// Make sure the parent in known
-		if _, ok := f.headers[header.ParentHash]; !ok {
+		if _, ok := f.headers[header.ParentHash[types.QuaiNetworkContext]]; !ok {
 			return i, errors.New("unknown parent")
 		}
 		// Discard any new blocks if the same height already exists
-		if header.Number.Uint64() <= f.headers[f.hashes[len(f.hashes)-1]].Number.Uint64() {
+		if header.Number[types.QuaiNetworkContext].Uint64() <= f.headers[f.hashes[len(f.hashes)-1]].Number[types.QuaiNetworkContext].Uint64() {
 			return i, nil
 		}
 		// Otherwise build our current chain
