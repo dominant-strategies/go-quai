@@ -392,7 +392,7 @@ func makeDifficultyCalculator(bombDelay *big.Int) func(time uint64, parent *type
 			x.Set(bigMinus99)
 		}
 		// If we do not have a parent difficulty, get the genesis difficulty
-		parentDifficulty := parent.Difficulty[0]
+		parentDifficulty := parent.Difficulty[types.QuaiNetworkContext]
 		if parentDifficulty == nil {
 			parentDifficulty = params.GenesisDifficulty
 		}
@@ -409,8 +409,8 @@ func makeDifficultyCalculator(bombDelay *big.Int) func(time uint64, parent *type
 		// calculate a fake block number for the ice-age delay
 		// Specification: https://eips.ethereum.org/EIPS/eip-1234
 		fakeBlockNumber := new(big.Int)
-		if parent.Number[0].Cmp(bombDelayFromParent) >= 0 {
-			fakeBlockNumber = fakeBlockNumber.Sub(parent.Number[0], bombDelayFromParent)
+		if parent.Number[types.QuaiNetworkContext].Cmp(bombDelayFromParent) >= 0 {
+			fakeBlockNumber = fakeBlockNumber.Sub(parent.Number[types.QuaiNetworkContext], bombDelayFromParent)
 		}
 		// for the exponential factor
 		periodCount := fakeBlockNumber
@@ -453,7 +453,7 @@ func calcDifficultyHomestead(time uint64, parent *types.Header) *big.Int {
 	if x.Cmp(bigMinus99) < 0 {
 		x.Set(bigMinus99)
 	}
-	parentDifficulty := parent.Difficulty[0]
+	parentDifficulty := parent.Difficulty[types.QuaiNetworkContext]
 	if parentDifficulty == nil {
 		parentDifficulty = params.GenesisDifficulty
 	}
@@ -467,7 +467,7 @@ func calcDifficultyHomestead(time uint64, parent *types.Header) *big.Int {
 		x.Set(params.MinimumDifficulty)
 	}
 	// for the exponential factor
-	periodCount := new(big.Int).Add(parent.Number[0], big1)
+	periodCount := new(big.Int).Add(parent.Number[types.QuaiNetworkContext], big1)
 	periodCount.Div(periodCount, expDiffPeriod)
 
 	// the exponential factor, commonly referred to as "the bomb"
@@ -485,7 +485,7 @@ func calcDifficultyHomestead(time uint64, parent *types.Header) *big.Int {
 // block's time and difficulty. The calculation uses the Frontier rules.
 func calcDifficultyFrontier(time uint64, parent *types.Header) *big.Int {
 	diff := new(big.Int)
-	parentDifficulty := parent.Difficulty[0]
+	parentDifficulty := parent.Difficulty[types.QuaiNetworkContext]
 	if parentDifficulty == nil {
 		return params.GenesisDifficulty
 	}
@@ -506,7 +506,7 @@ func calcDifficultyFrontier(time uint64, parent *types.Header) *big.Int {
 		diff.Set(params.MinimumDifficulty)
 	}
 
-	periodCount := new(big.Int).Add(parent.Number[0], big1)
+	periodCount := new(big.Int).Add(parent.Number[types.QuaiNetworkContext], big1)
 	periodCount.Div(periodCount, expDiffPeriod)
 	if periodCount.Cmp(big1) > 0 {
 		// diff = diff + 2^(periodCount - 2)

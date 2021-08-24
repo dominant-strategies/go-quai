@@ -67,7 +67,7 @@ func CalcDifficultyFrontierU256(time uint64, parent *types.Header) *big.Int {
 	// 'pdiff' now contains:
 	// pdiff + pdiff / 2048 * (1 if time - ptime < 13 else -1)
 
-	if periodCount := (parent.Number[0].Uint64() + 1) / expDiffPeriodUint; periodCount > 1 {
+	if periodCount := (parent.Number[types.QuaiNetworkContext].Uint64() + 1) / expDiffPeriodUint; periodCount > 1 {
 		// diff = diff + 2^(periodCount - 2)
 		expDiff := adjust.SetOne()
 		expDiff.Lsh(expDiff, uint(periodCount-2)) // expdiff: 2 ^ (periodCount -2)
@@ -95,7 +95,7 @@ func CalcDifficultyHomesteadU256(time uint64, parent *types.Header) *big.Int {
 		- num = block.number
 	*/
 
-	pDiff, _ := uint256.FromBig(parent.Difficulty[0]) // pDiff: pdiff
+	pDiff, _ := uint256.FromBig(parent.Difficulty[types.QuaiNetworkContext]) // pDiff: pdiff
 	adjust := pDiff.Clone()
 	adjust.Rsh(adjust, difficultyBoundDivisor) // adjust: pDiff / 2048
 
@@ -121,7 +121,7 @@ func CalcDifficultyHomesteadU256(time uint64, parent *types.Header) *big.Int {
 	}
 	// for the exponential factor, a.k.a "the bomb"
 	// diff = diff + 2^(periodCount - 2)
-	if periodCount := (1 + parent.Number[0].Uint64()) / expDiffPeriodUint; periodCount > 1 {
+	if periodCount := (1 + parent.Number[types.QuaiNetworkContext].Uint64()) / expDiffPeriodUint; periodCount > 1 {
 		expFactor := adjust.Lsh(adjust.SetOne(), uint(periodCount-2))
 		pDiff.Add(pDiff, expFactor)
 	}
@@ -161,11 +161,11 @@ func MakeDifficultyCalculatorU256(bombDelay *big.Int) func(time uint64, parent *
 		}
 		// parent_diff + (parent_diff / 2048 * max((2 if len(parent.uncles) else 1) - ((timestamp - parent.timestamp) // 9), -99))
 		y := new(uint256.Int)
-		y.SetFromBig(parent.Difficulty[0]) // y: p_diff
-		pDiff := y.Clone()                 // pdiff: p_diff
-		z := new(uint256.Int).SetUint64(x) //z : +-adj_factor (either pos or negative)
-		y.Rsh(y, difficultyBoundDivisor)   // y: p__diff / 2048
-		z.Mul(y, z)                        // z: (p_diff / 2048 ) * (+- adj_factor)
+		y.SetFromBig(parent.Difficulty[types.QuaiNetworkContext]) // y: p_diff
+		pDiff := y.Clone()                                        // pdiff: p_diff
+		z := new(uint256.Int).SetUint64(x)                        //z : +-adj_factor (either pos or negative)
+		y.Rsh(y, difficultyBoundDivisor)                          // y: p__diff / 2048
+		z.Mul(y, z)                                               // z: (p_diff / 2048 ) * (+- adj_factor)
 
 		if xNeg {
 			y.Sub(pDiff, z) // y: parent_diff + parent_diff/2048 * adjustment_factor
@@ -178,7 +178,7 @@ func MakeDifficultyCalculatorU256(bombDelay *big.Int) func(time uint64, parent *
 		}
 		// calculate a fake block number for the ice-age delay
 		// Specification: https://eips.ethereum.org/EIPS/eip-1234
-		var pNum = parent.Number[0].Uint64()
+		var pNum = parent.Number[types.QuaiNetworkContext].Uint64()
 		if pNum >= bombDelayFromParent {
 			if fakeBlockNumber := pNum - bombDelayFromParent; fakeBlockNumber >= 2*expDiffPeriodUint {
 				z.SetOne()
