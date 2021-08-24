@@ -1794,16 +1794,6 @@ func (s *PublicBlockChainAPI) SendMinedBlock(ctx context.Context, raw json.RawMe
 	if types.IsEqualHashSlice(head.UncleHash, types.EmptyUncleHash) && len(body.UncleHashes) > 0 {
 		return fmt.Errorf("server returned non-empty uncle list but block header indicates no uncles")
 	}
-	// emptyHash := make([]common.Hash, 3)
-	// if !types.IsEqualHashSlice(head.UncleHash, emptyHash) && len(body.UncleHashes) == 0 {
-	// 	return fmt.Errorf("server returned empty uncle list but block header indicates uncles")
-	// }
-	// if !types.IsEqualHashSlice(head.TxHash, types.EmptyRootHash) && len(body.Transactions) > 0 {
-	// 	return fmt.Errorf("server returned non-empty transaction list but block header indicates no transactions")
-	// }
-	// if !types.IsEqualHashSlice(head.TxHash, types.EmptyRootHash) && len(body.Transactions) == 0 {
-	// 	return fmt.Errorf("server returned empty transaction list but block header indicates transactions")
-	// }
 
 	// Load uncles because they are not included in the block response.
 	var uncles []*types.Header
