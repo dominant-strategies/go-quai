@@ -716,7 +716,7 @@ type badBlockList []*badBlock
 
 func (s badBlockList) Len() int { return len(s) }
 func (s badBlockList) Less(i, j int) bool {
-	return s[i].Header.Number[0].Uint64() < s[j].Header.Number[0].Uint64()
+	return s[i].Header.Number[types.QuaiNetworkContext].Uint64() < s[j].Header.Number[types.QuaiNetworkContext].Uint64()
 }
 func (s badBlockList) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
 

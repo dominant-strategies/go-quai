@@ -138,7 +138,7 @@ func genTxRing(naccounts int) func(int, *BlockGen) {
 func genUncles(i int, gen *BlockGen) {
 	if i >= 6 {
 		b2 := gen.PrevBlock(i - 6).Header()
-		b2.Extra[0] = []byte("foo")
+		b2.Extra[types.QuaiNetworkContext] = []byte("foo")
 		gen.AddUncle(b2)
 		b3 := gen.PrevBlock(i - 6).Header()
 		b3.Extra[0] = []byte("bar")
