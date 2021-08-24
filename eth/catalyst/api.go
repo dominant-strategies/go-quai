@@ -139,18 +139,10 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 	}
 	num := parent.Number()
 
-	emptyHash := common.Hash{}
-	emptyAddress := common.Address{}
-	header := &types.Header{
-		ParentHash: []common.Hash{emptyHash, emptyHash, emptyHash},
-		Number:     []*big.Int{big.NewInt(0), big.NewInt(0), big.NewInt(0)},
-		Coinbase:   []common.Address{emptyAddress, emptyAddress, emptyAddress},
-		GasLimit:   []uint64{parent.GasLimit(), parent.GasLimit(), parent.GasLimit()}, // Keep the gas limit constant in this prototype
-		BaseFee:    []*big.Int{big.NewInt(0), big.NewInt(0), big.NewInt(0)},
-		Extra:      [][]byte{[]byte{}, []byte{}, []byte{}},
-		Time:       params.Timestamp,
-	}
 
+	header := types.NewEmptyHeader()
+	header.Time = params.Timestamp
+	header.GasLimit[types.QuaiNetworkContext] = parent.GasLimit()
 	header.ParentHash[types.QuaiNetworkContext] = parent.Hash()
 	header.Number[types.QuaiNetworkContext] = num.Add(num, common.Big1)
 	header.Coinbase[types.QuaiNetworkContext] = coinbase
