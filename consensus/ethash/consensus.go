@@ -580,11 +580,11 @@ func (ethash *Ethash) verifySeal(chain consensus.ChainHeaderReader, header *type
 	}
 	// Verify the calculated values against the ones provided in the header
 	if !bytes.Equal(header.MixDigest[types.QuaiNetworkContext][:], digest) {
-		// return errInvalidMixDigest
+		return errInvalidMixDigest
 	}
 	target := new(big.Int).Div(two256, header.Difficulty[types.QuaiNetworkContext])
 	if new(big.Int).SetBytes(result).Cmp(target) > 0 {
-		// return errInvalidPoW
+		return errInvalidPoW
 	}
 	return nil
 }

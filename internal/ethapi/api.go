@@ -1187,15 +1187,9 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 		"difficulty":       (*hexutil.Big)(head.Difficulty),
 		"extraData":        hexutil.Bytes(head.Extra),
 		"size":             hexutil.Uint64(head.Size()),
-<<<<<<< HEAD
-		"gasLimit":         hexutil.Uint64(head.GasLimit),
-		"gasUsed":          hexutil.Uint64(head.GasUsed),
-		"timestamp":        hexutil.Uint64(head.Time),
-=======
 		"gasLimit":         head.GasLimit,
 		"gasUsed":          head.GasUsed,
 		"timestamp":        head.Time,
->>>>>>> c826ac0 (Getting nil on blocks in manager when subscribe pending)
 		"transactionsRoot": head.TxHash,
 		"receiptsRoot":     head.ReceiptHash,
 	}
