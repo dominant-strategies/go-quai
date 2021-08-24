@@ -64,7 +64,9 @@ type testBlockChain struct {
 
 func (bc *testBlockChain) CurrentBlock() *types.Block {
 	return types.NewBlock(&types.Header{
-		GasLimit: bc.gasLimit,
+		Number:   []*big.Int{new(big.Int).SetUint64(0), new(big.Int).SetUint64(0), new(big.Int).SetUint64(0)},
+		Root:     []common.Hash{common.Hash{}, common.Hash{}, common.Hash{}},
+		GasLimit: []uint64{bc.gasLimit, bc.gasLimit, bc.gasLimit},
 	}, nil, nil, nil, trie.NewStackTrie(nil))
 }
 

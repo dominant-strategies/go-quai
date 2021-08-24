@@ -324,7 +324,7 @@ func ReadHeader(db ethdb.Reader, hash common.Hash, number uint64) *types.Header 
 func WriteHeader(db ethdb.KeyValueWriter, header *types.Header) {
 	var (
 		hash   = header.Hash()
-		number = header.Number.Uint64()
+		number = header.Number[types.QuaiNetworkContext].Uint64()
 	)
 	// Write the hash -> number mapping
 	WriteHeaderNumber(db, hash, number)
@@ -716,7 +716,7 @@ type badBlockList []*badBlock
 
 func (s badBlockList) Len() int { return len(s) }
 func (s badBlockList) Less(i, j int) bool {
-	return s[i].Header.Number.Uint64() < s[j].Header.Number.Uint64()
+	return s[i].Header.Number[0].Uint64() < s[j].Header.Number[0].Uint64()
 }
 func (s badBlockList) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
 
@@ -770,7 +770,7 @@ func WriteBadBlock(db ethdb.KeyValueStore, block *types.Block) {
 		}
 	}
 	for _, b := range badBlocks {
-		if b.Header.Number.Uint64() == block.NumberU64() && b.Header.Hash() == block.Hash() {
+		if b.Header.Number[types.QuaiNetworkContext].Uint64() == block.NumberU64() && b.Header.Hash() == block.Hash() {
 			log.Info("Skip duplicated bad block", "number", block.NumberU64(), "hash", block.Hash())
 			return
 		}
@@ -801,24 +801,24 @@ func DeleteBadBlocks(db ethdb.KeyValueWriter) {
 
 // FindCommonAncestor returns the last common ancestor of two block headers
 func FindCommonAncestor(db ethdb.Reader, a, b *types.Header) *types.Header {
-	for bn := b.Number.Uint64(); a.Number.Uint64() > bn; {
-		a = ReadHeader(db, a.ParentHash, a.Number.Uint64()-1)
+	for bn := b.Number[types.QuaiNetworkContext].Uint64(); a.Number[types.QuaiNetworkContext].Uint64() > bn; {
+		a = ReadHeader(db, a.ParentHash[types.QuaiNetworkContext], a.Number[types.QuaiNetworkContext].Uint64()-1)
 		if a == nil {
 			return nil
 		}
 	}
-	for an := a.Number.Uint64(); an < b.Number.Uint64(); {
-		b = ReadHeader(db, b.ParentHash, b.Number.Uint64()-1)
+	for an := a.Number[types.QuaiNetworkContext].Uint64(); an < b.Number[types.QuaiNetworkContext].Uint64(); {
+		b = ReadHeader(db, b.ParentHash[types.QuaiNetworkContext], b.Number[types.QuaiNetworkContext].Uint64()-1)
 		if b == nil {
 			return nil
 		}
 	}
 	for a.Hash() != b.Hash() {
-		a = ReadHeader(db, a.ParentHash, a.Number.Uint64()-1)
+		a = ReadHeader(db, a.ParentHash[types.QuaiNetworkContext], a.Number[types.QuaiNetworkContext].Uint64()-1)
 		if a == nil {
 			return nil
 		}
-		b = ReadHeader(db, b.ParentHash, b.Number.Uint64()-1)
+		b = ReadHeader(db, b.ParentHash[types.QuaiNetworkContext], b.Number[types.QuaiNetworkContext].Uint64()-1)
 		if b == nil {
 			return nil
 		}

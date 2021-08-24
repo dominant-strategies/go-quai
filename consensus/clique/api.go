@@ -48,7 +48,7 @@ func (api *API) GetSnapshot(number *rpc.BlockNumber) (*Snapshot, error) {
 	if header == nil {
 		return nil, errUnknownBlock
 	}
-	return api.clique.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
+	return api.clique.snapshot(api.chain, header.Number[types.QuaiNetworkContext].Uint64(), header.Hash(), nil)
 }
 
 // GetSnapshotAtHash retrieves the state snapshot at a given block.
@@ -57,7 +57,7 @@ func (api *API) GetSnapshotAtHash(hash common.Hash) (*Snapshot, error) {
 	if header == nil {
 		return nil, errUnknownBlock
 	}
-	return api.clique.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
+	return api.clique.snapshot(api.chain, header.Number[types.QuaiNetworkContext].Uint64(), header.Hash(), nil)
 }
 
 // GetSigners retrieves the list of authorized signers at the specified block.
@@ -73,7 +73,7 @@ func (api *API) GetSigners(number *rpc.BlockNumber) ([]common.Address, error) {
 	if header == nil {
 		return nil, errUnknownBlock
 	}
-	snap, err := api.clique.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
+	snap, err := api.clique.snapshot(api.chain, header.Number[types.QuaiNetworkContext].Uint64(), header.Hash(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +86,7 @@ func (api *API) GetSignersAtHash(hash common.Hash) ([]common.Address, error) {
 	if header == nil {
 		return nil, errUnknownBlock
 	}
-	snap, err := api.clique.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
+	snap, err := api.clique.snapshot(api.chain, header.Number[types.QuaiNetworkContext].Uint64(), header.Hash(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -140,13 +140,13 @@ func (api *API) Status() (*status, error) {
 		diff      = uint64(0)
 		optimals  = 0
 	)
-	snap, err := api.clique.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
+	snap, err := api.clique.snapshot(api.chain, header.Number[types.QuaiNetworkContext].Uint64(), header.Hash(), nil)
 	if err != nil {
 		return nil, err
 	}
 	var (
 		signers = snap.signers()
-		end     = header.Number.Uint64()
+		end     = header.Number[types.QuaiNetworkContext].Uint64()
 		start   = end - numBlocks
 	)
 	if numBlocks > end {
@@ -162,10 +162,10 @@ func (api *API) Status() (*status, error) {
 		if h == nil {
 			return nil, fmt.Errorf("missing block %d", n)
 		}
-		if h.Difficulty.Cmp(diffInTurn) == 0 {
+		if h.Difficulty[types.QuaiNetworkContext].Cmp(diffInTurn) == 0 {
 			optimals++
 		}
-		diff += h.Difficulty.Uint64()
+		diff += h.Difficulty[types.QuaiNetworkContext].Uint64()
 		sealer, err := api.clique.Author(h)
 		if err != nil {
 			return nil, err

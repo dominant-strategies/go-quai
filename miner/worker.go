@@ -514,7 +514,7 @@ func (w *worker) mainLoop() {
 					acc, _ := types.Sender(w.current.signer, tx)
 					txs[acc] = append(txs[acc], tx)
 				}
-				txset := types.NewTransactionsByPriceAndNonce(w.current.signer, txs, w.current.header.BaseFee)
+				txset := types.NewTransactionsByPriceAndNonce(w.current.signer, txs, w.current.header.BaseFee[types.QuaiNetworkContext])
 				tcount := w.current.tcount
 				w.commitTransactions(txset, coinbase, nil)
 				// Only update the snapshot if any new transactons were added
@@ -669,7 +669,7 @@ func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 	state.StartPrefetcher("miner")
 
 	env := &environment{
-		signer:    types.MakeSigner(w.chainConfig, header.Number),
+		signer:    types.MakeSigner(w.chainConfig, header.Number[types.QuaiNetworkContext]),
 		state:     state,
 		ancestors: mapset.NewSet(),
 		family:    mapset.NewSet(),
@@ -702,10 +702,10 @@ func (w *worker) commitUncle(env *environment, uncle *types.Header) error {
 	if env.uncles.Contains(hash) {
 		return errors.New("uncle not unique")
 	}
-	if env.header.ParentHash == uncle.ParentHash {
+	if env.header.ParentHash[types.QuaiNetworkContext] == uncle.ParentHash[types.QuaiNetworkContext] {
 		return errors.New("uncle is sibling")
 	}
-	if !env.ancestors.Contains(uncle.ParentHash) {
+	if !env.ancestors.Contains(uncle.ParentHash[types.QuaiNetworkContext]) {
 		return errors.New("uncle's parent unknown")
 	}
 	if env.family.Contains(hash) {
@@ -752,7 +752,7 @@ func (w *worker) updateSnapshot() {
 func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Address) ([]*types.Log, error) {
 	snap := w.current.state.Snapshot()
 
-	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &coinbase, w.current.gasPool, w.current.state, w.current.header, tx, &w.current.header.GasUsed, *w.chain.GetVMConfig())
+	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &coinbase, w.current.gasPool, w.current.state, w.current.header, tx, &w.current.header.GasUsed[types.QuaiNetworkContext], *w.chain.GetVMConfig())
 	if err != nil {
 		w.current.state.RevertToSnapshot(snap)
 		return nil, err
@@ -771,7 +771,7 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 
 	gasLimit := w.current.header.GasLimit
 	if w.current.gasPool == nil {
-		w.current.gasPool = new(core.GasPool).AddGas(gasLimit)
+		w.current.gasPool = new(core.GasPool).AddGas(gasLimit[types.QuaiNetworkContext])
 	}
 
 	var coalescedLogs []*types.Log
@@ -786,7 +786,7 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 		if interrupt != nil && atomic.LoadInt32(interrupt) != commitInterruptNone {
 			// Notify resubmit loop to increase resubmitting interval due to too frequent commits.
 			if atomic.LoadInt32(interrupt) == commitInterruptResubmit {
-				ratio := float64(gasLimit-w.current.gasPool.Gas()) / float64(gasLimit)
+				ratio := float64(gasLimit[types.QuaiNetworkContext]-w.current.gasPool.Gas()) / float64(gasLimit[types.QuaiNetworkContext])
 				if ratio < 0.1 {
 					ratio = 0.1
 				}
@@ -814,7 +814,7 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 		from, _ := types.Sender(w.current.signer, tx)
 		// Check whether the tx is replay protected. If we're not in the EIP155 hf
 		// phase, start ignoring the sender until we do.
-		if tx.Protected() && !w.chainConfig.IsEIP155(w.current.header.Number) {
+		if tx.Protected() && !w.chainConfig.IsEIP155(w.current.header.Number[types.QuaiNetworkContext]) {
 			log.Trace("Ignoring reply protected transaction", "hash", tx.Hash(), "eip155", w.chainConfig.EIP155Block)
 
 			txs.Pop()
@@ -895,21 +895,33 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	}
 	num := parent.Number()
 	header := &types.Header{
-		ParentHash: parent.Hash(),
-		Number:     num.Add(num, common.Big1),
-		GasLimit:   core.CalcGasLimit(parent.GasUsed(), parent.GasLimit(), w.config.GasFloor, w.config.GasCeil),
-		Extra:      w.extra,
-		Time:       uint64(timestamp),
+		ParentHash:  make([]common.Hash, 3),
+		Number:      make([]*big.Int, 3),
+		Extra:       make([][]byte, 3),
+		Time:        uint64(timestamp),
+		BaseFee:     make([]*big.Int, 3),
+		GasLimit:    make([]uint64, 3),
+		Coinbase:    make([]common.Address, 3),
+		Difficulty:  make([]*big.Int, 3),
+		Root:        make([]common.Hash, 3),
+		TxHash:      make([]common.Hash, 3),
+		ReceiptHash: make([]common.Hash, 3),
+		GasUsed:     make([]uint64, 3),
+		Bloom:       make([]types.Bloom, 3),
 	}
+	header.ParentHash[types.QuaiNetworkContext] = parent.Hash()
+	header.Number[types.QuaiNetworkContext] = num.Add(num, common.Big1)
+	header.Extra[types.QuaiNetworkContext] = w.extra
+	header.GasLimit[types.QuaiNetworkContext] = core.CalcGasLimit(parent.GasUsed(), parent.GasLimit(), w.config.GasFloor, w.config.GasCeil)
 	// Set baseFee and GasLimit if we are on an EIP-1559 chain
-	if w.chainConfig.IsLondon(header.Number) {
-		header.BaseFee = misc.CalcBaseFee(w.chainConfig, parent.Header())
+	if w.chainConfig.IsLondon(header.Number[types.QuaiNetworkContext]) {
+		header.BaseFee[types.QuaiNetworkContext] = misc.CalcBaseFee(w.chainConfig, parent.Header())
 		parentGasLimit := parent.GasLimit()
 		if !w.chainConfig.IsLondon(parent.Number()) {
 			// Bump by 2x
 			parentGasLimit = parent.GasLimit() * params.ElasticityMultiplier
 		}
-		header.GasLimit = core.CalcGasLimit1559(parentGasLimit, w.config.GasCeil)
+		header.GasLimit[types.QuaiNetworkContext] = core.CalcGasLimit1559(parentGasLimit, w.config.GasCeil)
 	}
 	// Only set the coinbase if our consensus engine is running (avoid spurious block rewards)
 	if w.isRunning() {
@@ -917,7 +929,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 			log.Error("Refusing to mine without etherbase")
 			return
 		}
-		header.Coinbase = w.coinbase
+		header.Coinbase[types.QuaiNetworkContext] = w.coinbase
 	}
 	if err := w.engine.Prepare(w.chain, header); err != nil {
 		log.Error("Failed to prepare header for mining", "err", err)
@@ -927,12 +939,12 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	if daoBlock := w.chainConfig.DAOForkBlock; daoBlock != nil {
 		// Check whether the block is among the fork extra-override range
 		limit := new(big.Int).Add(daoBlock, params.DAOForkExtraRange)
-		if header.Number.Cmp(daoBlock) >= 0 && header.Number.Cmp(limit) < 0 {
+		if header.Number[types.QuaiNetworkContext].Cmp(daoBlock) >= 0 && header.Number[types.QuaiNetworkContext].Cmp(limit) < 0 {
 			// Depending whether we support or oppose the fork, override differently
 			if w.chainConfig.DAOForkSupport {
-				header.Extra = common.CopyBytes(params.DAOForkBlockExtra)
-			} else if bytes.Equal(header.Extra, params.DAOForkBlockExtra) {
-				header.Extra = []byte{} // If miner opposes, don't let it use the reserved extra-data
+				header.Extra[types.QuaiNetworkContext] = common.CopyBytes(params.DAOForkBlockExtra)
+			} else if bytes.Equal(header.Extra[types.QuaiNetworkContext], params.DAOForkBlockExtra) {
+				header.Extra = [][]byte{} // If miner opposes, don't let it use the reserved extra-data
 			}
 		}
 	}
@@ -944,7 +956,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	}
 	// Create the current work task and check any fork transitions needed
 	env := w.current
-	if w.chainConfig.DAOForkSupport && w.chainConfig.DAOForkBlock != nil && w.chainConfig.DAOForkBlock.Cmp(header.Number) == 0 {
+	if w.chainConfig.DAOForkSupport && w.chainConfig.DAOForkBlock != nil && w.chainConfig.DAOForkBlock.Cmp(header.Number[types.QuaiNetworkContext]) == 0 {
 		misc.ApplyDAOHardFork(env.state)
 	}
 	// Accumulate the uncles for the current block
@@ -952,7 +964,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	commitUncles := func(blocks map[common.Hash]*types.Block) {
 		// Clean up stale uncle blocks first
 		for hash, uncle := range blocks {
-			if uncle.NumberU64()+staleThreshold <= header.Number.Uint64() {
+			if uncle.NumberU64()+staleThreshold <= header.Number[types.QuaiNetworkContext].Uint64() {
 				delete(blocks, hash)
 			}
 		}
@@ -1000,13 +1012,13 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		}
 	}
 	if len(localTxs) > 0 {
-		txs := types.NewTransactionsByPriceAndNonce(w.current.signer, localTxs, header.BaseFee)
+		txs := types.NewTransactionsByPriceAndNonce(w.current.signer, localTxs, header.BaseFee[types.QuaiNetworkContext])
 		if w.commitTransactions(txs, w.coinbase, interrupt) {
 			return
 		}
 	}
 	if len(remoteTxs) > 0 {
-		txs := types.NewTransactionsByPriceAndNonce(w.current.signer, remoteTxs, header.BaseFee)
+		txs := types.NewTransactionsByPriceAndNonce(w.current.signer, remoteTxs, header.BaseFee[types.QuaiNetworkContext])
 		if w.commitTransactions(txs, w.coinbase, interrupt) {
 			return
 		}

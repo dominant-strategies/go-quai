@@ -165,7 +165,7 @@ func newLightFetcher(chain *light.LightChain, engine consensus.Engine, peers *se
 		// Disable seal verification explicitly if we are running in ulc mode.
 		return engine.VerifyHeader(chain, header, ulc == nil)
 	}
-	heighter := func() uint64 { return chain.CurrentHeader().Number.Uint64() }
+	heighter := func() uint64 { return chain.CurrentHeader().Number[types.QuaiNetworkContext].Uint64() }
 	dropper := func(id string) { peers.unregister(id) }
 	inserter := func(headers []*types.Header) (int, error) {
 		// Disable PoW checking explicitly if we are running in ulc mode.
@@ -270,7 +270,7 @@ func (f *lightFetcher) mainloop() {
 
 		// Local status
 		localHead = f.chain.CurrentHeader()
-		localTd   = f.chain.GetTd(localHead.Hash(), localHead.Number.Uint64())
+		localTd   = f.chain.GetTd(localHead.Hash(), localHead.Number[types.QuaiNetworkContext].Uint64())
 	)
 	sub := f.chain.SubscribeChainHeadEvent(headCh)
 	defer sub.Unsubscribe()
@@ -278,7 +278,7 @@ func (f *lightFetcher) mainloop() {
 	// reset updates the local status with given header.
 	reset := func(header *types.Header) {
 		localHead = header
-		localTd = f.chain.GetTd(header.Hash(), header.Number.Uint64())
+		localTd = f.chain.GetTd(header.Hash(), header.Number[types.QuaiNetworkContext].Uint64())
 	}
 	// trustedHeader returns an indicator whether the header is regarded as
 	// trusted. If we are running in the ulc mode, only when we receive enough
@@ -333,7 +333,7 @@ func (f *lightFetcher) mainloop() {
 				// - local chain lags
 				// We can't retrieve the parent of the announce by single retrieval
 				// in both cases, so resync is necessary.
-				if data.Number > localHead.Number.Uint64()+syncInterval || data.ReorgDepth > 0 {
+				if data.Number > localHead.Number[types.QuaiNetworkContext].Uint64()+syncInterval || data.ReorgDepth > 0 {
 					syncing = true
 					go f.startSync(peerid)
 					log.Debug("Trigger light sync", "peer", peerid, "local", localHead.Number, "localhash", localHead.Hash(), "remote", data.Number, "remotehash", data.Hash)
@@ -348,7 +348,7 @@ func (f *lightFetcher) mainloop() {
 				// we have receive enough announcements from trusted server.
 				trusted, agreed := trustedHeader(data.Hash, data.Number)
 				if trusted && !syncing {
-					if data.Number > localHead.Number.Uint64()+syncInterval || data.ReorgDepth > 0 {
+					if data.Number > localHead.Number[types.QuaiNetworkContext].Uint64()+syncInterval || data.ReorgDepth > 0 {
 						syncing = true
 						go f.startSync(peerid)
 						log.Debug("Trigger trusted light sync", "local", localHead.Number, "localhash", localHead.Hash(), "remote", data.Number, "remotehash", data.Hash)
@@ -414,7 +414,7 @@ func (f *lightFetcher) mainloop() {
 				removed := p.forwardAnno(localTd)
 				for _, anno := range removed {
 					if header := f.chain.GetHeaderByHash(anno.data.Hash); header != nil {
-						if header.Number.Uint64() != anno.data.Number {
+						if header.Number[types.QuaiNetworkContext].Uint64() != anno.data.Number {
 							droplist = append(droplist, id)
 							break
 						}
@@ -444,13 +444,13 @@ func (f *lightFetcher) mainloop() {
 				head := f.chain.CurrentHeader()
 				ancestor := rawdb.FindCommonAncestor(f.chaindb, origin, head)
 				var untrusted []common.Hash
-				for head.Number.Cmp(ancestor.Number) > 0 {
-					hash, number := head.Hash(), head.Number.Uint64()
+				for head.Number[types.QuaiNetworkContext].Cmp(ancestor.Number[types.QuaiNetworkContext]) > 0 {
+					hash, number := head.Hash(), head.Number[types.QuaiNetworkContext].Uint64()
 					if trusted, _ := trustedHeader(hash, number); trusted {
 						break
 					}
 					untrusted = append(untrusted, hash)
-					head = f.chain.GetHeader(head.ParentHash, number-1)
+					head = f.chain.GetHeader(head.ParentHash[types.QuaiNetworkContext], number-1)
 				}
 				if len(untrusted) > 0 {
 					for i, j := 0, len(untrusted)-1; i < j; i, j = i+1, j-1 {

@@ -213,14 +213,14 @@ func BenchmarkEVM_CREATE2_1200(bench *testing.B) {
 
 func fakeHeader(n uint64, parentHash common.Hash) *types.Header {
 	header := types.Header{
-		Coinbase:   common.HexToAddress("0x00000000000000000000000000000000deadbeef"),
-		Number:     big.NewInt(int64(n)),
-		ParentHash: parentHash,
+		Coinbase:   []common.Address{common.HexToAddress("0x00000000000000000000000000000000deadbeef"), common.HexToAddress("0x00000000000000000000000000000000deadbeef"), common.HexToAddress("0x00000000000000000000000000000000deadbeef")},
+		Number:     []*big.Int{big.NewInt(int64(n)), big.NewInt(int64(n)), big.NewInt(int64(n))},
+		ParentHash: []common.Hash{parentHash, parentHash, parentHash},
 		Time:       1000,
 		Nonce:      types.BlockNonce{0x1},
-		Extra:      []byte{},
-		Difficulty: big.NewInt(0),
-		GasLimit:   100000,
+		Extra:      [][]byte{[]byte{}, []byte{}, []byte{}},
+		Difficulty: []*big.Int{big.NewInt(0), big.NewInt(0), big.NewInt(0)},
+		GasLimit:   []uint64{100000, 100000, 100000},
 	}
 	return &header
 }
@@ -295,7 +295,7 @@ func TestBlockhash(t *testing.T) {
 	chain := &dummyChain{}
 	ret, _, err := Execute(data, input, &Config{
 		GetHashFn:   core.GetHashFn(header, chain),
-		BlockNumber: new(big.Int).Set(header.Number),
+		BlockNumber: new(big.Int).Set(header.Number[types.QuaiNetworkContext]),
 	})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)

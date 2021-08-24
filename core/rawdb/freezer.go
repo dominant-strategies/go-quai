@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -436,7 +437,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 						log.Error("Missing dangling header", "number", tip, "hash", children[i])
 						continue
 					}
-					if _, ok := drop[child.ParentHash]; !ok {
+					if _, ok := drop[child.ParentHash[types.QuaiNetworkContext]]; !ok {
 						children = append(children[:i], children[i+1:]...)
 						i--
 						continue

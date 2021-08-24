@@ -167,7 +167,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 	if (stored == common.Hash{}) {
 		if genesis == nil {
 			log.Info("Writing default main-net genesis block")
-			genesis = DefaultGenesisBlock()
+			genesis = MainnetPrimeGenesisBlock()
 		} else {
 			log.Info("Writing custom genesis block")
 		}
@@ -180,9 +180,9 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 	// We have the genesis block in database(perhaps in ancient database)
 	// but the corresponding state is missing.
 	header := rawdb.ReadHeader(db, stored, 0)
-	if _, err := state.New(header.Root, state.NewDatabaseWithConfig(db, nil), nil); err != nil {
+	if _, err := state.New(header.Root[types.QuaiNetworkContext], state.NewDatabaseWithConfig(db, nil), nil); err != nil {
 		if genesis == nil {
-			genesis = DefaultGenesisBlock()
+			genesis = MainnetPrimeGenesisBlock()
 		}
 		// Ensure the stored genesis matches with the given one.
 		hash := genesis.ToBlock(nil).Hash()
@@ -195,6 +195,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 		}
 		return genesis.Config, block.Hash(), nil
 	}
+
 	// Check whether the genesis block is already written.
 	if genesis != nil {
 		hash := genesis.ToBlock(nil).Hash()
@@ -219,7 +220,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 	// Special case: don't change the existing config of a non-mainnet chain if no new
 	// config is supplied. These chains would get AllProtocolChanges (and a compat error)
 	// if we just continued here.
-	if genesis == nil && stored != params.MainnetGenesisHash {
+	if genesis == nil && stored != params.MainnetPrimeGenesisHash {
 		return storedcfg, stored, nil
 	}
 	// Check config compatibility and write the config. Compatibility errors
@@ -240,16 +241,10 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 	switch {
 	case g != nil:
 		return g.Config
-	case ghash == params.MainnetGenesisHash:
-		return params.MainnetChainConfig
+	case ghash == params.MainnetPrimeGenesisHash:
+		return params.MainnetPrimeChainConfig
 	case ghash == params.RopstenGenesisHash:
 		return params.RopstenChainConfig
-	case ghash == params.RinkebyGenesisHash:
-		return params.RinkebyChainConfig
-	case ghash == params.GoerliGenesisHash:
-		return params.GoerliChainConfig
-	case ghash == params.CalaverasGenesisHash:
-		return params.CalaverasChainConfig
 	default:
 		return params.AllEthashProtocolChanges
 	}
@@ -274,33 +269,30 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		}
 	}
 	root := statedb.IntermediateRoot(false)
+	baseFee := new(big.Int).SetUint64(params.InitialBaseFee)
+	if g.BaseFee != nil {
+		baseFee = g.BaseFee
+	}
+
 	head := &types.Header{
-		Number:     new(big.Int).SetUint64(g.Number),
+		Number:     []*big.Int{new(big.Int).SetUint64(g.Number), new(big.Int).SetUint64(g.Number), new(big.Int).SetUint64(g.Number)},
+		ParentHash: []common.Hash{g.ParentHash, g.ParentHash, g.ParentHash},
+		Extra:      [][]byte{g.ExtraData, g.ExtraData, g.ExtraData},
+		GasLimit:   []uint64{g.GasLimit, g.GasLimit, g.GasLimit},
+		GasUsed:    []uint64{g.GasUsed, g.GasUsed, g.GasUsed},
+		Difficulty: []*big.Int{g.Difficulty, g.Difficulty, g.Difficulty},
+		MixDigest:  []common.Hash{g.Mixhash, g.Mixhash, g.Mixhash},
+		Coinbase:   []common.Address{g.Coinbase, g.Coinbase, g.Coinbase},
 		Nonce:      types.EncodeNonce(g.Nonce),
 		Time:       g.Timestamp,
-		ParentHash: g.ParentHash,
-		Extra:      g.ExtraData,
-		GasLimit:   g.GasLimit,
-		GasUsed:    g.GasUsed,
-		BaseFee:    g.BaseFee,
-		Difficulty: g.Difficulty,
-		MixDigest:  g.Mixhash,
-		Coinbase:   g.Coinbase,
-		Root:       root,
+		BaseFee:    []*big.Int{baseFee, baseFee, baseFee},
+		Root:       []common.Hash{root, root, root},
 	}
+
 	if g.GasLimit == 0 {
-		head.GasLimit = params.GenesisGasLimit
+		head.GasLimit[types.QuaiNetworkContext] = params.GenesisGasLimit
 	}
-	if g.Difficulty == nil {
-		head.Difficulty = params.GenesisDifficulty
-	}
-	if g.Config != nil && g.Config.IsLondon(common.Big0) {
-		if g.BaseFee != nil {
-			head.BaseFee = g.BaseFee
-		} else {
-			head.BaseFee = new(big.Int).SetUint64(params.InitialBaseFee)
-		}
-	}
+
 	statedb.Commit(false)
 	statedb.Database().TrieDB().Commit(root, true, nil)
 
@@ -351,10 +343,34 @@ func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big
 	return g.MustCommit(db)
 }
 
-// DefaultGenesisBlock returns the Ethereum main net genesis block.
-func DefaultGenesisBlock() *Genesis {
+// MainnetPrimeGenesisBlock returns the Ethereum main net genesis block.
+func MainnetPrimeGenesisBlock() *Genesis {
 	return &Genesis{
-		Config:     params.MainnetChainConfig,
+		Config:     params.MainnetPrimeChainConfig,
+		Nonce:      66,
+		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
+		GasLimit:   500000,
+		Difficulty: big.NewInt(1717986918400),
+		Alloc:      decodePrealloc(mainnetAllocData),
+	}
+}
+
+// MainnetPrimeGenesisBlock returns the Ethereum main net genesis block.
+func MainnetRegionGenesisBlock(regionParams *params.ChainConfig) *Genesis {
+	return &Genesis{
+		Config:     regionParams,
+		Nonce:      66,
+		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
+		GasLimit:   50000,
+		Difficulty: big.NewInt(171798691840),
+		Alloc:      decodePrealloc(mainnetAllocData),
+	}
+}
+
+// MainnetPrimeGenesisBlock returns the Ethereum main net genesis block.
+func MainnetZoneGenesisBlock(regionParams *params.ChainConfig) *Genesis {
+	return &Genesis{
+		Config:     regionParams,
 		Nonce:      66,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
 		GasLimit:   5000,
@@ -372,42 +388,6 @@ func DefaultRopstenGenesisBlock() *Genesis {
 		GasLimit:   16777216,
 		Difficulty: big.NewInt(1048576),
 		Alloc:      decodePrealloc(ropstenAllocData),
-	}
-}
-
-// DefaultRinkebyGenesisBlock returns the Rinkeby network genesis block.
-func DefaultRinkebyGenesisBlock() *Genesis {
-	return &Genesis{
-		Config:     params.RinkebyChainConfig,
-		Timestamp:  1492009146,
-		ExtraData:  hexutil.MustDecode("0x52657370656374206d7920617574686f7269746168207e452e436172746d616e42eb768f2244c8811c63729a21a3569731535f067ffc57839b00206d1ad20c69a1981b489f772031b279182d99e65703f0076e4812653aab85fca0f00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"),
-		GasLimit:   4700000,
-		Difficulty: big.NewInt(1),
-		Alloc:      decodePrealloc(rinkebyAllocData),
-	}
-}
-
-// DefaultGoerliGenesisBlock returns the Görli network genesis block.
-func DefaultGoerliGenesisBlock() *Genesis {
-	return &Genesis{
-		Config:     params.GoerliChainConfig,
-		Timestamp:  1548854791,
-		ExtraData:  hexutil.MustDecode("0x22466c6578692069732061207468696e6722202d204166726900000000000000e0a2bd4258d2768837baa26a28fe71dc079f84c70000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"),
-		GasLimit:   10485760,
-		Difficulty: big.NewInt(1),
-		Alloc:      decodePrealloc(goerliAllocData),
-	}
-}
-
-func DefaultCalaverasGenesisBlock() *Genesis {
-	// Full genesis: https://gist.github.com/holiman/c6ed9269dce28304ad176314caa75e97
-	return &Genesis{
-		Config:     params.CalaverasChainConfig,
-		Timestamp:  0x60b3877f,
-		ExtraData:  hexutil.MustDecode("0x00000000000000000000000000000000000000000000000000000000000000005211cea3870c7ba7c6c44b185e62eecdb864cd8c560228ce57d31efbf64c200b2c200aacec78cf17a7148e784fe95a7a750335f8b9572ee28d72e7650000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"),
-		GasLimit:   0x47b760,
-		Difficulty: big.NewInt(1),
-		Alloc:      decodePrealloc(calaverasAllocData),
 	}
 }
 

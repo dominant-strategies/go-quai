@@ -253,7 +253,7 @@ func (p *Pruner) Prune(root common.Hash) error {
 		// Retrieve all snapshot layers from the current HEAD.
 		// In theory there are 128 difflayers + 1 disk layer present,
 		// so 128 diff layers are expected to be returned.
-		layers = p.snaptree.Snapshots(p.headHeader.Root, 128, true)
+		layers = p.snaptree.Snapshots(p.headHeader.Root[types.QuaiNetworkContext], 128, true)
 		if len(layers) != 128 {
 			// Reject if the accumulated diff layers are less than 128. It
 			// means in most of normal cases, there is no associated state
@@ -295,7 +295,7 @@ func (p *Pruner) Prune(root common.Hash) error {
 		}
 	} else {
 		if len(layers) > 0 {
-			log.Info("Selecting bottom-most difflayer as the pruning target", "root", root, "height", p.headHeader.Number.Uint64()-127)
+			log.Info("Selecting bottom-most difflayer as the pruning target", "root", root, "height", p.headHeader.Number[types.QuaiNetworkContext].Uint64()-127)
 		} else {
 			log.Info("Selecting user-specified state as the pruning target", "root", root)
 		}

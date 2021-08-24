@@ -42,6 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
@@ -146,18 +147,6 @@ var (
 	MainnetFlag = cli.BoolFlag{
 		Name:  "mainnet",
 		Usage: "Ethereum mainnet",
-	}
-	GoerliFlag = cli.BoolFlag{
-		Name:  "goerli",
-		Usage: "Görli network: pre-configured proof-of-authority test network",
-	}
-	CalaverasFlag = cli.BoolFlag{
-		Name:  "calaveras",
-		Usage: "Calaveras network: pre-configured proof-of-authority shortlived test network.",
-	}
-	RinkebyFlag = cli.BoolFlag{
-		Name:  "rinkeby",
-		Usage: "Rinkeby network: pre-configured proof-of-authority test network",
 	}
 	RopstenFlag = cli.BoolFlag{
 		Name:  "ropsten",
@@ -765,6 +754,17 @@ var (
 		Name:  "catalyst",
 		Usage: "Catalyst mode (eth2 integration testing)",
 	}
+
+	RegionFlag = cli.IntFlag{
+		Name:  "region",
+		Usage: "Quai Region flag",
+		Value: ethconfig.Defaults.Region,
+	}
+	ZoneFlag = cli.IntFlag{
+		Name:  "zone",
+		Usage: "Quai Zone flag",
+		Value: ethconfig.Defaults.Zone,
+	}
 )
 
 // MakeDataDir retrieves the currently requested data directory, terminating
@@ -777,14 +777,15 @@ func MakeDataDir(ctx *cli.Context) string {
 			// Ropsten database in `testnet` instead of `ropsten`.
 			return filepath.Join(path, "ropsten")
 		}
-		if ctx.GlobalBool(RinkebyFlag.Name) {
-			return filepath.Join(path, "rinkeby")
+		if ctx.GlobalIsSet(RegionFlag.Name) && !ctx.GlobalIsSet(ZoneFlag.Name) {
+			dir := node.QuaiRegionDataDir(strconv.Itoa(ctx.GlobalInt(RegionFlag.Name)))
+			log.Info("Setting dir path", dir)
+			return dir
 		}
-		if ctx.GlobalBool(GoerliFlag.Name) {
-			return filepath.Join(path, "goerli")
-		}
-		if ctx.GlobalBool(CalaverasFlag.Name) {
-			return filepath.Join(path, "calaveras")
+		if ctx.GlobalIsSet(RegionFlag.Name) && ctx.GlobalIsSet(ZoneFlag.Name) {
+			dir := node.QuaiZoneDataDir(strconv.Itoa(ctx.GlobalInt(RegionFlag.Name)), strconv.Itoa(ctx.GlobalInt(ZoneFlag.Name)))
+			log.Info("Setting dir path", dir)
+			return dir
 		}
 		return path
 	}
@@ -834,12 +835,6 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 		urls = SplitAndTrim(ctx.GlobalString(BootnodesFlag.Name))
 	case ctx.GlobalBool(RopstenFlag.Name):
 		urls = params.RopstenBootnodes
-	case ctx.GlobalBool(RinkebyFlag.Name):
-		urls = params.RinkebyBootnodes
-	case ctx.GlobalBool(GoerliFlag.Name):
-		urls = params.GoerliBootnodes
-	case ctx.GlobalBool(CalaverasFlag.Name):
-		urls = params.CalaverasBootnodes
 	case cfg.BootstrapNodes != nil:
 		return // already set, don't apply defaults.
 	}
@@ -1279,12 +1274,14 @@ func setDataDir(ctx *cli.Context, cfg *node.Config) {
 		}
 
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "ropsten")
-	case ctx.GlobalBool(RinkebyFlag.Name) && cfg.DataDir == node.DefaultDataDir():
-		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "rinkeby")
-	case ctx.GlobalBool(GoerliFlag.Name) && cfg.DataDir == node.DefaultDataDir():
-		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "goerli")
-	case ctx.GlobalBool(CalaverasFlag.Name) && cfg.DataDir == node.DefaultDataDir():
-		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "calaveras")
+	case ctx.GlobalIsSet(RegionFlag.Name) && !ctx.GlobalIsSet(ZoneFlag.Name):
+		dir := node.QuaiRegionDataDir(strconv.Itoa(ctx.GlobalInt(RegionFlag.Name)))
+		log.Info("Setting dir path", dir)
+		cfg.DataDir = dir
+	case ctx.GlobalIsSet(RegionFlag.Name) && ctx.GlobalIsSet(ZoneFlag.Name):
+		dir := node.QuaiZoneDataDir(strconv.Itoa(ctx.GlobalInt(RegionFlag.Name)), strconv.Itoa(ctx.GlobalInt(ZoneFlag.Name)))
+		log.Info("Setting dir path", dir)
+		cfg.DataDir = dir
 	}
 }
 
@@ -1470,7 +1467,7 @@ func CheckExclusive(ctx *cli.Context, args ...interface{}) {
 // SetEthConfig applies eth-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Avoid conflicting network flags
-	CheckExclusive(ctx, MainnetFlag, DeveloperFlag, RopstenFlag, RinkebyFlag, GoerliFlag, CalaverasFlag)
+	CheckExclusive(ctx, MainnetFlag, DeveloperFlag, RopstenFlag)
 	CheckExclusive(ctx, LightServeFlag, SyncModeFlag, "light")
 	CheckExclusive(ctx, DeveloperFlag, ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer
 	if ctx.GlobalString(GCModeFlag.Name) == "archive" && ctx.GlobalUint64(TxLookupLimitFlag.Name) != 0 {
@@ -1603,31 +1600,28 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1
 		}
-		cfg.Genesis = core.DefaultGenesisBlock()
-		SetDNSDiscoveryDefaults(cfg, params.MainnetGenesisHash)
+		cfg.Genesis = core.MainnetPrimeGenesisBlock()
+		SetDNSDiscoveryDefaults(cfg, params.MainnetPrimeGenesisHash)
 	case ctx.GlobalBool(RopstenFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 3
 		}
 		cfg.Genesis = core.DefaultRopstenGenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, params.RopstenGenesisHash)
-	case ctx.GlobalBool(RinkebyFlag.Name):
+	case ctx.GlobalIsSet(RegionFlag.Name) && !ctx.GlobalIsSet(ZoneFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 4
+			cfg.NetworkId = params.MainnetRegionChainConfigs[ctx.GlobalInt(RegionFlag.Name)-1].ChainID.Uint64()
 		}
-		cfg.Genesis = core.DefaultRinkebyGenesisBlock()
-		SetDNSDiscoveryDefaults(cfg, params.RinkebyGenesisHash)
-	case ctx.GlobalBool(GoerliFlag.Name):
+		cfg.Genesis = core.MainnetRegionGenesisBlock(&params.MainnetRegionChainConfigs[ctx.GlobalInt(RegionFlag.Name)-1])
+		types.QuaiNetworkContext = cfg.Genesis.Config.Context
+		SetDNSDiscoveryDefaults(cfg, params.MainnetPrimeGenesisHash)
+	case ctx.GlobalIsSet(RegionFlag.Name) && ctx.GlobalIsSet(ZoneFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 5
+			cfg.NetworkId = params.MainnetZoneChainConfigs[ctx.GlobalInt(RegionFlag.Name)-1][ctx.GlobalInt(ZoneFlag.Name)-1].ChainID.Uint64()
 		}
-		cfg.Genesis = core.DefaultGoerliGenesisBlock()
-		SetDNSDiscoveryDefaults(cfg, params.GoerliGenesisHash)
-	case ctx.GlobalBool(CalaverasFlag.Name):
-		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 123 // https://gist.github.com/holiman/c5697b041b3dc18c50a5cdd382cbdd16
-		}
-		cfg.Genesis = core.DefaultCalaverasGenesisBlock()
+		cfg.Genesis = core.MainnetZoneGenesisBlock(&params.MainnetZoneChainConfigs[ctx.GlobalInt(RegionFlag.Name)-1][ctx.GlobalInt(ZoneFlag.Name)-1])
+		types.QuaiNetworkContext = cfg.Genesis.Config.Context
+		SetDNSDiscoveryDefaults(cfg, params.MainnetPrimeGenesisHash)
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1337
@@ -1677,7 +1671,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		}
 	default:
 		if cfg.NetworkId == 1 {
-			SetDNSDiscoveryDefaults(cfg, params.MainnetGenesisHash)
+			SetDNSDiscoveryDefaults(cfg, params.MainnetPrimeGenesisHash)
 		}
 	}
 }
@@ -1809,19 +1803,14 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly bool) ethdb.
 func MakeGenesis(ctx *cli.Context) *core.Genesis {
 	var genesis *core.Genesis
 	switch {
-	case ctx.GlobalBool(MainnetFlag.Name):
-		genesis = core.DefaultGenesisBlock()
-	case ctx.GlobalBool(RopstenFlag.Name):
-		genesis = core.DefaultRopstenGenesisBlock()
-	case ctx.GlobalBool(RinkebyFlag.Name):
-		genesis = core.DefaultRinkebyGenesisBlock()
-	case ctx.GlobalBool(GoerliFlag.Name):
-		genesis = core.DefaultGoerliGenesisBlock()
-	case ctx.GlobalBool(CalaverasFlag.Name):
-		genesis = core.DefaultCalaverasGenesisBlock()
-	case ctx.GlobalBool(DeveloperFlag.Name):
-		Fatalf("Developer chains are ephemeral")
+	case ctx.GlobalBool(RegionFlag.Name) && ctx.GlobalBool(ZoneFlag.Name):
+		genesis = core.MainnetZoneGenesisBlock(&params.MainnetZoneChainConfigs[ctx.GlobalInt(RegionFlag.Name)-1][ctx.GlobalInt(ZoneFlag.Name)-1])
+	case ctx.GlobalBool(RegionFlag.Name) && !ctx.GlobalBool(ZoneFlag.Name):
+		genesis = core.MainnetRegionGenesisBlock(&params.MainnetRegionChainConfigs[ctx.GlobalInt(RegionFlag.Name)-1])
+	default:
+		genesis = core.MainnetPrimeGenesisBlock()
 	}
+	types.QuaiNetworkContext = genesis.Config.Context
 	return genesis
 }
 

@@ -1149,7 +1149,7 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 	// because of another transaction (e.g. higher gas price).
 	if reset != nil {
 		pool.demoteUnexecutables()
-		if reset.newHead != nil && pool.chainconfig.IsLondon(new(big.Int).Add(reset.newHead.Number, big.NewInt(1))) {
+		if reset.newHead != nil && pool.chainconfig.IsLondon(new(big.Int).Add(reset.newHead.Number[types.QuaiNetworkContext], big.NewInt(1))) {
 			pendingBaseFee := misc.CalcBaseFee(pool.chainconfig, reset.newHead)
 			pool.priced.SetBaseFee(pendingBaseFee)
 		}
@@ -1188,10 +1188,10 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	// If we're reorging an old state, reinject all dropped transactions
 	var reinject types.Transactions
 
-	if oldHead != nil && oldHead.Hash() != newHead.ParentHash {
+	if oldHead != nil && oldHead.Hash() != newHead.ParentHash[types.QuaiNetworkContext] {
 		// If the reorg is too deep, avoid doing it (will happen during fast sync)
-		oldNum := oldHead.Number.Uint64()
-		newNum := newHead.Number.Uint64()
+		oldNum := oldHead.Number[types.QuaiNetworkContext].Uint64()
+		newNum := newHead.Number[types.QuaiNetworkContext].Uint64()
 
 		if depth := uint64(math.Abs(float64(oldNum) - float64(newNum))); depth > 64 {
 			log.Debug("Skipping deep transaction reorg", "depth", depth)
@@ -1199,8 +1199,8 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 			// Reorg seems shallow enough to pull in all transactions into memory
 			var discarded, included types.Transactions
 			var (
-				rem = pool.chain.GetBlock(oldHead.Hash(), oldHead.Number.Uint64())
-				add = pool.chain.GetBlock(newHead.Hash(), newHead.Number.Uint64())
+				rem = pool.chain.GetBlock(oldHead.Hash(), oldHead.Number[types.QuaiNetworkContext].Uint64())
+				add = pool.chain.GetBlock(newHead.Hash(), newHead.Number[types.QuaiNetworkContext].Uint64())
 			)
 			if rem == nil {
 				// This can happen if a setHead is performed, where we simply discard the old
@@ -1252,14 +1252,14 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	if newHead == nil {
 		newHead = pool.chain.CurrentBlock().Header() // Special case during testing
 	}
-	statedb, err := pool.chain.StateAt(newHead.Root)
+	statedb, err := pool.chain.StateAt(newHead.Root[types.QuaiNetworkContext])
 	if err != nil {
 		log.Error("Failed to reset txpool state", "err", err)
 		return
 	}
 	pool.currentState = statedb
 	pool.pendingNonces = newTxNoncer(statedb)
-	pool.currentMaxGas = newHead.GasLimit
+	pool.currentMaxGas = newHead.GasLimit[types.QuaiNetworkContext]
 
 	// Inject any transactions discarded due to reorgs
 	log.Debug("Reinjecting stale transactions", "count", len(reinject))
@@ -1267,7 +1267,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	pool.addTxsLocked(reinject, false)
 
 	// Update all fork indicator by next pending block number.
-	next := new(big.Int).Add(newHead.Number, big.NewInt(1))
+	next := new(big.Int).Add(newHead.Number[types.QuaiNetworkContext], big.NewInt(1))
 	pool.istanbul = pool.chainconfig.IsIstanbul(next)
 	pool.eip2718 = pool.chainconfig.IsBerlin(next)
 	pool.eip1559 = pool.chainconfig.IsLondon(next)

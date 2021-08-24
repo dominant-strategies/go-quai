@@ -92,6 +92,8 @@ var Defaults = Config{
 	RPCGasCap:   50000000,
 	GPO:         FullNodeGPO,
 	RPCTxFeeCap: 1, // 1 ether
+	Region:      0,
+	Zone:        0,
 }
 
 func init() {
@@ -201,6 +203,12 @@ type Config struct {
 
 	// Berlin block override (TODO: remove after the fork)
 	OverrideLondon *big.Int `toml:",omitempty"`
+
+	// Region location options
+	Region int
+
+	// Zone location options
+	Zone int
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.

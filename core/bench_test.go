@@ -138,10 +138,10 @@ func genTxRing(naccounts int) func(int, *BlockGen) {
 func genUncles(i int, gen *BlockGen) {
 	if i >= 6 {
 		b2 := gen.PrevBlock(i - 6).Header()
-		b2.Extra = []byte("foo")
+		b2.Extra[0] = []byte("foo")
 		gen.AddUncle(b2)
 		b3 := gen.PrevBlock(i - 6).Header()
-		b3.Extra = []byte("bar")
+		b3.Extra[0] = []byte("bar")
 		gen.AddUncle(b3)
 	}
 }
@@ -167,8 +167,9 @@ func benchInsertChain(b *testing.B, disk bool, gen func(int, *BlockGen)) {
 	// Generate a chain of b.N blocks using the supplied block
 	// generator function.
 	gspec := Genesis{
-		Config: params.TestChainConfig,
-		Alloc:  GenesisAlloc{benchRootAddr: {Balance: benchRootFunds}},
+		Config:   params.TestChainConfig,
+		Alloc:    GenesisAlloc{benchRootAddr: {Balance: benchRootFunds}},
+		GasLimit: 1000000,
 	}
 	genesis := gspec.MustCommit(db)
 	chain, _ := GenerateChain(gspec.Config, genesis, ethash.NewFaker(), db, b.N, gen)
@@ -227,10 +228,10 @@ func makeChainForBench(db ethdb.Database, full bool, count uint64) {
 	var hash common.Hash
 	for n := uint64(0); n < count; n++ {
 		header := &types.Header{
-			Coinbase:    common.Address{},
-			Number:      big.NewInt(int64(n)),
-			ParentHash:  hash,
-			Difficulty:  big.NewInt(1),
+			Coinbase:    []common.Address{common.Address{}, common.Address{}, common.Address{}},
+			Number:      []*big.Int{big.NewInt(int64(n)), big.NewInt(int64(n)), big.NewInt(int64(n))},
+			ParentHash:  []common.Hash{hash, hash, hash},
+			Difficulty:  []*big.Int{big.NewInt(1), big.NewInt(1), big.NewInt(1)},
 			UncleHash:   types.EmptyUncleHash,
 			TxHash:      types.EmptyRootHash,
 			ReceiptHash: types.EmptyRootHash,

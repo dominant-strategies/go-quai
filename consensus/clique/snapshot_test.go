@@ -54,7 +54,7 @@ func (ap *testerAccountPool) checkpoint(header *types.Header, signers []string) 
 	}
 	sort.Sort(signersAscending(auths))
 	for i, auth := range auths {
-		copy(header.Extra[extraVanity+i*common.AddressLength:], auth.Bytes())
+		copy(header.Extra[types.QuaiNetworkContext][extraVanity+i*common.AddressLength:], auth.Bytes())
 	}
 }
 
@@ -82,7 +82,7 @@ func (ap *testerAccountPool) sign(header *types.Header, signer string) {
 	}
 	// Sign the header and embed the signature in extra data
 	sig, _ := crypto.Sign(SealHash(header).Bytes(), ap.accounts[signer])
-	copy(header.Extra[len(header.Extra)-extraSeal:], sig)
+	copy(header.Extra[types.QuaiNetworkContext][len(header.Extra[types.QuaiNetworkContext])-extraSeal:], sig)
 }
 
 // testerVote represents a single block signed by a parcitular account, where
@@ -428,14 +428,14 @@ func TestClique(t *testing.T) {
 			// Get the header and prepare it for signing
 			header := block.Header()
 			if j > 0 {
-				header.ParentHash = blocks[j-1].Hash()
+				header.ParentHash[types.QuaiNetworkContext] = blocks[j-1].Hash()
 			}
-			header.Extra = make([]byte, extraVanity+extraSeal)
+			header.Extra[types.QuaiNetworkContext] = make([]byte, extraVanity+extraSeal)
 			if auths := tt.votes[j].checkpoint; auths != nil {
-				header.Extra = make([]byte, extraVanity+len(auths)*common.AddressLength+extraSeal)
+				header.Extra[types.QuaiNetworkContext] = make([]byte, extraVanity+len(auths)*common.AddressLength+extraSeal)
 				accounts.checkpoint(header, auths)
 			}
-			header.Difficulty = diffInTurn // Ignored, we just need a valid number
+			header.Difficulty[types.QuaiNetworkContext] = diffInTurn // Ignored, we just need a valid number
 
 			// Generate the signature, embed it into the header and the block
 			accounts.sign(header, tt.votes[j].signer)
