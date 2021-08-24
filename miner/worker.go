@@ -587,10 +587,6 @@ func (w *worker) taskLoop() {
 			w.updateSnapshot()
 			log.Info("Sending pending block to feed")
 			w.pendingBlockFeed.Send(w.snapshotBlock.Header())
-
-			// if err := w.engine.Seal(w.chain, task.block, w.resultCh, stopCh); err != nil {
-			// 	log.Warn("Block sealing failed", "err", err)
-			// }
 		case <-w.exitCh:
 			interrupt()
 			return

@@ -187,6 +187,152 @@ search:
 	runtime.KeepAlive(dataset)
 }
 
+// Seal implements consensus.Engine, attempting to find a nonce that satisfies
+// the block's difficulty requirements.
+func (ethash *Ethash) MergedMineSeal(header *types.Header, results chan<- *types.Header, stop <-chan struct{}) error {
+	// If we're running a fake PoW, simply return a 0 nonce immediately
+	if ethash.config.PowMode == ModeFake || ethash.config.PowMode == ModeFullFake {
+		header.Nonce, header.MixDigest = types.BlockNonce{}, []common.Hash{common.Hash{}, common.Hash{}, common.Hash{}}
+		select {
+		case results <- header:
+		default:
+			ethash.config.Log.Warn("Sealing result is not read by miner", "mode", "fake", "sealhash", ethash.SealHash(header))
+		}
+		return nil
+	}
+	// If we're running a shared PoW, delegate sealing to it
+	if ethash.shared != nil {
+		return ethash.shared.MergedMineSeal(header, results, stop)
+	}
+	// Create a runner and the multiple search threads it directs
+	abort := make(chan struct{})
+
+	ethash.lock.Lock()
+	threads := ethash.threads
+	if ethash.rand == nil {
+		seed, err := crand.Int(crand.Reader, big.NewInt(math.MaxInt64))
+		if err != nil {
+			ethash.lock.Unlock()
+			return err
+		}
+		ethash.rand = rand.New(rand.NewSource(seed.Int64()))
+	}
+	ethash.lock.Unlock()
+	if threads == 0 {
+		threads = runtime.NumCPU()
+	}
+	if threads < 0 {
+		threads = 0 // Allows disabling local mining without extra logic around local/remote
+	}
+	var (
+		pend   sync.WaitGroup
+		locals = make(chan *types.Header)
+	)
+	for i := 0; i < threads; i++ {
+		pend.Add(1)
+		go func(id int, nonce uint64) {
+			defer pend.Done()
+			ethash.mergedMine(header, id, nonce, abort, locals)
+		}(i, uint64(ethash.rand.Int63()))
+	}
+	// Wait until sealing is terminated or a nonce is found
+	go func() {
+		var result *types.Header
+		select {
+		case <-stop:
+			// Outside abort, stop all miner threads
+			close(abort)
+		case result = <-locals:
+			// One of the threads found a block, abort all others
+			select {
+			case results <- result:
+			default:
+				ethash.config.Log.Warn("Sealing result is not read by miner", "mode", "local", "sealhash", ethash.SealHash(header))
+			}
+			close(abort)
+		case <-ethash.update:
+			// Thread count was changed on user request, restart
+			close(abort)
+			if err := ethash.MergedMineSeal(header, results, stop); err != nil {
+				ethash.config.Log.Error("Failed to restart sealing after update", "err", err)
+			}
+		}
+		// Wait for all miners to terminate and return the block
+		pend.Wait()
+	}()
+	return nil
+}
+
+// mine is the actual proof-of-work miner that searches for a nonce starting from
+// seed that results in correct final block difficulty.
+func (ethash *Ethash) mergedMine(header *types.Header, id int, seed uint64, abort chan struct{}, found chan *types.Header) {
+	// Extract some data from the header
+	var (
+		hash    = ethash.SealHash(header).Bytes()
+		targets = make([]*big.Int, 3)
+		number  = header.Number[0].Uint64()
+		dataset = ethash.dataset(number, false)
+	)
+
+	if header.Difficulty[0] != nil {
+		targets[0] = new(big.Int).Div(two256, header.Difficulty[0])
+	}
+	if header.Difficulty[1] != nil {
+		targets[1] = new(big.Int).Div(two256, header.Difficulty[1])
+	}
+	if header.Difficulty[2] != nil {
+		targets[2] = new(big.Int).Div(two256, header.Difficulty[2])
+	}
+
+	// Start generating random nonces until we abort or find a good one
+	var (
+		attempts  = int64(0)
+		nonce     = seed
+		powBuffer = new(big.Int)
+	)
+	logger := ethash.config.Log.New("miner", id)
+	logger.Trace("Started ethash search for new nonces", "seed", seed)
+search:
+	for {
+		select {
+		case <-abort:
+			// Mining terminated, update stats and abort
+			logger.Trace("Ethash nonce search aborted", "attempts", nonce-seed)
+			ethash.hashrate.Mark(attempts)
+			break search
+
+		default:
+			// We don't have to update hash rate on every nonce, so update after after 2^X nonces
+			attempts++
+			if (attempts % (1 << 15)) == 0 {
+				ethash.hashrate.Mark(attempts)
+				attempts = 0
+			}
+			// Compute the PoW value of this nonce
+			digest, result := hashimotoFull(dataset.dataset, hash, nonce)
+			if powBuffer.SetBytes(result).Cmp(targets[2]) <= 0 {
+				// Correct nonce found, create a new header with it
+				header = types.CopyHeader(header)
+				header.Nonce = types.EncodeNonce(nonce)
+				header.MixDigest[0] = common.BytesToHash(digest)
+
+				// Seal and return a block (if still needed)
+				select {
+				case found <- header:
+					logger.Trace("Ethash nonce found and reported", "attempts", nonce-seed, "nonce", nonce)
+				case <-abort:
+					logger.Trace("Ethash nonce found but discarded", "attempts", nonce-seed, "nonce", nonce)
+				}
+				break search
+			}
+			nonce++
+		}
+	}
+	// Datasets are unmapped in a finalizer. Ensure that the dataset stays live
+	// during sealing so it's not unmapped while being read.
+	runtime.KeepAlive(dataset)
+}
+
 // This is the timeout for HTTP requests to notify external miners.
 const remoteSealerTimeout = 1 * time.Second
 
