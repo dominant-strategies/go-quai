@@ -53,7 +53,7 @@ func TestHeaderVerification(t *testing.T) {
 				engine := ethash.NewFaker()
 				_, results = engine.VerifyHeaders(chain, []*types.Header{headers[i]}, []bool{true})
 			} else {
-				engine := ethash.NewFakeFailer(headers[i].Number[0].Uint64())
+				engine := ethash.NewFakeFailer(headers[i].Number[types.QuaiNetworkContext].Uint64())
 				_, results = engine.VerifyHeaders(chain, []*types.Header{headers[i]}, []bool{true})
 			}
 			// Wait for the verification result

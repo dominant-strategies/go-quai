@@ -67,7 +67,7 @@ func CalcDifficultyFrontierU256(time uint64, parent *types.Header) *big.Int {
 	// 'pdiff' now contains:
 	// pdiff + pdiff / 2048 * (1 if time - ptime < 13 else -1)
 
-	if periodCount := (parent.Number[0].Uint64() + 1) / expDiffPeriodUint; periodCount > 1 {
+	if periodCount := (parent.Number[types.QuaiNetworkContext].Uint64() + 1) / expDiffPeriodUint; periodCount > 1 {
 		// diff = diff + 2^(periodCount - 2)
 		expDiff := adjust.SetOne()
 		expDiff.Lsh(expDiff, uint(periodCount-2)) // expdiff: 2 ^ (periodCount -2)
@@ -121,7 +121,7 @@ func CalcDifficultyHomesteadU256(time uint64, parent *types.Header) *big.Int {
 	}
 	// for the exponential factor, a.k.a "the bomb"
 	// diff = diff + 2^(periodCount - 2)
-	if periodCount := (1 + parent.Number[0].Uint64()) / expDiffPeriodUint; periodCount > 1 {
+	if periodCount := (1 + parent.Number[types.QuaiNetworkContext].Uint64()) / expDiffPeriodUint; periodCount > 1 {
 		expFactor := adjust.Lsh(adjust.SetOne(), uint(periodCount-2))
 		pDiff.Add(pDiff, expFactor)
 	}
@@ -146,7 +146,7 @@ func MakeDifficultyCalculatorU256(bombDelay *big.Int) func(time uint64, parent *
 		*/
 		x := (time - parent.Time) / 9 // (block_timestamp - parent_timestamp) // 9
 		c := uint64(1)                // if parent.unclehash == emptyUncleHashHash
-		if types.IsEqualHashSlice(parent.UncleHash, types.EmptyUncleHash) {
+		if !types.IsEqualHashSlice(parent.UncleHash, types.EmptyUncleHash) {
 			c = 2
 		}
 		xNeg := x >= c
@@ -178,7 +178,7 @@ func MakeDifficultyCalculatorU256(bombDelay *big.Int) func(time uint64, parent *
 		}
 		// calculate a fake block number for the ice-age delay
 		// Specification: https://eips.ethereum.org/EIPS/eip-1234
-		var pNum = parent.Number[0].Uint64()
+		var pNum = parent.Number[types.QuaiNetworkContext].Uint64()
 		if pNum >= bombDelayFromParent {
 			if fakeBlockNumber := pNum - bombDelayFromParent; fakeBlockNumber >= 2*expDiffPeriodUint {
 				z.SetOne()

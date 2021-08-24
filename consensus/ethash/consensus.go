@@ -214,7 +214,7 @@ func (ethash *Ethash) VerifyUncles(chain consensus.ChainReader, block *types.Blo
 		}
 		ancestors[parent] = ancestorHeader
 		// If the ancestor doesn't have any uncles, we don't have to iterate them
-		if types.IsEqualHashSlice(ancestorHeader.UncleHash, types.EmptyUncleHash) {
+		if !types.IsEqualHashSlice(ancestorHeader.UncleHash, types.EmptyUncleHash) {
 			// Need to add those uncles to the banned list too
 			ancestor := chain.GetBlock(parent, number)
 			if ancestor == nil {
@@ -409,8 +409,8 @@ func makeDifficultyCalculator(bombDelay *big.Int) func(time uint64, parent *type
 		// calculate a fake block number for the ice-age delay
 		// Specification: https://eips.ethereum.org/EIPS/eip-1234
 		fakeBlockNumber := new(big.Int)
-		if parent.Number[0].Cmp(bombDelayFromParent) >= 0 {
-			fakeBlockNumber = fakeBlockNumber.Sub(parent.Number[0], bombDelayFromParent)
+		if parent.Number[types.QuaiNetworkContext].Cmp(bombDelayFromParent) >= 0 {
+			fakeBlockNumber = fakeBlockNumber.Sub(parent.Number[types.QuaiNetworkContext], bombDelayFromParent)
 		}
 		// for the exponential factor
 		periodCount := fakeBlockNumber
@@ -467,7 +467,7 @@ func calcDifficultyHomestead(time uint64, parent *types.Header) *big.Int {
 		x.Set(params.MinimumDifficulty)
 	}
 	// for the exponential factor
-	periodCount := new(big.Int).Add(parent.Number[0], big1)
+	periodCount := new(big.Int).Add(parent.Number[types.QuaiNetworkContext], big1)
 	periodCount.Div(periodCount, expDiffPeriod)
 
 	// the exponential factor, commonly referred to as "the bomb"
@@ -506,7 +506,7 @@ func calcDifficultyFrontier(time uint64, parent *types.Header) *big.Int {
 		diff.Set(params.MinimumDifficulty)
 	}
 
-	periodCount := new(big.Int).Add(parent.Number[0], big1)
+	periodCount := new(big.Int).Add(parent.Number[types.QuaiNetworkContext], big1)
 	periodCount.Div(periodCount, expDiffPeriod)
 	if periodCount.Cmp(big1) > 0 {
 		// diff = diff + 2^(periodCount - 2)
