@@ -265,6 +265,28 @@ func NewBlockWithHeader(header *Header) *Block {
 	return &Block{header: CopyHeader(header)}
 }
 
+// NewEmptyHeader returns a header with intialized fields ContextDepth deep
+func NewEmptyHeader() *Header {
+	header := &Header{
+		ParentHash:  make([]common.Hash, ContextDepth),
+		Number:      make([]*big.Int, ContextDepth),
+		Extra:       make([][]byte, ContextDepth),
+		Time:        uint64(0),
+		BaseFee:     make([]*big.Int, ContextDepth),
+		GasLimit:    make([]uint64, ContextDepth),
+		Coinbase:    make([]common.Address, ContextDepth),
+		Difficulty:  make([]*big.Int, ContextDepth),
+		Root:        make([]common.Hash, ContextDepth),
+		TxHash:      make([]common.Hash, ContextDepth),
+		UncleHash:   make([]common.Hash, ContextDepth),
+		ReceiptHash: make([]common.Hash, ContextDepth),
+		GasUsed:     make([]uint64, ContextDepth),
+		Bloom:       make([]Bloom, ContextDepth),
+	}
+
+	return header
+}
+
 // CopyHeader creates a deep copy of a block header to prevent side effects from
 // modifying a header variable.
 func CopyHeader(h *Header) *Header {

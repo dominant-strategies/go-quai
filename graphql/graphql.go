@@ -638,10 +638,10 @@ func (b *Block) Nonce(ctx context.Context) (hexutil.Bytes, error) {
 	return header.Nonce[:], nil
 }
 
-func (b *Block) MixHash(ctx context.Context) (common.Hash, error) {
+func (b *Block) MixHash(ctx context.Context) ([]common.Hash, error) {
 	header, err := b.resolveHeader(ctx)
 	if err != nil {
-		return common.Hash{}, err
+		return []common.Hash{common.Hash{}, common.Hash{}, common.Hash{}}, err
 	}
 	return header.MixDigest, nil
 }
