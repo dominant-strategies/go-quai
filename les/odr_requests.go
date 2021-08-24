@@ -116,10 +116,10 @@ func (r *BlockRequest) Validate(db ethdb.Database, msg *Msg) error {
 	if r.Header == nil {
 		return errHeaderUnavailable
 	}
-	if r.Header.TxHash != types.DeriveSha(types.Transactions(body.Transactions), trie.NewStackTrie(nil)) {
+	if r.Header.TxHash[types.QuaiNetworkContext] != types.DeriveSha(types.Transactions(body.Transactions), trie.NewStackTrie(nil)) {
 		return errTxHashMismatch
 	}
-	if r.Header.UncleHash != types.CalcUncleHash(body.Uncles) {
+	if r.Header.UncleHash[types.QuaiNetworkContext] != types.CalcUncleHash(body.Uncles) {
 		return errUncleHashMismatch
 	}
 	// Validations passed, encode and store RLP
@@ -174,7 +174,7 @@ func (r *ReceiptsRequest) Validate(db ethdb.Database, msg *Msg) error {
 	if r.Header == nil {
 		return errHeaderUnavailable
 	}
-	if r.Header.ReceiptHash != types.DeriveSha(receipt, trie.NewStackTrie(nil)) {
+	if r.Header.ReceiptHash[types.QuaiNetworkContext] != types.DeriveSha(receipt, trie.NewStackTrie(nil)) {
 		return errReceiptHashMismatch
 	}
 	// Validations passed, store and return
@@ -386,7 +386,7 @@ func (r *ChtRequest) Validate(db ethdb.Database, msg *Msg) error {
 	if node.Hash != header.Hash() {
 		return errCHTHashMismatch
 	}
-	if r.BlockNum != header.Number.Uint64() {
+	if r.BlockNum != header.Number[types.QuaiNetworkContext].Uint64() {
 		return errCHTNumberMismatch
 	}
 	// Verifications passed, store and return
