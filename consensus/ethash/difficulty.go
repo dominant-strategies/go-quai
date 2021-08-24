@@ -52,7 +52,7 @@ func CalcDifficultyFrontierU256(time uint64, parent *types.Header) *big.Int {
 		- num = block.number
 	*/
 
-	pDiff, _ := uint256.FromBig(parent.Difficulty[0]) // pDiff: pdiff
+	pDiff, _ := uint256.FromBig(parent.Difficulty[types.QuaiNetworkContext]) // pDiff: pdiff
 	adjust := pDiff.Clone()
 	adjust.Rsh(adjust, difficultyBoundDivisor) // adjust: pDiff / 2048
 
@@ -95,7 +95,7 @@ func CalcDifficultyHomesteadU256(time uint64, parent *types.Header) *big.Int {
 		- num = block.number
 	*/
 
-	pDiff, _ := uint256.FromBig(parent.Difficulty[0]) // pDiff: pdiff
+	pDiff, _ := uint256.FromBig(parent.Difficulty[types.QuaiNetworkContext]) // pDiff: pdiff
 	adjust := pDiff.Clone()
 	adjust.Rsh(adjust, difficultyBoundDivisor) // adjust: pDiff / 2048
 
@@ -161,11 +161,11 @@ func MakeDifficultyCalculatorU256(bombDelay *big.Int) func(time uint64, parent *
 		}
 		// parent_diff + (parent_diff / 2048 * max((2 if len(parent.uncles) else 1) - ((timestamp - parent.timestamp) // 9), -99))
 		y := new(uint256.Int)
-		y.SetFromBig(parent.Difficulty[0]) // y: p_diff
-		pDiff := y.Clone()                 // pdiff: p_diff
-		z := new(uint256.Int).SetUint64(x) //z : +-adj_factor (either pos or negative)
-		y.Rsh(y, difficultyBoundDivisor)   // y: p__diff / 2048
-		z.Mul(y, z)                        // z: (p_diff / 2048 ) * (+- adj_factor)
+		y.SetFromBig(parent.Difficulty[types.QuaiNetworkContext]) // y: p_diff
+		pDiff := y.Clone()                                        // pdiff: p_diff
+		z := new(uint256.Int).SetUint64(x)                        //z : +-adj_factor (either pos or negative)
+		y.Rsh(y, difficultyBoundDivisor)                          // y: p__diff / 2048
+		z.Mul(y, z)                                               // z: (p_diff / 2048 ) * (+- adj_factor)
 
 		if xNeg {
 			y.Sub(pDiff, z) // y: parent_diff + parent_diff/2048 * adjustment_factor

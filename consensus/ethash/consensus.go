@@ -392,7 +392,7 @@ func makeDifficultyCalculator(bombDelay *big.Int) func(time uint64, parent *type
 			x.Set(bigMinus99)
 		}
 		// If we do not have a parent difficulty, get the genesis difficulty
-		parentDifficulty := parent.Difficulty[0]
+		parentDifficulty := parent.Difficulty[types.QuaiNetworkContext]
 		if parentDifficulty == nil {
 			parentDifficulty = params.GenesisDifficulty
 		}
@@ -453,7 +453,7 @@ func calcDifficultyHomestead(time uint64, parent *types.Header) *big.Int {
 	if x.Cmp(bigMinus99) < 0 {
 		x.Set(bigMinus99)
 	}
-	parentDifficulty := parent.Difficulty[0]
+	parentDifficulty := parent.Difficulty[types.QuaiNetworkContext]
 	if parentDifficulty == nil {
 		parentDifficulty = params.GenesisDifficulty
 	}
@@ -485,7 +485,7 @@ func calcDifficultyHomestead(time uint64, parent *types.Header) *big.Int {
 // block's time and difficulty. The calculation uses the Frontier rules.
 func calcDifficultyFrontier(time uint64, parent *types.Header) *big.Int {
 	diff := new(big.Int)
-	parentDifficulty := parent.Difficulty[0]
+	parentDifficulty := parent.Difficulty[types.QuaiNetworkContext]
 	if parentDifficulty == nil {
 		return params.GenesisDifficulty
 	}

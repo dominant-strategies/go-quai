@@ -189,12 +189,16 @@ search:
 
 // Seal implements consensus.Engine, attempting to find a nonce that satisfies
 // the block's difficulty requirements.
-func (ethash *Ethash) MergedMineSeal(header *types.Header, results chan<- *types.Header, stop <-chan struct{}) error {
+func (ethash *Ethash) MergedMineSeal(header *types.Header, results chan<- *types.HeaderBundle, stop <-chan struct{}) error {
 	// If we're running a fake PoW, simply return a 0 nonce immediately
 	if ethash.config.PowMode == ModeFake || ethash.config.PowMode == ModeFullFake {
 		header.Nonce, header.MixDigest = types.BlockNonce{}, common.Hash{}
+		fakeHeaderBundle := &types.HeaderBundle{
+			Header:  header,
+			Context: 0,
+		}
 		select {
-		case results <- header:
+		case results <- fakeHeaderBundle:
 		default:
 			ethash.config.Log.Warn("Sealing result is not read by miner", "mode", "fake", "sealhash", ethash.SealHash(header))
 		}
@@ -226,7 +230,7 @@ func (ethash *Ethash) MergedMineSeal(header *types.Header, results chan<- *types
 	}
 	var (
 		pend   sync.WaitGroup
-		locals = make(chan *types.Header)
+		locals = make(chan *types.HeaderBundle)
 	)
 	for i := 0; i < threads; i++ {
 		pend.Add(1)
@@ -237,7 +241,7 @@ func (ethash *Ethash) MergedMineSeal(header *types.Header, results chan<- *types
 	}
 	// Wait until sealing is terminated or a nonce is found
 	go func() {
-		var result *types.Header
+		var result *types.HeaderBundle
 		select {
 		case <-stop:
 			// Outside abort, stop all miner threads
@@ -265,7 +269,7 @@ func (ethash *Ethash) MergedMineSeal(header *types.Header, results chan<- *types
 
 // mine is the actual proof-of-work miner that searches for a nonce starting from
 // seed that results in correct final block difficulty.
-func (ethash *Ethash) mergedMine(header *types.Header, id int, seed uint64, abort chan struct{}, found chan *types.Header) {
+func (ethash *Ethash) mergedMine(header *types.Header, id int, seed uint64, abort chan struct{}, found chan *types.HeaderBundle) {
 	// Extract some data from the header
 	var (
 		hash    = ethash.SealHash(header).Bytes()
@@ -315,10 +319,22 @@ search:
 				header = types.CopyHeader(header)
 				header.Nonce = types.EncodeNonce(nonce)
 				header.MixDigest = common.BytesToHash(digest)
+				foundType := 2
+				if powBuffer.SetBytes(result).Cmp(targets[1]) <= 0 {
+					foundType = 1
+				}
+				if powBuffer.SetBytes(result).Cmp(targets[0]) <= 0 {
+					foundType = 0
+				}
+
+				headerBundle := &types.HeaderBundle{
+					Header:  header,
+					Context: foundType,
+				}
 
 				// Seal and return a block (if still needed)
 				select {
-				case found <- header:
+				case found <- headerBundle:
 					logger.Trace("Ethash nonce found and reported", "attempts", nonce-seed, "nonce", nonce)
 				case <-abort:
 					logger.Trace("Ethash nonce found but discarded", "attempts", nonce-seed, "nonce", nonce)
