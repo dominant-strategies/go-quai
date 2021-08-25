@@ -164,7 +164,7 @@ func (evm *EVM) Interpreter() *EVMInterpreter {
 // parameters. It also handles any necessary value transfer required and takes
 // the necessary steps to create accounts and reverses the state in case of an
 // execution error or failed value transfer.
-func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int, toLocation []byte) (ret []byte, leftOverGas uint64, err error) {
+func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
 	if evm.Config.NoRecursion && evm.depth > 0 {
 		return nil, gas, nil
 	}
@@ -176,13 +176,6 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	if value.Sign() != 0 && !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
 		return nil, gas, ErrInsufficientBalance
 	}
-
-	// Do we update in Call?
-	if len(toLocation) > 0 {
-		evm.StateDB.SubBalance(caller.Address(), value)
-		return nil, gas, nil
-	}
-
 	snapshot := evm.StateDB.Snapshot()
 	p, isPrecompile := evm.precompile(addr)
 
