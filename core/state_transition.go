@@ -60,6 +60,7 @@ type StateTransition struct {
 	data       []byte
 	state      vm.StateDB
 	evm        *vm.EVM
+	toLocation []byte
 }
 
 // Message represents a message sent to a contract.
@@ -77,6 +78,7 @@ type Message interface {
 	CheckNonce() bool
 	Data() []byte
 	AccessList() types.AccessList
+	ToLocation() []byte
 }
 
 // ExecutionResult includes all output after executing given evm
@@ -158,15 +160,16 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation b
 // NewStateTransition initialises and returns a new state transition object.
 func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool) *StateTransition {
 	return &StateTransition{
-		gp:        gp,
-		evm:       evm,
-		msg:       msg,
-		gasPrice:  msg.GasPrice(),
-		gasFeeCap: msg.GasFeeCap(),
-		gasTipCap: msg.GasTipCap(),
-		value:     msg.Value(),
-		data:      msg.Data(),
-		state:     evm.StateDB,
+		gp:         gp,
+		evm:        evm,
+		msg:        msg,
+		gasPrice:   msg.GasPrice(),
+		gasFeeCap:  msg.GasFeeCap(),
+		gasTipCap:  msg.GasTipCap(),
+		value:      msg.Value(),
+		data:       msg.Data(),
+		toLocation: msg.ToLocation(),
+		state:      evm.StateDB,
 	}
 }
 
@@ -289,6 +292,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	istanbul := st.evm.ChainConfig().IsIstanbul(st.evm.Context.BlockNumber)
 	london := st.evm.ChainConfig().IsLondon(st.evm.Context.BlockNumber)
 	contractCreation := msg.To() == nil
+	externalTransaction := msg.ToLocation() != nil
 
 	// Check clauses 4-5, subtract intrinsic gas if everything is correct
 	gas, err := IntrinsicGas(st.data, st.msg.AccessList(), contractCreation, homestead, istanbul)
@@ -315,10 +319,13 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	)
 	if contractCreation {
 		ret, _, st.gas, vmerr = st.evm.Create(sender, st.data, st.gas, st.value)
+	} else if externalTransaction {
+		// Or do we do it here?
+		st.state.SubBalance(sender.Address(), st.value)
 	} else {
 		// Increment the nonce for the next transaction
 		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
-		ret, st.gas, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value)
+		ret, st.gas, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value, st.toLocation)
 	}
 
 	if !london {
