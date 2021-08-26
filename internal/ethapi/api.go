@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1237,6 +1238,33 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool) (map[string]i
 	return fields, nil
 }
 
+// RPCMarshalExternalBlock converts the given external block to the RPC output.
+func RPCMarshalExternalBlock(extBlock *types.ExternalBlock) (map[string]interface{}, error) {
+	fields := RPCMarshalHeader(extBlock.Header())
+	fields["size"] = hexutil.Uint64(extBlock.Size())
+
+	// Get full external transaction from block
+	for i := 0; i < types.ContextDepth; i++ {
+		block := types.NewBlockWithHeader(extBlock.Header())
+		block = block.WithBody(extBlock.Transactions()[i], nil)
+
+		formatTx := func(tx *types.Transaction) (interface{}, error) {
+			return newRPCTransactionFromBlockHash(block, tx.Hash()), nil
+		}
+
+		txs := block.Transactions()
+		transactions := make([]interface{}, len(txs))
+		var err error
+		for i, tx := range txs {
+			if transactions[i], err = formatTx(tx); err != nil {
+				return nil, err
+			}
+		}
+		fields["transactions-"+strconv.Itoa(i)] = transactions
+	}
+	return fields, nil
+}
+
 // rpcMarshalHeader uses the generalized output filler, then adds the total difficulty field, which requires
 // a `PublicBlockchainAPI`.
 func (s *PublicBlockChainAPI) rpcMarshalHeader(ctx context.Context, header *types.Header) map[string]interface{} {
@@ -1815,6 +1843,31 @@ func (s *PublicBlockChainAPI) SendMinedBlock(ctx context.Context, raw json.RawMe
 	block := types.NewBlockWithHeader(head).WithBody(txs, uncles)
 
 	s.b.InsertBlock(ctx, block)
+
+	return nil
+}
+
+// SendMinedBlock will run checks on the block and add to canonical chain if valid.
+func (s *PublicBlockChainAPI) SendExternalBlock(ctx context.Context, raw json.RawMessage) error {
+	// Decode header and transactions.
+	var head *types.Header
+	var body rpcBlock
+	if err := json.Unmarshal(raw, &head); err != nil {
+		return err
+	}
+	if err := json.Unmarshal(raw, &body); err != nil {
+		return err
+	}
+
+	// Load transactions, uncles are not needed for external blocks
+	txs := make([]*types.Transaction, len(body.Transactions))
+	for i, tx := range body.Transactions {
+		txs[i] = tx.tx
+	}
+
+	block := types.NewExternalBlockWithHeader(head).WithBody(txs, nil)
+
+	s.b.AddExternalBlock(block)
 
 	return nil
 }
