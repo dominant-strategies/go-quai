@@ -19,6 +19,7 @@ package miner
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -130,7 +131,8 @@ type worker struct {
 	chain       *core.BlockChain
 
 	// Feeds
-	pendingLogsFeed event.Feed
+	pendingLogsFeed  event.Feed
+	pendingBlockFeed event.Feed
 
 	// Subscriptions
 	mux          *event.TypeMux
@@ -582,9 +584,9 @@ func (w *worker) taskLoop() {
 			w.pendingTasks[sealHash] = task
 			w.pendingMu.Unlock()
 
-			if err := w.engine.Seal(w.chain, task.block, w.resultCh, stopCh); err != nil {
-				log.Warn("Block sealing failed", "err", err)
-			}
+			w.updateSnapshot()
+			log.Info("Sending pending block to feed")
+			w.pendingBlockFeed.Send(w.snapshotBlock.Header())
 		case <-w.exitCh:
 			interrupt()
 			return
@@ -889,6 +891,10 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 
 	tstart := time.Now()
 	parent := w.chain.CurrentBlock()
+	if w.snapshotBlock != nil && parent.Header().Number[types.QuaiNetworkContext] == w.snapshotBlock.Number() {
+		fmt.Println("Snapshot block isn't past current block")
+		return
+	}
 
 	if parent.Time() >= uint64(timestamp) {
 		timestamp = int64(parent.Time() + 1)

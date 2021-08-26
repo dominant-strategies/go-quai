@@ -18,6 +18,7 @@ package ethapi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -744,6 +745,14 @@ func (s *PublicBlockChainAPI) GetBlockByNumber(ctx context.Context, number rpc.B
 		return response, err
 	}
 	return nil, err
+}
+
+func (s *PublicBlockChainAPI) PendingBlock(ctx context.Context) (map[string]interface{}, error) {
+	block, _ := s.b.PendingBlockAndReceipts()
+	if block == nil {
+		return nil, errors.New("no pending block")
+	}
+	return s.rpcMarshalBlock(ctx, block, true, true)
 }
 
 // GetBlockByHash returns the requested block. When fullTx is true all transactions in the block are returned in full
@@ -1751,6 +1760,63 @@ func (s *PublicTransactionPoolAPI) SendRawTransaction(ctx context.Context, input
 		return common.Hash{}, err
 	}
 	return SubmitTransaction(ctx, s.b, tx)
+}
+
+type rpcTransaction struct {
+	tx *types.Transaction
+	txExtraInfo
+}
+
+type txExtraInfo struct {
+	BlockNumber *string         `json:"blockNumber,omitempty"`
+	BlockHash   *common.Hash    `json:"blockHash,omitempty"`
+	From        *common.Address `json:"from,omitempty"`
+}
+
+type rpcBlock struct {
+	Hash         common.Hash      `json:"hash"`
+	Transactions []rpcTransaction `json:"transactions"`
+	UncleHashes  []common.Hash    `json:"uncles"`
+}
+
+// SendMinedBlock will run checks on the block and add to canonical chain if valid.
+func (s *PublicBlockChainAPI) SendMinedBlock(ctx context.Context, raw json.RawMessage) error {
+	// Decode header and transactions.
+	var head *types.Header
+	var body rpcBlock
+	if err := json.Unmarshal(raw, &head); err != nil {
+		return err
+	}
+	if err := json.Unmarshal(raw, &body); err != nil {
+		return err
+	}
+	// Quick-verify transaction and uncle lists. This mostly helps with debugging the server.
+	if types.IsEqualHashSlice(head.UncleHash, types.EmptyUncleHash) && len(body.UncleHashes) > 0 {
+		return fmt.Errorf("server returned non-empty uncle list but block header indicates no uncles")
+	}
+	// emptyHash := make([]common.Hash, 3)
+	// if !types.IsEqualHashSlice(head.UncleHash, emptyHash) && len(body.UncleHashes) == 0 {
+	// 	return fmt.Errorf("server returned empty uncle list but block header indicates uncles")
+	// }
+	// if !types.IsEqualHashSlice(head.TxHash, types.EmptyRootHash) && len(body.Transactions) > 0 {
+	// 	return fmt.Errorf("server returned non-empty transaction list but block header indicates no transactions")
+	// }
+	// if !types.IsEqualHashSlice(head.TxHash, types.EmptyRootHash) && len(body.Transactions) == 0 {
+	// 	return fmt.Errorf("server returned empty transaction list but block header indicates transactions")
+	// }
+
+	// Load uncles because they are not included in the block response.
+	var uncles []*types.Header
+	txs := make([]*types.Transaction, len(body.Transactions))
+	for i, tx := range body.Transactions {
+		txs[i] = tx.tx
+	}
+
+	block := types.NewBlockWithHeader(head).WithBody(txs, uncles)
+
+	s.b.InsertBlock(ctx, block)
+
+	return nil
 }
 
 // Sign calculates an ECDSA signature for:

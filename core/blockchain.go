@@ -1759,7 +1759,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		// If there are any still remaining, mark as ignored
 		return it.index, err
 
-	// Some other error occurred, abort
+		// Some other error occurred, abort
 	case err != nil:
 		bc.futureBlocks.Remove(block.Hash())
 		stats.ignored += len(it.chain)
@@ -2419,9 +2419,9 @@ func (bc *BlockChain) GetTdByHash(hash common.Hash) *big.Int {
 // caching it if found.
 func (bc *BlockChain) GetHeader(hash common.Hash, number uint64) *types.Header {
 	// Blockchain might have cached the whole block, only if not go to headerchain
-	if block, ok := bc.blockCache.Get(hash); ok {
-		return block.(*types.Block).Header()
-	}
+	// if block, ok := bc.blockCache.Get(hash); ok {
+	// 	return block.(*types.Block).Header()
+	// }
 
 	return bc.hc.GetHeader(hash, number)
 }

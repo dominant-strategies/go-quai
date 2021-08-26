@@ -272,7 +272,7 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	// Verify the block's difficulty based on its timestamp and parent's difficulty
 	expected := ethash.CalcDifficulty(chain, header.Time, parent)
 
-	if expected.Cmp(header.Difficulty[types.QuaiNetworkContext]) != 0 {
+	if expected.Cmp(header.Difficulty[types.QuaiNetworkContext]) > 0 {
 		return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty[types.QuaiNetworkContext], expected)
 	}
 	// Verify that the gas limit is <= 2^63-1
@@ -579,7 +579,7 @@ func (ethash *Ethash) verifySeal(chain consensus.ChainHeaderReader, header *type
 		runtime.KeepAlive(cache)
 	}
 	// Verify the calculated values against the ones provided in the header
-	if !bytes.Equal(header.MixDigest[types.QuaiNetworkContext][:], digest) {
+	if !bytes.Equal(header.MixDigest[:], digest) {
 		return errInvalidMixDigest
 	}
 	target := new(big.Int).Div(two256, header.Difficulty[types.QuaiNetworkContext])

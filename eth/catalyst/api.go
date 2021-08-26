@@ -139,8 +139,8 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 	}
 	num := parent.Number()
 
-	header := types.NewEmptyHeader()
 
+	header := types.NewEmptyHeader()
 	header.Time = params.Timestamp
 	header.GasLimit[types.QuaiNetworkContext] = parent.GasLimit()
 	header.ParentHash[types.QuaiNetworkContext] = parent.Hash()

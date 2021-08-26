@@ -35,7 +35,7 @@ func TestTestMode(t *testing.T) {
 	header := &types.Header{
 		Number:     []*big.Int{big.NewInt(1), big.NewInt(1), big.NewInt(1)},
 		Difficulty: []*big.Int{big.NewInt(100), big.NewInt(100), big.NewInt(100)},
-		MixDigest:  []common.Hash{common.Hash{}, common.Hash{}, common.Hash{}},
+		MixDigest:  common.Hash{},
 	}
 
 	ethash := NewTester(nil, false)

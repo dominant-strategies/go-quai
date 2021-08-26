@@ -281,7 +281,7 @@ func (c *Clique) verifyHeader(chain consensus.ChainHeaderReader, header *types.H
 		return errInvalidCheckpointSigners
 	}
 	// Ensure that the mix digest is zero as we don't have fork protection currently
-	if header.MixDigest[types.QuaiNetworkContext] != (common.Hash{}) {
+	if header.MixDigest != (common.Hash{}) {
 		return errInvalidMixDigest
 	}
 	// Ensure that the block doesn't contain any uncles which are meaningless in PoA
@@ -559,7 +559,7 @@ func (c *Clique) Prepare(chain consensus.ChainHeaderReader, header *types.Header
 	header.Extra[types.QuaiNetworkContext] = append(header.Extra[types.QuaiNetworkContext], make([]byte, extraSeal)...)
 
 	// Mix digest is reserved for now, set to empty
-	header.MixDigest[types.QuaiNetworkContext] = common.Hash{}
+	header.MixDigest = common.Hash{}
 
 	// Ensure the timestamp has the correct delay
 	parent := chain.GetHeader(header.ParentHash[types.QuaiNetworkContext], number-1)
