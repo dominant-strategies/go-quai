@@ -236,6 +236,14 @@ func (t *Transaction) GasPrice(ctx context.Context) (hexutil.Big, error) {
 			}
 		}
 		return hexutil.Big(*tx.GasPrice()), nil
+	case types.ExternalTxType:
+		if t.block != nil {
+			if baseFee, _ := t.block.BaseFeePerGas(ctx); baseFee != nil {
+				// price = min(tip, gasFeeCap - baseFee) + baseFee
+				return (hexutil.Big)(*math.BigMin(new(big.Int).Add(tx.GasTipCap(), baseFee.ToInt()), tx.GasFeeCap())), nil
+			}
+		}
+		return hexutil.Big(*tx.GasPrice()), nil
 	default:
 		return hexutil.Big(*tx.GasPrice()), nil
 	}
@@ -266,6 +274,8 @@ func (t *Transaction) MaxFeePerGas(ctx context.Context) (*hexutil.Big, error) {
 		return nil, nil
 	case types.DynamicFeeTxType:
 		return (*hexutil.Big)(tx.GasFeeCap()), nil
+	case types.ExternalTxType:
+		return (*hexutil.Big)(tx.GasFeeCap()), nil
 	default:
 		return nil, nil
 	}
@@ -280,6 +290,8 @@ func (t *Transaction) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.Big, e
 	case types.AccessListTxType:
 		return nil, nil
 	case types.DynamicFeeTxType:
+		return (*hexutil.Big)(tx.GasTipCap()), nil
+	case types.ExternalTxType:
 		return (*hexutil.Big)(tx.GasTipCap()), nil
 	default:
 		return nil, nil
