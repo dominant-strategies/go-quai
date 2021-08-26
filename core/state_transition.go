@@ -292,7 +292,6 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	istanbul := st.evm.ChainConfig().IsIstanbul(st.evm.Context.BlockNumber)
 	london := st.evm.ChainConfig().IsLondon(st.evm.Context.BlockNumber)
 	contractCreation := msg.To() == nil
-	externalTransaction := msg.ToLocation() != nil
 
 	// Check clauses 4-5, subtract intrinsic gas if everything is correct
 	gas, err := IntrinsicGas(st.data, st.msg.AccessList(), contractCreation, homestead, istanbul)
@@ -319,11 +318,6 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	)
 	if contractCreation {
 		ret, _, st.gas, vmerr = st.evm.Create(sender, st.data, st.gas, st.value)
-	} else if externalTransaction {
-		// Increment the nonce for the next transaction
-		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
-		// Substract balance from externally owned account
-		st.state.SubBalance(sender.Address(), st.value)
 	} else {
 		// Increment the nonce for the next transaction
 		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
