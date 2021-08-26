@@ -269,6 +269,8 @@ func accountCreate(ctx *cli.Context) error {
 	}
 	utils.SetNodeConfig(ctx, &cfg.Node)
 	keydir, err := cfg.Node.KeyDirConfig()
+	id := cfg.Eth.Genesis.Config.ChainIDByte()
+
 	if err != nil {
 		utils.Fatalf("Failed to read configuration: %v", err)
 	}
