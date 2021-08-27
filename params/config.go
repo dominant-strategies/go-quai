@@ -18,6 +18,7 @@ package params
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -785,4 +786,33 @@ func (c *ChainConfig) Rules(num *big.Int) Rules {
 		IsLondon:         c.IsLondon(num),
 		IsCatalyst:       c.IsCatalyst(num),
 	}
+}
+
+var (
+	bytePrefixList = make([]byte, 20000)
+)
+
+func init() {
+	bytePrefixList[9000] = byte(0)
+	bytePrefixList[9100] = byte(1)
+	bytePrefixList[9101] = byte(2)
+	bytePrefixList[9102] = byte(3)
+	bytePrefixList[9103] = byte(4)
+	bytePrefixList[9200] = byte(5)
+	bytePrefixList[9201] = byte(6)
+	bytePrefixList[9202] = byte(7)
+	bytePrefixList[9203] = byte(8)
+	bytePrefixList[9300] = byte(9)
+	bytePrefixList[9301] = byte(10)
+	bytePrefixList[9302] = byte(11)
+	bytePrefixList[9303] = byte(12)
+}
+
+func (c *ChainConfig) ValidateAddressForChainID(address *common.Address) error {
+	lookup := bytePrefixList[c.ChainID.Int64()]
+	if address.Bytes()[0] != lookup {
+		return errors.New("sender not in operable state")
+	}
+
+	return nil
 }
