@@ -1603,7 +1603,12 @@ func (bc *BlockChain) addFutureBlock(block *types.Block) error {
 
 // addExternalBlock adds the received block to the external block cache.
 func (bc *BlockChain) AddExternalBlock(block *types.ExternalBlock) error {
+	context := []interface{}{
+		"context", block.Context(), "numbers", block.Header().Number, "location", block.Header().Location,
+		"txs", len(block.Transactions()),
+	}
 	bc.externalBlocks.Add(block.CacheKey(), block)
+	log.Info("Imported new chain segment", context...)
 	return nil
 }
 
