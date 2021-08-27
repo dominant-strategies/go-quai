@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"strconv"
 	"strings"
 	"time"
 
@@ -1238,30 +1237,27 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool) (map[string]i
 	return fields, nil
 }
 
-// RPCMarshalExternalBlock converts the given external block to the RPC output.
-func RPCMarshalExternalBlock(extBlock *types.ExternalBlock) (map[string]interface{}, error) {
-	fields := RPCMarshalHeader(extBlock.Header())
-	fields["size"] = hexutil.Uint64(extBlock.Size())
+// RPCMarshalBlock converts the given block to the RPC output which depends on fullTx. If inclTx is true transactions are
+// returned. When fullTx is true the returned block contains full transaction details, otherwise it will only contain
+// transaction hashes.
+func RPCMarshalExternalBlock(block *types.Block, context *big.Int) (map[string]interface{}, error) {
+	fields := RPCMarshalHeader(block.Header())
+	fields["size"] = hexutil.Uint64(block.Size())
 
-	// Get full external transaction from block
-	for i := 0; i < types.ContextDepth; i++ {
-		block := types.NewBlockWithHeader(extBlock.Header())
-		block = block.WithBody(extBlock.Transactions()[i], nil)
-
-		formatTx := func(tx *types.Transaction) (interface{}, error) {
-			return newRPCTransactionFromBlockHash(block, tx.Hash()), nil
-		}
-
-		txs := block.Transactions()
-		transactions := make([]interface{}, len(txs))
-		var err error
-		for i, tx := range txs {
-			if transactions[i], err = formatTx(tx); err != nil {
-				return nil, err
-			}
-		}
-		fields["transactions-"+strconv.Itoa(i)] = transactions
+	formatTx := func(tx *types.Transaction) (interface{}, error) {
+		return newRPCTransactionFromBlockHash(block, tx.Hash()), nil
 	}
+
+	txs := block.Transactions()
+	transactions := make([]interface{}, len(txs))
+	var err error
+	for i, tx := range txs {
+		if transactions[i], err = formatTx(tx); err != nil {
+			return nil, err
+		}
+	}
+	fields["transactions"] = transactions
+	fields["context"] = context
 	return fields, nil
 }
 
@@ -1847,11 +1843,17 @@ func (s *PublicBlockChainAPI) SendMinedBlock(ctx context.Context, raw json.RawMe
 	return nil
 }
 
+type rpcExternalBlock struct {
+	Hash         common.Hash      `json:"hash"`
+	Transactions []rpcTransaction `json:"transactions"`
+	Context      *big.Int         `json:"context"`
+}
+
 // SendMinedBlock will run checks on the block and add to canonical chain if valid.
 func (s *PublicBlockChainAPI) SendExternalBlock(ctx context.Context, raw json.RawMessage) error {
 	// Decode header and transactions.
 	var head *types.Header
-	var body rpcBlock
+	var body rpcExternalBlock
 	if err := json.Unmarshal(raw, &head); err != nil {
 		return err
 	}
@@ -1865,7 +1867,7 @@ func (s *PublicBlockChainAPI) SendExternalBlock(ctx context.Context, raw json.Ra
 		txs[i] = tx.tx
 	}
 
-	block := types.NewExternalBlockWithHeader(head).WithBody(txs, nil)
+	block := types.NewExternalBlockWithHeader(head).ExternalBlockWithBody(txs, body.Context)
 
 	s.b.AddExternalBlock(block)
 

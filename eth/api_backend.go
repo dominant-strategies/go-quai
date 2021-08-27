@@ -120,6 +120,10 @@ func (b *EthAPIBackend) InsertBlock(ctx context.Context, block *types.Block) (in
 	return b.eth.blockchain.InsertChain([]*types.Block{block})
 }
 
+func (b *EthAPIBackend) AddExternalBlock(block *types.ExternalBlock) error {
+	return b.eth.blockchain.AddExternalBlock(block)
+}
+
 func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
 	return b.eth.blockchain.GetBlockByHash(hash), nil
 }

@@ -1603,7 +1603,7 @@ func (bc *BlockChain) addFutureBlock(block *types.Block) error {
 
 // addExternalBlock adds the received block to the external block cache.
 func (bc *BlockChain) AddExternalBlock(block *types.ExternalBlock) error {
-	bc.externalBlocks.Add(block.Hash(), block)
+	bc.externalBlocks.Add(block.CacheKey(), block)
 	return nil
 }
 

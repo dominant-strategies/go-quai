@@ -223,7 +223,8 @@ type extblock struct {
 // ExternalBlock represents an entire Quai block with multiple contexts.
 type ExternalBlock struct {
 	header       *Header
-	transactions []Transactions
+	transactions Transactions
+	context      *big.Int
 
 	// caches
 	hash atomic.Value
@@ -238,21 +239,24 @@ func NewExternalBlockWithHeader(header *Header) *ExternalBlock {
 }
 
 // WithBody returns a new block with the given transaction and uncle contents.
-func (b *ExternalBlock) ExternalBlockWithBody(transactions [][]*Transaction) *Block {
+func (b *ExternalBlock) ExternalBlockWithBody(transactions []*Transaction, context *big.Int) *ExternalBlock {
 	block := &ExternalBlock{
 		header:       CopyHeader(b.header),
-		transactions: make([][]*Transaction, len(transactions)),
+		transactions: make([]*Transaction, len(transactions)),
+		context:      context,
 	}
 	copy(block.transactions, transactions)
-	for i := range uncles {
-		block.uncles[i] = CopyHeader(uncles[i])
-	}
 	return block
 }
 
 // Simple access methods for ExternalBlocks
-func (b *ExternalBlock) Header() *Header              { return CopyHeader(b.header) }
-func (b *ExternalBlock) Transactions() []Transactions { return b.transactions }
+func (b *ExternalBlock) Header() *Header            { return CopyHeader(b.header) }
+func (b *ExternalBlock) Transactions() Transactions { return b.transactions }
+func (b *ExternalBlock) Context() *big.Int          { return b.context }
+func (b *ExternalBlock) CacheKey() string {
+	hash := b.header.Hash()
+	return b.context.String() + hash.String()
+}
 
 func (b *ExternalBlock) Hash() common.Hash {
 	if hash := b.hash.Load(); hash != nil {

@@ -545,8 +545,8 @@ func (ec *Client) SendMinedBlock(ctx context.Context, block *types.Block, inclTx
 }
 
 // SendExternalBlock sends an external block back to the node to add to it's external block list
-func (ec *Client) SendExternalBlock(ctx context.Context, block *types.ExternalBlock) error {
-	data, err := ethapi.RPCMarshalExternalBlock(block)
+func (ec *Client) SendExternalBlock(ctx context.Context, block *types.Block, context *big.Int) error {
+	data, err := ethapi.RPCMarshalExternalBlock(block, context)
 	if err != nil {
 		return err
 	}
