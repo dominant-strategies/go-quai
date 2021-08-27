@@ -1608,7 +1608,7 @@ func (bc *BlockChain) AddExternalBlock(block *types.ExternalBlock) error {
 		"txs", len(block.Transactions()),
 	}
 	bc.externalBlocks.Add(block.CacheKey(), block)
-	log.Info("Imported new chain segment", context...)
+	log.Info("Added external block to cache", context...)
 	return nil
 }
 
