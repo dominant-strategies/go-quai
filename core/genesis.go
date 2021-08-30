@@ -349,7 +349,7 @@ func MainnetPrimeGenesisBlock() *Genesis {
 		Config:     params.MainnetPrimeChainConfig,
 		Nonce:      66,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
-		GasLimit:   500000,
+		GasLimit:   5000000,
 		Difficulty: big.NewInt(10048576),
 		Alloc:      decodePrealloc(mainnetAllocData),
 	}
@@ -361,7 +361,7 @@ func MainnetRegionGenesisBlock(regionParams *params.ChainConfig) *Genesis {
 		Config:     regionParams,
 		Nonce:      66,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
-		GasLimit:   50000,
+		GasLimit:   1600000,
 		Difficulty: big.NewInt(2048576),
 		Alloc:      decodePrealloc(mainnetAllocData),
 	}
@@ -373,7 +373,7 @@ func MainnetZoneGenesisBlock(regionParams *params.ChainConfig) *Genesis {
 		Config:     regionParams,
 		Nonce:      66,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
-		GasLimit:   5000,
+		GasLimit:   500000,
 		Difficulty: big.NewInt(1048576),
 		Alloc:      decodePrealloc(mainnetAllocData),
 	}
