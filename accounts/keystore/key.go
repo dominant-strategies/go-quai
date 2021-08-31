@@ -172,10 +172,16 @@ func newKey(rand io.Reader) (*Key, error) {
 	return newKeyFromECDSA(privateKeyECDSA), nil
 }
 
-func storeNewKey(ks keyStore, rand io.Reader, auth string) (*Key, accounts.Account, error) {
+func storeNewKey(ks keyStore, rand io.Reader, auth string, id byte) (*Key, accounts.Account, error) {
 	key, err := newKey(rand)
 	if err != nil {
 		return nil, accounts.Account{}, err
+	}
+	for key.Address.Bytes()[0] != id {
+		key, err = newKey(rand)
+		if err != nil {
+			return nil, accounts.Account{}, err
+		}
 	}
 	a := accounts.Account{
 		Address: key.Address,
