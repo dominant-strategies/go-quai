@@ -24,6 +24,7 @@ import (
 	"math/big"
 	mrand "math/rand"
 	"sort"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -2450,6 +2451,15 @@ func (bc *BlockChain) GetHeaderByHash(hash common.Hash) *types.Header {
 	}
 
 	return bc.hc.GetHeaderByHash(hash)
+}
+
+func (bc *BlockChain) GetExtHeaderByHashAndContext(hash common.Hash, context int) *types.Header {
+	// Lookup block in externalBlocks cache
+	key := strconv.Itoa(context) + hash.String()
+	if block, ok := bc.externalBlocks.Get(key); ok {
+		return block.(*types.ExternalBlock).Header()
+	}
+	return nil
 }
 
 // HasHeader checks if a block header is present in the database or not, caching

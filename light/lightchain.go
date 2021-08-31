@@ -491,6 +491,12 @@ func (lc *LightChain) GetHeaderByNumber(number uint64) *types.Header {
 	return lc.hc.GetHeaderByNumber(number)
 }
 
+// GetExtHeaderByHashAndContext is not applicable in the header chain since the BlockChain contains
+// the external blocks cache.
+func (lc *LightChain) GetExtHeaderByHashAndContext(hash common.Hash, context int) *types.Header {
+	return nil
+}
+
 // GetHeaderByNumberOdr retrieves a block header from the database or network
 // by number, caching it (associated with its hash) if found.
 func (lc *LightChain) GetHeaderByNumberOdr(ctx context.Context, number uint64) (*types.Header, error) {

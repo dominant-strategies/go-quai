@@ -44,6 +44,9 @@ type ChainHeaderReader interface {
 
 	// GetHeaderByHash retrieves a block header from the database by its hash.
 	GetHeaderByHash(hash common.Hash) *types.Header
+
+	// GetExtHeaderByHashAndContext retrieves an external block header by its hash and context.
+	GetExtHeaderByHashAndContext(hash common.Hash, context int) *types.Header
 }
 
 // ChainReader defines a small collection of methods needed to access the local

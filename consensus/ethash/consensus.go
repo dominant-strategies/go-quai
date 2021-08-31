@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
@@ -608,9 +609,62 @@ func (ethash *Ethash) Finalize(chain consensus.ChainHeaderReader, header *types.
 	header.Root[types.QuaiNetworkContext] = state.IntermediateRoot(chain.Config().IsEIP158(header.Number[types.QuaiNetworkContext]))
 }
 
+func (ethash *Ethash) TraceBranches(chain consensus.ChainHeaderReader, context int, location []byte, header *types.Header) []*types.Header {
+	// Make a list of headers
+	headers := make([]*types.Header, 0)
+	log.Info("Tracing branches!")
+	for {
+		// If block header is Genesis return headers
+		if header.Number[context] == big.NewInt(0) {
+			return headers
+		}
+
+		// Get previous header
+		prevNum := header.Number[context].Uint64() - 1
+		prevHeader := chain.GetHeaderByNumber(prevNum)
+		// if header is nil, check the external cache
+		if prevHeader == nil {
+			prevHeader = chain.GetExtHeaderByHashAndContext(header.ParentHash[context], context)
+		}
+
+		difficulty := ethash.CalcDifficulty(chain, header.Time, prevHeader)
+		difficultyContext := types.ContextDepth
+		for i := types.ContextDepth - 1; i > -1; i-- {
+			if difficulty.Cmp(header.Difficulty[i]) > -1 {
+				difficultyContext = i
+			}
+		}
+
+		// We have reached a coincident block in the lower context from a different location.
+		// Another process is expected to return the rest of the set if it is to be found.
+		if context > difficultyContext && !bytes.Equal(header.Location, location) {
+			return headers
+		}
+
+		headers = append(headers, header)
+
+		// Check current context and call lower contexts
+		// If not, this means we're already in Zone and can continue without adding other calls
+		if context > 0 {
+			// Call TraceBranches in Region / Prime
+			headers = append(headers, ethash.TraceBranches(chain, context-1, location, header)...)
+		}
+
+		// Increment previous header
+		header = prevHeader
+	}
+}
+
 // FinalizeAndAssemble implements consensus.Engine, accumulating the block and
 // uncle rewards, setting the final state and assembling the block.
 func (ethash *Ethash) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
+
+	context := chain.Config().Context   // Index that node is currently at
+	location := chain.Config().Location // Location node is currently in
+
+	externalHeaders := ethash.TraceBranches(chain, context, location, header)
+	fmt.Println(externalHeaders)
+
 	// Finalize block
 	ethash.Finalize(chain, header, state, txs, uncles)
 
