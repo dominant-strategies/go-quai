@@ -269,14 +269,14 @@ func accountCreate(ctx *cli.Context) error {
 	}
 	utils.SetNodeConfig(ctx, &cfg.Node)
 	scryptN, scryptP, keydir, err := cfg.Node.AccountConfig()
-
+	id := cfg.Eth.Genesis.Config.ChainIDByte()
 	if err != nil {
 		utils.Fatalf("Failed to read configuration: %v", err)
 	}
 
 	password := utils.GetPassPhraseWithList("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
 
-	account, err := keystore.StoreKey(keydir, password, scryptN, scryptP)
+	account, err := keystore.StoreKey(keydir, password, id, scryptN, scryptP)
 
 	if err != nil {
 		utils.Fatalf("Failed to create account: %v", err)
