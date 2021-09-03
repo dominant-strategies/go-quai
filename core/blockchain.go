@@ -90,6 +90,7 @@ const (
 	maxFutureBlocks     = 256
 	maxTimeFutureBlocks = 30
 	TriesInMemory       = 128
+	maxExternalBlocks   = 1024
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	//
@@ -188,13 +189,14 @@ type BlockChain struct {
 	currentBlock     atomic.Value // Current head of the block chain
 	currentFastBlock atomic.Value // Current head of the fast-sync chain (may be above the block chain!)
 
-	stateCache    state.Database // State database to reuse between imports (contains state cache)
-	bodyCache     *lru.Cache     // Cache for the most recent block bodies
-	bodyRLPCache  *lru.Cache     // Cache for the most recent block bodies in RLP encoded format
-	receiptsCache *lru.Cache     // Cache for the most recent receipts per block
-	blockCache    *lru.Cache     // Cache for the most recent entire blocks
-	txLookupCache *lru.Cache     // Cache for the most recent transaction lookup data.
-	futureBlocks  *lru.Cache     // future blocks are blocks added for later processing
+	stateCache     state.Database // State database to reuse between imports (contains state cache)
+	bodyCache      *lru.Cache     // Cache for the most recent block bodies
+	bodyRLPCache   *lru.Cache     // Cache for the most recent block bodies in RLP encoded format
+	receiptsCache  *lru.Cache     // Cache for the most recent receipts per block
+	blockCache     *lru.Cache     // Cache for the most recent entire blocks
+	txLookupCache  *lru.Cache     // Cache for the most recent transaction lookup data.
+	futureBlocks   *lru.Cache     // future blocks are blocks added for later processing
+	externalBlocks *lru.Cache     // blocks that need to be applied externally
 
 	quit          chan struct{}  // blockchain quit channel
 	wg            sync.WaitGroup // chain processing wait group for shutting down
@@ -224,6 +226,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	blockCache, _ := lru.New(blockCacheLimit)
 	txLookupCache, _ := lru.New(txLookupCacheLimit)
 	futureBlocks, _ := lru.New(maxFutureBlocks)
+	externalBlocks, _ := lru.New(maxExternalBlocks)
 
 	bc := &BlockChain{
 		chainConfig: chainConfig,
@@ -243,6 +246,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		blockCache:     blockCache,
 		txLookupCache:  txLookupCache,
 		futureBlocks:   futureBlocks,
+		externalBlocks: externalBlocks,
 		engine:         engine,
 		vmConfig:       vmConfig,
 	}
@@ -1594,6 +1598,17 @@ func (bc *BlockChain) addFutureBlock(block *types.Block) error {
 		return fmt.Errorf("future block timestamp %v > allowed %v", block.Time(), max)
 	}
 	bc.futureBlocks.Add(block.Hash(), block)
+	return nil
+}
+
+// addExternalBlock adds the received block to the external block cache.
+func (bc *BlockChain) AddExternalBlock(block *types.ExternalBlock) error {
+	context := []interface{}{
+		"context", block.Context(), "numbers", block.Header().Number, "location", block.Header().Location,
+		"txs", len(block.Transactions()),
+	}
+	bc.externalBlocks.Add(block.CacheKey(), block)
+	log.Info("Added external block to cache", context...)
 	return nil
 }
 

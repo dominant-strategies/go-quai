@@ -19,6 +19,7 @@ package types
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math/big"
@@ -217,6 +218,76 @@ type extblock struct {
 	Header *Header
 	Txs    []*Transaction
 	Uncles []*Header
+}
+
+// ExternalBlock represents an entire Quai block with multiple contexts.
+type ExternalBlock struct {
+	header       *Header
+	transactions Transactions
+	context      *big.Int
+
+	// caches
+	hash atomic.Value
+	size atomic.Value
+}
+
+// NewExternalBlockWithHeader creates a block with the given header data. The
+// header data is copied, changes to header and to the field values
+// will not affect the block.
+func NewExternalBlockWithHeader(header *Header) *ExternalBlock {
+	return &ExternalBlock{header: CopyHeader(header)}
+}
+
+// WithBody returns a new block with the given transaction and uncle contents.
+func (b *ExternalBlock) ExternalBlockWithBody(transactions []*Transaction, context *big.Int) *ExternalBlock {
+	block := &ExternalBlock{
+		header:       CopyHeader(b.header),
+		transactions: make([]*Transaction, len(transactions)),
+		context:      context,
+	}
+	copy(block.transactions, transactions)
+	return block
+}
+
+// Simple access methods for ExternalBlocks
+func (b *ExternalBlock) Header() *Header            { return CopyHeader(b.header) }
+func (b *ExternalBlock) Transactions() Transactions { return b.transactions }
+func (b *ExternalBlock) Context() *big.Int          { return b.context }
+func (b *ExternalBlock) CacheKey() string {
+	hash := b.header.Hash()
+	return b.context.String() + hash.String()
+}
+
+func (b *ExternalBlock) Hash() common.Hash {
+	if hash := b.hash.Load(); hash != nil {
+		return hash.(common.Hash)
+	}
+	v := b.header.Hash()
+	b.hash.Store(v)
+	return v
+}
+
+// Size returns the true RLP encoded storage size of the block, either by encoding
+// and returning it, or returning a previsouly cached value.
+func (b *ExternalBlock) Size() common.StorageSize {
+	if size := b.size.Load(); size != nil {
+		return size.(common.StorageSize)
+	}
+	c := writeCounter(0)
+	rlp.Encode(&c, b)
+	b.size.Store(common.StorageSize(c))
+	return common.StorageSize(c)
+}
+
+func (b *ExternalBlock) UnmarshalJSON(data []byte) error {
+	var res []interface{}
+	if err := json.Unmarshal(data, &res); err != nil {
+		return err
+	}
+
+	fmt.Println(res)
+
+	return nil
 }
 
 // NewBlock creates a new block. The input data is copied,

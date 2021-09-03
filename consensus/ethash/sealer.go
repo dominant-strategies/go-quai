@@ -278,14 +278,19 @@ func (ethash *Ethash) mergedMine(header *types.Header, id int, seed uint64, abor
 		dataset = ethash.dataset(number, false)
 	)
 
+	// Use Prime difficulty in lower contexts if not passing block header
 	if header.Difficulty[0] != nil {
 		targets[0] = new(big.Int).Div(two256, header.Difficulty[0])
 	}
 	if header.Difficulty[1] != nil {
 		targets[1] = new(big.Int).Div(two256, header.Difficulty[1])
+	} else {
+		targets[1] = targets[0]
 	}
 	if header.Difficulty[2] != nil {
 		targets[2] = new(big.Int).Div(two256, header.Difficulty[2])
+	} else {
+		targets[2] = targets[1]
 	}
 
 	// Start generating random nonces until we abort or find a good one

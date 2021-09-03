@@ -70,6 +70,7 @@ type Backend interface {
 	SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription
 	InsertBlock(ctx context.Context, block *types.Block) (int, error)
 	PendingBlockAndReceipts() (*types.Block, types.Receipts)
+	AddExternalBlock(*types.ExternalBlock) error
 
 	// Transaction pool API
 	SendTx(ctx context.Context, signedTx *types.Transaction) error
