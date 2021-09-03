@@ -1605,11 +1605,11 @@ func (bc *BlockChain) addFutureBlock(block *types.Block) error {
 // addExternalBlock adds the received block to the external block cache.
 func (bc *BlockChain) AddExternalBlock(block *types.ExternalBlock) error {
 	context := []interface{}{
-		"context", block.Context(), "numbers", block.Header().Number, "location", block.Header().Location,
+		"context", block.Context(), "numbers", block.Header().Number, "key", block.CacheKey(), "location", block.Header().Location,
 		"txs", len(block.Transactions()),
 	}
+	log.Info("New external block", context...)
 	bc.externalBlocks.Add(block.CacheKey(), block)
-	log.Info("Added external block to cache", context...)
 	return nil
 }
 
@@ -2453,13 +2453,14 @@ func (bc *BlockChain) GetHeaderByHash(hash common.Hash) *types.Header {
 	return bc.hc.GetHeaderByHash(hash)
 }
 
-func (bc *BlockChain) GetExtHeaderByHashAndContext(hash common.Hash, context int) *types.Header {
+func (bc *BlockChain) GetExtBlockByHashAndContext(hash common.Hash, context int) (*types.ExternalBlock, error) {
 	// Lookup block in externalBlocks cache
 	key := strconv.Itoa(context) + hash.String()
 	if block, ok := bc.externalBlocks.Get(key); ok {
-		return block.(*types.ExternalBlock).Header()
+		return block.(*types.ExternalBlock), nil
 	}
-	return nil
+	log.Warn("Unable to find external block", "key", key)
+	return &types.ExternalBlock{}, errors.New("external block not found in cache")
 }
 
 // HasHeader checks if a block header is present in the database or not, caching

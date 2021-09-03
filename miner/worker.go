@@ -914,6 +914,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		ReceiptHash: make([]common.Hash, 3),
 		GasUsed:     make([]uint64, 3),
 		Bloom:       make([]types.Bloom, 3),
+		Location:    w.chainConfig.Location,
 	}
 	header.ParentHash[types.QuaiNetworkContext] = parent.Hash()
 	header.Number[types.QuaiNetworkContext] = num.Add(num, common.Big1)

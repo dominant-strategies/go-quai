@@ -1193,6 +1193,7 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 		"timestamp":        head.Time,
 		"transactionsRoot": head.TxHash,
 		"receiptsRoot":     head.ReceiptHash,
+		"location":         head.Location,
 	}
 
 	if head.BaseFee != nil {

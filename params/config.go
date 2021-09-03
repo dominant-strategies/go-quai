@@ -53,6 +53,7 @@ var (
 	MainnetPrimeChainConfig = &ChainConfig{
 		ChainID:             big.NewInt(9000),
 		Context:             0,
+		Location:            []byte{0, 0},
 		Ethash:              new(EthashConfig),
 		HomesteadBlock:      big.NewInt(0),
 		DAOForkBlock:        nil,

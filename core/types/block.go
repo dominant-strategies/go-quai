@@ -107,6 +107,7 @@ type headerMarshaling struct {
 	Time       hexutil.Uint64
 	Extra      []hexutil.Bytes
 	BaseFee    []*hexutil.Big
+	Location   []byte
 	Hash       common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
 }
 

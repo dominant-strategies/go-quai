@@ -528,10 +528,10 @@ func (hc *HeaderChain) GetHeaderByNumber(number uint64) *types.Header {
 	return hc.GetHeader(hash, number)
 }
 
-// GetExtHeaderByHashAndContext is not applicable in the header chain since the BlockChain contains
+// GetExtBlockByHashAndContext is not applicable in the header chain since the BlockChain contains
 // the external blocks cache.
-func (hc *HeaderChain) GetExtHeaderByHashAndContext(hash common.Hash, context int) *types.Header {
-	return nil
+func (hc *HeaderChain) GetExtBlockByHashAndContext(hash common.Hash, context int) (*types.ExternalBlock, error) {
+	return nil, nil
 }
 
 func (hc *HeaderChain) GetCanonicalHash(number uint64) common.Hash {
