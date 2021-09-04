@@ -810,7 +810,6 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 // TraceBranches traces all available branches to find external blocks
 func (ethash *Ethash) TraceBranches(chain consensus.ChainHeaderReader, header *types.Header) []*types.ExternalBlock {
 	context := chain.Config().Context // Index that node is currently at
-	log.Warn("Assembling new block", "number", header.Number[context])
 	externalBlocks := make([]*types.ExternalBlock, 0)
 
 	// Do not run on block 1
