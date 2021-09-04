@@ -639,6 +639,26 @@ func (ethash *Ethash) checkPoW(chain consensus.ChainHeaderReader, header *types.
 	return result
 }
 
+func (ethash *Ethash) GetDifficultyContext(chain consensus.ChainHeaderReader, header *types.Header, context int) (int, error) {
+	difficultyContext := context
+	if header.Nonce != (types.BlockNonce{}) {
+		result := ethash.checkPoW(chain, header, false)
+		for i := types.ContextDepth - 1; i > -1; i-- {
+			if header.Difficulty[i] != nil {
+				target := new(big.Int).Div(two256, header.Difficulty[i])
+				if new(big.Int).SetBytes(result).Cmp(target) <= 0 {
+					difficultyContext = i
+				}
+			}
+		}
+		// Invalid number on the new difficulty
+		if header.Number[difficultyContext] == nil {
+			return types.ContextDepth, errors.New("error checking difficulty context")
+		}
+	}
+	return difficultyContext, nil
+}
+
 // Prepare implements consensus.Engine, initializing the difficulty field of a
 // header to conform to the ethash protocol. The changes are done inline.
 func (ethash *Ethash) Prepare(chain consensus.ChainHeaderReader, header *types.Header) error {
@@ -671,21 +691,10 @@ func (ethash *Ethash) GetCoincidentHeader(chain consensus.ChainHeaderReader, con
 
 		// Check work of the header, if it has enough work we will move up in context.
 		// difficultyContext is initially context since it could be a pending block w/o a nonce.
-		difficultyContext := context
-		if header.Nonce != (types.BlockNonce{}) {
-			result := ethash.checkPoW(chain, header, false)
-			for i := types.ContextDepth - 1; i > -1; i-- {
-				if header.Difficulty[i] != nil {
-					target := new(big.Int).Div(two256, header.Difficulty[i])
-					if new(big.Int).SetBytes(result).Cmp(target) <= 0 {
-						difficultyContext = i
-					}
-				}
-			}
-			// Invalid number on the new difficulty
-			if header.Number[difficultyContext] == nil {
-				break
-			}
+		difficultyContext, err := ethash.GetDifficultyContext(chain, header, context)
+		if err != nil {
+			log.Warn("Unable to calculate difficulty context")
+			return header, context
 		}
 
 		// If we have reached a coincident block or we're in Region and found the prev region
@@ -701,8 +710,6 @@ func (ethash *Ethash) GetCoincidentHeader(chain consensus.ChainHeaderReader, con
 		// Increment previous header
 		header = prevHeader
 	}
-
-	return header, context
 }
 
 func (ethash *Ethash) GetTraceList(chain consensus.ChainHeaderReader, context int, startingHeader *types.Header) ([]*types.Header, common.Hash) {
@@ -755,22 +762,11 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 
 		// Check work of the header, if it has enough work we will move up in context.
 		// difficultyContext is initially context since it could be a pending block w/o a nonce.
-		difficultyContext := context
-		if header.Nonce != (types.BlockNonce{}) {
-			result := ethash.checkPoW(chain, header, false)
-			for i := types.ContextDepth - 1; i > -1; i-- {
-				if header.Difficulty[i] != nil {
-					target := new(big.Int).Div(two256, header.Difficulty[i])
-					if new(big.Int).SetBytes(result).Cmp(target) <= 0 {
-						difficultyContext = i
-					}
-				}
-			}
-			// Invalid number on the new difficulty
-			if header.Number[difficultyContext] == nil {
-				break
-			}
+		difficultyContext, err := ethash.GetDifficultyContext(chain, header, context)
+		if err != nil {
+			log.Warn("Unable to calculate difficulty context")
 		}
+
 		// If we have reached a coincident block or we're in Region and found the prev region
 		if difficultyContext < context && steppedBack {
 			break
