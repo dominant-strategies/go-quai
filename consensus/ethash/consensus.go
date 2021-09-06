@@ -818,6 +818,10 @@ func (ethash *Ethash) TraceBranches(chain consensus.ChainHeaderReader, header *t
 		// Skip pending block
 		prevHeader := chain.GetHeaderByHash(header.ParentHash[context])
 		coincidentHeader, difficultyContext := ethash.GetCoincidentHeader(chain, context, prevHeader)
+		// If we are not getting the transactions immediately after the coincident block, return
+		if coincidentHeader.Number[context].Cmp(prevHeader.Number[context]) != 0 {
+			return externalBlocks
+		}
 		stopHash := ethash.GetStopHash(chain, difficultyContext, context, coincidentHeader)
 		externalBlocks = append(externalBlocks, ethash.TraceBranch(chain, coincidentHeader, difficultyContext, stopHash, context)...)
 
