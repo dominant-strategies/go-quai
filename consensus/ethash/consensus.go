@@ -750,6 +750,19 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 	steppedBack := false
 	startingHeader := header
 	for {
+		// Check work of the header, if it has enough work we will move up in context.
+		// difficultyContext is initially context since it could be a pending block w/o a nonce.
+		difficultyContext, err := ethash.GetDifficultyContext(chain, header, context)
+		if err != nil {
+			log.Warn("Unable to calculate difficulty context")
+		}
+
+		// If we have reached a coincident block or we're in Region and found the prev region
+		if difficultyContext < context && steppedBack {
+			log.Info("TraceBranch: Stopping on found coincident block in lower context", "number", header.Number, "context", context)
+			break
+		}
+
 		// Starting off in a context above our own.
 		if context != originalContext {
 			extBlock, err := chain.GetExtBlockByHashAndContext(header.Hash(), context)
@@ -760,24 +773,13 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 			extBlocks = append(extBlocks, extBlock)
 		}
 
-		// Check work of the header, if it has enough work we will move up in context.
-		// difficultyContext is initially context since it could be a pending block w/o a nonce.
-		difficultyContext, err := ethash.GetDifficultyContext(chain, header, context)
-		if err != nil {
-			log.Warn("Unable to calculate difficulty context")
-		}
-
-		// If we have reached a coincident block or we're in Region and found the prev region
-		if difficultyContext < context && steppedBack {
-			break
-		}
-
 		if context < types.ContextDepth-1 {
 			extBlocks = append(extBlocks, ethash.TraceBranch(chain, header, context+1, stopHash, originalContext)...)
 		}
 
 		// Stop at the stop hash before iterating downward
 		if header.ParentHash[context] == stopHash || context == 0 || header.Number[context].Cmp(big.NewInt(1)) <= 0 {
+			log.Info("TraceBranch: Stopping on stop hash", "number", header.Number, "context", context)
 			break
 		}
 
