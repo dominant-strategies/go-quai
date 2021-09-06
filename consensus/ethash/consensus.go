@@ -697,7 +697,7 @@ func (ethash *Ethash) GetCoincidentHeader(chain consensus.ChainHeaderReader, con
 			return header, context
 		}
 
-		// If we have reached a coincident block or we're in Region and found the prev region
+		// If we have reached a coincident block
 		if difficultyContext < context {
 			return header, difficultyContext
 		} else if difficultyContext == 1 && context == 1 {
@@ -712,14 +712,17 @@ func (ethash *Ethash) GetCoincidentHeader(chain consensus.ChainHeaderReader, con
 	}
 }
 
-func (ethash *Ethash) GetTraceList(chain consensus.ChainHeaderReader, context int, startingHeader *types.Header) ([]*types.Header, common.Hash) {
+func (ethash *Ethash) GetStopHash(chain consensus.ChainHeaderReader, difficultyContext int, originalContext int, startingHeader *types.Header) common.Hash {
 	header := startingHeader
-	headers := make([]*types.Header, 0)
 	stopHash := common.Hash{}
+	context := difficultyContext
+	if difficultyContext == 0 && originalContext == 1 {
+		context = 1
+	} else if difficultyContext == 0 && originalContext == 2 {
+		context = 1
+	}
 	for {
 		// Append the coincident and iterating header to the list
-		headers = append(headers, header)
-
 		if header.Number[context].Cmp(big.NewInt(1)) <= 0 {
 			break
 		}
@@ -742,7 +745,7 @@ func (ethash *Ethash) GetTraceList(chain consensus.ChainHeaderReader, context in
 		header = prevHeader
 	}
 
-	return headers, stopHash
+	return stopHash
 }
 
 func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *types.Header, context int, stopHash common.Hash, originalContext int) []*types.ExternalBlock {
@@ -815,10 +818,9 @@ func (ethash *Ethash) TraceBranches(chain consensus.ChainHeaderReader, header *t
 		// Skip pending block
 		prevHeader := chain.GetHeaderByHash(header.ParentHash[context])
 		coincidentHeader, difficultyContext := ethash.GetCoincidentHeader(chain, context, prevHeader)
-		traceList, stopHash := ethash.GetTraceList(chain, difficultyContext, coincidentHeader)
-		for i := 0; i < len(traceList); i++ {
-			externalBlocks = append(externalBlocks, ethash.TraceBranch(chain, traceList[i], difficultyContext, stopHash, context)...)
-		}
+		stopHash := ethash.GetStopHash(chain, difficultyContext, context, coincidentHeader)
+		externalBlocks = append(externalBlocks, ethash.TraceBranch(chain, coincidentHeader, difficultyContext, stopHash, context)...)
+
 	}
 	return externalBlocks
 }
