@@ -1622,7 +1622,7 @@ func (bc *BlockChain) addFutureBlock(block *types.Block) error {
 // addExternalBlock adds the received block to the external block cache.
 func (bc *BlockChain) AddExternalBlock(block *types.ExternalBlock) error {
 	context := []interface{}{
-		"context", block.Context(), "numbers", block.Header().Number, "key", block.CacheKey(), "location", block.Header().Location,
+		"context", block.Context(), "numbers", block.Header().Number, "hash", block.Hash(), "location", block.Header().Location,
 		"txs", len(block.Transactions()),
 	}
 	log.Info("New external block", context...)
