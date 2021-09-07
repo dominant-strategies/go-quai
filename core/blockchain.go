@@ -23,12 +23,14 @@ import (
 	"io"
 	"math/big"
 	mrand "math/rand"
+	"runtime"
 	"sort"
 	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/common/prque"
@@ -91,7 +93,6 @@ const (
 	maxFutureBlocks     = 256
 	maxTimeFutureBlocks = 30
 	TriesInMemory       = 128
-	maxExternalBlocks   = 1024
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	//
@@ -133,16 +134,20 @@ type CacheConfig struct {
 	Preimages           bool          // Whether to store preimage of trie key to the disk
 
 	SnapshotWait bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
+
+	ExternalBlockLimit   int    // Memory allowance (MB) to use for caching trie nodes in memory
+	ExternalBlockJournal string // Disk journal for saving clean cache entries.
 }
 
 // defaultCacheConfig are the default caching values if none are specified by the
 // user (also used during testing).
 var defaultCacheConfig = &CacheConfig{
-	TrieCleanLimit: 256,
-	TrieDirtyLimit: 256,
-	TrieTimeLimit:  5 * time.Minute,
-	SnapshotLimit:  256,
-	SnapshotWait:   true,
+	TrieCleanLimit:     256,
+	TrieDirtyLimit:     256,
+	TrieTimeLimit:      5 * time.Minute,
+	SnapshotLimit:      256,
+	SnapshotWait:       true,
+	ExternalBlockLimit: 256,
 }
 
 // BlockChain represents the canonical chain given a database with a genesis
@@ -190,14 +195,15 @@ type BlockChain struct {
 	currentBlock     atomic.Value // Current head of the block chain
 	currentFastBlock atomic.Value // Current head of the fast-sync chain (may be above the block chain!)
 
-	stateCache     state.Database // State database to reuse between imports (contains state cache)
-	bodyCache      *lru.Cache     // Cache for the most recent block bodies
-	bodyRLPCache   *lru.Cache     // Cache for the most recent block bodies in RLP encoded format
-	receiptsCache  *lru.Cache     // Cache for the most recent receipts per block
-	blockCache     *lru.Cache     // Cache for the most recent entire blocks
-	txLookupCache  *lru.Cache     // Cache for the most recent transaction lookup data.
-	futureBlocks   *lru.Cache     // future blocks are blocks added for later processing
-	externalBlocks *lru.Cache     // blocks that need to be applied externally
+	stateCache    state.Database // State database to reuse between imports (contains state cache)
+	bodyCache     *lru.Cache     // Cache for the most recent block bodies
+	bodyRLPCache  *lru.Cache     // Cache for the most recent block bodies in RLP encoded format
+	receiptsCache *lru.Cache     // Cache for the most recent receipts per block
+	blockCache    *lru.Cache     // Cache for the most recent entire blocks
+	txLookupCache *lru.Cache     // Cache for the most recent transaction lookup data.
+	futureBlocks  *lru.Cache     // future blocks are blocks added for later processing
+
+	externalBlocks *fastcache.Cache // blocks that need to be applied externally
 
 	quit          chan struct{}  // blockchain quit channel
 	wg            sync.WaitGroup // chain processing wait group for shutting down
@@ -227,7 +233,13 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	blockCache, _ := lru.New(blockCacheLimit)
 	txLookupCache, _ := lru.New(txLookupCacheLimit)
 	futureBlocks, _ := lru.New(maxFutureBlocks)
-	externalBlocks, _ := lru.New(maxExternalBlocks)
+
+	var externalBlocks *fastcache.Cache
+	if cacheConfig.ExternalBlockJournal == "" {
+		externalBlocks = fastcache.New(cacheConfig.ExternalBlockLimit * 1024 * 1024)
+	} else {
+		externalBlocks = fastcache.LoadFromFileOrNew(cacheConfig.ExternalBlockJournal, cacheConfig.ExternalBlockLimit*1024*1024)
+	}
 
 	bc := &BlockChain{
 		chainConfig: chainConfig,
@@ -1011,6 +1023,11 @@ func (bc *BlockChain) Stop() {
 			log.Error("Failed to journal state snapshot", "err", err)
 		}
 	}
+
+	// Save the state of the external block cache to disk
+	log.Info("Writing external blocks state to disk", "dir", bc.cacheConfig.ExternalBlockJournal)
+	bc.externalBlocks.SaveToFileConcurrent(bc.cacheConfig.ExternalBlockJournal, runtime.GOMAXPROCS(0))
+
 	// Ensure the state of a recent block is also stored to disk before exiting.
 	// We're writing three different states to catch different restart scenarios:
 	//  - HEAD:     So we don't need to reprocess any blocks in the general case
@@ -1605,11 +1622,15 @@ func (bc *BlockChain) addFutureBlock(block *types.Block) error {
 // addExternalBlock adds the received block to the external block cache.
 func (bc *BlockChain) AddExternalBlock(block *types.ExternalBlock) error {
 	context := []interface{}{
-		"context", block.Context(), "numbers", block.Header().Number, "key", block.CacheKey(), "location", block.Header().Location,
+		"context", block.Context(), "numbers", block.Header().Number, "location", block.Header().Location,
 		"txs", len(block.Transactions()),
 	}
 	log.Info("New external block", context...)
-	bc.externalBlocks.Add(block.CacheKey(), block)
+	data, err := rlp.EncodeToBytes(block)
+	if err != nil {
+		log.Crit("Failed to RLP encode external block", "err", err)
+	}
+	bc.externalBlocks.Set(block.CacheKey(), data)
 	return nil
 }
 
@@ -2455,12 +2476,11 @@ func (bc *BlockChain) GetHeaderByHash(hash common.Hash) *types.Header {
 
 func (bc *BlockChain) GetExtBlockByHashAndContext(hash common.Hash, context int) (*types.ExternalBlock, error) {
 	// Lookup block in externalBlocks cache
-	key := strconv.Itoa(context) + hash.String()
-	if block, ok := bc.externalBlocks.Get(key); ok {
-		return block.(*types.ExternalBlock), nil
-	}
-	log.Warn("Unable to find external block", "key", key)
-	return &types.ExternalBlock{}, errors.New("external block not found in cache")
+	key := []byte(strconv.Itoa(context) + hash.String())
+	data := bc.externalBlocks.Get(nil, key)
+	var blockDecoded *types.ExternalBlock
+	rlp.DecodeBytes(data, &blockDecoded)
+	return blockDecoded, nil
 }
 
 // HasHeader checks if a block header is present in the database or not, caching

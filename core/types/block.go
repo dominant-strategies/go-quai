@@ -214,8 +214,8 @@ type Block struct {
 	ReceivedFrom interface{}
 }
 
-// "external" block encoding. used for eth protocol, etc.
-type extblock struct {
+// rlp block encoding. used for eth protocol, etc.
+type rlpblock struct {
 	Header *Header
 	Txs    []*Transaction
 	Uncles []*Header
@@ -230,6 +230,34 @@ type ExternalBlock struct {
 	// caches
 	hash atomic.Value
 	size atomic.Value
+}
+
+// rlp external block encoding. used for eth protocol, etc.
+type rlpexternalblock struct {
+	Header  *Header
+	Txs     []*Transaction
+	Context *big.Int
+}
+
+// DecodeRLP decodes the Ethereum
+func (b *ExternalBlock) DecodeRLP(s *rlp.Stream) error {
+	var eb rlpexternalblock
+	_, size, _ := s.Kind()
+	if err := s.Decode(&eb); err != nil {
+		return err
+	}
+	b.header, b.context, b.transactions = eb.Header, eb.Context, eb.Txs
+	b.size.Store(common.StorageSize(rlp.ListSize(size)))
+	return nil
+}
+
+// EncodeRLP serializes b into the Ethereum RLP block format.
+func (b *ExternalBlock) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, rlpexternalblock{
+		Header:  b.header,
+		Txs:     b.transactions,
+		Context: b.context,
+	})
 }
 
 // NewExternalBlockWithHeader creates a block with the given header data. The
@@ -254,9 +282,10 @@ func (b *ExternalBlock) ExternalBlockWithBody(transactions []*Transaction, conte
 func (b *ExternalBlock) Header() *Header            { return CopyHeader(b.header) }
 func (b *ExternalBlock) Transactions() Transactions { return b.transactions }
 func (b *ExternalBlock) Context() *big.Int          { return b.context }
-func (b *ExternalBlock) CacheKey() string {
+func (b *ExternalBlock) CacheKey() []byte {
 	hash := b.header.Hash()
-	return b.context.String() + hash.String()
+	toBytes := []byte(b.context.String() + hash.String())
+	return toBytes
 }
 
 func (b *ExternalBlock) Hash() common.Hash {
@@ -385,7 +414,7 @@ func CopyHeader(h *Header) *Header {
 
 // DecodeRLP decodes the Ethereum
 func (b *Block) DecodeRLP(s *rlp.Stream) error {
-	var eb extblock
+	var eb rlpblock
 	_, size, _ := s.Kind()
 	if err := s.Decode(&eb); err != nil {
 		return err
@@ -397,7 +426,7 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 
 // EncodeRLP serializes b into the Ethereum RLP block format.
 func (b *Block) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, extblock{
+	return rlp.Encode(w, rlpblock{
 		Header: b.header,
 		Txs:    b.transactions,
 		Uncles: b.uncles,

@@ -762,7 +762,7 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 
 		// If we have reached a coincident block or we're in Region and found the prev region
 		if difficultyContext < context && steppedBack {
-			log.Info("TraceBranch: Stopping on found coincident block in lower context", "number", header.Number, "context", context)
+			// log.Info("TraceBranch: Stopping on found coincident block in lower context", "number", header.Number, "context", context)
 			break
 		}
 
@@ -772,7 +772,7 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 			if err != nil {
 				log.Warn("TraceBranch: External Block not found for header", "number", header.Number[context], "context", context)
 			}
-			log.Warn("TraceBranch: Appending to external blocks", "number", extBlock.Header().Number, "context", context)
+			// log.Warn("TraceBranch: Appending to external blocks", "number", extBlock.Header().Number, "context", context)
 			extBlocks = append(extBlocks, extBlock)
 		}
 
@@ -782,7 +782,7 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 
 		// Stop at the stop hash before iterating downward
 		if header.ParentHash[context] == stopHash || context == 0 || header.Number[context].Cmp(big.NewInt(1)) <= 0 {
-			log.Info("TraceBranch: Stopping on stop hash", "number", header.Number, "context", context)
+			// log.Info("TraceBranch: Stopping on stop hash", "number", header.Number, "context", context)
 			break
 		}
 
@@ -834,8 +834,9 @@ func (ethash *Ethash) TraceBranches(chain consensus.ChainHeaderReader, header *t
 func (ethash *Ethash) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
 
 	externalBlocks := ethash.TraceBranches(chain, header)
-	log.Info("Amount of External blocks", "number", len(externalBlocks))
-
+	for i := 0; i < len(externalBlocks); i++ {
+		log.Info("FinalizeAndAssemble: External block and transactions: ", "number", externalBlocks[i].Header().Number, "context", externalBlocks[i].Context(), "txs", len(externalBlocks[i].Transactions()))
+	}
 	// Finalize block
 	ethash.Finalize(chain, header, state, txs, uncles)
 
