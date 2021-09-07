@@ -1622,7 +1622,7 @@ func (bc *BlockChain) addFutureBlock(block *types.Block) error {
 // addExternalBlock adds the received block to the external block cache.
 func (bc *BlockChain) AddExternalBlock(block *types.ExternalBlock) error {
 	context := []interface{}{
-		"context", block.Context(), "numbers", block.Header().Number, "location", block.Header().Location,
+		"context", block.Context(), "numbers", block.Header().Number, "key", block.CacheKey(), "location", block.Header().Location,
 		"txs", len(block.Transactions()),
 	}
 	log.Info("New external block", context...)
@@ -2467,9 +2467,9 @@ func (bc *BlockChain) GetHeader(hash common.Hash, number uint64) *types.Header {
 // found.
 func (bc *BlockChain) GetHeaderByHash(hash common.Hash) *types.Header {
 	// Blockchain might have cached the whole block, only if not go to headerchain
-	if block, ok := bc.blockCache.Get(hash); ok {
-		return block.(*types.Block).Header()
-	}
+	// if block, ok := bc.blockCache.Get(hash); ok {
+	// 	return block.(*types.Block).Header()
+	// }
 
 	return bc.hc.GetHeaderByHash(hash)
 }
@@ -2477,7 +2477,10 @@ func (bc *BlockChain) GetHeaderByHash(hash common.Hash) *types.Header {
 func (bc *BlockChain) GetExtBlockByHashAndContext(hash common.Hash, context int) (*types.ExternalBlock, error) {
 	// Lookup block in externalBlocks cache
 	key := []byte(strconv.Itoa(context) + hash.String())
-	data := bc.externalBlocks.Get(nil, key)
+	data, ok := bc.externalBlocks.HasGet(nil, key)
+	if !ok {
+		return &types.ExternalBlock{}, errors.New("error finding external block by context and hash")
+	}
 	var blockDecoded *types.ExternalBlock
 	rlp.DecodeBytes(data, &blockDecoded)
 	return blockDecoded, nil
