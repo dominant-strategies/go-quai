@@ -96,7 +96,7 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	// Validate Address Operability
 	byteID := config.ChainIDByte()
 
-	if author.Bytes()[0] != byteID {
+	if msg.From().Bytes()[0] != byteID {
 		return nil, ErrSenderInoperable
 	}
 

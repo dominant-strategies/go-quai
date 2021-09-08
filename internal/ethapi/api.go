@@ -1793,6 +1793,13 @@ type rpcTransaction struct {
 	txExtraInfo
 }
 
+func (tx *rpcTransaction) UnmarshalJSON(msg []byte) error {
+	if err := json.Unmarshal(msg, &tx.tx); err != nil {
+		return err
+	}
+	return json.Unmarshal(msg, &tx.txExtraInfo)
+}
+
 type txExtraInfo struct {
 	BlockNumber *string         `json:"blockNumber,omitempty"`
 	BlockHash   *common.Hash    `json:"blockHash,omitempty"`
@@ -1820,17 +1827,15 @@ func (s *PublicBlockChainAPI) SendMinedBlock(ctx context.Context, raw json.RawMe
 	if types.IsEqualHashSlice(head.UncleHash, types.EmptyUncleHash) && len(body.UncleHashes) > 0 {
 		return fmt.Errorf("server returned non-empty uncle list but block header indicates no uncles")
 	}
-	// emptyHash := make([]common.Hash, 3)
-	// if !types.IsEqualHashSlice(head.UncleHash, emptyHash) && len(body.UncleHashes) == 0 {
-	// 	return fmt.Errorf("server returned empty uncle list but block header indicates uncles")
-	// }
-	// if !types.IsEqualHashSlice(head.TxHash, types.EmptyRootHash) && len(body.Transactions) > 0 {
-	// 	return fmt.Errorf("server returned non-empty transaction list but block header indicates no transactions")
-	// }
-	// if !types.IsEqualHashSlice(head.TxHash, types.EmptyRootHash) && len(body.Transactions) == 0 {
-	// 	return fmt.Errorf("server returned empty transaction list but block header indicates transactions")
-	// }
-
+	if !types.IsEqualHashSlice(head.UncleHash, types.EmptyUncleHash) && len(body.UncleHashes) == 0 {
+		return fmt.Errorf("server returned empty uncle list but block header indicates uncles")
+	}
+	if types.IsEqualHashSlice(head.TxHash, types.EmptyRootHash) && len(body.Transactions) > 0 {
+		return fmt.Errorf("server returned non-empty transaction list but block header indicates no transactions")
+	}
+	if !types.IsEqualHashSlice(head.TxHash, types.EmptyRootHash) && len(body.Transactions) == 0 {
+		return fmt.Errorf("server returned empty transaction list but block header indicates transactions")
+	}
 	// Load uncles because they are not included in the block response.
 	var uncles []*types.Header
 	txs := make([]*types.Transaction, len(body.Transactions))
@@ -1851,7 +1856,7 @@ type rpcExternalBlock struct {
 	Context      *big.Int         `json:"context"`
 }
 
-// SendMinedBlock will run checks on the block and add to canonical chain if valid.
+// SendExternalBlock will run checks on the block and add to canonical chain if valid.
 func (s *PublicBlockChainAPI) SendExternalBlock(ctx context.Context, raw json.RawMessage) error {
 	// Decode header and transactions.
 	var head *types.Header
