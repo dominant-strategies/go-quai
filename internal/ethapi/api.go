@@ -749,11 +749,11 @@ func (s *PublicBlockChainAPI) GetBlockByNumber(ctx context.Context, number rpc.B
 }
 
 func (s *PublicBlockChainAPI) PendingBlock(ctx context.Context) (map[string]interface{}, error) {
-	block, _ := s.b.PendingBlockAndReceipts()
+	block, receipts := s.b.PendingBlockAndReceipts()
 	if block == nil {
 		return nil, errors.New("no pending block")
 	}
-	return s.rpcMarshalBlock(ctx, block, true, true)
+	return s.rpcMarshalBlockWithReceipts(ctx, block, receipts, true, true)
 }
 
 // GetBlockByHash returns the requested block. When fullTx is true all transactions in the block are returned in full
@@ -1239,10 +1239,40 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool) (map[string]i
 	return fields, nil
 }
 
+// RPCMarshalReceipt converts the given receipt to the RPC output.
+func RPCMarshalReceipt(receipt *types.Receipt) (map[string]interface{}, error) {
+	fields := map[string]interface{}{
+		"gasUsed":           hexutil.Uint64(receipt.GasUsed),
+		"cumulativeGasUsed": hexutil.Uint64(receipt.CumulativeGasUsed),
+		"logs":              receipt.Logs,
+		"logsBloom":         receipt.Bloom,
+		"transactionHash":   receipt.TxHash,
+		"type":              hexutil.Uint(receipt.Type),
+		"blockHash":         receipt.BlockHash,
+		"blockNumber":       hexutil.Uint64(receipt.BlockNumber.Uint64()),
+		"transactionIndex":  hexutil.Uint64(receipt.TransactionIndex),
+	}
+
+	// Assign receipt status or post state.
+	if len(receipt.PostState) > 0 {
+		fields["root"] = hexutil.Bytes(receipt.PostState)
+	} else {
+		fields["status"] = hexutil.Uint(receipt.Status)
+	}
+	if receipt.Logs == nil {
+		fields["logs"] = [][]*types.Log{}
+	}
+	// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
+	if receipt.ContractAddress != (common.Address{}) {
+		fields["contractAddress"] = receipt.ContractAddress
+	}
+	return fields, nil
+}
+
 // RPCMarshalBlock converts the given block to the RPC output which depends on fullTx. If inclTx is true transactions are
 // returned. When fullTx is true the returned block contains full transaction details, otherwise it will only contain
 // transaction hashes.
-func RPCMarshalExternalBlock(block *types.Block, context *big.Int) (map[string]interface{}, error) {
+func RPCMarshalExternalBlock(block *types.Block, receipts []*types.Receipt, context *big.Int) (map[string]interface{}, error) {
 	fields := RPCMarshalHeader(block.Header())
 	fields["size"] = hexutil.Uint64(block.Size())
 
@@ -1258,6 +1288,13 @@ func RPCMarshalExternalBlock(block *types.Block, context *big.Int) (map[string]i
 			return nil, err
 		}
 	}
+
+	fieldReceipts := make([]interface{}, len(receipts))
+	for i, receipt := range receipts {
+		fieldReceipts[i], _ = RPCMarshalReceipt(receipt)
+	}
+	fields["receipts"] = fieldReceipts
+
 	fields["transactions"] = transactions
 	fields["context"] = context
 	return fields, nil
@@ -1281,6 +1318,24 @@ func (s *PublicBlockChainAPI) rpcMarshalBlock(ctx context.Context, b *types.Bloc
 	if inclTx {
 		fields["totalDifficulty"] = (*hexutil.Big)(s.b.GetTd(ctx, b.Hash()))
 	}
+	return fields, err
+}
+
+// rpcMarshalBlock uses the generalized output filler, then adds the total difficulty field, which requires
+// a `PublicBlockchainAPI`.
+func (s *PublicBlockChainAPI) rpcMarshalBlockWithReceipts(ctx context.Context, b *types.Block, receipts types.Receipts, inclTx bool, fullTx bool) (map[string]interface{}, error) {
+	fields, err := RPCMarshalBlock(b, inclTx, fullTx)
+	if err != nil {
+		return nil, err
+	}
+	if inclTx {
+		fields["totalDifficulty"] = (*hexutil.Big)(s.b.GetTd(ctx, b.Hash()))
+	}
+	fieldReceipts := make([]interface{}, len(receipts))
+	for i, receipt := range receipts {
+		fieldReceipts[i], _ = RPCMarshalReceipt(receipt)
+	}
+	fields["receipts"] = fieldReceipts
 	return fields, err
 }
 
@@ -1810,6 +1865,7 @@ type rpcBlock struct {
 	Hash         common.Hash      `json:"hash"`
 	Transactions []rpcTransaction `json:"transactions"`
 	UncleHashes  []common.Hash    `json:"uncles"`
+	Receipts     types.Receipts   `json:"receipts"`
 }
 
 // SendMinedBlock will run checks on the block and add to canonical chain if valid.
@@ -1853,6 +1909,7 @@ func (s *PublicBlockChainAPI) SendMinedBlock(ctx context.Context, raw json.RawMe
 type rpcExternalBlock struct {
 	Hash         common.Hash      `json:"hash"`
 	Transactions []rpcTransaction `json:"transactions"`
+	Receipts     []*types.Receipt `json:"receipts"`
 	Context      *big.Int         `json:"context"`
 }
 
@@ -1874,7 +1931,12 @@ func (s *PublicBlockChainAPI) SendExternalBlock(ctx context.Context, raw json.Ra
 		txs[i] = tx.tx
 	}
 
-	block := types.NewExternalBlockWithHeader(head).ExternalBlockWithBody(txs, body.Context)
+	receipts := make([]*types.Receipt, len(body.Receipts))
+	for i, receipt := range body.Receipts {
+		receipts[i] = receipt
+	}
+
+	block := types.NewExternalBlockWithHeader(head).ExternalBlockWithBody(txs, receipts, body.Context)
 
 	s.b.AddExternalBlock(block)
 

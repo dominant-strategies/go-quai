@@ -1623,7 +1623,7 @@ func (bc *BlockChain) addFutureBlock(block *types.Block) error {
 func (bc *BlockChain) AddExternalBlock(block *types.ExternalBlock) error {
 	context := []interface{}{
 		"context", block.Context(), "numbers", block.Header().Number, "hash", block.Hash(), "location", block.Header().Location,
-		"txs", len(block.Transactions()),
+		"txs", len(block.Transactions()), "receipts", len(block.Receipts()),
 	}
 	log.Info("New external block", context...)
 	data, err := rlp.EncodeToBytes(block)

@@ -88,6 +88,7 @@ type receiptRLP struct {
 	CumulativeGasUsed uint64
 	Bloom             Bloom
 	Logs              []*Log
+	TxHash            common.Hash
 }
 
 // storedReceiptRLP is the storage encoding of a receipt.
@@ -137,7 +138,7 @@ func NewReceipt(root []byte, failed bool, cumulativeGasUsed uint64) *Receipt {
 // EncodeRLP implements rlp.Encoder, and flattens the consensus fields of a receipt
 // into an RLP stream. If no post state is present, byzantium fork is assumed.
 func (r *Receipt) EncodeRLP(w io.Writer) error {
-	data := &receiptRLP{r.statusEncoding(), r.CumulativeGasUsed, r.Bloom, r.Logs}
+	data := &receiptRLP{r.statusEncoding(), r.CumulativeGasUsed, r.Bloom, r.Logs, r.TxHash}
 	if r.Type == LegacyTxType {
 		return rlp.Encode(w, data)
 	}
@@ -190,7 +191,7 @@ func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 }
 
 func (r *Receipt) setFromRLP(data receiptRLP) error {
-	r.CumulativeGasUsed, r.Bloom, r.Logs = data.CumulativeGasUsed, data.Bloom, data.Logs
+	r.CumulativeGasUsed, r.Bloom, r.Logs, r.TxHash = data.CumulativeGasUsed, data.Bloom, data.Logs, data.TxHash
 	return r.setStatus(data.PostStateOrStatus)
 }
 
@@ -335,7 +336,7 @@ func (rs Receipts) Len() int { return len(rs) }
 // EncodeIndex encodes the i'th receipt to w.
 func (rs Receipts) EncodeIndex(i int, w *bytes.Buffer) {
 	r := rs[i]
-	data := &receiptRLP{r.statusEncoding(), r.CumulativeGasUsed, r.Bloom, r.Logs}
+	data := &receiptRLP{r.statusEncoding(), r.CumulativeGasUsed, r.Bloom, r.Logs, r.TxHash}
 	switch r.Type {
 	case LegacyTxType:
 		rlp.Encode(w, data)
