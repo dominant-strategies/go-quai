@@ -45,6 +45,7 @@ const (
 	LegacyTxType = iota
 	AccessListTxType
 	DynamicFeeTxType
+	ExternalTxType
 )
 
 // Transaction is an Ethereum transaction.
@@ -569,48 +570,75 @@ func (t *TransactionsByPriceAndNonce) Pop() {
 //
 // NOTE: In a future PR this will be removed.
 type Message struct {
-	to         *common.Address
-	from       common.Address
-	nonce      uint64
-	amount     *big.Int
-	gasLimit   uint64
-	gasPrice   *big.Int
-	gasFeeCap  *big.Int
-	gasTipCap  *big.Int
-	data       []byte
-	accessList AccessList
-	checkNonce bool
+	to           *common.Address
+	from         common.Address
+	nonce        uint64
+	amount       *big.Int
+	gasLimit     uint64
+	gasPrice     *big.Int
+	gasFeeCap    *big.Int
+	gasTipCap    *big.Int
+	data         []byte
+	accessList   AccessList
+	checkNonce   bool
+	fromExternal bool
 }
 
 func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice, gasFeeCap, gasTipCap *big.Int, data []byte, accessList AccessList, checkNonce bool) Message {
 	return Message{
-		from:       from,
-		to:         to,
-		nonce:      nonce,
-		amount:     amount,
-		gasLimit:   gasLimit,
-		gasPrice:   gasPrice,
-		gasFeeCap:  gasFeeCap,
-		gasTipCap:  gasTipCap,
-		data:       data,
-		accessList: accessList,
-		checkNonce: checkNonce,
+		from:         from,
+		to:           to,
+		nonce:        nonce,
+		amount:       amount,
+		gasLimit:     gasLimit,
+		gasPrice:     gasPrice,
+		gasFeeCap:    gasFeeCap,
+		gasTipCap:    gasTipCap,
+		data:         data,
+		accessList:   accessList,
+		checkNonce:   checkNonce,
+		fromExternal: false,
 	}
 }
 
 // AsMessage returns the transaction as a core.Message.
 func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 	msg := Message{
-		nonce:      tx.Nonce(),
-		gasLimit:   tx.Gas(),
-		gasPrice:   new(big.Int).Set(tx.GasPrice()),
-		gasFeeCap:  new(big.Int).Set(tx.GasFeeCap()),
-		gasTipCap:  new(big.Int).Set(tx.GasTipCap()),
-		to:         tx.To(),
-		amount:     tx.Value(),
-		data:       tx.Data(),
-		accessList: tx.AccessList(),
-		checkNonce: true,
+		nonce:        tx.Nonce(),
+		gasLimit:     tx.Gas(),
+		gasPrice:     new(big.Int).Set(tx.GasPrice()),
+		gasFeeCap:    new(big.Int).Set(tx.GasFeeCap()),
+		gasTipCap:    new(big.Int).Set(tx.GasTipCap()),
+		to:           tx.To(),
+		amount:       tx.Value(),
+		data:         tx.Data(),
+		accessList:   tx.AccessList(),
+		checkNonce:   true,
+		fromExternal: false,
+	}
+	// If baseFee provided, set gasPrice to effectiveGasPrice.
+	if baseFee != nil {
+		msg.gasPrice = math.BigMin(msg.gasPrice.Add(msg.gasTipCap, baseFee), msg.gasFeeCap)
+	}
+	var err error
+	msg.from, err = Sender(s, tx)
+	return msg, err
+}
+
+// AsMessage returns the transaction as a core.Message.
+func (tx *Transaction) AsExternalMessage(s Signer, baseFee *big.Int) (Message, error) {
+	msg := Message{
+		nonce:        tx.Nonce(),
+		gasLimit:     tx.Gas(),
+		gasPrice:     new(big.Int).Set(tx.GasPrice()),
+		gasFeeCap:    new(big.Int).Set(tx.GasFeeCap()),
+		gasTipCap:    new(big.Int).Set(tx.GasTipCap()),
+		to:           tx.To(),
+		amount:       tx.Value(),
+		data:         tx.Data(),
+		accessList:   tx.AccessList(),
+		checkNonce:   true,
+		fromExternal: true,
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
@@ -632,3 +660,4 @@ func (m Message) Nonce() uint64          { return m.nonce }
 func (m Message) Data() []byte           { return m.data }
 func (m Message) AccessList() AccessList { return m.accessList }
 func (m Message) CheckNonce() bool       { return m.checkNonce }
+func (m Message) FromExternal() bool     { return m.fromExternal }

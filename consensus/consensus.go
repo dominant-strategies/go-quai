@@ -100,6 +100,9 @@ type Engine interface {
 	FinalizeAndAssemble(chain ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction,
 		uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error)
 
+	// GetExternalBlocks retrieves all valid external blocks from external chains
+	GetExternalBlocks(chain ChainHeaderReader, header *types.Header) []*types.ExternalBlock
+
 	// Seal generates a new sealing request for the given input block and pushes
 	// the result into the given channel.
 	//

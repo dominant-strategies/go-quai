@@ -591,6 +591,11 @@ func (c *Clique) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *
 	return types.NewBlock(header, txs, nil, receipts, trie.NewStackTrie(nil)), nil
 }
 
+// GetExternalBlocks traces all available branches to find external blocks
+func (c *Clique) GetExternalBlocks(chain consensus.ChainHeaderReader, header *types.Header) []*types.ExternalBlock {
+	return make([]*types.ExternalBlock, 0)
+}
+
 // Authorize injects a private key into the consensus engine to mint new blocks
 // with.
 func (c *Clique) Authorize(signer common.Address, signFn SignerFn) {

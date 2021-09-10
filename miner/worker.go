@@ -998,6 +998,23 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		w.updateSnapshot()
 		return
 	}
+
+	// Gather external blocks and apply transactions
+	externalBlocks := w.engine.GetExternalBlocks(w.chain, header)
+	for _, block := range externalBlocks {
+		for _, tx := range block.Transactions() {
+			snap := w.current.state.Snapshot()
+			receipt, err := core.ApplyExternalTransaction(w.chainConfig, w.chain, &w.coinbase, w.current.gasPool, w.current.state, w.current.header, block, tx, &w.current.header.GasUsed[types.QuaiNetworkContext], *w.chain.GetVMConfig())
+			if err != nil {
+				w.current.state.RevertToSnapshot(snap)
+				log.Debug("Transaction failed, account skipped", "hash", tx.Hash(), "err", err)
+			} else {
+				w.current.txs = append(w.current.txs, tx)
+				w.current.receipts = append(w.current.receipts, receipt)
+			}
+		}
+	}
+
 	// Split the pending transactions into locals and remotes
 	localTxs, remoteTxs := make(map[common.Address]types.Transactions), pending
 	for _, account := range w.eth.TxPool().Locals() {

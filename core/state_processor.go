@@ -17,6 +17,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -72,6 +73,16 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	}
 	blockContext := NewEVMBlockContext(header, p.bc, nil)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
+
+	// Gather external blocks and apply transactions
+	// externalBlocks := p.engine.GetExternalBlocks(p.bc, header)
+	// for _, block := range externalBlocks {
+	// 	for _, tx := range block.Transactions() {
+	// 		// receipt, err := ApplyExternalTransaction(msg, p.config, p.bc, nil, gp, statedb, blockNumber, blockHash, blocl, tx, usedGas, vmenv)
+
+	// 	}
+	// }
+
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
 		msg, err := tx.AsMessage(types.MakeSigner(p.config, header.Number[types.QuaiNetworkContext]), header.BaseFee[types.QuaiNetworkContext])
@@ -158,4 +169,63 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	blockContext := NewEVMBlockContext(header, bc, author)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, cfg)
 	return applyTransaction(msg, config, bc, author, gp, statedb, header.Number[types.QuaiNetworkContext], header.Hash(), tx, usedGas, vmenv)
+}
+
+func applyExternalTransaction(msg types.Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) error {
+	// Create a new context to be used in the EVM environment.
+	txContext := NewEVMTxContext(msg)
+	evm.Reset(txContext, statedb)
+
+	// Apply the transaction to the current state (included in the env).
+	_, err := ApplyMessage(evm, msg, gp)
+	if err != nil {
+		return err
+	}
+
+	// Update the state with pending changes.
+	if config.IsByzantium(blockNumber) {
+		statedb.Finalise(true)
+	} else {
+		statedb.IntermediateRoot(config.IsEIP158(blockNumber)).Bytes()
+	}
+
+	return err
+}
+
+// ApplyTransaction attempts to apply a transaction to the given state database
+// and uses the input parameters for its environment. It returns the receipt
+// for the transaction, gas used and an error if the transaction failed,
+// indicating the block was invalid.
+func ApplyExternalTransaction(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, externalBlock *types.ExternalBlock, tx *types.Transaction, usedGas *uint64, cfg vm.Config) (*types.Receipt, error) {
+	s := types.MakeSigner(config, header.Number[types.QuaiNetworkContext])
+	byteID := config.ChainIDByte()
+
+	from, err := types.Sender(s, tx)
+	if err != nil {
+		return nil, errors.New("attempting to send from same chain")
+	}
+
+	if from.Bytes()[0] == byteID {
+		return nil, errors.New("attempting to send from same chain")
+	}
+
+	if tx.To().Bytes()[0] != byteID {
+		return nil, errors.New("receipt status not 1")
+	}
+
+	receipt := externalBlock.ReceiptForTransaction(tx)
+	if receipt.Status != 1 {
+		return nil, errors.New("receipt status not 1")
+	}
+
+	msg, err := tx.AsExternalMessage(s, header.BaseFee[types.QuaiNetworkContext])
+	if err != nil {
+		return nil, err
+	}
+
+	// Create a new context to be used in the EVM environment
+	blockContext := NewEVMBlockContext(header, bc, author)
+	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, cfg)
+	applyExternalTransaction(msg, config, bc, author, gp, statedb, header.Number[types.QuaiNetworkContext], header.Hash(), tx, usedGas, vmenv)
+	return receipt, nil
 }
