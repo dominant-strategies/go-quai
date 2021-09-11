@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -604,17 +605,16 @@ func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *b
 // AsMessage returns the transaction as a core.Message.
 func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 	msg := Message{
-		nonce:        tx.Nonce(),
-		gasLimit:     tx.Gas(),
-		gasPrice:     new(big.Int).Set(tx.GasPrice()),
-		gasFeeCap:    new(big.Int).Set(tx.GasFeeCap()),
-		gasTipCap:    new(big.Int).Set(tx.GasTipCap()),
-		to:           tx.To(),
-		amount:       tx.Value(),
-		data:         tx.Data(),
-		accessList:   tx.AccessList(),
-		checkNonce:   true,
-		fromExternal: false,
+		nonce:      tx.Nonce(),
+		gasLimit:   tx.Gas(),
+		gasPrice:   new(big.Int).Set(tx.GasPrice()),
+		gasFeeCap:  new(big.Int).Set(tx.GasFeeCap()),
+		gasTipCap:  new(big.Int).Set(tx.GasTipCap()),
+		to:         tx.To(),
+		amount:     tx.Value(),
+		data:       tx.Data(),
+		accessList: tx.AccessList(),
+		checkNonce: true,
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
@@ -622,30 +622,12 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 	}
 	var err error
 	msg.from, err = Sender(s, tx)
-	return msg, err
-}
+	byteID := params.LookupChainByte(s.ChainID())
 
-// AsMessage returns the transaction as a core.Message.
-func (tx *Transaction) AsExternalMessage(s Signer, baseFee *big.Int) (Message, error) {
-	msg := Message{
-		nonce:        tx.Nonce(),
-		gasLimit:     tx.Gas(),
-		gasPrice:     new(big.Int).Set(tx.GasPrice()),
-		gasFeeCap:    new(big.Int).Set(tx.GasFeeCap()),
-		gasTipCap:    new(big.Int).Set(tx.GasTipCap()),
-		to:           tx.To(),
-		amount:       tx.Value(),
-		data:         tx.Data(),
-		accessList:   tx.AccessList(),
-		checkNonce:   true,
-		fromExternal: true,
+	if msg.from[0] != byteID && tx.To()[0] == byteID {
+		msg.fromExternal = true
 	}
-	// If baseFee provided, set gasPrice to effectiveGasPrice.
-	if baseFee != nil {
-		msg.gasPrice = math.BigMin(msg.gasPrice.Add(msg.gasTipCap, baseFee), msg.gasFeeCap)
-	}
-	var err error
-	msg.from, err = Sender(s, tx)
+
 	return msg, err
 }
 

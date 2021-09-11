@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -74,20 +75,36 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	blockContext := NewEVMBlockContext(header, p.bc, nil)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
 
-	// Gather external blocks and apply transactions
-	// externalBlocks := p.engine.GetExternalBlocks(p.bc, header)
-	// for _, block := range externalBlocks {
-	// 	for _, tx := range block.Transactions() {
-	// 		// receipt, err := ApplyExternalTransaction(msg, p.config, p.bc, nil, gp, statedb, blockNumber, blockHash, blocl, tx, usedGas, vmenv)
-
-	// 	}
-	// }
+	// Gather external blocks and apply transactions, need to trace own local external block cache based on cache to validate
+	i := 0
+	externalBlocks := p.engine.GetExternalBlocks(p.bc, header)
+	for _, externalBlock := range externalBlocks {
+		for _, tx := range externalBlock.Transactions() {
+			msg, err := tx.AsMessage(types.MakeSigner(p.config, header.Number[types.QuaiNetworkContext]), header.BaseFee[types.QuaiNetworkContext])
+			if err != nil {
+				return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+			}
+			log.Info("Adding tx with balance", "val", msg.Value())
+			statedb.Prepare(tx.Hash(), i)
+			receipt, err := applyExternalTransaction(msg, p.config, p.bc, nil, gp, statedb, blockNumber, blockHash, externalBlock, tx, usedGas, vmenv)
+			if err != nil {
+				return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+			}
+			receipts = append(receipts, receipt)
+			allLogs = append(allLogs, receipt.Logs...)
+			i++
+		}
+	}
 
 	// Iterate over and process the individual transactions
-	for i, tx := range block.Transactions() {
+	for _, tx := range block.Transactions() {
 		msg, err := tx.AsMessage(types.MakeSigner(p.config, header.Number[types.QuaiNetworkContext]), header.BaseFee[types.QuaiNetworkContext])
 		if err != nil {
 			return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+		}
+		// All ETxs applied to state must be generated from our cache
+		if msg.FromExternal() {
+			continue
 		}
 		statedb.Prepare(tx.Hash(), i)
 		receipt, err := applyTransaction(msg, p.config, p.bc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv)
@@ -96,6 +113,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		}
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
+		i++
 	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
@@ -171,15 +189,18 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	return applyTransaction(msg, config, bc, author, gp, statedb, header.Number[types.QuaiNetworkContext], header.Hash(), tx, usedGas, vmenv)
 }
 
-func applyExternalTransaction(msg types.Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) error {
+func applyExternalTransaction(msg types.Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, externalBlock *types.ExternalBlock, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (*types.Receipt, error) {
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(msg)
 	evm.Reset(txContext, statedb)
-
+	receipt := externalBlock.ReceiptForTransaction(tx)
+	if receipt.Status != 1 {
+		return nil, errors.New("receipt status not 1")
+	}
 	// Apply the transaction to the current state (included in the env).
 	_, err := ApplyMessage(evm, msg, gp)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Update the state with pending changes.
@@ -189,7 +210,7 @@ func applyExternalTransaction(msg types.Message, config *params.ChainConfig, bc 
 		statedb.IntermediateRoot(config.IsEIP158(blockNumber)).Bytes()
 	}
 
-	return err
+	return receipt, err
 }
 
 // ApplyTransaction attempts to apply a transaction to the given state database
@@ -198,27 +219,8 @@ func applyExternalTransaction(msg types.Message, config *params.ChainConfig, bc 
 // indicating the block was invalid.
 func ApplyExternalTransaction(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, externalBlock *types.ExternalBlock, tx *types.Transaction, usedGas *uint64, cfg vm.Config) (*types.Receipt, error) {
 	s := types.MakeSigner(config, header.Number[types.QuaiNetworkContext])
-	byteID := config.ChainIDByte()
 
-	from, err := types.Sender(s, tx)
-	if err != nil {
-		return nil, errors.New("attempting to send from same chain")
-	}
-
-	if from.Bytes()[0] == byteID {
-		return nil, errors.New("attempting to send from same chain")
-	}
-
-	if tx.To().Bytes()[0] != byteID {
-		return nil, errors.New("receipt status not 1")
-	}
-
-	receipt := externalBlock.ReceiptForTransaction(tx)
-	if receipt.Status != 1 {
-		return nil, errors.New("receipt status not 1")
-	}
-
-	msg, err := tx.AsExternalMessage(s, header.BaseFee[types.QuaiNetworkContext])
+	msg, err := tx.AsMessage(s, header.BaseFee[types.QuaiNetworkContext])
 	if err != nil {
 		return nil, err
 	}
@@ -226,6 +228,5 @@ func ApplyExternalTransaction(config *params.ChainConfig, bc ChainContext, autho
 	// Create a new context to be used in the EVM environment
 	blockContext := NewEVMBlockContext(header, bc, author)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, cfg)
-	applyExternalTransaction(msg, config, bc, author, gp, statedb, header.Number[types.QuaiNetworkContext], header.Hash(), tx, usedGas, vmenv)
-	return receipt, nil
+	return applyExternalTransaction(msg, config, bc, author, gp, statedb, header.Number[types.QuaiNetworkContext], header.Hash(), externalBlock, tx, usedGas, vmenv)
 }
