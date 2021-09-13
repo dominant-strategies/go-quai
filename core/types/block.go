@@ -307,7 +307,7 @@ func (b *ExternalBlock) ExternalBlockWithBody(transactions []*Transaction, recei
 // Simple access methods for ExternalBlocks
 func (b *ExternalBlock) Header() *Header            { return CopyHeader(b.header) }
 func (b *ExternalBlock) Transactions() Transactions { return b.transactions }
-func (b *ExternalBlock) Receipts() []*Receipt       { return b.receipts }
+func (b *ExternalBlock) Receipts() Receipts         { return b.receipts }
 func (b *ExternalBlock) Context() *big.Int          { return b.context }
 func (b *ExternalBlock) CacheKey() []byte {
 	hash := b.header.Hash()

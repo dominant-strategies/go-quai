@@ -79,6 +79,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	i := 0
 	externalBlocks := p.engine.GetExternalBlocks(p.bc, header)
 	for _, externalBlock := range externalBlocks {
+		externalBlock.Receipts().DeriveFields(p.config, externalBlock.Hash(), externalBlock.Header().Number[externalBlock.Context().Int64()].Uint64(), externalBlock.Transactions())
 		for _, tx := range externalBlock.Transactions() {
 			msg, err := tx.AsMessage(types.MakeSigner(p.config, header.Number[types.QuaiNetworkContext]), header.BaseFee[types.QuaiNetworkContext])
 			if err != nil {
@@ -198,10 +199,8 @@ func applyExternalTransaction(msg types.Message, config *params.ChainConfig, bc 
 		return nil, errors.New("receipt status not 1")
 	}
 	// Apply the transaction to the current state (included in the env).
-	_, err := ApplyMessage(evm, msg, gp)
-	if err != nil {
-		return nil, err
-	}
+	statedb.AddBalance(msg.From(), msg.Value())
+	statedb.AddBalance(*msg.To(), msg.Value())
 
 	// Update the state with pending changes.
 	if config.IsByzantium(blockNumber) {
@@ -210,7 +209,7 @@ func applyExternalTransaction(msg types.Message, config *params.ChainConfig, bc 
 		statedb.IntermediateRoot(config.IsEIP158(blockNumber)).Bytes()
 	}
 
-	return receipt, err
+	return receipt, nil
 }
 
 // ApplyTransaction attempts to apply a transaction to the given state database
