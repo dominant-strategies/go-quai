@@ -2505,6 +2505,10 @@ func (bc *BlockChain) QueueAndRetrieveExtBlocks(externalBlocks []*types.External
 
 		externalBlock := result.(*types.ExternalBlock)
 
+		// Must append before gas check since it will never undo queue if 1 block exceeds limit
+		resultBlocks = append(resultBlocks, externalBlock)
+		bc.externalBlockQueue.Remove(key)
+
 		for _, tx := range externalBlock.Transactions() {
 			receipt := externalBlock.ReceiptForTransaction(tx)
 			gasUsed += int(receipt.GasUsed)
@@ -2513,8 +2517,6 @@ func (bc *BlockChain) QueueAndRetrieveExtBlocks(externalBlocks []*types.External
 		if gasUsed > int(header.GasLimit[types.QuaiNetworkContext]/10) {
 			break
 		}
-		resultBlocks = append(resultBlocks, externalBlock)
-		bc.externalBlockQueue.Remove(key)
 	}
 	log.Info("Returning result blocks", "len", len(resultBlocks))
 	return resultBlocks
