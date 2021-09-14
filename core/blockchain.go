@@ -93,6 +93,7 @@ const (
 	maxFutureBlocks     = 256
 	maxTimeFutureBlocks = 30
 	TriesInMemory       = 128
+	extBlockQueueLimit  = 1024
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	//
@@ -195,15 +196,15 @@ type BlockChain struct {
 	currentBlock     atomic.Value // Current head of the block chain
 	currentFastBlock atomic.Value // Current head of the fast-sync chain (may be above the block chain!)
 
-	stateCache    state.Database // State database to reuse between imports (contains state cache)
-	bodyCache     *lru.Cache     // Cache for the most recent block bodies
-	bodyRLPCache  *lru.Cache     // Cache for the most recent block bodies in RLP encoded format
-	receiptsCache *lru.Cache     // Cache for the most recent receipts per block
-	blockCache    *lru.Cache     // Cache for the most recent entire blocks
-	txLookupCache *lru.Cache     // Cache for the most recent transaction lookup data.
-	futureBlocks  *lru.Cache     // future blocks are blocks added for later processing
-
-	externalBlocks *fastcache.Cache // blocks that need to be applied externally
+	stateCache         state.Database   // State database to reuse between imports (contains state cache)
+	bodyCache          *lru.Cache       // Cache for the most recent block bodies
+	bodyRLPCache       *lru.Cache       // Cache for the most recent block bodies in RLP encoded format
+	receiptsCache      *lru.Cache       // Cache for the most recent receipts per block
+	blockCache         *lru.Cache       // Cache for the most recent entire blocks
+	txLookupCache      *lru.Cache       // Cache for the most recent transaction lookup data.
+	futureBlocks       *lru.Cache       // future blocks are blocks added for later processing
+	externalBlockQueue *lru.Cache       // Queue for external blocks
+	externalBlocks     *fastcache.Cache // blocks that need to be applied externally
 
 	quit          chan struct{}  // blockchain quit channel
 	wg            sync.WaitGroup // chain processing wait group for shutting down
@@ -233,6 +234,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	blockCache, _ := lru.New(blockCacheLimit)
 	txLookupCache, _ := lru.New(txLookupCacheLimit)
 	futureBlocks, _ := lru.New(maxFutureBlocks)
+	externalBlockQueue, _ := lru.New(extBlockQueueLimit)
 
 	var externalBlocks *fastcache.Cache
 	if cacheConfig.ExternalBlockJournal == "" {
@@ -251,17 +253,18 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			Journal:   cacheConfig.TrieCleanJournal,
 			Preimages: cacheConfig.Preimages,
 		}),
-		quit:           make(chan struct{}),
-		shouldPreserve: shouldPreserve,
-		bodyCache:      bodyCache,
-		bodyRLPCache:   bodyRLPCache,
-		receiptsCache:  receiptsCache,
-		blockCache:     blockCache,
-		txLookupCache:  txLookupCache,
-		futureBlocks:   futureBlocks,
-		externalBlocks: externalBlocks,
-		engine:         engine,
-		vmConfig:       vmConfig,
+		quit:               make(chan struct{}),
+		shouldPreserve:     shouldPreserve,
+		bodyCache:          bodyCache,
+		bodyRLPCache:       bodyRLPCache,
+		receiptsCache:      receiptsCache,
+		blockCache:         blockCache,
+		txLookupCache:      txLookupCache,
+		futureBlocks:       futureBlocks,
+		externalBlocks:     externalBlocks,
+		externalBlockQueue: externalBlockQueue,
+		engine:             engine,
+		vmConfig:           vmConfig,
 	}
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
@@ -636,6 +639,7 @@ func (bc *BlockChain) SetHeadBeyondRoot(head uint64, root common.Hash) (uint64, 
 	bc.blockCache.Purge()
 	bc.txLookupCache.Purge()
 	bc.futureBlocks.Purge()
+	bc.externalBlockQueue.Purge()
 
 	return rootNumber, bc.loadLastState()
 }
@@ -2484,6 +2488,36 @@ func (bc *BlockChain) GetExtBlockByHashAndContext(hash common.Hash, context int)
 	var blockDecoded *types.ExternalBlock
 	rlp.DecodeBytes(data, &blockDecoded)
 	return blockDecoded, nil
+}
+
+// QueueExternalBlocks takes a set of external blocks and adds them to the queue
+func (bc *BlockChain) QueueAndRetrieveExtBlocks(externalBlocks []*types.ExternalBlock, header *types.Header) []*types.ExternalBlock {
+	for _, block := range externalBlocks {
+		bc.externalBlockQueue.Add(block.Hash(), block)
+	}
+	resultBlocks := make([]*types.ExternalBlock, 0)
+	gasUsed := 0
+	for {
+		key, result, ok := bc.externalBlockQueue.GetOldest()
+		if !ok {
+			break
+		}
+
+		externalBlock := result.(*types.ExternalBlock)
+
+		for _, tx := range externalBlock.Transactions() {
+			receipt := externalBlock.ReceiptForTransaction(tx)
+			gasUsed += int(receipt.GasUsed)
+		}
+		// If the total gasUsed for external transactions exceeds this blocks gasLimit by 10% break
+		if gasUsed > int(header.GasLimit[types.QuaiNetworkContext]/10) {
+			break
+		}
+		resultBlocks = append(resultBlocks, externalBlock)
+		bc.externalBlockQueue.Remove(key)
+	}
+	log.Info("Returning result blocks", "len", len(resultBlocks))
+	return resultBlocks
 }
 
 // HasHeader checks if a block header is present in the database or not, caching

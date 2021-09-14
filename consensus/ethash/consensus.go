@@ -826,7 +826,15 @@ func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, heade
 		externalBlocks = append(externalBlocks, ethash.TraceBranch(chain, coincidentHeader, difficultyContext, stopHash, context)...)
 
 	}
-	return externalBlocks
+
+	// Swap order of external blocks
+	if len(externalBlocks) > 0 {
+		for i, j := 0, len(externalBlocks)-1; i < j; i, j = i+1, j-1 {
+			externalBlocks[i], externalBlocks[j] = externalBlocks[j], externalBlocks[i]
+		}
+	}
+
+	return chain.QueueAndRetrieveExtBlocks(externalBlocks, header)
 }
 
 // FinalizeAndAssemble implements consensus.Engine, accumulating the block and
