@@ -2499,7 +2499,7 @@ func (bc *BlockChain) QueueAndRetrieveExtBlocks(externalBlocks []*types.External
 	gasUsed := 0
 	for {
 		key, result, ok := bc.externalBlockQueue.GetOldest()
-		if !ok {
+		if !ok || result == nil {
 			break
 		}
 
