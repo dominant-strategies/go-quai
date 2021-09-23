@@ -23,11 +23,14 @@ import (
 	"io"
 	"math/big"
 	mrand "math/rand"
+	"runtime"
 	"sort"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/common/prque"
@@ -90,7 +93,7 @@ const (
 	maxFutureBlocks     = 256
 	maxTimeFutureBlocks = 30
 	TriesInMemory       = 128
-	maxExternalBlocks   = 1024
+	extBlockQueueLimit  = 1024
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	//
@@ -132,16 +135,20 @@ type CacheConfig struct {
 	Preimages           bool          // Whether to store preimage of trie key to the disk
 
 	SnapshotWait bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
+
+	ExternalBlockLimit   int    // Memory allowance (MB) to use for caching trie nodes in memory
+	ExternalBlockJournal string // Disk journal for saving clean cache entries.
 }
 
 // defaultCacheConfig are the default caching values if none are specified by the
 // user (also used during testing).
 var defaultCacheConfig = &CacheConfig{
-	TrieCleanLimit: 256,
-	TrieDirtyLimit: 256,
-	TrieTimeLimit:  5 * time.Minute,
-	SnapshotLimit:  256,
-	SnapshotWait:   true,
+	TrieCleanLimit:     256,
+	TrieDirtyLimit:     256,
+	TrieTimeLimit:      5 * time.Minute,
+	SnapshotLimit:      256,
+	SnapshotWait:       true,
+	ExternalBlockLimit: 256,
 }
 
 // BlockChain represents the canonical chain given a database with a genesis
@@ -189,14 +196,15 @@ type BlockChain struct {
 	currentBlock     atomic.Value // Current head of the block chain
 	currentFastBlock atomic.Value // Current head of the fast-sync chain (may be above the block chain!)
 
-	stateCache     state.Database // State database to reuse between imports (contains state cache)
-	bodyCache      *lru.Cache     // Cache for the most recent block bodies
-	bodyRLPCache   *lru.Cache     // Cache for the most recent block bodies in RLP encoded format
-	receiptsCache  *lru.Cache     // Cache for the most recent receipts per block
-	blockCache     *lru.Cache     // Cache for the most recent entire blocks
-	txLookupCache  *lru.Cache     // Cache for the most recent transaction lookup data.
-	futureBlocks   *lru.Cache     // future blocks are blocks added for later processing
-	externalBlocks *lru.Cache     // blocks that need to be applied externally
+	stateCache         state.Database   // State database to reuse between imports (contains state cache)
+	bodyCache          *lru.Cache       // Cache for the most recent block bodies
+	bodyRLPCache       *lru.Cache       // Cache for the most recent block bodies in RLP encoded format
+	receiptsCache      *lru.Cache       // Cache for the most recent receipts per block
+	blockCache         *lru.Cache       // Cache for the most recent entire blocks
+	txLookupCache      *lru.Cache       // Cache for the most recent transaction lookup data.
+	futureBlocks       *lru.Cache       // future blocks are blocks added for later processing
+	externalBlockQueue *lru.Cache       // Queue for external blocks
+	externalBlocks     *fastcache.Cache // blocks that need to be applied externally
 
 	quit          chan struct{}  // blockchain quit channel
 	wg            sync.WaitGroup // chain processing wait group for shutting down
@@ -226,7 +234,14 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	blockCache, _ := lru.New(blockCacheLimit)
 	txLookupCache, _ := lru.New(txLookupCacheLimit)
 	futureBlocks, _ := lru.New(maxFutureBlocks)
-	externalBlocks, _ := lru.New(maxExternalBlocks)
+	externalBlockQueue, _ := lru.New(extBlockQueueLimit)
+
+	var externalBlocks *fastcache.Cache
+	if cacheConfig.ExternalBlockJournal == "" {
+		externalBlocks = fastcache.New(cacheConfig.ExternalBlockLimit * 1024 * 1024)
+	} else {
+		externalBlocks = fastcache.LoadFromFileOrNew(cacheConfig.ExternalBlockJournal, cacheConfig.ExternalBlockLimit*1024*1024)
+	}
 
 	bc := &BlockChain{
 		chainConfig: chainConfig,
@@ -238,17 +253,18 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			Journal:   cacheConfig.TrieCleanJournal,
 			Preimages: cacheConfig.Preimages,
 		}),
-		quit:           make(chan struct{}),
-		shouldPreserve: shouldPreserve,
-		bodyCache:      bodyCache,
-		bodyRLPCache:   bodyRLPCache,
-		receiptsCache:  receiptsCache,
-		blockCache:     blockCache,
-		txLookupCache:  txLookupCache,
-		futureBlocks:   futureBlocks,
-		externalBlocks: externalBlocks,
-		engine:         engine,
-		vmConfig:       vmConfig,
+		quit:               make(chan struct{}),
+		shouldPreserve:     shouldPreserve,
+		bodyCache:          bodyCache,
+		bodyRLPCache:       bodyRLPCache,
+		receiptsCache:      receiptsCache,
+		blockCache:         blockCache,
+		txLookupCache:      txLookupCache,
+		futureBlocks:       futureBlocks,
+		externalBlocks:     externalBlocks,
+		externalBlockQueue: externalBlockQueue,
+		engine:             engine,
+		vmConfig:           vmConfig,
 	}
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
@@ -623,6 +639,7 @@ func (bc *BlockChain) SetHeadBeyondRoot(head uint64, root common.Hash) (uint64, 
 	bc.blockCache.Purge()
 	bc.txLookupCache.Purge()
 	bc.futureBlocks.Purge()
+	bc.externalBlockQueue.Purge()
 
 	return rootNumber, bc.loadLastState()
 }
@@ -1010,6 +1027,11 @@ func (bc *BlockChain) Stop() {
 			log.Error("Failed to journal state snapshot", "err", err)
 		}
 	}
+
+	// Save the state of the external block cache to disk
+	log.Info("Writing external blocks state to disk", "dir", bc.cacheConfig.ExternalBlockJournal)
+	bc.externalBlocks.SaveToFileConcurrent(bc.cacheConfig.ExternalBlockJournal, runtime.GOMAXPROCS(0))
+
 	// Ensure the state of a recent block is also stored to disk before exiting.
 	// We're writing three different states to catch different restart scenarios:
 	//  - HEAD:     So we don't need to reprocess any blocks in the general case
@@ -1604,11 +1626,15 @@ func (bc *BlockChain) addFutureBlock(block *types.Block) error {
 // addExternalBlock adds the received block to the external block cache.
 func (bc *BlockChain) AddExternalBlock(block *types.ExternalBlock) error {
 	context := []interface{}{
-		"context", block.Context(), "numbers", block.Header().Number, "location", block.Header().Location,
-		"txs", len(block.Transactions()),
+		"context", block.Context(), "numbers", block.Header().Number, "hash", block.Hash(), "location", block.Header().Location,
+		"txs", len(block.Transactions()), "receipts", len(block.Receipts()),
 	}
-	bc.externalBlocks.Add(block.CacheKey(), block)
-	log.Info("Added external block to cache", context...)
+	log.Info("New external block", context...)
+	data, err := rlp.EncodeToBytes(block)
+	if err != nil {
+		log.Crit("Failed to RLP encode external block", "err", err)
+	}
+	bc.externalBlocks.Set(block.CacheKey(), data)
 	return nil
 }
 
@@ -2445,11 +2471,55 @@ func (bc *BlockChain) GetHeader(hash common.Hash, number uint64) *types.Header {
 // found.
 func (bc *BlockChain) GetHeaderByHash(hash common.Hash) *types.Header {
 	// Blockchain might have cached the whole block, only if not go to headerchain
-	if block, ok := bc.blockCache.Get(hash); ok {
-		return block.(*types.Block).Header()
-	}
+	// if block, ok := bc.blockCache.Get(hash); ok {
+	// 	return block.(*types.Block).Header()
+	// }
 
 	return bc.hc.GetHeaderByHash(hash)
+}
+
+func (bc *BlockChain) GetExtBlockByHashAndContext(hash common.Hash, context int) (*types.ExternalBlock, error) {
+	// Lookup block in externalBlocks cache
+	key := []byte(strconv.Itoa(context) + hash.String())
+	data, ok := bc.externalBlocks.HasGet(nil, key)
+	if !ok {
+		return &types.ExternalBlock{}, errors.New("error finding external block by context and hash")
+	}
+	var blockDecoded *types.ExternalBlock
+	rlp.DecodeBytes(data, &blockDecoded)
+	return blockDecoded, nil
+}
+
+// QueueExternalBlocks takes a set of external blocks and adds them to the queue
+func (bc *BlockChain) QueueAndRetrieveExtBlocks(externalBlocks []*types.ExternalBlock, header *types.Header) []*types.ExternalBlock {
+	for _, block := range externalBlocks {
+		bc.externalBlockQueue.Add(block.Hash(), block)
+	}
+	resultBlocks := make([]*types.ExternalBlock, 0)
+	gasUsed := 0
+	for {
+		key, result, ok := bc.externalBlockQueue.GetOldest()
+		if !ok || result == nil {
+			break
+		}
+
+		externalBlock := result.(*types.ExternalBlock)
+
+		// Must append before gas check since it will never undo queue if 1 block exceeds limit
+		resultBlocks = append(resultBlocks, externalBlock)
+		bc.externalBlockQueue.Remove(key)
+
+		for _, tx := range externalBlock.Transactions() {
+			receipt := externalBlock.ReceiptForTransaction(tx)
+			gasUsed += int(receipt.GasUsed)
+		}
+		// If the total gasUsed for external transactions exceeds this blocks gasLimit by 10% break
+		if gasUsed > int(header.GasLimit[types.QuaiNetworkContext]/10) {
+			break
+		}
+	}
+	log.Info("Returning result blocks", "len", len(resultBlocks))
+	return resultBlocks
 }
 
 // HasHeader checks if a block header is present in the database or not, caching

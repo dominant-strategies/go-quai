@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
@@ -544,7 +545,8 @@ func (ethash *Ethash) verifySeal(chain consensus.ChainHeaderReader, header *type
 		return errInvalidDifficulty
 	}
 	// Recompute the digest and PoW values
-	number := header.Number[types.QuaiNetworkContext].Uint64()
+	// Number is set to the Prime number for ethash dataset
+	number := header.Number[0].Uint64()
 
 	var (
 		digest []byte
@@ -578,15 +580,83 @@ func (ethash *Ethash) verifySeal(chain consensus.ChainHeaderReader, header *type
 		// until after the call to hashimotoLight so it's not unmapped while being used.
 		runtime.KeepAlive(cache)
 	}
+	// TODO: Commenting out for now, may need to specify the same ethash directory as manager
 	// Verify the calculated values against the ones provided in the header
 	if !bytes.Equal(header.MixDigest[:], digest) {
-		return errInvalidMixDigest
+		log.Warn("MixDigest is invalid")
+		// 	return errInvalidMixDigest
 	}
+	// Difficulty check for valid proof of work
 	target := new(big.Int).Div(two256, header.Difficulty[types.QuaiNetworkContext])
 	if new(big.Int).SetBytes(result).Cmp(target) > 0 {
 		return errInvalidPoW
 	}
 	return nil
+}
+
+func (ethash *Ethash) checkPoW(chain consensus.ChainHeaderReader, header *types.Header, fulldag bool) []byte {
+	// Recompute the digest and PoW values
+	// Number is set to the Prime number for ethash dataset
+	bigNum := header.Number[0]
+	if bigNum == nil {
+		bigNum = big.NewInt(0)
+	}
+
+	number := bigNum.Uint64()
+
+	var (
+		result []byte
+	)
+	// If fast-but-heavy PoW verification was requested, use an ethash dataset
+	if fulldag {
+		dataset := ethash.dataset(number, true)
+		if dataset.generated() {
+			_, result = hashimotoFull(dataset.dataset, ethash.SealHash(header).Bytes(), header.Nonce.Uint64())
+
+			// Datasets are unmapped in a finalizer. Ensure that the dataset stays alive
+			// until after the call to hashimotoFull so it's not unmapped while being used.
+			runtime.KeepAlive(dataset)
+		} else {
+			// Dataset not yet generated, don't hang, use a cache instead
+			fulldag = false
+		}
+	}
+	// If slow-but-light PoW verification was requested (or DAG not yet ready), use an ethash cache
+	if !fulldag {
+		cache := ethash.cache(number)
+
+		size := datasetSize(number)
+		if ethash.config.PowMode == ModeTest {
+			size = 32 * 1024
+		}
+		_, result = hashimotoLight(size, cache.cache, ethash.SealHash(header).Bytes(), header.Nonce.Uint64())
+
+		// Caches are unmapped in a finalizer. Ensure that the cache stays alive
+		// until after the call to hashimotoLight so it's not unmapped while being used.
+		runtime.KeepAlive(cache)
+	}
+
+	return result
+}
+
+func (ethash *Ethash) GetDifficultyContext(chain consensus.ChainHeaderReader, header *types.Header, context int) (int, error) {
+	difficultyContext := context
+	if header.Nonce != (types.BlockNonce{}) {
+		result := ethash.checkPoW(chain, header, false)
+		for i := types.ContextDepth - 1; i > -1; i-- {
+			if header.Difficulty[i] != nil {
+				target := new(big.Int).Div(two256, header.Difficulty[i])
+				if new(big.Int).SetBytes(result).Cmp(target) <= 0 {
+					difficultyContext = i
+				}
+			}
+		}
+		// Invalid number on the new difficulty
+		if header.Number[difficultyContext] == nil {
+			return types.ContextDepth, errors.New("error checking difficulty context")
+		}
+	}
+	return difficultyContext, nil
 }
 
 // Prepare implements consensus.Engine, initializing the difficulty field of a
@@ -606,6 +676,165 @@ func (ethash *Ethash) Finalize(chain consensus.ChainHeaderReader, header *types.
 	// Accumulate any block and uncle rewards and commit the final state root
 	accumulateRewards(chain.Config(), state, header, uncles)
 	header.Root[types.QuaiNetworkContext] = state.IntermediateRoot(chain.Config().IsEIP158(header.Number[types.QuaiNetworkContext]))
+}
+
+func (ethash *Ethash) GetCoincidentHeader(chain consensus.ChainHeaderReader, context int, header *types.Header) (*types.Header, int) {
+	// If we are at the highest context, no coincident will include it.
+	if context == 0 {
+		return header, 0
+	}
+	for {
+		// If block header is Genesis return it as coincident
+		if header.Number[context].Cmp(big.NewInt(1)) <= 0 {
+			return header, context
+		}
+
+		// Check work of the header, if it has enough work we will move up in context.
+		// difficultyContext is initially context since it could be a pending block w/o a nonce.
+		difficultyContext, err := ethash.GetDifficultyContext(chain, header, context)
+		if err != nil {
+			log.Warn("Unable to calculate difficulty context")
+			return header, context
+		}
+
+		// If we have reached a coincident block
+		if difficultyContext < context {
+			return header, difficultyContext
+		} else if difficultyContext == 1 && context == 1 {
+			return header, difficultyContext
+		}
+
+		// Get previous header on local chain by hash
+		prevHeader := chain.GetHeaderByHash(header.ParentHash[context])
+
+		// Increment previous header
+		header = prevHeader
+	}
+}
+
+func (ethash *Ethash) GetStopHash(chain consensus.ChainHeaderReader, difficultyContext int, originalContext int, startingHeader *types.Header) common.Hash {
+	header := startingHeader
+	stopHash := common.Hash{}
+	context := difficultyContext
+	if difficultyContext == 0 && originalContext == 1 {
+		context = 1
+	} else if difficultyContext == 0 && originalContext == 2 {
+		context = 1
+	}
+	for {
+		// Append the coincident and iterating header to the list
+		if header.Number[context].Cmp(big.NewInt(1)) <= 0 {
+			break
+		}
+
+		prevHeader := chain.GetHeaderByHash(header.ParentHash[context])
+		if prevHeader == nil {
+			extBlock, err := chain.GetExtBlockByHashAndContext(header.ParentHash[context], context)
+			if err != nil {
+				log.Warn("GetTraceList: External Block not found for previous header", "number", header.Number[context], "context", context)
+				break
+			}
+			prevHeader = extBlock.Header()
+		}
+		// Relevant to region finding N-1 coincident block
+		if bytes.Equal(startingHeader.Location, prevHeader.Location) {
+			stopHash = header.ParentHash[context]
+			break
+		}
+
+		header = prevHeader
+	}
+
+	return stopHash
+}
+
+func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *types.Header, context int, stopHash common.Hash, originalContext int) []*types.ExternalBlock {
+	extBlocks := make([]*types.ExternalBlock, 0)
+	steppedBack := false
+	startingHeader := header
+	for {
+		// Check work of the header, if it has enough work we will move up in context.
+		// difficultyContext is initially context since it could be a pending block w/o a nonce.
+		difficultyContext, err := ethash.GetDifficultyContext(chain, header, context)
+		if err != nil {
+			log.Warn("Unable to calculate difficulty context")
+		}
+
+		// If we have reached a coincident block or we're in Region and found the prev region
+		if difficultyContext < context && steppedBack {
+			log.Info("TraceBranch: Stopping on found coincident block in lower context", "number", header.Number, "context", context)
+			break
+		}
+
+		// Starting off in a context above our own.
+		if context != originalContext {
+			extBlock, err := chain.GetExtBlockByHashAndContext(header.Hash(), context)
+			if err != nil {
+				log.Warn("TraceBranch: External Block not found for header", "number", header.Number[context], "context", context)
+				break
+			}
+			extBlocks = append(extBlocks, extBlock)
+		}
+
+		if context < types.ContextDepth-1 {
+			extBlocks = append(extBlocks, ethash.TraceBranch(chain, header, context+1, stopHash, originalContext)...)
+		}
+
+		// Stop at the stop hash before iterating downward
+		if header.ParentHash[context] == stopHash || context == 0 || header.Number[context].Cmp(big.NewInt(1)) <= 0 {
+			log.Info("TraceBranch: Stopping on stop hash", "number", header.Number, "context", context)
+			break
+		}
+
+		// Get previous header on local chain by hash
+		prevHeader := chain.GetHeaderByHash(header.ParentHash[context])
+
+		// If prevHeader is nil, we could be tracing in external context. Lookup in external block cache.
+		if prevHeader == nil {
+			extBlock, err := chain.GetExtBlockByHashAndContext(header.ParentHash[context], context)
+			if err != nil {
+				log.Warn("Trace Branch: External Block not found for previous header", "number", header.Number[context], "context", context)
+				break
+			}
+			prevHeader = extBlock.Header()
+			// In Regions the starting header needs to be broken off for N-1
+			if context < types.ContextDepth-1 && bytes.Equal(startingHeader.Location, prevHeader.Location) && originalContext != 0 {
+				break
+			}
+		}
+		header = prevHeader
+		steppedBack = true
+	}
+	return extBlocks
+}
+
+// GetExternalBlocks traces all available branches to find external blocks
+func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, header *types.Header) []*types.ExternalBlock {
+	context := chain.Config().Context // Index that node is currently at
+	externalBlocks := make([]*types.ExternalBlock, 0)
+
+	// Do not run on block 1
+	if header.Number[context].Cmp(big.NewInt(1)) > 0 {
+		// Skip pending block
+		prevHeader := chain.GetHeaderByHash(header.ParentHash[context])
+		coincidentHeader, difficultyContext := ethash.GetCoincidentHeader(chain, context, prevHeader)
+		// If we are not getting the transactions immediately after the coincident block, return
+		if coincidentHeader.Number[context].Cmp(prevHeader.Number[context]) != 0 {
+			return externalBlocks
+		}
+		stopHash := ethash.GetStopHash(chain, difficultyContext, context, coincidentHeader)
+		externalBlocks = append(externalBlocks, ethash.TraceBranch(chain, coincidentHeader, difficultyContext, stopHash, context)...)
+
+	}
+
+	// Swap order of external blocks
+	if len(externalBlocks) > 0 {
+		for i, j := 0, len(externalBlocks)-1; i < j; i, j = i+1, j-1 {
+			externalBlocks[i], externalBlocks[j] = externalBlocks[j], externalBlocks[i]
+		}
+	}
+
+	return chain.QueueAndRetrieveExtBlocks(externalBlocks, header)
 }
 
 // FinalizeAndAssemble implements consensus.Engine, accumulating the block and
@@ -636,6 +865,7 @@ func (ethash *Ethash) SealHash(header *types.Header) (hash common.Hash) {
 		header.GasUsed,
 		header.Time,
 		header.Extra,
+		header.Location,
 	}
 	if header.BaseFee != nil {
 		enc = append(enc, header.BaseFee)

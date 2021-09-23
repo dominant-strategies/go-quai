@@ -107,6 +107,7 @@ type headerMarshaling struct {
 	Time       hexutil.Uint64
 	Extra      []hexutil.Bytes
 	BaseFee    []*hexutil.Big
+	Location   []byte
 	Hash       common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
 }
 
@@ -213,8 +214,29 @@ type Block struct {
 	ReceivedFrom interface{}
 }
 
-// "external" block encoding. used for eth protocol, etc.
-type extblock struct {
+// Block represents an entire block in the Ethereum blockchain.
+type ReceiptBlock struct {
+	header       *Header
+	uncles       []*Header
+	transactions Transactions
+	receipts     []*Receipt
+
+	// caches
+	hash atomic.Value
+	size atomic.Value
+
+	// Td is used by package core to store the total difficulty
+	// of the chain up to and including the block.
+	td *big.Int
+
+	// These fields are used by package eth to track
+	// inter-peer block relay.
+	ReceivedAt   time.Time
+	ReceivedFrom interface{}
+}
+
+// rlp block encoding. used for eth protocol, etc.
+type rlpblock struct {
 	Header *Header
 	Txs    []*Transaction
 	Uncles []*Header
@@ -224,11 +246,42 @@ type extblock struct {
 type ExternalBlock struct {
 	header       *Header
 	transactions Transactions
+	receipts     []*Receipt
 	context      *big.Int
 
 	// caches
 	hash atomic.Value
 	size atomic.Value
+}
+
+// rlp external block encoding. used for eth protocol, etc.
+type rlpexternalblock struct {
+	Header   *Header
+	Txs      []*Transaction
+	Receipts []*Receipt
+	Context  *big.Int
+}
+
+// DecodeRLP decodes the Ethereum
+func (b *ExternalBlock) DecodeRLP(s *rlp.Stream) error {
+	var eb rlpexternalblock
+	_, size, _ := s.Kind()
+	if err := s.Decode(&eb); err != nil {
+		return err
+	}
+	b.header, b.context, b.transactions, b.receipts = eb.Header, eb.Context, eb.Txs, eb.Receipts
+	b.size.Store(common.StorageSize(rlp.ListSize(size)))
+	return nil
+}
+
+// EncodeRLP serializes b into the Ethereum RLP block format.
+func (b *ExternalBlock) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, rlpexternalblock{
+		Header:   b.header,
+		Txs:      b.transactions,
+		Context:  b.context,
+		Receipts: b.receipts,
+	})
 }
 
 // NewExternalBlockWithHeader creates a block with the given header data. The
@@ -239,23 +292,37 @@ func NewExternalBlockWithHeader(header *Header) *ExternalBlock {
 }
 
 // WithBody returns a new block with the given transaction and uncle contents.
-func (b *ExternalBlock) ExternalBlockWithBody(transactions []*Transaction, context *big.Int) *ExternalBlock {
+func (b *ExternalBlock) ExternalBlockWithBody(transactions []*Transaction, receipts []*Receipt, context *big.Int) *ExternalBlock {
 	block := &ExternalBlock{
 		header:       CopyHeader(b.header),
 		transactions: make([]*Transaction, len(transactions)),
+		receipts:     make([]*Receipt, len(receipts)),
 		context:      context,
 	}
 	copy(block.transactions, transactions)
+	copy(block.receipts, receipts)
 	return block
 }
 
 // Simple access methods for ExternalBlocks
 func (b *ExternalBlock) Header() *Header            { return CopyHeader(b.header) }
 func (b *ExternalBlock) Transactions() Transactions { return b.transactions }
+func (b *ExternalBlock) Receipts() Receipts         { return b.receipts }
 func (b *ExternalBlock) Context() *big.Int          { return b.context }
-func (b *ExternalBlock) CacheKey() string {
+func (b *ExternalBlock) CacheKey() []byte {
 	hash := b.header.Hash()
-	return b.context.String() + hash.String()
+	toBytes := []byte(b.context.String() + hash.String())
+	return toBytes
+}
+
+// ReceiptForTransaction searches receipts within an external block for a specific transaction
+func (b *ExternalBlock) ReceiptForTransaction(tx *Transaction) *Receipt {
+	for _, receipt := range b.receipts {
+		if receipt.TxHash == tx.Hash() {
+			return receipt
+		}
+	}
+	return &Receipt{}
 }
 
 func (b *ExternalBlock) Hash() common.Hash {
@@ -336,6 +403,13 @@ func NewBlockWithHeader(header *Header) *Block {
 	return &Block{header: CopyHeader(header)}
 }
 
+// NewReceiptBlockWithHeader creates a receipt block with the given header data. The
+// header data is copied, changes to header and to the field values
+// will not affect the block.
+func NewReceiptBlockWithHeader(header *Header) *ReceiptBlock {
+	return &ReceiptBlock{header: CopyHeader(header)}
+}
+
 // NewEmptyHeader returns a header with intialized fields ContextDepth deep
 func NewEmptyHeader() *Header {
 	header := &Header{
@@ -384,7 +458,7 @@ func CopyHeader(h *Header) *Header {
 
 // DecodeRLP decodes the Ethereum
 func (b *Block) DecodeRLP(s *rlp.Stream) error {
-	var eb extblock
+	var eb rlpblock
 	_, size, _ := s.Kind()
 	if err := s.Decode(&eb); err != nil {
 		return err
@@ -396,7 +470,7 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 
 // EncodeRLP serializes b into the Ethereum RLP block format.
 func (b *Block) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, extblock{
+	return rlp.Encode(w, rlpblock{
 		Header: b.header,
 		Txs:    b.transactions,
 		Uncles: b.uncles,
@@ -407,6 +481,10 @@ func (b *Block) EncodeRLP(w io.Writer) error {
 
 func (b *Block) Uncles() []*Header          { return b.uncles }
 func (b *Block) Transactions() Transactions { return b.transactions }
+
+func (b *ReceiptBlock) Uncles() []*Header          { return b.uncles }
+func (b *ReceiptBlock) Transactions() Transactions { return b.transactions }
+func (b *ReceiptBlock) Receipts() []*Receipt       { return b.receipts }
 
 func (b *Block) Transaction(hash common.Hash) *Transaction {
 	for _, transaction := range b.transactions {
@@ -536,6 +614,8 @@ func (b *Block) BaseFee(params ...int) *big.Int {
 
 func (b *Block) Header() *Header { return CopyHeader(b.header) }
 
+func (b *ReceiptBlock) Header() *Header { return CopyHeader(b.header) }
+
 // Body returns the non-header content of the block.
 func (b *Block) Body() *Body { return &Body{b.transactions, b.uncles} }
 
@@ -594,6 +674,35 @@ func (b *Block) WithBody(transactions []*Transaction, uncles []*Header) *Block {
 	for i := range uncles {
 		block.uncles[i] = CopyHeader(uncles[i])
 	}
+	return block
+}
+
+// WithSeal returns a new receipt block with the data from b but the header replaced with
+// the sealed one.
+func (b *ReceiptBlock) WithSeal(header *Header) *ReceiptBlock {
+	cpy := *header
+
+	return &ReceiptBlock{
+		header:       &cpy,
+		transactions: b.transactions,
+		uncles:       b.uncles,
+		receipts:     b.receipts,
+	}
+}
+
+// WithBody returns a new block with the given transaction and uncle contents.
+func (b *ReceiptBlock) WithBody(transactions []*Transaction, uncles []*Header, receipts []*Receipt) *ReceiptBlock {
+	block := &ReceiptBlock{
+		header:       CopyHeader(b.header),
+		transactions: make([]*Transaction, len(transactions)),
+		uncles:       make([]*Header, len(uncles)),
+		receipts:     make([]*Receipt, len(receipts)),
+	}
+	copy(block.transactions, transactions)
+	for i := range uncles {
+		block.uncles[i] = CopyHeader(uncles[i])
+	}
+	copy(block.receipts, receipts)
 	return block
 }
 

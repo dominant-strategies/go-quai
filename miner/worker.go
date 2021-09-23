@@ -17,9 +17,7 @@
 package miner
 
 import (
-	"bytes"
 	"errors"
-	"fmt"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -891,10 +889,6 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 
 	tstart := time.Now()
 	parent := w.chain.CurrentBlock()
-	if w.snapshotBlock != nil && parent.Header().Number[types.QuaiNetworkContext] == w.snapshotBlock.Number() {
-		fmt.Println("Snapshot block isn't past current block")
-		return
-	}
 
 	if parent.Time() >= uint64(timestamp) {
 		timestamp = int64(parent.Time() + 1)
@@ -914,11 +908,21 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		ReceiptHash: make([]common.Hash, 3),
 		GasUsed:     make([]uint64, 3),
 		Bloom:       make([]types.Bloom, 3),
+		Location:    w.chainConfig.Location,
 	}
-	header.ParentHash[types.QuaiNetworkContext] = parent.Hash()
-	header.Number[types.QuaiNetworkContext] = num.Add(num, common.Big1)
-	header.Extra[types.QuaiNetworkContext] = w.extra
-	header.GasLimit[types.QuaiNetworkContext] = core.CalcGasLimit(parent.GasUsed(), parent.GasLimit(), w.config.GasFloor, w.config.GasCeil)
+
+	// If block has not advanced
+	if w.snapshotBlock != nil && parent.Header().Number[types.QuaiNetworkContext] == w.snapshotBlock.Number() {
+		header.ParentHash[types.QuaiNetworkContext] = w.snapshotBlock.ParentHash()
+		header.Number[types.QuaiNetworkContext] = w.snapshotBlock.Number()
+		header.Extra[types.QuaiNetworkContext] = w.snapshotBlock.Extra()
+		header.GasLimit[types.QuaiNetworkContext] = w.snapshotBlock.GasLimit()
+	} else {
+		header.ParentHash[types.QuaiNetworkContext] = parent.Hash()
+		header.Number[types.QuaiNetworkContext] = num.Add(num, common.Big1)
+		header.Extra[types.QuaiNetworkContext] = w.extra
+		header.GasLimit[types.QuaiNetworkContext] = core.CalcGasLimit(parent.GasUsed(), parent.GasLimit(), w.config.GasFloor, w.config.GasCeil)
+	}
 	// Set baseFee and GasLimit if we are on an EIP-1559 chain
 	if w.chainConfig.IsLondon(header.Number[types.QuaiNetworkContext]) {
 		header.BaseFee[types.QuaiNetworkContext] = misc.CalcBaseFee(w.chainConfig, parent.Header())
@@ -941,19 +945,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		log.Error("Failed to prepare header for mining", "err", err)
 		return
 	}
-	// If we are care about TheDAO hard-fork check whether to override the extra-data or not
-	if daoBlock := w.chainConfig.DAOForkBlock; daoBlock != nil {
-		// Check whether the block is among the fork extra-override range
-		limit := new(big.Int).Add(daoBlock, params.DAOForkExtraRange)
-		if header.Number[types.QuaiNetworkContext].Cmp(daoBlock) >= 0 && header.Number[types.QuaiNetworkContext].Cmp(limit) < 0 {
-			// Depending whether we support or oppose the fork, override differently
-			if w.chainConfig.DAOForkSupport {
-				header.Extra[types.QuaiNetworkContext] = common.CopyBytes(params.DAOForkBlockExtra)
-			} else if bytes.Equal(header.Extra[types.QuaiNetworkContext], params.DAOForkBlockExtra) {
-				header.Extra = [][]byte{} // If miner opposes, don't let it use the reserved extra-data
-			}
-		}
-	}
+
 	// Could potentially happen if starting to mine in an odd state.
 	err := w.makeCurrent(parent, header)
 	if err != nil {
@@ -962,9 +954,6 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	}
 	// Create the current work task and check any fork transitions needed
 	env := w.current
-	if w.chainConfig.DAOForkSupport && w.chainConfig.DAOForkBlock != nil && w.chainConfig.DAOForkBlock.Cmp(header.Number[types.QuaiNetworkContext]) == 0 {
-		misc.ApplyDAOHardFork(env.state)
-	}
 	// Accumulate the uncles for the current block
 	uncles := make([]*types.Header, 0, 2)
 	commitUncles := func(blocks map[common.Hash]*types.Block) {
@@ -1002,13 +991,34 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		log.Error("Failed to fetch pending transactions", "err", err)
 		return
 	}
+
+	// Gather external blocks and apply transactions
+	externalBlocks := w.engine.GetExternalBlocks(w.chain, header)
+	etxs := make(types.Transactions, 0)
+	for _, externalBlock := range externalBlocks {
+		externalBlock.Receipts().DeriveFields(w.chainConfig, externalBlock.Hash(), externalBlock.Header().Number[externalBlock.Context().Int64()].Uint64(), externalBlock.Transactions())
+		for _, tx := range externalBlock.Transactions() {
+			snap := w.current.state.Snapshot()
+			receipt, err := core.ApplyExternalTransaction(w.chainConfig, w.chain, &w.coinbase, w.current.gasPool, w.current.state, w.current.header, externalBlock, tx, &w.current.header.GasUsed[types.QuaiNetworkContext], *w.chain.GetVMConfig())
+			if err != nil {
+				w.current.state.RevertToSnapshot(snap)
+				log.Debug("Transaction failed, account skipped", "hash", tx.Hash(), "err", err)
+			} else {
+				w.current.txs = append(w.current.txs, tx)
+				w.current.receipts = append(w.current.receipts, receipt)
+				etxs = append(etxs, tx)
+			}
+		}
+	}
+
 	// Short circuit if there is no available pending transactions.
 	// But if we disable empty precommit already, ignore it. Since
 	// empty block is necessary to keep the liveness of the network.
-	if len(pending) == 0 && atomic.LoadUint32(&w.noempty) == 0 {
+	if len(pending) == 0 && atomic.LoadUint32(&w.noempty) == 0 && len(etxs) == 0 {
 		w.updateSnapshot()
 		return
 	}
+
 	// Split the pending transactions into locals and remotes
 	localTxs, remoteTxs := make(map[common.Address]types.Transactions), pending
 	for _, account := range w.eth.TxPool().Locals() {

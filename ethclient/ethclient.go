@@ -89,8 +89,8 @@ func (ec *Client) BlockByNumber(ctx context.Context, number *big.Int) (*types.Bl
 }
 
 // Pending block returns a pending block if one exists
-func (ec *Client) GetPendingBlock(ctx context.Context) (*types.Block, error) {
-	return ec.getBlock(ctx, "eth_pendingBlock")
+func (ec *Client) GetPendingBlock(ctx context.Context) (*types.ReceiptBlock, error) {
+	return ec.getBlockWithReceipts(ctx, "eth_pendingBlock")
 }
 
 // BlockNumber returns the most recent block number
@@ -104,6 +104,82 @@ type rpcBlock struct {
 	Hash         common.Hash      `json:"hash"`
 	Transactions []rpcTransaction `json:"transactions"`
 	UncleHashes  []common.Hash    `json:"uncles"`
+}
+
+type rpcReceiptBlock struct {
+	Hash         common.Hash      `json:"hash"`
+	Transactions []rpcTransaction `json:"transactions"`
+	UncleHashes  []common.Hash    `json:"uncles"`
+	Receipts     []*types.Receipt `json:"receipts"`
+}
+
+func (ec *Client) getBlockWithReceipts(ctx context.Context, method string, args ...interface{}) (*types.ReceiptBlock, error) {
+	var raw json.RawMessage
+	err := ec.c.CallContext(ctx, &raw, method, args...)
+	if err != nil {
+		return nil, err
+	} else if len(raw) == 0 {
+		return nil, ethereum.NotFound
+	}
+	// Decode header and transactions.
+	var head *types.Header
+	var body rpcReceiptBlock
+	if err := json.Unmarshal(raw, &head); err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(raw, &body); err != nil {
+		return nil, err
+	}
+	// Quick-verify transaction and uncle lists. This mostly helps with debugging the server.
+	if types.IsEqualHashSlice(head.UncleHash, types.EmptyUncleHash) && len(body.UncleHashes) > 0 {
+		return nil, fmt.Errorf("server returned non-empty uncle list but block header indicates no uncles")
+	}
+	if !types.IsEqualHashSlice(head.UncleHash, types.EmptyUncleHash) && len(body.UncleHashes) == 0 {
+		return nil, fmt.Errorf("server returned empty uncle list but block header indicates uncles")
+	}
+	if types.IsEqualHashSlice(head.TxHash, types.EmptyRootHash) && len(body.Transactions) > 0 {
+		return nil, fmt.Errorf("server returned non-empty transaction list but block header indicates no transactions")
+	}
+	if !types.IsEqualHashSlice(head.TxHash, types.EmptyRootHash) && len(body.Transactions) == 0 {
+		return nil, fmt.Errorf("server returned empty transaction list but block header indicates transactions")
+	}
+	// Load uncles because they are not included in the block response.
+	var uncles []*types.Header
+	if len(body.UncleHashes) > 0 {
+		uncles = make([]*types.Header, len(body.UncleHashes))
+		reqs := make([]rpc.BatchElem, len(body.UncleHashes))
+		for i := range reqs {
+			reqs[i] = rpc.BatchElem{
+				Method: "eth_getUncleByBlockHashAndIndex",
+				Args:   []interface{}{body.Hash, hexutil.EncodeUint64(uint64(i))},
+				Result: &uncles[i],
+			}
+		}
+		if err := ec.c.BatchCallContext(ctx, reqs); err != nil {
+			return nil, err
+		}
+		for i := range reqs {
+			if reqs[i].Error != nil {
+				return nil, reqs[i].Error
+			}
+			if uncles[i] == nil {
+				return nil, fmt.Errorf("got null header for uncle %d of block %x", i, body.Hash[:])
+			}
+		}
+	}
+	// Fill the sender cache of transactions in the block.
+	txs := make([]*types.Transaction, len(body.Transactions))
+	for i, tx := range body.Transactions {
+		if tx.From != nil {
+			setSenderFromServer(tx.tx, *tx.From, body.Hash)
+		}
+		txs[i] = tx.tx
+	}
+	receipts := make([]*types.Receipt, len(body.Receipts))
+	for i, receipt := range body.Receipts {
+		receipts[i] = receipt
+	}
+	return types.NewReceiptBlockWithHeader(head).WithBody(txs, uncles, receipts), nil
 }
 
 func (ec *Client) getBlock(ctx context.Context, method string, args ...interface{}) (*types.Block, error) {
@@ -130,7 +206,7 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 	if !types.IsEqualHashSlice(head.UncleHash, types.EmptyUncleHash) && len(body.UncleHashes) == 0 {
 		return nil, fmt.Errorf("server returned empty uncle list but block header indicates uncles")
 	}
-	if !types.IsEqualHashSlice(head.TxHash, types.EmptyRootHash) && len(body.Transactions) > 0 {
+	if types.IsEqualHashSlice(head.TxHash, types.EmptyRootHash) && len(body.Transactions) > 0 {
 		return nil, fmt.Errorf("server returned non-empty transaction list but block header indicates no transactions")
 	}
 	if !types.IsEqualHashSlice(head.TxHash, types.EmptyRootHash) && len(body.Transactions) == 0 {
@@ -545,8 +621,8 @@ func (ec *Client) SendMinedBlock(ctx context.Context, block *types.Block, inclTx
 }
 
 // SendExternalBlock sends an external block back to the node to add to it's external block list
-func (ec *Client) SendExternalBlock(ctx context.Context, block *types.Block, context *big.Int) error {
-	data, err := ethapi.RPCMarshalExternalBlock(block, context)
+func (ec *Client) SendExternalBlock(ctx context.Context, block *types.Block, receipts []*types.Receipt, context *big.Int) error {
+	data, err := ethapi.RPCMarshalExternalBlock(block, receipts, context)
 	if err != nil {
 		return err
 	}

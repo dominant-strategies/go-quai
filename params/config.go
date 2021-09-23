@@ -47,12 +47,14 @@ var CheckpointOracles = map[common.Hash]*CheckpointOracleConfig{
 	MainnetPrimeGenesisHash: MainnetCheckpointOracle,
 	RopstenGenesisHash:      RopstenCheckpointOracle,
 }
+var validChains = []*big.Int{big.NewInt(9000), big.NewInt(9100), big.NewInt(9101), big.NewInt(9102), big.NewInt(9103), big.NewInt(9200), big.NewInt(9201), big.NewInt(9202), big.NewInt(9203), big.NewInt(9300), big.NewInt(9301), big.NewInt(9302), big.NewInt(9303)}
 
 var (
 	// MainnetPrimeChainConfig is the chain parameters to run a node on the main network.
 	MainnetPrimeChainConfig = &ChainConfig{
 		ChainID:             big.NewInt(9000),
 		Context:             0,
+		Location:            []byte{0, 0},
 		Ethash:              new(EthashConfig),
 		HomesteadBlock:      big.NewInt(0),
 		DAOForkBlock:        nil,
@@ -808,7 +810,24 @@ func init() {
 	bytePrefixList[9303] = byte(60)
 }
 
+// ChainIDByte returns the byte lookup based off a configs chainID
 func (c *ChainConfig) ChainIDByte() byte {
 	lookup := bytePrefixList[c.ChainID.Int64()]
 	return lookup
+}
+
+// ChainIDByte returns the byte lookup based off a configs chainID
+func LookupChainByte(index *big.Int) byte {
+	lookup := bytePrefixList[index.Int64()]
+	return lookup
+}
+
+// ValidChainID takes in a chain ID and checks against the valid list
+func ValidChainID(id *big.Int) bool {
+	for _, valid := range validChains {
+		if id.Cmp(valid) == 0 {
+			return true
+		}
+	}
+	return false
 }

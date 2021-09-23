@@ -71,17 +71,20 @@ var Defaults = Config{
 		DatasetsOnDisk:   2,
 		DatasetsLockMmap: false,
 	},
-	NetworkId:               1,
-	TxLookupLimit:           2350000,
-	LightPeers:              100,
-	UltraLightFraction:      75,
-	DatabaseCache:           512,
-	TrieCleanCache:          154,
-	TrieCleanCacheJournal:   "triecache",
-	TrieCleanCacheRejournal: 60 * time.Minute,
-	TrieDirtyCache:          256,
-	TrieTimeout:             60 * time.Minute,
-	SnapshotCache:           102,
+	NetworkId:                  1,
+	TxLookupLimit:              2350000,
+	LightPeers:                 100,
+	UltraLightFraction:         75,
+	DatabaseCache:              512,
+	TrieCleanCache:             154,
+	TrieCleanCacheJournal:      "triecache",
+	TrieCleanCacheRejournal:    60 * time.Minute,
+	TrieDirtyCache:             256,
+	TrieTimeout:                60 * time.Minute,
+	ExternalBlockCache:         256,
+	ExternalBlocksCacheJournal: "externalblocks",
+
+	SnapshotCache: 102,
 	Miner: miner.Config{
 		GasFloor: 8000000,
 		GasCeil:  8000000,
@@ -169,6 +172,10 @@ type Config struct {
 	TrieTimeout             time.Duration
 	SnapshotCache           int
 	Preimages               bool
+
+	// External Block cache options
+	ExternalBlockCache         int
+	ExternalBlocksCacheJournal string `toml:",omitempty"` // Disk journal directory for external blocks to survive node restarts
 
 	// Mining options
 	Miner miner.Config

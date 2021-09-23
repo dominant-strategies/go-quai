@@ -44,6 +44,12 @@ type ChainHeaderReader interface {
 
 	// GetHeaderByHash retrieves a block header from the database by its hash.
 	GetHeaderByHash(hash common.Hash) *types.Header
+
+	// GetExtBlockByHashAndContext retrieves an external block header by its hash and context.
+	GetExtBlockByHashAndContext(hash common.Hash, context int) (*types.ExternalBlock, error)
+
+	// QueueAndRetrieveExtBlocks passes external blocks to the queue and returns the amount available for this block
+	QueueAndRetrieveExtBlocks(externalBlocks []*types.ExternalBlock, header *types.Header) []*types.ExternalBlock
 }
 
 // ChainReader defines a small collection of methods needed to access the local
@@ -96,6 +102,9 @@ type Engine interface {
 	// consensus rules that happen at finalization (e.g. block rewards).
 	FinalizeAndAssemble(chain ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction,
 		uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error)
+
+	// GetExternalBlocks retrieves all valid external blocks from external chains
+	GetExternalBlocks(chain ChainHeaderReader, header *types.Header) []*types.ExternalBlock
 
 	// Seal generates a new sealing request for the given input block and pushes
 	// the result into the given channel.
