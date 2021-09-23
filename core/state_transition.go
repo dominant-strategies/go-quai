@@ -77,6 +77,7 @@ type Message interface {
 	CheckNonce() bool
 	Data() []byte
 	AccessList() types.AccessList
+	FromExternal() bool
 }
 
 // ExecutionResult includes all output after executing given evm

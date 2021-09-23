@@ -991,13 +991,34 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		log.Error("Failed to fetch pending transactions", "err", err)
 		return
 	}
+
+	// Gather external blocks and apply transactions
+	externalBlocks := w.engine.GetExternalBlocks(w.chain, header)
+	etxs := make(types.Transactions, 0)
+	for _, externalBlock := range externalBlocks {
+		externalBlock.Receipts().DeriveFields(w.chainConfig, externalBlock.Hash(), externalBlock.Header().Number[externalBlock.Context().Int64()].Uint64(), externalBlock.Transactions())
+		for _, tx := range externalBlock.Transactions() {
+			snap := w.current.state.Snapshot()
+			receipt, err := core.ApplyExternalTransaction(w.chainConfig, w.chain, &w.coinbase, w.current.gasPool, w.current.state, w.current.header, externalBlock, tx, &w.current.header.GasUsed[types.QuaiNetworkContext], *w.chain.GetVMConfig())
+			if err != nil {
+				w.current.state.RevertToSnapshot(snap)
+				log.Debug("Transaction failed, account skipped", "hash", tx.Hash(), "err", err)
+			} else {
+				w.current.txs = append(w.current.txs, tx)
+				w.current.receipts = append(w.current.receipts, receipt)
+				etxs = append(etxs, tx)
+			}
+		}
+	}
+
 	// Short circuit if there is no available pending transactions.
 	// But if we disable empty precommit already, ignore it. Since
 	// empty block is necessary to keep the liveness of the network.
-	if len(pending) == 0 && atomic.LoadUint32(&w.noempty) == 0 {
+	if len(pending) == 0 && atomic.LoadUint32(&w.noempty) == 0 && len(etxs) == 0 {
 		w.updateSnapshot()
 		return
 	}
+
 	// Split the pending transactions into locals and remotes
 	localTxs, remoteTxs := make(map[common.Address]types.Transactions), pending
 	for _, account := range w.eth.TxPool().Locals() {

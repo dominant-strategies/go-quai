@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -45,6 +46,7 @@ const (
 	LegacyTxType = iota
 	AccessListTxType
 	DynamicFeeTxType
+	ExternalTxType
 )
 
 // Transaction is an Ethereum transaction.
@@ -569,32 +571,34 @@ func (t *TransactionsByPriceAndNonce) Pop() {
 //
 // NOTE: In a future PR this will be removed.
 type Message struct {
-	to         *common.Address
-	from       common.Address
-	nonce      uint64
-	amount     *big.Int
-	gasLimit   uint64
-	gasPrice   *big.Int
-	gasFeeCap  *big.Int
-	gasTipCap  *big.Int
-	data       []byte
-	accessList AccessList
-	checkNonce bool
+	to           *common.Address
+	from         common.Address
+	nonce        uint64
+	amount       *big.Int
+	gasLimit     uint64
+	gasPrice     *big.Int
+	gasFeeCap    *big.Int
+	gasTipCap    *big.Int
+	data         []byte
+	accessList   AccessList
+	checkNonce   bool
+	fromExternal bool
 }
 
 func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice, gasFeeCap, gasTipCap *big.Int, data []byte, accessList AccessList, checkNonce bool) Message {
 	return Message{
-		from:       from,
-		to:         to,
-		nonce:      nonce,
-		amount:     amount,
-		gasLimit:   gasLimit,
-		gasPrice:   gasPrice,
-		gasFeeCap:  gasFeeCap,
-		gasTipCap:  gasTipCap,
-		data:       data,
-		accessList: accessList,
-		checkNonce: checkNonce,
+		from:         from,
+		to:           to,
+		nonce:        nonce,
+		amount:       amount,
+		gasLimit:     gasLimit,
+		gasPrice:     gasPrice,
+		gasFeeCap:    gasFeeCap,
+		gasTipCap:    gasTipCap,
+		data:         data,
+		accessList:   accessList,
+		checkNonce:   checkNonce,
+		fromExternal: false,
 	}
 }
 
@@ -618,6 +622,12 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 	}
 	var err error
 	msg.from, err = Sender(s, tx)
+	byteID := params.LookupChainByte(s.ChainID())
+
+	if msg.from[0] != byteID && tx.To()[0] == byteID {
+		msg.fromExternal = true
+	}
+
 	return msg, err
 }
 
@@ -632,3 +642,4 @@ func (m Message) Nonce() uint64          { return m.nonce }
 func (m Message) Data() []byte           { return m.data }
 func (m Message) AccessList() AccessList { return m.accessList }
 func (m Message) CheckNonce() bool       { return m.checkNonce }
+func (m Message) FromExternal() bool     { return m.fromExternal }

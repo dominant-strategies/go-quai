@@ -673,8 +673,6 @@ func (ethash *Ethash) Prepare(chain consensus.ChainHeaderReader, header *types.H
 // Finalize implements consensus.Engine, accumulating the block and uncle rewards,
 // setting the final state on the header
 func (ethash *Ethash) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
-	externalBlocks := ethash.TraceBranches(chain, header)
-	accumulateExternalTransactions(chain.Config(), state, header, externalBlocks)
 	// Accumulate any block and uncle rewards and commit the final state root
 	accumulateRewards(chain.Config(), state, header, uncles)
 	header.Root[types.QuaiNetworkContext] = state.IntermediateRoot(chain.Config().IsEIP158(header.Number[types.QuaiNetworkContext]))
@@ -810,8 +808,8 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 	return extBlocks
 }
 
-// TraceBranches traces all available branches to find external blocks
-func (ethash *Ethash) TraceBranches(chain consensus.ChainHeaderReader, header *types.Header) []*types.ExternalBlock {
+// GetExternalBlocks traces all available branches to find external blocks
+func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, header *types.Header) []*types.ExternalBlock {
 	context := chain.Config().Context // Index that node is currently at
 	externalBlocks := make([]*types.ExternalBlock, 0)
 
@@ -828,7 +826,15 @@ func (ethash *Ethash) TraceBranches(chain consensus.ChainHeaderReader, header *t
 		externalBlocks = append(externalBlocks, ethash.TraceBranch(chain, coincidentHeader, difficultyContext, stopHash, context)...)
 
 	}
-	return externalBlocks
+
+	// Swap order of external blocks
+	if len(externalBlocks) > 0 {
+		for i, j := 0, len(externalBlocks)-1; i < j; i, j = i+1, j-1 {
+			externalBlocks[i], externalBlocks[j] = externalBlocks[j], externalBlocks[i]
+		}
+	}
+
+	return chain.QueueAndRetrieveExtBlocks(externalBlocks, header)
 }
 
 // FinalizeAndAssemble implements consensus.Engine, accumulating the block and
@@ -905,41 +911,4 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		reward.Add(reward, r)
 	}
 	state.AddBalance(header.Coinbase[types.QuaiNetworkContext], reward)
-}
-
-// AccumulateExternalTransactions mints the external transaction based on transactions and successful receipts.
-func accumulateExternalTransactions(config *params.ChainConfig, state *state.StateDB, header *types.Header, externalBlocks []*types.ExternalBlock) {
-	s := types.MakeSigner(config, header.Number[types.QuaiNetworkContext])
-	byteID := config.ChainIDByte()
-
-	for _, externalBlock := range externalBlocks {
-		for _, tx := range externalBlock.Transactions() {
-			log.Info("accumlateExternalTransactions: iterating tx")
-			from, err := types.Sender(s, tx)
-			if err != nil {
-				log.Info("breaking in from not found")
-				break
-			}
-			if from.Bytes()[0] == byteID {
-				log.Info("breaking in from matches")
-				break
-			}
-
-			if tx.To().Bytes()[0] != byteID {
-				log.Info("breaking in to doesnt match")
-				break
-			}
-
-			receipt := externalBlock.ReceiptForTransaction(tx)
-			var to common.Address
-			if tx.To() != nil {
-				to = *tx.To()
-			}
-			if receipt.Status == 1 {
-				log.Info("accumlateExternalTransactions: Adding balance", "to", to, "value", tx.Value())
-				state.AddBalance(to, tx.Value())
-			}
-		}
-
-	}
 }

@@ -534,6 +534,12 @@ func (hc *HeaderChain) GetExtBlockByHashAndContext(hash common.Hash, context int
 	return nil, nil
 }
 
+// QueueAndRetrieveExtBlocks is not applicable in the header chain since the BlockChain contains
+// the external blocks cache.
+func (hc *HeaderChain) QueueAndRetrieveExtBlocks(blocks []*types.ExternalBlock, header *types.Header) []*types.ExternalBlock {
+	return nil
+}
+
 func (hc *HeaderChain) GetCanonicalHash(number uint64) common.Hash {
 	return rawdb.ReadCanonicalHash(hc.chainDb, number)
 }

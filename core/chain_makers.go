@@ -340,3 +340,6 @@ func (cr *fakeChainReader) GetBlock(hash common.Hash, number uint64) *types.Bloc
 func (cr *fakeChainReader) GetExtBlockByHashAndContext(hash common.Hash, context int) (*types.ExternalBlock, error) {
 	return nil, nil
 }
+func (cr *fakeChainReader) QueueAndRetrieveExtBlocks(blocks []*types.ExternalBlock, header *types.Header) []*types.ExternalBlock {
+	return nil
+}

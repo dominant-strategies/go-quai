@@ -816,6 +816,12 @@ func (c *ChainConfig) ChainIDByte() byte {
 	return lookup
 }
 
+// ChainIDByte returns the byte lookup based off a configs chainID
+func LookupChainByte(index *big.Int) byte {
+	lookup := bytePrefixList[index.Int64()]
+	return lookup
+}
+
 // ValidChainID takes in a chain ID and checks against the valid list
 func ValidChainID(id *big.Int) bool {
 	for _, valid := range validChains {
