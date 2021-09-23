@@ -198,6 +198,12 @@ func applyExternalTransaction(msg types.Message, config *params.ChainConfig, bc 
 	if receipt.Status != 1 {
 		return nil, errors.New("receipt status not 1")
 	}
+
+	// Triple check we are from external
+	if !msg.FromExternal() {
+		return nil, errors.New("not an external transaction")
+	}
+
 	// Apply the transaction to the current state (included in the env).
 	statedb.AddBalance(msg.From(), msg.Value())
 	statedb.AddBalance(*msg.To(), msg.Value())
