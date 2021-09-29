@@ -201,6 +201,9 @@ type BlockChain interface {
 
 	// Snapshots returns the blockchain snapshot tree to paused it during sync.
 	Snapshots() *snapshot.Tree
+
+	// Adds ExternalBlock to external block cache
+	AddExternalBlock(block *types.ExternalBlock) error
 }
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
@@ -549,6 +552,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 		func() error { return d.fetchHeaders(p, origin+1) }, // Headers are always retrieved
 		func() error { return d.fetchBodies(origin + 1) },   // Bodies are retrieved during normal and fast sync
 		func() error { return d.fetchReceipts(origin + 1) }, // Receipts are retrieved during fast sync
+		func() error { return d.fetchExternalBlocks(origin + 1) },
 		func() error { return d.processHeaders(origin+1, td) },
 	}
 	if mode == FastSync {
@@ -1310,6 +1314,30 @@ func (d *Downloader) fetchReceipts(from uint64) error {
 	return err
 }
 
+// fetchExternalBlocks iteratively downloads the scheduled external blocks, taking any
+func (d *Downloader) fetchExternalBlocks(from uint64) error {
+	log.Debug("Downloading external blocks", "origin", from)
+
+	var (
+		deliver = func(packet dataPack) (int, error) {
+			pack := packet.(*externalBlockPack)
+			return d.queue.DeliverExternalBlocks(pack.peerID, pack.externalBlocks)
+		}
+		expire   = func() map[string]int { return d.queue.ExpireExternalBlocks(d.peers.rates.TargetTimeout()) }
+		fetch    = func(p *peerConnection, req *fetchRequest) error { return p.FetchExternalBlocks(req) }
+		capacity = func(p *peerConnection) int { return p.ReceiptCapacity(d.peers.rates.TargetRoundTrip()) }
+		setIdle  = func(p *peerConnection, accepted int, deliveryTime time.Time) {
+			p.SetReceiptsIdle(accepted, deliveryTime)
+		}
+	)
+	err := d.fetchParts(d.receiptCh, deliver, d.receiptWakeCh, expire,
+		d.queue.PendingReceipts, d.queue.InFlightReceipts, d.queue.ReserveReceipts,
+		d.receiptFetchHook, fetch, d.queue.CancelReceipts, capacity, d.peers.ReceiptIdlePeers, setIdle, "externalBlocks")
+
+	log.Debug("External block download terminated", "err", err)
+	return err
+}
+
 // fetchParts iteratively downloads scheduled block parts, taking any available
 // peers, reserving a chunk of fetch requests for each, waiting for delivery and
 // also periodically checking for timeouts.
@@ -1716,9 +1744,13 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 		"firstnum", first.Number, "firsthash", first.Hash(),
 		"lastnum", last.Number, "lasthash", last.Hash(),
 	)
+	// Compose blocks for insert and prepare external block cache
 	blocks := make([]*types.Block, len(results))
 	for i, result := range results {
 		blocks[i] = types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles)
+		for _, extBlock := range result.ExternalBlocks {
+			d.blockchain.AddExternalBlock(extBlock)
+		}
 	}
 	if index, err := d.blockchain.InsertChain(blocks); err != nil {
 		if index < len(results) {

@@ -53,10 +53,11 @@ type peerConnection struct {
 	receiptIdle int32 // Current receipt activity state of the peer (idle = 0, active = 1)
 	stateIdle   int32 // Current node data activity state of the peer (idle = 0, active = 1)
 
-	headerStarted  time.Time // Time instance when the last header fetch was started
-	blockStarted   time.Time // Time instance when the last block (body) fetch was started
-	receiptStarted time.Time // Time instance when the last receipt fetch was started
-	stateStarted   time.Time // Time instance when the last node data fetch was started
+	headerStarted        time.Time // Time instance when the last header fetch was started
+	blockStarted         time.Time // Time instance when the last block (body) fetch was started
+	receiptStarted       time.Time // Time instance when the last receipt fetch was started
+	stateStarted         time.Time // Time instance when the last node data fetch was started
+	externalBlockStarted time.Time // Time instance when the last external block fetch was started
 
 	rates   *msgrate.Tracker         // Tracker to hone in on the number of items retrievable per second
 	lacking map[common.Hash]struct{} // Set of hashes not to request (didn't have previously)
@@ -81,6 +82,7 @@ type Peer interface {
 	RequestBodies([]common.Hash) error
 	RequestReceipts([]common.Hash) error
 	RequestNodeData([]common.Hash) error
+	RequestExternalBlocks([]common.Hash) error
 }
 
 // lightPeerWrapper wraps a LightPeer struct, stubbing out the Peer-only methods.
@@ -103,6 +105,9 @@ func (w *lightPeerWrapper) RequestReceipts([]common.Hash) error {
 }
 func (w *lightPeerWrapper) RequestNodeData([]common.Hash) error {
 	panic("RequestNodeData not supported in light client mode sync")
+}
+func (w *lightPeerWrapper) RequestExternalBlocks([]common.Hash) error {
+	panic("RequestExternalBlocks not supported in light client mode sync")
 }
 
 // newPeerConnection creates a new downloader peer.
@@ -178,6 +183,26 @@ func (p *peerConnection) FetchReceipts(request *fetchRequest) error {
 			hashes = append(hashes, header.Hash())
 		}
 		p.peer.RequestReceipts(hashes)
+	}()
+
+	return nil
+}
+
+// FetchReceipts sends a receipt retrieval request to the remote peer.
+func (p *peerConnection) FetchExternalBlocks(request *fetchRequest) error {
+	// Short circuit if the peer is already fetching
+	if !atomic.CompareAndSwapInt32(&p.receiptIdle, 0, 1) {
+		return errAlreadyFetching
+	}
+	p.externalBlockStarted = time.Now()
+
+	go func() {
+		// Convert the header set to a retrievable slice
+		hashes := make([]common.Hash, 0, len(request.Headers))
+		for _, header := range request.Headers {
+			hashes = append(hashes, header.Hash())
+		}
+		p.peer.RequestExternalBlocks(hashes)
 	}()
 
 	return nil

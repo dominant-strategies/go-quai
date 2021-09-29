@@ -35,8 +35,9 @@ import (
 )
 
 const (
-	bodyType    = uint(0)
-	receiptType = uint(1)
+	bodyType          = uint(0)
+	receiptType       = uint(1)
+	externalBlockType = uint(2)
 )
 
 var (
@@ -64,10 +65,11 @@ type fetchRequest struct {
 type fetchResult struct {
 	pending int32 // Flag telling what deliveries are outstanding
 
-	Header       *types.Header
-	Uncles       []*types.Header
-	Transactions types.Transactions
-	Receipts     types.Receipts
+	Header         *types.Header
+	Uncles         []*types.Header
+	Transactions   types.Transactions
+	Receipts       types.Receipts
+	ExternalBlocks []*types.ExternalBlock
 }
 
 func newFetchResult(header *types.Header, fastSync bool) *fetchResult {
@@ -102,6 +104,13 @@ func (f *fetchResult) SetReceiptsDone() {
 	}
 }
 
+// SetReceiptsDone flags the receipts as finished.
+func (f *fetchResult) SetExternalBlocksDone() {
+	if v := atomic.LoadInt32(&f.pending); (v & (1 << externalBlockType)) != 0 {
+		atomic.AddInt32(&f.pending, -3)
+	}
+}
+
 // Done checks if the given type is done already
 func (f *fetchResult) Done(kind uint) bool {
 	v := atomic.LoadInt32(&f.pending)
@@ -131,6 +140,10 @@ type queue struct {
 	receiptTaskPool  map[common.Hash]*types.Header // Pending receipt retrieval tasks, mapping hashes to headers
 	receiptTaskQueue *prque.Prque                  // Priority queue of the headers to fetch the receipts for
 	receiptPendPool  map[string]*fetchRequest      // Currently pending receipt retrieval operations
+
+	externalBlockTaskPool  map[common.Hash]*types.Header // Pending external block retrieval tasks, mapping hashes to headers
+	externalBlockTaskQueue *prque.Prque                  // Priority queue of the headers to fetch the external block for
+	externalBlockPendPool  map[string]*fetchRequest      // Currently pending external block retrieval operations
 
 	resultCache *resultStore       // Downloaded but not yet delivered fetch results
 	resultSize  common.StorageSize // Approximate size of a block (exponential moving average)
@@ -648,6 +661,15 @@ func (q *queue) ExpireReceipts(timeout time.Duration) map[string]int {
 	return q.expire(timeout, q.receiptPendPool, q.receiptTaskQueue, receiptTimeoutMeter)
 }
 
+// ExpireExternalBlocks checks for in flight external block requests that exceeded a timeout
+// allowance, canceling them and returning the responsible peers for penalisation.
+func (q *queue) ExpireExternalBlocks(timeout time.Duration) map[string]int {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+
+	return q.expire(timeout, q.receiptPendPool, q.receiptTaskQueue, receiptTimeoutMeter)
+}
+
 // expire is the generic check that move expired tasks from a pending pool back
 // into a task pool, returning all entities caught with expired tasks.
 //
@@ -822,6 +844,19 @@ func (q *queue) DeliverReceipts(id string, receiptList [][]*types.Receipt) (int,
 	}
 	return q.deliver(id, q.receiptTaskPool, q.receiptTaskQueue, q.receiptPendPool,
 		receiptReqTimer, len(receiptList), validate, reconstruct)
+}
+
+// DeliverExternalBlocks injects an external block retrieval response into the results queue.
+func (q *queue) DeliverExternalBlocks(id string, externalBlockList [][]*types.ExternalBlock) (int, error) {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+
+	reconstruct := func(index int, result *fetchResult) {
+		result.ExternalBlocks = externalBlockList[index]
+		result.SetExternalBlocksDone()
+	}
+	return q.deliver(id, q.externalBlockTaskPool, q.externalBlockTaskQueue, q.externalBlockPendPool,
+		receiptReqTimer, len(externalBlockList), nil, reconstruct)
 }
 
 // deliver injects a data retrieval response into the results queue.

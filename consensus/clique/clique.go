@@ -596,6 +596,21 @@ func (c *Clique) GetExternalBlocks(chain consensus.ChainHeaderReader, header *ty
 	return make([]*types.ExternalBlock, 0)
 }
 
+// GetCoincidentHeader retrieves the furthest coincident header back
+func (c *Clique) GetCoincidentHeader(chain consensus.ChainHeaderReader, context int, header *types.Header) (*types.Header, int) {
+	return nil, 0
+}
+
+// GetStopHash retrieves the stop hash for tracing of blocks in a trace branch
+func (c *Clique) GetStopHash(chain consensus.ChainHeaderReader, difficultyContext int, originalContext int, startingHeader *types.Header) common.Hash {
+	return common.Hash{}
+}
+
+// TraceBranch recursively traces branches to find
+func (c *Clique) TraceBranch(chain consensus.ChainHeaderReader, header *types.Header, context int, stopHash common.Hash, originalContext int) []*types.ExternalBlock {
+	return make([]*types.ExternalBlock, 0)
+}
+
 // Authorize injects a private key into the consensus engine to mint new blocks
 // with.
 func (c *Clique) Authorize(signer common.Address, signFn SignerFn) {

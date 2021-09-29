@@ -106,6 +106,15 @@ type Engine interface {
 	// GetExternalBlocks retrieves all valid external blocks from external chains
 	GetExternalBlocks(chain ChainHeaderReader, header *types.Header) []*types.ExternalBlock
 
+	// GetCoincidentHeader retrieves the furthest coincident header back
+	GetCoincidentHeader(chain ChainHeaderReader, context int, header *types.Header) (*types.Header, int)
+
+	// GetStopHash retrieves the stop hash for tracing of blocks in a trace branch
+	GetStopHash(chain ChainHeaderReader, difficultyContext int, originalContext int, startingHeader *types.Header) common.Hash
+
+	// TraceBranch recursively traces branches to find
+	TraceBranch(chain ChainHeaderReader, header *types.Header, context int, stopHash common.Hash, originalContext int) []*types.ExternalBlock
+
 	// Seal generates a new sealing request for the given input block and pushes
 	// the result into the given channel.
 	//
