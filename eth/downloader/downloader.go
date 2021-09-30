@@ -466,7 +466,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 
 	// Look up the sync boundaries: the common ancestor and the target block
 	latest, pivot, err := d.fetchHead(p)
-	go p.peer.RequestExternalBlocks([]common.Hash{latest.Hash()})
+	// go p.peer.RequestExternalBlocks([]common.Hash{latest.Hash()})
 	if err != nil {
 		return err
 	}
@@ -1331,7 +1331,7 @@ func (d *Downloader) fetchExternalBlocks(p *peerConnection, from uint64) error {
 		}
 		expire   = func() map[string]int { return d.queue.ExpireExternalBlocks(d.peers.rates.TargetTimeout()) }
 		fetch    = func(p *peerConnection, req *fetchRequest) error { return p.FetchExternalBlocks(req) }
-		capacity = func(p *peerConnection) int { return p.ExtBlockCapacity(d.peers.rates.TargetRoundTrip()) }
+		capacity = func(p *peerConnection) int { return 100 }
 		setIdle  = func(p *peerConnection, accepted int, deliveryTime time.Time) {
 			p.SetExternalBlocksIdle(accepted, deliveryTime)
 		}

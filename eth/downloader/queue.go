@@ -104,7 +104,7 @@ func (f *fetchResult) SetReceiptsDone() {
 	}
 }
 
-// SetReceiptsDone flags the receipts as finished.
+// SetExternalBlocksDone flags the external blocks as finished.
 func (f *fetchResult) SetExternalBlocksDone() {
 	if v := atomic.LoadInt32(&f.pending); (v & (1 << externalBlockType)) != 0 {
 		atomic.AddInt32(&f.pending, -3)
@@ -279,8 +279,8 @@ func (q *queue) Idle() bool {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
-	queued := q.blockTaskQueue.Size() + q.receiptTaskQueue.Size()
-	pending := len(q.blockPendPool) + len(q.receiptPendPool)
+	queued := q.blockTaskQueue.Size() + q.receiptTaskQueue.Size() + q.externalBlockTaskQueue.Size()
+	pending := len(q.blockPendPool) + len(q.receiptPendPool) + len(q.externalBlockPendPool)
 
 	return (queued + pending) == 0
 }
@@ -361,6 +361,8 @@ func (q *queue) Schedule(headers []*types.Header, from uint64) []*types.Header {
 				q.receiptTaskQueue.Push(header, -int64(header.Number[types.QuaiNetworkContext].Uint64()))
 			}
 		}
+		// Add to external block task queue
+		q.externalBlockTaskQueue.Push(header, -int64(header.Number[types.QuaiNetworkContext].Uint64()))
 		inserts = append(inserts, header)
 		q.headerHead = hash
 		from++
@@ -550,7 +552,7 @@ func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common
 		// "prioritized" segment of blocks. If it is not, we need to throttle
 
 		stale, throttle, item, err := q.resultCache.AddFetch(header, q.mode == FastSync)
-		if stale {
+		if stale && kind != 2 {
 			// Don't put back in the task queue, this item has already been
 			// delivered upstream
 			taskQueue.PopItem()
@@ -574,7 +576,7 @@ func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common
 			// There are no resultslots available. Leave it in the task queue
 			break
 		}
-		if item.Done(kind) {
+		if item.Done(kind) && kind != 2 {
 			// If it's a noop, we can skip this task
 			delete(taskPool, header.Hash())
 			taskQueue.PopItem()
@@ -672,6 +674,12 @@ func (q *queue) Revoke(peerID string) {
 			q.receiptTaskQueue.Push(header, -int64(header.Number[types.QuaiNetworkContext].Uint64()))
 		}
 		delete(q.receiptPendPool, peerID)
+	}
+	if request, ok := q.externalBlockPendPool[peerID]; ok {
+		for _, header := range request.Headers {
+			q.externalBlockTaskQueue.Push(header, -int64(header.Number[types.QuaiNetworkContext].Uint64()))
+		}
+		delete(q.externalBlockPendPool, peerID)
 	}
 }
 
