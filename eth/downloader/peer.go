@@ -297,8 +297,8 @@ func (p *peerConnection) ReceiptCapacity(targetRTT time.Duration) int {
 // previously discovered throughput.
 func (p *peerConnection) ExtBlockCapacity(targetRTT time.Duration) int {
 	cap := p.rates.Capacity(eth.ExtBlocksMsg, targetRTT)
-	if cap > MaxReceiptFetch {
-		cap = MaxReceiptFetch
+	if cap > MaxExtBlockFetch {
+		cap = MaxExtBlockFetch
 	}
 	return cap
 }

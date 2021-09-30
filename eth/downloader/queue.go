@@ -362,6 +362,7 @@ func (q *queue) Schedule(headers []*types.Header, from uint64) []*types.Header {
 			}
 		}
 		// Add to external block task queue
+		log.Info("Adding header to externalBlockTaskQueue")
 		q.externalBlockTaskQueue.Push(header, -int64(header.Number[types.QuaiNetworkContext].Uint64()))
 		inserts = append(inserts, header)
 		q.headerHead = hash
