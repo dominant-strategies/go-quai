@@ -83,6 +83,12 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 		}
 		return nil
 
+	case *eth.ExtBlocksPacket:
+		if err := h.downloader.DeliverExtBlocks(peer.ID(), *packet); err != nil {
+			log.Debug("Failed to deliver external blocks", "err", err)
+		}
+		return nil
+
 	case *eth.NewBlockHashesPacket:
 		hashes, numbers := packet.Unpack()
 		return h.handleBlockAnnounces(peer, hashes, numbers)

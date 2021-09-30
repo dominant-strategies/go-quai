@@ -302,7 +302,7 @@ type GetExtBlocksPacket66 struct {
 	GetExtBlocksPacket
 }
 
-// ReceiptsPacket is the network packet for block external block distribution.
+// ExtBlocksPacket is the network packet for block external block distribution.
 type ExtBlocksPacket [][]*types.ExternalBlock
 
 // ReceiptsPacket is the network packet for block external block distribution over eth/66.
@@ -385,6 +385,9 @@ func (*GetReceiptsPacket) Kind() byte   { return GetReceiptsMsg }
 
 func (*ReceiptsPacket) Name() string { return "Receipts" }
 func (*ReceiptsPacket) Kind() byte   { return ReceiptsMsg }
+
+func (*ExtBlocksPacket) Name() string { return "ExtBlocks" }
+func (*ExtBlocksPacket) Kind() byte   { return ExtBlocksMsg }
 
 func (*NewPooledTransactionHashesPacket) Name() string { return "NewPooledTransactionHashes" }
 func (*NewPooledTransactionHashesPacket) Kind() byte   { return NewPooledTransactionHashesMsg }

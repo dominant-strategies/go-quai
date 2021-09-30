@@ -443,6 +443,15 @@ func handleReceipts66(backend Backend, msg Decoder, peer *Peer) error {
 	return backend.Handle(peer, &res.ReceiptsPacket)
 }
 
+func handleExtBlocks(backend Backend, msg Decoder, peer *Peer) error {
+	// A batch of receipts arrived to one of our previous requests
+	res := new(ExtBlocksPacket)
+	if err := msg.Decode(res); err != nil {
+		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+	}
+	return backend.Handle(peer, res)
+}
+
 func handleExtBlocks66(backend Backend, msg Decoder, peer *Peer) error {
 	// A batch of receipts arrived to one of our previous requests
 	res := new(ReceiptsPacket66)

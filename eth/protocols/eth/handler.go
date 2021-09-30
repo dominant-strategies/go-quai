@@ -180,6 +180,8 @@ var eth65 = map[uint64]msgHandler{
 	NodeDataMsg:                   handleNodeData,
 	GetReceiptsMsg:                handleGetReceipts,
 	ReceiptsMsg:                   handleReceipts,
+	GetExtBlocksMsg:               handleGetExtBlocks,
+	ExtBlocksMsg:                  handleExtBlocks,
 	NewBlockHashesMsg:             handleNewBlockhashes,
 	NewBlockMsg:                   handleNewBlock,
 	TransactionsMsg:               handleTransactions,

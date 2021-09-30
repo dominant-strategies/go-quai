@@ -1987,6 +1987,11 @@ func (d *Downloader) DeliverReceipts(id string, receipts [][]*types.Receipt) err
 	return d.deliver(d.receiptCh, &receiptPack{id, receipts}, receiptInMeter, receiptDropMeter)
 }
 
+// DeliverReceipts injects a new batch of receipts received from a remote node.
+func (d *Downloader) DeliverExtBlocks(id string, extblocks [][]*types.ExternalBlock) error {
+	return d.deliver(d.receiptCh, &externalBlockPack{id, extblocks}, receiptInMeter, receiptDropMeter)
+}
+
 // DeliverNodeData injects a new batch of node state data received from a remote node.
 func (d *Downloader) DeliverNodeData(id string, data [][]byte) error {
 	return d.deliver(d.stateCh, &statePack{id, data}, stateInMeter, stateDropMeter)

@@ -48,16 +48,17 @@ var (
 type peerConnection struct {
 	id string // Unique identifier of the peer
 
-	headerIdle  int32 // Current header activity state of the peer (idle = 0, active = 1)
-	blockIdle   int32 // Current block activity state of the peer (idle = 0, active = 1)
-	receiptIdle int32 // Current receipt activity state of the peer (idle = 0, active = 1)
-	stateIdle   int32 // Current node data activity state of the peer (idle = 0, active = 1)
+	headerIdle   int32 // Current header activity state of the peer (idle = 0, active = 1)
+	blockIdle    int32 // Current block activity state of the peer (idle = 0, active = 1)
+	receiptIdle  int32 // Current receipt activity state of the peer (idle = 0, active = 1)
+	extBlockIdle int32 // Current external block activity state of the peer (idle = 0, active = 1)
+	stateIdle    int32 // Current node data activity state of the peer (idle = 0, active = 1)
 
-	headerStarted        time.Time // Time instance when the last header fetch was started
-	blockStarted         time.Time // Time instance when the last block (body) fetch was started
-	receiptStarted       time.Time // Time instance when the last receipt fetch was started
-	stateStarted         time.Time // Time instance when the last node data fetch was started
-	externalBlockStarted time.Time // Time instance when the last external block fetch was started
+	headerStarted   time.Time // Time instance when the last header fetch was started
+	blockStarted    time.Time // Time instance when the last block (body) fetch was started
+	receiptStarted  time.Time // Time instance when the last receipt fetch was started
+	stateStarted    time.Time // Time instance when the last node data fetch was started
+	extBlockStarted time.Time // Time instance when the last external block fetch was started
 
 	rates   *msgrate.Tracker         // Tracker to hone in on the number of items retrievable per second
 	lacking map[common.Hash]struct{} // Set of hashes not to request (didn't have previously)
@@ -129,6 +130,7 @@ func (p *peerConnection) Reset() {
 	atomic.StoreInt32(&p.headerIdle, 0)
 	atomic.StoreInt32(&p.blockIdle, 0)
 	atomic.StoreInt32(&p.receiptIdle, 0)
+	atomic.StoreInt32(&p.extBlockIdle, 0)
 	atomic.StoreInt32(&p.stateIdle, 0)
 
 	p.lacking = make(map[common.Hash]struct{})
@@ -191,10 +193,10 @@ func (p *peerConnection) FetchReceipts(request *fetchRequest) error {
 // FetchReceipts sends a receipt retrieval request to the remote peer.
 func (p *peerConnection) FetchExternalBlocks(request *fetchRequest) error {
 	// Short circuit if the peer is already fetching
-	if !atomic.CompareAndSwapInt32(&p.receiptIdle, 0, 1) {
+	if !atomic.CompareAndSwapInt32(&p.extBlockIdle, 0, 1) {
 		return errAlreadyFetching
 	}
-	p.externalBlockStarted = time.Now()
+	p.extBlockStarted = time.Now()
 
 	go func() {
 		// Convert the header set to a retrievable slice
@@ -243,6 +245,14 @@ func (p *peerConnection) SetBodiesIdle(delivered int, deliveryTime time.Time) {
 func (p *peerConnection) SetReceiptsIdle(delivered int, deliveryTime time.Time) {
 	p.rates.Update(eth.ReceiptsMsg, deliveryTime.Sub(p.receiptStarted), delivered)
 	atomic.StoreInt32(&p.receiptIdle, 0)
+}
+
+// SetExternalBlocksIdle sets the peer to idle, allowing it to execute new ext block retrieval
+// requests. Its estimated header retrieval throughput is updated with that measured
+// just now.
+func (p *peerConnection) SetExternalBlocksIdle(delivered int, deliveryTime time.Time) {
+	p.rates.Update(eth.ExtBlocksMsg, deliveryTime.Sub(p.extBlockStarted), delivered)
+	atomic.StoreInt32(&p.extBlockIdle, 0)
 }
 
 // SetNodeDataIdle sets the peer to idle, allowing it to execute new state trie
