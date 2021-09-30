@@ -159,11 +159,12 @@ type queue struct {
 func newQueue(blockCacheLimit int, thresholdInitialSize int) *queue {
 	lock := new(sync.RWMutex)
 	q := &queue{
-		headerContCh:     make(chan bool),
-		blockTaskQueue:   prque.New(nil),
-		receiptTaskQueue: prque.New(nil),
-		active:           sync.NewCond(lock),
-		lock:             lock,
+		headerContCh:           make(chan bool),
+		blockTaskQueue:         prque.New(nil),
+		receiptTaskQueue:       prque.New(nil),
+		externalBlockTaskQueue: prque.New(nil),
+		active:                 sync.NewCond(lock),
+		lock:                   lock,
 	}
 	q.Reset(blockCacheLimit, thresholdInitialSize)
 	return q
@@ -187,6 +188,10 @@ func (q *queue) Reset(blockCacheLimit int, thresholdInitialSize int) {
 	q.receiptTaskPool = make(map[common.Hash]*types.Header)
 	q.receiptTaskQueue.Reset()
 	q.receiptPendPool = make(map[string]*fetchRequest)
+
+	q.externalBlockTaskPool = make(map[common.Hash]*types.Header)
+	q.externalBlockTaskQueue.Reset()
+	q.externalBlockPendPool = make(map[string]*fetchRequest)
 
 	q.resultCache = newResultStore(blockCacheLimit)
 	q.resultCache.SetThrottleThreshold(uint64(thresholdInitialSize))
@@ -225,6 +230,14 @@ func (q *queue) PendingReceipts() int {
 	return q.receiptTaskQueue.Size()
 }
 
+// PendingReceipts retrieves the number of block receipts pending for retrieval.
+func (q *queue) PendingExtBlocks() int {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+
+	return q.externalBlockTaskQueue.Size()
+}
+
 // InFlightHeaders retrieves whether there are header fetch requests currently
 // in flight.
 func (q *queue) InFlightHeaders() bool {
@@ -250,6 +263,15 @@ func (q *queue) InFlightReceipts() bool {
 	defer q.lock.Unlock()
 
 	return len(q.receiptPendPool) > 0
+}
+
+// InFlightExtBlocks retrieves whether there are external block fetch requests currently
+// in flight.
+func (q *queue) InFlightExtBlocks() bool {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+
+	return len(q.externalBlockPendPool) > 0
 }
 
 // Idle returns if the queue is fully idle or has some data still inside.
@@ -417,6 +439,7 @@ func (q *queue) stats() []interface{} {
 	return []interface{}{
 		"receiptTasks", q.receiptTaskQueue.Size(),
 		"blockTasks", q.blockTaskQueue.Size(),
+		"externalBlockTasks", q.externalBlockTaskQueue.Size(),
 		"itemSize", q.resultSize,
 	}
 }
@@ -479,6 +502,16 @@ func (q *queue) ReserveReceipts(p *peerConnection, count int) (*fetchRequest, bo
 	defer q.lock.Unlock()
 
 	return q.reserveHeaders(p, count, q.receiptTaskPool, q.receiptTaskQueue, q.receiptPendPool, receiptType)
+}
+
+// ReserveExtBlocks reserves a set of external block fetches for the given peer, skipping
+// any previously failed downloads. Beside the next batch of needed fetches, it
+// also returns a flag whether empty receipts were queued requiring importing.
+func (q *queue) ReserveExtBlocks(p *peerConnection, count int) (*fetchRequest, bool, bool) {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+
+	return q.reserveHeaders(p, count, q.externalBlockTaskPool, q.externalBlockTaskQueue, q.externalBlockPendPool, externalBlockType)
 }
 
 // reserveHeaders reserves a set of data download operations for a given peer,
@@ -600,6 +633,14 @@ func (q *queue) CancelReceipts(request *fetchRequest) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 	q.cancel(request, q.receiptTaskQueue, q.receiptPendPool)
+}
+
+// CancelExtBlocks aborts an external block fetch request, returning all pending headers to
+// the task queue.
+func (q *queue) CancelExtBlocks(request *fetchRequest) {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+	q.cancel(request, q.externalBlockTaskQueue, q.externalBlockPendPool)
 }
 
 // Cancel aborts a fetch request, returning all pending hashes to the task queue.

@@ -293,6 +293,16 @@ func (p *peerConnection) ReceiptCapacity(targetRTT time.Duration) int {
 	return cap
 }
 
+// ExtBlockCapacity retrieves the peers receipt download allowance based on its
+// previously discovered throughput.
+func (p *peerConnection) ExtBlockCapacity(targetRTT time.Duration) int {
+	cap := p.rates.Capacity(eth.ExtBlocksMsg, targetRTT)
+	if cap > MaxReceiptFetch {
+		cap = MaxReceiptFetch
+	}
+	return cap
+}
+
 // NodeDataCapacity retrieves the peers state download allowance based on its
 // previously discovered throughput.
 func (p *peerConnection) NodeDataCapacity(targetRTT time.Duration) int {
@@ -471,6 +481,18 @@ func (ps *peerSet) ReceiptIdlePeers() ([]*peerConnection, int) {
 	}
 	throughput := func(p *peerConnection) int {
 		return p.rates.Capacity(eth.ReceiptsMsg, time.Second)
+	}
+	return ps.idlePeers(eth.ETH65, eth.ETH66, idle, throughput)
+}
+
+// ExtBlockIdlePeers retrieves a flat list of all the currently external block idle peers
+// within the active peer set, ordered by their reputation.
+func (ps *peerSet) ExtBlockIdlePeers() ([]*peerConnection, int) {
+	idle := func(p *peerConnection) bool {
+		return atomic.LoadInt32(&p.extBlockIdle) == 0
+	}
+	throughput := func(p *peerConnection) int {
+		return p.rates.Capacity(eth.ExtBlocksMsg, time.Second)
 	}
 	return ps.idlePeers(eth.ETH65, eth.ETH66, idle, throughput)
 }

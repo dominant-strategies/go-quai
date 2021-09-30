@@ -386,6 +386,9 @@ func (*GetReceiptsPacket) Kind() byte   { return GetReceiptsMsg }
 func (*ReceiptsPacket) Name() string { return "Receipts" }
 func (*ReceiptsPacket) Kind() byte   { return ReceiptsMsg }
 
+func (*GetExtBlocksPacket) Name() string { return "GetExtBlocks" }
+func (*GetExtBlocksPacket) Kind() byte   { return GetExtBlocksMsg }
+
 func (*ExtBlocksPacket) Name() string { return "ExtBlocks" }
 func (*ExtBlocksPacket) Kind() byte   { return ExtBlocksMsg }
 

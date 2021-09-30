@@ -117,12 +117,14 @@ type Downloader struct {
 	ancientLimit    uint64 // The maximum block number which can be regarded as ancient data.
 
 	// Channels
-	headerCh      chan dataPack        // Channel receiving inbound block headers
-	bodyCh        chan dataPack        // Channel receiving inbound block bodies
-	receiptCh     chan dataPack        // Channel receiving inbound receipts
-	bodyWakeCh    chan bool            // Channel to signal the block body fetcher of new tasks
-	receiptWakeCh chan bool            // Channel to signal the receipt fetcher of new tasks
-	headerProcCh  chan []*types.Header // Channel to feed the header processor new tasks
+	headerCh       chan dataPack        // Channel receiving inbound block headers
+	bodyCh         chan dataPack        // Channel receiving inbound block bodies
+	receiptCh      chan dataPack        // Channel receiving inbound receipts
+	extBlockCh     chan dataPack        // Channel receiving inbound external blocks
+	bodyWakeCh     chan bool            // Channel to signal the block body fetcher of new tasks
+	receiptWakeCh  chan bool            // Channel to signal the receipt fetcher of new tasks
+	extBlockWakeCh chan bool            // Channel to signal the external block fetcher of new tasks
+	headerProcCh   chan []*types.Header // Channel to feed the header processor new tasks
 
 	// State sync
 	pivotHeader *types.Header // Pivot block header to dynamically push the syncing state root
@@ -144,10 +146,11 @@ type Downloader struct {
 	quitLock sync.Mutex    // Lock to prevent double closes
 
 	// Testing hooks
-	syncInitHook     func(uint64, uint64)  // Method to call upon initiating a new sync run
-	bodyFetchHook    func([]*types.Header) // Method to call upon starting a block body fetch
-	receiptFetchHook func([]*types.Header) // Method to call upon starting a receipt fetch
-	chainInsertHook  func([]*fetchResult)  // Method to call upon inserting a chain of blocks (possibly in multiple invocations)
+	syncInitHook      func(uint64, uint64)  // Method to call upon initiating a new sync run
+	bodyFetchHook     func([]*types.Header) // Method to call upon starting a block body fetch
+	receiptFetchHook  func([]*types.Header) // Method to call upon starting a receipt fetch
+	extBlockFetchHook func([]*types.Header) // Method to call upon starting a external block fetch
+	chainInsertHook   func([]*fetchResult)  // Method to call upon inserting a chain of blocks (possibly in multiple invocations)
 }
 
 // LightChain encapsulates functions required to synchronise a light chain.
@@ -463,6 +466,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 
 	// Look up the sync boundaries: the common ancestor and the target block
 	latest, pivot, err := d.fetchHead(p)
+	go p.peer.RequestExternalBlocks([]common.Hash{latest.Hash()})
 	if err != nil {
 		return err
 	}
@@ -552,7 +556,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 		func() error { return d.fetchHeaders(p, origin+1) }, // Headers are always retrieved
 		func() error { return d.fetchBodies(origin + 1) },   // Bodies are retrieved during normal and fast sync
 		func() error { return d.fetchReceipts(origin + 1) }, // Receipts are retrieved during fast sync
-		func() error { return d.fetchExternalBlocks(origin + 1) },
+		func() error { return d.fetchExternalBlocks(p, origin+1) },
 		func() error { return d.processHeaders(origin+1, td) },
 	}
 	if mode == FastSync {
@@ -1021,10 +1025,10 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 		timeout.Reset(ttl)
 
 		if skeleton {
-			p.log.Trace("Fetching skeleton headers", "count", MaxHeaderFetch, "from", from)
+			p.log.Debug("Fetching skeleton headers", "count", MaxHeaderFetch, "from", from)
 			go p.peer.RequestHeadersByNumber(from+uint64(MaxHeaderFetch)-1, MaxSkeletonSize, MaxHeaderFetch-1, false)
 		} else {
-			p.log.Trace("Fetching full headers", "count", MaxHeaderFetch, "from", from)
+			p.log.Debug("Fetching full headers", "count", MaxHeaderFetch, "from", from)
 			go p.peer.RequestHeadersByNumber(from, MaxHeaderFetch, 0, false)
 		}
 	}
@@ -1315,8 +1319,10 @@ func (d *Downloader) fetchReceipts(from uint64) error {
 }
 
 // fetchExternalBlocks iteratively downloads the scheduled external blocks, taking any
-func (d *Downloader) fetchExternalBlocks(from uint64) error {
+func (d *Downloader) fetchExternalBlocks(p *peerConnection, from uint64) error {
 	log.Debug("Downloading external blocks", "origin", from)
+
+	// go p.peer.RequestHeadersByNumber(from, MaxHeaderFetch, 0, false)
 
 	var (
 		deliver = func(packet dataPack) (int, error) {
@@ -1325,14 +1331,14 @@ func (d *Downloader) fetchExternalBlocks(from uint64) error {
 		}
 		expire   = func() map[string]int { return d.queue.ExpireExternalBlocks(d.peers.rates.TargetTimeout()) }
 		fetch    = func(p *peerConnection, req *fetchRequest) error { return p.FetchExternalBlocks(req) }
-		capacity = func(p *peerConnection) int { return p.ReceiptCapacity(d.peers.rates.TargetRoundTrip()) }
+		capacity = func(p *peerConnection) int { return p.ExtBlockCapacity(d.peers.rates.TargetRoundTrip()) }
 		setIdle  = func(p *peerConnection, accepted int, deliveryTime time.Time) {
-			p.SetReceiptsIdle(accepted, deliveryTime)
+			p.SetExternalBlocksIdle(accepted, deliveryTime)
 		}
 	)
-	err := d.fetchParts(d.receiptCh, deliver, d.receiptWakeCh, expire,
-		d.queue.PendingReceipts, d.queue.InFlightReceipts, d.queue.ReserveReceipts,
-		d.receiptFetchHook, fetch, d.queue.CancelReceipts, capacity, d.peers.ReceiptIdlePeers, setIdle, "externalBlocks")
+	err := d.fetchParts(d.extBlockCh, deliver, d.extBlockWakeCh, expire,
+		d.queue.PendingExtBlocks, d.queue.InFlightExtBlocks, d.queue.ReserveExtBlocks,
+		d.extBlockFetchHook, fetch, d.queue.CancelExtBlocks, capacity, d.peers.ExtBlockIdlePeers, setIdle, "externalBlocks")
 
 	log.Debug("External block download terminated", "err", err)
 	return err
@@ -1987,9 +1993,9 @@ func (d *Downloader) DeliverReceipts(id string, receipts [][]*types.Receipt) err
 	return d.deliver(d.receiptCh, &receiptPack{id, receipts}, receiptInMeter, receiptDropMeter)
 }
 
-// DeliverReceipts injects a new batch of receipts received from a remote node.
+// DeliverReceipts injects a new batch of external blocks received from a remote node.
 func (d *Downloader) DeliverExtBlocks(id string, extblocks [][]*types.ExternalBlock) error {
-	return d.deliver(d.receiptCh, &externalBlockPack{id, extblocks}, receiptInMeter, receiptDropMeter)
+	return d.deliver(d.extBlockCh, &externalBlockPack{id, extblocks}, extBlockInMeter, extBlockDropMeter)
 }
 
 // DeliverNodeData injects a new batch of node state data received from a remote node.
