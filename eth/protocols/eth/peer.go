@@ -411,9 +411,10 @@ func (p *Peer) SendExtBlocksRLP(extblocks []rlp.RawValue) error {
 
 // ReplyExtBlocksRLP is the eth/66 response to GetExtBlocks.
 func (p *Peer) ReplyExtBlocksRLP(id uint64, extblocks []rlp.RawValue) error {
+	log.Info("Sending replyExtBlocksRLP", "len", "len")
 	return p2p.Send(p.rw, ExtBlocksMsg, ExtBlocksRLPPacket66{
-		RequestId:         id,
-		ReceiptsRLPPacket: extblocks,
+		RequestId:          id,
+		ExtBlocksRLPPacket: extblocks,
 	})
 }
 

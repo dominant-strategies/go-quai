@@ -320,6 +320,7 @@ func answerGetExtBlocksQuery(backend Backend, query GetExtBlocksPacket, peer *Pe
 			bytes += len(encoded)
 		}
 	}
+	log.Info("Returning answerGetExtBlocksQuery.", "len", len(extBlocks))
 	return extBlocks
 }
 

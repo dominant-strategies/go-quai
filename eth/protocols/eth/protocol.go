@@ -317,7 +317,7 @@ type ExtBlocksRLPPacket []rlp.RawValue
 // ExtBlocksRLPPacket66 is the eth-66 version of ExtBlocksRLPPacket
 type ExtBlocksRLPPacket66 struct {
 	RequestId uint64
-	ReceiptsRLPPacket
+	ExtBlocksRLPPacket
 }
 
 // NewPooledTransactionHashesPacket represents a transaction announcement packet.
