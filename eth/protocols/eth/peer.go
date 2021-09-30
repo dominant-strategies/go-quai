@@ -24,6 +24,7 @@ import (
 	mapset "github.com/deckarep/golang-set"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -559,6 +560,7 @@ func (p *Peer) RequestTxs(hashes []common.Hash) error {
 // RequestExternalBlocks fetches a batch of external blocks from a remote node.
 func (p *Peer) RequestExternalBlocks(hashes []common.Hash) error {
 	p.Log().Debug("Fetching batch of external blocks", "count", len(hashes))
+	log.Info("Fetching batch of external blocks for hashes", "count", len(hashes))
 	if p.Version() >= ETH66 {
 		id := rand.Uint64()
 
