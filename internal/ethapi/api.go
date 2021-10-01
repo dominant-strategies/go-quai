@@ -2119,6 +2119,19 @@ func (api *PublicDebugAPI) GetHeaderRlp(ctx context.Context, number uint64) (str
 }
 
 // GetBlockRlp retrieves the RLP encoded for of a single block.
+func (api *PublicDebugAPI) GetBlockRlp(ctx context.Context, number uint64) (string, error) {
+	block, _ := api.b.BlockByNumber(ctx, rpc.BlockNumber(number))
+	if block == nil {
+		return "", fmt.Errorf("block #%d not found", number)
+	}
+	encoded, err := rlp.EncodeToBytes(header)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", encoded), nil
+}
+
+// GetBlockRlp retrieves the RLP encoded for of a single block.
 func (api *PublicDebugAPI) GetBlockRlp(ctx context.Context, number uint64) (hexutil.Bytes, error) {
 	block, _ := api.b.BlockByNumber(ctx, rpc.BlockNumber(number))
 	if block == nil {
