@@ -455,13 +455,13 @@ func handleExtBlocks(backend Backend, msg Decoder, peer *Peer) error {
 
 func handleExtBlocks66(backend Backend, msg Decoder, peer *Peer) error {
 	// A batch of receipts arrived to one of our previous requests
-	res := new(ReceiptsPacket66)
+	res := new(ExtBlocksPacket66)
 	if err := msg.Decode(res); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
 	requestTracker.Fulfil(peer.id, peer.version, ExtBlocksMsg, res.RequestId)
 
-	return backend.Handle(peer, &res.ReceiptsPacket)
+	return backend.Handle(peer, &res.ExtBlocksPacket)
 }
 
 func handleNewPooledTransactionHashes(backend Backend, msg Decoder, peer *Peer) error {

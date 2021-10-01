@@ -228,8 +228,10 @@ func New(checkpoint uint64, stateDb ethdb.Database, stateBloom *trie.SyncBloom, 
 		headerCh:       make(chan dataPack, 1),
 		bodyCh:         make(chan dataPack, 1),
 		receiptCh:      make(chan dataPack, 1),
+		extBlockCh:     make(chan dataPack, 1),
 		bodyWakeCh:     make(chan bool, 1),
 		receiptWakeCh:  make(chan bool, 1),
+		extBlockWakeCh: make(chan bool, 1),
 		headerProcCh:   make(chan []*types.Header, 1),
 		quitCh:         make(chan struct{}),
 		stateCh:        make(chan dataPack),
@@ -397,13 +399,13 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int, mode 
 	d.queue.Reset(blockCacheMaxItems, blockCacheInitialItems)
 	d.peers.Reset()
 
-	for _, ch := range []chan bool{d.bodyWakeCh, d.receiptWakeCh} {
+	for _, ch := range []chan bool{d.bodyWakeCh, d.receiptWakeCh, d.extBlockWakeCh} {
 		select {
 		case <-ch:
 		default:
 		}
 	}
-	for _, ch := range []chan dataPack{d.headerCh, d.bodyCh, d.receiptCh} {
+	for _, ch := range []chan dataPack{d.headerCh, d.bodyCh, d.receiptCh, d.extBlockCh} {
 		for empty := false; !empty; {
 			select {
 			case <-ch:
@@ -554,10 +556,10 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 		d.syncInitHook(origin, height)
 	}
 	fetchers := []func() error{
+		func() error { return d.fetchExternalBlocks(p, origin+1) },
 		func() error { return d.fetchHeaders(p, origin+1) }, // Headers are always retrieved
 		func() error { return d.fetchBodies(origin + 1) },   // Bodies are retrieved during normal and fast sync
 		func() error { return d.fetchReceipts(origin + 1) }, // Receipts are retrieved during fast sync
-		func() error { return d.fetchExternalBlocks(p, origin+1) },
 		func() error { return d.processHeaders(origin+1, td) },
 	}
 	if mode == FastSync {
@@ -703,6 +705,7 @@ func (d *Downloader) fetchHead(p *peerConnection) (head *types.Header, pivot *ty
 
 		case <-d.bodyCh:
 		case <-d.receiptCh:
+		case <-d.extBlockCh:
 			// Out of bounds delivery, ignore
 		}
 	}
@@ -900,6 +903,7 @@ func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, re
 
 		case <-d.bodyCh:
 		case <-d.receiptCh:
+		case <-d.extBlockCh:
 			// Out of bounds delivery, ignore
 		}
 	}
@@ -985,6 +989,7 @@ func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, 
 
 			case <-d.bodyCh:
 			case <-d.receiptCh:
+			case <-d.extBlockCh:
 				// Out of bounds delivery, ignore
 			}
 		}
@@ -1216,7 +1221,7 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 			d.dropPeer(p.id)
 
 			// Finish the sync gracefully instead of dumping the gathered data though
-			for _, ch := range []chan bool{d.bodyWakeCh, d.receiptWakeCh} {
+			for _, ch := range []chan bool{d.bodyWakeCh, d.receiptWakeCh, d.extBlockWakeCh} {
 				select {
 				case ch <- false:
 				case <-d.cancelCh:
@@ -1322,8 +1327,6 @@ func (d *Downloader) fetchReceipts(from uint64) error {
 // fetchExternalBlocks iteratively downloads the scheduled external blocks, taking any
 func (d *Downloader) fetchExternalBlocks(p *peerConnection, from uint64) error {
 	log.Debug("Downloading external blocks", "origin", from)
-
-	// go p.peer.RequestHeadersByNumber(from, MaxHeaderFetch, 0, false)
 
 	var (
 		deliver = func(packet dataPack) (int, error) {
@@ -1587,7 +1590,7 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 			// Terminate header processing if we synced up
 			if len(headers) == 0 {
 				// Notify everyone that headers are fully processed
-				for _, ch := range []chan bool{d.bodyWakeCh, d.receiptWakeCh} {
+				for _, ch := range []chan bool{d.bodyWakeCh, d.receiptWakeCh, d.extBlockWakeCh} {
 					select {
 					case ch <- false:
 					case <-d.cancelCh:
@@ -1709,7 +1712,7 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 			d.syncStatsLock.Unlock()
 
 			// Signal the content downloaders of the availablility of new tasks
-			for _, ch := range []chan bool{d.bodyWakeCh, d.receiptWakeCh} {
+			for _, ch := range []chan bool{d.bodyWakeCh, d.receiptWakeCh, d.extBlockWakeCh} {
 				select {
 				case ch <- true:
 				default:
@@ -1994,7 +1997,7 @@ func (d *Downloader) DeliverReceipts(id string, receipts [][]*types.Receipt) err
 	return d.deliver(d.receiptCh, &receiptPack{id, receipts}, receiptInMeter, receiptDropMeter)
 }
 
-// DeliverReceipts injects a new batch of external blocks received from a remote node.
+// DeliverExtBlocks injects a new batch of external blocks received from a remote node.
 func (d *Downloader) DeliverExtBlocks(id string, extblocks [][]*types.ExternalBlock) error {
 	return d.deliver(d.extBlockCh, &externalBlockPack{id, extblocks}, extBlockInMeter, extBlockDropMeter)
 }

@@ -82,6 +82,8 @@ func newFetchResult(header *types.Header, fastSync bool) *fetchResult {
 	if fastSync && !header.EmptyReceipts() {
 		item.pending |= (1 << receiptType)
 	}
+	item.pending |= (1 << externalBlockType)
+
 	return item
 }
 
@@ -362,8 +364,13 @@ func (q *queue) Schedule(headers []*types.Header, from uint64) []*types.Header {
 			}
 		}
 		// Add to external block task queue
+		if _, ok := q.externalBlockTaskPool[hash]; ok {
+			log.Warn("Header already scheduled for external block fetch", "number", header.Number, "hash", hash)
+		} else {
+			q.externalBlockTaskPool[hash] = header
+			q.externalBlockTaskQueue.Push(header, -int64(header.Number[types.QuaiNetworkContext].Uint64()))
+		}
 		log.Info("Adding header to externalBlockTaskQueue")
-		q.externalBlockTaskQueue.Push(header, -int64(header.Number[types.QuaiNetworkContext].Uint64()))
 		inserts = append(inserts, header)
 		q.headerHead = hash
 		from++
@@ -553,7 +560,7 @@ func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common
 		// "prioritized" segment of blocks. If it is not, we need to throttle
 
 		stale, throttle, item, err := q.resultCache.AddFetch(header, q.mode == FastSync)
-		if stale && kind != 2 {
+		if stale {
 			// Don't put back in the task queue, this item has already been
 			// delivered upstream
 			taskQueue.PopItem()
@@ -577,7 +584,7 @@ func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common
 			// There are no resultslots available. Leave it in the task queue
 			break
 		}
-		if item.Done(kind) && kind != 2 {
+		if item.Done(kind) {
 			// If it's a noop, we can skip this task
 			delete(taskPool, header.Hash())
 			taskQueue.PopItem()
@@ -717,7 +724,7 @@ func (q *queue) ExpireExternalBlocks(timeout time.Duration) map[string]int {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
-	return q.expire(timeout, q.receiptPendPool, q.receiptTaskQueue, receiptTimeoutMeter)
+	return q.expire(timeout, q.externalBlockPendPool, q.externalBlockTaskQueue, extBlockTimeoutMeter)
 }
 
 // expire is the generic check that move expired tasks from a pending pool back
@@ -900,13 +907,15 @@ func (q *queue) DeliverReceipts(id string, receiptList [][]*types.Receipt) (int,
 func (q *queue) DeliverExternalBlocks(id string, externalBlockList [][]*types.ExternalBlock) (int, error) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
-
+	validate := func(index int, header *types.Header) error {
+		return nil
+	}
 	reconstruct := func(index int, result *fetchResult) {
 		result.ExternalBlocks = externalBlockList[index]
 		result.SetExternalBlocksDone()
 	}
 	return q.deliver(id, q.externalBlockTaskPool, q.externalBlockTaskQueue, q.externalBlockPendPool,
-		receiptReqTimer, len(externalBlockList), nil, reconstruct)
+		receiptReqTimer, len(externalBlockList), validate, reconstruct)
 }
 
 // deliver injects a data retrieval response into the results queue.
