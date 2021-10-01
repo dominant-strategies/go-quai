@@ -570,6 +570,7 @@ func (bc *BlockChain) SetHeadBeyondRoot(head uint64, root common.Hash) (uint64, 
 			// last step, however the direction of SetHead is from high
 			// to low, so it's safe the update in-memory markers directly.
 			bc.currentBlock.Store(newHeadBlock)
+			log.Info("SetHeadBeyondRoot", "number", newHeadBlock.NumberU64())
 			headBlockGauge.Update(int64(newHeadBlock.NumberU64()))
 		}
 		// Rewind the fast block in a simpleton way to the target head

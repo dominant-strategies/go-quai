@@ -109,7 +109,7 @@ func (f *fetchResult) SetReceiptsDone() {
 // SetExternalBlocksDone flags the external blocks as finished.
 func (f *fetchResult) SetExternalBlocksDone() {
 	if v := atomic.LoadInt32(&f.pending); (v & (1 << externalBlockType)) != 0 {
-		atomic.AddInt32(&f.pending, -3)
+		atomic.AddInt32(&f.pending, -4)
 	}
 }
 
