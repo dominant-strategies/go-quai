@@ -261,10 +261,6 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 		mode = downloader.SnapSync
 	}
 	op := peerToSyncOp(mode, peer)
-	// TODO: #82 Fix ourTD == nil in sync.go
-	// if ourTD == nil {
-	// 	return nil
-	// }
 	if op.td.Cmp(ourTD) <= 0 {
 		return nil // We're in sync.
 	}
