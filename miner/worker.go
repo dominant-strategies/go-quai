@@ -919,7 +919,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		header.GasLimit[types.QuaiNetworkContext] = w.snapshotBlock.GasLimit()
 	} else {
 		header.ParentHash[types.QuaiNetworkContext] = parent.Hash()
-		header.Number[types.QuaiNetworkContext] = num.Add(num, common.Big1)
+		header.Number[types.QuaiNetworkContext] = big.NewInt(int64(num.Uint64()) + 1)
 		header.Extra[types.QuaiNetworkContext] = w.extra
 		header.GasLimit[types.QuaiNetworkContext] = core.CalcGasLimit(parent.GasUsed(), parent.GasLimit(), w.config.GasFloor, w.config.GasCeil)
 	}
