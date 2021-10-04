@@ -570,7 +570,6 @@ func (bc *BlockChain) SetHeadBeyondRoot(head uint64, root common.Hash) (uint64, 
 			// last step, however the direction of SetHead is from high
 			// to low, so it's safe the update in-memory markers directly.
 			bc.currentBlock.Store(newHeadBlock)
-			log.Info("SetHeadBeyondRoot", "number", newHeadBlock.NumberU64())
 			headBlockGauge.Update(int64(newHeadBlock.NumberU64()))
 		}
 		// Rewind the fast block in a simpleton way to the target head
@@ -2461,9 +2460,9 @@ func (bc *BlockChain) GetTdByHash(hash common.Hash) *big.Int {
 // caching it if found.
 func (bc *BlockChain) GetHeader(hash common.Hash, number uint64) *types.Header {
 	// Blockchain might have cached the whole block, only if not go to headerchain
-	// if block, ok := bc.blockCache.Get(hash); ok {
-	// 	return block.(*types.Block).Header()
-	// }
+	if block, ok := bc.blockCache.Get(hash); ok {
+		return block.(*types.Block).Header()
+	}
 
 	return bc.hc.GetHeader(hash, number)
 }
@@ -2472,9 +2471,9 @@ func (bc *BlockChain) GetHeader(hash common.Hash, number uint64) *types.Header {
 // found.
 func (bc *BlockChain) GetHeaderByHash(hash common.Hash) *types.Header {
 	// Blockchain might have cached the whole block, only if not go to headerchain
-	// if block, ok := bc.blockCache.Get(hash); ok {
-	// 	return block.(*types.Block).Header()
-	// }
+	if block, ok := bc.blockCache.Get(hash); ok {
+		return block.(*types.Block).Header()
+	}
 
 	return bc.hc.GetHeaderByHash(hash)
 }
