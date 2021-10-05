@@ -298,7 +298,6 @@ func answerGetExtBlocksQuery(backend Backend, query GetExtBlocksPacket, peer *Pe
 		bytes     int
 		extBlocks []rlp.RawValue
 	)
-	log.Info("answerGetExtBlocksQuery is being called.")
 	for _, hash := range query {
 		if bytes >= softResponseLimit {
 			break
@@ -309,9 +308,6 @@ func answerGetExtBlocksQuery(backend Backend, query GetExtBlocksPacket, peer *Pe
 		if err != nil {
 			log.Error("Unable to retrieve external blocks")
 		}
-
-		log.Info("Length of ext blocks returned", "hash", hash, "len", len(results))
-
 		// If known, encode and queue for response packet
 		if encoded, err := rlp.EncodeToBytes(results); err != nil {
 			log.Error("Failed to encode receipt", "err", err)
@@ -320,7 +316,6 @@ func answerGetExtBlocksQuery(backend Backend, query GetExtBlocksPacket, peer *Pe
 			bytes += len(encoded)
 		}
 	}
-	log.Info("Returning answerGetExtBlocksQuery.", "len", len(extBlocks))
 	return extBlocks
 }
 
