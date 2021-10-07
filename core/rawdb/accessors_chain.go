@@ -783,7 +783,7 @@ func WriteAncientBlocks(db ethdb.AncientWriter, blocks []*types.Block, receipts 
 			}
 			header := block.Header()
 			if i > 0 {
-				tdSum.Add(tdSum, header.Difficulty)
+				tdSum.Add(tdSum, header.Difficulty[types.QuaiNetworkContext])
 			}
 			if err := writeAncientBlock(op, block, header, stReceipts, tdSum); err != nil {
 				return err

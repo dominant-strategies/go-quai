@@ -2,11 +2,15 @@ from subprocess import getoutput
 
 lines = []
 
+# Commits to apply, in order of newest to oldest
 with open('eth_commits.txt') as f:
     lines = f.readlines()
 
+# Reverse commits to apply oldest first
 lines.reverse()
 
+# Iterate and fetch commit data from github using hub. Skip if merge conflict arises
+# Log to file in order to manually resolve merge conflicts post apply.
 for line in lines:
     str = "hub am -3 https://github.com/ethereum/go-ethereum/commit/" + line
     response = getoutput(str)

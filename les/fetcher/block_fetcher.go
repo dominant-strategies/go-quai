@@ -141,7 +141,7 @@ type blockOrHeaderInject struct {
 // number returns the block number of the injected object.
 func (inject *blockOrHeaderInject) number() uint64 {
 	if inject.header != nil {
-		return inject.header.Number.Uint64()
+		return inject.header.Number[types.QuaiNetworkContext].Uint64()
 	}
 	return inject.block.NumberU64()
 }
@@ -526,7 +526,7 @@ func (f *BlockFetcher) loop() {
 				// Filter fetcher-requested headers from other synchronisation algorithms
 				if announce := f.fetching[hash]; announce != nil && announce.origin == task.peer && f.fetched[hash] == nil && f.completing[hash] == nil && f.queued[hash] == nil {
 					// If the delivered header does not match the promised number, drop the announcer
-					if header.Number.Uint64() != announce.number {
+					if header.Number[types.QuaiNetworkContext].Uint64() != announce.number {
 						log.Trace("Invalid block number fetched", "peer", announce.origin, "hash", header.Hash(), "announced", announce.number, "provided", header.Number)
 						f.dropPeer(announce.origin)
 						f.forgetHash(hash)
@@ -548,7 +548,7 @@ func (f *BlockFetcher) loop() {
 						announce.time = task.time
 
 						// If the block is empty (header only), short circuit into the final import queue
-						if header.TxHash == types.EmptyRootHash && header.UncleHash == types.EmptyUncleHash {
+						if header.TxHash[types.QuaiNetworkContext] == types.EmptyRootHash[0] && header.UncleHash[types.QuaiNetworkContext] == types.EmptyUncleHash[0] {
 							log.Trace("Block empty, skipping body retrieval", "peer", announce.origin, "number", header.Number, "hash", header.Hash())
 
 							block := types.NewBlockWithHeader(header)
@@ -623,13 +623,13 @@ func (f *BlockFetcher) loop() {
 						if uncleHash == (common.Hash{}) {
 							uncleHash = types.CalcUncleHash(task.uncles[i])
 						}
-						if uncleHash != announce.header.UncleHash {
+						if uncleHash != announce.header.UncleHash[types.QuaiNetworkContext] {
 							continue
 						}
 						if txnHash == (common.Hash{}) {
 							txnHash = types.DeriveSha(types.Transactions(task.transactions[i]), trie.NewStackTrie(nil))
 						}
-						if txnHash != announce.header.TxHash {
+						if txnHash != announce.header.TxHash[types.QuaiNetworkContext] {
 							continue
 						}
 						// Mark the body matched, reassemble if still unknown
@@ -713,7 +713,7 @@ func (f *BlockFetcher) enqueue(peer string, header *types.Header, block *types.B
 		number uint64
 	)
 	if header != nil {
-		hash, number = header.Hash(), header.Number.Uint64()
+		hash, number = header.Hash(), header.Number[types.QuaiNetworkContext].Uint64()
 	} else {
 		hash, number = block.Hash(), block.NumberU64()
 	}
@@ -760,7 +760,7 @@ func (f *BlockFetcher) importHeaders(peer string, header *types.Header) {
 	go func() {
 		defer func() { f.done <- hash }()
 		// If the parent's unknown, abort insertion
-		parent := f.getHeader(header.ParentHash)
+		parent := f.getHeader(header.ParentHash[types.QuaiNetworkContext])
 		if parent == nil {
 			log.Debug("Unknown parent of propagated header", "peer", peer, "number", header.Number, "hash", hash, "parent", header.ParentHash)
 			return

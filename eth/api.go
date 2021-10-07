@@ -601,7 +601,7 @@ func (api *PrivateDebugAPI) GetAccessibleState(from, to rpc.BlockNumber) (uint64
 		if h == nil {
 			return 0, fmt.Errorf("missing header %d", i)
 		}
-		if ok, _ := api.eth.ChainDb().Has(h.Root[:]); ok {
+		if ok, _ := api.eth.ChainDb().Has(h.Root[types.QuaiNetworkContext][:]); ok {
 			return uint64(i), nil
 		}
 	}
