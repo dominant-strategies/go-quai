@@ -286,13 +286,7 @@ func (tx *Transaction) Nonce() uint64 { return tx.inner.nonce() }
 // To returns the recipient address of the transaction.
 // For contract-creation transactions, To returns nil.
 func (tx *Transaction) To() *common.Address {
-	// Copy the pointed-to address.
-	ito := tx.inner.to()
-	if ito == nil {
-		return nil
-	}
-	cpy := *ito
-	return &cpy
+	return copyAddressPtr(tx.inner.to())
 }
 
 // Cost returns gas * gasPrice + value.
@@ -581,11 +575,11 @@ type Message struct {
 	gasTipCap    *big.Int
 	data         []byte
 	accessList   AccessList
-	checkNonce   bool
+	isFake       bool
 	fromExternal bool
 }
 
-func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice, gasFeeCap, gasTipCap *big.Int, data []byte, accessList AccessList, checkNonce bool) Message {
+func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice, gasFeeCap, gasTipCap *big.Int, data []byte, accessList AccessList, isFake bool) Message {
 	return Message{
 		from:         from,
 		to:           to,
@@ -597,7 +591,7 @@ func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *b
 		gasTipCap:    gasTipCap,
 		data:         data,
 		accessList:   accessList,
-		checkNonce:   checkNonce,
+		isFake:       isFake,
 		fromExternal: false,
 	}
 }
@@ -614,7 +608,7 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 		amount:     tx.Value(),
 		data:       tx.Data(),
 		accessList: tx.AccessList(),
-		checkNonce: true,
+		isFake:     false,
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
@@ -641,5 +635,14 @@ func (m Message) Gas() uint64            { return m.gasLimit }
 func (m Message) Nonce() uint64          { return m.nonce }
 func (m Message) Data() []byte           { return m.data }
 func (m Message) AccessList() AccessList { return m.accessList }
-func (m Message) CheckNonce() bool       { return m.checkNonce }
+func (m Message) IsFake() bool           { return m.isFake }
 func (m Message) FromExternal() bool     { return m.fromExternal }
+
+// copyAddressPtr copies an address.
+func copyAddressPtr(a *common.Address) *common.Address {
+	if a == nil {
+		return nil
+	}
+	cpy := *a
+	return &cpy
+}

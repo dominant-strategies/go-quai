@@ -42,11 +42,11 @@ func TestState(t *testing.T) {
 
 	// Very time consuming
 	st.skipLoad(`^stTimeConsuming/`)
+	st.skipLoad(`.*vmPerformance/loop.*`)
 
 	// Uses 1GB RAM per tested fork
 	st.skipLoad(`^stStaticCall/static_Call1MB`)
-	// Un-skip this when https://github.com/ethereum/tests/issues/908 is closed
-	st.skipLoad(`^stQuadraticComplexityTest/QuadraticComplexitySolidity_CallDataCopy`)
+
 	// Broken tests:
 	// Expected failures:
 	//st.fails(`^stRevertTest/RevertPrecompiledTouch(_storage)?\.json/Byzantium/0`, "bug in test")
@@ -59,9 +59,7 @@ func TestState(t *testing.T) {
 	// For Istanbul, older tests were moved into LegacyTests
 	for _, dir := range []string{
 		stateTestDir,
-		// legacy state tests are disabled, due to them not being
-		// regenerated for the no-sender-eoa change.
-		//legacyStateTestDir,
+		legacyStateTestDir,
 	} {
 		st.walk(t, dir, func(t *testing.T, name string, test *StateTest) {
 			for _, subtest := range test.Subtests() {
@@ -117,7 +115,7 @@ func withTrace(t *testing.T, gasLimit uint64, test func(vm.Config) error) {
 	}
 	buf := new(bytes.Buffer)
 	w := bufio.NewWriter(buf)
-	tracer := vm.NewJSONLogger(&vm.LogConfig{DisableMemory: true}, w)
+	tracer := vm.NewJSONLogger(&vm.LogConfig{}, w)
 	config.Debug, config.Tracer = true, tracer
 	err2 := test(config)
 	if !reflect.DeepEqual(err, err2) {

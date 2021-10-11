@@ -126,10 +126,6 @@ var (
 		Name:  "keystore",
 		Usage: "Directory for the keystore (default = inside the datadir)",
 	}
-	NoUSBFlag = cli.BoolFlag{
-		Name:  "nousb",
-		Usage: "Disables monitoring for and managing USB hardware wallets (deprecated)",
-	}
 	USBFlag = cli.BoolFlag{
 		Name:  "usb",
 		Usage: "Enable monitoring and management of USB hardware wallets",
@@ -438,11 +434,6 @@ var (
 		Name:  "miner.notify.full",
 		Usage: "Notify with pending block headers instead of work packages",
 	}
-	MinerGasTargetFlag = cli.Uint64Flag{
-		Name:  "miner.gastarget",
-		Usage: "Target gas floor for mined blocks",
-		Value: ethconfig.Defaults.Miner.GasFloor,
-	}
 	MinerGasLimitFlag = cli.Uint64Flag{
 		Name:  "miner.gaslimit",
 		Usage: "Target gas ceiling for mined blocks",
@@ -467,7 +458,7 @@ var (
 		Usage: "Time interval to recreate the block being mined",
 		Value: ethconfig.Defaults.Miner.Recommit,
 	}
-	MinerNoVerfiyFlag = cli.BoolFlag{
+	MinerNoVerifyFlag = cli.BoolFlag{
 		Name:  "miner.noverify",
 		Usage: "Disable remote sealing verification",
 	}
@@ -755,6 +746,29 @@ var (
 		Value: metrics.DefaultConfig.InfluxDBTags,
 	}
 
+	MetricsEnableInfluxDBV2Flag = cli.BoolFlag{
+		Name:  "metrics.influxdbv2",
+		Usage: "Enable metrics export/push to an external InfluxDB v2 database",
+	}
+
+	MetricsInfluxDBTokenFlag = cli.StringFlag{
+		Name:  "metrics.influxdb.token",
+		Usage: "Token to authorize access to the database (v2 only)",
+		Value: metrics.DefaultConfig.InfluxDBToken,
+	}
+
+	MetricsInfluxDBBucketFlag = cli.StringFlag{
+		Name:  "metrics.influxdb.bucket",
+		Usage: "InfluxDB bucket name to push reported metrics to (v2 only)",
+		Value: metrics.DefaultConfig.InfluxDBBucket,
+	}
+
+	MetricsInfluxDBOrganizationFlag = cli.StringFlag{
+		Name:  "metrics.influxdb.organization",
+		Usage: "InfluxDB organization name (v2 only)",
+		Value: metrics.DefaultConfig.InfluxDBOrganization,
+	}
+
 	CatalystFlag = cli.BoolFlag{
 		Name:  "catalyst",
 		Usage: "Catalyst mode (eth2 integration testing)",
@@ -915,14 +929,6 @@ func SplitAndTrim(input string) (ret []string) {
 // setHTTP creates the HTTP RPC listener interface string from the set
 // command line flags, returning empty if the HTTP endpoint is disabled.
 func setHTTP(ctx *cli.Context, cfg *node.Config) {
-	if ctx.GlobalBool(LegacyRPCEnabledFlag.Name) && cfg.HTTPHost == "" {
-		log.Warn("The flag --rpc is deprecated and will be removed June 2021, please use --http")
-		cfg.HTTPHost = "127.0.0.1"
-		if ctx.GlobalIsSet(LegacyRPCListenAddrFlag.Name) {
-			cfg.HTTPHost = ctx.GlobalString(LegacyRPCListenAddrFlag.Name)
-			log.Warn("The flag --rpcaddr is deprecated and will be removed June 2021, please use --http.addr")
-		}
-	}
 	if ctx.GlobalBool(HTTPEnabledFlag.Name) && cfg.HTTPHost == "" {
 		cfg.HTTPHost = "127.0.0.1"
 		if ctx.GlobalIsSet(HTTPListenAddrFlag.Name) {
@@ -930,34 +936,18 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 		}
 	}
 
-	if ctx.GlobalIsSet(LegacyRPCPortFlag.Name) {
-		cfg.HTTPPort = ctx.GlobalInt(LegacyRPCPortFlag.Name)
-		log.Warn("The flag --rpcport is deprecated and will be removed June 2021, please use --http.port")
-	}
 	if ctx.GlobalIsSet(HTTPPortFlag.Name) {
 		cfg.HTTPPort = ctx.GlobalInt(HTTPPortFlag.Name)
 	}
 
-	if ctx.GlobalIsSet(LegacyRPCCORSDomainFlag.Name) {
-		cfg.HTTPCors = SplitAndTrim(ctx.GlobalString(LegacyRPCCORSDomainFlag.Name))
-		log.Warn("The flag --rpccorsdomain is deprecated and will be removed June 2021, please use --http.corsdomain")
-	}
 	if ctx.GlobalIsSet(HTTPCORSDomainFlag.Name) {
 		cfg.HTTPCors = SplitAndTrim(ctx.GlobalString(HTTPCORSDomainFlag.Name))
 	}
 
-	if ctx.GlobalIsSet(LegacyRPCApiFlag.Name) {
-		cfg.HTTPModules = SplitAndTrim(ctx.GlobalString(LegacyRPCApiFlag.Name))
-		log.Warn("The flag --rpcapi is deprecated and will be removed June 2021, please use --http.api")
-	}
 	if ctx.GlobalIsSet(HTTPApiFlag.Name) {
 		cfg.HTTPModules = SplitAndTrim(ctx.GlobalString(HTTPApiFlag.Name))
 	}
 
-	if ctx.GlobalIsSet(LegacyRPCVirtualHostsFlag.Name) {
-		cfg.HTTPVirtualHosts = SplitAndTrim(ctx.GlobalString(LegacyRPCVirtualHostsFlag.Name))
-		log.Warn("The flag --rpcvhosts is deprecated and will be removed June 2021, please use --http.vhosts")
-	}
 	if ctx.GlobalIsSet(HTTPVirtualHostsFlag.Name) {
 		cfg.HTTPVirtualHosts = SplitAndTrim(ctx.GlobalString(HTTPVirtualHostsFlag.Name))
 	}
@@ -1388,9 +1378,6 @@ func setMiner(ctx *cli.Context, cfg *miner.Config) {
 	if ctx.GlobalIsSet(MinerExtraDataFlag.Name) {
 		cfg.ExtraData = []byte(ctx.GlobalString(MinerExtraDataFlag.Name))
 	}
-	if ctx.GlobalIsSet(MinerGasTargetFlag.Name) {
-		cfg.GasFloor = ctx.GlobalUint64(MinerGasTargetFlag.Name)
-	}
 	if ctx.GlobalIsSet(MinerGasLimitFlag.Name) {
 		cfg.GasCeil = ctx.GlobalUint64(MinerGasLimitFlag.Name)
 	}
@@ -1400,8 +1387,11 @@ func setMiner(ctx *cli.Context, cfg *miner.Config) {
 	if ctx.GlobalIsSet(MinerRecommitIntervalFlag.Name) {
 		cfg.Recommit = ctx.GlobalDuration(MinerRecommitIntervalFlag.Name)
 	}
-	if ctx.GlobalIsSet(MinerNoVerfiyFlag.Name) {
-		cfg.Noverify = ctx.GlobalBool(MinerNoVerfiyFlag.Name)
+	if ctx.GlobalIsSet(MinerNoVerifyFlag.Name) {
+		cfg.Noverify = ctx.GlobalBool(MinerNoVerifyFlag.Name)
+	}
+	if ctx.GlobalIsSet(LegacyMinerGasTargetFlag.Name) {
+		log.Warn("The generic --miner.gastarget flag is deprecated and will be removed in the future!")
 	}
 }
 
@@ -1743,11 +1733,36 @@ func SetupMetrics(ctx *cli.Context) {
 		log.Info("Enabling metrics collection")
 
 		var (
-			enableExport = ctx.GlobalBool(MetricsEnableInfluxDBFlag.Name)
-			endpoint     = ctx.GlobalString(MetricsInfluxDBEndpointFlag.Name)
-			database     = ctx.GlobalString(MetricsInfluxDBDatabaseFlag.Name)
-			username     = ctx.GlobalString(MetricsInfluxDBUsernameFlag.Name)
-			password     = ctx.GlobalString(MetricsInfluxDBPasswordFlag.Name)
+			enableExport   = ctx.GlobalBool(MetricsEnableInfluxDBFlag.Name)
+			enableExportV2 = ctx.GlobalBool(MetricsEnableInfluxDBV2Flag.Name)
+		)
+
+		if enableExport || enableExportV2 {
+			CheckExclusive(ctx, MetricsEnableInfluxDBFlag, MetricsEnableInfluxDBV2Flag)
+
+			v1FlagIsSet := ctx.GlobalIsSet(MetricsInfluxDBUsernameFlag.Name) ||
+				ctx.GlobalIsSet(MetricsInfluxDBPasswordFlag.Name)
+
+			v2FlagIsSet := ctx.GlobalIsSet(MetricsInfluxDBTokenFlag.Name) ||
+				ctx.GlobalIsSet(MetricsInfluxDBOrganizationFlag.Name) ||
+				ctx.GlobalIsSet(MetricsInfluxDBBucketFlag.Name)
+
+			if enableExport && v2FlagIsSet {
+				Fatalf("Flags --influxdb.metrics.organization, --influxdb.metrics.token, --influxdb.metrics.bucket are only available for influxdb-v2")
+			} else if enableExportV2 && v1FlagIsSet {
+				Fatalf("Flags --influxdb.metrics.username, --influxdb.metrics.password are only available for influxdb-v1")
+			}
+		}
+
+		var (
+			endpoint = ctx.GlobalString(MetricsInfluxDBEndpointFlag.Name)
+			database = ctx.GlobalString(MetricsInfluxDBDatabaseFlag.Name)
+			username = ctx.GlobalString(MetricsInfluxDBUsernameFlag.Name)
+			password = ctx.GlobalString(MetricsInfluxDBPasswordFlag.Name)
+
+			token        = ctx.GlobalString(MetricsInfluxDBTokenFlag.Name)
+			bucket       = ctx.GlobalString(MetricsInfluxDBBucketFlag.Name)
+			organization = ctx.GlobalString(MetricsInfluxDBOrganizationFlag.Name)
 		)
 
 		if enableExport {
@@ -1756,6 +1771,12 @@ func SetupMetrics(ctx *cli.Context) {
 			log.Info("Enabling metrics export to InfluxDB")
 
 			go influxdb.InfluxDBWithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, database, username, password, "geth.", tagsMap)
+		} else if enableExportV2 {
+			tagsMap := SplitTagsFlag(ctx.GlobalString(MetricsInfluxDBTagsFlag.Name))
+
+			log.Info("Enabling metrics export to InfluxDB (v2)")
+
+			go influxdb.InfluxDBV2WithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, token, bucket, organization, "geth.", tagsMap)
 		}
 
 		if ctx.GlobalIsSet(MetricsHTTPFlag.Name) {
