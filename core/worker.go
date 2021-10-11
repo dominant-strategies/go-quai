@@ -648,6 +648,10 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool, txs t
 		work.wo.Header().SetBaseFee(big.NewInt(0))
 	}
 
+	if block.NumberU64(common.ZONE_CTX) < params.TimeToStartTx {
+		work.wo.Header().SetGasUsed(0)
+	}
+
 	if nodeCtx == common.ZONE_CTX && w.hc.ProcessingState() {
 		if !fromOrderedTransactionSet {
 			select {
@@ -1007,10 +1011,12 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 			return nil, false, fmt.Errorf("invalid coinbase address %v: %v", tx.To(), err)
 		}
 		lockupByte := tx.Data()[0]
-		if err := env.gasPool.SubGas(params.TxGas); err != nil {
-			// etxs are taking more gas
-			w.logger.Info("Stopped the etx processing because we crossed the block gas limit processing coinbase etxs")
-			return nil, false, nil
+		if parent.NumberU64(common.ZONE_CTX) >= params.TimeToStartTx {
+			if err := env.gasPool.SubGas(params.TxGas); err != nil {
+				// etxs are taking more gas
+				w.logger.Info("Stopped the etx processing because we crossed the block gas limit processing coinbase etxs")
+				return nil, false, nil
+			}
 		}
 		if tx.To().IsInQiLedgerScope() {
 			lockup := new(big.Int).SetUint64(params.LockupByteToBlockDepth[lockupByte])
@@ -1050,7 +1056,9 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 			}
 		}
 		gasUsed := env.wo.GasUsed()
-		gasUsed += params.TxGas
+		if parent.NumberU64(common.ZONE_CTX) >= params.TimeToStartTx {
+			gasUsed += params.TxGas
+		}
 		env.wo.Header().SetGasUsed(gasUsed)
 		env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, gasUsed)
 		env.txs = append(env.txs, tx)
@@ -1162,12 +1170,22 @@ func (w *worker) commitTransactions(env *environment, primeTerminus *types.WorkO
 	}
 	var coalescedLogs []*types.Log
 	minEtxGas := gasLimit() / params.MinimumEtxGasDivisor
+	etxCount := 0
 	for {
 		if excludeEtx {
 			break
 		}
+		etxCount = 0
+		for _, tx := range env.txs {
+			if tx.Type() == types.ExternalTxType {
+				etxCount++
+			}
+		}
+		if parent.NumberU64(common.ZONE_CTX) < params.TimeToStartTx && etxCount > params.MinEtxCount {
+			break
+		}
 		// Add ETXs until minimum gas is used
-		if env.wo.GasUsed() >= minEtxGas {
+		if parent.NumberU64(common.ZONE_CTX) >= params.TimeToStartTx && env.wo.GasUsed() >= minEtxGas {
 			// included etxs more than min etx gas
 			break
 		}

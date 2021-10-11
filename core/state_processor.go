@@ -304,6 +304,9 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 	if etxPLimit < params.ETXPLimitMin {
 		etxPLimit = params.ETXPLimitMin
 	}
+	minimumEtxCount := params.MinEtxCount
+	maximumEtxCount := params.MaxEtxCount
+	etxCount := 0
 	minimumEtxGas := header.GasLimit() / params.MinimumEtxGasDivisor // 20% of the block gas limit
 	maximumEtxGas := minimumEtxGas * params.MaximumEtxGasMultiplier  // 40% of the block gas limit
 	totalEtxGas := uint64(0)
@@ -391,6 +394,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 		var receipt *types.Receipt
 		var addReceipt bool
 		if tx.Type() == types.ExternalTxType {
+			etxCount++
 			startTimeEtx := time.Now()
 			// ETXs MUST be included in order, so popping the first from the queue must equal the first in the block
 			etx, err := statedb.PopETX()
@@ -466,12 +470,14 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 						quaiCoinbaseEtxs[coinbaseAddrWithLockup] = tx.Value() // this creates a new *big.Int
 					}
 				}
-				// subtract the minimum tx gas from the gas pool
-				if err := gp.SubGas(params.TxGas); err != nil {
-					return nil, nil, nil, nil, 0, 0, 0, nil, err
+				if block.NumberU64(common.ZONE_CTX) > params.TimeToStartTx {
+					// subtract the minimum tx gas from the gas pool
+					if err := gp.SubGas(params.TxGas); err != nil {
+						return nil, nil, nil, nil, 0, 0, 0, nil, err
+					}
+					*usedGas += params.TxGas
+					totalEtxGas += params.TxGas
 				}
-				*usedGas += params.TxGas
-				totalEtxGas += params.TxGas
 				timeDelta := time.Since(startTimeEtx)
 				timeCoinbase += timeDelta
 				continue
@@ -620,7 +626,11 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 	if etx != nil {
 		etxAvailable = true
 	}
-	if (etxAvailable && totalEtxGas < minimumEtxGas) || totalEtxGas > maximumEtxGas {
+
+	if block.NumberU64(common.ZONE_CTX) <= params.TimeToStartTx && (etxAvailable && etxCount < minimumEtxCount || etxCount > maximumEtxCount) {
+		return nil, nil, nil, nil, 0, 0, 0, nil, fmt.Errorf("total number of ETXs %d is not within the range %d to %d", etxCount, minimumEtxCount, maximumEtxCount)
+	}
+	if block.NumberU64(common.ZONE_CTX) > params.TimeToStartTx && (etxAvailable && totalEtxGas < minimumEtxGas) || totalEtxGas > maximumEtxGas {
 		p.logger.Errorf("prevInboundEtxs: %d, oldestIndex: %d, etxHash: %s", len(prevInboundEtxs), oldestIndex.Int64(), etx.Hash().Hex())
 		return nil, nil, nil, nil, 0, 0, 0, nil, fmt.Errorf("total gas used by ETXs %d is not within the range %d to %d", totalEtxGas, minimumEtxGas, maximumEtxGas)
 	}
