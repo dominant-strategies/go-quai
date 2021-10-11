@@ -121,6 +121,8 @@ const (
 	MaxAddressGrindAttempts int = 1000 // Maximum number of attempts to grind an address to a valid one
 	MinimumEtxGasDivisor        = 5    // The divisor for the minimum gas for inbound ETXs (Block gas limit / MinimumEtxGasDivisor)
 	MaximumEtxGasMultiplier     = 2    // Multiplied with the minimum ETX gas for inbound ETXs (Block gas limit / MinimumEtxGasDivisor) * MaximumEtxGasMultiplier
+	MinEtxCount                 = 50   // These counts are used in the case where tx is not eligible to be started
+	MaxEtxCount                 = 100
 
 	// Dynamic Expansion parameters
 
@@ -174,7 +176,7 @@ var (
 	OrchardDurationLimit              = big.NewInt(5)     // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
 	LighthouseDurationLimit           = big.NewInt(7)     // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
 	LocalDurationLimit                = big.NewInt(1)     // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
-	TimeToStartTx              uint64 = 0 * BlocksPerDay
+	TimeToStartTx              uint64 = 30
 	BlocksPerDay               uint64 = new(big.Int).Div(big.NewInt(86400), DurationLimit).Uint64() // BlocksPerDay is the number of blocks per day assuming 12 second block time
 	DifficultyAdjustmentPeriod        = big.NewInt(360)                                             // This is the number of blocks over which the average has to be taken
 	DifficultyAdjustmentFactor int64  = 40                                                          // This is the factor that divides the log of the change in the difficulty
