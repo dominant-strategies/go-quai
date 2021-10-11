@@ -6,6 +6,7 @@ import (
 	"io"
 	"math/big"
 	"runtime/debug"
+	"sync"
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/network"
@@ -35,8 +36,12 @@ type rateTracker struct {
 var inRateTrackers map[peer.ID]rateTracker
 var outRateTrackers map[peer.ID]rateTracker
 
+var requestRateMu sync.RWMutex
+
 // Feed the request rate tracker, recomputing the rate, and returning an error if the rate limit is exceeded
 func ProcRequestRate(peerId peer.ID, inbound bool) error {
+	requestRateMu.Lock()
+	defer requestRateMu.Unlock()
 	var rateTrackers *map[peer.ID]rateTracker
 	if inRateTrackers == nil {
 		inRateTrackers = make(map[peer.ID]rateTracker)
