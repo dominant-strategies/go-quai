@@ -17,6 +17,9 @@ go-quai:
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/geth\" to launch go-quai."
 
+debug:
+	go build -gcflags=all="-N -l" -o build/bin/geth ./cmd/geth
+
 all:
 	$(GORUN) build/ci.go install
 
