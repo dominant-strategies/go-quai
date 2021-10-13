@@ -24,6 +24,7 @@ import (
 	mapset "github.com/deckarep/golang-set"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -321,6 +322,21 @@ func (p *Peer) ReplyReceiptsRLP(id uint64, receipts []rlp.RawValue) error {
 	})
 }
 
+// SendExtBlocksRLP sends a batch of external blocks, corresponding to the
+// ones requested from an already RLP encoded format.
+func (p *Peer) SendExtBlocksRLP(extblocks []rlp.RawValue) error {
+	return p2p.Send(p.rw, ExtBlocksMsg, extblocks) // Not packed into ReceiptsPacket to avoid RLP decoding
+}
+
+// ReplyExtBlocksRLP is the eth/66 response to GetExtBlocks.
+func (p *Peer) ReplyExtBlocksRLP(id uint64, extblocks []rlp.RawValue) error {
+	log.Info("Sending replyExtBlocksRLP", "len", "len")
+	return p2p.Send(p.rw, ExtBlocksMsg, ExtBlocksRLPPacket66{
+		RequestId:          id,
+		ExtBlocksRLPPacket: extblocks,
+	})
+}
+
 // RequestOneHeader is a wrapper around the header query functions to fetch a
 // single header. It is used solely by the fetcher.
 func (p *Peer) RequestOneHeader(hash common.Hash) error {
@@ -360,7 +376,6 @@ func (p *Peer) RequestHeadersByHash(origin common.Hash, amount int, skip int, re
 // RequestHeadersByNumber fetches a batch of blocks' headers corresponding to the
 // specified header query, based on the number of an origin block.
 func (p *Peer) RequestHeadersByNumber(origin uint64, amount int, skip int, reverse bool) error {
-	p.Log().Debug("Fetching batch of headers", "count", amount, "fromnum", origin, "skip", skip, "reverse", reverse)
 	id := rand.Uint64()
 
 	requestTracker.Track(p.id, p.version, GetBlockHeadersMsg, BlockHeadersMsg, id)
@@ -373,6 +388,18 @@ func (p *Peer) RequestHeadersByNumber(origin uint64, amount int, skip int, rever
 			Reverse: reverse,
 		},
 	})
+}
+
+// ExpectRequestHeadersByNumber is a testing method to mirror the recipient side
+// of the RequestHeadersByNumber operation.
+func (p *Peer) ExpectRequestHeadersByNumber(origin uint64, amount int, skip int, reverse bool) error {
+	req := &GetBlockHeadersPacket{
+		Origin:  HashOrNumber{Number: origin},
+		Amount:  uint64(amount),
+		Skip:    uint64(skip),
+		Reverse: reverse,
+	}
+	return p2p.ExpectMsg(p.rw, GetBlockHeadersMsg, req)
 }
 
 // RequestBodies fetches a batch of blocks' bodies corresponding to the hashes
@@ -457,4 +484,20 @@ func (k *knownCache) Contains(hash common.Hash) bool {
 // Cardinality returns the number of elements in the set.
 func (k *knownCache) Cardinality() int {
 	return k.hashes.Cardinality()
+}
+
+// RequestExternalBlocks fetches a batch of external blocks from a remote node.
+func (p *Peer) RequestExternalBlocks(hashes []common.Hash) error {
+	p.Log().Debug("Fetching batch of external blocks", "count", len(hashes))
+	log.Info("Fetching batch of external blocks for hashes", "count", len(hashes))
+	if p.Version() >= ETH66 {
+		id := rand.Uint64()
+
+		requestTracker.Track(p.id, p.version, GetExtBlocksMsg, ExtBlocksMsg, id)
+		return p2p.Send(p.rw, GetExtBlocksMsg, &GetExtBlocksPacket66{
+			RequestId:          id,
+			GetExtBlocksPacket: hashes,
+		})
+	}
+	return p2p.Send(p.rw, GetExtBlocksMsg, GetExtBlocksPacket(hashes))
 }

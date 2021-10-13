@@ -2425,9 +2425,9 @@ func (bc *BlockChain) GetTdByHash(hash common.Hash) *big.Int {
 // caching it if found.
 func (bc *BlockChain) GetHeader(hash common.Hash, number uint64) *types.Header {
 	// Blockchain might have cached the whole block, only if not go to headerchain
-	// if block, ok := bc.blockCache.Get(hash); ok {
-	// 	return block.(*types.Block).Header()
-	// }
+	if block, ok := bc.blockCache.Get(hash); ok {
+		return block.(*types.Block).Header()
+	}
 
 	return bc.hc.GetHeader(hash, number)
 }
@@ -2436,9 +2436,9 @@ func (bc *BlockChain) GetHeader(hash common.Hash, number uint64) *types.Header {
 // found.
 func (bc *BlockChain) GetHeaderByHash(hash common.Hash) *types.Header {
 	// Blockchain might have cached the whole block, only if not go to headerchain
-	// if block, ok := bc.blockCache.Get(hash); ok {
-	// 	return block.(*types.Block).Header()
-	// }
+	if block, ok := bc.blockCache.Get(hash); ok {
+		return block.(*types.Block).Header()
+	}
 
 	return bc.hc.GetHeaderByHash(hash)
 }
@@ -2453,6 +2453,27 @@ func (bc *BlockChain) GetExtBlockByHashAndContext(hash common.Hash, context int)
 	var blockDecoded *types.ExternalBlock
 	rlp.DecodeBytes(data, &blockDecoded)
 	return blockDecoded, nil
+}
+
+func (bc *BlockChain) GetExternalBlocks(header *types.Header) ([]*types.ExternalBlock, error) {
+	// Lookup block in externalBlocks cache
+	context := bc.Config().Context // Index that node is currently at
+	externalBlocks := make([]*types.ExternalBlock, 0)
+
+	// Do not run on block 1
+	if header.Number[context].Cmp(big.NewInt(1)) > 0 {
+		// Skip pending block
+		prevHeader := bc.GetHeaderByHash(header.ParentHash[context])
+		coincidentHeader, difficultyContext := bc.engine.GetCoincidentHeader(bc, context, prevHeader)
+		// If we are not getting the transactions immediately after the coincident block, return
+		if coincidentHeader.Number[context].Cmp(prevHeader.Number[context]) != 0 {
+			return externalBlocks, nil
+		}
+		stopHash := bc.engine.GetStopHash(bc, difficultyContext, context, coincidentHeader)
+		externalBlocks = append(externalBlocks, bc.engine.TraceBranch(bc, coincidentHeader, difficultyContext, stopHash, context)...)
+	}
+
+	return externalBlocks, nil
 }
 
 // QueueExternalBlocks takes a set of external blocks and adds them to the queue

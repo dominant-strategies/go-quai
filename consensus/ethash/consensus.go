@@ -824,7 +824,6 @@ func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, heade
 		}
 		stopHash := ethash.GetStopHash(chain, difficultyContext, context, coincidentHeader)
 		externalBlocks = append(externalBlocks, ethash.TraceBranch(chain, coincidentHeader, difficultyContext, stopHash, context)...)
-
 	}
 
 	// Swap order of external blocks
