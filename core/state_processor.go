@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -82,10 +81,13 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		externalBlock.Receipts().DeriveFields(p.config, externalBlock.Hash(), externalBlock.Header().Number[externalBlock.Context().Int64()].Uint64(), externalBlock.Transactions())
 		for _, tx := range externalBlock.Transactions() {
 			msg, err := tx.AsMessage(types.MakeSigner(p.config, header.Number[types.QuaiNetworkContext]), header.BaseFee[types.QuaiNetworkContext])
+			// Quick check to make sure we're adding an external transaction, currently saves us from not passing merkel path in external block
+			if !msg.FromExternal() {
+				continue
+			}
 			if err != nil {
 				return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 			}
-			log.Info("Adding tx with balance", "val", msg.Value())
 			statedb.Prepare(tx.Hash(), i)
 			receipt, err := applyExternalTransaction(msg, p.config, p.bc, nil, gp, statedb, blockNumber, blockHash, externalBlock, tx, usedGas, vmenv)
 			if err != nil {
@@ -228,6 +230,12 @@ func ApplyExternalTransaction(config *params.ChainConfig, bc ChainContext, autho
 	msg, err := tx.AsMessage(s, header.BaseFee[types.QuaiNetworkContext])
 	if err != nil {
 		return nil, err
+	}
+
+	// Validate address origination
+	byteID := config.ChainIDByte()
+	if msg.From().Bytes()[0] == byteID {
+		return nil, ErrSenderInoperable
 	}
 
 	// Create a new context to be used in the EVM environment

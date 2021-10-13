@@ -494,7 +494,7 @@ func (ps *peerSet) ExtBlockIdlePeers() ([]*peerConnection, int) {
 	throughput := func(p *peerConnection) int {
 		return p.rates.Capacity(eth.ExtBlocksMsg, time.Second)
 	}
-	return ps.idlePeers(eth.ETH65, eth.ETH66, idle, throughput)
+	return ps.idlePeers(eth.ETH66, eth.ETH66, idle, throughput)
 }
 
 // NodeDataIdlePeers retrieves a flat list of all the currently node-data-idle
