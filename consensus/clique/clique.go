@@ -607,7 +607,7 @@ func (c *Clique) GetStopHash(chain consensus.ChainHeaderReader, difficultyContex
 }
 
 // TraceBranch recursively traces branches to find
-func (c *Clique) TraceBranch(chain consensus.ChainHeaderReader, header *types.Header, context int, stopHash common.Hash, originalContext int) []*types.ExternalBlock {
+func (c *Clique) TraceBranch(chain consensus.ChainHeaderReader, header *types.Header, context int, stopHash common.Hash, originalContext int, originalLocation []byte) []*types.ExternalBlock {
 	return make([]*types.ExternalBlock, 0)
 }
 

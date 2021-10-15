@@ -748,7 +748,7 @@ func (ethash *Ethash) GetStopHash(chain consensus.ChainHeaderReader, difficultyC
 	return stopHash
 }
 
-func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *types.Header, context int, stopHash common.Hash, originalContext int) []*types.ExternalBlock {
+func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *types.Header, context int, stopHash common.Hash, originalContext int, originalLocation []byte) []*types.ExternalBlock {
 	extBlocks := make([]*types.ExternalBlock, 0)
 	steppedBack := false
 	startingHeader := header
@@ -762,27 +762,28 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 
 		// If we have reached a coincident block or we're in Region and found the prev region
 		if difficultyContext < context && steppedBack {
-			log.Info("TraceBranch: Stopping on found coincident block in lower context", "number", header.Number, "context", context)
+			log.Info("TraceBranch: Found coincident block", "number", header.Number, "context", context, "location", header.Location)
 			break
 		}
 
-		// Starting off in a context above our own.
+		// Starting off in a context above our own or no longer in our starting location
 		if context != originalContext {
 			extBlock, err := chain.GetExtBlockByHashAndContext(header.Hash(), context)
 			if err != nil {
 				log.Warn("TraceBranch: External Block not found for header", "number", header.Number[context], "context", context)
 				break
 			}
+			log.Info("GetExternalBlocks: Block being added: ", "number", extBlock.Header().Number, "context", extBlock.Context(), "location", extBlock.Header().Location, "txs", len(extBlock.Transactions()))
 			extBlocks = append(extBlocks, extBlock)
 		}
 
 		if context < types.ContextDepth-1 {
-			extBlocks = append(extBlocks, ethash.TraceBranch(chain, header, context+1, stopHash, originalContext)...)
+			extBlocks = append(extBlocks, ethash.TraceBranch(chain, header, context+1, stopHash, originalContext, originalLocation)...)
 		}
 
 		// Stop at the stop hash before iterating downward
 		if header.ParentHash[context] == stopHash || context == 0 || header.Number[context].Cmp(big.NewInt(1)) <= 0 {
-			log.Info("TraceBranch: Stopping on stop hash", "number", header.Number, "context", context)
+			log.Info("TraceBranch: Stopping on stop hash", "number", header.Number, "context", context, "location", header.Location)
 			break
 		}
 
@@ -823,7 +824,7 @@ func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, heade
 			return externalBlocks
 		}
 		stopHash := ethash.GetStopHash(chain, difficultyContext, context, coincidentHeader)
-		externalBlocks = append(externalBlocks, ethash.TraceBranch(chain, coincidentHeader, difficultyContext, stopHash, context)...)
+		externalBlocks = append(externalBlocks, ethash.TraceBranch(chain, coincidentHeader, difficultyContext, stopHash, context, header.Location)...)
 	}
 
 	// Swap order of external blocks

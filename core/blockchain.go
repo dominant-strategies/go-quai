@@ -1594,7 +1594,7 @@ func (bc *BlockChain) AddExternalBlock(block *types.ExternalBlock) error {
 		"context", block.Context(), "numbers", block.Header().Number, "hash", block.Hash(), "location", block.Header().Location,
 		"txs", len(block.Transactions()), "receipts", len(block.Receipts()),
 	}
-	log.Info("New external block", context...)
+	log.Debug("New external block", context...)
 	data, err := rlp.EncodeToBytes(block)
 	if err != nil {
 		log.Crit("Failed to RLP encode external block", "err", err)
@@ -2470,7 +2470,7 @@ func (bc *BlockChain) GetExternalBlocks(header *types.Header) ([]*types.External
 			return externalBlocks, nil
 		}
 		stopHash := bc.engine.GetStopHash(bc, difficultyContext, context, coincidentHeader)
-		externalBlocks = append(externalBlocks, bc.engine.TraceBranch(bc, coincidentHeader, difficultyContext, stopHash, context)...)
+		externalBlocks = append(externalBlocks, bc.engine.TraceBranch(bc, coincidentHeader, difficultyContext, stopHash, context, header.Location)...)
 	}
 
 	return externalBlocks, nil

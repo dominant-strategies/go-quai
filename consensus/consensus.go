@@ -113,7 +113,7 @@ type Engine interface {
 	GetStopHash(chain ChainHeaderReader, difficultyContext int, originalContext int, startingHeader *types.Header) common.Hash
 
 	// TraceBranch recursively traces branches to find
-	TraceBranch(chain ChainHeaderReader, header *types.Header, context int, stopHash common.Hash, originalContext int) []*types.ExternalBlock
+	TraceBranch(chain ChainHeaderReader, header *types.Header, context int, stopHash common.Hash, originalContext int, originalLocation []byte) []*types.ExternalBlock
 
 	// Seal generates a new sealing request for the given input block and pushes
 	// the result into the given channel.
