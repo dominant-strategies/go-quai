@@ -761,13 +761,21 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 		}
 
 		// If we have reached a coincident block or we're in Region and found the prev region
+		log.Info("TraceBranch:", "number", header.Number, "context", context, "location", header.Location, "steppedBack", steppedBack)
 		if difficultyContext < context && steppedBack {
 			log.Info("TraceBranch: Found coincident block", "number", header.Number, "context", context, "location", header.Location)
 			break
 		}
 
-		// Starting off in a context above our own or no longer in our starting location
-		if context != originalContext {
+		sameLocation := false
+		if types.QuaiNetworkContext == 1 {
+			sameLocation = header.Location[0] == originalLocation[0]
+		} else if types.QuaiNetworkContext == 2 {
+			sameLocation = bytes.Equal(header.Location, originalLocation)
+		}
+
+		// Starting off in a context above our own
+		if context != originalContext || (context == originalContext && !sameLocation) {
 			extBlock, err := chain.GetExtBlockByHashAndContext(header.Hash(), context)
 			if err != nil {
 				log.Warn("TraceBranch: External Block not found for header", "number", header.Number[context], "context", context)
