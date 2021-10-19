@@ -172,6 +172,11 @@ func blockBodyKey(number uint64, hash common.Hash) []byte {
 	return append(append(blockBodyPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
 }
 
+// extBlockBodyKey = blockBodyPrefix + num (uint64 big endian) + location + context + hash
+func extBlockBodyKey(number uint64, context uint64, hash common.Hash) []byte {
+	return append(append(append(blockBodyPrefix, encodeBlockNumber(number)...), encodeBlockNumber(context)...), hash.Bytes()...)
+}
+
 // blockReceiptsKey = blockReceiptsPrefix + num (uint64 big endian) + hash
 func blockReceiptsKey(number uint64, hash common.Hash) []byte {
 	return append(append(blockReceiptsPrefix, encodeBlockNumber(number)...), hash.Bytes()...)

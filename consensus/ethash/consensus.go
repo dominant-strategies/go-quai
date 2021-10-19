@@ -729,7 +729,7 @@ func (ethash *Ethash) GetStopHash(chain consensus.ChainHeaderReader, difficultyC
 
 		prevHeader := chain.GetHeaderByHash(header.ParentHash[context])
 		if prevHeader == nil {
-			extBlock, err := chain.GetExtBlockByHashAndContext(header.ParentHash[context], context)
+			extBlock, err := chain.GetExternalBlock(header.ParentHash[context], header.Number[context].Uint64()-1, uint64(context))
 			if err != nil {
 				log.Warn("GetTraceList: External Block not found for previous header", "number", header.Number[context], "context", context)
 				break
@@ -776,7 +776,7 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 
 		// Starting off in a context above our own
 		if context != originalContext || (context == originalContext && !sameLocation) {
-			extBlock, err := chain.GetExtBlockByHashAndContext(header.Hash(), context)
+			extBlock, err := chain.GetExternalBlock(header.Hash(), header.Number[context].Uint64(), uint64(context))
 			if err != nil {
 				log.Warn("TraceBranch: External Block not found for header", "number", header.Number[context], "context", context)
 				break
@@ -800,7 +800,7 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 
 		// If prevHeader is nil, we could be tracing in external context. Lookup in external block cache.
 		if prevHeader == nil {
-			extBlock, err := chain.GetExtBlockByHashAndContext(header.ParentHash[context], context)
+			extBlock, err := chain.GetExternalBlock(header.ParentHash[context], header.Number[context].Uint64()-1, uint64(context))
 			if err != nil {
 				log.Warn("Trace Branch: External Block not found for previous header", "number", header.Number[context], "context", context)
 				break

@@ -25,7 +25,6 @@ import (
 	mrand "math/rand"
 	"runtime"
 	"sort"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -1867,7 +1866,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		}
 		// Process block using the parent state as reference point
 		substart := time.Now()
-		receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
+		receipts, logs, usedGas, externalBlocks, err := bc.processor.Process(block, statedb, bc.vmConfig)
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			atomic.StoreUint32(&followupInterrupt, 1)
@@ -1908,6 +1907,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		if err != nil {
 			return it.index, err
 		}
+
+		bc.StoreExternalBlocks(externalBlocks)
+
 		// Update the metrics touched during block commit
 		accountCommitTimer.Update(statedb.AccountCommits)   // Account commits are complete, we can mark them
 		storageCommitTimer.Update(statedb.StorageCommits)   // Storage commits are complete, we can mark them
@@ -2443,16 +2445,38 @@ func (bc *BlockChain) GetHeaderByHash(hash common.Hash) *types.Header {
 	return bc.hc.GetHeaderByHash(hash)
 }
 
-func (bc *BlockChain) GetExtBlockByHashAndContext(hash common.Hash, context int) (*types.ExternalBlock, error) {
+func (bc *BlockChain) GetExternalBlock(hash common.Hash, number uint64, context uint64) (*types.ExternalBlock, error) {
 	// Lookup block in externalBlocks cache
-	key := []byte(strconv.Itoa(context) + hash.String())
-	data, ok := bc.externalBlocks.HasGet(nil, key)
-	if !ok {
+	key := types.ExtBlockCacheKey(number, context, hash)
+	var blockDecoded *types.ExternalBlock
+
+	if block, ok := bc.externalBlocks.HasGet(nil, key); ok {
+		rlp.DecodeBytes(block, &blockDecoded)
+		return blockDecoded, nil
+	}
+	block := rawdb.ReadExternalBlock(bc.db, hash, number, context)
+	if block == nil {
 		return &types.ExternalBlock{}, errors.New("error finding external block by context and hash")
 	}
-	var blockDecoded *types.ExternalBlock
-	rlp.DecodeBytes(data, &blockDecoded)
+
 	return blockDecoded, nil
+}
+
+// StoreExternalBlocks removes the external block from the cached blocks and writes it into the database
+func (bc *BlockChain) StoreExternalBlocks(blocks []*types.ExternalBlock) error {
+
+	for i := 0; i < len(blocks); i++ {
+		context := blocks[i].Context().Uint64()
+		number := blocks[i].Header().Number[context].Uint64()
+		hash := blocks[i].Hash()
+
+		// Lookup block in externalBlocks cache
+		key := types.ExtBlockCacheKey(number, context, hash)
+		bc.externalBlocks.Del(key)
+
+		rawdb.WriteExternalBlock(bc.db, blocks[i])
+	}
+	return nil
 }
 
 func (bc *BlockChain) GetExternalBlocks(header *types.Header) ([]*types.ExternalBlock, error) {
