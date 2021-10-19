@@ -2448,9 +2448,9 @@ func (bc *BlockChain) GetHeaderByHash(hash common.Hash) *types.Header {
 func (bc *BlockChain) GetExternalBlock(hash common.Hash, number uint64, context uint64) (*types.ExternalBlock, error) {
 	// Lookup block in externalBlocks cache
 	key := types.ExtBlockCacheKey(number, context, hash)
-	var blockDecoded *types.ExternalBlock
 
 	if block, ok := bc.externalBlocks.HasGet(nil, key); ok {
+		var blockDecoded *types.ExternalBlock
 		rlp.DecodeBytes(block, &blockDecoded)
 		return blockDecoded, nil
 	}
@@ -2459,7 +2459,7 @@ func (bc *BlockChain) GetExternalBlock(hash common.Hash, number uint64, context 
 		return &types.ExternalBlock{}, errors.New("error finding external block by context and hash")
 	}
 
-	return blockDecoded, nil
+	return block, nil
 }
 
 // StoreExternalBlocks removes the external block from the cached blocks and writes it into the database
