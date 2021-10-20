@@ -268,20 +268,40 @@ func (p *Peer) AsyncSendNewBlockHash(block *types.Block) {
 }
 
 // SendNewBlock propagates an entire block to a remote peer.
-func (p *Peer) SendNewBlock(block *types.Block, td *big.Int) error {
+func (p *Peer) SendNewBlock(block *types.Block, td *big.Int, extBlocks []*types.ExternalBlock) error {
 	// Mark all the block hash as known, but ensure we don't overflow our limits
 	p.knownBlocks.Add(block.Hash())
+
 	return p2p.Send(p.rw, NewBlockMsg, &NewBlockPacket{
-		Block: block,
-		TD:    td,
+		Block:     block,
+		TD:        td,
+		ExtBlocks: extBlocks,
 	})
+}
+
+// SendExtBlocks propagates an entire block to a remote peer.
+func (p *Peer) SendExtBlocks(blocks []*types.ExternalBlock) error {
+	var (
+		bytes     int
+		extBlocks []rlp.RawValue
+	)
+
+	// If known, encode and queue for response packet
+	if encoded, err := rlp.EncodeToBytes(blocks); err != nil {
+		log.Error("Failed to encode receipt", "err", err)
+	} else {
+		extBlocks = append(extBlocks, encoded)
+		bytes += len(encoded)
+	}
+
+	return p.SendExtBlocksRLP(extBlocks)
 }
 
 // AsyncSendNewBlock queues an entire block for propagation to a remote peer. If
 // the peer's broadcast queue is full, the event is silently dropped.
-func (p *Peer) AsyncSendNewBlock(block *types.Block, td *big.Int) {
+func (p *Peer) AsyncSendNewBlock(block *types.Block, td *big.Int, extBlocks []*types.ExternalBlock) {
 	select {
-	case p.queuedBlocks <- &blockPropagation{block: block, td: td}:
+	case p.queuedBlocks <- &blockPropagation{block: block, td: td, extBlocks: extBlocks}:
 		// Mark all the block hash as known, but ensure we don't overflow our limits
 		p.knownBlocks.Add(block.Hash())
 	default:
@@ -330,7 +350,7 @@ func (p *Peer) SendExtBlocksRLP(extblocks []rlp.RawValue) error {
 
 // ReplyExtBlocksRLP is the eth/66 response to GetExtBlocks.
 func (p *Peer) ReplyExtBlocksRLP(id uint64, extblocks []rlp.RawValue) error {
-	log.Info("Sending replyExtBlocksRLP", "len", "len")
+	log.Info("Sending replyExtBlocksRLP", "len", len(extblocks))
 	return p2p.Send(p.rw, ExtBlocksMsg, ExtBlocksRLPPacket66{
 		RequestId:          id,
 		ExtBlocksRLPPacket: extblocks,

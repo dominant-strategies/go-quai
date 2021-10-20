@@ -182,8 +182,9 @@ type BlockHeadersPacket66 struct {
 
 // NewBlockPacket is the network packet for the block propagation message.
 type NewBlockPacket struct {
-	Block *types.Block
-	TD    *big.Int
+	Block     *types.Block
+	TD        *big.Int
+	ExtBlocks []*types.ExternalBlock
 }
 
 // sanityCheck verifies that the values are reasonable, as a DoS protection
@@ -196,6 +197,8 @@ func (request *NewBlockPacket) sanityCheck() error {
 	if tdlen := request.TD.BitLen(); tdlen > 100 {
 		return fmt.Errorf("too large block TD: bitlen %d", tdlen)
 	}
+
+	// TODO #86
 	return nil
 }
 

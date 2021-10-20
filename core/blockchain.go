@@ -1587,6 +1587,17 @@ func (bc *BlockChain) addFutureBlock(block *types.Block) error {
 	return nil
 }
 
+// AddExternalBlocks adds a group of external blocks to the cache
+func (bc *BlockChain) AddExternalBlocks(blocks []*types.ExternalBlock) error {
+	for _, extBlock := range blocks {
+		err := bc.AddExternalBlock(extBlock)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // addExternalBlock adds the received block to the external block cache.
 func (bc *BlockChain) AddExternalBlock(block *types.ExternalBlock) error {
 	context := []interface{}{

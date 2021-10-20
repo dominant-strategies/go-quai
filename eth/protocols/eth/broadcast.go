@@ -32,8 +32,9 @@ const (
 // blockPropagation is a block propagation event, waiting for its turn in the
 // broadcast queue.
 type blockPropagation struct {
-	block *types.Block
-	td    *big.Int
+	block     *types.Block
+	td        *big.Int
+	extBlocks []*types.ExternalBlock
 }
 
 // broadcastBlocks is a write loop that multiplexes blocks and block accouncements
@@ -43,9 +44,10 @@ func (p *Peer) broadcastBlocks() {
 	for {
 		select {
 		case prop := <-p.queuedBlocks:
-			if err := p.SendNewBlock(prop.block, prop.td); err != nil {
+			if err := p.SendNewBlock(prop.block, prop.td, prop.extBlocks); err != nil {
 				return
 			}
+
 			p.Log().Trace("Propagated block", "number", prop.block.Number(), "hash", prop.block.Hash(), "td", prop.td)
 
 		case block := <-p.queuedBlockAnns:
