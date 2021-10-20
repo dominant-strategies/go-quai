@@ -212,6 +212,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 			return 0, nil
 		}
 
+		log.Info("Adding external blocks from peer", "len", len(extBlocks), "number", blocks[0].Number())
 		err := h.chain.AddExternalBlocks(extBlocks)
 		if err != nil {
 			log.Warn("Error importing external blocks", "number", blocks[0].Number(), "hash", blocks[0].Hash())
