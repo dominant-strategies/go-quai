@@ -1914,7 +1914,9 @@ func (s *PublicBlockChainAPI) SendMinedBlock(ctx context.Context, raw json.RawMe
 	log.Info("Retrieved mined block", "num", head.Number[types.QuaiNetworkContext])
 	s.b.InsertBlock(ctx, block)
 	// Broadcast the block and announce chain insertion event
-	s.b.EventMux().Post(core.NewMinedBlockEvent{Block: block})
+	if block.Header() != nil {
+		s.b.EventMux().Post(core.NewMinedBlockEvent{Block: block})
+	}
 
 	return nil
 }

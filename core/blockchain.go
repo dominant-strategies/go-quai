@@ -2534,12 +2534,12 @@ func (bc *BlockChain) QueueAndRetrieveExtBlocks(externalBlocks []*types.External
 			receipt := externalBlock.ReceiptForTransaction(tx)
 			gasUsed += int(receipt.GasUsed)
 		}
-		// If the total gasUsed for external transactions exceeds this blocks gasLimit by 10% break
-		if gasUsed > int(header.GasLimit[types.QuaiNetworkContext]/10) {
+		// If the total gasUsed for external transactions exceeds this blocks gasLimit by 50% break
+		if gasUsed > int(header.GasLimit[types.QuaiNetworkContext]/2) {
 			break
 		}
 	}
-	log.Info("Returning result blocks", "len", len(resultBlocks))
+	log.Info("QueueAndRetrieveExtBlocks: Returning result blocks", "len", len(resultBlocks))
 	return resultBlocks
 }
 

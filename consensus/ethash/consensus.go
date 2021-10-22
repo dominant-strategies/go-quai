@@ -761,7 +761,6 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 		}
 
 		// If we have reached a coincident block or we're in Region and found the prev region
-		log.Info("TraceBranch:", "number", header.Number, "context", context, "location", header.Location, "steppedBack", steppedBack)
 		if difficultyContext < context && steppedBack {
 			log.Info("TraceBranch: Found coincident block", "number", header.Number, "context", context, "location", header.Location)
 			break
@@ -775,7 +774,7 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 		}
 
 		// Starting off in a context above our own
-		if context != originalContext || (context == originalContext && !sameLocation) {
+		if context != originalContext || (context == originalContext && !sameLocation && types.QuaiNetworkContext != 0) {
 			extBlock, err := chain.GetExternalBlock(header.Hash(), header.Number[context].Uint64(), uint64(context))
 			if err != nil {
 				log.Warn("TraceBranch: External Block not found for header", "number", header.Number[context], "context", context)
@@ -842,7 +841,9 @@ func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, heade
 		}
 	}
 
-	return chain.QueueAndRetrieveExtBlocks(externalBlocks, header)
+	// log.Info("GetExternalBlocks: Adding into Queue:", "len", len(externalBlocks))
+	// return chain.QueueAndRetrieveExtBlocks(externalBlocks, header)
+	return externalBlocks
 }
 
 // FinalizeAndAssemble implements consensus.Engine, accumulating the block and

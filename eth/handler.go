@@ -520,12 +520,14 @@ func (h *handler) minedBroadcastLoop() {
 		if ev, ok := obj.Data.(core.NewMinedBlockEvent); ok {
 			// Retrieve the requested block's external blocks
 			header := h.chain.GetHeaderByHash(ev.Block.Hash())
-			extBlocks, err := h.chain.GetExternalBlocks(header)
-			if err != nil {
-				log.Info("Error sending external blocks to peer", "err", err)
+			if header != nil {
+				extBlocks, err := h.chain.GetExternalBlocks(header)
+				if err != nil {
+					log.Info("Error sending external blocks to peer", "err", err)
+				}
+				h.BroadcastBlock(ev.Block, extBlocks, true)  // First propagate block to peers
+				h.BroadcastBlock(ev.Block, extBlocks, false) // Only then announce to the rest
 			}
-			h.BroadcastBlock(ev.Block, extBlocks, true)  // First propagate block to peers
-			h.BroadcastBlock(ev.Block, extBlocks, false) // Only then announce to the rest
 		}
 	}
 }

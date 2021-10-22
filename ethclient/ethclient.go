@@ -232,7 +232,7 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 				return nil, reqs[i].Error
 			}
 			if uncles[i] == nil {
-				return nil, fmt.Errorf("getBlock: got null header for uncle %d of block %x", i, body.Hash[:])
+				return nil, fmt.Errorf("getBlock: got null header for block %d hash %x", body.Hash[:], body.UncleHashes[i])
 			}
 		}
 	}
