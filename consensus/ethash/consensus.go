@@ -716,14 +716,15 @@ func (ethash *Ethash) GetStopHash(chain consensus.ChainHeaderReader, difficultyC
 	header := startingHeader
 	stopHash := common.Hash{}
 	context := difficultyContext
-	if difficultyContext == 0 && originalContext == 1 {
-		context = 1
-	} else if difficultyContext == 0 && originalContext == 2 {
-		context = 1
-	}
+	// if difficultyContext == 0 && originalContext == 1 {
+	// 	context = 1
+	// } else if difficultyContext == 0 && originalContext == 2 {
+	// 	context = 1
+	// }
 	for {
 		// Append the coincident and iterating header to the list
-		if header.Number[context].Cmp(big.NewInt(1)) <= 0 {
+		if header.Number[context].Cmp(big.NewInt(1)) < 0 {
+			log.Info("GetStopHash: Breaking in number <= 0 cmp", "context", context)
 			break
 		}
 
@@ -736,6 +737,7 @@ func (ethash *Ethash) GetStopHash(chain consensus.ChainHeaderReader, difficultyC
 			}
 			prevHeader = extBlock.Header()
 		}
+		log.Info("GetStopHash: Iterating back", "context", context)
 		// Relevant to region finding N-1 coincident block
 		if bytes.Equal(startingHeader.Location, prevHeader.Location) {
 			stopHash = header.ParentHash[context]
@@ -789,7 +791,7 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 		}
 
 		// Stop at the stop hash before iterating downward
-		if header.ParentHash[context] == stopHash || context == 0 || header.Number[context].Cmp(big.NewInt(1)) <= 0 {
+		if header.ParentHash[context] == stopHash || header.Number[context].Cmp(big.NewInt(1)) <= 0 {
 			log.Info("TraceBranch: Stopping on stop hash", "number", header.Number, "context", context, "location", header.Location)
 			break
 		}

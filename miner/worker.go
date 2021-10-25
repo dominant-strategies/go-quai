@@ -996,7 +996,6 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	externalBlocks := w.engine.GetExternalBlocks(w.chain, header)
 	etxs := make(types.Transactions, 0)
 	for _, externalBlock := range externalBlocks {
-		log.Info("Worker: Iterating on external block", "txs", len(externalBlock.Transactions()))
 		externalBlock.Receipts().DeriveFields(w.chainConfig, externalBlock.Hash(), externalBlock.Header().Number[externalBlock.Context().Int64()].Uint64(), externalBlock.Transactions())
 		for _, tx := range externalBlock.Transactions() {
 			snap := w.current.state.Snapshot()

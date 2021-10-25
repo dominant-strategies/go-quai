@@ -78,9 +78,10 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	// Gather external blocks and apply transactions, need to trace own local external block cache based on cache to validate
 	i := 0
 	externalBlocks := p.engine.GetExternalBlocks(p.bc, header)
+	etxs := 0
 	for _, externalBlock := range externalBlocks {
 		externalBlock.Receipts().DeriveFields(p.config, externalBlock.Hash(), externalBlock.Header().Number[externalBlock.Context().Int64()].Uint64(), externalBlock.Transactions())
-		log.Info("State Processor: Length of block txs", "len", len(externalBlock.Transactions()))
+		etxs += len(externalBlock.Transactions())
 		for _, tx := range externalBlock.Transactions() {
 			msg, err := tx.AsMessage(types.MakeSigner(p.config, header.Number[types.QuaiNetworkContext]), header.BaseFee[types.QuaiNetworkContext])
 			// Quick check to make sure we're adding an external transaction, currently saves us from not passing merkel path in external block
@@ -98,10 +99,11 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 			}
 			receipts = append(receipts, receipt)
 			allLogs = append(allLogs, receipt.Logs...)
-			log.Info("Process: Applying external tranasction", "from", msg.From(), "amount", msg.Value())
 			i++
 		}
 	}
+
+	log.Info("State Processor: External txs applied", "num", etxs)
 
 	// Iterate over and process the individual transactions
 	for _, tx := range block.Transactions() {
