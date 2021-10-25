@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/docker/docker/pkg/reexec"
-	"github.com/ethereum/go-ethereum/internal/cmdtest"
+	"github.com/spruce-solutions/go-quai/internal/cmdtest"
 )
 
 func TestMain(m *testing.M) {

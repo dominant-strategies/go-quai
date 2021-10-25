@@ -1,4 +1,4 @@
-module github.com/ethereum/go-ethereum
+module github.com/spruce-solutions/go-quai
 
 go 1.15
 

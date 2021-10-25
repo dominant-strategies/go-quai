@@ -19,9 +19,9 @@ package main
 import (
 	"os"
 
-	"github.com/ethereum/go-ethereum/cmd/devp2p/internal/v4test"
-	"github.com/ethereum/go-ethereum/internal/utesting"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/spruce-solutions/go-quai/cmd/devp2p/internal/v4test"
+	"github.com/spruce-solutions/go-quai/internal/utesting"
+	"github.com/spruce-solutions/go-quai/log"
 	"gopkg.in/urfave/cli.v1"
 )
 
