@@ -24,6 +24,7 @@ import (
 	mapset "github.com/deckarep/golang-set"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -267,20 +268,41 @@ func (p *Peer) AsyncSendNewBlockHash(block *types.Block) {
 }
 
 // SendNewBlock propagates an entire block to a remote peer.
-func (p *Peer) SendNewBlock(block *types.Block, td *big.Int) error {
+func (p *Peer) SendNewBlock(block *types.Block, td *big.Int, extBlocks []*types.ExternalBlock) error {
 	// Mark all the block hash as known, but ensure we don't overflow our limits
 	p.knownBlocks.Add(block.Hash())
+
+	log.Info("Sending external blocks with block", "len", len(extBlocks), "num", block.Header().Number[types.QuaiNetworkContext])
 	return p2p.Send(p.rw, NewBlockMsg, &NewBlockPacket{
-		Block: block,
-		TD:    td,
+		Block:     block,
+		TD:        td,
+		ExtBlocks: extBlocks,
 	})
+}
+
+// SendExtBlocks propagates an entire block to a remote peer.
+func (p *Peer) SendExtBlocks(blocks []*types.ExternalBlock) error {
+	var (
+		bytes     int
+		extBlocks []rlp.RawValue
+	)
+
+	// If known, encode and queue for response packet
+	if encoded, err := rlp.EncodeToBytes(blocks); err != nil {
+		log.Error("Failed to encode receipt", "err", err)
+	} else {
+		extBlocks = append(extBlocks, encoded)
+		bytes += len(encoded)
+	}
+
+	return p.SendExtBlocksRLP(extBlocks)
 }
 
 // AsyncSendNewBlock queues an entire block for propagation to a remote peer. If
 // the peer's broadcast queue is full, the event is silently dropped.
-func (p *Peer) AsyncSendNewBlock(block *types.Block, td *big.Int) {
+func (p *Peer) AsyncSendNewBlock(block *types.Block, td *big.Int, extBlocks []*types.ExternalBlock) {
 	select {
-	case p.queuedBlocks <- &blockPropagation{block: block, td: td}:
+	case p.queuedBlocks <- &blockPropagation{block: block, td: td, extBlocks: extBlocks}:
 		// Mark all the block hash as known, but ensure we don't overflow our limits
 		p.knownBlocks.Add(block.Hash())
 	default:
@@ -318,6 +340,21 @@ func (p *Peer) ReplyReceiptsRLP(id uint64, receipts []rlp.RawValue) error {
 	return p2p.Send(p.rw, ReceiptsMsg, ReceiptsRLPPacket66{
 		RequestId:         id,
 		ReceiptsRLPPacket: receipts,
+	})
+}
+
+// SendExtBlocksRLP sends a batch of external blocks, corresponding to the
+// ones requested from an already RLP encoded format.
+func (p *Peer) SendExtBlocksRLP(extblocks []rlp.RawValue) error {
+	return p2p.Send(p.rw, ExtBlocksMsg, extblocks) // Not packed into ReceiptsPacket to avoid RLP decoding
+}
+
+// ReplyExtBlocksRLP is the eth/66 response to GetExtBlocks.
+func (p *Peer) ReplyExtBlocksRLP(id uint64, extblocks []rlp.RawValue) error {
+	log.Info("Sending replyExtBlocksRLP", "len", len(extblocks))
+	return p2p.Send(p.rw, ExtBlocksMsg, ExtBlocksRLPPacket66{
+		RequestId:          id,
+		ExtBlocksRLPPacket: extblocks,
 	})
 }
 
@@ -360,7 +397,6 @@ func (p *Peer) RequestHeadersByHash(origin common.Hash, amount int, skip int, re
 // RequestHeadersByNumber fetches a batch of blocks' headers corresponding to the
 // specified header query, based on the number of an origin block.
 func (p *Peer) RequestHeadersByNumber(origin uint64, amount int, skip int, reverse bool) error {
-	p.Log().Debug("Fetching batch of headers", "count", amount, "fromnum", origin, "skip", skip, "reverse", reverse)
 	id := rand.Uint64()
 
 	requestTracker.Track(p.id, p.version, GetBlockHeadersMsg, BlockHeadersMsg, id)
@@ -373,6 +409,18 @@ func (p *Peer) RequestHeadersByNumber(origin uint64, amount int, skip int, rever
 			Reverse: reverse,
 		},
 	})
+}
+
+// ExpectRequestHeadersByNumber is a testing method to mirror the recipient side
+// of the RequestHeadersByNumber operation.
+func (p *Peer) ExpectRequestHeadersByNumber(origin uint64, amount int, skip int, reverse bool) error {
+	req := &GetBlockHeadersPacket{
+		Origin:  HashOrNumber{Number: origin},
+		Amount:  uint64(amount),
+		Skip:    uint64(skip),
+		Reverse: reverse,
+	}
+	return p2p.ExpectMsg(p.rw, GetBlockHeadersMsg, req)
 }
 
 // RequestBodies fetches a batch of blocks' bodies corresponding to the hashes
@@ -457,4 +505,20 @@ func (k *knownCache) Contains(hash common.Hash) bool {
 // Cardinality returns the number of elements in the set.
 func (k *knownCache) Cardinality() int {
 	return k.hashes.Cardinality()
+}
+
+// RequestExternalBlocks fetches a batch of external blocks from a remote node.
+func (p *Peer) RequestExternalBlocks(hashes []common.Hash) error {
+	p.Log().Debug("Fetching batch of external blocks", "count", len(hashes))
+	log.Info("Fetching batch of external blocks for hashes", "count", len(hashes))
+	if p.Version() >= ETH66 {
+		id := rand.Uint64()
+
+		requestTracker.Track(p.id, p.version, GetExtBlocksMsg, ExtBlocksMsg, id)
+		return p2p.Send(p.rw, GetExtBlocksMsg, &GetExtBlocksPacket66{
+			RequestId:          id,
+			GetExtBlocksPacket: hashes,
+		})
+	}
+	return p2p.Send(p.rw, GetExtBlocksMsg, GetExtBlocksPacket(hashes))
 }

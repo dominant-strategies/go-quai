@@ -191,7 +191,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	heighter := func() uint64 {
 		return h.chain.CurrentBlock().NumberU64()
 	}
-	inserter := func(blocks types.Blocks) (int, error) {
+	inserter := func(blocks types.Blocks, extBlocks []*types.ExternalBlock) (int, error) {
 		// If sync hasn't reached the checkpoint yet, deny importing weird blocks.
 		//
 		// Ideally we would also compare the head block's timestamp and similarly reject
@@ -211,6 +211,13 @@ func newHandler(config *handlerConfig) (*handler, error) {
 			log.Warn("Fast syncing, discarded propagated block", "number", blocks[0].Number(), "hash", blocks[0].Hash())
 			return 0, nil
 		}
+
+		log.Info("Adding external blocks from peer", "len", len(extBlocks), "number", blocks[0].Number())
+		err := h.chain.AddExternalBlocks(extBlocks)
+		if err != nil {
+			log.Warn("Error importing external blocks", "number", blocks[0].Number(), "hash", blocks[0].Hash())
+		}
+
 		n, err := h.chain.InsertChain(blocks)
 		if err == nil {
 			atomic.StoreUint32(&h.acceptTxs, 1) // Mark initial sync done on any fetcher import
@@ -431,7 +438,7 @@ func (h *handler) Stop() {
 
 // BroadcastBlock will either propagate a block to a subset of its peers, or
 // will only announce its availability (depending what's requested).
-func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
+func (h *handler) BroadcastBlock(block *types.Block, extBlocks []*types.ExternalBlock, propagate bool) {
 	hash := block.Hash()
 	peers := h.peers.peersWithoutBlock(hash)
 
@@ -448,7 +455,7 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 		// Send the block to a subset of our peers
 		transfer := peers[:int(math.Sqrt(float64(len(peers))))]
 		for _, peer := range transfer {
-			peer.AsyncSendNewBlock(block, td)
+			peer.AsyncSendNewBlock(block, td, extBlocks)
 		}
 		log.Trace("Propagated block", "hash", hash, "recipients", len(transfer), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
 		return
@@ -511,8 +518,16 @@ func (h *handler) minedBroadcastLoop() {
 
 	for obj := range h.minedBlockSub.Chan() {
 		if ev, ok := obj.Data.(core.NewMinedBlockEvent); ok {
-			h.BroadcastBlock(ev.Block, true)  // First propagate block to peers
-			h.BroadcastBlock(ev.Block, false) // Only then announce to the rest
+			// Retrieve the requested block's external blocks
+			header := h.chain.GetHeaderByHash(ev.Block.Hash())
+			if header != nil {
+				extBlocks, err := h.chain.GetExternalBlocks(header)
+				if err != nil {
+					log.Info("Error sending external blocks to peer", "err", err)
+				}
+				h.BroadcastBlock(ev.Block, extBlocks, true)  // First propagate block to peers
+				h.BroadcastBlock(ev.Block, extBlocks, false) // Only then announce to the rest
+			}
 		}
 	}
 }

@@ -45,8 +45,8 @@ type ChainHeaderReader interface {
 	// GetHeaderByHash retrieves a block header from the database by its hash.
 	GetHeaderByHash(hash common.Hash) *types.Header
 
-	// GetExtBlockByHashAndContext retrieves an external block header by its hash and context.
-	GetExtBlockByHashAndContext(hash common.Hash, context int) (*types.ExternalBlock, error)
+	// GetExternalBlock retrieves an external block header by its hash and context.
+	GetExternalBlock(hash common.Hash, number uint64, context uint64) (*types.ExternalBlock, error)
 
 	// QueueAndRetrieveExtBlocks passes external blocks to the queue and returns the amount available for this block
 	QueueAndRetrieveExtBlocks(externalBlocks []*types.ExternalBlock, header *types.Header) []*types.ExternalBlock
@@ -105,6 +105,15 @@ type Engine interface {
 
 	// GetExternalBlocks retrieves all valid external blocks from external chains
 	GetExternalBlocks(chain ChainHeaderReader, header *types.Header) []*types.ExternalBlock
+
+	// GetCoincidentHeader retrieves the furthest coincident header back
+	GetCoincidentHeader(chain ChainHeaderReader, context int, header *types.Header) (*types.Header, int)
+
+	// GetStopHash retrieves the stop hash for tracing of blocks in a trace branch
+	GetStopHash(chain ChainHeaderReader, difficultyContext int, originalContext int, startingHeader *types.Header) common.Hash
+
+	// TraceBranch recursively traces branches to find
+	TraceBranch(chain ChainHeaderReader, header *types.Header, context int, stopHash common.Hash, originalContext int, originalLocation []byte) []*types.ExternalBlock
 
 	// Seal generates a new sealing request for the given input block and pushes
 	// the result into the given channel.

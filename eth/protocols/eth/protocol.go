@@ -43,24 +43,29 @@ var ProtocolVersions = []uint{ETH66}
 
 // protocolLengths are the number of implemented message corresponding to
 // different protocol versions.
-var protocolLengths = map[uint]uint64{ETH66: 17}
+var protocolLengths = map[uint]uint64{ETH66: 19}
 
 // maxMessageSize is the maximum cap on the size of a protocol message.
 const maxMessageSize = 10 * 1024 * 1024
 
 const (
-	StatusMsg                     = 0x00
-	NewBlockHashesMsg             = 0x01
-	TransactionsMsg               = 0x02
-	GetBlockHeadersMsg            = 0x03
-	BlockHeadersMsg               = 0x04
-	GetBlockBodiesMsg             = 0x05
-	BlockBodiesMsg                = 0x06
-	NewBlockMsg                   = 0x07
-	GetNodeDataMsg                = 0x0d
-	NodeDataMsg                   = 0x0e
-	GetReceiptsMsg                = 0x0f
-	ReceiptsMsg                   = 0x10
+	// Protocol messages in eth/64
+	StatusMsg          = 0x00
+	NewBlockHashesMsg  = 0x01
+	TransactionsMsg    = 0x02
+	GetBlockHeadersMsg = 0x03
+	BlockHeadersMsg    = 0x04
+	GetBlockBodiesMsg  = 0x05
+	BlockBodiesMsg     = 0x06
+	NewBlockMsg        = 0x07
+	GetNodeDataMsg     = 0x0d
+	NodeDataMsg        = 0x0e
+	GetReceiptsMsg     = 0x0f
+	ReceiptsMsg        = 0x10
+	GetExtBlocksMsg    = 0x11
+	ExtBlocksMsg       = 0x12
+
+	// Protocol messages overloaded in eth/65
 	NewPooledTransactionHashesMsg = 0x08
 	GetPooledTransactionsMsg      = 0x09
 	PooledTransactionsMsg         = 0x0a
@@ -177,8 +182,9 @@ type BlockHeadersPacket66 struct {
 
 // NewBlockPacket is the network packet for the block propagation message.
 type NewBlockPacket struct {
-	Block *types.Block
-	TD    *big.Int
+	Block     *types.Block
+	TD        *big.Int
+	ExtBlocks []*types.ExternalBlock
 }
 
 // sanityCheck verifies that the values are reasonable, as a DoS protection
@@ -191,6 +197,8 @@ func (request *NewBlockPacket) sanityCheck() error {
 	if tdlen := request.TD.BitLen(); tdlen > 100 {
 		return fmt.Errorf("too large block TD: bitlen %d", tdlen)
 	}
+
+	// TODO #86
 	return nil
 }
 
@@ -287,6 +295,33 @@ type ReceiptsRLPPacket66 struct {
 	ReceiptsRLPPacket
 }
 
+// GetExtBlockPacket represents a block external block query.
+type GetExtBlocksPacket []common.Hash
+
+// GetExtBlockPacket represents a a block external block query over eth/66.
+type GetExtBlocksPacket66 struct {
+	RequestId uint64
+	GetExtBlocksPacket
+}
+
+// ExtBlocksPacket is the network packet for block external block distribution.
+type ExtBlocksPacket [][]*types.ExternalBlock
+
+// ReceiptsPacket is the network packet for block external block distribution over eth/66.
+type ExtBlocksPacket66 struct {
+	RequestId uint64
+	ExtBlocksPacket
+}
+
+// ExtBlocksRLPPacket is used for external blocks, when we already have it encoded
+type ExtBlocksRLPPacket []rlp.RawValue
+
+// ExtBlocksRLPPacket66 is the eth-66 version of ExtBlocksRLPPacket
+type ExtBlocksRLPPacket66 struct {
+	RequestId uint64
+	ExtBlocksRLPPacket
+}
+
 // NewPooledTransactionHashesPacket represents a transaction announcement packet.
 type NewPooledTransactionHashesPacket []common.Hash
 
@@ -352,6 +387,12 @@ func (*GetReceiptsPacket) Kind() byte   { return GetReceiptsMsg }
 
 func (*ReceiptsPacket) Name() string { return "Receipts" }
 func (*ReceiptsPacket) Kind() byte   { return ReceiptsMsg }
+
+func (*GetExtBlocksPacket) Name() string { return "GetExtBlocks" }
+func (*GetExtBlocksPacket) Kind() byte   { return GetExtBlocksMsg }
+
+func (*ExtBlocksPacket) Name() string { return "ExtBlocks" }
+func (*ExtBlocksPacket) Kind() byte   { return ExtBlocksMsg }
 
 func (*NewPooledTransactionHashesPacket) Name() string { return "NewPooledTransactionHashes" }
 func (*NewPooledTransactionHashesPacket) Kind() byte   { return NewPooledTransactionHashesMsg }

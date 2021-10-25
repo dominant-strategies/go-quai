@@ -242,6 +242,12 @@ type rlpblock struct {
 	Uncles []*Header
 }
 
+type ExternalBody struct {
+	Transactions Transactions
+	Receipts     []*Receipt
+	Context      *big.Int
+}
+
 // ExternalBlock represents an entire Quai block with multiple contexts.
 type ExternalBlock struct {
 	header       *Header
@@ -311,8 +317,24 @@ func (b *ExternalBlock) Receipts() Receipts         { return b.receipts }
 func (b *ExternalBlock) Context() *big.Int          { return b.context }
 func (b *ExternalBlock) CacheKey() []byte {
 	hash := b.header.Hash()
-	toBytes := []byte(b.context.String() + hash.String())
-	return toBytes
+	return ExtBlockCacheKey(b.header.Number[b.context.Int64()].Uint64(), b.context.Uint64(), hash)
+}
+
+// encodeBlockNumber encodes a block number as big endian uint64
+func encodeBlockNumber(number uint64) []byte {
+	enc := make([]byte, 8)
+	binary.BigEndian.PutUint64(enc, number)
+	return enc
+}
+
+// extBlockBodyKey = blockBodyPrefix + num (uint64 big endian) + location + context + hash
+func ExtBlockCacheKey(number uint64, context uint64, hash common.Hash) []byte {
+	return append(append(append([]byte("e"), encodeBlockNumber(number)...), encodeBlockNumber(context)...), hash.Bytes()...)
+}
+
+// Body returns the non-header content of the block.
+func (b *ExternalBlock) Body() *ExternalBody {
+	return &ExternalBody{b.transactions, b.receipts, b.context}
 }
 
 // ReceiptForTransaction searches receipts within an external block for a specific transaction

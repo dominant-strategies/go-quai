@@ -48,15 +48,17 @@ var (
 type peerConnection struct {
 	id string // Unique identifier of the peer
 
-	headerIdle  int32 // Current header activity state of the peer (idle = 0, active = 1)
-	blockIdle   int32 // Current block activity state of the peer (idle = 0, active = 1)
-	receiptIdle int32 // Current receipt activity state of the peer (idle = 0, active = 1)
-	stateIdle   int32 // Current node data activity state of the peer (idle = 0, active = 1)
+	headerIdle   int32 // Current header activity state of the peer (idle = 0, active = 1)
+	blockIdle    int32 // Current block activity state of the peer (idle = 0, active = 1)
+	receiptIdle  int32 // Current receipt activity state of the peer (idle = 0, active = 1)
+	extBlockIdle int32 // Current external block activity state of the peer (idle = 0, active = 1)
+	stateIdle    int32 // Current node data activity state of the peer (idle = 0, active = 1)
 
-	headerStarted  time.Time // Time instance when the last header fetch was started
-	blockStarted   time.Time // Time instance when the last block (body) fetch was started
-	receiptStarted time.Time // Time instance when the last receipt fetch was started
-	stateStarted   time.Time // Time instance when the last node data fetch was started
+	headerStarted   time.Time // Time instance when the last header fetch was started
+	blockStarted    time.Time // Time instance when the last block (body) fetch was started
+	receiptStarted  time.Time // Time instance when the last receipt fetch was started
+	stateStarted    time.Time // Time instance when the last node data fetch was started
+	extBlockStarted time.Time // Time instance when the last external block fetch was started
 
 	rates   *msgrate.Tracker         // Tracker to hone in on the number of items retrievable per second
 	lacking map[common.Hash]struct{} // Set of hashes not to request (didn't have previously)
@@ -81,6 +83,7 @@ type Peer interface {
 	RequestBodies([]common.Hash) error
 	RequestReceipts([]common.Hash) error
 	RequestNodeData([]common.Hash) error
+	RequestExternalBlocks([]common.Hash) error
 }
 
 // lightPeerWrapper wraps a LightPeer struct, stubbing out the Peer-only methods.
@@ -104,6 +107,9 @@ func (w *lightPeerWrapper) RequestReceipts([]common.Hash) error {
 func (w *lightPeerWrapper) RequestNodeData([]common.Hash) error {
 	panic("RequestNodeData not supported in light client mode sync")
 }
+func (w *lightPeerWrapper) RequestExternalBlocks([]common.Hash) error {
+	panic("RequestExternalBlocks not supported in light client mode sync")
+}
 
 // newPeerConnection creates a new downloader peer.
 func newPeerConnection(id string, version uint, peer Peer, logger log.Logger) *peerConnection {
@@ -124,6 +130,7 @@ func (p *peerConnection) Reset() {
 	atomic.StoreInt32(&p.headerIdle, 0)
 	atomic.StoreInt32(&p.blockIdle, 0)
 	atomic.StoreInt32(&p.receiptIdle, 0)
+	atomic.StoreInt32(&p.extBlockIdle, 0)
 	atomic.StoreInt32(&p.stateIdle, 0)
 
 	p.lacking = make(map[common.Hash]struct{})
@@ -183,6 +190,26 @@ func (p *peerConnection) FetchReceipts(request *fetchRequest) error {
 	return nil
 }
 
+// FetchReceipts sends a receipt retrieval request to the remote peer.
+func (p *peerConnection) FetchExternalBlocks(request *fetchRequest) error {
+	// Short circuit if the peer is already fetching
+	if !atomic.CompareAndSwapInt32(&p.extBlockIdle, 0, 1) {
+		return errAlreadyFetching
+	}
+	p.extBlockStarted = time.Now()
+
+	go func() {
+		// Convert the header set to a retrievable slice
+		hashes := make([]common.Hash, 0, len(request.Headers))
+		for _, header := range request.Headers {
+			hashes = append(hashes, header.Hash())
+		}
+		p.peer.RequestExternalBlocks(hashes)
+	}()
+
+	return nil
+}
+
 // FetchNodeData sends a node state data retrieval request to the remote peer.
 func (p *peerConnection) FetchNodeData(hashes []common.Hash) error {
 	// Short circuit if the peer is already fetching
@@ -220,6 +247,14 @@ func (p *peerConnection) SetReceiptsIdle(delivered int, deliveryTime time.Time) 
 	atomic.StoreInt32(&p.receiptIdle, 0)
 }
 
+// SetExternalBlocksIdle sets the peer to idle, allowing it to execute new ext block retrieval
+// requests. Its estimated header retrieval throughput is updated with that measured
+// just now.
+func (p *peerConnection) SetExternalBlocksIdle(delivered int, deliveryTime time.Time) {
+	p.rates.Update(eth.ExtBlocksMsg, deliveryTime.Sub(p.extBlockStarted), delivered)
+	atomic.StoreInt32(&p.extBlockIdle, 0)
+}
+
 // SetNodeDataIdle sets the peer to idle, allowing it to execute new state trie
 // data retrieval requests. Its estimated state retrieval throughput is updated
 // with that measured just now.
@@ -254,6 +289,16 @@ func (p *peerConnection) ReceiptCapacity(targetRTT time.Duration) int {
 	cap := p.rates.Capacity(eth.ReceiptsMsg, targetRTT)
 	if cap > MaxReceiptFetch {
 		cap = MaxReceiptFetch
+	}
+	return cap
+}
+
+// ExtBlockCapacity retrieves the peers receipt download allowance based on its
+// previously discovered throughput.
+func (p *peerConnection) ExtBlockCapacity(targetRTT time.Duration) int {
+	cap := p.rates.Capacity(eth.ExtBlocksMsg, targetRTT)
+	if cap > MaxExtBlockFetch {
+		cap = MaxExtBlockFetch
 	}
 	return cap
 }
@@ -436,6 +481,18 @@ func (ps *peerSet) ReceiptIdlePeers() ([]*peerConnection, int) {
 	}
 	throughput := func(p *peerConnection) int {
 		return p.rates.Capacity(eth.ReceiptsMsg, time.Second)
+	}
+	return ps.idlePeers(eth.ETH66, eth.ETH66, idle, throughput)
+}
+
+// ExtBlockIdlePeers retrieves a flat list of all the currently external block idle peers
+// within the active peer set, ordered by their reputation.
+func (ps *peerSet) ExtBlockIdlePeers() ([]*peerConnection, int) {
+	idle := func(p *peerConnection) bool {
+		return atomic.LoadInt32(&p.extBlockIdle) == 0
+	}
+	throughput := func(p *peerConnection) int {
+		return p.rates.Capacity(eth.ExtBlocksMsg, time.Second)
 	}
 	return ps.idlePeers(eth.ETH66, eth.ETH66, idle, throughput)
 }

@@ -202,6 +202,26 @@ func handleGetReceipts66(backend Backend, msg Decoder, peer *Peer) error {
 	return peer.ReplyReceiptsRLP(query.RequestId, response)
 }
 
+func handleGetExtBlocks(backend Backend, msg Decoder, peer *Peer) error {
+	// Decode the block receipts retrieval message
+	var query GetExtBlocksPacket
+	if err := msg.Decode(&query); err != nil {
+		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+	}
+	response := answerGetExtBlocksQuery(backend, query, peer)
+	return peer.SendExtBlocksRLP(response)
+}
+
+func handleGetExtBlocks66(backend Backend, msg Decoder, peer *Peer) error {
+	// Decode the block receipts retrieval message
+	var query GetExtBlocksPacket66
+	if err := msg.Decode(&query); err != nil {
+		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+	}
+	response := answerGetExtBlocksQuery(backend, query.GetExtBlocksPacket, peer)
+	return peer.ReplyExtBlocksRLP(query.RequestId, response)
+}
+
 func answerGetReceiptsQuery(backend Backend, query GetReceiptsPacket, peer *Peer) []rlp.RawValue {
 	// Gather state data until the fetch or network limits is reached
 	var (
@@ -229,6 +249,33 @@ func answerGetReceiptsQuery(backend Backend, query GetReceiptsPacket, peer *Peer
 		}
 	}
 	return receipts
+}
+
+func answerGetExtBlocksQuery(backend Backend, query GetExtBlocksPacket, peer *Peer) []rlp.RawValue {
+	// Gather state data until the fetch or network limits is reached
+	var (
+		bytes     int
+		extBlocks []rlp.RawValue
+	)
+	for _, hash := range query {
+		if bytes >= softResponseLimit {
+			break
+		}
+		// Retrieve the requested block's external blocks
+		header := backend.Chain().GetHeaderByHash(hash)
+		results, err := backend.Chain().GetExternalBlocks(header)
+		if err != nil {
+			log.Error("Unable to retrieve external blocks")
+		}
+		// If known, encode and queue for response packet
+		if encoded, err := rlp.EncodeToBytes(results); err != nil {
+			log.Error("Failed to encode receipt", "err", err)
+		} else {
+			extBlocks = append(extBlocks, encoded)
+			bytes += len(encoded)
+		}
+	}
+	return extBlocks
 }
 
 func handleNewBlockhashes(backend Backend, msg Decoder, peer *Peer) error {
@@ -313,6 +360,26 @@ func handleReceipts66(backend Backend, msg Decoder, peer *Peer) error {
 	requestTracker.Fulfil(peer.id, peer.version, ReceiptsMsg, res.RequestId)
 
 	return backend.Handle(peer, &res.ReceiptsPacket)
+}
+
+func handleExtBlocks(backend Backend, msg Decoder, peer *Peer) error {
+	// A batch of receipts arrived to one of our previous requests
+	res := new(ExtBlocksPacket)
+	if err := msg.Decode(res); err != nil {
+		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+	}
+	return backend.Handle(peer, res)
+}
+
+func handleExtBlocks66(backend Backend, msg Decoder, peer *Peer) error {
+	// A batch of receipts arrived to one of our previous requests
+	res := new(ExtBlocksPacket66)
+	if err := msg.Decode(res); err != nil {
+		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+	}
+	requestTracker.Fulfil(peer.id, peer.version, ExtBlocksMsg, res.RequestId)
+
+	return backend.Handle(peer, &res.ExtBlocksPacket)
 }
 
 func handleNewPooledTransactionHashes(backend Backend, msg Decoder, peer *Peer) error {

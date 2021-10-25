@@ -83,7 +83,7 @@ type bodyRequesterFn func([]common.Hash) error
 type headerVerifierFn func(header *types.Header) error
 
 // blockBroadcasterFn is a callback type for broadcasting a block to connected peers.
-type blockBroadcasterFn func(block *types.Block, propagate bool)
+type blockBroadcasterFn func(block *types.Block, extBlocks []*types.ExternalBlock, propagate bool)
 
 // chainHeightFn is a callback type to retrieve the current chain height.
 type chainHeightFn func() uint64
@@ -92,7 +92,7 @@ type chainHeightFn func() uint64
 type headersInsertFn func(headers []*types.Header) (int, error)
 
 // chainInsertFn is a callback type to insert a batch of blocks into the local chain.
-type chainInsertFn func(types.Blocks) (int, error)
+type chainInsertFn func(types.Blocks, []*types.ExternalBlock) (int, error)
 
 // peerDropFn is a callback type for dropping a peer detected as malicious.
 type peerDropFn func(id string)
@@ -131,8 +131,9 @@ type bodyFilterTask struct {
 type blockOrHeaderInject struct {
 	origin string
 
-	header *types.Header // Used for light mode fetcher which only cares about header.
-	block  *types.Block  // Used for normal mode fetcher which imports full block.
+	header    *types.Header          // Used for light mode fetcher which only cares about header.
+	block     *types.Block           // Used for normal mode fetcher which imports full block.
+	extBlocks []*types.ExternalBlock // UIsed for normal mode fetcher which imports
 }
 
 // number returns the block number of the injected object.
@@ -258,10 +259,11 @@ func (f *BlockFetcher) Notify(peer string, hash common.Hash, number uint64, time
 }
 
 // Enqueue tries to fill gaps the fetcher's future import queue.
-func (f *BlockFetcher) Enqueue(peer string, block *types.Block) error {
+func (f *BlockFetcher) Enqueue(peer string, block *types.Block, extBlocks []*types.ExternalBlock) error {
 	op := &blockOrHeaderInject{
-		origin: peer,
-		block:  block,
+		origin:    peer,
+		block:     block,
+		extBlocks: extBlocks,
 	}
 	select {
 	case f.inject <- op:
@@ -372,7 +374,7 @@ func (f *BlockFetcher) loop() {
 			if f.light {
 				f.importHeaders(op.origin, op.header)
 			} else {
-				f.importBlocks(op.origin, op.block)
+				f.importBlocks(op.origin, op.block, op.extBlocks)
 			}
 		}
 		// Wait for an outside event to occur
@@ -783,7 +785,7 @@ func (f *BlockFetcher) importHeaders(peer string, header *types.Header) {
 // importBlocks spawns a new goroutine to run a block insertion into the chain. If the
 // block's number is at the same height as the current import phase, it updates
 // the phase states accordingly.
-func (f *BlockFetcher) importBlocks(peer string, block *types.Block) {
+func (f *BlockFetcher) importBlocks(peer string, block *types.Block, extBlocks []*types.ExternalBlock) {
 	hash := block.Hash()
 
 	// Run the import on a new thread
@@ -802,7 +804,7 @@ func (f *BlockFetcher) importBlocks(peer string, block *types.Block) {
 		case nil:
 			// All ok, quickly propagate to our peers
 			blockBroadcastOutTimer.UpdateSince(block.ReceivedAt)
-			go f.broadcastBlock(block, true)
+			go f.broadcastBlock(block, nil, true)
 
 		case consensus.ErrFutureBlock:
 			// Weird future block, don't fail, but neither propagate
@@ -813,14 +815,15 @@ func (f *BlockFetcher) importBlocks(peer string, block *types.Block) {
 			f.dropPeer(peer)
 			return
 		}
+
 		// Run the actual import and log any issues
-		if _, err := f.insertChain(types.Blocks{block}); err != nil {
+		if _, err := f.insertChain(types.Blocks{block}, extBlocks); err != nil {
 			log.Debug("Propagated block import failed", "peer", peer, "number", block.Number(), "hash", hash, "err", err)
 			return
 		}
 		// If import succeeded, broadcast the block
 		blockAnnounceOutTimer.UpdateSince(block.ReceivedAt)
-		go f.broadcastBlock(block, false)
+		go f.broadcastBlock(block, nil, false)
 
 		// Invoke the testing hook if needed
 		if f.importedHook != nil {

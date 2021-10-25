@@ -77,3 +77,13 @@ type statePack struct {
 func (p *statePack) PeerId() string { return p.peerID }
 func (p *statePack) Items() int     { return len(p.states) }
 func (p *statePack) Stats() string  { return fmt.Sprintf("%d", len(p.states)) }
+
+// externalBlockPack is a batch of external blocks returned by a peer.
+type externalBlockPack struct {
+	peerID         string
+	externalBlocks [][]*types.ExternalBlock
+}
+
+func (p *externalBlockPack) PeerId() string { return p.peerID }
+func (p *externalBlockPack) Items() int     { return len(p.externalBlocks) }
+func (p *externalBlockPack) Stats() string  { return fmt.Sprintf("%d", len(p.externalBlocks)) }
