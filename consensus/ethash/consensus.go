@@ -739,7 +739,7 @@ func (ethash *Ethash) GetStopHash(chain consensus.ChainHeaderReader, difficultyC
 		}
 		log.Info("GetStopHash: Iterating back", "context", context)
 		// Relevant to region finding N-1 coincident block
-		if bytes.Equal(startingHeader.Location, prevHeader.Location) {
+		if bytes.Equal(startingHeader.Location, prevHeader.Location) || originalContext == 0 {
 			stopHash = header.ParentHash[context]
 			break
 		}
