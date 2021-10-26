@@ -27,6 +27,7 @@ import (
 	"sync"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/spruce-solutions/go-quai/accounts"
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/common/hexutil"
@@ -41,7 +42,6 @@ import (
 	"github.com/spruce-solutions/go-quai/rlp"
 	"github.com/spruce-solutions/go-quai/rpc"
 	"github.com/spruce-solutions/go-quai/trie"
-	lru "github.com/hashicorp/golang-lru"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -592,7 +592,7 @@ func (c *Clique) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *
 }
 
 // GetExternalBlocks traces all available branches to find external blocks
-func (c *Clique) GetExternalBlocks(chain consensus.ChainHeaderReader, header *types.Header) []*types.ExternalBlock {
+func (c *Clique) GetExternalBlocks(chain consensus.ChainHeaderReader, header *types.Header, logging bool) []*types.ExternalBlock {
 	return make([]*types.ExternalBlock, 0)
 }
 
@@ -607,7 +607,7 @@ func (c *Clique) GetStopHash(chain consensus.ChainHeaderReader, difficultyContex
 }
 
 // TraceBranch recursively traces branches to find
-func (c *Clique) TraceBranch(chain consensus.ChainHeaderReader, header *types.Header, context int, stopHash common.Hash, originalContext int, originalLocation []byte) []*types.ExternalBlock {
+func (c *Clique) TraceBranch(chain consensus.ChainHeaderReader, header *types.Header, context int, stopHash common.Hash, originalContext int, originalLocation []byte, logging bool) []*types.ExternalBlock {
 	return make([]*types.ExternalBlock, 0)
 }
 

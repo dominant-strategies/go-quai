@@ -104,7 +104,7 @@ type Engine interface {
 		uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error)
 
 	// GetExternalBlocks retrieves all valid external blocks from external chains
-	GetExternalBlocks(chain ChainHeaderReader, header *types.Header) []*types.ExternalBlock
+	GetExternalBlocks(chain ChainHeaderReader, header *types.Header, logging bool) []*types.ExternalBlock
 
 	// GetCoincidentHeader retrieves the furthest coincident header back
 	GetCoincidentHeader(chain ChainHeaderReader, context int, header *types.Header) (*types.Header, int)
@@ -113,7 +113,7 @@ type Engine interface {
 	GetStopHash(chain ChainHeaderReader, difficultyContext int, originalContext int, startingHeader *types.Header) common.Hash
 
 	// TraceBranch recursively traces branches to find
-	TraceBranch(chain ChainHeaderReader, header *types.Header, context int, stopHash common.Hash, originalContext int, originalLocation []byte) []*types.ExternalBlock
+	TraceBranch(chain ChainHeaderReader, header *types.Header, context int, stopHash common.Hash, originalContext int, originalLocation []byte, logging bool) []*types.ExternalBlock
 
 	// Seal generates a new sealing request for the given input block and pushes
 	// the result into the given channel.

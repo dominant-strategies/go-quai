@@ -24,7 +24,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/spruce-solutions/go-quai"
+	ethereum "github.com/spruce-solutions/go-quai"
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/common/hexutil"
 	"github.com/spruce-solutions/go-quai/core/types"
@@ -163,7 +163,7 @@ func (ec *Client) getBlockWithReceipts(ctx context.Context, method string, args 
 				return nil, reqs[i].Error
 			}
 			if uncles[i] == nil {
-				return nil, fmt.Errorf("getBlockWithReceipts: got null header for uncle %d of block %x", i, body.Hash[:])
+				return nil, fmt.Errorf("getBlockWithReceipts: got null header for uncle %d with hash %x", i, body.UncleHashes[i])
 			}
 		}
 	}

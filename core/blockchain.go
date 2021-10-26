@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/common/mclock"
 	"github.com/spruce-solutions/go-quai/common/prque"
@@ -46,7 +47,6 @@ import (
 	"github.com/spruce-solutions/go-quai/params"
 	"github.com/spruce-solutions/go-quai/rlp"
 	"github.com/spruce-solutions/go-quai/trie"
-	lru "github.com/hashicorp/golang-lru"
 )
 
 var (
@@ -2505,7 +2505,7 @@ func (bc *BlockChain) GetExternalBlocks(header *types.Header) ([]*types.External
 			return externalBlocks, nil
 		}
 		stopHash := bc.engine.GetStopHash(bc, difficultyContext, context, coincidentHeader)
-		externalBlocks = append(externalBlocks, bc.engine.TraceBranch(bc, coincidentHeader, difficultyContext, stopHash, context, header.Location)...)
+		externalBlocks = append(externalBlocks, bc.engine.TraceBranch(bc, coincidentHeader, difficultyContext, stopHash, context, header.Location, false)...)
 	}
 
 	return externalBlocks, nil

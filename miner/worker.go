@@ -993,7 +993,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	}
 
 	// Gather external blocks and apply transactions
-	externalBlocks := w.engine.GetExternalBlocks(w.chain, header)
+	externalBlocks := w.engine.GetExternalBlocks(w.chain, header, false)
 	etxs := make(types.Transactions, 0)
 	for _, externalBlock := range externalBlocks {
 		externalBlock.Receipts().DeriveFields(w.chainConfig, externalBlock.Hash(), externalBlock.Header().Number[externalBlock.Context().Int64()].Uint64(), externalBlock.Transactions())

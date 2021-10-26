@@ -750,7 +750,7 @@ func (ethash *Ethash) GetStopHash(chain consensus.ChainHeaderReader, difficultyC
 	return stopHash
 }
 
-func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *types.Header, context int, stopHash common.Hash, originalContext int, originalLocation []byte) []*types.ExternalBlock {
+func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *types.Header, context int, stopHash common.Hash, originalContext int, originalLocation []byte, logging bool) []*types.ExternalBlock {
 	extBlocks := make([]*types.ExternalBlock, 0)
 	steppedBack := false
 	startingHeader := header
@@ -764,7 +764,9 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 
 		// If we have reached a coincident block or we're in Region and found the prev region
 		if difficultyContext < context && steppedBack {
-			log.Info("TraceBranch: Found coincident block", "number", header.Number, "context", context, "location", header.Location)
+			if logging {
+				log.Info("TraceBranch: Found coincident block", "number", header.Number, "context", context, "location", header.Location)
+			}
 			break
 		}
 
@@ -782,17 +784,21 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 				log.Warn("TraceBranch: External Block not found for header", "number", header.Number[context], "context", context)
 				break
 			}
-			log.Info("GetExternalBlocks: Block being added: ", "number", extBlock.Header().Number, "context", extBlock.Context(), "location", extBlock.Header().Location, "txs", len(extBlock.Transactions()))
+			if logging {
+				log.Info("GetExternalBlocks: Block being added: ", "number", extBlock.Header().Number, "context", extBlock.Context(), "location", extBlock.Header().Location, "txs", len(extBlock.Transactions()))
+			}
 			extBlocks = append(extBlocks, extBlock)
 		}
 
 		if context < types.ContextDepth-1 {
-			extBlocks = append(extBlocks, ethash.TraceBranch(chain, header, context+1, stopHash, originalContext, originalLocation)...)
+			extBlocks = append(extBlocks, ethash.TraceBranch(chain, header, context+1, stopHash, originalContext, originalLocation, logging)...)
 		}
 
 		// Stop at the stop hash before iterating downward
 		if header.ParentHash[context] == stopHash || header.Number[context].Cmp(big.NewInt(1)) <= 0 {
-			log.Info("TraceBranch: Stopping on stop hash", "number", header.Number, "context", context, "location", header.Location)
+			if logging {
+				log.Info("TraceBranch: Stopping on stop hash", "number", header.Number, "context", context, "location", header.Location)
+			}
 			break
 		}
 
@@ -808,7 +814,10 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 			}
 			prevHeader = extBlock.Header()
 			// In Regions the starting header needs to be broken off for N-1
-			if context < types.ContextDepth-1 && bytes.Equal(startingHeader.Location, prevHeader.Location) && originalContext != 0 {
+			if context < types.ContextDepth-1 && bytes.Equal(startingHeader.Location, prevHeader.Location) && originalContext != 0 && sameLocation {
+				if logging {
+					log.Info("TraceBranch: Stopping with Region N-1", "number", header.Number, "context", context, "location", header.Location)
+				}
 				break
 			}
 		}
@@ -819,7 +828,7 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 }
 
 // GetExternalBlocks traces all available branches to find external blocks
-func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, header *types.Header) []*types.ExternalBlock {
+func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, header *types.Header, logging bool) []*types.ExternalBlock {
 	context := chain.Config().Context // Index that node is currently at
 	externalBlocks := make([]*types.ExternalBlock, 0)
 
@@ -833,7 +842,7 @@ func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, heade
 			return externalBlocks
 		}
 		stopHash := ethash.GetStopHash(chain, difficultyContext, context, coincidentHeader)
-		externalBlocks = append(externalBlocks, ethash.TraceBranch(chain, coincidentHeader, difficultyContext, stopHash, context, header.Location)...)
+		externalBlocks = append(externalBlocks, ethash.TraceBranch(chain, coincidentHeader, difficultyContext, stopHash, context, header.Location, logging)...)
 	}
 
 	// Swap order of external blocks
