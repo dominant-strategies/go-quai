@@ -1904,7 +1904,7 @@ func (s *PublicBlockChainAPI) SendMinedBlock(ctx context.Context, raw json.RawMe
 	if types.IsEqualHashSlice(head.UncleHash, types.EmptyUncleHash) && len(body.UncleHashes) > 0 {
 		return fmt.Errorf("server returned non-empty uncle list but block header indicates no uncles")
 	}
-	if !types.IsEqualHashSlice(head.UncleHash, types.EmptyUncleHash) && len(body.UncleHashes) == 0 {
+	if head.UncleHash[types.QuaiNetworkContext] != types.EmptyUncleHash[0] && len(body.UncleHashes) == 0 {
 		return fmt.Errorf("server returned empty uncle list but block header indicates uncles")
 	}
 	if head.TxHash[types.QuaiNetworkContext] == types.EmptyRootHash[0] && len(body.Transactions) > 0 {
