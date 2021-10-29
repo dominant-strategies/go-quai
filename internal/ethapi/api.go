@@ -1901,7 +1901,7 @@ func (s *PublicBlockChainAPI) SendMinedBlock(ctx context.Context, raw json.RawMe
 		return err
 	}
 	// Quick-verify transaction and uncle lists. This mostly helps with debugging the server.
-	if types.IsEqualHashSlice(head.UncleHash, types.EmptyUncleHash) && len(body.UncleHashes) > 0 {
+	if head.UncleHash[types.QuaiNetworkContext] == types.EmptyUncleHash[0] && len(body.UncleHashes) > 0 {
 		return fmt.Errorf("server returned non-empty uncle list but block header indicates no uncles")
 	}
 	if head.UncleHash[types.QuaiNetworkContext] != types.EmptyUncleHash[0] && len(body.UncleHashes) == 0 {
