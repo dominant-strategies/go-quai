@@ -795,6 +795,16 @@ func (s *PublicBlockChainAPI) GetUncleByBlockHashAndIndex(ctx context.Context, b
 		block = types.NewBlockWithHeader(uncles[index])
 		return s.rpcMarshalBlock(ctx, block, false, false)
 	}
+	pendBlock, _ := s.b.PendingBlockAndReceipts()
+	if pendBlock != nil && pendBlock.Hash() == blockHash {
+		uncles := pendBlock.Uncles()
+		if index >= hexutil.Uint(len(uncles)) {
+			log.Debug("Requested uncle not found in pending block", "number", block.Number(), "hash", blockHash, "index", index)
+			return nil, nil
+		}
+		block = types.NewBlockWithHeader(uncles[index])
+		return s.rpcMarshalBlock(ctx, block, false, false)
+	}
 	return nil, err
 }
 
@@ -1904,10 +1914,15 @@ func (s *PublicBlockChainAPI) SendMinedBlock(ctx context.Context, raw json.RawMe
 		return fmt.Errorf("server returned empty transaction list but block header indicates transactions")
 	}
 	// Load uncles because they are not included in the block response.
-	var uncles []*types.Header
 	txs := make([]*types.Transaction, len(body.Transactions))
 	for i, tx := range body.Transactions {
 		txs[i] = tx.tx
+	}
+
+	uncles := make([]*types.Header, len(body.UncleHashes))
+	for i, uncleHash := range body.UncleHashes {
+		block, _ := s.b.BlockByHash(ctx, uncleHash)
+		uncles[i] = block.Header()
 	}
 
 	block := types.NewBlockWithHeader(head).WithBody(txs, uncles)
