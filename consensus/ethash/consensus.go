@@ -277,23 +277,23 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 
 	if types.QuaiNetworkContext == 0 {
 		sum.Add(sum, header.Difficulty[0])
-		expectedSum.Add(expectedSum, ethash.CalcDifficulty(chain, header.Time, parent, 0))
+		expectedSum.Add(expectedSum, ethash.CalcDifficulty(chain, header.Time[0], parent, 0))
 	}
 	if types.QuaiNetworkContext == 1 {
 		sum.Add(sum, header.Difficulty[0])
 		sum.Add(sum, header.Difficulty[1])
 
-		expectedSum.Add(expectedSum, header.Difficulty[0])
-		expectedSum.Add(expectedSum, ethash.CalcDifficulty(chain, header.Time, parent, 1))
+		expectedSum.Add(expectedSum, parent.Difficulty[0])
+		expectedSum.Add(expectedSum, ethash.CalcDifficulty(chain, header.Time[1], parent, 1))
 	}
 	if types.QuaiNetworkContext == 2 {
 		sum.Add(sum, header.Difficulty[0])
 		sum.Add(sum, header.Difficulty[1])
 		sum.Add(sum, header.Difficulty[2])
 
-		expectedSum.Add(expectedSum, header.Difficulty[0])
-		expectedSum.Add(expectedSum, header.Difficulty[1])
-		expectedSum.Add(expectedSum, ethash.CalcDifficulty(chain, header.Time, parent, 2))
+		expectedSum.Add(expectedSum, parent.Difficulty[0])
+		expectedSum.Add(expectedSum, parent.Difficulty[1])
+		expectedSum.Add(expectedSum, ethash.CalcDifficulty(chain, header.Time[2], parent, 2))
 	}
 
 	if expectedSum.Cmp(sum) > 0 {
