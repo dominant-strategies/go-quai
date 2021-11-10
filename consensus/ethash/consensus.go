@@ -271,11 +271,27 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		return errOlderBlockTime
 	}
 	// Verify the block's difficulty based on its timestamp and parent's difficulty
-	expected := ethash.CalcDifficulty(chain, header.Time, parent)
+	// expected := ethash.CalcDifficulty(chain, header.Time, parent)
+	expectedSum := big.NewInt(0)
+	sum := big.NewInt(0)
 
-	if expected.Cmp(header.Difficulty[types.QuaiNetworkContext]) > 0 {
-		return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty[types.QuaiNetworkContext], expected)
+	if types.QuaiNetworkContext == 0 {
+		sum.Add(sum, header.Difficulty[0])
+		expectedSum.Add(expectedSum, ethash.CalcDifficulty(chain, header.Time, parent, 0))
 	}
+	if types.QuaiNetworkContext > 0 {
+		sum.Add(sum, header.Difficulty[1])
+		expectedSum.Add(expectedSum, ethash.CalcDifficulty(chain, header.Time, parent, 1))
+	}
+	if types.QuaiNetworkContext > 1 {
+		sum.Add(sum, header.Difficulty[2])
+		expectedSum.Add(expectedSum, ethash.CalcDifficulty(chain, header.Time, parent, 2))
+	}
+
+	if expectedSum.Cmp(sum) > 0 {
+		return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty[types.QuaiNetworkContext], expectedSum)
+	}
+
 	// Verify that the gas limit is <= 2^63-1
 	cap := uint64(0x7fffffffffffffff)
 	if header.GasLimit[types.QuaiNetworkContext] > cap {
@@ -322,31 +338,15 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 // CalcDifficulty is the difficulty adjustment algorithm. It returns
 // the difficulty that a new block should have when created at time
 // given the parent block's time and difficulty.
-func (ethash *Ethash) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, parent *types.Header) *big.Int {
-	return CalcDifficulty(chain.Config(), time, parent)
+func (ethash *Ethash) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, parent *types.Header, context int) *big.Int {
+	return CalcDifficulty(chain.Config(), time, parent, context)
 }
 
 // CalcDifficulty is the difficulty adjustment algorithm. It returns
 // the difficulty that a new block should have when created at time
 // given the parent block's time and difficulty.
-func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Header) *big.Int {
-	next := new(big.Int).Add(parent.Number[types.QuaiNetworkContext], big1)
-	switch {
-	case config.IsCatalyst(next):
-		return big.NewInt(1)
-	case config.IsLondon(next):
-		return calcDifficultyEip3554(time, parent)
-	case config.IsMuirGlacier(next):
-		return calcDifficultyEip2384(time, parent)
-	case config.IsConstantinople(next):
-		return calcDifficultyConstantinople(time, parent)
-	case config.IsByzantium(next):
-		return calcDifficultyByzantium(time, parent)
-	case config.IsHomestead(next):
-		return calcDifficultyHomestead(time, parent)
-	default:
-		return calcDifficultyFrontier(time, parent)
-	}
+func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Header, context int) *big.Int {
+	return calcDifficultyFrontier(time, parent, context)
 }
 
 // Some weird constants to avoid constant memory allocs for them.
@@ -484,9 +484,9 @@ func calcDifficultyHomestead(time uint64, parent *types.Header) *big.Int {
 // calcDifficultyFrontier is the difficulty adjustment algorithm. It returns the
 // difficulty that a new block should have when created at time given the parent
 // block's time and difficulty. The calculation uses the Frontier rules.
-func calcDifficultyFrontier(time uint64, parent *types.Header) *big.Int {
+func calcDifficultyFrontier(time uint64, parent *types.Header, context int) *big.Int {
 	diff := new(big.Int)
-	parentDifficulty := parent.Difficulty[types.QuaiNetworkContext]
+	parentDifficulty := parent.Difficulty[context]
 	if parentDifficulty == nil {
 		return params.GenesisDifficulty
 	}
@@ -507,7 +507,7 @@ func calcDifficultyFrontier(time uint64, parent *types.Header) *big.Int {
 		diff.Set(params.MinimumDifficulty)
 	}
 
-	periodCount := new(big.Int).Add(parent.Number[types.QuaiNetworkContext], big1)
+	periodCount := new(big.Int).Add(parent.Number[context], big1)
 	periodCount.Div(periodCount, expDiffPeriod)
 	if periodCount.Cmp(big1) > 0 {
 		// diff = diff + 2^(periodCount - 2)
@@ -666,7 +666,7 @@ func (ethash *Ethash) Prepare(chain consensus.ChainHeaderReader, header *types.H
 	if parent == nil {
 		return consensus.ErrUnknownAncestor
 	}
-	header.Difficulty[types.QuaiNetworkContext] = ethash.CalcDifficulty(chain, header.Time, parent)
+	header.Difficulty[types.QuaiNetworkContext] = ethash.CalcDifficulty(chain, header.Time, parent, types.QuaiNetworkContext)
 	return nil
 }
 

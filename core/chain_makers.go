@@ -180,7 +180,7 @@ func (b *BlockGen) OffsetTime(seconds int64) {
 		panic("block time out of range")
 	}
 	chainreader := &fakeChainReader{config: b.config}
-	b.header.Difficulty[types.QuaiNetworkContext] = b.engine.CalcDifficulty(chainreader, b.header.Time, b.parent.Header())
+	b.header.Difficulty[types.QuaiNetworkContext] = b.engine.CalcDifficulty(chainreader, b.header.Time, b.parent.Header(), types.QuaiNetworkContext)
 }
 
 // GenerateChain creates a chain of n blocks. The first block's
@@ -299,7 +299,7 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 	header.Root[types.QuaiNetworkContext] = state.IntermediateRoot(chain.Config().IsEIP158(parent.Number()))
 	header.ParentHash[types.QuaiNetworkContext] = parent.Hash()
 	header.Coinbase[types.QuaiNetworkContext] = parent.Coinbase()
-	header.Difficulty[types.QuaiNetworkContext] = engine.CalcDifficulty(chain, time, parentHeader)
+	header.Difficulty[types.QuaiNetworkContext] = engine.CalcDifficulty(chain, time, parentHeader, types.QuaiNetworkContext)
 	header.Number[types.QuaiNetworkContext] = new(big.Int).Add(parent.Number(), common.Big1)
 
 	return header
