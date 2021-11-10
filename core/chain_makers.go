@@ -175,12 +175,12 @@ func (b *BlockGen) PrevBlock(index int) *types.Block {
 // associated difficulty. It's useful to test scenarios where forking is not
 // tied to chain length directly.
 func (b *BlockGen) OffsetTime(seconds int64) {
-	b.header.Time += uint64(seconds)
-	if b.header.Time <= b.parent.Header().Time {
+	b.header.Time[types.QuaiNetworkContext] += uint64(seconds)
+	if b.header.Time[types.QuaiNetworkContext] <= b.parent.Header().Time[types.QuaiNetworkContext] {
 		panic("block time out of range")
 	}
 	chainreader := &fakeChainReader{config: b.config}
-	b.header.Difficulty[types.QuaiNetworkContext] = b.engine.CalcDifficulty(chainreader, b.header.Time, b.parent.Header(), types.QuaiNetworkContext)
+	b.header.Difficulty[types.QuaiNetworkContext] = b.engine.CalcDifficulty(chainreader, b.header.Time[types.QuaiNetworkContext], b.parent.Header(), types.QuaiNetworkContext)
 }
 
 // GenerateChain creates a chain of n blocks. The first block's
@@ -270,19 +270,19 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 		TxHash:      types.EmptyRootHash,
 		ReceiptHash: types.EmptyRootHash,
 		Bloom:       []types.Bloom{types.Bloom{}, types.Bloom{}, types.Bloom{}},
-		Time:        time,
+		Time:        []uint64{0, 0, 0},
 		BaseFee:     []*big.Int{baseFee, baseFee, baseFee},
 		GasLimit:    []uint64{0, 0, 0},
 		GasUsed:     []uint64{0, 0, 0},
 		Extra:       [][]byte{[]byte(nil), []byte(nil), []byte(nil)},
 	}
+	header.Time[types.QuaiNetworkContext] = time
 	header.GasLimit[types.QuaiNetworkContext] = parent.GasLimit()
 
 	parentHeader := &types.Header{
 		Number:     []*big.Int{big.NewInt(int64(1)), big.NewInt(int64(1)), big.NewInt(int64(1))},
 		Difficulty: []*big.Int{big.NewInt(1), big.NewInt(1), big.NewInt(1)},
 		UncleHash:  types.EmptyUncleHash,
-		Time:       time - 10,
 	}
 
 	if chain.Config().IsLondon(header.Number[types.QuaiNetworkContext]) {
@@ -295,6 +295,7 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 	parentHeader.Number[types.QuaiNetworkContext] = new(big.Int).Add(parent.Number(), common.Big1)
 	parentHeader.Difficulty[types.QuaiNetworkContext] = parent.Difficulty()
 	parentHeader.UncleHash[types.QuaiNetworkContext] = parent.UncleHash()
+	parentHeader.Time[types.QuaiNetworkContext] = time - 10
 
 	header.Root[types.QuaiNetworkContext] = state.IntermediateRoot(chain.Config().IsEIP158(parent.Number()))
 	header.ParentHash[types.QuaiNetworkContext] = parent.Hash()

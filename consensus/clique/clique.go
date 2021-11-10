@@ -250,7 +250,7 @@ func (c *Clique) verifyHeader(chain consensus.ChainHeaderReader, header *types.H
 	number := header.Number[types.QuaiNetworkContext].Uint64()
 
 	// Don't waste time checking blocks from the future
-	if header.Time > uint64(time.Now().Unix()) {
+	if header.Time[types.QuaiNetworkContext] > uint64(time.Now().Unix()) {
 		return consensus.ErrFutureBlock
 	}
 	// Checkpoint blocks need to enforce zero beneficiary
@@ -327,7 +327,7 @@ func (c *Clique) verifyCascadingFields(chain consensus.ChainHeaderReader, header
 	if parent == nil || parent.Number[types.QuaiNetworkContext].Uint64() != number-1 || parent.Hash() != header.ParentHash[types.QuaiNetworkContext] {
 		return consensus.ErrUnknownAncestor
 	}
-	if parent.Time+c.config.Period > header.Time {
+	if parent.Time[types.QuaiNetworkContext]+c.config.Period > header.Time[types.QuaiNetworkContext] {
 		return errInvalidTimestamp
 	}
 	// Verify that the gasUsed is <= gasLimit
@@ -566,9 +566,9 @@ func (c *Clique) Prepare(chain consensus.ChainHeaderReader, header *types.Header
 	if parent == nil {
 		return consensus.ErrUnknownAncestor
 	}
-	header.Time = parent.Time + c.config.Period
-	if header.Time < uint64(time.Now().Unix()) {
-		header.Time = uint64(time.Now().Unix())
+	header.Time[types.QuaiNetworkContext] = parent.Time[types.QuaiNetworkContext] + c.config.Period
+	if header.Time[types.QuaiNetworkContext] < uint64(time.Now().Unix()) {
+		header.Time[types.QuaiNetworkContext] = uint64(time.Now().Unix())
 	}
 	return nil
 }
@@ -660,7 +660,7 @@ func (c *Clique) Seal(chain consensus.ChainHeaderReader, block *types.Block, res
 		}
 	}
 	// Sweet, the protocol permits us to sign the block, wait for our time
-	delay := time.Unix(int64(header.Time), 0).Sub(time.Now()) // nolint: gosimple
+	delay := time.Unix(int64(header.Time[types.QuaiNetworkContext]), 0).Sub(time.Now()) // nolint: gosimple
 	if header.Difficulty[types.QuaiNetworkContext].Cmp(diffNoTurn) == 0 {
 		// It's not our turn explicitly to sign, delay it a bit
 		wiggle := time.Duration(len(snap.Signers)/2+1) * wiggleTime

@@ -19,8 +19,8 @@ package ethash
 import (
 	"math/big"
 
-	"github.com/spruce-solutions/go-quai/core/types"
 	"github.com/holiman/uint256"
+	"github.com/spruce-solutions/go-quai/core/types"
 )
 
 const (
@@ -56,7 +56,7 @@ func CalcDifficultyFrontierU256(time uint64, parent *types.Header) *big.Int {
 	adjust := pDiff.Clone()
 	adjust.Rsh(adjust, difficultyBoundDivisor) // adjust: pDiff / 2048
 
-	if time-parent.Time < frontierDurationLimit {
+	if time-parent.Time[types.QuaiNetworkContext] < frontierDurationLimit {
 		pDiff.Add(pDiff, adjust)
 	} else {
 		pDiff.Sub(pDiff, adjust)
@@ -99,7 +99,7 @@ func CalcDifficultyHomesteadU256(time uint64, parent *types.Header) *big.Int {
 	adjust := pDiff.Clone()
 	adjust.Rsh(adjust, difficultyBoundDivisor) // adjust: pDiff / 2048
 
-	x := (time - parent.Time) / 10 // (time - ptime) / 10)
+	x := (time - parent.Time[types.QuaiNetworkContext]) / 10 // (time - ptime) / 10)
 	var neg = true
 	if x == 0 {
 		x = 1
@@ -144,8 +144,8 @@ func MakeDifficultyCalculatorU256(bombDelay *big.Int) func(time uint64, parent *
 			b = min(parent.difficulty, MIN_DIFF)
 			child_diff = max(a,b )
 		*/
-		x := (time - parent.Time) / 9 // (block_timestamp - parent_timestamp) // 9
-		c := uint64(1)                // if parent.unclehash == emptyUncleHashHash
+		x := (time - parent.Time[types.QuaiNetworkContext]) / 9 // (block_timestamp - parent_timestamp) // 9
+		c := uint64(1)                                          // if parent.unclehash == emptyUncleHashHash
 		if !types.IsEqualHashSlice(parent.UncleHash, types.EmptyUncleHash) {
 			c = 2
 		}

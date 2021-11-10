@@ -26,6 +26,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/consensus"
 	"github.com/spruce-solutions/go-quai/core"
@@ -37,7 +38,6 @@ import (
 	"github.com/spruce-solutions/go-quai/log"
 	"github.com/spruce-solutions/go-quai/params"
 	"github.com/spruce-solutions/go-quai/rlp"
-	lru "github.com/hashicorp/golang-lru"
 )
 
 var (
@@ -166,7 +166,7 @@ func (lc *LightChain) loadLastState() error {
 	// Issue a status log and return
 	header := lc.hc.CurrentHeader()
 	headerTd := lc.GetTd(header.Hash(), header.Number[types.QuaiNetworkContext].Uint64())
-	log.Info("Loaded most recent local header", "number", header.Number, "hash", header.Hash(), "td", headerTd, "age", common.PrettyAge(time.Unix(int64(header.Time), 0)))
+	log.Info("Loaded most recent local header", "number", header.Number, "hash", header.Hash(), "td", headerTd, "age", common.PrettyAge(time.Unix(int64(header.Time[types.QuaiNetworkContext]), 0)))
 	return nil
 }
 
@@ -538,7 +538,7 @@ func (lc *LightChain) SyncCheckpoint(ctx context.Context, checkpoint *params.Tru
 
 		// Ensure the chain didn't move past the latest block while retrieving it
 		if lc.hc.CurrentHeader().Number[types.QuaiNetworkContext].Uint64() < header.Number[types.QuaiNetworkContext].Uint64() {
-			log.Info("Updated latest header based on CHT", "number", header.Number, "hash", header.Hash(), "age", common.PrettyAge(time.Unix(int64(header.Time), 0)))
+			log.Info("Updated latest header based on CHT", "number", header.Number, "hash", header.Hash(), "age", common.PrettyAge(time.Unix(int64(header.Time[types.QuaiNetworkContext]), 0)))
 			rawdb.WriteHeadHeaderHash(lc.chainDb, header.Hash())
 			lc.hc.SetCurrentHeader(header)
 		}

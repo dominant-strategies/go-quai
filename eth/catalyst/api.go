@@ -139,9 +139,8 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 	}
 	num := parent.Number()
 
-
 	header := types.NewEmptyHeader()
-	header.Time = params.Timestamp
+	header.Time[types.QuaiNetworkContext] = params.Timestamp
 	header.GasLimit[types.QuaiNetworkContext] = parent.GasLimit()
 	header.ParentHash[types.QuaiNetworkContext] = parent.Hash()
 	header.Number[types.QuaiNetworkContext] = num.Add(num, common.Big1)
@@ -274,7 +273,7 @@ func insertBlockParamsToBlock(config *chainParams.ChainConfig, parent *types.Hea
 		GasUsed:     []uint64{0, 0, 0},
 		BaseFee:     []*big.Int{big.NewInt(0), big.NewInt(0), big.NewInt(0)},
 		Extra:       [][]byte{[]byte{}, []byte{}, []byte{}},
-		Time:        params.Timestamp,
+		Time:        []uint64{params.Timestamp, params.Timestamp, params.Timestamp},
 	}
 
 	header.ParentHash[types.QuaiNetworkContext] = params.ParentHash

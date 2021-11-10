@@ -263,11 +263,11 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	}
 	// Verify the header's timestamp
 	if !uncle {
-		if header.Time > uint64(unixNow+allowedFutureBlockTimeSeconds) {
+		if header.Time[types.QuaiNetworkContext] > uint64(unixNow+allowedFutureBlockTimeSeconds) {
 			return consensus.ErrFutureBlock
 		}
 	}
-	if header.Time <= parent.Time {
+	if header.Time[types.QuaiNetworkContext] <= parent.Time[types.QuaiNetworkContext] {
 		return errOlderBlockTime
 	}
 	// Verify the block's difficulty based on its timestamp and parent's difficulty
@@ -277,19 +277,27 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 
 	if types.QuaiNetworkContext == 0 {
 		sum.Add(sum, header.Difficulty[0])
-		expectedSum.Add(expectedSum, ethash.CalcDifficulty(chain, header.Time, parent, 0))
+		expectedSum.Add(expectedSum, ethash.CalcDifficulty(chain, header.Time[1], parent, 0))
 	}
-	if types.QuaiNetworkContext > 0 {
+	if types.QuaiNetworkContext == 1 {
+		sum.Add(sum, header.Difficulty[0])
 		sum.Add(sum, header.Difficulty[1])
-		expectedSum.Add(expectedSum, ethash.CalcDifficulty(chain, header.Time, parent, 1))
+
+		expectedSum.Add(expectedSum, header.Difficulty[0])
+		expectedSum.Add(expectedSum, ethash.CalcDifficulty(chain, header.Time[1], parent, 1))
 	}
-	if types.QuaiNetworkContext > 1 {
+	if types.QuaiNetworkContext == 2 {
+		sum.Add(sum, header.Difficulty[0])
+		sum.Add(sum, header.Difficulty[1])
 		sum.Add(sum, header.Difficulty[2])
-		expectedSum.Add(expectedSum, ethash.CalcDifficulty(chain, header.Time, parent, 2))
+
+		expectedSum.Add(expectedSum, header.Difficulty[0])
+		expectedSum.Add(expectedSum, header.Difficulty[1])
+		expectedSum.Add(expectedSum, ethash.CalcDifficulty(chain, header.Time[2], parent, 2))
 	}
 
 	if expectedSum.Cmp(sum) > 0 {
-		return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty[types.QuaiNetworkContext], expectedSum)
+		return fmt.Errorf("invalid difficulty: have %v, want %v", sum, expectedSum)
 	}
 
 	// Verify that the gas limit is <= 2^63-1
@@ -374,7 +382,7 @@ func makeDifficultyCalculator(bombDelay *big.Int) func(time uint64, parent *type
 		//        ) + 2^(periodCount - 2)
 
 		bigTime := new(big.Int).SetUint64(time)
-		bigParentTime := new(big.Int).SetUint64(parent.Time)
+		bigParentTime := new(big.Int).SetUint64(parent.Time[types.QuaiNetworkContext])
 
 		// holds intermediate values to make the algo easier to read & audit
 		x := new(big.Int)
@@ -439,7 +447,7 @@ func calcDifficultyHomestead(time uint64, parent *types.Header) *big.Int {
 	//        ) + 2^(periodCount - 2)
 
 	bigTime := new(big.Int).SetUint64(time)
-	bigParentTime := new(big.Int).SetUint64(parent.Time)
+	bigParentTime := new(big.Int).SetUint64(parent.Time[types.QuaiNetworkContext])
 
 	// holds intermediate values to make the algo easier to read & audit
 	x := new(big.Int)
@@ -496,7 +504,7 @@ func calcDifficultyFrontier(time uint64, parent *types.Header, context int) *big
 	bigParentTime := new(big.Int)
 
 	bigTime.SetUint64(time)
-	bigParentTime.SetUint64(parent.Time)
+	bigParentTime.SetUint64(parent.Time[context])
 
 	if bigTime.Sub(bigTime, bigParentTime).Cmp(params.DurationLimit) < 0 {
 		diff.Add(parentDifficulty, adjust)
@@ -666,7 +674,7 @@ func (ethash *Ethash) Prepare(chain consensus.ChainHeaderReader, header *types.H
 	if parent == nil {
 		return consensus.ErrUnknownAncestor
 	}
-	header.Difficulty[types.QuaiNetworkContext] = ethash.CalcDifficulty(chain, header.Time, parent, types.QuaiNetworkContext)
+	header.Difficulty[types.QuaiNetworkContext] = ethash.CalcDifficulty(chain, header.Time[types.QuaiNetworkContext], parent, types.QuaiNetworkContext)
 	return nil
 }
 

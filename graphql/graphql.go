@@ -25,7 +25,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/spruce-solutions/go-quai"
+	ethereum "github.com/spruce-solutions/go-quai"
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/common/hexutil"
 	"github.com/spruce-solutions/go-quai/common/math"
@@ -627,7 +627,7 @@ func (b *Block) Timestamp(ctx context.Context) (hexutil.Uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return hexutil.Uint64(header.Time), nil
+	return hexutil.Uint64(header.Time[types.QuaiNetworkContext]), nil
 }
 
 func (b *Block) Nonce(ctx context.Context) (hexutil.Bytes, error) {

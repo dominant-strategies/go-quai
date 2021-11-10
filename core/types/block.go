@@ -86,7 +86,7 @@ type Header struct {
 	Number      []*big.Int       `json:"number"           gencodec:"required"`
 	GasLimit    []uint64         `json:"gasLimit"         gencodec:"required"`
 	GasUsed     []uint64         `json:"gasUsed"          gencodec:"required"`
-	Time        uint64           `json:"timestamp"        gencodec:"required"`
+	Time        []uint64         `json:"timestamp"        gencodec:"required"`
 	Extra       [][]byte         `json:"extraData"        gencodec:"required"`
 	MixDigest   common.Hash      `json:"mixHash"`
 	Nonce       BlockNonce       `json:"nonce"`
@@ -438,7 +438,7 @@ func NewEmptyHeader() *Header {
 		ParentHash:  make([]common.Hash, ContextDepth),
 		Number:      make([]*big.Int, ContextDepth),
 		Extra:       make([][]byte, ContextDepth),
-		Time:        uint64(0),
+		Time:        make([]uint64, ContextDepth),
 		BaseFee:     make([]*big.Int, ContextDepth),
 		GasLimit:    make([]uint64, ContextDepth),
 		Coinbase:    make([]common.Address, ContextDepth),
@@ -552,7 +552,13 @@ func (b *Block) Difficulty(params ...int) *big.Int {
 	}
 	return new(big.Int).Set(b.header.Difficulty[context])
 }
-func (b *Block) Time() uint64 { return b.header.Time }
+func (b *Block) Time(params ...int) uint64 {
+	context := QuaiNetworkContext
+	if len(params) > 0 {
+		context = params[0]
+	}
+	return b.header.Time[context]
+}
 func (b *Block) NumberU64(params ...int) uint64 {
 	context := QuaiNetworkContext
 	if len(params) > 0 {

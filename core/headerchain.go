@@ -26,6 +26,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/consensus"
 	"github.com/spruce-solutions/go-quai/core/rawdb"
@@ -33,7 +34,6 @@ import (
 	"github.com/spruce-solutions/go-quai/ethdb"
 	"github.com/spruce-solutions/go-quai/log"
 	"github.com/spruce-solutions/go-quai/params"
-	lru "github.com/hashicorp/golang-lru"
 )
 
 const (
@@ -383,7 +383,7 @@ func (hc *HeaderChain) InsertHeaderChain(chain []*types.Header, start time.Time)
 	}
 	if last := res.lastHeader; last != nil {
 		context = append(context, "number", last.Number, "hash", res.lastHash)
-		if timestamp := time.Unix(int64(last.Time), 0); time.Since(timestamp) > time.Minute {
+		if timestamp := time.Unix(int64(last.Time[types.QuaiNetworkContext]), 0); time.Since(timestamp) > time.Minute {
 			context = append(context, []interface{}{"age", common.PrettyAge(timestamp)}...)
 		}
 	}

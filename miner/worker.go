@@ -898,7 +898,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		ParentHash:  make([]common.Hash, 3),
 		Number:      make([]*big.Int, 3),
 		Extra:       make([][]byte, 3),
-		Time:        uint64(timestamp),
+		Time:        make([]uint64, 3),
 		BaseFee:     make([]*big.Int, 3),
 		GasLimit:    make([]uint64, 3),
 		Coinbase:    make([]common.Address, 3),
@@ -911,6 +911,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		Location:    w.chainConfig.Location,
 	}
 
+	header.Time[types.QuaiNetworkContext] = uint64(timestamp)
 	// If block has not advanced
 	if w.snapshotBlock != nil && parent.Header().Number[types.QuaiNetworkContext] == w.snapshotBlock.Number() {
 		header.ParentHash[types.QuaiNetworkContext] = w.snapshotBlock.ParentHash()

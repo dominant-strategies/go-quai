@@ -30,7 +30,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/spruce-solutions/go-quai"
+	"github.com/gorilla/websocket"
+	ethereum "github.com/spruce-solutions/go-quai"
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/common/mclock"
 	"github.com/spruce-solutions/go-quai/consensus"
@@ -44,7 +45,6 @@ import (
 	"github.com/spruce-solutions/go-quai/node"
 	"github.com/spruce-solutions/go-quai/p2p"
 	"github.com/spruce-solutions/go-quai/rpc"
-	"github.com/gorilla/websocket"
 )
 
 const (
@@ -566,7 +566,7 @@ type blockStats struct {
 	Number     []*big.Int     `json:"number"`
 	Hash       common.Hash    `json:"hash"`
 	ParentHash []common.Hash  `json:"parentHash"`
-	Timestamp  *big.Int       `json:"timestamp"`
+	Timestamp  []uint64       `json:"timestamp"`
 	Miner      common.Address `json:"miner"`
 	GasUsed    []uint64       `json:"gasUsed"`
 	GasLimit   []uint64       `json:"gasLimit"`
@@ -655,7 +655,7 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		Number:     header.Number,
 		Hash:       header.Hash(),
 		ParentHash: header.ParentHash,
-		Timestamp:  new(big.Int).SetUint64(header.Time),
+		Timestamp:  header.Time,
 		Miner:      author,
 		GasUsed:    header.GasUsed,
 		GasLimit:   header.GasLimit,
