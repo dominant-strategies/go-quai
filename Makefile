@@ -17,6 +17,11 @@ go-quai:
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/geth\" to launch go-quai."
 
+bootnode:
+	$(GORUN) build/ci.go install ./cmd/bootnode
+	@echo "Done building."
+	@echo "Run \"$(GOBIN)/bootnode\" to launch bootnode binary."
+
 debug:
 	go build -gcflags=all="-N -l" -v -o build/bin/geth ./cmd/geth
 
@@ -148,3 +153,54 @@ geth-windows-amd64:
 	$(GORUN) build/ci.go xgo -- --go=$(GO) --targets=windows/amd64 -v ./cmd/geth
 	@echo "Windows amd64 cross compilation done:"
 	@ls -ld $(GOBIN)/geth-windows-* | grep amd64
+
+PRIME_PORT_HTTP=8546
+PRIME_PORT_WS=8547
+REGION_1_PORT_HTTP=8578
+REGION_1_PORT_WS=8579
+REGION_2_PORT_HTTP=8580
+REGION_2_PORT_WS=8581
+REGION_3_PORT_HTTP=8582
+REGION_3_PORT_WS=8583
+ZONE_1_1_PORT_HTTP=8610
+ZONE_1_1_PORT_WS=8611
+ZONE_1_2_PORT_HTTP=8542
+ZONE_1_2_PORT_WS=8643
+ZONE_1_3_PORT_HTTP=8674
+ZONE_1_3_PORT_WS=8675
+ZONE_2_1_PORT_HTTP=8512
+ZONE_2_1_PORT_WS=8613
+ZONE_2_2_PORT_HTTP=8544
+ZONE_2_2_PORT_WS=8645
+ZONE_2_3_PORT_HTTP=8576
+ZONE_2_3_PORT_WS=8677
+ZONE_3_1_PORT_HTTP=8614
+ZONE_3_1_PORT_WS=8615
+ZONE_3_2_PORT_HTTP=8646
+ZONE_3_2_PORT_WS=8647
+ZONE_3_3_PORT_HTTP=8678
+ZONE_3_3_PORT_WS=8679
+
+run-full-node:
+ifeq (,$(wildcard ./bootnode.key))
+	./build/bin/bootnode --genkey=bootnode.key
+endif
+ifeq (,$(wildcard nodelogs))
+	mkdir nodelogs
+endif
+	@nohup ./build/bin/geth --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30303 --nodekey bootnode.key --http.port $(PRIME_PORT_HTTP) --ws.port $(PRIME_PORT_WS) > nodelogs/prime.log 2>&1 &
+	@nohup ./build/bin/geth --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30304 --nodekey bootnode.key --http.port $(REGION_1_PORT_HTTP) --ws.port $(REGION_1_PORT_WS) --region 1 > nodelogs/region-1.log 2>&1 &
+	@nohup ./build/bin/geth --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30305 --nodekey bootnode.key --http.port $(REGION_2_PORT_HTTP) --ws.port $(REGION_2_PORT_WS) --region 2 > nodelogs/region-2.log 2>&1 &
+	@nohup ./build/bin/geth --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30306 --nodekey bootnode.key --http.port $(REGION_3_PORT_HTTP) --ws.port $(REGION_3_PORT_WS) --region 3 > nodelogs/region-3.log 2>&1 &
+	@nohup ./build/bin/geth --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30307 --nodekey bootnode.key --http.port $(ZONE_1_1_PORT_HTTP) --ws.port $(ZONE_1_1_PORT_WS) --region 1 --zone 1 > nodelogs/zone-1-1.log 2>&1 &
+	@nohup ./build/bin/geth --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30308 --nodekey bootnode.key --http.port $(ZONE_1_2_PORT_HTTP) --ws.port $(ZONE_1_2_PORT_WS) --region 1 --zone 2 > nodelogs/zone-1-2.log 2>&1 &
+	@nohup ./build/bin/geth --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30309 --nodekey bootnode.key --http.port $(ZONE_1_3_PORT_HTTP) --ws.port $(ZONE_1_3_PORT_WS) --region 1 --zone 3 > nodelogs/zone-1-3.log 2>&1 &
+	@nohup ./build/bin/geth --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30310 --nodekey bootnode.key --http.port $(ZONE_2_1_PORT_HTTP) --ws.port $(ZONE_2_1_PORT_WS) --region 2 --zone 1 > nodelogs/zone-2-1.log 2>&1 &
+	@nohup ./build/bin/geth --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30311 --nodekey bootnode.key --http.port $(ZONE_2_2_PORT_HTTP) --ws.port $(ZONE_2_2_PORT_WS) --region 2 --zone 2 > nodelogs/zone-2-2.log 2>&1 &
+	@nohup ./build/bin/geth --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30312 --nodekey bootnode.key --http.port $(ZONE_2_3_PORT_HTTP) --ws.port $(ZONE_2_3_PORT_WS) --region 2 --zone 3 > nodelogs/zone-2-3.log 2>&1 &
+	@nohup ./build/bin/geth --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30313 --nodekey bootnode.key --http.port $(ZONE_3_1_PORT_HTTP) --ws.port $(ZONE_3_1_PORT_WS) --region 3 --zone 1 > nodelogs/zone-3-1.log 2>&1 &
+	@nohup ./build/bin/geth --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30314 --nodekey bootnode.key --http.port $(ZONE_3_2_PORT_HTTP) --ws.port $(ZONE_3_2_PORT_WS) --region 3 --zone 2 > nodelogs/zone-3-2.log 2>&1 &
+	@nohup ./build/bin/geth --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30315 --nodekey bootnode.key --http.port $(ZONE_3_3_PORT_HTTP) --ws.port $(ZONE_3_3_PORT_WS) --region 3 --zone 3 > nodelogs/zone-3-3.log 2>&1 &
+
+stop:
+	pkill -f './build/bin/geth'
