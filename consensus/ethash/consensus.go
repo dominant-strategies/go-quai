@@ -279,17 +279,25 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		sum.Add(sum, header.Difficulty[0])
 		expectedSum.Add(expectedSum, ethash.CalcDifficulty(chain, header.Time, parent, 0))
 	}
-	if types.QuaiNetworkContext > 0 {
+	if types.QuaiNetworkContext == 1 {
+		sum.Add(sum, header.Difficulty[0])
 		sum.Add(sum, header.Difficulty[1])
+
+		expectedSum.Add(expectedSum, header.Difficulty[0])
 		expectedSum.Add(expectedSum, ethash.CalcDifficulty(chain, header.Time, parent, 1))
 	}
-	if types.QuaiNetworkContext > 1 {
+	if types.QuaiNetworkContext == 2 {
+		sum.Add(sum, header.Difficulty[0])
+		sum.Add(sum, header.Difficulty[1])
 		sum.Add(sum, header.Difficulty[2])
+
+		expectedSum.Add(expectedSum, header.Difficulty[0])
+		expectedSum.Add(expectedSum, header.Difficulty[1])
 		expectedSum.Add(expectedSum, ethash.CalcDifficulty(chain, header.Time, parent, 2))
 	}
 
 	if expectedSum.Cmp(sum) > 0 {
-		return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty[types.QuaiNetworkContext], expectedSum)
+		return fmt.Errorf("invalid difficulty: have %v, want %v", sum, expectedSum)
 	}
 
 	// Verify that the gas limit is <= 2^63-1
