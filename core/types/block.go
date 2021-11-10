@@ -104,7 +104,7 @@ type headerMarshaling struct {
 	Number     []*hexutil.Big
 	GasLimit   []hexutil.Uint64
 	GasUsed    []hexutil.Uint64
-	Time       hexutil.Uint64
+	Time       []hexutil.Uint64
 	Extra      []hexutil.Bytes
 	BaseFee    []*hexutil.Big
 	Location   []byte
