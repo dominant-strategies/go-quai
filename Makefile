@@ -202,5 +202,26 @@ endif
 	@nohup ./build/bin/geth --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30314 --nodekey bootnode.key --http.port $(ZONE_3_2_PORT_HTTP) --ws.port $(ZONE_3_2_PORT_WS) --region 3 --zone 2 > nodelogs/zone-3-2.log 2>&1 &
 	@nohup ./build/bin/geth --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30315 --nodekey bootnode.key --http.port $(ZONE_3_3_PORT_HTTP) --ws.port $(ZONE_3_3_PORT_WS) --region 3 --zone 3 > nodelogs/zone-3-3.log 2>&1 &
 
+run-full-mining:
+ifeq (,$(wildcard ./bootnode.key))
+	./build/bin/bootnode --genkey=bootnode.key
+endif
+ifeq (,$(wildcard nodelogs))
+	mkdir nodelogs
+endif
+	@nohup ./build/bin/geth --ws --mine --miner.threads=4 --miner.etherbase 0x990eAa88FD08902a4f396beA0285385887Bed5a6 --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30303 --nodekey bootnode.key --http.port $(PRIME_PORT_HTTP) --ws.port $(PRIME_PORT_WS) > nodelogs/prime.log 2>&1 &
+	@nohup ./build/bin/geth --ws --mine --miner.threads=4 --miner.etherbase 0x1a6ad97c8f06c7ae79fea47e43a8c048da5b1f7d --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30304 --nodekey bootnode.key --http.port $(REGION_1_PORT_HTTP) --ws.port $(REGION_1_PORT_WS) --region 1 > nodelogs/region-1.log 2>&1 &
+	@nohup ./build/bin/geth --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30305 --nodekey bootnode.key --http.port $(REGION_2_PORT_HTTP) --ws.port $(REGION_2_PORT_WS) --region 2 > nodelogs/region-2.log 2>&1 &
+	@nohup ./build/bin/geth --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30306 --nodekey bootnode.key --http.port $(REGION_3_PORT_HTTP) --ws.port $(REGION_3_PORT_WS) --region 3 > nodelogs/region-3.log 2>&1 &
+	@nohup ./build/bin/geth --ws  --ws --mine --miner.threads=4 --miner.etherbase 0x1a6ad97c8f06c7ae79fea47e43a8c048da5b1f7d --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30307 --nodekey bootnode.key --http.port $(ZONE_1_1_PORT_HTTP) --ws.port $(ZONE_1_1_PORT_WS) --region 1 --zone 1 > nodelogs/zone-1-1.log 2>&1 &
+	@nohup ./build/bin/geth --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30308 --nodekey bootnode.key --http.port $(ZONE_1_2_PORT_HTTP) --ws.port $(ZONE_1_2_PORT_WS) --region 1 --zone 2 > nodelogs/zone-1-2.log 2>&1 &
+	@nohup ./build/bin/geth --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30309 --nodekey bootnode.key --http.port $(ZONE_1_3_PORT_HTTP) --ws.port $(ZONE_1_3_PORT_WS) --region 1 --zone 3 > nodelogs/zone-1-3.log 2>&1 &
+	@nohup ./build/bin/geth --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30310 --nodekey bootnode.key --http.port $(ZONE_2_1_PORT_HTTP) --ws.port $(ZONE_2_1_PORT_WS) --region 2 --zone 1 > nodelogs/zone-2-1.log 2>&1 &
+	@nohup ./build/bin/geth --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30311 --nodekey bootnode.key --http.port $(ZONE_2_2_PORT_HTTP) --ws.port $(ZONE_2_2_PORT_WS) --region 2 --zone 2 > nodelogs/zone-2-2.log 2>&1 &
+	@nohup ./build/bin/geth --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30312 --nodekey bootnode.key --http.port $(ZONE_2_3_PORT_HTTP) --ws.port $(ZONE_2_3_PORT_WS) --region 2 --zone 3 > nodelogs/zone-2-3.log 2>&1 &
+	@nohup ./build/bin/geth --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30313 --nodekey bootnode.key --http.port $(ZONE_3_1_PORT_HTTP) --ws.port $(ZONE_3_1_PORT_WS) --region 3 --zone 1 > nodelogs/zone-3-1.log 2>&1 &
+	@nohup ./build/bin/geth --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30314 --nodekey bootnode.key --http.port $(ZONE_3_2_PORT_HTTP) --ws.port $(ZONE_3_2_PORT_WS) --region 3 --zone 2 > nodelogs/zone-3-2.log 2>&1 &
+	@nohup ./build/bin/geth --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30315 --nodekey bootnode.key --http.port $(ZONE_3_3_PORT_HTTP) --ws.port $(ZONE_3_3_PORT_WS) --region 3 --zone 3 > nodelogs/zone-3-3.log 2>&1 &
+
 stop:
 	pkill -f './build/bin/geth'
