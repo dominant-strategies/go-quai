@@ -288,12 +288,20 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	}
 	if types.QuaiNetworkContext == 2 {
 		sum.Add(sum, header.Difficulty[0])
+		fmt.Println(sum)
 		sum.Add(sum, header.Difficulty[1])
+		fmt.Println(sum)
 		sum.Add(sum, header.Difficulty[2])
+		fmt.Println(sum)
+
+		fmt.Println("")
 
 		expectedSum.Add(expectedSum, parent.Difficulty[0])
+		fmt.Println(expectedSum)
 		expectedSum.Add(expectedSum, parent.Difficulty[1])
+		fmt.Println(expectedSum)
 		expectedSum.Add(expectedSum, ethash.CalcDifficulty(chain, header.Time, parent, 2))
+		fmt.Println(expectedSum)
 	}
 
 	if expectedSum.Cmp(sum) > 0 {
