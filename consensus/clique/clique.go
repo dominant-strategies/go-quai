@@ -697,7 +697,7 @@ func (c *Clique) Seal(chain consensus.ChainHeaderReader, block *types.Block, res
 // that a new block should have:
 // * DIFF_NOTURN(2) if BLOCK_NUMBER % SIGNER_COUNT != SIGNER_INDEX
 // * DIFF_INTURN(1) if BLOCK_NUMBER % SIGNER_COUNT == SIGNER_INDEX
-func (c *Clique) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, parent *types.Header) *big.Int {
+func (c *Clique) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, parent *types.Header, context int) *big.Int {
 	snap, err := c.snapshot(chain, parent.Number[types.QuaiNetworkContext].Uint64(), parent.Hash(), nil)
 	if err != nil {
 		return nil
