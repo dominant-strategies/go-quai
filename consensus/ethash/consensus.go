@@ -299,7 +299,6 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	if expectedSum.Cmp(sum) > 0 {
 		return fmt.Errorf("invalid difficulty: have %v, want %v", sum, expectedSum)
 	}
-	return fmt.Errorf("breaking here")
 
 	// Verify that the gas limit is <= 2^63-1
 	cap := uint64(0x7fffffffffffffff)

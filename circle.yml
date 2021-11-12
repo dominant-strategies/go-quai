@@ -25,7 +25,7 @@ test:
   override:
     # Build Geth and move into a known folder
     - make geth
-    - cp ./build/bin/geth $HOME/geth
+    - cp ./build/bin/quai $HOME/quai
 
     # Run hive and move all generated logs into the public artifacts folder
     - (cd ~/.go_workspace/src/github.com/karalabe/hive && hive --docker-noshell --client=go-ethereum:local --override=$HOME/geth --test=. --sim=.)
