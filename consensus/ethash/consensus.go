@@ -932,7 +932,7 @@ func calculateReward() *big.Int {
 	regionReward.Mul(regionReward, big.NewInt(3))
 	regionReward.Mul(regionReward, regions)
 	regionReward.Mul(regionReward, time)
-	regionReward.Div(reward, regions)
+	regionReward.Div(reward, regionReward)
 
 	zoneReward := new(big.Int)
 	zoneReward.Mul(zoneReward, big.NewInt(3))
