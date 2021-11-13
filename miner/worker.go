@@ -911,6 +911,26 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		Location:    w.chainConfig.Location,
 	}
 
+	// Only set the coinbase if our consensus engine is running (avoid spurious block rewards)
+	if w.isRunning() {
+		if w.coinbase == (common.Address{}) {
+			log.Error("Refusing to mine without etherbase")
+			return
+		}
+		header.Coinbase[types.QuaiNetworkContext] = w.coinbase
+	}
+
+	// If block has not advanced
+	if w.snapshotBlock != nil && parent.Header().Number[types.QuaiNetworkContext] == w.snapshotBlock.Number() {
+		header.ParentHash[types.QuaiNetworkContext] = w.snapshotBlock.ParentHash()
+		header.Number[types.QuaiNetworkContext] = w.snapshotBlock.Number()
+		header.Extra[types.QuaiNetworkContext] = w.snapshotBlock.Extra()
+	} else {
+		header.ParentHash[types.QuaiNetworkContext] = parent.Hash()
+		header.Number[types.QuaiNetworkContext] = big.NewInt(int64(num.Uint64()) + 1)
+		header.Extra[types.QuaiNetworkContext] = w.extra
+	}
+
 	// Gather external blocks and apply transactions
 	externalBlocks := w.engine.GetExternalBlocks(w.chain, header, false)
 	etxs := make(types.Transactions, 0)
@@ -936,26 +956,12 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 
 	// If block has not advanced
 	if w.snapshotBlock != nil && parent.Header().Number[types.QuaiNetworkContext] == w.snapshotBlock.Number() {
-		header.ParentHash[types.QuaiNetworkContext] = w.snapshotBlock.ParentHash()
-		header.Number[types.QuaiNetworkContext] = w.snapshotBlock.Number()
-		header.Extra[types.QuaiNetworkContext] = w.snapshotBlock.Extra()
 		header.GasLimit[types.QuaiNetworkContext] = w.snapshotBlock.GasLimit()
 	} else {
-		header.ParentHash[types.QuaiNetworkContext] = parent.Hash()
-		header.Number[types.QuaiNetworkContext] = big.NewInt(int64(num.Uint64()) + 1)
-		header.Extra[types.QuaiNetworkContext] = w.extra
 		header.GasLimit[types.QuaiNetworkContext] = core.CalcGasLimit(parent.GasLimit(), w.config.GasCeil, gasUsed)
 		header.BaseFee[types.QuaiNetworkContext] = misc.CalcBaseFee(w.chainConfig, parent.Header())
 	}
 
-	// Only set the coinbase if our consensus engine is running (avoid spurious block rewards)
-	if w.isRunning() {
-		if w.coinbase == (common.Address{}) {
-			log.Error("Refusing to mine without etherbase")
-			return
-		}
-		header.Coinbase[types.QuaiNetworkContext] = w.coinbase
-	}
 	if err := w.engine.Prepare(w.chain, header); err != nil {
 		log.Error("Failed to prepare header for mining", "err", err)
 		return
