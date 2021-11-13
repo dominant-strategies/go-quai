@@ -904,17 +904,17 @@ func calculateReward() *big.Int {
 	regions := big.NewInt(3)
 	zones := big.NewInt(3)
 
-	primeReward := new(big.Int)
+	primeReward := big.NewInt(1)
 	primeReward.Mul(primeReward, big.NewInt(3))
 	primeReward.Div(reward, primeReward)
 
-	regionReward := new(big.Int)
+	regionReward := big.NewInt(1)
 	regionReward.Mul(regionReward, big.NewInt(3))
 	regionReward.Mul(regionReward, regions)
 	regionReward.Mul(regionReward, timeFactor)
 	regionReward.Div(reward, regionReward)
 
-	zoneReward := new(big.Int)
+	zoneReward := big.NewInt(1)
 	zoneReward.Mul(zoneReward, big.NewInt(3))
 	zoneReward.Mul(zoneReward, regions)
 	zoneReward.Mul(zoneReward, zones)
