@@ -913,8 +913,8 @@ var (
 // regions = # of regions
 // zones = # of zones
 // For each prime = Reward/3
-// For each region = Reward/(3*regions)
-// For each zone = Reward/(3*regions*zones)
+// For each region = Reward/(3*regions*time-factor)
+// For each zone = Reward/(3*regions*zones*time-factor^2)
 func calculateReward() *big.Int {
 
 	reward := big.NewInt(5e18)
