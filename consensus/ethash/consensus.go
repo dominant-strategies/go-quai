@@ -270,34 +270,11 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	if header.Time <= parent.Time {
 		return errOlderBlockTime
 	}
+
 	// Verify the block's difficulty based on its timestamp and parent's difficulty
-	// expected := ethash.CalcDifficulty(chain, header.Time, parent)
-	expectedSum := big.NewInt(0)
-	sum := big.NewInt(0)
-
-	if types.QuaiNetworkContext == 0 {
-		sum.Add(sum, header.Difficulty[0])
-		expectedSum.Add(expectedSum, ethash.CalcDifficulty(chain, header.Time, parent, 0))
-	}
-	if types.QuaiNetworkContext == 1 {
-		sum.Add(sum, header.Difficulty[0])
-		sum.Add(sum, header.Difficulty[1])
-
-		expectedSum.Add(expectedSum, parent.Difficulty[0])
-		expectedSum.Add(expectedSum, ethash.CalcDifficulty(chain, header.Time, parent, 1))
-	}
-	if types.QuaiNetworkContext == 2 {
-		sum.Add(sum, header.Difficulty[0])
-		sum.Add(sum, header.Difficulty[1])
-		sum.Add(sum, header.Difficulty[2])
-
-		expectedSum.Add(expectedSum, parent.Difficulty[0])
-		expectedSum.Add(expectedSum, parent.Difficulty[1])
-		expectedSum.Add(expectedSum, ethash.CalcDifficulty(chain, header.Time, parent, 2))
-	}
-
-	if expectedSum.Cmp(sum) > 0 {
-		return fmt.Errorf("invalid difficulty: have %v, want %v", sum, expectedSum)
+	expected := ethash.CalcDifficulty(chain, header.Time, parent, types.QuaiNetworkContext)
+	if expected.Cmp(header.Difficulty[types.QuaiNetworkContext]) > 0 {
+		return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty[types.QuaiNetworkContext], expected)
 	}
 
 	// Verify that the gas limit is <= 2^63-1
@@ -675,6 +652,9 @@ func (ethash *Ethash) Prepare(chain consensus.ChainHeaderReader, header *types.H
 		return consensus.ErrUnknownAncestor
 	}
 	header.Difficulty[types.QuaiNetworkContext] = ethash.CalcDifficulty(chain, header.Time, parent, types.QuaiNetworkContext)
+	currentTotal := big.NewInt(0)
+	currentTotal.Add(parent.NetworkDifficulty[types.QuaiNetworkContext], header.Difficulty[types.QuaiNetworkContext])
+	header.NetworkDifficulty[types.QuaiNetworkContext] = currentTotal
 	return nil
 }
 

@@ -275,18 +275,19 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	}
 
 	head := &types.Header{
-		Number:     []*big.Int{new(big.Int).SetUint64(g.Number), new(big.Int).SetUint64(g.Number), new(big.Int).SetUint64(g.Number)},
-		ParentHash: []common.Hash{g.ParentHash, g.ParentHash, g.ParentHash},
-		Extra:      [][]byte{g.ExtraData, g.ExtraData, g.ExtraData},
-		GasLimit:   []uint64{g.GasLimit, g.GasLimit, g.GasLimit},
-		GasUsed:    []uint64{g.GasUsed, g.GasUsed, g.GasUsed},
-		Difficulty: []*big.Int{g.Difficulty, g.Difficulty, g.Difficulty},
-		MixDigest:  g.Mixhash,
-		Coinbase:   []common.Address{g.Coinbase, g.Coinbase, g.Coinbase},
-		Nonce:      types.EncodeNonce(g.Nonce),
-		Time:       g.Timestamp,
-		BaseFee:    []*big.Int{baseFee, baseFee, baseFee},
-		Root:       []common.Hash{root, root, root},
+		Number:            []*big.Int{new(big.Int).SetUint64(g.Number), new(big.Int).SetUint64(g.Number), new(big.Int).SetUint64(g.Number)},
+		ParentHash:        []common.Hash{g.ParentHash, g.ParentHash, g.ParentHash},
+		Extra:             [][]byte{g.ExtraData, g.ExtraData, g.ExtraData},
+		GasLimit:          []uint64{g.GasLimit, g.GasLimit, g.GasLimit},
+		GasUsed:           []uint64{g.GasUsed, g.GasUsed, g.GasUsed},
+		Difficulty:        []*big.Int{g.Difficulty, g.Difficulty, g.Difficulty},
+		NetworkDifficulty: []*big.Int{big.NewInt(0), big.NewInt(0), big.NewInt(0)},
+		MixDigest:         g.Mixhash,
+		Coinbase:          []common.Address{g.Coinbase, g.Coinbase, g.Coinbase},
+		Nonce:             types.EncodeNonce(g.Nonce),
+		Time:              g.Timestamp,
+		BaseFee:           []*big.Int{baseFee, baseFee, baseFee},
+		Root:              []common.Hash{root, root, root},
 	}
 
 	if g.GasLimit == 0 {
