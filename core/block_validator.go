@@ -115,15 +115,12 @@ func CalcGasLimit(parentGasLimit, gasCeil uint64, gasUsed uint64) uint64 {
 		if limit > gasCeil {
 			limit = gasCeil
 		}
-		fmt.Println("Percent > 95")
 		return limit
 	} else {
 		limit = parentGasLimit - delta
 		if limit < params.MinGasLimit {
 			limit = params.MinGasLimit
 		}
-		fmt.Println(parentGasLimit)
-		fmt.Println("Percent < 95")
 		return limit
 	}
 }
