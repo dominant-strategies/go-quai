@@ -889,6 +889,54 @@ var (
 	big32 = big.NewInt(32)
 )
 
+// calculateReward calculates the coinbase rewards depending on the type of the block
+// regions = # of regions
+// zones = # of zones
+// For each prime = Reward/3
+// For each region = Reward/(3*regions*time-factor)
+// For each zone = Reward/(3*regions*zones*time-factor^2)
+func calculateReward() *big.Int {
+
+	reward := big.NewInt(5e18)
+
+	timeFactor := big.NewInt(10)
+
+	regions := big.NewInt(3)
+	zones := big.NewInt(3)
+
+	primeReward := new(big.Int)
+	primeReward.Mul(primeReward, big.NewInt(3))
+	primeReward.Div(reward, primeReward)
+
+	regionReward := new(big.Int)
+	regionReward.Mul(regionReward, big.NewInt(3))
+	regionReward.Mul(regionReward, regions)
+	regionReward.Mul(regionReward, timeFactor)
+	regionReward.Div(reward, regionReward)
+
+	zoneReward := new(big.Int)
+	zoneReward.Mul(zoneReward, big.NewInt(3))
+	zoneReward.Mul(zoneReward, regions)
+	zoneReward.Mul(zoneReward, zones)
+	zoneReward.Mul(zoneReward, timeFactor)
+	zoneReward.Mul(zoneReward, timeFactor)
+	zoneReward.Div(reward, zoneReward)
+
+	finalReward := new(big.Int)
+
+	if types.QuaiNetworkContext == 0 {
+		finalReward = primeReward
+	}
+	if types.QuaiNetworkContext == 1 {
+		finalReward = regionReward
+	}
+	if types.QuaiNetworkContext == 2 {
+		finalReward = zoneReward
+	}
+
+	return finalReward
+}
+
 // AccumulateRewards credits the coinbase of the given block with the mining
 // reward. The total reward consists of the static block reward and rewards for
 // included uncles. The coinbase of each uncle block is also rewarded.
@@ -898,13 +946,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		return
 	}
 	// Select the correct block reward based on chain progression
-	blockReward := FrontierBlockReward
-	if config.IsByzantium(header.Number[types.QuaiNetworkContext]) {
-		blockReward = ByzantiumBlockReward
-	}
-	if config.IsConstantinople(header.Number[types.QuaiNetworkContext]) {
-		blockReward = ConstantinopleBlockReward
-	}
+	blockReward := calculateReward()
 	// Accumulate the rewards for the miner and any included uncles
 	reward := new(big.Int).Set(blockReward)
 	r := new(big.Int)
