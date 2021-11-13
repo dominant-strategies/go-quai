@@ -911,6 +911,29 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		Location:    w.chainConfig.Location,
 	}
 
+	// Gather external blocks and apply transactions
+	externalBlocks := w.engine.GetExternalBlocks(w.chain, header, false)
+	etxs := make(types.Transactions, 0)
+	externalGasUsed := uint64(0)
+	for _, externalBlock := range externalBlocks {
+		externalBlock.Receipts().DeriveFields(w.chainConfig, externalBlock.Hash(), externalBlock.Header().Number[externalBlock.Context().Int64()].Uint64(), externalBlock.Transactions())
+		externalGasUsed += uint64(externalBlock.Header().GasUsed[externalBlock.Context().Uint64()])
+		for _, tx := range externalBlock.Transactions() {
+			snap := w.current.state.Snapshot()
+			receipt, err := core.ApplyExternalTransaction(w.chainConfig, w.chain, &w.coinbase, w.current.gasPool, w.current.state, w.current.header, externalBlock, tx, &w.current.header.GasUsed[types.QuaiNetworkContext], *w.chain.GetVMConfig())
+			if err != nil {
+				w.current.state.RevertToSnapshot(snap)
+				log.Debug("Transaction failed, account skipped", "hash", tx.Hash(), "err", err)
+			} else {
+				w.current.txs = append(w.current.txs, tx)
+				w.current.receipts = append(w.current.receipts, receipt)
+				etxs = append(etxs, tx)
+			}
+		}
+	}
+
+	gasUsed := (parent.GasUsed() + externalGasUsed) / uint64(len(externalBlocks)+1)
+
 	// If block has not advanced
 	if w.snapshotBlock != nil && parent.Header().Number[types.QuaiNetworkContext] == w.snapshotBlock.Number() {
 		header.ParentHash[types.QuaiNetworkContext] = w.snapshotBlock.ParentHash()
@@ -921,16 +944,8 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		header.ParentHash[types.QuaiNetworkContext] = parent.Hash()
 		header.Number[types.QuaiNetworkContext] = big.NewInt(int64(num.Uint64()) + 1)
 		header.Extra[types.QuaiNetworkContext] = w.extra
-		header.GasLimit[types.QuaiNetworkContext] = core.CalcGasLimit(parent.GasLimit(), w.config.GasCeil)
+		header.GasLimit[types.QuaiNetworkContext] = core.CalcGasLimit(parent.GasLimit(), w.config.GasCeil, gasUsed)
 		header.BaseFee[types.QuaiNetworkContext] = misc.CalcBaseFee(w.chainConfig, parent.Header())
-	}
-	// Set baseFee and GasLimit if we are on an EIP-1559 chain
-	if w.chainConfig.IsLondon(header.Number[types.QuaiNetworkContext]) {
-		header.BaseFee[types.QuaiNetworkContext] = misc.CalcBaseFee(w.chainConfig, parent.Header())
-		if !w.chainConfig.IsLondon(parent.Number()) {
-			parentGasLimit := parent.GasLimit() * params.ElasticityMultiplier
-			header.GasLimit[types.QuaiNetworkContext] = core.CalcGasLimit(parentGasLimit, w.config.GasCeil)
-		}
 	}
 
 	// Only set the coinbase if our consensus engine is running (avoid spurious block rewards)
@@ -990,25 +1005,6 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	if err != nil {
 		log.Error("Failed to fetch pending transactions", "err", err)
 		return
-	}
-
-	// Gather external blocks and apply transactions
-	externalBlocks := w.engine.GetExternalBlocks(w.chain, header, false)
-	etxs := make(types.Transactions, 0)
-	for _, externalBlock := range externalBlocks {
-		externalBlock.Receipts().DeriveFields(w.chainConfig, externalBlock.Hash(), externalBlock.Header().Number[externalBlock.Context().Int64()].Uint64(), externalBlock.Transactions())
-		for _, tx := range externalBlock.Transactions() {
-			snap := w.current.state.Snapshot()
-			receipt, err := core.ApplyExternalTransaction(w.chainConfig, w.chain, &w.coinbase, w.current.gasPool, w.current.state, w.current.header, externalBlock, tx, &w.current.header.GasUsed[types.QuaiNetworkContext], *w.chain.GetVMConfig())
-			if err != nil {
-				w.current.state.RevertToSnapshot(snap)
-				log.Debug("Transaction failed, account skipped", "hash", tx.Hash(), "err", err)
-			} else {
-				w.current.txs = append(w.current.txs, tx)
-				w.current.receipts = append(w.current.receipts, receipt)
-				etxs = append(etxs, tx)
-			}
-		}
 	}
 
 	// Short circuit if there is no available pending transactions.
