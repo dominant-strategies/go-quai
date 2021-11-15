@@ -33,8 +33,9 @@ import (
 	"runtime"
 	"sort"
 	"strings"
-	"time"
 
+	"github.com/mattn/go-colorable"
+	"github.com/mattn/go-isatty"
 	"github.com/spruce-solutions/go-quai/accounts"
 	"github.com/spruce-solutions/go-quai/accounts/keystore"
 	"github.com/spruce-solutions/go-quai/cmd/utils"
@@ -47,15 +48,12 @@ import (
 	"github.com/spruce-solutions/go-quai/log"
 	"github.com/spruce-solutions/go-quai/node"
 	"github.com/spruce-solutions/go-quai/params"
-	"github.com/spruce-solutions/go-quai/rlp"
 	"github.com/spruce-solutions/go-quai/rpc"
 	"github.com/spruce-solutions/go-quai/signer/core"
 	"github.com/spruce-solutions/go-quai/signer/core/apitypes"
 	"github.com/spruce-solutions/go-quai/signer/fourbyte"
 	"github.com/spruce-solutions/go-quai/signer/rules"
 	"github.com/spruce-solutions/go-quai/signer/storage"
-	"github.com/mattn/go-colorable"
-	"github.com/mattn/go-isatty"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -99,7 +97,7 @@ var (
 	}
 	chainIdFlag = cli.Int64Flag{
 		Name:  "chainid",
-		Value: params.MainnetChainConfig.ChainID.Int64(),
+		Value: params.MainnetPrimeChainConfig.ChainID.Int64(),
 		Usage: "Chain id to use for signing (1=mainnet, 3=Ropsten, 4=Rinkeby, 5=Goerli)",
 	}
 	rpcPortFlag = cli.IntFlag{
@@ -695,10 +693,6 @@ func signer(c *cli.Context) error {
 		}()
 	}
 
-	if c.GlobalBool(testFlag.Name) {
-		log.Info("Performing UI test")
-		go testExternalUI(apiImpl)
-	}
 	ui.OnSignerStartup(core.StartupInfo{
 		Info: map[string]interface{}{
 			"intapi_version": core.InternalAPIVersion,
@@ -815,153 +809,6 @@ func confirm(text string) bool {
 		return true
 	}
 	return false
-}
-
-func testExternalUI(api *core.SignerAPI) {
-
-	ctx := context.WithValue(context.Background(), "remote", "clef binary")
-	ctx = context.WithValue(ctx, "scheme", "in-proc")
-	ctx = context.WithValue(ctx, "local", "main")
-	errs := make([]string, 0)
-
-	a := common.HexToAddress("0xdeadbeef000000000000000000000000deadbeef")
-	addErr := func(errStr string) {
-		log.Info("Test error", "err", errStr)
-		errs = append(errs, errStr)
-	}
-
-	queryUser := func(q string) string {
-		resp, err := api.UI.OnInputRequired(core.UserInputRequest{
-			Title:  "Testing",
-			Prompt: q,
-		})
-		if err != nil {
-			addErr(err.Error())
-		}
-		return resp.Text
-	}
-	expectResponse := func(testcase, question, expect string) {
-		if got := queryUser(question); got != expect {
-			addErr(fmt.Sprintf("%s: got %v, expected %v", testcase, got, expect))
-		}
-	}
-	expectApprove := func(testcase string, err error) {
-		if err == nil || err == accounts.ErrUnknownAccount {
-			return
-		}
-		addErr(fmt.Sprintf("%v: expected no error, got %v", testcase, err.Error()))
-	}
-	expectDeny := func(testcase string, err error) {
-		if err == nil || err != core.ErrRequestDenied {
-			addErr(fmt.Sprintf("%v: expected ErrRequestDenied, got %v", testcase, err))
-		}
-	}
-	var delay = 1 * time.Second
-	// Test display of info and error
-	{
-		api.UI.ShowInfo("If you see this message, enter 'yes' to next question")
-		time.Sleep(delay)
-		expectResponse("showinfo", "Did you see the message? [yes/no]", "yes")
-		api.UI.ShowError("If you see this message, enter 'yes' to the next question")
-		time.Sleep(delay)
-		expectResponse("showerror", "Did you see the message? [yes/no]", "yes")
-	}
-	{ // Sign data test - clique header
-		api.UI.ShowInfo("Please approve the next request for signing a clique header")
-		time.Sleep(delay)
-		cliqueHeader := types.Header{
-			ParentHash:  common.HexToHash("0000H45H"),
-			UncleHash:   common.HexToHash("0000H45H"),
-			Coinbase:    common.HexToAddress("0000H45H"),
-			Root:        common.HexToHash("0000H00H"),
-			TxHash:      common.HexToHash("0000H45H"),
-			ReceiptHash: common.HexToHash("0000H45H"),
-			Difficulty:  big.NewInt(1337),
-			Number:      big.NewInt(1337),
-			GasLimit:    1338,
-			GasUsed:     1338,
-			Time:        1338,
-			Extra:       []byte("Extra data Extra data Extra data  Extra data  Extra data  Extra data  Extra data Extra data"),
-			MixDigest:   common.HexToHash("0x0000H45H"),
-		}
-		cliqueRlp, err := rlp.EncodeToBytes(cliqueHeader)
-		if err != nil {
-			utils.Fatalf("Should not error: %v", err)
-		}
-		addr, _ := common.NewMixedcaseAddressFromString("0x0011223344556677889900112233445566778899")
-		_, err = api.SignData(ctx, accounts.MimetypeClique, *addr, hexutil.Encode(cliqueRlp))
-		expectApprove("signdata - clique header", err)
-	}
-	{ // Sign data test - typed data
-		api.UI.ShowInfo("Please approve the next request for signing EIP-712 typed data")
-		time.Sleep(delay)
-		addr, _ := common.NewMixedcaseAddressFromString("0x0011223344556677889900112233445566778899")
-		data := `{"types":{"EIP712Domain":[{"name":"name","type":"string"},{"name":"version","type":"string"},{"name":"chainId","type":"uint256"},{"name":"verifyingContract","type":"address"}],"Person":[{"name":"name","type":"string"},{"name":"test","type":"uint8"},{"name":"wallet","type":"address"}],"Mail":[{"name":"from","type":"Person"},{"name":"to","type":"Person"},{"name":"contents","type":"string"}]},"primaryType":"Mail","domain":{"name":"Ether Mail","version":"1","chainId":"1","verifyingContract":"0xCCCcccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC"},"message":{"from":{"name":"Cow","test":"3","wallet":"0xcD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826"},"to":{"name":"Bob","wallet":"0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB","test":"2"},"contents":"Hello, Bob!"}}`
-		//_, err := api.SignData(ctx, accounts.MimetypeTypedData, *addr, hexutil.Encode([]byte(data)))
-		var typedData core.TypedData
-		json.Unmarshal([]byte(data), &typedData)
-		_, err := api.SignTypedData(ctx, *addr, typedData)
-		expectApprove("sign 712 typed data", err)
-	}
-	{ // Sign data test - plain text
-		api.UI.ShowInfo("Please approve the next request for signing text")
-		time.Sleep(delay)
-		addr, _ := common.NewMixedcaseAddressFromString("0x0011223344556677889900112233445566778899")
-		_, err := api.SignData(ctx, accounts.MimetypeTextPlain, *addr, hexutil.Encode([]byte("hello world")))
-		expectApprove("signdata - text", err)
-	}
-	{ // Sign data test - plain text reject
-		api.UI.ShowInfo("Please deny the next request for signing text")
-		time.Sleep(delay)
-		addr, _ := common.NewMixedcaseAddressFromString("0x0011223344556677889900112233445566778899")
-		_, err := api.SignData(ctx, accounts.MimetypeTextPlain, *addr, hexutil.Encode([]byte("hello world")))
-		expectDeny("signdata - text", err)
-	}
-	{ // Sign transaction
-
-		api.UI.ShowInfo("Please reject next transaction")
-		time.Sleep(delay)
-		data := hexutil.Bytes([]byte{})
-		to := common.NewMixedcaseAddress(a)
-		tx := apitypes.SendTxArgs{
-			Data:     &data,
-			Nonce:    0x1,
-			Value:    hexutil.Big(*big.NewInt(6)),
-			From:     common.NewMixedcaseAddress(a),
-			To:       &to,
-			GasPrice: (*hexutil.Big)(big.NewInt(5)),
-			Gas:      1000,
-			Input:    nil,
-		}
-		_, err := api.SignTransaction(ctx, tx, nil)
-		expectDeny("signtransaction [1]", err)
-		expectResponse("signtransaction [2]", "Did you see any warnings for the last transaction? (yes/no)", "no")
-	}
-	{ // Listing
-		api.UI.ShowInfo("Please reject listing-request")
-		time.Sleep(delay)
-		_, err := api.List(ctx)
-		expectDeny("list", err)
-	}
-	{ // Import
-		api.UI.ShowInfo("Please reject new account-request")
-		time.Sleep(delay)
-		_, err := api.New(ctx)
-		expectDeny("newaccount", err)
-	}
-	{ // Metadata
-		api.UI.ShowInfo("Please check if you see the Origin in next listing (approve or deny)")
-		time.Sleep(delay)
-		api.List(context.WithValue(ctx, "Origin", "origin.com"))
-		expectResponse("metadata - origin", "Did you see origin (origin.com)? [yes/no] ", "yes")
-	}
-
-	for _, e := range errs {
-		log.Error(e)
-	}
-	result := fmt.Sprintf("Tests completed. %d errors:\n%s\n", len(errs), strings.Join(errs, "\n"))
-	api.UI.ShowInfo(result)
-
 }
 
 type encryptedSeedStorage struct {

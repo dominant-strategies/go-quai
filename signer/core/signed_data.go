@@ -240,7 +240,7 @@ func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType 
 		// The incoming clique header is already truncated, sent to us with a extradata already shortened
 		if len(header.Extra) < 65 {
 			// Need to add it back, to get a suitable length for hashing
-			newExtra := make([]byte, len(header.Extra)+65)
+			newExtra := make([][]byte, len(header.Extra)+65)
 			copy(newExtra, header.Extra)
 			header.Extra = newExtra
 		}
