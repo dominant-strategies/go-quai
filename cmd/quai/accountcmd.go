@@ -269,7 +269,7 @@ func accountCreate(ctx *cli.Context) error {
 	}
 	utils.SetNodeConfig(ctx, &cfg.Node)
 	keydir, err := cfg.Node.KeyDirConfig()
-	id := cfg.Eth.Genesis.Config.ChainIDByte()
+	idRange := cfg.Eth.Genesis.Config.ChainIDRange()
 
 	if err != nil {
 		utils.Fatalf("Failed to read configuration: %v", err)
@@ -283,7 +283,7 @@ func accountCreate(ctx *cli.Context) error {
 
 	password := utils.GetPassPhraseWithList("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
 
-	account, err := keystore.StoreKey(keydir, password, id, scryptN, scryptP)
+	account, err := keystore.StoreKey(keydir, password, idRange, scryptN, scryptP)
 
 	if err != nil {
 		utils.Fatalf("Failed to create account: %v", err)

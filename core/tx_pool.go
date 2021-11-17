@@ -644,8 +644,9 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 
 	// Validate Address Operability
-	byteID := pool.chainconfig.ChainIDByte()
-	if from.Bytes()[0] != byteID {
+	idRange := pool.chainconfig.ChainIDRange()
+
+	if int(from.Bytes()[0]) < idRange[0] || int(from.Bytes()[0]) > idRange[1] {
 		return ErrSenderInoperable
 	}
 

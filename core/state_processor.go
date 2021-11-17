@@ -132,9 +132,9 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 
 func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (*types.Receipt, error) {
 	// Validate Address Operability
-	byteID := config.ChainIDByte()
+	idRange := config.ChainIDRange()
 
-	if msg.From().Bytes()[0] != byteID {
+	if int(msg.From().Bytes()[0]) < idRange[0] || int(msg.From().Bytes()[0]) > idRange[1] {
 		return nil, ErrSenderInoperable
 	}
 
@@ -237,9 +237,9 @@ func ApplyExternalTransaction(config *params.ChainConfig, bc ChainContext, autho
 		return nil, err
 	}
 
-	// Validate address origination
-	byteID := config.ChainIDByte()
-	if msg.From().Bytes()[0] == byteID {
+	// Validate address origination did not occur in our current chain
+	idRange := config.ChainIDRange()
+	if int(msg.From().Bytes()[0]) >= idRange[0] && int(msg.From().Bytes()[0]) <= idRange[1] {
 		return nil, ErrSenderInoperable
 	}
 
