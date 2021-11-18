@@ -84,7 +84,7 @@ func main() {
 
 		// Inject the signer key and start sealing with it
 		store := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
-		if _, err := store.NewAccount("", ethBackend.APIBackend.ChainConfig().ChainIDByte()); err != nil {
+		if _, err := store.NewAccount("", ethBackend.APIBackend.ChainConfig().ChainIDRange()); err != nil {
 			panic(err)
 		}
 	}

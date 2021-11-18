@@ -616,9 +616,11 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 	}
 	var err error
 	msg.from, err = Sender(s, tx)
-	byteID := params.LookupChainByte(s.ChainID())
+	idRange := params.LookupChainIDRange(s.ChainID())
 
-	if msg.from[0] != byteID && tx.To()[0] == byteID {
+	sendingFrom := int(msg.from[0]) < idRange[0] || int(msg.from[0]) > idRange[1]
+	sendingTo := int(tx.To()[0]) >= idRange[0] && int(tx.To()[0]) <= idRange[1]
+	if sendingFrom && sendingTo {
 		msg.fromExternal = true
 	}
 

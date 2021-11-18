@@ -29,10 +29,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/spruce-solutions/go-quai/accounts"
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/crypto"
-	"github.com/google/uuid"
 )
 
 const (
@@ -172,12 +172,16 @@ func newKey(rand io.Reader) (*Key, error) {
 	return newKeyFromECDSA(privateKeyECDSA), nil
 }
 
-func storeNewKey(ks keyStore, rand io.Reader, auth string, id byte) (*Key, accounts.Account, error) {
+func storeNewKey(ks keyStore, rand io.Reader, auth string, id []int) (*Key, accounts.Account, error) {
 	key, err := newKey(rand)
 	if err != nil {
 		return nil, accounts.Account{}, err
 	}
-	for key.Address.Bytes()[0] != id {
+
+	for int(key.Address.Bytes()[0]) < id[0] || int(key.Address.Bytes()[0]) > id[1] {
+		fmt.Println(int(key.Address.Bytes()[0]))
+		fmt.Println(id[0], id[1])
+
 		key, err = newKey(rand)
 		if err != nil {
 			return nil, accounts.Account{}, err

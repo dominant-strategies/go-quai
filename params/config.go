@@ -791,33 +791,33 @@ func (c *ChainConfig) Rules(num *big.Int) Rules {
 
 // bytePrefixList expands the space with proper size for chain IDs to be indexed
 var (
-	bytePrefixList = make([]byte, 20000)
+	bytePrefixList = make([][]int, 20000)
 )
 
 func init() {
-	bytePrefixList[9000] = byte(0)
-	bytePrefixList[9100] = byte(10)
-	bytePrefixList[9101] = byte(26)
-	bytePrefixList[9102] = byte(42)
-	bytePrefixList[9103] = byte(58)
-	bytePrefixList[9200] = byte(11)
-	bytePrefixList[9201] = byte(27)
-	bytePrefixList[9202] = byte(43)
-	bytePrefixList[9203] = byte(59)
-	bytePrefixList[9300] = byte(12)
-	bytePrefixList[9301] = byte(28)
-	bytePrefixList[9302] = byte(44)
-	bytePrefixList[9303] = byte(60)
+	bytePrefixList[9000] = []int{0, 9}
+	bytePrefixList[9100] = []int{10, 19}
+	bytePrefixList[9101] = []int{20, 29}
+	bytePrefixList[9102] = []int{30, 39}
+	bytePrefixList[9103] = []int{40, 49}
+	bytePrefixList[9200] = []int{50, 59}
+	bytePrefixList[9201] = []int{60, 69}
+	bytePrefixList[9202] = []int{70, 79}
+	bytePrefixList[9203] = []int{80, 89}
+	bytePrefixList[9300] = []int{90, 99}
+	bytePrefixList[9301] = []int{100, 109}
+	bytePrefixList[9302] = []int{110, 119}
+	bytePrefixList[9303] = []int{120, 129}
 }
 
-// ChainIDByte returns the byte lookup based off a configs chainID
-func (c *ChainConfig) ChainIDByte() byte {
+// ChainIDRange returns the byte lookup based off a configs chainID
+func (c *ChainConfig) ChainIDRange() []int {
 	lookup := bytePrefixList[c.ChainID.Int64()]
 	return lookup
 }
 
-// ChainIDByte returns the byte lookup based off a configs chainID
-func LookupChainByte(index *big.Int) byte {
+// LookupChainIDRange returns the byte lookup based off a configs chainID
+func LookupChainIDRange(index *big.Int) []int {
 	lookup := bytePrefixList[index.Int64()]
 	return lookup
 }

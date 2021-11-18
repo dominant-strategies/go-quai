@@ -349,7 +349,7 @@ func (s *PrivateAccountAPI) NewAccount(password string) (common.Address, error) 
 	if err != nil {
 		return common.Address{}, err
 	}
-	id := s.b.ChainConfig().ChainIDByte()
+	id := s.b.ChainConfig().ChainIDRange()
 	acc, err := ks.NewAccount(password, id)
 	if err == nil {
 		log.Info("Your new key was generated", "address", acc.Address)
