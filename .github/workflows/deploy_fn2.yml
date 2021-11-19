@@ -1,5 +1,8 @@
 name: deploy_fn2
 
+on: 
+  ["workflow_dispatch"]
+  
 jobs:
   build:
 
