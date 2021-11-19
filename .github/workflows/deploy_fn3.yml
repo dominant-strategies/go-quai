@@ -1,4 +1,4 @@
-name: deploy_fn1
+name: deploy_fn3
 
 on: 
   ["workflow_dispatch"]
