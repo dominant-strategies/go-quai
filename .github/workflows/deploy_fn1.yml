@@ -1,0 +1,34 @@
+name: deploy_fn1
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v1
+    
+    - name: Copy repository contents
+      uses: garygrossgarten/github-action-scp@release
+      with:
+        local: "."
+        remote: go-quai
+        host: ${{ secrets.FN1_HOST }}
+        username: ${{ secrets.FN1_USER }}
+        password: ${{ secrets.FN1_PASSWORD }}
+
+    - name: Move files
+      uses: fifsky/ssh-action@master
+      with:
+        command: rm -rf /$(USER)/go-quai && mv go-quai /$(USER)
+        host: ${{ secrets.FN1_HOST }}
+        user: ${{ secrets.FN1_USER}}
+        key: ${{ secrets.FN1_KEY}}
+
+    - name: Install packages, build, and start server
+      uses: fifsky/ssh-action@master
+      with:
+        command: make stop && export HOST_IP=$(hostname -I | awk '{print $1}') && make run-bootnode
+        host: ${{ secrets.FN1_HOST }}
+        user: ${{ secrets.FN1_USER}}
+        key: ${{ secrets.FN1_KEY}}
