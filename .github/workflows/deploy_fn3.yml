@@ -10,28 +10,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v1
-    
-    - name: Copy repository contents
-      uses: garygrossgarten/github-action-scp@release
-      with:
-        local: "."
-        remote: go-quai
-        host: ${{ secrets.FN3_HOST }}
-        username: ${{ secrets.FN3_USER }}
-        password: ${{ secrets.FN3_PASSWORD }}
-
-    - name: Move files
-      uses: fifsky/ssh-action@master
-      with:
-        command: rm -rf /$(USER)/go-quai && mv go-quai /$(USER)
-        host: ${{ secrets.FN3_HOST }}
-        user: ${{ secrets.FN3_USER}}
-        key: ${{ secrets.FN3_KEY}}
 
     - name: Install packages, build, and start server
       uses: fifsky/ssh-action@master
       with:
-        command: make stop && export HOST_IP=$(hostname -I | awk '{print $1}') && make run-bootnode
+        command: cd /$(USER)/go-quai && git pull && make go-quai && make stop && export HOST_IP=$(hostname -I | awk '{print $1}') && make run-bootnode
         host: ${{ secrets.FN3_HOST }}
         user: ${{ secrets.FN3_USER}}
         key: ${{ secrets.FN3_KEY}}
