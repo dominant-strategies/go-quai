@@ -260,5 +260,5 @@ endif
 	@nohup ./build/bin/quai --ws --http --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --http.corsdomain "*" --port 30315 --nodekey bootnode.key --http.port $(ZONE_3_3_PORT_HTTP) --ws.port $(ZONE_3_3_PORT_WS) --region 3 --zone 3 --nat extip:$(HOST_IP) > nodelogs/zone-3-3.log 2>&1 &
 
 stop:
-	@if pgrep './build/bin/quai'; then pkill -f './build/bin/quai'; fi
+	@if pgrep quai; then pkill -f ./build/bin/quai; fi
 	@echo "Stopping all instances of go-quai"
