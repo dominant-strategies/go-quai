@@ -179,9 +179,6 @@ func storeNewKey(ks keyStore, rand io.Reader, auth string, id []int) (*Key, acco
 	}
 
 	for int(key.Address.Bytes()[0]) < id[0] || int(key.Address.Bytes()[0]) > id[1] {
-		fmt.Println(int(key.Address.Bytes()[0]))
-		fmt.Println(id[0], id[1])
-
 		key, err = newKey(rand)
 		if err != nil {
 			return nil, accounts.Account{}, err
