@@ -202,19 +202,19 @@ endif
 	@nohup ./build/bin/quai --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30314 --nodekey bootnode.key --http.port $(ZONE_3_2_PORT_HTTP) --ws.port $(ZONE_3_2_PORT_WS) --region 3 --zone 2 > nodelogs/zone-3-2.log 2>&1 &
 	@nohup ./build/bin/quai --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30315 --nodekey bootnode.key --http.port $(ZONE_3_3_PORT_HTTP) --ws.port $(ZONE_3_3_PORT_WS) --region 3 --zone 3 > nodelogs/zone-3-3.log 2>&1 &
 
-PRIME_COINBASE=0x990eAa88FD08902a4f396beA0285385887Bed5a6
-REGION_1_COINBASE=0x1a6ad97c8f06c7ae79fea47e43a8c048da5b1f7d
-REGION_2_COINBASE=
-REGION_3_COINBASE=
+PRIME_COINBASE=0x0767d31b0d7671c3e97c6abed055a26fb59b4149
+REGION_1_COINBASE=0x11a03db52d12201e614466cb98ec5d49a1205bda
+REGION_2_COINBASE=0x3bcec1847c55246cf9ea32a5dfe652f147ac091c
+REGION_3_COINBASE=0x5e6b0261c32b25f187786612d27a39f6d0c31771
 ZONE_1_1_COINBASE=0x1a6ad97c8f06c7ae79fea47e43a8c048da5b1f7d
-ZONE_1_2_COINBASE=
-ZONE_1_3_COINBASE=
-ZONE_2_1_COINBASE=
-ZONE_2_2_COINBASE=
-ZONE_2_3_COINBASE=
-ZONE_3_1_COINBASE=
-ZONE_3_2_COINBASE=
-ZONE_3_3_COINBASE=
+ZONE_1_2_COINBASE=0x186da447ec1dd29cdec8cca5653ccc4fd8f9e5e3
+ZONE_1_3_COINBASE=0x2ab56840530b1c395ecf91e5923446fa696c7933
+ZONE_2_1_COINBASE=0x454f47e9da39a4d2cff17d7ca50757576a298fb2
+ZONE_2_2_COINBASE=0x4c190ab6136e94b3b510172784a4fed22f566622
+ZONE_2_3_COINBASE=0x5446d13d4907630425928fceb67ca35a6bf1bb0e
+ZONE_3_1_COINBASE=0x677c5623aabeb5d6d978cc2ec11ac5297a8afcbd
+ZONE_3_2_COINBASE=0x7717ddddd08eacc0bb981c47348d1ec3a99566f8
+ZONE_3_3_COINBASE=0x8169c0a78e20ee6e5c53cc18ee2f4eb3f762ee05
 
 run-full-mining:
 ifeq (,$(wildcard ./bootnode.key))
@@ -225,17 +225,17 @@ ifeq (,$(wildcard nodelogs))
 endif
 	@nohup ./build/bin/quai --ws --mine --miner.threads=4 --miner.etherbase $(PRIME_COINBASE) --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30303 --nodekey bootnode.key --http.port $(PRIME_PORT_HTTP) --ws.port $(PRIME_PORT_WS) > nodelogs/prime.log 2>&1 &
 	@nohup ./build/bin/quai --ws --mine --miner.threads=4 --miner.etherbase $(REGION_1_COINBASE) --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30304 --nodekey bootnode.key --http.port $(REGION_1_PORT_HTTP) --ws.port $(REGION_1_PORT_WS) --region 1 > nodelogs/region-1.log 2>&1 &
-	@nohup ./build/bin/quai --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30305 --nodekey bootnode.key --http.port $(REGION_2_PORT_HTTP) --ws.port $(REGION_2_PORT_WS) --region 2 > nodelogs/region-2.log 2>&1 &
-	@nohup ./build/bin/quai --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30306 --nodekey bootnode.key --http.port $(REGION_3_PORT_HTTP) --ws.port $(REGION_3_PORT_WS) --region 3 > nodelogs/region-3.log 2>&1 &
+	@nohup ./build/bin/quai --ws --mine --miner.threads=4 --miner.etherbase $(REGION_2_COINBASE) --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30305 --nodekey bootnode.key --http.port $(REGION_2_PORT_HTTP) --ws.port $(REGION_2_PORT_WS) --region 2 > nodelogs/region-2.log 2>&1 &
+	@nohup ./build/bin/quai --ws --mine --miner.threads=4 --miner.etherbase $(REGION_3_COINBASE) --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30306 --nodekey bootnode.key --http.port $(REGION_3_PORT_HTTP) --ws.port $(REGION_3_PORT_WS) --region 3 > nodelogs/region-3.log 2>&1 &
 	@nohup ./build/bin/quai --ws --mine --miner.threads=4 --miner.etherbase $(ZONE_1_1_COINBASE) --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30307 --nodekey bootnode.key --http.port $(ZONE_1_1_PORT_HTTP) --ws.port $(ZONE_1_1_PORT_WS) --region 1 --zone 1 > nodelogs/zone-1-1.log 2>&1 &
-	@nohup ./build/bin/quai --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30308 --nodekey bootnode.key --http.port $(ZONE_1_2_PORT_HTTP) --ws.port $(ZONE_1_2_PORT_WS) --region 1 --zone 2 > nodelogs/zone-1-2.log 2>&1 &
-	@nohup ./build/bin/quai --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30309 --nodekey bootnode.key --http.port $(ZONE_1_3_PORT_HTTP) --ws.port $(ZONE_1_3_PORT_WS) --region 1 --zone 3 > nodelogs/zone-1-3.log 2>&1 &
-	@nohup ./build/bin/quai --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30310 --nodekey bootnode.key --http.port $(ZONE_2_1_PORT_HTTP) --ws.port $(ZONE_2_1_PORT_WS) --region 2 --zone 1 > nodelogs/zone-2-1.log 2>&1 &
-	@nohup ./build/bin/quai --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30311 --nodekey bootnode.key --http.port $(ZONE_2_2_PORT_HTTP) --ws.port $(ZONE_2_2_PORT_WS) --region 2 --zone 2 > nodelogs/zone-2-2.log 2>&1 &
-	@nohup ./build/bin/quai --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30312 --nodekey bootnode.key --http.port $(ZONE_2_3_PORT_HTTP) --ws.port $(ZONE_2_3_PORT_WS) --region 2 --zone 3 > nodelogs/zone-2-3.log 2>&1 &
-	@nohup ./build/bin/quai --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30313 --nodekey bootnode.key --http.port $(ZONE_3_1_PORT_HTTP) --ws.port $(ZONE_3_1_PORT_WS) --region 3 --zone 1 > nodelogs/zone-3-1.log 2>&1 &
-	@nohup ./build/bin/quai --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30314 --nodekey bootnode.key --http.port $(ZONE_3_2_PORT_HTTP) --ws.port $(ZONE_3_2_PORT_WS) --region 3 --zone 2 > nodelogs/zone-3-2.log 2>&1 &
-	@nohup ./build/bin/quai --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30315 --nodekey bootnode.key --http.port $(ZONE_3_3_PORT_HTTP) --ws.port $(ZONE_3_3_PORT_WS) --region 3 --zone 3 > nodelogs/zone-3-3.log 2>&1 &
+	@nohup ./build/bin/quai --ws --mine --miner.threads=4 --miner.etherbase $(ZONE_1_2_COINBASE) --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30308 --nodekey bootnode.key --http.port $(ZONE_1_2_PORT_HTTP) --ws.port $(ZONE_1_2_PORT_WS) --region 1 --zone 2 > nodelogs/zone-1-2.log 2>&1 &
+	@nohup ./build/bin/quai --ws --mine --miner.threads=4 --miner.etherbase $(ZONE_1_3_COINBASE) --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30309 --nodekey bootnode.key --http.port $(ZONE_1_3_PORT_HTTP) --ws.port $(ZONE_1_3_PORT_WS) --region 1 --zone 3 > nodelogs/zone-1-3.log 2>&1 &
+	@nohup ./build/bin/quai --ws --mine --miner.threads=4 --miner.etherbase $(ZONE_2_1_COINBASE) --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30310 --nodekey bootnode.key --http.port $(ZONE_2_1_PORT_HTTP) --ws.port $(ZONE_2_1_PORT_WS) --region 2 --zone 1 > nodelogs/zone-2-1.log 2>&1 &
+	@nohup ./build/bin/quai --ws --mine --miner.threads=4 --miner.etherbase $(ZONE_2_2_COINBASE) --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30311 --nodekey bootnode.key --http.port $(ZONE_2_2_PORT_HTTP) --ws.port $(ZONE_2_2_PORT_WS) --region 2 --zone 2 > nodelogs/zone-2-2.log 2>&1 &
+	@nohup ./build/bin/quai --ws --mine --miner.threads=4 --miner.etherbase $(ZONE_2_3_COINBASE) --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30312 --nodekey bootnode.key --http.port $(ZONE_2_3_PORT_HTTP) --ws.port $(ZONE_2_3_PORT_WS) --region 2 --zone 3 > nodelogs/zone-2-3.log 2>&1 &
+	@nohup ./build/bin/quai --ws --mine --miner.threads=4 --miner.etherbase $(ZONE_3_1_COINBASE) --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30313 --nodekey bootnode.key --http.port $(ZONE_3_1_PORT_HTTP) --ws.port $(ZONE_3_1_PORT_WS) --region 3 --zone 1 > nodelogs/zone-3-1.log 2>&1 &
+	@nohup ./build/bin/quai --ws --mine --miner.threads=4 --miner.etherbase $(ZONE_3_2_COINBASE) --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30314 --nodekey bootnode.key --http.port $(ZONE_3_2_PORT_HTTP) --ws.port $(ZONE_3_2_PORT_WS) --region 3 --zone 2 > nodelogs/zone-3-2.log 2>&1 &
+	@nohup ./build/bin/quai --ws --mine --miner.threads=4 --miner.etherbase $(ZONE_3_3_COINBASE) --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30315 --nodekey bootnode.key --http.port $(ZONE_3_3_PORT_HTTP) --ws.port $(ZONE_3_3_PORT_WS) --region 3 --zone 3 > nodelogs/zone-3-3.log 2>&1 &
 
 
 run-bootnode:
