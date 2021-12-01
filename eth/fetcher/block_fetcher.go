@@ -426,7 +426,7 @@ func (f *BlockFetcher) loop() {
 			if f.light {
 				continue
 			}
-			f.enqueue(op.origin, nil, op.block)
+			f.enqueue(op.origin, nil, op.block, op.extBlocks)
 
 		case hash := <-f.done:
 			// A pending import finished, remove all traces of the notification
@@ -587,12 +587,12 @@ func (f *BlockFetcher) loop() {
 			}
 			// Schedule the header for light fetcher import
 			for _, announce := range lightHeaders {
-				f.enqueue(announce.origin, announce.header, nil)
+				f.enqueue(announce.origin, announce.header, nil, nil)
 			}
 			// Schedule the header-only blocks for import
 			for _, block := range complete {
 				if announce := f.completing[block.Hash()]; announce != nil {
-					f.enqueue(announce.origin, nil, block)
+					f.enqueue(announce.origin, nil, block, nil)
 				}
 			}
 
@@ -659,7 +659,7 @@ func (f *BlockFetcher) loop() {
 			// Schedule the retrieved blocks for ordered import
 			for _, block := range blocks {
 				if announce := f.completing[block.Hash()]; announce != nil {
-					f.enqueue(announce.origin, nil, block)
+					f.enqueue(announce.origin, nil, block, nil)
 				}
 			}
 		}
@@ -706,7 +706,7 @@ func (f *BlockFetcher) rescheduleComplete(complete *time.Timer) {
 
 // enqueue schedules a new header or block import operation, if the component
 // to be imported has not yet been seen.
-func (f *BlockFetcher) enqueue(peer string, header *types.Header, block *types.Block) {
+func (f *BlockFetcher) enqueue(peer string, header *types.Header, block *types.Block, extBlocks []*types.ExternalBlock) {
 	var (
 		hash   common.Hash
 		number uint64
@@ -733,7 +733,7 @@ func (f *BlockFetcher) enqueue(peer string, header *types.Header, block *types.B
 	}
 	// Schedule the block for future importing
 	if _, ok := f.queued[hash]; !ok {
-		op := &blockOrHeaderInject{origin: peer}
+		op := &blockOrHeaderInject{origin: peer, extBlocks: extBlocks}
 		if header != nil {
 			op.header = header
 		} else {
