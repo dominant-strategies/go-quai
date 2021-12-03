@@ -725,7 +725,7 @@ func (ethash *Ethash) GetStopHash(chain consensus.ChainHeaderReader, difficultyC
 			}
 			prevHeader = extBlock.Header()
 		}
-		log.Info("GetStopHash: Iterating back", "context", context)
+		log.Debug("GetStopHash: Iterating back", "context", context)
 		// Relevant to region finding N-1 coincident block
 		if bytes.Equal(startingHeader.Location, prevHeader.Location) || originalContext == 0 {
 			stopHash = header.ParentHash[context]
@@ -753,7 +753,7 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 		// If we have reached a coincident block or we're in Region and found the prev region
 		if difficultyContext < context && steppedBack {
 			if logging {
-				log.Info("TraceBranch: Found coincident block", "number", header.Number, "context", context, "location", header.Location)
+				log.Debug("TraceBranch: Found coincident block", "number", header.Number, "context", context, "location", header.Location)
 			}
 			break
 		}
@@ -773,7 +773,7 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 				break
 			}
 			if logging {
-				log.Info("GetExternalBlocks: Block being added: ", "number", extBlock.Header().Number, "context", extBlock.Context(), "location", extBlock.Header().Location, "txs", len(extBlock.Transactions()))
+				log.Debug("GetExternalBlocks: Block being added: ", "number", extBlock.Header().Number, "context", extBlock.Context(), "location", extBlock.Header().Location, "txs", len(extBlock.Transactions()))
 			}
 			extBlocks = append(extBlocks, extBlock)
 		}
