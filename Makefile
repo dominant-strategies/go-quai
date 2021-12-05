@@ -188,7 +188,7 @@ endif
 ifeq (,$(wildcard nodelogs))
 	mkdir nodelogs
 endif
-	@nohup ./build/bin/quai --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30303 --nodekey bootnode.key --http.port $(PRIME_PORT_HTTP) --ws.port $(PRIME_PORT_WS) >> nodelogs/prime.log 2>&1 &
+	@nohup ./build/bin/quai --mainnet --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30303 --nodekey bootnode.key --http.port $(PRIME_PORT_HTTP) --ws.port $(PRIME_PORT_WS) >> nodelogs/prime.log 2>&1 &
 	@nohup ./build/bin/quai --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30304 --nodekey bootnode.key --http.port $(REGION_1_PORT_HTTP) --ws.port $(REGION_1_PORT_WS) --region 1 >> nodelogs/region-1.log 2>&1 &
 	@nohup ./build/bin/quai --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30305 --nodekey bootnode.key --http.port $(REGION_2_PORT_HTTP) --ws.port $(REGION_2_PORT_WS) --region 2 >> nodelogs/region-2.log 2>&1 &
 	@nohup ./build/bin/quai --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins "*" --port 30306 --nodekey bootnode.key --http.port $(REGION_3_PORT_HTTP) --ws.port $(REGION_3_PORT_WS) --region 3 >> nodelogs/region-3.log 2>&1 &

@@ -1592,31 +1592,51 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Override any default configs for hard coded networks.
 	switch {
 	case ctx.GlobalBool(MainnetFlag.Name):
-		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 1
+		switch {
+		case ctx.GlobalIsSet(RegionFlag.Name) && !ctx.GlobalIsSet(ZoneFlag.Name):
+			if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
+				cfg.NetworkId = params.MainnetRegionChainConfigs[ctx.GlobalInt(RegionFlag.Name)-1].ChainID.Uint64()
+			}
+			cfg.Genesis = core.MainnetRegionGenesisBlock(&params.MainnetRegionChainConfigs[ctx.GlobalInt(RegionFlag.Name)-1])
+			types.QuaiNetworkContext = cfg.Genesis.Config.Context
+			SetDNSDiscoveryDefaults(cfg, params.MainnetRegionGenesisHash)
+		case ctx.GlobalIsSet(RegionFlag.Name) && ctx.GlobalIsSet(ZoneFlag.Name):
+			if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
+				cfg.NetworkId = params.MainnetZoneChainConfigs[ctx.GlobalInt(RegionFlag.Name)-1][ctx.GlobalInt(ZoneFlag.Name)-1].ChainID.Uint64()
+			}
+			cfg.Genesis = core.MainnetZoneGenesisBlock(&params.MainnetZoneChainConfigs[ctx.GlobalInt(RegionFlag.Name)-1][ctx.GlobalInt(ZoneFlag.Name)-1])
+			types.QuaiNetworkContext = cfg.Genesis.Config.Context
+			SetDNSDiscoveryDefaults(cfg, params.MainnetZoneGenesisHash)
+		default:
+			if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
+				cfg.NetworkId = params.MainnetPrimeChainConfig.ChainID.Uint64()
+			}
+			cfg.Genesis = core.MainnetPrimeGenesisBlock()
+			SetDNSDiscoveryDefaults(cfg, params.MainnetPrimeGenesisHash)
 		}
-		cfg.Genesis = core.MainnetPrimeGenesisBlock()
-		SetDNSDiscoveryDefaults(cfg, params.MainnetPrimeGenesisHash)
 	case ctx.GlobalBool(RopstenFlag.Name):
-		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 3
+		switch {
+		case ctx.GlobalIsSet(RegionFlag.Name) && !ctx.GlobalIsSet(ZoneFlag.Name):
+			if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
+				cfg.NetworkId = params.RopstenRegionChainConfigs[ctx.GlobalInt(RegionFlag.Name)-1].ChainID.Uint64()
+			}
+			cfg.Genesis = core.RopstenRegionGenesisBlock(&params.RopstenRegionChainConfigs[ctx.GlobalInt(RegionFlag.Name)-1])
+			types.QuaiNetworkContext = cfg.Genesis.Config.Context
+			SetDNSDiscoveryDefaults(cfg, params.RopstenRegionGenesisHash)
+		case ctx.GlobalIsSet(RegionFlag.Name) && ctx.GlobalIsSet(ZoneFlag.Name):
+			if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
+				cfg.NetworkId = params.RopstenZoneChainConfigs[ctx.GlobalInt(RegionFlag.Name)-1][ctx.GlobalInt(ZoneFlag.Name)-1].ChainID.Uint64()
+			}
+			cfg.Genesis = core.RopstenZoneGenesisBlock(&params.RopstenZoneChainConfigs[ctx.GlobalInt(RegionFlag.Name)-1][ctx.GlobalInt(ZoneFlag.Name)-1])
+			types.QuaiNetworkContext = cfg.Genesis.Config.Context
+			SetDNSDiscoveryDefaults(cfg, params.RopstenZoneGenesisHash)
+		default:
+			if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
+				cfg.NetworkId = params.MainnetPrimeChainConfig.ChainID.Uint64()
+			}
+			cfg.Genesis = core.RopstenPrimeGenesisBlock()
+			SetDNSDiscoveryDefaults(cfg, params.RopstenPrimeGenesisHash)
 		}
-		cfg.Genesis = core.DefaultRopstenGenesisBlock()
-		SetDNSDiscoveryDefaults(cfg, params.RopstenGenesisHash)
-	case ctx.GlobalIsSet(RegionFlag.Name) && !ctx.GlobalIsSet(ZoneFlag.Name):
-		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = params.MainnetRegionChainConfigs[ctx.GlobalInt(RegionFlag.Name)-1].ChainID.Uint64()
-		}
-		cfg.Genesis = core.MainnetRegionGenesisBlock(&params.MainnetRegionChainConfigs[ctx.GlobalInt(RegionFlag.Name)-1])
-		types.QuaiNetworkContext = cfg.Genesis.Config.Context
-		SetDNSDiscoveryDefaults(cfg, params.MainnetPrimeGenesisHash)
-	case ctx.GlobalIsSet(RegionFlag.Name) && ctx.GlobalIsSet(ZoneFlag.Name):
-		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = params.MainnetZoneChainConfigs[ctx.GlobalInt(RegionFlag.Name)-1][ctx.GlobalInt(ZoneFlag.Name)-1].ChainID.Uint64()
-		}
-		cfg.Genesis = core.MainnetZoneGenesisBlock(&params.MainnetZoneChainConfigs[ctx.GlobalInt(RegionFlag.Name)-1][ctx.GlobalInt(ZoneFlag.Name)-1])
-		types.QuaiNetworkContext = cfg.Genesis.Config.Context
-		SetDNSDiscoveryDefaults(cfg, params.MainnetPrimeGenesisHash)
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1337

@@ -49,9 +49,17 @@ func KnownDNSNetwork(genesis common.Hash, protocol string) string {
 	var net string
 	switch genesis {
 	case MainnetPrimeGenesisHash:
-		net = "mainnet"
-	case RopstenGenesisHash:
-		net = "ropsten"
+		net = "mainnet-prime"
+	case MainnetRegionGenesisHash:
+		net = "mainnet-region"
+	case MainnetZoneGenesisHash:
+		net = "mainnet-zone"
+	case RopstenPrimeGenesisHash:
+		net = "ropsten-prime"
+	case RopstenRegionGenesisHash:
+		net = "ropsten-region"
+	case RopstenZoneGenesisHash:
+		net = "ropsten-zone"
 	case RinkebyGenesisHash:
 		net = "rinkeby"
 	case GoerliGenesisHash:

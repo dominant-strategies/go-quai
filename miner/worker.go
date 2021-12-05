@@ -955,11 +955,15 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 
 	gasUsed := (parent.GasUsed() + externalGasUsed) / uint64(len(externalBlocks)+1)
 
+	// Get the amount of uncles for the past 1000 blocks
+	prevBlock := w.chain.GetBlockByHash(header.ParentHash[types.QuaiNetworkContext])
+	uncleCount := len(w.chain.GetUnclesInChain(prevBlock, 1000))
+
 	// If block has not advanced
 	if w.snapshotBlock != nil && parent.Header().Number[types.QuaiNetworkContext] == w.snapshotBlock.Number() {
 		header.GasLimit[types.QuaiNetworkContext] = w.snapshotBlock.GasLimit()
 	} else {
-		header.GasLimit[types.QuaiNetworkContext] = core.CalcGasLimit(parent.GasLimit(), w.config.GasCeil, gasUsed)
+		header.GasLimit[types.QuaiNetworkContext] = core.CalcGasLimit(parent.GasLimit(), w.config.GasCeil, gasUsed, uncleCount)
 		header.BaseFee[types.QuaiNetworkContext] = misc.CalcBaseFee(w.chainConfig, parent.Header())
 	}
 
