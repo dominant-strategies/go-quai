@@ -2501,6 +2501,11 @@ func (bc *BlockChain) GetExternalBlocks(header *types.Header) ([]*types.External
 	context := bc.Config().Context // Index that node is currently at
 	externalBlocks := make([]*types.ExternalBlock, 0)
 
+	// Check if header is nil
+	if header == nil {
+		return externalBlocks, nil
+	}
+
 	// Check header number
 	if header.Number == nil {
 		return externalBlocks, nil
