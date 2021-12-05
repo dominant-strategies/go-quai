@@ -384,7 +384,7 @@ func makeDifficultyCalculator(bombDelay *big.Int) func(time uint64, parent *type
 		}
 
 		// parent_diff + (parent_diff / 2048 * max((2 if len(parent.uncles) else 1) - ((timestamp - parent.timestamp) // 9), -99))
-		y.Div(parentDifficulty, params.DifficultyBoundDivisor)
+		y.Div(parentDifficulty, params.DifficultyBoundDivisor[types.QuaiNetworkContext])
 		x.Mul(y, x)
 		x.Add(parentDifficulty, x)
 
@@ -444,7 +444,7 @@ func calcDifficultyHomestead(time uint64, parent *types.Header) *big.Int {
 		parentDifficulty = params.GenesisDifficulty
 	}
 	// (parent_diff + parent_diff // 2048 * max(1 - (block_timestamp - parent_timestamp) // 10, -99))
-	y.Div(parentDifficulty, params.DifficultyBoundDivisor)
+	y.Div(parentDifficulty, params.DifficultyBoundDivisor[types.QuaiNetworkContext])
 	x.Mul(y, x)
 	x.Add(parentDifficulty, x)
 
@@ -476,7 +476,7 @@ func calcDifficultyFrontier(time uint64, parent *types.Header, context int) *big
 		return params.GenesisDifficulty
 	}
 
-	adjust := new(big.Int).Div(parentDifficulty, params.DifficultyBoundDivisor)
+	adjust := new(big.Int).Div(parentDifficulty, params.DifficultyBoundDivisor[types.QuaiNetworkContext])
 	bigTime := new(big.Int)
 	bigParentTime := new(big.Int)
 
