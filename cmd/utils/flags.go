@@ -1258,17 +1258,18 @@ func setDataDir(ctx *cli.Context, cfg *node.Config) {
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		cfg.DataDir = "" // unless explicitly requested, use memory databases
 	case ctx.GlobalBool(RopstenFlag.Name) && cfg.DataDir == node.DefaultDataDir():
-		// Maintain compatibility with older Geth configurations storing the
-		// Ropsten database in `testnet` instead of `ropsten`.
-		legacyPath := filepath.Join(node.DefaultDataDir(), "testnet")
-		if _, err := os.Stat(legacyPath); !os.IsNotExist(err) {
-			log.Warn("Using the deprecated `testnet` datadir. Future versions will store the Ropsten chain in `ropsten`.")
-			cfg.DataDir = legacyPath
-		} else {
-			cfg.DataDir = filepath.Join(node.DefaultDataDir(), "ropsten")
+		tempDir := node.DefaultDataDir()
+		switch {
+		case ctx.GlobalIsSet(RegionFlag.Name) && !ctx.GlobalIsSet(ZoneFlag.Name):
+			dir := node.QuaiRegionDataDir(strconv.Itoa(ctx.GlobalInt(RegionFlag.Name)))
+			log.Info("Setting dir path", dir)
+			tempDir = dir
+		case ctx.GlobalIsSet(RegionFlag.Name) && ctx.GlobalIsSet(ZoneFlag.Name):
+			dir := node.QuaiZoneDataDir(strconv.Itoa(ctx.GlobalInt(RegionFlag.Name)), strconv.Itoa(ctx.GlobalInt(ZoneFlag.Name)))
+			log.Info("Setting dir path", dir)
+			tempDir = dir
 		}
-
-		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "ropsten")
+		cfg.DataDir = filepath.Join(tempDir, "ropsten")
 	case ctx.GlobalIsSet(RegionFlag.Name) && !ctx.GlobalIsSet(ZoneFlag.Name):
 		dir := node.QuaiRegionDataDir(strconv.Itoa(ctx.GlobalInt(RegionFlag.Name)))
 		log.Info("Setting dir path", dir)
