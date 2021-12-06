@@ -963,7 +963,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	if w.snapshotBlock != nil && parent.Header().Number[types.QuaiNetworkContext] == w.snapshotBlock.Number() {
 		header.GasLimit[types.QuaiNetworkContext] = w.snapshotBlock.GasLimit()
 	} else {
-		header.GasLimit[types.QuaiNetworkContext] = core.CalcGasLimit(parent.GasLimit(), w.config.GasCeil, gasUsed, uncleCount)
+		header.GasLimit[types.QuaiNetworkContext] = core.CalcGasLimit(parent.GasLimit(), gasUsed, uncleCount)
 		header.BaseFee[types.QuaiNetworkContext] = misc.CalcBaseFee(w.chainConfig, parent.Header())
 	}
 
