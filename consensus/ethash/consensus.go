@@ -483,12 +483,7 @@ func calcDifficultyFrontier(time uint64, parent *types.Header, context int) *big
 	bigTime.SetUint64(time)
 	bigParentTime.SetUint64(parent.Time)
 
-	duration := params.DurationLimit
-	if types.QuaiNetworkContext == 1 {
-		duration = params.RegionDurationLimit
-	} else if types.QuaiNetworkContext == 0 {
-		duration = params.PrimeDurationLimit
-	}
+	duration := params.DurationLimits[types.QuaiNetworkContext]
 
 	if bigTime.Sub(bigTime, bigParentTime).Cmp(duration) < 0 {
 		diff.Add(parentDifficulty, adjust)
