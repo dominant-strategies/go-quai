@@ -21,7 +21,7 @@ import "math/big"
 const (
 	GasLimitBoundDivisor uint64 = 1024    // The bound divisor of the gas limit, used in update calculations.
 	MinGasLimit          uint64 = 5000    // Minimum the gas limit may ever be.
-	EmptyGasLimit        uint64 = 10000   // Minimum the gas limit may ever be.
+	EmptyGasLimit        uint64 = 100000  // Gas limit at empty blocks
 	GenesisGasLimit      uint64 = 4712388 // Gas limit of the Genesis block.
 
 	MaximumExtraDataSize  uint64 = 32    // Maximum size extra data may be after Genesis.
