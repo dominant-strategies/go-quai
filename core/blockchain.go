@@ -2518,7 +2518,13 @@ func (bc *BlockChain) GetExternalBlocks(header *types.Header) ([]*types.External
 		coincidentHeader, difficultyContext := bc.engine.GetCoincidentHeader(bc, context, prevHeader)
 
 		// Checking for nil prev or coincident headers
-		if prevHeader == nil || coincidentHeader == nil {
+		if prevHeader == nil {
+			log.Info("GetExternalBlocks: prevHeader nil", "header", header.Hash())
+			return externalBlocks, nil
+		}
+
+		if coincidentHeader == nil {
+			log.Info("GetExternalBlocks: coincidentHeader nil", "header", header.Hash())
 			return externalBlocks, nil
 		}
 
