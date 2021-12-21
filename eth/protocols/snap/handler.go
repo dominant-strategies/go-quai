@@ -82,9 +82,9 @@ type Backend interface {
 	Handle(peer *Peer, packet Packet) error
 }
 
-// MakeProtocols constructs the P2P protocol definitions for `snap`.
+// MakeProtocols constructs the P2P protocol definitions for `qsnap`.
 func MakeProtocols(backend Backend, dnsdisc enode.Iterator) []p2p.Protocol {
-	// Filter the discovery iterator for nodes advertising snap support.
+	// Filter the discovery iterator for nodes advertising qsnap support.
 	dnsdisc = enode.Filter(dnsdisc, func(n *enode.Node) bool {
 		var snap enrEntry
 		return n.Load(&snap) == nil
