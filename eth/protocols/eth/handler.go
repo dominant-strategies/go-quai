@@ -171,7 +171,7 @@ type Decoder interface {
 	Time() time.Time
 }
 
-var eth66 = map[uint64]msgHandler{
+var quai66 = map[uint64]msgHandler{
 	NewBlockHashesMsg:             handleNewBlockhashes,
 	NewBlockMsg:                   handleNewBlock,
 	TransactionsMsg:               handleTransactions,
@@ -203,7 +203,7 @@ func handleMessage(backend Backend, peer *Peer) error {
 	}
 	defer msg.Discard()
 
-	var handlers = eth66
+	var handlers = quai66
 	//if peer.Version() >= ETH67 { // Left in as a sample when new protocol is added
 	//	handlers = eth67
 	//}
