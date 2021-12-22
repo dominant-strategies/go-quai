@@ -103,17 +103,19 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 }
 
 // CalcGasLimit computes the gas limit of the next block after parent. It aims
-// to keep blocks 95% full.
-func CalcGasLimit(parentGasLimit, gasCeil uint64, gasUsed uint64) uint64 {
+// to keep blocks 95% full.  If we have achieved our max gas limit, we will expand
+// our gas limit to reach our uncle rate.
+func CalcGasLimit(parentGasLimit, gasUsed uint64, uncleCount int) uint64 {
 	delta := parentGasLimit/params.GasLimitBoundDivisor - 1
 	// Add 1000 check for uint64 division comparison to 95%
 	percent := (gasUsed * 1000) / (parentGasLimit * 1000)
 	limit := parentGasLimit
+	aboveRate := uncleCount > params.TargetUncles[types.QuaiNetworkContext]
 	// If we're receiving full blocks, we try to increase the block size
 	if percent > uint64(950) {
 		limit = parentGasLimit + delta
-		if limit > gasCeil {
-			limit = gasCeil
+		if aboveRate {
+			limit = limit - delta
 		}
 		return limit
 	} else {

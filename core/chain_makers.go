@@ -288,7 +288,7 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 	if chain.Config().IsLondon(header.Number[types.QuaiNetworkContext]) {
 		if !chain.Config().IsLondon(parent.Number()) {
 			parentGasLimit := parent.GasLimit() * params.ElasticityMultiplier
-			header.GasLimit[types.QuaiNetworkContext] = CalcGasLimit(parentGasLimit, parentGasLimit, parent.GasUsed())
+			header.GasLimit[types.QuaiNetworkContext] = CalcGasLimit(parentGasLimit, parent.GasUsed(), 0)
 		}
 	}
 
