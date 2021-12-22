@@ -123,6 +123,9 @@ func CalcGasLimit(parentGasLimit, gasUsed uint64, uncleCount int) uint64 {
 		if limit < params.MinGasLimit {
 			limit = params.MinGasLimit
 		}
+		if limit < params.EmptyGasLimit {
+			limit = parentGasLimit + delta
+		}
 		return limit
 	}
 }

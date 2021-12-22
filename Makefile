@@ -182,9 +182,6 @@ ZONE_3_3_PORT_HTTP=8678
 ZONE_3_3_PORT_WS=8679
 
 run-full-node:
-ifeq (,$(wildcard ./bootnode.key))
-	./build/bin/bootnode --genkey=bootnode.key
-endif
 ifeq (,$(wildcard nodelogs))
 	mkdir nodelogs
 endif
@@ -217,9 +214,6 @@ ZONE_3_2_COINBASE=0x7717ddddd08eacc0bb981c47348d1ec3a99566f8
 ZONE_3_3_COINBASE=0x8169c0a78e20ee6e5c53cc18ee2f4eb3f762ee05
 
 run-full-mining:
-ifeq (,$(wildcard ./bootnode.key))
-	./build/bin/bootnode --genkey=bootnode.key
-endif
 ifeq (,$(wildcard nodelogs))
 	mkdir nodelogs
 endif
