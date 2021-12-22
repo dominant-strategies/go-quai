@@ -511,7 +511,7 @@ func (k *knownCache) Cardinality() int {
 func (p *Peer) RequestExternalBlocks(hashes []common.Hash) error {
 	p.Log().Debug("Fetching batch of external blocks", "count", len(hashes))
 	log.Info("Fetching batch of external blocks for hashes", "count", len(hashes))
-	if p.Version() >= ETH66 {
+	if p.Version() >= QUAI66 {
 		id := rand.Uint64()
 
 		requestTracker.Track(p.id, p.version, GetExtBlocksMsg, ExtBlocksMsg, id)

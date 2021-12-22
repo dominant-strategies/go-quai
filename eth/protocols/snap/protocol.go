@@ -30,9 +30,9 @@ const (
 	snap1 = 1
 )
 
-// ProtocolName is the official short name of the `snap` protocol used during
+// ProtocolName is the official short name of the `qsnap` protocol used during
 // devp2p capability negotiation.
-const ProtocolName = "snap"
+const ProtocolName = "qsnap"
 
 // ProtocolVersions are the supported versions of the `snap` protocol (first
 // is primary).

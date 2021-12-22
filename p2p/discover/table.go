@@ -341,8 +341,8 @@ func (tab *Table) doRevalidate(done chan<- struct{}) {
 	if err == nil {
 		// The node responded, move it to the front.
 		last.livenessChecks++
-		tab.log.Debug("Revalidated node", "b", bi, "id", last.ID(), "checks", last.livenessChecks)
-		log.Debug("Revalidated node", "b", bi, "id", last.ID(), "checks", last.livenessChecks)
+		tab.log.Debug("Revalidated node", "b", bi, "id", last.ID(), "ip", last.IP(), "checks", last.livenessChecks)
+		log.Debug("Revalidated node", "b", bi, "id", last.ID(), "ip", last.IP(), "checks", last.livenessChecks)
 		tab.bumpInBucket(b, last)
 		return
 	}
