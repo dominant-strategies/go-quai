@@ -43,7 +43,7 @@ var (
 	timeout = 20 * time.Second
 )
 
-// Is_66 checks if the node supports the eth66 protocol version,
+// Is_66 checks if the node supports the quai66 protocol version,
 // and if not, exists the test suite
 func (s *Suite) Is_66(t *utesting.T) {
 	conn, err := s.dial66()
@@ -84,7 +84,7 @@ func (s *Suite) dial() (*Conn, error) {
 }
 
 // dial66 attempts to dial the given node and perform a handshake,
-// returning the created Conn with additional eth66 capabilities if
+// returning the created Conn with additional quai66 capabilities if
 // successful
 func (s *Suite) dial66() (*Conn, error) {
 	conn, err := s.dial()
@@ -212,13 +212,13 @@ loop:
 
 // createSendAndRecvConns creates two connections, one for sending messages to the
 // node, and one for receiving messages from the node.
-func (s *Suite) createSendAndRecvConns(isEth66 bool) (*Conn, *Conn, error) {
+func (s *Suite) createSendAndRecvConns(isQuai66 bool) (*Conn, *Conn, error) {
 	var (
 		sendConn *Conn
 		recvConn *Conn
 		err      error
 	)
-	if isEth66 {
+	if isQuai66 {
 		sendConn, err = s.dial66()
 		if err != nil {
 			return nil, nil, fmt.Errorf("dial failed: %v", err)
@@ -275,7 +275,7 @@ func (c *Conn) readAndServe65(chain *Chain, timeout time.Duration) Message {
 	return errorf("no message received within %v", timeout)
 }
 
-// readAndServe66 serves eth66 GetBlockHeaders requests while waiting
+// readAndServe66 serves quai66 GetBlockHeaders requests while waiting
 // on another message from the node.
 func (c *Conn) readAndServe66(chain *Chain, timeout time.Duration) (uint64, Message) {
 	start := time.Now()
@@ -307,11 +307,11 @@ func (c *Conn) readAndServe66(chain *Chain, timeout time.Duration) (uint64, Mess
 }
 
 // headersRequest executes the given `GetBlockHeaders` request.
-func (c *Conn) headersRequest(request *GetBlockHeaders, chain *Chain, isEth66 bool, reqID uint64) (BlockHeaders, error) {
+func (c *Conn) headersRequest(request *GetBlockHeaders, chain *Chain, isQuai66 bool, reqID uint64) (BlockHeaders, error) {
 	defer c.SetReadDeadline(time.Time{})
 	c.SetReadDeadline(time.Now().Add(20 * time.Second))
-	// if on eth66 connection, perform eth66 GetBlockHeaders request
-	if isEth66 {
+	// if on quai66 connection, perform quai66 GetBlockHeaders request
+	if isQuai66 {
 		return getBlockHeaders66(chain, c, request, reqID)
 	}
 	if err := c.Write(request); err != nil {
@@ -325,7 +325,7 @@ func (c *Conn) headersRequest(request *GetBlockHeaders, chain *Chain, isEth66 bo
 	}
 }
 
-// getBlockHeaders66 executes the given `GetBlockHeaders` request over the eth66 protocol.
+// getBlockHeaders66 executes the given `GetBlockHeaders` request over the quai66 protocol.
 func getBlockHeaders66(chain *Chain, conn *Conn, request *GetBlockHeaders, id uint64) (BlockHeaders, error) {
 	// write request
 	packet := eth.GetBlockHeadersPacket(*request)
@@ -363,9 +363,9 @@ func (c *Conn) waitForResponse(chain *Chain, timeout time.Duration, requestID ui
 
 // sendNextBlock broadcasts the next block in the chain and waits
 // for the node to propagate the block and import it into its chain.
-func (s *Suite) sendNextBlock(isEth66 bool) error {
+func (s *Suite) sendNextBlock(isQuai66 bool) error {
 	// set up sending and receiving connections
-	sendConn, recvConn, err := s.createSendAndRecvConns(isEth66)
+	sendConn, recvConn, err := s.createSendAndRecvConns(isQuai66)
 	if err != nil {
 		return err
 	}
@@ -388,7 +388,7 @@ func (s *Suite) sendNextBlock(isEth66 bool) error {
 		return fmt.Errorf("failed to announce block: %v", err)
 	}
 	// wait for client to update its chain
-	if err = s.waitForBlockImport(recvConn, nextBlock, isEth66); err != nil {
+	if err = s.waitForBlockImport(recvConn, nextBlock, isQuai66); err != nil {
 		return fmt.Errorf("failed to receive confirmation of block import: %v", err)
 	}
 	// update test suite chain
@@ -433,7 +433,7 @@ func (s *Suite) waitAnnounce(conn *Conn, blockAnnouncement *NewBlock) error {
 	}
 }
 
-func (s *Suite) waitForBlockImport(conn *Conn, block *types.Block, isEth66 bool) error {
+func (s *Suite) waitForBlockImport(conn *Conn, block *types.Block, isQuai66 bool) error {
 	defer conn.SetReadDeadline(time.Time{})
 	conn.SetReadDeadline(time.Now().Add(20 * time.Second))
 	// create request
@@ -450,9 +450,9 @@ func (s *Suite) waitForBlockImport(conn *Conn, block *types.Block, isEth66 bool)
 			headers BlockHeaders
 			err     error
 		)
-		if isEth66 {
+		if isQuai66 {
 			requestID := uint64(54)
-			headers, err = conn.headersRequest(req, s.chain, eth66, requestID)
+			headers, err = conn.headersRequest(req, s.chain, quai66, requestID)
 		} else {
 			headers, err = conn.headersRequest(req, s.chain, eth65, 0)
 		}
@@ -471,8 +471,8 @@ func (s *Suite) waitForBlockImport(conn *Conn, block *types.Block, isEth66 bool)
 	}
 }
 
-func (s *Suite) oldAnnounce(isEth66 bool) error {
-	sendConn, receiveConn, err := s.createSendAndRecvConns(isEth66)
+func (s *Suite) oldAnnounce(isQuai66 bool) error {
+	sendConn, receiveConn, err := s.createSendAndRecvConns(isQuai66)
 	if err != nil {
 		return err
 	}
@@ -518,12 +518,12 @@ func (s *Suite) oldAnnounce(isEth66 bool) error {
 	return nil
 }
 
-func (s *Suite) maliciousHandshakes(t *utesting.T, isEth66 bool) error {
+func (s *Suite) maliciousHandshakes(t *utesting.T, isQuai66 bool) error {
 	var (
 		conn *Conn
 		err  error
 	)
-	if isEth66 {
+	if isQuai66 {
 		conn, err = s.dial66()
 		if err != nil {
 			return fmt.Errorf("dial failed: %v", err)
@@ -595,7 +595,7 @@ func (s *Suite) maliciousHandshakes(t *utesting.T, isEth66 bool) error {
 			}
 		}
 		// dial for the next round
-		if isEth66 {
+		if isQuai66 {
 			conn, err = s.dial66()
 			if err != nil {
 				return fmt.Errorf("dial failed: %v", err)
@@ -643,9 +643,9 @@ func (s *Suite) maliciousStatus(conn *Conn) error {
 	}
 }
 
-func (s *Suite) hashAnnounce(isEth66 bool) error {
+func (s *Suite) hashAnnounce(isQuai66 bool) error {
 	// create connections
-	sendConn, recvConn, err := s.createSendAndRecvConns(isEth66)
+	sendConn, recvConn, err := s.createSendAndRecvConns(isQuai66)
 	if err != nil {
 		return fmt.Errorf("failed to create connections: %v", err)
 	}
@@ -674,7 +674,7 @@ func (s *Suite) hashAnnounce(isEth66 bool) error {
 		msg            Message
 		blockHeaderReq GetBlockHeaders
 	)
-	if isEth66 {
+	if isQuai66 {
 		id, msg = sendConn.Read66()
 		switch msg := msg.(type) {
 		case GetBlockHeaders:
@@ -748,7 +748,7 @@ func (s *Suite) hashAnnounce(isEth66 bool) error {
 		return fmt.Errorf("unexpected: %s", pretty.Sdump(msg))
 	}
 	// confirm node imported block
-	if err := s.waitForBlockImport(recvConn, nextBlock, isEth66); err != nil {
+	if err := s.waitForBlockImport(recvConn, nextBlock, isQuai66); err != nil {
 		return fmt.Errorf("error waiting for node to import new block: %v", err)
 	}
 	// update the chain
