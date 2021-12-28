@@ -214,10 +214,9 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		}
 
 		log.Info("Adding external blocks from peer", "len", len(extBlocks), "number", blocks[0].Number())
-
 		// Print out the hash for the ext blocks
 		for i := 0; i < len(extBlocks); i++ {
-			fmt.Println(extBlocks[i].Hash())
+			fmt.Println(extBlocks[i].Hash(), extBlocks[i].Context(), extBlocks[i].Header().Number)
 		}
 
 		err := h.chain.AddExternalBlocks(extBlocks)
@@ -532,6 +531,7 @@ func (h *handler) minedBroadcastLoop() {
 				if err != nil {
 					log.Info("Error sending external blocks to peer", "err", err)
 				}
+				fmt.Print("minedBroadcastLoop", header.Hash(), len(extBlocks))
 				h.BroadcastBlock(ev.Block, extBlocks, true)  // First propagate block to peers
 				h.BroadcastBlock(ev.Block, extBlocks, false) // Only then announce to the rest
 			}

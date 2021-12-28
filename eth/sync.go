@@ -17,6 +17,7 @@
 package eth
 
 import (
+	"fmt"
 	"math/big"
 	"sync/atomic"
 	"time"
@@ -260,6 +261,7 @@ func (h *handler) doSync(op *chainSyncOp) error {
 		if err != nil {
 			log.Info("Error sending external blocks to peer", "err", err)
 		}
+		fmt.Print("doSync", head.Hash(), len(extBlocks))
 		h.BroadcastBlock(head, extBlocks, false)
 	}
 	return nil
