@@ -21,7 +21,6 @@ import (
 
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/core/types"
-	"github.com/spruce-solutions/go-quai/log"
 )
 
 const (
@@ -45,7 +44,6 @@ func (p *Peer) broadcastBlocks() {
 	for {
 		select {
 		case prop := <-p.queuedBlocks:
-			log.Info("broadcastBlocks", "numExtBlocks", len(prop.extBlocks))
 			if err := p.SendNewBlock(prop.block, prop.td, prop.extBlocks); err != nil {
 				return
 			}
