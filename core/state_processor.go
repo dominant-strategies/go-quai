@@ -28,7 +28,6 @@ import (
 	"github.com/spruce-solutions/go-quai/core/types"
 	"github.com/spruce-solutions/go-quai/core/vm"
 	"github.com/spruce-solutions/go-quai/crypto"
-	"github.com/spruce-solutions/go-quai/log"
 	"github.com/spruce-solutions/go-quai/params"
 )
 
@@ -101,8 +100,6 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 			i++
 		}
 	}
-
-	log.Info("State Processor: External txs applied", "num", etxs)
 
 	// Iterate over and process the individual transactions
 	for _, tx := range block.Transactions() {

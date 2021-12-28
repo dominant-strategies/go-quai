@@ -804,7 +804,7 @@ func (f *BlockFetcher) importBlocks(peer string, block *types.Block, extBlocks [
 		case nil:
 			// All ok, quickly propagate to our peers
 			blockBroadcastOutTimer.UpdateSince(block.ReceivedAt)
-			go f.broadcastBlock(block, nil, true)
+			go f.broadcastBlock(block, extBlocks, true)
 
 		case consensus.ErrFutureBlock:
 			// Weird future block, don't fail, but neither propagate
@@ -823,7 +823,7 @@ func (f *BlockFetcher) importBlocks(peer string, block *types.Block, extBlocks [
 		}
 		// If import succeeded, broadcast the block
 		blockAnnounceOutTimer.UpdateSince(block.ReceivedAt)
-		go f.broadcastBlock(block, nil, false)
+		go f.broadcastBlock(block, extBlocks, false)
 
 		// Invoke the testing hook if needed
 		if f.importedHook != nil {

@@ -256,7 +256,11 @@ func (h *handler) doSync(op *chainSyncOp) error {
 		// scenario will most often crop up in private and hackathon networks with
 		// degenerate connectivity, but it should be healthy for the mainnet too to
 		// more reliably update peers or the local TD state.
-		h.BroadcastBlock(head, nil, false)
+		extBlocks, err := h.chain.GetExternalBlocks(head.Header())
+		if err != nil {
+			log.Info("Error sending external blocks to peer", "err", err)
+		}
+		h.BroadcastBlock(head, extBlocks, false)
 	}
 	return nil
 }

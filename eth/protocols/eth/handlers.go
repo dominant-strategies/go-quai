@@ -264,12 +264,17 @@ func answerGetExtBlocksQuery(backend Backend, query GetExtBlocksPacket, peer *Pe
 		// Retrieve the requested block's external blocks
 		header := backend.Chain().GetHeaderByHash(hash)
 		results, err := backend.Chain().GetExternalBlocks(header)
+		log.Info("answerGetExtBlocks: Retrieving ext blocks", "hash", hash, "len", len(results))
+		// Temp print, leave for now until we resolve all consensus.
+		for i := 0; i < len(results); i++ {
+			log.Info("answerGetExtBlocks:", "hash", results[i].Hash(), "context", results[i].Context(), "num", results[i].Header().Number)
+		}
 		if err != nil {
 			log.Error("Unable to retrieve external blocks")
 		}
 		// If known, encode and queue for response packet
 		if encoded, err := rlp.EncodeToBytes(results); err != nil {
-			log.Error("Failed to encode receipt", "err", err)
+			log.Error("Failed to encode external block", "err", err)
 		} else {
 			extBlocks = append(extBlocks, encoded)
 			bytes += len(encoded)
