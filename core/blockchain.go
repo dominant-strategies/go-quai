@@ -2513,12 +2513,10 @@ func (bc *BlockChain) GetExternalBlocks(header *types.Header) ([]*types.External
 
 	// Do not run on block 1
 	if header.Number[context].Cmp(big.NewInt(1)) > 0 {
-		// Skip pending block
-		prevHeader := bc.GetHeaderByHash(header.ParentHash[context])
-		coincidentHeader, difficultyContext := bc.engine.GetCoincidentHeader(bc, context, prevHeader)
+		coincidentHeader, difficultyContext := bc.engine.GetCoincidentHeader(bc, context, header)
 
 		// Checking for nil prev or coincident headers
-		if prevHeader == nil {
+		if header == nil {
 			log.Info("GetExternalBlocks: prevHeader nil", "header", header.Hash())
 			return externalBlocks, nil
 		}
@@ -2529,7 +2527,7 @@ func (bc *BlockChain) GetExternalBlocks(header *types.Header) ([]*types.External
 		}
 
 		// If we are not getting the transactions immediately after the coincident block, return
-		if coincidentHeader.Number[context].Cmp(prevHeader.Number[context]) != 0 {
+		if coincidentHeader.Number[context].Cmp(header.Number[context]) != 0 {
 			return externalBlocks, nil
 		}
 		stopHash := bc.engine.GetStopHash(bc, difficultyContext, context, coincidentHeader)

@@ -711,7 +711,6 @@ func (ethash *Ethash) GetStopHash(chain consensus.ChainHeaderReader, difficultyC
 	for {
 		// Append the coincident and iterating header to the list
 		if header.Number[context].Cmp(big.NewInt(1)) < 0 {
-			log.Info("GetStopHash: Stopping on block height == 1", "difficultyContext", context)
 			break
 		}
 
