@@ -1748,20 +1748,27 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 		return errCancelContentProcessing
 	default:
 	}
+	// Compose blocks for insert and prepare external block cache
+	blocks := make([]*types.Block, len(results))
+	extBlocks := make([]*types.ExternalBlock, 0)
+	for i, result := range results {
+		blocks[i] = types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles)
+		extBlocks = append(extBlocks, result.ExternalBlocks...)
+	}
+
 	// Retrieve the a batch of results to import
 	first, last := results[0].Header, results[len(results)-1].Header
 	log.Debug("Inserting downloaded chain", "items", len(results),
 		"firstnum", first.Number, "firsthash", first.Hash(),
 		"lastnum", last.Number, "lasthash", last.Hash(),
+		"extBlocks", len(extBlocks),
 	)
-	// Compose blocks for insert and prepare external block cache
-	blocks := make([]*types.Block, len(results))
-	for i, result := range results {
-		blocks[i] = types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles)
-		for _, extBlock := range result.ExternalBlocks {
-			d.blockchain.AddExternalBlock(extBlock)
-		}
+
+	// Insert all ExternalBlocks
+	for _, extBlock := range extBlocks {
+		d.blockchain.AddExternalBlock(extBlock)
 	}
+
 	if index, err := d.blockchain.InsertChain(blocks); err != nil {
 		if index < len(results) {
 			log.Debug("Downloaded item processing failed", "number", results[index].Header.Number, "hash", results[index].Header.Hash(), "err", err)
