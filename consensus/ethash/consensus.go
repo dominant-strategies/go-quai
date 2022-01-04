@@ -742,6 +742,12 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 	steppedBack := false
 	startingHeader := header
 	for {
+
+		// If the header is genesis
+		if header.Number[context].Cmp(big.NewInt(1)) == 0 {
+			break
+		}
+
 		// Check work of the header, if it has enough work we will move up in context.
 		// difficultyContext is initially context since it could be a pending block w/o a nonce.
 		difficultyContext, err := ethash.GetDifficultyContext(chain, header, context)
