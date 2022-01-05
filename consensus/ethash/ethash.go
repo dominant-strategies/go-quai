@@ -34,11 +34,13 @@ import (
 	"unsafe"
 
 	"github.com/edsrzf/mmap-go"
+	"github.com/hashicorp/golang-lru/simplelru"
+	"github.com/spruce-solutions/go-quai/common"
+	"github.com/spruce-solutions/go-quai/common/hexutil"
 	"github.com/spruce-solutions/go-quai/consensus"
 	"github.com/spruce-solutions/go-quai/log"
 	"github.com/spruce-solutions/go-quai/metrics"
 	"github.com/spruce-solutions/go-quai/rpc"
-	"github.com/hashicorp/golang-lru/simplelru"
 )
 
 var ErrInvalidDumpMagic = errors.New("invalid dump magic")
@@ -661,6 +663,29 @@ func (ethash *Ethash) Hashrate() float64 {
 
 	// Gather total submitted hash rate of remote sealers.
 	return ethash.hashrate.Rate1() + float64(<-res)
+}
+
+// SubmitHashrate can be used for remote miners to submit their hash rate.
+// This enables the node to report the combined hash rate of all miners
+// which submit work through this node.
+//
+// It accepts the miner hash rate and an identifier which must be unique
+// between nodes.
+func (ethash *Ethash) SubmitHashrate(rate hexutil.Uint64, id common.Hash) bool {
+	if ethash.remote == nil {
+		return false
+	}
+
+	var done = make(chan struct{}, 1)
+	select {
+	case ethash.remote.submitRateCh <- &hashrate{done: done, rate: uint64(rate), id: id}:
+	case <-ethash.remote.exitCh:
+		return false
+	}
+
+	// Block until hash rate submitted successfully.
+	<-done
+	return true
 }
 
 // APIs implements consensus.Engine, returning the user facing RPC APIs.
