@@ -802,7 +802,7 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 		if prevHeader == nil {
 			extBlock, err := chain.GetExternalBlock(header.ParentHash[context], header.Number[context].Uint64()-1, uint64(context))
 			if err != nil {
-				log.Warn("Trace Branch: External Block not found for previous header", "number", header.Number[context], "context", context, header.ParentHash[context])
+				log.Warn("Trace Branch: External Block not found for previous header", "number", header.Number[context], "context", context, "hash", header.ParentHash[context])
 				break
 			}
 			prevHeader = extBlock.Header()
