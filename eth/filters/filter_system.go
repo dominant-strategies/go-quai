@@ -70,8 +70,6 @@ const (
 	logsChanSize = 10
 	// chainEvChanSize is the size of channel listening to ChainEvent.
 	chainEvChanSize = 10
-	// reOrgEvChanSize is the size of channel listening to reOrgEvent.
-	reOrgEvChanSize = 10
 )
 
 type subscription struct {
