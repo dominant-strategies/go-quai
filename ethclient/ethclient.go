@@ -411,7 +411,7 @@ func (ec *Client) SubscribePendingBlock(ctx context.Context, ch chan<- *types.He
 }
 
 // SubscribeReOrg subscribes to notifications about the current pending block on the node.
-func (ec *Client) SubscribeReOrg(ctx context.Context, ch chan<- *types.Header) (ethereum.Subscription, error) {
+func (ec *Client) SubscribeReOrg(ctx context.Context, ch chan<- *types.ReOrgRollup) (ethereum.Subscription, error) {
 	return ec.c.EthSubscribe(ctx, ch, "reOrg")
 }
 
