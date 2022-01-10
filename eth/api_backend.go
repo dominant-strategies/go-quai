@@ -235,8 +235,8 @@ func (b *EthAPIBackend) SubscribePendingBlockEvent(ch chan<- *types.Header) even
 	return b.eth.miner.SubscribePendingBlock(ch)
 }
 
-func (b *EthAPIBackend) SubscribeReOrgEvent(ch chan<- *types.ReOrgRollup) event.Subscription {
-	return b.eth.miner.SubscribeReOrg(ch)
+func (b *EthAPIBackend) SubscribeReOrgEvent(ch chan<- core.ReOrgRollup) event.Subscription {
+	return b.eth.BlockChain().SubscribeReOrgEvent(ch)
 }
 
 func (b *EthAPIBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {

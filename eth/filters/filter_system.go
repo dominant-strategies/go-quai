@@ -83,7 +83,7 @@ type subscription struct {
 	block     chan *types.Header
 	installed chan struct{} // closed when the filter is installed
 	err       chan error    // closed when the filter is uninstalled
-	reOrg     chan *types.ReOrgRollup
+	reOrg     chan core.ReOrgRollup
 }
 
 // EventSystem creates subscriptions, processes events and broadcasts them to the
@@ -111,7 +111,7 @@ type EventSystem struct {
 	pendingBlockCh chan *types.Header         // Channel to receive new pending block event
 	rmLogsCh       chan core.RemovedLogsEvent // Channel to receive removed log event
 	chainCh        chan core.ChainEvent       // Channel to receive new chain event
-	reOrgCh        chan *types.ReOrgRollup    // Channel to receive reorg event data
+	reOrgCh        chan core.ReOrgRollup      // Channel to receive reorg event data
 }
 
 // NewEventSystem creates a new manager that listens for event on the given mux,
@@ -132,7 +132,7 @@ func NewEventSystem(backend Backend, lightMode bool) *EventSystem {
 		pendingLogsCh:  make(chan []*types.Log, logsChanSize),
 		pendingBlockCh: make(chan *types.Header),
 		chainCh:        make(chan core.ChainEvent, chainEvChanSize),
-		reOrgCh:        make(chan *types.ReOrgRollup),
+		reOrgCh:        make(chan core.ReOrgRollup),
 	}
 
 	// Subscribe events
@@ -250,7 +250,7 @@ func (es *EventSystem) subscribeMinedPendingLogs(crit ethereum.FilterQuery, logs
 		headers:   make(chan *types.Header),
 		installed: make(chan struct{}),
 		err:       make(chan error),
-		reOrg:     make(chan *types.ReOrgRollup),
+		reOrg:     make(chan core.ReOrgRollup),
 	}
 	return es.subscribe(sub)
 }
@@ -268,7 +268,7 @@ func (es *EventSystem) subscribeLogs(crit ethereum.FilterQuery, logs chan []*typ
 		headers:   make(chan *types.Header),
 		installed: make(chan struct{}),
 		err:       make(chan error),
-		reOrg:     make(chan *types.ReOrgRollup),
+		reOrg:     make(chan core.ReOrgRollup),
 	}
 	return es.subscribe(sub)
 }
@@ -286,7 +286,7 @@ func (es *EventSystem) subscribePendingLogs(crit ethereum.FilterQuery, logs chan
 		headers:   make(chan *types.Header),
 		installed: make(chan struct{}),
 		err:       make(chan error),
-		reOrg:     make(chan *types.ReOrgRollup),
+		reOrg:     make(chan core.ReOrgRollup),
 	}
 	return es.subscribe(sub)
 }
@@ -303,7 +303,7 @@ func (es *EventSystem) SubscribePendingBlock(block chan *types.Header) *Subscrip
 		block:     block,
 		installed: make(chan struct{}),
 		err:       make(chan error),
-		reOrg:     make(chan *types.ReOrgRollup),
+		reOrg:     make(chan core.ReOrgRollup),
 	}
 	return es.subscribe(sub)
 }
@@ -320,7 +320,7 @@ func (es *EventSystem) SubscribeNewHeads(headers chan *types.Header) *Subscripti
 		headers:   headers,
 		installed: make(chan struct{}),
 		err:       make(chan error),
-		reOrg:     make(chan *types.ReOrgRollup),
+		reOrg:     make(chan core.ReOrgRollup),
 	}
 	return es.subscribe(sub)
 }
@@ -337,14 +337,14 @@ func (es *EventSystem) SubscribePendingTxs(hashes chan []common.Hash) *Subscript
 		headers:   make(chan *types.Header),
 		installed: make(chan struct{}),
 		err:       make(chan error),
-		reOrg:     make(chan *types.ReOrgRollup),
+		reOrg:     make(chan core.ReOrgRollup),
 	}
 	return es.subscribe(sub)
 }
 
 // SubscribeReOrg creates a subscription that write the header and array of headers
 // of the newChain from a newly found chain.
-func (es *EventSystem) SubscribeReOrg(reOrg chan *types.ReOrgRollup) *Subscription {
+func (es *EventSystem) SubscribeReOrg(reOrg chan core.ReOrgRollup) *Subscription {
 	sub := &subscription{
 		id:        rpc.NewID(),
 		typ:       ReOrgSubscription,
@@ -391,7 +391,7 @@ func (es *EventSystem) handlePendingBlock(filters filterIndex, ev *types.Header)
 	}
 }
 
-func (es *EventSystem) handleReOrg(filters filterIndex, ev *types.ReOrgRollup) {
+func (es *EventSystem) handleReOrg(filters filterIndex, ev core.ReOrgRollup) {
 	for _, f := range filters[ReOrgSubscription] {
 		f.reOrg <- ev
 	}

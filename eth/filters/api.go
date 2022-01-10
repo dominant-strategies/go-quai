@@ -28,6 +28,7 @@ import (
 	ethereum "github.com/spruce-solutions/go-quai"
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/common/hexutil"
+	"github.com/spruce-solutions/go-quai/core"
 	"github.com/spruce-solutions/go-quai/core/types"
 	"github.com/spruce-solutions/go-quai/ethdb"
 	"github.com/spruce-solutions/go-quai/event"
@@ -280,7 +281,7 @@ func (api *PublicFilterAPI) ReOrg(ctx context.Context) (*rpc.Subscription, error
 	rpcSub := notifier.CreateSubscription()
 
 	go func() {
-		reOrg := make(chan *types.ReOrgRollup)
+		reOrg := make(chan core.ReOrgRollup)
 		reOrgSub := api.events.SubscribeReOrg(reOrg)
 
 		for {

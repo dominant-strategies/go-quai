@@ -268,7 +268,7 @@ func (b *LesApiBackend) SubscribePendingBlockEvent(ch chan<- *types.Header) even
 	})
 }
 
-func (b *LesApiBackend) SubscribeReOrgEvent(ch chan<- *types.ReOrgRollup) event.Subscription {
+func (b *LesApiBackend) SubscribeReOrgEvent(ch chan<- core.ReOrgRollup) event.Subscription {
 	return event.NewSubscription(func(quit <-chan struct{}) error {
 		<-quit
 		return nil

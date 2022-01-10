@@ -27,6 +27,7 @@ import (
 	ethereum "github.com/spruce-solutions/go-quai"
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/common/hexutil"
+	"github.com/spruce-solutions/go-quai/core"
 	"github.com/spruce-solutions/go-quai/core/types"
 	"github.com/spruce-solutions/go-quai/internal/ethapi"
 	"github.com/spruce-solutions/go-quai/rpc"
@@ -410,8 +411,8 @@ func (ec *Client) SubscribePendingBlock(ctx context.Context, ch chan<- *types.He
 	return ec.c.EthSubscribe(ctx, ch, "pendingBlock")
 }
 
-// SubscribePendingBlock subscribes to notifications about the current pending block on the node.
-func (ec *Client) SubscribeReOrg(ctx context.Context, ch chan<- *types.Header) (ethereum.Subscription, error) {
+// SubscribeReOrg subscribes to notifications about the reorg event.
+func (ec *Client) SubscribeReOrg(ctx context.Context, ch chan<- core.ReOrgRollup) (ethereum.Subscription, error) {
 	return ec.c.EthSubscribe(ctx, ch, "reOrg")
 }
 

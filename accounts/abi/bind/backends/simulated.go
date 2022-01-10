@@ -875,7 +875,7 @@ func (fb *filterBackend) SubscribePendingBlockEvent(ch chan<- *types.Header) eve
 	return nullSubscription()
 }
 
-func (fb *filterBackend) SubscribeReOrgEvent(ch chan<- *types.ReOrgRollup) event.Subscription {
+func (fb *filterBackend) SubscribeReOrgEvent(ch chan<- core.ReOrgRollup) event.Subscription {
 	return nullSubscription()
 }
 func (fb *filterBackend) BloomStatus() (uint64, uint64) { return 4096, 0 }
