@@ -258,7 +258,7 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 		time = parent.Time() + 10 // block time is fixed at 10 seconds
 	}
 
-	baseFee := misc.CalcBaseFee(chain.Config(), parent.Header())
+	baseFee := misc.CalcBaseFee(chain.Config(), parent.Header(), chain.GetHeaderByNumber, chain.GetUnclesInChain, chain.GetGasUsedInChain)
 
 	header := &types.Header{
 		Coinbase:    []common.Address{common.Address{}, common.Address{}, common.Address{}},
@@ -342,4 +342,13 @@ func (cr *fakeChainReader) GetExternalBlock(hash common.Hash, number uint64, con
 }
 func (cr *fakeChainReader) QueueAndRetrieveExtBlocks(blocks []*types.ExternalBlock, header *types.Header) []*types.ExternalBlock {
 	return nil
+}
+
+func (cr *fakeChainReader) GetUnclesInChain(block *types.Block, length int) []*types.Header {
+	return nil
+}
+func (cr *fakeChainReader) GetGasUsedInChain(block *types.Block, length int) int64 { return 0 }
+
+func (cr *fakeChainReader) GetExternalBlocks(header *types.Header) ([]*types.ExternalBlock, error) {
+	return nil, nil
 }

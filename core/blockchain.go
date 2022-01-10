@@ -35,6 +35,7 @@ import (
 	"github.com/spruce-solutions/go-quai/common/mclock"
 	"github.com/spruce-solutions/go-quai/common/prque"
 	"github.com/spruce-solutions/go-quai/consensus"
+	"github.com/spruce-solutions/go-quai/consensus/misc"
 	"github.com/spruce-solutions/go-quai/core/rawdb"
 	"github.com/spruce-solutions/go-quai/core/state"
 	"github.com/spruce-solutions/go-quai/core/state/snapshot"
@@ -979,6 +980,23 @@ func (bc *BlockChain) GetUnclesInChain(block *types.Block, length int) []*types.
 		block = bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
 	}
 	return uncles
+}
+
+// GetGasUsedInChain retrieves all the gas used from a given block backwards until
+// a specific distance is reached.
+func (bc *BlockChain) GetGasUsedInChain(block *types.Block, length int) int64 {
+	gasUsed := 0
+	for i := 0; block != nil && i < length; i++ {
+		gasUsed += int(block.GasUsed())
+		block = bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
+	}
+	return int64(gasUsed)
+}
+
+// GetGasUsedInChain retrieves all the gas used from a given block backwards until
+// a specific distance is reached.
+func (bc *BlockChain) CalculateBaseFee(header *types.Header) *big.Int {
+	return misc.CalcBaseFee(bc.Config(), header, bc.GetHeaderByNumber, bc.GetUnclesInChain, bc.GetGasUsedInChain)
 }
 
 // TrieNode retrieves a blob of data associated with a trie node
@@ -2496,6 +2514,8 @@ func (bc *BlockChain) StoreExternalBlocks(blocks []*types.ExternalBlock) error {
 	return nil
 }
 
+// GetExternalBlocks retrieves the external blocks for a given header. Will call the necessary
+// TraceBranch functionality.
 func (bc *BlockChain) GetExternalBlocks(header *types.Header) ([]*types.ExternalBlock, error) {
 	// Lookup block in externalBlocks cache
 	context := bc.Config().Context // Index that node is currently at

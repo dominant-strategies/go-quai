@@ -21,7 +21,7 @@ import (
 	"context"
 	"math/big"
 
-	"github.com/spruce-solutions/go-quai"
+	ethereum "github.com/spruce-solutions/go-quai"
 	"github.com/spruce-solutions/go-quai/accounts"
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/consensus"
@@ -73,6 +73,7 @@ type Backend interface {
 	PendingBlockAndReceipts() (*types.Block, types.Receipts)
 	AddExternalBlock(block *types.ExternalBlock) error
 	EventMux() *event.TypeMux
+	CalculateBaseFee(header *types.Header) *big.Int
 
 	// Transaction pool API
 	SendTx(ctx context.Context, signedTx *types.Transaction) error
