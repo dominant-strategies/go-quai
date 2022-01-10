@@ -233,7 +233,12 @@ func (miner *Miner) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscript
 	return miner.worker.pendingLogsFeed.Subscribe(ch)
 }
 
-// SubscribePendingBlock starts delivering the pending block to the given chanel.
+// SubscribePendingBlock starts delivering the pending block to the given chanell.
 func (miner *Miner) SubscribePendingBlock(ch chan<- *types.Header) event.Subscription {
 	return miner.worker.pendingBlockFeed.Subscribe(ch)
+}
+
+// SubscribeReOrg starts delivering the reOrg data to the given chanell.
+func (miner *Miner) SubscribeReOrg(ch chan<- *types.ReOrgRollup) event.Subscription {
+	return miner.worker.reOrgFeed.Subscribe(ch)
 }

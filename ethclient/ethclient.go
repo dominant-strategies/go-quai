@@ -410,6 +410,11 @@ func (ec *Client) SubscribePendingBlock(ctx context.Context, ch chan<- *types.He
 	return ec.c.EthSubscribe(ctx, ch, "pendingBlock")
 }
 
+// SubscribePendingBlock subscribes to notifications about the current pending block on the node.
+func (ec *Client) SubscribeReOrg(ctx context.Context, ch chan<- *types.Header) (ethereum.Subscription, error) {
+	return ec.c.EthSubscribe(ctx, ch, "reOrg")
+}
+
 // State Access
 
 // NetworkID returns the network ID (also known as the chain ID) for this chain.

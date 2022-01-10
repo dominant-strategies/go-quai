@@ -21,7 +21,7 @@ import (
 	"context"
 	"math/big"
 
-	"github.com/spruce-solutions/go-quai"
+	ethereum "github.com/spruce-solutions/go-quai"
 	"github.com/spruce-solutions/go-quai/accounts"
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/consensus"
@@ -93,6 +93,7 @@ type Backend interface {
 	SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription
 	SubscribePendingBlockEvent(ch chan<- *types.Header) event.Subscription
 	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
+	SubscribeReOrgEvent(ch chan<- *types.ReOrgRollup) event.Subscription
 
 	ChainConfig() *params.ChainConfig
 	Engine() consensus.Engine

@@ -21,7 +21,7 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/spruce-solutions/go-quai"
+	ethereum "github.com/spruce-solutions/go-quai"
 	"github.com/spruce-solutions/go-quai/accounts"
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/consensus"
@@ -233,6 +233,10 @@ func (b *EthAPIBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.
 
 func (b *EthAPIBackend) SubscribePendingBlockEvent(ch chan<- *types.Header) event.Subscription {
 	return b.eth.miner.SubscribePendingBlock(ch)
+}
+
+func (b *EthAPIBackend) SubscribeReOrgEvent(ch chan<- *types.ReOrgRollup) event.Subscription {
+	return b.eth.miner.SubscribeReOrg(ch)
 }
 
 func (b *EthAPIBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
