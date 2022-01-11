@@ -2110,6 +2110,19 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 	return 0, nil
 }
 
+func (bc *BlockChain) getAllHeaders(block *types.Block) []*types.Header {
+	// Initialize the headers array
+	var prevBlock *types.Block
+	var headers []*types.Header
+	headers = append(headers, block.Header())
+
+	// Find all the headers since genesis
+	for ; block != nil && block.NumberU64() > 0; prevBlock = bc.GetBlock(block.ParentHash(), block.NumberU64()-1) {
+		headers = append(headers, prevBlock.Header())
+	}
+	return headers
+}
+
 // reorg takes two blocks, an old chain and a new chain and will reconstruct the
 // blocks and inserts them to be part of the new canonical chain and accumulates
 // potential missing transactions and post an event about them.
@@ -2168,6 +2181,11 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 			return ret
 		}
 	)
+
+	// Get all the headers for both oldBlock and newBlock
+	oldBlockHeaders := bc.getAllHeaders(oldBlock)
+	newBlockHeaders := bc.getAllHeaders(newBlock)
+
 	// Reduce the longer chain to the same number as the shorter one
 	if oldBlock.NumberU64() > newBlock.NumberU64() {
 		// Old chain is longer, gather all transactions and logs as deleted ones
@@ -2194,6 +2212,8 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		// If the common ancestor was found, bail out
 		if oldBlock.Hash() == newBlock.Hash() {
 			commonBlock = oldBlock
+			// Once the common block is found, the reorg data is sent to the reOrg feed
+			bc.reOrgFeed.Send(ReOrgRollup{ReOrgHeader: commonBlock.Header(), oldChainHeaders: oldBlockHeaders, newChainHeaders: newBlockHeaders})
 			break
 		}
 		// Remove an old block as well as stash away a new block

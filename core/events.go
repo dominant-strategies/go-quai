@@ -37,8 +37,9 @@ type ChainEvent struct {
 }
 
 type ReOrgRollup struct {
-	ReOrgHeader *types.Header
-	ReOrgProof  []*types.Header
+	ReOrgHeader     *types.Header
+	oldChainHeaders []*types.Header
+	newChainHeaders []*types.Header
 }
 type ChainSideEvent struct {
 	Block *types.Block
