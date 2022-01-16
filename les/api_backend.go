@@ -116,6 +116,10 @@ func (b *LesApiBackend) AddExternalBlock(block *types.ExternalBlock) error {
 	return errors.New("light client does not support external block caching.")
 }
 
+func (b *LesApiBackend) ReOrgRollBack(reOrgData *core.ReOrgRollup) error {
+	return errors.New("light client does not support reorg.")
+}
+
 func (b *LesApiBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Block, error) {
 	if blockNr, ok := blockNrOrHash.Number(); ok {
 		return b.BlockByNumber(ctx, blockNr)

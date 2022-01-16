@@ -1620,6 +1620,13 @@ func (bc *BlockChain) AddExternalBlock(block *types.ExternalBlock) error {
 	return nil
 }
 
+// ReOrgRollBack compares the difficulty of the newchain and oldchain. Rolls back
+// the current header to the position where the reorg took place in a higher context
+func (bc *BlockChain) ReOrgRollBack(reOrgData *ReOrgRollup) error {
+
+	return nil
+}
+
 // InsertChain attempts to insert the given batch of blocks in to the canonical
 // chain or, otherwise, create a fork. If an error is returned it will return
 // the index number of the failing block as well an error describing what went
@@ -2208,7 +2215,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 			commonBlock = oldBlock
 
 			// Once the common block is found, the reorg data is sent to the reOrg feed
-			bc.reOrgFeed.Send(ReOrgRollup{ReOrgHeader: commonBlock.Header(), oldChainHeaders: bc.getAllHeaders(oldChain), newChainHeaders: bc.getAllHeaders(newChain)})
+			bc.reOrgFeed.Send(ReOrgRollup{ReOrgHeader: commonBlock.Header(), OldChainHeaders: bc.getAllHeaders(oldChain), NewChainHeaders: bc.getAllHeaders(newChain)})
 			break
 		}
 		// Remove an old block as well as stash away a new block

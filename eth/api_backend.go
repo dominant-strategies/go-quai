@@ -124,6 +124,10 @@ func (b *EthAPIBackend) AddExternalBlock(block *types.ExternalBlock) error {
 	return b.eth.blockchain.AddExternalBlock(block)
 }
 
+func (b *EthAPIBackend) ReOrgRollBack(reOrgData *core.ReOrgRollup) error {
+	return b.eth.blockchain.ReOrgRollBack(reOrgData)
+}
+
 func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
 	return b.eth.blockchain.GetBlockByHash(hash), nil
 }

@@ -635,6 +635,15 @@ func (ec *Client) SendExternalBlock(ctx context.Context, block *types.Block, rec
 	return ec.c.CallContext(ctx, nil, "eth_sendExternalBlock", data)
 }
 
+// SendReorgData sends thre reorg data to the node to rollup and update the chain
+func (ec *Client) SendReOrgData(ctx context.Context, reorgData core.ReOrgRollup) error {
+	data, err := ethapi.RPCMarshalReOrgData(reorgData)
+	if err != nil {
+		return err
+	}
+	return ec.c.CallContext(ctx, nil, "eth_sendReOrgData", data)
+}
+
 func toBlockNumArg(number *big.Int) string {
 	if number == nil {
 		return "latest"

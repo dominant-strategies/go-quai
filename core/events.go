@@ -17,8 +17,14 @@
 package core
 
 import (
+	"math/big"
+
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/core/types"
+)
+
+var (
+	ContextDepth = 3
 )
 
 // NewTxsEvent is posted when a batch of transactions enter the transaction pool.
@@ -38,11 +44,56 @@ type ChainEvent struct {
 
 type ReOrgRollup struct {
 	ReOrgHeader     *types.Header
-	oldChainHeaders []*types.Header
-	newChainHeaders []*types.Header
+	OldChainHeaders []*types.Header
+	NewChainHeaders []*types.Header
 }
 type ChainSideEvent struct {
 	Block *types.Block
 }
 
 type ChainHeadEvent struct{ Block *types.Block }
+
+// CopyHeader creates a deep copy of a block header to prevent side effects from
+// modifying a header variable.
+func CopyHeader(h *types.Header) *types.Header {
+	cpy := *h
+	for i := 0; i < ContextDepth; i++ {
+		if len(h.Difficulty) > i && h.Difficulty[i] != nil {
+			cpy.Difficulty[i].Set(h.Difficulty[i])
+		}
+		if len(h.NetworkDifficulty) > i && h.NetworkDifficulty[i] != nil {
+			cpy.NetworkDifficulty[i].Set(h.NetworkDifficulty[i])
+		}
+		if len(h.Number) > i && h.Number[i] != nil {
+			cpy.Number[i].Set(h.Number[i])
+		}
+		if len(h.BaseFee) > i && h.BaseFee != nil && h.BaseFee[i] != nil {
+			cpy.BaseFee[i] = new(big.Int).Set(h.BaseFee[i])
+		}
+		if len(h.Extra) > i {
+			if len(h.Extra[i]) > 0 {
+				cpy.Extra[i] = make([]byte, len(h.Extra[i]))
+				copy(cpy.Extra[i], h.Extra[i])
+			}
+		}
+	}
+	return &cpy
+}
+
+// NewReOrgHeader copies the header data into the ReOrgHeader field
+func NewReOrgHeader(header *types.Header) *ReOrgRollup {
+	return &ReOrgRollup{ReOrgHeader: header}
+}
+
+// ReOrgDataWithNewChainAndOldChain copies the newchain and oldchain headers into the reorg data
+func (r *ReOrgRollup) ReOrgDataWithNewChainAndOldChain(oldChain, newChain []*types.Header) *ReOrgRollup {
+	reOrgData := &ReOrgRollup{
+		ReOrgHeader:     CopyHeader(r.ReOrgHeader),
+		OldChainHeaders: make([]*types.Header, len(oldChain)),
+		NewChainHeaders: make([]*types.Header, len(newChain)),
+	}
+
+	copy(reOrgData.OldChainHeaders, oldChain)
+	copy(reOrgData.NewChainHeaders, newChain)
+	return reOrgData
+}

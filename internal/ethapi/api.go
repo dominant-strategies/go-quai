@@ -1322,6 +1322,15 @@ func RPCMarshalExternalBlock(block *types.Block, receipts []*types.Receipt, cont
 	return fields, nil
 }
 
+// rpcMarshalReOrgData converts the reOrgData obtained to the right header format
+func RPCMarshalReOrgData(reOrgData core.ReOrgRollup) (map[string]interface{}, error) {
+	fields := RPCMarshalHeader(reOrgData.ReOrgHeader)
+	fields["commonHead"] = reOrgData.ReOrgHeader
+	fields["newChain"] = reOrgData.NewChainHeaders
+	fields["oldChain"] = reOrgData.OldChainHeaders
+	return fields, nil
+}
+
 // rpcMarshalHeader uses the generalized output filler, then adds the total difficulty field, which requires
 // a `PublicBlockchainAPI`.
 func (s *PublicBlockChainAPI) rpcMarshalHeader(ctx context.Context, header *types.Header) map[string]interface{} {
@@ -1933,6 +1942,36 @@ func (s *PublicBlockChainAPI) SendMinedBlock(ctx context.Context, raw json.RawMe
 	if block.Header() != nil {
 		s.b.EventMux().Post(core.NewMinedBlockEvent{Block: block})
 	}
+
+	return nil
+}
+
+// ReOrgRollBack will send the reorg data to perform reorg rollback
+func (s *PublicBlockChainAPI) ReOrgRollBack(ctx context.Context, raw json.RawMessage) error {
+	// Decode reOrgHeader and body.
+	var head *types.Header
+	var body core.ReOrgRollup
+	if err := json.Unmarshal(raw, &head); err != nil {
+		return err
+	}
+	if err := json.Unmarshal(raw, &body); err != nil {
+		return err
+	}
+
+	// Load newchain and oldchain data
+	oldChainHeaders := make([]*types.Header, len(body.OldChainHeaders))
+	for i, header := range body.OldChainHeaders {
+		oldChainHeaders[i] = header
+	}
+
+	newChainHeaders := make([]*types.Header, len(body.NewChainHeaders))
+	for i, header := range body.NewChainHeaders {
+		oldChainHeaders[i] = header
+	}
+
+	reOrgData := core.NewReOrgHeader(head).ReOrgDataWithNewChainAndOldChain(oldChainHeaders, newChainHeaders)
+
+	s.b.ReOrgRollBack(reOrgData)
 
 	return nil
 }
