@@ -646,6 +646,71 @@ func (ethash *Ethash) GetDifficultyContext(chain consensus.ChainHeaderReader, he
 	return difficultyContext, nil
 }
 
+func (ethash *Ethash) checkPoWWithoutChain(header *types.Header, fulldag bool) []byte {
+	// Recompute the digest and PoW values
+	// Number is set to the Prime number for ethash dataset
+	bigNum := header.Number[0]
+	if bigNum == nil {
+		bigNum = big.NewInt(0)
+	}
+
+	number := bigNum.Uint64()
+
+	var (
+		result []byte
+	)
+	// If fast-but-heavy PoW verification was requested, use an ethash dataset
+	if fulldag {
+		dataset := ethash.dataset(number, true)
+		if dataset.generated() {
+			_, result = hashimotoFull(dataset.dataset, ethash.SealHash(header).Bytes(), header.Nonce.Uint64())
+
+			// Datasets are unmapped in a finalizer. Ensure that the dataset stays alive
+			// until after the call to hashimotoFull so it's not unmapped while being used.
+			runtime.KeepAlive(dataset)
+		} else {
+			// Dataset not yet generated, don't hang, use a cache instead
+			fulldag = false
+		}
+	}
+	// If slow-but-light PoW verification was requested (or DAG not yet ready), use an ethash cache
+	if !fulldag {
+		cache := ethash.cache(number)
+
+		size := datasetSize(number)
+		if ethash.config.PowMode == ModeTest {
+			size = 32 * 1024
+		}
+		_, result = hashimotoLight(size, cache.cache, ethash.SealHash(header).Bytes(), header.Nonce.Uint64())
+
+		// Caches are unmapped in a finalizer. Ensure that the cache stays alive
+		// until after the call to hashimotoLight so it's not unmapped while being used.
+		runtime.KeepAlive(cache)
+	}
+
+	return result
+}
+
+func (ethash *Ethash) GetDifficultyContextWithoutContext(header *types.Header) (int, error) {
+	var difficultyContext int
+	if header.Nonce != (types.BlockNonce{}) {
+		result := ethash.checkPoWWithoutChain(header, false)
+		for i := types.ContextDepth - 1; i > -1; i-- {
+			if header.Difficulty[i] != nil {
+				target := new(big.Int).Div(two256, header.Difficulty[i])
+				if new(big.Int).SetBytes(result).Cmp(target) <= 0 {
+					difficultyContext = i
+				}
+			}
+		}
+		// Invalid number on the new difficulty
+		if header.Number[difficultyContext] == nil {
+			return types.ContextDepth, errors.New("error checking difficulty context")
+		}
+	}
+	return difficultyContext, nil
+}
+
 // Prepare implements consensus.Engine, initializing the difficulty field of a
 // header to conform to the ethash protocol. The changes are done inline.
 func (ethash *Ethash) Prepare(chain consensus.ChainHeaderReader, header *types.Header) error {
