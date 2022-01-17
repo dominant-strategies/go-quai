@@ -1623,15 +1623,104 @@ func (bc *BlockChain) AddExternalBlock(block *types.ExternalBlock) error {
 // ReOrgRollBack compares the difficulty of the newchain and oldchain. Rolls back
 // the current header to the position where the reorg took place in a higher context
 func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
+	var (
+		deletedTxs  types.Transactions
+		deletedLogs [][]*types.Log
 
-	// check if the new chain is heavier than the old chain
-	// heavier := compareDifficulty(reOrgData.ReOrgHeader, reOrgData.OldChainHeaders, reOrgData.NewChainHeaders)
+		// collectLogs collects the logs that were generated or removed during
+		// the processing of the block that corresponds with the given hash.
+		// These logs are later announced as deleted or reborn
+		collectLogs = func(hash common.Hash) {
+			number := bc.hc.GetBlockNumber(hash)
+			if number == nil {
+				return
+			}
+			receipts := rawdb.ReadReceipts(bc.db, hash, *number, bc.chainConfig)
 
-	// if heavier {
+			var logs []*types.Log
+			for _, receipt := range receipts {
+				for _, log := range receipt.Logs {
+					l := *log
+					l.Removed = true
+					logs = append(logs, &l)
+				}
+			}
+			if len(logs) > 0 {
+				deletedLogs = append(deletedLogs, logs)
+			}
+		}
+		// mergeLogs returns a merged log slice with specified sort order.
+		mergeLogs = func(logs [][]*types.Log, reverse bool) []*types.Log {
+			var ret []*types.Log
+			if reverse {
+				for i := len(logs) - 1; i >= 0; i-- {
+					ret = append(ret, logs[i]...)
+				}
+			} else {
+				for i := 0; i < len(logs); i++ {
+					ret = append(ret, logs[i]...)
+				}
+			}
+			return ret
+		}
+	)
 
-	// } else {
-	// 	return errors.New("reorg rollback failed as newchain violated the longest chain rule")
-	// }
+	if header != nil {
+		// get the commonBlock number and the block
+		commonBlock := bc.GetBlockByHash(header.Hash())
+		// if a block with this hash does not exist then we dont have to roll back
+		if commonBlock == nil {
+			return nil
+		}
+		// get the current head in this chain
+		currentBlock := bc.CurrentBlock()
+
+		for {
+			if currentBlock.NumberU64() == commonBlock.NumberU64()-1 {
+				break
+			}
+			deletedTxs = append(deletedTxs, currentBlock.Transactions()...)
+			collectLogs(currentBlock.Hash())
+
+			currentBlock = bc.GetBlock(currentBlock.ParentHash(), currentBlock.NumberU64())
+			if currentBlock == nil {
+				return fmt.Errorf("invalid current chain")
+			}
+		}
+		// set the head back to the block before the commonhead
+		if err := bc.SetHead(commonBlock.NumberU64() - 1); err != nil {
+			return err
+		}
+
+		fmt.Println("Header is now rolled back and the current head is at", bc.CurrentBlock().NumberU64())
+
+		// Delete useless indexes right now which includes the non-canonical
+		// transaction indexes, canonical chain indexes which above the head.
+		indexesBatch := bc.db.NewBatch()
+		for _, tx := range deletedTxs {
+			rawdb.DeleteTxLookupEntry(indexesBatch, tx.Hash())
+		}
+
+		// Delete any canonical number assignments above the new head
+		number := bc.CurrentBlock().NumberU64()
+		for i := number + 1; ; i++ {
+			hash := rawdb.ReadCanonicalHash(bc.db, i)
+			if hash == (common.Hash{}) {
+				break
+			}
+			rawdb.DeleteCanonicalHash(indexesBatch, i)
+		}
+		if err := indexesBatch.Write(); err != nil {
+			log.Crit("Failed to delete useless indexes", "err", err)
+		}
+
+		// send the deleted logs to the removed logs feed
+		if len(deletedLogs) > 0 {
+			bc.rmLogsFeed.Send(RemovedLogsEvent{mergeLogs(deletedLogs, true)})
+		}
+	} else {
+		return fmt.Errorf("reorg header was null")
+	}
 	return nil
 }
 
