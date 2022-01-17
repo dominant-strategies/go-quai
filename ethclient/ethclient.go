@@ -636,8 +636,8 @@ func (ec *Client) SendExternalBlock(ctx context.Context, block *types.Block, rec
 }
 
 // SendReorgData sends thre reorg data to the node to rollup and update the chain
-func (ec *Client) SendReOrgData(ctx context.Context, reorgData core.ReOrgRollup) error {
-	data, err := ethapi.RPCMarshalReOrgData(reorgData)
+func (ec *Client) SendReOrgData(ctx context.Context, header *types.Header) error {
+	data, err := ethapi.RPCMarshalReOrgData(header)
 	if err != nil {
 		return err
 	}

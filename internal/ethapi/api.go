@@ -1323,11 +1323,8 @@ func RPCMarshalExternalBlock(block *types.Block, receipts []*types.Receipt, cont
 }
 
 // rpcMarshalReOrgData converts the reOrgData obtained to the right header format
-func RPCMarshalReOrgData(reOrgData core.ReOrgRollup) (map[string]interface{}, error) {
-	fields := RPCMarshalHeader(reOrgData.ReOrgHeader)
-	fields["commonHead"] = reOrgData.ReOrgHeader
-	fields["newChain"] = reOrgData.NewChainHeaders
-	fields["oldChain"] = reOrgData.OldChainHeaders
+func RPCMarshalReOrgData(header *types.Header) (map[string]interface{}, error) {
+	fields := RPCMarshalHeader(header)
 	return fields, nil
 }
 
@@ -1950,7 +1947,7 @@ func (s *PublicBlockChainAPI) SendMinedBlock(ctx context.Context, raw json.RawMe
 func (s *PublicBlockChainAPI) ReOrgRollBack(ctx context.Context, raw json.RawMessage) error {
 	// Decode reOrgHeader and body.
 	var head *types.Header
-	var body core.ReOrgRollup
+	var body *types.Header
 	if err := json.Unmarshal(raw, &head); err != nil {
 		return err
 	}
@@ -1958,20 +1955,7 @@ func (s *PublicBlockChainAPI) ReOrgRollBack(ctx context.Context, raw json.RawMes
 		return err
 	}
 
-	// Load newchain and oldchain data
-	oldChainHeaders := make([]*types.Header, len(body.OldChainHeaders))
-	for i, header := range body.OldChainHeaders {
-		oldChainHeaders[i] = header
-	}
-
-	newChainHeaders := make([]*types.Header, len(body.NewChainHeaders))
-	for i, header := range body.NewChainHeaders {
-		oldChainHeaders[i] = header
-	}
-
-	reOrgData := core.NewReOrgHeader(head).ReOrgDataWithNewChainAndOldChain(oldChainHeaders, newChainHeaders)
-
-	s.b.ReOrgRollBack(reOrgData)
+	s.b.ReOrgRollBack(head)
 
 	return nil
 }

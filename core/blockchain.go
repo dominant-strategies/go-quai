@@ -35,7 +35,6 @@ import (
 	"github.com/spruce-solutions/go-quai/common/mclock"
 	"github.com/spruce-solutions/go-quai/common/prque"
 	"github.com/spruce-solutions/go-quai/consensus"
-	"github.com/spruce-solutions/go-quai/consensus/ethash"
 	"github.com/spruce-solutions/go-quai/core/rawdb"
 	"github.com/spruce-solutions/go-quai/core/state"
 	"github.com/spruce-solutions/go-quai/core/state/snapshot"
@@ -1621,63 +1620,18 @@ func (bc *BlockChain) AddExternalBlock(block *types.ExternalBlock) error {
 	return nil
 }
 
-// checkNonceEmpty checks if any of the headers have empty nonce
-func checkNonceEmpty(commonHead *types.Header, oldChain, newChain []*types.Header) bool {
-	if commonHead.Nonce == (types.BlockNonce{}) {
-		return false
-	}
-
-	for i := 0; i < len(oldChain); i++ {
-		if oldChain[i].Nonce == (types.BlockNonce{}) {
-			return false
-		}
-	}
-	for i := 0; i < len(newChain); i++ {
-		if newChain[i].Nonce == (types.BlockNonce{}) {
-			return false
-		}
-	}
-	return true
-}
-
-// compareDifficulty compares 2 chains and returns true if the newChain is heavier
-// than the oldChain and false otherwise
-func compareDifficulty(commonHead *types.Header, oldChain, newChain []*types.Header) bool {
-
-	var ethash ethash.Ethash
-
-	oldChainDifficulty := big.NewInt(0)
-	newChainDifficulty := big.NewInt(0)
-
-	nonceEmpty := checkNonceEmpty(commonHead, oldChain, newChain)
-
-	difficultyContext, err := ethash.GetDifficultyContextWithoutContext(commonHead)
-
-	if err != nil {
-		return false
-	}
-
-	for i := 0; i < len(oldChain); i++ {
-		oldChainDifficulty.Add(oldChainDifficulty, oldChain[i].Difficulty[difficultyContext])
-	}
-	for i := 0; i < len(newChain); i++ {
-		newChainDifficulty.Add(newChainDifficulty, newChain[i].Difficulty[difficultyContext])
-	}
-	return newChainDifficulty.Cmp(oldChainDifficulty) > 0 && nonceEmpty
-}
-
 // ReOrgRollBack compares the difficulty of the newchain and oldchain. Rolls back
 // the current header to the position where the reorg took place in a higher context
-func (bc *BlockChain) ReOrgRollBack(reOrgData *ReOrgRollup) error {
+func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 
 	// check if the new chain is heavier than the old chain
-	heavier := compareDifficulty(reOrgData.ReOrgHeader, reOrgData.OldChainHeaders, reOrgData.NewChainHeaders)
+	// heavier := compareDifficulty(reOrgData.ReOrgHeader, reOrgData.OldChainHeaders, reOrgData.NewChainHeaders)
 
-	if heavier {
+	// if heavier {
 
-	} else {
-		return errors.New("reorg rollback failed as newchain violated the longest chain rule")
-	}
+	// } else {
+	// 	return errors.New("reorg rollback failed as newchain violated the longest chain rule")
+	// }
 	return nil
 }
 

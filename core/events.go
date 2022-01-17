@@ -79,21 +79,3 @@ func CopyHeader(h *types.Header) *types.Header {
 	}
 	return &cpy
 }
-
-// NewReOrgHeader copies the header data into the ReOrgHeader field
-func NewReOrgHeader(header *types.Header) *ReOrgRollup {
-	return &ReOrgRollup{ReOrgHeader: header}
-}
-
-// ReOrgDataWithNewChainAndOldChain copies the newchain and oldchain headers into the reorg data
-func (r *ReOrgRollup) ReOrgDataWithNewChainAndOldChain(oldChain, newChain []*types.Header) *ReOrgRollup {
-	reOrgData := &ReOrgRollup{
-		ReOrgHeader:     CopyHeader(r.ReOrgHeader),
-		OldChainHeaders: make([]*types.Header, len(oldChain)),
-		NewChainHeaders: make([]*types.Header, len(newChain)),
-	}
-
-	copy(reOrgData.OldChainHeaders, oldChain)
-	copy(reOrgData.NewChainHeaders, newChain)
-	return reOrgData
-}
