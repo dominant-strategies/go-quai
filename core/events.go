@@ -17,8 +17,6 @@
 package core
 
 import (
-	"math/big"
-
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/core/types"
 )
@@ -52,30 +50,3 @@ type ChainSideEvent struct {
 }
 
 type ChainHeadEvent struct{ Block *types.Block }
-
-// CopyHeader creates a deep copy of a block header to prevent side effects from
-// modifying a header variable.
-func CopyHeader(h *types.Header) *types.Header {
-	cpy := *h
-	for i := 0; i < ContextDepth; i++ {
-		if len(h.Difficulty) > i && h.Difficulty[i] != nil {
-			cpy.Difficulty[i].Set(h.Difficulty[i])
-		}
-		if len(h.NetworkDifficulty) > i && h.NetworkDifficulty[i] != nil {
-			cpy.NetworkDifficulty[i].Set(h.NetworkDifficulty[i])
-		}
-		if len(h.Number) > i && h.Number[i] != nil {
-			cpy.Number[i].Set(h.Number[i])
-		}
-		if len(h.BaseFee) > i && h.BaseFee != nil && h.BaseFee[i] != nil {
-			cpy.BaseFee[i] = new(big.Int).Set(h.BaseFee[i])
-		}
-		if len(h.Extra) > i {
-			if len(h.Extra[i]) > 0 {
-				cpy.Extra[i] = make([]byte, len(h.Extra[i]))
-				copy(cpy.Extra[i], h.Extra[i])
-			}
-		}
-	}
-	return &cpy
-}
