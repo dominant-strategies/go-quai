@@ -1666,7 +1666,7 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 	)
 
 	if header != nil {
-		// get the commonBlock number and the block
+		// get the commonBlock
 		commonBlock := bc.GetBlockByHash(header.Hash())
 		// if a block with this hash does not exist then we dont have to roll back
 		if commonBlock == nil {
@@ -1687,7 +1687,7 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 				return fmt.Errorf("invalid current chain")
 			}
 		}
-		// set the head back to the block before the commonhead
+		// set the head back to the block before the second block in newChain in higher context reorg
 		if err := bc.SetHead(commonBlock.NumberU64() - 1); err != nil {
 			return err
 		}
