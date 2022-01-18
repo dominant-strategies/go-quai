@@ -1687,7 +1687,7 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 				return fmt.Errorf("invalid current chain")
 			}
 		}
-		// set the head back to the block before the second block in newChain in higher context reorg
+		// set the head back to the block before the rollback point
 		if err := bc.SetHead(commonBlock.NumberU64() - 1); err != nil {
 			return err
 		}
