@@ -21,10 +21,6 @@ import (
 	"github.com/spruce-solutions/go-quai/core/types"
 )
 
-var (
-	ContextDepth = 3
-)
-
 // NewTxsEvent is posted when a batch of transactions enter the transaction pool.
 type NewTxsEvent struct{ Txs []*types.Transaction }
 
