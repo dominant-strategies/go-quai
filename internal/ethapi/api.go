@@ -756,6 +756,18 @@ func (s *PublicBlockChainAPI) PendingBlock(ctx context.Context) (map[string]inte
 	return s.rpcMarshalBlockWithReceipts(ctx, block, receipts, true, true)
 }
 
+func (s *PublicBlockChainAPI) GetBlockWithReceiptsByHash(ctx context.Context, hash common.Hash) (map[string]interface{}, error) {
+	block, err := s.b.BlockByHash(ctx, hash)
+	if err != nil {
+		return nil, err
+	}
+	receipts, err := s.b.GetReceipts(ctx, hash)
+	if err != nil {
+		return nil, err
+	}
+	return s.rpcMarshalBlockWithReceipts(ctx, block, receipts, true, true)
+}
+
 // GetBlockByHash returns the requested block. When fullTx is true all transactions in the block are returned in full
 // detail, otherwise only the transaction hash is returned.
 func (s *PublicBlockChainAPI) GetBlockByHash(ctx context.Context, hash common.Hash, fullTx bool) (map[string]interface{}, error) {

@@ -94,6 +94,11 @@ func (ec *Client) GetPendingBlock(ctx context.Context) (*types.ReceiptBlock, err
 	return ec.getBlockWithReceipts(ctx, "eth_pendingBlock")
 }
 
+// Pending block returns a pending block if one exists
+func (ec *Client) ReceiptBlockByHash(ctx context.Context) (*types.ReceiptBlock, error) {
+	return ec.getBlockWithReceipts(ctx, "eth_getBlockWithReceiptsByHash")
+}
+
 // BlockNumber returns the most recent block number
 func (ec *Client) BlockNumber(ctx context.Context) (uint64, error) {
 	var result hexutil.Uint64
@@ -359,6 +364,18 @@ func (ec *Client) TransactionInBlock(ctx context.Context, blockHash common.Hash,
 func (ec *Client) TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error) {
 	var r *types.Receipt
 	err := ec.c.CallContext(ctx, &r, "eth_getTransactionReceipt", txHash)
+	if err == nil {
+		if r == nil {
+			return nil, ethereum.NotFound
+		}
+	}
+	return r, err
+}
+
+// GetBlockReceipts returns the receipts of a block by block hash.
+func (ec *Client) GetBlockReceipts(ctx context.Context, blockHash common.Hash) (*types.ReceiptBlock, error) {
+	var r *types.ReceiptBlock
+	err := ec.c.CallContext(ctx, &r, "eth_getBlockWithReceiptsByHash", blockHash)
 	if err == nil {
 		if r == nil {
 			return nil, ethereum.NotFound
