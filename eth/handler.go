@@ -524,10 +524,11 @@ func (h *handler) minedBroadcastLoop() {
 				extBlocks, err := h.chain.GetExternalBlocks(header)
 				if err != nil {
 					log.Info("Error sending external blocks to peer", "err", err)
+				} else {
+					log.Info("minedBroadcastLoop", "hash", header.Hash(), "extBlocks", len(extBlocks))
+					h.BroadcastBlock(ev.Block, extBlocks, true)  // First propagate block to peers
+					h.BroadcastBlock(ev.Block, extBlocks, false) // Only then announce to the rest
 				}
-				log.Info("minedBroadcastLoop", "hash", header.Hash(), "extBlocks", len(extBlocks))
-				h.BroadcastBlock(ev.Block, extBlocks, true)  // First propagate block to peers
-				h.BroadcastBlock(ev.Block, extBlocks, false) // Only then announce to the rest
 			}
 		}
 	}
