@@ -934,7 +934,11 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	}
 
 	// Gather external blocks and apply transactions
-	externalBlocks := w.engine.GetExternalBlocks(w.chain, header, false)
+	externalBlocks, extBlockErr := w.engine.GetExternalBlocks(w.chain, header, false)
+	if extBlockErr != nil {
+		log.Error("commitNewWork: Unable to retrieve external blocks", "height", header.Number)
+		return
+	}
 	etxs := make(types.Transactions, 0)
 	externalGasUsed := uint64(0)
 	for _, externalBlock := range externalBlocks {
