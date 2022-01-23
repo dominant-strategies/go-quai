@@ -1955,7 +1955,7 @@ func (s *PublicBlockChainAPI) SendMinedBlock(ctx context.Context, raw json.RawMe
 }
 
 // ReOrgRollBack will send the reorg data to perform reorg rollback
-func (s *PublicBlockChainAPI) ReOrgRollBack(ctx context.Context, raw json.RawMessage) error {
+func (s *PublicBlockChainAPI) SendReOrgData(ctx context.Context, raw json.RawMessage) error {
 	// Decode reOrgHeader and body.
 	var head *types.Header
 	var body *types.Header
