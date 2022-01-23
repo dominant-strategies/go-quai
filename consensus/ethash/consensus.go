@@ -767,7 +767,7 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 			extBlock, err := chain.GetExternalBlock(header.Hash(), header.Number[context].Uint64(), uint64(context))
 			if err != nil {
 				log.Warn("TraceBranch: External Block not found for header", "number", header.Number[context], "context", context, "hash", header.Hash())
-				return nil, errExtBlockNotFound
+				return nil, nil
 			}
 			if logging {
 				log.Debug("GetExternalBlocks: Block being added: ", "number", extBlock.Header().Number, "context", extBlock.Context(), "location", extBlock.Header().Location, "txs", len(extBlock.Transactions()))
@@ -799,7 +799,7 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 			extBlock, err := chain.GetExternalBlock(header.ParentHash[context], header.Number[context].Uint64()-1, uint64(context))
 			if err != nil {
 				log.Warn("Trace Branch: External Block not found for previous header", "number", header.Number[context], "context", context, "hash", header.ParentHash[context])
-				return nil, errExtBlockNotFound
+				return nil, nil
 			}
 			prevHeader = extBlock.Header()
 			// In Regions the starting header needs to be broken off for N-1
