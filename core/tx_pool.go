@@ -147,6 +147,9 @@ type blockChain interface {
 	StateAt(root common.Hash) (*state.StateDB, error)
 
 	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
+	GetHeaderByNumber(number uint64) *types.Header
+	GetUnclesInChain(block *types.Block, length int) []*types.Header
+	GetGasUsedInChain(block *types.Block, length int) int64
 }
 
 // TxPoolConfig are the configuration parameters of the transaction pool.
@@ -1187,7 +1190,7 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 	if reset != nil {
 		pool.demoteUnexecutables()
 		if reset.newHead != nil && pool.chainconfig.IsLondon(new(big.Int).Add(reset.newHead.Number[types.QuaiNetworkContext], big.NewInt(1))) {
-			pendingBaseFee := misc.CalcBaseFee(pool.chainconfig, reset.newHead)
+			pendingBaseFee := misc.CalcBaseFee(pool.chainconfig, reset.newHead, pool.chain.GetHeaderByNumber, pool.chain.GetUnclesInChain, pool.chain.GetGasUsedInChain)
 			pool.priced.SetBaseFee(pendingBaseFee)
 		}
 	}

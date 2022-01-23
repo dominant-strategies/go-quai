@@ -139,7 +139,6 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 	}
 	num := parent.Number()
 
-
 	header := types.NewEmptyHeader()
 	header.Time = params.Timestamp
 	header.GasLimit[types.QuaiNetworkContext] = parent.GasLimit()
@@ -148,7 +147,7 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 	header.Coinbase[types.QuaiNetworkContext] = coinbase
 
 	if config := api.eth.BlockChain().Config(); config.IsLondon(header.Number[types.QuaiNetworkContext]) {
-		header.BaseFee[types.QuaiNetworkContext] = misc.CalcBaseFee(config, parent.Header())
+		header.BaseFee[types.QuaiNetworkContext] = misc.CalcBaseFee(config, parent.Header(), api.eth.BlockChain().GetHeaderByNumber, api.eth.BlockChain().GetUnclesInChain, api.eth.BlockChain().GetGasUsedInChain)
 	}
 	err = api.eth.Engine().Prepare(bc, header)
 	if err != nil {
@@ -251,7 +250,9 @@ func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 	return txs, nil
 }
 
-func insertBlockParamsToBlock(config *chainParams.ChainConfig, parent *types.Header, params executableData) (*types.Block, error) {
+func insertBlockParamsToBlock(chain *core.BlockChain, parent *types.Header, params executableData) (*types.Block, error) {
+	config := chain.Config()
+
 	txs, err := decodeTransactions(params.Transactions)
 	if err != nil {
 		return nil, err
@@ -286,9 +287,8 @@ func insertBlockParamsToBlock(config *chainParams.ChainConfig, parent *types.Hea
 	header.Number[types.QuaiNetworkContext] = number
 	header.GasUsed[types.QuaiNetworkContext] = params.GasUsed
 
-	if config.IsLondon(number) {
-		header.BaseFee[types.QuaiNetworkContext] = misc.CalcBaseFee(config, parent)
-	}
+	header.BaseFee[types.QuaiNetworkContext] = misc.CalcBaseFee(config, parent, chain.GetHeaderByNumber, chain.GetUnclesInChain, chain.GetGasUsedInChain)
+
 	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */)
 	return block, nil
 }
@@ -301,7 +301,7 @@ func (api *consensusAPI) NewBlock(params executableData) (*newBlockResponse, err
 	if parent == nil {
 		return &newBlockResponse{false}, fmt.Errorf("could not find parent %x", params.ParentHash)
 	}
-	block, err := insertBlockParamsToBlock(api.eth.BlockChain().Config(), parent.Header(), params)
+	block, err := insertBlockParamsToBlock(api.eth.BlockChain(), parent.Header(), params)
 	if err != nil {
 		return nil, err
 	}

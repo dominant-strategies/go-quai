@@ -287,17 +287,8 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	if len(header.GasUsed) > 0 && header.GasUsed[types.QuaiNetworkContext] > header.GasLimit[types.QuaiNetworkContext] {
 		return fmt.Errorf("invalid gasUsed: have %d, gasLimit %d", header.GasUsed, header.GasLimit)
 	}
-	// Verify the block's gas usage and (if applicable) verify the base fee.
-	if !chain.Config().IsLondon(header.Number[types.QuaiNetworkContext]) {
-		// Verify BaseFee not present before EIP-1559 fork.
-		// TODO: #22 Enable the check for invalid baseFee before fork
-		// if header.BaseFee != nil {
-		// 	return fmt.Errorf("invalid baseFee before fork: have %d, expected 'nil'", header.BaseFee)
-		// }
-		if err := misc.VerifyGaslimit(parent.GasLimit[types.QuaiNetworkContext], header.GasLimit[types.QuaiNetworkContext]); err != nil {
-			return err
-		}
-	} else if err := misc.VerifyEip1559Header(chain.Config(), parent, header); err != nil {
+	// Verify the block's gas usage and base fee.
+	if err := misc.VerifyHeaderGasAndFee(chain.Config(), parent, header, chain); err != nil {
 		// Verify the header's EIP-1559 attributes.
 		return err
 	}
@@ -908,54 +899,6 @@ var (
 	big32 = big.NewInt(32)
 )
 
-// calculateReward calculates the coinbase rewards depending on the type of the block
-// regions = # of regions
-// zones = # of zones
-// For each prime = Reward/3
-// For each region = Reward/(3*regions*time-factor)
-// For each zone = Reward/(3*regions*zones*time-factor^2)
-func calculateReward() *big.Int {
-
-	reward := big.NewInt(5e18)
-
-	timeFactor := big.NewInt(10)
-
-	regions := big.NewInt(3)
-	zones := big.NewInt(3)
-
-	primeReward := big.NewInt(1)
-	primeReward.Mul(primeReward, big.NewInt(3))
-	primeReward.Div(reward, primeReward)
-
-	regionReward := big.NewInt(1)
-	regionReward.Mul(regionReward, big.NewInt(3))
-	regionReward.Mul(regionReward, regions)
-	regionReward.Mul(regionReward, timeFactor)
-	regionReward.Div(reward, regionReward)
-
-	zoneReward := big.NewInt(1)
-	zoneReward.Mul(zoneReward, big.NewInt(3))
-	zoneReward.Mul(zoneReward, regions)
-	zoneReward.Mul(zoneReward, zones)
-	zoneReward.Mul(zoneReward, timeFactor)
-	zoneReward.Mul(zoneReward, timeFactor)
-	zoneReward.Div(reward, zoneReward)
-
-	finalReward := new(big.Int)
-
-	if types.QuaiNetworkContext == 0 {
-		finalReward = primeReward
-	}
-	if types.QuaiNetworkContext == 1 {
-		finalReward = regionReward
-	}
-	if types.QuaiNetworkContext == 2 {
-		finalReward = zoneReward
-	}
-
-	return finalReward
-}
-
 // AccumulateRewards credits the coinbase of the given block with the mining
 // reward. The total reward consists of the static block reward and rewards for
 // included uncles. The coinbase of each uncle block is also rewarded.
@@ -965,7 +908,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		return
 	}
 	// Select the correct block reward based on chain progression
-	blockReward := calculateReward()
+	blockReward := misc.CalculateReward()
 	// Accumulate the rewards for the miner and any included uncles
 	reward := new(big.Int).Set(blockReward)
 	r := new(big.Int)

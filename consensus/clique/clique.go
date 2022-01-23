@@ -342,7 +342,7 @@ func (c *Clique) verifyCascadingFields(chain consensus.ChainHeaderReader, header
 		if err := misc.VerifyGaslimit(parent.GasLimit[types.QuaiNetworkContext], header.GasLimit[types.QuaiNetworkContext]); err != nil {
 			return err
 		}
-	} else if err := misc.VerifyEip1559Header(chain.Config(), parent, header); err != nil {
+	} else if err := misc.VerifyHeaderGasAndFee(chain.Config(), parent, header, chain); err != nil {
 		// Verify the header's EIP-1559 attributes.
 		return err
 	}

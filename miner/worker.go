@@ -967,9 +967,11 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	// If block has not advanced
 	if w.snapshotBlock != nil && parent.Header().Number[types.QuaiNetworkContext] == w.snapshotBlock.Number() {
 		header.GasLimit[types.QuaiNetworkContext] = w.snapshotBlock.GasLimit()
+		header.BaseFee[types.QuaiNetworkContext] = w.snapshotBlock.BaseFee()
+
 	} else {
 		header.GasLimit[types.QuaiNetworkContext] = core.CalcGasLimit(parent.GasLimit(), gasUsed, uncleCount)
-		header.BaseFee[types.QuaiNetworkContext] = misc.CalcBaseFee(w.chainConfig, parent.Header())
+		header.BaseFee[types.QuaiNetworkContext] = misc.CalcBaseFee(w.chainConfig, parent.Header(), w.chain.GetHeaderByNumber, w.chain.GetUnclesInChain, w.chain.GetGasUsedInChain)
 	}
 
 	if err := w.engine.Prepare(w.chain, header); err != nil {
