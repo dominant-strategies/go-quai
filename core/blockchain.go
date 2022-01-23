@@ -2650,8 +2650,17 @@ func (bc *BlockChain) GetExternalBlocks(header *types.Header) ([]*types.External
 		if coincidentHeader.Number[context].Cmp(header.Number[context]) != 0 {
 			return externalBlocks, nil
 		}
-		stopHash := bc.engine.GetStopHash(bc, difficultyContext, context, coincidentHeader)
-		externalBlocks = append(externalBlocks, bc.engine.TraceBranch(bc, coincidentHeader, difficultyContext, stopHash, context, header.Location, false)...)
+		stopHash, err := bc.engine.GetStopHash(bc, difficultyContext, context, coincidentHeader)
+		if err != nil {
+			log.Info("GetExternalBlocks: Unable to get stop hash", "coincident", coincidentHeader.Hash())
+			return nil, err
+		}
+		extBlockResults, err := bc.engine.TraceBranch(bc, coincidentHeader, difficultyContext, stopHash, context, header.Location, false)
+		if err != nil {
+			log.Info("GetExternalBlocks: Unable to get external blocks", "coincident", coincidentHeader.Hash(), "stopHash", stopHash)
+			return nil, err
+		}
+		externalBlocks = append(externalBlocks, extBlockResults...)
 	}
 
 	return externalBlocks, nil

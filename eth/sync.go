@@ -259,8 +259,9 @@ func (h *handler) doSync(op *chainSyncOp) error {
 		extBlocks, err := h.chain.GetExternalBlocks(head.Header())
 		if err != nil {
 			log.Info("Error sending external blocks to peer", "err", err)
+		} else {
+			h.BroadcastBlock(head, extBlocks, false)
 		}
-		h.BroadcastBlock(head, extBlocks, false)
 	}
 	return nil
 }

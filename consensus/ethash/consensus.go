@@ -83,6 +83,7 @@ var (
 	errInvalidDifficulty = errors.New("non-positive difficulty")
 	errInvalidMixDigest  = errors.New("invalid mix digest")
 	errInvalidPoW        = errors.New("invalid proof-of-work")
+	errExtBlockNotFound  = errors.New("external block not found")
 )
 
 // Author implements consensus.Engine, returning the header's coinbase as the
@@ -703,7 +704,7 @@ func (ethash *Ethash) GetCoincidentHeader(chain consensus.ChainHeaderReader, con
 }
 
 // GetStopHash returns the N-1 hash that is used to terminate on during TraceBranch.
-func (ethash *Ethash) GetStopHash(chain consensus.ChainHeaderReader, difficultyContext int, originalContext int, startingHeader *types.Header) common.Hash {
+func (ethash *Ethash) GetStopHash(chain consensus.ChainHeaderReader, difficultyContext int, originalContext int, startingHeader *types.Header) (common.Hash, error) {
 	header := startingHeader
 	stopHash := common.Hash{}
 	context := difficultyContext
@@ -733,11 +734,11 @@ func (ethash *Ethash) GetStopHash(chain consensus.ChainHeaderReader, difficultyC
 		header = prevHeader
 	}
 
-	return stopHash
+	return stopHash, nil
 }
 
 // TraceBranch is the recursive function that returns all ExternalBlocks for a given header, stopHash, context, and location.
-func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *types.Header, context int, stopHash common.Hash, originalContext int, originalLocation []byte, logging bool) []*types.ExternalBlock {
+func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *types.Header, context int, stopHash common.Hash, originalContext int, originalLocation []byte, logging bool) ([]*types.ExternalBlock, error) {
 	extBlocks := make([]*types.ExternalBlock, 0)
 	steppedBack := false
 	startingHeader := header
@@ -775,7 +776,7 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 			extBlock, err := chain.GetExternalBlock(header.Hash(), header.Number[context].Uint64(), uint64(context))
 			if err != nil {
 				log.Warn("TraceBranch: External Block not found for header", "number", header.Number[context], "context", context, "hash", header.Hash())
-				break
+				return nil, errExtBlockNotFound
 			}
 			if logging {
 				log.Debug("GetExternalBlocks: Block being added: ", "number", extBlock.Header().Number, "context", extBlock.Context(), "location", extBlock.Header().Location, "txs", len(extBlock.Transactions()))
@@ -784,7 +785,11 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 		}
 
 		if context < types.ContextDepth-1 {
-			extBlocks = append(extBlocks, ethash.TraceBranch(chain, header, context+1, stopHash, originalContext, originalLocation, logging)...)
+			result, err := ethash.TraceBranch(chain, header, context+1, stopHash, originalContext, originalLocation, logging)
+			if err != nil {
+				return nil, err
+			}
+			extBlocks = append(extBlocks, result...)
 		}
 
 		// Stop at the stop hash before iterating downward
@@ -803,7 +808,7 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 			extBlock, err := chain.GetExternalBlock(header.ParentHash[context], header.Number[context].Uint64()-1, uint64(context))
 			if err != nil {
 				log.Warn("Trace Branch: External Block not found for previous header", "number", header.Number[context], "context", context, "hash", header.ParentHash[context])
-				break
+				return nil, errExtBlockNotFound
 			}
 			prevHeader = extBlock.Header()
 			// In Regions the starting header needs to be broken off for N-1
@@ -817,11 +822,11 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 		header = prevHeader
 		steppedBack = true
 	}
-	return extBlocks
+	return extBlocks, nil
 }
 
 // GetExternalBlocks traces all available branches to find external blocks
-func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, header *types.Header, logging bool) []*types.ExternalBlock {
+func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, header *types.Header, logging bool) ([]*types.ExternalBlock, error) {
 	context := chain.Config().Context // Index that node is currently at
 	externalBlocks := make([]*types.ExternalBlock, 0)
 
@@ -832,10 +837,17 @@ func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, heade
 		coincidentHeader, difficultyContext := ethash.GetCoincidentHeader(chain, context, prevHeader)
 		// Only run if we are the block immediately following the coincident block. Check below is to make sure we are N+1.
 		if coincidentHeader.Number[context].Cmp(prevHeader.Number[context]) != 0 {
-			return externalBlocks
+			return externalBlocks, nil
 		}
-		stopHash := ethash.GetStopHash(chain, difficultyContext, context, coincidentHeader)
-		externalBlocks = append(externalBlocks, ethash.TraceBranch(chain, coincidentHeader, difficultyContext, stopHash, context, header.Location, logging)...)
+		stopHash, err := ethash.GetStopHash(chain, difficultyContext, context, coincidentHeader)
+		if err != nil {
+			return nil, err
+		}
+		extBlockResult, extBlockErr := ethash.TraceBranch(chain, coincidentHeader, difficultyContext, stopHash, context, header.Location, logging)
+		if extBlockErr != nil {
+			return nil, err
+		}
+		externalBlocks = append(externalBlocks, extBlockResult...)
 	}
 	log.Info("GetExternalBlocks: Amount of external blocks returned", "amount", len(externalBlocks))
 
@@ -849,7 +861,7 @@ func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, heade
 	// TODO: Impelement queue here, remove the above check for N+1.
 	// log.Info("GetExternalBlocks: Adding into Queue:", "len", len(externalBlocks))
 	// return chain.QueueAndRetrieveExtBlocks(externalBlocks, header)
-	return externalBlocks
+	return externalBlocks, nil
 }
 
 // FinalizeAndAssemble implements consensus.Engine, accumulating the block and

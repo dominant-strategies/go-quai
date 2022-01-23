@@ -18,6 +18,7 @@ package eth
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"math/big"
 	"sync"
@@ -213,6 +214,9 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		}
 
 		log.Info("Adding external blocks from peer", "len", len(extBlocks), "number", blocks[0].Number())
+		for _, block := range extBlocks {
+			fmt.Println("newHandler: inserter extBlocks", block.Hash(), block.Context(), block.Header().Number)
+		}
 		err := h.chain.AddExternalBlocks(extBlocks)
 		if err != nil {
 			log.Warn("Error importing external blocks", "number", blocks[0].Number(), "hash", blocks[0].Hash())
@@ -452,6 +456,9 @@ func (h *handler) BroadcastBlock(block *types.Block, extBlocks []*types.External
 			log.Error("Propagating dangling block", "number", block.Number(), "hash", hash)
 			return
 		}
+		for _, block := range extBlocks {
+			fmt.Println("broadcastBlock: Sending extBlocks", block.Hash(), block.Context(), block.Header().Number)
+		}
 		// Send the block to a subset of our peers
 		transfer := peers[:int(math.Sqrt(float64(len(peers))))]
 		for _, peer := range transfer {
@@ -522,12 +529,16 @@ func (h *handler) minedBroadcastLoop() {
 			header := h.chain.GetHeaderByHash(ev.Block.Hash())
 			if header != nil {
 				extBlocks, err := h.chain.GetExternalBlocks(header)
+				for _, block := range extBlocks {
+					fmt.Println("minedBroadcastLoop: Sending extBlocks", block.Hash(), block.Context(), block.Header().Number)
+				}
 				if err != nil {
 					log.Info("Error sending external blocks to peer", "err", err)
+				} else {
+					log.Info("minedBroadcastLoop", "hash", header.Hash(), "extBlocks", len(extBlocks))
+					h.BroadcastBlock(ev.Block, extBlocks, true)  // First propagate block to peers
+					h.BroadcastBlock(ev.Block, extBlocks, false) // Only then announce to the rest
 				}
-				log.Info("minedBroadcastLoop", "hash", header.Hash(), "extBlocks", len(extBlocks))
-				h.BroadcastBlock(ev.Block, extBlocks, true)  // First propagate block to peers
-				h.BroadcastBlock(ev.Block, extBlocks, false) // Only then announce to the rest
 			}
 		}
 	}
