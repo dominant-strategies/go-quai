@@ -45,11 +45,20 @@ type ChainHeaderReader interface {
 	// GetHeaderByHash retrieves a block header from the database by its hash.
 	GetHeaderByHash(hash common.Hash) *types.Header
 
+	// GetExternalBlocks retrieve all external blocks for a header.
+	GetExternalBlocks(header *types.Header) ([]*types.ExternalBlock, error)
+
 	// GetExternalBlock retrieves an external block header by its hash and context.
 	GetExternalBlock(hash common.Hash, number uint64, context uint64) (*types.ExternalBlock, error)
 
 	// QueueAndRetrieveExtBlocks passes external blocks to the queue and returns the amount available for this block
 	QueueAndRetrieveExtBlocks(externalBlocks []*types.ExternalBlock, header *types.Header) []*types.ExternalBlock
+
+	// GetUnclesInChain retrieves the uncles in the chain based on header.
+	GetUnclesInChain(block *types.Block, length int) []*types.Header
+
+	// GetGasUsedInChain gets the number value of gas used in the chain up until a certain number.
+	GetGasUsedInChain(block *types.Block, length int) int64
 }
 
 // ChainReader defines a small collection of methods needed to access the local
@@ -104,16 +113,16 @@ type Engine interface {
 		uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error)
 
 	// GetExternalBlocks retrieves all valid external blocks from external chains
-	GetExternalBlocks(chain ChainHeaderReader, header *types.Header, logging bool) []*types.ExternalBlock
+	GetExternalBlocks(chain ChainHeaderReader, header *types.Header, logging bool) ([]*types.ExternalBlock, error)
 
 	// GetCoincidentHeader retrieves the furthest coincident header back
 	GetCoincidentHeader(chain ChainHeaderReader, context int, header *types.Header) (*types.Header, int)
 
 	// GetStopHash retrieves the stop hash for tracing of blocks in a trace branch
-	GetStopHash(chain ChainHeaderReader, difficultyContext int, originalContext int, startingHeader *types.Header) common.Hash
+	GetStopHash(chain ChainHeaderReader, difficultyContext int, originalContext int, startingHeader *types.Header) (common.Hash, error)
 
 	// TraceBranch recursively traces branches to find
-	TraceBranch(chain ChainHeaderReader, header *types.Header, context int, stopHash common.Hash, originalContext int, originalLocation []byte, logging bool) []*types.ExternalBlock
+	TraceBranch(chain ChainHeaderReader, header *types.Header, context int, stopHash common.Hash, originalContext int, originalLocation []byte, logging bool) ([]*types.ExternalBlock, error)
 
 	// Seal generates a new sealing request for the given input block and pushes
 	// the result into the given channel.
