@@ -131,6 +131,7 @@ type worker struct {
 	// Feeds
 	pendingLogsFeed  event.Feed
 	pendingBlockFeed event.Feed
+	reOrgFeed        event.Feed
 
 	// Subscriptions
 	mux          *event.TypeMux

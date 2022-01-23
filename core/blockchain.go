@@ -183,6 +183,7 @@ type BlockChain struct {
 	hc            *HeaderChain
 	rmLogsFeed    event.Feed
 	chainFeed     event.Feed
+	reOrgFeed     event.Feed
 	chainSideFeed event.Feed
 	chainHeadFeed event.Feed
 	logsFeed      event.Feed
@@ -1619,6 +1620,110 @@ func (bc *BlockChain) AddExternalBlock(block *types.ExternalBlock) error {
 	return nil
 }
 
+// ReOrgRollBack compares the difficulty of the newchain and oldchain. Rolls back
+// the current header to the position where the reorg took place in a higher context
+func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
+	var (
+		deletedTxs  types.Transactions
+		deletedLogs [][]*types.Log
+
+		// collectLogs collects the logs that were generated or removed during
+		// the processing of the block that corresponds with the given hash.
+		// These logs are later announced as deleted or reborn
+		collectLogs = func(hash common.Hash) {
+			number := bc.hc.GetBlockNumber(hash)
+			if number == nil {
+				return
+			}
+			receipts := rawdb.ReadReceipts(bc.db, hash, *number, bc.chainConfig)
+
+			var logs []*types.Log
+			for _, receipt := range receipts {
+				for _, log := range receipt.Logs {
+					l := *log
+					l.Removed = true
+					logs = append(logs, &l)
+				}
+			}
+			if len(logs) > 0 {
+				deletedLogs = append(deletedLogs, logs)
+			}
+		}
+		// mergeLogs returns a merged log slice with specified sort order.
+		mergeLogs = func(logs [][]*types.Log, reverse bool) []*types.Log {
+			var ret []*types.Log
+			if reverse {
+				for i := len(logs) - 1; i >= 0; i-- {
+					ret = append(ret, logs[i]...)
+				}
+			} else {
+				for i := 0; i < len(logs); i++ {
+					ret = append(ret, logs[i]...)
+				}
+			}
+			return ret
+		}
+	)
+
+	if header != nil {
+		// get the commonBlock
+		commonBlock := bc.GetBlockByHash(header.Hash())
+		// if a block with this hash does not exist then we dont have to roll back
+		if commonBlock == nil {
+			return nil
+		}
+		// get the current head in this chain
+		currentBlock := bc.CurrentBlock()
+
+		for {
+			if currentBlock.NumberU64() == commonBlock.NumberU64()-1 {
+				break
+			}
+			deletedTxs = append(deletedTxs, currentBlock.Transactions()...)
+			collectLogs(currentBlock.Hash())
+
+			currentBlock = bc.GetBlock(currentBlock.ParentHash(), currentBlock.NumberU64())
+			if currentBlock == nil {
+				return fmt.Errorf("invalid current chain")
+			}
+		}
+		// set the head back to the block before the rollback point
+		if err := bc.SetHead(commonBlock.NumberU64() - 1); err != nil {
+			return err
+		}
+
+		fmt.Println("Header is now rolled back and the current head is at", bc.CurrentBlock().NumberU64())
+
+		// Delete useless indexes right now which includes the non-canonical
+		// transaction indexes, canonical chain indexes which above the head.
+		indexesBatch := bc.db.NewBatch()
+		for _, tx := range deletedTxs {
+			rawdb.DeleteTxLookupEntry(indexesBatch, tx.Hash())
+		}
+
+		// Delete any canonical number assignments above the new head
+		number := bc.CurrentBlock().NumberU64()
+		for i := number + 1; ; i++ {
+			hash := rawdb.ReadCanonicalHash(bc.db, i)
+			if hash == (common.Hash{}) {
+				break
+			}
+			rawdb.DeleteCanonicalHash(indexesBatch, i)
+		}
+		if err := indexesBatch.Write(); err != nil {
+			log.Crit("Failed to delete useless indexes", "err", err)
+		}
+
+		// send the deleted logs to the removed logs feed
+		if len(deletedLogs) > 0 {
+			bc.rmLogsFeed.Send(RemovedLogsEvent{mergeLogs(deletedLogs, true)})
+		}
+	} else {
+		return fmt.Errorf("reorg header was null")
+	}
+	return nil
+}
+
 // InsertChain attempts to insert the given batch of blocks in to the canonical
 // chain or, otherwise, create a fork. If an error is returned it will return
 // the index number of the failing block as well an error describing what went
@@ -2109,6 +2214,17 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 	return 0, nil
 }
 
+func (bc *BlockChain) getAllHeaders(blocks []*types.Block) []*types.Header {
+	// Initialize the headers array
+	var headers []*types.Header
+
+	// Find all the headers since genesis
+	for i := 0; i < len(blocks); i++ {
+		headers = append(headers, blocks[i].Header())
+	}
+	return headers
+}
+
 // reorg takes two blocks, an old chain and a new chain and will reconstruct the
 // blocks and inserts them to be part of the new canonical chain and accumulates
 // potential missing transactions and post an event about them.
@@ -2167,6 +2283,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 			return ret
 		}
 	)
+
 	// Reduce the longer chain to the same number as the shorter one
 	if oldBlock.NumberU64() > newBlock.NumberU64() {
 		// Old chain is longer, gather all transactions and logs as deleted ones
@@ -2193,6 +2310,9 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		// If the common ancestor was found, bail out
 		if oldBlock.Hash() == newBlock.Hash() {
 			commonBlock = oldBlock
+
+			// Once the common block is found, the reorg data is sent to the reOrg feed
+			bc.reOrgFeed.Send(ReOrgRollup{ReOrgHeader: commonBlock.Header(), OldChainHeaders: bc.getAllHeaders(oldChain), NewChainHeaders: bc.getAllHeaders(newChain)})
 			break
 		}
 		// Remove an old block as well as stash away a new block
@@ -2631,6 +2751,11 @@ func (bc *BlockChain) SubscribeRemovedLogsEvent(ch chan<- RemovedLogsEvent) even
 // SubscribeChainEvent registers a subscription of ChainEvent.
 func (bc *BlockChain) SubscribeChainEvent(ch chan<- ChainEvent) event.Subscription {
 	return bc.scope.Track(bc.chainFeed.Subscribe(ch))
+}
+
+// SubscribeReOrgEvent registers a subscription of ReOrgEvent.
+func (bc *BlockChain) SubscribeReOrgEvent(ch chan<- ReOrgRollup) event.Subscription {
+	return bc.scope.Track(bc.reOrgFeed.Subscribe(ch))
 }
 
 // SubscribeChainHeadEvent registers a subscription of ChainHeadEvent.

@@ -27,6 +27,7 @@ import (
 	ethereum "github.com/spruce-solutions/go-quai"
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/common/hexutil"
+	"github.com/spruce-solutions/go-quai/core"
 	"github.com/spruce-solutions/go-quai/core/types"
 	"github.com/spruce-solutions/go-quai/internal/ethapi"
 	"github.com/spruce-solutions/go-quai/rpc"
@@ -410,6 +411,11 @@ func (ec *Client) SubscribePendingBlock(ctx context.Context, ch chan<- *types.He
 	return ec.c.EthSubscribe(ctx, ch, "pendingBlock")
 }
 
+// SubscribeReOrg subscribes to notifications about the reorg event.
+func (ec *Client) SubscribeReOrg(ctx context.Context, ch chan<- core.ReOrgRollup) (ethereum.Subscription, error) {
+	return ec.c.EthSubscribe(ctx, ch, "reOrg")
+}
+
 // State Access
 
 // NetworkID returns the network ID (also known as the chain ID) for this chain.
@@ -627,6 +633,15 @@ func (ec *Client) SendExternalBlock(ctx context.Context, block *types.Block, rec
 		return err
 	}
 	return ec.c.CallContext(ctx, nil, "eth_sendExternalBlock", data)
+}
+
+// SendReorgData sends thre reorg data to the node to rollup and update the chain
+func (ec *Client) SendReOrgData(ctx context.Context, header *types.Header) error {
+	data, err := ethapi.RPCMarshalReOrgData(header)
+	if err != nil {
+		return err
+	}
+	return ec.c.CallContext(ctx, nil, "eth_sendReOrgData", data)
 }
 
 func toBlockNumArg(number *big.Int) string {

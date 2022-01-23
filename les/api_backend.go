@@ -21,7 +21,7 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/spruce-solutions/go-quai"
+	ethereum "github.com/spruce-solutions/go-quai"
 	"github.com/spruce-solutions/go-quai/accounts"
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/consensus"
@@ -114,6 +114,10 @@ func (b *LesApiBackend) InsertBlock(ctx context.Context, block *types.Block) (in
 
 func (b *LesApiBackend) AddExternalBlock(block *types.ExternalBlock) error {
 	return errors.New("light client does not support external block caching.")
+}
+
+func (b *LesApiBackend) ReOrgRollBack(header *types.Header) error {
+	return errors.New("light client does not support reorg.")
 }
 
 func (b *LesApiBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Block, error) {
@@ -262,6 +266,13 @@ func (b *LesApiBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.
 }
 
 func (b *LesApiBackend) SubscribePendingBlockEvent(ch chan<- *types.Header) event.Subscription {
+	return event.NewSubscription(func(quit <-chan struct{}) error {
+		<-quit
+		return nil
+	})
+}
+
+func (b *LesApiBackend) SubscribeReOrgEvent(ch chan<- core.ReOrgRollup) event.Subscription {
 	return event.NewSubscription(func(quit <-chan struct{}) error {
 		<-quit
 		return nil
