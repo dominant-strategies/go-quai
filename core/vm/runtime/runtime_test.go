@@ -179,8 +179,6 @@ func benchmarkEVM_Create(bench *testing.B, code string) {
 			HomesteadBlock:      new(big.Int),
 			ByzantiumBlock:      new(big.Int),
 			ConstantinopleBlock: new(big.Int),
-			DAOForkBlock:        new(big.Int),
-			DAOForkSupport:      false,
 			EIP150Block:         new(big.Int),
 			EIP155Block:         new(big.Int),
 			EIP158Block:         new(big.Int),
