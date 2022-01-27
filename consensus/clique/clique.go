@@ -299,6 +299,19 @@ func (c *Clique) verifyHeader(chain consensus.ChainHeaderReader, header *types.H
 	if header.GasLimit[types.QuaiNetworkContext] > cap {
 		return fmt.Errorf("invalid gasLimit: have %v, max %v", header.GasLimit, cap)
 	}
+	// Check that Location is in MapContext
+	var locInMap = false
+	for _, i := range header.MapContext {
+		for s, j := range i {
+			if header.Location[s] == j {
+				locInMap = true
+				break
+			}
+		}
+		if locInMap == false {
+			return fmt.Errorf("Location not in MapContext: Location: %v MapContext: %v", header.Location, header.MapContext)
+		}
+	}
 	// If all checks passed, validate any special fields for hard forks
 	if err := misc.VerifyForkHashes(chain.Config(), header, false); err != nil {
 		return err
