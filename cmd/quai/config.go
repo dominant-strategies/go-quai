@@ -27,6 +27,7 @@ import (
 
 	"gopkg.in/urfave/cli.v1"
 
+	"github.com/naoina/toml"
 	"github.com/spruce-solutions/go-quai/accounts/external"
 	"github.com/spruce-solutions/go-quai/accounts/keystore"
 	"github.com/spruce-solutions/go-quai/accounts/scwallet"
@@ -39,7 +40,6 @@ import (
 	"github.com/spruce-solutions/go-quai/metrics"
 	"github.com/spruce-solutions/go-quai/node"
 	"github.com/spruce-solutions/go-quai/params"
-	"github.com/naoina/toml"
 )
 
 var (
@@ -111,8 +111,8 @@ func defaultNodeConfig() node.Config {
 	cfg := node.DefaultConfig
 	cfg.Name = clientIdentifier
 	cfg.Version = params.VersionWithCommit(gitCommit, gitDate)
-	cfg.HTTPModules = append(cfg.HTTPModules, "eth")
-	cfg.WSModules = append(cfg.WSModules, "eth")
+	cfg.HTTPModules = append(cfg.HTTPModules, "eth", "quai")
+	cfg.WSModules = append(cfg.WSModules, "eth", "quai")
 	cfg.IPCPath = "geth.ipc"
 	return cfg
 }

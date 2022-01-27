@@ -39,7 +39,7 @@ import (
 // Backend interface provides the common API services (that are provided by
 // both full and light clients) with access to necessary functions.
 type Backend interface {
-	// General Ethereum API
+	// General Ethereum and Quai API
 	SyncProgress() ethereum.SyncProgress
 
 	SuggestGasTipCap(ctx context.Context) (*big.Int, error)
@@ -110,12 +110,27 @@ func GetAPIs(apiBackend Backend) []rpc.API {
 			Service:   NewPublicEthereumAPI(apiBackend),
 			Public:    true,
 		}, {
+			Namespace: "quai",
+			Version:   "1.0",
+			Service:   NewPublicQuaiAPI(apiBackend),
+			Public:    true,
+		}, {
 			Namespace: "eth",
 			Version:   "1.0",
 			Service:   NewPublicBlockChainAPI(apiBackend),
 			Public:    true,
 		}, {
+			Namespace: "quai",
+			Version:   "1.0",
+			Service:   NewPublicBlockChainQuaiAPI(apiBackend),
+			Public:    true,
+		}, {
 			Namespace: "eth",
+			Version:   "1.0",
+			Service:   NewPublicTransactionPoolAPI(apiBackend, nonceLock),
+			Public:    true,
+		}, {
+			Namespace: "quai",
 			Version:   "1.0",
 			Service:   NewPublicTransactionPoolAPI(apiBackend, nonceLock),
 			Public:    true,
@@ -135,6 +150,11 @@ func GetAPIs(apiBackend Backend) []rpc.API {
 			Service:   NewPrivateDebugAPI(apiBackend),
 		}, {
 			Namespace: "eth",
+			Version:   "1.0",
+			Service:   NewPublicAccountAPI(apiBackend.AccountManager()),
+			Public:    true,
+		}, {
+			Namespace: "quai",
 			Version:   "1.0",
 			Service:   NewPublicAccountAPI(apiBackend.AccountManager()),
 			Public:    true,
