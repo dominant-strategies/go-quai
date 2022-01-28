@@ -56,7 +56,7 @@ type Genesis struct {
 	Mixhash    common.Hash         `json:"mixHash"`
 	Coinbase   common.Address      `json:"coinbase"`
 	Alloc      GenesisAlloc        `json:"alloc"      gencodec:"required"`
-	MapContext [][]bool
+	MapContext [][]bool	       `json:"mapContext"`
 
 	// These fields are used for consensus tests. Please don't use them
 	// in actual genesis blocks.
