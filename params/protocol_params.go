@@ -168,5 +168,5 @@ var (
 	MinimumDifficulty      = big.NewInt(131072)                                             // The minimum that the difficulty may ever be.
 	DurationLimits         = []*big.Int{big.NewInt(10), big.NewInt(30), big.NewInt(90)}     // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
 	TargetUncles           = []int{10, 30, 100}                                             // The bound divisor of the gas limit, used in update calculations.
-	GenesisMapContext	   = [3][3]bool{{true, true, true},{true, true, true},{true, true, true}}
+	GenesisMapContext	   = [][]bool{{true, true, true},{true, true, true},{true, true, true}}
 )
