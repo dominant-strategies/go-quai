@@ -56,7 +56,7 @@ type Genesis struct {
 	Mixhash    common.Hash         `json:"mixHash"`
 	Coinbase   common.Address      `json:"coinbase"`
 	Alloc      GenesisAlloc        `json:"alloc"      gencodec:"required"`
-	MapContext [3][3]bool
+	MapContext [][]bool
 
 	// These fields are used for consensus tests. Please don't use them
 	// in actual genesis blocks.
@@ -295,7 +295,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		head.GasLimit[types.QuaiNetworkContext] = params.GenesisGasLimit
 	}
 
-	if g.MapContext != [3][3]bool{{true,true,true},{true,true,true},{true,true,true}} {
+	if g.MapContext == nil {
 		head.MapContext = params.GenesisMapContext
 	}
 
