@@ -19,6 +19,7 @@ package core
 import (
 	"errors"
 	"fmt"
+	"log"
 	"math/big"
 
 	"github.com/spruce-solutions/go-quai/common"
@@ -35,17 +36,25 @@ import (
 //
 // StateProcessor implements Processor.
 type StateProcessor struct {
-	config *params.ChainConfig // Chain configuration options
-	bc     *BlockChain         // Canonical block chain
-	engine consensus.Engine    // Consensus engine used for block rewards
+	config    *params.ChainConfig // Chain configuration options
+	bc        *BlockChain         // Canonical block chain
+	engine    consensus.Engine    // Consensus engine used for block rewards
+	blockLink *extBlockLink
+}
+
+type extBlockLink struct {
+	prime   common.Hash     // Last applied prime hash
+	regions []common.Hash   // Last applied region hashes
+	zones   [][]common.Hash // Last applied zone hashes
 }
 
 // NewStateProcessor initialises a new StateProcessor.
 func NewStateProcessor(config *params.ChainConfig, bc *BlockChain, engine consensus.Engine) *StateProcessor {
 	return &StateProcessor{
-		config: config,
-		bc:     bc,
-		engine: engine,
+		config:    config,
+		bc:        bc,
+		engine:    engine,
+		blockLink: GenerateExtBlockLink(bc, engine),
 	}
 }
 
@@ -70,12 +79,44 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	blockContext := NewEVMBlockContext(header, p.bc, nil)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
 
-	// Gather external blocks and apply transactions, need to trace own local external block cache based on cache to validate
+	// Gather external blocks and apply transactions, need to trace own local external block cache based on cache to validate.
 	i := 0
 	externalBlocks, err := p.engine.GetExternalBlocks(p.bc, header, true)
 	if err != nil {
 		return nil, nil, uint64(0), nil, err
 	}
+
+	// Get the previous hashes from the first external blocks applied in the new GetExternalBlocks set.
+	// Initial the linkBlocks into 3x3 structure.
+	linkBlocks := &extBlockLink{
+		prime:   common.Hash{},
+		regions: make([]common.Hash, 3),
+		zones:   [][]common.Hash{make([]common.Hash, 3), make([]common.Hash, 3), make([]common.Hash, 3)},
+	}
+	for _, externalBlock := range externalBlocks {
+		switch externalBlock.Context() {
+		case big.NewInt(0):
+			if linkBlocks.prime == (common.Hash{}) {
+				linkedPreviousHash := externalBlock.Header().ParentHash[externalBlock.Context().Int64()]
+				linkBlocks.prime = linkedPreviousHash
+			}
+		case big.NewInt(1):
+			if linkBlocks.regions[externalBlock.Header().Location[0]] == (common.Hash{}) {
+				linkedPreviousHash := externalBlock.Header().ParentHash[externalBlock.Context().Int64()]
+				linkBlocks.regions[externalBlock.Header().Location[0]] = linkedPreviousHash
+			}
+		case big.NewInt(2):
+			if linkBlocks.zones[externalBlock.Header().Location[0]][externalBlock.Header().Location[1]] == (common.Hash{}) {
+				linkedPreviousHash := externalBlock.Header().ParentHash[externalBlock.Context().Int64()]
+				linkBlocks.zones[externalBlock.Header().Location[0]][externalBlock.Header().Location[1]] = linkedPreviousHash
+			}
+		}
+	}
+
+	// Verify that the externalBlocks provided link with previous coincident blocks.
+
+	// Update array with latest applied externalBlocks.
+
 	etxs := 0
 	for _, externalBlock := range externalBlocks {
 		externalBlock.Receipts().DeriveFields(p.config, externalBlock.Hash(), externalBlock.Header().Number[externalBlock.Context().Int64()].Uint64(), externalBlock.Transactions())
@@ -100,13 +141,13 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		}
 	}
 
-	// Iterate over and process the individual transactions
+	// Iterate over and process the individual transactions.
 	for _, tx := range block.Transactions() {
 		msg, err := tx.AsMessage(types.MakeSigner(p.config, header.Number[types.QuaiNetworkContext]), header.BaseFee[types.QuaiNetworkContext])
 		if err != nil {
 			return nil, nil, 0, nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
-		// All ETxs applied to state must be generated from our cache
+		// All ETxs applied to state must be generated from our cache.
 		if msg.FromExternal() {
 			continue
 		}
@@ -243,4 +284,95 @@ func ApplyExternalTransaction(config *params.ChainConfig, bc ChainContext, autho
 	blockContext := NewEVMBlockContext(header, bc, author)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, cfg)
 	return applyExternalTransaction(msg, config, bc, author, gp, statedb, header.Number[types.QuaiNetworkContext], header.Hash(), externalBlock, tx, usedGas, vmenv)
+}
+
+// GenerateExtBlockLink will generate blockLink struct for the last applied external block hashes for a current context.
+// This will be used to check the trace of each set of applied external block sets so that they keep proper lineage to previous
+// traces. GenerateExtBlockLink will be used upon start up and the blockLink struct will be continually updated as more blocks are processed.
+func GenerateExtBlockLink(bc *BlockChain, engine consensus.Engine) *extBlockLink {
+	// Get the previous hashes from the first external blocks applied in the new GetExternalBlocks set.
+	// Initial the linkBlocks into 3x3 structure.
+	linkBlocks := &extBlockLink{
+		prime:   params.MainnetPrimeGenesisHash,
+		regions: make([]common.Hash, 3),
+		zones:   [][]common.Hash{make([]common.Hash, 3), make([]common.Hash, 3), make([]common.Hash, 3)},
+	}
+	for i := range linkBlocks.regions {
+		linkBlocks.regions[i] = params.MainnetRegionGenesisHash
+		for j := range linkBlocks.zones[i] {
+			linkBlocks.zones[i][j] = params.MainnetZoneGenesisHash
+		}
+	}
+
+	currentBlock := bc.CurrentBlock()
+	if currentBlock.Number().Cmp(big.NewInt(1)) < 1 {
+		return linkBlocks
+	}
+
+	populated := false
+	for !populated {
+
+		// Populate the linkBlocks struct with the block hashes of the last applied ext block of that chain.
+		lastAppliedExtBlocks, err := engine.GetExternalBlocks(bc, currentBlock.Header(), true)
+		if err != nil {
+			log.Fatal("GenerateExtBlockLink:", "err", err)
+		}
+
+		// reverse laspAppliedExtBlcoks so that we pull the coincident blocks first.
+		if len(lastAppliedExtBlocks) > 0 {
+			for i, j := 0, len(lastAppliedExtBlocks)-1; i < j; i, j = i+1, j-1 {
+				lastAppliedExtBlocks[i], lastAppliedExtBlocks[j] = lastAppliedExtBlocks[j], lastAppliedExtBlocks[i]
+			}
+		}
+
+		for _, lastAppliedBlock := range lastAppliedExtBlocks {
+			switch lastAppliedBlock.Context() {
+			case big.NewInt(0):
+				if linkBlocks.prime == (params.MainnetPrimeGenesisHash) {
+					linkBlocks.prime = lastAppliedBlock.Hash()
+				}
+			case big.NewInt(1):
+				if linkBlocks.regions[lastAppliedBlock.Header().Location[0]] == (params.MainnetRegionGenesisHash) {
+					linkBlocks.regions[lastAppliedBlock.Header().Location[0]] = lastAppliedBlock.Hash()
+				}
+			case big.NewInt(2):
+				if linkBlocks.zones[lastAppliedBlock.Header().Location[0]][lastAppliedBlock.Header().Location[1]] == (params.MainnetZoneGenesisHash) {
+					linkBlocks.zones[lastAppliedBlock.Header().Location[0]][lastAppliedBlock.Header().Location[1]] = lastAppliedBlock.Hash()
+				}
+			}
+		}
+
+		// Check if linkBlocks is populated fully for all chains in the hierarchy.
+		tempPopulated := true
+		if linkBlocks.prime == params.MainnetPrimeGenesisHash {
+			tempPopulated = false
+		} else {
+			for i := range linkBlocks.regions {
+				if linkBlocks.regions[i] == params.MainnetRegionGenesisHash {
+					tempPopulated = false
+					break
+				}
+				for j := range linkBlocks.zones[i] {
+					if linkBlocks.zones[i][j] == params.MainnetZoneGenesisHash {
+						tempPopulated = false
+						break
+					}
+				}
+			}
+		}
+
+		// Update the populated check with current status of populating the last applied external block hashes.
+		populated = tempPopulated
+
+		// Check if we are on block height 1 for current context.
+		if currentBlock.Number().Cmp(big.NewInt(1)) < 1 {
+			return linkBlocks
+		}
+
+		// Iterate to previous block in current context.
+		currentBlock = bc.GetBlockByHash(currentBlock.ParentHash())
+	}
+
+	return linkBlocks
+
 }
