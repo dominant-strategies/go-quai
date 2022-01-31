@@ -259,6 +259,7 @@ func (w *worker) setExtra(extra []byte) {
 	w.extra = extra
 }
 
+// setMapContext sets the block MapContext field
 func (w *worker) setMapContext(mc [][]bool) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
