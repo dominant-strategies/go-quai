@@ -332,6 +332,19 @@ func (p *StateProcessor) GenerateExtBlockLink() {
 		}
 	}
 
+	// Keep track of what the method started with.
+	// Deep copy the struct.
+	startingLinkBlocks := &extBlockLink{
+		prime:   linkBlocks.prime,
+		regions: make([]common.Hash, len(linkBlocks.regions)),
+		zones:   make([][]common.Hash, 3),
+	}
+	copy(startingLinkBlocks.regions, linkBlocks.regions)
+	for i := range linkBlocks.zones {
+		startingLinkBlocks.zones[i] = make([]common.Hash, len(linkBlocks.zones[i]))
+		copy(startingLinkBlocks.zones[i], linkBlocks.zones[i])
+	}
+
 	currentHeader := p.bc.CurrentHeader()
 	if currentHeader.Number[types.QuaiNetworkContext].Cmp(big.NewInt(1)) < 1 {
 		p.blockLink = linkBlocks
@@ -343,13 +356,45 @@ func (p *StateProcessor) GenerateExtBlockLink() {
 	populated := false
 	for !populated {
 
+		fmt.Println("Current number", currentHeader.Number)
 		// Populate the linkBlocks struct with the block hashes of the last applied ext block of that chain.
 		extBlocks, err := p.engine.GetExternalBlocks(p.bc, currentHeader, true)
 		if err != nil {
 			log.Fatal("GenerateExtBlockLink:", "err", err)
 		}
+		// Keep track of what the method started with.
+		// Deep copy the struct.
+		tempLinkBlocks := &extBlockLink{
+			prime:   linkBlocks.prime,
+			regions: make([]common.Hash, len(linkBlocks.regions)),
+			zones:   [][]common.Hash{make([]common.Hash, 3), make([]common.Hash, 3), make([]common.Hash, 3)},
+		}
 
-		linkBlocks = p.SetLinkBlocksToLastApplied(extBlocks, linkBlocks)
+		copy(tempLinkBlocks.regions, linkBlocks.regions)
+		for i := range linkBlocks.zones {
+			tempLinkBlocks.zones[i] = make([]common.Hash, len(linkBlocks.zones[i]))
+			copy(tempLinkBlocks.zones[i], linkBlocks.zones[i])
+		}
+
+		p.SetLinkBlocksToLastApplied(extBlocks, tempLinkBlocks)
+
+		// If our tempLink is new and our starting link hasn't changed.
+		if tempLinkBlocks.prime != linkBlocks.prime && startingLinkBlocks.prime == linkBlocks.prime {
+			linkBlocks.prime = tempLinkBlocks.prime
+		}
+		for i := range linkBlocks.regions {
+			fmt.Println(tempLinkBlocks.regions[i], linkBlocks.regions[i], startingLinkBlocks.regions[i], linkBlocks.regions[i])
+			if tempLinkBlocks.regions[i] != linkBlocks.regions[i] && startingLinkBlocks.regions[i] == linkBlocks.regions[i] {
+				linkBlocks.regions[i] = tempLinkBlocks.regions[i]
+				fmt.Println("Updating region last applied hash", linkBlocks.regions[i])
+			}
+			for j := range linkBlocks.zones[i] {
+				if tempLinkBlocks.zones[i][j] != linkBlocks.zones[i][j] && startingLinkBlocks.zones[i][j] == linkBlocks.zones[i][j] {
+					linkBlocks.zones[i][j] = tempLinkBlocks.zones[i][j]
+					fmt.Println("Updating zone last applied hash", linkBlocks.zones[i][j])
+				}
+			}
+		}
 
 		// Check if linkBlocks is populated fully for all chains in the hierarchy.
 		tempPopulated := true
@@ -411,6 +456,8 @@ func (p *StateProcessor) SetLinkBlocksToLastApplied(externalBlocks []*types.Exte
 	// iterate through the extBlocks, updated the index with the last applied external blocks.
 	for _, lastAppliedBlock := range externalBlocks {
 		fmt.Println("SetLinksContext", lastAppliedBlock.Context().Int64())
+		fmt.Println("Number", lastAppliedBlock.Header().Number)
+		fmt.Println("Hash", lastAppliedBlock.Hash())
 		switch lastAppliedBlock.Context().Int64() {
 		case 0:
 			fmt.Println("PRIME LINK BLOCKS")

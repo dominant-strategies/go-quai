@@ -739,7 +739,7 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 	startingHeader := header
 	for {
 
-		// If the header is genesis
+		// If the header is genesis, return the current set of external blocks.
 		if header.Number[context].Cmp(big.NewInt(0)) == 0 {
 			break
 		}
