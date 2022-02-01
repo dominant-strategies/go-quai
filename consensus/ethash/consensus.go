@@ -698,7 +698,15 @@ func (ethash *Ethash) GetStopHash(chain consensus.ChainHeaderReader, difficultyC
 
 	for {
 		// Append the coincident and iterating header to the list
-		if header.Number[context].Cmp(big.NewInt(1)) < 0 {
+		if header.Number[context].Cmp(big.NewInt(1)) == 0 {
+			switch context {
+			case 0:
+				stopHash = params.RopstenPrimeGenesisHash
+			case 1:
+				stopHash = params.RopstenRegionGenesisHash
+			case 2:
+				stopHash = params.RopstenZoneGenesisHash
+			}
 			break
 		}
 
@@ -732,7 +740,7 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 	for {
 
 		// If the header is genesis
-		if header.Number[context].Cmp(big.NewInt(1)) == 0 {
+		if header.Number[context].Cmp(big.NewInt(0)) == 0 {
 			break
 		}
 
@@ -780,7 +788,7 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 		}
 
 		// Stop at the stop hash before iterating downward
-		if header.ParentHash[context] == stopHash || header.Number[context].Cmp(big.NewInt(1)) <= 0 {
+		if header.ParentHash[context] == stopHash || header.Number[context].Cmp(big.NewInt(1)) == 0 {
 			if logging {
 				log.Info("TraceBranch: Stopping on stop hash", "number", header.Number, "context", context, "location", header.Location, "hash", stopHash)
 			}
@@ -789,22 +797,21 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 
 		// Get previous header on local chain by hash
 		prevHeader := chain.GetHeaderByHash(header.ParentHash[context])
-
 		// If prevHeader is nil, we could be tracing in external context. Lookup in external block cache.
 		if prevHeader == nil {
 			extBlock, err := chain.GetExternalBlock(header.ParentHash[context], header.Number[context].Uint64()-1, uint64(context))
 			if err != nil {
-				log.Warn("Trace Branch: External Block not found for previous header", "number", header.Number[context], "context", context, "hash", header.ParentHash[context])
-				return nil, nil
+				log.Warn("Trace Branch: External Block not found for previous header", "number", header.Number[context].Int64()-1, "context", context, "hash", header.ParentHash[context])
+				return extBlocks, nil
 			}
 			prevHeader = extBlock.Header()
-			// In Regions the starting header needs to be broken off for N-1
-			if context < types.ContextDepth-1 && bytes.Equal(startingHeader.Location, prevHeader.Location) && originalContext != 0 && sameLocation {
-				if logging {
-					log.Info("TraceBranch: Stopping with Region N-1", "number", header.Number, "context", context, "location", header.Location)
-				}
-				break
+		}
+		// In Regions the starting header needs to be broken off for N-1
+		if context < types.ContextDepth-1 && bytes.Equal(startingHeader.Location, prevHeader.Location) && originalContext != 0 && sameLocation {
+			if logging {
+				log.Info("TraceBranch: Stopping with Region N-1", "number", header.Number, "context", context, "location", header.Location)
 			}
+			break
 		}
 		header = prevHeader
 		steppedBack = true
