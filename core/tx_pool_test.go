@@ -71,8 +71,30 @@ func (bc *testBlockChain) CurrentBlock() *types.Block {
 	}, nil, nil, nil, trie.NewStackTrie(nil))
 }
 
+func (bc *testBlockChain) GetGasUsedInChain(block *types.Block, length int) int64 {
+	gasUsed := 0
+	for i := 0; block != nil && i < length; i++ {
+		gasUsed += int(block.GasUsed())
+		block = bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
+	}
+	return int64(gasUsed)
+}
+
+func (bc *testBlockChain) GetHeaderByNumber(number uint64) *types.Header {
+	return bc.GetHeaderByNumber(number)
+}
+
 func (bc *testBlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
 	return bc.CurrentBlock()
+}
+
+func (bc *testBlockChain) GetUnclesInChain(block *types.Block, length int) []*types.Header {
+	uncles := []*types.Header{}
+	for i := 0; block != nil && i < length; i++ {
+		uncles = append(uncles, block.Uncles()...)
+		block = bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
+	}
+	return uncles
 }
 
 func (bc *testBlockChain) StateAt(common.Hash) (*state.StateDB, error) {
