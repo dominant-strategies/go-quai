@@ -121,7 +121,7 @@ func TestTimedUnlock(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	pass := "foo"
-	a1, err := ks.NewAccount(pass, []int{10}) //Added dummy string
+	a1, err := ks.NewAccount(pass, []int{10})
 	if err != nil {
 		t.Fatal(err)
 	}
