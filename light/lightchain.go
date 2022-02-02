@@ -26,6 +26,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/consensus"
 	"github.com/spruce-solutions/go-quai/core"
@@ -37,7 +38,6 @@ import (
 	"github.com/spruce-solutions/go-quai/log"
 	"github.com/spruce-solutions/go-quai/params"
 	"github.com/spruce-solutions/go-quai/rlp"
-	lru "github.com/hashicorp/golang-lru"
 )
 
 var (
@@ -489,6 +489,31 @@ func (lc *LightChain) GetAncestor(hash common.Hash, number, ancestor uint64, max
 // caching it (associated with its hash) if found.
 func (lc *LightChain) GetHeaderByNumber(number uint64) *types.Header {
 	return lc.hc.GetHeaderByNumber(number)
+}
+
+// TODO: GetUnclesInChain retrieves all the uncles from a given block backwards until
+// a specific distance is reached. This method is not fully impelemented and is not a feature of lightclients.
+func (bc *LightChain) GetUnclesInChain(block *types.Block, length int) []*types.Header {
+	uncles := []*types.Header{}
+	return uncles
+}
+
+// TODO: GetGasUsedInChain retrieves all the gas used from a given block backwards until
+// a specific distance is reached. This method is not fully impelemented and is not a feature of lightclients.
+func (lc *LightChain) GetGasUsedInChain(block *types.Block, length int) int64 {
+	return 0
+}
+
+// TODO: CalculateBaseFee returns the base fee for the light client. Current not finished as returning
+// the base fee requires looking up uncles.
+func (lc *LightChain) CalculateBaseFee(header *types.Header) *big.Int {
+	return big.NewInt(0)
+}
+
+// TODO: GetExternalBlocks is not a feature of light clients. Light clients will be unable to process
+// and validate cross-context transitions until further implementation.
+func (lc *LightChain) GetExternalBlocks(header *types.Header) ([]*types.ExternalBlock, error) {
+	return nil, nil
 }
 
 // GetExternalBlock is not applicable in the header chain since the BlockChain contains

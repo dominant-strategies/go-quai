@@ -27,7 +27,6 @@ import (
 	"sync/atomic"
 
 	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/consensus/misc"
 	"github.com/spruce-solutions/go-quai/core/types"
 	"github.com/spruce-solutions/go-quai/log"
 	"github.com/spruce-solutions/go-quai/rpc"
@@ -89,7 +88,7 @@ func (oracle *Oracle) processBlock(bf *blockFees, percentiles []float64) {
 		bf.results.baseFee = new(big.Int)
 	}
 	if chainconfig.IsLondon(big.NewInt(int64(bf.blockNumber + 1))) {
-		bf.results.nextBaseFee = misc.CalcBaseFee(chainconfig, bf.header)
+		bf.results.nextBaseFee = oracle.backend.CalculateBaseFee(bf.header)
 	} else {
 		bf.results.nextBaseFee = new(big.Int)
 	}

@@ -39,7 +39,6 @@ type alethGenesisSpec struct {
 		AccountStartNonce          math2.HexOrDecimal64   `json:"accountStartNonce"`
 		MaximumExtraDataSize       hexutil.Uint64         `json:"maximumExtraDataSize"`
 		HomesteadForkBlock         *hexutil.Big           `json:"homesteadForkBlock,omitempty"`
-		DaoHardforkBlock           math2.HexOrDecimal64   `json:"daoHardforkBlock"`
 		EIP150ForkBlock            *hexutil.Big           `json:"EIP150ForkBlock,omitempty"`
 		EIP158ForkBlock            *hexutil.Big           `json:"EIP158ForkBlock,omitempty"`
 		ByzantiumForkBlock         *hexutil.Big           `json:"byzantiumForkBlock,omitempty"`
@@ -108,11 +107,6 @@ func newAlethGenesisSpec(network string, genesis *core.Genesis) (*alethGenesisSp
 	spec.Params.AccountStartNonce = 0
 	spec.Params.TieBreakingGas = false
 	spec.Params.AllowFutureBlocks = false
-
-	// Dao hardfork block is a special one. The fork block is listed as 0 in the
-	// config but aleth will sync with ETC clients up until the actual dao hard
-	// fork block.
-	spec.Params.DaoHardforkBlock = 0
 
 	if num := genesis.Config.HomesteadBlock; num != nil {
 		spec.Params.HomesteadForkBlock = (*hexutil.Big)(num)

@@ -23,7 +23,6 @@ import (
 
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/consensus"
-	"github.com/spruce-solutions/go-quai/consensus/misc"
 	"github.com/spruce-solutions/go-quai/core/state"
 	"github.com/spruce-solutions/go-quai/core/types"
 	"github.com/spruce-solutions/go-quai/core/vm"
@@ -67,16 +66,16 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		allLogs     []*types.Log
 		gp          = new(GasPool).AddGas(block.GasLimit())
 	)
-	// Mutate the block and state according to any hard-fork specs
-	if p.config.DAOForkSupport && p.config.DAOForkBlock != nil && p.config.DAOForkBlock.Cmp(block.Number()) == 0 {
-		misc.ApplyDAOHardFork(statedb)
-	}
+
 	blockContext := NewEVMBlockContext(header, p.bc, nil)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
 
 	// Gather external blocks and apply transactions, need to trace own local external block cache based on cache to validate
 	i := 0
-	externalBlocks := p.engine.GetExternalBlocks(p.bc, header, true)
+	externalBlocks, err := p.engine.GetExternalBlocks(p.bc, header, true)
+	if err != nil {
+		return nil, nil, uint64(0), nil, err
+	}
 	etxs := 0
 	for _, externalBlock := range externalBlocks {
 		externalBlock.Receipts().DeriveFields(p.config, externalBlock.Hash(), externalBlock.Header().Number[externalBlock.Context().Int64()].Uint64(), externalBlock.Transactions())

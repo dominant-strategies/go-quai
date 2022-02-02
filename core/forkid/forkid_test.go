@@ -47,8 +47,6 @@ func TestCreation(t *testing.T) {
 				{1149999, ID{Hash: checksumToBytes(0xfc64ec04), Next: 1150000}},   // Last Frontier block
 				{1150000, ID{Hash: checksumToBytes(0x97c2c34c), Next: 1920000}},   // First Homestead block
 				{1919999, ID{Hash: checksumToBytes(0x97c2c34c), Next: 1920000}},   // Last Homestead block
-				{1920000, ID{Hash: checksumToBytes(0x91d1f948), Next: 2463000}},   // First DAO block
-				{2462999, ID{Hash: checksumToBytes(0x91d1f948), Next: 2463000}},   // Last DAO block
 				{2463000, ID{Hash: checksumToBytes(0x7a64da13), Next: 2675000}},   // First Tangerine block
 				{2674999, ID{Hash: checksumToBytes(0x7a64da13), Next: 2675000}},   // Last Tangerine block
 				{2675000, ID{Hash: checksumToBytes(0x3edd5b10), Next: 4370000}},   // First Spurious block

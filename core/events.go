@@ -36,6 +36,11 @@ type ChainEvent struct {
 	Logs  []*types.Log
 }
 
+type ReOrgRollup struct {
+	ReOrgHeader     *types.Header
+	OldChainHeaders []*types.Header
+	NewChainHeaders []*types.Header
+}
 type ChainSideEvent struct {
 	Block *types.Block
 }

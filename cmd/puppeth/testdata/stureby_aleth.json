@@ -4,7 +4,6 @@
     "accountStartNonce": "0x0",
     "maximumExtraDataSize": "0x20",
     "homesteadForkBlock": "0x2710",
-    "daoHardforkBlock": "0x0",
     "EIP150ForkBlock": "0x3a98",
     "EIP158ForkBlock": "0x59d8",
     "byzantiumForkBlock": "0x7530",
