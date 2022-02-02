@@ -335,8 +335,8 @@ func TestStreamUncleBlock(t *testing.T) {
 			if taskIndex == 2 {
 				have := task.block.Header().UncleHash
 				want := types.CalcUncleHash([]*types.Header{b.uncleBlock.Header()})
-				if have != want {
-					t.Errorf("uncle hash mismatch: have %s, want %s", have.Hex(), want.Hex())
+				if have[0] != want {
+					t.Errorf("uncle hash mismatch: have %s, want %s", have[0].Hex(), want.Hex())
 				}
 			}
 			taskCh <- struct{}{}

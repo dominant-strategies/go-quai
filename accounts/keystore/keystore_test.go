@@ -40,7 +40,7 @@ func TestKeyStore(t *testing.T) {
 	dir, ks := tmpKeyStore(t, true)
 	defer os.RemoveAll(dir)
 
-	a, err := ks.NewAccount("foo")
+	a, err := ks.NewAccount("foo", []int{10})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +76,7 @@ func TestSign(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	pass := "" // not used but required by API
-	a1, err := ks.NewAccount(pass)
+	a1, err := ks.NewAccount(pass, []int{10})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +93,7 @@ func TestSignWithPassphrase(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	pass := "passwd"
-	acc, err := ks.NewAccount(pass)
+	acc, err := ks.NewAccount(pass, []int{10})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +121,7 @@ func TestTimedUnlock(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	pass := "foo"
-	a1, err := ks.NewAccount(pass)
+	a1, err := ks.NewAccount(pass, []int{10}) //Added dummy string
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +156,7 @@ func TestOverrideUnlock(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	pass := "foo"
-	a1, err := ks.NewAccount(pass)
+	a1, err := ks.NewAccount(pass, []int{10})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,7 +197,7 @@ func TestSignRace(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	// Create a test account.
-	a1, err := ks.NewAccount("")
+	a1, err := ks.NewAccount("", []int{0})
 	if err != nil {
 		t.Fatal("could not create the test account", err)
 	}
@@ -313,7 +313,7 @@ func TestWalletNotifications(t *testing.T) {
 	for i := 0; i < 1024; i++ {
 		if create := len(live) == 0 || rand.Int()%4 > 0; create {
 			// Add a new account and ensure wallet notifications arrives
-			account, err := ks.NewAccount("")
+			account, err := ks.NewAccount("", []int{2})
 			if err != nil {
 				t.Fatalf("failed to create test account: %v", err)
 			}
@@ -366,7 +366,7 @@ func TestImportECDSA(t *testing.T) {
 func TestImportExport(t *testing.T) {
 	dir, ks := tmpKeyStore(t, true)
 	defer os.RemoveAll(dir)
-	acc, err := ks.NewAccount("old")
+	acc, err := ks.NewAccount("old", []int{1})
 	if err != nil {
 		t.Fatalf("failed to create account: %v", acc)
 	}
@@ -397,7 +397,7 @@ func TestImportExport(t *testing.T) {
 func TestImportRace(t *testing.T) {
 	dir, ks := tmpKeyStore(t, true)
 	defer os.RemoveAll(dir)
-	acc, err := ks.NewAccount("old")
+	acc, err := ks.NewAccount("old", []int{3})
 	if err != nil {
 		t.Fatalf("failed to create account: %v", acc)
 	}

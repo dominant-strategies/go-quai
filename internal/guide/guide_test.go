@@ -48,7 +48,7 @@ func TestAccountManagement(t *testing.T) {
 	ks := keystore.NewKeyStore(filepath.Join(workdir, "keystore"), keystore.StandardScryptN, keystore.StandardScryptP)
 
 	// Create a new account with the specified encryption passphrase
-	newAcc, err := ks.NewAccount("Creation password")
+	newAcc, err := ks.NewAccount("Creation password", []int{100})
 	if err != nil {
 		t.Fatalf("Failed to create new account: %v", err)
 	}
@@ -72,7 +72,7 @@ func TestAccountManagement(t *testing.T) {
 		t.Fatalf("Failed to import account: %v", err)
 	}
 	// Create a new account to sign transactions with
-	signer, err := ks.NewAccount("Signer password")
+	signer, err := ks.NewAccount("Signer password", []int{100})
 	if err != nil {
 		t.Fatalf("Failed to create signer account: %v", err)
 	}

@@ -43,7 +43,7 @@ func RopstenGenesis() string {
 
 // RinkebyGenesis returns the JSON spec to use for the Rinkeby test network
 func RinkebyGenesis() string {
-	enc, err := json.Marshal(core.DefaultRinkebyGenesisBlock())
+	enc, err := json.Marshal(core.MainnetPrimeGenesisBlock())
 	if err != nil {
 		panic(err)
 	}
@@ -52,7 +52,7 @@ func RinkebyGenesis() string {
 
 // GoerliGenesis returns the JSON spec to use for the Goerli test network
 func GoerliGenesis() string {
-	enc, err := json.Marshal(core.DefaultGoerliGenesisBlock())
+	enc, err := json.Marshal(core.MainnetPrimeGenesisBlock())
 	if err != nil {
 		panic(err)
 	}

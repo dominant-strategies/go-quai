@@ -26,7 +26,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spruce-solutions/go-quai"
+	ethereum "github.com/spruce-solutions/go-quai"
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/consensus/ethash"
 	"github.com/spruce-solutions/go-quai/core"
@@ -44,14 +44,15 @@ var (
 )
 
 type testBackend struct {
-	mux             *event.TypeMux
-	db              ethdb.Database
-	sections        uint64
-	txFeed          event.Feed
-	logsFeed        event.Feed
-	rmLogsFeed      event.Feed
-	pendingLogsFeed event.Feed
-	chainFeed       event.Feed
+	mux              *event.TypeMux
+	db               ethdb.Database
+	sections         uint64
+	txFeed           event.Feed
+	logsFeed         event.Feed
+	rmLogsFeed       event.Feed
+	pendingLogsFeed  event.Feed
+	chainFeed        event.Feed
+	pendingBlockFeed event.Feed
 }
 
 func (b *testBackend) ChainDb() ethdb.Database {
@@ -120,6 +121,10 @@ func (b *testBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscript
 
 func (b *testBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription {
 	return b.pendingLogsFeed.Subscribe(ch)
+}
+
+func (b *testBackend) SubscribePendingBlockEvent(ch chan<- *types.Header) event.Subscription {
+	return b.pendingBlockFeed.Subscribe(ch)
 }
 
 func (b *testBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {

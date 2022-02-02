@@ -311,7 +311,7 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 	parentDiff.Number[types.QuaiNetworkContext] = parent.Number()
 	parentDiff.Difficulty[types.QuaiNetworkContext] = parent.Difficulty()
 	parentDiff.UncleHash[types.QuaiNetworkContext] = parent.UncleHash()
-	header.Difficulty[types.QuaiNetworkContext] = engine.CalcDifficulty(&fakeChainReader{config}, parent.Time()+10, parentDiff)
+	header.Difficulty[types.QuaiNetworkContext] = engine.CalcDifficulty(&fakeChainReader{config}, parent.Time()+10, parentDiff, 0)
 	header.GasLimit[types.QuaiNetworkContext] = parent.GasLimit()
 	header.Number[types.QuaiNetworkContext] = new(big.Int).Add(parent.Number(), common.Big1)
 

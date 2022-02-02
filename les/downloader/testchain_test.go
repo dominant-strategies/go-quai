@@ -136,8 +136,8 @@ func (tc *testChain) generate(n int, seed byte, parent *types.Block, heavy bool)
 		// if the block number is a multiple of 5, add a bonus uncle to the block
 		if i > 0 && i%5 == 0 {
 			block.AddUncle(&types.Header{
-				ParentHash: block.PrevBlock(i - 1).Hash(),
-				Number:     big.NewInt(block.Number().Int64() - 1),
+				ParentHash: []common.Hash{block.PrevBlock(i - 1).Hash()},
+				Number:     []*big.Int{big.NewInt(block.Number().Int64() - 1)},
 			})
 		}
 	})

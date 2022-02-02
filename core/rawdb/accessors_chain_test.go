@@ -539,9 +539,9 @@ func TestCanonicalHashIteration(t *testing.T) {
 func TestHashesInRange(t *testing.T) {
 	mkHeader := func(number, seq int) *types.Header {
 		h := types.Header{
-			Difficulty: new(big.Int),
-			Number:     big.NewInt(int64(number)),
-			GasLimit:   uint64(seq),
+			Difficulty: []*big.Int{new(big.Int)},
+			Number:     []*big.Int{big.NewInt(int64(number))},
+			GasLimit:   []uint64{uint64(seq)},
 		}
 		return &h
 	}
@@ -648,8 +648,8 @@ func makeTestBlocks(nblock int, txsPerBlock int) []*types.Block {
 	blocks := make([]*types.Block, nblock)
 	for i := 0; i < nblock; i++ {
 		header := &types.Header{
-			Number: big.NewInt(int64(i)),
-			Extra:  []byte("test block"),
+			Number: []*big.Int{big.NewInt(int64(i))},
+			Extra:  [][]byte{[]byte("test block")},
 		}
 		blocks[i] = types.NewBlockWithHeader(header).WithBody(txs, nil)
 		blocks[i].Hash() // pre-cache the block hash
