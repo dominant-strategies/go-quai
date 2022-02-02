@@ -660,33 +660,42 @@ func (ethash *Ethash) GetCoincidentHeader(chain consensus.ChainHeaderReader, con
 	// If we are at the highest context, no coincident will include it.
 	if context == 0 {
 		return header, 0
-	}
-	for {
-		// If block header is Genesis return it as coincident
-		if header.Number[context].Cmp(big.NewInt(1)) <= 0 {
-			return header, context
-		}
-
-		// Check work of the header, if it has enough work we will move up in context.
-		// difficultyContext is initially context since it could be a pending block w/o a nonce.
+	} else if context == 1 {
 		difficultyContext, err := ethash.GetDifficultyContext(chain, header, context)
 		if err != nil {
 			log.Warn("Unable to calculate difficulty context")
 			return header, context
 		}
 
-		// If we have reached a coincident block
-		if difficultyContext < context {
-			return header, difficultyContext
-		} else if difficultyContext == 1 && context == 1 {
-			return header, difficultyContext
+		return header, difficultyContext
+	} else {
+		for {
+			// If block header is Genesis return it as coincident
+			if header.Number[context].Cmp(big.NewInt(0)) == 0 {
+				return header, context
+			}
+
+			// Check work of the header, if it has enough work we will move up in context.
+			// difficultyContext is initially context since it could be a pending block w/o a nonce.
+			difficultyContext, err := ethash.GetDifficultyContext(chain, header, context)
+			if err != nil {
+				log.Warn("Unable to calculate difficulty context")
+				return header, context
+			}
+
+			// If we have reached a coincident block
+			if difficultyContext < context {
+				return header, difficultyContext
+			} else if difficultyContext == 1 && context == 1 {
+				return header, difficultyContext
+			}
+
+			// Get previous header on local chain by hash
+			prevHeader := chain.GetHeaderByHash(header.ParentHash[context])
+
+			// Increment previous header
+			header = prevHeader
 		}
-
-		// Get previous header on local chain by hash
-		prevHeader := chain.GetHeaderByHash(header.ParentHash[context])
-
-		// Increment previous header
-		header = prevHeader
 	}
 }
 
@@ -719,9 +728,19 @@ func (ethash *Ethash) GetStopHash(chain consensus.ChainHeaderReader, difficultyC
 			}
 			prevHeader = extBlock.Header()
 		}
-		log.Debug("GetStopHash: Iterating back", "context", context)
+		log.Debug("GetStopHash: Iterating back", "context", context, "number", header.Number)
+		if originalContext == 0 {
+			stopHash = header.ParentHash[context]
+			break
+		}
+
 		// Relevant to region finding N-1 coincident block
-		if bytes.Equal(startingHeader.Location, prevHeader.Location) || originalContext == 0 {
+		if originalContext == 1 && startingHeader.Location[0] == prevHeader.Location[0] {
+			stopHash = header.ParentHash[context]
+			break
+		}
+
+		if originalContext == 2 && bytes.Equal(startingHeader.Location, prevHeader.Location) {
 			stopHash = header.ParentHash[context]
 			break
 		}
@@ -751,11 +770,9 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 			log.Warn("Unable to calculate difficulty context")
 		}
 
-		// If we have reached a coincident block or we're in Region and found the prev region
-		if difficultyContext < context && steppedBack {
-			if logging {
-				log.Debug("TraceBranch: Found coincident block", "number", header.Number, "context", context, "location", header.Location)
-			}
+		// If we have reached a coincident block in Zone.
+		if difficultyContext < context && steppedBack && context == types.ContextDepth-1 {
+			log.Debug("TraceBranch: Found coincident block", "number", header.Number, "context", context, "location", header.Location)
 			break
 		}
 
@@ -773,13 +790,41 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 				log.Warn("TraceBranch: External Block not found for header", "number", header.Number[context], "context", context, "hash", header.Hash())
 				return nil, nil
 			}
-			if logging {
-				log.Debug("GetExternalBlocks: Block being added: ", "number", extBlock.Header().Number, "context", extBlock.Context(), "location", extBlock.Header().Location, "txs", len(extBlock.Transactions()))
-			}
+			log.Info("GetExternalBlocks: Block being added: ", "number", extBlock.Header().Number, "context", extBlock.Context(), "location", extBlock.Header().Location, "txs", len(extBlock.Transactions()))
+
 			extBlocks = append(extBlocks, extBlock)
 		}
 
-		if context < types.ContextDepth-1 {
+		// If we are in Prime, do not trace down our own Regions.
+		if context == 0 {
+			fmt.Println("In context 0")
+			if header.Location[0] != originalLocation[0] {
+				result, err := ethash.TraceBranch(chain, header, context+1, stopHash, originalContext, originalLocation, logging)
+				if err != nil {
+					return nil, err
+				}
+				extBlocks = append(extBlocks, result...)
+			} else if originalContext == 1 && sameLocation {
+				// If we are in a Prime block in our own Region. Get the Zone blocks
+				result, err := ethash.TraceBranch(chain, header, context+2, stopHash, originalContext, originalLocation, logging)
+				if err != nil {
+					return nil, err
+				}
+				extBlocks = append(extBlocks, result...)
+			} else if originalContext == 2 && sameLocation {
+				fmt.Println("In context == 2 && sameLocation")
+				// If we are in a Prime block in our own Zone. Get the Region block
+				extBlock, err := chain.GetExternalBlock(header.Hash(), header.Number[context+1].Uint64(), uint64(context)+1)
+				if err != nil {
+					log.Warn("Trace Branch: External Block not found for previous header", "number", header.Number[context+1].Int64(), "context", context+1, "hash", header.Hash())
+					return extBlocks, nil
+				}
+				extBlocks = append(extBlocks, extBlock)
+			}
+		}
+
+		if context == 1 {
+			fmt.Println("Going down Region to Zone.")
 			result, err := ethash.TraceBranch(chain, header, context+1, stopHash, originalContext, originalLocation, logging)
 			if err != nil {
 				return nil, err
@@ -788,10 +833,8 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 		}
 
 		// Stop at the stop hash before iterating downward
-		if header.ParentHash[context] == stopHash || header.Number[context].Cmp(big.NewInt(1)) == 0 {
-			if logging {
-				log.Info("TraceBranch: Stopping on stop hash", "number", header.Number, "context", context, "location", header.Location, "hash", stopHash)
-			}
+		if header.ParentHash[context] == stopHash || header.Number[context].Cmp(big.NewInt(0)) == 0 {
+			log.Info("TraceBranch: Stopping on stop hash", "number", header.Number, "context", context, "location", header.Location, "hash", stopHash)
 			break
 		}
 
@@ -808,9 +851,7 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 		}
 		// In Regions the starting header needs to be broken off for N-1
 		if context < types.ContextDepth-1 && bytes.Equal(startingHeader.Location, prevHeader.Location) && originalContext != 0 && sameLocation {
-			if logging {
-				log.Info("TraceBranch: Stopping with Region N-1", "number", header.Number, "context", context, "location", header.Location)
-			}
+			log.Info("TraceBranch: Stopping with Region N-1", "number", header.Number, "context", context, "location", header.Location)
 			break
 		}
 		header = prevHeader
@@ -837,6 +878,8 @@ func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, heade
 		if err != nil {
 			return nil, err
 		}
+		fmt.Println("difficultyContext:", difficultyContext)
+
 		extBlockResult, extBlockErr := ethash.TraceBranch(chain, coincidentHeader, difficultyContext, stopHash, context, header.Location, logging)
 		if extBlockErr != nil {
 			return nil, err
@@ -845,6 +888,9 @@ func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, heade
 	}
 	log.Info("GetExternalBlocks: Amount of external blocks returned", "amount", len(externalBlocks))
 
+	for _, extBlock := range externalBlocks {
+		fmt.Println(extBlock.Hash(), extBlock.Context(), extBlock.Header().Number)
+	}
 	// Swap order of external blocks
 	if len(externalBlocks) > 0 {
 		for i, j := 0, len(externalBlocks)-1; i < j; i, j = i+1, j-1 {

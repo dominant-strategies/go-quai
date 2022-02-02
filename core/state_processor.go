@@ -94,7 +94,6 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	}
 
 	for _, externalBlock := range externalBlocks {
-		fmt.Println(externalBlock.Hash())
 		context := externalBlock.Context().Int64()
 		switch context {
 		case 0:
@@ -117,26 +116,20 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 			}
 		}
 	}
-	fmt.Println("Prime linkHash", p.blockLink.prime)
-	fmt.Println("Prime parentHash", linkBlocks.prime)
 
 	// Verify that the externalBlocks provided link with previous coincident blocks.
 	if linkBlocks.prime != (common.Hash{}) && linkBlocks.prime != p.blockLink.prime {
 		return nil, nil, 0, nil, fmt.Errorf("Error linking external blocks: prev prime %d parentHash %v", p.blockLink.prime, linkBlocks.prime)
 	} else {
 		for i := range linkBlocks.regions {
-			fmt.Println("Region linkHash", p.blockLink.regions[i])
-			fmt.Println("Region parentHash", linkBlocks.regions[i])
 			if linkBlocks.regions[i] != (common.Hash{}) && linkBlocks.regions[i] != p.blockLink.regions[i] {
+				fmt.Println("Wanted", p.blockLink.regions[i], "Received", linkBlocks.regions[i])
 				return nil, nil, 0, nil, fmt.Errorf("Error linking external blocks: prev region %d parentHash %v", p.blockLink.regions[i], linkBlocks.regions[i])
-
 			}
 			for j := range linkBlocks.zones[i] {
-				fmt.Println("Zone linkHash", p.blockLink.zones[i][j])
-				fmt.Println("Zone parentHash", linkBlocks.zones[i][j])
 				if linkBlocks.zones[i][j] != (common.Hash{}) && linkBlocks.zones[i][j] != p.blockLink.zones[i][j] {
+					fmt.Println("Wanted", p.blockLink.zones[i][j], "Received", linkBlocks.zones[i][j])
 					return nil, nil, 0, nil, fmt.Errorf("Error linking external blocks: prev zone %d parentHash %v", p.blockLink.zones[i][j], linkBlocks.zones[i][j])
-
 				}
 			}
 		}
