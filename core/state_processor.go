@@ -93,6 +93,8 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		zones:   [][]common.Hash{make([]common.Hash, 3), make([]common.Hash, 3), make([]common.Hash, 3)},
 	}
 
+	fmt.Println("Len of extBlocks in process", len(externalBlocks))
+
 	for _, externalBlock := range externalBlocks {
 		context := externalBlock.Context().Int64()
 		switch context {
@@ -136,6 +138,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	}
 
 	// Update array with latest applied externalBlocks.
+	fmt.Println("Updating linkBlocks set")
 	p.blockLink = p.SetLinkBlocksToLastApplied(externalBlocks, p.blockLink)
 
 	etxs := 0
@@ -458,6 +461,7 @@ func (p *StateProcessor) SetLinkBlocksToLastApplied(externalBlocks []*types.Exte
 			fmt.Println("starting", startingLinkBlocks.prime)
 			if linkBlocks.prime == startingLinkBlocks.prime {
 				linkBlocks.prime = lastAppliedBlock.Hash()
+				fmt.Println("New last applied Prime", lastAppliedBlock.Header().Location, lastAppliedBlock.Hash())
 			}
 		case 1:
 			fmt.Println("REGION LINK BLOCKS")
