@@ -51,3 +51,5 @@ profile.cov
 bootnode.key
 nodelogs/*
 nodelogs
+
+network.env
