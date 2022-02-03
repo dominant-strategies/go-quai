@@ -93,8 +93,6 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		zones:   [][]common.Hash{make([]common.Hash, 3), make([]common.Hash, 3), make([]common.Hash, 3)},
 	}
 
-	fmt.Println("Len of extBlocks in process", len(externalBlocks))
-
 	for _, externalBlock := range externalBlocks {
 		context := externalBlock.Context().Int64()
 		switch context {
@@ -102,19 +100,16 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 			if linkBlocks.prime == (common.Hash{}) {
 				linkedPreviousHash := externalBlock.Header().ParentHash[externalBlock.Context().Int64()]
 				linkBlocks.prime = linkedPreviousHash
-				fmt.Println("PRIME", externalBlock.Header().Number, linkedPreviousHash, externalBlock.Hash())
 			}
 		case 1:
 			if linkBlocks.regions[externalBlock.Header().Location[0]-1] == (common.Hash{}) {
 				linkedPreviousHash := externalBlock.Header().ParentHash[externalBlock.Context().Int64()]
 				linkBlocks.regions[externalBlock.Header().Location[0]-1] = linkedPreviousHash
-				fmt.Println("REGION", externalBlock.Header().Number, linkedPreviousHash, externalBlock.Hash())
 			}
 		case 2:
 			if linkBlocks.zones[externalBlock.Header().Location[0]-1][externalBlock.Header().Location[1]-1] == (common.Hash{}) {
 				linkedPreviousHash := externalBlock.Header().ParentHash[externalBlock.Context().Int64()]
 				linkBlocks.zones[externalBlock.Header().Location[0]-1][externalBlock.Header().Location[1]-1] = linkedPreviousHash
-				fmt.Println("ZONE", externalBlock.Header().Number, linkedPreviousHash, externalBlock.Hash())
 			}
 		}
 	}
@@ -125,12 +120,10 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	} else {
 		for i := range linkBlocks.regions {
 			if linkBlocks.regions[i] != (common.Hash{}) && linkBlocks.regions[i] != p.blockLink.regions[i] {
-				fmt.Println("Wanted", p.blockLink.regions[i], "Received", linkBlocks.regions[i])
 				return nil, nil, 0, nil, fmt.Errorf("Error linking external blocks: prev region %d parentHash %v", p.blockLink.regions[i], linkBlocks.regions[i])
 			}
 			for j := range linkBlocks.zones[i] {
 				if linkBlocks.zones[i][j] != (common.Hash{}) && linkBlocks.zones[i][j] != p.blockLink.zones[i][j] {
-					fmt.Println("Wanted", p.blockLink.zones[i][j], "Received", linkBlocks.zones[i][j])
 					return nil, nil, 0, nil, fmt.Errorf("Error linking external blocks: prev zone %d parentHash %v", p.blockLink.zones[i][j], linkBlocks.zones[i][j])
 				}
 			}
@@ -138,7 +131,6 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	}
 
 	// Update array with latest applied externalBlocks.
-	fmt.Println("Updating linkBlocks set")
 	p.blockLink = p.SetLinkBlocksToLastApplied(externalBlocks, p.blockLink)
 
 	etxs := 0
@@ -347,12 +339,10 @@ func (p *StateProcessor) GenerateExtBlockLink() {
 		return
 	}
 
-	// TODO:
 	// Need to keep first hash that is put. Region went all the way back to the first region block.
 	populated := false
 	for !populated {
 
-		fmt.Println("Current number", currentHeader.Number)
 		// Populate the linkBlocks struct with the block hashes of the last applied ext block of that chain.
 		extBlocks, err := p.engine.GetExternalBlocks(p.bc, currentHeader, true)
 		if err != nil {
@@ -379,15 +369,12 @@ func (p *StateProcessor) GenerateExtBlockLink() {
 			linkBlocks.prime = tempLinkBlocks.prime
 		}
 		for i := range linkBlocks.regions {
-			fmt.Println(tempLinkBlocks.regions[i], linkBlocks.regions[i], startingLinkBlocks.regions[i], linkBlocks.regions[i])
 			if tempLinkBlocks.regions[i] != linkBlocks.regions[i] && startingLinkBlocks.regions[i] == linkBlocks.regions[i] {
 				linkBlocks.regions[i] = tempLinkBlocks.regions[i]
-				fmt.Println("Updating region last applied hash", linkBlocks.regions[i])
 			}
 			for j := range linkBlocks.zones[i] {
 				if tempLinkBlocks.zones[i][j] != linkBlocks.zones[i][j] && startingLinkBlocks.zones[i][j] == linkBlocks.zones[i][j] {
 					linkBlocks.zones[i][j] = tempLinkBlocks.zones[i][j]
-					fmt.Println("Updating zone last applied hash", linkBlocks.zones[i][j])
 				}
 			}
 		}
@@ -451,33 +438,18 @@ func (p *StateProcessor) SetLinkBlocksToLastApplied(externalBlocks []*types.Exte
 	}
 	// iterate through the extBlocks, updated the index with the last applied external blocks.
 	for _, lastAppliedBlock := range externalBlocks {
-		fmt.Println("SetLinksContext", lastAppliedBlock.Context().Int64())
-		fmt.Println("Number", lastAppliedBlock.Header().Number)
-		fmt.Println("Hash", lastAppliedBlock.Hash())
 		switch lastAppliedBlock.Context().Int64() {
 		case 0:
-			fmt.Println("PRIME LINK BLOCKS")
-			fmt.Println("link", linkBlocks.prime)
-			fmt.Println("starting", startingLinkBlocks.prime)
 			if linkBlocks.prime == startingLinkBlocks.prime {
 				linkBlocks.prime = lastAppliedBlock.Hash()
-				fmt.Println("New last applied Prime", lastAppliedBlock.Header().Location, lastAppliedBlock.Hash())
 			}
 		case 1:
-			fmt.Println("REGION LINK BLOCKS")
-			fmt.Println("link", linkBlocks.regions[lastAppliedBlock.Header().Location[0]-1])
-			fmt.Println("starting", startingLinkBlocks.regions[lastAppliedBlock.Header().Location[0]-1])
 			if linkBlocks.regions[lastAppliedBlock.Header().Location[0]-1] == startingLinkBlocks.regions[lastAppliedBlock.Header().Location[0]-1] {
 				linkBlocks.regions[lastAppliedBlock.Header().Location[0]-1] = lastAppliedBlock.Hash()
-				fmt.Println("New last applied Region", lastAppliedBlock.Header().Location[0]-1, lastAppliedBlock.Hash())
 			}
 		case 2:
-			fmt.Println("ZONE LINK BLOCKS")
-			fmt.Println("link", linkBlocks.zones[lastAppliedBlock.Header().Location[0]-1][lastAppliedBlock.Header().Location[1]-1])
-			fmt.Println("starting", startingLinkBlocks.zones[lastAppliedBlock.Header().Location[0]-1][lastAppliedBlock.Header().Location[1]-1])
 			if linkBlocks.zones[lastAppliedBlock.Header().Location[0]-1][lastAppliedBlock.Header().Location[1]-1] == startingLinkBlocks.zones[lastAppliedBlock.Header().Location[0]-1][lastAppliedBlock.Header().Location[1]-1] {
 				linkBlocks.zones[lastAppliedBlock.Header().Location[0]-1][lastAppliedBlock.Header().Location[1]-1] = lastAppliedBlock.Hash()
-				fmt.Println("New last applied Zone", lastAppliedBlock.Header().Location[0]-1, lastAppliedBlock.Header().Location[1]-1, lastAppliedBlock.Hash())
 			}
 		}
 	}
