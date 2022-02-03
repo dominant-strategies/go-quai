@@ -279,7 +279,7 @@ func TestStaleSubmission(t *testing.T) {
 			if res.Header().Nonce != fakeNonce {
 				t.Errorf("case %d block nonce mismatch, want %x, get %x", id+1, fakeNonce, res.Header().Nonce)
 			}
-			if res.Header().MixDigest[types.QuaiNetworkContext] != fakeDigest {
+			if res.Header().MixDigest[types.QuaiNetworkContext] != fakeDigest[0] {
 				t.Errorf("case %d block digest mismatch, want %x, get %x", id+1, fakeDigest, res.Header().MixDigest)
 			}
 			if res.Header().Difficulty[types.QuaiNetworkContext].Uint64() != c.headers[c.submitIndex].Difficulty[types.QuaiNetworkContext].Uint64() {

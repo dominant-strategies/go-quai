@@ -95,6 +95,10 @@ func (b *testBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) eve
 	return nil
 }
 
+func (b *testBackend) CalculateBaseFee(header *types.Header) *big.Int {
+	return nil
+}
+
 func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBackend {
 	var (
 		key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
