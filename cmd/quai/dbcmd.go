@@ -174,34 +174,45 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 )
 
 func removeDB(ctx *cli.Context) error {
-	stack, config := makeConfigNode(ctx)
+	// stack, config := makeConfigNode(ctx)
 
-	// Remove the full node state database
-	path := stack.ResolvePath("chaindata")
-	if common.FileExist(path) {
-		confirmAndRemoveDB(path, "full node state database")
-	} else {
-		log.Info("Full node state database missing", "path", path)
+	// get local environment
+	home := os.Getenv("HOME")
+	db_path := filepath.Join(home, ".quai")
+	prime_path := "prime"
+	region_paths := [3]string{"region1", "region2", "region3"}
+	zone_paths := [3]string{"zone1", "zone2", "zone3"}
+	// get paths for all chains
+	all_chain_dbs := []string{filepath.Join(db_path, prime_path)}
+	for _, n := range region_paths {
+		all_chain_dbs = append(all_chain_dbs, filepath.Join(db_path, n))
+		for _, s := range zone_paths {
+			all_chain_dbs = append(all_chain_dbs, filepath.Join(db_path, n, s))
+		}
 	}
-	// Remove the full node ancient database
-	path = config.Eth.DatabaseFreezer
-	switch {
-	case path == "":
-		path = filepath.Join(stack.ResolvePath("chaindata"), "ancient")
-	case !filepath.IsAbs(path):
-		path = config.Node.ResolvePath(path)
-	}
-	if common.FileExist(path) {
-		confirmAndRemoveDB(path, "full node ancient database")
-	} else {
-		log.Info("Full node ancient database missing", "path", path)
-	}
-	// Remove the light node database
-	path = stack.ResolvePath("lightchaindata")
-	if common.FileExist(path) {
-		confirmAndRemoveDB(path, "light node database")
-	} else {
-		log.Info("Light node database missing", "path", path)
+
+	for _, d := range all_chain_dbs {
+		// Remove the full node state database
+		path := filepath.Join(d, "geth", "chaindata")
+		if common.FileExist(path) {
+			confirmAndRemoveDB(path, "full node state database")
+		} else {
+			log.Info("Full node state database missing", "path", path)
+		}
+		// Remove the full node ancient database
+		path = filepath.Join(path, "ancient")
+		if common.FileExist(path) {
+			confirmAndRemoveDB(path, "full node ancient database")
+		} else {
+			log.Info("Full node ancient database missing", "path", path)
+		}
+		// Remove the light node database
+		/* path = d.ResolvePath("lightchaindata")
+		if common.FileExist(path) {
+			confirmAndRemoveDB(path, "light node database")
+		} else {
+			log.Info("Light node database missing", "path", path)
+		} */
 	}
 	return nil
 }
