@@ -32,6 +32,8 @@ import (
 	"github.com/spruce-solutions/go-quai/ethdb"
 	"github.com/spruce-solutions/go-quai/log"
 	"github.com/spruce-solutions/go-quai/trie"
+	"github.com/spruce-solutions/go-quai/eth/ethconfig"
+	"github.com/spruce-solutions/go-quai/node"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -175,19 +177,16 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 
 func removeDB(ctx *cli.Context) error {
 	// stack, config := makeConfigNode(ctx)
+	all_chain_dbs := []string{node.DefaultConfig.DataDir} // array to hold dirs of all chains
+	cache_path := ethconfig.Defaults.Ethash.CacheDir // dir for ethcache
+	dataset_path := ethconfig.Defaults.Ethash.DatasetDir // dir for ethash dataset
 
-	// get local environment
-	home := os.Getenv("HOME")
-	db_path := filepath.Join(home, ".quai")
-	prime_path := "prime"
-	region_paths := [3]string{"region1", "region2", "region3"}
-	zone_paths := [3]string{"zone1", "zone2", "zone3"}
-	// get paths for all chains
-	all_chain_dbs := []string{filepath.Join(db_path, prime_path)}
-	for _, n := range region_paths {
-		all_chain_dbs = append(all_chain_dbs, filepath.Join(db_path, n))
-		for _, s := range zone_paths {
-			all_chain_dbs = append(all_chain_dbs, filepath.Join(db_path, n, s))
+	for n := 1; n < 4; n++ {
+		n_str := strconv.Itoa(n)
+		all_chain_dbs = append(all_chain_dbs, node.QuaiRegionDataDir(n_str))
+		for s := 1; s < 4; s++ {
+			s_str := strconv.Itoa(s)
+			all_chain_dbs = append(all_chain_dbs, node.QuaiZoneDataDir(n_str, s_str))
 		}
 	}
 
@@ -214,6 +213,20 @@ func removeDB(ctx *cli.Context) error {
 			log.Info("Light node database missing", "path", path)
 		} */
 	}
+
+	// check and delete cache
+	if common.FileExist(cache_path) {
+		confirmAndRemoveDB(cache_path, "ethash cache")
+	} else {
+		log.Info("ethash cache database missing", "path", cache_path)
+	}
+	// check and delete dataset
+	if common.FileExist(dataset_path) {
+		confirmAndRemoveDB(dataset_path, "ethash dataset")
+	} else {
+		log.Info("ethash dataset database missing", "path", dataset_path)
+	}
+
 	return nil
 }
 
