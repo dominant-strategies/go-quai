@@ -49,7 +49,7 @@ func TestKeyStorePlain(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	pass := "" // not used but required by API
-	k1, account, err := storeNewKey(ks, rand.Reader, pass)
+	k1, account, err := storeNewKey(ks, rand.Reader, pass, []int{20})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +70,7 @@ func TestKeyStorePassphrase(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	pass := "foo"
-	k1, account, err := storeNewKey(ks, rand.Reader, pass)
+	k1, account, err := storeNewKey(ks, rand.Reader, pass, []int{10})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +91,7 @@ func TestKeyStorePassphraseDecryptionFail(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	pass := "foo"
-	k1, account, err := storeNewKey(ks, rand.Reader, pass)
+	k1, account, err := storeNewKey(ks, rand.Reader, pass, []int{5})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -343,6 +343,12 @@ func (dl *downloadTester) InsertReceiptChain(blocks types.Blocks, receipts []typ
 	return len(blocks), nil
 }
 
+//AddExternalBlock adds a array of external blocks onto the simulated block cache
+//downloadTester doesn't have ExternalBlocks currently a work in progress
+func (dl *downloadTester) AddExternalBlock(block *types.ExternalBlock) error {
+	return nil
+}
+
 // SetHead rewinds the local chain to a new head.
 func (dl *downloadTester) SetHead(head uint64) error {
 	dl.lock.Lock()
@@ -453,6 +459,13 @@ func (dlp *downloadTesterPeer) RequestHeadersByNumber(origin uint64, amount int,
 func (dlp *downloadTesterPeer) RequestBodies(hashes []common.Hash) error {
 	txs, uncles := dlp.chain.bodies(hashes)
 	go dlp.dl.downloader.DeliverBodies(dlp.id, txs, uncles)
+	return nil
+}
+
+//RequestExteralBlocks
+func (dlp *downloadTesterPeer) RequestExternalBlocks(hashes []common.Hash) error {
+	//extBlocks := dlp.chain
+	//go dlp.dl.downloader.DeliverExtBlocks(dlp.id,extBlocks)
 	return nil
 }
 
@@ -1481,6 +1494,9 @@ func (ftp *floodingTestPeer) RequestReceipts(hashes []common.Hash) error {
 }
 func (ftp *floodingTestPeer) RequestNodeData(hashes []common.Hash) error {
 	return ftp.peer.RequestNodeData(hashes)
+}
+func (ftp *floodingTestPeer) RequestExternalBlocks(hashes []common.Hash) error {
+	return ftp.peer.RequestExternalBlocks(hashes)
 }
 
 func (ftp *floodingTestPeer) RequestHeadersByNumber(from uint64, count, skip int, reverse bool) error {

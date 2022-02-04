@@ -170,7 +170,7 @@ func (ks *KeyStore) TimedUnlock(account *Account, passphrase string, timeout int
 
 // NewAccount generates a new key and stores it into the key directory,
 // encrypting it with the passphrase.
-func (ks *KeyStore) NewAccount(passphrase string, id byte) (*Account, error) {
+func (ks *KeyStore) NewAccount(passphrase string, id []int) (*Account, error) {
 	account, err := ks.keystore.NewAccount(passphrase, id)
 	if err != nil {
 		return nil, err
