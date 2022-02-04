@@ -710,11 +710,11 @@ func (ethash *Ethash) GetStopHash(chain consensus.ChainHeaderReader, difficultyC
 		if header.Number[context].Cmp(big.NewInt(1)) == 0 {
 			switch context {
 			case 0:
-				stopHash = params.RopstenPrimeGenesisHash
+				stopHash = chain.Config().GenesisHashes[0]
 			case 1:
-				stopHash = params.RopstenRegionGenesisHash
+				stopHash = chain.Config().GenesisHashes[1]
 			case 2:
-				stopHash = params.RopstenZoneGenesisHash
+				stopHash = chain.Config().GenesisHashes[2]
 			}
 			break
 		}

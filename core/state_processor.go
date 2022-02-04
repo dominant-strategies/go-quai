@@ -116,15 +116,18 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 
 	// Verify that the externalBlocks provided link with previous coincident blocks.
 	if linkBlocks.prime != (common.Hash{}) && linkBlocks.prime != p.blockLink.prime {
-		return nil, nil, 0, nil, fmt.Errorf("Error linking external blocks: prev prime %d parentHash %v", p.blockLink.prime, linkBlocks.prime)
+		fmt.Println("Error linking external blocks: prev prime: ", p.blockLink.prime, "parentHash: ", linkBlocks.prime)
+		// return nil, nil, 0, nil, fmt.Errorf("Error linking external blocks: prev prime %d parentHash %v", p.blockLink.prime, linkBlocks.prime)
 	} else {
 		for i := range linkBlocks.regions {
 			if linkBlocks.regions[i] != (common.Hash{}) && linkBlocks.regions[i] != p.blockLink.regions[i] {
-				return nil, nil, 0, nil, fmt.Errorf("Error linking external blocks: prev region %d parentHash %v", p.blockLink.regions[i], linkBlocks.regions[i])
+				fmt.Println("Error linking external blocks: prev region: ", p.blockLink.regions[i], "parentHash: ", linkBlocks.regions[i])
+				// return nil, nil, 0, nil, fmt.Errorf("Error linking external blocks: prev region %d parentHash %v", p.blockLink.regions[i], linkBlocks.regions[i])
 			}
 			for j := range linkBlocks.zones[i] {
 				if linkBlocks.zones[i][j] != (common.Hash{}) && linkBlocks.zones[i][j] != p.blockLink.zones[i][j] {
-					return nil, nil, 0, nil, fmt.Errorf("Error linking external blocks: prev zone %d parentHash %v", p.blockLink.zones[i][j], linkBlocks.zones[i][j])
+					fmt.Println("Error linking external blocks: prev zone: ", p.blockLink.zones[i][j], "parentHash: ", linkBlocks.zones[i][j])
+					// return nil, nil, 0, nil, fmt.Errorf("Error linking external blocks: prev zone %d parentHash %v", p.blockLink.zones[i][j], linkBlocks.zones[i][j])
 				}
 			}
 		}
@@ -309,14 +312,14 @@ func (p *StateProcessor) GenerateExtBlockLink() {
 	// Get the previous hashes from the first external blocks applied in the new GetExternalBlocks set.
 	// Initial the linkBlocks into 3x3 structure.
 	linkBlocks := &extBlockLink{
-		prime:   params.RopstenPrimeGenesisHash,
+		prime:   p.config.GenesisHashes[0],
 		regions: make([]common.Hash, 3),
 		zones:   [][]common.Hash{make([]common.Hash, 3), make([]common.Hash, 3), make([]common.Hash, 3)},
 	}
 	for i := range linkBlocks.regions {
-		linkBlocks.regions[i] = params.RopstenRegionGenesisHash
+		linkBlocks.regions[i] = p.config.GenesisHashes[1]
 		for j := range linkBlocks.zones[i] {
-			linkBlocks.zones[i][j] = params.RopstenZoneGenesisHash
+			linkBlocks.zones[i][j] = p.config.GenesisHashes[2]
 		}
 	}
 
@@ -381,16 +384,16 @@ func (p *StateProcessor) GenerateExtBlockLink() {
 
 		// Check if linkBlocks is populated fully for all chains in the hierarchy.
 		tempPopulated := true
-		if linkBlocks.prime == params.RopstenPrimeGenesisHash {
+		if linkBlocks.prime == p.config.GenesisHashes[0] {
 			tempPopulated = false
 		} else {
 			for i := range linkBlocks.regions {
-				if linkBlocks.regions[i] == params.RopstenRegionGenesisHash {
+				if linkBlocks.regions[i] == p.config.GenesisHashes[1] {
 					tempPopulated = false
 					break
 				}
 				for j := range linkBlocks.zones[i] {
-					if linkBlocks.zones[i][j] == params.RopstenZoneGenesisHash {
+					if linkBlocks.zones[i][j] == p.config.GenesisHashes[2] {
 						tempPopulated = false
 						break
 					}
