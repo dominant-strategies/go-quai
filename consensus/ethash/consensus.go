@@ -886,9 +886,8 @@ func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, heade
 		externalBlocks = append(externalBlocks, extBlockResult...)
 	}
 
-	for _, extBlock := range externalBlocks {
-		fmt.Println(extBlock.Hash(), extBlock.Context(), extBlock.Header().Number)
-	}
+	log.Info("GetExternalBlocks: Length of external blocks", "len", len(externalBlocks))
+
 	// Swap order of external blocks
 	if len(externalBlocks) > 0 {
 		for i, j := 0, len(externalBlocks)-1; i < j; i, j = i+1, j-1 {
