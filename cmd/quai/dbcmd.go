@@ -34,6 +34,7 @@ import (
 	"github.com/spruce-solutions/go-quai/trie"
 	"github.com/spruce-solutions/go-quai/eth/ethconfig"
 	"github.com/spruce-solutions/go-quai/node"
+	"github.com/spruce-solutions/go-quai/core/types"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -181,15 +182,17 @@ func removeDB(ctx *cli.Context) error {
 	cache_path := ethconfig.Defaults.Ethash.CacheDir // dir for ethcache
 	dataset_path := ethconfig.Defaults.Ethash.DatasetDir // dir for ethash dataset
 
-	for n := 1; n < 4; n++ {
+	// construct all_chain_dbs to hold all paths properly formatted to machine OS
+	for n := 1; n < (types.ContextDepth + 1); n++ {
 		n_str := strconv.Itoa(n)
 		all_chain_dbs = append(all_chain_dbs, node.QuaiRegionDataDir(n_str))
-		for s := 1; s < 4; s++ {
-			s_str := strconv.Itoa(s)
-			all_chain_dbs = append(all_chain_dbs, node.QuaiZoneDataDir(n_str, s_str))
+		for i := 1; i < (types.ContextDepth + 1); i++ {
+			i_str := strconv.Itoa(i)
+			all_chain_dbs = append(all_chain_dbs, node.QuaiZoneDataDir(n_str, i_str))
 		}
 	}
 
+	// loop through each chain db in all_chain_dbs and prompt Y/n to delete
 	for _, d := range all_chain_dbs {
 		// Remove the full node state database
 		path := filepath.Join(d, "geth", "chaindata")
