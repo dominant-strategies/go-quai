@@ -1633,7 +1633,7 @@ func (bc *BlockChain) AddExternalBlock(block *types.ExternalBlock) error {
 		"context", block.Context(), "numbers", block.Header().Number, "hash", block.Hash(), "location", block.Header().Location,
 		"txs", len(block.Transactions()), "receipts", len(block.Receipts()),
 	}
-	log.Debug("New external block", context...)
+	log.Info("New external block", context...)
 	data, err := rlp.EncodeToBytes(block)
 	if err != nil {
 		log.Crit("Failed to RLP encode external block", "err", err)

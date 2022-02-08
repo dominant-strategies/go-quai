@@ -1764,8 +1764,10 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 		"extBlocks", len(extBlocks),
 	)
 
+	fmt.Println("importBlockResults: Length of ext blocks", len(extBlocks))
 	// Insert all ExternalBlocks
 	for _, extBlock := range extBlocks {
+		fmt.Println("importBlockResults:", extBlock.Context(), extBlock.Header().Number, extBlock.Header().Location)
 		d.blockchain.AddExternalBlock(extBlock)
 	}
 
@@ -2006,6 +2008,10 @@ func (d *Downloader) DeliverReceipts(id string, receipts [][]*types.Receipt) err
 
 // DeliverExtBlocks injects a new batch of external blocks received from a remote node.
 func (d *Downloader) DeliverExtBlocks(id string, extblocks [][]*types.ExternalBlock) error {
+	fmt.Println("DeliverExtBlocks: Delivering ext blocks")
+	for _, block := range extblocks {
+		fmt.Println("Num ext blocks:", len(block))
+	}
 	return d.deliver(d.extBlockCh, &externalBlockPack{id, extblocks}, extBlockInMeter, extBlockDropMeter)
 }
 
