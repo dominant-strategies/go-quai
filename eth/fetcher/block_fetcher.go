@@ -19,6 +19,7 @@ package fetcher
 
 import (
 	"errors"
+	"fmt"
 	"math/rand"
 	"time"
 
@@ -822,6 +823,7 @@ func (f *BlockFetcher) importBlocks(peer string, block *types.Block, extBlocks [
 		}
 
 		// Run the actual import and log any issues
+		fmt.Println("importBlocks: Inserting block into chain", "len extBlocks", len(extBlocks))
 		if _, err := f.insertChain(types.Blocks{block}, extBlocks); err != nil {
 			log.Debug("Propagated block import failed", "peer", peer, "number", block.Number(), "hash", hash, "err", err)
 			return
