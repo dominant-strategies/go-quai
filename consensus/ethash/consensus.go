@@ -932,22 +932,11 @@ func verifyMapContext(location []byte, mapcontext []int) bool {
 	var location0 = int(location[0])
 	var location1 = int(location[1])
 	
-	// check if Prime; if Prime then true
-	if location0 == 0 {
-		if location1 == 0 {
-			return true
-		}
-	} else {
-		return false // if location[1] isn't 0 when location[0] is 0 then something's gone wrong
-	}
 	// check Region
 	if location0 > len(mapcontext) {
 		return false
 	}
 	// check Zone
-	if location1 == 0 {
-		return true // if location[1] is 0 then it is a Region chain and no further checks necessary
-	}
 	if location1 > mapcontext[location0-1] {
 		return false
 	}
