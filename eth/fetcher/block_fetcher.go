@@ -79,6 +79,9 @@ type headerRequesterFn func(common.Hash) error
 // bodyRequesterFn is a callback type for sending a body retrieval request.
 type bodyRequesterFn func([]common.Hash) error
 
+// extBlockRequesterFn is a callback type for sending an external block retrieval request.
+type extBlockRequesterFn func([]common.Hash) error
+
 // headerVerifierFn is a callback type to verify a block's header for fast propagation.
 type headerVerifierFn func(header *types.Header) error
 
@@ -107,8 +110,9 @@ type blockAnnounce struct {
 
 	origin string // Identifier of the peer originating the notification
 
-	fetchHeader headerRequesterFn // Fetcher function to retrieve the header of an announced block
-	fetchBodies bodyRequesterFn   // Fetcher function to retrieve the body of an announced block
+	fetchHeader    headerRequesterFn   // Fetcher function to retrieve the header of an announced block
+	fetchBodies    bodyRequesterFn     // Fetcher function to retrieve the body of an announced block
+	fetchExtBlocks extBlockRequesterFn // Fetcher function to retrieve the external blocks of an announced block
 }
 
 // headerFilterTask represents a batch of headers needing fetcher filtering.
@@ -241,14 +245,15 @@ func (f *BlockFetcher) Stop() {
 // Notify announces the fetcher of the potential availability of a new block in
 // the network.
 func (f *BlockFetcher) Notify(peer string, hash common.Hash, number uint64, time time.Time,
-	headerFetcher headerRequesterFn, bodyFetcher bodyRequesterFn) error {
+	headerFetcher headerRequesterFn, bodyFetcher bodyRequesterFn, extBlockFetcher extBlockRequesterFn) error {
 	block := &blockAnnounce{
-		hash:        hash,
-		number:      number,
-		time:        time,
-		origin:      peer,
-		fetchHeader: headerFetcher,
-		fetchBodies: bodyFetcher,
+		hash:           hash,
+		number:         number,
+		time:           time,
+		origin:         peer,
+		fetchHeader:    headerFetcher,
+		fetchBodies:    bodyFetcher,
+		fetchExtBlocks: extBlockFetcher,
 	}
 	select {
 	case f.notify <- block:
