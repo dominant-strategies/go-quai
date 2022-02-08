@@ -259,6 +259,7 @@ func answerGetExtBlocksQuery(backend Backend, query GetExtBlocksPacket, peer *Pe
 	)
 	for _, hash := range query {
 		if bytes >= softResponseLimit {
+			fmt.Println("Hitting softResponseLimit in answerGetExtBlocksQuery")
 			break
 		}
 		// Retrieve the requested block's external blocks
