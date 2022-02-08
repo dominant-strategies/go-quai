@@ -27,9 +27,9 @@ import (
 
 // Genesis hashes to enforce below configs on.
 var (
-	MainnetPrimeGenesisHash  = common.HexToHash("0xd906676b4e345769613a9859421189884f69287a41bf5b819531ef124c10b178")
-	MainnetRegionGenesisHash = common.HexToHash("0x6ed5d241d374b55679451898a0d6f168b305da6d68361192bdc2705da095fdd9")
-	MainnetZoneGenesisHash   = common.HexToHash("0x09a169ea4693dfb4c9ade2a64b02da487513299821b8accdbfe928aafcbb0eeb")
+	MainnetPrimeGenesisHash  = common.HexToHash("0x6413bda6c6f8379a0aa4c6081b138bd10229b59c0cb3d092edbabe67f5306087")
+	MainnetRegionGenesisHash = common.HexToHash("0x2d8fa81d69095b6a8cc267ae69e6e22a0f35323c80028a24cfb359993e6064ae")
+	MainnetZoneGenesisHash   = common.HexToHash("0x277f051a75137fd81551a67d1e0577c9348174ad25b608c2323633140f88931b")
 	RopstenPrimeGenesisHash  = common.HexToHash("0x669e78d392237d2cdc0fda1e670592c8e524d8406a816bd8c301bfe6dc7bbda4")
 	RopstenRegionGenesisHash = common.HexToHash("0x1fe2d85883523226f92c2073f486f1e37b9596a341950c54d8803248cffad2ab")
 	RopstenZoneGenesisHash   = common.HexToHash("0x8c3eed6189c9bafb44941150dc2eb93f29d79352e30bfff0a4e6199fb5a39f44")
@@ -73,6 +73,7 @@ var (
 		MuirGlacierBlock:    big.NewInt(0),
 		BerlinBlock:         big.NewInt(0),
 		LondonBlock:         big.NewInt(0),
+		GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
 	}
 
 	MainnetRegionChainConfigs = []ChainConfig{
@@ -93,6 +94,7 @@ var (
 			MuirGlacierBlock:    big.NewInt(0),
 			BerlinBlock:         big.NewInt(0),
 			LondonBlock:         big.NewInt(0),
+			GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
 		},
 		ChainConfig{
 			ChainID:             big.NewInt(9200),
@@ -111,6 +113,7 @@ var (
 			MuirGlacierBlock:    big.NewInt(0),
 			BerlinBlock:         big.NewInt(0),
 			LondonBlock:         big.NewInt(0),
+			GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
 		},
 		ChainConfig{
 			ChainID:             big.NewInt(9300),
@@ -129,6 +132,7 @@ var (
 			MuirGlacierBlock:    big.NewInt(0),
 			BerlinBlock:         big.NewInt(0),
 			LondonBlock:         big.NewInt(0),
+			GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
 		},
 	}
 
@@ -151,6 +155,7 @@ var (
 				MuirGlacierBlock:    big.NewInt(0),
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
+				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(9102),
@@ -169,6 +174,7 @@ var (
 				MuirGlacierBlock:    big.NewInt(0),
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
+				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(9103),
@@ -187,6 +193,7 @@ var (
 				MuirGlacierBlock:    big.NewInt(0),
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
+				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
 			}},
 		[]ChainConfig{
 			ChainConfig{
@@ -206,6 +213,7 @@ var (
 				MuirGlacierBlock:    big.NewInt(0),
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
+				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(9202),
@@ -224,6 +232,7 @@ var (
 				MuirGlacierBlock:    big.NewInt(0),
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
+				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(9203),
@@ -242,6 +251,7 @@ var (
 				MuirGlacierBlock:    big.NewInt(0),
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
+				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
 			}},
 		[]ChainConfig{
 			ChainConfig{
@@ -261,6 +271,7 @@ var (
 				MuirGlacierBlock:    big.NewInt(0),
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
+				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(9302),
@@ -279,6 +290,7 @@ var (
 				MuirGlacierBlock:    big.NewInt(0),
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
+				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(9303),
@@ -297,6 +309,7 @@ var (
 				MuirGlacierBlock:    big.NewInt(0),
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
+				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
 			},
 		},
 	}
@@ -319,6 +332,7 @@ var (
 		MuirGlacierBlock:    big.NewInt(0),
 		BerlinBlock:         big.NewInt(0),
 		LondonBlock:         big.NewInt(0),
+		GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
 	}
 
 	RopstenRegionChainConfigs = []ChainConfig{
@@ -339,6 +353,7 @@ var (
 			MuirGlacierBlock:    big.NewInt(0),
 			BerlinBlock:         big.NewInt(0),
 			LondonBlock:         big.NewInt(0),
+			GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
 		},
 		ChainConfig{
 			ChainID:             big.NewInt(12200),
@@ -357,6 +372,7 @@ var (
 			MuirGlacierBlock:    big.NewInt(0),
 			BerlinBlock:         big.NewInt(0),
 			LondonBlock:         big.NewInt(0),
+			GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
 		},
 		ChainConfig{
 			ChainID:             big.NewInt(12300),
@@ -375,6 +391,7 @@ var (
 			MuirGlacierBlock:    big.NewInt(0),
 			BerlinBlock:         big.NewInt(0),
 			LondonBlock:         big.NewInt(0),
+			GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
 		},
 	}
 
@@ -397,6 +414,7 @@ var (
 				MuirGlacierBlock:    big.NewInt(0),
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
+				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(12102),
@@ -415,6 +433,7 @@ var (
 				MuirGlacierBlock:    big.NewInt(0),
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
+				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(12103),
@@ -433,6 +452,7 @@ var (
 				MuirGlacierBlock:    big.NewInt(0),
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
+				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
 			}},
 		[]ChainConfig{
 			ChainConfig{
@@ -452,6 +472,7 @@ var (
 				MuirGlacierBlock:    big.NewInt(0),
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
+				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(12202),
@@ -470,6 +491,7 @@ var (
 				MuirGlacierBlock:    big.NewInt(0),
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
+				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(12203),
@@ -488,6 +510,7 @@ var (
 				MuirGlacierBlock:    big.NewInt(0),
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
+				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
 			}},
 		[]ChainConfig{
 			ChainConfig{
@@ -507,6 +530,7 @@ var (
 				MuirGlacierBlock:    big.NewInt(0),
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
+				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(12302),
@@ -525,6 +549,7 @@ var (
 				MuirGlacierBlock:    big.NewInt(0),
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
+				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(12303),
@@ -543,6 +568,7 @@ var (
 				MuirGlacierBlock:    big.NewInt(0),
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
+				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
 			},
 		},
 	}
@@ -569,6 +595,7 @@ var (
 		BerlinBlock:         big.NewInt(9_812_189),
 		LondonBlock:         big.NewInt(10_499_401),
 		Ethash:              new(EthashConfig),
+		GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
 	}
 
 	// RopstenTrustedCheckpoint contains the light client trusted checkpoint for the Ropsten test network.
@@ -597,16 +624,16 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), 0, []byte{0, 0}, big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil}
+	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), 0, []byte{0, 0}, big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, nil}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), 0, []byte{0, 0}, big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}}
+	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), 0, []byte{0, 0}, big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil}
 
-	TestChainConfig = &ChainConfig{big.NewInt(1), 0, []byte{0, 0}, big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil}
+	TestChainConfig = &ChainConfig{big.NewInt(1), 0, []byte{0, 0}, big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, nil}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
@@ -690,6 +717,9 @@ type ChainConfig struct {
 	// Various consensus engines
 	Ethash *EthashConfig `json:"ethash,omitempty"`
 	Clique *CliqueConfig `json:"clique,omitempty"`
+
+	// Genesis Hashes
+	GenesisHashes []common.Hash
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -722,7 +752,7 @@ func (c *ChainConfig) String() string {
 	default:
 		engine = "unknown"
 	}
-	return fmt.Sprintf("{ChainID: %v Homestead: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, Berlin: %v, London: %v, Engine: %v}",
+	return fmt.Sprintf("{ChainID: %v Homestead: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, Berlin: %v, London: %v, Engine: %v, GenesisHashes: %v}",
 		c.ChainID,
 		c.HomesteadBlock,
 		c.EIP150Block,
@@ -736,6 +766,7 @@ func (c *ChainConfig) String() string {
 		c.BerlinBlock,
 		c.LondonBlock,
 		engine,
+		c.GenesisHashes,
 	)
 }
 
