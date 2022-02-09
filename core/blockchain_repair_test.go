@@ -62,13 +62,13 @@ func testShortRepair(t *testing.T, snapshots bool) {
 	// Expected head block     : C4
 	testRepair(t, &rewindTest{
 		canonicalBlocks:    8,
-		sidechainBlocks:    0,
+		sidechainBlocks:    4,
 		freezeThreshold:    16,
 		commitBlock:        4,
 		pivotBlock:         nil,
 		expCanonicalBlocks: 8,
-		expSidechainBlocks: 0,
-		expFrozen:          0,
+		expSidechainBlocks: 4,
+		expFrozen:          4,
 		expHeadHeader:      8,
 		expHeadFastBlock:   8,
 		expHeadBlock:       4,
@@ -102,13 +102,13 @@ func testShortFastSyncedRepair(t *testing.T, snapshots bool) {
 	// Expected head block     : C4
 	testRepair(t, &rewindTest{
 		canonicalBlocks:    8,
-		sidechainBlocks:    0,
+		sidechainBlocks:    4,
 		freezeThreshold:    16,
 		commitBlock:        4,
 		pivotBlock:         uint64ptr(4),
 		expCanonicalBlocks: 8,
-		expSidechainBlocks: 0,
-		expFrozen:          0,
+		expSidechainBlocks: 4,
+		expFrozen:          4,
 		expHeadHeader:      8,
 		expHeadFastBlock:   8,
 		expHeadBlock:       4,
@@ -142,16 +142,16 @@ func testShortFastSyncingRepair(t *testing.T, snapshots bool) {
 	// Expected head block     : G
 	testRepair(t, &rewindTest{
 		canonicalBlocks:    8,
-		sidechainBlocks:    0,
+		sidechainBlocks:    4,
 		freezeThreshold:    16,
-		commitBlock:        0,
+		commitBlock:        4,
 		pivotBlock:         uint64ptr(4),
 		expCanonicalBlocks: 8,
-		expSidechainBlocks: 0,
-		expFrozen:          0,
+		expSidechainBlocks: 4,
+		expFrozen:          4,
 		expHeadHeader:      8,
 		expHeadFastBlock:   8,
-		expHeadBlock:       0,
+		expHeadBlock:       4,
 	}, snapshots)
 }
 
@@ -191,7 +191,7 @@ func testShortOldForkedRepair(t *testing.T, snapshots bool) {
 		pivotBlock:         nil,
 		expCanonicalBlocks: 8,
 		expSidechainBlocks: 3,
-		expFrozen:          0,
+		expFrozen:          4,
 		expHeadHeader:      8,
 		expHeadFastBlock:   8,
 		expHeadBlock:       4,
@@ -238,7 +238,7 @@ func testShortOldForkedFastSyncedRepair(t *testing.T, snapshots bool) {
 		pivotBlock:         uint64ptr(4),
 		expCanonicalBlocks: 8,
 		expSidechainBlocks: 3,
-		expFrozen:          0,
+		expFrozen:          4,
 		expHeadHeader:      8,
 		expHeadFastBlock:   8,
 		expHeadBlock:       4,
@@ -281,14 +281,14 @@ func testShortOldForkedFastSyncingRepair(t *testing.T, snapshots bool) {
 		canonicalBlocks:    8,
 		sidechainBlocks:    3,
 		freezeThreshold:    16,
-		commitBlock:        0,
+		commitBlock:        4,
 		pivotBlock:         uint64ptr(4),
 		expCanonicalBlocks: 8,
 		expSidechainBlocks: 3,
-		expFrozen:          0,
+		expFrozen:          4,
 		expHeadHeader:      8,
 		expHeadFastBlock:   8,
-		expHeadBlock:       0,
+		expHeadBlock:       4,
 	}, snapshots)
 }
 
@@ -328,7 +328,7 @@ func testShortNewlyForkedRepair(t *testing.T, snapshots bool) {
 		pivotBlock:         nil,
 		expCanonicalBlocks: 8,
 		expSidechainBlocks: 6,
-		expFrozen:          0,
+		expFrozen:          4,
 		expHeadHeader:      8,
 		expHeadFastBlock:   8,
 		expHeadBlock:       4,
@@ -375,7 +375,7 @@ func testShortNewlyForkedFastSyncedRepair(t *testing.T, snapshots bool) {
 		pivotBlock:         uint64ptr(4),
 		expCanonicalBlocks: 8,
 		expSidechainBlocks: 6,
-		expFrozen:          0,
+		expFrozen:          4,
 		expHeadHeader:      8,
 		expHeadFastBlock:   8,
 		expHeadBlock:       4,
@@ -418,14 +418,14 @@ func testShortNewlyForkedFastSyncingRepair(t *testing.T, snapshots bool) {
 		canonicalBlocks:    8,
 		sidechainBlocks:    6,
 		freezeThreshold:    16,
-		commitBlock:        0,
+		commitBlock:        4,
 		pivotBlock:         uint64ptr(4),
 		expCanonicalBlocks: 8,
 		expSidechainBlocks: 6,
-		expFrozen:          0,
+		expFrozen:          4,
 		expHeadHeader:      8,
 		expHeadFastBlock:   8,
-		expHeadBlock:       0,
+		expHeadBlock:       4,
 	}, snapshots)
 }
 
@@ -464,7 +464,7 @@ func testShortReorgedRepair(t *testing.T, snapshots bool) {
 		pivotBlock:         nil,
 		expCanonicalBlocks: 8,
 		expSidechainBlocks: 10,
-		expFrozen:          0,
+		expFrozen:          4,
 		expHeadHeader:      8,
 		expHeadFastBlock:   8,
 		expHeadBlock:       4,
@@ -510,7 +510,7 @@ func testShortReorgedFastSyncedRepair(t *testing.T, snapshots bool) {
 		pivotBlock:         uint64ptr(4),
 		expCanonicalBlocks: 8,
 		expSidechainBlocks: 10,
-		expFrozen:          0,
+		expFrozen:          4,
 		expHeadHeader:      8,
 		expHeadFastBlock:   8,
 		expHeadBlock:       4,
@@ -552,14 +552,14 @@ func testShortReorgedFastSyncingRepair(t *testing.T, snapshots bool) {
 		canonicalBlocks:    8,
 		sidechainBlocks:    10,
 		freezeThreshold:    16,
-		commitBlock:        0,
+		commitBlock:        4,
 		pivotBlock:         uint64ptr(4),
 		expCanonicalBlocks: 8,
 		expSidechainBlocks: 10,
-		expFrozen:          0,
+		expFrozen:          4,
 		expHeadHeader:      8,
 		expHeadFastBlock:   8,
-		expHeadBlock:       0,
+		expHeadBlock:       4,
 	}, snapshots)
 }
 
@@ -595,12 +595,12 @@ func testLongShallowRepair(t *testing.T, snapshots bool) {
 	// Expected head block     : C4
 	testRepair(t, &rewindTest{
 		canonicalBlocks:    18,
-		sidechainBlocks:    0,
+		sidechainBlocks:    4,
 		freezeThreshold:    16,
 		commitBlock:        4,
 		pivotBlock:         nil,
 		expCanonicalBlocks: 18,
-		expSidechainBlocks: 0,
+		expSidechainBlocks: 4,
 		expFrozen:          3,
 		expHeadHeader:      18,
 		expHeadFastBlock:   18,
@@ -639,12 +639,12 @@ func testLongDeepRepair(t *testing.T, snapshots bool) {
 	// Expected head block     : C4
 	testRepair(t, &rewindTest{
 		canonicalBlocks:    24,
-		sidechainBlocks:    0,
+		sidechainBlocks:    4,
 		freezeThreshold:    16,
 		commitBlock:        4,
 		pivotBlock:         nil,
 		expCanonicalBlocks: 4,
-		expSidechainBlocks: 0,
+		expSidechainBlocks: 4,
 		expFrozen:          5,
 		expHeadHeader:      4,
 		expHeadFastBlock:   4,
@@ -688,12 +688,12 @@ func testLongFastSyncedShallowRepair(t *testing.T, snapshots bool) {
 	// Expected head block     : C4
 	testRepair(t, &rewindTest{
 		canonicalBlocks:    18,
-		sidechainBlocks:    0,
+		sidechainBlocks:    4,
 		freezeThreshold:    16,
 		commitBlock:        4,
 		pivotBlock:         uint64ptr(4),
 		expCanonicalBlocks: 18,
-		expSidechainBlocks: 0,
+		expSidechainBlocks: 4,
 		expFrozen:          3,
 		expHeadHeader:      18,
 		expHeadFastBlock:   18,
@@ -732,12 +732,12 @@ func testLongFastSyncedDeepRepair(t *testing.T, snapshots bool) {
 	// Expected head block     : C4
 	testRepair(t, &rewindTest{
 		canonicalBlocks:    24,
-		sidechainBlocks:    0,
+		sidechainBlocks:    4,
 		freezeThreshold:    16,
 		commitBlock:        4,
 		pivotBlock:         uint64ptr(4),
 		expCanonicalBlocks: 4,
-		expSidechainBlocks: 0,
+		expSidechainBlocks: 4,
 		expFrozen:          5,
 		expHeadHeader:      4,
 		expHeadFastBlock:   4,
@@ -782,16 +782,16 @@ func testLongFastSyncingShallowRepair(t *testing.T, snapshots bool) {
 	// Expected head block     : G
 	testRepair(t, &rewindTest{
 		canonicalBlocks:    18,
-		sidechainBlocks:    0,
+		sidechainBlocks:    4,
 		freezeThreshold:    16,
-		commitBlock:        0,
+		commitBlock:        4,
 		pivotBlock:         uint64ptr(4),
 		expCanonicalBlocks: 18,
-		expSidechainBlocks: 0,
+		expSidechainBlocks: 4,
 		expFrozen:          3,
 		expHeadHeader:      18,
 		expHeadFastBlock:   18,
-		expHeadBlock:       0,
+		expHeadBlock:       4,
 	}, snapshots)
 }
 
@@ -828,16 +828,16 @@ func testLongFastSyncingDeepRepair(t *testing.T, snapshots bool) {
 	// Expected head block     : G
 	testRepair(t, &rewindTest{
 		canonicalBlocks:    24,
-		sidechainBlocks:    0,
+		sidechainBlocks:    4,
 		freezeThreshold:    16,
-		commitBlock:        0,
+		commitBlock:        4,
 		pivotBlock:         uint64ptr(4),
 		expCanonicalBlocks: 24,
-		expSidechainBlocks: 0,
+		expSidechainBlocks: 4,
 		expFrozen:          9,
 		expHeadHeader:      24,
 		expHeadFastBlock:   24,
-		expHeadBlock:       0,
+		expHeadBlock:       4,
 	}, snapshots)
 }
 
@@ -885,7 +885,7 @@ func testLongOldForkedShallowRepair(t *testing.T, snapshots bool) {
 		commitBlock:        4,
 		pivotBlock:         nil,
 		expCanonicalBlocks: 18,
-		expSidechainBlocks: 0,
+		expSidechainBlocks: 4,
 		expFrozen:          3,
 		expHeadHeader:      18,
 		expHeadFastBlock:   18,
@@ -932,7 +932,7 @@ func testLongOldForkedDeepRepair(t *testing.T, snapshots bool) {
 		commitBlock:        4,
 		pivotBlock:         nil,
 		expCanonicalBlocks: 4,
-		expSidechainBlocks: 0,
+		expSidechainBlocks: 4,
 		expFrozen:          5,
 		expHeadHeader:      4,
 		expHeadFastBlock:   4,
@@ -984,7 +984,7 @@ func testLongOldForkedFastSyncedShallowRepair(t *testing.T, snapshots bool) {
 		commitBlock:        4,
 		pivotBlock:         uint64ptr(4),
 		expCanonicalBlocks: 18,
-		expSidechainBlocks: 0,
+		expSidechainBlocks: 4,
 		expFrozen:          3,
 		expHeadHeader:      18,
 		expHeadFastBlock:   18,
@@ -1035,7 +1035,7 @@ func testLongOldForkedFastSyncedDeepRepair(t *testing.T, snapshots bool) {
 		commitBlock:        4,
 		pivotBlock:         uint64ptr(4),
 		expCanonicalBlocks: 4,
-		expSidechainBlocks: 0,
+		expSidechainBlocks: 4,
 		expFrozen:          5,
 		expHeadHeader:      4,
 		expHeadFastBlock:   4,
@@ -1084,14 +1084,14 @@ func testLongOldForkedFastSyncingShallowRepair(t *testing.T, snapshots bool) {
 		canonicalBlocks:    18,
 		sidechainBlocks:    3,
 		freezeThreshold:    16,
-		commitBlock:        0,
+		commitBlock:        4,
 		pivotBlock:         uint64ptr(4),
 		expCanonicalBlocks: 18,
-		expSidechainBlocks: 0,
+		expSidechainBlocks: 4,
 		expFrozen:          3,
 		expHeadHeader:      18,
 		expHeadFastBlock:   18,
-		expHeadBlock:       0,
+		expHeadBlock:       4,
 	}, snapshots)
 }
 
@@ -1136,14 +1136,14 @@ func testLongOldForkedFastSyncingDeepRepair(t *testing.T, snapshots bool) {
 		canonicalBlocks:    24,
 		sidechainBlocks:    3,
 		freezeThreshold:    16,
-		commitBlock:        0,
+		commitBlock:        4,
 		pivotBlock:         uint64ptr(4),
 		expCanonicalBlocks: 24,
-		expSidechainBlocks: 0,
+		expSidechainBlocks: 4,
 		expFrozen:          9,
 		expHeadHeader:      24,
 		expHeadFastBlock:   24,
-		expHeadBlock:       0,
+		expHeadBlock:       4,
 	}, snapshots)
 }
 
@@ -1191,7 +1191,7 @@ func testLongNewerForkedShallowRepair(t *testing.T, snapshots bool) {
 		commitBlock:        4,
 		pivotBlock:         nil,
 		expCanonicalBlocks: 18,
-		expSidechainBlocks: 0,
+		expSidechainBlocks: 4,
 		expFrozen:          3,
 		expHeadHeader:      18,
 		expHeadFastBlock:   18,
@@ -1238,7 +1238,7 @@ func testLongNewerForkedDeepRepair(t *testing.T, snapshots bool) {
 		commitBlock:        4,
 		pivotBlock:         nil,
 		expCanonicalBlocks: 4,
-		expSidechainBlocks: 0,
+		expSidechainBlocks: 4,
 		expFrozen:          5,
 		expHeadHeader:      4,
 		expHeadFastBlock:   4,
@@ -1290,7 +1290,7 @@ func testLongNewerForkedFastSyncedShallowRepair(t *testing.T, snapshots bool) {
 		commitBlock:        4,
 		pivotBlock:         uint64ptr(4),
 		expCanonicalBlocks: 18,
-		expSidechainBlocks: 0,
+		expSidechainBlocks: 4,
 		expFrozen:          3,
 		expHeadHeader:      18,
 		expHeadFastBlock:   18,
@@ -1341,7 +1341,7 @@ func testLongNewerForkedFastSyncedDeepRepair(t *testing.T, snapshots bool) {
 		commitBlock:        4,
 		pivotBlock:         uint64ptr(4),
 		expCanonicalBlocks: 4,
-		expSidechainBlocks: 0,
+		expSidechainBlocks: 4,
 		expFrozen:          5,
 		expHeadHeader:      4,
 		expHeadFastBlock:   4,
@@ -1390,14 +1390,14 @@ func testLongNewerForkedFastSyncingShallowRepair(t *testing.T, snapshots bool) {
 		canonicalBlocks:    18,
 		sidechainBlocks:    12,
 		freezeThreshold:    16,
-		commitBlock:        0,
+		commitBlock:        4,
 		pivotBlock:         uint64ptr(4),
 		expCanonicalBlocks: 18,
-		expSidechainBlocks: 0,
+		expSidechainBlocks: 4,
 		expFrozen:          3,
 		expHeadHeader:      18,
 		expHeadFastBlock:   18,
-		expHeadBlock:       0,
+		expHeadBlock:       4,
 	}, snapshots)
 }
 
@@ -1442,14 +1442,14 @@ func testLongNewerForkedFastSyncingDeepRepair(t *testing.T, snapshots bool) {
 		canonicalBlocks:    24,
 		sidechainBlocks:    12,
 		freezeThreshold:    16,
-		commitBlock:        0,
+		commitBlock:        4,
 		pivotBlock:         uint64ptr(4),
 		expCanonicalBlocks: 24,
-		expSidechainBlocks: 0,
+		expSidechainBlocks: 4,
 		expFrozen:          9,
 		expHeadHeader:      24,
 		expHeadFastBlock:   24,
-		expHeadBlock:       0,
+		expHeadBlock:       4,
 	}, snapshots)
 }
 
@@ -1492,7 +1492,7 @@ func testLongReorgedShallowRepair(t *testing.T, snapshots bool) {
 		commitBlock:        4,
 		pivotBlock:         nil,
 		expCanonicalBlocks: 18,
-		expSidechainBlocks: 0,
+		expSidechainBlocks: 4,
 		expFrozen:          3,
 		expHeadHeader:      18,
 		expHeadFastBlock:   18,
@@ -1538,7 +1538,7 @@ func testLongReorgedDeepRepair(t *testing.T, snapshots bool) {
 		commitBlock:        4,
 		pivotBlock:         nil,
 		expCanonicalBlocks: 4,
-		expSidechainBlocks: 0,
+		expSidechainBlocks: 4,
 		expFrozen:          5,
 		expHeadHeader:      4,
 		expHeadFastBlock:   4,
@@ -1590,7 +1590,7 @@ func testLongReorgedFastSyncedShallowRepair(t *testing.T, snapshots bool) {
 		commitBlock:        4,
 		pivotBlock:         uint64ptr(4),
 		expCanonicalBlocks: 18,
-		expSidechainBlocks: 0,
+		expSidechainBlocks: 4,
 		expFrozen:          3,
 		expHeadHeader:      18,
 		expHeadFastBlock:   18,
@@ -1640,7 +1640,7 @@ func testLongReorgedFastSyncedDeepRepair(t *testing.T, snapshots bool) {
 		commitBlock:        4,
 		pivotBlock:         uint64ptr(4),
 		expCanonicalBlocks: 4,
-		expSidechainBlocks: 0,
+		expSidechainBlocks: 4,
 		expFrozen:          5,
 		expHeadHeader:      4,
 		expHeadFastBlock:   4,
@@ -1688,14 +1688,14 @@ func testLongReorgedFastSyncingShallowRepair(t *testing.T, snapshots bool) {
 		canonicalBlocks:    18,
 		sidechainBlocks:    26,
 		freezeThreshold:    16,
-		commitBlock:        0,
+		commitBlock:        4,
 		pivotBlock:         uint64ptr(4),
 		expCanonicalBlocks: 18,
-		expSidechainBlocks: 0,
+		expSidechainBlocks: 4,
 		expFrozen:          3,
 		expHeadHeader:      18,
 		expHeadFastBlock:   18,
-		expHeadBlock:       0,
+		expHeadBlock:       4,
 	}, snapshots)
 }
 
@@ -1739,14 +1739,14 @@ func testLongReorgedFastSyncingDeepRepair(t *testing.T, snapshots bool) {
 		canonicalBlocks:    24,
 		sidechainBlocks:    26,
 		freezeThreshold:    16,
-		commitBlock:        0,
+		commitBlock:        4,
 		pivotBlock:         uint64ptr(4),
 		expCanonicalBlocks: 24,
-		expSidechainBlocks: 0,
+		expSidechainBlocks: 4,
 		expFrozen:          9,
 		expHeadHeader:      24,
 		expHeadFastBlock:   24,
-		expHeadBlock:       0,
+		expHeadBlock:       4,
 	}, snapshots)
 }
 
@@ -1762,7 +1762,7 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 	}
 	os.RemoveAll(datadir)
 
-	db, err := rawdb.NewLevelDBDatabaseWithFreezer(datadir, 0, 0, datadir, "", false)
+	db, err := rawdb.NewLevelDBDatabaseWithFreezer(datadir, 4, 4, datadir, "", false)
 	if err != nil {
 		t.Fatalf("Failed to create persistent database: %v", err)
 	}
@@ -1776,7 +1776,7 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 			TrieCleanLimit: 256,
 			TrieDirtyLimit: 256,
 			TrieTimeLimit:  5 * time.Minute,
-			SnapshotLimit:  0, // Disable snapshot by default
+			SnapshotLimit:  4, // Disable snapshot by default
 		}
 	)
 	if snapshots {

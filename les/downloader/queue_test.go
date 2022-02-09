@@ -134,7 +134,7 @@ func TestBasics(t *testing.T) {
 		if got, exp := len(fetchReq.Headers), 5; got != exp {
 			t.Fatalf("expected %d requests, got %d", exp, got)
 		}
-		if got, exp := fetchReq.Headers[0].Number.Uint64(), uint64(1); got != exp {
+		if got, exp := fetchReq.Headers[0].Number[0].Uint64(), uint64(1); got != exp {
 			t.Fatalf("expected header %d, got %d", exp, got)
 		}
 	}
@@ -176,7 +176,7 @@ func TestBasics(t *testing.T) {
 		if got, exp := len(fetchReq.Headers), 5; got != exp {
 			t.Fatalf("expected %d requests, got %d", exp, got)
 		}
-		if got, exp := fetchReq.Headers[0].Number.Uint64(), uint64(1); got != exp {
+		if got, exp := fetchReq.Headers[0].Number[0].Uint64(), uint64(1); got != exp {
 			t.Fatalf("expected header %d, got %d", exp, got)
 		}
 
@@ -298,7 +298,7 @@ func XTestDelivery(t *testing.T) {
 			tot += len(res)
 			fmt.Printf("got %d results, %d tot\n", len(res), tot)
 			// Now we can forget about these
-			world.forget(res[len(res)-1].Header.Number.Uint64())
+			world.forget(res[len(res)-1].Header.Number[0].Uint64())
 
 		}
 	}()
@@ -316,7 +316,7 @@ func XTestDelivery(t *testing.T) {
 				var uncles [][]*types.Header
 				numToSkip := rand.Intn(len(f.Headers))
 				for _, hdr := range f.Headers[0 : len(f.Headers)-numToSkip] {
-					txs = append(txs, world.getTransactions(hdr.Number.Uint64()))
+					txs = append(txs, world.getTransactions(hdr.Number[0].Uint64()))
 					uncles = append(uncles, emptyList)
 				}
 				time.Sleep(100 * time.Millisecond)
@@ -339,7 +339,7 @@ func XTestDelivery(t *testing.T) {
 			if f != nil {
 				var rcs [][]*types.Receipt
 				for _, hdr := range f.Headers {
-					rcs = append(rcs, world.getReceipts(hdr.Number.Uint64()))
+					rcs = append(rcs, world.getReceipts(hdr.Number[0].Uint64()))
 				}
 				_, err := q.DeliverReceipts(peer.id, rcs)
 				if err != nil {
@@ -371,7 +371,7 @@ func XTestDelivery(t *testing.T) {
 		for {
 			time.Sleep(990 * time.Millisecond)
 			fmt.Printf("world block tip is %d\n",
-				world.chain[len(world.chain)-1].Header().Number.Uint64())
+				world.chain[len(world.chain)-1].Header().Number[0].Uint64())
 			fmt.Println(q.Stats())
 		}
 	}()
@@ -401,7 +401,7 @@ func (n *network) getTransactions(blocknum uint64) types.Transactions {
 }
 func (n *network) getReceipts(blocknum uint64) types.Receipts {
 	index := blocknum - uint64(n.offset)
-	if got := n.chain[index].Header().Number.Uint64(); got != blocknum {
+	if got := n.chain[index].Header().Number[0].Uint64(); got != blocknum {
 		fmt.Printf("Err, got %d exp %d\n", got, blocknum)
 		panic("sd")
 	}

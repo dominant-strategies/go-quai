@@ -81,7 +81,7 @@ func TestCalcDifficulty(t *testing.T) {
 			Number:     []*big.Int{number, number, number},
 			Time:       test.ParentTimestamp,
 			Difficulty: []*big.Int{test.ParentDifficulty, test.ParentDifficulty, test.ParentDifficulty},
-		})
+		}, 0) //Added context
 		if diff.Cmp(test.CurrentDifficulty) != 0 {
 			t.Error(name, "failed. Expected", test.CurrentDifficulty, "and calculated", diff)
 		}
@@ -118,7 +118,7 @@ func TestDifficultyCalculators(t *testing.T) {
 		}
 		bombDelay := new(big.Int).SetUint64(rand.Uint64() % 50_000_000)
 		for i, pair := range []struct {
-			bigFn  func(time uint64, parent *types.Header) *big.Int
+			bigFn  func(time uint64, parent *types.Header, context int) *big.Int
 			u256Fn func(time uint64, parent *types.Header) *big.Int
 		}{
 			{FrontierDifficultyCalulator, CalcDifficultyFrontierU256},
@@ -126,7 +126,7 @@ func TestDifficultyCalculators(t *testing.T) {
 			{DynamicDifficultyCalculator(bombDelay), MakeDifficultyCalculatorU256(bombDelay)},
 		} {
 			time := header.Time + timeDelta
-			want := pair.bigFn(time, header)
+			want := pair.bigFn(time, header, 0)
 			have := pair.u256Fn(time, header)
 			if want.BitLen() > 256 {
 				continue
@@ -152,7 +152,7 @@ func BenchmarkDifficultyCalculator(b *testing.B) {
 	b.Run("big-frontier", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			calcDifficultyFrontier(1000014, h)
+			calcDifficultyFrontier(1000014, h, 0) //Editied Context
 		}
 	})
 	b.Run("u256-frontier", func(b *testing.B) {
@@ -164,7 +164,7 @@ func BenchmarkDifficultyCalculator(b *testing.B) {
 	b.Run("big-homestead", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			calcDifficultyHomestead(1000014, h)
+			calcDifficultyHomestead(1000014, h, 0)
 		}
 	})
 	b.Run("u256-homestead", func(b *testing.B) {
@@ -176,7 +176,7 @@ func BenchmarkDifficultyCalculator(b *testing.B) {
 	b.Run("big-generic", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			x1(1000014, h)
+			x1(1000014, h, 0)
 		}
 	})
 	b.Run("u256-generic", func(b *testing.B) {

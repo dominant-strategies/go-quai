@@ -1206,13 +1206,17 @@ func FormatLogs(logs []vm.StructLog) []StructLogRes {
 // RPCMarshalHeader converts the given header to the RPC output .
 func RPCMarshalEthHeader(head *types.Header) map[string]interface{} {
 	context := types.QuaiNetworkContext
+	bloom := types.Bloom{}
+	if len(head.Bloom) > types.ContextDepth-1 {
+		bloom = head.Bloom[context]
+	}
 	result := map[string]interface{}{
 		"number":           head.Number[context],
 		"hash":             head.Hash(),
 		"parentHash":       head.ParentHash[context],
 		"nonce":            head.Nonce,
 		"sha3Uncles":       head.UncleHash[context],
-		"logsBloom":        head.Bloom[context],
+		"logsBloom":        bloom,
 		"stateRoot":        head.Root[context],
 		"miner":            head.Coinbase[context],
 		"difficulty":       head.Difficulty[context],

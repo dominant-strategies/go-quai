@@ -731,7 +731,7 @@ func testBroadcastMalformedBlock(t *testing.T, protocol uint) {
 	// Try to broadcast all malformations and ensure they all get discarded
 	for _, header := range []*types.Header{malformedUncles, malformedTransactions, malformedEverything} {
 		block := types.NewBlockWithHeader(header).WithBody(head.Transactions(), head.Uncles())
-		if err := src.SendNewBlock(block, big.NewInt(131136)); err != nil {
+		if err := src.SendNewBlock(block, big.NewInt(131136), []*types.ExternalBlock{types.NewExternalBlockWithHeader(header)}); err != nil {
 			t.Fatalf("failed to broadcast block: %v", err)
 		}
 		select {
