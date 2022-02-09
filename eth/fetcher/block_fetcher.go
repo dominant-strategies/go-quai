@@ -359,6 +359,7 @@ func (f *BlockFetcher) loop() {
 		height := f.chainHeight()
 		for !f.queue.Empty() {
 			op := f.queue.PopItem().(*blockOrHeaderInject)
+			fmt.Println("Looping in loop(), popping blockOrHeaderInject", "extBlockLen", len(op.extBlocks))
 			hash := op.hash()
 			if f.queueChangeHook != nil {
 				f.queueChangeHook(hash, false)
@@ -377,11 +378,13 @@ func (f *BlockFetcher) loop() {
 				f.forgetBlock(hash)
 				continue
 			}
-			if f.light {
-				f.importHeaders(op.origin, op.header)
-			} else {
-				f.importBlocks(op.origin, op.block, op.extBlocks)
-			}
+			// if f.light {
+			// 	f.importHeaders(op.origin, op.header)
+			// } else {
+			// 	f.importBlocks(op.origin, op.block, op.extBlocks)
+			// }
+			f.importBlocks(op.origin, op.block, op.extBlocks)
+
 		}
 		// Wait for an outside event to occur
 		select {
@@ -741,8 +744,10 @@ func (f *BlockFetcher) enqueue(peer string, header *types.Header, block *types.B
 	if _, ok := f.queued[hash]; !ok {
 		op := &blockOrHeaderInject{origin: peer, extBlocks: extBlocks}
 		if header != nil {
+			fmt.Println("enqueue Header")
 			op.header = header
 		} else {
+			fmt.Println("enqueue Block")
 			op.block = block
 		}
 		f.queues[peer] = count
