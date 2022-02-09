@@ -1335,7 +1335,7 @@ func (d *Downloader) fetchExternalBlocks(p *peerConnection, from uint64) error {
 		}
 		expire   = func() map[string]int { return d.queue.ExpireExternalBlocks(d.peers.rates.TargetTimeout()) }
 		fetch    = func(p *peerConnection, req *fetchRequest) error { return p.FetchExternalBlocks(req) }
-		capacity = func(p *peerConnection) int { return 20000 }
+		capacity = func(p *peerConnection) int { return p.ExtBlockCapacity(d.peers.rates.TargetRoundTrip()) }
 		setIdle  = func(p *peerConnection, accepted int, deliveryTime time.Time) {
 			p.SetExternalBlocksIdle(accepted, deliveryTime)
 		}

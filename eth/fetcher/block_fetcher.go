@@ -362,11 +362,13 @@ func (f *BlockFetcher) loop() {
 			fmt.Println("Looping in loop(), popping blockOrHeaderInject", "extBlockLen", len(op.extBlocks))
 			hash := op.hash()
 			if f.queueChangeHook != nil {
+				fmt.Println("in loop(), going into changeHook")
 				f.queueChangeHook(hash, false)
 			}
 			// If too high up the chain or phase, continue later
 			number := op.number()
 			if number > height+1 {
+				fmt.Println("in loop(), number > height+1")
 				f.queue.Push(op, -int64(number))
 				if f.queueChangeHook != nil {
 					f.queueChangeHook(hash, true)
@@ -375,6 +377,7 @@ func (f *BlockFetcher) loop() {
 			}
 			// Otherwise if fresh and still unknown, try and import
 			if (number+maxUncleDist < height) || (f.light && f.getHeader(hash) != nil) || (!f.light && f.getBlock(hash) != nil) {
+				fmt.Println("in loop(), fresh and still uknown, trying to import")
 				f.forgetBlock(hash)
 				continue
 			}
@@ -804,7 +807,7 @@ func (f *BlockFetcher) importBlocks(peer string, block *types.Block, extBlocks [
 	hash := block.Hash()
 
 	// Run the import on a new thread
-	log.Debug("Importing propagated block", "peer", peer, "number", block.Number(), "hash", hash)
+	log.Info("Importing propagated block", "peer", peer, "number", block.Number(), "hash", hash)
 	go func() {
 		defer func() { f.done <- hash }()
 
