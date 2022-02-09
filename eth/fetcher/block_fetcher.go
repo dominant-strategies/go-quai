@@ -435,6 +435,7 @@ func (f *BlockFetcher) loop() {
 			if f.light {
 				continue
 			}
+			fmt.Println("enqueue coming from line 438")
 			f.enqueue(op.origin, nil, op.block, op.extBlocks)
 
 		case hash := <-f.done:
