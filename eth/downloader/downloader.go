@@ -1766,7 +1766,10 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 	)
 
 	log.Info("importBlockResults: Length of ext blocks", "len", len(extBlocks))
-
+	// Add external blocks to chain before inserting blocks
+	for _, extBlock := range extBlocks {
+		d.blockchain.AddExternalBlock(extBlock)
+	}
 	if index, err := d.blockchain.InsertChain(blocks); err != nil {
 		if index < len(results) {
 			log.Debug("Downloaded item processing failed", "number", results[index].Header.Number, "hash", results[index].Header.Hash(), "err", err)
