@@ -2661,34 +2661,22 @@ func (bc *BlockChain) GetExternalBlocks(header *types.Header) ([]*types.External
 
 	// Do not run on block 1
 	if header.Number[context].Cmp(big.NewInt(1)) > 0 {
+		prevHeader := bc.GetHeaderByHash(header.ParentHash[context])
 		coincidentHeader, difficultyContext := bc.engine.GetCoincidentHeader(bc, context, header)
 
-		// Checking for nil prev or coincident headers
-		if header == nil {
-			log.Info("GetExternalBlocks: prevHeader nil", "header", header.Hash())
-			return externalBlocks, nil
-		}
-
-		if coincidentHeader == nil {
-			log.Info("GetExternalBlocks: coincidentHeader nil", "header", header.Hash())
-			return externalBlocks, nil
-		}
-
-		// If we are not getting the transactions immediately after the coincident block, return
-		if coincidentHeader.Number[context].Cmp(header.Number[context]) != 0 {
+		// Only run if we are the block immediately following the coincident block. Check below is to make sure we are N+1.
+		if coincidentHeader.Number[context].Cmp(prevHeader.Number[context]) != 0 {
 			return externalBlocks, nil
 		}
 		stopHash, err := bc.engine.GetStopHash(bc, difficultyContext, context, coincidentHeader)
 		if err != nil {
-			log.Info("GetExternalBlocks: Unable to get stop hash", "coincident", coincidentHeader.Hash())
 			return nil, err
 		}
-		extBlockResults, err := bc.engine.TraceBranch(bc, coincidentHeader, difficultyContext, stopHash, context, header.Location, false)
-		if err != nil {
-			log.Info("GetExternalBlocks: Unable to get external blocks", "coincident", coincidentHeader.Hash(), "stopHash", stopHash)
+		extBlockResult, extBlockErr := bc.engine.TraceBranch(bc, coincidentHeader, difficultyContext, stopHash, context, header.Location, false)
+		if extBlockErr != nil {
 			return nil, err
 		}
-		externalBlocks = append(externalBlocks, extBlockResults...)
+		externalBlocks = append(externalBlocks, extBlockResult...)
 	}
 
 	return externalBlocks, nil
