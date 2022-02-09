@@ -108,6 +108,7 @@ func (f *fetchResult) SetReceiptsDone() {
 
 // SetExternalBlocksDone flags the external blocks as finished.
 func (f *fetchResult) SetExternalBlocksDone() {
+	fmt.Println("Setting external blocks as done")
 	if v := atomic.LoadInt32(&f.pending); (v & (1 << externalBlockType)) != 0 {
 		atomic.AddInt32(&f.pending, -4)
 	}
@@ -116,6 +117,7 @@ func (f *fetchResult) SetExternalBlocksDone() {
 // Done checks if the given type is done already
 func (f *fetchResult) Done(kind uint) bool {
 	v := atomic.LoadInt32(&f.pending)
+	fmt.Println("Is item done??", kind, v&(1<<kind) == 0)
 	return v&(1<<kind) == 0
 }
 
@@ -407,7 +409,9 @@ func (q *queue) Results(block bool) []*fetchResult {
 	}
 	// Regardless if closed or not, we can still deliver whatever we have
 	results := q.resultCache.GetCompleted(maxResultsProcess)
+	fmt.Println("Before size checking fetch result")
 	for _, result := range results {
+		fmt.Println("Result in queue ext block len", len(result.ExternalBlocks))
 		// Recalculate the result item weights to prevent memory exhaustion
 		size := result.Header.Size()
 		for _, uncle := range result.Uncles {

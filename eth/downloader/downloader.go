@@ -1753,6 +1753,7 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 	extBlocks := make([]*types.ExternalBlock, 0)
 	for i, result := range results {
 		blocks[i] = types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles)
+		fmt.Println("Len of ext blocks in block result", len(result.ExternalBlocks))
 		extBlocks = append(extBlocks, result.ExternalBlocks...)
 	}
 
