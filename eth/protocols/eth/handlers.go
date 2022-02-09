@@ -218,6 +218,7 @@ func handleGetExtBlocks66(backend Backend, msg Decoder, peer *Peer) error {
 	if err := msg.Decode(&query); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
+	fmt.Println("Answering handleGetExtBlocks66")
 	response := answerGetExtBlocksQuery(backend, query.GetExtBlocksPacket, peer)
 	return peer.ReplyExtBlocksRLP(query.RequestId, response)
 }
