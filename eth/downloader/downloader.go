@@ -1732,6 +1732,7 @@ func (d *Downloader) processFullSyncContent() error {
 		if d.chainInsertHook != nil {
 			d.chainInsertHook(results)
 		}
+		fmt.Println("Importing in process full sync")
 		if err := d.importBlockResults(results); err != nil {
 			return err
 		}
@@ -1903,6 +1904,7 @@ func (d *Downloader) processFastSyncContent() error {
 			}
 		}
 		// Fast sync done, pivot commit done, full import
+		fmt.Println("Importing in process fast sync")
 		if err := d.importBlockResults(afterP); err != nil {
 			return err
 		}
