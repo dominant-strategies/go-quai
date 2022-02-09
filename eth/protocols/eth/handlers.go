@@ -274,15 +274,14 @@ func answerGetExtBlocksQuery(backend Backend, query GetExtBlocksPacket, peer *Pe
 		for i := 0; i < len(results); i++ {
 			log.Info("answerGetExtBlocks:", "hash", results[i].Hash(), "context", results[i].Context(), "num", results[i].Header().Number)
 		}
-		if err != nil {
-			log.Error("Unable to retrieve external blocks")
-		}
 		// If known, encode and queue for response packet
-		if encoded, err := rlp.EncodeToBytes(results); err != nil {
-			log.Error("Failed to encode external block", "err", err)
-		} else {
-			extBlocks = append(extBlocks, encoded)
-			bytes += len(encoded)
+		for _, result := range results {
+			if encoded, err := rlp.EncodeToBytes(result); err != nil {
+				log.Error("Failed to encode external block", "err", err)
+			} else {
+				extBlocks = append(extBlocks, encoded)
+				bytes += len(encoded)
+			}
 		}
 	}
 	return extBlocks

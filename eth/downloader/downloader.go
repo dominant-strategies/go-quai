@@ -2009,6 +2009,10 @@ func (d *Downloader) DeliverReceipts(id string, receipts [][]*types.Receipt) err
 
 // DeliverExtBlocks injects a new batch of external blocks received from a remote node.
 func (d *Downloader) DeliverExtBlocks(id string, extblocks [][]*types.ExternalBlock) error {
+	log.Info("DeliverExtBlocks", "len", len(extblocks))
+	for _, extBlock := range extblocks {
+		log.Info("DeliverExtBlocks", "len", len(extBlock))
+	}
 	return d.deliver(d.extBlockCh, &externalBlockPack{id, extblocks}, extBlockInMeter, extBlockDropMeter)
 }
 
