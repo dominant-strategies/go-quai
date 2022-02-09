@@ -1457,10 +1457,10 @@ func (d *Downloader) fetchParts(deliveryCh chan dataPack, deliver func(dataPack)
 					// and latency of a peer separately, which requires pushing the measures capacity a bit and seeing
 					// how response times reacts, to it always requests one more than the minimum (i.e. min 2).
 					if fails > 2 {
-						peer.log.Trace("Data delivery timed out", "type", kind)
+						log.Info("Data delivery timed out", "type", kind)
 						setIdle(peer, 0, time.Now())
 					} else {
-						peer.log.Debug("Stalling delivery, dropping", "type", kind)
+						log.Info("Stalling delivery, dropping", "type", kind)
 
 						if d.dropPeer == nil {
 							// The dropPeer method is nil when `--copydb` is used for a local copy.
@@ -1485,7 +1485,7 @@ func (d *Downloader) fetchParts(deliveryCh chan dataPack, deliver func(dataPack)
 			// If there's nothing more to fetch, wait or terminate
 			if pending() == 0 {
 				if !inFlight() && finished {
-					log.Debug("Data fetching completed", "type", kind)
+					log.Info("Data fetching completed", "type", kind)
 					return nil
 				}
 				break
@@ -1518,9 +1518,9 @@ func (d *Downloader) fetchParts(deliveryCh chan dataPack, deliver func(dataPack)
 					continue
 				}
 				if request.From > 0 {
-					peer.log.Trace("Requesting new batch of data", "type", kind, "from", request.From)
+					log.Info("Requesting new batch of data", "type", kind, "from", request.From)
 				} else {
-					peer.log.Trace("Requesting new batch of data", "type", kind, "count", len(request.Headers), "from", request.Headers[0].Number)
+					log.Info("Requesting new batch of data", "type", kind, "count", len(request.Headers), "from", request.Headers[0].Number)
 				}
 				// Fetch the chunk and make sure any errors return the hashes to the queue
 				if fetchHook != nil {

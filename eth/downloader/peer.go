@@ -251,6 +251,7 @@ func (p *peerConnection) SetReceiptsIdle(delivered int, deliveryTime time.Time) 
 // requests. Its estimated header retrieval throughput is updated with that measured
 // just now.
 func (p *peerConnection) SetExternalBlocksIdle(delivered int, deliveryTime time.Time) {
+	log.Info("SetExternalBlocksIdle", "delivered", delivered, "deliveryTime", deliveryTime)
 	p.rates.Update(eth.ExtBlocksMsg, deliveryTime.Sub(p.extBlockStarted), delivered)
 	atomic.StoreInt32(&p.extBlockIdle, 0)
 }
