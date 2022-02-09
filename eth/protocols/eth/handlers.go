@@ -270,10 +270,9 @@ func answerGetExtBlocksQuery(backend Backend, query GetExtBlocksPacket, peer *Pe
 			log.Info("answerGetExtBlocks: Unable to retrieve ext blocks", "hash", hash, "len", len(results))
 			break
 		}
-		log.Info("answerGetExtBlocks: Retrieving ext blocks", "hash", hash, "len", len(results))
 		// Temp print, leave for now until we resolve all consensus.
 		for i := 0; i < len(results); i++ {
-			log.Info("answerGetExtBlocks:", "hash", results[i].Hash(), "context", results[i].Context(), "num", results[i].Header().Number)
+			log.Debug("answerGetExtBlocks:", "hash", results[i].Hash(), "context", results[i].Context(), "num", results[i].Header().Number)
 		}
 		if err != nil {
 			log.Error("Unable to retrieve external blocks")

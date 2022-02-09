@@ -2659,15 +2659,10 @@ func (bc *BlockChain) GetExternalBlocks(header *types.Header) ([]*types.External
 		return externalBlocks, nil
 	}
 
-	// Do not run on block 1
-	if header.Number[context].Cmp(big.NewInt(1)) > 0 {
-		prevHeader := bc.GetHeaderByHash(header.ParentHash[context])
+	// Do not run on block 0
+	if header.Number[context].Cmp(big.NewInt(0)) > 0 {
 		coincidentHeader, difficultyContext := bc.engine.GetCoincidentHeader(bc, context, header)
 
-		// Only run if we are the block immediately following the coincident block. Check below is to make sure we are N+1.
-		if coincidentHeader.Number[context].Cmp(prevHeader.Number[context]) != 0 {
-			return externalBlocks, nil
-		}
 		stopHash, err := bc.engine.GetStopHash(bc, difficultyContext, context, coincidentHeader)
 		if err != nil {
 			return nil, err
