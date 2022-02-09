@@ -503,7 +503,7 @@ func (q *queue) ReserveHeaders(p *peerConnection, count int) *fetchRequest {
 func (q *queue) ReserveBodies(p *peerConnection, count int) (*fetchRequest, bool, bool) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
-
+	fmt.Println("In ReserveBodies")
 	return q.reserveHeaders(p, count, q.blockTaskPool, q.blockTaskQueue, q.blockPendPool, bodyType)
 }
 
@@ -523,7 +523,7 @@ func (q *queue) ReserveReceipts(p *peerConnection, count int) (*fetchRequest, bo
 func (q *queue) ReserveExtBlocks(p *peerConnection, count int) (*fetchRequest, bool, bool) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
-
+	fmt.Println("In ReserveExtBlocks")
 	return q.reserveHeaders(p, count, q.externalBlockTaskPool, q.externalBlockTaskQueue, q.externalBlockPendPool, externalBlockType)
 }
 
@@ -979,7 +979,7 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 			log.Error("Delivery stale", "stale", stale, "number", header.Number[types.QuaiNetworkContext].Uint64(), "err", err)
 			failure = errStaleDelivery
 		}
-		fmt.Println("In deliver in quueue.go", "acceptNum", accepted)
+		fmt.Println("In deliver in queue.go", "acceptNum", accepted)
 		// Clean up a successful fetch
 		delete(taskPool, hashes[accepted])
 		accepted++

@@ -1326,7 +1326,7 @@ func (d *Downloader) fetchReceipts(from uint64) error {
 
 // fetchExternalBlocks iteratively downloads the scheduled external blocks, taking any
 func (d *Downloader) fetchExternalBlocks(p *peerConnection, from uint64) error {
-	log.Debug("Downloading external blocks", "origin", from)
+	log.Info("Downloading external blocks", "origin", from)
 
 	var (
 		deliver = func(packet dataPack) (int, error) {
@@ -1335,7 +1335,7 @@ func (d *Downloader) fetchExternalBlocks(p *peerConnection, from uint64) error {
 		}
 		expire   = func() map[string]int { return d.queue.ExpireExternalBlocks(d.peers.rates.TargetTimeout()) }
 		fetch    = func(p *peerConnection, req *fetchRequest) error { return p.FetchExternalBlocks(req) }
-		capacity = func(p *peerConnection) int { return 100 }
+		capacity = func(p *peerConnection) int { return 10000 }
 		setIdle  = func(p *peerConnection, accepted int, deliveryTime time.Time) {
 			p.SetExternalBlocksIdle(accepted, deliveryTime)
 		}
@@ -1344,7 +1344,7 @@ func (d *Downloader) fetchExternalBlocks(p *peerConnection, from uint64) error {
 		d.queue.PendingExtBlocks, d.queue.InFlightExtBlocks, d.queue.ReserveExtBlocks,
 		d.extBlockFetchHook, fetch, d.queue.CancelExtBlocks, capacity, d.peers.ExtBlockIdlePeers, setIdle, "externalBlocks")
 
-	log.Debug("External block download terminated", "err", err)
+	log.Info("External block download terminated", "err", err)
 	return err
 }
 
