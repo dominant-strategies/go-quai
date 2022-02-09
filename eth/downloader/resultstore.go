@@ -81,7 +81,6 @@ func (r *resultStore) AddFetch(header *types.Header, fastSync bool) (stale, thro
 
 	var index int
 	item, index, stale, throttled, err = r.getFetchResult(header.Number[types.QuaiNetworkContext].Uint64())
-	fmt.Println("In AddFetch, ext block len", len(item.ExternalBlocks))
 	if err != nil || stale || throttled {
 		return stale, throttled, item, err
 	}

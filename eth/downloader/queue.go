@@ -561,7 +561,7 @@ func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common
 		header := h.(*types.Header)
 		// we can ask the resultcache if this header is within the
 		// "prioritized" segment of blocks. If it is not, we need to throttle
-		fmt.Println("in reserve headers, addFetch is using fast sync")
+		fmt.Println("in reserve headers, addFetch is using fast sync", "kind", kind)
 		stale, throttle, item, err := q.resultCache.AddFetch(header, q.mode == FastSync)
 		if stale {
 			// Don't put back in the task queue, this item has already been
@@ -917,6 +917,9 @@ func (q *queue) DeliverExternalBlocks(id string, externalBlockList [][]*types.Ex
 		result.ExternalBlocks = externalBlockList[index]
 		result.SetExternalBlocksDone()
 	}
+	for _, block := range externalBlockList {
+		fmt.Println("DeliverExternalBlocks", "len", len(block))
+	}
 	return q.deliver(id, q.externalBlockTaskPool, q.externalBlockTaskQueue, q.externalBlockPendPool,
 		receiptReqTimer, len(externalBlockList), validate, reconstruct)
 }
@@ -976,6 +979,7 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 			log.Error("Delivery stale", "stale", stale, "number", header.Number[types.QuaiNetworkContext].Uint64(), "err", err)
 			failure = errStaleDelivery
 		}
+		fmt.Println("In deliver in quueue.go", "acceptNum", accepted)
 		// Clean up a successful fetch
 		delete(taskPool, hashes[accepted])
 		accepted++
