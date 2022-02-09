@@ -596,11 +596,13 @@ func (f *BlockFetcher) loop() {
 			}
 			// Schedule the header for light fetcher import
 			for _, announce := range lightHeaders {
+				fmt.Println("Enqueue coming from loop line 599")
 				f.enqueue(announce.origin, announce.header, nil, nil)
 			}
 			// Schedule the header-only blocks for import
 			for _, block := range complete {
 				if announce := f.completing[block.Hash()]; announce != nil {
+					fmt.Println("Enqueue coming from loop line 604")
 					f.enqueue(announce.origin, nil, block, nil)
 				}
 			}
@@ -668,6 +670,7 @@ func (f *BlockFetcher) loop() {
 			// Schedule the retrieved blocks for ordered import
 			for _, block := range blocks {
 				if announce := f.completing[block.Hash()]; announce != nil {
+					fmt.Println("Enqueue coming from loop line 671")
 					f.enqueue(announce.origin, nil, block, nil)
 				}
 			}
