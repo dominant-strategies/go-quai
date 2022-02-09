@@ -385,7 +385,7 @@ func handleExtBlocks66(backend Backend, msg Decoder, peer *Peer) error {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
 	requestTracker.Fulfil(peer.id, peer.version, ExtBlocksMsg, res.RequestId)
-	log.Info("handleExtBlocks66", len(res.ExtBlocksPacket))
+	log.Info("handleExtBlocks66", "len", len(res.ExtBlocksPacket))
 	for _, block := range res.ExtBlocksPacket {
 		fmt.Println("handleExtBlocks66", len(block))
 	}

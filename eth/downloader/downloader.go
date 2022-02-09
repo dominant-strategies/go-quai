@@ -1335,7 +1335,7 @@ func (d *Downloader) fetchExternalBlocks(p *peerConnection, from uint64) error {
 		}
 		expire   = func() map[string]int { return d.queue.ExpireExternalBlocks(d.peers.rates.TargetTimeout()) }
 		fetch    = func(p *peerConnection, req *fetchRequest) error { return p.FetchExternalBlocks(req) }
-		capacity = func(p *peerConnection) int { return 10000 }
+		capacity = func(p *peerConnection) int { return 20000 }
 		setIdle  = func(p *peerConnection, accepted int, deliveryTime time.Time) {
 			p.SetExternalBlocksIdle(accepted, deliveryTime)
 		}
@@ -1732,7 +1732,6 @@ func (d *Downloader) processFullSyncContent() error {
 		if d.chainInsertHook != nil {
 			d.chainInsertHook(results)
 		}
-		fmt.Println("Importing in process full sync")
 		if err := d.importBlockResults(results); err != nil {
 			return err
 		}
@@ -1754,7 +1753,6 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 	extBlocks := make([]*types.ExternalBlock, 0)
 	for i, result := range results {
 		blocks[i] = types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles)
-		fmt.Println("Len of ext blocks in block result", len(result.ExternalBlocks))
 		extBlocks = append(extBlocks, result.ExternalBlocks...)
 	}
 
@@ -2009,9 +2007,11 @@ func (d *Downloader) DeliverReceipts(id string, receipts [][]*types.Receipt) err
 
 // DeliverExtBlocks injects a new batch of external blocks received from a remote node.
 func (d *Downloader) DeliverExtBlocks(id string, extblocks [][]*types.ExternalBlock) error {
-	log.Info("DeliverExtBlocks", "len", len(extblocks))
-	for _, extBlock := range extblocks {
-		log.Info("DeliverExtBlocks", "len", len(extBlock))
+	log.Info("DeliverExtBlocks: ext blocks for blocks", "len", len(extblocks))
+	for _, block := range extblocks {
+		for _, extBlock := range block {
+			log.Info("DeliverExtBlocks: Ext Blocks returned", "hash", extBlock.Hash(), "context", extBlock.Context())
+		}
 	}
 	return d.deliver(d.extBlockCh, &externalBlockPack{id, extblocks}, extBlockInMeter, extBlockDropMeter)
 }

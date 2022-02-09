@@ -108,7 +108,6 @@ func (f *fetchResult) SetReceiptsDone() {
 
 // SetExternalBlocksDone flags the external blocks as finished.
 func (f *fetchResult) SetExternalBlocksDone() {
-	fmt.Println("Setting external blocks as done")
 	if v := atomic.LoadInt32(&f.pending); (v & (1 << externalBlockType)) != 0 {
 		atomic.AddInt32(&f.pending, -4)
 	}
@@ -117,7 +116,6 @@ func (f *fetchResult) SetExternalBlocksDone() {
 // Done checks if the given type is done already
 func (f *fetchResult) Done(kind uint) bool {
 	v := atomic.LoadInt32(&f.pending)
-	fmt.Println("Is item done??", kind, v&(1<<kind) == 0)
 	return v&(1<<kind) == 0
 }
 
@@ -409,9 +407,7 @@ func (q *queue) Results(block bool) []*fetchResult {
 	}
 	// Regardless if closed or not, we can still deliver whatever we have
 	results := q.resultCache.GetCompleted(maxResultsProcess)
-	fmt.Println("Before size checking fetch result")
 	for _, result := range results {
-		fmt.Println("Result in queue ext block len", len(result.ExternalBlocks))
 		// Recalculate the result item weights to prevent memory exhaustion
 		size := result.Header.Size()
 		for _, uncle := range result.Uncles {
@@ -503,7 +499,6 @@ func (q *queue) ReserveHeaders(p *peerConnection, count int) *fetchRequest {
 func (q *queue) ReserveBodies(p *peerConnection, count int) (*fetchRequest, bool, bool) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
-	fmt.Println("In ReserveBodies")
 	return q.reserveHeaders(p, count, q.blockTaskPool, q.blockTaskQueue, q.blockPendPool, bodyType)
 }
 
@@ -523,7 +518,6 @@ func (q *queue) ReserveReceipts(p *peerConnection, count int) (*fetchRequest, bo
 func (q *queue) ReserveExtBlocks(p *peerConnection, count int) (*fetchRequest, bool, bool) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
-	fmt.Println("In ReserveExtBlocks")
 	return q.reserveHeaders(p, count, q.externalBlockTaskPool, q.externalBlockTaskQueue, q.externalBlockPendPool, externalBlockType)
 }
 
@@ -561,7 +555,6 @@ func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common
 		header := h.(*types.Header)
 		// we can ask the resultcache if this header is within the
 		// "prioritized" segment of blocks. If it is not, we need to throttle
-		fmt.Println("in reserve headers, addFetch is using fast sync", "kind", kind)
 		stale, throttle, item, err := q.resultCache.AddFetch(header, q.mode == FastSync)
 		if stale {
 			// Don't put back in the task queue, this item has already been
@@ -918,7 +911,7 @@ func (q *queue) DeliverExternalBlocks(id string, externalBlockList [][]*types.Ex
 		result.SetExternalBlocksDone()
 	}
 	for _, block := range externalBlockList {
-		fmt.Println("DeliverExternalBlocks", "len", len(block))
+		log.Info("DeliverExternalBlocks", "len", len(block))
 	}
 	return q.deliver(id, q.externalBlockTaskPool, q.externalBlockTaskQueue, q.externalBlockPendPool,
 		receiptReqTimer, len(externalBlockList), validate, reconstruct)
@@ -979,7 +972,6 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 			log.Error("Delivery stale", "stale", stale, "number", header.Number[types.QuaiNetworkContext].Uint64(), "err", err)
 			failure = errStaleDelivery
 		}
-		fmt.Println("In deliver in queue.go", "acceptNum", accepted)
 		// Clean up a successful fetch
 		delete(taskPool, hashes[accepted])
 		accepted++
