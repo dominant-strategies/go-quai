@@ -84,7 +84,6 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	if err != nil {
 		return nil, nil, uint64(0), nil, err
 	}
-	fmt.Println("Process: Applying external blocks", "len", len(externalBlocks))
 
 	// Get the previous hashes from the first external blocks applied in the new GetExternalBlocks set.
 	// Initial the linkBlocks into 3x3 structure.

@@ -164,7 +164,7 @@ REGION_3_PORT_HTTP=8582
 REGION_3_PORT_WS=8583
 ZONE_1_1_PORT_HTTP=8610
 ZONE_1_1_PORT_WS=8611
-ZONE_1_2_PORT_HTTP=8542
+ZONE_1_2_PORT_HTTP=8642
 ZONE_1_2_PORT_WS=8643
 ZONE_1_3_PORT_HTTP=8674
 ZONE_1_3_PORT_WS=8675
@@ -199,11 +199,11 @@ endif
 	@nohup ./build/bin/quai --mainnet --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3,quai --ws.origins "*" --port 30314 --http.port $(ZONE_3_2_PORT_HTTP) --ws.port $(ZONE_3_2_PORT_WS) --region 3 --zone 2 --quaistats ${NAME}:zone32${PASSWORD}@${STATS_HOST}:9302 >> nodelogs/zone-3-2.log 2>&1 &
 	@nohup ./build/bin/quai --mainnet --ws --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3,quai --ws.origins "*" --port 30315 --http.port $(ZONE_3_3_PORT_HTTP) --ws.port $(ZONE_3_3_PORT_WS) --region 3 --zone 3 --quaistats ${NAME}:zone33${PASSWORD}@${STATS_HOST}:9303 >> nodelogs/zone-3-3.log 2>&1 &
 
-PRIME_COINBASE=0x0767d31b0d7671c3e97c6abed055a26fb59b4149
-REGION_1_COINBASE=0x11a03db52d12201e614466cb98ec5d49a1205bda
+PRIME_COINBASE=0x00114a47a5d39ea2022dd4d864cb62cfd16879fc
+REGION_1_COINBASE=0x0d79b69c082e6f6a2e78a10a9a49baedb7db37a5
 REGION_2_COINBASE=0x3bcec1847c55246cf9ea32a5dfe652f147ac091c
 REGION_3_COINBASE=0x5e6b0261c32b25f187786612d27a39f6d0c31771
-ZONE_1_1_COINBASE=0x1ae01D4a922e710692Ba1bA2C03e345CFF3A8635
+ZONE_1_1_COINBASE=0x1930e0b28d3766e895df661de871a9b8ab70a4da
 ZONE_1_2_COINBASE=0x186da447ec1dd29cdec8cca5653ccc4fd8f9e5e3
 ZONE_1_3_COINBASE=0x2ab56840530b1c395ecf91e5923446fa696c7933
 ZONE_2_1_COINBASE=0x454f47e9da39a4d2cff17d7ca50757576a298fb2
