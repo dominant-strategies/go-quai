@@ -18,6 +18,7 @@ package miner
 
 import (
 	"errors"
+	"fmt"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -933,12 +934,41 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		header.Extra[types.QuaiNetworkContext] = w.extra
 	}
 
+	// Could potentially happen if starting to mine in an odd state.
+	err := w.makeCurrent(parent, header)
+	if err != nil {
+		log.Error("Failed to create mining context", "err", err)
+		return
+	}
+
 	// Gather external blocks and apply transactions
 	externalBlocks, extBlockErr := w.engine.GetExternalBlocks(w.chain, header, false)
+	fmt.Println("ExtBlocks in worker", len(externalBlocks))
 	if extBlockErr != nil {
 		log.Error("commitNewWork: Unable to retrieve external blocks", "height", header.Number)
 		return
 	}
+
+	// Reverse order so that external blocks are sequentially applied
+	// if len(externalBlocks) > 0 {
+	// 	for i, j := 0, len(externalBlocks)-1; i < j; i, j = i+1, j-1 {
+	// 		externalBlocks[i], externalBlocks[j] = externalBlocks[j], externalBlocks[i]
+	// 	}
+	// }
+
+	// If block has not advanced
+	if w.snapshotBlock != nil && parent.Header().Number[types.QuaiNetworkContext] == w.snapshotBlock.Number() {
+		header.BaseFee[types.QuaiNetworkContext] = w.snapshotBlock.BaseFee()
+
+	} else {
+		header.BaseFee[types.QuaiNetworkContext] = misc.CalcBaseFee(w.chainConfig, parent.Header(), w.chain.GetHeaderByNumber, w.chain.GetUnclesInChain, w.chain.GetGasUsedInChain)
+	}
+
+	if err := w.engine.Prepare(w.chain, header); err != nil {
+		log.Error("Failed to prepare header for mining", "err", err)
+		return
+	}
+
 	etxs := make(types.Transactions, 0)
 	externalGasUsed := uint64(0)
 	for _, externalBlock := range externalBlocks {
@@ -967,24 +997,11 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	// If block has not advanced
 	if w.snapshotBlock != nil && parent.Header().Number[types.QuaiNetworkContext] == w.snapshotBlock.Number() {
 		header.GasLimit[types.QuaiNetworkContext] = w.snapshotBlock.GasLimit()
-		header.BaseFee[types.QuaiNetworkContext] = w.snapshotBlock.BaseFee()
 
 	} else {
 		header.GasLimit[types.QuaiNetworkContext] = core.CalcGasLimit(parent.GasLimit(), gasUsed, uncleCount)
-		header.BaseFee[types.QuaiNetworkContext] = misc.CalcBaseFee(w.chainConfig, parent.Header(), w.chain.GetHeaderByNumber, w.chain.GetUnclesInChain, w.chain.GetGasUsedInChain)
 	}
 
-	if err := w.engine.Prepare(w.chain, header); err != nil {
-		log.Error("Failed to prepare header for mining", "err", err)
-		return
-	}
-
-	// Could potentially happen if starting to mine in an odd state.
-	err := w.makeCurrent(parent, header)
-	if err != nil {
-		log.Error("Failed to create mining context", "err", err)
-		return
-	}
 	// Create the current work task and check any fork transitions needed
 	env := w.current
 	// Accumulate the uncles for the current block

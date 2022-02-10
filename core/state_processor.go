@@ -85,56 +85,11 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		return nil, nil, uint64(0), nil, err
 	}
 
-	// Get the previous hashes from the first external blocks applied in the new GetExternalBlocks set.
-	// Initial the linkBlocks into 3x3 structure.
-	linkBlocks := &extBlockLink{
-		prime:   common.Hash{},
-		regions: make([]common.Hash, 3),
-		zones:   [][]common.Hash{make([]common.Hash, 3), make([]common.Hash, 3), make([]common.Hash, 3)},
+	cpyExtBlocks := make([]*types.ExternalBlock, len(externalBlocks))
+	copy(cpyExtBlocks, externalBlocks)
+	if !p.checkExternalBlockLink(cpyExtBlocks) {
+		fmt.Println("Error in checking block link")
 	}
-
-	for _, externalBlock := range externalBlocks {
-		context := externalBlock.Context().Int64()
-		switch context {
-		case 0:
-			if linkBlocks.prime == (common.Hash{}) {
-				linkedPreviousHash := externalBlock.Header().ParentHash[externalBlock.Context().Int64()]
-				linkBlocks.prime = linkedPreviousHash
-			}
-		case 1:
-			if linkBlocks.regions[externalBlock.Header().Location[0]-1] == (common.Hash{}) {
-				linkedPreviousHash := externalBlock.Header().ParentHash[externalBlock.Context().Int64()]
-				linkBlocks.regions[externalBlock.Header().Location[0]-1] = linkedPreviousHash
-			}
-		case 2:
-			if linkBlocks.zones[externalBlock.Header().Location[0]-1][externalBlock.Header().Location[1]-1] == (common.Hash{}) {
-				linkedPreviousHash := externalBlock.Header().ParentHash[externalBlock.Context().Int64()]
-				linkBlocks.zones[externalBlock.Header().Location[0]-1][externalBlock.Header().Location[1]-1] = linkedPreviousHash
-			}
-		}
-	}
-
-	// Verify that the externalBlocks provided link with previous coincident blocks.
-	if linkBlocks.prime != (common.Hash{}) && linkBlocks.prime != p.blockLink.prime {
-		fmt.Println("Error linking external blocks: prev prime: ", p.blockLink.prime, "parentHash: ", linkBlocks.prime)
-		// return nil, nil, 0, nil, fmt.Errorf("Error linking external blocks: prev prime %d parentHash %v", p.blockLink.prime, linkBlocks.prime)
-	} else {
-		for i := range linkBlocks.regions {
-			if linkBlocks.regions[i] != (common.Hash{}) && linkBlocks.regions[i] != p.blockLink.regions[i] {
-				fmt.Println("Error linking external blocks: prev region: ", p.blockLink.regions[i], "parentHash: ", linkBlocks.regions[i])
-				// return nil, nil, 0, nil, fmt.Errorf("Error linking external blocks: prev region %d parentHash %v", p.blockLink.regions[i], linkBlocks.regions[i])
-			}
-			for j := range linkBlocks.zones[i] {
-				if linkBlocks.zones[i][j] != (common.Hash{}) && linkBlocks.zones[i][j] != p.blockLink.zones[i][j] {
-					fmt.Println("Error linking external blocks: prev zone: ", p.blockLink.zones[i][j], "parentHash: ", linkBlocks.zones[i][j])
-					// return nil, nil, 0, nil, fmt.Errorf("Error linking external blocks: prev zone %d parentHash %v", p.blockLink.zones[i][j], linkBlocks.zones[i][j])
-				}
-			}
-		}
-	}
-
-	// Update array with latest applied externalBlocks.
-	p.blockLink = p.SetLinkBlocksToLastApplied(externalBlocks, p.blockLink)
 
 	etxs := 0
 	for _, externalBlock := range externalBlocks {
@@ -434,12 +389,6 @@ func (p *StateProcessor) SetLinkBlocksToLastApplied(externalBlocks []*types.Exte
 		copy(startingLinkBlocks.zones[i], linkBlocks.zones[i])
 	}
 
-	// Reverse externalBlocks to get coincident first.
-	if len(externalBlocks) > 0 {
-		for i, j := 0, len(externalBlocks)-1; i < j; i, j = i+1, j-1 {
-			externalBlocks[i], externalBlocks[j] = externalBlocks[j], externalBlocks[i]
-		}
-	}
 	// iterate through the extBlocks, updated the index with the last applied external blocks.
 	for _, lastAppliedBlock := range externalBlocks {
 		switch lastAppliedBlock.Context().Int64() {
@@ -459,4 +408,63 @@ func (p *StateProcessor) SetLinkBlocksToLastApplied(externalBlocks []*types.Exte
 	}
 
 	return linkBlocks
+}
+
+func (p *StateProcessor) checkExternalBlockLink(externalBlocks []*types.ExternalBlock) bool {
+	// Get the previous hashes from the first external blocks applied in the new GetExternalBlocks set.
+	// Initial the linkBlocks into 3x3 structure.
+	linkBlocks := &extBlockLink{
+		prime:   common.Hash{},
+		regions: make([]common.Hash, 3),
+		zones:   [][]common.Hash{make([]common.Hash, 3), make([]common.Hash, 3), make([]common.Hash, 3)},
+	}
+
+	// Reverse ext block set to get the last applied block order
+	// if len(externalBlocks) > 0 {
+	// 	for i, j := 0, len(externalBlocks)-1; i < j; i, j = i+1, j-1 {
+	// 		externalBlocks[i], externalBlocks[j] = externalBlocks[j], externalBlocks[i]
+	// 	}
+	// }
+
+	for _, externalBlock := range externalBlocks {
+		fmt.Println(externalBlock.Hash(), externalBlock.Header().Number)
+		context := externalBlock.Context().Int64()
+		switch context {
+		case 0:
+			linkedPreviousHash := externalBlock.Header().ParentHash[externalBlock.Context().Int64()]
+			linkBlocks.prime = linkedPreviousHash
+
+		case 1:
+			linkedPreviousHash := externalBlock.Header().ParentHash[externalBlock.Context().Int64()]
+			linkBlocks.regions[externalBlock.Header().Location[0]-1] = linkedPreviousHash
+
+		case 2:
+			linkedPreviousHash := externalBlock.Header().ParentHash[externalBlock.Context().Int64()]
+			linkBlocks.zones[externalBlock.Header().Location[0]-1][externalBlock.Header().Location[1]-1] = linkedPreviousHash
+		}
+	}
+
+	// Verify that the externalBlocks provided link with previous coincident blocks.
+	if linkBlocks.prime != (common.Hash{}) && linkBlocks.prime != p.blockLink.prime {
+		fmt.Println("Error linking external blocks: prev prime: ", p.blockLink.prime, "parentHash: ", linkBlocks.prime)
+		// return nil, nil, 0, nil, fmt.Errorf("Error linking external blocks: prev prime %d parentHash %v", p.blockLink.prime, linkBlocks.prime)
+	} else {
+		for i := range linkBlocks.regions {
+			if linkBlocks.regions[i] != (common.Hash{}) && linkBlocks.regions[i] != p.blockLink.regions[i] {
+				fmt.Println("Error linking external blocks: prev region: ", p.blockLink.regions[i], "parentHash: ", linkBlocks.regions[i])
+				// return nil, nil, 0, nil, fmt.Errorf("Error linking external blocks: prev region %d parentHash %v", p.blockLink.regions[i], linkBlocks.regions[i])
+			}
+			for j := range linkBlocks.zones[i] {
+				if linkBlocks.zones[i][j] != (common.Hash{}) && linkBlocks.zones[i][j] != p.blockLink.zones[i][j] {
+					fmt.Println("Error linking external blocks: prev zone: ", p.blockLink.zones[i][j], "parentHash: ", linkBlocks.zones[i][j])
+					// return nil, nil, 0, nil, fmt.Errorf("Error linking external blocks: prev zone %d parentHash %v", p.blockLink.zones[i][j], linkBlocks.zones[i][j])
+				}
+			}
+		}
+	}
+
+	// Update array with latest applied externalBlocks.
+	p.blockLink = p.SetLinkBlocksToLastApplied(externalBlocks, p.blockLink)
+
+	return true
 }
