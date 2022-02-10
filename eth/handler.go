@@ -456,9 +456,6 @@ func (h *handler) BroadcastBlock(block *types.Block, extBlocks []*types.External
 			log.Error("Propagating dangling block", "number", block.Number(), "hash", hash)
 			return
 		}
-		for _, block := range extBlocks {
-			fmt.Println("broadcastBlock: Sending extBlocks", block.Hash(), block.Context(), block.Header().Number)
-		}
 		// Send the block to a subset of our peers
 		transfer := peers[:int(math.Sqrt(float64(len(peers))))]
 		for _, peer := range transfer {

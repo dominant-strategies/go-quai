@@ -359,16 +359,13 @@ func (f *BlockFetcher) loop() {
 		height := f.chainHeight()
 		for !f.queue.Empty() {
 			op := f.queue.PopItem().(*blockOrHeaderInject)
-			fmt.Println("Looping in loop(), popping blockOrHeaderInject", "extBlockLen", len(op.extBlocks))
 			hash := op.hash()
 			if f.queueChangeHook != nil {
-				fmt.Println("in loop(), going into changeHook")
 				f.queueChangeHook(hash, false)
 			}
 			// If too high up the chain or phase, continue later
 			number := op.number()
 			if number > height+1 {
-				fmt.Println("in loop(), number > height+1")
 				f.queue.Push(op, -int64(number))
 				if f.queueChangeHook != nil {
 					f.queueChangeHook(hash, true)
@@ -377,7 +374,6 @@ func (f *BlockFetcher) loop() {
 			}
 			// Otherwise if fresh and still unknown, try and import
 			if (number+maxUncleDist < height) || (f.light && f.getHeader(hash) != nil) || (!f.light && f.getBlock(hash) != nil) {
-				fmt.Println("in loop(), fresh and still uknown, trying to import")
 				f.forgetBlock(hash)
 				continue
 			}
@@ -438,7 +434,6 @@ func (f *BlockFetcher) loop() {
 			if f.light {
 				continue
 			}
-			fmt.Println("enqueue coming from line 438")
 			f.enqueue(op.origin, nil, op.block, op.extBlocks)
 
 		case hash := <-f.done:
@@ -600,13 +595,11 @@ func (f *BlockFetcher) loop() {
 			}
 			// Schedule the header for light fetcher import
 			for _, announce := range lightHeaders {
-				fmt.Println("Enqueue coming from loop line 599")
 				f.enqueue(announce.origin, announce.header, nil, nil)
 			}
 			// Schedule the header-only blocks for import
 			for _, block := range complete {
 				if announce := f.completing[block.Hash()]; announce != nil {
-					fmt.Println("Enqueue coming from loop line 604")
 					f.enqueue(announce.origin, nil, block, nil)
 				}
 			}
@@ -674,7 +667,6 @@ func (f *BlockFetcher) loop() {
 			// Schedule the retrieved blocks for ordered import
 			for _, block := range blocks {
 				if announce := f.completing[block.Hash()]; announce != nil {
-					fmt.Println("Enqueue coming from loop line 671")
 					f.enqueue(announce.origin, nil, block, nil)
 				}
 			}
@@ -751,10 +743,8 @@ func (f *BlockFetcher) enqueue(peer string, header *types.Header, block *types.B
 	if _, ok := f.queued[hash]; !ok {
 		op := &blockOrHeaderInject{origin: peer, extBlocks: extBlocks}
 		if header != nil {
-			fmt.Println("enqueue Header")
 			op.header = header
 		} else {
-			fmt.Println("enqueue Block")
 			op.block = block
 		}
 		f.queues[peer] = count

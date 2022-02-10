@@ -17,7 +17,6 @@
 package eth
 
 import (
-	"fmt"
 	"math/big"
 	"math/rand"
 	"sync"
@@ -511,10 +510,6 @@ func (k *knownCache) Cardinality() int {
 // RequestExternalBlocks fetches a batch of external blocks from a remote node.
 func (p *Peer) RequestExternalBlocks(hashes []common.Hash) error {
 	p.Log().Debug("Fetching batch of external blocks", "count", len(hashes))
-	log.Info("Fetching batch of external blocks for hashes", "count", len(hashes))
-	for _, hash := range hashes {
-		fmt.Println("RequestExternalBlocks for hash", hash)
-	}
 	if p.Version() >= QUAI66 {
 		id := rand.Uint64()
 

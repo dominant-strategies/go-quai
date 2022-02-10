@@ -209,7 +209,6 @@ func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block, td
 	log.Info("handleBlockBroadcast: Received block broadcast", "hash", block.Hash(), "num", block.Header().Number, "extBlocks", len(extBlocks))
 
 	for _, extBlock := range extBlocks {
-		fmt.Println("handleBlockBroadcast: ExtBlock", extBlock.Hash(), extBlock.Context(), extBlock.Header().Number, extBlock.Header().Location)
 		h.chain.AddExternalBlock(extBlock)
 	}
 	// Schedule the block for import

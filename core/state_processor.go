@@ -140,7 +140,6 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	etxs := 0
 	for _, externalBlock := range externalBlocks {
 		externalBlock.Receipts().DeriveFields(p.config, externalBlock.Hash(), externalBlock.Header().Number[externalBlock.Context().Int64()].Uint64(), externalBlock.Transactions())
-		fmt.Println("Number of txs in external block", "len", len(externalBlock.Transactions()))
 		for _, tx := range externalBlock.Transactions() {
 			msg, err := tx.AsMessage(types.MakeSigner(p.config, header.Number[types.QuaiNetworkContext]), header.BaseFee[types.QuaiNetworkContext])
 			// Quick check to make sure we're adding an external transaction, currently saves us from not passing merkel path in external block
