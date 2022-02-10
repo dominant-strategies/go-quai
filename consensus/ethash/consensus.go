@@ -619,11 +619,13 @@ func (ethash *Ethash) GetDifficultyContext(chain consensus.ChainHeaderReader, he
 	if header.Nonce != (types.BlockNonce{}) {
 		result := ethash.checkPoW(chain, header, false)
 		for i := types.ContextDepth - 1; i > -1; i-- {
-			if header.Difficulty[i] != nil {
+			if header.Difficulty[i] != nil || header.Difficulty[i] == big.NewInt(0) {
 				target := new(big.Int).Div(two256, header.Difficulty[i])
 				if new(big.Int).SetBytes(result).Cmp(target) <= 0 {
 					difficultyContext = i
 				}
+			} else {
+				return types.ContextDepth, errors.New("error checking difficulty context")
 			}
 		}
 		// Invalid number on the new difficulty
