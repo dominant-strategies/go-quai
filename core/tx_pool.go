@@ -1312,7 +1312,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	next := new(big.Int).Add(newHead.Number[types.QuaiNetworkContext], big.NewInt(1))
 	pool.istanbul = pool.chainconfig.IsIstanbul(next)
 	pool.eip2718 = pool.chainconfig.IsBerlin(next)
-	pool.eip1559 = pool.chainconfig.IsLondon(next)
+	pool.eip1559 = true
 }
 
 // promoteExecutables moves transactions that have become processable from the

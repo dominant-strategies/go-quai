@@ -87,8 +87,12 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, headerByNumbe
 	denominator := math.BigMax(gasUsed1.Sub(gasUsed1, gasUsed2), big.NewInt(1000))
 
 	result := big.NewInt(0)
-
-	return result.Div(numerator, denominator).Mul(result, reward)
+	result.Div(numerator, denominator).Mul(result, reward)
+	if result.Cmp(big.NewInt(params.InitialBaseFee)) < 0 {
+		return big.NewInt(params.InitialBaseFee)
+	} else {
+		return result
+	}
 }
 
 // CalculateReward calculates the coinbase rewards depending on the type of the block
