@@ -618,9 +618,9 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 	msg.from, err = Sender(s, tx)
 	idRange := params.LookupChainIDRange(s.ChainID())
 
-	sendingFrom := int(msg.from[0]) < idRange[0] || int(msg.from[0]) > idRange[1]
-	sendingTo := int(tx.To()[0]) >= idRange[0] && int(tx.To()[0]) <= idRange[1]
-	if sendingFrom && sendingTo {
+	sendingFromExternal := int(msg.from[0]) < idRange[0] || int(msg.from[0]) > idRange[1]
+	sendingToInternal := int(tx.To()[0]) >= idRange[0] && int(tx.To()[0]) <= idRange[1]
+	if sendingFromExternal && sendingToInternal {
 		msg.fromExternal = true
 	}
 

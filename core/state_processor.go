@@ -84,6 +84,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	if err != nil {
 		return nil, nil, uint64(0), nil, err
 	}
+	fmt.Println("Process: Applying external blocks", "len", len(externalBlocks))
 
 	// Get the previous hashes from the first external blocks applied in the new GetExternalBlocks set.
 	// Initial the linkBlocks into 3x3 structure.
@@ -139,12 +140,14 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	etxs := 0
 	for _, externalBlock := range externalBlocks {
 		externalBlock.Receipts().DeriveFields(p.config, externalBlock.Hash(), externalBlock.Header().Number[externalBlock.Context().Int64()].Uint64(), externalBlock.Transactions())
+		fmt.Println("Number of txs in external block", "len", len(externalBlock.Transactions()))
 		for _, tx := range externalBlock.Transactions() {
 			msg, err := tx.AsMessage(types.MakeSigner(p.config, header.Number[types.QuaiNetworkContext]), header.BaseFee[types.QuaiNetworkContext])
 			// Quick check to make sure we're adding an external transaction, currently saves us from not passing merkel path in external block
 			if !msg.FromExternal() {
 				continue
 			}
+			fmt.Println("Applying etx", tx.Hash().Hex(), msg.From(), msg.To(), msg.Value())
 			if err != nil {
 				return nil, nil, 0, nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 			}
