@@ -253,10 +253,6 @@ endif
 	@nohup ./build/bin/quai --mainnet --ws --http --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3,quai --ws.origins "*" --http.corsdomain "*" --port 30314 --nodekey bootnode.key --http.port $(ZONE_3_2_PORT_HTTP) --ws.port $(ZONE_3_2_PORT_WS) --region 3 --zone 2 --quaistats ${NAME}:zone32${PASSWORD}@${STATS_HOST}:9302 --nat extip:$(HOST_IP) >> nodelogs/zone-3-2.log 2>&1 &
 	@nohup ./build/bin/quai --mainnet --ws --http --syncmode full --allow-insecure-unlock --http.addr 0.0.0.0 --ws.addr 0.0.0.0 --ws.api eth,net,web3,quai --ws.origins "*" --http.corsdomain "*" --port 30315 --nodekey bootnode.key --http.port $(ZONE_3_3_PORT_HTTP) --ws.port $(ZONE_3_3_PORT_WS) --region 3 --zone 3 --quaistats ${NAME}:zone33${PASSWORD}@${STATS_HOST}:9303 --nat extip:$(HOST_IP) >> nodelogs/zone-3-3.log 2>&1 &
 
-stop:
-	@if pgrep quai; then pkill -f ./build/bin/quai; fi
-	@echo "Stopping all instances of go-quai"
-
 bootnode-mine:
 ifeq (,$(wildcard ./bootnode.key))
 	./build/bin/bootnode --genkey=bootnode.key
