@@ -112,10 +112,12 @@ func CalcGasLimit(parentGasLimit, gasUsed uint64, uncleCount int) uint64 {
 	limit := parentGasLimit
 	aboveRate := uncleCount > params.TargetUncles[types.QuaiNetworkContext]
 	// If we're receiving full blocks, we try to increase the block size
+	fmt.Println("CalcGaslimit:", delta, percent, limit, aboveRate, gasUsed, parentGasLimit)
 	if percent > uint64(950) {
 		limit = parentGasLimit + delta
 		if aboveRate {
 			limit = limit - delta
+			fmt.Println("CalcGaslimit: adjusting back down")
 		}
 		return limit
 	} else {
@@ -124,6 +126,8 @@ func CalcGasLimit(parentGasLimit, gasUsed uint64, uncleCount int) uint64 {
 			limit = params.MinGasLimit
 		}
 		if limit < params.EmptyGasLimit {
+			fmt.Println("CalcGaslimit: adjusting back down")
+
 			limit = parentGasLimit + delta
 		}
 		return limit
