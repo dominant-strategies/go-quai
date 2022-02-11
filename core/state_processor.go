@@ -321,7 +321,7 @@ func (p *StateProcessor) GenerateExtBlockLink() {
 			copy(tempLinkBlocks.zones[i], linkBlocks.zones[i])
 		}
 
-		p.SetLinkBlocksToLastApplied(extBlocks, tempLinkBlocks)
+		tempLinkBlocks = p.SetLinkBlocksToLastApplied(extBlocks, tempLinkBlocks)
 
 		// If our tempLink is new and our starting link hasn't changed.
 		if tempLinkBlocks.prime != linkBlocks.prime && startingLinkBlocks.prime == linkBlocks.prime {
@@ -339,8 +339,9 @@ func (p *StateProcessor) GenerateExtBlockLink() {
 		}
 
 		// Check if linkBlocks is populated fully for all chains in the hierarchy.
+		// Do not set populated to false if we are in Prime as Prime will not have any external blocks.
 		tempPopulated := true
-		if linkBlocks.prime == p.config.GenesisHashes[0] {
+		if linkBlocks.prime == p.config.GenesisHashes[0] && types.QuaiNetworkContext != 0 {
 			tempPopulated = false
 		} else {
 			for i := range linkBlocks.regions {
@@ -369,7 +370,6 @@ func (p *StateProcessor) GenerateExtBlockLink() {
 		// Iterate to previous block in current context.
 		currentHeader = p.bc.GetHeaderByHash(currentHeader.ParentHash[types.QuaiNetworkContext])
 	}
-
 	p.blockLink = linkBlocks
 }
 

@@ -69,8 +69,13 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, headerByNumbe
 	// Transform the parent header into a block.
 	parentBlock := types.NewBlockWithHeader(parent)
 
+	header500 := headerByNumber(uint64(parent.Number[types.QuaiNetworkContext].Int64() - 500))
+	if header500 == nil {
+		return new(big.Int).SetUint64(params.InitialBaseFee)
+	}
+
 	// Get the 500th previous block in order to calculate slope on the uncle rate and gas used.
-	block500 := types.NewBlockWithHeader(headerByNumber(uint64(parent.Number[types.QuaiNetworkContext].Int64() - 500)))
+	block500 := types.NewBlockWithHeader(header500)
 
 	// Get applicable uncle count and gas used across two various slope points
 	uncleCount1 := big.NewInt(int64(len(getUncles(parentBlock, slopeLength))))
