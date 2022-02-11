@@ -18,7 +18,6 @@ package eth
 
 import (
 	"errors"
-	"fmt"
 	"math"
 	"math/big"
 	"sync"
@@ -214,9 +213,6 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		}
 
 		log.Info("Adding external blocks from peer", "len", len(extBlocks), "number", blocks[0].Number())
-		for _, block := range extBlocks {
-			fmt.Println("newHandler: inserter extBlocks", block.Hash(), block.Context(), block.Header().Number)
-		}
 		err := h.chain.AddExternalBlocks(extBlocks)
 		if err != nil {
 			log.Warn("Error importing external blocks", "number", blocks[0].Number(), "hash", blocks[0].Hash())

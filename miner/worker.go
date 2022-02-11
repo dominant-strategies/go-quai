@@ -18,7 +18,6 @@ package miner
 
 import (
 	"errors"
-	"fmt"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -943,7 +942,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 
 	// Gather external blocks and apply transactions
 	externalBlocks, extBlockErr := w.engine.GetExternalBlocks(w.chain, header, false)
-	fmt.Println("ExtBlocks in worker", len(externalBlocks))
+	log.Info("Worker: Length of external blocks", "len", len(externalBlocks))
 	if extBlockErr != nil {
 		log.Error("commitNewWork: Unable to retrieve external blocks", "height", header.Number)
 		return
