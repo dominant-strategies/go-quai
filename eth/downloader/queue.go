@@ -910,9 +910,6 @@ func (q *queue) DeliverExternalBlocks(id string, externalBlockList [][]*types.Ex
 		result.ExternalBlocks = externalBlockList[index]
 		result.SetExternalBlocksDone()
 	}
-	for _, block := range externalBlockList {
-		log.Info("DeliverExternalBlocks", "len", len(block))
-	}
 	return q.deliver(id, q.externalBlockTaskPool, q.externalBlockTaskQueue, q.externalBlockPendPool,
 		receiptReqTimer, len(externalBlockList), validate, reconstruct)
 }
