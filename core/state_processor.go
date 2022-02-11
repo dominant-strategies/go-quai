@@ -338,6 +338,10 @@ func (p *StateProcessor) GenerateExtBlockLink() {
 			}
 		}
 
+		// Convert config for region and zone location into ints to compare during check.
+		regionLoc := int(p.config.Location[0])
+		zoneLoc := int(p.config.Location[0])
+
 		// Check if linkBlocks is populated fully for all chains in the hierarchy.
 		// Do not set populated to false if we are in Prime as Prime will not have any external blocks.
 		tempPopulated := true
@@ -345,12 +349,13 @@ func (p *StateProcessor) GenerateExtBlockLink() {
 			tempPopulated = false
 		} else {
 			for i := range linkBlocks.regions {
-				if linkBlocks.regions[i] == p.config.GenesisHashes[1] {
+
+				if linkBlocks.regions[i] == p.config.GenesisHashes[1] && !(regionLoc-1 == i && types.QuaiNetworkContext == 1) {
 					tempPopulated = false
 					break
 				}
 				for j := range linkBlocks.zones[i] {
-					if linkBlocks.zones[i][j] == p.config.GenesisHashes[2] {
+					if linkBlocks.zones[i][j] == p.config.GenesisHashes[2] && !(regionLoc-1 == i && zoneLoc-1 == j) {
 						tempPopulated = false
 						break
 					}
