@@ -159,7 +159,6 @@ type worker struct {
 	mu       sync.RWMutex // The lock used to protect the coinbase and extra fields
 	coinbase common.Address
 	extra    []byte
-	mapcontext [][]bool
 
 	pendingMu    sync.RWMutex
 	pendingTasks map[common.Hash]*task
@@ -257,13 +256,6 @@ func (w *worker) setExtra(extra []byte) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.extra = extra
-}
-
-// setMapContext sets the block MapContext field
-func (w *worker) setMapContext(mc [][]bool) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	w.mapcontext = mc
 }
 
 // setRecommitInterval updates the interval for miner sealing work recommitting.
