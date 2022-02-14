@@ -933,13 +933,6 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		header.Extra[types.QuaiNetworkContext] = w.extra
 	}
 
-	// Could potentially happen if starting to mine in an odd state.
-	err := w.makeCurrent(parent, header)
-	if err != nil {
-		log.Error("Failed to create mining context", "err", err)
-		return
-	}
-
 	// Gather external blocks and apply transactions
 	externalBlocks, extBlockErr := w.engine.GetExternalBlocks(w.chain, header, false)
 	log.Info("Worker: Length of external blocks", "len", len(externalBlocks))
@@ -965,6 +958,13 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 
 	if err := w.engine.Prepare(w.chain, header); err != nil {
 		log.Error("Failed to prepare header for mining", "err", err)
+		return
+	}
+
+	// Could potentially happen if starting to mine in an odd state.
+	err := w.makeCurrent(parent, header)
+	if err != nil {
+		log.Error("Failed to create mining context", "err", err)
 		return
 	}
 

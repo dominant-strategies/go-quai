@@ -433,7 +433,7 @@ func (p *StateProcessor) checkExternalBlockLink(externalBlocks []*types.External
 	// }
 
 	for _, externalBlock := range externalBlocks {
-		fmt.Println("checkExternalBlockLinl: ext block", externalBlock.Header().Number, externalBlock.Context(), externalBlock.Hash())
+		fmt.Println("checkExternalBlockLink: ext block", externalBlock.Header().Number, externalBlock.Context(), externalBlock.Hash())
 		context := externalBlock.Context().Int64()
 		switch context {
 		case 0:
