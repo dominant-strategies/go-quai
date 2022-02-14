@@ -22,6 +22,7 @@ import (
 	"github.com/spruce-solutions/go-quai/consensus"
 	"github.com/spruce-solutions/go-quai/core/state"
 	"github.com/spruce-solutions/go-quai/core/types"
+	"github.com/spruce-solutions/go-quai/log"
 	"github.com/spruce-solutions/go-quai/params"
 	"github.com/spruce-solutions/go-quai/trie"
 )
@@ -112,7 +113,7 @@ func CalcGasLimit(parentGasLimit, gasUsed uint64, uncleCount int) uint64 {
 	limit := parentGasLimit
 	aboveRate := uncleCount > params.TargetUncles[types.QuaiNetworkContext]
 	// If we're receiving full blocks, we try to increase the block size
-	fmt.Println("CalcGaslimit:", delta, percent, limit, aboveRate, gasUsed, parentGasLimit)
+	log.Info("CalcGaslimit:", "delta", delta, "percent", percent, "limit", limit, "uncleCount", uncleCount, "gasUsed", gasUsed, "parentGasLimit", parentGasLimit)
 	if percent > uint64(800) {
 		limit = parentGasLimit + delta
 		if aboveRate {

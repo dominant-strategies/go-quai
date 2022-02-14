@@ -89,7 +89,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	copy(cpyExtBlocks, externalBlocks)
 	linkErr := p.checkExternalBlockLink(cpyExtBlocks)
 	if linkErr != nil {
-		return nil, nil, 0, nil, fmt.Errorf("Error linking external blocks %d", err)
+		return nil, nil, 0, nil, err
 	}
 
 	etxs := 0
@@ -433,6 +433,7 @@ func (p *StateProcessor) checkExternalBlockLink(externalBlocks []*types.External
 	// }
 
 	for _, externalBlock := range externalBlocks {
+		fmt.Println("checkExternalBlockLinl: ext block", externalBlock.Header().Number, externalBlock.Context(), externalBlock.Hash())
 		context := externalBlock.Context().Int64()
 		switch context {
 		case 0:
@@ -451,16 +452,15 @@ func (p *StateProcessor) checkExternalBlockLink(externalBlocks []*types.External
 
 	// Verify that the externalBlocks provided link with previous coincident blocks.
 	if linkBlocks.prime != (common.Hash{}) && linkBlocks.prime != p.blockLink.prime {
-		return fmt.Errorf("expected prime: %v received prime: %v", p.blockLink.prime, linkBlocks.prime)
+		return fmt.Errorf("error linking expected prime: %d received prime: %d", p.blockLink.prime, linkBlocks.prime)
 	} else {
 		for i := range linkBlocks.regions {
 			if linkBlocks.regions[i] != (common.Hash{}) && linkBlocks.regions[i] != p.blockLink.regions[i] {
-				return fmt.Errorf("region: %v expected region: %v received region: %v ", i, p.blockLink.regions[i], linkBlocks.regions[i])
+				return fmt.Errorf("error linking  region: %d expected region: %d received region: %d", i, p.blockLink.regions[i], linkBlocks.regions[i])
 			}
 			for j := range linkBlocks.zones[i] {
 				if linkBlocks.zones[i][j] != (common.Hash{}) && linkBlocks.zones[i][j] != p.blockLink.zones[i][j] {
-					return fmt.Errorf("region: %v zone: %v expected zone: %v received zone: %v", i, j, p.blockLink.zones[i][j], linkBlocks.zones[i][j])
-
+					return fmt.Errorf("error linking  region: %d zone: %d expected zone: %d received zone: %d", i, j, p.blockLink.zones[i][j], linkBlocks.zones[i][j])
 				}
 			}
 		}
