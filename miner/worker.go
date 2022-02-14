@@ -18,6 +18,7 @@ package miner
 
 import (
 	"errors"
+	"fmt"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -971,6 +972,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	etxs := make(types.Transactions, 0)
 	externalGasUsed := uint64(0)
 	for _, externalBlock := range externalBlocks {
+		fmt.Println("Worker: Ext Block", externalBlock.Header().Number, externalBlock.Context(), externalBlock.Hash())
 		externalBlock.Receipts().DeriveFields(w.chainConfig, externalBlock.Hash(), externalBlock.Header().Number[externalBlock.Context().Int64()].Uint64(), externalBlock.Transactions())
 		externalGasUsed += uint64(externalBlock.Header().GasUsed[externalBlock.Context().Uint64()])
 		for _, tx := range externalBlock.Transactions() {

@@ -94,6 +94,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 
 	etxs := 0
 	for _, externalBlock := range externalBlocks {
+		fmt.Println("Process: Ext Block", externalBlock.Header().Number, externalBlock.Context(), externalBlock.Hash())
 		externalBlock.Receipts().DeriveFields(p.config, externalBlock.Hash(), externalBlock.Header().Number[externalBlock.Context().Int64()].Uint64(), externalBlock.Transactions())
 		for _, tx := range externalBlock.Transactions() {
 			msg, err := tx.AsMessage(types.MakeSigner(p.config, header.Number[types.QuaiNetworkContext]), header.BaseFee[types.QuaiNetworkContext])
