@@ -786,7 +786,7 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 		}
 
 		// If we find a coincident block for Prime while tracing another Region
-		if difficultyContext < context && steppedBack && crossRegion && context == types.ContextDepth-2 {
+		if difficultyContext < context && steppedBack && ((crossRegion && context == types.ContextDepth-2) || originalContext == 0) {
 			log.Info("TraceBranch: Found Prime coincident block while tracing other Region", "number", header.Number, "context", context, "location", header.Location)
 			break
 		}
