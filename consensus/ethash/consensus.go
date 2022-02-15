@@ -777,9 +777,17 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 			sameLocation = bytes.Equal(header.Location, originalLocation)
 		}
 
+		crossRegion := header.Location[0] != originalLocation[0]
+
 		// If we find any coincident block in a Zone we should stop
 		if difficultyContext < context && steppedBack && context == types.ContextDepth-1 {
 			log.Info("TraceBranch: Found Region coincident block in Zone", "number", header.Number, "context", context, "location", header.Location)
+			break
+		}
+
+		// If we find a coincident block for Prime while tracing another Region
+		if difficultyContext < context && steppedBack && crossRegion && context == types.ContextDepth-2 {
+			log.Info("TraceBranch: Found Prime coincident block while tracing other Region", "number", header.Number, "context", context, "location", header.Location)
 			break
 		}
 
@@ -869,7 +877,7 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 			prevHeader = extBlock.Header()
 		}
 		// In Regions the starting header needs to be broken off for N-1
-		if context < types.ContextDepth-1 && bytes.Equal(startingHeader.Location, prevHeader.Location) && originalContext != 0 {
+		if context < types.ContextDepth-1 && bytes.Equal(startingHeader.Location, prevHeader.Location) && originalContext != 0 && !crossRegion {
 			log.Info("TraceBranch: Stopping with Region N-1", "number", header.Number, "context", context, "location", header.Location, "hash", header.Hash(), "startingLocation", startingHeader.Location, "prevHeaderLocation", prevHeader.Location)
 			break
 		}
