@@ -741,16 +741,9 @@ func (ethash *Ethash) GetStopHash(chain consensus.ChainHeaderReader, difficultyC
 			break
 		}
 
-		if originalContext == 2 {
-			// Check work of the header to get us the Region block to stop on when tracing from Zone
-			difficultyContext, err := ethash.GetDifficultyContext(chain, header, context)
-			if err != nil {
-				log.Warn("Unable to calculate difficulty context")
-			}
-			if difficultyContext == 1 {
-				stopHash = header.Hash()
-				break
-			}
+		if originalContext == 2 && bytes.Equal(startingHeader.Location, prevHeader.Location) {
+			stopHash = header.ParentHash[context]
+			break
 		}
 
 		header = prevHeader
@@ -785,11 +778,14 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 		}
 
 		// If we have reached a coincident block in Zone.
-		if difficultyContext < context && steppedBack {
-			if context == types.ContextDepth-1 || (context == 1 && !sameLocation) {
-				log.Info("TraceBranch: Found coincident block", "number", header.Number, "context", context, "location", header.Location)
-				break
-			}
+		if difficultyContext < context && steppedBack && context == types.ContextDepth-1 {
+			log.Info("TraceBranch: Found coincident block in Zone", "number", header.Number, "context", context, "location", header.Location)
+			break
+		}
+
+		if difficultyContext == 1 && steppedBack && sameLocation {
+			log.Info("TraceBranch: Found same type in Region", "number", header.Number, "context", context, "location", header.Location)
+			break
 		}
 
 		// Starting off in a context above our own
@@ -804,7 +800,9 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 
 		// TraceBranch edge cases when context == 0:
 		// 1. If our header location is not equal to the starting location, go down and trace all blocks for that branch.
-		// 2. If we are running a Prime node or
+		// 2. If we are running a Prime node or we're running a Zone and we're not going into our own Region.
+		// 3. If we're running a Region node and we're in the same location, get the Zone block that is coincident of it.
+		// 4. If we're running a Zone node and we're in the same Location, run a trace. This means we went under Prime.
 		if context == 0 {
 			if header.Location[0] != originalLocation[0] {
 				result, err := ethash.TraceBranch(chain, header, context+1, stopHash, originalContext, originalLocation, logging)
@@ -812,7 +810,7 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 					return nil, err
 				}
 				extBlocks = append(extBlocks, result...)
-			} else if originalContext == 0 || (originalContext == 2 && !sameLocation) {
+			} else if originalContext == 0 || (originalContext == 2 && header.Location[0] != originalLocation[0]) {
 				result, err := ethash.TraceBranch(chain, header, context+1, stopHash, originalContext, originalLocation, logging)
 				if err != nil {
 					return nil, err
@@ -827,16 +825,24 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 				extBlocks = append(extBlocks, result...)
 			} else if originalContext == 2 && sameLocation {
 				// If we are in a Prime block in our own Zone. Get the Region block
-				extBlock, err := chain.GetExternalBlock(header.Hash(), header.Number[context+1].Uint64(), uint64(context)+1)
+				// extBlock, err := chain.GetExternalBlock(header.Hash(), header.Number[context+1].Uint64(), uint64(context)+1)
+				// if err != nil {
+				// 	log.Info("Trace Branch: External Block not found for previous header", "number", header.Number[context+1].Int64(), "context", context+1, "hash", header.Hash())
+				// 	return extBlocks, nil
+				// }
+				// extBlocks = append(extBlocks, extBlock)
+				log.Info("Trace Branch: Running a trace down Region", "number", header.Number[context].Int64(), "context", context, "location", header.Location, "hash", header.ParentHash[context])
+				result, err := ethash.TraceBranch(chain, header, context+1, stopHash, originalContext, originalLocation, logging)
 				if err != nil {
-					log.Info("Trace Branch: External Block not found for previous header", "number", header.Number[context+1].Int64(), "context", context+1, "hash", header.Hash())
-					return extBlocks, nil
+					return nil, err
 				}
-				extBlocks = append(extBlocks, extBlock)
+				extBlocks = append(extBlocks, result...)
 			}
 		}
 
-		if context == 1 && header.ParentHash[context] != stopHash {
+		// TraceBranch edge cases where context == 1
+		// When we are in a Region, go down into the Zones regardless of which node we're running.
+		if context == 1 {
 			result, err := ethash.TraceBranch(chain, header, context+1, stopHash, originalContext, originalLocation, logging)
 			if err != nil {
 				return nil, err
@@ -844,8 +850,9 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 			extBlocks = append(extBlocks, result...)
 		}
 
-		// Stop at the stop hash before iterating downward
-		if header.ParentHash[context] == stopHash || header.Number[context].Cmp(big.NewInt(1)) == 0 {
+		// Stop at the stop hash before iterating downward. Stop hash will not always be relevant in the case
+		// in which Zones or Regions go under Prime to trace its own Region.
+		if (header.ParentHash[context] == stopHash && originalContext != 2) || header.Number[context].Cmp(big.NewInt(1)) == 0 {
 			log.Info("Trace Branch: Stopping on stop hash or num is 1", "number", header.Number[context].Int64(), "context", context, "location", header.Location, "hash", header.ParentHash[context])
 			break
 		}
@@ -862,7 +869,7 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 			prevHeader = extBlock.Header()
 		}
 		// In Regions the starting header needs to be broken off for N-1
-		if context < types.ContextDepth-1 && bytes.Equal(startingHeader.Location, prevHeader.Location) && originalContext != 0 && sameLocation {
+		if context < types.ContextDepth-1 && bytes.Equal(startingHeader.Location, prevHeader.Location) && originalContext != 0 {
 			log.Info("TraceBranch: Stopping with Region N-1", "number", header.Number, "context", context, "location", header.Location, "hash", header.Hash())
 			break
 		}
@@ -890,6 +897,7 @@ func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, heade
 		if err != nil {
 			return nil, err
 		}
+		fmt.Println("StopHash", stopHash)
 		extBlockResult, extBlockErr := ethash.TraceBranch(chain, coincidentHeader, difficultyContext, stopHash, context, header.Location, logging)
 		if extBlockErr != nil {
 			return nil, err
