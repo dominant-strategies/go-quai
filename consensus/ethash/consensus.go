@@ -778,8 +778,15 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 		}
 
 		// If we have reached a coincident block in Zone.
+		// if difficultyContext < context && steppedBack && context == types.ContextDepth-1 {
+		// 	log.Info("TraceBranch: Found coincident block in Zone", "number", header.Number, "context", context, "location", header.Location)
+		// 	break
+		// }
+
+		// If we find any coincident block in a Zone we should stop
+		fmt.Println("header and original", header.Location, originalLocation)
 		if difficultyContext < context && steppedBack && context == types.ContextDepth-1 {
-			log.Info("TraceBranch: Found coincident block in Zone", "number", header.Number, "context", context, "location", header.Location)
+			log.Info("TraceBranch: Found Region coincident block in Zone", "number", header.Number, "context", context, "location", header.Location)
 			break
 		}
 
@@ -869,8 +876,8 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 			prevHeader = extBlock.Header()
 		}
 		// In Regions the starting header needs to be broken off for N-1
-		if context < types.ContextDepth-1 && bytes.Equal(startingHeader.Location, prevHeader.Location) && originalContext != 0 {
-			log.Info("TraceBranch: Stopping with Region N-1", "number", header.Number, "context", context, "location", header.Location, "hash", header.Hash())
+		if context < types.ContextDepth-1 && bytes.Equal(originalLocation, prevHeader.Location) && originalContext != 0 {
+			log.Info("TraceBranch: Stopping with Region N-1", "number", header.Number, "context", context, "location", header.Location, "hash", header.Hash(), "startingLocation", startingHeader.Location, "prevHeaderLocation", prevHeader.Location)
 			break
 		}
 		header = prevHeader
