@@ -784,7 +784,6 @@ func (ethash *Ethash) TraceBranch(chain consensus.ChainHeaderReader, header *typ
 		// }
 
 		// If we find any coincident block in a Zone we should stop
-		fmt.Println("header and original", header.Location, originalLocation)
 		if difficultyContext < context && steppedBack && context == types.ContextDepth-1 {
 			log.Info("TraceBranch: Found Region coincident block in Zone", "number", header.Number, "context", context, "location", header.Location)
 			break
