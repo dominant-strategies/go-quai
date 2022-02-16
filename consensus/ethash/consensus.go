@@ -732,7 +732,13 @@ func (ethash *Ethash) GetStopHash(chain consensus.ChainHeaderReader, originalCon
 			log.Warn("Unable to calculate difficulty context")
 		}
 
-		if difficultyContext == wantedDiffContext && bytes.Equal(startingHeader.Location, header.Location) {
+		sameLocation := false
+		if originalContext == 1 {
+			sameLocation = startingHeader.Location[0] == header.Location[0]
+		} else if originalContext == 2 {
+			sameLocation = bytes.Equal(startingHeader.Location, header.Location)
+		}
+		if difficultyContext == wantedDiffContext && sameLocation {
 			stopHash = header.Hash()
 			break
 		}
