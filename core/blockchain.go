@@ -1863,7 +1863,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			if localTd.Cmp(externTd) < 0 {
 				break
 			}
-			log.Debug("Ignoring already known block", "number", block.Number(), "hash", block.Hash())
+			log.Info("Ignoring already known block", "number", block.Number(), "hash", block.Hash())
 			stats.ignored++
 
 			block, err = it.next()
@@ -1877,7 +1877,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		// `insertChain` while a part of them have higher total difficulty than current
 		// head full block(new pivot point).
 		for block != nil && err == ErrKnownBlock {
-			log.Debug("Writing previously known block", "number", block.Number(), "hash", block.Hash())
+			log.Info("Writing previously known block", "number", block.Number(), "hash", block.Hash())
 			if err := bc.writeKnownBlock(block); err != nil {
 				return it.index, err
 			}

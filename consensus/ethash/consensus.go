@@ -907,6 +907,7 @@ func (ethash *Ethash) RegionTraceBranch(chain consensus.ChainHeaderReader, heade
 func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, header *types.Header, logging bool) ([]*types.ExternalBlock, error) {
 	context := chain.Config().Context // Index that node is currently at
 	externalBlocks := make([]*types.ExternalBlock, 0)
+	log.Info("GetExternalBlocks: Getting trace for block", "num", header.Number, "context", context, "hash", header.Hash())
 
 	// Do not run on block 1
 	if header.Number[context].Cmp(big.NewInt(1)) > 0 {
@@ -920,6 +921,7 @@ func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, heade
 
 		// Get the Prime stopHash to be used in the Prime context. Go on to trace Prime once.
 		primeStopHash := coincidentHeader.ParentHash[0]
+		fmt.Println("primeStopHash1", primeStopHash)
 		if context == 0 {
 			extBlockResult, extBlockErr := ethash.PrimeTraceBranch(chain, coincidentHeader, difficultyContext, primeStopHash, context, header.Location)
 			if extBlockErr != nil {
@@ -932,8 +934,10 @@ func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, heade
 		// a Region block might not yet have been found. Scenario: [2, 2, 2] mined before [1, 2, 2].
 		if context == 1 || context == 2 {
 			primeStopHash, primeNum := ethash.GetStopHash(chain, context, 0, coincidentHeader)
+			fmt.Println("primeStopHash2", primeStopHash)
 
 			regionStopHash, regionNum := ethash.GetStopHash(chain, context, 1, coincidentHeader)
+			fmt.Println("regionStopHash1", regionStopHash)
 			if difficultyContext == 0 {
 				extBlockResult, extBlockErr := ethash.PrimeTraceBranch(chain, coincidentHeader, difficultyContext, primeStopHash, context, header.Location)
 				if extBlockErr != nil {
@@ -944,6 +948,7 @@ func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, heade
 			// If our Prime stopHash comes before our Region stopHash.
 			if primeNum < regionNum {
 				regionStopHash = primeStopHash
+				fmt.Println("regionStopHash2", regionStopHash)
 			}
 			// If we have a Region block, trace it.
 			if difficultyContext < 2 {

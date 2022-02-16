@@ -466,7 +466,6 @@ func (p *StateProcessor) checkExternalBlockLink(externalBlocks []*types.External
 		regions: make([]common.Hash, 3),
 		zones:   [][]common.Hash{make([]common.Hash, 3), make([]common.Hash, 3), make([]common.Hash, 3)},
 	}
-	fmt.Println("Checking External Block Link")
 
 	// Reverse ext block set to get the last applied block order
 	// if len(externalBlocks) > 0 {
@@ -499,12 +498,12 @@ func (p *StateProcessor) checkExternalBlockLink(externalBlocks []*types.External
 	} else {
 		for i := range linkBlocks.regions {
 			if linkBlocks.regions[i] != (common.Hash{}) && linkBlocks.regions[i] != p.blockLink.regions[i] {
-				fmt.Println("Error linking external blocks: have region: ", p.blockLink.regions[i], "want region: ", linkBlocks.regions[i])
+				fmt.Println("Error linking external blocks:", "location", i-1, "have region: ", p.blockLink.regions[i], "want region: ", linkBlocks.regions[i])
 				return fmt.Errorf("unable to link external blocks in region")
 			}
 			for j := range linkBlocks.zones[i] {
 				if linkBlocks.zones[i][j] != (common.Hash{}) && linkBlocks.zones[i][j] != p.blockLink.zones[i][j] {
-					fmt.Println("Error linking external blocks: have zone: ", p.blockLink.zones[i][j], "want zone: ", linkBlocks.zones[i][j])
+					fmt.Println("Error linking external blocks:", "location", i-1, j-1, "have zone: ", p.blockLink.zones[i][j], "want zone: ", linkBlocks.zones[i][j])
 					return fmt.Errorf("unable to link external blocks in zone")
 				}
 			}
