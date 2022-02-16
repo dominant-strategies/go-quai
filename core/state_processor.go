@@ -88,7 +88,6 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	cpyExtBlocks := make([]*types.ExternalBlock, len(externalBlocks))
 	copy(cpyExtBlocks, externalBlocks)
 	linkErr := p.checkExternalBlockLink(cpyExtBlocks)
-
 	if linkErr != nil {
 		return nil, nil, 0, nil, err
 	}
@@ -395,6 +394,7 @@ func (p *StateProcessor) SetLinkBlocksToLastApplied(externalBlocks []*types.Exte
 		startingLinkBlocks.zones[i] = make([]common.Hash, len(linkBlocks.zones[i]))
 		copy(startingLinkBlocks.zones[i], linkBlocks.zones[i])
 	}
+	fmt.Println("Setting Link Blocks to Last Applied", len(externalBlocks))
 
 	// iterate through the extBlocks, updated the index with the last applied external blocks.
 	for _, lastAppliedBlock := range externalBlocks {
@@ -405,11 +405,13 @@ func (p *StateProcessor) SetLinkBlocksToLastApplied(externalBlocks []*types.Exte
 				linkBlocks.prime = lastAppliedBlock.Hash()
 			}
 		case 1:
+			fmt.Println("Apply Link Region:", linkBlocks.regions[lastAppliedBlock.Header().Location[0]-1], startingLinkBlocks.regions[lastAppliedBlock.Header().Location[0]-1])
 			if linkBlocks.regions[lastAppliedBlock.Header().Location[0]-1] == startingLinkBlocks.regions[lastAppliedBlock.Header().Location[0]-1] {
 				fmt.Println("setting last applied region:", lastAppliedBlock.Header().Number, lastAppliedBlock.Header().Location, lastAppliedBlock.Context(), lastAppliedBlock.Hash())
 				linkBlocks.regions[lastAppliedBlock.Header().Location[0]-1] = lastAppliedBlock.Hash()
 			}
 		case 2:
+			fmt.Println("Apply Link Zone:", linkBlocks.zones[lastAppliedBlock.Header().Location[0]-1][lastAppliedBlock.Header().Location[1]-1], startingLinkBlocks.zones[lastAppliedBlock.Header().Location[0]-1][lastAppliedBlock.Header().Location[1]-1])
 			if linkBlocks.zones[lastAppliedBlock.Header().Location[0]-1][lastAppliedBlock.Header().Location[1]-1] == startingLinkBlocks.zones[lastAppliedBlock.Header().Location[0]-1][lastAppliedBlock.Header().Location[1]-1] {
 				fmt.Println("setting last applied zone:", lastAppliedBlock.Header().Number, lastAppliedBlock.Header().Location, lastAppliedBlock.Context(), lastAppliedBlock.Hash())
 				linkBlocks.zones[lastAppliedBlock.Header().Location[0]-1][lastAppliedBlock.Header().Location[1]-1] = lastAppliedBlock.Hash()
@@ -428,6 +430,7 @@ func (p *StateProcessor) checkExternalBlockLink(externalBlocks []*types.External
 		regions: make([]common.Hash, 3),
 		zones:   [][]common.Hash{make([]common.Hash, 3), make([]common.Hash, 3), make([]common.Hash, 3)},
 	}
+	fmt.Println("Checking External Block Link")
 
 	// Reverse ext block set to get the last applied block order
 	// if len(externalBlocks) > 0 {

@@ -119,10 +119,12 @@ type Engine interface {
 	GetCoincidentHeader(chain ChainHeaderReader, context int, header *types.Header) (*types.Header, int)
 
 	// GetStopHash retrieves the stop hash for tracing of blocks in a trace branch
-	GetStopHash(chain ChainHeaderReader, difficultyContext int, originalContext int, startingHeader *types.Header) (common.Hash, error)
+	GetStopHash(chain ChainHeaderReader, difficultyContext int, originalContext int, startingHeader *types.Header) (common.Hash, int)
 
 	// TraceBranch recursively traces branches to find
-	TraceBranch(chain ChainHeaderReader, header *types.Header, context int, stopHash common.Hash, originalContext int, originalLocation []byte, logging bool) ([]*types.ExternalBlock, error)
+	PrimeTraceBranch(chain ChainHeaderReader, header *types.Header, context int, stopHash common.Hash, originalContext int, originalLocation []byte) ([]*types.ExternalBlock, error)
+
+	RegionTraceBranch(chain ChainHeaderReader, header *types.Header, context int, stopHash common.Hash, originalContext int, originalLocation []byte) ([]*types.ExternalBlock, error)
 
 	// Seal generates a new sealing request for the given input block and pushes
 	// the result into the given channel.

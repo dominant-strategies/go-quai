@@ -2663,15 +2663,37 @@ func (bc *BlockChain) GetExternalBlocks(header *types.Header) ([]*types.External
 	if header.Number[context].Cmp(big.NewInt(0)) > 0 {
 		coincidentHeader, difficultyContext := bc.engine.GetCoincidentHeader(bc, context, header)
 
-		stopHash, err := bc.engine.GetStopHash(bc, difficultyContext, context, coincidentHeader)
-		if err != nil {
-			return nil, err
+		primeStopHash, primeNum := bc.engine.GetStopHash(bc, context, 0, coincidentHeader)
+
+		fmt.Println("PrimeStopHash", primeStopHash)
+		if context == 0 {
+			extBlockResult, extBlockErr := bc.engine.PrimeTraceBranch(bc, coincidentHeader, difficultyContext, primeStopHash, context, header.Location)
+			if extBlockErr != nil {
+				return nil, extBlockErr
+			}
+			externalBlocks = append(externalBlocks, extBlockResult...)
 		}
-		extBlockResult, extBlockErr := bc.engine.TraceBranch(bc, coincidentHeader, difficultyContext, stopHash, context, header.Location, false)
-		if extBlockErr != nil {
-			return nil, err
+
+		if context == 1 || context == 2 {
+			regionStopHash, regionNum := bc.engine.GetStopHash(bc, context, 1, coincidentHeader)
+			fmt.Println("RegionStopHash", regionStopHash)
+			if difficultyContext == 0 {
+				extBlockResult, extBlockErr := bc.engine.PrimeTraceBranch(bc, coincidentHeader, difficultyContext, primeStopHash, context, header.Location)
+				if extBlockErr != nil {
+					return nil, extBlockErr
+				}
+				externalBlocks = append(externalBlocks, extBlockResult...)
+			}
+			// If our Prime stopHash comes before our Region stopHash
+			if primeNum < regionNum {
+				regionStopHash = primeStopHash
+			}
+			extBlockResult, extBlockErr := bc.engine.RegionTraceBranch(bc, coincidentHeader, 1, regionStopHash, context, header.Location)
+			if extBlockErr != nil {
+				return nil, extBlockErr
+			}
+			externalBlocks = append(externalBlocks, extBlockResult...)
 		}
-		externalBlocks = append(externalBlocks, extBlockResult...)
 	}
 
 	return externalBlocks, nil
