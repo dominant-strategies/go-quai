@@ -115,6 +115,9 @@ type Engine interface {
 	// GetExternalBlocks retrieves all valid external blocks from external chains
 	GetExternalBlocks(chain ChainHeaderReader, header *types.Header, logging bool) ([]*types.ExternalBlock, error)
 
+	// GetLinkExternalBlocks retrieves all requried blocks for valid linking
+	GetLinkExternalBlocks(chain ChainHeaderReader, header *types.Header, logging bool) ([]*types.ExternalBlock, error)
+
 	// GetCoincidentHeader retrieves the furthest coincident header back
 	GetCoincidentHeader(chain ChainHeaderReader, context int, header *types.Header) (*types.Header, int)
 

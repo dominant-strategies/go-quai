@@ -2078,9 +2078,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 				"elapsed", common.PrettyDuration(time.Since(start)),
 				"root", block.Root())
 
-			// Update array with latest applied externalBlocks.
-			bc.processor.SetLinkBlocksToLastApplied(externalBlocks)
-
 			lastCanon = block
 
 			// Only count canonical blocks for GC processing time

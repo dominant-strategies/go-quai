@@ -79,19 +79,31 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	blockContext := NewEVMBlockContext(header, p.bc, nil)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
 
+	linkExtBlocks, err := p.engine.GetLinkExternalBlocks(p.bc, header, true)
+	if err != nil {
+		return nil, nil, uint64(0), nil, err
+	}
+
+	if len(linkExtBlocks) > 0 && types.QuaiNetworkContext == 2 {
+		cpyExtBlocks := make([]*types.ExternalBlock, len(linkExtBlocks))
+		copy(cpyExtBlocks, linkExtBlocks)
+		linkErr := p.checkExternalBlockLink(cpyExtBlocks)
+		if linkErr != nil {
+			log.Warn("Error linking during process: ", "err", linkErr)
+			return nil, nil, 0, nil, err
+		}
+
+		for _, linkBlock := range linkExtBlocks {
+			fmt.Println("LinkBlock", linkBlock.Header().Number, linkBlock.Context(), linkBlock.Header().Location, linkBlock.Hash())
+		}
+		p.SetLinkBlocksToLastApplied(linkExtBlocks)
+	}
+
 	// Gather external blocks and apply transactions, need to trace own local external block cache based on cache to validate.
 	i := 0
 	externalBlocks, err := p.engine.GetExternalBlocks(p.bc, header, true)
 	if err != nil {
 		return nil, nil, uint64(0), nil, err
-	}
-
-	cpyExtBlocks := make([]*types.ExternalBlock, len(externalBlocks))
-	copy(cpyExtBlocks, externalBlocks)
-	linkErr := p.checkExternalBlockLink(cpyExtBlocks)
-	if linkErr != nil {
-		log.Warn("Error linking during process: ", "err", linkErr)
-		return nil, nil, 0, nil, err
 	}
 
 	etxs := 0
@@ -479,17 +491,17 @@ func (p *StateProcessor) checkExternalBlockLink(externalBlocks []*types.External
 		switch context {
 		case 0:
 			linkedPreviousHash := externalBlock.Header().ParentHash[externalBlock.Context().Int64()]
-			fmt.Println("Prime: Setting linked previous hash", externalBlock.Header().Number, externalBlock.Header().Location, externalBlock.Hash(), linkedPreviousHash)
+			fmt.Println("Prime: Setting linked hash", externalBlock.Header().Number, externalBlock.Header().Location, externalBlock.Hash(), linkedPreviousHash)
 			linkBlocks.prime = linkedPreviousHash
 
 		case 1:
 			linkedPreviousHash := externalBlock.Header().ParentHash[externalBlock.Context().Int64()]
-			fmt.Println("Region: Setting linked previous hash", externalBlock.Header().Number, externalBlock.Header().Location, externalBlock.Hash(), linkedPreviousHash)
+			fmt.Println("Region: Setting linked hash", externalBlock.Header().Number, externalBlock.Header().Location, externalBlock.Hash(), linkedPreviousHash)
 			linkBlocks.regions[externalBlock.Header().Location[0]-1] = linkedPreviousHash
 
 		case 2:
 			linkedPreviousHash := externalBlock.Header().ParentHash[externalBlock.Context().Int64()]
-			fmt.Println("Zone: Setting linked previous hash", externalBlock.Header().Number, externalBlock.Header().Location, externalBlock.Hash(), linkedPreviousHash)
+			fmt.Println("Zone: Setting linked hash:", externalBlock.Header().Number, externalBlock.Header().Location, externalBlock.Hash(), linkedPreviousHash)
 			linkBlocks.zones[externalBlock.Header().Location[0]-1][externalBlock.Header().Location[1]-1] = linkedPreviousHash
 		}
 	}

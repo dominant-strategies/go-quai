@@ -596,6 +596,11 @@ func (c *Clique) GetExternalBlocks(chain consensus.ChainHeaderReader, header *ty
 	return make([]*types.ExternalBlock, 0), nil
 }
 
+// GetExternalBlocks traces all available branches to find external blocks
+func (c *Clique) GetLinkExternalBlocks(chain consensus.ChainHeaderReader, header *types.Header, logging bool) ([]*types.ExternalBlock, error) {
+	return make([]*types.ExternalBlock, 0), nil
+}
+
 // GetCoincidentHeader retrieves the furthest coincident header back
 func (c *Clique) GetCoincidentHeader(chain consensus.ChainHeaderReader, context int, header *types.Header) (*types.Header, int) {
 	return nil, 0
