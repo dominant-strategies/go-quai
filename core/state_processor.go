@@ -83,7 +83,10 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	if err != nil {
 		return nil, nil, uint64(0), nil, err
 	}
-
+	fmt.Println("Len of linkBlocks", len(linkExtBlocks))
+	for _, linkBlock := range linkExtBlocks {
+		fmt.Println("LinkBlock", linkBlock.Header().Number, linkBlock.Context(), linkBlock.Header().Location, linkBlock.Hash())
+	}
 	if len(linkExtBlocks) > 0 && types.QuaiNetworkContext == 2 {
 		cpyExtBlocks := make([]*types.ExternalBlock, len(linkExtBlocks))
 		copy(cpyExtBlocks, linkExtBlocks)
@@ -93,9 +96,6 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 			return nil, nil, 0, nil, err
 		}
 
-		for _, linkBlock := range linkExtBlocks {
-			fmt.Println("LinkBlock", linkBlock.Header().Number, linkBlock.Context(), linkBlock.Header().Location, linkBlock.Hash())
-		}
 		p.SetLinkBlocksToLastApplied(linkExtBlocks)
 	}
 
