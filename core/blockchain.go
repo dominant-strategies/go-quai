@@ -2010,6 +2010,15 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		}
 		// Process block using the parent state as reference point
 		substart := time.Now()
+
+		// If in Prime or Region, take to see if we have already included the hash in the lower level.
+		// TODO: #179 Extend CheckHashInclusion to if the hash was ever included in the chain, not just the parent.
+		err = bc.CheckHashInclusion(block.Header(), parent)
+		if err != nil {
+			return it.index, err
+		}
+
+		// Process our block and retrieve external blocks.
 		receipts, logs, usedGas, externalBlocks, err := bc.processor.Process(block, statedb, bc.vmConfig)
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
@@ -2598,6 +2607,26 @@ func (bc *BlockChain) GetHeader(hash common.Hash, number uint64) *types.Header {
 	}
 
 	return bc.hc.GetHeader(hash, number)
+}
+
+// GetHeader retrieves a block header from the database by hash and number,
+// caching it if found.
+func (bc *BlockChain) CheckHashInclusion(header *types.Header, parent *types.Header) error {
+	if types.QuaiNetworkContext < 1 {
+		if header.ParentHash[1] == parent.ParentHash[1] {
+			fmt.Println("Region hash already included:", header.ParentHash[1], parent.ParentHash[1])
+			return fmt.Errorf("error subordinate hash already included in parent")
+		}
+	}
+
+	if types.QuaiNetworkContext < 2 {
+		if header.ParentHash[2] == parent.ParentHash[2] {
+			fmt.Println("Zone hash already included:", header.ParentHash[2], parent.ParentHash[2])
+			return fmt.Errorf("error subordinate hash already included in parent")
+		}
+	}
+
+	return nil
 }
 
 // GetHeaderByHash retrieves a block header from the database by hash, caching it if
