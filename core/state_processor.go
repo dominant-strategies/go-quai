@@ -324,7 +324,7 @@ func (p *StateProcessor) GenerateExtBlockLink() {
 			copy(tempLinkBlocks.zones[i], linkBlocks.zones[i])
 		}
 
-		tempLinkBlocks = p.SetLinkBlocksToLastApplied(extBlocks, tempLinkBlocks)
+		tempLinkBlocks = p.generateLinkBlocksLastApplied(extBlocks, tempLinkBlocks)
 
 		// If our tempLink is new and our starting link hasn't changed.
 		if tempLinkBlocks.prime != linkBlocks.prime && startingLinkBlocks.prime == linkBlocks.prime {
@@ -381,9 +381,8 @@ func (p *StateProcessor) GenerateExtBlockLink() {
 	p.blockLink = linkBlocks
 }
 
-// SetLinkBlocksToLastApplied will update the passed in linkBlocks struct with the latest applied external blocks.
-func (p *StateProcessor) SetLinkBlocksToLastApplied(externalBlocks []*types.ExternalBlock, linkBlocks *extBlockLink) *extBlockLink {
-
+// generateLinkBlocksLastApplied will update the passed in linkBlocks struct with the latest applied external blocks.
+func (p *StateProcessor) generateLinkBlocksLastApplied(externalBlocks []*types.ExternalBlock, linkBlocks *extBlockLink) *extBlockLink {
 	// Keep track of what the method started with.
 	// Deep copy the struct.
 	startingLinkBlocks := &extBlockLink{
@@ -419,6 +418,44 @@ func (p *StateProcessor) SetLinkBlocksToLastApplied(externalBlocks []*types.Exte
 	}
 
 	return linkBlocks
+}
+
+// SetLinkBlocksToLastApplied will update the passed in linkBlocks struct with the latest applied external blocks.
+func (p *StateProcessor) SetLinkBlocksToLastApplied(externalBlocks []*types.ExternalBlock) {
+
+	// Keep track of what the method started with.
+	// Deep copy the struct.
+	startingLinkBlocks := &extBlockLink{
+		prime:   p.blockLink.prime,
+		regions: make([]common.Hash, len(p.blockLink.regions)),
+		zones:   make([][]common.Hash, 3),
+	}
+	copy(startingLinkBlocks.regions, p.blockLink.regions)
+	for i := range p.blockLink.zones {
+		startingLinkBlocks.zones[i] = make([]common.Hash, len(p.blockLink.zones[i]))
+		copy(startingLinkBlocks.zones[i], p.blockLink.zones[i])
+	}
+
+	// iterate through the extBlocks, updated the index with the last applied external blocks.
+	for _, lastAppliedBlock := range externalBlocks {
+		switch lastAppliedBlock.Context().Int64() {
+		case 0:
+			if p.blockLink.prime == startingLinkBlocks.prime {
+				fmt.Println("setting last applied prime:", lastAppliedBlock.Header().Number, lastAppliedBlock.Header().Location, lastAppliedBlock.Context(), lastAppliedBlock.Hash())
+				p.blockLink.prime = lastAppliedBlock.Hash()
+			}
+		case 1:
+			if p.blockLink.regions[lastAppliedBlock.Header().Location[0]-1] == startingLinkBlocks.regions[lastAppliedBlock.Header().Location[0]-1] {
+				fmt.Println("setting last applied region:", lastAppliedBlock.Header().Number, lastAppliedBlock.Header().Location, lastAppliedBlock.Context(), lastAppliedBlock.Hash())
+				p.blockLink.regions[lastAppliedBlock.Header().Location[0]-1] = lastAppliedBlock.Hash()
+			}
+		case 2:
+			if p.blockLink.zones[lastAppliedBlock.Header().Location[0]-1][lastAppliedBlock.Header().Location[1]-1] == startingLinkBlocks.zones[lastAppliedBlock.Header().Location[0]-1][lastAppliedBlock.Header().Location[1]-1] {
+				fmt.Println("setting last applied zone:", lastAppliedBlock.Header().Number, lastAppliedBlock.Header().Location, lastAppliedBlock.Context(), lastAppliedBlock.Hash())
+				p.blockLink.zones[lastAppliedBlock.Header().Location[0]-1][lastAppliedBlock.Header().Location[1]-1] = lastAppliedBlock.Hash()
+			}
+		}
+	}
 }
 
 func (p *StateProcessor) checkExternalBlockLink(externalBlocks []*types.ExternalBlock) error {
@@ -473,9 +510,6 @@ func (p *StateProcessor) checkExternalBlockLink(externalBlocks []*types.External
 			}
 		}
 	}
-
-	// Update array with latest applied externalBlocks.
-	p.blockLink = p.SetLinkBlocksToLastApplied(externalBlocks, p.blockLink)
 
 	return nil
 }
