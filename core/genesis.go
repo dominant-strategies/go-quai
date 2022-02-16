@@ -175,6 +175,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 		if err != nil {
 			return genesis.Config, common.Hash{}, err
 		}
+		log.Info("Genesis hash", "hash", block.Hash())
 		return genesis.Config, block.Hash(), nil
 	}
 	// We have the genesis block in database(perhaps in ancient database)
@@ -352,7 +353,7 @@ func MainnetPrimeGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.MainnetPrimeChainConfig,
 		Number:     0,
-		Nonce:      44,
+		Nonce:      48,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
 		GasLimit:   5000000,
 		Difficulty: big.NewInt(16048576),
@@ -365,7 +366,7 @@ func MainnetRegionGenesisBlock(regionParams *params.ChainConfig) *Genesis {
 	return &Genesis{
 		Config:     regionParams,
 		Number:     0,
-		Nonce:      44,
+		Nonce:      48,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
 		GasLimit:   1600000,
 		Difficulty: big.NewInt(4048576),
@@ -378,7 +379,7 @@ func MainnetZoneGenesisBlock(zoneParams *params.ChainConfig) *Genesis {
 	return &Genesis{
 		Config:     zoneParams,
 		Number:     0,
-		Nonce:      44,
+		Nonce:      48,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
 		GasLimit:   500000,
 		Difficulty: big.NewInt(1048576),
@@ -389,7 +390,7 @@ func MainnetZoneGenesisBlock(zoneParams *params.ChainConfig) *Genesis {
 // RopstenPrimeGenesisBlock returns the Quai Network ropsten prime genesis block.
 func RopstenPrimeGenesisBlock() *Genesis {
 	return &Genesis{
-		Config:     params.MainnetPrimeChainConfig,
+		Config:     params.RopstenPrimeChainConfig,
 		Number:     0,
 		Nonce:      11,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),

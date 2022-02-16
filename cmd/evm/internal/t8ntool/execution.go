@@ -283,14 +283,14 @@ func calcDifficulty(config *params.ChainConfig, number, currentTime, parentTime 
 	parentDifficulty *big.Int, parentUncleHash common.Hash) *big.Int {
 	uncleHash := parentUncleHash
 	if uncleHash == (common.Hash{}) {
-		uncleHash = types.EmptyUncleHash
+		uncleHash = types.EmptyUncleHash[0]
 	}
 	parent := &types.Header{
-		ParentHash: common.Hash{},
-		UncleHash:  uncleHash,
-		Difficulty: parentDifficulty,
-		Number:     new(big.Int).SetUint64(number - 1),
+		ParentHash: []common.Hash{},
+		UncleHash:  []common.Hash{uncleHash},
+		Difficulty: []*big.Int{parentDifficulty},
+		Number:     []*big.Int{new(big.Int).SetUint64(number - 1)},
 		Time:       parentTime,
 	}
-	return ethash.CalcDifficulty(config, currentTime, parent)
+	return ethash.CalcDifficulty(config, currentTime, parent, 0)
 }

@@ -167,14 +167,14 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 		}
 		// If we have the Rinkeby testnet, hard code the chain configs too
 		if config.EthereumGenesis == RinkebyGenesis() {
-			genesis.Config = params.RinkebyChainConfig
+			genesis.Config = params.RopstenPrimeChainConfig
 			if config.EthereumNetworkID == 1 {
 				config.EthereumNetworkID = 4
 			}
 		}
 		// If we have the Goerli testnet, hard code the chain configs too
 		if config.EthereumGenesis == GoerliGenesis() {
-			genesis.Config = params.GoerliChainConfig
+			genesis.Config = params.RopstenPrimeChainConfig
 			if config.EthereumNetworkID == 1 {
 				config.EthereumNetworkID = 5
 			}
