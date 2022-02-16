@@ -91,7 +91,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	linkErr := p.checkExternalBlockLink(cpyExtBlocks)
 	if linkErr != nil {
 		log.Warn("Error linking during process: ", "err", linkErr)
-		// return nil, nil, 0, nil, err
+		return nil, nil, 0, nil, err
 	}
 
 	etxs := 0
