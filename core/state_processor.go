@@ -495,17 +495,17 @@ func (p *StateProcessor) checkExternalBlockLink(externalBlocks []*types.External
 	// Verify that the externalBlocks provided link with previous coincident blocks.
 	if linkBlocks.prime != (common.Hash{}) && linkBlocks.prime != p.blockLink.prime {
 		fmt.Println("Error linking external blocks: have prime: ", p.blockLink.prime, "want prime: ", linkBlocks.prime)
-		return fmt.Errorf("error linking external blocks: prev prime %d parentHash %v", p.blockLink.prime, linkBlocks.prime)
+		return fmt.Errorf("unable to link external blocks in prime")
 	} else {
 		for i := range linkBlocks.regions {
 			if linkBlocks.regions[i] != (common.Hash{}) && linkBlocks.regions[i] != p.blockLink.regions[i] {
 				fmt.Println("Error linking external blocks: have region: ", p.blockLink.regions[i], "want region: ", linkBlocks.regions[i])
-				return fmt.Errorf("error linking external blocks: prev region %d parentHash %v", p.blockLink.regions[i], linkBlocks.regions[i])
+				return fmt.Errorf("unable to link external blocks in region")
 			}
 			for j := range linkBlocks.zones[i] {
 				if linkBlocks.zones[i][j] != (common.Hash{}) && linkBlocks.zones[i][j] != p.blockLink.zones[i][j] {
 					fmt.Println("Error linking external blocks: have zone: ", p.blockLink.zones[i][j], "want zone: ", linkBlocks.zones[i][j])
-					return fmt.Errorf("error linking external blocks: prev zone %d parentHash %v", p.blockLink.zones[i][j], linkBlocks.zones[i][j])
+					return fmt.Errorf("unable to link external blocks in zone")
 				}
 			}
 		}
