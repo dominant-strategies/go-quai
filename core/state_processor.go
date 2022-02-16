@@ -19,8 +19,9 @@ package core
 import (
 	"errors"
 	"fmt"
-	"log"
 	"math/big"
+
+	"github.com/spruce-solutions/go-quai/log"
 
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/consensus"
@@ -89,7 +90,8 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	copy(cpyExtBlocks, externalBlocks)
 	linkErr := p.checkExternalBlockLink(cpyExtBlocks)
 	if linkErr != nil {
-		return nil, nil, 0, nil, err
+		log.Warn("Error linking during process: ", "err", linkErr)
+		// return nil, nil, 0, nil, err
 	}
 
 	etxs := 0
@@ -306,7 +308,7 @@ func (p *StateProcessor) GenerateExtBlockLink() {
 		// Populate the linkBlocks struct with the block hashes of the last applied ext block of that chain.
 		extBlocks, err := p.engine.GetExternalBlocks(p.bc, currentHeader, true)
 		if err != nil {
-			log.Fatal("GenerateExtBlockLink:", "err", err)
+			log.Error("GenerateExtBlockLink:", "err", err)
 		}
 		// Keep track of what the method started with.
 		// Deep copy the struct.
@@ -394,7 +396,6 @@ func (p *StateProcessor) SetLinkBlocksToLastApplied(externalBlocks []*types.Exte
 		startingLinkBlocks.zones[i] = make([]common.Hash, len(linkBlocks.zones[i]))
 		copy(startingLinkBlocks.zones[i], linkBlocks.zones[i])
 	}
-	fmt.Println("Setting Link Blocks to Last Applied", len(externalBlocks))
 
 	// iterate through the extBlocks, updated the index with the last applied external blocks.
 	for _, lastAppliedBlock := range externalBlocks {
@@ -405,13 +406,11 @@ func (p *StateProcessor) SetLinkBlocksToLastApplied(externalBlocks []*types.Exte
 				linkBlocks.prime = lastAppliedBlock.Hash()
 			}
 		case 1:
-			fmt.Println("Apply Link Region:", linkBlocks.regions[lastAppliedBlock.Header().Location[0]-1], startingLinkBlocks.regions[lastAppliedBlock.Header().Location[0]-1])
 			if linkBlocks.regions[lastAppliedBlock.Header().Location[0]-1] == startingLinkBlocks.regions[lastAppliedBlock.Header().Location[0]-1] {
 				fmt.Println("setting last applied region:", lastAppliedBlock.Header().Number, lastAppliedBlock.Header().Location, lastAppliedBlock.Context(), lastAppliedBlock.Hash())
 				linkBlocks.regions[lastAppliedBlock.Header().Location[0]-1] = lastAppliedBlock.Hash()
 			}
 		case 2:
-			fmt.Println("Apply Link Zone:", linkBlocks.zones[lastAppliedBlock.Header().Location[0]-1][lastAppliedBlock.Header().Location[1]-1], startingLinkBlocks.zones[lastAppliedBlock.Header().Location[0]-1][lastAppliedBlock.Header().Location[1]-1])
 			if linkBlocks.zones[lastAppliedBlock.Header().Location[0]-1][lastAppliedBlock.Header().Location[1]-1] == startingLinkBlocks.zones[lastAppliedBlock.Header().Location[0]-1][lastAppliedBlock.Header().Location[1]-1] {
 				fmt.Println("setting last applied zone:", lastAppliedBlock.Header().Number, lastAppliedBlock.Header().Location, lastAppliedBlock.Context(), lastAppliedBlock.Hash())
 				linkBlocks.zones[lastAppliedBlock.Header().Location[0]-1][lastAppliedBlock.Header().Location[1]-1] = lastAppliedBlock.Hash()
