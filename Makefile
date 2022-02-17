@@ -171,7 +171,7 @@ ifeq ($(QUAI_MINING),true)
 endif
 
 ifeq ($(BOOTNODE),true)
-	BASE_COMMAND += --nodekey bootnode.key --ws.origins $(WS_ORIG)
+	BASE_COMMAND += --nodekey bootnode.key --ws.origins $(WS_ORIG) --http.corsdomain $(HTTP_CORSDOMAIN)
 endif
 
 run-full-node:
