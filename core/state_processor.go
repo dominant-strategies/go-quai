@@ -80,22 +80,22 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
 
 	// Get the linkBlocks and check linkage to previous external blocks.
-	linkExtBlocks, err := p.bc.GetExternalBlocks(header)
-	if err != nil {
-		return nil, nil, uint64(0), nil, err
-	}
+	// linkExtBlocks, err := p.bc.GetExternalBlocks(header)
+	// if err != nil {
+	// 	return nil, nil, uint64(0), nil, err
+	// }
 
-	if len(linkExtBlocks) > 0 {
-		cpyExtBlocks := make([]*types.ExternalBlock, len(linkExtBlocks))
-		copy(cpyExtBlocks, linkExtBlocks)
-		linkErr := p.checkExternalBlockLink(cpyExtBlocks)
-		if linkErr != nil {
-			log.Warn("Error linking during process: ", "err", linkErr)
-			return nil, nil, 0, nil, err
-		}
+	// if len(linkExtBlocks) > 0 {
+	// 	cpyExtBlocks := make([]*types.ExternalBlock, len(linkExtBlocks))
+	// 	copy(cpyExtBlocks, linkExtBlocks)
+	// 	linkErr := p.checkExternalBlockLink(cpyExtBlocks)
+	// 	if linkErr != nil {
+	// 		log.Warn("Error linking during process: ", "err", linkErr)
+	// 		return nil, nil, 0, nil, err
+	// 	}
 
-		p.SetLinkBlocksToLastApplied(linkExtBlocks)
-	}
+	// 	p.SetLinkBlocksToLastApplied(linkExtBlocks)
+	// }
 
 	// Gather external blocks and apply transactions, need to trace own local external block cache based on cache to validate.
 	i := 0
