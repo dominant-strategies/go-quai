@@ -760,7 +760,7 @@ func (ethash *Ethash) PrimeTraceBranch(chain consensus.ChainHeaderReader, header
 
 		// If we have are stepping into a Region from Prime ensure it is now our original location.
 		if context < types.ContextDepth-1 {
-			if (header.Location[0] != originalLocation[0] && originalContext > 1) || originalContext == 0 {
+			if (header.Location[0] != originalLocation[0] && originalContext > 0) || originalContext == 0 {
 				log.Info("Trace Branch: Going down into trace fromPrime", "number", header.Number, "context", context, "location", header.Location, "hash", header.Hash())
 				result, err := ethash.PrimeTraceBranch(chain, header, context+1, stopHash, originalContext, originalLocation)
 				if err != nil {
@@ -966,83 +966,10 @@ func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, heade
 	}
 
 	log.Info("GetExternalBlocks: Length of external blocks", "len", len(externalBlocks), "time", time.Since(start))
-	for _, extexternalBlock := range externalBlocks {
-		fmt.Println("GetExternalBlocks:", extexternalBlock.Header().Number, extexternalBlock.Header().Location, extexternalBlock.Context(), extexternalBlock.Hash())
-	}
-
-	// Swap order of external blocks
-	// if len(externalBlocks) > 0 {
-	// 	for i, j := 0, len(externalBlocks)-1; i < j; i, j = i+1, j-1 {
-	// 		externalBlocks[i], externalBlocks[j] = externalBlocks[j], externalBlocks[i]
-	// 	}
-	// }
-
-	// TODO: Impelement queue here, remove the above check for N+1.
-	// log.Info("GetExternalBlocks: Adding into Queue:", "len", len(externalBlocks))
-	// return chain.QueueAndRetrieveExtBlocks(externalBlocks, header)
-	return externalBlocks, nil
-}
-
-// GetExternalBlocks traces all available branches to find external blocks
-func (ethash *Ethash) GetLinkExternalBlocks(chain consensus.ChainHeaderReader, header *types.Header, logging bool) ([]*types.ExternalBlock, error) {
-	context := chain.Config().Context // Index that node is currently at
-	externalBlocks := make([]*types.ExternalBlock, 0)
-	log.Info("GetExternalBlocks: Getting trace for block", "num", header.Number, "context", context, "location", header.Location, "hash", header.Hash())
-	start := time.Now()
-
-	// Do not run on block 1
-	if header.Number[context].Cmp(big.NewInt(1)) > 0 {
-		coincidentHeader, difficultyContext := ethash.GetCoincidentHeader(chain, context, header)
-		// Only run if we are the block immediately following the coincident block. Check below is to make sure we are N+1.
-		if coincidentHeader.Number[context].Cmp(header.Number[context]) != 0 {
-			return externalBlocks, nil
+	if logging {
+		for _, extexternalBlock := range externalBlocks {
+			fmt.Println("GetExternalBlocks:", extexternalBlock.Header().Number, extexternalBlock.Header().Location, extexternalBlock.Context(), extexternalBlock.Hash())
 		}
-
-		// Get the Prime stopHash to be used in the Prime context. Go on to trace Prime once.
-		primeStopHash := coincidentHeader.ParentHash[0]
-		fmt.Println("primeStopHash1", primeStopHash)
-		if context == 0 {
-			extBlockResult, extBlockErr := ethash.PrimeTraceBranch(chain, coincidentHeader, difficultyContext, primeStopHash, context, header.Location)
-			if extBlockErr != nil {
-				return nil, extBlockErr
-			}
-			externalBlocks = append(externalBlocks, extBlockResult...)
-		}
-
-		// If we are in a Region or Zone context, we may need to change our Prime stopHash since
-		// a Region block might not yet have been found. Scenario: [2, 2, 2] mined before [1, 2, 2].
-		if context == 1 || context == 2 {
-			primeStopHash, primeNum := ethash.GetStopHash(chain, context, 0, coincidentHeader)
-			fmt.Println("primeStopHash2", primeStopHash)
-
-			regionStopHash, regionNum := ethash.GetStopHash(chain, context, 1, coincidentHeader)
-			fmt.Println("regionStopHash1", regionStopHash)
-			if difficultyContext == 0 {
-				extBlockResult, extBlockErr := ethash.PrimeTraceBranch(chain, coincidentHeader, difficultyContext, primeStopHash, context, header.Location)
-				if extBlockErr != nil {
-					return nil, extBlockErr
-				}
-				externalBlocks = append(externalBlocks, extBlockResult...)
-			}
-			// If our Prime stopHash comes before our Region stopHash.
-			if primeNum < regionNum {
-				regionStopHash = primeStopHash
-				fmt.Println("regionStopHash2", regionStopHash)
-			}
-			// If we have a Region block, trace it.
-			if difficultyContext < 2 {
-				extBlockResult, extBlockErr := ethash.RegionTraceBranch(chain, coincidentHeader, 1, regionStopHash, context, header.Location)
-				if extBlockErr != nil {
-					return nil, extBlockErr
-				}
-				externalBlocks = append(externalBlocks, extBlockResult...)
-			}
-		}
-	}
-
-	log.Info("GetExternalBlocks: Length of external blocks", "len", len(externalBlocks), "time", time.Since(start))
-	for _, extexternalBlock := range externalBlocks {
-		fmt.Println("GetExternalBlocks:", extexternalBlock.Header().Number, extexternalBlock.Header().Location, extexternalBlock.Context(), extexternalBlock.Hash())
 	}
 
 	// Swap order of external blocks

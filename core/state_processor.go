@@ -79,15 +79,13 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	blockContext := NewEVMBlockContext(header, p.bc, nil)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
 
-	linkExtBlocks, err := p.engine.GetLinkExternalBlocks(p.bc, header, true)
+	// Get the linkBlocks and check linkage to previous external blocks.
+	linkExtBlocks, err := p.bc.GetExternalBlocks(header)
 	if err != nil {
 		return nil, nil, uint64(0), nil, err
 	}
-	fmt.Println("Len of linkBlocks", len(linkExtBlocks))
-	for _, linkBlock := range linkExtBlocks {
-		fmt.Println("LinkBlock", linkBlock.Header().Number, linkBlock.Context(), linkBlock.Header().Location, linkBlock.Hash())
-	}
-	if len(linkExtBlocks) > 0 && types.QuaiNetworkContext == 2 {
+
+	if len(linkExtBlocks) > 0 {
 		cpyExtBlocks := make([]*types.ExternalBlock, len(linkExtBlocks))
 		copy(cpyExtBlocks, linkExtBlocks)
 		linkErr := p.checkExternalBlockLink(cpyExtBlocks)
@@ -308,7 +306,7 @@ func (p *StateProcessor) GenerateExtBlockLink() {
 	}
 
 	currentHeader := p.bc.CurrentHeader()
-	if currentHeader.Number[types.QuaiNetworkContext].Cmp(big.NewInt(1)) < 1 {
+	if currentHeader.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) < 1 {
 		p.blockLink = linkBlocks
 		return
 	}
@@ -318,10 +316,11 @@ func (p *StateProcessor) GenerateExtBlockLink() {
 	for !populated {
 
 		// Populate the linkBlocks struct with the block hashes of the last applied ext block of that chain.
-		extBlocks, err := p.engine.GetExternalBlocks(p.bc, currentHeader, true)
+		extBlocks, err := p.bc.GetExternalBlocks(currentHeader)
 		if err != nil {
 			log.Error("GenerateExtBlockLink:", "err", err)
 		}
+
 		// Keep track of what the method started with.
 		// Deep copy the struct.
 		tempLinkBlocks := &extBlockLink{
@@ -340,14 +339,17 @@ func (p *StateProcessor) GenerateExtBlockLink() {
 
 		// If our tempLink is new and our starting link hasn't changed.
 		if tempLinkBlocks.prime != linkBlocks.prime && startingLinkBlocks.prime == linkBlocks.prime {
+			fmt.Println("Setting linkBlocks.prime", tempLinkBlocks.prime)
 			linkBlocks.prime = tempLinkBlocks.prime
 		}
 		for i := range linkBlocks.regions {
 			if tempLinkBlocks.regions[i] != linkBlocks.regions[i] && startingLinkBlocks.regions[i] == linkBlocks.regions[i] {
+				fmt.Println("Setting linkBlocks.region", i+1, tempLinkBlocks.regions[i])
 				linkBlocks.regions[i] = tempLinkBlocks.regions[i]
 			}
 			for j := range linkBlocks.zones[i] {
 				if tempLinkBlocks.zones[i][j] != linkBlocks.zones[i][j] && startingLinkBlocks.zones[i][j] == linkBlocks.zones[i][j] {
+					fmt.Println("Setting linkBlocks.zone", i+1, j+1, tempLinkBlocks.zones[i][j])
 					linkBlocks.zones[i][j] = tempLinkBlocks.zones[i][j]
 				}
 			}
@@ -479,29 +481,22 @@ func (p *StateProcessor) checkExternalBlockLink(externalBlocks []*types.External
 		zones:   [][]common.Hash{make([]common.Hash, 3), make([]common.Hash, 3), make([]common.Hash, 3)},
 	}
 
-	// Reverse ext block set to get the last applied block order
-	// if len(externalBlocks) > 0 {
-	// 	for i, j := 0, len(externalBlocks)-1; i < j; i, j = i+1, j-1 {
-	// 		externalBlocks[i], externalBlocks[j] = externalBlocks[j], externalBlocks[i]
-	// 	}
-	// }
-
 	for _, externalBlock := range externalBlocks {
 		context := externalBlock.Context().Int64()
 		switch context {
 		case 0:
 			linkedPreviousHash := externalBlock.Header().ParentHash[externalBlock.Context().Int64()]
-			fmt.Println("Prime: Setting linked hash", externalBlock.Header().Number, externalBlock.Header().Location, externalBlock.Hash(), linkedPreviousHash)
+			// fmt.Println("Prime: Setting linked hash", externalBlock.Header().Number, externalBlock.Header().Location, externalBlock.Hash(), linkedPreviousHash)
 			linkBlocks.prime = linkedPreviousHash
 
 		case 1:
 			linkedPreviousHash := externalBlock.Header().ParentHash[externalBlock.Context().Int64()]
-			fmt.Println("Region: Setting linked hash", externalBlock.Header().Number, externalBlock.Header().Location, externalBlock.Hash(), linkedPreviousHash)
+			// fmt.Println("Region: Setting linked hash", externalBlock.Header().Number, externalBlock.Header().Location, externalBlock.Hash(), linkedPreviousHash)
 			linkBlocks.regions[externalBlock.Header().Location[0]-1] = linkedPreviousHash
 
 		case 2:
 			linkedPreviousHash := externalBlock.Header().ParentHash[externalBlock.Context().Int64()]
-			fmt.Println("Zone: Setting linked hash:", externalBlock.Header().Number, externalBlock.Header().Location, externalBlock.Hash(), linkedPreviousHash)
+			// fmt.Println("Zone: Setting linked hash:", externalBlock.Header().Number, externalBlock.Header().Location, externalBlock.Hash(), linkedPreviousHash)
 			linkBlocks.zones[externalBlock.Header().Location[0]-1][externalBlock.Header().Location[1]-1] = linkedPreviousHash
 		}
 	}

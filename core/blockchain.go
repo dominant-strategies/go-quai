@@ -2677,6 +2677,7 @@ func (bc *BlockChain) GetExternalBlocks(header *types.Header) ([]*types.External
 	// Lookup block in externalBlocks cache
 	context := bc.Config().Context // Index that node is currently at
 	externalBlocks := make([]*types.ExternalBlock, 0)
+	start := time.Now()
 
 	// Check if header is nil
 	if header == nil {
@@ -2690,13 +2691,21 @@ func (bc *BlockChain) GetExternalBlocks(header *types.Header) ([]*types.External
 
 	// Do not run on block 0
 	if header.Number[context].Cmp(big.NewInt(0)) > 0 {
-		coincidentHeader, difficultyContext := bc.engine.GetCoincidentHeader(bc, context, header)
+		difficultyContext, err := bc.engine.GetDifficultyContext(bc, header, context)
+		if err != nil {
+			log.Warn("Unable to calculate difficulty context")
+			return externalBlocks, nil
+		}
 
-		primeStopHash, primeNum := bc.engine.GetStopHash(bc, context, 0, coincidentHeader)
+		// Do not run if no diff context.
+		if difficultyContext == 2 {
+			return externalBlocks, nil
+		}
 
-		fmt.Println("PrimeStopHash", primeStopHash)
+		// Get the Prime stopHash to be used in the Prime context. Go on to trace Prime once.
+		primeStopHash := header.ParentHash[0]
 		if context == 0 {
-			extBlockResult, extBlockErr := bc.engine.PrimeTraceBranch(bc, coincidentHeader, difficultyContext, primeStopHash, context, header.Location)
+			extBlockResult, extBlockErr := bc.engine.PrimeTraceBranch(bc, header, difficultyContext, primeStopHash, context, header.Location)
 			if extBlockErr != nil {
 				return nil, extBlockErr
 			}
@@ -2704,10 +2713,10 @@ func (bc *BlockChain) GetExternalBlocks(header *types.Header) ([]*types.External
 		}
 
 		if context == 1 || context == 2 {
-			regionStopHash, regionNum := bc.engine.GetStopHash(bc, context, 1, coincidentHeader)
-			fmt.Println("RegionStopHash", regionStopHash)
+			primeStopHash, primeNum := bc.engine.GetStopHash(bc, context, 0, header)
+			regionStopHash, regionNum := bc.engine.GetStopHash(bc, context, 1, header)
 			if difficultyContext == 0 {
-				extBlockResult, extBlockErr := bc.engine.PrimeTraceBranch(bc, coincidentHeader, difficultyContext, primeStopHash, context, header.Location)
+				extBlockResult, extBlockErr := bc.engine.PrimeTraceBranch(bc, header, difficultyContext, primeStopHash, context, header.Location)
 				if extBlockErr != nil {
 					return nil, extBlockErr
 				}
@@ -2717,12 +2726,20 @@ func (bc *BlockChain) GetExternalBlocks(header *types.Header) ([]*types.External
 			if primeNum < regionNum {
 				regionStopHash = primeStopHash
 			}
-			extBlockResult, extBlockErr := bc.engine.RegionTraceBranch(bc, coincidentHeader, 1, regionStopHash, context, header.Location)
-			if extBlockErr != nil {
-				return nil, extBlockErr
+			// If we have a Region block, trace it.
+			if difficultyContext < 2 {
+				extBlockResult, extBlockErr := bc.engine.RegionTraceBranch(bc, header, 1, regionStopHash, context, header.Location)
+				if extBlockErr != nil {
+					return nil, extBlockErr
+				}
+				externalBlocks = append(externalBlocks, extBlockResult...)
 			}
-			externalBlocks = append(externalBlocks, extBlockResult...)
 		}
+	}
+
+	log.Info("GetLinkExternalBlocks: Length of external blocks", "len", len(externalBlocks), "time", time.Since(start))
+	for _, extexternalBlock := range externalBlocks {
+		fmt.Println("GetLinkExternalBlocks:", extexternalBlock.Header().Number, extexternalBlock.Header().Location, extexternalBlock.Context(), extexternalBlock.Hash())
 	}
 
 	return externalBlocks, nil
