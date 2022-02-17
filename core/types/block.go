@@ -92,8 +92,7 @@ type Header struct {
 	MixDigest         common.Hash      `json:"mixHash"`
 	Nonce             BlockNonce       `json:"nonce"`
 	// Map the current Region / Zone
-	MapContext []byte `json:"mapContext"        gencodec:"required"`
-	Location   []byte `json:"location"        	gencodec:"required"`
+	Location []byte `json:"location"        	gencodec:"required"`
 
 	// BaseFee was added by EIP-1559 and is ignored in legacy headers.
 	BaseFee []*big.Int `json:"baseFeePerGas" rlp:"optional"`
