@@ -156,85 +156,59 @@ quai-windows-amd64:
 
 include network.env
 
-BASE_COMMAND = ./build/bin/quai --$(NETWORK)
+BASE_COMMAND = ./build/bin/quai --$(NETWORK) --syncmode full
 
-ifeq ($(ENABLE_HTTP),"TRUE")
-	BASE_COMMAND = $(BASE_COMMAND) --http
+ifeq ($(ENABLE_HTTP),true)
+	BASE_COMMAND += --http
 endif
 
-ifeq ($(ENABLE_WS),"TRUE")
-	BASE_COMMAND = $(BASE_COMMAND) --ws
+ifeq ($(ENABLE_WS),true)
+	BASE_COMMAND += --ws
 endif
 
-ifeq ($(ENABLE_FULLSYNC),"TRUE")
-	BASE_COMMAND = $(BASE_COMMAND) --syncmode full
+ifeq ($(QUAI_MINING),true)
+	MINING_BASE_COMMAND = $(BASE_COMMAND) --mine --miner.threads $(THREADS)
 endif
 
-ifeq ($(ENABLE_UNLOCK),"TRUE")
-	BASE_COMMAND = $(BASE_COMMAND) --allow-insecure-unlock
-endif
-
-ifeq ($(QUAI_MINING),"TRUE")
-	MINING_BASE_COMMAND = $(BASE_COMMAND) --mine --miner.threads$(THREADS)
+ifeq ($(BOOTNODE),true)
+	BASE_COMMAND += --nodekey bootnode.key --ws.origins $(WS_ORIG)
 endif
 
 run-full-node:
 ifeq (,$(wildcard nodelogs))
 	mkdir nodelogs
 endif
-	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API) --ws.origins $(WS_ORIG) --port $(PRIME_PORT_TCP) --http.port $(PRIME_PORT_HTTP) --ws.port $(PRIME_PORT_WS) --quaistats ${NAME}:prime${PASSWORD}@${STATS_HOST}:9000 >> nodelogs/prime.log 2>&1 &
-	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API) --ws.origins $(WS_ORIG) --port $(REGION_1_PORT_TCP) --http.port $(REGION_1_PORT_HTTP) --ws.port $(REGION_1_PORT_WS) --region 1 --quaistats ${NAME}:region1${PASSWORD}@${STATS_HOST}:9100 >> nodelogs/region-1.log 2>&1 &
-	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API) --ws.origins $(WS_ORIG) --port $(REGION_2_PORT_TCP) --http.port $(REGION_2_PORT_HTTP) --ws.port $(REGION_2_PORT_WS) --region 2 --quaistats ${NAME}:region2${PASSWORD}@${STATS_HOST}:9200 >> nodelogs/region-2.log 2>&1 &
-	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API) --ws.origins $(WS_ORIG) --port $(REGION_3_PORT_TCP) --http.port $(REGION_3_PORT_HTTP) --ws.port $(REGION_3_PORT_WS) --region 3 --quaistats ${NAME}:region3${PASSWORD}@${STATS_HOST}:9300 >> nodelogs/region-3.log 2>&1 &
-	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API) --ws.origins $(WS_ORIG) --port $(ZONE_1_1_PORT_TCP) --http.port $(ZONE_1_1_PORT_HTTP) --ws.port $(ZONE_1_1_PORT_WS) --region 1 --zone 1 --quaistats ${NAME}:zone11${PASSWORD}@${STATS_HOST}:9101 >> nodelogs/zone-1-1.log 2>&1 &
-	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API) --ws.origins $(WS_ORIG) --port $(ZONE_1_2_PORT_TCP) --http.port $(ZONE_1_2_PORT_HTTP) --ws.port $(ZONE_1_2_PORT_WS) --region 1 --zone 2 --quaistats ${NAME}:zone12${PASSWORD}@${STATS_HOST}:9102 >> nodelogs/zone-1-2.log 2>&1 &
-	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API) --ws.origins $(WS_ORIG) --port $(ZONE_1_3_PORT_TCP) --http.port $(ZONE_1_3_PORT_HTTP) --ws.port $(ZONE_1_3_PORT_WS) --region 1 --zone 3 --quaistats ${NAME}:zone13${PASSWORD}@${STATS_HOST}:9103 >> nodelogs/zone-1-3.log 2>&1 &
-	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API) --ws.origins $(WS_ORIG) --port $(ZONE_2_1_PORT_TCP) --http.port $(ZONE_2_1_PORT_HTTP) --ws.port $(ZONE_2_1_PORT_WS) --region 2 --zone 1 --quaistats ${NAME}:zone21${PASSWORD}@${STATS_HOST}:9201 >> nodelogs/zone-2-1.log 2>&1 &
-	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API) --ws.origins $(WS_ORIG) --port $(ZONE_2_2_PORT_TCP) --http.port $(ZONE_2_2_PORT_HTTP) --ws.port $(ZONE_2_2_PORT_WS) --region 2 --zone 2 --quaistats ${NAME}:zone22${PASSWORD}@${STATS_HOST}:9202 >> nodelogs/zone-2-2.log 2>&1 &
-	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API) --ws.origins $(WS_ORIG) --port $(ZONE_2_3_PORT_TCP) --http.port $(ZONE_2_3_PORT_HTTP) --ws.port $(ZONE_2_3_PORT_WS) --region 2 --zone 3 --quaistats ${NAME}:zone23${PASSWORD}@${STATS_HOST}:9203 >> nodelogs/zone-2-3.log 2>&1 &
-	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API) --ws.origins $(WS_ORIG) --port $(ZONE_3_1_PORT_TCP) --http.port $(ZONE_3_1_PORT_HTTP) --ws.port $(ZONE_3_1_PORT_WS) --region 3 --zone 1 --quaistats ${NAME}:zone31${PASSWORD}@${STATS_HOST}:9301 >> nodelogs/zone-3-1.log 2>&1 &
-	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API) --ws.origins $(WS_ORIG) --port $(ZONE_3_2_PORT_TCP) --http.port $(ZONE_3_2_PORT_HTTP) --ws.port $(ZONE_3_2_PORT_WS) --region 3 --zone 2 --quaistats ${NAME}:zone32${PASSWORD}@${STATS_HOST}:9302 >> nodelogs/zone-3-2.log 2>&1 &
-	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API) --ws.origins $(WS_ORIG) --port $(ZONE_3_3_PORT_TCP) --http.port $(ZONE_3_3_PORT_HTTP) --ws.port $(ZONE_3_3_PORT_WS) --region 3 --zone 3 --quaistats ${NAME}:zone33${PASSWORD}@${STATS_HOST}:9303 >> nodelogs/zone-3-3.log 2>&1 &
+	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(PRIME_PORT_TCP) --http.port $(PRIME_PORT_HTTP) --ws.port $(PRIME_PORT_WS) --quaistats ${NAME}:prime${PASSWORD}@${STATS_HOST}:9000 >> nodelogs/prime.log 2>&1 &
+	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(REGION_1_PORT_TCP) --http.port $(REGION_1_PORT_HTTP) --ws.port $(REGION_1_PORT_WS) --region 1 --quaistats ${NAME}:region1${PASSWORD}@${STATS_HOST}:9100 >> nodelogs/region-1.log 2>&1 &
+	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(REGION_2_PORT_TCP) --http.port $(REGION_2_PORT_HTTP) --ws.port $(REGION_2_PORT_WS) --region 2 --quaistats ${NAME}:region2${PASSWORD}@${STATS_HOST}:9200 >> nodelogs/region-2.log 2>&1 &
+	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(REGION_3_PORT_TCP) --http.port $(REGION_3_PORT_HTTP) --ws.port $(REGION_3_PORT_WS) --region 3 --quaistats ${NAME}:region3${PASSWORD}@${STATS_HOST}:9300 >> nodelogs/region-3.log 2>&1 &
+	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(ZONE_1_1_PORT_TCP) --http.port $(ZONE_1_1_PORT_HTTP) --ws.port $(ZONE_1_1_PORT_WS) --region 1 --zone 1 --quaistats ${NAME}:zone11${PASSWORD}@${STATS_HOST}:9101 >> nodelogs/zone-1-1.log 2>&1 &
+	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(ZONE_1_2_PORT_TCP) --http.port $(ZONE_1_2_PORT_HTTP) --ws.port $(ZONE_1_2_PORT_WS) --region 1 --zone 2 --quaistats ${NAME}:zone12${PASSWORD}@${STATS_HOST}:9102 >> nodelogs/zone-1-2.log 2>&1 &
+	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(ZONE_1_3_PORT_TCP) --http.port $(ZONE_1_3_PORT_HTTP) --ws.port $(ZONE_1_3_PORT_WS) --region 1 --zone 3 --quaistats ${NAME}:zone13${PASSWORD}@${STATS_HOST}:9103 >> nodelogs/zone-1-3.log 2>&1 &
+	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(ZONE_2_1_PORT_TCP) --http.port $(ZONE_2_1_PORT_HTTP) --ws.port $(ZONE_2_1_PORT_WS) --region 2 --zone 1 --quaistats ${NAME}:zone21${PASSWORD}@${STATS_HOST}:9201 >> nodelogs/zone-2-1.log 2>&1 &
+	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(ZONE_2_2_PORT_TCP) --http.port $(ZONE_2_2_PORT_HTTP) --ws.port $(ZONE_2_2_PORT_WS) --region 2 --zone 2 --quaistats ${NAME}:zone22${PASSWORD}@${STATS_HOST}:9202 >> nodelogs/zone-2-2.log 2>&1 &
+	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(ZONE_2_3_PORT_TCP) --http.port $(ZONE_2_3_PORT_HTTP) --ws.port $(ZONE_2_3_PORT_WS) --region 2 --zone 3 --quaistats ${NAME}:zone23${PASSWORD}@${STATS_HOST}:9203 >> nodelogs/zone-2-3.log 2>&1 &
+	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(ZONE_3_1_PORT_TCP) --http.port $(ZONE_3_1_PORT_HTTP) --ws.port $(ZONE_3_1_PORT_WS) --region 3 --zone 1 --quaistats ${NAME}:zone31${PASSWORD}@${STATS_HOST}:9301 >> nodelogs/zone-3-1.log 2>&1 &
+	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(ZONE_3_2_PORT_TCP) --http.port $(ZONE_3_2_PORT_HTTP) --ws.port $(ZONE_3_2_PORT_WS) --region 3 --zone 2 --quaistats ${NAME}:zone32${PASSWORD}@${STATS_HOST}:9302 >> nodelogs/zone-3-2.log 2>&1 &
+	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(ZONE_3_3_PORT_TCP) --http.port $(ZONE_3_3_PORT_HTTP) --ws.port $(ZONE_3_3_PORT_WS) --region 3 --zone 3 --quaistats ${NAME}:zone33${PASSWORD}@${STATS_HOST}:9303 >> nodelogs/zone-3-3.log 2>&1 &
 
 run-full-mining:
 ifeq (,$(wildcard nodelogs))
 	mkdir nodelogs
 endif
-	@nohup $(MINING_BASE_COMMAND) --miner.etherbase $(PRIME_COINBASE) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API) --ws.origins $(WS_ORIG) --port $(PRIME_PORT_TCP) --http.port $(PRIME_PORT_HTTP) --ws.port $(PRIME_PORT_WS) --quaistats ${NAME}:prime${PASSWORD}@${STATS_HOST}:9000 >> nodelogs/prime.log 2>&1 &
-	@nohup $(MINING_BASE_COMMAND) --miner.etherbase $(REGION_1_COINBASE)  --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API) --ws.origins $(WS_ORIG) --port $(REGION_1_PORT_TCP) --http.port $(REGION_1_PORT_HTTP) --ws.port $(REGION_1_PORT_WS) --region 1 --quaistats ${NAME}:region1${PASSWORD}@${STATS_HOST}:9100 >> nodelogs/region-1.log 2>&1 &
-	@nohup $(MINING_BASE_COMMAND) --miner.etherbase $(REGION_2_COINBASE)  --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API) --ws.origins $(WS_ORIG) --port $(REGION_2_PORT_TCP) --http.port $(REGION_2_PORT_HTTP) --ws.port $(REGION_2_PORT_WS) --region 2 --quaistats ${NAME}:region2${PASSWORD}@${STATS_HOST}:9200 >> nodelogs/region-2.log 2>&1 &
-	@nohup $(MINING_BASE_COMMAND) --miner.etherbase $(REGION_3_COINBASE)  --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API) --ws.origins $(WS_ORIG) --port $(REGION_3_PORT_TCP) --http.port $(REGION_3_PORT_HTTP) --ws.port $(REGION_3_PORT_WS) --region 3 --quaistats ${NAME}:region3${PASSWORD}@${STATS_HOST}:9300 >> nodelogs/region-3.log 2>&1 &
-	@nohup $(MINING_BASE_COMMAND) --miner.etherbase $(ZONE_1_1_COINBASE)  --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API) --ws.origins $(WS_ORIG) --port $(ZONE_1_1_PORT_TCP) --http.port $(ZONE_1_1_PORT_HTTP) --ws.port $(ZONE_1_1_PORT_WS) --region 1 --zone 1 --quaistats ${NAME}:zone11${PASSWORD}@${STATS_HOST}:9101 >> nodelogs/zone-1-1.log 2>&1 &
-	@nohup $(MINING_BASE_COMMAND) --miner.etherbase $(ZONE_1_2_COINBASE)  --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API) --ws.origins $(WS_ORIG) --port $(ZONE_1_2_PORT_TCP) --http.port $(ZONE_1_2_PORT_HTTP) --ws.port $(ZONE_1_2_PORT_WS) --region 1 --zone 2 --quaistats ${NAME}:zone12${PASSWORD}@${STATS_HOST}:9102 >> nodelogs/zone-1-2.log 2>&1 &
-	@nohup $(MINING_BASE_COMMAND) --miner.etherbase $(ZONE_1_3_COINBASE)  --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API) --ws.origins $(WS_ORIG) --port $(ZONE_1_3_PORT_TCP) --http.port $(ZONE_1_3_PORT_HTTP) --ws.port $(ZONE_1_3_PORT_WS) --region 1 --zone 3 --quaistats ${NAME}:zone13${PASSWORD}@${STATS_HOST}:9103 >> nodelogs/zone-1-3.log 2>&1 &
-	@nohup $(MINING_BASE_COMMAND) --miner.etherbase $(ZONE_2_1_COINBASE)  --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API) --ws.origins $(WS_ORIG) --port $(ZONE_2_1_PORT_TCP) --http.port $(ZONE_2_1_PORT_HTTP) --ws.port $(ZONE_2_1_PORT_WS) --region 2 --zone 1 --quaistats ${NAME}:zone21${PASSWORD}@${STATS_HOST}:9201 >> nodelogs/zone-2-1.log 2>&1 &
-	@nohup $(MINING_BASE_COMMAND) --miner.etherbase $(ZONE_2_2_COINBASE)  --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API) --ws.origins $(WS_ORIG) --port $(ZONE_2_2_PORT_TCP) --http.port $(ZONE_2_2_PORT_HTTP) --ws.port $(ZONE_2_2_PORT_WS) --region 2 --zone 2 --quaistats ${NAME}:zone22${PASSWORD}@${STATS_HOST}:9202 >> nodelogs/zone-2-2.log 2>&1 &
-	@nohup $(MINING_BASE_COMMAND) --miner.etherbase $(ZONE_2_3_COINBASE)  --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API) --ws.origins $(WS_ORIG) --port $(ZONE_2_3_PORT_TCP) --http.port $(ZONE_2_3_PORT_HTTP) --ws.port $(ZONE_2_3_PORT_WS) --region 2 --zone 3 --quaistats ${NAME}:zone23${PASSWORD}@${STATS_HOST}:9203 >> nodelogs/zone-2-3.log 2>&1 &
-	@nohup $(MINING_BASE_COMMAND) --miner.etherbase $(ZONE_3_1_COINBASE)  --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API) --ws.origins $(WS_ORIG) --port $(ZONE_3_1_PORT_TCP) --http.port $(ZONE_3_1_PORT_HTTP) --ws.port $(ZONE_3_1_PORT_WS) --region 3 --zone 1 --quaistats ${NAME}:zone31${PASSWORD}@${STATS_HOST}:9301 >> nodelogs/zone-3-1.log 2>&1 &
-	@nohup $(MINING_BASE_COMMAND) --miner.etherbase $(ZONE_3_2_COINBASE)  --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API) --ws.origins $(WS_ORIG) --port $(ZONE_3_2_PORT_TCP) --http.port $(ZONE_3_2_PORT_HTTP) --ws.port $(ZONE_3_2_PORT_WS) --region 3 --zone 2 --quaistats ${NAME}:zone32${PASSWORD}@${STATS_HOST}:9302 >> nodelogs/zone-3-2.log 2>&1 &
-	@nohup $(MINING_BASE_COMMAND) --miner.etherbase $(ZONE_3_3_COINBASE)  --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API) --ws.origins $(WS_ORIG) --port $(ZONE_3_3_PORT_TCP) --http.port $(ZONE_3_3_PORT_HTTP) --ws.port $(ZONE_3_3_PORT_WS) --region 3 --zone 3 --quaistats ${NAME}:zone33${PASSWORD}@${STATS_HOST}:9303 >> nodelogs/zone-3-3.log 2>&1 &
-
-
-run-bootnode:
-ifeq (,$(wildcard ./bootnode.key))
-	./build/bin/bootnode --genkey=bootnode.key
-endif
-ifeq (,$(wildcard nodelogs))
-	mkdir nodelogs
-endif
-	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API) --ws.origins $(WS_ORIG) --http.corsdomain $(HTTP_CORSDOMAIN) --port $(PRIME_PORT_TCP) --nodekey bootnode.key --http.port $(PRIME_PORT_HTTP) --ws.port $(PRIME_PORT_WS) --quaistats ${NAME}:prime${PASSWORD}@${STATS_HOST}:9000 --nat extip:$(HOST_IP) >> nodelogs/prime.log 2>&1 &
-	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API) --ws.origins $(WS_ORIG) --http.corsdomain $(HTTP_CORSDOMAIN) --port $(REGION_1_PORT_TCP) --nodekey bootnode.key --http.port $(REGION_1_PORT_HTTP) --ws.port $(REGION_1_PORT_WS) --region 1 --quaistats ${NAME}:region1${PASSWORD}@${STATS_HOST}:9100 --nat extip:$(HOST_IP) >> nodelogs/region-1.log 2>&1 &
-	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API) --ws.origins $(WS_ORIG) --http.corsdomain $(HTTP_CORSDOMAIN) --port $(REGION_2_PORT_TCP) --nodekey bootnode.key --http.port $(REGION_2_PORT_HTTP) --ws.port $(REGION_2_PORT_WS) --region 2 --quaistats ${NAME}:region2${PASSWORD}@${STATS_HOST}:9200 --nat extip:$(HOST_IP) >> nodelogs/region-2.log 2>&1 &
-	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API) --ws.origins $(WS_ORIG) --http.corsdomain $(HTTP_CORSDOMAIN) --port $(REGION_3_PORT_TCP) --nodekey bootnode.key --http.port $(REGION_3_PORT_HTTP) --ws.port $(REGION_3_PORT_WS) --region 3 --quaistats ${NAME}:region3${PASSWORD}@${STATS_HOST}:9300 --nat extip:$(HOST_IP) >> nodelogs/region-3.log 2>&1 &
-	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API) --ws.origins $(WS_ORIG) --http.corsdomain $(HTTP_CORSDOMAIN) --port $(ZONE_1_1_PORT_TCP) --nodekey bootnode.key --http.port $(ZONE_1_1_PORT_HTTP) --ws.port $(ZONE_1_1_PORT_WS) --region 1 --zone 1 --quaistats ${NAME}:zone11${PASSWORD}@${STATS_HOST}:9101 --nat extip:$(HOST_IP) >> nodelogs/zone-1-1.log 2>&1 &
-	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API) --ws.origins $(WS_ORIG) --http.corsdomain $(HTTP_CORSDOMAIN) --port $(ZONE_1_2_PORT_TCP) --nodekey bootnode.key --http.port $(ZONE_1_2_PORT_HTTP) --ws.port $(ZONE_1_2_PORT_WS) --region 1 --zone 2 --quaistats ${NAME}:zone12${PASSWORD}@${STATS_HOST}:9102 --nat extip:$(HOST_IP) >> nodelogs/zone-1-2.log 2>&1 &
-	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API) --ws.origins $(WS_ORIG) --http.corsdomain $(HTTP_CORSDOMAIN) --port $(ZONE_1_3_PORT_TCP) --nodekey bootnode.key --http.port $(ZONE_1_3_PORT_HTTP) --ws.port $(ZONE_1_3_PORT_WS) --region 1 --zone 3 --quaistats ${NAME}:zone13${PASSWORD}@${STATS_HOST}:9103 --nat extip:$(HOST_IP) >> nodelogs/zone-1-3.log 2>&1 &
-	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API) --ws.origins $(WS_ORIG) --http.corsdomain $(HTTP_CORSDOMAIN) --port $(ZONE_2_1_PORT_TCP) --nodekey bootnode.key --http.port $(ZONE_2_1_PORT_HTTP) --ws.port $(ZONE_2_1_PORT_WS) --region 2 --zone 1 --quaistats ${NAME}:zone21${PASSWORD}@${STATS_HOST}:9201 --nat extip:$(HOST_IP) >> nodelogs/zone-2-1.log 2>&1 &
-	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API) --ws.origins $(WS_ORIG) --http.corsdomain $(HTTP_CORSDOMAIN) --port $(ZONE_2_2_PORT_TCP) --nodekey bootnode.key --http.port $(ZONE_2_2_PORT_HTTP) --ws.port $(ZONE_2_2_PORT_WS) --region 2 --zone 2 --quaistats ${NAME}:zone22${PASSWORD}@${STATS_HOST}:9202 --nat extip:$(HOST_IP) >> nodelogs/zone-2-2.log 2>&1 &
-	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API) --ws.origins $(WS_ORIG) --http.corsdomain $(HTTP_CORSDOMAIN) --port $(ZONE_2_3_PORT_TCP) --nodekey bootnode.key --http.port $(ZONE_2_3_PORT_HTTP) --ws.port $(ZONE_2_3_PORT_WS) --region 2 --zone 3 --quaistats ${NAME}:zone23${PASSWORD}@${STATS_HOST}:9203 --nat extip:$(HOST_IP) >> nodelogs/zone-2-3.log 2>&1 &
-	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API) --ws.origins $(WS_ORIG) --http.corsdomain $(HTTP_CORSDOMAIN) --port $(ZONE_3_1_PORT_TCP) --nodekey bootnode.key --http.port $(ZONE_3_1_PORT_HTTP) --ws.port $(ZONE_3_1_PORT_WS) --region 3 --zone 1 --quaistats ${NAME}:zone31${PASSWORD}@${STATS_HOST}:9301 --nat extip:$(HOST_IP) >> nodelogs/zone-3-1.log 2>&1 &
-	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API) --ws.origins $(WS_ORIG) --http.corsdomain $(HTTP_CORSDOMAIN) --port $(ZONE_3_2_PORT_TCP) --nodekey bootnode.key --http.port $(ZONE_3_2_PORT_HTTP) --ws.port $(ZONE_3_2_PORT_WS) --region 3 --zone 2 --quaistats ${NAME}:zone32${PASSWORD}@${STATS_HOST}:9302 --nat extip:$(HOST_IP) >> nodelogs/zone-3-2.log 2>&1 &
-	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API) --ws.origins $(WS_ORIG) --http.corsdomain $(HTTP_CORSDOMAIN) --port $(ZONE_3_3_PORT_TCP) --nodekey bootnode.key --http.port $(ZONE_3_3_PORT_HTTP) --ws.port $(ZONE_3_3_PORT_WS) --region 3 --zone 3 --quaistats ${NAME}:zone33${PASSWORD}@${STATS_HOST}:9303 --nat extip:$(HOST_IP) >> nodelogs/zone-3-3.log 2>&1 &
+	@nohup $(MINING_BASE_COMMAND) --miner.etherbase $(PRIME_COINBASE) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(PRIME_PORT_TCP) --http.port $(PRIME_PORT_HTTP) --ws.port $(PRIME_PORT_WS) --quaistats ${NAME}:prime${PASSWORD}@${STATS_HOST}:9000 >> nodelogs/prime.log 2>&1 &
+	@nohup $(MINING_BASE_COMMAND) --miner.etherbase $(REGION_1_COINBASE)  --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(REGION_1_PORT_TCP) --http.port $(REGION_1_PORT_HTTP) --ws.port $(REGION_1_PORT_WS) --region 1 --quaistats ${NAME}:region1${PASSWORD}@${STATS_HOST}:9100 >> nodelogs/region-1.log 2>&1 &
+	@nohup $(MINING_BASE_COMMAND) --miner.etherbase $(REGION_2_COINBASE)  --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(REGION_2_PORT_TCP) --http.port $(REGION_2_PORT_HTTP) --ws.port $(REGION_2_PORT_WS) --region 2 --quaistats ${NAME}:region2${PASSWORD}@${STATS_HOST}:9200 >> nodelogs/region-2.log 2>&1 &
+	@nohup $(MINING_BASE_COMMAND) --miner.etherbase $(REGION_3_COINBASE)  --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(REGION_3_PORT_TCP) --http.port $(REGION_3_PORT_HTTP) --ws.port $(REGION_3_PORT_WS) --region 3 --quaistats ${NAME}:region3${PASSWORD}@${STATS_HOST}:9300 >> nodelogs/region-3.log 2>&1 &
+	@nohup $(MINING_BASE_COMMAND) --miner.etherbase $(ZONE_1_1_COINBASE)  --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(ZONE_1_1_PORT_TCP) --http.port $(ZONE_1_1_PORT_HTTP) --ws.port $(ZONE_1_1_PORT_WS) --region 1 --zone 1 --quaistats ${NAME}:zone11${PASSWORD}@${STATS_HOST}:9101 >> nodelogs/zone-1-1.log 2>&1 &
+	@nohup $(MINING_BASE_COMMAND) --miner.etherbase $(ZONE_1_2_COINBASE)  --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(ZONE_1_2_PORT_TCP) --http.port $(ZONE_1_2_PORT_HTTP) --ws.port $(ZONE_1_2_PORT_WS) --region 1 --zone 2 --quaistats ${NAME}:zone12${PASSWORD}@${STATS_HOST}:9102 >> nodelogs/zone-1-2.log 2>&1 &
+	@nohup $(MINING_BASE_COMMAND) --miner.etherbase $(ZONE_1_3_COINBASE)  --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(ZONE_1_3_PORT_TCP) --http.port $(ZONE_1_3_PORT_HTTP) --ws.port $(ZONE_1_3_PORT_WS) --region 1 --zone 3 --quaistats ${NAME}:zone13${PASSWORD}@${STATS_HOST}:9103 >> nodelogs/zone-1-3.log 2>&1 &
+	@nohup $(MINING_BASE_COMMAND) --miner.etherbase $(ZONE_2_1_COINBASE)  --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(ZONE_2_1_PORT_TCP) --http.port $(ZONE_2_1_PORT_HTTP) --ws.port $(ZONE_2_1_PORT_WS) --region 2 --zone 1 --quaistats ${NAME}:zone21${PASSWORD}@${STATS_HOST}:9201 >> nodelogs/zone-2-1.log 2>&1 &
+	@nohup $(MINING_BASE_COMMAND) --miner.etherbase $(ZONE_2_2_COINBASE)  --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(ZONE_2_2_PORT_TCP) --http.port $(ZONE_2_2_PORT_HTTP) --ws.port $(ZONE_2_2_PORT_WS) --region 2 --zone 2 --quaistats ${NAME}:zone22${PASSWORD}@${STATS_HOST}:9202 >> nodelogs/zone-2-2.log 2>&1 &
+	@nohup $(MINING_BASE_COMMAND) --miner.etherbase $(ZONE_2_3_COINBASE)  --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(ZONE_2_3_PORT_TCP) --http.port $(ZONE_2_3_PORT_HTTP) --ws.port $(ZONE_2_3_PORT_WS) --region 2 --zone 3 --quaistats ${NAME}:zone23${PASSWORD}@${STATS_HOST}:9203 >> nodelogs/zone-2-3.log 2>&1 &
+	@nohup $(MINING_BASE_COMMAND) --miner.etherbase $(ZONE_3_1_COINBASE)  --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(ZONE_3_1_PORT_TCP) --http.port $(ZONE_3_1_PORT_HTTP) --ws.port $(ZONE_3_1_PORT_WS) --region 3 --zone 1 --quaistats ${NAME}:zone31${PASSWORD}@${STATS_HOST}:9301 >> nodelogs/zone-3-1.log 2>&1 &
+	@nohup $(MINING_BASE_COMMAND) --miner.etherbase $(ZONE_3_2_COINBASE)  --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(ZONE_3_2_PORT_TCP) --http.port $(ZONE_3_2_PORT_HTTP) --ws.port $(ZONE_3_2_PORT_WS) --region 3 --zone 2 --quaistats ${NAME}:zone32${PASSWORD}@${STATS_HOST}:9302 >> nodelogs/zone-3-2.log 2>&1 &
+	@nohup $(MINING_BASE_COMMAND) --miner.etherbase $(ZONE_3_3_COINBASE)  --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(ZONE_3_3_PORT_TCP) --http.port $(ZONE_3_3_PORT_HTTP) --ws.port $(ZONE_3_3_PORT_WS) --region 3 --zone 3 --quaistats ${NAME}:zone33${PASSWORD}@${STATS_HOST}:9303 >> nodelogs/zone-3-3.log 2>&1 &
 
 stop:
 	@if pgrep quai; then pkill -f ./build/bin/quai; fi
