@@ -91,7 +91,8 @@ type Header struct {
 	Extra             [][]byte         `json:"extraData"        gencodec:"required"`
 	MixDigest         common.Hash      `json:"mixHash"`
 	Nonce             BlockNonce       `json:"nonce"`
-	// Map the current Region / Zone
+
+	// Originating location of the block.
 	Location []byte `json:"location"        	gencodec:"required"`
 
 	// BaseFee was added by EIP-1559 and is ignored in legacy headers.
