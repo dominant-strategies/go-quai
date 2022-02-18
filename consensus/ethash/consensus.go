@@ -302,6 +302,11 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 			return err
 		}
 	}
+	// Verify that Location is in MapContext
+	if inContext := verifyMapContext(header.Location, chain.Config().MapContext); inContext != true {
+		return fmt.Errorf("invalid Location or Mapcontext: Location %d not in MapContext %c", header.Location, chain.Config().MapContext)
+	}
+
 	if err := misc.VerifyForkHashes(chain.Config(), header, uncle); err != nil {
 		return err
 	}
@@ -1108,4 +1113,21 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		reward.Add(reward, r)
 	}
 	state.AddBalance(header.Coinbase[types.QuaiNetworkContext], reward)
+}
+
+// verifies that Location is in MapContext
+func verifyMapContext(location []byte, mapcontext []int) bool {
+	// convert location byte slices to ints for comparison
+	var location0 = int(location[0])
+	var location1 = int(location[1])
+
+	// check Region
+	if location0 > len(mapcontext) {
+		return false
+	}
+	// check Zone
+	if location1 > mapcontext[location0-1] {
+		return false
+	}
+	return true
 }
