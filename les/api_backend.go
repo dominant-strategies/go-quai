@@ -108,6 +108,10 @@ func (b *LesApiBackend) BlockByHash(ctx context.Context, hash common.Hash) (*typ
 	return b.eth.blockchain.GetBlockByHash(ctx, hash)
 }
 
+func (b *LesApiBackend) GetUncleFromWorker(hash common.Hash) (*types.Block, error) {
+	return nil, nil
+}
+
 func (b *LesApiBackend) InsertBlock(ctx context.Context, block *types.Block) (int, error) {
 	return 0, nil
 }
