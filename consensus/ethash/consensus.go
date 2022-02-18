@@ -985,6 +985,61 @@ func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, heade
 	return externalBlocks, nil
 }
 
+// GetExternalBlocks traces all available branches to find external blocks
+func (ethash *Ethash) GetLinkExternalBlocks(chain consensus.ChainHeaderReader, header *types.Header, logging bool) ([]*types.ExternalBlock, error) {
+	context := chain.Config().Context // Index that node is currently at
+	externalBlocks := make([]*types.ExternalBlock, 0)
+	log.Info("GetLinkExternalBlocks: Getting trace for block", "num", header.Number, "context", context, "location", header.Location, "hash", header.Hash())
+
+	// Do not run on block 1
+	if header.Number[context].Cmp(big.NewInt(1)) > 0 {
+		difficultyContext, err := ethash.GetDifficultyContext(chain, header, context)
+		// Only run if we are the block immediately following the coincident block. Check below is to make sure we are N+1.
+		if err != nil {
+			return externalBlocks, nil
+		}
+
+		// Get the Prime stopHash to be used in the Prime context. Go on to trace Prime once.
+		primeStopHash := header.ParentHash[0]
+		if context == 0 {
+			extBlockResult, extBlockErr := ethash.PrimeTraceBranch(chain, header, difficultyContext, primeStopHash, context, header.Location)
+			if extBlockErr != nil {
+				return nil, extBlockErr
+			}
+			externalBlocks = append(externalBlocks, extBlockResult...)
+		}
+
+		// If we are in a Region or Zone context, we may need to change our Prime stopHash since
+		// a Region block might not yet have been found. Scenario: [2, 2, 2] mined before [1, 2, 2].
+		if context == 1 || context == 2 {
+			primeStopHash, primeNum := ethash.GetStopHash(chain, context, 0, header)
+
+			regionStopHash, regionNum := ethash.GetStopHash(chain, context, 1, header)
+			if difficultyContext == 0 {
+				extBlockResult, extBlockErr := ethash.PrimeTraceBranch(chain, header, difficultyContext, primeStopHash, context, header.Location)
+				if extBlockErr != nil {
+					return nil, extBlockErr
+				}
+				externalBlocks = append(externalBlocks, extBlockResult...)
+			}
+			// If our Prime stopHash comes before our Region stopHash.
+			if primeNum < regionNum {
+				regionStopHash = primeStopHash
+			}
+			// If we have a Region block, trace it.
+			if difficultyContext < 2 {
+				extBlockResult, extBlockErr := ethash.RegionTraceBranch(chain, header, 1, regionStopHash, context, header.Location)
+				if extBlockErr != nil {
+					return nil, extBlockErr
+				}
+				externalBlocks = append(externalBlocks, extBlockResult...)
+			}
+		}
+	}
+
+	return externalBlocks, nil
+}
+
 // FinalizeAndAssemble implements consensus.Engine, accumulating the block and
 // uncle rewards, setting the final state and assembling the block.
 func (ethash *Ethash) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {

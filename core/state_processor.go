@@ -80,7 +80,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
 
 	// Get the linkBlocks and check linkage to previous external blocks.
-	// linkExtBlocks, err := p.bc.GetExternalBlocks(header)
+	// linkExtBlocks, err := p.engine.GetLinkExternalBlocks(p.bc, header, true)
 	// if err != nil {
 	// 	return nil, nil, uint64(0), nil, err
 	// }
