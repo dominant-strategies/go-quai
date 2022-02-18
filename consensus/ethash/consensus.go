@@ -763,14 +763,14 @@ func (ethash *Ethash) PrimeTraceBranch(chain consensus.ChainHeaderReader, header
 	for {
 		// If the header is genesis, return the current set of external blocks.
 		if header.Number[context].Cmp(big.NewInt(0)) == 0 {
-			log.Info("Trace Branch: Stopping height == 0", "number", header.Number, "context", context, "location", header.Location, "hash", header.ParentHash[context])
+			// log.Info("Trace Branch: Stopping height == 0", "number", header.Number, "context", context, "location", header.Location, "hash", header.ParentHash[context])
 			break
 		}
 
 		// If we have are stepping into a Region from Prime ensure it is now our original location.
 		if context < types.ContextDepth-1 {
 			if (header.Location[0] != originalLocation[0] && originalContext > 0) || originalContext == 0 {
-				log.Info("Trace Branch: Going down into trace fromPrime", "number", header.Number, "context", context, "location", header.Location, "hash", header.Hash())
+				// log.Info("Trace Branch: Going down into trace fromPrime", "number", header.Number, "context", context, "location", header.Location, "hash", header.Hash())
 				result, err := ethash.PrimeTraceBranch(chain, header, context+1, stopHash, originalContext, originalLocation)
 				if err != nil {
 					return nil, err
@@ -792,9 +792,8 @@ func (ethash *Ethash) PrimeTraceBranch(chain consensus.ChainHeaderReader, header
 		}
 		extBlocks = append(extBlocks, extBlock)
 		// log.Info("Trace Branch: PRIME Adding external block", "number", header.Number, "context", context, "location", header.Location, "hash", header.Hash())
-		// fmt.Println("Prime stopHash", header.ParentHash[context], stopHash)
 		if header.ParentHash[context] == stopHash {
-			log.Info("Trace Branch: Stopping on stop hash or num is 1", "number", header.Number, "context", context, "location", header.Location, "hash", header.ParentHash[context])
+			// log.Info("Trace Branch: Stopping on stop hash or num is 1", "number", header.Number, "context", context, "location", header.Location, "hash", header.ParentHash[context])
 			break
 		}
 
@@ -812,7 +811,7 @@ func (ethash *Ethash) PrimeTraceBranch(chain consensus.ChainHeaderReader, header
 		}
 
 		if bytes.Equal(originalLocation, prevHeader.Header().Location) && context == 0 {
-			log.Info("Trace Branch: Stopping in location equal", "original", originalLocation, "prev", prevHeader.Header().Location)
+			// log.Info("Trace Branch: Stopping in location equal", "original", originalLocation, "prev", prevHeader.Header().Location)
 			break
 		}
 
@@ -825,7 +824,7 @@ func (ethash *Ethash) PrimeTraceBranch(chain consensus.ChainHeaderReader, header
 			log.Warn("Unable to calculate difficulty context")
 		}
 		if difficultyContext < context {
-			log.Info("TraceBranch: Found Region coincident block in Zone", "number", header.Number, "context", context, "location", header.Location)
+			// log.Info("TraceBranch: Found Region coincident block in Zone", "number", header.Number, "context", context, "location", header.Location)
 			break
 		}
 	}
@@ -839,7 +838,7 @@ func (ethash *Ethash) RegionTraceBranch(chain consensus.ChainHeaderReader, heade
 	for {
 		// If the header is genesis, return the current set of external blocks.
 		if header.Number[context].Cmp(big.NewInt(0)) == 0 {
-			log.Info("Trace Branch: Stopping height == 0", "number", header.Number, "context", context, "location", header.Location, "hash", header.ParentHash[context])
+			// log.Info("Trace Branch: Stopping height == 0", "number", header.Number, "context", context, "location", header.Location, "hash", header.ParentHash[context])
 			break
 		}
 
@@ -873,7 +872,6 @@ func (ethash *Ethash) RegionTraceBranch(chain consensus.ChainHeaderReader, heade
 
 		// If we are in the sameLocation, meaning our context and location aren't different we must stop.
 		if sameLocation {
-			log.Info("Trace Branch: In same context and location, stopping")
 			break
 		}
 
@@ -889,13 +887,13 @@ func (ethash *Ethash) RegionTraceBranch(chain consensus.ChainHeaderReader, heade
 		// Stop on the passed in stopHash
 		// fmt.Println("Region stopHash", header.ParentHash[context], stopHash)
 		if header.ParentHash[context] == stopHash {
-			log.Info("Trace Branch: Stopping on stop hash or num is 1", "number", header.Number, "context", context, "location", header.Location, "hash", header.ParentHash[context])
+			// log.Info("Trace Branch: Stopping on stop hash or num is 1", "number", header.Number, "context", context, "location", header.Location, "hash", header.ParentHash[context])
 			break
 		}
 
 		// Do not continue at header number == 1 since we are unable to obtain the Genesis as an external block.
 		if header.Number[context].Cmp(big.NewInt(1)) == 0 {
-			log.Info("Trace Branch: Stopping height == 1", "number", header.Number, "context", context, "location", header.Location, "hash", header.ParentHash[context])
+			// log.Info("Trace Branch: Stopping height == 1", "number", header.Number, "context", context, "location", header.Location, "hash", header.ParentHash[context])
 			break
 		}
 
@@ -907,7 +905,7 @@ func (ethash *Ethash) RegionTraceBranch(chain consensus.ChainHeaderReader, heade
 		}
 
 		if bytes.Equal(originalLocation, prevHeader.Header().Location) && context == 1 {
-			log.Info("Trace Branch: Stopping in location equal", "original", originalLocation, "prev", prevHeader.Header().Location)
+			// log.Info("Trace Branch: Stopping in location equal", "original", originalLocation, "prev", prevHeader.Header().Location)
 			break
 		}
 
@@ -920,7 +918,7 @@ func (ethash *Ethash) RegionTraceBranch(chain consensus.ChainHeaderReader, heade
 			log.Warn("Unable to calculate difficulty context")
 		}
 		if difficultyContext < context && context == types.ContextDepth-1 {
-			log.Info("Trace Branch: Found Region coincident block in Zone", "number", header.Number, "context", context, "location", header.Location)
+			// log.Info("Trace Branch: Found Region coincident block in Zone", "number", header.Number, "context", context, "location", header.Location)
 			break
 		}
 	}
@@ -946,7 +944,6 @@ func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, heade
 
 		// Get the Prime stopHash to be used in the Prime context. Go on to trace Prime once.
 		primeStopHash, primeNum := ethash.GetStopHash(chain, context, 0, coincidentHeader)
-		fmt.Println("primeStopHash1", primeStopHash)
 		if context == 0 {
 			extBlockResult, extBlockErr := ethash.PrimeTraceBranch(chain, coincidentHeader, difficultyContext, primeStopHash, context, header.Location)
 			if extBlockErr != nil {
@@ -959,7 +956,6 @@ func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, heade
 		// a Region block might not yet have been found. Scenario: [2, 2, 2] mined before [1, 2, 2].
 		if context == 1 || context == 2 {
 			regionStopHash, regionNum := ethash.GetStopHash(chain, context, 1, coincidentHeader)
-			fmt.Println("regionStopHash1", regionStopHash)
 			if difficultyContext == 0 {
 				extBlockResult, extBlockErr := ethash.PrimeTraceBranch(chain, coincidentHeader, difficultyContext, primeStopHash, context, header.Location)
 				if extBlockErr != nil {
@@ -970,7 +966,6 @@ func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, heade
 			// If our Prime stopHash comes before our Region stopHash.
 			if primeNum < regionNum {
 				regionStopHash = primeStopHash
-				fmt.Println("regionStopHash2", regionStopHash)
 			}
 			// If we have a Region block, trace it.
 			if difficultyContext < 2 {
@@ -984,21 +979,8 @@ func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, heade
 	}
 
 	log.Info("GetExternalBlocks: Length of external blocks", "len", len(externalBlocks), "time", time.Since(start))
-	if logging {
-		for _, extexternalBlock := range externalBlocks {
-			fmt.Println("GetExternalBlocks:", extexternalBlock.Header().Number, extexternalBlock.Header().Location, extexternalBlock.Context(), extexternalBlock.Hash())
-		}
-	}
-
-	// Swap order of external blocks
-	// if len(externalBlocks) > 0 {
-	// 	for i, j := 0, len(externalBlocks)-1; i < j; i, j = i+1, j-1 {
-	// 		externalBlocks[i], externalBlocks[j] = externalBlocks[j], externalBlocks[i]
-	// 	}
-	// }
 
 	// TODO: Impelement queue here, remove the above check for N+1.
-	// log.Info("GetExternalBlocks: Adding into Queue:", "len", len(externalBlocks))
 	// return chain.QueueAndRetrieveExtBlocks(externalBlocks, header)
 	return externalBlocks, nil
 }
