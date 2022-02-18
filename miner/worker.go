@@ -948,13 +948,6 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		return
 	}
 
-	// Reverse order so that external blocks are sequentially applied
-	// if len(externalBlocks) > 0 {
-	// 	for i, j := 0, len(externalBlocks)-1; i < j; i, j = i+1, j-1 {
-	// 		externalBlocks[i], externalBlocks[j] = externalBlocks[j], externalBlocks[i]
-	// 	}
-	// }
-
 	// If block has not advanced
 	if w.snapshotBlock != nil && parent.Header().Number[types.QuaiNetworkContext] == w.snapshotBlock.Number() {
 		header.BaseFee[types.QuaiNetworkContext] = w.snapshotBlock.BaseFee()

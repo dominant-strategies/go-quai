@@ -1902,7 +1902,6 @@ func (d *Downloader) processFastSyncContent() error {
 			}
 		}
 		// Fast sync done, pivot commit done, full import
-		fmt.Println("Importing in process fast sync")
 		if err := d.importBlockResults(afterP); err != nil {
 			return err
 		}

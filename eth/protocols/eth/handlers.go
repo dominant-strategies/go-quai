@@ -218,7 +218,6 @@ func handleGetExtBlocks66(backend Backend, msg Decoder, peer *Peer) error {
 	if err := msg.Decode(&query); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
-	fmt.Println("Answering handleGetExtBlocks66")
 	response := answerGetExtBlocksQuery(backend, query.GetExtBlocksPacket, peer)
 	return peer.ReplyExtBlocksRLP(query.RequestId, response)
 }
@@ -260,7 +259,7 @@ func answerGetExtBlocksQuery(backend Backend, query GetExtBlocksPacket, peer *Pe
 	)
 	for _, hash := range query {
 		if bytes >= softResponseLimit {
-			fmt.Println("Hitting softResponseLimit in answerGetExtBlocksQuery")
+			log.Warn("Hitting softResponseLimit in answerGetExtBlocksQuery")
 			break
 		}
 		// Retrieve the requested block's external blocks
@@ -269,10 +268,6 @@ func answerGetExtBlocksQuery(backend Backend, query GetExtBlocksPacket, peer *Pe
 		if err != nil {
 			log.Info("answerGetExtBlocks: Unable to retrieve ext blocks", "hash", hash, "len", len(results))
 			break
-		}
-		// Temp print, leave for now until we resolve all consensus.
-		for i := 0; i < len(results); i++ {
-			log.Info("answerGetExtBlocks:", "hash", results[i].Hash(), "context", results[i].Context(), "num", results[i].Header().Number)
 		}
 		// If known, encode and queue for response packet
 		if encoded, err := rlp.EncodeToBytes(results); err != nil {

@@ -587,8 +587,13 @@ func (s *PublicBlockChainQuaiAPI) SendMinedBlock(ctx context.Context, raw json.R
 		if block != nil {
 			uncles[i] = block.Header()
 		} else {
-			log.Warn("Unable to find local uncle for retrieved mined block", "uncle", uncleHash)
-			return nil
+			block, _ := s.b.GetUncleFromWorker(uncleHash)
+			uncles[i] = block.Header()
+
+			if block == nil {
+				log.Warn("Unable to find local uncle for retrieved mined block", "uncle", uncleHash)
+				return nil
+			}
 		}
 	}
 

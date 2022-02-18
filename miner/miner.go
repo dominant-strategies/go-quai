@@ -237,3 +237,14 @@ func (miner *Miner) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscript
 func (miner *Miner) SubscribePendingBlock(ch chan<- *types.Header) event.Subscription {
 	return miner.worker.pendingBlockFeed.Subscribe(ch)
 }
+
+// Method to retrieve uncles from the worker in case not found in normal DB.
+func (miner *Miner) GetUncle(hash common.Hash) *types.Block {
+	if uncle, exist := miner.worker.localUncles[hash]; exist {
+		return uncle
+	}
+	if uncle, exist := miner.worker.remoteUncles[hash]; exist {
+		return uncle
+	}
+	return nil
+}
