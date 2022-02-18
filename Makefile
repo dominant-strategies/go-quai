@@ -196,6 +196,7 @@ run-full-mining:
 ifeq (,$(wildcard nodelogs))
 	mkdir nodelogs
 endif
+
 	@nohup $(MINING_BASE_COMMAND) --miner.etherbase $(PRIME_COINBASE) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(PRIME_PORT_TCP) --http.port $(PRIME_PORT_HTTP) --ws.port $(PRIME_PORT_WS) --quaistats ${NAME}:prime${PASSWORD}@${STATS_HOST}:9000 >> nodelogs/prime.log 2>&1 &
 	@nohup $(MINING_BASE_COMMAND) --miner.etherbase $(REGION_1_COINBASE)  --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(REGION_1_PORT_TCP) --http.port $(REGION_1_PORT_HTTP) --ws.port $(REGION_1_PORT_WS) --region 1 --quaistats ${NAME}:region1${PASSWORD}@${STATS_HOST}:9100 >> nodelogs/region-1.log 2>&1 &
 	@nohup $(MINING_BASE_COMMAND) --miner.etherbase $(REGION_2_COINBASE)  --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(REGION_2_PORT_TCP) --http.port $(REGION_2_PORT_HTTP) --ws.port $(REGION_2_PORT_WS) --region 2 --quaistats ${NAME}:region2${PASSWORD}@${STATS_HOST}:9200 >> nodelogs/region-2.log 2>&1 &

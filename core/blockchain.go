@@ -416,7 +416,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	}
 
 	// Once we have updated the state of the chain, generate the extBlockLink struct for processing of ext blocks.
-	bc.processor.GenerateExtBlockLink()
+	// bc.processor.GenerateExtBlockLink()
 
 	return bc, nil
 }
@@ -1629,11 +1629,11 @@ func (bc *BlockChain) AddExternalBlocks(blocks []*types.ExternalBlock) error {
 
 // addExternalBlock adds the received block to the external block cache.
 func (bc *BlockChain) AddExternalBlock(block *types.ExternalBlock) error {
-	context := []interface{}{
-		"context", block.Context(), "numbers", block.Header().Number, "hash", block.Hash(), "location", block.Header().Location,
-		"txs", len(block.Transactions()), "receipts", len(block.Receipts()),
-	}
-	log.Debug("New external block", context...)
+	// context := []interface{}{
+	// 	"context", block.Context(), "numbers", block.Header().Number, "hash", block.Hash(), "location", block.Header().Location,
+	// 	"txs", len(block.Transactions()), "receipts", len(block.Receipts()),
+	// }
+	// log.Info("Adding external block", context...)
 	data, err := rlp.EncodeToBytes(block)
 	if err != nil {
 		log.Crit("Failed to RLP encode external block", "err", err)
@@ -1863,7 +1863,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			if localTd.Cmp(externTd) < 0 {
 				break
 			}
-			log.Debug("Ignoring already known block", "number", block.Number(), "hash", block.Hash())
+			log.Info("Ignoring already known block", "number", block.Number(), "hash", block.Hash())
 			stats.ignored++
 
 			block, err = it.next()
@@ -1877,7 +1877,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		// `insertChain` while a part of them have higher total difficulty than current
 		// head full block(new pivot point).
 		for block != nil && err == ErrKnownBlock {
-			log.Debug("Writing previously known block", "number", block.Number(), "hash", block.Hash())
+			log.Info("Writing previously known block", "number", block.Number(), "hash", block.Hash())
 			if err := bc.writeKnownBlock(block); err != nil {
 				return it.index, err
 			}
@@ -2010,6 +2010,15 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		}
 		// Process block using the parent state as reference point
 		substart := time.Now()
+
+		// If in Prime or Region, take to see if we have already included the hash in the lower level.
+		// TODO: #179 Extend CheckHashInclusion to if the hash was ever included in the chain, not just the parent.
+		err = bc.CheckHashInclusion(block.Header(), parent)
+		if err != nil {
+			return it.index, err
+		}
+
+		// Process our block and retrieve external blocks.
 		receipts, logs, usedGas, externalBlocks, err := bc.processor.Process(block, statedb, bc.vmConfig)
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
@@ -2064,7 +2073,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 
 		switch status {
 		case CanonStatTy:
-			log.Debug("Inserted new block", "number", block.Number(), "hash", block.Hash(),
+			log.Info("Inserted new block", "number", block.Header().Number, "hash", block.Hash(), "extBlocks", len(externalBlocks),
 				"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"elapsed", common.PrettyDuration(time.Since(start)),
 				"root", block.Root())
@@ -2417,7 +2426,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	}
 
 	// Reset the blockLink in the blockchain state processor.
-	bc.processor.GenerateExtBlockLink()
+	// bc.processor.GenerateExtBlockLink()
 
 	return nil
 }
@@ -2597,6 +2606,26 @@ func (bc *BlockChain) GetHeader(hash common.Hash, number uint64) *types.Header {
 	return bc.hc.GetHeader(hash, number)
 }
 
+// GetHeader retrieves a block header from the database by hash and number,
+// caching it if found.
+func (bc *BlockChain) CheckHashInclusion(header *types.Header, parent *types.Header) error {
+	if types.QuaiNetworkContext < 1 {
+		if header.ParentHash[1] == parent.ParentHash[1] {
+			fmt.Println("Region hash already included:", header.ParentHash[1], parent.ParentHash[1])
+			return fmt.Errorf("error subordinate hash already included in parent")
+		}
+	}
+
+	if types.QuaiNetworkContext < 2 {
+		if header.ParentHash[2] == parent.ParentHash[2] {
+			fmt.Println("Zone hash already included:", header.ParentHash[2], parent.ParentHash[2])
+			return fmt.Errorf("error subordinate hash already included in parent")
+		}
+	}
+
+	return nil
+}
+
 // GetHeaderByHash retrieves a block header from the database by hash, caching it if
 // found.
 func (bc *BlockChain) GetHeaderByHash(hash common.Hash) *types.Header {
@@ -2662,33 +2691,43 @@ func (bc *BlockChain) GetExternalBlocks(header *types.Header) ([]*types.External
 	// Do not run on block 1
 	if header.Number[context].Cmp(big.NewInt(1)) > 0 {
 		coincidentHeader, difficultyContext := bc.engine.GetCoincidentHeader(bc, context, header)
-
-		// Checking for nil prev or coincident headers
-		if header == nil {
-			log.Info("GetExternalBlocks: prevHeader nil", "header", header.Hash())
-			return externalBlocks, nil
-		}
-
-		if coincidentHeader == nil {
-			log.Info("GetExternalBlocks: coincidentHeader nil", "header", header.Hash())
-			return externalBlocks, nil
-		}
-
-		// If we are not getting the transactions immediately after the coincident block, return
 		if coincidentHeader.Number[context].Cmp(header.Number[context]) != 0 {
 			return externalBlocks, nil
 		}
-		stopHash, err := bc.engine.GetStopHash(bc, difficultyContext, context, coincidentHeader)
-		if err != nil {
-			log.Info("GetExternalBlocks: Unable to get stop hash", "coincident", coincidentHeader.Hash())
-			return nil, err
+
+		// Get the Prime stopHash to be used in the Prime context. Go on to trace Prime once.
+		primeStopHash := header.ParentHash[0]
+		if context == 0 {
+			extBlockResult, extBlockErr := bc.engine.PrimeTraceBranch(bc, coincidentHeader, difficultyContext, primeStopHash, context, header.Location)
+			if extBlockErr != nil {
+				return nil, extBlockErr
+			}
+			externalBlocks = append(externalBlocks, extBlockResult...)
 		}
-		extBlockResults, err := bc.engine.TraceBranch(bc, coincidentHeader, difficultyContext, stopHash, context, header.Location, false)
-		if err != nil {
-			log.Info("GetExternalBlocks: Unable to get external blocks", "coincident", coincidentHeader.Hash(), "stopHash", stopHash)
-			return nil, err
+
+		if context == 1 || context == 2 {
+			primeStopHash, primeNum := bc.engine.GetStopHash(bc, context, 0, coincidentHeader)
+			regionStopHash, regionNum := bc.engine.GetStopHash(bc, context, 1, coincidentHeader)
+			if difficultyContext == 0 {
+				extBlockResult, extBlockErr := bc.engine.PrimeTraceBranch(bc, coincidentHeader, difficultyContext, primeStopHash, context, coincidentHeader.Location)
+				if extBlockErr != nil {
+					return nil, extBlockErr
+				}
+				externalBlocks = append(externalBlocks, extBlockResult...)
+			}
+			// If our Prime stopHash comes before our Region stopHash
+			if primeNum < regionNum {
+				regionStopHash = primeStopHash
+			}
+			// If we have a Region block, trace it.
+			if difficultyContext < 2 {
+				extBlockResult, extBlockErr := bc.engine.RegionTraceBranch(bc, coincidentHeader, 1, regionStopHash, context, coincidentHeader.Location)
+				if extBlockErr != nil {
+					return nil, extBlockErr
+				}
+				externalBlocks = append(externalBlocks, extBlockResult...)
+			}
 		}
-		externalBlocks = append(externalBlocks, extBlockResults...)
 	}
 
 	return externalBlocks, nil

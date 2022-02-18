@@ -353,10 +353,10 @@ func MainnetPrimeGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.MainnetPrimeChainConfig,
 		Number:     0,
-		Nonce:      48,
+		Nonce:      52,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
 		GasLimit:   5000000,
-		Difficulty: big.NewInt(16048576),
+		Difficulty: big.NewInt(32048576),
 		Alloc:      decodePrealloc(mainnetAllocData),
 	}
 }
@@ -366,10 +366,10 @@ func MainnetRegionGenesisBlock(regionParams *params.ChainConfig) *Genesis {
 	return &Genesis{
 		Config:     regionParams,
 		Number:     0,
-		Nonce:      48,
+		Nonce:      52,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
 		GasLimit:   1600000,
-		Difficulty: big.NewInt(4048576),
+		Difficulty: big.NewInt(8048576),
 		Alloc:      decodePrealloc(mainnetAllocData),
 	}
 }
@@ -379,10 +379,10 @@ func MainnetZoneGenesisBlock(zoneParams *params.ChainConfig) *Genesis {
 	return &Genesis{
 		Config:     zoneParams,
 		Number:     0,
-		Nonce:      48,
+		Nonce:      52,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
 		GasLimit:   500000,
-		Difficulty: big.NewInt(1048576),
+		Difficulty: big.NewInt(2048576),
 		Alloc:      decodePrealloc(mainnetAllocData),
 	}
 }
@@ -395,7 +395,7 @@ func RopstenPrimeGenesisBlock() *Genesis {
 		Nonce:      11,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
 		GasLimit:   5000000,
-		Difficulty: big.NewInt(16048576),
+		Difficulty: big.NewInt(3448576),
 		Alloc:      decodePrealloc(mainnetAllocData),
 	}
 }
@@ -408,7 +408,7 @@ func RopstenRegionGenesisBlock(regionParams *params.ChainConfig) *Genesis {
 		Nonce:      11,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
 		GasLimit:   1600000,
-		Difficulty: big.NewInt(4048576),
+		Difficulty: big.NewInt(1248576),
 		Alloc:      decodePrealloc(mainnetAllocData),
 	}
 }
@@ -421,7 +421,7 @@ func RopstenZoneGenesisBlock(zoneParams *params.ChainConfig) *Genesis {
 		Nonce:      11,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
 		GasLimit:   500000,
-		Difficulty: big.NewInt(1048576),
+		Difficulty: big.NewInt(168576),
 		Alloc:      decodePrealloc(mainnetAllocData),
 	}
 }
