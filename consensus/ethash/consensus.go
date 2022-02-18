@@ -302,9 +302,9 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 			return err
 		}
 	}
-	// Verify that Location is in MapContext
-	if inContext := verifyMapContext(header.Location, chain.Config().MapContext); inContext != true {
-		return fmt.Errorf("invalid Location or Mapcontext: Location %d not in MapContext %c", header.Location, chain.Config().MapContext)
+	// Verify that Location is same as config
+	if validLocation := verifyLocation(header.Location, chain.Config().Location); !validLocation {
+		return fmt.Errorf("invalid location: Location %d not valid, expected %c", header.Location, chain.Config().Location)
 	}
 
 	if err := misc.VerifyForkHashes(chain.Config(), header, uncle); err != nil {
@@ -738,11 +738,15 @@ func (ethash *Ethash) GetStopHash(chain consensus.ChainHeaderReader, originalCon
 		}
 
 		sameLocation := false
-		if originalContext == 1 {
+		switch originalContext {
+		case 0:
+			sameLocation = true
+		case 1:
 			sameLocation = startingHeader.Location[0] == header.Location[0]
-		} else if originalContext == 2 {
+		case 2:
 			sameLocation = bytes.Equal(startingHeader.Location, header.Location)
 		}
+
 		if difficultyContext == wantedDiffContext && sameLocation {
 			stopHash = header.Hash()
 			break
@@ -806,6 +810,12 @@ func (ethash *Ethash) PrimeTraceBranch(chain consensus.ChainHeaderReader, header
 			log.Info("Trace Branch: External Block not found for previous header", "number", header.Number[context].Int64()-1, "context", context, "hash", header.ParentHash[context], "location", header.Location)
 			return extBlocks, nil
 		}
+
+		if bytes.Equal(originalLocation, prevHeader.Header().Location) && context == 0 {
+			log.Info("Trace Branch: Stopping in location equal", "original", originalLocation, "prev", prevHeader.Header().Location)
+			break
+		}
+
 		header = prevHeader.Header()
 
 		// Calculate the difficulty context in order to know if we have reached a coincident.
@@ -895,6 +905,12 @@ func (ethash *Ethash) RegionTraceBranch(chain consensus.ChainHeaderReader, heade
 			log.Info("Trace Branch: External Block not found for previous header", "number", header.Number[context].Int64()-1, "context", context, "hash", header.ParentHash[context], "location", header.Location)
 			break
 		}
+
+		if bytes.Equal(originalLocation, prevHeader.Header().Location) && context == 1 {
+			log.Info("Trace Branch: Stopping in location equal", "original", originalLocation, "prev", prevHeader.Header().Location)
+			break
+		}
+
 		header = prevHeader.Header()
 
 		// Calculate the difficulty context in order to know if we have reached a coincident.
@@ -929,7 +945,7 @@ func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, heade
 		}
 
 		// Get the Prime stopHash to be used in the Prime context. Go on to trace Prime once.
-		primeStopHash := coincidentHeader.ParentHash[0]
+		primeStopHash, primeNum := ethash.GetStopHash(chain, context, 0, coincidentHeader)
 		fmt.Println("primeStopHash1", primeStopHash)
 		if context == 0 {
 			extBlockResult, extBlockErr := ethash.PrimeTraceBranch(chain, coincidentHeader, difficultyContext, primeStopHash, context, header.Location)
@@ -942,9 +958,6 @@ func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, heade
 		// If we are in a Region or Zone context, we may need to change our Prime stopHash since
 		// a Region block might not yet have been found. Scenario: [2, 2, 2] mined before [1, 2, 2].
 		if context == 1 || context == 2 {
-			primeStopHash, primeNum := ethash.GetStopHash(chain, context, 0, coincidentHeader)
-			fmt.Println("primeStopHash2", primeStopHash)
-
 			regionStopHash, regionNum := ethash.GetStopHash(chain, context, 1, coincidentHeader)
 			fmt.Println("regionStopHash1", regionStopHash)
 			if difficultyContext == 0 {
@@ -1115,19 +1128,24 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	state.AddBalance(header.Coinbase[types.QuaiNetworkContext], reward)
 }
 
-// verifies that Location is in MapContext
-func verifyMapContext(location []byte, mapcontext []int) bool {
-	// convert location byte slices to ints for comparison
-	var location0 = int(location[0])
-	var location1 = int(location[1])
-
-	// check Region
-	if location0 > len(mapcontext) {
+// Verifies that a header location is valid for a specific config.
+func verifyLocation(location []byte, configLocation []byte) bool {
+	switch types.QuaiNetworkContext {
+	case 0:
+		return true
+	case 1:
+		if location[0] != configLocation[0] {
+			return false
+		} else {
+			return true
+		}
+	case 2:
+		if !bytes.Equal(location, configLocation) {
+			return false
+		} else {
+			return true
+		}
+	default:
 		return false
 	}
-	// check Zone
-	if location1 > mapcontext[location0-1] {
-		return false
-	}
-	return true
 }

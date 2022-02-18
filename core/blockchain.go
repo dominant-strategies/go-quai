@@ -416,7 +416,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	}
 
 	// Once we have updated the state of the chain, generate the extBlockLink struct for processing of ext blocks.
-	bc.processor.GenerateExtBlockLink()
+	// bc.processor.GenerateExtBlockLink()
 
 	return bc, nil
 }
@@ -2073,7 +2073,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 
 		switch status {
 		case CanonStatTy:
-			log.Info("Inserted new block", "number", block.Header().Number, "hash", block.Hash(),
+			log.Info("Inserted new block", "number", block.Header().Number, "hash", block.Hash(), "extBlocks", len(externalBlocks),
 				"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"elapsed", common.PrettyDuration(time.Since(start)),
 				"root", block.Root())
@@ -2426,7 +2426,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	}
 
 	// Reset the blockLink in the blockchain state processor.
-	bc.processor.GenerateExtBlockLink()
+	// bc.processor.GenerateExtBlockLink()
 
 	return nil
 }
