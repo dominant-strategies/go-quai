@@ -29,12 +29,12 @@ import (
 	"github.com/spruce-solutions/go-quai/common/hexutil"
 	"github.com/spruce-solutions/go-quai/console/prompt"
 	"github.com/spruce-solutions/go-quai/core/rawdb"
+	"github.com/spruce-solutions/go-quai/core/types"
+	"github.com/spruce-solutions/go-quai/eth/ethconfig"
 	"github.com/spruce-solutions/go-quai/ethdb"
 	"github.com/spruce-solutions/go-quai/log"
-	"github.com/spruce-solutions/go-quai/trie"
-	"github.com/spruce-solutions/go-quai/eth/ethconfig"
 	"github.com/spruce-solutions/go-quai/node"
-	"github.com/spruce-solutions/go-quai/core/types"
+	"github.com/spruce-solutions/go-quai/trie"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -179,8 +179,8 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 func removeDB(ctx *cli.Context) error {
 	// stack, config := makeConfigNode(ctx)
 	all_chain_dbs := []string{node.DefaultConfig.DataDir} // array to hold dirs of all chains
-	cache_path := ethconfig.Defaults.Ethash.CacheDir // dir for ethcache
-	dataset_path := ethconfig.Defaults.Ethash.DatasetDir // dir for ethash dataset
+	cache_path := ethconfig.Defaults.Ethash.CacheDir      // dir for ethcache
+	dataset_path := ethconfig.Defaults.Ethash.DatasetDir  // dir for ethash dataset
 
 	// construct all_chain_dbs to hold all paths properly formatted to machine OS
 	for n := 1; n < (types.ContextDepth + 1); n++ {
@@ -195,7 +195,7 @@ func removeDB(ctx *cli.Context) error {
 	// loop through each chain db in all_chain_dbs and prompt Y/n to delete
 	for _, d := range all_chain_dbs {
 		// Remove the full node state database
-		path := filepath.Join(d, "geth", "chaindata")
+		path := filepath.Join(d, "quai", "chaindata")
 		if common.FileExist(path) {
 			confirmAndRemoveDB(path, "full node state database")
 		} else {
@@ -207,6 +207,13 @@ func removeDB(ctx *cli.Context) error {
 			confirmAndRemoveDB(path, "full node ancient database")
 		} else {
 			log.Info("Full node ancient database missing", "path", path)
+		}
+
+		extPath := filepath.Join(d, "quai", "externalblocks")
+		if common.FileExist(extPath) {
+			confirmAndRemoveDB(extPath, "full external blocks db")
+		} else {
+			log.Info("Full external blocks database missing", "path", extPath)
 		}
 		// Remove the light node database
 		/* path = d.ResolvePath("lightchaindata")
