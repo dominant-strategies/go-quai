@@ -2696,7 +2696,8 @@ func (bc *BlockChain) GetExternalBlocks(header *types.Header) ([]*types.External
 		}
 
 		// Get the Prime stopHash to be used in the Prime context. Go on to trace Prime once.
-		primeStopHash := header.ParentHash[0]
+		// Get the Prime stopHash to be used in the Prime context. Go on to trace Prime once.
+		primeStopHash, primeNum := bc.engine.GetStopHash(bc, context, 0, coincidentHeader)
 		if context == 0 {
 			extBlockResult, extBlockErr := bc.engine.PrimeTraceBranch(bc, coincidentHeader, difficultyContext, primeStopHash, context, header.Location)
 			if extBlockErr != nil {
@@ -2706,7 +2707,6 @@ func (bc *BlockChain) GetExternalBlocks(header *types.Header) ([]*types.External
 		}
 
 		if context == 1 || context == 2 {
-			primeStopHash, primeNum := bc.engine.GetStopHash(bc, context, 0, coincidentHeader)
 			regionStopHash, regionNum := bc.engine.GetStopHash(bc, context, 1, coincidentHeader)
 			if difficultyContext == 0 {
 				extBlockResult, extBlockErr := bc.engine.PrimeTraceBranch(bc, coincidentHeader, difficultyContext, primeStopHash, context, coincidentHeader.Location)
