@@ -19,9 +19,9 @@ package params
 import "math/big"
 
 const (
-	GasLimitBoundDivisor uint64 = 1024    // The bound divisor of the gas limit, used in update calculations.
+	GasLimitBoundDivisor uint64 = 512     // The bound divisor of the gas limit, used in update calculations.
 	MinGasLimit          uint64 = 5000    // Minimum the gas limit may ever be.
-	EmptyGasLimit        uint64 = 100000  // Gas limit at empty blocks
+	EmptyGasLimit        uint64 = 200000  // Gas limit at empty blocks
 	GenesisGasLimit      uint64 = 4712388 // Gas limit of the Genesis block.
 
 	MaximumExtraDataSize  uint64 = 32    // Maximum size extra data may be after Genesis.
@@ -121,7 +121,7 @@ const (
 
 	BaseFeeChangeDenominator = 8 // Bounds the amount the base fee can change between blocks.
 	ElasticityMultiplier     = 2 // Bounds the maximum gas limit an EIP-1559 block may have.
-	InitialBaseFee           = 0 // Initial base fee for EIP-1559 blocks.
+	InitialBaseFee           = 1 // Initial base fee for EIP-1559 blocks.
 
 	MaxCodeSize = 24576 // Maximum bytecode to permit for a contract
 

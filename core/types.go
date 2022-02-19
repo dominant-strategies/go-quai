@@ -51,4 +51,6 @@ type Processor interface {
 
 	// GenerateExtBlockLink resets the ext block linking hashes depending on where the current head is.
 	GenerateExtBlockLink()
+
+	SetLinkBlocksToLastApplied(externalBlocks []*types.ExternalBlock)
 }

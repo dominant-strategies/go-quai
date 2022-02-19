@@ -63,6 +63,7 @@ var LightClientGPO = gasprice.Config{
 var Defaults = Config{
 	SyncMode: downloader.SnapSync,
 	Ethash: ethash.Config{
+		CacheDir:         "ethash",
 		CachesInMem:      2,
 		CachesOnDisk:     3,
 		CachesLockMmap:   false,
@@ -105,19 +106,15 @@ func init() {
 		}
 	}
 	if runtime.GOOS == "darwin" {
-		Defaults.Ethash.CacheDir = filepath.Join(home, "Library", "Quai", "ethash")
 		Defaults.Ethash.DatasetDir = filepath.Join(home, "Library", "Ethash")
 	} else if runtime.GOOS == "windows" {
 		localappdata := os.Getenv("LOCALAPPDATA")
 		if localappdata != "" {
-			Defaults.Ethash.CacheDir = filepath.Join(localappdata, "ethash")
 			Defaults.Ethash.DatasetDir = filepath.Join(localappdata, "Ethash")
 		} else {
-			Defaults.Ethash.CacheDir = filepath.Join(home, "AppData", "Local", "Quai", "ethash")
 			Defaults.Ethash.DatasetDir = filepath.Join(home, "AppData", "Local", "Ethash")
 		}
 	} else {
-		Defaults.Ethash.CacheDir = filepath.Join(home, ".Quai", "ethash")
 		Defaults.Ethash.DatasetDir = filepath.Join(home, ".ethash")
 	}
 }

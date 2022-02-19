@@ -27,12 +27,12 @@ import (
 
 // Genesis hashes to enforce below configs on.
 var (
-	MainnetPrimeGenesisHash  = common.HexToHash("0x6413bda6c6f8379a0aa4c6081b138bd10229b59c0cb3d092edbabe67f5306087")
-	MainnetRegionGenesisHash = common.HexToHash("0x2d8fa81d69095b6a8cc267ae69e6e22a0f35323c80028a24cfb359993e6064ae")
-	MainnetZoneGenesisHash   = common.HexToHash("0x277f051a75137fd81551a67d1e0577c9348174ad25b608c2323633140f88931b")
-	RopstenPrimeGenesisHash  = common.HexToHash("0x669e78d392237d2cdc0fda1e670592c8e524d8406a816bd8c301bfe6dc7bbda4")
-	RopstenRegionGenesisHash = common.HexToHash("0x1fe2d85883523226f92c2073f486f1e37b9596a341950c54d8803248cffad2ab")
-	RopstenZoneGenesisHash   = common.HexToHash("0x8c3eed6189c9bafb44941150dc2eb93f29d79352e30bfff0a4e6199fb5a39f44")
+	MainnetPrimeGenesisHash  = common.HexToHash("0x7b4490b9d85546cb8ef5d43316bc7a6d78ea5ec7ae3ea9bc6fd16bcc3bcc279f")
+	MainnetRegionGenesisHash = common.HexToHash("0x5942bcc68eac3b1ba8be42864ca11972b870ad931edd0e463cc54ffd40058477")
+	MainnetZoneGenesisHash   = common.HexToHash("0xd9b9ed9fe4ae892542aae9bb1d42ea14f0fa5f32fffef48da58f149ce20bf297")
+	RopstenPrimeGenesisHash  = common.HexToHash("0xdd56672364a589f747b788db90ce749a4b2fd7232811448a5007758dd1be66bc")
+	RopstenRegionGenesisHash = common.HexToHash("0xf08581e49395806472eee0a3bb9e1db56c53ea55c306a070f91053a9b310154f")
+	RopstenZoneGenesisHash   = common.HexToHash("0xad8733f0fbeb410396d09db8f1f9fefbf45406ad6da8e7dae648f91d71b86d11")
 	RopstenGenesisHash       = common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d")
 	RinkebyGenesisHash       = common.HexToHash("0x6341fd3daf94b748c72ced5a5b26028f2474f5f00d824504e4fa37a75767e177")
 	GoerliGenesisHash        = common.HexToHash("0xbf7e331f7f7c1dd2e05159666b3bf8bc7a8a3a9eb1d518969eab529dd9b88c1a")
@@ -60,6 +60,7 @@ var (
 		ChainID:             big.NewInt(9000),
 		Context:             0,
 		Location:            []byte{0, 0},
+		MapContext:          []int{3, 3, 3},
 		Ethash:              new(EthashConfig),
 		HomesteadBlock:      big.NewInt(0),
 		EIP150Block:         big.NewInt(0),
@@ -81,6 +82,7 @@ var (
 			ChainID:             big.NewInt(9100),
 			Context:             1,
 			Location:            []byte{1, 0},
+			MapContext:          []int{3, 3, 3},
 			Ethash:              new(EthashConfig),
 			HomesteadBlock:      big.NewInt(0),
 			EIP150Block:         big.NewInt(0),
@@ -100,6 +102,7 @@ var (
 			ChainID:             big.NewInt(9200),
 			Context:             1,
 			Location:            []byte{2, 0},
+			MapContext:          []int{3, 3, 3},
 			Ethash:              new(EthashConfig),
 			HomesteadBlock:      big.NewInt(0),
 			EIP150Block:         big.NewInt(0),
@@ -119,6 +122,7 @@ var (
 			ChainID:             big.NewInt(9300),
 			Context:             1,
 			Location:            []byte{3, 0},
+			MapContext:          []int{3, 3, 3},
 			Ethash:              new(EthashConfig),
 			HomesteadBlock:      big.NewInt(0),
 			EIP150Block:         big.NewInt(0),
@@ -142,6 +146,7 @@ var (
 				ChainID:             big.NewInt(9101),
 				Context:             2,
 				Location:            []byte{1, 1},
+				MapContext:          []int{3, 3, 3},
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -161,6 +166,7 @@ var (
 				ChainID:             big.NewInt(9102),
 				Context:             2,
 				Location:            []byte{1, 2},
+				MapContext:          []int{3, 3, 3},
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -200,6 +206,7 @@ var (
 				ChainID:             big.NewInt(9201),
 				Context:             2,
 				Location:            []byte{2, 1},
+				MapContext:          []int{3, 3, 3},
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -219,6 +226,7 @@ var (
 				ChainID:             big.NewInt(9202),
 				Context:             2,
 				Location:            []byte{2, 2},
+				MapContext:          []int{3, 3, 3},
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -238,6 +246,7 @@ var (
 				ChainID:             big.NewInt(9203),
 				Context:             2,
 				Location:            []byte{2, 3},
+				MapContext:          []int{3, 3, 3},
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -258,6 +267,7 @@ var (
 				ChainID:             big.NewInt(9301),
 				Context:             2,
 				Location:            []byte{3, 1},
+				MapContext:          []int{3, 3, 3},
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -277,6 +287,7 @@ var (
 				ChainID:             big.NewInt(9302),
 				Context:             2,
 				Location:            []byte{3, 2},
+				MapContext:          []int{3, 3, 3},
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -296,6 +307,7 @@ var (
 				ChainID:             big.NewInt(9303),
 				Context:             2,
 				Location:            []byte{3, 3},
+				MapContext:          []int{3, 3, 3},
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -319,6 +331,7 @@ var (
 		ChainID:             big.NewInt(12000),
 		Context:             0,
 		Location:            []byte{0, 0},
+		MapContext:          []int{3, 3, 3},
 		Ethash:              new(EthashConfig),
 		HomesteadBlock:      big.NewInt(0),
 		EIP150Block:         big.NewInt(0),
@@ -340,6 +353,7 @@ var (
 			ChainID:             big.NewInt(12100),
 			Context:             1,
 			Location:            []byte{1, 0},
+			MapContext:          []int{3, 3, 3},
 			Ethash:              new(EthashConfig),
 			HomesteadBlock:      big.NewInt(0),
 			EIP150Block:         big.NewInt(0),
@@ -359,6 +373,7 @@ var (
 			ChainID:             big.NewInt(12200),
 			Context:             1,
 			Location:            []byte{2, 0},
+			MapContext:          []int{3, 3, 3},
 			Ethash:              new(EthashConfig),
 			HomesteadBlock:      big.NewInt(0),
 			EIP150Block:         big.NewInt(0),
@@ -378,6 +393,7 @@ var (
 			ChainID:             big.NewInt(12300),
 			Context:             1,
 			Location:            []byte{3, 0},
+			MapContext:          []int{3, 3, 3},
 			Ethash:              new(EthashConfig),
 			HomesteadBlock:      big.NewInt(0),
 			EIP150Block:         big.NewInt(0),
@@ -401,6 +417,7 @@ var (
 				ChainID:             big.NewInt(12101),
 				Context:             2,
 				Location:            []byte{1, 1},
+				MapContext:          []int{3, 3, 3},
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -420,6 +437,7 @@ var (
 				ChainID:             big.NewInt(12102),
 				Context:             2,
 				Location:            []byte{1, 2},
+				MapContext:          []int{3, 3, 3},
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -439,6 +457,7 @@ var (
 				ChainID:             big.NewInt(12103),
 				Context:             2,
 				Location:            []byte{1, 3},
+				MapContext:          []int{3, 3, 3},
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -459,6 +478,7 @@ var (
 				ChainID:             big.NewInt(12201),
 				Context:             2,
 				Location:            []byte{2, 1},
+				MapContext:          []int{3, 3, 3},
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -478,6 +498,7 @@ var (
 				ChainID:             big.NewInt(12202),
 				Context:             2,
 				Location:            []byte{2, 2},
+				MapContext:          []int{3, 3, 3},
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -497,6 +518,7 @@ var (
 				ChainID:             big.NewInt(12203),
 				Context:             2,
 				Location:            []byte{2, 3},
+				MapContext:          []int{3, 3, 3},
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -517,6 +539,7 @@ var (
 				ChainID:             big.NewInt(12301),
 				Context:             2,
 				Location:            []byte{3, 1},
+				MapContext:          []int{3, 3, 3},
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -536,6 +559,7 @@ var (
 				ChainID:             big.NewInt(12302),
 				Context:             2,
 				Location:            []byte{3, 2},
+				MapContext:          []int{3, 3, 3},
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -555,6 +579,7 @@ var (
 				ChainID:             big.NewInt(12303),
 				Context:             2,
 				Location:            []byte{3, 3},
+				MapContext:          []int{3, 3, 3},
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -624,16 +649,15 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), 0, []byte{0, 0}, big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, nil}
+	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), 0, []byte{0, 0}, []int{3, 3, 3}, big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, nil}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), 0, []byte{0, 0}, big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil}
-
-	TestChainConfig = &ChainConfig{big.NewInt(1), 0, []byte{0, 0}, big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, nil}
+	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), 0, []byte{0, 0}, []int{3, 3, 3}, big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil}
+	TestChainConfig = &ChainConfig{big.NewInt(1), 0, []byte{0, 0}, []int{3, 3, 3}, big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, nil}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
@@ -693,10 +717,11 @@ type CheckpointOracleConfig struct {
 type ChainConfig struct {
 	ChainID *big.Int `json:"chainId"` // chainId identifies the current chain and is used for replay protection
 
-	Context        int      // Context defines the index in which the chain operates at
-	Location       []byte   //Location for a given block
-	HomesteadBlock *big.Int `json:"homesteadBlock,omitempty"` // Homestead switch block (nil = no fork, 0 = already homestead)
+	Context    int    // Context defines the index in which the chain operates at
+	Location   []byte // Location for a given block
+	MapContext []int  // MapContext for structure of the hierarchy
 
+	HomesteadBlock *big.Int `json:"homesteadBlock,omitempty"` // Homestead switch block (nil = no fork, 0 = already homestead)
 	// EIP150 implements the Gas price changes (https://github.com/ethereum/EIPs/issues/150)
 	EIP150Block *big.Int    `json:"eip150Block,omitempty"` // EIP150 HF block (nil = no fork)
 	EIP150Hash  common.Hash `json:"eip150Hash,omitempty"`  // EIP150 HF hash (needed for header only clients as only gas pricing changed)

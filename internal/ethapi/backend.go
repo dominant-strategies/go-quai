@@ -75,6 +75,7 @@ type Backend interface {
 	AddExternalBlock(block *types.ExternalBlock) error
 	EventMux() *event.TypeMux
 	CalculateBaseFee(header *types.Header) *big.Int
+	GetUncleFromWorker(uncleHash common.Hash) (*types.Block, error)
 
 	// Transaction pool API
 	SendTx(ctx context.Context, signedTx *types.Transaction) error

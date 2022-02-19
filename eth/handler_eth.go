@@ -198,7 +198,7 @@ func (h *ethHandler) handleBlockAnnounces(peer *eth.Peer, hashes []common.Hash, 
 		}
 	}
 	for i := 0; i < len(unknownHashes); i++ {
-		h.blockFetcher.Notify(peer.ID(), unknownHashes[i], unknownNumbers[i], time.Now(), peer.RequestOneHeader, peer.RequestBodies)
+		h.blockFetcher.Notify(peer.ID(), unknownHashes[i], unknownNumbers[i], time.Now(), peer.RequestOneHeader, peer.RequestBodies, peer.RequestExternalBlocks)
 	}
 	return nil
 }
@@ -206,7 +206,11 @@ func (h *ethHandler) handleBlockAnnounces(peer *eth.Peer, hashes []common.Hash, 
 // handleBlockBroadcast is invoked from a peer's message handler when it transmits a
 // block broadcast for the local node to process.
 func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block, td *big.Int, extBlocks []*types.ExternalBlock) error {
+	log.Info("handleBlockBroadcast: Received block broadcast", "hash", block.Hash(), "num", block.Header().Number, "extBlocks", len(extBlocks))
 
+	for _, extBlock := range extBlocks {
+		h.chain.AddExternalBlock(extBlock)
+	}
 	// Schedule the block for import
 	h.blockFetcher.Enqueue(peer.ID(), block, extBlocks)
 

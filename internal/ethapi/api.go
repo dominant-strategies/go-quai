@@ -1228,6 +1228,9 @@ func RPCMarshalEthHeader(head *types.Header) map[string]interface{} {
 		"timestamp":        head.Time,
 		"transactionsRoot": head.TxHash[context],
 	}
+	if head.BaseFee[context] != nil {
+		result["baseFeePerGas"] = head.BaseFee[context]
+	}
 	return result
 }
 

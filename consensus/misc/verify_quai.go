@@ -69,8 +69,13 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, headerByNumbe
 	// Transform the parent header into a block.
 	parentBlock := types.NewBlockWithHeader(parent)
 
+	header500 := headerByNumber(uint64(parent.Number[types.QuaiNetworkContext].Int64() - 500))
+	if header500 == nil {
+		return new(big.Int).SetUint64(params.InitialBaseFee)
+	}
+
 	// Get the 500th previous block in order to calculate slope on the uncle rate and gas used.
-	block500 := types.NewBlockWithHeader(headerByNumber(uint64(parent.Number[types.QuaiNetworkContext].Int64() - 500)))
+	block500 := types.NewBlockWithHeader(header500)
 
 	// Get applicable uncle count and gas used across two various slope points
 	uncleCount1 := big.NewInt(int64(len(getUncles(parentBlock, slopeLength))))
@@ -87,8 +92,12 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, headerByNumbe
 	denominator := math.BigMax(gasUsed1.Sub(gasUsed1, gasUsed2), big.NewInt(1000))
 
 	result := big.NewInt(0)
-
-	return result.Div(numerator, denominator).Mul(result, reward)
+	result.Div(numerator, denominator).Mul(result, reward)
+	if result.Cmp(big.NewInt(params.InitialBaseFee)) < 0 {
+		return big.NewInt(params.InitialBaseFee)
+	} else {
+		return result
+	}
 }
 
 // CalculateReward calculates the coinbase rewards depending on the type of the block

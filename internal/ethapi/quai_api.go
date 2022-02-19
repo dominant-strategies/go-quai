@@ -584,11 +584,20 @@ func (s *PublicBlockChainQuaiAPI) SendMinedBlock(ctx context.Context, raw json.R
 	uncles := make([]*types.Header, len(body.UncleHashes))
 	for i, uncleHash := range body.UncleHashes {
 		block, _ := s.b.BlockByHash(ctx, uncleHash)
-		uncles[i] = block.Header()
+		if block != nil {
+			uncles[i] = block.Header()
+		} else {
+			block, _ := s.b.GetUncleFromWorker(uncleHash)
+			if block == nil {
+				log.Warn("Unable to find local uncle for retrieved mined block", "uncle", uncleHash)
+				return nil
+			}
+			uncles[i] = block.Header()
+		}
 	}
 
 	block := types.NewBlockWithHeader(head).WithBody(txs, uncles)
-	log.Info("Retrieved mined block", "num", head.Number[types.QuaiNetworkContext])
+	log.Info("Retrieved mined block", "number", head.Number, "location", head.Location)
 	s.b.InsertBlock(ctx, block)
 	// Broadcast the block and announce chain insertion event
 	if block.Header() != nil {
