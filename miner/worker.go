@@ -1006,7 +1006,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 			}
 		}
 		for hash, uncle := range blocks {
-			if len(uncles) == 2 {
+			if len(uncles) == 0 {
 				break
 			}
 			if err := w.commitUncle(env, uncle.Header()); err != nil {
