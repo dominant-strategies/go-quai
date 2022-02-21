@@ -986,6 +986,12 @@ func verifyMapContext(location []byte, mapcontext []int) bool {
 	if location0 > len(mapcontext) {
 		return false
 	}
+	// check if Region = 0 then Zone should be 0
+	if location0 == 0 {
+		if location1 > 0 {
+			return false
+		}
+	}
 	// check Zone
 	if location1 > mapcontext[location0-1] {
 		return false
