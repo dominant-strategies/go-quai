@@ -585,7 +585,9 @@ func (w *worker) taskLoop() {
 
 			w.updateSnapshot()
 			log.Info("Sending pending block to feed")
+			w.snapshotMu.Lock()
 			w.pendingBlockFeed.Send(w.snapshotBlock.Header())
+			w.snapshotMu.Unlock()
 		case <-w.exitCh:
 			interrupt()
 			return
