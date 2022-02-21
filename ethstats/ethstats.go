@@ -288,7 +288,7 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, txEventCh chan core
 			}
 			if err != nil {
 				log.Warn("Stats server unreachable", "err", err)
-				errTimer.Reset(10 * time.Second)
+				errTimer.Reset(30 * time.Second)
 				continue
 			}
 			// Authenticate the client with the server
@@ -308,7 +308,7 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, txEventCh chan core
 				continue
 			}
 			// Keep sending status updates until the connection breaks
-			fullReport := time.NewTicker(15 * time.Second)
+			fullReport := time.NewTicker(60 * time.Second)
 
 			for err == nil {
 				select {
