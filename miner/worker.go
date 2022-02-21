@@ -935,7 +935,6 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		header.Extra[types.QuaiNetworkContext] = w.extra
 		header.BaseFee[types.QuaiNetworkContext] = misc.CalcBaseFee(w.chainConfig, parent.Header(), w.chain.GetHeaderByNumber, w.chain.GetUnclesInChain, w.chain.GetGasUsedInChain)
 	}
-
 	w.snapshotMu.Unlock()
 
 	if err := w.engine.Prepare(w.chain, header); err != nil {
@@ -995,7 +994,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 
 	// Create the current work task and check any fork transitions needed
 	// env := w.current
-	// // Accumulate the uncles for the current block
+	// Accumulate the uncles for the current block
 	uncles := make([]*types.Header, 0, 2)
 	// commitUncles := func(blocks map[common.Hash]*types.Block) {
 	// 	// Clean up stale uncle blocks first
