@@ -994,31 +994,31 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	w.snapshotMu.Unlock()
 
 	// Create the current work task and check any fork transitions needed
-	env := w.current
-	// Accumulate the uncles for the current block
+	// env := w.current
+	// // Accumulate the uncles for the current block
 	uncles := make([]*types.Header, 0, 2)
-	commitUncles := func(blocks map[common.Hash]*types.Block) {
-		// Clean up stale uncle blocks first
-		for hash, uncle := range blocks {
-			if uncle.NumberU64()+staleThreshold <= header.Number[types.QuaiNetworkContext].Uint64() {
-				delete(blocks, hash)
-			}
-		}
-		for hash, uncle := range blocks {
-			if len(uncles) == 0 {
-				break
-			}
-			if err := w.commitUncle(env, uncle.Header()); err != nil {
-				log.Trace("Possible uncle rejected", "hash", hash, "reason", err)
-			} else {
-				log.Debug("Committing new uncle to block", "hash", hash)
-				uncles = append(uncles, uncle.Header())
-			}
-		}
-	}
-	// Prefer to locally generated uncle
-	commitUncles(w.localUncles)
-	commitUncles(w.remoteUncles)
+	// commitUncles := func(blocks map[common.Hash]*types.Block) {
+	// 	// Clean up stale uncle blocks first
+	// 	for hash, uncle := range blocks {
+	// 		if uncle.NumberU64()+staleThreshold <= header.Number[types.QuaiNetworkContext].Uint64() {
+	// 			delete(blocks, hash)
+	// 		}
+	// 	}
+	// 	for hash, uncle := range blocks {
+	// 		if len(uncles) == 0 {
+	// 			break
+	// 		}
+	// 		if err := w.commitUncle(env, uncle.Header()); err != nil {
+	// 			log.Trace("Possible uncle rejected", "hash", hash, "reason", err)
+	// 		} else {
+	// 			log.Debug("Committing new uncle to block", "hash", hash)
+	// 			uncles = append(uncles, uncle.Header())
+	// 		}
+	// 	}
+	// }
+	// // Prefer to locally generated uncle
+	// commitUncles(w.localUncles)
+	// commitUncles(w.remoteUncles)
 
 	// Create an empty block based on temporary copied state for
 	// sealing in advance without waiting block execution finished.
