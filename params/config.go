@@ -52,7 +52,9 @@ var CheckpointOracles = map[common.Hash]*CheckpointOracleConfig{
 	MainnetPrimeGenesisHash: MainnetCheckpointOracle,
 	RopstenGenesisHash:      RopstenCheckpointOracle,
 }
-var validChains = []*big.Int{big.NewInt(9000), big.NewInt(9100), big.NewInt(9101), big.NewInt(9102), big.NewInt(9103), big.NewInt(9200), big.NewInt(9201), big.NewInt(9202), big.NewInt(9203), big.NewInt(9300), big.NewInt(9301), big.NewInt(9302), big.NewInt(9303)}
+var mainnetValidChains = []*big.Int{big.NewInt(9000), big.NewInt(9100), big.NewInt(9101), big.NewInt(9102), big.NewInt(9103), big.NewInt(9200), big.NewInt(9201), big.NewInt(9202), big.NewInt(9203), big.NewInt(9300), big.NewInt(9301), big.NewInt(9302), big.NewInt(9303)}
+
+var testnetValidChains = []*big.Int{big.NewInt(12000), big.NewInt(12100), big.NewInt(12101), big.NewInt(12102), big.NewInt(12103), big.NewInt(12200), big.NewInt(12201), big.NewInt(12202), big.NewInt(12203), big.NewInt(12300), big.NewInt(12301), big.NewInt(12302), big.NewInt(12303)}
 
 var (
 	// MainnetPrimeChainConfig is the chain parameters to run a node on the main network.
@@ -1053,42 +1055,119 @@ func (c *ChainConfig) Rules(num *big.Int) Rules {
 
 // bytePrefixList expands the space with proper size for chain IDs to be indexed
 var (
-	bytePrefixList = make([][]int, 20000)
+	mainnetBytePrefixList = make([][]int, 20000)
+	testnetBytePrefixList = make([][]int, 20000)
 )
 
 func init() {
-	bytePrefixList[9000] = []int{0, 9}
-	bytePrefixList[9100] = []int{10, 19}
-	bytePrefixList[9101] = []int{20, 29}
-	bytePrefixList[9102] = []int{30, 39}
-	bytePrefixList[9103] = []int{40, 49}
-	bytePrefixList[9200] = []int{50, 59}
-	bytePrefixList[9201] = []int{60, 69}
-	bytePrefixList[9202] = []int{70, 79}
-	bytePrefixList[9203] = []int{80, 89}
-	bytePrefixList[9300] = []int{90, 99}
-	bytePrefixList[9301] = []int{100, 109}
-	bytePrefixList[9302] = []int{110, 119}
-	bytePrefixList[9303] = []int{120, 129}
+	mainnetBytePrefixList[9000] = []int{0, 9}
+	mainnetBytePrefixList[9100] = []int{10, 19}
+	mainnetBytePrefixList[9101] = []int{20, 29}
+	mainnetBytePrefixList[9102] = []int{30, 39}
+	mainnetBytePrefixList[9103] = []int{40, 49}
+	mainnetBytePrefixList[9200] = []int{50, 59}
+	mainnetBytePrefixList[9201] = []int{60, 69}
+	mainnetBytePrefixList[9202] = []int{70, 79}
+	mainnetBytePrefixList[9203] = []int{80, 89}
+	mainnetBytePrefixList[9300] = []int{90, 99}
+	mainnetBytePrefixList[9301] = []int{100, 109}
+	mainnetBytePrefixList[9302] = []int{110, 119}
+	mainnetBytePrefixList[9303] = []int{120, 129}
+
+	testnetBytePrefixList[12000] = []int{0, 9}
+	testnetBytePrefixList[12100] = []int{10, 19}
+	testnetBytePrefixList[12101] = []int{20, 29}
+	testnetBytePrefixList[12102] = []int{30, 39}
+	testnetBytePrefixList[12103] = []int{40, 49}
+	testnetBytePrefixList[12200] = []int{50, 59}
+	testnetBytePrefixList[12201] = []int{60, 69}
+	testnetBytePrefixList[12202] = []int{70, 79}
+	testnetBytePrefixList[12203] = []int{80, 89}
+	testnetBytePrefixList[12300] = []int{90, 99}
+	testnetBytePrefixList[12301] = []int{100, 109}
+	testnetBytePrefixList[12302] = []int{110, 119}
+	testnetBytePrefixList[12303] = []int{120, 129}
 }
 
 // ChainIDRange returns the byte lookup based off a configs chainID
 func (c *ChainConfig) ChainIDRange() []int {
-	lookup := bytePrefixList[c.ChainID.Int64()]
-	return lookup
+	for _, inSet := range mainnetValidChains {
+		if c.ChainID.Cmp(inSet) == 0 {
+			lookup := mainnetBytePrefixList[c.ChainID.Int64()]
+			return lookup
+		}
+	}
+
+	for _, inSet := range testnetValidChains {
+		if c.ChainID.Cmp(inSet) == 0 {
+			lookup := testnetBytePrefixList[c.ChainID.Int64()]
+			return lookup
+		}
+	}
+	return nil
 }
 
 // LookupChainIDRange returns the byte lookup based off a configs chainID
 func LookupChainIDRange(index *big.Int) []int {
-	lookup := bytePrefixList[index.Int64()]
-	return lookup
+	for _, inSet := range mainnetValidChains {
+		if index.Cmp(inSet) == 0 {
+			lookup := mainnetBytePrefixList[index.Int64()]
+			return lookup
+		}
+	}
+
+	for _, inSet := range testnetValidChains {
+		if index.Cmp(inSet) == 0 {
+			lookup := testnetBytePrefixList[index.Int64()]
+			return lookup
+		}
+	}
+	return nil
 }
 
 // ValidChainID takes in a chain ID and checks against the valid list
-func ValidChainID(id *big.Int) bool {
-	for _, valid := range validChains {
-		if id.Cmp(valid) == 0 {
-			return true
+func ValidChainID(id *big.Int, chainId *big.Int) bool {
+	for _, inSet := range mainnetValidChains {
+		if chainId.Cmp(inSet) == 0 {
+			for _, valid := range mainnetValidChains {
+				if id.Cmp(valid) == 0 {
+					return true
+				}
+			}
+		}
+	}
+
+	for _, inSet := range testnetValidChains {
+		if chainId.Cmp(inSet) == 0 {
+			for _, valid := range testnetValidChains {
+				if id.Cmp(valid) == 0 {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// CheckETxChainID takes in a chain ID and checks against the valid list
+func CheckETxChainID(ourID *big.Int, txID *big.Int) bool {
+	for _, inSet := range mainnetValidChains {
+		if ourID.Cmp(inSet) == 0 {
+			for _, valid := range mainnetValidChains {
+				if txID.Cmp(valid) == 0 {
+					return true
+				}
+			}
+		}
+	}
+
+	for _, inSet := range testnetValidChains {
+		if ourID.Cmp(inSet) == 0 {
+			for _, valid := range testnetValidChains {
+				if txID.Cmp(valid) == 0 {
+					return true
+				}
+			}
 		}
 	}
 	return false

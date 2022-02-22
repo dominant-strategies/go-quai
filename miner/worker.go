@@ -1005,15 +1005,20 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	header.Number[types.QuaiNetworkContext] = big.NewInt(int64(num.Uint64()) + 1)
 	header.Extra[types.QuaiNetworkContext] = w.extra
 	header.BaseFee[types.QuaiNetworkContext] = misc.CalcBaseFee(w.chainConfig, parent.Header(), w.chain.GetHeaderByNumber, w.chain.GetUnclesInChain, w.chain.GetGasUsedInChain)
+	if w.isRunning() {
+		if w.coinbase == (common.Address{}) {
+			log.Error("Refusing to mine without etherbase")
+		}
+		header.Coinbase[types.QuaiNetworkContext] = w.coinbase
+	}
+
 	// Run the consensus preparation with the default or customized consensus engine.
 	if err := w.engine.Prepare(w.chain, header); err != nil {
 		log.Error("Failed to prepare header for sealing", "err", err)
 		return nil, err
 	}
-	// Could potentially happen if starting to mine in an odd state.
-	// Note genParams.coinbase can be different with header.Coinbase
-	// since clique algorithm can modify the coinbase field in header.
-	env, err := w.makeEnv(parent, header, genParams.coinbase)
+
+	env, err := w.makeEnv(parent, header, w.coinbase)
 	if err != nil {
 		log.Error("Failed to create sealing context", "err", err)
 		return nil, err
@@ -1038,6 +1043,27 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	}
 
 	return env, nil
+}
+
+func (w *worker) fillExternalTransactions(interrupt *int32, env *environment) {
+	// Gather external blocks and apply transactions
+	externalBlocks, extBlockErr := w.engine.GetExternalBlocks(w.chain, env.header, false)
+	log.Info("Worker: Length of external blocks", "len", len(externalBlocks))
+	if extBlockErr != nil {
+		log.Error("commitNewWork: Unable to retrieve external blocks", "height", env.header.Number)
+		return
+	}
+
+	externalGasUsed := uint64(0)
+	for _, externalBlock := range externalBlocks {
+		externalBlock.Receipts().DeriveFields(w.chainConfig, externalBlock.Hash(), externalBlock.Header().Number[externalBlock.Context().Int64()].Uint64(), externalBlock.Transactions())
+		externalGasUsed += uint64(externalBlock.Header().GasUsed[externalBlock.Context().Uint64()])
+		for _, tx := range externalBlock.Transactions() {
+			w.commitExternalTransaction(env, tx, externalBlock)
+		}
+	}
+	env.externalGasUsed = externalGasUsed
+	env.externalBlockLength = len(externalBlocks)
 }
 
 // fillTransactions retrieves the pending transactions from the txpool and fills them
@@ -1069,25 +1095,6 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment) {
 			return
 		}
 	}
-
-	// Gather external blocks and apply transactions
-	externalBlocks, extBlockErr := w.engine.GetExternalBlocks(w.chain, env.header, false)
-	log.Info("Worker: Length of external blocks", "len", len(externalBlocks))
-	if extBlockErr != nil {
-		log.Error("commitNewWork: Unable to retrieve external blocks", "height", env.header.Number)
-		return
-	}
-
-	externalGasUsed := uint64(0)
-	for _, externalBlock := range externalBlocks {
-		externalBlock.Receipts().DeriveFields(w.chainConfig, externalBlock.Hash(), externalBlock.Header().Number[externalBlock.Context().Int64()].Uint64(), externalBlock.Transactions())
-		externalGasUsed += uint64(externalBlock.Header().GasUsed[externalBlock.Context().Uint64()])
-		for _, tx := range externalBlock.Transactions() {
-			w.commitExternalTransaction(env, tx, externalBlock)
-		}
-	}
-	env.externalGasUsed = externalGasUsed
-	env.externalBlockLength = len(externalBlocks)
 }
 
 // fillTransactions retrieves the pending transactions from the txpool and fills them
@@ -1114,8 +1121,9 @@ func (w *worker) generateWork(params *generateParams) (*types.Block, error) {
 	}
 	defer work.discard()
 
-	w.fillTransactions(nil, work)
+	w.fillExternalTransactions(nil, work)
 	w.adjustGasLimit(nil, work)
+	w.fillTransactions(nil, work)
 	return w.engine.FinalizeAndAssemble(w.chain, work.header, work.state, work.txs, work.unclelist(), work.receipts)
 }
 
@@ -1146,8 +1154,9 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 	// 	w.commit(work.copy(), nil, false, start)
 	// }
 	// Fill pending transactions from the txpool
-	w.fillTransactions(interrupt, work)
+	w.fillExternalTransactions(nil, work)
 	w.adjustGasLimit(nil, work)
+	w.fillTransactions(interrupt, work)
 	w.commit(work.copy(), w.fullTaskHook, true, start)
 
 	// Swap out the old work with the new one, terminating any leftover
