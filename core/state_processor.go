@@ -233,6 +233,10 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 		return nil, errors.New("header number is nil")
 	}
 
+	if tx == nil {
+		return nil, errors.New("tx is nil")
+	}
+
 	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number[types.QuaiNetworkContext]), header.BaseFee[types.QuaiNetworkContext])
 	if err != nil {
 		return nil, err
