@@ -810,31 +810,37 @@ func (w *worker) updateSnapshot(env *environment) {
 }
 
 func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*types.Log, error) {
-	snap := env.state.Snapshot()
+	if tx != nil {
+		snap := env.state.Snapshot()
+		receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed[types.QuaiNetworkContext], *w.chain.GetVMConfig())
+		if err != nil {
+			env.state.RevertToSnapshot(snap)
+			return nil, err
+		}
+		env.txs = append(env.txs, tx)
+		env.receipts = append(env.receipts, receipt)
 
-	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed[types.QuaiNetworkContext], *w.chain.GetVMConfig())
-	if err != nil {
-		env.state.RevertToSnapshot(snap)
-		return nil, err
+		return receipt.Logs, nil
 	}
-	env.txs = append(env.txs, tx)
-	env.receipts = append(env.receipts, receipt)
-
-	return receipt.Logs, nil
+	return nil, errors.New("error finding transaction")
 }
 
 func (w *worker) commitExternalTransaction(env *environment, tx *types.Transaction, externalBlock *types.ExternalBlock) ([]*types.Log, error) {
-	snap := env.state.Snapshot()
+	if tx != nil {
 
-	receipt, err := core.ApplyExternalTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, externalBlock, tx, &env.header.GasUsed[types.QuaiNetworkContext], *w.chain.GetVMConfig())
-	if err != nil {
-		env.state.RevertToSnapshot(snap)
-		return nil, err
+		snap := env.state.Snapshot()
+
+		receipt, err := core.ApplyExternalTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, externalBlock, tx, &env.header.GasUsed[types.QuaiNetworkContext], *w.chain.GetVMConfig())
+		if err != nil {
+			env.state.RevertToSnapshot(snap)
+			return nil, err
+		}
+		env.txs = append(env.txs, tx)
+		env.receipts = append(env.receipts, receipt)
+
+		return receipt.Logs, nil
 	}
-	env.txs = append(env.txs, tx)
-	env.receipts = append(env.receipts, receipt)
-
-	return receipt.Logs, nil
+	return nil, errors.New("error finding external transaction")
 }
 
 func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByPriceAndNonce, interrupt *int32) bool {
