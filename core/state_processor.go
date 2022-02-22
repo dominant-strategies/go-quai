@@ -225,6 +225,14 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
 func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config) (*types.Receipt, error) {
+	if header.BaseFee == nil {
+		return nil, errors.New("header BaseFee is nil")
+	}
+
+	if header.Number == nil {
+		return nil, errors.New("header number is nil")
+	}
+
 	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number[types.QuaiNetworkContext]), header.BaseFee[types.QuaiNetworkContext])
 	if err != nil {
 		return nil, err
