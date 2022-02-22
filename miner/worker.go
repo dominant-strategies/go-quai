@@ -1014,6 +1014,7 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	if w.isRunning() {
 		if w.coinbase == (common.Address{}) {
 			log.Error("Refusing to mine without etherbase")
+			return nil, errors.New("refusing to mine without etherbase")
 		}
 		header.Coinbase[types.QuaiNetworkContext] = w.coinbase
 	}
