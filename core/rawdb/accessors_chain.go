@@ -352,6 +352,7 @@ func HasHeader(db ethdb.Reader, hash common.Hash, number uint64) bool {
 func ReadHeader(db ethdb.Reader, hash common.Hash, number uint64) *types.Header {
 	data := ReadHeaderRLP(db, hash, number)
 	if len(data) == 0 {
+		fmt.Println("Not in ReadHeaderRLP")
 		return nil
 	}
 	header := new(types.Header)
@@ -384,15 +385,20 @@ func WriteHeader(db ethdb.KeyValueWriter, header *types.Header) {
 		number = header.Number[types.QuaiNetworkContext].Uint64()
 	)
 	// Write the hash -> number mapping
+	fmt.Println("Write header", header.Hash())
+	fmt.Println(header)
+
 	WriteHeaderNumber(db, hash, number)
 
 	// Write the encoded header
 	data, err := rlp.EncodeToBytes(header)
 	if err != nil {
+		fmt.Println("Error writing header number", err)
 		log.Crit("Failed to RLP encode header", "err", err)
 	}
 	key := headerKey(number, hash)
 	if err := db.Put(key, data); err != nil {
+		fmt.Println("Error storing header number", err)
 		log.Crit("Failed to store header", "err", err)
 	}
 }

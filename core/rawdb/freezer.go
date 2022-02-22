@@ -26,13 +26,13 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/prometheus/tsdb/fileutil"
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/core/types"
 	"github.com/spruce-solutions/go-quai/ethdb"
 	"github.com/spruce-solutions/go-quai/log"
 	"github.com/spruce-solutions/go-quai/metrics"
 	"github.com/spruce-solutions/go-quai/params"
-	"github.com/prometheus/tsdb/fileutil"
 )
 
 var (
