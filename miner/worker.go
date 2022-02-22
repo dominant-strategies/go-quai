@@ -634,7 +634,6 @@ func (w *worker) taskLoop() {
 			// Reject duplicate sealing work due to resubmitting.
 			sealHash := w.engine.SealHash(task.block.Header())
 			if sealHash == prev {
-				fmt.Println("Skipping seal hash is duplicate")
 				continue
 			}
 			// Interrupt previous sealing operation
@@ -642,7 +641,6 @@ func (w *worker) taskLoop() {
 			stopCh, prev = make(chan struct{}), sealHash
 
 			if w.skipSealHook != nil && w.skipSealHook(task) {
-				fmt.Println("Skipping sealHook")
 				continue
 			}
 			w.pendingMu.Lock()
@@ -650,7 +648,6 @@ func (w *worker) taskLoop() {
 			w.pendingMu.Unlock()
 
 			w.snapshotMu.Lock()
-			fmt.Println("Sending task block to pending feed", task.block.Header().Number)
 			w.pendingBlockFeed.Send(task.block.Header())
 			w.snapshotMu.Unlock()
 		case <-w.exitCh:
@@ -1010,16 +1007,10 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 		Bloom:             make([]types.Bloom, 3),
 		Location:          w.chainConfig.Location,
 	}
-
-	// If block has not advanced
-	fmt.Println("ParentHash", parent.Hash())
-	fmt.Println(parent)
-
 	header.ParentHash[types.QuaiNetworkContext] = parent.Hash()
 	header.Number[types.QuaiNetworkContext] = big.NewInt(int64(num.Uint64()) + 1)
 	header.Extra[types.QuaiNetworkContext] = w.extra
 	header.BaseFee[types.QuaiNetworkContext] = misc.CalcBaseFee(w.chainConfig, parent.Header(), w.chain.GetHeaderByNumber, w.chain.GetUnclesInChain, w.chain.GetGasUsedInChain)
-
 	if w.isRunning() {
 		if w.coinbase == (common.Address{}) {
 			log.Error("Refusing to mine without etherbase")
