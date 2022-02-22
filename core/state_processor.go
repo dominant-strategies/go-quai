@@ -130,7 +130,8 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 			statedb.Prepare(tx.Hash(), i)
 			receipt, err := applyExternalTransaction(msg, p.config, p.bc, nil, gp, statedb, blockNumber, blockHash, externalBlock, tx, usedGas, vmenv)
 			if err != nil {
-				return nil, nil, 0, nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+				log.Warn("Could not apply etx", "i", i, "hash", tx.Hash().Hex(), "err", err)
+				continue
 			}
 			receipts = append(receipts, receipt)
 			allLogs = append(allLogs, receipt.Logs...)
