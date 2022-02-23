@@ -22,6 +22,7 @@ import (
 	"math/big"
 
 	"github.com/spruce-solutions/go-quai/log"
+	"github.com/spruce-solutions/go-quai/trie"
 
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/consensus"
@@ -107,20 +108,30 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	etxs := 0
 	for _, externalBlock := range externalBlocks {
 		externalBlock.Receipts().DeriveFields(p.config, externalBlock.Hash(), externalBlock.Header().Number[externalBlock.Context().Int64()].Uint64(), externalBlock.Transactions())
+
+		hashedTxList := types.DeriveSha(externalBlock.Transactions(), trie.NewStackTrie(nil))
+		if externalBlock.Header().TxHash[externalBlock.Context().Int64()] != hashedTxList {
+			fmt.Println("Bad external block: Transaction hash not equal to txs", externalBlock.Header().TxHash[externalBlock.Context().Int64()], hashedTxList)
+			continue
+			// return nil, nil, uint64(0), nil, err
+		}
+
 		for _, tx := range externalBlock.Transactions() {
 			msg, err := tx.AsMessage(types.MakeSigner(p.config, header.Number[types.QuaiNetworkContext]), header.BaseFee[types.QuaiNetworkContext])
 			// Quick check to make sure we're adding an external transaction, currently saves us from not passing merkel path in external block
-			if !msg.FromExternal() {
+			if err != nil {
+				return nil, nil, 0, nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+			}
+
+			if !msg.FromExternal() || !params.CheckETxChainID(p.config.ChainID, tx.ChainId()) {
 				continue
 			}
 			fmt.Println("Applying etx", tx.Hash().Hex(), msg.From(), msg.To(), msg.Value())
-			if err != nil {
-				return nil, nil, 0, nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
-			}
 			statedb.Prepare(tx.Hash(), i)
 			receipt, err := applyExternalTransaction(msg, p.config, p.bc, nil, gp, statedb, blockNumber, blockHash, externalBlock, tx, usedGas, vmenv)
 			if err != nil {
-				return nil, nil, 0, nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+				log.Warn("Could not apply etx", "i", i, "hash", tx.Hash().Hex(), "err", err)
+				continue
 			}
 			receipts = append(receipts, receipt)
 			allLogs = append(allLogs, receipt.Logs...)
@@ -156,9 +167,12 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 }
 
 func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (*types.Receipt, error) {
+	if config.ChainID.Cmp(tx.ChainId()) != 0 {
+		return nil, ErrSenderInoperable
+	}
+
 	// Validate Address Operability
 	idRange := config.ChainIDRange()
-
 	if int(msg.From().Bytes()[0]) < idRange[0] || int(msg.From().Bytes()[0]) > idRange[1] {
 		return nil, ErrSenderInoperable
 	}
@@ -212,6 +226,18 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
 func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config) (*types.Receipt, error) {
+	if header.BaseFee == nil {
+		return nil, errors.New("header BaseFee is nil")
+	}
+
+	if header.Number == nil {
+		return nil, errors.New("header number is nil")
+	}
+
+	if tx == nil {
+		return nil, errors.New("tx is nil")
+	}
+
 	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number[types.QuaiNetworkContext]), header.BaseFee[types.QuaiNetworkContext])
 	if err != nil {
 		return nil, err
