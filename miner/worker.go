@@ -634,15 +634,16 @@ func (w *worker) taskLoop() {
 			// Reject duplicate sealing work due to resubmitting.
 			sealHash := w.engine.SealHash(task.block.Header())
 			if sealHash == prev {
-				continue
+				log.Info("sealHash == prev, continuing with sending task to pending channel", "seal", sealHash, "prev", prev)
+				// continue
 			}
 			// Interrupt previous sealing operation
 			interrupt()
 			stopCh, prev = make(chan struct{}), sealHash
 
-			if w.skipSealHook != nil && w.skipSealHook(task) {
-				continue
-			}
+			// if w.skipSealHook != nil && w.skipSealHook(task) {
+			// 	continue
+			// }
 			w.pendingMu.Lock()
 			w.pendingTasks[sealHash] = task
 			w.pendingMu.Unlock()
