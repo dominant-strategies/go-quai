@@ -29,8 +29,11 @@ import (
 	"github.com/spruce-solutions/go-quai/common/hexutil"
 	"github.com/spruce-solutions/go-quai/console/prompt"
 	"github.com/spruce-solutions/go-quai/core/rawdb"
+	"github.com/spruce-solutions/go-quai/core/types"
+	"github.com/spruce-solutions/go-quai/eth/ethconfig"
 	"github.com/spruce-solutions/go-quai/ethdb"
 	"github.com/spruce-solutions/go-quai/log"
+	"github.com/spruce-solutions/go-quai/node"
 	"github.com/spruce-solutions/go-quai/trie"
 	"gopkg.in/urfave/cli.v1"
 )
@@ -174,35 +177,66 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 )
 
 func removeDB(ctx *cli.Context) error {
-	stack, config := makeConfigNode(ctx)
+	// stack, config := makeConfigNode(ctx)
+	all_chain_dbs := []string{node.DefaultConfig.DataDir} // array to hold dirs of all chains
+	cache_path := ethconfig.Defaults.Ethash.CacheDir      // dir for ethcache
+	dataset_path := ethconfig.Defaults.Ethash.DatasetDir  // dir for ethash dataset
 
-	// Remove the full node state database
-	path := stack.ResolvePath("chaindata")
-	if common.FileExist(path) {
-		confirmAndRemoveDB(path, "full node state database")
+	// construct all_chain_dbs to hold all paths properly formatted to machine OS
+	for n := 1; n < (types.ContextDepth + 1); n++ {
+		n_str := strconv.Itoa(n)
+		all_chain_dbs = append(all_chain_dbs, node.QuaiRegionDataDir(n_str))
+		for i := 1; i < (types.ContextDepth + 1); i++ {
+			i_str := strconv.Itoa(i)
+			all_chain_dbs = append(all_chain_dbs, node.QuaiZoneDataDir(n_str, i_str))
+		}
+	}
+
+	// loop through each chain db in all_chain_dbs and prompt Y/n to delete
+	for _, d := range all_chain_dbs {
+		// Remove the full node state database
+		path := filepath.Join(d, "quai", "chaindata")
+		if common.FileExist(path) {
+			confirmAndRemoveDB(path, "full node state database")
+		} else {
+			log.Info("Full node state database missing", "path", path)
+		}
+		// Remove the full node ancient database
+		path = filepath.Join(path, "ancient")
+		if common.FileExist(path) {
+			confirmAndRemoveDB(path, "full node ancient database")
+		} else {
+			log.Info("Full node ancient database missing", "path", path)
+		}
+
+		extPath := filepath.Join(d, "quai", "externalblocks")
+		if common.FileExist(extPath) {
+			confirmAndRemoveDB(extPath, "full external blocks db")
+		} else {
+			log.Info("Full external blocks database missing", "path", extPath)
+		}
+		// Remove the light node database
+		/* path = d.ResolvePath("lightchaindata")
+		if common.FileExist(path) {
+			confirmAndRemoveDB(path, "light node database")
+		} else {
+			log.Info("Light node database missing", "path", path)
+		} */
+	}
+
+	// check and delete cache
+	if common.FileExist(cache_path) {
+		confirmAndRemoveDB(cache_path, "ethash cache")
 	} else {
-		log.Info("Full node state database missing", "path", path)
+		log.Info("ethash cache database missing", "path", cache_path)
 	}
-	// Remove the full node ancient database
-	path = config.Eth.DatabaseFreezer
-	switch {
-	case path == "":
-		path = filepath.Join(stack.ResolvePath("chaindata"), "ancient")
-	case !filepath.IsAbs(path):
-		path = config.Node.ResolvePath(path)
-	}
-	if common.FileExist(path) {
-		confirmAndRemoveDB(path, "full node ancient database")
+	// check and delete dataset
+	if common.FileExist(dataset_path) {
+		confirmAndRemoveDB(dataset_path, "ethash dataset")
 	} else {
-		log.Info("Full node ancient database missing", "path", path)
+		log.Info("ethash dataset database missing", "path", dataset_path)
 	}
-	// Remove the light node database
-	path = stack.ResolvePath("lightchaindata")
-	if common.FileExist(path) {
-		confirmAndRemoveDB(path, "light node database")
-	} else {
-		log.Info("Light node database missing", "path", path)
-	}
+
 	return nil
 }
 

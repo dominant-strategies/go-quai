@@ -272,7 +272,7 @@ func (p *Peer) SendNewBlock(block *types.Block, td *big.Int, extBlocks []*types.
 	// Mark all the block hash as known, but ensure we don't overflow our limits
 	p.knownBlocks.Add(block.Hash())
 
-	log.Info("Sending external blocks with block", "len", len(extBlocks), "num", block.Header().Number[types.QuaiNetworkContext])
+	log.Info("Sending external blocks with block", "len", len(extBlocks), "number", block.Header().Number[types.QuaiNetworkContext])
 	return p2p.Send(p.rw, NewBlockMsg, &NewBlockPacket{
 		Block:     block,
 		TD:        td,
@@ -510,8 +510,7 @@ func (k *knownCache) Cardinality() int {
 // RequestExternalBlocks fetches a batch of external blocks from a remote node.
 func (p *Peer) RequestExternalBlocks(hashes []common.Hash) error {
 	p.Log().Debug("Fetching batch of external blocks", "count", len(hashes))
-	log.Info("Fetching batch of external blocks for hashes", "count", len(hashes))
-	if p.Version() >= ETH66 {
+	if p.Version() >= QUAI66 {
 		id := rand.Uint64()
 
 		requestTracker.Track(p.id, p.version, GetExtBlocksMsg, ExtBlocksMsg, id)

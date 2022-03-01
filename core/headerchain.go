@@ -26,6 +26,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/consensus"
 	"github.com/spruce-solutions/go-quai/core/rawdb"
@@ -33,7 +34,6 @@ import (
 	"github.com/spruce-solutions/go-quai/ethdb"
 	"github.com/spruce-solutions/go-quai/log"
 	"github.com/spruce-solutions/go-quai/params"
-	lru "github.com/hashicorp/golang-lru"
 )
 
 const (
@@ -528,6 +528,12 @@ func (hc *HeaderChain) GetHeaderByNumber(number uint64) *types.Header {
 	return hc.GetHeader(hash, number)
 }
 
+// GetExternalBlocks is not applicable in the header chain since the BlockChain contains
+// the external blocks cache.
+func (hc *HeaderChain) GetExternalBlocks(header *types.Header) ([]*types.ExternalBlock, error) {
+	return nil, nil
+}
+
 // GetExternalBlock is not applicable in the header chain since the BlockChain contains
 // the external blocks cache.
 func (hc *HeaderChain) GetExternalBlock(hash common.Hash, number uint64, context uint64) (*types.ExternalBlock, error) {
@@ -665,5 +671,17 @@ func (hc *HeaderChain) Engine() consensus.Engine { return hc.engine }
 // GetBlock implements consensus.ChainReader, and returns nil for every input as
 // a header chain does not have blocks available for retrieval.
 func (hc *HeaderChain) GetBlock(hash common.Hash, number uint64) *types.Block {
+	return nil
+}
+
+// GetGasUsedInChain retrieves all the gas used from a given block backwards until
+// a specific distance is reached.
+func (hc *HeaderChain) GetGasUsedInChain(block *types.Block, length int) int64 {
+	return int64(0)
+}
+
+// GetUnclesInChain retrieves all the uncles from a given block backwards until
+// a specific distance is reached.
+func (hc *HeaderChain) GetUnclesInChain(block *types.Block, length int) []*types.Header {
 	return nil
 }

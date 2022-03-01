@@ -25,7 +25,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/spruce-solutions/go-quai"
+	ethereum "github.com/spruce-solutions/go-quai"
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/common/hexutil"
 	"github.com/spruce-solutions/go-quai/common/math"

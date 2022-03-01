@@ -91,9 +91,9 @@ type Header struct {
 	Extra             [][]byte         `json:"extraData"        gencodec:"required"`
 	MixDigest         common.Hash      `json:"mixHash"`
 	Nonce             BlockNonce       `json:"nonce"`
-	// Map the current Region / Zone
-	MapContext []byte `json:"mapContext"        gencodec:"required"`
-	Location   []byte `json:"location"        	gencodec:"required"`
+
+	// Originating location of the block.
+	Location []byte `json:"location"        	gencodec:"required"`
 
 	// BaseFee was added by EIP-1559 and is ignored in legacy headers.
 	BaseFee []*big.Int `json:"baseFeePerGas" rlp:"optional"`
@@ -390,7 +390,6 @@ func (b *ExternalBlock) UnmarshalJSON(data []byte) error {
 // and receipts.
 func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*Receipt, hasher TrieHasher) *Block {
 	b := &Block{header: CopyHeader(header), td: new(big.Int)}
-
 	// TODO: panic if len(txs) != len(receipts)
 	if len(txs) == 0 {
 		b.header.TxHash = EmptyRootHash
@@ -407,15 +406,17 @@ func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*
 		b.header.Bloom = []Bloom{CreateBloom(receipts), CreateBloom(receipts), CreateBloom(receipts)}
 	}
 
-	if len(uncles) == 0 {
-		b.header.UncleHash = EmptyUncleHash
-	} else {
-		b.header.UncleHash = []common.Hash{CalcUncleHash(uncles), CalcUncleHash(uncles), CalcUncleHash(uncles)}
-		b.uncles = make([]*Header, len(uncles))
-		for i := range uncles {
-			b.uncles[i] = CopyHeader(uncles[i])
-		}
-	}
+	b.header.UncleHash = EmptyUncleHash
+
+	// if len(uncles) == 0 {
+	// 	b.header.UncleHash = EmptyUncleHash
+	// } else {
+	// 	b.header.UncleHash = []common.Hash{CalcUncleHash(uncles), CalcUncleHash(uncles), CalcUncleHash(uncles)}
+	// 	b.uncles = make([]*Header, len(uncles))
+	// 	for i := range uncles {
+	// 		b.uncles[i] = CopyHeader(uncles[i])
+	// 	}
+	// }
 
 	return b
 }

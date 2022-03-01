@@ -259,17 +259,19 @@ func answerGetExtBlocksQuery(backend Backend, query GetExtBlocksPacket, peer *Pe
 	)
 	for _, hash := range query {
 		if bytes >= softResponseLimit {
+			log.Warn("Hitting softResponseLimit in answerGetExtBlocksQuery")
 			break
 		}
 		// Retrieve the requested block's external blocks
 		header := backend.Chain().GetHeaderByHash(hash)
 		results, err := backend.Chain().GetExternalBlocks(header)
 		if err != nil {
-			log.Error("Unable to retrieve external blocks")
+			log.Info("answerGetExtBlocks: Unable to retrieve ext blocks", "hash", hash, "len", len(results))
+			break
 		}
 		// If known, encode and queue for response packet
 		if encoded, err := rlp.EncodeToBytes(results); err != nil {
-			log.Error("Failed to encode receipt", "err", err)
+			log.Error("Failed to encode external block", "err", err)
 		} else {
 			extBlocks = append(extBlocks, encoded)
 			bytes += len(encoded)
@@ -378,7 +380,6 @@ func handleExtBlocks66(backend Backend, msg Decoder, peer *Peer) error {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
 	requestTracker.Fulfil(peer.id, peer.version, ExtBlocksMsg, res.RequestId)
-
 	return backend.Handle(peer, &res.ExtBlocksPacket)
 }
 

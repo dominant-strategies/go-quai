@@ -21,7 +21,7 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/spruce-solutions/go-quai"
+	ethereum "github.com/spruce-solutions/go-quai"
 	"github.com/spruce-solutions/go-quai/accounts"
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/consensus"
@@ -108,12 +108,20 @@ func (b *LesApiBackend) BlockByHash(ctx context.Context, hash common.Hash) (*typ
 	return b.eth.blockchain.GetBlockByHash(ctx, hash)
 }
 
+func (b *LesApiBackend) GetUncleFromWorker(hash common.Hash) (*types.Block, error) {
+	return nil, nil
+}
+
 func (b *LesApiBackend) InsertBlock(ctx context.Context, block *types.Block) (int, error) {
 	return 0, nil
 }
 
 func (b *LesApiBackend) AddExternalBlock(block *types.ExternalBlock) error {
 	return errors.New("light client does not support external block caching.")
+}
+
+func (b *LesApiBackend) ReOrgRollBack(header *types.Header) error {
+	return errors.New("light client does not support reorg.")
 }
 
 func (b *LesApiBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Block, error) {
@@ -268,6 +276,13 @@ func (b *LesApiBackend) SubscribePendingBlockEvent(ch chan<- *types.Header) even
 	})
 }
 
+func (b *LesApiBackend) SubscribeReOrgEvent(ch chan<- core.ReOrgRollup) event.Subscription {
+	return event.NewSubscription(func(quit <-chan struct{}) error {
+		<-quit
+		return nil
+	})
+}
+
 func (b *LesApiBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {
 	return b.eth.blockchain.SubscribeRemovedLogsEvent(ch)
 }
@@ -338,10 +353,14 @@ func (b *LesApiBackend) CurrentHeader() *types.Header {
 	return b.eth.blockchain.CurrentHeader()
 }
 
-func (b *LesApiBackend) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, checkLive bool) (*state.StateDB, error) {
+func (b *LesApiBackend) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, checkLive bool, preferDisk bool) (*state.StateDB, error) {
 	return b.eth.stateAtBlock(ctx, block, reexec)
 }
 
 func (b *LesApiBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, error) {
 	return b.eth.stateAtTransaction(ctx, block, txIndex, reexec)
+}
+
+func (b *LesApiBackend) CalculateBaseFee(header *types.Header) *big.Int {
+	return b.CalculateBaseFee(header)
 }

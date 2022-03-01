@@ -21,7 +21,7 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/spruce-solutions/go-quai"
+	ethereum "github.com/spruce-solutions/go-quai"
 	"github.com/spruce-solutions/go-quai/accounts"
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/consensus"
@@ -124,8 +124,16 @@ func (b *EthAPIBackend) AddExternalBlock(block *types.ExternalBlock) error {
 	return b.eth.blockchain.AddExternalBlock(block)
 }
 
+func (b *EthAPIBackend) ReOrgRollBack(header *types.Header) error {
+	return b.eth.blockchain.ReOrgRollBack(header)
+}
+
 func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
 	return b.eth.blockchain.GetBlockByHash(hash), nil
+}
+
+func (b *EthAPIBackend) GetUncleFromWorker(hash common.Hash) (*types.Block, error) {
+	return b.eth.miner.GetUncle(hash), nil
 }
 
 func (b *EthAPIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Block, error) {
@@ -233,6 +241,10 @@ func (b *EthAPIBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.
 
 func (b *EthAPIBackend) SubscribePendingBlockEvent(ch chan<- *types.Header) event.Subscription {
 	return b.eth.miner.SubscribePendingBlock(ch)
+}
+
+func (b *EthAPIBackend) SubscribeReOrgEvent(ch chan<- core.ReOrgRollup) event.Subscription {
+	return b.eth.BlockChain().SubscribeReOrgEvent(ch)
 }
 
 func (b *EthAPIBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
@@ -367,10 +379,14 @@ func (b *EthAPIBackend) StartMining(threads int) error {
 	return b.eth.StartMining(threads)
 }
 
-func (b *EthAPIBackend) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, checkLive bool) (*state.StateDB, error) {
-	return b.eth.stateAtBlock(block, reexec, base, checkLive)
+func (b *EthAPIBackend) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, checkLive, preferDisk bool) (*state.StateDB, error) {
+	return b.eth.StateAtBlock(block, reexec, base, checkLive, preferDisk)
 }
 
 func (b *EthAPIBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, error) {
 	return b.eth.stateAtTransaction(block, txIndex, reexec)
+}
+
+func (b *EthAPIBackend) CalculateBaseFee(header *types.Header) *big.Int {
+	return b.eth.blockchain.CalculateBaseFee(header)
 }

@@ -19,6 +19,7 @@ package fetcher
 
 import (
 	"errors"
+	"fmt"
 	"math/rand"
 	"time"
 
@@ -79,6 +80,9 @@ type headerRequesterFn func(common.Hash) error
 // bodyRequesterFn is a callback type for sending a body retrieval request.
 type bodyRequesterFn func([]common.Hash) error
 
+// extBlockRequesterFn is a callback type for sending an external block retrieval request.
+type extBlockRequesterFn func([]common.Hash) error
+
 // headerVerifierFn is a callback type to verify a block's header for fast propagation.
 type headerVerifierFn func(header *types.Header) error
 
@@ -107,8 +111,9 @@ type blockAnnounce struct {
 
 	origin string // Identifier of the peer originating the notification
 
-	fetchHeader headerRequesterFn // Fetcher function to retrieve the header of an announced block
-	fetchBodies bodyRequesterFn   // Fetcher function to retrieve the body of an announced block
+	fetchHeader    headerRequesterFn   // Fetcher function to retrieve the header of an announced block
+	fetchBodies    bodyRequesterFn     // Fetcher function to retrieve the body of an announced block
+	fetchExtBlocks extBlockRequesterFn // Fetcher function to retrieve the external blocks of an announced block
 }
 
 // headerFilterTask represents a batch of headers needing fetcher filtering.
@@ -241,14 +246,15 @@ func (f *BlockFetcher) Stop() {
 // Notify announces the fetcher of the potential availability of a new block in
 // the network.
 func (f *BlockFetcher) Notify(peer string, hash common.Hash, number uint64, time time.Time,
-	headerFetcher headerRequesterFn, bodyFetcher bodyRequesterFn) error {
+	headerFetcher headerRequesterFn, bodyFetcher bodyRequesterFn, extBlockFetcher extBlockRequesterFn) error {
 	block := &blockAnnounce{
-		hash:        hash,
-		number:      number,
-		time:        time,
-		origin:      peer,
-		fetchHeader: headerFetcher,
-		fetchBodies: bodyFetcher,
+		hash:           hash,
+		number:         number,
+		time:           time,
+		origin:         peer,
+		fetchHeader:    headerFetcher,
+		fetchBodies:    bodyFetcher,
+		fetchExtBlocks: extBlockFetcher,
 	}
 	select {
 	case f.notify <- block:
@@ -371,11 +377,13 @@ func (f *BlockFetcher) loop() {
 				f.forgetBlock(hash)
 				continue
 			}
-			if f.light {
-				f.importHeaders(op.origin, op.header)
-			} else {
-				f.importBlocks(op.origin, op.block, op.extBlocks)
-			}
+			// if f.light {
+			// 	f.importHeaders(op.origin, op.header)
+			// } else {
+			// 	f.importBlocks(op.origin, op.block, op.extBlocks)
+			// }
+			f.importBlocks(op.origin, op.block, op.extBlocks)
+
 		}
 		// Wait for an outside event to occur
 		select {
@@ -426,7 +434,7 @@ func (f *BlockFetcher) loop() {
 			if f.light {
 				continue
 			}
-			f.enqueue(op.origin, nil, op.block)
+			f.enqueue(op.origin, nil, op.block, op.extBlocks)
 
 		case hash := <-f.done:
 			// A pending import finished, remove all traces of the notification
@@ -587,12 +595,12 @@ func (f *BlockFetcher) loop() {
 			}
 			// Schedule the header for light fetcher import
 			for _, announce := range lightHeaders {
-				f.enqueue(announce.origin, announce.header, nil)
+				f.enqueue(announce.origin, announce.header, nil, nil)
 			}
 			// Schedule the header-only blocks for import
 			for _, block := range complete {
 				if announce := f.completing[block.Hash()]; announce != nil {
-					f.enqueue(announce.origin, nil, block)
+					f.enqueue(announce.origin, nil, block, nil)
 				}
 			}
 
@@ -659,7 +667,7 @@ func (f *BlockFetcher) loop() {
 			// Schedule the retrieved blocks for ordered import
 			for _, block := range blocks {
 				if announce := f.completing[block.Hash()]; announce != nil {
-					f.enqueue(announce.origin, nil, block)
+					f.enqueue(announce.origin, nil, block, nil)
 				}
 			}
 		}
@@ -706,7 +714,7 @@ func (f *BlockFetcher) rescheduleComplete(complete *time.Timer) {
 
 // enqueue schedules a new header or block import operation, if the component
 // to be imported has not yet been seen.
-func (f *BlockFetcher) enqueue(peer string, header *types.Header, block *types.Block) {
+func (f *BlockFetcher) enqueue(peer string, header *types.Header, block *types.Block, extBlocks []*types.ExternalBlock) {
 	var (
 		hash   common.Hash
 		number uint64
@@ -733,7 +741,7 @@ func (f *BlockFetcher) enqueue(peer string, header *types.Header, block *types.B
 	}
 	// Schedule the block for future importing
 	if _, ok := f.queued[hash]; !ok {
-		op := &blockOrHeaderInject{origin: peer}
+		op := &blockOrHeaderInject{origin: peer, extBlocks: extBlocks}
 		if header != nil {
 			op.header = header
 		} else {
@@ -745,7 +753,7 @@ func (f *BlockFetcher) enqueue(peer string, header *types.Header, block *types.B
 		if f.queueChangeHook != nil {
 			f.queueChangeHook(hash, true)
 		}
-		log.Debug("Queued delivered header or block", "peer", peer, "number", number, "hash", hash, "queued", f.queue.Size())
+		log.Info("Queued delivered header or block", "peer", peer, "number", number, "hash", hash, "queued", f.queue.Size(), "extBlocks", len(extBlocks))
 	}
 }
 
@@ -789,7 +797,7 @@ func (f *BlockFetcher) importBlocks(peer string, block *types.Block, extBlocks [
 	hash := block.Hash()
 
 	// Run the import on a new thread
-	log.Debug("Importing propagated block", "peer", peer, "number", block.Number(), "hash", hash)
+	log.Info("Importing propagated block", "peer", peer, "number", block.Number(), "hash", hash)
 	go func() {
 		defer func() { f.done <- hash }()
 
@@ -804,7 +812,7 @@ func (f *BlockFetcher) importBlocks(peer string, block *types.Block, extBlocks [
 		case nil:
 			// All ok, quickly propagate to our peers
 			blockBroadcastOutTimer.UpdateSince(block.ReceivedAt)
-			go f.broadcastBlock(block, nil, true)
+			go f.broadcastBlock(block, extBlocks, true)
 
 		case consensus.ErrFutureBlock:
 			// Weird future block, don't fail, but neither propagate
@@ -817,13 +825,14 @@ func (f *BlockFetcher) importBlocks(peer string, block *types.Block, extBlocks [
 		}
 
 		// Run the actual import and log any issues
+		fmt.Println("importBlocks: Inserting block into chain", "len extBlocks", len(extBlocks))
 		if _, err := f.insertChain(types.Blocks{block}, extBlocks); err != nil {
 			log.Debug("Propagated block import failed", "peer", peer, "number", block.Number(), "hash", hash, "err", err)
 			return
 		}
 		// If import succeeded, broadcast the block
 		blockAnnounceOutTimer.UpdateSince(block.ReceivedAt)
-		go f.broadcastBlock(block, nil, false)
+		go f.broadcastBlock(block, extBlocks, false)
 
 		// Invoke the testing hook if needed
 		if f.importedHook != nil {

@@ -25,9 +25,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/spruce-solutions/go-quai"
+	ethereum "github.com/spruce-solutions/go-quai"
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/common/hexutil"
+	"github.com/spruce-solutions/go-quai/core"
 	"github.com/spruce-solutions/go-quai/core/types"
 	"github.com/spruce-solutions/go-quai/ethdb"
 	"github.com/spruce-solutions/go-quai/event"
@@ -262,6 +263,36 @@ func (api *PublicFilterAPI) PendingBlock(ctx context.Context) (*rpc.Subscription
 				return
 			case <-notifier.Closed():
 				blockSub.Unsubscribe()
+				return
+			}
+		}
+	}()
+
+	return rpcSub, nil
+}
+
+// reOrg sends a notification each time a new pending block is created.
+func (api *PublicFilterAPI) ReOrg(ctx context.Context) (*rpc.Subscription, error) {
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+
+	rpcSub := notifier.CreateSubscription()
+
+	go func() {
+		reOrg := make(chan core.ReOrgRollup)
+		reOrgSub := api.events.SubscribeReOrg(reOrg)
+
+		for {
+			select {
+			case b := <-reOrg:
+				notifier.Notify(rpcSub.ID, b)
+			case <-rpcSub.Err():
+				reOrgSub.Unsubscribe()
+				return
+			case <-notifier.Closed():
+				reOrgSub.Unsubscribe()
 				return
 			}
 		}

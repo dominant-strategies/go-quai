@@ -17,6 +17,7 @@
 package miner
 
 import (
+	"errors"
 	"math/big"
 	"math/rand"
 	"sync/atomic"
@@ -30,6 +31,7 @@ import (
 	"github.com/spruce-solutions/go-quai/consensus/ethash"
 	"github.com/spruce-solutions/go-quai/core"
 	"github.com/spruce-solutions/go-quai/core/rawdb"
+	"github.com/spruce-solutions/go-quai/core/state"
 	"github.com/spruce-solutions/go-quai/core/types"
 	"github.com/spruce-solutions/go-quai/core/vm"
 	"github.com/spruce-solutions/go-quai/crypto"
@@ -166,6 +168,9 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 
 func (b *testWorkerBackend) BlockChain() *core.BlockChain { return b.chain }
 func (b *testWorkerBackend) TxPool() *core.TxPool         { return b.txPool }
+func (b *testWorkerBackend) StateAtBlock(block *types.Block, reexec uint64, base *state.StateDB, checkLive bool, preferDisk bool) (statedb *state.StateDB, err error) {
+	return nil, errors.New("not supported")
+}
 
 func (b *testWorkerBackend) newRandomUncle() *types.Block {
 	var parent *types.Block
@@ -335,8 +340,8 @@ func TestStreamUncleBlock(t *testing.T) {
 			if taskIndex == 2 {
 				have := task.block.Header().UncleHash
 				want := types.CalcUncleHash([]*types.Header{b.uncleBlock.Header()})
-				if have != want {
-					t.Errorf("uncle hash mismatch: have %s, want %s", have.Hex(), want.Hex())
+				if have[0] != want {
+					t.Errorf("uncle hash mismatch: have %s, want %s", have[0].Hex(), want.Hex())
 				}
 			}
 			taskCh <- struct{}{}

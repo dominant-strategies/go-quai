@@ -175,6 +175,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 		if err != nil {
 			return genesis.Config, common.Hash{}, err
 		}
+		log.Info("Genesis hash", "hash", block.Hash())
 		return genesis.Config, block.Hash(), nil
 	}
 	// We have the genesis block in database(perhaps in ancient database)
@@ -352,10 +353,10 @@ func MainnetPrimeGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.MainnetPrimeChainConfig,
 		Number:     0,
-		Nonce:      66,
+		Nonce:      52,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
 		GasLimit:   5000000,
-		Difficulty: big.NewInt(16048576),
+		Difficulty: big.NewInt(32048576),
 		Alloc:      decodePrealloc(mainnetAllocData),
 	}
 }
@@ -365,23 +366,62 @@ func MainnetRegionGenesisBlock(regionParams *params.ChainConfig) *Genesis {
 	return &Genesis{
 		Config:     regionParams,
 		Number:     0,
-		Nonce:      66,
+		Nonce:      52,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
 		GasLimit:   1600000,
-		Difficulty: big.NewInt(4048576),
+		Difficulty: big.NewInt(8048576),
 		Alloc:      decodePrealloc(mainnetAllocData),
 	}
 }
 
 // MainnetPrimeGenesisBlock returns the Ethereum main net genesis block.
-func MainnetZoneGenesisBlock(regionParams *params.ChainConfig) *Genesis {
+func MainnetZoneGenesisBlock(zoneParams *params.ChainConfig) *Genesis {
+	return &Genesis{
+		Config:     zoneParams,
+		Number:     0,
+		Nonce:      52,
+		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
+		GasLimit:   500000,
+		Difficulty: big.NewInt(2048576),
+		Alloc:      decodePrealloc(mainnetAllocData),
+	}
+}
+
+// RopstenPrimeGenesisBlock returns the Quai Network ropsten prime genesis block.
+func RopstenPrimeGenesisBlock() *Genesis {
+	return &Genesis{
+		Config:     params.RopstenPrimeChainConfig,
+		Number:     0,
+		Nonce:      11,
+		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
+		GasLimit:   5000000,
+		Difficulty: big.NewInt(3448576),
+		Alloc:      decodePrealloc(mainnetAllocData),
+	}
+}
+
+// RopstenRegionGenesisBlock returns the Quai Network ropsten region genesis block.
+func RopstenRegionGenesisBlock(regionParams *params.ChainConfig) *Genesis {
 	return &Genesis{
 		Config:     regionParams,
 		Number:     0,
-		Nonce:      66,
+		Nonce:      11,
+		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
+		GasLimit:   1600000,
+		Difficulty: big.NewInt(1248576),
+		Alloc:      decodePrealloc(mainnetAllocData),
+	}
+}
+
+// RopstenZoneGenesisBlock returns the Quai Network ropsten zone genesis block.
+func RopstenZoneGenesisBlock(zoneParams *params.ChainConfig) *Genesis {
+	return &Genesis{
+		Config:     zoneParams,
+		Number:     0,
+		Nonce:      11,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
 		GasLimit:   500000,
-		Difficulty: big.NewInt(1048576),
+		Difficulty: big.NewInt(168576),
 		Alloc:      decodePrealloc(mainnetAllocData),
 	}
 }

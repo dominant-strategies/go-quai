@@ -35,6 +35,7 @@ import (
 	"github.com/spruce-solutions/go-quai/common/mclock"
 	"github.com/spruce-solutions/go-quai/common/prque"
 	"github.com/spruce-solutions/go-quai/consensus"
+	"github.com/spruce-solutions/go-quai/consensus/misc"
 	"github.com/spruce-solutions/go-quai/core/rawdb"
 	"github.com/spruce-solutions/go-quai/core/state"
 	"github.com/spruce-solutions/go-quai/core/state/snapshot"
@@ -183,6 +184,7 @@ type BlockChain struct {
 	hc            *HeaderChain
 	rmLogsFeed    event.Feed
 	chainFeed     event.Feed
+	reOrgFeed     event.Feed
 	chainSideFeed event.Feed
 	chainHeadFeed event.Feed
 	logsFeed      event.Feed
@@ -412,6 +414,10 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			triedb.SaveCachePeriodically(bc.cacheConfig.TrieCleanJournal, bc.cacheConfig.TrieCleanRejournal, bc.quit)
 		}()
 	}
+
+	// Once we have updated the state of the chain, generate the extBlockLink struct for processing of ext blocks.
+	// bc.processor.GenerateExtBlockLink()
+
 	return bc, nil
 }
 
@@ -979,6 +985,23 @@ func (bc *BlockChain) GetUnclesInChain(block *types.Block, length int) []*types.
 		block = bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
 	}
 	return uncles
+}
+
+// GetGasUsedInChain retrieves all the gas used from a given block backwards until
+// a specific distance is reached.
+func (bc *BlockChain) GetGasUsedInChain(block *types.Block, length int) int64 {
+	gasUsed := 0
+	for i := 0; block != nil && i < length; i++ {
+		gasUsed += int(block.GasUsed())
+		block = bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
+	}
+	return int64(gasUsed)
+}
+
+// GetGasUsedInChain retrieves all the gas used from a given block backwards until
+// a specific distance is reached.
+func (bc *BlockChain) CalculateBaseFee(header *types.Header) *big.Int {
+	return misc.CalcBaseFee(bc.Config(), header, bc.GetHeaderByNumber, bc.GetUnclesInChain, bc.GetGasUsedInChain)
 }
 
 // TrieNode retrieves a blob of data associated with a trie node
@@ -1606,16 +1629,120 @@ func (bc *BlockChain) AddExternalBlocks(blocks []*types.ExternalBlock) error {
 
 // addExternalBlock adds the received block to the external block cache.
 func (bc *BlockChain) AddExternalBlock(block *types.ExternalBlock) error {
-	context := []interface{}{
-		"context", block.Context(), "numbers", block.Header().Number, "hash", block.Hash(), "location", block.Header().Location,
-		"txs", len(block.Transactions()), "receipts", len(block.Receipts()),
-	}
-	log.Debug("New external block", context...)
+	// context := []interface{}{
+	// 	"context", block.Context(), "numbers", block.Header().Number, "hash", block.Hash(), "location", block.Header().Location,
+	// 	"txs", len(block.Transactions()), "receipts", len(block.Receipts()),
+	// }
+	// log.Info("Adding external block", context...)
 	data, err := rlp.EncodeToBytes(block)
 	if err != nil {
 		log.Crit("Failed to RLP encode external block", "err", err)
 	}
 	bc.externalBlocks.Set(block.CacheKey(), data)
+	return nil
+}
+
+// ReOrgRollBack compares the difficulty of the newchain and oldchain. Rolls back
+// the current header to the position where the reorg took place in a higher context
+func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
+	var (
+		deletedTxs  types.Transactions
+		deletedLogs [][]*types.Log
+
+		// collectLogs collects the logs that were generated or removed during
+		// the processing of the block that corresponds with the given hash.
+		// These logs are later announced as deleted or reborn
+		collectLogs = func(hash common.Hash) {
+			number := bc.hc.GetBlockNumber(hash)
+			if number == nil {
+				return
+			}
+			receipts := rawdb.ReadReceipts(bc.db, hash, *number, bc.chainConfig)
+
+			var logs []*types.Log
+			for _, receipt := range receipts {
+				for _, log := range receipt.Logs {
+					l := *log
+					l.Removed = true
+					logs = append(logs, &l)
+				}
+			}
+			if len(logs) > 0 {
+				deletedLogs = append(deletedLogs, logs)
+			}
+		}
+		// mergeLogs returns a merged log slice with specified sort order.
+		mergeLogs = func(logs [][]*types.Log, reverse bool) []*types.Log {
+			var ret []*types.Log
+			if reverse {
+				for i := len(logs) - 1; i >= 0; i-- {
+					ret = append(ret, logs[i]...)
+				}
+			} else {
+				for i := 0; i < len(logs); i++ {
+					ret = append(ret, logs[i]...)
+				}
+			}
+			return ret
+		}
+	)
+
+	if header != nil {
+		// get the commonBlock
+		commonBlock := bc.GetBlockByHash(header.Hash())
+		// if a block with this hash does not exist then we dont have to roll back
+		if commonBlock == nil {
+			return nil
+		}
+		// get the current head in this chain
+		currentBlock := bc.CurrentBlock()
+
+		for {
+			if currentBlock.NumberU64() == commonBlock.NumberU64()-1 {
+				break
+			}
+			deletedTxs = append(deletedTxs, currentBlock.Transactions()...)
+			collectLogs(currentBlock.Hash())
+
+			currentBlock = bc.GetBlock(currentBlock.ParentHash(), currentBlock.NumberU64())
+			if currentBlock == nil {
+				return fmt.Errorf("invalid current chain")
+			}
+		}
+		// set the head back to the block before the rollback point
+		if err := bc.SetHead(commonBlock.NumberU64() - 1); err != nil {
+			return err
+		}
+
+		fmt.Println("Header is now rolled back and the current head is at", bc.CurrentBlock().NumberU64())
+
+		// Delete useless indexes right now which includes the non-canonical
+		// transaction indexes, canonical chain indexes which above the head.
+		indexesBatch := bc.db.NewBatch()
+		for _, tx := range deletedTxs {
+			rawdb.DeleteTxLookupEntry(indexesBatch, tx.Hash())
+		}
+
+		// Delete any canonical number assignments above the new head
+		number := bc.CurrentBlock().NumberU64()
+		for i := number + 1; ; i++ {
+			hash := rawdb.ReadCanonicalHash(bc.db, i)
+			if hash == (common.Hash{}) {
+				break
+			}
+			rawdb.DeleteCanonicalHash(indexesBatch, i)
+		}
+		if err := indexesBatch.Write(); err != nil {
+			log.Crit("Failed to delete useless indexes", "err", err)
+		}
+
+		// send the deleted logs to the removed logs feed
+		if len(deletedLogs) > 0 {
+			bc.rmLogsFeed.Send(RemovedLogsEvent{mergeLogs(deletedLogs, true)})
+		}
+	} else {
+		return fmt.Errorf("reorg header was null")
+	}
 	return nil
 }
 
@@ -1736,7 +1863,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			if localTd.Cmp(externTd) < 0 {
 				break
 			}
-			log.Debug("Ignoring already known block", "number", block.Number(), "hash", block.Hash())
+			log.Info("Ignoring already known block", "number", block.Number(), "hash", block.Hash())
 			stats.ignored++
 
 			block, err = it.next()
@@ -1750,7 +1877,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		// `insertChain` while a part of them have higher total difficulty than current
 		// head full block(new pivot point).
 		for block != nil && err == ErrKnownBlock {
-			log.Debug("Writing previously known block", "number", block.Number(), "hash", block.Hash())
+			log.Info("Writing previously known block", "number", block.Number(), "hash", block.Hash())
 			if err := bc.writeKnownBlock(block); err != nil {
 				return it.index, err
 			}
@@ -1883,6 +2010,15 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		}
 		// Process block using the parent state as reference point
 		substart := time.Now()
+
+		// If in Prime or Region, take to see if we have already included the hash in the lower level.
+		// TODO: #179 Extend CheckHashInclusion to if the hash was ever included in the chain, not just the parent.
+		err = bc.CheckHashInclusion(block.Header(), parent)
+		if err != nil {
+			return it.index, err
+		}
+
+		// Process our block and retrieve external blocks.
 		receipts, logs, usedGas, externalBlocks, err := bc.processor.Process(block, statedb, bc.vmConfig)
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
@@ -1937,7 +2073,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 
 		switch status {
 		case CanonStatTy:
-			log.Debug("Inserted new block", "number", block.Number(), "hash", block.Hash(),
+			log.Info("Inserted new block", "number", block.Header().Number, "hash", block.Hash(), "extBlocks", len(externalBlocks),
 				"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"elapsed", common.PrettyDuration(time.Since(start)),
 				"root", block.Root())
@@ -1948,7 +2084,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			bc.gcproc += proctime
 
 		case SideStatTy:
-			log.Debug("Inserted forked block", "number", block.Number(), "hash", block.Hash(),
+			log.Info("Inserted forked block", "number", block.Number(), "hash", block.Hash(),
 				"diff", block.Difficulty(), "elapsed", common.PrettyDuration(time.Since(start)),
 				"txs", len(block.Transactions()), "gas", block.GasUsed(), "uncles", len(block.Uncles()),
 				"root", block.Root())
@@ -1956,7 +2092,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		default:
 			// This in theory is impossible, but lets be nice to our future selves and leave
 			// a log, instead of trying to track down blocks imports that don't emit logs.
-			log.Warn("Inserted block with unknown status", "number", block.Number(), "hash", block.Hash(),
+			log.Info("Inserted block with unknown status", "number", block.Number(), "hash", block.Hash(),
 				"diff", block.Difficulty(), "elapsed", common.PrettyDuration(time.Since(start)),
 				"txs", len(block.Transactions()), "gas", block.GasUsed(), "uncles", len(block.Uncles()),
 				"root", block.Root())
@@ -2109,6 +2245,17 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 	return 0, nil
 }
 
+func (bc *BlockChain) getAllHeaders(blocks []*types.Block) []*types.Header {
+	// Initialize the headers array
+	var headers []*types.Header
+
+	// Find all the headers since genesis
+	for i := 0; i < len(blocks); i++ {
+		headers = append(headers, blocks[i].Header())
+	}
+	return headers
+}
+
 // reorg takes two blocks, an old chain and a new chain and will reconstruct the
 // blocks and inserts them to be part of the new canonical chain and accumulates
 // potential missing transactions and post an event about them.
@@ -2167,6 +2314,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 			return ret
 		}
 	)
+
 	// Reduce the longer chain to the same number as the shorter one
 	if oldBlock.NumberU64() > newBlock.NumberU64() {
 		// Old chain is longer, gather all transactions and logs as deleted ones
@@ -2193,6 +2341,9 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		// If the common ancestor was found, bail out
 		if oldBlock.Hash() == newBlock.Hash() {
 			commonBlock = oldBlock
+
+			// Once the common block is found, the reorg data is sent to the reOrg feed
+			bc.reOrgFeed.Send(ReOrgRollup{ReOrgHeader: commonBlock.Header(), OldChainHeaders: bc.getAllHeaders(oldChain), NewChainHeaders: bc.getAllHeaders(newChain)})
 			break
 		}
 		// Remove an old block as well as stash away a new block
@@ -2273,6 +2424,10 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 			bc.chainSideFeed.Send(ChainSideEvent{Block: oldChain[i]})
 		}
 	}
+
+	// Reset the blockLink in the blockchain state processor.
+	// bc.processor.GenerateExtBlockLink()
+
 	return nil
 }
 
@@ -2451,6 +2606,26 @@ func (bc *BlockChain) GetHeader(hash common.Hash, number uint64) *types.Header {
 	return bc.hc.GetHeader(hash, number)
 }
 
+// GetHeader retrieves a block header from the database by hash and number,
+// caching it if found.
+func (bc *BlockChain) CheckHashInclusion(header *types.Header, parent *types.Header) error {
+	if types.QuaiNetworkContext < 1 {
+		if header.ParentHash[1] == parent.ParentHash[1] {
+			fmt.Println("Region hash already included:", header.ParentHash[1], parent.ParentHash[1])
+			return fmt.Errorf("error subordinate hash already included in parent")
+		}
+	}
+
+	if types.QuaiNetworkContext < 2 {
+		if header.ParentHash[2] == parent.ParentHash[2] {
+			fmt.Println("Zone hash already included:", header.ParentHash[2], parent.ParentHash[2])
+			return fmt.Errorf("error subordinate hash already included in parent")
+		}
+	}
+
+	return nil
+}
+
 // GetHeaderByHash retrieves a block header from the database by hash, caching it if
 // found.
 func (bc *BlockChain) GetHeaderByHash(hash common.Hash) *types.Header {
@@ -2496,22 +2671,63 @@ func (bc *BlockChain) StoreExternalBlocks(blocks []*types.ExternalBlock) error {
 	return nil
 }
 
+// GetExternalBlocks retrieves the external blocks for a given header. Will call the necessary
+// TraceBranch functionality.
 func (bc *BlockChain) GetExternalBlocks(header *types.Header) ([]*types.ExternalBlock, error) {
 	// Lookup block in externalBlocks cache
 	context := bc.Config().Context // Index that node is currently at
 	externalBlocks := make([]*types.ExternalBlock, 0)
 
+	// Check if header is nil
+	if header == nil {
+		return externalBlocks, nil
+	}
+
+	// Check header number
+	if header.Number == nil {
+		return externalBlocks, nil
+	}
+
 	// Do not run on block 1
 	if header.Number[context].Cmp(big.NewInt(1)) > 0 {
-		// Skip pending block
-		prevHeader := bc.GetHeaderByHash(header.ParentHash[context])
-		coincidentHeader, difficultyContext := bc.engine.GetCoincidentHeader(bc, context, prevHeader)
-		// If we are not getting the transactions immediately after the coincident block, return
-		if coincidentHeader.Number[context].Cmp(prevHeader.Number[context]) != 0 {
+		coincidentHeader, difficultyContext := bc.engine.GetCoincidentHeader(bc, context, header)
+		if coincidentHeader.Number[context].Cmp(header.Number[context]) != 0 {
 			return externalBlocks, nil
 		}
-		stopHash := bc.engine.GetStopHash(bc, difficultyContext, context, coincidentHeader)
-		externalBlocks = append(externalBlocks, bc.engine.TraceBranch(bc, coincidentHeader, difficultyContext, stopHash, context, header.Location, false)...)
+
+		// Get the Prime stopHash to be used in the Prime context. Go on to trace Prime once.
+		// Get the Prime stopHash to be used in the Prime context. Go on to trace Prime once.
+		primeStopHash, primeNum := bc.engine.GetStopHash(bc, context, 0, coincidentHeader)
+		if context == 0 {
+			extBlockResult, extBlockErr := bc.engine.PrimeTraceBranch(bc, coincidentHeader, difficultyContext, primeStopHash, context, header.Location)
+			if extBlockErr != nil {
+				return nil, extBlockErr
+			}
+			externalBlocks = append(externalBlocks, extBlockResult...)
+		}
+
+		if context == 1 || context == 2 {
+			regionStopHash, regionNum := bc.engine.GetStopHash(bc, context, 1, coincidentHeader)
+			if difficultyContext == 0 {
+				extBlockResult, extBlockErr := bc.engine.PrimeTraceBranch(bc, coincidentHeader, difficultyContext, primeStopHash, context, coincidentHeader.Location)
+				if extBlockErr != nil {
+					return nil, extBlockErr
+				}
+				externalBlocks = append(externalBlocks, extBlockResult...)
+			}
+			// If our Prime stopHash comes before our Region stopHash
+			if primeNum < regionNum {
+				regionStopHash = primeStopHash
+			}
+			// If we have a Region block, trace it.
+			if difficultyContext < 2 {
+				extBlockResult, extBlockErr := bc.engine.RegionTraceBranch(bc, coincidentHeader, 1, regionStopHash, context, coincidentHeader.Location)
+				if extBlockErr != nil {
+					return nil, extBlockErr
+				}
+				externalBlocks = append(externalBlocks, extBlockResult...)
+			}
+		}
 	}
 
 	return externalBlocks, nil
@@ -2611,6 +2827,11 @@ func (bc *BlockChain) SubscribeRemovedLogsEvent(ch chan<- RemovedLogsEvent) even
 // SubscribeChainEvent registers a subscription of ChainEvent.
 func (bc *BlockChain) SubscribeChainEvent(ch chan<- ChainEvent) event.Subscription {
 	return bc.scope.Track(bc.chainFeed.Subscribe(ch))
+}
+
+// SubscribeReOrgEvent registers a subscription of ReOrgEvent.
+func (bc *BlockChain) SubscribeReOrgEvent(ch chan<- ReOrgRollup) event.Subscription {
+	return bc.scope.Track(bc.reOrgFeed.Subscribe(ch))
 }
 
 // SubscribeChainHeadEvent registers a subscription of ChainHeadEvent.

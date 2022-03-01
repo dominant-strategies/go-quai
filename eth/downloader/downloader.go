@@ -25,7 +25,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/spruce-solutions/go-quai"
+	ethereum "github.com/spruce-solutions/go-quai"
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/core/rawdb"
 	"github.com/spruce-solutions/go-quai/core/state/snapshot"
@@ -457,8 +457,8 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 			d.mux.Post(DoneEvent{latest})
 		}
 	}()
-	if p.version < eth.ETH66 {
-		return fmt.Errorf("%w: advertized %d < required %d", errTooOld, p.version, eth.ETH66)
+	if p.version < eth.QUAI66 {
+		return fmt.Errorf("%w: advertized %d < required %d", errTooOld, p.version, eth.QUAI66)
 	}
 	mode := d.getMode()
 
@@ -1326,7 +1326,7 @@ func (d *Downloader) fetchReceipts(from uint64) error {
 
 // fetchExternalBlocks iteratively downloads the scheduled external blocks, taking any
 func (d *Downloader) fetchExternalBlocks(p *peerConnection, from uint64) error {
-	log.Debug("Downloading external blocks", "origin", from)
+	log.Info("Downloading external blocks", "origin", from)
 
 	var (
 		deliver = func(packet dataPack) (int, error) {
@@ -1335,7 +1335,7 @@ func (d *Downloader) fetchExternalBlocks(p *peerConnection, from uint64) error {
 		}
 		expire   = func() map[string]int { return d.queue.ExpireExternalBlocks(d.peers.rates.TargetTimeout()) }
 		fetch    = func(p *peerConnection, req *fetchRequest) error { return p.FetchExternalBlocks(req) }
-		capacity = func(p *peerConnection) int { return 100 }
+		capacity = func(p *peerConnection) int { return p.ExtBlockCapacity(d.peers.rates.TargetRoundTrip()) }
 		setIdle  = func(p *peerConnection, accepted int, deliveryTime time.Time) {
 			p.SetExternalBlocksIdle(accepted, deliveryTime)
 		}
@@ -1344,7 +1344,7 @@ func (d *Downloader) fetchExternalBlocks(p *peerConnection, from uint64) error {
 		d.queue.PendingExtBlocks, d.queue.InFlightExtBlocks, d.queue.ReserveExtBlocks,
 		d.extBlockFetchHook, fetch, d.queue.CancelExtBlocks, capacity, d.peers.ExtBlockIdlePeers, setIdle, "externalBlocks")
 
-	log.Debug("External block download terminated", "err", err)
+	log.Info("External block download terminated", "err", err)
 	return err
 }
 
@@ -1457,10 +1457,10 @@ func (d *Downloader) fetchParts(deliveryCh chan dataPack, deliver func(dataPack)
 					// and latency of a peer separately, which requires pushing the measures capacity a bit and seeing
 					// how response times reacts, to it always requests one more than the minimum (i.e. min 2).
 					if fails > 2 {
-						peer.log.Trace("Data delivery timed out", "type", kind)
+						log.Info("Data delivery timed out", "type", kind)
 						setIdle(peer, 0, time.Now())
 					} else {
-						peer.log.Debug("Stalling delivery, dropping", "type", kind)
+						log.Info("Stalling delivery, dropping", "type", kind)
 
 						if d.dropPeer == nil {
 							// The dropPeer method is nil when `--copydb` is used for a local copy.
@@ -1485,7 +1485,7 @@ func (d *Downloader) fetchParts(deliveryCh chan dataPack, deliver func(dataPack)
 			// If there's nothing more to fetch, wait or terminate
 			if pending() == 0 {
 				if !inFlight() && finished {
-					log.Debug("Data fetching completed", "type", kind)
+					log.Info("Data fetching completed", "type", kind)
 					return nil
 				}
 				break
@@ -1518,9 +1518,9 @@ func (d *Downloader) fetchParts(deliveryCh chan dataPack, deliver func(dataPack)
 					continue
 				}
 				if request.From > 0 {
-					peer.log.Trace("Requesting new batch of data", "type", kind, "from", request.From)
+					log.Info("Requesting new batch of data", "type", kind, "from", request.From)
 				} else {
-					peer.log.Trace("Requesting new batch of data", "type", kind, "count", len(request.Headers), "from", request.Headers[0].Number)
+					log.Info("Requesting new batch of data", "type", kind, "count", len(request.Headers), "from", request.Headers[0].Number)
 				}
 				// Fetch the chunk and make sure any errors return the hashes to the queue
 				if fetchHook != nil {
@@ -1748,19 +1748,26 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 		return errCancelContentProcessing
 	default:
 	}
+	// Compose blocks for insert and prepare external block cache
+	blocks := make([]*types.Block, len(results))
+	extBlocks := make([]*types.ExternalBlock, 0)
+	for i, result := range results {
+		blocks[i] = types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles)
+		extBlocks = append(extBlocks, result.ExternalBlocks...)
+	}
+
 	// Retrieve the a batch of results to import
 	first, last := results[0].Header, results[len(results)-1].Header
 	log.Debug("Inserting downloaded chain", "items", len(results),
 		"firstnum", first.Number, "firsthash", first.Hash(),
 		"lastnum", last.Number, "lasthash", last.Hash(),
+		"extBlocks", len(extBlocks),
 	)
-	// Compose blocks for insert and prepare external block cache
-	blocks := make([]*types.Block, len(results))
-	for i, result := range results {
-		blocks[i] = types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles)
-		for _, extBlock := range result.ExternalBlocks {
-			d.blockchain.AddExternalBlock(extBlock)
-		}
+
+	log.Info("importBlockResults: Length of ext blocks", "len", len(extBlocks))
+	// Add external blocks to chain before inserting blocks
+	for _, extBlock := range extBlocks {
+		d.blockchain.AddExternalBlock(extBlock)
 	}
 	if index, err := d.blockchain.InsertChain(blocks); err != nil {
 		if index < len(results) {

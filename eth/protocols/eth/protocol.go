@@ -30,20 +30,20 @@ import (
 
 // Constants to match up protocol versions and messages
 const (
-	ETH66 = 66
+	QUAI66 = 66
 )
 
 // ProtocolName is the official short name of the `eth` protocol used during
 // devp2p capability negotiation.
-const ProtocolName = "eth"
+const ProtocolName = "quai"
 
 // ProtocolVersions are the supported versions of the `eth` protocol (first
 // is primary).
-var ProtocolVersions = []uint{ETH66}
+var ProtocolVersions = []uint{QUAI66}
 
 // protocolLengths are the number of implemented message corresponding to
 // different protocol versions.
-var protocolLengths = map[uint]uint64{ETH66: 19}
+var protocolLengths = map[uint]uint64{QUAI66: 19}
 
 // maxMessageSize is the maximum cap on the size of a protocol message.
 const maxMessageSize = 10 * 1024 * 1024

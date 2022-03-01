@@ -43,7 +43,7 @@ import (
 )
 
 const (
-	clientIdentifier = "geth" // Client identifier to advertise over the network
+	clientIdentifier = "quai" // Client identifier to advertise over the network
 )
 
 var (
@@ -263,13 +263,13 @@ func prepare(ctx *cli.Context) {
 	// If we're running a known preset, log it for convenience.
 	switch {
 	case ctx.GlobalIsSet(utils.RopstenFlag.Name):
-		log.Info("Starting Geth on Ropsten testnet...")
+		log.Info("Starting Quai on Ropsten testnet...")
 
 	case ctx.GlobalIsSet(utils.DeveloperFlag.Name):
-		log.Info("Starting Geth in ephemeral dev mode...")
+		log.Info("Starting Quai in ephemeral dev mode...")
 
 	case !ctx.GlobalIsSet(utils.NetworkIdFlag.Name):
-		log.Info("Starting Geth on Ethereum mainnet...")
+		log.Info("Starting go-quai on Quai Network mainnet...")
 	}
 	// If we're running a light client on any network, drop the cache to some meaningfully low amount
 	if ctx.GlobalString(utils.SyncModeFlag.Name) == "light" && !ctx.GlobalIsSet(utils.CacheFlag.Name) {

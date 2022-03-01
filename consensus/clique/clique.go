@@ -342,7 +342,7 @@ func (c *Clique) verifyCascadingFields(chain consensus.ChainHeaderReader, header
 		if err := misc.VerifyGaslimit(parent.GasLimit[types.QuaiNetworkContext], header.GasLimit[types.QuaiNetworkContext]); err != nil {
 			return err
 		}
-	} else if err := misc.VerifyEip1559Header(chain.Config(), parent, header); err != nil {
+	} else if err := misc.VerifyHeaderGasAndFee(chain.Config(), parent, header, chain); err != nil {
 		// Verify the header's EIP-1559 attributes.
 		return err
 	}
@@ -592,8 +592,13 @@ func (c *Clique) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *
 }
 
 // GetExternalBlocks traces all available branches to find external blocks
-func (c *Clique) GetExternalBlocks(chain consensus.ChainHeaderReader, header *types.Header, logging bool) []*types.ExternalBlock {
-	return make([]*types.ExternalBlock, 0)
+func (c *Clique) GetExternalBlocks(chain consensus.ChainHeaderReader, header *types.Header, logging bool) ([]*types.ExternalBlock, error) {
+	return make([]*types.ExternalBlock, 0), nil
+}
+
+// GetCoincidentHeader retrieves the furthest coincident header back
+func (c *Clique) GetDifficultyContext(chain consensus.ChainHeaderReader, header *types.Header, context int) (int, error) {
+	return 0, nil
 }
 
 // GetCoincidentHeader retrieves the furthest coincident header back
@@ -602,13 +607,17 @@ func (c *Clique) GetCoincidentHeader(chain consensus.ChainHeaderReader, context 
 }
 
 // GetStopHash retrieves the stop hash for tracing of blocks in a trace branch
-func (c *Clique) GetStopHash(chain consensus.ChainHeaderReader, difficultyContext int, originalContext int, startingHeader *types.Header) common.Hash {
-	return common.Hash{}
+func (c *Clique) GetStopHash(chain consensus.ChainHeaderReader, difficultyContext int, originalContext int, startingHeader *types.Header) (common.Hash, int) {
+	return common.Hash{}, 0
 }
 
 // TraceBranch recursively traces branches to find
-func (c *Clique) TraceBranch(chain consensus.ChainHeaderReader, header *types.Header, context int, stopHash common.Hash, originalContext int, originalLocation []byte, logging bool) []*types.ExternalBlock {
-	return make([]*types.ExternalBlock, 0)
+func (c *Clique) PrimeTraceBranch(chain consensus.ChainHeaderReader, header *types.Header, context int, stopHash common.Hash, originalContext int, originalLocation []byte) ([]*types.ExternalBlock, error) {
+	return make([]*types.ExternalBlock, 0), nil
+}
+
+func (c *Clique) RegionTraceBranch(chain consensus.ChainHeaderReader, header *types.Header, context int, stopHash common.Hash, originalContext int, originalLocation []byte) ([]*types.ExternalBlock, error) {
+	return make([]*types.ExternalBlock, 0), nil
 }
 
 // Authorize injects a private key into the consensus engine to mint new blocks

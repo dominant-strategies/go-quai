@@ -35,7 +35,6 @@ import (
 	"github.com/spruce-solutions/go-quai/common/math"
 	"github.com/spruce-solutions/go-quai/consensus/clique"
 	"github.com/spruce-solutions/go-quai/consensus/ethash"
-	"github.com/spruce-solutions/go-quai/consensus/misc"
 	"github.com/spruce-solutions/go-quai/core"
 	"github.com/spruce-solutions/go-quai/core/state"
 	"github.com/spruce-solutions/go-quai/core/types"
@@ -161,7 +160,7 @@ func (s *PublicTxPoolAPI) Content() map[string]map[string]map[string]*RPCTransac
 	for account, txs := range pending {
 		dump := make(map[string]*RPCTransaction)
 		for _, tx := range txs {
-			dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, curHeader, s.b.ChainConfig())
+			dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, curHeader, s.b)
 		}
 		content["pending"][account.Hex()] = dump
 	}
@@ -169,7 +168,7 @@ func (s *PublicTxPoolAPI) Content() map[string]map[string]map[string]*RPCTransac
 	for account, txs := range queue {
 		dump := make(map[string]*RPCTransaction)
 		for _, tx := range txs {
-			dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, curHeader, s.b.ChainConfig())
+			dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, curHeader, s.b)
 		}
 		content["queued"][account.Hex()] = dump
 	}
@@ -185,14 +184,14 @@ func (s *PublicTxPoolAPI) ContentFrom(addr common.Address) map[string]map[string
 	// Build the pending transactions
 	dump := make(map[string]*RPCTransaction, len(pending))
 	for _, tx := range pending {
-		dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, curHeader, s.b.ChainConfig())
+		dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, curHeader, s.b)
 	}
 	content["pending"] = dump
 
 	// Build the queued transactions
 	dump = make(map[string]*RPCTransaction, len(queue))
 	for _, tx := range queue {
-		dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, curHeader, s.b.ChainConfig())
+		dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, curHeader, s.b)
 	}
 	content["queued"] = dump
 
@@ -349,7 +348,7 @@ func (s *PrivateAccountAPI) NewAccount(password string) (common.Address, error) 
 	if err != nil {
 		return common.Address{}, err
 	}
-	id := s.b.ChainConfig().ChainIDByte()
+	id := s.b.ChainConfig().ChainIDRange()
 	acc, err := ks.NewAccount(password, id)
 	if err == nil {
 		log.Info("Your new key was generated", "address", acc.Address)
@@ -707,7 +706,7 @@ func (s *PublicBlockChainAPI) GetProof(ctx context.Context, address common.Addre
 func (s *PublicBlockChainAPI) GetHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (map[string]interface{}, error) {
 	header, err := s.b.HeaderByNumber(ctx, number)
 	if header != nil && err == nil {
-		response := s.rpcMarshalHeader(ctx, header)
+		response := s.rpcMarshalEthHeader(ctx, header)
 		if number == rpc.PendingBlockNumber {
 			// Pending header need to nil out a few fields
 			for _, field := range []string{"hash", "nonce", "miner"} {
@@ -723,7 +722,7 @@ func (s *PublicBlockChainAPI) GetHeaderByNumber(ctx context.Context, number rpc.
 func (s *PublicBlockChainAPI) GetHeaderByHash(ctx context.Context, hash common.Hash) map[string]interface{} {
 	header, _ := s.b.HeaderByHash(ctx, hash)
 	if header != nil {
-		return s.rpcMarshalHeader(ctx, header)
+		return s.rpcMarshalEthHeader(ctx, header)
 	}
 	return nil
 }
@@ -736,7 +735,7 @@ func (s *PublicBlockChainAPI) GetHeaderByHash(ctx context.Context, hash common.H
 func (s *PublicBlockChainAPI) GetBlockByNumber(ctx context.Context, number rpc.BlockNumber, fullTx bool) (map[string]interface{}, error) {
 	block, err := s.b.BlockByNumber(ctx, number)
 	if block != nil && err == nil {
-		response, err := s.rpcMarshalBlock(ctx, block, true, fullTx)
+		response, err := s.rpcMarshalEthBlock(ctx, block, true, fullTx)
 		if err == nil && number == rpc.PendingBlockNumber {
 			// Pending blocks need to nil out a few fields
 			for _, field := range []string{"hash", "nonce", "miner"} {
@@ -756,12 +755,22 @@ func (s *PublicBlockChainAPI) PendingBlock(ctx context.Context) (map[string]inte
 	return s.rpcMarshalBlockWithReceipts(ctx, block, receipts, true, true)
 }
 
-// GetBlockByHash returns the requested block. When fullTx is true all transactions in the block are returned in full
-// detail, otherwise only the transaction hash is returned.
+func (s *PublicBlockChainAPI) GetBlockWithReceiptsByHash(ctx context.Context, hash common.Hash) (map[string]interface{}, error) {
+	block, err := s.b.BlockByHash(ctx, hash)
+	if err != nil {
+		return nil, err
+	}
+	receipts, err := s.b.GetReceipts(ctx, hash)
+	if err != nil {
+		return nil, err
+	}
+	return s.rpcMarshalBlockWithReceipts(ctx, block, receipts, true, true)
+}
+
 func (s *PublicBlockChainAPI) GetBlockByHash(ctx context.Context, hash common.Hash, fullTx bool) (map[string]interface{}, error) {
 	block, err := s.b.BlockByHash(ctx, hash)
 	if block != nil {
-		return s.rpcMarshalBlock(ctx, block, true, fullTx)
+		return s.rpcMarshalEthBlock(ctx, block, true, fullTx)
 	}
 	return nil, err
 }
@@ -777,7 +786,7 @@ func (s *PublicBlockChainAPI) GetUncleByBlockNumberAndIndex(ctx context.Context,
 			return nil, nil
 		}
 		block = types.NewBlockWithHeader(uncles[index])
-		return s.rpcMarshalBlock(ctx, block, false, false)
+		return s.rpcMarshalEthBlock(ctx, block, false, false)
 	}
 	return nil, err
 }
@@ -793,7 +802,7 @@ func (s *PublicBlockChainAPI) GetUncleByBlockHashAndIndex(ctx context.Context, b
 			return nil, nil
 		}
 		block = types.NewBlockWithHeader(uncles[index])
-		return s.rpcMarshalBlock(ctx, block, false, false)
+		return s.rpcMarshalEthBlock(ctx, block, false, false)
 	}
 	pendBlock, _ := s.b.PendingBlockAndReceipts()
 	if pendBlock != nil && pendBlock.Hash() == blockHash {
@@ -803,7 +812,7 @@ func (s *PublicBlockChainAPI) GetUncleByBlockHashAndIndex(ctx context.Context, b
 			return nil, nil
 		}
 		block = types.NewBlockWithHeader(uncles[index])
-		return s.rpcMarshalBlock(ctx, block, false, false)
+		return s.rpcMarshalEthBlock(ctx, block, false, false)
 	}
 	return nil, err
 }
@@ -1195,41 +1204,38 @@ func FormatLogs(logs []vm.StructLog) []StructLogRes {
 }
 
 // RPCMarshalHeader converts the given header to the RPC output .
-func RPCMarshalHeader(head *types.Header) map[string]interface{} {
+func RPCMarshalEthHeader(head *types.Header) map[string]interface{} {
+	context := types.QuaiNetworkContext
+	bloom := types.Bloom{}
+	if len(head.Bloom) > types.ContextDepth-1 {
+		bloom = head.Bloom[context]
+	}
 	result := map[string]interface{}{
-		"number":            head.Number,
-		"hash":              head.Hash(),
-		"parentHash":        head.ParentHash,
-		"nonce":             head.Nonce,
-		"mixHash":           head.MixDigest,
-		"sha3Uncles":        head.UncleHash,
-		"logsBloom":         head.Bloom,
-		"stateRoot":         head.Root,
-		"miner":             head.Coinbase,
-		"difficulty":        head.Difficulty,
-		"networkDifficulty": head.NetworkDifficulty,
-		"extraData":         head.Extra,
-		"size":              hexutil.Uint64(head.Size()),
-		"gasLimit":          head.GasLimit,
-		"gasUsed":           head.GasUsed,
-		"timestamp":         head.Time,
-		"transactionsRoot":  head.TxHash,
-		"receiptsRoot":      head.ReceiptHash,
-		"location":          head.Location,
+		"number":           head.Number[context],
+		"hash":             head.Hash(),
+		"parentHash":       head.ParentHash[context],
+		"nonce":            head.Nonce,
+		"sha3Uncles":       head.UncleHash[context],
+		"logsBloom":        bloom,
+		"stateRoot":        head.Root[context],
+		"miner":            head.Coinbase[context],
+		"difficulty":       head.Difficulty[context],
+		"totalDifficulty":  head.NetworkDifficulty[context],
+		"extraData":        head.Extra[context],
+		"size":             hexutil.Uint64(head.Size()),
+		"gasLimit":         head.GasLimit[context],
+		"gasUsed":          head.GasUsed[context],
+		"timestamp":        head.Time,
+		"transactionsRoot": head.TxHash[context],
 	}
-
-	if head.BaseFee != nil {
-		result["baseFeePerGas"] = head.BaseFee
+	if head.BaseFee[context] != nil {
+		result["baseFeePerGas"] = head.BaseFee[context]
 	}
-
 	return result
 }
 
-// RPCMarshalBlock converts the given block to the RPC output which depends on fullTx. If inclTx is true transactions are
-// returned. When fullTx is true the returned block contains full transaction details, otherwise it will only contain
-// transaction hashes.
-func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool) (map[string]interface{}, error) {
-	fields := RPCMarshalHeader(block.Header())
+func RPCMarshalEthBlock(block *types.Block, inclTx bool, fullTx bool) (map[string]interface{}, error) {
+	fields := RPCMarshalEthHeader(block.Header())
 	fields["size"] = hexutil.Uint64(block.Size())
 
 	if inclTx {
@@ -1291,49 +1297,16 @@ func RPCMarshalReceipt(receipt *types.Receipt) (map[string]interface{}, error) {
 	return fields, nil
 }
 
-// RPCMarshalBlock converts the given block to the RPC output which depends on fullTx. If inclTx is true transactions are
-// returned. When fullTx is true the returned block contains full transaction details, otherwise it will only contain
-// transaction hashes.
-func RPCMarshalExternalBlock(block *types.Block, receipts []*types.Receipt, context *big.Int) (map[string]interface{}, error) {
-	fields := RPCMarshalHeader(block.Header())
-	fields["size"] = hexutil.Uint64(block.Size())
-
-	formatTx := func(tx *types.Transaction) (interface{}, error) {
-		return newRPCTransactionFromBlockHash(block, tx.Hash()), nil
-	}
-
-	txs := block.Transactions()
-	transactions := make([]interface{}, len(txs))
-	var err error
-	for i, tx := range txs {
-		if transactions[i], err = formatTx(tx); err != nil {
-			return nil, err
-		}
-	}
-
-	fieldReceipts := make([]interface{}, len(receipts))
-	for i, receipt := range receipts {
-		fieldReceipts[i], _ = RPCMarshalReceipt(receipt)
-	}
-	fields["receipts"] = fieldReceipts
-
-	fields["transactions"] = transactions
-	fields["context"] = context
-	return fields, nil
-}
-
 // rpcMarshalHeader uses the generalized output filler, then adds the total difficulty field, which requires
 // a `PublicBlockchainAPI`.
-func (s *PublicBlockChainAPI) rpcMarshalHeader(ctx context.Context, header *types.Header) map[string]interface{} {
-	fields := RPCMarshalHeader(header)
+func (s *PublicBlockChainAPI) rpcMarshalEthHeader(ctx context.Context, header *types.Header) map[string]interface{} {
+	fields := RPCMarshalEthHeader(header)
 	fields["totalDifficulty"] = (*hexutil.Big)(s.b.GetTd(ctx, header.Hash()))
 	return fields
 }
 
-// rpcMarshalBlock uses the generalized output filler, then adds the total difficulty field, which requires
-// a `PublicBlockchainAPI`.
-func (s *PublicBlockChainAPI) rpcMarshalBlock(ctx context.Context, b *types.Block, inclTx bool, fullTx bool) (map[string]interface{}, error) {
-	fields, err := RPCMarshalBlock(b, inclTx, fullTx)
+func (s *PublicBlockChainAPI) rpcMarshalEthBlock(ctx context.Context, b *types.Block, inclTx bool, fullTx bool) (map[string]interface{}, error) {
+	fields, err := RPCMarshalEthBlock(b, inclTx, fullTx)
 	if err != nil {
 		return nil, err
 	}
@@ -1346,7 +1319,7 @@ func (s *PublicBlockChainAPI) rpcMarshalBlock(ctx context.Context, b *types.Bloc
 // rpcMarshalBlock uses the generalized output filler, then adds the total difficulty field, which requires
 // a `PublicBlockchainAPI`.
 func (s *PublicBlockChainAPI) rpcMarshalBlockWithReceipts(ctx context.Context, b *types.Block, receipts types.Receipts, inclTx bool, fullTx bool) (map[string]interface{}, error) {
-	fields, err := RPCMarshalBlock(b, inclTx, fullTx)
+	fields, err := RPCMarshalEthBlock(b, inclTx, fullTx)
 	if err != nil {
 		return nil, err
 	}
@@ -1442,10 +1415,10 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 }
 
 // newRPCPendingTransaction returns a pending transaction that will serialize to the RPC representation
-func newRPCPendingTransaction(tx *types.Transaction, current *types.Header, config *params.ChainConfig) *RPCTransaction {
+func newRPCPendingTransaction(tx *types.Transaction, current *types.Header, backend Backend) *RPCTransaction {
 	var baseFee *big.Int
 	if current != nil {
-		baseFee = misc.CalcBaseFee(config, current)
+		baseFee = backend.CalculateBaseFee(current)
 	}
 	return newRPCTransaction(tx, common.Hash{}, 0, 0, baseFee)
 }
@@ -1678,7 +1651,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionByHash(ctx context.Context, has
 	}
 	// No finalized transaction, try to retrieve it from the pool
 	if tx := s.b.GetPoolTransaction(hash); tx != nil {
-		return newRPCPendingTransaction(tx, s.b.CurrentHeader(), s.b.ChainConfig()), nil
+		return newRPCPendingTransaction(tx, s.b.CurrentHeader(), s.b), nil
 	}
 
 	// Transaction unknown, return as such
@@ -1890,90 +1863,6 @@ type rpcBlock struct {
 	Receipts     types.Receipts   `json:"receipts"`
 }
 
-// SendMinedBlock will run checks on the block and add to canonical chain if valid.
-func (s *PublicBlockChainAPI) SendMinedBlock(ctx context.Context, raw json.RawMessage) error {
-	// Decode header and transactions.
-	var head *types.Header
-	var body rpcBlock
-	if err := json.Unmarshal(raw, &head); err != nil {
-		return err
-	}
-	if err := json.Unmarshal(raw, &body); err != nil {
-		return err
-	}
-	// Quick-verify transaction and uncle lists. This mostly helps with debugging the server.
-	if head.UncleHash[types.QuaiNetworkContext] == types.EmptyUncleHash[0] && len(body.UncleHashes) > 0 {
-		return fmt.Errorf("server returned non-empty uncle list but block header indicates no uncles")
-	}
-	if head.UncleHash[types.QuaiNetworkContext] != types.EmptyUncleHash[0] && len(body.UncleHashes) == 0 {
-		return fmt.Errorf("server returned empty uncle list but block header indicates uncles")
-	}
-	if head.TxHash[types.QuaiNetworkContext] == types.EmptyRootHash[0] && len(body.Transactions) > 0 {
-		return fmt.Errorf("server returned non-empty transaction list but block header indicates no transactions")
-	}
-	if head.TxHash[types.QuaiNetworkContext] != types.EmptyRootHash[0] && len(body.Transactions) == 0 {
-		return fmt.Errorf("server returned empty transaction list but block header indicates transactions")
-	}
-	// Load uncles because they are not included in the block response.
-	txs := make([]*types.Transaction, len(body.Transactions))
-	for i, tx := range body.Transactions {
-		txs[i] = tx.tx
-	}
-
-	uncles := make([]*types.Header, len(body.UncleHashes))
-	for i, uncleHash := range body.UncleHashes {
-		block, _ := s.b.BlockByHash(ctx, uncleHash)
-		uncles[i] = block.Header()
-	}
-
-	block := types.NewBlockWithHeader(head).WithBody(txs, uncles)
-	log.Info("Retrieved mined block", "num", head.Number[types.QuaiNetworkContext])
-	s.b.InsertBlock(ctx, block)
-	// Broadcast the block and announce chain insertion event
-	if block.Header() != nil {
-		s.b.EventMux().Post(core.NewMinedBlockEvent{Block: block})
-	}
-
-	return nil
-}
-
-type rpcExternalBlock struct {
-	Hash         common.Hash      `json:"hash"`
-	Transactions []rpcTransaction `json:"transactions"`
-	Receipts     []*types.Receipt `json:"receipts"`
-	Context      *big.Int         `json:"context"`
-}
-
-// SendExternalBlock will run checks on the block and add to canonical chain if valid.
-func (s *PublicBlockChainAPI) SendExternalBlock(ctx context.Context, raw json.RawMessage) error {
-	// Decode header and transactions.
-	var head *types.Header
-	var body rpcExternalBlock
-	if err := json.Unmarshal(raw, &head); err != nil {
-		return err
-	}
-	if err := json.Unmarshal(raw, &body); err != nil {
-		return err
-	}
-
-	// Load transactions, uncles are not needed for external blocks
-	txs := make([]*types.Transaction, len(body.Transactions))
-	for i, tx := range body.Transactions {
-		txs[i] = tx.tx
-	}
-
-	receipts := make([]*types.Receipt, len(body.Receipts))
-	for i, receipt := range body.Receipts {
-		receipts[i] = receipt
-	}
-
-	block := types.NewExternalBlockWithHeader(head).ExternalBlockWithBody(txs, receipts, body.Context)
-
-	s.b.AddExternalBlock(block)
-
-	return nil
-}
-
 // Sign calculates an ECDSA signature for:
 // keccack256("\x19Ethereum Signed Message:\n" + len(message) + message).
 //
@@ -2055,7 +1944,7 @@ func (s *PublicTransactionPoolAPI) PendingTransactions() ([]*RPCTransaction, err
 	for _, tx := range pending {
 		from, _ := types.Sender(s.signer, tx)
 		if _, exists := accounts[from]; exists {
-			transactions = append(transactions, newRPCPendingTransaction(tx, curHeader, s.b.ChainConfig()))
+			transactions = append(transactions, newRPCPendingTransaction(tx, curHeader, s.b))
 		}
 	}
 	return transactions, nil

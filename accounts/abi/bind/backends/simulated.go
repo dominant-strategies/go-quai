@@ -24,7 +24,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/spruce-solutions/go-quai"
+	ethereum "github.com/spruce-solutions/go-quai"
 	"github.com/spruce-solutions/go-quai/accounts/abi"
 	"github.com/spruce-solutions/go-quai/accounts/abi/bind"
 	"github.com/spruce-solutions/go-quai/common"
@@ -875,6 +875,9 @@ func (fb *filterBackend) SubscribePendingBlockEvent(ch chan<- *types.Header) eve
 	return nullSubscription()
 }
 
+func (fb *filterBackend) SubscribeReOrgEvent(ch chan<- core.ReOrgRollup) event.Subscription {
+	return nullSubscription()
+}
 func (fb *filterBackend) BloomStatus() (uint64, uint64) { return 4096, 0 }
 
 func (fb *filterBackend) ServiceFilter(ctx context.Context, ms *bloombits.MatcherSession) {

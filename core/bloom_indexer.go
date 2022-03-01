@@ -67,7 +67,11 @@ func (b *BloomIndexer) Reset(ctx context.Context, section uint64, lastSectionHea
 // Process implements core.ChainIndexerBackend, adding a new header's bloom into
 // the index.
 func (b *BloomIndexer) Process(ctx context.Context, header *types.Header) error {
-	b.gen.AddBloom(uint(header.Number[types.QuaiNetworkContext].Uint64()-b.section*b.size), header.Bloom[types.QuaiNetworkContext])
+	bloom := types.Bloom{}
+	if len(header.Bloom) > 0 {
+		bloom = header.Bloom[types.QuaiNetworkContext]
+	}
+	b.gen.AddBloom(uint(header.Number[types.QuaiNetworkContext].Uint64()-b.section*b.size), bloom)
 	b.head = header.Hash()
 	return nil
 }

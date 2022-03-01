@@ -88,7 +88,7 @@ func main() {
 
 		// Inject the signer key and start sealing with it
 		store := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
-		if _, err := store.NewAccount(""); err != nil {
+		if _, err := store.NewAccount("", []int{0}); err != nil {
 			panic(err)
 		}
 	}
@@ -121,7 +121,7 @@ func main() {
 		// Create a self transaction and inject into the pool. The legacy
 		// and 1559 transactions can all be created by random even if the
 		// fork is not happened.
-		tx := makeTransaction(nonces[index], faucets[index], signer, baseFee)
+		tx := makeTransaction(nonces[index], faucets[index], signer, baseFee[0])
 		if err := backend.TxPool().AddLocal(tx); err != nil {
 			continue
 		}
@@ -133,7 +133,7 @@ func main() {
 		}
 
 		// Wait if the basefee is raised too fast
-		if baseFee != nil && baseFee.Cmp(new(big.Int).Mul(big.NewInt(100), big.NewInt(params.GWei))) > 0 {
+		if baseFee != nil && baseFee[0].Cmp(new(big.Int).Mul(big.NewInt(100), big.NewInt(params.GWei))) > 0 {
 			time.Sleep(500 * time.Millisecond)
 		}
 	}

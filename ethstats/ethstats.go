@@ -30,7 +30,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/spruce-solutions/go-quai"
+	"github.com/gorilla/websocket"
+	ethereum "github.com/spruce-solutions/go-quai"
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/common/mclock"
 	"github.com/spruce-solutions/go-quai/consensus"
@@ -44,7 +45,6 @@ import (
 	"github.com/spruce-solutions/go-quai/node"
 	"github.com/spruce-solutions/go-quai/p2p"
 	"github.com/spruce-solutions/go-quai/rpc"
-	"github.com/gorilla/websocket"
 )
 
 const (
@@ -288,7 +288,7 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, txEventCh chan core
 			}
 			if err != nil {
 				log.Warn("Stats server unreachable", "err", err)
-				errTimer.Reset(10 * time.Second)
+				errTimer.Reset(30 * time.Second)
 				continue
 			}
 			// Authenticate the client with the server
@@ -308,7 +308,7 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, txEventCh chan core
 				continue
 			}
 			// Keep sending status updates until the connection breaks
-			fullReport := time.NewTicker(15 * time.Second)
+			fullReport := time.NewTicker(60 * time.Second)
 
 			for err == nil {
 				select {
@@ -470,7 +470,7 @@ func (s *Service) login(conn *connWrapper) error {
 		protocols = append(protocols, fmt.Sprintf("%s/%d", proto.Name, proto.Version))
 	}
 	var network string
-	if info := infos.Protocols["eth"]; info != nil {
+	if info := infos.Protocols["quai"]; info != nil {
 		network = fmt.Sprintf("%d", info.(*ethproto.NodeInfo).Network)
 	} else {
 		network = fmt.Sprintf("%d", infos.Protocols["les"].(*les.NodeInfo).Network)
@@ -563,18 +563,18 @@ func (s *Service) reportLatency(conn *connWrapper) error {
 
 // blockStats is the information to report about individual blocks.
 type blockStats struct {
-	Number     []*big.Int     `json:"number"`
+	Number     *big.Int       `json:"number"`
 	Hash       common.Hash    `json:"hash"`
-	ParentHash []common.Hash  `json:"parentHash"`
+	ParentHash common.Hash    `json:"parentHash"`
 	Timestamp  *big.Int       `json:"timestamp"`
 	Miner      common.Address `json:"miner"`
-	GasUsed    []uint64       `json:"gasUsed"`
-	GasLimit   []uint64       `json:"gasLimit"`
-	Diff       []*big.Int     `json:"difficulty"`
+	GasUsed    uint64         `json:"gasUsed"`
+	GasLimit   uint64         `json:"gasLimit"`
+	Diff       *big.Int       `json:"difficulty"`
 	TotalDiff  string         `json:"totalDifficulty"`
 	Txs        []txStats      `json:"transactions"`
-	TxHash     []common.Hash  `json:"transactionsRoot"`
-	Root       []common.Hash  `json:"stateRoot"`
+	TxHash     common.Hash    `json:"transactionsRoot"`
+	Root       common.Hash    `json:"stateRoot"`
 	Uncles     uncleStats     `json:"uncles"`
 }
 
@@ -652,18 +652,18 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 	author, _ := s.engine.Author(header)
 
 	return &blockStats{
-		Number:     header.Number,
+		Number:     header.Number[types.QuaiNetworkContext],
 		Hash:       header.Hash(),
-		ParentHash: header.ParentHash,
+		ParentHash: header.ParentHash[types.QuaiNetworkContext],
 		Timestamp:  new(big.Int).SetUint64(header.Time),
 		Miner:      author,
-		GasUsed:    header.GasUsed,
-		GasLimit:   header.GasLimit,
-		Diff:       header.Difficulty,
+		GasUsed:    header.GasUsed[types.QuaiNetworkContext],
+		GasLimit:   header.GasLimit[types.QuaiNetworkContext],
+		Diff:       header.Difficulty[types.QuaiNetworkContext],
 		TotalDiff:  td.String(),
 		Txs:        txs,
-		TxHash:     header.TxHash,
-		Root:       header.Root,
+		TxHash:     header.TxHash[types.QuaiNetworkContext],
+		Root:       header.Root[types.QuaiNetworkContext],
 		Uncles:     uncles,
 	}
 }

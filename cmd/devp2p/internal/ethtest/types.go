@@ -181,7 +181,7 @@ func (c *Conn) Read() Message {
 	return msg
 }
 
-// Read66 reads an eth66 packet from the connection.
+// Read66 reads an quai66 packet from the connection.
 func (c *Conn) Read66() (uint64, Message) {
 	code, rawData, _, err := c.Conn.Read()
 	if err != nil {
@@ -272,7 +272,7 @@ func (c *Conn) Write(msg Message) error {
 	return err
 }
 
-// Write66 writes an eth66 packet to the connection.
+// Write66 writes an quai66 packet to the connection.
 func (c *Conn) Write66(req eth.Packet, code int) error {
 	payload, err := rlp.EncodeToBytes(req)
 	if err != nil {

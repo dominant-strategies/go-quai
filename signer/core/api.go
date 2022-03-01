@@ -442,7 +442,7 @@ func (api *SignerAPI) newAccount() (common.Address, error) {
 			api.UI.ShowError(fmt.Sprintf("Account creation attempt #%d failed due to password requirements: %v", i+1, pwErr))
 		} else {
 			// No error
-			acc, err := be[0].(*keystore.KeyStore).NewAccount(resp.Text)
+			acc, err := be[0].(*keystore.KeyStore).NewAccount(resp.Text, nil)
 			log.Info("Your new key was generated", "address", acc.Address)
 			log.Warn("Please backup your key file!", "path", acc.URL.Path)
 			log.Warn("Please remember your password!")

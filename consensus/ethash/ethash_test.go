@@ -49,7 +49,7 @@ func TestTestMode(t *testing.T) {
 	select {
 	case block := <-results:
 		header.Nonce = types.EncodeNonce(block.Nonce())
-		header.MixDigest[types.QuaiNetworkContext] = block.MixDigest()
+		header.MixDigest[types.QuaiNetworkContext] = block.MixDigest()[0]
 		if err := ethash.verifySeal(nil, header, false); err != nil {
 			t.Fatalf("unexpected verification error: %v", err)
 		}

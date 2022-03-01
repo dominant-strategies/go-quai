@@ -227,10 +227,10 @@ func (t *BlockTest) insertBlocks(blockchain *core.BlockChain) ([]btBlock, error)
 }
 
 func validateHeader(h *btHeader, h2 *types.Header) error {
-	if h.Bloom != h2.Bloom {
+	if h.Bloom != h2.Bloom[0] {
 		return fmt.Errorf("bloom: want: %x have: %x", h.Bloom, h2.Bloom)
 	}
-	if h.Coinbase != h2.Coinbase {
+	if h.Coinbase != h2.Coinbase[0] {
 		return fmt.Errorf("coinbase: want: %x have: %x", h.Coinbase, h2.Coinbase)
 	}
 	if h.MixHash != h2.MixDigest {
@@ -239,34 +239,34 @@ func validateHeader(h *btHeader, h2 *types.Header) error {
 	if h.Nonce != h2.Nonce {
 		return fmt.Errorf("nonce: want: %x have: %x", h.Nonce, h2.Nonce)
 	}
-	if h.Number.Cmp(h2.Number) != 0 {
+	if h.Number.Cmp(h2.Number[0]) != 0 {
 		return fmt.Errorf("number: want: %v have: %v", h.Number, h2.Number)
 	}
-	if h.ParentHash != h2.ParentHash {
+	if h.ParentHash != h2.ParentHash[0] {
 		return fmt.Errorf("parent hash: want: %x have: %x", h.ParentHash, h2.ParentHash)
 	}
-	if h.ReceiptTrie != h2.ReceiptHash {
+	if h.ReceiptTrie != h2.ReceiptHash[0] {
 		return fmt.Errorf("receipt hash: want: %x have: %x", h.ReceiptTrie, h2.ReceiptHash)
 	}
-	if h.TransactionsTrie != h2.TxHash {
+	if h.TransactionsTrie != h2.TxHash[0] {
 		return fmt.Errorf("tx hash: want: %x have: %x", h.TransactionsTrie, h2.TxHash)
 	}
-	if h.StateRoot != h2.Root {
+	if h.StateRoot != h2.Root[0] {
 		return fmt.Errorf("state hash: want: %x have: %x", h.StateRoot, h2.Root)
 	}
-	if h.UncleHash != h2.UncleHash {
+	if h.UncleHash != h2.UncleHash[0] {
 		return fmt.Errorf("uncle hash: want: %x have: %x", h.UncleHash, h2.UncleHash)
 	}
-	if !bytes.Equal(h.ExtraData, h2.Extra) {
+	if !bytes.Equal(h.ExtraData, h2.Extra[0]) {
 		return fmt.Errorf("extra data: want: %x have: %x", h.ExtraData, h2.Extra)
 	}
-	if h.Difficulty.Cmp(h2.Difficulty) != 0 {
+	if h.Difficulty.Cmp(h2.Difficulty[0]) != 0 {
 		return fmt.Errorf("difficulty: want: %v have: %v", h.Difficulty, h2.Difficulty)
 	}
-	if h.GasLimit != h2.GasLimit {
+	if h.GasLimit != h2.GasLimit[0] {
 		return fmt.Errorf("gasLimit: want: %d have: %d", h.GasLimit, h2.GasLimit)
 	}
-	if h.GasUsed != h2.GasUsed {
+	if h.GasUsed != h2.GasUsed[0] {
 		return fmt.Errorf("gasUsed: want: %d have: %d", h.GasUsed, h2.GasUsed)
 	}
 	if h.Timestamp != h2.Time {
@@ -306,7 +306,7 @@ func (t *BlockTest) validateImportedHeaders(cm *core.BlockChain, validBlocks []b
 	// block-by-block, so we can only validate imported headers after
 	// all blocks have been processed by BlockChain, as they may not
 	// be part of the longest chain until last block is imported.
-	for b := cm.CurrentBlock(); b != nil && b.NumberU64() != 0; b = cm.GetBlockByHash(b.Header().ParentHash) {
+	for b := cm.CurrentBlock(); b != nil && b.NumberU64() != 0; b = cm.GetBlockByHash(b.Header().ParentHash[0]) {
 		if err := validateHeader(bmap[b.Hash()].BlockHeader, b.Header()); err != nil {
 			return fmt.Errorf("imported block header validation failed: %v", err)
 		}

@@ -59,7 +59,7 @@ var LightClientGPO = gasprice.Config{
 	IgnorePrice:      gasprice.DefaultIgnorePrice,
 }
 
-// Defaults contains default settings for use on the Ethereum main net.
+// Defaults contains default settings for use on the Quai Network Prime main net.
 var Defaults = Config{
 	SyncMode: downloader.SnapSync,
 	Ethash: ethash.Config{
@@ -71,7 +71,7 @@ var Defaults = Config{
 		DatasetsOnDisk:   2,
 		DatasetsLockMmap: false,
 	},
-	NetworkId:                  1,
+	NetworkId:                  9000,
 	TxLookupLimit:              2350000,
 	LightPeers:                 100,
 	UltraLightFraction:         75,

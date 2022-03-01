@@ -18,6 +18,7 @@
 package miner
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -54,6 +55,10 @@ func (m *mockBackend) TxPool() *core.TxPool {
 	return m.txPool
 }
 
+func (m *mockBackend) StateAtBlock(block *types.Block, reexec uint64, base *state.StateDB, checkLive bool, preferDisk bool) (statedb *state.StateDB, err error) {
+	return nil, errors.New("not supported")
+}
+
 type testBlockChain struct {
 	statedb       *state.StateDB
 	gasLimit      uint64
@@ -62,12 +67,34 @@ type testBlockChain struct {
 
 func (bc *testBlockChain) CurrentBlock() *types.Block {
 	return types.NewBlock(&types.Header{
-		GasLimit: bc.gasLimit,
+		GasLimit: []uint64{bc.gasLimit},
 	}, nil, nil, nil, trie.NewStackTrie(nil))
 }
 
 func (bc *testBlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
 	return bc.CurrentBlock()
+}
+
+func (bc *testBlockChain) GetGasUsedInChain(block *types.Block, length int) int64 {
+	gasUsed := 0
+	for i := 0; block != nil && i < length; i++ {
+		gasUsed += int(block.GasUsed())
+		block = bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
+	}
+	return int64(gasUsed)
+}
+
+func (bc *testBlockChain) GetHeaderByNumber(number uint64) *types.Header {
+	return bc.GetHeaderByNumber(number)
+}
+
+func (bc *testBlockChain) GetUnclesInChain(block *types.Block, length int) []*types.Header {
+	uncles := []*types.Header{}
+	for i := 0; block != nil && i < length; i++ {
+		uncles = append(uncles, block.Uncles()...)
+		block = bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
+	}
+	return uncles
 }
 
 func (bc *testBlockChain) StateAt(common.Hash) (*state.StateDB, error) {

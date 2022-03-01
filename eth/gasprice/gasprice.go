@@ -22,6 +22,7 @@ import (
 	"sort"
 	"sync"
 
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/core"
 	"github.com/spruce-solutions/go-quai/core/types"
@@ -29,7 +30,6 @@ import (
 	"github.com/spruce-solutions/go-quai/log"
 	"github.com/spruce-solutions/go-quai/params"
 	"github.com/spruce-solutions/go-quai/rpc"
-	lru "github.com/hashicorp/golang-lru"
 )
 
 const sampleNumber = 3 // Number of transactions sampled in a block
@@ -57,6 +57,7 @@ type OracleBackend interface {
 	PendingBlockAndReceipts() (*types.Block, types.Receipts)
 	ChainConfig() *params.ChainConfig
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
+	CalculateBaseFee(header *types.Header) *big.Int
 }
 
 // Oracle recommends gas prices based on the content of recent

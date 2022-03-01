@@ -147,6 +147,9 @@ type blockChain interface {
 	StateAt(root common.Hash) (*state.StateDB, error)
 
 	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
+	GetHeaderByNumber(number uint64) *types.Header
+	GetUnclesInChain(block *types.Block, length int) []*types.Header
+	GetGasUsedInChain(block *types.Block, length int) int64
 }
 
 // TxPoolConfig are the configuration parameters of the transaction pool.
@@ -644,8 +647,9 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 
 	// Validate Address Operability
-	byteID := pool.chainconfig.ChainIDByte()
-	if from.Bytes()[0] != byteID {
+	idRange := pool.chainconfig.ChainIDRange()
+
+	if int(from.Bytes()[0]) < idRange[0] || int(from.Bytes()[0]) > idRange[1] {
 		return ErrSenderInoperable
 	}
 
@@ -1186,7 +1190,7 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 	if reset != nil {
 		pool.demoteUnexecutables()
 		if reset.newHead != nil && pool.chainconfig.IsLondon(new(big.Int).Add(reset.newHead.Number[types.QuaiNetworkContext], big.NewInt(1))) {
-			pendingBaseFee := misc.CalcBaseFee(pool.chainconfig, reset.newHead)
+			pendingBaseFee := misc.CalcBaseFee(pool.chainconfig, reset.newHead, pool.chain.GetHeaderByNumber, pool.chain.GetUnclesInChain, pool.chain.GetGasUsedInChain)
 			pool.priced.SetBaseFee(pendingBaseFee)
 		}
 	}
@@ -1255,6 +1259,9 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 				log.Debug("Skipping transaction reset caused by setHead",
 					"old", oldHead.Hash(), "oldnum", oldNum, "new", newHead.Hash(), "newnum", newNum)
 				// We still need to update the current state s.th. the lost transactions can be readded by the user
+			} else if add == nil {
+				log.Error("Unrooted new chain seen by tx pool", "block", newHead.Number, "hash", newHead.Hash())
+				return
 			} else {
 				for rem.NumberU64() > add.NumberU64() {
 					discarded = append(discarded, rem.Transactions()...)
@@ -1262,10 +1269,26 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 						log.Error("Unrooted old chain seen by tx pool", "block", oldHead.Number, "hash", oldHead.Hash())
 						return
 					}
+					if rem.Header() == nil {
+						log.Error("Unrooted old chain seen by tx pool", "block", oldHead.Number, "hash", oldHead.Hash())
+						return
+					}
+					if rem.Header().Number == nil {
+						log.Error("Unrooted old chain seen by tx pool", "block", oldHead.Number, "hash", oldHead.Hash())
+						return
+					}
 				}
 				for add.NumberU64() > rem.NumberU64() {
 					included = append(included, add.Transactions()...)
 					if add = pool.chain.GetBlock(add.ParentHash(), add.NumberU64()-1); add == nil {
+						log.Error("Unrooted new chain seen by tx pool", "block", newHead.Number, "hash", newHead.Hash())
+						return
+					}
+					if add.Header() == nil {
+						log.Error("Unrooted new chain seen by tx pool", "block", newHead.Number, "hash", newHead.Hash())
+						return
+					}
+					if add.Header().Number == nil {
 						log.Error("Unrooted new chain seen by tx pool", "block", newHead.Number, "hash", newHead.Hash())
 						return
 					}
@@ -1308,7 +1331,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	next := new(big.Int).Add(newHead.Number[types.QuaiNetworkContext], big.NewInt(1))
 	pool.istanbul = pool.chainconfig.IsIstanbul(next)
 	pool.eip2718 = pool.chainconfig.IsBerlin(next)
-	pool.eip1559 = pool.chainconfig.IsLondon(next)
+	pool.eip1559 = true
 }
 
 // promoteExecutables moves transactions that have become processable from the

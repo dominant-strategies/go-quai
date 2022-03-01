@@ -103,9 +103,9 @@ func (s *Suite) EthTests() []utesting.Test {
 	}
 }
 
-func (s *Suite) Eth66Tests() []utesting.Test {
+func (s *Suite) Quai66Tests() []utesting.Test {
 	return []utesting.Test{
-		// only proceed with eth66 test suite if node supports eth 66 protocol
+		// only proceed with quai66 test suite if node supports eth 66 protocol
 		{Name: "TestStatus66", Fn: s.TestStatus66},
 		{Name: "TestGetBlockHeaders66", Fn: s.TestGetBlockHeaders66},
 		{Name: "TestSimultaneousRequests66", Fn: s.TestSimultaneousRequests66},
@@ -126,8 +126,8 @@ func (s *Suite) Eth66Tests() []utesting.Test {
 }
 
 var (
-	eth66 = true  // indicates whether suite should negotiate eth66 connection
-	eth65 = false // indicates whether suite should negotiate eth65 connection or below.
+	quai66 = true  // indicates whether suite should negotiate quai66 connection
+	eth65  = false // indicates whether suite should negotiate eth65 connection or below.
 )
 
 // TestStatus attempts to connect to the given node and exchange
@@ -144,7 +144,7 @@ func (s *Suite) TestStatus(t *utesting.T) {
 }
 
 // TestStatus66 attempts to connect to the given node and exchange
-// a status message with it on the eth66 protocol.
+// a status message with it on the quai66 protocol.
 func (s *Suite) TestStatus66(t *utesting.T) {
 	conn, err := s.dial66()
 	if err != nil {
@@ -191,7 +191,7 @@ func (s *Suite) TestGetBlockHeaders(t *utesting.T) {
 }
 
 // TestGetBlockHeaders66 tests whether the given node can respond to
-// an eth66 `GetBlockHeaders` request and that the response is accurate.
+// an quai66 `GetBlockHeaders` request and that the response is accurate.
 func (s *Suite) TestGetBlockHeaders66(t *utesting.T) {
 	conn, err := s.dial66()
 	if err != nil {
@@ -210,7 +210,7 @@ func (s *Suite) TestGetBlockHeaders66(t *utesting.T) {
 		Skip:    1,
 		Reverse: false,
 	}
-	headers, err := conn.headersRequest(req, s.chain, eth66, 33)
+	headers, err := conn.headersRequest(req, s.chain, quai66, 33)
 	if err != nil {
 		t.Fatalf("could not get block headers: %v", err)
 	}
@@ -379,7 +379,7 @@ func (s *Suite) TestZeroRequestID66(t *utesting.T) {
 		},
 		Amount: 2,
 	}
-	headers, err := conn.headersRequest(req, s.chain, eth66, 0)
+	headers, err := conn.headersRequest(req, s.chain, quai66, 0)
 	if err != nil {
 		t.Fatalf("failed to get block headers: %v", err)
 	}
@@ -426,7 +426,7 @@ func (s *Suite) TestGetBlockBodies(t *utesting.T) {
 
 // TestGetBlockBodies66 tests whether the given node can respond to
 // a `GetBlockBodies` request and that the response is accurate over
-// the eth66 protocol.
+// the quai66 protocol.
 func (s *Suite) TestGetBlockBodies66(t *utesting.T) {
 	conn, err := s.dial66()
 	if err != nil {
@@ -469,9 +469,9 @@ func (s *Suite) TestBroadcast(t *utesting.T) {
 }
 
 // TestBroadcast66 tests whether a block announcement is correctly
-// propagated to the given node's peer(s) on the eth66 protocol.
+// propagated to the given node's peer(s) on the quai66 protocol.
 func (s *Suite) TestBroadcast66(t *utesting.T) {
-	if err := s.sendNextBlock(eth66); err != nil {
+	if err := s.sendNextBlock(quai66); err != nil {
 		t.Fatalf("block broadcast failed: %v", err)
 	}
 }
@@ -523,7 +523,7 @@ func (s *Suite) TestLargeAnnounce(t *utesting.T) {
 }
 
 // TestLargeAnnounce66 tests the announcement mechanism with a large
-// block over the eth66 protocol.
+// block over the quai66 protocol.
 func (s *Suite) TestLargeAnnounce66(t *utesting.T) {
 	nextBlock := len(s.chain.blocks)
 	blocks := []*NewBlock{
@@ -564,7 +564,7 @@ func (s *Suite) TestLargeAnnounce66(t *utesting.T) {
 		conn.Close()
 	}
 	// Test the last block as a valid block
-	if err := s.sendNextBlock(eth66); err != nil {
+	if err := s.sendNextBlock(quai66); err != nil {
 		t.Fatalf("failed to broadcast next block: %v", err)
 	}
 }
@@ -577,9 +577,9 @@ func (s *Suite) TestOldAnnounce(t *utesting.T) {
 }
 
 // TestOldAnnounce66 tests the announcement mechanism with an old block,
-// over the eth66 protocol.
+// over the quai66 protocol.
 func (s *Suite) TestOldAnnounce66(t *utesting.T) {
-	if err := s.oldAnnounce(eth66); err != nil {
+	if err := s.oldAnnounce(quai66); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -595,7 +595,7 @@ func (s *Suite) TestBlockHashAnnounce(t *utesting.T) {
 // TestBlockHashAnnounce66 sends a new block hash announcement and expects
 // the node to perform a `GetBlockHeaders` request.
 func (s *Suite) TestBlockHashAnnounce66(t *utesting.T) {
-	if err := s.hashAnnounce(eth66); err != nil {
+	if err := s.hashAnnounce(quai66); err != nil {
 		t.Fatalf("block hash announcement failed: %v", err)
 	}
 }
@@ -609,7 +609,7 @@ func (s *Suite) TestMaliciousHandshake(t *utesting.T) {
 
 // TestMaliciousHandshake66 tries to send malicious data during the handshake.
 func (s *Suite) TestMaliciousHandshake66(t *utesting.T) {
-	if err := s.maliciousHandshakes(t, eth66); err != nil {
+	if err := s.maliciousHandshakes(t, quai66); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -628,7 +628,7 @@ func (s *Suite) TestMaliciousStatus(t *utesting.T) {
 }
 
 // TestMaliciousStatus66 sends a status package with a large total
-// difficulty over the eth66 protocol.
+// difficulty over the quai66 protocol.
 func (s *Suite) TestMaliciousStatus66(t *utesting.T) {
 	conn, err := s.dial66()
 	if err != nil {
@@ -652,7 +652,7 @@ func (s *Suite) TestTransaction(t *utesting.T) {
 // TestTransaction66 sends a valid transaction to the node and
 // checks if the transaction gets propagated.
 func (s *Suite) TestTransaction66(t *utesting.T) {
-	if err := s.sendSuccessfulTxs(t, eth66); err != nil {
+	if err := s.sendSuccessfulTxs(t, quai66); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -668,7 +668,7 @@ func (s *Suite) TestMaliciousTx(t *utesting.T) {
 // TestMaliciousTx66 sends several invalid transactions and tests whether
 // the node will propagate them.
 func (s *Suite) TestMaliciousTx66(t *utesting.T) {
-	if err := s.sendMaliciousTxs(t, eth66); err != nil {
+	if err := s.sendMaliciousTxs(t, quai66); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -678,7 +678,7 @@ func (s *Suite) TestMaliciousTx66(t *utesting.T) {
 func (s *Suite) TestLargeTxRequest66(t *utesting.T) {
 	// send the next block to ensure the node is no longer syncing and
 	// is able to accept txs
-	if err := s.sendNextBlock(eth66); err != nil {
+	if err := s.sendNextBlock(quai66); err != nil {
 		t.Fatalf("failed to send next block: %v", err)
 	}
 	// send 2000 transactions to the node
@@ -729,7 +729,7 @@ func (s *Suite) TestLargeTxRequest66(t *utesting.T) {
 func (s *Suite) TestNewPooledTxs66(t *utesting.T) {
 	// send the next block to ensure the node is no longer syncing and
 	// is able to accept txs
-	if err := s.sendNextBlock(eth66); err != nil {
+	if err := s.sendNextBlock(quai66); err != nil {
 		t.Fatalf("failed to send next block: %v", err)
 	}
 

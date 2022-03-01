@@ -51,7 +51,7 @@
 						<div class="input-group">
 							<input id="url" name="url" type="text" class="form-control" placeholder="Social network URL containing your Ethereum address..."/>
 							<span class="input-group-btn">
-								<button class="btn btn-default dropdown-toggle" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Give me Ether	<i class="fa fa-caret-down" aria-hidden="true"></i></button>
+								<button class="btn btn-default dropdown-toggle" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Give me Quai	<i class="fa fa-caret-down" aria-hidden="true"></i></button>
 				        <ul class="dropdown-menu dropdown-menu-right">{{range $idx, $amount := .Amounts}}
 				          <li><a style="text-align: center;" onclick="tier={{$idx}}; {{if $.Recaptcha}}grecaptcha.execute(){{else}}submit({{$idx}}){{end}}">{{$amount}} / {{index $.Periods $idx}}</a></li>{{end}}
 				        </ul>
@@ -70,7 +70,7 @@
 								<table style="width: 100%"><tr>
 									<td style="text-align: center;"><i class="fa fa-rss" aria-hidden="true"></i> <span id="peers"></span> peers</td>
 									<td style="text-align: center;"><i class="fa fa-database" aria-hidden="true"></i> <span id="block"></span> blocks</td>
-									<td style="text-align: center;"><i class="fa fa-heartbeat" aria-hidden="true"></i> <span id="funds"></span> Ethers</td>
+									<td style="text-align: center;"><i class="fa fa-heartbeat" aria-hidden="true"></i> <span id="funds"></span> Quai</td>
 									<td style="text-align: center;"><i class="fa fa-university" aria-hidden="true"></i> <span id="funded"></span> funded</td>
 								</tr></table>
 							</div>
@@ -140,16 +140,15 @@
 						$("#funded").text(msg.funded);
 					}
 					if (msg.peers !== undefined) {
-						$("#peers").text(msg.peers);
 					}
 					if (msg.number !== undefined) {
-						$("#block").text(parseInt(msg.number, 16));
+						$("#block").text(parseInt(msg.number[2], 10));
 					}
 					if (msg.error !== undefined) {
 						noty({layout: 'topCenter', text: msg.error, type: 'error', timeout: 5000, progressBar: true});
 					}
 					if (msg.success !== undefined) {
-						noty({layout: 'topCenter', text: msg.success, type: 'success', timeout: 5000, progressBar: true});
+						noty({layout: 'topCenter', text: msg.success, type: 'success', timeout: 10000, progressBar: true});
 					}
 					if (msg.requests !== undefined && msg.requests !== null) {
 						// Mark all previous requests missing as done

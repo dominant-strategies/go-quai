@@ -27,11 +27,16 @@ import (
 
 // Genesis hashes to enforce below configs on.
 var (
-	MainnetPrimeGenesisHash = common.HexToHash("0xeba9fc05149534973dfec0f57952e697eae1625fd15c6f860e2adf5359e81270")
-	RopstenGenesisHash      = common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d")
-	RinkebyGenesisHash      = common.HexToHash("0x6341fd3daf94b748c72ced5a5b26028f2474f5f00d824504e4fa37a75767e177")
-	GoerliGenesisHash       = common.HexToHash("0xbf7e331f7f7c1dd2e05159666b3bf8bc7a8a3a9eb1d518969eab529dd9b88c1a")
-	CalaverasGenesisHash    = common.HexToHash("0xeb9233d066c275efcdfed8037f4fc082770176aefdbcb7691c71da412a5670f2")
+	MainnetPrimeGenesisHash  = common.HexToHash("0x7b4490b9d85546cb8ef5d43316bc7a6d78ea5ec7ae3ea9bc6fd16bcc3bcc279f")
+	MainnetRegionGenesisHash = common.HexToHash("0x5942bcc68eac3b1ba8be42864ca11972b870ad931edd0e463cc54ffd40058477")
+	MainnetZoneGenesisHash   = common.HexToHash("0xd9b9ed9fe4ae892542aae9bb1d42ea14f0fa5f32fffef48da58f149ce20bf297")
+	RopstenPrimeGenesisHash  = common.HexToHash("0xdd56672364a589f747b788db90ce749a4b2fd7232811448a5007758dd1be66bc")
+	RopstenRegionGenesisHash = common.HexToHash("0xf08581e49395806472eee0a3bb9e1db56c53ea55c306a070f91053a9b310154f")
+	RopstenZoneGenesisHash   = common.HexToHash("0xad8733f0fbeb410396d09db8f1f9fefbf45406ad6da8e7dae648f91d71b86d11")
+	RopstenGenesisHash       = common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d")
+	RinkebyGenesisHash       = common.HexToHash("0x6341fd3daf94b748c72ced5a5b26028f2474f5f00d824504e4fa37a75767e177")
+	GoerliGenesisHash        = common.HexToHash("0xbf7e331f7f7c1dd2e05159666b3bf8bc7a8a3a9eb1d518969eab529dd9b88c1a")
+	CalaverasGenesisHash     = common.HexToHash("0xeb9233d066c275efcdfed8037f4fc082770176aefdbcb7691c71da412a5670f2")
 )
 
 // TrustedCheckpoints associates each known checkpoint with the genesis hash of
@@ -47,7 +52,9 @@ var CheckpointOracles = map[common.Hash]*CheckpointOracleConfig{
 	MainnetPrimeGenesisHash: MainnetCheckpointOracle,
 	RopstenGenesisHash:      RopstenCheckpointOracle,
 }
-var validChains = []*big.Int{big.NewInt(9000), big.NewInt(9100), big.NewInt(9101), big.NewInt(9102), big.NewInt(9103), big.NewInt(9200), big.NewInt(9201), big.NewInt(9202), big.NewInt(9203), big.NewInt(9300), big.NewInt(9301), big.NewInt(9302), big.NewInt(9303)}
+var mainnetValidChains = []*big.Int{big.NewInt(9000), big.NewInt(9100), big.NewInt(9101), big.NewInt(9102), big.NewInt(9103), big.NewInt(9200), big.NewInt(9201), big.NewInt(9202), big.NewInt(9203), big.NewInt(9300), big.NewInt(9301), big.NewInt(9302), big.NewInt(9303)}
+
+var testnetValidChains = []*big.Int{big.NewInt(12000), big.NewInt(12100), big.NewInt(12101), big.NewInt(12102), big.NewInt(12103), big.NewInt(12200), big.NewInt(12201), big.NewInt(12202), big.NewInt(12203), big.NewInt(12300), big.NewInt(12301), big.NewInt(12302), big.NewInt(12303)}
 
 var (
 	// MainnetPrimeChainConfig is the chain parameters to run a node on the main network.
@@ -55,10 +62,9 @@ var (
 		ChainID:             big.NewInt(9000),
 		Context:             0,
 		Location:            []byte{0, 0},
+		MapContext:          []int{3, 3, 3},
 		Ethash:              new(EthashConfig),
 		HomesteadBlock:      big.NewInt(0),
-		DAOForkBlock:        nil,
-		DAOForkSupport:      true,
 		EIP150Block:         big.NewInt(0),
 		EIP150Hash:          common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
 		EIP155Block:         big.NewInt(0),
@@ -70,6 +76,7 @@ var (
 		MuirGlacierBlock:    big.NewInt(0),
 		BerlinBlock:         big.NewInt(0),
 		LondonBlock:         big.NewInt(0),
+		GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
 	}
 
 	MainnetRegionChainConfigs = []ChainConfig{
@@ -77,10 +84,9 @@ var (
 			ChainID:             big.NewInt(9100),
 			Context:             1,
 			Location:            []byte{1, 0},
+			MapContext:          []int{3, 3, 3},
 			Ethash:              new(EthashConfig),
 			HomesteadBlock:      big.NewInt(0),
-			DAOForkBlock:        nil,
-			DAOForkSupport:      true,
 			EIP150Block:         big.NewInt(0),
 			EIP150Hash:          common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
 			EIP155Block:         big.NewInt(0),
@@ -92,15 +98,15 @@ var (
 			MuirGlacierBlock:    big.NewInt(0),
 			BerlinBlock:         big.NewInt(0),
 			LondonBlock:         big.NewInt(0),
+			GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
 		},
 		ChainConfig{
 			ChainID:             big.NewInt(9200),
 			Context:             1,
 			Location:            []byte{2, 0},
+			MapContext:          []int{3, 3, 3},
 			Ethash:              new(EthashConfig),
 			HomesteadBlock:      big.NewInt(0),
-			DAOForkBlock:        nil,
-			DAOForkSupport:      true,
 			EIP150Block:         big.NewInt(0),
 			EIP150Hash:          common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
 			EIP155Block:         big.NewInt(0),
@@ -112,15 +118,15 @@ var (
 			MuirGlacierBlock:    big.NewInt(0),
 			BerlinBlock:         big.NewInt(0),
 			LondonBlock:         big.NewInt(0),
+			GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
 		},
 		ChainConfig{
 			ChainID:             big.NewInt(9300),
 			Context:             1,
 			Location:            []byte{3, 0},
+			MapContext:          []int{3, 3, 3},
 			Ethash:              new(EthashConfig),
 			HomesteadBlock:      big.NewInt(0),
-			DAOForkBlock:        nil,
-			DAOForkSupport:      true,
 			EIP150Block:         big.NewInt(0),
 			EIP150Hash:          common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
 			EIP155Block:         big.NewInt(0),
@@ -132,6 +138,7 @@ var (
 			MuirGlacierBlock:    big.NewInt(0),
 			BerlinBlock:         big.NewInt(0),
 			LondonBlock:         big.NewInt(0),
+			GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
 		},
 	}
 
@@ -141,10 +148,9 @@ var (
 				ChainID:             big.NewInt(9101),
 				Context:             2,
 				Location:            []byte{1, 1},
+				MapContext:          []int{3, 3, 3},
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
-				DAOForkBlock:        nil,
-				DAOForkSupport:      true,
 				EIP150Block:         big.NewInt(0),
 				EIP150Hash:          common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
 				EIP155Block:         big.NewInt(0),
@@ -156,15 +162,15 @@ var (
 				MuirGlacierBlock:    big.NewInt(0),
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
+				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(9102),
 				Context:             2,
 				Location:            []byte{1, 2},
+				MapContext:          []int{3, 3, 3},
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
-				DAOForkBlock:        nil,
-				DAOForkSupport:      true,
 				EIP150Block:         big.NewInt(0),
 				EIP150Hash:          common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
 				EIP155Block:         big.NewInt(0),
@@ -176,6 +182,7 @@ var (
 				MuirGlacierBlock:    big.NewInt(0),
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
+				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(9103),
@@ -183,8 +190,6 @@ var (
 				Location:            []byte{1, 3},
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
-				DAOForkBlock:        nil,
-				DAOForkSupport:      true,
 				EIP150Block:         big.NewInt(0),
 				EIP150Hash:          common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
 				EIP155Block:         big.NewInt(0),
@@ -196,16 +201,16 @@ var (
 				MuirGlacierBlock:    big.NewInt(0),
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
+				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
 			}},
 		[]ChainConfig{
 			ChainConfig{
 				ChainID:             big.NewInt(9201),
 				Context:             2,
 				Location:            []byte{2, 1},
+				MapContext:          []int{3, 3, 3},
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
-				DAOForkBlock:        nil,
-				DAOForkSupport:      true,
 				EIP150Block:         big.NewInt(0),
 				EIP150Hash:          common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
 				EIP155Block:         big.NewInt(0),
@@ -217,15 +222,15 @@ var (
 				MuirGlacierBlock:    big.NewInt(0),
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
+				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(9202),
 				Context:             2,
 				Location:            []byte{2, 2},
+				MapContext:          []int{3, 3, 3},
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
-				DAOForkBlock:        nil,
-				DAOForkSupport:      true,
 				EIP150Block:         big.NewInt(0),
 				EIP150Hash:          common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
 				EIP155Block:         big.NewInt(0),
@@ -237,15 +242,15 @@ var (
 				MuirGlacierBlock:    big.NewInt(0),
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
+				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(9203),
 				Context:             2,
 				Location:            []byte{2, 3},
+				MapContext:          []int{3, 3, 3},
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
-				DAOForkBlock:        nil,
-				DAOForkSupport:      true,
 				EIP150Block:         big.NewInt(0),
 				EIP150Hash:          common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
 				EIP155Block:         big.NewInt(0),
@@ -257,16 +262,16 @@ var (
 				MuirGlacierBlock:    big.NewInt(0),
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
+				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
 			}},
 		[]ChainConfig{
 			ChainConfig{
 				ChainID:             big.NewInt(9301),
 				Context:             2,
 				Location:            []byte{3, 1},
+				MapContext:          []int{3, 3, 3},
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
-				DAOForkBlock:        nil,
-				DAOForkSupport:      true,
 				EIP150Block:         big.NewInt(0),
 				EIP150Hash:          common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
 				EIP155Block:         big.NewInt(0),
@@ -278,15 +283,15 @@ var (
 				MuirGlacierBlock:    big.NewInt(0),
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
+				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(9302),
 				Context:             2,
 				Location:            []byte{3, 2},
+				MapContext:          []int{3, 3, 3},
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
-				DAOForkBlock:        nil,
-				DAOForkSupport:      true,
 				EIP150Block:         big.NewInt(0),
 				EIP150Hash:          common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
 				EIP155Block:         big.NewInt(0),
@@ -298,15 +303,15 @@ var (
 				MuirGlacierBlock:    big.NewInt(0),
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
+				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(9303),
 				Context:             2,
 				Location:            []byte{3, 3},
+				MapContext:          []int{3, 3, 3},
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
-				DAOForkBlock:        nil,
-				DAOForkSupport:      true,
 				EIP150Block:         big.NewInt(0),
 				EIP150Hash:          common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
 				EIP155Block:         big.NewInt(0),
@@ -318,6 +323,279 @@ var (
 				MuirGlacierBlock:    big.NewInt(0),
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
+				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
+			},
+		},
+	}
+
+	// RopstenPrimeChainConfig is the chain parameters to run a node on the test network.
+	RopstenPrimeChainConfig = &ChainConfig{
+		ChainID:             big.NewInt(12000),
+		Context:             0,
+		Location:            []byte{0, 0},
+		MapContext:          []int{3, 3, 3},
+		Ethash:              new(EthashConfig),
+		HomesteadBlock:      big.NewInt(0),
+		EIP150Block:         big.NewInt(0),
+		EIP150Hash:          common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
+		MuirGlacierBlock:    big.NewInt(0),
+		BerlinBlock:         big.NewInt(0),
+		LondonBlock:         big.NewInt(0),
+		GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
+	}
+
+	RopstenRegionChainConfigs = []ChainConfig{
+		ChainConfig{
+			ChainID:             big.NewInt(12100),
+			Context:             1,
+			Location:            []byte{1, 0},
+			MapContext:          []int{3, 3, 3},
+			Ethash:              new(EthashConfig),
+			HomesteadBlock:      big.NewInt(0),
+			EIP150Block:         big.NewInt(0),
+			EIP150Hash:          common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
+			EIP155Block:         big.NewInt(0),
+			EIP158Block:         big.NewInt(0),
+			ByzantiumBlock:      big.NewInt(0),
+			ConstantinopleBlock: big.NewInt(0),
+			PetersburgBlock:     big.NewInt(0),
+			IstanbulBlock:       big.NewInt(0),
+			MuirGlacierBlock:    big.NewInt(0),
+			BerlinBlock:         big.NewInt(0),
+			LondonBlock:         big.NewInt(0),
+			GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
+		},
+		ChainConfig{
+			ChainID:             big.NewInt(12200),
+			Context:             1,
+			Location:            []byte{2, 0},
+			MapContext:          []int{3, 3, 3},
+			Ethash:              new(EthashConfig),
+			HomesteadBlock:      big.NewInt(0),
+			EIP150Block:         big.NewInt(0),
+			EIP150Hash:          common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
+			EIP155Block:         big.NewInt(0),
+			EIP158Block:         big.NewInt(0),
+			ByzantiumBlock:      big.NewInt(0),
+			ConstantinopleBlock: big.NewInt(0),
+			PetersburgBlock:     big.NewInt(0),
+			IstanbulBlock:       big.NewInt(0),
+			MuirGlacierBlock:    big.NewInt(0),
+			BerlinBlock:         big.NewInt(0),
+			LondonBlock:         big.NewInt(0),
+			GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
+		},
+		ChainConfig{
+			ChainID:             big.NewInt(12300),
+			Context:             1,
+			Location:            []byte{3, 0},
+			MapContext:          []int{3, 3, 3},
+			Ethash:              new(EthashConfig),
+			HomesteadBlock:      big.NewInt(0),
+			EIP150Block:         big.NewInt(0),
+			EIP150Hash:          common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
+			EIP155Block:         big.NewInt(0),
+			EIP158Block:         big.NewInt(0),
+			ByzantiumBlock:      big.NewInt(0),
+			ConstantinopleBlock: big.NewInt(0),
+			PetersburgBlock:     big.NewInt(0),
+			IstanbulBlock:       big.NewInt(0),
+			MuirGlacierBlock:    big.NewInt(0),
+			BerlinBlock:         big.NewInt(0),
+			LondonBlock:         big.NewInt(0),
+			GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
+		},
+	}
+
+	RopstenZoneChainConfigs = [][]ChainConfig{
+		[]ChainConfig{
+			ChainConfig{
+				ChainID:             big.NewInt(12101),
+				Context:             2,
+				Location:            []byte{1, 1},
+				MapContext:          []int{3, 3, 3},
+				Ethash:              new(EthashConfig),
+				HomesteadBlock:      big.NewInt(0),
+				EIP150Block:         big.NewInt(0),
+				EIP150Hash:          common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
+				EIP155Block:         big.NewInt(0),
+				EIP158Block:         big.NewInt(0),
+				ByzantiumBlock:      big.NewInt(0),
+				ConstantinopleBlock: big.NewInt(0),
+				PetersburgBlock:     big.NewInt(0),
+				IstanbulBlock:       big.NewInt(0),
+				MuirGlacierBlock:    big.NewInt(0),
+				BerlinBlock:         big.NewInt(0),
+				LondonBlock:         big.NewInt(0),
+				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
+			},
+			ChainConfig{
+				ChainID:             big.NewInt(12102),
+				Context:             2,
+				Location:            []byte{1, 2},
+				MapContext:          []int{3, 3, 3},
+				Ethash:              new(EthashConfig),
+				HomesteadBlock:      big.NewInt(0),
+				EIP150Block:         big.NewInt(0),
+				EIP150Hash:          common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
+				EIP155Block:         big.NewInt(0),
+				EIP158Block:         big.NewInt(0),
+				ByzantiumBlock:      big.NewInt(0),
+				ConstantinopleBlock: big.NewInt(0),
+				PetersburgBlock:     big.NewInt(0),
+				IstanbulBlock:       big.NewInt(0),
+				MuirGlacierBlock:    big.NewInt(0),
+				BerlinBlock:         big.NewInt(0),
+				LondonBlock:         big.NewInt(0),
+				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
+			},
+			ChainConfig{
+				ChainID:             big.NewInt(12103),
+				Context:             2,
+				Location:            []byte{1, 3},
+				MapContext:          []int{3, 3, 3},
+				Ethash:              new(EthashConfig),
+				HomesteadBlock:      big.NewInt(0),
+				EIP150Block:         big.NewInt(0),
+				EIP150Hash:          common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
+				EIP155Block:         big.NewInt(0),
+				EIP158Block:         big.NewInt(0),
+				ByzantiumBlock:      big.NewInt(0),
+				ConstantinopleBlock: big.NewInt(0),
+				PetersburgBlock:     big.NewInt(0),
+				IstanbulBlock:       big.NewInt(0),
+				MuirGlacierBlock:    big.NewInt(0),
+				BerlinBlock:         big.NewInt(0),
+				LondonBlock:         big.NewInt(0),
+				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
+			}},
+		[]ChainConfig{
+			ChainConfig{
+				ChainID:             big.NewInt(12201),
+				Context:             2,
+				Location:            []byte{2, 1},
+				MapContext:          []int{3, 3, 3},
+				Ethash:              new(EthashConfig),
+				HomesteadBlock:      big.NewInt(0),
+				EIP150Block:         big.NewInt(0),
+				EIP150Hash:          common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
+				EIP155Block:         big.NewInt(0),
+				EIP158Block:         big.NewInt(0),
+				ByzantiumBlock:      big.NewInt(0),
+				ConstantinopleBlock: big.NewInt(0),
+				PetersburgBlock:     big.NewInt(0),
+				IstanbulBlock:       big.NewInt(0),
+				MuirGlacierBlock:    big.NewInt(0),
+				BerlinBlock:         big.NewInt(0),
+				LondonBlock:         big.NewInt(0),
+				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
+			},
+			ChainConfig{
+				ChainID:             big.NewInt(12202),
+				Context:             2,
+				Location:            []byte{2, 2},
+				MapContext:          []int{3, 3, 3},
+				Ethash:              new(EthashConfig),
+				HomesteadBlock:      big.NewInt(0),
+				EIP150Block:         big.NewInt(0),
+				EIP150Hash:          common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
+				EIP155Block:         big.NewInt(0),
+				EIP158Block:         big.NewInt(0),
+				ByzantiumBlock:      big.NewInt(0),
+				ConstantinopleBlock: big.NewInt(0),
+				PetersburgBlock:     big.NewInt(0),
+				IstanbulBlock:       big.NewInt(0),
+				MuirGlacierBlock:    big.NewInt(0),
+				BerlinBlock:         big.NewInt(0),
+				LondonBlock:         big.NewInt(0),
+				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
+			},
+			ChainConfig{
+				ChainID:             big.NewInt(12203),
+				Context:             2,
+				Location:            []byte{2, 3},
+				MapContext:          []int{3, 3, 3},
+				Ethash:              new(EthashConfig),
+				HomesteadBlock:      big.NewInt(0),
+				EIP150Block:         big.NewInt(0),
+				EIP150Hash:          common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
+				EIP155Block:         big.NewInt(0),
+				EIP158Block:         big.NewInt(0),
+				ByzantiumBlock:      big.NewInt(0),
+				ConstantinopleBlock: big.NewInt(0),
+				PetersburgBlock:     big.NewInt(0),
+				IstanbulBlock:       big.NewInt(0),
+				MuirGlacierBlock:    big.NewInt(0),
+				BerlinBlock:         big.NewInt(0),
+				LondonBlock:         big.NewInt(0),
+				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
+			}},
+		[]ChainConfig{
+			ChainConfig{
+				ChainID:             big.NewInt(12301),
+				Context:             2,
+				Location:            []byte{3, 1},
+				MapContext:          []int{3, 3, 3},
+				Ethash:              new(EthashConfig),
+				HomesteadBlock:      big.NewInt(0),
+				EIP150Block:         big.NewInt(0),
+				EIP150Hash:          common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
+				EIP155Block:         big.NewInt(0),
+				EIP158Block:         big.NewInt(0),
+				ByzantiumBlock:      big.NewInt(0),
+				ConstantinopleBlock: big.NewInt(0),
+				PetersburgBlock:     big.NewInt(0),
+				IstanbulBlock:       big.NewInt(0),
+				MuirGlacierBlock:    big.NewInt(0),
+				BerlinBlock:         big.NewInt(0),
+				LondonBlock:         big.NewInt(0),
+				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
+			},
+			ChainConfig{
+				ChainID:             big.NewInt(12302),
+				Context:             2,
+				Location:            []byte{3, 2},
+				MapContext:          []int{3, 3, 3},
+				Ethash:              new(EthashConfig),
+				HomesteadBlock:      big.NewInt(0),
+				EIP150Block:         big.NewInt(0),
+				EIP150Hash:          common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
+				EIP155Block:         big.NewInt(0),
+				EIP158Block:         big.NewInt(0),
+				ByzantiumBlock:      big.NewInt(0),
+				ConstantinopleBlock: big.NewInt(0),
+				PetersburgBlock:     big.NewInt(0),
+				IstanbulBlock:       big.NewInt(0),
+				MuirGlacierBlock:    big.NewInt(0),
+				BerlinBlock:         big.NewInt(0),
+				LondonBlock:         big.NewInt(0),
+				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
+			},
+			ChainConfig{
+				ChainID:             big.NewInt(12303),
+				Context:             2,
+				Location:            []byte{3, 3},
+				MapContext:          []int{3, 3, 3},
+				Ethash:              new(EthashConfig),
+				HomesteadBlock:      big.NewInt(0),
+				EIP150Block:         big.NewInt(0),
+				EIP150Hash:          common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
+				EIP155Block:         big.NewInt(0),
+				EIP158Block:         big.NewInt(0),
+				ByzantiumBlock:      big.NewInt(0),
+				ConstantinopleBlock: big.NewInt(0),
+				PetersburgBlock:     big.NewInt(0),
+				IstanbulBlock:       big.NewInt(0),
+				MuirGlacierBlock:    big.NewInt(0),
+				BerlinBlock:         big.NewInt(0),
+				LondonBlock:         big.NewInt(0),
+				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
 			},
 		},
 	}
@@ -332,8 +610,6 @@ var (
 	RopstenChainConfig = &ChainConfig{
 		ChainID:             big.NewInt(3),
 		HomesteadBlock:      big.NewInt(0),
-		DAOForkBlock:        nil,
-		DAOForkSupport:      true,
 		EIP150Block:         big.NewInt(0),
 		EIP150Hash:          common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
 		EIP155Block:         big.NewInt(10),
@@ -346,6 +622,7 @@ var (
 		BerlinBlock:         big.NewInt(9_812_189),
 		LondonBlock:         big.NewInt(10_499_401),
 		Ethash:              new(EthashConfig),
+		GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
 	}
 
 	// RopstenTrustedCheckpoint contains the light client trusted checkpoint for the Ropsten test network.
@@ -374,17 +651,16 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), 0, []byte{0, 0}, big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil}
+	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), 0, []byte{0, 0}, []int{3, 3, 3}, big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, nil}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), 0, []byte{0, 0}, big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}}
-
-	TestChainConfig = &ChainConfig{big.NewInt(1), 0, []byte{0, 0}, big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil}
-	TestRules       = TestChainConfig.Rules(new(big.Int))
+	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), 0, []byte{0, 0}, []int{3, 3, 3}, big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil}
+	TestChainConfig          = &ChainConfig{big.NewInt(1), 0, []byte{0, 0}, []int{3, 3, 3}, big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, nil}
+	TestRules                = TestChainConfig.Rules(new(big.Int))
 )
 
 // TrustedCheckpoint represents a set of post-processed trie roots (CHT and
@@ -443,13 +719,11 @@ type CheckpointOracleConfig struct {
 type ChainConfig struct {
 	ChainID *big.Int `json:"chainId"` // chainId identifies the current chain and is used for replay protection
 
-	Context        int      // Context defines the index in which the chain operates at
-	Location       []byte   //Location for a given block
+	Context    int    // Context defines the index in which the chain operates at
+	Location   []byte // Location for a given block
+	MapContext []int  // MapContext for structure of the hierarchy
+
 	HomesteadBlock *big.Int `json:"homesteadBlock,omitempty"` // Homestead switch block (nil = no fork, 0 = already homestead)
-
-	DAOForkBlock   *big.Int `json:"daoForkBlock,omitempty"`   // TheDAO hard-fork switch block (nil = no fork)
-	DAOForkSupport bool     `json:"daoForkSupport,omitempty"` // Whether the nodes supports or opposes the DAO hard-fork
-
 	// EIP150 implements the Gas price changes (https://github.com/ethereum/EIPs/issues/150)
 	EIP150Block *big.Int    `json:"eip150Block,omitempty"` // EIP150 HF block (nil = no fork)
 	EIP150Hash  common.Hash `json:"eip150Hash,omitempty"`  // EIP150 HF hash (needed for header only clients as only gas pricing changed)
@@ -470,6 +744,9 @@ type ChainConfig struct {
 	// Various consensus engines
 	Ethash *EthashConfig `json:"ethash,omitempty"`
 	Clique *CliqueConfig `json:"clique,omitempty"`
+
+	// Genesis Hashes
+	GenesisHashes []common.Hash
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -502,11 +779,9 @@ func (c *ChainConfig) String() string {
 	default:
 		engine = "unknown"
 	}
-	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, Berlin: %v, London: %v, Engine: %v}",
+	return fmt.Sprintf("{ChainID: %v Homestead: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, Berlin: %v, London: %v, Engine: %v, GenesisHashes: %v}",
 		c.ChainID,
 		c.HomesteadBlock,
-		c.DAOForkBlock,
-		c.DAOForkSupport,
 		c.EIP150Block,
 		c.EIP155Block,
 		c.EIP158Block,
@@ -518,17 +793,13 @@ func (c *ChainConfig) String() string {
 		c.BerlinBlock,
 		c.LondonBlock,
 		engine,
+		c.GenesisHashes,
 	)
 }
 
 // IsHomestead returns whether num is either equal to the homestead block or greater.
 func (c *ChainConfig) IsHomestead(num *big.Int) bool {
 	return isForked(c.HomesteadBlock, num)
-}
-
-// IsDAOFork returns whether num is either equal to the DAO fork block or greater.
-func (c *ChainConfig) IsDAOFork(num *big.Int) bool {
-	return isForked(c.DAOForkBlock, num)
 }
 
 // IsEIP150 returns whether num is either equal to the EIP150 fork block or greater.
@@ -617,7 +888,6 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 	var lastFork fork
 	for _, cur := range []fork{
 		{name: "homesteadBlock", block: c.HomesteadBlock},
-		{name: "daoForkBlock", block: c.DAOForkBlock, optional: true},
 		{name: "eip150Block", block: c.EIP150Block},
 		{name: "eip155Block", block: c.EIP155Block},
 		{name: "eip158Block", block: c.EIP158Block},
@@ -653,12 +923,6 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, head *big.Int) *ConfigCompatError {
 	if isForkIncompatible(c.HomesteadBlock, newcfg.HomesteadBlock, head) {
 		return newCompatError("Homestead fork block", c.HomesteadBlock, newcfg.HomesteadBlock)
-	}
-	if isForkIncompatible(c.DAOForkBlock, newcfg.DAOForkBlock, head) {
-		return newCompatError("DAO fork block", c.DAOForkBlock, newcfg.DAOForkBlock)
-	}
-	if c.IsDAOFork(head) && c.DAOForkSupport != newcfg.DAOForkSupport {
-		return newCompatError("DAO fork support flag", c.DAOForkBlock, newcfg.DAOForkBlock)
 	}
 	if isForkIncompatible(c.EIP150Block, newcfg.EIP150Block, head) {
 		return newCompatError("EIP150 fork block", c.EIP150Block, newcfg.EIP150Block)
@@ -791,42 +1055,119 @@ func (c *ChainConfig) Rules(num *big.Int) Rules {
 
 // bytePrefixList expands the space with proper size for chain IDs to be indexed
 var (
-	bytePrefixList = make([]byte, 20000)
+	mainnetBytePrefixList = make([][]int, 20000)
+	testnetBytePrefixList = make([][]int, 20000)
 )
 
 func init() {
-	bytePrefixList[9000] = byte(0)
-	bytePrefixList[9100] = byte(10)
-	bytePrefixList[9101] = byte(26)
-	bytePrefixList[9102] = byte(42)
-	bytePrefixList[9103] = byte(58)
-	bytePrefixList[9200] = byte(11)
-	bytePrefixList[9201] = byte(27)
-	bytePrefixList[9202] = byte(43)
-	bytePrefixList[9203] = byte(59)
-	bytePrefixList[9300] = byte(12)
-	bytePrefixList[9301] = byte(28)
-	bytePrefixList[9302] = byte(44)
-	bytePrefixList[9303] = byte(60)
+	mainnetBytePrefixList[9000] = []int{0, 9}
+	mainnetBytePrefixList[9100] = []int{10, 19}
+	mainnetBytePrefixList[9101] = []int{20, 29}
+	mainnetBytePrefixList[9102] = []int{30, 39}
+	mainnetBytePrefixList[9103] = []int{40, 49}
+	mainnetBytePrefixList[9200] = []int{50, 59}
+	mainnetBytePrefixList[9201] = []int{60, 69}
+	mainnetBytePrefixList[9202] = []int{70, 79}
+	mainnetBytePrefixList[9203] = []int{80, 89}
+	mainnetBytePrefixList[9300] = []int{90, 99}
+	mainnetBytePrefixList[9301] = []int{100, 109}
+	mainnetBytePrefixList[9302] = []int{110, 119}
+	mainnetBytePrefixList[9303] = []int{120, 129}
+
+	testnetBytePrefixList[12000] = []int{0, 9}
+	testnetBytePrefixList[12100] = []int{10, 19}
+	testnetBytePrefixList[12101] = []int{20, 29}
+	testnetBytePrefixList[12102] = []int{30, 39}
+	testnetBytePrefixList[12103] = []int{40, 49}
+	testnetBytePrefixList[12200] = []int{50, 59}
+	testnetBytePrefixList[12201] = []int{60, 69}
+	testnetBytePrefixList[12202] = []int{70, 79}
+	testnetBytePrefixList[12203] = []int{80, 89}
+	testnetBytePrefixList[12300] = []int{90, 99}
+	testnetBytePrefixList[12301] = []int{100, 109}
+	testnetBytePrefixList[12302] = []int{110, 119}
+	testnetBytePrefixList[12303] = []int{120, 129}
 }
 
-// ChainIDByte returns the byte lookup based off a configs chainID
-func (c *ChainConfig) ChainIDByte() byte {
-	lookup := bytePrefixList[c.ChainID.Int64()]
-	return lookup
+// ChainIDRange returns the byte lookup based off a configs chainID
+func (c *ChainConfig) ChainIDRange() []int {
+	for _, inSet := range mainnetValidChains {
+		if c.ChainID.Cmp(inSet) == 0 {
+			lookup := mainnetBytePrefixList[c.ChainID.Int64()]
+			return lookup
+		}
+	}
+
+	for _, inSet := range testnetValidChains {
+		if c.ChainID.Cmp(inSet) == 0 {
+			lookup := testnetBytePrefixList[c.ChainID.Int64()]
+			return lookup
+		}
+	}
+	return nil
 }
 
-// ChainIDByte returns the byte lookup based off a configs chainID
-func LookupChainByte(index *big.Int) byte {
-	lookup := bytePrefixList[index.Int64()]
-	return lookup
+// LookupChainIDRange returns the byte lookup based off a configs chainID
+func LookupChainIDRange(index *big.Int) []int {
+	for _, inSet := range mainnetValidChains {
+		if index.Cmp(inSet) == 0 {
+			lookup := mainnetBytePrefixList[index.Int64()]
+			return lookup
+		}
+	}
+
+	for _, inSet := range testnetValidChains {
+		if index.Cmp(inSet) == 0 {
+			lookup := testnetBytePrefixList[index.Int64()]
+			return lookup
+		}
+	}
+	return nil
 }
 
 // ValidChainID takes in a chain ID and checks against the valid list
-func ValidChainID(id *big.Int) bool {
-	for _, valid := range validChains {
-		if id.Cmp(valid) == 0 {
-			return true
+func ValidChainID(id *big.Int, chainId *big.Int) bool {
+	for _, inSet := range mainnetValidChains {
+		if chainId.Cmp(inSet) == 0 {
+			for _, valid := range mainnetValidChains {
+				if id.Cmp(valid) == 0 {
+					return true
+				}
+			}
+		}
+	}
+
+	for _, inSet := range testnetValidChains {
+		if chainId.Cmp(inSet) == 0 {
+			for _, valid := range testnetValidChains {
+				if id.Cmp(valid) == 0 {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// CheckETxChainID takes in a chain ID and checks against the valid list
+func CheckETxChainID(ourID *big.Int, txID *big.Int) bool {
+	for _, inSet := range mainnetValidChains {
+		if ourID.Cmp(inSet) == 0 {
+			for _, valid := range mainnetValidChains {
+				if txID.Cmp(valid) == 0 {
+					return true
+				}
+			}
+		}
+	}
+
+	for _, inSet := range testnetValidChains {
+		if ourID.Cmp(inSet) == 0 {
+			for _, valid := range testnetValidChains {
+				if txID.Cmp(valid) == 0 {
+					return true
+				}
+			}
 		}
 	}
 	return false

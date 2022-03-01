@@ -160,7 +160,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if bcVersion != nil {
 		dbVer = fmt.Sprintf("%d", *bcVersion)
 	}
-	log.Info("Initialising Ethereum protocol", "network", config.NetworkId, "dbversion", dbVer)
+	log.Info("Initialising Quai Network protocol", "network", config.NetworkId, "dbversion", dbVer)
 
 	if !config.SkipBcVersionCheck {
 		if bcVersion != nil && *bcVersion > core.BlockChainVersion {
@@ -307,12 +307,27 @@ func (s *Ethereum) APIs() []rpc.API {
 			Service:   NewPublicEthereumAPI(s),
 			Public:    true,
 		}, {
+			Namespace: "quai",
+			Version:   "1.0",
+			Service:   NewPublicEthereumAPI(s),
+			Public:    true,
+		}, {
 			Namespace: "eth",
 			Version:   "1.0",
 			Service:   NewPublicMinerAPI(s),
 			Public:    true,
 		}, {
+			Namespace: "quai",
+			Version:   "1.0",
+			Service:   NewPublicMinerAPI(s),
+			Public:    true,
+		}, {
 			Namespace: "eth",
+			Version:   "1.0",
+			Service:   downloader.NewPublicDownloaderAPI(s.handler.downloader, s.eventMux),
+			Public:    true,
+		}, {
+			Namespace: "quai",
 			Version:   "1.0",
 			Service:   downloader.NewPublicDownloaderAPI(s.handler.downloader, s.eventMux),
 			Public:    true,
@@ -323,6 +338,11 @@ func (s *Ethereum) APIs() []rpc.API {
 			Public:    false,
 		}, {
 			Namespace: "eth",
+			Version:   "1.0",
+			Service:   filters.NewPublicFilterAPI(s.APIBackend, false, 5*time.Minute),
+			Public:    true,
+		}, {
+			Namespace: "quai",
 			Version:   "1.0",
 			Service:   filters.NewPublicFilterAPI(s.APIBackend, false, 5*time.Minute),
 			Public:    true,
@@ -380,10 +400,10 @@ func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 //
 // We regard two types of accounts as local miner account: etherbase
 // and accounts specified via `txpool.locals` flag.
-func (s *Ethereum) isLocalBlock(block *types.Block) bool {
-	author, err := s.engine.Author(block.Header())
+func (s *Ethereum) isLocalBlock(header *types.Header) bool {
+	author, err := s.engine.Author(header)
 	if err != nil {
-		log.Warn("Failed to retrieve block author", "number", block.NumberU64(), "hash", block.Hash(), "err", err)
+		log.Warn("Failed to retrieve block author", "number", header.Number, "hash", header.Hash(), "err", err)
 		return false
 	}
 	// Check whether the given address is etherbase.
@@ -426,7 +446,7 @@ func (s *Ethereum) shouldPreserve(block *types.Block) bool {
 	if _, ok := s.engine.(*clique.Clique); ok {
 		return false
 	}
-	return s.isLocalBlock(block)
+	return s.isLocalBlock(block.Header())
 }
 
 // SetEtherbase sets the mining reward address.

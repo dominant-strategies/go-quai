@@ -21,7 +21,7 @@ import (
 	"context"
 	"math/big"
 
-	"github.com/spruce-solutions/go-quai"
+	ethereum "github.com/spruce-solutions/go-quai"
 	"github.com/spruce-solutions/go-quai/accounts"
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/consensus"
@@ -39,7 +39,7 @@ import (
 // Backend interface provides the common API services (that are provided by
 // both full and light clients) with access to necessary functions.
 type Backend interface {
-	// General Ethereum API
+	// General Ethereum and Quai API
 	SyncProgress() ethereum.SyncProgress
 
 	SuggestGasTipCap(ctx context.Context) (*big.Int, error)
@@ -70,9 +70,12 @@ type Backend interface {
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 	SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription
 	InsertBlock(ctx context.Context, block *types.Block) (int, error)
+	ReOrgRollBack(header *types.Header) error
 	PendingBlockAndReceipts() (*types.Block, types.Receipts)
 	AddExternalBlock(block *types.ExternalBlock) error
 	EventMux() *event.TypeMux
+	CalculateBaseFee(header *types.Header) *big.Int
+	GetUncleFromWorker(uncleHash common.Hash) (*types.Block, error)
 
 	// Transaction pool API
 	SendTx(ctx context.Context, signedTx *types.Transaction) error
@@ -93,6 +96,7 @@ type Backend interface {
 	SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription
 	SubscribePendingBlockEvent(ch chan<- *types.Header) event.Subscription
 	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
+	SubscribeReOrgEvent(ch chan<- core.ReOrgRollup) event.Subscription
 
 	ChainConfig() *params.ChainConfig
 	Engine() consensus.Engine
@@ -107,12 +111,27 @@ func GetAPIs(apiBackend Backend) []rpc.API {
 			Service:   NewPublicEthereumAPI(apiBackend),
 			Public:    true,
 		}, {
+			Namespace: "quai",
+			Version:   "1.0",
+			Service:   NewPublicQuaiAPI(apiBackend),
+			Public:    true,
+		}, {
 			Namespace: "eth",
 			Version:   "1.0",
 			Service:   NewPublicBlockChainAPI(apiBackend),
 			Public:    true,
 		}, {
+			Namespace: "quai",
+			Version:   "1.0",
+			Service:   NewPublicBlockChainQuaiAPI(apiBackend),
+			Public:    true,
+		}, {
 			Namespace: "eth",
+			Version:   "1.0",
+			Service:   NewPublicTransactionPoolAPI(apiBackend, nonceLock),
+			Public:    true,
+		}, {
+			Namespace: "quai",
 			Version:   "1.0",
 			Service:   NewPublicTransactionPoolAPI(apiBackend, nonceLock),
 			Public:    true,
@@ -132,6 +151,11 @@ func GetAPIs(apiBackend Backend) []rpc.API {
 			Service:   NewPrivateDebugAPI(apiBackend),
 		}, {
 			Namespace: "eth",
+			Version:   "1.0",
+			Service:   NewPublicAccountAPI(apiBackend.AccountManager()),
+			Public:    true,
+		}, {
+			Namespace: "quai",
 			Version:   "1.0",
 			Service:   NewPublicAccountAPI(apiBackend.AccountManager()),
 			Public:    true,

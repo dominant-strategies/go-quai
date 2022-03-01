@@ -38,6 +38,7 @@ import (
 type Backend interface {
 	BlockChain() *core.BlockChain
 	TxPool() *core.TxPool
+	StateAtBlock(block *types.Block, reexec uint64, base *state.StateDB, checkLive bool, preferDisk bool) (statedb *state.StateDB, err error)
 }
 
 // Config is the configuration parameters of mining.
@@ -65,7 +66,7 @@ type Miner struct {
 	stopCh   chan struct{}
 }
 
-func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, isLocalBlock func(block *types.Block) bool) *Miner {
+func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, isLocalBlock func(block *types.Header) bool) *Miner {
 	miner := &Miner{
 		eth:     eth,
 		mux:     mux,
@@ -233,7 +234,18 @@ func (miner *Miner) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscript
 	return miner.worker.pendingLogsFeed.Subscribe(ch)
 }
 
-// SubscribePendingBlock starts delivering the pending block to the given chanel.
+// SubscribePendingBlock starts delivering the pending block to the given channel.
 func (miner *Miner) SubscribePendingBlock(ch chan<- *types.Header) event.Subscription {
 	return miner.worker.pendingBlockFeed.Subscribe(ch)
+}
+
+// Method to retrieve uncles from the worker in case not found in normal DB.
+func (miner *Miner) GetUncle(hash common.Hash) *types.Block {
+	if uncle, exist := miner.worker.localUncles[hash]; exist {
+		return uncle
+	}
+	if uncle, exist := miner.worker.remoteUncles[hash]; exist {
+		return uncle
+	}
+	return nil
 }

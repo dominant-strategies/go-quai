@@ -205,18 +205,6 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: config, engine: engine}
 		b.header = makeHeader(chainreader, parent, statedb, b.engine)
 
-		// Mutate the state and block according to any hard-fork specs
-		if daoBlock := config.DAOForkBlock; daoBlock != nil {
-			limit := new(big.Int).Add(daoBlock, params.DAOForkExtraRange)
-			if b.header.Number[types.QuaiNetworkContext].Cmp(daoBlock) >= 0 && b.header.Number[types.QuaiNetworkContext].Cmp(limit) < 0 {
-				if config.DAOForkSupport {
-					b.header.Extra[types.QuaiNetworkContext] = common.CopyBytes(params.DAOForkBlockExtra)
-				}
-			}
-		}
-		if config.DAOForkSupport && config.DAOForkBlock != nil && config.DAOForkBlock.Cmp(b.header.Number[types.QuaiNetworkContext]) == 0 {
-			misc.ApplyDAOHardFork(statedb)
-		}
 		// Execute any user modifications to the block
 		if gen != nil {
 			gen(i, b)
@@ -258,7 +246,7 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 		time = parent.Time() + 10 // block time is fixed at 10 seconds
 	}
 
-	baseFee := misc.CalcBaseFee(chain.Config(), parent.Header())
+	baseFee := misc.CalcBaseFee(chain.Config(), parent.Header(), chain.GetHeaderByNumber, chain.GetUnclesInChain, chain.GetGasUsedInChain)
 
 	header := &types.Header{
 		Coinbase:    []common.Address{common.Address{}, common.Address{}, common.Address{}},
@@ -288,7 +276,7 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 	if chain.Config().IsLondon(header.Number[types.QuaiNetworkContext]) {
 		if !chain.Config().IsLondon(parent.Number()) {
 			parentGasLimit := parent.GasLimit() * params.ElasticityMultiplier
-			header.GasLimit[types.QuaiNetworkContext] = CalcGasLimit(parentGasLimit, parentGasLimit, parent.GasUsed())
+			header.GasLimit[types.QuaiNetworkContext] = CalcGasLimit(parentGasLimit, parent.GasUsed(), 0)
 		}
 	}
 
@@ -342,4 +330,13 @@ func (cr *fakeChainReader) GetExternalBlock(hash common.Hash, number uint64, con
 }
 func (cr *fakeChainReader) QueueAndRetrieveExtBlocks(blocks []*types.ExternalBlock, header *types.Header) []*types.ExternalBlock {
 	return nil
+}
+
+func (cr *fakeChainReader) GetUnclesInChain(block *types.Block, length int) []*types.Header {
+	return nil
+}
+func (cr *fakeChainReader) GetGasUsedInChain(block *types.Block, length int) int64 { return 0 }
+
+func (cr *fakeChainReader) GetExternalBlocks(header *types.Header) ([]*types.ExternalBlock, error) {
+	return nil, nil
 }
