@@ -60,20 +60,21 @@ import (
 )
 
 var (
-	genesisFlag = flag.String("genesis", "", "Genesis json file to seed the chain with")
+	genesisFlag = flag.String("genesis", "", "Genesis json file to seed the chain with, currently not used")
 	apiPortFlag = flag.Int("apiport", 8080, "Listener port for the HTTP API connection")
-	ethPortFlag = flag.Int("ethport", 30307, "Listener port for the devp2p connection") // zone 1 port
-	bootFlag    = flag.String("bootnodes", "", "Comma separated bootnode enode URLs to seed with")
-	netFlag     = flag.Uint64("network", 0, "Network ID to use for the Ethereum protocol")
+	ethPortFlag = flag.Int("ethport", 30307, "Listener port for the devp2p connection, currently not used")
+	bootFlag    = flag.String("bootnodes", "", "Comma separated bootnode enode URLs to seed with, currently not used")
+	netFlag     = flag.Uint64("network", 0, "Network ID to use for the Ethereum protocol, currently not used")
 	statsFlag   = flag.String("ethstats", "", "Ethstats network monitoring auth string")
+	nodeFlag    = flag.String("node", "ws://45.76.19.78:8611", "Node RPC API address, ideally websockets, with port if applicable")
 
 	netnameFlag = flag.String("faucet.name", "Quai", "Network name to assign to the faucet")
 	payoutFlag  = flag.Int("faucet.amount", 1, "Number of Ethers to pay out per user request") // No longer used because it is an integer but we pay out less than 1
 	minutesFlag = flag.Int("faucet.minutes", 1, "Number of minutes to wait between funding rounds")
 	tiersFlag   = flag.Int("faucet.tiers", 1, "Number of funding tiers to enable (x3 time, x2.5 funds)")
 
-	accJSONFlag = flag.String("account.json", "/Users/jonathan/go/src/go-quai/cmd/faucet/zone1.json", "Key json file to fund user requests with")
-	accPassFlag = flag.String("account.pass", "/Users/jonathan/go/src/go-quai/cmd/faucet/password", "Decryption password to access faucet funds")
+	accJSONFlag = flag.String("account.json", "zone1.json", "Key json file to fund user requests with")
+	accPassFlag = flag.String("account.pass", "password", "Decryption password file to access faucet funds")
 
 	captchaToken  = flag.String("captcha.token", "", "Recaptcha site key to authenticate client side")
 	captchaSecret = flag.String("captcha.secret", "", "Recaptcha secret key to authenticate server side")
@@ -190,7 +191,7 @@ func main() {
 		log.Crit("Failed to unlock faucet signer account", "err", err)
 	}
 	// Assemble and start the faucet light service
-	faucet, err := newFaucet(genesis, *ethPortFlag, enodes /* *netFlag */, zone.ChainID.Uint64(), *statsFlag, ks, website.Bytes())
+	faucet, err := newFaucet(genesis, *ethPortFlag, enodes /* *netFlag */, zone.ChainID.Uint64(), *statsFlag, *nodeFlag, ks, website.Bytes())
 	if err != nil {
 		log.Crit("Failed to start faucet", "err", err)
 	}
@@ -238,7 +239,7 @@ type wsConn struct {
 	wlock deadlock.Mutex
 }
 
-func newFaucet(genesis *core.Genesis, port int, enodes []*enode.Node, network uint64, stats string, ks *keystore.KeyStore, index []byte) (*faucet, error) {
+func newFaucet(genesis *core.Genesis, port int, enodes []*enode.Node, network uint64, stats string, nodeAddr string, ks *keystore.KeyStore, index []byte) (*faucet, error) {
 	// Assemble the raw devp2p protocol stack
 	stack, err := node.New(&node.Config{
 		Name:    "geth",
@@ -293,7 +294,7 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*enode.Node, network ui
 	}
 	client := ethclient.NewClient(api)*/
 
-	client, err := ethclient.Dial("ws://45.76.19.78:8611")
+	client, err := ethclient.Dial(nodeAddr)
 	if err != nil {
 		stack.Close()
 		return nil, err
