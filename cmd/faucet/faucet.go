@@ -200,6 +200,7 @@ func main() {
 	if err := faucet.listenAndServe(*apiPortFlag); err != nil {
 		log.Crit("Failed to launch faucet API", "err", err)
 	}
+
 }
 
 // request represents an accepted funding request.
@@ -324,6 +325,7 @@ func (f *faucet) listenAndServe(port int) error {
 
 	http.HandleFunc("/", f.webHandler)
 	http.HandleFunc("/api", f.apiHandler)
+	log.Info("Faucet starting on port " + fmt.Sprintf("%d", port))
 	return http.ListenAndServe(fmt.Sprintf(":%d", port), nil)
 }
 
@@ -641,10 +643,10 @@ func (f *faucet) loop() {
 			}
 			// Faucet state retrieved, update locally and send to clients
 			f.lock.RLock()
-			log.Info("Updated faucet state", "number", head.Number, "hash", head.Hash(), "age", common.PrettyAge(timestamp), "balance", f.balance, "nonce", f.nonce, "price", f.price)
 
 			balance := new(big.Float).Quo(new(big.Float).SetInt(f.balance), new(big.Float).SetInt(ether)).Text('f', 3) // big int to floating point (decimal) to string
 			peers := 0                                                                                                 //f.stack.Server().PeerCount()
+			log.Info("Updated faucet state", "number", head.Number, "hash", head.Hash(), "age", common.PrettyAge(timestamp), "balance", balance, "nonce", f.nonce, "price", f.price)
 
 			for _, conn := range f.conns {
 				if err := send(conn, map[string]interface{}{
