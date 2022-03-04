@@ -673,7 +673,6 @@ func (ethash *Ethash) GetCoincidentHeader(chain consensus.ChainHeaderReader, con
 	} else if context == 1 {
 		difficultyContext, err := ethash.GetDifficultyContext(chain, header, context)
 		if err != nil {
-			log.Warn("Unable to calculate difficulty context")
 			return header, context
 		}
 
@@ -684,7 +683,6 @@ func (ethash *Ethash) GetCoincidentHeader(chain consensus.ChainHeaderReader, con
 			// difficultyContext is initially context since it could be a pending block w/o a nonce.
 			difficultyContext, err := ethash.GetDifficultyContext(chain, header, context)
 			if err != nil {
-				log.Warn("Unable to calculate difficulty context")
 				return header, context
 			}
 
@@ -741,7 +739,6 @@ func (ethash *Ethash) GetStopHash(chain consensus.ChainHeaderReader, originalCon
 		// difficultyContext is initially context since it could be a pending block w/o a nonce.
 		difficultyContext, err := ethash.GetDifficultyContext(chain, header, originalContext)
 		if err != nil {
-			log.Warn("Unable to calculate difficulty context")
 			break
 		}
 
@@ -824,12 +821,13 @@ func (ethash *Ethash) PrimeTraceBranch(chain consensus.ChainHeaderReader, header
 		}
 
 		header = prevHeader.Header()
-
+		if header == nil {
+			break
+		}
 		// Calculate the difficulty context in order to know if we have reached a coincident.
 		// If we get a coincident, stop and return.
 		difficultyContext, err := ethash.GetDifficultyContext(chain, header, context)
 		if err != nil {
-			log.Warn("Unable to calculate difficulty context")
 			break
 		}
 		if difficultyContext < context {
@@ -919,12 +917,13 @@ func (ethash *Ethash) RegionTraceBranch(chain consensus.ChainHeaderReader, heade
 		}
 
 		header = prevHeader.Header()
-
+		if header == nil {
+			break
+		}
 		// Calculate the difficulty context in order to know if we have reached a coincident.
 		// If we get a coincident, stop and return.
 		difficultyContext, err := ethash.GetDifficultyContext(chain, header, context)
 		if err != nil {
-			log.Warn("Unable to calculate difficulty context")
 			break
 		}
 		if difficultyContext < context && context == types.ContextDepth-1 {
