@@ -166,6 +166,10 @@ ifeq ($(ENABLE_WS),true)
 	BASE_COMMAND += --ws
 endif
 
+ifeq ($(ENABLE_UNLOCK),true)
+	BASE_COMMAND += --allow-insecure-unlock
+endif
+
 ifeq ($(QUAI_MINING),true)
 	MINING_BASE_COMMAND = $(BASE_COMMAND) --mine --miner.threads $(THREADS)
 endif
