@@ -948,7 +948,7 @@ func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, heade
 		prevHeader := chain.GetHeaderByHash(header.ParentHash[context])
 		coincidentHeader, difficultyContext := ethash.GetCoincidentHeader(chain, context, prevHeader)
 		// Only run if we are the block immediately following the coincident block. Check below is to make sure we are N+1.
-		if coincidentHeader.Number[context].Cmp(prevHeader.Number[context]) != 0 {
+		if coincidentHeader == nil || coincidentHeader.Number[context].Cmp(prevHeader.Number[context]) != 0 {
 			return externalBlocks, nil
 		}
 
