@@ -66,7 +66,7 @@ var (
 	netFlag       = flag.Uint64("network", 0, "Network ID to use for the Ethereum protocol, currently not used")
 	statsFlag     = flag.String("ethstats", "", "Ethstats network monitoring auth string")
 	nodeFlag      = flag.String("node", "ws://45.76.19.78", "Full Node RPC IP address, ideally websockets, without port")
-	numChainsFlag = flag.Int("numchains", 13, "Number of blockchains to run the faucet for, default 13. Ensure you have the equivalent number of keys with proper naming!")
+	numChainsFlag = flag.Int("numchains", 1, "Number of blockchains to run the faucet for, default 13. Ensure you have the equivalent number of keys with proper naming!")
 	netnameFlag   = flag.String("faucet.name", "Quai", "Network name to assign to the faucet")
 	payoutFlag    = flag.Int("faucet.amount", 1, "Number of Ethers to pay out per user request") // No longer used because it is an integer but we pay out less than 1
 	minutesFlag   = flag.Int("faucet.minutes", 1, "Number of minutes to wait between funding rounds")
@@ -156,7 +156,7 @@ func main() {
 		}*/
 	zone := params.MainnetZoneChainConfigs[0][0]
 	genesis := core.MainnetZoneGenesisBlock(&zone)
-	types.QuaiNetworkContext = zone.Context
+	types.QuaiNetworkContext = zone.Context // this should be removed
 	//prime := params.MainnetPrimeChainConfig
 	//genesis := core.MainnetPrimeGenesisBlock()
 	// Convert the bootnodes to internal enode representations
@@ -213,6 +213,7 @@ type request struct {
 	Account common.Address     `json:"account"` // Ethereum address being funded
 	Time    time.Time          `json:"time"`    // Timestamp when the request was accepted
 	Tx      *types.Transaction `json:"tx"`      // Transaction funding the account
+	Chain   string             `json:"chain"`   // Chain tx sent on
 }
 
 // faucet represents a crypto faucet backed by an Ethereum light client.
@@ -304,6 +305,15 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*enode.Node, network ui
 	for i := 0; i < *numChainsFlag; i++ {
 		client, err := ethclient.Dial(nodeAddr + ":" + portList[i])
 		if err != nil {
+			if strings.Contains(err.Error(), "connection refused") {
+				client, err := ethclient.Dial("ws://45.32.77.104" + ":" + portList[i])
+				if err != nil {
+					stack.Close()
+					return nil, err
+				}
+				clients = append(clients, client)
+				continue
+			}
 			stack.Close()
 			return nil, err
 		}
@@ -386,13 +396,13 @@ func (f *faucet) apiHandler(w http.ResponseWriter, r *http.Request) {
 	for head == nil || balance == nil {
 		// Retrieve the current stats cached by the faucet
 		f.lock.RLock()
-		if f.head != nil {
-			head = types.CopyHeader(f.head[2]) // just show cyprus 1 for now. This will break with less than 3 in numchains
+		if f.head[0] != nil {
+			head = types.CopyHeader(f.head[0]) // just show cyprus 1 for now. This will break with less than 3 in numchains
 		}
-		if f.balance != nil {
-			balance = new(big.Int).Set(f.balance[2])
+		if f.balance[0] != nil {
+			balance = new(big.Int).Set(f.balance[0])
 		}
-		nonce = f.nonce[2]
+		nonce = f.nonce[0]
 		f.lock.RUnlock()
 
 		if head == nil || balance == nil {
@@ -412,7 +422,7 @@ func (f *faucet) apiHandler(w http.ResponseWriter, r *http.Request) {
 	if err = send(wsconn, map[string]interface{}{
 		"funds":    new(big.Float).Quo(new(big.Float).SetInt(balance), new(big.Float).SetInt(ether)).Text('f', 3),
 		"funded":   nonce,
-		"peers":    "cyprus1", //hardcoded, initial state is cyprus1
+		"peers":    "prime", //hardcoded, initial state is prime
 		"requests": flatten(reqs),
 	}, 3*time.Second); err != nil {
 		log.Warn("Failed to send initial stats to client", "err", err)
@@ -567,6 +577,11 @@ func (f *faucet) apiHandler(w http.ResponseWriter, r *http.Request) {
 			chainID = params.MainnetPrimeChainConfig.ChainID // Default is Prime
 		}
 
+		if client >= *numChainsFlag {
+			client = 0
+			chainID = params.MainnetPrimeChainConfig.ChainID
+		}
+
 		log.Info("Faucet request valid", "url", msg.URL, "tier", msg.Tier, "user", username, "address", address, "chain", chainList[client])
 
 		// Ensure the user didn't request funds too recently
@@ -609,6 +624,7 @@ func (f *faucet) apiHandler(w http.ResponseWriter, r *http.Request) {
 				Account: address,
 				Time:    time.Now(),
 				Tx:      signed,
+				Chain:   chainList[client],
 			})
 			timeout := time.Duration(*minutesFlag*int(math.Pow(3, float64(msg.Tier)))) * time.Minute
 			grace := timeout / 288 // 24h timeout => 5m grace
@@ -642,7 +658,7 @@ func (f *faucet) apiHandler(w http.ResponseWriter, r *http.Request) {
 
 // refresh attempts to retrieve the latest header from the chain and extract the
 // associated faucet balance and nonce for connectivity caching.
-func (f *faucet) refresh(head *types.Header, client int) error {
+func (f *faucet) refresh(head *types.Header, client int, quaiContext int) error {
 	// Ensure a state update does not run for too long
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -660,10 +676,11 @@ func (f *faucet) refresh(head *types.Header, client int) error {
 		nonce   uint64
 		price   *big.Int
 	)
-	if balance, err = f.clients[client].BalanceAt(ctx, f.keystore.Accounts()[client].Address, head.Number[types.QuaiNetworkContext]); err != nil {
+
+	if balance, err = f.clients[client].BalanceAt(ctx, f.keystore.Accounts()[client].Address, head.Number[quaiContext]); err != nil {
 		return err
 	}
-	if nonce, err = f.clients[client].NonceAt(ctx, f.keystore.Accounts()[client].Address, head.Number[types.QuaiNetworkContext]); err != nil {
+	if nonce, err = f.clients[client].NonceAt(ctx, f.keystore.Accounts()[client].Address, head.Number[quaiContext]); err != nil {
 		return err
 	}
 	/*if price, err = f.clients[client].SuggestGasPrice(ctx); err != nil {
@@ -704,7 +721,13 @@ func (f *faucet) loop(client int) {
 				log.Warn("Skipping faucet refresh, head too old", "number", head.Number, "hash", head.Hash(), "age", common.PrettyAge(timestamp))
 				continue
 			}
-			if err := f.refresh(head, client); err != nil {
+			context := 2 // zone
+			if client == 0 {
+				context = 0 // prime
+			} else if client == 1 || client == 5 || client == 9 {
+				context = 1 // region
+			}
+			if err := f.refresh(head, client, context); err != nil {
 				log.Warn("Failed to update faucet state", "block", head.Number, "hash", head.Hash(), "err", err)
 				continue
 			}
@@ -713,12 +736,12 @@ func (f *faucet) loop(client int) {
 
 			balance := new(big.Float).Quo(new(big.Float).SetInt(f.balance[client]), new(big.Float).SetInt(ether)).Text('f', 3) // big int to floating point (decimal) to string
 
-			log.Info("Updated faucet state", "number", head.Number, "hash", head.Hash(), "age", common.PrettyAge(timestamp), "balance", balance, "nonce", f.nonce, "price", f.price)
-
+			log.Info("Updated faucet state", "number", head.Number[context], "hash", head.Hash(), "age", common.PrettyAge(timestamp), "balance", balance, "nonce", f.nonce[client], "price", f.price)
+			head.Number[0] = head.Number[context] // this is cheating but the frontend needs context
 			for _, conn := range f.conns {
 				if err := send(conn, map[string]interface{}{
 					"funds":    balance,
-					"funded":   f.nonce,
+					"funded":   f.nonce[client],
 					"peers":    chainList[client],
 					"requests": flatten(f.reqs),
 				}, time.Second); err != nil {

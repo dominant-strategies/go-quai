@@ -5,7 +5,7 @@
 		<meta http-equiv="X-UA-Compatible" content="IE=edge">
 		<meta name="viewport" content="width=device-width, initial-scale=1">
 
-		<title>{{.Network}}: Quai Faucet</title>
+		<title>{{.Network}}: Multizone Faucet</title>
 
 		<link href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet" />
 		<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet" />
@@ -32,8 +32,9 @@
 				color: white;
 			 }
 			 pre {
-				 padding: 6px;
+				 padding: 5px;
 				 margin: 0;
+				 font-size: 10px;
 			 }
 		</style>
 	</head>
@@ -43,7 +44,7 @@
 			<div class="container">
 				<div class="row" style="margin-bottom: 16px;">
 					<div class="col-lg-12">
-						<h1 style="text-align: center;"><i class="fa fa-bath" aria-hidden="true"></i> {{.Network}} Quai Faucet</h1>
+						<h1 style="text-align: center;"><i class="fa fa-bath" aria-hidden="true"></i> {{.Network}} Multizone Faucet</h1>
 					</div>
 				</div>
 				<div class="row">
@@ -80,14 +81,14 @@
 				<div class="row" style="margin-top: 32px;">
 					<div class="col-lg-12">
 						<h3>How does this work?</h3>
-						<p>This Quai faucet is running from a wallet in Cyprus 1 but you may send to any Quai address. Simply paste your address and fire away. Note the following delays, however:</p>
-						<dl class="dl-horizontal">
+						<p>This Quai faucet is running from wallets in every Quai chain and you may send to any Quai address. Simply paste your address and fire away.</p>
+				<!--	<dl class="dl-horizontal">
 							
 							<dd style="margin-left: 88px; margin-bottom: 10px;">• Within Zone Cyprus 1: ~10s (best case)</dd>
 							<dd style="margin-left: 88px; margin-bottom: 10px;">• Zone to its own Region: Best case 10 minutes; Worst case ~35 minutes</dd>
 							<dd style="margin-left: 88px; margin-bottom: 10px;">• Zone to Prime: Best case 30 minutes; Worst case ~3.5 hrs</dd>
 							<dd style="margin-left: 88px; margin-bottom: 10px;">• Zone through Prime: Best case 1 hr; Worst case 9 hrs</dd>
-						</dl>
+						</dl> -->
 						<p>You can track the current pending requests below the input field to see how much you have to wait until your turn comes.</p>
 						{{if .Recaptcha}}<em>The faucet is running invisible reCaptcha protection against bots.</em>{{end}}
 					</div>
@@ -138,7 +139,7 @@
 						$("#peers").text(msg.peers);
 					}
 					if (msg.number !== undefined) {
-						$("#block").text(parseInt(msg.number[2], 10));
+						$("#block").text(parseInt(msg.number[0], 10)); // location used as context
 					}
 					if (msg.error !== undefined) {
 						noty({layout: 'topCenter', text: msg.error, type: 'error', timeout: 5000, progressBar: true});
@@ -177,7 +178,8 @@
 							var elapsed = moment().unix()-moment(requests[i].time).unix();
 
 							content += "<tr id='" + requests[i].tx.hash + "'>";
-							content += "  <td><div style=\"background: url('" + requests[i].avatar + "'); background-size: cover; width:32px; height: 32px; border-radius: 4px;\"></div></td>";
+							content += "  <td><pre>" + requests[i].chain + "</pre></td>";
+							content += "  <td><pre>" + requests[i].tx.hash + "</pre></td>";
 							content += "  <td><pre>" + requests[i].account + "</pre></td>";
 							content += "  <td style=\"width: 100%; text-align: center; vertical-align: middle;\">";
 							if (done) {
