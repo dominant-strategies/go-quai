@@ -731,6 +731,10 @@ func (ethash *Ethash) GetStopHash(chain consensus.ChainHeaderReader, originalCon
 		}
 
 		prevHeader := chain.GetHeaderByHash(header.ParentHash[originalContext])
+		if prevHeader == nil {
+			log.Warn("Unable to get prevHeader in GetStopHash")
+			return stopHash, num
+		}
 		header = prevHeader
 
 		// Check work of the header, if it has enough work we will move up in context.
@@ -738,6 +742,7 @@ func (ethash *Ethash) GetStopHash(chain consensus.ChainHeaderReader, originalCon
 		difficultyContext, err := ethash.GetDifficultyContext(chain, header, originalContext)
 		if err != nil {
 			log.Warn("Unable to calculate difficulty context")
+			break
 		}
 
 		sameLocation := false
@@ -825,6 +830,7 @@ func (ethash *Ethash) PrimeTraceBranch(chain consensus.ChainHeaderReader, header
 		difficultyContext, err := ethash.GetDifficultyContext(chain, header, context)
 		if err != nil {
 			log.Warn("Unable to calculate difficulty context")
+			break
 		}
 		if difficultyContext < context {
 			// log.Info("TraceBranch: Found Region coincident block in Zone", "number", header.Number, "context", context, "location", header.Location)
@@ -919,6 +925,7 @@ func (ethash *Ethash) RegionTraceBranch(chain consensus.ChainHeaderReader, heade
 		difficultyContext, err := ethash.GetDifficultyContext(chain, header, context)
 		if err != nil {
 			log.Warn("Unable to calculate difficulty context")
+			break
 		}
 		if difficultyContext < context && context == types.ContextDepth-1 {
 			// log.Info("Trace Branch: Found Region coincident block in Zone", "number", header.Number, "context", context, "location", header.Location)
