@@ -66,7 +66,7 @@ var (
 	netFlag       = flag.Uint64("network", 0, "Network ID to use for the Ethereum protocol, currently not used")
 	statsFlag     = flag.String("ethstats", "", "Ethstats network monitoring auth string")
 	nodeFlag      = flag.String("node", "ws://45.76.19.78", "Full Node RPC IP address, ideally websockets, without port")
-	numChainsFlag = flag.Int("numchains", 1, "Number of blockchains to run the faucet for, default 13. Ensure you have the equivalent number of keys with proper naming!")
+	numChainsFlag = flag.Int("numchains", 13, "Number of blockchains to run the faucet for, default 13. Ensure you have the equivalent number of keys with proper naming!")
 	netnameFlag   = flag.String("faucet.name", "Quai", "Network name to assign to the faucet")
 	payoutFlag    = flag.Int("faucet.amount", 1, "Number of Ethers to pay out per user request") // No longer used because it is an integer but we pay out less than 1
 	minutesFlag   = flag.Int("faucet.minutes", 1, "Number of minutes to wait between funding rounds")
@@ -306,7 +306,7 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*enode.Node, network ui
 		client, err := ethclient.Dial(nodeAddr + ":" + portList[i])
 		if err != nil {
 			if strings.Contains(err.Error(), "connection refused") {
-				client, err := ethclient.Dial("ws://45.32.77.104" + ":" + portList[i])
+				client, err := ethclient.Dial("ws://45.32.77.104" + ":" + portList[i]) // fallback
 				if err != nil {
 					stack.Close()
 					return nil, err
@@ -718,7 +718,7 @@ func (f *faucet) loop(client int) {
 			// New chain head arrived, query the current stats and stream to clients
 			timestamp := time.Unix(int64(head.Time), 0)
 			if time.Since(timestamp) > time.Hour*24 {
-				log.Warn("Skipping faucet refresh, head too old", "number", head.Number, "hash", head.Hash(), "age", common.PrettyAge(timestamp))
+				log.Warn("Skipping faucet refresh, head too old", "number", head.Number, "hash", head.Hash(), "age", common.PrettyAge(timestamp), "chain", chainList[client])
 				continue
 			}
 			context := 2 // zone
@@ -736,7 +736,7 @@ func (f *faucet) loop(client int) {
 
 			balance := new(big.Float).Quo(new(big.Float).SetInt(f.balance[client]), new(big.Float).SetInt(ether)).Text('f', 3) // big int to floating point (decimal) to string
 
-			log.Info("Updated faucet state", "number", head.Number[context], "hash", head.Hash(), "age", common.PrettyAge(timestamp), "balance", balance, "nonce", f.nonce[client], "price", f.price)
+			log.Info("Updated faucet state", "number", head.Number[context], "hash", head.Hash(), "age", common.PrettyAge(timestamp), "balance", balance, "nonce", f.nonce[client], "chain", chainList[client])
 			head.Number[0] = head.Number[context] // this is cheating but the frontend needs context
 			for _, conn := range f.conns {
 				if err := send(conn, map[string]interface{}{
