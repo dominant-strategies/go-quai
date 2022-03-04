@@ -621,6 +621,9 @@ func (ethash *Ethash) checkPoW(chain consensus.ChainHeaderReader, header *types.
 
 func (ethash *Ethash) GetDifficultyContext(chain consensus.ChainHeaderReader, header *types.Header, context int) (int, error) {
 	difficultyContext := context
+	if header == nil {
+		return types.ContextDepth, errors.New("error checking difficulty context")
+	}
 	if header.Nonce != (types.BlockNonce{}) {
 		result := ethash.checkPoW(chain, header, false)
 		for i := types.ContextDepth - 1; i > -1; i-- {
