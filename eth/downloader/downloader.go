@@ -969,13 +969,17 @@ func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, 
 				case FastSync:
 					known = d.blockchain.HasFastBlock(h, n)
 				default:
-					known = d.lightchain.HasHeader(h, n)
+					known = d.blockchain.HasBlock(h, n)
 				}
 				if !known {
 					end = check
 					break
 				}
 				header := d.blockchain.GetHeaderByHash(h) // Independent of sync mode, header surely exists
+				// Somehow got past known check
+				if header == nil {
+					break
+				}
 				if header.Number[types.QuaiNetworkContext].Uint64() != check {
 					p.log.Warn("Received non requested header", "number", header.Number, "hash", header.Hash(), "request", check)
 					return 0, fmt.Errorf("%w: non-requested header (%d)", errBadPeer, header.Number)
