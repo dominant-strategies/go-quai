@@ -969,7 +969,7 @@ func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, 
 				case FastSync:
 					known = d.blockchain.HasFastBlock(h, n)
 				default:
-					known = d.lightchain.HasHeader(h, n)
+					known = d.blockchain.HasBlock(h, n)
 				}
 				if !known {
 					end = check
