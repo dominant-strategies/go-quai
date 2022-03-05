@@ -621,6 +621,9 @@ func (ethash *Ethash) checkPoW(chain consensus.ChainHeaderReader, header *types.
 
 func (ethash *Ethash) GetDifficultyContext(chain consensus.ChainHeaderReader, header *types.Header, context int) (int, error) {
 	difficultyContext := context
+	if header == nil {
+		return types.ContextDepth, errors.New("error checking difficulty context")
+	}
 	if header.Nonce != (types.BlockNonce{}) {
 		result := ethash.checkPoW(chain, header, false)
 		for i := types.ContextDepth - 1; i > -1; i-- {
@@ -670,7 +673,6 @@ func (ethash *Ethash) GetCoincidentHeader(chain consensus.ChainHeaderReader, con
 	} else if context == 1 {
 		difficultyContext, err := ethash.GetDifficultyContext(chain, header, context)
 		if err != nil {
-			log.Warn("Unable to calculate difficulty context")
 			return header, context
 		}
 
@@ -681,7 +683,6 @@ func (ethash *Ethash) GetCoincidentHeader(chain consensus.ChainHeaderReader, con
 			// difficultyContext is initially context since it could be a pending block w/o a nonce.
 			difficultyContext, err := ethash.GetDifficultyContext(chain, header, context)
 			if err != nil {
-				log.Warn("Unable to calculate difficulty context")
 				return header, context
 			}
 
@@ -728,13 +729,17 @@ func (ethash *Ethash) GetStopHash(chain consensus.ChainHeaderReader, originalCon
 		}
 
 		prevHeader := chain.GetHeaderByHash(header.ParentHash[originalContext])
+		if prevHeader == nil {
+			log.Warn("Unable to get prevHeader in GetStopHash")
+			return stopHash, num
+		}
 		header = prevHeader
 
 		// Check work of the header, if it has enough work we will move up in context.
 		// difficultyContext is initially context since it could be a pending block w/o a nonce.
 		difficultyContext, err := ethash.GetDifficultyContext(chain, header, originalContext)
 		if err != nil {
-			log.Warn("Unable to calculate difficulty context")
+			break
 		}
 
 		sameLocation := false
@@ -816,12 +821,14 @@ func (ethash *Ethash) PrimeTraceBranch(chain consensus.ChainHeaderReader, header
 		}
 
 		header = prevHeader.Header()
-
+		if header == nil {
+			break
+		}
 		// Calculate the difficulty context in order to know if we have reached a coincident.
 		// If we get a coincident, stop and return.
 		difficultyContext, err := ethash.GetDifficultyContext(chain, header, context)
 		if err != nil {
-			log.Warn("Unable to calculate difficulty context")
+			break
 		}
 		if difficultyContext < context {
 			// log.Info("TraceBranch: Found Region coincident block in Zone", "number", header.Number, "context", context, "location", header.Location)
@@ -910,12 +917,14 @@ func (ethash *Ethash) RegionTraceBranch(chain consensus.ChainHeaderReader, heade
 		}
 
 		header = prevHeader.Header()
-
+		if header == nil {
+			break
+		}
 		// Calculate the difficulty context in order to know if we have reached a coincident.
 		// If we get a coincident, stop and return.
 		difficultyContext, err := ethash.GetDifficultyContext(chain, header, context)
 		if err != nil {
-			log.Warn("Unable to calculate difficulty context")
+			break
 		}
 		if difficultyContext < context && context == types.ContextDepth-1 {
 			// log.Info("Trace Branch: Found Region coincident block in Zone", "number", header.Number, "context", context, "location", header.Location)
@@ -938,7 +947,7 @@ func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, heade
 		prevHeader := chain.GetHeaderByHash(header.ParentHash[context])
 		coincidentHeader, difficultyContext := ethash.GetCoincidentHeader(chain, context, prevHeader)
 		// Only run if we are the block immediately following the coincident block. Check below is to make sure we are N+1.
-		if coincidentHeader.Number[context].Cmp(prevHeader.Number[context]) != 0 {
+		if coincidentHeader == nil || coincidentHeader.Number[context].Cmp(prevHeader.Number[context]) != 0 {
 			return externalBlocks, nil
 		}
 

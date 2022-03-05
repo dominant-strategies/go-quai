@@ -2691,7 +2691,7 @@ func (bc *BlockChain) GetExternalBlocks(header *types.Header) ([]*types.External
 	// Do not run on block 1
 	if header.Number[context].Cmp(big.NewInt(1)) > 0 {
 		coincidentHeader, difficultyContext := bc.engine.GetCoincidentHeader(bc, context, header)
-		if coincidentHeader.Number[context].Cmp(header.Number[context]) != 0 {
+		if coincidentHeader == nil || coincidentHeader.Number[context].Cmp(header.Number[context]) != 0 {
 			return externalBlocks, nil
 		}
 
