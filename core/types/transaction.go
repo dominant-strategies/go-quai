@@ -621,7 +621,7 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 	sendingFromExternal := int(msg.from[0]) < idRange[0] || int(msg.from[0]) > idRange[1]
 
 	// checking if the transaction is deploying a contract
-	if tx.To() != nil && tx.Data() == nil {
+	if tx.To() != nil && len(tx.Data()) == 0 {
 		sendingToInternal := int(tx.To()[0]) >= idRange[0] && int(tx.To()[0]) <= idRange[1]
 		if sendingFromExternal && sendingToInternal {
 			msg.fromExternal = true
