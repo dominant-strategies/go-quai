@@ -182,9 +182,10 @@ func main() {
 	pass := strings.TrimSuffix(string(blob), "\n")
 
 	for i := 0; i < *numChainsFlag; i++ {
-		if blob, err = ioutil.ReadFile(chainList[i] + ".json"); err != nil {
+		if blob, err = ioutil.ReadFile("keystore/" + chainList[i] + ".json"); err != nil {
 			log.Crit("Failed to read account key contents", "file", chainList[i]+".json", "err", err)
 		}
+		fmt.Println("Here", i)
 		acc, err := ks.Import(blob, pass, pass)
 		if err != nil && err != keystore.ErrAccountAlreadyExists {
 			log.Crit("Failed to import faucet signer account", "err", err)
@@ -597,8 +598,8 @@ func (f *faucet) apiHandler(w http.ResponseWriter, r *http.Request) {
 			amount = new(big.Int).Mul(amount, new(big.Int).Exp(big.NewInt(5), big.NewInt(int64(msg.Tier)), nil))
 			amount = new(big.Int).Div(amount, new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(msg.Tier)), nil))
 
-			tx := types.NewTransaction(f.nonce[client]+uint64(len(f.reqs[client])), address, amount, 21000, f.price, nil)
-			signed, err := f.keystore.SignTx(f.keystore.Accounts()[client], tx, chainID)
+			tx := types.NewTransaction(f.nonce[client]+uint64(len(f.reqs[client])), address, big.NewInt(10000000000000000), 21000, f.price, nil)
+			signed, err := f.keystore.SignTx(f.keystore.Accounts()[client+1], tx, chainID)
 			if err != nil {
 				f.lock.Unlock()
 				if err = sendError(wsconn, err); err != nil {
@@ -632,7 +633,7 @@ func (f *faucet) apiHandler(w http.ResponseWriter, r *http.Request) {
 			f.timeouts[id] = time.Now().Add(timeout - grace)
 			fund = true
 			txhash = signed.Hash()
-			log.Info("Transaction sent", "from", f.keystore.Accounts()[client].Address.String(), "to", address.String(), "chain", chainList[client], "hash", txhash.String())
+			log.Info("Transaction sent", "from", f.keystore.Accounts()[client+1].Address.String(), "to", address.String(), "chain", chainList[client], "hash", txhash.String())
 		}
 		f.lock.Unlock()
 
@@ -677,10 +678,10 @@ func (f *faucet) refresh(head *types.Header, client int, quaiContext int) error 
 		price   *big.Int
 	)
 
-	if balance, err = f.clients[client].BalanceAt(ctx, f.keystore.Accounts()[client].Address, head.Number[quaiContext]); err != nil {
+	if balance, err = f.clients[client].BalanceAt(ctx, f.keystore.Accounts()[client+1].Address, head.Number[quaiContext]); err != nil {
 		return err
 	}
-	if nonce, err = f.clients[client].NonceAt(ctx, f.keystore.Accounts()[client].Address, head.Number[quaiContext]); err != nil {
+	if nonce, err = f.clients[client].NonceAt(ctx, f.keystore.Accounts()[client+1].Address, head.Number[quaiContext]); err != nil {
 		return err
 	}
 	/*if price, err = f.clients[client].SuggestGasPrice(ctx); err != nil {
