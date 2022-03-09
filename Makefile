@@ -23,7 +23,7 @@ bootnode:
 	@echo "Run \"$(GOBIN)/bootnode\" to launch bootnode binary."
 
 faucet:
-	$(GORUN) build/ci.go install ./cmd/faucet
+	go build -gcflags=all="-N -l" -v -o build/bin/faucet ./cmd/faucet
 
 debug:
 	go build -gcflags=all="-N -l" -v -o build/bin/quai ./cmd/quai
