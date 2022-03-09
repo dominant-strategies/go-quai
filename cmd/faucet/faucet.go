@@ -597,9 +597,6 @@ func (f *faucet) apiHandler(w http.ResponseWriter, r *http.Request) {
 			amount := new(big.Int).Mul(big.NewInt(int64(1 /**payoutFlag*/)), divisor) // We no longer use the payout flag because it is a whole integer
 			amount = new(big.Int).Mul(amount, new(big.Int).Exp(big.NewInt(5), big.NewInt(int64(msg.Tier)), nil))
 			amount = new(big.Int).Div(amount, new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(msg.Tier)), nil))
-			fmt.Println(f.keystore.Accounts())
-			fmt.Println("BREAK")
-			fmt.Println(f.keystore.Accounts()[client])
 			tx := types.NewTransaction(f.nonce[client]+uint64(len(f.reqs[client])), address, big.NewInt(100000000000000), 21000, f.price, nil)
 			signed, err := f.keystore.SignTx(f.keystore.Accounts()[client], tx, chainID)
 			if err != nil {
