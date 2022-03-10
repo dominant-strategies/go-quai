@@ -573,9 +573,12 @@ func (f *faucet) apiHandler(w http.ResponseWriter, r *http.Request) {
 		case 120 <= addrPrefix && addrPrefix <= 129:
 			client = 12
 			chainID = params.MainnetZoneChainConfigs[2][2].ChainID
-		default:
-			client = 0
-			chainID = params.MainnetPrimeChainConfig.ChainID // Default is Prime
+		}
+
+		if client == 0 {
+			err := fmt.Errorf("the quai address %s is invalid", address)
+			sendError(wsconn, err)
+			return
 		}
 
 		if client >= *numChainsFlag {
