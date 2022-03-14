@@ -439,7 +439,7 @@ func answerGetPooledTransactions(backend Backend, query GetPooledTransactionsPac
 		}
 	}
 
-	log.Info("answer get pooled tranasctions", txs)
+	fmt.Println("answer get pooled tranasctions", txs)
 	return hashes, txs
 }
 
@@ -455,7 +455,7 @@ func handleTransactions(backend Backend, msg Decoder, peer *Peer) error {
 	}
 	for i, tx := range txs {
 
-		log.Info("received transactions", tx.Hash(), " to ", tx.To())
+		fmt.Println("received transactions", " hash ", tx.Hash(), " to ", tx.To())
 
 		// Validate and mark the remote transaction
 		if tx == nil {
@@ -482,7 +482,7 @@ func handlePooledTransactions66(backend Backend, msg Decoder, peer *Peer) error 
 			return fmt.Errorf("%w: transaction %d is nil", errDecode, i)
 		}
 
-		log.Info("received transactions", tx.Hash(), " to ", tx.To())
+		fmt.Println("received transactions", " hash ", tx.Hash(), " to ", tx.To())
 
 		peer.markTransaction(tx.Hash())
 	}
