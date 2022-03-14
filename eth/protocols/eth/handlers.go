@@ -438,6 +438,8 @@ func answerGetPooledTransactions(backend Backend, query GetPooledTransactionsPac
 			bytes += len(encoded)
 		}
 	}
+
+	log.Info("answer get pooled tranasctions", txs)
 	return hashes, txs
 }
 
@@ -452,6 +454,9 @@ func handleTransactions(backend Backend, msg Decoder, peer *Peer) error {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
 	for i, tx := range txs {
+
+		log.Info("received transactions", tx.Hash(), " to ", tx.To())
+
 		// Validate and mark the remote transaction
 		if tx == nil {
 			return fmt.Errorf("%w: transaction %d is nil", errDecode, i)
@@ -476,6 +481,9 @@ func handlePooledTransactions66(backend Backend, msg Decoder, peer *Peer) error 
 		if tx == nil {
 			return fmt.Errorf("%w: transaction %d is nil", errDecode, i)
 		}
+
+		log.Info("received transactions", tx.Hash(), " to ", tx.To())
+
 		peer.markTransaction(tx.Hash())
 	}
 	requestTracker.Fulfil(peer.id, peer.version, PooledTransactionsMsg, txs.RequestId)
