@@ -17,7 +17,6 @@
 package eth
 
 import (
-	"fmt"
 	"math/big"
 	"math/rand"
 	"sync"
@@ -186,7 +185,6 @@ func (p *Peer) markTransaction(hash common.Hash) {
 func (p *Peer) SendTransactions(txs types.Transactions) error {
 	// Mark all the transactions as known, but ensure we don't overflow our limits
 	for _, tx := range txs {
-		fmt.Println("sending tranasctions with transactions hash ", tx.Hash(), " to ", tx.To())
 		p.knownTxs.Add(tx.Hash())
 	}
 	return p2p.Send(p.rw, TransactionsMsg, txs)
@@ -214,7 +212,6 @@ func (p *Peer) AsyncSendTransactions(hashes []common.Hash) {
 func (p *Peer) sendPooledTransactionHashes(hashes []common.Hash) error {
 	// Mark all the transactions as known, but ensure we don't overflow our limits
 	p.knownTxs.Add(hashes...)
-	fmt.Println("sending pooled transaction hashes", hashes)
 	return p2p.Send(p.rw, NewPooledTransactionHashesMsg, NewPooledTransactionHashesPacket(hashes))
 }
 
@@ -235,8 +232,6 @@ func (p *Peer) AsyncSendPooledTransactionHashes(hashes []common.Hash) {
 func (p *Peer) ReplyPooledTransactionsRLP(id uint64, hashes []common.Hash, txs []rlp.RawValue) error {
 	// Mark all the transactions as known, but ensure we don't overflow our limits
 	p.knownTxs.Add(hashes...)
-
-	fmt.Println("sending replypooled transactions rlp", hashes)
 
 	// Not packed into PooledTransactionsPacket to avoid RLP decoding
 	return p2p.Send(p.rw, PooledTransactionsMsg, PooledTransactionsRLPPacket66{
