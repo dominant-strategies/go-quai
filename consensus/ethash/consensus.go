@@ -956,6 +956,7 @@ func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, heade
 		if context == 0 {
 			extBlockResult, extBlockErr := ethash.PrimeTraceBranch(chain, coincidentHeader, difficultyContext, primeStopHash, context, header.Location)
 			if extBlockErr != nil {
+				log.Info("GetExternalBlocks: Returning with error", "len", len(externalBlocks), "time", time.Since(start), "err", extBlockErr)
 				return nil, extBlockErr
 			}
 			externalBlocks = append(externalBlocks, extBlockResult...)

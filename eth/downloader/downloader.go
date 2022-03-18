@@ -1522,9 +1522,9 @@ func (d *Downloader) fetchParts(deliveryCh chan dataPack, deliver func(dataPack)
 					continue
 				}
 				if request.From > 0 {
-					log.Info("Requesting new batch of data", "type", kind, "from", request.From)
+					peer.log.Trace("Requesting new batch of data", "type", kind, "from", request.From)
 				} else {
-					log.Info("Requesting new batch of data", "type", kind, "count", len(request.Headers), "from", request.Headers[0].Number)
+					peer.log.Trace("Requesting new batch of data", "type", kind, "count", len(request.Headers), "from", request.Headers[0].Number)
 				}
 				// Fetch the chunk and make sure any errors return the hashes to the queue
 				if fetchHook != nil {
