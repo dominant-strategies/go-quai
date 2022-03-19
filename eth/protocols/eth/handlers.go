@@ -255,32 +255,32 @@ func answerGetExtBlocksQuery(backend Backend, query GetExtBlocksPacket, peer *Pe
 	// Gather state data until the fetch or network limits is reached
 	// Temporary comments to test sync without ext block request
 	var (
-		// bytes     int
+		bytes     int
 		extBlocks []rlp.RawValue
 	)
-	// for _, hash := range query {
-	// 	if bytes >= softResponseLimit {
-	// 		log.Warn("Hitting softResponseLimit in answerGetExtBlocksQuery")
-	// 		break
-	// 	}
-	// 	// Retrieve the requested block's external blocks
-	// 	header := backend.Chain().GetHeaderByHash(hash)
-	// 	if header == nil {
-	// 		continue
-	// 	}
-	// 	results, err := backend.Chain().GetExternalBlocks(header)
-	// 	if err != nil {
-	// 		log.Info("answerGetExtBlocks: Unable to retrieve ext blocks", "hash", hash, "len", len(results))
-	// 		continue
-	// 	}
-	// 	// If known, encode and queue for response packet
-	// 	if encoded, err := rlp.EncodeToBytes(results); err != nil {
-	// 		log.Error("Failed to encode external block", "err", err)
-	// 	} else {
-	// 		extBlocks = append(extBlocks, encoded)
-	// 		bytes += len(encoded)
-	// 	}
-	// }
+	for _, hash := range query {
+		if bytes >= softResponseLimit {
+			log.Warn("Hitting softResponseLimit in answerGetExtBlocksQuery")
+			break
+		}
+		// Retrieve the requested block's external blocks
+		header := backend.Chain().GetHeaderByHash(hash)
+		if header == nil {
+			continue
+		}
+		results, err := backend.Chain().GetExternalBlocks(header)
+		if err != nil {
+			log.Info("answerGetExtBlocks: Unable to retrieve ext blocks", "hash", hash, "len", len(results))
+			continue
+		}
+		// If known, encode and queue for response packet
+		if encoded, err := rlp.EncodeToBytes(results); err != nil {
+			log.Error("Failed to encode external block", "err", err)
+		} else {
+			extBlocks = append(extBlocks, encoded)
+			bytes += len(encoded)
+		}
+	}
 	return extBlocks
 }
 
