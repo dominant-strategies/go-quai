@@ -620,6 +620,7 @@ func (ethash *Ethash) checkPoW(chain consensus.ChainHeaderReader, header *types.
 }
 
 func (ethash *Ethash) GetDifficultyContext(chain consensus.ChainHeaderReader, header *types.Header, context int) (int, error) {
+	start := time.Now()
 	difficultyContext := context
 	if header == nil {
 		return types.ContextDepth, errors.New("error checking difficulty context")
@@ -641,6 +642,7 @@ func (ethash *Ethash) GetDifficultyContext(chain consensus.ChainHeaderReader, he
 			return types.ContextDepth, errors.New("error checking difficulty context")
 		}
 	}
+	log.Info("GetDifficultyContext", "time", time.Since(start), "num", header.Number, "loc", header.Location)
 	return difficultyContext, nil
 }
 
@@ -666,6 +668,7 @@ func (ethash *Ethash) Finalize(chain consensus.ChainHeaderReader, header *types.
 	header.Root[types.QuaiNetworkContext] = state.IntermediateRoot(chain.Config().IsEIP158(header.Number[types.QuaiNetworkContext]))
 }
 
+// Iterate back through headers to find ones that exceed a given context.
 func (ethash *Ethash) GetCoincidentHeader(chain consensus.ChainHeaderReader, context int, header *types.Header) (*types.Header, int) {
 	// If we are at the highest context, no coincident will include it.
 	if context == 0 {
@@ -705,6 +708,16 @@ func (ethash *Ethash) GetCoincidentHeader(chain consensus.ChainHeaderReader, con
 			header = prevHeader
 		}
 	}
+}
+
+// Check difficulty of previous header in order to find traceability.
+func (ethash *Ethash) CheckPrevHeaderCoincident(chain consensus.ChainHeaderReader, context int, header *types.Header) (int, error) {
+	// If we are at the highest context, no coincident will include it.
+	difficultyContext, err := ethash.GetDifficultyContext(chain, header, context)
+	if err != nil {
+		return difficultyContext, fmt.Errorf("difficulty not found")
+	}
+	return difficultyContext, nil
 }
 
 // GetStopHash returns the N-1 hash that is used to terminate on during TraceBranch.
@@ -945,16 +958,20 @@ func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, heade
 	if header.Number[context].Cmp(big.NewInt(1)) > 0 {
 		// Skip pending block
 		prevHeader := chain.GetHeaderByHash(header.ParentHash[context])
-		coincidentHeader, difficultyContext := ethash.GetCoincidentHeader(chain, context, prevHeader)
-		// Only run if we are the block immediately following the coincident block. Check below is to make sure we are N+1.
-		if coincidentHeader == nil || coincidentHeader.Number[context].Cmp(prevHeader.Number[context]) != 0 {
+		difficultyContext, err := ethash.CheckPrevHeaderCoincident(chain, context, prevHeader)
+		if err != nil {
+			return nil, err
+		}
+
+		// Check if in Zone and PrevHeader is not a coincident header, no external blocks to trace.
+		if context == 2 && difficultyContext == 2 {
 			return externalBlocks, nil
 		}
 
 		// Get the Prime stopHash to be used in the Prime context. Go on to trace Prime once.
-		primeStopHash, primeNum := ethash.GetStopHash(chain, context, 0, coincidentHeader)
+		primeStopHash, primeNum := ethash.GetStopHash(chain, context, 0, prevHeader)
 		if context == 0 {
-			extBlockResult, extBlockErr := ethash.PrimeTraceBranch(chain, coincidentHeader, difficultyContext, primeStopHash, context, header.Location)
+			extBlockResult, extBlockErr := ethash.PrimeTraceBranch(chain, prevHeader, difficultyContext, primeStopHash, context, header.Location)
 			if extBlockErr != nil {
 				log.Info("GetExternalBlocks: Returning with error", "len", len(externalBlocks), "time", time.Since(start), "err", extBlockErr)
 				return nil, extBlockErr
@@ -965,9 +982,9 @@ func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, heade
 		// If we are in a Region or Zone context, we may need to change our Prime stopHash since
 		// a Region block might not yet have been found. Scenario: [2, 2, 2] mined before [1, 2, 2].
 		if context == 1 || context == 2 {
-			regionStopHash, regionNum := ethash.GetStopHash(chain, context, 1, coincidentHeader)
+			regionStopHash, regionNum := ethash.GetStopHash(chain, context, 1, prevHeader)
 			if difficultyContext == 0 {
-				extBlockResult, extBlockErr := ethash.PrimeTraceBranch(chain, coincidentHeader, difficultyContext, primeStopHash, context, header.Location)
+				extBlockResult, extBlockErr := ethash.PrimeTraceBranch(chain, prevHeader, difficultyContext, primeStopHash, context, header.Location)
 				if extBlockErr != nil {
 					log.Info("GetExternalBlocks: Returning with error", "len", len(externalBlocks), "time", time.Since(start), "err", extBlockErr)
 					return nil, extBlockErr
@@ -980,7 +997,7 @@ func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, heade
 			}
 			// If we have a Region block, trace it.
 			if difficultyContext < 2 {
-				extBlockResult, extBlockErr := ethash.RegionTraceBranch(chain, coincidentHeader, 1, regionStopHash, context, header.Location)
+				extBlockResult, extBlockErr := ethash.RegionTraceBranch(chain, prevHeader, 1, regionStopHash, context, header.Location)
 				if extBlockErr != nil {
 					log.Info("GetExternalBlocks: Returning with error", "len", len(externalBlocks), "time", time.Since(start), "err", extBlockErr)
 					return nil, extBlockErr

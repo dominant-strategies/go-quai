@@ -2690,16 +2690,22 @@ func (bc *BlockChain) GetExternalBlocks(header *types.Header) ([]*types.External
 
 	// Do not run on block 1
 	if header.Number[context].Cmp(big.NewInt(1)) > 0 {
-		coincidentHeader, difficultyContext := bc.engine.GetCoincidentHeader(bc, context, header)
-		if coincidentHeader == nil || coincidentHeader.Number[context].Cmp(header.Number[context]) != 0 {
+		prevHeader := bc.GetHeaderByHash(header.ParentHash[context])
+		difficultyContext, err := bc.engine.CheckPrevHeaderCoincident(bc, context, prevHeader)
+		if err != nil {
+			return nil, err
+		}
+
+		// Check if in Zone and PrevHeader is not a coincident header, no external blocks to trace.
+		if context == 2 && difficultyContext == 2 {
 			return externalBlocks, nil
 		}
 
 		// Get the Prime stopHash to be used in the Prime context. Go on to trace Prime once.
 		// Get the Prime stopHash to be used in the Prime context. Go on to trace Prime once.
-		primeStopHash, primeNum := bc.engine.GetStopHash(bc, context, 0, coincidentHeader)
+		primeStopHash, primeNum := bc.engine.GetStopHash(bc, context, 0, prevHeader)
 		if context == 0 {
-			extBlockResult, extBlockErr := bc.engine.PrimeTraceBranch(bc, coincidentHeader, difficultyContext, primeStopHash, context, header.Location)
+			extBlockResult, extBlockErr := bc.engine.PrimeTraceBranch(bc, prevHeader, difficultyContext, primeStopHash, context, header.Location)
 			if extBlockErr != nil {
 				return nil, extBlockErr
 			}
@@ -2707,9 +2713,9 @@ func (bc *BlockChain) GetExternalBlocks(header *types.Header) ([]*types.External
 		}
 
 		if context == 1 || context == 2 {
-			regionStopHash, regionNum := bc.engine.GetStopHash(bc, context, 1, coincidentHeader)
+			regionStopHash, regionNum := bc.engine.GetStopHash(bc, context, 1, prevHeader)
 			if difficultyContext == 0 {
-				extBlockResult, extBlockErr := bc.engine.PrimeTraceBranch(bc, coincidentHeader, difficultyContext, primeStopHash, context, coincidentHeader.Location)
+				extBlockResult, extBlockErr := bc.engine.PrimeTraceBranch(bc, prevHeader, difficultyContext, primeStopHash, context, prevHeader.Location)
 				if extBlockErr != nil {
 					return nil, extBlockErr
 				}
@@ -2721,7 +2727,7 @@ func (bc *BlockChain) GetExternalBlocks(header *types.Header) ([]*types.External
 			}
 			// If we have a Region block, trace it.
 			if difficultyContext < 2 {
-				extBlockResult, extBlockErr := bc.engine.RegionTraceBranch(bc, coincidentHeader, 1, regionStopHash, context, coincidentHeader.Location)
+				extBlockResult, extBlockErr := bc.engine.RegionTraceBranch(bc, prevHeader, 1, regionStopHash, context, prevHeader.Location)
 				if extBlockErr != nil {
 					return nil, extBlockErr
 				}
