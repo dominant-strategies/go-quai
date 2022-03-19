@@ -620,7 +620,6 @@ func (ethash *Ethash) checkPoW(chain consensus.ChainHeaderReader, header *types.
 }
 
 func (ethash *Ethash) GetDifficultyContext(chain consensus.ChainHeaderReader, header *types.Header, context int) (int, error) {
-	start := time.Now()
 	difficultyContext := context
 	if header == nil {
 		return types.ContextDepth, errors.New("error checking difficulty context")
@@ -642,7 +641,6 @@ func (ethash *Ethash) GetDifficultyContext(chain consensus.ChainHeaderReader, he
 			return types.ContextDepth, errors.New("error checking difficulty context")
 		}
 	}
-	log.Info("GetDifficultyContext", "time", time.Since(start), "num", header.Number, "loc", header.Location)
 	return difficultyContext, nil
 }
 
@@ -963,6 +961,7 @@ func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, heade
 			return nil, err
 		}
 
+		log.Info("GetExternalBlocks: Retrieved difficultyContext", "difficultyContext", difficultyContext, "context", context)
 		// Check if in Zone and PrevHeader is not a coincident header, no external blocks to trace.
 		if context == 2 && difficultyContext == 2 {
 			return externalBlocks, nil
