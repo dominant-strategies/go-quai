@@ -1211,7 +1211,7 @@ func RPCMarshalEthHeader(head *types.Header) map[string]interface{} {
 		bloom = head.Bloom[context]
 	}
 	result := map[string]interface{}{
-		"number":           head.Number[context],
+		"number":           fmt.Sprintf("0x%x", head.Number[context]),
 		"hash":             head.Hash(),
 		"parentHash":       head.ParentHash[context],
 		"nonce":            head.Nonce,
@@ -1227,9 +1227,10 @@ func RPCMarshalEthHeader(head *types.Header) map[string]interface{} {
 		"gasUsed":          head.GasUsed[context],
 		"timestamp":        head.Time,
 		"transactionsRoot": head.TxHash[context],
+		"receiptsRoot":     head.ReceiptHash[context],
 	}
 	if head.BaseFee[context] != nil {
-		result["baseFeePerGas"] = head.BaseFee[context]
+		result["baseFeePerGas"] = (*hexutil.Big)(head.BaseFee[context])
 	}
 	return result
 }
@@ -1301,7 +1302,7 @@ func RPCMarshalReceipt(receipt *types.Receipt) (map[string]interface{}, error) {
 // a `PublicBlockchainAPI`.
 func (s *PublicBlockChainAPI) rpcMarshalEthHeader(ctx context.Context, header *types.Header) map[string]interface{} {
 	fields := RPCMarshalEthHeader(header)
-	fields["totalDifficulty"] = (*hexutil.Big)(s.b.GetTd(ctx, header.Hash()))
+	// fields["totalDifficulty"] = (*hexutil.Big)(s.b.GetTd(ctx, header.Hash()))
 	return fields
 }
 
