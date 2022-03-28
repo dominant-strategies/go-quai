@@ -1221,7 +1221,6 @@ func RPCMarshalEthHeader(head *types.Header) map[string]interface{} {
 		"miner":            head.Coinbase[context],
 		"difficulty":       head.Difficulty[context],
 		"totalDifficulty":  head.NetworkDifficulty[context],
-		"extraData":        head.Extra[context],
 		"size":             hexutil.Uint64(head.Size()),
 		"gasLimit":         head.GasLimit[context],
 		"gasUsed":          head.GasUsed[context],
