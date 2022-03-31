@@ -34,6 +34,11 @@ func (al *accessList) ContainsAddress(address common.Address) bool {
 // Contains checks if a slot within an account is present in the access list, returning
 // separate flags for the presence of the account and the slot respectively.
 func (al *accessList) Contains(address common.Address, slot common.Hash) (addressPresent bool, slotPresent bool) {
+
+	if al == nil {
+		return false, false
+	}
+
 	idx, ok := al.addresses[address]
 	if !ok {
 		// no such address (and hence zero slots)
@@ -91,6 +96,11 @@ func (al *accessList) AddAddress(address common.Address) bool {
 // - slot added
 // For any 'true' value returned, a corresponding journal entry must be made.
 func (al *accessList) AddSlot(address common.Address, slot common.Hash) (addrChange bool, slotChange bool) {
+
+	if al == nil {
+		return false, false
+	}
+
 	idx, addrPresent := al.addresses[address]
 	if !addrPresent || idx == -1 {
 		// Address not present, or addr present but no slots there

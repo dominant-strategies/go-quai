@@ -1703,8 +1703,8 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 			}
 			deletedTxs = append(deletedTxs, currentBlock.Transactions()...)
 			collectLogs(currentBlock.Hash())
-
-			currentBlock = bc.GetBlock(currentBlock.ParentHash(), currentBlock.NumberU64())
+			fmt.Println("hash", currentBlock.ParentHash(), " number ", currentBlock.NumberU64()-1)
+			currentBlock = bc.GetBlock(currentBlock.ParentHash(), currentBlock.NumberU64()-1)
 			if currentBlock == nil {
 				return fmt.Errorf("invalid current chain")
 			}
