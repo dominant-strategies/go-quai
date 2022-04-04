@@ -112,8 +112,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		hashedTxList := types.DeriveSha(externalBlock.Transactions(), trie.NewStackTrie(nil))
 		if externalBlock.Header().TxHash[externalBlock.Context().Int64()] != hashedTxList {
 			fmt.Println("Bad external block: Transaction hash not equal to txs", externalBlock.Header().TxHash[externalBlock.Context().Int64()], hashedTxList)
-			continue
-			// return nil, nil, uint64(0), nil, err
+			return nil, nil, uint64(0), nil, err
 		}
 
 		for _, tx := range externalBlock.Transactions() {
@@ -131,7 +130,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 			receipt, err := applyExternalTransaction(msg, p.config, p.bc, nil, gp, statedb, blockNumber, blockHash, externalBlock, tx, usedGas, vmenv)
 			if err != nil {
 				log.Warn("Could not apply etx", "i", i, "hash", tx.Hash().Hex(), "err", err)
-				continue
+				return nil, nil, uint64(0), nil, err
 			}
 			receipts = append(receipts, receipt)
 			allLogs = append(allLogs, receipt.Logs...)
