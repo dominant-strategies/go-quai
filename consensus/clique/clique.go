@@ -606,6 +606,11 @@ func (c *Clique) GetCoincidentHeader(chain consensus.ChainHeaderReader, context 
 	return nil, 0
 }
 
+// CheckPrevHeaderCoincident checks if previous header is a coincident header.
+func (c *Clique) CheckPrevHeaderCoincident(chain consensus.ChainHeaderReader, context int, header *types.Header) (int, error) {
+	return 0, nil
+}
+
 // GetStopHash retrieves the stop hash for tracing of blocks in a trace branch
 func (c *Clique) GetStopHash(chain consensus.ChainHeaderReader, difficultyContext int, originalContext int, startingHeader *types.Header) (common.Hash, int) {
 	return common.Hash{}, 0
