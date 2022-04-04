@@ -406,8 +406,6 @@ func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*
 		b.header.Bloom = []Bloom{CreateBloom(receipts), CreateBloom(receipts), CreateBloom(receipts)}
 	}
 
-	b.header.UncleHash = EmptyUncleHash
-
 	if len(uncles) == 0 {
 		b.header.UncleHash = EmptyUncleHash
 	} else {
