@@ -112,7 +112,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		hashedTxList := types.DeriveSha(externalBlock.Transactions(), trie.NewStackTrie(nil))
 		if externalBlock.Header().TxHash[externalBlock.Context().Int64()] != hashedTxList {
 			fmt.Println("Bad external block: Transaction hash not equal to txs", externalBlock.Header().TxHash[externalBlock.Context().Int64()], hashedTxList)
-			return nil, nil, uint64(0), nil, err
+			return nil, nil, uint64(0), nil, fmt.Errorf("Bad external block: Transaction hash not equal to txs %v, %v", externalBlock.Header().TxHash[externalBlock.Context().Int64()], hashedTxList)
 		}
 
 		for _, tx := range externalBlock.Transactions() {
