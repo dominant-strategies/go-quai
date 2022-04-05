@@ -647,7 +647,6 @@ func (ethash *Ethash) GetDifficultyContext(chain consensus.ChainHeaderReader, he
 // Prepare implements consensus.Engine, initializing the difficulty field of a
 // header to conform to the ethash protocol. The changes are done inline.
 func (ethash *Ethash) Prepare(chain consensus.ChainHeaderReader, header *types.Header) error {
-	fmt.Println("prepare: header hash", header.ParentHash[types.QuaiNetworkContext])
 	parent := chain.GetHeader(header.ParentHash[types.QuaiNetworkContext], header.Number[types.QuaiNetworkContext].Uint64()-1)
 	if parent == nil {
 		return consensus.ErrUnknownAncestor

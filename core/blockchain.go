@@ -1465,17 +1465,13 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 	// Calculate the total difficulty of the block
 	ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
-	fmt.Println("parent total diff:", ptd)
 	if ptd == nil {
 		return NonStatTy, consensus.ErrUnknownAncestor
 	}
 
-	fmt.Println("coincident num:", block.Number(), block.Number().Cmp(big.NewInt(1)) < 1)
 	if types.QuaiNetworkContext > 0 && block.Number().Cmp(big.NewInt(1)) < 1 {
 		coincident, index := bc.Engine().GetCoincidentHeader(bc, types.QuaiNetworkContext, block.Header())
-		fmt.Println("network diff and index:", coincident.NetworkDifficulty, index)
 		ptd = coincident.NetworkDifficulty[index]
-		fmt.Println("coincident parent total diff:", ptd)
 	}
 
 	// Make sure no inconsistent state is leaked during insertion
@@ -1711,7 +1707,6 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 			}
 			deletedTxs = append(deletedTxs, currentBlock.Transactions()...)
 			collectLogs(currentBlock.Hash())
-
 			currentBlock = bc.GetBlock(currentBlock.ParentHash(), currentBlock.NumberU64()-1)
 			if currentBlock == nil {
 				return fmt.Errorf("invalid current chain")
