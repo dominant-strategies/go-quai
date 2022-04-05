@@ -133,6 +133,9 @@ type Engine interface {
 	// RegionTraceBranch recursively traces region branches to find.
 	RegionTraceBranch(chain ChainHeaderReader, header *types.Header, context int, stopHash common.Hash, originalContext int, originalLocation []byte) ([]*types.ExternalBlock, error)
 
+	// GetLinkExternalBlocks links every block to the correct previous block
+	GetLinkExternalBlocks(chain ChainHeaderReader, header *types.Header, logging bool) ([]*types.ExternalBlock, error)
+
 	// Seal generates a new sealing request for the given input block and pushes
 	// the result into the given channel.
 	//

@@ -625,6 +625,10 @@ func (c *Clique) RegionTraceBranch(chain consensus.ChainHeaderReader, header *ty
 	return make([]*types.ExternalBlock, 0), nil
 }
 
+func (c *Clique) GetLinkExternalBlocks(chain consensus.ChainHeaderReader, header *types.Header, logging bool) ([]*types.ExternalBlock, error) {
+	return make([]*types.ExternalBlock, 0), nil
+}
+
 // Authorize injects a private key into the consensus engine to mint new blocks
 // with.
 func (c *Clique) Authorize(signer common.Address, signFn SignerFn) {
