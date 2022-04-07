@@ -1020,8 +1020,8 @@ func (ethash *Ethash) GetLinkExternalBlocks(chain consensus.ChainHeaderReader, h
 	externalBlocks := make([]*types.ExternalBlock, 0)
 	fmt.Println("GetLinkExternalBlocks: Getting trace for block", "num", header.Number, "context", context, "location", header.Location, "hash", header.Hash())
 	fmt.Println("Getting Link blocks")
-	// Do not run on block 1
-	if header.Number[context].Cmp(big.NewInt(1)) > 0 {
+	// Do not run on block 0
+	if header.Number[context].Cmp(big.NewInt(0)) > 0 {
 		difficultyContext, err := ethash.GetDifficultyContext(chain, header, context)
 		fmt.Println("DifficultyContext - GetLinkExternalBlocks", difficultyContext)
 		// Only run if we are the block immediately following the coincident block. Check below is to make sure we are N+1.
