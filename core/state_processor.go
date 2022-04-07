@@ -82,6 +82,8 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 
 	// Get the linkBlocks and check linkage to previous external blocks.
 	linkExtBlocks, err := p.engine.GetLinkExternalBlocks(p.bc, header, true)
+
+	fmt.Println(linkExtBlocks, len(linkExtBlocks))
 	if err != nil {
 		return nil, nil, uint64(0), nil, err
 	}
@@ -526,20 +528,24 @@ func (p *StateProcessor) checkExternalBlockLink(externalBlocks []*types.External
 		}
 	}
 
+	fmt.Println(p.blockLink)
+
+	fmt.Println(linkBlocks.prime, linkBlocks.regions, p.blockLink.regions)
+
 	// Verify that the externalBlocks provided link with previous coincident blocks.
 	if linkBlocks.prime != (common.Hash{}) && linkBlocks.prime != p.blockLink.prime {
 		fmt.Println("Error linking external blocks: have prime: ", p.blockLink.prime, "want prime: ", linkBlocks.prime)
-		return fmt.Errorf("unable to link external blocks in prime")
+		// return fmt.Errorf("unable to link external blocks in prime")
 	} else {
 		for i := range linkBlocks.regions {
 			if linkBlocks.regions[i] != (common.Hash{}) && linkBlocks.regions[i] != p.blockLink.regions[i] {
 				fmt.Println("Error linking external blocks:", "location", i+1, "have region: ", p.blockLink.regions[i], "want region: ", linkBlocks.regions[i])
-				return fmt.Errorf("unable to link external blocks in region")
+				// return fmt.Errorf("unable to link external blocks in region")
 			}
 			for j := range linkBlocks.zones[i] {
 				if linkBlocks.zones[i][j] != (common.Hash{}) && linkBlocks.zones[i][j] != p.blockLink.zones[i][j] {
 					fmt.Println("Error linking external blocks:", "location", i+1, j+1, "have zone: ", p.blockLink.zones[i][j], "want zone: ", linkBlocks.zones[i][j])
-					return fmt.Errorf("unable to link external blocks in zone")
+					// return fmt.Errorf("unable to link external blocks in zone")
 				}
 			}
 		}

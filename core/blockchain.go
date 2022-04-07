@@ -416,7 +416,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	}
 
 	// Once we have updated the state of the chain, generate the extBlockLink struct for processing of ext blocks.
-	// bc.processor.GenerateExtBlockLink()
+	bc.processor.GenerateExtBlockLink()
 
 	return bc, nil
 }
@@ -2445,7 +2445,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	}
 
 	// Reset the blockLink in the blockchain state processor.
-	// bc.processor.GenerateExtBlockLink()
+	bc.processor.GenerateExtBlockLink()
 
 	return nil
 }
