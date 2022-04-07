@@ -1023,6 +1023,7 @@ func (ethash *Ethash) GetLinkExternalBlocks(chain consensus.ChainHeaderReader, h
 	// Do not run on block 1
 	if header.Number[context].Cmp(big.NewInt(1)) > 0 {
 		difficultyContext, err := ethash.GetDifficultyContext(chain, header, context)
+		fmt.Println("DifficultyContext - GetLinkExternalBlocks", difficultyContext)
 		// Only run if we are the block immediately following the coincident block. Check below is to make sure we are N+1.
 		if err != nil {
 			return externalBlocks, nil
