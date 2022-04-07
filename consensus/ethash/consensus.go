@@ -807,7 +807,7 @@ func (ethash *Ethash) PrimeTraceBranch(chain consensus.ChainHeaderReader, header
 			return extBlocks, nil
 		}
 		extBlocks = append(extBlocks, extBlock)
-		fmt.Println("Trace Branch: PRIME Adding external block", "number", header.Number, "context", context, "location", header.Location, "hash", header.Hash())
+		fmt.Println("Trace Branch: PRIME Adding external block", "number", header.Number, "context", context, "location", header.Location, "hash", header.Hash(), "prevHash", header.ParentHash[context])
 		if header.ParentHash[context] == stopHash {
 			fmt.Println("Trace Branch: Stopping on stop hash or num is 1", "number", header.Number, "context", context, "location", header.Location, "hash", header.ParentHash[context])
 			break
@@ -943,7 +943,6 @@ func (ethash *Ethash) RegionTraceBranch(chain consensus.ChainHeaderReader, heade
 			break
 		}
 	}
-	fmt.Println("Prime trace ext blocks", extBlocks)
 	return extBlocks, nil
 }
 
