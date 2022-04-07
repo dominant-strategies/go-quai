@@ -48,6 +48,9 @@ type ChainHeaderReader interface {
 	// GetExternalBlocks retrieve all external blocks for a header.
 	GetExternalBlocks(header *types.Header) ([]*types.ExternalBlock, error)
 
+	// GetExternalBlocks retrieve all external link blocks for a header.
+	GetLinkExternalBlocks(header *types.Header) ([]*types.ExternalBlock, error)
+
 	// GetExternalBlock retrieves an external block header by its hash and context.
 	GetExternalBlock(hash common.Hash, number uint64, context uint64) (*types.ExternalBlock, error)
 

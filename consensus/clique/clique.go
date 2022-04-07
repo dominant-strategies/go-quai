@@ -596,6 +596,11 @@ func (c *Clique) GetExternalBlocks(chain consensus.ChainHeaderReader, header *ty
 	return make([]*types.ExternalBlock, 0), nil
 }
 
+// GetExternalBlocks traces all available branches to find external blocks
+func (c *Clique) GetLinkExternalBlocks(chain consensus.ChainHeaderReader, header *types.Header, logging bool) ([]*types.ExternalBlock, error) {
+	return make([]*types.ExternalBlock, 0), nil
+}
+
 // GetCoincidentHeader retrieves the furthest coincident header back
 func (c *Clique) GetDifficultyContext(chain consensus.ChainHeaderReader, header *types.Header, context int) (int, error) {
 	return 0, nil
@@ -622,10 +627,6 @@ func (c *Clique) PrimeTraceBranch(chain consensus.ChainHeaderReader, header *typ
 }
 
 func (c *Clique) RegionTraceBranch(chain consensus.ChainHeaderReader, header *types.Header, context int, stopHash common.Hash, originalContext int, originalLocation []byte) ([]*types.ExternalBlock, error) {
-	return make([]*types.ExternalBlock, 0), nil
-}
-
-func (c *Clique) GetLinkExternalBlocks(chain consensus.ChainHeaderReader, header *types.Header, logging bool) ([]*types.ExternalBlock, error) {
 	return make([]*types.ExternalBlock, 0), nil
 }
 

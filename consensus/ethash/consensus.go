@@ -809,7 +809,7 @@ func (ethash *Ethash) PrimeTraceBranch(chain consensus.ChainHeaderReader, header
 		extBlocks = append(extBlocks, extBlock)
 		fmt.Println("Trace Branch: PRIME Adding external block", "number", header.Number, "context", context, "location", header.Location, "hash", header.Hash(), "prevHash", header.ParentHash[context])
 		if header.ParentHash[context] == stopHash {
-			fmt.Println("Trace Branch: Stopping on stop hash or num is 1", "number", header.Number, "context", context, "location", header.Location, "hash", header.ParentHash[context])
+			fmt.Println("Trace Branch: Stopping on stop hash or num is 1", "number", header.Number, "context", context, "location", header.Location, "prevHash", header.ParentHash[context])
 			break
 		}
 
@@ -822,7 +822,7 @@ func (ethash *Ethash) PrimeTraceBranch(chain consensus.ChainHeaderReader, header
 		// Retrieve the previous header as an external block.
 		prevHeader, err := chain.GetExternalBlock(header.ParentHash[context], header.Number[context].Uint64()-1, uint64(context))
 		if err != nil {
-			fmt.Println("Trace Branch: External Block not found for previous header", "number", header.Number[context].Int64()-1, "context", context, "hash", header.ParentHash[context], "location", header.Location)
+			fmt.Println("Trace Branch: External Block not found for previous header", "number", header.Number[context].Int64()-1, "context", context, "prevHash", header.ParentHash[context], "location", header.Location)
 			return extBlocks, nil
 		}
 
@@ -906,20 +906,20 @@ func (ethash *Ethash) RegionTraceBranch(chain consensus.ChainHeaderReader, heade
 		// Stop on the passed in stopHash
 		fmt.Println("Region stopHash", header.ParentHash[context], stopHash)
 		if header.ParentHash[context] == stopHash {
-			fmt.Println("Trace Branch: Stopping on stop hash or num is 1", "number", header.Number, "context", context, "location", header.Location, "hash", header.ParentHash[context])
+			fmt.Println("Trace Branch: Stopping on stop hash or num is 1", "number", header.Number, "context", context, "location", header.Location, "prevHash", header.ParentHash[context])
 			break
 		}
 
 		// Do not continue at header number == 1 since we are unable to obtain the Genesis as an external block.
 		if header.Number[context].Cmp(big.NewInt(1)) == 0 {
-			fmt.Println("Trace Branch: Stopping height == 1", "number", header.Number, "context", context, "location", header.Location, "hash", header.ParentHash[context])
+			fmt.Println("Trace Branch: Stopping height == 1", "number", header.Number, "context", context, "location", header.Location, "prevHash", header.ParentHash[context])
 			break
 		}
 
 		// Retrieve the previous header as an external block.
 		prevHeader, err := chain.GetExternalBlock(header.ParentHash[context], header.Number[context].Uint64()-1, uint64(context))
 		if err != nil {
-			fmt.Println("Trace Branch: External Block not found for previous header", "number", header.Number[context].Int64()-1, "context", context, "hash", header.ParentHash[context], "location", header.Location)
+			fmt.Println("Trace Branch: External Block not found for previous header", "number", header.Number[context].Int64()-1, "context", context, "prevHash", header.ParentHash[context], "location", header.Location)
 			break
 		}
 

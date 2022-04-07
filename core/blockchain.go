@@ -2758,6 +2758,66 @@ func (bc *BlockChain) GetExternalBlocks(header *types.Header) ([]*types.External
 	return externalBlocks, nil
 }
 
+// GetLinkExternalBlocks retrieves the external link blocks for a given header. Will call the necessary
+// TraceBranch functionality.
+func (bc *BlockChain) GetLinkExternalBlocks(header *types.Header) ([]*types.ExternalBlock, error) {
+	// Lookup block in externalBlocks cache
+	context := bc.Config().Context // Index that node is currently at
+	externalBlocks := make([]*types.ExternalBlock, 0)
+
+	// Check if header is nil
+	if header == nil || header.Number == nil {
+		return externalBlocks, nil
+	}
+
+	difficultyContext, err := bc.engine.GetDifficultyContext(bc, header, context)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check if in Zone and PrevHeader is not a coincident header, no external blocks to trace.
+	if context == 2 && difficultyContext == 2 {
+		return externalBlocks, nil
+	}
+
+	// Get the Prime stopHash to be used in the Prime context. Go on to trace Prime once.
+	primeStopHash := header.ParentHash[0]
+	if context == 0 {
+		extBlockResult, extBlockErr := bc.engine.PrimeTraceBranch(bc, header, difficultyContext, primeStopHash, context, header.Location)
+		if extBlockErr != nil {
+			return nil, extBlockErr
+		}
+		externalBlocks = append(externalBlocks, extBlockResult...)
+	}
+
+	if context == 1 || context == 2 {
+		primeStopHash, primeNum := bc.engine.GetStopHash(bc, context, 0, header)
+
+		regionStopHash, regionNum := bc.engine.GetStopHash(bc, context, 1, header)
+		if difficultyContext == 0 {
+			extBlockResult, extBlockErr := bc.engine.PrimeTraceBranch(bc, header, difficultyContext, primeStopHash, context, header.Location)
+			if extBlockErr != nil {
+				return nil, extBlockErr
+			}
+			externalBlocks = append(externalBlocks, extBlockResult...)
+		}
+		// If our Prime stopHash comes before our Region stopHash
+		if primeNum < regionNum {
+			regionStopHash = primeStopHash
+		}
+		// If we have a Region block, trace it.
+		if difficultyContext < 2 {
+			extBlockResult, extBlockErr := bc.engine.RegionTraceBranch(bc, header, 1, regionStopHash, context, header.Location)
+			if extBlockErr != nil {
+				return nil, extBlockErr
+			}
+			externalBlocks = append(externalBlocks, extBlockResult...)
+		}
+	}
+
+	return externalBlocks, nil
+}
+
 // QueueExternalBlocks takes a set of external blocks and adds them to the queue
 func (bc *BlockChain) QueueAndRetrieveExtBlocks(externalBlocks []*types.ExternalBlock, header *types.Header) []*types.ExternalBlock {
 	for _, block := range externalBlocks {

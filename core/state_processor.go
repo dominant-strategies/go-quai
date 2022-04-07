@@ -333,6 +333,7 @@ func (p *StateProcessor) GenerateExtBlockLink() {
 	}
 
 	currentHeader := p.bc.CurrentHeader()
+	fmt.Println("Current Header Number", currentHeader.Number)
 	if currentHeader.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) < 1 {
 		p.blockLink = linkBlocks
 		return
@@ -343,7 +344,7 @@ func (p *StateProcessor) GenerateExtBlockLink() {
 	for !populated {
 
 		// Populate the linkBlocks struct with the block hashes of the last applied ext block of that chain.
-		extBlocks, err := p.bc.GetExternalBlocks(currentHeader)
+		extBlocks, err := p.bc.GetLinkExternalBlocks(currentHeader)
 		if err != nil {
 			log.Error("GenerateExtBlockLink:", "err", err)
 		}
@@ -437,22 +438,21 @@ func (p *StateProcessor) generateLinkBlocksLastApplied(externalBlocks []*types.E
 		copy(startingLinkBlocks.zones[i], linkBlocks.zones[i])
 	}
 
+	fmt.Println("generateLinkBlocksLastApplied: Len ext blocks", len(externalBlocks))
+
 	// iterate through the extBlocks, updated the index with the last applied external blocks.
 	for _, lastAppliedBlock := range externalBlocks {
 		switch lastAppliedBlock.Context().Int64() {
 		case 0:
 			if linkBlocks.prime == startingLinkBlocks.prime {
-				fmt.Println("setting last applied prime:", lastAppliedBlock.Header().Number, lastAppliedBlock.Header().Location, lastAppliedBlock.Context(), lastAppliedBlock.Hash())
 				linkBlocks.prime = lastAppliedBlock.Hash()
 			}
 		case 1:
 			if linkBlocks.regions[lastAppliedBlock.Header().Location[0]-1] == startingLinkBlocks.regions[lastAppliedBlock.Header().Location[0]-1] {
-				fmt.Println("setting last applied region:", lastAppliedBlock.Header().Number, lastAppliedBlock.Header().Location, lastAppliedBlock.Context(), lastAppliedBlock.Hash())
 				linkBlocks.regions[lastAppliedBlock.Header().Location[0]-1] = lastAppliedBlock.Hash()
 			}
 		case 2:
 			if linkBlocks.zones[lastAppliedBlock.Header().Location[0]-1][lastAppliedBlock.Header().Location[1]-1] == startingLinkBlocks.zones[lastAppliedBlock.Header().Location[0]-1][lastAppliedBlock.Header().Location[1]-1] {
-				fmt.Println("setting last applied zone:", lastAppliedBlock.Header().Number, lastAppliedBlock.Header().Location, lastAppliedBlock.Context(), lastAppliedBlock.Hash())
 				linkBlocks.zones[lastAppliedBlock.Header().Location[0]-1][lastAppliedBlock.Header().Location[1]-1] = lastAppliedBlock.Hash()
 			}
 		}
@@ -535,17 +535,17 @@ func (p *StateProcessor) checkExternalBlockLink(externalBlocks []*types.External
 	// Verify that the externalBlocks provided link with previous coincident blocks.
 	if linkBlocks.prime != (common.Hash{}) && linkBlocks.prime != p.blockLink.prime {
 		fmt.Println("Error linking external blocks: want prime: ", p.blockLink.prime, "have prime: ", linkBlocks.prime)
-		// return fmt.Errorf("unable to link external blocks in prime")
+		return fmt.Errorf("unable to link external blocks in prime")
 	} else {
 		for i := range linkBlocks.regions {
 			if linkBlocks.regions[i] != (common.Hash{}) && linkBlocks.regions[i] != p.blockLink.regions[i] {
 				fmt.Println("Error linking external blocks:", "location", i+1, "want region: ", p.blockLink.regions[i], "have region: ", linkBlocks.regions[i])
-				// return fmt.Errorf("unable to link external blocks in region")
+				return fmt.Errorf("unable to link external blocks in region")
 			}
 			for j := range linkBlocks.zones[i] {
 				if linkBlocks.zones[i][j] != (common.Hash{}) && linkBlocks.zones[i][j] != p.blockLink.zones[i][j] {
 					fmt.Println("Error linking external blocks:", "location", i+1, j+1, "want zone: ", p.blockLink.zones[i][j], "have zone: ", linkBlocks.zones[i][j])
-					// return fmt.Errorf("unable to link external blocks in zone")
+					return fmt.Errorf("unable to link external blocks in zone")
 				}
 			}
 		}
