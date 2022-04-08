@@ -377,18 +377,18 @@ func (es *EventSystem) SubscribeReOrg(reOrg chan core.ReOrgRollup) *Subscription
 
 // SubscribeChainSideEvent creates a subscription that writes the header of a block that is
 // notified as an uncle.
-func (es *EventSystem) SubscribeChainSideEvent(headers chan *types.Header) *Subscription {
+func (es *EventSystem) SubscribeChainSideEvent(sideEvent chan core.ChainSideEvent) *Subscription {
 	sub := &subscription{
 		id:        rpc.NewID(),
 		typ:       BlocksSubscription,
 		created:   time.Now(),
 		logs:      make(chan []*types.Log),
 		hashes:    make(chan []common.Hash),
-		headers:   headers,
+		headers:   make(chan *types.Header),
 		installed: make(chan struct{}),
 		err:       make(chan error),
 		reOrg:     make(chan core.ReOrgRollup),
-		sideEvent: make(chan core.ChainSideEvent),
+		sideEvent: sideEvent,
 	}
 	return es.subscribe(sub)
 }

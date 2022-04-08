@@ -251,18 +251,18 @@ func (api *PublicFilterAPI) SideEvent(ctx context.Context) (*rpc.Subscription, e
 	rpcSub := notifier.CreateSubscription()
 
 	go func() {
-		headers := make(chan *types.Header)
-		headersSub := api.events.SubscribeChainSideEvent(headers)
+		sideEvent := make(chan core.ChainSideEvent)
+		sideEventSub := api.events.SubscribeChainSideEvent(sideEvent)
 
 		for {
 			select {
-			case h := <-headers:
+			case h := <-sideEvent:
 				notifier.Notify(rpcSub.ID, h)
 			case <-rpcSub.Err():
-				headersSub.Unsubscribe()
+				sideEventSub.Unsubscribe()
 				return
 			case <-notifier.Closed():
-				headersSub.Unsubscribe()
+				sideEventSub.Unsubscribe()
 				return
 			}
 		}
