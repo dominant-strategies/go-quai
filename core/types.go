@@ -48,9 +48,4 @@ type Processor interface {
 	// the transaction messages using the statedb and applying any rewards to both
 	// the processor (coinbase) and any included uncles.
 	Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (types.Receipts, []*types.Log, uint64, []*types.ExternalBlock, error)
-
-	// GenerateExtBlockLink resets the ext block linking hashes depending on where the current head is.
-	GenerateExtBlockLink()
-
-	SetLinkBlocksToLastApplied(externalBlocks []*types.ExternalBlock)
 }
