@@ -2625,19 +2625,16 @@ func (bc *BlockChain) GetHeader(hash common.Hash, number uint64) *types.Header {
 	return bc.hc.GetHeader(hash, number)
 }
 
-// GetHeader retrieves a block header from the database by hash and number,
-// caching it if found.
+// CheckHashInclusion checks to see if a hash is already included in a previous block.
 func (bc *BlockChain) CheckHashInclusion(header *types.Header, parent *types.Header) error {
 	if types.QuaiNetworkContext < 1 {
 		if header.ParentHash[1] == parent.ParentHash[1] {
-			fmt.Println("Region hash already included:", header.ParentHash[1], parent.ParentHash[1])
 			return fmt.Errorf("error subordinate hash already included in parent")
 		}
 	}
 
 	if types.QuaiNetworkContext < 2 {
 		if header.ParentHash[2] == parent.ParentHash[2] {
-			fmt.Println("Zone hash already included:", header.ParentHash[2], parent.ParentHash[2])
 			return fmt.Errorf("error subordinate hash already included in parent")
 		}
 	}

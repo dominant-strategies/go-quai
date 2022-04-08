@@ -878,6 +878,11 @@ func (fb *filterBackend) SubscribePendingBlockEvent(ch chan<- *types.Header) eve
 func (fb *filterBackend) SubscribeReOrgEvent(ch chan<- core.ReOrgRollup) event.Subscription {
 	return nullSubscription()
 }
+
+func (fb *filterBackend) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription {
+	return nullSubscription()
+}
+
 func (fb *filterBackend) BloomStatus() (uint64, uint64) { return 4096, 0 }
 
 func (fb *filterBackend) ServiceFilter(ctx context.Context, ms *bloombits.MatcherSession) {

@@ -70,6 +70,8 @@ const (
 	logsChanSize = 10
 	// chainEvChanSize is the size of channel listening to ChainEvent.
 	chainEvChanSize = 10
+	// chainSideChanSize is the size of channel listening to ChainSideEvent.
+	chainSideChanSize = 10
 )
 
 type subscription struct {
@@ -101,6 +103,7 @@ type EventSystem struct {
 	pendingBlockSub event.Subscription // Subscription for pending block event
 	chainSub        event.Subscription // Subscription for new chain event
 	reOrgSub        event.Subscription // Subscription for reorg event
+	sideChSub       event.Subscription // Subscription for side chain event
 
 	// Channels
 	install        chan *subscription         // install filter for event notification
@@ -112,6 +115,7 @@ type EventSystem struct {
 	rmLogsCh       chan core.RemovedLogsEvent // Channel to receive removed log event
 	chainCh        chan core.ChainEvent       // Channel to receive new chain event
 	reOrgCh        chan core.ReOrgRollup      // Channel to receive reorg event data
+	sideCh         chan core.ChainSideEvent   // Channel to receive side chain event data
 }
 
 // NewEventSystem creates a new manager that listens for event on the given mux,
@@ -133,6 +137,7 @@ func NewEventSystem(backend Backend, lightMode bool) *EventSystem {
 		pendingBlockCh: make(chan *types.Header),
 		chainCh:        make(chan core.ChainEvent, chainEvChanSize),
 		reOrgCh:        make(chan core.ReOrgRollup),
+		sideCh:         make(chan core.ChainSideEvent, chainSideChanSize),
 	}
 
 	// Subscribe events
@@ -143,6 +148,7 @@ func NewEventSystem(backend Backend, lightMode bool) *EventSystem {
 	m.pendingLogsSub = m.backend.SubscribePendingLogsEvent(m.pendingLogsCh)
 	m.pendingBlockSub = m.backend.SubscribePendingBlockEvent(m.pendingBlockCh)
 	m.reOrgSub = m.backend.SubscribeReOrgEvent(m.reOrgCh)
+	m.sideChSub = m.backend.SubscribeChainSideEvent(m.sideCh)
 
 	// Make sure none of the subscriptions are empty
 	if m.txsSub == nil || m.logsSub == nil || m.rmLogsSub == nil || m.chainSub == nil || m.pendingLogsSub == nil {
@@ -355,6 +361,23 @@ func (es *EventSystem) SubscribeReOrg(reOrg chan core.ReOrgRollup) *Subscription
 		installed: make(chan struct{}),
 		err:       make(chan error),
 		reOrg:     reOrg,
+	}
+	return es.subscribe(sub)
+}
+
+// SubscribeChainSideEvent creates a subscription that writes the header of a block that is
+// notified as an uncle.
+func (es *EventSystem) SubscribeChainSideEvent(headers chan *types.Header) *Subscription {
+	sub := &subscription{
+		id:        rpc.NewID(),
+		typ:       BlocksSubscription,
+		created:   time.Now(),
+		logs:      make(chan []*types.Log),
+		hashes:    make(chan []common.Hash),
+		headers:   headers,
+		installed: make(chan struct{}),
+		err:       make(chan error),
+		reOrg:     make(chan core.ReOrgRollup),
 	}
 	return es.subscribe(sub)
 }
