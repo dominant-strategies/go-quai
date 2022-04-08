@@ -97,6 +97,10 @@ func (b *testBackend) SubscribeReOrgEvent(ch chan<- core.ReOrgRollup) event.Subs
 	return nil
 }
 
+func (b *testBackend) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription {
+	return nil
+}
+
 func (b *testBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*types.Log, error) {
 	number := rawdb.ReadHeaderNumber(b.db, hash)
 	if number == nil {

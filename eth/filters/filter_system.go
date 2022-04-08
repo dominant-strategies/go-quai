@@ -58,6 +58,8 @@ const (
 	LastIndexSubscription
 	// ReOrg subscription sends in the data from the reorg event
 	ReOrgSubscription
+	// SideChSubscription writes the header of a block that is notified as an uncle.
+	SideChSubscription
 )
 
 const (
@@ -86,6 +88,7 @@ type subscription struct {
 	installed chan struct{} // closed when the filter is installed
 	err       chan error    // closed when the filter is uninstalled
 	reOrg     chan core.ReOrgRollup
+	sideEvent chan core.ChainSideEvent
 }
 
 // EventSystem creates subscriptions, processes events and broadcasts them to the
@@ -257,6 +260,7 @@ func (es *EventSystem) subscribeMinedPendingLogs(crit ethereum.FilterQuery, logs
 		installed: make(chan struct{}),
 		err:       make(chan error),
 		reOrg:     make(chan core.ReOrgRollup),
+		sideEvent: make(chan core.ChainSideEvent),
 	}
 	return es.subscribe(sub)
 }
@@ -275,6 +279,7 @@ func (es *EventSystem) subscribeLogs(crit ethereum.FilterQuery, logs chan []*typ
 		installed: make(chan struct{}),
 		err:       make(chan error),
 		reOrg:     make(chan core.ReOrgRollup),
+		sideEvent: make(chan core.ChainSideEvent),
 	}
 	return es.subscribe(sub)
 }
@@ -293,6 +298,7 @@ func (es *EventSystem) subscribePendingLogs(crit ethereum.FilterQuery, logs chan
 		installed: make(chan struct{}),
 		err:       make(chan error),
 		reOrg:     make(chan core.ReOrgRollup),
+		sideEvent: make(chan core.ChainSideEvent),
 	}
 	return es.subscribe(sub)
 }
@@ -310,6 +316,7 @@ func (es *EventSystem) SubscribePendingBlock(block chan *types.Header) *Subscrip
 		installed: make(chan struct{}),
 		err:       make(chan error),
 		reOrg:     make(chan core.ReOrgRollup),
+		sideEvent: make(chan core.ChainSideEvent),
 	}
 	return es.subscribe(sub)
 }
@@ -327,6 +334,7 @@ func (es *EventSystem) SubscribeNewHeads(headers chan *types.Header) *Subscripti
 		installed: make(chan struct{}),
 		err:       make(chan error),
 		reOrg:     make(chan core.ReOrgRollup),
+		sideEvent: make(chan core.ChainSideEvent),
 	}
 	return es.subscribe(sub)
 }
@@ -344,6 +352,7 @@ func (es *EventSystem) SubscribePendingTxs(hashes chan []common.Hash) *Subscript
 		installed: make(chan struct{}),
 		err:       make(chan error),
 		reOrg:     make(chan core.ReOrgRollup),
+		sideEvent: make(chan core.ChainSideEvent),
 	}
 	return es.subscribe(sub)
 }
@@ -361,6 +370,7 @@ func (es *EventSystem) SubscribeReOrg(reOrg chan core.ReOrgRollup) *Subscription
 		installed: make(chan struct{}),
 		err:       make(chan error),
 		reOrg:     reOrg,
+		sideEvent: make(chan core.ChainSideEvent),
 	}
 	return es.subscribe(sub)
 }
@@ -378,6 +388,7 @@ func (es *EventSystem) SubscribeChainSideEvent(headers chan *types.Header) *Subs
 		installed: make(chan struct{}),
 		err:       make(chan error),
 		reOrg:     make(chan core.ReOrgRollup),
+		sideEvent: make(chan core.ChainSideEvent),
 	}
 	return es.subscribe(sub)
 }
@@ -417,6 +428,12 @@ func (es *EventSystem) handlePendingBlock(filters filterIndex, ev *types.Header)
 func (es *EventSystem) handleReOrg(filters filterIndex, ev core.ReOrgRollup) {
 	for _, f := range filters[ReOrgSubscription] {
 		f.reOrg <- ev
+	}
+}
+
+func (es *EventSystem) handleSideCh(filters filterIndex, ev core.ChainSideEvent) {
+	for _, f := range filters[SideChSubscription] {
+		f.sideEvent <- ev
 	}
 }
 
@@ -538,10 +555,11 @@ func (es *EventSystem) eventLoop() {
 		es.pendingBlockSub.Unsubscribe()
 		es.chainSub.Unsubscribe()
 		es.reOrgSub.Unsubscribe()
+		es.sideChSub.Unsubscribe()
 	}()
 
 	index := make(filterIndex)
-	for i := UnknownSubscription; i <= ReOrgSubscription; i++ {
+	for i := UnknownSubscription; i <= SideChSubscription; i++ {
 		index[i] = make(map[rpc.ID]*subscription)
 	}
 
@@ -561,6 +579,8 @@ func (es *EventSystem) eventLoop() {
 			es.handleChainEvent(index, ev)
 		case ev := <-es.reOrgCh:
 			es.handleReOrg(index, ev)
+		case ev := <-es.sideCh:
+			es.handleSideCh(index, ev)
 
 		case f := <-es.install:
 			if f.typ == MinedAndPendingLogsSubscription {
@@ -592,6 +612,8 @@ func (es *EventSystem) eventLoop() {
 		case <-es.chainSub.Err():
 			return
 		case <-es.reOrgSub.Err():
+			return
+		case <-es.sideChSub.Err():
 			return
 		}
 	}
