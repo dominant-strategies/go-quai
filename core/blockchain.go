@@ -1477,9 +1477,16 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		return NonStatTy, consensus.ErrUnknownAncestor
 	}
 
-	if types.QuaiNetworkContext > 0 && block.Number().Cmp(big.NewInt(1)) < 1 {
-		coincident, index := bc.Engine().GetCoincidentHeader(bc, types.QuaiNetworkContext, block.Header())
-		ptd = coincident.NetworkDifficulty[index]
+	context, err := bc.Engine().GetDifficultyContext(bc, block.Header(), types.QuaiNetworkContext)
+	if err != nil {
+		return NonStatTy, err
+	}
+
+	fmt.Println("coincident num:", block.Number(), context < types.QuaiNetworkContext)
+	if context < types.QuaiNetworkContext {
+		fmt.Println("network diff and index:", block.Header().NetworkDifficulty, context)
+		ptd = block.Header().NetworkDifficulty[context]
+		fmt.Println("coincident parent total diff:", ptd)
 	}
 
 	// Make sure no inconsistent state is leaked during insertion
