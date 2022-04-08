@@ -1477,23 +1477,25 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		return NonStatTy, consensus.ErrUnknownAncestor
 	}
 
-	context, err := bc.Engine().GetDifficultyContext(bc, block.Header(), types.QuaiNetworkContext)
-	if err != nil {
-		return NonStatTy, err
-	}
-
-	fmt.Println("coincident num:", block.Number(), context < types.QuaiNetworkContext)
-	if context < types.QuaiNetworkContext {
-		fmt.Println("network diff and index:", block.Header().NetworkDifficulty, context)
-		ptd = block.Header().NetworkDifficulty[context]
-		fmt.Println("coincident parent total diff:", ptd)
-	}
-
 	// Make sure no inconsistent state is leaked during insertion
 	currentBlock := bc.CurrentBlock()
 	localTd := bc.GetTd(currentBlock.Hash(), currentBlock.NumberU64())
 	externTd := new(big.Int).Add(block.Difficulty(), ptd)
 
+	context, err := bc.Engine().GetDifficultyContext(bc, block.Header(), types.QuaiNetworkContext)
+	if err != nil {
+		return NonStatTy, err
+	}
+
+	fmt.Println("current num:", block.Header().Number, context, types.QuaiNetworkContext)
+	if context < types.QuaiNetworkContext {
+		coincident, index := bc.Engine().GetCoincidentHeader(bc, types.QuaiNetworkContext, block.Header())
+		fmt.Println("coincident header:", coincident.Number, "coincidentNetworkDiff", coincident.NetworkDifficulty)
+		externTd = new(big.Int).Add(block.Header().Difficulty[context], coincident.NetworkDifficulty[index])
+		localTd = coincident.NetworkDifficulty[index]
+	}
+
+	fmt.Println("LocalTd", localTd, "externTd", externTd, "blockDiff", block.Difficulty(), "networkDiff", block.Header().NetworkDifficulty)
 	// Irrelevant of the canonical status, write the block itself to the database.
 	//
 	// Note all the components of block(td, hash->number map, header, body, receipts)
@@ -1569,6 +1571,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	// Second clause in the if statement reduces the vulnerability to selfish mining.
 	// Please refer to http://www.cs.cornell.edu/~ie53/publications/btcProcFC.pdf
 	reorg := externTd.Cmp(localTd) > 0
+	fmt.Println("Add to chain?", reorg)
 	currentBlock = bc.CurrentBlock()
 	if !reorg && externTd.Cmp(localTd) == 0 {
 		// Split same-difficulty blocks by number, then preferentially select
@@ -2426,7 +2429,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 			msg = "Large chain reorg detected"
 			logFn = log.Warn
 		}
-		logFn(msg, "number", commonBlock.Number(), "hash", commonBlock.Hash(),
+		logFn(msg, "number", commonBlock.Header().Number, "hash", commonBlock.Hash(),
 			"drop", len(oldChain), "dropfrom", oldChain[0].Hash(), "add", len(newChain), "addfrom", newChain[0].Hash())
 		blockReorgAddMeter.Mark(int64(len(newChain)))
 		blockReorgDropMeter.Mark(int64(len(oldChain)))
