@@ -1599,6 +1599,8 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			bc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
 		}
 	} else {
+		fmt.Println("Emitting chainSideFeedEvent")
+		fmt.Println(block)
 		bc.chainSideFeed.Send(ChainSideEvent{Block: block})
 	}
 	return status, nil

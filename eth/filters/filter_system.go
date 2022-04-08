@@ -73,7 +73,7 @@ const (
 	// chainEvChanSize is the size of channel listening to ChainEvent.
 	chainEvChanSize = 10
 	// chainSideChanSize is the size of channel listening to ChainSideEvent.
-	chainSideChanSize = 10
+	chainSideChanSize = 1
 )
 
 type subscription struct {
@@ -154,7 +154,7 @@ func NewEventSystem(backend Backend, lightMode bool) *EventSystem {
 	m.sideChSub = m.backend.SubscribeChainSideEvent(m.sideCh)
 
 	// Make sure none of the subscriptions are empty
-	if m.txsSub == nil || m.logsSub == nil || m.rmLogsSub == nil || m.chainSub == nil || m.pendingLogsSub == nil {
+	if m.txsSub == nil || m.logsSub == nil || m.rmLogsSub == nil || m.chainSub == nil || m.pendingLogsSub == nil || m.reOrgSub == nil || m.sideChSub == nil {
 		log.Crit("Subscribe for event system failed")
 	}
 
@@ -380,7 +380,7 @@ func (es *EventSystem) SubscribeReOrg(reOrg chan core.ReOrgRollup) *Subscription
 func (es *EventSystem) SubscribeChainSideEvent(sideEvent chan core.ChainSideEvent) *Subscription {
 	sub := &subscription{
 		id:        rpc.NewID(),
-		typ:       BlocksSubscription,
+		typ:       SideChSubscription,
 		created:   time.Now(),
 		logs:      make(chan []*types.Log),
 		hashes:    make(chan []common.Hash),
