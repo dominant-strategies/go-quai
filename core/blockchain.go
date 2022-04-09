@@ -187,16 +187,17 @@ type BlockChain struct {
 	//  * nil: disable tx reindexer/deleter, but still index new blocks
 	txLookupLimit uint64
 
-	hc            *HeaderChain
-	rmLogsFeed    event.Feed
-	chainFeed     event.Feed
-	reOrgFeed     event.Feed
-	chainSideFeed event.Feed
-	chainHeadFeed event.Feed
-	logsFeed      event.Feed
-	blockProcFeed event.Feed
-	scope         event.SubscriptionScope
-	genesisBlock  *types.Block
+	hc             *HeaderChain
+	rmLogsFeed     event.Feed
+	chainFeed      event.Feed
+	reOrgFeed      event.Feed
+	chainSideFeed  event.Feed
+	chainHeadFeed  event.Feed
+	chainUncleFeed event.Feed
+	logsFeed       event.Feed
+	blockProcFeed  event.Feed
+	scope          event.SubscriptionScope
+	genesisBlock   *types.Block
 
 	chainmu sync.RWMutex // blockchain insertion lock
 
@@ -1617,6 +1618,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			bc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
 		}
 	} else {
+		bc.chainUncleFeed.Send(block.Header())
 		bc.chainSideFeed.Send(ChainSideEvent{Block: block})
 	}
 	return status, nil
@@ -1666,6 +1668,7 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 	bc.wg.Add(1)
 	defer bc.wg.Done()
 
+	log.Info("Rolling back header beyond", "Hash ", header.Hash())
 	var (
 		deletedTxs  types.Transactions
 		deletedLogs [][]*types.Log
@@ -2664,19 +2667,16 @@ func (bc *BlockChain) GetHeader(hash common.Hash, number uint64) *types.Header {
 	return bc.hc.GetHeader(hash, number)
 }
 
-// GetHeader retrieves a block header from the database by hash and number,
-// caching it if found.
+// CheckHashInclusion checks to see if a hash is already included in a previous block.
 func (bc *BlockChain) CheckHashInclusion(header *types.Header, parent *types.Header) error {
 	if types.QuaiNetworkContext < 1 {
 		if header.ParentHash[1] == parent.ParentHash[1] {
-			fmt.Println("Region hash already included:", header.ParentHash[1], parent.ParentHash[1])
 			return fmt.Errorf("error subordinate hash already included in parent")
 		}
 	}
 
 	if types.QuaiNetworkContext < 2 {
 		if header.ParentHash[2] == parent.ParentHash[2] {
-			fmt.Println("Zone hash already included:", header.ParentHash[2], parent.ParentHash[2])
 			return fmt.Errorf("error subordinate hash already included in parent")
 		}
 	}
@@ -3219,6 +3219,11 @@ func (bc *BlockChain) SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Su
 // SubscribeChainSideEvent registers a subscription of ChainSideEvent.
 func (bc *BlockChain) SubscribeChainSideEvent(ch chan<- ChainSideEvent) event.Subscription {
 	return bc.scope.Track(bc.chainSideFeed.Subscribe(ch))
+}
+
+// SubscribeChainUncleEvent registers a subscription of an uncled header.
+func (bc *BlockChain) SubscribeChainUncleEvent(ch chan<- *types.Header) event.Subscription {
+	return bc.scope.Track(bc.chainUncleFeed.Subscribe(ch))
 }
 
 // SubscribeLogsEvent registers a subscription of []*types.Log.

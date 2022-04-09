@@ -599,8 +599,8 @@ func (lc *LightChain) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) eve
 	return lc.scope.Track(lc.chainHeadFeed.Subscribe(ch))
 }
 
-// SubscribeChainSideEvent registers a subscription of ChainSideEvent.
-func (lc *LightChain) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription {
+// SubscribeChainSideEvent registers a subscription of an uncled header.
+func (lc *LightChain) SubscribeChainUncleEvent(ch chan<- *types.Header) event.Subscription {
 	return lc.scope.Track(lc.chainSideFeed.Subscribe(ch))
 }
 

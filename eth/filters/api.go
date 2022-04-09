@@ -241,6 +241,36 @@ func (api *PublicFilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, er
 	return rpcSub, nil
 }
 
+// UncleEvent send a notification each time a new (header) uncle is sent in.
+func (api *PublicFilterAPI) UncleEvent(ctx context.Context) (*rpc.Subscription, error) {
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+
+	rpcSub := notifier.CreateSubscription()
+
+	go func() {
+		uncleEvent := make(chan *types.Header)
+		uncleEventSub := api.events.SubscribeChainUncleEvent(uncleEvent)
+
+		for {
+			select {
+			case h := <-uncleEvent:
+				notifier.Notify(rpcSub.ID, h)
+			case <-uncleEventSub.Err():
+				uncleEventSub.Unsubscribe()
+				return
+			case <-notifier.Closed():
+				uncleEventSub.Unsubscribe()
+				return
+			}
+		}
+	}()
+
+	return rpcSub, nil
+}
+
 // PendingBlock sends a notification each time a new pending block is created.
 func (api *PublicFilterAPI) PendingBlock(ctx context.Context) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
