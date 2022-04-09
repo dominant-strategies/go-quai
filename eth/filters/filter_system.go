@@ -432,8 +432,6 @@ func (es *EventSystem) handleReOrg(filters filterIndex, ev core.ReOrgRollup) {
 }
 
 func (es *EventSystem) handleUncleCh(filters filterIndex, ev *types.Header) {
-	fmt.Println("handleuncleCh")
-	fmt.Println(ev)
 	for _, f := range filters[uncleChSubscription] {
 		f.uncleEvent <- ev
 	}

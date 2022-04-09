@@ -1600,9 +1600,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			bc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
 		}
 	} else {
-		fmt.Println("Emitting chainSideFeedEvent")
-		fmt.Println(block)
-		bc.chainUncleFeed.Send(block.Header)
+		bc.chainUncleFeed.Send(block.Header())
 		bc.chainSideFeed.Send(ChainSideEvent{Block: block})
 	}
 	return status, nil
@@ -1652,6 +1650,7 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 	bc.wg.Add(1)
 	defer bc.wg.Done()
 
+	log.Info("Rolling back header beyond", "Hash ", header.Hash())
 	var (
 		deletedTxs  types.Transactions
 		deletedLogs [][]*types.Log

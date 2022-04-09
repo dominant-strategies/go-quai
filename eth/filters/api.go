@@ -257,8 +257,6 @@ func (api *PublicFilterAPI) UncleEvent(ctx context.Context) (*rpc.Subscription, 
 		for {
 			select {
 			case h := <-uncleEvent:
-				fmt.Println("SideEvent api.go")
-				fmt.Println(h)
 				notifier.Notify(rpcSub.ID, h)
 			case <-uncleEventSub.Err():
 				uncleEventSub.Unsubscribe()
