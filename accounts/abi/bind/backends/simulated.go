@@ -879,7 +879,7 @@ func (fb *filterBackend) SubscribeReOrgEvent(ch chan<- core.ReOrgRollup) event.S
 	return nullSubscription()
 }
 
-func (fb *filterBackend) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription {
+func (fb *filterBackend) SubscribeChainUncleEvent(ch chan<- *types.Header) event.Subscription {
 	return nullSubscription()
 }
 

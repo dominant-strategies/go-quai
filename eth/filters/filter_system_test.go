@@ -97,7 +97,7 @@ func (b *testBackend) SubscribeReOrgEvent(ch chan<- core.ReOrgRollup) event.Subs
 	return nil
 }
 
-func (b *testBackend) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription {
+func (b *testBackend) SubscribeChainUncleEvent(ch chan<- *types.Header) event.Subscription {
 	return nil
 }
 

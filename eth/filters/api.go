@@ -241,8 +241,8 @@ func (api *PublicFilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, er
 	return rpcSub, nil
 }
 
-// SideEvent send a notification each time a new (header) uncle is sent in.
-func (api *PublicFilterAPI) SideEvent(ctx context.Context) (*rpc.Subscription, error) {
+// UncleEvent send a notification each time a new (header) uncle is sent in.
+func (api *PublicFilterAPI) UncleEvent(ctx context.Context) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
@@ -251,18 +251,20 @@ func (api *PublicFilterAPI) SideEvent(ctx context.Context) (*rpc.Subscription, e
 	rpcSub := notifier.CreateSubscription()
 
 	go func() {
-		sideEvent := make(chan core.ChainSideEvent)
-		sideEventSub := api.events.SubscribeChainSideEvent(sideEvent)
+		uncleEvent := make(chan *types.Header)
+		uncleEventSub := api.events.SubscribeChainUncleEvent(uncleEvent)
 
 		for {
 			select {
-			case h := <-sideEvent:
+			case h := <-uncleEvent:
+				fmt.Println("SideEvent api.go")
+				fmt.Println(h)
 				notifier.Notify(rpcSub.ID, h)
-			case <-rpcSub.Err():
-				sideEventSub.Unsubscribe()
+			case <-uncleEventSub.Err():
+				uncleEventSub.Unsubscribe()
 				return
 			case <-notifier.Closed():
-				sideEventSub.Unsubscribe()
+				uncleEventSub.Unsubscribe()
 				return
 			}
 		}

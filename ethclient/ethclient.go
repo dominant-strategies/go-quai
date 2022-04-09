@@ -434,8 +434,8 @@ func (ec *Client) SubscribeReOrg(ctx context.Context, ch chan<- core.ReOrgRollup
 }
 
 // SubscribeReOrg subscribes to notifications about the reorg event.
-func (ec *Client) SubscribeChainSideEvent(ctx context.Context, ch chan<- core.ChainSideEvent) (ethereum.Subscription, error) {
-	return ec.c.EthSubscribe(ctx, ch, "sideEvent")
+func (ec *Client) SubscribeChainUncleEvent(ctx context.Context, ch chan<- *types.Header) (ethereum.Subscription, error) {
+	return ec.c.EthSubscribe(ctx, ch, "uncleEvent")
 }
 
 // State Access
