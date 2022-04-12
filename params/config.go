@@ -30,7 +30,7 @@ var (
 	MainnetPrimeGenesisHash  = common.HexToHash("0x7b4490b9d85546cb8ef5d43316bc7a6d78ea5ec7ae3ea9bc6fd16bcc3bcc279f")
 	MainnetRegionGenesisHash = common.HexToHash("0x5942bcc68eac3b1ba8be42864ca11972b870ad931edd0e463cc54ffd40058477")
 	MainnetZoneGenesisHash   = common.HexToHash("0xd9b9ed9fe4ae892542aae9bb1d42ea14f0fa5f32fffef48da58f149ce20bf297")
-	RopstenPrimeGenesisHash  = common.HexToHash("0x177ffeb3149997d7696e81d50c11be520509afc1a125fbd843cf05e7ce0e55af")
+	RopstenPrimeGenesisHash  = common.HexToHash("0xc0777e10617fafd8eb34afeb306b733f4f253fcfa64f9d0f66f25263bfe5297e")
 	RopstenRegionGenesisHash = common.HexToHash("0xf476007865dc979481bd80e88a326e5c9008c6be98635f1f48dad9996dc85165")
 	RopstenZoneGenesisHash   = common.HexToHash("0xff56adc1e6033122b530d810d563e75776d3c05de8fd0afbf42c198843dd45e7")
 	RopstenGenesisHash       = common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d")
