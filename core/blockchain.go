@@ -1480,7 +1480,16 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 	// Make sure no inconsistent state is leaked during insertion
 	currentBlock := bc.CurrentBlock()
-	localTd := bc.GetTd(currentBlock.Hash(), currentBlock.NumberU64())
+	parent := bc.GetHeaderByHash(currentBlock.ParentHash())
+	if parent != nil {
+		ptd = parent.NetworkDifficulty[types.QuaiNetworkContext]
+	}
+
+	fmt.Println("writeBlockWithState, number:", block.Header().Number)
+	fmt.Println("parentNetworkDifficulty", ptd)
+
+	localTd := currentBlock.Header().NetworkDifficulty[types.QuaiNetworkContext]
+	// localTd := bc.GetTd(currentBlock.Hash(), currentBlock.NumberU64())
 	externTd := new(big.Int).Add(block.Difficulty(), ptd)
 
 	context, err := bc.Engine().GetDifficultyContext(bc, block.Header(), types.QuaiNetworkContext)
@@ -1492,8 +1501,8 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	if context < types.QuaiNetworkContext {
 		coincident, index := bc.Engine().GetCoincidentHeader(bc, types.QuaiNetworkContext, block.Header())
 		fmt.Println("coincident header:", coincident.Number, "coincidentNetworkDiff", coincident.NetworkDifficulty)
-		externTd = new(big.Int).Add(block.Header().Difficulty[context], coincident.NetworkDifficulty[index])
 		localTd = coincident.NetworkDifficulty[index]
+		externTd = new(big.Int).Add(coincident.NetworkDifficulty[index], block.Header().Difficulty[context])
 	}
 
 	fmt.Println("LocalTd", localTd, "externTd", externTd, "blockDiff", block.Difficulty(), "networkDiff", block.Header().NetworkDifficulty)

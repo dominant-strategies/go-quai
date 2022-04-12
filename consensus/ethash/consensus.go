@@ -654,6 +654,7 @@ func (ethash *Ethash) Prepare(chain consensus.ChainHeaderReader, header *types.H
 	header.Difficulty[types.QuaiNetworkContext] = ethash.CalcDifficulty(chain, header.Time, parent, types.QuaiNetworkContext)
 	currentTotal := big.NewInt(0)
 	currentTotal.Add(parent.NetworkDifficulty[types.QuaiNetworkContext], header.Difficulty[types.QuaiNetworkContext])
+	fmt.Println("Prepare: ParentNetworkDifficulty", parent.NetworkDifficulty[types.QuaiNetworkContext], "currentTotal", currentTotal)
 	header.NetworkDifficulty[types.QuaiNetworkContext] = currentTotal
 	return nil
 }
@@ -807,7 +808,7 @@ func (ethash *Ethash) PrimeTraceBranch(chain consensus.ChainHeaderReader, header
 			return extBlocks, nil
 		}
 		extBlocks = append(extBlocks, extBlock)
-		// fmt.Println("Trace Branch: PRIME Adding external block", "number", header.Number, "context", context, "location", header.Location, "hash", header.Hash(), "prevHash", header.ParentHash[context])
+		fmt.Println("Trace Branch: PRIME Adding external block", "number", header.Number, "context", context, "location", header.Location, "hash", header.Hash(), "prevHash", header.ParentHash[context])
 		if header.ParentHash[context] == stopHash {
 			// fmt.Println("Trace Branch: Stopping on stop hash or num is 1", "number", header.Number, "context", context, "location", header.Location, "prevHash", header.ParentHash[context])
 			break
@@ -901,7 +902,7 @@ func (ethash *Ethash) RegionTraceBranch(chain consensus.ChainHeaderReader, heade
 			break
 		}
 		extBlocks = append(extBlocks, extBlock)
-		// fmt.Println("Trace Branch: REGION Adding external block", "number", header.Number, "context", context, "location", header.Location, "hash", header.Hash())
+		fmt.Println("Trace Branch: REGION Adding external block", "number", header.Number, "context", context, "location", header.Location, "hash", header.Hash())
 
 		// Stop on the passed in stopHash
 		// fmt.Println("Region stopHash", header.ParentHash[context], stopHash)
@@ -1067,6 +1068,7 @@ func (ethash *Ethash) GetLinkExternalBlocks(chain consensus.ChainHeaderReader, h
 		}
 	}
 
+	fmt.Println("GetLinkExternalBlocks: length of external blocks", len(externalBlocks))
 	return externalBlocks, nil
 }
 
