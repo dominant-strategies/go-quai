@@ -2957,6 +2957,7 @@ func (bc *BlockChain) GenerateExtBlockLink() {
 			copy(tempLinkBlocks.zones[i], linkBlocks.zones[i])
 		}
 
+		fmt.Println("generateLinkBlocks, num:", currentHeader.Number)
 		tempLinkBlocks = bc.generateLinkBlocksLastApplied(extBlocks, tempLinkBlocks)
 
 		// If our tempLink is new and our starting link hasn't changed.
@@ -3031,8 +3032,6 @@ func (bc *BlockChain) generateLinkBlocksLastApplied(externalBlocks []*types.Exte
 		startingLinkBlocks.zones[i] = make([]common.Hash, len(linkBlocks.zones[i]))
 		copy(startingLinkBlocks.zones[i], linkBlocks.zones[i])
 	}
-
-	fmt.Println("generateLinkBlocksLastApplied: Len ext blocks", len(externalBlocks))
 
 	// iterate through the extBlocks, updated the index with the last applied external blocks.
 	for _, lastAppliedBlock := range externalBlocks {
