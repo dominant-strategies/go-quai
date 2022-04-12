@@ -1478,13 +1478,10 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		return NonStatTy, consensus.ErrUnknownAncestor
 	}
 
+	fmt.Println("parentTotalDifficulty", ptd)
+
 	// Make sure no inconsistent state is leaked during insertion
 	currentBlock := bc.CurrentBlock()
-	parent := bc.GetHeaderByHash(currentBlock.ParentHash())
-	if parent != nil {
-		ptd = parent.NetworkDifficulty[types.QuaiNetworkContext]
-	}
-
 	fmt.Println("writeBlockWithState, number:", block.Header().Number)
 	fmt.Println("parentNetworkDifficulty", ptd)
 
