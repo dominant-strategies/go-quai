@@ -712,11 +712,11 @@ func (ethash *Ethash) GetCoincidentHeader(chain consensus.ChainHeaderReader, con
 
 // Iterate back through headers to find ones that exceed a given context.
 func (ethash *Ethash) GetCoincidentAndAggDifficulty(chain consensus.ChainHeaderReader, context int, header *types.Header) (*types.Header, int, *big.Int) {
+	totalDiff := new(big.Int).Set(header.Difficulty[context])
 	// If we are at the highest context, no coincident will include it.
 	if context == 0 {
-		return header, 0, header.NetworkDifficulty[context]
+		return header, 0, totalDiff
 	} else {
-		totalDiff := new(big.Int).Set(header.Difficulty[context])
 		for {
 			// Check work of the header, if it has enough work we will move up in context.
 			// difficultyContext is initially context since it could be a pending block w/o a nonce.

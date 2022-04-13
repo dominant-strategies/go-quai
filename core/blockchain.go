@@ -1489,12 +1489,12 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	localCoincident, localIndex, localAggDiff := bc.Engine().GetCoincidentAndAggDifficulty(bc, types.QuaiNetworkContext, currentBlock.Header())
 	localTd := new(big.Int).Add(localCoincident.NetworkDifficulty[localIndex], localAggDiff)
 
-	fmt.Println("localCoincident", localCoincident.Number, localIndex, localAggDiff)
+	fmt.Println("localCoincident", localCoincident.Number, localCoincident.NetworkDifficulty, localIndex, localAggDiff)
 
 	externCoincident, externIndex, externAggDiff := bc.Engine().GetCoincidentAndAggDifficulty(bc, types.QuaiNetworkContext, block.Header())
 	externTd := new(big.Int).Add(externCoincident.NetworkDifficulty[externIndex], externAggDiff)
 
-	fmt.Println("externCoincident", externCoincident.Number, externIndex, externAggDiff)
+	fmt.Println("externCoincident", externCoincident.Number, externCoincident.NetworkDifficulty, externIndex, externAggDiff)
 
 	context, err := bc.Engine().GetDifficultyContext(bc, block.Header(), types.QuaiNetworkContext)
 	if err != nil {
@@ -1506,7 +1506,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		fmt.Println("coincident header:", localCoincident.Number, "coincidentNetworkDiff", localCoincident.NetworkDifficulty)
 		externTd = new(big.Int).Add(block.Header().NetworkDifficulty[context], block.Header().Difficulty[context])
 		localTd = new(big.Int).Set(localCoincident.NetworkDifficulty[context])
-	} else if localCoincident.Hash() != externCoincident.Hash() {
+	} else if localCoincident.Hash() != externCoincident.Hash() && types.QuaiNetworkContext == 2 {
 		externTd = new(big.Int).Set(externCoincident.NetworkDifficulty[externIndex])
 	}
 
