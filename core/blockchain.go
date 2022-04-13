@@ -1475,6 +1475,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	// Calculate the total difficulty of the block
 	ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
 	if ptd == nil {
+		fmt.Println("ptd error in writeBlockWithState")
 		return NonStatTy, consensus.ErrUnknownAncestor
 	}
 
@@ -1485,9 +1486,15 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	fmt.Println("writeBlockWithState, number:", block.Header().Number)
 	fmt.Println("parentNetworkDifficulty", ptd)
 
-	localTd := currentBlock.Header().NetworkDifficulty[types.QuaiNetworkContext]
-	// localTd := bc.GetTd(currentBlock.Hash(), currentBlock.NumberU64())
-	externTd := new(big.Int).Add(block.Difficulty(), ptd)
+	localCoincident, localIndex, localAggDiff := bc.Engine().GetCoincidentAndAggDifficulty(bc, types.QuaiNetworkContext, currentBlock.Header())
+	localTd := new(big.Int).Add(localCoincident.NetworkDifficulty[localIndex], localAggDiff)
+
+	fmt.Println("localCoincident", localCoincident.Number, localIndex, localAggDiff)
+
+	externCoincident, externIndex, externAggDiff := bc.Engine().GetCoincidentAndAggDifficulty(bc, types.QuaiNetworkContext, block.Header())
+	externTd := new(big.Int).Add(externCoincident.NetworkDifficulty[externIndex], externAggDiff)
+
+	fmt.Println("externCoincident", externCoincident.Number, externIndex, externAggDiff)
 
 	context, err := bc.Engine().GetDifficultyContext(bc, block.Header(), types.QuaiNetworkContext)
 	if err != nil {
@@ -1496,10 +1503,8 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 	fmt.Println("current num:", block.Header().Number, context, types.QuaiNetworkContext)
 	if context < types.QuaiNetworkContext {
-		coincident, index := bc.Engine().GetCoincidentHeader(bc, types.QuaiNetworkContext, block.Header())
-		fmt.Println("coincident header:", coincident.Number, "coincidentNetworkDiff", coincident.NetworkDifficulty)
-		localTd = coincident.NetworkDifficulty[index]
-		externTd = new(big.Int).Add(coincident.NetworkDifficulty[index], block.Header().Difficulty[context])
+		fmt.Println("coincident header:", localCoincident.Number, "coincidentNetworkDiff", localCoincident.NetworkDifficulty)
+		externTd = new(big.Int).Add(block.Header().NetworkDifficulty[context], block.Header().Difficulty[context])
 	}
 
 	fmt.Println("LocalTd", localTd, "externTd", externTd, "blockDiff", block.Difficulty(), "networkDiff", block.Header().NetworkDifficulty)

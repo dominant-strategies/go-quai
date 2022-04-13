@@ -647,6 +647,7 @@ func (ethash *Ethash) GetDifficultyContext(chain consensus.ChainHeaderReader, he
 // Prepare implements consensus.Engine, initializing the difficulty field of a
 // header to conform to the ethash protocol. The changes are done inline.
 func (ethash *Ethash) Prepare(chain consensus.ChainHeaderReader, header *types.Header) error {
+	fmt.Println("Prepare hash", header.ParentHash[types.QuaiNetworkContext])
 	parent := chain.GetHeader(header.ParentHash[types.QuaiNetworkContext], header.Number[types.QuaiNetworkContext].Uint64()-1)
 	if parent == nil {
 		return consensus.ErrUnknownAncestor
@@ -705,6 +706,41 @@ func (ethash *Ethash) GetCoincidentHeader(chain consensus.ChainHeaderReader, con
 
 			// Increment previous header
 			header = prevHeader
+		}
+	}
+}
+
+// Iterate back through headers to find ones that exceed a given context.
+func (ethash *Ethash) GetCoincidentAndAggDifficulty(chain consensus.ChainHeaderReader, context int, header *types.Header) (*types.Header, int, *big.Int) {
+	// If we are at the highest context, no coincident will include it.
+	if context == 0 {
+		return header, 0, header.NetworkDifficulty[context]
+	} else {
+		totalDiff := new(big.Int).Set(header.Difficulty[context])
+		for {
+			// Check work of the header, if it has enough work we will move up in context.
+			// difficultyContext is initially context since it could be a pending block w/o a nonce.
+			difficultyContext, err := ethash.GetDifficultyContext(chain, header, context)
+			if err != nil {
+				return header, difficultyContext, totalDiff
+			}
+
+			// If block header is Genesis return it as coincident
+			if header.Number[context].Cmp(big.NewInt(1)) <= 0 {
+				return header, difficultyContext, totalDiff
+			}
+
+			// If we have reached a coincident block
+			if difficultyContext < context {
+				return header, difficultyContext, totalDiff
+			}
+
+			// Get previous header on local chain by hash
+			prevHeader := chain.GetHeaderByHash(header.ParentHash[context])
+			// Increment previous header
+			header = prevHeader
+
+			totalDiff.Add(totalDiff, header.Difficulty[context])
 		}
 	}
 }
