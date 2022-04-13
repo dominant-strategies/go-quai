@@ -733,6 +733,8 @@ func (ethash *Ethash) GetCoincidentAndAggDifficulty(chain consensus.ChainHeaderR
 			// If we have reached a coincident block
 			if difficultyContext < context {
 				return header, difficultyContext, totalDiff
+			} else if difficultyContext == 1 && context == 1 {
+				return header, difficultyContext, totalDiff
 			}
 
 			// Get previous header on local chain by hash
