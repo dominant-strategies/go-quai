@@ -1130,7 +1130,7 @@ func (w *worker) generateWork(params *generateParams) (*types.Block, error) {
 	w.fillExternalTransactions(nil, work)
 	w.adjustGasLimit(nil, work)
 	w.fillTransactions(nil, work)
-	return w.engine.FinalizeAndAssemble(w.chain, work.header, work.state, work.txs, make([]*types.Header, 0), work.receipts)
+	return w.engine.FinalizeAndAssemble(w.chain, work.header, work.state, work.txs, work.unclelist(), work.receipts)
 }
 
 // commitWork generates several new sealing tasks based on the parent block

@@ -1482,6 +1482,12 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	if externIndex < localIndex {
 		externIndex = localIndex
 	}
+
+	// If running in a Region, the localIndex can be 0 and externIndex can be 1. In this case,
+	// canonical Region blocks do not get added since the Prime networkDifficulty will be more than the agg diff of the externCoincident.
+	if localIndex < externIndex && types.QuaiNetworkContext == 1 {
+		localIndex = externIndex
+	}
 	localTd := new(big.Int).Add(localCoincident.NetworkDifficulty[localIndex], localAggDiff)
 	externTd := new(big.Int).Add(externCoincident.NetworkDifficulty[externIndex], externAggDiff)
 
@@ -1671,10 +1677,10 @@ func (bc *BlockChain) AddExternalBlock(block *types.ExternalBlock) error {
 // ReOrgRollBack compares the difficulty of the newchain and oldchain. Rolls back
 // the current header to the position where the reorg took place in a higher context
 func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
-	bc.wg.Add(1)
-	defer bc.wg.Done()
-
 	log.Info("Rolling back header beyond", "hash", header.Hash())
+
+	bc.chainmu.Lock()
+	defer bc.chainmu.Unlock()
 	var (
 		deletedTxs  types.Transactions
 		deletedLogs [][]*types.Log
@@ -2135,10 +2141,18 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			if len(linkExtBlocks) > 0 {
 				cpyExtBlocks := make([]*types.ExternalBlock, len(linkExtBlocks))
 				copy(cpyExtBlocks, linkExtBlocks)
+
+				duplicateErr := bc.CheckExtBlockDuplicates(cpyExtBlocks)
+				if duplicateErr != nil {
+					bc.reportBlock(block, receipts, duplicateErr)
+					return it.index, duplicateErr
+				}
+
 				linkErr := bc.CheckExternalBlockLink(cpyExtBlocks)
 				if linkErr != nil {
 					log.Warn("Error linking during process: ", "err", linkErr)
-					return it.index, err
+					bc.reportBlock(block, receipts, linkErr)
+					return it.index, linkErr
 				}
 
 				bc.SetLinkBlocksToLastApplied(linkExtBlocks)
@@ -3126,6 +3140,22 @@ func (bc *BlockChain) SetLinkBlocksToLastApplied(externalBlocks []*types.Externa
 	}
 }
 
+// CheckExtBlockDuplicates iterates external blocks to ensure that no duplicates are included.
+func (bc *BlockChain) CheckExtBlockDuplicates(externalBlocks []*types.ExternalBlock) error {
+	m := make(map[string]bool)
+	for _, extBlock := range externalBlocks {
+		fmt.Println(extBlock.CacheKey())
+		if _, ok := m[string(extBlock.CacheKey())]; !ok {
+			m[string(extBlock.CacheKey())] = true
+		} else {
+			return fmt.Errorf("duplicate external blocks contained in link trace")
+		}
+	}
+	return nil
+}
+
+// CheckExternalBlockLink is the function that will ensure that the links of the provided external blocks
+// matches the previously applied external blocks.
 func (bc *BlockChain) CheckExternalBlockLink(externalBlocks []*types.ExternalBlock) error {
 	// Get the previous hashes from the first external blocks applied in the new GetExternalBlocks set.
 	// Initial the linkBlocks into 3x3 structure.
