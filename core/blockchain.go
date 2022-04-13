@@ -1505,6 +1505,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	if context < types.QuaiNetworkContext {
 		fmt.Println("coincident header:", localCoincident.Number, "coincidentNetworkDiff", localCoincident.NetworkDifficulty)
 		externTd = new(big.Int).Add(block.Header().NetworkDifficulty[context], block.Header().Difficulty[context])
+		localTd = new(big.Int).Set(localCoincident.NetworkDifficulty[context])
 	}
 
 	fmt.Println("LocalTd", localTd, "externTd", externTd, "blockDiff", block.Difficulty(), "networkDiff", block.Header().NetworkDifficulty)
