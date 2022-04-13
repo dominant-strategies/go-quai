@@ -2683,12 +2683,14 @@ func (bc *BlockChain) GetHeader(hash common.Hash, number uint64) *types.Header {
 func (bc *BlockChain) CheckHashInclusion(header *types.Header, parent *types.Header) error {
 	if types.QuaiNetworkContext < 1 {
 		if header.ParentHash[1] == parent.ParentHash[1] {
+			fmt.Println("CheckHashInclusion error")
 			return fmt.Errorf("error subordinate hash already included in parent")
 		}
 	}
 
 	if types.QuaiNetworkContext < 2 {
 		if header.ParentHash[2] == parent.ParentHash[2] {
+			fmt.Println("CheckHashInclusion error")
 			return fmt.Errorf("error subordinate hash already included in parent")
 		}
 	}
