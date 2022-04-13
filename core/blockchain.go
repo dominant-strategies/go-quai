@@ -1679,10 +1679,10 @@ func (bc *BlockChain) AddExternalBlock(block *types.ExternalBlock) error {
 // ReOrgRollBack compares the difficulty of the newchain and oldchain. Rolls back
 // the current header to the position where the reorg took place in a higher context
 func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
-	bc.wg.Add(1)
-	defer bc.wg.Done()
+	bc.chainmu.Lock()
+	defer bc.chainmu.Unlock()
 
-	log.Info("Rolling back header beyond", "Hash ", header.Hash())
+	log.Info("Rolling back header beyond", "hash", header.Hash())
 	var (
 		deletedTxs  types.Transactions
 		deletedLogs [][]*types.Log
@@ -2687,14 +2687,12 @@ func (bc *BlockChain) GetHeader(hash common.Hash, number uint64) *types.Header {
 func (bc *BlockChain) CheckHashInclusion(header *types.Header, parent *types.Header) error {
 	if types.QuaiNetworkContext < 1 {
 		if header.ParentHash[1] == parent.ParentHash[1] {
-			fmt.Println("CheckHashInclusion error")
 			return fmt.Errorf("error subordinate hash already included in parent")
 		}
 	}
 
 	if types.QuaiNetworkContext < 2 {
 		if header.ParentHash[2] == parent.ParentHash[2] {
-			fmt.Println("CheckHashInclusion error")
 			return fmt.Errorf("error subordinate hash already included in parent")
 		}
 	}
