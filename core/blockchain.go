@@ -2067,6 +2067,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		// TODO: #179 Extend CheckHashInclusion to if the hash was ever included in the chain, not just the parent.
 		err = bc.CheckHashInclusion(block.Header(), parent)
 		if err != nil {
+			bc.reportBlock(block, make(types.Receipts, 0), err)
+			bc.chainUncleFeed.Send(block.Header())
 			return it.index, err
 		}
 
