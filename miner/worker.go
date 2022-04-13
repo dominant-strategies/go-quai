@@ -649,6 +649,7 @@ func (w *worker) taskLoop() {
 			w.pendingMu.Unlock()
 
 			w.snapshotMu.Lock()
+			log.Info("Sending pending block", "number", task.block.Header().Number)
 			w.pendingBlockFeed.Send(task.block.Header())
 			w.snapshotMu.Unlock()
 		case <-w.exitCh:

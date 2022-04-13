@@ -2145,6 +2145,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 				duplicateErr := bc.CheckExtBlockDuplicates(cpyExtBlocks)
 				if duplicateErr != nil {
 					bc.reportBlock(block, receipts, duplicateErr)
+					bc.chainUncleFeed.Send(block.Header())
 					return it.index, duplicateErr
 				}
 
@@ -2152,6 +2153,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 				if linkErr != nil {
 					log.Warn("Error linking during process: ", "err", linkErr)
 					bc.reportBlock(block, receipts, linkErr)
+					bc.chainUncleFeed.Send(block.Header())
 					return it.index, linkErr
 				}
 
