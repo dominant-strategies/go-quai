@@ -1679,8 +1679,8 @@ func (bc *BlockChain) AddExternalBlock(block *types.ExternalBlock) error {
 func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 	log.Info("Rolling back header beyond", "hash", header.Hash())
 
-	bc.chainmu.Lock()
-	defer bc.chainmu.Unlock()
+	// bc.chainmu.Lock()
+	// defer bc.chainmu.Unlock()
 	var (
 		deletedTxs  types.Transactions
 		deletedLogs [][]*types.Log
@@ -1837,7 +1837,9 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	// Pre-checks passed, start the full block imports
 	bc.wg.Add(1)
 	bc.chainmu.Lock()
+	log.Info("InsertChain Lock", "hash", chain[0].Header().Number)
 	n, err := bc.insertChain(chain, true)
+	log.Info("InsertChain Unlock", "hash", chain[0].Header().Number)
 	bc.chainmu.Unlock()
 	bc.wg.Done()
 
