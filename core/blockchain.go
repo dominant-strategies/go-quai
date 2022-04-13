@@ -1679,8 +1679,8 @@ func (bc *BlockChain) AddExternalBlock(block *types.ExternalBlock) error {
 // ReOrgRollBack compares the difficulty of the newchain and oldchain. Rolls back
 // the current header to the position where the reorg took place in a higher context
 func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
-	bc.chainmu.Lock()
-	defer bc.chainmu.Unlock()
+	bc.wg.Add(1)
+	defer bc.wg.Done()
 
 	log.Info("Rolling back header beyond", "hash", header.Hash())
 	var (
@@ -1797,6 +1797,10 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 	} else {
 		return fmt.Errorf("reorg header was null")
 	}
+
+	// Reset the blockLink in the blockchain state processor.
+	bc.GenerateExtBlockLink()
+
 	return nil
 }
 
