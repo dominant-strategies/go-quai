@@ -1472,28 +1472,20 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	bc.wg.Add(1)
 	defer bc.wg.Done()
 
-	// Calculate the total difficulty of the block
-	ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
-	if ptd == nil {
-		fmt.Println("ptd error in writeBlockWithState")
-		return NonStatTy, consensus.ErrUnknownAncestor
-	}
-
-	fmt.Println("parentTotalDifficulty", ptd)
-
 	// Make sure no inconsistent state is leaked during insertion
 	currentBlock := bc.CurrentBlock()
 	fmt.Println("writeBlockWithState, number:", block.Header().Number)
-	fmt.Println("parentNetworkDifficulty", ptd)
-
 	localCoincident, localIndex, localAggDiff := bc.Engine().GetCoincidentAndAggDifficulty(bc, types.QuaiNetworkContext, currentBlock.Header())
-	localTd := new(big.Int).Add(localCoincident.NetworkDifficulty[localIndex], localAggDiff)
-
-	fmt.Println("localCoincident", localCoincident.Number, localCoincident.NetworkDifficulty, localIndex, localAggDiff)
-
 	externCoincident, externIndex, externAggDiff := bc.Engine().GetCoincidentAndAggDifficulty(bc, types.QuaiNetworkContext, block.Header())
+
+	// If externIndex is Prime and localIndex is Region, the indexes should be matching.
+	if externIndex < localIndex {
+		externIndex = localIndex
+	}
+	localTd := new(big.Int).Add(localCoincident.NetworkDifficulty[localIndex], localAggDiff)
 	externTd := new(big.Int).Add(externCoincident.NetworkDifficulty[externIndex], externAggDiff)
 
+	fmt.Println("localCoincident", localCoincident.Number, localCoincident.NetworkDifficulty, localIndex, localAggDiff)
 	fmt.Println("externCoincident", externCoincident.Number, externCoincident.NetworkDifficulty, externIndex, externAggDiff)
 
 	context, err := bc.Engine().GetDifficultyContext(bc, block.Header(), types.QuaiNetworkContext)
@@ -2069,7 +2061,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		// Process block using the parent state as reference point
 		substart := time.Now()
 
-		// If in Prime or Region, take to see if we have already included the hash in the lower level.
+		// If in Prime or Region, check to see if we have already included the hash in the lower level.
 		// TODO: #179 Extend CheckHashInclusion to if the hash was ever included in the chain, not just the parent.
 		err = bc.CheckHashInclusion(block.Header(), parent)
 		if err != nil {
@@ -2689,6 +2681,7 @@ func (bc *BlockChain) GetHeader(hash common.Hash, number uint64) *types.Header {
 
 // CheckHashInclusion checks to see if a hash is already included in a previous block.
 func (bc *BlockChain) CheckHashInclusion(header *types.Header, parent *types.Header) error {
+	// Lower level check
 	if types.QuaiNetworkContext < 1 {
 		if header.ParentHash[1] == parent.ParentHash[1] {
 			return fmt.Errorf("error subordinate hash already included in parent")
@@ -2698,6 +2691,33 @@ func (bc *BlockChain) CheckHashInclusion(header *types.Header, parent *types.Hea
 	if types.QuaiNetworkContext < 2 {
 		if header.ParentHash[2] == parent.ParentHash[2] {
 			return fmt.Errorf("error subordinate hash already included in parent")
+		}
+	}
+
+	if types.QuaiNetworkContext == 2 {
+		// Upper level check
+		currentBlock := bc.CurrentBlock()
+		currContext, err := bc.Engine().GetDifficultyContext(bc, currentBlock.Header(), types.QuaiNetworkContext)
+		if err != nil {
+			return err
+		}
+
+		newContext, err := bc.Engine().GetDifficultyContext(bc, header, types.QuaiNetworkContext)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println("CheckHashInclusion", currContext, newContext)
+
+		// Attempting to stop blocks from being included / triggering reorg that are waiting on Zone updates.
+		// We see this in the following scenario when the Zone block that already was included in a Region reorgs
+		// the region block.
+		// REGION: [6 8 60] 0x657dc29c4b2ac624638707b660e2bef4897a82efe4cc6e91471ae37d50bd665d
+		// ZONE:   [6 9 60] 0xedd4cdc59db07818f9b5c38a71d5f68c2d661168e1b0b57570614b05b6264211
+		if currContext == newContext && header.ParentHash[newContext] != currentBlock.Header().ParentHash[currContext] {
+			if header.ParentHash[2] == currentBlock.Header().ParentHash[2] {
+				return fmt.Errorf("error subordinate hash already included in parent")
+			}
 		}
 	}
 
