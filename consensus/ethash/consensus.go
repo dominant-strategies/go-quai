@@ -726,7 +726,7 @@ func (ethash *Ethash) GetCoincidentAndAggDifficulty(chain consensus.ChainHeaderR
 			}
 
 			// If block header is Genesis return it as coincident
-			if header.Number[context].Cmp(big.NewInt(1)) <= 0 {
+			if header.Number[context].Cmp(big.NewInt(0)) <= 0 {
 				return header, difficultyContext, totalDiff
 			}
 
