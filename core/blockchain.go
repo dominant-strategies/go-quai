@@ -185,9 +185,10 @@ type BlockChain struct {
 	rmLogsFeed               event.Feed
 	chainFeed                event.Feed
 	reOrgFeed                event.Feed
-	missingExternalBlockFeed event.Feed
 	chainSideFeed            event.Feed
 	chainHeadFeed            event.Feed
+	chainUncleFeed           event.Feed
+	missingExternalBlockFeed event.Feed
 	logsFeed                 event.Feed
 	blockProcFeed            event.Feed
 	scope                    event.SubscriptionScope
@@ -1600,6 +1601,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			bc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
 		}
 	} else {
+		bc.chainUncleFeed.Send(block.Header())
 		bc.chainSideFeed.Send(ChainSideEvent{Block: block})
 	}
 	return status, nil
@@ -1646,6 +1648,10 @@ func (bc *BlockChain) AddExternalBlock(block *types.ExternalBlock) error {
 // ReOrgRollBack compares the difficulty of the newchain and oldchain. Rolls back
 // the current header to the position where the reorg took place in a higher context
 func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
+	bc.wg.Add(1)
+	defer bc.wg.Done()
+
+	log.Info("Rolling back header beyond", "Hash ", header.Hash())
 	var (
 		deletedTxs  types.Transactions
 		deletedLogs [][]*types.Log
@@ -1691,6 +1697,7 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 	if header != nil {
 		// get the commonBlock
 		commonBlock := bc.GetBlockByHash(header.Hash())
+
 		// if a block with this hash does not exist then we dont have to roll back
 		if commonBlock == nil {
 			return nil
@@ -1705,7 +1712,7 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 			deletedTxs = append(deletedTxs, currentBlock.Transactions()...)
 			collectLogs(currentBlock.Hash())
 
-			currentBlock = bc.GetBlock(currentBlock.ParentHash(), currentBlock.NumberU64())
+			currentBlock = bc.GetBlock(currentBlock.ParentHash(), currentBlock.NumberU64()-1)
 			if currentBlock == nil {
 				return fmt.Errorf("invalid current chain")
 			}
@@ -1715,7 +1722,22 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 			return err
 		}
 
-		fmt.Println("Header is now rolled back and the current head is at", bc.CurrentBlock().NumberU64())
+		// writing the head to the blockchain state
+		bc.writeHeadBlock(currentBlock)
+		bc.futureBlocks.Remove(currentBlock.Hash())
+
+		// get all the receipts and extract the logs from it
+		receipts := bc.GetReceiptsByHash(currentBlock.Hash())
+		var logs []*types.Log
+
+		for _, receipt := range receipts {
+			logs = append(logs, receipt.Logs...)
+		}
+		// send a chain event so that it updates the pending header
+		bc.chainFeed.Send(ChainEvent{Block: currentBlock, Hash: currentBlock.Hash(), Logs: logs})
+		bc.chainHeadFeed.Send(ChainHeadEvent{Block: currentBlock})
+
+		log.Info("Header is now rolled back and the current head is at block with ", "Hash ", bc.CurrentBlock().Hash(), " Number ", bc.CurrentBlock().NumberU64())
 
 		// Delete useless indexes right now which includes the non-canonical
 		// transaction indexes, canonical chain indexes which above the head.
@@ -2607,19 +2629,16 @@ func (bc *BlockChain) GetHeader(hash common.Hash, number uint64) *types.Header {
 	return bc.hc.GetHeader(hash, number)
 }
 
-// GetHeader retrieves a block header from the database by hash and number,
-// caching it if found.
+// CheckHashInclusion checks to see if a hash is already included in a previous block.
 func (bc *BlockChain) CheckHashInclusion(header *types.Header, parent *types.Header) error {
 	if types.QuaiNetworkContext < 1 {
 		if header.ParentHash[1] == parent.ParentHash[1] {
-			fmt.Println("Region hash already included:", header.ParentHash[1], parent.ParentHash[1])
 			return fmt.Errorf("error subordinate hash already included in parent")
 		}
 	}
 
 	if types.QuaiNetworkContext < 2 {
 		if header.ParentHash[2] == parent.ParentHash[2] {
-			fmt.Println("Zone hash already included:", header.ParentHash[2], parent.ParentHash[2])
 			return fmt.Errorf("error subordinate hash already included in parent")
 		}
 	}
@@ -2857,6 +2876,11 @@ func (bc *BlockChain) SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Su
 // SubscribeChainSideEvent registers a subscription of ChainSideEvent.
 func (bc *BlockChain) SubscribeChainSideEvent(ch chan<- ChainSideEvent) event.Subscription {
 	return bc.scope.Track(bc.chainSideFeed.Subscribe(ch))
+}
+
+// SubscribeChainUncleEvent registers a subscription of an uncled header.
+func (bc *BlockChain) SubscribeChainUncleEvent(ch chan<- *types.Header) event.Subscription {
+	return bc.scope.Track(bc.chainUncleFeed.Subscribe(ch))
 }
 
 // SubscribeLogsEvent registers a subscription of []*types.Log.

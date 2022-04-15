@@ -45,6 +45,7 @@ type Backend interface {
 	SubscribePendingBlockEvent(ch chan<- *types.Header) event.Subscription
 	SubscribeReOrgEvent(ch chan<- core.ReOrgRollup) event.Subscription
 	SubscribeMissingExternalBlockEvent(ch chan<- *types.Header) event.Subscription
+	SubscribeChainUncleEvent(ch chan<- *types.Header) event.Subscription
 
 	BloomStatus() (uint64, uint64)
 	ServiceFilter(ctx context.Context, session *bloombits.MatcherSession)

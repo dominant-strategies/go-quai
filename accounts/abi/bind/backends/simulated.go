@@ -883,6 +883,10 @@ func (fb *filterBackend) SubscribeMissingExternalBlockEvent(ch chan<- *types.Hea
 	return nullSubscription()
 }
 
+func (fb *filterBackend) SubscribeChainUncleEvent(ch chan<- *types.Header) event.Subscription {
+	return nullSubscription()
+}
+
 func (fb *filterBackend) BloomStatus() (uint64, uint64) { return 4096, 0 }
 
 func (fb *filterBackend) ServiceFilter(ctx context.Context, ms *bloombits.MatcherSession) {
