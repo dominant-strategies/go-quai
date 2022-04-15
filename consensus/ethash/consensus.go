@@ -31,6 +31,7 @@ import (
 	"github.com/spruce-solutions/go-quai/consensus/misc"
 	"github.com/spruce-solutions/go-quai/core/state"
 	"github.com/spruce-solutions/go-quai/core/types"
+	"github.com/spruce-solutions/go-quai/event"
 	"github.com/spruce-solutions/go-quai/log"
 	"github.com/spruce-solutions/go-quai/params"
 	"github.com/spruce-solutions/go-quai/rlp"
@@ -801,10 +802,20 @@ func (ethash *Ethash) PrimeTraceBranch(chain consensus.ChainHeaderReader, header
 		}
 
 		// Obtain the external block on the branch we are currently tracing.
-		extBlock, err := chain.GetExternalBlock(header.Hash(), header.Number[context].Uint64(), uint64(context))
+		var extBlock *types.ExternalBlock
+		var err error
+		extBlock, err = chain.GetExternalBlock(header.Hash(), header.Number[context].Uint64(), uint64(context))
 		if err != nil {
-			log.Info("Trace Branch: External Block not found for header", "number", header.Number, "context", context, "hash", header.Hash(), "location", header.Location)
-			return extBlocks, nil
+			log.Info("Trace Branch: External Block not found for header, contacting Manager", "number", header.Number, "context", context, "hash", header.Hash(), "location", header.Location)
+			feed := chain.GetMissingExternalBlockFeed()
+			feed.(*event.Feed).Send(header)
+			time.Sleep(5 * time.Second)
+			// Try again
+			extBlock, err = chain.GetExternalBlock(header.Hash(), header.Number[context].Uint64(), uint64(context))
+			if err != nil {
+				log.Info("Trace Branch: External Block not found for header, second attempt", "number", header.Number, "context", context, "hash", header.Hash(), "location", header.Location)
+				break
+			}
 		}
 		extBlocks = append(extBlocks, extBlock)
 		// log.Info("Trace Branch: PRIME Adding external block", "number", header.Number, "context", context, "location", header.Location, "hash", header.Hash())
@@ -894,10 +905,20 @@ func (ethash *Ethash) RegionTraceBranch(chain consensus.ChainHeaderReader, heade
 		}
 
 		// Obtain the external block on the branch we are currently tracing.
-		extBlock, err := chain.GetExternalBlock(header.Hash(), header.Number[context].Uint64(), uint64(context))
+		var extBlock *types.ExternalBlock
+		var err error
+		extBlock, err = chain.GetExternalBlock(header.Hash(), header.Number[context].Uint64(), uint64(context))
 		if err != nil {
-			log.Info("Trace Branch: External Block not found for header", "number", header.Number, "context", context, "hash", header.Hash(), "location", header.Location)
-			break
+			log.Info("Trace Branch: External Block not found for header, contacting Manager", "number", header.Number, "context", context, "hash", header.Hash(), "location", header.Location)
+			feed := chain.GetMissingExternalBlockFeed()
+			feed.(*event.Feed).Send(header)
+			time.Sleep(5 * time.Second)
+			// Try again
+			extBlock, err = chain.GetExternalBlock(header.Hash(), header.Number[context].Uint64(), uint64(context))
+			if err != nil {
+				log.Info("Trace Branch: External Block not found for header, second attempt", "number", header.Number, "context", context, "hash", header.Hash(), "location", header.Location)
+				break
+			}
 		}
 		extBlocks = append(extBlocks, extBlock)
 		// log.Info("Trace Branch: REGION Adding external block", "number", header.Number, "context", context, "location", header.Location, "hash", header.Hash())

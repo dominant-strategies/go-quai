@@ -685,3 +685,6 @@ func (hc *HeaderChain) GetGasUsedInChain(block *types.Block, length int) int64 {
 func (hc *HeaderChain) GetUnclesInChain(block *types.Block, length int) []*types.Header {
 	return nil
 }
+func (hc *HeaderChain) GetMissingExternalBlockFeed() interface{} {
+	return nil
+}

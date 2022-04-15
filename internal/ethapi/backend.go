@@ -97,6 +97,7 @@ type Backend interface {
 	SubscribePendingBlockEvent(ch chan<- *types.Header) event.Subscription
 	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
 	SubscribeReOrgEvent(ch chan<- core.ReOrgRollup) event.Subscription
+	SubscribeMissingExternalBlockEvent(ch chan<- *types.Header) event.Subscription
 
 	ChainConfig() *params.ChainConfig
 	Engine() consensus.Engine

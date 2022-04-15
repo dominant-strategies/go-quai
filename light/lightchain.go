@@ -619,3 +619,7 @@ func (lc *LightChain) DisableCheckFreq() {
 func (lc *LightChain) EnableCheckFreq() {
 	atomic.StoreInt32(&lc.disableCheckFreq, 0)
 }
+
+func (lc *LightChain) GetMissingExternalBlockFeed() interface{} {
+	return nil
+}

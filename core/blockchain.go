@@ -181,16 +181,17 @@ type BlockChain struct {
 	//  * nil: disable tx reindexer/deleter, but still index new blocks
 	txLookupLimit uint64
 
-	hc            *HeaderChain
-	rmLogsFeed    event.Feed
-	chainFeed     event.Feed
-	reOrgFeed     event.Feed
-	chainSideFeed event.Feed
-	chainHeadFeed event.Feed
-	logsFeed      event.Feed
-	blockProcFeed event.Feed
-	scope         event.SubscriptionScope
-	genesisBlock  *types.Block
+	hc                       *HeaderChain
+	rmLogsFeed               event.Feed
+	chainFeed                event.Feed
+	reOrgFeed                event.Feed
+	missingExternalBlockFeed event.Feed
+	chainSideFeed            event.Feed
+	chainHeadFeed            event.Feed
+	logsFeed                 event.Feed
+	blockProcFeed            event.Feed
+	scope                    event.SubscriptionScope
+	genesisBlock             *types.Block
 
 	chainmu sync.RWMutex // blockchain insertion lock
 
@@ -2838,6 +2839,14 @@ func (bc *BlockChain) SubscribeChainEvent(ch chan<- ChainEvent) event.Subscripti
 // SubscribeReOrgEvent registers a subscription of ReOrgEvent.
 func (bc *BlockChain) SubscribeReOrgEvent(ch chan<- ReOrgRollup) event.Subscription {
 	return bc.scope.Track(bc.reOrgFeed.Subscribe(ch))
+}
+
+func (bc *BlockChain) SubscribeMissingExternalBlockEvent(ch chan<- *types.Header) event.Subscription {
+	return bc.scope.Track(bc.missingExternalBlockFeed.Subscribe(ch))
+}
+
+func (bc *BlockChain) GetMissingExternalBlockFeed() interface{} {
+	return &bc.missingExternalBlockFeed
 }
 
 // SubscribeChainHeadEvent registers a subscription of ChainHeadEvent.

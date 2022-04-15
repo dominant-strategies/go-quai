@@ -59,6 +59,8 @@ type ChainHeaderReader interface {
 
 	// GetGasUsedInChain gets the number value of gas used in the chain up until a certain number.
 	GetGasUsedInChain(block *types.Block, length int) int64
+
+	GetMissingExternalBlockFeed() interface{}
 }
 
 // ChainReader defines a small collection of methods needed to access the local

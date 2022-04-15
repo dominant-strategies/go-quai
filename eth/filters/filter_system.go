@@ -58,6 +58,8 @@ const (
 	LastIndexSubscription
 	// ReOrg subscription sends in the data from the reorg event
 	ReOrgSubscription
+	// MissingExternalBlock subscription sends in the data from the missingExternalBlock event
+	MissingExternalBlockSubscription
 )
 
 const (
@@ -94,24 +96,26 @@ type EventSystem struct {
 	lastHead  *types.Header
 
 	// Subscriptions
-	txsSub          event.Subscription // Subscription for new transaction event
-	logsSub         event.Subscription // Subscription for new log event
-	rmLogsSub       event.Subscription // Subscription for removed log event
-	pendingLogsSub  event.Subscription // Subscription for pending log event
-	pendingBlockSub event.Subscription // Subscription for pending block event
-	chainSub        event.Subscription // Subscription for new chain event
-	reOrgSub        event.Subscription // Subscription for reorg event
+	txsSub                  event.Subscription // Subscription for new transaction event
+	logsSub                 event.Subscription // Subscription for new log event
+	rmLogsSub               event.Subscription // Subscription for removed log event
+	pendingLogsSub          event.Subscription // Subscription for pending log event
+	pendingBlockSub         event.Subscription // Subscription for pending block event
+	chainSub                event.Subscription // Subscription for new chain event
+	reOrgSub                event.Subscription // Subscription for reorg event
+	missingExternalBlockSub event.Subscription // Subscription for missingBlock event
 
 	// Channels
-	install        chan *subscription         // install filter for event notification
-	uninstall      chan *subscription         // remove filter for event notification
-	txsCh          chan core.NewTxsEvent      // Channel to receive new transactions event
-	logsCh         chan []*types.Log          // Channel to receive new log event
-	pendingLogsCh  chan []*types.Log          // Channel to receive new log event
-	pendingBlockCh chan *types.Header         // Channel to receive new pending block event
-	rmLogsCh       chan core.RemovedLogsEvent // Channel to receive removed log event
-	chainCh        chan core.ChainEvent       // Channel to receive new chain event
-	reOrgCh        chan core.ReOrgRollup      // Channel to receive reorg event data
+	install                chan *subscription         // install filter for event notification
+	uninstall              chan *subscription         // remove filter for event notification
+	txsCh                  chan core.NewTxsEvent      // Channel to receive new transactions event
+	logsCh                 chan []*types.Log          // Channel to receive new log event
+	pendingLogsCh          chan []*types.Log          // Channel to receive new log event
+	pendingBlockCh         chan *types.Header         // Channel to receive new pending block event
+	rmLogsCh               chan core.RemovedLogsEvent // Channel to receive removed log event
+	chainCh                chan core.ChainEvent       // Channel to receive new chain event
+	reOrgCh                chan core.ReOrgRollup      // Channel to receive reorg event data
+	missingExternalBlockCh chan *types.Header
 }
 
 // NewEventSystem creates a new manager that listens for event on the given mux,
@@ -122,17 +126,18 @@ type EventSystem struct {
 // or by stopping the given mux.
 func NewEventSystem(backend Backend, lightMode bool) *EventSystem {
 	m := &EventSystem{
-		backend:        backend,
-		lightMode:      lightMode,
-		install:        make(chan *subscription),
-		uninstall:      make(chan *subscription),
-		txsCh:          make(chan core.NewTxsEvent, txChanSize),
-		logsCh:         make(chan []*types.Log, logsChanSize),
-		rmLogsCh:       make(chan core.RemovedLogsEvent, rmLogsChanSize),
-		pendingLogsCh:  make(chan []*types.Log, logsChanSize),
-		pendingBlockCh: make(chan *types.Header),
-		chainCh:        make(chan core.ChainEvent, chainEvChanSize),
-		reOrgCh:        make(chan core.ReOrgRollup),
+		backend:                backend,
+		lightMode:              lightMode,
+		install:                make(chan *subscription),
+		uninstall:              make(chan *subscription),
+		txsCh:                  make(chan core.NewTxsEvent, txChanSize),
+		logsCh:                 make(chan []*types.Log, logsChanSize),
+		rmLogsCh:               make(chan core.RemovedLogsEvent, rmLogsChanSize),
+		pendingLogsCh:          make(chan []*types.Log, logsChanSize),
+		pendingBlockCh:         make(chan *types.Header),
+		chainCh:                make(chan core.ChainEvent, chainEvChanSize),
+		reOrgCh:                make(chan core.ReOrgRollup),
+		missingExternalBlockCh: make(chan *types.Header),
 	}
 
 	// Subscribe events
@@ -143,6 +148,7 @@ func NewEventSystem(backend Backend, lightMode bool) *EventSystem {
 	m.pendingLogsSub = m.backend.SubscribePendingLogsEvent(m.pendingLogsCh)
 	m.pendingBlockSub = m.backend.SubscribePendingBlockEvent(m.pendingBlockCh)
 	m.reOrgSub = m.backend.SubscribeReOrgEvent(m.reOrgCh)
+	m.missingExternalBlockSub = m.backend.SubscribeMissingExternalBlockEvent(m.missingExternalBlockCh)
 
 	// Make sure none of the subscriptions are empty
 	if m.txsSub == nil || m.logsSub == nil || m.rmLogsSub == nil || m.chainSub == nil || m.pendingLogsSub == nil {
@@ -359,6 +365,23 @@ func (es *EventSystem) SubscribeReOrg(reOrg chan core.ReOrgRollup) *Subscription
 	return es.subscribe(sub)
 }
 
+// SubscribeNewHeads creates a subscription that writes the header of a block that is
+// imported in the chain.
+func (es *EventSystem) SubscribeMissingExternalBlock(headers chan *types.Header) *Subscription {
+	sub := &subscription{
+		id:        rpc.NewID(),
+		typ:       MissingExternalBlockSubscription,
+		created:   time.Now(),
+		logs:      make(chan []*types.Log),
+		hashes:    make(chan []common.Hash),
+		headers:   headers,
+		installed: make(chan struct{}),
+		err:       make(chan error),
+		reOrg:     make(chan core.ReOrgRollup),
+	}
+	return es.subscribe(sub)
+}
+
 type filterIndex map[Type]map[rpc.ID]*subscription
 
 func (es *EventSystem) handleLogs(filters filterIndex, ev []*types.Log) {
@@ -394,6 +417,12 @@ func (es *EventSystem) handlePendingBlock(filters filterIndex, ev *types.Header)
 func (es *EventSystem) handleReOrg(filters filterIndex, ev core.ReOrgRollup) {
 	for _, f := range filters[ReOrgSubscription] {
 		f.reOrg <- ev
+	}
+}
+
+func (es *EventSystem) handleMissingExternalBlock(filters filterIndex, ev *types.Header) {
+	for _, f := range filters[MissingExternalBlockSubscription] {
+		f.headers <- ev
 	}
 }
 
@@ -515,6 +544,7 @@ func (es *EventSystem) eventLoop() {
 		es.pendingBlockSub.Unsubscribe()
 		es.chainSub.Unsubscribe()
 		es.reOrgSub.Unsubscribe()
+		es.missingExternalBlockSub.Unsubscribe()
 	}()
 
 	index := make(filterIndex)
@@ -538,6 +568,8 @@ func (es *EventSystem) eventLoop() {
 			es.handleChainEvent(index, ev)
 		case ev := <-es.reOrgCh:
 			es.handleReOrg(index, ev)
+		case ev := <-es.missingExternalBlockCh:
+			es.handleMissingExternalBlock(index, ev)
 
 		case f := <-es.install:
 			if f.typ == MinedAndPendingLogsSubscription {
