@@ -260,7 +260,7 @@ func (s eip2930Signer) Sender(tx *Transaction) (common.Address, error) {
 		if !tx.Protected() {
 			return HomesteadSigner{}.Sender(tx)
 		}
-		V = new(big.Int).Sub(V, s.chainIdMul)
+		V = new(big.Int).Sub(V, new(big.Int).Mul(tx.ChainId(), big.NewInt(2)))
 		V.Sub(V, big8)
 	case AccessListTxType:
 		// AL txs are defined to use 0 and 1 as their recovery
