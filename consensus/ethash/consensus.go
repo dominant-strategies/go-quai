@@ -725,6 +725,8 @@ func (ethash *Ethash) GetCoincidentAndAggDifficulty(chain consensus.ChainHeaderR
 				return header, difficultyContext, totalDiff
 			}
 
+			fmt.Println(difficultyContext, header.Number, header.Hash())
+
 			// If block header is Genesis return it as coincident
 			if header.Number[context].Cmp(big.NewInt(0)) <= 0 {
 				return header, difficultyContext, totalDiff
@@ -844,7 +846,7 @@ func (ethash *Ethash) PrimeTraceBranch(chain consensus.ChainHeaderReader, header
 			return extBlocks, nil
 		}
 		extBlocks = append(extBlocks, extBlock)
-		fmt.Println("Trace Branch: PRIME Adding external block", "number", header.Number, "context", context, "location", header.Location, "hash", header.Hash(), "prevHash", header.ParentHash[context])
+		// fmt.Println("Trace Branch: PRIME Adding external block", "number", header.Number, "context", context, "location", header.Location, "hash", header.Hash(), "prevHash", header.ParentHash[context])
 		if header.ParentHash[context] == stopHash {
 			// fmt.Println("Trace Branch: Stopping on stop hash or num is 1", "number", header.Number, "context", context, "location", header.Location, "prevHash", header.ParentHash[context])
 			break
@@ -883,7 +885,6 @@ func (ethash *Ethash) PrimeTraceBranch(chain consensus.ChainHeaderReader, header
 			break
 		}
 	}
-	fmt.Println("Prime trace ext blocks", extBlocks)
 	return extBlocks, nil
 }
 
@@ -938,7 +939,7 @@ func (ethash *Ethash) RegionTraceBranch(chain consensus.ChainHeaderReader, heade
 			break
 		}
 		extBlocks = append(extBlocks, extBlock)
-		fmt.Println("Trace Branch: REGION Adding external block", "number", header.Number, "context", context, "location", header.Location, "hash", header.Hash())
+		// fmt.Println("Trace Branch: REGION Adding external block", "number", header.Number, "context", context, "location", header.Location, "hash", header.Hash())
 
 		// Stop on the passed in stopHash
 		// fmt.Println("Region stopHash", header.ParentHash[context], stopHash)
@@ -1055,8 +1056,9 @@ func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, heade
 func (ethash *Ethash) GetLinkExternalBlocks(chain consensus.ChainHeaderReader, header *types.Header, logging bool) ([]*types.ExternalBlock, error) {
 	context := chain.Config().Context // Index that node is currently at
 	externalBlocks := make([]*types.ExternalBlock, 0)
-	fmt.Println("GetLinkExternalBlocks: Getting trace for block", "num", header.Number, "context", context, "location", header.Location, "hash", header.Hash())
-	fmt.Println("Getting Link blocks")
+	log.Info("GetLinkExternalBlocks: Getting trace for block", "num", header.Number, "context", context, "location", header.Location, "hash", header.Hash())
+	start := time.Now()
+
 	// Do not run on block 0
 	if header.Number[context].Cmp(big.NewInt(0)) > 0 {
 		difficultyContext, err := ethash.GetDifficultyContext(chain, header, context)
@@ -1104,7 +1106,7 @@ func (ethash *Ethash) GetLinkExternalBlocks(chain consensus.ChainHeaderReader, h
 		}
 	}
 
-	fmt.Println("GetLinkExternalBlocks: length of external blocks", len(externalBlocks))
+	fmt.Println("GetLinkExternalBlocks: length of external blocks", len(externalBlocks), "time", time.Since(start))
 	return externalBlocks, nil
 }
 
