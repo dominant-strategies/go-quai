@@ -1467,23 +1467,15 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 // but is expects the chain mutex to be held.
 func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
 
-	parent := bc.GetHeaderByHash(block.ParentHash())
-	context, err := bc.Engine().GetDifficultyContext(bc, parent, types.QuaiNetworkContext)
-	if err != nil {
-		return NonStatTy, err
+	ptd := block.Header().NetworkDifficulty[types.QuaiNetworkContext]
+	if ptd == nil {
+		return NonStatTy, consensus.ErrUnknownAncestor
 	}
-
-	ptd := parent.NetworkDifficulty[context]
 
 	// Make sure no inconsistent state is leaked during insertion
 	currentBlock := bc.CurrentBlock()
 	localTd := bc.GetTd(currentBlock.Hash(), currentBlock.NumberU64())
-
-	externContext, err := bc.Engine().GetDifficultyContext(bc, block.Header(), types.QuaiNetworkContext)
-	if err != nil {
-		return NonStatTy, err
-	}
-	externTd := new(big.Int).Add(block.Header().Difficulty[externContext], ptd)
+	externTd := new(big.Int).Add(block.Header().Difficulty[types.QuaiNetworkContext], ptd)
 
 	// Irrelevant of the canonical status, write the block itself to the database.
 	//
