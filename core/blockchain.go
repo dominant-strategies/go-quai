@@ -1466,45 +1466,25 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 // writeBlockWithState writes the block and all associated state to the database,
 // but is expects the chain mutex to be held.
 func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
-	// Make sure no inconsistent state is leaked during insertion
-	currentBlock := bc.CurrentBlock()
-	fmt.Println("writeBlockWithState, number:", block.Header().Number)
 
-	// Retrieve the coincident blocks for the local and extern blocks. The coincidents will be compared if the same
-	// coincident block is not being built upon. Pass localIndex+1 to extern so that the matching type is found for the externCoincident.
-	localCoincident, localIndex, localAggDiff := bc.Engine().GetCoincidentAndAggDifficulty(bc, types.QuaiNetworkContext, types.QuaiNetworkContext, currentBlock.Header())
-	externCoincident, externIndex, externAggDiff := bc.Engine().GetCoincidentAndAggDifficulty(bc, types.QuaiNetworkContext, localIndex+1, block.Header())
-
-	// Set the localTd and externTd to the network difficulty of the index of each coincident block.
-	// Aggregate the work done post coincident under the assumption they are the same coincident block.
-	localTd := new(big.Int).Add(localCoincident.NetworkDifficulty[localIndex], localAggDiff)
-	externTd := new(big.Int).Add(externCoincident.NetworkDifficulty[externIndex], externAggDiff)
-
-	// In the event the coincidents do not match, check the network difficulty of the two. This ensures
-	// that the chain is being built on the proper coincident.
-	if localCoincident.Hash() != externCoincident.Hash() {
-		localTd = new(big.Int).Set(localCoincident.NetworkDifficulty[localIndex])
-		externTd = new(big.Int).Set(externCoincident.NetworkDifficulty[externIndex])
-	}
-
-	fmt.Println("localCoincident", localCoincident.Number, localCoincident.NetworkDifficulty, localIndex, localAggDiff)
-	fmt.Println("externCoincident", externCoincident.Number, externCoincident.NetworkDifficulty, externIndex, externAggDiff)
-
-	// Retrieve the current difficulty context of the block being imported.
-	context, err := bc.Engine().GetDifficultyContext(bc, block.Header(), types.QuaiNetworkContext)
+	parent := bc.GetHeaderByHash(block.ParentHash())
+	context, err := bc.Engine().GetDifficultyContext(bc, parent, types.QuaiNetworkContext)
 	if err != nil {
 		return NonStatTy, err
 	}
 
-	fmt.Println("current num:", block.Header().Number, context, types.QuaiNetworkContext)
-	// If the block being imported is a coincident block, we must compare it to our latest coincident block
-	if context < types.QuaiNetworkContext {
-		fmt.Println("coincident header:", localCoincident.Number, "coincidentNetworkDiff", localCoincident.NetworkDifficulty)
-		localTd = new(big.Int).Add(localCoincident.NetworkDifficulty[context], localCoincident.Difficulty[context])
-		externTd = new(big.Int).Add(block.Header().NetworkDifficulty[context], block.Header().Difficulty[context])
-	}
+	ptd := parent.NetworkDifficulty[context]
 
-	fmt.Println("LocalTd", localTd, "externTd", externTd, "blockDiff", block.Difficulty(), "networkDiff", block.Header().NetworkDifficulty)
+	// Make sure no inconsistent state is leaked during insertion
+	currentBlock := bc.CurrentBlock()
+	localTd := bc.GetTd(currentBlock.Hash(), currentBlock.NumberU64())
+
+	externContext, err := bc.Engine().GetDifficultyContext(bc, block.Header(), types.QuaiNetworkContext)
+	if err != nil {
+		return NonStatTy, err
+	}
+	externTd := new(big.Int).Add(block.Header().Difficulty[externContext], ptd)
+
 	// Irrelevant of the canonical status, write the block itself to the database.
 	//
 	// Note all the components of block(td, hash->number map, header, body, receipts)
@@ -1613,6 +1593,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	bc.futureBlocks.Remove(block.Hash())
 
 	if status == CanonStatTy {
+		fmt.Println("status == CanonStatTy")
 		bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
 		if len(logs) > 0 {
 			bc.logsFeed.Send(logs)
@@ -1675,8 +1656,8 @@ func (bc *BlockChain) AddExternalBlock(block *types.ExternalBlock) error {
 func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 	log.Info("Rolling back header beyond", "hash", header.Hash())
 
-	// bc.chainmu.Lock()
-	// defer bc.chainmu.Unlock()
+	bc.chainmu.Lock()
+	defer bc.chainmu.Unlock()
 	var (
 		deletedTxs  types.Transactions
 		deletedLogs [][]*types.Log
@@ -2131,7 +2112,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			// Get the linkBlocks and check linkage to previous external blocks.
 			linkExtBlocks, err := bc.engine.GetLinkExternalBlocks(bc, block.Header(), true)
 
-			fmt.Println(linkExtBlocks, len(linkExtBlocks))
+			fmt.Println("linkExtBlocks", len(linkExtBlocks))
 			if err != nil {
 				return it.index, err
 			}
@@ -3144,7 +3125,7 @@ func (bc *BlockChain) SetLinkBlocksToLastApplied(externalBlocks []*types.Externa
 func (bc *BlockChain) CheckExtBlockDuplicates(externalBlocks []*types.ExternalBlock) error {
 	m := make(map[string]bool)
 	for _, extBlock := range externalBlocks {
-		fmt.Println(extBlock.CacheKey())
+		fmt.Println(extBlock.Header().Number, extBlock.Hash())
 		if _, ok := m[string(extBlock.CacheKey())]; !ok {
 			m[string(extBlock.CacheKey())] = true
 		} else {
@@ -3184,10 +3165,6 @@ func (bc *BlockChain) CheckExternalBlockLink(externalBlocks []*types.ExternalBlo
 			linkBlocks.zones[externalBlock.Header().Location[0]-1][externalBlock.Header().Location[1]-1] = linkedPreviousHash
 		}
 	}
-
-	fmt.Println(bc.blockLink)
-
-	fmt.Println(linkBlocks.prime, linkBlocks.regions, bc.blockLink.regions)
 
 	// Verify that the externalBlocks provided link with previous coincident blocks.
 	if linkBlocks.prime != (common.Hash{}) && linkBlocks.prime != bc.blockLink.prime {

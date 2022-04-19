@@ -412,6 +412,7 @@ func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*
 		b.header.UncleHash = []common.Hash{CalcUncleHash(uncles), CalcUncleHash(uncles), CalcUncleHash(uncles)}
 		b.uncles = make([]*Header, len(uncles))
 		for i := range uncles {
+			fmt.Println("NewBlock: uncle", uncles[i].Hash())
 			b.uncles[i] = CopyHeader(uncles[i])
 		}
 	}

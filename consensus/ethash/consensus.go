@@ -653,10 +653,20 @@ func (ethash *Ethash) Prepare(chain consensus.ChainHeaderReader, header *types.H
 		return consensus.ErrUnknownAncestor
 	}
 	header.Difficulty[types.QuaiNetworkContext] = ethash.CalcDifficulty(chain, header.Time, parent, types.QuaiNetworkContext)
-	currentTotal := big.NewInt(0)
-	currentTotal.Add(parent.NetworkDifficulty[types.QuaiNetworkContext], header.Difficulty[types.QuaiNetworkContext])
-	fmt.Println("Prepare: ParentNetworkDifficulty", parent.NetworkDifficulty[types.QuaiNetworkContext], "currentTotal", currentTotal)
-	header.NetworkDifficulty[types.QuaiNetworkContext] = currentTotal
+
+	// Get the highest context index for the parent.
+	context, err := ethash.GetDifficultyContext(chain, parent, types.QuaiNetworkContext)
+	if err != nil {
+		return err
+	}
+
+	// In the event our parent is a coincident block, set to the parents NetworkDifficulty.
+	if context < types.QuaiNetworkContext {
+		header.NetworkDifficulty[types.QuaiNetworkContext] = new(big.Int).Set(parent.NetworkDifficulty[context])
+	} else {
+		header.NetworkDifficulty[types.QuaiNetworkContext] = new(big.Int).Add(parent.NetworkDifficulty[types.QuaiNetworkContext], header.Difficulty[types.QuaiNetworkContext])
+	}
+
 	return nil
 }
 
@@ -712,7 +722,7 @@ func (ethash *Ethash) GetCoincidentHeader(chain consensus.ChainHeaderReader, con
 
 // GetCoincidentAndAggDifficulty iterates back through headers to find ones that exceed a given expectedContext.
 func (ethash *Ethash) GetCoincidentAndAggDifficulty(chain consensus.ChainHeaderReader, context int, expectedContext int, header *types.Header) (*types.Header, int, *big.Int) {
-	totalDiff := new(big.Int).Set(header.Difficulty[context])
+	totalDiff := big.NewInt(0)
 	// If we are at the highest context, no coincident will include it.
 	if context == 0 {
 		return header, 0, totalDiff
@@ -723,6 +733,12 @@ func (ethash *Ethash) GetCoincidentAndAggDifficulty(chain consensus.ChainHeaderR
 			difficultyContext, err := ethash.GetDifficultyContext(chain, header, context)
 			if err != nil {
 				return header, difficultyContext, totalDiff
+			}
+
+			i := difficultyContext
+			for i <= context {
+				totalDiff.Add(totalDiff, header.Difficulty[i])
+				i++
 			}
 
 			fmt.Println(difficultyContext, header.Number, header.Hash())
@@ -741,8 +757,6 @@ func (ethash *Ethash) GetCoincidentAndAggDifficulty(chain consensus.ChainHeaderR
 			prevHeader := chain.GetHeaderByHash(header.ParentHash[context])
 			// Increment previous header
 			header = prevHeader
-
-			totalDiff.Add(totalDiff, header.Difficulty[context])
 		}
 	}
 }
