@@ -628,7 +628,9 @@ func (w *worker) taskLoop() {
 	for {
 		select {
 		case task := <-w.taskCh:
+			log.Info("In task operation")
 			if w.newTaskHook != nil {
+				log.Info("newTaskHook != nil")
 				w.newTaskHook(task)
 			}
 			// Reject duplicate sealing work due to resubmitting.
@@ -638,9 +640,11 @@ func (w *worker) taskLoop() {
 				// continue
 			}
 			// Interrupt previous sealing operation
+			log.Info("Interrupt previous sealing")
 			interrupt()
 			stopCh, prev = make(chan struct{}), sealHash
 
+			log.Info("Worker grabbing pendingMu lock")
 			// if w.skipSealHook != nil && w.skipSealHook(task) {
 			// 	continue
 			// }

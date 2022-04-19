@@ -1475,21 +1475,18 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	// Make sure no inconsistent state is leaked during insertion
 	currentBlock := bc.CurrentBlock()
 	fmt.Println("writeBlockWithState, number:", block.Header().Number)
-	localCoincident, localIndex, localAggDiff := bc.Engine().GetCoincidentAndAggDifficulty(bc, types.QuaiNetworkContext, currentBlock.Header())
-	externCoincident, externIndex, externAggDiff := bc.Engine().GetCoincidentAndAggDifficulty(bc, types.QuaiNetworkContext, block.Header())
+	localCoincident, localIndex, localAggDiff := bc.Engine().GetCoincidentAndAggDifficulty(bc, types.QuaiNetworkContext, types.QuaiNetworkContext, currentBlock.Header())
+	// Pass localIndex+1 so that the matching type is found for the externCoincident.
+	externCoincident, externIndex, externAggDiff := bc.Engine().GetCoincidentAndAggDifficulty(bc, types.QuaiNetworkContext, localIndex+1, block.Header())
 
-	// If externIndex is Prime and localIndex is Region, the indexes should be matching.
-	if externIndex < localIndex {
-		externIndex = localIndex
-	}
-
-	// If running in a Region, the localIndex can be 0 and externIndex can be 1. In this case,
-	// canonical Region blocks do not get added since the Prime networkDifficulty will be more than the agg diff of the externCoincident.
-	if localIndex < externIndex && types.QuaiNetworkContext == 1 {
-		localIndex = externIndex
-	}
 	localTd := new(big.Int).Add(localCoincident.NetworkDifficulty[localIndex], localAggDiff)
 	externTd := new(big.Int).Add(externCoincident.NetworkDifficulty[externIndex], externAggDiff)
+
+	if localCoincident.Hash() != externCoincident.Hash() {
+		// If the chain is not building on the proper coincident
+		localTd = new(big.Int).Set(localCoincident.NetworkDifficulty[localIndex])
+		externTd = new(big.Int).Set(externCoincident.NetworkDifficulty[externIndex])
+	}
 
 	fmt.Println("localCoincident", localCoincident.Number, localCoincident.NetworkDifficulty, localIndex, localAggDiff)
 	fmt.Println("externCoincident", externCoincident.Number, externCoincident.NetworkDifficulty, externIndex, externAggDiff)
@@ -1502,10 +1499,8 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	fmt.Println("current num:", block.Header().Number, context, types.QuaiNetworkContext)
 	if context < types.QuaiNetworkContext {
 		fmt.Println("coincident header:", localCoincident.Number, "coincidentNetworkDiff", localCoincident.NetworkDifficulty)
-		externTd = new(big.Int).Add(block.Header().NetworkDifficulty[context], block.Header().Difficulty[context])
 		localTd = new(big.Int).Set(localCoincident.NetworkDifficulty[context])
-	} else if localCoincident.Hash() != externCoincident.Hash() && types.QuaiNetworkContext == 2 {
-		externTd = new(big.Int).Set(externCoincident.NetworkDifficulty[externIndex])
+		externTd = new(big.Int).Add(block.Header().NetworkDifficulty[context], block.Header().Difficulty[context])
 	}
 
 	fmt.Println("LocalTd", localTd, "externTd", externTd, "blockDiff", block.Difficulty(), "networkDiff", block.Header().NetworkDifficulty)
@@ -1835,13 +1830,11 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 		}
 	}
 	// Pre-checks passed, start the full block imports
-	bc.wg.Add(1)
 	bc.chainmu.Lock()
 	log.Info("InsertChain Lock", "hash", chain[0].Header().Number)
 	n, err := bc.insertChain(chain, true)
 	log.Info("InsertChain Unlock", "hash", chain[0].Header().Number)
 	bc.chainmu.Unlock()
-	bc.wg.Done()
 
 	return n, err
 }
@@ -1871,8 +1864,10 @@ func (bc *BlockChain) InsertChainWithoutSealVerification(block *types.Block) (in
 // is imported, but then new canon-head is added before the actual sidechain
 // completes, then the historic state could be pruned again
 func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, error) {
+	log.Info("starting insertChain")
 	// If the chain is terminating, don't even bother starting up
 	if atomic.LoadInt32(&bc.procInterrupt) == 1 {
+		log.Info("exiting insertChain")
 		return 0, nil
 	}
 	// Start a parallel signature recovery (signer will fluke on fork transition, minimal perf loss)

@@ -612,7 +612,7 @@ func (c *Clique) GetCoincidentHeader(chain consensus.ChainHeaderReader, context 
 }
 
 // GetCoincidentHeader retrieves the furthest coincident header back
-func (c *Clique) GetCoincidentAndAggDifficulty(chain consensus.ChainHeaderReader, context int, header *types.Header) (*types.Header, int, *big.Int) {
+func (c *Clique) GetCoincidentAndAggDifficulty(chain consensus.ChainHeaderReader, context int, expectedContext int, header *types.Header) (*types.Header, int, *big.Int) {
 	return nil, 0, big.NewInt(0)
 }
 

@@ -668,7 +668,7 @@ func (ethash *Ethash) Finalize(chain consensus.ChainHeaderReader, header *types.
 	header.Root[types.QuaiNetworkContext] = state.IntermediateRoot(chain.Config().IsEIP158(header.Number[types.QuaiNetworkContext]))
 }
 
-// Iterate back through headers to find ones that exceed a given context.
+// GetCoincidentHeader iterates back through headers to find ones that exceed its own context.
 func (ethash *Ethash) GetCoincidentHeader(chain consensus.ChainHeaderReader, context int, header *types.Header) (*types.Header, int) {
 	// If we are at the highest context, no coincident will include it.
 	if context == 0 {
@@ -710,8 +710,8 @@ func (ethash *Ethash) GetCoincidentHeader(chain consensus.ChainHeaderReader, con
 	}
 }
 
-// Iterate back through headers to find ones that exceed a given context.
-func (ethash *Ethash) GetCoincidentAndAggDifficulty(chain consensus.ChainHeaderReader, context int, header *types.Header) (*types.Header, int, *big.Int) {
+// GetCoincidentAndAggDifficulty iterates back through headers to find ones that exceed a given expectedContext.
+func (ethash *Ethash) GetCoincidentAndAggDifficulty(chain consensus.ChainHeaderReader, context int, expectedContext int, header *types.Header) (*types.Header, int, *big.Int) {
 	totalDiff := new(big.Int).Set(header.Difficulty[context])
 	// If we are at the highest context, no coincident will include it.
 	if context == 0 {
@@ -731,9 +731,7 @@ func (ethash *Ethash) GetCoincidentAndAggDifficulty(chain consensus.ChainHeaderR
 			}
 
 			// If we have reached a coincident block
-			if difficultyContext < context {
-				return header, difficultyContext, totalDiff
-			} else if difficultyContext == 1 && context == 1 {
+			if difficultyContext < expectedContext {
 				return header, difficultyContext, totalDiff
 			}
 
