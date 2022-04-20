@@ -655,16 +655,16 @@ func (ethash *Ethash) Prepare(chain consensus.ChainHeaderReader, header *types.H
 	header.Difficulty[types.QuaiNetworkContext] = ethash.CalcDifficulty(chain, header.Time, parent, types.QuaiNetworkContext)
 
 	// Get the highest context index for the parent.
-	context, err := ethash.GetDifficultyContext(chain, parent, types.QuaiNetworkContext)
+	parentContext, err := ethash.GetDifficultyContext(chain, parent, types.QuaiNetworkContext)
 	if err != nil {
 		return err
 	}
 
 	// In the event our parent is a coincident block, set to the parents NetworkDifficulty.
-	if context < types.QuaiNetworkContext {
-		header.NetworkDifficulty[types.QuaiNetworkContext] = new(big.Int).Set(parent.NetworkDifficulty[context])
+	if parentContext < types.QuaiNetworkContext {
+		header.NetworkDifficulty[types.QuaiNetworkContext] = new(big.Int).Set(parent.NetworkDifficulty[parentContext])
 	} else {
-		header.NetworkDifficulty[types.QuaiNetworkContext] = new(big.Int).Add(parent.NetworkDifficulty[types.QuaiNetworkContext], header.Difficulty[types.QuaiNetworkContext])
+		header.NetworkDifficulty[types.QuaiNetworkContext] = new(big.Int).Add(parent.NetworkDifficulty[types.QuaiNetworkContext], parent.Difficulty[types.QuaiNetworkContext])
 	}
 
 	return nil

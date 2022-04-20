@@ -1467,15 +1467,32 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 // but is expects the chain mutex to be held.
 func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
 
-	ptd := block.Header().NetworkDifficulty[types.QuaiNetworkContext]
-	if ptd == nil {
-		return NonStatTy, consensus.ErrUnknownAncestor
-	}
-
 	// Make sure no inconsistent state is leaked during insertion
 	currentBlock := bc.CurrentBlock()
-	localTd := bc.GetTd(currentBlock.Hash(), currentBlock.NumberU64())
-	externTd := new(big.Int).Add(block.Header().Difficulty[types.QuaiNetworkContext], ptd)
+	localContext, err := bc.Engine().GetDifficultyContext(bc, currentBlock.Header(), types.QuaiNetworkContext)
+	if err != nil {
+		return NonStatTy, err
+	}
+
+	externContext, err := bc.Engine().GetDifficultyContext(bc, block.Header(), types.QuaiNetworkContext)
+	if err != nil {
+		return NonStatTy, err
+	}
+
+	localHeader := currentBlock.Header()
+	externHeader := block.Header()
+
+	if externContext < localContext {
+		localHeader, localContext, _ = bc.Engine().GetCoincidentAndAggDifficulty(bc, types.QuaiNetworkContext, externContext+1, currentBlock.Header())
+	} else if localContext < externContext {
+		externHeader, externContext, _ = bc.Engine().GetCoincidentAndAggDifficulty(bc, types.QuaiNetworkContext, localContext+1, block.Header())
+	}
+
+	localTd := new(big.Int).Set(localHeader.NetworkDifficulty[localContext])
+	externTd := new(big.Int).Add(externHeader.NetworkDifficulty[externContext], externHeader.Difficulty[externContext])
+
+	fmt.Println("currentDiff", currentBlock.Header().Difficulty, "currentNetworkDiff", currentBlock.Header().NetworkDifficulty)
+	fmt.Println("localTd", localTd, "externTd", externTd, "blockDiff", block.Header().Difficulty, "networkDiff", block.Header().NetworkDifficulty)
 
 	// Irrelevant of the canonical status, write the block itself to the database.
 	//
