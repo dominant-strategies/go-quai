@@ -1466,6 +1466,7 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 // writeBlockWithState writes the block and all associated state to the database,
 // but is expects the chain mutex to be held.
 func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
+	fmt.Println("writeBlockWithState", block.Header().Number, block.Hash())
 
 	// Make sure no inconsistent state is leaked during insertion
 	currentBlock := bc.CurrentBlock()
@@ -1502,8 +1503,10 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	}
 	localTd := new(big.Int).Add(localHeader.NetworkDifficulty[localContext], localHeader.Difficulty[localContext])
 
-	fmt.Println("localTd", localTd, "localDiff", localHeader.Difficulty, "localNetworkDiff", localHeader.NetworkDifficulty, "localNum", localHeader.Number)
-	fmt.Println("externTd", externTd, "blockDiff", block.Header().Difficulty, "networkDiff", block.Header().NetworkDifficulty, "externNum", externHeader.Number)
+	fmt.Println("localTd", localTd, "localDiff", localHeader.Difficulty, "localNetworkDiff", localHeader.NetworkDifficulty, "localNum", localHeader.Number, "localContext", localContext)
+	fmt.Println("localHash", localHeader.Hash())
+	fmt.Println("externTd", externTd, "blockDiff", block.Header().Difficulty, "networkDiff", block.Header().NetworkDifficulty, "externNum", externHeader.Number, "externContext", externContext)
+	fmt.Println("externHash", externHeader.Hash())
 
 	// Irrelevant of the canonical status, write the block itself to the database.
 	//
@@ -1726,6 +1729,7 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 
 		// if a block with this hash does not exist then we dont have to roll back
 		if commonBlock == nil {
+			fmt.Println("Unable to find commonBlock", header.Hash())
 			return nil
 		}
 		// get the current head in this chain
@@ -1832,6 +1836,7 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 		}
 	}
 	// Pre-checks passed, start the full block imports
+	log.Info("Trying to grab InsertChain Lock", "hash", chain[0].Header().Number)
 	bc.chainmu.Lock()
 	log.Info("InsertChain Lock", "hash", chain[0].Header().Number)
 	n, err := bc.insertChain(chain, true)
