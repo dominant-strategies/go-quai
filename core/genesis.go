@@ -175,7 +175,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 		if err != nil {
 			return genesis.Config, common.Hash{}, err
 		}
-		log.Info("Genesis hash", "hash", block.Hash())
+		fmt.Println("Genesis hash", "hash", block.Hash())
 		return genesis.Config, block.Hash(), nil
 	}
 	// We have the genesis block in database(perhaps in ancient database)
@@ -282,7 +282,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		GasLimit:          []uint64{g.GasLimit, g.GasLimit, g.GasLimit},
 		GasUsed:           []uint64{g.GasUsed, g.GasUsed, g.GasUsed},
 		Difficulty:        []*big.Int{g.Difficulty, g.Difficulty, g.Difficulty},
-		NetworkDifficulty: []*big.Int{g.Difficulty, g.Difficulty, g.Difficulty},
+		NetworkDifficulty: []*big.Int{big.NewInt(0), big.NewInt(0), big.NewInt(0)},
 		MixDigest:         g.Mixhash,
 		Coinbase:          []common.Address{g.Coinbase, g.Coinbase, g.Coinbase},
 		Nonce:             types.EncodeNonce(g.Nonce),

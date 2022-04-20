@@ -1484,15 +1484,26 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 	if externContext < localContext {
 		localHeader, localContext, _ = bc.Engine().GetCoincidentAndAggDifficulty(bc, types.QuaiNetworkContext, externContext+1, currentBlock.Header())
-	} else if localContext < externContext {
-		externHeader, externContext, _ = bc.Engine().GetCoincidentAndAggDifficulty(bc, types.QuaiNetworkContext, localContext+1, block.Header())
 	}
 
-	localTd := new(big.Int).Set(localHeader.NetworkDifficulty[localContext])
-	externTd := new(big.Int).Add(externHeader.NetworkDifficulty[externContext], externHeader.Difficulty[externContext])
+	var externAggDiff *big.Int
+	if localContext < externContext {
+		externHeader, externContext, externAggDiff = bc.Engine().GetCoincidentAndAggDifficulty(bc, types.QuaiNetworkContext, localContext+1, block.Header())
+	}
 
-	fmt.Println("currentDiff", currentBlock.Header().Difficulty, "currentNetworkDiff", currentBlock.Header().NetworkDifficulty)
-	fmt.Println("localTd", localTd, "externTd", externTd, "blockDiff", block.Header().Difficulty, "networkDiff", block.Header().NetworkDifficulty)
+	var externTd *big.Int
+	// If are building on a coincident, we need to aggregate the difficulty.
+	// Else we consider the network difficulties at the coincidents or equal level.
+	if localHeader.Hash() == externHeader.Hash() {
+		externTd = new(big.Int).Add(externHeader.NetworkDifficulty[externContext], externHeader.Difficulty[externContext])
+		externTd.Add(externTd, externAggDiff)
+	} else {
+		externTd = new(big.Int).Add(externHeader.NetworkDifficulty[externContext], externHeader.Difficulty[externContext])
+	}
+	localTd := new(big.Int).Add(localHeader.NetworkDifficulty[localContext], localHeader.Difficulty[localContext])
+
+	fmt.Println("localTd", localTd, "localDiff", localHeader.Difficulty, "localNetworkDiff", localHeader.NetworkDifficulty, "localNum", localHeader.Number)
+	fmt.Println("externTd", externTd, "blockDiff", block.Header().Difficulty, "networkDiff", block.Header().NetworkDifficulty, "externNum", externHeader.Number)
 
 	// Irrelevant of the canonical status, write the block itself to the database.
 	//
@@ -2071,6 +2082,31 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			atomic.StoreUint32(&followupInterrupt, 1)
 			return it.index, err
 		}
+		// Get the linkBlocks and check linkage to previous external blocks.
+		linkExtBlocks, err := bc.engine.GetLinkExternalBlocks(bc, block.Header(), true)
+		if err != nil {
+			bc.reportBlock(block, receipts, err)
+			bc.chainUncleFeed.Send(block.Header())
+			return it.index, err
+		}
+		if len(linkExtBlocks) > 0 {
+			duplicateErr := bc.CheckExtBlockDuplicates(linkExtBlocks)
+			if duplicateErr != nil {
+				bc.reportBlock(block, receipts, duplicateErr)
+				bc.chainUncleFeed.Send(block.Header())
+				return it.index, duplicateErr
+			}
+			cpyExtBlocks := make([]*types.ExternalBlock, len(linkExtBlocks))
+			copy(cpyExtBlocks, linkExtBlocks)
+
+			linkErr := bc.CheckExternalBlockLink(cpyExtBlocks)
+			if linkErr != nil {
+				bc.reportBlock(block, receipts, linkErr)
+				bc.chainUncleFeed.Send(block.Header())
+				return it.index, linkErr
+			}
+		}
+
 		// Update the metrics touched during block processing
 		accountReadTimer.Update(statedb.AccountReads)                 // Account reads are complete, we can mark them
 		storageReadTimer.Update(statedb.StorageReads)                 // Storage reads are complete, we can mark them
@@ -2117,37 +2153,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 
 		switch status {
 		case CanonStatTy:
-
-			// Get the linkBlocks and check linkage to previous external blocks.
-			linkExtBlocks, err := bc.engine.GetLinkExternalBlocks(bc, block.Header(), true)
-
-			fmt.Println("linkExtBlocks", len(linkExtBlocks))
-			if err != nil {
-				return it.index, err
-			}
-
-			if len(linkExtBlocks) > 0 {
-				cpyExtBlocks := make([]*types.ExternalBlock, len(linkExtBlocks))
-				copy(cpyExtBlocks, linkExtBlocks)
-
-				duplicateErr := bc.CheckExtBlockDuplicates(cpyExtBlocks)
-				if duplicateErr != nil {
-					bc.reportBlock(block, receipts, duplicateErr)
-					bc.chainUncleFeed.Send(block.Header())
-					return it.index, duplicateErr
-				}
-
-				linkErr := bc.CheckExternalBlockLink(cpyExtBlocks)
-				if linkErr != nil {
-					log.Warn("Error linking during process: ", "err", linkErr)
-					bc.reportBlock(block, receipts, linkErr)
-					bc.chainUncleFeed.Send(block.Header())
-					return it.index, linkErr
-				}
-
-				bc.SetLinkBlocksToLastApplied(linkExtBlocks)
-			}
-
+			bc.SetLinkBlocksToLastApplied(linkExtBlocks)
 			bc.StoreExternalBlocks(linkExtBlocks)
 
 			log.Info("Inserted new block", "number", block.Header().Number, "hash", block.Hash(), "extBlocks", len(externalBlocks),

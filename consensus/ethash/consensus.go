@@ -662,7 +662,7 @@ func (ethash *Ethash) Prepare(chain consensus.ChainHeaderReader, header *types.H
 
 	// In the event our parent is a coincident block, set to the parents NetworkDifficulty.
 	if parentContext < types.QuaiNetworkContext {
-		header.NetworkDifficulty[types.QuaiNetworkContext] = new(big.Int).Set(parent.NetworkDifficulty[parentContext])
+		header.NetworkDifficulty[types.QuaiNetworkContext] = new(big.Int).Add(parent.NetworkDifficulty[parentContext], parent.Difficulty[parentContext])
 	} else {
 		header.NetworkDifficulty[types.QuaiNetworkContext] = new(big.Int).Add(parent.NetworkDifficulty[types.QuaiNetworkContext], parent.Difficulty[types.QuaiNetworkContext])
 	}
