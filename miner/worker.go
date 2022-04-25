@@ -997,21 +997,20 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	// Construct the sealing block header, set the extra field if it's allowed
 	num := parent.Number()
 	header := &types.Header{
-		ParentHash:        make([]common.Hash, 3),
-		Number:            make([]*big.Int, 3),
-		Extra:             make([][]byte, 3),
-		Time:              uint64(timestamp),
-		BaseFee:           make([]*big.Int, 3),
-		GasLimit:          make([]uint64, 3),
-		Coinbase:          make([]common.Address, 3),
-		Difficulty:        make([]*big.Int, 3),
-		NetworkDifficulty: make([]*big.Int, 3),
-		Root:              make([]common.Hash, 3),
-		TxHash:            make([]common.Hash, 3),
-		ReceiptHash:       make([]common.Hash, 3),
-		GasUsed:           make([]uint64, 3),
-		Bloom:             make([]types.Bloom, 3),
-		Location:          w.chainConfig.Location,
+		ParentHash:  make([]common.Hash, 3),
+		Number:      make([]*big.Int, 3),
+		Extra:       make([][]byte, 3),
+		Time:        uint64(timestamp),
+		BaseFee:     make([]*big.Int, 3),
+		GasLimit:    make([]uint64, 3),
+		Coinbase:    make([]common.Address, 3),
+		Difficulty:  make([]*big.Int, 3),
+		Root:        make([]common.Hash, 3),
+		TxHash:      make([]common.Hash, 3),
+		ReceiptHash: make([]common.Hash, 3),
+		GasUsed:     make([]uint64, 3),
+		Bloom:       make([]types.Bloom, 3),
+		Location:    w.chainConfig.Location,
 	}
 	header.ParentHash[types.QuaiNetworkContext] = parent.Hash()
 	header.Number[types.QuaiNetworkContext] = big.NewInt(int64(num.Uint64()) + 1)

@@ -1468,45 +1468,55 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
 	fmt.Println("writeBlockWithState", block.Header().Number, block.Hash())
 
+	// Calculate the total difficulty of the block
+	ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
+	if ptd == nil {
+		return NonStatTy, consensus.ErrUnknownAncestor
+	}
+	// Make sure no inconsistent state is leaked during insertion
+	externTd := new(big.Int).Add(block.Difficulty(), ptd)
+
 	// Make sure no inconsistent state is leaked during insertion
 	currentBlock := bc.CurrentBlock()
-	localContext, err := bc.Engine().GetDifficultyContext(bc, currentBlock.Header(), types.QuaiNetworkContext)
-	if err != nil {
-		return NonStatTy, err
-	}
+	localTd := bc.GetTd(currentBlock.Hash(), currentBlock.NumberU64())
 
-	externContext, err := bc.Engine().GetDifficultyContext(bc, block.Header(), types.QuaiNetworkContext)
-	if err != nil {
-		return NonStatTy, err
-	}
+	// localContext, err := bc.Engine().GetDifficultyContext(bc, currentBlock.Header(), types.QuaiNetworkContext)
+	// if err != nil {
+	// 	return NonStatTy, err
+	// }
 
-	localHeader := currentBlock.Header()
-	externHeader := block.Header()
+	// externContext, err := bc.Engine().GetDifficultyContext(bc, block.Header(), types.QuaiNetworkContext)
+	// if err != nil {
+	// 	return NonStatTy, err
+	// }
 
-	if externContext < localContext {
-		localHeader, localContext, _ = bc.Engine().GetCoincidentAndAggDifficulty(bc, types.QuaiNetworkContext, externContext+1, currentBlock.Header())
-	}
+	// localHeader := currentBlock.Header()
+	// externHeader := block.Header()
 
-	var externAggDiff *big.Int
-	if localContext < externContext {
-		externHeader, externContext, externAggDiff = bc.Engine().GetCoincidentAndAggDifficulty(bc, types.QuaiNetworkContext, localContext+1, block.Header())
-	}
+	// if externContext < localContext {
+	// 	localHeader, localContext, _ = bc.Engine().GetCoincidentAndAggDifficulty(bc, types.QuaiNetworkContext, externContext+1, currentBlock.Header())
+	// }
 
-	var externTd *big.Int
+	// // var externAggDiff *big.Int
+	// if localContext < externContext {
+	// 	externHeader, externContext, externAggDiff = bc.Engine().GetCoincidentAndAggDifficulty(bc, types.QuaiNetworkContext, localContext+1, block.Header())
+	// }
+
+	// var externTd *big.Int
 	// If are building on a coincident, we need to aggregate the difficulty.
 	// Else we consider the network difficulties at the coincidents or equal level.
-	if localHeader.Hash() == externHeader.Hash() {
-		externTd = new(big.Int).Add(externHeader.NetworkDifficulty[externContext], externHeader.Difficulty[externContext])
-		externTd.Add(externTd, externAggDiff)
-	} else {
-		externTd = new(big.Int).Add(externHeader.NetworkDifficulty[externContext], externHeader.Difficulty[externContext])
-	}
-	localTd := new(big.Int).Add(localHeader.NetworkDifficulty[localContext], localHeader.Difficulty[localContext])
+	// if localHeader.Hash() == externHeader.Hash() {
+	// 	externTd = new(big.Int).Add(externHeader.NetworkDifficulty[externContext], externHeader.Difficulty[externContext])
+	// 	externTd.Add(externTd, externAggDiff)
+	// } else {
+	// 	externTd = new(big.Int).Add(externHeader.NetworkDifficulty[externContext], externHeader.Difficulty[externContext])
+	// }
+	// localTd := new(big.Int).Add(localHeader.NetworkDifficulty[localContext], localHeader.Difficulty[localContext])
 
-	fmt.Println("localTd", localTd, "localDiff", localHeader.Difficulty, "localNetworkDiff", localHeader.NetworkDifficulty, "localNum", localHeader.Number, "localContext", localContext)
-	fmt.Println("localHash", localHeader.Hash())
-	fmt.Println("externTd", externTd, "blockDiff", block.Header().Difficulty, "networkDiff", block.Header().NetworkDifficulty, "externNum", externHeader.Number, "externContext", externContext)
-	fmt.Println("externHash", externHeader.Hash())
+	// fmt.Println("localTd", localTd, "localDiff", localHeader.Difficulty, "localNetworkDiff", localHeader.NetworkDifficulty, "localNum", localHeader.Number, "localContext", localContext)
+	// fmt.Println("localHash", localHeader.Hash())
+	// fmt.Println("externTd", externTd, "blockDiff", block.Header().Difficulty, "networkDiff", block.Header().NetworkDifficulty, "externNum", externHeader.Number, "externContext", externContext)
+	// fmt.Println("externHash", externHeader.Hash())
 
 	// Irrelevant of the canonical status, write the block itself to the database.
 	//
