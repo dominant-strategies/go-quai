@@ -121,7 +121,7 @@ func TestHandshake(t *testing.T) {
 		errCh1 = make(chan error, 1)
 		errCh2 = make(chan error, 1)
 
-		td      = big.NewInt(100)
+		td      = []*big.Int{big.NewInt(100), big.NewInt(100), big.NewInt(100)}
 		head    = common.HexToHash("deadbeef")
 		headNum = uint64(10)
 		genesis = common.HexToHash("cafebabe")

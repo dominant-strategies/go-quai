@@ -217,7 +217,7 @@ func (b *EthAPIBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*typ
 	return logs, nil
 }
 
-func (b *EthAPIBackend) GetTd(ctx context.Context, hash common.Hash) *big.Int {
+func (b *EthAPIBackend) GetTd(ctx context.Context, hash common.Hash) []*big.Int {
 	return b.eth.blockchain.GetTdByHash(hash)
 }
 

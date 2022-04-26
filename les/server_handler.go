@@ -18,6 +18,7 @@ package les
 
 import (
 	"errors"
+	"math/big"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -408,7 +409,7 @@ func (h *serverHandler) broadcastLoop() {
 
 	var (
 		lastHead = h.blockchain.CurrentHeader()
-		lastTd   = common.Big0
+		lastTd   = []*big.Int{common.Big0, common.Big0, common.Big0}
 	)
 	for {
 		select {
@@ -416,7 +417,7 @@ func (h *serverHandler) broadcastLoop() {
 			header := ev.Block.Header()
 			hash, number := header.Hash(), header.Number[types.QuaiNetworkContext].Uint64()
 			td := h.blockchain.GetTd(hash, number)
-			if td == nil || td.Cmp(lastTd) <= 0 {
+			if td == nil || td[types.QuaiNetworkContext].Cmp(lastTd[types.QuaiNetworkContext]) <= 0 {
 				continue
 			}
 			var reorg uint64

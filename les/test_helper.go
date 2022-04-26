@@ -336,7 +336,7 @@ type testPeer struct {
 }
 
 // handshakeWithServer executes the handshake with the remote server peer.
-func (p *testPeer) handshakeWithServer(t *testing.T, td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, forkID forkid.ID) {
+func (p *testPeer) handshakeWithServer(t *testing.T, td []*big.Int, head common.Hash, headNum uint64, genesis common.Hash, forkID forkid.ID) {
 	// It only works for the simulated client peer
 	if p.cpeer == nil {
 		t.Fatal("handshake for client peer only")
@@ -360,7 +360,7 @@ func (p *testPeer) handshakeWithServer(t *testing.T, td *big.Int, head common.Ha
 }
 
 // handshakeWithClient executes the handshake with the remote client peer.
-func (p *testPeer) handshakeWithClient(t *testing.T, td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, forkID forkid.ID, costList RequestCostList, recentTxLookup uint64) {
+func (p *testPeer) handshakeWithClient(t *testing.T, td []*big.Int, head common.Hash, headNum uint64, genesis common.Hash, forkID forkid.ID, costList RequestCostList, recentTxLookup uint64) {
 	// It only works for the simulated client peer
 	if p.speer == nil {
 		t.Fatal("handshake for server peer only")

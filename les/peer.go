@@ -166,9 +166,9 @@ func (p *peerCommons) String() string {
 // PeerInfo represents a short summary of the `eth` sub-protocol metadata known
 // about a connected peer.
 type PeerInfo struct {
-	Version    int      `json:"version"`    // Ethereum protocol version negotiated
-	Difficulty *big.Int `json:"difficulty"` // Total difficulty of the peer's blockchain
-	Head       string   `json:"head"`       // SHA3 hash of the peer's best owned block
+	Version    int        `json:"version"`    // Ethereum protocol version negotiated
+	Difficulty []*big.Int `json:"difficulty"` // Total difficulty of the peer's blockchain
+	Head       string     `json:"head"`       // SHA3 hash of the peer's best owned block
 }
 
 // Info gathers and returns a collection of metadata known about a peer.
@@ -189,19 +189,19 @@ func (p *peerCommons) Head() (hash common.Hash) {
 }
 
 // Td retrieves the current total difficulty of a peer.
-func (p *peerCommons) Td() *big.Int {
+func (p *peerCommons) Td() []*big.Int {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
-	return new(big.Int).Set(p.headInfo.Td)
+	return p.headInfo.Td
 }
 
 // HeadAndTd retrieves the current head hash and total difficulty of a peer.
-func (p *peerCommons) HeadAndTd() (hash common.Hash, td *big.Int) {
+func (p *peerCommons) HeadAndTd() (hash common.Hash, td []*big.Int) {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
-	return p.headInfo.Hash, new(big.Int).Set(p.headInfo.Td)
+	return p.headInfo.Hash, p.headInfo.Td
 }
 
 // sendReceiveHandshake exchanges handshake packet with remote peer and returns any error
@@ -256,7 +256,7 @@ func (p *peerCommons) sendReceiveHandshake(sendList keyValueList) (keyValueList,
 // network IDs, difficulties, head and genesis blocks. Besides the basic handshake
 // fields, server and client can exchange and resolve some specified fields through
 // two callback functions.
-func (p *peerCommons) handshake(td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, forkID forkid.ID, forkFilter forkid.Filter, sendCallback func(*keyValueList), recvCallback func(keyValueMap) error) error {
+func (p *peerCommons) handshake(td []*big.Int, head common.Hash, headNum uint64, genesis common.Hash, forkID forkid.ID, forkFilter forkid.Filter, sendCallback func(*keyValueList), recvCallback func(keyValueMap) error) error {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
@@ -578,7 +578,7 @@ func (p *serverPeer) updateFlowControl(update keyValueMap) {
 
 // updateHead updates the head information based on the announcement from
 // the peer.
-func (p *serverPeer) updateHead(hash common.Hash, number uint64, td *big.Int) {
+func (p *serverPeer) updateHead(hash common.Hash, number uint64, td []*big.Int) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
@@ -590,7 +590,7 @@ func (p *serverPeer) updateHead(hash common.Hash, number uint64, td *big.Int) {
 func (p *serverPeer) Handshake(genesis common.Hash, forkid forkid.ID, forkFilter forkid.Filter) error {
 	// Note: there is no need to share local head with a server but older servers still
 	// require these fields so we announce zero values.
-	return p.handshake(common.Big0, common.Hash{}, 0, genesis, forkid, forkFilter, func(lists *keyValueList) {
+	return p.handshake([]*big.Int{common.Big0, common.Big0, common.Big0}, common.Hash{}, 0, genesis, forkid, forkFilter, func(lists *keyValueList) {
 		// Add some client-specific handshake fields
 		//
 		// Enable signed announcement randomly even the server is not trusted.
@@ -603,7 +603,7 @@ func (p *serverPeer) Handshake(genesis common.Hash, forkid forkid.ID, forkFilter
 		var (
 			rHash common.Hash
 			rNum  uint64
-			rTd   *big.Int
+			rTd   []*big.Int
 		)
 		if err := recv.get("headTd", &rTd); err != nil {
 			return err
@@ -985,7 +985,7 @@ func (p *clientPeer) sendLastAnnounce() {
 	if p.lastAnnounce.Td == nil {
 		return
 	}
-	if p.headInfo.Td == nil || p.lastAnnounce.Td.Cmp(p.headInfo.Td) > 0 {
+	if p.headInfo.Td == nil || p.lastAnnounce.Td[types.QuaiNetworkContext].Cmp(p.headInfo.Td[types.QuaiNetworkContext]) > 0 {
 		if !p.queueSend(func() { p.sendAnnounce(p.lastAnnounce) }) {
 			p.Log().Debug("Dropped announcement because queue is full", "number", p.lastAnnounce.Number, "hash", p.lastAnnounce.Hash)
 		} else {
@@ -1031,7 +1031,7 @@ func (p *clientPeer) freezeClient() {
 
 // Handshake executes the les protocol handshake, negotiating version number,
 // network IDs, difficulties, head and genesis blocks.
-func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, forkID forkid.ID, forkFilter forkid.Filter, server *LesServer) error {
+func (p *clientPeer) Handshake(td []*big.Int, head common.Hash, headNum uint64, genesis common.Hash, forkID forkid.ID, forkFilter forkid.Filter, server *LesServer) error {
 	recentTx := server.handler.blockchain.TxLookupLimit()
 	if recentTx != txIndexUnlimited {
 		if recentTx < blockSafetyMargin {
@@ -1245,10 +1245,10 @@ func (ps *serverPeerSet) bestPeer() *serverPeer {
 
 	var (
 		bestPeer *serverPeer
-		bestTd   *big.Int
+		bestTd   []*big.Int
 	)
 	for _, p := range ps.peers {
-		if td := p.Td(); bestTd == nil || td.Cmp(bestTd) > 0 {
+		if td := p.Td(); bestTd == nil || td[types.QuaiNetworkContext].Cmp(bestTd[types.QuaiNetworkContext]) > 0 {
 			bestPeer, bestTd = p, td
 		}
 	}

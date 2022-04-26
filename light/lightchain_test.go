@@ -84,7 +84,7 @@ func newTestLightChain() *LightChain {
 }
 
 // Test fork of length N starting from block i
-func testFork(t *testing.T, LightChain *LightChain, i, n int, comparator func(td1, td2 *big.Int)) {
+func testFork(t *testing.T, LightChain *LightChain, i, n int, comparator func(td1, td2 []*big.Int)) {
 	// Copy old chain up to #i into a new db
 	db, LightChain2, err := newCanonical(i)
 	if err != nil {
@@ -103,7 +103,7 @@ func testFork(t *testing.T, LightChain *LightChain, i, n int, comparator func(td
 		t.Fatalf("failed to insert forking chain: %v", err)
 	}
 	// Sanity check that the forked chain can be imported into the original
-	var tdPre, tdPost *big.Int
+	var tdPre, tdPost []*big.Int
 
 	tdPre = LightChain.GetTdByHash(LightChain.CurrentHeader().Hash())
 	if err := testHeaderChainImport(headerChainB, LightChain); err != nil {
@@ -124,7 +124,7 @@ func testHeaderChainImport(chain []*types.Header, lightchain *LightChain) error 
 		}
 		// Manually insert the header into the database, but don't reorganize (allows subsequent testing)
 		lightchain.chainmu.Lock()
-		rawdb.WriteTd(lightchain.chainDb, header.Hash(), header.Number[types.QuaiNetworkContext].Uint64(), new(big.Int).Add(header.Difficulty[types.QuaiNetworkContext], lightchain.GetTdByHash(header.ParentHash[types.QuaiNetworkContext])))
+		rawdb.WriteTd(lightchain.chainDb, header.Hash(), header.Number[types.QuaiNetworkContext].Uint64(), []*big.Int{new(big.Int).Add(header.Difficulty[types.QuaiNetworkContext], lightchain.GetTdByHash(header.ParentHash[types.QuaiNetworkContext])[types.QuaiNetworkContext])})
 		rawdb.WriteHeader(lightchain.chainDb, header)
 		lightchain.chainmu.Unlock()
 	}
@@ -142,8 +142,14 @@ func TestExtendCanonicalHeaders(t *testing.T) {
 		t.Fatalf("failed to make new canonical chain: %v", err)
 	}
 	// Define the difficulty comparator
-	better := func(td1, td2 *big.Int) {
-		if td2.Cmp(td1) <= 0 {
+	better := func(td1, td2 []*big.Int) {
+		if td2[0].Cmp(td1[0]) <= 0 {
+			t.Errorf("total difficulty mismatch: have %v, expected more than %v", td2, td1)
+		}
+		if td2[1].Cmp(td1[1]) <= 0 {
+			t.Errorf("total difficulty mismatch: have %v, expected more than %v", td2, td1)
+		}
+		if td2[2].Cmp(td1[2]) <= 0 {
 			t.Errorf("total difficulty mismatch: have %v, expected more than %v", td2, td1)
 		}
 	}
@@ -165,8 +171,14 @@ func TestShorterForkHeaders(t *testing.T) {
 		t.Fatalf("failed to make new canonical chain: %v", err)
 	}
 	// Define the difficulty comparator
-	worse := func(td1, td2 *big.Int) {
-		if td2.Cmp(td1) >= 0 {
+	worse := func(td1, td2 []*big.Int) {
+		if td2[0].Cmp(td1[0]) >= 0 {
+			t.Errorf("total difficulty mismatch: have %v, expected less than %v", td2, td1)
+		}
+		if td2[1].Cmp(td1[1]) >= 0 {
+			t.Errorf("total difficulty mismatch: have %v, expected less than %v", td2, td1)
+		}
+		if td2[2].Cmp(td1[2]) >= 0 {
 			t.Errorf("total difficulty mismatch: have %v, expected less than %v", td2, td1)
 		}
 	}
@@ -190,8 +202,14 @@ func TestLongerForkHeaders(t *testing.T) {
 		t.Fatalf("failed to make new canonical chain: %v", err)
 	}
 	// Define the difficulty comparator
-	better := func(td1, td2 *big.Int) {
-		if td2.Cmp(td1) <= 0 {
+	better := func(td1, td2 []*big.Int) {
+		if td2[0].Cmp(td1[0]) <= 0 {
+			t.Errorf("total difficulty mismatch: have %v, expected more than %v", td2, td1)
+		}
+		if td2[1].Cmp(td1[1]) <= 0 {
+			t.Errorf("total difficulty mismatch: have %v, expected more than %v", td2, td1)
+		}
+		if td2[2].Cmp(td1[2]) <= 0 {
 			t.Errorf("total difficulty mismatch: have %v, expected more than %v", td2, td1)
 		}
 	}
@@ -215,8 +233,14 @@ func TestEqualForkHeaders(t *testing.T) {
 		t.Fatalf("failed to make new canonical chain: %v", err)
 	}
 	// Define the difficulty comparator
-	equal := func(td1, td2 *big.Int) {
-		if td2.Cmp(td1) != 0 {
+	equal := func(td1, td2 []*big.Int) {
+		if td2[0].Cmp(td1[0]) != 0 {
+			t.Errorf("total difficulty mismatch: have %v, want %v", td2, td1)
+		}
+		if td2[1].Cmp(td1[1]) != 0 {
+			t.Errorf("total difficulty mismatch: have %v, want %v", td2, td1)
+		}
+		if td2[2].Cmp(td1[2]) != 0 {
 			t.Errorf("total difficulty mismatch: have %v, want %v", td2, td1)
 		}
 	}
@@ -309,7 +333,7 @@ func testReorg(t *testing.T, first, second []int, td int64) {
 	}
 	// Make sure the chain total difficulty is the correct one
 	want := new(big.Int).Add(bc.genesisBlock.Difficulty(), big.NewInt(td))
-	if have := bc.GetTdByHash(bc.CurrentHeader().Hash()); have.Cmp(want) != 0 {
+	if have := bc.GetTdByHash(bc.CurrentHeader().Hash()); have[types.QuaiNetworkContext].Cmp(want) != 0 {
 		t.Errorf("total difficulty mismatch: have %v, want %v", have, want)
 	}
 }

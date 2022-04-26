@@ -378,7 +378,7 @@ type peerConnection struct {
 	peer    *serverPeer
 }
 
-func (pc *peerConnection) Head() (common.Hash, *big.Int) {
+func (pc *peerConnection) Head() (common.Hash, []*big.Int) {
 	return pc.peer.HeadAndTd()
 }
 

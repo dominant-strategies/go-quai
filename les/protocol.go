@@ -243,15 +243,17 @@ var errorToString = map[int]string{
 type announceData struct {
 	Hash       common.Hash // Hash of one particular block being announced
 	Number     uint64      // Number of one particular block being announced
-	Td         *big.Int    // Total difficulty of one particular block being announced
+	Td         []*big.Int  // Total difficulty of one particular block being announced
 	ReorgDepth uint64
 	Update     keyValueList
 }
 
 // sanityCheck verifies that the values are reasonable, as a DoS protection
 func (a *announceData) sanityCheck() error {
-	if tdlen := a.Td.BitLen(); tdlen > 100 {
-		return fmt.Errorf("too large block TD: bitlen %d", tdlen)
+	for _, td := range a.Td {
+		if tdlen := td.BitLen(); tdlen > 100 {
+			return fmt.Errorf("too large block TD: bitlen %d", tdlen)
+		}
 	}
 	return nil
 }
@@ -283,7 +285,7 @@ func (a *announceData) checkSignature(id enode.ID, update keyValueMap) error {
 type blockInfo struct {
 	Hash   common.Hash // Hash of one particular block being announced
 	Number uint64      // Number of one particular block being announced
-	Td     *big.Int    // Total difficulty of one particular block being announced
+	Td     []*big.Int  // Total difficulty of one particular block being announced
 }
 
 // hashOrNumber is a combined field for specifying an origin block.

@@ -74,7 +74,7 @@ type Peer struct {
 	version   uint              // Protocol version negotiated
 
 	head common.Hash // Latest advertised head block hash
-	td   *big.Int    // Latest advertised head block total difficulty
+	td   []*big.Int  // Latest advertised head block total difficulty
 
 	knownBlocks     *knownCache            // Set of block hashes known to be known by this peer
 	queuedBlocks    chan *blockPropagation // Queue of blocks to broadcast to the peer
@@ -132,7 +132,7 @@ func (p *Peer) Version() uint {
 }
 
 // Head retrieves the current head hash and total difficulty of the peer.
-func (p *Peer) Head() (hash common.Hash, td *big.Int) {
+func (p *Peer) Head() (hash common.Hash, td []*big.Int) {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 

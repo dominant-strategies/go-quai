@@ -73,7 +73,7 @@ type chainSyncer struct {
 type chainSyncOp struct {
 	mode downloader.SyncMode
 	peer *eth.Peer
-	td   *big.Int
+	td   []*big.Int
 	head common.Hash
 }
 
@@ -167,7 +167,7 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 		mode = downloader.SnapSync
 	}
 	op := peerToSyncOp(mode, peer)
-	if op.td.Cmp(ourTD) <= 0 {
+	if op.td[types.QuaiNetworkContext].Cmp(ourTD[types.QuaiNetworkContext]) <= 0 {
 		return nil // We're in sync.
 	}
 	return op
@@ -178,7 +178,7 @@ func peerToSyncOp(mode downloader.SyncMode, p *eth.Peer) *chainSyncOp {
 	return &chainSyncOp{mode: mode, peer: p, td: peerTD, head: peerHead}
 }
 
-func (cs *chainSyncer) modeAndLocalHead() (downloader.SyncMode, *big.Int) {
+func (cs *chainSyncer) modeAndLocalHead() (downloader.SyncMode, []*big.Int) {
 	// If we're in fast sync mode, return that directly
 	if atomic.LoadUint32(&cs.handler.fastSync) == 1 {
 		block := cs.handler.chain.CurrentFastBlock()

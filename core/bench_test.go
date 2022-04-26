@@ -240,7 +240,7 @@ func makeChainForBench(db ethdb.Database, full bool, count uint64) {
 
 		rawdb.WriteHeader(db, header)
 		rawdb.WriteCanonicalHash(db, hash, n)
-		rawdb.WriteTd(db, hash, n, big.NewInt(int64(n+1)))
+		rawdb.WriteTd(db, hash, n, []*big.Int{big.NewInt(int64(n + 1)), big.NewInt(int64(n + 1)), big.NewInt(int64(n + 1))})
 
 		if full || n == 0 {
 			block := types.NewBlockWithHeader(header)

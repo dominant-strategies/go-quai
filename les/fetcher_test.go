@@ -247,7 +247,7 @@ func testInvalidAnnounces(t *testing.T, protocol int) {
 	// Prepare announcement by latest header.
 	headerOne := s.backend.Blockchain().GetHeaderByNumber(1)
 	hash, number := headerOne.Hash(), headerOne.Number[types.QuaiNetworkContext].Uint64()
-	td := big.NewInt(200) // bad td
+	td := []*big.Int{big.NewInt(200), big.NewInt(200), big.NewInt(200)} // bad td
 
 	// Sign the announcement if necessary.
 	announce := announceData{hash, number, td, 0, nil}

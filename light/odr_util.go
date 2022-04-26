@@ -81,7 +81,7 @@ func GetCanonicalHash(ctx context.Context, odr OdrBackend, number uint64) (commo
 }
 
 // GetTd retrieves the total difficulty corresponding to the number and hash.
-func GetTd(ctx context.Context, odr OdrBackend, hash common.Hash, number uint64) (*big.Int, error) {
+func GetTd(ctx context.Context, odr OdrBackend, hash common.Hash, number uint64) ([]*big.Int, error) {
 	td := rawdb.ReadTd(odr.Database(), hash, number)
 	if td != nil {
 		return td, nil

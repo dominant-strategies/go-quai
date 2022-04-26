@@ -2683,13 +2683,13 @@ func (bc *BlockChain) CurrentHeader() *types.Header {
 
 // GetTd retrieves a block's total difficulty in the canonical chain from the
 // database by hash and number, caching it if found.
-func (bc *BlockChain) GetTd(hash common.Hash, number uint64) *big.Int {
+func (bc *BlockChain) GetTd(hash common.Hash, number uint64) []*big.Int {
 	return bc.hc.GetTd(hash, number)
 }
 
 // GetTdByHash retrieves a block's total difficulty in the canonical chain from the
 // database by hash, caching it if found.
-func (bc *BlockChain) GetTdByHash(hash common.Hash) *big.Int {
+func (bc *BlockChain) GetTdByHash(hash common.Hash) []*big.Int {
 	return bc.hc.GetTdByHash(hash)
 }
 
