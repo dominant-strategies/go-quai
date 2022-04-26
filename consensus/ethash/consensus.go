@@ -993,6 +993,14 @@ func (ethash *Ethash) RegionTraceBranch(chain consensus.ChainHeaderReader, heade
 		if difficultyContext < context && context == types.ContextDepth-1 {
 			// fmt.Println("Trace Branch: Found Region coincident block in Zone", "number", header.Number, "context", context, "location", header.Location)
 			break
+		} else if difficultyContext < context && context == types.QuaiNetworkContext-2 {
+			// If we have found a Prime block, trace it.
+			fmt.Println("Going into PrimeTraceBranch from Region")
+			result, err := ethash.PrimeTraceBranch(chain, header, difficultyContext, stopHash, originalContext, originalLocation)
+			if err != nil {
+				return nil, err
+			}
+			extBlocks = append(extBlocks, result...)
 		}
 	}
 	return extBlocks, nil
