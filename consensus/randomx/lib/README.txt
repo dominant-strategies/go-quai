@@ -1,0 +1,1 @@
+The folder holds the binary lib & header of random-x

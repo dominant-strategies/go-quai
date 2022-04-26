@@ -597,7 +597,7 @@ func (c *Clique) GetExternalBlocks(chain consensus.ChainHeaderReader, header *ty
 }
 
 // GetCoincidentHeader retrieves the furthest coincident header back
-func (c *Clique) GetDifficultyContext(chain consensus.ChainHeaderReader, header *types.Header, context int) (int, error) {
+func (c *Clique) GetDifficultyOrder(header *types.Header) (int, error) {
 	return 0, nil
 }
 

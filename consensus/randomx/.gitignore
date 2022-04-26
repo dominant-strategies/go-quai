@@ -1,0 +1,7 @@
+CMakeFiles
+CMakeCache.txt
+*.exe
+librandomx.a
+*.cmake
+RandomX/
+lib/
