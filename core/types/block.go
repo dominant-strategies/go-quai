@@ -93,7 +93,9 @@ type Header struct {
 	Nonce             BlockNonce       `json:"nonce"`
 
 	// Originating location of the block.
-	Location []byte `json:"location"        	gencodec:"required"`
+	Location []byte `json:"location"       gencodec:"required"`
+	// MapContext to recognize current ontology of Quai Network
+	MapContext []int `json:"MapContext"      gencodec:"required"`
 
 	// BaseFee was added by EIP-1559 and is ignored in legacy headers.
 	BaseFee []*big.Int `json:"baseFeePerGas" rlp:"optional"`

@@ -307,6 +307,16 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		return fmt.Errorf("invalid location: Location %d not valid, expected %c", header.Location, chain.Config().Location)
 	}
 
+	// Verify that MapContext is same as config
+	if validMapContext := verifyMapContext(header.MapContext, chain.Config().MapContext); !validMapContext {
+		return fmt.Errorf("invalid ontology: MapContext %d not valid, expected %c", header.MapContext, chain.Config().MapContext)
+	}
+
+	// Verify Location is in ontology described by MapContext
+	if validInsideLocation := verifyInsideLocation(header.Location, header.MapContext); !validInsideLocation {
+		return fmt.Errorf("invalid location: Location %d not inside current MapContext %d", header.Location, header.MapContext)
+	}
+
 	if err := misc.VerifyForkHashes(chain.Config(), header, uncle); err != nil {
 		return err
 	}
@@ -1158,4 +1168,31 @@ func verifyLocation(location []byte, configLocation []byte) bool {
 	default:
 		return false
 	}
+}
+
+// Verifies that a MapContext value is valid for a specific config.
+func verifyMapContext(mapcontext []int, configMapContext []int) bool {
+	// quick check that mapcontext is a positive value
+	if mapcontext[0] < 1 || mapcontext[1] < 1 {
+		return false
+	}
+	if mapcontext[0] == configMapContext[0] && mapcontext[1] == configMapContext[1] {
+		return true
+	} else {
+		return false
+	}
+}
+
+// Verifies that Location value is valid inside MapContext ontolgoy.
+func verifyInsideLocation(location []byte, mapcontext []int) bool {
+	regionLocation := int(location[0])
+	zoneLocation := int(location[1])
+
+	if mapcontext[0] > regionLocation {
+		return false
+	}
+	if mapcontext[1] > zoneLocation {
+		return false
+	}
+	return true
 }
