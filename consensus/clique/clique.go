@@ -280,10 +280,6 @@ func (c *Clique) verifyHeader(chain consensus.ChainHeaderReader, header *types.H
 	if checkpoint && signersBytes%common.AddressLength != 0 {
 		return errInvalidCheckpointSigners
 	}
-	// Ensure that the mix digest is zero as we don't have fork protection currently
-	if header.MixDigest != (common.Hash{}) {
-		return errInvalidMixDigest
-	}
 	// Ensure that the block doesn't contain any uncles which are meaningless in PoA
 	if header.UncleHash[types.QuaiNetworkContext] != uncleHash {
 		return errInvalidUncleHash
@@ -558,9 +554,6 @@ func (c *Clique) Prepare(chain consensus.ChainHeaderReader, header *types.Header
 	}
 	header.Extra[types.QuaiNetworkContext] = append(header.Extra[types.QuaiNetworkContext], make([]byte, extraSeal)...)
 
-	// Mix digest is reserved for now, set to empty
-	header.MixDigest = common.Hash{}
-
 	// Ensure the timestamp has the correct delay
 	parent := chain.GetHeader(header.ParentHash[types.QuaiNetworkContext], number-1)
 	if parent == nil {
@@ -597,7 +590,7 @@ func (c *Clique) GetExternalBlocks(chain consensus.ChainHeaderReader, header *ty
 }
 
 // GetCoincidentHeader retrieves the furthest coincident header back
-func (c *Clique) GetDifficultyContext(chain consensus.ChainHeaderReader, header *types.Header, context int) (int, error) {
+func (c *Clique) GetDifficultyOrder(header *types.Header) (int, error) {
 	return 0, nil
 }
 
@@ -783,7 +776,6 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 		header.GasUsed,
 		header.Time,
 		header.Extra[types.QuaiNetworkContext][:len(header.Extra[types.QuaiNetworkContext])-crypto.SignatureLength], // Yes, this will panic if extra is too short
-		header.MixDigest,
 		header.Nonce,
 	}
 	if header.BaseFee != nil {
