@@ -289,6 +289,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		Time:              g.Timestamp,
 		BaseFee:           []*big.Int{baseFee, baseFee, baseFee},
 		Root:              []common.Hash{root, root, root},
+		MapContext:        params.FullerOntology,
 	}
 
 	if g.GasLimit == 0 {
