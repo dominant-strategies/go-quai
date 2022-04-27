@@ -2094,6 +2094,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			bc.chainUncleFeed.Send(block.Header())
 			return it.index, err
 		}
+		for _, extBlock := range linkExtBlocks {
+			fmt.Println("linkBlock", extBlock.Context(), extBlock.Header().Number, extBlock.Hash())
+		}
 		if len(linkExtBlocks) > 0 {
 			duplicateErr := bc.CheckExtBlockDuplicates(linkExtBlocks)
 			if duplicateErr != nil {
@@ -3145,7 +3148,6 @@ func (bc *BlockChain) SetLinkBlocksToLastApplied(externalBlocks []*types.Externa
 func (bc *BlockChain) CheckExtBlockDuplicates(externalBlocks []*types.ExternalBlock) error {
 	m := make(map[string]bool)
 	for _, extBlock := range externalBlocks {
-		fmt.Println(extBlock.Header().Number, extBlock.Hash())
 		if _, ok := m[string(extBlock.CacheKey())]; !ok {
 			m[string(extBlock.CacheKey())] = true
 		} else {
