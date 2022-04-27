@@ -332,7 +332,7 @@ func (s eip2930Signer) Hash(tx *Transaction) common.Hash {
 // EIP155Signer implements Signer using the EIP-155 rules. This accepts transactions which
 // are replay-protected as well as unprotected homestead transactions.
 type EIP155Signer struct {
-	chainId, chainIdMul *big.Int
+	chainId *big.Int
 }
 
 func NewEIP155Signer(chainId *big.Int) EIP155Signer {
@@ -340,8 +340,7 @@ func NewEIP155Signer(chainId *big.Int) EIP155Signer {
 		chainId = new(big.Int)
 	}
 	return EIP155Signer{
-		chainId:    chainId,
-		chainIdMul: new(big.Int).Mul(chainId, big.NewInt(2)),
+		chainId: chainId,
 	}
 }
 
@@ -367,8 +366,12 @@ func (s EIP155Signer) Sender(tx *Transaction) (common.Address, error) {
 		return common.Address{}, ErrInvalidChainId
 	}
 	V, R, S := tx.RawSignatureValues()
-	V = new(big.Int).Sub(V, s.chainIdMul)
+	V = new(big.Int).Sub(V, new(big.Int).Mul(tx.ChainId(), big.NewInt(2)))
 	V.Sub(V, big8)
+	// checking if the transaction was sent from a valid chain in the network
+	if !params.ValidChainID(tx.ChainId(), s.chainId) {
+		return common.Address{}, ErrInvalidChainId
+	}
 	return recoverPlain(s.Hash(tx), R, S, V, true)
 }
 
@@ -381,7 +384,7 @@ func (s EIP155Signer) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big
 	R, S, V = decodeSignature(sig)
 	if s.chainId.Sign() != 0 {
 		V = big.NewInt(int64(sig[64] + 35))
-		V.Add(V, s.chainIdMul)
+		V.Add(V, new(big.Int).Mul(tx.ChainId(), big.NewInt(2)))
 	}
 	return R, S, V, nil
 }
