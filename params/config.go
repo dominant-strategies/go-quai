@@ -56,13 +56,20 @@ var mainnetValidChains = []*big.Int{big.NewInt(9000), big.NewInt(9100), big.NewI
 
 var testnetValidChains = []*big.Int{big.NewInt(12000), big.NewInt(12100), big.NewInt(12101), big.NewInt(12102), big.NewInt(12103), big.NewInt(12200), big.NewInt(12201), big.NewInt(12202), big.NewInt(12203), big.NewInt(12300), big.NewInt(12301), big.NewInt(12302), big.NewInt(12303)}
 
+// Ontology defines the current Quai Network ontology
+var (
+	CronosOntology = []int{3, 3, 3}
+	// future ontology expansion markers go here
+	CurrentOntology = CronosOntology
+)
+
 var (
 	// MainnetPrimeChainConfig is the chain parameters to run a node on the main network.
 	MainnetPrimeChainConfig = &ChainConfig{
 		ChainID:             big.NewInt(9000),
 		Context:             0,
 		Location:            []byte{0, 0},
-		MapContext:          []int{3, 3, 3},
+		MapContext:          CurrentOntology,
 		Ethash:              new(EthashConfig),
 		HomesteadBlock:      big.NewInt(0),
 		EIP150Block:         big.NewInt(0),
@@ -77,6 +84,7 @@ var (
 		BerlinBlock:         big.NewInt(0),
 		LondonBlock:         big.NewInt(0),
 		GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
+		CronosBlock:         big.NewInt(0),
 	}
 
 	MainnetRegionChainConfigs = []ChainConfig{
@@ -84,7 +92,7 @@ var (
 			ChainID:             big.NewInt(9100),
 			Context:             1,
 			Location:            []byte{1, 0},
-			MapContext:          []int{3, 3, 3},
+			MapContext:          CurrentOntology,
 			Ethash:              new(EthashConfig),
 			HomesteadBlock:      big.NewInt(0),
 			EIP150Block:         big.NewInt(0),
@@ -99,12 +107,13 @@ var (
 			BerlinBlock:         big.NewInt(0),
 			LondonBlock:         big.NewInt(0),
 			GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
+			CronosBlock:         big.NewInt(0),
 		},
 		ChainConfig{
 			ChainID:             big.NewInt(9200),
 			Context:             1,
 			Location:            []byte{2, 0},
-			MapContext:          []int{3, 3, 3},
+			MapContext:          CurrentOntology,
 			Ethash:              new(EthashConfig),
 			HomesteadBlock:      big.NewInt(0),
 			EIP150Block:         big.NewInt(0),
@@ -119,12 +128,13 @@ var (
 			BerlinBlock:         big.NewInt(0),
 			LondonBlock:         big.NewInt(0),
 			GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
+			CronosBlock:         big.NewInt(0),
 		},
 		ChainConfig{
 			ChainID:             big.NewInt(9300),
 			Context:             1,
 			Location:            []byte{3, 0},
-			MapContext:          []int{3, 3, 3},
+			MapContext:          CurrentOntology,
 			Ethash:              new(EthashConfig),
 			HomesteadBlock:      big.NewInt(0),
 			EIP150Block:         big.NewInt(0),
@@ -139,6 +149,7 @@ var (
 			BerlinBlock:         big.NewInt(0),
 			LondonBlock:         big.NewInt(0),
 			GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
+			CronosBlock:         big.NewInt(0),
 		},
 	}
 
@@ -148,7 +159,7 @@ var (
 				ChainID:             big.NewInt(9101),
 				Context:             2,
 				Location:            []byte{1, 1},
-				MapContext:          []int{3, 3, 3},
+				MapContext:          CurrentOntology,
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -163,12 +174,13 @@ var (
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
+				CronosBlock:         big.NewInt(0),
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(9102),
 				Context:             2,
 				Location:            []byte{1, 2},
-				MapContext:          []int{3, 3, 3},
+				MapContext:          CurrentOntology,
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -183,6 +195,7 @@ var (
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
+				CronosBlock:         big.NewInt(0),
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(9103),
@@ -202,13 +215,14 @@ var (
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
+				CronosBlock:         big.NewInt(0),
 			}},
 		[]ChainConfig{
 			ChainConfig{
 				ChainID:             big.NewInt(9201),
 				Context:             2,
 				Location:            []byte{2, 1},
-				MapContext:          []int{3, 3, 3},
+				MapContext:          CurrentOntology,
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -223,12 +237,13 @@ var (
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
+				CronosBlock:         big.NewInt(0),
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(9202),
 				Context:             2,
 				Location:            []byte{2, 2},
-				MapContext:          []int{3, 3, 3},
+				MapContext:          CurrentOntology,
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -243,12 +258,13 @@ var (
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
+				CronosBlock:         big.NewInt(0),
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(9203),
 				Context:             2,
 				Location:            []byte{2, 3},
-				MapContext:          []int{3, 3, 3},
+				MapContext:          CurrentOntology,
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -263,13 +279,14 @@ var (
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
+				CronosBlock:         big.NewInt(0),
 			}},
 		[]ChainConfig{
 			ChainConfig{
 				ChainID:             big.NewInt(9301),
 				Context:             2,
 				Location:            []byte{3, 1},
-				MapContext:          []int{3, 3, 3},
+				MapContext:          CurrentOntology,
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -284,12 +301,13 @@ var (
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
+				CronosBlock:         big.NewInt(0),
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(9302),
 				Context:             2,
 				Location:            []byte{3, 2},
-				MapContext:          []int{3, 3, 3},
+				MapContext:          CurrentOntology,
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -304,12 +322,13 @@ var (
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
+				CronosBlock:         big.NewInt(0),
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(9303),
 				Context:             2,
 				Location:            []byte{3, 3},
-				MapContext:          []int{3, 3, 3},
+				MapContext:          CurrentOntology,
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -324,6 +343,7 @@ var (
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
+				CronosBlock:         big.NewInt(0),
 			},
 		},
 	}
@@ -333,7 +353,7 @@ var (
 		ChainID:             big.NewInt(12000),
 		Context:             0,
 		Location:            []byte{0, 0},
-		MapContext:          []int{3, 3, 3},
+		MapContext:          CurrentOntology,
 		Ethash:              new(EthashConfig),
 		HomesteadBlock:      big.NewInt(0),
 		EIP150Block:         big.NewInt(0),
@@ -348,6 +368,7 @@ var (
 		BerlinBlock:         big.NewInt(0),
 		LondonBlock:         big.NewInt(0),
 		GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
+		CronosBlock:         big.NewInt(0),
 	}
 
 	RopstenRegionChainConfigs = []ChainConfig{
@@ -355,7 +376,7 @@ var (
 			ChainID:             big.NewInt(12100),
 			Context:             1,
 			Location:            []byte{1, 0},
-			MapContext:          []int{3, 3, 3},
+			MapContext:          CurrentOntology,
 			Ethash:              new(EthashConfig),
 			HomesteadBlock:      big.NewInt(0),
 			EIP150Block:         big.NewInt(0),
@@ -370,12 +391,13 @@ var (
 			BerlinBlock:         big.NewInt(0),
 			LondonBlock:         big.NewInt(0),
 			GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
+			CronosBlock:         big.NewInt(0),
 		},
 		ChainConfig{
 			ChainID:             big.NewInt(12200),
 			Context:             1,
 			Location:            []byte{2, 0},
-			MapContext:          []int{3, 3, 3},
+			MapContext:          CurrentOntology,
 			Ethash:              new(EthashConfig),
 			HomesteadBlock:      big.NewInt(0),
 			EIP150Block:         big.NewInt(0),
@@ -390,12 +412,13 @@ var (
 			BerlinBlock:         big.NewInt(0),
 			LondonBlock:         big.NewInt(0),
 			GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
+			CronosBlock:         big.NewInt(0),
 		},
 		ChainConfig{
 			ChainID:             big.NewInt(12300),
 			Context:             1,
 			Location:            []byte{3, 0},
-			MapContext:          []int{3, 3, 3},
+			MapContext:          CurrentOntology,
 			Ethash:              new(EthashConfig),
 			HomesteadBlock:      big.NewInt(0),
 			EIP150Block:         big.NewInt(0),
@@ -410,6 +433,7 @@ var (
 			BerlinBlock:         big.NewInt(0),
 			LondonBlock:         big.NewInt(0),
 			GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
+			CronosBlock:         big.NewInt(0),
 		},
 	}
 
@@ -419,7 +443,7 @@ var (
 				ChainID:             big.NewInt(12101),
 				Context:             2,
 				Location:            []byte{1, 1},
-				MapContext:          []int{3, 3, 3},
+				MapContext:          CurrentOntology,
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -434,12 +458,13 @@ var (
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
+				CronosBlock:         big.NewInt(0),
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(12102),
 				Context:             2,
 				Location:            []byte{1, 2},
-				MapContext:          []int{3, 3, 3},
+				MapContext:          CurrentOntology,
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -454,12 +479,13 @@ var (
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
+				CronosBlock:         big.NewInt(0),
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(12103),
 				Context:             2,
 				Location:            []byte{1, 3},
-				MapContext:          []int{3, 3, 3},
+				MapContext:          CurrentOntology,
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -474,13 +500,14 @@ var (
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
+				CronosBlock:         big.NewInt(0),
 			}},
 		[]ChainConfig{
 			ChainConfig{
 				ChainID:             big.NewInt(12201),
 				Context:             2,
 				Location:            []byte{2, 1},
-				MapContext:          []int{3, 3, 3},
+				MapContext:          CurrentOntology,
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -495,12 +522,13 @@ var (
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
+				CronosBlock:         big.NewInt(0),
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(12202),
 				Context:             2,
 				Location:            []byte{2, 2},
-				MapContext:          []int{3, 3, 3},
+				MapContext:          CurrentOntology,
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -515,12 +543,13 @@ var (
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
+				CronosBlock:         big.NewInt(0),
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(12203),
 				Context:             2,
 				Location:            []byte{2, 3},
-				MapContext:          []int{3, 3, 3},
+				MapContext:          CurrentOntology,
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -535,13 +564,14 @@ var (
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
+				CronosBlock:         big.NewInt(0),
 			}},
 		[]ChainConfig{
 			ChainConfig{
 				ChainID:             big.NewInt(12301),
 				Context:             2,
 				Location:            []byte{3, 1},
-				MapContext:          []int{3, 3, 3},
+				MapContext:          CurrentOntology,
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -556,12 +586,13 @@ var (
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
+				CronosBlock:         big.NewInt(0),
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(12302),
 				Context:             2,
 				Location:            []byte{3, 2},
-				MapContext:          []int{3, 3, 3},
+				MapContext:          CurrentOntology,
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -576,12 +607,13 @@ var (
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
+				CronosBlock:         big.NewInt(0),
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(12303),
 				Context:             2,
 				Location:            []byte{3, 3},
-				MapContext:          []int{3, 3, 3},
+				MapContext:          CurrentOntology,
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -596,6 +628,7 @@ var (
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
+				CronosBlock:         big.NewInt(0),
 			},
 		},
 	}
@@ -651,15 +684,15 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), 0, []byte{0, 0}, []int{3, 3, 3}, big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, nil}
+	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), 0, []byte{0, 0}, CurrentOntology, big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, nil, big.NewInt(0)}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), 0, []byte{0, 0}, []int{3, 3, 3}, big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil}
-	TestChainConfig          = &ChainConfig{big.NewInt(1), 0, []byte{0, 0}, []int{3, 3, 3}, big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, nil}
+	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), 0, []byte{0, 0}, CurrentOntology, big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil, big.NewInt(0)}
+	TestChainConfig          = &ChainConfig{big.NewInt(1), 0, []byte{0, 0}, CurrentOntology, big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, nil, big.NewInt(0)}
 	TestRules                = TestChainConfig.Rules(new(big.Int))
 )
 
@@ -747,6 +780,10 @@ type ChainConfig struct {
 
 	// Genesis Hashes
 	GenesisHashes []common.Hash
+
+	// Quai Network Ontology
+	CronosBlock *big.Int `json:"cronosBlock,omitempty"` // CronosBlock (nil = no fork, 0 = already activated)
+	// future ontology expansion fields go here
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -779,7 +816,7 @@ func (c *ChainConfig) String() string {
 	default:
 		engine = "unknown"
 	}
-	return fmt.Sprintf("{ChainID: %v Homestead: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, Berlin: %v, London: %v, Engine: %v, GenesisHashes: %v}",
+	return fmt.Sprintf("{ChainID: %v Homestead: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, Berlin: %v, London: %v, Engine: %v, GenesisHashes: %v, Cronos: %v}",
 		c.ChainID,
 		c.HomesteadBlock,
 		c.EIP150Block,
@@ -794,6 +831,7 @@ func (c *ChainConfig) String() string {
 		c.LondonBlock,
 		engine,
 		c.GenesisHashes,
+		c.CronosBlock,
 	)
 }
 
@@ -859,6 +897,11 @@ func (c *ChainConfig) IsCatalyst(num *big.Int) bool {
 	return isForked(c.CatalystBlock, num)
 }
 
+// IsCronos returns whether num is either equal to the Merge fork block or greater.
+func (c *ChainConfig) IsCronos(num *big.Int) bool {
+	return isForked(c.CronosBlock, num)
+}
+
 // CheckCompatible checks whether scheduled fork transitions have been imported
 // with a mismatching chain configuration.
 func (c *ChainConfig) CheckCompatible(newcfg *ChainConfig, height uint64) *ConfigCompatError {
@@ -898,6 +941,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "muirGlacierBlock", block: c.MuirGlacierBlock, optional: true},
 		{name: "berlinBlock", block: c.BerlinBlock},
 		{name: "londonBlock", block: c.LondonBlock},
+		{name: "cronosBlock", block: c.CronosBlock},
 	} {
 		if lastFork.name != "" {
 			// Next one must be higher number
@@ -960,6 +1004,9 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, head *big.Int) *Confi
 	}
 	if isForkIncompatible(c.LondonBlock, newcfg.LondonBlock, head) {
 		return newCompatError("London fork block", c.LondonBlock, newcfg.LondonBlock)
+	}
+	if isForkIncompatible(c.CronosBlock, newcfg.CronosBlock, head) {
+		return newCompatError("Cronos fork block", c.CronosBlock, newcfg.CronosBlock)
 	}
 	return nil
 }
@@ -1029,6 +1076,7 @@ type Rules struct {
 	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
 	IsBerlin, IsLondon, IsCatalyst                          bool
+	IsCronos                                                bool
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -1050,6 +1098,7 @@ func (c *ChainConfig) Rules(num *big.Int) Rules {
 		IsBerlin:         c.IsBerlin(num),
 		IsLondon:         c.IsLondon(num),
 		IsCatalyst:       c.IsCatalyst(num),
+		IsCronos:         c.IsCronos(num),
 	}
 }
 
