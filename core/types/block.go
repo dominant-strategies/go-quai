@@ -323,6 +323,7 @@ func (b *ExternalBlock) CacheKey() []byte {
 	hash := b.header.Hash()
 	return ExtBlockCacheKey(b.header.Number[b.context.Int64()].Uint64(), b.context.Uint64(), hash)
 }
+func (b *ExternalBlock) MapContext() []int { return CopyHeader(b.header).MapContext }
 
 // encodeBlockNumber encodes a block number as big endian uint64
 func encodeBlockNumber(number uint64) []byte {
@@ -453,6 +454,7 @@ func NewEmptyHeader() *Header {
 		ReceiptHash:       make([]common.Hash, ContextDepth),
 		GasUsed:           make([]uint64, ContextDepth),
 		Bloom:             make([]Bloom, ContextDepth),
+		MapContext:        make([]int, ContextDepth),
 	}
 
 	return header
@@ -649,6 +651,14 @@ func (b *Block) BaseFee(params ...int) *big.Int {
 	}
 
 	return new(big.Int).Set(b.header.BaseFee[context])
+}
+
+func (b *Block) MapContext() []int {
+	if b.header.MapContext == nil {
+		return nil
+	}
+
+	return CopyHeader(b.header).MapContext
 }
 
 func (b *Block) Header() *Header { return CopyHeader(b.header) }
