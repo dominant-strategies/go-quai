@@ -28,7 +28,7 @@ import (
 )
 
 var ErrInvalidChainId = errors.New("invalid chain id for signer")
-var ErrInvalidChain = errors.New("the chain has a invalid chain id")
+var ErrInvalidChain = errors.New("the chain has an invalid chain id")
 
 var mainnetValidChains = []*big.Int{big.NewInt(9000), big.NewInt(9100), big.NewInt(9101), big.NewInt(9102), big.NewInt(9103), big.NewInt(9200), big.NewInt(9201), big.NewInt(9202), big.NewInt(9203), big.NewInt(9300), big.NewInt(9301), big.NewInt(9302), big.NewInt(9303)}
 var mainnetValidChainIdMuls = []*big.Int{big.NewInt(18000), big.NewInt(18200), big.NewInt(18202), big.NewInt(18204), big.NewInt(18206), big.NewInt(18400), big.NewInt(18402), big.NewInt(18404), big.NewInt(18406), big.NewInt(18600), big.NewInt(18602), big.NewInt(18604), big.NewInt(18606)}
