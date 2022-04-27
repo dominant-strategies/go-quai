@@ -1172,7 +1172,7 @@ func verifyLocation(location []byte, configLocation []byte) bool {
 
 // Verifies that a MapContext value is valid for a specific config.
 func verifyMapContext(mapcontext []int, configMapContext []int) bool {
-	// quick check that mapcontext is a positive value
+	// quick sanity check that mapcontext is a positive value
 	if mapcontext[0] < 1 || mapcontext[1] < 1 {
 		return false
 	}
@@ -1183,15 +1183,15 @@ func verifyMapContext(mapcontext []int, configMapContext []int) bool {
 	}
 }
 
-// Verifies that Location value is valid inside MapContext ontolgoy.
+// Verifies that Location value is valid inside MapContext ontology.
 func verifyInsideLocation(location []byte, mapcontext []int) bool {
 	regionLocation := int(location[0])
 	zoneLocation := int(location[1])
 
-	if mapcontext[0] > regionLocation {
+	if len(mapcontext) < regionLocation {
 		return false
 	}
-	if mapcontext[1] > zoneLocation {
+	if mapcontext[regionLocation-1] < zoneLocation {
 		return false
 	}
 	return true
