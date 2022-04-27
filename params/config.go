@@ -58,9 +58,9 @@ var testnetValidChains = []*big.Int{big.NewInt(12000), big.NewInt(12100), big.Ne
 
 // Ontology defines the current Quai Network ontology
 var (
-	CronosOntology = []int{3, 3, 3}
+	FullerOntology = []int{3, 3, 3} // named after Buckminster Fuller
 	// future ontology expansion markers go here
-	CurrentOntology = CronosOntology
+	CurrentOntology = FullerOntology
 )
 
 var (
@@ -84,7 +84,7 @@ var (
 		BerlinBlock:         big.NewInt(0),
 		LondonBlock:         big.NewInt(0),
 		GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
-		CronosBlock:         big.NewInt(0),
+		FullerBlock:         big.NewInt(0),
 	}
 
 	MainnetRegionChainConfigs = []ChainConfig{
@@ -107,7 +107,7 @@ var (
 			BerlinBlock:         big.NewInt(0),
 			LondonBlock:         big.NewInt(0),
 			GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
-			CronosBlock:         big.NewInt(0),
+			FullerBlock:         big.NewInt(0),
 		},
 		ChainConfig{
 			ChainID:             big.NewInt(9200),
@@ -128,7 +128,7 @@ var (
 			BerlinBlock:         big.NewInt(0),
 			LondonBlock:         big.NewInt(0),
 			GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
-			CronosBlock:         big.NewInt(0),
+			FullerBlock:         big.NewInt(0),
 		},
 		ChainConfig{
 			ChainID:             big.NewInt(9300),
@@ -149,7 +149,7 @@ var (
 			BerlinBlock:         big.NewInt(0),
 			LondonBlock:         big.NewInt(0),
 			GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
-			CronosBlock:         big.NewInt(0),
+			FullerBlock:         big.NewInt(0),
 		},
 	}
 
@@ -174,7 +174,7 @@ var (
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
-				CronosBlock:         big.NewInt(0),
+				FullerBlock:         big.NewInt(0),
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(9102),
@@ -195,7 +195,7 @@ var (
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
-				CronosBlock:         big.NewInt(0),
+				FullerBlock:         big.NewInt(0),
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(9103),
@@ -215,7 +215,7 @@ var (
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
-				CronosBlock:         big.NewInt(0),
+				FullerBlock:         big.NewInt(0),
 			}},
 		[]ChainConfig{
 			ChainConfig{
@@ -237,7 +237,7 @@ var (
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
-				CronosBlock:         big.NewInt(0),
+				FullerBlock:         big.NewInt(0),
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(9202),
@@ -258,7 +258,7 @@ var (
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
-				CronosBlock:         big.NewInt(0),
+				FullerBlock:         big.NewInt(0),
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(9203),
@@ -279,7 +279,7 @@ var (
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
-				CronosBlock:         big.NewInt(0),
+				FullerBlock:         big.NewInt(0),
 			}},
 		[]ChainConfig{
 			ChainConfig{
@@ -301,7 +301,7 @@ var (
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
-				CronosBlock:         big.NewInt(0),
+				FullerBlock:         big.NewInt(0),
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(9302),
@@ -322,7 +322,7 @@ var (
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
-				CronosBlock:         big.NewInt(0),
+				FullerBlock:         big.NewInt(0),
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(9303),
@@ -343,7 +343,7 @@ var (
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
-				CronosBlock:         big.NewInt(0),
+				FullerBlock:         big.NewInt(0),
 			},
 		},
 	}
@@ -368,7 +368,7 @@ var (
 		BerlinBlock:         big.NewInt(0),
 		LondonBlock:         big.NewInt(0),
 		GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
-		CronosBlock:         big.NewInt(0),
+		FullerBlock:         big.NewInt(0),
 	}
 
 	RopstenRegionChainConfigs = []ChainConfig{
@@ -391,7 +391,7 @@ var (
 			BerlinBlock:         big.NewInt(0),
 			LondonBlock:         big.NewInt(0),
 			GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
-			CronosBlock:         big.NewInt(0),
+			FullerBlock:         big.NewInt(0),
 		},
 		ChainConfig{
 			ChainID:             big.NewInt(12200),
@@ -412,7 +412,7 @@ var (
 			BerlinBlock:         big.NewInt(0),
 			LondonBlock:         big.NewInt(0),
 			GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
-			CronosBlock:         big.NewInt(0),
+			FullerBlock:         big.NewInt(0),
 		},
 		ChainConfig{
 			ChainID:             big.NewInt(12300),
@@ -433,7 +433,7 @@ var (
 			BerlinBlock:         big.NewInt(0),
 			LondonBlock:         big.NewInt(0),
 			GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
-			CronosBlock:         big.NewInt(0),
+			FullerBlock:         big.NewInt(0),
 		},
 	}
 
@@ -458,7 +458,7 @@ var (
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
-				CronosBlock:         big.NewInt(0),
+				FullerBlock:         big.NewInt(0),
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(12102),
@@ -479,7 +479,7 @@ var (
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
-				CronosBlock:         big.NewInt(0),
+				FullerBlock:         big.NewInt(0),
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(12103),
@@ -500,7 +500,7 @@ var (
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
-				CronosBlock:         big.NewInt(0),
+				FullerBlock:         big.NewInt(0),
 			}},
 		[]ChainConfig{
 			ChainConfig{
@@ -522,7 +522,7 @@ var (
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
-				CronosBlock:         big.NewInt(0),
+				FullerBlock:         big.NewInt(0),
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(12202),
@@ -543,7 +543,7 @@ var (
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
-				CronosBlock:         big.NewInt(0),
+				FullerBlock:         big.NewInt(0),
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(12203),
@@ -564,7 +564,7 @@ var (
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
-				CronosBlock:         big.NewInt(0),
+				FullerBlock:         big.NewInt(0),
 			}},
 		[]ChainConfig{
 			ChainConfig{
@@ -586,7 +586,7 @@ var (
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
-				CronosBlock:         big.NewInt(0),
+				FullerBlock:         big.NewInt(0),
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(12302),
@@ -607,7 +607,7 @@ var (
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
-				CronosBlock:         big.NewInt(0),
+				FullerBlock:         big.NewInt(0),
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(12303),
@@ -628,7 +628,7 @@ var (
 				BerlinBlock:         big.NewInt(0),
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
-				CronosBlock:         big.NewInt(0),
+				FullerBlock:         big.NewInt(0),
 			},
 		},
 	}
@@ -782,7 +782,7 @@ type ChainConfig struct {
 	GenesisHashes []common.Hash
 
 	// Quai Network Ontology
-	CronosBlock *big.Int `json:"cronosBlock,omitempty"` // CronosBlock (nil = no fork, 0 = already activated)
+	FullerBlock *big.Int `json:"FullerBlock,omitempty"` // FullerBlock (nil = no fork, 0 = already activated)
 	// future ontology expansion fields go here
 }
 
@@ -816,7 +816,7 @@ func (c *ChainConfig) String() string {
 	default:
 		engine = "unknown"
 	}
-	return fmt.Sprintf("{ChainID: %v Homestead: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, Berlin: %v, London: %v, Engine: %v, GenesisHashes: %v, Cronos: %v}",
+	return fmt.Sprintf("{ChainID: %v Homestead: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, Berlin: %v, London: %v, Engine: %v, GenesisHashes: %v, Fuller: %v}",
 		c.ChainID,
 		c.HomesteadBlock,
 		c.EIP150Block,
@@ -831,7 +831,7 @@ func (c *ChainConfig) String() string {
 		c.LondonBlock,
 		engine,
 		c.GenesisHashes,
-		c.CronosBlock,
+		c.FullerBlock,
 	)
 }
 
@@ -897,9 +897,9 @@ func (c *ChainConfig) IsCatalyst(num *big.Int) bool {
 	return isForked(c.CatalystBlock, num)
 }
 
-// IsCronos returns whether num is either equal to the Merge fork block or greater.
-func (c *ChainConfig) IsCronos(num *big.Int) bool {
-	return isForked(c.CronosBlock, num)
+// IsFuller returns whether num is either equal to the Merge fork block or greater.
+func (c *ChainConfig) IsFuller(num *big.Int) bool {
+	return isForked(c.FullerBlock, num)
 }
 
 // CheckCompatible checks whether scheduled fork transitions have been imported
@@ -941,7 +941,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "muirGlacierBlock", block: c.MuirGlacierBlock, optional: true},
 		{name: "berlinBlock", block: c.BerlinBlock},
 		{name: "londonBlock", block: c.LondonBlock},
-		{name: "cronosBlock", block: c.CronosBlock},
+		{name: "FullerBlock", block: c.FullerBlock},
 	} {
 		if lastFork.name != "" {
 			// Next one must be higher number
@@ -1005,8 +1005,8 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, head *big.Int) *Confi
 	if isForkIncompatible(c.LondonBlock, newcfg.LondonBlock, head) {
 		return newCompatError("London fork block", c.LondonBlock, newcfg.LondonBlock)
 	}
-	if isForkIncompatible(c.CronosBlock, newcfg.CronosBlock, head) {
-		return newCompatError("Cronos fork block", c.CronosBlock, newcfg.CronosBlock)
+	if isForkIncompatible(c.FullerBlock, newcfg.FullerBlock, head) {
+		return newCompatError("Fuller fork block", c.FullerBlock, newcfg.FullerBlock)
 	}
 	return nil
 }
@@ -1076,7 +1076,7 @@ type Rules struct {
 	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
 	IsBerlin, IsLondon, IsCatalyst                          bool
-	IsCronos                                                bool
+	IsFuller                                                bool
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -1098,7 +1098,7 @@ func (c *ChainConfig) Rules(num *big.Int) Rules {
 		IsBerlin:         c.IsBerlin(num),
 		IsLondon:         c.IsLondon(num),
 		IsCatalyst:       c.IsCatalyst(num),
-		IsCronos:         c.IsCronos(num),
+		IsFuller:         c.IsFuller(num),
 	}
 }
 
