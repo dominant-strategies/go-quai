@@ -761,6 +761,65 @@ func (ethash *Ethash) GetCoincidentAndAggDifficulty(chain consensus.ChainHeaderR
 	}
 }
 
+// AggregateNetworkDifficulty aggregates the total difficulty from the previous stop Hash in the dominant chains only
+func (ethash *Ethash) AggregateNetworkDifficulty(chain consensus.ChainHeaderReader, context int, stopHash common.Hash, header *types.Header) (*big.Int, error) {
+
+	currentLowestContext := context
+	currentTotalDifficulty := big.NewInt(0)
+
+	// Check the difficulty context of the starting header
+	difficultyContext, err := ethash.GetDifficultyContext(chain, header, context)
+	if err != nil {
+		return currentTotalDifficulty, fmt.Errorf("difficulty context not found")
+	}
+
+	// this function should only be called upon a coincident block, to use it the way it is intended to be used this check is added
+	if difficultyContext < currentLowestContext {
+		currentLowestContext = difficultyContext
+		// Accumulate the difficulty
+		currentTotalDifficulty.Add(currentTotalDifficulty, header.Difficulty[currentLowestContext])
+
+		// Retrieve the previous header as an external block.
+		prevBlock, err := chain.GetExternalBlock(header.ParentHash[currentLowestContext], header.Number[currentLowestContext].Uint64()-1, uint64(currentLowestContext))
+		if err != nil {
+			return currentTotalDifficulty, fmt.Errorf("error finding previous external block")
+		}
+
+		// If we encounter consecutive coincidents in the same location
+		if prevBlock.Header().Hash() == stopHash {
+			return currentTotalDifficulty, nil
+		}
+		header = prevBlock.Header()
+
+		// Accumulate the difficulty until we find a header from a dominant chain or we reach a stop hash
+		// If we encounter a dominant chain we repeat the same process until we find the stop hash
+		for {
+			// Check the difficulty context of the starting header
+			difficultyContext, err := ethash.GetDifficultyContext(chain, header, currentLowestContext)
+			if err != nil {
+				return currentTotalDifficulty, fmt.Errorf("difficulty context not found")
+			}
+
+			if difficultyContext < currentLowestContext {
+				currentLowestContext = difficultyContext
+			}
+			currentTotalDifficulty.Add(currentTotalDifficulty, header.Difficulty[currentLowestContext])
+
+			// Retrieve the previous header as an external block.
+			prevBlock, err := chain.GetExternalBlock(header.ParentHash[currentLowestContext], header.Number[currentLowestContext].Uint64()-1, uint64(currentLowestContext))
+			if err != nil {
+				return currentTotalDifficulty, fmt.Errorf("error finding previous external block")
+			}
+			// If we reach the stop hash
+			if prevBlock.Header().Hash() == stopHash {
+				return currentTotalDifficulty, nil
+			}
+			header = prevBlock.Header()
+		}
+	}
+	return currentTotalDifficulty, nil
+}
+
 // Check difficulty of previous header in order to find traceability.
 func (ethash *Ethash) CheckPrevHeaderCoincident(chain consensus.ChainHeaderReader, context int, header *types.Header) (int, error) {
 	// If we are at the highest context, no coincident will include it.
