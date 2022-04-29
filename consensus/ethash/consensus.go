@@ -308,12 +308,12 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	}
 
 	// Verify that MapContext is same as config
-	if validMapContext := verifyMapContext(header.MapContext, chain.Config().MapContext); !validMapContext {
-		return fmt.Errorf("invalid ontology: MapContext %d not valid, expected %c", header.MapContext, chain.Config().MapContext)
+	if validMapContext, err := verifyMapContext(header.MapContext, header.Number, chain.Config()); !validMapContext {
+		return fmt.Errorf("invalid MapContext: ", err)
 	}
 
 	// Verify Location is in ontology described by MapContext
-	if validInsideLocation := verifyInsideLocation(header.Location, header.MapContext); !validInsideLocation {
+	if validInsideLocation := verifyInsideLocation(header.Location, header.Number, chain.Config()); !validInsideLocation {
 		return fmt.Errorf("invalid location: Location %d not inside current MapContext %d", header.Location, header.MapContext)
 	}
 
@@ -787,6 +787,18 @@ func (ethash *Ethash) PrimeTraceBranch(chain consensus.ChainHeaderReader, header
 	extBlocks := make([]*types.ExternalBlock, 0)
 	// startingHeader := header
 	for {
+		// Check MapContext and Location first to be sure an invalid block will not be traced through.
+		// Verify that MapContext is same as config
+		if validMapContext, err := verifyMapContext(header.MapContext, header.Number, chain.Config()); !validMapContext {
+			fmt.Errorf("Trace could not be completed: ", err)
+			break
+		}
+
+		// Verify Location is in ontology described by MapContext
+		if validInsideLocation := verifyInsideLocation(header.Location, header.Number, chain.Config()); !validInsideLocation {
+			fmt.Errorf("Trace could not be completed: given Location not in MapContext")
+			break
+		}
 		// If the header is genesis, return the current set of external blocks.
 		if header.Number[context].Cmp(big.NewInt(0)) == 0 {
 			// log.Info("Trace Branch: Stopping height == 0", "number", header.Number, "context", context, "location", header.Location, "hash", header.ParentHash[context])
@@ -864,6 +876,19 @@ func (ethash *Ethash) RegionTraceBranch(chain consensus.ChainHeaderReader, heade
 	extBlocks := make([]*types.ExternalBlock, 0)
 	// startingHeader := header
 	for {
+		// Check MapContext and Location first to be sure an invalid block will not be traced through.
+		// Verify that MapContext is same as config
+		if validMapContext, err := verifyMapContext(header.MapContext, header.Number, chain.Config()); !validMapContext {
+			fmt.Errorf("Trace could not be completed: ", err)
+			break
+		}
+
+		// Verify Location is in ontology described by MapContext
+		if validInsideLocation := verifyInsideLocation(header.Location, header.Number, chain.Config()); !validInsideLocation {
+			fmt.Errorf("Trace could not be completed: given Location not in MapContext")
+			break
+		}
+
 		// If the header is genesis, return the current set of external blocks.
 		if header.Number[context].Cmp(big.NewInt(0)) == 0 {
 			// log.Info("Trace Branch: Stopping height == 0", "number", header.Number, "context", context, "location", header.Location, "hash", header.ParentHash[context])
@@ -1171,28 +1196,45 @@ func verifyLocation(location []byte, configLocation []byte) bool {
 }
 
 // Verifies that a MapContext value is valid for a specific config.
-func verifyMapContext(mapcontext []int, configMapContext []int) bool {
+func verifyMapContext(mapcontext []int, number []*big.Int, config *params.ChainConfig) (bool, string) {
 	// quick sanity check that mapcontext is a positive value
 	if mapcontext[0] < 1 || mapcontext[1] < 1 {
-		return false
+		err := "MapContext is impossible"
+		return false, err
 	}
-	if mapcontext[0] == configMapContext[0] && mapcontext[1] == configMapContext[1] {
-		return true
-	} else {
-		return false
+	// reference expansion parameters to compare with proper MapContext
+	// FullerBlock = [3,3,3] at Number = 0
+	if config.IsFuller(number[0]) {
+		ontology := params.FullerOntology
+		// first check for proper length
+		if len(mapcontext) != len(ontology) {
+			return false, "given MapContext is invalid"
+		}
+		// loop to check uknown number of indexes
+		for i := range mapcontext {
+			if mapcontext[i] != ontology[i] {
+				return false, "MapContext does not match protocol configuration"
+			}
+		}
+		return true, ""
 	}
+	return false, "wrong number given"
 }
 
 // Verifies that Location value is valid inside MapContext ontology.
-func verifyInsideLocation(location []byte, mapcontext []int) bool {
+func verifyInsideLocation(location []byte, number []*big.Int, config *params.ChainConfig) bool {
 	regionLocation := int(location[0])
 	zoneLocation := int(location[1])
 
-	if len(mapcontext) < regionLocation {
-		return false
+	if config.IsFuller(number[0]) {
+		ontology := params.FullerOntology
+		if len(ontology) < regionLocation {
+			return false
+		}
+		if ontology[regionLocation-1] < zoneLocation {
+			return false
+		}
+		return true
 	}
-	if mapcontext[regionLocation-1] < zoneLocation {
-		return false
-	}
-	return true
+	return false
 }
