@@ -2095,7 +2095,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			return it.index, err
 		}
 		for _, extBlock := range linkExtBlocks {
-			fmt.Println("linkBlock", extBlock.Context(), extBlock.Header().Number, extBlock.Hash())
+			fmt.Println("linkBlock", extBlock.Context(), extBlock.Header().Location, extBlock.Header().Number, extBlock.Hash())
 		}
 		if len(linkExtBlocks) > 0 {
 			duplicateErr := bc.CheckExtBlockDuplicates(linkExtBlocks)

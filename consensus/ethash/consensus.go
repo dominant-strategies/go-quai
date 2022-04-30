@@ -992,9 +992,9 @@ func (ethash *Ethash) RegionTraceBranch(chain consensus.ChainHeaderReader, heade
 			break
 		}
 		if difficultyContext < context && context == types.ContextDepth-1 {
-			// fmt.Println("Trace Branch: Found Region coincident block in Zone", "number", header.Number, "context", context, "location", header.Location)
+			fmt.Println("Trace Branch: Found Region coincident block in Zone", "number", header.Number, "context", context, "location", header.Location)
 			break
-		} else if difficultyContext < context && context == types.QuaiNetworkContext-2 {
+		} else if difficultyContext == 0 && !bytes.Equal(header.Location, originalLocation) {
 			// If we have found a Prime block, trace it.
 			fmt.Println("Going into PrimeTraceBranch from Region")
 			result, err := ethash.PrimeTraceBranch(chain, header, difficultyContext, stopHash, originalContext, originalLocation)
@@ -1031,7 +1031,7 @@ func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, heade
 
 		// Get the Prime stopHash to be used in the Prime context. Go on to trace Prime once.
 		primeStopHash, primeNum := ethash.GetStopHash(chain, context, 0, prevHeader)
-		if context == 0 {
+		if context == 0 && context != types.QuaiNetworkContext-1 {
 			extBlockResult, extBlockErr := ethash.PrimeTraceBranch(chain, prevHeader, difficultyContext, primeStopHash, context, header.Location)
 			if extBlockErr != nil {
 				log.Info("GetExternalBlocks: Returning with error", "len", len(externalBlocks), "time", time.Since(start), "err", extBlockErr)
