@@ -836,7 +836,7 @@ func (ethash *Ethash) PrimeTraceBranch(chain consensus.ChainHeaderReader, header
 			break
 		}
 
-		// If we have are stepping into a Region from Prime ensure it is now our original location.
+		// If we have are stepping into a Region from Prime ensure it is not our original location.
 		if context < types.ContextDepth-1 {
 			if (header.Location[0] != originalLocation[0] && originalContext > 0) || originalContext == 0 {
 				fmt.Println("PrimeTraceBranch: Going down into trace fromPrime", "number", header.Number, "context", context, "location", header.Location, "hash", header.Hash())
@@ -860,11 +860,6 @@ func (ethash *Ethash) PrimeTraceBranch(chain consensus.ChainHeaderReader, header
 			return extBlocks, nil
 		}
 		extBlocks = append(extBlocks, extBlock)
-		// fmt.Println("Trace Branch: PRIME Adding external block", "number", header.Number, "context", context, "location", header.Location, "hash", header.Hash(), "prevHash", header.ParentHash[context])
-		if header.ParentHash[context] == stopHash {
-			fmt.Println("PrimeTraceBranch: Stopping on stop hash or num is 1", "number", header.Number, "context", context, "location", header.Location, "prevHash", header.ParentHash[context])
-			break
-		}
 
 		// Do not continue at header number == 1 since we are unable to obtain the Genesis as an external block.
 		if header.Number[context].Cmp(big.NewInt(1)) == 0 {
@@ -879,7 +874,7 @@ func (ethash *Ethash) PrimeTraceBranch(chain consensus.ChainHeaderReader, header
 			return extBlocks, nil
 		}
 
-		if bytes.Equal(originalLocation, prevHeader.Header().Location) && context == 0 {
+		if context == 0 && originalLocation[0] == prevHeader.Header().Location[0] {
 			fmt.Println("PrimeTraceBranch: Stopping in location equal", "original", originalLocation, "prev", prevHeader.Header().Location)
 			break
 		}
@@ -956,13 +951,6 @@ func (ethash *Ethash) RegionTraceBranch(chain consensus.ChainHeaderReader, heade
 		extBlocks = append(extBlocks, extBlock)
 		fmt.Println("RegionTraceBranch: REGION Adding external block", "number", header.Number, "context", context, "location", header.Location, "hash", header.Hash())
 
-		// Stop on the passed in stopHash
-		// fmt.Println("Region stopHash", header.ParentHash[context], stopHash)
-		if header.ParentHash[context] == stopHash {
-			fmt.Println("RegionTraceBranch: Stopping on stop hash or num is 1", "number", header.Number, "context", context, "location", header.Location, "prevHash", header.ParentHash[context])
-			break
-		}
-
 		// Do not continue at header number == 1 since we are unable to obtain the Genesis as an external block.
 		if header.Number[context].Cmp(big.NewInt(1)) == 0 {
 			fmt.Println("RegionTraceBranch: Stopping height == 1", "number", header.Number, "context", context, "location", header.Location, "prevHash", header.ParentHash[context])
@@ -976,7 +964,7 @@ func (ethash *Ethash) RegionTraceBranch(chain consensus.ChainHeaderReader, heade
 			break
 		}
 
-		if bytes.Equal(originalLocation, prevHeader.Header().Location) && context == 1 {
+		if context == 1 && bytes.Equal(originalLocation, prevHeader.Header().Location) {
 			fmt.Println("RegionTraceBranch: Stopping in location equal", "original", originalLocation, "prev", prevHeader.Header().Location)
 			break
 		}
