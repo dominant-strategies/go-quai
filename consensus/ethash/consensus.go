@@ -1203,22 +1203,49 @@ func verifyMapContext(mapcontext []int, number []*big.Int, config *params.ChainC
 		return false, err
 	}
 	// reference expansion parameters to compare with proper MapContext
+	// LovelaceBlock = [3,4,4] at Number = MaxInt
+	if config.IsLovelace(number[0]) {
+		check, err := checkLengthAndIndices(mapcontext, params.LovelaceOntology)
+		if !check {
+			fmt.Errorf("mapcontext error on Lovelace : ", err)
+		} else {
+			return true, ""
+		}
+	}
+	// TuringBlock = [3,3,4] at Number = MaxInt
+	if config.IsTuring(number[0]) {
+		check, err := checkLengthAndIndices(mapcontext, params.TuringOntology)
+		if !check {
+			fmt.Errorf("mapcontext error on Turing: ", err)
+		} else {
+			return true, ""
+		}
+	}
 	// FullerBlock = [3,3,3] at Number = 0
 	if config.IsFuller(number[0]) {
-		ontology := params.FullerOntology
-		// first check for proper length
-		if len(mapcontext) != len(ontology) {
-			return false, "given MapContext is invalid"
+		check, err := checkLengthAndIndices(mapcontext, params.FullerOntology)
+		if !check {
+			fmt.Errorf("mapcontext error on Fuller: ", err)
+		} else {
+			return true, ""
 		}
-		// loop to check uknown number of indexes
-		for i := range mapcontext {
-			if mapcontext[i] != ontology[i] {
-				return false, "MapContext does not match protocol configuration"
-			}
-		}
-		return true, ""
 	}
 	return false, "wrong number given"
+}
+
+// Verifies that MapContext length is valid.
+func checkLengthAndIndices(mapcontext []int, ontology []int) (bool, string) {
+	// first check for proper length
+	if len(mapcontext) != len(ontology) {
+		return false, "given MapContext is invalid"
+	}
+	// loop to check unknown number of indices
+	for i := range mapcontext {
+		if mapcontext[i] != ontology[i] {
+			return false, "MapContext does not match protocol configuration"
+		}
+	}
+	return true, ""
 }
 
 // Verifies that Location value is valid inside MapContext ontology.
@@ -1226,15 +1253,28 @@ func verifyInsideLocation(location []byte, number []*big.Int, config *params.Cha
 	regionLocation := int(location[0])
 	zoneLocation := int(location[1])
 
+	// LovelaceBlock = [3,4,4]
+	if config.IsLovelace(number[0]) {
+		return checkInsideCurrent(regionLocation, zoneLocation, params.LovelaceOntology)
+	}
+	// TuringBlock = [3,3,4]
+	if config.IsTuring(number[0]) {
+		return checkInsideCurrent(regionLocation, zoneLocation, params.TuringOntology)
+	}
+	// FullerBlock = [3,3,3]
 	if config.IsFuller(number[0]) {
-		ontology := params.FullerOntology
-		if len(ontology) < regionLocation {
-			return false
-		}
-		if ontology[regionLocation-1] < zoneLocation {
-			return false
-		}
-		return true
+		return checkInsideCurrent(regionLocation, zoneLocation, params.FullerOntology)
 	}
 	return false
+}
+
+// Verifies that Location is valid inside current MapContext ontology.
+func checkInsideCurrent(regionLoc int, zoneLoc int, ontology []int) bool {
+	if len(ontology) < regionLoc {
+		return false
+	}
+	if ontology[regionLoc-1] < zoneLoc {
+		return false
+	}
+	return true
 }
