@@ -19,6 +19,7 @@ package params
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
 	"math/big"
 
 	"github.com/spruce-solutions/go-quai/common"
@@ -58,10 +59,26 @@ var testnetValidChains = []*big.Int{big.NewInt(12000), big.NewInt(12100), big.Ne
 
 // Ontology defines the current Quai Network ontology
 var (
-	FullerOntology = []int{3, 3, 3} // named after Buckminster Fuller
+	FullerOntology   = []int{3, 3, 3} // named after Buckminster Fuller
+	TuringOntology   = []int{3, 3, 4} // named after Alan Turing
+	LovelaceOntology = []int{3, 4, 4} // named after Ada Lovelace
 	// future ontology expansion markers go here
-	CurrentOntology = FullerOntology
+	QuaiOntologies = [][]int{FullerOntology, TuringOntology, LovelaceOntology}
 )
+
+// CurrentOntology determines from the given block number the appropriate MapContext ontology to select out of QuaiOntologies
+func CurrentOntology(config ChainConfig, number []*big.Int) ([]int, string) {
+	if config.IsLovelace(number[0]) {
+		return config.MapContexts[2], ""
+	}
+	if config.IsTuring(number[0]) {
+		return config.MapContexts[1], ""
+	}
+	if config.IsFuller(number[0]) {
+		return config.MapContexts[0], ""
+	}
+	return nil, "Impossible number given. Check your settings."
+}
 
 var (
 	// MainnetPrimeChainConfig is the chain parameters to run a node on the main network.
@@ -69,7 +86,7 @@ var (
 		ChainID:             big.NewInt(9000),
 		Context:             0,
 		Location:            []byte{0, 0},
-		MapContext:          CurrentOntology,
+		MapContexts:         QuaiOntologies,
 		Ethash:              new(EthashConfig),
 		HomesteadBlock:      big.NewInt(0),
 		EIP150Block:         big.NewInt(0),
@@ -85,6 +102,8 @@ var (
 		LondonBlock:         big.NewInt(0),
 		GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
 		FullerBlock:         big.NewInt(0),
+		TuringBlock:         big.NewInt(math.MaxInt),
+		LovelaceBlock:       big.NewInt(math.MaxInt),
 	}
 
 	MainnetRegionChainConfigs = []ChainConfig{
@@ -92,7 +111,7 @@ var (
 			ChainID:             big.NewInt(9100),
 			Context:             1,
 			Location:            []byte{1, 0},
-			MapContext:          CurrentOntology,
+			MapContexts:         QuaiOntologies,
 			Ethash:              new(EthashConfig),
 			HomesteadBlock:      big.NewInt(0),
 			EIP150Block:         big.NewInt(0),
@@ -108,12 +127,14 @@ var (
 			LondonBlock:         big.NewInt(0),
 			GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
 			FullerBlock:         big.NewInt(0),
+			TuringBlock:         big.NewInt(math.MaxInt),
+			LovelaceBlock:       big.NewInt(math.MaxInt),
 		},
 		ChainConfig{
 			ChainID:             big.NewInt(9200),
 			Context:             1,
 			Location:            []byte{2, 0},
-			MapContext:          CurrentOntology,
+			MapContexts:         QuaiOntologies,
 			Ethash:              new(EthashConfig),
 			HomesteadBlock:      big.NewInt(0),
 			EIP150Block:         big.NewInt(0),
@@ -129,12 +150,14 @@ var (
 			LondonBlock:         big.NewInt(0),
 			GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
 			FullerBlock:         big.NewInt(0),
+			TuringBlock:         big.NewInt(math.MaxInt),
+			LovelaceBlock:       big.NewInt(math.MaxInt),
 		},
 		ChainConfig{
 			ChainID:             big.NewInt(9300),
 			Context:             1,
 			Location:            []byte{3, 0},
-			MapContext:          CurrentOntology,
+			MapContexts:         QuaiOntologies,
 			Ethash:              new(EthashConfig),
 			HomesteadBlock:      big.NewInt(0),
 			EIP150Block:         big.NewInt(0),
@@ -150,6 +173,8 @@ var (
 			LondonBlock:         big.NewInt(0),
 			GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
 			FullerBlock:         big.NewInt(0),
+			TuringBlock:         big.NewInt(math.MaxInt),
+			LovelaceBlock:       big.NewInt(math.MaxInt),
 		},
 	}
 
@@ -159,7 +184,7 @@ var (
 				ChainID:             big.NewInt(9101),
 				Context:             2,
 				Location:            []byte{1, 1},
-				MapContext:          CurrentOntology,
+				MapContexts:         QuaiOntologies,
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -175,12 +200,14 @@ var (
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
 				FullerBlock:         big.NewInt(0),
+				TuringBlock:         big.NewInt(math.MaxInt),
+				LovelaceBlock:       big.NewInt(math.MaxInt),
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(9102),
 				Context:             2,
 				Location:            []byte{1, 2},
-				MapContext:          CurrentOntology,
+				MapContexts:         QuaiOntologies,
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -196,11 +223,14 @@ var (
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
 				FullerBlock:         big.NewInt(0),
+				TuringBlock:         big.NewInt(math.MaxInt),
+				LovelaceBlock:       big.NewInt(math.MaxInt),
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(9103),
 				Context:             2,
 				Location:            []byte{1, 3},
+				MapContexts:         QuaiOntologies,
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -216,13 +246,15 @@ var (
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
 				FullerBlock:         big.NewInt(0),
+				TuringBlock:         big.NewInt(math.MaxInt),
+				LovelaceBlock:       big.NewInt(math.MaxInt),
 			}},
 		[]ChainConfig{
 			ChainConfig{
 				ChainID:             big.NewInt(9201),
 				Context:             2,
 				Location:            []byte{2, 1},
-				MapContext:          CurrentOntology,
+				MapContexts:         QuaiOntologies,
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -238,12 +270,14 @@ var (
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
 				FullerBlock:         big.NewInt(0),
+				TuringBlock:         big.NewInt(math.MaxInt),
+				LovelaceBlock:       big.NewInt(math.MaxInt),
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(9202),
 				Context:             2,
 				Location:            []byte{2, 2},
-				MapContext:          CurrentOntology,
+				MapContexts:         QuaiOntologies,
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -259,12 +293,14 @@ var (
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
 				FullerBlock:         big.NewInt(0),
+				TuringBlock:         big.NewInt(math.MaxInt),
+				LovelaceBlock:       big.NewInt(math.MaxInt),
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(9203),
 				Context:             2,
 				Location:            []byte{2, 3},
-				MapContext:          CurrentOntology,
+				MapContexts:         QuaiOntologies,
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -280,13 +316,15 @@ var (
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
 				FullerBlock:         big.NewInt(0),
+				TuringBlock:         big.NewInt(math.MaxInt),
+				LovelaceBlock:       big.NewInt(math.MaxInt),
 			}},
 		[]ChainConfig{
 			ChainConfig{
 				ChainID:             big.NewInt(9301),
 				Context:             2,
 				Location:            []byte{3, 1},
-				MapContext:          CurrentOntology,
+				MapContexts:         QuaiOntologies,
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -302,12 +340,14 @@ var (
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
 				FullerBlock:         big.NewInt(0),
+				TuringBlock:         big.NewInt(math.MaxInt),
+				LovelaceBlock:       big.NewInt(math.MaxInt),
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(9302),
 				Context:             2,
 				Location:            []byte{3, 2},
-				MapContext:          CurrentOntology,
+				MapContexts:         QuaiOntologies,
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -323,12 +363,14 @@ var (
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
 				FullerBlock:         big.NewInt(0),
+				TuringBlock:         big.NewInt(math.MaxInt),
+				LovelaceBlock:       big.NewInt(math.MaxInt),
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(9303),
 				Context:             2,
 				Location:            []byte{3, 3},
-				MapContext:          CurrentOntology,
+				MapContexts:         QuaiOntologies,
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -344,6 +386,8 @@ var (
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{MainnetPrimeGenesisHash, MainnetRegionGenesisHash, MainnetZoneGenesisHash},
 				FullerBlock:         big.NewInt(0),
+				TuringBlock:         big.NewInt(math.MaxInt),
+				LovelaceBlock:       big.NewInt(math.MaxInt),
 			},
 		},
 	}
@@ -353,7 +397,7 @@ var (
 		ChainID:             big.NewInt(12000),
 		Context:             0,
 		Location:            []byte{0, 0},
-		MapContext:          CurrentOntology,
+		MapContexts:         QuaiOntologies,
 		Ethash:              new(EthashConfig),
 		HomesteadBlock:      big.NewInt(0),
 		EIP150Block:         big.NewInt(0),
@@ -369,6 +413,8 @@ var (
 		LondonBlock:         big.NewInt(0),
 		GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
 		FullerBlock:         big.NewInt(0),
+		TuringBlock:         big.NewInt(math.MaxInt),
+		LovelaceBlock:       big.NewInt(math.MaxInt),
 	}
 
 	RopstenRegionChainConfigs = []ChainConfig{
@@ -376,7 +422,7 @@ var (
 			ChainID:             big.NewInt(12100),
 			Context:             1,
 			Location:            []byte{1, 0},
-			MapContext:          CurrentOntology,
+			MapContexts:         QuaiOntologies,
 			Ethash:              new(EthashConfig),
 			HomesteadBlock:      big.NewInt(0),
 			EIP150Block:         big.NewInt(0),
@@ -392,12 +438,14 @@ var (
 			LondonBlock:         big.NewInt(0),
 			GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
 			FullerBlock:         big.NewInt(0),
+			TuringBlock:         big.NewInt(math.MaxInt),
+			LovelaceBlock:       big.NewInt(math.MaxInt),
 		},
 		ChainConfig{
 			ChainID:             big.NewInt(12200),
 			Context:             1,
 			Location:            []byte{2, 0},
-			MapContext:          CurrentOntology,
+			MapContexts:         QuaiOntologies,
 			Ethash:              new(EthashConfig),
 			HomesteadBlock:      big.NewInt(0),
 			EIP150Block:         big.NewInt(0),
@@ -413,12 +461,14 @@ var (
 			LondonBlock:         big.NewInt(0),
 			GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
 			FullerBlock:         big.NewInt(0),
+			TuringBlock:         big.NewInt(math.MaxInt),
+			LovelaceBlock:       big.NewInt(math.MaxInt),
 		},
 		ChainConfig{
 			ChainID:             big.NewInt(12300),
 			Context:             1,
 			Location:            []byte{3, 0},
-			MapContext:          CurrentOntology,
+			MapContexts:         QuaiOntologies,
 			Ethash:              new(EthashConfig),
 			HomesteadBlock:      big.NewInt(0),
 			EIP150Block:         big.NewInt(0),
@@ -434,6 +484,8 @@ var (
 			LondonBlock:         big.NewInt(0),
 			GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
 			FullerBlock:         big.NewInt(0),
+			TuringBlock:         big.NewInt(math.MaxInt),
+			LovelaceBlock:       big.NewInt(math.MaxInt),
 		},
 	}
 
@@ -443,7 +495,7 @@ var (
 				ChainID:             big.NewInt(12101),
 				Context:             2,
 				Location:            []byte{1, 1},
-				MapContext:          CurrentOntology,
+				MapContexts:         QuaiOntologies,
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -459,12 +511,14 @@ var (
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
 				FullerBlock:         big.NewInt(0),
+				TuringBlock:         big.NewInt(math.MaxInt),
+				LovelaceBlock:       big.NewInt(math.MaxInt),
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(12102),
 				Context:             2,
 				Location:            []byte{1, 2},
-				MapContext:          CurrentOntology,
+				MapContexts:         QuaiOntologies,
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -480,12 +534,14 @@ var (
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
 				FullerBlock:         big.NewInt(0),
+				TuringBlock:         big.NewInt(math.MaxInt),
+				LovelaceBlock:       big.NewInt(math.MaxInt),
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(12103),
 				Context:             2,
 				Location:            []byte{1, 3},
-				MapContext:          CurrentOntology,
+				MapContexts:         QuaiOntologies,
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -501,13 +557,15 @@ var (
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
 				FullerBlock:         big.NewInt(0),
+				TuringBlock:         big.NewInt(math.MaxInt),
+				LovelaceBlock:       big.NewInt(math.MaxInt),
 			}},
 		[]ChainConfig{
 			ChainConfig{
 				ChainID:             big.NewInt(12201),
 				Context:             2,
 				Location:            []byte{2, 1},
-				MapContext:          CurrentOntology,
+				MapContexts:         QuaiOntologies,
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -523,12 +581,14 @@ var (
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
 				FullerBlock:         big.NewInt(0),
+				TuringBlock:         big.NewInt(math.MaxInt),
+				LovelaceBlock:       big.NewInt(math.MaxInt),
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(12202),
 				Context:             2,
 				Location:            []byte{2, 2},
-				MapContext:          CurrentOntology,
+				MapContexts:         QuaiOntologies,
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -544,12 +604,14 @@ var (
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
 				FullerBlock:         big.NewInt(0),
+				TuringBlock:         big.NewInt(math.MaxInt),
+				LovelaceBlock:       big.NewInt(math.MaxInt),
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(12203),
 				Context:             2,
 				Location:            []byte{2, 3},
-				MapContext:          CurrentOntology,
+				MapContexts:         QuaiOntologies,
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -565,13 +627,15 @@ var (
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
 				FullerBlock:         big.NewInt(0),
+				TuringBlock:         big.NewInt(math.MaxInt),
+				LovelaceBlock:       big.NewInt(math.MaxInt),
 			}},
 		[]ChainConfig{
 			ChainConfig{
 				ChainID:             big.NewInt(12301),
 				Context:             2,
 				Location:            []byte{3, 1},
-				MapContext:          CurrentOntology,
+				MapContexts:         QuaiOntologies,
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -587,12 +651,14 @@ var (
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
 				FullerBlock:         big.NewInt(0),
+				TuringBlock:         big.NewInt(math.MaxInt),
+				LovelaceBlock:       big.NewInt(math.MaxInt),
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(12302),
 				Context:             2,
 				Location:            []byte{3, 2},
-				MapContext:          CurrentOntology,
+				MapContexts:         QuaiOntologies,
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -608,12 +674,14 @@ var (
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
 				FullerBlock:         big.NewInt(0),
+				TuringBlock:         big.NewInt(math.MaxInt),
+				LovelaceBlock:       big.NewInt(math.MaxInt),
 			},
 			ChainConfig{
 				ChainID:             big.NewInt(12303),
 				Context:             2,
 				Location:            []byte{3, 3},
-				MapContext:          CurrentOntology,
+				MapContexts:         QuaiOntologies,
 				Ethash:              new(EthashConfig),
 				HomesteadBlock:      big.NewInt(0),
 				EIP150Block:         big.NewInt(0),
@@ -629,6 +697,8 @@ var (
 				LondonBlock:         big.NewInt(0),
 				GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
 				FullerBlock:         big.NewInt(0),
+				TuringBlock:         big.NewInt(math.MaxInt),
+				LovelaceBlock:       big.NewInt(math.MaxInt),
 			},
 		},
 	}
@@ -642,6 +712,7 @@ var (
 	// RopstenChainConfig contains the chain parameters to run a node on the Ropsten test network.
 	RopstenChainConfig = &ChainConfig{
 		ChainID:             big.NewInt(3),
+		MapContexts:         QuaiOntologies,
 		HomesteadBlock:      big.NewInt(0),
 		EIP150Block:         big.NewInt(0),
 		EIP150Hash:          common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
@@ -656,6 +727,9 @@ var (
 		LondonBlock:         big.NewInt(10_499_401),
 		Ethash:              new(EthashConfig),
 		GenesisHashes:       []common.Hash{RopstenPrimeGenesisHash, RopstenRegionGenesisHash, RopstenZoneGenesisHash},
+		FullerBlock:         big.NewInt(0),
+		TuringBlock:         big.NewInt(math.MaxInt),
+		LovelaceBlock:       big.NewInt(math.MaxInt),
 	}
 
 	// RopstenTrustedCheckpoint contains the light client trusted checkpoint for the Ropsten test network.
@@ -684,15 +758,15 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), 0, []byte{0, 0}, CurrentOntology, big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, nil, big.NewInt(0)}
+	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), 0, []byte{0, 0}, QuaiOntologies, big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, nil, big.NewInt(0), big.NewInt(math.MaxInt), big.NewInt(math.MaxInt)}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), 0, []byte{0, 0}, CurrentOntology, big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil, big.NewInt(0)}
-	TestChainConfig          = &ChainConfig{big.NewInt(1), 0, []byte{0, 0}, CurrentOntology, big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, nil, big.NewInt(0)}
+	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), 0, []byte{0, 0}, QuaiOntologies, big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil, big.NewInt(0), big.NewInt(math.MaxInt), big.NewInt(math.MaxInt)}
+	TestChainConfig          = &ChainConfig{big.NewInt(1), 0, []byte{0, 0}, QuaiOntologies, big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, nil, big.NewInt(0), big.NewInt(math.MaxInt), big.NewInt(math.MaxInt)}
 	TestRules                = TestChainConfig.Rules(new(big.Int))
 )
 
@@ -752,9 +826,9 @@ type CheckpointOracleConfig struct {
 type ChainConfig struct {
 	ChainID *big.Int `json:"chainId"` // chainId identifies the current chain and is used for replay protection
 
-	Context    int    // Context defines the index in which the chain operates at
-	Location   []byte // Location for a given block
-	MapContext []int  // MapContext for structure of the hierarchy
+	Context     int     // Context defines the index in which the chain operates at
+	Location    []byte  // Location for a given block
+	MapContexts [][]int // MapContext for structure of the hierarchy
 
 	HomesteadBlock *big.Int `json:"homesteadBlock,omitempty"` // Homestead switch block (nil = no fork, 0 = already homestead)
 	// EIP150 implements the Gas price changes (https://github.com/ethereum/EIPs/issues/150)
@@ -782,7 +856,9 @@ type ChainConfig struct {
 	GenesisHashes []common.Hash
 
 	// Quai Network Ontology
-	FullerBlock *big.Int `json:"FullerBlock,omitempty"` // FullerBlock (nil = no fork, 0 = already activated)
+	FullerBlock   *big.Int `json:"FullerBlock,omitempty"`   // FullerBlock (nil = no fork, 0 = already activated)
+	TuringBlock   *big.Int `json:"TuringBlock,omitempty"`   // TuringBlock
+	LovelaceBlock *big.Int `json:"LovelaceBlock,omitempty"` // LovelaceBlock
 	// future ontology expansion fields go here
 }
 
@@ -902,6 +978,16 @@ func (c *ChainConfig) IsFuller(num *big.Int) bool {
 	return isForked(c.FullerBlock, num)
 }
 
+// IsTuring returns whether num is either equal to the Merge fork block or greater.
+func (c *ChainConfig) IsTuring(num *big.Int) bool {
+	return isForked(c.TuringBlock, num)
+}
+
+// IsLovelace returns whether num is either equal to the Merge fork block or greater.
+func (c *ChainConfig) IsLovelace(num *big.Int) bool {
+	return isForked(c.LovelaceBlock, num)
+}
+
 // CheckCompatible checks whether scheduled fork transitions have been imported
 // with a mismatching chain configuration.
 func (c *ChainConfig) CheckCompatible(newcfg *ChainConfig, height uint64) *ConfigCompatError {
@@ -942,6 +1028,8 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "berlinBlock", block: c.BerlinBlock},
 		{name: "londonBlock", block: c.LondonBlock},
 		{name: "FullerBlock", block: c.FullerBlock},
+		{name: "TuringBlock", block: c.TuringBlock},
+		{name: "LoveLaceBlock", block: c.LovelaceBlock},
 	} {
 		if lastFork.name != "" {
 			// Next one must be higher number
@@ -1006,7 +1094,13 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, head *big.Int) *Confi
 		return newCompatError("London fork block", c.LondonBlock, newcfg.LondonBlock)
 	}
 	if isForkIncompatible(c.FullerBlock, newcfg.FullerBlock, head) {
-		return newCompatError("Fuller fork block", c.FullerBlock, newcfg.FullerBlock)
+		return newCompatError("Fuller ontology block", c.FullerBlock, newcfg.FullerBlock)
+	}
+	if isForkIncompatible(c.TuringBlock, newcfg.TuringBlock, head) {
+		return newCompatError("Turing ontology block", c.TuringBlock, newcfg.TuringBlock)
+	}
+	if isForkIncompatible(c.LovelaceBlock, newcfg.LovelaceBlock, head) {
+		return newCompatError("Lovelace ontology block", c.LovelaceBlock, newcfg.LovelaceBlock)
 	}
 	return nil
 }
@@ -1076,7 +1170,7 @@ type Rules struct {
 	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
 	IsBerlin, IsLondon, IsCatalyst                          bool
-	IsFuller                                                bool
+	IsFuller, IsTuring, IsLovelace                          bool
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -1099,6 +1193,8 @@ func (c *ChainConfig) Rules(num *big.Int) Rules {
 		IsLondon:         c.IsLondon(num),
 		IsCatalyst:       c.IsCatalyst(num),
 		IsFuller:         c.IsFuller(num),
+		IsTuring:         c.IsTuring(num),
+		IsLovelace:       c.IsLovelace(num),
 	}
 }
 
