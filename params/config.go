@@ -68,16 +68,16 @@ var (
 
 // CurrentOntology determines from the given block number the appropriate MapContext ontology to select out of QuaiOntologies
 func CurrentOntology(config ChainConfig, number []*big.Int) ([]int, string) {
-	if config.IsLovelace(number[0]) {
+	switch { // number[0] represents the respective Prime number; expansion forks go off Prime
+	case config.IsLovelace(number[0]):
 		return config.MapContexts[2], ""
-	}
-	if config.IsTuring(number[0]) {
+	case config.IsTuring(number[0]):
 		return config.MapContexts[1], ""
-	}
-	if config.IsFuller(number[0]) {
+	case config.IsFuller(number[0]):
 		return config.MapContexts[0], ""
+	default:
+		return nil, "Impossible number given."
 	}
-	return nil, "Impossible number given. Check your settings."
 }
 
 var (
