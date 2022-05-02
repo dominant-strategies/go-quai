@@ -60,6 +60,7 @@ type Genesis struct {
 	// These fields are used for consensus tests. Please don't use them
 	// in actual genesis blocks.
 	Number     uint64      `json:"number"`
+	MapContext []int       `json:"MapContext"`
 	GasUsed    uint64      `json:"gasUsed"`
 	ParentHash common.Hash `json:"parentHash"`
 	BaseFee    *big.Int    `json:"baseFeePerGas"`
@@ -354,6 +355,7 @@ func MainnetPrimeGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.MainnetPrimeChainConfig,
 		Number:     0,
+		MapContext: params.FullerOntology,
 		Nonce:      52,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
 		GasLimit:   5000000,
@@ -367,6 +369,7 @@ func MainnetRegionGenesisBlock(regionParams *params.ChainConfig) *Genesis {
 	return &Genesis{
 		Config:     regionParams,
 		Number:     0,
+		MapContext: params.FullerOntology,
 		Nonce:      52,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
 		GasLimit:   1600000,
@@ -380,6 +383,7 @@ func MainnetZoneGenesisBlock(zoneParams *params.ChainConfig) *Genesis {
 	return &Genesis{
 		Config:     zoneParams,
 		Number:     0,
+		MapContext: params.FullerOntology,
 		Nonce:      52,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
 		GasLimit:   500000,
@@ -393,6 +397,7 @@ func RopstenPrimeGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.RopstenPrimeChainConfig,
 		Number:     0,
+		MapContext: params.FullerOntology,
 		Nonce:      11,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
 		GasLimit:   5000000,
@@ -406,6 +411,7 @@ func RopstenRegionGenesisBlock(regionParams *params.ChainConfig) *Genesis {
 	return &Genesis{
 		Config:     regionParams,
 		Number:     0,
+		MapContext: params.FullerOntology,
 		Nonce:      11,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
 		GasLimit:   1600000,
@@ -419,6 +425,7 @@ func RopstenZoneGenesisBlock(zoneParams *params.ChainConfig) *Genesis {
 	return &Genesis{
 		Config:     zoneParams,
 		Number:     0,
+		MapContext: params.FullerOntology,
 		Nonce:      11,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
 		GasLimit:   500000,
@@ -431,6 +438,7 @@ func RopstenZoneGenesisBlock(zoneParams *params.ChainConfig) *Genesis {
 func DefaultRopstenGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.RopstenChainConfig,
+		MapContext: params.FullerOntology,
 		Nonce:      66,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
 		GasLimit:   16777216,
