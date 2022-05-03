@@ -307,14 +307,9 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		return fmt.Errorf("invalid location: Location %d not valid, expected %c", header.Location, chain.Config().Location)
 	}
 
-	// Verify that MapContext is same as config
-	if validMapContext, err := verifyMapContext(header.MapContext, header.Number, chain.Config()); !validMapContext {
-		return fmt.Errorf("invalid MapContext: ", err)
-	}
-
 	// Verify Location is in ontology described by MapContext
-	if validInsideLocation := verifyInsideLocation(header.Location, header.Number, chain.Config()); !validInsideLocation {
-		return fmt.Errorf("invalid location: Location %d not inside current MapContext %d", header.Location, header.MapContext)
+	if validInsideLocation, currentMapContext := verifyInsideLocation(header.Location, header.Number, chain.Config()); !validInsideLocation {
+		return fmt.Errorf("invalid location: Location %d not inside current MapContext %d", header.Location, currentMapContext)
 	}
 
 	if err := misc.VerifyForkHashes(chain.Config(), header, uncle); err != nil {
@@ -787,16 +782,9 @@ func (ethash *Ethash) PrimeTraceBranch(chain consensus.ChainHeaderReader, header
 	extBlocks := make([]*types.ExternalBlock, 0)
 	// startingHeader := header
 	for {
-		// Check MapContext and Location first to be sure an invalid block will not be traced through.
-		// Verify that MapContext is same as config
-		if validMapContext, err := verifyMapContext(header.MapContext, header.Number, chain.Config()); !validMapContext {
-			fmt.Errorf("Trace could not be completed: ", err)
-			break
-		}
-
 		// Verify Location is in ontology described by MapContext
-		if validInsideLocation := verifyInsideLocation(header.Location, header.Number, chain.Config()); !validInsideLocation {
-			fmt.Errorf("Trace could not be completed: given Location not in MapContext")
+		if validInsideLocation, currentMapContext := verifyInsideLocation(header.Location, header.Number, chain.Config()); !validInsideLocation {
+			fmt.Errorf("Trace could not be completed: given Location not in associated MapContext %d", currentMapContext)
 			break
 		}
 		// If the header is genesis, return the current set of external blocks.
@@ -876,16 +864,9 @@ func (ethash *Ethash) RegionTraceBranch(chain consensus.ChainHeaderReader, heade
 	extBlocks := make([]*types.ExternalBlock, 0)
 	// startingHeader := header
 	for {
-		// Check MapContext and Location first to be sure an invalid block will not be traced through.
-		// Verify that MapContext is same as config
-		if validMapContext, err := verifyMapContext(header.MapContext, header.Number, chain.Config()); !validMapContext {
-			fmt.Errorf("Trace could not be completed: ", err)
-			break
-		}
-
 		// Verify Location is in ontology described by MapContext
-		if validInsideLocation := verifyInsideLocation(header.Location, header.Number, chain.Config()); !validInsideLocation {
-			fmt.Errorf("Trace could not be completed: given Location not in MapContext")
+		if validInsideLocation, currentMapContext := verifyInsideLocation(header.Location, header.Number, chain.Config()); !validInsideLocation {
+			fmt.Errorf("Trace could not be completed: given Location not in associated MapContext %d", currentMapContext)
 			break
 		}
 
@@ -1195,77 +1176,25 @@ func verifyLocation(location []byte, configLocation []byte) bool {
 	}
 }
 
-// Verifies that a MapContext value is valid for a specific config.
-func verifyMapContext(mapcontext []int, number []*big.Int, config *params.ChainConfig) (bool, string) {
-	// quick sanity check that mapcontext is a positive value
-	if mapcontext[0] < 1 || mapcontext[1] < 1 {
-		err := "MapContext is impossible"
-		return false, err
-	}
-	// reference expansion parameters to compare with proper MapContext
-	// LovelaceBlock = [3,4,4] at Number = MaxInt
-	if config.IsLovelace(number[0]) {
-		check, err := checkLengthAndIndices(mapcontext, params.LovelaceOntology)
-		if !check {
-			fmt.Errorf("mapcontext error on Lovelace : ", err)
-		} else {
-			return true, ""
-		}
-	}
-	// TuringBlock = [3,3,4] at Number = MaxInt
-	if config.IsTuring(number[0]) {
-		check, err := checkLengthAndIndices(mapcontext, params.TuringOntology)
-		if !check {
-			fmt.Errorf("mapcontext error on Turing: ", err)
-		} else {
-			return true, ""
-		}
-	}
-	// FullerBlock = [3,3,3] at Number = 0
-	if config.IsFuller(number[0]) {
-		check, err := checkLengthAndIndices(mapcontext, params.FullerOntology)
-		if !check {
-			fmt.Errorf("mapcontext error on Fuller: ", err)
-		} else {
-			return true, ""
-		}
-	}
-	return false, "wrong number given"
-}
-
-// Verifies that MapContext length is valid.
-func checkLengthAndIndices(mapcontext []int, ontology []int) (bool, string) {
-	// first check for proper length
-	if len(mapcontext) != len(ontology) {
-		return false, "given MapContext is invalid"
-	}
-	// loop to check unknown number of indices
-	for i := range mapcontext {
-		if mapcontext[i] != ontology[i] {
-			return false, "MapContext does not match protocol configuration"
-		}
-	}
-	return true, ""
-}
-
 // Verifies that Location value is valid inside MapContext ontology.
-func verifyInsideLocation(location []byte, number []*big.Int, config *params.ChainConfig) bool {
+// Returns MapContext for error handling purposes.
+func verifyInsideLocation(location []byte, number []*big.Int, config *params.ChainConfig) (bool, []int) {
 	regionLocation := int(location[0])
 	zoneLocation := int(location[1])
 
 	// LovelaceBlock = [3,4,4]
 	if config.IsLovelace(number[0]) {
-		return checkInsideCurrent(regionLocation, zoneLocation, params.LovelaceOntology)
+		return checkInsideCurrent(regionLocation, zoneLocation, params.LovelaceOntology), params.LovelaceOntology
 	}
 	// TuringBlock = [3,3,4]
 	if config.IsTuring(number[0]) {
-		return checkInsideCurrent(regionLocation, zoneLocation, params.TuringOntology)
+		return checkInsideCurrent(regionLocation, zoneLocation, params.TuringOntology), params.TuringOntology
 	}
 	// FullerBlock = [3,3,3]
 	if config.IsFuller(number[0]) {
-		return checkInsideCurrent(regionLocation, zoneLocation, params.FullerOntology)
+		return checkInsideCurrent(regionLocation, zoneLocation, params.FullerOntology), params.FullerOntology
 	}
-	return false
+	return false, nil
 }
 
 // Verifies that Location is valid inside current MapContext ontology.
