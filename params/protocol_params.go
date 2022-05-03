@@ -16,7 +16,10 @@
 
 package params
 
-import "math/big"
+import (
+	"math"
+	"math/big"
+)
 
 const (
 	GasLimitBoundDivisor uint64 = 256     // The bound divisor of the gas limit, used in update calculations.
@@ -168,4 +171,18 @@ var (
 	MinimumDifficulty      = big.NewInt(131072)                                             // The minimum that the difficulty may ever be.
 	DurationLimits         = []*big.Int{big.NewInt(900), big.NewInt(300), big.NewInt(10)}   // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
 	TargetUncles           = []int{10, 30, 100}                                             // The bound divisor of the gas limit, used in update calculations.
+)
+
+// Ontology defines the current Quai Network ontology
+var (
+	// Fork blocks; necessary for retrieving MapContext through header/block methods
+	FullerBlock   = big.NewInt(0)           // Fork = 0 meaning initial ontology
+	TuringBlock   = big.NewInt(math.MaxInt) // maxed out for now
+	LovelaceBlock = big.NewInt(math.MaxInt) // maxed out for now
+	// Named ontologies
+	FullerOntology   = []int{3, 3, 3} // named after Buckminster Fuller
+	TuringOntology   = []int{3, 3, 4} // named after Alan Turing
+	LovelaceOntology = []int{3, 4, 4} // named after Ada Lovelace
+	// future ontology expansion markers go here
+	QuaiOntologies = [][]int{FullerOntology, TuringOntology, LovelaceOntology}
 )

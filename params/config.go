@@ -57,20 +57,6 @@ var mainnetValidChains = []*big.Int{big.NewInt(9000), big.NewInt(9100), big.NewI
 
 var testnetValidChains = []*big.Int{big.NewInt(12000), big.NewInt(12100), big.NewInt(12101), big.NewInt(12102), big.NewInt(12103), big.NewInt(12200), big.NewInt(12201), big.NewInt(12202), big.NewInt(12203), big.NewInt(12300), big.NewInt(12301), big.NewInt(12302), big.NewInt(12303)}
 
-// Ontology defines the current Quai Network ontology
-var (
-	// Fork blocks; necessary for retrieving MapContext through header/block methods
-	FullerBlock   = big.NewInt(0)           // Fork = 0 meaning initial ontology
-	TuringBlock   = big.NewInt(math.MaxInt) // maxed out for now
-	LovelaceBlock = big.NewInt(math.MaxInt) // maxed out for now
-	// Named ontologies
-	FullerOntology   = []int{3, 3, 3} // named after Buckminster Fuller
-	TuringOntology   = []int{3, 3, 4} // named after Alan Turing
-	LovelaceOntology = []int{3, 4, 4} // named after Ada Lovelace
-	// future ontology expansion markers go here
-	QuaiOntologies = [][]int{FullerOntology, TuringOntology, LovelaceOntology}
-)
-
 // CurrentOntology is used to retrieve the MapContext of a given block.
 func CurrentOntology(number []*big.Int) []int {
 	fuller := FullerBlock
@@ -89,6 +75,8 @@ func CurrentOntology(number []*big.Int) []int {
 		return nil
 	}
 }
+
+// ConfigOntology retrieves the
 
 var (
 	// MainnetPrimeChainConfig is the chain parameters to run a node on the main network.
