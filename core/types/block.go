@@ -325,22 +325,7 @@ func (b *ExternalBlock) CacheKey() []byte {
 
 // Returns current MapContext for a given block.
 func (b *ExternalBlock) MapContext() []int {
-	// initialize values for checking
-	fuller := params.FullerBlock
-	turing := params.TuringBlock
-	lovelace := params.LovelaceBlock
-	number := b.header.Number[0]
-
-	switch {
-	case number.Cmp(lovelace) > 0:
-		return params.LovelaceOntology
-	case number.Cmp(turing) > 0:
-		return params.TuringOntology
-	case number.Cmp(fuller) > 0:
-		return params.FullerOntology
-	default:
-		return nil
-	}
+	return params.CurrentOntology(b.header.Number)
 }
 
 // encodeBlockNumber encodes a block number as big endian uint64
@@ -672,21 +657,7 @@ func (b *Block) BaseFee(params ...int) *big.Int {
 
 // TODO
 func (b *Block) MapContext() []int {
-	fuller := params.FullerBlock
-	turing := params.TuringBlock
-	lovelace := params.LovelaceBlock
-	number := b.header.Number[0]
-
-	switch {
-	case number.Cmp(lovelace) > 0:
-		return params.LovelaceOntology
-	case number.Cmp(turing) > 0:
-		return params.TuringOntology
-	case number.Cmp(fuller) > 0:
-		return params.FullerOntology
-	default:
-		return nil
-	}
+	return params.CurrentOntology(b.header.Number)
 }
 
 func (b *Block) Header() *Header { return CopyHeader(b.header) }

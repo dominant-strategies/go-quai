@@ -71,17 +71,22 @@ var (
 	QuaiOntologies = [][]int{FullerOntology, TuringOntology, LovelaceOntology}
 )
 
-// CurrentOntology determines from the given block number the appropriate MapContext ontology to select out of QuaiOntologies
-func CurrentOntology(config ChainConfig, number []*big.Int) ([]int, string) {
-	switch { // number[0] represents the respective Prime number; expansion forks go off Prime
-	case config.IsLovelace(number[0]):
-		return config.MapContexts[2], ""
-	case config.IsTuring(number[0]):
-		return config.MapContexts[1], ""
-	case config.IsFuller(number[0]):
-		return config.MapContexts[0], ""
+// CurrentOntology is used to retrieve the MapContext of a given block.
+func CurrentOntology(number []*big.Int) []int {
+	fuller := FullerBlock
+	turing := TuringBlock
+	lovelace := LovelaceBlock
+	forkNumber := number[0]
+
+	switch {
+	case forkNumber.Cmp(lovelace) > 0:
+		return LovelaceOntology
+	case forkNumber.Cmp(turing) > 0:
+		return TuringOntology
+	case forkNumber.Cmp(fuller) > 0:
+		return FullerOntology
 	default:
-		return nil, "Impossible number given."
+		return nil
 	}
 }
 

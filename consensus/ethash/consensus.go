@@ -1132,7 +1132,6 @@ func (ethash *Ethash) SealHash(header *types.Header) (hash common.Hash) {
 		header.Time,
 		header.Extra,
 		header.Location,
-		header.MapContext,
 	}
 	if header.BaseFee != nil {
 		enc = append(enc, header.BaseFee)
