@@ -29,6 +29,7 @@ import (
 
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/common/hexutil"
+	"github.com/spruce-solutions/go-quai/params"
 	"github.com/spruce-solutions/go-quai/rlp"
 )
 
@@ -322,8 +323,25 @@ func (b *ExternalBlock) CacheKey() []byte {
 	return ExtBlockCacheKey(b.header.Number[b.context.Int64()].Uint64(), b.context.Uint64(), hash)
 }
 
-// TODO BRYCE FIX THIS
-// func (b *ExternalBlock) MapContext() []int { return CopyHeader(b.header).MapContext }
+// Returns current MapContext for a given block.
+func (b *ExternalBlock) MapContext() []int {
+	// initialize values for checking
+	fuller := params.FullerBlock
+	turing := params.TuringBlock
+	lovelace := params.LovelaceBlock
+	number := b.header.Number[0]
+
+	switch {
+	case number.Cmp(lovelace) > 0:
+		return params.LovelaceOntology
+	case number.Cmp(turing) > 0:
+		return params.TuringOntology
+	case number.Cmp(fuller) > 0:
+		return params.FullerOntology
+	default:
+		return nil
+	}
+}
 
 // encodeBlockNumber encodes a block number as big endian uint64
 func encodeBlockNumber(number uint64) []byte {
@@ -652,14 +670,24 @@ func (b *Block) BaseFee(params ...int) *big.Int {
 	return new(big.Int).Set(b.header.BaseFee[context])
 }
 
-// TODO BRYCE FIX THIS
-//	func (b *Block) MapContext() []int {
-//	if b.header.MapContext == nil {
-//	return nil
-//	}
-//
-//	return CopyHeader(b.header).MapContext
-//	}
+// TODO
+func (b *Block) MapContext() []int {
+	fuller := params.FullerBlock
+	turing := params.TuringBlock
+	lovelace := params.LovelaceBlock
+	number := b.header.Number[0]
+
+	switch {
+	case number.Cmp(lovelace) > 0:
+		return params.LovelaceOntology
+	case number.Cmp(turing) > 0:
+		return params.TuringOntology
+	case number.Cmp(fuller) > 0:
+		return params.FullerOntology
+	default:
+		return nil
+	}
+}
 
 func (b *Block) Header() *Header { return CopyHeader(b.header) }
 

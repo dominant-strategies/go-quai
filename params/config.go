@@ -59,6 +59,11 @@ var testnetValidChains = []*big.Int{big.NewInt(12000), big.NewInt(12100), big.Ne
 
 // Ontology defines the current Quai Network ontology
 var (
+	// Fork blocks; necessary for retrieving MapContext through header/block methods
+	FullerBlock   = big.NewInt(0)           // Fork = 0 meaning initial ontology
+	TuringBlock   = big.NewInt(math.MaxInt) // maxed out for now
+	LovelaceBlock = big.NewInt(math.MaxInt) // maxed out for now
+	// Named ontologies
 	FullerOntology   = []int{3, 3, 3} // named after Buckminster Fuller
 	TuringOntology   = []int{3, 3, 4} // named after Alan Turing
 	LovelaceOntology = []int{3, 4, 4} // named after Ada Lovelace
