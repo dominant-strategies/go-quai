@@ -115,33 +115,30 @@ func CalculateReward() *big.Int {
 	regions := big.NewInt(3)
 	zones := big.NewInt(3)
 
-	primeReward := big.NewInt(1)
-	primeReward.Mul(primeReward, big.NewInt(3))
-	primeReward.Div(reward, primeReward)
-
-	regionReward := big.NewInt(1)
-	regionReward.Mul(regionReward, big.NewInt(3))
-	regionReward.Mul(regionReward, regions)
-	regionReward.Mul(regionReward, timeFactor)
-	regionReward.Div(reward, regionReward)
-
-	zoneReward := big.NewInt(1)
-	zoneReward.Mul(zoneReward, big.NewInt(3))
-	zoneReward.Mul(zoneReward, regions)
-	zoneReward.Mul(zoneReward, zones)
-	zoneReward.Mul(zoneReward, timeFactor)
-	zoneReward.Mul(zoneReward, timeFactor)
-	zoneReward.Div(reward, zoneReward)
-
 	finalReward := new(big.Int)
 
 	if types.QuaiNetworkContext == 0 {
+		primeReward := big.NewInt(1)
+		primeReward.Mul(primeReward, big.NewInt(3))
+		primeReward.Div(reward, primeReward)
 		finalReward = primeReward
 	}
 	if types.QuaiNetworkContext == 1 {
+		regionReward := big.NewInt(1)
+		regionReward.Mul(regionReward, big.NewInt(3))
+		regionReward.Mul(regionReward, regions)
+		regionReward.Mul(regionReward, timeFactor)
+		regionReward.Div(reward, regionReward)
 		finalReward = regionReward
 	}
 	if types.QuaiNetworkContext == 2 {
+		zoneReward := big.NewInt(1)
+		zoneReward.Mul(zoneReward, big.NewInt(3))
+		zoneReward.Mul(zoneReward, regions)
+		zoneReward.Mul(zoneReward, zones)
+		zoneReward.Mul(zoneReward, timeFactor)
+		zoneReward.Mul(zoneReward, timeFactor)
+		zoneReward.Div(reward, zoneReward)
 		finalReward = zoneReward
 	}
 
