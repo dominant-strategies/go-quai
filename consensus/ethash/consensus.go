@@ -303,13 +303,13 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		}
 	}
 	// Verify that Location is same as config
-	if validLocation := verifyLocation(header.Location, chain.Config().Location); !validLocation {
-		return fmt.Errorf("invalid location: Location %d not valid, expected %c", header.Location, chain.Config().Location)
+	if err := verifyLocation(header.Location, chain.Config().Location); err != nil {
+		return err
 	}
 
 	// Verify Location is in ontology described by MapContext
-	if validInsideLocation, currentMapContext := verifyInsideLocation(header.Location, header.Number, chain.Config()); !validInsideLocation {
-		return fmt.Errorf("invalid location: Location %d not inside current MapContext %d", header.Location, currentMapContext)
+	if err := verifyInsideLocation(header.Location, header.Number, chain.Config()); err != nil {
+		return err
 	}
 
 	if err := misc.VerifyForkHashes(chain.Config(), header, uncle); err != nil {
@@ -1155,52 +1155,52 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 }
 
 // Verifies that a header location is valid for a specific config.
-func verifyLocation(location []byte, configLocation []byte) bool {
+func verifyLocation(location []byte, configLocation []byte) error {
 	switch types.QuaiNetworkContext {
 	case 0:
-		return true
+		return nil
 	case 1:
 		if location[0] != configLocation[0] {
-			return false
+			return consensus.ErrInvalidLocation
 		} else {
-			return true
+			return nil
 		}
 	case 2:
 		if !bytes.Equal(location, configLocation) {
-			return false
+			return consensus.ErrInvalidLocation
 		} else {
-			return true
+			return nil
 		}
 	default:
-		return false
+		return consensus.ErrInvalidLocation
 	}
 }
 
 // Verifies that Location value is valid inside MapContext ontology.
 // Returns MapContext for error handling purposes.
-func verifyInsideLocation(location []byte, number []*big.Int, config *params.ChainConfig) (bool, []int) {
+func verifyInsideLocation(location []byte, number []*big.Int, config *params.ChainConfig) error {
 	regionLocation := int(location[0])
 	zoneLocation := int(location[1])
 
 	switch {
 	case config.IsLovelace(number[0]): // Lovelace = [3,4,4]
-		return checkInsideCurrent(regionLocation, zoneLocation, params.LovelaceOntology), params.LovelaceOntology
+		return checkInsideCurrent(regionLocation, zoneLocation, params.LovelaceOntology)
 	case config.IsTuring(number[0]): // Turing = [3,3,4]
-		return checkInsideCurrent(regionLocation, zoneLocation, params.TuringOntology), params.TuringOntology
+		return checkInsideCurrent(regionLocation, zoneLocation, params.TuringOntology)
 	case config.IsFuller(number[0]): // Fuller = [3,3,3]
-		return checkInsideCurrent(regionLocation, zoneLocation, params.FullerOntology), params.FullerOntology
+		return checkInsideCurrent(regionLocation, zoneLocation, params.FullerOntology)
 	default:
-		return false, nil
+		return consensus.ErrInvalidOntology
 	}
 }
 
 // Verifies that Location is valid inside current MapContext ontology.
-func checkInsideCurrent(regionLoc int, zoneLoc int, ontology []int) bool {
+func checkInsideCurrent(regionLoc int, zoneLoc int, ontology []int) error {
 	if len(ontology) < regionLoc {
-		return false
+		return consensus.ErrInvalidOntology
 	}
 	if ontology[regionLoc-1] < zoneLoc {
-		return false
+		return consensus.ErrInvalidOntology
 	}
-	return true
+	return nil
 }
