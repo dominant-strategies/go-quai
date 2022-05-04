@@ -1182,19 +1182,16 @@ func verifyInsideLocation(location []byte, number []*big.Int, config *params.Cha
 	regionLocation := int(location[0])
 	zoneLocation := int(location[1])
 
-	// LovelaceBlock = [3,4,4]
-	if config.IsLovelace(number[0]) {
+	switch {
+	case config.IsLovelace(number[0]): // Lovelace = [3,4,4]
 		return checkInsideCurrent(regionLocation, zoneLocation, params.LovelaceOntology), params.LovelaceOntology
-	}
-	// TuringBlock = [3,3,4]
-	if config.IsTuring(number[0]) {
+	case config.IsTuring(number[0]): // Turing = [3,3,4]
 		return checkInsideCurrent(regionLocation, zoneLocation, params.TuringOntology), params.TuringOntology
-	}
-	// FullerBlock = [3,3,3]
-	if config.IsFuller(number[0]) {
+	case config.IsFuller(number[0]): // Fuller = [3,3,3]
 		return checkInsideCurrent(regionLocation, zoneLocation, params.FullerOntology), params.FullerOntology
+	default:
+		return false, nil
 	}
-	return false, nil
 }
 
 // Verifies that Location is valid inside current MapContext ontology.
