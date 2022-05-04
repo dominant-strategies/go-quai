@@ -65,11 +65,11 @@ func CurrentOntology(number []*big.Int) []int {
 	forkNumber := number[0]
 
 	switch {
-	case forkNumber.Cmp(lovelace) > 0:
+	case forkNumber.Cmp(lovelace) >= 0:
 		return LovelaceOntology
-	case forkNumber.Cmp(turing) > 0:
+	case forkNumber.Cmp(turing) >= 0:
 		return TuringOntology
-	case forkNumber.Cmp(fuller) > 0:
+	case forkNumber.Cmp(fuller) >= 0:
 		return FullerOntology
 	default:
 		return nil
