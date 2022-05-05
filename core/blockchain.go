@@ -1680,6 +1680,7 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 	log.Info("Rolling back header beyond", "hash", header.Hash())
 
 	bc.chainmu.Lock()
+	fmt.Println("ReOrgRollBack Grabbed lock")
 	defer bc.chainmu.Unlock()
 	var (
 		deletedTxs  types.Transactions
