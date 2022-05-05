@@ -1137,7 +1137,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		return
 	}
 	// Select the correct block reward based on chain progression
-	blockReward := misc.CalculateReward(header.Number)
+	blockReward := misc.CalculateReward()
 	// Accumulate the rewards for the miner and any included uncles
 	reward := new(big.Int).Set(blockReward)
 	r := new(big.Int)

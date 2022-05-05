@@ -63,7 +63,7 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, headerByNumbe
 	var (
 		slopeLength        = 500
 		slopeLengthDivisor = big.NewInt(int64(slopeLength))
-		reward             = CalculateReward(parent.Number)
+		reward             = CalculateReward()
 	)
 
 	// Transform the parent header into a block.
@@ -106,7 +106,7 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, headerByNumbe
 // For each prime = Reward/3
 // For each region = Reward/(3*regions*time-factor)
 // For each zone = Reward/(3*regions*zones*time-factor^2)
-func CalculateReward(number []*big.Int) *big.Int {
+func CalculateReward() *big.Int {
 
 	reward := big.NewInt(5e18)
 

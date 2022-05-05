@@ -120,6 +120,11 @@ func (h *Header) Hash() common.Hash {
 	return rlpHash(h)
 }
 
+// Returns current MapContext for a given block.
+func (h *Header) MapContext() []int {
+	return params.CurrentOntology(h.Number)
+}
+
 var headerSize = common.StorageSize(reflect.TypeOf(Header{}).Size())
 
 // Size returns the approximate memory used by all internal contents. It is used
