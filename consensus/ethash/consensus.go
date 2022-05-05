@@ -783,8 +783,8 @@ func (ethash *Ethash) PrimeTraceBranch(chain consensus.ChainHeaderReader, header
 	// startingHeader := header
 	for {
 		// Verify Location is in ontology described by MapContext
-		if validInsideLocation, currentMapContext := verifyInsideLocation(header.Location, header.Number, chain.Config()); !validInsideLocation {
-			fmt.Errorf("Trace could not be completed: given Location not in associated MapContext %d", currentMapContext)
+		if err := verifyInsideLocation(header.Location, header.Number, chain.Config()); err != nil {
+			fmt.Println(err)
 			break
 		}
 		// If the header is genesis, return the current set of external blocks.
@@ -865,8 +865,8 @@ func (ethash *Ethash) RegionTraceBranch(chain consensus.ChainHeaderReader, heade
 	// startingHeader := header
 	for {
 		// Verify Location is in ontology described by MapContext
-		if validInsideLocation, currentMapContext := verifyInsideLocation(header.Location, header.Number, chain.Config()); !validInsideLocation {
-			fmt.Errorf("Trace could not be completed: given Location not in associated MapContext %d", currentMapContext)
+		if err := verifyInsideLocation(header.Location, header.Number, chain.Config()); err != nil {
+			fmt.Println(err)
 			break
 		}
 
