@@ -57,25 +57,6 @@ var mainnetValidChains = []*big.Int{big.NewInt(9000), big.NewInt(9100), big.NewI
 
 var testnetValidChains = []*big.Int{big.NewInt(12000), big.NewInt(12100), big.NewInt(12101), big.NewInt(12102), big.NewInt(12103), big.NewInt(12200), big.NewInt(12201), big.NewInt(12202), big.NewInt(12203), big.NewInt(12300), big.NewInt(12301), big.NewInt(12302), big.NewInt(12303)}
 
-// CurrentOntology is used to retrieve the MapContext of a given block.
-func CurrentOntology(number []*big.Int) []int {
-	fuller := FullerBlock
-	turing := TuringBlock
-	lovelace := LovelaceBlock
-	forkNumber := number[0]
-
-	switch {
-	case forkNumber.Cmp(lovelace) >= 0:
-		return LovelaceOntology
-	case forkNumber.Cmp(turing) >= 0:
-		return TuringOntology
-	case forkNumber.Cmp(fuller) >= 0:
-		return FullerOntology
-	default:
-		return nil
-	}
-}
-
 var (
 	// MainnetPrimeChainConfig is the chain parameters to run a node on the main network.
 	MainnetPrimeChainConfig = &ChainConfig{
