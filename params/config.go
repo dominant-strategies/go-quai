@@ -1294,3 +1294,19 @@ func CheckETxChainID(ourID *big.Int, txID *big.Int) bool {
 	}
 	return false
 }
+
+// CurrentOntology is used to retrieve the MapContext of a given block.
+func (c *ChainConfig) CurrentOntology(number []*big.Int) []int {
+	forkNumber := number[0]
+
+	switch {
+	case forkNumber.Cmp(LovelaceBlock) >= 0:
+		return LovelaceOntology
+	case forkNumber.Cmp(TuringBlock) >= 0:
+		return TuringOntology
+	case forkNumber.Cmp(FullerBlock) >= 0:
+		return FullerOntology
+	default:
+		return nil
+	}
+}

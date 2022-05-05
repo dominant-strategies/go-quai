@@ -122,7 +122,7 @@ func (h *Header) Hash() common.Hash {
 
 // Returns current MapContext for a given block.
 func (h *Header) MapContext() []int {
-	return CurrentOntology(h.Number)
+	return blockOntology(h.Number)
 }
 
 var headerSize = common.StorageSize(reflect.TypeOf(Header{}).Size())
@@ -330,7 +330,7 @@ func (b *ExternalBlock) CacheKey() []byte {
 
 // Returns current MapContext for a given block.
 func (b *ExternalBlock) MapContext() []int {
-	return CurrentOntology(b.header.Number)
+	return blockOntology(b.header.Number)
 }
 
 // encodeBlockNumber encodes a block number as big endian uint64
@@ -662,7 +662,7 @@ func (b *Block) BaseFee(params ...int) *big.Int {
 
 // TODO
 func (b *Block) MapContext() []int {
-	return CurrentOntology(b.header.Number)
+	return blockOntology(b.header.Number)
 }
 
 func (b *Block) Header() *Header { return CopyHeader(b.header) }
@@ -772,19 +772,16 @@ func (b *Block) Hash() common.Hash {
 
 type Blocks []*Block
 
-// CurrentOntology is used to retrieve the MapContext of a given block.
-func CurrentOntology(number []*big.Int) []int {
-	fuller := params.FullerBlock
-	turing := params.TuringBlock
-	lovelace := params.LovelaceBlock
+// blockOntology is used to retrieve the MapContext of a given block.
+func blockOntology(number []*big.Int) []int {
 	forkNumber := number[0]
 
 	switch {
-	case forkNumber.Cmp(lovelace) >= 0:
+	case forkNumber.Cmp(params.LovelaceBlock) >= 0:
 		return params.LovelaceOntology
-	case forkNumber.Cmp(turing) >= 0:
+	case forkNumber.Cmp(params.TuringBlock) >= 0:
 		return params.TuringOntology
-	case forkNumber.Cmp(fuller) >= 0:
+	case forkNumber.Cmp(params.FullerBlock) >= 0:
 		return params.FullerOntology
 	default:
 		return nil
