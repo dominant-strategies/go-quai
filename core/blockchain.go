@@ -3235,6 +3235,13 @@ func (bc *BlockChain) AggregateTotalDifficulty(context int, header *types.Header
 
 		// If the previous block is a coincident block
 		if bytes.Equal(prevBlock.Header().Location, header.Location) {
+			// Go back in our chain till prevBlock.Header().Hash()
+			stopHash := prevBlock.Header().Hash()
+			tempHeader := header
+			for stopHash != tempHeader.Hash() {
+				tempHeader = bc.GetHeaderByHash(tempHeader.ParentHash[types.QuaiNetworkContext])
+			}
+			currentTotalDifficulty.Add(currentTotalDifficulty, bc.GetTd(tempHeader.Hash(), tempHeader.Number[types.QuaiNetworkContext].Uint64()))
 			return currentTotalDifficulty, nil
 		}
 		header = prevBlock.Header()
@@ -3261,7 +3268,6 @@ func (bc *BlockChain) AggregateTotalDifficulty(context int, header *types.Header
 			// If the previous block is a coincident block, if we have found a coincident in the same
 			// location we go back in our chain context till that block and collect the totalDifficulty
 			if bytes.Equal(prevBlock.Header().Location, header.Location) {
-
 				// Go back in our chain till prevBlock.Header().Hash()
 				stopHash := prevBlock.Header().Hash()
 				tempHeader := header
