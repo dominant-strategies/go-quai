@@ -122,7 +122,7 @@ func (h *Header) Hash() common.Hash {
 
 // Returns current MapContext for a given block.
 func (h *Header) MapContext() []int {
-	return blockOntology(h.Number)
+	return currentBlockOntology(h.Number)
 }
 
 var headerSize = common.StorageSize(reflect.TypeOf(Header{}).Size())
@@ -330,7 +330,7 @@ func (b *ExternalBlock) CacheKey() []byte {
 
 // Returns current MapContext for a given block.
 func (b *ExternalBlock) MapContext() []int {
-	return blockOntology(b.header.Number)
+	return currentBlockOntology(b.header.Number)
 }
 
 // encodeBlockNumber encodes a block number as big endian uint64
@@ -662,7 +662,7 @@ func (b *Block) BaseFee(params ...int) *big.Int {
 
 // TODO
 func (b *Block) MapContext() []int {
-	return blockOntology(b.header.Number)
+	return currentBlockOntology(b.header.Number)
 }
 
 func (b *Block) Header() *Header { return CopyHeader(b.header) }
@@ -772,8 +772,8 @@ func (b *Block) Hash() common.Hash {
 
 type Blocks []*Block
 
-// blockOntology is used to retrieve the MapContext of a given block.
-func blockOntology(number []*big.Int) []int {
+// currentBlockOntology is used to retrieve the MapContext of a given block.
+func currentBlockOntology(number []*big.Int) []int {
 	forkNumber := number[0]
 
 	switch {

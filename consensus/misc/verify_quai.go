@@ -141,3 +141,19 @@ func CalculateReward() *big.Int {
 
 	return finalReward
 }
+
+// blockOntology is used to retrieve the MapContext of a given block.
+func BlockOntology(number []*big.Int) []int {
+	forkNumber := number[0]
+
+	switch {
+	case forkNumber.Cmp(params.LovelaceBlock) >= 0:
+		return params.LovelaceOntology
+	case forkNumber.Cmp(params.TuringBlock) >= 0:
+		return params.TuringOntology
+	case forkNumber.Cmp(params.FullerBlock) >= 0:
+		return params.FullerOntology
+	default:
+		return nil
+	}
+}
