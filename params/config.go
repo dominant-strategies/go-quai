@@ -76,8 +76,6 @@ func CurrentOntology(number []*big.Int) []int {
 	}
 }
 
-// ConfigOntology retrieves the
-
 var (
 	// MainnetPrimeChainConfig is the chain parameters to run a node on the main network.
 	MainnetPrimeChainConfig = &ChainConfig{

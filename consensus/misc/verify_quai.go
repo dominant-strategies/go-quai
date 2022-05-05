@@ -63,7 +63,7 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, headerByNumbe
 	var (
 		slopeLength        = 500
 		slopeLengthDivisor = big.NewInt(int64(slopeLength))
-		reward             = CalculateReward()
+		reward             = CalculateReward(parent.Number)
 	)
 
 	// Transform the parent header into a block.
@@ -106,7 +106,7 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, headerByNumbe
 // For each prime = Reward/3
 // For each region = Reward/(3*regions*time-factor)
 // For each zone = Reward/(3*regions*zones*time-factor^2)
-func CalculateReward() *big.Int {
+func CalculateReward(number []*big.Int) *big.Int {
 
 	reward := big.NewInt(5e18)
 
@@ -118,22 +118,19 @@ func CalculateReward() *big.Int {
 	finalReward := new(big.Int)
 
 	if types.QuaiNetworkContext == 0 {
-		primeReward := big.NewInt(1)
-		primeReward.Mul(primeReward, big.NewInt(3))
+		primeReward := big.NewInt(3)
 		primeReward.Div(reward, primeReward)
 		finalReward = primeReward
 	}
 	if types.QuaiNetworkContext == 1 {
-		regionReward := big.NewInt(1)
-		regionReward.Mul(regionReward, big.NewInt(3))
+		regionReward := big.NewInt(3)
 		regionReward.Mul(regionReward, regions)
 		regionReward.Mul(regionReward, timeFactor)
 		regionReward.Div(reward, regionReward)
 		finalReward = regionReward
 	}
 	if types.QuaiNetworkContext == 2 {
-		zoneReward := big.NewInt(1)
-		zoneReward.Mul(zoneReward, big.NewInt(3))
+		zoneReward := big.NewInt(3)
 		zoneReward.Mul(zoneReward, regions)
 		zoneReward.Mul(zoneReward, zones)
 		zoneReward.Mul(zoneReward, timeFactor)
