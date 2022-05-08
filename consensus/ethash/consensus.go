@@ -725,7 +725,7 @@ func (ethash *Ethash) GetCoincidentAndAggDifficulty(chain consensus.ChainHeaderR
 	totalDiff := big.NewInt(0)
 	// If we are at the highest context, no coincident will include it.
 	if context == 0 {
-		return header, 0, totalDiff
+		return header, 0, header.Difficulty[0]
 	} else {
 		for {
 			// Check work of the header, if it has enough work we will move up in context.
