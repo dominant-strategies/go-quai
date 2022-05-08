@@ -1692,6 +1692,7 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 		collectLogs = func(hash common.Hash) {
 			number := bc.hc.GetBlockNumber(hash)
 			if number == nil {
+				fmt.Println("returning while collecting logs")
 				return
 			}
 			receipts := rawdb.ReadReceipts(bc.db, hash, *number, bc.chainConfig)
@@ -1738,6 +1739,7 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 
 		for {
 			if currentBlock.NumberU64() == commonBlock.NumberU64()-1 {
+				fmt.Println("numbers are not equal", currentBlock.NumberU64(), commonBlock.NumberU64()-1)
 				break
 			}
 			deletedTxs = append(deletedTxs, currentBlock.Transactions()...)
@@ -1750,15 +1752,20 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 		}
 		// set the head back to the block before the rollback point
 		if err := bc.SetHead(commonBlock.NumberU64() - 1); err != nil {
+			fmt.Println("error setting head")
 			return err
 		}
-
+		fmt.Println("before write head")
 		// writing the head to the blockchain state
 		bc.writeHeadBlock(currentBlock)
+		fmt.Println("before remove future blocks")
 		bc.futureBlocks.Remove(currentBlock.Hash())
 
 		// get all the receipts and extract the logs from it
 		receipts := bc.GetReceiptsByHash(currentBlock.Hash())
+		if receipts != nil {
+			fmt.Println("receipts was nil for ", currentBlock.Hash())
+		}
 		var logs []*types.Log
 
 		for _, receipt := range receipts {
@@ -1768,6 +1775,7 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 		bc.chainFeed.Send(ChainEvent{Block: currentBlock, Hash: currentBlock.Hash(), Logs: logs})
 		bc.chainHeadFeed.Send(ChainHeadEvent{Block: currentBlock})
 
+		fmt.Println("Header is now rolled back and the current head is at block with ", "Hash ", bc.CurrentBlock().Hash(), " Number ", bc.CurrentBlock().NumberU64())
 		log.Info("Header is now rolled back and the current head is at block with ", "Hash ", bc.CurrentBlock().Hash(), " Number ", bc.CurrentBlock().NumberU64())
 
 		// Delete useless indexes right now which includes the non-canonical
