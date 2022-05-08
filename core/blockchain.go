@@ -522,7 +522,9 @@ func (bc *BlockChain) SetHead(head uint64) error {
 //
 // The method returns the block number where the requested root cap was found.
 func (bc *BlockChain) SetHeadBeyondRoot(head uint64, root common.Hash) (uint64, error) {
+	fmt.Println("Attempting to grab SetHeadBeyondRoot lock")
 	bc.chainmu.Lock()
+	fmt.Println("Grabbed SetHeadBeyondRoot lock")
 	defer bc.chainmu.Unlock()
 
 	// Track the block number of the requested root hash
@@ -1743,14 +1745,17 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 				break
 			}
 			deletedTxs = append(deletedTxs, currentBlock.Transactions()...)
+			fmt.Println("collecting logs")
 			collectLogs(currentBlock.Hash())
 
 			currentBlock = bc.GetBlock(currentBlock.ParentHash(), currentBlock.NumberU64()-1)
 			if currentBlock == nil {
+				fmt.Println("invalid current chain")
 				return fmt.Errorf("invalid current chain")
 			}
 		}
 		// set the head back to the block before the rollback point
+		fmt.Println("attempting to set head to", commonBlock.NumberU64()-1)
 		if err := bc.SetHead(commonBlock.NumberU64() - 1); err != nil {
 			fmt.Println("error setting head")
 			return err
