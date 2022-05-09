@@ -803,7 +803,7 @@ func (ethash *Ethash) PrimeTraceBranch(chain consensus.ChainHeaderReader, header
 			fmt.Println("PrimeTraceBranch: External Block not found for header", "number", header.Number, "context", context, "hash", header.Hash(), "location", header.Location)
 			return extBlocks, nil
 		}
-		fmt.Println("PrimeTraceBranch: PRIME Adding external block", "number", header.Number, "context", context, "location", header.Location, "hash", header.Hash())
+		// fmt.Println("PrimeTraceBranch: PRIME Adding external block", "number", header.Number, "context", context, "location", header.Location, "hash", header.Hash())
 		extBlocks = append(extBlocks, extBlock)
 
 		// Do not continue at header number == 1 since we are unable to obtain the Genesis as an external block.
@@ -819,7 +819,7 @@ func (ethash *Ethash) PrimeTraceBranch(chain consensus.ChainHeaderReader, header
 			return extBlocks, nil
 		}
 
-		fmt.Println("PrimeTraceBranch: Do we stop in equal location?", "context", context, "original", originalLocation, "prev", prevHeader.Header().Location)
+		// fmt.Println("PrimeTraceBranch: Do we stop in equal location?", "context", context, "original", originalLocation, "prev", prevHeader.Header().Location)
 		if context == 0 && originalLocation[0] == prevHeader.Header().Location[0] {
 			fmt.Println("PrimeTraceBranch: Stopping in location equal", "original", originalLocation, "prev", prevHeader.Header().Location)
 			break
@@ -895,7 +895,7 @@ func (ethash *Ethash) RegionTraceBranch(chain consensus.ChainHeaderReader, heade
 			break
 		}
 		extBlocks = append(extBlocks, extBlock)
-		fmt.Println("RegionTraceBranch: REGION Adding external block", "number", header.Number, "context", context, "location", header.Location, "hash", header.Hash())
+		// fmt.Println("RegionTraceBranch: REGION Adding external block", "number", header.Number, "context", context, "location", header.Location, "hash", header.Hash())
 
 		// Do not continue at header number == 1 since we are unable to obtain the Genesis as an external block.
 		if header.Number[context].Cmp(big.NewInt(1)) == 0 {
@@ -982,6 +982,9 @@ func (ethash *Ethash) GetLinkExternalBlocks(chain consensus.ChainHeaderReader, h
 			return externalBlocks, nil
 		}
 		externalBlocks = append(externalBlocks, extBlocks...)
+	}
+	for _, extBlock := range externalBlocks {
+		fmt.Println("GetLinkExternalBlocks", extBlock.Context(), extBlock.Header().Number, extBlock.Header().Location, extBlock.Hash())
 	}
 	return externalBlocks, nil
 }

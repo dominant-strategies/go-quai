@@ -201,6 +201,7 @@ type BlockChain struct {
 	genesisBlock   *types.Block
 
 	chainmu sync.RWMutex // blockchain insertion lock
+	reorgmu sync.RWMutex // reorg call lock
 
 	currentBlock     atomic.Value // Current head of the block chain
 	currentFastBlock atomic.Value // Current head of the fast-sync chain (may be above the block chain!)
@@ -1473,52 +1474,58 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 	// Make sure no inconsistent state is leaked during insertion
 	currentBlock := bc.CurrentBlock()
-	localContext, err := bc.Engine().GetDifficultyContext(bc, currentBlock.Header(), types.QuaiNetworkContext)
-	if err != nil {
-		return NonStatTy, err
-	}
+	// localContext, err := bc.Engine().GetDifficultyContext(bc, currentBlock.Header(), types.QuaiNetworkContext)
+	// if err != nil {
+	// 	return NonStatTy, err
+	// }
 
 	externContext, err := bc.Engine().GetDifficultyContext(bc, block.Header(), types.QuaiNetworkContext)
 	if err != nil {
 		return NonStatTy, err
 	}
 
-	localHeader := currentBlock.Header()
-	externHeader := block.Header()
-
-	if externContext < localContext {
-		localHeader, localContext, _ = bc.Engine().GetCoincidentAndAggDifficulty(bc, types.QuaiNetworkContext, externContext+1, currentBlock.Header())
+	// localHeader := currentBlock.Header()
+	// externHeader := block.Header()
+	if types.QuaiNetworkContext == 2 && externContext == 2 {
+		externContext = 1
 	}
 
-	tempExternHeader, tempExternContext, externAggDiff := bc.Engine().GetCoincidentAndAggDifficulty(bc, types.QuaiNetworkContext, localContext+1, block.Header())
-	if localContext < externContext {
-		externHeader = tempExternHeader
-		externContext = tempExternContext
-	}
+	localHeader, localContext, localAggDiff := bc.Engine().GetCoincidentAndAggDifficulty(bc, types.QuaiNetworkContext, externContext+1, currentBlock.Header())
+	externHeader, externContext, externAggDiff := bc.Engine().GetCoincidentAndAggDifficulty(bc, types.QuaiNetworkContext, localContext+1, block.Header())
 
 	var localTd, externTd *big.Int
-	// If are building on a coincident, we need to aggregate the difficulty.
-	// Else we consider the network difficulties at the coincidents or equal level.
-	if localHeader.Hash() == externHeader.Hash() {
+	localTd = new(big.Int).Add(localHeader.NetworkDifficulty[localContext], localAggDiff)
+	externTd = new(big.Int).Add(externHeader.NetworkDifficulty[externContext], externAggDiff)
+	if localHeader.Hash() != externHeader.Hash() {
+		fmt.Println("Hashes are the same")
 		localTd = new(big.Int).Add(localHeader.NetworkDifficulty[localContext], localHeader.Difficulty[localContext])
 		externTd = new(big.Int).Add(externHeader.NetworkDifficulty[externContext], externHeader.Difficulty[externContext])
 		externTd.Add(externTd, externAggDiff)
-	} else {
-		localTd, err = bc.AggregateTotalDifficulty(localContext, localHeader)
-		if err != nil {
-			return NonStatTy, err
-		}
-
-		externTd, err = bc.AggregateTotalDifficulty(externContext, externHeader)
-		if err != nil {
-			return NonStatTy, err
-		}
-		externTd.Add(externTd, externAggDiff)
 	}
+	// If are building on a coincident, we need to aggregate the difficulty.
+	// Else we consider the network difficulties at the coincidents or equal level.
+	// if localHeader.Hash() == externHeader.Hash() {
+	// 	fmt.Println("Hashes are the same")
+	// 	localTd = new(big.Int).Add(localHeader.NetworkDifficulty[localContext], localHeader.Difficulty[localContext])
+	// 	externTd = new(big.Int).Add(externHeader.NetworkDifficulty[externContext], externHeader.Difficulty[externContext])
+	// 	externTd.Add(externTd, externAggDiff)
+	// } else {
+	// 	localTd, err = bc.AggregateTotalDifficulty(localContext, localHeader)
+	// 	if err != nil {
+	// 		return NonStatTy, err
+	// 	}
+	// 	localAggDiff.Add(localTd, localAggDiff)
+
+	// 	externTd, err = bc.AggregateTotalDifficulty(externContext, externHeader)
+	// 	if err != nil {
+	// 		return NonStatTy, err
+	// 	}
+	// 	externTd.Add(externTd, externAggDiff)
+	// }
 
 	fmt.Println("localTd", localTd, "localDiff", localHeader.Difficulty, "localNetworkDiff", localHeader.NetworkDifficulty, "localNum", localHeader.Number, "localContext", localContext)
 	fmt.Println("localHash", localHeader.Hash())
-	fmt.Println("externTd", externTd, "blockDiff", block.Header().Difficulty, "networkDiff", block.Header().NetworkDifficulty, "externNum", externHeader.Number, "externContext", externContext)
+	fmt.Println("externTd", externTd, "blockDiff", externHeader.Difficulty, "externNetworkDiff", externHeader.NetworkDifficulty, "externNum", externHeader.Number, "externContext", externContext)
 	fmt.Println("externHash", externHeader.Hash())
 
 	// Irrelevant of the canonical status, write the block itself to the database.
@@ -1691,10 +1698,8 @@ func (bc *BlockChain) AddExternalBlock(block *types.ExternalBlock) error {
 // the current header to the position where the reorg took place in a higher context
 func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 	log.Info("Rolling back header beyond", "hash", header.Hash())
-
-	bc.chainmu.Lock()
-	fmt.Println("ReOrgRollBack Grabbed lock")
-	defer bc.chainmu.Unlock()
+	bc.reorgmu.Lock()
+	defer bc.reorgmu.Unlock()
 	var (
 		deletedTxs  types.Transactions
 		deletedLogs [][]*types.Log
@@ -1863,10 +1868,12 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	// Pre-checks passed, start the full block imports
 	log.Info("Trying to grab InsertChain Lock", "hash", chain[0].Header().Number)
 	bc.chainmu.Lock()
+	bc.reorgmu.Lock()
 	log.Info("InsertChain Lock", "hash", chain[0].Header().Number)
 	n, err := bc.insertChain(chain, true)
 	log.Info("InsertChain Unlock", "hash", chain[0].Header().Number)
 	bc.chainmu.Unlock()
+	bc.reorgmu.Unlock()
 
 	return n, err
 }
@@ -2456,6 +2463,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 			commonBlock = oldBlock
 
 			// Once the common block is found, the reorg data is sent to the reOrg feed
+			fmt.Println("Sending reorg rollup feed event", commonBlock.Header().Hash())
 			bc.reOrgFeed.Send(ReOrgRollup{ReOrgHeader: commonBlock.Header(), OldChainHeaders: bc.getAllHeaders(oldChain), NewChainHeaders: bc.getAllHeaders(newChain)})
 			break
 		}
