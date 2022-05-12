@@ -1494,17 +1494,17 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	// externHeader, externContext, _ := bc.Engine().GetCoincidentAndAggDifficulty(bc, types.QuaiNetworkContext, localContext+1, block.Header())
 
 	localTd, externTd := big.NewInt(0), big.NewInt(0)
-
 	// If the incoming block is a coincident block
 	if externContext < localContext {
-		externTd, err = bc.AggregateTotalDifficulty(localContext, block.Header())
+		var lowestOrder int
+		externTd, lowestOrder, err = bc.AggregateTotalDifficulty(localContext, block.Header())
 		fmt.Println("case 1- externTd", externTd)
 		if err != nil {
 			return NonStatTy, err
 		}
 
 		// get coincident and get the Total difficulty of it
-		localHeader, _, _ = bc.Engine().GetCoincidentAndAggDifficulty(bc, types.QuaiNetworkContext, externContext+1, currentBlock.Header())
+		localHeader, _, _ = bc.Engine().GetCoincidentAndAggDifficulty(bc, types.QuaiNetworkContext, lowestOrder+1, currentBlock.Header())
 		localBlock := bc.GetBlockByHash(localHeader.Hash())
 		localTd = bc.GetTd(localHeader.Hash(), localBlock.NumberU64())
 	} else if localContext < externContext {
@@ -1530,7 +1530,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		// externHeader, _, _ = bc.Engine().GetCoincidentAndAggDifficulty(bc, types.QuaiNetworkContext, localContext+1, currentBlock.Header())
 		// externBlock := bc.GetBlockByHash(externHeader.Hash())
 		// externTd = bc.GetTd(externHeader.Hash(), externBlock.NumberU64())
-		externTd, err = bc.AggregateTotalDifficulty(localContext+1, block.Header())
+		externTd, _, err = bc.AggregateTotalDifficulty(localContext+1, block.Header())
 		if err != nil {
 			return NonStatTy, err
 		}
@@ -3234,7 +3234,7 @@ func (bc *BlockChain) CheckExternalBlockLink(externalBlocks []*types.ExternalBlo
 }
 
 // AggregateNetworkDifficulty aggregates the total difficulty from the previous stop Hash in the dominant chains only
-func (bc *BlockChain) AggregateTotalDifficulty(context int, header *types.Header) (*big.Int, error) {
+func (bc *BlockChain) AggregateTotalDifficulty(context int, header *types.Header) (*big.Int, int, error) {
 
 	currentLowestContext := context
 	currentTotalDifficulty := big.NewInt(0)
@@ -3244,12 +3244,12 @@ func (bc *BlockChain) AggregateTotalDifficulty(context int, header *types.Header
 	difficultyContext, err := bc.Engine().GetDifficultyContext(bc, header, context)
 	if err != nil {
 		fmt.Println("diff not found - diff", currentTotalDifficulty)
-		return currentTotalDifficulty, fmt.Errorf("difficulty context not found")
+		return currentTotalDifficulty, currentLowestContext, fmt.Errorf("difficulty context not found")
 	}
 
 	// this function should only be called upon a coincident block, to use it the way it is intended to be used this check is added
 	if difficultyContext >= currentLowestContext {
-		return currentTotalDifficulty, fmt.Errorf("not a coincident block")
+		return currentTotalDifficulty, currentLowestContext, fmt.Errorf("not a coincident block")
 	}
 
 	// Accumulate the difficulty until we find a header from a dominant chain or we reach a stop hash
@@ -3259,7 +3259,7 @@ func (bc *BlockChain) AggregateTotalDifficulty(context int, header *types.Header
 		difficultyContext, err := bc.Engine().GetDifficultyContext(bc, header, currentLowestContext)
 		if err != nil {
 			fmt.Println("diff not found - diff", currentTotalDifficulty)
-			return currentTotalDifficulty, fmt.Errorf("difficulty context not found")
+			return currentTotalDifficulty, currentLowestContext, fmt.Errorf("difficulty context not found")
 		}
 
 		if difficultyContext < currentLowestContext {
@@ -3270,14 +3270,14 @@ func (bc *BlockChain) AggregateTotalDifficulty(context int, header *types.Header
 		//check if the parent block of the first coincident is genesis
 		if header.Number[currentLowestContext].Uint64()-1 == 0 {
 			fmt.Println("returning in AggregateTotalDifficulty at parent number == 0")
-			return currentTotalDifficulty, nil
+			return currentTotalDifficulty, currentLowestContext, nil
 		}
 
 		// Retrieve the previous header as an external block.
 		prevBlock, err := bc.GetExternalBlock(header.ParentHash[currentLowestContext], header.Number[currentLowestContext].Uint64()-1, uint64(currentLowestContext))
 		if err != nil {
 			fmt.Println("prev block not found - diff", currentTotalDifficulty, header.ParentHash[currentLowestContext], header.Number[currentLowestContext].Uint64()-1, uint64(currentLowestContext))
-			return currentTotalDifficulty, fmt.Errorf("error finding previous external block")
+			return currentTotalDifficulty, currentLowestContext, fmt.Errorf("error finding previous external block")
 		}
 		// If the previous block is a coincident block, if we have found a coincident in the same
 		// location we go back in our chain context till that block and collect the totalDifficulty
@@ -3289,13 +3289,13 @@ func (bc *BlockChain) AggregateTotalDifficulty(context int, header *types.Header
 			fmt.Println("AggregateTotalDifficulty: stopHash", stopHash, currentLowestContext)
 			if tempHeader == nil {
 				fmt.Println("current difficulty", currentTotalDifficulty, "tempheader", tempHeader)
-				return currentTotalDifficulty, nil
+				return currentTotalDifficulty, currentLowestContext, nil
 			}
 			fmt.Println("Current total difficulty", currentTotalDifficulty)
 			fmt.Println("Previous coincident td", bc.GetTd(tempHeader.Hash(), tempHeader.Number[types.QuaiNetworkContext].Uint64()), prevBlock.Header().Number)
 			currentTotalDifficulty.Add(currentTotalDifficulty, bc.GetTd(tempHeader.Hash(), tempHeader.Number[types.QuaiNetworkContext].Uint64()))
 			fmt.Println("prev coincident reached- diff", currentTotalDifficulty)
-			return currentTotalDifficulty, nil
+			return currentTotalDifficulty, currentLowestContext, nil
 		}
 		header = prevBlock.Header()
 	}
