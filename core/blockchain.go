@@ -1900,8 +1900,8 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 	// }
 
 	// Reset the blockLink in the blockchain state processor.
-	bc.GenerateExtBlockLink()
-	// bc.UpdateExtBlockLink()
+	// bc.GenerateExtBlockLink()
+	bc.UpdateExtBlockLink()
 
 	return nil
 }
@@ -2635,8 +2635,8 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	// }
 
 	// Reset the blockLink in the blockchain state processor.
-	bc.GenerateExtBlockLink()
-	// bc.UpdateExtBlockLink()
+	// bc.GenerateExtBlockLink()
+	bc.UpdateExtBlockLink()
 
 	return nil
 }
@@ -3035,13 +3035,31 @@ func (bc *BlockChain) UpdateExtBlockLink() {
 	}
 
 	currentHeader := bc.CurrentHeader()
-	if currentHeader.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) < 1 {
+
+	var prevCoincidentHeader, tempHeader *types.Header
+	tempHeader = currentHeader
+
+	// Find the previous coincident
+	for {
+		order, err := bc.engine.GetDifficultyContext(bc, tempHeader, types.QuaiNetworkContext)
+		if err != nil {
+			fmt.Println("error retreiving the order of the block with hash ", tempHeader.Hash())
+			return
+		}
+		if order < types.QuaiNetworkContext {
+			prevCoincidentHeader = tempHeader
+			break
+		}
+		tempHeader = bc.GetHeaderByHash(tempHeader.ParentHash[types.QuaiNetworkContext])
+	}
+
+	if prevCoincidentHeader.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) < 1 {
 		bc.blockLink = linkBlocks
 		return
 	}
 
 	// Populate the linkBlocks struct with the block hashes of the last applied ext block of that chain.
-	extBlocks, err := bc.GetLinkExternalBlocks(currentHeader)
+	extBlocks, err := bc.GetLinkExternalBlocks(prevCoincidentHeader)
 	if err != nil {
 		log.Error("GenerateExtBlockLink:", "err", err)
 	}
@@ -3060,7 +3078,7 @@ func (bc *BlockChain) UpdateExtBlockLink() {
 		copy(tempLinkBlocks.zones[i], linkBlocks.zones[i])
 	}
 
-	fmt.Println("generateLinkBlocks, num:", currentHeader.Number, currentHeader.Hash())
+	fmt.Println("generateLinkBlocks, num:", prevCoincidentHeader.Number, prevCoincidentHeader.Hash())
 	tempLinkBlocks = bc.generateLinkBlocksLastApplied(extBlocks, tempLinkBlocks)
 
 	// If our tempLink is new and our starting link hasn't changed.
