@@ -425,6 +425,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			triedb.SaveCachePeriodically(bc.cacheConfig.TrieCleanJournal, bc.cacheConfig.TrieCleanRejournal, bc.quit)
 		}()
 	}
+	// Initialize an empty map initially while generating the external block link
+	// var initialLocations = map[int]*types.Header{}
 
 	// Once we have updated the state of the chain, generate the extBlockLink struct for processing of ext blocks.
 	bc.GenerateExtBlockLink()
@@ -1796,6 +1798,7 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 		}
 	)
 
+	var OldChainHeaders []*types.Header
 	if header != nil {
 		// get the commonBlock
 		commonBlock := bc.GetBlockByHash(header.Hash())
@@ -1809,6 +1812,9 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 		currentBlock := bc.CurrentBlock()
 
 		for {
+			// these old headers are used in the generate link blocks
+			OldChainHeaders = append(OldChainHeaders, currentBlock.Header())
+
 			if currentBlock.NumberU64() == commonBlock.NumberU64()-1 {
 				fmt.Println("numbers are not equal", currentBlock.NumberU64(), commonBlock.NumberU64()-1)
 				break
@@ -1880,8 +1886,22 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 		return fmt.Errorf("reorg header was null")
 	}
 
+	// var lastReOrgPoints = map[int]*types.Header{}
+	// process the old chain headers to create a map
+	// for _, header := range OldChainHeaders {
+	// 	location := int(binary.BigEndian.Uint64(header.Location[0:2]))
+	// 	existingHeader, exists := lastReOrgPoints[location]
+
+	// 	if exists && existingHeader.Number[types.QuaiNetworkContext].Cmp(header.Number[types.QuaiNetworkContext]) < 0 {
+	// 		continue
+	// 	} else {
+	// 		lastReOrgPoints[location] = header
+	// 	}
+	// }
+
 	// Reset the blockLink in the blockchain state processor.
 	bc.GenerateExtBlockLink()
+	// bc.UpdateExtBlockLink()
 
 	return nil
 }
@@ -2600,8 +2620,23 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		}
 	}
 
+	// OldChainHeaders := bc.getAllHeaders(oldChain)
+	// var lastReOrgPoints = map[int]*types.Header{}
+	// // process the old chain headers to create a map
+	// for _, header := range OldChainHeaders {
+	// 	location := int(binary.BigEndian.Uint64(header.Location[0:2]))
+	// 	existingHeader, exists := lastReOrgPoints[location]
+
+	// 	if exists && existingHeader.Number[types.QuaiNetworkContext].Cmp(header.Number[types.QuaiNetworkContext]) < 0 {
+	// 		continue
+	// 	} else {
+	// 		lastReOrgPoints[location] = header
+	// 	}
+	// }
+
 	// Reset the blockLink in the blockchain state processor.
 	bc.GenerateExtBlockLink()
+	// bc.UpdateExtBlockLink()
 
 	return nil
 }
@@ -2968,6 +3003,84 @@ func (bc *BlockChain) QueueAndRetrieveExtBlocks(externalBlocks []*types.External
 	}
 	log.Info("QueueAndRetrieveExtBlocks: Returning result blocks", "len", len(resultBlocks))
 	return resultBlocks
+}
+
+// UpdateExtBlockLink will update the last set of applied blocks on the current block
+func (bc *BlockChain) UpdateExtBlockLink() {
+	// Get the previous hashes from the first external blocks applied in the new GetExternalBlocks set.
+	// Initial the linkBlocks into 3x3 structure.
+	linkBlocks := &extBlockLink{
+		prime:   bc.chainConfig.GenesisHashes[0],
+		regions: make([]common.Hash, 3),
+		zones:   [][]common.Hash{make([]common.Hash, 3), make([]common.Hash, 3), make([]common.Hash, 3)},
+	}
+	for i := range linkBlocks.regions {
+		linkBlocks.regions[i] = bc.chainConfig.GenesisHashes[1]
+		for j := range linkBlocks.zones[i] {
+			linkBlocks.zones[i][j] = bc.chainConfig.GenesisHashes[2]
+		}
+	}
+
+	// Keep track of what the method started with.
+	// Deep copy the struct.
+	startingLinkBlocks := &extBlockLink{
+		prime:   linkBlocks.prime,
+		regions: make([]common.Hash, len(linkBlocks.regions)),
+		zones:   make([][]common.Hash, 3),
+	}
+	copy(startingLinkBlocks.regions, linkBlocks.regions)
+	for i := range linkBlocks.zones {
+		startingLinkBlocks.zones[i] = make([]common.Hash, len(linkBlocks.zones[i]))
+		copy(startingLinkBlocks.zones[i], linkBlocks.zones[i])
+	}
+
+	currentHeader := bc.CurrentHeader()
+	if currentHeader.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) < 1 {
+		bc.blockLink = linkBlocks
+		return
+	}
+
+	// Populate the linkBlocks struct with the block hashes of the last applied ext block of that chain.
+	extBlocks, err := bc.GetLinkExternalBlocks(currentHeader)
+	if err != nil {
+		log.Error("GenerateExtBlockLink:", "err", err)
+	}
+
+	// Keep track of what the method started with.
+	// Deep copy the struct.
+	tempLinkBlocks := &extBlockLink{
+		prime:   linkBlocks.prime,
+		regions: make([]common.Hash, len(linkBlocks.regions)),
+		zones:   [][]common.Hash{make([]common.Hash, 3), make([]common.Hash, 3), make([]common.Hash, 3)},
+	}
+
+	copy(tempLinkBlocks.regions, linkBlocks.regions)
+	for i := range linkBlocks.zones {
+		tempLinkBlocks.zones[i] = make([]common.Hash, len(linkBlocks.zones[i]))
+		copy(tempLinkBlocks.zones[i], linkBlocks.zones[i])
+	}
+
+	fmt.Println("generateLinkBlocks, num:", currentHeader.Number, currentHeader.Hash())
+	tempLinkBlocks = bc.generateLinkBlocksLastApplied(extBlocks, tempLinkBlocks)
+
+	// If our tempLink is new and our starting link hasn't changed.
+	if tempLinkBlocks.prime != linkBlocks.prime && startingLinkBlocks.prime == linkBlocks.prime {
+		fmt.Println("Setting linkBlocks.prime", tempLinkBlocks.prime)
+		linkBlocks.prime = tempLinkBlocks.prime
+	}
+	for i := range linkBlocks.regions {
+		if tempLinkBlocks.regions[i] != linkBlocks.regions[i] && startingLinkBlocks.regions[i] == linkBlocks.regions[i] {
+			fmt.Println("Setting linkBlocks.region", i+1, tempLinkBlocks.regions[i])
+			linkBlocks.regions[i] = tempLinkBlocks.regions[i]
+		}
+		for j := range linkBlocks.zones[i] {
+			if tempLinkBlocks.zones[i][j] != linkBlocks.zones[i][j] && startingLinkBlocks.zones[i][j] == linkBlocks.zones[i][j] {
+				fmt.Println("Setting linkBlocks.zone", i+1, j+1, tempLinkBlocks.zones[i][j])
+				linkBlocks.zones[i][j] = tempLinkBlocks.zones[i][j]
+			}
+		}
+	}
+	bc.blockLink = linkBlocks
 }
 
 // GenerateExtBlockLink will generate blockLink struct for the last applied external block hashes for a current context.
