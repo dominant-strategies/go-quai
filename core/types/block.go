@@ -20,6 +20,7 @@ package types
 import (
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -121,7 +122,7 @@ func (h *Header) Hash() common.Hash {
 }
 
 // Returns current MapContext for a given block.
-func (h *Header) MapContext() []int {
+func (h *Header) MapContext() ([]int, error) {
 	return currentBlockOntology(h.Number)
 }
 
@@ -329,7 +330,7 @@ func (b *ExternalBlock) CacheKey() []byte {
 }
 
 // Returns current MapContext for a given block.
-func (b *ExternalBlock) MapContext() []int {
+func (b *ExternalBlock) MapContext() ([]int, error) {
 	return currentBlockOntology(b.header.Number)
 }
 
@@ -661,7 +662,7 @@ func (b *Block) BaseFee(params ...int) *big.Int {
 }
 
 // TODO
-func (b *Block) MapContext() []int {
+func (b *Block) MapContext() ([]int, error) {
 	return currentBlockOntology(b.header.Number)
 }
 
@@ -773,17 +774,17 @@ func (b *Block) Hash() common.Hash {
 type Blocks []*Block
 
 // currentBlockOntology is used to retrieve the MapContext of a given block.
-func currentBlockOntology(number []*big.Int) []int {
+func currentBlockOntology(number []*big.Int) ([]int, error) {
 	forkNumber := number[0]
 
 	switch {
-	case forkNumber.Cmp(params.LovelaceBlock) >= 0:
-		return params.LovelaceOntology
-	case forkNumber.Cmp(params.TuringBlock) >= 0:
-		return params.TuringOntology
+	/*	case forkNumber.Cmp(params.LovelaceBlock) >= 0: // Lovelace = MaxInt
+			return params.LovelaceOntology
+		case forkNumber.Cmp(params.TuringBlock) >= 0: // Turing = MaxInt
+			return params.TuringOntology */
 	case forkNumber.Cmp(params.FullerBlock) >= 0:
-		return params.FullerOntology
+		return params.FullerOntology, nil
 	default:
-		return nil
+		return nil, errors.New("invalid number passed to currentBlockOntology")
 	}
 }
