@@ -181,8 +181,8 @@ var (
 	LovelaceBlock = big.NewInt(math.MaxInt) // maxed out for now
 	// Named ontologies
 	FullerOntology   = []int{3, 3, 3} // named after Buckminster Fuller
-	TuringOntology   = []int{3, 3, 4} // named after Alan Turing
-	LovelaceOntology = []int{3, 4, 4} // named after Ada Lovelace
+	TuringOntology   = []int{4, 4, 4} // named after Alan Turing
+	LovelaceOntology = []int{5, 5, 5} // named after Ada Lovelace
 	// future ontology expansion markers go here
 	QuaiOntologies = [][]int{FullerOntology, TuringOntology, LovelaceOntology}
 )

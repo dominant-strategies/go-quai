@@ -18,6 +18,7 @@ package params
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -1296,17 +1297,17 @@ func CheckETxChainID(ourID *big.Int, txID *big.Int) bool {
 }
 
 // CurrentOntology is used to retrieve the MapContext of a given block.
-func (c *ChainConfig) CurrentOntology(number []*big.Int) []int {
+func (c *ChainConfig) CurrentOntology(number []*big.Int) ([]int, error) {
 	forkNumber := number[0]
 
 	switch {
-	case forkNumber.Cmp(LovelaceBlock) >= 0:
-		return LovelaceOntology
-	case forkNumber.Cmp(TuringBlock) >= 0:
-		return TuringOntology
-	case forkNumber.Cmp(FullerBlock) >= 0:
-		return FullerOntology
+	/*	case forkNumber.Cmp(LovelaceBlock) >= 0: // Lovelace = MaxInt
+			return LovelaceOntology, nil
+		case forkNumber.Cmp(TuringBlock) >= 0: // Turing = MaxInt
+			return TuringOntology, nil */
+	case forkNumber.Cmp(FullerBlock) >= 0: // Fuller = 0
+		return FullerOntology, nil
 	default:
-		return nil
+		return nil, errors.New("invalid block number passed to ontology")
 	}
 }
