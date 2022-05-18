@@ -176,9 +176,9 @@ var (
 // Ontology defines the current Quai Network ontology
 var (
 	// Fork blocks; necessary for retrieving MapContext through header/block methods
-	FullerBlock   = big.NewInt(0)           // Fork = 0 meaning initial ontology
-	TuringBlock   = big.NewInt(math.MaxInt) // maxed out for now
-	LovelaceBlock = big.NewInt(math.MaxInt) // maxed out for now
+	FullerMapContext = big.NewInt(0)           // Fork = 0 meaning initial ontology
+	TuringMapContext = big.NewInt(math.MaxInt) // maxed out for now
+	LovelaMapContext = big.NewInt(math.MaxInt) // maxed out for now
 	// Named ontologies
 	FullerOntology   = []int{3, 3, 3} // named after Buckminster Fuller
 	TuringOntology   = []int{4, 4, 4} // named after Alan Turing
