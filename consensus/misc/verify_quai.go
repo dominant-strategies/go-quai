@@ -17,6 +17,7 @@
 package misc
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -143,7 +144,7 @@ func CalculateReward() *big.Int {
 }
 
 // blockOntology is used to retrieve the MapContext of a given block.
-func BlockOntology(number []*big.Int) []int {
+func BlockOntology(number []*big.Int) ([]int, error) {
 	forkNumber := number[0]
 
 	switch {
@@ -152,8 +153,8 @@ func BlockOntology(number []*big.Int) []int {
 		case forkNumber.Cmp(params.TuringMapContext) >= 0: // Turing = MaxInt
 			return params.TuringOntology */
 	case forkNumber.Cmp(params.FullerMapContext) >= 0:
-		return params.FullerOntology
+		return params.FullerOntology, nil
 	default:
-		return nil
+		return nil, errors.New("invalid number passed to BlockOntology")
 	}
 }
