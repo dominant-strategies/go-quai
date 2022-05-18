@@ -3046,7 +3046,9 @@ func (bc *BlockChain) UpdateExtBlockLink() {
 			fmt.Println("error retreiving the order of the block with hash ", tempHeader.Hash())
 			return
 		}
-		if order < types.QuaiNetworkContext {
+
+		// If its a prime block or we have actually found the coincident block
+		if order == 0 || order < types.QuaiNetworkContext || types.QuaiNetworkContext == 1 {
 			prevCoincidentHeader = tempHeader
 			break
 		}
