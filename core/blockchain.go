@@ -1837,10 +1837,10 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 			if err != nil {
 				return err
 			}
-			for _, block := range extBlocks {
-				_, exist := oldTraceLocations[int(binary.BigEndian.Uint64(block.Header().Location[0:2]))]
-				if !exist {
-					oldTraceLocations[int(binary.BigEndian.Uint64(block.Header().Location[0:2]))] = struct{}{}
+			for _, extBlock := range extBlocks {
+				_, exists := oldTraceLocations[int(binary.BigEndian.Uint16(extBlock.Header().Location[0:2]))]
+				if !exists {
+					oldTraceLocations[int(binary.BigEndian.Uint16(extBlock.Header().Location[0:2]))] = struct{}{}
 				}
 			}
 		}
@@ -2624,18 +2624,18 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		}
 	}
 
-	var oldTraceLocations = map[int]struct{}{}
 	OldChainHeaders := bc.getAllHeaders(oldChain)
+	var oldTraceLocations = map[int]struct{}{}
 	// we run the trace on all the oldBlockHeaders and create a list of locations
-	for _, headers := range OldChainHeaders {
-		extBlocks, err := bc.GetLinkExternalBlocks(headers)
+	for _, header := range OldChainHeaders {
+		extBlocks, err := bc.GetLinkExternalBlocks(header)
 		if err != nil {
 			return err
 		}
-		for _, block := range extBlocks {
-			_, exist := oldTraceLocations[int(binary.BigEndian.Uint64(block.Header().Location[0:2]))]
-			if !exist {
-				oldTraceLocations[int(binary.BigEndian.Uint64(block.Header().Location[0:2]))] = struct{}{}
+		for _, extBlock := range extBlocks {
+			_, exists := oldTraceLocations[int(binary.BigEndian.Uint16(extBlock.Header().Location[0:2]))]
+			if !exists {
+				oldTraceLocations[int(binary.BigEndian.Uint16(extBlock.Header().Location[0:2]))] = struct{}{}
 			}
 		}
 	}
@@ -3083,23 +3083,26 @@ func (bc *BlockChain) UpdateExtBlockLink(oldTraceLocations map[int]struct{}) {
 			if tempLinkBlocks.regions[i] != linkBlocks.regions[i] && startingLinkBlocks.regions[i] == linkBlocks.regions[i] {
 				fmt.Println("Setting linkBlocks.region", i+1, tempLinkBlocks.regions[i])
 				linkBlocks.regions[i] = tempLinkBlocks.regions[i]
-
-				header := bc.GetHeaderByHash(linkBlocks.regions[i])
-				delete(oldTraceLocations, int(binary.BigEndian.Uint64(header.Location[0:2])))
 			}
 			for j := range linkBlocks.zones[i] {
 				if tempLinkBlocks.zones[i][j] != linkBlocks.zones[i][j] && startingLinkBlocks.zones[i][j] == linkBlocks.zones[i][j] {
 					fmt.Println("Setting linkBlocks.zone", i+1, j+1, tempLinkBlocks.zones[i][j])
 					linkBlocks.zones[i][j] = tempLinkBlocks.zones[i][j]
 				}
-
-				header := bc.GetHeaderByHash(linkBlocks.zones[i][j])
-				delete(oldTraceLocations, int(binary.BigEndian.Uint64(header.Location[0:2])))
 			}
 		}
 
+		// This is an enhancement to the GenerateExtBlockLink where we only go back until we have
+		// proper knowledge of all the chains instead of Genesis
+		for _, extBlock := range extBlocks {
+			_, exists := oldTraceLocations[int(binary.BigEndian.Uint16(extBlock.Header().Location[0:2]))]
+			if exists {
+				delete(oldTraceLocations, int(binary.BigEndian.Uint16(extBlock.Header().Location[0:2])))
+			}
+		}
 		if oldTraceLocations == nil {
 			fmt.Println("Generated the ExtBlockLinks till we updated the links on all the Old Trace Locations")
+			bc.blockLink = linkBlocks
 			return
 		}
 
