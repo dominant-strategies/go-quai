@@ -61,7 +61,6 @@ type alethGenesisSpec struct {
 	Genesis struct {
 		Nonce      types.BlockNonce `json:"nonce"`
 		Difficulty *hexutil.Big     `json:"difficulty"`
-		MixHash    common.Hash      `json:"mixHash"`
 		Author     common.Address   `json:"author"`
 		Timestamp  hexutil.Uint64   `json:"timestamp"`
 		ParentHash common.Hash      `json:"parentHash"`
@@ -138,10 +137,9 @@ func newAlethGenesisSpec(network string, genesis *core.Genesis) (*alethGenesisSp
 	spec.Params.DifficultyBoundDivisor = (*math2.HexOrDecimal256)(params.DifficultyBoundDivisor[0])
 	spec.Params.GasLimitBoundDivisor = (math2.HexOrDecimal64)(params.GasLimitBoundDivisor)
 	spec.Params.DurationLimit = (*math2.HexOrDecimal256)(params.DurationLimits[0])
-	spec.Params.BlockReward = (*hexutil.Big)(ethash.FrontierBlockReward)
+	spec.Params.BlockReward = (*hexutil.Big)(blake3.FrontierBlockReward)
 
 	spec.Genesis.Nonce = types.EncodeNonce(genesis.Nonce)
-	spec.Genesis.MixHash = genesis.Mixhash
 	spec.Genesis.Difficulty = (*hexutil.Big)(genesis.Difficulty)
 	spec.Genesis.Author = genesis.Coinbase
 	spec.Genesis.Timestamp = (hexutil.Uint64)(genesis.Timestamp)

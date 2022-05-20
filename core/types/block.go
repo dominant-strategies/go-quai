@@ -89,7 +89,6 @@ type Header struct {
 	GasUsed           []uint64         `json:"gasUsed"          gencodec:"required"`
 	Time              uint64           `json:"timestamp"        gencodec:"required"`
 	Extra             [][]byte         `json:"extraData"        gencodec:"required"`
-	MixDigest         common.Hash      `json:"mixHash"`
 	Nonce             BlockNonce       `json:"nonce"`
 
 	// Originating location of the block.
@@ -578,9 +577,6 @@ func (b *Block) NumberU64(params ...int) uint64 {
 		return 0
 	}
 	return b.header.Number[context].Uint64()
-}
-func (b *Block) MixDigest() common.Hash {
-	return b.header.MixDigest
 }
 func (b *Block) Nonce(params ...int) uint64 {
 	return binary.BigEndian.Uint64(b.header.Nonce[:])

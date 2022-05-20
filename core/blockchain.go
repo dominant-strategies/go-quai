@@ -1474,12 +1474,12 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 	// Make sure no inconsistent state is leaked during insertion
 	currentBlock := bc.CurrentBlock()
-	localContext, err := bc.Engine().GetDifficultyContext(bc, currentBlock.Header(), types.QuaiNetworkContext)
+	localContext, err := bc.Engine().GetDifficultyOrder(currentBlock.Header())
 	if err != nil {
 		return NonStatTy, err
 	}
 
-	externContext, err := bc.Engine().GetDifficultyContext(bc, block.Header(), types.QuaiNetworkContext)
+	externContext, err := bc.Engine().GetDifficultyOrder(block.Header())
 	if err != nil {
 		return NonStatTy, err
 	}
@@ -2799,12 +2799,12 @@ func (bc *BlockChain) CheckHashInclusion(header *types.Header, parent *types.Hea
 	if types.QuaiNetworkContext == 2 {
 		// Upper level check
 		currentBlock := bc.CurrentBlock()
-		currContext, err := bc.Engine().GetDifficultyContext(bc, currentBlock.Header(), types.QuaiNetworkContext)
+		currContext, err := bc.Engine().GetDifficultyOrder(currentBlock.Header())
 		if err != nil {
 			return err
 		}
 
-		newContext, err := bc.Engine().GetDifficultyContext(bc, header, types.QuaiNetworkContext)
+		newContext, err := bc.Engine().GetDifficultyOrder(header)
 		if err != nil {
 			return err
 		}
@@ -2920,7 +2920,7 @@ func (bc *BlockChain) GetLinkExternalBlocks(header *types.Header) ([]*types.Exte
 		return externalBlocks, nil
 	}
 
-	difficultyContext, err := bc.engine.GetDifficultyContext(bc, header, context)
+	difficultyContext, err := bc.engine.GetDifficultyOrder(header)
 	if err != nil {
 		return nil, err
 	}
@@ -3241,7 +3241,7 @@ func (bc *BlockChain) AggregateTotalDifficulty(context int, header *types.Header
 	startingHeader := header
 
 	// Check the difficulty context of the starting header
-	difficultyContext, err := bc.Engine().GetDifficultyContext(bc, header, context)
+	difficultyContext, err := bc.Engine().GetDifficultyOrder(header)
 	if err != nil {
 		fmt.Println("diff not found - diff", currentTotalDifficulty)
 		return currentTotalDifficulty, currentLowestContext, fmt.Errorf("difficulty context not found")
@@ -3256,7 +3256,7 @@ func (bc *BlockChain) AggregateTotalDifficulty(context int, header *types.Header
 	// If we encounter a dominant chain we repeat the same process until we find the stop hash
 	for {
 		// Check the difficulty context of the starting header
-		difficultyContext, err := bc.Engine().GetDifficultyContext(bc, header, currentLowestContext)
+		difficultyContext, err := bc.Engine().GetDifficultyOrder(header)
 		if err != nil {
 			fmt.Println("diff not found - diff", currentTotalDifficulty)
 			return currentTotalDifficulty, currentLowestContext, fmt.Errorf("difficulty context not found")

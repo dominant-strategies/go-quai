@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package ethash
+package blake3
 
 import (
 	"encoding/json"
@@ -94,18 +94,17 @@ func TestRemoteNotifyFull(t *testing.T) {
 
 	// Create the custom ethash engine.
 	config := Config{
-		PowMode:    ModeTest,
 		NotifyFull: true,
 		Log:        testlog.Logger(t, log.LvlWarn),
 	}
-	ethash := New(config, []string{server.URL}, false)
-	defer ethash.Close()
+	blake3 := New(config, []string{server.URL}, false)
+	defer blake3.Close()
 
 	// Stream a work task and ensure the notification bubbles out.
 	header := &types.Header{Number: []*big.Int{big.NewInt(1), big.NewInt(1), big.NewInt(1)}, Difficulty: []*big.Int{big.NewInt(100), big.NewInt(100), big.NewInt(100)}}
 	block := types.NewBlockWithHeader(header)
 
-	ethash.Seal(nil, block, nil, nil)
+	blake3.Seal(nil, block, nil, nil)
 	select {
 	case work := <-sink:
 		if want := "0x" + strconv.FormatUint(header.Number[types.QuaiNetworkContext].Uint64(), 16); work["number"] != want {
