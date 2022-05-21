@@ -1474,9 +1474,15 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 	// Make sure no inconsistent state is leaked during insertion
 	currentBlock := bc.CurrentBlock()
-	localContext, err := bc.Engine().GetDifficultyOrder(currentBlock.Header())
-	if err != nil {
-		return NonStatTy, err
+
+	var localContext int
+	if currentBlock.NumberU64() == 0 {
+		localContext = types.QuaiNetworkContext
+	} else {
+		localContext, err = bc.Engine().GetDifficultyOrder(currentBlock.Header())
+		if err != nil {
+			return NonStatTy, err
+		}
 	}
 
 	externContext, err := bc.Engine().GetDifficultyOrder(block.Header())
@@ -2799,6 +2805,11 @@ func (bc *BlockChain) CheckHashInclusion(header *types.Header, parent *types.Hea
 	if types.QuaiNetworkContext == 2 {
 		// Upper level check
 		currentBlock := bc.CurrentBlock()
+
+		if currentBlock.NumberU64() == 0 {
+			return nil
+		}
+
 		currContext, err := bc.Engine().GetDifficultyOrder(currentBlock.Header())
 		if err != nil {
 			return err
