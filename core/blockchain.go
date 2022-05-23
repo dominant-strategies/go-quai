@@ -3203,10 +3203,10 @@ func (bc *BlockChain) checkExtBlockCollision(header *types.Header, externalBlock
 		subExtBlockNum := extBlock.Header().Number[types.QuaiNetworkContext]
 		subHeaderNum := header.Number[types.QuaiNetworkContext]
 
-		// domExtBlockNum := extBlock.Header().Number[extBlock.Context().Int64()]
-		// domHeaderNum := header.Number[extBlock.Context().Int64()]
+		domExtBlockNum := extBlock.Header().Number[extBlock.Context().Int64()]
+		domHeaderNum := header.Number[extBlock.Context().Int64()]
 
-		if equalLocation && greaterContext && subExtBlockNum.Cmp(subHeaderNum) >= 0 {
+		if equalLocation && greaterContext && subExtBlockNum.Cmp(subHeaderNum) >= 0 && domExtBlockNum.Cmp(domHeaderNum) != 0 {
 			return fmt.Errorf("external block collision detected")
 		}
 	}
