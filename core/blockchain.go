@@ -1508,18 +1508,24 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		localBlock := bc.GetBlockByHash(localHeader.Hash())
 		localTd = bc.GetTd(localHeader.Hash(), localBlock.NumberU64())
 	} else if localContext < externContext {
-		ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
-		if ptd == nil {
-			return NonStatTy, consensus.ErrUnknownAncestor
-		}
-		externTd = new(big.Int).Add(block.Difficulty(), ptd)
-		fmt.Println("case 2- externTd", externTd)
-
 		// get coincident and get the Total difficulty of it
-		localHeader, _, _ = bc.Engine().GetCoincidentAndAggDifficulty(bc, types.QuaiNetworkContext, externContext+1, currentBlock.Header())
-		localBlock := bc.GetBlockByHash(localHeader.Hash())
-		localTd = bc.GetTd(localHeader.Hash(), localBlock.NumberU64())
+		localTd = bc.GetTd(currentBlock.Header().Hash(), currentBlock.NumberU64())
 
+		externHeader, _, _ = bc.Engine().GetCoincidentAndAggDifficulty(bc, types.QuaiNetworkContext, localContext+1, block.Header())
+		externBlock := bc.GetBlockByHash(externHeader.Hash())
+
+		// If we are building on the same point
+		if localHeader.Hash() == externHeader.Hash() {
+			ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
+			if ptd == nil {
+				return NonStatTy, consensus.ErrUnknownAncestor
+			}
+			externTd = new(big.Int).Add(block.Difficulty(), ptd)
+		} else {
+			externTd = bc.GetTd(externHeader.Hash(), externBlock.NumberU64())
+		}
+
+		fmt.Println("case 2- externTd", externTd)
 	} else if localContext < types.QuaiNetworkContext {
 		// get coincident and get the Total difficulty of it
 		// localHeader, _, _ = bc.Engine().GetCoincidentAndAggDifficulty(bc, types.QuaiNetworkContext, externContext+1, currentBlock.Header())
