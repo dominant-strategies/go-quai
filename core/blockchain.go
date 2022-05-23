@@ -1511,15 +1511,15 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		// get coincident and get the Total difficulty of it
 		localTd = bc.GetTd(currentBlock.Header().Hash(), currentBlock.NumberU64())
 
-		externHeader, _, _ = bc.Engine().GetCoincidentAndAggDifficulty(bc, types.QuaiNetworkContext, localContext+1, currentBlock.Header())
+		externHeader, _, _ = bc.Engine().GetCoincidentAndAggDifficulty(bc, types.QuaiNetworkContext, localContext+1, block.Header())
 		externBlock := bc.GetBlockByHash(externHeader.Hash())
-		ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
-		if ptd == nil {
-			return NonStatTy, consensus.ErrUnknownAncestor
-		}
 
 		// If we are building on the same point
 		if localHeader.Hash() == externHeader.Hash() {
+			ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
+			if ptd == nil {
+				return NonStatTy, consensus.ErrUnknownAncestor
+			}
 			externTd = new(big.Int).Add(block.Difficulty(), ptd)
 		} else {
 			externTd = bc.GetTd(externHeader.Hash(), externBlock.NumberU64())
