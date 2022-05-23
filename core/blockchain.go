@@ -2193,6 +2193,14 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 				bc.chainUncleFeed.Send(block.Header())
 				return it.index, duplicateErr
 			}
+
+			collisionErr := bc.checkExtBlockCollision(block.Header(), linkExtBlocks)
+			if collisionErr != nil {
+				bc.reportBlock(block, receipts, collisionErr)
+				bc.chainUncleFeed.Send(block.Header())
+				return it.index, collisionErr
+			}
+
 			cpyExtBlocks := make([]*types.ExternalBlock, len(linkExtBlocks))
 			copy(cpyExtBlocks, linkExtBlocks)
 
@@ -3181,6 +3189,18 @@ func (bc *BlockChain) CheckExtBlockDuplicates(externalBlocks []*types.ExternalBl
 			m[string(extBlock.CacheKey())] = true
 		} else {
 			return fmt.Errorf("duplicate external blocks contained in link trace")
+		}
+	}
+	return nil
+}
+
+// CheckExtBlockDuplicates iterates external blocks to ensure that no duplicates are included.
+func (bc *BlockChain) checkExtBlockCollision(header *types.Header, externalBlocks []*types.ExternalBlock) error {
+	for _, extBlock := range externalBlocks {
+		extBlockNum := extBlock.Header().Number[extBlock.Context().Int64()]
+		headerNum := header.Number[extBlock.Context().Int64()]
+		if bytes.Compare(extBlock.Header().Location, header.Location) == 0 && extBlockNum.Cmp(headerNum) >= 0 {
+			return fmt.Errorf("external block collision detected")
 		}
 	}
 	return nil
