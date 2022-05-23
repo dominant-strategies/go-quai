@@ -3209,12 +3209,12 @@ func (bc *BlockChain) CheckExtBlockDuplicates(externalBlocks []*types.ExternalBl
 func (bc *BlockChain) checkExtBlockCollision(header *types.Header, externalBlocks []*types.ExternalBlock) error {
 	for _, extBlock := range externalBlocks {
 		equalLocation := bytes.Compare(extBlock.Header().Location, header.Location) == 0
-		equalContext := int(extBlock.Context().Int64()) == types.QuaiNetworkContext
+		greaterContext := int(extBlock.Context().Int64()) > types.QuaiNetworkContext
 
-		extBlockNum := extBlock.Header().Number[extBlock.Context().Int64()]
-		headerNum := header.Number[extBlock.Context().Int64()]
+		extBlockNum := extBlock.Header().Number[types.QuaiNetworkContext]
+		headerNum := header.Number[types.QuaiNetworkContext]
 
-		if equalLocation && equalContext && extBlockNum.Cmp(headerNum) >= 0 {
+		if equalLocation && greaterContext && extBlockNum.Cmp(headerNum) >= 0 {
 			return fmt.Errorf("external block collision detected")
 		}
 	}
