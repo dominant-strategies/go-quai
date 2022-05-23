@@ -1821,7 +1821,7 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 		currentBlock := bc.CurrentBlock()
 
 		for {
-			if currentBlock.NumberU64() == commonBlock.NumberU64()-1 {
+			if currentBlock.Hash() == commonBlock.ParentHash() {
 				fmt.Println("numbers are not equal", currentBlock.NumberU64(), commonBlock.NumberU64()-1)
 				break
 			}
