@@ -879,7 +879,7 @@ func (fb *filterBackend) SubscribeReOrgEvent(ch chan<- core.ReOrgRollup) event.S
 	return nullSubscription()
 }
 
-func (fb *filterBackend) SubscribeMissingExternalBlockEvent(ch chan<- *types.Header) event.Subscription {
+func (fb *filterBackend) SubscribeMissingExternalBlockEvent(ch chan<- core.MissingExternalBlock) event.Subscription {
 	return nullSubscription()
 }
 

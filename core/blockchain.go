@@ -2860,7 +2860,7 @@ func (bc *BlockChain) SubscribeReOrgEvent(ch chan<- ReOrgRollup) event.Subscript
 	return bc.scope.Track(bc.reOrgFeed.Subscribe(ch))
 }
 
-func (bc *BlockChain) SubscribeMissingExternalBlockEvent(ch chan<- *types.Header) event.Subscription {
+func (bc *BlockChain) SubscribeMissingExternalBlockEvent(ch chan<- MissingExternalBlock) event.Subscription {
 	return bc.scope.Track(bc.missingExternalBlockFeed.Subscribe(ch))
 }
 

@@ -283,7 +283,7 @@ func (b *LesApiBackend) SubscribeReOrgEvent(ch chan<- core.ReOrgRollup) event.Su
 	})
 }
 
-func (b *LesApiBackend) SubscribeMissingExternalBlockEvent(ch chan<- *types.Header) event.Subscription {
+func (b *LesApiBackend) SubscribeMissingExternalBlockEvent(ch chan<- core.MissingExternalBlock) event.Subscription {
 	return event.NewSubscription(func(quit <-chan struct{}) error {
 		<-quit
 		return nil
