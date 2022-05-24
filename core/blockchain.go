@@ -1926,8 +1926,8 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	}
 	// Pre-checks passed, start the full block imports
 	log.Info("Trying to grab InsertChain Lock", "hash", chain[0].Header().Number)
-	bc.chainmu.Lock()
 	bc.reorgmu.Lock()
+	bc.chainmu.Lock()
 	log.Info("InsertChain Lock", "hash", chain[0].Header().Number)
 	n, err := bc.insertChain(chain, true)
 	log.Info("InsertChain Unlock", "hash", chain[0].Header().Number)
@@ -2169,6 +2169,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			fmt.Println("err", err)
 			bc.reportBlock(block, make(types.Receipts, 0), err)
 			bc.chainUncleFeed.Send(block.Header())
+			bc.futureBlocks.Remove(block.Hash())
 			return it.index, err
 		}
 
@@ -2177,6 +2178,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			atomic.StoreUint32(&followupInterrupt, 1)
+			bc.futureBlocks.Remove(block.Hash())
 			return it.index, err
 		}
 		// Get the linkBlocks and check linkage to previous external blocks.
@@ -2191,6 +2193,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			if duplicateErr != nil {
 				bc.reportBlock(block, receipts, duplicateErr)
 				bc.chainUncleFeed.Send(block.Header())
+				bc.futureBlocks.Remove(block.Hash())
 				return it.index, duplicateErr
 			}
 
@@ -2198,6 +2201,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			if collisionErr != nil {
 				bc.reportBlock(block, receipts, collisionErr)
 				bc.chainUncleFeed.Send(block.Header())
+				bc.futureBlocks.Remove(block.Hash())
 				return it.index, collisionErr
 			}
 
@@ -2208,6 +2212,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			if linkErr != nil {
 				bc.reportBlock(block, receipts, linkErr)
 				bc.chainUncleFeed.Send(block.Header())
+				bc.futureBlocks.Remove(block.Hash())
 				return it.index, linkErr
 			}
 		}
