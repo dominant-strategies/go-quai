@@ -1463,13 +1463,13 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 }
 
 // WriteBlockWithState writes the block and all associated state to the database.
-func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
-	return bc.writeBlockWithState(block, receipts, logs, state, emitHeadEvent)
+func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, linkExtBlocks []*types.ExternalBlock, emitHeadEvent bool) (status WriteStatus, err error) {
+	return bc.writeBlockWithState(block, receipts, logs, state, linkExtBlocks, emitHeadEvent)
 }
 
 // writeBlockWithState writes the block and all associated state to the database,
 // but is expects the chain mutex to be held.
-func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
+func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, linkExtBlocks []*types.ExternalBlock, emitHeadEvent bool) (status WriteStatus, err error) {
 	fmt.Println("writeBlockWithState", block.Header().Number, block.Hash())
 
 	// Make sure no inconsistent state is leaked during insertion
@@ -1691,6 +1691,9 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			}
 		}
 		status = CanonStatTy
+		if err := bc.CheckLinkExtBlocks(block, linkExtBlocks); err != nil {
+			return NonStatTy, err
+		}
 	} else {
 		status = SideStatTy
 	}
@@ -2187,41 +2190,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			bc.futureBlocks.Remove(block.Hash())
 			return it.index, err
 		}
-		// Get the linkBlocks and check linkage to previous external blocks.
-		linkExtBlocks, err := bc.engine.GetLinkExternalBlocks(bc, block.Header(), true)
-		if err != nil {
-			bc.reportBlock(block, receipts, err)
-			bc.chainUncleFeed.Send(block.Header())
-			return it.index, err
-		}
-		if len(linkExtBlocks) > 0 {
-			duplicateErr := bc.CheckExtBlockDuplicates(linkExtBlocks)
-			if duplicateErr != nil {
-				bc.reportBlock(block, receipts, duplicateErr)
-				bc.chainUncleFeed.Send(block.Header())
-				bc.futureBlocks.Remove(block.Hash())
-				return it.index, duplicateErr
-			}
-
-			collisionErr := bc.checkExtBlockCollision(block.Header(), linkExtBlocks)
-			if collisionErr != nil {
-				bc.reportBlock(block, receipts, collisionErr)
-				bc.chainUncleFeed.Send(block.Header())
-				bc.futureBlocks.Remove(block.Hash())
-				return it.index, collisionErr
-			}
-
-			cpyExtBlocks := make([]*types.ExternalBlock, len(linkExtBlocks))
-			copy(cpyExtBlocks, linkExtBlocks)
-
-			linkErr := bc.CheckExternalBlockLink(cpyExtBlocks)
-			if linkErr != nil {
-				bc.reportBlock(block, receipts, linkErr)
-				bc.chainUncleFeed.Send(block.Header())
-				bc.futureBlocks.Remove(block.Hash())
-				return it.index, linkErr
-			}
-		}
 
 		// Update the metrics touched during block processing
 		accountReadTimer.Update(statedb.AccountReads)                 // Account reads are complete, we can mark them
@@ -2251,9 +2219,17 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 
 		blockValidationTimer.Update(time.Since(substart) - (statedb.AccountHashes + statedb.StorageHashes - triehash))
 
+		// Get the linkBlocks and check linkage to previous external blocks.
+		linkExtBlocks, err := bc.engine.GetLinkExternalBlocks(bc, block.Header(), true)
+		if err != nil {
+			bc.reportBlock(block, receipts, err)
+			bc.chainUncleFeed.Send(block.Header())
+			return it.index, err
+		}
+
 		// Write the block to the chain and get the status.
 		substart = time.Now()
-		status, err := bc.writeBlockWithState(block, receipts, logs, statedb, false)
+		status, err := bc.writeBlockWithState(block, receipts, logs, statedb, linkExtBlocks, false)
 		atomic.StoreUint32(&followupInterrupt, 1)
 		if err != nil {
 			return it.index, err
@@ -3195,6 +3171,30 @@ func (bc *BlockChain) SetLinkBlocksToLastApplied(externalBlocks []*types.Externa
 			}
 		}
 	}
+}
+
+// CheckLinkExtBlocks will check if the passed in extBlocks are valid against a block.
+func (bc *BlockChain) CheckLinkExtBlocks(block *types.Block, linkExtBlocks []*types.ExternalBlock) error {
+	if len(linkExtBlocks) > 0 {
+		duplicateErr := bc.CheckExtBlockDuplicates(linkExtBlocks)
+		if duplicateErr != nil {
+			return duplicateErr
+		}
+
+		collisionErr := bc.checkExtBlockCollision(block.Header(), linkExtBlocks)
+		if collisionErr != nil {
+			return collisionErr
+		}
+
+		cpyExtBlocks := make([]*types.ExternalBlock, len(linkExtBlocks))
+		copy(cpyExtBlocks, linkExtBlocks)
+
+		linkErr := bc.CheckExternalBlockLink(cpyExtBlocks)
+		if linkErr != nil {
+			return linkErr
+		}
+	}
+	return nil
 }
 
 // CheckExtBlockDuplicates iterates external blocks to ensure that no duplicates are included.
