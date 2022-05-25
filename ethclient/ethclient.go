@@ -435,7 +435,7 @@ func (ec *Client) SubscribeReOrg(ctx context.Context, ch chan<- core.ReOrgRollup
 
 // SubscribeMissingExternalBlock subscribes to notifications about the missingExternalBlock event.
 func (ec *Client) SubscribeMissingExternalBlock(ctx context.Context, ch chan<- core.MissingExternalBlock) (ethereum.Subscription, error) {
-	return ec.c.EthSubscribe(ctx, ch, "missingExternalBlock")
+	return ec.c.EthSubscribe(ctx, ch, "missingExtBlock")
 }
 
 func (ec *Client) SubscribeChainUncleEvent(ctx context.Context, ch chan<- *types.Header) (ethereum.Subscription, error) {

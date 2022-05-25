@@ -79,19 +79,19 @@ const (
 )
 
 type subscription struct {
-	id           rpc.ID
-	typ          Type
-	created      time.Time
-	logsCrit     ethereum.FilterQuery
-	logs         chan []*types.Log
-	hashes       chan []common.Hash
-	headers      chan *types.Header
-	block        chan *types.Header
-	installed    chan struct{} // closed when the filter is installed
-	err          chan error    // closed when the filter is uninstalled
-	reOrg        chan core.ReOrgRollup
-	uncleEvent   chan *types.Header
-	extBlockMiss chan core.MissingExternalBlock
+	id              rpc.ID
+	typ             Type
+	created         time.Time
+	logsCrit        ethereum.FilterQuery
+	logs            chan []*types.Log
+	hashes          chan []common.Hash
+	headers         chan *types.Header
+	block           chan *types.Header
+	installed       chan struct{} // closed when the filter is installed
+	err             chan error    // closed when the filter is uninstalled
+	reOrg           chan core.ReOrgRollup
+	uncleEvent      chan *types.Header
+	missingExtBlock chan core.MissingExternalBlock
 }
 
 // EventSystem creates subscriptions, processes events and broadcasts them to the
@@ -257,18 +257,18 @@ func (es *EventSystem) SubscribeLogs(crit ethereum.FilterQuery, logs chan []*typ
 // pending logs that match the given criteria.
 func (es *EventSystem) subscribeMinedPendingLogs(crit ethereum.FilterQuery, logs chan []*types.Log) *Subscription {
 	sub := &subscription{
-		id:           rpc.NewID(),
-		typ:          MinedAndPendingLogsSubscription,
-		logsCrit:     crit,
-		created:      time.Now(),
-		logs:         logs,
-		hashes:       make(chan []common.Hash),
-		headers:      make(chan *types.Header),
-		installed:    make(chan struct{}),
-		err:          make(chan error),
-		reOrg:        make(chan core.ReOrgRollup),
-		uncleEvent:   make(chan *types.Header),
-		extBlockMiss: make(chan core.MissingExternalBlock),
+		id:              rpc.NewID(),
+		typ:             MinedAndPendingLogsSubscription,
+		logsCrit:        crit,
+		created:         time.Now(),
+		logs:            logs,
+		hashes:          make(chan []common.Hash),
+		headers:         make(chan *types.Header),
+		installed:       make(chan struct{}),
+		err:             make(chan error),
+		reOrg:           make(chan core.ReOrgRollup),
+		uncleEvent:      make(chan *types.Header),
+		missingExtBlock: make(chan core.MissingExternalBlock),
 	}
 	return es.subscribe(sub)
 }
@@ -277,18 +277,18 @@ func (es *EventSystem) subscribeMinedPendingLogs(crit ethereum.FilterQuery, logs
 // given criteria to the given logs channel.
 func (es *EventSystem) subscribeLogs(crit ethereum.FilterQuery, logs chan []*types.Log) *Subscription {
 	sub := &subscription{
-		id:           rpc.NewID(),
-		typ:          LogsSubscription,
-		logsCrit:     crit,
-		created:      time.Now(),
-		logs:         logs,
-		hashes:       make(chan []common.Hash),
-		headers:      make(chan *types.Header),
-		installed:    make(chan struct{}),
-		err:          make(chan error),
-		reOrg:        make(chan core.ReOrgRollup),
-		uncleEvent:   make(chan *types.Header),
-		extBlockMiss: make(chan core.MissingExternalBlock),
+		id:              rpc.NewID(),
+		typ:             LogsSubscription,
+		logsCrit:        crit,
+		created:         time.Now(),
+		logs:            logs,
+		hashes:          make(chan []common.Hash),
+		headers:         make(chan *types.Header),
+		installed:       make(chan struct{}),
+		err:             make(chan error),
+		reOrg:           make(chan core.ReOrgRollup),
+		uncleEvent:      make(chan *types.Header),
+		missingExtBlock: make(chan core.MissingExternalBlock),
 	}
 	return es.subscribe(sub)
 }
@@ -297,18 +297,18 @@ func (es *EventSystem) subscribeLogs(crit ethereum.FilterQuery, logs chan []*typ
 // transactions that enter the transaction pool.
 func (es *EventSystem) subscribePendingLogs(crit ethereum.FilterQuery, logs chan []*types.Log) *Subscription {
 	sub := &subscription{
-		id:           rpc.NewID(),
-		typ:          PendingLogsSubscription,
-		logsCrit:     crit,
-		created:      time.Now(),
-		logs:         logs,
-		hashes:       make(chan []common.Hash),
-		headers:      make(chan *types.Header),
-		installed:    make(chan struct{}),
-		err:          make(chan error),
-		reOrg:        make(chan core.ReOrgRollup),
-		uncleEvent:   make(chan *types.Header),
-		extBlockMiss: make(chan core.MissingExternalBlock),
+		id:              rpc.NewID(),
+		typ:             PendingLogsSubscription,
+		logsCrit:        crit,
+		created:         time.Now(),
+		logs:            logs,
+		hashes:          make(chan []common.Hash),
+		headers:         make(chan *types.Header),
+		installed:       make(chan struct{}),
+		err:             make(chan error),
+		reOrg:           make(chan core.ReOrgRollup),
+		uncleEvent:      make(chan *types.Header),
+		missingExtBlock: make(chan core.MissingExternalBlock),
 	}
 	return es.subscribe(sub)
 }
@@ -316,18 +316,18 @@ func (es *EventSystem) subscribePendingLogs(crit ethereum.FilterQuery, logs chan
 // SubscribePendingBlock creates a subscription that writes pending block that are created in the miner.
 func (es *EventSystem) SubscribePendingBlock(block chan *types.Header) *Subscription {
 	sub := &subscription{
-		id:           rpc.NewID(),
-		typ:          PendingBlockSubscription,
-		created:      time.Now(),
-		logs:         make(chan []*types.Log),
-		hashes:       make(chan []common.Hash),
-		headers:      make(chan *types.Header),
-		block:        block,
-		installed:    make(chan struct{}),
-		err:          make(chan error),
-		reOrg:        make(chan core.ReOrgRollup),
-		uncleEvent:   make(chan *types.Header),
-		extBlockMiss: make(chan core.MissingExternalBlock),
+		id:              rpc.NewID(),
+		typ:             PendingBlockSubscription,
+		created:         time.Now(),
+		logs:            make(chan []*types.Log),
+		hashes:          make(chan []common.Hash),
+		headers:         make(chan *types.Header),
+		block:           block,
+		installed:       make(chan struct{}),
+		err:             make(chan error),
+		reOrg:           make(chan core.ReOrgRollup),
+		uncleEvent:      make(chan *types.Header),
+		missingExtBlock: make(chan core.MissingExternalBlock),
 	}
 	return es.subscribe(sub)
 }
@@ -336,17 +336,17 @@ func (es *EventSystem) SubscribePendingBlock(block chan *types.Header) *Subscrip
 // imported in the chain.
 func (es *EventSystem) SubscribeNewHeads(headers chan *types.Header) *Subscription {
 	sub := &subscription{
-		id:           rpc.NewID(),
-		typ:          BlocksSubscription,
-		created:      time.Now(),
-		logs:         make(chan []*types.Log),
-		hashes:       make(chan []common.Hash),
-		headers:      headers,
-		installed:    make(chan struct{}),
-		err:          make(chan error),
-		reOrg:        make(chan core.ReOrgRollup),
-		uncleEvent:   make(chan *types.Header),
-		extBlockMiss: make(chan core.MissingExternalBlock),
+		id:              rpc.NewID(),
+		typ:             BlocksSubscription,
+		created:         time.Now(),
+		logs:            make(chan []*types.Log),
+		hashes:          make(chan []common.Hash),
+		headers:         headers,
+		installed:       make(chan struct{}),
+		err:             make(chan error),
+		reOrg:           make(chan core.ReOrgRollup),
+		uncleEvent:      make(chan *types.Header),
+		missingExtBlock: make(chan core.MissingExternalBlock),
 	}
 	return es.subscribe(sub)
 }
@@ -355,17 +355,17 @@ func (es *EventSystem) SubscribeNewHeads(headers chan *types.Header) *Subscripti
 // transactions that enter the transaction pool.
 func (es *EventSystem) SubscribePendingTxs(hashes chan []common.Hash) *Subscription {
 	sub := &subscription{
-		id:           rpc.NewID(),
-		typ:          PendingTransactionsSubscription,
-		created:      time.Now(),
-		logs:         make(chan []*types.Log),
-		hashes:       hashes,
-		headers:      make(chan *types.Header),
-		installed:    make(chan struct{}),
-		err:          make(chan error),
-		reOrg:        make(chan core.ReOrgRollup),
-		uncleEvent:   make(chan *types.Header),
-		extBlockMiss: make(chan core.MissingExternalBlock),
+		id:              rpc.NewID(),
+		typ:             PendingTransactionsSubscription,
+		created:         time.Now(),
+		logs:            make(chan []*types.Log),
+		hashes:          hashes,
+		headers:         make(chan *types.Header),
+		installed:       make(chan struct{}),
+		err:             make(chan error),
+		reOrg:           make(chan core.ReOrgRollup),
+		uncleEvent:      make(chan *types.Header),
+		missingExtBlock: make(chan core.MissingExternalBlock),
 	}
 	return es.subscribe(sub)
 }
@@ -374,17 +374,17 @@ func (es *EventSystem) SubscribePendingTxs(hashes chan []common.Hash) *Subscript
 // of the newChain from a newly found chain.
 func (es *EventSystem) SubscribeReOrg(reOrg chan core.ReOrgRollup) *Subscription {
 	sub := &subscription{
-		id:           rpc.NewID(),
-		typ:          ReOrgSubscription,
-		created:      time.Now(),
-		logs:         make(chan []*types.Log),
-		hashes:       make(chan []common.Hash),
-		headers:      make(chan *types.Header),
-		installed:    make(chan struct{}),
-		err:          make(chan error),
-		reOrg:        reOrg,
-		uncleEvent:   make(chan *types.Header),
-		extBlockMiss: make(chan core.MissingExternalBlock),
+		id:              rpc.NewID(),
+		typ:             ReOrgSubscription,
+		created:         time.Now(),
+		logs:            make(chan []*types.Log),
+		hashes:          make(chan []common.Hash),
+		headers:         make(chan *types.Header),
+		installed:       make(chan struct{}),
+		err:             make(chan error),
+		reOrg:           reOrg,
+		uncleEvent:      make(chan *types.Header),
+		missingExtBlock: make(chan core.MissingExternalBlock),
 	}
 	return es.subscribe(sub)
 }
@@ -393,17 +393,17 @@ func (es *EventSystem) SubscribeReOrg(reOrg chan core.ReOrgRollup) *Subscription
 // notified as an uncle.
 func (es *EventSystem) SubscribeChainUncleEvent(uncleEvent chan *types.Header) *Subscription {
 	sub := &subscription{
-		id:           rpc.NewID(),
-		typ:          uncleChSubscription,
-		created:      time.Now(),
-		logs:         make(chan []*types.Log),
-		hashes:       make(chan []common.Hash),
-		headers:      make(chan *types.Header),
-		installed:    make(chan struct{}),
-		err:          make(chan error),
-		reOrg:        make(chan core.ReOrgRollup),
-		uncleEvent:   uncleEvent,
-		extBlockMiss: make(chan core.MissingExternalBlock),
+		id:              rpc.NewID(),
+		typ:             uncleChSubscription,
+		created:         time.Now(),
+		logs:            make(chan []*types.Log),
+		hashes:          make(chan []common.Hash),
+		headers:         make(chan *types.Header),
+		installed:       make(chan struct{}),
+		err:             make(chan error),
+		reOrg:           make(chan core.ReOrgRollup),
+		uncleEvent:      uncleEvent,
+		missingExtBlock: make(chan core.MissingExternalBlock),
 	}
 	return es.subscribe(sub)
 }
@@ -412,16 +412,16 @@ func (es *EventSystem) SubscribeChainUncleEvent(uncleEvent chan *types.Header) *
 // imported in the chain.
 func (es *EventSystem) SubscribeMissingExternalBlock(extBlockMiss chan core.MissingExternalBlock) *Subscription {
 	sub := &subscription{
-		id:           rpc.NewID(),
-		typ:          MissingExternalBlockSubscription,
-		created:      time.Now(),
-		logs:         make(chan []*types.Log),
-		hashes:       make(chan []common.Hash),
-		headers:      make(chan *types.Header),
-		installed:    make(chan struct{}),
-		err:          make(chan error),
-		reOrg:        make(chan core.ReOrgRollup),
-		extBlockMiss: extBlockMiss,
+		id:              rpc.NewID(),
+		typ:             MissingExternalBlockSubscription,
+		created:         time.Now(),
+		logs:            make(chan []*types.Log),
+		hashes:          make(chan []common.Hash),
+		headers:         make(chan *types.Header),
+		installed:       make(chan struct{}),
+		err:             make(chan error),
+		reOrg:           make(chan core.ReOrgRollup),
+		missingExtBlock: extBlockMiss,
 	}
 	return es.subscribe(sub)
 }
@@ -466,7 +466,7 @@ func (es *EventSystem) handleReOrg(filters filterIndex, ev core.ReOrgRollup) {
 
 func (es *EventSystem) handleMissingExternalBlock(filters filterIndex, ev core.MissingExternalBlock) {
 	for _, f := range filters[MissingExternalBlockSubscription] {
-		f.extBlockMiss <- ev
+		f.missingExtBlock <- ev
 	}
 }
 func (es *EventSystem) handleUncleCh(filters filterIndex, ev *types.Header) {
