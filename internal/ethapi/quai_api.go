@@ -267,6 +267,9 @@ func (s *PublicBlockChainQuaiAPI) GetBlockWithReceiptsByHash(ctx context.Context
 	if err != nil {
 		return nil, err
 	}
+	if block == nil {
+		return nil, errors.New("block not found")
+	}
 	return s.rpcMarshalBlockWithReceipts(ctx, block, receipts, true, true)
 }
 
