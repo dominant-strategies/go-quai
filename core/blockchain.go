@@ -1812,6 +1812,9 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 		// get the commonBlock
 		commonBlock := bc.GetBlockByHash(header.Hash())
 
+		// if commonBlock isn't canoncial in our chain, do not reorg
+		// because commonBlock parentHash could potentially be in our chain.
+
 		// if a block with this hash does not exist then we dont have to roll back
 		if commonBlock == nil {
 			fmt.Println("Unable to find commonBlock", header.Hash())
@@ -1821,8 +1824,12 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 		currentBlock := bc.CurrentBlock()
 
 		for {
-			if currentBlock.Hash() == commonBlock.ParentHash() {
-				fmt.Println("numbers are not equal", currentBlock.NumberU64(), commonBlock.NumberU64()-1)
+			if currentBlock.Hash() == commonBlock.Hash() {
+				fmt.Println("Stopping iteration for reorg point", currentBlock.NumberU64(), commonBlock.NumberU64()-1)
+				// iterate one more for the current block reorg point to exclude the commonBlock that is to be reorged.
+				currentBlock = bc.GetBlock(currentBlock.ParentHash(), currentBlock.NumberU64()-1)
+				deletedTxs = append(deletedTxs, currentBlock.Transactions()...)
+				collectLogs(currentBlock.Hash())
 				break
 			}
 			deletedTxs = append(deletedTxs, currentBlock.Transactions()...)
