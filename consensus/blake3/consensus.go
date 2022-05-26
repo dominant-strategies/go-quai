@@ -1,4 +1,4 @@
-// Copyright 2017 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package ethash
+package blake3
 
 import (
 	"bytes"
@@ -35,39 +35,28 @@ import (
 	"github.com/spruce-solutions/go-quai/params"
 	"github.com/spruce-solutions/go-quai/rlp"
 	"github.com/spruce-solutions/go-quai/trie"
-	"golang.org/x/crypto/sha3"
+	blake3hash "lukechampine.com/blake3"
 )
 
-// Ethash proof-of-work protocol constants.
+// Blake3 proof-of-work protocol constants.
 var (
-	FrontierBlockReward           = big.NewInt(5e+18) // Block reward in wei for successfully mining a block
-	ByzantiumBlockReward          = big.NewInt(3e+18) // Block reward in wei for successfully mining a block upward from Byzantium
-	ConstantinopleBlockReward     = big.NewInt(2e+18) // Block reward in wei for successfully mining a block upward from Constantinople
-	maxUncles                     = 2                 // Maximum number of uncles allowed in a single block
-	allowedFutureBlockTimeSeconds = int64(15)         // Max seconds from current time allowed for blocks, before they're considered future blocks
+	BlockReward = big.NewInt(5e+18) // Block reward in wei for successfully mining a block
 
-	// calcDifficultyEip3554 is the difficulty adjustment algorithm as specified by EIP 3554.
-	// It offsets the bomb a total of 9.7M blocks.
-	// Specification EIP-3554: https://eips.ethereum.org/EIPS/eip-3554
-	calcDifficultyEip3554 = makeDifficultyCalculator(big.NewInt(9700000))
+	allowedFutureBlockTimeSeconds = int64(15) // Max seconds from current time allowed for blocks, before they're considered future blocks
+	maxUncles                     = 2         // Maximum number of uncles allowed in a single block
+)
 
-	// calcDifficultyEip2384 is the difficulty adjustment algorithm as specified by EIP 2384.
-	// It offsets the bomb 4M blocks from Constantinople, so in total 9M blocks.
-	// Specification EIP-2384: https://eips.ethereum.org/EIPS/eip-2384
-	calcDifficultyEip2384 = makeDifficultyCalculator(big.NewInt(9000000))
-
-	// calcDifficultyConstantinople is the difficulty adjustment algorithm for Constantinople.
-	// It returns the difficulty that a new block should have when created at time given the
-	// parent block's time and difficulty. The calculation uses the Byzantium rules, but with
-	// bomb offset 5M.
-	// Specification EIP-1234: https://eips.ethereum.org/EIPS/eip-1234
-	calcDifficultyConstantinople = makeDifficultyCalculator(big.NewInt(5000000))
-
-	// calcDifficultyByzantium is the difficulty adjustment algorithm. It returns
-	// the difficulty that a new block should have when created at time given the
-	// parent block's time and difficulty. The calculation uses the Byzantium rules.
-	// Specification EIP-649: https://eips.ethereum.org/EIPS/eip-649
-	calcDifficultyByzantium = makeDifficultyCalculator(big.NewInt(3000000))
+// Some weird constants to avoid constant memory allocs for them.
+var (
+	expDiffPeriod = big.NewInt(100000)
+	big1          = big.NewInt(1)
+	big2          = big.NewInt(2)
+	big8          = big.NewInt(8)
+	big9          = big.NewInt(9)
+	big10         = big.NewInt(10)
+	big32         = big.NewInt(32)
+	bigMinus99    = big.NewInt(-99)
+	big2e256      = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0)) // 2^256
 )
 
 // Various error messages to mark blocks invalid. These should be private to
@@ -88,17 +77,12 @@ var (
 
 // Author implements consensus.Engine, returning the header's coinbase as the
 // proof-of-work verified author of the block.
-func (ethash *Ethash) Author(header *types.Header) (common.Address, error) {
+func (blake3 *Blake3) Author(header *types.Header) (common.Address, error) {
 	return header.Coinbase[types.QuaiNetworkContext], nil
 }
 
-// VerifyHeader checks whether a header conforms to the consensus rules of the
-// stock Ethereum ethash engine.
-func (ethash *Ethash) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Header, seal bool) error {
-	// If we're running a full engine faking, accept any input as valid
-	if ethash.config.PowMode == ModeFullFake {
-		return nil
-	}
+// VerifyHeader checks whether a header conforms to the consensus rules of the Blake3 engine.
+func (blake3 *Blake3) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Header, seal bool) error {
 	// Short circuit if the header is known, or its parent not
 	number := header.Number[types.QuaiNetworkContext].Uint64()
 	if chain.GetHeader(header.Hash(), number) != nil {
@@ -109,15 +93,15 @@ func (ethash *Ethash) VerifyHeader(chain consensus.ChainHeaderReader, header *ty
 		return consensus.ErrUnknownAncestor
 	}
 	// Sanity checks passed, do a proper verification
-	return ethash.verifyHeader(chain, header, parent, false, seal, time.Now().Unix())
+	return blake3.verifyHeader(chain, header, parent, false, seal, time.Now().Unix())
 }
 
 // VerifyHeaders is similar to VerifyHeader, but verifies a batch of headers
 // concurrently. The method returns a quit channel to abort the operations and
 // a results channel to retrieve the async verifications.
-func (ethash *Ethash) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header, seals []bool) (chan<- struct{}, <-chan error) {
+func (blake3 *Blake3) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header, seals []bool) (chan<- struct{}, <-chan error) {
 	// If we're running a full engine faking, accept any input as valid
-	if ethash.config.PowMode == ModeFullFake || len(headers) == 0 {
+	if len(headers) == 0 {
 		abort, results := make(chan struct{}), make(chan error, len(headers))
 		for i := 0; i < len(headers); i++ {
 			results <- nil
@@ -142,7 +126,7 @@ func (ethash *Ethash) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 	for i := 0; i < workers; i++ {
 		go func() {
 			for index := range inputs {
-				errors[index] = ethash.verifyHeaderWorker(chain, headers, seals, index, unixNow)
+				errors[index] = blake3.verifyHeaderWorker(chain, headers, seals, index, unixNow)
 				done <- index
 			}
 		}()
@@ -178,7 +162,7 @@ func (ethash *Ethash) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 	return abort, errorsOut
 }
 
-func (ethash *Ethash) verifyHeaderWorker(chain consensus.ChainHeaderReader, headers []*types.Header, seals []bool, index int, unixNow int64) error {
+func (blake3 *Blake3) verifyHeaderWorker(chain consensus.ChainHeaderReader, headers []*types.Header, seals []bool, index int, unixNow int64) error {
 	var parent *types.Header
 	if index == 0 {
 		parent = chain.GetHeader(headers[0].ParentHash[types.QuaiNetworkContext], headers[0].Number[types.QuaiNetworkContext].Uint64()-1)
@@ -188,16 +172,11 @@ func (ethash *Ethash) verifyHeaderWorker(chain consensus.ChainHeaderReader, head
 	if parent == nil {
 		return consensus.ErrUnknownAncestor
 	}
-	return ethash.verifyHeader(chain, headers[index], parent, false, seals[index], unixNow)
+	return blake3.verifyHeader(chain, headers[index], parent, false, seals[index], unixNow)
 }
 
-// VerifyUncles verifies that the given block's uncles conform to the consensus
-// rules of the stock Ethereum ethash engine.
-func (ethash *Ethash) VerifyUncles(chain consensus.ChainReader, block *types.Block) error {
-	// If we're running a full engine faking, accept any input as valid
-	if ethash.config.PowMode == ModeFullFake {
-		return nil
-	}
+// VerifyUncles verifies that the given block's uncles conform to the consensus rules
+func (blake3 *Blake3) VerifyUncles(chain consensus.ChainReader, block *types.Block) error {
 	// Verify that there are at most 2 uncles included in this block
 	if len(block.Uncles()) > maxUncles {
 		return errTooManyUncles
@@ -247,17 +226,15 @@ func (ethash *Ethash) VerifyUncles(chain consensus.ChainReader, block *types.Blo
 		if ancestors[uncle.ParentHash[types.QuaiNetworkContext]] == nil || uncle.ParentHash[types.QuaiNetworkContext] == block.ParentHash() {
 			return errDanglingUncle
 		}
-		if err := ethash.verifyHeader(chain, uncle, ancestors[uncle.ParentHash[types.QuaiNetworkContext]], true, true, time.Now().Unix()); err != nil {
+		if err := blake3.verifyHeader(chain, uncle, ancestors[uncle.ParentHash[types.QuaiNetworkContext]], true, true, time.Now().Unix()); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// verifyHeader checks whether a header conforms to the consensus rules of the
-// stock Ethereum ethash engine.
-// See YP section 4.3.4. "Block Header Validity"
-func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, parent *types.Header, uncle bool, seal bool, unixNow int64) error {
+// verifyHeader checks whether a header conforms to the consensus rules
+func (blake3 *Blake3) verifyHeader(chain consensus.ChainHeaderReader, header, parent *types.Header, uncle bool, seal bool, unixNow int64) error {
 	// Ensure that the header's extra-data section is of a reasonable size
 	if uint64(len(header.Extra)) > params.MaximumExtraDataSize {
 		return fmt.Errorf("extra-data too long: %d > %d", len(header.Extra), params.MaximumExtraDataSize)
@@ -271,13 +248,11 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	if header.Time <= parent.Time {
 		return errOlderBlockTime
 	}
-
 	// Verify the block's difficulty based on its timestamp and parent's difficulty
-	expected := ethash.CalcDifficulty(chain, header.Time, parent, types.QuaiNetworkContext)
+	expected := blake3.CalcDifficulty(chain, header.Time, parent, types.QuaiNetworkContext)
 	if expected.Cmp(header.Difficulty[types.QuaiNetworkContext]) > 0 {
 		return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty[types.QuaiNetworkContext], expected)
 	}
-
 	// Verify that the gas limit is <= 2^63-1
 	cap := uint64(0x7fffffffffffffff)
 	if header.GasLimit[types.QuaiNetworkContext] > cap {
@@ -298,7 +273,7 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	}
 	// Verify the engine specific seal securing the block
 	if seal {
-		if err := ethash.verifySeal(chain, header, false); err != nil {
+		if err := blake3.verifySeal(header); err != nil {
 			return err
 		}
 	}
@@ -321,7 +296,7 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 // CalcDifficulty is the difficulty adjustment algorithm. It returns
 // the difficulty that a new block should have when created at time
 // given the parent block's time and difficulty.
-func (ethash *Ethash) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, parent *types.Header, context int) *big.Int {
+func (blake3 *Blake3) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, parent *types.Header, context int) *big.Int {
 	return CalcDifficulty(chain.Config(), time, parent, context)
 }
 
@@ -330,138 +305,6 @@ func (ethash *Ethash) CalcDifficulty(chain consensus.ChainHeaderReader, time uin
 // given the parent block's time and difficulty.
 func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Header, context int) *big.Int {
 	return calcDifficultyFrontier(time, parent, context)
-}
-
-// Some weird constants to avoid constant memory allocs for them.
-var (
-	expDiffPeriod = big.NewInt(100000)
-	big1          = big.NewInt(1)
-	big2          = big.NewInt(2)
-	big9          = big.NewInt(9)
-	big10         = big.NewInt(10)
-	bigMinus99    = big.NewInt(-99)
-)
-
-// makeDifficultyCalculator creates a difficultyCalculator with the given bomb-delay.
-// the difficulty is calculated with Byzantium rules, which differs from Homestead in
-// how uncles affect the calculation
-func makeDifficultyCalculator(bombDelay *big.Int) func(time uint64, parent *types.Header, context int) *big.Int {
-	// Note, the calculations below looks at the parent number, which is 1 below
-	// the block number. Thus we remove one from the delay given
-	bombDelayFromParent := new(big.Int).Sub(bombDelay, big1)
-	return func(time uint64, parent *types.Header, context int) *big.Int {
-		// https://github.com/ethereum/EIPs/issues/100.
-		// algorithm:
-		// diff = (parent_diff +
-		//         (parent_diff / 2048 * max((2 if len(parent.uncles) else 1) - ((timestamp - parent.timestamp) // 9), -99))
-		//        ) + 2^(periodCount - 2)
-
-		bigTime := new(big.Int).SetUint64(time)
-		bigParentTime := new(big.Int).SetUint64(parent.Time)
-
-		// holds intermediate values to make the algo easier to read & audit
-		x := new(big.Int)
-		y := new(big.Int)
-
-		// (2 if len(parent_uncles) else 1) - (block_timestamp - parent_timestamp) // 9
-		x.Sub(bigTime, bigParentTime)
-		x.Div(x, big9)
-		if types.IsEqualHashSlice(parent.UncleHash, types.EmptyUncleHash) {
-			x.Sub(big1, x)
-		} else {
-			x.Sub(big2, x)
-		}
-		// max((2 if len(parent_uncles) else 1) - (block_timestamp - parent_timestamp) // 9, -99)
-		if x.Cmp(bigMinus99) < 0 {
-			x.Set(bigMinus99)
-		}
-		// If we do not have a parent difficulty, get the genesis difficulty
-		parentDifficulty := parent.Difficulty[types.QuaiNetworkContext]
-		if parentDifficulty == nil {
-			parentDifficulty = params.GenesisDifficulty
-		}
-
-		// parent_diff + (parent_diff / 2048 * max((2 if len(parent.uncles) else 1) - ((timestamp - parent.timestamp) // 9), -99))
-		y.Div(parentDifficulty, params.DifficultyBoundDivisor[types.QuaiNetworkContext])
-		x.Mul(y, x)
-		x.Add(parentDifficulty, x)
-
-		// minimum difficulty can ever be (before exponential factor)
-		if x.Cmp(params.MinimumDifficulty) < 0 {
-			x.Set(params.MinimumDifficulty)
-		}
-		// calculate a fake block number for the ice-age delay
-		// Specification: https://eips.ethereum.org/EIPS/eip-1234
-		fakeBlockNumber := new(big.Int)
-		if parent.Number[types.QuaiNetworkContext].Cmp(bombDelayFromParent) >= 0 {
-			fakeBlockNumber = fakeBlockNumber.Sub(parent.Number[types.QuaiNetworkContext], bombDelayFromParent)
-		}
-		// for the exponential factor
-		periodCount := fakeBlockNumber
-		periodCount.Div(periodCount, expDiffPeriod)
-
-		// the exponential factor, commonly referred to as "the bomb"
-		// diff = diff + 2^(periodCount - 2)
-		if periodCount.Cmp(big1) > 0 {
-			y.Sub(periodCount, big2)
-			y.Exp(big2, y, nil)
-			x.Add(x, y)
-		}
-		return x
-	}
-}
-
-// calcDifficultyHomestead is the difficulty adjustment algorithm. It returns
-// the difficulty that a new block should have when created at time given the
-// parent block's time and difficulty. The calculation uses the Homestead rules.
-func calcDifficultyHomestead(time uint64, parent *types.Header, context int) *big.Int {
-	// https://github.com/ethereum/EIPs/blob/master/EIPS/eip-2.md
-	// algorithm:
-	// diff = (parent_diff +
-	//         (parent_diff / 2048 * max(1 - (block_timestamp - parent_timestamp) // 10, -99))
-	//        ) + 2^(periodCount - 2)
-
-	bigTime := new(big.Int).SetUint64(time)
-	bigParentTime := new(big.Int).SetUint64(parent.Time)
-
-	// holds intermediate values to make the algo easier to read & audit
-	x := new(big.Int)
-	y := new(big.Int)
-
-	// 1 - (block_timestamp - parent_timestamp) // 10
-	x.Sub(bigTime, bigParentTime)
-	x.Div(x, big10)
-	x.Sub(big1, x)
-
-	// max(1 - (block_timestamp - parent_timestamp) // 10, -99)
-	if x.Cmp(bigMinus99) < 0 {
-		x.Set(bigMinus99)
-	}
-	parentDifficulty := parent.Difficulty[types.QuaiNetworkContext]
-	if parentDifficulty == nil {
-		parentDifficulty = params.GenesisDifficulty
-	}
-	// (parent_diff + parent_diff // 2048 * max(1 - (block_timestamp - parent_timestamp) // 10, -99))
-	y.Div(parentDifficulty, params.DifficultyBoundDivisor[types.QuaiNetworkContext])
-	x.Mul(y, x)
-	x.Add(parentDifficulty, x)
-
-	// minimum difficulty can ever be (before exponential factor)
-	if x.Cmp(params.MinimumDifficulty) < 0 {
-		x.Set(params.MinimumDifficulty)
-	}
-	// for the exponential factor
-	periodCount := new(big.Int).Add(parent.Number[types.QuaiNetworkContext], big1)
-	periodCount.Div(periodCount, expDiffPeriod)
-
-	// the exponential factor, commonly referred to as "the bomb"
-	// diff = diff + 2^(periodCount - 2)
-	if periodCount.Cmp(big1) > 0 {
-		y.Sub(periodCount, big2)
-		y.Exp(big2, y, nil)
-		x.Add(x, y)
-	}
-	return x
 }
 
 // calcDifficultyFrontier is the difficulty adjustment algorithm. It returns the
@@ -504,180 +347,45 @@ func calcDifficultyFrontier(time uint64, parent *types.Header, context int) *big
 	return diff
 }
 
-// Exported for fuzzing
-var FrontierDifficultyCalulator = calcDifficultyFrontier
-var HomesteadDifficultyCalulator = calcDifficultyHomestead
-var DynamicDifficultyCalculator = makeDifficultyCalculator
-
 // verifySeal checks whether a block satisfies the PoW difficulty requirements,
-// either using the usual ethash cache for it, or alternatively using a full DAG
-// to make remote mining fast.
-func (ethash *Ethash) verifySeal(chain consensus.ChainHeaderReader, header *types.Header, fulldag bool) error {
-	// If we're running a fake PoW, accept any seal as valid
-	if ethash.config.PowMode == ModeFake || ethash.config.PowMode == ModeFullFake {
-		time.Sleep(ethash.fakeDelay)
-		if ethash.fakeFail == header.Number[types.QuaiNetworkContext].Uint64() {
-			return errInvalidPoW
-		}
-		return nil
-	}
-	// If we're running a shared PoW, delegate verification to it
-	if ethash.shared != nil {
-		return ethash.shared.verifySeal(chain, header, fulldag)
-	}
+func (blake3 *Blake3) verifySeal(header *types.Header) error {
+	difficulty := header.Difficulty[types.QuaiNetworkContext]
 	// Ensure that we have a valid difficulty for the block
-	if header.Difficulty[types.QuaiNetworkContext].Sign() <= 0 {
+	if difficulty.Sign() <= 0 {
 		return errInvalidDifficulty
 	}
-	// Recompute the digest and PoW values
-	// Number is set to the Prime number for ethash dataset
-	number := header.Number[0].Uint64()
-
-	var (
-		digest []byte
-		result []byte
-	)
-	// If fast-but-heavy PoW verification was requested, use an ethash dataset
-	if fulldag {
-		dataset := ethash.dataset(number, true)
-		if dataset.generated() {
-			digest, result = hashimotoFull(dataset.dataset, ethash.SealHash(header).Bytes(), header.Nonce.Uint64())
-
-			// Datasets are unmapped in a finalizer. Ensure that the dataset stays alive
-			// until after the call to hashimotoFull so it's not unmapped while being used.
-			runtime.KeepAlive(dataset)
-		} else {
-			// Dataset not yet generated, don't hang, use a cache instead
-			fulldag = false
-		}
-	}
-	// If slow-but-light PoW verification was requested (or DAG not yet ready), use an ethash cache
-	if !fulldag {
-		cache := ethash.cache(number)
-
-		size := datasetSize(number)
-		if ethash.config.PowMode == ModeTest {
-			size = 32 * 1024
-		}
-		digest, result = hashimotoLight(size, cache.cache, ethash.SealHash(header).Bytes(), header.Nonce.Uint64())
-
-		// Caches are unmapped in a finalizer. Ensure that the cache stays alive
-		// until after the call to hashimotoLight so it's not unmapped while being used.
-		runtime.KeepAlive(cache)
-	}
-	// TODO: Commenting out for now, may need to specify the same ethash directory as manager
-	// Verify the calculated values against the ones provided in the header
-	if !bytes.Equal(header.MixDigest[:], digest) {
-		log.Warn("MixDigest is invalid")
-		// 	return errInvalidMixDigest
-	}
-	// Difficulty check for valid proof of work
-	target := new(big.Int).Div(two256, header.Difficulty[types.QuaiNetworkContext])
-	if new(big.Int).SetBytes(result).Cmp(target) > 0 {
+	// Check the SealHash meets the difficulty target
+	target := new(big.Int).Div(big2e256, difficulty)
+	if !blake3.config.Fakepow && new(big.Int).SetBytes(blake3.SealHash(header).Bytes()).Cmp(target) > 0 {
 		return errInvalidPoW
 	}
 	return nil
 }
 
-func (ethash *Ethash) checkPoW(chain consensus.ChainHeaderReader, header *types.Header, fulldag bool) []byte {
-	// Recompute the digest and PoW values
-	// Number is set to the Prime number for ethash dataset
-	bigNum := header.Number[0]
-	if bigNum == nil {
-		bigNum = big.NewInt(0)
-	}
-
-	number := bigNum.Uint64()
-
-	var (
-		result []byte
-	)
-	// If fast-but-heavy PoW verification was requested, use an ethash dataset
-	if fulldag {
-		dataset := ethash.dataset(number, true)
-		if dataset.generated() {
-			_, result = hashimotoFull(dataset.dataset, ethash.SealHash(header).Bytes(), header.Nonce.Uint64())
-
-			// Datasets are unmapped in a finalizer. Ensure that the dataset stays alive
-			// until after the call to hashimotoFull so it's not unmapped while being used.
-			runtime.KeepAlive(dataset)
-		} else {
-			// Dataset not yet generated, don't hang, use a cache instead
-			fulldag = false
-		}
-	}
-	// If slow-but-light PoW verification was requested (or DAG not yet ready), use an ethash cache
-	if !fulldag {
-		cache := ethash.cache(number)
-
-		size := datasetSize(number)
-		if ethash.config.PowMode == ModeTest {
-			size = 32 * 1024
-		}
-		_, result = hashimotoLight(size, cache.cache, ethash.SealHash(header).Bytes(), header.Nonce.Uint64())
-
-		// Caches are unmapped in a finalizer. Ensure that the cache stays alive
-		// until after the call to hashimotoLight so it's not unmapped while being used.
-		runtime.KeepAlive(cache)
-	}
-
-	return result
-}
-
-func (ethash *Ethash) GetDifficultyContext(chain consensus.ChainHeaderReader, header *types.Header, context int) (int, error) {
-	difficultyContext := context
+// This function determines the difficulty order of a block
+func (blake3 *Blake3) GetDifficultyOrder(header *types.Header) (int, error) {
 	if header == nil {
-		return types.ContextDepth, errors.New("error checking difficulty context")
+		return types.ContextDepth, errors.New("No header provided")
 	}
-	if header.Nonce != (types.BlockNonce{}) {
-		result := ethash.checkPoW(chain, header, false)
-		for i := types.ContextDepth - 1; i > -1; i-- {
-			if header.Difficulty[i] != nil && header.Difficulty[i] != big.NewInt(0) {
-				target := new(big.Int).Div(two256, header.Difficulty[i])
-				if new(big.Int).SetBytes(result).Cmp(target) <= 0 {
-					difficultyContext = i
-				}
-			} else {
-				return types.ContextDepth, errors.New("error checking difficulty context")
+	blockhash := blake3.SealHash(header)
+	for i, difficulty := range header.Difficulty {
+		if difficulty != nil && big.NewInt(0).Cmp(difficulty) < 0 {
+			target := new(big.Int).Div(big2e256, difficulty)
+			if new(big.Int).SetBytes(blockhash.Bytes()).Cmp(target) <= 0 {
+				return i, nil
 			}
 		}
-		// Invalid number on the new difficulty
-		if header.Number[difficultyContext] == nil {
-			return types.ContextDepth, errors.New("error checking difficulty context")
-		}
 	}
-	return difficultyContext, nil
-}
-
-// Prepare implements consensus.Engine, initializing the difficulty field of a
-// header to conform to the ethash protocol. The changes are done inline.
-func (ethash *Ethash) Prepare(chain consensus.ChainHeaderReader, header *types.Header) error {
-	parent := chain.GetHeader(header.ParentHash[types.QuaiNetworkContext], header.Number[types.QuaiNetworkContext].Uint64()-1)
-	if parent == nil {
-		return consensus.ErrUnknownAncestor
-	}
-	header.Difficulty[types.QuaiNetworkContext] = ethash.CalcDifficulty(chain, header.Time, parent, types.QuaiNetworkContext)
-	currentTotal := big.NewInt(0)
-	currentTotal.Add(parent.NetworkDifficulty[types.QuaiNetworkContext], header.Difficulty[types.QuaiNetworkContext])
-	header.NetworkDifficulty[types.QuaiNetworkContext] = currentTotal
-	return nil
-}
-
-// Finalize implements consensus.Engine, accumulating the block and uncle rewards,
-// setting the final state on the header
-func (ethash *Ethash) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
-	// Accumulate any block and uncle rewards and commit the final state root
-	accumulateRewards(chain.Config(), state, header, uncles)
-	header.Root[types.QuaiNetworkContext] = state.IntermediateRoot(chain.Config().IsEIP158(header.Number[types.QuaiNetworkContext]))
+	return -1, errors.New("Block does not satisfy minimum difficulty")
 }
 
 // Iterate back through headers to find ones that exceed a given context.
-func (ethash *Ethash) GetCoincidentHeader(chain consensus.ChainHeaderReader, context int, header *types.Header) (*types.Header, int) {
+func (blake3 *Blake3) GetCoincidentHeader(chain consensus.ChainHeaderReader, context int, header *types.Header) (*types.Header, int) {
 	// If we are at the highest context, no coincident will include it.
 	if context == 0 {
 		return header, 0
 	} else if context == 1 {
-		difficultyContext, err := ethash.GetDifficultyContext(chain, header, context)
+		difficultyContext, err := blake3.GetDifficultyOrder(header)
 		if err != nil {
 			return header, context
 		}
@@ -687,7 +395,7 @@ func (ethash *Ethash) GetCoincidentHeader(chain consensus.ChainHeaderReader, con
 		for {
 			// Check work of the header, if it has enough work we will move up in context.
 			// difficultyContext is initially context since it could be a pending block w/o a nonce.
-			difficultyContext, err := ethash.GetDifficultyContext(chain, header, context)
+			difficultyContext, err := blake3.GetDifficultyOrder(header)
 			if err != nil {
 				return header, context
 			}
@@ -714,9 +422,9 @@ func (ethash *Ethash) GetCoincidentHeader(chain consensus.ChainHeaderReader, con
 }
 
 // Check difficulty of previous header in order to find traceability.
-func (ethash *Ethash) CheckPrevHeaderCoincident(chain consensus.ChainHeaderReader, context int, header *types.Header) (int, error) {
+func (blake3 *Blake3) CheckPrevHeaderCoincident(chain consensus.ChainHeaderReader, context int, header *types.Header) (int, error) {
 	// If we are at the highest context, no coincident will include it.
-	difficultyContext, err := ethash.GetDifficultyContext(chain, header, context)
+	difficultyContext, err := blake3.GetDifficultyOrder(header)
 	if err != nil {
 		return difficultyContext, fmt.Errorf("difficulty not found")
 	}
@@ -724,7 +432,7 @@ func (ethash *Ethash) CheckPrevHeaderCoincident(chain consensus.ChainHeaderReade
 }
 
 // GetStopHash returns the N-1 hash that is used to terminate on during TraceBranch.
-func (ethash *Ethash) GetStopHash(chain consensus.ChainHeaderReader, originalContext int, wantedDiffContext int, startingHeader *types.Header) (common.Hash, int) {
+func (blake3 *Blake3) GetStopHash(chain consensus.ChainHeaderReader, originalContext int, wantedDiffContext int, startingHeader *types.Header) (common.Hash, int) {
 	header := startingHeader
 	stopHash := common.Hash{}
 	num := 0
@@ -753,7 +461,7 @@ func (ethash *Ethash) GetStopHash(chain consensus.ChainHeaderReader, originalCon
 
 		// Check work of the header, if it has enough work we will move up in context.
 		// difficultyContext is initially context since it could be a pending block w/o a nonce.
-		difficultyContext, err := ethash.GetDifficultyContext(chain, header, originalContext)
+		difficultyContext, err := blake3.GetDifficultyOrder(header)
 		if err != nil {
 			break
 		}
@@ -778,7 +486,7 @@ func (ethash *Ethash) GetStopHash(chain consensus.ChainHeaderReader, originalCon
 }
 
 // TraceBranch is the recursive function that returns all ExternalBlocks for a given header, stopHash, context, and location.
-func (ethash *Ethash) PrimeTraceBranch(chain consensus.ChainHeaderReader, header *types.Header, context int, stopHash common.Hash, originalContext int, originalLocation []byte) ([]*types.ExternalBlock, error) {
+func (blake3 *Blake3) PrimeTraceBranch(chain consensus.ChainHeaderReader, header *types.Header, context int, stopHash common.Hash, originalContext int, originalLocation []byte) ([]*types.ExternalBlock, error) {
 	extBlocks := make([]*types.ExternalBlock, 0)
 	// startingHeader := header
 	for {
@@ -796,7 +504,7 @@ func (ethash *Ethash) PrimeTraceBranch(chain consensus.ChainHeaderReader, header
 		if context < types.ContextDepth-1 {
 			if (header.Location[0] != originalLocation[0] && originalContext > 0) || originalContext == 0 {
 				// log.Info("Trace Branch: Going down into trace fromPrime", "number", header.Number, "context", context, "location", header.Location, "hash", header.Hash())
-				result, err := ethash.PrimeTraceBranch(chain, header, context+1, stopHash, originalContext, originalLocation)
+				result, err := blake3.PrimeTraceBranch(chain, header, context+1, stopHash, originalContext, originalLocation)
 				if err != nil {
 					return nil, err
 				}
@@ -846,7 +554,7 @@ func (ethash *Ethash) PrimeTraceBranch(chain consensus.ChainHeaderReader, header
 		}
 		// Calculate the difficulty context in order to know if we have reached a coincident.
 		// If we get a coincident, stop and return.
-		difficultyContext, err := ethash.GetDifficultyContext(chain, header, context)
+		difficultyContext, err := blake3.GetDifficultyOrder(header)
 		if err != nil {
 			break
 		}
@@ -859,7 +567,7 @@ func (ethash *Ethash) PrimeTraceBranch(chain consensus.ChainHeaderReader, header
 }
 
 // TraceBranch is the recursive function that returns all ExternalBlocks for a given header, stopHash, context, and location.
-func (ethash *Ethash) RegionTraceBranch(chain consensus.ChainHeaderReader, header *types.Header, context int, stopHash common.Hash, originalContext int, originalLocation []byte) ([]*types.ExternalBlock, error) {
+func (blake3 *Blake3) RegionTraceBranch(chain consensus.ChainHeaderReader, header *types.Header, context int, stopHash common.Hash, originalContext int, originalLocation []byte) ([]*types.ExternalBlock, error) {
 	extBlocks := make([]*types.ExternalBlock, 0)
 	// startingHeader := header
 	for {
@@ -880,13 +588,13 @@ func (ethash *Ethash) RegionTraceBranch(chain consensus.ChainHeaderReader, heade
 		// If we are in a Zone node, we cannot trace down into our own Zone.
 		if context < types.ContextDepth-1 {
 			if originalContext == 1 {
-				result, err := ethash.RegionTraceBranch(chain, header, context+1, stopHash, originalContext, originalLocation)
+				result, err := blake3.RegionTraceBranch(chain, header, context+1, stopHash, originalContext, originalLocation)
 				if err != nil {
 					return nil, err
 				}
 				extBlocks = append(extBlocks, result...)
 			} else if originalContext == 2 && !bytes.Equal(originalLocation, header.Location) {
-				result, err := ethash.RegionTraceBranch(chain, header, context+1, stopHash, originalContext, originalLocation)
+				result, err := blake3.RegionTraceBranch(chain, header, context+1, stopHash, originalContext, originalLocation)
 				if err != nil {
 					return nil, err
 				}
@@ -947,7 +655,7 @@ func (ethash *Ethash) RegionTraceBranch(chain consensus.ChainHeaderReader, heade
 		}
 		// Calculate the difficulty context in order to know if we have reached a coincident.
 		// If we get a coincident, stop and return.
-		difficultyContext, err := ethash.GetDifficultyContext(chain, header, context)
+		difficultyContext, err := blake3.GetDifficultyOrder(header)
 		if err != nil {
 			break
 		}
@@ -960,7 +668,7 @@ func (ethash *Ethash) RegionTraceBranch(chain consensus.ChainHeaderReader, heade
 }
 
 // GetExternalBlocks traces all available branches to find external blocks
-func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, header *types.Header, logging bool) ([]*types.ExternalBlock, error) {
+func (blake3 *Blake3) GetExternalBlocks(chain consensus.ChainHeaderReader, header *types.Header, logging bool) ([]*types.ExternalBlock, error) {
 	context := chain.Config().Context // Index that node is currently at
 	externalBlocks := make([]*types.ExternalBlock, 0)
 	log.Info("GetExternalBlocks: Getting trace for block", "num", header.Number, "context", context, "location", header.Location, "hash", header.Hash())
@@ -970,7 +678,7 @@ func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, heade
 	if header.Number[context].Cmp(big.NewInt(1)) > 0 {
 		// Skip pending block
 		prevHeader := chain.GetHeaderByHash(header.ParentHash[context])
-		difficultyContext, err := ethash.CheckPrevHeaderCoincident(chain, context, prevHeader)
+		difficultyContext, err := blake3.CheckPrevHeaderCoincident(chain, context, prevHeader)
 		if err != nil {
 			return nil, err
 		}
@@ -982,9 +690,9 @@ func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, heade
 		}
 
 		// Get the Prime stopHash to be used in the Prime context. Go on to trace Prime once.
-		primeStopHash, primeNum := ethash.GetStopHash(chain, context, 0, prevHeader)
+		primeStopHash, primeNum := blake3.GetStopHash(chain, context, 0, prevHeader)
 		if context == 0 {
-			extBlockResult, extBlockErr := ethash.PrimeTraceBranch(chain, prevHeader, difficultyContext, primeStopHash, context, header.Location)
+			extBlockResult, extBlockErr := blake3.PrimeTraceBranch(chain, prevHeader, difficultyContext, primeStopHash, context, header.Location)
 			if extBlockErr != nil {
 				log.Info("GetExternalBlocks: Returning with error", "len", len(externalBlocks), "time", time.Since(start), "err", extBlockErr)
 				return nil, extBlockErr
@@ -995,9 +703,9 @@ func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, heade
 		// If we are in a Region or Zone context, we may need to change our Prime stopHash since
 		// a Region block might not yet have been found. Scenario: [2, 2, 2] mined before [1, 2, 2].
 		if context == 1 || context == 2 {
-			regionStopHash, regionNum := ethash.GetStopHash(chain, context, 1, prevHeader)
+			regionStopHash, regionNum := blake3.GetStopHash(chain, context, 1, prevHeader)
 			if difficultyContext == 0 {
-				extBlockResult, extBlockErr := ethash.PrimeTraceBranch(chain, prevHeader, difficultyContext, primeStopHash, context, header.Location)
+				extBlockResult, extBlockErr := blake3.PrimeTraceBranch(chain, prevHeader, difficultyContext, primeStopHash, context, header.Location)
 				if extBlockErr != nil {
 					log.Info("GetExternalBlocks: Returning with error", "len", len(externalBlocks), "time", time.Since(start), "err", extBlockErr)
 					return nil, extBlockErr
@@ -1010,7 +718,7 @@ func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, heade
 			}
 			// If we have a Region block, trace it.
 			if difficultyContext < 2 {
-				extBlockResult, extBlockErr := ethash.RegionTraceBranch(chain, prevHeader, 1, regionStopHash, context, header.Location)
+				extBlockResult, extBlockErr := blake3.RegionTraceBranch(chain, prevHeader, 1, regionStopHash, context, header.Location)
 				if extBlockErr != nil {
 					log.Info("GetExternalBlocks: Returning with error", "len", len(externalBlocks), "time", time.Since(start), "err", extBlockErr)
 					return nil, extBlockErr
@@ -1027,15 +735,29 @@ func (ethash *Ethash) GetExternalBlocks(chain consensus.ChainHeaderReader, heade
 	return externalBlocks, nil
 }
 
+// Prepare implements consensus.Engine, initializing the difficulty field of a
+// header to conform to the protocol. The changes are done inline.
+func (blake3 *Blake3) Prepare(chain consensus.ChainHeaderReader, header *types.Header) error {
+	parent := chain.GetHeader(header.ParentHash[types.QuaiNetworkContext], header.Number[types.QuaiNetworkContext].Uint64()-1)
+	if parent == nil {
+		return consensus.ErrUnknownAncestor
+	}
+	header.Difficulty[types.QuaiNetworkContext] = blake3.CalcDifficulty(chain, header.Time, parent, types.QuaiNetworkContext)
+	currentTotal := big.NewInt(0)
+	currentTotal.Add(parent.NetworkDifficulty[types.QuaiNetworkContext], header.Difficulty[types.QuaiNetworkContext])
+	header.NetworkDifficulty[types.QuaiNetworkContext] = currentTotal
+	return nil
+}
+
 // GetExternalBlocks traces all available branches to find external blocks
-func (ethash *Ethash) GetLinkExternalBlocks(chain consensus.ChainHeaderReader, header *types.Header, logging bool) ([]*types.ExternalBlock, error) {
+func (blake3 *Blake3) GetLinkExternalBlocks(chain consensus.ChainHeaderReader, header *types.Header, logging bool) ([]*types.ExternalBlock, error) {
 	context := chain.Config().Context // Index that node is currently at
 	externalBlocks := make([]*types.ExternalBlock, 0)
-	log.Info("GetLinkExternalBlocks: Getting trace for block", "num", header.Number, "context", context, "location", header.Location, "hash", header.Hash())
+	blake3.config.Log.Info("GetLinkExternalBlocks: Getting trace for block", "num", header.Number, "context", context, "location", header.Location, "hash", header.Hash())
 
 	// Do not run on block 1
 	if header.Number[context].Cmp(big.NewInt(1)) > 0 {
-		difficultyContext, err := ethash.GetDifficultyContext(chain, header, context)
+		difficultyContext, err := blake3.GetDifficultyOrder(header)
 		// Only run if we are the block immediately following the coincident block. Check below is to make sure we are N+1.
 		if err != nil {
 			return externalBlocks, nil
@@ -1044,7 +766,7 @@ func (ethash *Ethash) GetLinkExternalBlocks(chain consensus.ChainHeaderReader, h
 		// Get the Prime stopHash to be used in the Prime context. Go on to trace Prime once.
 		primeStopHash := header.ParentHash[0]
 		if context == 0 {
-			extBlockResult, extBlockErr := ethash.PrimeTraceBranch(chain, header, difficultyContext, primeStopHash, context, header.Location)
+			extBlockResult, extBlockErr := blake3.PrimeTraceBranch(chain, header, difficultyContext, primeStopHash, context, header.Location)
 			if extBlockErr != nil {
 				return nil, extBlockErr
 			}
@@ -1054,11 +776,11 @@ func (ethash *Ethash) GetLinkExternalBlocks(chain consensus.ChainHeaderReader, h
 		// If we are in a Region or Zone context, we may need to change our Prime stopHash since
 		// a Region block might not yet have been found. Scenario: [2, 2, 2] mined before [1, 2, 2].
 		if context == 1 || context == 2 {
-			primeStopHash, primeNum := ethash.GetStopHash(chain, context, 0, header)
+			primeStopHash, primeNum := blake3.GetStopHash(chain, context, 0, header)
 
-			regionStopHash, regionNum := ethash.GetStopHash(chain, context, 1, header)
+			regionStopHash, regionNum := blake3.GetStopHash(chain, context, 1, header)
 			if difficultyContext == 0 {
-				extBlockResult, extBlockErr := ethash.PrimeTraceBranch(chain, header, difficultyContext, primeStopHash, context, header.Location)
+				extBlockResult, extBlockErr := blake3.PrimeTraceBranch(chain, header, difficultyContext, primeStopHash, context, header.Location)
 				if extBlockErr != nil {
 					return nil, extBlockErr
 				}
@@ -1070,7 +792,7 @@ func (ethash *Ethash) GetLinkExternalBlocks(chain consensus.ChainHeaderReader, h
 			}
 			// If we have a Region block, trace it.
 			if difficultyContext < 2 {
-				extBlockResult, extBlockErr := ethash.RegionTraceBranch(chain, header, 1, regionStopHash, context, header.Location)
+				extBlockResult, extBlockErr := blake3.RegionTraceBranch(chain, header, 1, regionStopHash, context, header.Location)
 				if extBlockErr != nil {
 					return nil, extBlockErr
 				}
@@ -1082,19 +804,28 @@ func (ethash *Ethash) GetLinkExternalBlocks(chain consensus.ChainHeaderReader, h
 	return externalBlocks, nil
 }
 
+// Finalize implements consensus.Engine, accumulating the block and uncle rewards,
+// setting the final state on the header
+func (blake3 *Blake3) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
+	// Accumulate any block and uncle rewards and commit the final state root
+	accumulateRewards(chain.Config(), state, header, uncles)
+	header.Root[types.QuaiNetworkContext] = state.IntermediateRoot(chain.Config().IsEIP158(header.Number[types.QuaiNetworkContext]))
+}
+
 // FinalizeAndAssemble implements consensus.Engine, accumulating the block and
 // uncle rewards, setting the final state and assembling the block.
-func (ethash *Ethash) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
+func (blake3 *Blake3) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
 	// Finalize block
-	ethash.Finalize(chain, header, state, txs, uncles)
+	blake3.Finalize(chain, header, state, txs, uncles)
 
 	// Header seems complete, assemble into a block and return
 	return types.NewBlock(header, txs, uncles, receipts, trie.NewStackTrie(nil)), nil
 }
 
 // SealHash returns the hash of a block prior to it being sealed.
-func (ethash *Ethash) SealHash(header *types.Header) (hash common.Hash) {
-	hasher := sha3.NewLegacyKeccak256()
+func (blake3 *Blake3) SealHash(header *types.Header) (hash common.Hash) {
+	hasher := blake3hash.New(32, nil)
+	hasher.Reset()
 
 	enc := []interface{}{
 		header.ParentHash,
@@ -1115,16 +846,11 @@ func (ethash *Ethash) SealHash(header *types.Header) (hash common.Hash) {
 	if header.BaseFee != nil {
 		enc = append(enc, header.BaseFee)
 	}
+	enc = append(enc, header.Nonce)
 	rlp.Encode(hasher, enc)
 	hasher.Sum(hash[:0])
 	return hash
 }
-
-// Some weird constants to avoid constant memory allocs for them.
-var (
-	big8  = big.NewInt(8)
-	big32 = big.NewInt(32)
-)
 
 // AccumulateRewards credits the coinbase of the given block with the mining
 // reward. The total reward consists of the static block reward and rewards for
