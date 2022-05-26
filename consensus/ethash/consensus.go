@@ -29,10 +29,8 @@ import (
 	"github.com/spruce-solutions/go-quai/common/math"
 	"github.com/spruce-solutions/go-quai/consensus"
 	"github.com/spruce-solutions/go-quai/consensus/misc"
-	"github.com/spruce-solutions/go-quai/core"
 	"github.com/spruce-solutions/go-quai/core/state"
 	"github.com/spruce-solutions/go-quai/core/types"
-	"github.com/spruce-solutions/go-quai/event"
 	"github.com/spruce-solutions/go-quai/log"
 	"github.com/spruce-solutions/go-quai/params"
 	"github.com/spruce-solutions/go-quai/rlp"
@@ -805,12 +803,10 @@ func (ethash *Ethash) PrimeTraceBranch(chain consensus.ChainHeaderReader, header
 		// Obtain the external block on the branch we are currently tracing.
 		var extBlock *types.ExternalBlock
 		var err error
-		extBlock, err = chain.GetExternalBlock(header.Hash(), header.Number[context].Uint64(), uint64(context))
+		extBlock, err = chain.GetExternalBlock(header.Hash(), header.Number[context].Uint64(), header.Location, uint64(context))
 		if err != nil {
-			if err != nil {
-				log.Info("Trace Branch: External Block not found for header, second attempt", "number", header.Number, "context", context, "hash", header.Hash(), "location", header.Location)
-				break
-			}
+			log.Info("Trace Branch: External Block not found for header, second attempt", "number", header.Number, "context", context, "hash", header.Hash(), "location", header.Location)
+			break
 		}
 		extBlocks = append(extBlocks, extBlock)
 		// log.Info("Trace Branch: PRIME Adding external block", "number", header.Number, "context", context, "location", header.Location, "hash", header.Hash())
@@ -826,18 +822,10 @@ func (ethash *Ethash) PrimeTraceBranch(chain consensus.ChainHeaderReader, header
 		}
 
 		// Retrieve the previous header as an external block.
-		prevHeader, err := chain.GetExternalBlock(header.ParentHash[context], header.Number[context].Uint64()-1, uint64(context))
+		prevHeader, err := chain.GetExternalBlock(header.ParentHash[context], header.Number[context].Uint64()-1, header.Location, uint64(context))
 		if err != nil {
-			log.Info("Trace Branch: External Block not found for header, contacting Manager", "number", header.Number[context].Uint64()-1, "context", uint64(context), "hash", header.ParentHash[context], "location", header.Location)
-			feed := chain.GetMissingExternalBlockFeed()
-			feed.(*event.Feed).Send(core.MissingExternalBlock{Hash: header.ParentHash[context], Location: header.Location, Context: context})
-			time.Sleep(2 * time.Second)
-			// Try again
-			prevHeader, err = chain.GetExternalBlock(header.ParentHash[context], header.Number[context].Uint64()-1, uint64(context))
-			if err != nil {
-				log.Info("Trace Branch: External Block not found for previous header", "number", header.Number[context].Int64()-1, "context", context, "hash", header.ParentHash[context], "location", header.Location)
-				return extBlocks, err
-			}
+			log.Info("Trace Branch: External Block not found for previous header", "number", header.Number[context].Int64()-1, "context", context, "hash", header.ParentHash[context], "location", header.Location)
+			return extBlocks, err
 		}
 
 		if bytes.Equal(originalLocation, prevHeader.Header().Location) && context == 0 {
@@ -910,7 +898,7 @@ func (ethash *Ethash) RegionTraceBranch(chain consensus.ChainHeaderReader, heade
 		// Obtain the external block on the branch we are currently tracing.
 		var extBlock *types.ExternalBlock
 		var err error
-		extBlock, err = chain.GetExternalBlock(header.Hash(), header.Number[context].Uint64(), uint64(context))
+		extBlock, err = chain.GetExternalBlock(header.Hash(), header.Number[context].Uint64(), header.Location, uint64(context))
 		if err != nil {
 			log.Info("Trace Branch: External Block not found for header, second attempt", "number", header.Number, "context", context, "hash", header.Hash(), "location", header.Location)
 			return extBlocks, err
@@ -932,17 +920,10 @@ func (ethash *Ethash) RegionTraceBranch(chain consensus.ChainHeaderReader, heade
 		}
 
 		// Retrieve the previous header as an external block.
-		prevHeader, err := chain.GetExternalBlock(header.ParentHash[context], header.Number[context].Uint64()-1, uint64(context))
+		prevHeader, err := chain.GetExternalBlock(header.ParentHash[context], header.Number[context].Uint64()-1, header.Location, uint64(context))
 		if err != nil {
-			feed := chain.GetMissingExternalBlockFeed()
-			feed.(*event.Feed).Send(core.MissingExternalBlock{Hash: header.ParentHash[context], Location: header.Location, Context: context})
-			time.Sleep(2 * time.Second)
-			// Try again
-			prevHeader, err = chain.GetExternalBlock(header.ParentHash[context], header.Number[context].Uint64()-1, uint64(context))
-			if err != nil {
-				log.Info("Trace Branch: External Block not found for previous header", "number", header.Number[context].Int64()-1, "context", context, "hash", header.ParentHash[context], "location", header.Location)
-				return extBlocks, err
-			}
+			log.Info("Trace Branch: External Block not found for previous header", "number", header.Number[context].Int64()-1, "context", context, "hash", header.ParentHash[context], "location", header.Location)
+			return extBlocks, err
 		}
 
 		if bytes.Equal(originalLocation, prevHeader.Header().Location) && context == 1 {

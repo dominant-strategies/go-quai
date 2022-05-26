@@ -2657,7 +2657,7 @@ func (bc *BlockChain) GetHeaderByHash(hash common.Hash) *types.Header {
 	return bc.hc.GetHeaderByHash(hash)
 }
 
-func (bc *BlockChain) GetExternalBlock(hash common.Hash, number uint64, context uint64) (*types.ExternalBlock, error) {
+func (bc *BlockChain) GetExternalBlock(hash common.Hash, number uint64, location []byte, context uint64) (*types.ExternalBlock, error) {
 	// Lookup block in externalBlocks cache
 	key := types.ExtBlockCacheKey(number, context, hash)
 
@@ -2667,6 +2667,22 @@ func (bc *BlockChain) GetExternalBlock(hash common.Hash, number uint64, context 
 		return blockDecoded, nil
 	}
 	block := rawdb.ReadExternalBlock(bc.db, hash, number, context)
+
+	if block == nil {
+		bc.missingExternalBlockFeed.Send(MissingExternalBlock{Hash: hash, Location: location, Context: int(context)})
+		time.Sleep(2 * time.Second)
+
+		// Lookup block in externalBlocks cache
+		key := types.ExtBlockCacheKey(number, context, hash)
+
+		if block, ok := bc.externalBlocks.HasGet(nil, key); ok {
+			var blockDecoded *types.ExternalBlock
+			rlp.DecodeBytes(block, &blockDecoded)
+			return blockDecoded, nil
+		}
+		block = rawdb.ReadExternalBlock(bc.db, hash, number, context)
+	}
+
 	if block == nil {
 		return &types.ExternalBlock{}, errors.New("error finding external block by context and hash")
 	}
@@ -2862,10 +2878,6 @@ func (bc *BlockChain) SubscribeReOrgEvent(ch chan<- ReOrgRollup) event.Subscript
 
 func (bc *BlockChain) SubscribeMissingExternalBlockEvent(ch chan<- MissingExternalBlock) event.Subscription {
 	return bc.scope.Track(bc.missingExternalBlockFeed.Subscribe(ch))
-}
-
-func (bc *BlockChain) GetMissingExternalBlockFeed() interface{} {
-	return &bc.missingExternalBlockFeed
 }
 
 // SubscribeChainHeadEvent registers a subscription of ChainHeadEvent.
