@@ -121,8 +121,8 @@ type Engine interface {
 	// CheckPrevHeaderCoincident checks if previous header is a coincident header.
 	CheckPrevHeaderCoincident(chain ChainHeaderReader, context int, header *types.Header) (int, error)
 
-	// GetDifficultyContext retrieves the difficulty at a given header
-	GetDifficultyContext(chain ChainHeaderReader, header *types.Header, context int) (int, error)
+	// This function determines the difficulty order of a block
+	GetDifficultyOrder(header *types.Header) (int, error)
 
 	// GetStopHash retrieves the stop hash for tracing of blocks in a trace branch.
 	GetStopHash(chain ChainHeaderReader, difficultyContext int, originalContext int, startingHeader *types.Header) (common.Hash, int)

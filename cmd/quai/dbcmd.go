@@ -30,7 +30,6 @@ import (
 	"github.com/spruce-solutions/go-quai/console/prompt"
 	"github.com/spruce-solutions/go-quai/core/rawdb"
 	"github.com/spruce-solutions/go-quai/core/types"
-	"github.com/spruce-solutions/go-quai/eth/ethconfig"
 	"github.com/spruce-solutions/go-quai/ethdb"
 	"github.com/spruce-solutions/go-quai/log"
 	"github.com/spruce-solutions/go-quai/node"
@@ -179,8 +178,6 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 func removeDB(ctx *cli.Context) error {
 	// stack, config := makeConfigNode(ctx)
 	all_chain_dbs := []string{node.DefaultConfig.DataDir} // array to hold dirs of all chains
-	cache_path := ethconfig.Defaults.Ethash.CacheDir      // dir for ethcache
-	dataset_path := ethconfig.Defaults.Ethash.DatasetDir  // dir for ethash dataset
 
 	// construct all_chain_dbs to hold all paths properly formatted to machine OS
 	for n := 1; n < (types.ContextDepth + 1); n++ {
@@ -222,19 +219,6 @@ func removeDB(ctx *cli.Context) error {
 		} else {
 			log.Info("Light node database missing", "path", path)
 		} */
-	}
-
-	// check and delete cache
-	if common.FileExist(cache_path) {
-		confirmAndRemoveDB(cache_path, "ethash cache")
-	} else {
-		log.Info("ethash cache database missing", "path", cache_path)
-	}
-	// check and delete dataset
-	if common.FileExist(dataset_path) {
-		confirmAndRemoveDB(dataset_path, "ethash dataset")
-	} else {
-		log.Info("ethash dataset database missing", "path", dataset_path)
 	}
 
 	return nil
