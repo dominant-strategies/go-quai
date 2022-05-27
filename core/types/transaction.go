@@ -618,7 +618,8 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 	msg.from, err = Sender(s, tx)
 	idRange := params.LookupChainIDRange(s.ChainID())
 
-	sendingFromExternal := int(msg.from[0]) < idRange[0] || int(msg.from[0]) > idRange[1]
+	// check if the from address is not a common.Address and the doesn't match the id range
+	sendingFromExternal := (int(msg.from[0]) < idRange[0] || int(msg.from[0]) > idRange[1]) && msg.from != common.Address{}
 
 	// checking if the transaction is deploying a contract
 	if tx.To() != nil && len(tx.Data()) == 0 {

@@ -115,18 +115,22 @@ type Engine interface {
 	// GetExternalBlocks retrieves all valid external blocks from external chains
 	GetExternalBlocks(chain ChainHeaderReader, header *types.Header, logging bool) ([]*types.ExternalBlock, error)
 
-	// GetCoincidentHeader retrieves the furthest coincident header back
+	// GetCoincidentHeader retrieves the furthest coincident header back.
 	GetCoincidentHeader(chain ChainHeaderReader, context int, header *types.Header) (*types.Header, int)
 
-	// GetDifficultyContext retrieves the difficulty at a given header
-	GetDifficultyContext(chain ChainHeaderReader, header *types.Header, context int) (int, error)
+	// CheckPrevHeaderCoincident checks if previous header is a coincident header.
+	CheckPrevHeaderCoincident(chain ChainHeaderReader, context int, header *types.Header) (int, error)
 
-	// GetStopHash retrieves the stop hash for tracing of blocks in a trace branch
+	// This function determines the difficulty order of a block
+	GetDifficultyOrder(header *types.Header) (int, error)
+
+	// GetStopHash retrieves the stop hash for tracing of blocks in a trace branch.
 	GetStopHash(chain ChainHeaderReader, difficultyContext int, originalContext int, startingHeader *types.Header) (common.Hash, int)
 
-	// TraceBranch recursively traces branches to find
+	// PrimeTraceBranch recursively traces branches to find.
 	PrimeTraceBranch(chain ChainHeaderReader, header *types.Header, context int, stopHash common.Hash, originalContext int, originalLocation []byte) ([]*types.ExternalBlock, error)
 
+	// RegionTraceBranch recursively traces region branches to find.
 	RegionTraceBranch(chain ChainHeaderReader, header *types.Header, context int, stopHash common.Hash, originalContext int, originalLocation []byte) ([]*types.ExternalBlock, error)
 
 	// Seal generates a new sealing request for the given input block and pushes

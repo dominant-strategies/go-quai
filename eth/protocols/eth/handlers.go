@@ -253,6 +253,7 @@ func answerGetReceiptsQuery(backend Backend, query GetReceiptsPacket, peer *Peer
 
 func answerGetExtBlocksQuery(backend Backend, query GetExtBlocksPacket, peer *Peer) []rlp.RawValue {
 	// Gather state data until the fetch or network limits is reached
+	// Temporary comments to test sync without ext block request
 	var (
 		bytes     int
 		extBlocks []rlp.RawValue

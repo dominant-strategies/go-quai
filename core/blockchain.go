@@ -181,16 +181,17 @@ type BlockChain struct {
 	//  * nil: disable tx reindexer/deleter, but still index new blocks
 	txLookupLimit uint64
 
-	hc            *HeaderChain
-	rmLogsFeed    event.Feed
-	chainFeed     event.Feed
-	reOrgFeed     event.Feed
-	chainSideFeed event.Feed
-	chainHeadFeed event.Feed
-	logsFeed      event.Feed
-	blockProcFeed event.Feed
-	scope         event.SubscriptionScope
-	genesisBlock  *types.Block
+	hc             *HeaderChain
+	rmLogsFeed     event.Feed
+	chainFeed      event.Feed
+	reOrgFeed      event.Feed
+	chainSideFeed  event.Feed
+	chainHeadFeed  event.Feed
+	chainUncleFeed event.Feed
+	logsFeed       event.Feed
+	blockProcFeed  event.Feed
+	scope          event.SubscriptionScope
+	genesisBlock   *types.Block
 
 	chainmu sync.RWMutex // blockchain insertion lock
 
@@ -1599,6 +1600,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			bc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
 		}
 	} else {
+		bc.chainUncleFeed.Send(block.Header())
 		bc.chainSideFeed.Send(ChainSideEvent{Block: block})
 	}
 	return status, nil
@@ -1645,6 +1647,10 @@ func (bc *BlockChain) AddExternalBlock(block *types.ExternalBlock) error {
 // ReOrgRollBack compares the difficulty of the newchain and oldchain. Rolls back
 // the current header to the position where the reorg took place in a higher context
 func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
+	bc.wg.Add(1)
+	defer bc.wg.Done()
+
+	log.Info("Rolling back header beyond", "Hash ", header.Hash())
 	var (
 		deletedTxs  types.Transactions
 		deletedLogs [][]*types.Log
@@ -1690,6 +1696,7 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 	if header != nil {
 		// get the commonBlock
 		commonBlock := bc.GetBlockByHash(header.Hash())
+
 		// if a block with this hash does not exist then we dont have to roll back
 		if commonBlock == nil {
 			return nil
@@ -1704,7 +1711,7 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 			deletedTxs = append(deletedTxs, currentBlock.Transactions()...)
 			collectLogs(currentBlock.Hash())
 
-			currentBlock = bc.GetBlock(currentBlock.ParentHash(), currentBlock.NumberU64())
+			currentBlock = bc.GetBlock(currentBlock.ParentHash(), currentBlock.NumberU64()-1)
 			if currentBlock == nil {
 				return fmt.Errorf("invalid current chain")
 			}
@@ -1714,7 +1721,22 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 			return err
 		}
 
-		fmt.Println("Header is now rolled back and the current head is at", bc.CurrentBlock().NumberU64())
+		// writing the head to the blockchain state
+		bc.writeHeadBlock(currentBlock)
+		bc.futureBlocks.Remove(currentBlock.Hash())
+
+		// get all the receipts and extract the logs from it
+		receipts := bc.GetReceiptsByHash(currentBlock.Hash())
+		var logs []*types.Log
+
+		for _, receipt := range receipts {
+			logs = append(logs, receipt.Logs...)
+		}
+		// send a chain event so that it updates the pending header
+		bc.chainFeed.Send(ChainEvent{Block: currentBlock, Hash: currentBlock.Hash(), Logs: logs})
+		bc.chainHeadFeed.Send(ChainHeadEvent{Block: currentBlock})
+
+		log.Info("Header is now rolled back and the current head is at block with ", "Hash ", bc.CurrentBlock().Hash(), " Number ", bc.CurrentBlock().NumberU64())
 
 		// Delete useless indexes right now which includes the non-canonical
 		// transaction indexes, canonical chain indexes which above the head.
@@ -2606,19 +2628,16 @@ func (bc *BlockChain) GetHeader(hash common.Hash, number uint64) *types.Header {
 	return bc.hc.GetHeader(hash, number)
 }
 
-// GetHeader retrieves a block header from the database by hash and number,
-// caching it if found.
+// CheckHashInclusion checks to see if a hash is already included in a previous block.
 func (bc *BlockChain) CheckHashInclusion(header *types.Header, parent *types.Header) error {
 	if types.QuaiNetworkContext < 1 {
 		if header.ParentHash[1] == parent.ParentHash[1] {
-			fmt.Println("Region hash already included:", header.ParentHash[1], parent.ParentHash[1])
 			return fmt.Errorf("error subordinate hash already included in parent")
 		}
 	}
 
 	if types.QuaiNetworkContext < 2 {
 		if header.ParentHash[2] == parent.ParentHash[2] {
-			fmt.Println("Zone hash already included:", header.ParentHash[2], parent.ParentHash[2])
 			return fmt.Errorf("error subordinate hash already included in parent")
 		}
 	}
@@ -2690,16 +2709,22 @@ func (bc *BlockChain) GetExternalBlocks(header *types.Header) ([]*types.External
 
 	// Do not run on block 1
 	if header.Number[context].Cmp(big.NewInt(1)) > 0 {
-		coincidentHeader, difficultyContext := bc.engine.GetCoincidentHeader(bc, context, header)
-		if coincidentHeader == nil || coincidentHeader.Number[context].Cmp(header.Number[context]) != 0 {
+		prevHeader := bc.GetHeaderByHash(header.ParentHash[context])
+		difficultyContext, err := bc.engine.CheckPrevHeaderCoincident(bc, context, prevHeader)
+		if err != nil {
+			return nil, err
+		}
+
+		// Check if in Zone and PrevHeader is not a coincident header, no external blocks to trace.
+		if context == 2 && difficultyContext == 2 {
 			return externalBlocks, nil
 		}
 
 		// Get the Prime stopHash to be used in the Prime context. Go on to trace Prime once.
 		// Get the Prime stopHash to be used in the Prime context. Go on to trace Prime once.
-		primeStopHash, primeNum := bc.engine.GetStopHash(bc, context, 0, coincidentHeader)
+		primeStopHash, primeNum := bc.engine.GetStopHash(bc, context, 0, prevHeader)
 		if context == 0 {
-			extBlockResult, extBlockErr := bc.engine.PrimeTraceBranch(bc, coincidentHeader, difficultyContext, primeStopHash, context, header.Location)
+			extBlockResult, extBlockErr := bc.engine.PrimeTraceBranch(bc, prevHeader, difficultyContext, primeStopHash, context, header.Location)
 			if extBlockErr != nil {
 				return nil, extBlockErr
 			}
@@ -2707,9 +2732,9 @@ func (bc *BlockChain) GetExternalBlocks(header *types.Header) ([]*types.External
 		}
 
 		if context == 1 || context == 2 {
-			regionStopHash, regionNum := bc.engine.GetStopHash(bc, context, 1, coincidentHeader)
+			regionStopHash, regionNum := bc.engine.GetStopHash(bc, context, 1, prevHeader)
 			if difficultyContext == 0 {
-				extBlockResult, extBlockErr := bc.engine.PrimeTraceBranch(bc, coincidentHeader, difficultyContext, primeStopHash, context, coincidentHeader.Location)
+				extBlockResult, extBlockErr := bc.engine.PrimeTraceBranch(bc, prevHeader, difficultyContext, primeStopHash, context, prevHeader.Location)
 				if extBlockErr != nil {
 					return nil, extBlockErr
 				}
@@ -2721,7 +2746,7 @@ func (bc *BlockChain) GetExternalBlocks(header *types.Header) ([]*types.External
 			}
 			// If we have a Region block, trace it.
 			if difficultyContext < 2 {
-				extBlockResult, extBlockErr := bc.engine.RegionTraceBranch(bc, coincidentHeader, 1, regionStopHash, context, coincidentHeader.Location)
+				extBlockResult, extBlockErr := bc.engine.RegionTraceBranch(bc, prevHeader, 1, regionStopHash, context, prevHeader.Location)
 				if extBlockErr != nil {
 					return nil, extBlockErr
 				}
@@ -2842,6 +2867,11 @@ func (bc *BlockChain) SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Su
 // SubscribeChainSideEvent registers a subscription of ChainSideEvent.
 func (bc *BlockChain) SubscribeChainSideEvent(ch chan<- ChainSideEvent) event.Subscription {
 	return bc.scope.Track(bc.chainSideFeed.Subscribe(ch))
+}
+
+// SubscribeChainUncleEvent registers a subscription of an uncled header.
+func (bc *BlockChain) SubscribeChainUncleEvent(ch chan<- *types.Header) event.Subscription {
+	return bc.scope.Track(bc.chainUncleFeed.Subscribe(ch))
 }
 
 // SubscribeLogsEvent registers a subscription of []*types.Log.

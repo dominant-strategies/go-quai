@@ -433,6 +433,11 @@ func (ec *Client) SubscribeReOrg(ctx context.Context, ch chan<- core.ReOrgRollup
 	return ec.c.EthSubscribe(ctx, ch, "reOrg")
 }
 
+// SubscribeReOrg subscribes to notifications about the reorg event.
+func (ec *Client) SubscribeChainUncleEvent(ctx context.Context, ch chan<- *types.Header) (ethereum.Subscription, error) {
+	return ec.c.EthSubscribe(ctx, ch, "uncleEvent")
+}
+
 // State Access
 
 // NetworkID returns the network ID (also known as the chain ID) for this chain.

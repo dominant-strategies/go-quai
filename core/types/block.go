@@ -20,6 +20,7 @@ package types
 import (
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -29,6 +30,7 @@ import (
 
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/common/hexutil"
+	"github.com/spruce-solutions/go-quai/params"
 	"github.com/spruce-solutions/go-quai/rlp"
 )
 
@@ -89,11 +91,10 @@ type Header struct {
 	GasUsed           []uint64         `json:"gasUsed"          gencodec:"required"`
 	Time              uint64           `json:"timestamp"        gencodec:"required"`
 	Extra             [][]byte         `json:"extraData"        gencodec:"required"`
-	MixDigest         common.Hash      `json:"mixHash"`
 	Nonce             BlockNonce       `json:"nonce"`
 
 	// Originating location of the block.
-	Location []byte `json:"location"        	gencodec:"required"`
+	Location []byte `json:"location"       gencodec:"required"`
 
 	// BaseFee was added by EIP-1559 and is ignored in legacy headers.
 	BaseFee []*big.Int `json:"baseFeePerGas" rlp:"optional"`
@@ -117,6 +118,11 @@ type headerMarshaling struct {
 // RLP encoding.
 func (h *Header) Hash() common.Hash {
 	return rlpHash(h)
+}
+
+// Returns current MapContext for a given block.
+func (h *Header) MapContext() ([]int, error) {
+	return currentBlockOntology(h.Number)
 }
 
 var headerSize = common.StorageSize(reflect.TypeOf(Header{}).Size())
@@ -322,6 +328,11 @@ func (b *ExternalBlock) CacheKey() []byte {
 	return ExtBlockCacheKey(b.header.Number[b.context.Int64()].Uint64(), b.context.Uint64(), hash)
 }
 
+// Returns current MapContext for a given block.
+func (b *ExternalBlock) MapContext() ([]int, error) {
+	return currentBlockOntology(b.header.Number)
+}
+
 // encodeBlockNumber encodes a block number as big endian uint64
 func encodeBlockNumber(number uint64) []byte {
 	enc := make([]byte, 8)
@@ -406,17 +417,15 @@ func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*
 		b.header.Bloom = []Bloom{CreateBloom(receipts), CreateBloom(receipts), CreateBloom(receipts)}
 	}
 
-	b.header.UncleHash = EmptyUncleHash
-
-	// if len(uncles) == 0 {
-	// 	b.header.UncleHash = EmptyUncleHash
-	// } else {
-	// 	b.header.UncleHash = []common.Hash{CalcUncleHash(uncles), CalcUncleHash(uncles), CalcUncleHash(uncles)}
-	// 	b.uncles = make([]*Header, len(uncles))
-	// 	for i := range uncles {
-	// 		b.uncles[i] = CopyHeader(uncles[i])
-	// 	}
-	// }
+	if len(uncles) == 0 {
+		b.header.UncleHash = EmptyUncleHash
+	} else {
+		b.header.UncleHash = []common.Hash{CalcUncleHash(uncles), CalcUncleHash(uncles), CalcUncleHash(uncles)}
+		b.uncles = make([]*Header, len(uncles))
+		for i := range uncles {
+			b.uncles[i] = CopyHeader(uncles[i])
+		}
+	}
 
 	return b
 }
@@ -580,9 +589,6 @@ func (b *Block) NumberU64(params ...int) uint64 {
 	}
 	return b.header.Number[context].Uint64()
 }
-func (b *Block) MixDigest() common.Hash {
-	return b.header.MixDigest
-}
 func (b *Block) Nonce(params ...int) uint64 {
 	return binary.BigEndian.Uint64(b.header.Nonce[:])
 }
@@ -649,6 +655,11 @@ func (b *Block) BaseFee(params ...int) *big.Int {
 	}
 
 	return new(big.Int).Set(b.header.BaseFee[context])
+}
+
+// TODO
+func (b *Block) MapContext() ([]int, error) {
+	return currentBlockOntology(b.header.Number)
 }
 
 func (b *Block) Header() *Header { return CopyHeader(b.header) }
@@ -757,3 +768,19 @@ func (b *Block) Hash() common.Hash {
 }
 
 type Blocks []*Block
+
+// currentBlockOntology is used to retrieve the MapContext of a given block.
+func currentBlockOntology(number []*big.Int) ([]int, error) {
+	forkNumber := number[0]
+
+	switch {
+	/*	case forkNumber.Cmp(params.LovelaceMapContext) >= 0: // Lovelace = MaxInt
+			return params.LovelaceOntology
+		case forkNumber.Cmp(params.TuringMapContext) >= 0: // Turing = MaxInt
+			return params.TuringOntology */
+	case forkNumber.Cmp(params.FullerMapContext) >= 0:
+		return params.FullerOntology, nil
+	default:
+		return nil, errors.New("invalid number passed to currentBlockOntology")
+	}
+}

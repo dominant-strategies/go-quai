@@ -23,7 +23,7 @@ import (
 
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/common/math"
-	"github.com/spruce-solutions/go-quai/consensus/ethash"
+	"github.com/spruce-solutions/go-quai/consensus/blake3"
 	"github.com/spruce-solutions/go-quai/core"
 	"github.com/spruce-solutions/go-quai/core/rawdb"
 	"github.com/spruce-solutions/go-quai/core/state"
@@ -292,5 +292,5 @@ func calcDifficulty(config *params.ChainConfig, number, currentTime, parentTime 
 		Number:     []*big.Int{new(big.Int).SetUint64(number - 1)},
 		Time:       parentTime,
 	}
-	return ethash.CalcDifficulty(config, currentTime, parent, 0)
+	return blake3.CalcDifficulty(config, currentTime, parent, 0)
 }

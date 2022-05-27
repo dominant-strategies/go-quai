@@ -28,6 +28,10 @@ import (
 )
 
 var ErrInvalidChainId = errors.New("invalid chain id for signer")
+var ErrInvalidChain = errors.New("the chain has an invalid chain id")
+
+var mainnetValidChainIdMuls = map[uint64]*big.Int{9000: big.NewInt(18000), 9100: big.NewInt(18200), 9101: big.NewInt(18202), 9102: big.NewInt(18204), 9103: big.NewInt(18206), 9200: big.NewInt(18400), 9201: big.NewInt(18402), 9202: big.NewInt(18404), 9203: big.NewInt(18406), 9300: big.NewInt(18600), 9301: big.NewInt(18602), 9302: big.NewInt(18604), 9303: big.NewInt(18606)}
+var testnetValidChainIdMuls = map[uint64]*big.Int{12000: big.NewInt(24000), 12100: big.NewInt(24200), 12101: big.NewInt(24202), 12102: big.NewInt(24204), 12103: big.NewInt(24206), 12200: big.NewInt(24400), 12201: big.NewInt(24402), 12202: big.NewInt(24404), 12203: big.NewInt(24406), 12300: big.NewInt(24600), 12301: big.NewInt(24602), 12302: big.NewInt(24604), 12303: big.NewInt(24606)}
 
 // sigCache is used to cache the derived sender and contains
 // the signer used to derive it.
@@ -260,7 +264,15 @@ func (s eip2930Signer) Sender(tx *Transaction) (common.Address, error) {
 		if !tx.Protected() {
 			return HomesteadSigner{}.Sender(tx)
 		}
-		V = new(big.Int).Sub(V, s.chainIdMul)
+		// check if the chain has different chainId from the allowed list
+		if s.chainIdMul == nil {
+			return common.Address{}, ErrInvalidChain
+		}
+		chainIdMul, isFound := s.chainIdMul[tx.ChainId().Uint64()]
+		if !isFound {
+			return common.Address{}, ErrInvalidChain
+		}
+		V = new(big.Int).Sub(V, chainIdMul)
 		V.Sub(V, big8)
 	case AccessListTxType:
 		// AL txs are defined to use 0 and 1 as their recovery
@@ -268,9 +280,6 @@ func (s eip2930Signer) Sender(tx *Transaction) (common.Address, error) {
 		V = new(big.Int).Add(V, big.NewInt(27))
 	default:
 		return common.Address{}, ErrTxTypeNotSupported
-	}
-	if !params.ValidChainID(tx.ChainId(), s.chainId) {
-		return common.Address{}, ErrInvalidChainId
 	}
 	return recoverPlain(s.Hash(tx), R, S, V, true)
 }
@@ -332,16 +341,30 @@ func (s eip2930Signer) Hash(tx *Transaction) common.Hash {
 // EIP155Signer implements Signer using the EIP-155 rules. This accepts transactions which
 // are replay-protected as well as unprotected homestead transactions.
 type EIP155Signer struct {
-	chainId, chainIdMul *big.Int
+	chainId    *big.Int
+	chainIdMul map[uint64]*big.Int
 }
 
 func NewEIP155Signer(chainId *big.Int) EIP155Signer {
 	if chainId == nil {
 		chainId = new(big.Int)
 	}
+	_, isMainnet := mainnetValidChainIdMuls[chainId.Uint64()]
+	if isMainnet {
+		return EIP155Signer{
+			chainId:    chainId,
+			chainIdMul: mainnetValidChainIdMuls,
+		}
+	}
+	_, isTestnet := testnetValidChainIdMuls[chainId.Uint64()]
+	if isTestnet {
+		return EIP155Signer{
+			chainId:    chainId,
+			chainIdMul: testnetValidChainIdMuls,
+		}
+	}
 	return EIP155Signer{
-		chainId:    chainId,
-		chainIdMul: new(big.Int).Mul(chainId, big.NewInt(2)),
+		chainId: chainId,
 	}
 }
 
@@ -367,7 +390,15 @@ func (s EIP155Signer) Sender(tx *Transaction) (common.Address, error) {
 		return common.Address{}, ErrInvalidChainId
 	}
 	V, R, S := tx.RawSignatureValues()
-	V = new(big.Int).Sub(V, s.chainIdMul)
+	// check if the chainId of the current chain is valid
+	if s.chainIdMul == nil {
+		return common.Address{}, ErrInvalidChain
+	}
+	chainIdMul, isFound := s.chainIdMul[tx.ChainId().Uint64()]
+	if !isFound {
+		return common.Address{}, ErrInvalidChain
+	}
+	V = new(big.Int).Sub(V, chainIdMul)
 	V.Sub(V, big8)
 	return recoverPlain(s.Hash(tx), R, S, V, true)
 }
@@ -381,7 +412,15 @@ func (s EIP155Signer) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big
 	R, S, V = decodeSignature(sig)
 	if s.chainId.Sign() != 0 {
 		V = big.NewInt(int64(sig[64] + 35))
-		V.Add(V, s.chainIdMul)
+		// check if the chainId of the current chain is valid
+		if s.chainIdMul == nil {
+			return nil, nil, nil, ErrInvalidChain
+		}
+		chainIdMul, isFound := s.chainIdMul[tx.ChainId().Uint64()]
+		if !isFound {
+			return nil, nil, nil, ErrInvalidChain
+		}
+		V.Add(V, chainIdMul)
 	}
 	return R, S, V, nil
 }
