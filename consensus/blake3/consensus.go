@@ -421,16 +421,6 @@ func (blake3 *Blake3) GetCoincidentHeader(chain consensus.ChainHeaderReader, con
 	}
 }
 
-// Check difficulty of previous header in order to find traceability.
-func (blake3 *Blake3) CheckPrevHeaderCoincident(chain consensus.ChainHeaderReader, context int, header *types.Header) (int, error) {
-	// If we are at the highest context, no coincident will include it.
-	difficultyContext, err := blake3.GetDifficultyOrder(header)
-	if err != nil {
-		return difficultyContext, fmt.Errorf("difficulty not found")
-	}
-	return difficultyContext, nil
-}
-
 // GetStopHash returns the N-1 hash that is used to terminate on during TraceBranch.
 func (blake3 *Blake3) GetStopHash(chain consensus.ChainHeaderReader, originalContext int, wantedDiffContext int, startingHeader *types.Header) (common.Hash, int) {
 	header := startingHeader
@@ -483,6 +473,55 @@ func (blake3 *Blake3) GetStopHash(chain consensus.ChainHeaderReader, originalCon
 	}
 
 	return stopHash, num
+}
+
+// GetCoincidentAndAggDifficulty iterates back through headers to find ones that exceed a given expectedContext.
+func (blake3 *Blake3) GetCoincidentAndAggDifficulty(chain consensus.ChainHeaderReader, context int, expectedContext int, header *types.Header) (*types.Header, int, *big.Int) {
+	totalDiff := big.NewInt(0)
+	// If we are at the highest context, no coincident will include it.
+	if context == 0 {
+		return header, 0, header.Difficulty[0]
+	} else {
+		for {
+			// Check work of the header, if it has enough work we will move up in context.
+			// difficultyContext is initially context since it could be a pending block w/o a nonce.
+			difficultyContext, err := blake3.GetDifficultyOrder(header)
+			if err != nil {
+				return header, difficultyContext, totalDiff
+			}
+
+			i := difficultyContext
+			for i <= context {
+				totalDiff.Add(totalDiff, header.Difficulty[i])
+				i++
+			}
+
+			// If block header is Genesis return it as coincident
+			if header.Number[context].Cmp(big.NewInt(0)) <= 0 {
+				return header, difficultyContext, totalDiff
+			}
+
+			// If we have reached a coincident block
+			if difficultyContext < expectedContext {
+				return header, difficultyContext, totalDiff
+			}
+
+			// Get previous header on local chain by hash
+			prevHeader := chain.GetHeaderByHash(header.ParentHash[context])
+			// Increment previous header
+			header = prevHeader
+		}
+	}
+}
+
+// Check difficulty of previous header in order to find traceability.
+func (blake3 *Blake3) CheckPrevHeaderCoincident(chain consensus.ChainHeaderReader, context int, header *types.Header) (int, error) {
+	// If we are at the highest context, no coincident will include it.
+	difficultyContext, err := blake3.GetDifficultyOrder(header)
+	if err != nil {
+		return difficultyContext, fmt.Errorf("difficulty not found")
+	}
+	return difficultyContext, nil
 }
 
 // TraceBranch is the recursive function that returns all ExternalBlocks for a given header, stopHash, context, and location.

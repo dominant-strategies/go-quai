@@ -118,6 +118,9 @@ type Engine interface {
 	// GetCoincidentHeader retrieves the furthest coincident header back.
 	GetCoincidentHeader(chain ChainHeaderReader, context int, header *types.Header) (*types.Header, int)
 
+	// GetCoincidentAndAggDifficulty retrieves the coincident header and aggregated difficulty to it.
+	GetCoincidentAndAggDifficulty(chain ChainHeaderReader, context int, expectedContext int, header *types.Header) (*types.Header, int, *big.Int)
+
 	// CheckPrevHeaderCoincident checks if previous header is a coincident header.
 	CheckPrevHeaderCoincident(chain ChainHeaderReader, context int, header *types.Header) (int, error)
 

@@ -18,6 +18,7 @@
 package core
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -1461,24 +1462,71 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 // writeBlockWithState writes the block and all associated state to the database,
 // but is expects the chain mutex to be held.
 func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
-	bc.wg.Add(1)
-	defer bc.wg.Done()
-
-	// Calculate the total difficulty of the block
-	ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
-	if ptd == nil {
-		return NonStatTy, consensus.ErrUnknownAncestor
-	}
-
-	if types.QuaiNetworkContext > 0 && block.Number().Cmp(big.NewInt(1)) < 1 {
-		coincident, index := bc.Engine().GetCoincidentHeader(bc, types.QuaiNetworkContext, block.Header())
-		ptd = coincident.NetworkDifficulty[index]
-	}
-
 	// Make sure no inconsistent state is leaked during insertion
 	currentBlock := bc.CurrentBlock()
-	localTd := bc.GetTd(currentBlock.Hash(), currentBlock.NumberU64())
-	externTd := new(big.Int).Add(block.Difficulty(), ptd)
+
+	var localContext int
+	if currentBlock.NumberU64() == 0 {
+		localContext = types.QuaiNetworkContext
+	} else {
+		localContext, err = bc.Engine().GetDifficultyOrder(currentBlock.Header())
+		if err != nil {
+			return NonStatTy, err
+		}
+	}
+
+	externContext, err := bc.Engine().GetDifficultyOrder(block.Header())
+	if err != nil {
+		return NonStatTy, err
+	}
+
+	localHeader := currentBlock.Header()
+	externHeader := block.Header()
+
+	localTd, externTd := big.NewInt(0), big.NewInt(0)
+	// If the incoming block is a coincident block
+	if externContext < localContext {
+		var lowestOrder int
+		externTd, lowestOrder, err = bc.AggregateTotalDifficulty(localContext, block.Header())
+		if err != nil {
+			return NonStatTy, err
+		}
+
+		// get coincident and get the Total difficulty of it
+		localHeader, _, _ = bc.Engine().GetCoincidentAndAggDifficulty(bc, types.QuaiNetworkContext, lowestOrder+1, currentBlock.Header())
+		localBlock := bc.GetBlockByHash(localHeader.Hash())
+		localTd = bc.GetTd(localHeader.Hash(), localBlock.NumberU64())
+	} else if localContext < externContext {
+		// get coincident and get the Total difficulty of it
+		localTd = bc.GetTd(currentBlock.Header().Hash(), currentBlock.NumberU64())
+
+		externHeader, _, _ = bc.Engine().GetCoincidentAndAggDifficulty(bc, types.QuaiNetworkContext, localContext+1, block.Header())
+		externBlock := bc.GetBlockByHash(externHeader.Hash())
+
+		// If we are building on the same point
+		if localHeader.Hash() == externHeader.Hash() {
+			ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
+			if ptd == nil {
+				return NonStatTy, consensus.ErrUnknownAncestor
+			}
+			externTd = new(big.Int).Add(block.Difficulty(), ptd)
+		} else {
+			externTd = bc.GetTd(externHeader.Hash(), externBlock.NumberU64())
+		}
+	} else if localContext < types.QuaiNetworkContext {
+		localTd = bc.GetTd(currentBlock.Header().Hash(), currentBlock.NumberU64())
+		externTd, _, err = bc.AggregateTotalDifficulty(localContext+1, block.Header())
+		if err != nil {
+			return NonStatTy, err
+		}
+	} else {
+		ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
+		if ptd == nil {
+			return NonStatTy, consensus.ErrUnknownAncestor
+		}
+		externTd = new(big.Int).Add(block.Difficulty(), ptd)
+		localTd = bc.GetTd(currentBlock.Hash(), currentBlock.NumberU64())
+	}
 
 	// Irrelevant of the canonical status, write the block itself to the database.
 	//
@@ -2788,6 +2836,64 @@ func (bc *BlockChain) QueueAndRetrieveExtBlocks(externalBlocks []*types.External
 	}
 	log.Info("QueueAndRetrieveExtBlocks: Returning result blocks", "len", len(resultBlocks))
 	return resultBlocks
+}
+
+// AggregateNetworkDifficulty aggregates the total difficulty from the previous stop Hash in the dominant chains only
+func (bc *BlockChain) AggregateTotalDifficulty(context int, header *types.Header) (*big.Int, int, error) {
+
+	currentLowestContext := context
+	currentTotalDifficulty := big.NewInt(0)
+	startingHeader := header
+
+	// Check the difficulty context of the starting header
+	difficultyContext, err := bc.Engine().GetDifficultyOrder(header)
+	if err != nil {
+		return currentTotalDifficulty, currentLowestContext, fmt.Errorf("difficulty context not found")
+	}
+
+	// this function should only be called upon a coincident block, to use it the way it is intended to be used this check is added
+	if difficultyContext >= currentLowestContext {
+		return currentTotalDifficulty, currentLowestContext, fmt.Errorf("not a coincident block")
+	}
+
+	// Accumulate the difficulty until we find a header from a dominant chain or we reach a stop hash
+	// If we encounter a dominant chain we repeat the same process until we find the stop hash
+	for {
+		// Check the difficulty context of the starting header
+		difficultyContext, err := bc.Engine().GetDifficultyOrder(header)
+		if err != nil {
+			return currentTotalDifficulty, currentLowestContext, fmt.Errorf("difficulty context not found")
+		}
+
+		if difficultyContext < currentLowestContext {
+			currentLowestContext = difficultyContext
+		}
+		currentTotalDifficulty.Add(currentTotalDifficulty, header.Difficulty[currentLowestContext])
+
+		//check if the parent block of the first coincident is genesis
+		if header.Number[currentLowestContext].Uint64()-1 == 0 {
+			return currentTotalDifficulty, currentLowestContext, nil
+		}
+
+		// Retrieve the previous header as an external block.
+		prevBlock, err := bc.GetExternalBlock(header.ParentHash[currentLowestContext], header.Number[currentLowestContext].Uint64()-1, uint64(currentLowestContext))
+		if err != nil {
+			return currentTotalDifficulty, currentLowestContext, fmt.Errorf("error finding previous external block")
+		}
+		// If the previous block is a coincident block, if we have found a coincident in the same
+		// location we go back in our chain context till that block and collect the totalDifficulty
+		if bytes.Equal(prevBlock.Header().Location, startingHeader.Location) {
+			// Go back in our chain till prevBlock.Header().Hash()
+			stopHash := prevBlock.Header().Hash()
+			tempHeader := bc.GetHeaderByHash(stopHash)
+			if tempHeader == nil {
+				return currentTotalDifficulty, currentLowestContext, nil
+			}
+			currentTotalDifficulty.Add(currentTotalDifficulty, bc.GetTd(tempHeader.Hash(), tempHeader.Number[types.QuaiNetworkContext].Uint64()))
+			return currentTotalDifficulty, currentLowestContext, nil
+		}
+		header = prevBlock.Header()
+	}
 }
 
 // HasHeader checks if a block header is present in the database or not, caching
