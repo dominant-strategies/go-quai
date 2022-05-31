@@ -421,6 +421,16 @@ func (blake3 *Blake3) GetCoincidentHeader(chain consensus.ChainHeaderReader, con
 	}
 }
 
+// Check difficulty of previous header in order to find traceability.
+func (blake3 *Blake3) CheckPrevHeaderCoincident(chain consensus.ChainHeaderReader, context int, header *types.Header) (int, error) {
+	// If we are at the highest context, no coincident will include it.
+	difficultyContext, err := blake3.GetDifficultyOrder(header)
+	if err != nil {
+		return difficultyContext, fmt.Errorf("difficulty not found")
+	}
+	return difficultyContext, nil
+}
+
 // GetStopHash returns the N-1 hash that is used to terminate on during TraceBranch.
 func (blake3 *Blake3) GetStopHash(chain consensus.ChainHeaderReader, originalContext int, wantedDiffContext int, startingHeader *types.Header) (common.Hash, int) {
 	header := startingHeader
@@ -512,16 +522,6 @@ func (blake3 *Blake3) GetCoincidentAndAggDifficulty(chain consensus.ChainHeaderR
 			header = prevHeader
 		}
 	}
-}
-
-// Check difficulty of previous header in order to find traceability.
-func (blake3 *Blake3) CheckPrevHeaderCoincident(chain consensus.ChainHeaderReader, context int, header *types.Header) (int, error) {
-	// If we are at the highest context, no coincident will include it.
-	difficultyContext, err := blake3.GetDifficultyOrder(header)
-	if err != nil {
-		return difficultyContext, fmt.Errorf("difficulty not found")
-	}
-	return difficultyContext, nil
 }
 
 // TraceBranch is the recursive function that returns all ExternalBlocks for a given header, stopHash, context, and location.
