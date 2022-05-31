@@ -1303,7 +1303,7 @@ func RPCMarshalReceipt(receipt *types.Receipt) (map[string]interface{}, error) {
 // a `PublicBlockchainAPI`.
 func (s *PublicBlockChainAPI) rpcMarshalEthHeader(ctx context.Context, header *types.Header) map[string]interface{} {
 	fields := RPCMarshalEthHeader(header)
-	// fields["totalDifficulty"] = (*hexutil.Big)(s.b.GetTd(ctx, header.Hash()))
+	fields["totalDifficulty"] = (*hexutil.Big)(s.b.GetTd(ctx, header.Hash()))
 	return fields
 }
 
