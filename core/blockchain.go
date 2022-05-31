@@ -2856,7 +2856,8 @@ func (bc *BlockChain) AggregateTotalDifficulty(context int, header *types.Header
 		return currentTotalDifficulty, currentLowestContext, fmt.Errorf("not a coincident block")
 	}
 
-	// Accumulate the difficulty until we find a header from a dominant chain or we reach a stop hash
+	// Accumulate the difficulty until we find a header from a dominant chain or we reach a block with
+	// higher order and in the same location.
 	// If we encounter a dominant chain we repeat the same process until we find the stop hash
 	for {
 		// Check the difficulty context of the starting header
