@@ -1709,10 +1709,10 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 
 		for {
 			if currentBlock.Hash() == commonBlock.Hash() {
-				// iterate one more for the current block reorg point to exclude the commonBlock that is to be reorged.
-				currentBlock = bc.GetBlock(currentBlock.ParentHash(), currentBlock.NumberU64()-1)
 				deletedTxs = append(deletedTxs, currentBlock.Transactions()...)
 				collectLogs(currentBlock.Hash())
+				// iterate one more for the current block reorg point to exclude the commonBlock that is to be reorged.
+				currentBlock = bc.GetBlock(currentBlock.ParentHash(), currentBlock.NumberU64()-1)
 				break
 			}
 			deletedTxs = append(deletedTxs, currentBlock.Transactions()...)
