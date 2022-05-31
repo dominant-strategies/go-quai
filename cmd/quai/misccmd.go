@@ -103,12 +103,20 @@ and displays information about any security vulnerabilities that affect the curr
 
 // makecache generates an ethash verification cache into the provided folder.
 func makecache(ctx *cli.Context) error {
+<<<<<<< HEAD
 	return errors.New("Unsupported")
+=======
+	return errors.New("unsupported")
+>>>>>>> main
 }
 
 // makedag generates an ethash mining DAG into the provided folder.
 func makedag(ctx *cli.Context) error {
+<<<<<<< HEAD
 	return errors.New("Unsupported")
+=======
+	return errors.New("unsupported")
+>>>>>>> main
 }
 
 func version(ctx *cli.Context) error {

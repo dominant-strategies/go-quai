@@ -130,6 +130,9 @@ type Engine interface {
 	// This function determines the difficulty order of a block
 	GetDifficultyOrder(header *types.Header) (int, error)
 
+	// GetStopHash retrieves the stop hash for tracing of blocks in a trace branch.
+	GetStopHash(chain ChainHeaderReader, difficultyContext int, originalContext int, startingHeader *types.Header) (common.Hash, int)
+
 	// TraceBranches recursively traces region branches to find external blocks.
 	TraceBranches(chain ChainHeaderReader, header *types.Header, context int, originalContext int, originalLocation []byte) ([]*types.ExternalBlock, error)
 

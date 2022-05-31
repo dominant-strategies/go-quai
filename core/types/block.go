@@ -20,6 +20,7 @@ package types
 import (
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -29,6 +30,7 @@ import (
 
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/common/hexutil"
+	"github.com/spruce-solutions/go-quai/params"
 	"github.com/spruce-solutions/go-quai/rlp"
 )
 
@@ -92,7 +94,7 @@ type Header struct {
 	Nonce             BlockNonce       `json:"nonce"`
 
 	// Originating location of the block.
-	Location []byte `json:"location"        	gencodec:"required"`
+	Location []byte `json:"location"       gencodec:"required"`
 
 	// BaseFee was added by EIP-1559 and is ignored in legacy headers.
 	BaseFee []*big.Int `json:"baseFeePerGas" rlp:"optional"`
@@ -116,6 +118,11 @@ type headerMarshaling struct {
 // RLP encoding.
 func (h *Header) Hash() common.Hash {
 	return rlpHash(h)
+}
+
+// Returns current MapContext for a given block.
+func (h *Header) MapContext() ([]int, error) {
+	return currentBlockOntology(h.Number)
 }
 
 var headerSize = common.StorageSize(reflect.TypeOf(Header{}).Size())
@@ -319,6 +326,11 @@ func (b *ExternalBlock) Context() *big.Int          { return b.context }
 func (b *ExternalBlock) CacheKey() []byte {
 	hash := b.header.Hash()
 	return ExtBlockCacheKey(b.header.Number[b.context.Int64()].Uint64(), b.context.Uint64(), hash)
+}
+
+// Returns current MapContext for a given block.
+func (b *ExternalBlock) MapContext() ([]int, error) {
+	return currentBlockOntology(b.header.Number)
 }
 
 // encodeBlockNumber encodes a block number as big endian uint64
@@ -646,6 +658,11 @@ func (b *Block) BaseFee(params ...int) *big.Int {
 	return new(big.Int).Set(b.header.BaseFee[context])
 }
 
+// TODO
+func (b *Block) MapContext() ([]int, error) {
+	return currentBlockOntology(b.header.Number)
+}
+
 func (b *Block) Header() *Header { return CopyHeader(b.header) }
 
 func (b *ReceiptBlock) Header() *Header { return CopyHeader(b.header) }
@@ -752,3 +769,19 @@ func (b *Block) Hash() common.Hash {
 }
 
 type Blocks []*Block
+
+// currentBlockOntology is used to retrieve the MapContext of a given block.
+func currentBlockOntology(number []*big.Int) ([]int, error) {
+	forkNumber := number[0]
+
+	switch {
+	/*	case forkNumber.Cmp(params.LovelaceMapContext) >= 0: // Lovelace = MaxInt
+			return params.LovelaceOntology
+		case forkNumber.Cmp(params.TuringMapContext) >= 0: // Turing = MaxInt
+			return params.TuringOntology */
+	case forkNumber.Cmp(params.FullerMapContext) >= 0:
+		return params.FullerOntology, nil
+	default:
+		return nil, errors.New("invalid number passed to currentBlockOntology")
+	}
+}

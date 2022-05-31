@@ -34,4 +34,11 @@ var (
 	// ErrInvalidNumber is returned if a block's number doesn't equal its parent's
 	// plus one.
 	ErrInvalidNumber = errors.New("invalid block number")
+
+	// ErrInvalidLocation is returned if a block's given location doesn't match config
+	ErrInvalidLocation = errors.New("invalid location")
+
+	// ErrInvalidOntology is returned if a block's given location isn't inside the
+	// correct ontology as described by MapContext at its given number
+	ErrInvalidOntology = errors.New("invalid ontology")
 )

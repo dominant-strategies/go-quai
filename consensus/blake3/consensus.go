@@ -278,8 +278,13 @@ func (blake3 *Blake3) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		}
 	}
 	// Verify that Location is same as config
-	if validLocation := verifyLocation(header.Location, chain.Config().Location); !validLocation {
-		return fmt.Errorf("invalid location: Location %d not valid, expected %c", header.Location, chain.Config().Location)
+	if err := verifyLocation(header.Location, chain.Config().Location); err != nil {
+		return err
+	}
+
+	// Verify Location is in ontology described by MapContext
+	if err := verifyInsideLocation(header.Location, header.Number, chain.Config()); err != nil {
+		return err
 	}
 
 	if err := misc.VerifyForkHashes(chain.Config(), header, uncle); err != nil {
@@ -416,45 +421,6 @@ func (blake3 *Blake3) GetCoincidentHeader(chain consensus.ChainHeaderReader, con
 	}
 }
 
-// GetCoincidentAndAggDifficulty iterates back through headers to find ones that exceed a given expectedContext.
-func (blake3 *Blake3) GetCoincidentAndAggDifficulty(chain consensus.ChainHeaderReader, context int, expectedContext int, header *types.Header) (*types.Header, int, *big.Int) {
-	totalDiff := big.NewInt(0)
-	// If we are at the highest context, no coincident will include it.
-	if context == 0 {
-		return header, 0, header.Difficulty[0]
-	} else {
-		for {
-			// Check work of the header, if it has enough work we will move up in context.
-			// difficultyContext is initially context since it could be a pending block w/o a nonce.
-			difficultyContext, err := blake3.GetDifficultyOrder(header)
-			if err != nil {
-				return header, difficultyContext, totalDiff
-			}
-
-			i := difficultyContext
-			for i <= context {
-				totalDiff.Add(totalDiff, header.Difficulty[i])
-				i++
-			}
-
-			// If block header is Genesis return it as coincident
-			if header.Number[context].Cmp(big.NewInt(0)) <= 0 {
-				return header, difficultyContext, totalDiff
-			}
-
-			// If we have reached a coincident block
-			if difficultyContext < expectedContext {
-				return header, difficultyContext, totalDiff
-			}
-
-			// Get previous header on local chain by hash
-			prevHeader := chain.GetHeaderByHash(header.ParentHash[context])
-			// Increment previous header
-			header = prevHeader
-		}
-	}
-}
-
 // Check difficulty of previous header in order to find traceability.
 func (blake3 *Blake3) CheckPrevHeaderCoincident(chain consensus.ChainHeaderReader, context int, header *types.Header) (int, error) {
 	// If we are at the highest context, no coincident will include it.
@@ -465,22 +431,80 @@ func (blake3 *Blake3) CheckPrevHeaderCoincident(chain consensus.ChainHeaderReade
 	return difficultyContext, nil
 }
 
-// TraceBranch is the recursive function that returns all ExternalBlocks for a given header, stopHash, context, and location.
-func (blake3 *Blake3) PrimeTraceBranch(chain consensus.ChainHeaderReader, header *types.Header, context int, originalContext int, originalLocation []byte) ([]*types.ExternalBlock, error) {
-	extBlocks := make([]*types.ExternalBlock, 0)
-	// startingHeader := header
+// GetStopHash returns the N-1 hash that is used to terminate on during TraceBranch.
+func (blake3 *Blake3) GetStopHash(chain consensus.ChainHeaderReader, originalContext int, wantedDiffContext int, startingHeader *types.Header) (common.Hash, int) {
+	header := startingHeader
+	stopHash := common.Hash{}
+	num := 0
 	for {
-		// If the header is genesis, return the current set of external blocks.
-		if header.Number[context].Cmp(big.NewInt(0)) == 0 {
-			// fmt.Println("PrimeTraceBranch: Stopping height == 0", "number", header.Number, "context", context, "location", header.Location, "hash", header.ParentHash[context])
+		num++
+
+		// Append the coincident and iterating header to the list
+		if header.Number[originalContext].Cmp(big.NewInt(1)) == 0 {
+			switch wantedDiffContext {
+			case 0:
+				stopHash = chain.Config().GenesisHashes[0]
+			case 1:
+				stopHash = chain.Config().GenesisHashes[1]
+			case 2:
+				stopHash = chain.Config().GenesisHashes[2]
+			}
 			break
 		}
 
-		// If we have are stepping into a Region from Prime ensure it is not our original location.
+		prevHeader := chain.GetHeaderByHash(header.ParentHash[originalContext])
+		if prevHeader == nil {
+			log.Warn("Unable to get prevHeader in GetStopHash")
+			return stopHash, num
+		}
+		header = prevHeader
+
+		// Check work of the header, if it has enough work we will move up in context.
+		// difficultyContext is initially context since it could be a pending block w/o a nonce.
+		difficultyContext, err := blake3.GetDifficultyOrder(header)
+		if err != nil {
+			break
+		}
+
+		sameLocation := false
+		switch originalContext {
+		case 0:
+			sameLocation = true
+		case 1:
+			sameLocation = startingHeader.Location[0] == header.Location[0]
+		case 2:
+			sameLocation = bytes.Equal(startingHeader.Location, header.Location)
+		}
+
+		if difficultyContext == wantedDiffContext && sameLocation {
+			stopHash = header.Hash()
+			break
+		}
+	}
+
+	return stopHash, num
+}
+
+// TraceBranch is the recursive function that returns all ExternalBlocks for a given header, stopHash, context, and location.
+func (blake3 *Blake3) PrimeTraceBranch(chain consensus.ChainHeaderReader, header *types.Header, context int, stopHash common.Hash, originalContext int, originalLocation []byte) ([]*types.ExternalBlock, error) {
+	extBlocks := make([]*types.ExternalBlock, 0)
+	// startingHeader := header
+	for {
+		// Verify Location is in ontology described by MapContext
+		if err := verifyInsideLocation(header.Location, header.Number, chain.Config()); err != nil {
+			return nil, consensus.ErrInvalidLocation
+		}
+		// If the header is genesis, return the current set of external blocks.
+		if header.Number[context].Cmp(big.NewInt(0)) == 0 {
+			// log.Info("Trace Branch: Stopping height == 0", "number", header.Number, "context", context, "location", header.Location, "hash", header.ParentHash[context])
+			break
+		}
+
+		// If we have are stepping into a Region from Prime ensure it is now our original location.
 		if context < types.ContextDepth-1 {
 			if (header.Location[0] != originalLocation[0] && originalContext > 0) || originalContext == 0 {
-				// fmt.Println("PrimeTraceBranch: Going down into trace fromPrime", "number", header.Number, "context", context, "location", header.Location, "hash", header.Hash())
-				result, err := blake3.PrimeTraceBranch(chain, header, context+1, originalContext, originalLocation)
+				// log.Info("Trace Branch: Going down into trace fromPrime", "number", header.Number, "context", context, "location", header.Location, "hash", header.Hash())
+				result, err := blake3.PrimeTraceBranch(chain, header, context+1, stopHash, originalContext, originalLocation)
 				if err != nil {
 					return nil, err
 				}
@@ -496,28 +520,31 @@ func (blake3 *Blake3) PrimeTraceBranch(chain consensus.ChainHeaderReader, header
 		// Obtain the external block on the branch we are currently tracing.
 		extBlock, err := chain.GetExternalBlock(header.Hash(), header.Number[context].Uint64(), uint64(context))
 		if err != nil {
-			fmt.Println("PrimeTraceBranch: External Block not found for header", "number", header.Number, "context", context, "hash", header.Hash(), "location", header.Location)
+			log.Info("Trace Branch: External Block not found for header", "number", header.Number, "context", context, "hash", header.Hash(), "location", header.Location)
 			return extBlocks, nil
 		}
-		// fmt.Println("PrimeTraceBranch: PRIME Adding external block", "number", header.Number, "context", context, "location", header.Location, "hash", header.Hash())
 		extBlocks = append(extBlocks, extBlock)
+		// log.Info("Trace Branch: PRIME Adding external block", "number", header.Number, "context", context, "location", header.Location, "hash", header.Hash())
+		if header.ParentHash[context] == stopHash {
+			// log.Info("Trace Branch: Stopping on stop hash or num is 1", "number", header.Number, "context", context, "location", header.Location, "hash", header.ParentHash[context])
+			break
+		}
 
 		// Do not continue at header number == 1 since we are unable to obtain the Genesis as an external block.
 		if header.Number[context].Cmp(big.NewInt(1)) == 0 {
-			// fmt.Println("PrimeTraceBranch: Stopping height == 1", "number", header.Number, "context", context, "location", header.Location, "hash", header.ParentHash[context])
+			log.Info("Trace Branch: Stopping height == 1", "number", header.Number, "context", context, "location", header.Location, "hash", header.ParentHash[context])
 			break
 		}
 
 		// Retrieve the previous header as an external block.
 		prevHeader, err := chain.GetExternalBlock(header.ParentHash[context], header.Number[context].Uint64()-1, uint64(context))
 		if err != nil {
-			fmt.Println("PrimeTraceBranch: External Block not found for previous header", "number", header.Number[context].Int64()-1, "context", context, "prevHash", header.ParentHash[context], "location", header.Location)
+			log.Info("Trace Branch: External Block not found for previous header", "number", header.Number[context].Int64()-1, "context", context, "hash", header.ParentHash[context], "location", header.Location)
 			return extBlocks, nil
 		}
 
-		// fmt.Println("PrimeTraceBranch: Do we stop in equal location?", "context", context, "original", originalLocation, "prev", prevHeader.Header().Location)
-		if context == 0 && originalLocation[0] == prevHeader.Header().Location[0] {
-			fmt.Println("PrimeTraceBranch: Stopping in location equal", "original", originalLocation, "prev", prevHeader.Header().Location)
+		if bytes.Equal(originalLocation, prevHeader.Header().Location) && context == 0 {
+			// log.Info("Trace Branch: Stopping in location equal", "original", originalLocation, "prev", prevHeader.Header().Location)
 			break
 		}
 
@@ -532,7 +559,7 @@ func (blake3 *Blake3) PrimeTraceBranch(chain consensus.ChainHeaderReader, header
 			break
 		}
 		if difficultyContext < context {
-			// fmt.Println("PrimeTraceBranch: Found Prime coincident block", "number", header.Number, "context", context, "location", header.Location)
+			// log.Info("TraceBranch: Found Region coincident block in Zone", "number", header.Number, "context", context, "location", header.Location)
 			break
 		}
 	}
@@ -540,13 +567,18 @@ func (blake3 *Blake3) PrimeTraceBranch(chain consensus.ChainHeaderReader, header
 }
 
 // TraceBranch is the recursive function that returns all ExternalBlocks for a given header, stopHash, context, and location.
-func (blake3 *Blake3) RegionTraceBranch(chain consensus.ChainHeaderReader, header *types.Header, context int, originalContext int, originalLocation []byte) ([]*types.ExternalBlock, error) {
+func (blake3 *Blake3) RegionTraceBranch(chain consensus.ChainHeaderReader, header *types.Header, context int, stopHash common.Hash, originalContext int, originalLocation []byte) ([]*types.ExternalBlock, error) {
 	extBlocks := make([]*types.ExternalBlock, 0)
 	// startingHeader := header
 	for {
+		// Verify Location is in ontology described by MapContext
+		if err := verifyInsideLocation(header.Location, header.Number, chain.Config()); err != nil {
+			return nil, consensus.ErrInvalidLocation
+		}
+
 		// If the header is genesis, return the current set of external blocks.
 		if header.Number[context].Cmp(big.NewInt(0)) == 0 {
-			// fmt.Println("RegionTraceBranch: Stopping height == 0", "number", header.Number, "context", context, "location", header.Location, "hash", header.ParentHash[context])
+			// log.Info("Trace Branch: Stopping height == 0", "number", header.Number, "context", context, "location", header.Location, "hash", header.ParentHash[context])
 			break
 		}
 
@@ -556,13 +588,13 @@ func (blake3 *Blake3) RegionTraceBranch(chain consensus.ChainHeaderReader, heade
 		// If we are in a Zone node, we cannot trace down into our own Zone.
 		if context < types.ContextDepth-1 {
 			if originalContext == 1 {
-				result, err := blake3.RegionTraceBranch(chain, header, context+1, originalContext, originalLocation)
+				result, err := blake3.RegionTraceBranch(chain, header, context+1, stopHash, originalContext, originalLocation)
 				if err != nil {
 					return nil, err
 				}
 				extBlocks = append(extBlocks, result...)
 			} else if originalContext == 2 && !bytes.Equal(originalLocation, header.Location) {
-				result, err := blake3.RegionTraceBranch(chain, header, context+1, originalContext, originalLocation)
+				result, err := blake3.RegionTraceBranch(chain, header, context+1, stopHash, originalContext, originalLocation)
 				if err != nil {
 					return nil, err
 				}
@@ -580,34 +612,40 @@ func (blake3 *Blake3) RegionTraceBranch(chain consensus.ChainHeaderReader, heade
 
 		// If we are in the sameLocation, meaning our context and location aren't different we must stop.
 		if sameLocation {
-			fmt.Println("RegionTraceBranch: Breaking in same location")
 			break
 		}
 
 		// Obtain the external block on the branch we are currently tracing.
 		extBlock, err := chain.GetExternalBlock(header.Hash(), header.Number[context].Uint64(), uint64(context))
 		if err != nil {
-			fmt.Println("RegionTraceBranch: External Block not found for header", "number", header.Number, "context", context, "hash", header.Hash(), "location", header.Location)
+			log.Info("Trace Branch: External Block not found for header", "number", header.Number, "context", context, "hash", header.Hash(), "location", header.Location)
 			break
 		}
 		extBlocks = append(extBlocks, extBlock)
-		// fmt.Println("RegionTraceBranch: REGION Adding external block", "number", header.Number, "context", context, "location", header.Location, "hash", header.Hash())
+		// log.Info("Trace Branch: REGION Adding external block", "number", header.Number, "context", context, "location", header.Location, "hash", header.Hash())
+
+		// Stop on the passed in stopHash
+		// fmt.Println("Region stopHash", header.ParentHash[context], stopHash)
+		if header.ParentHash[context] == stopHash {
+			// log.Info("Trace Branch: Stopping on stop hash or num is 1", "number", header.Number, "context", context, "location", header.Location, "hash", header.ParentHash[context])
+			break
+		}
 
 		// Do not continue at header number == 1 since we are unable to obtain the Genesis as an external block.
 		if header.Number[context].Cmp(big.NewInt(1)) == 0 {
-			// fmt.Println("RegionTraceBranch: Stopping height == 1", "number", header.Number, "context", context, "location", header.Location, "prevHash", header.ParentHash[context])
+			// log.Info("Trace Branch: Stopping height == 1", "number", header.Number, "context", context, "location", header.Location, "hash", header.ParentHash[context])
 			break
 		}
 
 		// Retrieve the previous header as an external block.
 		prevHeader, err := chain.GetExternalBlock(header.ParentHash[context], header.Number[context].Uint64()-1, uint64(context))
 		if err != nil {
-			fmt.Println("RegionTraceBranch: External Block not found for previous header", "number", header.Number[context].Int64()-1, "context", context, "prevHash", header.ParentHash[context], "location", header.Location)
+			log.Info("Trace Branch: External Block not found for previous header", "number", header.Number[context].Int64()-1, "context", context, "hash", header.ParentHash[context], "location", header.Location)
 			break
 		}
 
-		if context == 1 && bytes.Equal(originalLocation, prevHeader.Header().Location) {
-			// fmt.Println("RegionTraceBranch: Stopping in location equal", "original", originalLocation, "prev", prevHeader.Header().Location)
+		if bytes.Equal(originalLocation, prevHeader.Header().Location) && context == 1 {
+			// log.Info("Trace Branch: Stopping in location equal", "original", originalLocation, "prev", prevHeader.Header().Location)
 			break
 		}
 
@@ -622,16 +660,8 @@ func (blake3 *Blake3) RegionTraceBranch(chain consensus.ChainHeaderReader, heade
 			break
 		}
 		if difficultyContext < context && context == types.ContextDepth-1 {
-			// fmt.Println("Trace Branch: Found Region coincident block in Zone", "number", header.Number, "context", context, "location", header.Location)
+			// log.Info("Trace Branch: Found Region coincident block in Zone", "number", header.Number, "context", context, "location", header.Location)
 			break
-		} else if difficultyContext == 0 && !bytes.Equal(header.Location, originalLocation) {
-			// If we have found a Prime block, trace it.
-			result, err := blake3.PrimeTraceBranch(chain, header, difficultyContext, originalContext, originalLocation)
-			if err != nil {
-				return nil, err
-			}
-			fmt.Println("Len of Prime block trace found from Region", len(result))
-			extBlocks = append(extBlocks, result...)
 		}
 	}
 	return extBlocks, nil
@@ -641,6 +671,8 @@ func (blake3 *Blake3) RegionTraceBranch(chain consensus.ChainHeaderReader, heade
 func (blake3 *Blake3) GetExternalBlocks(chain consensus.ChainHeaderReader, header *types.Header, logging bool) ([]*types.ExternalBlock, error) {
 	context := chain.Config().Context // Index that node is currently at
 	externalBlocks := make([]*types.ExternalBlock, 0)
+	log.Info("GetExternalBlocks: Getting trace for block", "num", header.Number, "context", context, "location", header.Location, "hash", header.Hash())
+	start := time.Now()
 
 	// Do not run on block 1
 	if header.Number[context].Cmp(big.NewInt(1)) > 0 {
@@ -650,12 +682,53 @@ func (blake3 *Blake3) GetExternalBlocks(chain consensus.ChainHeaderReader, heade
 		if err != nil {
 			return nil, err
 		}
-		extBlocks, err := blake3.TraceBranches(chain, prevHeader, difficultyContext, context, prevHeader.Location)
-		if err != nil {
+
+		log.Info("GetExternalBlocks: Retrieved difficultyContext", "difficultyContext", difficultyContext, "context", context)
+		// Check if in Zone and PrevHeader is not a coincident header, no external blocks to trace.
+		if context == 2 && difficultyContext == 2 {
 			return externalBlocks, nil
 		}
-		externalBlocks = append(externalBlocks, extBlocks...)
+
+		// Get the Prime stopHash to be used in the Prime context. Go on to trace Prime once.
+		primeStopHash, primeNum := blake3.GetStopHash(chain, context, 0, prevHeader)
+		if context == 0 {
+			extBlockResult, extBlockErr := blake3.PrimeTraceBranch(chain, prevHeader, difficultyContext, primeStopHash, context, header.Location)
+			if extBlockErr != nil {
+				log.Info("GetExternalBlocks: Returning with error", "len", len(externalBlocks), "time", time.Since(start), "err", extBlockErr)
+				return nil, extBlockErr
+			}
+			externalBlocks = append(externalBlocks, extBlockResult...)
+		}
+
+		// If we are in a Region or Zone context, we may need to change our Prime stopHash since
+		// a Region block might not yet have been found. Scenario: [2, 2, 2] mined before [1, 2, 2].
+		if context == 1 || context == 2 {
+			regionStopHash, regionNum := blake3.GetStopHash(chain, context, 1, prevHeader)
+			if difficultyContext == 0 {
+				extBlockResult, extBlockErr := blake3.PrimeTraceBranch(chain, prevHeader, difficultyContext, primeStopHash, context, header.Location)
+				if extBlockErr != nil {
+					log.Info("GetExternalBlocks: Returning with error", "len", len(externalBlocks), "time", time.Since(start), "err", extBlockErr)
+					return nil, extBlockErr
+				}
+				externalBlocks = append(externalBlocks, extBlockResult...)
+			}
+			// If our Prime stopHash comes before our Region stopHash.
+			if primeNum < regionNum {
+				regionStopHash = primeStopHash
+			}
+			// If we have a Region block, trace it.
+			if difficultyContext < 2 {
+				extBlockResult, extBlockErr := blake3.RegionTraceBranch(chain, prevHeader, 1, regionStopHash, context, header.Location)
+				if extBlockErr != nil {
+					log.Info("GetExternalBlocks: Returning with error", "len", len(externalBlocks), "time", time.Since(start), "err", extBlockErr)
+					return nil, extBlockErr
+				}
+				externalBlocks = append(externalBlocks, extBlockResult...)
+			}
+		}
 	}
+
+	log.Info("GetExternalBlocks: Length of external blocks", "len", len(externalBlocks), "time", time.Since(start))
 
 	// TODO: Impelement queue here, remove the above check for N+1.
 	// return chain.QueueAndRetrieveExtBlocks(externalBlocks, header)
@@ -680,63 +753,54 @@ func (blake3 *Blake3) Prepare(chain consensus.ChainHeaderReader, header *types.H
 func (blake3 *Blake3) GetLinkExternalBlocks(chain consensus.ChainHeaderReader, header *types.Header, logging bool) ([]*types.ExternalBlock, error) {
 	context := chain.Config().Context // Index that node is currently at
 	externalBlocks := make([]*types.ExternalBlock, 0)
+	blake3.config.Log.Info("GetLinkExternalBlocks: Getting trace for block", "num", header.Number, "context", context, "location", header.Location, "hash", header.Hash())
 
-	// Do not run on block 0
-	if header.Number[context].Cmp(big.NewInt(0)) > 0 {
+	// Do not run on block 1
+	if header.Number[context].Cmp(big.NewInt(1)) > 0 {
 		difficultyContext, err := blake3.GetDifficultyOrder(header)
-		if err != nil {
-			return externalBlocks, err
-		}
-		extBlocks, err := blake3.TraceBranches(chain, header, difficultyContext, context, header.Location)
+		// Only run if we are the block immediately following the coincident block. Check below is to make sure we are N+1.
 		if err != nil {
 			return externalBlocks, nil
 		}
-		externalBlocks = append(externalBlocks, extBlocks...)
-	}
-	for _, extBlock := range externalBlocks {
-		fmt.Println("GetLinkExternalBlocks", extBlock.Context(), extBlock.Header().Number, extBlock.Header().Location, extBlock.Hash())
-	}
-	return externalBlocks, nil
-}
 
-// TraceBranches utilizes a passed in header for initializing a trace of all external blocks.
-// The function will sue PrimeTraceBranch and RegionTraceBranch for the two different types of traces that need to occur.
-// Depending on the difficultyContext, originalContext, and originalLocation the trace will know when and where to stop.
-func (blake3 *Blake3) TraceBranches(chain consensus.ChainHeaderReader, header *types.Header, difficultyContext int, originalContext int, originalLocation []byte) ([]*types.ExternalBlock, error) {
-	// Get the Prime stopHash to be used in the Prime context. Go on to trace Prime once.
-	log.Info("GetExternalBlocks: Getting trace for block", "num", header.Number, "context", originalContext, "location", header.Location, "hash", header.Hash())
-	start := time.Now()
-	externalBlocks := make([]*types.ExternalBlock, 0)
-	if originalContext == 0 {
-		extBlockResult, extBlockErr := blake3.PrimeTraceBranch(chain, header, difficultyContext, originalContext, header.Location)
-		if extBlockErr != nil {
-			return nil, extBlockErr
-		}
-		externalBlocks = append(externalBlocks, extBlockResult...)
-	}
-
-	// If we are in a Region or Zone context, we may need to change our Prime stopHash since
-	// a Region block might not yet have been found. Scenario: [2, 2, 2] mined before [1, 2, 2].
-	if originalContext == 1 || originalContext == 2 {
-		if difficultyContext == 0 {
-			extBlockResult, extBlockErr := blake3.PrimeTraceBranch(chain, header, difficultyContext, originalContext, header.Location)
+		// Get the Prime stopHash to be used in the Prime context. Go on to trace Prime once.
+		primeStopHash := header.ParentHash[0]
+		if context == 0 {
+			extBlockResult, extBlockErr := blake3.PrimeTraceBranch(chain, header, difficultyContext, primeStopHash, context, header.Location)
 			if extBlockErr != nil {
 				return nil, extBlockErr
 			}
 			externalBlocks = append(externalBlocks, extBlockResult...)
 		}
-		// If we have a Region block, trace it.
-		// This check should remain < 2 since a Prime block at difficultyContext == 1 would still
-		// have a Region block to trace and the value should remain 1 since we are going into the Region trace.
-		if difficultyContext < 2 {
-			extBlockResult, extBlockErr := blake3.RegionTraceBranch(chain, header, 1, originalContext, header.Location)
-			if extBlockErr != nil {
-				return nil, extBlockErr
+
+		// If we are in a Region or Zone context, we may need to change our Prime stopHash since
+		// a Region block might not yet have been found. Scenario: [2, 2, 2] mined before [1, 2, 2].
+		if context == 1 || context == 2 {
+			primeStopHash, primeNum := blake3.GetStopHash(chain, context, 0, header)
+
+			regionStopHash, regionNum := blake3.GetStopHash(chain, context, 1, header)
+			if difficultyContext == 0 {
+				extBlockResult, extBlockErr := blake3.PrimeTraceBranch(chain, header, difficultyContext, primeStopHash, context, header.Location)
+				if extBlockErr != nil {
+					return nil, extBlockErr
+				}
+				externalBlocks = append(externalBlocks, extBlockResult...)
 			}
-			externalBlocks = append(externalBlocks, extBlockResult...)
+			// If our Prime stopHash comes before our Region stopHash.
+			if primeNum < regionNum {
+				regionStopHash = primeStopHash
+			}
+			// If we have a Region block, trace it.
+			if difficultyContext < 2 {
+				extBlockResult, extBlockErr := blake3.RegionTraceBranch(chain, header, 1, regionStopHash, context, header.Location)
+				if extBlockErr != nil {
+					return nil, extBlockErr
+				}
+				externalBlocks = append(externalBlocks, extBlockResult...)
+			}
 		}
 	}
-	log.Info("TraceBranches: length of external blocks", "len", len(externalBlocks), "time", time.Since(start))
+
 	return externalBlocks, nil
 }
 
@@ -796,6 +860,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	if config.IsCatalyst(header.Number[types.QuaiNetworkContext]) {
 		return
 	}
+
 	// Select the correct block reward based on chain progression
 	blockReward := misc.CalculateReward()
 	// Accumulate the rewards for the miner and any included uncles
@@ -815,23 +880,52 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 }
 
 // Verifies that a header location is valid for a specific config.
-func verifyLocation(location []byte, configLocation []byte) bool {
+func verifyLocation(location []byte, configLocation []byte) error {
 	switch types.QuaiNetworkContext {
 	case 0:
-		return true
+		return nil
 	case 1:
 		if location[0] != configLocation[0] {
-			return false
+			return consensus.ErrInvalidLocation
 		} else {
-			return true
+			return nil
 		}
 	case 2:
 		if !bytes.Equal(location, configLocation) {
-			return false
+			return consensus.ErrInvalidLocation
 		} else {
-			return true
+			return nil
 		}
 	default:
-		return false
+		return consensus.ErrInvalidLocation
 	}
+}
+
+// Verifies that Location value is valid inside MapContext ontology.
+// Returns MapContext for error handling purposes.
+func verifyInsideLocation(location []byte, number []*big.Int, config *params.ChainConfig) error {
+	regionLocation := int(location[0])
+	zoneLocation := int(location[1])
+
+	switch {
+	/*	case config.IsLovelace(number[0]): // Lovelace = [3,4,4]
+			return checkInsideCurrent(regionLocation, zoneLocation, params.LovelaceOntology)
+		case config.IsTuring(number[0]): // Turing = [3,3,4]
+			return checkInsideCurrent(regionLocation, zoneLocation, params.TuringOntology) */
+	case config.IsFuller(number[0]): // Fuller = [3,3,3]
+		return checkInsideCurrent(regionLocation, zoneLocation, params.FullerOntology)
+	default:
+		return consensus.ErrInvalidOntology
+	}
+}
+
+// Verifies that Location is valid inside current MapContext ontology.
+func checkInsideCurrent(regionLoc int, zoneLoc int, ontology []int) error {
+	if len(ontology) < regionLoc {
+		return consensus.ErrInvalidOntology
+	}
+	if ontology[regionLoc-1] < zoneLoc {
+		return consensus.ErrInvalidOntology
+	}
+	return nil
 }
