@@ -48,6 +48,9 @@ type ChainHeaderReader interface {
 	// GetExternalBlocks retrieve all external blocks for a header.
 	GetExternalBlocks(header *types.Header) ([]*types.ExternalBlock, error)
 
+	// GetExternalBlocks retrieve all external link blocks for a header.
+	GetLinkExternalBlocks(header *types.Header) ([]*types.ExternalBlock, error)
+
 	// GetExternalBlock retrieves an external block header by its hash and context.
 	GetExternalBlock(hash common.Hash, number uint64, context uint64) (*types.ExternalBlock, error)
 
@@ -124,14 +127,11 @@ type Engine interface {
 	// This function determines the difficulty order of a block
 	GetDifficultyOrder(header *types.Header) (int, error)
 
-	// GetStopHash retrieves the stop hash for tracing of blocks in a trace branch.
-	GetStopHash(chain ChainHeaderReader, difficultyContext int, originalContext int, startingHeader *types.Header) (common.Hash, int)
+	// TraceBranches recursively traces region branches to find external blocks.
+	TraceBranches(chain ChainHeaderReader, header *types.Header, context int, originalContext int, originalLocation []byte) ([]*types.ExternalBlock, error)
 
-	// PrimeTraceBranch recursively traces branches to find.
-	PrimeTraceBranch(chain ChainHeaderReader, header *types.Header, context int, stopHash common.Hash, originalContext int, originalLocation []byte) ([]*types.ExternalBlock, error)
-
-	// RegionTraceBranch recursively traces region branches to find.
-	RegionTraceBranch(chain ChainHeaderReader, header *types.Header, context int, stopHash common.Hash, originalContext int, originalLocation []byte) ([]*types.ExternalBlock, error)
+	// GetLinkExternalBlocks links every block to the correct previous block
+	GetLinkExternalBlocks(chain ChainHeaderReader, header *types.Header, logging bool) ([]*types.ExternalBlock, error)
 
 	// Seal generates a new sealing request for the given input block and pushes
 	// the result into the given channel.
