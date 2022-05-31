@@ -2460,7 +2460,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	}
 
 	// Reset the blockLink in the blockchain state processor.
-	// bc.processor.GenerateExtBlockLink()
+	bc.GenerateExtBlockLink(newBlock.Header())
 
 	return nil
 }
