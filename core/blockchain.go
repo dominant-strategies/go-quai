@@ -1565,6 +1565,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		// Reorganise the chain if the parent is not the head block
 		if block.ParentHash() != currentBlock.Hash() {
 			if err := bc.reorg(currentBlock, block); err != nil {
+				bc.GenerateExtBlockLink(currentBlock.Header())
 				return NonStatTy, err
 			}
 		}
