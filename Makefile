@@ -156,7 +156,11 @@ quai-windows-amd64:
 
 include network.env
 
-BASE_COMMAND = ./build/bin/quai --$(NETWORK) --syncmode full
+BASE_COMMAND = ./build/bin/quai --$(NETWORK) --syncmode full 
+
+ifeq ($(ENABLE_ARCHIVE),true)
+	BASE_COMMAND += --gcmode archive
+endif
 
 ifeq ($(ENABLE_HTTP),true)
 	BASE_COMMAND += --http

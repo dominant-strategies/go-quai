@@ -1209,11 +1209,13 @@ func RPCMarshalEthHeader(head *types.Header) map[string]interface{} {
 	if len(head.Bloom) > types.ContextDepth-1 {
 		bloom = head.Bloom[context]
 	}
+	fmt.Println("Here")
 	result := map[string]interface{}{
 		"number":           fmt.Sprintf("0x%x", head.Number[context]),
 		"hash":             head.Hash(),
 		"parentHash":       head.ParentHash[context],
 		"nonce":            head.Nonce,
+		"extraData":        head.Extra[context], //<-----------
 		"sha3Uncles":       head.UncleHash[context],
 		"logsBloom":        bloom,
 		"stateRoot":        head.Root[context],
@@ -1300,7 +1302,7 @@ func RPCMarshalReceipt(receipt *types.Receipt) (map[string]interface{}, error) {
 // a `PublicBlockchainAPI`.
 func (s *PublicBlockChainAPI) rpcMarshalEthHeader(ctx context.Context, header *types.Header) map[string]interface{} {
 	fields := RPCMarshalEthHeader(header)
-	// fields["totalDifficulty"] = (*hexutil.Big)(s.b.GetTd(ctx, header.Hash()))
+	fields["totalDifficulty"] = (*hexutil.Big)(s.b.GetTd(ctx, header.Hash()))
 	return fields
 }
 
