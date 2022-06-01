@@ -1465,17 +1465,17 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	// Make sure no inconsistent state is leaked during insertion
 	currentBlock := bc.CurrentBlock()
 
-	var localContext int
+	var localOrder int
 	if currentBlock.NumberU64() == 0 {
-		localContext = types.QuaiNetworkContext
+		localOrder = types.QuaiNetworkContext
 	} else {
-		localContext, err = bc.Engine().GetDifficultyOrder(currentBlock.Header())
+		localOrder, err = bc.Engine().GetDifficultyOrder(currentBlock.Header())
 		if err != nil {
 			return NonStatTy, err
 		}
 	}
 
-	externContext, err := bc.Engine().GetDifficultyOrder(block.Header())
+	externOrder, err := bc.Engine().GetDifficultyOrder(block.Header())
 	if err != nil {
 		return NonStatTy, err
 	}
@@ -1485,22 +1485,30 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 	localTd, externTd := big.NewInt(0), big.NewInt(0)
 	// If the incoming block is a coincident block
-	if externContext < localContext {
+	if externOrder < localOrder {
 		var lowestOrder int
-		externTd, lowestOrder, err = bc.AggregateTotalDifficulty(localContext, block.Header())
+		externTd, lowestOrder, err = bc.AggregateTotalDifficulty(localOrder, block.Header())
 		if err != nil {
 			return NonStatTy, err
 		}
 
 		// get coincident and get the Total difficulty of it
-		localHeader, _, _ = bc.Engine().GetCoincidentAndAggDifficulty(bc, types.QuaiNetworkContext, lowestOrder+1, currentBlock.Header())
+		localHeader, err = bc.Engine().GetCoincidentAtOrder(bc, types.QuaiNetworkContext, lowestOrder, currentBlock.Header())
+		if err != nil {
+			return NonStatTy, err
+		}
+
 		localBlock := bc.GetBlockByHash(localHeader.Hash())
 		localTd = bc.GetTd(localHeader.Hash(), localBlock.NumberU64())
-	} else if localContext < externContext {
+	} else if localOrder < externOrder {
 		// get coincident and get the Total difficulty of it
 		localTd = bc.GetTd(currentBlock.Header().Hash(), currentBlock.NumberU64())
 
-		externHeader, _, _ = bc.Engine().GetCoincidentAndAggDifficulty(bc, types.QuaiNetworkContext, localContext+1, block.Header())
+		externHeader, err = bc.Engine().GetCoincidentAtOrder(bc, types.QuaiNetworkContext, localOrder, block.Header())
+		if err != nil {
+			return NonStatTy, err
+		}
+
 		externBlock := bc.GetBlockByHash(externHeader.Hash())
 
 		// If we are building on the same point
@@ -1513,9 +1521,9 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		} else {
 			externTd = bc.GetTd(externHeader.Hash(), externBlock.NumberU64())
 		}
-	} else if localContext < types.QuaiNetworkContext {
+	} else if localOrder < types.QuaiNetworkContext {
 		localTd = bc.GetTd(currentBlock.Header().Hash(), currentBlock.NumberU64())
-		externTd, _, err = bc.AggregateTotalDifficulty(localContext+1, block.Header())
+		externTd, _, err = bc.AggregateTotalDifficulty(localOrder+1, block.Header())
 		if err != nil {
 			return NonStatTy, err
 		}

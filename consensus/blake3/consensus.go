@@ -485,35 +485,28 @@ func (blake3 *Blake3) GetStopHash(chain consensus.ChainHeaderReader, originalCon
 	return stopHash, num
 }
 
-// GetCoincidentAndAggDifficulty iterates back through headers to find ones that exceed a given expectedContext.
-func (blake3 *Blake3) GetCoincidentAndAggDifficulty(chain consensus.ChainHeaderReader, context int, expectedContext int, header *types.Header) (*types.Header, int, *big.Int) {
-	totalDiff := big.NewInt(0)
+// GetCoincidentAtOrder iterates back through headers to find ones that exceed a given expectedOrder.
+func (blake3 *Blake3) GetCoincidentAtOrder(chain consensus.ChainHeaderReader, context int, expectedOrder int, header *types.Header) (*types.Header, error) {
 	// If we are at the highest context, no coincident will include it.
 	if context == 0 {
-		return header, 0, header.Difficulty[0]
+		return header, nil
 	} else {
 		for {
-			// Check work of the header, if it has enough work we will move up in context.
-			// difficultyContext is initially context since it could be a pending block w/o a nonce.
-			difficultyContext, err := blake3.GetDifficultyOrder(header)
-			if err != nil {
-				return header, difficultyContext, totalDiff
-			}
-
-			i := difficultyContext
-			for i <= context {
-				totalDiff.Add(totalDiff, header.Difficulty[i])
-				i++
-			}
-
 			// If block header is Genesis return it as coincident
 			if header.Number[context].Cmp(big.NewInt(0)) <= 0 {
-				return header, difficultyContext, totalDiff
+				return header, nil
+			}
+
+			// Check work of the header, if it has enough work we will move up in context.
+			// difficultyContext is initially context since it could be a pending block w/o a nonce.
+			difficultyOrder, err := blake3.GetDifficultyOrder(header)
+			if err != nil {
+				return nil, err
 			}
 
 			// If we have reached a coincident block
-			if difficultyContext < expectedContext {
-				return header, difficultyContext, totalDiff
+			if difficultyOrder <= expectedOrder {
+				return header, nil
 			}
 
 			// Get previous header on local chain by hash

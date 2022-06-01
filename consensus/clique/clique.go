@@ -600,8 +600,8 @@ func (c *Clique) GetCoincidentHeader(chain consensus.ChainHeaderReader, context 
 }
 
 // GetCoincidentHeader retrieves the furthest coincident header back
-func (c *Clique) GetCoincidentAndAggDifficulty(chain consensus.ChainHeaderReader, context int, expectedContext int, header *types.Header) (*types.Header, int, *big.Int) {
-	return nil, 0, big.NewInt(0)
+func (c *Clique) GetCoincidentAtOrder(chain consensus.ChainHeaderReader, context int, expectedOrder int, header *types.Header) (*types.Header, error) {
+	return nil, nil
 }
 
 // CheckPrevHeaderCoincident checks if previous header is a coincident header.
