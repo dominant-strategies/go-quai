@@ -1215,7 +1215,7 @@ func RPCMarshalEthHeader(head *types.Header) map[string]interface{} {
 		"hash":             head.Hash(),
 		"parentHash":       head.ParentHash[context],
 		"nonce":            head.Nonce,
-		"extraData":        head.Extra[context], //<-----------
+		"extraData":        head.Extra[context],
 		"sha3Uncles":       head.UncleHash[context],
 		"logsBloom":        bloom,
 		"stateRoot":        head.Root[context],
