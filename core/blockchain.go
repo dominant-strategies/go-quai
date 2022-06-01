@@ -1737,9 +1737,6 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 
 		// get all the receipts and extract the logs from it
 		receipts := bc.GetReceiptsByHash(currentBlock.Hash())
-		if receipts != nil {
-			fmt.Println("receipts was nil for ", currentBlock.Hash())
-		}
 		var logs []*types.Log
 
 		for _, receipt := range receipts {
@@ -1778,7 +1775,6 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 	} else {
 		return fmt.Errorf("reorg header was null")
 	}
-
 	return nil
 }
 
