@@ -1706,23 +1706,27 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 		}
 		// get the current head in this chain
 		currentBlock := bc.CurrentBlock()
-
 		for {
-			if currentBlock.Hash() == commonBlock.Hash() {
-				// iterate one more for the current block reorg point to exclude the commonBlock that is to be reorged.
-				currentBlock = bc.GetBlock(currentBlock.ParentHash(), currentBlock.NumberU64()-1)
-				deletedTxs = append(deletedTxs, currentBlock.Transactions()...)
-				collectLogs(currentBlock.Hash())
-				break
-			}
 			deletedTxs = append(deletedTxs, currentBlock.Transactions()...)
 			collectLogs(currentBlock.Hash())
+			if currentBlock.Hash() == commonBlock.Hash() {
+				break
+			}
 
 			currentBlock = bc.GetBlock(currentBlock.ParentHash(), currentBlock.NumberU64()-1)
 			if currentBlock == nil {
 				return fmt.Errorf("invalid current chain")
 			}
 		}
+
+		// Additional step is needed since we want to rollback 1 past the commonBlock.
+		deletedTxs = append(deletedTxs, currentBlock.Transactions()...)
+		collectLogs(currentBlock.Hash())
+		currentBlock = bc.GetBlock(currentBlock.ParentHash(), currentBlock.NumberU64()-1)
+		if currentBlock == nil {
+			return fmt.Errorf("invalid current chain")
+		}
+
 		// set the head back to the block before the rollback point
 		if err := bc.SetHead(commonBlock.NumberU64() - 1); err != nil {
 			return err
