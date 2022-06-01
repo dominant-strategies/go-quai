@@ -2092,6 +2092,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		status, err := bc.writeBlockWithState(block, receipts, logs, statedb, linkExtBlocks, false)
 		atomic.StoreUint32(&followupInterrupt, 1)
 		if err != nil {
+			bc.reportBlock(block, receipts, err)
+			bc.chainUncleFeed.Send(block.Header())
 			return it.index, err
 		}
 
