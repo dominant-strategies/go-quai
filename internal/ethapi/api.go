@@ -1210,25 +1210,26 @@ func RPCMarshalEthHeader(head *types.Header) map[string]interface{} {
 		bloom = head.Bloom[context]
 	}
 	result := map[string]interface{}{
-		"number":           head.Number[context],
+		"number":           fmt.Sprintf("0x%x", head.Number[context]),
 		"hash":             head.Hash(),
 		"parentHash":       head.ParentHash[context],
 		"nonce":            head.Nonce,
+		"extraData":        head.Extra[context],
 		"sha3Uncles":       head.UncleHash[context],
 		"logsBloom":        bloom,
 		"stateRoot":        head.Root[context],
 		"miner":            head.Coinbase[context],
 		"difficulty":       head.Difficulty[context],
 		"totalDifficulty":  head.NetworkDifficulty[context],
-		"extraData":        head.Extra[context],
 		"size":             hexutil.Uint64(head.Size()),
 		"gasLimit":         head.GasLimit[context],
 		"gasUsed":          head.GasUsed[context],
 		"timestamp":        head.Time,
 		"transactionsRoot": head.TxHash[context],
+		"receiptsRoot":     head.ReceiptHash[context],
 	}
 	if head.BaseFee[context] != nil {
-		result["baseFeePerGas"] = head.BaseFee[context]
+		result["baseFeePerGas"] = (*hexutil.Big)(head.BaseFee[context])
 	}
 	return result
 }
