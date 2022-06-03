@@ -1209,7 +1209,6 @@ func RPCMarshalEthHeader(head *types.Header) map[string]interface{} {
 	if len(head.Bloom) > types.ContextDepth-1 {
 		bloom = head.Bloom[context]
 	}
-	fmt.Println("Here")
 	result := map[string]interface{}{
 		"number":           fmt.Sprintf("0x%x", head.Number[context]),
 		"hash":             head.Hash(),
