@@ -501,7 +501,6 @@ func WriteBodyRLP(db ethdb.KeyValueWriter, hash common.Hash, number uint64, rlp 
 
 // WriteBodyRLP stores an RLP encoded block body into the database.
 func WriteExternalBodyRLP(db ethdb.KeyValueWriter, hash common.Hash, number uint64, context uint64, rlp rlp.RawValue) {
-	fmt.Println("WriteExternalBodyRLP:", number, context, hash)
 	if err := db.Put(extBlockBodyKey(number, context, hash), rlp); err != nil {
 		log.Crit("Failed to store block body", "err", err)
 	}
