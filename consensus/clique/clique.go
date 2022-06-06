@@ -604,6 +604,11 @@ func (c *Clique) GetCoincidentHeader(chain consensus.ChainHeaderReader, context 
 	return nil, 0
 }
 
+// GetCoincidentHeader retrieves the furthest coincident header back
+func (c *Clique) GetCoincidentAtOrder(chain consensus.ChainHeaderReader, context int, expectedOrder int, header *types.Header) (*types.Header, error) {
+	return nil, nil
+}
+
 // CheckPrevHeaderCoincident checks if previous header is a coincident header.
 func (c *Clique) CheckPrevHeaderCoincident(chain consensus.ChainHeaderReader, context int, header *types.Header) (int, error) {
 	return 0, nil

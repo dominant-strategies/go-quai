@@ -121,6 +121,9 @@ type Engine interface {
 	// GetCoincidentHeader retrieves the furthest coincident header back.
 	GetCoincidentHeader(chain ChainHeaderReader, context int, header *types.Header) (*types.Header, int)
 
+	// GetCoincidentAtOrder retrieves the coincident header.
+	GetCoincidentAtOrder(chain ChainHeaderReader, context int, expectedOrder int, header *types.Header) (*types.Header, error)
+
 	// CheckPrevHeaderCoincident checks if previous header is a coincident header.
 	CheckPrevHeaderCoincident(chain ChainHeaderReader, context int, header *types.Header) (int, error)
 

@@ -431,6 +431,38 @@ func (blake3 *Blake3) CheckPrevHeaderCoincident(chain consensus.ChainHeaderReade
 	return difficultyContext, nil
 }
 
+// GetCoincidentAtOrder iterates back through headers to find ones that exceed a given expectedOrder.
+func (blake3 *Blake3) GetCoincidentAtOrder(chain consensus.ChainHeaderReader, context int, expectedOrder int, header *types.Header) (*types.Header, error) {
+	// If we are at the highest context, no coincident will include it.
+	if context == 0 {
+		return header, nil
+	} else {
+		for {
+			// If block header is Genesis return it as coincident
+			if header.Number[context].Cmp(big.NewInt(0)) <= 0 {
+				return header, nil
+			}
+
+			// Check work of the header, if it has enough work we will move up in context.
+			// difficultyContext is initially context since it could be a pending block w/o a nonce.
+			difficultyOrder, err := blake3.GetDifficultyOrder(header)
+			if err != nil {
+				return nil, err
+			}
+
+			// If we have reached a coincident block
+			if difficultyOrder <= expectedOrder {
+				return header, nil
+			}
+
+			// Get previous header on local chain by hash
+			prevHeader := chain.GetHeaderByHash(header.ParentHash[context])
+			// Increment previous header
+			header = prevHeader
+		}
+	}
+}
+
 // TraceBranch is the recursive function that returns all ExternalBlocks for a given header, stopHash, context, and location.
 func (blake3 *Blake3) PrimeTraceBranch(chain consensus.ChainHeaderReader, header *types.Header, context int, originalContext int, originalLocation []byte) ([]*types.ExternalBlock, error) {
 	extBlocks := make([]*types.ExternalBlock, 0)
