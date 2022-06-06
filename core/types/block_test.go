@@ -48,7 +48,7 @@ func TestHeaderBlockEncoding(t *testing.T) {
 	check("GasLimit", block.GasLimit(), uint64(12345678))
 	check("GasUsed", block.GasUsed(), uint64(1476322))
 	check("Coinbase", block.Coinbase(), common.HexToAddress("8888f1f195afa192cfee860698584c030f4c9db1"))
-	check("MixDigest", block.MixDigest(), common.HexToHash("bd4472abb6659ebe3ee06ee4d7b72a00a9f4d001caca51342001075469aff498"))
+	//check("MixDigest", block.MixDigest(), common.HexToHash("bd4472abb6659ebe3ee06ee4d7b72a00a9f4d001caca51342001075469aff498"))
 	check("Root", block.Root(), common.HexToHash("ef1552a40b7165c3cd773806b9e0c165b75356e0314bf0706f279c729f51e017"))
 	check("Hash", block.Hash(), common.HexToHash("0x4f4545c805c893e07e552b93151a4d031401ca71e0ab25971cb0a81babf1e742"))
 	check("Nonce", block.Nonce(), uint64(0))
@@ -82,7 +82,7 @@ func TestBlockEncoding(t *testing.T) {
 	check("GasLimit", block.GasLimit(), uint64(12345678))
 	check("GasUsed", block.GasUsed(), uint64(1476322))
 	check("Coinbase", block.Coinbase(), common.HexToAddress("8888f1f195afa192cfee860698584c030f4c9db1"))
-	check("MixDigest", block.MixDigest(), common.HexToHash("bd4472abb6659ebe3ee06ee4d7b72a00a9f4d001caca51342001075469aff498"))
+	//check("MixDigest", block.MixDigest(), common.HexToHash("bd4472abb6659ebe3ee06ee4d7b72a00a9f4d001caca51342001075469aff498"))
 	check("Root", block.Root(), common.HexToHash("ef1552a40b7165c3cd773806b9e0c165b75356e0314bf0706f279c729f51e017"))
 	check("Hash", block.Hash(), common.HexToHash("0x2d6ef4ffff178d40bb3759a2c2ec41dff373e207ec6cccb8e12437bc8f821c70"))
 	check("Nonce", block.Nonce(), uint64(0))
@@ -111,9 +111,9 @@ func TestBlockDecoding(t *testing.T) {
 		uncles   = make([]*Header, 0)
 	)
 	header := &Header{
-		Coinbase:   []common.Address{common.HexToAddress("8888f1f195afa192cfee860698584c030f4c9db1"), common.HexToAddress("8888f1f195afa192cfee860698584c030f4c9db1"), common.HexToAddress("8888f1f195afa192cfee860698584c030f4c9db1")},
-		Root:       []common.Hash{common.HexToHash("ef1552a40b7165c3cd773806b9e0c165b75356e0314bf0706f279c729f51e017"), common.HexToHash("ef1552a40b7165c3cd773806b9e0c165b75356e0314bf0706f279c729f51e017"), common.HexToHash("ef1552a40b7165c3cd773806b9e0c165b75356e0314bf0706f279c729f51e017")},
-		MixDigest:  common.HexToHash("bd4472abb6659ebe3ee06ee4d7b72a00a9f4d001caca51342001075469aff498"),
+		Coinbase: []common.Address{common.HexToAddress("8888f1f195afa192cfee860698584c030f4c9db1"), common.HexToAddress("8888f1f195afa192cfee860698584c030f4c9db1"), common.HexToAddress("8888f1f195afa192cfee860698584c030f4c9db1")},
+		Root:     []common.Hash{common.HexToHash("ef1552a40b7165c3cd773806b9e0c165b75356e0314bf0706f279c729f51e017"), common.HexToHash("ef1552a40b7165c3cd773806b9e0c165b75356e0314bf0706f279c729f51e017"), common.HexToHash("ef1552a40b7165c3cd773806b9e0c165b75356e0314bf0706f279c729f51e017")},
+		//MixDigest:  common.HexToHash("bd4472abb6659ebe3ee06ee4d7b72a00a9f4d001caca51342001075469aff498"),
 		Difficulty: []*big.Int{big.NewInt(131072), big.NewInt(131072), big.NewInt(131072)},
 		Number:     []*big.Int{math.BigPow(2, 9), math.BigPow(2, 9), math.BigPow(2, 9)},
 		GasLimit:   []uint64{12345678, 12345678, 12345678},
@@ -171,7 +171,7 @@ func TestEIP1559BlockEncoding(t *testing.T) {
 	check("GasLimit", block.GasLimit(), uint64(3141592))
 	check("GasUsed", block.GasUsed(), uint64(21000))
 	check("Coinbase", block.Coinbase(), common.HexToAddress("8888f1f195afa192cfee860698584c030f4c9db1"))
-	check("MixDigest", block.MixDigest(), common.HexToHash("bd4472abb6659ebe3ee06ee4d7b72a00a9f4d001caca51342001075469aff498"))
+	//check("MixDigest", block.MixDigest(), common.HexToHash("bd4472abb6659ebe3ee06ee4d7b72a00a9f4d001caca51342001075469aff498"))
 	check("Root", block.Root(), common.HexToHash("ef1552a40b7165c3cd773806b9e0c165b75356e0314bf0706f279c729f51e017"))
 	check("Hash", block.Hash(), common.HexToHash("c7252048cd273fe0dac09650027d07f0e3da4ee0675ebbb26627cea92729c372"))
 	check("Nonce", block.Nonce(), uint64(0xa13a5a8c8f2bb1c4))
@@ -235,7 +235,7 @@ func TestEIP2718BlockEncoding(t *testing.T) {
 	check("GasLimit", block.GasLimit(), uint64(3141592))
 	check("GasUsed", block.GasUsed(), uint64(42000))
 	check("Coinbase", block.Coinbase(), common.HexToAddress("8888f1f195afa192cfee860698584c030f4c9db1"))
-	check("MixDigest", block.MixDigest(), common.HexToHash("bd4472abb6659ebe3ee06ee4d7b72a00a9f4d001caca51342001075469aff498"))
+	//check("MixDigest", block.MixDigest(), common.HexToHash("bd4472abb6659ebe3ee06ee4d7b72a00a9f4d001caca51342001075469aff498"))
 	check("Root", block.Root(), common.HexToHash("ef1552a40b7165c3cd773806b9e0c165b75356e0314bf0706f279c729f51e017"))
 	check("Nonce", block.Nonce(), uint64(0xa13a5a8c8f2bb1c4))
 	check("Time", block.Time(), uint64(1426516743))

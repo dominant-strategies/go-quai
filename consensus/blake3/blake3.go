@@ -81,6 +81,12 @@ func NewFaker() *Blake3 {
 	}
 }
 
+// NewTester creates a small sized ethash PoW scheme useful only for testing
+// purposes.
+func NewTester(notify []string, noverify bool) (*Blake3, error) {
+	return New(Config{Fakepow: true}, notify, noverify)
+}
+
 // Close closes the exit channel to notify all backend threads exiting.
 func (blake3 *Blake3) Close() error {
 	blake3.closeOnce.Do(func() {

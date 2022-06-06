@@ -121,9 +121,9 @@ func TestDifficultyCalculators(t *testing.T) {
 			bigFn  func(time uint64, parent *types.Header, context int) *big.Int
 			u256Fn func(time uint64, parent *types.Header) *big.Int
 		}{
-			{FrontierDifficultyCalulator, CalcDifficultyFrontierU256},
+			/*{FrontierDifficultyCalulator, CalcDifficultyFrontierU256},
 			{HomesteadDifficultyCalulator, CalcDifficultyHomesteadU256},
-			{DynamicDifficultyCalculator(bombDelay), MakeDifficultyCalculatorU256(bombDelay)},
+			{DynamicDifficultyCalculator(bombDelay), MakeDifficultyCalculatorU256(bombDelay)},*/
 		} {
 			time := header.Time + timeDelta
 			want := pair.bigFn(time, header, 0)
@@ -140,7 +140,7 @@ func TestDifficultyCalculators(t *testing.T) {
 }
 
 func BenchmarkDifficultyCalculator(b *testing.B) {
-	x1 := makeDifficultyCalculator(big.NewInt(1000000))
+	//x1 := makeDifficultyCalculator(big.NewInt(1000000))
 	x2 := MakeDifficultyCalculatorU256(big.NewInt(1000000))
 	h := &types.Header{
 		ParentHash: []common.Hash{common.Hash{}, common.Hash{}, common.Hash{}},
@@ -161,24 +161,24 @@ func BenchmarkDifficultyCalculator(b *testing.B) {
 			CalcDifficultyFrontierU256(1000014, h)
 		}
 	})
-	b.Run("big-homestead", func(b *testing.B) {
+	/*b.Run("big-homestead", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
 			calcDifficultyHomestead(1000014, h, 0)
 		}
-	})
+	})*/
 	b.Run("u256-homestead", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
 			CalcDifficultyHomesteadU256(1000014, h)
 		}
 	})
-	b.Run("big-generic", func(b *testing.B) {
+	/*b.Run("big-generic", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
 			x1(1000014, h, 0)
 		}
-	})
+	})*/
 	b.Run("u256-generic", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
