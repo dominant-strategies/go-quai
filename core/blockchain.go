@@ -2719,12 +2719,17 @@ func (bc *BlockChain) GetHeader(hash common.Hash, number uint64) *types.Header {
 
 // CheckHashInclusion checks to see if a hash is already included in a previous block.
 func (bc *BlockChain) CheckHashInclusion(header *types.Header, parent *types.Header) error {
+	
+	// If we are in Prime node, check to see if the subordinate Region hash included in the parent block
+	// is the same as the hash we are trying to include in the current block.
 	if types.QuaiNetworkContext < 1 {
 		if header.ParentHash[1] == parent.ParentHash[1] {
 			return fmt.Errorf("error subordinate hash already included in parent")
 		}
 	}
 
+	// If we are in a Prime or Region node, check to see if the subordinate Zone hash included in the parent block
+	// is the same as the hash we are trying to include in the current block.
 	if types.QuaiNetworkContext < 2 {
 		if header.ParentHash[2] == parent.ParentHash[2] {
 			return fmt.Errorf("error subordinate hash already included in parent")
@@ -2739,12 +2744,12 @@ func (bc *BlockChain) CheckHashInclusion(header *types.Header, parent *types.Hea
 			return nil
 		}
 
-		currContext, err := bc.Engine().GetDifficultyOrder(currentBlock.Header())
+		currOrder, err := bc.Engine().GetDifficultyOrder(currentBlock.Header())
 		if err != nil {
 			return err
 		}
 
-		newContext, err := bc.Engine().GetDifficultyOrder(header)
+		newOrder, err := bc.Engine().GetDifficultyOrder(header)
 		if err != nil {
 			return err
 		}
@@ -2754,7 +2759,7 @@ func (bc *BlockChain) CheckHashInclusion(header *types.Header, parent *types.Hea
 		// the region block.
 		// REGION: [6 8 60] 0x657dc29c4b2ac624638707b660e2bef4897a82efe4cc6e91471ae37d50bd665d
 		// ZONE:   [6 9 60] 0xedd4cdc59db07818f9b5c38a71d5f68c2d661168e1b0b57570614b05b6264211
-		if currContext == newContext && header.ParentHash[newContext] != currentBlock.Header().ParentHash[currContext] {
+		if currOrder == newOrder && header.ParentHash[newOrder] != currentBlock.Header().ParentHash[currOrder] {
 			if header.ParentHash[2] == currentBlock.Header().ParentHash[2] {
 				return fmt.Errorf("error subordinate hash already included in parent")
 			}
@@ -2818,12 +2823,12 @@ func (bc *BlockChain) GetExternalBlocks(header *types.Header) ([]*types.External
 
 	// Check if header is nil
 	if header == nil {
-		return externalBlocks, nil
+		return nil, fmt.Errorf("error getting external blocks for nil header")
 	}
 
 	// Check header number
 	if header.Number == nil {
-		return externalBlocks, nil
+		return nil, fmt.Errorf("error getting external blocks for header with nil number")
 	}
 
 	// Do not run on block 1
@@ -2841,7 +2846,7 @@ func (bc *BlockChain) GetExternalBlocks(header *types.Header) ([]*types.External
 
 		externalBlocks, err := bc.engine.TraceBranches(bc, prevHeader, difficultyContext, context, header.Location)
 		if err != nil {
-			return externalBlocks, nil
+			return nil, err
 		}
 	}
 
@@ -2857,7 +2862,7 @@ func (bc *BlockChain) GetLinkExternalBlocks(header *types.Header) ([]*types.Exte
 
 	// Check if header is nil
 	if header == nil || header.Number == nil {
-		return externalBlocks, nil
+		return  nil, fmt.Errorf("error getting external blocks for nil header")
 	}
 
 	difficultyContext, err := bc.engine.GetDifficultyOrder(header)
@@ -2872,7 +2877,7 @@ func (bc *BlockChain) GetLinkExternalBlocks(header *types.Header) ([]*types.Exte
 
 	externalBlocks, err = bc.engine.TraceBranches(bc, header, difficultyContext, context, header.Location)
 	if err != nil {
-		return externalBlocks, nil
+		return nil, err
 	}
 
 	return externalBlocks, nil

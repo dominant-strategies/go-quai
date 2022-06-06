@@ -130,7 +130,7 @@ type Engine interface {
 	// This function determines the difficulty order of a block
 	GetDifficultyOrder(header *types.Header) (int, error)
 
-	// TraceBranches recursively traces region branches to find external blocks.
+	// TraceBranches recursively traces region and zone branches to find external blocks.
 	TraceBranches(chain ChainHeaderReader, header *types.Header, context int, originalContext int, originalLocation []byte) ([]*types.ExternalBlock, error)
 
 	// GetLinkExternalBlocks links every block to the correct previous block

@@ -463,7 +463,7 @@ func (blake3 *Blake3) GetCoincidentAtOrder(chain consensus.ChainHeaderReader, co
 	}
 }
 
-// TraceBranch is the recursive function that returns all ExternalBlocks for a given header, stopHash, context, and location.
+// PrimeTraceBranch is the recursive function that returns all ExternalBlocks for a given header, stopHash, context, and location.
 func (blake3 *Blake3) PrimeTraceBranch(chain consensus.ChainHeaderReader, header *types.Header, context int, originalContext int, originalLocation []byte) ([]*types.ExternalBlock, error) {
 	extBlocks := make([]*types.ExternalBlock, 0)
 	// startingHeader := header
@@ -540,7 +540,7 @@ func (blake3 *Blake3) PrimeTraceBranch(chain consensus.ChainHeaderReader, header
 	return extBlocks, nil
 }
 
-// TraceBranch is the recursive function that returns all ExternalBlocks for a given header, stopHash, context, and location.
+// RegionTraceBranch is the recursive function that returns all ExternalBlocks for a given header, stopHash, context, and location.
 func (blake3 *Blake3) RegionTraceBranch(chain consensus.ChainHeaderReader, header *types.Header, context int, originalContext int, originalLocation []byte) ([]*types.ExternalBlock, error) {
 	extBlocks := make([]*types.ExternalBlock, 0)
 	// startingHeader := header
