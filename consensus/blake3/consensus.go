@@ -278,8 +278,13 @@ func (blake3 *Blake3) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		}
 	}
 	// Verify that Location is same as config
-	if validLocation := verifyLocation(header.Location, chain.Config().Location); !validLocation {
-		return fmt.Errorf("invalid location: Location %d not valid, expected %c", header.Location, chain.Config().Location)
+	if err := verifyLocation(header.Location, chain.Config().Location); err != nil {
+		return err
+	}
+
+	// Verify Location is in ontology described by MapContext
+	if err := verifyInsideLocation(header.Location, header.Number, chain.Config()); err != nil {
+		return err
 	}
 
 	if err := misc.VerifyForkHashes(chain.Config(), header, uncle); err != nil {
@@ -480,11 +485,47 @@ func (blake3 *Blake3) GetStopHash(chain consensus.ChainHeaderReader, originalCon
 	return stopHash, num
 }
 
+// GetCoincidentAtOrder iterates back through headers to find ones that exceed a given expectedOrder.
+func (blake3 *Blake3) GetCoincidentAtOrder(chain consensus.ChainHeaderReader, context int, expectedOrder int, header *types.Header) (*types.Header, error) {
+	// If we are at the highest context, no coincident will include it.
+	if context == 0 {
+		return header, nil
+	} else {
+		for {
+			// If block header is Genesis return it as coincident
+			if header.Number[context].Cmp(big.NewInt(0)) <= 0 {
+				return header, nil
+			}
+
+			// Check work of the header, if it has enough work we will move up in context.
+			// difficultyContext is initially context since it could be a pending block w/o a nonce.
+			difficultyOrder, err := blake3.GetDifficultyOrder(header)
+			if err != nil {
+				return nil, err
+			}
+
+			// If we have reached a coincident block
+			if difficultyOrder <= expectedOrder {
+				return header, nil
+			}
+
+			// Get previous header on local chain by hash
+			prevHeader := chain.GetHeaderByHash(header.ParentHash[context])
+			// Increment previous header
+			header = prevHeader
+		}
+	}
+}
+
 // TraceBranch is the recursive function that returns all ExternalBlocks for a given header, stopHash, context, and location.
 func (blake3 *Blake3) PrimeTraceBranch(chain consensus.ChainHeaderReader, header *types.Header, context int, stopHash common.Hash, originalContext int, originalLocation []byte) ([]*types.ExternalBlock, error) {
 	extBlocks := make([]*types.ExternalBlock, 0)
 	// startingHeader := header
 	for {
+		// Verify Location is in ontology described by MapContext
+		if err := verifyInsideLocation(header.Location, header.Number, chain.Config()); err != nil {
+			return nil, consensus.ErrInvalidLocation
+		}
 		// If the header is genesis, return the current set of external blocks.
 		if header.Number[context].Cmp(big.NewInt(0)) == 0 {
 			// log.Info("Trace Branch: Stopping height == 0", "number", header.Number, "context", context, "location", header.Location, "hash", header.ParentHash[context])
@@ -562,6 +603,11 @@ func (blake3 *Blake3) RegionTraceBranch(chain consensus.ChainHeaderReader, heade
 	extBlocks := make([]*types.ExternalBlock, 0)
 	// startingHeader := header
 	for {
+		// Verify Location is in ontology described by MapContext
+		if err := verifyInsideLocation(header.Location, header.Number, chain.Config()); err != nil {
+			return nil, consensus.ErrInvalidLocation
+		}
+
 		// If the header is genesis, return the current set of external blocks.
 		if header.Number[context].Cmp(big.NewInt(0)) == 0 {
 			// log.Info("Trace Branch: Stopping height == 0", "number", header.Number, "context", context, "location", header.Location, "hash", header.ParentHash[context])
@@ -846,6 +892,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	if config.IsCatalyst(header.Number[types.QuaiNetworkContext]) {
 		return
 	}
+
 	// Select the correct block reward based on chain progression
 	blockReward := misc.CalculateReward()
 	// Accumulate the rewards for the miner and any included uncles
@@ -865,23 +912,52 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 }
 
 // Verifies that a header location is valid for a specific config.
-func verifyLocation(location []byte, configLocation []byte) bool {
+func verifyLocation(location []byte, configLocation []byte) error {
 	switch types.QuaiNetworkContext {
 	case 0:
-		return true
+		return nil
 	case 1:
 		if location[0] != configLocation[0] {
-			return false
+			return consensus.ErrInvalidLocation
 		} else {
-			return true
+			return nil
 		}
 	case 2:
 		if !bytes.Equal(location, configLocation) {
-			return false
+			return consensus.ErrInvalidLocation
 		} else {
-			return true
+			return nil
 		}
 	default:
-		return false
+		return consensus.ErrInvalidLocation
 	}
+}
+
+// Verifies that Location value is valid inside MapContext ontology.
+// Returns MapContext for error handling purposes.
+func verifyInsideLocation(location []byte, number []*big.Int, config *params.ChainConfig) error {
+	regionLocation := int(location[0])
+	zoneLocation := int(location[1])
+
+	switch {
+	/*	case config.IsLovelace(number[0]): // Lovelace = [3,4,4]
+			return checkInsideCurrent(regionLocation, zoneLocation, params.LovelaceOntology)
+		case config.IsTuring(number[0]): // Turing = [3,3,4]
+			return checkInsideCurrent(regionLocation, zoneLocation, params.TuringOntology) */
+	case config.IsFuller(number[0]): // Fuller = [3,3,3]
+		return checkInsideCurrent(regionLocation, zoneLocation, params.FullerOntology)
+	default:
+		return consensus.ErrInvalidOntology
+	}
+}
+
+// Verifies that Location is valid inside current MapContext ontology.
+func checkInsideCurrent(regionLoc int, zoneLoc int, ontology []int) error {
+	if len(ontology) < regionLoc {
+		return consensus.ErrInvalidOntology
+	}
+	if ontology[regionLoc-1] < zoneLoc {
+		return consensus.ErrInvalidOntology
+	}
+	return nil
 }

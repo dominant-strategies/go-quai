@@ -50,7 +50,7 @@ func TestRemoteNotify(t *testing.T) {
 	defer server.Close()
 
 	// Create the custom ethash engine.
-	ethash, _ := NewTester([]string{server.URL}, false)
+	ethash := NewTester([]string{server.URL}, false)
 	defer ethash.Close()
 
 	// Stream a work task and ensure the notification bubbles out.
@@ -98,7 +98,6 @@ func TestRemoteNotifyFull(t *testing.T) {
 		Log:        testlog.Logger(t, log.LvlWarn),
 	}
 	blake3, _ := New(config, []string{server.URL}, false)
-	defer blake3.Close()
 
 	// Stream a work task and ensure the notification bubbles out.
 	header := &types.Header{Number: []*big.Int{big.NewInt(1), big.NewInt(1), big.NewInt(1)}, Difficulty: []*big.Int{big.NewInt(100), big.NewInt(100), big.NewInt(100)}}
@@ -137,7 +136,7 @@ func TestRemoteMultiNotify(t *testing.T) {
 	defer server.Close()
 
 	// Create the custom ethash engine.
-	ethash, _ := NewTester([]string{server.URL}, false)
+	ethash := NewTester([]string{server.URL}, false)
 	ethash.config.Log = testlog.Logger(t, log.LvlWarn)
 	defer ethash.Close()
 
@@ -214,7 +213,7 @@ func TestRemoteMultiNotifyFull(t *testing.T) {
 
 // Tests whether stale solutions are correctly processed.
 func TestStaleSubmission(t *testing.T) {
-	ethash, _ := NewTester(nil, true)
+	ethash := NewTester(nil, true)
 	defer ethash.Close()
 	api := &API{ethash}
 

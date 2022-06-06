@@ -328,9 +328,9 @@ func ReadHeaderRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValu
 }
 
 // ReadExternalHeaderRLP retrieves a block header in its raw RLP database encoding.
-func ReadExternalHeaderRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
+func ReadExternalHeaderRLP(db ethdb.Reader, hash common.Hash, number uint64, context uint64) rlp.RawValue {
 	// look up the data in leveldb.
-	data, _ := db.Get(headerKey(number, hash))
+	data, _ := db.Get(extHeaderKey(number, context, hash))
 	if len(data) > 0 {
 		return data
 	}
@@ -363,8 +363,8 @@ func ReadHeader(db ethdb.Reader, hash common.Hash, number uint64) *types.Header 
 }
 
 // ReadExternalHeader retrieves the block header corresponding to the hash.
-func ReadExternalHeader(db ethdb.Reader, hash common.Hash, number uint64) *types.Header {
-	data := ReadExternalHeaderRLP(db, hash, number)
+func ReadExternalHeader(db ethdb.Reader, hash common.Hash, number uint64, context uint64) *types.Header {
+	data := ReadExternalHeaderRLP(db, hash, number, context)
 	if len(data) == 0 {
 		return nil
 	}
@@ -410,7 +410,7 @@ func WriteExternalHeader(db ethdb.KeyValueWriter, header *types.Header, context 
 	if err != nil {
 		log.Crit("Failed to RLP encode header", "err", err)
 	}
-	key := headerKey(number, hash)
+	key := extHeaderKey(number, context, hash)
 	if err := db.Put(key, data); err != nil {
 		log.Crit("Failed to store header", "err", err)
 	}
@@ -855,7 +855,7 @@ func WriteBlock(db ethdb.KeyValueWriter, block *types.Block) {
 // back from the stored header and body. If either the header or body could not
 // be retrieved nil is returned.
 func ReadExternalBlock(db ethdb.Reader, hash common.Hash, number uint64, context uint64) *types.ExternalBlock {
-	header := ReadExternalHeader(db, hash, number)
+	header := ReadExternalHeader(db, hash, number, context)
 	if header == nil {
 		return nil
 	}

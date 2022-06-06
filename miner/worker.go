@@ -710,12 +710,7 @@ func (w *worker) resultLoop() {
 				}
 				logs = append(logs, receipt.Logs...)
 			}
-			// Commit block and state to database.
-			_, err := w.chain.WriteBlockWithState(block, receipts, logs, task.state, true)
-			if err != nil {
-				log.Error("Failed writing block to chain", "err", err)
-				continue
-			}
+
 			log.Info("Successfully sealed new block", "number", block.Number(), "sealhash", sealhash, "hash", hash,
 				"elapsed", common.PrettyDuration(time.Since(task.createdAt)))
 
@@ -1130,7 +1125,7 @@ func (w *worker) generateWork(params *generateParams) (*types.Block, error) {
 	w.fillExternalTransactions(nil, work)
 	w.adjustGasLimit(nil, work)
 	w.fillTransactions(nil, work)
-	return w.engine.FinalizeAndAssemble(w.chain, work.header, work.state, work.txs, make([]*types.Header, 0), work.receipts)
+	return w.engine.FinalizeAndAssemble(w.chain, work.header, work.state, work.txs, work.unclelist(), work.receipts)
 }
 
 // commitWork generates several new sealing tasks based on the parent block
