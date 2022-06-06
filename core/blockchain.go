@@ -195,6 +195,7 @@ type BlockChain struct {
 	genesisBlock   *types.Block
 
 	chainmu sync.RWMutex // blockchain insertion lock
+	reorgmu sync.RWMutex // reorg call lock
 
 	currentBlock     atomic.Value // Current head of the block chain
 	currentFastBlock atomic.Value // Current head of the fast-sync chain (may be above the block chain!)
@@ -1713,10 +1714,9 @@ func (bc *BlockChain) AddExternalBlock(block *types.ExternalBlock) error {
 // ReOrgRollBack compares the difficulty of the newchain and oldchain. Rolls back
 // the current header to the position where the reorg took place in a higher context
 func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
-	bc.wg.Add(1)
-	defer bc.wg.Done()
-
-	log.Info("Rolling back header beyond", "Hash ", header.Hash())
+	log.Info("Rolling back header beyond", "hash", header.Hash())
+	bc.reorgmu.Lock()
+	defer bc.reorgmu.Unlock()
 	var (
 		deletedTxs  types.Transactions
 		deletedLogs [][]*types.Log
@@ -1763,30 +1763,40 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 		// get the commonBlock
 		commonBlock := bc.GetBlockByHash(header.Hash())
 
+		// if commonBlock isn't canoncial in our chain, do not reorg
+		// because commonBlock parentHash could potentially be in our chain.
+
 		// if a block with this hash does not exist then we dont have to roll back
 		if commonBlock == nil {
 			return nil
 		}
 		// get the current head in this chain
 		currentBlock := bc.CurrentBlock()
-
 		for {
-			if currentBlock.NumberU64() == commonBlock.NumberU64()-1 {
-				break
-			}
 			deletedTxs = append(deletedTxs, currentBlock.Transactions()...)
 			collectLogs(currentBlock.Hash())
+			if currentBlock.Hash() == commonBlock.Hash() {
+				break
+			}
 
 			currentBlock = bc.GetBlock(currentBlock.ParentHash(), currentBlock.NumberU64()-1)
 			if currentBlock == nil {
 				return fmt.Errorf("invalid current chain")
 			}
 		}
+
+		// Additional step is needed since we want to rollback 1 past the commonBlock.
+		deletedTxs = append(deletedTxs, currentBlock.Transactions()...)
+		collectLogs(currentBlock.Hash())
+		currentBlock = bc.GetBlock(currentBlock.ParentHash(), currentBlock.NumberU64()-1)
+		if currentBlock == nil {
+			return fmt.Errorf("invalid current chain")
+		}
+
 		// set the head back to the block before the rollback point
 		if err := bc.SetHead(commonBlock.NumberU64() - 1); err != nil {
 			return err
 		}
-
 		// writing the head to the blockchain state
 		bc.writeHeadBlock(currentBlock)
 		bc.futureBlocks.Remove(currentBlock.Hash())
@@ -1867,11 +1877,11 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 		}
 	}
 	// Pre-checks passed, start the full block imports
-	bc.wg.Add(1)
+	bc.reorgmu.Lock()
 	bc.chainmu.Lock()
 	n, err := bc.insertChain(chain, true)
 	bc.chainmu.Unlock()
-	bc.wg.Done()
+	bc.reorgmu.Unlock()
 
 	return n, err
 }
