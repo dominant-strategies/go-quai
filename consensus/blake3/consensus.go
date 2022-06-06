@@ -401,7 +401,7 @@ func (blake3 *Blake3) GetCoincidentHeader(chain consensus.ChainHeaderReader, con
 			}
 
 			// If block header is Genesis return it as coincident
-			if header.Number[context].Cmp(big.NewInt(1)) <= 0 {
+			if header.Number[context].Cmp(big.NewInt(0)) <= 0 {
 				return header, difficultyContext
 			}
 
