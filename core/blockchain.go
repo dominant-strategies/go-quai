@@ -1533,7 +1533,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		// to ensure that the previous coincident of the externHeader matches the previous coincident
 		// of the localHeader. This makes sure that the imported chain with externHeader doesn't outrun
 		// the chain.
-		if types.QuaiNetworkContext != 0 {
+		if types.QuaiNetworkContext == 2 {
 			localPrevCoincident, _ := bc.Engine().GetCoincidentHeader(bc, localOrder, localHeader)
 			externPrevCoincident, _ := bc.Engine().GetCoincidentHeader(bc, localOrder, externHeader)
 			if localPrevCoincident.Hash() != externPrevCoincident.Hash() {

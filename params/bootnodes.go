@@ -21,7 +21,7 @@ import "github.com/spruce-solutions/go-quai/common"
 // MainnetBootnodes are the enode URLs of the P2P bootstrap nodes running on
 // the main Quai Network.
 var MainnetBootnodes = []string{
-	"enode://6e79bc43bb98a582805a7bf81cfd67cd193c68bebcc9609d939df7576374d5ec3c71a2b70e59993c0a3cd8c5bb5dfae74c3efae72c8e7bd8d2370a84da33baf7@34.135.197.187", // ds-team-node
+	"enode://ac169b82df3350085dbdb2cd236008fac52cc0cb81481c0b0a957e01da1a9552201c8c6cfb54ebb28b7c23fbd065cf5e9cfa1f30d6802ecf4831ccfb6d36dc92@34.135.197.187", // ds-team-node
 }
 
 // RopstenBootnodes are the enode URLs of the P2P bootstrap nodes running on the
