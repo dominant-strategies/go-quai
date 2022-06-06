@@ -2719,7 +2719,7 @@ func (bc *BlockChain) GetHeader(hash common.Hash, number uint64) *types.Header {
 
 // CheckHashInclusion checks to see if a hash is already included in a previous block.
 func (bc *BlockChain) CheckHashInclusion(header *types.Header, parent *types.Header) error {
-	
+
 	// If we are in Prime node, check to see if the subordinate Region hash included in the parent block
 	// is the same as the hash we are trying to include in the current block.
 	if types.QuaiNetworkContext < 1 {
@@ -2862,7 +2862,7 @@ func (bc *BlockChain) GetLinkExternalBlocks(header *types.Header) ([]*types.Exte
 
 	// Check if header is nil
 	if header == nil || header.Number == nil {
-		return  nil, fmt.Errorf("error getting external blocks for nil header")
+		return nil, fmt.Errorf("error getting external blocks for nil header")
 	}
 
 	difficultyContext, err := bc.engine.GetDifficultyOrder(header)
@@ -2914,7 +2914,6 @@ func (bc *BlockChain) QueueAndRetrieveExtBlocks(externalBlocks []*types.External
 	log.Info("QueueAndRetrieveExtBlocks: Returning result blocks", "len", len(resultBlocks))
 	return resultBlocks
 }
-
 
 // GenerateExtBlockLink will generate blockLink struct for the last applied external block hashes for a current context.
 // This will be used to check the trace of each set of applied external block sets so that they keep proper lineage to previous
@@ -3219,6 +3218,7 @@ func (bc *BlockChain) CheckExternalBlockLink(externalBlocks []*types.ExternalBlo
 	}
 
 	return nil
+}
 
 // AggregateNetworkDifficulty aggregates the total difficulty from the previous stop Hash in the dominant chains only
 func (bc *BlockChain) AggregateTotalDifficulty(context int, header *types.Header) (*big.Int, int, error) {
