@@ -22,7 +22,7 @@ import (
 
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/common/math"
-	"github.com/spruce-solutions/go-quai/consensus/ethash"
+	"github.com/spruce-solutions/go-quai/consensus/blake3"
 	"github.com/spruce-solutions/go-quai/core/types"
 	"github.com/spruce-solutions/go-quai/params"
 )
@@ -61,7 +61,7 @@ func (test *DifficultyTest) Run(config *params.ChainConfig) error {
 		UncleHash:  uncleHash,
 	}
 
-	actual := ethash.CalcDifficulty(config, test.CurrentTimestamp, parent, context)
+	actual := blake3.CalcDifficulty(config, test.CurrentTimestamp, parent, context)
 	exp := test.CurrentDifficulty
 
 	if actual.Cmp(exp) != 0 {

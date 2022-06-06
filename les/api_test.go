@@ -28,9 +28,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mattn/go-colorable"
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/common/hexutil"
-	"github.com/spruce-solutions/go-quai/consensus/ethash"
 	"github.com/spruce-solutions/go-quai/eth"
 	ethdownloader "github.com/spruce-solutions/go-quai/eth/downloader"
 	"github.com/spruce-solutions/go-quai/eth/ethconfig"
@@ -42,7 +42,6 @@ import (
 	"github.com/spruce-solutions/go-quai/p2p/simulations"
 	"github.com/spruce-solutions/go-quai/p2p/simulations/adapters"
 	"github.com/spruce-solutions/go-quai/rpc"
-	"github.com/mattn/go-colorable"
 )
 
 // Additional command line flags for the test binary.
@@ -496,7 +495,7 @@ func testSim(t *testing.T, serverCount, clientCount int, serverDir, clientDir []
 func newLesClientService(ctx *adapters.ServiceContext, stack *node.Node) (node.Lifecycle, error) {
 	config := ethconfig.Defaults
 	config.SyncMode = (ethdownloader.SyncMode)(downloader.LightSync)
-	config.Ethash.PowMode = ethash.ModeFake
+	config.Blake3.Fakepow = true
 	return New(stack, &config)
 }
 

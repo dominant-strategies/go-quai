@@ -121,8 +121,8 @@ func TestDifficultyCalculators(t *testing.T) {
 			bigFn  func(time uint64, parent *types.Header, context int) *big.Int
 			u256Fn func(time uint64, parent *types.Header) *big.Int
 		}{
-			/*{FrontierDifficultyCalulator, CalcDifficultyFrontierU256},
-			{HomesteadDifficultyCalulator, CalcDifficultyHomesteadU256},
+			{FrontierDifficultyCalulator, CalcDifficultyFrontierU256},
+			/*{HomesteadDifficultyCalulator, CalcDifficultyHomesteadU256},
 			{DynamicDifficultyCalculator(bombDelay), MakeDifficultyCalculatorU256(bombDelay)},*/
 		} {
 			time := header.Time + timeDelta
