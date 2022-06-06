@@ -1533,10 +1533,12 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		// to ensure that the previous coincident of the externHeader matches the previous coincident
 		// of the localHeader. This makes sure that the imported chain with externHeader doesn't outrun
 		// the chain.
-		localPrevCoincident, _ := bc.Engine().GetCoincidentHeader(bc, localOrder, localHeader)
-		externPrevCoincident, _ := bc.Engine().GetCoincidentHeader(bc, localOrder, externHeader)
-		if localPrevCoincident.Hash() != externPrevCoincident.Hash() {
-			return NonStatTy, errors.New("previous coincident of extern header doesn't match the previous coincident of local header")
+		if types.QuaiNetworkContext != 0 {
+			localPrevCoincident, _ := bc.Engine().GetCoincidentHeader(bc, localOrder, localHeader)
+			externPrevCoincident, _ := bc.Engine().GetCoincidentHeader(bc, localOrder, externHeader)
+			if localPrevCoincident.Hash() != externPrevCoincident.Hash() {
+				return NonStatTy, errors.New("previous coincident of extern header doesn't match the previous coincident of local header")
+			}
 		}
 
 		ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
