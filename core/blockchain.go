@@ -1960,6 +1960,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		)
 		for block != nil && err == ErrKnownBlock {
 			externTd = new(big.Int).Add(externTd, block.Difficulty())
+			fmt.Println("InsertChain TD:", externTd, localTd)
 			if localTd.Cmp(externTd) < 0 {
 				break
 			}
