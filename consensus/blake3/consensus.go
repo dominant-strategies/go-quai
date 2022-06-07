@@ -696,7 +696,7 @@ func (blake3 *Blake3) GetLinkExternalBlocks(chain consensus.ChainHeaderReader, h
 		}
 		extBlocks, err := blake3.TraceBranches(chain, header, difficultyContext, context, header.Location)
 		if err != nil {
-			return externalBlocks, nil
+			return nil, err
 		}
 		externalBlocks = append(externalBlocks, extBlocks...)
 	}
@@ -708,7 +708,7 @@ func (blake3 *Blake3) GetLinkExternalBlocks(chain consensus.ChainHeaderReader, h
 // Depending on the difficultyContext, originalContext, and originalLocation the trace will know when and where to stop.
 func (blake3 *Blake3) TraceBranches(chain consensus.ChainHeaderReader, header *types.Header, difficultyContext int, originalContext int, originalLocation []byte) ([]*types.ExternalBlock, error) {
 	// Get the Prime stopHash to be used in the Prime context. Go on to trace Prime once.
-	log.Info("GetExternalBlocks: Getting trace for block", "num", header.Number, "context", originalContext, "location", header.Location, "hash", header.Hash())
+	log.Info("TraceBranches: Getting trace for block", "num", header.Number, "context", originalContext, "location", header.Location, "hash", header.Hash())
 	start := time.Now()
 	externalBlocks := make([]*types.ExternalBlock, 0)
 	if originalContext == 0 {
