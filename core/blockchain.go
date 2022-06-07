@@ -1696,11 +1696,11 @@ func (bc *BlockChain) AddExternalBlocks(blocks []*types.ExternalBlock) error {
 
 // addExternalBlock adds the received block to the external block cache.
 func (bc *BlockChain) AddExternalBlock(block *types.ExternalBlock) error {
-	// context := []interface{}{
-	// 	"context", block.Context(), "numbers", block.Header().Number, "hash", block.Hash(), "location", block.Header().Location,
-	// 	"txs", len(block.Transactions()), "receipts", len(block.Receipts()),
-	// }
-	// log.Info("Adding external block", context...)
+	context := []interface{}{
+		"context", block.Context(), "numbers", block.Header().Number, "hash", block.Hash(), "location", block.Header().Location,
+		"txs", len(block.Transactions()), "receipts", len(block.Receipts()),
+	}
+	log.Info("Adding external block", context...)
 	data, err := rlp.EncodeToBytes(block)
 	if err != nil {
 		log.Crit("Failed to RLP encode external block", "err", err)
