@@ -1975,6 +1975,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 				return it.index, err
 			}
 			fmt.Println("InsertChain TD:", externTd, localTd)
+			fmt.Println(current.Hash(), current.Header().Number, block.Hash(), block.Header().Number)
 			if localTd.Cmp(externTd) < 0 {
 				break
 			}
