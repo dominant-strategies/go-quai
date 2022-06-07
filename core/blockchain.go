@@ -1470,87 +1470,9 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	// Make sure no inconsistent state is leaked during insertion
 	currentBlock := bc.CurrentBlock()
 
-	var localOrder int
-	if currentBlock.NumberU64() == 0 {
-		localOrder = types.QuaiNetworkContext
-	} else {
-		localOrder, err = bc.Engine().GetDifficultyOrder(currentBlock.Header())
-		if err != nil {
-			return NonStatTy, err
-		}
-	}
-
-	externOrder, err := bc.Engine().GetDifficultyOrder(block.Header())
+	externTd, localTd, err := bc.getHierarchicalTD(currentBlock, block)
 	if err != nil {
 		return NonStatTy, err
-	}
-
-	localHeader := currentBlock.Header()
-	externHeader := block.Header()
-
-	localTd, externTd := big.NewInt(0), big.NewInt(0)
-	// If the incoming block is a coincident block
-	if externOrder < localOrder {
-		var lowestOrder int
-		externTd, lowestOrder, err = bc.AggregateTotalDifficulty(localOrder, block.Header())
-		if err != nil {
-			return NonStatTy, err
-		}
-
-		// get coincident and get the Total difficulty of it
-		localHeader, err = bc.Engine().GetCoincidentAtOrder(bc, types.QuaiNetworkContext, lowestOrder, currentBlock.Header())
-		if err != nil {
-			return NonStatTy, err
-		}
-
-		localBlock := bc.GetBlockByHash(localHeader.Hash())
-		localTd = bc.GetTd(localHeader.Hash(), localBlock.NumberU64())
-	} else if localOrder < externOrder {
-		// get coincident and get the Total difficulty of it
-		localTd = bc.GetTd(currentBlock.Header().Hash(), currentBlock.NumberU64())
-
-		externHeader, err = bc.Engine().GetCoincidentAtOrder(bc, types.QuaiNetworkContext, localOrder, block.Header())
-		if err != nil {
-			return NonStatTy, err
-		}
-
-		externBlock := bc.GetBlockByHash(externHeader.Hash())
-
-		// If we are building on the same point
-		if localHeader.Hash() == externHeader.Hash() {
-			ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
-			if ptd == nil {
-				return NonStatTy, consensus.ErrUnknownAncestor
-			}
-			externTd = new(big.Int).Add(block.Difficulty(), ptd)
-		} else {
-			externTd = bc.GetTd(externHeader.Hash(), externBlock.NumberU64())
-		}
-	} else if localOrder < types.QuaiNetworkContext {
-		localTd = bc.GetTd(currentBlock.Header().Hash(), currentBlock.NumberU64())
-		externTd, _, err = bc.AggregateTotalDifficulty(localOrder+1, block.Header())
-		if err != nil {
-			return NonStatTy, err
-		}
-	} else {
-		// If the localHeader and the externHeader order is same as the chain context, we need
-		// to ensure that the previous coincident of the externHeader matches the previous coincident
-		// of the localHeader. This makes sure that the imported chain with externHeader doesn't outrun
-		// the chain.
-		if types.QuaiNetworkContext == 2 {
-			localPrevCoincident, _ := bc.Engine().GetCoincidentHeader(bc, localOrder, localHeader)
-			externPrevCoincident, _ := bc.Engine().GetCoincidentHeader(bc, localOrder, externHeader)
-			if localPrevCoincident.Hash() != externPrevCoincident.Hash() {
-				return NonStatTy, errors.New("previous coincident of extern header doesn't match the previous coincident of local header")
-			}
-		}
-
-		ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
-		if ptd == nil {
-			return NonStatTy, consensus.ErrUnknownAncestor
-		}
-		externTd = new(big.Int).Add(block.Difficulty(), ptd)
-		localTd = bc.GetTd(currentBlock.Hash(), currentBlock.NumberU64())
 	}
 
 	// Irrelevant of the canonical status, write the block itself to the database.
@@ -1669,6 +1591,95 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		bc.chainSideFeed.Send(ChainSideEvent{Block: block})
 	}
 	return status, nil
+}
+
+// getHierarchicalTD retrieves the local and extern td for two blocks. Taking hierarchical order into an account.
+func (bc *BlockChain) getHierarchicalTD(currentBlock *types.Block, block *types.Block) (*big.Int, *big.Int, error) {
+	var localOrder int
+	var err error
+	if currentBlock.NumberU64() == 0 {
+		localOrder = types.QuaiNetworkContext
+	} else {
+		localOrder, err = bc.Engine().GetDifficultyOrder(currentBlock.Header())
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	externOrder, err := bc.Engine().GetDifficultyOrder(block.Header())
+	if err != nil {
+		return nil, nil, err
+	}
+
+	localHeader := currentBlock.Header()
+	externHeader := block.Header()
+
+	localTd, externTd := big.NewInt(0), big.NewInt(0)
+	// If the incoming block is a coincident block
+	if externOrder < localOrder {
+		var lowestOrder int
+		externTd, lowestOrder, err = bc.AggregateTotalDifficulty(localOrder, block.Header())
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// get coincident and get the Total difficulty of it
+		localHeader, err = bc.Engine().GetCoincidentAtOrder(bc, types.QuaiNetworkContext, lowestOrder, currentBlock.Header())
+		if err != nil {
+			return nil, nil, err
+		}
+
+		localBlock := bc.GetBlockByHash(localHeader.Hash())
+		localTd = bc.GetTd(localHeader.Hash(), localBlock.NumberU64())
+	} else if localOrder < externOrder {
+		// get coincident and get the Total difficulty of it
+		localTd = bc.GetTd(currentBlock.Header().Hash(), currentBlock.NumberU64())
+
+		externHeader, err = bc.Engine().GetCoincidentAtOrder(bc, types.QuaiNetworkContext, localOrder, block.Header())
+		if err != nil {
+			return nil, nil, err
+		}
+
+		externBlock := bc.GetBlockByHash(externHeader.Hash())
+
+		// If we are building on the same point
+		if localHeader.Hash() == externHeader.Hash() {
+			ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
+			if ptd == nil {
+				return nil, nil, err
+			}
+			externTd = new(big.Int).Add(block.Difficulty(), ptd)
+		} else {
+			externTd = bc.GetTd(externHeader.Hash(), externBlock.NumberU64())
+		}
+	} else if localOrder < types.QuaiNetworkContext {
+		localTd = bc.GetTd(currentBlock.Header().Hash(), currentBlock.NumberU64())
+		externTd, _, err = bc.AggregateTotalDifficulty(localOrder+1, block.Header())
+		if err != nil {
+			return nil, nil, err
+		}
+	} else {
+		// If the localHeader and the externHeader order is same as the chain context, we need
+		// to ensure that the previous coincident of the externHeader matches the previous coincident
+		// of the localHeader. This makes sure that the imported chain with externHeader doesn't outrun
+		// the chain.
+		if types.QuaiNetworkContext == 2 {
+			localPrevCoincident, _ := bc.Engine().GetCoincidentHeader(bc, localOrder, localHeader)
+			externPrevCoincident, _ := bc.Engine().GetCoincidentHeader(bc, localOrder, externHeader)
+			if localPrevCoincident.Hash() != externPrevCoincident.Hash() {
+				return nil, nil, err
+			}
+		}
+
+		ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
+		if ptd == nil {
+			return nil, nil, err
+		}
+		externTd = new(big.Int).Add(block.Difficulty(), ptd)
+		localTd = bc.GetTd(currentBlock.Hash(), currentBlock.NumberU64())
+	}
+
+	return externTd, localTd, nil
 }
 
 // addFutureBlock checks if the block is within the max allowed window to get
@@ -1959,7 +1970,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			externTd = bc.GetTd(block.ParentHash(), block.NumberU64()-1) // The first block can't be nil
 		)
 		for block != nil && err == ErrKnownBlock {
-			externTd = new(big.Int).Add(externTd, block.Difficulty())
+			localTd, externTd, err = bc.getHierarchicalTD(current, block)
+			if err != nil {
+				return it.index, err
+			}
 			fmt.Println("InsertChain TD:", externTd, localTd)
 			if localTd.Cmp(externTd) < 0 {
 				break
