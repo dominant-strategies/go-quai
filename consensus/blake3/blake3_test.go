@@ -5,7 +5,9 @@ import (
 	"encoding/hex"
 	"testing"
 
+	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/consensus/blake3"
+	"github.com/spruce-solutions/go-quai/core/types"
 )
 
 var testPairs = [][][]byte{
@@ -36,8 +38,9 @@ func TestComputeHash(t *testing.T) {
 	}
 
 	t.Log("Compute hash and check result")
-	hash := blake3.SealHash(tp[1])
-	if !bytes.Equal(hash, hashCorrect) {
+	header := types.Header{ParentHash: []common.Hash{common.BytesToHash(tp[1])}}
+	hash := blake3.SealHash(&header)
+	if !bytes.Equal(hash.Bytes(), hashCorrect) {
 		t.Logf("answer is incorrect: %x, %x", hash, hashCorrect)
 		t.Fail()
 	}

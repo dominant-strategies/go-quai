@@ -75,6 +75,9 @@ var (
 	errExtBlockNotFound  = errors.New("external block not found")
 )
 
+// Exported for fuzzing
+var FrontierDifficultyCalulator = calcDifficultyFrontier
+
 // Author implements consensus.Engine, returning the header's coinbase as the
 // proof-of-work verified author of the block.
 func (blake3 *Blake3) Author(header *types.Header) (common.Address, error) {
