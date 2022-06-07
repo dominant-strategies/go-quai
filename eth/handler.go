@@ -521,7 +521,7 @@ func (h *handler) minedBroadcastLoop() {
 			// Retrieve the requested block's external blocks
 			header := h.chain.GetHeaderByHash(ev.Block.Hash())
 			if header != nil {
-				extBlocks, err := h.chain.GetExternalBlocks(header)
+				extBlocks, err := h.chain.GetLinkExternalBlocks(header)
 				if err != nil {
 					log.Info("Error sending external blocks to peer", "err", err)
 				} else {
