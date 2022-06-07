@@ -75,6 +75,9 @@ var (
 	errExtBlockNotFound  = errors.New("external block not found")
 )
 
+// Exported for fuzzing
+var FrontierDifficultyCalulator = calcDifficultyFrontier
+
 // Author implements consensus.Engine, returning the header's coinbase as the
 // proof-of-work verified author of the block.
 func (blake3 *Blake3) Author(header *types.Header) (common.Address, error) {
@@ -401,7 +404,7 @@ func (blake3 *Blake3) GetCoincidentHeader(chain consensus.ChainHeaderReader, con
 			}
 
 			// If block header is Genesis return it as coincident
-			if header.Number[context].Cmp(big.NewInt(1)) <= 0 {
+			if header.Number[context].Cmp(big.NewInt(0)) <= 0 {
 				return header, difficultyContext
 			}
 
@@ -499,7 +502,7 @@ func (blake3 *Blake3) PrimeTraceBranch(chain consensus.ChainHeaderReader, header
 		extBlock, err := chain.GetExternalBlock(header.Hash(), header.Number[context].Uint64(), uint64(context))
 		if err != nil {
 			log.Info("Trace Branch: External Block not found for header", "number", header.Number, "context", context, "hash", header.Hash(), "location", header.Location)
-			return extBlocks, nil
+			return nil, err
 		}
 		extBlocks = append(extBlocks, extBlock)
 
@@ -513,7 +516,7 @@ func (blake3 *Blake3) PrimeTraceBranch(chain consensus.ChainHeaderReader, header
 		prevHeader, err := chain.GetExternalBlock(header.ParentHash[context], header.Number[context].Uint64()-1, uint64(context))
 		if err != nil {
 			log.Info("Trace Branch: External Block not found for previous header", "number", header.Number[context].Int64()-1, "context", context, "hash", header.ParentHash[context], "location", header.Location)
-			return extBlocks, nil
+			return nil, err
 		}
 
 		// fmt.Println("PrimeTraceBranch: Do we stop in equal location?", "context", context, "original", originalLocation, "prev", prevHeader.Header().Location)
@@ -593,7 +596,7 @@ func (blake3 *Blake3) RegionTraceBranch(chain consensus.ChainHeaderReader, heade
 		extBlock, err := chain.GetExternalBlock(header.Hash(), header.Number[context].Uint64(), uint64(context))
 		if err != nil {
 			log.Info("Trace Branch: External Block not found for header", "number", header.Number, "context", context, "hash", header.Hash(), "location", header.Location)
-			break
+			return nil, err
 		}
 		extBlocks = append(extBlocks, extBlock)
 		// log.Info("Trace Branch: REGION Adding external block", "number", header.Number, "context", context, "location", header.Location, "hash", header.Hash())
@@ -608,7 +611,7 @@ func (blake3 *Blake3) RegionTraceBranch(chain consensus.ChainHeaderReader, heade
 		prevHeader, err := chain.GetExternalBlock(header.ParentHash[context], header.Number[context].Uint64()-1, uint64(context))
 		if err != nil {
 			log.Info("Trace Branch: External Block not found for previous header", "number", header.Number[context].Int64()-1, "context", context, "hash", header.ParentHash[context], "location", header.Location)
-			break
+			return nil, err
 		}
 
 		if context == 1 && bytes.Equal(originalLocation, prevHeader.Header().Location) {

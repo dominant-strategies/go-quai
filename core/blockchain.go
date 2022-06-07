@@ -1537,10 +1537,12 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		// to ensure that the previous coincident of the externHeader matches the previous coincident
 		// of the localHeader. This makes sure that the imported chain with externHeader doesn't outrun
 		// the chain.
-		localPrevCoincident, _ := bc.Engine().GetCoincidentHeader(bc, localOrder, localHeader)
-		externPrevCoincident, _ := bc.Engine().GetCoincidentHeader(bc, localOrder, externHeader)
-		if localPrevCoincident.Hash() != externPrevCoincident.Hash() {
-			return NonStatTy, errors.New("previous coincident of extern header doesn't match the previous coincident of local header")
+		if types.QuaiNetworkContext == 2 {
+			localPrevCoincident, _ := bc.Engine().GetCoincidentHeader(bc, localOrder, localHeader)
+			externPrevCoincident, _ := bc.Engine().GetCoincidentHeader(bc, localOrder, externHeader)
+			if localPrevCoincident.Hash() != externPrevCoincident.Hash() {
+				return NonStatTy, errors.New("previous coincident of extern header doesn't match the previous coincident of local header")
+			}
 		}
 
 		ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
@@ -2878,6 +2880,61 @@ func (bc *BlockChain) GetLinkExternalBlocks(header *types.Header) ([]*types.Exte
 	externalBlocks, err = bc.engine.TraceBranches(bc, header, difficultyContext, context, header.Location)
 	if err != nil {
 		return nil, err
+	}
+
+	return externalBlocks, nil
+}
+
+// GetExternalBlocks traces all available branches to find external blocks
+func (bc *BlockChain) GetLinkExternalBlocks(header *types.Header) ([]*types.ExternalBlock, error) {
+	context := bc.Config().Context // Index that node is currently at
+	externalBlocks := make([]*types.ExternalBlock, 0)
+	log.Info("GetLinkExternalBlocks: Getting trace for block", "num", header.Number, "context", context, "location", header.Location, "hash", header.Hash())
+
+	// Do not run on block 1
+	if header.Number[context].Cmp(big.NewInt(1)) > 0 {
+		// Skip pending block
+		difficultyContext, err := bc.engine.GetDifficultyOrder(header)
+		if err != nil {
+			return nil, err
+		}
+
+		// Get the Prime stopHash to be used in the Prime context. Go on to trace Prime once.
+		primeStopHash := header.ParentHash[0]
+		if context == 0 {
+			extBlockResult, extBlockErr := bc.engine.PrimeTraceBranch(bc, header, difficultyContext, primeStopHash, context, header.Location)
+			if extBlockErr != nil {
+				return nil, extBlockErr
+			}
+			externalBlocks = append(externalBlocks, extBlockResult...)
+		}
+
+		// If we are in a Region or Zone context, we may need to change our Prime stopHash since
+		// a Region block might not yet have been found. Scenario: [2, 2, 2] mined before [1, 2, 2].
+		if context == 1 || context == 2 {
+			primeStopHash, primeNum := bc.engine.GetStopHash(bc, context, 0, header)
+
+			regionStopHash, regionNum := bc.engine.GetStopHash(bc, context, 1, header)
+			if difficultyContext == 0 {
+				extBlockResult, extBlockErr := bc.engine.PrimeTraceBranch(bc, header, difficultyContext, primeStopHash, context, header.Location)
+				if extBlockErr != nil {
+					return nil, extBlockErr
+				}
+				externalBlocks = append(externalBlocks, extBlockResult...)
+			}
+			// If our Prime stopHash comes before our Region stopHash.
+			if primeNum < regionNum {
+				regionStopHash = primeStopHash
+			}
+			// If we have a Region block, trace it.
+			if difficultyContext < 2 {
+				extBlockResult, extBlockErr := bc.engine.RegionTraceBranch(bc, header, 1, regionStopHash, context, header.Location)
+				if extBlockErr != nil {
+					return nil, extBlockErr
+				}
+				externalBlocks = append(externalBlocks, extBlockResult...)
+			}
+		}
 	}
 
 	return externalBlocks, nil

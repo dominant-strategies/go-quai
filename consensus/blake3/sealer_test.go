@@ -63,9 +63,9 @@ func TestRemoteNotify(t *testing.T) {
 		if want := ethash.SealHash(header).Hex(); work[0] != want {
 			t.Errorf("work packet hash mismatch: have %s, want %s", work[0], want)
 		}
-		if want := common.BytesToHash(SeedHash(header.Number[types.QuaiNetworkContext].Uint64())).Hex(); work[1] != want {
+		/*if want := common.BytesToHash(SeedHash(header.Number[types.QuaiNetworkContext].Uint64())).Hex(); work[1] != want {
 			t.Errorf("work packet seed mismatch: have %s, want %s", work[1], want)
-		}
+		}*/
 		target := new(big.Int).Div(new(big.Int).Lsh(big.NewInt(1), 256), header.Difficulty[types.QuaiNetworkContext])
 		if want := common.BytesToHash(target.Bytes()).Hex(); work[2] != want {
 			t.Errorf("work packet target mismatch: have %s, want %s", work[2], want)
@@ -97,8 +97,7 @@ func TestRemoteNotifyFull(t *testing.T) {
 		NotifyFull: true,
 		Log:        testlog.Logger(t, log.LvlWarn),
 	}
-	blake3 := New(config, []string{server.URL}, false)
-	defer blake3.Close()
+	blake3, _ := New(config, []string{server.URL}, false)
 
 	// Stream a work task and ensure the notification bubbles out.
 	header := &types.Header{Number: []*big.Int{big.NewInt(1), big.NewInt(1), big.NewInt(1)}, Difficulty: []*big.Int{big.NewInt(100), big.NewInt(100), big.NewInt(100)}}
@@ -183,11 +182,11 @@ func TestRemoteMultiNotifyFull(t *testing.T) {
 
 	// Create the custom ethash engine.
 	config := Config{
-		PowMode:    ModeTest,
+		Fakepow:    true,
 		NotifyFull: true,
 		Log:        testlog.Logger(t, log.LvlWarn),
 	}
-	ethash := New(config, []string{server.URL}, false)
+	ethash, _ := New(config, []string{server.URL}, false)
 	defer ethash.Close()
 
 	// Provide a results reader.
@@ -278,9 +277,9 @@ func TestStaleSubmission(t *testing.T) {
 			if res.Header().Nonce != fakeNonce {
 				t.Errorf("case %d block nonce mismatch, want %x, get %x", id+1, fakeNonce, res.Header().Nonce)
 			}
-			if res.Header().MixDigest[types.QuaiNetworkContext] != fakeDigest[0] {
+			/*if res.Header().MixDigest[types.QuaiNetworkContext] != fakeDigest[0] {
 				t.Errorf("case %d block digest mismatch, want %x, get %x", id+1, fakeDigest, res.Header().MixDigest)
-			}
+			}*/
 			if res.Header().Difficulty[types.QuaiNetworkContext].Uint64() != c.headers[c.submitIndex].Difficulty[types.QuaiNetworkContext].Uint64() {
 				t.Errorf("case %d block difficulty mismatch, want %d, get %d", id+1, c.headers[c.submitIndex].Difficulty, res.Header().Difficulty)
 			}
