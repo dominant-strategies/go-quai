@@ -2845,14 +2845,6 @@ func (bc *BlockChain) GetLinkExternalBlocks(header *types.Header) ([]*types.Exte
 	// Do not run on block 1
 	if header.Number[context].Cmp(big.NewInt(1)) > 0 {
 		// Skip pending block
-		prevHeader := bc.GetHeaderByHash(header.ParentHash[context])
-		_, err := bc.engine.CheckPrevHeaderCoincident(bc, context, prevHeader)
-
-		// Only run if we are the block immediately following the coincident block. Check below is to make sure we are N+1.
-		if err != nil {
-			return nil, err
-		}
-
 		difficultyContext, err := bc.engine.GetDifficultyOrder(header)
 		if err != nil {
 			return nil, err
