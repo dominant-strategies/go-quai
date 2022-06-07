@@ -2060,13 +2060,13 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		// just skip the block (we already validated it once fully (and crashed), since
 		// its header and body was already in the database).
 		if err == ErrKnownBlock {
-			logger := log.Debug
-			if bc.chainConfig.Clique == nil {
-				logger = log.Warn
-			}
-			logger("Inserted known block", "number", block.Number(), "hash", block.Hash(),
-				"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
-				"root", block.Root())
+			// logger := log.Debug
+			// if bc.chainConfig.Clique == nil {
+			// 	logger = log.Warn
+			// }
+			// logger("Inserted known block", "number", block.Number(), "hash", block.Hash(),
+			// 	"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
+			// 	"root", block.Root())
 
 			// Special case. Commit the empty receipt slice if we meet the known
 			// block in the middle. It can only happen in the clique chain. Whenever
@@ -2076,15 +2076,15 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			// as the canonical chain eventually, it needs to be reexecuted for missing
 			// state, but if it's this special case here(skip reexecution) we will lose
 			// the empty receipt entry.
-			if len(block.Transactions()) == 0 {
-				rawdb.WriteReceipts(bc.db, block.Hash(), block.NumberU64(), nil)
-			} else {
-				log.Error("Please file an issue, skip known block execution without receipt",
-					"hash", block.Hash(), "number", block.NumberU64())
-			}
-			if err := bc.writeKnownBlock(block); err != nil {
-				return it.index, err
-			}
+			// if len(block.Transactions()) == 0 {
+			// 	rawdb.WriteReceipts(bc.db, block.Hash(), block.NumberU64(), nil)
+			// } else {
+			// 	log.Error("Please file an issue, skip known block execution without receipt",
+			// 		"hash", block.Hash(), "number", block.NumberU64())
+			// }
+			// if err := bc.writeKnownBlock(block); err != nil {
+			// 	return it.index, err
+			// }
 			stats.processed++
 
 			// We can assume that logs are empty here, since the only way for consecutive
