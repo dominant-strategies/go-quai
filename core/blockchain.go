@@ -1611,6 +1611,8 @@ func (bc *BlockChain) getHierarchicalTD(currentBlock *types.Block, block *types.
 		return nil, nil, err
 	}
 
+	fmt.Println("Local Order ", localOrder, " Extern Order", externOrder)
+
 	localHeader := currentBlock.Header()
 	externHeader := block.Header()
 
