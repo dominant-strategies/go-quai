@@ -1471,87 +1471,9 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	// Make sure no inconsistent state is leaked during insertion
 	currentBlock := bc.CurrentBlock()
 
-	var localOrder int
-	if currentBlock.NumberU64() == 0 {
-		localOrder = types.QuaiNetworkContext
-	} else {
-		localOrder, err = bc.Engine().GetDifficultyOrder(currentBlock.Header())
-		if err != nil {
-			return NonStatTy, err
-		}
-	}
-
-	externOrder, err := bc.Engine().GetDifficultyOrder(block.Header())
+	externTd, localTd, err := bc.getHierarchicalTD(currentBlock, block)
 	if err != nil {
 		return NonStatTy, err
-	}
-
-	localHeader := currentBlock.Header()
-	externHeader := block.Header()
-
-	localTd, externTd := big.NewInt(0), big.NewInt(0)
-	// If the incoming block is a coincident block
-	if externOrder < localOrder {
-		var lowestOrder int
-		externTd, lowestOrder, err = bc.AggregateTotalDifficulty(localOrder, block.Header())
-		if err != nil {
-			return NonStatTy, err
-		}
-
-		// get coincident and get the Total difficulty of it
-		localHeader, err = bc.Engine().GetCoincidentAtOrder(bc, types.QuaiNetworkContext, lowestOrder, currentBlock.Header())
-		if err != nil {
-			return NonStatTy, err
-		}
-
-		localBlock := bc.GetBlockByHash(localHeader.Hash())
-		localTd = bc.GetTd(localHeader.Hash(), localBlock.NumberU64())
-	} else if localOrder < externOrder {
-		// get coincident and get the Total difficulty of it
-		localTd = bc.GetTd(currentBlock.Header().Hash(), currentBlock.NumberU64())
-
-		externHeader, err = bc.Engine().GetCoincidentAtOrder(bc, types.QuaiNetworkContext, localOrder, block.Header())
-		if err != nil {
-			return NonStatTy, err
-		}
-
-		externBlock := bc.GetBlockByHash(externHeader.Hash())
-
-		// If we are building on the same point
-		if localHeader.Hash() == externHeader.Hash() {
-			ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
-			if ptd == nil {
-				return NonStatTy, consensus.ErrUnknownAncestor
-			}
-			externTd = new(big.Int).Add(block.Difficulty(), ptd)
-		} else {
-			externTd = bc.GetTd(externHeader.Hash(), externBlock.NumberU64())
-		}
-	} else if localOrder < types.QuaiNetworkContext {
-		localTd = bc.GetTd(currentBlock.Header().Hash(), currentBlock.NumberU64())
-		externTd, _, err = bc.AggregateTotalDifficulty(localOrder+1, block.Header())
-		if err != nil {
-			return NonStatTy, err
-		}
-	} else {
-		// If the localHeader and the externHeader order is same as the chain context, we need
-		// to ensure that the previous coincident of the externHeader matches the previous coincident
-		// of the localHeader. This makes sure that the imported chain with externHeader doesn't outrun
-		// the chain.
-		if types.QuaiNetworkContext == 2 {
-			localPrevCoincident, _ := bc.Engine().GetCoincidentHeader(bc, localOrder, localHeader)
-			externPrevCoincident, _ := bc.Engine().GetCoincidentHeader(bc, localOrder, externHeader)
-			if localPrevCoincident.Hash() != externPrevCoincident.Hash() {
-				return NonStatTy, errors.New("previous coincident of extern header doesn't match the previous coincident of local header")
-			}
-		}
-
-		ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
-		if ptd == nil {
-			return NonStatTy, consensus.ErrUnknownAncestor
-		}
-		externTd = new(big.Int).Add(block.Difficulty(), ptd)
-		localTd = bc.GetTd(currentBlock.Hash(), currentBlock.NumberU64())
 	}
 
 	// Irrelevant of the canonical status, write the block itself to the database.
@@ -1672,6 +1594,99 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	return status, nil
 }
 
+// getHierarchicalTD retrieves the local and extern td for two blocks. Taking hierarchical order into an account.
+func (bc *BlockChain) getHierarchicalTD(currentBlock *types.Block, block *types.Block) (*big.Int, *big.Int, error) {
+	var localOrder int
+	var err error
+	if currentBlock.NumberU64() == 0 {
+		localOrder = types.QuaiNetworkContext
+	} else {
+		localOrder, err = bc.Engine().GetDifficultyOrder(currentBlock.Header())
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	externOrder, err := bc.Engine().GetDifficultyOrder(block.Header())
+	if err != nil {
+		return nil, nil, err
+	}
+
+	fmt.Println("Local Order ", localOrder, " Extern Order", externOrder)
+
+	localHeader := currentBlock.Header()
+	externHeader := block.Header()
+
+	localTd, externTd := big.NewInt(0), big.NewInt(0)
+	// If the incoming block is a coincident block
+	if externOrder < localOrder {
+		var lowestOrder int
+		externTd, lowestOrder, err = bc.AggregateTotalDifficulty(localOrder, block.Header())
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// get coincident and get the Total difficulty of it
+		localHeader, err = bc.Engine().GetCoincidentAtOrder(bc, types.QuaiNetworkContext, lowestOrder, currentBlock.Header())
+		if err != nil {
+			return nil, nil, err
+		}
+
+		localBlock := bc.GetBlockByHash(localHeader.Hash())
+		localTd = bc.GetTd(localHeader.Hash(), localBlock.NumberU64())
+	} else if localOrder < externOrder {
+		// get coincident and get the Total difficulty of it
+		localTd = bc.GetTd(currentBlock.Header().Hash(), currentBlock.NumberU64())
+
+		externHeader, err = bc.Engine().GetCoincidentAtOrder(bc, types.QuaiNetworkContext, localOrder, block.Header())
+		if err != nil {
+			return nil, nil, err
+		}
+
+		externBlock := bc.GetBlockByHash(externHeader.Hash())
+		fmt.Println("case 2: externHeader", externHeader.Number, externHeader.Location, externHeader.Hash())
+		// If we are building on the same point
+		if localHeader.Hash() == externHeader.Hash() {
+			ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
+			if ptd == nil {
+				return nil, nil, err
+			}
+			externTd = new(big.Int).Add(block.Difficulty(), ptd)
+			fmt.Println("case 2: GetTD with add", block.Difficulty(), ptd)
+		} else {
+			fmt.Println("case 2: GetTD for externHeader without add ")
+			externTd = bc.GetTd(externHeader.Hash(), externBlock.NumberU64())
+		}
+	} else if localOrder < types.QuaiNetworkContext {
+		localTd = bc.GetTd(currentBlock.Header().Hash(), currentBlock.NumberU64())
+		externTd, _, err = bc.AggregateTotalDifficulty(localOrder+1, block.Header())
+		if err != nil {
+			return nil, nil, err
+		}
+	} else {
+		// If the localHeader and the externHeader order is same as the chain context, we need
+		// to ensure that the previous coincident of the externHeader matches the previous coincident
+		// of the localHeader. This makes sure that the imported chain with externHeader doesn't outrun
+		// the chain.
+		if types.QuaiNetworkContext == 2 {
+			localPrevCoincident, _ := bc.Engine().GetCoincidentHeader(bc, localOrder, localHeader)
+			externPrevCoincident, _ := bc.Engine().GetCoincidentHeader(bc, localOrder, externHeader)
+			if localPrevCoincident.Hash() != externPrevCoincident.Hash() {
+				return nil, nil, err
+			}
+		}
+
+		ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
+		if ptd == nil {
+			return nil, nil, err
+		}
+		externTd = new(big.Int).Add(block.Difficulty(), ptd)
+		localTd = bc.GetTd(currentBlock.Hash(), currentBlock.NumberU64())
+	}
+
+	return externTd, localTd, nil
+}
+
 // addFutureBlock checks if the block is within the max allowed window to get
 // accepted for future processing, and returns an error if the block is too far
 // ahead and was not added.
@@ -1697,11 +1712,11 @@ func (bc *BlockChain) AddExternalBlocks(blocks []*types.ExternalBlock) error {
 
 // addExternalBlock adds the received block to the external block cache.
 func (bc *BlockChain) AddExternalBlock(block *types.ExternalBlock) error {
-	// context := []interface{}{
-	// 	"context", block.Context(), "numbers", block.Header().Number, "hash", block.Hash(), "location", block.Header().Location,
-	// 	"txs", len(block.Transactions()), "receipts", len(block.Receipts()),
-	// }
-	// log.Info("Adding external block", context...)
+	context := []interface{}{
+		"context", block.Context(), "numbers", block.Header().Number, "hash", block.Hash(), "location", block.Header().Location,
+		"txs", len(block.Transactions()), "receipts", len(block.Receipts()),
+	}
+	log.Info("Adding external block", context...)
 	data, err := rlp.EncodeToBytes(block)
 	if err != nil {
 		log.Crit("Failed to RLP encode external block", "err", err)
@@ -1960,7 +1975,13 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			externTd = bc.GetTd(block.ParentHash(), block.NumberU64()-1) // The first block can't be nil
 		)
 		for block != nil && err == ErrKnownBlock {
-			externTd = new(big.Int).Add(externTd, block.Difficulty())
+			localTd, externTd, err = bc.getHierarchicalTD(current, block)
+			if err != nil {
+				return it.index, err
+			}
+			fmt.Println("InsertChain TD:", "extern", externTd, "local", localTd)
+			fmt.Println("Extern:", block.Hash(), block.Header().Number)
+			fmt.Println("Local:", current.Hash(), current.Header().Number)
 			if localTd.Cmp(externTd) < 0 {
 				break
 			}
@@ -2028,6 +2049,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		}
 	}()
 
+	for _, block := range chain {
+		fmt.Println("InsertChain block:", block.Header().Number, block.Hash())
+	}
 	for ; block != nil && err == nil || err == ErrKnownBlock; block, err = it.next() {
 		// If the chain is terminating, stop processing blocks
 		if bc.insertStopped() {
@@ -2039,19 +2063,20 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			bc.reportBlock(block, nil, ErrBannedHash)
 			return it.index, ErrBannedHash
 		}
+		fmt.Println("InsertChain err:", err)
 		// If the block is known (in the middle of the chain), it's a special case for
 		// Clique blocks where they can share state among each other, so importing an
 		// older block might complete the state of the subsequent one. In this case,
 		// just skip the block (we already validated it once fully (and crashed), since
 		// its header and body was already in the database).
 		if err == ErrKnownBlock {
-			logger := log.Debug
-			if bc.chainConfig.Clique == nil {
-				logger = log.Warn
-			}
-			logger("Inserted known block", "number", block.Number(), "hash", block.Hash(),
-				"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
-				"root", block.Root())
+			// logger := log.Debug
+			// if bc.chainConfig.Clique == nil {
+			// 	logger = log.Warn
+			// }
+			// logger("Inserted known block", "number", block.Number(), "hash", block.Hash(),
+			// 	"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
+			// 	"root", block.Root())
 
 			// Special case. Commit the empty receipt slice if we meet the known
 			// block in the middle. It can only happen in the clique chain. Whenever
@@ -2061,15 +2086,15 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			// as the canonical chain eventually, it needs to be reexecuted for missing
 			// state, but if it's this special case here(skip reexecution) we will lose
 			// the empty receipt entry.
-			if len(block.Transactions()) == 0 {
-				rawdb.WriteReceipts(bc.db, block.Hash(), block.NumberU64(), nil)
-			} else {
-				log.Error("Please file an issue, skip known block execution without receipt",
-					"hash", block.Hash(), "number", block.NumberU64())
-			}
-			if err := bc.writeKnownBlock(block); err != nil {
-				return it.index, err
-			}
+			// if len(block.Transactions()) == 0 {
+			// 	rawdb.WriteReceipts(bc.db, block.Hash(), block.NumberU64(), nil)
+			// } else {
+			// 	log.Error("Please file an issue, skip known block execution without receipt",
+			// 		"hash", block.Hash(), "number", block.NumberU64())
+			// }
+			// if err := bc.writeKnownBlock(block); err != nil {
+			// 	return it.index, err
+			// }
 			stats.processed++
 
 			// We can assume that logs are empty here, since the only way for consecutive
@@ -2725,8 +2750,9 @@ func (bc *BlockChain) CheckHashInclusion(header *types.Header, parent *types.Hea
 
 	// If we are in Prime node, check to see if the subordinate Region hash included in the parent block
 	// is the same as the hash we are trying to include in the current block.
+	// Need to run when number is greater than 1 for the edge case of new Regions / Zones being mined in sequentially.
 	if types.QuaiNetworkContext < 1 {
-		if header.ParentHash[1] == parent.ParentHash[1] {
+		if header.ParentHash[1] == parent.ParentHash[1] && header.Number[1].Cmp(big.NewInt(1)) > 0 {
 			return fmt.Errorf("error subordinate hash already included in parent")
 		}
 	}
@@ -2734,7 +2760,7 @@ func (bc *BlockChain) CheckHashInclusion(header *types.Header, parent *types.Hea
 	// If we are in a Prime or Region node, check to see if the subordinate Zone hash included in the parent block
 	// is the same as the hash we are trying to include in the current block.
 	if types.QuaiNetworkContext < 2 {
-		if header.ParentHash[2] == parent.ParentHash[2] {
+		if header.ParentHash[2] == parent.ParentHash[2] && header.Number[2].Cmp(big.NewInt(1)) > 0 {
 			return fmt.Errorf("error subordinate hash already included in parent")
 		}
 	}
@@ -3273,7 +3299,11 @@ func (bc *BlockChain) AggregateTotalDifficulty(context int, header *types.Header
 		currentTotalDifficulty.Add(currentTotalDifficulty, header.Difficulty[currentLowestContext])
 
 		//check if the parent block of the first coincident is genesis
+		// add in the genesis total difficulty such that the following blocks build off the TD correctly.
 		if header.Number[currentLowestContext].Uint64()-1 == 0 {
+			genesis := MainnetPrimeGenesisBlock()
+			currentTotalDifficulty.Add(currentTotalDifficulty, genesis.Difficulty)
+			fmt.Println("Adding genesis Prime difficulty")
 			return currentTotalDifficulty, currentLowestContext, nil
 		}
 
