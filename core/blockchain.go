@@ -2746,8 +2746,9 @@ func (bc *BlockChain) CheckHashInclusion(header *types.Header, parent *types.Hea
 
 	// If we are in Prime node, check to see if the subordinate Region hash included in the parent block
 	// is the same as the hash we are trying to include in the current block.
+	// Need to run when number is greater than 1 for the edge case of new Regions / Zones being mined in sequentially.
 	if types.QuaiNetworkContext < 1 {
-		if header.ParentHash[1] == parent.ParentHash[1] {
+		if header.ParentHash[1] == parent.ParentHash[1] && header.Number[1].Cmp(big.NewInt(1)) > 0 {
 			return fmt.Errorf("error subordinate hash already included in parent")
 		}
 	}
@@ -2755,7 +2756,7 @@ func (bc *BlockChain) CheckHashInclusion(header *types.Header, parent *types.Hea
 	// If we are in a Prime or Region node, check to see if the subordinate Zone hash included in the parent block
 	// is the same as the hash we are trying to include in the current block.
 	if types.QuaiNetworkContext < 2 {
-		if header.ParentHash[2] == parent.ParentHash[2] {
+		if header.ParentHash[2] == parent.ParentHash[2] && header.Number[2].Cmp(big.NewInt(1)) > 0 {
 			return fmt.Errorf("error subordinate hash already included in parent")
 		}
 	}
