@@ -516,6 +516,12 @@ func (lc *LightChain) GetExternalBlocks(header *types.Header) ([]*types.External
 	return nil, nil
 }
 
+// TODO: GetLinkExternalBlocks is not a feature of light clients. Light clients will be unable to process
+// and validate cross-context transitions until further implementation.
+func (lc *LightChain) GetLinkExternalBlocks(header *types.Header) ([]*types.ExternalBlock, error) {
+	return nil, nil
+}
+
 // GetExternalBlock is not applicable in the header chain since the BlockChain contains
 // the external blocks cache.
 func (lc *LightChain) GetExternalBlock(hash common.Hash, number uint64, location []byte, context uint64) (*types.ExternalBlock, error) {
@@ -618,8 +624,4 @@ func (lc *LightChain) DisableCheckFreq() {
 // EnableCheckFreq enables header validation.
 func (lc *LightChain) EnableCheckFreq() {
 	atomic.StoreInt32(&lc.disableCheckFreq, 0)
-}
-
-func (lc *LightChain) GetMissingExternalBlockFeed() interface{} {
-	return nil
 }

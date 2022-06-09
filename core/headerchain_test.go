@@ -24,7 +24,7 @@ import (
 	"time"
 
 	"github.com/spruce-solutions/go-quai/consensus"
-	"github.com/spruce-solutions/go-quai/consensus/ethash"
+	"github.com/spruce-solutions/go-quai/consensus/blake3"
 	"github.com/spruce-solutions/go-quai/core/rawdb"
 	"github.com/spruce-solutions/go-quai/core/types"
 	"github.com/spruce-solutions/go-quai/log"
@@ -74,14 +74,14 @@ func TestHeaderInsertion(t *testing.T) {
 		genesis = (&Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}).MustCommit(db)
 	)
 
-	hc, err := NewHeaderChain(db, params.AllEthashProtocolChanges, ethash.NewFaker(), func() bool { return false })
+	hc, err := NewHeaderChain(db, params.AllEthashProtocolChanges, blake3.NewFaker(), func() bool { return false })
 	if err != nil {
 		t.Fatal(err)
 	}
 	// chain A: G->A1->A2...A128
-	chainA := makeHeaderChain(genesis.Header(), 128, ethash.NewFaker(), db, 10)
+	chainA := makeHeaderChain(genesis.Header(), 128, blake3.NewFaker(), db, 10)
 	// chain B: G->A1->B2...B128
-	chainB := makeHeaderChain(chainA[0], 128, ethash.NewFaker(), db, 10)
+	chainB := makeHeaderChain(chainA[0], 128, blake3.NewFaker(), db, 10)
 	log.Root().SetHandler(log.StdoutHandler)
 
 	// Inserting 64 headers on an empty chain, expecting

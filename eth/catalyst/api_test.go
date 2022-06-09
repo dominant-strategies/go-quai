@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"github.com/spruce-solutions/go-quai/consensus/blake3"
-	"github.com/spruce-solutions/go-quai/consensus/ethash"
 	"github.com/spruce-solutions/go-quai/core"
 	"github.com/spruce-solutions/go-quai/core/rawdb"
 	"github.com/spruce-solutions/go-quai/core/types"
@@ -57,7 +56,7 @@ func generateTestChain() (*core.Genesis, []*types.Block) {
 		g.SetExtra([]byte("test"))
 	}
 	gblock := genesis.ToBlock(db)
-	engine := ethash.NewFaker()
+	engine := blake3.NewFaker()
 	blocks, _ := core.GenerateChain(config, gblock, engine, db, 10, generate)
 	blocks = append([]*types.Block{gblock}, blocks...)
 	return genesis, blocks
@@ -100,7 +99,7 @@ func generateTestChainWithFork(n int, fork int) (*core.Genesis, []*types.Block, 
 		g.SetExtra([]byte("testF"))
 	}
 	gblock := genesis.ToBlock(db)
-	engine := ethash.NewFaker()
+	engine := blake3.NewFaker()
 	blocks, _ := core.GenerateChain(config, gblock, engine, db, n, generate)
 	blocks = append([]*types.Block{gblock}, blocks...)
 	forkedBlocks, _ := core.GenerateChain(config, blocks[fork], engine, db, n-fork, generateFork)

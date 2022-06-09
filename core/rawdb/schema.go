@@ -152,6 +152,11 @@ func headerKey(number uint64, hash common.Hash) []byte {
 	return append(append(headerPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
 }
 
+// extHeaderKey = headerPrefix + num (uint64 big endian) + location + context + hash
+func extHeaderKey(number uint64, context uint64, hash common.Hash) []byte {
+	return append(append(append(headerPrefix, encodeBlockNumber(number)...), encodeBlockNumber(context)...), hash.Bytes()...)
+}
+
 // headerTDKey = headerPrefix + num (uint64 big endian) + hash + headerTDSuffix
 func headerTDKey(number uint64, hash common.Hash) []byte {
 	return append(headerKey(number, hash), headerTDSuffix...)

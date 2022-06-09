@@ -340,6 +340,7 @@ func (cr *fakeChainReader) GetGasUsedInChain(block *types.Block, length int) int
 func (cr *fakeChainReader) GetExternalBlocks(header *types.Header) ([]*types.ExternalBlock, error) {
 	return nil, nil
 }
-func (cr *fakeChainReader) GetMissingExternalBlockFeed() interface{} {
-	return nil
+
+func (cr *fakeChainReader) GetLinkExternalBlocks(header *types.Header) ([]*types.ExternalBlock, error) {
+	return nil, nil
 }

@@ -25,7 +25,7 @@ import (
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/common/hexutil"
 	math2 "github.com/spruce-solutions/go-quai/common/math"
-	"github.com/spruce-solutions/go-quai/consensus/ethash"
+	"github.com/spruce-solutions/go-quai/consensus/blake3"
 	"github.com/spruce-solutions/go-quai/core"
 	"github.com/spruce-solutions/go-quai/core/types"
 	"github.com/spruce-solutions/go-quai/params"
@@ -137,7 +137,7 @@ func newAlethGenesisSpec(network string, genesis *core.Genesis) (*alethGenesisSp
 	spec.Params.DifficultyBoundDivisor = (*math2.HexOrDecimal256)(params.DifficultyBoundDivisor[0])
 	spec.Params.GasLimitBoundDivisor = (math2.HexOrDecimal64)(params.GasLimitBoundDivisor)
 	spec.Params.DurationLimit = (*math2.HexOrDecimal256)(params.DurationLimits[0])
-	spec.Params.BlockReward = (*hexutil.Big)(blake3.FrontierBlockReward)
+	spec.Params.BlockReward = (*hexutil.Big)(blake3.BlockReward)
 
 	spec.Genesis.Nonce = types.EncodeNonce(genesis.Nonce)
 	spec.Genesis.Difficulty = (*hexutil.Big)(genesis.Difficulty)
@@ -372,7 +372,7 @@ func newParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 	spec.Engine.Ethash.Params.MinimumDifficulty = (*hexutil.Big)(params.MinimumDifficulty)
 	spec.Engine.Ethash.Params.DifficultyBoundDivisor = (*hexutil.Big)(params.DifficultyBoundDivisor[0])
 	spec.Engine.Ethash.Params.DurationLimit = (*hexutil.Big)(params.DurationLimits[0])
-	spec.Engine.Ethash.Params.BlockReward["0x0"] = hexutil.EncodeBig(ethash.FrontierBlockReward)
+	spec.Engine.Ethash.Params.BlockReward["0x0"] = hexutil.EncodeBig(blake3.BlockReward)
 
 	// Homestead
 	spec.Engine.Ethash.Params.HomesteadTransition = hexutil.Uint64(genesis.Config.HomesteadBlock.Uint64())
@@ -551,7 +551,7 @@ func (spec *parityChainSpec) setPrecompile(address byte, data *parityChainSpecBu
 }
 
 func (spec *parityChainSpec) setByzantium(num *big.Int) {
-	spec.Engine.Ethash.Params.BlockReward[hexutil.EncodeBig(num)] = hexutil.EncodeBig(ethash.ByzantiumBlockReward)
+	spec.Engine.Ethash.Params.BlockReward[hexutil.EncodeBig(num)] = hexutil.EncodeBig(blake3.BlockReward)
 	spec.Engine.Ethash.Params.DifficultyBombDelays[hexutil.EncodeBig(num)] = hexutil.EncodeUint64(3000000)
 	n := hexutil.Uint64(num.Uint64())
 	spec.Engine.Ethash.Params.EIP100bTransition = n
@@ -562,7 +562,7 @@ func (spec *parityChainSpec) setByzantium(num *big.Int) {
 }
 
 func (spec *parityChainSpec) setConstantinople(num *big.Int) {
-	spec.Engine.Ethash.Params.BlockReward[hexutil.EncodeBig(num)] = hexutil.EncodeBig(ethash.ConstantinopleBlockReward)
+	spec.Engine.Ethash.Params.BlockReward[hexutil.EncodeBig(num)] = hexutil.EncodeBig(blake3.BlockReward)
 	spec.Engine.Ethash.Params.DifficultyBombDelays[hexutil.EncodeBig(num)] = hexutil.EncodeUint64(2000000)
 	n := hexutil.Uint64(num.Uint64())
 	spec.Params.EIP145Transition = n

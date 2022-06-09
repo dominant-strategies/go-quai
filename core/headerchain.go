@@ -534,6 +534,12 @@ func (hc *HeaderChain) GetExternalBlocks(header *types.Header) ([]*types.Externa
 	return nil, nil
 }
 
+// GetExternalBlocks is not applicable in the header chain since the BlockChain contains
+// the external blocks cache.
+func (hc *HeaderChain) GetLinkExternalBlocks(header *types.Header) ([]*types.ExternalBlock, error) {
+	return nil, nil
+}
+
 // GetExternalBlock is not applicable in the header chain since the BlockChain contains
 // the external blocks cache.
 func (hc *HeaderChain) GetExternalBlock(hash common.Hash, number uint64, location []byte, context uint64) (*types.ExternalBlock, error) {
@@ -683,8 +689,5 @@ func (hc *HeaderChain) GetGasUsedInChain(block *types.Block, length int) int64 {
 // GetUnclesInChain retrieves all the uncles from a given block backwards until
 // a specific distance is reached.
 func (hc *HeaderChain) GetUnclesInChain(block *types.Block, length int) []*types.Header {
-	return nil
-}
-func (hc *HeaderChain) GetMissingExternalBlockFeed() interface{} {
 	return nil
 }
