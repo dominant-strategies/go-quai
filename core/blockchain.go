@@ -1643,7 +1643,7 @@ func (bc *BlockChain) getHierarchicalTD(currentBlock *types.Block, block *types.
 		}
 
 		externBlock := bc.GetBlockByHash(externHeader.Hash())
-
+		fmt.Println("case 2: externHeader", externHeader.Number, externHeader.Location, externHeader.Hash())
 		// If we are building on the same point
 		if localHeader.Hash() == externHeader.Hash() {
 			ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
@@ -1651,7 +1651,9 @@ func (bc *BlockChain) getHierarchicalTD(currentBlock *types.Block, block *types.
 				return nil, nil, err
 			}
 			externTd = new(big.Int).Add(block.Difficulty(), ptd)
+			fmt.Println("case 2: GetTD with add", block.Difficulty(), ptd)
 		} else {
+			fmt.Println("case 2: GetTD for externHeader without add ")
 			externTd = bc.GetTd(externHeader.Hash(), externBlock.NumberU64())
 		}
 	} else if localOrder < types.QuaiNetworkContext {
@@ -1976,8 +1978,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			if err != nil {
 				return it.index, err
 			}
-			fmt.Println("InsertChain TD:", externTd, localTd)
-			fmt.Println(current.Hash(), current.Header().Number, block.Hash(), block.Header().Number)
+			fmt.Println("InsertChain TD:", "extern", externTd, "local", localTd)
+			fmt.Println("Extern:", block.Hash(), block.Header().Number)
+			fmt.Println("Local:", current.Hash(), current.Header().Number)
 			if localTd.Cmp(externTd) < 0 {
 				break
 			}
