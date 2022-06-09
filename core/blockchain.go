@@ -3282,7 +3282,11 @@ func (bc *BlockChain) AggregateTotalDifficulty(context int, header *types.Header
 		currentTotalDifficulty.Add(currentTotalDifficulty, header.Difficulty[currentLowestContext])
 
 		//check if the parent block of the first coincident is genesis
+		// add in the genesis total difficulty such that the following blocks build off the TD correctly.
 		if header.Number[currentLowestContext].Uint64()-1 == 0 {
+			genesis := MainnetPrimeGenesisBlock()
+			currentTotalDifficulty.Add(currentTotalDifficulty, genesis.Difficulty)
+			fmt.Println("Adding genesis Prime difficulty")
 			return currentTotalDifficulty, currentLowestContext, nil
 		}
 
