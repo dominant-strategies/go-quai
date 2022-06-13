@@ -2062,7 +2062,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			bc.reportBlock(block, nil, ErrBannedHash)
 			return it.index, ErrBannedHash
 		}
-		fmt.Println("InsertChain err:", err)
 		// If the block is known (in the middle of the chain), it's a special case for
 		// Clique blocks where they can share state among each other, so importing an
 		// older block might complete the state of the subsequent one. In this case,
