@@ -287,5 +287,5 @@ ifeq ($(shell uname -s),Darwin)
 	done;
 else
 	@echo "Stopping all Quai Network nodes, please wait until terminated.";
-	@killall -w quai
+	@if pgrep quai; then killall -w quai; fi
 endif
