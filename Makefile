@@ -279,8 +279,13 @@ endif
 	@nohup $(MINING_BASE_COMMAND) --miner.etherbase $(ZONE_3_3_COINBASE)  --http.addr $(HTTP_ADDR) --http.api $(HTTP_API) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(ZONE_3_3_PORT_TCP) --http.port $(ZONE_3_3_PORT_HTTP) --ws.port $(ZONE_3_3_PORT_WS) --region 3 --zone 3 --quaistats ${STATS_NAME}:zone33${STATS_PASS}@${ZONE_3_3_STATS_HOST} >> nodelogs/zone-3-3.log 2>&1 &
 
 stop:
+ifeq ($(shell uname -s),Darwin)
 	@if pgrep quai; then pkill -f ./build/bin/quai; fi
 	@while pgrep quai >/dev/null; do \
 		echo "Stopping all Quai Network nodes, please wait until terminated."; \
 		sleep 3; \
-	done; \
+	done;
+else
+	@echo "Stopping all Quai Network nodes, please wait until terminated.";
+	@killall -w quai
+endif
