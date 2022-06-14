@@ -171,11 +171,15 @@ var (
 	MinimumDifficulty      = big.NewInt(131072)                                             // The minimum that the difficulty may ever be.
 	DurationLimits         = []*big.Int{big.NewInt(900), big.NewInt(300), big.NewInt(10)}   // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
 	TargetUncles           = []int{10, 30, 100}                                             // The bound divisor of the gas limit, used in update calculations.
-	MaxContext             = 2
 )
 
 // Ontology defines the current Quai Network ontology
 var (
+	// Explicit definition of PRIME, REGION, ZONE
+	PRIME  = 0
+	REGION = 1
+	ZONE   = 2
+
 	// Fork blocks; necessary for retrieving MapContext through header/block methods
 	FullerMapContext = big.NewInt(0)           // Fork = 0 meaning initial ontology
 	TuringMapContext = big.NewInt(math.MaxInt) // maxed out for now

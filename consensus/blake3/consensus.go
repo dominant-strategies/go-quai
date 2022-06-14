@@ -703,6 +703,60 @@ func (blake3 *Blake3) GetLinkExternalBlocks(chain consensus.ChainHeaderReader, h
 	return externalBlocks, nil
 }
 
+// PreviousCoincidentOnPath searches the path for a block of specified order in the specified slice
+//     *slice - The zone location which defines the slice in which we are validating
+//     *order - The order of the conincidence that is desired
+//     *path - Search among ancestors of this path in the specified slice
+func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader, header *types.Header, slice []byte, order, path int) (common.Hash, error) {
+
+	if err := chain.CheckContextAndOrderRange(path); err != nil {
+		return common.Hash{}, err
+	}
+	if err := chain.CheckContextAndOrderRange(order); err != nil {
+		return common.Hash{}, err
+	}
+	if err := chain.CheckLocationRange(slice); err != nil {
+		return common.Hash{}, err
+	}
+
+	for {
+		// If block header is Genesis return it as coincident
+		if header.Number[path].Cmp(big.NewInt(0)) <= 0 {
+			return header.Hash(), nil
+		}
+
+		if path == types.QuaiNetworkContext {
+
+			// Get previous header on local chain by hash
+			prevHeader := chain.GetHeaderByHash(header.ParentHash[path])
+
+			// Increment previous header
+			header = prevHeader
+		} else {
+
+			// Get previous header on local chain by hash
+			prevExtBlock, err := chain.GetExternalBlock(header.ParentHash[path], header.Number[path].Uint64()-1, uint64(path))
+			if err != nil {
+				return common.Hash{}, err
+			}
+
+			// Increment previous header
+			header = prevExtBlock.Header()
+		}
+
+		// Find the order of the header
+		difficultyOrder, err := blake3.GetDifficultyOrder(header)
+		if err != nil {
+			return common.Hash{}, err
+		}
+
+		// If we have reached a coincident block of desired order in our desired slice
+		if bytes.Equal(header.Location, slice) && difficultyOrder <= order {
+			return header.Hash(), nil
+		}
+	}
+}
+
 // TraceBranches utilizes a passed in header for initializing a trace of all external blocks.
 // The function will sue PrimeTraceBranch and RegionTraceBranch for the two different types of traces that need to occur.
 // Depending on the difficultyContext, originalContext, and originalLocation the trace will know when and where to stop.

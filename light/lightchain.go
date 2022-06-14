@@ -625,3 +625,13 @@ func (lc *LightChain) DisableCheckFreq() {
 func (lc *LightChain) EnableCheckFreq() {
 	atomic.StoreInt32(&lc.disableCheckFreq, 0)
 }
+
+// CheckContextAndOrderRange checks to make sure the range of a context or order is valid
+func (lc *LightChain) CheckContextAndOrderRange(context int) error {
+	return nil
+}
+
+// CheckLocationRange checks to make sure the range of r and z are valid
+func (lc *LightChain) CheckLocationRange(location []byte) error {
+	return nil
+}

@@ -594,6 +594,11 @@ func (c *Clique) GetLinkExternalBlocks(chain consensus.ChainHeaderReader, header
 	return make([]*types.ExternalBlock, 0), nil
 }
 
+// PreviousCoincidentOnPath searches the path for a block of specified order in the specified slice
+func (c *Clique) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader, header *types.Header, slice []byte, order, path int) (common.Hash, error) {
+	return common.Hash{}, nil
+}
+
 // GetCoincidentHeader retrieves the furthest coincident header back
 func (c *Clique) GetDifficultyOrder(header *types.Header) (int, error) {
 	return 0, nil

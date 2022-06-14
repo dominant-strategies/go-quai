@@ -691,3 +691,13 @@ func (hc *HeaderChain) GetGasUsedInChain(block *types.Block, length int) int64 {
 func (hc *HeaderChain) GetUnclesInChain(block *types.Block, length int) []*types.Header {
 	return nil
 }
+
+// CheckContextAndOrderRange checks to make sure the range of a context or order is valid
+func (hc *HeaderChain) CheckContextAndOrderRange(context int) error {
+	return nil
+}
+
+// CheckLocationRange checks to make sure the range of r and z are valid
+func (hc *HeaderChain) CheckLocationRange(location []byte) error {
+	return nil
+}
