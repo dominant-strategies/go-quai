@@ -171,6 +171,7 @@ var (
 	MinimumDifficulty      = big.NewInt(131072)                                             // The minimum that the difficulty may ever be.
 	DurationLimits         = []*big.Int{big.NewInt(900), big.NewInt(300), big.NewInt(10)}   // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
 	TargetUncles           = []int{10, 30, 100}                                             // The bound divisor of the gas limit, used in update calculations.
+	MaxContext             = 2
 )
 
 // Ontology defines the current Quai Network ontology
@@ -179,10 +180,12 @@ var (
 	FullerMapContext = big.NewInt(0)           // Fork = 0 meaning initial ontology
 	TuringMapContext = big.NewInt(math.MaxInt) // maxed out for now
 	LovelaMapContext = big.NewInt(math.MaxInt) // maxed out for now
+
 	// Named ontologies
-	FullerOntology   = []int{3, 3, 3} // named after Buckminster Fuller
-	TuringOntology   = []int{4, 4, 4} // named after Alan Turing
-	LovelaceOntology = []int{5, 5, 5} // named after Ada Lovelace
+	// This defines the number of allowed regions (r) and zones (z) in the hierarchy (r,z)
+	FullerOntology   = []int{3, 3} // named after Buckminster Fuller
+	TuringOntology   = []int{4, 4} // named after Alan Turing
+	LovelaceOntology = []int{5, 5} // named after Ada Lovelace
 	// future ontology expansion markers go here
 	QuaiOntologies = [][]int{FullerOntology, TuringOntology, LovelaceOntology}
 )
