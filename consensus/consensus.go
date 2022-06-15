@@ -118,9 +118,6 @@ type Engine interface {
 	// GetExternalBlocks retrieves all valid external blocks from external chains
 	GetExternalBlocks(chain ChainHeaderReader, header *types.Header, logging bool) ([]*types.ExternalBlock, error)
 
-	// GetCoincidentHeader retrieves the furthest coincident header back.
-	GetCoincidentHeader(chain ChainHeaderReader, context int, header *types.Header) (*types.Header, int)
-
 	// GetCoincidentAtOrder retrieves the coincident header.
 	GetCoincidentAtOrder(chain ChainHeaderReader, context int, expectedOrder int, header *types.Header) (*types.Header, error)
 

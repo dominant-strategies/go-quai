@@ -1668,8 +1668,8 @@ func (bc *BlockChain) getHierarchicalTD(currentBlock *types.Block, block *types.
 		// of the localHeader. This makes sure that the imported chain with externHeader doesn't outrun
 		// the chain.
 		if types.QuaiNetworkContext > 0 {
-			localPrevCoincident, _ := bc.Engine().GetCoincidentHeader(bc, localOrder, localHeader)
-			externPrevCoincident, _ := bc.Engine().GetCoincidentHeader(bc, localOrder, externHeader)
+			localPrevCoincident, _ := bc.Engine().GetCoincidentAtOrder(bc, localOrder, localOrder-1, localHeader)
+			externPrevCoincident, _ := bc.Engine().GetCoincidentAtOrder(bc, localOrder, localOrder-1, externHeader)
 			if localPrevCoincident.Hash() != externPrevCoincident.Hash() {
 				return nil, nil, err
 			}

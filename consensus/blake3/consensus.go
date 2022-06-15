@@ -382,48 +382,6 @@ func (blake3 *Blake3) GetDifficultyOrder(header *types.Header) (int, error) {
 	return -1, errors.New("Block does not satisfy minimum difficulty")
 }
 
-// Iterate back through headers to find ones that exceed a given context.
-func (blake3 *Blake3) GetCoincidentHeader(chain consensus.ChainHeaderReader, context int, header *types.Header) (*types.Header, int) {
-	// If we are at the highest context, no coincident will include it.
-	if context == 0 {
-		return header, 0
-	} else if context == 1 {
-		difficultyContext, err := blake3.GetDifficultyOrder(header)
-		if err != nil {
-			return header, context
-		}
-
-		return header, difficultyContext
-	} else {
-		for {
-			// Check work of the header, if it has enough work we will move up in context.
-			// difficultyContext is initially context since it could be a pending block w/o a nonce.
-			difficultyContext, err := blake3.GetDifficultyOrder(header)
-			if err != nil {
-				return header, context
-			}
-
-			// If block header is Genesis return it as coincident
-			if header.Number[context].Cmp(big.NewInt(0)) <= 0 {
-				return header, difficultyContext
-			}
-
-			// If we have reached a coincident block
-			if difficultyContext < context {
-				return header, difficultyContext
-			} else if difficultyContext == 1 && context == 1 {
-				return header, difficultyContext
-			}
-
-			// Get previous header on local chain by hash
-			prevHeader := chain.GetHeaderByHash(header.ParentHash[context])
-
-			// Increment previous header
-			header = prevHeader
-		}
-	}
-}
-
 // Check difficulty of previous header in order to find traceability.
 func (blake3 *Blake3) CheckPrevHeaderCoincident(chain consensus.ChainHeaderReader, context int, header *types.Header) (int, error) {
 	// If we are at the highest context, no coincident will include it.
