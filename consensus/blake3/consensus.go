@@ -857,10 +857,10 @@ func verifyInsideLocation(location []byte, number []*big.Int, config *params.Cha
 
 // Verifies that Location is valid inside current MapContext ontology.
 func checkInsideCurrent(regionLoc int, zoneLoc int, ontology []int) error {
-	if regionLoc < 0 || regionLoc > ontology[0] {
+	if regionLoc < 1 || regionLoc > ontology[0] {
 		return consensus.ErrInvalidOntology
 	}
-	if zoneLoc < 0 || zoneLoc > ontology[1] {
+	if zoneLoc < 1 || zoneLoc > ontology[1] {
 		return consensus.ErrInvalidOntology
 	}
 	return nil
