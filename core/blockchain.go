@@ -3222,11 +3222,14 @@ func (bc *BlockChain) CheckExternalBlockLink(externalBlocks []*types.ExternalBlo
 	return nil
 }
 
-// Confirm the proposed block is an untwisted extension of the canonical head
+// The purpose of the Previous Coincident Reference Check (PCRC) is to establish
+// that we have linked untwisted chains prior to checking HLCR & applying external state transfers.
 func (bc *BlockChain) PCRC(block *types.Block) ([]common.Hash, error) {
 	slice := block.Header().Location
 
-	//Region twist check
+	// Region twist check
+	// RTZ -- Region coincident along zone path
+	// RTR -- Region coincident along region path
 	RTZ, err := bc.Engine().PreviousCoincidentOnPath(bc, block.Header(), slice, params.REGION, params.ZONE)
 	if err != nil {
 		return []common.Hash{}, err
@@ -3241,7 +3244,10 @@ func (bc *BlockChain) PCRC(block *types.Block) ([]common.Hash, error) {
 		return []common.Hash{}, errors.New("there exists a region twist")
 	}
 
-	//Prime twist check
+	// Prime twist check
+	// PTZ -- Prime coincident along zone path
+	// PTR -- Prime coincident along region path
+	// PTP -- Prime coincident along prime path
 	PTZ, err := bc.Engine().PreviousCoincidentOnPath(bc, block.Header(), slice, params.PRIME, params.ZONE)
 	if err != nil {
 		return []common.Hash{}, err

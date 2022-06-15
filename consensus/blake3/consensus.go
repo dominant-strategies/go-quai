@@ -759,7 +759,7 @@ func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader
 			header = prevHeader
 		} else {
 
-			// Get previous header on local chain by hash
+			// Get previous header on external chain by hash
 			prevExtBlock, err := chain.GetExternalBlock(header.ParentHash[path], header.Number[path].Uint64()-1, uint64(path))
 			if err != nil {
 				return common.Hash{}, err
