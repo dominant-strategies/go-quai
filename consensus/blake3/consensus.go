@@ -719,6 +719,31 @@ func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader
 		return common.Hash{}, err
 	}
 
+	// Check for non-allowed input combinations
+	// Table for the expected output of Hashes from PreviousCoincidentOnPath for various combinations of given order(o) and path(p)
+	// -------------------
+	// |o\p| 0 | 1    | 2 |
+	// | 0 |PPB|PPB   |PPB|
+	// | 1 | X |PB/PPB|PDB|
+	// | 2 | X |  X   |PB |
+	// --------------------
+	// PB  = Previous Block
+	// PDB = Previous Dominant Block
+	// PPB = Previous Prime Block
+	// X   = Not Allowed
+	if order > path {
+		return common.Hash{}, errors.New("tracing along a dominant chain for a subordinate order block is non-sensical")
+	}
+
+	difficultyOrder, err := blake3.GetDifficultyOrder(header)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	if difficultyOrder > path {
+		return common.Hash{}, errors.New("provided header does not directly link to requested path")
+	}
+
 	for {
 		// If block header is Genesis return it as coincident
 		if header.Number[path].Cmp(big.NewInt(0)) <= 0 {
