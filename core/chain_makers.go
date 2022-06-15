@@ -23,6 +23,7 @@ import (
 
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/consensus"
+	"github.com/spruce-solutions/go-quai/consensus/blake3"
 	"github.com/spruce-solutions/go-quai/consensus/misc"
 	"github.com/spruce-solutions/go-quai/core/state"
 	"github.com/spruce-solutions/go-quai/core/types"
@@ -74,7 +75,7 @@ func (b *BlockGen) SetNonce(nonce types.BlockNonce) {
 
 // SetDifficulty sets the difficulty field of the generated block. This method is
 // useful for Clique tests where the difficulty does not depend on time. For the
-// ethash tests, please use OffsetTime, which implicitly recalculates the diff.
+// blake3 tests, please use OffsetTime, which implicitly recalculates the diff.
 func (b *BlockGen) SetDifficulty(diff *big.Int) {
 	b.header.Difficulty[types.QuaiNetworkContext] = diff
 }
@@ -197,6 +198,10 @@ func (b *BlockGen) OffsetTime(seconds int64) {
 // values. Inserting them into BlockChain requires use of FakePow or
 // a similar non-validating proof of work implementation.
 func GenerateChain(config *params.ChainConfig, parent *types.Block, engine consensus.Engine, db ethdb.Database, n int, gen func(int, *BlockGen)) ([]*types.Block, []types.Receipts) {
+	if config.ChainID == nil { // for testing purposes
+		config = params.TestChainConfig
+	}
+
 	if config == nil {
 		config = params.TestChainConfig
 	}
@@ -204,7 +209,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	chainreader := &fakeChainReader{config: config}
 	genblock := func(i int, parent *types.Block, statedb *state.StateDB) (*types.Block, types.Receipts) {
 		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: config, engine: engine}
-		b.header = makeHeader(chainreader, parent, statedb, b.engine)
+		// b.header = makeHeader(chainreader, parent, statedb, b.engine)
 
 		// Execute any user modifications to the block
 		if gen != nil {
@@ -239,57 +244,78 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	return blocks, receipts
 }
 
-func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.StateDB, engine consensus.Engine) *types.Header {
-	var time uint64
-	if parent.Time() == 0 {
-		time = 10
-	} else {
-		time = parent.Time() + 10 // block time is fixed at 10 seconds
+func makeHeader(config *params.ChainConfig, chain consensus.ChainReader, parent *types.Block, order int, state *state.StateDB, engine consensus.Engine) *types.Header {
+	// return genesis block as itself for first block in chain
+	if parent.Header().Number[0].Cmp(big.NewInt(0)) == 0 {
+		return parent.Header()
 	}
 
+	// initialization of header
 	baseFee := misc.CalcBaseFee(chain.Config(), parent.Header(), chain.GetHeaderByNumber, chain.GetUnclesInChain, chain.GetGasUsedInChain)
-
 	header := &types.Header{
-		Coinbase:    []common.Address{common.Address{}, common.Address{}, common.Address{}},
-		Number:      []*big.Int{big.NewInt(int64(1)), big.NewInt(int64(1)), big.NewInt(int64(1))},
-		ParentHash:  []common.Hash{common.Hash{}, common.Hash{}, common.Hash{}},
-		Root:        []common.Hash{common.Hash{}, common.Hash{}, common.Hash{}},
-		Difficulty:  []*big.Int{big.NewInt(1), big.NewInt(1), big.NewInt(1)},
-		UncleHash:   types.EmptyUncleHash,
-		TxHash:      types.EmptyRootHash,
-		ReceiptHash: types.EmptyRootHash,
-		Bloom:       []types.Bloom{types.Bloom{}, types.Bloom{}, types.Bloom{}},
-		Time:        time,
-		BaseFee:     []*big.Int{baseFee, baseFee, baseFee},
-		GasLimit:    []uint64{0, 0, 0},
-		GasUsed:     []uint64{0, 0, 0},
-		Extra:       [][]byte{[]byte(nil), []byte(nil), []byte(nil)},
-	}
-	header.GasLimit[types.QuaiNetworkContext] = parent.GasLimit()
-
-	parentHeader := &types.Header{
-		Number:     []*big.Int{big.NewInt(int64(1)), big.NewInt(int64(1)), big.NewInt(int64(1))},
-		Difficulty: []*big.Int{big.NewInt(1), big.NewInt(1), big.NewInt(1)},
-		UncleHash:  types.EmptyUncleHash,
-		Time:       time - 10,
+		ParentHash:        make([]common.Hash, 3),
+		Number:            []*big.Int{new(big.Int).SetUint64(0), new(big.Int).SetUint64(0), new(big.Int).SetUint64(0)},
+		Extra:             make([][]byte, 3),
+		Time:              uint64(0),
+		BaseFee:           []*big.Int{baseFee, baseFee, baseFee},
+		GasLimit:          make([]uint64, 3),
+		Coinbase:          make([]common.Address, 3),
+		Difficulty:        make([]*big.Int, 3),
+		NetworkDifficulty: make([]*big.Int, 3),
+		Root:              make([]common.Hash, 3),
+		TxHash:            make([]common.Hash, 3),
+		ReceiptHash:       make([]common.Hash, 3),
+		GasUsed:           make([]uint64, 3),
+		Bloom:             make([]types.Bloom, 3),
+		Location:          chain.Config().Location,
 	}
 
-	if chain.Config().IsLondon(header.Number[types.QuaiNetworkContext]) {
-		if !chain.Config().IsLondon(parent.Number()) {
-			parentGasLimit := parent.GasLimit() * params.ElasticityMultiplier
-			header.GasLimit[types.QuaiNetworkContext] = CalcGasLimit(parentGasLimit, parent.GasUsed(), 0)
-		}
+	// same across orders
+	header.Time = parent.Time() + uint64(10)
+	gasLimit := CalcGasLimit(parent.GasLimit(), parent.GasUsed(), len(parent.Uncles()))
+	header.GasLimit = []uint64{gasLimit, gasLimit, gasLimit}
+
+	switch order {
+	case 2: // Zone
+		// fill ParentHash values
+		header.ParentHash[0] = parent.Header().ParentHash[0]
+		header.ParentHash[1] = parent.Header().ParentHash[1]
+		header.ParentHash[2] = parent.Hash()
+		// fill Number values
+		header.Number[0] = parent.Header().Number[0]
+		header.Number[1] = parent.Header().Number[1]
+		header.Number[2].Add(parent.Header().Number[2], common.Big1)
+		// fill Difficulty values
+		header.Difficulty[0] = parent.Header().Difficulty[0]
+		header.Difficulty[1] = parent.Header().Difficulty[1]
+		header.Difficulty[2] = blake3.CalcDifficulty(config, header.Time, parent.Header(), 2)
+	case 1: // Region
+		// fill ParentHash values
+		header.ParentHash[0] = parent.Header().ParentHash[0]
+		header.ParentHash[1] = parent.Hash()
+		header.ParentHash[2] = header.ParentHash[1]
+		// fill Number values
+		header.Number[0] = parent.Header().Number[0]
+		header.Number[1].Add(parent.Header().Number[1], common.Big1)
+		header.Number[2].Add(parent.Header().Number[2], common.Big1)
+		// fill Difficulty values
+		header.Difficulty[0] = parent.Header().Difficulty[0]
+		header.Difficulty[1] = blake3.CalcDifficulty(config, header.Time, parent.Header(), 1)
+		header.Difficulty[2] = blake3.CalcDifficulty(config, header.Time, parent.Header(), 2)
+	case 0: // Prime
+		// fill ParentHash values
+		header.ParentHash[0] = parent.Hash()
+		header.ParentHash[1] = header.ParentHash[0] // take new header[0] value to reduce compute
+		header.ParentHash[2] = header.ParentHash[0]
+		// fill Number values
+		header.Number[0].Add(parent.Header().Number[0], common.Big1)
+		header.Number[1].Add(parent.Header().Number[1], common.Big1)
+		header.Number[2].Add(parent.Header().Number[2], common.Big1)
+		// fill Difficulty values
+		header.Difficulty[0] = blake3.CalcDifficulty(config, header.Time, parent.Header(), 0)
+		header.Difficulty[1] = blake3.CalcDifficulty(config, header.Time, parent.Header(), 1)
+		header.Difficulty[2] = blake3.CalcDifficulty(config, header.Time, parent.Header(), 2)
 	}
-
-	parentHeader.Number[types.QuaiNetworkContext] = new(big.Int).Add(parent.Number(), common.Big1)
-	parentHeader.Difficulty[types.QuaiNetworkContext] = parent.Difficulty()
-	parentHeader.UncleHash[types.QuaiNetworkContext] = parent.UncleHash()
-
-	header.Root[types.QuaiNetworkContext] = state.IntermediateRoot(chain.Config().IsEIP158(parent.Number()))
-	header.ParentHash[types.QuaiNetworkContext] = parent.Hash()
-	header.Coinbase[types.QuaiNetworkContext] = parent.Coinbase()
-	header.Difficulty[types.QuaiNetworkContext] = engine.CalcDifficulty(chain, time, parentHeader, types.QuaiNetworkContext)
-	header.Number[types.QuaiNetworkContext] = new(big.Int).Add(parent.Number(), common.Big1)
 
 	return header
 }
@@ -353,7 +379,102 @@ func (cr *fakeChainReader) GetGasUsedInChain(block *types.Block, length int) int
 func (cr *fakeChainReader) GetExternalBlocks(header *types.Header) ([]*types.ExternalBlock, error) {
 	return nil, nil
 }
-
 func (cr *fakeChainReader) GetLinkExternalBlocks(header *types.Header) ([]*types.ExternalBlock, error) {
 	return nil, nil
+}
+
+// GenerateNetwork creates a network of n blocks in c contexts. The first block's
+// parent will be the provided parent. db is used to store intermediate states
+// and should contain the parent's state trie.
+
+// configs should contain the respective config settings being tested. This must
+// include a valid slice of Prime, Region, and Zone mining locations. This is
+// necessary for testing interchain linkages through coincident blocks as well
+// as transactions flowing through them. The array of ints in c represent
+// the intended order of contexts to be mined.
+
+// The generator function is called with a new block generator for every
+// block. Any transactions and uncles added to the generator become part of the
+// block. If gen is nil, the blocks will be empty and their coinbase will
+// be the zero address.
+
+// Blocks created by GenerateNetwork do not contain valid proof of work values.
+// Inserting them into BlockChain requires use of a TestPoW in order to test and
+// verify the correct operation of the Proof-of-Work algorithm.
+func GenerateNetwork(primeConfig *params.ChainConfig, regionConfig params.ChainConfig, zoneConfig params.ChainConfig, parent *types.Block, orders []int, startNumber []int, engine consensus.Engine, db ethdb.Database, gen func(int, *BlockGen)) ([]*types.Block, []types.Receipts) {
+	// the first config must be the Prime
+	if primeConfig != params.MainnetPrimeChainConfig {
+		print("must have MainnetPrimeChainConfig as first config")
+	}
+	// check second config for Region
+	if !(regionConfig.ChainID.Cmp(params.MainnetRegionChainConfigs[0].ChainID) == 0 || regionConfig.ChainID.Cmp(params.MainnetRegionChainConfigs[1].ChainID) == 0 || regionConfig.ChainID.Cmp(params.MainnetRegionChainConfigs[2].ChainID) == 0) {
+		print("must have a MainnetRegionChainConfig as second config")
+	}
+	// check third config for Zone in Region
+	if !(zoneConfig.ChainID.Cmp(params.MainnetZoneChainConfigs[regionConfig.Location[0]-1][0].ChainID) == 0 || zoneConfig.ChainID.Cmp(params.MainnetZoneChainConfigs[regionConfig.Location[0]-1][1].ChainID) == 0 || zoneConfig.ChainID.Cmp(params.MainnetZoneChainConfigs[regionConfig.Location[0]-1][2].ChainID) == 0) {
+		print("must have a MainnetZoneConfig as third config")
+	}
+
+	n := len(orders)
+	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
+
+	// associate chainreaders and configs for correct block context placement
+	chainreaders, configs := []fakeChainReader{}, []params.ChainConfig{}
+	for _, context := range orders {
+		switch context {
+		case 0:
+			chainreaders = append(chainreaders, fakeChainReader{config: primeConfig})
+			configs = append(configs, *primeConfig)
+		case 1:
+			chainreaders = append(chainreaders, fakeChainReader{config: &regionConfig})
+			configs = append(configs, regionConfig)
+		case 2:
+			chainreaders = append(chainreaders, fakeChainReader{config: &zoneConfig})
+			configs = append(configs, zoneConfig)
+		default:
+			print("contexts must be 0, 1, or 2")
+		}
+	}
+
+	genblock := func(i int, parent *types.Block, context int, statedb *state.StateDB, chainreaders []fakeChainReader, configs []params.ChainConfig) (*types.Block, types.Receipts) {
+		// select appropriate fakeChainReader for block creation
+		chainreader := chainreaders[i]
+		config := configs[i]
+
+		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: &config, engine: engine}
+		b.header = makeHeader(&config, &chainreader, parent, context, statedb, b.engine)
+
+		// Execute any user modifications to the block
+		if gen != nil {
+			gen(i, b)
+		}
+
+		if b.engine != nil {
+			// Finalize and seal the block
+			block, _ := b.engine.FinalizeAndAssemble(&chainreader, b.header, statedb, b.txs, b.uncles, b.receipts)
+
+			// Write state changes to db
+			root, err := statedb.Commit(config.IsEIP158(b.header.Number[types.QuaiNetworkContext]))
+			if err != nil {
+				panic(fmt.Sprintf("state write error: %v", err))
+			}
+			if err := statedb.Database().TrieDB().Commit(root, false, nil); err != nil {
+				panic(fmt.Sprintf("trie write error: %v", err))
+			}
+			return block, b.receipts
+		}
+		return nil, nil
+	}
+
+	for i := 0; i < n; i++ {
+		statedb, err := state.New(parent.Root(), state.NewDatabase(db), nil)
+		if err != nil {
+			panic(err)
+		}
+		block, receipt := genblock(i, parent, orders[i], statedb, chainreaders, configs)
+		blocks[i] = block
+		receipts[i] = receipt
+		parent = block
+	}
+	return blocks, receipts
 }
