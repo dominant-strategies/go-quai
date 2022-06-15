@@ -970,6 +970,7 @@ func (bc *BlockChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
 // GetBlocksFromHash returns the block corresponding to hash and up to n-1 ancestors.
 // [deprecated by eth/62]
 func (bc *BlockChain) GetBlocksFromHash(hash common.Hash, n int) (blocks []*types.Block) {
+	fmt.Println("GetBlocksFromHash", hash)
 	number := bc.hc.GetBlockNumber(hash)
 	if number == nil {
 		return nil
@@ -3287,7 +3288,7 @@ func (bc *BlockChain) AggregateTotalDifficulty(context int, header *types.Header
 		// add in the genesis total difficulty such that the following blocks build off the TD correctly.
 		if header.Number[currentLowestContext].Uint64()-1 == 0 {
 			genesis := MainnetPrimeGenesisBlock()
-			currentTotalDifficulty.Add(currentTotalDifficulty, genesis.Difficulty)
+			currentTotalDifficulty.Add(currentTotalDifficulty, genesis.Difficulty[0])
 			fmt.Println("Adding genesis Prime difficulty")
 			return currentTotalDifficulty, currentLowestContext, nil
 		}

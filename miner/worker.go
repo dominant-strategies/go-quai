@@ -758,6 +758,7 @@ func (w *worker) makeEnv(parent *types.Block, header *types.Header, coinbase com
 		externalGasUsed: uint64(0),
 	}
 	// when 08 is processed ancestors contain 07 (quick block)
+	fmt.Println("asking for parent hash", parent.Hash())
 	for _, ancestor := range w.chain.GetBlocksFromHash(parent.Hash(), 7) {
 		for _, uncle := range ancestor.Uncles() {
 			env.family.Add(uncle.Hash())
