@@ -1480,6 +1480,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	// Note all the components of block(td, hash->number map, header, body, receipts)
 	// should be written atomically. BlockBatch is used for containing all components.
 	blockBatch := bc.db.NewBatch()
+	fmt.Println("Writing TD", externTd, block.Hash())
 	rawdb.WriteTd(blockBatch, block.Hash(), block.NumberU64(), externTd)
 	rawdb.WriteBlock(blockBatch, block)
 	rawdb.WriteReceipts(blockBatch, block.Hash(), block.NumberU64(), receipts)
@@ -1635,6 +1636,7 @@ func (bc *BlockChain) getHierarchicalTD(currentBlock *types.Block, block *types.
 		localTd = bc.GetTd(localHeader.Hash(), localBlock.NumberU64())
 	} else if localOrder < externOrder {
 		// get coincident and get the Total difficulty of it
+		fmt.Println("case 2: currentBlock", currentBlock.Header().Number, currentBlock.Header().Hash())
 		localTd = bc.GetTd(currentBlock.Header().Hash(), currentBlock.NumberU64())
 
 		externHeader, err = bc.Engine().GetCoincidentAtOrder(bc, types.QuaiNetworkContext, localOrder, block.Header())
@@ -1928,6 +1930,10 @@ func (bc *BlockChain) InsertChainWithoutSealVerification(block *types.Block) (in
 // is imported, but then new canon-head is added before the actual sidechain
 // completes, then the historic state could be pruned again
 func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, error) {
+	for _, block := range chain {
+		fmt.Println("InsertChain block:", block.Header().Number, block.Hash())
+	}
+
 	// If the chain is terminating, don't even bother starting up
 	if atomic.LoadInt32(&bc.procInterrupt) == 1 {
 		return 0, nil
@@ -2048,9 +2054,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		}
 	}()
 
-	for _, block := range chain {
-		fmt.Println("InsertChain block:", block.Header().Number, block.Hash())
-	}
 	for ; block != nil && err == nil || err == ErrKnownBlock; block, err = it.next() {
 		// If the chain is terminating, stop processing blocks
 		if bc.insertStopped() {
