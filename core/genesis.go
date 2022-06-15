@@ -350,10 +350,12 @@ func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big
 func MainnetPrimeGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.MainnetPrimeChainConfig,
+		ParentHash: []common.Hash{common.Hash{}, common.Hash{}, common.Hash{}},
 		Number:     []*big.Int{big.NewInt(0), big.NewInt(0), big.NewInt(0)},
 		Nonce:      59,
 		ExtraData:  [][]byte{hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"), hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"), hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa")},
 		GasLimit:   []uint64{500000, 500000, 500000},
+		GasUsed:    []uint64{0, 0, 0},
 		Difficulty: []*big.Int{big.NewInt(32048576), big.NewInt(8048576), big.NewInt(2048576)},
 		Alloc:      decodePrealloc(mainnetAllocData),
 	}
@@ -363,10 +365,12 @@ func MainnetPrimeGenesisBlock() *Genesis {
 func MainnetRegionGenesisBlock(regionParams *params.ChainConfig) *Genesis {
 	return &Genesis{
 		Config:     regionParams,
+		ParentHash: []common.Hash{common.Hash{}, common.Hash{}, common.Hash{}},
 		Number:     []*big.Int{big.NewInt(0), big.NewInt(0), big.NewInt(0)},
 		Nonce:      59,
 		ExtraData:  [][]byte{hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"), hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"), hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa")},
 		GasLimit:   []uint64{500000, 500000, 500000},
+		GasUsed:    []uint64{0, 0, 0},
 		Difficulty: []*big.Int{big.NewInt(32048576), big.NewInt(8048576), big.NewInt(2048576)},
 		Alloc:      decodePrealloc(mainnetAllocData),
 	}
@@ -376,10 +380,12 @@ func MainnetRegionGenesisBlock(regionParams *params.ChainConfig) *Genesis {
 func MainnetZoneGenesisBlock(zoneParams *params.ChainConfig) *Genesis {
 	return &Genesis{
 		Config:     zoneParams,
+		ParentHash: []common.Hash{common.Hash{}, common.Hash{}, common.Hash{}},
 		Number:     []*big.Int{big.NewInt(0), big.NewInt(0), big.NewInt(0)},
 		Nonce:      59,
 		ExtraData:  [][]byte{hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"), hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"), hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa")},
 		GasLimit:   []uint64{500000, 500000, 500000},
+		GasUsed:    []uint64{0, 0, 0},
 		Difficulty: []*big.Int{big.NewInt(32048576), big.NewInt(8048576), big.NewInt(2048576)},
 		Alloc:      decodePrealloc(mainnetAllocData),
 	}
@@ -389,10 +395,12 @@ func MainnetZoneGenesisBlock(zoneParams *params.ChainConfig) *Genesis {
 func RopstenPrimeGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.RopstenPrimeChainConfig,
+		ParentHash: []common.Hash{common.Hash{}, common.Hash{}, common.Hash{}},
 		Number:     []*big.Int{big.NewInt(0), big.NewInt(0), big.NewInt(0)},
 		Nonce:      11,
 		ExtraData:  [][]byte{hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"), hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"), hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa")},
 		GasLimit:   []uint64{500000, 500000, 500000},
+		GasUsed:    []uint64{0, 0, 0},
 		Difficulty: []*big.Int{big.NewInt(3448576), big.NewInt(1248576), big.NewInt(168576)},
 		Alloc:      decodePrealloc(ropstenAllocData),
 	}
@@ -402,10 +410,12 @@ func RopstenPrimeGenesisBlock() *Genesis {
 func RopstenRegionGenesisBlock(regionParams *params.ChainConfig) *Genesis {
 	return &Genesis{
 		Config:     regionParams,
+		ParentHash: []common.Hash{common.Hash{}, common.Hash{}, common.Hash{}},
 		Number:     []*big.Int{big.NewInt(0), big.NewInt(0), big.NewInt(0)},
 		Nonce:      11,
 		ExtraData:  [][]byte{hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"), hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"), hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa")},
 		GasLimit:   []uint64{500000, 500000, 500000},
+		GasUsed:    []uint64{0, 0, 0},
 		Difficulty: []*big.Int{big.NewInt(3448576), big.NewInt(1248576), big.NewInt(168576)},
 		Alloc:      decodePrealloc(ropstenAllocData),
 	}
@@ -415,10 +425,12 @@ func RopstenRegionGenesisBlock(regionParams *params.ChainConfig) *Genesis {
 func RopstenZoneGenesisBlock(zoneParams *params.ChainConfig) *Genesis {
 	return &Genesis{
 		Config:     zoneParams,
+		ParentHash: []common.Hash{common.Hash{}, common.Hash{}, common.Hash{}},
 		Number:     []*big.Int{big.NewInt(0), big.NewInt(0), big.NewInt(0)},
 		Nonce:      11,
 		ExtraData:  [][]byte{hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"), hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"), hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa")},
 		GasLimit:   []uint64{500000, 500000, 500000},
+		GasUsed:    []uint64{0, 0, 0},
 		Difficulty: []*big.Int{big.NewInt(3448576), big.NewInt(1248576), big.NewInt(168576)},
 		Alloc:      decodePrealloc(ropstenAllocData),
 	}
@@ -428,10 +440,12 @@ func RopstenZoneGenesisBlock(zoneParams *params.ChainConfig) *Genesis {
 func DefaultRopstenGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.RopstenChainConfig,
+		ParentHash: []common.Hash{common.Hash{}, common.Hash{}, common.Hash{}},
 		Number:     []*big.Int{big.NewInt(0), big.NewInt(0), big.NewInt(0)},
 		Nonce:      11,
 		ExtraData:  [][]byte{hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"), hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"), hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa")},
 		GasLimit:   []uint64{500000, 500000, 500000},
+		GasUsed:    []uint64{0, 0, 0},
 		Difficulty: []*big.Int{big.NewInt(1048576), big.NewInt(1248576), big.NewInt(168576)},
 	}
 }
@@ -450,6 +464,7 @@ func DeveloperGenesisBlock(period uint64, faucet common.Address) *Genesis {
 		Config:     &config,
 		ExtraData:  [][]byte{append(append(make([]byte, 32), faucet[:]...), make([]byte, crypto.SignatureLength)...), append(append(make([]byte, 32), faucet[:]...), make([]byte, crypto.SignatureLength)...), append(append(make([]byte, 32), faucet[:]...), make([]byte, crypto.SignatureLength)...), append(append(make([]byte, 32), faucet[:]...), make([]byte, crypto.SignatureLength)...)},
 		GasLimit:   []uint64{11500000, 11500000, 11500000},
+		GasUsed:    []uint64{0, 0, 0},
 		BaseFee:    []*big.Int{big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee)},
 		Difficulty: []*big.Int{big.NewInt(1), big.NewInt(1), big.NewInt(1)},
 		Alloc: map[common.Address]GenesisAccount{
