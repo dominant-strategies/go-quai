@@ -3224,50 +3224,53 @@ func (bc *BlockChain) CheckExternalBlockLink(externalBlocks []*types.ExternalBlo
 
 // The purpose of the Previous Coincident Reference Check (PCRC) is to establish
 // that we have linked untwisted chains prior to checking HLCR & applying external state transfers.
-func (bc *BlockChain) PCRC(block *types.Block) ([]common.Hash, error) {
+func (bc *BlockChain) PCRC(block *types.Block) ([]common.Hash, []*big.Int, error) {
 	slice := block.Header().Location
 
 	// Region twist check
 	// RTZ -- Region coincident along zone path
 	// RTR -- Region coincident along region path
-	RTZ, err := bc.Engine().PreviousCoincidentOnPath(bc, block.Header(), slice, params.REGION, params.ZONE)
+	// RTZND -- Net difficulty until dom or terminus along zone path
+	RTZ, RTZND, err := bc.Engine().PreviousCoincidentOnPath(bc, block.Header(), slice, params.REGION, params.ZONE)
 	if err != nil {
-		return []common.Hash{}, err
+		return []common.Hash{}, nil, err
 	}
 
-	RTR, err := bc.Engine().PreviousCoincidentOnPath(bc, block.Header(), slice, params.REGION, params.REGION)
+	RTR, _, err := bc.Engine().PreviousCoincidentOnPath(bc, block.Header(), slice, params.REGION, params.REGION)
 	if err != nil {
-		return []common.Hash{}, err
+		return []common.Hash{}, nil, err
 	}
 
 	if RTZ != RTR {
-		return []common.Hash{}, errors.New("there exists a region twist")
+		return []common.Hash{}, nil, errors.New("there exists a region twist")
 	}
 
 	// Prime twist check
 	// PTZ -- Prime coincident along zone path
 	// PTR -- Prime coincident along region path
 	// PTP -- Prime coincident along prime path
-	PTZ, err := bc.Engine().PreviousCoincidentOnPath(bc, block.Header(), slice, params.PRIME, params.ZONE)
+	// PTRND -- Net difficulty until dom or terminus along region path
+	// PTPND -- Net difficulty until terminus along prime path
+	PTZ, _, err := bc.Engine().PreviousCoincidentOnPath(bc, block.Header(), slice, params.PRIME, params.ZONE)
 	if err != nil {
-		return []common.Hash{}, err
+		return []common.Hash{}, nil, err
 	}
 
-	PTR, err := bc.Engine().PreviousCoincidentOnPath(bc, block.Header(), slice, params.PRIME, params.REGION)
+	PTR, PTRND, err := bc.Engine().PreviousCoincidentOnPath(bc, block.Header(), slice, params.PRIME, params.REGION)
 	if err != nil {
-		return []common.Hash{}, err
+		return []common.Hash{}, nil, err
 	}
 
-	PTP, err := bc.Engine().PreviousCoincidentOnPath(bc, block.Header(), slice, params.PRIME, params.PRIME)
+	PTP, PTPND, err := bc.Engine().PreviousCoincidentOnPath(bc, block.Header(), slice, params.PRIME, params.PRIME)
 	if err != nil {
-		return []common.Hash{}, err
+		return []common.Hash{}, nil, err
 	}
 
 	if PTZ != PTR || PTR != PTP || PTP != PTZ {
-		return []common.Hash{}, errors.New("there exists a prime twist")
+		return []common.Hash{}, nil, errors.New("there exists a prime twist")
 	}
 
-	return []common.Hash{PTP, RTR, block.Header().Hash()}, nil
+	return []common.Hash{PTP, RTR, block.Header().Hash()}, []*big.Int{PTPND, PTRND, RTZND}, nil
 }
 
 // AggregateNetworkDifficulty aggregates the total difficulty from the previous stop Hash in the dominant chains only

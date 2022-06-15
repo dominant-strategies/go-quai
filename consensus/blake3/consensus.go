@@ -707,16 +707,16 @@ func (blake3 *Blake3) GetLinkExternalBlocks(chain consensus.ChainHeaderReader, h
 //     *slice - The zone location which defines the slice in which we are validating
 //     *order - The order of the conincidence that is desired
 //     *path - Search among ancestors of this path in the specified slice
-func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader, header *types.Header, slice []byte, order, path int) (common.Hash, error) {
+func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader, header *types.Header, slice []byte, order, path int) (common.Hash, *big.Int, error) {
 
 	if err := chain.CheckContextAndOrderRange(path); err != nil {
-		return common.Hash{}, err
+		return common.Hash{}, nil, err
 	}
 	if err := chain.CheckContextAndOrderRange(order); err != nil {
-		return common.Hash{}, err
+		return common.Hash{}, nil, err
 	}
 	if err := chain.CheckLocationRange(slice); err != nil {
-		return common.Hash{}, err
+		return common.Hash{}, nil, err
 	}
 
 	// Check for non-allowed input combinations
@@ -732,22 +732,28 @@ func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader
 	// PPB = Previous Prime Block
 	// X   = Not Allowed
 	if order > path {
-		return common.Hash{}, errors.New("tracing along a dominant chain for a subordinate order block is non-sensical")
+		return common.Hash{}, nil, errors.New("tracing along a dominant chain for a subordinate order block is non-sensical")
 	}
 
 	difficultyOrder, err := blake3.GetDifficultyOrder(header)
 	if err != nil {
-		return common.Hash{}, err
+		return common.Hash{}, nil, err
 	}
 
 	if difficultyOrder > path {
-		return common.Hash{}, errors.New("provided header does not directly link to requested path")
+		return common.Hash{}, nil, errors.New("provided header does not directly link to requested path")
 	}
 
+	netDifficultyUntilDom := big.NewInt(0)
+	netDifficultyUntilDom = netDifficultyUntilDom.Add(netDifficultyUntilDom, header.Difficulty[path])
+
+	domFound := false
+
 	for {
+
 		// If block header is Genesis return it as coincident
 		if header.Number[path].Cmp(big.NewInt(0)) <= 0 {
-			return header.Hash(), nil
+			return header.Hash(), netDifficultyUntilDom, nil
 		}
 
 		if path == types.QuaiNetworkContext {
@@ -762,7 +768,7 @@ func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader
 			// Get previous header on external chain by hash
 			prevExtBlock, err := chain.GetExternalBlock(header.ParentHash[path], header.Number[path].Uint64()-1, uint64(path))
 			if err != nil {
-				return common.Hash{}, err
+				return common.Hash{}, nil, err
 			}
 
 			// Increment previous header
@@ -772,12 +778,21 @@ func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader
 		// Find the order of the header
 		difficultyOrder, err := blake3.GetDifficultyOrder(header)
 		if err != nil {
-			return common.Hash{}, err
+			return common.Hash{}, nil, err
+		}
+
+		// Check to see if we have found a dom
+		if difficultyOrder <= order {
+			domFound = true
 		}
 
 		// If we have reached a coincident block of desired order in our desired slice
 		if bytes.Equal(header.Location, slice) && difficultyOrder <= order {
-			return header.Hash(), nil
+			return header.Hash(), netDifficultyUntilDom, nil
+		}
+
+		if !domFound {
+			netDifficultyUntilDom = netDifficultyUntilDom.Add(netDifficultyUntilDom, header.Difficulty[path])
 		}
 	}
 }

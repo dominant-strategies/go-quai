@@ -143,7 +143,7 @@ type Engine interface {
 	GetLinkExternalBlocks(chain ChainHeaderReader, header *types.Header, logging bool) ([]*types.ExternalBlock, error)
 
 	// PreviousCoincidentOnPath searches the path for a block of specified order in the specified slice
-	PreviousCoincidentOnPath(chain ChainHeaderReader, header *types.Header, slice []byte, order, path int) (common.Hash, error)
+	PreviousCoincidentOnPath(chain ChainHeaderReader, header *types.Header, slice []byte, order, path int) (common.Hash, *big.Int, error)
 
 	// Seal generates a new sealing request for the given input block and pushes
 	// the result into the given channel.
