@@ -374,14 +374,7 @@ func (ec *Client) TransactionReceipt(ctx context.Context, txHash common.Hash) (*
 
 // GetBlockReceipts returns the receipts of a block by block hash.
 func (ec *Client) GetBlockReceipts(ctx context.Context, blockHash common.Hash) (*types.ReceiptBlock, error) {
-	var r *types.ReceiptBlock
-	err := ec.c.CallContext(ctx, &r, "quai_getBlockWithReceiptsByHash", blockHash)
-	if err == nil {
-		if r == nil {
-			return nil, ethereum.NotFound
-		}
-	}
-	return r, err
+	return ec.getBlockWithReceipts(ctx, "quai_getBlockWithReceiptsByHash", blockHash)
 }
 
 type rpcProgress struct {
