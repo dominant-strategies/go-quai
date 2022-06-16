@@ -3273,6 +3273,39 @@ func (bc *BlockChain) PCRC(block *types.Block) ([]common.Hash, []*big.Int, error
 	return []common.Hash{PTP, RTR, block.Header().Hash()}, []*big.Int{PTPND, PTRND, RTZND}, nil
 }
 
+func (bc *BlockChain) calcHLCRNetDifficulties(internTerminalHashes []common.Hash, internNetDifficulties []*big.Int, externTerminalHashes []common.Hash, externNetDifficulties []*big.Int) ([]*big.Int, error) {
+
+	if (internTerminalHashes[0] == common.Hash{}) || (internTerminalHashes[1] == common.Hash{}) || (internTerminalHashes[2] == common.Hash{}) {
+		return nil, errors.New("one or many of the intern terminal hashes were nil")
+	}
+
+	if (externTerminalHashes[0] == common.Hash{}) || (externTerminalHashes[1] == common.Hash{}) || (externTerminalHashes[2] == common.Hash{}) {
+		return nil, errors.New("one or many of the extern terminal hashes were nil")
+	}
+
+	netInternDifficulty := big.NewInt(0)
+	if internTerminalHashes[0] == internTerminalHashes[1] {
+		netInternDifficulty = netInternDifficulty.Add(netInternDifficulty, internNetDifficulties[0])
+		netInternDifficulty = netInternDifficulty.Add(netInternDifficulty, internNetDifficulties[2])
+	} else {
+		netInternDifficulty = netInternDifficulty.Add(netInternDifficulty, internNetDifficulties[0])
+		netInternDifficulty = netInternDifficulty.Add(netInternDifficulty, internNetDifficulties[1])
+		netInternDifficulty = netInternDifficulty.Add(netInternDifficulty, internNetDifficulties[2])
+	}
+
+	netExternDifficulty := big.NewInt(0)
+	if externTerminalHashes[0] == externTerminalHashes[1] {
+		netExternDifficulty = netExternDifficulty.Add(netExternDifficulty, externNetDifficulties[0])
+		netExternDifficulty = netExternDifficulty.Add(netExternDifficulty, externNetDifficulties[2])
+	} else {
+		netExternDifficulty = netExternDifficulty.Add(netExternDifficulty, externNetDifficulties[0])
+		netExternDifficulty = netExternDifficulty.Add(netExternDifficulty, externNetDifficulties[1])
+		netExternDifficulty = netExternDifficulty.Add(netExternDifficulty, externNetDifficulties[2])
+	}
+
+	return []*big.Int{netInternDifficulty, netExternDifficulty}, nil
+}
+
 // AggregateNetworkDifficulty aggregates the total difficulty from the previous stop Hash in the dominant chains only
 func (bc *BlockChain) AggregateTotalDifficulty(context int, header *types.Header) (*big.Int, int, error) {
 
