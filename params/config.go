@@ -55,7 +55,7 @@ var CheckpointOracles = map[common.Hash]*CheckpointOracleConfig{
 }
 var mainnetValidChains = []*big.Int{big.NewInt(9000), big.NewInt(9100), big.NewInt(9101), big.NewInt(9102), big.NewInt(9103), big.NewInt(9200), big.NewInt(9201), big.NewInt(9202), big.NewInt(9203), big.NewInt(9300), big.NewInt(9301), big.NewInt(9302), big.NewInt(9303)}
 
-var testnetValidChains = []*big.Int{big.NewInt(12000), big.NewInt(12100), big.NewInt(12101), big.NewInt(12102), big.NewInt(12103), big.NewInt(12200), big.NewInt(12201), big.NewInt(12202), big.NewInt(12203), big.NewInt(12300), big.NewInt(12301), big.NewInt(12302), big.NewInt(12303), big.NewInt(1337)}
+var testnetValidChains = []*big.Int{big.NewInt(12000), big.NewInt(12100), big.NewInt(12101), big.NewInt(12102), big.NewInt(12103), big.NewInt(12200), big.NewInt(12201), big.NewInt(12202), big.NewInt(12203), big.NewInt(12300), big.NewInt(12301), big.NewInt(12302), big.NewInt(12303)}
 
 var (
 	// MainnetPrimeChainConfig is the chain parameters to run a node on the main network.
@@ -1115,21 +1115,20 @@ var (
 	testnetBytePrefixList = make([][]int, 20000)
 )
 
-// Guarded Address Space ranges
 func init() {
-	mainnetBytePrefixList[9000] = []int{0, 9}     // Prime
-	mainnetBytePrefixList[9100] = []int{10, 19}   // Cyprus
-	mainnetBytePrefixList[9101] = []int{20, 29}   // Cyprus One
-	mainnetBytePrefixList[9102] = []int{30, 39}   // Cyprus Two
-	mainnetBytePrefixList[9103] = []int{40, 49}   // Cyprus Three
-	mainnetBytePrefixList[9200] = []int{50, 59}   // Paxos
-	mainnetBytePrefixList[9201] = []int{60, 69}   // Paxos One
-	mainnetBytePrefixList[9202] = []int{70, 79}   // Paxos Two
-	mainnetBytePrefixList[9203] = []int{80, 89}   // Paxos Three
-	mainnetBytePrefixList[9300] = []int{90, 99}   // Hydra
-	mainnetBytePrefixList[9301] = []int{100, 109} // Hydra One
-	mainnetBytePrefixList[9302] = []int{110, 119} // Hydra Two
-	mainnetBytePrefixList[9303] = []int{120, 129} // Hydra Three
+	mainnetBytePrefixList[9000] = []int{0, 9}
+	mainnetBytePrefixList[9100] = []int{10, 19}
+	mainnetBytePrefixList[9101] = []int{20, 29}
+	mainnetBytePrefixList[9102] = []int{30, 39}
+	mainnetBytePrefixList[9103] = []int{40, 49}
+	mainnetBytePrefixList[9200] = []int{50, 59}
+	mainnetBytePrefixList[9201] = []int{60, 69}
+	mainnetBytePrefixList[9202] = []int{70, 79}
+	mainnetBytePrefixList[9203] = []int{80, 89}
+	mainnetBytePrefixList[9300] = []int{90, 99}
+	mainnetBytePrefixList[9301] = []int{100, 109}
+	mainnetBytePrefixList[9302] = []int{110, 119}
+	mainnetBytePrefixList[9303] = []int{120, 129}
 
 	testnetBytePrefixList[12000] = []int{0, 9}
 	testnetBytePrefixList[12100] = []int{10, 19}
@@ -1144,7 +1143,6 @@ func init() {
 	testnetBytePrefixList[12301] = []int{100, 109}
 	testnetBytePrefixList[12302] = []int{110, 119}
 	testnetBytePrefixList[12303] = []int{120, 129}
-	testnetBytePrefixList[1337] = []int{0, 129} // for integration tests
 }
 
 // ChainIDRange returns the byte lookup based off a configs chainID
