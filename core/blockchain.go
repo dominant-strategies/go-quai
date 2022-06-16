@@ -3273,6 +3273,25 @@ func (bc *BlockChain) PCRC(block *types.Block) ([]common.Hash, []*big.Int, error
 	return []common.Hash{PTP, RTR, block.Header().Hash()}, []*big.Int{PTPND, PTRND, RTZND}, nil
 }
 
+func (bc *BlockChain) calcHLCRNetDifficulty(terminalHashes []common.Hash, netDifficulties []*big.Int) (*big.Int, error) {
+
+	if (terminalHashes[0] == common.Hash{}) || (terminalHashes[1] == common.Hash{}) || (terminalHashes[2] == common.Hash{}) {
+		return nil, errors.New("one or many of the  terminal hashes were nil")
+	}
+
+	netDifficulty := big.NewInt(0)
+	if terminalHashes[0] == terminalHashes[1] {
+		netDifficulty = netDifficulty.Add(netDifficulty, netDifficulties[0])
+		netDifficulty = netDifficulty.Add(netDifficulty, netDifficulties[2])
+	} else {
+		netDifficulty = netDifficulty.Add(netDifficulty, netDifficulties[0])
+		netDifficulty = netDifficulty.Add(netDifficulty, netDifficulties[1])
+		netDifficulty = netDifficulty.Add(netDifficulty, netDifficulties[2])
+	}
+
+	return netDifficulty, nil
+}
+
 // AggregateNetworkDifficulty aggregates the total difficulty from the previous stop Hash in the dominant chains only
 func (bc *BlockChain) AggregateTotalDifficulty(context int, header *types.Header) (*big.Int, int, error) {
 
