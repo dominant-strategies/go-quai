@@ -1470,88 +1470,26 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	// Make sure no inconsistent state is leaked during insertion
 	currentBlock := bc.CurrentBlock()
 
-	var localOrder int
-	if currentBlock.NumberU64() == 0 {
-		localOrder = types.QuaiNetworkContext
-	} else {
-		localOrder, err = bc.Engine().GetDifficultyOrder(currentBlock.Header())
-		if err != nil {
-			return NonStatTy, err
-		}
-	}
-
-	externOrder, err := bc.Engine().GetDifficultyOrder(block.Header())
+	localTerminalHashes, localNetDifficulties, err := bc.PCRC(currentBlock)
 	if err != nil {
 		return NonStatTy, err
 	}
 
-	localHeader := currentBlock.Header()
-	externHeader := block.Header()
-
-	localTd, externTd := big.NewInt(0), big.NewInt(0)
-	// If the incoming block is a coincident block
-	if externOrder < localOrder {
-		var lowestOrder int
-		externTd, lowestOrder, err = bc.AggregateTotalDifficulty(localOrder, block.Header())
-		if err != nil {
-			return NonStatTy, err
-		}
-
-		// get coincident and get the Total difficulty of it
-		localHeader, err = bc.Engine().GetCoincidentAtOrder(bc, types.QuaiNetworkContext, lowestOrder, currentBlock.Header())
-		if err != nil {
-			return NonStatTy, err
-		}
-
-		localBlock := bc.GetBlockByHash(localHeader.Hash())
-		localTd = bc.GetTd(localHeader.Hash(), localBlock.NumberU64())
-	} else if localOrder < externOrder {
-		// get coincident and get the Total difficulty of it
-		localTd = bc.GetTd(currentBlock.Header().Hash(), currentBlock.NumberU64())
-
-		externHeader, err = bc.Engine().GetCoincidentAtOrder(bc, types.QuaiNetworkContext, localOrder, block.Header())
-		if err != nil {
-			return NonStatTy, err
-		}
-
-		externBlock := bc.GetBlockByHash(externHeader.Hash())
-
-		// If we are building on the same point
-		if localHeader.Hash() == externHeader.Hash() {
-			ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
-			if ptd == nil {
-				return NonStatTy, consensus.ErrUnknownAncestor
-			}
-			externTd = new(big.Int).Add(block.Difficulty(), ptd)
-		} else {
-			externTd = bc.GetTd(externHeader.Hash(), externBlock.NumberU64())
-		}
-	} else if localOrder < types.QuaiNetworkContext {
-		localTd = bc.GetTd(currentBlock.Header().Hash(), currentBlock.NumberU64())
-		externTd, _, err = bc.AggregateTotalDifficulty(localOrder+1, block.Header())
-		if err != nil {
-			return NonStatTy, err
-		}
-	} else {
-		// If the localHeader and the externHeader order is same as the chain context, we need
-		// to ensure that the previous coincident of the externHeader matches the previous coincident
-		// of the localHeader. This makes sure that the imported chain with externHeader doesn't outrun
-		// the chain.
-		if types.QuaiNetworkContext == 2 {
-			localPrevCoincident, _ := bc.Engine().GetCoincidentHeader(bc, localOrder, localHeader)
-			externPrevCoincident, _ := bc.Engine().GetCoincidentHeader(bc, localOrder, externHeader)
-			if localPrevCoincident.Hash() != externPrevCoincident.Hash() {
-				return NonStatTy, errors.New("previous coincident of extern header doesn't match the previous coincident of local header")
-			}
-		}
-
-		ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
-		if ptd == nil {
-			return NonStatTy, consensus.ErrUnknownAncestor
-		}
-		externTd = new(big.Int).Add(block.Difficulty(), ptd)
-		localTd = bc.GetTd(currentBlock.Hash(), currentBlock.NumberU64())
+	externTerminalHashes, externNetDifficulties, err := bc.PCRC(block)
+	if err != nil {
+		return NonStatTy, err
 	}
+
+	localNetTd, externNetTd, err := bc.calcHLCRNetDifficulties(localTerminalHashes, localNetDifficulties, externTerminalHashes, externNetDifficulties)
+	if err != nil {
+		return NonStatTy, err
+	}
+
+	localTd := big.NewInt(0)
+	localTd = localNetTd.Add(localNetTd, bc.GetTdByHash(localTerminalHashes[0]))
+
+	externTd := big.NewInt(0)
+	externTd = externNetTd.Add(externNetTd, bc.GetTdByHash(externTerminalHashes[0]))
 
 	// Irrelevant of the canonical status, write the block itself to the database.
 	//
@@ -3273,24 +3211,24 @@ func (bc *BlockChain) PCRC(block *types.Block) ([]common.Hash, []*big.Int, error
 	return []common.Hash{PTP, RTR, block.Header().Hash()}, []*big.Int{PTPND, PTRND, RTZND}, nil
 }
 
-func (bc *BlockChain) calcHLCRNetDifficulties(internTerminalHashes []common.Hash, internNetDifficulties []*big.Int, externTerminalHashes []common.Hash, externNetDifficulties []*big.Int) ([]*big.Int, error) {
+func (bc *BlockChain) calcHLCRNetDifficulties(localTerminalHashes []common.Hash, localNetDifficulties []*big.Int, externTerminalHashes []common.Hash, externNetDifficulties []*big.Int) (*big.Int, *big.Int, error) {
 
-	if (internTerminalHashes[0] == common.Hash{}) || (internTerminalHashes[1] == common.Hash{}) || (internTerminalHashes[2] == common.Hash{}) {
-		return nil, errors.New("one or many of the intern terminal hashes were nil")
+	if (localTerminalHashes[0] == common.Hash{}) || (localTerminalHashes[1] == common.Hash{}) || (localTerminalHashes[2] == common.Hash{}) {
+		return nil, nil, errors.New("one or many of the local terminal hashes were nil")
 	}
 
 	if (externTerminalHashes[0] == common.Hash{}) || (externTerminalHashes[1] == common.Hash{}) || (externTerminalHashes[2] == common.Hash{}) {
-		return nil, errors.New("one or many of the extern terminal hashes were nil")
+		return nil, nil, errors.New("one or many of the extern terminal hashes were nil")
 	}
 
-	netInternDifficulty := big.NewInt(0)
-	if internTerminalHashes[0] == internTerminalHashes[1] {
-		netInternDifficulty = netInternDifficulty.Add(netInternDifficulty, internNetDifficulties[0])
-		netInternDifficulty = netInternDifficulty.Add(netInternDifficulty, internNetDifficulties[2])
+	netLocalDifficulty := big.NewInt(0)
+	if localTerminalHashes[0] == localTerminalHashes[1] {
+		netLocalDifficulty = netLocalDifficulty.Add(netLocalDifficulty, localNetDifficulties[0])
+		netLocalDifficulty = netLocalDifficulty.Add(netLocalDifficulty, localNetDifficulties[2])
 	} else {
-		netInternDifficulty = netInternDifficulty.Add(netInternDifficulty, internNetDifficulties[0])
-		netInternDifficulty = netInternDifficulty.Add(netInternDifficulty, internNetDifficulties[1])
-		netInternDifficulty = netInternDifficulty.Add(netInternDifficulty, internNetDifficulties[2])
+		netLocalDifficulty = netLocalDifficulty.Add(netLocalDifficulty, localNetDifficulties[0])
+		netLocalDifficulty = netLocalDifficulty.Add(netLocalDifficulty, localNetDifficulties[1])
+		netLocalDifficulty = netLocalDifficulty.Add(netLocalDifficulty, localNetDifficulties[2])
 	}
 
 	netExternDifficulty := big.NewInt(0)
@@ -3303,7 +3241,7 @@ func (bc *BlockChain) calcHLCRNetDifficulties(internTerminalHashes []common.Hash
 		netExternDifficulty = netExternDifficulty.Add(netExternDifficulty, externNetDifficulties[2])
 	}
 
-	return []*big.Int{netInternDifficulty, netExternDifficulty}, nil
+	return netLocalDifficulty, netExternDifficulty, nil
 }
 
 // AggregateNetworkDifficulty aggregates the total difficulty from the previous stop Hash in the dominant chains only
