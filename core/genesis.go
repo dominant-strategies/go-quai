@@ -367,7 +367,7 @@ func MainnetRegionGenesisBlock(regionParams *params.ChainConfig) *Genesis {
 		Number:     0,
 		Nonce:      59,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
-		GasLimit:   1600000,
+		GasLimit:   20000000,
 		Difficulty: big.NewInt(8048576),
 		Alloc:      decodePrealloc(mainnetAllocData),
 	}
@@ -380,7 +380,7 @@ func MainnetZoneGenesisBlock(zoneParams *params.ChainConfig) *Genesis {
 		Number:     0,
 		Nonce:      59,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
-		GasLimit:   500000,
+		GasLimit:   20000000,
 		Difficulty: big.NewInt(2048576),
 		Alloc:      decodePrealloc(mainnetAllocData),
 	}
@@ -393,7 +393,7 @@ func RopstenPrimeGenesisBlock() *Genesis {
 		Number:     0,
 		Nonce:      11,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
-		GasLimit:   5000000,
+		GasLimit:   20000000,
 		Difficulty: big.NewInt(3448576),
 		Alloc:      decodePrealloc(mainnetAllocData),
 	}
