@@ -752,6 +752,7 @@ func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader
 	netDifficultyUntilDom = netDifficultyUntilDom.Add(netDifficultyUntilDom, header.Difficulty[path])
 
 	domFound := false
+	terminusHash := common.Hash{}
 
 	for {
 
@@ -791,14 +792,22 @@ func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader
 		}
 
 		// If we have reached a coincident block of desired order in our desired slice
-		if bytes.Equal(header.Location, slice) && difficultyOrder <= order {
-			return header.Hash(), netDifficultyUntilDom, nil
+		if bytes.Equal(header.Location, slice) && difficultyOrder <= order && !domFound {
+			terminusHash = header.Hash()
 		}
 
-		if !domFound {
-			netDifficultyUntilDom = netDifficultyUntilDom.Add(netDifficultyUntilDom, header.Difficulty[path])
+		// In the region path we have to find the block of prime order to stop the difficulty calculation
+		// This extra check is needed because if there are multiple regions after the prime we need to collect
+		// the difficulties of all the regions before stop
+		if path == 1 && bytes.Equal(header.Location, slice) && difficultyOrder < order && !domFound {
+			break
+		} else if bytes.Equal(header.Location, slice) && difficultyOrder <= order && !domFound {
+			break
 		}
+
+		netDifficultyUntilDom = netDifficultyUntilDom.Add(netDifficultyUntilDom, header.Difficulty[path])
 	}
+	return terminusHash, netDifficultyUntilDom, nil
 }
 
 // TraceBranches utilizes a passed in header for initializing a trace of all external blocks.
