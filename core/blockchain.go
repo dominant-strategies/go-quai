@@ -2809,6 +2809,7 @@ func (bc *BlockChain) GetHeaderByHash(hash common.Hash) *types.Header {
 	return bc.hc.GetHeaderByHash(hash)
 }
 
+// GetExternalBlock retrieves an external block from either the ext block cache or rawdb.
 func (bc *BlockChain) GetExternalBlock(hash common.Hash, number uint64, location []byte, context uint64) (*types.ExternalBlock, error) {
 	// Lookup block in externalBlocks cache
 	key := types.ExtBlockCacheKey(number, context, hash)
@@ -2821,25 +2822,32 @@ func (bc *BlockChain) GetExternalBlock(hash common.Hash, number uint64, location
 	block := rawdb.ReadExternalBlock(bc.db, hash, number, context)
 
 	if block == nil {
-		bc.missingExternalBlockFeed.Send(MissingExternalBlock{Hash: hash, Location: location, Context: int(context)})
-		time.Sleep(500 * time.Millisecond)
+		block = bc.requestExternalBlock(hash, number, location, context)
+		if block == nil {
+			return &types.ExternalBlock{}, errors.New("error finding external block by context and hash")
+		}
+	}
+	return block, nil
+}
 
+// requestExternalBlock sends an external block event to the missingExternalBlockFeed in order to be fulfilled by a manager or client.
+func (bc *BlockChain) requestExternalBlock(hash common.Hash, number uint64, location []byte, context uint64) *types.ExternalBlock {
+	bc.missingExternalBlockFeed.Send(MissingExternalBlock{Hash: hash, Location: location, Context: int(context)})
+	for i := 0; i < params.ExternalBlockLookupLimit; i++ {
+		time.Sleep(time.Duration(params.ExternalBlockLookupDelay) * time.Millisecond)
 		// Lookup block in externalBlocks cache
 		key := types.ExtBlockCacheKey(number, context, hash)
-
 		if block, ok := bc.externalBlocks.HasGet(nil, key); ok {
 			var blockDecoded *types.ExternalBlock
 			rlp.DecodeBytes(block, &blockDecoded)
-			return blockDecoded, nil
+			return blockDecoded
 		}
-		block = rawdb.ReadExternalBlock(bc.db, hash, number, context)
+		block := rawdb.ReadExternalBlock(bc.db, hash, number, context)
+		if block != nil {
+			return block
+		}
 	}
-
-	if block == nil {
-		return &types.ExternalBlock{}, errors.New("error finding external block by context and hash")
-	}
-
-	return block, nil
+	return nil
 }
 
 // StoreExternalBlocks removes the external block from the cached blocks and writes it into the database
