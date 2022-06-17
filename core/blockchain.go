@@ -1468,27 +1468,24 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 // writeBlockWithState writes the block and all associated state to the database,
 // but is expects the chain mutex to be held.
 func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, linkExtBlocks []*types.ExternalBlock, emitHeadEvent bool) (status WriteStatus, err error) {
-	// Make sure no inconsistent state is leaked during insertion
+
+	// Get the current local total difficulty
 	currentBlock := bc.CurrentBlock()
+	localTd := bc.GetTdByHash(currentBlock.Hash())
 
-	localTerminalHashes, localNetDifficulties, err := bc.PCRC(currentBlock)
-	if err != nil {
-		return NonStatTy, err
-	}
-
+	// Check PCRC for the external block and return the terminal hash and net difficulties
 	externTerminalHashes, externNetDifficulties, err := bc.PCRC(block)
 	if err != nil {
 		return NonStatTy, err
 	}
 
-	localNetTd, externNetTd, err := bc.calcHLCRNetDifficulties(localTerminalHashes, localNetDifficulties, externTerminalHashes, externNetDifficulties)
+	// Use HLCR to compute net total difficulty
+	externNetTd, err := bc.calcHLCRNetDifficulty(externTerminalHashes, externNetDifficulties)
 	if err != nil {
 		return NonStatTy, err
 	}
 
-	localTd := big.NewInt(0)
-	localTd = localNetTd.Add(localNetTd, bc.GetTdByHash(localTerminalHashes[0]))
-
+	// Add terminal difficulty to net difficulty to compute total external difficulty
 	externTd := big.NewInt(0)
 	externTd = externNetTd.Add(externNetTd, bc.GetTdByHash(externTerminalHashes[0]))
 
@@ -3340,37 +3337,23 @@ func (bc *BlockChain) PCRC(block *types.Block) ([]common.Hash, []*big.Int, error
 	return []common.Hash{PTP, RTR, block.Header().Hash()}, []*big.Int{PTPND, PTRND, RTZND}, nil
 }
 
-func (bc *BlockChain) calcHLCRNetDifficulties(localTerminalHashes []common.Hash, localNetDifficulties []*big.Int, externTerminalHashes []common.Hash, externNetDifficulties []*big.Int) (*big.Int, *big.Int, error) {
+func (bc *BlockChain) calcHLCRNetDifficulty(terminalHashes []common.Hash, netDifficulties []*big.Int) (*big.Int, error) {
 
-	if (localTerminalHashes[0] == common.Hash{}) || (localTerminalHashes[1] == common.Hash{}) || (localTerminalHashes[2] == common.Hash{}) {
-		return nil, nil, errors.New("one or many of the local terminal hashes were nil")
+	if (terminalHashes[0] == common.Hash{}) || (terminalHashes[1] == common.Hash{}) || (terminalHashes[2] == common.Hash{}) {
+		return nil, errors.New("one or many of the  terminal hashes were nil")
 	}
 
-	if (externTerminalHashes[0] == common.Hash{}) || (externTerminalHashes[1] == common.Hash{}) || (externTerminalHashes[2] == common.Hash{}) {
-		return nil, nil, errors.New("one or many of the extern terminal hashes were nil")
-	}
-
-	netLocalDifficulty := big.NewInt(0)
-	if localTerminalHashes[0] == localTerminalHashes[1] {
-		netLocalDifficulty = netLocalDifficulty.Add(netLocalDifficulty, localNetDifficulties[0])
-		netLocalDifficulty = netLocalDifficulty.Add(netLocalDifficulty, localNetDifficulties[2])
+	netDifficulty := big.NewInt(0)
+	if terminalHashes[0] == terminalHashes[1] {
+		netDifficulty = netDifficulty.Add(netDifficulty, netDifficulties[0])
+		netDifficulty = netDifficulty.Add(netDifficulty, netDifficulties[2])
 	} else {
-		netLocalDifficulty = netLocalDifficulty.Add(netLocalDifficulty, localNetDifficulties[0])
-		netLocalDifficulty = netLocalDifficulty.Add(netLocalDifficulty, localNetDifficulties[1])
-		netLocalDifficulty = netLocalDifficulty.Add(netLocalDifficulty, localNetDifficulties[2])
+		netDifficulty = netDifficulty.Add(netDifficulty, netDifficulties[0])
+		netDifficulty = netDifficulty.Add(netDifficulty, netDifficulties[1])
+		netDifficulty = netDifficulty.Add(netDifficulty, netDifficulties[2])
 	}
 
-	netExternDifficulty := big.NewInt(0)
-	if externTerminalHashes[0] == externTerminalHashes[1] {
-		netExternDifficulty = netExternDifficulty.Add(netExternDifficulty, externNetDifficulties[0])
-		netExternDifficulty = netExternDifficulty.Add(netExternDifficulty, externNetDifficulties[2])
-	} else {
-		netExternDifficulty = netExternDifficulty.Add(netExternDifficulty, externNetDifficulties[0])
-		netExternDifficulty = netExternDifficulty.Add(netExternDifficulty, externNetDifficulties[1])
-		netExternDifficulty = netExternDifficulty.Add(netExternDifficulty, externNetDifficulties[2])
-	}
-
-	return netLocalDifficulty, netExternDifficulty, nil
+	return netDifficulty, nil
 }
 
 // AggregateNetworkDifficulty aggregates the total difficulty from the previous stop Hash in the dominant chains only
