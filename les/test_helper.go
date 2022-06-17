@@ -196,8 +196,8 @@ func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, index
 		gspec  = core.Genesis{
 			Config:   params.AllEthashProtocolChanges,
 			Alloc:    core.GenesisAlloc{bankAddr: {Balance: bankFunds}},
-			GasLimit: 100000000,
-			BaseFee:  big.NewInt(params.InitialBaseFee),
+			GasLimit: []uint64{100000000, 100000000, 100000000},
+			BaseFee:  []*big.Int{big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee)},
 		}
 		oracle *checkpointoracle.CheckpointOracle
 	)
@@ -256,8 +256,8 @@ func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Da
 		gspec = core.Genesis{
 			Config:   params.AllEthashProtocolChanges,
 			Alloc:    core.GenesisAlloc{bankAddr: {Balance: bankFunds}},
-			GasLimit: 100000000,
-			BaseFee:  big.NewInt(params.InitialBaseFee),
+			GasLimit: []uint64{100000000, 100000000, 100000000},
+			BaseFee:  []*big.Int{big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee)},
 		}
 		oracle *checkpointoracle.CheckpointOracle
 	)

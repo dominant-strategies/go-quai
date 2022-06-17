@@ -317,7 +317,7 @@ func calcDifficultyFrontier(time uint64, parent *types.Header, context int) *big
 	diff := new(big.Int)
 	parentDifficulty := parent.Difficulty[context]
 	if parentDifficulty == nil {
-		return params.GenesisDifficulty
+		return params.GenesisDifficulty[types.QuaiNetworkContext]
 	}
 
 	adjust := new(big.Int).Div(parentDifficulty, params.DifficultyBoundDivisor[types.QuaiNetworkContext])
@@ -334,8 +334,8 @@ func calcDifficultyFrontier(time uint64, parent *types.Header, context int) *big
 	} else {
 		diff.Sub(parentDifficulty, adjust)
 	}
-	if diff.Cmp(params.MinimumDifficulty) < 0 {
-		diff.Set(params.MinimumDifficulty)
+	if diff.Cmp(params.MinimumDifficulty[types.QuaiNetworkContext]) < 0 {
+		diff.Set(params.MinimumDifficulty[types.QuaiNetworkContext])
 	}
 
 	periodCount := new(big.Int).Add(parent.Number[context], big1)
@@ -345,7 +345,7 @@ func calcDifficultyFrontier(time uint64, parent *types.Header, context int) *big
 		expDiff := periodCount.Sub(periodCount, big2)
 		expDiff.Exp(big2, expDiff, nil)
 		diff.Add(diff, expDiff)
-		diff = math.BigMax(diff, params.MinimumDifficulty)
+		diff = math.BigMax(diff, params.MinimumDifficulty[types.QuaiNetworkContext])
 	}
 	return diff
 }
@@ -639,9 +639,6 @@ func (blake3 *Blake3) Prepare(chain consensus.ChainHeaderReader, header *types.H
 		return consensus.ErrUnknownAncestor
 	}
 	header.Difficulty[types.QuaiNetworkContext] = blake3.CalcDifficulty(chain, header.Time, parent, types.QuaiNetworkContext)
-	currentTotal := big.NewInt(0)
-	currentTotal.Add(parent.NetworkDifficulty[types.QuaiNetworkContext], header.Difficulty[types.QuaiNetworkContext])
-	header.NetworkDifficulty[types.QuaiNetworkContext] = currentTotal
 	return nil
 }
 
