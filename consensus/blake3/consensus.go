@@ -503,8 +503,8 @@ func (blake3 *Blake3) PrimeTraceBranch(chain consensus.ChainHeaderReader, header
 		var err error
 		extBlock, err = chain.GetExternalBlock(header.Hash(), header.Number[context].Uint64(), header.Location, uint64(context))
 		if err != nil {
-			log.Info("Trace Branch: External Block not found for header, second attempt", "number", header.Number, "context", context, "hash", header.Hash(), "location", header.Location)
-			break
+			log.Info("Trace Branch: External Block not found for header", "number", header.Number, "context", context, "hash", header.Hash(), "location", header.Location)
+			return nil, err
 		}
 		extBlocks = append(extBlocks, extBlock)
 
@@ -599,8 +599,8 @@ func (blake3 *Blake3) RegionTraceBranch(chain consensus.ChainHeaderReader, heade
 		var err error
 		extBlock, err = chain.GetExternalBlock(header.Hash(), header.Number[context].Uint64(), header.Location, uint64(context))
 		if err != nil {
-			log.Info("Trace Branch: External Block not found for header, number ", header.Number, "context", context, "hash", header.Hash(), "location", header.Location)
-			return extBlocks, err
+			log.Info("Trace Branch: External Block not found for header", "number", header.Number, "context", context, "hash", header.Hash(), "location", header.Location)
+			return nil, err
 		}
 		extBlocks = append(extBlocks, extBlock)
 		// log.Info("Trace Branch: REGION Adding external block", "number", header.Number, "context", context, "location", header.Location, "hash", header.Hash())
