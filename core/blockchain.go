@@ -3337,24 +3337,6 @@ func (bc *BlockChain) CheckExternalBlockLink(externalBlocks []*types.ExternalBlo
 func (bc *BlockChain) PCRC(header *types.Header) ([]common.Hash, []*big.Int, error) {
 	slice := header.Location
 
-	// Region twist check
-	// RTZ -- Region coincident along zone path
-	// RTR -- Region coincident along region path
-	// RTZND -- Net difficulty until dom or terminus along zone path
-	RTZ, RTZND, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.REGION, params.ZONE)
-	if err != nil {
-		return []common.Hash{}, nil, err
-	}
-
-	RTR, _, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.REGION, params.REGION)
-	if err != nil {
-		return []common.Hash{}, nil, err
-	}
-
-	if RTZ != RTR {
-		return []common.Hash{}, nil, errors.New("there exists a region twist")
-	}
-
 	// Prime twist check
 	// PTZ -- Prime coincident along zone path
 	// PTR -- Prime coincident along region path
@@ -3380,6 +3362,24 @@ func (bc *BlockChain) PCRC(header *types.Header) ([]common.Hash, []*big.Int, err
 		return []common.Hash{}, nil, errors.New("there exists a prime twist")
 	}
 
+	// Region twist check
+	// RTZ -- Region coincident along zone path
+	// RTR -- Region coincident along region path
+	// RTZND -- Net difficulty until dom or terminus along zone path
+	RTZ, RTZND, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.REGION, params.ZONE)
+	if err != nil {
+		return []common.Hash{}, nil, err
+	}
+
+	RTR, _, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.REGION, params.REGION)
+	if err != nil {
+		return []common.Hash{}, nil, err
+	}
+
+	if RTZ != RTR {
+		return []common.Hash{}, nil, errors.New("there exists a region twist")
+	}
+
 	return []common.Hash{PTP, RTR, header.Hash()}, []*big.Int{PTPND, PTRND, RTZND}, nil
 }
 
@@ -3390,13 +3390,17 @@ func (bc *BlockChain) CalcHLCRNetDifficulty(terminalHashes []common.Hash, netDif
 	}
 
 	netDifficulty := big.NewInt(0)
+	fmt.Println("CalcHLCRNetDifficulty: terminalHashes")
+	fmt.Println(terminalHashes)
+	fmt.Println("CalcHLCRNetDifficulty: netDifficulties")
+	fmt.Println(netDifficulties)
 	if terminalHashes[0] == terminalHashes[1] {
-		netDifficulty = netDifficulty.Add(netDifficulty, netDifficulties[0])
 		netDifficulty = netDifficulty.Add(netDifficulty, netDifficulties[2])
+		fmt.Println("terminalHashes[0] == terminalHashes[1]", netDifficulty, netDifficulties[0], netDifficulties[2])
 	} else {
-		netDifficulty = netDifficulty.Add(netDifficulty, netDifficulties[0])
 		netDifficulty = netDifficulty.Add(netDifficulty, netDifficulties[1])
 		netDifficulty = netDifficulty.Add(netDifficulty, netDifficulties[2])
+		fmt.Println("terminalHashes[0] != terminalHashes[1]", netDifficulty, netDifficulties[0], netDifficulties[1], netDifficulties[2])
 	}
 
 	return netDifficulty, nil

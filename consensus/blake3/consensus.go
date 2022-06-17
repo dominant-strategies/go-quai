@@ -709,7 +709,6 @@ func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader
 	domFound := false
 
 	for {
-
 		// If block header is Genesis return it as coincident
 		if header.Number[path].Cmp(big.NewInt(1)) == 0 {
 			return chain.Config().GenesisHashes[0], netDifficultyUntilDom, nil

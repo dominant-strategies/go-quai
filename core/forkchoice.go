@@ -107,7 +107,10 @@ func (f *ForkChoice) ReorgNeeded(current *types.Header, header *types.Header) (b
 	}
 
 	externTd := big.NewInt(0)
+	fmt.Println("In forkchoice")
+	fmt.Println("externNetTD", externNetTd)
 	externTd = externNetTd.Add(externNetTd, f.chain.GetTdByHash(externTerminalHashes[0]))
+	fmt.Println("externTerminalHashes[0]", f.chain.GetTdByHash(externTerminalHashes[0]))
 
 	fmt.Println("localTD", localTd)
 	fmt.Println("externTD", externTd)
