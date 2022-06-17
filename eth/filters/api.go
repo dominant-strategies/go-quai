@@ -331,6 +331,36 @@ func (api *PublicFilterAPI) ReOrg(ctx context.Context) (*rpc.Subscription, error
 	return rpcSub, nil
 }
 
+// MissedExtBlock sends a notification whenever a missingExternalBlock event is triggered.
+func (api *PublicFilterAPI) MissingExtBlock(ctx context.Context) (*rpc.Subscription, error) {
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+
+	rpcSub := notifier.CreateSubscription()
+
+	go func() {
+		extBlockMiss := make(chan core.MissingExternalBlock)
+		extBlockMissSub := api.events.SubscribeMissingExternalBlock(extBlockMiss)
+
+		for {
+			select {
+			case b := <-extBlockMiss:
+				notifier.Notify(rpcSub.ID, b)
+			case <-rpcSub.Err():
+				extBlockMissSub.Unsubscribe()
+				return
+			case <-notifier.Closed():
+				extBlockMissSub.Unsubscribe()
+				return
+			}
+		}
+	}()
+
+	return rpcSub, nil
+}
+
 // Logs creates a subscription that fires for all new log that match the given filter criteria.
 func (api *PublicFilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)

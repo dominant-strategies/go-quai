@@ -791,9 +791,6 @@ type ChainConfig struct {
 
 	// Quai Network Ontology
 	FullerMapContext *big.Int // Block number effective for Fuller Map Context ontology
-	// TuringMapContext *big.Int
-	// LovelaceMapContext *big.Int
-	// future ontology expansion fields go here
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -912,18 +909,6 @@ func (c *ChainConfig) IsFuller(num *big.Int) bool {
 	return isForked(c.FullerMapContext, num)
 }
 
-/*
-// IsTuring returns whether num is either equal to the Merge fork block or greater.
-func (c *ChainConfig) IsTuring(num *big.Int) bool {
-	return isForked(c.TuringMapContext, num)
-}
-
-// IsLovelace returns whether num is either equal to the Merge fork block or greater.
-func (c *ChainConfig) IsLovelace(num *big.Int) bool {
-	return isForked(c.LovelaceMapContext, num)
-}
-*/
-
 // CheckCompatible checks whether scheduled fork transitions have been imported
 // with a mismatching chain configuration.
 func (c *ChainConfig) CheckCompatible(newcfg *ChainConfig, height uint64) *ConfigCompatError {
@@ -964,8 +949,6 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "berlinBlock", block: c.BerlinBlock},
 		{name: "londonBlock", block: c.LondonBlock},
 		{name: "c.FullerMapContext", block: c.FullerMapContext},
-		/*		{name: "TuringMapContext", block: c.TuringMapContext},
-				{name: "LovelaceMapContext", block: c.LovelaceMapContext}, */
 	} {
 		if lastFork.name != "" {
 			// Next one must be higher number
@@ -1032,12 +1015,6 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, head *big.Int) *Confi
 	if isForkIncompatible(c.FullerMapContext, newcfg.FullerMapContext, head) {
 		return newCompatError("Fuller ontology block", c.FullerMapContext, newcfg.FullerMapContext)
 	}
-	/*	if isForkIncompatible(c.TuringMapContext, newcfg.TuringMapContext, head) {
-			return newCompatError("Turing ontology block", c.TuringMapContext, newcfg.TuringMapContext)
-		}
-		if isForkIncompatible(c.LovelaceMapContext, newcfg.LovelaceMapContext, head) {
-			return newCompatError("Lovelace ontology block", c.LovelaceMapContext, newcfg.LovelaceMapContext)
-		} */
 	return nil
 }
 
@@ -1129,8 +1106,6 @@ func (c *ChainConfig) Rules(num *big.Int) Rules {
 		IsLondon:         c.IsLondon(num),
 		IsCatalyst:       c.IsCatalyst(num),
 		IsFuller:         c.IsFuller(num),
-		/*		IsTuring:         c.IsTuring(num),
-				IsLovelace:       c.IsLovelace(num), */
 	}
 }
 
@@ -1259,10 +1234,6 @@ func (c *ChainConfig) CurrentOntology(number []*big.Int) ([]int, error) {
 	forkNumber := number[0]
 
 	switch {
-	/*	case forkNumber.Cmp(LovelaceMapContext) >= 0: // Lovelace = MaxInt
-			return LovelaceOntology, nil
-		case forkNumber.Cmp(TuringMapContext) >= 0: // Turing = MaxInt
-			return TuringOntology, nil */
 	case forkNumber.Cmp(c.FullerMapContext) >= 0: // Fuller = 0
 		return FullerOntology, nil
 	default:

@@ -187,17 +187,18 @@ type BlockChain struct {
 	//  * nil: disable tx reindexer/deleter, but still index new blocks
 	txLookupLimit uint64
 
-	hc             *HeaderChain
-	rmLogsFeed     event.Feed
-	chainFeed      event.Feed
-	reOrgFeed      event.Feed
-	chainSideFeed  event.Feed
-	chainHeadFeed  event.Feed
-	chainUncleFeed event.Feed
-	logsFeed       event.Feed
-	blockProcFeed  event.Feed
-	scope          event.SubscriptionScope
-	genesisBlock   *types.Block
+	hc                       *HeaderChain
+	rmLogsFeed               event.Feed
+	chainFeed                event.Feed
+	reOrgFeed                event.Feed
+	chainSideFeed            event.Feed
+	chainHeadFeed            event.Feed
+	chainUncleFeed           event.Feed
+	missingExternalBlockFeed event.Feed
+	logsFeed                 event.Feed
+	blockProcFeed            event.Feed
+	scope                    event.SubscriptionScope
+	genesisBlock             *types.Block
 
 	chainmu sync.RWMutex // blockchain insertion lock
 	reorgmu sync.RWMutex // reorg call lock
@@ -1636,7 +1637,10 @@ func (bc *BlockChain) getHierarchicalTD(currentBlock *types.Block, block *types.
 		localTd = bc.GetTd(localHeader.Hash(), localBlock.NumberU64())
 	} else if localOrder < externOrder {
 		// get coincident and get the Total difficulty of it
+<<<<<<< HEAD
 		fmt.Println("case 2: currentBlock", currentBlock.Header().Number, currentBlock.Header().Hash())
+=======
+>>>>>>> main
 		localTd = bc.GetTd(currentBlock.Header().Hash(), currentBlock.NumberU64())
 
 		externHeader, err = bc.Engine().GetCoincidentAtOrder(bc, types.QuaiNetworkContext, localOrder, block.Header())
@@ -2054,6 +2058,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		}
 	}()
 
+	for _, block := range chain {
+		fmt.Println("InsertChain block:", block.Header().Number, block.Hash())
+	}
 	for ; block != nil && err == nil || err == ErrKnownBlock; block, err = it.next() {
 		// If the chain is terminating, stop processing blocks
 		if bc.insertStopped() {
@@ -2065,6 +2072,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			bc.reportBlock(block, nil, ErrBannedHash)
 			return it.index, ErrBannedHash
 		}
+		fmt.Println("InsertChain err:", err)
 		// If the block is known (in the middle of the chain), it's a special case for
 		// Clique blocks where they can share state among each other, so importing an
 		// older block might complete the state of the subsequent one. In this case,
@@ -2810,7 +2818,8 @@ func (bc *BlockChain) GetHeaderByHash(hash common.Hash) *types.Header {
 	return bc.hc.GetHeaderByHash(hash)
 }
 
-func (bc *BlockChain) GetExternalBlock(hash common.Hash, number uint64, context uint64) (*types.ExternalBlock, error) {
+// GetExternalBlock retrieves an external block from either the ext block cache or rawdb.
+func (bc *BlockChain) GetExternalBlock(hash common.Hash, number uint64, location []byte, context uint64) (*types.ExternalBlock, error) {
 	// Lookup block in externalBlocks cache
 	key := types.ExtBlockCacheKey(number, context, hash)
 
@@ -2820,11 +2829,34 @@ func (bc *BlockChain) GetExternalBlock(hash common.Hash, number uint64, context 
 		return blockDecoded, nil
 	}
 	block := rawdb.ReadExternalBlock(bc.db, hash, number, context)
-	if block == nil {
-		return &types.ExternalBlock{}, errors.New("error finding external block by context and hash")
-	}
 
+	if block == nil {
+		block = bc.requestExternalBlock(hash, number, location, context)
+		if block == nil {
+			return &types.ExternalBlock{}, errors.New("error finding external block by context and hash")
+		}
+	}
 	return block, nil
+}
+
+// requestExternalBlock sends an external block event to the missingExternalBlockFeed in order to be fulfilled by a manager or client.
+func (bc *BlockChain) requestExternalBlock(hash common.Hash, number uint64, location []byte, context uint64) *types.ExternalBlock {
+	bc.missingExternalBlockFeed.Send(MissingExternalBlock{Hash: hash, Location: location, Context: int(context)})
+	for i := 0; i < params.ExternalBlockLookupLimit; i++ {
+		time.Sleep(time.Duration(params.ExternalBlockLookupDelay) * time.Millisecond)
+		// Lookup block in externalBlocks cache
+		key := types.ExtBlockCacheKey(number, context, hash)
+		if block, ok := bc.externalBlocks.HasGet(nil, key); ok {
+			var blockDecoded *types.ExternalBlock
+			rlp.DecodeBytes(block, &blockDecoded)
+			return blockDecoded
+		}
+		block := rawdb.ReadExternalBlock(bc.db, hash, number, context)
+		if block != nil {
+			return block
+		}
+	}
+	return nil
 }
 
 // StoreExternalBlocks removes the external block from the cached blocks and writes it into the database
@@ -3293,7 +3325,7 @@ func (bc *BlockChain) AggregateTotalDifficulty(context int, header *types.Header
 		}
 
 		// Retrieve the previous header as an external block.
-		prevBlock, err := bc.GetExternalBlock(header.ParentHash[currentLowestContext], header.Number[currentLowestContext].Uint64()-1, uint64(currentLowestContext))
+		prevBlock, err := bc.GetExternalBlock(header.ParentHash[currentLowestContext], header.Number[currentLowestContext].Uint64()-1, header.Location, uint64(currentLowestContext))
 		if err != nil {
 			return currentTotalDifficulty, currentLowestContext, fmt.Errorf("error finding previous external block")
 		}
@@ -3382,6 +3414,10 @@ func (bc *BlockChain) SubscribeReOrgEvent(ch chan<- ReOrgRollup) event.Subscript
 	return bc.scope.Track(bc.reOrgFeed.Subscribe(ch))
 }
 
+func (bc *BlockChain) SubscribeMissingExternalBlockEvent(ch chan<- MissingExternalBlock) event.Subscription {
+	return bc.scope.Track(bc.missingExternalBlockFeed.Subscribe(ch))
+}
+
 // SubscribeChainHeadEvent registers a subscription of ChainHeadEvent.
 func (bc *BlockChain) SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription {
 	return bc.scope.Track(bc.chainHeadFeed.Subscribe(ch))
@@ -3406,4 +3442,23 @@ func (bc *BlockChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscript
 // block processing has started while false means it has stopped.
 func (bc *BlockChain) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscription {
 	return bc.scope.Track(bc.blockProcFeed.Subscribe(ch))
+}
+
+// CheckContextAndOrderRange checks to make sure the range of a context or order is valid
+func (bc *BlockChain) CheckContextAndOrderRange(number int) error {
+	if number < 0 || number > len(params.FullerOntology) {
+		return errors.New("the provided path is outside the allowable range")
+	}
+	return nil
+}
+
+// CheckLocationRange checks to make sure the range of location is valid
+func (bc *BlockChain) CheckLocationRange(location []byte) error {
+	if int(location[0]) < 1 || int(location[0]) > params.FullerOntology[0] {
+		return errors.New("the provided location is outside the allowable region range")
+	}
+	if int(location[1]) < 1 || int(location[1]) > params.FullerOntology[1] {
+		return errors.New("the provided location is outside the allowable zone range")
+	}
+	return nil
 }
