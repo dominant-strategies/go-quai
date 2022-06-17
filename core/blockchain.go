@@ -430,7 +430,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	}
 
 	// Once we have updated the state of the chain, generate the extBlockLink struct for processing of ext blocks.
-	bc.GenerateExtBlockLink(bc.CurrentHeader())
+	// bc.GenerateExtBlockLink(bc.CurrentHeader())
 
 	return bc, nil
 }
@@ -1485,6 +1485,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 	// Add terminal difficulty to net difficulty to compute total external difficulty
 	externTd := big.NewInt(0)
+	fmt.Println(externTerminalHashes)
 	externTd = externNetTd.Add(externNetTd, bc.GetTdByHash(externTerminalHashes[0]))
 
 	// Irrelevant of the canonical status, write the block itself to the database.
@@ -1589,15 +1590,15 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 		// Reorganise the chain if the parent is not the head block
 		if block.ParentHash() != currentBlock.Hash() {
 			if err := bc.reorg(currentBlock, block); err != nil {
-				bc.GenerateExtBlockLink(currentBlock.Header())
+				// bc.GenerateExtBlockLink(currentBlock.Header())
 				return NonStatTy, err
 			}
 		}
 		status = CanonStatTy
-		if err := bc.CheckLinkExtBlocks(block, linkExtBlocks); err != nil {
-			bc.GenerateExtBlockLink(currentBlock.Header())
-			return NonStatTy, err
-		}
+		// if err := bc.CheckLinkExtBlocks(block, linkExtBlocks); err != nil {
+		// 	// bc.GenerateExtBlockLink(currentBlock.Header())
+		// 	return NonStatTy, err
+		// }
 	} else {
 		status = SideStatTy
 	}
@@ -1893,7 +1894,7 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 	}
 
 	// Reset the blockLink in the blockchain state processor.
-	bc.GenerateExtBlockLink(bc.CurrentBlock().Header())
+	// bc.GenerateExtBlockLink(bc.CurrentBlock().Header())
 
 	return nil
 }
@@ -2253,7 +2254,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 
 		switch status {
 		case CanonStatTy:
-			bc.SetLinkBlocksToLastApplied(linkExtBlocks)
+			// bc.SetLinkBlocksToLastApplied(linkExtBlocks)
 			bc.StoreExternalBlocks(linkExtBlocks)
 			log.Info("Inserted new block", "number", block.Header().Number, "hash", block.Hash(), "extBlocks", len(externalBlocks),
 				"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
@@ -2622,7 +2623,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	}
 
 	// Reset the blockLink in the blockchain state processor.
-	bc.GenerateExtBlockLink(newBlock.Header())
+	// bc.GenerateExtBlockLink(newBlock.Header())
 
 	return nil
 }

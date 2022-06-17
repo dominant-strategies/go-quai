@@ -19,6 +19,7 @@ package core
 import (
 	crand "crypto/rand"
 	"errors"
+	"fmt"
 	"math/big"
 	mrand "math/rand"
 
@@ -91,12 +92,14 @@ func (f *ForkChoice) ReorgNeeded(current *types.Header, header *types.Header) (b
 
 	localTd := f.chain.GetTdByHash(current.Hash())
 
+	fmt.Println("Running PCRC")
 	// Check PCRC for the external block and return the terminal hash and net difficulties
 	externTerminalHashes, externNetDifficulties, err := f.chain.PCRC(header)
 	if err != nil {
 		return false, err
 	}
 
+	fmt.Println("Running CalcHLCRNetDifficulty")
 	// Use HLCR to compute net total difficulty
 	externNetTd, err := f.chain.CalcHLCRNetDifficulty(externTerminalHashes, externNetDifficulties)
 	if err != nil {
@@ -106,6 +109,8 @@ func (f *ForkChoice) ReorgNeeded(current *types.Header, header *types.Header) (b
 	externTd := big.NewInt(0)
 	externTd = externNetTd.Add(externNetTd, f.chain.GetTdByHash(externTerminalHashes[0]))
 
+	fmt.Println("localTD", localTd)
+	fmt.Println("externTD", externTd)
 	if localTd == nil || externNetTd == nil {
 		return false, errors.New("missing td")
 	}

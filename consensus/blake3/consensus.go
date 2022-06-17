@@ -694,14 +694,14 @@ func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader
 		return common.Hash{}, nil, errors.New("tracing along a dominant chain for a subordinate order block is non-sensical")
 	}
 
-	difficultyOrder, err := blake3.GetDifficultyOrder(header)
-	if err != nil {
-		return common.Hash{}, nil, err
-	}
+	// difficultyOrder, err := blake3.GetDifficultyOrder(header)
+	// if err != nil {
+	// 	return common.Hash{}, nil, err
+	// }
 
-	if difficultyOrder > path {
-		return common.Hash{}, nil, errors.New("provided header does not directly link to requested path")
-	}
+	// if difficultyOrder > path {
+	// 	return common.Hash{}, nil, errors.New("provided header does not directly link to requested path")
+	// }
 
 	netDifficultyUntilDom := big.NewInt(0)
 	netDifficultyUntilDom = netDifficultyUntilDom.Add(netDifficultyUntilDom, header.Difficulty[path])
@@ -711,8 +711,8 @@ func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader
 	for {
 
 		// If block header is Genesis return it as coincident
-		if header.Number[path].Cmp(big.NewInt(0)) <= 0 {
-			return header.Hash(), netDifficultyUntilDom, nil
+		if header.Number[path].Cmp(big.NewInt(1)) == 0 {
+			return chain.Config().GenesisHashes[0], netDifficultyUntilDom, nil
 		}
 
 		if path == types.QuaiNetworkContext {
