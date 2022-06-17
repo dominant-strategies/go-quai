@@ -160,6 +160,9 @@ const (
 	// up to half the consumed gas could be refunded. Redefined as 1/5th in EIP-3529
 	RefundQuotient        uint64 = 2
 	RefundQuotientEIP3529 uint64 = 5
+
+	ExternalBlockLookupLimit int   = 200 // Amount of iterations to lookup external block
+	ExternalBlockLookupDelay int64 = 25  // Delay time for external block lookup during polling
 )
 
 // Gas discount table for BLS12-381 G1 and G2 multi exponentiation operations
@@ -175,14 +178,21 @@ var (
 
 // Ontology defines the current Quai Network ontology
 var (
+	// Explicit definition of PRIME, REGION, ZONE
+	PRIME  = 0
+	REGION = 1
+	ZONE   = 2
+
 	// Fork blocks; necessary for retrieving MapContext through header/block methods
 	FullerMapContext = big.NewInt(0)           // Fork = 0 meaning initial ontology
 	TuringMapContext = big.NewInt(math.MaxInt) // maxed out for now
 	LovelaMapContext = big.NewInt(math.MaxInt) // maxed out for now
+
 	// Named ontologies
-	FullerOntology   = []int{3, 3, 3} // named after Buckminster Fuller
-	TuringOntology   = []int{4, 4, 4} // named after Alan Turing
-	LovelaceOntology = []int{5, 5, 5} // named after Ada Lovelace
+	// This defines the number of allowed regions (r) and zones (z) in the hierarchy (r,z)
+	FullerOntology   = []int{3, 3} // named after Buckminster Fuller
+	TuringOntology   = []int{4, 4} // named after Alan Turing
+	LovelaceOntology = []int{5, 5} // named after Ada Lovelace
 	// future ontology expansion markers go here
 	QuaiOntologies = [][]int{FullerOntology, TuringOntology, LovelaceOntology}
 )

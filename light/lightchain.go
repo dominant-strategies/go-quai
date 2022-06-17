@@ -524,7 +524,7 @@ func (lc *LightChain) GetLinkExternalBlocks(header *types.Header) ([]*types.Exte
 
 // GetExternalBlock is not applicable in the header chain since the BlockChain contains
 // the external blocks cache.
-func (lc *LightChain) GetExternalBlock(hash common.Hash, number uint64, context uint64) (*types.ExternalBlock, error) {
+func (lc *LightChain) GetExternalBlock(hash common.Hash, number uint64, location []byte, context uint64) (*types.ExternalBlock, error) {
 	return nil, nil
 }
 
@@ -624,4 +624,14 @@ func (lc *LightChain) DisableCheckFreq() {
 // EnableCheckFreq enables header validation.
 func (lc *LightChain) EnableCheckFreq() {
 	atomic.StoreInt32(&lc.disableCheckFreq, 0)
+}
+
+// CheckContextAndOrderRange checks to make sure the range of a context or order is valid
+func (lc *LightChain) CheckContextAndOrderRange(context int) error {
+	return nil
+}
+
+// CheckLocationRange checks to make sure the range of r and z are valid
+func (lc *LightChain) CheckLocationRange(location []byte) error {
+	return nil
 }

@@ -368,7 +368,7 @@ func (blake3 *Blake3) verifySeal(header *types.Header) error {
 // This function determines the difficulty order of a block
 func (blake3 *Blake3) GetDifficultyOrder(header *types.Header) (int, error) {
 	if header == nil {
-		return types.ContextDepth, errors.New("No header provided")
+		return types.ContextDepth, errors.New("no header provided")
 	}
 	blockhash := blake3.SealHash(header)
 	for i, difficulty := range header.Difficulty {
@@ -379,7 +379,7 @@ func (blake3 *Blake3) GetDifficultyOrder(header *types.Header) (int, error) {
 			}
 		}
 	}
-	return -1, errors.New("Block does not satisfy minimum difficulty")
+	return -1, errors.New("block does not satisfy minimum difficulty")
 }
 
 // Check difficulty of previous header in order to find traceability.
@@ -457,7 +457,9 @@ func (blake3 *Blake3) PrimeTraceBranch(chain consensus.ChainHeaderReader, header
 		}
 
 		// Obtain the external block on the branch we are currently tracing.
-		extBlock, err := chain.GetExternalBlock(header.Hash(), header.Number[context].Uint64(), uint64(context))
+		var extBlock *types.ExternalBlock
+		var err error
+		extBlock, err = chain.GetExternalBlock(header.Hash(), header.Number[context].Uint64(), header.Location, uint64(context))
 		if err != nil {
 			log.Info("Trace Branch: External Block not found for header", "number", header.Number, "context", context, "hash", header.Hash(), "location", header.Location)
 			return nil, err
@@ -471,7 +473,7 @@ func (blake3 *Blake3) PrimeTraceBranch(chain consensus.ChainHeaderReader, header
 		}
 
 		// Retrieve the previous header as an external block.
-		prevHeader, err := chain.GetExternalBlock(header.ParentHash[context], header.Number[context].Uint64()-1, uint64(context))
+		prevHeader, err := chain.GetExternalBlock(header.ParentHash[context], header.Number[context].Uint64()-1, header.Location, uint64(context))
 		if err != nil {
 			log.Info("Trace Branch: External Block not found for previous header", "number", header.Number[context].Int64()-1, "context", context, "hash", header.ParentHash[context], "location", header.Location)
 			return nil, err
@@ -551,7 +553,9 @@ func (blake3 *Blake3) RegionTraceBranch(chain consensus.ChainHeaderReader, heade
 		}
 
 		// Obtain the external block on the branch we are currently tracing.
-		extBlock, err := chain.GetExternalBlock(header.Hash(), header.Number[context].Uint64(), uint64(context))
+		var extBlock *types.ExternalBlock
+		var err error
+		extBlock, err = chain.GetExternalBlock(header.Hash(), header.Number[context].Uint64(), header.Location, uint64(context))
 		if err != nil {
 			log.Info("Trace Branch: External Block not found for header", "number", header.Number, "context", context, "hash", header.Hash(), "location", header.Location)
 			return nil, err
@@ -566,7 +570,7 @@ func (blake3 *Blake3) RegionTraceBranch(chain consensus.ChainHeaderReader, heade
 		}
 
 		// Retrieve the previous header as an external block.
-		prevHeader, err := chain.GetExternalBlock(header.ParentHash[context], header.Number[context].Uint64()-1, uint64(context))
+		prevHeader, err := chain.GetExternalBlock(header.ParentHash[context], header.Number[context].Uint64()-1, header.Location, uint64(context))
 		if err != nil {
 			log.Info("Trace Branch: External Block not found for previous header", "number", header.Number[context].Int64()-1, "context", context, "hash", header.ParentHash[context], "location", header.Location)
 			return nil, err
@@ -659,6 +663,100 @@ func (blake3 *Blake3) GetLinkExternalBlocks(chain consensus.ChainHeaderReader, h
 		externalBlocks = append(externalBlocks, extBlocks...)
 	}
 	return externalBlocks, nil
+}
+
+// PreviousCoincidentOnPath searches the path for a block of specified order in the specified slice
+//     *slice - The zone location which defines the slice in which we are validating
+//     *order - The order of the conincidence that is desired
+//     *path - Search among ancestors of this path in the specified slice
+func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader, header *types.Header, slice []byte, order, path int) (common.Hash, *big.Int, error) {
+
+	if err := chain.CheckContextAndOrderRange(path); err != nil {
+		return common.Hash{}, nil, err
+	}
+	if err := chain.CheckContextAndOrderRange(order); err != nil {
+		return common.Hash{}, nil, err
+	}
+	if err := chain.CheckLocationRange(slice); err != nil {
+		return common.Hash{}, nil, err
+	}
+
+	// Check for non-allowed input combinations
+	// Table for the expected output of Hashes from PreviousCoincidentOnPath for various combinations of given order(o) and path(p)
+	// -------------------
+	// |o\p| 0 | 1    | 2 |
+	// | 0 |PPB|PPB   |PPB|
+	// | 1 | X |PB/PPB|PDB|
+	// | 2 | X |  X   |PB |
+	// --------------------
+	// PB  = Previous Block
+	// PDB = Previous Dominant Block
+	// PPB = Previous Prime Block
+	// X   = Not Allowed
+	if order > path {
+		return common.Hash{}, nil, errors.New("tracing along a dominant chain for a subordinate order block is non-sensical")
+	}
+
+	difficultyOrder, err := blake3.GetDifficultyOrder(header)
+	if err != nil {
+		return common.Hash{}, nil, err
+	}
+
+	if difficultyOrder > path {
+		return common.Hash{}, nil, errors.New("provided header does not directly link to requested path")
+	}
+
+	netDifficultyUntilDom := big.NewInt(0)
+	netDifficultyUntilDom = netDifficultyUntilDom.Add(netDifficultyUntilDom, header.Difficulty[path])
+
+	domFound := false
+
+	for {
+
+		// If block header is Genesis return it as coincident
+		if header.Number[path].Cmp(big.NewInt(0)) <= 0 {
+			return header.Hash(), netDifficultyUntilDom, nil
+		}
+
+		if path == types.QuaiNetworkContext {
+
+			// Get previous header on local chain by hash
+			prevHeader := chain.GetHeaderByHash(header.ParentHash[path])
+
+			// Increment previous header
+			header = prevHeader
+		} else {
+
+			// Get previous header on external chain by hash
+			prevExtBlock, err := chain.GetExternalBlock(header.ParentHash[path], header.Number[path].Uint64()-1, header.Location, uint64(path))
+			if err != nil {
+				return common.Hash{}, nil, err
+			}
+
+			// Increment previous header
+			header = prevExtBlock.Header()
+		}
+
+		// Find the order of the header
+		difficultyOrder, err := blake3.GetDifficultyOrder(header)
+		if err != nil {
+			return common.Hash{}, nil, err
+		}
+
+		// Check to see if we have found a dom
+		if difficultyOrder <= order {
+			domFound = true
+		}
+
+		// If we have reached a coincident block of desired order in our desired slice
+		if bytes.Equal(header.Location, slice) && difficultyOrder <= order {
+			return header.Hash(), netDifficultyUntilDom, nil
+		}
+
+		if !domFound {
+			netDifficultyUntilDom = netDifficultyUntilDom.Add(netDifficultyUntilDom, header.Difficulty[path])
+		}
+	}
 }
 
 // TraceBranches utilizes a passed in header for initializing a trace of all external blocks.
@@ -806,11 +904,7 @@ func verifyInsideLocation(location []byte, number []*big.Int, config *params.Cha
 	zoneLocation := int(location[1])
 
 	switch {
-	/*	case config.IsLovelace(number[0]): // Lovelace = [3,4,4]
-			return checkInsideCurrent(regionLocation, zoneLocation, params.LovelaceOntology)
-		case config.IsTuring(number[0]): // Turing = [3,3,4]
-			return checkInsideCurrent(regionLocation, zoneLocation, params.TuringOntology) */
-	case config.IsFuller(number[0]): // Fuller = [3,3,3]
+	case config.IsFuller(number[0]): // Fuller = [3,3]
 		return checkInsideCurrent(regionLocation, zoneLocation, params.FullerOntology)
 	default:
 		return consensus.ErrInvalidOntology
@@ -819,10 +913,10 @@ func verifyInsideLocation(location []byte, number []*big.Int, config *params.Cha
 
 // Verifies that Location is valid inside current MapContext ontology.
 func checkInsideCurrent(regionLoc int, zoneLoc int, ontology []int) error {
-	if len(ontology) < regionLoc {
+	if regionLoc < 1 || regionLoc > ontology[0] {
 		return consensus.ErrInvalidOntology
 	}
-	if ontology[regionLoc-1] < zoneLoc {
+	if zoneLoc < 1 || zoneLoc > ontology[1] {
 		return consensus.ErrInvalidOntology
 	}
 	return nil

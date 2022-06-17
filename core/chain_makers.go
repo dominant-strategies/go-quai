@@ -325,7 +325,7 @@ func (cr *fakeChainReader) GetHeaderByNumber(number uint64) *types.Header       
 func (cr *fakeChainReader) GetHeaderByHash(hash common.Hash) *types.Header          { return nil }
 func (cr *fakeChainReader) GetHeader(hash common.Hash, number uint64) *types.Header { return nil }
 func (cr *fakeChainReader) GetBlock(hash common.Hash, number uint64) *types.Block   { return nil }
-func (cr *fakeChainReader) GetExternalBlock(hash common.Hash, number uint64, context uint64) (*types.ExternalBlock, error) {
+func (cr *fakeChainReader) GetExternalBlock(hash common.Hash, number uint64, location []byte, context uint64) (*types.ExternalBlock, error) {
 	return nil, nil
 }
 func (cr *fakeChainReader) QueueAndRetrieveExtBlocks(blocks []*types.ExternalBlock, header *types.Header) []*types.ExternalBlock {
@@ -343,4 +343,14 @@ func (cr *fakeChainReader) GetExternalBlocks(header *types.Header) ([]*types.Ext
 
 func (cr *fakeChainReader) GetLinkExternalBlocks(header *types.Header) ([]*types.ExternalBlock, error) {
 	return nil, nil
+}
+
+// CheckContextAndOrderRange checks to make sure the range of a context or order is valid
+func (cr *fakeChainReader) CheckContextAndOrderRange(context int) error {
+	return nil
+}
+
+// CheckLocationRange checks to make sure the range of r and z are valid
+func (cr *fakeChainReader) CheckLocationRange(location []byte) error {
+	return nil
 }
