@@ -3434,3 +3434,22 @@ func (bc *BlockChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscript
 func (bc *BlockChain) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscription {
 	return bc.scope.Track(bc.blockProcFeed.Subscribe(ch))
 }
+
+// CheckContextAndOrderRange checks to make sure the range of a context or order is valid
+func (bc *BlockChain) CheckContextAndOrderRange(number int) error {
+	if number < 0 || number > len(params.FullerOntology) {
+		return errors.New("the provided path is outside the allowable range")
+	}
+	return nil
+}
+
+// CheckLocationRange checks to make sure the range of location is valid
+func (bc *BlockChain) CheckLocationRange(location []byte) error {
+	if int(location[0]) < 1 || int(location[0]) > params.FullerOntology[0] {
+		return errors.New("the provided location is outside the allowable region range")
+	}
+	if int(location[1]) < 1 || int(location[1]) > params.FullerOntology[1] {
+		return errors.New("the provided location is outside the allowable zone range")
+	}
+	return nil
+}
