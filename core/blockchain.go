@@ -3335,6 +3335,11 @@ func (bc *BlockChain) CheckExternalBlockLink(externalBlocks []*types.ExternalBlo
 // The purpose of the Previous Coincident Reference Check (PCRC) is to establish
 // that we have linked untwisted chains prior to checking HLCR & applying external state transfers.
 func (bc *BlockChain) PCRC(header *types.Header) ([]common.Hash, []*big.Int, error) {
+
+	if header.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
+		return bc.chainConfig.GenesisHashes, header.Difficulty, nil
+	}
+
 	slice := header.Location
 
 	// Prime twist check
@@ -3379,6 +3384,9 @@ func (bc *BlockChain) PCRC(header *types.Header) ([]common.Hash, []*big.Int, err
 	if RTZ != RTR {
 		return []common.Hash{}, nil, errors.New("there exists a region twist")
 	}
+
+	fmt.Println("PTZ", PTZ, "PTR", PTR, "PTP", PTP, "RTZ", RTZ, "RTR", RTR)
+	fmt.Println("PTPND", PTPND, "PTRND", PTRND, "RTZND", RTZND)
 
 	return []common.Hash{PTP, RTR, header.Hash()}, []*big.Int{PTPND, PTRND, RTZND}, nil
 }

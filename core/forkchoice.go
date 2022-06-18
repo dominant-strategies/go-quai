@@ -18,7 +18,6 @@ package core
 
 import (
 	crand "crypto/rand"
-	"errors"
 	"fmt"
 	"math/big"
 	mrand "math/rand"
@@ -90,33 +89,54 @@ func NewForkChoice(chainReader ChainReader, preserve func(header *types.Header) 
 // header is always selected as the head.
 func (f *ForkChoice) ReorgNeeded(current *types.Header, header *types.Header) (bool, error) {
 
-	localTd := f.chain.GetTdByHash(current.Hash())
-
 	fmt.Println("Running PCRC")
+	localTerminalHashes, localNetDifficulties, err := f.chain.PCRC(current)
+	if err != nil {
+		return false, err
+	}
+
 	// Check PCRC for the external block and return the terminal hash and net difficulties
 	externTerminalHashes, externNetDifficulties, err := f.chain.PCRC(header)
 	if err != nil {
 		return false, err
 	}
-
 	fmt.Println("Running CalcHLCRNetDifficulty")
-	// Use HLCR to compute net total difficulty
-	externNetTd, err := f.chain.CalcHLCRNetDifficulty(externTerminalHashes, externNetDifficulties)
-	if err != nil {
-		return false, err
-	}
-
-	externTd := big.NewInt(0)
 	fmt.Println("In forkchoice")
-	fmt.Println("externNetTD", externNetTd)
-	externTd = externNetTd.Add(externNetTd, f.chain.GetTdByHash(externTerminalHashes[0]))
-	fmt.Println("externTerminalHashes[0]", f.chain.GetTdByHash(externTerminalHashes[0]))
+	fmt.Println("localDifficulty      :", current.Difficulty)
+	fmt.Println("externDifficulty     :", header.Difficulty)
+	fmt.Println("localTerminalHashes  :", localTerminalHashes)
+	fmt.Println("externTerminalHashes :", externTerminalHashes)
+	fmt.Println("localNetDiffs        :", localNetDifficulties)
+	fmt.Println("externNetDiffs       :", externNetDifficulties)
 
+	var externTd *big.Int
+	var localTd *big.Int
+	switch types.QuaiNetworkContext {
+	case 0:
+		localTd = localNetDifficulties[0]
+		externTd = externNetDifficulties[0]
+	case 1:
+		if localTerminalHashes[0] == externTerminalHashes[0] {
+			localTd = localNetDifficulties[1]
+			externTd = externNetDifficulties[1]
+		} else {
+			localTd = localNetDifficulties[0]
+			externTd = externNetDifficulties[0]
+		}
+	case 2:
+		if localTerminalHashes[1] == externTerminalHashes[1] {
+			localTd = localNetDifficulties[2]
+			externTd = externNetDifficulties[2]
+		} else if localTerminalHashes[0] == externTerminalHashes[1] {
+			localTd = localNetDifficulties[1]
+			externTd = externNetDifficulties[1]
+		} else {
+			localTd = localNetDifficulties[0]
+			externTd = externNetDifficulties[0]
+		}
+	}
 	fmt.Println("localTD", localTd)
 	fmt.Println("externTD", externTd)
-	if localTd == nil || externNetTd == nil {
-		return false, errors.New("missing td")
-	}
 
 	currentBlock := f.chain.GetBlockByHash(current.Hash())
 	externBlock := f.chain.GetBlockByHash(header.Hash())

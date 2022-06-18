@@ -710,11 +710,6 @@ func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader
 	terminusHash := common.Hash{}
 
 	for {
-		// If block header is Genesis return it as coincident
-		if header.Number[path].Cmp(big.NewInt(1)) == 0 {
-			return chain.Config().GenesisHashes[0], netDifficultyUntilDom, nil
-		}
-
 		if path == types.QuaiNetworkContext {
 
 			// Get previous header on local chain by hash
@@ -732,6 +727,12 @@ func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader
 
 			// Increment previous header
 			header = prevExtBlock.Header()
+		}
+
+		// If block header is Genesis return it as coincident
+		if header.Number[path].Cmp(big.NewInt(0)) == 0 {
+			netDifficultyUntilDom.Add(netDifficultyUntilDom, header.Difficulty[0])
+			return chain.Config().GenesisHashes[0], netDifficultyUntilDom, nil
 		}
 
 		// Find the order of the header
