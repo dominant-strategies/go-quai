@@ -3034,7 +3034,6 @@ func (bc *BlockChain) GenerateExtBlockLink(currentHeader *types.Header) {
 			copy(tempLinkBlocks.zones[i], linkBlocks.zones[i])
 		}
 
-		fmt.Println("generateLinkBlocks, num:", currentHeader.Number, currentHeader.Hash())
 		tempLinkBlocks = bc.generateLinkBlocksLastApplied(extBlocks, tempLinkBlocks)
 
 		// If our tempLink is new and our starting link hasn't changed.
