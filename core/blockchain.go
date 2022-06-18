@@ -1637,10 +1637,6 @@ func (bc *BlockChain) getHierarchicalTD(currentBlock *types.Block, block *types.
 		localTd = bc.GetTd(localHeader.Hash(), localBlock.NumberU64())
 	} else if localOrder < externOrder {
 		// get coincident and get the Total difficulty of it
-<<<<<<< HEAD
-		fmt.Println("case 2: currentBlock", currentBlock.Header().Number, currentBlock.Header().Hash())
-=======
->>>>>>> main
 		localTd = bc.GetTd(currentBlock.Header().Hash(), currentBlock.NumberU64())
 
 		externHeader, err = bc.Engine().GetCoincidentAtOrder(bc, types.QuaiNetworkContext, localOrder, block.Header())
