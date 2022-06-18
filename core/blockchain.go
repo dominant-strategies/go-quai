@@ -1980,7 +1980,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			externTd = bc.GetTd(block.ParentHash(), block.NumberU64()-1) // The first block can't be nil
 		)
 		for block != nil && err == ErrKnownBlock {
-			localTd, externTd, err = bc.getHierarchicalTD(current, block)
+			externTd, localTd, err = bc.getHierarchicalTD(current, block)
 			if err != nil {
 				return it.index, err
 			}
