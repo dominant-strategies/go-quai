@@ -1471,29 +1471,34 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 // but is expects the chain mutex to be held.
 func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, linkExtBlocks []*types.ExternalBlock) error {
 
-	// Check PCRC for the external block and return the terminal hash and net difficulties
-	externTerminalHashes, externNetDifficulties, err := bc.PCRC(block.Header())
+	var externTd *big.Int
+	order, err := bc.Engine().GetDifficultyOrder(block.Header())
 	if err != nil {
 		return err
 	}
 
-	// Use HLCR to compute net total difficulty
-	externNetTd, err := bc.CalcHLCRNetDifficulty(externTerminalHashes, externNetDifficulties)
-	if err != nil {
-		return err
+	if order < types.QuaiNetworkContext {
+		// Add terminal difficulty to net difficulty to compute total external difficulty
+		externTd, _, err = bc.AggregateTotalDifficulty(types.QuaiNetworkContext, block.Header())
+		if err != nil {
+			return err
+		}
+	} else {
+		// Calculate the total difficulty of the block
+		ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
+		if ptd == nil {
+			return consensus.ErrUnknownAncestor
+		}
+		// Make sure no inconsistent state is leaked during insertion
+		externTd = new(big.Int).Add(block.Difficulty(), ptd)
 	}
-
-	// Add terminal difficulty to net difficulty to compute total external difficulty
-	externTd := big.NewInt(0)
-	fmt.Println(externTerminalHashes)
-	externTd = externNetTd.Add(externNetTd, bc.GetTdByHash(externTerminalHashes[0]))
 
 	// Irrelevant of the canonical status, write the block itself to the database.
 	//
 	// Note all the components of block(td, hash->number map, header, body, receipts)
 	// should be written atomically. BlockBatch is used for containing all components.
 	blockBatch := bc.db.NewBatch()
-	fmt.Println("Writing TD", externTd, block.Hash())
+	fmt.Println("writeBlockWithState: writing externTD", externTd, block.Hash())
 	rawdb.WriteTd(blockBatch, block.Hash(), block.NumberU64(), externTd)
 	rawdb.WriteBlock(blockBatch, block)
 	rawdb.WriteReceipts(blockBatch, block.Hash(), block.NumberU64(), receipts)
@@ -3353,15 +3358,18 @@ func (bc *BlockChain) PCRC(header *types.Header) ([]common.Hash, []*big.Int, err
 		return []common.Hash{}, nil, err
 	}
 
+	fmt.Println("Finding PTR and PTRND")
 	PTR, PTRND, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.REGION)
 	if err != nil {
 		return []common.Hash{}, nil, err
 	}
 
+	fmt.Println("Finding PTP and PTPND")
 	PTP, PTPND, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.PRIME)
 	if err != nil {
 		return []common.Hash{}, nil, err
 	}
+	fmt.Println("PTP RETURN HASH", PTP)
 
 	if PTZ != PTR || PTR != PTP || PTP != PTZ {
 		return []common.Hash{}, nil, errors.New("there exists a prime twist")
@@ -3371,6 +3379,7 @@ func (bc *BlockChain) PCRC(header *types.Header) ([]common.Hash, []*big.Int, err
 	// RTZ -- Region coincident along zone path
 	// RTR -- Region coincident along region path
 	// RTZND -- Net difficulty until dom or terminus along zone path
+	fmt.Println("Finding RTZ and RTZND")
 	RTZ, RTZND, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.REGION, params.ZONE)
 	if err != nil {
 		return []common.Hash{}, nil, err
@@ -3381,12 +3390,12 @@ func (bc *BlockChain) PCRC(header *types.Header) ([]common.Hash, []*big.Int, err
 		return []common.Hash{}, nil, err
 	}
 
+	fmt.Println("PTP", PTP, "RTR", RTR)
+	fmt.Println("PTPND", PTPND, "PTRND", PTRND, "RTZND", RTZND)
+
 	if RTZ != RTR {
 		return []common.Hash{}, nil, errors.New("there exists a region twist")
 	}
-
-	fmt.Println("PTZ", PTZ, "PTR", PTR, "PTP", PTP, "RTZ", RTZ, "RTR", RTR)
-	fmt.Println("PTPND", PTPND, "PTRND", PTRND, "RTZND", RTZND)
 
 	return []common.Hash{PTP, RTR, header.Hash()}, []*big.Int{PTPND, PTRND, RTZND}, nil
 }

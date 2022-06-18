@@ -707,9 +707,42 @@ func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader
 	netDifficultyUntilDom = netDifficultyUntilDom.Add(netDifficultyUntilDom, header.Difficulty[path])
 
 	domFound := false
-	terminusHash := common.Hash{}
+	terminusHash := chain.Config().GenesisHashes[0]
 
 	for {
+		// If block header is Genesis return it as coincident
+		if header.Number[path].Cmp(big.NewInt(0)) == 0 {
+			netDifficultyUntilDom.Add(netDifficultyUntilDom, header.Difficulty[0])
+			return terminusHash, netDifficultyUntilDom, nil
+		}
+
+		// Find the order of the header
+		difficultyOrder, err := blake3.GetDifficultyOrder(header)
+		if err != nil {
+			return common.Hash{}, nil, err
+		}
+		fmt.Println("Iterating PCRC", header.Location, slice, difficultyOrder, order, domFound, header.Hash())
+
+		// If we have reached a coincident block of desired order in our desired slice
+		if bytes.Equal(header.Location, slice) && difficultyOrder <= order && !domFound {
+			fmt.Println("Found terminus hash", header.Hash())
+			terminusHash = header.Hash()
+		}
+
+		// Check to see if we have found a dom
+		if difficultyOrder <= order {
+			domFound = true
+		}
+
+		// In the region path we have to find the block of prime order to stop the difficulty calculation
+		// This extra check is needed because if there are multiple regions after the prime we need to collect
+		// the difficulties of all the regions before stop
+		if path == 1 && bytes.Equal(header.Location, slice) && difficultyOrder < order && !domFound {
+			break
+		} else if bytes.Equal(header.Location, slice) && difficultyOrder <= order && !domFound {
+			break
+		}
+
 		if path == types.QuaiNetworkContext {
 
 			// Get previous header on local chain by hash
@@ -729,38 +762,11 @@ func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader
 			header = prevExtBlock.Header()
 		}
 
-		// If block header is Genesis return it as coincident
-		if header.Number[path].Cmp(big.NewInt(0)) == 0 {
-			netDifficultyUntilDom.Add(netDifficultyUntilDom, header.Difficulty[0])
-			return chain.Config().GenesisHashes[0], netDifficultyUntilDom, nil
+		// Order <= path ensures invalid difficulties are not added.
+		if difficultyOrder <= path {
+			netDifficultyUntilDom = netDifficultyUntilDom.Add(netDifficultyUntilDom, header.Difficulty[path])
+			fmt.Println("Adding to netDifficultyUntilDom", header.Difficulty[path])
 		}
-
-		// Find the order of the header
-		difficultyOrder, err := blake3.GetDifficultyOrder(header)
-		if err != nil {
-			return common.Hash{}, nil, err
-		}
-
-		// Check to see if we have found a dom
-		if difficultyOrder <= order {
-			domFound = true
-		}
-
-		// If we have reached a coincident block of desired order in our desired slice
-		if bytes.Equal(header.Location, slice) && difficultyOrder <= order && !domFound {
-			terminusHash = header.Hash()
-		}
-
-		// In the region path we have to find the block of prime order to stop the difficulty calculation
-		// This extra check is needed because if there are multiple regions after the prime we need to collect
-		// the difficulties of all the regions before stop
-		if path == 1 && bytes.Equal(header.Location, slice) && difficultyOrder < order && !domFound {
-			break
-		} else if bytes.Equal(header.Location, slice) && difficultyOrder <= order && !domFound {
-			break
-		}
-
-		netDifficultyUntilDom = netDifficultyUntilDom.Add(netDifficultyUntilDom, header.Difficulty[path])
 	}
 	return terminusHash, netDifficultyUntilDom, nil
 }

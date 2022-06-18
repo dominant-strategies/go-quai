@@ -89,12 +89,13 @@ func NewForkChoice(chainReader ChainReader, preserve func(header *types.Header) 
 // header is always selected as the head.
 func (f *ForkChoice) ReorgNeeded(current *types.Header, header *types.Header) (bool, error) {
 
-	fmt.Println("Running PCRC")
+	fmt.Println("Running PCRC for local")
 	localTerminalHashes, localNetDifficulties, err := f.chain.PCRC(current)
 	if err != nil {
 		return false, err
 	}
 
+	fmt.Println("Running PCRC for extern")
 	// Check PCRC for the external block and return the terminal hash and net difficulties
 	externTerminalHashes, externNetDifficulties, err := f.chain.PCRC(header)
 	if err != nil {
@@ -127,7 +128,7 @@ func (f *ForkChoice) ReorgNeeded(current *types.Header, header *types.Header) (b
 		if localTerminalHashes[1] == externTerminalHashes[1] {
 			localTd = localNetDifficulties[2]
 			externTd = externNetDifficulties[2]
-		} else if localTerminalHashes[0] == externTerminalHashes[1] {
+		} else if localTerminalHashes[0] == externTerminalHashes[0] {
 			localTd = localNetDifficulties[1]
 			externTd = externNetDifficulties[1]
 		} else {
