@@ -163,7 +163,7 @@ ifeq ($(ENABLE_ARCHIVE),true)
 endif
 
 ifeq ($(ENABLE_HTTP),true)
-	BASE_COMMAND += --http
+	BASE_COMMAND += --http --http.vhosts=* 
 endif
 
 ifeq ($(ENABLE_WS),true)
