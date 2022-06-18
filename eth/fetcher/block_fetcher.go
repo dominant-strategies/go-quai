@@ -73,6 +73,9 @@ type HeaderRetrievalFn func(common.Hash) *types.Header
 // blockRetrievalFn is a callback type for retrieving a block from the local chain.
 type blockRetrievalFn func(common.Hash) *types.Block
 
+// extBlockRetrievalFn is a callback type for retrieving a block from the local chain.
+type extBlockRetrievalFn func(header *types.Header) ([]*types.ExternalBlock, error)
+
 // headerRequesterFn is a callback type for sending a header retrieval request.
 type headerRequesterFn func(common.Hash) error
 
@@ -184,14 +187,15 @@ type BlockFetcher struct {
 	queued map[common.Hash]*blockOrHeaderInject // Set of already queued blocks (to dedup imports)
 
 	// Callbacks
-	getHeader      HeaderRetrievalFn  // Retrieves a header from the local chain
-	getBlock       blockRetrievalFn   // Retrieves a block from the local chain
-	verifyHeader   headerVerifierFn   // Checks if a block's headers have a valid proof of work
-	broadcastBlock blockBroadcasterFn // Broadcasts a block to connected peers
-	chainHeight    chainHeightFn      // Retrieves the current chain's height
-	insertHeaders  headersInsertFn    // Injects a batch of headers into the chain
-	insertChain    chainInsertFn      // Injects a batch of blocks into the chain
-	dropPeer       peerDropFn         // Drops a peer for misbehaving
+	getHeader      HeaderRetrievalFn   // Retrieves a header from the local chain
+	getBlock       blockRetrievalFn    // Retrieves a block from the local chain
+	verifyHeader   headerVerifierFn    // Checks if a block's headers have a valid proof of work
+	broadcastBlock blockBroadcasterFn  // Broadcasts a block to connected peers
+	chainHeight    chainHeightFn       // Retrieves the current chain's height
+	insertHeaders  headersInsertFn     // Injects a batch of headers into the chain
+	insertChain    chainInsertFn       // Injects a batch of blocks into the chain
+	dropPeer       peerDropFn          // Drops a peer for misbehaving
+	getExtBlocks   extBlockRetrievalFn // Retrieves external blocks for a block
 
 	// Testing hooks
 	announceChangeHook func(common.Hash, bool)           // Method to call upon adding or deleting a hash from the blockAnnounce list
@@ -202,7 +206,7 @@ type BlockFetcher struct {
 }
 
 // NewBlockFetcher creates a block fetcher to retrieve blocks based on hash announcements.
-func NewBlockFetcher(light bool, getHeader HeaderRetrievalFn, getBlock blockRetrievalFn, verifyHeader headerVerifierFn, broadcastBlock blockBroadcasterFn, chainHeight chainHeightFn, insertHeaders headersInsertFn, insertChain chainInsertFn, dropPeer peerDropFn) *BlockFetcher {
+func NewBlockFetcher(light bool, getHeader HeaderRetrievalFn, getBlock blockRetrievalFn, verifyHeader headerVerifierFn, broadcastBlock blockBroadcasterFn, chainHeight chainHeightFn, insertHeaders headersInsertFn, insertChain chainInsertFn, dropPeer peerDropFn, getExtBlocks extBlockRetrievalFn) *BlockFetcher {
 	return &BlockFetcher{
 		light:          light,
 		notify:         make(chan *blockAnnounce),
@@ -227,6 +231,7 @@ func NewBlockFetcher(light bool, getHeader HeaderRetrievalFn, getBlock blockRetr
 		insertHeaders:  insertHeaders,
 		insertChain:    insertChain,
 		dropPeer:       dropPeer,
+		getExtBlocks:   getExtBlocks,
 	}
 }
 
@@ -433,6 +438,7 @@ func (f *BlockFetcher) loop() {
 			if f.light {
 				continue
 			}
+			fmt.Println("enqueue 1")
 			f.enqueue(op.origin, nil, op.block, op.extBlocks)
 
 		case hash := <-f.done:
@@ -553,9 +559,16 @@ func (f *BlockFetcher) loop() {
 						announce.header = header
 						announce.time = task.time
 
+						var traceable bool
+						_, err := f.getExtBlocks(header)
+						if err != nil {
+							fmt.Println("Not traceable", err)
+							traceable = false
+						}
+
 						// If the block is empty (header only), short circuit into the final import queue
-						if types.IsEqualHashSlice(header.TxHash, types.EmptyRootHash) && types.IsEqualHashSlice(header.UncleHash, types.EmptyUncleHash) {
-							log.Trace("Block empty, skipping body retrieval", "peer", announce.origin, "number", header.Number, "hash", header.Hash())
+						if types.IsEqualHashSlice(header.TxHash, types.EmptyRootHash) && types.IsEqualHashSlice(header.UncleHash, types.EmptyUncleHash) && traceable {
+							log.Info("Block empty, skipping body retrieval", "peer", announce.origin, "number", header.Number, "hash", header.Hash())
 
 							block := types.NewBlockWithHeader(header)
 							block.ReceivedAt = task.time
@@ -599,6 +612,7 @@ func (f *BlockFetcher) loop() {
 			// Schedule the header-only blocks for import
 			for _, block := range complete {
 				if announce := f.completing[block.Hash()]; announce != nil {
+					fmt.Println("enqueue 3")
 					f.enqueue(announce.origin, nil, block, nil)
 				}
 			}
@@ -666,6 +680,7 @@ func (f *BlockFetcher) loop() {
 			// Schedule the retrieved blocks for ordered import
 			for _, block := range blocks {
 				if announce := f.completing[block.Hash()]; announce != nil {
+					fmt.Println("enqueue 4")
 					f.enqueue(announce.origin, nil, block, nil)
 				}
 			}
