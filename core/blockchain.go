@@ -83,6 +83,7 @@ var (
 	blockPrefetchInterruptMeter = metrics.NewRegisteredMeter("chain/prefetch/interrupts", nil)
 
 	errInsertionInterrupted = errors.New("insertion is interrupted")
+	errExtBlockNotFound     = errors.New("error finding external block by context and hash")
 )
 
 const (
@@ -2824,7 +2825,7 @@ func (bc *BlockChain) GetExternalBlock(hash common.Hash, number uint64, location
 	if block == nil {
 		block = bc.requestExternalBlock(hash, number, location, context)
 		if block == nil {
-			return &types.ExternalBlock{}, errors.New("error finding external block by context and hash")
+			return &types.ExternalBlock{}, errExtBlockNotFound
 		}
 	}
 	return block, nil
