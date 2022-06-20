@@ -472,7 +472,6 @@ func (f *BlockFetcher) loop() {
 						header := f.getBlock(hash).Header()
 						_, err := f.getExtBlocks(header)
 						if err != nil {
-							fmt.Println("fetchTimer.C setting to fetching")
 							request[announce.origin] = append(request[announce.origin], hash)
 							f.fetching[hash] = announce
 						}
