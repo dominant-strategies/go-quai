@@ -44,6 +44,13 @@ type ChainReader interface {
 
 	// GetHierarchicalTD gets the localTD and externTD for the local header and the incoming header
 	GetHierarchicalTD(currentBlock *types.Header, block *types.Header) (*big.Int, *big.Int, error)
+
+	// The purpose of the Previous Coincident Reference Check (PCRC) is to establish
+	// that we have linked untwisted chains prior to checking HLCR & applying external state transfers.
+	PCRC(header *types.Header) ([]common.Hash, []*big.Int, error)
+
+	// calcHLCRNetDifficulty calculates the net difficulty from previous prime pecalcHLCRNetDifficultyg
+	CalcHLCRNetDifficulty(terminalHashes []common.Hash, netDifficulties []*big.Int) (*big.Int, error)
 }
 
 // ForkChoice is the fork chooser based on the highest total difficulty of the
@@ -82,11 +89,29 @@ func NewForkChoice(chainReader ChainReader, preserve func(header *types.Header) 
 // header is always selected as the head.
 func (f *ForkChoice) ReorgNeeded(current *types.Header, header *types.Header) (bool, error) {
 
-	externTd, localTd, err := f.chain.GetHierarchicalTD(current, header)
+	localTerminalHashes, localNetDifficulties, err := f.chain.PCRC(current)
+	if err != nil {
+		return false, err
+	}
+
+	// Check PCRC for the external block and return the terminal hash and net difficulties
+	externTerminalHashes, externNetDifficulties, err := f.chain.PCRC(header)
 	if err != nil {
 		return false, errors.New("error finding hierarchical td")
 	}
-	if localTd == nil || externTd == nil {
+
+	// Use HLCR to compute net total difficulty
+	localNetTd, err := f.chain.CalcHLCRNetDifficulty(localTerminalHashes, localNetDifficulties)
+	if err != nil {
+		return false, err
+	}
+
+	externNetTd, err := f.chain.CalcHLCRNetDifficulty(externTerminalHashes, externNetDifficulties)
+	if err != nil {
+		return false, err
+	}
+
+	if localNetTd == nil || externNetTd == nil {
 		return false, errors.New("missing td")
 	}
 
@@ -96,8 +121,8 @@ func (f *ForkChoice) ReorgNeeded(current *types.Header, header *types.Header) (b
 	// If the total difficulty is higher than our known, add it to the canonical chain
 	// Second clause in the if statement reduces the vulnerability to selfish mining.
 	// Please refer to http://www.cs.cornell.edu/~ie53/publications/btcProcFC.pdf
-	reorg := externTd.Cmp(localTd) > 0
-	if !reorg && externTd.Cmp(localTd) == 0 {
+	reorg := externNetTd.Cmp(localNetTd) > 0
+	if !reorg && externNetTd.Cmp(localNetTd) == 0 {
 		number, headNumber := externBlock.NumberU64(), currentBlock.NumberU64()
 		if number < headNumber {
 			reorg = true

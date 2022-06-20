@@ -1471,20 +1471,32 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 // but is expects the chain mutex to be held.
 func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, linkExtBlocks []*types.ExternalBlock) error {
 	// Check PCRC for the external block and return the terminal hash and net difficulties
-	externTerminalHashes, externNetDifficulties, err := bc.PCRC(block)
+	externTerminalHashes, externNetDifficulties, err := bc.PCRC(block.Header())
 	if err != nil {
 		return err
 	}
 
 	// Use HLCR to compute net total difficulty
-	externNetTd, err := bc.calcHLCRNetDifficulty(externTerminalHashes, externNetDifficulties)
+	externNetTd, err := bc.CalcHLCRNetDifficulty(externTerminalHashes, externNetDifficulties)
 	if err != nil {
 		return err
 	}
 
 	// Add terminal difficulty to net difficulty to compute total external difficulty
 	externTd := big.NewInt(0)
-	externTd = externNetTd.Add(externNetTd, bc.GetTdByHash(externTerminalHashes[0]))
+
+	externTerminalHeader := bc.GetHeaderByHash(externTerminalHashes[0])
+
+	prevExternTerminus, prevExternTd, err := bc.Engine().PreviousCoincidentOnPath(bc, externTerminalHeader, externTerminalHeader.Location, params.PRIME, params.PRIME)
+	if err != nil {
+		return err
+
+	}
+
+	externTd = externNetTd.Add(externNetTd, prevExternTd)
+	externTd = externTd.Add(externTd, bc.GetTdByHash(prevExternTerminus))
+	externTd = externTd.Sub(externTd, externTerminalHeader.Difficulty[0])
+	externTd = externTd.Sub(externTd, bc.GetHeaderByHash(prevExternTerminus).Difficulty[0])
 
 	// Irrelevant of the canonical status, write the block itself to the database.
 	//
@@ -1680,6 +1692,7 @@ func (bc *BlockChain) GetHierarchicalTD(currentHeader *types.Header, header *typ
 		externBlock := bc.GetBlockByHash(externHeader.Hash())
 		fmt.Println("case 2: externHeader", externHeader.Number, externHeader.Location, externHeader.Hash())
 		// If we are building on the same point
+
 		if localHeader.Hash() == externHeader.Hash() {
 			ptd := bc.GetTd(externBlock.ParentHash(), externBlock.NumberU64()-1)
 			if ptd == nil {
@@ -3331,19 +3344,24 @@ func (bc *BlockChain) CheckExternalBlockLink(externalBlocks []*types.ExternalBlo
 
 // The purpose of the Previous Coincident Reference Check (PCRC) is to establish
 // that we have linked untwisted chains prior to checking HLCR & applying external state transfers.
-func (bc *BlockChain) PCRC(block *types.Block) ([]common.Hash, []*big.Int, error) {
-	slice := block.Header().Location
+func (bc *BlockChain) PCRC(header *types.Header) ([]common.Hash, []*big.Int, error) {
+
+	if header.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
+		return bc.chainConfig.GenesisHashes, header.Difficulty, nil
+	}
+
+	slice := header.Location
 
 	// Region twist check
 	// RTZ -- Region coincident along zone path
 	// RTR -- Region coincident along region path
 	// RTZND -- Net difficulty until dom or terminus along zone path
-	RTZ, RTZND, err := bc.Engine().PreviousCoincidentOnPath(bc, block.Header(), slice, params.REGION, params.ZONE)
+	RTZ, RTZND, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.REGION, params.ZONE)
 	if err != nil {
 		return []common.Hash{}, nil, err
 	}
 
-	RTR, _, err := bc.Engine().PreviousCoincidentOnPath(bc, block.Header(), slice, params.REGION, params.REGION)
+	RTR, _, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.REGION, params.REGION)
 	if err != nil {
 		return []common.Hash{}, nil, err
 	}
@@ -3358,17 +3376,17 @@ func (bc *BlockChain) PCRC(block *types.Block) ([]common.Hash, []*big.Int, error
 	// PTP -- Prime coincident along prime path
 	// PTRND -- Net difficulty until dom or terminus along region path
 	// PTPND -- Net difficulty until terminus along prime path
-	PTZ, _, err := bc.Engine().PreviousCoincidentOnPath(bc, block.Header(), slice, params.PRIME, params.ZONE)
+	PTZ, _, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.ZONE)
 	if err != nil {
 		return []common.Hash{}, nil, err
 	}
 
-	PTR, PTRND, err := bc.Engine().PreviousCoincidentOnPath(bc, block.Header(), slice, params.PRIME, params.REGION)
+	PTR, PTRND, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.REGION)
 	if err != nil {
 		return []common.Hash{}, nil, err
 	}
 
-	PTP, PTPND, err := bc.Engine().PreviousCoincidentOnPath(bc, block.Header(), slice, params.PRIME, params.PRIME)
+	PTP, PTPND, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.PRIME)
 	if err != nil {
 		return []common.Hash{}, nil, err
 	}
@@ -3377,10 +3395,11 @@ func (bc *BlockChain) PCRC(block *types.Block) ([]common.Hash, []*big.Int, error
 		return []common.Hash{}, nil, errors.New("there exists a prime twist")
 	}
 
-	return []common.Hash{PTP, RTR, block.Header().Hash()}, []*big.Int{PTPND, PTRND, RTZND}, nil
+	return []common.Hash{PTP, RTR, header.Hash()}, []*big.Int{PTPND, PTRND, RTZND}, nil
 }
 
-func (bc *BlockChain) calcHLCRNetDifficulty(terminalHashes []common.Hash, netDifficulties []*big.Int) (*big.Int, error) {
+// calcHLCRNetDifficulty calculates the net difficulty from previous prime pecalcHLCRNetDifficultyg
+func (bc *BlockChain) CalcHLCRNetDifficulty(terminalHashes []common.Hash, netDifficulties []*big.Int) (*big.Int, error) {
 
 	if (terminalHashes[0] == common.Hash{}) || (terminalHashes[1] == common.Hash{}) || (terminalHashes[2] == common.Hash{}) {
 		return nil, errors.New("one or many of the  terminal hashes were nil")
