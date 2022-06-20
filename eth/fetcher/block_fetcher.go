@@ -467,6 +467,16 @@ func (f *BlockFetcher) loop() {
 						request[announce.origin] = append(request[announce.origin], hash)
 						f.fetching[hash] = announce
 					}
+
+					if !f.light && f.getBlock(hash) != nil {
+						header := f.getBlock(hash).Header()
+						_, err := f.getExtBlocks(header)
+						if err != nil {
+							fmt.Println("fetchTimer.C setting to fetching")
+							request[announce.origin] = append(request[announce.origin], hash)
+							f.fetching[hash] = announce
+						}
+					}
 				}
 			}
 			// Send out all block header requests
@@ -566,7 +576,7 @@ func (f *BlockFetcher) loop() {
 						announce.header = header
 						announce.time = task.time
 
-						var traceable bool
+						traceable := true
 						_, err := f.getExtBlocks(header)
 						if err != nil {
 							traceable = false

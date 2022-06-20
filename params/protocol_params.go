@@ -178,7 +178,6 @@ var (
 
 // Ontology defines the current Quai Network ontology
 var (
-	// Explicit definition of PRIME, REGION, ZONE
 	PRIME  = 0
 	REGION = 1
 	ZONE   = 2

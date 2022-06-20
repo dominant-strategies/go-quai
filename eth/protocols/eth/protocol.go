@@ -92,7 +92,7 @@ type Packet interface {
 type StatusPacket struct {
 	ProtocolVersion uint32
 	NetworkID       uint64
-	TD              *big.Int
+	TD              []*big.Int
 	Head            common.Hash
 	Genesis         common.Hash
 	ForkID          forkid.ID
@@ -183,7 +183,7 @@ type BlockHeadersPacket66 struct {
 // NewBlockPacket is the network packet for the block propagation message.
 type NewBlockPacket struct {
 	Block     *types.Block
-	TD        *big.Int
+	TD        []*big.Int
 	ExtBlocks []*types.ExternalBlock
 }
 
@@ -194,7 +194,7 @@ func (request *NewBlockPacket) sanityCheck() error {
 	}
 	//TD at mainnet block #7753254 is 76 bits. If it becomes 100 million times
 	// larger, it will still fit within 100 bits
-	if tdlen := request.TD.BitLen(); tdlen > 100 {
+	if tdlen := request.TD[types.QuaiNetworkContext].BitLen(); tdlen > 100 {
 		return fmt.Errorf("too large block TD: bitlen %d", tdlen)
 	}
 
