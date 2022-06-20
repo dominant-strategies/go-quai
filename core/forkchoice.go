@@ -127,7 +127,7 @@ func (f *ForkChoice) ReorgNeeded(current *types.Header, header *types.Header) (b
 		if localTerminalHashes[1] == externTerminalHashes[1] {
 			localTd = localNetDifficulties[2]
 			externTd = externNetDifficulties[2]
-		} else if localTerminalHashes[0] == externTerminalHashes[1] {
+		} else if localTerminalHashes[0] == externTerminalHashes[0] {
 			localTd = localNetDifficulties[1]
 			externTd = externNetDifficulties[1]
 		} else {
