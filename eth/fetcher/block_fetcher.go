@@ -439,7 +439,6 @@ func (f *BlockFetcher) loop() {
 			if f.light {
 				continue
 			}
-			fmt.Println("enqueue 1")
 			f.enqueue(op.origin, nil, op.block, op.extBlocks)
 
 		case hash := <-f.done:
@@ -498,10 +497,16 @@ func (f *BlockFetcher) loop() {
 				announce := announces[rand.Intn(len(announces))]
 				f.forgetHash(hash)
 
-				// If the block still didn't arrive, queue for completion
-				if f.getBlock(hash) == nil {
+				block := f.getBlock(hash)
+				if block == nil {
 					request[announce.origin] = append(request[announce.origin], hash)
 					f.completing[hash] = announce
+				} else {
+					_, err := f.getExtBlocks(block.Header())
+					if err != nil {
+						request[announce.origin] = append(request[announce.origin], hash)
+						f.completing[hash] = announce
+					}
 				}
 			}
 			// Send out all block body requests
@@ -514,6 +519,7 @@ func (f *BlockFetcher) loop() {
 				}
 				bodyFetchMeter.Mark(int64(len(hashes)))
 				go f.completing[hashes[0]].fetchBodies(hashes)
+				go f.completing[hashes[0]].fetchExtBlocks(hashes)
 			}
 			// Schedule the next fetch if blocks are still pending
 			f.rescheduleComplete(completeTimer)
@@ -563,13 +569,13 @@ func (f *BlockFetcher) loop() {
 						var traceable bool
 						_, err := f.getExtBlocks(header)
 						if err != nil {
-							fmt.Println("Not traceable", err)
 							traceable = false
+							announce.fetchExtBlocks([]common.Hash{header.Hash()})
 						}
 
 						// If the block is empty (header only), short circuit into the final import queue
 						if types.IsEqualHashSlice(header.TxHash, types.EmptyRootHash) && types.IsEqualHashSlice(header.UncleHash, types.EmptyUncleHash) && traceable {
-							log.Info("Block empty, skipping body retrieval", "peer", announce.origin, "number", header.Number, "hash", header.Hash())
+							log.Trace("Block empty, skipping body retrieval", "peer", announce.origin, "number", header.Number, "hash", header.Hash())
 
 							block := types.NewBlockWithHeader(header)
 							block.ReceivedAt = task.time
@@ -681,7 +687,6 @@ func (f *BlockFetcher) loop() {
 			// Schedule the retrieved blocks for ordered import
 			for _, block := range blocks {
 				if announce := f.completing[block.Hash()]; announce != nil {
-					fmt.Println("enqueue 4")
 					f.enqueue(announce.origin, nil, block, nil)
 				}
 			}
