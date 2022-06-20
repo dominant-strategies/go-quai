@@ -619,7 +619,6 @@ func (f *BlockFetcher) loop() {
 			// Schedule the header-only blocks for import
 			for _, block := range complete {
 				if announce := f.completing[block.Hash()]; announce != nil {
-					fmt.Println("enqueue 3")
 					f.enqueue(announce.origin, nil, block, nil)
 				}
 			}
