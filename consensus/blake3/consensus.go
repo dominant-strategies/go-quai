@@ -668,6 +668,10 @@ func (blake3 *Blake3) GetLinkExternalBlocks(chain consensus.ChainHeaderReader, h
 //     *path - Search among ancestors of this path in the specified slice
 func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader, header *types.Header, slice []byte, order, path int) (common.Hash, *big.Int, error) {
 
+	if header.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
+		return chain.Config().GenesisHashes[0], header.Difficulty[0], nil
+	}
+
 	if err := chain.CheckContextAndOrderRange(path); err != nil {
 		return common.Hash{}, nil, err
 	}
@@ -710,6 +714,11 @@ func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader
 	terminusHash := common.Hash{}
 
 	for {
+		// If block header is Genesis return it as coincident
+		// if header.Number[path].Cmp(big.NewInt(0)) == 0 {
+		// 	return chain.Config().GenesisHashes[0], netDifficultyUntilDom, nil
+		// }
+
 		if path == types.QuaiNetworkContext {
 
 			// Get previous header on local chain by hash

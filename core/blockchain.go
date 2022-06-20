@@ -1486,7 +1486,19 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	// Add terminal difficulty to net difficulty to compute total external difficulty
 	externTd := big.NewInt(0)
 	fmt.Println(externTerminalHashes)
-	externTd = externNetTd.Add(externNetTd, bc.GetTdByHash(externTerminalHashes[0]))
+
+	externTerminalHeader := bc.GetHeaderByHash(externTerminalHashes[0])
+
+	prevExternTerminus, prevExternTd, err := bc.Engine().PreviousCoincidentOnPath(bc, externTerminalHeader, externTerminalHeader.Location, params.PRIME, params.PRIME)
+	if err != nil {
+		return err
+
+	}
+
+	externTd = externNetTd.Add(externNetTd, prevExternTd)
+	externTd = externTd.Add(externTd, bc.GetTdByHash(prevExternTerminus))
+	externTd = externTd.Sub(externTd, externTerminalHeader.Difficulty[0])
+	externTd = externTd.Sub(externTd, bc.GetHeaderByHash(prevExternTerminus).Difficulty[0])
 
 	// Irrelevant of the canonical status, write the block itself to the database.
 	//
@@ -1683,6 +1695,7 @@ func (bc *BlockChain) GetHierarchicalTD(currentHeader *types.Header, header *typ
 		externBlock := bc.GetBlockByHash(externHeader.Hash())
 		fmt.Println("case 2: externHeader", externHeader.Number, externHeader.Location, externHeader.Hash())
 		// If we are building on the same point
+
 		if localHeader.Hash() == externHeader.Hash() {
 			ptd := bc.GetTd(externBlock.ParentHash(), externBlock.NumberU64()-1)
 			if ptd == nil {
@@ -3403,9 +3416,11 @@ func (bc *BlockChain) CalcHLCRNetDifficulty(terminalHashes []common.Hash, netDif
 	fmt.Println("CalcHLCRNetDifficulty: netDifficulties")
 	fmt.Println(netDifficulties)
 	if terminalHashes[0] == terminalHashes[1] {
+		netDifficulty = netDifficulty.Add(netDifficulty, netDifficulties[0])
 		netDifficulty = netDifficulty.Add(netDifficulty, netDifficulties[2])
 		fmt.Println("terminalHashes[0] == terminalHashes[1]", netDifficulty, netDifficulties[0], netDifficulties[2])
 	} else {
+		netDifficulty = netDifficulty.Add(netDifficulty, netDifficulties[0])
 		netDifficulty = netDifficulty.Add(netDifficulty, netDifficulties[1])
 		netDifficulty = netDifficulty.Add(netDifficulty, netDifficulties[2])
 		fmt.Println("terminalHashes[0] != terminalHashes[1]", netDifficulty, netDifficulties[0], netDifficulties[1], netDifficulties[2])
