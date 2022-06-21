@@ -18,6 +18,7 @@ package core
 
 import (
 	"fmt"
+	"math"
 	"math/big"
 
 	"github.com/spruce-solutions/go-quai/consensus/blake3"
@@ -103,33 +104,15 @@ func ExampleGenerateChain() {
 } */
 
 // Runner function
-func chainsValidator(chains [][]*types.Block, primeChain BlockChain, regionChain BlockChain, zoneChain BlockChain, ordersPool []chainOrders) (validNetwork [3]BlockChain) {
-	// ordersPool = permutePoool(ordersPool)
+func chainsValidator(chain []*types.Block, primeChain BlockChain, regionChain BlockChain, zoneChain BlockChain, ordersPool []chainOrders) (validNetwork [3]BlockChain) {
+	// pass blocks in through all possible methods to verify similar handling
+	// e.g. rpc
 
-	for i := range ordersPool {
-		chain := chains[i]
-		if _, err := primeChain.InsertChain(chain); err != nil {
-			print(err)
-		}
-		// insert each block at their respective contexts
-		/*for i, order := range orders.orders {
-			switch order {
-			case 0:
-				if chain[i] != primeChain.genesisBlock {
-					if _, err := primeChain.InsertChain(types.Blocks{chain[i]}); err != nil {
-						print(err)
-					}
-				}
-			case 1:
-				if _, err := regionChain.InsertChain(types.Blocks{chain[i]}); err != nil {
-					print(err)
-				}
-			case 2:
-				if _, err := zoneChain.InsertChain(types.Blocks{chain[i]}); err != nil {
-					print(err)
-				}
-			}
-		}*/
+	// handle permutation *outside* this function
+	// will need to hit this function twice - first to create blocks (with forks), second to test fork scenarios
+
+	if _, err := primeChain.InsertChain(chain); err != nil {
+		print(err)
 	}
 
 	validNetwork = [3]BlockChain{primeChain, regionChain, zoneChain}
@@ -150,7 +133,8 @@ func ExampleGenerateNetwork() {
 		addr1 = crypto.PubkeyToAddress(key1.PublicKey)
 		// addr2    = crypto.PubkeyToAddress(key2.PublicKey)
 		// addr3    = crypto.PubkeyToAddress(key3.PublicKey)
-		db = rawdb.NewMemoryDatabase()
+		db = rawdb.NewMemoryDatabase() // first db necessary to grind blocks with forks
+		// second rawdb.NewMemoryDatabase object to decide fork scenarios
 	)
 
 	// Ensure that key1 has some funds in the genesis block.
@@ -183,11 +167,7 @@ func ExampleGenerateNetwork() {
 
 	// establish desired contexts for generated blocks
 	// orders must descend i.e. a Prime block must come before any Region blocks, and a Region block must come before any Zone blocks
-	chainOrders1 := chainOrders{
-		orders:      []int{0, 1, 2, 2, 1, 0}, // {0,1,2,2,1} represents Prime, Region, Zone, Zone, Region
-		startNumber: []int{0, 0, 0},
-	}
-	ordersPool := []chainOrders{chainOrders1}
+	ordersPool := BlockInterpreter(networkGraphSample)
 
 	// Import the chain. This runs all block validation rules.
 	blockchainPrime, _ := NewBlockChain(db, defaultCacheConfig, primeConfig, blake3.NewFaker(), vm.Config{}, nil, nil)
@@ -204,13 +184,19 @@ func ExampleGenerateNetwork() {
 	// temp
 	parent := genesisPrime
 
+	// genesis handling - should only trigger once, necessary to generate genesis block first and only once
+	var genesisCheck bool = false
+	if ordersPool[0].startNumber == [3]int{0, 0, 0} {
+		genesisCheck = true
+	}
+
 	// Generator section
 	// loop over GenerateNetwork
-	chains := [][]*types.Block{}
+	blockPool := []*types.Block{}
 	for _, orders := range ordersPool {
-		// parent := blockchainPrime.GetBlockByNumber(uint64(orders.parent[0]))
-		chain, _ := GenerateNetwork(primeConfig, regionConfig, zoneConfig,
-			parent, orders.orders, orders.startNumber,
+		// function here to derive appropriate parent post-genesis cases
+		chain, _ := GenerateNetwork(genesisCheck, &orders.slice,
+			parent, orders.order, orders.startNumber, orders.sequence,
 			blake3.NewFaker(), db, func(i int, gen *BlockGen) {
 				switch i { // preserve this section for testing transaction data
 				/* case 0:
@@ -225,11 +211,19 @@ func ExampleGenerateNetwork() {
 				*/
 				}
 			})
-		chains = append(chains, chain)
+		if genesisCheck {
+			genesisCheck = false
+		}
+		// mini-Runner section (must grind blocks in order to derive parents for forks)
+		blockchainPrime.InsertChain(chain)
+		for _, block := range chain {
+			blockPool = append(blockPool, block)
+		}
 	}
 
+	// loop over runner section
 	// Runner section
-	validNetwork := chainsValidator(chains, *blockchainPrime, *blockchainRegion, *blockchainZone, ordersPool)
+	validNetwork := chainsValidator(blockPool, *blockchainPrime, *blockchainRegion, *blockchainZone, ordersPool)
 	blockchainPrime = &validNetwork[0]
 	blockchainRegion = &validNetwork[1]
 	blockchainZone = &validNetwork[2]
@@ -262,56 +256,144 @@ type blockConstructor struct {
 var genesisBlock = blockConstructor{[3]int{0, 0, 0}, [3]string{}, ""}
 
 type chainOrders struct {
-	orders      []int // sequence of orders to grind
-	startNumber []int // Number to start at (also used to derive parent)
-	parent      []int //
+	order       int                // order to grind in
+	startNumber [3]int             // Number to start at (also used to derive parent)
+	sequence    int                // consecutive number of blocks to grind 1 = 1 block
+	slice       params.ChainConfig // chain config (used to infer slice)
 	parentTags  [3]string
 	tag         string
 }
 
 // simple example graph
 // [3][3][100]*blockConstructor = 3 regions, each w/ 3 zones, each w/ 100 blocks
-var networkGraph = [1][1][6]*blockConstructor{
+var networkGraphSample = [3][3][]*blockConstructor{
 	{ // Region1
 		{ // Zone1
 			&genesisBlock,
-			&blockConstructor{[3]int{0, 1, 1}, [3]string{}, ""},
-			&blockConstructor{[3]int{0, 1, 2}, [3]string{}, ""},
-			&blockConstructor{[3]int{0, 1, 3}, [3]string{}, ""},
-			&blockConstructor{[3]int{0, 2, 4}, [3]string{}, ""},
+			&blockConstructor{[3]int{-1, 1, 1}, [3]string{}, ""},
+			&blockConstructor{[3]int{-1, -1, 2}, [3]string{}, ""},
+			&blockConstructor{[3]int{-1, -1, 3}, [3]string{}, ""},
+			&blockConstructor{[3]int{-1, 2, 4}, [3]string{}, ""},
 			&blockConstructor{[3]int{1, 3, 5}, [3]string{}, ""},
 		},
 	},
 }
 
-/*
-func BlockInterpreter(networkGraph [][][]*blockConstructor) []chainOrders {
+func BlockInterpreter(networkGraph [3][3][]*blockConstructor) []chainOrders {
+	// an array of chainOrders will be constructed to be looped over GenerateNetwork
+	// this will generate the blocks in sequential order (the chains will then be validated separately again)
+	// Prime blocks then Region blocks and finally Zone blocks last
 
 	chains := []chainOrders{}
-	for _, regionSlice := range networkGraph {
-		for _, zoneSlice := range regionSlice {
+	primeConfig := params.MainnetPrimeChainConfig
+	for r, regions := range networkGraph {
+		regionConfig := params.MainnetRegionChainConfigs[r]
+		for z, zones := range regions {
+			zoneConfig := params.MainnetZoneChainConfigs[r][z]
+			lastOrder := -1
 			chain := chainOrders{}
-			prime := 0
-			region := 0
-			zone := 0
-
-			for i, block := range zoneSlice {
-				if i == 0 {
-					chain.parent = []int{prime, region, zone}
-					chain.parentTags = block.parentTags
-					chain.tag = block.tag
-				}
-				if block == genesisBlock {
-					chain.orders[i] = 0 // selects order in slice
-					chain.startNumber = []int{0, 0, 0}
-					chain.parent = nil // remember to assign genesis
+			chain.slice = zoneConfig
+			for i, block := range zones {
+				if block.numbers[0] != -1 {
+					if lastOrder == 0 {
+						chain.sequence = chain.sequence + 1
+					} else {
+						if chain.order != 0 {
+							chains = append(chains, chain)
+							chain = chainOrders{}
+							chain.slice = *primeConfig
+						}
+						chain.order = 0
+						chain.startNumber = block.numbers
+						chain.sequence = 1
+						lastOrder = 0
+					}
 				} else {
+					if block.numbers[1] != -1 {
+						if lastOrder == 1 {
+							chain.sequence = chain.sequence + 1
+						} else {
+							if chain.order != 1 {
+								chains = append(chains, chain)
+								chain = chainOrders{}
+								chain.slice = regionConfig
+							}
+							chain.order = 1
+							chain.startNumber = block.numbers
+							chain.sequence = 1
+							lastOrder = 1
+						}
+					} else {
+						if block.numbers[2] != -1 {
+							if lastOrder == 2 {
+								chain.sequence = chain.sequence + 1
+							} else {
+								if chain.order != 2 {
+									chains = append(chains, chain)
+									chain = chainOrders{}
+									chain.slice = zoneConfig
+								}
+								chain.order = 2
+								chain.startNumber = block.numbers
+								chain.sequence = 1
+								lastOrder = 2
+							}
+						}
+					}
+				}
 
+				if i == len(zones) {
+					chains = append(chains, chain)
 				}
 			}
 		}
 	}
 
-	return chains
+	// will need to order chains consecutively for proper block generation
+	sequentialChains := []chainOrders{}
+	var nPrime, nRegion, nZone int
+	for {
+		var bin []int
+		// start with smallest available Prime
+		nPrime = math.MaxInt
+		for _, chain := range chains {
+			if chain.startNumber[0] < nPrime {
+				nPrime = chain.startNumber[0]
+				nRegion = chain.startNumber[1]
+				nZone = chain.startNumber[2]
+			}
+		}
+
+		// construct one in-sequence chain starting from lowest available Prime
+		for i, chain := range chains {
+			if chain.startNumber == [3]int{nPrime, nRegion, nZone} {
+				sequentialChains = append(sequentialChains, chain)
+				order := chain.order
+				switch order {
+				case 0:
+					nPrime = nPrime + chain.sequence
+					nRegion = nRegion + chain.sequence
+					nZone = nZone + chain.sequence
+				case 1:
+					nRegion = nRegion + chain.sequence
+					nZone = nZone + chain.sequence
+				case 2:
+					nZone = nZone + chain.sequence
+				}
+				bin = append(bin, i)
+			}
+		}
+		// remove sequenced chainOrders from chains
+		// slow but maintains order! order important for fast sequencing
+		for idx, _ := range bin {
+			chains = append(chains[:bin[len(bin)-idx]], chains[(len(bin)-idx-1):]...)
+		} // NOTE: confirm this works and keeps order! backwards left-shift overwrite popping
+
+		if len(chains) == 0 {
+			break
+		}
+
+	}
+
+	return sequentialChains
 }
-*/
