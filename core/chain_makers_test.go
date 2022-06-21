@@ -18,6 +18,7 @@ package core
 
 import (
 	"fmt"
+	"math"
 	"math/big"
 
 	"github.com/spruce-solutions/go-quai/common"
@@ -352,6 +353,12 @@ func ExampleGenerateNetwork() {
 	// genesis handling - should only trigger once
 	var genesisCheck bool = false
 	var parent *types.Block
+
+	// genesis handling - should only trigger once, necessary to generate genesis block first and only once
+	var genesisCheck bool = false
+	if ordersPool[0].startNumber == [3]int{0, 0, 0} {
+		genesisCheck = true
+	}
 
 	// Generator section
 	// loop over GenerateNetwork
