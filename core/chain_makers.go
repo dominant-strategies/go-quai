@@ -69,7 +69,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	chainreader := &fakeChainReader{config: config}
 	genblock := func(i int, parent *types.Block, statedb *state.StateDB) (*types.Block, types.Receipts) {
 		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: config, engine: engine}
-		b.header = makeHeader(config, chainreader, parent, 0, statedb, b.engine)
+		b.header = makeHeader(false, config, chainreader, parent, 0, statedb, b.engine)
 
 		// Execute any user modifications to the block
 		if gen != nil {
