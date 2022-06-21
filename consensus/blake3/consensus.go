@@ -760,26 +760,21 @@ func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader
 
 	for {
 
-		// If block header is Genesis return it as coincident
-		// if header.Number[path].Cmp(big.NewInt(0)) == 0 {
-		// 	return chain.Config().GenesisHashes[0], netDifficultyUntilDom, nil
-		// }
-
 		if path == types.QuaiNetworkContext {
 
 			// Get previous header on local chain by hash
 			prevHeader := chain.GetHeaderByHash(header.ParentHash[path])
-
+			if prevHeader == nil {
+				return common.Hash{}, nil, errors.New("prevheader not found for hash")
+			}
 			// Increment previous header
 			header = prevHeader
 		} else {
-
 			// Get previous header on external chain by hash
 			prevExtBlock, err := chain.GetExternalBlock(header.ParentHash[path], header.Number[path].Uint64()-1, header.Location, uint64(path))
 			if err != nil {
 				return common.Hash{}, nil, err
 			}
-
 			// Increment previous header
 			header = prevExtBlock.Header()
 		}

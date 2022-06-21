@@ -1458,9 +1458,46 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 	return nil
 }
 
+// NdToTd returns the total difficulty for a header given the net difficulty
+func (bc *BlockChain) NdToTd(header *types.Header, nD []*big.Int) ([]*big.Int, error) {
+	if header == nil {
+		return nil, errors.New("header provided to ndtotd is nil")
+	}
+
+	k := big.NewInt(0)
+	k.Sub(k, header.Difficulty[0])
+
+	prevExternTerminus := common.Hash{}
+	for {
+		prevExternTerminus, prevExternTd, err := bc.Engine().PreviousCoincidentOnPath(bc, header, header.Location, params.PRIME, params.PRIME)
+		if err != nil {
+			return nil, err
+
+		}
+		k.Add(k, prevExternTd)
+
+		// subtract the terminal block difficulty
+		k.Sub(k, bc.GetHeaderByHash(prevExternTerminus).Difficulty[0])
+
+		if bc.hc.GetBlockNumber(prevExternTerminus) != nil {
+			break
+		}
+		header = bc.GetHeaderByHash(prevExternTerminus)
+	}
+	k.Add(k, bc.GetTdByHash(prevExternTerminus)[params.PRIME])
+
+	// adding the common total difficulty to the net
+	nD[0].Add(nD[0], k)
+	nD[1].Add(nD[1], k)
+	nD[2].Add(nD[2], k)
+
+	return nD, nil
+}
+
 // writeBlockWithState writes the block and all associated state to the database,
 // but is expects the chain mutex to be held.
 func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, linkExtBlocks []*types.ExternalBlock) error {
+
 	// Check PCRC for the external block and return the terminal hash and net difficulties
 	externTerminalHashes, externNetDifficulties, err := bc.PCRC(block.Header())
 	if err != nil {
@@ -1473,28 +1510,15 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		return err
 	}
 
-	// Add terminal difficulty to net difficulty to compute total external difficulty
-	externTd := big.NewInt(0)
-
 	externTerminalHeader := bc.GetHeaderByHash(externTerminalHashes[0])
-
-	prevExternTerminus, prevExternTd, err := bc.Engine().PreviousCoincidentOnPath(bc, externTerminalHeader, externTerminalHeader.Location, params.PRIME, params.PRIME)
-	if err != nil {
-		return err
-
-	}
-
-	externTd = externNetTd.Add(externNetTd, prevExternTd)
-	externTd = externTd.Add(externTd, bc.GetTdByHash(prevExternTerminus)[types.QuaiNetworkContext])
-	externTd = externTd.Sub(externTd, externTerminalHeader.Difficulty[0])
-	externTd = externTd.Sub(externTd, bc.GetHeaderByHash(prevExternTerminus).Difficulty[0])
+	externTd, err := bc.NdToTd(externTerminalHeader, externNetTd)
 
 	// Irrelevant of the canonical status, write the block itself to the database.
 	//
 	// Note all the components of block(td, hash->number map, header, body, receipts)
 	// should be written atomically. BlockBatch is used for containing all components.
 	blockBatch := bc.db.NewBatch()
-	rawdb.WriteTd(blockBatch, block.Hash(), block.NumberU64(), []*big.Int{externTd, externTd, externTd})
+	rawdb.WriteTd(blockBatch, block.Hash(), block.NumberU64(), externTd)
 	rawdb.WriteBlock(blockBatch, block)
 	rawdb.WriteReceipts(blockBatch, block.Hash(), block.NumberU64(), receipts)
 	rawdb.WritePreimages(blockBatch, state.Preimages())
