@@ -39,6 +39,9 @@ type ChainReader interface {
 	// GetTd returns the total difficulty of a local block.
 	GetTd(common.Hash, uint64) []*big.Int
 
+	// CalcTd calculates the TD of the given header using PCRC and CalcHLCRNetDifficulty.
+	CalcTd(header *types.Header) ([]*big.Int, error)
+
 	// GetBlockByHash retrieves a block from the database by hash, caching it if found.
 	GetBlockByHash(hash common.Hash) *types.Block
 
@@ -46,8 +49,11 @@ type ChainReader interface {
 	// that we have linked untwisted chains prior to checking HLCR & applying external state transfers.
 	PCRC(header *types.Header) ([]common.Hash, []*big.Int, error)
 
+	// HLCR does hierarchical comparison of two difficulty tuples and returns true if second tuple is greater than the first
+	HLCR(localDifficulties []*big.Int, externDifficulties []*big.Int) bool
+
 	// calcHLCRNetDifficulty calculates the net difficulty from previous prime pecalcHLCRNetDifficultyg
-	CalcHLCRNetDifficulty(terminalHashes []common.Hash, netDifficulties []*big.Int) (*big.Int, error)
+	CalcHLCRNetDifficulty(terminalHashes []common.Hash, netDifficulties []*big.Int) ([]*big.Int, error)
 }
 
 // ForkChoice is the fork chooser based on the highest total difficulty of the
@@ -86,29 +92,14 @@ func NewForkChoice(chainReader ChainReader, preserve func(header *types.Header) 
 // header is always selected as the head.
 func (f *ForkChoice) ReorgNeeded(current *types.Header, header *types.Header) (bool, error) {
 
-	localTerminalHashes, localNetDifficulties, err := f.chain.PCRC(current)
+	localTd := f.chain.GetTd(current.Hash(), current.Number[types.QuaiNetworkContext].Uint64())
+
+	externTd, err := f.chain.CalcTd(header)
 	if err != nil {
 		return false, err
 	}
 
-	// Check PCRC for the external block and return the terminal hash and net difficulties
-	externTerminalHashes, externNetDifficulties, err := f.chain.PCRC(header)
-	if err != nil {
-		return false, errors.New("error finding hierarchical td")
-	}
-
-	// Use HLCR to compute net total difficulty
-	localNetTd, err := f.chain.CalcHLCRNetDifficulty(localTerminalHashes, localNetDifficulties)
-	if err != nil {
-		return false, err
-	}
-
-	externNetTd, err := f.chain.CalcHLCRNetDifficulty(externTerminalHashes, externNetDifficulties)
-	if err != nil {
-		return false, err
-	}
-
-	if localNetTd == nil || externNetTd == nil {
+	if localTd == nil || externTd == nil {
 		return false, errors.New("missing td")
 	}
 
@@ -118,8 +109,9 @@ func (f *ForkChoice) ReorgNeeded(current *types.Header, header *types.Header) (b
 	// If the total difficulty is higher than our known, add it to the canonical chain
 	// Second clause in the if statement reduces the vulnerability to selfish mining.
 	// Please refer to http://www.cs.cornell.edu/~ie53/publications/btcProcFC.pdf
-	reorg := externNetTd.Cmp(localNetTd) > 0
-	if !reorg && externNetTd.Cmp(localNetTd) == 0 {
+	reorg := f.chain.HLCR(localTd, externTd)
+	equalTd := externTd[0].Cmp(localTd[0]) == 0 && externTd[1].Cmp(localTd[1]) == 0 && externTd[2].Cmp(localTd[2]) == 0
+	if !reorg && equalTd {
 		number, headNumber := externBlock.NumberU64(), currentBlock.NumberU64()
 		if number < headNumber {
 			reorg = true
