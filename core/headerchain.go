@@ -157,7 +157,7 @@ func (hc *HeaderChain) writeHeaders(headers []*types.Header) (result *headerWrit
 	var (
 		lastNumber = headers[0].Number[types.QuaiNetworkContext].Uint64() - 1 // Last successfully imported number
 		lastHash   = headers[0].ParentHash[types.QuaiNetworkContext]          // Last imported header hash
-		newTD      = new(big.Int).Set(ptd)                                    // Total difficulty of inserted chain
+		newTD      = ptd                                                      // Total difficulty of inserted chain
 
 		lastHeader    *types.Header
 		inserted      []numberHash // Ephemeral lookup of number/hash for the chain
@@ -177,7 +177,9 @@ func (hc *HeaderChain) writeHeaders(headers []*types.Header) (result *headerWrit
 			hash = header.Hash()
 		}
 		number := header.Number[types.QuaiNetworkContext].Uint64()
-		newTD.Add(newTD, header.Difficulty[types.QuaiNetworkContext])
+		newTD[0].Add(newTD[0], header.Difficulty[0])
+		newTD[1].Add(newTD[1], header.Difficulty[1])
+		newTD[2].Add(newTD[2], header.Difficulty[2])
 
 		// If the parent was not present, store it
 		// If the header is already known, skip it, otherwise store
@@ -185,7 +187,7 @@ func (hc *HeaderChain) writeHeaders(headers []*types.Header) (result *headerWrit
 		if !alreadyKnown {
 			// Irrelevant of the canonical status, write the TD and header to the database.
 			rawdb.WriteTd(batch, hash, number, newTD)
-			hc.tdCache.Add(hash, new(big.Int).Set(newTD))
+			hc.tdCache.Add(hash, newTD)
 
 			rawdb.WriteHeader(batch, header)
 			inserted = append(inserted, numberHash{number, hash})
@@ -218,8 +220,9 @@ func (hc *HeaderChain) writeHeaders(headers []*types.Header) (result *headerWrit
 	// If the total difficulty is higher than our known, add it to the canonical chain
 	// Second clause in the if statement reduces the vulnerability to selfish mining.
 	// Please refer to http://www.cs.cornell.edu/~ie53/publications/btcProcFC.pdf
-	reorg := newTD.Cmp(localTD) > 0
-	if !reorg && newTD.Cmp(localTD) == 0 {
+	// TODO: need to change the HLCR logic to return something else if the difficulties are equal (replace the first if statement)
+	reorg := hc.HLCR(localTD, newTD)
+	if !reorg && !hc.HLCR(localTD, newTD) {
 		if lastNumber < head {
 			reorg = true
 		} else if lastNumber == head {
@@ -458,10 +461,10 @@ func (hc *HeaderChain) GetAncestor(hash common.Hash, number, ancestor uint64, ma
 
 // GetTd retrieves a block's total difficulty in the canonical chain from the
 // database by hash and number, caching it if found.
-func (hc *HeaderChain) GetTd(hash common.Hash, number uint64) *big.Int {
+func (hc *HeaderChain) GetTd(hash common.Hash, number uint64) []*big.Int {
 	// Short circuit if the td's already in the cache, retrieve otherwise
 	if cached, ok := hc.tdCache.Get(hash); ok {
-		return cached.(*big.Int)
+		return cached.([]*big.Int)
 	}
 	td := rawdb.ReadTd(hc.chainDb, hash, number)
 	if td == nil {
@@ -474,7 +477,7 @@ func (hc *HeaderChain) GetTd(hash common.Hash, number uint64) *big.Int {
 
 // GetTdByHash retrieves a block's total difficulty in the canonical chain from the
 // database by hash, caching it if found.
-func (hc *HeaderChain) GetTdByHash(hash common.Hash) *big.Int {
+func (hc *HeaderChain) GetTdByHash(hash common.Hash) []*big.Int {
 	number := hc.GetBlockNumber(hash)
 	if number == nil {
 		return nil
@@ -661,6 +664,19 @@ func (hc *HeaderChain) SetHead(head uint64, updateFn UpdateHeadBlocksCallback, d
 	hc.headerCache.Purge()
 	hc.tdCache.Purge()
 	hc.numberCache.Purge()
+}
+
+// HLCR does hierarchical comparison of two difficulty tuples and returns true if second tuple is greater than the first
+func (hc *HeaderChain) HLCR(localDifficulties []*big.Int, externDifficulties []*big.Int) bool {
+	if localDifficulties[0].Cmp(externDifficulties[0]) < 0 {
+		return true
+	} else if localDifficulties[1].Cmp(externDifficulties[1]) < 0 {
+		return true
+	} else if localDifficulties[2].Cmp(externDifficulties[2]) < 0 {
+		return true
+	} else {
+		return false
+	}
 }
 
 // SetGenesis sets a new genesis block header for the chain

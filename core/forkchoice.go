@@ -37,13 +37,10 @@ type ChainReader interface {
 	Config() *params.ChainConfig
 
 	// GetTd returns the total difficulty of a local block.
-	GetTd(common.Hash, uint64) *big.Int
+	GetTd(common.Hash, uint64) []*big.Int
 
 	// GetBlockByHash retrieves a block from the database by hash, caching it if found.
 	GetBlockByHash(hash common.Hash) *types.Block
-
-	// GetHierarchicalTD gets the localTD and externTD for the local header and the incoming header
-	GetHierarchicalTD(currentBlock *types.Header, block *types.Header) (*big.Int, *big.Int, error)
 
 	// The purpose of the Previous Coincident Reference Check (PCRC) is to establish
 	// that we have linked untwisted chains prior to checking HLCR & applying external state transfers.
