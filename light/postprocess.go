@@ -110,7 +110,7 @@ var (
 // ChtNode structures are stored in the Canonical Hash Trie in an RLP encoded format
 type ChtNode struct {
 	Hash common.Hash
-	Td   *big.Int
+	Td   []*big.Int
 }
 
 // GetChtRoot reads the CHT root associated to the given section from the database

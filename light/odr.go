@@ -140,7 +140,7 @@ type ChtRequest struct {
 	ChtNum, BlockNum uint64
 	ChtRoot          common.Hash
 	Header           *types.Header
-	Td               *big.Int
+	Td               []*big.Int
 	Proof            *NodeSet
 }
 

@@ -738,7 +738,7 @@ func (bc *BlockChain) ResetWithGenesisBlock(genesis *types.Block) error {
 
 	// Prepare the genesis block and reinitialise the chain
 	batch := bc.db.NewBatch()
-	rawdb.WriteTd(batch, genesis.Hash(), genesis.NumberU64(), genesis.Difficulty())
+	rawdb.WriteTd(batch, genesis.Hash(), genesis.NumberU64(), genesis.Header().Difficulty)
 	rawdb.WriteBlock(batch, genesis)
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to write genesis block", "err", err)
@@ -1182,8 +1182,9 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 
 		// Rewind may have occurred, skip in that case.
 		if bc.CurrentHeader().Number[types.QuaiNetworkContext].Cmp(head.Number()) >= 0 {
-			currentFastBlock, td := bc.CurrentFastBlock(), bc.GetTd(head.Hash(), head.NumberU64())
-			if bc.GetTd(currentFastBlock.Hash(), currentFastBlock.NumberU64()).Cmp(td) < 0 {
+			currentFastBlock := bc.CurrentFastBlock()
+			td := bc.GetTd(head.Hash(), head.NumberU64())
+			if bc.HLCR(bc.GetTd(currentFastBlock.Hash(), currentFastBlock.NumberU64()), td) {
 				rawdb.WriteHeadFastBlockHash(bc.db, head.Hash())
 				bc.currentFastBlock.Store(head)
 				headFastBlockGauge.Update(int64(head.NumberU64()))
@@ -1224,7 +1225,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 
 		// Write all chain data to ancients.
 		td := bc.GetTd(first.Hash(), first.NumberU64())
-		writeSize, err := rawdb.WriteAncientBlocks(bc.db, blockChain, receiptChain, td)
+		writeSize, err := rawdb.WriteAncientBlocks(bc.db, blockChain, receiptChain, td[types.QuaiNetworkContext])
 		size += writeSize
 		if err != nil {
 			log.Error("Error importing chain data to ancients", "err", err)
@@ -1420,7 +1421,7 @@ var lastWrite uint64
 // writeBlockWithoutState writes only the block and its metadata to the database,
 // but does not write any state. This is used to construct competing side forks
 // up to the point where they exceed the canonical total difficulty.
-func (bc *BlockChain) writeBlockWithoutState(block *types.Block, td *big.Int) (err error) {
+func (bc *BlockChain) writeBlockWithoutState(block *types.Block, td []*big.Int) (err error) {
 	bc.wg.Add(1)
 	defer bc.wg.Done()
 
@@ -1539,7 +1540,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	// If the total difficulty is higher than our known, add it to the canonical chain
 	// Second clause in the if statement reduces the vulnerability to selfish mining.
 	// Please refer to http://www.cs.cornell.edu/~ie53/publications/btcProcFC.pdf
-	reorg := externTd.Cmp(localTd) > 0
+	reorg := bc.HLCR(localTd, externTd)
 	currentBlock = bc.CurrentBlock()
 	if reorg {
 		// Reorganise the chain if the parent is not the head block
@@ -1582,8 +1583,8 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 }
 
 // getHierarchicalTD retrieves the local and extern td for two blocks. Taking hierarchical order into an account.
-func (bc *BlockChain) getHierarchicalTD(currentBlock *types.Block, block *types.Block) (*big.Int, *big.Int, error) {
-	return currentBlock.Difficulty(), block.Difficulty(), nil
+func (bc *BlockChain) getHierarchicalTD(currentBlock *types.Block, block *types.Block) ([]*big.Int, []*big.Int, error) {
+	return currentBlock.Header().Difficulty, block.Header().Difficulty, nil
 }
 
 // addFutureBlock checks if the block is within the max allowed window to get
@@ -1871,14 +1872,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			externTd = bc.GetTd(block.ParentHash(), block.NumberU64()-1) // The first block can't be nil
 		)
 		for block != nil && err == ErrKnownBlock {
-			localTd, externTd, err = bc.getHierarchicalTD(current, block)
-			if err != nil {
-				return it.index, err
-			}
 			fmt.Println("InsertChain TD:", "extern", externTd, "local", localTd)
 			fmt.Println("Extern:", block.Hash(), block.Header().Number)
 			fmt.Println("Local:", current.Hash(), current.Header().Number)
-			if localTd.Cmp(externTd) < 0 {
+			if bc.HLCR(localTd, externTd) {
 				break
 			}
 			log.Info("Ignoring already known block", "number", block.Number(), "hash", block.Hash())
@@ -2164,7 +2161,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 // switch over to the new chain if the TD exceeded the current chain.
 func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (int, error) {
 	var (
-		externTd *big.Int
+		externTd []*big.Int
 		current  = bc.CurrentBlock()
 	)
 	// The first sidechain block error is already verified to be ErrPrunedAncestor.
@@ -2204,7 +2201,9 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 		if externTd == nil {
 			externTd = bc.GetTd(block.ParentHash(), block.NumberU64()-1)
 		}
-		externTd = new(big.Int).Add(externTd, block.Difficulty())
+		externTd[0] = new(big.Int).Add(externTd[0], block.Header().Difficulty[0])
+		externTd[1] = new(big.Int).Add(externTd[1], block.Header().Difficulty[1])
+		externTd[2] = new(big.Int).Add(externTd[2], block.Header().Difficulty[2])
 
 		if !bc.HasBlock(block.Hash(), block.NumberU64()) {
 			start := time.Now()
@@ -2224,7 +2223,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 	// If the externTd was larger than our local TD, we now need to reimport the previous
 	// blocks to regenerate the required state
 	localTd := bc.GetTd(current.Hash(), current.NumberU64())
-	if localTd.Cmp(externTd) > 0 {
+	if bc.HLCR(localTd, externTd) {
 		log.Info("Sidechain written to disk", "start", it.first().NumberU64(), "end", it.previous().Number, "sidetd", externTd, "localtd", localTd)
 		return it.index, err
 	}
@@ -2616,13 +2615,13 @@ func (bc *BlockChain) CurrentHeader() *types.Header {
 
 // GetTd retrieves a block's total difficulty in the canonical chain from the
 // database by hash and number, caching it if found.
-func (bc *BlockChain) GetTd(hash common.Hash, number uint64) *big.Int {
+func (bc *BlockChain) GetTd(hash common.Hash, number uint64) []*big.Int {
 	return bc.hc.GetTd(hash, number)
 }
 
 // GetTdByHash retrieves a block's total difficulty in the canonical chain from the
 // database by hash, caching it if found.
-func (bc *BlockChain) GetTdByHash(hash common.Hash) *big.Int {
+func (bc *BlockChain) GetTdByHash(hash common.Hash) []*big.Int {
 	return bc.hc.GetTdByHash(hash)
 }
 
@@ -2918,69 +2917,6 @@ func (bc *BlockChain) HLCR(localDifficulties []*big.Int, externDifficulties []*b
 		return true
 	} else {
 		return false
-	}
-}
-
-// AggregateNetworkDifficulty aggregates the total difficulty from the previous stop Hash in the dominant chains only
-func (bc *BlockChain) AggregateTotalDifficulty(context int, header *types.Header) (*big.Int, int, error) {
-
-	currentLowestContext := context
-	currentTotalDifficulty := big.NewInt(0)
-	startingHeader := header
-
-	// Check the difficulty context of the starting header
-	difficultyContext, err := bc.Engine().GetDifficultyOrder(header)
-	if err != nil {
-		return currentTotalDifficulty, currentLowestContext, fmt.Errorf("difficulty context not found")
-	}
-
-	// this function should only be called upon a coincident block, to use it the way it is intended to be used this check is added
-	if difficultyContext >= currentLowestContext {
-		return currentTotalDifficulty, currentLowestContext, fmt.Errorf("not a coincident block")
-	}
-
-	// Accumulate the difficulty until we find a header from a dominant chain or we reach a block with
-	// higher order and in the same location.
-	// If we encounter a dominant chain we repeat the same process until we find the stop hash
-	for {
-		// Check the difficulty context of the starting header
-		difficultyContext, err := bc.Engine().GetDifficultyOrder(header)
-		if err != nil {
-			return currentTotalDifficulty, currentLowestContext, fmt.Errorf("difficulty context not found")
-		}
-
-		if difficultyContext < currentLowestContext {
-			currentLowestContext = difficultyContext
-		}
-		currentTotalDifficulty.Add(currentTotalDifficulty, header.Difficulty[currentLowestContext])
-
-		//check if the parent block of the first coincident is genesis
-		// add in the genesis total difficulty such that the following blocks build off the TD correctly.
-		if header.Number[currentLowestContext].Uint64()-1 == 0 {
-			genesis := MainnetPrimeGenesisBlock()
-			currentTotalDifficulty.Add(currentTotalDifficulty, genesis.Difficulty)
-			fmt.Println("Adding genesis Prime difficulty")
-			return currentTotalDifficulty, currentLowestContext, nil
-		}
-
-		// Retrieve the previous header as an external block.
-		prevBlock, err := bc.GetExternalBlock(header.ParentHash[currentLowestContext], header.Number[currentLowestContext].Uint64()-1, header.Location, uint64(currentLowestContext))
-		if err != nil {
-			return currentTotalDifficulty, currentLowestContext, fmt.Errorf("error finding previous external block")
-		}
-		// If the previous block is a coincident block, if we have found a coincident in the same
-		// location we go back in our chain context till that block and collect the totalDifficulty
-		if bytes.Equal(prevBlock.Header().Location, startingHeader.Location) {
-			// Go back in our chain till prevBlock.Header().Hash()
-			stopHash := prevBlock.Header().Hash()
-			tempHeader := bc.GetHeaderByHash(stopHash)
-			if tempHeader == nil {
-				return currentTotalDifficulty, currentLowestContext, nil
-			}
-			currentTotalDifficulty.Add(currentTotalDifficulty, bc.GetTd(tempHeader.Hash(), tempHeader.Number[types.QuaiNetworkContext].Uint64()))
-			return currentTotalDifficulty, currentLowestContext, nil
-		}
-		header = prevBlock.Header()
 	}
 }
 
