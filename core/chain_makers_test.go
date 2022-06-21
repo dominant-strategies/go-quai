@@ -353,6 +353,12 @@ func ExampleGenerateNetwork() {
 	var genesisCheck bool = false
 	var parent *types.Block
 
+	// genesis handling - should only trigger once, necessary to generate genesis block first and only once
+	var genesisCheck bool = false
+	if specsPool[0].number == [3]int{0, 0, 0} {
+		genesisCheck = true
+	}
+
 	// Generator section
 	// loop over GenerateNetwork
 	blockPool := []*types.Block{}
