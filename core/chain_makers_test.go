@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/consensus/blake3"
 	"github.com/spruce-solutions/go-quai/core/rawdb"
 	"github.com/spruce-solutions/go-quai/core/types"
@@ -103,38 +104,196 @@ func ExampleGenerateChain() {
 } */
 
 // Runner function
-func chainsValidator(chains [][]*types.Block, primeChain BlockChain, regionChain BlockChain, zoneChain BlockChain, ordersPool []chainOrders) (validNetwork [3]BlockChain) {
-	// ordersPool = permutePoool(ordersPool)
+func chainsValidator(chain []*types.Block, primeChain BlockChain, regionChain BlockChain, zoneChain BlockChain, specsPool []blockSpecs) (validNetwork [3]BlockChain) {
+	// pass blocks in through all possible methods to verify similar handling
+	// e.g. rpc
 
-	for i := range ordersPool {
-		chain := chains[i]
-		if _, err := primeChain.InsertChain(chain); err != nil {
-			print(err)
-		}
-		// insert each block at their respective contexts
-		/*for i, order := range orders.orders {
-			switch order {
-			case 0:
-				if chain[i] != primeChain.genesisBlock {
-					if _, err := primeChain.InsertChain(types.Blocks{chain[i]}); err != nil {
-						print(err)
-					}
-				}
-			case 1:
-				if _, err := regionChain.InsertChain(types.Blocks{chain[i]}); err != nil {
-					print(err)
-				}
-			case 2:
-				if _, err := zoneChain.InsertChain(types.Blocks{chain[i]}); err != nil {
-					print(err)
-				}
-			}
-		}*/
+	// handle permutation *outside* this function
+	// will need to hit this function twice - first to create blocks (with forks), second to test fork scenarios
+
+	if _, err := primeChain.InsertChain(chain); err != nil {
+		print(err)
 	}
 
 	validNetwork = [3]BlockChain{primeChain, regionChain, zoneChain}
 
 	return validNetwork
+}
+
+// struct for notation
+type blockConstructor struct {
+	numbers [3]int // prime idx, region idx, zone idx
+	// -1 for contexts the block does not coincide with
+	fork          int       // specify what fork to construct block in (0 must be first chain grinded)
+	parentFork    int       // select what fork to point to (if same as fork int then will be same)
+	parentNumbers [3]int    // necessary to select correct block to fork from
+	parentTags    [3]string // (optionally) Override the parents to point to tagged blocks. Empty strings are ignored.
+	tag           string    // (optionally) Give this block a named tag. Empty strings are ignored.
+}
+
+// Constant Genesis definition in notation
+var genesisBlock = blockConstructor{[3]int{0, 0, 0}, 0, 0, [3]int{0, 0, 0}, [3]string{}, ""}
+
+type blockSpecs struct {
+	order         int    // order to grind in
+	number        [3]int // Number of block to be created
+	parentNumbers [3]int
+	fork          int
+	parentFork    int
+	hash          common.Hash
+	slice         params.ChainConfig // chain config (used to infer slice)
+	parentTags    [3]string
+	tag           string
+}
+
+// simple example graph
+// [3][3][100]*blockConstructor = 3 regions, each w/ 3 zones, each w/ 100 blocks
+var networkGraphSample = [3][3][]*blockConstructor{
+	{ // Region1
+		{ // Zone1
+			&genesisBlock,
+			&blockConstructor{[3]int{-1, 1, 1}, 0, 0, [3]int{0, 0, 0}, [3]string{}, ""},
+			&blockConstructor{[3]int{-1, -1, 2}, 0, 0, [3]int{0, 1, 1}, [3]string{}, ""},
+			&blockConstructor{[3]int{-1, -1, 3}, 0, 0, [3]int{0, 1, 2}, [3]string{}, ""},
+			&blockConstructor{[3]int{-1, 2, 4}, 0, 0, [3]int{0, 1, 3}, [3]string{}, ""},
+			&blockConstructor{[3]int{1, 3, 5}, 0, 0, [3]int{0, 2, 4}, [3]string{}, ""},
+		},
+	},
+}
+
+func BlockInterpreter(networkGraph [3][3][]*blockConstructor) []blockSpecs {
+	// an array of blockSpecs will be constructed to be looped over GenerateNetwork
+	// this will generate the blocks in sequential order (the chains will then be validated separately again)
+	// Prime blocks then Region blocks and finally Zone blocks last
+
+	// loop to find number of forks; result used to derive correct block numbers
+	totalForks := 0
+	for _, regions := range networkGraph {
+		for _, zones := range regions {
+			for _, construct := range zones {
+				if construct.fork >= totalForks {
+					totalForks = construct.fork + 1
+				}
+			}
+		}
+	}
+
+	// initialize array to derive respective number values in forks
+	forkedNumbers := [][3]int{}
+	n := 0
+	for n <= totalForks {
+		forkedNumbers = append(forkedNumbers, [3]int{0, 0, 0})
+		n++
+	}
+
+	// create (unordered) set of blockSpecs
+	specs := []blockSpecs{}
+	primeConfig := params.MainnetPrimeChainConfig
+	for r, regions := range networkGraph {
+		regionConfig := params.MainnetRegionChainConfigs[r]
+		for z, zones := range regions {
+			zoneConfig := params.MainnetZoneChainConfigs[r][z]
+			for _, block := range zones {
+				spec := blockSpecs{}
+				if block.numbers[0] != -1 {
+					spec.order = 0
+					if block == &genesisBlock { // genesis is special case
+						spec.number = block.numbers
+					} else {
+						spec.number[0] = block.parentNumbers[0] + 1
+						spec.number[1] = block.parentNumbers[1] + 1
+						spec.number[2] = block.parentNumbers[2] + 1
+					}
+					spec.parentNumbers = block.parentNumbers
+					spec.fork = block.fork
+					spec.parentFork = block.parentFork
+					spec.slice = *primeConfig
+					forkedNumbers[block.fork] = spec.number
+				} else {
+					if block.numbers[1] != -1 {
+						spec.order = 1
+						spec.number[0] = block.parentNumbers[0]
+						spec.number[1] = block.parentNumbers[1] + 1
+						spec.number[2] = block.parentNumbers[2] + 1
+						spec.parentNumbers = block.parentNumbers
+						spec.fork = block.fork
+						spec.parentFork = block.parentFork
+						spec.slice = regionConfig
+						forkedNumbers[block.fork] = spec.number
+					} else {
+						spec.order = 2
+						spec.number[0] = block.parentNumbers[0]
+						spec.number[1] = block.parentNumbers[1]
+						spec.number[2] = block.parentNumbers[2] + 1
+						spec.parentNumbers = block.parentNumbers
+						spec.fork = block.fork
+						spec.parentFork = block.parentFork
+						spec.slice = zoneConfig
+						forkedNumbers[block.fork] = spec.number
+					}
+				}
+				specs = append(specs, spec)
+			}
+		}
+	}
+
+	// organize specs by fork id
+	forkArrays := make([][]blockSpecs, totalForks)
+	for _, spec := range specs {
+		forkArrays[spec.fork] = append(forkArrays[spec.fork], spec)
+	}
+
+	// will need to order chains consecutively for proper block generation
+	sequencedSpecs := []blockSpecs{} // once ordered put specs in this array
+	// sequence within fork chains
+	for _, forkArray := range forkArrays {
+		last := findLast(forkArray) // start with last number
+		reversedForkSpecs := []blockSpecs{}
+		for len(forkArray) > 0 { // beware infinite loop!
+			// find next in sequence then append to reversedForkSpecs
+			// since we are finding block sequence backwards must be reversed
+			// then append to sequencedSpecs
+			for i, spec := range forkArray {
+				// find next block in sequence and append to sequencedSpecs
+				if spec.number == last {
+					reversedForkSpecs = append(reversedForkSpecs, spec)
+					// determine values for next block (if any)
+					last = spec.parentNumbers
+					// fast removal of element
+					forkArray[i] = forkArray[len(forkArray)-1]
+					forkArray = forkArray[:len(forkArray)-1]
+					break
+				}
+			}
+		}
+		for len(reversedForkSpecs) > 0 {
+			// append last element
+			sequencedSpecs = append(sequencedSpecs, reversedForkSpecs[len(reversedForkSpecs)-1])
+			// remove element
+			reversedForkSpecs = reversedForkSpecs[:len(reversedForkSpecs)-1]
+		}
+	}
+
+	return sequencedSpecs
+}
+
+// returns the last block in forkArray to sequence blocks from parentNumbers
+func findLast(specs []blockSpecs) (lastNumbers [3]int) {
+	nPrime, nRegion, nZone := 0, 0, 0
+	for _, spec := range specs {
+		if spec.number[0] >= nPrime {
+			nPrime = spec.number[0]
+			if spec.number[1] >= nRegion {
+				nRegion = spec.number[1]
+				if spec.number[2] >= nZone {
+					nZone = spec.number[2]
+					lastNumbers = spec.number
+				}
+			}
+		}
+
+	}
+	return lastNumbers
 }
 
 // ExampleGenerateNetwork follows the logic of ExampleGenerateChain but
@@ -150,7 +309,8 @@ func ExampleGenerateNetwork() {
 		addr1 = crypto.PubkeyToAddress(key1.PublicKey)
 		// addr2    = crypto.PubkeyToAddress(key2.PublicKey)
 		// addr3    = crypto.PubkeyToAddress(key3.PublicKey)
-		db = rawdb.NewMemoryDatabase()
+		db = rawdb.NewMemoryDatabase() // first db necessary to grind blocks with forks
+		// second rawdb.NewMemoryDatabase object to decide fork scenarios
 	)
 
 	// Ensure that key1 has some funds in the genesis block.
@@ -172,22 +332,9 @@ func ExampleGenerateNetwork() {
 	// create Geneis blocks in respective chains
 	genesisPrime := gspecPrime.MustCommit(db)
 
-	// ordersPool constructor - feed notation in here to construct
-	// sets of orders that can be passed into the generator one at
-	// a time and placed into a pool
-
-	// IMPORTANT TO NOTE: sequence of blocks generated must be sequential,
-	// i.e. you cannot generate a 75th block w/out first generating the 74th block
-	// AFTER generation, ordersPool can be permuted in all possible ways and
-	// passed into the Runner
-
 	// establish desired contexts for generated blocks
 	// orders must descend i.e. a Prime block must come before any Region blocks, and a Region block must come before any Zone blocks
-	chainOrders1 := chainOrders{
-		orders:      []int{0, 1, 2, 2, 1, 0}, // {0,1,2,2,1} represents Prime, Region, Zone, Zone, Region
-		startNumber: []int{0, 0, 0},
-	}
-	ordersPool := []chainOrders{chainOrders1}
+	specsPool := BlockInterpreter(networkGraphSample)
 
 	// Import the chain. This runs all block validation rules.
 	blockchainPrime, _ := NewBlockChain(db, defaultCacheConfig, primeConfig, blake3.NewFaker(), vm.Config{}, nil, nil)
@@ -204,32 +351,33 @@ func ExampleGenerateNetwork() {
 	// temp
 	parent := genesisPrime
 
-	// Generator section
-	// loop over GenerateNetwork
-	chains := [][]*types.Block{}
-	for _, orders := range ordersPool {
-		// parent := blockchainPrime.GetBlockByNumber(uint64(orders.parent[0]))
-		chain, _ := GenerateNetwork(primeConfig, regionConfig, zoneConfig,
-			parent, orders.orders, orders.startNumber,
-			blake3.NewFaker(), db, func(i int, gen *BlockGen) {
-				switch i { // preserve this section for testing transaction data
-				/* case 0:
-
-				case 1:
-
-				case 2:
-
-				case 3:
-
-				case 4:
-				*/
-				}
-			})
-		chains = append(chains, chain)
+	// genesis handling - should only trigger once, necessary to generate genesis block first and only once
+	var genesisCheck bool = false
+	if specsPool[0].number == [3]int{0, 0, 0} {
+		genesisCheck = true
 	}
 
+	// Generator section
+	// loop over GenerateNetwork
+	blockPool := []*types.Block{}
+	for _, specs := range specsPool {
+		// function here to derive appropriate parent post-genesis cases
+
+		block := GenerateBlock(genesisCheck, &specs.slice,
+			parent, specs.order, specs.number,
+			blake3.NewFaker(), db)
+		if genesisCheck {
+			genesisCheck = false
+		}
+		specs.hash = block.Hash()
+		// mini-Runner section (must grind blocks in order to derive parents for forks)
+		blockchainPrime.InsertChain(types.Blocks{block})
+		blockPool = append(blockPool, block)
+	}
+
+	// loop over runner section
 	// Runner section
-	validNetwork := chainsValidator(chains, *blockchainPrime, *blockchainRegion, *blockchainZone, ordersPool)
+	validNetwork := chainsValidator(blockPool, *blockchainPrime, *blockchainRegion, *blockchainZone, specsPool)
 	blockchainPrime = &validNetwork[0]
 	blockchainRegion = &validNetwork[1]
 	blockchainZone = &validNetwork[2]
@@ -249,69 +397,3 @@ func ExampleGenerateNetwork() {
 	// balance of addr1 in Region 1: 1000000
 	// balance of addr1 in Zone 1-1: 1000000
 }
-
-// struct for interpreting notation/constructing chains
-type blockConstructor struct {
-	numbers [3]int // prime idx, region idx, zone idx
-	// -1 for contexts the block does not coincide with
-	parentTags [3]string // (optionally) Override the parents to point to tagged blocks. Empty strings are ignored.
-	tag        string    // (optionally) Give this block a named tag. Empty strings are ignored.
-}
-
-// Constant Genesis definition
-var genesisBlock = blockConstructor{[3]int{0, 0, 0}, [3]string{}, ""}
-
-type chainOrders struct {
-	orders      []int // sequence of orders to grind
-	startNumber []int // Number to start at (also used to derive parent)
-	parent      []int //
-	parentTags  [3]string
-	tag         string
-}
-
-// simple example graph
-// [3][3][100]*blockConstructor = 3 regions, each w/ 3 zones, each w/ 100 blocks
-var networkGraph = [1][1][6]*blockConstructor{
-	{ // Region1
-		{ // Zone1
-			&genesisBlock,
-			&blockConstructor{[3]int{0, 1, 1}, [3]string{}, ""},
-			&blockConstructor{[3]int{0, 1, 2}, [3]string{}, ""},
-			&blockConstructor{[3]int{0, 1, 3}, [3]string{}, ""},
-			&blockConstructor{[3]int{0, 2, 4}, [3]string{}, ""},
-			&blockConstructor{[3]int{1, 3, 5}, [3]string{}, ""},
-		},
-	},
-}
-
-/*
-func BlockInterpreter(networkGraph [][][]*blockConstructor) []chainOrders {
-
-	chains := []chainOrders{}
-	for _, regionSlice := range networkGraph {
-		for _, zoneSlice := range regionSlice {
-			chain := chainOrders{}
-			prime := 0
-			region := 0
-			zone := 0
-
-			for i, block := range zoneSlice {
-				if i == 0 {
-					chain.parent = []int{prime, region, zone}
-					chain.parentTags = block.parentTags
-					chain.tag = block.tag
-				}
-				if block == genesisBlock {
-					chain.orders[i] = 0 // selects order in slice
-					chain.startNumber = []int{0, 0, 0}
-					chain.parent = nil // remember to assign genesis
-				} else {
-
-				}
-			}
-		}
-	}
-
-	return chains
-}
-*/

@@ -848,11 +848,7 @@ func verifyInsideLocation(location []byte, number []*big.Int, config *params.Cha
 	zoneLocation := int(location[1])
 
 	switch {
-	/*	case config.IsLovelace(number[0]): // Lovelace = [3,4,4]
-			return checkInsideCurrent(regionLocation, zoneLocation, params.LovelaceOntology)
-		case config.IsTuring(number[0]): // Turing = [3,3,4]
-			return checkInsideCurrent(regionLocation, zoneLocation, params.TuringOntology) */
-	case config.IsFuller(number[0]): // Fuller = [3,3,3]
+	case config.IsFuller(number[0]): // Fuller = [3,3]
 		return checkInsideCurrent(regionLocation, zoneLocation, params.FullerOntology)
 	default:
 		return consensus.ErrInvalidOntology
@@ -861,10 +857,10 @@ func verifyInsideLocation(location []byte, number []*big.Int, config *params.Cha
 
 // Verifies that Location is valid inside current MapContext ontology.
 func checkInsideCurrent(regionLoc int, zoneLoc int, ontology []int) error {
-	if len(ontology) < regionLoc {
+	if regionLoc < 1 || regionLoc > ontology[0] {
 		return consensus.ErrInvalidOntology
 	}
-	if ontology[regionLoc-1] < zoneLoc {
+	if zoneLoc < 1 || zoneLoc > ontology[1] {
 		return consensus.ErrInvalidOntology
 	}
 	return nil

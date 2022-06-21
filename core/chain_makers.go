@@ -49,6 +49,79 @@ type BlockGen struct {
 	engine consensus.Engine
 }
 
+// GenerateChain creates a chain of n blocks. The first block's
+// parent will be the provided parent. db is used to store
+// intermediate states and should contain the parent's state trie.
+//
+// The generator function is called with a new block generator for
+// every block. Any transactions and uncles added to the generator
+// become part of the block. If gen is nil, the blocks will be empty
+// and their coinbase will be the zero address.
+//
+// Blocks created by GenerateChain do not contain valid proof of work
+// values. Inserting them into BlockChain requires use of FakePow or
+// a similar non-validating proof of work implementation.
+func GenerateChain(config *params.ChainConfig, parent *types.Block, engine consensus.Engine, db ethdb.Database, n int, gen func(int, *BlockGen)) ([]*types.Block, []types.Receipts) {
+	if config == nil {
+		config = params.TestChainConfig
+	}
+	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
+	chainreader := &fakeChainReader{config: config}
+	genblock := func(i int, parent *types.Block, statedb *state.StateDB) (*types.Block, types.Receipts) {
+		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: config, engine: engine}
+		b.header = makeHeader(false, config, chainreader, parent, 0, statedb, b.engine)
+
+		// Execute any user modifications to the block
+		if gen != nil {
+			gen(i, b)
+		}
+		if b.engine != nil {
+			// Finalize and seal the block
+			block, _ := b.engine.FinalizeAndAssemble(chainreader, b.header, statedb, b.txs, b.uncles, b.receipts)
+
+			// Write state changes to db
+			root, err := statedb.Commit(config.IsEIP158(b.header.Number[types.QuaiNetworkContext]))
+			if err != nil {
+				panic(fmt.Sprintf("state write error: %v", err))
+			}
+			if err := statedb.Database().TrieDB().Commit(root, false, nil); err != nil {
+				panic(fmt.Sprintf("trie write error: %v", err))
+			}
+			return block, b.receipts
+		}
+		return nil, nil
+	}
+	for i := 0; i < n; i++ {
+		statedb, err := state.New(parent.Root(), state.NewDatabase(db), nil)
+		if err != nil {
+			panic(err)
+		}
+		block, receipt := genblock(i, parent, statedb)
+		blocks[i] = block
+		receipts[i] = receipt
+		parent = block
+	}
+	return blocks, receipts
+}
+
+// makeHeaderChain creates a deterministic chain of headers rooted at parent.
+func makeHeaderChain(parent *types.Header, n int, engine consensus.Engine, db ethdb.Database, seed int) []*types.Header {
+	blocks := makeBlockChain(types.NewBlockWithHeader(parent), n, engine, db, seed)
+	headers := make([]*types.Header, len(blocks))
+	for i, block := range blocks {
+		headers[i] = block.Header()
+	}
+	return headers
+}
+
+// makeBlockChain creates a deterministic chain of blocks rooted at parent.
+func makeBlockChain(parent *types.Block, n int, engine consensus.Engine, db ethdb.Database, seed int) []*types.Block {
+	blocks, _ := GenerateChain(params.TestChainConfig, parent, engine, db, n, func(i int, b *BlockGen) {
+		b.SetCoinbase(common.Address{0: byte(seed), 19: byte(i)})
+	})
+	return blocks
+}
+
 // SetCoinbase sets the coinbase of the generated block.
 // It can be called at most once.
 func (b *BlockGen) SetCoinbase(addr common.Address) {
@@ -184,68 +257,9 @@ func (b *BlockGen) OffsetTime(seconds int64) {
 	b.header.Difficulty[types.QuaiNetworkContext] = b.engine.CalcDifficulty(chainreader, b.header.Time, b.parent.Header(), types.QuaiNetworkContext)
 }
 
-// GenerateChain creates a chain of n blocks. The first block's
-// parent will be the provided parent. db is used to store
-// intermediate states and should contain the parent's state trie.
-//
-// The generator function is called with a new block generator for
-// every block. Any transactions and uncles added to the generator
-// become part of the block. If gen is nil, the blocks will be empty
-// and their coinbase will be the zero address.
-//
-// Blocks created by GenerateChain do not contain valid proof of work
-// values. Inserting them into BlockChain requires use of FakePow or
-// a similar non-validating proof of work implementation.
-func GenerateChain(config *params.ChainConfig, parent *types.Block, engine consensus.Engine, db ethdb.Database, n int, gen func(int, *BlockGen)) ([]*types.Block, []types.Receipts) {
-	if config.ChainID == nil { // for testing purposes
-		config = params.TestChainConfig
-	}
-
-	if config == nil {
-		config = params.TestChainConfig
-	}
-	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
-	chainreader := &fakeChainReader{config: config}
-	genblock := func(i int, parent *types.Block, statedb *state.StateDB) (*types.Block, types.Receipts) {
-		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: config, engine: engine}
-		// b.header = makeHeader(chainreader, parent, statedb, b.engine)
-
-		// Execute any user modifications to the block
-		if gen != nil {
-			gen(i, b)
-		}
-		if b.engine != nil {
-			// Finalize and seal the block
-			block, _ := b.engine.FinalizeAndAssemble(chainreader, b.header, statedb, b.txs, b.uncles, b.receipts)
-
-			// Write state changes to db
-			root, err := statedb.Commit(config.IsEIP158(b.header.Number[types.QuaiNetworkContext]))
-			if err != nil {
-				panic(fmt.Sprintf("state write error: %v", err))
-			}
-			if err := statedb.Database().TrieDB().Commit(root, false, nil); err != nil {
-				panic(fmt.Sprintf("trie write error: %v", err))
-			}
-			return block, b.receipts
-		}
-		return nil, nil
-	}
-	for i := 0; i < n; i++ {
-		statedb, err := state.New(parent.Root(), state.NewDatabase(db), nil)
-		if err != nil {
-			panic(err)
-		}
-		block, receipt := genblock(i, parent, statedb)
-		blocks[i] = block
-		receipts[i] = receipt
-		parent = block
-	}
-	return blocks, receipts
-}
-
-func makeHeader(config *params.ChainConfig, chain consensus.ChainReader, parent *types.Block, order int, state *state.StateDB, engine consensus.Engine) *types.Header {
-	// return genesis block as itself for first block in chain
-	if parent.Header().Number[0].Cmp(big.NewInt(0)) == 0 {
+func makeHeader(genCheck bool, config *params.ChainConfig, chain consensus.ChainReader, parent *types.Block, order int, state *state.StateDB, engine consensus.Engine) *types.Header {
+	// return genesis block as first block in chain (only triggers once)
+	if genCheck {
 		return parent.Header()
 	}
 
@@ -319,24 +333,6 @@ func makeHeader(config *params.ChainConfig, chain consensus.ChainReader, parent 
 	return header
 }
 
-// makeHeaderChain creates a deterministic chain of headers rooted at parent.
-func makeHeaderChain(parent *types.Header, n int, engine consensus.Engine, db ethdb.Database, seed int) []*types.Header {
-	blocks := makeBlockChain(types.NewBlockWithHeader(parent), n, engine, db, seed)
-	headers := make([]*types.Header, len(blocks))
-	for i, block := range blocks {
-		headers[i] = block.Header()
-	}
-	return headers
-}
-
-// makeBlockChain creates a deterministic chain of blocks rooted at parent.
-func makeBlockChain(parent *types.Block, n int, engine consensus.Engine, db ethdb.Database, seed int) []*types.Block {
-	blocks, _ := GenerateChain(params.TestChainConfig, parent, engine, db, n, func(i int, b *BlockGen) {
-		b.SetCoinbase(common.Address{0: byte(seed), 19: byte(i)})
-	})
-	return blocks
-}
-
 type fakeChainReader struct {
 	config *params.ChainConfig
 }
@@ -388,53 +384,20 @@ func (cr *fakeChainReader) GetLinkExternalBlocks(header *types.Header) ([]*types
 // Blocks created by GenerateNetwork do not contain valid proof of work values.
 // Inserting them into BlockChain requires use of a TestPoW in order to test and
 // verify the correct operation of the Proof-of-Work algorithm.
-func GenerateNetwork(primeConfig *params.ChainConfig, regionConfig params.ChainConfig, zoneConfig params.ChainConfig, parent *types.Block, orders []int, startNumber []int, engine consensus.Engine, db ethdb.Database, gen func(int, *BlockGen)) ([]*types.Block, []types.Receipts) {
-	// the first config must be the Prime
-	if primeConfig != params.MainnetPrimeChainConfig {
-		print("must have MainnetPrimeChainConfig as first config")
-	}
-	// check second config for Region
-	if !(regionConfig.ChainID.Cmp(params.MainnetRegionChainConfigs[0].ChainID) == 0 || regionConfig.ChainID.Cmp(params.MainnetRegionChainConfigs[1].ChainID) == 0 || regionConfig.ChainID.Cmp(params.MainnetRegionChainConfigs[2].ChainID) == 0) {
-		print("must have a MainnetRegionChainConfig as second config")
-	}
-	// check third config for Zone in Region
-	if !(zoneConfig.ChainID.Cmp(params.MainnetZoneChainConfigs[regionConfig.Location[0]-1][0].ChainID) == 0 || zoneConfig.ChainID.Cmp(params.MainnetZoneChainConfigs[regionConfig.Location[0]-1][1].ChainID) == 0 || zoneConfig.ChainID.Cmp(params.MainnetZoneChainConfigs[regionConfig.Location[0]-1][2].ChainID) == 0) {
-		print("must have a MainnetZoneConfig as third config")
-	}
-
-	n := len(orders)
-	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
+func GenerateBlock(genesisCheck bool, config *params.ChainConfig, parent *types.Block, order int, startNumber [3]int, engine consensus.Engine, db ethdb.Database) *types.Block {
+	// initialize blocks and receipts
+	block := types.Block{}
 
 	// associate chainreaders and configs for correct block context placement
-	chainreaders, configs := []fakeChainReader{}, []params.ChainConfig{}
-	for _, context := range orders {
-		switch context {
-		case 0:
-			chainreaders = append(chainreaders, fakeChainReader{config: primeConfig})
-			configs = append(configs, *primeConfig)
-		case 1:
-			chainreaders = append(chainreaders, fakeChainReader{config: &regionConfig})
-			configs = append(configs, regionConfig)
-		case 2:
-			chainreaders = append(chainreaders, fakeChainReader{config: &zoneConfig})
-			configs = append(configs, zoneConfig)
-		default:
-			print("contexts must be 0, 1, or 2")
-		}
-	}
+	chainreader := fakeChainReader{config: config}
 
-	genblock := func(i int, parent *types.Block, context int, statedb *state.StateDB, chainreaders []fakeChainReader, configs []params.ChainConfig) (*types.Block, types.Receipts) {
-		// select appropriate fakeChainReader for block creation
-		chainreader := chainreaders[i]
-		config := configs[i]
+	genblock := func(genCheck bool, parent *types.Block, order int, statedb *state.StateDB, chainreader fakeChainReader, config params.ChainConfig) *types.Block {
 
-		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: &config, engine: engine}
-		b.header = makeHeader(&config, &chainreader, parent, context, statedb, b.engine)
+		b := &BlockGen{chain: types.Blocks{&block}, parent: parent, statedb: statedb, config: &config, engine: engine}
+		b.header = makeHeader(genCheck, &config, &chainreader, parent, order, statedb, b.engine)
 
 		// Execute any user modifications to the block
-		if gen != nil {
-			gen(i, b)
-		}
+		// for modifications want new logic - come back to later
 
 		if b.engine != nil {
 			// Finalize and seal the block
@@ -448,20 +411,19 @@ func GenerateNetwork(primeConfig *params.ChainConfig, regionConfig params.ChainC
 			if err := statedb.Database().TrieDB().Commit(root, false, nil); err != nil {
 				panic(fmt.Sprintf("trie write error: %v", err))
 			}
-			return block, b.receipts
+			return block
 		}
-		return nil, nil
+		return nil
 	}
 
-	for i := 0; i < n; i++ {
-		statedb, err := state.New(parent.Root(), state.NewDatabase(db), nil)
-		if err != nil {
-			panic(err)
-		}
-		block, receipt := genblock(i, parent, orders[i], statedb, chainreaders, configs)
-		blocks[i] = block
-		receipts[i] = receipt
-		parent = block
+	statedb, err := state.New(parent.Root(), state.NewDatabase(db), nil)
+	if err != nil {
+		panic(err)
 	}
-	return blocks, receipts
+	block = *genblock(genesisCheck, parent, order, statedb, chainreader, *config)
+	if genesisCheck { // in order to generate genesis first and only once
+		genesisCheck = false
+	}
+
+	return &block
 }
