@@ -244,9 +244,9 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	return blocks, receipts
 }
 
-func makeHeader(config *params.ChainConfig, chain consensus.ChainReader, parent *types.Block, order int, state *state.StateDB, engine consensus.Engine) *types.Header {
-	// return genesis block as itself for first block in chain
-	if parent.Header().Number[0].Cmp(big.NewInt(0)) == 0 {
+func makeHeader(genCheck bool, config *params.ChainConfig, chain consensus.ChainReader, parent *types.Block, order int, state *state.StateDB, engine consensus.Engine) *types.Header {
+	// return genesis block as first block in chain (only triggers once)
+	if genCheck {
 		return parent.Header()
 	}
 
@@ -401,48 +401,17 @@ func (cr *fakeChainReader) GetLinkExternalBlocks(header *types.Header) ([]*types
 // Blocks created by GenerateNetwork do not contain valid proof of work values.
 // Inserting them into BlockChain requires use of a TestPoW in order to test and
 // verify the correct operation of the Proof-of-Work algorithm.
-func GenerateNetwork(primeConfig *params.ChainConfig, regionConfig params.ChainConfig, zoneConfig params.ChainConfig, parent *types.Block, orders []int, startNumber []int, engine consensus.Engine, db ethdb.Database, gen func(int, *BlockGen)) ([]*types.Block, []types.Receipts) {
-	// the first config must be the Prime
-	if primeConfig != params.MainnetPrimeChainConfig {
-		print("must have MainnetPrimeChainConfig as first config")
-	}
-	// check second config for Region
-	if !(regionConfig.ChainID.Cmp(params.MainnetRegionChainConfigs[0].ChainID) == 0 || regionConfig.ChainID.Cmp(params.MainnetRegionChainConfigs[1].ChainID) == 0 || regionConfig.ChainID.Cmp(params.MainnetRegionChainConfigs[2].ChainID) == 0) {
-		print("must have a MainnetRegionChainConfig as second config")
-	}
-	// check third config for Zone in Region
-	if !(zoneConfig.ChainID.Cmp(params.MainnetZoneChainConfigs[regionConfig.Location[0]-1][0].ChainID) == 0 || zoneConfig.ChainID.Cmp(params.MainnetZoneChainConfigs[regionConfig.Location[0]-1][1].ChainID) == 0 || zoneConfig.ChainID.Cmp(params.MainnetZoneChainConfigs[regionConfig.Location[0]-1][2].ChainID) == 0) {
-		print("must have a MainnetZoneConfig as third config")
-	}
-
-	n := len(orders)
+func GenerateNetwork(genesisCheck bool, config *params.ChainConfig, parent *types.Block, order int, startNumber [3]int, n int, engine consensus.Engine, db ethdb.Database, gen func(int, *BlockGen)) ([]*types.Block, []types.Receipts) {
+	// initialize blocks and receipts
 	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
 
 	// associate chainreaders and configs for correct block context placement
-	chainreaders, configs := []fakeChainReader{}, []params.ChainConfig{}
-	for _, context := range orders {
-		switch context {
-		case 0:
-			chainreaders = append(chainreaders, fakeChainReader{config: primeConfig})
-			configs = append(configs, *primeConfig)
-		case 1:
-			chainreaders = append(chainreaders, fakeChainReader{config: &regionConfig})
-			configs = append(configs, regionConfig)
-		case 2:
-			chainreaders = append(chainreaders, fakeChainReader{config: &zoneConfig})
-			configs = append(configs, zoneConfig)
-		default:
-			print("contexts must be 0, 1, or 2")
-		}
-	}
+	chainreader := fakeChainReader{config: config}
 
-	genblock := func(i int, parent *types.Block, context int, statedb *state.StateDB, chainreaders []fakeChainReader, configs []params.ChainConfig) (*types.Block, types.Receipts) {
-		// select appropriate fakeChainReader for block creation
-		chainreader := chainreaders[i]
-		config := configs[i]
+	genblock := func(genCheck bool, i int, parent *types.Block, order int, statedb *state.StateDB, chainreader fakeChainReader, config params.ChainConfig) (*types.Block, types.Receipts) {
 
 		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: &config, engine: engine}
-		b.header = makeHeader(&config, &chainreader, parent, context, statedb, b.engine)
+		b.header = makeHeader(genCheck, &config, &chainreader, parent, order, statedb, b.engine)
 
 		// Execute any user modifications to the block
 		if gen != nil {
@@ -471,7 +440,10 @@ func GenerateNetwork(primeConfig *params.ChainConfig, regionConfig params.ChainC
 		if err != nil {
 			panic(err)
 		}
-		block, receipt := genblock(i, parent, orders[i], statedb, chainreaders, configs)
+		block, receipt := genblock(genesisCheck, i, parent, order, statedb, chainreader, *config)
+		if genesisCheck { // in order to generate genesis first and only once
+			genesisCheck = false
+		}
 		blocks[i] = block
 		receipts[i] = receipt
 		parent = block
