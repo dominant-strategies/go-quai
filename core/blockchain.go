@@ -3273,6 +3273,19 @@ func (bc *BlockChain) CheckExternalBlockLink(externalBlocks []*types.ExternalBlo
 	return nil
 }
 
+// HLCR does hierarchical comparison of two difficulty tuples and returns true if second tuple is greater than the first
+func (bc *BlockChain) HLCR(localDifficulties []*big.Int, externDifficulties []*big.Int) bool {
+	if localDifficulties[0].Cmp(externDifficulties[0]) < 0 {
+		return true
+	} else if localDifficulties[1].Cmp(externDifficulties[1]) < 0 {
+		return true
+	} else if localDifficulties[2].Cmp(externDifficulties[2]) < 0 {
+		return true
+	} else {
+		return false
+	}
+}
+
 // AggregateNetworkDifficulty aggregates the total difficulty from the previous stop Hash in the dominant chains only
 func (bc *BlockChain) AggregateTotalDifficulty(context int, header *types.Header) (*big.Int, int, error) {
 
