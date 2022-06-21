@@ -3049,24 +3049,27 @@ func (bc *BlockChain) PCRC(header *types.Header) ([]common.Hash, []*big.Int, err
 	return []common.Hash{PTP, RTR, header.Hash()}, []*big.Int{PTPND, PTRND, RTZND}, nil
 }
 
-// calcHLCRNetDifficulty calculates the net difficulty from previous prime pecalcHLCRNetDifficultyg
-func (bc *BlockChain) CalcHLCRNetDifficulty(terminalHashes []common.Hash, netDifficulties []*big.Int) (*big.Int, error) {
+// calcHLCRNetDifficulty calculates the net difficulty from previous prime.
+// The netDifficulties parameter inputs the nets of instantaneous difficulties from the terminus block.
+// By correctly summing the net difficulties we have obtained the proper array to be compared in HLCR.
+func (bc *BlockChain) CalcHLCRNetDifficulty(terminalHashes []common.Hash, netDifficulties []*big.Int) ([]*big.Int, error) {
 
 	if (terminalHashes[0] == common.Hash{}) || (terminalHashes[1] == common.Hash{}) || (terminalHashes[2] == common.Hash{}) {
 		return nil, errors.New("one or many of the  terminal hashes were nil")
 	}
 
 	netDifficulty := big.NewInt(0)
-	if terminalHashes[0] == terminalHashes[1] {
-		netDifficulty = netDifficulty.Add(netDifficulty, netDifficulties[0])
-		netDifficulty = netDifficulty.Add(netDifficulty, netDifficulties[2])
+	primeNet := netDifficulties[0]
+	if terminalHashes[0] == terminalHashes[1] && terminalHashes[1] == terminalHashes[2] {
+		return []*big.Int{primeNet, primeNet, primeNet}, nil
+	} else if terminalHashes[0] == terminalHashes[1] {
+		zoneNet := netDifficulty.Add(primeNet, netDifficulties[2])
+		return []*big.Int{primeNet, primeNet, zoneNet}, nil
 	} else {
-		netDifficulty = netDifficulty.Add(netDifficulty, netDifficulties[0])
-		netDifficulty = netDifficulty.Add(netDifficulty, netDifficulties[1])
-		netDifficulty = netDifficulty.Add(netDifficulty, netDifficulties[2])
+		regionNet := netDifficulty.Add(primeNet, netDifficulties[1])
+		zoneNet := netDifficulty.Add(regionNet, netDifficulties[2])
+		return []*big.Int{primeNet, regionNet, zoneNet}, nil
 	}
-
-	return netDifficulty, nil
 }
 
 // HasHeader checks if a block header is present in the database or not, caching
