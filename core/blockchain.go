@@ -1494,25 +1494,37 @@ func (bc *BlockChain) NdToTd(header *types.Header, nD []*big.Int) ([]*big.Int, e
 	return nD, nil
 }
 
-// writeBlockWithState writes the block and all associated state to the database,
-// but is expects the chain mutex to be held.
-func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, linkExtBlocks []*types.ExternalBlock) error {
-
+// CalcTd calculates the TD of the given header using PCRC and CalcHLCRNetDifficulty.
+func (bc *BlockChain) CalcTd(header *types.Header) ([]*big.Int, error) {
 	// Check PCRC for the external block and return the terminal hash and net difficulties
-	externTerminalHashes, externNetDifficulties, err := bc.PCRC(block.Header())
+	externTerminalHashes, externNetDifficulties, err := bc.PCRC(header)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Use HLCR to compute net total difficulty
 	externNetTd, err := bc.CalcHLCRNetDifficulty(externTerminalHashes, externNetDifficulties)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	externTerminalHeader := bc.GetHeaderByHash(externTerminalHashes[0])
 	externTd, err := bc.NdToTd(externTerminalHeader, externNetTd)
+	if err != nil {
+		return nil, err
+	}
 
+	return externTd, nil
+}
+
+// writeBlockWithState writes the block and all associated state to the database,
+// but is expects the chain mutex to be held.
+func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, linkExtBlocks []*types.ExternalBlock) error {
+
+	externTd, err := bc.CalcTd(block.Header())
+	if err != nil {
+		return err
+	}
 	// Irrelevant of the canonical status, write the block itself to the database.
 	//
 	// Note all the components of block(td, hash->number map, header, body, receipts)
@@ -2282,11 +2294,11 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 			}
 		}
 		if externTd == nil {
-			externTd = bc.GetTd(block.ParentHash(), block.NumberU64()-1)
+			externTd, err = bc.CalcTd(block.Header())
+			if err != nil {
+				return it.index, err
+			}
 		}
-		externTd[0] = new(big.Int).Add(externTd[0], block.Header().Difficulty[0])
-		externTd[1] = new(big.Int).Add(externTd[1], block.Header().Difficulty[1])
-		externTd[2] = new(big.Int).Add(externTd[2], block.Header().Difficulty[2])
 
 		if !bc.HasBlock(block.Hash(), block.NumberU64()) {
 			start := time.Now()
