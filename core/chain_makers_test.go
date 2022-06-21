@@ -109,7 +109,7 @@ func chainsValidator(chain []*types.Block, primeChain BlockChain, regionChain Bl
 	// e.g. rpc
 
 	// handle permutation *outside* this function
-	// will need to hit this function twice - first to create blocks (with tags), second to test tag scenarios
+	// will need to hit this function twice - first to create blocks (with forks), second to test fork scenarios
 
 	if _, err := primeChain.InsertChain(chain); err != nil {
 		print(err)
@@ -137,7 +137,6 @@ var genesisBlock = blockConstructor{[3]int{0, 0, 0}, 0, [3]int{0}}
 
 type blockSpecs struct {
 	order         int    // order to grind in
-	number        [3]int // Number of block to be created
 	tag           int
 	parentTags    [3]int
 	parentNumbers [3]int
@@ -353,6 +352,12 @@ func ExampleGenerateNetwork() {
 	// genesis handling - should only trigger once
 	var genesisCheck bool = false
 	var parent *types.Block
+
+	// genesis handling - should only trigger once, necessary to generate genesis block first and only once
+	var genesisCheck bool = false
+	if specsPool[0].number == [3]int{0, 0, 0} {
+		genesisCheck = true
+	}
 
 	// Generator section
 	// loop over GenerateNetwork
