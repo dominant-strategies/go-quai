@@ -103,7 +103,7 @@ func AssembleGraph(start int, end int, chains []Chain) {
 		//Sets the default range if start and end parameters are 0. Also checks to see if they are out of bounds
 		if start == 0 && end == 0 {
 			end = int(numBlocks)
-			start = int(numBlocks) - 20
+			start = int(numBlocks) - 100
 		}
 		if end > int(numBlocks) {
 			end = int(numBlocks)
@@ -113,17 +113,17 @@ func AssembleGraph(start int, end int, chains []Chain) {
 		}
 
 		for j := start; j <= end; j++ {
-			Block, err := chain.BlockByNumber(context.Background(), big.NewInt(int64(j)))
+			blockHeader, err := chain.HeaderByNumber(context.Background(), big.NewInt(int64(j)))
 			if err != nil {
 				panic(err)
 			}
-			blockHash := rlpHash(Block.Header())
+			blockHash := rlpHash(blockHeader)
 			if order == 0 || order == 1 {
 				AddCoincident(chains, blockHash)
 			}
 			if j != start {
-				parentBlock, _ := chain.BlockByHash(context.Background(), Block.Header().ParentHash[order])
-				parentHash := rlpHash(parentBlock.Header()).String()[2:7]
+				parentHeader, _ := chain.HeaderByHash(context.Background(), blockHeader.ParentHash[order])
+				parentHash := rlpHash(parentHeader).String()[2:7]
 				bHash := blockHash.String()[2:7]
 				chains[i].AddEdge(true, fmt.Sprintf("%d", chains[i].order)+parentHash, fmt.Sprintf("%d", chains[i].order)+bHash)
 
