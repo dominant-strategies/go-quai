@@ -85,7 +85,7 @@ func rlpHash(x interface{}) (h common.Hash) {
 
 //Main runner of the tool AssembleGraph takes a chain with initialized ethclients and fills out the other fiels as well as generates the DOT file
 //Start and End indicates the block range you want in the graph
-//If start and end are left 0 AssembleGraph will default to the 10 most recent nodes
+//If start and end are left 0 AssembleGraph will default to the 100 most recent nodes
 func AssembleGraph(start int, end int, chains []Chain) {
 	f, _ := os.Create("TestGraph.dot")
 	defer f.Close()
