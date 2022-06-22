@@ -268,7 +268,7 @@ func answerGetExtBlocksQuery(backend Backend, query GetExtBlocksPacket, peer *Pe
 		if header == nil {
 			continue
 		}
-		results, err := backend.Chain().GetExternalBlocks(header)
+		results, err := backend.Chain().GetLinkExternalBlocks(header)
 		if err != nil {
 			log.Info("answerGetExtBlocks: Unable to retrieve ext blocks", "hash", hash, "len", len(results))
 			continue

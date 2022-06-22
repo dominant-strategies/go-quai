@@ -542,7 +542,7 @@ func (hc *HeaderChain) GetLinkExternalBlocks(header *types.Header) ([]*types.Ext
 
 // GetExternalBlock is not applicable in the header chain since the BlockChain contains
 // the external blocks cache.
-func (hc *HeaderChain) GetExternalBlock(hash common.Hash, number uint64, context uint64) (*types.ExternalBlock, error) {
+func (hc *HeaderChain) GetExternalBlock(hash common.Hash, number uint64, location []byte, context uint64) (*types.ExternalBlock, error) {
 	return nil, nil
 }
 
