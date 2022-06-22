@@ -43,7 +43,7 @@ var (
 
 type Chain struct {
 	client    *ethclient.Client //Used for retrieving the Block information from the DB
-	subGraph  string            //Used to store everything to be written to the file
+	subGraph  string            //Used to store initial subgraph formatting for respective chain
 	nodes     []node            //Contains the nodes of each chain
 	edges     []string          //Contains the edges for each chain
 	order     int               //Stores the order of the chain being dealt with
