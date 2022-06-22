@@ -247,6 +247,10 @@ func (b *EthAPIBackend) SubscribeReOrgEvent(ch chan<- core.ReOrgRollup) event.Su
 	return b.eth.BlockChain().SubscribeReOrgEvent(ch)
 }
 
+func (b *EthAPIBackend) SubscribeMissingExternalBlockEvent(ch chan<- core.MissingExternalBlock) event.Subscription {
+	return b.eth.BlockChain().SubscribeMissingExternalBlockEvent(ch)
+}
+
 func (b *EthAPIBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
 	return b.eth.BlockChain().SubscribeChainEvent(ch)
 }

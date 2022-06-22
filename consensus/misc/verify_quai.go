@@ -148,10 +148,6 @@ func BlockOntology(number []*big.Int) ([]int, error) {
 	forkNumber := number[0]
 
 	switch {
-	/*	case forkNumber.Cmp(params.LovelaceMapContext) >= 0: // Lovelace = MaxInt
-			return params.LovelaceOntology
-		case forkNumber.Cmp(params.TuringMapContext) >= 0: // Turing = MaxInt
-			return params.TuringOntology */
 	case forkNumber.Cmp(params.FullerMapContext) >= 0:
 		return params.FullerOntology, nil
 	default:

@@ -52,7 +52,7 @@ type ChainHeaderReader interface {
 	GetLinkExternalBlocks(header *types.Header) ([]*types.ExternalBlock, error)
 
 	// GetExternalBlock retrieves an external block header by its hash and context.
-	GetExternalBlock(hash common.Hash, number uint64, context uint64) (*types.ExternalBlock, error)
+	GetExternalBlock(hash common.Hash, number uint64, location []byte, context uint64) (*types.ExternalBlock, error)
 
 	// QueueAndRetrieveExtBlocks passes external blocks to the queue and returns the amount available for this block
 	QueueAndRetrieveExtBlocks(externalBlocks []*types.ExternalBlock, header *types.Header) []*types.ExternalBlock
