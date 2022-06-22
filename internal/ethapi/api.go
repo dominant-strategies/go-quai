@@ -1206,9 +1206,14 @@ func FormatLogs(logs []vm.StructLog) []StructLogRes {
 func RPCMarshalEthHeader(head *types.Header) map[string]interface{} {
 	context := types.QuaiNetworkContext
 	bloom := types.Bloom{}
-	if len(head.Bloom) > types.ContextDepth-1 {
+	if len(head.Bloom) > len(params.FullerOntology) {
 		bloom = head.Bloom[context]
 	}
+	coinbase := common.Address{}
+	if head.Coinbase != nil && len(head.Coinbase) > len(params.FullerOntology) {
+		coinbase = head.Coinbase[context]
+	}
+
 	result := map[string]interface{}{
 		"number":           fmt.Sprintf("0x%x", head.Number[context]),
 		"hash":             head.Hash(),
@@ -1218,9 +1223,8 @@ func RPCMarshalEthHeader(head *types.Header) map[string]interface{} {
 		"sha3Uncles":       head.UncleHash[context],
 		"logsBloom":        bloom,
 		"stateRoot":        head.Root[context],
-		"miner":            head.Coinbase[context],
+		"miner":            coinbase,
 		"difficulty":       head.Difficulty[context],
-		"totalDifficulty":  head.NetworkDifficulty[context],
 		"size":             hexutil.Uint64(head.Size()),
 		"gasLimit":         head.GasLimit[context],
 		"gasUsed":          head.GasUsed[context],
