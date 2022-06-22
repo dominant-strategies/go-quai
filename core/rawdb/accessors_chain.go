@@ -601,18 +601,22 @@ func ReadTdRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 	return nil // Can't find the data anywhere.
 }
 
+type totalDifficulty struct {
+	td []*big.Int
+}
+
 // ReadTd retrieves a block's total difficulty corresponding to the hash.
 func ReadTd(db ethdb.Reader, hash common.Hash, number uint64) []*big.Int {
 	data := ReadTdRLP(db, hash, number)
 	if len(data) == 0 {
 		return nil
 	}
-	td := []*big.Int{}
+	td := new(totalDifficulty)
 	if err := rlp.Decode(bytes.NewReader(data), td); err != nil {
 		log.Error("Invalid block total difficulty RLP", "hash", hash, "err", err)
 		return nil
 	}
-	return td
+	return td.td
 }
 
 // WriteTd stores the total difficulty of a block into the database.
