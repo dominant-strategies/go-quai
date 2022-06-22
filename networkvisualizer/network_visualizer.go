@@ -100,9 +100,13 @@ func AssembleGraph(start int, end int, chains []Chain) {
 		//Fetches the number of blocks in the respective chain
 		numBlocks, _ := chain.BlockNumber(context.Background())
 
+		//Sets the default range if start and end parameters are 0. Also checks to see if they are out of bounds
 		if start == 0 && end == 0 {
 			end = int(numBlocks)
 			start = int(numBlocks) - 20
+		}
+		if end > int(numBlocks) {
+			end = int(numBlocks)
 		}
 		if start < 0 {
 			start = 1
