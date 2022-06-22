@@ -19,6 +19,7 @@ package fetcher
 
 import (
 	"errors"
+	"fmt"
 	"math/rand"
 	"time"
 
@@ -438,6 +439,7 @@ func (f *BlockFetcher) loop() {
 			if f.light {
 				continue
 			}
+			fmt.Println("enqueue 1: inject")
 			f.enqueue(op.origin, nil, op.block, op.extBlocks)
 
 		case hash := <-f.done:
@@ -622,11 +624,13 @@ func (f *BlockFetcher) loop() {
 			}
 			// Schedule the header for light fetcher import
 			for _, announce := range lightHeaders {
+				fmt.Println("enqueue 3: lightHeaders")
 				f.enqueue(announce.origin, announce.header, nil, nil)
 			}
 			// Schedule the header-only blocks for import
 			for _, block := range complete {
 				if announce := f.completing[block.Hash()]; announce != nil {
+					fmt.Println("enqueue 4: complete")
 					f.enqueue(announce.origin, nil, block, nil)
 				}
 			}
@@ -694,6 +698,7 @@ func (f *BlockFetcher) loop() {
 			// Schedule the retrieved blocks for ordered import
 			for _, block := range blocks {
 				if announce := f.completing[block.Hash()]; announce != nil {
+					fmt.Println("enqueue 2: schedule retrieval")
 					f.enqueue(announce.origin, nil, block, nil)
 				}
 			}
