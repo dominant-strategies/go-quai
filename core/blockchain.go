@@ -1465,11 +1465,21 @@ func (bc *BlockChain) NdToTd(header *types.Header, nD []*big.Int) ([]*big.Int, e
 	}
 
 	k := big.NewInt(0)
-	k.Sub(k, header.Difficulty[0])
 
-	prevExternTerminus := common.Hash{}
+	prevExternTerminus := header.Hash()
+	var prevExternTd *big.Int
+	var err error
 	for {
-		prevExternTerminus, prevExternTd, err := bc.Engine().PreviousCoincidentOnPath(bc, header, header.Location, params.PRIME, params.PRIME)
+		// subtract the terminal block difficulty
+		k.Sub(k, bc.GetHeaderByHash(prevExternTerminus).Difficulty[0])
+		fmt.Println("NdToTd GetBlockNum", bc.hc.GetBlockNumber(prevExternTerminus))
+
+		if bc.hc.GetBlockNumber(prevExternTerminus) != nil {
+			break
+		}
+
+		prevExternTerminus, prevExternTd, err = bc.Engine().PreviousCoincidentOnPath(bc, header, header.Location, params.PRIME, params.PRIME)
+		fmt.Println("NdToTd prevExternTerminus", prevExternTd, prevExternTerminus)
 		if err != nil {
 			return nil, err
 
@@ -1477,21 +1487,28 @@ func (bc *BlockChain) NdToTd(header *types.Header, nD []*big.Int) ([]*big.Int, e
 		k.Add(k, prevExternTd)
 
 		// subtract the terminal block difficulty
-		k.Sub(k, bc.GetHeaderByHash(prevExternTerminus).Difficulty[0])
-
-		if bc.hc.GetBlockNumber(prevExternTerminus) != nil {
-			break
-		}
+		fmt.Println("NdToTd GetBlockNum", bc.hc.GetBlockNumber(prevExternTerminus))
 		header = bc.GetHeaderByHash(prevExternTerminus)
 	}
-	k.Add(k, bc.GetTdByHash(prevExternTerminus)[params.PRIME])
+	fmt.Println("Returned prevExternTerminus", prevExternTd, prevExternTerminus)
+	fmt.Println("K before adding prev TD", k)
+	if prevExternTerminus == bc.Config().GenesisHashes[0] {
+		k.Add(k, bc.GetHeaderByHash(prevExternTerminus).Difficulty[0])
+	} else {
+		fmt.Println("bc.GetTdByHash", bc.GetTdByHash(prevExternTerminus))
+		k.Add(k, bc.GetTdByHash(prevExternTerminus)[params.PRIME])
+	}
+	fmt.Println("K value after adding prev TD:", k)
+	fmt.Println("NdToTd netDiffs             :", nD, header.Number)
 
 	// adding the common total difficulty to the net
-	nD[0].Add(nD[0], k)
-	nD[1].Add(nD[1], k)
-	nD[2].Add(nD[2], k)
+	totalDiffs := []*big.Int{big.NewInt(0), big.NewInt(0), big.NewInt(0)}
+	totalDiffs[0].Add(nD[0], k)
+	totalDiffs[1].Add(nD[1], k)
+	totalDiffs[2].Add(nD[2], k)
 
-	return nD, nil
+	fmt.Println("NdToTd New Total Difficulties", totalDiffs)
+	return totalDiffs, nil
 }
 
 // CalcTd calculates the TD of the given header using PCRC and CalcHLCRNetDifficulty.
@@ -1505,6 +1522,7 @@ func (bc *BlockChain) CalcTd(header *types.Header) ([]*big.Int, error) {
 		return externNetDifficulties, nil
 	}
 
+	fmt.Println("CalcTd: externTerminalHashes", externTerminalHashes, "netDiffs", externNetDifficulties)
 	// Use HLCR to compute net total difficulty
 	externNetTd, err := bc.CalcHLCRNetDifficulty(externTerminalHashes, externNetDifficulties)
 	if err != nil {
@@ -3022,6 +3040,7 @@ func (bc *BlockChain) checkExtBlockCollision(header *types.Header, externalBlock
 
 // HLCR does hierarchical comparison of two difficulty tuples and returns true if second tuple is greater than the first
 func (bc *BlockChain) HLCR(localDifficulties []*big.Int, externDifficulties []*big.Int) bool {
+	fmt.Println("HLCR local", localDifficulties, "extern", externDifficulties)
 	if localDifficulties[0].Cmp(externDifficulties[0]) < 0 {
 		return true
 	} else if localDifficulties[1].Cmp(externDifficulties[1]) < 0 {
@@ -3097,17 +3116,23 @@ func (bc *BlockChain) CalcHLCRNetDifficulty(terminalHashes []common.Hash, netDif
 	if (terminalHashes[0] == common.Hash{}) || (terminalHashes[1] == common.Hash{}) || (terminalHashes[2] == common.Hash{}) {
 		return nil, errors.New("one or many of the  terminal hashes were nil")
 	}
+	fmt.Println("CalcHLCRNetDifficulty: netDifficulties", netDifficulties)
 
-	netDifficulty := big.NewInt(0)
-	primeNet := netDifficulties[0]
+	primeNet := big.NewInt(0)
+	regionNet := big.NewInt(0)
+	zoneNet := big.NewInt(0)
 	if terminalHashes[0] == terminalHashes[1] && terminalHashes[1] == terminalHashes[2] {
+		primeNet.Add(primeNet, netDifficulties[0])
 		return []*big.Int{primeNet, primeNet, primeNet}, nil
 	} else if terminalHashes[0] == terminalHashes[1] {
-		zoneNet := netDifficulty.Add(primeNet, netDifficulties[2])
+		primeNet.Add(primeNet, netDifficulties[0])
+		zoneNet.Add(primeNet, netDifficulties[2])
 		return []*big.Int{primeNet, primeNet, zoneNet}, nil
 	} else {
-		regionNet := netDifficulty.Add(primeNet, netDifficulties[1])
-		zoneNet := netDifficulty.Add(regionNet, netDifficulties[2])
+		primeNet.Add(primeNet, netDifficulties[0])
+		regionNet.Add(primeNet, netDifficulties[1])
+		zoneNet.Add(regionNet, netDifficulties[2])
+		fmt.Println("CalcHLCRNetDifficulty", []*big.Int{primeNet, regionNet, zoneNet})
 		return []*big.Int{primeNet, regionNet, zoneNet}, nil
 	}
 }
