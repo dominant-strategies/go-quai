@@ -157,7 +157,8 @@ func (hc *HeaderChain) writeHeaders(headers []*types.Header) (result *headerWrit
 	var (
 		lastNumber = headers[0].Number[types.QuaiNetworkContext].Uint64() - 1 // Last successfully imported number
 		lastHash   = headers[0].ParentHash[types.QuaiNetworkContext]          // Last imported header hash
-		newTD      = new(big.Int).Set(ptd)                                    // Total difficulty of inserted chain
+
+		newTd = ptd // Total difficulty of inserted chain
 
 		lastHeader    *types.Header
 		inserted      []numberHash // Ephemeral lookup of number/hash for the chain
@@ -176,16 +177,21 @@ func (hc *HeaderChain) writeHeaders(headers []*types.Header) (result *headerWrit
 		} else {
 			hash = header.Hash()
 		}
+
+		newTd, err = hc.CalcTd(header)
+		if err != nil {
+			return &headerWriteResult{}, errors.New("error calculating the total td for the header")
+		}
+
 		number := header.Number[types.QuaiNetworkContext].Uint64()
-		newTD.Add(newTD, header.Difficulty[types.QuaiNetworkContext])
 
 		// If the parent was not present, store it
 		// If the header is already known, skip it, otherwise store
 		alreadyKnown := parentKnown && hc.HasHeader(hash, number)
 		if !alreadyKnown {
 			// Irrelevant of the canonical status, write the TD and header to the database.
-			rawdb.WriteTd(batch, hash, number, newTD)
-			hc.tdCache.Add(hash, new(big.Int).Set(newTD))
+			rawdb.WriteTd(batch, hash, number, newTd)
+			hc.tdCache.Add(hash, newTd)
 
 			rawdb.WriteHeader(batch, header)
 			inserted = append(inserted, numberHash{number, hash})
@@ -212,14 +218,16 @@ func (hc *HeaderChain) writeHeaders(headers []*types.Header) (result *headerWrit
 
 	var (
 		head    = hc.CurrentHeader().Number[types.QuaiNetworkContext].Uint64()
-		localTD = hc.GetTd(hc.currentHeaderHash, head)
+		localTd = hc.GetTd(hc.currentHeaderHash, head)
 		status  = SideStatTy
 	)
 	// If the total difficulty is higher than our known, add it to the canonical chain
 	// Second clause in the if statement reduces the vulnerability to selfish mining.
 	// Please refer to http://www.cs.cornell.edu/~ie53/publications/btcProcFC.pdf
-	reorg := newTD.Cmp(localTD) > 0
-	if !reorg && newTD.Cmp(localTD) == 0 {
+	// TODO: need to change the HLCR logic to return something else if the difficulties are equal (replace the first if statement)
+	reorg := hc.HLCR(localTd, newTd)
+	equalTd := newTd[0].Cmp(localTd[0]) == 0 && newTd[1].Cmp(localTd[1]) == 0 && newTd[2].Cmp(localTd[2]) == 0
+	if !reorg && equalTd {
 		if lastNumber < head {
 			reorg = true
 		} else if lastNumber == head {
@@ -458,14 +466,14 @@ func (hc *HeaderChain) GetAncestor(hash common.Hash, number, ancestor uint64, ma
 
 // GetTd retrieves a block's total difficulty in the canonical chain from the
 // database by hash and number, caching it if found.
-func (hc *HeaderChain) GetTd(hash common.Hash, number uint64) *big.Int {
+func (hc *HeaderChain) GetTd(hash common.Hash, number uint64) []*big.Int {
 	// Short circuit if the td's already in the cache, retrieve otherwise
 	if cached, ok := hc.tdCache.Get(hash); ok {
-		return cached.(*big.Int)
+		return cached.([]*big.Int)
 	}
 	td := rawdb.ReadTd(hc.chainDb, hash, number)
 	if td == nil {
-		return nil
+		return make([]*big.Int, 3)
 	}
 	// Cache the found body for next time and return
 	hc.tdCache.Add(hash, td)
@@ -474,10 +482,10 @@ func (hc *HeaderChain) GetTd(hash common.Hash, number uint64) *big.Int {
 
 // GetTdByHash retrieves a block's total difficulty in the canonical chain from the
 // database by hash, caching it if found.
-func (hc *HeaderChain) GetTdByHash(hash common.Hash) *big.Int {
+func (hc *HeaderChain) GetTdByHash(hash common.Hash) []*big.Int {
 	number := hc.GetBlockNumber(hash)
 	if number == nil {
-		return nil
+		return make([]*big.Int, 3)
 	}
 	return hc.GetTd(hash, *number)
 }
@@ -663,6 +671,157 @@ func (hc *HeaderChain) SetHead(head uint64, updateFn UpdateHeadBlocksCallback, d
 	hc.numberCache.Purge()
 }
 
+// HLCR does hierarchical comparison of two difficulty tuples and returns true if second tuple is greater than the first
+func (hc *HeaderChain) HLCR(localDifficulties []*big.Int, externDifficulties []*big.Int) bool {
+	if localDifficulties[0].Cmp(externDifficulties[0]) < 0 {
+		return true
+	} else if localDifficulties[1].Cmp(externDifficulties[1]) < 0 {
+		return true
+	} else if localDifficulties[2].Cmp(externDifficulties[2]) < 0 {
+		return true
+	} else {
+		return false
+	}
+}
+
+// CalcTd calculates the TD of the given header using PCRC and CalcHLCRNetDifficulty.
+func (hc *HeaderChain) CalcTd(header *types.Header) ([]*big.Int, error) {
+	// Check PCRC for the external block and return the terminal hash and net difficulties
+	externTerminalHashes, externNetDifficulties, err := hc.PCRC(header)
+	if err != nil {
+		return nil, err
+	}
+
+	// Use HLCR to compute net total difficulty
+	externNetTd, err := hc.CalcHLCRNetDifficulty(externTerminalHashes, externNetDifficulties)
+	if err != nil {
+		return nil, err
+	}
+
+	externTerminalHeader := hc.GetHeaderByHash(externTerminalHashes[0])
+	externTd, err := hc.NdToTd(externTerminalHeader, externNetTd)
+	if err != nil {
+		return nil, err
+	}
+
+	return externTd, nil
+}
+
+// NdToTd returns the total difficulty for a header given the net difficulty
+func (hc *HeaderChain) NdToTd(header *types.Header, nD []*big.Int) ([]*big.Int, error) {
+	if header == nil {
+		return nil, errors.New("header provided to ndtotd is nil")
+	}
+
+	k := big.NewInt(0)
+	k.Sub(k, header.Difficulty[0])
+
+	prevExternTerminus := common.Hash{}
+	for {
+		prevExternTerminus, prevExternTd, err := hc.Engine().PreviousCoincidentOnPath(hc, header, header.Location, params.PRIME, params.PRIME)
+		if err != nil {
+			return nil, err
+
+		}
+		k.Add(k, prevExternTd)
+
+		// subtract the terminal block difficulty
+		k.Sub(k, hc.GetHeaderByHash(prevExternTerminus).Difficulty[0])
+
+		if hc.GetBlockNumber(prevExternTerminus) != nil {
+			break
+		}
+		header = hc.GetHeaderByHash(prevExternTerminus)
+	}
+	k.Add(k, hc.GetTdByHash(prevExternTerminus)[params.PRIME])
+
+	// adding the common total difficulty to the net
+	nD[0].Add(nD[0], k)
+	nD[1].Add(nD[1], k)
+	nD[2].Add(nD[2], k)
+
+	return nD, nil
+}
+
+// The purpose of the Previous Coincident Reference Check (PCRC) is to establish
+// that we have linked untwisted chains prior to checking HLCR & applying external state transfers.
+func (hc *HeaderChain) PCRC(header *types.Header) ([]common.Hash, []*big.Int, error) {
+
+	if header.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
+		return hc.config.GenesisHashes, header.Difficulty, nil
+	}
+
+	slice := header.Location
+
+	// Region twist check
+	// RTZ -- Region coincident along zone path
+	// RTR -- Region coincident along region path
+	// RTZND -- Net difficulty until dom or terminus along zone path
+	RTZ, RTZND, err := hc.Engine().PreviousCoincidentOnPath(hc, header, slice, params.REGION, params.ZONE)
+	if err != nil {
+		return []common.Hash{}, nil, err
+	}
+
+	RTR, _, err := hc.Engine().PreviousCoincidentOnPath(hc, header, slice, params.REGION, params.REGION)
+	if err != nil {
+		return []common.Hash{}, nil, err
+	}
+
+	if RTZ != RTR {
+		return []common.Hash{}, nil, errors.New("there exists a region twist")
+	}
+
+	// Prime twist check
+	// PTZ -- Prime coincident along zone path
+	// PTR -- Prime coincident along region path
+	// PTP -- Prime coincident along prime path
+	// PTRND -- Net difficulty until dom or terminus along region path
+	// PTPND -- Net difficulty until terminus along prime path
+	PTZ, _, err := hc.Engine().PreviousCoincidentOnPath(hc, header, slice, params.PRIME, params.ZONE)
+	if err != nil {
+		return []common.Hash{}, nil, err
+	}
+
+	PTR, PTRND, err := hc.Engine().PreviousCoincidentOnPath(hc, header, slice, params.PRIME, params.REGION)
+	if err != nil {
+		return []common.Hash{}, nil, err
+	}
+
+	PTP, PTPND, err := hc.Engine().PreviousCoincidentOnPath(hc, header, slice, params.PRIME, params.PRIME)
+	if err != nil {
+		return []common.Hash{}, nil, err
+	}
+
+	if PTZ != PTR || PTR != PTP || PTP != PTZ {
+		return []common.Hash{}, nil, errors.New("there exists a prime twist")
+	}
+
+	return []common.Hash{PTP, RTR, header.Hash()}, []*big.Int{PTPND, PTRND, RTZND}, nil
+}
+
+// calcHLCRNetDifficulty calculates the net difficulty from previous prime.
+// The netDifficulties parameter inputs the nets of instantaneous difficulties from the terminus block.
+// By correctly summing the net difficulties we have obtained the proper array to be compared in HLCR.
+func (hc *HeaderChain) CalcHLCRNetDifficulty(terminalHashes []common.Hash, netDifficulties []*big.Int) ([]*big.Int, error) {
+
+	if (terminalHashes[0] == common.Hash{}) || (terminalHashes[1] == common.Hash{}) || (terminalHashes[2] == common.Hash{}) {
+		return nil, errors.New("one or many of the  terminal hashes were nil")
+	}
+
+	netDifficulty := big.NewInt(0)
+	primeNet := netDifficulties[0]
+	if terminalHashes[0] == terminalHashes[1] && terminalHashes[1] == terminalHashes[2] {
+		return []*big.Int{primeNet, primeNet, primeNet}, nil
+	} else if terminalHashes[0] == terminalHashes[1] {
+		zoneNet := netDifficulty.Add(primeNet, netDifficulties[2])
+		return []*big.Int{primeNet, primeNet, zoneNet}, nil
+	} else {
+		regionNet := netDifficulty.Add(primeNet, netDifficulties[1])
+		zoneNet := netDifficulty.Add(regionNet, netDifficulties[2])
+		return []*big.Int{primeNet, regionNet, zoneNet}, nil
+	}
+}
+
 // SetGenesis sets a new genesis block header for the chain
 func (hc *HeaderChain) SetGenesis(head *types.Header) {
 	hc.genesisHeader = head
@@ -689,5 +848,15 @@ func (hc *HeaderChain) GetGasUsedInChain(block *types.Block, length int) int64 {
 // GetUnclesInChain retrieves all the uncles from a given block backwards until
 // a specific distance is reached.
 func (hc *HeaderChain) GetUnclesInChain(block *types.Block, length int) []*types.Header {
+	return nil
+}
+
+// CheckContextAndOrderRange checks to make sure the range of a context or order is valid
+func (hc *HeaderChain) CheckContextAndOrderRange(context int) error {
+	return nil
+}
+
+// CheckLocationRange checks to make sure the range of r and z are valid
+func (hc *HeaderChain) CheckLocationRange(location []byte) error {
 	return nil
 }

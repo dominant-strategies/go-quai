@@ -344,3 +344,13 @@ func (cr *fakeChainReader) GetExternalBlocks(header *types.Header) ([]*types.Ext
 func (cr *fakeChainReader) GetLinkExternalBlocks(header *types.Header) ([]*types.ExternalBlock, error) {
 	return nil, nil
 }
+
+// CheckContextAndOrderRange checks to make sure the range of a context or order is valid
+func (cr *fakeChainReader) CheckContextAndOrderRange(context int) error {
+	return nil
+}
+
+// CheckLocationRange checks to make sure the range of r and z are valid
+func (cr *fakeChainReader) CheckLocationRange(location []byte) error {
+	return nil
+}

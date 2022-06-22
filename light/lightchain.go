@@ -201,7 +201,7 @@ func (lc *LightChain) ResetWithGenesisBlock(genesis *types.Block) {
 
 	// Prepare the genesis block and reinitialise the chain
 	batch := lc.chainDb.NewBatch()
-	rawdb.WriteTd(batch, genesis.Hash(), genesis.NumberU64(), genesis.Difficulty())
+	rawdb.WriteTd(batch, genesis.Hash(), genesis.NumberU64(), genesis.Header().Difficulty)
 	rawdb.WriteBlock(batch, genesis)
 	rawdb.WriteHeadHeaderHash(batch, genesis.Hash())
 	if err := batch.Write(); err != nil {
@@ -426,19 +426,19 @@ func (lc *LightChain) CurrentHeader() *types.Header {
 
 // GetTd retrieves a block's total difficulty in the canonical chain from the
 // database by hash and number, caching it if found.
-func (lc *LightChain) GetTd(hash common.Hash, number uint64) *big.Int {
+func (lc *LightChain) GetTd(hash common.Hash, number uint64) []*big.Int {
 	return lc.hc.GetTd(hash, number)
 }
 
 // GetTdByHash retrieves a block's total difficulty in the canonical chain from the
 // database by hash, caching it if found.
-func (lc *LightChain) GetTdByHash(hash common.Hash) *big.Int {
+func (lc *LightChain) GetTdByHash(hash common.Hash) []*big.Int {
 	return lc.hc.GetTdByHash(hash)
 }
 
 // GetHeaderByNumberOdr retrieves the total difficult from the database or
 // network by hash and number, caching it (associated with its hash) if found.
-func (lc *LightChain) GetTdOdr(ctx context.Context, hash common.Hash, number uint64) *big.Int {
+func (lc *LightChain) GetTdOdr(ctx context.Context, hash common.Hash, number uint64) []*big.Int {
 	td := lc.GetTd(hash, number)
 	if td != nil {
 		return td
@@ -624,4 +624,14 @@ func (lc *LightChain) DisableCheckFreq() {
 // EnableCheckFreq enables header validation.
 func (lc *LightChain) EnableCheckFreq() {
 	atomic.StoreInt32(&lc.disableCheckFreq, 0)
+}
+
+// CheckContextAndOrderRange checks to make sure the range of a context or order is valid
+func (lc *LightChain) CheckContextAndOrderRange(context int) error {
+	return nil
+}
+
+// CheckLocationRange checks to make sure the range of r and z are valid
+func (lc *LightChain) CheckLocationRange(location []byte) error {
+	return nil
 }

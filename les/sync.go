@@ -97,7 +97,7 @@ func (h *clientHandler) synchronise(peer *serverPeer) {
 	// Make sure the peer's TD is higher than our own.
 	latest := h.backend.blockchain.CurrentHeader()
 	currentTd := rawdb.ReadTd(h.backend.chainDb, latest.Hash(), latest.Number[types.QuaiNetworkContext].Uint64())
-	if currentTd != nil && peer.Td().Cmp(currentTd) < 0 {
+	if currentTd != nil && peer.Td().Cmp(currentTd[types.QuaiNetworkContext]) < 0 {
 		return
 	}
 	// Recap the checkpoint. The light client may be connected to several different

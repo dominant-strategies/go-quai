@@ -84,6 +84,7 @@ var (
 
 	errInsertionInterrupted = errors.New("insertion is interrupted")
 	errExtBlockNotFound     = errors.New("error finding external block by context and hash")
+	errChainStopped         = errors.New("blockchain is stopped")
 )
 
 const (
@@ -150,12 +151,6 @@ var defaultCacheConfig = &CacheConfig{
 	SnapshotLimit:      256,
 	SnapshotWait:       true,
 	ExternalBlockLimit: 256,
-}
-
-type extBlockLink struct {
-	prime   common.Hash     // Last applied prime hash
-	regions []common.Hash   // Last applied region hashes
-	zones   [][]common.Hash // Last applied zone hashes
 }
 
 // BlockChain represents the canonical chain given a database with a genesis
@@ -227,16 +222,15 @@ type BlockChain struct {
 	prefetcher Prefetcher
 	processor  Processor // Block transaction processor interface
 	vmConfig   vm.Config
+	forker     *ForkChoice
 
 	shouldPreserve func(*types.Block) bool // Function used to determine whether should preserve the given block.
-
-	blockLink *extBlockLink // Struct that maintains cannon linking of external blocks
 }
 
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator and
 // Processor.
-func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(block *types.Block) bool, txLookupLimit *uint64) (*BlockChain, error) {
+func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64) (*BlockChain, error) {
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
 	}
@@ -266,7 +260,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			Preimages: cacheConfig.Preimages,
 		}),
 		quit:               make(chan struct{}),
-		shouldPreserve:     shouldPreserve,
 		bodyCache:          bodyCache,
 		bodyRLPCache:       bodyRLPCache,
 		receiptsCache:      receiptsCache,
@@ -278,6 +271,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		engine:             engine,
 		vmConfig:           vmConfig,
 	}
+
+	bc.forker = NewForkChoice(bc, shouldPreserve)
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
 	bc.processor = NewStateProcessor(chainConfig, bc, engine)
@@ -406,7 +401,9 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		bc.snaps, _ = snapshot.New(bc.db, bc.stateCache.TrieDB(), bc.cacheConfig.SnapshotLimit, head.Root(), !bc.cacheConfig.SnapshotWait, true, recover)
 	}
 	// Take ownership of this particular state
+	bc.wg.Add(1)
 	go bc.update()
+
 	if txLookupLimit != nil {
 		bc.txLookupLimit = *txLookupLimit
 
@@ -426,9 +423,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			triedb.SaveCachePeriodically(bc.cacheConfig.TrieCleanJournal, bc.cacheConfig.TrieCleanRejournal, bc.quit)
 		}()
 	}
-
-	// Once we have updated the state of the chain, generate the extBlockLink struct for processing of ext blocks.
-	bc.GenerateExtBlockLink(bc.CurrentHeader())
 
 	return bc, nil
 }
@@ -750,7 +744,7 @@ func (bc *BlockChain) ResetWithGenesisBlock(genesis *types.Block) error {
 
 	// Prepare the genesis block and reinitialise the chain
 	batch := bc.db.NewBatch()
-	rawdb.WriteTd(batch, genesis.Hash(), genesis.NumberU64(), genesis.Difficulty())
+	rawdb.WriteTd(batch, genesis.Hash(), genesis.NumberU64(), genesis.Header().Difficulty)
 	rawdb.WriteBlock(batch, genesis)
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to write genesis block", "err", err)
@@ -1194,13 +1188,17 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 
 		// Rewind may have occurred, skip in that case.
 		if bc.CurrentHeader().Number[types.QuaiNetworkContext].Cmp(head.Number()) >= 0 {
-			currentFastBlock, td := bc.CurrentFastBlock(), bc.GetTd(head.Hash(), head.NumberU64())
-			if bc.GetTd(currentFastBlock.Hash(), currentFastBlock.NumberU64()).Cmp(td) < 0 {
-				rawdb.WriteHeadFastBlockHash(bc.db, head.Hash())
-				bc.currentFastBlock.Store(head)
-				headFastBlockGauge.Update(int64(head.NumberU64()))
-				return true
+			reorg, err := bc.forker.ReorgNeeded(bc.CurrentFastBlock().Header(), head.Header())
+			if err != nil {
+				log.Warn("Reorg failed", "err", err)
+				return false
+			} else if !reorg {
+				return false
 			}
+			rawdb.WriteHeadFastBlockHash(bc.db, head.Hash())
+			bc.currentFastBlock.Store(head)
+			headFastBlockGauge.Update(int64(head.NumberU64()))
+			return true
 		}
 		return false
 	}
@@ -1236,7 +1234,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 
 		// Write all chain data to ancients.
 		td := bc.GetTd(first.Hash(), first.NumberU64())
-		writeSize, err := rawdb.WriteAncientBlocks(bc.db, blockChain, receiptChain, td)
+		writeSize, err := rawdb.WriteAncientBlocks(bc.db, blockChain, receiptChain, td[types.QuaiNetworkContext])
 		size += writeSize
 		if err != nil {
 			log.Error("Error importing chain data to ancients", "err", err)
@@ -1432,7 +1430,7 @@ var lastWrite uint64
 // writeBlockWithoutState writes only the block and its metadata to the database,
 // but does not write any state. This is used to construct competing side forks
 // up to the point where they exceed the canonical total difficulty.
-func (bc *BlockChain) writeBlockWithoutState(block *types.Block, td *big.Int) (err error) {
+func (bc *BlockChain) writeBlockWithoutState(block *types.Block, td []*big.Int) (err error) {
 	bc.wg.Add(1)
 	defer bc.wg.Done()
 
@@ -1461,22 +1459,76 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 	return nil
 }
 
-// WriteBlockWithState writes the block and all associated state to the database.
-func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, linkExtBlocks []*types.ExternalBlock, emitHeadEvent bool) (status WriteStatus, err error) {
-	return bc.writeBlockWithState(block, receipts, logs, state, linkExtBlocks, emitHeadEvent)
+// NdToTd returns the total difficulty for a header given the net difficulty
+func (bc *BlockChain) NdToTd(header *types.Header, nD []*big.Int) ([]*big.Int, error) {
+	if header == nil {
+		return nil, errors.New("header provided to ndtotd is nil")
+	}
+
+	k := big.NewInt(0)
+	k.Sub(k, header.Difficulty[0])
+
+	prevExternTerminus := common.Hash{}
+	for {
+		prevExternTerminus, prevExternTd, err := bc.Engine().PreviousCoincidentOnPath(bc, header, header.Location, params.PRIME, params.PRIME)
+		if err != nil {
+			return nil, err
+
+		}
+		k.Add(k, prevExternTd)
+
+		// subtract the terminal block difficulty
+		k.Sub(k, bc.GetHeaderByHash(prevExternTerminus).Difficulty[0])
+
+		if bc.hc.GetBlockNumber(prevExternTerminus) != nil {
+			break
+		}
+		header = bc.GetHeaderByHash(prevExternTerminus)
+	}
+	k.Add(k, bc.GetTdByHash(prevExternTerminus)[params.PRIME])
+
+	// adding the common total difficulty to the net
+	nD[0].Add(nD[0], k)
+	nD[1].Add(nD[1], k)
+	nD[2].Add(nD[2], k)
+
+	return nD, nil
+}
+
+// CalcTd calculates the TD of the given header using PCRC and CalcHLCRNetDifficulty.
+func (bc *BlockChain) CalcTd(header *types.Header) ([]*big.Int, error) {
+	// Check PCRC for the external block and return the terminal hash and net difficulties
+	externTerminalHashes, externNetDifficulties, err := bc.PCRC(header)
+	if err != nil {
+		return nil, err
+	}
+	if externTerminalHashes[0] == bc.chainConfig.GenesisHashes[0] {
+		return externNetDifficulties, nil
+	}
+
+	// Use HLCR to compute net total difficulty
+	externNetTd, err := bc.CalcHLCRNetDifficulty(externTerminalHashes, externNetDifficulties)
+	if err != nil {
+		return nil, err
+	}
+
+	externTerminalHeader := bc.GetHeaderByHash(externTerminalHashes[0])
+	externTd, err := bc.NdToTd(externTerminalHeader, externNetTd)
+	if err != nil {
+		return nil, err
+	}
+
+	return externTd, nil
 }
 
 // writeBlockWithState writes the block and all associated state to the database,
 // but is expects the chain mutex to be held.
-func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, linkExtBlocks []*types.ExternalBlock, emitHeadEvent bool) (status WriteStatus, err error) {
-	// Make sure no inconsistent state is leaked during insertion
-	currentBlock := bc.CurrentBlock()
+func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, linkExtBlocks []*types.ExternalBlock) error {
 
-	externTd, localTd, err := bc.getHierarchicalTD(currentBlock, block)
+	externTd, err := bc.CalcTd(block.Header())
 	if err != nil {
-		return NonStatTy, err
+		return err
 	}
-
 	// Irrelevant of the canonical status, write the block itself to the database.
 	//
 	// Note all the components of block(td, hash->number map, header, body, receipts)
@@ -1493,14 +1545,14 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	// Commit all cached state changes into underlying memory database.
 	root, err := state.Commit(bc.chainConfig.IsEIP158(block.Number()))
 	if err != nil {
-		return NonStatTy, err
+		return err
 	}
 	triedb := bc.stateCache.TrieDB()
 
 	// If we're running an archive node, always flush
 	if bc.cacheConfig.TrieDirtyDisabled {
 		if err := triedb.Commit(root, false, nil); err != nil {
-			return NonStatTy, err
+			return err
 		}
 	} else {
 		// Full but not archive node, do proper garbage collection
@@ -1549,22 +1601,44 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			}
 		}
 	}
+	return nil
+}
+
+// WriteBlockWithState writes the block and all associated state to the database.
+func (bc *BlockChain) WriteBlockAndSetHead(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, linkExtBlocks []*types.ExternalBlock, emitHeadEvent bool) (status WriteStatus, err error) {
+	if !bc.chainmu.TryLock() {
+		return NonStatTy, errChainStopped
+	}
+	defer bc.chainmu.Unlock()
+
+	return bc.writeBlockAndSetHead(block, receipts, logs, state, linkExtBlocks, emitHeadEvent)
+}
+
+// writeBlockAndSetHead writes the block and all associated state to the database,
+// and also it applies the given block as the new chain head. This function expects
+// the chain mutex to be held.
+func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, linkExtBlocks []*types.ExternalBlock, emitHeadEvent bool) (status WriteStatus, err error) {
+	if err := bc.writeBlockWithState(block, receipts, logs, state, linkExtBlocks); err != nil {
+		return NonStatTy, err
+	}
+	currentBlock := bc.CurrentBlock()
+	reorg, err := bc.forker.ReorgNeeded(currentBlock.Header(), block.Header())
+	if err != nil {
+		return NonStatTy, err
+	}
+
 	// If the total difficulty is higher than our known, add it to the canonical chain
 	// Second clause in the if statement reduces the vulnerability to selfish mining.
 	// Please refer to http://www.cs.cornell.edu/~ie53/publications/btcProcFC.pdf
-	reorg := externTd.Cmp(localTd) > 0
-	currentBlock = bc.CurrentBlock()
 	if reorg {
 		// Reorganise the chain if the parent is not the head block
 		if block.ParentHash() != currentBlock.Hash() {
 			if err := bc.reorg(currentBlock, block); err != nil {
-				bc.GenerateExtBlockLink(currentBlock.Header())
 				return NonStatTy, err
 			}
 		}
 		status = CanonStatTy
 		if err := bc.CheckLinkExtBlocks(block, linkExtBlocks); err != nil {
-			bc.GenerateExtBlockLink(currentBlock.Header())
 			return NonStatTy, err
 		}
 	} else {
@@ -1583,7 +1657,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		}
 		// In theory we should fire a ChainHeadEvent when we inject
 		// a canonical block, but sometimes we can insert a batch of
-		// canonicial blocks. Avoid firing too much ChainHeadEvents,
+		// canonicial blocks. Avoid firing too many ChainHeadEvents,
 		// we will fire an accumulated ChainHeadEvent and disable fire
 		// event here.
 		if emitHeadEvent {
@@ -1597,96 +1671,8 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 }
 
 // getHierarchicalTD retrieves the local and extern td for two blocks. Taking hierarchical order into an account.
-func (bc *BlockChain) getHierarchicalTD(currentBlock *types.Block, block *types.Block) (*big.Int, *big.Int, error) {
-	var localOrder int
-	var err error
-	if currentBlock.NumberU64() == 0 {
-		localOrder = types.QuaiNetworkContext
-	} else {
-		localOrder, err = bc.Engine().GetDifficultyOrder(currentBlock.Header())
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-
-	externOrder, err := bc.Engine().GetDifficultyOrder(block.Header())
-	if err != nil {
-		return nil, nil, err
-	}
-
-	fmt.Println("Local Order ", localOrder, " Extern Order", externOrder)
-
-	localHeader := currentBlock.Header()
-	externHeader := block.Header()
-
-	localTd, externTd := big.NewInt(0), big.NewInt(0)
-	// If the incoming block is a coincident block
-	if externOrder < localOrder {
-		var lowestOrder int
-		externTd, lowestOrder, err = bc.AggregateTotalDifficulty(localOrder, block.Header())
-		if err != nil {
-			return nil, nil, err
-		}
-
-		// get coincident and get the Total difficulty of it
-		localHeader, err = bc.Engine().GetCoincidentAtOrder(bc, types.QuaiNetworkContext, lowestOrder, currentBlock.Header())
-		if err != nil {
-			return nil, nil, err
-		}
-
-		localBlock := bc.GetBlockByHash(localHeader.Hash())
-		localTd = bc.GetTd(localHeader.Hash(), localBlock.NumberU64())
-	} else if localOrder < externOrder {
-		// get coincident and get the Total difficulty of it
-		localTd = bc.GetTd(currentBlock.Header().Hash(), currentBlock.NumberU64())
-
-		externHeader, err = bc.Engine().GetCoincidentAtOrder(bc, types.QuaiNetworkContext, localOrder, block.Header())
-		if err != nil {
-			return nil, nil, err
-		}
-
-		externBlock := bc.GetBlockByHash(externHeader.Hash())
-		fmt.Println("case 2: externHeader", externHeader.Number, externHeader.Location, externHeader.Hash())
-		// If we are building on the same point
-		if localHeader.Hash() == externHeader.Hash() {
-			ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
-			if ptd == nil {
-				return nil, nil, err
-			}
-			externTd = new(big.Int).Add(block.Difficulty(), ptd)
-			fmt.Println("case 2: GetTD with add", block.Difficulty(), ptd)
-		} else {
-			fmt.Println("case 2: GetTD for externHeader without add ")
-			externTd = bc.GetTd(externHeader.Hash(), externBlock.NumberU64())
-		}
-	} else if localOrder < types.QuaiNetworkContext {
-		localTd = bc.GetTd(currentBlock.Header().Hash(), currentBlock.NumberU64())
-		externTd, _, err = bc.AggregateTotalDifficulty(localOrder+1, block.Header())
-		if err != nil {
-			return nil, nil, err
-		}
-	} else {
-		// If the localHeader and the externHeader order is same as the chain context, we need
-		// to ensure that the previous coincident of the externHeader matches the previous coincident
-		// of the localHeader. This makes sure that the imported chain with externHeader doesn't outrun
-		// the chain.
-		if types.QuaiNetworkContext > 0 {
-			localPrevCoincident, _ := bc.Engine().GetCoincidentAtOrder(bc, localOrder, localOrder-1, localHeader)
-			externPrevCoincident, _ := bc.Engine().GetCoincidentAtOrder(bc, localOrder, localOrder-1, externHeader)
-			if localPrevCoincident.Hash() != externPrevCoincident.Hash() {
-				return nil, nil, err
-			}
-		}
-
-		ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
-		if ptd == nil {
-			return nil, nil, err
-		}
-		externTd = new(big.Int).Add(block.Difficulty(), ptd)
-		localTd = bc.GetTd(currentBlock.Hash(), currentBlock.NumberU64())
-	}
-
-	return externTd, localTd, nil
+func (bc *BlockChain) getHierarchicalTD(currentBlock *types.Block, block *types.Block) ([]*big.Int, []*big.Int, error) {
+	return currentBlock.Header().Difficulty, block.Header().Difficulty, nil
 }
 
 // addFutureBlock checks if the block is within the max allowed window to get
@@ -1858,18 +1844,13 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 		return fmt.Errorf("reorg header was null")
 	}
 
-	// Reset the blockLink in the blockchain state processor.
-	bc.GenerateExtBlockLink(bc.CurrentBlock().Header())
-
 	return nil
 }
 
 // InsertChain attempts to insert the given batch of blocks in to the canonical
 // chain or, otherwise, create a fork. If an error is returned it will return
 // the index number of the failing block as well an error describing what went
-// wrong.
-//
-// After insertion is done, all accumulated events will be fired.
+// wrong. After insertion is done, all accumulated events will be fired.
 func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	// Sanity check that we have something meaningful to import
 	if len(chain) == 0 {
@@ -1899,7 +1880,7 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	// Pre-checks passed, start the full block imports
 	bc.reorgmu.Lock()
 	bc.chainmu.Lock()
-	n, err := bc.insertChain(chain, true)
+	n, err := bc.insertChain(chain, true, true)
 	bc.chainmu.Unlock()
 	bc.reorgmu.Unlock()
 
@@ -1915,7 +1896,7 @@ func (bc *BlockChain) InsertChainWithoutSealVerification(block *types.Block) (in
 	// Pre-checks passed, start the full block imports
 	bc.wg.Add(1)
 	bc.chainmu.Lock()
-	n, err := bc.insertChain(types.Blocks([]*types.Block{block}), false)
+	n, err := bc.insertChain(types.Blocks([]*types.Block{block}), false, true)
 	bc.chainmu.Unlock()
 	bc.wg.Done()
 
@@ -1930,11 +1911,7 @@ func (bc *BlockChain) InsertChainWithoutSealVerification(block *types.Block) (in
 // racey behaviour. If a sidechain import is in progress, and the historic state
 // is imported, but then new canon-head is added before the actual sidechain
 // completes, then the historic state could be pruned again
-func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, error) {
-	for _, block := range chain {
-		fmt.Println("InsertChain block:", block.Header().Number, block.Hash())
-	}
-
+func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead bool) (int, error) {
 	// If the chain is terminating, don't even bother starting up
 	if atomic.LoadInt32(&bc.procInterrupt) == 1 {
 		return 0, nil
@@ -1965,7 +1942,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 
 	// Peek the error for the first block to decide the directing import logic
 	it := newInsertIterator(chain, results, bc.validator)
-
 	block, err := it.next()
 
 	// Left-trim all the known blocks
@@ -1976,19 +1952,17 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		// 	    from the canonical chain, which has not been verified.
 		// Skip all known blocks that are behind us
 		var (
-			current  = bc.CurrentBlock()
-			localTd  = bc.GetTd(current.Hash(), current.NumberU64())
-			externTd = bc.GetTd(block.ParentHash(), block.NumberU64()-1) // The first block can't be nil
+			reorg   bool
+			current = bc.CurrentBlock()
 		)
 		for block != nil && err == ErrKnownBlock {
-			externTd, localTd, err = bc.getHierarchicalTD(current, block)
+			reorg, err = bc.forker.ReorgNeeded(current.Header(), block.Header())
 			if err != nil {
 				return it.index, err
 			}
-			fmt.Println("InsertChain TD:", "extern", externTd, "local", localTd)
 			fmt.Println("Extern:", block.Hash(), block.Header().Number)
 			fmt.Println("Local:", current.Hash(), current.Header().Number)
-			if localTd.Cmp(externTd) < 0 {
+			if reorg {
 				break
 			}
 			log.Info("Ignoring already known block", "number", block.Number(), "hash", block.Hash())
@@ -2198,7 +2172,13 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 
 		// Write the block to the chain and get the status.
 		substart = time.Now()
-		status, err := bc.writeBlockWithState(block, receipts, logs, statedb, linkExtBlocks, false)
+		var status WriteStatus
+		if !setHead {
+			// Don't set the head, only insert the block
+			err = bc.writeBlockWithState(block, receipts, logs, statedb, linkExtBlocks)
+		} else {
+			status, err = bc.writeBlockAndSetHead(block, receipts, logs, statedb, linkExtBlocks, false)
+		}
 		atomic.StoreUint32(&followupInterrupt, 1)
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
@@ -2214,9 +2194,14 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		blockWriteTimer.Update(time.Since(substart) - statedb.AccountCommits - statedb.StorageCommits - statedb.SnapshotCommits)
 		blockInsertTimer.UpdateSince(start)
 
+		if !setHead {
+			// We did not setHead, so we don't have any stats to update
+			log.Info("Inserted block", "number", block.Number(), "hash", block.Hash(), "txs", len(block.Transactions()), "elapsed", common.PrettyDuration(time.Since(start)))
+			return it.index, nil
+		}
+
 		switch status {
 		case CanonStatTy:
-			bc.SetLinkBlocksToLastApplied(linkExtBlocks)
 			bc.StoreExternalBlocks(linkExtBlocks)
 			log.Info("Inserted new block", "number", block.Header().Number, "hash", block.Hash(), "extBlocks", len(externalBlocks),
 				"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
@@ -2275,8 +2260,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 // switch over to the new chain if the TD exceeded the current chain.
 func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (int, error) {
 	var (
-		externTd *big.Int
-		current  = bc.CurrentBlock()
+		externTd  []*big.Int
+		lastBlock = block
+		current   = bc.CurrentBlock()
 	)
 	// The first sidechain block error is already verified to be ErrPrunedAncestor.
 	// Since we don't import them here, we expect ErrUnknownAncestor for the remaining
@@ -2313,9 +2299,11 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 			}
 		}
 		if externTd == nil {
-			externTd = bc.GetTd(block.ParentHash(), block.NumberU64()-1)
+			externTd, err = bc.CalcTd(block.Header())
+			if err != nil {
+				return it.index, err
+			}
 		}
-		externTd = new(big.Int).Add(externTd, block.Difficulty())
 
 		if !bc.HasBlock(block.Hash(), block.NumberU64()) {
 			start := time.Now()
@@ -2327,6 +2315,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 				"txs", len(block.Transactions()), "gas", block.GasUsed(), "uncles", len(block.Uncles()),
 				"root", block.Root())
 		}
+		lastBlock = block
 	}
 	// At this point, we've written all sidechain blocks to database. Loop ended
 	// either on some other error or all were processed. If there was some other
@@ -2334,8 +2323,12 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 	//
 	// If the externTd was larger than our local TD, we now need to reimport the previous
 	// blocks to regenerate the required state
-	localTd := bc.GetTd(current.Hash(), current.NumberU64())
-	if localTd.Cmp(externTd) > 0 {
+	reorg, err := bc.forker.ReorgNeeded(current.Header(), lastBlock.Header())
+	if err != nil {
+		return it.index, err
+	}
+	if !reorg {
+		localTd := bc.GetTd(current.Hash(), current.NumberU64())
 		log.Info("Sidechain written to disk", "start", it.first().NumberU64(), "end", it.previous().Number, "sidetd", externTd, "localtd", localTd)
 		return it.index, err
 	}
@@ -2371,7 +2364,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 		// memory here.
 		if len(blocks) >= 2048 || memory > 64*1024*1024 {
 			log.Info("Importing heavy sidechain segment", "blocks", len(blocks), "start", blocks[0].NumberU64(), "end", block.NumberU64())
-			if _, err := bc.insertChain(blocks, false); err != nil {
+			if _, err := bc.insertChain(blocks, false, true); err != nil {
 				return 0, err
 			}
 			blocks, memory = blocks[:0], 0
@@ -2385,7 +2378,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 	}
 	if len(blocks) > 0 {
 		log.Info("Importing sidechain segment", "start", blocks[0].NumberU64(), "end", blocks[len(blocks)-1].NumberU64())
-		return bc.insertChain(blocks, false)
+		return bc.insertChain(blocks, false, true)
 	}
 	return 0, nil
 }
@@ -2399,6 +2392,44 @@ func (bc *BlockChain) getAllHeaders(blocks []*types.Block) []*types.Header {
 		headers = append(headers, blocks[i].Header())
 	}
 	return headers
+}
+
+// collectLogs collects the logs that were generated or removed during
+// the processing of the block that corresponds with the given hash.
+// These logs are later announced as deleted or reborn.
+func (bc *BlockChain) collectLogs(hash common.Hash, removed bool) []*types.Log {
+	number := bc.hc.GetBlockNumber(hash)
+	if number == nil {
+		return nil
+	}
+	receipts := rawdb.ReadReceipts(bc.db, hash, *number, bc.chainConfig)
+
+	var logs []*types.Log
+	for _, receipt := range receipts {
+		for _, log := range receipt.Logs {
+			l := *log
+			if removed {
+				l.Removed = true
+			}
+			logs = append(logs, &l)
+		}
+	}
+	return logs
+}
+
+// mergeLogs returns a merged log slice with specified sort order.
+func mergeLogs(logs [][]*types.Log, reverse bool) []*types.Log {
+	var ret []*types.Log
+	if reverse {
+		for i := len(logs) - 1; i >= 0; i-- {
+			ret = append(ret, logs[i]...)
+		}
+	} else {
+		for i := 0; i < len(logs); i++ {
+			ret = append(ret, logs[i]...)
+		}
+	}
+	return ret
 }
 
 // reorg takes two blocks, an old chain and a new chain and will reconstruct the
@@ -2415,49 +2446,6 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 
 		deletedLogs [][]*types.Log
 		rebirthLogs [][]*types.Log
-
-		// collectLogs collects the logs that were generated or removed during
-		// the processing of the block that corresponds with the given hash.
-		// These logs are later announced as deleted or reborn
-		collectLogs = func(hash common.Hash, removed bool) {
-			number := bc.hc.GetBlockNumber(hash)
-			if number == nil {
-				return
-			}
-			receipts := rawdb.ReadReceipts(bc.db, hash, *number, bc.chainConfig)
-
-			var logs []*types.Log
-			for _, receipt := range receipts {
-				for _, log := range receipt.Logs {
-					l := *log
-					if removed {
-						l.Removed = true
-					}
-					logs = append(logs, &l)
-				}
-			}
-			if len(logs) > 0 {
-				if removed {
-					deletedLogs = append(deletedLogs, logs)
-				} else {
-					rebirthLogs = append(rebirthLogs, logs)
-				}
-			}
-		}
-		// mergeLogs returns a merged log slice with specified sort order.
-		mergeLogs = func(logs [][]*types.Log, reverse bool) []*types.Log {
-			var ret []*types.Log
-			if reverse {
-				for i := len(logs) - 1; i >= 0; i-- {
-					ret = append(ret, logs[i]...)
-				}
-			} else {
-				for i := 0; i < len(logs); i++ {
-					ret = append(ret, logs[i]...)
-				}
-			}
-			return ret
-		}
 	)
 
 	// Reduce the longer chain to the same number as the shorter one
@@ -2466,7 +2454,12 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		for ; oldBlock != nil && oldBlock.NumberU64() != newBlock.NumberU64(); oldBlock = bc.GetBlock(oldBlock.ParentHash(), oldBlock.NumberU64()-1) {
 			oldChain = append(oldChain, oldBlock)
 			deletedTxs = append(deletedTxs, oldBlock.Transactions()...)
-			collectLogs(oldBlock.Hash(), true)
+
+			// Collect deleted logs for notification
+			logs := bc.collectLogs(oldBlock.Hash(), true)
+			if len(logs) > 0 {
+				deletedLogs = append(deletedLogs, logs)
+			}
 		}
 	} else {
 		// New chain is longer, stash all blocks away for subsequent insertion
@@ -2494,7 +2487,12 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		// Remove an old block as well as stash away a new block
 		oldChain = append(oldChain, oldBlock)
 		deletedTxs = append(deletedTxs, oldBlock.Transactions()...)
-		collectLogs(oldBlock.Hash(), true)
+
+		// Collect deleted logs for notification
+		logs := bc.collectLogs(oldBlock.Hash(), true)
+		if len(logs) > 0 {
+			deletedLogs = append(deletedLogs, logs)
+		}
 
 		newChain = append(newChain, newBlock)
 
@@ -2531,7 +2529,10 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		bc.writeHeadBlock(newChain[i])
 
 		// Collect reborn logs due to chain reorg
-		collectLogs(newChain[i].Hash(), false)
+		logs := bc.collectLogs(newChain[i].Hash(), false)
+		if len(logs) > 0 {
+			rebirthLogs = append(rebirthLogs, logs)
+		}
 
 		// Collect the new added transactions.
 		addedTxs = append(addedTxs, newChain[i].Transactions()...)
@@ -2570,15 +2571,13 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		}
 	}
 
-	// Reset the blockLink in the blockchain state processor.
-	bc.GenerateExtBlockLink(newBlock.Header())
-
 	return nil
 }
 
 func (bc *BlockChain) update() {
 	futureTimer := time.NewTicker(5 * time.Second)
 	defer futureTimer.Stop()
+	defer bc.wg.Done()
 	for {
 		select {
 		case <-futureTimer.C:
@@ -2730,13 +2729,13 @@ func (bc *BlockChain) CurrentHeader() *types.Header {
 
 // GetTd retrieves a block's total difficulty in the canonical chain from the
 // database by hash and number, caching it if found.
-func (bc *BlockChain) GetTd(hash common.Hash, number uint64) *big.Int {
+func (bc *BlockChain) GetTd(hash common.Hash, number uint64) []*big.Int {
 	return bc.hc.GetTd(hash, number)
 }
 
 // GetTdByHash retrieves a block's total difficulty in the canonical chain from the
 // database by hash, caching it if found.
-func (bc *BlockChain) GetTdByHash(hash common.Hash) *big.Int {
+func (bc *BlockChain) GetTdByHash(hash common.Hash) []*big.Int {
 	return bc.hc.GetTdByHash(hash)
 }
 
@@ -2974,201 +2973,6 @@ func (bc *BlockChain) QueueAndRetrieveExtBlocks(externalBlocks []*types.External
 	return resultBlocks
 }
 
-// GenerateExtBlockLink will generate blockLink struct for the last applied external block hashes for a current context.
-// This will be used to check the trace of each set of applied external block sets so that they keep proper lineage to previous
-// traces. GenerateExtBlockLink will be used upon start up and the blockLink struct will be continually updated as more blocks are processed.
-func (bc *BlockChain) GenerateExtBlockLink(currentHeader *types.Header) {
-	// Get the previous hashes from the first external blocks applied in the new GetExternalBlocks set.
-	// Initial the linkBlocks into 3x3 structure.
-	linkBlocks := &extBlockLink{
-		prime:   bc.chainConfig.GenesisHashes[0],
-		regions: make([]common.Hash, 3),
-		zones:   [][]common.Hash{make([]common.Hash, 3), make([]common.Hash, 3), make([]common.Hash, 3)},
-	}
-	for i := range linkBlocks.regions {
-		linkBlocks.regions[i] = bc.chainConfig.GenesisHashes[1]
-		for j := range linkBlocks.zones[i] {
-			linkBlocks.zones[i][j] = bc.chainConfig.GenesisHashes[2]
-		}
-	}
-
-	// Keep track of what the method started with.
-	// Deep copy the struct.
-	startingLinkBlocks := &extBlockLink{
-		prime:   linkBlocks.prime,
-		regions: make([]common.Hash, len(linkBlocks.regions)),
-		zones:   make([][]common.Hash, 3),
-	}
-	copy(startingLinkBlocks.regions, linkBlocks.regions)
-	for i := range linkBlocks.zones {
-		startingLinkBlocks.zones[i] = make([]common.Hash, len(linkBlocks.zones[i]))
-		copy(startingLinkBlocks.zones[i], linkBlocks.zones[i])
-	}
-
-	fmt.Println("Current Header Number", currentHeader.Number, currentHeader.Hash())
-	if currentHeader.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) < 1 {
-		bc.blockLink = linkBlocks
-		return
-	}
-
-	// Need to keep first hash that is put. Region went all the way back to the first region block.
-	populated := false
-	for !populated {
-
-		// Populate the linkBlocks struct with the block hashes of the last applied ext block of that chain.
-		extBlocks, err := bc.GetLinkExternalBlocks(currentHeader)
-		if err != nil {
-			log.Error("GenerateExtBlockLink:", "err", err)
-		}
-
-		// Keep track of what the method started with.
-		// Deep copy the struct.
-		tempLinkBlocks := &extBlockLink{
-			prime:   linkBlocks.prime,
-			regions: make([]common.Hash, len(linkBlocks.regions)),
-			zones:   [][]common.Hash{make([]common.Hash, 3), make([]common.Hash, 3), make([]common.Hash, 3)},
-		}
-
-		copy(tempLinkBlocks.regions, linkBlocks.regions)
-		for i := range linkBlocks.zones {
-			tempLinkBlocks.zones[i] = make([]common.Hash, len(linkBlocks.zones[i]))
-			copy(tempLinkBlocks.zones[i], linkBlocks.zones[i])
-		}
-
-		tempLinkBlocks = bc.generateLinkBlocksLastApplied(extBlocks, tempLinkBlocks)
-
-		// If our tempLink is new and our starting link hasn't changed.
-		if tempLinkBlocks.prime != linkBlocks.prime && startingLinkBlocks.prime == linkBlocks.prime {
-			fmt.Println("Setting linkBlocks.prime", tempLinkBlocks.prime)
-			linkBlocks.prime = tempLinkBlocks.prime
-		}
-		for i := range linkBlocks.regions {
-			if tempLinkBlocks.regions[i] != linkBlocks.regions[i] && startingLinkBlocks.regions[i] == linkBlocks.regions[i] {
-				fmt.Println("Setting linkBlocks.region", i+1, tempLinkBlocks.regions[i])
-				linkBlocks.regions[i] = tempLinkBlocks.regions[i]
-			}
-			for j := range linkBlocks.zones[i] {
-				if tempLinkBlocks.zones[i][j] != linkBlocks.zones[i][j] && startingLinkBlocks.zones[i][j] == linkBlocks.zones[i][j] {
-					fmt.Println("Setting linkBlocks.zone", i+1, j+1, tempLinkBlocks.zones[i][j])
-					linkBlocks.zones[i][j] = tempLinkBlocks.zones[i][j]
-				}
-			}
-		}
-
-		// Convert config for region and zone location into ints to compare during check.
-		regionLoc := int(bc.chainConfig.Location[0])
-		zoneLoc := int(bc.chainConfig.Location[0])
-
-		// Check if linkBlocks is populated fully for all chains in the hierarchy.
-		// Do not set populated to false if we are in Prime as Prime will not have any external blocks.
-		tempPopulated := true
-		if linkBlocks.prime == bc.chainConfig.GenesisHashes[0] && types.QuaiNetworkContext != 0 {
-			tempPopulated = false
-		} else {
-			for i := range linkBlocks.regions {
-
-				if linkBlocks.regions[i] == bc.chainConfig.GenesisHashes[1] && !(regionLoc-1 == i && types.QuaiNetworkContext == 1) {
-					tempPopulated = false
-					break
-				}
-				for j := range linkBlocks.zones[i] {
-					if linkBlocks.zones[i][j] == bc.chainConfig.GenesisHashes[2] && !(regionLoc-1 == i && zoneLoc-1 == j) {
-						tempPopulated = false
-						break
-					}
-				}
-			}
-		}
-
-		// Update the populated check with current status of populating the last applied external block hashes.
-		populated = tempPopulated
-
-		// Check if we are on block height 1 for current context.
-		if currentHeader.Number[types.QuaiNetworkContext].Cmp(big.NewInt(1)) < 1 {
-			bc.blockLink = linkBlocks
-			return
-		}
-
-		// Iterate to previous block in current context.
-		currentHeader = bc.GetHeaderByHash(currentHeader.ParentHash[types.QuaiNetworkContext])
-	}
-	bc.blockLink = linkBlocks
-}
-
-// generateLinkBlocksLastApplied will update the passed in linkBlocks struct with the latest applied external blocks.
-func (bc *BlockChain) generateLinkBlocksLastApplied(externalBlocks []*types.ExternalBlock, linkBlocks *extBlockLink) *extBlockLink {
-	// Keep track of what the method started with.
-	// Deep copy the struct.
-	startingLinkBlocks := &extBlockLink{
-		prime:   linkBlocks.prime,
-		regions: make([]common.Hash, len(linkBlocks.regions)),
-		zones:   make([][]common.Hash, 3),
-	}
-	copy(startingLinkBlocks.regions, linkBlocks.regions)
-	for i := range linkBlocks.zones {
-		startingLinkBlocks.zones[i] = make([]common.Hash, len(linkBlocks.zones[i]))
-		copy(startingLinkBlocks.zones[i], linkBlocks.zones[i])
-	}
-
-	// iterate through the extBlocks, updated the index with the last applied external blocks.
-	for _, lastAppliedBlock := range externalBlocks {
-		switch lastAppliedBlock.Context().Int64() {
-		case 0:
-			if linkBlocks.prime == startingLinkBlocks.prime {
-				linkBlocks.prime = lastAppliedBlock.Hash()
-			}
-		case 1:
-			if linkBlocks.regions[lastAppliedBlock.Header().Location[0]-1] == startingLinkBlocks.regions[lastAppliedBlock.Header().Location[0]-1] {
-				linkBlocks.regions[lastAppliedBlock.Header().Location[0]-1] = lastAppliedBlock.Hash()
-			}
-		case 2:
-			if linkBlocks.zones[lastAppliedBlock.Header().Location[0]-1][lastAppliedBlock.Header().Location[1]-1] == startingLinkBlocks.zones[lastAppliedBlock.Header().Location[0]-1][lastAppliedBlock.Header().Location[1]-1] {
-				linkBlocks.zones[lastAppliedBlock.Header().Location[0]-1][lastAppliedBlock.Header().Location[1]-1] = lastAppliedBlock.Hash()
-			}
-		}
-	}
-
-	return linkBlocks
-}
-
-// SetLinkBlocksToLastApplied will update the passed in linkBlocks struct with the latest applied external blocks.
-func (bc *BlockChain) SetLinkBlocksToLastApplied(externalBlocks []*types.ExternalBlock) {
-
-	// Keep track of what the method started with.
-	// Deep copy the struct.
-	startingLinkBlocks := &extBlockLink{
-		prime:   bc.blockLink.prime,
-		regions: make([]common.Hash, len(bc.blockLink.regions)),
-		zones:   make([][]common.Hash, 3),
-	}
-	copy(startingLinkBlocks.regions, bc.blockLink.regions)
-	for i := range bc.blockLink.zones {
-		startingLinkBlocks.zones[i] = make([]common.Hash, len(bc.blockLink.zones[i]))
-		copy(startingLinkBlocks.zones[i], bc.blockLink.zones[i])
-	}
-
-	// iterate through the extBlocks, updated the index with the last applied external blocks.
-	for _, lastAppliedBlock := range externalBlocks {
-		switch lastAppliedBlock.Context().Int64() {
-		case 0:
-			if bc.blockLink.prime == startingLinkBlocks.prime {
-				fmt.Println("setting last applied prime:", lastAppliedBlock.Header().Number, lastAppliedBlock.Header().Location, lastAppliedBlock.Context(), lastAppliedBlock.Hash())
-				bc.blockLink.prime = lastAppliedBlock.Hash()
-			}
-		case 1:
-			if bc.blockLink.regions[lastAppliedBlock.Header().Location[0]-1] == startingLinkBlocks.regions[lastAppliedBlock.Header().Location[0]-1] {
-				fmt.Println("setting last applied region:", lastAppliedBlock.Header().Number, lastAppliedBlock.Header().Location, lastAppliedBlock.Context(), lastAppliedBlock.Hash())
-				bc.blockLink.regions[lastAppliedBlock.Header().Location[0]-1] = lastAppliedBlock.Hash()
-			}
-		case 2:
-			if bc.blockLink.zones[lastAppliedBlock.Header().Location[0]-1][lastAppliedBlock.Header().Location[1]-1] == startingLinkBlocks.zones[lastAppliedBlock.Header().Location[0]-1][lastAppliedBlock.Header().Location[1]-1] {
-				fmt.Println("setting last applied zone:", lastAppliedBlock.Header().Number, lastAppliedBlock.Header().Location, lastAppliedBlock.Context(), lastAppliedBlock.Hash())
-				bc.blockLink.zones[lastAppliedBlock.Header().Location[0]-1][lastAppliedBlock.Header().Location[1]-1] = lastAppliedBlock.Hash()
-			}
-		}
-	}
-}
-
 // CheckLinkExtBlocks will check if the passed in extBlocks are valid against a block.
 func (bc *BlockChain) CheckLinkExtBlocks(block *types.Block, linkExtBlocks []*types.ExternalBlock) error {
 	if len(linkExtBlocks) > 0 {
@@ -3180,14 +2984,6 @@ func (bc *BlockChain) CheckLinkExtBlocks(block *types.Block, linkExtBlocks []*ty
 		collisionErr := bc.checkExtBlockCollision(block.Header(), linkExtBlocks)
 		if collisionErr != nil {
 			return collisionErr
-		}
-
-		cpyExtBlocks := make([]*types.ExternalBlock, len(linkExtBlocks))
-		copy(cpyExtBlocks, linkExtBlocks)
-
-		linkErr := bc.CheckExternalBlockLink(cpyExtBlocks)
-		if linkErr != nil {
-			return linkErr
 		}
 	}
 	return nil
@@ -3225,119 +3021,95 @@ func (bc *BlockChain) checkExtBlockCollision(header *types.Header, externalBlock
 	return nil
 }
 
-// CheckExternalBlockLink is the function that will ensure that the links of the provided external blocks
-// matches the previously applied external blocks.
-func (bc *BlockChain) CheckExternalBlockLink(externalBlocks []*types.ExternalBlock) error {
-	// Get the previous hashes from the first external blocks applied in the new GetExternalBlocks set.
-	// Initial the linkBlocks into 3x3 structure.
-	linkBlocks := &extBlockLink{
-		prime:   common.Hash{},
-		regions: make([]common.Hash, 3),
-		zones:   [][]common.Hash{make([]common.Hash, 3), make([]common.Hash, 3), make([]common.Hash, 3)},
-	}
-
-	for _, externalBlock := range externalBlocks {
-		context := externalBlock.Context().Int64()
-		switch context {
-		case 0:
-			linkedPreviousHash := externalBlock.Header().ParentHash[externalBlock.Context().Int64()]
-			// fmt.Println("Prime: Setting linked hash", externalBlock.Header().Number, externalBlock.Header().Location, externalBlock.Hash(), linkedPreviousHash)
-			linkBlocks.prime = linkedPreviousHash
-
-		case 1:
-			linkedPreviousHash := externalBlock.Header().ParentHash[externalBlock.Context().Int64()]
-			// fmt.Println("Region: Setting linked hash", externalBlock.Header().Number, externalBlock.Header().Location, externalBlock.Hash(), linkedPreviousHash)
-			linkBlocks.regions[externalBlock.Header().Location[0]-1] = linkedPreviousHash
-
-		case 2:
-			linkedPreviousHash := externalBlock.Header().ParentHash[externalBlock.Context().Int64()]
-			// fmt.Println("Zone: Setting linked hash:", externalBlock.Header().Number, externalBlock.Header().Location, externalBlock.Hash(), linkedPreviousHash)
-			linkBlocks.zones[externalBlock.Header().Location[0]-1][externalBlock.Header().Location[1]-1] = linkedPreviousHash
-		}
-	}
-
-	// Verify that the externalBlocks provided link with previous coincident blocks.
-	if linkBlocks.prime != (common.Hash{}) && linkBlocks.prime != bc.blockLink.prime {
-		fmt.Println("Error linking external blocks: want prime: ", bc.blockLink.prime, "have prime: ", linkBlocks.prime)
-		return fmt.Errorf("unable to link external blocks in prime")
+// HLCR does hierarchical comparison of two difficulty tuples and returns true if second tuple is greater than the first
+func (bc *BlockChain) HLCR(localDifficulties []*big.Int, externDifficulties []*big.Int) bool {
+	if localDifficulties[0].Cmp(externDifficulties[0]) < 0 {
+		return true
+	} else if localDifficulties[1].Cmp(externDifficulties[1]) < 0 {
+		return true
+	} else if localDifficulties[2].Cmp(externDifficulties[2]) < 0 {
+		return true
 	} else {
-		for i := range linkBlocks.regions {
-			if linkBlocks.regions[i] != (common.Hash{}) && linkBlocks.regions[i] != bc.blockLink.regions[i] {
-				fmt.Println("Error linking external blocks:", "location", i+1, "want region: ", bc.blockLink.regions[i], "have region: ", linkBlocks.regions[i])
-				return fmt.Errorf("unable to link external blocks in region")
-			}
-			for j := range linkBlocks.zones[i] {
-				if linkBlocks.zones[i][j] != (common.Hash{}) && linkBlocks.zones[i][j] != bc.blockLink.zones[i][j] {
-					fmt.Println("Error linking external blocks:", "location", i+1, j+1, "want zone: ", bc.blockLink.zones[i][j], "have zone: ", linkBlocks.zones[i][j])
-					return fmt.Errorf("unable to link external blocks in zone")
-				}
-			}
-		}
+		return false
 	}
-
-	return nil
 }
 
-// AggregateNetworkDifficulty aggregates the total difficulty from the previous stop Hash in the dominant chains only
-func (bc *BlockChain) AggregateTotalDifficulty(context int, header *types.Header) (*big.Int, int, error) {
+// The purpose of the Previous Coincident Reference Check (PCRC) is to establish
+// that we have linked untwisted chains prior to checking HLCR & applying external state transfers.
+func (bc *BlockChain) PCRC(header *types.Header) ([]common.Hash, []*big.Int, error) {
 
-	currentLowestContext := context
-	currentTotalDifficulty := big.NewInt(0)
-	startingHeader := header
+	if header.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
+		return bc.chainConfig.GenesisHashes, header.Difficulty, nil
+	}
 
-	// Check the difficulty context of the starting header
-	difficultyContext, err := bc.Engine().GetDifficultyOrder(header)
+	slice := header.Location
+
+	// Region twist check
+	// RTZ -- Region coincident along zone path
+	// RTR -- Region coincident along region path
+	// RTZND -- Net difficulty until dom or terminus along zone path
+	RTZ, RTZND, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.REGION, params.ZONE)
 	if err != nil {
-		return currentTotalDifficulty, currentLowestContext, fmt.Errorf("difficulty context not found")
+		return []common.Hash{}, nil, err
 	}
 
-	// this function should only be called upon a coincident block, to use it the way it is intended to be used this check is added
-	if difficultyContext >= currentLowestContext {
-		return currentTotalDifficulty, currentLowestContext, fmt.Errorf("not a coincident block")
+	RTR, _, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.REGION, params.REGION)
+	if err != nil {
+		return []common.Hash{}, nil, err
 	}
 
-	// Accumulate the difficulty until we find a header from a dominant chain or we reach a block with
-	// higher order and in the same location.
-	// If we encounter a dominant chain we repeat the same process until we find the stop hash
-	for {
-		// Check the difficulty context of the starting header
-		difficultyContext, err := bc.Engine().GetDifficultyOrder(header)
-		if err != nil {
-			return currentTotalDifficulty, currentLowestContext, fmt.Errorf("difficulty context not found")
-		}
+	if RTZ != RTR {
+		return []common.Hash{}, nil, errors.New("there exists a region twist")
+	}
 
-		if difficultyContext < currentLowestContext {
-			currentLowestContext = difficultyContext
-		}
-		currentTotalDifficulty.Add(currentTotalDifficulty, header.Difficulty[currentLowestContext])
+	// Prime twist check
+	// PTZ -- Prime coincident along zone path
+	// PTR -- Prime coincident along region path
+	// PTP -- Prime coincident along prime path
+	// PTRND -- Net difficulty until dom or terminus along region path
+	// PTPND -- Net difficulty until terminus along prime path
+	PTZ, _, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.ZONE)
+	if err != nil {
+		return []common.Hash{}, nil, err
+	}
 
-		//check if the parent block of the first coincident is genesis
-		// add in the genesis total difficulty such that the following blocks build off the TD correctly.
-		if header.Number[currentLowestContext].Uint64()-1 == 0 {
-			genesis := MainnetPrimeGenesisBlock()
-			currentTotalDifficulty.Add(currentTotalDifficulty, genesis.Difficulty)
-			fmt.Println("Adding genesis Prime difficulty")
-			return currentTotalDifficulty, currentLowestContext, nil
-		}
+	PTR, PTRND, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.REGION)
+	if err != nil {
+		return []common.Hash{}, nil, err
+	}
 
-		// Retrieve the previous header as an external block.
-		prevBlock, err := bc.GetExternalBlock(header.ParentHash[currentLowestContext], header.Number[currentLowestContext].Uint64()-1, header.Location, uint64(currentLowestContext))
-		if err != nil {
-			return currentTotalDifficulty, currentLowestContext, fmt.Errorf("error finding previous external block")
-		}
-		// If the previous block is a coincident block, if we have found a coincident in the same
-		// location we go back in our chain context till that block and collect the totalDifficulty
-		if bytes.Equal(prevBlock.Header().Location, startingHeader.Location) {
-			// Go back in our chain till prevBlock.Header().Hash()
-			stopHash := prevBlock.Header().Hash()
-			tempHeader := bc.GetHeaderByHash(stopHash)
-			if tempHeader == nil {
-				return currentTotalDifficulty, currentLowestContext, nil
-			}
-			currentTotalDifficulty.Add(currentTotalDifficulty, bc.GetTd(tempHeader.Hash(), tempHeader.Number[types.QuaiNetworkContext].Uint64()))
-			return currentTotalDifficulty, currentLowestContext, nil
-		}
-		header = prevBlock.Header()
+	PTP, PTPND, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.PRIME)
+	if err != nil {
+		return []common.Hash{}, nil, err
+	}
+
+	if PTZ != PTR || PTR != PTP || PTP != PTZ {
+		return []common.Hash{}, nil, errors.New("there exists a prime twist")
+	}
+
+	return []common.Hash{PTP, RTR, header.Hash()}, []*big.Int{PTPND, PTRND, RTZND}, nil
+}
+
+// calcHLCRNetDifficulty calculates the net difficulty from previous prime.
+// The netDifficulties parameter inputs the nets of instantaneous difficulties from the terminus block.
+// By correctly summing the net difficulties we have obtained the proper array to be compared in HLCR.
+func (bc *BlockChain) CalcHLCRNetDifficulty(terminalHashes []common.Hash, netDifficulties []*big.Int) ([]*big.Int, error) {
+
+	if (terminalHashes[0] == common.Hash{}) || (terminalHashes[1] == common.Hash{}) || (terminalHashes[2] == common.Hash{}) {
+		return nil, errors.New("one or many of the  terminal hashes were nil")
+	}
+
+	netDifficulty := big.NewInt(0)
+	primeNet := netDifficulties[0]
+	if terminalHashes[0] == terminalHashes[1] && terminalHashes[1] == terminalHashes[2] {
+		return []*big.Int{primeNet, primeNet, primeNet}, nil
+	} else if terminalHashes[0] == terminalHashes[1] {
+		zoneNet := netDifficulty.Add(primeNet, netDifficulties[2])
+		return []*big.Int{primeNet, primeNet, zoneNet}, nil
+	} else {
+		regionNet := netDifficulty.Add(primeNet, netDifficulties[1])
+		zoneNet := netDifficulty.Add(regionNet, netDifficulties[2])
+		return []*big.Int{primeNet, regionNet, zoneNet}, nil
 	}
 }
 

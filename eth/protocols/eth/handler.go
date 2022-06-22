@@ -146,7 +146,7 @@ func nodeInfo(chain *core.BlockChain, network uint64) *NodeInfo {
 	head := chain.CurrentBlock()
 	return &NodeInfo{
 		Network:    network,
-		Difficulty: chain.GetTd(head.Hash(), head.NumberU64()),
+		Difficulty: chain.GetTd(head.Hash(), head.NumberU64())[types.QuaiNetworkContext],
 		Genesis:    chain.Genesis().Hash(),
 		Config:     chain.Config(),
 		Head:       head.Hash(),
