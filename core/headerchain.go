@@ -473,7 +473,7 @@ func (hc *HeaderChain) GetTd(hash common.Hash, number uint64) []*big.Int {
 	}
 	td := rawdb.ReadTd(hc.chainDb, hash, number)
 	if td == nil {
-		return nil
+		return make([]*big.Int, 3)
 	}
 	// Cache the found body for next time and return
 	hc.tdCache.Add(hash, td)
@@ -485,7 +485,7 @@ func (hc *HeaderChain) GetTd(hash common.Hash, number uint64) []*big.Int {
 func (hc *HeaderChain) GetTdByHash(hash common.Hash) []*big.Int {
 	number := hc.GetBlockNumber(hash)
 	if number == nil {
-		return nil
+		return make([]*big.Int, 3)
 	}
 	return hc.GetTd(hash, *number)
 }
