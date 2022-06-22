@@ -473,7 +473,27 @@ func (hc *HeaderChain) GetTd(hash common.Hash, number uint64) []*big.Int {
 	}
 	td := rawdb.ReadTd(hc.chainDb, hash, number)
 	if td == nil {
-		return nil
+		fmt.Println("GetTd hash", hash)
+		header := hc.GetHeaderByHash(hash)
+		fmt.Println("GetTd")
+		fmt.Println(" header.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0", header.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0)
+		if header.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
+			return []*big.Int{header.Difficulty[0], header.Difficulty[0], header.Difficulty[0]}
+		}
+
+		var err error
+		td, err = hc.CalcTd(header)
+		fmt.Println("err in calcTd", err)
+		fmt.Println("td from calcTd", td)
+		if err != nil {
+			fmt.Println("returning err in calcTd")
+			return make([]*big.Int, 3)
+		}
+
+		if td == nil {
+			fmt.Println("returning nil td in calcTd")
+			return make([]*big.Int, 3)
+		}
 	}
 	// Cache the found body for next time and return
 	hc.tdCache.Add(hash, td)
@@ -485,7 +505,7 @@ func (hc *HeaderChain) GetTd(hash common.Hash, number uint64) []*big.Int {
 func (hc *HeaderChain) GetTdByHash(hash common.Hash) []*big.Int {
 	number := hc.GetBlockNumber(hash)
 	if number == nil {
-		return nil
+		return make([]*big.Int, 3)
 	}
 	return hc.GetTd(hash, *number)
 }
@@ -686,11 +706,15 @@ func (hc *HeaderChain) HLCR(localDifficulties []*big.Int, externDifficulties []*
 
 // CalcTd calculates the TD of the given header using PCRC and CalcHLCRNetDifficulty.
 func (hc *HeaderChain) CalcTd(header *types.Header) ([]*big.Int, error) {
+	fmt.Println("CalcTd header", header.Number, header.Hash())
 	// Check PCRC for the external block and return the terminal hash and net difficulties
 	externTerminalHashes, externNetDifficulties, err := hc.PCRC(header)
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("CalcTD hashes and difficulties")
+	fmt.Println(externTerminalHashes)
+	fmt.Println(externNetDifficulties)
 
 	// Use HLCR to compute net total difficulty
 	externNetTd, err := hc.CalcHLCRNetDifficulty(externTerminalHashes, externNetDifficulties)
@@ -721,7 +745,6 @@ func (hc *HeaderChain) NdToTd(header *types.Header, nD []*big.Int) ([]*big.Int, 
 		prevExternTerminus, prevExternTd, err := hc.Engine().PreviousCoincidentOnPath(hc, header, header.Location, params.PRIME, params.PRIME)
 		if err != nil {
 			return nil, err
-
 		}
 		k.Add(k, prevExternTd)
 

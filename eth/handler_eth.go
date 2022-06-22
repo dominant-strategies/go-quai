@@ -205,7 +205,7 @@ func (h *ethHandler) handleBlockAnnounces(peer *eth.Peer, hashes []common.Hash, 
 
 // handleBlockBroadcast is invoked from a peer's message handler when it transmits a
 // block broadcast for the local node to process.
-func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block, td *big.Int, extBlocks []*types.ExternalBlock) error {
+func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block, td []*big.Int, extBlocks []*types.ExternalBlock) error {
 	log.Info("handleBlockBroadcast: Received block broadcast", "hash", block.Hash(), "num", block.Header().Number, "extBlocks", len(extBlocks))
 
 	for _, extBlock := range extBlocks {
@@ -218,7 +218,7 @@ func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block, td
 	// calculate the head hash and TD that the peer truly must have.
 	var (
 		trueHead = block.ParentHash()
-		trueTD   = new(big.Int).Sub(td, block.Difficulty())
+		trueTD   = new(big.Int).Sub(td[types.QuaiNetworkContext], block.Difficulty())
 	)
 	// Update the peer's total difficulty if better than the previous
 	if _, td := peer.Head(); trueTD.Cmp(td) > 0 {

@@ -743,14 +743,14 @@ func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader
 		return common.Hash{}, nil, errors.New("tracing along a dominant chain for a subordinate order block is non-sensical")
 	}
 
-	difficultyOrder, err := blake3.GetDifficultyOrder(header)
-	if err != nil {
-		return common.Hash{}, nil, err
-	}
+	// difficultyOrder, err := blake3.GetDifficultyOrder(header)
+	// if err != nil {
+	// 	return common.Hash{}, nil, err
+	// }
 
-	if difficultyOrder > path {
-		return common.Hash{}, nil, errors.New("provided header does not directly link to requested path")
-	}
+	// if difficultyOrder > path {
+	// 	return common.Hash{}, nil, errors.New("provided header does not directly link to requested path")
+	// }
 
 	netDifficultyUntilDom := big.NewInt(0)
 	netDifficultyUntilDom = netDifficultyUntilDom.Add(netDifficultyUntilDom, header.Difficulty[path])
@@ -760,27 +760,9 @@ func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader
 
 	for {
 
-		if path == types.QuaiNetworkContext {
-
-			// Get previous header on local chain by hash
-			prevHeader := chain.GetHeaderByHash(header.ParentHash[path])
-			if prevHeader == nil {
-				return common.Hash{}, nil, errors.New("prevheader not found for hash")
-			}
-			// Increment previous header
-			header = prevHeader
-		} else {
-			// Get previous header on external chain by hash
-			prevExtBlock, err := chain.GetExternalBlock(header.ParentHash[path], header.Number[path].Uint64()-1, header.Location, uint64(path))
-			if err != nil {
-				return common.Hash{}, nil, err
-			}
-			// Increment previous header
-			header = prevExtBlock.Header()
-		}
-
+		fmt.Println("PreviousCoincidentOnPath", header.Hash(), header.Number, order, path)
 		// If block header is Genesis return it as coincident
-		if header.Number[path].Cmp(big.NewInt(0)) == 0 {
+		if header.Number[path].Cmp(big.NewInt(1)) == 0 {
 			netDifficultyUntilDom.Add(netDifficultyUntilDom, header.Difficulty[0])
 			return chain.Config().GenesisHashes[0], netDifficultyUntilDom, nil
 		}
@@ -811,6 +793,26 @@ func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader
 		}
 
 		netDifficultyUntilDom = netDifficultyUntilDom.Add(netDifficultyUntilDom, header.Difficulty[path])
+
+		if path == types.QuaiNetworkContext {
+			// Get previous header on local chain by hash
+			prevHeader := chain.GetHeaderByHash(header.ParentHash[path])
+			if prevHeader == nil {
+				return common.Hash{}, nil, errors.New("prevheader not found for hash")
+			}
+			// Increment previous header
+			header = prevHeader
+		} else {
+			fmt.Println("PrevCoincidentOnPath: GetExternalBlock", header.ParentHash[path])
+			// Get previous header on external chain by hash
+			prevExtBlock, err := chain.GetExternalBlock(header.ParentHash[path], header.Number[path].Uint64()-1, header.Location, uint64(path))
+			if err != nil {
+				return common.Hash{}, nil, err
+			}
+			// Increment previous header
+			header = prevExtBlock.Header()
+		}
+
 	}
 	return terminusHash, netDifficultyUntilDom, nil
 }

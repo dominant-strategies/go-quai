@@ -18,6 +18,7 @@ package eth
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"math/big"
 	"sync"
@@ -445,9 +446,12 @@ func (h *handler) BroadcastBlock(block *types.Block, extBlocks []*types.External
 	// If propagation is requested, send to a subset of the peer
 	if propagate {
 		// Calculate the TD of the block (it's not imported yet, so block.Td is not valid)
-		var td *big.Int
+		var td []*big.Int
 		if parent := h.chain.GetBlock(block.ParentHash(), block.NumberU64()-1); parent != nil {
-			td = new(big.Int).Add(block.Difficulty(), h.chain.GetTd(block.ParentHash(), block.NumberU64()-1)[types.QuaiNetworkContext])
+			fmt.Println("BroadcastBlock")
+			fmt.Println(block.Difficulty())
+			fmt.Println(h.chain.GetTd(block.ParentHash(), block.NumberU64()-1))
+			td = h.chain.GetTd(block.Hash(), block.NumberU64())
 		} else {
 			log.Error("Propagating dangling block", "number", block.Number(), "hash", hash)
 			return

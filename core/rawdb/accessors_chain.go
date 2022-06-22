@@ -607,12 +607,14 @@ func ReadTd(db ethdb.Reader, hash common.Hash, number uint64) []*big.Int {
 	if len(data) == 0 {
 		return nil
 	}
-	td := []*big.Int{}
+	fmt.Println("READTD")
+	fmt.Println(data)
+	td := new([]*big.Int)
 	if err := rlp.Decode(bytes.NewReader(data), td); err != nil {
 		log.Error("Invalid block total difficulty RLP", "hash", hash, "err", err)
 		return nil
 	}
-	return td
+	return *td
 }
 
 // WriteTd stores the total difficulty of a block into the database.
@@ -621,6 +623,8 @@ func WriteTd(db ethdb.KeyValueWriter, hash common.Hash, number uint64, td []*big
 	if err != nil {
 		log.Crit("Failed to RLP encode block total difficulty", "err", err)
 	}
+	fmt.Println("WRITETD")
+	fmt.Println(data)
 	if err := db.Put(headerTDKey(number, hash), data); err != nil {
 		log.Crit("Failed to store block total difficulty", "err", err)
 	}

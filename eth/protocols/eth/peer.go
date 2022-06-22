@@ -268,7 +268,7 @@ func (p *Peer) AsyncSendNewBlockHash(block *types.Block) {
 }
 
 // SendNewBlock propagates an entire block to a remote peer.
-func (p *Peer) SendNewBlock(block *types.Block, td *big.Int, extBlocks []*types.ExternalBlock) error {
+func (p *Peer) SendNewBlock(block *types.Block, td []*big.Int, extBlocks []*types.ExternalBlock) error {
 	// Mark all the block hash as known, but ensure we don't overflow our limits
 	p.knownBlocks.Add(block.Hash())
 
@@ -300,7 +300,7 @@ func (p *Peer) SendExtBlocks(blocks []*types.ExternalBlock) error {
 
 // AsyncSendNewBlock queues an entire block for propagation to a remote peer. If
 // the peer's broadcast queue is full, the event is silently dropped.
-func (p *Peer) AsyncSendNewBlock(block *types.Block, td *big.Int, extBlocks []*types.ExternalBlock) {
+func (p *Peer) AsyncSendNewBlock(block *types.Block, td []*big.Int, extBlocks []*types.ExternalBlock) {
 	select {
 	case p.queuedBlocks <- &blockPropagation{block: block, td: td, extBlocks: extBlocks}:
 		// Mark all the block hash as known, but ensure we don't overflow our limits

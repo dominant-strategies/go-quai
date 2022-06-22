@@ -19,6 +19,7 @@ package core
 import (
 	crand "crypto/rand"
 	"errors"
+	"fmt"
 	"math/big"
 	mrand "math/rand"
 
@@ -92,7 +93,15 @@ func NewForkChoice(chainReader ChainReader, preserve func(header *types.Header) 
 // header is always selected as the head.
 func (f *ForkChoice) ReorgNeeded(current *types.Header, header *types.Header) (bool, error) {
 
-	localTd := f.chain.GetTd(current.Hash(), current.Number[types.QuaiNetworkContext].Uint64())
+	var localTd []*big.Int
+	fmt.Println("ReorgNeeded", current.Number, header.Number)
+	if current.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
+		localTd = []*big.Int{header.Difficulty[0], header.Difficulty[0], header.Difficulty[0]}
+	} else {
+		fmt.Println("Getting TD in ReorgNeeded", current.Hash(), current.Number)
+		localTd = f.chain.GetTd(current.Hash(), current.Number[types.QuaiNetworkContext].Uint64())
+		fmt.Println("LOCALTD RETURNED FROM GETTD IN REORGNEEDED", localTd)
+	}
 
 	externTd, err := f.chain.CalcTd(header)
 	if err != nil {
@@ -106,6 +115,9 @@ func (f *ForkChoice) ReorgNeeded(current *types.Header, header *types.Header) (b
 	currentBlock := f.chain.GetBlockByHash(current.Hash())
 	externBlock := f.chain.GetBlockByHash(header.Hash())
 
+	fmt.Println("ReorgNeeded hashes")
+	fmt.Println("ReorgNeeded localTd", localTd)
+	fmt.Println("ReorgNeeded externTd", externTd)
 	// If the total difficulty is higher than our known, add it to the canonical chain
 	// Second clause in the if statement reduces the vulnerability to selfish mining.
 	// Please refer to http://www.cs.cornell.edu/~ie53/publications/btcProcFC.pdf

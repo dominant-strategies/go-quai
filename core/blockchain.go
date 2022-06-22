@@ -1502,12 +1502,20 @@ func (bc *BlockChain) CalcTd(header *types.Header) ([]*big.Int, error) {
 		return nil, err
 	}
 
+	fmt.Println("RUNNING CALCTD FOR HEADER", header.Number, header.Hash())
+	fmt.Println("externTerminalHashes :", externTerminalHashes)
+	fmt.Println("externNetDiffs       :", externNetDifficulties)
+	fmt.Println(externTerminalHashes[0] == bc.chainConfig.GenesisHashes[0])
+	if externTerminalHashes[0] == bc.chainConfig.GenesisHashes[0] {
+		fmt.Println("CalcTd returning on externTerminalHashes is genesis")
+		return externNetDifficulties, nil
+	}
+
 	// Use HLCR to compute net total difficulty
 	externNetTd, err := bc.CalcHLCRNetDifficulty(externTerminalHashes, externNetDifficulties)
 	if err != nil {
 		return nil, err
 	}
-
 	externTerminalHeader := bc.GetHeaderByHash(externTerminalHashes[0])
 	externTd, err := bc.NdToTd(externTerminalHeader, externNetTd)
 	if err != nil {
@@ -1617,6 +1625,8 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 		return NonStatTy, err
 	}
 	currentBlock := bc.CurrentBlock()
+	fmt.Println("currentBlock hash :", currentBlock.Hash())
+	fmt.Println("externBlock hash  :", block.Hash())
 	reorg, err := bc.forker.ReorgNeeded(currentBlock.Header(), block.Header())
 	if err != nil {
 		return NonStatTy, err
@@ -3018,6 +3028,8 @@ func (bc *BlockChain) checkExtBlockCollision(header *types.Header, externalBlock
 
 // HLCR does hierarchical comparison of two difficulty tuples and returns true if second tuple is greater than the first
 func (bc *BlockChain) HLCR(localDifficulties []*big.Int, externDifficulties []*big.Int) bool {
+	fmt.Println("localDifficulties   :", localDifficulties)
+	fmt.Println("externDifficulties  :", externDifficulties)
 	if localDifficulties[0].Cmp(externDifficulties[0]) < 0 {
 		return true
 	} else if localDifficulties[1].Cmp(externDifficulties[1]) < 0 {
