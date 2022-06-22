@@ -1501,6 +1501,9 @@ func (bc *BlockChain) CalcTd(header *types.Header) ([]*big.Int, error) {
 	if err != nil {
 		return nil, err
 	}
+	if externTerminalHashes[0] == bc.chainConfig.GenesisHashes[0] {
+		return externNetDifficulties, nil
+	}
 
 	// Use HLCR to compute net total difficulty
 	externNetTd, err := bc.CalcHLCRNetDifficulty(externTerminalHashes, externNetDifficulties)
