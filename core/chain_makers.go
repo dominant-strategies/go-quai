@@ -17,6 +17,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -343,4 +344,17 @@ func (cr *fakeChainReader) GetExternalBlocks(header *types.Header) ([]*types.Ext
 
 func (cr *fakeChainReader) GetLinkExternalBlocks(header *types.Header) ([]*types.ExternalBlock, error) {
 	return nil, nil
+}
+
+// CheckContext checks to make sure the range of a context or order is valid
+func (cr *fakeChainReader) CheckContext(context int) error {
+	if context < 0 || context > len(params.FullerOntology) {
+		return errors.New("the provided path is outside the allowable range")
+	}
+	return nil
+}
+
+// CheckLocationRange checks to make sure the range of r and z are valid
+func (cr *fakeChainReader) CheckLocationRange(location []byte) error {
+	return nil
 }
