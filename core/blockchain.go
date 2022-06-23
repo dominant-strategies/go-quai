@@ -84,7 +84,10 @@ var (
 
 	errInsertionInterrupted = errors.New("insertion is interrupted")
 	errChainStopped         = errors.New("blockchain is stopped")
+<<<<<<< HEAD
 	errExtBlockNotFound     = errors.New("error finding external block by context and hash")
+=======
+>>>>>>> 2848670df (core: Added forkchoice, PCRC, HLCR, Td to Tuple, Single Genesis changes)
 )
 
 const (
