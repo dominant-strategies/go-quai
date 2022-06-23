@@ -45,15 +45,8 @@ type ChainReader interface {
 	// GetBlockByHash retrieves a block from the database by hash, caching it if found.
 	GetBlockByHash(hash common.Hash) *types.Block
 
-	// The purpose of the Previous Coincident Reference Check (PCRC) is to establish
-	// that we have linked untwisted chains prior to checking HLCR & applying external state transfers.
-	PCRC(header *types.Header) ([]common.Hash, []*big.Int, error)
-
 	// HLCR does hierarchical comparison of two difficulty tuples and returns true if second tuple is greater than the first
 	HLCR(localDifficulties []*big.Int, externDifficulties []*big.Int) bool
-
-	// calcHLCRNetDifficulty calculates the net difficulty from previous prime pecalcHLCRNetDifficultyg
-	CalcHLCRNetDifficulty(terminalHashes []common.Hash, netDifficulties []*big.Int) ([]*big.Int, error)
 }
 
 // ForkChoice is the fork chooser based on the highest total difficulty of the
