@@ -83,7 +83,10 @@ var (
 	blockPrefetchInterruptMeter = metrics.NewRegisteredMeter("chain/prefetch/interrupts", nil)
 
 	errInsertionInterrupted = errors.New("insertion is interrupted")
+<<<<<<< HEAD
 	errExtBlockNotFound     = errors.New("error finding external block by context and hash")
+=======
+>>>>>>> non-canon-dom
 	errChainStopped         = errors.New("blockchain is stopped")
 )
 
@@ -1684,11 +1687,6 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 	return status, nil
 }
 
-// getHierarchicalTD retrieves the local and extern td for two blocks. Taking hierarchical order into an account.
-func (bc *BlockChain) getHierarchicalTD(currentBlock *types.Block, block *types.Block) ([]*big.Int, []*big.Int, error) {
-	return currentBlock.Header().Difficulty, block.Header().Difficulty, nil
-}
-
 // addFutureBlock checks if the block is within the max allowed window to get
 // accepted for future processing, and returns an error if the block is too far
 // ahead and was not added.
@@ -1729,8 +1727,8 @@ func (bc *BlockChain) AddExternalBlock(block *types.ExternalBlock) error {
 
 // ReOrgRollBack compares the difficulty of the newchain and oldchain. Rolls back
 // the current header to the position where the reorg took place in a higher context
-func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
-	log.Info("Rolling back header beyond", "hash", header.Hash())
+func (bc *BlockChain) ReOrgRollBack(header *types.Header, validHeaders []*types.Header, invalidHeaders []*types.Header) error {
+	log.Info("Rolling back header beyond", "hash", header.Hash(), "from", bc.CurrentBlock().Header().Hash())
 	bc.reorgmu.Lock()
 	defer bc.reorgmu.Unlock()
 	var (
@@ -1858,6 +1856,18 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 		return fmt.Errorf("reorg header was null")
 	}
 
+	// Upon successful reorg and insert, update the nonCanonicalBlock headers in the DB.
+	// Write all invalid headers to non canonical dominants so that we do not re-import from peers.
+	for _, header := range invalidHeaders {
+		log.Info("ReOrgRollBack: Add non canonical dom to non canon DB", "hash", header.Hash())
+		rawdb.WriteNonCanonDom(bc.db, header)
+	}
+
+	// Pop all newly correct dominant headers that could potentially be in our non canonical dominant db.
+	for _, header := range validHeaders {
+		log.Info("ReOrgRollBack: Removing canonical dom from non canon DB", "hash", header.Hash())
+		rawdb.DeleteNonCanonDom(bc.db, header.Hash())
+	}
 	return nil
 }
 
@@ -1917,6 +1927,11 @@ func (bc *BlockChain) InsertChainWithoutSealVerification(block *types.Block) (in
 	return n, err
 }
 
+// SealHash runs the consensus engine seal hash from bc.
+func (bc *BlockChain) SealHash(header *types.Header) common.Hash {
+	return bc.Engine().SealHash(header)
+}
+
 // insertChain is the internal implementation of InsertChain, which assumes that
 // 1) chains are contiguous, and 2) The chain mutex is held.
 //
@@ -1974,8 +1989,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 			if err != nil {
 				return it.index, err
 			}
-			fmt.Println("Extern:", block.Hash(), block.Header().Number)
-			fmt.Println("Local:", current.Hash(), current.Header().Number)
 			if reorg {
 				break
 			}
@@ -2043,9 +2056,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		}
 	}()
 
-	for _, block := range chain {
-		fmt.Println("InsertChain block:", block.Header().Number, block.Hash())
-	}
 	for ; block != nil && err == nil || err == ErrKnownBlock; block, err = it.next() {
 		// If the chain is terminating, stop processing blocks
 		if bc.insertStopped() {
@@ -2057,7 +2067,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 			bc.reportBlock(block, nil, ErrBannedHash)
 			return it.index, ErrBannedHash
 		}
-		fmt.Println("InsertChain err:", err)
+		// If the header is a banned one, straight out abort
+		if rawdb.ReadNonCanonDom(bc.db, block.Hash()) != nil {
+			return it.index, ErrNonCanonicalDomHash
+		}
 		// If the block is known (in the middle of the chain), it's a special case for
 		// Clique blocks where they can share state among each other, so importing an
 		// older block might complete the state of the subsequent one. In this case,
@@ -3037,9 +3050,7 @@ func (bc *BlockChain) checkExtBlockCollision(header *types.Header, externalBlock
 
 // HLCR does hierarchical comparison of two difficulty tuples and returns true if second tuple is greater than the first
 func (bc *BlockChain) HLCR(localDifficulties []*big.Int, externDifficulties []*big.Int) bool {
-	fmt.Println("HLCR")
-	fmt.Println("localDifficulties :", localDifficulties)
-	fmt.Println("externDifficulties:", externDifficulties)
+	log.Info("HLCR", "localDiff", localDifficulties, "externDiff", externDifficulties)
 	if localDifficulties[0].Cmp(externDifficulties[0]) < 0 {
 		return true
 	}
@@ -3075,7 +3086,11 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 		return common.Hash{}, err
 	}
 
+	// PCRC has failed. Rollback through the prior untwisted region.
 	if RTZ.Hash() != RTR.Hash() {
+		rtzParent := bc.GetBlockByHash(RTZ.Hash()).Header().ParentHash[types.QuaiNetworkContext]
+		rtzParentBlock := bc.GetBlockByHash(rtzParent)
+		bc.reorg(bc.CurrentBlock(), rtzParentBlock)
 		return common.Hash{}, errors.New("there exists a region twist")
 	}
 
@@ -3098,7 +3113,18 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 		return common.Hash{}, err
 	}
 
-	if PTZ.Hash() != PTR.Hash() || PTR.Hash() != PTP.Hash() || PTP.Hash() != PTZ.Hash() {
+	// PCRC has failed. Rollback through the prior untwisted prime.
+	if PTR.Hash() != PTP.Hash() {
+		ptrParent := bc.GetBlockByHash(PTR.Hash()).Header().ParentHash[types.QuaiNetworkContext]
+		ptrParentBlock := bc.GetBlockByHash(ptrParent)
+		bc.reorg(bc.CurrentBlock(), ptrParentBlock)
+		return common.Hash{}, errors.New("there exists a prime twist")
+	}
+
+	if PTZ.Hash() != PTR.Hash() {
+		ptzParent := bc.GetBlockByHash(PTZ.Hash()).Header().ParentHash[types.QuaiNetworkContext]
+		ptzParentBlock := bc.GetBlockByHash(ptzParent)
+		bc.reorg(bc.CurrentBlock(), ptzParentBlock)
 		return common.Hash{}, errors.New("there exists a prime twist")
 	}
 
@@ -3156,7 +3182,6 @@ func (bc *BlockChain) CalcHLCRNetDifficulty(terminalHash common.Hash, header *ty
 		}
 	}
 
-	fmt.Println("Returning CalcHLCRNetDifficulty", []*big.Int{primeNd, regionNd, zoneNd})
 	return []*big.Int{primeNd, regionNd, zoneNd}, nil
 }
 

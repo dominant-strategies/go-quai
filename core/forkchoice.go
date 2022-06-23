@@ -47,6 +47,12 @@ type ChainReader interface {
 
 	// HLCR does hierarchical comparison of two difficulty tuples and returns true if second tuple is greater than the first
 	HLCR(localDifficulties []*big.Int, externDifficulties []*big.Int) bool
+<<<<<<< HEAD
+=======
+
+	// SealHash returns the seal hash to run a byte comparison on equal TD hashes.
+	SealHash(header *types.Header) common.Hash
+>>>>>>> non-canon-dom
 }
 
 // ForkChoice is the fork chooser based on the highest total difficulty of the
@@ -96,25 +102,15 @@ func (f *ForkChoice) ReorgNeeded(current *types.Header, header *types.Header) (b
 		return false, errors.New("missing td")
 	}
 
-	currentBlock := f.chain.GetBlockByHash(current.Hash())
-	externBlock := f.chain.GetBlockByHash(header.Hash())
-
 	// If the total difficulty is higher than our known, add it to the canonical chain
 	// Second clause in the if statement reduces the vulnerability to selfish mining.
 	// Please refer to http://www.cs.cornell.edu/~ie53/publications/btcProcFC.pdf
 	reorg := f.chain.HLCR(localTd, externTd)
 	equalTd := externTd[0].Cmp(localTd[0]) == 0 && externTd[1].Cmp(localTd[1]) == 0 && externTd[2].Cmp(localTd[2]) == 0
 	if !reorg && equalTd {
-		number, headNumber := externBlock.NumberU64(), currentBlock.NumberU64()
-		if number < headNumber {
-			reorg = true
-		} else if number == headNumber {
-			var currentPreserve, externPreserve bool
-			if f.preserve != nil {
-				currentPreserve, externPreserve = f.preserve(current), f.preserve(header)
-			}
-			reorg = !currentPreserve && (externPreserve || f.rand.Float64() < 0.5)
-		}
+		localTarget := f.chain.SealHash(current).Bytes()
+		externTarget := f.chain.SealHash(header).Bytes()
+		reorg = new(big.Int).SetBytes(localTarget).Cmp(new(big.Int).SetBytes(externTarget)) < 0
 	}
 	return reorg, nil
 }
