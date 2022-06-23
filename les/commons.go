@@ -64,7 +64,7 @@ type lesCommons struct {
 // known about the host peer.
 type NodeInfo struct {
 	Network    uint64                   `json:"network"`    // Ethereum network ID (1=Frontier, 2=Morden, Ropsten=3, Rinkeby=4)
-	Difficulty *big.Int                 `json:"difficulty"` // Total difficulty of the host's blockchain
+	Difficulty []*big.Int               `json:"difficulty"` // Total difficulty of the host's blockchain
 	Genesis    common.Hash              `json:"genesis"`    // SHA3 hash of the host's genesis block
 	Config     *params.ChainConfig      `json:"config"`     // Chain configuration for the fork rules
 	Head       common.Hash              `json:"head"`       // SHA3 hash of the host's best owned block

@@ -183,7 +183,7 @@ func (cs *chainSyncer) modeAndLocalHead() (downloader.SyncMode, *big.Int) {
 	if atomic.LoadUint32(&cs.handler.fastSync) == 1 {
 		block := cs.handler.chain.CurrentFastBlock()
 		td := cs.handler.chain.GetTdByHash(block.Hash())
-		return downloader.FastSync, td
+		return downloader.FastSync, td[types.QuaiNetworkContext]
 	}
 	// We are probably in full sync, but we might have rewound to before the
 	// fast sync pivot, check if we should reenable
@@ -191,13 +191,13 @@ func (cs *chainSyncer) modeAndLocalHead() (downloader.SyncMode, *big.Int) {
 		if head := cs.handler.chain.CurrentBlock(); head.NumberU64() < *pivot {
 			block := cs.handler.chain.CurrentFastBlock()
 			td := cs.handler.chain.GetTdByHash(block.Hash())
-			return downloader.FastSync, td
+			return downloader.FastSync, td[types.QuaiNetworkContext]
 		}
 	}
 	// Nope, we're really full syncing
 	head := cs.handler.chain.CurrentBlock()
 	td := cs.handler.chain.GetTd(head.Hash(), head.NumberU64())
-	return downloader.FullSync, td
+	return downloader.FullSync, td[types.QuaiNetworkContext]
 }
 
 // startSync launches doSync in a new goroutine.

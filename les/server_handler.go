@@ -118,7 +118,7 @@ func (h *serverHandler) handle(p *clientPeer) error {
 		td     = h.blockchain.GetTd(hash, number)
 		forkID = forkid.NewID(h.blockchain.Config(), h.blockchain.Genesis().Hash(), h.blockchain.CurrentBlock().NumberU64())
 	)
-	if err := p.Handshake(td, hash, number, h.blockchain.Genesis().Hash(), forkID, h.forkFilter, h.server); err != nil {
+	if err := p.Handshake(td[types.QuaiNetworkContext], hash, number, h.blockchain.Genesis().Hash(), forkID, h.forkFilter, h.server); err != nil {
 		p.Log().Debug("Light Ethereum handshake failed", "err", err)
 		return err
 	}
@@ -416,16 +416,16 @@ func (h *serverHandler) broadcastLoop() {
 			header := ev.Block.Header()
 			hash, number := header.Hash(), header.Number[types.QuaiNetworkContext].Uint64()
 			td := h.blockchain.GetTd(hash, number)
-			if td == nil || td.Cmp(lastTd) <= 0 {
+			if td == nil || td[types.QuaiNetworkContext].Cmp(lastTd) <= 0 {
 				continue
 			}
 			var reorg uint64
 			if lastHead != nil {
 				reorg = lastHead.Number[types.QuaiNetworkContext].Uint64() - rawdb.FindCommonAncestor(h.chainDb, header, lastHead).Number[types.QuaiNetworkContext].Uint64()
 			}
-			lastHead, lastTd = header, td
+			lastHead = header
 			log.Debug("Announcing block to peers", "number", number, "hash", hash, "td", td, "reorg", reorg)
-			h.server.peers.broadcast(announceData{Hash: hash, Number: number, Td: td, ReorgDepth: reorg})
+			h.server.peers.broadcast(announceData{Hash: hash, Number: number, Td: td[types.QuaiNetworkContext], ReorgDepth: reorg})
 		case <-h.closeCh:
 			return
 		}
