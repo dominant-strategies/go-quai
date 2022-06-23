@@ -1466,7 +1466,6 @@ func (bc *BlockChain) NdToTd(header *types.Header, nD []*big.Int) ([]*big.Int, e
 	}
 	startingHeader := header
 	k := big.NewInt(0)
-	k.Sub(k, header.Difficulty[0])
 
 	var prevExternTerminus *types.Header
 	var err error
@@ -1484,7 +1483,6 @@ func (bc *BlockChain) NdToTd(header *types.Header, nD []*big.Int) ([]*big.Int, e
 	for prevExternTerminus.Hash() != header.Hash() {
 		k.Add(k, header.Difficulty[0])
 		if header.Hash() == bc.Config().GenesisHashes[0] {
-			k.Add(k, header.Difficulty[0])
 			break
 		}
 
@@ -3039,15 +3037,19 @@ func (bc *BlockChain) checkExtBlockCollision(header *types.Header, externalBlock
 
 // HLCR does hierarchical comparison of two difficulty tuples and returns true if second tuple is greater than the first
 func (bc *BlockChain) HLCR(localDifficulties []*big.Int, externDifficulties []*big.Int) bool {
+	fmt.Println("HLCR")
+	fmt.Println("localDifficulties :", localDifficulties)
+	fmt.Println("externDifficulties:", externDifficulties)
 	if localDifficulties[0].Cmp(externDifficulties[0]) < 0 {
 		return true
-	} else if localDifficulties[1].Cmp(externDifficulties[1]) < 0 {
-		return true
-	} else if localDifficulties[2].Cmp(externDifficulties[2]) < 0 {
-		return true
-	} else {
-		return false
 	}
+	if localDifficulties[1].Cmp(externDifficulties[1]) < 0 {
+		return true
+	}
+	if localDifficulties[2].Cmp(externDifficulties[2]) < 0 {
+		return true
+	}
+	return false
 }
 
 // The purpose of the Previous Coincident Reference Check (PCRC) is to establish
@@ -3117,6 +3119,10 @@ func (bc *BlockChain) CalcHLCRNetDifficulty(terminalHash common.Hash, header *ty
 	zoneNd := big.NewInt(0)
 
 	for {
+		if header.Hash() == terminalHash {
+			break
+		}
+
 		order, err := bc.engine.GetDifficultyOrder(header)
 		if err != nil {
 			return nil, err
@@ -3130,10 +3136,6 @@ func (bc *BlockChain) CalcHLCRNetDifficulty(terminalHash common.Hash, header *ty
 		}
 		if order <= params.ZONE {
 			zoneNd.Add(zoneNd, nD)
-		}
-
-		if header.Hash() == terminalHash {
-			break
 		}
 
 		// Get previous header on local chain by hash
@@ -3154,6 +3156,7 @@ func (bc *BlockChain) CalcHLCRNetDifficulty(terminalHash common.Hash, header *ty
 		}
 	}
 
+	fmt.Println("Returning CalcHLCRNetDifficulty", []*big.Int{primeNd, regionNd, zoneNd})
 	return []*big.Int{primeNd, regionNd, zoneNd}, nil
 }
 
