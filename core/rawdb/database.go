@@ -24,12 +24,12 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/olekukonko/tablewriter"
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/ethdb"
 	"github.com/spruce-solutions/go-quai/ethdb/leveldb"
 	"github.com/spruce-solutions/go-quai/ethdb/memorydb"
 	"github.com/spruce-solutions/go-quai/log"
-	"github.com/olekukonko/tablewriter"
 )
 
 // freezerdb is a database wrapper that enabled freezer data retrievals.
@@ -379,7 +379,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 				databaseVersionKey, headHeaderKey, headBlockKey, headFastBlockKey, lastPivotKey,
 				fastTrieProgressKey, snapshotDisabledKey, snapshotRootKey, snapshotJournalKey,
 				snapshotGeneratorKey, snapshotRecoveryKey, txIndexTailKey, fastTxLookupLimitKey,
-				uncleanShutdownKey, badBlockKey,
+				uncleanShutdownKey, badBlockKey, nonCanonDomKey,
 			} {
 				if bytes.Equal(key, meta) {
 					metadata.Add(size)

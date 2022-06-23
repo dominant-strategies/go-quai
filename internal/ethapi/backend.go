@@ -70,7 +70,7 @@ type Backend interface {
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 	SubscribeChainUncleEvent(ch chan<- *types.Header) event.Subscription
 	InsertBlock(ctx context.Context, block *types.Block) (int, error)
-	ReOrgRollBack(header *types.Header) error
+	ReOrgRollBack(header *types.Header, validHeaders []*types.Header, invalidHeaders []*types.Header) error
 	PendingBlockAndReceipts() (*types.Block, types.Receipts)
 	AddExternalBlock(block *types.ExternalBlock) error
 	EventMux() *event.TypeMux
