@@ -47,12 +47,9 @@ type ChainReader interface {
 
 	// HLCR does hierarchical comparison of two difficulty tuples and returns true if second tuple is greater than the first
 	HLCR(localDifficulties []*big.Int, externDifficulties []*big.Int) bool
-<<<<<<< HEAD
-=======
 
 	// SealHash returns the seal hash to run a byte comparison on equal TD hashes.
 	SealHash(header *types.Header) common.Hash
->>>>>>> non-canon-dom
 }
 
 // ForkChoice is the fork chooser based on the highest total difficulty of the

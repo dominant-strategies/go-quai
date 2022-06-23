@@ -83,10 +83,7 @@ var (
 	blockPrefetchInterruptMeter = metrics.NewRegisteredMeter("chain/prefetch/interrupts", nil)
 
 	errInsertionInterrupted = errors.New("insertion is interrupted")
-<<<<<<< HEAD
 	errExtBlockNotFound     = errors.New("error finding external block by context and hash")
-=======
->>>>>>> non-canon-dom
 	errChainStopped         = errors.New("blockchain is stopped")
 )
 
