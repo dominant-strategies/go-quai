@@ -1,3 +1,10 @@
+//Networkvisualizer is a testing tool that generates a graph of the network
+//AssembleGraph is the main runner of the program and takes three parameters
+//Start/End(int) specifies the range of blocks you would like to include in the graph, leaving both values 0 will default to the 100 most recent blocks
+//The parameters for the program can be modified on the line that calls AssembleGraph within main
+//The program can be run with the command: 							go run network_visualizer.go
+//The generated DOT file can be viewed with a VSCode extension:		tintinweb.graphviz-interactive-preview
+//Aternatively the DOT file can be converted into other image formats using a dot command
 package main
 
 import (
@@ -72,6 +79,7 @@ func main() {
 	primeChain := Chain{prime, primeSubGraph, []node{}, []string{}, 0, []Chain{region1Chain, region2Chain, region3Chain}}
 	chains := make([]Chain, 0)
 	chains = append(chains, primeChain, region1Chain, region2Chain, region3Chain, zone11Chain, zone12Chain, zone13Chain, zone21Chain, zone22Chain, zone23Chain, zone31Chain, zone32Chain, zone33Chain)
+	//Parameters for the program can be modified here.
 	AssembleGraph(0, 0, chains)
 }
 
@@ -112,6 +120,7 @@ func AssembleGraph(start int, end int, chains []Chain) {
 			start = 1
 		}
 
+		//Iterates through the blocks in the chain
 		for j := start; j <= end; j++ {
 			blockHeader, err := chain.HeaderByNumber(context.Background(), big.NewInt(int64(j)))
 			if err != nil {
@@ -138,12 +147,10 @@ func AssembleGraph(start int, end int, chains []Chain) {
 	f.WriteString("\n}")
 }
 
-//AddCoincident Goes through Region and Prime chains and connects all blocks found in the network with the same hash.
+//AddCoincident Goes through Region and Prime chains and connects all blocks found in the network with the same hash
 func AddCoincident(chains []Chain, hash common.Hash) {
 	for i := 0; i < len(chains); i++ {
 		_, err := chains[i].client.BlockByHash(context.Background(), hash)
-		//bString := hash.String()[2:7]
-		//fmt.Println(bString)
 		if err == nil {
 			chains[i].AddNode(hash, 0)
 			if chains[i].order < 2 {
@@ -202,26 +209,6 @@ func Contains(s string, list []string) bool {
 	}
 	return false
 }
-
-/*
-func (c *Chain) OrderNodes(blockNum *big.Int) {
-	for _, a := range c.nodes {
-		if a.number.Int64()-blockNum.Int64() == 1 {
-			block, _ := c.client.HeaderByNumber(context.Background(), blockNum)
-			nextBlock, _ := c.client.HeaderByNumber(context.Background(), a.number)
-			c.AddEdge(true, fmt.Sprint(c.order)+rlpHash(block).String()[2:7], fmt.Sprint(c.order)+rlpHash(nextBlock).String()[2:7])
-		}
-	}
-
-}*/
-
-/*func (c *Chain) OrderNodes() {
-	for i := 0; i < len(c.nodes)-1; i++ {
-		if c.nodes[i].number.Int64()-c.nodes[i+1].number.Int64() == -1 {
-			c.AddEdge()
-		}
-	}
-}*/
 
 //Function for writing a DOT file that generates the graph
 func writeToDOT(chains []Chain, file *os.File) {
