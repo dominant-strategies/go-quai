@@ -1463,28 +1463,47 @@ func (bc *BlockChain) NdToTd(header *types.Header, nD []*big.Int) ([]*big.Int, e
 	if header == nil {
 		return nil, errors.New("header provided to ndtotd is nil")
 	}
-
+	startingHeader := header
 	k := big.NewInt(0)
 	k.Sub(k, header.Difficulty[0])
 
-	prevExternTerminus := common.Hash{}
+	var prevExternTerminus *types.Header
+	var err error
 	for {
-		prevExternTerminus, prevExternTd, err := bc.Engine().PreviousCoincidentOnPath(bc, header, header.Location, params.PRIME, params.PRIME)
-		if err != nil {
-			return nil, err
-
-		}
-		k.Add(k, prevExternTd)
-
-		// subtract the terminal block difficulty
-		k.Sub(k, bc.GetHeaderByHash(prevExternTerminus).Difficulty[0])
-
-		if bc.hc.GetBlockNumber(prevExternTerminus) != nil {
+		if bc.hc.GetBlockNumber(header.Hash()) != nil {
 			break
 		}
-		header = bc.GetHeaderByHash(prevExternTerminus)
+		prevExternTerminus, err = bc.Engine().PreviousCoincidentOnPath(bc, header, header.Location, params.PRIME, params.PRIME)
+		if err != nil {
+			return nil, err
+		}
+		header = prevExternTerminus
 	}
-	k.Add(k, bc.GetTdByHash(prevExternTerminus)[params.PRIME])
+	header = startingHeader
+	for prevExternTerminus.Hash() != header.Hash() {
+		k.Add(k, header.Difficulty[0])
+		if header.Hash() == bc.Config().GenesisHashes[0] {
+			k.Add(k, header.Difficulty[0])
+			break
+		}
+
+		// Get previous header on local chain by hash
+		prevHeader := bc.GetHeaderByHash(header.ParentHash[params.PRIME])
+		if prevHeader == nil {
+			// Get previous header on external chain by hash
+			prevExtBlock, err := bc.GetExternalBlock(header.ParentHash[params.PRIME], header.Number[params.PRIME].Uint64()-1, header.Location, uint64(params.PRIME))
+			if err != nil {
+				return nil, err
+			}
+			// Increment previous header
+			prevHeader = prevExtBlock.Header()
+		}
+		header = prevHeader
+	}
+	// subtract the terminal block difficulty
+	k.Sub(k, header.Difficulty[0])
+
+	k.Add(k, bc.GetTdByHash(header.Hash())[params.PRIME])
 
 	// adding the common total difficulty to the net
 	nD[0].Add(nD[0], k)
@@ -1497,22 +1516,19 @@ func (bc *BlockChain) NdToTd(header *types.Header, nD []*big.Int) ([]*big.Int, e
 // CalcTd calculates the TD of the given header using PCRC and CalcHLCRNetDifficulty.
 func (bc *BlockChain) CalcTd(header *types.Header) ([]*big.Int, error) {
 	// Check PCRC for the external block and return the terminal hash and net difficulties
-	externTerminalHashes, externNetDifficulties, err := bc.PCRC(header)
+	externTerminalHash, err := bc.PCRC(header)
 	if err != nil {
 		return nil, err
-	}
-	if externTerminalHashes[0] == bc.chainConfig.GenesisHashes[0] {
-		return externNetDifficulties, nil
 	}
 
 	// Use HLCR to compute net total difficulty
-	externNetTd, err := bc.CalcHLCRNetDifficulty(externTerminalHashes, externNetDifficulties)
+	externNd, err := bc.CalcHLCRNetDifficulty(externTerminalHash, header)
 	if err != nil {
 		return nil, err
 	}
 
-	externTerminalHeader := bc.GetHeaderByHash(externTerminalHashes[0])
-	externTd, err := bc.NdToTd(externTerminalHeader, externNetTd)
+	externTerminalHeader := bc.GetHeaderByHash(externTerminalHash)
+	externTd, err := bc.NdToTd(externTerminalHeader, externNd)
 	if err != nil {
 		return nil, err
 	}
@@ -3035,10 +3051,10 @@ func (bc *BlockChain) HLCR(localDifficulties []*big.Int, externDifficulties []*b
 
 // The purpose of the Previous Coincident Reference Check (PCRC) is to establish
 // that we have linked untwisted chains prior to checking HLCR & applying external state transfers.
-func (bc *BlockChain) PCRC(header *types.Header) ([]common.Hash, []*big.Int, error) {
+func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 
 	if header.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
-		return bc.chainConfig.GenesisHashes, header.Difficulty, nil
+		return bc.chainConfig.GenesisHashes[0], nil
 	}
 
 	slice := header.Location
@@ -3046,70 +3062,98 @@ func (bc *BlockChain) PCRC(header *types.Header) ([]common.Hash, []*big.Int, err
 	// Region twist check
 	// RTZ -- Region coincident along zone path
 	// RTR -- Region coincident along region path
-	// RTZND -- Net difficulty until dom or terminus along zone path
-	RTZ, RTZND, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.REGION, params.ZONE)
+	RTZ, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.REGION, params.ZONE)
 	if err != nil {
-		return []common.Hash{}, nil, err
+		return common.Hash{}, err
 	}
 
-	RTR, _, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.REGION, params.REGION)
+	RTR, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.REGION, params.REGION)
 	if err != nil {
-		return []common.Hash{}, nil, err
+		return common.Hash{}, err
 	}
 
-	if RTZ != RTR {
-		return []common.Hash{}, nil, errors.New("there exists a region twist")
+	if RTZ.Hash() != RTR.Hash() {
+		return common.Hash{}, errors.New("there exists a region twist")
 	}
 
 	// Prime twist check
 	// PTZ -- Prime coincident along zone path
 	// PTR -- Prime coincident along region path
 	// PTP -- Prime coincident along prime path
-	// PTRND -- Net difficulty until dom or terminus along region path
-	// PTPND -- Net difficulty until terminus along prime path
-	PTZ, _, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.ZONE)
+	PTZ, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.ZONE)
 	if err != nil {
-		return []common.Hash{}, nil, err
+		return common.Hash{}, err
 	}
 
-	PTR, PTRND, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.REGION)
+	PTR, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.REGION)
 	if err != nil {
-		return []common.Hash{}, nil, err
+		return common.Hash{}, err
 	}
 
-	PTP, PTPND, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.PRIME)
+	PTP, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.PRIME)
 	if err != nil {
-		return []common.Hash{}, nil, err
+		return common.Hash{}, err
 	}
 
-	if PTZ != PTR || PTR != PTP || PTP != PTZ {
-		return []common.Hash{}, nil, errors.New("there exists a prime twist")
+	if PTZ.Hash() != PTR.Hash() || PTR.Hash() != PTP.Hash() || PTP.Hash() != PTZ.Hash() {
+		return common.Hash{}, errors.New("there exists a prime twist")
 	}
 
-	return []common.Hash{PTP, RTR, header.Hash()}, []*big.Int{PTPND, PTRND, RTZND}, nil
+	return PTP.Hash(), nil
 }
 
 // calcHLCRNetDifficulty calculates the net difficulty from previous prime.
 // The netDifficulties parameter inputs the nets of instantaneous difficulties from the terminus block.
 // By correctly summing the net difficulties we have obtained the proper array to be compared in HLCR.
-func (bc *BlockChain) CalcHLCRNetDifficulty(terminalHashes []common.Hash, netDifficulties []*big.Int) ([]*big.Int, error) {
+func (bc *BlockChain) CalcHLCRNetDifficulty(terminalHash common.Hash, header *types.Header) ([]*big.Int, error) {
 
-	if (terminalHashes[0] == common.Hash{}) || (terminalHashes[1] == common.Hash{}) || (terminalHashes[2] == common.Hash{}) {
+	if (terminalHash == common.Hash{}) {
 		return nil, errors.New("one or many of the  terminal hashes were nil")
 	}
 
-	netDifficulty := big.NewInt(0)
-	primeNet := netDifficulties[0]
-	if terminalHashes[0] == terminalHashes[1] && terminalHashes[1] == terminalHashes[2] {
-		return []*big.Int{primeNet, primeNet, primeNet}, nil
-	} else if terminalHashes[0] == terminalHashes[1] {
-		zoneNet := netDifficulty.Add(primeNet, netDifficulties[2])
-		return []*big.Int{primeNet, primeNet, zoneNet}, nil
-	} else {
-		regionNet := netDifficulty.Add(primeNet, netDifficulties[1])
-		zoneNet := netDifficulty.Add(regionNet, netDifficulties[2])
-		return []*big.Int{primeNet, regionNet, zoneNet}, nil
+	primeNd := big.NewInt(0)
+	regionNd := big.NewInt(0)
+	zoneNd := big.NewInt(0)
+
+	for {
+		order, err := bc.engine.GetDifficultyOrder(header)
+		if err != nil {
+			return nil, err
+		}
+		nD := header.Difficulty[order]
+		if order <= params.PRIME {
+			primeNd.Add(primeNd, nD)
+		}
+		if order <= params.REGION {
+			regionNd.Add(regionNd, nD)
+		}
+		if order <= params.ZONE {
+			zoneNd.Add(zoneNd, nD)
+		}
+
+		if header.Hash() == terminalHash {
+			break
+		}
+
+		// Get previous header on local chain by hash
+		prevHeader := bc.GetHeaderByHash(header.ParentHash[order])
+		if prevHeader == nil {
+			// Get previous header on external chain by hash
+			prevExtBlock, err := bc.GetExternalBlock(header.ParentHash[order], header.Number[order].Uint64()-1, header.Location, uint64(order))
+			if err != nil {
+				return nil, err
+			}
+			// Increment previous header
+			prevHeader = prevExtBlock.Header()
+		}
+		header = prevHeader
+
+		if header.Hash() == bc.Config().GenesisHashes[0] {
+			break
+		}
 	}
+
+	return []*big.Int{primeNd, regionNd, zoneNd}, nil
 }
 
 // HasHeader checks if a block header is present in the database or not, caching
