@@ -62,6 +62,12 @@ type ChainHeaderReader interface {
 
 	// GetGasUsedInChain gets the number value of gas used in the chain up until a certain number.
 	GetGasUsedInChain(block *types.Block, length int) int64
+
+	// CheckContextAndOrderRange checks to make sure the range of a context or order is valid
+	CheckContextAndOrderRange(context int) error
+
+	// CheckLocationRange checks to make sure the range of r and z are valid
+	CheckLocationRange(location []byte) error
 }
 
 // ChainReader defines a small collection of methods needed to access the local
@@ -118,9 +124,6 @@ type Engine interface {
 	// GetExternalBlocks retrieves all valid external blocks from external chains
 	GetExternalBlocks(chain ChainHeaderReader, header *types.Header, logging bool) ([]*types.ExternalBlock, error)
 
-	// GetCoincidentHeader retrieves the furthest coincident header back.
-	GetCoincidentHeader(chain ChainHeaderReader, context int, header *types.Header) (*types.Header, int)
-
 	// GetCoincidentAtOrder retrieves the coincident header.
 	GetCoincidentAtOrder(chain ChainHeaderReader, context int, expectedOrder int, header *types.Header) (*types.Header, error)
 
@@ -135,6 +138,9 @@ type Engine interface {
 
 	// GetLinkExternalBlocks links every block to the correct previous block
 	GetLinkExternalBlocks(chain ChainHeaderReader, header *types.Header, logging bool) ([]*types.ExternalBlock, error)
+
+	// PreviousCoincidentOnPath searches the path for a block of specified order in the specified slice
+	PreviousCoincidentOnPath(chain ChainHeaderReader, header *types.Header, slice []byte, order, path int) (*types.Header, error)
 
 	// Seal generates a new sealing request for the given input block and pushes
 	// the result into the given channel.
