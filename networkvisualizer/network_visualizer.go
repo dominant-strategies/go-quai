@@ -5,6 +5,7 @@
 //The program can be run with the command: 							go run network_visualizer.go
 //The generated DOT file can be viewed with a VSCode extension:		tintinweb.graphviz-interactive-preview
 //Aternatively the DOT file can be converted into other image formats using a dot command
+//A full node must be running for the tool to work properly
 package main
 
 import (
