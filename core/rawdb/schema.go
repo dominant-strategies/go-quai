@@ -72,6 +72,9 @@ var (
 	// badBlockKey tracks the list of bad blocks seen by local
 	badBlockKey = []byte("InvalidBlock")
 
+	// nonCanonDomKey tracks the list of non canonical dominant blocks seen by local
+	nonCanonDomKey = []byte("NonCanonicalDominant")
+
 	// uncleanShutdownKey tracks the list of local crashes
 	uncleanShutdownKey = []byte("unclean-shutdown") // config prefix for the db
 
