@@ -2841,6 +2841,8 @@ func (bc *BlockChain) GetHeaderByHash(hash common.Hash) *types.Header {
 // GetExternalBlock retrieves an external block from either the ext block cache or rawdb.
 func (bc *BlockChain) GetExternalBlock(hash common.Hash, number uint64, location []byte, context uint64) (*types.ExternalBlock, error) {
 	// Lookup block in externalBlocks cache
+	log.Info("Getting external block", "hash", hash, "number", number, "location", location, "context", context)
+
 	key := types.ExtBlockCacheKey(number, context, hash)
 
 	if block, ok := bc.externalBlocks.HasGet(nil, key); ok {
