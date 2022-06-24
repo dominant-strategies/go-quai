@@ -761,6 +761,8 @@ func (hc *HeaderChain) NdToTd(header *types.Header, nD []*big.Int) ([]*big.Int, 
 
 // The purpose of the Previous Coincident Reference Check (PCRC) is to establish
 // that we have linked untwisted chains prior to checking HLCR & applying external state transfers.
+// NOTE: note that it only guarantees linked & untwisted back to the prime terminus, assuming the
+// prime termini match. To check deeper than that, you need to iteratively apply PCRC to get that guarantee.
 func (hc *HeaderChain) PCRC(header *types.Header) (common.Hash, error) {
 
 	if header.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
@@ -891,12 +893,21 @@ func (hc *HeaderChain) GetUnclesInChain(block *types.Block, length int) []*types
 	return nil
 }
 
-// CheckContextAndOrderRange checks to make sure the range of a context or order is valid
-func (hc *HeaderChain) CheckContextAndOrderRange(context int) error {
+// CheckContext checks to make sure the range of a context or order is valid
+func (hc *HeaderChain) CheckContext(context int) error {
+	if context < 0 || context > len(params.FullerOntology) {
+		return errors.New("the provided path is outside the allowable range")
+	}
 	return nil
 }
 
 // CheckLocationRange checks to make sure the range of r and z are valid
 func (hc *HeaderChain) CheckLocationRange(location []byte) error {
+	if int(location[0]) < 1 || int(location[0]) > params.FullerOntology[0] {
+		return errors.New("the provided location is outside the allowable region range")
+	}
+	if int(location[1]) < 1 || int(location[1]) > params.FullerOntology[1] {
+		return errors.New("the provided location is outside the allowable zone range")
+	}
 	return nil
 }

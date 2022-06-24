@@ -626,8 +626,11 @@ func (lc *LightChain) EnableCheckFreq() {
 	atomic.StoreInt32(&lc.disableCheckFreq, 0)
 }
 
-// CheckContextAndOrderRange checks to make sure the range of a context or order is valid
-func (lc *LightChain) CheckContextAndOrderRange(context int) error {
+// CheckContext checks to make sure the range of a context or order is valid
+func (lc *LightChain) CheckContext(context int) error {
+	if context < 0 || context > len(params.FullerOntology) {
+		return errors.New("the provided path is outside the allowable range")
+	}
 	return nil
 }
 

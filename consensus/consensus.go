@@ -63,8 +63,8 @@ type ChainHeaderReader interface {
 	// GetGasUsedInChain gets the number value of gas used in the chain up until a certain number.
 	GetGasUsedInChain(block *types.Block, length int) int64
 
-	// CheckContextAndOrderRange checks to make sure the range of a context or order is valid
-	CheckContextAndOrderRange(context int) error
+	// CheckContextchecks to make sure the range of a context or order is valid
+	CheckContext(context int) error
 
 	// CheckLocationRange checks to make sure the range of r and z are valid
 	CheckLocationRange(location []byte) error

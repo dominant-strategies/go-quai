@@ -672,10 +672,10 @@ func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader
 		return chain.GetHeaderByHash(chain.Config().GenesisHashes[0]), nil
 	}
 
-	if err := chain.CheckContextAndOrderRange(path); err != nil {
+	if err := chain.CheckContext(path); err != nil {
 		return nil, err
 	}
-	if err := chain.CheckContextAndOrderRange(order); err != nil {
+	if err := chain.CheckContext(order); err != nil {
 		return nil, err
 	}
 	if err := chain.CheckLocationRange(slice); err != nil {

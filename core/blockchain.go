@@ -3064,6 +3064,8 @@ func (bc *BlockChain) HLCR(localDifficulties []*big.Int, externDifficulties []*b
 
 // The purpose of the Previous Coincident Reference Check (PCRC) is to establish
 // that we have linked untwisted chains prior to checking HLCR & applying external state transfers.
+// NOTE: note that it only guarantees linked & untwisted back to the prime terminus, assuming the
+// prime termini match. To check deeper than that, you need to iteratively apply PCRC to get that guarantee.
 func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 
 	if header.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
@@ -3071,63 +3073,61 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 	}
 
 	slice := header.Location
-
-	// Region twist check
-	// RTZ -- Region coincident along zone path
-	// RTR -- Region coincident along region path
-	RTZ, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.REGION, params.ZONE)
+	headerOrder, err := bc.Engine().GetDifficultyOrder(header)
 	if err != nil {
 		return common.Hash{}, err
 	}
 
-	RTR, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.REGION, params.REGION)
-	if err != nil {
-		return common.Hash{}, err
-	}
+	// Only check for region twist if block is of region order
+	if headerOrder == params.REGION {
+		// Region twist check
+		// RTZ -- Region coincident along zone path
+		// RTR -- Region coincident along region path
+		RTZ, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.REGION, params.ZONE)
+		if err != nil {
+			return common.Hash{}, err
+		}
 
-	// PCRC has failed. Rollback through the prior untwisted region.
-	if RTZ.Hash() != RTR.Hash() {
-		rtzParent := bc.GetBlockByHash(RTZ.Hash()).Header().ParentHash[types.QuaiNetworkContext]
-		rtzParentBlock := bc.GetBlockByHash(rtzParent)
-		bc.reorg(bc.CurrentBlock(), rtzParentBlock)
-		return common.Hash{}, errors.New("there exists a region twist")
+		RTR, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.REGION, params.REGION)
+		if err != nil {
+			return common.Hash{}, err
+		}
+
+		if RTZ.Hash() != RTR.Hash() {
+			return common.Hash{}, errors.New("there exists a region twist")
+		}
 	}
 
 	// Prime twist check
 	// PTZ -- Prime coincident along zone path
 	// PTR -- Prime coincident along region path
 	// PTP -- Prime coincident along prime path
+
+	// Always calculate PTZ because it is always valid and we need terminus for calcHLCRDifficulty
 	PTZ, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.ZONE)
 	if err != nil {
 		return common.Hash{}, err
 	}
 
-	PTR, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.REGION)
-	if err != nil {
-		return common.Hash{}, err
+	// Only check for prime twist if block is of prime order
+	if headerOrder == params.PRIME {
+
+		PTR, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.REGION)
+		if err != nil {
+			return common.Hash{}, err
+		}
+
+		PTP, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.PRIME)
+		if err != nil {
+			return common.Hash{}, err
+		}
+
+		if PTZ.Hash() != PTR.Hash() || PTR.Hash() != PTP.Hash() || PTP.Hash() != PTZ.Hash() {
+			return common.Hash{}, errors.New("there exists a prime twist")
+		}
 	}
 
-	PTP, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.PRIME)
-	if err != nil {
-		return common.Hash{}, err
-	}
-
-	// PCRC has failed. Rollback through the prior untwisted prime.
-	if PTR.Hash() != PTP.Hash() {
-		ptrParent := bc.GetBlockByHash(PTR.Hash()).Header().ParentHash[types.QuaiNetworkContext]
-		ptrParentBlock := bc.GetBlockByHash(ptrParent)
-		bc.reorg(bc.CurrentBlock(), ptrParentBlock)
-		return common.Hash{}, errors.New("there exists a prime twist")
-	}
-
-	if PTZ.Hash() != PTR.Hash() {
-		ptzParent := bc.GetBlockByHash(PTZ.Hash()).Header().ParentHash[types.QuaiNetworkContext]
-		ptzParentBlock := bc.GetBlockByHash(ptzParent)
-		bc.reorg(bc.CurrentBlock(), ptzParentBlock)
-		return common.Hash{}, errors.New("there exists a prime twist")
-	}
-
-	return PTP.Hash(), nil
+	return PTZ.Hash(), nil
 }
 
 // calcHLCRNetDifficulty calculates the net difficulty from previous prime.
@@ -3283,8 +3283,8 @@ func (bc *BlockChain) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscr
 	return bc.scope.Track(bc.blockProcFeed.Subscribe(ch))
 }
 
-// CheckContextAndOrderRange checks to make sure the range of a context or order is valid
-func (bc *BlockChain) CheckContextAndOrderRange(number int) error {
+// CheckContext checks to make sure the range of a context or order is valid
+func (bc *BlockChain) CheckContext(number int) error {
 	if number < 0 || number > len(params.FullerOntology) {
 		return errors.New("the provided path is outside the allowable range")
 	}
