@@ -3052,12 +3052,18 @@ func (bc *BlockChain) HLCR(localDifficulties []*big.Int, externDifficulties []*b
 	log.Info("HLCR", "localDiff", localDifficulties, "externDiff", externDifficulties)
 	if localDifficulties[0].Cmp(externDifficulties[0]) < 0 {
 		return true
+	} else if localDifficulties[0].Cmp(externDifficulties[0]) > 0 {
+		return false
 	}
 	if localDifficulties[1].Cmp(externDifficulties[1]) < 0 {
 		return true
+	} else if localDifficulties[1].Cmp(externDifficulties[1]) > 0 {
+		return false
 	}
 	if localDifficulties[2].Cmp(externDifficulties[2]) < 0 {
 		return true
+	} else if localDifficulties[2].Cmp(externDifficulties[2]) > 0 {
+		return false
 	}
 	return false
 }
