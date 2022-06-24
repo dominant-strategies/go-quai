@@ -3049,48 +3049,61 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 	}
 
 	slice := header.Location
-
-	// Region twist check
-	// RTZ -- Region coincident along zone path
-	// RTR -- Region coincident along region path
-	RTZ, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.REGION, params.ZONE)
+	headerOrder, err := bc.Engine().GetDifficultyOrder(header)
 	if err != nil {
 		return common.Hash{}, err
 	}
 
-	RTR, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.REGION, params.REGION)
-	if err != nil {
-		return common.Hash{}, err
-	}
+	// Only check for region twist if block is of region order
+	if headerOrder == params.REGION {
+		// Region twist check
+		// RTZ -- Region coincident along zone path
+		// RTR -- Region coincident along region path
+		RTZ, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.REGION, params.ZONE)
+		if err != nil {
+			return common.Hash{}, err
+		}
 
-	if RTZ.Hash() != RTR.Hash() {
-		return common.Hash{}, errors.New("there exists a region twist")
+		RTR, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.REGION, params.REGION)
+		if err != nil {
+			return common.Hash{}, err
+		}
+
+		if RTZ.Hash() != RTR.Hash() {
+			return common.Hash{}, errors.New("there exists a region twist")
+		}
 	}
 
 	// Prime twist check
 	// PTZ -- Prime coincident along zone path
 	// PTR -- Prime coincident along region path
 	// PTP -- Prime coincident along prime path
+
+	// Always calculate PTZ because it is always valid and we need terminus for calcHLCRDifficulty
 	PTZ, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.ZONE)
 	if err != nil {
 		return common.Hash{}, err
 	}
 
-	PTR, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.REGION)
-	if err != nil {
-		return common.Hash{}, err
+	// Only check for prime twist if block is of prime order
+	if headerOrder == params.PRIME {
+
+		PTR, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.REGION)
+		if err != nil {
+			return common.Hash{}, err
+		}
+
+		PTP, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.PRIME)
+		if err != nil {
+			return common.Hash{}, err
+		}
+
+		if PTZ.Hash() != PTR.Hash() || PTR.Hash() != PTP.Hash() || PTP.Hash() != PTZ.Hash() {
+			return common.Hash{}, errors.New("there exists a prime twist")
+		}
 	}
 
-	PTP, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.PRIME)
-	if err != nil {
-		return common.Hash{}, err
-	}
-
-	if PTZ.Hash() != PTR.Hash() || PTR.Hash() != PTP.Hash() || PTP.Hash() != PTZ.Hash() {
-		return common.Hash{}, errors.New("there exists a prime twist")
-	}
-
-	return PTP.Hash(), nil
+	return PTZ.Hash(), nil
 }
 
 // calcHLCRNetDifficulty calculates the net difficulty from previous prime.
