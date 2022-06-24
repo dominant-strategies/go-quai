@@ -356,7 +356,7 @@ func ExampleGenerateNetwork() {
 
 	// genesis handling - should only trigger once, necessary to generate genesis block first and only once
 	var genesisCheck bool = false
-	if ordersPool[0].startNumber == [3]int{0, 0, 0} {
+	if specsPool[0].number == [3]int{0, 0, 0} {
 		genesisCheck = true
 	}
 
