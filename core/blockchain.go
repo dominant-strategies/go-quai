@@ -3093,7 +3093,11 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 			return common.Hash{}, err
 		}
 
+		// PCRC has failed. Rollback through the prior untwisted region.
 		if RTZ.Hash() != RTR.Hash() {
+			rtzParent := bc.GetBlockByHash(RTZ.Hash()).Header().ParentHash[types.QuaiNetworkContext]
+			rtzParentBlock := bc.GetBlockByHash(rtzParent)
+			bc.reorg(bc.CurrentBlock(), rtzParentBlock)
 			return common.Hash{}, errors.New("there exists a region twist")
 		}
 	}
@@ -3122,7 +3126,18 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 			return common.Hash{}, err
 		}
 
-		if PTZ.Hash() != PTR.Hash() || PTR.Hash() != PTP.Hash() || PTP.Hash() != PTZ.Hash() {
+		// PCRC has failed. Rollback through the prior untwisted prime.
+		if PTR.Hash() != PTP.Hash() {
+			ptrParent := bc.GetBlockByHash(PTR.Hash()).Header().ParentHash[types.QuaiNetworkContext]
+			ptrParentBlock := bc.GetBlockByHash(ptrParent)
+			bc.reorg(bc.CurrentBlock(), ptrParentBlock)
+			return common.Hash{}, errors.New("there exists a prime twist")
+		}
+
+		if PTZ.Hash() != PTR.Hash() {
+			ptzParent := bc.GetBlockByHash(PTZ.Hash()).Header().ParentHash[types.QuaiNetworkContext]
+			ptzParentBlock := bc.GetBlockByHash(ptzParent)
+			bc.reorg(bc.CurrentBlock(), ptzParentBlock)
 			return common.Hash{}, errors.New("there exists a prime twist")
 		}
 	}
