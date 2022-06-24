@@ -439,7 +439,7 @@ func (f *BlockFetcher) loop() {
 			if f.light {
 				continue
 			}
-			fmt.Println("enqueue 1: inject")
+			log.Info("block_fetcher: enqueue 1 inject", "op.block", op.block.Hash(), "extBlocks", len(op.extBlocks))
 			f.enqueue(op.origin, nil, op.block, op.extBlocks)
 
 		case hash := <-f.done:
@@ -630,7 +630,7 @@ func (f *BlockFetcher) loop() {
 			// Schedule the header-only blocks for import
 			for _, block := range complete {
 				if announce := f.completing[block.Hash()]; announce != nil {
-					fmt.Println("enqueue 4: complete")
+					log.Info("block_fetcher: enqueue 2 complete", "op.block", block.Hash(), "extBlocks", 0)
 					f.enqueue(announce.origin, nil, block, nil)
 				}
 			}
@@ -698,7 +698,7 @@ func (f *BlockFetcher) loop() {
 			// Schedule the retrieved blocks for ordered import
 			for _, block := range blocks {
 				if announce := f.completing[block.Hash()]; announce != nil {
-					fmt.Println("enqueue 2: schedule retrieval")
+					log.Info("block_fetcher: enqueue 2 completing", "op.block", block.Hash(), "extBlocks", 0)
 					f.enqueue(announce.origin, nil, block, nil)
 				}
 			}
