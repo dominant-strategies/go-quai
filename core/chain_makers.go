@@ -356,5 +356,11 @@ func (cr *fakeChainReader) CheckContext(context int) error {
 
 // CheckLocationRange checks to make sure the range of r and z are valid
 func (cr *fakeChainReader) CheckLocationRange(location []byte) error {
+	if int(location[0]) < 1 || int(location[0]) > params.FullerOntology[0] {
+		return errors.New("the provided location is outside the allowable region range")
+	}
+	if int(location[1]) < 1 || int(location[1]) > params.FullerOntology[1] {
+		return errors.New("the provided location is outside the allowable zone range")
+	}
 	return nil
 }
