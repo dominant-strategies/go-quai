@@ -3040,6 +3040,8 @@ func (bc *BlockChain) HLCR(localDifficulties []*big.Int, externDifficulties []*b
 
 // The purpose of the Previous Coincident Reference Check (PCRC) is to establish
 // that we have linked untwisted chains prior to checking HLCR & applying external state transfers.
+// NOTE: note that it only guarantees linked & untwisted back to the prime terminus, assuming the
+// prime termini match. To check deeper than that, you need to iteratively apply PCRC to get that guarantee.
 func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 
 	if header.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
