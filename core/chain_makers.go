@@ -50,6 +50,61 @@ type BlockGen struct {
 	engine consensus.Engine
 }
 
+// GenerateChain creates a chain of n blocks. The first block's
+// parent will be the provided parent. db is used to store
+// intermediate states and should contain the parent's state trie.
+//
+// The generator function is called with a new block generator for
+// every block. Any transactions and uncles added to the generator
+// become part of the block. If gen is nil, the blocks will be empty
+// and their coinbase will be the zero address.
+//
+// Blocks created by GenerateChain do not contain valid proof of work
+// values. Inserting them into BlockChain requires use of FakePow or
+// a similar non-validating proof of work implementation.
+func GenerateChain(config *params.ChainConfig, parent *types.Block, engine consensus.Engine, db ethdb.Database, n int, gen func(int, *BlockGen)) ([]*types.Block, []types.Receipts) {
+	if config == nil {
+		config = params.TestChainConfig
+	}
+	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
+	chainreader := &fakeChainReader{config: config}
+	genblock := func(i int, parent *types.Block, statedb *state.StateDB) (*types.Block, types.Receipts) {
+		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: config, engine: engine}
+		b.header = makeHeader(false, config, chainreader, parent, 0, statedb, b.engine)
+
+		// Execute any user modifications to the block
+		if gen != nil {
+			gen(i, b)
+		}
+		if b.engine != nil {
+			// Finalize and seal the block
+			block, _ := b.engine.FinalizeAndAssemble(chainreader, b.header, statedb, b.txs, b.uncles, b.receipts)
+
+			// Write state changes to db
+			root, err := statedb.Commit(config.IsEIP158(b.header.Number[types.QuaiNetworkContext]))
+			if err != nil {
+				panic(fmt.Sprintf("state write error: %v", err))
+			}
+			if err := statedb.Database().TrieDB().Commit(root, false, nil); err != nil {
+				panic(fmt.Sprintf("trie write error: %v", err))
+			}
+			return block, b.receipts
+		}
+		return nil, nil
+	}
+	for i := 0; i < n; i++ {
+		statedb, err := state.New(parent.Root(), state.NewDatabase(db), nil)
+		if err != nil {
+			panic(err)
+		}
+		block, receipt := genblock(i, parent, statedb)
+		blocks[i] = block
+		receipts[i] = receipt
+		parent = block
+	}
+	return blocks, receipts
+}
+
 // SetCoinbase sets the coinbase of the generated block.
 // It can be called at most once.
 func (b *BlockGen) SetCoinbase(addr common.Address) {
@@ -183,65 +238,6 @@ func (b *BlockGen) OffsetTime(seconds int64) {
 	}
 	chainreader := &fakeChainReader{config: b.config}
 	b.header.Difficulty[types.QuaiNetworkContext] = b.engine.CalcDifficulty(chainreader, b.header.Time, b.parent.Header(), types.QuaiNetworkContext)
-}
-
-// GenerateChain creates a chain of n blocks. The first block's
-// parent will be the provided parent. db is used to store
-// intermediate states and should contain the parent's state trie.
-//
-// The generator function is called with a new block generator for
-// every block. Any transactions and uncles added to the generator
-// become part of the block. If gen is nil, the blocks will be empty
-// and their coinbase will be the zero address.
-//
-// Blocks created by GenerateChain do not contain valid proof of work
-// values. Inserting them into BlockChain requires use of FakePow or
-// a similar non-validating proof of work implementation.
-func GenerateChain(config *params.ChainConfig, parent *types.Block, engine consensus.Engine, db ethdb.Database, n int, gen func(int, *BlockGen)) ([]*types.Block, []types.Receipts) {
-	if config.ChainID == nil { // for testing purposes
-		config = params.TestChainConfig
-	}
-
-	if config == nil {
-		config = params.TestChainConfig
-	}
-	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
-	chainreader := &fakeChainReader{config: config}
-	genblock := func(i int, parent *types.Block, statedb *state.StateDB) (*types.Block, types.Receipts) {
-		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: config, engine: engine}
-		// b.header = makeHeader(chainreader, parent, statedb, b.engine)
-
-		// Execute any user modifications to the block
-		if gen != nil {
-			gen(i, b)
-		}
-		if b.engine != nil {
-			// Finalize and seal the block
-			block, _ := b.engine.FinalizeAndAssemble(chainreader, b.header, statedb, b.txs, b.uncles, b.receipts)
-
-			// Write state changes to db
-			root, err := statedb.Commit(config.IsEIP158(b.header.Number[types.QuaiNetworkContext]))
-			if err != nil {
-				panic(fmt.Sprintf("state write error: %v", err))
-			}
-			if err := statedb.Database().TrieDB().Commit(root, false, nil); err != nil {
-				panic(fmt.Sprintf("trie write error: %v", err))
-			}
-			return block, b.receipts
-		}
-		return nil, nil
-	}
-	for i := 0; i < n; i++ {
-		statedb, err := state.New(parent.Root(), state.NewDatabase(db), nil)
-		if err != nil {
-			panic(err)
-		}
-		block, receipt := genblock(i, parent, statedb)
-		blocks[i] = block
-		receipts[i] = receipt
-		parent = block
-	}
-	return blocks, receipts
 }
 
 func makeHeader(genCheck bool, config *params.ChainConfig, chain consensus.ChainReader, parent *types.Block, order int, state *state.StateDB, engine consensus.Engine) *types.Header {
@@ -401,22 +397,20 @@ func (cr *fakeChainReader) GetLinkExternalBlocks(header *types.Header) ([]*types
 // Blocks created by GenerateNetwork do not contain valid proof of work values.
 // Inserting them into BlockChain requires use of a TestPoW in order to test and
 // verify the correct operation of the Proof-of-Work algorithm.
-func GenerateNetwork(genesisCheck bool, config *params.ChainConfig, parent *types.Block, order int, startNumber [3]int, n int, engine consensus.Engine, db ethdb.Database, gen func(int, *BlockGen)) ([]*types.Block, []types.Receipts) {
+func GenerateBlock(genesisCheck bool, config *params.ChainConfig, parent *types.Block, order int, startNumber [3]int, engine consensus.Engine, db ethdb.Database) *types.Block {
 	// initialize blocks and receipts
-	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
+	block := types.Block{}
 
 	// associate chainreaders and configs for correct block context placement
 	chainreader := fakeChainReader{config: config}
 
-	genblock := func(genCheck bool, i int, parent *types.Block, order int, statedb *state.StateDB, chainreader fakeChainReader, config params.ChainConfig) (*types.Block, types.Receipts) {
+	genblock := func(genCheck bool, parent *types.Block, order int, statedb *state.StateDB, chainreader fakeChainReader, config params.ChainConfig) *types.Block {
 
-		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: &config, engine: engine}
+		b := &BlockGen{chain: types.Blocks{&block}, parent: parent, statedb: statedb, config: &config, engine: engine}
 		b.header = makeHeader(genCheck, &config, &chainreader, parent, order, statedb, b.engine)
 
 		// Execute any user modifications to the block
-		if gen != nil {
-			gen(i, b)
-		}
+		// for modifications want new logic - come back to later
 
 		if b.engine != nil {
 			// Finalize and seal the block
@@ -430,23 +424,19 @@ func GenerateNetwork(genesisCheck bool, config *params.ChainConfig, parent *type
 			if err := statedb.Database().TrieDB().Commit(root, false, nil); err != nil {
 				panic(fmt.Sprintf("trie write error: %v", err))
 			}
-			return block, b.receipts
+			return block
 		}
-		return nil, nil
+		return nil
 	}
 
-	for i := 0; i < n; i++ {
-		statedb, err := state.New(parent.Root(), state.NewDatabase(db), nil)
-		if err != nil {
-			panic(err)
-		}
-		block, receipt := genblock(genesisCheck, i, parent, order, statedb, chainreader, *config)
-		if genesisCheck { // in order to generate genesis first and only once
-			genesisCheck = false
-		}
-		blocks[i] = block
-		receipts[i] = receipt
-		parent = block
+	statedb, err := state.New(parent.Root(), state.NewDatabase(db), nil)
+	if err != nil {
+		panic(err)
 	}
-	return blocks, receipts
+	block = *genblock(genesisCheck, parent, order, statedb, chainreader, *config)
+	if genesisCheck { // in order to generate genesis first and only once
+		genesisCheck = false
+	}
+
+	return &block
 }
