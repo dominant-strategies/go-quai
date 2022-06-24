@@ -1723,8 +1723,8 @@ func (bc *BlockChain) AddExternalBlock(block *types.ExternalBlock) error {
 
 // ReOrgRollBack compares the difficulty of the newchain and oldchain. Rolls back
 // the current header to the position where the reorg took place in a higher context
-func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
-	log.Info("Rolling back header beyond", "hash", header.Hash())
+func (bc *BlockChain) ReOrgRollBack(header *types.Header, validHeaders []*types.Header, invalidHeaders []*types.Header) error {
+	log.Info("Rolling back header beyond", "hash", header.Hash(), "from", bc.CurrentBlock().Header().Hash())
 	bc.reorgmu.Lock()
 	defer bc.reorgmu.Unlock()
 	var (
@@ -1852,6 +1852,18 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header) error {
 		return fmt.Errorf("reorg header was null")
 	}
 
+	// Upon successful reorg and insert, update the nonCanonicalBlock headers in the DB.
+	// Write all invalid headers to non canonical dominants so that we do not re-import from peers.
+	for _, header := range invalidHeaders {
+		log.Info("ReOrgRollBack: Add non canonical dom to non canon DB", "hash", header.Hash())
+		rawdb.WriteNonCanonDom(bc.db, header)
+	}
+
+	// Pop all newly correct dominant headers that could potentially be in our non canonical dominant db.
+	for _, header := range validHeaders {
+		log.Info("ReOrgRollBack: Removing canonical dom from non canon DB", "hash", header.Hash())
+		rawdb.DeleteNonCanonDom(bc.db, header.Hash())
+	}
 	return nil
 }
 
@@ -1909,6 +1921,11 @@ func (bc *BlockChain) InsertChainWithoutSealVerification(block *types.Block) (in
 	bc.wg.Done()
 
 	return n, err
+}
+
+// SealHash runs the consensus engine seal hash from bc.
+func (bc *BlockChain) SealHash(header *types.Header) common.Hash {
+	return bc.Engine().SealHash(header)
 }
 
 // insertChain is the internal implementation of InsertChain, which assumes that
@@ -2045,6 +2062,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		if BadHashes[block.Hash()] {
 			bc.reportBlock(block, nil, ErrBannedHash)
 			return it.index, ErrBannedHash
+		}
+		// If the header is a banned one, straight out abort
+		if rawdb.ReadNonCanonDom(bc.db, block.Hash()) != nil {
+			return it.index, ErrNonCanonicalDomHash
 		}
 		// If the block is known (in the middle of the chain), it's a special case for
 		// Clique blocks where they can share state among each other, so importing an

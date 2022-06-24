@@ -1031,6 +1031,118 @@ func DeleteBadBlocks(db ethdb.KeyValueWriter) {
 	}
 }
 
+const numNonCanonDomsToKeep = 2000
+
+type nonCanonDom struct {
+	Header *types.Header
+}
+
+// nonCanonDomList implements the sort interface to allow sorting a list of
+// non canon doms by their number in the reverse order.
+type nonCanonDomList []*nonCanonDom
+
+func (s nonCanonDomList) Len() int { return len(s) }
+func (s nonCanonDomList) Less(i, j int) bool {
+	return s[i].Header.Number[types.QuaiNetworkContext].Uint64() < s[j].Header.Number[types.QuaiNetworkContext].Uint64()
+}
+func (s nonCanonDomList) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
+
+// ReadNonCanonDom retrieves the non canonical dom with the corresponding block hash.
+func ReadNonCanonDom(db ethdb.Reader, hash common.Hash) *types.Header {
+	blob, err := db.Get(nonCanonDomKey)
+	if err != nil {
+		return nil
+	}
+	var nonCanonDoms nonCanonDomList
+	if err := rlp.DecodeBytes(blob, &nonCanonDoms); err != nil {
+		return nil
+	}
+	for _, bad := range nonCanonDoms {
+		if bad.Header.Hash() == hash {
+			return bad.Header
+		}
+	}
+	return nil
+}
+
+// ReadAllNonCanonDoms retrieves all the non canonical doms in the database.
+// All returned blocks are sorted in reverse order by number.
+func ReadAllNonCanonDoms(db ethdb.Reader) []*types.Header {
+	blob, err := db.Get(nonCanonDomKey)
+	if err != nil {
+		return nil
+	}
+	var nonCanonDoms nonCanonDomList
+	if err := rlp.DecodeBytes(blob, &nonCanonDoms); err != nil {
+		return nil
+	}
+	var headers []*types.Header
+	for _, bad := range nonCanonDoms {
+		headers = append(headers, bad.Header)
+	}
+	return headers
+}
+
+// WriteBadBlock serializes the non canonical block into the database. If the cumulated
+// bad blocks exceeds the limitation, the oldest will be dropped.
+func WriteNonCanonDom(db ethdb.KeyValueStore, header *types.Header) {
+	blob, err := db.Get(nonCanonDomKey)
+	if err != nil {
+		log.Warn("Failed to load non canonincal dominant headers", "error", err)
+	}
+	var nonCanonDoms nonCanonDomList
+	if len(blob) > 0 {
+		if err := rlp.DecodeBytes(blob, &nonCanonDoms); err != nil {
+			log.Crit("Failed to decode non canonical dominant headers", "error", err)
+		}
+	}
+	nonCanonDoms = append(nonCanonDoms, &nonCanonDom{
+		Header: header,
+	})
+	sort.Sort(sort.Reverse(nonCanonDoms))
+	if len(nonCanonDoms) > numNonCanonDomsToKeep {
+		nonCanonDoms = nonCanonDoms[:numNonCanonDomsToKeep]
+	}
+	data, err := rlp.EncodeToBytes(nonCanonDoms)
+	if err != nil {
+		log.Crit("Failed to encode non canonical dominant headers", "err", err)
+	}
+	if err := db.Put(nonCanonDomKey, data); err != nil {
+		log.Crit("Failed to write non canonical dominant headers", "err", err)
+	}
+}
+
+// DeleteNonCanonDoms deletes all the non canoncical dominant blocks from the database
+func DeleteAllNonCanonDoms(db ethdb.KeyValueWriter) {
+	if err := db.Delete(nonCanonDomKey); err != nil {
+		log.Crit("Failed to delete non canonical dominatn header", "err", err)
+	}
+}
+
+// ReadNonCanonDom retrieves the non canonical dom with the corresponding block hash.
+func DeleteNonCanonDom(db ethdb.KeyValueStore, hash common.Hash) {
+	blob, err := db.Get(nonCanonDomKey)
+	if err != nil {
+		log.Warn("Failed to load non canonincal dominant headers", "error", err)
+	}
+	var nonCanonDoms nonCanonDomList
+	if err := rlp.DecodeBytes(blob, &nonCanonDoms); err != nil {
+		log.Crit("Failed to decode non canonical dominant headers", "error", err)
+	}
+	for _, nonCanonDom := range nonCanonDoms {
+		if nonCanonDom.Header.Hash() == hash {
+			nonCanonDoms = append(nonCanonDoms, nonCanonDom)
+		}
+	}
+	data, err := rlp.EncodeToBytes(nonCanonDoms)
+	if err != nil {
+		log.Crit("Failed to encode non canonical dominant headers", "err", err)
+	}
+	if err := db.Put(nonCanonDomKey, data); err != nil {
+		log.Crit("Failed to write non canonical dominant headers", "err", err)
+	}
+}
+
 // FindCommonAncestor returns the last common ancestor of two block headers
 func FindCommonAncestor(db ethdb.Reader, a, b *types.Header) *types.Header {
 	for bn := b.Number[types.QuaiNetworkContext].Uint64(); a.Number[types.QuaiNetworkContext].Uint64() > bn; {

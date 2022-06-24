@@ -228,11 +228,9 @@ func (hc *HeaderChain) writeHeaders(headers []*types.Header) (result *headerWrit
 	reorg := hc.HLCR(localTd, newTd)
 	equalTd := newTd[0].Cmp(localTd[0]) == 0 && newTd[1].Cmp(localTd[1]) == 0 && newTd[2].Cmp(localTd[2]) == 0
 	if !reorg && equalTd {
-		if lastNumber < head {
-			reorg = true
-		} else if lastNumber == head {
-			reorg = mrand.Float64() < 0.5
-		}
+		localTarget := hc.engine.SealHash(hc.CurrentHeader()).Bytes()
+		externTarget := hc.engine.SealHash(lastHeader).Bytes()
+		reorg = new(big.Int).SetBytes(localTarget).Cmp(new(big.Int).SetBytes(externTarget)) < 0
 	}
 	// If the parent of the (first) block is already the canon header,
 	// we don't have to go backwards to delete canon blocks, but
