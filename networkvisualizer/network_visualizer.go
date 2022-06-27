@@ -47,6 +47,7 @@ var (
 	zone31SubGraph  = "subgraph cluster_Zone31 { label = \"Zone31\" node [color = darkorange1]"
 	zone32SubGraph  = "subgraph cluster_Zone32 { label = \"Zone32\" node [color = orangered2]"
 	zone33SubGraph  = "subgraph cluster_Zone33 { label = \"Zone33\" node [color = \"#c55200\"]"
+	uncleSubGraph   = []string{"subgraph cluster_Uncles { label = \"Uncles\""}
 )
 
 type Chain struct {
@@ -150,15 +151,19 @@ func AssembleGraph(start int, end int, chains []Chain) {
 
 //AddCoincident Goes through Region and Prime chains and connects all blocks found in the network with the same hash
 func AddCoincident(chains []Chain, hash common.Hash) {
+	uncle := true
 	for i := 0; i < len(chains); i++ {
-		_, err := chains[i].client.BlockByHash(context.Background(), hash)
+		_, err := chains[i].client.HeaderByHash(context.Background(), hash)
 		if err == nil {
 			chains[i].AddNode(hash, 0)
 			if chains[i].order < 2 {
 				chains[i].AddEdge(false, fmt.Sprintf("%d", chains[i].order)+hash.String()[2:7], fmt.Sprintf("%d", chains[i].order+1)+hash.String()[2:7])
+				AddCoincident(chains[i].subChains, hash)
 			}
-			AddCoincident(chains[i].subChains, hash)
-
+			uncle = false
+		}
+		if uncle && i == len(chains)-1 {
+			AddUncle(hash, chains[0].order)
 		}
 	}
 }
@@ -170,11 +175,16 @@ func (c *Chain) AddNode(hash common.Hash, num int) {
 		if num == 0 {
 			blockHeader, _ := c.client.HeaderByHash(context.Background(), hash)
 			tempNode = node{"\n\"" + fmt.Sprint(c.order) + hash.String()[2:7] + "\" [label = \"" + hash.String()[2:7] + "\\n " + blockHeader.Number[c.order].String() + "\"]", blockHeader.Number[c.order]}
+			c.nodes = append(c.nodes, tempNode)
 		} else {
 			tempNode = node{"\n\"" + fmt.Sprint(c.order) + hash.String()[2:7] + "\" [label = \"" + hash.String()[2:7] + "\\n " + fmt.Sprint(num) + "\"]", big.NewInt(int64(num))}
+			c.nodes = append(c.nodes, tempNode)
 		}
-		c.nodes = append(c.nodes, tempNode)
 	}
+}
+
+func AddUncle(hash common.Hash, order int) {
+	uncleSubGraph = append(uncleSubGraph, "\n\""+fmt.Sprint(order)+hash.String()[2:7]+"\" [label = \""+hash.String()[2:7]+"\"]")
 }
 
 //Adds an edge to the chain FROM string1 TO string2. The bool parameter will take away the direction of the edge if it is false.
@@ -221,6 +231,10 @@ func writeToDOT(chains []Chain, file *os.File) {
 		file.WriteString("}\n")
 
 	}
+	for _, n := range uncleSubGraph {
+		file.WriteString(n)
+	}
+	file.WriteString("}\n")
 	for _, n := range chains {
 		for _, s := range n.edges {
 			file.WriteString(s)
