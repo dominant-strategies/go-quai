@@ -187,6 +187,7 @@ func BlockInterpreter(networkGraph [3][3][]*blockConstructor) []blockSpecs {
 		n++
 	}
 
+	// create (unordered) set of blockSpecs
 	specs := []blockSpecs{}
 	primeConfig := params.MainnetPrimeChainConfig
 	for r, regions := range networkGraph {
@@ -244,26 +245,42 @@ func BlockInterpreter(networkGraph [3][3][]*blockConstructor) []blockSpecs {
 	}
 
 	// will need to order chains consecutively for proper block generation
-	sequentialSpecs := []blockSpecs{} // once ordered put specs in this array
+	sequencedSpecs := []blockSpecs{} // once ordered put specs in this array
 	// sequence within fork chains
 	for _, forkArray := range forkArrays {
-		parent := findParent(forkArray)
+		parent := findParent(forkArray) // start with lowest number
+		nPrime, nRegion, nZone := parent[0], parent[1], parent[2]
 		for len(forkArray) > 0 { // beware infinite loop!
 			// find next in sequence then append to sequentialSpecs
 			for i, spec := range forkArray {
-				// TO DO
-				// needs substantial revision of logic
-				// take parentNumber and cf. order to find next in sequence
-				// loop over zones then regions
-				// fast removal of element
-				forkArray[i] = forkArray[len(forkArray)-1]
-				forkArray = forkArray[:len(forkArray)-1]
-				break
+				// find next block in sequence and append to sequencedSpecs
+				if spec.number == [3]int{nPrime, nRegion, nZone} {
+					sequencedSpecs = append(sequencedSpecs, spec)
+					// determine values for next block (if any)
+					switch spec.order {
+					case 0:
+						nPrime = nPrime + 1
+						nRegion = nRegion + 1
+						nZone = nZone + 1
+					case 1:
+						nRegion = nRegion + 1
+						nZone = nZone + 1
+					case 2:
+						nZone = nZone + 1
+					default:
+						fmt.Println("no order given for ", spec)
+					}
+					// fast removal of element
+					forkArray[i] = forkArray[len(forkArray)-1]
+					forkArray = forkArray[:len(forkArray)-1]
+					break
+				}
+
 			}
 		}
 	}
 
-	return sequentialSpecs
+	return sequencedSpecs
 }
 
 // returns the first block number that can be used to build a fork chain
