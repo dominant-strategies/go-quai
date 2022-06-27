@@ -296,6 +296,20 @@ func findLast(specs []blockSpecs) (lastNumbers [3]int) {
 	return lastNumbers
 }
 
+// finds parent for each block to be generated
+func findParent(blockPool []*types.Block, parentNumbers [3]int) *types.Block {
+	parent := types.Block{}
+	for i := range blockPool {
+		if blockPool[len(blockPool)-1-i].Header().Number[0].Cmp(big.NewInt(int64(parentNumbers[0]))) == 0 &&
+			blockPool[len(blockPool)-1-i].Header().Number[1].Cmp(big.NewInt(int64(parentNumbers[1]))) == 0 &&
+			blockPool[len(blockPool)-1-i].Header().Number[2].Cmp(big.NewInt(int64(parentNumbers[2]))) == 0 {
+			parent = *blockPool[len(blockPool)-1-i]
+			break
+		}
+	}
+	return &parent
+}
+
 // ExampleGenerateNetwork follows the logic of ExampleGenerateChain but
 // with additional parameters to specify intended context of blocks.
 // This makes it possible to test interchain linkages, external transactions,
@@ -360,6 +374,8 @@ func ExampleGenerateNetwork() {
 		if specs.number == [3]int{0, 0, 0} {
 			genesisCheck = true
 			parent = genesisPrime
+		} else {
+			parent = findParent(blockPool, specs.parentNumbers)
 		}
 
 		block := GenerateBlock(genesisCheck, &specs.slice,
