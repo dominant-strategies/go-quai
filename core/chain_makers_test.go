@@ -18,7 +18,6 @@ package core
 
 import (
 	"fmt"
-	"math"
 	"math/big"
 
 	"github.com/spruce-solutions/go-quai/common"
@@ -248,58 +247,53 @@ func BlockInterpreter(networkGraph [3][3][]*blockConstructor) []blockSpecs {
 	sequencedSpecs := []blockSpecs{} // once ordered put specs in this array
 	// sequence within fork chains
 	for _, forkArray := range forkArrays {
-		parent := findParent(forkArray) // start with lowest number
-		nPrime, nRegion, nZone := parent[0], parent[1], parent[2]
+		last := findLast(forkArray) // start with last number
+		reversedForkSpecs := []blockSpecs{}
 		for len(forkArray) > 0 { // beware infinite loop!
-			// find next in sequence then append to sequentialSpecs
+			// find next in sequence then append to reversedForkSpecs
+			// since we are finding block sequence backwards must be reversed
+			// then append to sequencedSpecs
 			for i, spec := range forkArray {
 				// find next block in sequence and append to sequencedSpecs
-				if spec.number == [3]int{nPrime, nRegion, nZone} {
-					sequencedSpecs = append(sequencedSpecs, spec)
+				if spec.number == last {
+					reversedForkSpecs = append(reversedForkSpecs, spec)
 					// determine values for next block (if any)
-					switch spec.order {
-					case 0:
-						nPrime = nPrime + 1
-						nRegion = nRegion + 1
-						nZone = nZone + 1
-					case 1:
-						nRegion = nRegion + 1
-						nZone = nZone + 1
-					case 2:
-						nZone = nZone + 1
-					default:
-						fmt.Println("no order given for ", spec)
-					}
+					last = spec.parentNumbers
 					// fast removal of element
 					forkArray[i] = forkArray[len(forkArray)-1]
 					forkArray = forkArray[:len(forkArray)-1]
 					break
 				}
-
 			}
+		}
+		for len(reversedForkSpecs) > 0 {
+			// append last element
+			sequencedSpecs = append(sequencedSpecs, reversedForkSpecs[len(reversedForkSpecs)-1])
+			// remove element
+			reversedForkSpecs = reversedForkSpecs[:len(reversedForkSpecs)-1]
 		}
 	}
 
 	return sequencedSpecs
 }
 
-// returns the first block number that can be used to build a fork chain
-func findParent(specs []blockSpecs) (parentNumbers [3]int) {
-	nPrime, nRegion, nZone := math.MaxInt, math.MaxInt, math.MaxInt
+// returns the last block in forkArray to sequence blocks from parentNumbers
+func findLast(specs []blockSpecs) (lastNumbers [3]int) {
+	nPrime, nRegion, nZone := 0, 0, 0
 	for _, spec := range specs {
-		if spec.number[0] <= nPrime {
+		if spec.number[0] >= nPrime {
 			nPrime = spec.number[0]
-			if spec.number[1] <= nRegion {
+			if spec.number[1] >= nRegion {
 				nRegion = spec.number[1]
-				if spec.number[2] <= nZone {
+				if spec.number[2] >= nZone {
 					nZone = spec.number[2]
-					parentNumbers = spec.parentNumbers
+					lastNumbers = spec.number
 				}
 			}
 		}
 
 	}
-	return parentNumbers
+	return lastNumbers
 }
 
 // ExampleGenerateNetwork follows the logic of ExampleGenerateChain but
