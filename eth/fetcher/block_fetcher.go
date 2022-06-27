@@ -547,7 +547,7 @@ func (f *BlockFetcher) loop() {
 
 			// Split the batch of headers into unknown ones (to return to the caller),
 			// known incomplete ones (requiring body retrievals) and completed blocks.
-			unknown, incomplete, complete, lightHeaders := []*types.Header{}, []*blockAnnounce{}, []*types.Block{}, []*blockAnnounce{}
+			unknown, incomplete, complete, lightHeaders := []*types.Header{}, []*blockAnnounce{}, []*blockOrHeaderInject{}, []*blockAnnounce{}
 			for _, header := range task.headers {
 				hash := header.Hash()
 
@@ -576,7 +576,7 @@ func (f *BlockFetcher) loop() {
 						announce.time = task.time
 
 						traceable := true
-						_, err := f.getExtBlocks(header)
+						extBlocks, err := f.getExtBlocks(header)
 						if err != nil {
 							traceable = false
 							announce.fetchExtBlocks([]common.Hash{header.Hash()})
@@ -589,7 +589,8 @@ func (f *BlockFetcher) loop() {
 							block := types.NewBlockWithHeader(header)
 							block.ReceivedAt = task.time
 
-							complete = append(complete, block)
+							op := &blockOrHeaderInject{block: block, extBlocks: extBlocks}
+							complete = append(complete, op)
 							f.completing[hash] = announce
 							continue
 						}
@@ -626,9 +627,10 @@ func (f *BlockFetcher) loop() {
 				f.enqueue(announce.origin, announce.header, nil, nil)
 			}
 			// Schedule the header-only blocks for import
-			for _, block := range complete {
-				if announce := f.completing[block.Hash()]; announce != nil {
-					f.enqueue(announce.origin, nil, block, nil)
+			for _, op := range complete {
+				if announce := f.completing[op.block.Hash()]; announce != nil {
+					log.Info("block_fetcher: enqueue 4 complete", "op.block", op.block.Hash(), "extBlocks", len(op.extBlocks))
+					f.enqueue(announce.origin, nil, op.block, op.extBlocks)
 				}
 			}
 
@@ -641,7 +643,7 @@ func (f *BlockFetcher) loop() {
 				return
 			}
 			bodyFilterInMeter.Mark(int64(len(task.transactions)))
-			blocks := []*types.Block{}
+			blockOperations := []*blockOrHeaderInject{}
 			// abort early if there's nothing explicitly requested
 			if len(f.completing) > 0 {
 				for i := 0; i < len(task.transactions) && i < len(task.uncles); i++ {
@@ -672,7 +674,13 @@ func (f *BlockFetcher) loop() {
 						if f.getBlock(hash) == nil {
 							block := types.NewBlockWithHeader(announce.header).WithBody(task.transactions[i], task.uncles[i])
 							block.ReceivedAt = task.time
-							blocks = append(blocks, block)
+							extBlocks, err := f.getExtBlocks(announce.header)
+							if err != nil {
+								continue
+							}
+
+							op := &blockOrHeaderInject{origin: task.peer, block: block, extBlocks: extBlocks}
+							blockOperations = append(blockOperations, op)
 						} else {
 							f.forgetHash(hash)
 						}
@@ -693,9 +701,10 @@ func (f *BlockFetcher) loop() {
 				return
 			}
 			// Schedule the retrieved blocks for ordered import
-			for _, block := range blocks {
-				if announce := f.completing[block.Hash()]; announce != nil {
-					f.enqueue(announce.origin, nil, block, nil)
+			for _, op := range blockOperations {
+				if announce := f.completing[op.block.Hash()]; announce != nil {
+					log.Info("block_fetcher: enqueue 2 completing", "op.block", op.block.Hash(), "extBlocks", len(op.extBlocks))
+					f.enqueue(announce.origin, nil, op.block, op.extBlocks)
 				}
 			}
 		}
@@ -825,7 +834,7 @@ func (f *BlockFetcher) importBlocks(peer string, block *types.Block, extBlocks [
 	hash := block.Hash()
 
 	// Run the import on a new thread
-	log.Info("Importing propagated block", "peer", peer, "number", block.Number(), "hash", hash)
+	log.Info("Importing propagated block", "peer", peer, "number", block.Number(), "hash", hash, "extBlocks", extBlocks)
 	go func() {
 		defer func() { f.done <- hash }()
 
@@ -840,7 +849,10 @@ func (f *BlockFetcher) importBlocks(peer string, block *types.Block, extBlocks [
 		case nil:
 			// All ok, quickly propagate to our peers
 			blockBroadcastOutTimer.UpdateSince(block.ReceivedAt)
-			go f.broadcastBlock(block, extBlocks, true)
+			extBlocks, err = f.getExtBlocks(block.Header())
+			if err != nil {
+				go f.broadcastBlock(block, extBlocks, true)
+			}
 
 		case consensus.ErrFutureBlock:
 			// Weird future block, don't fail, but neither propagate
@@ -860,8 +872,11 @@ func (f *BlockFetcher) importBlocks(peer string, block *types.Block, extBlocks [
 		}
 		// If import succeeded, broadcast the block
 		blockAnnounceOutTimer.UpdateSince(block.ReceivedAt)
-		go f.broadcastBlock(block, extBlocks, false)
-
+		var err error
+		extBlocks, err = f.getExtBlocks(block.Header())
+		if err != nil {
+			go f.broadcastBlock(block, extBlocks, false)
+		}
 		// Invoke the testing hook if needed
 		if f.importedHook != nil {
 			f.importedHook(nil, block)
