@@ -18,7 +18,6 @@ package core
 
 import (
 	"fmt"
-	"math"
 	"math/big"
 
 	"github.com/spruce-solutions/go-quai/common"
