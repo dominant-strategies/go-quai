@@ -348,20 +348,19 @@ func ExampleGenerateNetwork() {
 		fmt.Println("wrong genesis")
 	}
 
-	// temp
-	parent := genesisPrime
-
-	// genesis handling - should only trigger once, necessary to generate genesis block first and only once
+	// genesis handling - should only trigger once
 	var genesisCheck bool = false
-	if specsPool[0].number == [3]int{0, 0, 0} {
-		genesisCheck = true
-	}
+	var parent *types.Block
 
 	// Generator section
 	// loop over GenerateNetwork
 	blockPool := []*types.Block{}
 	for _, specs := range specsPool {
 		// function here to derive appropriate parent post-genesis cases
+		if specs.number == [3]int{0, 0, 0} {
+			genesisCheck = true
+			parent = genesisPrime
+		}
 
 		block := GenerateBlock(genesisCheck, &specs.slice,
 			parent, specs.order, specs.number,
