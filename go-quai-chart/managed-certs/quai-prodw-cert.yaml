@@ -1,0 +1,21 @@
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  annotations:
+  name: go-quai-dev
+  namespace: quai-dev
+spec:
+  domains:
+  - dev.prime.rpc.quaiscan.io
+  - dev.cyprus.rpc.quaiscan.io
+  - dev.paxos.rpc.quaiscan.io
+  - dev.hydra.rpc.quaiscan.io
+  - dev.cyprus1.rpc.quaiscan.io
+  - dev.cyprus2.rpc.quaiscan.io
+  - dev.cyprus3.rpc.quaiscan.io
+  - dev.paxos1.rpc.quaiscan.io
+  - dev.paxos2.rpc.quaiscan.io
+  - dev.paxos3.rpc.quaiscan.io
+  - dev.hydra1.rpc.quaiscan.io
+  - dev.hydra2.rpc.quaiscan.io
+  - dev.hydra3.rpc.quaiscan.io
