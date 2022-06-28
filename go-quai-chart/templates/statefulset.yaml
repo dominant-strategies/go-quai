@@ -10,7 +10,7 @@ metadata:
 spec:
   ports:
 {{- range $chain := .Values.goQuai.chains }}
-{{ include "go-quai.clusterIP" $ | replace "HTTP" $chain.ports.http | replace "WS" $chain.ports.ws | replace "DISC" $chain.ports.disc | replace "prime" $chain.name | indent 2 }}
+{{ include "go-quai.clusterIP" $ | replace "<HTTP>" $chain.ports.http | replace "<WS>" $chain.ports.ws | replace "<DISC>" $chain.ports.disc | replace "prime" $chain.name | indent 2 }}
 {{- end }}
   selector:
     app: {{ $name }}
@@ -39,7 +39,7 @@ spec:
         name: go-quai
         ports:
 {{- range $chain := .Values.goQuai.chains }}
-{{ include "go-quai.statefulset" $ | replace "HTTP" $chain.ports.http | replace "WS" $chain.ports.ws | replace "DISC" $chain.ports.disc | replace "prime" $chain.name | indent 8 }}
+{{ include "go-quai.statefulset" $ | replace "<HTTP>" $chain.ports.http | replace "<WS>" $chain.ports.ws | replace "<DISC>" $chain.ports.disc | replace "prime" $chain.name | indent 8 }}
 {{- end }}
         volumeMounts:
         - mountPath: ~/.quai/

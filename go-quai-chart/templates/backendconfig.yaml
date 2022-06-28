@@ -1,0 +1,4 @@
+{{- range $chain := .Values.goQuai.chains }}
+{{ include "go-quai.backendconfig" $ | replace "prime" $chain.name }}
+---
+{{- end }}

@@ -18,7 +18,7 @@ Get the environment URL prefix where prod is ""
 Expand the name of the chart.
 */}}
 {{- define "go-quai.name" -}}
-{{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
+{{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}-{{- include "go-quai.envSuffix" . -}}
 {{- end }}
 
 {{/*

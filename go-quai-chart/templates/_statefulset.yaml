@@ -1,25 +1,25 @@
 {{- define "go-quai.clusterIP" }}
 - name: prime-http
-  port: HTTP
+  port: <HTTP>
   protocol: TCP
-  targetPort: HTTP
-- name: prime-WS
-  port: WS
+  targetPort: <HTTP>
+- name: prime-<WS>
+  port: <WS>
   protocol: TCP
-  targetPort: WS
+  targetPort: <WS>
 - name: prime-disc
-  port: DISC
+  port: <DISC>
   protocol: UDP
-  targetPort: DISC
+  targetPort: <DISC>
 {{- end }}
 {{- define "go-quai.statefulset" }}
-- containerPort: HTTP
+- containerPort: <HTTP>
   name: prime-http
   protocol: TCP
-- containerPort: WS
+- containerPort: <WS>
   name: prime-ws
   protocol: TCP
-- containerPort: DISC
+- containerPort: <DISC>
   name: prime-disc
   protocol: UDP
 {{- end }}
