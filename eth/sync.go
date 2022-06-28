@@ -73,7 +73,7 @@ type chainSyncer struct {
 type chainSyncOp struct {
 	mode downloader.SyncMode
 	peer *eth.Peer
-	td   *big.Int
+	td   []*big.Int
 	head common.Hash
 }
 
@@ -167,7 +167,7 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 		mode = downloader.SnapSync
 	}
 	op := peerToSyncOp(mode, peer)
-	if op.td.Cmp(ourTD) <= 0 {
+	if cs.handler.chain.HLCR(op.td, ourTD) {
 		return nil // We're in sync.
 	}
 	return op
@@ -178,12 +178,12 @@ func peerToSyncOp(mode downloader.SyncMode, p *eth.Peer) *chainSyncOp {
 	return &chainSyncOp{mode: mode, peer: p, td: peerTD, head: peerHead}
 }
 
-func (cs *chainSyncer) modeAndLocalHead() (downloader.SyncMode, *big.Int) {
+func (cs *chainSyncer) modeAndLocalHead() (downloader.SyncMode, []*big.Int) {
 	// If we're in fast sync mode, return that directly
 	if atomic.LoadUint32(&cs.handler.fastSync) == 1 {
 		block := cs.handler.chain.CurrentFastBlock()
 		td := cs.handler.chain.GetTdByHash(block.Hash())
-		return downloader.FastSync, td[types.QuaiNetworkContext]
+		return downloader.FastSync, td
 	}
 	// We are probably in full sync, but we might have rewound to before the
 	// fast sync pivot, check if we should reenable
@@ -191,13 +191,13 @@ func (cs *chainSyncer) modeAndLocalHead() (downloader.SyncMode, *big.Int) {
 		if head := cs.handler.chain.CurrentBlock(); head.NumberU64() < *pivot {
 			block := cs.handler.chain.CurrentFastBlock()
 			td := cs.handler.chain.GetTdByHash(block.Hash())
-			return downloader.FastSync, td[types.QuaiNetworkContext]
+			return downloader.FastSync, td
 		}
 	}
 	// Nope, we're really full syncing
 	head := cs.handler.chain.CurrentBlock()
 	td := cs.handler.chain.GetTd(head.Hash(), head.NumberU64())
-	return downloader.FullSync, td[types.QuaiNetworkContext]
+	return downloader.FullSync, td
 }
 
 // startSync launches doSync in a new goroutine.
