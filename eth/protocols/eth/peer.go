@@ -139,7 +139,7 @@ func (p *Peer) Head() (hash common.Hash, td []*big.Int) {
 	log.Info("HEAD", "td", p.td)
 	copy(hash[:], p.head[:])
 	newTd := make([]*big.Int, 0)
-	newTd = append(newTd, td...)
+	newTd = append(newTd, p.td...)
 	log.Info("NEWTD", "td", newTd)
 	return hash, newTd
 }
