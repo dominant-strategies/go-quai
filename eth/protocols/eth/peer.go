@@ -138,7 +138,7 @@ func (p *Peer) Head() (hash common.Hash, td []*big.Int) {
 
 	copy(hash[:], p.head[:])
 	newTd := new([]*big.Int)
-	copy(*newTd, td)
+	copy(*newTd, p.td)
 	return hash, *newTd
 }
 
