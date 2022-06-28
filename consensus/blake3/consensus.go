@@ -394,7 +394,8 @@ func (blake3 *Blake3) GetDifficultyOrder(header *types.Header) (int, error) {
 			}
 		}
 	}
-	return -1, errors.New("block does not satisfy minimum difficulty")
+
+	return -1, errors.New("Block does not satisfy minimum difficulty")
 }
 
 // Iterate back through headers to find ones that exceed a given context.
