@@ -109,7 +109,7 @@ func chainsValidator(chain []*types.Block, primeChain BlockChain, regionChain Bl
 	// e.g. rpc
 
 	// handle permutation *outside* this function
-	// will need to hit this function twice - first to create blocks (with forks), second to test fork scenarios
+	// will need to hit this function twice - first to create blocks (with tags), second to test tag scenarios
 
 	if _, err := primeChain.InsertChain(chain); err != nil {
 		print(err)
@@ -124,26 +124,25 @@ func chainsValidator(chain []*types.Block, primeChain BlockChain, regionChain Bl
 type blockConstructor struct {
 	numbers [3]int // prime idx, region idx, zone idx
 	// -1 for contexts the block does not coincide with
-	fork          int       // specify what fork to construct block in (0 must be first chain grinded)
-	parentFork    int       // select what fork to point to (if same as fork int then will be same)
-	parentNumbers [3]int    // necessary to select correct block to fork from
-	parentTags    [3]string // (optionally) Override the parents to point to tagged blocks. Empty strings are ignored.
-	tag           string    // (optionally) Give this block a named tag. Empty strings are ignored.
+	tag        int    // specify what tag to construct block in (0 must be first chain grinded)
+	parentTags [3]int // index specifies whether to look for Prime, Region, or Zone order block in that respective tag
+	// parentTags    [3]string // (optionally) Override the parents to point to tagged blocks. Empty strings are ignored.
+	// tag           string    // (optionally) Give this block a named tag. Empty strings are ignored.
 }
 
+// change tags to strings
+
 // Constant Genesis definition in notation
-var genesisBlock = blockConstructor{[3]int{0, 0, 0}, 0, 0, [3]int{0, 0, 0}, [3]string{}, ""}
+var genesisBlock = blockConstructor{[3]int{0, 0, 0}, 0, [3]int{0}}
 
 type blockSpecs struct {
 	order         int    // order to grind in
 	number        [3]int // Number of block to be created
+	tag           int
+	parentTags    [3]int
 	parentNumbers [3]int
-	fork          int
-	parentFork    int
 	hash          common.Hash
-	slice         params.ChainConfig // chain config (used to infer slice)
-	parentTags    [3]string
-	tag           string
+	slice         [3]params.ChainConfig // chain config (used to infer slice)
 }
 
 // simple example graph
@@ -152,11 +151,11 @@ var networkGraphSample = [3][3][]*blockConstructor{
 	{ // Region1
 		{ // Zone1
 			&genesisBlock,
-			&blockConstructor{[3]int{-1, 1, 1}, 0, 0, [3]int{0, 0, 0}, [3]string{}, ""},
-			&blockConstructor{[3]int{-1, -1, 2}, 0, 0, [3]int{0, 1, 1}, [3]string{}, ""},
-			&blockConstructor{[3]int{-1, -1, 3}, 0, 0, [3]int{0, 1, 2}, [3]string{}, ""},
-			&blockConstructor{[3]int{-1, 2, 4}, 0, 0, [3]int{0, 1, 3}, [3]string{}, ""},
-			&blockConstructor{[3]int{1, 3, 5}, 0, 0, [3]int{0, 2, 4}, [3]string{}, ""},
+			&blockConstructor{[3]int{-1, 1, 1}, 0, [3]int{0, 0, 0}},
+			&blockConstructor{[3]int{-1, -1, 2}, 0, [3]int{0}},
+			&blockConstructor{[3]int{-1, -1, 3}, 0, [3]int{0}},
+			&blockConstructor{[3]int{-1, 2, 4}, 0, [3]int{0}},
+			&blockConstructor{[3]int{1, 3, 5}, 0, [3]int{0}},
 		},
 	},
 }
@@ -166,27 +165,28 @@ func BlockInterpreter(networkGraph [3][3][]*blockConstructor) []blockSpecs {
 	// this will generate the blocks in sequential order (the chains will then be validated separately again)
 	// Prime blocks then Region blocks and finally Zone blocks last
 
-	// loop to find number of forks; result used to derive correct block numbers
-	totalForks := 0
+	// loop to find number of tags; result used to derive correct block numbers
+	totaltags := 0
 	for _, regions := range networkGraph {
 		for _, zones := range regions {
 			for _, construct := range zones {
-				if construct.fork >= totalForks {
-					totalForks = construct.fork + 1
+				if construct.tag >= totaltags {
+					totaltags = construct.tag + 1
 				}
 			}
 		}
 	}
 
-	// initialize array to derive respective number values in forks
-	forkedNumbers := [][3]int{}
+	// initialize array to derive respective number values in tags
+	taggedNumbers := [][3]int{}
 	n := 0
-	for n <= totalForks {
-		forkedNumbers = append(forkedNumbers, [3]int{0, 0, 0})
+	for n <= totaltags {
+		taggedNumbers = append(taggedNumbers, [3]int{0, 0, 0})
 		n++
 	}
 
 	// create (unordered) set of blockSpecs
+	tagNumbersArray := make([][3]int, totaltags) // maintains current numbers for each tag
 	specs := []blockSpecs{}
 	primeConfig := params.MainnetPrimeChainConfig
 	for r, regions := range networkGraph {
@@ -195,89 +195,77 @@ func BlockInterpreter(networkGraph [3][3][]*blockConstructor) []blockSpecs {
 			zoneConfig := params.MainnetZoneChainConfigs[r][z]
 			for _, block := range zones {
 				spec := blockSpecs{}
-				if block.numbers[0] != -1 {
-					spec.order = 0
-					if block == &genesisBlock { // genesis is special case
-						spec.number = block.numbers
-					} else {
-						spec.number[0] = block.parentNumbers[0] + 1
-						spec.number[1] = block.parentNumbers[1] + 1
-						spec.number[2] = block.parentNumbers[2] + 1
-					}
-					spec.parentNumbers = block.parentNumbers
-					spec.fork = block.fork
-					spec.parentFork = block.parentFork
-					spec.slice = *primeConfig
-					forkedNumbers[block.fork] = spec.number
+				spec.slice = [3]params.ChainConfig{*primeConfig, regionConfig, zoneConfig}
+				// first fill out Zone number values
+				spec.number[2] = block.number[2]
+				spec.parentNumbers[2] = spec.number[2] - 1
+				// next figure out Region number value
+				if block.number[1] != -1 {
+					spec.number[1] = block.number[1]
+					spec.parentNumbers[1] = spec.number[1] - 1
 				} else {
-					if block.numbers[1] != -1 {
-						spec.order = 1
-						spec.number[0] = block.parentNumbers[0]
-						spec.number[1] = block.parentNumbers[1] + 1
-						spec.number[2] = block.parentNumbers[2] + 1
-						spec.parentNumbers = block.parentNumbers
-						spec.fork = block.fork
-						spec.parentFork = block.parentFork
-						spec.slice = regionConfig
-						forkedNumbers[block.fork] = spec.number
-					} else {
-						spec.order = 2
-						spec.number[0] = block.parentNumbers[0]
-						spec.number[1] = block.parentNumbers[1]
-						spec.number[2] = block.parentNumbers[2] + 1
-						spec.parentNumbers = block.parentNumbers
-						spec.fork = block.fork
-						spec.parentFork = block.parentFork
-						spec.slice = zoneConfig
-						forkedNumbers[block.fork] = spec.number
-					}
+					spec.parentNumbers[1] = tagNumbersArray[block.parentTags[1]]
+					spec.number[1] = spec.parentNumbers[1] + 1
+				}
+				if block.number[0] != -1 {
+					spec.number[0] = block.number[0]
+					spec.parentNumbers[0] = spec.number[0] -1
+				} else {
+					spec.parentNumbers[0] = tagNumbersArray[block.parentTags[0]]
+					spec.number[0] = spec.parentNumbers[0] + 1
+				}
+
+
+
+				// TO DO figure out how to infer numbers correctly!!!!!!!!
+
 				}
 				specs = append(specs, spec)
 			}
 		}
 	}
 
-	// organize specs by fork id
-	forkArrays := make([][]blockSpecs, totalForks)
+	// organize specs by tag id
+	tagArrays := make([][]blockSpecs, totaltags)
 	for _, spec := range specs {
-		forkArrays[spec.fork] = append(forkArrays[spec.fork], spec)
+		tagArrays[spec.tag] = append(tagArrays[spec.tag], spec)
 	}
 
 	// will need to order chains consecutively for proper block generation
 	sequencedSpecs := []blockSpecs{} // once ordered put specs in this array
-	// sequence within fork chains
-	for _, forkArray := range forkArrays {
-		last := findLast(forkArray) // start with last number
-		reversedForkSpecs := []blockSpecs{}
-		for len(forkArray) > 0 { // beware infinite loop!
-			// find next in sequence then append to reversedForkSpecs
+	// sequence within tag chains
+	for _, tagArray := range tagArrays {
+		last := findLast(tagArray) // start with last number
+		reversedtagSpecs := []blockSpecs{}
+		for len(tagArray) > 0 { // beware infinite loop!
+			// find next in sequence then append to reversedtagSpecs
 			// since we are finding block sequence backwards must be reversed
 			// then append to sequencedSpecs
-			for i, spec := range forkArray {
+			for i, spec := range tagArray {
 				// find next block in sequence and append to sequencedSpecs
 				if spec.number == last {
-					reversedForkSpecs = append(reversedForkSpecs, spec)
+					reversedtagSpecs = append(reversedtagSpecs, spec)
 					// determine values for next block (if any)
 					last = spec.parentNumbers
 					// fast removal of element
-					forkArray[i] = forkArray[len(forkArray)-1]
-					forkArray = forkArray[:len(forkArray)-1]
+					tagArray[i] = tagArray[len(tagArray)-1]
+					tagArray = tagArray[:len(tagArray)-1]
 					break
 				}
 			}
 		}
-		for len(reversedForkSpecs) > 0 {
+		for len(reversedtagSpecs) > 0 {
 			// append last element
-			sequencedSpecs = append(sequencedSpecs, reversedForkSpecs[len(reversedForkSpecs)-1])
+			sequencedSpecs = append(sequencedSpecs, reversedtagSpecs[len(reversedtagSpecs)-1])
 			// remove element
-			reversedForkSpecs = reversedForkSpecs[:len(reversedForkSpecs)-1]
+			reversedtagSpecs = reversedtagSpecs[:len(reversedtagSpecs)-1]
 		}
 	}
 
 	return sequencedSpecs
 }
 
-// returns the last block in forkArray to sequence blocks from parentNumbers
+// returns the last block in tagArray to sequence blocks from parentNumbers
 func findLast(specs []blockSpecs) (lastNumbers [3]int) {
 	nPrime, nRegion, nZone := 0, 0, 0
 	for _, spec := range specs {
@@ -299,11 +287,11 @@ func findLast(specs []blockSpecs) (lastNumbers [3]int) {
 // finds parent for each block to be generated
 func findParent(blockPool []*types.Block, parentNumbers [3]int) *types.Block {
 	parent := types.Block{}
-	for i := range blockPool {
-		if blockPool[len(blockPool)-1-i].Header().Number[0].Cmp(big.NewInt(int64(parentNumbers[0]))) == 0 &&
-			blockPool[len(blockPool)-1-i].Header().Number[1].Cmp(big.NewInt(int64(parentNumbers[1]))) == 0 &&
-			blockPool[len(blockPool)-1-i].Header().Number[2].Cmp(big.NewInt(int64(parentNumbers[2]))) == 0 {
-			parent = *blockPool[len(blockPool)-1-i]
+	for _, block := range blockPool {
+		if block.Header().Number[0].Cmp(big.NewInt(int64(parentNumbers[0]))) == 0 &&
+			block.Header().Number[1].Cmp(big.NewInt(int64(parentNumbers[1]))) == 0 &&
+			block.Header().Number[2].Cmp(big.NewInt(int64(parentNumbers[2]))) == 0 {
+			parent = *block
 			break
 		}
 	}
@@ -323,8 +311,8 @@ func ExampleGenerateNetwork() {
 		addr1 = crypto.PubkeyToAddress(key1.PublicKey)
 		// addr2    = crypto.PubkeyToAddress(key2.PublicKey)
 		// addr3    = crypto.PubkeyToAddress(key3.PublicKey)
-		db = rawdb.NewMemoryDatabase() // first db necessary to grind blocks with forks
-		// second rawdb.NewMemoryDatabase object to decide fork scenarios
+		db = rawdb.NewMemoryDatabase() // first db necessary to grind blocks with tags
+		// second rawdb.NewMemoryDatabase object to decide tag scenarios
 	)
 
 	// Ensure that key1 has some funds in the genesis block.
@@ -385,7 +373,7 @@ func ExampleGenerateNetwork() {
 			genesisCheck = false
 		}
 		specs.hash = block.Hash()
-		// mini-Runner section (must grind blocks in order to derive parents for forks)
+		// mini-Runner section (must grind blocks in order to derive parents for tags)
 		blockchainPrime.InsertChain(types.Blocks{block})
 		blockPool = append(blockPool, block)
 	}

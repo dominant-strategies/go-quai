@@ -22,7 +22,6 @@ import (
 
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/consensus"
-	"github.com/spruce-solutions/go-quai/consensus/blake3"
 	"github.com/spruce-solutions/go-quai/consensus/misc"
 	"github.com/spruce-solutions/go-quai/core/state"
 	"github.com/spruce-solutions/go-quai/core/types"
@@ -69,7 +68,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	chainreader := &fakeChainReader{config: config}
 	genblock := func(i int, parent *types.Block, statedb *state.StateDB) (*types.Block, types.Receipts) {
 		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: config, engine: engine}
-		b.header = makeHeader(false, config, chainreader, parent, 0, statedb, b.engine)
+		b.header = makeHeader(config, chainreader, parent, 0, statedb, b.engine)
 
 		// Execute any user modifications to the block
 		if gen != nil {
@@ -257,12 +256,7 @@ func (b *BlockGen) OffsetTime(seconds int64) {
 	b.header.Difficulty[types.QuaiNetworkContext] = b.engine.CalcDifficulty(chainreader, b.header.Time, b.parent.Header(), types.QuaiNetworkContext)
 }
 
-func makeHeader(genCheck bool, config *params.ChainConfig, chain consensus.ChainReader, parent *types.Block, order int, state *state.StateDB, engine consensus.Engine) *types.Header {
-	// return genesis block as first block in chain (only triggers once)
-	if genCheck {
-		return parent.Header()
-	}
-
+func makeHeader(config *params.ChainConfig, chain consensus.ChainReader, parent *types.Block, order int, state *state.StateDB, engine consensus.Engine) *types.Header {
 	// initialization of header
 	baseFee := misc.CalcBaseFee(chain.Config(), parent.Header(), chain.GetHeaderByNumber, chain.GetUnclesInChain, chain.GetGasUsedInChain)
 	header := &types.Header{
@@ -288,50 +282,35 @@ func makeHeader(genCheck bool, config *params.ChainConfig, chain consensus.Chain
 	gasLimit := CalcGasLimit(parent.GasLimit(), parent.GasUsed(), len(parent.Uncles()))
 	header.GasLimit = []uint64{gasLimit, gasLimit, gasLimit}
 
+	// set Number based on order
 	switch order {
-	case 2: // Zone
-		// fill ParentHash values
-		header.ParentHash[0] = parent.Header().ParentHash[0]
-		header.ParentHash[1] = parent.Header().ParentHash[1]
-		header.ParentHash[2] = parent.Hash()
-		// fill Number values
-		header.Number[0] = parent.Header().Number[0]
-		header.Number[1] = parent.Header().Number[1]
-		header.Number[2].Add(parent.Header().Number[2], common.Big1)
-		// fill Difficulty values
-		header.Difficulty[0] = parent.Header().Difficulty[0]
-		header.Difficulty[1] = parent.Header().Difficulty[1]
-		header.Difficulty[2] = blake3.CalcDifficulty(config, header.Time, parent.Header(), 2)
-	case 1: // Region
-		// fill ParentHash values
-		header.ParentHash[0] = parent.Header().ParentHash[0]
-		header.ParentHash[1] = parent.Hash()
-		header.ParentHash[2] = header.ParentHash[1]
-		// fill Number values
-		header.Number[0] = parent.Header().Number[0]
-		header.Number[1].Add(parent.Header().Number[1], common.Big1)
-		header.Number[2].Add(parent.Header().Number[2], common.Big1)
-		// fill Difficulty values
-		header.Difficulty[0] = parent.Header().Difficulty[0]
-		header.Difficulty[1] = blake3.CalcDifficulty(config, header.Time, parent.Header(), 1)
-		header.Difficulty[2] = blake3.CalcDifficulty(config, header.Time, parent.Header(), 2)
-	case 0: // Prime
-		// fill ParentHash values
-		header.ParentHash[0] = parent.Hash()
-		header.ParentHash[1] = header.ParentHash[0] // take new header[0] value to reduce compute
-		header.ParentHash[2] = header.ParentHash[0]
-		// fill Number values
-		header.Number[0].Add(parent.Header().Number[0], common.Big1)
-		header.Number[1].Add(parent.Header().Number[1], common.Big1)
-		header.Number[2].Add(parent.Header().Number[2], common.Big1)
-		// fill Difficulty values
-		header.Difficulty[0] = blake3.CalcDifficulty(config, header.Time, parent.Header(), 0)
-		header.Difficulty[1] = blake3.CalcDifficulty(config, header.Time, parent.Header(), 1)
-		header.Difficulty[2] = blake3.CalcDifficulty(config, header.Time, parent.Header(), 2)
+	case 0:
+		header.Number[0].Add(parent.Header().Number[0], big1)
+		header.Number[1].Add(parent.Header().Number[1], big1)
+		header.Number[2].Add(parent.Header().Number[2], big1)
+	case 1:
+		header.Number[1].Add(parent.Header().Number[1], big1)
+		header.Number[2].Add(parent.Header().Number[2], big1)
+	case 2:
+		header.Number[2].Add(parent.Header().Number[2], big1)
+	}
+
+	// mine using special Fakepow to find block in right order
+	nonce := uint64(0)
+	for {
+		header.Nonce = types.EncodeNonce(nonce)
+		diff, _ := engine.GetDifficultyOrder(header)
+		if diff == order {
+			break
+		}
+		nonce++
 	}
 
 	return header
 }
+
+// big1 variable allocation
+var big1 = big.NewInt(1)
 
 type fakeChainReader struct {
 	config *params.ChainConfig
@@ -394,7 +373,11 @@ func GenerateBlock(genesisCheck bool, config *params.ChainConfig, parent *types.
 	genblock := func(genCheck bool, parent *types.Block, order int, statedb *state.StateDB, chainreader fakeChainReader, config params.ChainConfig) *types.Block {
 
 		b := &BlockGen{chain: types.Blocks{&block}, parent: parent, statedb: statedb, config: &config, engine: engine}
-		b.header = makeHeader(genCheck, &config, &chainreader, parent, order, statedb, b.engine)
+		if !genCheck {
+			b.header = makeHeader(&config, &chainreader, parent, order, statedb, b.engine)
+		} else {
+			b.header = parent.Header()
+		}
 
 		// Execute any user modifications to the block
 		// for modifications want new logic - come back to later
