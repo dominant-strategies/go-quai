@@ -452,12 +452,14 @@ func (h *handler) BroadcastBlock(block *types.Block, extBlocks []*types.External
 			log.Error("Propagating dangling block", "number", block.Number(), "hash", hash)
 			return
 		}
-		// Send the block to a subset of our peers
-		transfer := peers[:int(math.Sqrt(float64(len(peers))))]
-		for _, peer := range transfer {
+		// Send the block to a subset of our peers if less than 10
+		if len(peers) > 9 {
+			peers = peers[:int(math.Sqrt(float64(len(peers))))]
+		}
+		for _, peer := range peers {
 			peer.AsyncSendNewBlock(block, td, extBlocks)
 		}
-		log.Info("Propagated block", "hash", hash, "recipients", len(transfer), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
+		log.Info("Propagated block", "hash", hash, "recipients", len(peers), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
 		return
 	}
 	// Otherwise if the block is indeed in out own chain, announce it
