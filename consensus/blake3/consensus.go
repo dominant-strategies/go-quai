@@ -378,7 +378,12 @@ func (blake3 *Blake3) GetDifficultyOrder(header *types.Header) (int, error) {
 	var difficulties []*big.Int
 
 	if header == nil {
-		return types.ContextDepth, errors.New("No header provided")
+		return types.ContextDepth, errors.New("no header provided")
+	}
+	if !blake3.config.Fakepow {
+		difficulties = header.Difficulty
+	} else {
+		difficulties = fakeDifficulties
 	}
 	if !blake3.config.Fakepow {
 		difficulties = header.Difficulty
@@ -394,6 +399,7 @@ func (blake3 *Blake3) GetDifficultyOrder(header *types.Header) (int, error) {
 			}
 		}
 	}
+
 	return -1, errors.New("Block does not satisfy minimum difficulty")
 }
 

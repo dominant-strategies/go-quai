@@ -109,7 +109,7 @@ func chainsValidator(chain []*types.Block, primeChain BlockChain, regionChain Bl
 	// e.g. rpc
 
 	// handle permutation *outside* this function
-	// will need to hit this function twice - first to create blocks (with forks), second to test fork scenarios
+	// will need to hit this function twice - first to create blocks (with tags), second to test tag scenarios
 
 	if _, err := primeChain.InsertChain(chain); err != nil {
 		print(err)

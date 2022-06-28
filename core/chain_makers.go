@@ -68,11 +68,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	chainreader := &fakeChainReader{config: config}
 	genblock := func(i int, parent *types.Block, statedb *state.StateDB) (*types.Block, types.Receipts) {
 		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: config, engine: engine}
-<<<<<<< HEAD
 		b.header = makeHeader(config, chainreader, parent, 0, statedb, b.engine)
-=======
-		b.header = makeHeader(false, config, chainreader, parent, 0, statedb, b.engine)
->>>>>>> V2 generator draft ~buggy, more changes wanted
 
 		// Execute any user modifications to the block
 		if gen != nil {
@@ -260,16 +256,12 @@ func (b *BlockGen) OffsetTime(seconds int64) {
 	b.header.Difficulty[types.QuaiNetworkContext] = b.engine.CalcDifficulty(chainreader, b.header.Time, b.parent.Header(), types.QuaiNetworkContext)
 }
 
-<<<<<<< HEAD
-func makeHeader(config *params.ChainConfig, chain consensus.ChainReader, parent *types.Block, order int, state *state.StateDB, engine consensus.Engine) *types.Header {
-=======
 func makeHeader(genCheck bool, config *params.ChainConfig, chain consensus.ChainReader, parent *types.Block, order int, state *state.StateDB, engine consensus.Engine) *types.Header {
 	// return genesis block as first block in chain (only triggers once)
 	if genCheck {
 		return parent.Header()
 	}
 
->>>>>>> V2 generator draft ~buggy, more changes wanted
 	// initialization of header
 	baseFee := misc.CalcBaseFee(chain.Config(), parent.Header(), chain.GetHeaderByNumber, chain.GetUnclesInChain, chain.GetGasUsedInChain)
 	header := &types.Header{
@@ -308,6 +300,17 @@ func makeHeader(genCheck bool, config *params.ChainConfig, chain consensus.Chain
 		header.Number[2].Add(parent.Header().Number[2], big1)
 	}
 
+	// mine using special Fakepow to find block in right order
+	nonce := uint64(0)
+	for {
+		header.Nonce = types.EncodeNonce(nonce)
+		diff, _ := engine.GetDifficultyOrder(header)
+		if diff == order {
+			break
+		}
+		nonce++
+	}
+
 <<<<<<< HEAD
 	// mine using special Fakepow to find block in right order
 	nonce := uint64(0)
@@ -325,12 +328,6 @@ func makeHeader(genCheck bool, config *params.ChainConfig, chain consensus.Chain
 
 // big1 variable allocation
 var big1 = big.NewInt(1)
-
-=======
-	return header
-}
-
->>>>>>> V2 generator draft ~buggy, more changes wanted
 type fakeChainReader struct {
 	config *params.ChainConfig
 }
@@ -392,15 +389,12 @@ func GenerateBlock(genesisCheck bool, config *params.ChainConfig, parent *types.
 	genblock := func(genCheck bool, parent *types.Block, order int, statedb *state.StateDB, chainreader fakeChainReader, config params.ChainConfig) *types.Block {
 
 		b := &BlockGen{chain: types.Blocks{&block}, parent: parent, statedb: statedb, config: &config, engine: engine}
-<<<<<<< HEAD
 		if !genCheck {
 			b.header = makeHeader(&config, &chainreader, parent, order, statedb, b.engine)
 		} else {
 			b.header = parent.Header()
 		}
-=======
-		b.header = makeHeader(genCheck, &config, &chainreader, parent, order, statedb, b.engine)
->>>>>>> V2 generator draft ~buggy, more changes wanted
+
 
 		// Execute any user modifications to the block
 		// for modifications want new logic - come back to later
