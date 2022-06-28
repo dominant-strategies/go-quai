@@ -137,9 +137,9 @@ func (p *Peer) Head() (hash common.Hash, td []*big.Int) {
 	defer p.lock.RUnlock()
 
 	copy(hash[:], p.head[:])
-	newTd := new([]*big.Int)
-	copy(*newTd, p.td)
-	return hash, *newTd
+	newTd := make([]*big.Int, 0)
+	newTd = append(newTd, td...)
+	return hash, newTd
 }
 
 // SetHead updates the head hash and total difficulty of the peer.
