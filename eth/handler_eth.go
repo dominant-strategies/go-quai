@@ -29,6 +29,7 @@ import (
 	"github.com/spruce-solutions/go-quai/eth/protocols/eth"
 	"github.com/spruce-solutions/go-quai/log"
 	"github.com/spruce-solutions/go-quai/p2p/enode"
+	"github.com/spruce-solutions/go-quai/params"
 	"github.com/spruce-solutions/go-quai/trie"
 )
 
@@ -205,7 +206,7 @@ func (h *ethHandler) handleBlockAnnounces(peer *eth.Peer, hashes []common.Hash, 
 
 // handleBlockBroadcast is invoked from a peer's message handler when it transmits a
 // block broadcast for the local node to process.
-func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block, td *big.Int, extBlocks []*types.ExternalBlock) error {
+func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block, td []*big.Int, extBlocks []*types.ExternalBlock) error {
 	log.Info("handleBlockBroadcast: Received block broadcast", "hash", block.Hash(), "num", block.Header().Number, "extBlocks", len(extBlocks))
 
 	for _, extBlock := range extBlocks {
@@ -218,10 +219,23 @@ func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block, td
 	// calculate the head hash and TD that the peer truly must have.
 	var (
 		trueHead = block.ParentHash()
-		trueTD   = new(big.Int).Sub(td, block.Difficulty())
+		trueTD   = make([]*big.Int, 3)
+		tempTD   = big.NewInt(0)
 	)
+	order, _ := h.chain.Engine().GetDifficultyOrder(block.Header())
+	switch order {
+	case params.PRIME:
+		tempTD = new(big.Int).Sub(td[0], block.Header().Difficulty[0])
+		trueTD = []*big.Int{tempTD, tempTD, tempTD}
+	case params.REGION:
+		tempTD = new(big.Int).Sub(td[1], block.Header().Difficulty[1])
+		trueTD = []*big.Int{td[0], tempTD, tempTD}
+	case params.ZONE:
+		tempTD = new(big.Int).Sub(td[2], block.Header().Difficulty[2])
+		trueTD = []*big.Int{td[0], td[1], tempTD}
+	}
 	// Update the peer's total difficulty if better than the previous
-	if _, td := peer.Head(); trueTD.Cmp(td) > 0 {
+	if _, td := peer.Head(); h.chain.HLCR(trueTD, td) {
 		peer.SetHead(trueHead, trueTD)
 		h.chainSync.handlePeerEvent(peer)
 	}

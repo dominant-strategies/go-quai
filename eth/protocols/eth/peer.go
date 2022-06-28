@@ -147,7 +147,7 @@ func (p *Peer) SetHead(hash common.Hash, td []*big.Int) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	copy(p.head[:], hash[:])
-	p.td := td
+	p.td = td
 }
 
 // KnownBlock returns whether peer is known to already have a block.
