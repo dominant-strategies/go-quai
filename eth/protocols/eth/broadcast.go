@@ -33,7 +33,7 @@ const (
 // broadcast queue.
 type blockPropagation struct {
 	block     *types.Block
-	td        *big.Int
+	td        []*big.Int
 	extBlocks []*types.ExternalBlock
 }
 

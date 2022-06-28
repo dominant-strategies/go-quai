@@ -161,8 +161,8 @@ const (
 	RefundQuotient        uint64 = 2
 	RefundQuotientEIP3529 uint64 = 5
 
-	ExternalBlockLookupLimit int   = 200 // Amount of iterations to lookup external block
-	ExternalBlockLookupDelay int64 = 25  // Delay time for external block lookup during polling
+	ExternalBlockLookupLimit int   = 2  // Amount of iterations to lookup external block
+	ExternalBlockLookupDelay int64 = 25 // Delay time for external block lookup during polling
 )
 
 // Gas discount table for BLS12-381 G1 and G2 multi exponentiation operations
@@ -178,7 +178,6 @@ var (
 
 // Ontology defines the current Quai Network ontology
 var (
-	// Explicit definition of PRIME, REGION, ZONE
 	PRIME  = 0
 	REGION = 1
 	ZONE   = 2

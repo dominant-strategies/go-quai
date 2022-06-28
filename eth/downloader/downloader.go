@@ -208,6 +208,9 @@ type BlockChain interface {
 
 	// Adds ExternalBlock to external block cache
 	AddExternalBlock(block *types.ExternalBlock) error
+
+	// HLCR does hierarchical comparison of two difficulty tuples and returns true if second tuple is greater than the first
+	HLCR(localDifficulties []*big.Int, externDifficulties []*big.Int) bool
 }
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
@@ -331,7 +334,7 @@ func (d *Downloader) UnregisterPeer(id string) error {
 
 // Synchronise tries to sync up our local block chain with a remote peer, both
 // adding various sanity checks as well as wrapping it with various log entries.
-func (d *Downloader) Synchronise(id string, head common.Hash, td *big.Int, mode SyncMode) error {
+func (d *Downloader) Synchronise(id string, head common.Hash, td []*big.Int, mode SyncMode) error {
 	err := d.synchronise(id, head, td, mode)
 
 	switch err {
@@ -358,7 +361,7 @@ func (d *Downloader) Synchronise(id string, head common.Hash, td *big.Int, mode 
 // synchronise will select the peer and use it for synchronising. If an empty string is given
 // it will use the best peer possible and synchronize if its TD is higher than our own. If any of the
 // checks fail an error will be returned. This method is synchronous
-func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int, mode SyncMode) error {
+func (d *Downloader) synchronise(id string, hash common.Hash, td []*big.Int, mode SyncMode) error {
 	// Mock out the synchronisation if testing
 	if d.synchroniseMock != nil {
 		return d.synchroniseMock(id, hash)
@@ -446,7 +449,7 @@ func (d *Downloader) getMode() SyncMode {
 
 // syncWithPeer starts a block synchronization based on the hash chain from the
 // specified peer and head hash.
-func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.Int) (err error) {
+func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td []*big.Int) (err error) {
 	d.mux.Post(StartEvent{})
 	defer func() {
 		// reset on error
@@ -1552,7 +1555,7 @@ func (d *Downloader) fetchParts(deliveryCh chan dataPack, deliver func(dataPack)
 // processHeaders takes batches of retrieved headers from an input channel and
 // keeps processing and scheduling them into the header chain and downloader's
 // queue until the stream ends or a failure occurs.
-func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
+func (d *Downloader) processHeaders(origin uint64, td []*big.Int) error {
 	// Keep a count of uncertain headers to roll back
 	var (
 		rollback    uint64 // Zero means no rollback (fine as you can't unroll the genesis)
@@ -1614,7 +1617,7 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 				// R: Nothing to give
 				if mode != LightSync {
 					head := d.blockchain.CurrentBlock()
-					if !gotHeaders && td.Cmp(d.blockchain.GetTd(head.Hash(), head.NumberU64())[types.QuaiNetworkContext]) > 0 {
+					if !gotHeaders && d.blockchain.HLCR(d.blockchain.GetTd(head.Hash(), head.NumberU64()), td) {
 						return errStallingPeer
 					}
 				}
@@ -1627,7 +1630,7 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 				// peer gave us something useful, we're already happy/progressed (above check).
 				if mode == FastSync || mode == LightSync {
 					head := d.lightchain.CurrentHeader()
-					if td.Cmp(d.lightchain.GetTd(head.Hash(), head.Number[types.QuaiNetworkContext].Uint64())[types.QuaiNetworkContext]) > 0 {
+					if d.blockchain.HLCR(d.lightchain.GetTd(head.Hash(), head.Number[types.QuaiNetworkContext].Uint64()), td) {
 						return errStallingPeer
 					}
 				}
