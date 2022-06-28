@@ -167,6 +167,7 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 		mode = downloader.SnapSync
 	}
 	op := peerToSyncOp(mode, peer)
+	log.Info("nextSyncOp: returning bestPeer", "op.td", op.td, "td", ourTD)
 	if cs.handler.chain.HLCR(op.td, ourTD) {
 		return nil // We're in sync.
 	}

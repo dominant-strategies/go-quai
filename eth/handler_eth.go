@@ -235,7 +235,8 @@ func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block, td
 		trueTD = []*big.Int{td[0], td[1], tempTD}
 	}
 	// Update the peer's total difficulty if better than the previous
-	if _, td := peer.Head(); h.chain.HLCR(trueTD, td) {
+	log.Info("handleBlockBroadcast: peer set head", "trueTD", trueTD, "td", td)
+	if _, td := peer.Head(); h.chain.HLCR(td, trueTD) {
 		peer.SetHead(trueHead, trueTD)
 		h.chainSync.handlePeerEvent(peer)
 	}
