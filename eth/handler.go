@@ -19,7 +19,6 @@ package eth
 import (
 	"errors"
 	"math"
-	"math/big"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -220,7 +219,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		}
 		return n, err
 	}
-	h.blockFetcher = fetcher.NewBlockFetcher(false, nil, h.chain.GetBlockByHash, validator, h.BroadcastBlock, heighter, nil, inserter, h.removePeer, h.chain.GetLinkExternalBlocks)
+	h.blockFetcher = fetcher.NewBlockFetcher(false, nil, h.chain.GetBlockByHash, validator, h.BroadcastBlock, heighter, nil, inserter, h.removePeer, h.chain.GetLinkExternalBlocks, h.chain.AddExternalBlocks)
 
 	fetchTx := func(peer string, hashes []common.Hash) error {
 		p := h.peers.peer(peer)
@@ -441,6 +440,7 @@ func (h *handler) BroadcastBlock(block *types.Block, extBlocks []*types.External
 	// If propagation is requested, send to a subset of the peer
 	if propagate {
 		// Calculate the TD of the block (it's not imported yet, so block.Td is not valid)
+<<<<<<< HEAD
 		var td []*big.Int
 		if parent := h.chain.GetBlock(block.ParentHash(), block.NumberU64()-1); parent != nil {
 <<<<<<< HEAD
@@ -469,14 +469,23 @@ func (h *handler) BroadcastBlock(block *types.Block, extBlocks []*types.External
 >>>>>>> 2848670df (core: Added forkchoice, PCRC, HLCR, Td to Tuple, Single Genesis changes)
 		} else {
 			log.Error("Propagating dangling block", "number", block.Number(), "hash", hash)
+=======
+		td, err := h.chain.CalcTd(block.Header())
+		if err != nil {
+			log.Error("Error calculating td for block", "number", block.Number(), "hash", hash)
+>>>>>>> e18063f39 (block_fetcher.go: updated ext block filter to get proper ext block fetching)
 			return
 		}
-		// Send the block to a subset of our peers
-		transfer := peers[:int(math.Sqrt(float64(len(peers))))]
-		for _, peer := range transfer {
+		log.Info("BroadcastBlock", "td", td)
+
+		// Send the block to a subset of our peers if less than 10
+		if len(peers) > 9 {
+			peers = peers[:int(math.Sqrt(float64(len(peers))))]
+		}
+		for _, peer := range peers {
 			peer.AsyncSendNewBlock(block, td, extBlocks)
 		}
-		log.Trace("Propagated block", "hash", hash, "recipients", len(transfer), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
+		log.Trace("Propagated block", "hash", hash, "recipients", len(peers), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
 		return
 	}
 	// Otherwise if the block is indeed in out own chain, announce it

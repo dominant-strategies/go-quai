@@ -243,6 +243,7 @@ func (ps *peerSet) peerWithHighestTD() *eth.Peer {
 	for _, p := range ps.peers {
 		if _, td := p.Head(); bestPeer == nil || HLCR(bestTd, td) {
 			bestPeer, bestTd = p.Peer, td
+			log.Info("peerWithHighestTD: returning bestPeer", "bestTd", bestTd, "td", td)
 		}
 	}
 	return bestPeer

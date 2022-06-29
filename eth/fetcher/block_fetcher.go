@@ -19,6 +19,7 @@ package fetcher
 
 import (
 	"errors"
+	"fmt"
 	"math/rand"
 	"time"
 
@@ -409,6 +410,7 @@ func (f *BlockFetcher) loop() {
 		height := f.chainHeight()
 		for !f.queue.Empty() {
 			op := f.queue.PopItem().(*blockOrHeaderInject)
+			fmt.Println("Popping item from import queue", "hash", op.hash())
 			hash := op.hash()
 			if f.queueChangeHook != nil {
 				f.queueChangeHook(hash, false)
@@ -416,6 +418,7 @@ func (f *BlockFetcher) loop() {
 			// If too high up the chain or phase, continue later
 			number := op.number()
 			if number > height+1 {
+				fmt.Println("too high up number chain", "number", number, "height+1", height+1)
 				f.queue.Push(op, -int64(number))
 				if f.queueChangeHook != nil {
 					f.queueChangeHook(hash, true)
@@ -424,6 +427,7 @@ func (f *BlockFetcher) loop() {
 			}
 			// Otherwise if fresh and still unknown, try and import
 			if (number+maxUncleDist < height) || (f.light && f.getHeader(hash) != nil) || (!f.light && f.getBlock(hash) != nil) {
+				fmt.Println("fresh and still unknown", number, maxUncleDist, height, f.getBlock(hash) != nil)
 				f.forgetBlock(hash)
 				continue
 			}
@@ -545,8 +549,9 @@ func (f *BlockFetcher) loop() {
 		case <-completeTimer.C:
 			// At least one header's timer ran out, retrieve everything
 			request := make(map[string][]common.Hash)
-
+			fmt.Println("Triggered complete timer")
 			for hash, announces := range f.fetched {
+				fmt.Println("Iterating on f.fetched", hash)
 				// Pick a random peer to retrieve from, reset all others
 				announce := announces[rand.Intn(len(announces))]
 				f.forgetHash(hash)
