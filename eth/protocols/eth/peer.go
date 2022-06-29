@@ -510,15 +510,12 @@ func (k *knownCache) Cardinality() int {
 
 // RequestExternalBlocks fetches a batch of external blocks from a remote node.
 func (p *Peer) RequestExternalBlocks(hashes []common.Hash) error {
-	p.Log().Debug("Fetching batch of external blocks", "count", len(hashes))
-	if p.Version() >= QUAI66 {
-		id := rand.Uint64()
+	log.Info("Fetching batch of external blocks", "count", len(hashes), "hashes", hashes)
+	id := rand.Uint64()
 
-		requestTracker.Track(p.id, p.version, GetExtBlocksMsg, ExtBlocksMsg, id)
-		return p2p.Send(p.rw, GetExtBlocksMsg, &GetExtBlocksPacket66{
-			RequestId:          id,
-			GetExtBlocksPacket: hashes,
-		})
-	}
-	return p2p.Send(p.rw, GetExtBlocksMsg, GetExtBlocksPacket(hashes))
+	requestTracker.Track(p.id, p.version, GetExtBlocksMsg, ExtBlocksMsg, id)
+	return p2p.Send(p.rw, GetExtBlocksMsg, &GetExtBlocksPacket66{
+		RequestId:          id,
+		GetExtBlocksPacket: hashes,
+	})
 }
