@@ -3083,7 +3083,7 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 		return common.Hash{}, err
 	}
 	// Only check for region twist if block is of region order
-	if headerOrder == params.REGION {
+	if headerOrder <= params.REGION {
 		// Region twist check
 		// RTZ -- Region coincident along zone path
 		// RTR -- Region coincident along region path
