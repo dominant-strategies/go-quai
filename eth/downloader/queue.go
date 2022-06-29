@@ -913,8 +913,10 @@ func (q *queue) DeliverExternalBlocks(id string, externalBlockList [][]*types.Ex
 		result.ExternalBlocks = externalBlockList[index]
 		result.SetExternalBlocksDone()
 	}
-	for _, extBlock := range externalBlockList {
-		fmt.Println("DeliverExternalBlocks: len", len(extBlock))
+	for _, extBlocks := range externalBlockList {
+		for _, extBlock := range extBlocks {
+			fmt.Println("DeliverExternalBlocks:", extBlock.Header().Number, extBlock.Header().Location, extBlock.Context(), extBlock.Hash())
+		}
 	}
 	return q.deliver(id, q.externalBlockTaskPool, q.externalBlockTaskQueue, q.externalBlockPendPool,
 		receiptReqTimer, len(externalBlockList), validate, reconstruct)
