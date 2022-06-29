@@ -163,7 +163,7 @@ ifeq ($(ENABLE_ARCHIVE),true)
 endif
 
 ifeq ($(ENABLE_HTTP),true)
-	BASE_COMMAND += --http
+	BASE_COMMAND += --http --http.vhosts=* 
 endif
 
 ifeq ($(ENABLE_WS),true)
@@ -180,6 +180,10 @@ endif
 
 ifeq ($(BOOTNODE),true)
 	BASE_COMMAND += --nodekey bootnode.key --ws.origins $(WS_ORIG) --http.corsdomain $(HTTP_CORSDOMAIN)
+endif
+
+ifeq ($(CORS),true)
+	BASE_COMMAND += --ws.origins $(WS_ORIG) --http.corsdomain $(HTTP_CORSDOMAIN)
 endif
 
 run-slice:
