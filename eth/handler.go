@@ -18,6 +18,7 @@ package eth
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"math/big"
 	"sync"
@@ -452,10 +453,14 @@ func (h *handler) BroadcastBlock(block *types.Block, extBlocks []*types.External
 				log.Error("Error calculating block order in BroadcastBlock, err: ", err)
 				return
 			}
+			if block.Header() == nil {
+				fmt.Println("block.Header() is nil in Broadcast Block for block: ", block)
+				return
+			}
 			var tempTD = big.NewInt(0)
-			parentPrimeTd := h.chain.GetTd(block.Header().ParentHash[types.QuaiNetworkContext], block.Header().Number[types.QuaiNetworkContext].Uint64())[0]
-			parentRegionTd := h.chain.GetTd(block.Header().ParentHash[types.QuaiNetworkContext], block.Header().Number[types.QuaiNetworkContext].Uint64())[1]
-			parentZoneTd := h.chain.GetTd(block.Header().ParentHash[types.QuaiNetworkContext], block.Header().Number[types.QuaiNetworkContext].Uint64())[2]
+			parentPrimeTd := h.chain.GetTd(block.Header().ParentHash[types.QuaiNetworkContext], block.Header().Number[types.QuaiNetworkContext].Uint64()-1)[0]
+			parentRegionTd := h.chain.GetTd(block.Header().ParentHash[types.QuaiNetworkContext], block.Header().Number[types.QuaiNetworkContext].Uint64()-1)[1]
+			parentZoneTd := h.chain.GetTd(block.Header().ParentHash[types.QuaiNetworkContext], block.Header().Number[types.QuaiNetworkContext].Uint64()-1)[2]
 			switch order {
 			case params.PRIME:
 				tempTD = new(big.Int).Add(block.Header().Difficulty[0], parentPrimeTd)
