@@ -24,6 +24,7 @@ import (
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/eth/protocols/eth"
 	"github.com/spruce-solutions/go-quai/eth/protocols/snap"
+	"github.com/spruce-solutions/go-quai/log"
 	"github.com/spruce-solutions/go-quai/p2p"
 )
 
@@ -237,10 +238,10 @@ func (ps *peerSet) peerWithHighestTD() *eth.Peer {
 
 	var (
 		bestPeer *eth.Peer
-		bestTd   *big.Int
+		bestTd   []*big.Int
 	)
 	for _, p := range ps.peers {
-		if _, td := p.Head(); bestPeer == nil || td.Cmp(bestTd) > 0 {
+		if _, td := p.Head(); bestPeer == nil || HLCR(bestTd, td) {
 			bestPeer, bestTd = p.Peer, td
 		}
 	}
@@ -256,4 +257,25 @@ func (ps *peerSet) close() {
 		p.Disconnect(p2p.DiscQuitting)
 	}
 	ps.closed = true
+}
+
+// HLCR does hierarchical comparison of two difficulty tuples and returns true if second tuple is greater than the first
+func HLCR(localDifficulties []*big.Int, externDifficulties []*big.Int) bool {
+	log.Info("HLCR", "localDiff", localDifficulties, "externDiff", externDifficulties)
+	if localDifficulties[0].Cmp(externDifficulties[0]) < 0 {
+		return true
+	} else if localDifficulties[0].Cmp(externDifficulties[0]) > 0 {
+		return false
+	}
+	if localDifficulties[1].Cmp(externDifficulties[1]) < 0 {
+		return true
+	} else if localDifficulties[1].Cmp(externDifficulties[1]) > 0 {
+		return false
+	}
+	if localDifficulties[2].Cmp(externDifficulties[2]) < 0 {
+		return true
+	} else if localDifficulties[2].Cmp(externDifficulties[2]) > 0 {
+		return false
+	}
+	return false
 }

@@ -124,8 +124,8 @@ func (b *EthAPIBackend) AddExternalBlock(block *types.ExternalBlock) error {
 	return b.eth.blockchain.AddExternalBlock(block)
 }
 
-func (b *EthAPIBackend) ReOrgRollBack(header *types.Header) error {
-	return b.eth.blockchain.ReOrgRollBack(header)
+func (b *EthAPIBackend) ReOrgRollBack(header *types.Header, validDoms []*types.Header, invalidDoms []*types.Header) error {
+	return b.eth.blockchain.ReOrgRollBack(header, validDoms, invalidDoms)
 }
 
 func (b *EthAPIBackend) GetExternalBlockTraceSet(header *types.Header, context int) (*types.ExternalBlock, error) {

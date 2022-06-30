@@ -124,7 +124,7 @@ func (b *LesApiBackend) GetExternalBlockTraceSet(header *types.Header, context i
 	return nil, errors.New("light client does not support external block caching.")
 }
 
-func (b *LesApiBackend) ReOrgRollBack(header *types.Header) error {
+func (b *LesApiBackend) ReOrgRollBack(header *types.Header, validHeaders []*types.Header, invalidHeaders []*types.Header) error {
 	return errors.New("light client does not support reorg.")
 }
 

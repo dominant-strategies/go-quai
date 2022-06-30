@@ -498,8 +498,21 @@ func RPCMarshalExternalBlock(block *types.Block, receipts []*types.Receipt, cont
 }
 
 // rpcMarshalReOrgData converts the reOrgData obtained to the right header format
-func RPCMarshalReOrgData(header *types.Header) (map[string]interface{}, error) {
-	fields := RPCMarshalHeader(header)
+func RPCMarshalReOrgData(header *types.Header, newHeaders []*types.Header, oldHeaders []*types.Header) (map[string]interface{}, error) {
+	fields := map[string]interface{}{"header": RPCMarshalHeader(header)}
+
+	fieldNewHeaders := make([]interface{}, len(newHeaders))
+	for i, newHeader := range newHeaders {
+		fieldNewHeaders[i] = RPCMarshalHeader(newHeader)
+	}
+
+	fieldOldHeaders := make([]interface{}, len(oldHeaders))
+	for i, oldHeader := range oldHeaders {
+		fieldOldHeaders[i] = RPCMarshalHeader(oldHeader)
+	}
+
+	fields["newHeaders"] = fieldNewHeaders
+	fields["oldHeaders"] = fieldOldHeaders
 	return fields, nil
 }
 
@@ -623,20 +636,21 @@ func (s *PublicBlockChainQuaiAPI) SendMinedBlock(ctx context.Context, raw json.R
 	return nil
 }
 
+type rpcReorgData struct {
+	Header     *types.Header   `json:"header"`
+	NewHeaders []*types.Header `json:"newHeaders"`
+	OldHeaders []*types.Header `json:"oldHeaders"`
+}
+
 // ReOrgRollBack will send the reorg data to perform reorg rollback
 func (s *PublicBlockChainQuaiAPI) SendReOrgData(ctx context.Context, raw json.RawMessage) error {
 	// Decode reOrgHeader and body.
-	var head *types.Header
-	var body *types.Header
-	if err := json.Unmarshal(raw, &head); err != nil {
-		return err
-	}
-	if err := json.Unmarshal(raw, &body); err != nil {
+	var reorgData rpcReorgData
+	if err := json.Unmarshal(raw, &reorgData); err != nil {
 		return err
 	}
 
-	s.b.ReOrgRollBack(head)
-
+	s.b.ReOrgRollBack(reorgData.Header, reorgData.NewHeaders, reorgData.OldHeaders)
 	return nil
 }
 
