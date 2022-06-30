@@ -68,7 +68,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	chainreader := &fakeChainReader{config: config}
 	genblock := func(i int, parent *types.Block, statedb *state.StateDB) (*types.Block, types.Receipts) {
 		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: config, engine: engine}
-		b.header = makeHeader(config, chainreader, parent, 0, statedb, b.engine)
+		b.header = makeHeader(false, config, chainreader, parent, 0, statedb, b.engine)
 
 		// Execute any user modifications to the block
 		if gen != nil {
@@ -311,23 +311,12 @@ func makeHeader(genCheck bool, config *params.ChainConfig, chain consensus.Chain
 		nonce++
 	}
 
-<<<<<<< HEAD
-	// mine using special Fakepow to find block in right order
-	nonce := uint64(0)
-	for {
-		header.Nonce = types.EncodeNonce(nonce)
-		diff, _ := engine.GetDifficultyOrder(header)
-		if diff == order {
-			break
-		}
-		nonce++
-	}
-
 	return header
 }
 
 // big1 variable allocation
 var big1 = big.NewInt(1)
+
 type fakeChainReader struct {
 	config *params.ChainConfig
 }
@@ -394,7 +383,6 @@ func GenerateBlock(genesisCheck bool, config *params.ChainConfig, parent *types.
 		} else {
 			b.header = parent.Header()
 		}
-
 
 		// Execute any user modifications to the block
 		// for modifications want new logic - come back to later
