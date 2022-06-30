@@ -83,6 +83,8 @@ jobs:
       run: rm $KUBECONFIG
 
     - uses: stefanzweifel/git-auto-commit-action@v4
+      with:
+        branch: main
 
   deploy:
     needs: build
