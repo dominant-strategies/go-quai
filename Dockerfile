@@ -11,8 +11,9 @@ ADD . /go-quai
 
 WORKDIR /go-quai
 
-RUN go run build/ci.go install ./cmd/quai
 RUN cat ./network.env.dist | sed "s/WS_API=eth,net,web3,quai/WS_API=eth,net,web3,quai,txpool/g" | sed "s/HTTP_API=eth,net,web3/HTTP_API=eth,net,web3,quai,txpool/g" > ./network.env 
+
+RUN go run build/ci.go install ./cmd/quai
 RUN make go-quai
 #RUN cd /go-quai && make run-full-node
 
