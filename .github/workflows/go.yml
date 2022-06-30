@@ -1,9 +1,9 @@
 name: Go
 
-on: push
-  #pull_request:
-  #  types: [closed]
-  #  branches: [ "main" ]
+on:
+  pull_request:
+    types: [closed]
+    branches: [ "main" ]
 jobs:
 
   build:
@@ -64,7 +64,6 @@ jobs:
         location: us-central1-c
         credentials: ${{ secrets.GKE_SA_KEY }}
 
-
     - name: Deploy
       uses: WyriHaximus/github-action-helm3@v2
       with:
@@ -78,12 +77,6 @@ jobs:
     - name: Update values.yaml version
       run: yq eval ".goQuai.image.version=\"$(cat VERSION)\"" ./go-quai-chart/values.yaml > ./go-quai-chart/values.yaml
     - uses: stefanzweifel/git-auto-commit-action@v4
-
-
-   # - uses: azure/setup-helm@v3
-   #   with:
-   #     version: 'default' # default is latest stable
-   #   id: install
 
   deploy:
     needs: build
