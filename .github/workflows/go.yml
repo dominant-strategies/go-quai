@@ -13,10 +13,6 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    - uses: stefanzweifel/git-auto-commit-action@v4
-      with:
-        tagging_message: 'v0.1.0-pre.2'
-
     - name: Set up Go
       uses: actions/setup-go@v3
       with:
@@ -50,7 +46,7 @@ jobs:
       run: docker push quainetwork/go-quai:$(cat VERSION)
 
     - name: git tag
-      run: git tag $(cat VERSION)
+      run: git tag $(cat VERSION) && git push origin $(cat VERSION)
 
     - name: Update version
       run: awk -F. '{print $1"."$2"."$3"."$4+1}' VERSION > tmp && mv tmp VERSION
