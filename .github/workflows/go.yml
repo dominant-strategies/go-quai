@@ -37,7 +37,7 @@ jobs:
       uses: docker/login-action@v2
       with:
         username: hubchub
-        password: ${{ secrets.docker }}
+        password: ${{ secrets.DOCKER}}
 
     - name: show
       run: docker push quainetwork/go-quai:$(cat VERSION)
