@@ -328,9 +328,9 @@ func ReadHeaderRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValu
 }
 
 // ReadExternalHeaderRLP retrieves a block header in its raw RLP database encoding.
-func ReadExternalHeaderRLP(db ethdb.Reader, hash common.Hash, number uint64, context uint64) rlp.RawValue {
+func ReadExternalHeaderRLP(db ethdb.Reader, hash common.Hash, context uint64) rlp.RawValue {
 	// look up the data in leveldb.
-	data, _ := db.Get(extHeaderKey(number, context, hash))
+	data, _ := db.Get(extHeaderKey(context, hash))
 	if len(data) > 0 {
 		return data
 	}
@@ -363,8 +363,8 @@ func ReadHeader(db ethdb.Reader, hash common.Hash, number uint64) *types.Header 
 }
 
 // ReadExternalHeader retrieves the block header corresponding to the hash.
-func ReadExternalHeader(db ethdb.Reader, hash common.Hash, number uint64, context uint64) *types.Header {
-	data := ReadExternalHeaderRLP(db, hash, number, context)
+func ReadExternalHeader(db ethdb.Reader, hash common.Hash, context uint64) *types.Header {
+	data := ReadExternalHeaderRLP(db, hash, context)
 	if len(data) == 0 {
 		return nil
 	}
@@ -401,8 +401,7 @@ func WriteHeader(db ethdb.KeyValueWriter, header *types.Header) {
 // to-number mapping.
 func WriteExternalHeader(db ethdb.KeyValueWriter, header *types.Header, context uint64) {
 	var (
-		hash   = header.Hash()
-		number = header.Number[context].Uint64()
+		hash = header.Hash()
 	)
 
 	// Write the encoded header
@@ -410,7 +409,7 @@ func WriteExternalHeader(db ethdb.KeyValueWriter, header *types.Header, context 
 	if err != nil {
 		log.Crit("Failed to RLP encode header", "err", err)
 	}
-	key := extHeaderKey(number, context, hash)
+	key := extHeaderKey(context, hash)
 	if err := db.Put(key, data); err != nil {
 		log.Crit("Failed to store header", "err", err)
 	}
@@ -464,9 +463,9 @@ func ReadBodyRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue 
 }
 
 // ReadExternalBodyRLP retrieves the block body (transactions and uncles) in RLP encoding.
-func ReadExternalBodyRLP(db ethdb.Reader, hash common.Hash, number uint64, context uint64) rlp.RawValue {
+func ReadExternalBodyRLP(db ethdb.Reader, hash common.Hash, context uint64) rlp.RawValue {
 	// Then try to look up the data in leveldb.
-	data, _ := db.Get(extBlockBodyKey(number, context, hash))
+	data, _ := db.Get(extBlockBodyKey(context, hash))
 	if len(data) > 0 {
 		return data
 	}
@@ -501,7 +500,7 @@ func WriteBodyRLP(db ethdb.KeyValueWriter, hash common.Hash, number uint64, rlp 
 
 // WriteBodyRLP stores an RLP encoded block body into the database.
 func WriteExternalBodyRLP(db ethdb.KeyValueWriter, hash common.Hash, number uint64, context uint64, rlp rlp.RawValue) {
-	if err := db.Put(extBlockBodyKey(number, context, hash), rlp); err != nil {
+	if err := db.Put(extBlockBodyKey(context, hash), rlp); err != nil {
 		log.Crit("Failed to store block body", "err", err)
 	}
 }
@@ -541,8 +540,8 @@ func WriteBody(db ethdb.KeyValueWriter, hash common.Hash, number uint64, body *t
 }
 
 // ReadExternalBody retrieves the block body corresponding to the hash.
-func ReadExternalBody(db ethdb.Reader, hash common.Hash, number uint64, context uint64) *types.ExternalBody {
-	data := ReadExternalBodyRLP(db, hash, number, context)
+func ReadExternalBody(db ethdb.Reader, hash common.Hash, context uint64) *types.ExternalBody {
+	data := ReadExternalBodyRLP(db, hash, context)
 	if len(data) == 0 {
 		return nil
 	}
@@ -854,12 +853,12 @@ func WriteBlock(db ethdb.KeyValueWriter, block *types.Block) {
 // ReadExternalBlock retrieves an entire external block corresponding to the hash, assembling it
 // back from the stored header and body. If either the header or body could not
 // be retrieved nil is returned.
-func ReadExternalBlock(db ethdb.Reader, hash common.Hash, number uint64, context uint64) *types.ExternalBlock {
-	header := ReadExternalHeader(db, hash, number, context)
+func ReadExternalBlock(db ethdb.Reader, hash common.Hash, context uint64) *types.ExternalBlock {
+	header := ReadExternalHeader(db, hash, context)
 	if header == nil {
 		return nil
 	}
-	body := ReadExternalBody(db, hash, number, context)
+	body := ReadExternalBody(db, hash, context)
 	if body == nil {
 		return nil
 	}

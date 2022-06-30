@@ -332,7 +332,7 @@ func (b *ExternalBlock) Receipts() Receipts         { return b.receipts }
 func (b *ExternalBlock) Context() *big.Int          { return b.context }
 func (b *ExternalBlock) CacheKey() []byte {
 	hash := b.header.Hash()
-	return ExtBlockCacheKey(b.header.Number[b.context.Int64()].Uint64(), b.context.Uint64(), hash)
+	return ExtBlockCacheKey(b.context.Uint64(), hash)
 }
 
 // Returns current MapContext for a given block.
@@ -348,8 +348,8 @@ func encodeBlockNumber(number uint64) []byte {
 }
 
 // extBlockBodyKey = blockBodyPrefix + num (uint64 big endian) + location + context + hash
-func ExtBlockCacheKey(number uint64, context uint64, hash common.Hash) []byte {
-	return append(append(append([]byte("e"), encodeBlockNumber(number)...), encodeBlockNumber(context)...), hash.Bytes()...)
+func ExtBlockCacheKey(context uint64, hash common.Hash) []byte {
+	return append(append([]byte("e"), encodeBlockNumber(context)...), hash.Bytes()...)
 }
 
 // Body returns the non-header content of the block.
