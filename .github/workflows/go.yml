@@ -47,10 +47,11 @@ jobs:
 
     - name: git tag
       run: git tag $(cat VERSION)
-   # - name: Update version
-   #   run: awk -F. '{print $1"."$2"."$3"."$4+1}' VERSION > tmp && mv tmp VERSION
 
-   # - uses: stefanzweifel/git-auto-commit-action@v4
+    - name: Update version
+      run: awk -F. '{print $1"."$2"."$3"."$4+1}' VERSION > tmp && mv tmp VERSION
+
+    - uses: stefanzweifel/git-auto-commit-action@v4
 
    # - uses: azure/setup-helm@v3
    #   with:
