@@ -120,57 +120,70 @@ func chainsValidator(chain []*types.Block, primeChain BlockChain, regionChain Bl
 	return validNetwork
 }
 
-// struct for notation
-type blockConstructor struct {
-	numbers [3]int // prime idx, region idx, zone idx
-	// -1 for contexts the block does not coincide with
-	tag        int    // specify what tag to construct block in (0 must be first chain grinded)
-	parentTags [3]int // index specifies whether to look for Prime, Region, or Zone order block in that respective tag
-	// parentTags    [3]string // (optionally) Override the parents to point to tagged blocks. Empty strings are ignored.
-	// tag           string    // (optionally) Give this block a named tag. Empty strings are ignored.
-}
-
-// change tags to strings
-
 // Constant Genesis definition in notation
-var genesisBlock = blockConstructor{[3]int{0, 0, 0}, 0, [3]int{0}}
+var genesisBlock = blockGenSpec{[3]int{0, 0, 0}, [3]string{}, ""}
 
 type blockSpecs struct {
 	order         int    // order to grind in
-	tag           int
-	parentTags    [3]int
-	parentNumbers [3]int
+	numbers [3]int // numbers to grind at
+	tag           string
+	parentTags    [3]string
 	hash          common.Hash
 	slice         [3]params.ChainConfig // chain config (used to infer slice)
 }
 
 // simple example graph
-// [3][3][100]*blockConstructor = 3 regions, each w/ 3 zones, each w/ 100 blocks
-var networkGraphSample = [3][3][]*blockConstructor{
-	{ // Region1
-		{ // Zone1
-			&genesisBlock,
-			&blockConstructor{[3]int{-1, 1, 1}, 0, [3]int{0, 0, 0}},
-			&blockConstructor{[3]int{-1, -1, 2}, 0, [3]int{0}},
-			&blockConstructor{[3]int{-1, -1, 3}, 0, [3]int{0}},
-			&blockConstructor{[3]int{-1, 2, 4}, 0, [3]int{0}},
-			&blockConstructor{[3]int{1, 3, 5}, 0, [3]int{0}},
+// [3][3][100]*blockGenSpec = 3 regions, each w/ 3 zones, each w/ 100 blocks
+var networkGraphSample = [3][3][]*blockGenSpec{
+	{ // Region0
+		{ // Zone0
+			&blockGenSpec{[3]int{1, 1, 1}, [3]string{}, "z00_1"},
+			&blockGenSpec{[3]int{-1, -1, 2}, [3]string{}, ""},
+			// ...
+			&blockGenSpec{[3]int{-1, 2, 4}, [3]string{}, "z00_4"},
+			&blockGenSpec{[3]int{3, 3, 5}, [3]string{}, ""},
+			&blockGenSpec{[3]int{-1, -1, 6}, [3]string{}, ""},                // END OF CANONICAL CHAIN
+			&blockGenSpec{[3]int{-1, -1, 5}, [3]string{"", "", "z00_4"}, ""}, // Fork at z00_4
+			// ...
+			&blockGenSpec{[3]int{-1, 3, 8}, [3]string{}, ""},
+			&blockGenSpec{[3]int{-1, -1, 5}, [3]string{"", "", "z00_4"}, ""}, // Fork at z00_4
+			&blockGenSpec{[3]int{-1, -1, 6}, [3]string{}, ""},
+			&blockGenSpec{[3]int{-1, -1, 7}, [3]string{"", "z00_1", ""}, ""}, // Twist to z00_1
 		},
+		{}, // ... Zone1 omitted
+		{}, // ... Zone2 omitted
 	},
+	{ // Region1
+		{ // Zone0
+			&blockGenSpec{[3]int{1, 1, 2}, [3]string{"", "", "z00_1"}, ""},
+		},
+		{}, // ... Zone1 omitted
+		{}, // ... Zone2 omitted
+	},
+	{}, // ... Region2 omitted
 }
-
-func BlockInterpreter(networkGraph [3][3][]*blockConstructor) []blockSpecs {
+func BlockInterpreter(networkGraph [3][3][]*blockGenSpec) []blockSpecs {
 	// an array of blockSpecs will be constructed to be looped over GenerateNetwork
 	// this will generate the blocks in sequential order (the chains will then be validated separately again)
 	// Prime blocks then Region blocks and finally Zone blocks last
 
 	// loop to find number of tags; result used to derive correct block numbers
-	totaltags := 0
+	totalTags := 0
+	tagRegister := []string{}
+	tagMap := make(map[string][3]int)
 	for _, regions := range networkGraph {
 		for _, zones := range regions {
 			for _, construct := range zones {
-				if construct.tag >= totaltags {
-					totaltags = construct.tag + 1
+				tags := 0
+				for _, tag := range tagRegister {
+					if construct.tag == tag {
+						tags++
+						break
+					}
+				}
+				if tags == 0 {
+					totalTags++
+					tagMap[construct.tag] = [3]int{0,0,0}
 				}
 			}
 		}
@@ -179,22 +192,74 @@ func BlockInterpreter(networkGraph [3][3][]*blockConstructor) []blockSpecs {
 	// initialize array to derive respective number values in tags
 	taggedNumbers := [][3]int{}
 	n := 0
-	for n <= totaltags {
+	for n <= totalTags {
 		taggedNumbers = append(taggedNumbers, [3]int{0, 0, 0})
 		n++
 	}
 
 	// create (unordered) set of blockSpecs
-	tagNumbersArray := make([][3]int, totaltags) // maintains current numbers for each tag
+	tagNumbersArray := make([][3]int, totalTags) // maintains current numbers for each tag
 	specs := []blockSpecs{}
+	forkParents := []blockSpecs{}
 	primeConfig := params.MainnetPrimeChainConfig
 	for r, regions := range networkGraph {
 		regionConfig := params.MainnetRegionChainConfigs[r]
 		for z, zones := range regions {
 			zoneConfig := params.MainnetZoneChainConfigs[r][z]
+			repeatIterator := 1 // for iterating over skips
+			lastBlockNumbers := [3][3]int{0,0,0} // Prime, Region, Zone; separated in case of twists
+			sources := []int{} // for building forks and twists
+			orderIterator := 0
 			for _, block := range zones {
 				spec := blockSpecs{}
 				spec.slice = [3]params.ChainConfig{*primeConfig, regionConfig, zoneConfig}
+				// detect what order block will be generated at
+				order := -1
+				for i, number := range block.numbers {
+					if number != -1 {
+						order = i
+						break
+					}
+				}
+				// look at parentTags to see if need to fork; then find right block to fork from
+				for i, parentTag := range block.parentTags {
+					if parentTag {
+						for j, _ := range forkParents {
+							if forkParents[j].tag == parentTag {
+								lastBlockNumbers[i] = forkParents[j].numbers
+								sources = append(sources, i)
+							}
+						}
+					}
+				}
+				for _, source := range sources {
+
+				}
+				
+				// detect if need to iterate over this spec
+				for i, number := range block.numbers { // we can assume repeats are in same order; otherwise there is ambiguity
+					if number > lastBlockNumbers[i] + 1 {
+						repeatIterator = number - lastBlockNumbers[i]
+						orderIterator = i
+					}
+				}
+				for repeatIterator > 0 { // on default cases loops once
+					repeatIterator--
+					// iterate over source (for constructing forks/twists)
+					for _, idx := range source {
+
+					}
+					// first fill out Zone number values, as they are always explicit from notation
+					lastBlockNumbers[2]++
+					specs.number[2] = lastBlockNumbers[2]
+					// next fill out Region number values
+					if block.numbers[1] != -1 {
+						lastBlockNumbers[1]++
+						specs.number[1] = lastBlockNumbers[1]
+					}
+
+
+				}
 				// first fill out Zone number values
 				spec.number[2] = block.number[2]
 				spec.parentNumbers[2] = spec.number[2] - 1
@@ -214,9 +279,10 @@ func BlockInterpreter(networkGraph [3][3][]*blockConstructor) []blockSpecs {
 					spec.number[0] = spec.parentNumbers[0] + 1
 				}
 
-
-
-				// TO DO figure out how to infer numbers correctly!!!!!!!!
+				// add specs to forkParents if tagged
+				if block.tag {
+					forkParents = append(forkParents, spec)
+				}
 
 				}
 				specs = append(specs, spec)
@@ -225,7 +291,7 @@ func BlockInterpreter(networkGraph [3][3][]*blockConstructor) []blockSpecs {
 	}
 
 	// organize specs by tag id
-	tagArrays := make([][]blockSpecs, totaltags)
+	tagArrays := make([][]blockSpecs, totalTags)
 	for _, spec := range specs {
 		tagArrays[spec.tag] = append(tagArrays[spec.tag], spec)
 	}
