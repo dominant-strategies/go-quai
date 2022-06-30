@@ -120,7 +120,7 @@ func (b *LesApiBackend) AddExternalBlock(block *types.ExternalBlock) error {
 	return errors.New("light client does not support external block caching.")
 }
 
-func (b *LesApiBackend) GetExternalBlockTraceSet(header *types.Header, context int) (*types.ExternalBlock, error) {
+func (b *LesApiBackend) GetExternalBlockTraceSet(hash common.Hash, context int) (*types.ExternalBlock, error) {
 	return nil, errors.New("light client does not support external block caching.")
 }
 

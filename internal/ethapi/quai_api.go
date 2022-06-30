@@ -517,8 +517,8 @@ func RPCMarshalReOrgData(header *types.Header, newHeaders []*types.Header, oldHe
 }
 
 // RPCMarshalExternalBlockTraceSet converts the header and context into the right format
-func RPCMarshalExternalBlockTraceSet(header *types.Header, context int) (map[string]interface{}, error) {
-	fields := RPCMarshalHeader(header)
+func RPCMarshalExternalBlockTraceSet(hash common.Hash, context int) (map[string]interface{}, error) {
+	fields := map[string]interface{}{"hash": hash}
 	fields["context"] = context
 	return fields, nil
 }
@@ -693,20 +693,20 @@ func (s *PublicBlockChainQuaiAPI) SendExternalBlock(ctx context.Context, raw jso
 	return nil
 }
 
-type HeaderWithContext struct {
-	header  *types.Header
+type HeaderHashWithContext struct {
+	hash    common.Hash
 	context int
 }
 
 // GetExternalBlockTraceSet will run checks on the header and get the External Block from the cache.
 func (s *PublicBlockChainQuaiAPI) GetExternalBlockTraceSet(ctx context.Context, raw json.RawMessage) (*types.ExternalBlock, error) {
 	// Decode header and transactions.
-	var headerWithContext HeaderWithContext
-	if err := json.Unmarshal(raw, &headerWithContext); err != nil {
+	var headerHashWithContext HeaderHashWithContext
+	if err := json.Unmarshal(raw, &headerHashWithContext); err != nil {
 		return nil, err
 	}
 
-	extBlock, err := s.b.GetExternalBlockTraceSet(headerWithContext.header, headerWithContext.context)
+	extBlock, err := s.b.GetExternalBlockTraceSet(headerHashWithContext.hash, headerHashWithContext.context)
 	if err != nil {
 		return nil, err
 	}

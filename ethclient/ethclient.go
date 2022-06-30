@@ -655,8 +655,8 @@ func (ec *Client) SendExternalBlock(ctx context.Context, block *types.Block, rec
 }
 
 // GetExternalBlockTraceSet searches the cache for external block
-func (ec *Client) GetExternalBlockTraceSet(ctx context.Context, header *types.Header, index int) (*types.ExternalBlock, error) {
-	data, err := ethapi.RPCMarshalExternalBlockTraceSet(header, index)
+func (ec *Client) GetExternalBlockTraceSet(ctx context.Context, hash common.Hash, index int) (*types.ExternalBlock, error) {
+	data, err := ethapi.RPCMarshalExternalBlockTraceSet(hash, index)
 	if err != nil {
 		return nil, err
 	}

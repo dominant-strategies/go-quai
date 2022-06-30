@@ -73,7 +73,7 @@ type Backend interface {
 	ReOrgRollBack(header *types.Header, validHeaders []*types.Header, invalidHeaders []*types.Header) error
 	PendingBlockAndReceipts() (*types.Block, types.Receipts)
 	AddExternalBlock(block *types.ExternalBlock) error
-	GetExternalBlockTraceSet(header *types.Header, context int) (*types.ExternalBlock, error)
+	GetExternalBlockTraceSet(hash common.Hash, context int) (*types.ExternalBlock, error)
 	EventMux() *event.TypeMux
 	CalculateBaseFee(header *types.Header) *big.Int
 	GetUncleFromWorker(uncleHash common.Hash) (*types.Block, error)
