@@ -1,0 +1,60 @@
+{{- $name := include "go-quai.name" . -}}
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+  labels:
+    app: {{ $name }}
+  name: {{ $name }}
+  namespace: {{ .Values.goQuai.env }}
+spec:
+  ports:
+{{- range $chain := .Values.goQuai.chains }}
+{{ include "go-quai.clusterIP" $ | replace "<HTTP>" $chain.ports.http | replace "<WS>" $chain.ports.ws | replace "<DISC>" $chain.ports.disc | replace "prime" $chain.name | indent 2 }}
+{{- end }}
+  selector:
+    app: {{ $name }}
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  annotations:
+  name: {{ $name }}
+  namespace: {{ .Values.goQuai.env }}
+spec:
+  replicas: {{ .Values.goQuai.replicas }}
+  selector:
+    matchLabels:
+      app: {{ $name }}
+  serviceName: {{ $name }}
+  template:
+    metadata:
+      labels:
+        app: {{ $name }}
+    spec:
+      containers:
+      - image: {{ .Values.goQuai.image.name -}}:{{- .Values.goQuai.image.version }}
+        imagePullPolicy: Always
+        name: go-quai
+        ports:
+{{- range $chain := .Values.goQuai.chains }}
+{{ include "go-quai.statefulset" $ | replace "<HTTP>" $chain.ports.http | replace "<WS>" $chain.ports.ws | replace "<DISC>" $chain.ports.disc | replace "prime" $chain.name | indent 8 }}
+{{- end }}
+        volumeMounts:
+        - mountPath: ~/.quai/
+          name: {{ $name }}
+        - mountPath: /go-quai/nodelogs
+          name: {{ $name }}
+  volumeClaimTemplates:
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: {{ $name }}
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 2Ti
+      storageClassName: premium-rwo
