@@ -19,7 +19,7 @@ jobs:
         go-version: 1.15
 
     - name: Install dependencies
-      run: sudo apt-get install make build-essenstial
+      run: sudo apt-get install make build-essential
 
     - name: make all
       run: make run all
