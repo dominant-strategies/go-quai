@@ -654,9 +654,11 @@ func (ec *Client) SendExternalBlock(ctx context.Context, block *types.Block, rec
 	return ec.c.CallContext(ctx, nil, "quai_sendExternalBlock", data)
 }
 
-// SendReorgData sends thre reorg data to the node to rollup and update the chain
-func (ec *Client) SendReOrgData(ctx context.Context, header *types.Header) error {
-	data, err := ethapi.RPCMarshalReOrgData(header)
+// header: header in which the intended chain is to roll back to.
+// newHeaders: potentially now valid dominant headers to take out of nonCanonDom db.
+// oldHeaders: invalid dominant headers to insert into nonCanonDom db.
+func (ec *Client) SendReOrgData(ctx context.Context, header *types.Header, newHeaders []*types.Header, oldHeaders []*types.Header) error {
+	data, err := ethapi.RPCMarshalReOrgData(header, newHeaders, oldHeaders)
 	if err != nil {
 		return err
 	}
