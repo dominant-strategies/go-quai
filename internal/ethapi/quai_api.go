@@ -479,6 +479,12 @@ func RPCMarshalExternalBlock(block *types.Block, receipts []*types.Receipt, cont
 		}
 	}
 
+	ucls := block.Uncles()
+	uncles := make([]interface{}, len(ucls))
+	for i, ucl := range ucls {
+		uncles[i] = RPCMarshalHeader(ucl)
+	}
+
 	fieldReceipts := make([]interface{}, len(receipts))
 	for i, receipt := range receipts {
 		fieldReceipts[i], _ = RPCMarshalReceipt(receipt)
@@ -486,6 +492,7 @@ func RPCMarshalExternalBlock(block *types.Block, receipts []*types.Receipt, cont
 	fields["receipts"] = fieldReceipts
 
 	fields["transactions"] = transactions
+	fields["uncles"] = uncles
 	fields["context"] = context
 	return fields, nil
 }
@@ -636,6 +643,7 @@ func (s *PublicBlockChainQuaiAPI) SendReOrgData(ctx context.Context, raw json.Ra
 type rpcExternalBlock struct {
 	Hash         common.Hash      `json:"hash"`
 	Transactions []rpcTransaction `json:"transactions"`
+	Uncles       []*types.Header  `json:"uncles"`
 	Receipts     []*types.Receipt `json:"receipts"`
 	Context      *big.Int         `json:"context"`
 }
@@ -652,18 +660,19 @@ func (s *PublicBlockChainQuaiAPI) SendExternalBlock(ctx context.Context, raw jso
 		return err
 	}
 
-	// Load transactions, uncles are not needed for external blocks
+	// Load transactions
 	txs := make([]*types.Transaction, len(body.Transactions))
 	for i, tx := range body.Transactions {
 		txs[i] = tx.tx
 	}
 
-	receipts := make([]*types.Receipt, len(body.Receipts))
-	for i, receipt := range body.Receipts {
-		receipts[i] = receipt
-	}
+	uncles := make([]*types.Header, len(body.Uncles))
+	copy(uncles, body.Uncles)
 
-	block := types.NewExternalBlockWithHeader(head).ExternalBlockWithBody(txs, receipts, body.Context)
+	receipts := make([]*types.Receipt, len(body.Receipts))
+	copy(receipts, body.Receipts)
+
+	block := types.NewExternalBlockWithHeader(head).ExternalBlockWithBody(txs, uncles, receipts, body.Context)
 
 	s.b.AddExternalBlock(block)
 

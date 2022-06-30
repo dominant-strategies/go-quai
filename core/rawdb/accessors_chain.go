@@ -863,7 +863,7 @@ func ReadExternalBlock(db ethdb.Reader, hash common.Hash, number uint64, context
 	if body == nil {
 		return nil
 	}
-	return types.NewExternalBlockWithHeader(header).ExternalBlockWithBody(body.Transactions, body.Receipts, body.Context)
+	return types.NewExternalBlockWithHeader(header).ExternalBlockWithBody(body.Transactions, body.Uncles, body.Receipts, body.Context)
 }
 
 // WriteBlock serializes a block into the database, header and body separately.

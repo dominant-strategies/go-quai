@@ -1710,7 +1710,7 @@ func (bc *BlockChain) AddExternalBlocks(blocks []*types.ExternalBlock) error {
 func (bc *BlockChain) AddExternalBlock(block *types.ExternalBlock) error {
 	context := []interface{}{
 		"context", block.Context(), "numbers", block.Header().Number, "hash", block.Hash(), "location", block.Header().Location,
-		"txs", len(block.Transactions()), "receipts", len(block.Receipts()),
+		"txs", len(block.Transactions()), "uncles", len(block.Uncles()), "receipts", len(block.Receipts()),
 	}
 	log.Info("Adding external block", context...)
 	data, err := rlp.EncodeToBytes(block)
