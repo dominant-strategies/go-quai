@@ -3,7 +3,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   annotations:
-    kubernetes.gke.io/managed-certificates: {{ $name }}
+    networking.gke.io/managed-certificates: {{ $name }}
     kubernetes.io/ingress.class: "gce"
     kubernetes.io/ingress.global-static-ip-name: {{ $name }}
   name: {{ $name }}
