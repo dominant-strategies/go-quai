@@ -7,7 +7,7 @@ on:
 jobs:
 
   build:
-    #if: github.event.pull_request.merged == true
+    if: github.event.pull_request.merged == true
 
     runs-on: ubuntu-latest
     steps:
@@ -43,7 +43,7 @@ jobs:
       uses: docker/login-action@v2
       with:
         username: hubchub
-        password: ${{ secrets.DOCKER}}
+        password: ${{ secrets.DOCKER }}
 
     - name: show
       run: docker push quainetwork/go-quai:$(cat VERSION)
@@ -67,15 +67,19 @@ jobs:
     - name: Deploy
       uses: WyriHaximus/github-action-helm3@v2
       with:
-        exec: helm upgrade go-quai ./go-quai-chart --install --wait --atomic --namespace=quai-prod --values=./go-quai-chart/env/quai-prod.values.yaml
+        exec: helm upgrade go-quai ./helm --install --wait --atomic --namespace=quai-prod --values=./helm/env/quai-prod.values.yaml
 
     - name: Update version
       run: awk -F. '{print $1"."$2"."$3"."$4+1}' VERSION > tmp && mv tmp VERSION
 
     - name: Update Chart.yaml version
-      run: yq eval ".appVersion=\"$(cat VERSION)\"" ./go-quai-chart/Chart.yaml > ./go-quai-chart/Chart.yaml
+      run: yq eval ".appVersion=\"$(cat VERSION)\"" ./helm/Chart.yaml > ./helm/Chart.yaml
     - name: Update values.yaml version
-      run: yq eval ".goQuai.image.version=\"$(cat VERSION)\"" ./go-quai-chart/values.yaml > ./go-quai-chart/values.yaml
+      run: yq eval ".goQuai.image.version=\"$(cat VERSION)\"" ./helm/values.yaml > ./helm/values.yaml
+
+    - name: remove kubeconfig
+      run: rm $KUBECONFIG
+
     - uses: stefanzweifel/git-auto-commit-action@v4
 
   deploy:
