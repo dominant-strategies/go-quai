@@ -14,7 +14,8 @@ jobs:
     - uses: actions/checkout@v3
 
     - uses: stefanzweifel/git-auto-commit-action@v4
-      tagging_message: 'v0.1.0-pre.2'
+      with:
+        tagging_message: 'v0.1.0-pre.2'
 
     - name: Set up Go
       uses: actions/setup-go@v3
