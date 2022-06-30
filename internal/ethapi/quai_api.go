@@ -496,6 +496,13 @@ func RPCMarshalReOrgData(header *types.Header) (map[string]interface{}, error) {
 	return fields, nil
 }
 
+// RPCMarshalExternalBlockTraceSet converts the header and context into the right format
+func RPCMarshalExternalBlockTraceSet(header *types.Header, context int) (map[string]interface{}, error) {
+	fields := RPCMarshalHeader(header)
+	fields["context"] = context
+	return fields, nil
+}
+
 // rpcMarshalHeader uses the generalized output filler, then adds the total difficulty field, which requires
 // a `PublicBlockchainQuaiAPI`.
 func (s *PublicBlockChainQuaiAPI) rpcMarshalHeader(ctx context.Context, header *types.Header) map[string]interface{} {
@@ -661,4 +668,25 @@ func (s *PublicBlockChainQuaiAPI) SendExternalBlock(ctx context.Context, raw jso
 	s.b.AddExternalBlock(block)
 
 	return nil
+}
+
+type HeaderWithContext struct {
+	header  *types.Header
+	context int
+}
+
+// GetExternalBlockTraceSet will run checks on the header and get the External Block from the cache.
+func (s *PublicBlockChainQuaiAPI) GetExternalBlockTraceSet(ctx context.Context, raw json.RawMessage) (*types.ExternalBlock, error) {
+	// Decode header and transactions.
+	var headerWithContext HeaderWithContext
+	if err := json.Unmarshal(raw, &headerWithContext); err != nil {
+		return nil, err
+	}
+
+	extBlock, err := s.b.GetExternalBlockTraceSet(headerWithContext.header, headerWithContext.context)
+	if err != nil {
+		return nil, err
+	}
+
+	return extBlock, nil
 }

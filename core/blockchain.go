@@ -2857,6 +2857,21 @@ func (bc *BlockChain) requestExternalBlock(hash common.Hash, number uint64, loca
 	return nil
 }
 
+// GetExternalBlockTraceSet checks if the ExternalBlock for the given header is present in the cache and returns the externalBlock
+func (bc *BlockChain) GetExternalBlockTraceSet(header *types.Header, context int) (*types.ExternalBlock, error) {
+	// Lookup block in externalBlocks cache
+	key := types.ExtBlockCacheKey(header.Number[context].Uint64(), uint64(context), header.Hash())
+
+	if extBlock, ok := bc.externalBlocks.HasGet(nil, key); ok {
+		var extBlockDecoded *types.ExternalBlock
+		rlp.DecodeBytes(extBlock, &extBlockDecoded)
+		return extBlockDecoded, nil
+	}
+	extBlock := rawdb.ReadExternalBlock(bc.db, header.Hash(), header.Number[context].Uint64(), uint64(context))
+
+	return extBlock, nil
+}
+
 // StoreExternalBlocks removes the external block from the cached blocks and writes it into the database
 func (bc *BlockChain) StoreExternalBlocks(blocks []*types.ExternalBlock) error {
 
