@@ -276,6 +276,7 @@ func answerGetExtBlocksQuery(backend Backend, query GetExtBlocksPacket, peer *Pe
 		// If known, encode and queue for response packet
 		if encoded, err := rlp.EncodeToBytes(results); err != nil {
 			log.Error("Failed to encode external block", "err", err)
+			continue
 		} else {
 			extBlocks = append(extBlocks, encoded)
 			bytes += len(encoded)
