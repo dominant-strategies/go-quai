@@ -44,7 +44,7 @@ var (
 
 	allowedFutureBlockTimeSeconds = int64(15) // Max seconds from current time allowed for blocks, before they're considered future blocks
 	maxUncles                     = 2         // Maximum number of uncles allowed in a single block
-	fakeDifficulties              = []*big.Int{new(big.Int).Mul(params.MinimumDifficulty, big.NewInt(4)), new(big.Int).Mul(params.MinimumDifficulty, big.NewInt(2)), params.MinimumDifficulty}
+	fakeDifficulties              = []*big.Int{new(big.Int).Mul(params.MinimumDifficulty[params.PRIME], big.NewInt(4)), new(big.Int).Mul(params.MinimumDifficulty[params.REGION], big.NewInt(2)), params.MinimumDifficulty[params.ZONE]}
 )
 
 // Some weird constants to avoid constant memory allocs for them.
