@@ -21,6 +21,9 @@ jobs:
     - name: Install dependencies
       run: sudo apt-get install make build-essential
 
+    - name: create network.env
+      run: cat ./network.env.dist | sed "s/WS_API=eth,net,web3,quai/WS_API=eth,net,web3,quai,txpool/g" | sed "s/HTTP_API=eth,net,web3/HTTP_API=eth,net,web3,quai,txpool/g" > ./network.env
+
     - name: make all
       run: make run all
 
