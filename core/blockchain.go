@@ -84,6 +84,7 @@ var (
 
 	errInsertionInterrupted = errors.New("insertion is interrupted")
 	errChainStopped         = errors.New("blockchain is stopped")
+	errExtBlockNotFound     = errors.New("error finding external block by context and hash")
 )
 
 const (
@@ -2829,7 +2830,7 @@ func (bc *BlockChain) GetExternalBlock(hash common.Hash, number uint64, location
 	if block == nil {
 		block = bc.requestExternalBlock(hash, number, location, context)
 		if block == nil {
-			return &types.ExternalBlock{}, errors.New("error finding external block by context and hash")
+			return &types.ExternalBlock{}, errExtBlockNotFound
 		}
 	}
 	return block, nil

@@ -220,7 +220,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		}
 		return n, err
 	}
-	h.blockFetcher = fetcher.NewBlockFetcher(false, nil, h.chain.GetBlockByHash, validator, h.BroadcastBlock, heighter, nil, inserter, h.removePeer)
+	h.blockFetcher = fetcher.NewBlockFetcher(false, nil, h.chain.GetBlockByHash, validator, h.BroadcastBlock, heighter, nil, inserter, h.removePeer, h.chain.GetLinkExternalBlocks, h.chain.AddExternalBlocks)
 
 	fetchTx := func(peer string, hashes []common.Hash) error {
 		p := h.peers.peer(peer)
@@ -260,7 +260,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 		td      = h.chain.GetTd(hash, number)
 	)
 	forkID := forkid.NewID(h.chain.Config(), h.chain.Genesis().Hash(), h.chain.CurrentHeader().Number[types.QuaiNetworkContext].Uint64())
-	if err := peer.Handshake(h.networkID, td[types.QuaiNetworkContext], hash, genesis.Hash(), forkID, h.forkFilter); err != nil {
+	if err := peer.Handshake(h.networkID, td, hash, genesis.Hash(), forkID, h.forkFilter); err != nil {
 		peer.Log().Debug("Ethereum handshake failed", "err", err)
 		return err
 	}
@@ -441,19 +441,40 @@ func (h *handler) BroadcastBlock(block *types.Block, extBlocks []*types.External
 	// If propagation is requested, send to a subset of the peer
 	if propagate {
 		// Calculate the TD of the block (it's not imported yet, so block.Td is not valid)
-		var td *big.Int
+		var td []*big.Int
 		if parent := h.chain.GetBlock(block.ParentHash(), block.NumberU64()-1); parent != nil {
-			td = new(big.Int).Add(block.Difficulty(), h.chain.GetTd(block.ParentHash(), block.NumberU64()-1)[types.QuaiNetworkContext])
+			order, err := h.chain.Engine().GetDifficultyOrder(block.Header())
+			if err != nil {
+				log.Error("Error calculating block order in BroadcastBlock, err: ", err)
+				return
+			}
+			var tempTD = big.NewInt(0)
+			parentPrimeTd := h.chain.GetTd(block.Header().ParentHash[types.QuaiNetworkContext], block.Header().Number[types.QuaiNetworkContext].Uint64()-1)[0]
+			parentRegionTd := h.chain.GetTd(block.Header().ParentHash[types.QuaiNetworkContext], block.Header().Number[types.QuaiNetworkContext].Uint64()-1)[1]
+			parentZoneTd := h.chain.GetTd(block.Header().ParentHash[types.QuaiNetworkContext], block.Header().Number[types.QuaiNetworkContext].Uint64()-1)[2]
+			switch order {
+			case params.PRIME:
+				tempTD = new(big.Int).Add(block.Header().Difficulty[0], parentPrimeTd)
+				td = []*big.Int{tempTD, tempTD, tempTD}
+			case params.REGION:
+				tempTD = new(big.Int).Add(block.Header().Difficulty[1], parentRegionTd)
+				td = []*big.Int{parentPrimeTd, tempTD, tempTD}
+			case params.ZONE:
+				tempTD = new(big.Int).Add(block.Header().Difficulty[2], parentZoneTd)
+				td = []*big.Int{parentPrimeTd, parentRegionTd, tempTD}
+			}
 		} else {
 			log.Error("Propagating dangling block", "number", block.Number(), "hash", hash)
 			return
 		}
-		// Send the block to a subset of our peers
-		transfer := peers[:int(math.Sqrt(float64(len(peers))))]
-		for _, peer := range transfer {
+		// Send the block to a subset of our peers if less than 10
+		if len(peers) > 9 {
+			peers = peers[:int(math.Sqrt(float64(len(peers))))]
+		}
+		for _, peer := range peers {
 			peer.AsyncSendNewBlock(block, td, extBlocks)
 		}
-		log.Trace("Propagated block", "hash", hash, "recipients", len(transfer), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
+		log.Trace("Propagated block", "hash", hash, "recipients", len(peers), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
 		return
 	}
 	// Otherwise if the block is indeed in out own chain, announce it
