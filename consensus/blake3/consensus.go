@@ -44,6 +44,7 @@ var (
 
 	allowedFutureBlockTimeSeconds = int64(15) // Max seconds from current time allowed for blocks, before they're considered future blocks
 	maxUncles                     = 2         // Maximum number of uncles allowed in a single block
+	fakeDifficulties              = []*big.Int{new(big.Int).Mul(params.MinimumDifficulty[params.PRIME], big.NewInt(4)), new(big.Int).Mul(params.MinimumDifficulty[params.REGION], big.NewInt(2)), params.MinimumDifficulty[params.ZONE]}
 )
 
 // Some weird constants to avoid constant memory allocs for them.
@@ -253,6 +254,9 @@ func (blake3 *Blake3) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	}
 	// Verify the block's difficulty based on its timestamp and parent's difficulty
 	expected := blake3.CalcDifficulty(chain, header.Time, parent, types.QuaiNetworkContext)
+	if blake3.config.Fakepow {
+		expected = fakeDifficulties[types.QuaiNetworkContext]
+	}
 	if expected.Cmp(header.Difficulty[types.QuaiNetworkContext]) > 0 {
 		return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty[types.QuaiNetworkContext], expected)
 	}
@@ -317,7 +321,7 @@ func calcDifficultyFrontier(time uint64, parent *types.Header, context int) *big
 	diff := new(big.Int)
 	parentDifficulty := parent.Difficulty[context]
 	if parentDifficulty == nil {
-		return params.GenesisDifficulty
+		return params.GenesisDifficulty[types.QuaiNetworkContext]
 	}
 
 	adjust := new(big.Int).Div(parentDifficulty, params.DifficultyBoundDivisor[types.QuaiNetworkContext])
@@ -334,8 +338,8 @@ func calcDifficultyFrontier(time uint64, parent *types.Header, context int) *big
 	} else {
 		diff.Sub(parentDifficulty, adjust)
 	}
-	if diff.Cmp(params.MinimumDifficulty) < 0 {
-		diff.Set(params.MinimumDifficulty)
+	if diff.Cmp(params.MinimumDifficulty[types.QuaiNetworkContext]) < 0 {
+		diff.Set(params.MinimumDifficulty[types.QuaiNetworkContext])
 	}
 
 	periodCount := new(big.Int).Add(parent.Number[context], big1)
@@ -345,7 +349,7 @@ func calcDifficultyFrontier(time uint64, parent *types.Header, context int) *big
 		expDiff := periodCount.Sub(periodCount, big2)
 		expDiff.Exp(big2, expDiff, nil)
 		diff.Add(diff, expDiff)
-		diff = math.BigMax(diff, params.MinimumDifficulty)
+		diff = math.BigMax(diff, params.MinimumDifficulty[types.QuaiNetworkContext])
 	}
 	return diff
 }
@@ -353,13 +357,17 @@ func calcDifficultyFrontier(time uint64, parent *types.Header, context int) *big
 // verifySeal checks whether a block satisfies the PoW difficulty requirements,
 func (blake3 *Blake3) verifySeal(header *types.Header) error {
 	difficulty := header.Difficulty[types.QuaiNetworkContext]
+	// If we are a faker, override the difficulty with the appropriate fake difficulty
+	if blake3.config.Fakepow {
+		difficulty = fakeDifficulties[types.QuaiNetworkContext]
+	}
 	// Ensure that we have a valid difficulty for the block
 	if difficulty.Sign() <= 0 {
 		return errInvalidDifficulty
 	}
 	// Check the SealHash meets the difficulty target
 	target := new(big.Int).Div(big2e256, difficulty)
-	if !blake3.config.Fakepow && new(big.Int).SetBytes(blake3.SealHash(header).Bytes()).Cmp(target) > 0 {
+	if new(big.Int).SetBytes(blake3.SealHash(header).Bytes()).Cmp(target) > 0 {
 		return errInvalidPoW
 	}
 	return nil
@@ -367,11 +375,18 @@ func (blake3 *Blake3) verifySeal(header *types.Header) error {
 
 // This function determines the difficulty order of a block
 func (blake3 *Blake3) GetDifficultyOrder(header *types.Header) (int, error) {
+	var difficulties []*big.Int
+
 	if header == nil {
 		return types.ContextDepth, errors.New("no header provided")
 	}
+	if !blake3.config.Fakepow {
+		difficulties = header.Difficulty
+	} else {
+		difficulties = fakeDifficulties
+	}
 	blockhash := blake3.SealHash(header)
-	for i, difficulty := range header.Difficulty {
+	for i, difficulty := range difficulties {
 		if difficulty != nil && big.NewInt(0).Cmp(difficulty) < 0 {
 			target := new(big.Int).Div(big2e256, difficulty)
 			if new(big.Int).SetBytes(blockhash.Bytes()).Cmp(target) <= 0 {
@@ -380,48 +395,6 @@ func (blake3 *Blake3) GetDifficultyOrder(header *types.Header) (int, error) {
 		}
 	}
 	return -1, errors.New("block does not satisfy minimum difficulty")
-}
-
-// Iterate back through headers to find ones that exceed a given context.
-func (blake3 *Blake3) GetCoincidentHeader(chain consensus.ChainHeaderReader, context int, header *types.Header) (*types.Header, int) {
-	// If we are at the highest context, no coincident will include it.
-	if context == 0 {
-		return header, 0
-	} else if context == 1 {
-		difficultyContext, err := blake3.GetDifficultyOrder(header)
-		if err != nil {
-			return header, context
-		}
-
-		return header, difficultyContext
-	} else {
-		for {
-			// Check work of the header, if it has enough work we will move up in context.
-			// difficultyContext is initially context since it could be a pending block w/o a nonce.
-			difficultyContext, err := blake3.GetDifficultyOrder(header)
-			if err != nil {
-				return header, context
-			}
-
-			// If block header is Genesis return it as coincident
-			if header.Number[context].Cmp(big.NewInt(0)) <= 0 {
-				return header, difficultyContext
-			}
-
-			// If we have reached a coincident block
-			if difficultyContext < context {
-				return header, difficultyContext
-			} else if difficultyContext == 1 && context == 1 {
-				return header, difficultyContext
-			}
-
-			// Get previous header on local chain by hash
-			prevHeader := chain.GetHeaderByHash(header.ParentHash[context])
-
-			// Increment previous header
-			header = prevHeader
-		}
-	}
 }
 
 // Check difficulty of previous header in order to find traceability.
@@ -681,9 +654,6 @@ func (blake3 *Blake3) Prepare(chain consensus.ChainHeaderReader, header *types.H
 		return consensus.ErrUnknownAncestor
 	}
 	header.Difficulty[types.QuaiNetworkContext] = blake3.CalcDifficulty(chain, header.Time, parent, types.QuaiNetworkContext)
-	currentTotal := big.NewInt(0)
-	currentTotal.Add(parent.NetworkDifficulty[types.QuaiNetworkContext], header.Difficulty[types.QuaiNetworkContext])
-	header.NetworkDifficulty[types.QuaiNetworkContext] = currentTotal
 	return nil
 }
 
@@ -705,6 +675,79 @@ func (blake3 *Blake3) GetLinkExternalBlocks(chain consensus.ChainHeaderReader, h
 		externalBlocks = append(externalBlocks, extBlocks...)
 	}
 	return externalBlocks, nil
+}
+
+// PreviousCoincidentOnPath searches the path for a block of specified order in the specified slice
+//     *slice - The zone location which defines the slice in which we are validating
+//     *order - The order of the conincidence that is desired
+//     *path - Search among ancestors of this path in the specified slice
+func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader, header *types.Header, slice []byte, order, path int) (*types.Header, error) {
+
+	if header.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
+		return chain.GetHeaderByHash(chain.Config().GenesisHashes[0]), nil
+	}
+
+	if err := chain.CheckContext(path); err != nil {
+		return nil, err
+	}
+	if err := chain.CheckContext(order); err != nil {
+		return nil, err
+	}
+	if err := chain.CheckLocationRange(slice); err != nil {
+		return nil, err
+	}
+
+	// Check for non-allowed input combinations
+	// Table for the expected output of Hashes from PreviousCoincidentOnPath for various combinations of given order(o) and path(p)
+	// -------------------
+	// |o\p| 0 | 1    | 2 |
+	// | 0 |PPB|PPB   |PPB|
+	// | 1 | X |PB/PPB|PDB|
+	// | 2 | X |  X   |PB |
+	// --------------------
+	// PB  = Previous Block
+	// PDB = Previous Dominant Block
+	// PPB = Previous Prime Block
+	// X   = Not Allowed
+	if order > path {
+		return nil, errors.New("tracing along a dominant chain for a subordinate order block is non-sensical")
+	}
+
+	for {
+		// If block header is Genesis return it as coincident
+		if header.Number[path].Cmp(big.NewInt(1)) == 0 {
+			return chain.GetHeaderByHash(chain.Config().GenesisHashes[0]), nil
+		}
+
+		if path == types.QuaiNetworkContext {
+			// Get previous header on local chain by hash
+			prevHeader := chain.GetHeaderByHash(header.ParentHash[path])
+			if prevHeader == nil {
+				return nil, errors.New("prevheader not found for hash")
+			}
+			// Increment previous header
+			header = prevHeader
+		} else {
+			// Get previous header on external chain by hash
+			prevExtBlock, err := chain.GetExternalBlock(header.ParentHash[path], header.Number[path].Uint64()-1, header.Location, uint64(path))
+			if err != nil {
+				return nil, err
+			}
+			// Increment previous header
+			header = prevExtBlock.Header()
+		}
+
+		// Find the order of the header
+		difficultyOrder, err := blake3.GetDifficultyOrder(header)
+		if err != nil {
+			return nil, err
+		}
+
+		// If we have reached a coincident block of desired order in our desired slice
+		if bytes.Equal(header.Location, slice) && difficultyOrder <= order {
+			return header, nil
+		}
+	}
 }
 
 // TraceBranches utilizes a passed in header for initializing a trace of all external blocks.

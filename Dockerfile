@@ -11,13 +11,11 @@ ADD . /go-quai
 
 WORKDIR /go-quai
 
-RUN cat ./network.env.dist | sed "s/WS_API=eth,net,web3,quai/WS_API=eth,net,web3,quai,txpool/g" | sed "s/HTTP_API=eth,net,web3/HTTP_API=eth,net,web3,quai,txpool/g" > ./network.env 
 
 RUN go run build/ci.go install ./cmd/quai
+RUN cat ./network.env.dist | sed "s/WS_API=eth,net,web3,quai/WS_API=eth,net,web3,quai,txpool,debug/g" | sed "s/HTTP_API=eth,net,web3/HTTP_API=eth,net,web3,quai,txpool,debug/g" | sed "s/CORS=false/CORS=true/g" > ./network.env
 RUN make go-quai
 #RUN cd /go-quai && make run-full-node
-
-
 
 EXPOSE 8546 8547 30303 30303/udp
 EXPOSE 8578 8579 30304 30304/udp
