@@ -13,6 +13,9 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
+    - uses: stefanzweifel/git-auto-commit-action@v4
+      tagging_message: 'v0.1.0-pre.2'
+
     - name: Set up Go
       uses: actions/setup-go@v3
       with:
@@ -52,6 +55,7 @@ jobs:
       run: awk -F. '{print $1"."$2"."$3"."$4+1}' VERSION > tmp && mv tmp VERSION
 
     - uses: stefanzweifel/git-auto-commit-action@v4
+
 
    # - uses: azure/setup-helm@v3
    #   with:
