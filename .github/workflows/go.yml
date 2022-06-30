@@ -45,6 +45,8 @@ jobs:
     - name: show
       run: docker push quainetwork/go-quai:$(cat VERSION)
 
+    - name: git tag
+      run: git tag $(cat VERSION)
    # - name: Update version
    #   run: awk -F. '{print $1"."$2"."$3"."$4+1}' VERSION > tmp && mv tmp VERSION
 
