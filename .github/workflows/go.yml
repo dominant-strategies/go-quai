@@ -13,7 +13,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
       with:
-        ref: main
+        ref: ${{ github.ref }}
 
     - name: Set up Go
       uses: actions/setup-go@v3
@@ -84,7 +84,7 @@ jobs:
 
     - uses: stefanzweifel/git-auto-commit-action@v4
       with:
-        branch: main
+        branch: ${{ github.ref }}
 
   deploy:
     needs: build
