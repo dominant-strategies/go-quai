@@ -85,10 +85,7 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 		return nil
 
 	case *eth.ExtBlocksPacket:
-		if err := h.downloader.DeliverExtBlocks(peer.ID(), *packet); err != nil {
-			log.Debug("Failed to deliver external", "err", err)
-		}
-		return nil
+		return h.handleExtBlocks(peer, *packet)
 
 	case *eth.NewBlockHashesPacket:
 		hashes, numbers := packet.Unpack()
@@ -184,6 +181,22 @@ func (h *ethHandler) handleBodies(peer *eth.Peer, txs [][]*types.Transaction, un
 	return nil
 }
 
+// handleBodies is invoked from a peer's message handler when it transmits a batch
+// of block bodies for the local node to process.
+func (h *ethHandler) handleExtBlocks(peer *eth.Peer, extBlocks [][]*types.ExternalBlock) error {
+	// Filter out any explicitly requested bodies, deliver the rest to the downloader
+	fmt.Println("handleExtBlocks", len(extBlocks))
+	extBlocks = h.blockFetcher.FilterExternalBlocks(peer.ID(), extBlocks, time.Now())
+	if len(extBlocks) > 0 {
+		err := h.downloader.DeliverExtBlocks(peer.ID(), extBlocks)
+		if err != nil {
+			log.Debug("Failed to deliver bodies", "err", err)
+		}
+	}
+
+	return nil
+}
+
 // handleBlockAnnounces is invoked from a peer's message handler when it transmits a
 // batch of block announcements for the local node to process.
 func (h *ethHandler) handleBlockAnnounces(peer *eth.Peer, hashes []common.Hash, numbers []uint64) error {
@@ -235,7 +248,7 @@ func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block, td
 		trueTD = []*big.Int{td[0], td[1], tempTD}
 	}
 	// Update the peer's total difficulty if better than the previous
-	if _, td := peer.Head(); h.chain.HLCR(trueTD, td) {
+	if _, td := peer.Head(); h.chain.HLCR(td, trueTD) {
 		peer.SetHead(trueHead, trueTD)
 		h.chainSync.handlePeerEvent(peer)
 	}
