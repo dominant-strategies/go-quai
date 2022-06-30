@@ -449,9 +449,9 @@ func (h *handler) BroadcastBlock(block *types.Block, extBlocks []*types.External
 				return
 			}
 			var tempTD = big.NewInt(0)
-			parentPrimeTd := h.chain.GetTd(block.Header().ParentHash[types.QuaiNetworkContext], block.Header().Number[types.QuaiNetworkContext].Uint64())[0]
-			parentRegionTd := h.chain.GetTd(block.Header().ParentHash[types.QuaiNetworkContext], block.Header().Number[types.QuaiNetworkContext].Uint64())[1]
-			parentZoneTd := h.chain.GetTd(block.Header().ParentHash[types.QuaiNetworkContext], block.Header().Number[types.QuaiNetworkContext].Uint64())[2]
+			parentPrimeTd := h.chain.GetTd(block.Header().ParentHash[types.QuaiNetworkContext], block.Header().Number[types.QuaiNetworkContext].Uint64()-1)[0]
+			parentRegionTd := h.chain.GetTd(block.Header().ParentHash[types.QuaiNetworkContext], block.Header().Number[types.QuaiNetworkContext].Uint64()-1)[1]
+			parentZoneTd := h.chain.GetTd(block.Header().ParentHash[types.QuaiNetworkContext], block.Header().Number[types.QuaiNetworkContext].Uint64()-1)[2]
 			switch order {
 			case params.PRIME:
 				tempTD = new(big.Int).Add(block.Header().Difficulty[0], parentPrimeTd)
