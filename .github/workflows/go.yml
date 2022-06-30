@@ -48,6 +48,17 @@ jobs:
     - name: git tag
       run: git tag $(cat VERSION) && git push origin $(cat VERSION)
 
+    - name: Update Chart.yaml version
+      uses: mikefarah/yq@master
+      with:
+        cmd: yq eval ".appVersion=\"$(cat VERSION)\"" ./go-quai-chart/Chart.yaml
+
+    - name: Deploy
+      uses: WyriHaximus/github-action-helm3@v2
+      with:
+        exec: helm upgrade go-quai ./go-quai-chart --install --wait --atomic --namespace=quai-prod --values=./go-quai-chart/env/quai-prod.values.yaml
+        kubeconfig: '${{ secrets.KUBECONFIG }}'
+
     - name: Update version
       run: awk -F. '{print $1"."$2"."$3"."$4+1}' VERSION > tmp && mv tmp VERSION
 
