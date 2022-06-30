@@ -1,0 +1,17 @@
+apiVersion: v1
+clusters:
+  - cluster:
+      certificate-authority-data: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUVMRENDQXBTZ0F3SUJBZ0lRYmJHeDJzQ20xNzB2UkdWam9iYWR5ekFOQmdrcWhraUc5dzBCQVFzRkFEQXYKTVMwd0t3WURWUVFERXlRNU1UZzRaRFJrWkMwME1USXhMVFEzWmpRdE9XVXpOUzFrWkRaa1pEQmpObVprWXpZdwpJQmNOTWpJd05USTNNRGsxTXpJMldoZ1BNakExTWpBMU1Ua3hNRFV6TWpaYU1DOHhMVEFyQmdOVkJBTVRKRGt4Ck9EaGtOR1JrTFRReE1qRXRORGRtTkMwNVpUTTFMV1JrTm1Sa01HTTJabVJqTmpDQ0FhSXdEUVlKS29aSWh2Y04KQVFFQkJRQURnZ0dQQURDQ0FZb0NnZ0dCQUtuL2R0Zjd4SFJGeGtueXNMTjByeVJrZHRqNjVIVFhGM2daOGJENwozU1Q0NjEvUVg4bHJxUWtpMSs1NkU4TFBVYnRxbjl3YVRhZlNSR1VOQ2VYSmxhQjYweVYvckk5WXBjaGhMT3dwClpFSkNQUjFsN2taRHFqQUZjOGxVTmlJVXdIYkxoQVYzTHZyM05IYXduSG5DZDdqK3hHamJzSUNSRHpLaHFOa3oKTGtFc3ptMnFpMEtZZ1hza1RxckZSbXQrWUtMRjNuRXRORmNLMGY2b1FIanFOeUJTN1VpYVY3MFltaFYwL1BpLwpnbklBblh1UTFnUkNEYVIvM2JGZGpoRjNBK2s0YkNrTExhRWs5VXNCWSt2enNFd0hGVkpIV1UvRjYyTS9Zb3U5CkxTSzVtS2grSlhQcUxMbDNBNExPelc3TU01ekp0QXlzTTN6ZkJiYnRPM0ZKVTI1bmZJdFdxRHhNVGpidW1rb08KRVhzWU8zRU1rR2I2TW1DMDI4cTRBdEd1dmpMM1hHNURhNktxajZWc2dQTjY0akNHcG9PeExaZ2dISnhvcWpmTgpTVDJCUnZSTkV2aXJXdHFpMlpzeGM2TE5lblFPdE9qSFlVMlVJY1dpc1BkUVQyM3ZuVHdUMU1SQTJoL21vaDZEClF0T1ozMXhkYy9yUDA2Tkx3QzRTOWJqOUtRSURBUUFCbzBJd1FEQU9CZ05WSFE4QkFmOEVCQU1DQWdRd0R3WUQKVlIwVEFRSC9CQVV3QXdFQi96QWRCZ05WSFE0RUZnUVVtT281V1JNRnFxTTRIR0pacWd0MzVDSDF4cEF3RFFZSgpLb1pJaHZjTkFRRUxCUUFEZ2dHQkFLbjZTbXl1OEgxaGlZVE9FMFBuZXVZaU4zN2FqOVJGNTNjQUVTVHNVcVVGClA4UXArYXBCQzdmUTcvRlVOb0J6a1JyQkdjS0NLR1VQOHNZSHpOOTlXRFI1S0JQdnNTelVseW1ZU3E0YWtIVi8KdFdOS0RYUHZLbUtkM3RpbzRhaml2S2lVSzliOS9xTUpvSGRJY0xJOVBobTlBQ0NGaWZwNk5JMlBsQmpoV050Rwp6dGhwdkdObFd3V1J5RHhEbTFDMUlXVkl0OXRqNzlCd0p6OHYrdE9PZnhQNzRyUW5KTVBXMkN3S3IwQXMxY0l1CmErWGNRQWZRbmdIdTR1UEEyQUtWQ0JZRUdBVGZUa2U1MjBiY3JwVmh4UWNyT2ZxQll0ajJPQnBRajNzQUVtazYKYzBkcGZ3YUxrUWgvaCtpd2s0MTFqaUNkMk94cXRIdmE0QWxpV0JZOXByU0phVXcyRFB0UWtLa0h2VnNjZ1NUVgpqWWhMZnJBbkJIcEtZajVTNkxIUEIzV3JmYTJHek9Mdk9IQWM4MjFCd1BlTlc3YzNWcmtXMCtxR2tTaGJxN2p1Ck1YL0xOWTcrdDdKTmgxNFQ1dnJObEVjVjB2VVFVYW4yTWRheG5mMGVZL01xQ0srYnliOUp0T0tINUNCSlE3Q2cKSmZ4Y0NaU0pYT054VFkxeEZOWk5FZz09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K
+      server: https://34.67.186.174
+    name: quai-prod
+contexts:
+  - context:
+      cluster: quai-prod
+      user: quai-prod
+    name: quai-prod
+kind: Config
+current-context: quai-prod
+users:
+  - name: quai-prod
+    user:
+      token: ya29.c.b0AXv0zTMeKWOWg0PCU7jRCQLLVphq90Zt-AphAROI4CKQ8bVU29gRosSw23mPy39B9-urdH4r1D4yHl8y-A6hbxDe44FVdT5Notnn9n-P9Nf2XYJBTVpR-AbFNTzzsWkf5jHy3XsmIICHI2USqbOrdqTh5CgxwOr8CGrz0ZQIMynqMBONygAEJlV7LmAin-8y1bM7K3eRqqVLqd3zVVwsj0_1IsooAv0........................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
