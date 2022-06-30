@@ -48,10 +48,10 @@ jobs:
     - name: git tag
       run: git tag $(cat VERSION) && git push origin $(cat VERSION)
 
+    - uses: chrisdickinson/setup-yq@latest
+
     - name: Update Chart.yaml version
-      uses: mikefarah/yq@master
-      with:
-        cmd: yq eval ".appVersion=\"$(cat VERSION)\"" ./go-quai-chart/Chart.yaml
+      run: yq eval ".appVersion=\"$(cat VERSION)\"" ./go-quai-chart/Chart.yaml
 
     - name: Deploy
       uses: WyriHaximus/github-action-helm3@v2
