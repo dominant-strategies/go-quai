@@ -319,7 +319,7 @@ func (f *lightFetcher) mainloop() {
 			peer.latest = data
 
 			// Filter out any stale announce, the local chain is ahead of announce
-			if localTd != nil && data.Td.Cmp(localTd) <= 0 {
+			if localTd != nil && data.Td.Cmp(localTd[types.QuaiNetworkContext]) <= 0 {
 				continue
 			}
 			peer.addAnno(anno)
@@ -409,7 +409,7 @@ func (f *lightFetcher) mainloop() {
 			// Clean stale announcements from les-servers.
 			var droplist []enode.ID
 			f.forEachPeer(func(id enode.ID, p *fetcherPeer) bool {
-				removed := p.forwardAnno(localTd)
+				removed := p.forwardAnno(localTd[types.QuaiNetworkContext])
 				for _, anno := range removed {
 					if header := f.chain.GetHeaderByHash(anno.data.Hash); header != nil {
 						if header.Number[types.QuaiNetworkContext].Uint64() != anno.data.Number {
@@ -418,7 +418,7 @@ func (f *lightFetcher) mainloop() {
 						}
 						// In theory td should exists.
 						td := f.chain.GetTd(anno.data.Hash, anno.data.Number)
-						if td != nil && td.Cmp(anno.data.Td) != 0 {
+						if td != nil && td[types.QuaiNetworkContext].Cmp(anno.data.Td) != 0 {
 							droplist = append(droplist, id)
 							break
 						}
