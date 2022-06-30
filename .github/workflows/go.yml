@@ -51,8 +51,6 @@ jobs:
     - name: git tag
       run: git tag $(cat VERSION) && git push origin $(cat VERSION)
 
-    - name: Update Chart.yaml version
-      run: yq eval ".appVersion=\"$(cat VERSION)\"" ./go-quai-chart/Chart.yaml
 
     # Setup gcloud CLI
     - uses: google-github-actions/setup-gcloud@94337306dda8180d967a56932ceb4ddcf01edae7
@@ -75,6 +73,10 @@ jobs:
     - name: Update version
       run: awk -F. '{print $1"."$2"."$3"."$4+1}' VERSION > tmp && mv tmp VERSION
 
+    - name: Update Chart.yaml version
+      run: yq eval ".appVersion=\"$(cat VERSION)\"" ./go-quai-chart/Chart.yaml > ./go-quai-chart/Chart.yaml
+    - name: Update values.yaml version
+      run: yq eval ".goQuai.image.version=\"$(cat VERSION)\"" ./go-quai-chart/values.yaml > ./go-quai-chart/values.yaml
     - uses: stefanzweifel/git-auto-commit-action@v4
 
 
