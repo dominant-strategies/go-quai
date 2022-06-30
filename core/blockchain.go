@@ -1619,9 +1619,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 // WriteBlockWithState writes the block and all associated state to the database.
 func (bc *BlockChain) WriteBlockAndSetHead(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, linkExtBlocks []*types.ExternalBlock, emitHeadEvent bool) (status WriteStatus, err error) {
-	if !bc.chainmu.TryLock() {
-		return NonStatTy, errChainStopped
-	}
+	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
 
 	return bc.writeBlockAndSetHead(block, receipts, logs, state, linkExtBlocks, emitHeadEvent)
