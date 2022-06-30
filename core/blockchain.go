@@ -2841,17 +2841,19 @@ func (bc *BlockChain) GetExternalBlock(hash common.Hash, number uint64, location
 // requestExternalBlock sends an external block event to the missingExternalBlockFeed in order to be fulfilled by a manager or client.
 func (bc *BlockChain) requestExternalBlock(hash common.Hash, number uint64, location []byte, context uint64) *types.ExternalBlock {
 	bc.missingExternalBlockFeed.Send(MissingExternalBlock{Hash: hash, Location: location, Context: int(context)})
-	time.Sleep(100 * time.Millisecond)
-	// Lookup block in externalBlocks cache
-	key := types.ExtBlockCacheKey(number, context, hash)
-	if block, ok := bc.externalBlocks.HasGet(nil, key); ok {
-		var blockDecoded *types.ExternalBlock
-		rlp.DecodeBytes(block, &blockDecoded)
-		return blockDecoded
-	}
-	block := rawdb.ReadExternalBlock(bc.db, hash, number, context)
-	if block != nil {
-		return block
+	for i := 0; i < params.ExternalBlockLookupLimit; i++ {
+		time.Sleep(time.Duration(params.ExternalBlockLookupDelay) * time.Millisecond)
+		// Lookup block in externalBlocks cache
+		key := types.ExtBlockCacheKey(number, context, hash)
+		if block, ok := bc.externalBlocks.HasGet(nil, key); ok {
+			var blockDecoded *types.ExternalBlock
+			rlp.DecodeBytes(block, &blockDecoded)
+			return blockDecoded
+		}
+		block := rawdb.ReadExternalBlock(bc.db, hash, number, context)
+		if block != nil {
+			return block
+		}
 	}
 	return nil
 }

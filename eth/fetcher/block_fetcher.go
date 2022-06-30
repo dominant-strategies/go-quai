@@ -850,7 +850,7 @@ func (f *BlockFetcher) importBlocks(peer string, block *types.Block, extBlocks [
 			// All ok, quickly propagate to our peers
 			blockBroadcastOutTimer.UpdateSince(block.ReceivedAt)
 			extBlocks, err = f.getExtBlocks(block.Header())
-			if err != nil {
+			if err == nil {
 				go f.broadcastBlock(block, extBlocks, true)
 			}
 
@@ -874,7 +874,7 @@ func (f *BlockFetcher) importBlocks(peer string, block *types.Block, extBlocks [
 		blockAnnounceOutTimer.UpdateSince(block.ReceivedAt)
 		var err error
 		extBlocks, err = f.getExtBlocks(block.Header())
-		if err != nil {
+		if err == nil {
 			go f.broadcastBlock(block, extBlocks, false)
 		}
 		// Invoke the testing hook if needed
