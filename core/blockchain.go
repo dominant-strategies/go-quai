@@ -2067,7 +2067,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		// If the header is a banned one, straight out abort
 		if rawdb.ReadNonCanonDom(bc.db, block.Hash()) != nil {
 			log.Info("Received non-canonical dominant block, skipping for now...", "hash", block.Hash())
-			return it.index, ErrNonCanonicalDomHash
+			// return it.index, ErrNonCanonicalDomHash
 		}
 		// If the block is known (in the middle of the chain), it's a special case for
 		// Clique blocks where they can share state among each other, so importing an
