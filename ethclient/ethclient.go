@@ -660,7 +660,7 @@ func (ec *Client) GetExternalBlockTraceSet(ctx context.Context, hash common.Hash
 	if err != nil {
 		return nil, err
 	}
-
+	fmt.Println("incoming data", data)
 	var externalBlock *types.ExternalBlock
 	err = ec.c.CallContext(ctx, &externalBlock, "quai_getExternalBlockTraceSet", data)
 	if err != nil {
