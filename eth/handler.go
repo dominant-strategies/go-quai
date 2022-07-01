@@ -18,7 +18,6 @@ package eth
 
 import (
 	"errors"
-	"fmt"
 	"math"
 	"math/big"
 	"sync"
@@ -454,7 +453,7 @@ func (h *handler) BroadcastBlock(block *types.Block, extBlocks []*types.External
 				return
 			}
 			if block.Header() == nil {
-				fmt.Println("block.Header() is nil in Broadcast Block for block: ", block)
+				log.Error("Error header is nil for block in BroadcastBlock")
 				return
 			}
 			var tempTD = big.NewInt(0)
