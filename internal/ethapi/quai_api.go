@@ -518,8 +518,8 @@ func RPCMarshalReOrgData(header *types.Header, newHeaders []*types.Header, oldHe
 
 // RPCMarshalExternalBlockTraceSet converts the header and context into the right format
 func RPCMarshalExternalBlockTraceSet(hash common.Hash, context int) (map[string]interface{}, error) {
-	fields := map[string]interface{}{"hash": hash}
-	fields["context"] = context
+	fields := map[string]interface{}{"Hash": hash}
+	fields["Context"] = context
 	return fields, nil
 }
 
