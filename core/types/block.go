@@ -310,7 +310,7 @@ func NewExternalBlockWithHeader(header *Header) *ExternalBlock {
 }
 
 // WithBody returns a new block with the given transaction and uncle contents.
-func (b *ExternalBlock) ExternalBlockWithBody(transactions []*Transaction, uncles []*Header, receipts []*Receipt, context *big.Int) *ExternalBlock {
+func (b *ExternalBlock) WithBody(transactions []*Transaction, uncles []*Header, receipts []*Receipt, context *big.Int) *ExternalBlock {
 	block := &ExternalBlock{
 		header:       CopyHeader(b.header),
 		transactions: make([]*Transaction, len(transactions)),
@@ -319,7 +319,9 @@ func (b *ExternalBlock) ExternalBlockWithBody(transactions []*Transaction, uncle
 		context:      context,
 	}
 	copy(block.transactions, transactions)
-	copy(block.uncles, uncles)
+	for i := range uncles {
+		block.uncles[i] = CopyHeader(uncles[i])
+	}
 	copy(block.receipts, receipts)
 	return block
 }
