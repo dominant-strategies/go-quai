@@ -199,7 +199,7 @@ func (blake3 *Blake3) VerifyUncles(chain consensus.ChainReader, block *types.Blo
 		}
 		ancestors[parent] = ancestorHeader
 		// If the ancestor doesn't have any uncles, we don't have to iterate them
-		if !types.IsEqualHashSlice(ancestorHeader.UncleHash, types.EmptyUncleHash) {
+		if ancestorHeader.UncleHash[types.QuaiNetworkContext] != types.EmptyUncleHash[types.QuaiNetworkContext] {
 			// Need to add those uncles to the banned list too
 			ancestor := chain.GetBlock(parent, number)
 			if ancestor == nil {

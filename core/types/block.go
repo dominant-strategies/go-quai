@@ -174,12 +174,12 @@ func (h *Header) SanityCheck() error {
 // EmptyBody returns true if there is no additional 'body' to complete the header
 // that is: no transactions and no uncles.
 func (h *Header) EmptyBody() bool {
-	return IsEqualHashSlice(h.TxHash, EmptyRootHash) && IsEqualHashSlice(h.UncleHash, EmptyUncleHash)
+	return h.TxHash[QuaiNetworkContext] == EmptyRootHash[QuaiNetworkContext] && h.UncleHash[QuaiNetworkContext] == EmptyUncleHash[QuaiNetworkContext]
 }
 
 // EmptyReceipts returns true if there are no receipts for this header/block.
 func (h *Header) EmptyReceipts() bool {
-	return IsEqualHashSlice(h.ReceiptHash, EmptyRootHash)
+	return h.ReceiptHash[QuaiNetworkContext] == EmptyRootHash[QuaiNetworkContext]
 }
 
 // IsEqualHashSlice compares each hash in a headers slice of hashes
