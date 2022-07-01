@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/consensus/blake3"
 	"github.com/spruce-solutions/go-quai/core/rawdb"
 	"github.com/spruce-solutions/go-quai/core/types"
@@ -120,18 +119,6 @@ func chainsValidator(chain []*types.Block, primeChain BlockChain, regionChain Bl
 	return validNetwork
 }
 
-// Constant Genesis definition in notation
-var genesisBlock = blockGenSpec{[3]int{0, 0, 0}, [3]string{}, ""}
-
-type blockSpecs struct {
-	order         int    // order to grind in
-	numbers [3]int // numbers to grind at
-	tag           string
-	parentTags    [3]string
-	hash          common.Hash
-	slice         [3]params.ChainConfig // chain config (used to infer slice)
-}
-
 // simple example graph
 // [3][3][100]*blockGenSpec = 3 regions, each w/ 3 zones, each w/ 100 blocks
 var networkGraphSample = [3][3][]*blockGenSpec{
@@ -162,6 +149,7 @@ var networkGraphSample = [3][3][]*blockGenSpec{
 	},
 	{}, // ... Region2 omitted
 }
+
 func BlockInterpreter(networkGraph [3][3][]*blockGenSpec) []blockSpecs {
 	// an array of blockSpecs will be constructed to be looped over GenerateNetwork
 	// this will generate the blocks in sequential order (the chains will then be validated separately again)
@@ -183,7 +171,8 @@ func BlockInterpreter(networkGraph [3][3][]*blockGenSpec) []blockSpecs {
 				}
 				if tags == 0 {
 					totalTags++
-					tagMap[construct.tag] = [3]int{0,0,0}
+					tagRegister = append(tagRegister, construct.tag)
+					tagMap[construct.tag] = [3]int{0, 0, 0} // used for setting lastBlockNumbers in respective tag forks
 				}
 			}
 		}
@@ -192,106 +181,206 @@ func BlockInterpreter(networkGraph [3][3][]*blockGenSpec) []blockSpecs {
 	// initialize array to derive respective number values in tags
 	taggedNumbers := [][3]int{}
 	n := 0
-	for n <= totalTags {
+	for n < totalTags {
 		taggedNumbers = append(taggedNumbers, [3]int{0, 0, 0})
 		n++
 	}
 
 	// create (unordered) set of blockSpecs
-	tagNumbersArray := make([][3]int, totalTags) // maintains current numbers for each tag
 	specs := []blockSpecs{}
-	forkParents := []blockSpecs{}
+	forkParents := []blockSpecs{}       // holds array of forking parents
+	lastBlockNumbers := [3]int{0, 0, 0} // Prime, Region, Zone; separated in case of twists
+	lastTag := "default"                // gives specs explicit tags
+	iteratorTag := "default"            // to save tag for repeatIterator loop
 	primeConfig := params.MainnetPrimeChainConfig
 	for r, regions := range networkGraph {
 		regionConfig := params.MainnetRegionChainConfigs[r]
 		for z, zones := range regions {
 			zoneConfig := params.MainnetZoneChainConfigs[r][z]
-			repeatIterator := 1 // for iterating over skips
-			lastBlockNumbers := [3][3]int{0,0,0} // Prime, Region, Zone; separated in case of twists
-			sources := []int{} // for building forks and twists
-			orderIterator := 0
+			repeatIterator := 0 // for iterating over skips
 			for _, block := range zones {
-				spec := blockSpecs{}
-				spec.slice = [3]params.ChainConfig{*primeConfig, regionConfig, zoneConfig}
-				// detect what order block will be generated at
-				order := -1
-				for i, number := range block.numbers {
-					if number != -1 {
-						order = i
-						break
+				// PLAN: try vanilla iteration first, then incorporate tag conditions
+
+				// if iterating, will build the last block *first* then iterate backwards
+				// compartment for logic for blockGenSpecs w/out tags or parentTags
+				if block.parentTags == [3]string{} {
+					// detect if need to iterate over block
+					if block.numbers[2] > lastBlockNumbers[2]+1 {
+						repeatIterator = block.numbers[2] - lastBlockNumbers[2] - 1
 					}
-				}
-				// look at parentTags to see if need to fork; then find right block to fork from
-				for i, parentTag := range block.parentTags {
-					if parentTag {
-						for j, _ := range forkParents {
-							if forkParents[j].tag == parentTag {
-								lastBlockNumbers[i] = forkParents[j].numbers
-								sources = append(sources, i)
+					// initialize spec
+					spec := blockSpecs{}
+
+					// fill out slice
+					spec.slice = [3]params.ChainConfig{*primeConfig, regionConfig, zoneConfig}
+					// fill out Zone values because necessary
+					// infer order from numbers
+					spec.numbers[2] = block.numbers[2]
+					spec.order = 2
+					// next Region values
+					if block.numbers[1] != -1 {
+						spec.numbers[1] = block.numbers[1]
+						spec.order = 1
+					} else {
+						spec.numbers[1] = lastBlockNumbers[1]
+					}
+					// Prime values
+					if block.numbers[0] != -1 {
+						spec.numbers[0] = block.numbers[0]
+						spec.order = 0
+					} else {
+						spec.numbers[0] = lastBlockNumbers[0]
+					}
+
+					// fill out parentNumbers
+					if repeatIterator == 0 {
+						spec.parentNumbers = lastBlockNumbers
+					} else { // infer parentNumbers based on order
+						spec.parentNumbers[2] = spec.numbers[2] - 1
+						switch spec.order {
+						case 1:
+							spec.parentNumbers[1] = spec.numbers[1] - 1
+							spec.parentNumbers[0] = spec.numbers[0]
+						case 0:
+							spec.parentNumbers[1] = spec.numbers[1] - 1
+							spec.parentNumbers[0] = spec.numbers[0] - 1
+						}
+					}
+
+					// detect tag and fill in tags explicitly for each spec
+					if block.tag != lastTag {
+						spec.tag = block.tag
+						// append spec to forkParents for easy parentTags retrieval
+						forkParents = append(forkParents, spec)
+						// save previous for repeatIterator
+						iteratorTag = lastTag
+						lastTag = spec.tag
+					} else {
+						iteratorTag = lastTag
+						spec.tag = lastTag
+					}
+
+					// spec completed, append to specs array
+					specs = append(specs, spec)
+
+					// update lastBlockNumbers state
+					lastBlockNumbers = spec.numbers
+
+					// generate block backwards from final child (e.g. spec just created above)
+					for repeatIterator > 0 {
+						repeatIterator--
+						// initialize spec
+						spec := blockSpecs{}
+						// fill out slice
+						spec.slice = [3]params.ChainConfig{*primeConfig, regionConfig, zoneConfig}
+						// fill out numbers from last block appended to specs
+						spec.numbers = specs[len(specs)-1].parentNumbers
+						// parentNumbers will only iterate downward in Zone
+						spec.parentNumbers[2] = spec.numbers[2] - 1
+						spec.parentNumbers[1] = spec.numbers[1]
+						spec.parentNumbers[0] = spec.numbers[0]
+						// fill out order
+						spec.order = 2 // always in Zone when iterating
+						spec.tag = iteratorTag
+						// last append to specs
+						specs = append(specs, spec)
+					}
+				} else { // if parentTags == true
+					var source int // to record order
+					// get respective lastBlockNumbers (put into lastBlockNumbers)
+					for i, parentTags := range block.parentTags {
+						if parentTags != "" {
+							source = i
+							for _, parents := range forkParents {
+								if parentTags == parents.tag {
+									lastBlockNumbers = parents.numbers
+									break
+								}
 							}
 						}
 					}
-				}
-				for _, source := range sources {
-
-				}
-				
-				// detect if need to iterate over this spec
-				for i, number := range block.numbers { // we can assume repeats are in same order; otherwise there is ambiguity
-					if number > lastBlockNumbers[i] + 1 {
-						repeatIterator = number - lastBlockNumbers[i]
-						orderIterator = i
-					}
-				}
-				for repeatIterator > 0 { // on default cases loops once
-					repeatIterator--
-					// iterate over source (for constructing forks/twists)
-					for _, idx := range source {
-
-					}
-					// first fill out Zone number values, as they are always explicit from notation
-					lastBlockNumbers[2]++
-					specs.number[2] = lastBlockNumbers[2]
-					// next fill out Region number values
+					// initialize spec
+					spec := blockSpecs{}
+					// fork and twist logic
+					// fill in numbers
+					spec.numbers[2] = block.numbers[2]
+					spec.order = 2
 					if block.numbers[1] != -1 {
-						lastBlockNumbers[1]++
-						specs.number[1] = lastBlockNumbers[1]
+						spec.numbers[1] = block.numbers[1]
+						spec.order = 1
+						if block.numbers[0] != -1 {
+							spec.numbers[0] = block.numbers[0]
+							spec.order = 0
+						} else { // if block.numbers[0] == -1
+							spec.numbers[0] = lastBlockNumbers[0]
+						}
+					} else { // if block.numbers[1] == -1
+						// infer Region
+						spec.numbers[1] = lastBlockNumbers[1]
+						spec.numbers[0] = lastBlockNumbers[0]
+					}
+					// fill in parentNumbers
+					spec.parentNumbers[2] = spec.numbers[2] - 1
+					switch source {
+					case 2:
+						spec.parentNumbers[1] = spec.numbers[1]
+						spec.parentNumbers[0] = spec.numbers[0]
+					case 1:
+						spec.parentNumbers[1] = spec.numbers[1] - 1
+						spec.parentNumbers[0] = spec.numbers[0]
+					case 0:
+						spec.parentNumbers[1] = spec.numbers[1] - 1
+						spec.parentNumbers[0] = spec.numbers[0] - 1
 					}
 
+					spec.parentTags = block.parentTags
 
-				}
-				// first fill out Zone number values
-				spec.number[2] = block.number[2]
-				spec.parentNumbers[2] = spec.number[2] - 1
-				// next figure out Region number value
-				if block.number[1] != -1 {
-					spec.number[1] = block.number[1]
-					spec.parentNumbers[1] = spec.number[1] - 1
-				} else {
-					spec.parentNumbers[1] = tagNumbersArray[block.parentTags[1]]
-					spec.number[1] = spec.parentNumbers[1] + 1
-				}
-				if block.number[0] != -1 {
-					spec.number[0] = block.number[0]
-					spec.parentNumbers[0] = spec.number[0] -1
-				} else {
-					spec.parentNumbers[0] = tagNumbersArray[block.parentTags[0]]
-					spec.number[0] = spec.parentNumbers[0] + 1
-				}
+					if block.tag != "" {
+						spec.tag = block.tag
+						forkParents = append(forkParents, spec)
+						iteratorTag = lastTag
+						lastTag = spec.tag
+					} else {
+						iteratorTag = lastTag
+						spec.tag = lastTag
+					}
 
-				// add specs to forkParents if tagged
-				if block.tag {
-					forkParents = append(forkParents, spec)
-				}
+					specs = append(specs, spec)
 
+					// detect if need to iterate over block
+					if block.numbers[2] > lastBlockNumbers[2]+1 {
+						repeatIterator = block.numbers[2] - lastBlockNumbers[2] - 1
+					}
+
+					lastBlockNumbers = spec.numbers
+
+					for repeatIterator > 0 {
+						repeatIterator--
+						// initialize spec
+						spec := blockSpecs{}
+						// fill out slice
+						spec.slice = [3]params.ChainConfig{*primeConfig, regionConfig, zoneConfig}
+						// fill out numbers from last block appended to specs
+						spec.numbers = specs[len(specs)-1].parentNumbers
+						// parentNumbers will only iterate downward in Zone
+						spec.parentNumbers[2] = spec.numbers[2] - 1
+						spec.parentNumbers[1] = spec.numbers[1]
+						spec.parentNumbers[0] = spec.numbers[0]
+						// fill out order
+						spec.order = 2 // always in Zone when iterating
+						spec.tag = iteratorTag
+						// must also fill out parentTags
+						spec.parentTags = block.parentTags
+						// last append to specs
+						specs = append(specs, spec)
+					}
 				}
-				specs = append(specs, spec)
 			}
 		}
 	}
 
 	// organize specs by tag id
-	tagArrays := make([][]blockSpecs, totalTags)
+	tagArrays := make(map[string][]blockSpecs)
 	for _, spec := range specs {
 		tagArrays[spec.tag] = append(tagArrays[spec.tag], spec)
 	}
@@ -308,7 +397,7 @@ func BlockInterpreter(networkGraph [3][3][]*blockGenSpec) []blockSpecs {
 			// then append to sequencedSpecs
 			for i, spec := range tagArray {
 				// find next block in sequence and append to sequencedSpecs
-				if spec.number == last {
+				if spec.numbers == last {
 					reversedtagSpecs = append(reversedtagSpecs, spec)
 					// determine values for next block (if any)
 					last = spec.parentNumbers
@@ -334,13 +423,13 @@ func BlockInterpreter(networkGraph [3][3][]*blockGenSpec) []blockSpecs {
 func findLast(specs []blockSpecs) (lastNumbers [3]int) {
 	nPrime, nRegion, nZone := 0, 0, 0
 	for _, spec := range specs {
-		if spec.number[0] >= nPrime {
-			nPrime = spec.number[0]
-			if spec.number[1] >= nRegion {
-				nRegion = spec.number[1]
-				if spec.number[2] >= nZone {
-					nZone = spec.number[2]
-					lastNumbers = spec.number
+		if spec.numbers[0] >= nPrime {
+			nPrime = spec.numbers[0]
+			if spec.numbers[1] >= nRegion {
+				nRegion = spec.numbers[1]
+				if spec.numbers[2] >= nZone {
+					nZone = spec.numbers[2]
+					lastNumbers = spec.numbers
 				}
 			}
 		}
@@ -424,15 +513,15 @@ func ExampleGenerateNetwork() {
 	blockPool := []*types.Block{}
 	for _, specs := range specsPool {
 		// function here to derive appropriate parent post-genesis cases
-		if specs.number == [3]int{0, 0, 0} {
+		if specs.numbers == [3]int{0, 0, 0} {
 			genesisCheck = true
 			parent = genesisPrime
 		} else {
 			parent = findParent(blockPool, specs.parentNumbers)
 		}
 
-		block := GenerateBlock(genesisCheck, &specs.slice,
-			parent, specs.order, specs.number,
+		block := GenerateBlock(genesisCheck, &specs.slice[2],
+			parent, specs.order, specs.numbers,
 			blake3.NewFaker(), db)
 		if genesisCheck {
 			genesisCheck = false

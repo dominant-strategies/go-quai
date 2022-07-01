@@ -319,6 +319,20 @@ type blockGenSpec struct {
 	tag        string    // (optionally) Give this block a named tag. Empty strings are ignored.
 }
 
+// Constant Genesis definition in notation
+var genesisBlock = blockGenSpec{[3]int{0, 0, 0}, [3]string{}, ""}
+
+// detailed specs that can be fed to the generator
+type blockSpecs struct {
+	order         int    // order to grind in
+	numbers       [3]int // numbers to grind at
+	tag           string // always explicit
+	parentTags    [3]string
+	parentNumbers [3]int // to find parent to generate from
+	hash          common.Hash
+	slice         [3]params.ChainConfig // chain config (used to infer slice)
+}
+
 // Generate blocks to form a network of chains
 func GenerateNetworkBlocks(graph [3][3][]*blockGenSpec) ([]*types.Block, error) {
 	return nil, errors.New("Not implemented")
