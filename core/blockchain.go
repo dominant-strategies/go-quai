@@ -1490,7 +1490,7 @@ func (bc *BlockChain) NdToTd(header *types.Header, nD []*big.Int) ([]*big.Int, e
 		prevHeader := bc.GetHeaderByHash(header.ParentHash[params.PRIME])
 		if prevHeader == nil {
 			// Get previous header on external chain by hash
-			prevExtBlock, err := bc.GetExternalBlock(header.ParentHash[params.PRIME], header.Number[params.PRIME].Uint64()-1, header.Location, uint64(params.PRIME))
+			prevExtBlock, err := bc.GetExternalBlock(header.ParentHash[params.PRIME], header.Location, uint64(params.PRIME))
 			if err != nil {
 				return nil, err
 			}
@@ -1709,7 +1709,7 @@ func (bc *BlockChain) AddExternalBlocks(blocks []*types.ExternalBlock) error {
 func (bc *BlockChain) AddExternalBlock(block *types.ExternalBlock) error {
 	context := []interface{}{
 		"context", block.Context(), "numbers", block.Header().Number, "hash", block.Hash(), "location", block.Header().Location,
-		"txs", len(block.Transactions()), "receipts", len(block.Receipts()),
+		"txs", len(block.Transactions()), "uncles", len(block.Uncles()), "receipts", len(block.Receipts()),
 	}
 	log.Info("Adding external block", context...)
 	data, err := rlp.EncodeToBytes(block)
@@ -2816,19 +2816,19 @@ func (bc *BlockChain) GetHeaderByHash(hash common.Hash) *types.Header {
 }
 
 // GetExternalBlock retrieves an external block from either the ext block cache or rawdb.
-func (bc *BlockChain) GetExternalBlock(hash common.Hash, number uint64, location []byte, context uint64) (*types.ExternalBlock, error) {
+func (bc *BlockChain) GetExternalBlock(hash common.Hash, location []byte, context uint64) (*types.ExternalBlock, error) {
 	// Lookup block in externalBlocks cache
-	key := types.ExtBlockCacheKey(number, context, hash)
+	key := types.ExtBlockCacheKey(context, hash)
 
 	if block, ok := bc.externalBlocks.HasGet(nil, key); ok {
 		var blockDecoded *types.ExternalBlock
 		rlp.DecodeBytes(block, &blockDecoded)
 		return blockDecoded, nil
 	}
-	block := rawdb.ReadExternalBlock(bc.db, hash, number, context)
+	block := rawdb.ReadExternalBlock(bc.db, hash, context)
 
 	if block == nil {
-		block = bc.requestExternalBlock(hash, number, location, context)
+		block = bc.requestExternalBlock(hash, location, context)
 		if block == nil {
 			return &types.ExternalBlock{}, errExtBlockNotFound
 		}
@@ -2837,18 +2837,18 @@ func (bc *BlockChain) GetExternalBlock(hash common.Hash, number uint64, location
 }
 
 // requestExternalBlock sends an external block event to the missingExternalBlockFeed in order to be fulfilled by a manager or client.
-func (bc *BlockChain) requestExternalBlock(hash common.Hash, number uint64, location []byte, context uint64) *types.ExternalBlock {
+func (bc *BlockChain) requestExternalBlock(hash common.Hash, location []byte, context uint64) *types.ExternalBlock {
 	bc.missingExternalBlockFeed.Send(MissingExternalBlock{Hash: hash, Location: location, Context: int(context)})
 	for i := 0; i < params.ExternalBlockLookupLimit; i++ {
 		time.Sleep(time.Duration(params.ExternalBlockLookupDelay) * time.Millisecond)
 		// Lookup block in externalBlocks cache
-		key := types.ExtBlockCacheKey(number, context, hash)
+		key := types.ExtBlockCacheKey(context, hash)
 		if block, ok := bc.externalBlocks.HasGet(nil, key); ok {
 			var blockDecoded *types.ExternalBlock
 			rlp.DecodeBytes(block, &blockDecoded)
 			return blockDecoded
 		}
-		block := rawdb.ReadExternalBlock(bc.db, hash, number, context)
+		block := rawdb.ReadExternalBlock(bc.db, hash, context)
 		if block != nil {
 			return block
 		}
@@ -2856,16 +2856,30 @@ func (bc *BlockChain) requestExternalBlock(hash common.Hash, number uint64, loca
 	return nil
 }
 
+// GetExternalBlockTraceSet checks if the ExternalBlock for the given hash is present in the cache and returns the externalBlock
+func (bc *BlockChain) GetExternalBlockTraceSet(hash common.Hash, context int) (*types.ExternalBlock, error) {
+	// Lookup block in externalBlocks cache
+	key := types.ExtBlockCacheKey(uint64(context), hash)
+
+	if extBlock, ok := bc.externalBlocks.HasGet(nil, key); ok {
+		var extBlockDecoded *types.ExternalBlock
+		rlp.DecodeBytes(extBlock, &extBlockDecoded)
+		return extBlockDecoded, nil
+	}
+	extBlock := rawdb.ReadExternalBlock(bc.db, hash, uint64(context))
+	fmt.Println("GetExternalBlockTraceSet: is block nil?", extBlock == nil)
+	return extBlock, nil
+}
+
 // StoreExternalBlocks removes the external block from the cached blocks and writes it into the database
 func (bc *BlockChain) StoreExternalBlocks(blocks []*types.ExternalBlock) error {
 
 	for i := 0; i < len(blocks); i++ {
 		context := blocks[i].Context().Uint64()
-		number := blocks[i].Header().Number[context].Uint64()
 		hash := blocks[i].Hash()
 
 		// Lookup block in externalBlocks cache
-		key := types.ExtBlockCacheKey(number, context, hash)
+		key := types.ExtBlockCacheKey(context, hash)
 		bc.externalBlocks.Del(key)
 
 		rawdb.WriteExternalBlock(bc.db, blocks[i])
@@ -3180,7 +3194,7 @@ func (bc *BlockChain) CalcHLCRNetDifficulty(terminalHash common.Hash, header *ty
 		prevHeader := bc.GetHeaderByHash(header.ParentHash[order])
 		if prevHeader == nil {
 			// Get previous header on external chain by hash
-			prevExtBlock, err := bc.GetExternalBlock(header.ParentHash[order], header.Number[order].Uint64()-1, header.Location, uint64(order))
+			prevExtBlock, err := bc.GetExternalBlock(header.ParentHash[order], header.Location, uint64(order))
 			if err != nil {
 				return nil, err
 			}

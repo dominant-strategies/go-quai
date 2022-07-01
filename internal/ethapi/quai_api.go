@@ -479,6 +479,12 @@ func RPCMarshalExternalBlock(block *types.Block, receipts []*types.Receipt, cont
 		}
 	}
 
+	ucls := block.Uncles()
+	uncles := make([]interface{}, len(ucls))
+	for i, ucl := range ucls {
+		uncles[i] = RPCMarshalHeader(ucl)
+	}
+
 	fieldReceipts := make([]interface{}, len(receipts))
 	for i, receipt := range receipts {
 		fieldReceipts[i], _ = RPCMarshalReceipt(receipt)
@@ -486,6 +492,7 @@ func RPCMarshalExternalBlock(block *types.Block, receipts []*types.Receipt, cont
 	fields["receipts"] = fieldReceipts
 
 	fields["transactions"] = transactions
+	fields["uncles"] = uncles
 	fields["context"] = context
 	return fields, nil
 }
@@ -506,6 +513,13 @@ func RPCMarshalReOrgData(header *types.Header, newHeaders []*types.Header, oldHe
 
 	fields["newHeaders"] = fieldNewHeaders
 	fields["oldHeaders"] = fieldOldHeaders
+	return fields, nil
+}
+
+// RPCMarshalExternalBlockTraceSet converts the header and context into the right format
+func RPCMarshalExternalBlockTraceSet(hash common.Hash, context int) (map[string]interface{}, error) {
+	fields := map[string]interface{}{"hash": hash}
+	fields["context"] = context
 	return fields, nil
 }
 
@@ -643,6 +657,7 @@ func (s *PublicBlockChainQuaiAPI) SendReOrgData(ctx context.Context, raw json.Ra
 type rpcExternalBlock struct {
 	Hash         common.Hash      `json:"hash"`
 	Transactions []rpcTransaction `json:"transactions"`
+	Uncles       []*types.Header  `json:"uncles"`
 	Receipts     []*types.Receipt `json:"receipts"`
 	Context      *big.Int         `json:"context"`
 }
@@ -659,20 +674,43 @@ func (s *PublicBlockChainQuaiAPI) SendExternalBlock(ctx context.Context, raw jso
 		return err
 	}
 
-	// Load transactions, uncles are not needed for external blocks
+	// Load transactions
 	txs := make([]*types.Transaction, len(body.Transactions))
 	for i, tx := range body.Transactions {
 		txs[i] = tx.tx
 	}
 
-	receipts := make([]*types.Receipt, len(body.Receipts))
-	for i, receipt := range body.Receipts {
-		receipts[i] = receipt
-	}
+	uncles := make([]*types.Header, len(body.Uncles))
+	copy(uncles, body.Uncles)
 
-	block := types.NewExternalBlockWithHeader(head).ExternalBlockWithBody(txs, receipts, body.Context)
+	receipts := make([]*types.Receipt, len(body.Receipts))
+	copy(receipts, body.Receipts)
+
+	block := types.NewExternalBlockWithHeader(head).WithBody(txs, uncles, receipts, body.Context)
 
 	s.b.AddExternalBlock(block)
 
 	return nil
+}
+
+type HeaderHashWithContext struct {
+	hash    common.Hash
+	context int
+}
+
+// GetExternalBlockTraceSet will run checks on the header and get the External Block from the cache.
+func (s *PublicBlockChainQuaiAPI) GetExternalBlockTraceSet(ctx context.Context, raw json.RawMessage) (map[string]interface{}, error) {
+	// Decode header and transactions.
+	var headerHashWithContext HeaderHashWithContext
+	if err := json.Unmarshal(raw, &headerHashWithContext); err != nil {
+		return nil, err
+	}
+
+	extBlock, err := s.b.GetExternalBlockTraceSet(headerHashWithContext.hash, headerHashWithContext.context)
+	if err != nil {
+		return nil, err
+	}
+	block := types.NewBlockWithHeader(extBlock.Header()).WithBody(extBlock.Transactions(), extBlock.Uncles())
+
+	return RPCMarshalExternalBlock(block, extBlock.Receipts(), extBlock.Context())
 }

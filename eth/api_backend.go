@@ -128,6 +128,10 @@ func (b *EthAPIBackend) ReOrgRollBack(header *types.Header, validDoms []*types.H
 	return b.eth.blockchain.ReOrgRollBack(header, validDoms, invalidDoms)
 }
 
+func (b *EthAPIBackend) GetExternalBlockTraceSet(hash common.Hash, context int) (*types.ExternalBlock, error) {
+	return b.eth.blockchain.GetExternalBlockTraceSet(hash, context)
+}
+
 func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
 	return b.eth.blockchain.GetBlockByHash(hash), nil
 }
