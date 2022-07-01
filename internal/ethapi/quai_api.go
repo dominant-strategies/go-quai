@@ -694,8 +694,8 @@ func (s *PublicBlockChainQuaiAPI) SendExternalBlock(ctx context.Context, raw jso
 }
 
 type HeaderHashWithContext struct {
-	hash    common.Hash
-	context int
+	Hash    common.Hash
+	Context int
 }
 
 // GetExternalBlockTraceSet will run checks on the header and get the External Block from the cache.
@@ -706,7 +706,7 @@ func (s *PublicBlockChainQuaiAPI) GetExternalBlockTraceSet(ctx context.Context, 
 		return nil, err
 	}
 
-	extBlock, err := s.b.GetExternalBlockTraceSet(headerHashWithContext.hash, headerHashWithContext.context)
+	extBlock, err := s.b.GetExternalBlockTraceSet(headerHashWithContext.Hash, headerHashWithContext.Context)
 	if err != nil {
 		return nil, err
 	}
