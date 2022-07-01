@@ -279,11 +279,6 @@ type rlpexternalblock struct {
 	Context  *big.Int
 }
 
-type HeaderHashWithContext struct {
-	Hash    common.Hash
-	Context int
-}
-
 // DecodeRLP decodes the Ethereum
 func (b *ExternalBlock) DecodeRLP(s *rlp.Stream) error {
 	var eb rlpexternalblock
