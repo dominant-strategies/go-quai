@@ -547,7 +547,7 @@ func ReadExternalBody(db ethdb.Reader, hash common.Hash, context uint64) *types.
 	}
 	body := new(types.ExternalBody)
 	if err := rlp.Decode(bytes.NewReader(data), body); err != nil {
-		log.Error("Invalid block body RLP", "hash", hash, "err", err)
+		log.Error("Invalid external block body RLP", "hash", hash, "err", err)
 		return nil
 	}
 	return body
@@ -862,7 +862,7 @@ func ReadExternalBlock(db ethdb.Reader, hash common.Hash, context uint64) *types
 	if body == nil {
 		return nil
 	}
-	return types.NewExternalBlockWithHeader(header).ExternalBlockWithBody(body.Transactions, body.Uncles, body.Receipts, body.Context)
+	return types.NewExternalBlockWithHeader(header).WithBody(body.Transactions, body.Uncles, body.Receipts, body.Context)
 }
 
 // WriteBlock serializes a block into the database, header and body separately.

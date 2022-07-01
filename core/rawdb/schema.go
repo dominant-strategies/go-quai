@@ -86,6 +86,7 @@ var (
 
 	blockBodyPrefix     = []byte("b") // blockBodyPrefix + num (uint64 big endian) + hash -> block body
 	blockReceiptsPrefix = []byte("r") // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
+	extBlockBodyPrefix  = []byte("e") // extBlockBodyPrefix + num (uint64 big endian) + hash -> block body
 
 	txLookupPrefix        = []byte("l") // txLookupPrefix + hash -> transaction/receipt lookup metadata
 	bloomBitsPrefix       = []byte("B") // bloomBitsPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash -> bloom bits
@@ -180,9 +181,9 @@ func blockBodyKey(number uint64, hash common.Hash) []byte {
 	return append(append(blockBodyPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
 }
 
-// extBlockBodyKey = blockBodyPrefix + num (uint64 big endian) + location + context + hash
+// extBlockBodyKey = extBlockBodyPrefix + num (uint64 big endian) + location + context + hash
 func extBlockBodyKey(context uint64, hash common.Hash) []byte {
-	return append(append(blockBodyPrefix, encodeBlockNumber(context)...), hash.Bytes()...)
+	return append(append(extBlockBodyPrefix, encodeBlockNumber(context)...), hash.Bytes()...)
 }
 
 // blockReceiptsKey = blockReceiptsPrefix + num (uint64 big endian) + hash

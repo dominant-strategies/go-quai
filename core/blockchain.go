@@ -2889,7 +2889,7 @@ func (bc *BlockChain) GetExternalBlockTraceSet(hash common.Hash, context int) (*
 		return extBlockDecoded, nil
 	}
 	extBlock := rawdb.ReadExternalBlock(bc.db, hash, uint64(context))
-
+	fmt.Println("GetExternalBlockTraceSet: is block nil?", extBlock == nil)
 	return extBlock, nil
 }
 
