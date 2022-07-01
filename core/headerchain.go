@@ -673,15 +673,23 @@ func (hc *HeaderChain) SetHead(head uint64, updateFn UpdateHeadBlocksCallback, d
 
 // HLCR does hierarchical comparison of two difficulty tuples and returns true if second tuple is greater than the first
 func (hc *HeaderChain) HLCR(localDifficulties []*big.Int, externDifficulties []*big.Int) bool {
+	log.Info("HLCR", "localDiff", localDifficulties, "externDiff", externDifficulties)
 	if localDifficulties[0].Cmp(externDifficulties[0]) < 0 {
 		return true
-	} else if localDifficulties[1].Cmp(externDifficulties[1]) < 0 {
-		return true
-	} else if localDifficulties[2].Cmp(externDifficulties[2]) < 0 {
-		return true
-	} else {
+	} else if localDifficulties[0].Cmp(externDifficulties[0]) > 0 {
 		return false
 	}
+	if localDifficulties[1].Cmp(externDifficulties[1]) < 0 {
+		return true
+	} else if localDifficulties[1].Cmp(externDifficulties[1]) > 0 {
+		return false
+	}
+	if localDifficulties[2].Cmp(externDifficulties[2]) < 0 {
+		return true
+	} else if localDifficulties[2].Cmp(externDifficulties[2]) > 0 {
+		return false
+	}
+	return false
 }
 
 // CalcTd calculates the TD of the given header using PCRC and CalcHLCRNetDifficulty.
