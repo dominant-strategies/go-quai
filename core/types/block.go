@@ -789,3 +789,9 @@ func currentBlockOntology(number []*big.Int) ([]int, error) {
 		return nil, errors.New("invalid number passed to currentBlockOntology")
 	}
 }
+
+// struct notation for fork choice testing
+type BlockGenSpec struct {
+	Parent [3]string // Override the parents to point to tagged blocks. Empty strings mean no parent at that order
+	Tag    string    // Give this block a named tag. Tags MUST be unique
+}
