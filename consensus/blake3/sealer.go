@@ -124,6 +124,9 @@ func (blake3 *Blake3) mine(block *types.Block, id int, seed uint64, abort chan s
 	)
 	logger := blake3.config.Log.New("miner", id)
 	logger.Trace("Started ethash search for new nonces", "seed", seed)
+	if blake3.config.Fakepow {
+		target = new(big.Int).Div(big2e256, fakeDifficulties[types.QuaiNetworkContext])
+	}
 search:
 	for {
 		select {
@@ -144,7 +147,7 @@ search:
 			// Set the new nonce and try again
 			header.Nonce = types.EncodeNonce(nonce)
 			blockhash := blake3.SealHash(header)
-			if !blake3.config.Fakepow && powBuffer.SetBytes(blockhash.Bytes()).Cmp(target) <= 0 {
+			if powBuffer.SetBytes(blockhash.Bytes()).Cmp(target) <= 0 {
 				// Seal and return a block (if still needed)
 				select {
 				case found <- block.WithSeal(header):
@@ -267,7 +270,7 @@ search:
 			// Set the new nonce and try again
 			header.Nonce = types.EncodeNonce(nonce)
 			blockhash := blake3.SealHash(&header)
-			if !blake3.config.Fakepow && powBuffer.SetBytes(blockhash.Bytes()).Cmp(targets[2]) <= 0 {
+			if powBuffer.SetBytes(blockhash.Bytes()).Cmp(targets[2]) <= 0 {
 				order, err := blake3.GetDifficultyOrder(&header)
 				if nil != err {
 					logger.Error("Failed to get difficulty order")

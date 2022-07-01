@@ -548,7 +548,7 @@ func (hc *HeaderChain) GetLinkExternalBlocks(header *types.Header) ([]*types.Ext
 
 // GetExternalBlock is not applicable in the header chain since the BlockChain contains
 // the external blocks cache.
-func (hc *HeaderChain) GetExternalBlock(hash common.Hash, number uint64, location []byte, context uint64) (*types.ExternalBlock, error) {
+func (hc *HeaderChain) GetExternalBlock(hash common.Hash, location []byte, context uint64) (*types.ExternalBlock, error) {
 	return nil, nil
 }
 
@@ -745,7 +745,7 @@ func (hc *HeaderChain) NdToTd(header *types.Header, nD []*big.Int) ([]*big.Int, 
 		prevHeader := hc.GetHeaderByHash(header.ParentHash[params.PRIME])
 		if prevHeader == nil {
 			// Get previous header on external chain by hash
-			prevExtBlock, err := hc.GetExternalBlock(header.ParentHash[params.PRIME], header.Number[params.PRIME].Uint64()-1, header.Location, uint64(params.PRIME))
+			prevExtBlock, err := hc.GetExternalBlock(header.ParentHash[params.PRIME], header.Location, uint64(params.PRIME))
 			if err != nil {
 				return nil, err
 			}
@@ -859,7 +859,7 @@ func (hc *HeaderChain) CalcHLCRNetDifficulty(terminalHash common.Hash, header *t
 		prevHeader := hc.GetHeaderByHash(header.ParentHash[order])
 		if prevHeader == nil {
 			// Get previous header on external chain by hash
-			prevExtBlock, err := hc.GetExternalBlock(header.ParentHash[order], header.Number[order].Uint64()-1, header.Location, uint64(order))
+			prevExtBlock, err := hc.GetExternalBlock(header.ParentHash[order], header.Location, uint64(order))
 			if err != nil {
 				return nil, err
 			}

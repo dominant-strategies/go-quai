@@ -44,6 +44,7 @@ var (
 
 	allowedFutureBlockTimeSeconds = int64(15) // Max seconds from current time allowed for blocks, before they're considered future blocks
 	maxUncles                     = 2         // Maximum number of uncles allowed in a single block
+	fakeDifficulties              = []*big.Int{new(big.Int).Mul(params.MinimumDifficulty[params.PRIME], big.NewInt(4)), new(big.Int).Mul(params.MinimumDifficulty[params.REGION], big.NewInt(2)), params.MinimumDifficulty[params.ZONE]}
 )
 
 // Some weird constants to avoid constant memory allocs for them.
@@ -253,6 +254,9 @@ func (blake3 *Blake3) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	}
 	// Verify the block's difficulty based on its timestamp and parent's difficulty
 	expected := blake3.CalcDifficulty(chain, header.Time, parent, types.QuaiNetworkContext)
+	if blake3.config.Fakepow {
+		expected = fakeDifficulties[types.QuaiNetworkContext]
+	}
 	if expected.Cmp(header.Difficulty[types.QuaiNetworkContext]) > 0 {
 		return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty[types.QuaiNetworkContext], expected)
 	}
@@ -353,13 +357,17 @@ func calcDifficultyFrontier(time uint64, parent *types.Header, context int) *big
 // verifySeal checks whether a block satisfies the PoW difficulty requirements,
 func (blake3 *Blake3) verifySeal(header *types.Header) error {
 	difficulty := header.Difficulty[types.QuaiNetworkContext]
+	// If we are a faker, override the difficulty with the appropriate fake difficulty
+	if blake3.config.Fakepow {
+		difficulty = fakeDifficulties[types.QuaiNetworkContext]
+	}
 	// Ensure that we have a valid difficulty for the block
 	if difficulty.Sign() <= 0 {
 		return errInvalidDifficulty
 	}
 	// Check the SealHash meets the difficulty target
 	target := new(big.Int).Div(big2e256, difficulty)
-	if !blake3.config.Fakepow && new(big.Int).SetBytes(blake3.SealHash(header).Bytes()).Cmp(target) > 0 {
+	if new(big.Int).SetBytes(blake3.SealHash(header).Bytes()).Cmp(target) > 0 {
 		return errInvalidPoW
 	}
 	return nil
@@ -367,11 +375,18 @@ func (blake3 *Blake3) verifySeal(header *types.Header) error {
 
 // This function determines the difficulty order of a block
 func (blake3 *Blake3) GetDifficultyOrder(header *types.Header) (int, error) {
+	var difficulties []*big.Int
+
 	if header == nil {
 		return types.ContextDepth, errors.New("no header provided")
 	}
+	if !blake3.config.Fakepow {
+		difficulties = header.Difficulty
+	} else {
+		difficulties = fakeDifficulties
+	}
 	blockhash := blake3.SealHash(header)
-	for i, difficulty := range header.Difficulty {
+	for i, difficulty := range difficulties {
 		if difficulty != nil && big.NewInt(0).Cmp(difficulty) < 0 {
 			target := new(big.Int).Div(big2e256, difficulty)
 			if new(big.Int).SetBytes(blockhash.Bytes()).Cmp(target) <= 0 {
@@ -459,7 +474,7 @@ func (blake3 *Blake3) PrimeTraceBranch(chain consensus.ChainHeaderReader, header
 		// Obtain the external block on the branch we are currently tracing.
 		var extBlock *types.ExternalBlock
 		var err error
-		extBlock, err = chain.GetExternalBlock(header.Hash(), header.Number[context].Uint64(), header.Location, uint64(context))
+		extBlock, err = chain.GetExternalBlock(header.Hash(), header.Location, uint64(context))
 		if err != nil {
 			log.Info("Trace Branch: External Block not found for header", "number", header.Number, "context", context, "hash", header.Hash(), "location", header.Location)
 			return nil, err
@@ -473,7 +488,7 @@ func (blake3 *Blake3) PrimeTraceBranch(chain consensus.ChainHeaderReader, header
 		}
 
 		// Retrieve the previous header as an external block.
-		prevHeader, err := chain.GetExternalBlock(header.ParentHash[context], header.Number[context].Uint64()-1, header.Location, uint64(context))
+		prevHeader, err := chain.GetExternalBlock(header.ParentHash[context], header.Location, uint64(context))
 		if err != nil {
 			log.Info("Trace Branch: External Block not found for previous header", "number", header.Number[context].Int64()-1, "context", context, "hash", header.ParentHash[context], "location", header.Location)
 			return nil, err
@@ -555,7 +570,7 @@ func (blake3 *Blake3) RegionTraceBranch(chain consensus.ChainHeaderReader, heade
 		// Obtain the external block on the branch we are currently tracing.
 		var extBlock *types.ExternalBlock
 		var err error
-		extBlock, err = chain.GetExternalBlock(header.Hash(), header.Number[context].Uint64(), header.Location, uint64(context))
+		extBlock, err = chain.GetExternalBlock(header.Hash(), header.Location, uint64(context))
 		if err != nil {
 			log.Info("Trace Branch: External Block not found for header", "number", header.Number, "context", context, "hash", header.Hash(), "location", header.Location)
 			return nil, err
@@ -570,7 +585,7 @@ func (blake3 *Blake3) RegionTraceBranch(chain consensus.ChainHeaderReader, heade
 		}
 
 		// Retrieve the previous header as an external block.
-		prevHeader, err := chain.GetExternalBlock(header.ParentHash[context], header.Number[context].Uint64()-1, header.Location, uint64(context))
+		prevHeader, err := chain.GetExternalBlock(header.ParentHash[context], header.Location, uint64(context))
 		if err != nil {
 			log.Info("Trace Branch: External Block not found for previous header", "number", header.Number[context].Int64()-1, "context", context, "hash", header.ParentHash[context], "location", header.Location)
 			return nil, err
@@ -714,7 +729,7 @@ func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader
 			header = prevHeader
 		} else {
 			// Get previous header on external chain by hash
-			prevExtBlock, err := chain.GetExternalBlock(header.ParentHash[path], header.Number[path].Uint64()-1, header.Location, uint64(path))
+			prevExtBlock, err := chain.GetExternalBlock(header.ParentHash[path], header.Location, uint64(path))
 			if err != nil {
 				return nil, err
 			}

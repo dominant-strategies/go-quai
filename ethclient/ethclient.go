@@ -654,7 +654,21 @@ func (ec *Client) SendExternalBlock(ctx context.Context, block *types.Block, rec
 	return ec.c.CallContext(ctx, nil, "quai_sendExternalBlock", data)
 }
 
-// SendReorgData sends thre reorg data to the node to rollup and update the chain
+// GetExternalBlockTraceSet searches the cache for external block
+func (ec *Client) GetExternalBlockTraceSet(ctx context.Context, hash common.Hash, index int) (*types.ExternalBlock, error) {
+	data, err := ethapi.RPCMarshalExternalBlockTraceSet(hash, index)
+	if err != nil {
+		return nil, err
+	}
+
+	var externalBlock *types.ExternalBlock
+	err = ec.c.CallContext(ctx, &externalBlock, "quai_getExternalBlockTraceSet", data)
+	if err != nil {
+		return nil, err
+	}
+	return externalBlock, nil
+}
+
 // header: header in which the intended chain is to roll back to.
 // newHeaders: potentially now valid dominant headers to take out of nonCanonDom db.
 // oldHeaders: invalid dominant headers to insert into nonCanonDom db.

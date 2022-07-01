@@ -472,7 +472,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td []*big
 
 	// Look up the sync boundaries: the common ancestor and the target block
 	latest, pivot, err := d.fetchHead(p)
-	// go p.peer.RequestExternalBlocks([]common.Hash{latest.Hash()})
+	go p.peer.RequestExternalBlocks([]common.Hash{latest.Hash()})
 	if err != nil {
 		return err
 	}

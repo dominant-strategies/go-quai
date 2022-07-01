@@ -312,6 +312,18 @@ func makeBlockChain(parent *types.Block, n int, engine consensus.Engine, db ethd
 	return blocks
 }
 
+// struct for notation
+type blockGenSpec struct {
+	numbers    [3]int    // prime idx, region idx, zone idx
+	parentTags [3]string // (optionally) Override the parents to point to tagged blocks. Empty strings are ignored.
+	tag        string    // (optionally) Give this block a named tag. Empty strings are ignored.
+}
+
+// Generate blocks to form a network of chains
+func GenerateNetworkBlocks(graph [3][3][]*blockGenSpec) ([]*types.Block, error) {
+	return nil, errors.New("Not implemented")
+}
+
 type fakeChainReader struct {
 	config *params.ChainConfig
 }
@@ -326,7 +338,7 @@ func (cr *fakeChainReader) GetHeaderByNumber(number uint64) *types.Header       
 func (cr *fakeChainReader) GetHeaderByHash(hash common.Hash) *types.Header          { return nil }
 func (cr *fakeChainReader) GetHeader(hash common.Hash, number uint64) *types.Header { return nil }
 func (cr *fakeChainReader) GetBlock(hash common.Hash, number uint64) *types.Block   { return nil }
-func (cr *fakeChainReader) GetExternalBlock(hash common.Hash, number uint64, location []byte, context uint64) (*types.ExternalBlock, error) {
+func (cr *fakeChainReader) GetExternalBlock(hash common.Hash, location []byte, context uint64) (*types.ExternalBlock, error) {
 	return nil, nil
 }
 func (cr *fakeChainReader) QueueAndRetrieveExtBlocks(blocks []*types.ExternalBlock, header *types.Header) []*types.ExternalBlock {
