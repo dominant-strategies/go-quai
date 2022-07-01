@@ -1,0 +1,93 @@
+name: Go
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [ "main" ]
+jobs:
+
+  build:
+    if: github.event.pull_request.merged == true
+
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        ref: ${{ github.ref }}
+
+    - name: Set up Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.17
+
+    - name: Install dependencies
+      run: sudo apt-get install make build-essential
+
+    - name: Install yq
+      run: sudo snap install yq
+
+    - name: create network.env
+      run: cat ./network.env.dist | sed "s/WS_API=eth,net,web3,quai/WS_API=eth,net,web3,quai,txpool/g" | sed "s/HTTP_API=eth,net,web3/HTTP_API=eth,net,web3,quai,txpool/g" | sed "s/CORS=false/CORS=true/g" > ./network.env
+
+    #- name: build
+    #  run: go run build/ci.go install ./cmd/quai
+
+    #- name: Build
+    #  run: make go-quai
+
+    #- name: Test
+    #  run: go test -v
+
+    - name: Build Docker
+      run: docker build . -t quainetwork/go-quai:$(cat VERSION) -t quainetwork/go-quai:latest
+
+    - name: Login to Docker Hub
+      uses: docker/login-action@v2
+      with:
+        username: quaibuild
+        password: ${{ secrets.DOCKER }}
+
+    - name: show
+      run: docker push quainetwork/go-quai:$(cat VERSION)
+
+    - name: git tag
+      run: git tag $(cat VERSION) && git push origin $(cat VERSION)
+
+
+    # Setup gcloud CLI
+    - uses: google-github-actions/setup-gcloud@94337306dda8180d967a56932ceb4ddcf01edae7
+      with:
+        service_account_key: ${{ secrets.GKE_SA_KEY }}
+        project_id: ${{ secrets.GKE_PROJECT }}
+
+    - uses: google-github-actions/get-gke-credentials@fb08709ba27618c31c09e014e1d8364b02e5042e
+      with:
+        cluster_name: quai-prod
+        location: us-central1-c
+        credentials: ${{ secrets.GKE_SA_KEY }}
+
+    - name: Deploy
+      uses: WyriHaximus/github-action-helm3@v2
+      with:
+        exec: helm upgrade go-quai ./helm --install --wait --atomic --namespace=quai-prod --values=./helm/env/quai-prod.values.yaml
+
+    - name: Update version
+      run: awk -F. '{print $1"."$2"."$3"."$4+1}' VERSION > tmp && mv tmp VERSION
+
+    - name: Update Chart.yaml version
+      run: yq eval ".appVersion=\"$(cat VERSION)\"" ./helm/Chart.yaml > ./helm/Chart.yaml
+    - name: Update values.yaml version
+      run: yq eval ".goQuai.image.version=\"$(cat VERSION)\"" ./helm/values.yaml > ./helm/values.yaml
+
+    - name: remove kubeconfig
+      run: rm $KUBECONFIG
+
+    - uses: stefanzweifel/git-auto-commit-action@v4
+      with:
+        branch: ${{ github.ref }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3

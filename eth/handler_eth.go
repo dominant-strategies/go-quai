@@ -185,7 +185,6 @@ func (h *ethHandler) handleBodies(peer *eth.Peer, txs [][]*types.Transaction, un
 // of block bodies for the local node to process.
 func (h *ethHandler) handleExtBlocks(peer *eth.Peer, extBlocks [][]*types.ExternalBlock) error {
 	// Filter out any explicitly requested bodies, deliver the rest to the downloader
-	fmt.Println("handleExtBlocks", len(extBlocks))
 	extBlocks = h.blockFetcher.FilterExternalBlocks(peer.ID(), extBlocks, time.Now())
 	if len(extBlocks) > 0 {
 		err := h.downloader.DeliverExtBlocks(peer.ID(), extBlocks)
@@ -248,7 +247,6 @@ func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block, td
 		trueTD = []*big.Int{td[0], td[1], tempTD}
 	}
 	// Update the peer's total difficulty if better than the previous
-	log.Info("handleBlockBroadcast: peer set head", "trueTD", trueTD, "td", td)
 	if _, td := peer.Head(); h.chain.HLCR(td, trueTD) {
 		peer.SetHead(trueHead, trueTD)
 		h.chainSync.handlePeerEvent(peer)

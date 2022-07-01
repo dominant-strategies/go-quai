@@ -83,8 +83,8 @@ var (
 	blockPrefetchInterruptMeter = metrics.NewRegisteredMeter("chain/prefetch/interrupts", nil)
 
 	errInsertionInterrupted = errors.New("insertion is interrupted")
-	errExtBlockNotFound     = errors.New("error finding external block by context and hash")
 	errChainStopped         = errors.New("blockchain is stopped")
+	errExtBlockNotFound     = errors.New("error finding external block by context and hash")
 )
 
 const (
@@ -1620,10 +1620,8 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 // WriteBlockWithState writes the block and all associated state to the database.
 func (bc *BlockChain) WriteBlockAndSetHead(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, linkExtBlocks []*types.ExternalBlock, emitHeadEvent bool) (status WriteStatus, err error) {
-	// if !bc.chainmu.TryLock() {
-	// 	return NonStatTy, errChainStopped
-	// }
-	// defer bc.chainmu.Unlock()
+	bc.chainmu.Lock()
+	defer bc.chainmu.Unlock()
 
 	return bc.writeBlockAndSetHead(block, receipts, logs, state, linkExtBlocks, emitHeadEvent)
 }
@@ -3084,6 +3082,7 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 	if err != nil {
 		return common.Hash{}, err
 	}
+
 	// Only check for region twist if block is of region order
 	if headerOrder <= params.REGION {
 		// Region twist check
@@ -3101,7 +3100,7 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 
 		// PCRC has failed. Rollback through the prior untwisted region.
 		if RTZ.Hash() != RTR.Hash() {
-			fmt.Println("Error in PCRC, RTZ:", RTZ.Hash(), "RTR:", RTR.Hash())
+			log.Info("Error in PCRC", "RTZ:", RTZ.Hash(), "RTR:", RTR.Hash())
 			// If we are running in Prime or Region and have failed PCRC
 			// 1. Check to see if the Zone terminus is on our chain.
 			// 2. If Zone terminus is in our chain, do nothing.
@@ -3141,7 +3140,7 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 
 		// PCRC has failed. Rollback through the prior untwisted prime.
 		if PTR.Hash() != PTP.Hash() {
-			fmt.Println("Error in PCRC, PTR:", PTR.Hash(), "RTR:", PTP.Hash())
+			log.Info("Error in PCRC", "PTR:", PTR.Hash(), "RTR:", PTP.Hash())
 			if types.QuaiNetworkContext < params.REGION {
 				ptr := bc.hc.GetBlockNumber(PTR.Hash())
 				// ptr is not in our Prime chain, remove it from subordinate chains.
@@ -3153,7 +3152,7 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 		}
 
 		if PTZ.Hash() != PTR.Hash() {
-			fmt.Println("Error in PCRC, PTZ:", PTZ.Hash(), "PTR:", PTR.Hash())
+			log.Info("Error in PCRC", "PTZ:", PTZ.Hash(), "PTR:", PTR.Hash())
 			if types.QuaiNetworkContext < params.REGION {
 				ptz := bc.hc.GetBlockNumber(PTZ.Hash())
 				// ptz is not in our Prime chain, remove it from subordinate chains.

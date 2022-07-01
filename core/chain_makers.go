@@ -312,6 +312,18 @@ func makeBlockChain(parent *types.Block, n int, engine consensus.Engine, db ethd
 	return blocks
 }
 
+// struct for notation
+type blockGenSpec struct {
+	numbers    [3]int    // prime idx, region idx, zone idx
+	parentTags [3]string // (optionally) Override the parents to point to tagged blocks. Empty strings are ignored.
+	tag        string    // (optionally) Give this block a named tag. Empty strings are ignored.
+}
+
+// Generate blocks to form a network of chains
+func GenerateNetworkBlocks(graph [3][3][]*blockGenSpec) ([]*types.Block, error) {
+	return nil, errors.New("Not implemented")
+}
+
 type fakeChainReader struct {
 	config *params.ChainConfig
 }

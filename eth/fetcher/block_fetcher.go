@@ -771,7 +771,6 @@ func (f *BlockFetcher) loop() {
 			// abort early if there's nothing explicitly requested
 			if len(f.completing) > 0 {
 				for _, extBlockSet := range task.extBlocks {
-					fmt.Println("Adding external blocks in extBlockFilter")
 					f.addExtBlocks(extBlockSet)
 					for _, announce := range f.completing {
 						extBlocks, err := f.getExtBlocks(announce.header)
@@ -794,7 +793,6 @@ func (f *BlockFetcher) loop() {
 			for _, op := range blockOperations {
 				if op.block != nil {
 					if announce := f.completing[op.block.Hash()]; announce != nil {
-						log.Info("block_fetcher: enqueue 5 completing", "op.block", op.block.Hash(), "extBlocks", len(op.extBlocks))
 						f.enqueue(announce.origin, nil, op.block, op.extBlocks)
 					}
 				}

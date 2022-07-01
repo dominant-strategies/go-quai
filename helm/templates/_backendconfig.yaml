@@ -1,0 +1,14 @@
+{{- define "go-quai.backendconfig" }}
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  annotations:
+  name: prime-{{- include "go-quai.name" $ }}
+  namespace: {{ .Values.goQuai.env }}
+spec:
+  healthCheck:
+    checkIntervalSec: 15
+    port: <HTTP>
+    requestPath: /
+    type: HTTP
+{{- end }}
