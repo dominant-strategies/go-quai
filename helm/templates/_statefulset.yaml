@@ -38,6 +38,4 @@
   volumeMounts:
   - mountPath: ~/.quai/
     name: {{ include "go-quai.name" $ }}
-  - mountPath: /go-quai/nodelogs
-    name: {{ include "go-quai.name" $ }}
 {{- end }}
