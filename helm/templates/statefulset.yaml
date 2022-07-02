@@ -34,18 +34,9 @@ spec:
         app: {{ $name }}
     spec:
       containers:
-      - image: {{ .Values.goQuai.image.name -}}:{{- .Values.goQuai.image.version }}
-        imagePullPolicy: Always
-        name: go-quai
-        ports:
 {{- range $chain := .Values.goQuai.chains }}
-{{ include "go-quai.statefulset" $ | replace "<HTTP>" $chain.ports.http | replace "<WS>" $chain.ports.ws | replace "<DISC>" $chain.ports.disc | replace "prime" $chain.name | indent 8 }}
+{{ include "go-quai.statefulset" $ | replace "<REGION>" $chain.region | replace "<ZONE>" $chain.zone | replace "<HTTP>" $chain.ports.http | replace "<WS>" $chain.ports.ws | replace "<DISC>" $chain.ports.disc | replace "prime" $chain.name | indent 6 }}
 {{- end }}
-        volumeMounts:
-        - mountPath: /root/.quai/
-          name: {{ $name }}
-        - mountPath: /go-quai/nodelogs
-          name: {{ $name }}
   volumeClaimTemplates:
   - apiVersion: v1
     kind: PersistentVolumeClaim

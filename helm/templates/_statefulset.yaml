@@ -13,13 +13,31 @@
   targetPort: <DISC>
 {{- end }}
 {{- define "go-quai.statefulset" }}
-- containerPort: <HTTP>
-  name: prime-http
-  protocol: TCP
-- containerPort: <WS>
-  name: prime-ws
-  protocol: TCP
-- containerPort: <DISC>
-  name: prime-disc
-  protocol: UDP
+- image: quainetwork/go-quai:thinnest
+  imagePullPolicy: Always
+  name: prime-go-quai
+  env:
+  - name: TCP_PORT
+    value: "<DISC>"
+  - name: HTTP_PORT
+    value: "<HTTP>"
+  - name: WS_PORT
+    value: "<WS>"
+  - name: NETWORK
+    value: ropsten
+  ports:
+  - containerPort: <HTTP>
+    name: prime-http
+    protocol: TCP
+  - containerPort: <WS>
+    name: prime-ws
+    protocol: TCP
+  - containerPort: <DISC>
+    name: prime-disc
+    protocol: UDP
+  volumeMounts:
+  - mountPath: ~/.quai/
+    name: {{ include "go-quai.name" $ }}
+  - mountPath: /go-quai/nodelogs
+    name: {{ include "go-quai.name" $ }}
 {{- end }}
