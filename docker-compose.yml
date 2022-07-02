@@ -1,0 +1,144 @@
+services:
+  prime:
+    environment:
+      - TCP_PORT=30303
+      - HTTP_PORT=8547
+      - WS_PORT=8548
+      - NETWORK=ropsten
+    build: .
+    ports:
+      - "30303"
+      - "8547"
+      - "8548"
+  cyprus:
+    environment:
+      - TCP_PORT=30304
+      - HTTP_PORT=8578
+      - WS_PORT=8579
+      - NETWORK=ropsten
+    build: .
+    ports:
+      - "30304"
+      - "8578"
+      - "8579"
+  paxos:
+    environment:
+      - TCP_PORT=30305
+      - HTTP_PORT=8580
+      - WS_PORT=8581
+      - NETWORK=ropsten
+    build: .
+    ports:
+      - "30305"
+      - "8580"
+      - "8581"
+  hydra:
+    environment:
+      - TCP_PORT=30306
+      - HTTP_PORT=8582
+      - WS_PORT=8583
+      - NETWORK=ropsten
+    build: .
+    ports:
+      - "30306"
+      - "8582"
+      - "8583"
+  cyprus1:
+    environment:
+      - TCP_PORT=30307
+      - HTTP_PORT=8610
+      - WS_PORT=8611
+      - NETWORK=ropsten
+    build: .
+    ports:
+      - "30307"
+      - "8610"
+      - "8611"
+  cyprus2:
+    environment:
+      - TCP_PORT=30308
+      - HTTP_PORT=8542
+      - WS_PORT=8643
+      - NETWORK=ropsten
+    build: .
+    ports:
+      - "30308"
+      - "8542"
+      - "8642"
+  cyprus3:
+    environment:
+      - TCP_PORT=30309
+      - HTTP_PORT=8674
+      - WS_PORT=8675
+      - NETWORK=ropsten
+    build: .
+    ports:
+      - "30309"
+      - "8674"
+      - "8675"
+  paxos1:
+    environment:
+      - TCP_PORT=30310
+      - HTTP_PORT=8512
+      - WS_PORT=8613
+      - NETWORK=ropsten
+    build: .
+    ports:
+      - "30310"
+      - "8512"
+      - "8613"
+  paxos2:
+    environment:
+      - TCP_PORT=30311
+      - HTTP_PORT=8544
+      - WS_PORT=8645
+      - NETWORK=ropsten
+    build: .
+    ports:
+      - "30311"
+      - "8544"
+      - "8645"
+  paxos3:
+    environment:
+      - TCP_PORT=30312
+      - HTTP_PORT=8576
+      - WS_PORT=8677
+      - NETWORK=ropsten
+    build: .
+    ports:
+      - "30312"
+      - "8576"
+      - "8677"
+  hydra1:
+    environment:
+      - TCP_PORT=30313
+      - HTTP_PORT=8614
+      - WS_PORT=8615
+      - NETWORK=ropsten
+    build: .
+    ports:
+      - "30313"
+      - "8614"
+      - "8615"
+  hydra2:
+    environment:
+      - TCP_PORT=30314
+      - HTTP_PORT=8646
+      - WS_PORT=8647
+      - NETWORK=ropsten
+    build: .
+    ports:
+      - "30314"
+      - "8646"
+      - "8647"
+  hydra3:
+    environment:
+      - TCP_PORT=30315
+      - HTTP_PORT=8678
+      - WS_PORT=8679
+      - NETWORK=ropsten
+    build: .
+    ports:
+      - "30315"
+      - "8678"
+      - "8679"
