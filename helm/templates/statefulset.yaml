@@ -42,7 +42,7 @@ spec:
 {{ include "go-quai.statefulset" $ | replace "<HTTP>" $chain.ports.http | replace "<WS>" $chain.ports.ws | replace "<DISC>" $chain.ports.disc | replace "prime" $chain.name | indent 8 }}
 {{- end }}
         volumeMounts:
-        - mountPath: ~/.quai/
+        - mountPath: /root/.quai/
           name: {{ $name }}
         - mountPath: /go-quai/nodelogs
           name: {{ $name }}
