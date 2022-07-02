@@ -36,6 +36,6 @@
     name: prime-disc
     protocol: UDP
   volumeMounts:
-  - mountPath: ~/.quai/
+  - mountPath: /root/.quai/
     name: {{ include "go-quai.name" $ }}
 {{- end }}
