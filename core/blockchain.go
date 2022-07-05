@@ -3095,7 +3095,7 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 			// 1. Check to see if the Zone terminus is on our chain.
 			// 2. If Zone terminus is in our chain, do nothing.
 			// 3. If Zone terminus is not in our chain, uncle the RTZ in the subordinate context.
-			if types.QuaiNetworkContext < params.ZONE {
+			if types.QuaiNetworkContext == params.REGION {
 				rtz := bc.hc.GetBlockNumber(RTZ.Hash())
 				// rtz is not in our Region chain, remove it from subordinate chains.
 				if rtz == nil {
@@ -3131,7 +3131,7 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 		// PCRC has failed. Rollback through the prior untwisted prime.
 		if PTR.Hash() != PTP.Hash() {
 			log.Info("Error in PCRC", "PTR:", PTR.Hash(), "RTR:", PTP.Hash())
-			if types.QuaiNetworkContext < params.REGION {
+			if types.QuaiNetworkContext == params.PRIME {
 				ptr := bc.hc.GetBlockNumber(PTR.Hash())
 				// ptr is not in our Prime chain, remove it from subordinate chains.
 				if ptr == nil {
@@ -3143,7 +3143,7 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 
 		if PTZ.Hash() != PTR.Hash() {
 			log.Info("Error in PCRC", "PTZ:", PTZ.Hash(), "PTR:", PTR.Hash())
-			if types.QuaiNetworkContext < params.REGION {
+			if types.QuaiNetworkContext == params.PRIME {
 				ptz := bc.hc.GetBlockNumber(PTZ.Hash())
 				// ptz is not in our Prime chain, remove it from subordinate chains.
 				if ptz == nil {
