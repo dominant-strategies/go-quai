@@ -3090,10 +3090,9 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 			// 2. If Zone terminus is in our chain, do nothing.
 			// 3. If Zone terminus is not in our chain, uncle the RTZ in the subordinate context.
 			if types.QuaiNetworkContext == params.REGION {
-				rtz := bc.hc.GetBlockNumber(RTZ.Hash())
-				// rtz is not in our Region chain, remove it from subordinate chains.
-				if rtz == nil {
-					bc.chainUncleFeed.Send(RTZ)
+				err = bc.reorgTwistToCommonAncestor(RTZ, slice, params.REGION, params.ZONE)
+				if err != nil {
+					return common.Hash{}, errors.New("unable to reorg to common ancestor after region twist")
 				}
 			}
 			return common.Hash{}, errors.New("there exists a region twist")
@@ -3126,29 +3125,46 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 		if PTR.Hash() != PTP.Hash() {
 			log.Info("Error in PCRC", "PTR:", PTR.Hash(), "RTR:", PTP.Hash())
 			if types.QuaiNetworkContext == params.PRIME {
-				ptr := bc.hc.GetBlockNumber(PTR.Hash())
-				// ptr is not in our Prime chain, remove it from subordinate chains.
-				if ptr == nil {
-					bc.chainUncleFeed.Send(PTR)
+				err = bc.reorgTwistToCommonAncestor(PTR, slice, params.PRIME, params.REGION)
+				if err != nil {
+					return common.Hash{}, errors.New("unable to reorg to common ancestor after prime (PTP) twist")
 				}
 			}
-			return common.Hash{}, errors.New("there exists a prime twist")
+			return common.Hash{}, errors.New("there exists a prime (PTP) twist")
 		}
 
 		if PTZ.Hash() != PTR.Hash() {
 			log.Info("Error in PCRC", "PTZ:", PTZ.Hash(), "PTR:", PTR.Hash())
 			if types.QuaiNetworkContext == params.PRIME {
-				ptz := bc.hc.GetBlockNumber(PTZ.Hash())
-				// ptz is not in our Prime chain, remove it from subordinate chains.
-				if ptz == nil {
-					bc.chainUncleFeed.Send(PTZ)
+				err = bc.reorgTwistToCommonAncestor(PTZ, slice, params.PRIME, params.ZONE)
+				if err != nil {
+					return common.Hash{}, errors.New("unable to reorg to common ancestor after prime (PTR) twist")
 				}
 			}
-			return common.Hash{}, errors.New("there exists a prime twist")
+			return common.Hash{}, errors.New("there exists a prime (PTR) twist")
 		}
 	}
 
 	return PTZ.Hash(), nil
+}
+
+func (bc *BlockChain) reorgTwistToCommonAncestor(header *types.Header, slice []byte, order int, path int) error {
+	num := bc.hc.GetBlockNumber(header.Hash())
+	prev := header
+	for num == nil {
+		header, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, order, path)
+		if err != nil {
+			return err
+		}
+		num = bc.hc.GetBlockNumber(header.Hash())
+		prev = header
+	}
+
+	// Remove non-cononical blocks from subordinate chains.
+	bc.chainUncleFeed.Send(prev)
+
+	return nil
+
 }
 
 // calcHLCRNetDifficulty calculates the net difficulty from previous prime.
