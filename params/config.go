@@ -43,8 +43,8 @@ var (
 // TrustedCheckpoints associates each known checkpoint with the genesis hash of
 // the chain it belongs to.
 var TrustedCheckpoints = map[common.Hash]*TrustedCheckpoint{
-	MainnetPrimeGenesisHash: MainnetTrustedCheckpoint,
-	RopstenGenesisHash:      RopstenTrustedCheckpoint,
+	// MainnetPrimeGenesisHash: MainnetTrustedCheckpoint,
+	// RopstenGenesisHash:      RopstenTrustedCheckpoint,
 }
 
 // CheckpointOracles associates each known checkpoint oracles with the genesis hash of
