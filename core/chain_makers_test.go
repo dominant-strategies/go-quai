@@ -19,6 +19,7 @@ package core
 import (
 	"fmt"
 	"math/big"
+	"strconv"
 
 	"github.com/spruce-solutions/go-quai/consensus/blake3"
 	"github.com/spruce-solutions/go-quai/core/rawdb"
@@ -135,7 +136,7 @@ var networkGraphSample = [3][3][]*blockGenSpec{
 			&blockGenSpec{[3]int{-1, 3, 8}, [3]string{}, ""},
 			&blockGenSpec{[3]int{-1, -1, 5}, [3]string{"", "", "z00_4"}, ""}, // Fork at z00_4
 			&blockGenSpec{[3]int{-1, -1, 6}, [3]string{}, ""},
-			&blockGenSpec{[3]int{-1, -1, 7}, [3]string{"", "z00_1", ""}, ""}, // Twist to z00_1
+			&blockGenSpec{[3]int{-1, -1, 7}, [3]string{"", "", "z00_1"}, ""}, // Twist to z00_1
 		},
 		{}, // ... Zone1 omitted
 		{}, // ... Zone2 omitted
@@ -192,6 +193,7 @@ func BlockInterpreter(networkGraph [3][3][]*blockGenSpec) []blockSpecs {
 	lastBlockNumbers := [3]int{0, 0, 0} // Prime, Region, Zone; separated in case of twists
 	lastTag := "default"                // gives specs explicit tags
 	iteratorTag := "default"            // to save tag for repeatIterator loop
+	blankTagN := 0                      // used for assigning tags to blank parent forks
 	primeConfig := params.MainnetPrimeChainConfig
 	for r, regions := range networkGraph {
 		regionConfig := params.MainnetRegionChainConfigs[r]
@@ -248,12 +250,10 @@ func BlockInterpreter(networkGraph [3][3][]*blockGenSpec) []blockSpecs {
 					}
 
 					// detect tag and fill in tags explicitly for each spec
-					if block.tag != lastTag {
+					if block.tag != "" {
 						spec.tag = block.tag
 						// append spec to forkParents for easy parentTags retrieval
 						forkParents = append(forkParents, spec)
-						// save previous for repeatIterator
-						iteratorTag = lastTag
 						lastTag = spec.tag
 					} else {
 						iteratorTag = lastTag
@@ -285,6 +285,10 @@ func BlockInterpreter(networkGraph [3][3][]*blockGenSpec) []blockSpecs {
 						// last append to specs
 						specs = append(specs, spec)
 					}
+
+					// save previous for repeatIterator
+					iteratorTag = lastTag
+
 				} else { // if parentTags == true
 					var source int // to record order
 					// get respective lastBlockNumbers (put into lastBlockNumbers)
@@ -333,24 +337,27 @@ func BlockInterpreter(networkGraph [3][3][]*blockGenSpec) []blockSpecs {
 						spec.parentNumbers[0] = spec.numbers[0] - 1
 					}
 
-					spec.parentTags = block.parentTags
-
 					if block.tag != "" {
 						spec.tag = block.tag
 						forkParents = append(forkParents, spec)
-						iteratorTag = lastTag
 						lastTag = spec.tag
 					} else {
-						iteratorTag = lastTag
-						spec.tag = lastTag
+						spec.tag = strconv.Itoa(blankTagN)
+						blankTagN++
+						lastTag = spec.tag
+						iteratorTag = spec.tag
 					}
-
-					specs = append(specs, spec)
 
 					// detect if need to iterate over block
 					if block.numbers[2] > lastBlockNumbers[2]+1 {
 						repeatIterator = block.numbers[2] - lastBlockNumbers[2] - 1
 					}
+
+					if repeatIterator == 0 {
+						spec.parentTags = block.parentTags
+					}
+
+					specs = append(specs, spec)
 
 					lastBlockNumbers = spec.numbers
 
@@ -369,8 +376,10 @@ func BlockInterpreter(networkGraph [3][3][]*blockGenSpec) []blockSpecs {
 						// fill out order
 						spec.order = 2 // always in Zone when iterating
 						spec.tag = iteratorTag
-						// must also fill out parentTags
-						spec.parentTags = block.parentTags
+						// only fill out first block in order with parentTags - leave rest blank
+						if repeatIterator == 0 {
+							spec.parentTags = block.parentTags
+						}
 						// last append to specs
 						specs = append(specs, spec)
 					}
