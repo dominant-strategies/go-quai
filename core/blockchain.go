@@ -2817,15 +2817,10 @@ func (bc *BlockChain) GetHeaderByHash(hash common.Hash) *types.Header {
 
 // GetExternalBlock retrieves an external block from either the ext block cache or rawdb.
 func (bc *BlockChain) GetExternalBlock(hash common.Hash, location []byte, context uint64) (*types.ExternalBlock, error) {
-	// Lookup block in externalBlocks cache
-	key := types.ExtBlockCacheKey(context, hash)
-
-	if block, ok := bc.externalBlocks.HasGet(nil, key); ok {
-		var blockDecoded *types.ExternalBlock
-		rlp.DecodeBytes(block, &blockDecoded)
-		return blockDecoded, nil
+	block, err := bc.GetExternalBlockByHashAndContext(hash, int(context))
+	if err != nil {
+		return &types.ExternalBlock{}, errExtBlockNotFound
 	}
-	block := rawdb.ReadExternalBlock(bc.db, hash, context)
 
 	if block == nil {
 		block = bc.requestExternalBlock(hash, location, context)
@@ -2867,7 +2862,6 @@ func (bc *BlockChain) GetExternalBlockByHashAndContext(hash common.Hash, context
 		return extBlockDecoded, nil
 	}
 	extBlock := rawdb.ReadExternalBlock(bc.db, hash, uint64(context))
-	fmt.Println("GetExternalBlockByHashAndContext: is block nil?", extBlock == nil)
 	return extBlock, nil
 }
 
