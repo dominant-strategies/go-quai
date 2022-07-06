@@ -2868,6 +2868,12 @@ func (bc *BlockChain) GetExternalBlockByHashAndContext(hash common.Hash, context
 // GetExternalBlockTraceSet collects all the external blocks from newHeader till stopHash in a given path
 func (bc *BlockChain) GetExternalBlockTraceSet(stopHash common.Hash, newHeader *types.Header, path int) ([]*types.ExternalBlock, error) {
 	extBlocks := []*types.ExternalBlock{}
+	// get the externalBlocks
+	extNewBlock, err := bc.GetExternalBlockByHashAndContext(newHeader.Hash(), path)
+	if err != nil {
+		return nil, errors.New("error finding external block in external block trace set")
+	}
+	extBlocks = append(extBlocks, extNewBlock)
 	for {
 		// if the newHeader is genesis
 		if newHeader.Number[path].Uint64() == 0 {
@@ -2875,7 +2881,7 @@ func (bc *BlockChain) GetExternalBlockTraceSet(stopHash common.Hash, newHeader *
 		}
 
 		// get the externalBlocks
-		extNewBlock, err := bc.GetExternalBlockByHashAndContext(newHeader.Hash(), path)
+		extNewBlock, err = bc.GetExternalBlockByHashAndContext(newHeader.ParentHash[path], path)
 		if err != nil {
 			return nil, errors.New("error finding external block in external block trace set")
 		}
@@ -2885,13 +2891,7 @@ func (bc *BlockChain) GetExternalBlockTraceSet(stopHash common.Hash, newHeader *
 		if stopHash == newHeader.Hash() {
 			return extBlocks, nil
 		}
-
-		newBlock := bc.GetBlockByHash(newHeader.ParentHash[path])
-		if newBlock == nil {
-			return nil, errors.New("error finding block in getexternalblocktraceset")
-		}
-
-		newHeader = newBlock.Header()
+		newHeader = extNewBlock.Header()
 	}
 }
 
@@ -3119,8 +3119,8 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 			// 1. Check to see if the Zone terminus is on our chain.
 			// 2. If Zone terminus is in our chain, do nothing.
 			// 3. If Zone terminus is not in our chain, uncle the RTZ in the subordinate context.
-			if types.QuaiNetworkContext == params.REGION {
-				err = bc.reorgTwistToCommonAncestor(RTZ, slice, params.REGION, params.ZONE)
+			if types.QuaiNetworkContext <= params.REGION {
+				err = bc.reorgTwistToCommonAncestor(RTZ, RTR, slice, params.REGION, params.ZONE)
 				if err != nil {
 					return common.Hash{}, errors.New("unable to reorg to common ancestor after region twist")
 				}
@@ -3155,7 +3155,7 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 		if PTR.Hash() != PTP.Hash() {
 			log.Info("Error in PCRC", "PTR:", PTR.Hash(), "RTR:", PTP.Hash())
 			if types.QuaiNetworkContext == params.PRIME {
-				err = bc.reorgTwistToCommonAncestor(PTR, slice, params.PRIME, params.REGION)
+				err = bc.reorgTwistToCommonAncestor(PTR, PTP, slice, params.PRIME, params.REGION)
 				if err != nil {
 					return common.Hash{}, errors.New("unable to reorg to common ancestor after prime (PTP) twist")
 				}
@@ -3166,7 +3166,7 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 		if PTZ.Hash() != PTR.Hash() {
 			log.Info("Error in PCRC", "PTZ:", PTZ.Hash(), "PTR:", PTR.Hash())
 			if types.QuaiNetworkContext == params.PRIME {
-				err = bc.reorgTwistToCommonAncestor(PTZ, slice, params.PRIME, params.ZONE)
+				err = bc.reorgTwistToCommonAncestor(PTZ, PTR, slice, params.PRIME, params.ZONE)
 				if err != nil {
 					return common.Hash{}, errors.New("unable to reorg to common ancestor after prime (PTR) twist")
 				}
@@ -3178,16 +3178,21 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 	return PTZ.Hash(), nil
 }
 
-func (bc *BlockChain) reorgTwistToCommonAncestor(header *types.Header, slice []byte, order int, path int) error {
-	num := bc.hc.GetBlockNumber(header.Hash())
+// reorgTwistToCommonAncestor takes in a subordinate head that is invalid (RTZ / PTR / PTZ) and a domHead that is valid.
+// If there are not many invalid subordinate heads off of a common block, communicate the invalid subordinate reference as an uncle.
+// This uncle will rollback the subordinate chain in the manager process.
+// If there are many invalid subordinate heads, aggregate the valid subordinate blocks (NewSubs) off of the valid dominant chain (RTR / PTP / PTR)
+// and include them for processing in the manager.
+func (bc *BlockChain) reorgTwistToCommonAncestor(subHead *types.Header, domHead *types.Header, slice []byte, order int, path int) error {
+	num := bc.hc.GetBlockNumber(subHead.Hash())
 
 	if num != nil {
 		// Remove non-cononical blocks from subordinate chains.
-		bc.chainUncleFeed.Send(header)
+		bc.chainUncleFeed.Send(subHead)
 		return nil
 	}
 
-	prev := header
+	prev := subHead
 	for {
 		prevHeader, err := bc.Engine().PreviousCoincidentOnPath(bc, prev, slice, order, path)
 		if err != nil {
@@ -3197,12 +3202,12 @@ func (bc *BlockChain) reorgTwistToCommonAncestor(header *types.Header, slice []b
 
 		if num != nil {
 			// get all the external blocks on the subordinate chain path until common point
-			extBlocks, err := bc.GetExternalBlockTraceSet(prevHeader.Hash(), header, path)
+			extBlocks, err := bc.GetExternalBlockTraceSet(prevHeader.Hash(), domHead, path)
 			if err != nil {
 				return err
 			}
 			// Remove non-cononical blocks from subordinate chains.
-			bc.reOrgFeed.Send(ReOrgRollup{ReOrgHeader: prev, NewSubs: extBlocks})
+			bc.reOrgFeed.Send(ReOrgRollup{ReOrgHeader: prev, OldChainHeaders: []*types.Header{prev}, NewChainHeaders: []*types.Header{domHead}, NewSubs: extBlocks})
 			return nil
 		}
 		prev = prevHeader
