@@ -2865,6 +2865,36 @@ func (bc *BlockChain) GetExternalBlockByHashAndContext(hash common.Hash, context
 	return extBlock, nil
 }
 
+// GetExternalBlockTraceSet collects all the external blocks from newHeader till stopHash in a given path
+func (bc *BlockChain) GetExternalBlockTraceSet(stopHash common.Hash, newHeader *types.Header, path int) ([]*types.ExternalBlock, error) {
+	extBlocks := []*types.ExternalBlock{}
+	for {
+		// if the newHeader is genesis
+		if newHeader.Number[path].Uint64() == 0 {
+			return extBlocks, nil
+		}
+
+		// get the externalBlocks
+		extNewBlock, err := bc.GetExternalBlockByHashAndContext(newHeader.Hash(), path)
+		if err != nil {
+			return nil, errors.New("error finding external block in external block trace set")
+		}
+		extBlocks = append(extBlocks, extNewBlock)
+
+		// If the common ancestor was found, bail out
+		if stopHash == newHeader.Hash() {
+			return extBlocks, nil
+		}
+
+		newBlock := bc.GetBlockByHash(newHeader.ParentHash[path])
+		if newBlock == nil {
+			return nil, errors.New("error finding block in getexternalblocktraceset")
+		}
+
+		newHeader = newBlock.Header()
+	}
+}
+
 // StoreExternalBlocks removes the external block from the cached blocks and writes it into the database
 func (bc *BlockChain) StoreExternalBlocks(blocks []*types.ExternalBlock) error {
 
@@ -3166,15 +3196,17 @@ func (bc *BlockChain) reorgTwistToCommonAncestor(header *types.Header, slice []b
 		num = bc.hc.GetBlockNumber(prevHeader.Hash())
 
 		if num != nil {
-			break
+			// get all the external blocks on the subordinate chain path until common point
+			extBlocks, err := bc.GetExternalBlockTraceSet(prevHeader.Hash(), header, path)
+			if err != nil {
+				return err
+			}
+			// Remove non-cononical blocks from subordinate chains.
+			bc.reOrgFeed.Send(ReOrgRollup{ReOrgHeader: prev, NewDoms: extBlocks})
+			return nil
 		}
 		prev = prevHeader
 	}
-
-	// Remove non-cononical blocks from subordinate chains.
-	bc.chainUncleFeed.Send(prev)
-
-	return nil
 }
 
 // calcHLCRNetDifficulty calculates the net difficulty from previous prime.
