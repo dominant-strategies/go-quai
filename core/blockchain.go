@@ -3202,7 +3202,7 @@ func (bc *BlockChain) reorgTwistToCommonAncestor(header *types.Header, slice []b
 				return err
 			}
 			// Remove non-cononical blocks from subordinate chains.
-			bc.reOrgFeed.Send(ReOrgRollup{ReOrgHeader: prev, NewDoms: extBlocks})
+			bc.reOrgFeed.Send(ReOrgRollup{ReOrgHeader: prev, NewSubs: extBlocks})
 			return nil
 		}
 		prev = prevHeader
