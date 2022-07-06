@@ -3150,21 +3150,31 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 
 func (bc *BlockChain) reorgTwistToCommonAncestor(header *types.Header, slice []byte, order int, path int) error {
 	num := bc.hc.GetBlockNumber(header.Hash())
+
+	if num != nil {
+		// Remove non-cononical blocks from subordinate chains.
+		bc.chainUncleFeed.Send(header)
+		return nil
+	}
+
 	prev := header
-	for num == nil {
-		header, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, order, path)
+	for {
+		prevHeader, err := bc.Engine().PreviousCoincidentOnPath(bc, prev, slice, order, path)
 		if err != nil {
 			return err
 		}
-		num = bc.hc.GetBlockNumber(header.Hash())
-		prev = header
+		num = bc.hc.GetBlockNumber(prevHeader.Hash())
+
+		if num != nil {
+			break
+		}
+		prev = prevHeader
 	}
 
 	// Remove non-cononical blocks from subordinate chains.
 	bc.chainUncleFeed.Send(prev)
 
 	return nil
-
 }
 
 // calcHLCRNetDifficulty calculates the net difficulty from previous prime.
