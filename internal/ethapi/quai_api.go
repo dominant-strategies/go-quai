@@ -698,15 +698,15 @@ type HeaderHashWithContext struct {
 	Context int
 }
 
-// GetExternalBlockTraceSet will run checks on the header and get the External Block from the cache.
-func (s *PublicBlockChainQuaiAPI) GetExternalBlockTraceSet(ctx context.Context, raw json.RawMessage) (map[string]interface{}, error) {
+// GetExternalBlockByHashAndContext will run checks on the header and get the External Block from the cache.
+func (s *PublicBlockChainQuaiAPI) GetExternalBlockByHashAndContext(ctx context.Context, raw json.RawMessage) (map[string]interface{}, error) {
 	// Decode header and transactions.
 	var headerHashWithContext HeaderHashWithContext
 	if err := json.Unmarshal(raw, &headerHashWithContext); err != nil {
 		return nil, err
 	}
 
-	extBlock, err := s.b.GetExternalBlockTraceSet(headerHashWithContext.Hash, headerHashWithContext.Context)
+	extBlock, err := s.b.GetExternalBlockByHashAndContext(headerHashWithContext.Hash, headerHashWithContext.Context)
 	if err != nil {
 		return nil, err
 	}

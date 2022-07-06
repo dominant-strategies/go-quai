@@ -2856,8 +2856,8 @@ func (bc *BlockChain) requestExternalBlock(hash common.Hash, location []byte, co
 	return nil
 }
 
-// GetExternalBlockTraceSet checks if the ExternalBlock for the given hash is present in the cache and returns the externalBlock
-func (bc *BlockChain) GetExternalBlockTraceSet(hash common.Hash, context int) (*types.ExternalBlock, error) {
+// GetExternalBlockByHashAndContext checks if the ExternalBlock for the given hash is present in the cache and returns the externalBlock
+func (bc *BlockChain) GetExternalBlockByHashAndContext(hash common.Hash, context int) (*types.ExternalBlock, error) {
 	// Lookup block in externalBlocks cache
 	key := types.ExtBlockCacheKey(uint64(context), hash)
 
@@ -2867,7 +2867,7 @@ func (bc *BlockChain) GetExternalBlockTraceSet(hash common.Hash, context int) (*
 		return extBlockDecoded, nil
 	}
 	extBlock := rawdb.ReadExternalBlock(bc.db, hash, uint64(context))
-	fmt.Println("GetExternalBlockTraceSet: is block nil?", extBlock == nil)
+	fmt.Println("GetExternalBlockByHashAndContext: is block nil?", extBlock == nil)
 	return extBlock, nil
 }
 
