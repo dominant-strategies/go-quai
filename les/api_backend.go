@@ -117,15 +117,15 @@ func (b *LesApiBackend) InsertBlock(ctx context.Context, block *types.Block) (in
 }
 
 func (b *LesApiBackend) AddExternalBlock(block *types.ExternalBlock) error {
-	return errors.New("light client does not support external block caching.")
+	return errors.New("light client does not support external block caching")
 }
 
-func (b *LesApiBackend) GetExternalBlockTraceSet(hash common.Hash, context int) (*types.ExternalBlock, error) {
-	return nil, errors.New("light client does not support external block caching.")
+func (b *LesApiBackend) GetExternalBlockByHashAndContext(hash common.Hash, context int) (*types.ExternalBlock, error) {
+	return nil, errors.New("light client does not support external block caching")
 }
 
 func (b *LesApiBackend) ReOrgRollBack(header *types.Header, validHeaders []*types.Header, invalidHeaders []*types.Header) error {
-	return errors.New("light client does not support reorg.")
+	return errors.New("light client does not support reorg")
 }
 
 func (b *LesApiBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Block, error) {

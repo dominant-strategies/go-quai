@@ -693,13 +693,13 @@ func (ec *Client) SendExternalBlock(ctx context.Context, block *types.Block, rec
 	return ec.c.CallContext(ctx, nil, "quai_sendExternalBlock", data)
 }
 
-// GetExternalBlockTraceSet searches the cache for external block
-func (ec *Client) GetExternalBlockTraceSet(ctx context.Context, hash common.Hash, index int) (*types.ExternalBlock, error) {
+// GetExternalBlockByHashAndContext searches the cache for external block
+func (ec *Client) GetExternalBlockByHashAndContext(ctx context.Context, hash common.Hash, index int) (*types.ExternalBlock, error) {
 	data, err := ethapi.RPCMarshalExternalBlockTraceSet(hash, index)
 	if err != nil {
 		return nil, err
 	}
-	return ec.getExternalBlock(ctx, "quai_getExternalBlockTraceSet", data)
+	return ec.getExternalBlock(ctx, "quai_getExternalBlockByHashAndContext", data)
 }
 
 // header: header in which the intended chain is to roll back to.
