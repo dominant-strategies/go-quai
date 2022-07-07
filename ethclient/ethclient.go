@@ -489,6 +489,15 @@ func (ec *Client) NetworkID(ctx context.Context) (*big.Int, error) {
 	return version, nil
 }
 
+// PeerCount counts the number of peers connected to the node
+func (ec *Client) PeerCount(ctx context.Context) (int, error) {
+	var peerCount hexutil.Uint
+	if err := ec.c.CallContext(ctx, &peerCount, "net_peerCount"); err != nil {
+		return 0, err
+	}
+	return int(peerCount), nil
+}
+
 // BalanceAt returns the wei balance of the given account.
 // The block number can be nil, in which case the balance is taken from the latest known block.
 func (ec *Client) BalanceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (*big.Int, error) {
