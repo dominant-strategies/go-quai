@@ -320,7 +320,7 @@ type blockGenSpec struct {
 }
 
 // Generate blocks to form a network of chains
-func GenerateNetworkBlocks(graph [3][3][]*blockGenSpec) ([]*types.Block, error) {
+func GenerateNetworkBlocks(graph [3][3][]*types.BlockGenSpec) (map[string]*types.Block, error) {
 	return nil, errors.New("Not implemented")
 }
 

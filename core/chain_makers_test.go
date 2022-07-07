@@ -19,6 +19,7 @@ package core
 import (
 	"fmt"
 	"math/big"
+	"testing"
 
 	"github.com/spruce-solutions/go-quai/consensus/blake3"
 	"github.com/spruce-solutions/go-quai/core/rawdb"
@@ -97,4 +98,108 @@ func ExampleGenerateChain() {
 	// balance of addr1: 989000
 	// balance of addr2: 10000
 	// balance of addr3: 19687500000000001000
+}
+
+func TestGenerateNetworkBlocks(t *testing.T) {
+	graph := [3][3][]*types.BlockGenSpec{
+		{ // Region1
+			{
+				&types.BlockGenSpec{[3]string{"gen", "gen", "gen"}, "z11_1"},
+				&types.BlockGenSpec{[3]string{"", "z11_1", "z11_1"}, "z11_2"},
+				&types.BlockGenSpec{[3]string{"", "", "z11_2"}, "z11_3"},
+				&types.BlockGenSpec{[3]string{"", "", "z11_3"}, "z11_4"},
+				&types.BlockGenSpec{[3]string{"z21_1", "z13_1", "z11_4"}, "final_prime"},
+				&types.BlockGenSpec{[3]string{"", "", "final_prime"}, "final_zone11"},
+			},
+			{},
+			{
+				&types.BlockGenSpec{[3]string{"", "z11_2", "gen"}, "z13_1"},
+			},
+		},
+		{
+			{
+				&types.BlockGenSpec{[3]string{"z23_1", "z23_1", "gen"}, "z21_1"},
+				&types.BlockGenSpec{[3]string{"", "z21_1", "z21_1"}, "final_region2"},
+			},
+			{},
+			{
+				&types.BlockGenSpec{[3]string{"final_region3", "gen", "gen"}, "z23_1"},
+			},
+		},
+		{
+			{},
+			{
+				&types.BlockGenSpec{[3]string{"", "", "gen"}, "z32_1"},
+				&types.BlockGenSpec{[3]string{"z11_1", "z33_1", "z32_1"}, "final_region3"},
+			},
+			{
+				&types.BlockGenSpec{[3]string{"", "gen", "gen"}, "z33_1"},
+				&types.BlockGenSpec{[3]string{"", "", "z33_1"}, "final_zone33"},
+			},
+		},
+	}
+	blocks, err := GenerateNetworkBlocks(graph)
+	if err != nil {
+		t.Errorf("Error in GenerateNetworkBlocks call")
+	}
+	engine := new(blake3.Blake3)
+	//Check Criteria 1: Every tagged block should be identifiable in the output map using the tag as the map key
+	_, found := blocks["final_prime"]
+	if !found {
+		t.Errorf("Tag not found in network")
+	}
+
+	//Check Criteria 2: Every block should have the correct order. Need to implement an engine to calculate Order
+	difficultyMap := map[string]int{
+		"z11_1":         1,
+		"z11_2":         2,
+		"z11_3":         3,
+		"z11_4":         3,
+		"final_prime":   1,
+		"final_zone11":  1,
+		"z13_1":         2,
+		"z21_1":         1,
+		"final_region2": 2,
+		"z23_1":         1,
+		"z32_1":         3,
+		"final_region3": 1,
+		"z33_1":         2,
+		"final_zone33":  3,
+	}
+	for tag, expectedOrder := range difficultyMap {
+		actualOrder, _ := engine.GetDifficultyOrder(blocks[tag].Header())
+		if expectedOrder != actualOrder {
+			t.Errorf("Incorrect block difficutly")
+		}
+	}
+
+	//Check Criteria 3: Block parents should chain as expected. Start at the last block and iterate backwards from it to genesis
+	primeChain := []string{"z11_1", "final_region3", "z23_1", "z21_1", "final_prime"}
+	region2Chain := []string{"z23_1", "z21_1", "final_region2"}
+	zone11Chain := []string{"z11_1", "z11_2", "z11_3", "z11_4", "final_prime", "final_zone11"}
+
+	for i := len(primeChain); i > 0; i-- {
+		block := blocks[primeChain[i]]
+		prevBlock := blocks[primeChain[i-1]]
+		if block.Header().ParentHash[0] != prevBlock.Header().Hash() {
+			t.Errorf("Prime blocks chain incorrectly")
+		}
+	}
+
+	for i := len(region2Chain); i > 0; i-- {
+		block := blocks[region2Chain[i]]
+		prevBlock := blocks[region2Chain[i-1]]
+		if block.Header().ParentHash[1] != prevBlock.Header().Hash() {
+			t.Errorf("Region2 blocks chain incorrectly")
+		}
+	}
+
+	for i := len(zone11Chain); i > 0; i-- {
+		block := blocks[zone11Chain[i]]
+		prevBlock := blocks[zone11Chain[i-1]]
+		if block.Header().ParentHash[2] != prevBlock.Header().Hash() {
+			t.Errorf("Zone11 blocks chain incorrectly")
+		}
+	}
+
 }
