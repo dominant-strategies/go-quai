@@ -17,6 +17,7 @@
 package core
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/spruce-solutions/go-quai/common"
@@ -107,6 +108,7 @@ func (it *insertIterator) next() (*types.Block, error) {
 	// If we reached the end of the chain, abort
 	if it.index+1 >= len(it.chain) {
 		it.index = len(it.chain)
+		fmt.Println("return next 1?")
 		return nil, nil
 	}
 	// Advance the iterator and wait for verification result if not yet done
@@ -115,6 +117,7 @@ func (it *insertIterator) next() (*types.Block, error) {
 		it.errors = append(it.errors, <-it.results)
 	}
 	if it.errors[it.index] != nil {
+		fmt.Println("return next 2?")
 		return it.chain[it.index], it.errors[it.index]
 	}
 	// Block header valid, run body validation and return
@@ -140,6 +143,14 @@ func (it *insertIterator) peek() (*types.Block, error) {
 	}
 	// Block header valid, ignore body validation since we don't have a parent anyway
 	return it.chain[it.index+1], nil
+}
+
+// current returns the current header that is being processed, or nil.
+func (it *insertIterator) current() *types.Header {
+	if it.index == -1 || it.index >= len(it.chain) {
+		return nil
+	}
+	return it.chain[it.index].Header()
 }
 
 // previous returns the previous header that was being processed, or nil.
