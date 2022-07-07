@@ -2925,7 +2925,7 @@ func (bc *BlockChain) GetExternalBlockTraceSet(stopHash common.Hash, newHeader *
 	extBlocks = append(extBlocks, extNewBlock)
 	for {
 		// if the newHeader is genesis
-		if newHeader.Number[path].Uint64() == 0 {
+		if newHeader.Number[path].Uint64() == 1 {
 			return extBlocks, nil
 		}
 
