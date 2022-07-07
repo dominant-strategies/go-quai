@@ -449,12 +449,8 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool) (map[string]i
 		}
 		fields["transactions"] = transactions
 	}
-	uncles := block.Uncles()
-	uncleHashes := make([]common.Hash, len(uncles))
-	for i, uncle := range uncles {
-		uncleHashes[i] = uncle.Hash()
-	}
-	fields["uncles"] = uncleHashes
+
+	fields["uncles"] = block.Uncles()
 
 	return fields, nil
 }
@@ -598,19 +594,9 @@ func (s *PublicBlockChainQuaiAPI) SendMinedBlock(ctx context.Context, raw json.R
 		txs[i] = tx.tx
 	}
 
-	uncles := make([]*types.Header, len(body.UncleHashes))
-	for i, uncleHash := range body.UncleHashes {
-		block, _ := s.b.BlockByHash(ctx, uncleHash)
-		if block != nil {
-			uncles[i] = block.Header()
-		} else {
-			block, _ := s.b.GetUncleFromWorker(uncleHash)
-			if block == nil {
-				log.Warn("Unable to find local uncle for retrieved mined block", "uncle", uncleHash)
-				return nil
-			}
-			uncles[i] = block.Header()
-		}
+	uncles := make([]*types.Header, len(body.Uncles))
+	for i, uncle := range body.Uncles {
+		uncles[i] = uncle
 	}
 
 	block := types.NewBlockWithHeader(head).WithBody(txs, uncles)

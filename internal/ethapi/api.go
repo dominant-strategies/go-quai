@@ -1863,7 +1863,7 @@ type txExtraInfo struct {
 type rpcBlock struct {
 	Hash         common.Hash      `json:"hash"`
 	Transactions []rpcTransaction `json:"transactions"`
-	UncleHashes  []common.Hash    `json:"uncles"`
+	Uncles       []*types.Header  `json:"uncles"`
 	Receipts     types.Receipts   `json:"receipts"`
 }
 

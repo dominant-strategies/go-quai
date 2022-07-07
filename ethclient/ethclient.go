@@ -274,8 +274,10 @@ func (ec *Client) getExternalBlock(ctx context.Context, method string, args ...i
 		return nil, fmt.Errorf("server returned non-empty transaction list but block header indicates no transactions")
 	}
 	// Load uncles because they are not included in the block response.
-	var uncles []*types.Header
-	copy(uncles, body.Uncles)
+	uncles := make([]*types.Header, len(body.Uncles))
+	for i, uncle := range body.Uncles {
+		uncles[i] = uncle
+	}
 
 	// Fill the sender cache of transactions in the block.
 	txs := make([]*types.Transaction, len(body.Transactions))
