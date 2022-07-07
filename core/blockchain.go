@@ -3185,6 +3185,7 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 				}
 				err = bc.reorgTwistToCommonAncestor(PTZ, PTP, slice, params.PRIME, params.ZONE)
 				if err != nil {
+					log.Info("error in reorgTwistToCommonAncestor", "err", err)
 					return common.Hash{}, errors.New("unable to reorg ZONE to common ancestor after prime (PTP!=PTR, PTR==PTZ) twist")
 				}
 			}
@@ -3196,6 +3197,7 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 			if types.QuaiNetworkContext <= params.PRIME {
 				err = bc.reorgTwistToCommonAncestor(PTZ, PTP, slice, params.PRIME, params.ZONE)
 				if err != nil {
+					log.Info("error in reorgTwistToCommonAncestor", "err", err)
 					return common.Hash{}, errors.New("unable to reorg ZONE to common ancestor after prime (PTP!=PTZ, PTP==PTR) twist")
 				}
 			}
@@ -3249,6 +3251,7 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 			if types.QuaiNetworkContext == params.REGION {
 				err = bc.reorgTwistToCommonAncestor(RTZ, RTR, slice, params.REGION, params.ZONE)
 				if err != nil {
+					log.Info("error in reorgTwistToCommonAncestor", "err", err)
 					return common.Hash{}, errors.New("unable to reorg to common ancestor after region twist")
 				}
 			}
@@ -3302,7 +3305,6 @@ func (bc *BlockChain) reorgTwistToCommonAncestor(subHead *types.Header, domHead 
 			for _, extBlock := range extBlocks {
 				hashes = append(hashes, extBlock.Hash())
 			}
-			fmt.Println("sending reorg rollup 2", len(hashes))
 			// Remove non-cononical blocks from subordinate chains.
 			bc.reOrgFeed.Send(ReOrgRollup{ReOrgHeader: prev, OldChainHeaders: []*types.Header{prev}, NewChainHeaders: []*types.Header{domHead}, NewSubs: hashes, NewSubContext: path})
 			return nil

@@ -733,6 +733,9 @@ func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader
 			if err != nil {
 				return nil, err
 			}
+			if prevExtBlock == nil {
+				return nil, fmt.Errorf("prevExtBlock nil in prev coincident on path %s", header.ParentHash[path])
+			}
 			// Increment previous header
 			header = prevExtBlock.Header()
 		}
