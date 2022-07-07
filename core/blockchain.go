@@ -3188,13 +3188,14 @@ func (bc *BlockChain) reorgTwistToCommonAncestor(subHead *types.Header, slice []
 
 	if num != nil {
 		// Remove non-cononical blocks from subordinate chains.
-		bc.chainUncleFeed.Send(subHead)
+		fmt.Println("the first sub shared block is in dom chain")
 		return nil
 	}
 
 	prev := subHead
 	for {
 		prevHeader, err := bc.Engine().PreviousCoincidentOnPath(bc, prev, slice, order, path)
+		fmt.Println("finding previous conincident on path looking for common block, current hash:", prevHeader.Hash())
 		if err != nil {
 			return err
 		}
