@@ -3130,11 +3130,11 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 		if PTP.Hash() != PTR.Hash() && PTR.Hash() == PTZ.Hash() {
 			log.Info("Error in PCRC", "PTP:", PTP.Hash(), "PTR:", PTR.Hash())
 			if types.QuaiNetworkContext == params.PRIME {
-				err = bc.reorgTwistToCommonAncestor(PTR, slice, params.PRIME, params.REGION)
+				err = bc.reorgTwistToCommonAncestor(PTR, PTP, slice, params.PRIME, params.REGION)
 				if err != nil {
 					return common.Hash{}, errors.New("unable to reorg REGION to common ancestor after prime (PTP!=PTR, PTR==PTZ) twist")
 				}
-				err = bc.reorgTwistToCommonAncestor(PTZ, slice, params.PRIME, params.ZONE)
+				err = bc.reorgTwistToCommonAncestor(PTZ, PTP, slice, params.PRIME, params.ZONE)
 				if err != nil {
 					return common.Hash{}, errors.New("unable to reorg ZONE to common ancestor after prime (PTP!=PTR, PTR==PTZ) twist")
 				}
@@ -3145,7 +3145,7 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 		if PTP.Hash() != PTZ.Hash() && PTP.Hash() == PTR.Hash() {
 			log.Info("Error in PCRC", "PTP:", PTP.Hash(), "PTZ:", PTZ.Hash())
 			if types.QuaiNetworkContext <= params.PRIME {
-				err = bc.reorgTwistToCommonAncestor(PTZ, slice, params.PRIME, params.ZONE)
+				err = bc.reorgTwistToCommonAncestor(PTZ, PTP, slice, params.PRIME, params.ZONE)
 				if err != nil {
 					return common.Hash{}, errors.New("unable to reorg ZONE to common ancestor after prime (PTP!=PTZ, PTP==PTR) twist")
 				}
@@ -3156,7 +3156,7 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 		if PTP.Hash() != PTR.Hash() && PTP.Hash() == PTZ.Hash() {
 			log.Info("Error in PCRC", "PTP:", PTP.Hash(), "PTR:", PTR.Hash())
 			if types.QuaiNetworkContext == params.PRIME {
-				err = bc.reorgTwistToCommonAncestor(PTR, slice, params.PRIME, params.REGION)
+				err = bc.reorgTwistToCommonAncestor(PTR, PTP, slice, params.PRIME, params.REGION)
 				if err != nil {
 					return common.Hash{}, errors.New("unable to reorg REGION to common ancestor after prime (PTP!=PTR, PTP==PTZ) twist")
 				}
@@ -3198,7 +3198,7 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 			// 2. If Zone terminus is in our chain, do nothing.
 			// 3. If Zone terminus is not in our chain, uncle the RTZ in the subordinate context.
 			if types.QuaiNetworkContext == params.REGION {
-				err = bc.reorgTwistToCommonAncestor(RTZ, slice, params.REGION, params.ZONE)
+				err = bc.reorgTwistToCommonAncestor(RTZ, RTR, slice, params.REGION, params.ZONE)
 				if err != nil {
 					return common.Hash{}, errors.New("unable to reorg to common ancestor after region twist")
 				}
@@ -3214,12 +3214,10 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 // This uncle will rollback the subordinate chain in the manager process.
 // If there are many invalid subordinate heads, aggregate the valid subordinate blocks (NewSubs) off of the valid dominant chain (RTR / PTP / PTR)
 // and include them for processing in the manager.
-func (bc *BlockChain) reorgTwistToCommonAncestor(subHead *types.Header, slice []byte, order int, path int) error {
+func (bc *BlockChain) reorgTwistToCommonAncestor(subHead *types.Header, domHead *types.Header, slice []byte, order int, path int) error {
 	num := bc.hc.GetBlockNumber(subHead.Hash())
 
 	if num != nil {
-		// Remove non-cononical blocks from subordinate chains.
-		fmt.Println("the first sub shared block is in dom chain")
 		return nil
 	}
 
@@ -3233,8 +3231,17 @@ func (bc *BlockChain) reorgTwistToCommonAncestor(subHead *types.Header, slice []
 		num = bc.hc.GetBlockNumber(prevHeader.Hash())
 
 		if num != nil {
+			// get all the external blocks on the subordinate chain path until common point
+			extBlocks, err := bc.GetExternalBlockTraceSet(prevHeader.Hash(), domHead, path)
+			if err != nil {
+				return err
+			}
+			hashes := make([]common.Hash, 0)
+			for _, extBlock := range extBlocks {
+				hashes = append(hashes, extBlock.Hash())
+			}
 			// Remove non-cononical blocks from subordinate chains.
-			bc.chainUncleFeed.Send(prev)
+			bc.reOrgFeed.Send(ReOrgRollup{ReOrgHeader: prev, OldChainHeaders: []*types.Header{prev}, NewChainHeaders: []*types.Header{domHead}, NewSubs: hashes, NewSubContext: path})
 			return nil
 		}
 		prev = prevHeader
