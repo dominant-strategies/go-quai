@@ -2212,7 +2212,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		switch status {
 		case CanonStatTy:
 			bc.StoreExternalBlocks(linkExtBlocks)
-			log.Info("Inserted new block", "number", block.Header().Number, "hash", block.Hash(), "extBlocks", len(externalBlocks),
+			log.Info("Inserted new block", "number", block.Header().Number, "hash", block.Hash(), "loc", block.Header().Location, "extBlocks", len(externalBlocks),
 				"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"elapsed", common.PrettyDuration(time.Since(start)),
 				"root", block.Root())
@@ -3268,6 +3268,19 @@ func (bc *BlockChain) reorgTwistToCommonAncestor(subHead *types.Header, domHead 
 
 	if num != nil {
 		fmt.Println("subHead is in dom", subHead.Number)
+		// get all the external blocks on the subordinate chain path until common point
+		extBlocks, err := bc.GetExternalBlockTraceSet(subHead.Hash(), domHead, path)
+		if err != nil {
+			return err
+		}
+		hashes := make([]common.Hash, 0)
+		for _, extBlock := range extBlocks {
+			hashes = append(hashes, extBlock.Hash())
+		}
+		fmt.Println("sending reorg rollup 1", len(hashes))
+		// Remove non-cononical blocks from subordinate chains.
+		nilHeader := &types.Header{}
+		bc.reOrgFeed.Send(ReOrgRollup{ReOrgHeader: nilHeader, OldChainHeaders: []*types.Header{nilHeader}, NewChainHeaders: []*types.Header{domHead}, NewSubs: hashes, NewSubContext: path})
 		return nil
 	}
 
@@ -3290,7 +3303,7 @@ func (bc *BlockChain) reorgTwistToCommonAncestor(subHead *types.Header, domHead 
 			for _, extBlock := range extBlocks {
 				hashes = append(hashes, extBlock.Hash())
 			}
-			fmt.Println("sending reorg rollup", len(hashes))
+			fmt.Println("sending reorg rollup 2", len(hashes))
 			// Remove non-cononical blocks from subordinate chains.
 			bc.reOrgFeed.Send(ReOrgRollup{ReOrgHeader: prev, OldChainHeaders: []*types.Header{prev}, NewChainHeaders: []*types.Header{domHead}, NewSubs: hashes, NewSubContext: path})
 			return nil

@@ -51,9 +51,7 @@ func NewBlockValidator(config *params.ChainConfig, blockchain *BlockChain, engin
 // validated at this point.
 func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	// Check whether the block's known, and if not, that it's linkable
-	fmt.Println("has block and state?", v.bc.HasBlockAndState(block.Hash(), block.NumberU64()))
 	if v.bc.HasBlockAndState(block.Hash(), block.NumberU64()) {
-		fmt.Println("returning ErrKnownBlock")
 		return ErrKnownBlock
 	}
 	// Header validity is known at this point, check the uncles and transactions
