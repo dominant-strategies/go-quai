@@ -681,7 +681,7 @@ func (blake3 *Blake3) GetLinkExternalBlocks(chain consensus.ChainHeaderReader, h
 //     *slice - The zone location which defines the slice in which we are validating
 //     *order - The order of the conincidence that is desired
 //     *path - Search among ancestors of this path in the specified slice
-func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader, header *types.Header, slice []byte, order, path int) (*types.Header, error) {
+func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader, header *types.Header, slice []byte, order, path int, fullSliceEqual bool) (*types.Header, error) {
 
 	if header.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
 		return chain.GetHeaderByHash(chain.Config().GenesisHashes[0]), nil
@@ -744,7 +744,13 @@ func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader
 		}
 
 		// If we have reached a coincident block of desired order in our desired slice
-		if bytes.Equal(header.Location, slice) && difficultyOrder <= order {
+		var equal bool
+		if fullSliceEqual {
+			equal = bytes.Equal(header.Location, slice)
+		} else {
+			equal = header.Location[0] == slice[0]
+		}
+		if equal && difficultyOrder <= order {
 			return header, nil
 		}
 	}

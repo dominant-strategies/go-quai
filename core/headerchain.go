@@ -730,7 +730,7 @@ func (hc *HeaderChain) NdToTd(header *types.Header, nD []*big.Int) ([]*big.Int, 
 		if hc.GetBlockNumber(header.Hash()) != nil {
 			break
 		}
-		prevExternTerminus, err = hc.Engine().PreviousCoincidentOnPath(hc, header, header.Location, params.PRIME, params.PRIME)
+		prevExternTerminus, err = hc.Engine().PreviousCoincidentOnPath(hc, header, header.Location, params.PRIME, params.PRIME, true)
 		if err != nil {
 			return nil, err
 		}
@@ -784,12 +784,12 @@ func (hc *HeaderChain) PCRC(header *types.Header) (common.Hash, error) {
 	// Region twist check
 	// RTZ -- Region coincident along zone path
 	// RTR -- Region coincident along region path
-	RTZ, err := hc.Engine().PreviousCoincidentOnPath(hc, header, slice, params.REGION, params.ZONE)
+	RTZ, err := hc.Engine().PreviousCoincidentOnPath(hc, header, slice, params.REGION, params.ZONE, true)
 	if err != nil {
 		return common.Hash{}, err
 	}
 
-	RTR, err := hc.Engine().PreviousCoincidentOnPath(hc, header, slice, params.REGION, params.REGION)
+	RTR, err := hc.Engine().PreviousCoincidentOnPath(hc, header, slice, params.REGION, params.REGION, true)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -802,17 +802,17 @@ func (hc *HeaderChain) PCRC(header *types.Header) (common.Hash, error) {
 	// PTZ -- Prime coincident along zone path
 	// PTR -- Prime coincident along region path
 	// PTP -- Prime coincident along prime path
-	PTZ, err := hc.Engine().PreviousCoincidentOnPath(hc, header, slice, params.PRIME, params.ZONE)
+	PTZ, err := hc.Engine().PreviousCoincidentOnPath(hc, header, slice, params.PRIME, params.ZONE, true)
 	if err != nil {
 		return common.Hash{}, err
 	}
 
-	PTR, err := hc.Engine().PreviousCoincidentOnPath(hc, header, slice, params.PRIME, params.REGION)
+	PTR, err := hc.Engine().PreviousCoincidentOnPath(hc, header, slice, params.PRIME, params.REGION, true)
 	if err != nil {
 		return common.Hash{}, err
 	}
 
-	PTP, err := hc.Engine().PreviousCoincidentOnPath(hc, header, slice, params.PRIME, params.PRIME)
+	PTP, err := hc.Engine().PreviousCoincidentOnPath(hc, header, slice, params.PRIME, params.PRIME, true)
 	if err != nil {
 		return common.Hash{}, err
 	}

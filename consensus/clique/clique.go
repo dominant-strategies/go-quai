@@ -595,7 +595,7 @@ func (c *Clique) GetLinkExternalBlocks(chain consensus.ChainHeaderReader, header
 }
 
 // PreviousCoincidentOnPath searches the path for a block of specified order in the specified slice
-func (c *Clique) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader, header *types.Header, slice []byte, order, path int) (*types.Header, error) {
+func (c *Clique) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader, header *types.Header, slice []byte, order, path int, fullSliceEqual bool) (*types.Header, error) {
 	return nil, nil
 }
 
