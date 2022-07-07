@@ -3251,7 +3251,6 @@ func (bc *BlockChain) reorgTwistToCommonAncestor(subHead *types.Header, domHead 
 		for _, extBlock := range extBlocks {
 			hashes = append(hashes, extBlock.Hash())
 		}
-		fmt.Println("sending reorg rollup 1", len(hashes))
 		// Remove non-cononical blocks from subordinate chains.
 		nilHeader := &types.Header{}
 		bc.reOrgFeed.Send(ReOrgRollup{ReOrgHeader: nilHeader, OldChainHeaders: []*types.Header{nilHeader}, NewChainHeaders: []*types.Header{domHead}, NewSubs: hashes, NewSubContext: path})
