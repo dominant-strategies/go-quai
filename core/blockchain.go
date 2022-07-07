@@ -2212,7 +2212,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		switch status {
 		case CanonStatTy:
 			bc.StoreExternalBlocks(linkExtBlocks)
-			log.Info("Inserted new block", "number", block.Header().Number, "hash", block.Hash(), "extBlocks", len(externalBlocks),
+			log.Info("Inserted new block", "number", block.Header().Number, "hash", block.Hash(), "loc", block.Header().Location, "extBlocks", len(externalBlocks),
 				"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"elapsed", common.PrettyDuration(time.Since(start)),
 				"root", block.Root())
@@ -3148,7 +3148,7 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 
 	var retErr []string
 	// Only check for region twist if block is of region order
-	if headerOrder == params.REGION {
+	if headerOrder <= params.REGION {
 		// Region twist check
 		// RTZ -- Region coincident along zone path
 		// RTR -- Region coincident along region path
@@ -3169,7 +3169,7 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 			// 1. Check to see if the Zone terminus is on our chain.
 			// 2. If Zone terminus is in our chain, do nothing.
 			// 3. If Zone terminus is not in our chain, uncle the RTZ in the subordinate context.
-			if types.QuaiNetworkContext == params.REGION {
+			if types.QuaiNetworkContext <= params.REGION {
 				err = bc.reorgTwistToCommonAncestor(RTZ, RTR, slice, params.REGION, params.ZONE)
 				if err != nil {
 					return common.Hash{}, errors.New("unable to reorg to common ancestor after region twist")
@@ -3242,6 +3242,19 @@ func (bc *BlockChain) reorgTwistToCommonAncestor(subHead *types.Header, domHead 
 
 	if num != nil {
 		fmt.Println("subHead is in dom", subHead.Number)
+		// get all the external blocks on the subordinate chain path until common point
+		extBlocks, err := bc.GetExternalBlockTraceSet(subHead.Hash(), domHead, path)
+		if err != nil {
+			return err
+		}
+		hashes := make([]common.Hash, 0)
+		for _, extBlock := range extBlocks {
+			hashes = append(hashes, extBlock.Hash())
+		}
+		fmt.Println("sending reorg rollup 1", len(hashes))
+		// Remove non-cononical blocks from subordinate chains.
+		nilHeader := &types.Header{}
+		bc.reOrgFeed.Send(ReOrgRollup{ReOrgHeader: nilHeader, OldChainHeaders: []*types.Header{nilHeader}, NewChainHeaders: []*types.Header{domHead}, NewSubs: hashes, NewSubContext: path})
 		return nil
 	}
 
@@ -3264,7 +3277,7 @@ func (bc *BlockChain) reorgTwistToCommonAncestor(subHead *types.Header, domHead 
 			for _, extBlock := range extBlocks {
 				hashes = append(hashes, extBlock.Hash())
 			}
-			fmt.Println("sending reorg rollup", len(hashes))
+			fmt.Println("sending reorg rollup 2", len(hashes))
 			// Remove non-cononical blocks from subordinate chains.
 			bc.reOrgFeed.Send(ReOrgRollup{ReOrgHeader: prev, OldChainHeaders: []*types.Header{prev}, NewChainHeaders: []*types.Header{domHead}, NewSubs: hashes, NewSubContext: path})
 			return nil
