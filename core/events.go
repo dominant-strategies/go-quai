@@ -40,7 +40,8 @@ type ReOrgRollup struct {
 	ReOrgHeader     *types.Header
 	OldChainHeaders []*types.Header
 	NewChainHeaders []*types.Header
-	NewSubs         []*types.ExternalBlock
+	NewSubs         []common.Hash
+	NewSubContext   int
 }
 type ChainSideEvent struct {
 	Block *types.Block

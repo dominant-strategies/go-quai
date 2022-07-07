@@ -3187,8 +3187,6 @@ func (bc *BlockChain) reorgTwistToCommonAncestor(subHead *types.Header, domHead 
 	num := bc.hc.GetBlockNumber(subHead.Hash())
 
 	if num != nil {
-		// Remove non-cononical blocks from subordinate chains.
-		bc.chainUncleFeed.Send(subHead)
 		return nil
 	}
 
@@ -3206,8 +3204,12 @@ func (bc *BlockChain) reorgTwistToCommonAncestor(subHead *types.Header, domHead 
 			if err != nil {
 				return err
 			}
+			hashes := make([]common.Hash, 0)
+			for _, extBlock := range extBlocks {
+				hashes = append(hashes, extBlock.Hash())
+			}
 			// Remove non-cononical blocks from subordinate chains.
-			bc.reOrgFeed.Send(ReOrgRollup{ReOrgHeader: prev, OldChainHeaders: []*types.Header{prev}, NewChainHeaders: []*types.Header{domHead}, NewSubs: extBlocks})
+			bc.reOrgFeed.Send(ReOrgRollup{ReOrgHeader: prev, OldChainHeaders: []*types.Header{prev}, NewChainHeaders: []*types.Header{domHead}, NewSubs: hashes, NewSubContext: path})
 			return nil
 		}
 		prev = prevHeader
