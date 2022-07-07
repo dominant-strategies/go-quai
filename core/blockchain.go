@@ -3177,7 +3177,7 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 		}
 
 		if PTP.Hash() != PTR.Hash() && PTR.Hash() == PTZ.Hash() {
-			log.Info("Error in PCRC", "PTP:", PTP.Hash(), "PTR:", PTR.Hash())
+			log.Info("Error in PCRC", "PTP", PTP.Hash(), "num", PTP.Number, "PTR", PTR.Hash(), "num", PTR.Number)
 			if types.QuaiNetworkContext == params.PRIME {
 				err = bc.reorgTwistToCommonAncestor(PTR, PTP, slice, params.PRIME, params.REGION)
 				if err != nil {
@@ -3192,7 +3192,7 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 		}
 
 		if PTP.Hash() != PTZ.Hash() && PTP.Hash() == PTR.Hash() {
-			log.Info("Error in PCRC", "PTP:", PTP.Hash(), "PTZ:", PTZ.Hash())
+			log.Info("Error in PCRC", "PTP", PTP.Hash(), "num", PTP.Number, "PTZ:", PTZ.Hash(), "num", PTZ.Number)
 			if types.QuaiNetworkContext <= params.PRIME {
 				err = bc.reorgTwistToCommonAncestor(PTZ, PTP, slice, params.PRIME, params.ZONE)
 				if err != nil {
@@ -3203,7 +3203,7 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 		}
 
 		if PTP.Hash() != PTR.Hash() && PTP.Hash() == PTZ.Hash() {
-			log.Info("Error in PCRC", "PTP:", PTP.Hash(), "PTR:", PTR.Hash())
+			log.Info("Error in PCRC", "PTP", PTP.Hash(), "num", PTP.Number, "PTR", PTR.Hash(), "num", PTR.Number)
 			if types.QuaiNetworkContext == params.PRIME {
 				err = bc.reorgTwistToCommonAncestor(PTR, PTP, slice, params.PRIME, params.REGION)
 				if err != nil {
@@ -3214,12 +3214,12 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 		}
 
 		if PTP.Hash() != PTR.Hash() && PTR.Hash() != PTZ.Hash() && PTP.Hash() != PTZ.Hash() {
-			log.Info("Error in PCRC, nothing is equal", "PTP:", PTP.Hash(), "PTR:", PTR.Hash(), "PTZ:", PTZ.Hash())
+			log.Info("Error in PCRC, nothing is equal", "PTP", PTP.Hash(), "num", PTP.Number, "PTR", PTR.Hash(), "num", PTR.Number, "PTZ", PTZ.Hash(), "num", PTZ.Number)
 			return common.Hash{}, errors.New("there exists a prime (PTP!=PTR!=PTZ) twist")
 		}
 
 		if PRTP.Hash() != PRTR.Hash() {
-			log.Info("Error in PCRC", "PRTP:", PRTP.Hash(), "PRTR:", PRTR.Hash())
+			log.Info("Error in PCRC", "PRTP", PRTP.Hash(), "num", PRTP.Number, "PRTR", PRTR.Hash(), "num", PRTR.Number)
 			return common.Hash{}, errors.New("there exists a prime (PRTP) twist")
 		}
 	}
@@ -3241,7 +3241,7 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 
 		// PCRC has failed. Rollback through the prior untwisted region.
 		if RTZ.Hash() != RTR.Hash() {
-			log.Info("Error in PCRC", "RTZ:", RTZ.Hash(), "RTR:", RTR.Hash())
+			log.Info("Error in PCRC", "RTZ", RTZ.Hash(), "num", RTZ.Number, "RTR", RTR.Hash(), "num", RTR.Number)
 			// If we are running in Prime or Region and have failed PCRC
 			// 1. Check to see if the Zone terminus is on our chain.
 			// 2. If Zone terminus is in our chain, do nothing.
