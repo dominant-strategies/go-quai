@@ -3098,7 +3098,7 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 	}
 
 	// Only check for region twist if block is of region order
-	if headerOrder <= params.REGION {
+	if headerOrder == params.REGION {
 		// Region twist check
 		// RTZ -- Region coincident along zone path
 		// RTR -- Region coincident along region path
@@ -3119,7 +3119,7 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 			// 1. Check to see if the Zone terminus is on our chain.
 			// 2. If Zone terminus is in our chain, do nothing.
 			// 3. If Zone terminus is not in our chain, uncle the RTZ in the subordinate context.
-			if types.QuaiNetworkContext <= params.REGION {
+			if types.QuaiNetworkContext == params.REGION {
 				err = bc.reorgTwistToCommonAncestor(RTZ, slice, params.REGION, params.ZONE)
 				if err != nil {
 					return common.Hash{}, errors.New("unable to reorg to common ancestor after region twist")
