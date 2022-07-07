@@ -2926,7 +2926,7 @@ func (bc *BlockChain) GetExternalBlockTraceSet(stopHash common.Hash, newHeader *
 	for {
 		// if the newHeader is genesis
 		if newHeader.Number[path].Uint64() == 1 {
-			return extBlocks, nil
+			return nil, errors.New("error finding stop hash")
 		}
 
 		// get the externalBlocks
