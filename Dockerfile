@@ -37,4 +37,4 @@ COPY --from=builder /go-quai/build/bin ./build/bin
 
 WORKDIR ./build/bin
 
-CMD ./quai --$NETWORK --syncmode full --http --http.vhosts="*" --ws --http.addr 0.0.0.0 --http.api eth,net,web3,quai,txpool --ws.addr 0.0.0.0 --ws.api eth,net,web3,quai,txpool --port $TCP_PORT --http.port $HTTP_PORT --ws.port $WS_PORT --ws.origins "*" --http.corsdomain "*" $REGION $ZONE
+CMD ./quai --$NETWORK --syncmode full --http --http.vhosts="*" --ws --http.addr 0.0.0.0 --http.api eth,net,web3,quai,txpool --ws.addr 0.0.0.0 --ws.api eth,net,web3,quai,txpool --port $TCP_PORT --http.port $HTTP_PORT --ws.port $WS_PORT --ws.origins="*" --http.corsdomain="*" $REGION $ZONE
