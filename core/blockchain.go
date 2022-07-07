@@ -3303,6 +3303,7 @@ func (bc *BlockChain) reorgTwistToCommonAncestor(subHead *types.Header, domHead 
 			}
 			hashes := make([]common.Hash, 0)
 			for _, extBlock := range extBlocks {
+				fmt.Println("hash in extBlock send", extBlock.Header().Number, extBlock.Hash())
 				hashes = append(hashes, extBlock.Hash())
 			}
 			// Remove non-cononical blocks from subordinate chains.

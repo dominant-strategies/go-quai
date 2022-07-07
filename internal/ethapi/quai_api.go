@@ -591,19 +591,7 @@ func (s *PublicBlockChainQuaiAPI) SendMinedBlock(ctx context.Context, raw json.R
 	if err := json.Unmarshal(raw, &body); err != nil {
 		return err
 	}
-	// Quick-verify transaction and uncle lists. This mostly helps with debugging the server.
-	if head.UncleHash[types.QuaiNetworkContext] == types.EmptyUncleHash[0] && len(body.UncleHashes) > 0 {
-		return fmt.Errorf("server returned non-empty uncle list but block header indicates no uncles")
-	}
-	if head.UncleHash[types.QuaiNetworkContext] != types.EmptyUncleHash[0] && len(body.UncleHashes) == 0 {
-		return fmt.Errorf("server returned empty uncle list but block header indicates uncles")
-	}
-	if head.TxHash[types.QuaiNetworkContext] == types.EmptyRootHash[0] && len(body.Transactions) > 0 {
-		return fmt.Errorf("server returned non-empty transaction list but block header indicates no transactions")
-	}
-	if head.TxHash[types.QuaiNetworkContext] != types.EmptyRootHash[0] && len(body.Transactions) == 0 {
-		return fmt.Errorf("server returned empty transaction list but block header indicates transactions")
-	}
+
 	// Load uncles because they are not included in the block response.
 	txs := make([]*types.Transaction, len(body.Transactions))
 	for i, tx := range body.Transactions {
