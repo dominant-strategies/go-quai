@@ -3223,6 +3223,12 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 
 		if PRTP.Hash() != PRTR.Hash() {
 			log.Info("Error in PCRC", "PRTP", PRTP.Hash(), "num", PRTP.Number, "PRTR", PRTR.Hash(), "num", PRTR.Number)
+			if types.QuaiNetworkContext == params.PRIME {
+				err = bc.reorgTwistToCommonAncestor(PRTR, PRTP, slice, params.PRIME, params.REGION)
+				if err != nil {
+					return common.Hash{}, errors.New("unable to reorg REGION to common ancestor after prime (PTP!=PTR, PTP==PTZ) twist")
+				}
+			}
 			return common.Hash{}, errors.New("there exists a prime (PRTP) twist")
 		}
 	}
