@@ -88,8 +88,8 @@ func (p *Peer) readStatus(network uint64, status *StatusPacket, genesis common.H
 	if msg.Size > maxMessageSize {
 		return fmt.Errorf("%w: %v > %v", errMsgTooLarge, msg.Size, maxMessageSize)
 	}
-	// Decode the handshake and make sure everything matches
-	if err := msg.Decode(&status); err != nil {
+	ann := new(StatusPacket)
+	if err := msg.Decode(ann); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
 	if status.NetworkID != network {
