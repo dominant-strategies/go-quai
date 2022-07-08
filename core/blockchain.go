@@ -3110,6 +3110,9 @@ func (bc *BlockChain) checkExtBlockCollision(header *types.Header, externalBlock
 // HLCR does hierarchical comparison of two difficulty tuples and returns true if second tuple is greater than the first
 func (bc *BlockChain) HLCR(localDifficulties []*big.Int, externDifficulties []*big.Int) bool {
 	log.Info("HLCR", "localDiff", localDifficulties, "externDiff", externDifficulties)
+	if externDifficulties == nil || len(externDifficulties) == 0 || localDifficulties == nil || len(localDifficulties) == 0 {
+		return false
+	}
 	if localDifficulties[0].Cmp(externDifficulties[0]) < 0 {
 		return true
 	} else if localDifficulties[0].Cmp(externDifficulties[0]) > 0 {
