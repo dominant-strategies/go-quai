@@ -3218,6 +3218,16 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 
 		if PTP.Hash() != PTR.Hash() && PTR.Hash() != PTZ.Hash() && PTP.Hash() != PTZ.Hash() {
 			log.Info("Error in PCRC, nothing is equal", "PTP", PTP.Hash(), "num", PTP.Number, "PTR", PTR.Hash(), "num", PTR.Number, "PTZ", PTZ.Hash(), "num", PTZ.Number)
+			if types.QuaiNetworkContext == params.PRIME {
+				err = bc.reorgTwistToCommonAncestor(PTR, PTP, slice, params.PRIME, params.REGION)
+				if err != nil {
+					return common.Hash{}, errors.New("unable to reorg REGION to common ancestor after prime (PTP != PTR != PTZ) twist")
+				}
+				err = bc.reorgTwistToCommonAncestor(PTZ, PTP, slice, params.PRIME, params.ZONE)
+				if err != nil {
+					return common.Hash{}, errors.New("unable to reorg ZONE to common ancestor after prime (PTP != PTR != PTZ)  twist")
+				}
+			}
 			return common.Hash{}, errors.New("there exists a prime (PTP!=PTR!=PTZ) twist")
 		}
 
@@ -3226,7 +3236,7 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 			if types.QuaiNetworkContext == params.PRIME {
 				err = bc.reorgTwistToCommonAncestor(PRTR, PRTP, slice, params.PRIME, params.REGION)
 				if err != nil {
-					return common.Hash{}, errors.New("unable to reorg REGION to common ancestor after prime (PTP!=PTR, PTP==PTZ) twist")
+					return common.Hash{}, errors.New("unable to reorg REGION to common ancestor after prime (PRTP != PRTR) twist")
 				}
 			}
 			return common.Hash{}, errors.New("there exists a prime (PRTP) twist")
