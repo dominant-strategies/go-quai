@@ -273,7 +273,6 @@ func (p *Peer) SendNewBlock(block *types.Block, td []*big.Int, extBlocks []*type
 	// Mark all the block hash as known, but ensure we don't overflow our limits
 	p.knownBlocks.Add(block.Hash())
 
-	log.Info("Sending external blocks with block", "len", len(extBlocks), "number", block.Header().Number[types.QuaiNetworkContext])
 	return p2p.Send(p.rw, NewBlockMsg, &NewBlockPacket{
 		Block:     block,
 		TD:        td,

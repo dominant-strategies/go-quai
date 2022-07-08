@@ -1548,7 +1548,6 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	// Note all the components of block(td, hash->number map, header, body, receipts)
 	// should be written atomically. BlockBatch is used for containing all components.
 	blockBatch := bc.db.NewBatch()
-	fmt.Println("Writing TD", externTd, block.Hash())
 	rawdb.WriteTd(blockBatch, block.Hash(), block.NumberU64(), externTd)
 	rawdb.WriteBlock(blockBatch, block)
 	rawdb.WriteReceipts(blockBatch, block.Hash(), block.NumberU64(), receipts)
@@ -1711,7 +1710,7 @@ func (bc *BlockChain) AddExternalBlock(block *types.ExternalBlock) error {
 		"context", block.Context(), "numbers", block.Header().Number, "hash", block.Hash(), "location", block.Header().Location,
 		"txs", len(block.Transactions()), "uncles", len(block.Uncles()), "receipts", len(block.Receipts()),
 	}
-	log.Info("Adding external block", context...)
+	log.Debug("Adding external block", context...)
 	data, err := rlp.EncodeToBytes(block)
 	if err != nil {
 		log.Crit("Failed to RLP encode external block", "err", err)
@@ -2052,7 +2051,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 			bc.reportBlock(block, nil, ErrBannedHash)
 			return it.index, ErrBannedHash
 		}
-		fmt.Println("err, insert", err, block.Hash())
 		// If the block is known (in the middle of the chain), it's a special case for
 		// Clique blocks where they can share state among each other, so importing an
 		// older block might complete the state of the subsequent one. In this case,
@@ -3270,7 +3268,6 @@ func (bc *BlockChain) reorgTwistToCommonAncestor(subHead *types.Header, domHead 
 	num := bc.hc.GetBlockNumber(subHead.Hash())
 
 	if num != nil {
-		fmt.Println("subHead is in dom", subHead.Number)
 		// get all the external blocks on the subordinate chain path until common point
 		extBlocks, err := bc.GetExternalBlockTraceSet(subHead.Hash(), domHead, path)
 		if err != nil {
@@ -3289,7 +3286,6 @@ func (bc *BlockChain) reorgTwistToCommonAncestor(subHead *types.Header, domHead 
 	prev := subHead
 	for {
 		prevHeader, err := bc.Engine().PreviousCoincidentOnPath(bc, prev, slice, order, path, true)
-		fmt.Println("finding previous conincident on path looking for common block, current hash:", prevHeader.Hash())
 		if err != nil {
 			return err
 		}
@@ -3303,7 +3299,6 @@ func (bc *BlockChain) reorgTwistToCommonAncestor(subHead *types.Header, domHead 
 			}
 			hashes := make([]common.Hash, 0)
 			for _, extBlock := range extBlocks {
-				fmt.Println("hash in extBlock send", extBlock.Header().Number, extBlock.Hash())
 				hashes = append(hashes, extBlock.Hash())
 			}
 			// Remove non-cononical blocks from subordinate chains.
