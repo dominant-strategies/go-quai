@@ -23,7 +23,6 @@ import (
 
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/core/forkid"
-	"github.com/spruce-solutions/go-quai/core/types"
 	"github.com/spruce-solutions/go-quai/p2p"
 )
 
@@ -70,9 +69,9 @@ func (p *Peer) Handshake(network uint64, td []*big.Int, head common.Hash, genesi
 
 	// TD at mainnet block #7753254 is 76 bits. If it becomes 100 million times
 	// larger, it will still fit within 100 bits
-	if tdlen := p.td[types.QuaiNetworkContext].BitLen(); tdlen > 100 {
-		return fmt.Errorf("too large total difficulty: bitlen %d", tdlen)
-	}
+	// if tdlen := p.td[types.QuaiNetworkContext].BitLen(); tdlen > 100 {
+	// 	return fmt.Errorf("too large total difficulty: bitlen %d", tdlen)
+	// }
 	return nil
 }
 
@@ -88,8 +87,8 @@ func (p *Peer) readStatus(network uint64, status *StatusPacket, genesis common.H
 	if msg.Size > maxMessageSize {
 		return fmt.Errorf("%w: %v > %v", errMsgTooLarge, msg.Size, maxMessageSize)
 	}
-	ann := new(StatusPacket)
-	if err := msg.Decode(ann); err != nil {
+	status = new(StatusPacket)
+	if err := msg.Decode(status); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
 	if status.NetworkID != network {
