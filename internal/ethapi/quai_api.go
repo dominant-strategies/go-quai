@@ -449,12 +449,8 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool) (map[string]i
 		}
 		fields["transactions"] = transactions
 	}
-	uncles := block.Uncles()
-	uncleHashes := make([]common.Hash, len(uncles))
-	for i, uncle := range uncles {
-		uncleHashes[i] = uncle.Hash()
-	}
-	fields["uncles"] = uncleHashes
+
+	fields["uncles"] = block.Uncles()
 
 	return fields, nil
 }
@@ -591,38 +587,16 @@ func (s *PublicBlockChainQuaiAPI) SendMinedBlock(ctx context.Context, raw json.R
 	if err := json.Unmarshal(raw, &body); err != nil {
 		return err
 	}
-	// Quick-verify transaction and uncle lists. This mostly helps with debugging the server.
-	if head.UncleHash[types.QuaiNetworkContext] == types.EmptyUncleHash[0] && len(body.UncleHashes) > 0 {
-		return fmt.Errorf("server returned non-empty uncle list but block header indicates no uncles")
-	}
-	if head.UncleHash[types.QuaiNetworkContext] != types.EmptyUncleHash[0] && len(body.UncleHashes) == 0 {
-		return fmt.Errorf("server returned empty uncle list but block header indicates uncles")
-	}
-	if head.TxHash[types.QuaiNetworkContext] == types.EmptyRootHash[0] && len(body.Transactions) > 0 {
-		return fmt.Errorf("server returned non-empty transaction list but block header indicates no transactions")
-	}
-	if head.TxHash[types.QuaiNetworkContext] != types.EmptyRootHash[0] && len(body.Transactions) == 0 {
-		return fmt.Errorf("server returned empty transaction list but block header indicates transactions")
-	}
+
 	// Load uncles because they are not included in the block response.
 	txs := make([]*types.Transaction, len(body.Transactions))
 	for i, tx := range body.Transactions {
 		txs[i] = tx.tx
 	}
 
-	uncles := make([]*types.Header, len(body.UncleHashes))
-	for i, uncleHash := range body.UncleHashes {
-		block, _ := s.b.BlockByHash(ctx, uncleHash)
-		if block != nil {
-			uncles[i] = block.Header()
-		} else {
-			block, _ := s.b.GetUncleFromWorker(uncleHash)
-			if block == nil {
-				log.Warn("Unable to find local uncle for retrieved mined block", "uncle", uncleHash)
-				return nil
-			}
-			uncles[i] = block.Header()
-		}
+	uncles := make([]*types.Header, len(body.Uncles))
+	for i, uncle := range body.Uncles {
+		uncles[i] = uncle
 	}
 
 	block := types.NewBlockWithHeader(head).WithBody(txs, uncles)
@@ -709,6 +683,9 @@ func (s *PublicBlockChainQuaiAPI) GetExternalBlockByHashAndContext(ctx context.C
 	extBlock, err := s.b.GetExternalBlockByHashAndContext(headerHashWithContext.Hash, headerHashWithContext.Context)
 	if err != nil {
 		return nil, err
+	}
+	if extBlock == nil {
+		return nil, fmt.Errorf("unable to find external block in getExternalBlockByHashAndContext")
 	}
 	block := types.NewBlockWithHeader(extBlock.Header()).WithBody(extBlock.Transactions(), extBlock.Uncles())
 

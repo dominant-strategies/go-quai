@@ -483,7 +483,7 @@ func (blake3 *Blake3) PrimeTraceBranch(chain consensus.ChainHeaderReader, header
 
 		// Do not continue at header number == 1 since we are unable to obtain the Genesis as an external block.
 		if header.Number[context].Cmp(big.NewInt(1)) == 0 {
-			log.Info("Trace Branch: Stopping height == 1", "number", header.Number, "context", context, "location", header.Location, "hash", header.ParentHash[context])
+			// log.Info("Trace Branch: Stopping height == 1", "number", header.Number, "context", context, "location", header.Location, "hash", header.ParentHash[context])
 			break
 		}
 
@@ -681,7 +681,7 @@ func (blake3 *Blake3) GetLinkExternalBlocks(chain consensus.ChainHeaderReader, h
 //     *slice - The zone location which defines the slice in which we are validating
 //     *order - The order of the conincidence that is desired
 //     *path - Search among ancestors of this path in the specified slice
-func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader, header *types.Header, slice []byte, order, path int) (*types.Header, error) {
+func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader, header *types.Header, slice []byte, order, path int, fullSliceEqual bool) (*types.Header, error) {
 
 	if header.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
 		return chain.GetHeaderByHash(chain.Config().GenesisHashes[0]), nil
@@ -733,6 +733,9 @@ func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader
 			if err != nil {
 				return nil, err
 			}
+			if prevExtBlock == nil {
+				return nil, fmt.Errorf("prevExtBlock nil in prev coincident on path %s", header.ParentHash[path])
+			}
 			// Increment previous header
 			header = prevExtBlock.Header()
 		}
@@ -744,7 +747,13 @@ func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader
 		}
 
 		// If we have reached a coincident block of desired order in our desired slice
-		if bytes.Equal(header.Location, slice) && difficultyOrder <= order {
+		var equal bool
+		if fullSliceEqual {
+			equal = bytes.Equal(header.Location, slice)
+		} else {
+			equal = header.Location[0] == slice[0]
+		}
+		if equal && difficultyOrder <= order {
 			return header, nil
 		}
 	}
@@ -755,7 +764,7 @@ func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader
 // Depending on the difficultyContext, originalContext, and originalLocation the trace will know when and where to stop.
 func (blake3 *Blake3) TraceBranches(chain consensus.ChainHeaderReader, header *types.Header, difficultyContext int, originalContext int, originalLocation []byte) ([]*types.ExternalBlock, error) {
 	// Get the Prime stopHash to be used in the Prime context. Go on to trace Prime once.
-	log.Info("TraceBranches: Getting trace for block", "num", header.Number, "context", originalContext, "location", header.Location, "hash", header.Hash())
+	log.Debug("TraceBranches: Getting trace for block", "num", header.Number, "context", originalContext, "location", header.Location, "hash", header.Hash())
 	start := time.Now()
 	externalBlocks := make([]*types.ExternalBlock, 0)
 	if originalContext == 0 {
@@ -787,7 +796,7 @@ func (blake3 *Blake3) TraceBranches(chain consensus.ChainHeaderReader, header *t
 			externalBlocks = append(externalBlocks, extBlockResult...)
 		}
 	}
-	log.Info("TraceBranches: length of external blocks", "len", len(externalBlocks), "time", time.Since(start))
+	log.Debug("TraceBranches: length of external blocks", "len", len(externalBlocks), "time", time.Since(start))
 	return externalBlocks, nil
 }
 

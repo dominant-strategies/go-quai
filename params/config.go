@@ -28,9 +28,9 @@ import (
 
 // Genesis hashes to enforce below configs on.
 var (
-	MainnetPrimeGenesisHash  = common.HexToHash("0x4b002e900adea19b2780353c4776e20ba02080b2477abea5b51f94616425b25d")
-	MainnetRegionGenesisHash = common.HexToHash("0x4b002e900adea19b2780353c4776e20ba02080b2477abea5b51f94616425b25d")
-	MainnetZoneGenesisHash   = common.HexToHash("0x4b002e900adea19b2780353c4776e20ba02080b2477abea5b51f94616425b25d")
+	MainnetPrimeGenesisHash  = common.HexToHash("0xfce9bedc6557777642ec64a707e8eb72c9d6f3a3fc021a6d36c6b4eb334808ec")
+	MainnetRegionGenesisHash = common.HexToHash("0xfce9bedc6557777642ec64a707e8eb72c9d6f3a3fc021a6d36c6b4eb334808ec")
+	MainnetZoneGenesisHash   = common.HexToHash("0xfce9bedc6557777642ec64a707e8eb72c9d6f3a3fc021a6d36c6b4eb334808ec")
 	RopstenPrimeGenesisHash  = common.HexToHash("0x9c0d89a5294e4635a49f6d4c9f9e1a361cb76bfffa71be2ff01a64f3c5dd0dcc")
 	RopstenRegionGenesisHash = common.HexToHash("0x9c0d89a5294e4635a49f6d4c9f9e1a361cb76bfffa71be2ff01a64f3c5dd0dcc")
 	RopstenZoneGenesisHash   = common.HexToHash("0x9c0d89a5294e4635a49f6d4c9f9e1a361cb76bfffa71be2ff01a64f3c5dd0dcc")

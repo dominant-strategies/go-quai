@@ -1273,6 +1273,9 @@ func RPCMarshalEthBlock(block *types.Block, inclTx bool, fullTx bool) (map[strin
 
 // RPCMarshalReceipt converts the given receipt to the RPC output.
 func RPCMarshalReceipt(receipt *types.Receipt) (map[string]interface{}, error) {
+	if receipt.BlockNumber == nil {
+		return nil, fmt.Errorf("unable to receive block number for receipt")
+	}
 	fields := map[string]interface{}{
 		"gasUsed":           hexutil.Uint64(receipt.GasUsed),
 		"cumulativeGasUsed": hexutil.Uint64(receipt.CumulativeGasUsed),
@@ -1863,7 +1866,7 @@ type txExtraInfo struct {
 type rpcBlock struct {
 	Hash         common.Hash      `json:"hash"`
 	Transactions []rpcTransaction `json:"transactions"`
-	UncleHashes  []common.Hash    `json:"uncles"`
+	Uncles       []*types.Header  `json:"uncles"`
 	Receipts     types.Receipts   `json:"receipts"`
 }
 

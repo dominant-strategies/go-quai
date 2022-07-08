@@ -1333,7 +1333,7 @@ func (d *Downloader) fetchReceipts(from uint64) error {
 
 // fetchExternalBlocks iteratively downloads the scheduled external blocks, taking any
 func (d *Downloader) fetchExternalBlocks(p *peerConnection, from uint64) error {
-	log.Info("Downloading external blocks", "origin", from)
+	log.Debug("Downloading external blocks", "origin", from)
 
 	var (
 		deliver = func(packet dataPack) (int, error) {
@@ -1351,7 +1351,7 @@ func (d *Downloader) fetchExternalBlocks(p *peerConnection, from uint64) error {
 		d.queue.PendingExtBlocks, d.queue.InFlightExtBlocks, d.queue.ReserveExtBlocks,
 		d.extBlockFetchHook, fetch, d.queue.CancelExtBlocks, capacity, d.peers.ExtBlockIdlePeers, setIdle, "externalBlocks")
 
-	log.Info("External block download terminated", "err", err)
+	log.Debug("External block download terminated", "err", err)
 	return err
 }
 
@@ -1492,7 +1492,7 @@ func (d *Downloader) fetchParts(deliveryCh chan dataPack, deliver func(dataPack)
 			// If there's nothing more to fetch, wait or terminate
 			if pending() == 0 {
 				if !inFlight() && finished {
-					log.Info("Data fetching completed", "type", kind)
+					log.Trace("Data fetching completed", "type", kind)
 					return nil
 				}
 				break
@@ -1771,7 +1771,6 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 		"extBlocks", len(extBlocks),
 	)
 
-	log.Info("importBlockResults: Length of ext blocks", "len", len(extBlocks))
 	// Add external blocks to chain before inserting blocks
 	for _, extBlock := range extBlocks {
 		d.blockchain.AddExternalBlock(extBlock)
