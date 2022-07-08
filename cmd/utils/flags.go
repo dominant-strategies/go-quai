@@ -1629,18 +1629,17 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 // SetDNSDiscoveryDefaults configures DNS discovery with the given URL if
 // no URLs are set.
 func SetDNSDiscoveryDefaults(cfg *ethconfig.Config, genesis common.Hash) {
-	// if cfg.EthDiscoveryURLs != nil {
-	// 	return // already set through flags/config
-	// }
-	// protocol := "all"
-	// if cfg.SyncMode == downloader.LightSync {
-	// 	protocol = "les"
-	// }
-	// if url := params.KnownDNSNetwork(genesis, protocol); url != "" {
-	// 	cfg.EthDiscoveryURLs = []string{url}
-	// 	cfg.SnapDiscoveryURLs = cfg.EthDiscoveryURLs
-	// }
-	return
+	if cfg.EthDiscoveryURLs != nil {
+		return // already set through flags/config
+	}
+	protocol := "all"
+	if cfg.SyncMode == downloader.LightSync {
+		protocol = "les"
+	}
+	if url := params.KnownDNSNetwork(genesis, protocol); url != "" {
+		cfg.EthDiscoveryURLs = []string{url}
+		cfg.SnapDiscoveryURLs = cfg.EthDiscoveryURLs
+	}
 }
 
 // RegisterEthService adds an Ethereum client to the stack.
