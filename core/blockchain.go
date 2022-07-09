@@ -2210,6 +2210,32 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		switch status {
 		case CanonStatTy:
 			bc.StoreExternalBlocks(linkExtBlocks)
+			nilHeader := &types.Header{}
+			if types.QuaiNetworkContext < params.REGION {
+				// get all the external blocks on the subordinate chain path until common point
+				extBlocks, err := bc.GetExternalBlockTraceSet(parent.Hash(), block.Header(), params.REGION)
+				if err == nil {
+					hashes := make([]common.Hash, 0)
+					for _, extBlock := range extBlocks {
+						hashes = append(hashes, extBlock.Hash())
+					}
+					fmt.Println("sending reorgrollup for new subs")
+					// Remove non-cononical blocks from subordinate chains.
+					bc.reOrgFeed.Send(ReOrgRollup{ReOrgHeader: nilHeader, OldChainHeaders: []*types.Header{nilHeader}, NewChainHeaders: []*types.Header{block.Header()}, NewSubs: hashes, NewSubContext: params.REGION})
+				}
+			}
+			if types.QuaiNetworkContext < params.ZONE {
+				// get all the external blocks on the subordinate chain path until common point
+				extBlocks, err := bc.GetExternalBlockTraceSet(parent.Hash(), block.Header(), params.ZONE)
+				if err == nil {
+					hashes := make([]common.Hash, 0)
+					for _, extBlock := range extBlocks {
+						hashes = append(hashes, extBlock.Hash())
+					}
+					// Remove non-cononical blocks from subordinate chains.
+					bc.reOrgFeed.Send(ReOrgRollup{ReOrgHeader: nilHeader, OldChainHeaders: []*types.Header{nilHeader}, NewChainHeaders: []*types.Header{block.Header()}, NewSubs: hashes, NewSubContext: params.ZONE})
+				}
+			}
 			log.Info("Inserted new block", "number", block.Header().Number, "hash", block.Hash(), "loc", block.Header().Location, "extBlocks", len(externalBlocks),
 				"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"elapsed", common.PrettyDuration(time.Since(start)),
