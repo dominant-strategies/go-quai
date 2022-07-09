@@ -153,6 +153,12 @@ var defaultCacheConfig = &CacheConfig{
 	ExternalBlockLimit: 256,
 }
 
+type extBlockLink struct {
+	prime   common.Hash     // Last applied prime hash
+	regions []common.Hash   // Last applied region hashes
+	zones   [][]common.Hash // Last applied zone hashes
+}
+
 // BlockChain represents the canonical chain given a database with a genesis
 // block. The Blockchain manages chain imports, reverts, chain reorganisations.
 //
@@ -225,6 +231,8 @@ type BlockChain struct {
 	forker     *ForkChoice
 
 	shouldPreserve func(*types.Block) bool // Function used to determine whether should preserve the given block.
+
+	blockLink *extBlockLink // Struct that maintains cannon linking of external blocks
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -423,6 +431,9 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			triedb.SaveCachePeriodically(bc.cacheConfig.TrieCleanJournal, bc.cacheConfig.TrieCleanRejournal, bc.quit)
 		}()
 	}
+
+	// Once we have updated the state of the chain, generate the extBlockLink struct for processing of ext blocks.
+	bc.GenerateExtBlockLink(bc.CurrentHeader())
 
 	return bc, nil
 }
@@ -1648,8 +1659,16 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 				return NonStatTy, err
 			}
 		}
+		// Reorganise the chain if the parent is not the head block
+		if block.ParentHash() != currentBlock.Hash() {
+			if err := bc.reorg(currentBlock, block); err != nil {
+				bc.GenerateExtBlockLink(currentBlock.Header())
+				return NonStatTy, err
+			}
+		}
 		status = CanonStatTy
 		if err := bc.CheckLinkExtBlocks(block, linkExtBlocks); err != nil {
+			bc.GenerateExtBlockLink(currentBlock.Header())
 			return NonStatTy, err
 		}
 	} else {
@@ -1849,6 +1868,8 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header, validHeaders []*types.
 	} else {
 		return fmt.Errorf("reorg header was null")
 	}
+	// Reset the blockLink in the blockchain state processor.
+	bc.GenerateExtBlockLink(bc.CurrentBlock().Header())
 
 	return nil
 }
@@ -2209,6 +2230,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 
 		switch status {
 		case CanonStatTy:
+			bc.SetLinkBlocksToLastApplied(linkExtBlocks)
 			bc.StoreExternalBlocks(linkExtBlocks)
 			log.Info("Inserted new block", "number", block.Header().Number, "hash", block.Hash(), "loc", block.Header().Location, "extBlocks", len(externalBlocks),
 				"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
@@ -2578,6 +2600,8 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	// Once the common block is found, the reorg data is sent to the reOrg feed
 	bc.reOrgFeed.Send(ReOrgRollup{ReOrgHeader: commonBlock.Header(), OldChainHeaders: bc.getAllHeaders(oldChain), NewChainHeaders: bc.getAllHeaders(newChain)})
 
+	// Reset the blockLink in the blockchain state processor.
+	bc.GenerateExtBlockLink(newBlock.Header())
 	return nil
 }
 
@@ -3071,7 +3095,264 @@ func (bc *BlockChain) CheckLinkExtBlocks(block *types.Block, linkExtBlocks []*ty
 		if collisionErr != nil {
 			return collisionErr
 		}
+
+		cpyExtBlocks := make([]*types.ExternalBlock, len(linkExtBlocks))
+		copy(cpyExtBlocks, linkExtBlocks)
+
+		linkErr := bc.CheckExternalBlockLink(cpyExtBlocks)
+		if linkErr != nil {
+			return linkErr
+		}
 	}
+	return nil
+}
+
+// GenerateExtBlockLink will generate blockLink struct for the last applied external block hashes for a current context.
+// This will be used to check the trace of each set of applied external block sets so that they keep proper lineage to previous
+// traces. GenerateExtBlockLink will be used upon start up and the blockLink struct will be continually updated as more blocks are processed.
+func (bc *BlockChain) GenerateExtBlockLink(currentHeader *types.Header) {
+	// Get the previous hashes from the first external blocks applied in the new GetExternalBlocks set.
+	// Initial the linkBlocks into 3x3 structure.
+	linkBlocks := &extBlockLink{
+		prime:   bc.chainConfig.GenesisHashes[0],
+		regions: make([]common.Hash, 3),
+		zones:   [][]common.Hash{make([]common.Hash, 3), make([]common.Hash, 3), make([]common.Hash, 3)},
+	}
+	for i := range linkBlocks.regions {
+		linkBlocks.regions[i] = bc.chainConfig.GenesisHashes[1]
+		for j := range linkBlocks.zones[i] {
+			linkBlocks.zones[i][j] = bc.chainConfig.GenesisHashes[2]
+		}
+	}
+
+	// Keep track of what the method started with.
+	// Deep copy the struct.
+	startingLinkBlocks := &extBlockLink{
+		prime:   linkBlocks.prime,
+		regions: make([]common.Hash, len(linkBlocks.regions)),
+		zones:   make([][]common.Hash, 3),
+	}
+	copy(startingLinkBlocks.regions, linkBlocks.regions)
+	for i := range linkBlocks.zones {
+		startingLinkBlocks.zones[i] = make([]common.Hash, len(linkBlocks.zones[i]))
+		copy(startingLinkBlocks.zones[i], linkBlocks.zones[i])
+	}
+
+	fmt.Println("Current Header Number", currentHeader.Number, currentHeader.Hash())
+	if currentHeader.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) < 1 {
+		bc.blockLink = linkBlocks
+		return
+	}
+
+	// Need to keep first hash that is put. Region went all the way back to the first region block.
+	populated := false
+	for !populated {
+
+		// Populate the linkBlocks struct with the block hashes of the last applied ext block of that chain.
+		extBlocks, err := bc.GetLinkExternalBlocks(currentHeader)
+		if err != nil {
+			log.Error("GenerateExtBlockLink:", "err", err)
+		}
+
+		// Keep track of what the method started with.
+		// Deep copy the struct.
+		tempLinkBlocks := &extBlockLink{
+			prime:   linkBlocks.prime,
+			regions: make([]common.Hash, len(linkBlocks.regions)),
+			zones:   [][]common.Hash{make([]common.Hash, 3), make([]common.Hash, 3), make([]common.Hash, 3)},
+		}
+
+		copy(tempLinkBlocks.regions, linkBlocks.regions)
+		for i := range linkBlocks.zones {
+			tempLinkBlocks.zones[i] = make([]common.Hash, len(linkBlocks.zones[i]))
+			copy(tempLinkBlocks.zones[i], linkBlocks.zones[i])
+		}
+
+		fmt.Println("generateLinkBlocks, num:", currentHeader.Number, currentHeader.Hash())
+		tempLinkBlocks = bc.generateLinkBlocksLastApplied(extBlocks, tempLinkBlocks)
+
+		// If our tempLink is new and our starting link hasn't changed.
+		if tempLinkBlocks.prime != linkBlocks.prime && startingLinkBlocks.prime == linkBlocks.prime {
+			fmt.Println("Setting linkBlocks.prime", tempLinkBlocks.prime)
+			linkBlocks.prime = tempLinkBlocks.prime
+		}
+		for i := range linkBlocks.regions {
+			if tempLinkBlocks.regions[i] != linkBlocks.regions[i] && startingLinkBlocks.regions[i] == linkBlocks.regions[i] {
+				fmt.Println("Setting linkBlocks.region", i+1, tempLinkBlocks.regions[i])
+				linkBlocks.regions[i] = tempLinkBlocks.regions[i]
+			}
+			for j := range linkBlocks.zones[i] {
+				if tempLinkBlocks.zones[i][j] != linkBlocks.zones[i][j] && startingLinkBlocks.zones[i][j] == linkBlocks.zones[i][j] {
+					fmt.Println("Setting linkBlocks.zone", i+1, j+1, tempLinkBlocks.zones[i][j])
+					linkBlocks.zones[i][j] = tempLinkBlocks.zones[i][j]
+				}
+			}
+		}
+
+		// Convert config for region and zone location into ints to compare during check.
+		regionLoc := int(bc.chainConfig.Location[0])
+		zoneLoc := int(bc.chainConfig.Location[0])
+
+		// Check if linkBlocks is populated fully for all chains in the hierarchy.
+		// Do not set populated to false if we are in Prime as Prime will not have any external blocks.
+		tempPopulated := true
+		if linkBlocks.prime == bc.chainConfig.GenesisHashes[0] && types.QuaiNetworkContext != 0 {
+			tempPopulated = false
+		} else {
+			for i := range linkBlocks.regions {
+
+				if linkBlocks.regions[i] == bc.chainConfig.GenesisHashes[1] && !(regionLoc-1 == i && types.QuaiNetworkContext == 1) {
+					tempPopulated = false
+					break
+				}
+				for j := range linkBlocks.zones[i] {
+					if linkBlocks.zones[i][j] == bc.chainConfig.GenesisHashes[2] && !(regionLoc-1 == i && zoneLoc-1 == j) {
+						tempPopulated = false
+						break
+					}
+				}
+			}
+		}
+
+		// Update the populated check with current status of populating the last applied external block hashes.
+		populated = tempPopulated
+
+		// Check if we are on block height 1 for current context.
+		if currentHeader.Number[types.QuaiNetworkContext].Cmp(big.NewInt(1)) < 1 {
+			bc.blockLink = linkBlocks
+			return
+		}
+
+		// Iterate to previous block in current context.
+		currentHeader = bc.GetHeaderByHash(currentHeader.ParentHash[types.QuaiNetworkContext])
+	}
+	bc.blockLink = linkBlocks
+}
+
+// generateLinkBlocksLastApplied will update the passed in linkBlocks struct with the latest applied external blocks.
+func (bc *BlockChain) generateLinkBlocksLastApplied(externalBlocks []*types.ExternalBlock, linkBlocks *extBlockLink) *extBlockLink {
+	// Keep track of what the method started with.
+	// Deep copy the struct.
+	startingLinkBlocks := &extBlockLink{
+		prime:   linkBlocks.prime,
+		regions: make([]common.Hash, len(linkBlocks.regions)),
+		zones:   make([][]common.Hash, 3),
+	}
+	copy(startingLinkBlocks.regions, linkBlocks.regions)
+	for i := range linkBlocks.zones {
+		startingLinkBlocks.zones[i] = make([]common.Hash, len(linkBlocks.zones[i]))
+		copy(startingLinkBlocks.zones[i], linkBlocks.zones[i])
+	}
+
+	// iterate through the extBlocks, updated the index with the last applied external blocks.
+	for _, lastAppliedBlock := range externalBlocks {
+		switch lastAppliedBlock.Context().Int64() {
+		case 0:
+			if linkBlocks.prime == startingLinkBlocks.prime {
+				linkBlocks.prime = lastAppliedBlock.Hash()
+			}
+		case 1:
+			if linkBlocks.regions[lastAppliedBlock.Header().Location[0]-1] == startingLinkBlocks.regions[lastAppliedBlock.Header().Location[0]-1] {
+				linkBlocks.regions[lastAppliedBlock.Header().Location[0]-1] = lastAppliedBlock.Hash()
+			}
+		case 2:
+			if linkBlocks.zones[lastAppliedBlock.Header().Location[0]-1][lastAppliedBlock.Header().Location[1]-1] == startingLinkBlocks.zones[lastAppliedBlock.Header().Location[0]-1][lastAppliedBlock.Header().Location[1]-1] {
+				linkBlocks.zones[lastAppliedBlock.Header().Location[0]-1][lastAppliedBlock.Header().Location[1]-1] = lastAppliedBlock.Hash()
+			}
+		}
+	}
+
+	return linkBlocks
+}
+
+// SetLinkBlocksToLastApplied will update the passed in linkBlocks struct with the latest applied external blocks.
+func (bc *BlockChain) SetLinkBlocksToLastApplied(externalBlocks []*types.ExternalBlock) {
+
+	// Keep track of what the method started with.
+	// Deep copy the struct.
+	startingLinkBlocks := &extBlockLink{
+		prime:   bc.blockLink.prime,
+		regions: make([]common.Hash, len(bc.blockLink.regions)),
+		zones:   make([][]common.Hash, 3),
+	}
+	copy(startingLinkBlocks.regions, bc.blockLink.regions)
+	for i := range bc.blockLink.zones {
+		startingLinkBlocks.zones[i] = make([]common.Hash, len(bc.blockLink.zones[i]))
+		copy(startingLinkBlocks.zones[i], bc.blockLink.zones[i])
+	}
+
+	// iterate through the extBlocks, updated the index with the last applied external blocks.
+	for _, lastAppliedBlock := range externalBlocks {
+		switch lastAppliedBlock.Context().Int64() {
+		case 0:
+			if bc.blockLink.prime == startingLinkBlocks.prime {
+				fmt.Println("setting last applied prime:", lastAppliedBlock.Header().Number, lastAppliedBlock.Header().Location, lastAppliedBlock.Context(), lastAppliedBlock.Hash())
+				bc.blockLink.prime = lastAppliedBlock.Hash()
+			}
+		case 1:
+			if bc.blockLink.regions[lastAppliedBlock.Header().Location[0]-1] == startingLinkBlocks.regions[lastAppliedBlock.Header().Location[0]-1] {
+				fmt.Println("setting last applied region:", lastAppliedBlock.Header().Number, lastAppliedBlock.Header().Location, lastAppliedBlock.Context(), lastAppliedBlock.Hash())
+				bc.blockLink.regions[lastAppliedBlock.Header().Location[0]-1] = lastAppliedBlock.Hash()
+			}
+		case 2:
+			if bc.blockLink.zones[lastAppliedBlock.Header().Location[0]-1][lastAppliedBlock.Header().Location[1]-1] == startingLinkBlocks.zones[lastAppliedBlock.Header().Location[0]-1][lastAppliedBlock.Header().Location[1]-1] {
+				fmt.Println("setting last applied zone:", lastAppliedBlock.Header().Number, lastAppliedBlock.Header().Location, lastAppliedBlock.Context(), lastAppliedBlock.Hash())
+				bc.blockLink.zones[lastAppliedBlock.Header().Location[0]-1][lastAppliedBlock.Header().Location[1]-1] = lastAppliedBlock.Hash()
+			}
+		}
+	}
+}
+
+// CheckExternalBlockLink is the function that will ensure that the links of the provided external blocks
+// matches the previously applied external blocks.
+func (bc *BlockChain) CheckExternalBlockLink(externalBlocks []*types.ExternalBlock) error {
+	// Get the previous hashes from the first external blocks applied in the new GetExternalBlocks set.
+	// Initial the linkBlocks into 3x3 structure.
+	linkBlocks := &extBlockLink{
+		prime:   common.Hash{},
+		regions: make([]common.Hash, 3),
+		zones:   [][]common.Hash{make([]common.Hash, 3), make([]common.Hash, 3), make([]common.Hash, 3)},
+	}
+
+	for _, externalBlock := range externalBlocks {
+		context := externalBlock.Context().Int64()
+		switch context {
+		case 0:
+			linkedPreviousHash := externalBlock.Header().ParentHash[externalBlock.Context().Int64()]
+			// fmt.Println("Prime: Setting linked hash", externalBlock.Header().Number, externalBlock.Header().Location, externalBlock.Hash(), linkedPreviousHash)
+			linkBlocks.prime = linkedPreviousHash
+
+		case 1:
+			linkedPreviousHash := externalBlock.Header().ParentHash[externalBlock.Context().Int64()]
+			// fmt.Println("Region: Setting linked hash", externalBlock.Header().Number, externalBlock.Header().Location, externalBlock.Hash(), linkedPreviousHash)
+			linkBlocks.regions[externalBlock.Header().Location[0]-1] = linkedPreviousHash
+
+		case 2:
+			linkedPreviousHash := externalBlock.Header().ParentHash[externalBlock.Context().Int64()]
+			// fmt.Println("Zone: Setting linked hash:", externalBlock.Header().Number, externalBlock.Header().Location, externalBlock.Hash(), linkedPreviousHash)
+			linkBlocks.zones[externalBlock.Header().Location[0]-1][externalBlock.Header().Location[1]-1] = linkedPreviousHash
+		}
+	}
+
+	// Verify that the externalBlocks provided link with previous coincident blocks.
+	if linkBlocks.prime != (common.Hash{}) && linkBlocks.prime != bc.blockLink.prime {
+		fmt.Println("Error linking external blocks: want prime: ", bc.blockLink.prime, "have prime: ", linkBlocks.prime)
+		return fmt.Errorf("unable to link external blocks in prime")
+	} else {
+		for i := range linkBlocks.regions {
+			if linkBlocks.regions[i] != (common.Hash{}) && linkBlocks.regions[i] != bc.blockLink.regions[i] {
+				fmt.Println("Error linking external blocks:", "location", i+1, "want region: ", bc.blockLink.regions[i], "have region: ", linkBlocks.regions[i])
+				return fmt.Errorf("unable to link external blocks in region")
+			}
+			for j := range linkBlocks.zones[i] {
+				if linkBlocks.zones[i][j] != (common.Hash{}) && linkBlocks.zones[i][j] != bc.blockLink.zones[i][j] {
+					fmt.Println("Error linking external blocks:", "location", i+1, j+1, "want zone: ", bc.blockLink.zones[i][j], "have zone: ", linkBlocks.zones[i][j])
+					return fmt.Errorf("unable to link external blocks in zone")
+				}
+			}
+		}
+	}
+
 	return nil
 }
 
