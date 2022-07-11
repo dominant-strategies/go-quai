@@ -128,6 +128,10 @@ func (b *LesApiBackend) ReOrgRollBack(header *types.Header, validHeaders []*type
 	return errors.New("light client does not support reorg")
 }
 
+func (b *LesApiBackend) PCRC(header *types.Header, order int) (common.Hash, error) {
+	return common.Hash{}, errors.New("light client does not support external block caching")
+}
+
 func (b *LesApiBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Block, error) {
 	if blockNr, ok := blockNrOrHash.Number(); ok {
 		return b.BlockByNumber(ctx, blockNr)
@@ -288,6 +292,13 @@ func (b *LesApiBackend) SubscribeReOrgEvent(ch chan<- core.ReOrgRollup) event.Su
 }
 
 func (b *LesApiBackend) SubscribeMissingExternalBlockEvent(ch chan<- core.MissingExternalBlock) event.Subscription {
+	return event.NewSubscription(func(quit <-chan struct{}) error {
+		<-quit
+		return nil
+	})
+}
+
+func (b *LesApiBackend) SubscribeCrossChainData(ch chan<- core.CrossChainData) event.Subscription {
 	return event.NewSubscription(func(quit <-chan struct{}) error {
 		<-quit
 		return nil

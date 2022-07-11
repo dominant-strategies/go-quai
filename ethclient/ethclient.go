@@ -425,6 +425,11 @@ func (ec *Client) SubscribeReOrg(ctx context.Context, ch chan<- core.ReOrgRollup
 	return ec.c.EthSubscribe(ctx, ch, "reOrg")
 }
 
+// SubscribeCrossChainData subscribes to notifications about the chain data availability.
+func (ec *Client) SubscribeCrossChainData(ctx context.Context, ch chan<- core.CrossChainData) (ethereum.Subscription, error) {
+	return ec.c.EthSubscribe(ctx, ch, "crossChainData")
+}
+
 // SubscribeMissingExternalBlock subscribes to notifications about the missingExternalBlock event.
 func (ec *Client) SubscribeMissingExternalBlock(ctx context.Context, ch chan<- core.MissingExternalBlock) (ethereum.Subscription, error) {
 	return ec.c.EthSubscribe(ctx, ch, "missingExtBlock")
@@ -671,6 +676,15 @@ func (ec *Client) SendReOrgData(ctx context.Context, header *types.Header, newHe
 		return err
 	}
 	return ec.c.CallContext(ctx, nil, "quai_sendReOrgData", data)
+}
+
+// GetExternalBlockByHashAndContext searches the cache for external block
+func (ec *Client) CheckPCRC(ctx context.Context, header *types.Header) (common.Hash, error) {
+	var hash common.Hash
+	if err := ec.c.CallContext(ctx, &hash, "quai_checkPCRC", header); err != nil {
+		return common.Hash{}, err
+	}
+	return hash, nil
 }
 
 func toBlockNumArg(number *big.Int) string {

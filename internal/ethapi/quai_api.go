@@ -691,3 +691,13 @@ func (s *PublicBlockChainQuaiAPI) GetExternalBlockByHashAndContext(ctx context.C
 
 	return RPCMarshalExternalBlock(block, extBlock.Receipts(), extBlock.Context())
 }
+
+// EstimateGas returns an estimate of the amount of gas needed to execute the
+// given transaction against the current pending block.
+func (s *PublicBlockChainQuaiAPI) CheckPCRC(ctx context.Context, raw json.RawMessage) (common.Hash, error) {
+	var head *types.Header
+	if err := json.Unmarshal(raw, &head); err != nil {
+		return common.Hash{}, err
+	}
+	return s.b.PCRC(head, 0)
+}

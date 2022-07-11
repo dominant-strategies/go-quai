@@ -24,7 +24,6 @@ import (
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/eth/protocols/eth"
 	"github.com/spruce-solutions/go-quai/eth/protocols/snap"
-	"github.com/spruce-solutions/go-quai/log"
 	"github.com/spruce-solutions/go-quai/p2p"
 )
 
@@ -261,7 +260,6 @@ func (ps *peerSet) close() {
 
 // HLCR does hierarchical comparison of two difficulty tuples and returns true if second tuple is greater than the first
 func HLCR(localDifficulties []*big.Int, externDifficulties []*big.Int) bool {
-	log.Info("HLCR", "localDiff", localDifficulties, "externDiff", externDifficulties)
 	if externDifficulties == nil || len(externDifficulties) == 0 || localDifficulties == nil || len(localDifficulties) == 0 {
 		return false
 	}

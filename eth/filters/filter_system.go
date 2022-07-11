@@ -60,8 +60,10 @@ const (
 	ReOrgSubscription
 	// MissingExternalBlock subscription sends in the data from the missingExternalBlock event
 	MissingExternalBlockSubscription
-	// uncleChSubscription writes the header of a block that is notified as an uncle.
-	uncleChSubscription
+	// UncleChSubscription writes the header of a block that is notified as an uncle.
+	UncleChSubscription
+	// CrossChainDataSubscription sends in data of cross chain events
+	CrossChainDataSubscription
 )
 
 const (
@@ -92,6 +94,7 @@ type subscription struct {
 	reOrg           chan core.ReOrgRollup
 	uncleEvent      chan *types.Header
 	missingExtBlock chan core.MissingExternalBlock
+	crossChainData  chan core.CrossChainData
 }
 
 // EventSystem creates subscriptions, processes events and broadcasts them to the
@@ -111,6 +114,7 @@ type EventSystem struct {
 	reOrgSub                event.Subscription // Subscription for reorg event
 	uncleChSub              event.Subscription // Subscription for side chain event
 	missingExternalBlockSub event.Subscription // Subscription for missingBlock event
+	crossChainDataSub       event.Subscription // Subscription for cross chain data event
 
 	// Channels
 	install                chan *subscription             // install filter for event notification
@@ -124,6 +128,7 @@ type EventSystem struct {
 	reOrgCh                chan core.ReOrgRollup          // Channel to receive reorg event data
 	uncleCh                chan *types.Header             // Channel to receive side chain event data
 	missingExternalBlockCh chan core.MissingExternalBlock // Channel to receive the missing external block event
+	crossChainCh           chan core.CrossChainData       // Channel to receive cross chain data information
 }
 
 // NewEventSystem creates a new manager that listens for event on the given mux,
@@ -147,6 +152,7 @@ func NewEventSystem(backend Backend, lightMode bool) *EventSystem {
 		reOrgCh:                make(chan core.ReOrgRollup),
 		uncleCh:                make(chan *types.Header),
 		missingExternalBlockCh: make(chan core.MissingExternalBlock),
+		crossChainCh:           make(chan core.CrossChainData),
 	}
 
 	// Subscribe events
@@ -159,6 +165,7 @@ func NewEventSystem(backend Backend, lightMode bool) *EventSystem {
 	m.reOrgSub = m.backend.SubscribeReOrgEvent(m.reOrgCh)
 	m.missingExternalBlockSub = m.backend.SubscribeMissingExternalBlockEvent(m.missingExternalBlockCh)
 	m.uncleChSub = m.backend.SubscribeChainUncleEvent(m.uncleCh)
+	m.crossChainDataSub = m.backend.SubscribeCrossChainData(m.crossChainCh)
 
 	// Make sure none of the subscriptions are empty
 	if m.txsSub == nil || m.logsSub == nil || m.rmLogsSub == nil || m.chainSub == nil || m.pendingLogsSub == nil || m.reOrgSub == nil || m.uncleChSub == nil {
@@ -264,11 +271,13 @@ func (es *EventSystem) subscribeMinedPendingLogs(crit ethereum.FilterQuery, logs
 		logs:            logs,
 		hashes:          make(chan []common.Hash),
 		headers:         make(chan *types.Header),
+		block:           make(chan *types.Header),
 		installed:       make(chan struct{}),
 		err:             make(chan error),
 		reOrg:           make(chan core.ReOrgRollup),
 		uncleEvent:      make(chan *types.Header),
 		missingExtBlock: make(chan core.MissingExternalBlock),
+		crossChainData:  make(chan core.CrossChainData),
 	}
 	return es.subscribe(sub)
 }
@@ -289,6 +298,7 @@ func (es *EventSystem) subscribeLogs(crit ethereum.FilterQuery, logs chan []*typ
 		reOrg:           make(chan core.ReOrgRollup),
 		uncleEvent:      make(chan *types.Header),
 		missingExtBlock: make(chan core.MissingExternalBlock),
+		crossChainData:  make(chan core.CrossChainData),
 	}
 	return es.subscribe(sub)
 }
@@ -304,11 +314,13 @@ func (es *EventSystem) subscribePendingLogs(crit ethereum.FilterQuery, logs chan
 		logs:            logs,
 		hashes:          make(chan []common.Hash),
 		headers:         make(chan *types.Header),
+		block:           make(chan *types.Header),
 		installed:       make(chan struct{}),
 		err:             make(chan error),
 		reOrg:           make(chan core.ReOrgRollup),
 		uncleEvent:      make(chan *types.Header),
 		missingExtBlock: make(chan core.MissingExternalBlock),
+		crossChainData:  make(chan core.CrossChainData),
 	}
 	return es.subscribe(sub)
 }
@@ -328,6 +340,7 @@ func (es *EventSystem) SubscribePendingBlock(block chan *types.Header) *Subscrip
 		reOrg:           make(chan core.ReOrgRollup),
 		uncleEvent:      make(chan *types.Header),
 		missingExtBlock: make(chan core.MissingExternalBlock),
+		crossChainData:  make(chan core.CrossChainData),
 	}
 	return es.subscribe(sub)
 }
@@ -342,11 +355,13 @@ func (es *EventSystem) SubscribeNewHeads(headers chan *types.Header) *Subscripti
 		logs:            make(chan []*types.Log),
 		hashes:          make(chan []common.Hash),
 		headers:         headers,
+		block:           make(chan *types.Header),
 		installed:       make(chan struct{}),
 		err:             make(chan error),
 		reOrg:           make(chan core.ReOrgRollup),
 		uncleEvent:      make(chan *types.Header),
 		missingExtBlock: make(chan core.MissingExternalBlock),
+		crossChainData:  make(chan core.CrossChainData),
 	}
 	return es.subscribe(sub)
 }
@@ -366,6 +381,7 @@ func (es *EventSystem) SubscribePendingTxs(hashes chan []common.Hash) *Subscript
 		reOrg:           make(chan core.ReOrgRollup),
 		uncleEvent:      make(chan *types.Header),
 		missingExtBlock: make(chan core.MissingExternalBlock),
+		crossChainData:  make(chan core.CrossChainData),
 	}
 	return es.subscribe(sub)
 }
@@ -380,11 +396,13 @@ func (es *EventSystem) SubscribeReOrg(reOrg chan core.ReOrgRollup) *Subscription
 		logs:            make(chan []*types.Log),
 		hashes:          make(chan []common.Hash),
 		headers:         make(chan *types.Header),
+		block:           make(chan *types.Header),
 		installed:       make(chan struct{}),
 		err:             make(chan error),
 		reOrg:           reOrg,
 		uncleEvent:      make(chan *types.Header),
 		missingExtBlock: make(chan core.MissingExternalBlock),
+		crossChainData:  make(chan core.CrossChainData),
 	}
 	return es.subscribe(sub)
 }
@@ -394,16 +412,18 @@ func (es *EventSystem) SubscribeReOrg(reOrg chan core.ReOrgRollup) *Subscription
 func (es *EventSystem) SubscribeChainUncleEvent(uncleEvent chan *types.Header) *Subscription {
 	sub := &subscription{
 		id:              rpc.NewID(),
-		typ:             uncleChSubscription,
+		typ:             UncleChSubscription,
 		created:         time.Now(),
 		logs:            make(chan []*types.Log),
 		hashes:          make(chan []common.Hash),
 		headers:         make(chan *types.Header),
+		block:           make(chan *types.Header),
 		installed:       make(chan struct{}),
 		err:             make(chan error),
 		reOrg:           make(chan core.ReOrgRollup),
 		uncleEvent:      uncleEvent,
 		missingExtBlock: make(chan core.MissingExternalBlock),
+		crossChainData:  make(chan core.CrossChainData),
 	}
 	return es.subscribe(sub)
 }
@@ -418,10 +438,34 @@ func (es *EventSystem) SubscribeMissingExternalBlock(extBlockMiss chan core.Miss
 		logs:            make(chan []*types.Log),
 		hashes:          make(chan []common.Hash),
 		headers:         make(chan *types.Header),
+		block:           make(chan *types.Header),
 		installed:       make(chan struct{}),
 		err:             make(chan error),
 		reOrg:           make(chan core.ReOrgRollup),
+		uncleEvent:      make(chan *types.Header),
 		missingExtBlock: extBlockMiss,
+		crossChainData:  make(chan core.CrossChainData),
+	}
+	return es.subscribe(sub)
+}
+
+// SubscribeNewHeads creates a subscription that writes the header of a block that is
+// imported in the chain.
+func (es *EventSystem) SubscribeCrossChainData(crossChainData chan core.CrossChainData) *Subscription {
+	sub := &subscription{
+		id:              rpc.NewID(),
+		typ:             CrossChainDataSubscription,
+		created:         time.Now(),
+		logs:            make(chan []*types.Log),
+		hashes:          make(chan []common.Hash),
+		headers:         make(chan *types.Header),
+		block:           make(chan *types.Header),
+		installed:       make(chan struct{}),
+		err:             make(chan error),
+		reOrg:           make(chan core.ReOrgRollup),
+		uncleEvent:      make(chan *types.Header),
+		missingExtBlock: make(chan core.MissingExternalBlock),
+		crossChainData:  crossChainData,
 	}
 	return es.subscribe(sub)
 }
@@ -469,9 +513,16 @@ func (es *EventSystem) handleMissingExternalBlock(filters filterIndex, ev core.M
 		f.missingExtBlock <- ev
 	}
 }
+
 func (es *EventSystem) handleUncleCh(filters filterIndex, ev *types.Header) {
-	for _, f := range filters[uncleChSubscription] {
+	for _, f := range filters[UncleChSubscription] {
 		f.uncleEvent <- ev
+	}
+}
+
+func (es *EventSystem) handleCrossChainData(filters filterIndex, ev core.CrossChainData) {
+	for _, f := range filters[CrossChainDataSubscription] {
+		f.crossChainData <- ev
 	}
 }
 
@@ -595,10 +646,11 @@ func (es *EventSystem) eventLoop() {
 		es.reOrgSub.Unsubscribe()
 		es.missingExternalBlockSub.Unsubscribe()
 		es.uncleChSub.Unsubscribe()
+		es.crossChainDataSub.Unsubscribe()
 	}()
 
 	index := make(filterIndex)
-	for i := UnknownSubscription; i <= uncleChSubscription; i++ {
+	for i := UnknownSubscription; i <= CrossChainDataSubscription; i++ {
 		index[i] = make(map[rpc.ID]*subscription)
 	}
 
@@ -622,6 +674,8 @@ func (es *EventSystem) eventLoop() {
 			es.handleMissingExternalBlock(index, ev)
 		case ev := <-es.uncleCh:
 			es.handleUncleCh(index, ev)
+		case ev := <-es.crossChainCh:
+			es.handleCrossChainData(index, ev)
 
 		case f := <-es.install:
 			if f.typ == MinedAndPendingLogsSubscription {

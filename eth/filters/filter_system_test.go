@@ -100,7 +100,12 @@ func (b *testBackend) SubscribeReOrgEvent(ch chan<- core.ReOrgRollup) event.Subs
 func (b *testBackend) SubscribeMissingExternalBlockEvent(ch chan<- core.MissingExternalBlock) event.Subscription {
 	return nil
 }
+
 func (b *testBackend) SubscribeChainUncleEvent(ch chan<- *types.Header) event.Subscription {
+	return nil
+}
+
+func (b *testBackend) SubscribeCrossChainData(ch chan<- core.CrossChainData) event.Subscription {
 	return nil
 }
 

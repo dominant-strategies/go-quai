@@ -673,7 +673,7 @@ func (hc *HeaderChain) SetHead(head uint64, updateFn UpdateHeadBlocksCallback, d
 
 // HLCR does hierarchical comparison of two difficulty tuples and returns true if second tuple is greater than the first
 func (hc *HeaderChain) HLCR(localDifficulties []*big.Int, externDifficulties []*big.Int) bool {
-	log.Info("HLCR", "localDiff", localDifficulties, "externDiff", externDifficulties)
+	log.Debug("HLCR", "localDiff", localDifficulties, "externDiff", externDifficulties)
 	if localDifficulties[0].Cmp(externDifficulties[0]) < 0 {
 		return true
 	} else if localDifficulties[0].Cmp(externDifficulties[0]) > 0 {
@@ -695,7 +695,12 @@ func (hc *HeaderChain) HLCR(localDifficulties []*big.Int, externDifficulties []*
 // CalcTd calculates the TD of the given header using PCRC and CalcHLCRNetDifficulty.
 func (hc *HeaderChain) CalcTd(header *types.Header) ([]*big.Int, error) {
 	// Check PCRC for the external block and return the terminal hash and net difficulties
-	externTerminalHash, err := hc.PCRC(header)
+	headerOrder, err := hc.Engine().GetDifficultyOrder(header)
+	if err != nil {
+		return nil, err
+	}
+
+	externTerminalHash, err := hc.PCRC(header, headerOrder)
 	if err != nil {
 		return nil, err
 	}
@@ -773,7 +778,7 @@ func (hc *HeaderChain) NdToTd(header *types.Header, nD []*big.Int) ([]*big.Int, 
 // that we have linked untwisted chains prior to checking HLCR & applying external state transfers.
 // NOTE: note that it only guarantees linked & untwisted back to the prime terminus, assuming the
 // prime termini match. To check deeper than that, you need to iteratively apply PCRC to get that guarantee.
-func (hc *HeaderChain) PCRC(header *types.Header) (common.Hash, error) {
+func (hc *HeaderChain) PCRC(header *types.Header, headerOrder int) (common.Hash, error) {
 
 	if header.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
 		return hc.config.GenesisHashes[0], nil

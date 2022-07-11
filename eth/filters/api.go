@@ -361,6 +361,36 @@ func (api *PublicFilterAPI) MissingExtBlock(ctx context.Context) (*rpc.Subscript
 	return rpcSub, nil
 }
 
+// CrossChainData sends an event when data can be made available to a different chain.
+func (api *PublicFilterAPI) CrossChainData(ctx context.Context) (*rpc.Subscription, error) {
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+
+	rpcSub := notifier.CreateSubscription()
+
+	go func() {
+		data := make(chan core.CrossChainData)
+		dataSub := api.events.SubscribeCrossChainData(data)
+
+		for {
+			select {
+			case b := <-data:
+				notifier.Notify(rpcSub.ID, b)
+			case <-rpcSub.Err():
+				dataSub.Unsubscribe()
+				return
+			case <-notifier.Closed():
+				dataSub.Unsubscribe()
+				return
+			}
+		}
+	}()
+
+	return rpcSub, nil
+}
+
 // Logs creates a subscription that fires for all new log that match the given filter criteria.
 func (api *PublicFilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)

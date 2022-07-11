@@ -74,6 +74,7 @@ type Backend interface {
 	PendingBlockAndReceipts() (*types.Block, types.Receipts)
 	AddExternalBlock(block *types.ExternalBlock) error
 	GetExternalBlockByHashAndContext(hash common.Hash, context int) (*types.ExternalBlock, error)
+	PCRC(header *types.Header, order int) (common.Hash, error)
 	EventMux() *event.TypeMux
 	CalculateBaseFee(header *types.Header) *big.Int
 	GetUncleFromWorker(uncleHash common.Hash) (*types.Block, error)
@@ -99,6 +100,7 @@ type Backend interface {
 	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
 	SubscribeReOrgEvent(ch chan<- core.ReOrgRollup) event.Subscription
 	SubscribeMissingExternalBlockEvent(ch chan<- core.MissingExternalBlock) event.Subscription
+	SubscribeCrossChainData(ch chan<- core.CrossChainData) event.Subscription
 
 	ChainConfig() *params.ChainConfig
 	Engine() consensus.Engine

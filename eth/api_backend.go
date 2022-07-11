@@ -132,6 +132,10 @@ func (b *EthAPIBackend) GetExternalBlockByHashAndContext(hash common.Hash, conte
 	return b.eth.blockchain.GetExternalBlockByHashAndContext(hash, context)
 }
 
+func (b *EthAPIBackend) PCRC(header *types.Header, order int) (common.Hash, error) {
+	return b.eth.blockchain.PCRC(header, order)
+}
+
 func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
 	return b.eth.blockchain.GetBlockByHash(hash), nil
 }
@@ -269,6 +273,10 @@ func (b *EthAPIBackend) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) e
 
 func (b *EthAPIBackend) SubscribeChainUncleEvent(ch chan<- *types.Header) event.Subscription {
 	return b.eth.BlockChain().SubscribeChainUncleEvent(ch)
+}
+
+func (b *EthAPIBackend) SubscribeCrossChainData(ch chan<- core.CrossChainData) event.Subscription {
+	return b.eth.BlockChain().SubscribeCrossChainData(ch)
 }
 
 func (b *EthAPIBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
