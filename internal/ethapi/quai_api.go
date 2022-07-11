@@ -519,6 +519,12 @@ func RPCMarshalExternalBlockTraceSet(hash common.Hash, context int) (map[string]
 	return fields, nil
 }
 
+// RPCMarshalHash convert the hash into a the correct interface.
+func RPCMarshalHash(hash common.Hash) (map[string]interface{}, error) {
+	fields := map[string]interface{}{"Hash": hash}
+	return fields, nil
+}
+
 // rpcMarshalHeader uses the generalized output filler, then adds the total difficulty field, which requires
 // a `PublicBlockchainQuaiAPI`.
 func (s *PublicBlockChainQuaiAPI) rpcMarshalHeader(ctx context.Context, header *types.Header) map[string]interface{} {
@@ -690,4 +696,14 @@ func (s *PublicBlockChainQuaiAPI) GetExternalBlockByHashAndContext(ctx context.C
 	block := types.NewBlockWithHeader(extBlock.Header()).WithBody(extBlock.Transactions(), extBlock.Uncles())
 
 	return RPCMarshalExternalBlock(block, extBlock.Receipts(), extBlock.Context())
+}
+
+// CheckCanonical checks if the block with the given hash is canonical in the chain.
+func (s *PublicBlockChainQuaiAPI) CheckCanonical(ctx context.Context, raw json.RawMessage) (bool, error) {
+	var head *types.Header
+	if err := json.Unmarshal(raw, &head); err != nil {
+		return false, err
+	}
+
+	return s.b.CheckCanonical(head)
 }

@@ -662,6 +662,15 @@ func (ec *Client) GetExternalBlockByHashAndContext(ctx context.Context, hash com
 	return ec.getExternalBlock(ctx, "quai_getExternalBlockByHashAndContext", data)
 }
 
+// CheckCanonical checks if the given header is canonical in the chain.
+func (ec *Client) CheckCanonical(ctx context.Context, header *types.Header) (bool, error) {
+	var isCanonical bool
+	if err := ec.c.CallContext(ctx, &isCanonical, "quai_checkCanonical", header); err != nil {
+		return false, err
+	}
+	return isCanonical, nil
+}
+
 // header: header in which the intended chain is to roll back to.
 // newHeaders: potentially now valid dominant headers to take out of nonCanonDom db.
 // oldHeaders: invalid dominant headers to insert into nonCanonDom db.
