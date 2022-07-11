@@ -600,6 +600,7 @@ func (s *PublicBlockChainQuaiAPI) SendMinedBlock(ctx context.Context, raw json.R
 	}
 
 	block := types.NewBlockWithHeader(head).WithBody(txs, uncles)
+
 	log.Info("Retrieved mined block", "number", head.Number, "location", head.Location)
 	s.b.InsertBlock(ctx, block)
 	// Broadcast the block and announce chain insertion event

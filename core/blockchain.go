@@ -1982,6 +1982,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 					break
 				}
 			}
+			canonHash := bc.GetCanonicalHash(block.Header().Number[types.QuaiNetworkContext].Uint64())
+			if canonHash != block.Hash() {
+				bc.chainUncleFeed.Send(block.Header())
+			}
 			log.Debug("Ignoring already known block", "number", block.Number(), "hash", block.Hash())
 			stats.ignored++
 
@@ -2146,6 +2150,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 			bc.reportBlock(block, receipts, err)
 			atomic.StoreUint32(&followupInterrupt, 1)
 			bc.futureBlocks.Remove(block.Hash())
+			bc.chainUncleFeed.Send(block.Header())
 			return it.index, err
 		}
 		// Update the metrics touched during block processing
@@ -2607,6 +2612,9 @@ func (bc *BlockChain) skipBlock(err error, it *insertIterator) bool {
 	)
 	// If we also have the snapshot-state, we can skip the processing.
 	if bc.snaps.Snapshot(header.Root[types.QuaiNetworkContext]) != nil {
+		if bc.GetCanonicalHash(header.Number[types.QuaiNetworkContext].Uint64()) != header.Hash() {
+			bc.chainUncleFeed.Send(header)
+		}
 		return true
 	}
 	// In this case, we have the trie-state but not snapshot-state. If the parent
@@ -2623,6 +2631,10 @@ func (bc *BlockChain) skipBlock(err error, it *insertIterator) bool {
 	}
 	// Parent is also missing snapshot: we can skip this. Otherwise process.
 	if bc.snaps.Snapshot(parentRoot) == nil {
+		canonHash := bc.GetCanonicalHash(header.Number[types.QuaiNetworkContext].Uint64())
+		if canonHash != header.Hash() {
+			bc.chainUncleFeed.Send(header)
+		}
 		return true
 	}
 	return false
@@ -3187,6 +3199,20 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (common.Hash, 
 		}
 		log.Debug("PCRC: PRTR", "time", time.Since(start))
 
+		if PTP.Hash() != PTR.Hash() && PTR.Hash() != PTZ.Hash() && PTP.Hash() != PTZ.Hash() {
+			log.Info("Error in PCRC, nothing is equal", "PTP", PTP.Hash(), "num", PTP.Number, "PTR", PTR.Hash(), "num", PTR.Number, "PTZ", PTZ.Hash(), "num", PTZ.Number)
+			err = bc.notifyCrossChainHeads(PTR, PTP, slice, params.PRIME, params.REGION)
+			if err != nil {
+				return common.Hash{}, errors.New("unable to reorg REGION to common ancestor after prime (PTP != PTR != PTZ) twist")
+			}
+			err = bc.notifyCrossChainHeads(PTZ, PTP, slice, params.PRIME, params.ZONE)
+			if err != nil {
+				return common.Hash{}, errors.New("unable to reorg ZONE to common ancestor after prime (PTP != PTR != PTZ)  twist")
+			}
+
+			return common.Hash{}, errors.New("there exists a prime (PTP!=PTR!=PTZ) twist")
+		}
+
 		if PTP.Hash() != PTR.Hash() && PTR.Hash() == PTZ.Hash() {
 			log.Info("Error in PCRC", "PTP", PTP.Hash(), "num", PTP.Number, "PTR", PTR.Hash(), "num", PTR.Number)
 			err = bc.notifyCrossChainHeads(PTR, PTP, slice, params.PRIME, params.REGION)
@@ -3199,7 +3225,7 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (common.Hash, 
 				return common.Hash{}, errors.New("unable to reorg ZONE to common ancestor after prime (PTP!=PTR, PTR==PTZ) twist")
 			}
 
-			return common.Hash{}, errors.New("there exists a prime (PTP-PTR) twist")
+			return common.Hash{}, errors.New("there exists a prime (PTP!=PTR, PTR==PTZ) twist")
 		}
 
 		if PTP.Hash() != PTZ.Hash() && PTP.Hash() == PTR.Hash() {
@@ -3221,20 +3247,6 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (common.Hash, 
 			}
 
 			return common.Hash{}, errors.New("there exists a prime (PTP-PTZ) twist")
-		}
-
-		if PTP.Hash() != PTR.Hash() && PTR.Hash() != PTZ.Hash() && PTP.Hash() != PTZ.Hash() {
-			log.Info("Error in PCRC, nothing is equal", "PTP", PTP.Hash(), "num", PTP.Number, "PTR", PTR.Hash(), "num", PTR.Number, "PTZ", PTZ.Hash(), "num", PTZ.Number)
-			err = bc.notifyCrossChainHeads(PTR, PTP, slice, params.PRIME, params.REGION)
-			if err != nil {
-				return common.Hash{}, errors.New("unable to reorg REGION to common ancestor after prime (PTP != PTR != PTZ) twist")
-			}
-			err = bc.notifyCrossChainHeads(PTZ, PTP, slice, params.PRIME, params.ZONE)
-			if err != nil {
-				return common.Hash{}, errors.New("unable to reorg ZONE to common ancestor after prime (PTP != PTR != PTZ)  twist")
-			}
-
-			return common.Hash{}, errors.New("there exists a prime (PTP!=PTR!=PTZ) twist")
 		}
 
 		if PRTP.Hash() != PRTR.Hash() {
@@ -3279,41 +3291,65 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (common.Hash, 
 
 // notifyCrossChainHeads notifies data to chains for processing.
 func (bc *BlockChain) notifyCrossChainHeads(subHead *types.Header, domHead *types.Header, slice []byte, order int, path int) error {
+	fmt.Println()
 	fmt.Println("do we have nums?", path, order, subHead.Number, domHead.Number, subHead.Hash(), domHead.Hash())
 	if types.QuaiNetworkContext <= order {
-		subNum := bc.hc.GetBlockNumber(subHead.Hash())
-		if subNum != nil {
+		num := bc.hc.GetBlockNumber(subHead.Hash())
+
+		if num != nil {
 			// get all the external blocks on the subordinate chain path until common point
-			extBlocks, err := bc.GetExternalBlockTraceSet(subHead.Hash(), domHead, path)
-			if err != nil {
-				fmt.Println("err with finding ext block trace set", err)
-				return err
+			var extBlocks []*types.ExternalBlock
+			var err error
+			if subHead.Number[path].Cmp(domHead.Number[path]) < 0 {
+				extBlocks, err = bc.GetExternalBlockTraceSet(subHead.Hash(), domHead, path)
+				if err != nil {
+					fmt.Println("err with finding ext block trace set", err)
+					return err
+				}
+			} else {
+				extBlocks, err = bc.GetExternalBlockTraceSet(subHead.Hash(), domHead, path)
+				if err != nil {
+					fmt.Println("err with finding ext block trace set", err)
+					return err
+				}
 			}
 			hashes := make([]common.Hash, 0)
 			for _, extBlock := range extBlocks {
 				hashes = append(hashes, extBlock.Hash())
 			}
-			fmt.Println("Sending crossChainData")
-			bc.crossChainDataFeed.Send(CrossChainData{Hashes: hashes, Context: order})
+			fmt.Println("Dom to Sub: sending crossChainData", len(hashes))
+			bc.crossChainDataFeed.Send(CrossChainData{Hashes: hashes, Context: path})
 			return nil
 		}
 	} else {
-		domNum := bc.hc.GetBlockNumber(domHead.Hash())
-
-		if domNum != nil {
-			// get all the external blocks on the subordinate chain path until common point
-			extBlocks, err := bc.GetExternalBlockTraceSet(domHead.Hash(), subHead, order)
+		prev := domHead
+		for {
+			fmt.Println("checking if num is there 1", prev.Number, prev.Hash())
+			prevHeader, err := bc.Engine().PreviousCoincidentOnPath(bc, prev, slice, order, path, true)
 			if err != nil {
+				fmt.Println("err in notify", err)
 				return err
 			}
-			hashes := make([]common.Hash, 0)
-			for _, extBlock := range extBlocks {
-				hashes = append(hashes, extBlock.Hash())
+			num := bc.hc.GetBlockNumber(prevHeader.Hash())
+			fmt.Println("checking if num is there 2", prevHeader.Number, prevHeader.Hash())
+			if num != nil {
+				// get all the external blocks on the subordinate chain path until common point
+				extBlocks, err := bc.GetExternalBlockTraceSet(prevHeader.Hash(), subHead, order)
+				if err != nil {
+					fmt.Println("err in get ext trace set", err)
+					return err
+				}
+				hashes := make([]common.Hash, 0)
+				for _, extBlock := range extBlocks {
+					hashes = append(hashes, extBlock.Hash())
+					fmt.Println("adding hash", extBlock.Header().Number, extBlock.Hash())
+				}
+				fmt.Println("Sub to Dom: sending crossChainData", len(hashes))
+				bc.crossChainDataFeed.Send(CrossChainData{Hashes: hashes, Context: order})
+				return nil
 			}
-			fmt.Println("Sending crossChainData")
-			bc.crossChainDataFeed.Send(CrossChainData{Hashes: hashes, Context: order})
+			prev = prevHeader
 		}
-		return nil
 	}
 	return nil
 }
