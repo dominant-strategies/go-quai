@@ -84,6 +84,7 @@ var Defaults = Config{
 	RPCTxFeeCap: 1, // 1 ether
 	Region:      0,
 	Zone:        0,
+	DomUrl:      "",
 }
 
 func init() {
@@ -185,6 +186,9 @@ type Config struct {
 
 	// Zone location options
 	Zone int
+
+	// Dom node websocket url
+	DomUrl string
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.

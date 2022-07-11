@@ -375,3 +375,7 @@ func (b *LesApiBackend) StateAtTransaction(ctx context.Context, block *types.Blo
 func (b *LesApiBackend) CalculateBaseFee(header *types.Header) *big.Int {
 	return b.CalculateBaseFee(header)
 }
+
+func (b *LesApiBackend) CheckCanonical(header *types.Header) (bool, error) {
+	return false, nil
+}
