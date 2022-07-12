@@ -759,6 +759,31 @@ func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader
 	}
 }
 
+// PreviousCononicalCoincidentOnPath searches the path for a cononical block of specified order in the specified slice
+//     *slice - The zone location which defines the slice in which we are validating
+//     *order - The order of the conincidence that is desired
+//     *path - Search among ancestors of this path in the specified slice
+func (blake3 *Blake3) PreviousCononicalCoincidentOnPath(chain consensus.ChainHeaderReader, header *types.Header, slice []byte, order, path int, fullSliceEqual bool) (*types.Header, *types.Header, error) {
+	prevTerminalHeader := header
+	for {
+		terminalHeader, err := blake3.PreviousCoincidentOnPath(chain, prevTerminalHeader, slice, order, path, fullSliceEqual)
+		if err != nil {
+			return nil, nil, err
+		}
+		// Check to see if the terminal header is cononical in the dom
+		if chain.GetCanonicalHash(terminalHeader.Number[order].Uint64()) == terminalHeader.Hash() {
+
+			// Only return the prevTerminalHeader if we have run more than once because if not it is our head
+			if prevTerminalHeader == header {
+				return terminalHeader, nil, nil
+			} else {
+				return terminalHeader, prevTerminalHeader, nil
+			}
+		}
+		prevTerminalHeader = terminalHeader
+	}
+}
+
 // TraceBranches utilizes a passed in header for initializing a trace of all external blocks.
 // The function will sue PrimeTraceBranch and RegionTraceBranch for the two different types of traces that need to occur.
 // Depending on the difficultyContext, originalContext, and originalLocation the trace will know when and where to stop.

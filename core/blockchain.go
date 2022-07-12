@@ -3350,23 +3350,7 @@ func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
 // If there are many invalid subordinate heads, aggregate the valid subordinate blocks (NewSubs) off of the valid dominant chain (RTR / PTP / PTR)
 // and include them for processing in the manager.
 func (bc *BlockChain) reorgTwistToCommonAncestor(subHead *types.Header, domHead *types.Header, slice []byte, order int, path int) error {
-	num := bc.hc.GetBlockNumber(subHead.Hash())
-
-	if num != nil {
-		// get all the external blocks on the subordinate chain path until common point
-		extBlocks, err := bc.GetExternalBlockTraceSet(subHead.Hash(), domHead, path)
-		if err != nil {
-			return err
-		}
-		hashes := make([]common.Hash, 0)
-		for _, extBlock := range extBlocks {
-			hashes = append(hashes, extBlock.Hash())
-		}
-		// Remove non-cononical blocks from subordinate chains.
-		nilHeader := &types.Header{}
-		bc.reOrgFeed.Send(ReOrgRollup{ReOrgHeader: nilHeader, OldChainHeaders: []*types.Header{nilHeader}, NewChainHeaders: []*types.Header{domHead}, NewSubs: hashes, NewSubContext: path})
-		return nil
-	}
+	hash := bc.hc.GetCanonicalHash(subHead.Number[path].Uint64())
 
 	prev := subHead
 	for {
@@ -3374,20 +3358,9 @@ func (bc *BlockChain) reorgTwistToCommonAncestor(subHead *types.Header, domHead 
 		if err != nil {
 			return err
 		}
-		num = bc.hc.GetBlockNumber(prevHeader.Hash())
+		hash = bc.hc.GetCanonicalHash(prevHeader.Number[path].Uint64())
 
-		if num != nil {
-			// get all the external blocks on the subordinate chain path until common point
-			extBlocks, err := bc.GetExternalBlockTraceSet(prevHeader.Hash(), domHead, path)
-			if err != nil {
-				return err
-			}
-			hashes := make([]common.Hash, 0)
-			for _, extBlock := range extBlocks {
-				hashes = append(hashes, extBlock.Hash())
-			}
-			// Remove non-cononical blocks from subordinate chains.
-			bc.reOrgFeed.Send(ReOrgRollup{ReOrgHeader: prev, OldChainHeaders: []*types.Header{prev}, NewChainHeaders: []*types.Header{domHead}, NewSubs: hashes, NewSubContext: path})
+		if hash == prevHeader.Hash() {
 			return nil
 		}
 		prev = prevHeader
