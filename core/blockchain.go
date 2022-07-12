@@ -1721,13 +1721,13 @@ func (bc *BlockChain) addFutureBlock(block *types.Block) error {
 func (bc *BlockChain) GetBlockStatus(header *types.Header) WriteStatus {
 	canonHash := bc.GetCanonicalHash(header.Number[types.QuaiNetworkContext].Uint64())
 	fmt.Println("canonHash", canonHash, "headerHash", header.Hash(), header.Number, header.Location)
-	if canonHash != header.Hash() {
-		fmt.Println("returning SideStatTy for subordinate")
-		return SideStatTy
-	}
 	if (canonHash == common.Hash{}) {
 		fmt.Println("returning UnknownStatTy for subordinate")
 		return UnknownStatTy
+	}
+	if canonHash != header.Hash() {
+		fmt.Println("returning SideStatTy for subordinate")
+		return SideStatTy
 	}
 	fmt.Println("returning CanonStatTy for subordinate")
 	return CanonStatTy
