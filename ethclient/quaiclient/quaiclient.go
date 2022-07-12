@@ -76,14 +76,21 @@ func (ec *Client) Close() {
 	ec.c.Close()
 }
 
+// WriteStatus status of write
+type WriteStatus byte
+
+const (
+	NonStatTy WriteStatus = iota
+	CanonStatTy
+	SideStatTy
+	UnknownStatTy
+)
+
 // GetBlockStatus returns the status of the block for a given header
-// * `accepted` - If the block with given header is canonical
-// * `rejected` - If the block with given header is an uncle
-// * `future` - If the given header is of a future block
-func (ec *Client) GetBlockStatus(ctx context.Context, header *types.Header) (string, error) {
-	var blockStatus string
+func (ec *Client) GetBlockStatus(ctx context.Context, header *types.Header) WriteStatus {
+	var blockStatus WriteStatus
 	if err := ec.c.CallContext(ctx, &blockStatus, "quai_getBlockStatus", header); err != nil {
-		return "", err
+		return NonStatTy
 	}
-	return blockStatus, nil
+	return blockStatus
 }

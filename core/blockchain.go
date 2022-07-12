@@ -1157,6 +1157,7 @@ const (
 	NonStatTy WriteStatus = iota
 	CanonStatTy
 	SideStatTy
+	UnknownStatTy
 )
 
 // numberHash is just a container for a number and a hash, to represent a block
@@ -1713,25 +1714,16 @@ func (bc *BlockChain) addFutureBlock(block *types.Block) error {
 	return nil
 }
 
-var (
-	accepted = "accepted"
-	rejected = "rejected"
-	future   = "future"
-)
-
 // GetBlockStatus returns the status of the block for a given header
-// * `accepted` - If the block with given header is canonical
-// * `rejected` - If the block with given header is an uncle
-// * `future` - If the given header is of a future block
-func (bc *BlockChain) GetBlockStatus(header *types.Header) (string, error) {
+func (bc *BlockChain) GetBlockStatus(header *types.Header) WriteStatus {
 	canonHash := bc.GetCanonicalHash(header.Number[types.QuaiNetworkContext].Uint64())
-	if (canonHash == common.Hash{}) {
-		return "", errors.New("unable to find a block with the header hash")
-	}
 	if canonHash != header.Hash() {
-		return "", nil
+		return SideStatTy
 	}
-	return accepted, nil
+	if (canonHash == common.Hash{}) {
+		return UnknownStatTy
+	}
+	return CanonStatTy
 }
 
 // AddExternalBlocks adds a group of external blocks to the cache

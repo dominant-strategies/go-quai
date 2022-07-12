@@ -43,5 +43,5 @@ var (
 	ErrInvalidOntology = errors.New("invalid ontology")
 
 	// ErrGhostState is returned if a side chain is attempted to be re-imported into state.
-	ErrGhostState = errors.New("sidechain ghost-state attac")
+	ErrGhostState = errors.New("sidechain ghost-state attack")
 )

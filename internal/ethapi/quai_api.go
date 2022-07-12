@@ -702,14 +702,14 @@ func (s *PublicBlockChainQuaiAPI) GetExternalBlockByHashAndContext(ctx context.C
 // * `accepted` - If the block with given header is canonical
 // * `rejected` - If the block with given header is an uncle
 // * `future` - If the given header is of a future block
-func (s *PublicBlockChainQuaiAPI) GetBlockStatus(ctx context.Context, raw json.RawMessage) (string, error) {
+func (s *PublicBlockChainQuaiAPI) GetBlockStatus(ctx context.Context, raw json.RawMessage) core.WriteStatus {
 	var head *types.Header
 	if err := json.Unmarshal(raw, &head); err != nil {
-		return "", err
+		return core.NonStatTy
 	}
 
 	if head == nil {
-		return "", errors.New("header provided to check canonical is nil")
+		return core.NonStatTy
 	}
 
 	fmt.Println("head ", head)

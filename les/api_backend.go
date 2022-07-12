@@ -376,6 +376,6 @@ func (b *LesApiBackend) CalculateBaseFee(header *types.Header) *big.Int {
 	return b.CalculateBaseFee(header)
 }
 
-func (b *LesApiBackend) GetBlockStatus(header *types.Header) (bool, error) {
-	return false, nil
+func (b *LesApiBackend) GetBlockStatus(header *types.Header) core.WriteStatus {
+	return core.NonStatTy
 }

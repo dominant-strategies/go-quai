@@ -132,7 +132,7 @@ func (b *EthAPIBackend) GetExternalBlockByHashAndContext(hash common.Hash, conte
 	return b.eth.blockchain.GetExternalBlockByHashAndContext(hash, context)
 }
 
-func (b *EthAPIBackend) GetBlockStatus(header *types.Header) (string, error) {
+func (b *EthAPIBackend) GetBlockStatus(header *types.Header) core.WriteStatus {
 	return b.eth.blockchain.GetBlockStatus(header)
 }
 
