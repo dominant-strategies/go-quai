@@ -1713,16 +1713,25 @@ func (bc *BlockChain) addFutureBlock(block *types.Block) error {
 	return nil
 }
 
-// CheckCanonical checks the if the block with given hash is canonical in the chain
-func (bc *BlockChain) CheckCanonical(header *types.Header) (bool, error) {
+var (
+	accepted = "accepted"
+	rejected = "rejected"
+	future   = "future"
+)
+
+// GetBlockStatus returns the status of the block for a given header
+// * `accepted` - If the block with given header is canonical
+// * `rejected` - If the block with given header is an uncle
+// * `future` - If the given header is of a future block
+func (bc *BlockChain) GetBlockStatus(header *types.Header) (string, error) {
 	canonHash := bc.GetCanonicalHash(header.Number[types.QuaiNetworkContext].Uint64())
 	if (canonHash == common.Hash{}) {
-		return false, errors.New("unable to find a block with the header hash")
+		return "", errors.New("unable to find a block with the header hash")
 	}
 	if canonHash != header.Hash() {
-		return false, nil
+		return "", nil
 	}
-	return true, nil
+	return accepted, nil
 }
 
 // AddExternalBlocks adds a group of external blocks to the cache

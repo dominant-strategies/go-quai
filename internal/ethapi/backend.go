@@ -74,7 +74,7 @@ type Backend interface {
 	PendingBlockAndReceipts() (*types.Block, types.Receipts)
 	AddExternalBlock(block *types.ExternalBlock) error
 	GetExternalBlockByHashAndContext(hash common.Hash, context int) (*types.ExternalBlock, error)
-	CheckCanonical(header *types.Header) (bool, error)
+	GetBlockStatus(header *types.Header) (string, error)
 	EventMux() *event.TypeMux
 	CalculateBaseFee(header *types.Header) *big.Int
 	GetUncleFromWorker(uncleHash common.Hash) (*types.Block, error)

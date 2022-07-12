@@ -76,11 +76,14 @@ func (ec *Client) Close() {
 	ec.c.Close()
 }
 
-// CheckCanonical checks if the given header is canonical in the chain.
-func (ec *Client) CheckCanonical(ctx context.Context, header *types.Header) (bool, error) {
-	var isCanonical bool
-	if err := ec.c.CallContext(ctx, &isCanonical, "quai_checkCanonical", header); err != nil {
-		return false, err
+// GetBlockStatus returns the status of the block for a given header
+// * `accepted` - If the block with given header is canonical
+// * `rejected` - If the block with given header is an uncle
+// * `future` - If the given header is of a future block
+func (ec *Client) GetBlockStatus(ctx context.Context, header *types.Header) (string, error) {
+	var blockStatus string
+	if err := ec.c.CallContext(ctx, &blockStatus, "quai_getBlockStatus", header); err != nil {
+		return "", err
 	}
-	return isCanonical, nil
+	return blockStatus, nil
 }

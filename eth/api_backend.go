@@ -132,8 +132,8 @@ func (b *EthAPIBackend) GetExternalBlockByHashAndContext(hash common.Hash, conte
 	return b.eth.blockchain.GetExternalBlockByHashAndContext(hash, context)
 }
 
-func (b *EthAPIBackend) CheckCanonical(header *types.Header) (bool, error) {
-	return b.eth.blockchain.CheckCanonical(header)
+func (b *EthAPIBackend) GetBlockStatus(header *types.Header) (string, error) {
+	return b.eth.blockchain.GetBlockStatus(header)
 }
 
 func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {

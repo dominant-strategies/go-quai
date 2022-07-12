@@ -698,18 +698,21 @@ func (s *PublicBlockChainQuaiAPI) GetExternalBlockByHashAndContext(ctx context.C
 	return RPCMarshalExternalBlock(block, extBlock.Receipts(), extBlock.Context())
 }
 
-// CheckCanonical checks if the block with the given hash is canonical in the chain.
-func (s *PublicBlockChainQuaiAPI) CheckCanonical(ctx context.Context, raw json.RawMessage) (bool, error) {
+// GetBlockStatus returns the status of the block for a given header
+// * `accepted` - If the block with given header is canonical
+// * `rejected` - If the block with given header is an uncle
+// * `future` - If the given header is of a future block
+func (s *PublicBlockChainQuaiAPI) GetBlockStatus(ctx context.Context, raw json.RawMessage) (string, error) {
 	var head *types.Header
 	if err := json.Unmarshal(raw, &head); err != nil {
-		return false, err
+		return "", err
 	}
 
 	if head == nil {
-		return false, errors.New("header provided to check canonical is nil")
+		return "", errors.New("header provided to check canonical is nil")
 	}
 
 	fmt.Println("head ", head)
 
-	return s.b.CheckCanonical(head)
+	return s.b.GetBlockStatus(head)
 }
