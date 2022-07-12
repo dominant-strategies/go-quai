@@ -47,9 +47,9 @@ func generateTestChain() (*core.Genesis, []*types.Block) {
 	genesis := &core.Genesis{
 		Config:    config,
 		Alloc:     core.GenesisAlloc{testAddr: {Balance: testBalance}},
-		ExtraData: []byte("test genesis"),
+		ExtraData: [][]byte{[]byte("test genesis"), []byte("test genesis"), []byte("test genesis")},
 		Timestamp: 9000,
-		BaseFee:   big.NewInt(params.InitialBaseFee),
+		BaseFee:   []*big.Int{big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee)},
 	}
 	generate := func(i int, g *core.BlockGen) {
 		g.OffsetTime(5)
@@ -86,9 +86,9 @@ func generateTestChainWithFork(n int, fork int) (*core.Genesis, []*types.Block, 
 	genesis := &core.Genesis{
 		Config:    config,
 		Alloc:     core.GenesisAlloc{testAddr: {Balance: testBalance}},
-		ExtraData: []byte("test genesis"),
+		ExtraData: [][]byte{[]byte("test genesis"), []byte("test genesis"), []byte("test genesis")},
 		Timestamp: 9000,
-		BaseFee:   big.NewInt(params.InitialBaseFee),
+		BaseFee:   []*big.Int{big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee)},
 	}
 	generate := func(i int, g *core.BlockGen) {
 		g.OffsetTime(5)

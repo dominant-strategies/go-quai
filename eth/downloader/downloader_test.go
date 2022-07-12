@@ -58,7 +58,7 @@ type downloadTester struct {
 	ownHeaders  map[common.Hash]*types.Header  // Headers belonging to the tester
 	ownBlocks   map[common.Hash]*types.Block   // Blocks belonging to the tester
 	ownReceipts map[common.Hash]types.Receipts // Receipts belonging to the tester
-	ownChainTd  map[common.Hash]*big.Int       // Total difficulties of the blocks in the local chain
+	ownChainTd  map[common.Hash][]*big.Int     // Total difficulties of the blocks in the local chain
 
 	ancientHeaders  map[common.Hash]*types.Header  // Ancient headers belonging to the tester
 	ancientBlocks   map[common.Hash]*types.Block   // Ancient blocks belonging to the tester
@@ -78,7 +78,7 @@ func newTester() *downloadTester {
 		ownHeaders:  map[common.Hash]*types.Header{testGenesis.Hash(): testGenesis.Header()},
 		ownBlocks:   map[common.Hash]*types.Block{testGenesis.Hash(): testGenesis},
 		ownReceipts: map[common.Hash]types.Receipts{testGenesis.Hash(): nil},
-		ownChainTd:  map[common.Hash]*big.Int{testGenesis.Hash(): testGenesis.Difficulty()},
+		ownChainTd:  map[common.Hash][]*big.Int{testGenesis.Hash(): {testGenesis.Difficulty(), testGenesis.Difficulty(), testGenesis.Difficulty()}},
 
 		// Initialize ancient store with test genesis block
 		ancientHeaders:  map[common.Hash]*types.Header{testGenesis.Hash(): testGenesis.Header()},
@@ -100,7 +100,7 @@ func (dl *downloadTester) terminate() {
 }
 
 // sync starts synchronizing with a remote peer, blocking until it completes.
-func (dl *downloadTester) sync(id string, td *big.Int, mode SyncMode) error {
+func (dl *downloadTester) sync(id string, td []*big.Int, mode SyncMode) error {
 	dl.lock.RLock()
 	hash := dl.peers[id].chain.headBlock().Hash()
 	// If no particular TD was requested, load from the peer's blockchain
@@ -236,7 +236,7 @@ func (dl *downloadTester) FastSyncCommitHead(hash common.Hash) error {
 }
 
 // GetTd retrieves the block's total difficulty from the canonical chain.
-func (dl *downloadTester) GetTd(hash common.Hash, number uint64) *big.Int {
+func (dl *downloadTester) GetTd(hash common.Hash, number uint64) []*big.Int {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
@@ -246,9 +246,9 @@ func (dl *downloadTester) GetTd(hash common.Hash, number uint64) *big.Int {
 // getTd retrieves the block's total difficulty if found either within
 // ancients or own blocks).
 // This method assumes that the caller holds at least the read-lock (dl.lock)
-func (dl *downloadTester) getTd(hash common.Hash) *big.Int {
+func (dl *downloadTester) getTd(hash common.Hash) []*big.Int {
 	if td := dl.ancientChainTd[hash]; td != nil {
-		return td
+		return []*big.Int{td, td, td}
 	}
 	return dl.ownChainTd[hash]
 }
@@ -284,7 +284,7 @@ func (dl *downloadTester) InsertHeaderChain(headers []*types.Header, checkFreq i
 		dl.ownHeaders[hash] = header
 
 		td := dl.getTd(header.ParentHash[types.QuaiNetworkContext])
-		dl.ownChainTd[hash] = new(big.Int).Add(td, header.Difficulty[types.QuaiNetworkContext])
+		dl.ownChainTd[hash] = []*big.Int{new(big.Int).Add(td[0], header.Difficulty[0]), new(big.Int).Add(td[1], header.Difficulty[1]), new(big.Int).Add(td[2], header.Difficulty[2])}
 	}
 	return len(headers), nil
 }
@@ -307,7 +307,7 @@ func (dl *downloadTester) InsertChain(blocks types.Blocks) (i int, err error) {
 		dl.ownReceipts[block.Hash()] = make(types.Receipts, 0)
 		dl.stateDb.Put(block.Root().Bytes(), []byte{0x00})
 		td := dl.getTd(block.ParentHash())
-		dl.ownChainTd[block.Hash()] = new(big.Int).Add(td, block.Difficulty())
+		dl.ownChainTd[block.Hash()] = []*big.Int{new(big.Int).Add(td[0], block.Difficulty(0)), new(big.Int).Add(td[1], block.Difficulty(1)), new(big.Int).Add(td[2], block.Difficulty(2))}
 	}
 	return len(blocks), nil
 }
@@ -430,7 +430,7 @@ type downloadTesterPeer struct {
 
 // Head constructs a function to retrieve a peer's current head hash
 // and total difficulty.
-func (dlp *downloadTesterPeer) Head() (common.Hash, *big.Int) {
+func (dlp *downloadTesterPeer) Head() (common.Hash, []*big.Int) {
 	b := dlp.chain.headBlock()
 	return b.Hash(), dlp.chain.td(b.Hash())
 }
@@ -1095,7 +1095,7 @@ func testHighTDStarvationAttack(t *testing.T, protocol uint, mode SyncMode) {
 
 	chain := testChainBase.shorten(1)
 	tester.newPeer("attack", protocol, chain)
-	if err := tester.sync("attack", big.NewInt(1000000), mode); err != errStallingPeer {
+	if err := tester.sync("attack", []*big.Int{big.NewInt(1000000), big.NewInt(1000000), big.NewInt(1000000)}, mode); err != errStallingPeer {
 		t.Fatalf("synchronisation error mismatch: have %v, want %v", err, errStallingPeer)
 	}
 	tester.terminate()
@@ -1145,7 +1145,7 @@ func testBlockHeaderAttackerDropping(t *testing.T, protocol uint) {
 		// Simulate a synchronisation and check the required result
 		tester.downloader.synchroniseMock = func(string, common.Hash) error { return tt.result }
 
-		tester.downloader.Synchronise(id, tester.genesis.Hash(), big.NewInt(1000), FullSync)
+		tester.downloader.Synchronise(id, tester.genesis.Hash(), []*big.Int{big.NewInt(1000), big.NewInt(1000), big.NewInt(1000)}, FullSync)
 		if _, ok := tester.peers[id]; !ok != tt.drop {
 			t.Errorf("test %d: peer drop mismatch for %v: have %v, want %v", i, tt.result, !ok, tt.drop)
 		}
@@ -1482,7 +1482,7 @@ type floodingTestPeer struct {
 	tester *downloadTester
 }
 
-func (ftp *floodingTestPeer) Head() (common.Hash, *big.Int) { return ftp.peer.Head() }
+func (ftp *floodingTestPeer) Head() (common.Hash, []*big.Int) { return ftp.peer.Head() }
 func (ftp *floodingTestPeer) RequestHeadersByHash(hash common.Hash, count int, skip int, reverse bool) error {
 	return ftp.peer.RequestHeadersByHash(hash, count, skip, reverse)
 }

@@ -45,13 +45,13 @@ func TestReimportMirroredState(t *testing.T) {
 		signer = new(types.HomesteadSigner)
 	)
 	genspec := &core.Genesis{
-		ExtraData: make([]byte, extraVanity+common.AddressLength+extraSeal),
+		ExtraData: make([][]byte, 3*(extraVanity+common.AddressLength+extraSeal)),
 		Alloc: map[common.Address]core.GenesisAccount{
 			addr: {Balance: big.NewInt(10000000000000000)},
 		},
-		BaseFee: big.NewInt(params.InitialBaseFee),
+		BaseFee: []*big.Int{big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee)},
 	}
-	copy(genspec.ExtraData[extraVanity:], addr[:])
+	copy(genspec.ExtraData[types.QuaiNetworkContext][extraVanity:], addr[:])
 	genesis := genspec.MustCommit(db)
 
 	// Generate a batch of blocks, each properly signed

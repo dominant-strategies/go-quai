@@ -51,7 +51,7 @@ var (
 func newCanonical(engine consensus.Engine, n int, full bool) (ethdb.Database, *BlockChain, error) {
 	var (
 		db      = rawdb.NewMemoryDatabase()
-		genesis = (&Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}).MustCommit(db)
+		genesis = (&Genesis{BaseFee: []*big.Int{big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee)}}).MustCommit(db)
 	)
 
 	// Initialize a fresh chain with only a genesis block
@@ -77,7 +77,7 @@ func newGwei(n int64) *big.Int {
 }
 
 // Test fork of length N starting from block i
-func testFork(t *testing.T, blockchain *BlockChain, i, n int, full bool, comparator func(td1, td2 *big.Int)) {
+func testFork(t *testing.T, blockchain *BlockChain, i, n int, full bool, comparator func(td1, td2 []*big.Int)) {
 	// Copy old chain up to #i into a new db
 	db, blockchain2, err := newCanonical(blake3.NewFaker(), i, full)
 	if err != nil {
@@ -114,7 +114,7 @@ func testFork(t *testing.T, blockchain *BlockChain, i, n int, full bool, compara
 		}
 	}
 	// Sanity check that the forked chain can be imported into the original
-	var tdPre, tdPost *big.Int
+	var tdPre, tdPost []*big.Int
 
 	if full {
 		tdPre = blockchain.GetTdByHash(blockchain.CurrentBlock().Hash())
@@ -163,7 +163,7 @@ func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
 			return err
 		}
 		blockchain.chainmu.Lock()
-		rawdb.WriteTd(blockchain.db, block.Hash(), block.NumberU64(), new(big.Int).Add(block.Difficulty(), blockchain.GetTdByHash(block.ParentHash())))
+		rawdb.WriteTd(blockchain.db, block.Hash(), block.NumberU64(), []*big.Int{new(big.Int).Add(block.Difficulty(), blockchain.GetTdByHash(block.ParentHash())[0]), new(big.Int).Add(block.Difficulty(), blockchain.GetTdByHash(block.ParentHash())[1]), new(big.Int).Add(block.Difficulty(), blockchain.GetTdByHash(block.ParentHash())[2])})
 		rawdb.WriteBlock(blockchain.db, block)
 		statedb.Commit(false)
 		blockchain.chainmu.Unlock()
@@ -181,7 +181,7 @@ func testHeaderChainImport(chain []*types.Header, blockchain *BlockChain) error 
 		}
 		// Manually insert the header into the database, but don't reorganise (allows subsequent testing)
 		blockchain.chainmu.Lock()
-		rawdb.WriteTd(blockchain.db, header.Hash(), header.Number[types.QuaiNetworkContext].Uint64(), new(big.Int).Add(header.Difficulty[types.QuaiNetworkContext], blockchain.GetTdByHash(header.ParentHash[types.QuaiNetworkContext])))
+		rawdb.WriteTd(blockchain.db, header.Hash(), header.Number[types.QuaiNetworkContext].Uint64(), []*big.Int{new(big.Int).Add(header.Difficulty[types.QuaiNetworkContext], blockchain.GetTdByHash(header.ParentHash[types.QuaiNetworkContext])[0]), new(big.Int).Add(header.Difficulty[types.QuaiNetworkContext], blockchain.GetTdByHash(header.ParentHash[types.QuaiNetworkContext])[1]), new(big.Int).Add(header.Difficulty[types.QuaiNetworkContext], blockchain.GetTdByHash(header.ParentHash[types.QuaiNetworkContext])[2])})
 		rawdb.WriteHeader(blockchain.db, header)
 		blockchain.chainmu.Unlock()
 	}
@@ -220,8 +220,8 @@ func testExtendCanonical(t *testing.T, full bool) {
 	defer processor.Stop()
 
 	// Define the difficulty comparator
-	better := func(td1, td2 *big.Int) {
-		if td2.Cmp(td1) <= 0 {
+	better := func(td1, td2 []*big.Int) {
+		if td2[types.QuaiNetworkContext].Cmp(td1[types.QuaiNetworkContext]) <= 0 {
 			t.Errorf("total difficulty mismatch: have %v, expected more than %v", td2, td1)
 		}
 	}
@@ -248,8 +248,8 @@ func testShorterFork(t *testing.T, full bool) {
 	defer processor.Stop()
 
 	// Define the difficulty comparator
-	worse := func(td1, td2 *big.Int) {
-		if td2.Cmp(td1) >= 0 {
+	worse := func(td1, td2 []*big.Int) {
+		if td2[types.QuaiNetworkContext].Cmp(td1[types.QuaiNetworkContext]) >= 0 {
 			t.Errorf("total difficulty mismatch: have %v, expected less than %v", td2, td1)
 		}
 	}
@@ -278,8 +278,8 @@ func testLongerFork(t *testing.T, full bool) {
 	defer processor.Stop()
 
 	// Define the difficulty comparator
-	better := func(td1, td2 *big.Int) {
-		if td2.Cmp(td1) <= 0 {
+	better := func(td1, td2 []*big.Int) {
+		if td2[types.QuaiNetworkContext].Cmp(td1[types.QuaiNetworkContext]) <= 0 {
 			t.Errorf("total difficulty mismatch: have %v, expected more than %v", td2, td1)
 		}
 	}
@@ -308,8 +308,8 @@ func testEqualFork(t *testing.T, full bool) {
 	defer processor.Stop()
 
 	// Define the difficulty comparator
-	equal := func(td1, td2 *big.Int) {
-		if td2.Cmp(td1) != 0 {
+	equal := func(td1, td2 []*big.Int) {
+		if td2[types.QuaiNetworkContext].Cmp(td1[types.QuaiNetworkContext]) != 0 {
 			t.Errorf("total difficulty mismatch: have %v, want %v", td2, td1)
 		}
 	}
@@ -432,13 +432,13 @@ func testReorg(t *testing.T, first, second []int64, td int64, full bool) {
 		}
 	}
 	// Make sure the chain total difficulty is the correct one
-	want := new(big.Int).Add(blockchain.genesisBlock.Difficulty(), big.NewInt(td))
+	want := []*big.Int{new(big.Int).Add(blockchain.genesisBlock.Difficulty(), big.NewInt(td)), new(big.Int).Add(blockchain.genesisBlock.Difficulty(), big.NewInt(td)), new(big.Int).Add(blockchain.genesisBlock.Difficulty(), big.NewInt(td))}
 	if full {
-		if have := blockchain.GetTdByHash(blockchain.CurrentBlock().Hash()); have.Cmp(want) != 0 {
+		if have := blockchain.GetTdByHash(blockchain.CurrentBlock().Hash()); have[types.QuaiNetworkContext].Cmp(want[types.QuaiNetworkContext]) != 0 {
 			t.Errorf("total difficulty mismatch: have %v, want %v", have, want)
 		}
 	} else {
-		if have := blockchain.GetTdByHash(blockchain.CurrentHeader().Hash()); have.Cmp(want) != 0 {
+		if have := blockchain.GetTdByHash(blockchain.CurrentHeader().Hash()); have[types.QuaiNetworkContext].Cmp(want[types.QuaiNetworkContext]) != 0 {
 			t.Errorf("total difficulty mismatch: have %v, want %v", have, want)
 		}
 	}
@@ -604,7 +604,7 @@ func TestFastVsFullChains(t *testing.T) {
 		gspec   = &Genesis{
 			Config:  params.TestChainConfig,
 			Alloc:   GenesisAlloc{address: {Balance: funds}},
-			BaseFee: big.NewInt(params.InitialBaseFee),
+			BaseFee: []*big.Int{big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee)},
 		}
 		genesis = gspec.MustCommit(gendb)
 		signer  = types.LatestSigner(gspec.Config)
@@ -679,10 +679,10 @@ func TestFastVsFullChains(t *testing.T) {
 	for i := 0; i < len(blocks); i++ {
 		num, hash := blocks[i].NumberU64(), blocks[i].Hash()
 
-		if ftd, atd := fast.GetTdByHash(hash), archive.GetTdByHash(hash); ftd.Cmp(atd) != 0 {
+		if ftd, atd := fast.GetTdByHash(hash), archive.GetTdByHash(hash); ftd[types.QuaiNetworkContext].Cmp(atd[types.QuaiNetworkContext]) != 0 {
 			t.Errorf("block #%d [%x]: td mismatch: fastdb %v, archivedb %v", num, hash, ftd, atd)
 		}
-		if antd, artd := ancient.GetTdByHash(hash), archive.GetTdByHash(hash); antd.Cmp(artd) != 0 {
+		if antd, artd := ancient.GetTdByHash(hash), archive.GetTdByHash(hash); antd[types.QuaiNetworkContext].Cmp(artd[types.QuaiNetworkContext]) != 0 {
 			t.Errorf("block #%d [%x]: td mismatch: ancientdb %v, archivedb %v", num, hash, antd, artd)
 		}
 		if fheader, aheader := fast.GetHeaderByHash(hash), archive.GetHeaderByHash(hash); fheader.Hash() != aheader.Hash() {
@@ -742,7 +742,7 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 		gspec   = &Genesis{
 			Config:  params.TestChainConfig,
 			Alloc:   GenesisAlloc{address: {Balance: funds}},
-			BaseFee: big.NewInt(params.InitialBaseFee),
+			BaseFee: []*big.Int{big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee)},
 		}
 		genesis = gspec.MustCommit(gendb)
 	)
@@ -862,7 +862,7 @@ func TestChainTxReorgs(t *testing.T) {
 		db      = rawdb.NewMemoryDatabase()
 		gspec   = &Genesis{
 			Config:   params.TestChainConfig,
-			GasLimit: 3141592,
+			GasLimit: []uint64{3141592, 3141592, 3141592},
 			Alloc: GenesisAlloc{
 				addr1: {Balance: big.NewInt(1000000000000000)},
 				addr2: {Balance: big.NewInt(1000000000000000)},
@@ -1466,7 +1466,7 @@ func TestBlockchainHeaderchainReorgConsistency(t *testing.T) {
 	engine := blake3.NewFaker()
 
 	db := rawdb.NewMemoryDatabase()
-	genesis := (&Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}).MustCommit(db)
+	genesis := (&Genesis{BaseFee: []*big.Int{big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee)}}).MustCommit(db)
 	blocks, _ := GenerateChain(params.TestChainConfig, genesis, engine, db, 64, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) })
 
 	// Generate a bunch of fork blocks, each side forking from the canonical chain
@@ -1482,7 +1482,7 @@ func TestBlockchainHeaderchainReorgConsistency(t *testing.T) {
 	// Import the canonical and fork chain side by side, verifying the current block
 	// and current header consistency
 	diskdb := rawdb.NewMemoryDatabase()
-	(&Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}).MustCommit(diskdb)
+	(&Genesis{BaseFee: []*big.Int{big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee)}}).MustCommit(diskdb)
 
 	chain, err := NewBlockChain(diskdb, nil, params.TestChainConfig, engine, vm.Config{}, nil, nil)
 	if err != nil {
@@ -1511,7 +1511,7 @@ func TestTrieForkGC(t *testing.T) {
 	engine := blake3.NewFaker()
 
 	db := rawdb.NewMemoryDatabase()
-	genesis := (&Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}).MustCommit(db)
+	genesis := (&Genesis{BaseFee: []*big.Int{big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee)}}).MustCommit(db)
 	blocks, _ := GenerateChain(params.TestChainConfig, genesis, engine, db, 2*TriesInMemory, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) })
 
 	// Generate a bunch of fork blocks, each side forking from the canonical chain
@@ -1526,7 +1526,7 @@ func TestTrieForkGC(t *testing.T) {
 	}
 	// Import the canonical and fork chain side by side, forcing the trie cache to cache both
 	diskdb := rawdb.NewMemoryDatabase()
-	(&Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}).MustCommit(diskdb)
+	(&Genesis{BaseFee: []*big.Int{big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee)}}).MustCommit(diskdb)
 
 	chain, err := NewBlockChain(diskdb, nil, params.TestChainConfig, engine, vm.Config{}, nil, nil)
 	if err != nil {
@@ -1557,7 +1557,7 @@ func TestLargeReorgTrieGC(t *testing.T) {
 	engine := blake3.NewFaker()
 
 	db := rawdb.NewMemoryDatabase()
-	genesis := (&Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}).MustCommit(db)
+	genesis := (&Genesis{BaseFee: []*big.Int{big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee)}}).MustCommit(db)
 
 	shared, _ := GenerateChain(params.TestChainConfig, genesis, engine, db, 64, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) })
 	original, _ := GenerateChain(params.TestChainConfig, shared[len(shared)-1], engine, db, 2*TriesInMemory, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{2}) })
@@ -1565,7 +1565,7 @@ func TestLargeReorgTrieGC(t *testing.T) {
 
 	// Import the shared chain and the original canonical one
 	diskdb := rawdb.NewMemoryDatabase()
-	(&Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}).MustCommit(diskdb)
+	(&Genesis{BaseFee: []*big.Int{big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee)}}).MustCommit(diskdb)
 
 	chain, err := NewBlockChain(diskdb, nil, params.TestChainConfig, engine, vm.Config{}, nil, nil)
 	if err != nil {
@@ -1748,7 +1748,7 @@ func TestLowDiffLongChain(t *testing.T) {
 	// Generate a canonical chain to act as the main dataset
 	engine := blake3.NewFaker()
 	db := rawdb.NewMemoryDatabase()
-	genesis := (&Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}).MustCommit(db)
+	genesis := (&Genesis{BaseFee: []*big.Int{big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee)}}).MustCommit(db)
 
 	// We must use a pretty long chain to ensure that the fork doesn't overtake us
 	// until after at least 128 blocks post tip
@@ -1759,7 +1759,7 @@ func TestLowDiffLongChain(t *testing.T) {
 
 	// Import the canonical chain
 	diskdb := rawdb.NewMemoryDatabase()
-	(&Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}).MustCommit(diskdb)
+	(&Genesis{BaseFee: []*big.Int{big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee)}}).MustCommit(diskdb)
 
 	chain, err := NewBlockChain(diskdb, nil, params.TestChainConfig, engine, vm.Config{}, nil, nil)
 	if err != nil {
@@ -1802,12 +1802,12 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 	// Generate a canonical chain to act as the main dataset
 	engine := blake3.NewFaker()
 	db := rawdb.NewMemoryDatabase()
-	genesis := (&Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}).MustCommit(db)
+	genesis := (&Genesis{BaseFee: []*big.Int{big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee)}}).MustCommit(db)
 
 	// Generate and import the canonical chain
 	blocks, _ := GenerateChain(params.TestChainConfig, genesis, engine, db, 2*TriesInMemory, nil)
 	diskdb := rawdb.NewMemoryDatabase()
-	(&Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}).MustCommit(diskdb)
+	(&Genesis{BaseFee: []*big.Int{big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee)}}).MustCommit(diskdb)
 	chain, err := NewBlockChain(diskdb, nil, params.TestChainConfig, engine, vm.Config{}, nil, nil)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
@@ -1882,7 +1882,7 @@ func testInsertKnownChainData(t *testing.T, typ string) {
 	engine := blake3.NewFaker()
 
 	db := rawdb.NewMemoryDatabase()
-	genesis := (&Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}).MustCommit(db)
+	genesis := (&Genesis{BaseFee: []*big.Int{big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee)}}).MustCommit(db)
 
 	blocks, receipts := GenerateChain(params.TestChainConfig, genesis, engine, db, 32, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) })
 	// A longer chain but total difficulty is lower.
@@ -1902,7 +1902,7 @@ func testInsertKnownChainData(t *testing.T, typ string) {
 	if err != nil {
 		t.Fatalf("failed to create temp freezer db: %v", err)
 	}
-	(&Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}).MustCommit(chaindb)
+	(&Genesis{BaseFee: []*big.Int{big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee)}}).MustCommit(chaindb)
 	defer os.RemoveAll(dir)
 
 	chain, err := NewBlockChain(chaindb, nil, params.TestChainConfig, engine, vm.Config{}, nil, nil)
@@ -2004,7 +2004,7 @@ func getLongAndShortChains() (bc *BlockChain, longChain []*types.Block, heavyCha
 	// Generate a canonical chain to act as the main dataset
 	engine := blake3.NewFaker()
 	db := rawdb.NewMemoryDatabase()
-	genesis := (&Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}).MustCommit(db)
+	genesis := (&Genesis{BaseFee: []*big.Int{big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee)}}).MustCommit(db)
 
 	// Generate and import the canonical chain,
 	// Offset the time, to keep the difficulty low
@@ -2012,7 +2012,7 @@ func getLongAndShortChains() (bc *BlockChain, longChain []*types.Block, heavyCha
 		b.SetCoinbase(common.Address{1})
 	})
 	diskdb := rawdb.NewMemoryDatabase()
-	(&Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}).MustCommit(diskdb)
+	(&Genesis{BaseFee: []*big.Int{big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee)}}).MustCommit(diskdb)
 
 	chain, err := NewBlockChain(diskdb, nil, params.TestChainConfig, engine, vm.Config{}, nil, nil)
 	if err != nil {
@@ -2131,7 +2131,7 @@ func TestTransactionIndices(t *testing.T) {
 		gspec   = &Genesis{
 			Config:  params.TestChainConfig,
 			Alloc:   GenesisAlloc{address: {Balance: funds}},
-			BaseFee: big.NewInt(params.InitialBaseFee),
+			BaseFee: []*big.Int{big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee)},
 		}
 		genesis = gspec.MustCommit(gendb)
 		signer  = types.LatestSigner(gspec.Config)
@@ -2354,7 +2354,7 @@ func benchmarkLargeNumberOfValueToNonexisting(b *testing.B, numTxs, numBlocks in
 					Balance: big.NewInt(0),
 				}, // push 1, pop
 			},
-			GasLimit: 100e6, // 100 M
+			GasLimit: []uint64{100e6, 100e6, 100e6}, // 100 M
 		}
 	)
 	// Generate the original common chain segment and the two competing forks
@@ -2459,12 +2459,12 @@ func TestSideImportPrunedBlocks(t *testing.T) {
 	// Generate a canonical chain to act as the main dataset
 	engine := blake3.NewFaker()
 	db := rawdb.NewMemoryDatabase()
-	genesis := (&Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}).MustCommit(db)
+	genesis := (&Genesis{BaseFee: []*big.Int{big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee)}}).MustCommit(db)
 
 	// Generate and import the canonical chain
 	blocks, _ := GenerateChain(params.TestChainConfig, genesis, engine, db, 2*TriesInMemory, nil)
 	diskdb := rawdb.NewMemoryDatabase()
-	(&Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}).MustCommit(diskdb)
+	(&Genesis{BaseFee: []*big.Int{big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee)}}).MustCommit(diskdb)
 	chain, err := NewBlockChain(diskdb, nil, params.TestChainConfig, engine, vm.Config{}, nil, nil)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)

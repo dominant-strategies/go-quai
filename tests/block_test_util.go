@@ -162,15 +162,14 @@ func (t *BlockTest) genesis(config *params.ChainConfig) *core.Genesis {
 		Config:     config,
 		Nonce:      t.json.Genesis.Nonce.Uint64(),
 		Timestamp:  t.json.Genesis.Timestamp,
-		ParentHash: t.json.Genesis.ParentHash,
-		ExtraData:  t.json.Genesis.ExtraData,
-		GasLimit:   t.json.Genesis.GasLimit,
-		GasUsed:    t.json.Genesis.GasUsed,
-		Difficulty: t.json.Genesis.Difficulty,
-		Mixhash:    t.json.Genesis.MixHash,
-		Coinbase:   t.json.Genesis.Coinbase,
+		ParentHash: []common.Hash{t.json.Genesis.ParentHash, t.json.Genesis.ParentHash, t.json.Genesis.ParentHash},
+		ExtraData:  [][]byte{t.json.Genesis.ExtraData, t.json.Genesis.ExtraData, t.json.Genesis.ExtraData},
+		GasLimit:   []uint64{t.json.Genesis.GasLimit, t.json.Genesis.GasLimit, t.json.Genesis.GasLimit},
+		GasUsed:    []uint64{t.json.Genesis.GasUsed, t.json.Genesis.GasUsed, t.json.Genesis.GasUsed},
+		Difficulty: []*big.Int{t.json.Genesis.Difficulty, t.json.Genesis.Difficulty, t.json.Genesis.Difficulty},
+		Coinbase:   []common.Address{t.json.Genesis.Coinbase, t.json.Genesis.Coinbase, t.json.Genesis.Coinbase},
 		Alloc:      t.json.Pre,
-		BaseFee:    t.json.Genesis.BaseFeePerGas,
+		BaseFee:    []*big.Int{t.json.Genesis.BaseFeePerGas, t.json.Genesis.BaseFeePerGas, t.json.Genesis.BaseFeePerGas},
 	}
 }
 
