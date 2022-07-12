@@ -699,9 +699,6 @@ func (s *PublicBlockChainQuaiAPI) GetExternalBlockByHashAndContext(ctx context.C
 }
 
 // GetBlockStatus returns the status of the block for a given header
-// * `accepted` - If the block with given header is canonical
-// * `rejected` - If the block with given header is an uncle
-// * `future` - If the given header is of a future block
 func (s *PublicBlockChainQuaiAPI) GetBlockStatus(ctx context.Context, raw json.RawMessage) core.WriteStatus {
 	var head *types.Header
 	if err := json.Unmarshal(raw, &head); err != nil {
@@ -711,8 +708,6 @@ func (s *PublicBlockChainQuaiAPI) GetBlockStatus(ctx context.Context, raw json.R
 	if head == nil {
 		return core.NonStatTy
 	}
-
-	fmt.Println("head ", head)
 
 	return s.b.GetBlockStatus(head)
 }

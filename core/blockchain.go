@@ -19,6 +19,7 @@ package core
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -1535,11 +1536,13 @@ func (bc *BlockChain) NdToTd(header *types.Header, nD []*big.Int) ([]*big.Int, e
 
 // CalcTd calculates the TD of the given header using PCRC and CalcHLCRNetDifficulty.
 func (bc *BlockChain) CalcTd(header *types.Header) ([]*big.Int, error) {
-	// Check PCRC for the external block and return the terminal hash and net difficulties
-	externTerminalHash, err := bc.PCRC(header)
+
+	// Always calculate PTZ because it is always valid and we need terminus for calcHLCRDifficulty
+	externTerminal, err := bc.Engine().PreviousCoincidentOnPath(bc, header, header.Location, params.PRIME, params.ZONE, true)
 	if err != nil {
 		return nil, err
 	}
+	externTerminalHash := externTerminal.Hash()
 
 	// Use HLCR to compute net total difficulty
 	externNd, err := bc.CalcHLCRNetDifficulty(externTerminalHash, header)
@@ -1717,12 +1720,16 @@ func (bc *BlockChain) addFutureBlock(block *types.Block) error {
 // GetBlockStatus returns the status of the block for a given header
 func (bc *BlockChain) GetBlockStatus(header *types.Header) WriteStatus {
 	canonHash := bc.GetCanonicalHash(header.Number[types.QuaiNetworkContext].Uint64())
+	fmt.Println("canonHash", canonHash, "headerHash", header.Hash(), header.Number, header.Location)
 	if canonHash != header.Hash() {
+		fmt.Println("returning SideStatTy for subordinate")
 		return SideStatTy
 	}
 	if (canonHash == common.Hash{}) {
+		fmt.Println("returning UnknownStatTy for subordinate")
 		return UnknownStatTy
 	}
+	fmt.Println("returning CanonStatTy for subordinate")
 	return CanonStatTy
 }
 
@@ -2156,6 +2163,32 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		}
 		// Process block using the parent state as reference point
 		substart := time.Now()
+
+		order, err := bc.engine.GetDifficultyOrder(block.Header())
+		if err != nil {
+			return it.index, err
+		}
+
+		if order < types.QuaiNetworkContext {
+			domStatus := bc.domClient.GetBlockStatus(context.Background(), block.Header())
+			switch domStatus {
+			case quaiclient.CanonStatTy:
+				fmt.Println("returning CanonStatTy for dom", block.Header().Number, block.Hash())
+			case quaiclient.SideStatTy:
+				fmt.Println("returning SideStatTy for dom", block.Header().Number, block.Hash())
+				return it.index, errors.New("attempting to insert a block uncled in dominant chain")
+			case quaiclient.UnknownStatTy:
+				fmt.Println("returning UnknownStatTy for dom", block.Header().Number, block.Hash())
+				if err := bc.addFutureBlock(block); err != nil {
+					return it.index, err
+				}
+			}
+		} else if types.QuaiNetworkContext < params.ZONE {
+			_, err := bc.PCRC(block.Header())
+			if err != nil {
+				return it.index, err
+			}
+		}
 
 		// If in Prime or Region, take to see if we have already included the hash in the lower level.
 		// TODO: #179 Extend CheckHashInclusion to if the hash was ever included in the chain, not just the parent.
