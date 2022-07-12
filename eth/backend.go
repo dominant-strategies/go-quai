@@ -43,7 +43,6 @@ import (
 	"github.com/spruce-solutions/go-quai/eth/gasprice"
 	"github.com/spruce-solutions/go-quai/eth/protocols/eth"
 	"github.com/spruce-solutions/go-quai/eth/protocols/snap"
-	"github.com/spruce-solutions/go-quai/ethclient/quaiclient"
 	"github.com/spruce-solutions/go-quai/ethdb"
 	"github.com/spruce-solutions/go-quai/event"
 	"github.com/spruce-solutions/go-quai/internal/ethapi"
@@ -191,10 +190,8 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			ExternalBlockJournal: stack.ResolvePath(config.ExternalBlocksCacheJournal),
 		}
 	)
-	var domClient *quaiclient.Client
-	domClient = MakeDomClient(eth.config.DomUrl)
 
-	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, chainConfig, domClient, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit)
+	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, chainConfig, eth.config.DomUrl, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -276,18 +273,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		}
 	}
 	return eth, nil
-}
-
-// MakeDomClient creates the ethclient for the given domurl
-func MakeDomClient(domurl string) *quaiclient.Client {
-	if domurl == "" {
-		log.Crit("dom client url is empty")
-	}
-	domClient, err := quaiclient.Dial(domurl)
-	if err != nil {
-		log.Crit("error connecting to the domClient")
-	}
-	return domClient
 }
 
 func makeExtraData(extra []byte) []byte {

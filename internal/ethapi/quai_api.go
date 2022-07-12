@@ -705,5 +705,11 @@ func (s *PublicBlockChainQuaiAPI) CheckCanonical(ctx context.Context, raw json.R
 		return false, err
 	}
 
+	if head == nil {
+		return false, errors.New("header provided to check canonical is nil")
+	}
+
+	fmt.Println("head ", head)
+
 	return s.b.CheckCanonical(head)
 }

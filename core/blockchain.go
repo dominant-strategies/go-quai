@@ -19,6 +19,7 @@ package core
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -233,7 +234,7 @@ type BlockChain struct {
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator and
 // Processor.
-func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, domClient *quaiclient.Client, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64) (*BlockChain, error) {
+func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, domClientUrl string, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64) (*BlockChain, error) {
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
 	}
@@ -279,7 +280,15 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
 	bc.processor = NewStateProcessor(chainConfig, bc, engine)
-	bc.domClient = domClient
+
+	// only set the domClient if the chain is not prime
+	if types.QuaiNetworkContext != params.PRIME {
+		fmt.Println("domClient", domClientUrl)
+		bc.domClient = MakeDomClient(domClientUrl)
+
+		dc, err := bc.domClient.CheckCanonical(context.Background(), nil)
+		fmt.Println("dom chain height", dc, "err: ", err)
+	}
 
 	var err error
 	bc.hc, err = NewHeaderChain(db, chainConfig, engine, bc.insertStopped)
@@ -504,6 +513,18 @@ func (bc *BlockChain) loadLastState() error {
 		log.Info("Loaded last fast-sync pivot marker", "number", *pivot)
 	}
 	return nil
+}
+
+// MakeDomClient creates the ethclient for the given domurl
+func MakeDomClient(domurl string) *quaiclient.Client {
+	if domurl == "" {
+		log.Crit("dom client url is empty")
+	}
+	domClient, err := quaiclient.Dial(domurl)
+	if err != nil {
+		log.Crit("error connecting to the domClient")
+	}
+	return domClient
 }
 
 // SetHead rewinds the local chain to a new head. Depending on whether the node

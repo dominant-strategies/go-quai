@@ -52,7 +52,6 @@ import (
 	"github.com/spruce-solutions/go-quai/eth/ethconfig"
 	"github.com/spruce-solutions/go-quai/eth/gasprice"
 	"github.com/spruce-solutions/go-quai/eth/tracers"
-	"github.com/spruce-solutions/go-quai/ethclient/quaiclient"
 	"github.com/spruce-solutions/go-quai/ethdb"
 	"github.com/spruce-solutions/go-quai/ethstats"
 	"github.com/spruce-solutions/go-quai/graphql"
@@ -1075,18 +1074,22 @@ func setEtherbase(ctx *cli.Context, ks *keystore.KeyStore, cfg *ethconfig.Config
 
 // setDomUrl sets the dominant chain websocket url.
 func setDomUrl(ctx *cli.Context, cfg *ethconfig.Config) {
-	// Extract the domurl
-	var domurl string
-	if ctx.GlobalIsSet(DomUrl.Name) {
-		domurl = ctx.GlobalString(DomUrl.Name)
-	}
 
-	// do not start the node if the domurl is not configured
-	if domurl == "" {
-		Fatalf("No dom.url configured")
-	}
+	// only set the dom url if the node is not prime
+	if ctx.GlobalIsSet(RegionFlag.Name) || ctx.GlobalIsSet(ZoneFlag.Name) {
+		// Extract the domurl
+		var domurl string
+		if ctx.GlobalIsSet(DomUrl.Name) {
+			domurl = ctx.GlobalString(DomUrl.Name)
+		}
 
-	cfg.DomUrl = domurl
+		// do not start the node if the domurl is not configured
+		if domurl == "" {
+			Fatalf("No dom.url configured")
+		}
+
+		cfg.DomUrl = domurl
+	}
 }
 
 // MakePasswordList reads password lines from the file specified by the global --password flag.
@@ -1863,31 +1866,16 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 	if ctx.GlobalIsSet(CacheFlag.Name) || ctx.GlobalIsSet(CacheGCFlag.Name) {
 		cache.TrieDirtyLimit = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheGCFlag.Name) / 100
 	}
-	var domClient *quaiclient.Client
-	if ctx.GlobalIsSet(DomUrl.Name) {
-		domClient = MakeDomClient(DomUrl.Name)
-	}
+
 	vmcfg := vm.Config{EnablePreimageRecording: ctx.GlobalBool(VMEnableDebugFlag.Name)}
 
 	// TODO(rjl493456442) disable snapshot generation/wiping if the chain is read only.
 	// Disable transaction indexing/unindexing by default.
-	chain, err = core.NewBlockChain(chainDb, cache, config, domClient, engine, vmcfg, nil, nil)
+	chain, err = core.NewBlockChain(chainDb, cache, config, ctx.GlobalString(DomUrl.Name), engine, vmcfg, nil, nil)
 	if err != nil {
 		Fatalf("Can't create BlockChain: %v", err)
 	}
 	return chain, chainDb
-}
-
-// MakeDomClient creates the ethclient for the given domurl
-func MakeDomClient(domurl string) *quaiclient.Client {
-	if domurl == "" {
-		Fatalf("dom client url is empty")
-	}
-	domClient, err := quaiclient.Dial(domurl)
-	if err != nil {
-		Fatalf("error connecting to the domClient")
-	}
-	return domClient
 }
 
 // MakeConsolePreloads retrieves the absolute paths for the console JavaScript

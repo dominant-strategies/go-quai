@@ -84,7 +84,7 @@ var Defaults = Config{
 	RPCTxFeeCap: 1, // 1 ether
 	Region:      0,
 	Zone:        0,
-	DomUrl:      "",
+	DomUrl:      "ws://127.0.0.1:8546",
 }
 
 func init() {
