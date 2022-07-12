@@ -1893,6 +1893,11 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	return n, err
 }
 
+// SealHash runs the consensus engine seal hash from bc.
+func (bc *BlockChain) SealHash(header *types.Header) common.Hash {
+	return bc.Engine().SealHash(header)
+}
+
 // InsertChainWithoutSealVerification works exactly the same
 // except for seal verification, seal verification is omitted
 func (bc *BlockChain) InsertChainWithoutSealVerification(block *types.Block) (int, error) {
