@@ -19,10 +19,15 @@ package quaiclient
 
 import (
 	"context"
+	"math"
+	"time"
 
 	"github.com/spruce-solutions/go-quai/core/types"
+	"github.com/spruce-solutions/go-quai/log"
 	"github.com/spruce-solutions/go-quai/rpc"
 )
+
+var exponentialBackoffCeilingSecs int64 = 60 // 1 minute
 
 // Client defines typed wrappers for the Ethereum RPC API.
 type Client struct {
@@ -35,10 +40,30 @@ func Dial(rawurl string) (*Client, error) {
 }
 
 func DialContext(ctx context.Context, rawurl string) (*Client, error) {
-	c, err := rpc.DialContext(ctx, rawurl)
-	if err != nil {
-		return nil, err
+	connectStatus := false
+	attempts := 0
+
+	var c *rpc.Client
+	var err error
+	for !connectStatus {
+		c, err = rpc.DialContext(ctx, rawurl)
+		if err == nil {
+			break
+		}
+
+		attempts += 1
+		// exponential back-off implemented
+		delaySecs := int64(math.Floor((math.Pow(2, float64(attempts)) - 1) * 0.5))
+		if delaySecs > exponentialBackoffCeilingSecs {
+			return nil, err
+		}
+
+		// should only get here if the ffmpeg record stream process dies
+		log.Warn("Attempting to connect to dominant go-quai node. Waiting and retrying...", "attempts", attempts, "delay", delaySecs)
+
+		time.Sleep(time.Duration(delaySecs) * time.Second)
 	}
+
 	return NewClient(c), nil
 }
 

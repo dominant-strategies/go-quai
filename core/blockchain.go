@@ -19,7 +19,6 @@ package core
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -283,11 +282,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 
 	// only set the domClient if the chain is not prime
 	if types.QuaiNetworkContext != params.PRIME {
-		fmt.Println("domClient", domClientUrl)
 		bc.domClient = MakeDomClient(domClientUrl)
-
-		dc, err := bc.domClient.CheckCanonical(context.Background(), nil)
-		fmt.Println("dom chain height", dc, "err: ", err)
 	}
 
 	var err error
@@ -522,7 +517,7 @@ func MakeDomClient(domurl string) *quaiclient.Client {
 	}
 	domClient, err := quaiclient.Dial(domurl)
 	if err != nil {
-		log.Crit("error connecting to the domClient")
+		log.Crit("Error connecting to the dominant go-quai client", "err", err)
 	}
 	return domClient
 }
