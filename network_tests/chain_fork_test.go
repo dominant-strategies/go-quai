@@ -294,37 +294,46 @@ func GenAndRun(graph [3][3][]*types.BlockGenSpec) (orderedBlockClients, map[stri
 
 // Example test for a fork choice scenario shown in slide00 (not a real slide)
 func TestForkChoice_Slide00(t *testing.T) {
+	clients, err := getNodeClients()
+	if err != nil {
+		log.Fatal("Error connecting to nodes!")
+	}
 	/**************************************************************************
 	 * Define the test scenario:
 	 *************************************************************************/
 	// The graph defines blocks to be mined by each of the chains in the network, to create a chain fork test scenario.
 	graph := [3][3][]*types.BlockGenSpec{
-		{ // Region0
-			{ // Zone0
-				&types.BlockGenSpec{[3]int{1, 1, 1}, [3]string{}, "z00_1"},
-				&types.BlockGenSpec{[3]int{-1, -1, 2}, [3]string{}, ""},
-				// ...
-				&types.BlockGenSpec{[3]int{-1, 2, 4}, [3]string{}, "z00_4"},
-				&types.BlockGenSpec{[3]int{3, 3, 5}, [3]string{}, ""},
-				&types.BlockGenSpec{[3]int{-1, -1, 6}, [3]string{}, ""},                // END OF CANONICAL CHAIN
-				&types.BlockGenSpec{[3]int{-1, -1, 5}, [3]string{"", "", "z00_4"}, ""}, // Fork at z00_4
-				// ...
-				&types.BlockGenSpec{[3]int{-1, 3, 8}, [3]string{}, ""},
-				&types.BlockGenSpec{[3]int{-1, -1, 5}, [3]string{"", "", "z00_4"}, ""}, // Fork at z00_4
-				&types.BlockGenSpec{[3]int{-1, -1, 6}, [3]string{}, ""},
-				&types.BlockGenSpec{[3]int{-1, -1, 7}, [3]string{"", "z00_1", ""}, ""}, // Twist to z00_1
+		{
+			{
+				&types.BlockGenSpec{[3]string{"gen", "gen", "gen"}, "z11_1"},
+				&types.BlockGenSpec{[3]string{"", "", "z11_1"}, "z11_2"},
+				&types.BlockGenSpec{[3]string{"", "", "z11_2"}, "z11_3"},
+				&types.BlockGenSpec{[3]string{"", "z11_1", "z11_3"}, "z11_4"},
+				&types.BlockGenSpec{[3]string{"z31_1", "z11_4", "z11_4"}, "final_prime"},
+				&types.BlockGenSpec{[3]string{"", "", "final_prime"}, "final_zone11"},
+				&types.BlockGenSpec{[3]string{"", "", "z11_4"}, "z11_7"},
+				&types.BlockGenSpec{[3]string{"", "", "z11_7"}, "z11_8"},
+				&types.BlockGenSpec{[3]string{"", "", "z11_8"}, "z11_9"},
+				&types.BlockGenSpec{[3]string{"", "z11_4", "z11_9"}, "z11_10"},
+				&types.BlockGenSpec{[3]string{"", "", "z11_4"}, "z11_11"},
+				&types.BlockGenSpec{[3]string{"", "", "z11_11"}, "z11_12"},
+				&types.BlockGenSpec{[3]string{"", "z11_4", "z11_12"}, "z11_13"},
 			},
-			{}, // ... Zone1 omitted
-			{}, // ... Zone2 omitted
+			nil, // Zone12 omitted
+			nil, // Zone13 omitted
 		},
-		{ // Region1
-			{ // Zone0
-				&types.BlockGenSpec{[3]int{1, 1, 2}, [3]string{"", "", "z00_1"}, ""},
+		{
+			nil, // Zone21 omitted
+			nil, // Zone22 omitted
+			nil, // Zone23 omitted
+		},
+		{
+			{
+				&types.BlockGenSpec{[3]string{"z11_1", "gen", "gen"}, "z31_1"},
 			},
-			{}, // ... Zone1 omitted
-			{}, // ... Zone2 omitted
+			nil, // Zone32 omitted
+			nil, // Zone33 omitted
 		},
-		{}, // ... Region2 omitted
 	}
 
 	/**************************************************************************
