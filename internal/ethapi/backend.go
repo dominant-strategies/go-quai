@@ -74,6 +74,9 @@ type Backend interface {
 	PendingBlockAndReceipts() (*types.Block, types.Receipts)
 	AddExternalBlock(block *types.ExternalBlock) error
 	GetExternalBlockByHashAndContext(hash common.Hash, context int) (*types.ExternalBlock, error)
+	GetAncestorByLocation(hash common.Hash, location []byte) (*types.Header, error)
+	GetSubordinateSet(stopHash common.Hash, location []byte) ([]common.Hash, error)
+
 	GetBlockStatus(header *types.Header) core.WriteStatus
 	EventMux() *event.TypeMux
 	CalculateBaseFee(header *types.Header) *big.Int

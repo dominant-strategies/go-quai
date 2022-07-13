@@ -17,6 +17,7 @@
 package core
 
 import (
+	"bytes"
 	crand "crypto/rand"
 	"errors"
 	"fmt"
@@ -462,6 +463,26 @@ func (hc *HeaderChain) GetAncestor(hash common.Hash, number, ancestor uint64, ma
 		number--
 	}
 	return hash, number
+}
+
+// GetAncestorByLocation retrieves the first occurrence of a block with a given location from a given block.
+//
+// Note: location == hash location returns the same block.
+func (hc *HeaderChain) GetAncestorByLocation(hash common.Hash, location []byte) (*types.Header, error) {
+	header := hc.GetHeaderByHash(hash)
+	if header != nil {
+		return nil, errors.New("error finding header by hash")
+	}
+
+	for !bytes.Equal(header.Location, location) {
+		hash = header.ParentHash[types.QuaiNetworkContext]
+
+		header := hc.GetHeaderByHash(hash)
+		if header != nil {
+			return nil, errors.New("error finding header by hash")
+		}
+	}
+	return header, nil
 }
 
 // GetTd retrieves a block's total difficulty in the canonical chain from the

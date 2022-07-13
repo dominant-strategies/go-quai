@@ -284,6 +284,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	// only set the domClient if the chain is not prime
 	if types.QuaiNetworkContext != params.PRIME {
 		bc.domClient = MakeDomClient(domClientUrl)
+		go bc.subscribeDomHead()
 	}
 
 	var err error
@@ -2987,6 +2988,28 @@ func (bc *BlockChain) GetExternalBlockTraceSet(stopHash common.Hash, newHeader *
 	}
 }
 
+func (bc *BlockChain) GetSubordinateSet(stopHash common.Hash, location []byte) ([]common.Hash, error) {
+	latest, err := bc.hc.GetAncestorByLocation(bc.CurrentBlock().Hash(), location)
+	if err != nil {
+		return nil, err
+	}
+
+	extBlocks, err := bc.GetExternalBlockTraceSet(stopHash, latest, types.QuaiNetworkContext+1)
+	if err != nil {
+		return nil, err
+	}
+
+	hashes := make([]common.Hash, 0)
+	for _, extBlock := range extBlocks {
+		hashes = append(hashes, extBlock.Hash())
+	}
+
+	for i, j := 0, len(hashes)-1; i < j; i, j = i+1, j-1 {
+		hashes[i], hashes[j] = hashes[j], hashes[i]
+	}
+	return hashes, nil
+}
+
 // StoreExternalBlocks removes the external block from the cached blocks and writes it into the database
 func (bc *BlockChain) StoreExternalBlocks(blocks []*types.ExternalBlock) error {
 
@@ -3366,6 +3389,55 @@ func (bc *BlockChain) CalcHLCRNetDifficulty(terminalHash common.Hash, header *ty
 	return []*big.Int{primeNd, regionNd, zoneNd}, nil
 }
 
+// subscribeDomHead listens to dominant go-quai node head events and will update state accordingly.
+func (bc *BlockChain) subscribeDomHead() {
+	newHeadChannel := make(chan *types.Header, 1)
+	sub, err := bc.domClient.SubscribeNewHead(context.Background(), newHeadChannel)
+	if err != nil {
+		log.Crit("Failed to subscribe to the new head notifications ", "err", err)
+	}
+	defer sub.Unsubscribe()
+
+	for {
+		select {
+		case newHead := <-newHeadChannel:
+			fmt.Println("new head in dom", newHead.Hash())
+
+			if !bytes.Equal(newHead.Location, bc.chainConfig.Location) {
+				newHead, err = bc.domClient.GetAncestorByLocation(context.Background(), newHead.Hash(), bc.chainConfig.Location)
+				if err != nil {
+					fmt.Println(err)
+					continue
+				}
+			}
+
+			_, err := bc.PCRC(newHead)
+			if err != nil {
+				fmt.Println("err in PCRC", err)
+			}
+
+			extBlockSet, err := bc.domClient.GetSubordinateSet(context.Background(), bc.CurrentBlock().Hash(), bc.chainConfig.Location)
+			if err != nil {
+				fmt.Println("cannot get sub set", err)
+				continue
+			}
+
+			newBlocks := make([]*types.Block, 0)
+			for _, newHash := range extBlockSet {
+				extBlock, err := bc.domClient.GetExternalBlockByHashAndContext(context.Background(), newHash, types.QuaiNetworkContext)
+				if err != nil {
+					fmt.Println("err getting ext block", newHash)
+					continue
+				}
+				block := types.NewBlockWithHeader(extBlock.Header()).WithBody(extBlock.Transactions(), extBlock.Uncles())
+				newBlocks = append(newBlocks, block)
+			}
+
+			bc.InsertChain(newBlocks)
+		}
+	}
+}
+
 // HasHeader checks if a block header is present in the database or not, caching
 // it if present.
 func (bc *BlockChain) HasHeader(hash common.Hash, number uint64) bool {
@@ -3390,6 +3462,13 @@ func (bc *BlockChain) GetBlockHashesFromHash(hash common.Hash, max uint64) []com
 // Note: ancestor == 0 returns the same block, 1 returns its parent and so on.
 func (bc *BlockChain) GetAncestor(hash common.Hash, number, ancestor uint64, maxNonCanonical *uint64) (common.Hash, uint64) {
 	return bc.hc.GetAncestor(hash, number, ancestor, maxNonCanonical)
+}
+
+// GetAncestorWithLocation retrieves the first occurrence of a block with a given location from a given block.
+//
+// Note: location == hash location returns the same block.
+func (bc *BlockChain) GetAncestorByLocation(hash common.Hash, location []byte) (*types.Header, error) {
+	return bc.hc.GetAncestorByLocation(hash, location)
 }
 
 // GetHeaderByNumber retrieves a block header from the database by number,
