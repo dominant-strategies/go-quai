@@ -3,11 +3,14 @@ package network_tests
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/spruce-solutions/go-quai/common"
+	"github.com/spruce-solutions/go-quai/consensus/blake3"
 	"github.com/spruce-solutions/go-quai/core"
 	"github.com/spruce-solutions/go-quai/core/types"
 	"github.com/spruce-solutions/go-quai/ethclient"
@@ -22,19 +25,52 @@ type orderedBlockClients struct {
 }
 
 // Generate blocks to form a network of chains
-func (obc *orderedBlockClients) SendBlocksToNodes(blocks map[string]*types.Block) error {
-	for _, block := range blocks {
+func (obc *orderedBlockClients) SendBlocksToNodes(blocks map[string]types.Block) error {
+	for tag, block := range blocks {
 		location := block.Header().Location
-		zone := obc.zoneClients[location[0]][location[1]]
-		region := obc.regionClients[location[0]]
-		prime := obc.primeClient
-		zone.SendMinedBlock(context.Background(), block, true, true)
-		receiptBlock, receiptErr := zone.GetBlockReceipts(context.Background(), block.Hash())
-		if receiptErr != nil {
-			return receiptErr
+		order, err := blake3.NewFaker().GetDifficultyOrder(block.Header())
+		if err != nil {
+			return err
 		}
-		region.SendExternalBlock(context.Background(), block, receiptBlock.Receipts(), big.NewInt(2))
-		prime.SendExternalBlock(context.Background(), block, receiptBlock.Receipts(), big.NewInt(2))
+		zone := obc.zoneClients[location[0]-1][location[1]-1]
+		region := obc.regionClients[location[0]-1]
+		prime := obc.primeClient
+		// Pretty prints for test dialog
+		prettyBlock := block.Hash().Bytes()[0:4]
+		prettyParents := [][]byte{block.Header().ParentHash[0].Bytes()[0:4], block.Header().ParentHash[1].Bytes()[0:4], block.Header().ParentHash[2].Bytes()[0:4]}
+		switch order {
+		case params.PRIME:
+			log.Printf("Sending PRIME block:\t%02x -> [%02x, %02x, %02x] (%s)", prettyBlock, prettyParents[0], prettyParents[1], prettyParents[2], tag)
+		case params.REGION:
+			log.Printf("Sending REGION[%d] block:\t%02x -> [________, %02x, %02x] (%s)", location[0], prettyBlock, prettyParents[1], prettyParents[2], tag)
+		case params.ZONE:
+			log.Printf("Sending ZONE[%d][%d] block: \t%02x -> [________, ________, %02x] (%s)", location[0], location[1], prettyBlock, prettyParents[2], tag)
+		default:
+			return fmt.Errorf("Unknown block order: %d", order)
+		}
+		// Send external blocks first
+		prime.SendExternalBlock(context.Background(), &block, nil, big.NewInt(int64(params.PRIME)))
+		prime.SendExternalBlock(context.Background(), &block, nil, big.NewInt(int64(params.REGION)))
+		prime.SendExternalBlock(context.Background(), &block, nil, big.NewInt(int64(params.ZONE)))
+		region.SendExternalBlock(context.Background(), &block, nil, big.NewInt(int64(params.PRIME)))
+		region.SendExternalBlock(context.Background(), &block, nil, big.NewInt(int64(params.REGION)))
+		region.SendExternalBlock(context.Background(), &block, nil, big.NewInt(int64(params.ZONE)))
+		zone.SendExternalBlock(context.Background(), &block, nil, big.NewInt(int64(params.PRIME)))
+		zone.SendExternalBlock(context.Background(), &block, nil, big.NewInt(int64(params.REGION)))
+		zone.SendExternalBlock(context.Background(), &block, nil, big.NewInt(int64(params.ZONE)))
+		// Send full blocks after slice has external blocks
+		err = prime.SendMinedBlock(context.Background(), &block, true, true)
+		if err != nil {
+			return err
+		}
+		err = region.SendMinedBlock(context.Background(), &block, true, true)
+		if err != nil {
+			return err
+		}
+		err = zone.SendMinedBlock(context.Background(), &block, true, true)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -55,7 +91,7 @@ func (obc *orderedBlockClients) SelectClient(region, zone *int) *ethclient.Clien
 func (obc *orderedBlockClients) GetNodeHeadHash(region, zone *int) common.Hash {
 	// Select the correct client for the requested location
 	client := obc.SelectClient(region, zone)
-	if client != nil {
+	if client == nil {
 		log.Fatal("Failed to select client for the requested location")
 	}
 
@@ -64,9 +100,9 @@ func (obc *orderedBlockClients) GetNodeHeadHash(region, zone *int) common.Hash {
 	if err != nil {
 		log.Fatal("Failed to get block number")
 	}
-	header, err := obc.primeClient.HeaderByNumber(context.Background(), big.NewInt(int64(number)))
+	header, err := client.HeaderByNumber(context.Background(), big.NewInt(int64(number)))
 	if err != nil {
-		log.Fatal("Failed to get head")
+		fmt.Errorf("Failed to get [%d, %d] head: %s", region, zone, err)
 	}
 	return header.Hash()
 }
@@ -74,19 +110,10 @@ func (obc *orderedBlockClients) GetNodeHeadHash(region, zone *int) common.Hash {
 func (obc *orderedBlockClients) GetNodeTotalDifficulties(region, zone *int) ([]*big.Int, error) {
 	// Select the correct client for the requested location
 	client := obc.SelectClient(region, zone)
-	if client != nil {
+	if client == nil {
 		log.Fatal("Failed to select client for the requested location")
 	}
-
-	number, err := client.BlockNumber(context.Background())
-	if err != nil {
-		log.Fatal("Failed to get block number")
-	}
-	block, err := obc.primeClient.BlockByNumber(context.Background(), big.NewInt(int64(number)))
-	if err != nil {
-		log.Fatal("Failed to get head")
-	}
-	td := []*big.Int{block.NetworkDifficulty(0), block.NetworkDifficulty(1), block.NetworkDifficulty(2)}
+	td := client.GetHeadTd(context.Background())
 	if td == nil || td[0] == nil || td[1] == nil || td[2] == nil {
 		return nil, errors.New("Failed to get total difficulties")
 	}
@@ -94,33 +121,33 @@ func (obc *orderedBlockClients) GetNodeTotalDifficulties(region, zone *int) ([]*
 }
 
 func (obc *orderedBlockClients) resetToGenesis() error {
-	primeGenesis, err := obc.primeClient.HeaderByHash(context.Background(), params.RopstenPrimeGenesisHash)
-	if err != nil {
-		return errors.New("Failed to reset prime node")
-	}
-	err = obc.primeClient.SendReOrgData(context.Background(), primeGenesis, nil, nil)
-	if err != nil {
-		return errors.New("Failed to reset prime node")
-	}
-	regionGenesis, err := obc.primeClient.HeaderByHash(context.Background(), params.RopstenRegionGenesisHash)
-	if err != nil {
-		return errors.New("Failed to reset prime node")
-	}
-	for _, c := range obc.regionClients {
-		err := c.SendReOrgData(context.Background(), regionGenesis, nil, nil)
+	// Reset Prime client
+	block1, _ := obc.primeClient.HeaderByNumber(context.Background(), big.NewInt(1))
+	if block1 != nil {
+		err := obc.primeClient.SendReOrgData(context.Background(), block1, []*types.Header{}, []*types.Header{})
 		if err != nil {
-			return errors.New("Failed to reset region node")
+			return errors.New("Failed to reset prime node")
 		}
 	}
-	zoneGenesis, err := obc.primeClient.HeaderByHash(context.Background(), params.RopstenZoneGenesisHash)
-	if err != nil {
-		return errors.New("Failed to reset prime node")
-	}
-	for _, region := range obc.zoneClients {
-		for _, c := range region {
-			err := c.SendReOrgData(context.Background(), zoneGenesis, nil, nil)
+	// Reset region clients
+	for r, c := range obc.regionClients {
+		block1, _ := c.HeaderByNumber(context.Background(), big.NewInt(1))
+		if block1 != nil {
+			err := c.SendReOrgData(context.Background(), block1, []*types.Header{}, []*types.Header{})
 			if err != nil {
-				return errors.New("Failed to reset region node")
+				return fmt.Errorf("Failed to reset region[%d] node", r)
+			}
+		}
+	}
+	// Reset zone clients
+	for r, region := range obc.zoneClients {
+		for z, c := range region {
+			block1, _ := c.HeaderByNumber(context.Background(), big.NewInt(1))
+			if block1 != nil {
+				err := c.SendReOrgData(context.Background(), block1, []*types.Header{}, []*types.Header{})
+				if err != nil {
+					return fmt.Errorf("Failed to reset zone[%d][%d] node", r, z)
+				}
 			}
 		}
 	}
@@ -193,103 +220,104 @@ func getNodeClients() (orderedBlockClients, error) {
 }
 
 // After running a test scenario, check if the nodes are on the correct heads
-func (obc *orderedBlockClients) CheckPassFail(blocks map[string]*types.Block) {
-	// Collect all final blocks that were tagged in the blocks map
-	finalPrime := blocks["final_prime"]
-	finalRegion := []*types.Block{blocks["final_region0"], blocks["final_region1"], blocks["final_region2"]}
-	finalZone := [][]*types.Block{
-		[]*types.Block{blocks["final_zone00"], blocks["final_zone01"], blocks["final_zone02"]},
-		[]*types.Block{blocks["final_zone10"], blocks["final_zone11"], blocks["final_zone12"]},
-		[]*types.Block{blocks["final_zone20"], blocks["final_zone21"], blocks["final_zone22"]},
+func (obc *orderedBlockClients) CheckPassFail(blocks map[string]types.Block) {
+	finalPrimeTag := "final_prime"
+	finalRegionTag := []string{"final_region1", "final_region2", "final_region3"}
+	finalZoneTag := [][]string{
+		[]string{"final_zone11", "final_zone12", "final_zone13"},
+		[]string{"final_zone21", "final_zone22", "final_zone23"},
+		[]string{"final_zone31", "final_zone32", "final_zone33"},
 	}
 
 	// Check node heads
-	if finalPrime != nil && finalPrime.Hash() != obc.GetNodeHeadHash(nil, nil) {
-		log.Fatal("Prime node is on wrong head!")
-	}
-	for r, region := range finalRegion {
-		if region != nil && region.Hash() != obc.GetNodeHeadHash(&r, nil) {
-			log.Fatal("Region", r, " node is on wrong head!")
+	if block, exists := blocks[finalPrimeTag]; exists {
+		actual := obc.GetNodeHeadHash(nil, nil)
+		expected := block.Hash()
+		if actual != expected {
+			log.Fatal("Prime node is on wrong head!\nexpected:\t", expected, "\nactual:\t\t", actual)
 		}
-	}
-	for r, region := range finalZone {
-		for z, zone := range region {
-			if region != nil && zone.Hash() != obc.GetNodeHeadHash(&r, &z) {
-				log.Fatal("Zone", r, z, " node is on wrong head!")
-			}
-		}
-	}
-
-	// Check node total difficulties
-	if finalPrime != nil {
 		totalDifficulties, err := obc.GetNodeTotalDifficulties(nil, nil)
 		if err != nil {
 			log.Fatal("Failed to get Prime difficulties")
 		}
-		expectedPrimeDiff := new(big.Int).Mul(params.MinimumDifficulty[params.PRIME], finalPrime.Number(params.PRIME))
-		expectedRegionDiff := new(big.Int).Mul(params.MinimumDifficulty[params.REGION], finalPrime.Number(params.REGION))
-		expectedZoneDiff := new(big.Int).Mul(params.MinimumDifficulty[params.ZONE], finalPrime.Number(params.ZONE))
+		expectedPrimeDiff := new(big.Int).Mul(params.MinimumDifficulty[params.PRIME], block.Number(params.PRIME))
+		expectedRegionDiff := new(big.Int).Mul(params.MinimumDifficulty[params.REGION], block.Number(params.REGION))
+		expectedZoneDiff := new(big.Int).Mul(params.MinimumDifficulty[params.ZONE], block.Number(params.ZONE))
 		if expectedPrimeDiff != totalDifficulties[params.PRIME] ||
 			expectedRegionDiff != totalDifficulties[params.REGION] ||
 			expectedZoneDiff != totalDifficulties[params.ZONE] {
 			log.Fatal("Prime node has wrong total difficulties!")
 		}
 	}
-	for r, region := range finalRegion {
-		totalDifficulties, err := obc.GetNodeTotalDifficulties(&r, nil)
-		if err != nil {
-			log.Fatal("Failed to get region", r, " difficulties")
-		}
-		expectedPrimeDiff := new(big.Int).Mul(params.MinimumDifficulty[params.PRIME], region.Number(params.PRIME))
-		expectedRegionDiff := new(big.Int).Mul(params.MinimumDifficulty[params.REGION], region.Number(params.REGION))
-		expectedZoneDiff := new(big.Int).Mul(params.MinimumDifficulty[params.ZONE], region.Number(params.ZONE))
-		if expectedPrimeDiff != totalDifficulties[params.PRIME] ||
-			expectedRegionDiff != totalDifficulties[params.REGION] ||
-			expectedZoneDiff != totalDifficulties[params.ZONE] {
-			log.Fatal("Region", r, " has the wrong total difficulties!")
-		}
-	}
-	for r, region := range finalZone {
-		for z, zone := range region {
-			totalDifficulties, err := obc.GetNodeTotalDifficulties(&r, &z)
-			if err != nil {
-				log.Fatal("Failed to get zone", r, z, " difficulties")
+	for r, tag := range finalRegionTag {
+		if block, exists := blocks[tag]; exists {
+			actual := obc.GetNodeHeadHash(&r, nil)
+			expected := block.Hash()
+			if actual != expected {
+				log.Fatal("Region[", r, "]node is on wrong head!\nexpected:\t", expected, "\nactual:\t\t", actual)
 			}
-			expectedPrimeDiff := new(big.Int).Mul(params.MinimumDifficulty[params.PRIME], zone.Number(params.PRIME))
-			expectedRegionDiff := new(big.Int).Mul(params.MinimumDifficulty[params.REGION], zone.Number(params.REGION))
-			expectedZoneDiff := new(big.Int).Mul(params.MinimumDifficulty[params.ZONE], zone.Number(params.ZONE))
+			totalDifficulties, err := obc.GetNodeTotalDifficulties(&r, nil)
+			if err != nil {
+				log.Fatal("Failed to get region[", r, "] difficulties")
+			}
+			expectedPrimeDiff := new(big.Int).Mul(params.MinimumDifficulty[params.PRIME], block.Number(params.PRIME))
+			expectedRegionDiff := new(big.Int).Mul(params.MinimumDifficulty[params.REGION], block.Number(params.REGION))
+			expectedZoneDiff := new(big.Int).Mul(params.MinimumDifficulty[params.ZONE], block.Number(params.ZONE))
 			if expectedPrimeDiff != totalDifficulties[params.PRIME] ||
 				expectedRegionDiff != totalDifficulties[params.REGION] ||
 				expectedZoneDiff != totalDifficulties[params.ZONE] {
-				log.Fatal("Zone", r, z, " has the wrong total difficulties!")
+				log.Fatal("Region[", r, "] node has wrong total difficulties!")
+			}
+		}
+	}
+	for r, zoneTags := range finalZoneTag {
+		for z, tag := range zoneTags {
+			if block, exists := blocks[tag]; exists {
+				actual := obc.GetNodeHeadHash(&r, &z)
+				expected := block.Hash()
+				if actual != expected {
+					log.Fatal("Zone[", r, "][", z, "] node is on wrong head!\nexpected:\t", expected, "\nactual:\t\t", actual)
+				}
+				totalDifficulties, err := obc.GetNodeTotalDifficulties(&r, &z)
+				if err != nil {
+					log.Fatal("Failed to get zone[", r, "][", z, "] difficulties")
+				}
+				expectedPrimeDiff := new(big.Int).Mul(params.MinimumDifficulty[params.PRIME], block.Number(params.PRIME))
+				expectedRegionDiff := new(big.Int).Mul(params.MinimumDifficulty[params.REGION], block.Number(params.REGION))
+				expectedZoneDiff := new(big.Int).Mul(params.MinimumDifficulty[params.ZONE], block.Number(params.ZONE))
+				if expectedPrimeDiff != totalDifficulties[params.PRIME] ||
+					expectedRegionDiff != totalDifficulties[params.REGION] ||
+					expectedZoneDiff != totalDifficulties[params.ZONE] {
+					log.Fatal("Zone[", r, "][", z, "] node has wrong total difficulties!")
+				}
 			}
 		}
 	}
 }
 
 //Generate blocks and run the test scenario simulation
-func GenAndRun(graph [3][3][]*types.BlockGenSpec) (orderedBlockClients, map[string]*types.Block) {
+func (obc *orderedBlockClients) GenAndRun(graph [3][3][]*types.BlockGenSpec) map[string]types.Block {
 	// Reset the node to genesis
-	clients, err := getNodeClients()
+	err := obc.resetToGenesis()
 	if err != nil {
-		log.Fatal("Error connecting to nodes!")
+		log.Fatalf("Faile to reset nodes to genesis: %s", err)
 	}
-	if nil != clients.resetToGenesis() {
-		log.Fatal("Failed to reset nodes to genesis!")
-	}
-
 	// Generate the blocks for this graph
-	blocks, err := core.GenerateNetworkBlocks(graph)
+	genesisBlock, err := obc.primeClient.BlockByNumber(context.Background(), big.NewInt(0))
 	if err != nil {
-		log.Fatal("Error generating blocks!")
+		log.Fatal("Failed to get genesis block!")
 	}
-
+	log.Printf("Genesis block hash: %s", genesisBlock.Hash())
+	blocks, err := core.GenerateNetworkBlocks(genesisBlock, graph)
+	if err != nil {
+		log.Fatalf("Error generating blocks: %s", err)
+	}
 	// Send internal & external blocks to the node
-	err = clients.SendBlocksToNodes(blocks)
+	err = obc.SendBlocksToNodes(blocks)
 	if err != nil {
 		log.Fatal("Failed to send all blocks to the node!")
 	}
-	return clients, blocks
+	return blocks
 }
 
 // Example test for a fork choice scenario shown in slide00 (not a real slide)
@@ -309,7 +337,7 @@ func TestForkChoice_Slide00(t *testing.T) {
 				&types.BlockGenSpec{[3]string{"", "", "z11_1"}, "z11_2"},
 				&types.BlockGenSpec{[3]string{"", "", "z11_2"}, "z11_3"},
 				&types.BlockGenSpec{[3]string{"", "z11_1", "z11_3"}, "z11_4"},
-				&types.BlockGenSpec{[3]string{"z31_1", "z11_4", "z11_4"}, "final_prime"},
+				&types.BlockGenSpec{[3]string{"final_zone31", "z11_4", "z11_4"}, "final_prime"},
 				&types.BlockGenSpec{[3]string{"", "", "final_prime"}, "final_zone11"},
 				&types.BlockGenSpec{[3]string{"", "", "z11_4"}, "z11_7"},
 				&types.BlockGenSpec{[3]string{"", "", "z11_7"}, "z11_8"},
@@ -329,7 +357,7 @@ func TestForkChoice_Slide00(t *testing.T) {
 		},
 		{
 			{
-				&types.BlockGenSpec{[3]string{"z11_1", "gen", "gen"}, "z31_1"},
+				&types.BlockGenSpec{[3]string{"z11_1", "gen", "gen"}, "final_zone31"},
 			},
 			nil, // Zone32 omitted
 			nil, // Zone33 omitted
@@ -339,7 +367,8 @@ func TestForkChoice_Slide00(t *testing.T) {
 	/**************************************************************************
 	 * Generate blocks and run the test scenario simulation:
 	 *************************************************************************/
-	clients, blocks := GenAndRun(graph)
+	blocks := clients.GenAndRun(graph)
+	time.Sleep(2 * time.Second) // Sleep a bit to allow nodes to reprocess future blocks
 
 	/**************************************************************************
 	 * PASS/FAIL criteria:

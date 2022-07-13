@@ -23,12 +23,17 @@ import (
 
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/consensus"
+	"github.com/spruce-solutions/go-quai/consensus/blake3"
 	"github.com/spruce-solutions/go-quai/consensus/misc"
 	"github.com/spruce-solutions/go-quai/core/state"
 	"github.com/spruce-solutions/go-quai/core/types"
 	"github.com/spruce-solutions/go-quai/core/vm"
 	"github.com/spruce-solutions/go-quai/ethdb"
 	"github.com/spruce-solutions/go-quai/params"
+)
+
+var (
+	big2e256 = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0)) // 2^256
 )
 
 // BlockGen creates blocks for testing.
@@ -312,9 +317,144 @@ func makeBlockChain(parent *types.Block, n int, engine consensus.Engine, db ethd
 	return blocks
 }
 
+func GenerateBlock(genesis *types.Block, parents []*types.Block, location []byte, tag string) (*types.Block, error) {
+	// Must always have a zone parent.
+	if parents[params.ZONE] == nil {
+		return nil, fmt.Errorf("Missing zone parent for block %s", tag)
+	}
+	// If has prime parent, must also have region parent.
+	if parents[params.PRIME] != nil && parents[params.REGION] == nil {
+		return nil, fmt.Errorf("Prime block is missing region parent for block %s", tag)
+	}
+	// Compute any relative values
+	time := []uint64{0, 0, 0}
+	number := make([]*big.Int, 3, 3)
+	parentHash := make([]common.Hash, 3, 3)
+	gasLimit := []uint64{0, 0, 0}
+	gasUsed := []uint64{0, 0, 0}
+	baseFee := make([]*big.Int, 3, 3)
+	for ctx, parent := range parents {
+		if parent != nil {
+			number[ctx] = new(big.Int).Add(parent.Number(ctx), big.NewInt(1))
+			parentHash[ctx] = parent.Hash()
+			gasLimit[ctx] = parent.GasLimit(ctx)
+			gasUsed[ctx] = parent.GasUsed(ctx)
+			baseFee[ctx] = parent.BaseFee(ctx)
+			time[ctx] = parent.Header().Time + 10
+		} else {
+			number[ctx] = big.NewInt(0)
+		}
+	}
+	// Determine the order we need to mine to
+	desiredOrder := -1
+	for ctx, parent := range parents {
+		if parent != nil {
+			desiredOrder = ctx
+			break
+		}
+	}
+	// Build the header
+	header := types.Header{
+		Coinbase:    []common.Address{common.Address{}, common.Address{}, common.Address{}},
+		Number:      number,
+		ParentHash:  parentHash,
+		Root:        types.EmptyRootHash,
+		Difficulty:  params.FakeDifficulty,
+		UncleHash:   types.EmptyUncleHash,
+		TxHash:      types.EmptyRootHash,
+		ReceiptHash: types.EmptyRootHash,
+		Bloom:       []types.Bloom{types.Bloom{}, types.Bloom{}, types.Bloom{}},
+		Time:        time[desiredOrder],
+		BaseFee:     baseFee,
+		GasLimit:    gasLimit,
+		GasUsed:     gasUsed,
+		Extra:       [][]byte{[]byte(nil), []byte(nil), []byte(nil)},
+		Location:    location,
+	}
+	// Mine the block
+	// This is similar to the conventional mining loop, but modified to find a block at _exactly_
+	// the specified order, instead of _at least_ the specified order.
+	engine := blake3.NewFaker()
+	// Loop until you find a block of the correct order
+	nonce := 0
+	for {
+		// Set the new nonce and try again
+		header.Nonce = types.EncodeNonce(uint64(nonce))
+		actual_order, err := engine.GetDifficultyOrder(&header)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to get block order: ", err)
+		}
+		if actual_order == desiredOrder {
+			return types.NewBlockWithHeader(&header).WithBody([]*types.Transaction{}, []*types.Header{}), nil
+		}
+		nonce += 1
+	}
+}
+
 // Generate blocks to form a network of chains
-func GenerateNetworkBlocks(graph [3][3][]*types.BlockGenSpec) (map[string]*types.Block, error) {
-	return nil, errors.New("Not implemented")
+func GenerateNetworkBlocks(genesisBlock *types.Block, graph [3][3][]*types.BlockGenSpec) (map[string]types.Block, error) {
+	// To generate a network, we need to generate individual chains and link the chains together (via coincidents & parent references)
+
+	// Track the position of each generator in the various chains
+	var position [3][3]int
+	blocks := make(map[string]types.Block)
+	blocks["gen"] = *genesisBlock
+
+	// Loop infinitely until we've generated all blocks in all locations
+	for {
+		blocksGenerated := 0
+		for r, regionSpecs := range graph {
+			for z, zoneSpecs := range regionSpecs {
+				if zoneSpecs == nil {
+					// No blocks to generate in this zone
+					continue
+				}
+				i := position[r][z]
+				if i >= len(zoneSpecs) {
+					// Reached end of this zone's blocks
+					continue
+				}
+				if spec := zoneSpecs[i]; spec != nil {
+					// Make sure this block tag is unique, and not already in use
+					if _, exists := blocks[spec.Tag]; exists {
+						return nil, fmt.Errorf("duplicate tag found: %s", spec.Tag)
+					}
+					// Look up the parent blocks
+					parents := make([]*types.Block, len(spec.Parent), cap(spec.Parent))
+					for ctx, tag := range spec.Parent {
+						if tag != "" {
+							parent, exists := blocks[tag]
+							if exists {
+								parents[ctx] = &parent
+							} else {
+								// If one or more of the parents is not available yet, stop generating blocks in this region.
+								// The necessary parent must exist in one of the other regions, so we need to skip to the next
+								// iteration of this loop to start generating blocks in other zones and regions. By the time
+								// we come back to this zone, we hopefully will have generated the requisit parents.
+								// As long as the requisit parents are tagged somewhere, this loop will eventually complete.
+								continue
+							}
+						}
+					}
+					// Generate the block and add it to the map
+					block, err := GenerateBlock(genesisBlock, parents, []byte{byte(r) + 1, byte(z) + 1}, spec.Tag)
+					if err != nil {
+						return nil, err
+					}
+					blocks[spec.Tag] = *block
+					// Increment the position for this chain's generator
+					position[r][z] += 1
+					// Record that we've done some work this iteration
+					blocksGenerated += 1
+				}
+			}
+		}
+		// If we ran through the entire network graph without generating a single block, then we've completed generating the graph
+		if blocksGenerated == 0 {
+			delete(blocks, "gen") // Do not include genesis block in final map
+			return blocks, nil
+		}
+	}
 }
 
 type fakeChainReader struct {
