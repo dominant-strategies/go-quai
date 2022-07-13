@@ -2182,6 +2182,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 				if err := bc.addFutureBlock(block); err != nil {
 					return it.index, err
 				}
+				return it.index, nil
 			}
 		} else if types.QuaiNetworkContext < params.ZONE {
 			_, err := bc.PCRC(block.Header())
