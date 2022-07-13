@@ -70,7 +70,7 @@ type ChainHeaderReader interface {
 	CheckLocationRange(location []byte) error
 
 	// GetCanonicalHash returns the canonical hash for a given block number
-	GetCanonicalHash(number uint64) common.Hash
+	// GetCanonicalHash(number uint64) common.Hash
 }
 
 // ChainReader defines a small collection of methods needed to access the local
