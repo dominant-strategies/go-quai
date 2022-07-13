@@ -3253,6 +3253,10 @@ func (bc *BlockChain) PCRC(header *types.Header) error {
 func (bc *BlockChain) PreviousCanonicalCoincidentOnPath(header *types.Header, slice []byte, order, path int, fullSliceEqual bool) (*types.Header, error) {
 	prevTerminalHeader := header
 	for {
+		if prevTerminalHeader.Number[types.QuaiNetworkContext].Cmp(big.NewInt(1)) == 0 {
+			return bc.GetHeaderByHash(bc.Config().GenesisHashes[0]), nil
+		}
+
 		terminalHeader, err := bc.Engine().PreviousCoincidentOnPath(bc, prevTerminalHeader, slice, order, path, fullSliceEqual)
 		if err != nil {
 			return nil, err
