@@ -2164,31 +2164,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		// Process block using the parent state as reference point
 		substart := time.Now()
 
-		order, err := bc.engine.GetDifficultyOrder(block.Header())
+		err = bc.PCRC(block.Header())
 		if err != nil {
 			return it.index, err
-		}
-
-		if order < types.QuaiNetworkContext {
-			domStatus := bc.domClient.GetBlockStatus(context.Background(), block.Header())
-			switch domStatus {
-			case quaiclient.CanonStatTy:
-				fmt.Println("returning CanonStatTy for dom", block.Header().Number, block.Hash())
-			case quaiclient.SideStatTy:
-				fmt.Println("returning SideStatTy for dom", block.Header().Number, block.Hash())
-				return it.index, errors.New("attempting to insert a block uncled in dominant chain")
-			case quaiclient.UnknownStatTy:
-				fmt.Println("returning UnknownStatTy for dom", block.Header().Number, block.Hash())
-				if err := bc.addFutureBlock(block); err != nil {
-					return it.index, err
-				}
-				return it.index, nil
-			}
-		} else if types.QuaiNetworkContext < params.ZONE {
-			_, err := bc.PCRC(block.Header())
-			if err != nil {
-				return it.index, err
-			}
 		}
 
 		// If in Prime or Region, take to see if we have already included the hash in the lower level.
@@ -3202,163 +3180,107 @@ func (bc *BlockChain) HLCR(localDifficulties []*big.Int, externDifficulties []*b
 // that we have linked untwisted chains prior to checking HLCR & applying external state transfers.
 // NOTE: note that it only guarantees linked & untwisted back to the prime terminus, assuming the
 // prime termini match. To check deeper than that, you need to iteratively apply PCRC to get that guarantee.
-func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
+func (bc *BlockChain) PCRC(header *types.Header) error {
 
 	if header.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
-		return bc.chainConfig.GenesisHashes[0], nil
+		return nil
 	}
 
 	slice := header.Location
 	headerOrder, err := bc.Engine().GetDifficultyOrder(header)
 	if err != nil {
-		return common.Hash{}, err
+		return err
 	}
 
 	// Prime twist check
 	// PTZ -- Prime coincident along zone path
 	// PTR -- Prime coincident along region path
 	// PTP -- Prime coincident along prime path
+	// Region twist check
+	// RTZ -- Region coincident along zone path
+	// RTR -- Region coincident along region path
 
-	// Always calculate PTZ because it is always valid and we need terminus for calcHLCRDifficulty
-	PTZ, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.ZONE, true)
+	// o/c			| prime 			| region 						| zone
+	// prime    	| x PTP, RTR		| x PTP, RTR					| x PTP, PTR, RTR
+	// region   	| X					| x PTP, RTR, PRTP, PRTR		| x PTP, PTR, RTR, PRTP, PRTR
+	// zone			| X					| X								| x PTP, PTR, RTR, PRTP, PRTR
+
+	_, err = bc.PreviousCanonicalCoincidentOnPath(header, slice, params.REGION, params.ZONE, true)
 	if err != nil {
-		return common.Hash{}, err
+		return err
+	}
+
+	PTZ, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.PRIME, params.ZONE, true)
+	if err != nil {
+		return err
 	}
 
 	// Only check for prime twist if block is of prime order
 	if headerOrder == params.PRIME {
-		PTR, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.REGION, true)
+		PRTP, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.PRIME, params.PRIME, false)
 		if err != nil {
-			return common.Hash{}, err
+			return err
 		}
-		PTP, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.PRIME, true)
+		PRTR, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.PRIME, params.REGION, false)
 		if err != nil {
-			return common.Hash{}, err
-		}
-		PRTP, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.PRIME, false)
-		if err != nil {
-			return common.Hash{}, err
-		}
-		PRTR, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.REGION, false)
-		if err != nil {
-			return common.Hash{}, err
+			return err
 		}
 
-		if PTP.Hash() != PTR.Hash() && PTR.Hash() == PTZ.Hash() {
-			log.Info("Error in PCRC", "PTP", PTP.Hash(), "num", PTP.Number, "PTR", PTR.Hash(), "num", PTR.Number)
-			err = bc.PCRCFailAction(PTR, PTP, slice, params.PRIME, params.REGION)
+		if types.QuaiNetworkContext < params.ZONE {
+			PTR, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.PRIME, params.REGION, true)
 			if err != nil {
-				return common.Hash{}, errors.New("unable to reorg REGION to common ancestor after prime (PTP!=PTR, PTR==PTZ) twist")
+				return err
 			}
-			err = bc.PCRCFailAction(PTZ, PTP, slice, params.PRIME, params.ZONE)
-			if err != nil {
-				log.Info("error in reorgTwistToCommonAncestor", "err", err)
-				return common.Hash{}, errors.New("unable to reorg ZONE to common ancestor after prime (PTP!=PTR, PTR==PTZ) twist")
+			if PTR.Hash() != PTZ.Hash() {
+				log.Info("Error in PCRC, nothing is equal", "PTR", PTR.Hash(), "num", PTR.Number, "PTZ", PTZ.Hash(), "num", PTZ.Number)
+				return errors.New("there exists a prime (PTP!=PTR!=PTZ) twist")
 			}
-			return common.Hash{}, errors.New("there exists a prime (PTP-PTR) twist")
-		}
-
-		if PTP.Hash() != PTZ.Hash() && PTP.Hash() == PTR.Hash() {
-			log.Info("Error in PCRC", "PTP", PTP.Hash(), "num", PTP.Number, "PTZ:", PTZ.Hash(), "num", PTZ.Number)
-			err = bc.PCRCFailAction(PTZ, PTP, slice, params.PRIME, params.ZONE)
-			if err != nil {
-				log.Info("error in reorgTwistToCommonAncestor", "err", err)
-				return common.Hash{}, errors.New("unable to reorg ZONE to common ancestor after prime (PTP!=PTZ, PTP==PTR) twist")
-			}
-			return common.Hash{}, errors.New("there exists a prime (PTP-PTZ) twist")
-		}
-
-		if PTP.Hash() != PTR.Hash() && PTP.Hash() == PTZ.Hash() {
-			log.Info("Error in PCRC", "PTP", PTP.Hash(), "num", PTP.Number, "PTR", PTR.Hash(), "num", PTR.Number)
-			err = bc.PCRCFailAction(PTR, PTP, slice, params.PRIME, params.REGION)
-			if err != nil {
-				return common.Hash{}, errors.New("unable to reorg REGION to common ancestor after prime (PTP!=PTR, PTP==PTZ) twist")
-			}
-			return common.Hash{}, errors.New("there exists a prime (PTP-PTZ) twist")
-		}
-
-		if PTP.Hash() != PTR.Hash() && PTR.Hash() != PTZ.Hash() && PTP.Hash() != PTZ.Hash() {
-			log.Info("Error in PCRC, nothing is equal", "PTP", PTP.Hash(), "num", PTP.Number, "PTR", PTR.Hash(), "num", PTR.Number, "PTZ", PTZ.Hash(), "num", PTZ.Number)
-			err = bc.PCRCFailAction(PTR, PTP, slice, params.PRIME, params.REGION)
-			if err != nil {
-				return common.Hash{}, errors.New("unable to reorg REGION to common ancestor after prime (PTP != PTR != PTZ) twist")
-			}
-			err = bc.PCRCFailAction(PTZ, PTP, slice, params.PRIME, params.ZONE)
-			if err != nil {
-				return common.Hash{}, errors.New("unable to reorg ZONE to common ancestor after prime (PTP != PTR != PTZ)  twist")
-			}
-			return common.Hash{}, errors.New("there exists a prime (PTP!=PTR!=PTZ) twist")
 		}
 
 		if PRTP.Hash() != PRTR.Hash() {
 			log.Info("Error in PCRC", "PRTP", PRTP.Hash(), "num", PRTP.Number, "PRTR", PRTR.Hash(), "num", PRTR.Number)
-			return common.Hash{}, errors.New("there exists a prime (PRTP) twist")
+			return errors.New("there exists a prime (PRTP) twist")
 		}
 	}
 
-	// Only check for region twist if block is of region order
-	if headerOrder <= params.REGION {
-		// Region twist check
-		// RTZ -- Region coincident along zone path
-		// RTR -- Region coincident along region path
-		RTZ, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.REGION, params.ZONE, true)
-		if err != nil {
-			return common.Hash{}, err
-		}
-
-		RTR, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.REGION, params.REGION, true)
-		if err != nil {
-			return common.Hash{}, err
-		}
-
-		// PCRC has failed. Rollback through the prior untwisted region.
-		if RTZ.Hash() != RTR.Hash() {
-			log.Info("Error in PCRC", "RTZ", RTZ.Hash(), "num", RTZ.Number, "RTR", RTR.Hash(), "num", RTR.Number)
-			err = bc.PCRCFailAction(RTZ, RTR, slice, params.REGION, params.ZONE)
-			if err != nil {
-				log.Info("error in reorgTwistToCommonAncestor", "err", err)
-				return common.Hash{}, errors.New("unable to reorg to common ancestor after region twist")
-			}
-			return common.Hash{}, errors.New("there exists a region twist")
-		}
-	}
-	return PTZ.Hash(), nil
-}
-
-func (bc *BlockChain) PCRCFailAction(subHead *types.Header, domHead *types.Header, slice []byte, order int, path int) error {
-	if types.QuaiNetworkContext == order {
-		err := bc.notifyCrossChainHeads(subHead, domHead, slice, order, path)
-		if err != nil {
-			return err
-		}
-	} else if types.QuaiNetworkContext == path {
-		err := bc.reorgTwistToCommonAncestor(subHead, domHead, slice, order, path)
-		if err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
-// reorgTwistToCommonAncestor takes in a subordinate head that is invalid (RTZ / PTR / PTZ) and a domHead that is valid.
-// If there are not many invalid subordinate heads off of a common block, communicate the invalid subordinate reference as an uncle.
-// This uncle will rollback the subordinate chain in the manager process.
-// If there are many invalid subordinate heads, aggregate the valid subordinate blocks (NewSubs) off of the valid dominant chain (RTR / PTP / PTR)
-// and include them for processing in the manager.
-func (bc *BlockChain) reorgTwistToCommonAncestor(subHead *types.Header, domHead *types.Header, slice []byte, order int, path int) error {
-	prev := subHead
+// PreviousCanonicalCoincidentOnPath searches the path for a cononical block of specified order in the specified slice
+//     *slice - The zone location which defines the slice in which we are validating
+//     *order - The order of the conincidence that is desired
+//     *path - Search among ancestors of this path in the specified slice
+func (bc *BlockChain) PreviousCanonicalCoincidentOnPath(header *types.Header, slice []byte, order, path int, fullSliceEqual bool) (*types.Header, error) {
+	prevTerminalHeader := header
 	for {
-		prevHeader, err := bc.Engine().PreviousCoincidentOnPath(bc, prev, slice, order, path, true)
+		terminalHeader, err := bc.Engine().PreviousCoincidentOnPath(bc, prevTerminalHeader, slice, order, path, fullSliceEqual)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		status := bc.domClient.GetBlockStatus(context.Background(), prevHeader)
 
-		if status == quaiclient.CanonStatTy {
-			bc.ReOrgRollBack(prev, []*types.Header{}, []*types.Header{})
-			return nil
+		headerOrder, err := bc.Engine().GetDifficultyOrder(terminalHeader)
+		if err != nil {
+			return nil, err
 		}
-		prev = prevHeader
+
+		// If the current header is dominant coincident check the status with the dom node
+		if headerOrder < types.QuaiNetworkContext {
+			status := bc.domClient.GetBlockStatus(context.Background(), terminalHeader)
+
+			// If the header is cononical break else keep looking
+			if status == quaiclient.CanonStatTy {
+
+				// If we have found a non-cononical dominant coincident header, reorg to prevTerminalHeader
+				if prevTerminalHeader != header {
+					bc.ReOrgRollBack(prevTerminalHeader, []*types.Header{}, []*types.Header{})
+				} else {
+					return terminalHeader, nil
+				}
+				return nil, err
+			}
+		}
+
+		prevTerminalHeader = terminalHeader
 	}
 }
 
