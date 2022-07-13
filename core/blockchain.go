@@ -3258,13 +3258,8 @@ func (bc *BlockChain) PreviousCanonicalCoincidentOnPath(header *types.Header, sl
 			return nil, err
 		}
 
-		headerOrder, err := bc.Engine().GetDifficultyOrder(terminalHeader)
-		if err != nil {
-			return nil, err
-		}
-
 		// If the current header is dominant coincident check the status with the dom node
-		if headerOrder < types.QuaiNetworkContext {
+		if order < types.QuaiNetworkContext {
 			status := bc.domClient.GetBlockStatus(context.Background(), terminalHeader)
 
 			// If the header is cononical break else keep looking
