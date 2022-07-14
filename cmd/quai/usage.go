@@ -141,6 +141,7 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.ExecFlag,
 			utils.PreloadJSFlag,
 			utils.DomUrl,
+			utils.SubUrls,
 		},
 	},
 	{

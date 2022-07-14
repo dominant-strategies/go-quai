@@ -228,13 +228,14 @@ type BlockChain struct {
 
 	shouldPreserve func(*types.Block) bool // Function used to determine whether should preserve the given block.
 
-	domClient *quaiclient.Client // domClient is used to check if a given dominant block in the chain is canonical in dominant chain.
+	domClient  *quaiclient.Client   // domClient is used to check if a given dominant block in the chain is canonical in dominant chain.
+	subClients []*quaiclient.Client // subClinets is used to check is a coincident block is valid in the subordinate context
 }
 
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator and
 // Processor.
-func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, domClientUrl string, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64) (*BlockChain, error) {
+func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, domClientUrl string, subClientUrls []string, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64) (*BlockChain, error) {
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
 	}
@@ -284,6 +285,11 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	// only set the domClient if the chain is not prime
 	if types.QuaiNetworkContext != params.PRIME {
 		bc.domClient = MakeDomClient(domClientUrl)
+	}
+
+	// only set the subClients if the chain is not region
+	if types.QuaiNetworkContext != params.ZONE {
+		bc.subClients = MakeSubClients(subClientUrls)
 	}
 
 	var err error
@@ -511,7 +517,7 @@ func (bc *BlockChain) loadLastState() error {
 	return nil
 }
 
-// MakeDomClient creates the ethclient for the given domurl
+// MakeDomClient creates the quaiclient for the given domurl
 func MakeDomClient(domurl string) *quaiclient.Client {
 	if domurl == "" {
 		log.Crit("dom client url is empty")
@@ -521,6 +527,22 @@ func MakeDomClient(domurl string) *quaiclient.Client {
 		log.Crit("Error connecting to the dominant go-quai client", "err", err)
 	}
 	return domClient
+}
+
+// MakeSubClients creates the quaiclient for the given suburls
+func MakeSubClients(suburls []string) []*quaiclient.Client {
+	subClients := make([]*quaiclient.Client, 3)
+	for i, suburl := range suburls {
+		if suburl == "" {
+			log.Warn("sub client url is empty")
+		}
+		subClient, err := quaiclient.Dial(suburl)
+		if err != nil {
+			log.Crit("Error connecting to the subclient go-quai client for index ", i, " err ", err)
+		}
+		subClients[i] = subClient
+	}
+	return subClients
 }
 
 // SetHead rewinds the local chain to a new head. Depending on whether the node
