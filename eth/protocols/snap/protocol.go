@@ -43,7 +43,7 @@ var ProtocolVersions = []uint{snap1}
 var protocolLengths = map[uint]uint64{snap1: 8}
 
 // maxMessageSize is the maximum cap on the size of a protocol message.
-const maxMessageSize = 10 * 1024 * 1024
+const maxMessageSize = 20 * 1024 * 1024
 
 const (
 	GetAccountRangeMsg  = 0x00
