@@ -290,7 +290,9 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 
 	// only set the subClients if the chain is not region
 	if types.QuaiNetworkContext != params.ZONE {
-		bc.subClients = MakeSubClients(subClientUrls)
+		go func() {
+			bc.subClients = MakeSubClients(subClientUrls)
+		}()
 	}
 
 	var err error
@@ -539,7 +541,7 @@ func MakeSubClients(suburls []string) []*quaiclient.Client {
 		}
 		subClient, err := quaiclient.Dial(suburl)
 		if err != nil {
-			log.Crit("Error connecting to the subclient go-quai client for index ", i, " err ", err)
+			log.Crit("Error connecting to the subordinate go-quai client for index", "index", i, " err ", err)
 		}
 		subClients[i] = subClient
 	}

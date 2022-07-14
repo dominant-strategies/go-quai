@@ -64,7 +64,7 @@ func DialContext(ctx context.Context, rawurl string) (*Client, error) {
 		}
 
 		// should only get here if the ffmpeg record stream process dies
-		log.Warn("Attempting to connect to dominant go-quai node. Waiting and retrying...", "attempts", attempts, "delay", delaySecs)
+		log.Warn("Attempting to connect to go-quai node. Waiting and retrying...", "attempts", attempts, "delay", delaySecs)
 
 		time.Sleep(time.Duration(delaySecs) * time.Second)
 	}
