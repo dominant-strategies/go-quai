@@ -2988,6 +2988,7 @@ func (bc *BlockChain) GetExternalBlockTraceSet(stopHash common.Hash, newHeader *
 	}
 }
 
+// GetSubordinateSet returns a subordinate set from a dominant chain.
 func (bc *BlockChain) GetSubordinateSet(stopHash common.Hash, location []byte) ([]common.Hash, error) {
 	latest, err := bc.hc.GetAncestorByLocation(bc.CurrentBlock().Hash(), location)
 	if err != nil {
@@ -3008,6 +3009,15 @@ func (bc *BlockChain) GetSubordinateSet(stopHash common.Hash, location []byte) (
 		hashes[i], hashes[j] = hashes[j], hashes[i]
 	}
 	return hashes, nil
+}
+
+// GetTerminusAtOrder returns the terminus at an order for the path at the node context.
+func (bc *BlockChain) GetTerminusAtOrder(header *types.Header, order int) (common.Hash, error) {
+	terminus, err := bc.Engine().PreviousCoincidentOnPath(bc, header, header.Location, order, types.QuaiNetworkContext, true)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return terminus.Hash(), nil
 }
 
 // StoreExternalBlocks removes the external block from the cached blocks and writes it into the database
@@ -3411,7 +3421,7 @@ func (bc *BlockChain) subscribeDomHead() {
 				}
 			}
 
-			_, err := bc.PCRC(newHead)
+			err := bc.PCRC(newHead)
 			if err != nil {
 				fmt.Println("err in PCRC", err)
 			}

@@ -730,6 +730,7 @@ func (s *PublicBlockChainQuaiAPI) GetBlockStatus(ctx context.Context, raw json.R
 	return s.b.GetBlockStatus(head)
 }
 
+// GetSubordinateSet returns the valid mined blocks from a dominant chain to the subordinate
 func (s *PublicBlockChainQuaiAPI) GetSubordinateSet(ctx context.Context, raw json.RawMessage) ([]common.Hash, error) {
 	var hash common.Hash
 	if err := json.Unmarshal(raw, &hash); err != nil {
@@ -741,4 +742,17 @@ func (s *PublicBlockChainQuaiAPI) GetSubordinateSet(ctx context.Context, raw jso
 	}
 
 	return s.b.GetSubordinateSet(hash, location)
+}
+
+func (s *PublicBlockChainAPI) GetTerminusAtOrder(ctx context.Context, raw json.RawMessage) (common.Hash, error) {
+	var head *types.Header
+	if err := json.Unmarshal(raw, &head); err != nil {
+		return common.Hash{}, nil
+	}
+	var order int
+	if err := json.Unmarshal(raw, &order); err != nil {
+		return common.Hash{}, nil
+	}
+
+	return s.b.GetTerminusAtOrder(head, order)
 }

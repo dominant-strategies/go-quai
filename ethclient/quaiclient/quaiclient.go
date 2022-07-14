@@ -136,6 +136,18 @@ func (ec *Client) GetExternalBlockByHashAndContext(ctx context.Context, hash com
 	return ec.getExternalBlock(ctx, "quai_getExternalBlockByHashAndContext", data)
 }
 
+// GetTerminusAtOrder retrieves subordinate validity and terminus hash for a header and order
+func (ec *Client) GetTerminusAtOrder(ctx context.Context, header *types.Header, order int) (common.Hash, error) {
+	data := map[string]interface{}{"Header": header}
+	data["Order"] = order
+
+	var hash common.Hash
+	if err := ec.c.CallContext(ctx, &hash, "quai_getTerminusAtOrder", data); err != nil {
+		return common.Hash{}, err
+	}
+	return hash, nil
+}
+
 type rpcExternalBlock struct {
 	Hash         common.Hash      `json:"hash"`
 	Transactions []rpcTransaction `json:"transactions"`

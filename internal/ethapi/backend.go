@@ -76,6 +76,7 @@ type Backend interface {
 	GetExternalBlockByHashAndContext(hash common.Hash, context int) (*types.ExternalBlock, error)
 	GetAncestorByLocation(hash common.Hash, location []byte) (*types.Header, error)
 	GetSubordinateSet(stopHash common.Hash, location []byte) ([]common.Hash, error)
+	GetTerminusAtOrder(header *types.Header, order int) (common.Hash, error)
 
 	GetBlockStatus(header *types.Header) core.WriteStatus
 	EventMux() *event.TypeMux
