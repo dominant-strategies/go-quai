@@ -124,6 +124,10 @@ func (b *LesApiBackend) GetExternalBlockByHashAndContext(hash common.Hash, conte
 	return nil, errors.New("light client does not support external block caching")
 }
 
+func (b *LesApiBackend) GetAncestorByLocation(hash common.Hash, location []byte) (*types.Header, error) {
+	return nil, errors.New("light client does not support getting ancestor by location")
+}
+
 func (b *LesApiBackend) ReOrgRollBack(header *types.Header, validHeaders []*types.Header, invalidHeaders []*types.Header) error {
 	return errors.New("light client does not support reorg")
 }
@@ -378,4 +382,12 @@ func (b *LesApiBackend) CalculateBaseFee(header *types.Header) *big.Int {
 
 func (b *LesApiBackend) GetBlockStatus(header *types.Header) core.WriteStatus {
 	return core.NonStatTy
+}
+
+func (b *LesApiBackend) GetSubordinateSet(hash common.Hash, location []byte) ([]common.Hash, error) {
+	return nil, errors.New("light client does not support retrieving subordinate set")
+}
+
+func (b *LesApiBackend) GetTerminusAtOrder(header *types.Header, order int) (common.Hash, error) {
+	return common.Hash{}, errors.New("light client does not support retrieving terminus at order")
 }
