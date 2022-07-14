@@ -258,9 +258,9 @@ func answerGetExtBlocksQuery(backend Backend, query GetExtBlocksPacket, peer *Pe
 		bytes     int
 		extBlocks []rlp.RawValue
 	)
-	for _, hash := range query {
-		if bytes >= softResponseLimit {
-			log.Warn("Hitting softResponseLimit in answerGetExtBlocksQuery")
+	for lookups, hash := range query {
+		if bytes >= softResponseLimit || len(extBlocks) >= maxExtBlocksServe ||
+			lookups >= 2*maxExtBlocksServe {
 			break
 		}
 		// Retrieve the requested block's external blocks

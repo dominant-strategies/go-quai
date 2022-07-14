@@ -34,7 +34,7 @@ import (
 
 const (
 	// softResponseLimit is the target maximum size of replies to data retrievals.
-	softResponseLimit = 40 * 1024 * 1024
+	softResponseLimit = 2 * 1024 * 1024
 
 	// estHeaderSize is the approximate size of an RLP encoded block header.
 	estHeaderSize = 1000
@@ -57,6 +57,10 @@ const (
 	// containing 200+ transactions nowadays, the practical limit will always
 	// be softResponseLimit.
 	maxReceiptsServe = 1024
+
+	// maxExtBlocksServe is the maximum number of external blocks to serve. This
+	// number is mostly there to limit the number of disk lookups.
+	maxExtBlocksServe = 1024
 )
 
 // Handler is a callback to invoke from an outside runner after the boilerplate
