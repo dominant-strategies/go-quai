@@ -79,8 +79,8 @@ func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.Genesis
 	genesis := core.Genesis{Config: params.AllEthashProtocolChanges, GasLimit: []uint64{gasLimit, gasLimit, gasLimit}, Alloc: alloc}
 	genesis.MustCommit(database)
 	var domClientUrl string
-	var subClinetUrls []string
-	blockchain, _ := core.NewBlockChain(database, nil, genesis.Config, domClientUrl, subClinetUrls, blake3.NewFaker(), vm.Config{}, nil, nil)
+	var subClientUrls []string
+	blockchain, _ := core.NewBlockChain(database, nil, genesis.Config, domClientUrl, subClientUrls, blake3.NewFaker(), vm.Config{}, nil, nil)
 
 	backend := &SimulatedBackend{
 		database:   database,
