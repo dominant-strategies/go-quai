@@ -1514,8 +1514,13 @@ func (bc *BlockChain) NdToTd(header *types.Header, nD []*big.Int) ([]*big.Int, e
 
 // CalcTd calculates the TD of the given header using PCRC and CalcHLCRNetDifficulty.
 func (bc *BlockChain) CalcTd(header *types.Header) ([]*big.Int, error) {
+	order, err := bc.Engine().GetDifficultyOrder(header)
+	if err != nil {
+		return nil, err
+	}
+
 	// Check PCRC for the external block and return the terminal hash and net difficulties
-	externTerminalHash, err := bc.PCRC(header)
+	externTerminalHash, err := bc.PCRC(header, order)
 	if err != nil {
 		return nil, err
 	}
@@ -3135,18 +3140,13 @@ func (bc *BlockChain) HLCR(localDifficulties []*big.Int, externDifficulties []*b
 // that we have linked untwisted chains prior to checking HLCR & applying external state transfers.
 // NOTE: note that it only guarantees linked & untwisted back to the prime terminus, assuming the
 // prime termini match. To check deeper than that, you need to iteratively apply PCRC to get that guarantee.
-func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
+func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (common.Hash, error) {
 
 	if header.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
 		return bc.chainConfig.GenesisHashes[0], nil
 	}
 
 	slice := header.Location
-	headerOrder, err := bc.Engine().GetDifficultyOrder(header)
-	if err != nil {
-		return common.Hash{}, err
-	}
-
 	// Prime twist check
 	// PTZ -- Prime coincident along zone path
 	// PTR -- Prime coincident along region path

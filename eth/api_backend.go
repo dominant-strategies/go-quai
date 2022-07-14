@@ -132,6 +132,10 @@ func (b *EthAPIBackend) GetExternalBlockByHashAndContext(hash common.Hash, conte
 	return b.eth.blockchain.GetExternalBlockByHashAndContext(hash, context)
 }
 
+func (b *EthAPIBackend) PCRC(header *types.Header, order int) (common.Hash, error) {
+	return b.eth.blockchain.PCRC(header, order)
+}
+
 func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
 	return b.eth.blockchain.GetBlockByHash(hash), nil
 }

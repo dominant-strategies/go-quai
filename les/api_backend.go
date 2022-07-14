@@ -124,6 +124,10 @@ func (b *LesApiBackend) GetExternalBlockByHashAndContext(hash common.Hash, conte
 	return nil, errors.New("light client does not support external block caching")
 }
 
+func (b *LesApiBackend) PCRC(header *types.Header, order int) (common.Hash, error) {
+	return common.Hash{}, errors.New("light client does not support running PCRC")
+}
+
 func (b *LesApiBackend) ReOrgRollBack(header *types.Header, validHeaders []*types.Header, invalidHeaders []*types.Header) error {
 	return errors.New("light client does not support reorg")
 }
