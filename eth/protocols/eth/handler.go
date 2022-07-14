@@ -41,7 +41,7 @@ const (
 
 	// maxHeadersServe is the maximum number of block headers to serve. This number
 	// is there to limit the number of disk lookups.
-	maxHeadersServe = 1024
+	maxHeadersServe = 100
 
 	// maxBodiesServe is the maximum number of block bodies to serve. This number
 	// is mostly there to limit the number of disk lookups. With 24KB block sizes
