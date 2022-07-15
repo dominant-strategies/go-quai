@@ -761,7 +761,12 @@ func (s *PublicBlockChainAPI) GetTerminusAtOrder(ctx context.Context, raw json.R
 func (s *PublicBlockChainQuaiAPI) CheckPCRC(ctx context.Context, raw json.RawMessage) (common.Hash, error) {
 	var head *types.Header
 	if err := json.Unmarshal(raw, &head); err != nil {
-		return common.Hash{}, err
+		return common.Hash{}, nil
 	}
-	return s.b.PCRC(head, 0)
+	var order int
+	if err := json.Unmarshal(raw, &order); err != nil {
+		return common.Hash{}, nil
+	}
+
+	return s.b.PCRC(head, order)
 }
