@@ -662,6 +662,15 @@ func (ec *Client) GetExternalBlockByHashAndContext(ctx context.Context, hash com
 	return ec.getExternalBlock(ctx, "quai_getExternalBlockByHashAndContext", data)
 }
 
+// CheckPCRC runs PCRC on the node with a given header
+func (ec *Client) CheckPCRC(ctx context.Context, header *types.Header) (common.Hash, error) {
+	var hash common.Hash
+	if err := ec.c.CallContext(ctx, &hash, "quai_checkPCRC", header); err != nil {
+		return common.Hash{}, err
+	}
+	return hash, nil
+}
+
 // header: header in which the intended chain is to roll back to.
 // newHeaders: potentially now valid dominant headers to take out of nonCanonDom db.
 // oldHeaders: invalid dominant headers to insert into nonCanonDom db.

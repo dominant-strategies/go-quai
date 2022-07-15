@@ -148,6 +148,10 @@ func (b *EthAPIBackend) GetTerminusAtOrder(header *types.Header, order int) (com
 	return b.eth.blockchain.GetTerminusAtOrder(header, order)
 }
 
+func (b *EthAPIBackend) PCRC(header *types.Header, order int) (common.Hash, error) {
+	return b.eth.blockchain.PCRC(header, order)
+}
+
 func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
 	return b.eth.blockchain.GetBlockByHash(hash), nil
 }

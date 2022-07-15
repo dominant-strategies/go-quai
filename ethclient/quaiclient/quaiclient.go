@@ -148,6 +148,15 @@ func (ec *Client) GetTerminusAtOrder(ctx context.Context, header *types.Header, 
 	return hash, nil
 }
 
+// CheckPCRC runs PCRC on the node with a given header
+func (ec *Client) CheckPCRC(ctx context.Context, header *types.Header) (common.Hash, error) {
+	var hash common.Hash
+	if err := ec.c.CallContext(ctx, &hash, "quai_checkPCRC", header); err != nil {
+		return common.Hash{}, err
+	}
+	return hash, nil
+}
+
 type rpcExternalBlock struct {
 	Hash         common.Hash      `json:"hash"`
 	Transactions []rpcTransaction `json:"transactions"`

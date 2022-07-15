@@ -3237,18 +3237,13 @@ func (bc *BlockChain) HLCR(localDifficulties []*big.Int, externDifficulties []*b
 // that we have linked untwisted chains prior to checking HLCR & applying external state transfers.
 // NOTE: note that it only guarantees linked & untwisted back to the prime terminus, assuming the
 // prime termini match. To check deeper than that, you need to iteratively apply PCRC to get that guarantee.
-func (bc *BlockChain) PCRC(header *types.Header) error {
+func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) error {
 
 	if header.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
 		return nil
 	}
 
 	slice := header.Location
-	headerOrder, err := bc.Engine().GetDifficultyOrder(header)
-	if err != nil {
-		return err
-	}
-
 	// Prime twist check
 	// PTZ -- Prime coincident along zone path
 	// PTR -- Prime coincident along region path
@@ -3262,7 +3257,7 @@ func (bc *BlockChain) PCRC(header *types.Header) error {
 	// region   	| X					| x PTP, RTR, PRTP, PRTR		| x PTP, PTR, RTR, PRTP, PRTR
 	// zone			| X					| X								| x PTP, PTR, RTR, PRTP, PRTR
 
-	_, err = bc.PreviousCanonicalCoincidentOnPath(header, slice, params.REGION, params.ZONE, true)
+	_, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.REGION, params.ZONE, true)
 	if err != nil {
 		return err
 	}
@@ -3445,10 +3440,10 @@ func (bc *BlockChain) subscribeDomHead() {
 				}
 			}
 
-			err := bc.PCRC(newHead)
-			if err != nil {
-				fmt.Println("err in PCRC", err)
-			}
+			// err := bc.PCRC(newHead)
+			// if err != nil {
+			// 	fmt.Println("err in PCRC", err)
+			// }
 
 			extBlockSet, err := bc.domClient.GetSubordinateSet(context.Background(), bc.CurrentBlock().Hash(), bc.chainConfig.Location)
 			if err != nil {
