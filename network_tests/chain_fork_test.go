@@ -1,10 +1,11 @@
-package tests
+package network_tests
 
 import (
 	"context"
 	"errors"
 	"log"
 	"math/big"
+	"testing"
 
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/core"
@@ -292,7 +293,7 @@ func GenAndRun(graph [3][3][]*types.BlockGenSpec) (orderedBlockClients, map[stri
 }
 
 // Example test for a fork choice scenario shown in slide00 (not a real slide)
-func ForkChoiceTest_Slide00() {
+func TestForkChoice_Slide00(t *testing.T) {
 	/**************************************************************************
 	 * Define the test scenario:
 	 *************************************************************************/
