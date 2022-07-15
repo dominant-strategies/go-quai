@@ -682,6 +682,10 @@ type HeaderWithOrder struct {
 	Header *types.Header
 	Order  int
 }
+type HashWithLocation struct {
+	Hash     common.Hash
+	Location []byte
+}
 
 // GetExternalBlockByHashAndContext will run checks on the header and get the External Block from the cache.
 func (s *PublicBlockChainQuaiAPI) GetExternalBlockByHashAndContext(ctx context.Context, raw json.RawMessage) (map[string]interface{}, error) {
@@ -703,17 +707,13 @@ func (s *PublicBlockChainQuaiAPI) GetExternalBlockByHashAndContext(ctx context.C
 	return RPCMarshalExternalBlock(block, extBlock.Receipts(), extBlock.Context())
 }
 
-func (s *PublicBlockChainAPI) GetAncestorByLocation(ctx context.Context, raw json.RawMessage) (map[string]interface{}, error) {
-	var hash common.Hash
-	if err := json.Unmarshal(raw, &hash); err != nil {
-		return nil, err
-	}
-	var location []byte
-	if err := json.Unmarshal(raw, &location); err != nil {
+func (s *PublicBlockChainQuaiAPI) GetAncestorByLocation(ctx context.Context, raw json.RawMessage) (map[string]interface{}, error) {
+	var hashWithLocation HashWithLocation
+	if err := json.Unmarshal(raw, &hashWithLocation); err != nil {
 		return nil, err
 	}
 
-	header, err := s.b.GetAncestorByLocation(hash, location)
+	header, err := s.b.GetAncestorByLocation(hashWithLocation.Hash, hashWithLocation.Location)
 	if err != nil {
 		return nil, err
 	}
@@ -737,29 +737,19 @@ func (s *PublicBlockChainQuaiAPI) GetBlockStatus(ctx context.Context, raw json.R
 
 // GetSubordinateSet returns the valid mined blocks from a dominant chain to the subordinate
 func (s *PublicBlockChainQuaiAPI) GetSubordinateSet(ctx context.Context, raw json.RawMessage) ([]common.Hash, error) {
-	var hash common.Hash
-	if err := json.Unmarshal(raw, &hash); err != nil {
+	var hashWithLocation HashWithLocation
+	if err := json.Unmarshal(raw, &hashWithLocation); err != nil {
 		return nil, err
 	}
-	var location []byte
-	if err := json.Unmarshal(raw, &location); err != nil {
-		return nil, err
-	}
-
-	return s.b.GetSubordinateSet(hash, location)
+	return s.b.GetSubordinateSet(hashWithLocation.Hash, hashWithLocation.Location)
 }
 
 func (s *PublicBlockChainAPI) GetTerminusAtOrder(ctx context.Context, raw json.RawMessage) (common.Hash, error) {
-	var head *types.Header
-	if err := json.Unmarshal(raw, &head); err != nil {
+	var headerWithOrder HeaderWithOrder
+	if err := json.Unmarshal(raw, &headerWithOrder); err != nil {
 		return common.Hash{}, err
 	}
-	var order int
-	if err := json.Unmarshal(raw, &order); err != nil {
-		return common.Hash{}, err
-	}
-
-	return s.b.GetTerminusAtOrder(head, order)
+	return s.b.GetTerminusAtOrder(headerWithOrder.Header, headerWithOrder.Order)
 }
 
 // CheckPCRC runs PCRC on a node and returns the response codes.
@@ -768,6 +758,5 @@ func (s *PublicBlockChainQuaiAPI) CheckPCRC(ctx context.Context, raw json.RawMes
 	if err := json.Unmarshal(raw, &headerWithOrder); err != nil {
 		return types.PCRCTermini{}, err
 	}
-
 	return s.b.PCRC(headerWithOrder.Header, headerWithOrder.Order)
 }

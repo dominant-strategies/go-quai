@@ -285,7 +285,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	// only set the domClient if the chain is not prime
 	if types.QuaiNetworkContext != params.PRIME {
 		bc.domClient = MakeDomClient(domClientUrl)
-		// go bc.subscribeDomHead()
+		go bc.subscribeDomHead()
 	}
 
 	// only set the subClients if the chain is not region
@@ -2193,9 +2193,17 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		if err != nil {
 			return it.index, err
 		}
-		_, err = bc.PCRC(block.Header(), order)
-		if err != nil {
-			return it.index, err
+
+		if order < types.QuaiNetworkContext {
+			blockStatus := bc.domClient.GetBlockStatus(context.Background(), block.Header())
+			if blockStatus != quaiclient.WriteStatus(CanonStatTy) {
+				return it.index, err
+			}
+		} else {
+			_, err = bc.PCRC(block.Header(), order)
+			if err != nil {
+				return it.index, err
+			}
 		}
 
 		// If in Prime or Region, take to see if we have already included the hash in the lower level.
