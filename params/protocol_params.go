@@ -174,6 +174,7 @@ var (
 	MinimumDifficulty      = []*big.Int{big.NewInt(531072), big.NewInt(431072), big.NewInt(131072)} // The minimum that the difficulty may ever be.
 	DurationLimits         = []*big.Int{big.NewInt(900), big.NewInt(300), big.NewInt(10)}           // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
 	TargetUncles           = []int{10, 30, 100}                                                     // The bound divisor of the gas limit, used in update calculations.
+	FakeDifficulty         = []*big.Int{big.NewInt(4), big.NewInt(2), big.NewInt(1)}
 )
 
 // Ontology defines the current Quai Network ontology
