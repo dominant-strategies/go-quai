@@ -3303,6 +3303,7 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTer
 		if bc.subClients[slice[1]-1] == nil {
 			return types.PCRCTermini{}, nil
 		}
+		fmt.Println(headerOrder)
 		PCRCTermini, err := bc.subClients[slice[1]-1].CheckPCRC(context.Background(), header, headerOrder)
 		if err != nil {
 			fmt.Println(err)

@@ -26,6 +26,7 @@ import (
 
 	quai "github.com/spruce-solutions/go-quai"
 	"github.com/spruce-solutions/go-quai/common"
+	"github.com/spruce-solutions/go-quai/common/hexutil"
 	"github.com/spruce-solutions/go-quai/core/types"
 	"github.com/spruce-solutions/go-quai/log"
 	"github.com/spruce-solutions/go-quai/rpc"
@@ -136,9 +137,14 @@ func (ec *Client) GetExternalBlockByHashAndContext(ctx context.Context, hash com
 	return ec.getExternalBlock(ctx, "quai_getExternalBlockByHashAndContext", data)
 }
 
+type rpcHeaderWithOrder struct {
+	tx *types.Transaction
+	txExtraInfo
+}
+
 // GetTerminusAtOrder retrieves subordinate validity and terminus hash for a header and order
 func (ec *Client) GetTerminusAtOrder(ctx context.Context, header *types.Header, order int) (common.Hash, error) {
-	data := map[string]interface{}{"Header": header}
+	data := map[string]interface{}{"Header": RPCMarshalHeader(header)}
 	data["Order"] = order
 
 	var hash common.Hash
@@ -150,7 +156,7 @@ func (ec *Client) GetTerminusAtOrder(ctx context.Context, header *types.Header, 
 
 // CheckPCRC runs PCRC on the node with a given header
 func (ec *Client) CheckPCRC(ctx context.Context, header *types.Header, order int) (types.PCRCTermini, error) {
-	data := map[string]interface{}{"Header": header}
+	data := map[string]interface{}{"Header": RPCMarshalHeader(header)}
 	data["Order"] = order
 
 	var PCRCTermini types.PCRCTermini
@@ -222,4 +228,34 @@ func (ec *Client) getExternalBlock(ctx context.Context, method string, args ...i
 		receipts[i] = receipt
 	}
 	return types.NewExternalBlockWithHeader(head).WithBody(txs, uncles, receipts, body.Context), nil
+}
+
+// RPCMarshalHeader converts the given header to the RPC output .
+func RPCMarshalHeader(head *types.Header) map[string]interface{} {
+	result := map[string]interface{}{
+		"number":            head.Number,
+		"hash":              head.Hash(),
+		"parentHash":        head.ParentHash,
+		"nonce":             head.Nonce,
+		"sha3Uncles":        head.UncleHash,
+		"logsBloom":         head.Bloom,
+		"stateRoot":         head.Root,
+		"miner":             head.Coinbase,
+		"difficulty":        head.Difficulty,
+		"networkDifficulty": head.NetworkDifficulty,
+		"extraData":         head.Extra,
+		"size":              hexutil.Uint64(head.Size()),
+		"gasLimit":          head.GasLimit,
+		"gasUsed":           head.GasUsed,
+		"timestamp":         head.Time,
+		"transactionsRoot":  head.TxHash,
+		"receiptsRoot":      head.ReceiptHash,
+		"location":          head.Location,
+	}
+
+	if head.BaseFee != nil {
+		result["baseFeePerGas"] = head.BaseFee
+	}
+
+	return result
 }

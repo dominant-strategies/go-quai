@@ -678,6 +678,11 @@ type HeaderHashWithContext struct {
 	Context int
 }
 
+type HeaderWithOrder struct {
+	Header *types.Header
+	Order  int
+}
+
 // GetExternalBlockByHashAndContext will run checks on the header and get the External Block from the cache.
 func (s *PublicBlockChainQuaiAPI) GetExternalBlockByHashAndContext(ctx context.Context, raw json.RawMessage) (map[string]interface{}, error) {
 	// Decode header and transactions.
@@ -759,14 +764,10 @@ func (s *PublicBlockChainAPI) GetTerminusAtOrder(ctx context.Context, raw json.R
 
 // CheckPCRC runs PCRC on a node and returns the response codes.
 func (s *PublicBlockChainQuaiAPI) CheckPCRC(ctx context.Context, raw json.RawMessage) (types.PCRCTermini, error) {
-	var head *types.Header
-	if err := json.Unmarshal(raw, &head); err != nil {
-		return types.PCRCTermini{}, err
-	}
-	var order int
-	if err := json.Unmarshal(raw, &order); err != nil {
+	var headerWithOrder HeaderWithOrder
+	if err := json.Unmarshal(raw, &headerWithOrder); err != nil {
 		return types.PCRCTermini{}, err
 	}
 
-	return s.b.PCRC(head, order)
+	return s.b.PCRC(headerWithOrder.Header, headerWithOrder.Order)
 }
