@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math"
 	"math/big"
 	"time"
 
@@ -58,7 +57,8 @@ func DialContext(ctx context.Context, rawurl string) (*Client, error) {
 
 		attempts += 1
 		// exponential back-off implemented
-		delaySecs := int64(math.Floor((math.Pow(2, float64(attempts)) - 1) * 0.5))
+		// delaySecs := int64(math.Floor((math.Pow(2, float64(attempts)) - 1) * 0.5))
+		delaySecs := int64(1)
 		if delaySecs > exponentialBackoffCeilingSecs {
 			return nil, err
 		}

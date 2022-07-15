@@ -285,7 +285,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	// only set the domClient if the chain is not prime
 	if types.QuaiNetworkContext != params.PRIME {
 		bc.domClient = MakeDomClient(domClientUrl)
-		go bc.subscribeDomHead()
+		// go bc.subscribeDomHead()
 	}
 
 	// only set the subClients if the chain is not region
@@ -3305,6 +3305,7 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTer
 		}
 		PCRCTermini, err := bc.subClients[slice[1]-1].CheckPCRC(context.Background(), header, headerOrder)
 		if err != nil {
+			fmt.Println(err)
 			return types.PCRCTermini{}, err
 		}
 
@@ -3361,6 +3362,10 @@ func (bc *BlockChain) PreviousCanonicalCoincidentOnPath(header *types.Header, sl
 		terminalHeader, err := bc.Engine().PreviousCoincidentOnPath(bc, prevTerminalHeader, slice, order, path, fullSliceEqual)
 		if err != nil {
 			return nil, err
+		}
+
+		if terminalHeader.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
+			return bc.GetHeaderByHash(bc.Config().GenesisHashes[0]), nil
 		}
 
 		// If the current header is dominant coincident check the status with the dom node

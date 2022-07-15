@@ -747,11 +747,11 @@ func (s *PublicBlockChainQuaiAPI) GetSubordinateSet(ctx context.Context, raw jso
 func (s *PublicBlockChainAPI) GetTerminusAtOrder(ctx context.Context, raw json.RawMessage) (common.Hash, error) {
 	var head *types.Header
 	if err := json.Unmarshal(raw, &head); err != nil {
-		return common.Hash{}, nil
+		return common.Hash{}, err
 	}
 	var order int
 	if err := json.Unmarshal(raw, &order); err != nil {
-		return common.Hash{}, nil
+		return common.Hash{}, err
 	}
 
 	return s.b.GetTerminusAtOrder(head, order)
@@ -761,11 +761,11 @@ func (s *PublicBlockChainAPI) GetTerminusAtOrder(ctx context.Context, raw json.R
 func (s *PublicBlockChainQuaiAPI) CheckPCRC(ctx context.Context, raw json.RawMessage) (types.PCRCTermini, error) {
 	var head *types.Header
 	if err := json.Unmarshal(raw, &head); err != nil {
-		return types.PCRCTermini{}, nil
+		return types.PCRCTermini{}, err
 	}
 	var order int
 	if err := json.Unmarshal(raw, &order); err != nil {
-		return types.PCRCTermini{}, nil
+		return types.PCRCTermini{}, err
 	}
 
 	return s.b.PCRC(head, order)
