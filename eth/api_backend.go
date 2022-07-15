@@ -148,7 +148,7 @@ func (b *EthAPIBackend) GetTerminusAtOrder(header *types.Header, order int) (com
 	return b.eth.blockchain.GetTerminusAtOrder(header, order)
 }
 
-func (b *EthAPIBackend) PCRC(header *types.Header, order int) (common.Hash, error) {
+func (b *EthAPIBackend) PCRC(header *types.Header, order int) (types.PCRCTermini, error) {
 	return b.eth.blockchain.PCRC(header, order)
 }
 

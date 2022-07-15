@@ -758,14 +758,14 @@ func (s *PublicBlockChainAPI) GetTerminusAtOrder(ctx context.Context, raw json.R
 }
 
 // CheckPCRC runs PCRC on a node and returns the response codes.
-func (s *PublicBlockChainQuaiAPI) CheckPCRC(ctx context.Context, raw json.RawMessage) (common.Hash, error) {
+func (s *PublicBlockChainQuaiAPI) CheckPCRC(ctx context.Context, raw json.RawMessage) (types.PCRCTermini, error) {
 	var head *types.Header
 	if err := json.Unmarshal(raw, &head); err != nil {
-		return common.Hash{}, nil
+		return types.PCRCTermini{}, nil
 	}
 	var order int
 	if err := json.Unmarshal(raw, &order); err != nil {
-		return common.Hash{}, nil
+		return types.PCRCTermini{}, nil
 	}
 
 	return s.b.PCRC(head, order)

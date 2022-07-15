@@ -663,12 +663,12 @@ func (ec *Client) GetExternalBlockByHashAndContext(ctx context.Context, hash com
 }
 
 // CheckPCRC runs PCRC on the node with a given header
-func (ec *Client) CheckPCRC(ctx context.Context, header *types.Header) (common.Hash, error) {
-	var hash common.Hash
-	if err := ec.c.CallContext(ctx, &hash, "quai_checkPCRC", header); err != nil {
-		return common.Hash{}, err
+func (ec *Client) CheckPCRC(ctx context.Context, header *types.Header) (types.PCRCTermini, error) {
+	var PCRCTermini types.PCRCTermini
+	if err := ec.c.CallContext(ctx, &PCRCTermini, "quai_checkPCRC", header); err != nil {
+		return types.PCRCTermini{}, err
 	}
-	return hash, nil
+	return PCRCTermini, nil
 }
 
 // header: header in which the intended chain is to roll back to.

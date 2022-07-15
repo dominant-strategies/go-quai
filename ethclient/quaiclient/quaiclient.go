@@ -149,15 +149,15 @@ func (ec *Client) GetTerminusAtOrder(ctx context.Context, header *types.Header, 
 }
 
 // CheckPCRC runs PCRC on the node with a given header
-func (ec *Client) CheckPCRC(ctx context.Context, header *types.Header, order int) (common.Hash, error) {
+func (ec *Client) CheckPCRC(ctx context.Context, header *types.Header, order int) (types.PCRCTermini, error) {
 	data := map[string]interface{}{"Header": header}
 	data["Order"] = order
 
-	var hash common.Hash
-	if err := ec.c.CallContext(ctx, &hash, "quai_checkPCRC", data); err != nil {
-		return common.Hash{}, err
+	var PCRCTermini types.PCRCTermini
+	if err := ec.c.CallContext(ctx, &PCRCTermini, "quai_checkPCRC", data); err != nil {
+		return types.PCRCTermini{}, err
 	}
-	return hash, nil
+	return PCRCTermini, nil
 }
 
 type rpcExternalBlock struct {

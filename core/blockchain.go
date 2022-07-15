@@ -2189,7 +2189,11 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		// Process block using the parent state as reference point
 		substart := time.Now()
 
-		err = bc.PCRC(block.Header())
+		order, err := bc.Engine().GetDifficultyOrder(block.Header())
+		if err != nil {
+			return it.index, err
+		}
+		_, err = bc.PCRC(block.Header(), order)
 		if err != nil {
 			return it.index, err
 		}
@@ -3237,10 +3241,10 @@ func (bc *BlockChain) HLCR(localDifficulties []*big.Int, externDifficulties []*b
 // that we have linked untwisted chains prior to checking HLCR & applying external state transfers.
 // NOTE: note that it only guarantees linked & untwisted back to the prime terminus, assuming the
 // prime termini match. To check deeper than that, you need to iteratively apply PCRC to get that guarantee.
-func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) error {
+func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTermini, error) {
 
 	if header.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
-		return nil
+		return types.PCRCTermini{}, nil
 	}
 
 	slice := header.Location
@@ -3257,45 +3261,90 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) error {
 	// region   	| X					| x PTP, RTR, PRTP, PRTR		| x PTP, PTR, RTR, PRTP, PRTR
 	// zone			| X					| X								| x PTP, PTR, RTR, PRTP, PRTR
 
-	_, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.REGION, params.ZONE, true)
-	if err != nil {
-		return err
-	}
+	switch types.QuaiNetworkContext {
+	case params.PRIME:
+		PTP, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.PRIME, params.PRIME, true)
+		if err != nil {
+			return types.PCRCTermini{}, err
+		}
 
-	PTZ, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.PRIME, params.ZONE, true)
-	if err != nil {
-		return err
-	}
-
-	// Only check for prime twist if block is of prime order
-	if headerOrder == params.PRIME {
 		PRTP, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.PRIME, params.PRIME, false)
 		if err != nil {
-			return err
-		}
-		PRTR, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.PRIME, params.REGION, false)
-		if err != nil {
-			return err
+			return types.PCRCTermini{}, err
 		}
 
-		if types.QuaiNetworkContext < params.ZONE {
+		if bc.subClients[slice[0]-1] == nil {
+			return types.PCRCTermini{}, nil
+		}
+		PCRCTermini, err := bc.subClients[slice[0]-1].CheckPCRC(context.Background(), header, headerOrder)
+		if err != nil {
+			return types.PCRCTermini{}, err
+		}
+
+		PCRCTermini.PTP = PTP.Hash()
+		PCRCTermini.PRTP = PRTP.Hash()
+
+		if (PTP.Hash() != PCRCTermini.PTR) && (PCRCTermini.PTR != PCRCTermini.PTZ) && (PCRCTermini.PTZ != PTP.Hash()) {
+			return types.PCRCTermini{}, errors.New("there exists a Prime twist (PTP != PTR != PTZ")
+		}
+		if PRTP.Hash() != PCRCTermini.PRTR {
+			return types.PCRCTermini{}, err
+		}
+
+		return PCRCTermini, nil
+
+	case params.REGION:
+
+		RTR, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.REGION, params.REGION, true)
+		if err != nil {
+			return types.PCRCTermini{}, err
+		}
+
+		if bc.subClients[slice[1]-1] == nil {
+			return types.PCRCTermini{}, nil
+		}
+		PCRCTermini, err := bc.subClients[slice[1]-1].CheckPCRC(context.Background(), header, headerOrder)
+		if err != nil {
+			return types.PCRCTermini{}, err
+		}
+
+		if RTR.Hash() != PCRCTermini.RTZ {
+			return types.PCRCTermini{}, errors.New("there exists a Region twist (RTR != RTZ)")
+		}
+		if headerOrder < params.REGION {
 			PTR, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.PRIME, params.REGION, true)
 			if err != nil {
-				return err
+				return types.PCRCTermini{}, err
 			}
-			if PTR.Hash() != PTZ.Hash() {
-				log.Info("Error in PCRC, nothing is equal", "PTR", PTR.Hash(), "num", PTR.Number, "PTZ", PTZ.Hash(), "num", PTZ.Number)
-				return errors.New("there exists a prime (PTP!=PTR!=PTZ) twist")
+
+			PRTR, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.PRIME, params.REGION, false)
+			if err != nil {
+				return types.PCRCTermini{}, err
 			}
+
+			PCRCTermini.PTR = PTR.Hash()
+			PCRCTermini.PRTR = PRTR.Hash()
+		}
+		return PCRCTermini, nil
+
+	case params.ZONE:
+		PCRCTermini := types.PCRCTermini{}
+		PTZ, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.PRIME, params.ZONE, true)
+		if err != nil {
+			return types.PCRCTermini{}, err
 		}
 
-		if PRTP.Hash() != PRTR.Hash() {
-			log.Info("Error in PCRC", "PRTP", PRTP.Hash(), "num", PRTP.Number, "PRTR", PRTR.Hash(), "num", PRTR.Number)
-			return errors.New("there exists a prime (PRTP) twist")
+		RTZ, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.REGION, params.ZONE, true)
+		if err != nil {
+			return types.PCRCTermini{}, err
 		}
+
+		PCRCTermini.PTZ = PTZ.Hash()
+		PCRCTermini.RTZ = RTZ.Hash()
+
+		return PCRCTermini, nil
 	}
-
-	return nil
+	return types.PCRCTermini{}, errors.New("running in unsupported context")
 }
 
 // PreviousCanonicalCoincidentOnPath searches the path for a cononical block of specified order in the specified slice
@@ -3329,39 +3378,12 @@ func (bc *BlockChain) PreviousCanonicalCoincidentOnPath(header *types.Header, sl
 				}
 				return nil, err
 			}
+		} else if order == types.QuaiNetworkContext {
+			return terminalHeader, err
 		}
 
 		prevTerminalHeader = terminalHeader
 	}
-}
-
-// notifyCrossChainHeads notifies data to chains for processing.
-func (bc *BlockChain) notifyCrossChainHeads(subHead *types.Header, domHead *types.Header, slice []byte, order int, path int) error {
-	prev := subHead
-	for {
-		prevHeader, err := bc.Engine().PreviousCoincidentOnPath(bc, prev, slice, order, path, true)
-		if err != nil {
-			return err
-		}
-		hash := bc.hc.GetCanonicalHash(prevHeader.Number[order].Uint64())
-
-		if hash == prevHeader.Hash() {
-			extBlocks, err := bc.GetExternalBlockTraceSet(prevHeader.Hash(), domHead, path)
-			if err != nil {
-				fmt.Println("err with finding ext block trace set", err)
-				return err
-			}
-			hashes := make([]common.Hash, 0)
-			for _, extBlock := range extBlocks {
-				hashes = append(hashes, extBlock.Hash())
-			}
-			fmt.Println("Dom to Sub: sending crossChainData", len(hashes))
-			// bc.crossChainDataFeed.Send(CrossChainData{Hashes: hashes, Context: path})
-			return nil
-		}
-		prev = prevHeader
-	}
-	return nil
 }
 
 // calcHLCRNetDifficulty calculates the net difficulty from previous prime.
