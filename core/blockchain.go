@@ -288,6 +288,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		// go bc.subscribeDomHead()
 	}
 
+	bc.subClients = make([]*quaiclient.Client, 3)
 	// only set the subClients if the chain is not region
 	if types.QuaiNetworkContext != params.ZONE {
 		go func() {
