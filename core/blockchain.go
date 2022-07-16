@@ -285,7 +285,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	// only set the domClient if the chain is not prime
 	if types.QuaiNetworkContext != params.PRIME {
 		bc.domClient = MakeDomClient(domClientUrl)
-		go bc.subscribeDomHead()
+		// go bc.subscribeDomHead()
 	}
 
 	// only set the subClients if the chain is not region
@@ -2196,13 +2196,26 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 
 		if order < types.QuaiNetworkContext {
 			blockStatus := bc.domClient.GetBlockStatus(context.Background(), block.Header())
-			if blockStatus != quaiclient.WriteStatus(CanonStatTy) {
-				return it.index, err
+			switch blockStatus {
+			case quaiclient.CanonStatTy:
+			case quaiclient.SideStatTy:
+				return it.index, errors.New("attempting to insert a block uncled in dominant chain")
+			case quaiclient.UnknownStatTy:
+				if err := bc.addFutureBlock(block); err != nil {
+					return it.index, err
+				}
+				return it.index, nil
 			}
 		} else {
 			_, err = bc.PCRC(block.Header(), order)
 			if err != nil {
-				return it.index, err
+				if err.Error() == "subordinate chain not synced" {
+					if err := bc.addFutureBlock(block); err != nil {
+						return it.index, err
+					}
+				} else if err != nil {
+					return it.index, err
+				}
 			}
 		}
 
@@ -2995,6 +3008,7 @@ func (bc *BlockChain) GetExternalBlockByHashAndContext(hash common.Hash, context
 }
 
 // GetExternalBlockTraceSet collects all the external blocks from newHeader till stopHash in a given path
+// TODO: Fix all this logic.
 func (bc *BlockChain) GetExternalBlockTraceSet(stopHash common.Hash, newHeader *types.Header, path int) ([]*types.ExternalBlock, error) {
 	extBlocks := []*types.ExternalBlock{}
 	// get the externalBlocks
@@ -3004,23 +3018,33 @@ func (bc *BlockChain) GetExternalBlockTraceSet(stopHash common.Hash, newHeader *
 	}
 	extBlocks = append(extBlocks, extNewBlock)
 	for {
-		// if the newHeader is genesis
-		if newHeader.Number[path].Uint64() == 1 {
-			return nil, errors.New("error finding stop hash")
-		}
 
+		// if the newHeader is before genesis
+		if newHeader.Number[path].Uint64() == 1 {
+			fmt.Println("stopping at newHeader is 1", newHeader.Hash())
+			return extBlocks, nil
+		}
 		// get the externalBlocks
 		extNewBlock, err = bc.GetExternalBlockByHashAndContext(newHeader.ParentHash[path], path)
 		if err != nil {
 			return nil, errors.New("error finding external block in external block trace set")
 		}
+		if extNewBlock == nil {
+			fmt.Println("unable to find", newHeader.ParentHash[path], path)
+			return nil, errors.New("unable to find external block by hash and context")
+		}
+
+		fmt.Println("appending extNewBlock", extNewBlock.Hash())
+
 		extBlocks = append(extBlocks, extNewBlock)
 
 		// If the common ancestor was found, bail out
 		if stopHash == newHeader.Hash() {
+			fmt.Println("returning in stopHash equal")
 			return extBlocks, nil
 		}
 		newHeader = extNewBlock.Header()
+
 	}
 }
 

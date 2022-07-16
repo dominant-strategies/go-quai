@@ -723,7 +723,7 @@ func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader
 			// Get previous header on local chain by hash
 			prevHeader := chain.GetHeaderByHash(header.ParentHash[path])
 			if prevHeader == nil {
-				return nil, errors.New("prevheader not found for hash")
+				return nil, consensus.ErrSubordinateNotSynced
 			}
 			// Increment previous header
 			header = prevHeader
