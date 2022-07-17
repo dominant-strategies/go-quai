@@ -2200,6 +2200,30 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 			return it.index, err
 		}
 
+		if order < types.QuaiNetworkContext {
+			err := bc.CheckCanonical(block.Header(), order)
+			if err != nil {
+				return it.index, err
+			}
+		} else if types.QuaiNetworkContext != params.ZONE {
+			status := bc.CheckValidity(block.Header(), order)
+			switch status {
+			case quaiclient.CanonStatTy:
+				// all is good, do nothing
+				fmt.Println("subordinate block is canonical", block.Header().Number, block.Header().Location, block.Hash())
+			case quaiclient.SideStatTy:
+				fmt.Println("subordinate block is uncled", block.Header().Number, block.Header().Location, block.Hash())
+				return it.index, err
+			case quaiclient.UnknownStatTy:
+				fmt.Println("subordinate block is unknown", block.Header().Number, block.Header().Location, block.Hash())
+				// potentially syncing, add to future blocks and wait
+				if err := bc.addFutureBlock(block); err != nil {
+					return it.index, err
+				}
+				return it.index, nil
+			}
+		}
+
 		// If in Prime or Region, take to see if we have already included the hash in the lower level.
 		// TODO: #179 Extend CheckHashInclusion to if the hash was ever included in the chain, not just the parent.
 		// err = bc.CheckHashInclusion(block.Header(), parent)
@@ -3261,116 +3285,142 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTer
 	}
 
 	slice := header.Location
+
 	// Prime twist check
 	// PTZ -- Prime coincident along zone path
 	// PTR -- Prime coincident along region path
 	// PTP -- Prime coincident along prime path
-	// Region twist check
-	// RTZ -- Region coincident along zone path
-	// RTR -- Region coincident along region path
 
-	// o/c			| prime 			| region 						| zone
-	// prime    	| x PTP, RTR		| x PTP, RTR					| x PTP, PTR, RTR
-	// region   	| X					| x PTP, RTR, PRTP, PRTR		| x PTP, PTR, RTR, PRTP, PRTR
-	// zone			| X					| X								| x PTP, PTR, RTR, PRTP, PRTR
-
-	switch types.QuaiNetworkContext {
-	case params.PRIME:
-		PTP, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.PRIME, params.PRIME, true)
-		if err != nil {
-			return types.PCRCTermini{}, err
-		}
-
-		PRTP, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.PRIME, params.PRIME, false)
-		if err != nil {
-			return types.PCRCTermini{}, err
-		}
-
-		if bc.subClients[slice[0]-1] == nil {
-			return types.PCRCTermini{}, nil
-		}
-		PCRCTermini, err := bc.subClients[slice[0]-1].CheckPCRC(context.Background(), header, headerOrder)
-		if err != nil {
-			return types.PCRCTermini{}, err
-		}
-
-		PCRCTermini.PTP = PTP.Hash()
-		PCRCTermini.PRTP = PRTP.Hash()
-
-		if (PTP.Hash() != PCRCTermini.PTR) && (PCRCTermini.PTR != PCRCTermini.PTZ) && (PCRCTermini.PTZ != PTP.Hash()) {
-			return types.PCRCTermini{}, errors.New("there exists a Prime twist (PTP != PTR != PTZ")
-		}
-		if PRTP.Hash() != PCRCTermini.PRTR {
-			return types.PCRCTermini{}, err
-		}
-
-		return PCRCTermini, nil
-
-	case params.REGION:
-
-		RTR, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.REGION, params.REGION, true)
-		if err != nil {
-			return types.PCRCTermini{}, err
-		}
-
-		if bc.subClients[slice[1]-1] == nil {
-			return types.PCRCTermini{}, nil
-		}
-		fmt.Println(headerOrder)
-		PCRCTermini, err := bc.subClients[slice[1]-1].CheckPCRC(context.Background(), header, headerOrder)
-		if err != nil {
-			fmt.Println(err)
-			return types.PCRCTermini{}, err
-		}
-
-		if RTR.Hash() != PCRCTermini.RTZ {
-			return types.PCRCTermini{}, errors.New("there exists a Region twist (RTR != RTZ)")
-		}
-		if headerOrder < params.REGION {
-			PTR, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.PRIME, params.REGION, true)
-			if err != nil {
-				return types.PCRCTermini{}, err
-			}
-
-			PRTR, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.PRIME, params.REGION, false)
-			if err != nil {
-				return types.PCRCTermini{}, err
-			}
-
-			PCRCTermini.PTR = PTR.Hash()
-			PCRCTermini.PRTR = PRTR.Hash()
-		}
-		return PCRCTermini, nil
-
-	case params.ZONE:
-		PCRCTermini := types.PCRCTermini{}
-
-		// only compute PTZ and RTZ on the coincident block in zone.
-		// PTZ and RTZ are essentially a signaling mechanism to know that we are building on the right terminal header.
-		// So running this only on a coincident block makes sure that the zones can move and sync past the coincident.
-		// Just run RTZ to make sure that its linked. This check decouples this signaling and linking paradigm.
-		if headerOrder < params.ZONE {
-			PTZ, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.PRIME, params.ZONE, true)
-			if err != nil {
-				return types.PCRCTermini{}, err
-			}
-
-			RTZ, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.REGION, params.ZONE, true)
-			if err != nil {
-				return types.PCRCTermini{}, err
-			}
-
-			PCRCTermini.PTZ = PTZ.Hash()
-			PCRCTermini.RTZ = RTZ.Hash()
-		} else {
-			// compute ZTZ to check if the zone block is syched
-			if header.ParentHash[types.QuaiNetworkContext] != bc.CurrentBlock().Hash() {
-				return types.PCRCTermini{}, errors.New("the zone block is not linked to the current head")
-			}
-		}
-		return PCRCTermini, nil
+	// Always calculate PTZ because it is always valid and we need terminus for calcHLCRDifficulty
+	PTZ, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.ZONE, true)
+	if err != nil {
+		return types.PCRCTermini{}, err
 	}
-	return types.PCRCTermini{}, errors.New("running in unsupported context")
+
+	// Only check for prime twist if block is of prime order
+	if headerOrder == params.PRIME {
+		PTR, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.REGION, true)
+		if err != nil {
+			return types.PCRCTermini{}, err
+		}
+		PTP, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.PRIME, true)
+		if err != nil {
+			return types.PCRCTermini{}, err
+		}
+		PRTP, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.PRIME, false)
+		if err != nil {
+			return types.PCRCTermini{}, err
+		}
+		PRTR, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.REGION, false)
+		if err != nil {
+			return types.PCRCTermini{}, err
+		}
+
+		if PTP.Hash() != PTR.Hash() && PTR.Hash() == PTZ.Hash() {
+			log.Info("Error in PCRC", "PTP", PTP.Hash(), "num", PTP.Number, "PTR", PTR.Hash(), "num", PTR.Number)
+			return types.PCRCTermini{}, errors.New("there exists a prime (PTP-PTR) twist")
+		}
+
+		if PTP.Hash() != PTZ.Hash() && PTP.Hash() == PTR.Hash() {
+			log.Info("Error in PCRC", "PTP", PTP.Hash(), "num", PTP.Number, "PTZ:", PTZ.Hash(), "num", PTZ.Number)
+			return types.PCRCTermini{}, errors.New("there exists a prime (PTP-PTZ) twist")
+		}
+
+		if PTP.Hash() != PTR.Hash() && PTP.Hash() == PTZ.Hash() {
+			log.Info("Error in PCRC", "PTP", PTP.Hash(), "num", PTP.Number, "PTR", PTR.Hash(), "num", PTR.Number)
+			return types.PCRCTermini{}, errors.New("there exists a prime (PTP-PTZ) twist")
+		}
+
+		if PTP.Hash() != PTR.Hash() && PTR.Hash() != PTZ.Hash() && PTP.Hash() != PTZ.Hash() {
+			log.Info("Error in PCRC, nothing is equal", "PTP", PTP.Hash(), "num", PTP.Number, "PTR", PTR.Hash(), "num", PTR.Number, "PTZ", PTZ.Hash(), "num", PTZ.Number)
+			return types.PCRCTermini{}, errors.New("there exists a prime (PTP!=PTR!=PTZ) twist")
+		}
+
+		if PRTP.Hash() != PRTR.Hash() {
+			log.Info("Error in PCRC", "PRTP", PRTP.Hash(), "num", PRTP.Number, "PRTR", PRTR.Hash(), "num", PRTR.Number)
+			return types.PCRCTermini{}, errors.New("there exists a prime (PRTP) twist")
+		}
+	}
+
+	// Only check for region twist if block is of region order
+	if headerOrder <= params.REGION {
+		// Region twist check
+		// RTZ -- Region coincident along zone path
+		// RTR -- Region coincident along region path
+		RTZ, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.REGION, params.ZONE, true)
+		if err != nil {
+			return types.PCRCTermini{}, err
+		}
+
+		RTR, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.REGION, params.REGION, true)
+		if err != nil {
+			return types.PCRCTermini{}, err
+		}
+
+		// PCRC has failed. Rollback through the prior untwisted region.
+		if RTZ.Hash() != RTR.Hash() {
+			log.Info("Error in PCRC", "RTZ", RTZ.Hash(), "num", RTZ.Number, "RTR", RTR.Hash(), "num", RTR.Number)
+			return types.PCRCTermini{}, errors.New("there exists a region twist")
+		}
+	}
+	return types.PCRCTermini{}, nil
+}
+
+// CheckCanonical checks a client for whether or not a block is considered canonical.
+func (bc *BlockChain) CheckCanonical(header *types.Header, order int) error {
+	prevTerminalHeader := header
+	for {
+		if prevTerminalHeader.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
+			return nil
+		}
+
+		terminalHeader, err := bc.Engine().PreviousCoincidentOnPath(bc, prevTerminalHeader, header.Location, order, types.QuaiNetworkContext-1, true)
+		if err != nil {
+			return err
+		}
+
+		if terminalHeader.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
+			return nil
+		}
+
+		// If the current header is dominant coincident check the status with the dom node
+		if order < types.QuaiNetworkContext {
+			status := bc.domClient.GetBlockStatus(context.Background(), terminalHeader)
+
+			// If the header is cononical break else keep looking
+			if status == quaiclient.CanonStatTy {
+				return nil
+			}
+			switch status {
+			case quaiclient.CanonStatTy:
+				fmt.Println("dominant block is canonical", header.Number, header.Location, header.Hash())
+				return nil
+			case quaiclient.SideStatTy:
+				fmt.Println("dominant block is uncled", header.Number, header.Location, header.Hash())
+				bc.ReOrgRollBack(terminalHeader, []*types.Header{}, []*types.Header{})
+			case quaiclient.UnknownStatTy:
+				// do nothing, keep going until we find canonical
+				fmt.Println("dominant block is unknown", header.Number, header.Location, header.Hash())
+			}
+		}
+
+		prevTerminalHeader = terminalHeader
+	}
+
+	return nil
+}
+
+// CheckValidity checks a subordinate client for the validity of a block.
+func (bc *BlockChain) CheckValidity(header *types.Header, order int) quaiclient.WriteStatus {
+	subClient := bc.subClients[header.Location[order]-1]
+
+	// Do not validate PCRC on a subclient you do not have.
+	if subClient != nil {
+		status := subClient.GetBlockStatus(context.Background(), header)
+		return status
+	}
+
+	return quaiclient.UnknownStatTy
 }
 
 // PreviousCanonicalCoincidentOnPath searches the path for a cononical block of specified order in the specified slice
