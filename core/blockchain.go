@@ -1746,7 +1746,7 @@ func (bc *BlockChain) addFutureBlock(block *types.Block) error {
 // GetBlockStatus returns the status of the block for a given header
 func (bc *BlockChain) GetBlockStatus(header *types.Header) WriteStatus {
 	canonHash := bc.GetCanonicalHash(header.Number[types.QuaiNetworkContext].Uint64())
-	fmt.Println("canonHash", canonHash, "headerHash", header.Hash(), header.Number, header.Location)
+	fmt.Println("GetBlockStatus: canonHash", canonHash, "headerHash", header.Hash(), header.Number, header.Location)
 	if (canonHash == common.Hash{}) {
 		fmt.Println("returning UnknownStatTy for subordinate")
 		return UnknownStatTy
@@ -2195,13 +2195,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 			return it.index, err
 		}
 
-		_, err = bc.PCRC(block.Header(), order)
-		if err != nil {
-			return it.index, err
-		}
-
 		if order < types.QuaiNetworkContext {
-			err := bc.CheckCanonical(block.Header(), order)
+			err := bc.CheckCanonical(block.Header())
 			if err != nil {
 				return it.index, err
 			}
@@ -2217,11 +2212,16 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 			case quaiclient.UnknownStatTy:
 				fmt.Println("subordinate block is unknown", block.Header().Number, block.Header().Location, block.Hash())
 				// potentially syncing, add to future blocks and wait
-				if err := bc.addFutureBlock(block); err != nil {
-					return it.index, err
-				}
-				return it.index, nil
+				// if err := bc.addFutureBlock(block); err != nil {
+				// 	return it.index, err
+				// }
+				// return it.index, nil
 			}
+		}
+
+		_, err = bc.PCRC(block.Header(), order)
+		if err != nil {
+			return it.index, err
 		}
 
 		// If in Prime or Region, take to see if we have already included the hash in the lower level.
@@ -3367,41 +3367,37 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTer
 }
 
 // CheckCanonical checks a client for whether or not a block is considered canonical.
-func (bc *BlockChain) CheckCanonical(header *types.Header, order int) error {
+func (bc *BlockChain) CheckCanonical(header *types.Header) error {
 	prevTerminalHeader := header
 	for {
 		if prevTerminalHeader.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
 			return nil
 		}
 
-		terminalHeader, err := bc.Engine().PreviousCoincidentOnPath(bc, prevTerminalHeader, header.Location, order, types.QuaiNetworkContext-1, true)
+		terminalHeader, err := bc.Engine().PreviousCoincidentOnPath(bc, prevTerminalHeader, header.Location, types.QuaiNetworkContext-1, types.QuaiNetworkContext, true)
 		if err != nil {
 			return err
 		}
+
+		fmt.Println("terminalHeader", terminalHeader.Number, terminalHeader.Hash())
 
 		if terminalHeader.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
 			return nil
 		}
 
-		// If the current header is dominant coincident check the status with the dom node
-		if order < types.QuaiNetworkContext {
-			status := bc.domClient.GetBlockStatus(context.Background(), terminalHeader)
-
-			// If the header is cononical break else keep looking
-			if status == quaiclient.CanonStatTy {
-				return nil
-			}
-			switch status {
-			case quaiclient.CanonStatTy:
-				fmt.Println("dominant block is canonical", header.Number, header.Location, header.Hash())
-				return nil
-			case quaiclient.SideStatTy:
-				fmt.Println("dominant block is uncled", header.Number, header.Location, header.Hash())
-				bc.ReOrgRollBack(terminalHeader, []*types.Header{}, []*types.Header{})
-			case quaiclient.UnknownStatTy:
-				// do nothing, keep going until we find canonical
-				fmt.Println("dominant block is unknown", header.Number, header.Location, header.Hash())
-			}
+		status := bc.domClient.GetBlockStatus(context.Background(), terminalHeader)
+		fmt.Println("CheckCanonical status", status)
+		// If the header is cononical break else keep looking
+		switch status {
+		case quaiclient.CanonStatTy:
+			fmt.Println("dominant block is canonical", header.Number, header.Location, header.Hash())
+			return nil
+		case quaiclient.SideStatTy:
+			fmt.Println("dominant block is uncled", header.Number, header.Location, header.Hash())
+			bc.ReOrgRollBack(terminalHeader, []*types.Header{}, []*types.Header{})
+		case quaiclient.UnknownStatTy:
+			// do nothing, keep going until we find canonical
+			fmt.Println("dominant block is unknown", header.Number, header.Location, header.Hash())
 		}
 
 		prevTerminalHeader = terminalHeader
