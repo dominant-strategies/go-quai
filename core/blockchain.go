@@ -3411,13 +3411,14 @@ func (bc *BlockChain) PreviousCanonicalCoincidentOnPath(header *types.Header, sl
 			// If the header is cononical break else keep looking
 			if status == quaiclient.CanonStatTy {
 				// If we have found a non-cononical dominant coincident header, reorg to prevTerminalHeader
-				if prevTerminalHeader != header {
+				if prevTerminalHeader.Hash() != header.Hash() {
 					bc.ReOrgRollBack(prevTerminalHeader, []*types.Header{}, []*types.Header{})
 				} else {
 					return terminalHeader, nil
 				}
 				return nil, err
 			}
+
 		} else if order == types.QuaiNetworkContext {
 			return terminalHeader, err
 		}
