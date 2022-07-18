@@ -13,8 +13,10 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"strings"
 
 	"github.com/spruce-solutions/go-quai/common"
+	"github.com/spruce-solutions/go-quai/core/types"
 	"github.com/spruce-solutions/go-quai/ethclient"
 	"github.com/spruce-solutions/go-quai/rlp"
 	"golang.org/x/crypto/sha3"
@@ -113,7 +115,7 @@ func AssembleGraph(start int, end int, chains []Chain) {
 		//Sets the default range if start and end parameters are 0. Also checks to see if they are out of bounds
 		if start == 0 && end == 0 {
 			end = int(numBlocks)
-			start = int(numBlocks) - 10
+			start = int(numBlocks) - 100
 		}
 		if end > int(numBlocks) {
 			end = int(numBlocks)
@@ -132,7 +134,7 @@ func AssembleGraph(start int, end int, chains []Chain) {
 			if order == 0 || order == 1 {
 				AddCoincident(chains, blockHash)
 			} else {
-				chains[i].AddNode(blockHash, j)
+				chains[i].AddNode(blockHash, j, blockHeader)
 			}
 			if j != start {
 				parentHeader, _ := chain.HeaderByHash(context.Background(), blockHeader.ParentHash[order])
@@ -154,9 +156,9 @@ func AssembleGraph(start int, end int, chains []Chain) {
 func AddCoincident(chains []Chain, hash common.Hash) {
 	uncle := true
 	for i := 0; i < len(chains); i++ {
-		_, err := chains[i].client.HeaderByHash(context.Background(), hash)
+		header, err := chains[i].client.HeaderByHash(context.Background(), hash)
 		if err == nil {
-			chains[i].AddNode(hash, 0)
+			chains[i].AddNode(hash, 0, header)
 			if chains[i].order < 2 {
 				chains[i].AddEdge(false, fmt.Sprintf("%d", chains[i].order)+hash.String()[2:10], fmt.Sprintf("%d", chains[i].order+1)+hash.String()[2:10], "")
 				AddCoincident(chains[i].subChains, hash)
@@ -170,12 +172,14 @@ func AddCoincident(chains []Chain, hash common.Hash) {
 }
 
 //Adds a Node to the chain if it doesn't already exist.
-func (c *Chain) AddNode(hash common.Hash, num int) {
-	blockHeader, _ := c.client.HeaderByHash(context.Background(), hash)
-	if !ContainsNode("\n\""+fmt.Sprint(c.order)+hash.String()[2:10]+"\" [label = \""+hash.String()[2:10]+"\\n "+blockHeader.Number[c.order].String()+"\"]", c.nodes) {
+func (c *Chain) AddNode(hash common.Hash, num int, header *types.Header) {
+	if !ContainsNode("\n\""+fmt.Sprint(c.order)+hash.String()[2:10]+"\" [label = \""+hash.String()[2:10]+"\\n "+header.Number[c.order].String()+"\"]", c.nodes) {
 		tempNode := node{}
-		if num == 0 {
-			tempNode = node{"\n\"" + fmt.Sprint(c.order) + hash.String()[2:10] + "\" [label = \"" + hash.String()[2:10] + "\\n " + blockHeader.Number[c.order].String() + "\"]", blockHeader.Number[c.order]}
+		if num == 0 && c.order == 0 {
+			tempNode = node{"\n\"" + fmt.Sprint(c.order) + hash.String()[2:10] + "\" [label = \"" + hash.String()[2:10] + "\\n [" + header.Number[0].String() + "," + header.Number[1].String() + "," + header.Number[2].String() + "]\"]", header.Number[c.order]}
+			c.nodes = append(c.nodes, tempNode)
+		} else if num == 0 {
+			tempNode = node{"\n\"" + fmt.Sprint(c.order) + hash.String()[2:10] + "\" [label = \"" + hash.String()[2:10] + "\\n " + header.Number[c.order].String() + "\"]", header.Number[c.order]}
 			c.nodes = append(c.nodes, tempNode)
 		} else {
 			tempNode = node{"\n\"" + fmt.Sprint(c.order) + hash.String()[2:10] + "\" [label = \"" + hash.String()[2:10] + "\\n " + fmt.Sprint(num) + "\"]", big.NewInt(int64(num))}
@@ -209,7 +213,7 @@ func (c *Chain) AddEdge(dir bool, node1 string, node2 string, color string) {
 func ContainsNode(s string, list []node) bool {
 	for _, a := range list {
 		modHash := a.nodehash
-		if modHash == s {
+		if strings.Contains(modHash, s) {
 			return true
 		}
 	}
@@ -219,14 +223,15 @@ func ContainsNode(s string, list []node) bool {
 //Checks to see if the list of strings contains the string passed as the first parameter. Used to check if a Node already exists in the the list.
 func Contains(s string, list []string) bool {
 	for _, a := range list {
-		if a == s {
+		if strings.Contains(a, s) {
 			return true
 		}
 	}
 	return false
 }
 
-func SortChains(chains []Chain) []Chain {
+func OrderChains(chains []Chain) []Chain {
+	//Insertion sorting the chains in order for next steps to be executed properly
 	for i := 0; i < len(chains); i++ {
 		for j := 1; j < len(chains[i].nodes); j++ {
 			for k := j; k >= 1 && int(chains[i].nodes[k].number.Int64()) < int(chains[i].nodes[k-1].number.Int64()); k-- {
@@ -234,16 +239,14 @@ func SortChains(chains []Chain) []Chain {
 			}
 		}
 	}
-	return chains
-}
-func OrderChains(chains []Chain) []Chain {
-	chainss := SortChains(chains)
-	for i := 0; i < len(chainss); i++ {
-		for j := 0; j < len(chainss[i].nodes)-1; j++ {
-			chainss[i].AddEdge(true, chainss[i].nodes[j].nodehash[2:11], chainss[i].nodes[j+1].nodehash[2:11], "blue")
+	for i := 0; i < len(chains); i++ {
+		for j := 0; j < len(chains[i].nodes)-1; j++ {
+			if i != 0 {
+				chains[i].AddEdge(true, chains[i].nodes[j].nodehash[2:11], chains[i].nodes[j+1].nodehash[2:11], "blue")
+			}
 		}
 	}
-	return chainss
+	return chains
 }
 
 //Function for writing a DOT file that generates the graph
