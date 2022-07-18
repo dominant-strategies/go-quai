@@ -95,9 +95,6 @@ jobs:
     - name: Update values.yaml version
       run: yq eval -i ".goQuai.image.version=\"${{ env.VERSION }}\"" ./helm/values.yaml
 
-    - name: remove kubeconfig
-      run: rm $KUBECONFIG
-
     - uses: stefanzweifel/git-auto-commit-action@v4
       with:
         branch: ${{ github.ref }}
