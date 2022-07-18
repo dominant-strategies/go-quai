@@ -566,8 +566,8 @@ func (bc *BlockChain) SetHead(head uint64) error {
 //
 // The method returns the block number where the requested root cap was found.
 func (bc *BlockChain) SetHeadBeyondRoot(head uint64, root common.Hash) (uint64, error) {
-	bc.chainmu.Lock()
-	defer bc.chainmu.Unlock()
+	// bc.chainmu.Lock()
+	// defer bc.chainmu.Unlock()
 
 	// Track the block number of the requested root hash
 	var rootNumber uint64 // (no root == always 0)
@@ -1789,8 +1789,8 @@ func (bc *BlockChain) AddExternalBlock(block *types.ExternalBlock) error {
 // the current header to the position where the reorg took place in a higher context
 func (bc *BlockChain) ReOrgRollBack(header *types.Header, validHeaders []*types.Header, invalidHeaders []*types.Header) error {
 	log.Info("Rolling back header beyond", "hash", header.Hash(), "from", bc.CurrentBlock().Header().Hash())
-	bc.reorgmu.Lock()
-	defer bc.reorgmu.Unlock()
+	// bc.reorgmu.Lock()
+	// defer bc.reorgmu.Unlock()
 	var (
 		deletedTxs  types.Transactions
 		deletedLogs [][]*types.Log
@@ -3362,11 +3362,11 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTer
 
 			PCRCTermini.PTZ = PTZ.Hash()
 			PCRCTermini.RTZ = RTZ.Hash()
-		} else {
-			// compute ZTZ to check if the zone block is syched
-			if header.ParentHash[types.QuaiNetworkContext] != bc.CurrentBlock().Hash() {
-				return types.PCRCTermini{}, errors.New("the zone block is not linked to the current head")
-			}
+		}
+		// compute ZTZ to check if the zone block is syched
+		if header.ParentHash[types.QuaiNetworkContext] != bc.GetCanonicalHash(header.Number[types.QuaiNetworkContext].Uint64()-1) {
+			return types.PCRCTermini{}, errors.New("the zone block is not linked to the current head")
+
 		}
 		return PCRCTermini, nil
 	}
@@ -3379,6 +3379,7 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTer
 //     *path - Search among ancestors of this path in the specified slice
 func (bc *BlockChain) PreviousCanonicalCoincidentOnPath(header *types.Header, slice []byte, order, path int, fullSliceEqual bool) (*types.Header, error) {
 	prevTerminalHeader := header
+	lastUncledHeader := &types.Header{}
 	for {
 		if prevTerminalHeader.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
 			return bc.GetHeaderByHash(bc.Config().GenesisHashes[0]), nil
@@ -3388,25 +3389,29 @@ func (bc *BlockChain) PreviousCanonicalCoincidentOnPath(header *types.Header, sl
 		if err != nil {
 			return nil, err
 		}
+		fmt.Println("terminalHeader", order, path, terminalHeader.Number, terminalHeader.Hash())
 
 		if terminalHeader.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
 			return bc.GetHeaderByHash(bc.Config().GenesisHashes[0]), nil
 		}
 
 		// If the current header is dominant coincident check the status with the dom node
+		// else if running order in current path return.
 		if order < types.QuaiNetworkContext {
 			status := bc.domClient.GetBlockStatus(context.Background(), terminalHeader)
+			fmt.Println("status", terminalHeader.Number, terminalHeader.Hash())
 
 			// If the header is cononical break else keep looking
 			if status == quaiclient.CanonStatTy {
-
 				// If we have found a non-cononical dominant coincident header, reorg to prevTerminalHeader
-				if prevTerminalHeader != header {
-					bc.ReOrgRollBack(prevTerminalHeader, []*types.Header{}, []*types.Header{})
-				} else {
-					return terminalHeader, nil
+				if (lastUncledHeader != &types.Header{}) {
+					bc.ReOrgRollBack(lastUncledHeader, []*types.Header{}, []*types.Header{})
 				}
-				return nil, err
+				return terminalHeader, nil
+			}
+
+			if status == quaiclient.SideStatTy {
+				lastUncledHeader = terminalHeader
 			}
 		} else if order == types.QuaiNetworkContext {
 			return terminalHeader, err
