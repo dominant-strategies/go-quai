@@ -35,7 +35,7 @@ spec:
     spec:
       containers:
 {{- range $chain := .Values.goQuai.chains }}
-{{ include "go-quai.statefulset" $ | replace "<HTTP>" $chain.ports.http | replace "<WS>" $chain.ports.ws | replace "<DISC>" $chain.ports.disc | replace "prime" $chain.name | indent 6 }}
+{{ include "go-quai.statefulset" $ | replace "<REGION>" $chain.region | replace "<ZONE>" $chain.zone | replace "<HTTP>" $chain.ports.http | replace "<WS>" $chain.ports.ws | replace "<DISC>" $chain.ports.disc | replace "prime" $chain.name | indent 6 }}
 {{- end }}
   volumeClaimTemplates:
   - apiVersion: v1

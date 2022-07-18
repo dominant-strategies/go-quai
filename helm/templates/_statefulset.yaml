@@ -13,7 +13,7 @@
   targetPort: <DISC>
 {{- end }}
 {{- define "go-quai.statefulset" }}
-- image: quainetwork/go-quai:thinnest
+- image: {{ .Values.goQuai.image.name -}}:{{- .Values.goQuai.image.version }}
   imagePullPolicy: Always
   name: prime-go-quai
   env:
@@ -24,7 +24,11 @@
   - name: WS_PORT
     value: "<WS>"
   - name: NETWORK
-    value: ropsten
+    value: {{ .Values.goQuai.network }}
+  - name: REGION
+    value: "<REGION>"
+  - name: ZONE
+    value: "<ZONE>"
   ports:
   - containerPort: <HTTP>
     name: prime-http
