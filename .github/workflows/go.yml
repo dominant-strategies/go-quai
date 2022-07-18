@@ -1,4 +1,4 @@
-name: Go
+name: Build and Deploy Pre-Release
 
 on:
   pull_request:
@@ -8,12 +8,15 @@ jobs:
 
   build:
     if: github.event.pull_request.merged == true
+    outputs:
+      output1: ${{ steps.version.outputs.version }}
 
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
       with:
         ref: ${{ github.ref }}
+        ssh-key: ${{ secrets.GH_PAT }}
 
     - name: Set up Go
       uses: actions/setup-go@v3
@@ -30,16 +33,7 @@ jobs:
       run: cat ./network.env.dist | sed "s/WS_API=eth,net,web3,quai/WS_API=eth,net,web3,quai,txpool/g" | sed "s/HTTP_API=eth,net,web3/HTTP_API=eth,net,web3,quai,txpool/g" | sed "s/CORS=false/CORS=true/g" > ./network.env
 
     - name: get Version
-      run: echo "VERSION=${{ env.VERSION }}" >> $GITHUB_ENV
-
-    #- name: build
-    #  run: go run build/ci.go install ./cmd/quai
-
-    #- name: Build
-    #  run: make go-quai
-
-    #- name: Test
-    #  run: go test -v
+      run: echo "VERSION=$(cat VERSION)" >> $GITHUB_ENV
 
     - name: Build Docker
       run: docker build . -t quainetwork/go-quai:${{ env.VERSION }} -t quainetwork/go-quai:latest
@@ -54,8 +48,17 @@ jobs:
       run: docker push quainetwork/go-quai:${{ env.VERSION }}
 
     - name: git tag
+      continue-on-error: true
       run: git tag ${{ env.VERSION }} && git push origin ${{ env.VERSION }}
 
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        ref: ${{ github.ref }}
+        ssh-key: ${{ secrets.GH_PAT }}
 
     # Setup gcloud CLI
     - uses: google-github-actions/setup-gcloud@94337306dda8180d967a56932ceb4ddcf01edae7
@@ -65,17 +68,24 @@ jobs:
 
     - uses: google-github-actions/get-gke-credentials@fb08709ba27618c31c09e014e1d8364b02e5042e
       with:
-        cluster_name: quai-prod
+        cluster_name: quai-dev
         location: us-central1-c
         credentials: ${{ secrets.GKE_SA_KEY }}
 
     - name: Deploy
       uses: WyriHaximus/github-action-helm3@v2
       with:
-        exec: helm upgrade go-quai ./helm --install --wait --atomic --namespace=quai-prod --values=./helm/env/quai-prod.values.yaml
+        exec: helm upgrade go-quai ./helm --install --wait --atomic --namespace=quai-dev --values=./helm/env/quai-dev.values.yaml
 
-    - name: get Version
-      run: echo "VERSION=${{ env.VERSION }}" >> $GITHUB_ENV
+
+  revVersion:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        ref: ${{ github.ref }}
+        ssh-key: ${{ secrets.GH_PAT }}
 
     - name: Update version
       run: awk -F. '{print $1"."$2"."$3"."$4+1}' VERSION > tmp && mv tmp VERSION
@@ -91,9 +101,3 @@ jobs:
     - uses: stefanzweifel/git-auto-commit-action@v4
       with:
         branch: ${{ github.ref }}
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v3
