@@ -167,6 +167,8 @@ var (
 		utils.AllowUnprotectedTxs,
 		utils.RegionFlag,
 		utils.ZoneFlag,
+		utils.DomUrl,
+		utils.SubUrls,
 	}
 
 	metricsFlags = []cli.Flag{

@@ -746,6 +746,16 @@ var (
 		Usage: "Quai Zone flag",
 		Value: ethconfig.Defaults.Zone,
 	}
+	DomUrl = cli.StringFlag{
+		Name:  "dom.url",
+		Usage: "Dominant chain websocket url",
+		Value: ethconfig.Defaults.DomUrl,
+	}
+	SubUrls = cli.StringFlag{
+		Name:  "sub.urls",
+		Usage: "Subordinate chain websocket urls",
+		Value: ethconfig.Defaults.DomUrl,
+	}
 )
 
 // MakeDataDir retrieves the currently requested data directory, terminating
@@ -1065,6 +1075,56 @@ func setEtherbase(ctx *cli.Context, ks *keystore.KeyStore, cfg *ethconfig.Config
 			Fatalf("No etherbase configured")
 		}
 	}
+}
+
+// setDomUrl sets the dominant chain websocket url.
+func setDomUrl(ctx *cli.Context, cfg *ethconfig.Config) {
+	// only set the dom url if the node is not prime
+	if ctx.GlobalIsSet(RegionFlag.Name) || ctx.GlobalIsSet(ZoneFlag.Name) {
+		// Extract the domurl
+		var domurl string
+		if ctx.GlobalIsSet(DomUrl.Name) {
+			domurl = ctx.GlobalString(DomUrl.Name)
+		}
+		// do not start the node if the domurl is not configured
+		if domurl == "" {
+			Fatalf("No dom.url configured")
+		}
+		cfg.DomUrl = domurl
+	}
+}
+
+// setSubUrls sets the subordinate chain urls
+func setSubUrls(ctx *cli.Context, cfg *ethconfig.Config) {
+	// only set the sub urls if its not the zone
+	if !ctx.GlobalIsSet(ZoneFlag.Name) {
+		// Extract the suburls
+		suburls := strings.Split(ctx.GlobalString(SubUrls.Name), ",")
+
+		// check if all the suburls are nil
+		subNilCount := 0
+		for _, url := range suburls {
+			if url == "" {
+				subNilCount++
+			}
+		}
+		// some sanity checks
+		if subNilCount == 3 {
+			Fatalf("All the suburls are nil")
+		}
+		if len(suburls) > 3 {
+			Fatalf("More than 3 sub urls specified")
+		}
+		if len(suburls) == 0 {
+			Fatalf("No sub url is specified")
+		}
+		cfg.SubUrls = suburls
+	}
+}
+
+// makeSubUrls returns the subordinate chain urls
+func makeSubUrls(ctx *cli.Context) []string {
+	return strings.Split(ctx.GlobalString(SubUrls.Name), ",")
 }
 
 // MakePasswordList reads password lines from the file specified by the global --password flag.
@@ -1418,6 +1478,12 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	setMiner(ctx, &cfg.Miner)
 	setWhitelist(ctx, cfg)
 	setLes(ctx, cfg)
+
+	// set the dominant chain websocket url
+	setDomUrl(ctx, cfg)
+
+	// set the subordinate chain websocket urls
+	setSubUrls(ctx, cfg)
 
 	// Cap the cache allowance and tune the garbage collector
 	mem, err := gopsutil.VirtualMemory()
@@ -1838,11 +1904,12 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 	if ctx.GlobalIsSet(CacheFlag.Name) || ctx.GlobalIsSet(CacheGCFlag.Name) {
 		cache.TrieDirtyLimit = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheGCFlag.Name) / 100
 	}
+
 	vmcfg := vm.Config{EnablePreimageRecording: ctx.GlobalBool(VMEnableDebugFlag.Name)}
 
 	// TODO(rjl493456442) disable snapshot generation/wiping if the chain is read only.
 	// Disable transaction indexing/unindexing by default.
-	chain, err = core.NewBlockChain(chainDb, cache, config, engine, vmcfg, nil, nil)
+	chain, err = core.NewBlockChain(chainDb, cache, config, ctx.GlobalString(DomUrl.Name), makeSubUrls(ctx), engine, vmcfg, nil, nil)
 	if err != nil {
 		Fatalf("Can't create BlockChain: %v", err)
 	}

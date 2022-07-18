@@ -519,6 +519,12 @@ func RPCMarshalExternalBlockTraceSet(hash common.Hash, context int) (map[string]
 	return fields, nil
 }
 
+// RPCMarshalHash convert the hash into a the correct interface.
+func RPCMarshalHash(hash common.Hash) (map[string]interface{}, error) {
+	fields := map[string]interface{}{"Hash": hash}
+	return fields, nil
+}
+
 // rpcMarshalHeader uses the generalized output filler, then adds the total difficulty field, which requires
 // a `PublicBlockchainQuaiAPI`.
 func (s *PublicBlockChainQuaiAPI) rpcMarshalHeader(ctx context.Context, header *types.Header) map[string]interface{} {
@@ -672,6 +678,15 @@ type HeaderHashWithContext struct {
 	Context int
 }
 
+type HeaderWithOrder struct {
+	Header *types.Header
+	Order  int
+}
+type HashWithLocation struct {
+	Hash     common.Hash
+	Location []byte
+}
+
 // GetExternalBlockByHashAndContext will run checks on the header and get the External Block from the cache.
 func (s *PublicBlockChainQuaiAPI) GetExternalBlockByHashAndContext(ctx context.Context, raw json.RawMessage) (map[string]interface{}, error) {
 	// Decode header and transactions.
@@ -690,4 +705,58 @@ func (s *PublicBlockChainQuaiAPI) GetExternalBlockByHashAndContext(ctx context.C
 	block := types.NewBlockWithHeader(extBlock.Header()).WithBody(extBlock.Transactions(), extBlock.Uncles())
 
 	return RPCMarshalExternalBlock(block, extBlock.Receipts(), extBlock.Context())
+}
+
+func (s *PublicBlockChainQuaiAPI) GetAncestorByLocation(ctx context.Context, raw json.RawMessage) (map[string]interface{}, error) {
+	var hashWithLocation HashWithLocation
+	if err := json.Unmarshal(raw, &hashWithLocation); err != nil {
+		return nil, err
+	}
+
+	header, err := s.b.GetAncestorByLocation(hashWithLocation.Hash, hashWithLocation.Location)
+	if err != nil {
+		return nil, err
+	}
+
+	return RPCMarshalHeader(header), nil
+}
+
+// GetBlockStatus returns the status of the block for a given header
+func (s *PublicBlockChainQuaiAPI) GetBlockStatus(ctx context.Context, raw json.RawMessage) core.WriteStatus {
+	var head *types.Header
+	if err := json.Unmarshal(raw, &head); err != nil {
+		return core.NonStatTy
+	}
+
+	if head == nil {
+		return core.NonStatTy
+	}
+
+	return s.b.GetBlockStatus(head)
+}
+
+// GetSubordinateSet returns the valid mined blocks from a dominant chain to the subordinate
+func (s *PublicBlockChainQuaiAPI) GetSubordinateSet(ctx context.Context, raw json.RawMessage) ([]common.Hash, error) {
+	var hashWithLocation HashWithLocation
+	if err := json.Unmarshal(raw, &hashWithLocation); err != nil {
+		return nil, err
+	}
+	return s.b.GetSubordinateSet(hashWithLocation.Hash, hashWithLocation.Location)
+}
+
+func (s *PublicBlockChainAPI) GetTerminusAtOrder(ctx context.Context, raw json.RawMessage) (common.Hash, error) {
+	var headerWithOrder HeaderWithOrder
+	if err := json.Unmarshal(raw, &headerWithOrder); err != nil {
+		return common.Hash{}, err
+	}
+	return s.b.GetTerminusAtOrder(headerWithOrder.Header, headerWithOrder.Order)
+}
+
+// CheckPCRC runs PCRC on a node and returns the response codes.
+func (s *PublicBlockChainQuaiAPI) CheckPCRC(ctx context.Context, raw json.RawMessage) (types.PCRCTermini, error) {
+	var headerWithOrder HeaderWithOrder
+	if err := json.Unmarshal(raw, &headerWithOrder); err != nil {
+		return types.PCRCTermini{}, err
+	}
+	return s.b.PCRC(headerWithOrder.Header, headerWithOrder.Order)
 }
