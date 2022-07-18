@@ -17,6 +17,7 @@
 package core
 
 import (
+	"bytes"
 	crand "crypto/rand"
 	"errors"
 	"fmt"
@@ -464,6 +465,26 @@ func (hc *HeaderChain) GetAncestor(hash common.Hash, number, ancestor uint64, ma
 	return hash, number
 }
 
+// GetAncestorByLocation retrieves the first occurrence of a block with a given location from a given block.
+//
+// Note: location == hash location returns the same block.
+func (hc *HeaderChain) GetAncestorByLocation(hash common.Hash, location []byte) (*types.Header, error) {
+	header := hc.GetHeaderByHash(hash)
+	if header != nil {
+		return nil, errors.New("error finding header by hash")
+	}
+
+	for !bytes.Equal(header.Location, location) {
+		hash = header.ParentHash[types.QuaiNetworkContext]
+
+		header := hc.GetHeaderByHash(hash)
+		if header != nil {
+			return nil, errors.New("error finding header by hash")
+		}
+	}
+	return header, nil
+}
+
 // GetTd retrieves a block's total difficulty in the canonical chain from the
 // database by hash and number, caching it if found.
 func (hc *HeaderChain) GetTd(hash common.Hash, number uint64) []*big.Int {
@@ -550,7 +571,7 @@ func (hc *HeaderChain) GetLinkExternalBlocks(header *types.Header) ([]*types.Ext
 
 // GetExternalBlock is not applicable in the header chain since the BlockChain contains
 // the external blocks cache.
-func (hc *HeaderChain) GetExternalBlock(hash common.Hash, number uint64, location []byte, context uint64) (*types.ExternalBlock, error) {
+func (hc *HeaderChain) GetExternalBlock(hash common.Hash, location []byte, context uint64) (*types.ExternalBlock, error) {
 	return nil, nil
 }
 
@@ -673,15 +694,23 @@ func (hc *HeaderChain) SetHead(head uint64, updateFn UpdateHeadBlocksCallback, d
 
 // HLCR does hierarchical comparison of two difficulty tuples and returns true if second tuple is greater than the first
 func (hc *HeaderChain) HLCR(localDifficulties []*big.Int, externDifficulties []*big.Int) bool {
+	log.Info("HLCR", "localDiff", localDifficulties, "externDiff", externDifficulties)
 	if localDifficulties[0].Cmp(externDifficulties[0]) < 0 {
 		return true
-	} else if localDifficulties[1].Cmp(externDifficulties[1]) < 0 {
-		return true
-	} else if localDifficulties[2].Cmp(externDifficulties[2]) < 0 {
-		return true
-	} else {
+	} else if localDifficulties[0].Cmp(externDifficulties[0]) > 0 {
 		return false
 	}
+	if localDifficulties[1].Cmp(externDifficulties[1]) < 0 {
+		return true
+	} else if localDifficulties[1].Cmp(externDifficulties[1]) > 0 {
+		return false
+	}
+	if localDifficulties[2].Cmp(externDifficulties[2]) < 0 {
+		return true
+	} else if localDifficulties[2].Cmp(externDifficulties[2]) > 0 {
+		return false
+	}
+	return false
 }
 
 // CalcTd calculates the TD of the given header using PCRC and CalcHLCRNetDifficulty.
@@ -722,7 +751,7 @@ func (hc *HeaderChain) NdToTd(header *types.Header, nD []*big.Int) ([]*big.Int, 
 		if hc.GetBlockNumber(header.Hash()) != nil {
 			break
 		}
-		prevExternTerminus, err = hc.Engine().PreviousCoincidentOnPath(hc, header, header.Location, params.PRIME, params.PRIME)
+		prevExternTerminus, err = hc.Engine().PreviousCoincidentOnPath(hc, header, header.Location, params.PRIME, params.PRIME, true)
 		if err != nil {
 			return nil, err
 		}
@@ -739,7 +768,7 @@ func (hc *HeaderChain) NdToTd(header *types.Header, nD []*big.Int) ([]*big.Int, 
 		prevHeader := hc.GetHeaderByHash(header.ParentHash[params.PRIME])
 		if prevHeader == nil {
 			// Get previous header on external chain by hash
-			prevExtBlock, err := hc.GetExternalBlock(header.ParentHash[params.PRIME], header.Number[params.PRIME].Uint64()-1, header.Location, uint64(params.PRIME))
+			prevExtBlock, err := hc.GetExternalBlock(header.ParentHash[params.PRIME], header.Location, uint64(params.PRIME))
 			if err != nil {
 				return nil, err
 			}
@@ -776,12 +805,12 @@ func (hc *HeaderChain) PCRC(header *types.Header) (common.Hash, error) {
 	// Region twist check
 	// RTZ -- Region coincident along zone path
 	// RTR -- Region coincident along region path
-	RTZ, err := hc.Engine().PreviousCoincidentOnPath(hc, header, slice, params.REGION, params.ZONE)
+	RTZ, err := hc.Engine().PreviousCoincidentOnPath(hc, header, slice, params.REGION, params.ZONE, true)
 	if err != nil {
 		return common.Hash{}, err
 	}
 
-	RTR, err := hc.Engine().PreviousCoincidentOnPath(hc, header, slice, params.REGION, params.REGION)
+	RTR, err := hc.Engine().PreviousCoincidentOnPath(hc, header, slice, params.REGION, params.REGION, true)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -794,17 +823,17 @@ func (hc *HeaderChain) PCRC(header *types.Header) (common.Hash, error) {
 	// PTZ -- Prime coincident along zone path
 	// PTR -- Prime coincident along region path
 	// PTP -- Prime coincident along prime path
-	PTZ, err := hc.Engine().PreviousCoincidentOnPath(hc, header, slice, params.PRIME, params.ZONE)
+	PTZ, err := hc.Engine().PreviousCoincidentOnPath(hc, header, slice, params.PRIME, params.ZONE, true)
 	if err != nil {
 		return common.Hash{}, err
 	}
 
-	PTR, err := hc.Engine().PreviousCoincidentOnPath(hc, header, slice, params.PRIME, params.REGION)
+	PTR, err := hc.Engine().PreviousCoincidentOnPath(hc, header, slice, params.PRIME, params.REGION, true)
 	if err != nil {
 		return common.Hash{}, err
 	}
 
-	PTP, err := hc.Engine().PreviousCoincidentOnPath(hc, header, slice, params.PRIME, params.PRIME)
+	PTP, err := hc.Engine().PreviousCoincidentOnPath(hc, header, slice, params.PRIME, params.PRIME, true)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -853,7 +882,7 @@ func (hc *HeaderChain) CalcHLCRNetDifficulty(terminalHash common.Hash, header *t
 		prevHeader := hc.GetHeaderByHash(header.ParentHash[order])
 		if prevHeader == nil {
 			// Get previous header on external chain by hash
-			prevExtBlock, err := hc.GetExternalBlock(header.ParentHash[order], header.Number[order].Uint64()-1, header.Location, uint64(order))
+			prevExtBlock, err := hc.GetExternalBlock(header.ParentHash[order], header.Location, uint64(order))
 			if err != nil {
 				return nil, err
 			}

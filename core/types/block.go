@@ -174,12 +174,12 @@ func (h *Header) SanityCheck() error {
 // EmptyBody returns true if there is no additional 'body' to complete the header
 // that is: no transactions and no uncles.
 func (h *Header) EmptyBody() bool {
-	return IsEqualHashSlice(h.TxHash, EmptyRootHash) && IsEqualHashSlice(h.UncleHash, EmptyUncleHash)
+	return h.TxHash[QuaiNetworkContext] == EmptyRootHash[QuaiNetworkContext] && h.UncleHash[QuaiNetworkContext] == EmptyUncleHash[QuaiNetworkContext]
 }
 
 // EmptyReceipts returns true if there are no receipts for this header/block.
 func (h *Header) EmptyReceipts() bool {
-	return IsEqualHashSlice(h.ReceiptHash, EmptyRootHash)
+	return h.ReceiptHash[QuaiNetworkContext] == EmptyRootHash[QuaiNetworkContext]
 }
 
 // IsEqualHashSlice compares each hash in a headers slice of hashes
@@ -252,6 +252,7 @@ type rlpblock struct {
 
 type ExternalBody struct {
 	Transactions Transactions
+	Uncles       []*Header
 	Receipts     []*Receipt
 	Context      *big.Int
 }
@@ -260,6 +261,7 @@ type ExternalBody struct {
 type ExternalBlock struct {
 	header       *Header
 	transactions Transactions
+	uncles       []*Header
 	receipts     []*Receipt
 	context      *big.Int
 
@@ -272,6 +274,7 @@ type ExternalBlock struct {
 type rlpexternalblock struct {
 	Header   *Header
 	Txs      []*Transaction
+	Uncles   []*Header
 	Receipts []*Receipt
 	Context  *big.Int
 }
@@ -283,7 +286,7 @@ func (b *ExternalBlock) DecodeRLP(s *rlp.Stream) error {
 	if err := s.Decode(&eb); err != nil {
 		return err
 	}
-	b.header, b.context, b.transactions, b.receipts = eb.Header, eb.Context, eb.Txs, eb.Receipts
+	b.header, b.context, b.transactions, b.uncles, b.receipts = eb.Header, eb.Context, eb.Txs, eb.Uncles, eb.Receipts
 	b.size.Store(common.StorageSize(rlp.ListSize(size)))
 	return nil
 }
@@ -293,6 +296,7 @@ func (b *ExternalBlock) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, rlpexternalblock{
 		Header:   b.header,
 		Txs:      b.transactions,
+		Uncles:   b.uncles,
 		Context:  b.context,
 		Receipts: b.receipts,
 	})
@@ -306,14 +310,18 @@ func NewExternalBlockWithHeader(header *Header) *ExternalBlock {
 }
 
 // WithBody returns a new block with the given transaction and uncle contents.
-func (b *ExternalBlock) ExternalBlockWithBody(transactions []*Transaction, receipts []*Receipt, context *big.Int) *ExternalBlock {
+func (b *ExternalBlock) WithBody(transactions []*Transaction, uncles []*Header, receipts []*Receipt, context *big.Int) *ExternalBlock {
 	block := &ExternalBlock{
 		header:       CopyHeader(b.header),
 		transactions: make([]*Transaction, len(transactions)),
+		uncles:       make([]*Header, len(uncles)),
 		receipts:     make([]*Receipt, len(receipts)),
 		context:      context,
 	}
 	copy(block.transactions, transactions)
+	for i := range uncles {
+		block.uncles[i] = CopyHeader(uncles[i])
+	}
 	copy(block.receipts, receipts)
 	return block
 }
@@ -321,11 +329,12 @@ func (b *ExternalBlock) ExternalBlockWithBody(transactions []*Transaction, recei
 // Simple access methods for ExternalBlocks
 func (b *ExternalBlock) Header() *Header            { return CopyHeader(b.header) }
 func (b *ExternalBlock) Transactions() Transactions { return b.transactions }
+func (b *ExternalBlock) Uncles() []*Header          { return b.uncles }
 func (b *ExternalBlock) Receipts() Receipts         { return b.receipts }
 func (b *ExternalBlock) Context() *big.Int          { return b.context }
 func (b *ExternalBlock) CacheKey() []byte {
 	hash := b.header.Hash()
-	return ExtBlockCacheKey(b.header.Number[b.context.Int64()].Uint64(), b.context.Uint64(), hash)
+	return ExtBlockCacheKey(b.context.Uint64(), hash)
 }
 
 // Returns current MapContext for a given block.
@@ -341,13 +350,13 @@ func encodeBlockNumber(number uint64) []byte {
 }
 
 // extBlockBodyKey = blockBodyPrefix + num (uint64 big endian) + location + context + hash
-func ExtBlockCacheKey(number uint64, context uint64, hash common.Hash) []byte {
-	return append(append(append([]byte("e"), encodeBlockNumber(number)...), encodeBlockNumber(context)...), hash.Bytes()...)
+func ExtBlockCacheKey(context uint64, hash common.Hash) []byte {
+	return append(append([]byte("e"), encodeBlockNumber(context)...), hash.Bytes()...)
 }
 
 // Body returns the non-header content of the block.
 func (b *ExternalBlock) Body() *ExternalBody {
-	return &ExternalBody{b.transactions, b.receipts, b.context}
+	return &ExternalBody{b.transactions, b.uncles, b.receipts, b.context}
 }
 
 // ReceiptForTransaction searches receipts within an external block for a specific transaction
@@ -779,4 +788,11 @@ func currentBlockOntology(number []*big.Int) ([]int, error) {
 	default:
 		return nil, errors.New("invalid number passed to currentBlockOntology")
 	}
+}
+
+// struct for notation
+type BlockGenSpec struct {
+	Numbers    [3]int    // prime idx, region idx, zone idx
+	ParentTags [3]string // (optionally) Override the parents to point to tagged blocks. Empty strings are ignored.
+	Tag        string    // (optionally) Give this block a named tag. Empty strings are ignored.
 }

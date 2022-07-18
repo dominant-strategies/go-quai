@@ -84,6 +84,8 @@ var Defaults = Config{
 	RPCTxFeeCap: 1, // 1 ether
 	Region:      0,
 	Zone:        0,
+	DomUrl:      "ws://127.0.0.1:8546",
+	SubUrls:     []string{"ws://127.0.0.1:8546", "ws://127.0.0.1:8546", "ws://127.0.0.1:8546"},
 }
 
 func init() {
@@ -185,6 +187,12 @@ type Config struct {
 
 	// Zone location options
 	Zone int
+
+	// Dom node websocket url
+	DomUrl string
+
+	// Sub node websoccket urls
+	SubUrls []string
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.

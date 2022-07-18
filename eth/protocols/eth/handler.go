@@ -34,10 +34,10 @@ import (
 
 const (
 	// softResponseLimit is the target maximum size of replies to data retrievals.
-	softResponseLimit = 2 * 1024 * 1024
+	softResponseLimit = 40 * 1024 * 1024
 
 	// estHeaderSize is the approximate size of an RLP encoded block header.
-	estHeaderSize = 500
+	estHeaderSize = 1000
 
 	// maxHeadersServe is the maximum number of block headers to serve. This number
 	// is there to limit the number of disk lookups.

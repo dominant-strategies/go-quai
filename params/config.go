@@ -28,9 +28,9 @@ import (
 
 // Genesis hashes to enforce below configs on.
 var (
-	MainnetPrimeGenesisHash  = common.HexToHash("0x8dd9cfdf62bc5d7a0401d2b525a43ddde3f3392e41b443be1628057193812f0e")
-	MainnetRegionGenesisHash = common.HexToHash("0x8dd9cfdf62bc5d7a0401d2b525a43ddde3f3392e41b443be1628057193812f0e")
-	MainnetZoneGenesisHash   = common.HexToHash("0x8dd9cfdf62bc5d7a0401d2b525a43ddde3f3392e41b443be1628057193812f0e")
+	MainnetPrimeGenesisHash  = common.HexToHash("0x43e469c92ad01de58df3ef841c5dd2cd4319bace34dfbb0b585eda02db8fbefc")
+	MainnetRegionGenesisHash = common.HexToHash("0x43e469c92ad01de58df3ef841c5dd2cd4319bace34dfbb0b585eda02db8fbefc")
+	MainnetZoneGenesisHash   = common.HexToHash("0x43e469c92ad01de58df3ef841c5dd2cd4319bace34dfbb0b585eda02db8fbefc")
 	RopstenPrimeGenesisHash  = common.HexToHash("0x9c0d89a5294e4635a49f6d4c9f9e1a361cb76bfffa71be2ff01a64f3c5dd0dcc")
 	RopstenRegionGenesisHash = common.HexToHash("0x9c0d89a5294e4635a49f6d4c9f9e1a361cb76bfffa71be2ff01a64f3c5dd0dcc")
 	RopstenZoneGenesisHash   = common.HexToHash("0x9c0d89a5294e4635a49f6d4c9f9e1a361cb76bfffa71be2ff01a64f3c5dd0dcc")
@@ -43,8 +43,8 @@ var (
 // TrustedCheckpoints associates each known checkpoint with the genesis hash of
 // the chain it belongs to.
 var TrustedCheckpoints = map[common.Hash]*TrustedCheckpoint{
-	MainnetPrimeGenesisHash: MainnetTrustedCheckpoint,
-	RopstenGenesisHash:      RopstenTrustedCheckpoint,
+	// MainnetPrimeGenesisHash: MainnetTrustedCheckpoint,
+	// RopstenGenesisHash:      RopstenTrustedCheckpoint,
 }
 
 // CheckpointOracles associates each known checkpoint oracles with the genesis hash of

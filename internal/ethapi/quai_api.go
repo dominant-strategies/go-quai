@@ -449,12 +449,8 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool) (map[string]i
 		}
 		fields["transactions"] = transactions
 	}
-	uncles := block.Uncles()
-	uncleHashes := make([]common.Hash, len(uncles))
-	for i, uncle := range uncles {
-		uncleHashes[i] = uncle.Hash()
-	}
-	fields["uncles"] = uncleHashes
+
+	fields["uncles"] = block.Uncles()
 
 	return fields, nil
 }
@@ -479,6 +475,12 @@ func RPCMarshalExternalBlock(block *types.Block, receipts []*types.Receipt, cont
 		}
 	}
 
+	ucls := block.Uncles()
+	uncles := make([]interface{}, len(ucls))
+	for i, ucl := range ucls {
+		uncles[i] = RPCMarshalHeader(ucl)
+	}
+
 	fieldReceipts := make([]interface{}, len(receipts))
 	for i, receipt := range receipts {
 		fieldReceipts[i], _ = RPCMarshalReceipt(receipt)
@@ -486,6 +488,7 @@ func RPCMarshalExternalBlock(block *types.Block, receipts []*types.Receipt, cont
 	fields["receipts"] = fieldReceipts
 
 	fields["transactions"] = transactions
+	fields["uncles"] = uncles
 	fields["context"] = context
 	return fields, nil
 }
@@ -506,6 +509,19 @@ func RPCMarshalReOrgData(header *types.Header, newHeaders []*types.Header, oldHe
 
 	fields["newHeaders"] = fieldNewHeaders
 	fields["oldHeaders"] = fieldOldHeaders
+	return fields, nil
+}
+
+// RPCMarshalExternalBlockTraceSet converts the header and context into the right format
+func RPCMarshalExternalBlockTraceSet(hash common.Hash, context int) (map[string]interface{}, error) {
+	fields := map[string]interface{}{"Hash": hash}
+	fields["Context"] = context
+	return fields, nil
+}
+
+// RPCMarshalHash convert the hash into a the correct interface.
+func RPCMarshalHash(hash common.Hash) (map[string]interface{}, error) {
+	fields := map[string]interface{}{"Hash": hash}
 	return fields, nil
 }
 
@@ -577,38 +593,16 @@ func (s *PublicBlockChainQuaiAPI) SendMinedBlock(ctx context.Context, raw json.R
 	if err := json.Unmarshal(raw, &body); err != nil {
 		return err
 	}
-	// Quick-verify transaction and uncle lists. This mostly helps with debugging the server.
-	if head.UncleHash[types.QuaiNetworkContext] == types.EmptyUncleHash[0] && len(body.UncleHashes) > 0 {
-		return fmt.Errorf("server returned non-empty uncle list but block header indicates no uncles")
-	}
-	if head.UncleHash[types.QuaiNetworkContext] != types.EmptyUncleHash[0] && len(body.UncleHashes) == 0 {
-		return fmt.Errorf("server returned empty uncle list but block header indicates uncles")
-	}
-	if head.TxHash[types.QuaiNetworkContext] == types.EmptyRootHash[0] && len(body.Transactions) > 0 {
-		return fmt.Errorf("server returned non-empty transaction list but block header indicates no transactions")
-	}
-	if head.TxHash[types.QuaiNetworkContext] != types.EmptyRootHash[0] && len(body.Transactions) == 0 {
-		return fmt.Errorf("server returned empty transaction list but block header indicates transactions")
-	}
+
 	// Load uncles because they are not included in the block response.
 	txs := make([]*types.Transaction, len(body.Transactions))
 	for i, tx := range body.Transactions {
 		txs[i] = tx.tx
 	}
 
-	uncles := make([]*types.Header, len(body.UncleHashes))
-	for i, uncleHash := range body.UncleHashes {
-		block, _ := s.b.BlockByHash(ctx, uncleHash)
-		if block != nil {
-			uncles[i] = block.Header()
-		} else {
-			block, _ := s.b.GetUncleFromWorker(uncleHash)
-			if block == nil {
-				log.Warn("Unable to find local uncle for retrieved mined block", "uncle", uncleHash)
-				return nil
-			}
-			uncles[i] = block.Header()
-		}
+	uncles := make([]*types.Header, len(body.Uncles))
+	for i, uncle := range body.Uncles {
+		uncles[i] = uncle
 	}
 
 	block := types.NewBlockWithHeader(head).WithBody(txs, uncles)
@@ -643,6 +637,7 @@ func (s *PublicBlockChainQuaiAPI) SendReOrgData(ctx context.Context, raw json.Ra
 type rpcExternalBlock struct {
 	Hash         common.Hash      `json:"hash"`
 	Transactions []rpcTransaction `json:"transactions"`
+	Uncles       []*types.Header  `json:"uncles"`
 	Receipts     []*types.Receipt `json:"receipts"`
 	Context      *big.Int         `json:"context"`
 }
@@ -659,20 +654,109 @@ func (s *PublicBlockChainQuaiAPI) SendExternalBlock(ctx context.Context, raw jso
 		return err
 	}
 
-	// Load transactions, uncles are not needed for external blocks
+	// Load transactions
 	txs := make([]*types.Transaction, len(body.Transactions))
 	for i, tx := range body.Transactions {
 		txs[i] = tx.tx
 	}
 
-	receipts := make([]*types.Receipt, len(body.Receipts))
-	for i, receipt := range body.Receipts {
-		receipts[i] = receipt
-	}
+	uncles := make([]*types.Header, len(body.Uncles))
+	copy(uncles, body.Uncles)
 
-	block := types.NewExternalBlockWithHeader(head).ExternalBlockWithBody(txs, receipts, body.Context)
+	receipts := make([]*types.Receipt, len(body.Receipts))
+	copy(receipts, body.Receipts)
+
+	block := types.NewExternalBlockWithHeader(head).WithBody(txs, uncles, receipts, body.Context)
 
 	s.b.AddExternalBlock(block)
 
 	return nil
+}
+
+type HeaderHashWithContext struct {
+	Hash    common.Hash
+	Context int
+}
+
+type HeaderWithOrder struct {
+	Header *types.Header
+	Order  int
+}
+type HashWithLocation struct {
+	Hash     common.Hash
+	Location []byte
+}
+
+// GetExternalBlockByHashAndContext will run checks on the header and get the External Block from the cache.
+func (s *PublicBlockChainQuaiAPI) GetExternalBlockByHashAndContext(ctx context.Context, raw json.RawMessage) (map[string]interface{}, error) {
+	// Decode header and transactions.
+	var headerHashWithContext HeaderHashWithContext
+	if err := json.Unmarshal(raw, &headerHashWithContext); err != nil {
+		return nil, err
+	}
+
+	extBlock, err := s.b.GetExternalBlockByHashAndContext(headerHashWithContext.Hash, headerHashWithContext.Context)
+	if err != nil {
+		return nil, err
+	}
+	if extBlock == nil {
+		return nil, fmt.Errorf("unable to find external block in getExternalBlockByHashAndContext")
+	}
+	block := types.NewBlockWithHeader(extBlock.Header()).WithBody(extBlock.Transactions(), extBlock.Uncles())
+
+	return RPCMarshalExternalBlock(block, extBlock.Receipts(), extBlock.Context())
+}
+
+func (s *PublicBlockChainQuaiAPI) GetAncestorByLocation(ctx context.Context, raw json.RawMessage) (map[string]interface{}, error) {
+	var hashWithLocation HashWithLocation
+	if err := json.Unmarshal(raw, &hashWithLocation); err != nil {
+		return nil, err
+	}
+
+	header, err := s.b.GetAncestorByLocation(hashWithLocation.Hash, hashWithLocation.Location)
+	if err != nil {
+		return nil, err
+	}
+
+	return RPCMarshalHeader(header), nil
+}
+
+// GetBlockStatus returns the status of the block for a given header
+func (s *PublicBlockChainQuaiAPI) GetBlockStatus(ctx context.Context, raw json.RawMessage) core.WriteStatus {
+	var head *types.Header
+	if err := json.Unmarshal(raw, &head); err != nil {
+		return core.NonStatTy
+	}
+
+	if head == nil {
+		return core.NonStatTy
+	}
+
+	return s.b.GetBlockStatus(head)
+}
+
+// GetSubordinateSet returns the valid mined blocks from a dominant chain to the subordinate
+func (s *PublicBlockChainQuaiAPI) GetSubordinateSet(ctx context.Context, raw json.RawMessage) ([]common.Hash, error) {
+	var hashWithLocation HashWithLocation
+	if err := json.Unmarshal(raw, &hashWithLocation); err != nil {
+		return nil, err
+	}
+	return s.b.GetSubordinateSet(hashWithLocation.Hash, hashWithLocation.Location)
+}
+
+func (s *PublicBlockChainAPI) GetTerminusAtOrder(ctx context.Context, raw json.RawMessage) (common.Hash, error) {
+	var headerWithOrder HeaderWithOrder
+	if err := json.Unmarshal(raw, &headerWithOrder); err != nil {
+		return common.Hash{}, err
+	}
+	return s.b.GetTerminusAtOrder(headerWithOrder.Header, headerWithOrder.Order)
+}
+
+// CheckPCRC runs PCRC on a node and returns the response codes.
+func (s *PublicBlockChainQuaiAPI) CheckPCRC(ctx context.Context, raw json.RawMessage) (types.PCRCTermini, error) {
+	var headerWithOrder HeaderWithOrder
+	if err := json.Unmarshal(raw, &headerWithOrder); err != nil {
+		return types.PCRCTermini{}, err
+	}
+	return s.b.PCRC(headerWithOrder.Header, headerWithOrder.Order)
 }

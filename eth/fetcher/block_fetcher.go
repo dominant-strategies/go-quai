@@ -304,7 +304,7 @@ func (f *BlockFetcher) Enqueue(peer string, block *types.Block, extBlocks []*typ
 // FilterHeaders extracts all the headers that were explicitly requested by the fetcher,
 // returning those that should be handled differently.
 func (f *BlockFetcher) FilterHeaders(peer string, headers []*types.Header, time time.Time) []*types.Header {
-	log.Info("Filtering headers", "peer", peer, "headers", len(headers))
+	log.Trace("Filtering headers", "peer", peer, "headers", len(headers))
 
 	// Send the filter channel to the fetcher
 	filter := make(chan *headerFilterTask)
@@ -332,7 +332,7 @@ func (f *BlockFetcher) FilterHeaders(peer string, headers []*types.Header, time 
 // FilterBodies extracts all the block bodies that were explicitly requested by
 // the fetcher, returning those that should be handled differently.
 func (f *BlockFetcher) FilterBodies(peer string, transactions [][]*types.Transaction, uncles [][]*types.Header, time time.Time) ([][]*types.Transaction, [][]*types.Header) {
-	log.Info("Filtering bodies", "peer", peer, "txs", len(transactions), "uncles", len(uncles))
+	log.Trace("Filtering bodies", "peer", peer, "txs", len(transactions), "uncles", len(uncles))
 
 	// Send the filter channel to the fetcher
 	filter := make(chan *bodyFilterTask)
@@ -360,7 +360,7 @@ func (f *BlockFetcher) FilterBodies(peer string, transactions [][]*types.Transac
 // FilterExternalBlocks extracts all the block bodies that were explicitly requested by
 // the fetcher, returning those that should be handled differently.
 func (f *BlockFetcher) FilterExternalBlocks(peer string, extBlocks [][]*types.ExternalBlock, time time.Time) [][]*types.ExternalBlock {
-	log.Info("Filtering external blocks", "peer", peer, "extBlocks", len(extBlocks))
+	log.Trace("Filtering external blocks", "peer", peer, "extBlocks", len(extBlocks))
 
 	// Send the filter channel to the fetcher
 	filter := make(chan *extBlockFilterTask)
@@ -621,7 +621,7 @@ func (f *BlockFetcher) loop() {
 						announce.time = task.time
 
 						// If the block is empty (header only), short circuit into the final import queue
-						if types.IsEqualHashSlice(header.TxHash, types.EmptyRootHash) && types.IsEqualHashSlice(header.UncleHash, types.EmptyUncleHash) {
+						if header.TxHash[types.QuaiNetworkContext] == types.EmptyRootHash[types.QuaiNetworkContext] && header.UncleHash[types.QuaiNetworkContext] == types.EmptyUncleHash[types.QuaiNetworkContext] {
 							log.Trace("Block empty, skipping body retrieval", "peer", announce.origin, "number", header.Number, "hash", header.Hash())
 
 							block := types.NewBlockWithHeader(header)

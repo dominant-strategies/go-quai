@@ -44,20 +44,20 @@ const capacityOverestimation = 1.01
 // bad nodes, we can target a smaller set of vey good nodes. At worse this will
 // result in less nodes to sync from, but that's still better than some hogging
 // the pipeline.
-const qosTuningPeers = 5
+const qosTuningPeers = 7
 
 // rttMinEstimate is the minimal round trip time to target requests for. Since
 // every request entails a 2 way latency + bandwidth + serving database lookups,
 // it should be generous enough to permit meaningful work to be done on top of
 // the transmission costs.
-const rttMinEstimate = 2 * time.Second
+const rttMinEstimate = 4 * time.Second
 
 // rttMaxEstimate is the maximal round trip time to target requests for. Although
 // the expectation is that a well connected node will never reach this, certain
 // special connectivity ones might experience significant delays (e.g. satellite
 // uplink with 3s RTT). This value should be low enough to forbid stalling the
 // pipeline too long, but large enough to cover the worst of the worst links.
-const rttMaxEstimate = 20 * time.Second
+const rttMaxEstimate = 25 * time.Second
 
 // rttPushdownFactor is a multiplier to attempt forcing quicker requests than
 // what the message rate tracker estimates. The reason is that message rate

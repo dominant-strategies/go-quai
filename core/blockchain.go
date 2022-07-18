@@ -19,6 +19,7 @@ package core
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -41,6 +42,7 @@ import (
 	"github.com/spruce-solutions/go-quai/core/state/snapshot"
 	"github.com/spruce-solutions/go-quai/core/types"
 	"github.com/spruce-solutions/go-quai/core/vm"
+	"github.com/spruce-solutions/go-quai/ethclient/quaiclient"
 	"github.com/spruce-solutions/go-quai/ethdb"
 	"github.com/spruce-solutions/go-quai/event"
 	"github.com/spruce-solutions/go-quai/log"
@@ -225,12 +227,15 @@ type BlockChain struct {
 	forker     *ForkChoice
 
 	shouldPreserve func(*types.Block) bool // Function used to determine whether should preserve the given block.
+
+	domClient  *quaiclient.Client   // domClient is used to check if a given dominant block in the chain is canonical in dominant chain.
+	subClients []*quaiclient.Client // subClinets is used to check is a coincident block is valid in the subordinate context
 }
 
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator and
 // Processor.
-func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64) (*BlockChain, error) {
+func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, domClientUrl string, subClientUrls []string, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64) (*BlockChain, error) {
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
 	}
@@ -276,6 +281,19 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
 	bc.processor = NewStateProcessor(chainConfig, bc, engine)
+
+	// only set the domClient if the chain is not prime
+	if types.QuaiNetworkContext != params.PRIME {
+		bc.domClient = MakeDomClient(domClientUrl)
+	}
+
+	bc.subClients = make([]*quaiclient.Client, 3)
+	// only set the subClients if the chain is not region
+	if types.QuaiNetworkContext != params.ZONE {
+		go func() {
+			bc.subClients = MakeSubClients(subClientUrls)
+		}()
+	}
 
 	var err error
 	bc.hc, err = NewHeaderChain(db, chainConfig, engine, bc.insertStopped)
@@ -502,6 +520,34 @@ func (bc *BlockChain) loadLastState() error {
 	return nil
 }
 
+// MakeDomClient creates the quaiclient for the given domurl
+func MakeDomClient(domurl string) *quaiclient.Client {
+	if domurl == "" {
+		log.Crit("dom client url is empty")
+	}
+	domClient, err := quaiclient.Dial(domurl)
+	if err != nil {
+		log.Crit("Error connecting to the dominant go-quai client", "err", err)
+	}
+	return domClient
+}
+
+// MakeSubClients creates the quaiclient for the given suburls
+func MakeSubClients(suburls []string) []*quaiclient.Client {
+	subClients := make([]*quaiclient.Client, 3)
+	for i, suburl := range suburls {
+		if suburl == "" {
+			log.Warn("sub client url is empty")
+		}
+		subClient, err := quaiclient.Dial(suburl)
+		if err != nil {
+			log.Crit("Error connecting to the subordinate go-quai client for index", "index", i, " err ", err)
+		}
+		subClients[i] = subClient
+	}
+	return subClients
+}
+
 // SetHead rewinds the local chain to a new head. Depending on whether the node
 // was fast synced or full synced and in which state, the method will try to
 // delete minimal data from disk whilst retaining chain consistency.
@@ -519,8 +565,8 @@ func (bc *BlockChain) SetHead(head uint64) error {
 //
 // The method returns the block number where the requested root cap was found.
 func (bc *BlockChain) SetHeadBeyondRoot(head uint64, root common.Hash) (uint64, error) {
-	bc.chainmu.Lock()
-	defer bc.chainmu.Unlock()
+	// bc.chainmu.Lock()
+	// defer bc.chainmu.Unlock()
 
 	// Track the block number of the requested root hash
 	var rootNumber uint64 // (no root == always 0)
@@ -1137,6 +1183,7 @@ const (
 	NonStatTy WriteStatus = iota
 	CanonStatTy
 	SideStatTy
+	UnknownStatTy
 )
 
 // numberHash is just a container for a number and a hash, to represent a block
@@ -1473,7 +1520,7 @@ func (bc *BlockChain) NdToTd(header *types.Header, nD []*big.Int) ([]*big.Int, e
 		if bc.hc.GetBlockNumber(header.Hash()) != nil {
 			break
 		}
-		prevExternTerminus, err = bc.Engine().PreviousCoincidentOnPath(bc, header, header.Location, params.PRIME, params.PRIME)
+		prevExternTerminus, err = bc.Engine().PreviousCoincidentOnPath(bc, header, header.Location, params.PRIME, params.PRIME, true)
 		if err != nil {
 			return nil, err
 		}
@@ -1490,7 +1537,7 @@ func (bc *BlockChain) NdToTd(header *types.Header, nD []*big.Int) ([]*big.Int, e
 		prevHeader := bc.GetHeaderByHash(header.ParentHash[params.PRIME])
 		if prevHeader == nil {
 			// Get previous header on external chain by hash
-			prevExtBlock, err := bc.GetExternalBlock(header.ParentHash[params.PRIME], header.Number[params.PRIME].Uint64()-1, header.Location, uint64(params.PRIME))
+			prevExtBlock, err := bc.GetExternalBlock(header.ParentHash[params.PRIME], header.Location, uint64(params.PRIME))
 			if err != nil {
 				return nil, err
 			}
@@ -1514,11 +1561,13 @@ func (bc *BlockChain) NdToTd(header *types.Header, nD []*big.Int) ([]*big.Int, e
 
 // CalcTd calculates the TD of the given header using PCRC and CalcHLCRNetDifficulty.
 func (bc *BlockChain) CalcTd(header *types.Header) ([]*big.Int, error) {
-	// Check PCRC for the external block and return the terminal hash and net difficulties
-	externTerminalHash, err := bc.PCRC(header)
+
+	// Always calculate PTZ because it is always valid and we need terminus for calcHLCRDifficulty
+	externTerminal, err := bc.Engine().PreviousCoincidentOnPath(bc, header, header.Location, params.PRIME, params.ZONE, true)
 	if err != nil {
 		return nil, err
 	}
+	externTerminalHash := externTerminal.Hash()
 
 	// Use HLCR to compute net total difficulty
 	externNd, err := bc.CalcHLCRNetDifficulty(externTerminalHash, header)
@@ -1548,7 +1597,6 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	// Note all the components of block(td, hash->number map, header, body, receipts)
 	// should be written atomically. BlockBatch is used for containing all components.
 	blockBatch := bc.db.NewBatch()
-	fmt.Println("Writing TD", externTd, block.Hash())
 	rawdb.WriteTd(blockBatch, block.Hash(), block.NumberU64(), externTd)
 	rawdb.WriteBlock(blockBatch, block)
 	rawdb.WriteReceipts(blockBatch, block.Hash(), block.NumberU64(), receipts)
@@ -1694,6 +1742,22 @@ func (bc *BlockChain) addFutureBlock(block *types.Block) error {
 	return nil
 }
 
+// GetBlockStatus returns the status of the block for a given header
+func (bc *BlockChain) GetBlockStatus(header *types.Header) WriteStatus {
+	canonHash := bc.GetCanonicalHash(header.Number[types.QuaiNetworkContext].Uint64())
+	fmt.Println("canonHash", canonHash, "headerHash", header.Hash(), header.Number, header.Location)
+	if (canonHash == common.Hash{}) {
+		fmt.Println("returning UnknownStatTy for subordinate")
+		return UnknownStatTy
+	}
+	if canonHash != header.Hash() {
+		fmt.Println("returning SideStatTy for subordinate")
+		return SideStatTy
+	}
+	fmt.Println("returning CanonStatTy for subordinate")
+	return CanonStatTy
+}
+
 // AddExternalBlocks adds a group of external blocks to the cache
 func (bc *BlockChain) AddExternalBlocks(blocks []*types.ExternalBlock) error {
 	for _, extBlock := range blocks {
@@ -1709,9 +1773,9 @@ func (bc *BlockChain) AddExternalBlocks(blocks []*types.ExternalBlock) error {
 func (bc *BlockChain) AddExternalBlock(block *types.ExternalBlock) error {
 	context := []interface{}{
 		"context", block.Context(), "numbers", block.Header().Number, "hash", block.Hash(), "location", block.Header().Location,
-		"txs", len(block.Transactions()), "receipts", len(block.Receipts()),
+		"txs", len(block.Transactions()), "uncles", len(block.Uncles()), "receipts", len(block.Receipts()),
 	}
-	log.Info("Adding external block", context...)
+	log.Debug("Adding external block", context...)
 	data, err := rlp.EncodeToBytes(block)
 	if err != nil {
 		log.Crit("Failed to RLP encode external block", "err", err)
@@ -1724,8 +1788,8 @@ func (bc *BlockChain) AddExternalBlock(block *types.ExternalBlock) error {
 // the current header to the position where the reorg took place in a higher context
 func (bc *BlockChain) ReOrgRollBack(header *types.Header, validHeaders []*types.Header, invalidHeaders []*types.Header) error {
 	log.Info("Rolling back header beyond", "hash", header.Hash(), "from", bc.CurrentBlock().Header().Hash())
-	bc.reorgmu.Lock()
-	defer bc.reorgmu.Unlock()
+	// bc.reorgmu.Lock()
+	// defer bc.reorgmu.Unlock()
 	var (
 		deletedTxs  types.Transactions
 		deletedLogs [][]*types.Log
@@ -1951,26 +2015,33 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 	it := newInsertIterator(chain, results, bc.validator)
 	block, err := it.next()
 
-	// Left-trim all the known blocks
-	if err == ErrKnownBlock {
+	// Left-trim all the known blocks that don't need to build snapshot
+	if bc.skipBlock(err, it) {
 		// First block (and state) is known
 		//   1. We did a roll-back, and should now do a re-import
 		//   2. The block is stored as a sidechain, and is lying about it's stateroot, and passes a stateroot
-		// 	    from the canonical chain, which has not been verified.
-		// Skip all known blocks that are behind us
+		//      from the canonical chain, which has not been verified.
+		// Skip all known blocks that are behind us.
 		var (
 			reorg   bool
 			current = bc.CurrentBlock()
 		)
-		for block != nil && err == ErrKnownBlock {
+		for block != nil && bc.skipBlock(err, it) {
 			reorg, err = bc.forker.ReorgNeeded(current.Header(), block.Header())
 			if err != nil {
 				return it.index, err
 			}
 			if reorg {
-				break
+				// Switch to import mode if the forker says the reorg is necessary
+				// and also the block is not on the canonical chain.
+				// In eth2 the forker always returns true for reorg decision (blindly trusting
+				// the external consensus engine), but in order to prevent the unnecessary
+				// reorgs when importing known blocks, the special case is handled here.
+				if block.NumberU64() > current.NumberU64() || bc.GetCanonicalHash(block.NumberU64()) != block.Hash() {
+					break
+				}
 			}
-			log.Info("Ignoring already known block", "number", block.Number(), "hash", block.Hash())
+			log.Debug("Ignoring already known block", "number", block.Number(), "hash", block.Hash())
 			stats.ignored++
 
 			block, err = it.next()
@@ -1983,8 +2054,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		// When node runs a fast sync again, it can re-import a batch of known blocks via
 		// `insertChain` while a part of them have higher total difficulty than current
 		// head full block(new pivot point).
-		for block != nil && err == ErrKnownBlock {
-			log.Info("Writing previously known block", "number", block.Number(), "hash", block.Hash())
+		for block != nil && bc.skipBlock(err, it) {
+			log.Debug("Writing previously known block", "number", block.Number(), "hash", block.Hash())
 			if err := bc.writeKnownBlock(block); err != nil {
 				return it.index, err
 			}
@@ -2001,7 +2072,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		return bc.insertSideChain(block, it)
 
 	// First block is future, shove it (and all children) to the future queue (unknown ancestor)
-	case errors.Is(err, consensus.ErrFutureBlock) || (errors.Is(err, consensus.ErrUnknownAncestor) && bc.futureBlocks.Contains(it.first().ParentHash())):
+	case errors.Is(err, consensus.ErrFutureBlock) || (errors.Is(err, consensus.ErrUnknownAncestor)):
 		for block != nil && (it.index == 0 || errors.Is(err, consensus.ErrUnknownAncestor)) {
 			log.Debug("Future block, postponing import", "number", block.Number(), "hash", block.Hash())
 			if err := bc.addFutureBlock(block); err != nil {
@@ -2013,7 +2084,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		stats.ignored += it.remaining()
 
 		// If there are any still remaining, mark as ignored
-		return it.index, err
+		return it.index, nil
 
 		// Some other error occurred, abort
 	case err != nil:
@@ -2118,15 +2189,50 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		// Process block using the parent state as reference point
 		substart := time.Now()
 
-		// If in Prime or Region, take to see if we have already included the hash in the lower level.
-		// TODO: #179 Extend CheckHashInclusion to if the hash was ever included in the chain, not just the parent.
-		err = bc.CheckHashInclusion(block.Header(), parent)
+		order, err := bc.Engine().GetDifficultyOrder(block.Header())
 		if err != nil {
-			bc.reportBlock(block, make(types.Receipts, 0), err)
-			bc.chainUncleFeed.Send(block.Header())
-			bc.futureBlocks.Remove(block.Hash())
 			return it.index, err
 		}
+
+		fmt.Println("Running CheckCanonical and PCRC for block", block.Header().Number, block.Header().Location, block.Header().Hash())
+
+		if order < types.QuaiNetworkContext {
+			err := bc.CheckCanonical(block.Header(), order)
+			if err != nil {
+				if err.Error() == "subordinate chain not synced" {
+					fmt.Println("dom not synced, adding to future blocks", block.Header().Hash())
+					if err := bc.addFutureBlock(block); err != nil {
+						return it.index, err
+					}
+					return it.index, nil
+				} else {
+					return it.index, err
+				}
+			}
+		} else if types.QuaiNetworkContext != params.ZONE {
+			_, err = bc.PCRC(block.Header(), order)
+			if err != nil {
+				if err.Error() == "subordinate chain not synced" {
+					fmt.Println("adding to future blocks", block.Header().Hash())
+					if err := bc.addFutureBlock(block); err != nil {
+						return it.index, err
+					}
+					return it.index, nil
+				} else {
+					return it.index, err
+				}
+			}
+		}
+
+		// If in Prime or Region, take to see if we have already included the hash in the lower level.
+		// TODO: #179 Extend CheckHashInclusion to if the hash was ever included in the chain, not just the parent.
+		// err = bc.CheckHashInclusion(block.Header(), parent)
+		// if err != nil {
+		// 	bc.reportBlock(block, make(types.Receipts, 0), err)
+		// 	bc.chainUncleFeed.Send(block.Header())
+		// 	bc.futureBlocks.Remove(block.Hash())
+		// 	return it.index, err
+		// }
 
 		// Process our block and retrieve external blocks.
 		receipts, logs, usedGas, externalBlocks, err := bc.processor.Process(block, statedb, bc.vmConfig)
@@ -2204,7 +2310,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		switch status {
 		case CanonStatTy:
 			bc.StoreExternalBlocks(linkExtBlocks)
-			log.Info("Inserted new block", "number", block.Header().Number, "hash", block.Hash(), "extBlocks", len(externalBlocks),
+			log.Info("Inserted new block", "number", block.Header().Number, "hash", block.Hash(), "loc", block.Header().Location, "extBlocks", len(externalBlocks),
 				"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"elapsed", common.PrettyDuration(time.Since(start)),
 				"root", block.Root())
@@ -2296,7 +2402,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 				// If someone legitimately side-mines blocks, they would still be imported as usual. However,
 				// we cannot risk writing unverified blocks to disk when they obviously target the pruning
 				// mechanism.
-				return it.index, errors.New("sidechain ghost-state attack")
+				return it.index, consensus.ErrGhostState
 			}
 		}
 		if externTd == nil {
@@ -2481,8 +2587,6 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		if oldBlock.Hash() == newBlock.Hash() {
 			commonBlock = oldBlock
 
-			// Once the common block is found, the reorg data is sent to the reOrg feed
-			bc.reOrgFeed.Send(ReOrgRollup{ReOrgHeader: commonBlock.Header(), OldChainHeaders: bc.getAllHeaders(oldChain), NewChainHeaders: bc.getAllHeaders(newChain)})
 			break
 		}
 		// Remove an old block as well as stash away a new block
@@ -2571,12 +2675,55 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 			bc.chainSideFeed.Send(ChainSideEvent{Block: oldChain[i]})
 		}
 	}
+	// Once the common block is found, the reorg data is sent to the reOrg feed
+	bc.reOrgFeed.Send(ReOrgRollup{ReOrgHeader: commonBlock.Header(), OldChainHeaders: bc.getAllHeaders(oldChain), NewChainHeaders: bc.getAllHeaders(newChain)})
 
 	return nil
 }
 
+// skipBlock returns 'true', if the block being imported can be skipped over, meaning
+// that the block does not need to be processed but can be considered already fully 'done'.
+func (bc *BlockChain) skipBlock(err error, it *insertIterator) bool {
+	// We can only ever bypass processing if the only error returned by the validator
+	// is ErrKnownBlock, which means all checks passed, but we already have the block
+	// and state.
+	if !errors.Is(err, ErrKnownBlock) {
+		return false
+	}
+	// If we're not using snapshots, we can skip this, since we have both block
+	// and (trie-) state
+	if bc.snaps == nil {
+		return true
+	}
+	var (
+		header     = it.current() // header can't be nil
+		parentRoot common.Hash
+	)
+	// If we also have the snapshot-state, we can skip the processing.
+	if bc.snaps.Snapshot(header.Root[types.QuaiNetworkContext]) != nil {
+		return true
+	}
+	// In this case, we have the trie-state but not snapshot-state. If the parent
+	// snapshot-state exists, we need to process this in order to not get a gap
+	// in the snapshot layers.
+	// Resolve parent block
+	if parent := it.previous(); parent != nil {
+		parentRoot = parent.Root[types.QuaiNetworkContext]
+	} else if parent = bc.GetHeaderByHash(header.ParentHash[types.QuaiNetworkContext]); parent != nil {
+		parentRoot = parent.Root[types.QuaiNetworkContext]
+	}
+	if parentRoot == (common.Hash{}) {
+		return false // Theoretically impossible case
+	}
+	// Parent is also missing snapshot: we can skip this. Otherwise process.
+	if bc.snaps.Snapshot(parentRoot) == nil {
+		return true
+	}
+	return false
+}
+
 func (bc *BlockChain) update() {
-	futureTimer := time.NewTicker(5 * time.Second)
+	futureTimer := time.NewTicker(1 * time.Second)
 	defer futureTimer.Stop()
 	defer bc.wg.Done()
 	for {
@@ -2816,19 +2963,14 @@ func (bc *BlockChain) GetHeaderByHash(hash common.Hash) *types.Header {
 }
 
 // GetExternalBlock retrieves an external block from either the ext block cache or rawdb.
-func (bc *BlockChain) GetExternalBlock(hash common.Hash, number uint64, location []byte, context uint64) (*types.ExternalBlock, error) {
-	// Lookup block in externalBlocks cache
-	key := types.ExtBlockCacheKey(number, context, hash)
-
-	if block, ok := bc.externalBlocks.HasGet(nil, key); ok {
-		var blockDecoded *types.ExternalBlock
-		rlp.DecodeBytes(block, &blockDecoded)
-		return blockDecoded, nil
+func (bc *BlockChain) GetExternalBlock(hash common.Hash, location []byte, context uint64) (*types.ExternalBlock, error) {
+	block, err := bc.GetExternalBlockByHashAndContext(hash, int(context))
+	if err != nil {
+		return &types.ExternalBlock{}, errExtBlockNotFound
 	}
-	block := rawdb.ReadExternalBlock(bc.db, hash, number, context)
 
 	if block == nil {
-		block = bc.requestExternalBlock(hash, number, location, context)
+		block = bc.requestExternalBlock(hash, location, context)
 		if block == nil {
 			return &types.ExternalBlock{}, errExtBlockNotFound
 		}
@@ -2837,18 +2979,18 @@ func (bc *BlockChain) GetExternalBlock(hash common.Hash, number uint64, location
 }
 
 // requestExternalBlock sends an external block event to the missingExternalBlockFeed in order to be fulfilled by a manager or client.
-func (bc *BlockChain) requestExternalBlock(hash common.Hash, number uint64, location []byte, context uint64) *types.ExternalBlock {
+func (bc *BlockChain) requestExternalBlock(hash common.Hash, location []byte, context uint64) *types.ExternalBlock {
 	bc.missingExternalBlockFeed.Send(MissingExternalBlock{Hash: hash, Location: location, Context: int(context)})
 	for i := 0; i < params.ExternalBlockLookupLimit; i++ {
 		time.Sleep(time.Duration(params.ExternalBlockLookupDelay) * time.Millisecond)
 		// Lookup block in externalBlocks cache
-		key := types.ExtBlockCacheKey(number, context, hash)
+		key := types.ExtBlockCacheKey(context, hash)
 		if block, ok := bc.externalBlocks.HasGet(nil, key); ok {
 			var blockDecoded *types.ExternalBlock
 			rlp.DecodeBytes(block, &blockDecoded)
 			return blockDecoded
 		}
-		block := rawdb.ReadExternalBlock(bc.db, hash, number, context)
+		block := rawdb.ReadExternalBlock(bc.db, hash, context)
 		if block != nil {
 			return block
 		}
@@ -2856,16 +2998,97 @@ func (bc *BlockChain) requestExternalBlock(hash common.Hash, number uint64, loca
 	return nil
 }
 
+// GetExternalBlockByHashAndContext checks if the ExternalBlock for the given hash is present in the cache and returns the externalBlock
+func (bc *BlockChain) GetExternalBlockByHashAndContext(hash common.Hash, context int) (*types.ExternalBlock, error) {
+	// Lookup block in externalBlocks cache
+	key := types.ExtBlockCacheKey(uint64(context), hash)
+
+	if extBlock, ok := bc.externalBlocks.HasGet(nil, key); ok {
+		var extBlockDecoded *types.ExternalBlock
+		rlp.DecodeBytes(extBlock, &extBlockDecoded)
+		return extBlockDecoded, nil
+	}
+	extBlock := rawdb.ReadExternalBlock(bc.db, hash, uint64(context))
+	return extBlock, nil
+}
+
+// GetExternalBlockTraceSet collects all the external blocks from newHeader till stopHash in a given path
+// TODO: Fix all this logic.
+func (bc *BlockChain) GetExternalBlockTraceSet(stopHash common.Hash, newHeader *types.Header, path int) ([]*types.ExternalBlock, error) {
+	extBlocks := []*types.ExternalBlock{}
+	// get the externalBlocks
+	extNewBlock, err := bc.GetExternalBlockByHashAndContext(newHeader.Hash(), path)
+	if err != nil {
+		return nil, errors.New("error finding external block in external block trace set")
+	}
+	extBlocks = append(extBlocks, extNewBlock)
+	for {
+
+		// if the newHeader is before genesis
+		if newHeader.Number[path].Uint64() == 1 {
+			return extBlocks, nil
+		}
+		// get the externalBlocks
+		extNewBlock, err = bc.GetExternalBlockByHashAndContext(newHeader.ParentHash[path], path)
+		if err != nil {
+			return nil, errors.New("error finding external block in external block trace set")
+		}
+		if extNewBlock == nil {
+			return nil, errors.New("unable to find external block by hash and context")
+		}
+
+		extBlocks = append(extBlocks, extNewBlock)
+
+		// If the common ancestor was found, bail out
+		if stopHash == newHeader.Hash() {
+			return extBlocks, nil
+		}
+		newHeader = extNewBlock.Header()
+
+	}
+}
+
+// GetSubordinateSet returns a subordinate set from a dominant chain.
+func (bc *BlockChain) GetSubordinateSet(stopHash common.Hash, location []byte) ([]common.Hash, error) {
+	latest, err := bc.hc.GetAncestorByLocation(bc.CurrentBlock().Hash(), location)
+	if err != nil {
+		return nil, err
+	}
+
+	extBlocks, err := bc.GetExternalBlockTraceSet(stopHash, latest, types.QuaiNetworkContext+1)
+	if err != nil {
+		return nil, err
+	}
+
+	hashes := make([]common.Hash, 0)
+	for _, extBlock := range extBlocks {
+		hashes = append(hashes, extBlock.Hash())
+	}
+
+	for i, j := 0, len(hashes)-1; i < j; i, j = i+1, j-1 {
+		hashes[i], hashes[j] = hashes[j], hashes[i]
+	}
+	return hashes, nil
+}
+
+// GetTerminusAtOrder returns the terminus at an order for the path at the node context.
+func (bc *BlockChain) GetTerminusAtOrder(header *types.Header, order int) (common.Hash, error) {
+	terminus, err := bc.Engine().PreviousCoincidentOnPath(bc, header, header.Location, order, types.QuaiNetworkContext, true)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return terminus.Hash(), nil
+}
+
 // StoreExternalBlocks removes the external block from the cached blocks and writes it into the database
 func (bc *BlockChain) StoreExternalBlocks(blocks []*types.ExternalBlock) error {
 
 	for i := 0; i < len(blocks); i++ {
 		context := blocks[i].Context().Uint64()
-		number := blocks[i].Header().Number[context].Uint64()
 		hash := blocks[i].Hash()
 
 		// Lookup block in externalBlocks cache
-		key := types.ExtBlockCacheKey(number, context, hash)
+		key := types.ExtBlockCacheKey(context, hash)
 		bc.externalBlocks.Del(key)
 
 		rawdb.WriteExternalBlock(bc.db, blocks[i])
@@ -3025,6 +3248,9 @@ func (bc *BlockChain) checkExtBlockCollision(header *types.Header, externalBlock
 // HLCR does hierarchical comparison of two difficulty tuples and returns true if second tuple is greater than the first
 func (bc *BlockChain) HLCR(localDifficulties []*big.Int, externDifficulties []*big.Int) bool {
 	log.Info("HLCR", "localDiff", localDifficulties, "externDiff", externDifficulties)
+	if externDifficulties == nil || len(externDifficulties) == 0 || localDifficulties == nil || len(localDifficulties) == 0 {
+		return false
+	}
 	if localDifficulties[0].Cmp(externDifficulties[0]) < 0 {
 		return true
 	} else if localDifficulties[0].Cmp(externDifficulties[0]) > 0 {
@@ -3047,100 +3273,205 @@ func (bc *BlockChain) HLCR(localDifficulties []*big.Int, externDifficulties []*b
 // that we have linked untwisted chains prior to checking HLCR & applying external state transfers.
 // NOTE: note that it only guarantees linked & untwisted back to the prime terminus, assuming the
 // prime termini match. To check deeper than that, you need to iteratively apply PCRC to get that guarantee.
-func (bc *BlockChain) PCRC(header *types.Header) (common.Hash, error) {
+func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTermini, error) {
 
 	if header.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
-		return bc.chainConfig.GenesisHashes[0], nil
+		return types.PCRCTermini{}, nil
 	}
 
 	slice := header.Location
-	headerOrder, err := bc.Engine().GetDifficultyOrder(header)
-	if err != nil {
-		return common.Hash{}, err
-	}
-
-	// Only check for region twist if block is of region order
-	if headerOrder <= params.REGION {
-		// Region twist check
-		// RTZ -- Region coincident along zone path
-		// RTR -- Region coincident along region path
-		RTZ, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.REGION, params.ZONE)
-		if err != nil {
-			return common.Hash{}, err
-		}
-
-		RTR, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.REGION, params.REGION)
-		if err != nil {
-			return common.Hash{}, err
-		}
-
-		// PCRC has failed. Rollback through the prior untwisted region.
-		if RTZ.Hash() != RTR.Hash() {
-			log.Info("Error in PCRC", "RTZ:", RTZ.Hash(), "RTR:", RTR.Hash())
-			// If we are running in Prime or Region and have failed PCRC
-			// 1. Check to see if the Zone terminus is on our chain.
-			// 2. If Zone terminus is in our chain, do nothing.
-			// 3. If Zone terminus is not in our chain, uncle the RTZ in the subordinate context.
-			if types.QuaiNetworkContext < params.ZONE {
-				rtz := bc.hc.GetBlockNumber(RTZ.Hash())
-				// rtz is not in our Region chain, remove it from subordinate chains.
-				if rtz == nil {
-					bc.chainUncleFeed.Send(RTZ)
-				}
-			}
-			return common.Hash{}, errors.New("there exists a region twist")
-		}
-	}
-
 	// Prime twist check
 	// PTZ -- Prime coincident along zone path
 	// PTR -- Prime coincident along region path
 	// PTP -- Prime coincident along prime path
+	// Region twist check
+	// RTZ -- Region coincident along zone path
+	// RTR -- Region coincident along region path
 
-	// Always calculate PTZ because it is always valid and we need terminus for calcHLCRDifficulty
-	PTZ, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.ZONE)
-	if err != nil {
-		return common.Hash{}, err
+	// o/c			| prime 			| region 						| zone
+	// prime    	| x PTP, RTR		| x PTP, RTR					| x PTP, PTR, RTR
+	// region   	| X					| x PTP, RTR, PRTP, PRTR		| x PTP, PTR, RTR, PRTP, PRTR
+	// zone			| X					| X								| x PTP, PTR, RTR, PRTP, PRTR
+
+	switch types.QuaiNetworkContext {
+	case params.PRIME:
+		PTP, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.PRIME, params.PRIME, true)
+		if err != nil {
+			return types.PCRCTermini{}, err
+		}
+
+		PRTP, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.PRIME, params.PRIME, false)
+		if err != nil {
+			return types.PCRCTermini{}, err
+		}
+
+		if bc.subClients[slice[0]-1] == nil {
+			return types.PCRCTermini{}, nil
+		}
+		PCRCTermini, err := bc.subClients[slice[0]-1].CheckPCRC(context.Background(), header, headerOrder)
+		if err != nil {
+			return types.PCRCTermini{}, err
+		}
+
+		if (PCRCTermini.PTR == common.Hash{} || PCRCTermini.PRTR == common.Hash{}) {
+			return PCRCTermini, consensus.ErrSubordinateNotSynced
+		}
+
+		PCRCTermini.PTP = PTP.Hash()
+		PCRCTermini.PRTP = PRTP.Hash()
+
+		if (PTP.Hash() != PCRCTermini.PTR) && (PCRCTermini.PTR != PCRCTermini.PTZ) && (PCRCTermini.PTZ != PTP.Hash()) {
+			fmt.Println("PTP", PTP.Hash(), "PTR", PCRCTermini.PTR, "PTZ", PCRCTermini.PTZ)
+			return types.PCRCTermini{}, errors.New("there exists a Prime twist (PTP != PTR != PTZ")
+		}
+		if PRTP.Hash() != PCRCTermini.PRTR {
+			fmt.Println("PRTP", PRTP.Hash(), PCRCTermini.PRTR)
+			return types.PCRCTermini{}, err
+		}
+
+		return PCRCTermini, nil
+
+	case params.REGION:
+		RTR, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.REGION, params.REGION, true)
+		if err != nil {
+			return types.PCRCTermini{}, err
+		}
+
+		if bc.subClients[slice[1]-1] == nil {
+			return types.PCRCTermini{}, nil
+		}
+
+		PCRCTermini, err := bc.subClients[slice[1]-1].CheckPCRC(context.Background(), header, headerOrder)
+		if err != nil {
+			return types.PCRCTermini{}, err
+		}
+
+		if (PCRCTermini.RTZ == common.Hash{}) {
+			return PCRCTermini, consensus.ErrSubordinateNotSynced
+		}
+
+		if RTR.Hash() != PCRCTermini.RTZ {
+			fmt.Println("RTR", RTR.Number, RTR.Hash(), "RTZ", PCRCTermini.RTZ)
+			return types.PCRCTermini{}, errors.New("there exists a Region twist (RTR != RTZ)")
+		}
+		if headerOrder < params.REGION {
+			PTR, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.PRIME, params.REGION, true)
+			if err != nil {
+				return types.PCRCTermini{}, err
+			}
+
+			PRTR, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.PRIME, params.REGION, false)
+			if err != nil {
+				return types.PCRCTermini{}, err
+			}
+
+			PCRCTermini.PTR = PTR.Hash()
+			PCRCTermini.PRTR = PRTR.Hash()
+		}
+		return PCRCTermini, nil
+
+	case params.ZONE:
+		PCRCTermini := types.PCRCTermini{}
+
+		fmt.Println("Header order for PCRC in Zone", headerOrder)
+
+		// only compute PTZ and RTZ on the coincident block in zone.
+		// PTZ and RTZ are essentially a signaling mechanism to know that we are building on the right terminal header.
+		// So running this only on a coincident block makes sure that the zones can move and sync past the coincident.
+		// Just run RTZ to make sure that its linked. This check decouples this signaling and linking paradigm.
+		if headerOrder < params.REGION {
+			PTZ, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.PRIME, params.ZONE, true)
+			if err != nil {
+				return types.PCRCTermini{}, err
+			}
+			PCRCTermini.PTZ = PTZ.Hash()
+		}
+
+		if headerOrder < params.ZONE {
+			RTZ, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.REGION, params.ZONE, true)
+			if err != nil {
+				return types.PCRCTermini{}, err
+			}
+			PCRCTermini.RTZ = RTZ.Hash()
+		}
+
+		return PCRCTermini, nil
 	}
+	return types.PCRCTermini{}, errors.New("running in unsupported context")
+}
 
-	// Only check for prime twist if block is of prime order
-	if headerOrder == params.PRIME {
-		PTR, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.REGION)
-		if err != nil {
-			return common.Hash{}, err
-		}
-		PTP, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.PRIME)
-		if err != nil {
-			return common.Hash{}, err
+// PreviousCanonicalCoincidentOnPath searches the path for a cononical block of specified order in the specified slice
+//     *slice - The zone location which defines the slice in which we are validating
+//     *order - The order of the conincidence that is desired
+//     *path - Search among ancestors of this path in the specified slice
+func (bc *BlockChain) PreviousCanonicalCoincidentOnPath(header *types.Header, slice []byte, order, path int, fullSliceEqual bool) (*types.Header, error) {
+	prevTerminalHeader := header
+	for {
+		if prevTerminalHeader.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
+			return bc.GetHeaderByHash(bc.Config().GenesisHashes[0]), nil
 		}
 
-		// PCRC has failed. Rollback through the prior untwisted prime.
-		if PTR.Hash() != PTP.Hash() {
-			log.Info("Error in PCRC", "PTR:", PTR.Hash(), "RTR:", PTP.Hash())
-			if types.QuaiNetworkContext < params.REGION {
-				ptr := bc.hc.GetBlockNumber(PTR.Hash())
-				// ptr is not in our Prime chain, remove it from subordinate chains.
-				if ptr == nil {
-					bc.chainUncleFeed.Send(PTR)
+		terminalHeader, err := bc.Engine().PreviousCoincidentOnPath(bc, prevTerminalHeader, slice, order, path, fullSliceEqual)
+		if err != nil {
+			return nil, err
+		}
+
+		if terminalHeader.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
+			return bc.GetHeaderByHash(bc.Config().GenesisHashes[0]), nil
+		}
+
+		// If the current header is dominant coincident check the status with the dom node
+		if order < types.QuaiNetworkContext {
+			status := bc.domClient.GetBlockStatus(context.Background(), terminalHeader)
+			// If the header is cononical break else keep looking
+			if status == quaiclient.CanonStatTy {
+				// If we have found a non-cononical dominant coincident header, reorg to prevTerminalHeader
+				if prevTerminalHeader.Hash() != header.Hash() {
+					return nil, err
+				} else {
+					return terminalHeader, nil
 				}
 			}
-			return common.Hash{}, errors.New("there exists a prime twist")
+		} else if order == types.QuaiNetworkContext {
+			return terminalHeader, err
 		}
 
-		if PTZ.Hash() != PTR.Hash() {
-			log.Info("Error in PCRC", "PTZ:", PTZ.Hash(), "PTR:", PTR.Hash())
-			if types.QuaiNetworkContext < params.REGION {
-				ptz := bc.hc.GetBlockNumber(PTZ.Hash())
-				// ptz is not in our Prime chain, remove it from subordinate chains.
-				if ptz == nil {
-					bc.chainUncleFeed.Send(PTZ)
-				}
-			}
-			return common.Hash{}, errors.New("there exists a prime twist")
-		}
+		prevTerminalHeader = terminalHeader
 	}
+}
 
-	return PTZ.Hash(), nil
+// CheckCanonical retrieves whether or not the block to be imported is canonical. Will rollback our chain until the
+// dominant block is canonical.
+func (bc *BlockChain) CheckCanonical(header *types.Header, order int) error {
+	lastUncleHeader := &types.Header{}
+	for {
+		status := bc.domClient.GetBlockStatus(context.Background(), header)
+		// If the header is cononical break else keep looking
+		switch status {
+		case quaiclient.CanonStatTy:
+			if (lastUncleHeader != &types.Header{}) {
+				bc.ReOrgRollBack(lastUncleHeader, []*types.Header{}, []*types.Header{})
+			}
+			return nil
+		default:
+			lastUncleHeader = header
+		}
+
+		if header.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
+			return nil
+		}
+
+		terminalHeader, err := bc.Engine().PreviousCoincidentOnPath(bc, header, header.Location, order, types.QuaiNetworkContext, true)
+		if err != nil {
+			return err
+		}
+
+		if terminalHeader.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
+			return nil
+		}
+
+		header = terminalHeader
+	}
 }
 
 // calcHLCRNetDifficulty calculates the net difficulty from previous prime.
@@ -3180,7 +3511,7 @@ func (bc *BlockChain) CalcHLCRNetDifficulty(terminalHash common.Hash, header *ty
 		prevHeader := bc.GetHeaderByHash(header.ParentHash[order])
 		if prevHeader == nil {
 			// Get previous header on external chain by hash
-			prevExtBlock, err := bc.GetExternalBlock(header.ParentHash[order], header.Number[order].Uint64()-1, header.Location, uint64(order))
+			prevExtBlock, err := bc.GetExternalBlock(header.ParentHash[order], header.Location, uint64(order))
 			if err != nil {
 				return nil, err
 			}
@@ -3221,6 +3552,13 @@ func (bc *BlockChain) GetBlockHashesFromHash(hash common.Hash, max uint64) []com
 // Note: ancestor == 0 returns the same block, 1 returns its parent and so on.
 func (bc *BlockChain) GetAncestor(hash common.Hash, number, ancestor uint64, maxNonCanonical *uint64) (common.Hash, uint64) {
 	return bc.hc.GetAncestor(hash, number, ancestor, maxNonCanonical)
+}
+
+// GetAncestorWithLocation retrieves the first occurrence of a block with a given location from a given block.
+//
+// Note: location == hash location returns the same block.
+func (bc *BlockChain) GetAncestorByLocation(hash common.Hash, location []byte) (*types.Header, error) {
+	return bc.hc.GetAncestorByLocation(hash, location)
 }
 
 // GetHeaderByNumber retrieves a block header from the database by number,

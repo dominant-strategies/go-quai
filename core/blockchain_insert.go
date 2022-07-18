@@ -142,6 +142,14 @@ func (it *insertIterator) peek() (*types.Block, error) {
 	return it.chain[it.index+1], nil
 }
 
+// current returns the current header that is being processed, or nil.
+func (it *insertIterator) current() *types.Header {
+	if it.index == -1 || it.index >= len(it.chain) {
+		return nil
+	}
+	return it.chain[it.index].Header()
+}
+
 // previous returns the previous header that was being processed, or nil.
 func (it *insertIterator) previous() *types.Header {
 	if it.index < 1 {

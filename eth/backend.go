@@ -190,7 +190,8 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			ExternalBlockJournal: stack.ResolvePath(config.ExternalBlocksCacheJournal),
 		}
 	)
-	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, chainConfig, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit)
+
+	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, chainConfig, eth.config.DomUrl, eth.config.SubUrls, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit)
 	if err != nil {
 		return nil, err
 	}

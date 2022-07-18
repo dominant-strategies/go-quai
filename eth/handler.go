@@ -448,6 +448,10 @@ func (h *handler) BroadcastBlock(block *types.Block, extBlocks []*types.External
 				log.Error("Error calculating block order in BroadcastBlock, err: ", err)
 				return
 			}
+			if block.Header() == nil {
+				log.Error("Error header is nil for block in BroadcastBlock")
+				return
+			}
 			var tempTD = big.NewInt(0)
 			parentPrimeTd := h.chain.GetTd(block.Header().ParentHash[types.QuaiNetworkContext], block.Header().Number[types.QuaiNetworkContext].Uint64()-1)[0]
 			parentRegionTd := h.chain.GetTd(block.Header().ParentHash[types.QuaiNetworkContext], block.Header().Number[types.QuaiNetworkContext].Uint64()-1)[1]

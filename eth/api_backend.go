@@ -128,6 +128,30 @@ func (b *EthAPIBackend) ReOrgRollBack(header *types.Header, validDoms []*types.H
 	return b.eth.blockchain.ReOrgRollBack(header, validDoms, invalidDoms)
 }
 
+func (b *EthAPIBackend) GetExternalBlockByHashAndContext(hash common.Hash, context int) (*types.ExternalBlock, error) {
+	return b.eth.blockchain.GetExternalBlockByHashAndContext(hash, context)
+}
+
+func (b *EthAPIBackend) GetSubordinateSet(stopHash common.Hash, location []byte) ([]common.Hash, error) {
+	return b.eth.blockchain.GetSubordinateSet(stopHash, location)
+}
+
+func (b *EthAPIBackend) GetBlockStatus(header *types.Header) core.WriteStatus {
+	return b.eth.blockchain.GetBlockStatus(header)
+}
+
+func (b *EthAPIBackend) GetAncestorByLocation(hash common.Hash, location []byte) (*types.Header, error) {
+	return b.eth.blockchain.GetAncestorByLocation(hash, location)
+}
+
+func (b *EthAPIBackend) GetTerminusAtOrder(header *types.Header, order int) (common.Hash, error) {
+	return b.eth.blockchain.GetTerminusAtOrder(header, order)
+}
+
+func (b *EthAPIBackend) PCRC(header *types.Header, order int) (types.PCRCTermini, error) {
+	return b.eth.blockchain.PCRC(header, order)
+}
+
 func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
 	return b.eth.blockchain.GetBlockByHash(hash), nil
 }

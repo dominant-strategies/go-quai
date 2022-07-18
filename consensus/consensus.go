@@ -52,7 +52,7 @@ type ChainHeaderReader interface {
 	GetLinkExternalBlocks(header *types.Header) ([]*types.ExternalBlock, error)
 
 	// GetExternalBlock retrieves an external block header by its hash and context.
-	GetExternalBlock(hash common.Hash, number uint64, location []byte, context uint64) (*types.ExternalBlock, error)
+	GetExternalBlock(hash common.Hash, location []byte, context uint64) (*types.ExternalBlock, error)
 
 	// QueueAndRetrieveExtBlocks passes external blocks to the queue and returns the amount available for this block
 	QueueAndRetrieveExtBlocks(externalBlocks []*types.ExternalBlock, header *types.Header) []*types.ExternalBlock
@@ -140,7 +140,7 @@ type Engine interface {
 	GetLinkExternalBlocks(chain ChainHeaderReader, header *types.Header, logging bool) ([]*types.ExternalBlock, error)
 
 	// PreviousCoincidentOnPath searches the path for a block of specified order in the specified slice
-	PreviousCoincidentOnPath(chain ChainHeaderReader, header *types.Header, slice []byte, order, path int) (*types.Header, error)
+	PreviousCoincidentOnPath(chain ChainHeaderReader, header *types.Header, slice []byte, order, path int, fullSliceEqual bool) (*types.Header, error)
 
 	// Seal generates a new sealing request for the given input block and pushes
 	// the result into the given channel.

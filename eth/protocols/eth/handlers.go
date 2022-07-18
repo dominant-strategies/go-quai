@@ -236,7 +236,7 @@ func answerGetReceiptsQuery(backend Backend, query GetReceiptsPacket, peer *Peer
 		// Retrieve the requested block's receipts
 		results := backend.Chain().GetReceiptsByHash(hash)
 		if results == nil {
-			if header := backend.Chain().GetHeaderByHash(hash); header == nil || !types.IsEqualHashSlice(header.ReceiptHash, types.EmptyRootHash) {
+			if header := backend.Chain().GetHeaderByHash(hash); header == nil || header.ReceiptHash[types.QuaiNetworkContext] != types.EmptyRootHash[types.QuaiNetworkContext] {
 				continue
 			}
 		}
@@ -270,7 +270,7 @@ func answerGetExtBlocksQuery(backend Backend, query GetExtBlocksPacket, peer *Pe
 		}
 		results, err := backend.Chain().GetLinkExternalBlocks(header)
 		if err != nil {
-			log.Info("answerGetExtBlocks: Unable to retrieve ext blocks", "hash", hash, "len", len(results))
+			log.Debug("answerGetExtBlocks: Unable to retrieve ext blocks", "hash", hash, "len", len(results))
 			continue
 		}
 		// If known, encode and queue for response packet
