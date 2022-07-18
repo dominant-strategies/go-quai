@@ -1,7 +1,7 @@
 goQuai:
   image:
     name: quainetwork/go-quai
-    version: thinnest
+    version: v0.1.0-pre.3
   env: "quai-dev"
   replicas: 1
   network: "ropsten"
