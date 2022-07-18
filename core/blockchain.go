@@ -2073,7 +2073,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		return bc.insertSideChain(block, it)
 
 	// First block is future, shove it (and all children) to the future queue (unknown ancestor)
-	case errors.Is(err, consensus.ErrFutureBlock) || (errors.Is(err, consensus.ErrUnknownAncestor) && bc.futureBlocks.Contains(it.first().ParentHash())):
+	case errors.Is(err, consensus.ErrFutureBlock) || (errors.Is(err, consensus.ErrUnknownAncestor)):
 		for block != nil && (it.index == 0 || errors.Is(err, consensus.ErrUnknownAncestor)) {
 			log.Debug("Future block, postponing import", "number", block.Number(), "hash", block.Hash())
 			if err := bc.addFutureBlock(block); err != nil {
@@ -2085,7 +2085,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		stats.ignored += it.remaining()
 
 		// If there are any still remaining, mark as ignored
-		return it.index, err
+		return it.index, nil
 
 		// Some other error occurred, abort
 	case err != nil:
@@ -2195,15 +2195,33 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 			return it.index, err
 		}
 
-		_, err = bc.PCRC(block.Header(), order)
-		if err != nil {
-			if err.Error() == "subordinate chain not synced" {
-				if err := bc.addFutureBlock(block); err != nil {
+		fmt.Println("Running CheckCanonical and PCRC for block", block.Header().Number, block.Header().Location, block.Header().Hash())
+
+		if order < types.QuaiNetworkContext {
+			err := bc.CheckCanonical(block.Header(), order)
+			if err != nil {
+				if err.Error() == "subordinate chain not synced" {
+					fmt.Println("dom not synced, adding to future blocks", block.Header().Hash())
+					if err := bc.addFutureBlock(block); err != nil {
+						return it.index, err
+					}
+					return it.index, nil
+				} else {
 					return it.index, err
 				}
-				return it.index, nil
-			} else {
-				return it.index, err
+			}
+		} else if types.QuaiNetworkContext != params.ZONE {
+			_, err = bc.PCRC(block.Header(), order)
+			if err != nil {
+				if err.Error() == "subordinate chain not synced" {
+					fmt.Println("adding to future blocks", block.Header().Hash())
+					if err := bc.addFutureBlock(block); err != nil {
+						return it.index, err
+					}
+					return it.index, nil
+				} else {
+					return it.index, err
+				}
 			}
 		}
 
@@ -2255,7 +2273,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 
 		linkExtBlocks, err := bc.engine.GetLinkExternalBlocks(bc, block.Header(), true)
 		if err != nil {
-			bc.reportBlock(block, receipts, err)
+			// bc.reportBlock(block, receipts, err)
 			bc.chainUncleFeed.Send(block.Header())
 			return it.index, err
 		}
@@ -2706,7 +2724,7 @@ func (bc *BlockChain) skipBlock(err error, it *insertIterator) bool {
 }
 
 func (bc *BlockChain) update() {
-	futureTimer := time.NewTicker(5 * time.Second)
+	futureTimer := time.NewTicker(1 * time.Second)
 	defer futureTimer.Stop()
 	defer bc.wg.Done()
 	for {
@@ -3309,16 +3327,17 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTer
 		PCRCTermini.PRTP = PRTP.Hash()
 
 		if (PTP.Hash() != PCRCTermini.PTR) && (PCRCTermini.PTR != PCRCTermini.PTZ) && (PCRCTermini.PTZ != PTP.Hash()) {
+			fmt.Println("PTP", PTP.Hash(), "PTR", PCRCTermini.PTR, "PTZ", PCRCTermini.PTZ)
 			return types.PCRCTermini{}, errors.New("there exists a Prime twist (PTP != PTR != PTZ")
 		}
 		if PRTP.Hash() != PCRCTermini.PRTR {
+			fmt.Println("PRTP", PRTP.Hash(), PCRCTermini.PRTR)
 			return types.PCRCTermini{}, err
 		}
 
 		return PCRCTermini, nil
 
 	case params.REGION:
-
 		RTR, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.REGION, params.REGION, true)
 		if err != nil {
 			return types.PCRCTermini{}, err
@@ -3338,6 +3357,7 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTer
 		}
 
 		if RTR.Hash() != PCRCTermini.RTZ {
+			fmt.Println("RTR", RTR.Number, RTR.Hash(), "RTZ", PCRCTermini.RTZ)
 			return types.PCRCTermini{}, errors.New("there exists a Region twist (RTR != RTZ)")
 		}
 		if headerOrder < params.REGION {
@@ -3358,6 +3378,8 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTer
 
 	case params.ZONE:
 		PCRCTermini := types.PCRCTermini{}
+
+		fmt.Println("Header order for PCRC in Zone", headerOrder)
 
 		// only compute PTZ and RTZ on the coincident block in zone.
 		// PTZ and RTZ are essentially a signaling mechanism to know that we are building on the right terminal header.
@@ -3407,7 +3429,6 @@ func (bc *BlockChain) PreviousCanonicalCoincidentOnPath(header *types.Header, sl
 		// If the current header is dominant coincident check the status with the dom node
 		if order < types.QuaiNetworkContext {
 			status := bc.domClient.GetBlockStatus(context.Background(), terminalHeader)
-
 			// If the header is cononical break else keep looking
 			if status == quaiclient.CanonStatTy {
 				// If we have found a non-cononical dominant coincident header, reorg to prevTerminalHeader
@@ -3418,13 +3439,33 @@ func (bc *BlockChain) PreviousCanonicalCoincidentOnPath(header *types.Header, sl
 				}
 				return nil, err
 			}
-
 		} else if order == types.QuaiNetworkContext {
 			return terminalHeader, err
 		}
 
 		prevTerminalHeader = terminalHeader
 	}
+}
+
+// CheckCanonical checks a client for whether or not a block is considered canonical.
+func (bc *BlockChain) CheckCanonical(header *types.Header, order int) error {
+	status := bc.domClient.GetBlockStatus(context.Background(), header)
+	fmt.Println("CheckCanonical status", status)
+	// If the header is cononical break else keep looking
+	switch status {
+	case quaiclient.CanonStatTy:
+		fmt.Println("dominant block is canonical", header.Number, header.Location, header.Hash())
+		return nil
+	case quaiclient.SideStatTy:
+		fmt.Println("dominant block is uncled", header.Number, header.Location, header.Hash())
+		bc.PreviousCanonicalCoincidentOnPath(header, header.Location, order, types.QuaiNetworkContext, true)
+		return consensus.ErrSubordinateNotSynced
+	case quaiclient.UnknownStatTy:
+		// do nothing, keep going until we find canonical
+		fmt.Println("dominant block is unknown", header.Number, header.Location, header.Hash())
+		return consensus.ErrSubordinateNotSynced
+	}
+	return nil
 }
 
 // calcHLCRNetDifficulty calculates the net difficulty from previous prime.
