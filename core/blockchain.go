@@ -285,7 +285,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	// only set the domClient if the chain is not prime
 	if types.QuaiNetworkContext != params.PRIME {
 		bc.domClient = MakeDomClient(domClientUrl)
-		// go bc.subscribeDomHead()
 	}
 
 	bc.subClients = make([]*quaiclient.Client, 3)
@@ -2273,7 +2272,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 
 		linkExtBlocks, err := bc.engine.GetLinkExternalBlocks(bc, block.Header(), true)
 		if err != nil {
-			// bc.reportBlock(block, receipts, err)
+			bc.reportBlock(block, receipts, err)
 			bc.chainUncleFeed.Send(block.Header())
 			return it.index, err
 		}
@@ -3027,7 +3026,6 @@ func (bc *BlockChain) GetExternalBlockTraceSet(stopHash common.Hash, newHeader *
 
 		// if the newHeader is before genesis
 		if newHeader.Number[path].Uint64() == 1 {
-			fmt.Println("stopping at newHeader is 1", newHeader.Hash())
 			return extBlocks, nil
 		}
 		// get the externalBlocks
@@ -3036,17 +3034,13 @@ func (bc *BlockChain) GetExternalBlockTraceSet(stopHash common.Hash, newHeader *
 			return nil, errors.New("error finding external block in external block trace set")
 		}
 		if extNewBlock == nil {
-			fmt.Println("unable to find", newHeader.ParentHash[path], path)
 			return nil, errors.New("unable to find external block by hash and context")
 		}
-
-		fmt.Println("appending extNewBlock", extNewBlock.Hash())
 
 		extBlocks = append(extBlocks, extNewBlock)
 
 		// If the common ancestor was found, bail out
 		if stopHash == newHeader.Hash() {
-			fmt.Println("returning in stopHash equal")
 			return extBlocks, nil
 		}
 		newHeader = extNewBlock.Header()
@@ -3433,11 +3427,10 @@ func (bc *BlockChain) PreviousCanonicalCoincidentOnPath(header *types.Header, sl
 			if status == quaiclient.CanonStatTy {
 				// If we have found a non-cononical dominant coincident header, reorg to prevTerminalHeader
 				if prevTerminalHeader.Hash() != header.Hash() {
-					bc.ReOrgRollBack(prevTerminalHeader, []*types.Header{}, []*types.Header{})
+					return nil, err
 				} else {
 					return terminalHeader, nil
 				}
-				return nil, err
 			}
 		} else if order == types.QuaiNetworkContext {
 			return terminalHeader, err
@@ -3447,25 +3440,38 @@ func (bc *BlockChain) PreviousCanonicalCoincidentOnPath(header *types.Header, sl
 	}
 }
 
-// CheckCanonical checks a client for whether or not a block is considered canonical.
+// CheckCanonical retrieves whether or not the block to be imported is canonical. Will rollback our chain until the
+// dominant block is canonical.
 func (bc *BlockChain) CheckCanonical(header *types.Header, order int) error {
-	status := bc.domClient.GetBlockStatus(context.Background(), header)
-	fmt.Println("CheckCanonical status", status)
-	// If the header is cononical break else keep looking
-	switch status {
-	case quaiclient.CanonStatTy:
-		fmt.Println("dominant block is canonical", header.Number, header.Location, header.Hash())
-		return nil
-	case quaiclient.SideStatTy:
-		fmt.Println("dominant block is uncled", header.Number, header.Location, header.Hash())
-		bc.PreviousCanonicalCoincidentOnPath(header, header.Location, order, types.QuaiNetworkContext, true)
-		return consensus.ErrSubordinateNotSynced
-	case quaiclient.UnknownStatTy:
-		// do nothing, keep going until we find canonical
-		fmt.Println("dominant block is unknown", header.Number, header.Location, header.Hash())
-		return consensus.ErrSubordinateNotSynced
+	lastUncleHeader := &types.Header{}
+	for {
+		status := bc.domClient.GetBlockStatus(context.Background(), header)
+		// If the header is cononical break else keep looking
+		switch status {
+		case quaiclient.CanonStatTy:
+			if (lastUncleHeader != &types.Header{}) {
+				bc.ReOrgRollBack(lastUncleHeader, []*types.Header{}, []*types.Header{})
+			}
+			return nil
+		default:
+			lastUncleHeader = header
+		}
+
+		if header.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
+			return nil
+		}
+
+		terminalHeader, err := bc.Engine().PreviousCoincidentOnPath(bc, header, header.Location, order, types.QuaiNetworkContext, true)
+		if err != nil {
+			return err
+		}
+
+		if terminalHeader.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
+			return nil
+		}
+
+		header = terminalHeader
 	}
-	return nil
 }
 
 // calcHLCRNetDifficulty calculates the net difficulty from previous prime.
@@ -3520,55 +3526,6 @@ func (bc *BlockChain) CalcHLCRNetDifficulty(terminalHash common.Hash, header *ty
 	}
 
 	return []*big.Int{primeNd, regionNd, zoneNd}, nil
-}
-
-// subscribeDomHead listens to dominant go-quai node head events and will update state accordingly.
-func (bc *BlockChain) subscribeDomHead() {
-	newHeadChannel := make(chan *types.Header, 1)
-	sub, err := bc.domClient.SubscribeNewHead(context.Background(), newHeadChannel)
-	if err != nil {
-		log.Crit("Failed to subscribe to the new head notifications ", "err", err)
-	}
-	defer sub.Unsubscribe()
-
-	for {
-		select {
-		case newHead := <-newHeadChannel:
-			fmt.Println("new head in dom", newHead.Hash())
-
-			if !bytes.Equal(newHead.Location, bc.chainConfig.Location) {
-				newHead, err = bc.domClient.GetAncestorByLocation(context.Background(), newHead.Hash(), bc.chainConfig.Location)
-				if err != nil {
-					fmt.Println(err)
-					continue
-				}
-			}
-
-			// err := bc.PCRC(newHead)
-			// if err != nil {
-			// 	fmt.Println("err in PCRC", err)
-			// }
-
-			extBlockSet, err := bc.domClient.GetSubordinateSet(context.Background(), bc.CurrentBlock().Hash(), bc.chainConfig.Location)
-			if err != nil {
-				fmt.Println("cannot get sub set", err)
-				continue
-			}
-
-			newBlocks := make([]*types.Block, 0)
-			for _, newHash := range extBlockSet {
-				extBlock, err := bc.domClient.GetExternalBlockByHashAndContext(context.Background(), newHash, types.QuaiNetworkContext)
-				if err != nil {
-					fmt.Println("err getting ext block", newHash)
-					continue
-				}
-				block := types.NewBlockWithHeader(extBlock.Header()).WithBody(extBlock.Transactions(), extBlock.Uncles())
-				newBlocks = append(newBlocks, block)
-			}
-
-			bc.InsertChain(newBlocks)
-		}
-	}
 }
 
 // HasHeader checks if a block header is present in the database or not, caching
