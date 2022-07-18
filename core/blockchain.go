@@ -566,8 +566,8 @@ func (bc *BlockChain) SetHead(head uint64) error {
 //
 // The method returns the block number where the requested root cap was found.
 func (bc *BlockChain) SetHeadBeyondRoot(head uint64, root common.Hash) (uint64, error) {
-	bc.chainmu.Lock()
-	defer bc.chainmu.Unlock()
+	// bc.chainmu.Lock()
+	// defer bc.chainmu.Unlock()
 
 	// Track the block number of the requested root hash
 	var rootNumber uint64 // (no root == always 0)
@@ -1789,8 +1789,8 @@ func (bc *BlockChain) AddExternalBlock(block *types.ExternalBlock) error {
 // the current header to the position where the reorg took place in a higher context
 func (bc *BlockChain) ReOrgRollBack(header *types.Header, validHeaders []*types.Header, invalidHeaders []*types.Header) error {
 	log.Info("Rolling back header beyond", "hash", header.Hash(), "from", bc.CurrentBlock().Header().Hash())
-	bc.reorgmu.Lock()
-	defer bc.reorgmu.Unlock()
+	// bc.reorgmu.Lock()
+	// defer bc.reorgmu.Unlock()
 	var (
 		deletedTxs  types.Transactions
 		deletedLogs [][]*types.Log
