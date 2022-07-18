@@ -2197,7 +2197,14 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 
 		_, err = bc.PCRC(block.Header(), order)
 		if err != nil {
-			return it.index, err
+			if err.Error() == "subordinate chain not synced" {
+				if err := bc.addFutureBlock(block); err != nil {
+					return it.index, err
+				}
+				return it.index, nil
+			} else {
+				return it.index, err
+			}
 		}
 
 		// If in Prime or Region, take to see if we have already included the hash in the lower level.
@@ -3294,6 +3301,10 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTer
 			return types.PCRCTermini{}, err
 		}
 
+		if (PCRCTermini.PTR == common.Hash{} || PCRCTermini.PRTR == common.Hash{}) {
+			return PCRCTermini, consensus.ErrSubordinateNotSynced
+		}
+
 		PCRCTermini.PTP = PTP.Hash()
 		PCRCTermini.PRTP = PRTP.Hash()
 
@@ -3316,11 +3327,14 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTer
 		if bc.subClients[slice[1]-1] == nil {
 			return types.PCRCTermini{}, nil
 		}
-		fmt.Println(headerOrder)
+
 		PCRCTermini, err := bc.subClients[slice[1]-1].CheckPCRC(context.Background(), header, headerOrder)
 		if err != nil {
-			fmt.Println(err)
 			return types.PCRCTermini{}, err
+		}
+
+		if (PCRCTermini.RTZ == common.Hash{}) {
+			return PCRCTermini, consensus.ErrSubordinateNotSynced
 		}
 
 		if RTR.Hash() != PCRCTermini.RTZ {
@@ -3349,25 +3363,22 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTer
 		// PTZ and RTZ are essentially a signaling mechanism to know that we are building on the right terminal header.
 		// So running this only on a coincident block makes sure that the zones can move and sync past the coincident.
 		// Just run RTZ to make sure that its linked. This check decouples this signaling and linking paradigm.
-		if headerOrder < params.ZONE {
+		if headerOrder < params.REGION {
 			PTZ, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.PRIME, params.ZONE, true)
 			if err != nil {
 				return types.PCRCTermini{}, err
 			}
+			PCRCTermini.PTZ = PTZ.Hash()
+		}
 
+		if headerOrder < params.ZONE {
 			RTZ, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.REGION, params.ZONE, true)
 			if err != nil {
 				return types.PCRCTermini{}, err
 			}
-
-			PCRCTermini.PTZ = PTZ.Hash()
 			PCRCTermini.RTZ = RTZ.Hash()
-		} else {
-			// compute ZTZ to check if the zone block is syched
-			if header.ParentHash[types.QuaiNetworkContext] != bc.CurrentBlock().Hash() {
-				return types.PCRCTermini{}, errors.New("the zone block is not linked to the current head")
-			}
 		}
+
 		return PCRCTermini, nil
 	}
 	return types.PCRCTermini{}, errors.New("running in unsupported context")
@@ -3399,7 +3410,6 @@ func (bc *BlockChain) PreviousCanonicalCoincidentOnPath(header *types.Header, sl
 
 			// If the header is cononical break else keep looking
 			if status == quaiclient.CanonStatTy {
-
 				// If we have found a non-cononical dominant coincident header, reorg to prevTerminalHeader
 				if prevTerminalHeader != header {
 					bc.ReOrgRollBack(prevTerminalHeader, []*types.Header{}, []*types.Header{})
