@@ -1,7 +1,7 @@
 goQuai:
   image:
     name: quainetwork/go-quai
-    version: "0.1.0-pre.3"
+    version: "v0.1.0-pre.4"
   env: "quai-dev"
   replicas: 1
   chains:
