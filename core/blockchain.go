@@ -2971,7 +2971,7 @@ func (bc *BlockChain) GetExternalBlock(hash common.Hash, location []byte, contex
 	}
 
 	if block == nil {
-		block = bc.requestExternalBlock(hash, location, context)
+		block = bc.requestExternalBlock(hash, context)
 		if block == nil {
 			return &types.ExternalBlock{}, errExtBlockNotFound
 		}
@@ -2980,7 +2980,7 @@ func (bc *BlockChain) GetExternalBlock(hash common.Hash, location []byte, contex
 }
 
 // requestExternalBlock sends an external block event to the missingExternalBlockFeed in order to be fulfilled by a manager or client.
-func (bc *BlockChain) requestExternalBlock(hash common.Hash, location []byte, blockContext uint64) *types.ExternalBlock {
+func (bc *BlockChain) requestExternalBlock(hash common.Hash, blockContext uint64) *types.ExternalBlock {
 	fmt.Println("requesting external block")
 	if bc.domClient != nil {
 		extBlock := FindExternalBlock(bc.domClient, hash, blockContext)
@@ -3043,7 +3043,7 @@ func (bc *BlockChain) GetExternalBlockByHashAndContext(hash common.Hash, context
 func (bc *BlockChain) GetExternalBlockTraceSet(stopHash common.Hash, newHeader *types.Header, path int) ([]*types.ExternalBlock, error) {
 	extBlocks := []*types.ExternalBlock{}
 	// get the externalBlocks
-	extNewBlock, err := bc.GetExternalBlockByHashAndContext(newHeader.Hash(), path)
+	extNewBlock, err := bc.GetExternalBlock(newHeader.Hash(), []byte{}, uint64(path))
 	if err != nil {
 		return nil, errors.New("error finding external block in external block trace set")
 	}
@@ -3055,7 +3055,7 @@ func (bc *BlockChain) GetExternalBlockTraceSet(stopHash common.Hash, newHeader *
 			return extBlocks, nil
 		}
 		// get the externalBlocks
-		extNewBlock, err = bc.GetExternalBlockByHashAndContext(newHeader.ParentHash[path], path)
+		extNewBlock, err = bc.GetExternalBlock(newHeader.ParentHash[path], []byte{}, uint64(path))
 		if err != nil {
 			return nil, errors.New("error finding external block in external block trace set")
 		}
