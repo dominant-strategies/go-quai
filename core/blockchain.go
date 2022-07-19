@@ -2191,7 +2191,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		}
 
 		if types.QuaiNetworkContext < params.ZONE {
-			err := bc.CheckSubordinateHeader(block.Header(), order)
+			err := bc.CheckSubordinateHeader(block.Header())
 			if err != nil {
 				return it.index, err
 			}
@@ -3508,8 +3508,8 @@ func (bc *BlockChain) CheckCanonical(header *types.Header, order int) error {
 
 // CheckSubordinateHeader asks the subordinate chain what their header is and will manifest
 // the subordinate chain to the proper head.
-func (bc *BlockChain) CheckSubordinateHeader(header *types.Header, order int) error {
-	subClient := bc.subClients[header.Location[order]-1]
+func (bc *BlockChain) CheckSubordinateHeader(header *types.Header) error {
+	subClient := bc.subClients[header.Location[types.QuaiNetworkContext]-1]
 	// Do not validate PCRC on a subclient you do not have.
 	if subClient == nil {
 		return nil
@@ -3520,8 +3520,8 @@ func (bc *BlockChain) CheckSubordinateHeader(header *types.Header, order int) er
 		return err
 	}
 	// If sub is not ready to run PCRC on a dominant block, sync the subordinate chain.
-	if subHead.Hash() != header.ParentHash[order+1] {
-		extBlocks, err := bc.GetExternalBlockTraceSet(subHead.Hash(), header, order+1)
+	if subHead.Hash() != header.ParentHash[types.QuaiNetworkContext+1] {
+		extBlocks, err := bc.GetExternalBlockTraceSet(subHead.Hash(), header, types.QuaiNetworkContext+1)
 		if err != nil {
 			log.Warn("Error in extBlockTrace", "err", err)
 			return err
