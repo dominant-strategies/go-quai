@@ -661,10 +661,14 @@ func (s *PublicBlockChainQuaiAPI) SendExternalBlock(ctx context.Context, raw jso
 	}
 
 	uncles := make([]*types.Header, len(body.Uncles))
-	copy(uncles, body.Uncles)
+	for i, uncle := range body.Uncles {
+		uncles[i] = uncle
+	}
 
 	receipts := make([]*types.Receipt, len(body.Receipts))
-	copy(receipts, body.Receipts)
+	for i, receipt := range body.Receipts {
+		receipts[i] = receipt
+	}
 
 	block := types.NewExternalBlockWithHeader(head).WithBody(txs, uncles, receipts, body.Context)
 
