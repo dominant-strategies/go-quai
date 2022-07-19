@@ -1,7 +1,11 @@
 goQuai:
   image:
     name: quainetwork/go-quai
+<<<<<<< HEAD
     version: v0.1.0-pre.3
+=======
+    version: "0.1.0-pre.3"
+>>>>>>> 84f7cbf84 (go.yml -> fixed bug where Chart.yaml and values.yaml were blank)
   env: "quai-dev"
   replicas: 1
   network: "ropsten"
