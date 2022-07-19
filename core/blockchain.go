@@ -3352,7 +3352,7 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTer
 		}
 		if PRTP.Hash() != PCRCTermini.PRTR {
 			fmt.Println("PRTP", PRTP.Hash(), PCRCTermini.PRTR)
-			return types.PCRCTermini{}, err
+			return types.PCRCTermini{}, errors.New("there exists a Prime twist (PRTP != PRTR")
 		}
 
 		return PCRCTermini, nil
@@ -3534,11 +3534,13 @@ func (bc *BlockChain) CheckSubordinateHeader(header *types.Header, order int) er
 
 		log.Info("Sending blocks to subordinate", "len", len(extBlocks), "from", subHead.Number, "location", header.Location, "hash", header.Hash())
 		for _, extBlock := range extBlocks {
-			block := types.NewBlockWithHeader(extBlock.Header()).WithBody(extBlock.Transactions(), extBlock.Uncles())
-			sealed := block.WithSeal(block.Header())
-			err := subClient.SendMinedBlock(context.Background(), sealed, true, true)
-			if err != nil {
-				return err
+			if extBlock != nil {
+				block := types.NewBlockWithHeader(extBlock.Header()).WithBody(extBlock.Transactions(), extBlock.Uncles())
+				sealed := block.WithSeal(block.Header())
+				err := subClient.SendMinedBlock(context.Background(), sealed, true, true)
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}
