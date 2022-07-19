@@ -202,9 +202,7 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, co
 		return clique.New(chainConfig.Clique, db)
 	}
 	// Otherwise assume proof-of-work
-	engine, err := blake3.New(blake3.Config{
-		NotifyFull: config.NotifyFull,
-	}, notify, noverify)
+	engine, err := blake3.New(*config, notify, noverify)
 	if nil != err {
 		log.Fatal(err)
 	}

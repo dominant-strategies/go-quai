@@ -1505,6 +1505,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	log.Debug("Sanitizing Go's GC trigger", "percent", int(gogc))
 	godebug.SetGCPercent(int(gogc))
 
+	if ctx.GlobalIsSet(FakePoWFlag.Name) {
+		cfg.Blake3.Fakepow = true
+	}
 	if ctx.GlobalIsSet(SyncModeFlag.Name) {
 		cfg.SyncMode = *GlobalTextMarshaler(ctx, SyncModeFlag.Name).(*downloader.SyncMode)
 	}
@@ -1873,7 +1876,11 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 	if config.Clique != nil {
 		engine = clique.New(config.Clique, chainDb)
 	} else {
-		engine, _ = blake3.New(blake3.Config{}, nil, false)
+		blake3Config := ethconfig.Defaults.Blake3
+		if ctx.Bool(FakePoWFlag.Name) {
+			blake3Config.Fakepow = true
+		}
+		engine, _ = blake3.New(blake3Config, nil, false)
 	}
 	if gcmode := ctx.GlobalString(GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {
 		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)

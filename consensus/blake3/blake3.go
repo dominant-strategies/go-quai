@@ -51,9 +51,6 @@ type Blake3 struct {
 
 // Creates a new Blake3 engine
 func New(config Config, notify []string, noverify bool) (*Blake3, error) {
-	// Do not allow Fakepow for a real consensus engine
-	config.Fakepow = false
-
 	if config.Log == nil {
 		config.Log = log.Root()
 	}
