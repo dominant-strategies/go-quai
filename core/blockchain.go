@@ -2981,11 +2981,9 @@ func (bc *BlockChain) GetExternalBlock(hash common.Hash, location []byte, contex
 
 // requestExternalBlock sends an external block event to the missingExternalBlockFeed in order to be fulfilled by a manager or client.
 func (bc *BlockChain) requestExternalBlock(hash common.Hash, blockContext uint64) *types.ExternalBlock {
-	fmt.Println("requesting external block")
 	if bc.domClient != nil {
 		extBlock := FindExternalBlock(bc.domClient, hash, blockContext)
 		if extBlock != nil {
-			fmt.Println("found", extBlock.Hash())
 			return extBlock
 		}
 	}
@@ -2994,7 +2992,6 @@ func (bc *BlockChain) requestExternalBlock(hash common.Hash, blockContext uint64
 		if client != nil {
 			extBlock := FindExternalBlock(client, hash, blockContext)
 			if extBlock != nil {
-				fmt.Println("found", extBlock.Hash())
 				return extBlock
 			}
 		}
@@ -3475,6 +3472,7 @@ func (bc *BlockChain) CheckCanonical(header *types.Header, order int) error {
 		switch status {
 		case quaiclient.CanonStatTy:
 			if (lastUncleHash != common.Hash{}) {
+				fmt.Println("header", header.Number, header.Hash(), lastUncleHeader.Number, lastUncleHash)
 				bc.ReOrgRollBack(lastUncleHeader, []*types.Header{}, []*types.Header{})
 				return consensus.ErrSubordinateNotSynced
 			}
