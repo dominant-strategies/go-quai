@@ -91,9 +91,9 @@ jobs:
       run: awk -F. '{print $1"."$2"."$3"."$4+1}' VERSION > tmp && mv tmp VERSION
 
     - name: Update Chart.yaml version
-      run: yq eval -i ".appVersion=\"${{ env.VERSION }}\"" ./helm/Chart.yaml
+      run: yq eval -i ".appVersion=\"$(cat VERSION)\"" ./helm/Chart.yaml
     - name: Update values.yaml version
-      run: yq eval -i ".goQuai.image.version=\"${{ env.VERSION }}\"" ./helm/values.yaml
+      run: yq eval -i ".goQuai.image.version=\"$(cat VERSION)\"" ./helm/values.yaml
 
     - uses: stefanzweifel/git-auto-commit-action@v4
       with:
