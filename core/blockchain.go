@@ -1747,14 +1747,11 @@ func (bc *BlockChain) GetBlockStatus(header *types.Header) WriteStatus {
 	canonHash := bc.GetCanonicalHash(header.Number[types.QuaiNetworkContext].Uint64())
 	fmt.Println("canonHash", canonHash, "headerHash", header.Hash(), header.Number, header.Location)
 	if (canonHash == common.Hash{}) {
-		fmt.Println("returning UnknownStatTy for subordinate")
 		return UnknownStatTy
 	}
 	if canonHash != header.Hash() {
-		fmt.Println("returning SideStatTy for subordinate")
 		return SideStatTy
 	}
-	fmt.Println("returning CanonStatTy for subordinate")
 	return CanonStatTy
 }
 
@@ -2210,6 +2207,39 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 				}
 			}
 		} else if types.QuaiNetworkContext != params.ZONE {
+			subClient := bc.subClients[block.Header().Location[order]-1]
+
+			// Do not validate PCRC on a subclient you do not have.
+			if subClient != nil {
+				subHead, err := subClient.HeaderByNumber(context.Background(), nil)
+				if err != nil {
+					return it.index, err
+				}
+
+				fmt.Println("current subHead", subHead.Number, subHead.Hash())
+
+				// If sub is not ready to run PCRC on a dominant block, sync the subordinate chain.
+				if subHead.Hash() != block.Header().ParentHash[order+1] {
+					extBlocks, err := bc.GetExternalBlockTraceSet(subHead.Hash(), block.Header(), order+1)
+					if err != nil {
+						return it.index, err
+					}
+					for i, j := 0, len(extBlocks)-1; i < j; i, j = i+1, j-1 {
+						extBlocks[i], extBlocks[j] = extBlocks[j], extBlocks[i]
+					}
+
+					for _, extBlock := range extBlocks {
+						fmt.Println("sending ext block to sub to sync", extBlock.Header().Location, extBlock.Header().Number, extBlock.Hash())
+						block := types.NewBlockWithHeader(extBlock.Header()).WithBody(extBlock.Transactions(), extBlock.Uncles())
+						sealed := block.WithSeal(block.Header())
+						err := subClient.SendMinedBlock(context.Background(), sealed, true, true)
+						if err != nil {
+							return it.index, err
+						}
+					}
+				}
+			}
+
 			_, err = bc.PCRC(block.Header(), order)
 			if err != nil {
 				if err.Error() == "subordinate chain not synced" {
@@ -2979,22 +3009,47 @@ func (bc *BlockChain) GetExternalBlock(hash common.Hash, location []byte, contex
 }
 
 // requestExternalBlock sends an external block event to the missingExternalBlockFeed in order to be fulfilled by a manager or client.
-func (bc *BlockChain) requestExternalBlock(hash common.Hash, location []byte, context uint64) *types.ExternalBlock {
-	bc.missingExternalBlockFeed.Send(MissingExternalBlock{Hash: hash, Location: location, Context: int(context)})
-	for i := 0; i < params.ExternalBlockLookupLimit; i++ {
-		time.Sleep(time.Duration(params.ExternalBlockLookupDelay) * time.Millisecond)
-		// Lookup block in externalBlocks cache
-		key := types.ExtBlockCacheKey(context, hash)
-		if block, ok := bc.externalBlocks.HasGet(nil, key); ok {
-			var blockDecoded *types.ExternalBlock
-			rlp.DecodeBytes(block, &blockDecoded)
-			return blockDecoded
-		}
-		block := rawdb.ReadExternalBlock(bc.db, hash, context)
-		if block != nil {
-			return block
+func (bc *BlockChain) requestExternalBlock(hash common.Hash, location []byte, blockContext uint64) *types.ExternalBlock {
+	fmt.Println("requesting external block")
+	if bc.domClient != nil {
+		extBlock := FindExternalBlock(bc.domClient, hash, blockContext)
+		if extBlock != nil {
+			fmt.Println("found", extBlock.Hash())
+			return extBlock
 		}
 	}
+
+	for _, client := range bc.subClients {
+		if client != nil {
+			extBlock := FindExternalBlock(client, hash, blockContext)
+			if extBlock != nil {
+				fmt.Println("found", extBlock.Hash())
+				return extBlock
+			}
+		}
+	}
+
+	return nil
+}
+
+func FindExternalBlock(client *quaiclient.Client, hash common.Hash, blockContext uint64) *types.ExternalBlock {
+	externalBlock, _ := client.GetExternalBlockByHashAndContext(context.Background(), hash, int(blockContext))
+	// if we find the external block in prime, we stop or else we continue to look at the region
+	if externalBlock != nil {
+		return externalBlock
+	}
+
+	block, _ := client.BlockByHash(context.Background(), hash)
+	var receipts []*types.Receipt
+	if block != nil {
+		receiptBlock, err := client.GetBlockReceipts(context.Background(), hash)
+		if err != nil {
+			return nil
+		}
+		receipts = receiptBlock.Receipts()
+		return types.NewExternalBlockWithHeader(block.Header()).WithBody(block.Transactions(), block.Uncles(), receipts, big.NewInt(int64(blockContext)))
+	}
+
 	return nil
 }
 
@@ -3444,29 +3499,39 @@ func (bc *BlockChain) PreviousCanonicalCoincidentOnPath(header *types.Header, sl
 // dominant block is canonical.
 func (bc *BlockChain) CheckCanonical(header *types.Header, order int) error {
 	lastUncleHeader := &types.Header{}
+	lastUncleHash := common.Hash{}
 	for {
 		status := bc.domClient.GetBlockStatus(context.Background(), header)
 		// If the header is cononical break else keep looking
 		switch status {
 		case quaiclient.CanonStatTy:
-			if (lastUncleHeader != &types.Header{}) {
+			if (lastUncleHash != common.Hash{}) {
 				bc.ReOrgRollBack(lastUncleHeader, []*types.Header{}, []*types.Header{})
+				return consensus.ErrSubordinateNotSynced
 			}
 			return nil
 		default:
 			lastUncleHeader = header
+			lastUncleHash = lastUncleHeader.Hash()
 		}
 
 		if header.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
+			if (lastUncleHeader != &types.Header{}) {
+				return consensus.ErrSubordinateNotSynced
+			}
 			return nil
 		}
 
 		terminalHeader, err := bc.Engine().PreviousCoincidentOnPath(bc, header, header.Location, order, types.QuaiNetworkContext, true)
 		if err != nil {
+			fmt.Println("err in PCOP", err)
 			return err
 		}
 
 		if terminalHeader.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
+			if (lastUncleHeader != &types.Header{}) {
+				return consensus.ErrSubordinateNotSynced
+			}
 			return nil
 		}
 
