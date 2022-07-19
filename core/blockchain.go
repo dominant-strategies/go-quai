@@ -3451,7 +3451,7 @@ func (bc *BlockChain) PreviousCanonicalCoincidentOnPath(header *types.Header, sl
 			if status == quaiclient.CanonStatTy {
 				// If we have found a non-cononical dominant coincident header, reorg to prevTerminalHeader
 				if prevTerminalHeader.Hash() != header.Hash() {
-					return nil, err
+					return nil, errors.New("prevTerminalHeader not equal to the header, returning after status==CanonStatTy")
 				} else {
 					return terminalHeader, nil
 				}
