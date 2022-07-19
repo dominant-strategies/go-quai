@@ -1745,7 +1745,6 @@ func (bc *BlockChain) addFutureBlock(block *types.Block) error {
 // GetBlockStatus returns the status of the block for a given header
 func (bc *BlockChain) GetBlockStatus(header *types.Header) WriteStatus {
 	canonHash := bc.GetCanonicalHash(header.Number[types.QuaiNetworkContext].Uint64())
-	fmt.Println("canonHash", canonHash, "headerHash", header.Hash(), header.Number, header.Location)
 	if (canonHash == common.Hash{}) {
 		return UnknownStatTy
 	}
@@ -2191,13 +2190,18 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 			return it.index, err
 		}
 
-		fmt.Println("Running CheckCanonical and PCRC for block", block.Header().Number, block.Header().Location, block.Header().Hash())
+		if types.QuaiNetworkContext < params.ZONE {
+			err := bc.CheckSubordinateHeader(block.Header(), order)
+			if err != nil {
+				return it.index, err
+			}
+		}
 
 		if order < types.QuaiNetworkContext {
 			err := bc.CheckCanonical(block.Header(), order)
 			if err != nil {
 				if err.Error() == "subordinate chain not synced" {
-					fmt.Println("dom not synced, adding to future blocks", block.Header().Hash())
+					log.Info("Dominant not synced", "number", block.Header().Number, "hash", block.Header().Hash())
 					if err := bc.addFutureBlock(block); err != nil {
 						return it.index, err
 					}
@@ -2207,43 +2211,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 				}
 			}
 		} else if types.QuaiNetworkContext != params.ZONE {
-			subClient := bc.subClients[block.Header().Location[order]-1]
-
-			// Do not validate PCRC on a subclient you do not have.
-			if subClient != nil {
-				subHead, err := subClient.HeaderByNumber(context.Background(), nil)
-				if err != nil {
-					return it.index, err
-				}
-
-				fmt.Println("current subHead", subHead.Number, subHead.Hash())
-
-				// If sub is not ready to run PCRC on a dominant block, sync the subordinate chain.
-				if subHead.Hash() != block.Header().ParentHash[order+1] {
-					extBlocks, err := bc.GetExternalBlockTraceSet(subHead.Hash(), block.Header(), order+1)
-					if err != nil {
-						return it.index, err
-					}
-					for i, j := 0, len(extBlocks)-1; i < j; i, j = i+1, j-1 {
-						extBlocks[i], extBlocks[j] = extBlocks[j], extBlocks[i]
-					}
-
-					for _, extBlock := range extBlocks {
-						fmt.Println("sending ext block to sub to sync", extBlock.Header().Location, extBlock.Header().Number, extBlock.Hash())
-						block := types.NewBlockWithHeader(extBlock.Header()).WithBody(extBlock.Transactions(), extBlock.Uncles())
-						sealed := block.WithSeal(block.Header())
-						err := subClient.SendMinedBlock(context.Background(), sealed, true, true)
-						if err != nil {
-							return it.index, err
-						}
-					}
-				}
-			}
-
 			_, err = bc.PCRC(block.Header(), order)
 			if err != nil {
 				if err.Error() == "subordinate chain not synced" {
-					fmt.Println("adding to future blocks", block.Header().Hash())
+					log.Info("Subordinate not synced", "number", block.Header().Number, "hash", block.Header().Hash())
 					if err := bc.addFutureBlock(block); err != nil {
 						return it.index, err
 					}
@@ -3428,8 +3399,6 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTer
 	case params.ZONE:
 		PCRCTermini := types.PCRCTermini{}
 
-		fmt.Println("Header order for PCRC in Zone", headerOrder)
-
 		// only compute PTZ and RTZ on the coincident block in zone.
 		// PTZ and RTZ are essentially a signaling mechanism to know that we are building on the right terminal header.
 		// So running this only on a coincident block makes sure that the zones can move and sync past the coincident.
@@ -3524,7 +3493,7 @@ func (bc *BlockChain) CheckCanonical(header *types.Header, order int) error {
 
 		terminalHeader, err := bc.Engine().PreviousCoincidentOnPath(bc, header, header.Location, order, types.QuaiNetworkContext, true)
 		if err != nil {
-			fmt.Println("err in PCOP", err)
+			log.Warn("Error in PCOP", "err", err)
 			return err
 		}
 
@@ -3537,6 +3506,43 @@ func (bc *BlockChain) CheckCanonical(header *types.Header, order int) error {
 
 		header = terminalHeader
 	}
+}
+
+// CheckSubordinateHeader asks the subordinate chain what their header is and will manifest
+// the subordinate chain to the proper head.
+func (bc *BlockChain) CheckSubordinateHeader(header *types.Header, order int) error {
+	subClient := bc.subClients[header.Location[order]-1]
+	// Do not validate PCRC on a subclient you do not have.
+	if subClient == nil {
+		return nil
+	}
+
+	subHead, err := subClient.HeaderByNumber(context.Background(), nil)
+	if err != nil {
+		return err
+	}
+	// If sub is not ready to run PCRC on a dominant block, sync the subordinate chain.
+	if subHead.Hash() != header.ParentHash[order+1] {
+		extBlocks, err := bc.GetExternalBlockTraceSet(subHead.Hash(), header, order+1)
+		if err != nil {
+			log.Warn("Error in extBlockTrace", "err", err)
+			return err
+		}
+		for i, j := 0, len(extBlocks)-1; i < j; i, j = i+1, j-1 {
+			extBlocks[i], extBlocks[j] = extBlocks[j], extBlocks[i]
+		}
+
+		log.Info("Sending blocks to subordinate", "len", len(extBlocks), "from", subHead.Number, "location", header.Location, "hash", header.Hash())
+		for _, extBlock := range extBlocks {
+			block := types.NewBlockWithHeader(extBlock.Header()).WithBody(extBlock.Transactions(), extBlock.Uncles())
+			sealed := block.WithSeal(block.Header())
+			err := subClient.SendMinedBlock(context.Background(), sealed, true, true)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // calcHLCRNetDifficulty calculates the net difficulty from previous prime.
