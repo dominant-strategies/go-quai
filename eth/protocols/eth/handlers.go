@@ -27,6 +27,12 @@ import (
 	"github.com/spruce-solutions/go-quai/trie"
 )
 
+// breakOnCoincident returns true on a coincident block with a given hash
+func breakOnCoincident(backend Backend, hash common.Hash) bool {
+	order, _ := backend.Chain().Engine().GetDifficultyOrder(backend.Chain().GetHeaderByHash(hash))
+	return order < types.QuaiNetworkContext
+}
+
 // handleGetBlockHeaders66 is the eth/66 version of handleGetBlockHeaders
 func handleGetBlockHeaders66(backend Backend, msg Decoder, peer *Peer) error {
 	// Decode the complex header query
@@ -73,6 +79,10 @@ func answerGetBlockHeadersQuery(backend Backend, query *GetBlockHeadersPacket, p
 		}
 		headers = append(headers, origin)
 		bytes += estHeaderSize
+
+		if order, _ := backend.Chain().Engine().GetDifficultyOrder(origin); order < types.QuaiNetworkContext {
+			break
+		}
 
 		// Advance to the next header of the query
 		switch {
@@ -148,6 +158,11 @@ func answerGetBlockBodiesQuery(backend Backend, query GetBlockBodiesPacket, peer
 		if data := backend.Chain().GetBodyRLP(hash); len(data) != 0 {
 			bodies = append(bodies, data)
 			bytes += len(data)
+		}
+
+		// stopping at a coincident block after including the block body for the coincident block.
+		if breakOnCoincident(backend, hash) {
+			break
 		}
 	}
 	return bodies
@@ -280,6 +295,11 @@ func answerGetExtBlocksQuery(backend Backend, query GetExtBlocksPacket, peer *Pe
 		} else {
 			extBlocks = append(extBlocks, encoded)
 			bytes += len(encoded)
+		}
+
+		// stopping at a coincident block after including the external block for the coincident block.
+		if breakOnCoincident(backend, hash) {
+			break
 		}
 	}
 	return extBlocks
