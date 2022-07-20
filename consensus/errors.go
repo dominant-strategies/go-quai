@@ -47,4 +47,7 @@ var (
 
 	// ErrSubordinateNotSynced is returned if PCRC returns an unlinked chain in the subordinate.
 	ErrSubordinateNotSynced = errors.New("subordinate chain not synced")
+
+	// ErrSliceNotSynced is returned if PCRC returns an unlinked chain in the subordinate.
+	ErrSliceNotSynced = errors.New("slice is not synced")
 )

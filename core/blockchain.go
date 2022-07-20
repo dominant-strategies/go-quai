@@ -2197,24 +2197,27 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 			}
 		}
 
+		fmt.Println("Running CheckCanonical and PCRC for block", block.Header().Number, block.Header().Location, block.Header().Hash())
+
 		if order < types.QuaiNetworkContext {
-			err := bc.CheckCanonical(block.Header(), order)
-			if err != nil {
-				if err.Error() == "subordinate chain not synced" {
-					log.Info("Dominant not synced", "number", block.Header().Number, "hash", block.Header().Hash())
+			status := bc.domClient.GetBlockStatus(context.Background(), block.Header())
+			// If the header is cononical break else keep looking
+			if status != quaiclient.CanonStatTy {
+				if status == quaiclient.SideStatTy {
+					// TODO: place holder for HLCRReorg
+
+				} else {
 					if err := bc.addFutureBlock(block); err != nil {
 						return it.index, err
 					}
 					return it.index, nil
-				} else {
-					return it.index, err
 				}
 			}
-		} else if types.QuaiNetworkContext != params.ZONE {
+		} else {
 			_, err = bc.PCRC(block.Header(), order)
 			if err != nil {
-				if err.Error() == "subordinate chain not synced" {
-					log.Info("Subordinate not synced", "number", block.Header().Number, "hash", block.Header().Hash())
+				if err.Error() == "slice is not synced" {
+					fmt.Println("adding to future blocks", block.Header().Hash())
 					if err := bc.addFutureBlock(block); err != nil {
 						return it.index, err
 					}
@@ -2224,16 +2227,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 				}
 			}
 		}
-
-		// If in Prime or Region, take to see if we have already included the hash in the lower level.
-		// TODO: #179 Extend CheckHashInclusion to if the hash was ever included in the chain, not just the parent.
-		// err = bc.CheckHashInclusion(block.Header(), parent)
-		// if err != nil {
-		// 	bc.reportBlock(block, make(types.Receipts, 0), err)
-		// 	bc.chainUncleFeed.Send(block.Header())
-		// 	bc.futureBlocks.Remove(block.Hash())
-		// 	return it.index, err
-		// }
 
 		// Process our block and retrieve external blocks.
 		receipts, logs, usedGas, externalBlocks, err := bc.processor.Process(block, statedb, bc.vmConfig)
@@ -3337,7 +3330,7 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTer
 		}
 
 		if (PCRCTermini.PTR == common.Hash{} || PCRCTermini.PRTR == common.Hash{}) {
-			return PCRCTermini, consensus.ErrSubordinateNotSynced
+			return PCRCTermini, consensus.ErrSliceNotSynced
 		}
 
 		PCRCTermini.PTP = PTP.Hash()
@@ -3370,7 +3363,7 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTer
 		}
 
 		if (PCRCTermini.RTZ == common.Hash{}) {
-			return PCRCTermini, consensus.ErrSubordinateNotSynced
+			return PCRCTermini, consensus.ErrSliceNotSynced
 		}
 
 		if RTR.Hash() != PCRCTermini.RTZ {
@@ -3448,7 +3441,7 @@ func (bc *BlockChain) PreviousCanonicalCoincidentOnPath(header *types.Header, sl
 			if status == quaiclient.CanonStatTy {
 				// If we have found a non-cononical dominant coincident header, reorg to prevTerminalHeader
 				if prevTerminalHeader.Hash() != header.Hash() {
-					return nil, errors.New("prevTerminalHeader not equal to the header, returning after status==CanonStatTy")
+					return nil, errors.New("PCCOP has found chain is not being built on canonical dom")
 				} else {
 					return terminalHeader, nil
 				}
