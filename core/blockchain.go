@@ -2197,22 +2197,16 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		fmt.Println("Running CheckCanonical and PCRC for block", block.Header().Number, block.Header().Location, block.Header().Hash())
 
 		if order < types.QuaiNetworkContext {
-			err := bc.CheckCanonical(block.Header(), order)
-			if err != nil {
-				if err.Error() == "subordinate chain not synced" {
-					fmt.Println("dom not synced, adding to future blocks", block.Header().Hash())
-					if err := bc.addFutureBlock(block); err != nil {
-						return it.index, err
-					}
-					return it.index, nil
-				} else {
-					return it.index, err
-				}
+			status := bc.domClient.GetBlockStatus(context.Background(), block.Header())
+			// If the header is cononical break else keep looking
+			if status != quaiclient.CanonStatTy {
+				// TODO: place holder for HLCRReorg
+				return it.index, errors.New("my slice is not synced")
 			}
-		} else if types.QuaiNetworkContext != params.ZONE {
+		} else {
 			_, err = bc.PCRC(block.Header(), order)
 			if err != nil {
-				if err.Error() == "subordinate chain not synced" {
+				if err.Error() == "slice is not synced" {
 					fmt.Println("adding to future blocks", block.Header().Hash())
 					if err := bc.addFutureBlock(block); err != nil {
 						return it.index, err
@@ -2223,16 +2217,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 				}
 			}
 		}
-
-		// If in Prime or Region, take to see if we have already included the hash in the lower level.
-		// TODO: #179 Extend CheckHashInclusion to if the hash was ever included in the chain, not just the parent.
-		// err = bc.CheckHashInclusion(block.Header(), parent)
-		// if err != nil {
-		// 	bc.reportBlock(block, make(types.Receipts, 0), err)
-		// 	bc.chainUncleFeed.Send(block.Header())
-		// 	bc.futureBlocks.Remove(block.Hash())
-		// 	return it.index, err
-		// }
 
 		// Process our block and retrieve external blocks.
 		receipts, logs, usedGas, externalBlocks, err := bc.processor.Process(block, statedb, bc.vmConfig)
@@ -3314,7 +3298,7 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTer
 		}
 
 		if (PCRCTermini.PTR == common.Hash{} || PCRCTermini.PRTR == common.Hash{}) {
-			return PCRCTermini, consensus.ErrSubordinateNotSynced
+			return PCRCTermini, consensus.ErrSliceNotSynced
 		}
 
 		PCRCTermini.PTP = PTP.Hash()
@@ -3347,7 +3331,7 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTer
 		}
 
 		if (PCRCTermini.RTZ == common.Hash{}) {
-			return PCRCTermini, consensus.ErrSubordinateNotSynced
+			return PCRCTermini, consensus.ErrSliceNotSynced
 		}
 
 		if RTR.Hash() != PCRCTermini.RTZ {
@@ -3427,7 +3411,7 @@ func (bc *BlockChain) PreviousCanonicalCoincidentOnPath(header *types.Header, sl
 			if status == quaiclient.CanonStatTy {
 				// If we have found a non-cononical dominant coincident header, reorg to prevTerminalHeader
 				if prevTerminalHeader.Hash() != header.Hash() {
-					return nil, err
+					return nil, errors.New("PCCOP has found chain is not building on canonical dom")
 				} else {
 					return terminalHeader, nil
 				}
@@ -3437,40 +3421,6 @@ func (bc *BlockChain) PreviousCanonicalCoincidentOnPath(header *types.Header, sl
 		}
 
 		prevTerminalHeader = terminalHeader
-	}
-}
-
-// CheckCanonical retrieves whether or not the block to be imported is canonical. Will rollback our chain until the
-// dominant block is canonical.
-func (bc *BlockChain) CheckCanonical(header *types.Header, order int) error {
-	lastUncleHeader := &types.Header{}
-	for {
-		status := bc.domClient.GetBlockStatus(context.Background(), header)
-		// If the header is cononical break else keep looking
-		switch status {
-		case quaiclient.CanonStatTy:
-			if (lastUncleHeader != &types.Header{}) {
-				bc.ReOrgRollBack(lastUncleHeader, []*types.Header{}, []*types.Header{})
-			}
-			return nil
-		default:
-			lastUncleHeader = header
-		}
-
-		if header.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
-			return nil
-		}
-
-		terminalHeader, err := bc.Engine().PreviousCoincidentOnPath(bc, header, header.Location, order, types.QuaiNetworkContext, true)
-		if err != nil {
-			return err
-		}
-
-		if terminalHeader.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
-			return nil
-		}
-
-		header = terminalHeader
 	}
 }
 
