@@ -3438,15 +3438,14 @@ func (bc *BlockChain) PreviousCanonicalCoincidentOnPath(header *types.Header, sl
 			status := bc.domClient.GetBlockStatus(context.Background(), terminalHeader)
 			// If the header is cononical break else keep looking
 			switch status {
-			case quaiclient.CanonStatTy:
+			case quaiclient.UnknownStatTy:
+				// do nothing and find latest uncle or canonical in dom
+			default:
 				if prevTerminalHeader.Hash() != header.Hash() {
 					bc.ReOrgRollBack(prevTerminalHeader, []*types.Header{}, []*types.Header{})
+					return nil, consensus.ErrSliceNotSynced
 				}
 				return terminalHeader, nil
-			case quaiclient.SideStatTy:
-				// Do nothing and continue
-			case quaiclient.UnknownStatTy:
-				return nil, consensus.ErrSliceNotSynced
 			}
 		} else if order == types.QuaiNetworkContext {
 			return terminalHeader, err
