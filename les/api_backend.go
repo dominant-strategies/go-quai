@@ -388,6 +388,10 @@ func (b *LesApiBackend) GetBlockStatus(header *types.Header) core.WriteStatus {
 	return core.NonStatTy
 }
 
+func (b *LesApiBackend) HLCRReorg(header *types.Header) error {
+	return nil
+}
+
 func (b *LesApiBackend) GetSubordinateSet(hash common.Hash, location []byte) ([]common.Hash, error) {
 	return nil, errors.New("light client does not support retrieving subordinate set")
 }

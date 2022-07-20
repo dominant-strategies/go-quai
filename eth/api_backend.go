@@ -140,6 +140,10 @@ func (b *EthAPIBackend) GetBlockStatus(header *types.Header) core.WriteStatus {
 	return b.eth.blockchain.GetBlockStatus(header)
 }
 
+func (b *EthAPIBackend) HLCRReorg(header *types.Header) error {
+	return b.eth.blockchain.HLCRReorg(header)
+}
+
 func (b *EthAPIBackend) GetAncestorByLocation(hash common.Hash, location []byte) (*types.Header, error) {
 	return b.eth.blockchain.GetAncestorByLocation(hash, location)
 }

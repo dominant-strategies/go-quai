@@ -79,6 +79,7 @@ type Backend interface {
 	GetTerminusAtOrder(header *types.Header, order int) (common.Hash, error)
 
 	GetBlockStatus(header *types.Header) core.WriteStatus
+	HLCRReorg(header *types.Header) error
 	PCRC(header *types.Header, order int) (types.PCRCTermini, error)
 	EventMux() *event.TypeMux
 	CalculateBaseFee(header *types.Header) *big.Int

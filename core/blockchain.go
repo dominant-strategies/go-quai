@@ -2205,7 +2205,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 			if status != quaiclient.CanonStatTy {
 				if status == quaiclient.SideStatTy {
 					// TODO: place holder for HLCRReorg
-
+					bc.HLCRReorg(block.Header())
 				} else {
 					if err := bc.addFutureBlock(block); err != nil {
 						return it.index, err
@@ -2351,6 +2351,23 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 	stats.ignored += it.remaining()
 
 	return it.index, err
+}
+
+func (bc *BlockChain) HLCRReorg(header *types.Header) error {
+	fmt.Println("HLCRReorg", header.Hash(), " context ", types.QuaiNetworkContext)
+	if types.QuaiNetworkContext != params.PRIME {
+		err := bc.domClient.HLCRReorg(context.Background(), header)
+		if err != nil {
+			fmt.Println("hlcrreorg dom reorg failed, context", types.QuaiNetworkContext)
+			return errors.New("unable to reorg the dom")
+		}
+	}
+	fmt.Println("starting reorgrollback, context", types.QuaiNetworkContext)
+	err := bc.ReOrgRollBack(header, []*types.Header{}, []*types.Header{})
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // insertSideChain is called when an import batch hits upon a pruned ancestor
