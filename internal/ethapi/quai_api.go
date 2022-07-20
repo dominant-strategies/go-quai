@@ -739,13 +739,13 @@ func (s *PublicBlockChainQuaiAPI) GetBlockStatus(ctx context.Context, raw json.R
 	return s.b.GetBlockStatus(head)
 }
 
-func (s *PublicBlockChainQuaiAPI) HLCRReorg(ctx context.Context, raw json.RawMessage) error {
-	var head *types.Header
-	if err := json.Unmarshal(raw, &head); err != nil {
-		return nil
+func (s *PublicBlockChainQuaiAPI) HLCRReorg(ctx context.Context, raw json.RawMessage) (bool, error) {
+	var block *types.Block
+	if err := json.Unmarshal(raw, &block); err != nil {
+		return false, nil
 	}
-	fmt.Println("Header", head.Hash())
-	return s.b.HLCRReorg(head)
+	fmt.Println("Header", block.Hash())
+	return s.b.HLCRReorg(block)
 }
 
 // GetSubordinateSet returns the valid mined blocks from a dominant chain to the subordinate

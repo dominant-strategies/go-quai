@@ -1944,6 +1944,7 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 				prev.Hash().Bytes()[:4], i, block.NumberU64(), block.Hash().Bytes()[:4], block.ParentHash().Bytes()[:4])
 		}
 	}
+
 	// Pre-checks passed, start the full block imports
 	bc.reorgmu.Lock()
 	bc.chainmu.Lock()
@@ -2338,21 +2339,70 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 	return it.index, err
 }
 
-func (bc *BlockChain) HLCRReorg(header *types.Header) error {
-	fmt.Println("HLCRReorg", header.Hash(), " context ", types.QuaiNetworkContext)
-	if types.QuaiNetworkContext != params.PRIME {
-		err := bc.domClient.HLCRReorg(context.Background(), header)
+func (bc *BlockChain) DomReorgNeeded(header *types.Header) (bool, error) {
+	terminalHeader, err := bc.Engine().PreviousCoincidentOnPath(bc, header, header.Location, types.QuaiNetworkContext-1, types.QuaiNetworkContext, true)
+	if err != nil {
+		return false, err
+	}
+
+	if bc.domClient == nil {
+		return false, errors.New("dom client is nil in writeBlockAndSetHead")
+	}
+
+	domStatus := bc.domClient.GetBlockStatus(context.Background(), terminalHeader)
+	if domStatus == quaiclient.SideStatTy {
+		// Send HLCRReorg to dom
+		reorg, err := bc.HLCRReorg(bc.GetBlockByHash(terminalHeader.Hash()))
+		if err != nil {
+			log.Info("Unable to reorg the dom ")
+			return false, err
+		}
+		return reorg, err
+	}
+	return true, nil
+}
+
+func (bc *BlockChain) HLCRReorg(block *types.Block) (bool, error) {
+	fmt.Println("HLCRReorg", block.Header().Hash(), " context ", types.QuaiNetworkContext)
+
+	fmt.Println("starting reorgrollback, context", types.QuaiNetworkContext)
+
+	order, err := bc.engine.GetDifficultyOrder(block.Header())
+	if err != nil {
+		return false, err
+	}
+
+	var reorgFromDom bool
+	if order < types.QuaiNetworkContext {
+		reorgFromDom, err = bc.domClient.HLCRReorg(context.Background(), block)
 		if err != nil {
 			fmt.Println("hlcrreorg dom reorg failed, context", types.QuaiNetworkContext)
-			return errors.New("unable to reorg the dom")
+			return false, errors.New("unable to reorg the dom")
 		}
+	} else {
+		currentTd := bc.GetTdByHash(bc.CurrentBlock().Hash())
+		externTd, err := bc.CalcTd(block.Header())
+		if err != nil {
+			return false, err
+		}
+		reorgFromDom = externTd[types.QuaiNetworkContext].Cmp(currentTd[types.QuaiNetworkContext]) >= 0
 	}
-	fmt.Println("starting reorgrollback, context", types.QuaiNetworkContext)
-	err := bc.ReOrgRollBack(header, []*types.Header{}, []*types.Header{})
+
+	if !reorgFromDom {
+		return false, nil
+	}
+
+	err = bc.ReOrgRollBack(bc.CurrentHeader(), []*types.Header{}, []*types.Header{})
 	if err != nil {
-		return err
+		return false, err
 	}
-	return nil
+
+	_, err = bc.insertChain([]*types.Block{block}, true, true)
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
 }
 
 // insertSideChain is called when an import batch hits upon a pruned ancestor

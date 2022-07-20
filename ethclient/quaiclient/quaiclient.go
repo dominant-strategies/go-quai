@@ -150,11 +150,12 @@ func (ec *Client) GetBlockStatus(ctx context.Context, header *types.Header) Writ
 	return blockStatus
 }
 
-func (ec *Client) HLCRReorg(ctx context.Context, header *types.Header) error {
-	if err := ec.c.CallContext(ctx, nil, "quai_hLCRReorg", header); err != nil {
-		return err
+func (ec *Client) HLCRReorg(ctx context.Context, block *types.Block) (bool, error) {
+	var domReorgNeeded bool
+	if err := ec.c.CallContext(ctx, &domReorgNeeded, "quai_hLCRReorg", block); err != nil {
+		return false, err
 	}
-	return nil
+	return domReorgNeeded, nil
 }
 
 // SubscribeNewHead subscribes to notifications about the current blockchain head

@@ -388,8 +388,8 @@ func (b *LesApiBackend) GetBlockStatus(header *types.Header) core.WriteStatus {
 	return core.NonStatTy
 }
 
-func (b *LesApiBackend) HLCRReorg(header *types.Header) error {
-	return nil
+func (b *LesApiBackend) HLCRReorg(block *types.Block) (bool, error) {
+	return false, nil
 }
 
 func (b *LesApiBackend) GetSubordinateSet(hash common.Hash, location []byte) ([]common.Hash, error) {

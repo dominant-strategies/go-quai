@@ -47,6 +47,9 @@ type ChainReader interface {
 
 	// HLCR does hierarchical comparison of two difficulty tuples and returns true if second tuple is greater than the first
 	HLCR(localDifficulties []*big.Int, externDifficulties []*big.Int) bool
+
+	// DomReorgNeeded checks the dominant chain for the reorg status.
+	DomReorgNeeded(header *types.Header) (bool, error)
 }
 
 // ForkChoice is the fork chooser based on the highest total difficulty of the
@@ -116,5 +119,13 @@ func (f *ForkChoice) ReorgNeeded(current *types.Header, header *types.Header) (b
 			reorg = !currentPreserve && (externPreserve || f.rand.Float64() < 0.5)
 		}
 	}
+	if reorg && types.QuaiNetworkContext != params.PRIME {
+		domReorg, err := f.chain.DomReorgNeeded(header)
+		if err != nil {
+			return false, err
+		}
+		reorg = domReorg
+	}
+
 	return reorg, nil
 }
