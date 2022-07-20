@@ -3436,7 +3436,7 @@ func (bc *BlockChain) PreviousCanonicalCoincidentOnPath(header *types.Header, sl
 		if order < types.QuaiNetworkContext {
 			status := bc.domClient.GetBlockStatus(context.Background(), terminalHeader)
 			// If the header is cononical break else keep looking
-			if status == quaiclient.CanonStatTy {
+			if status != quaiclient.UnknownStatTy {
 				// If we have found a non-cononical dominant coincident header, reorg to prevTerminalHeader
 				if prevTerminalHeader.Hash() != header.Hash() {
 					bc.ReOrgRollBack(prevTerminalHeader, []*types.Header{}, []*types.Header{})
@@ -3444,57 +3444,14 @@ func (bc *BlockChain) PreviousCanonicalCoincidentOnPath(header *types.Header, sl
 				} else {
 					return terminalHeader, nil
 				}
+			} else {
+				return nil, consensus.ErrSliceNotSynced
 			}
 		} else if order == types.QuaiNetworkContext {
 			return terminalHeader, err
 		}
 
 		prevTerminalHeader = terminalHeader
-	}
-}
-
-// CheckCanonical retrieves whether or not the block to be imported is canonical. Will rollback our chain until the
-// dominant block is canonical.
-func (bc *BlockChain) CheckCanonical(header *types.Header, order int) error {
-	lastUncleHeader := &types.Header{}
-	lastUncleHash := common.Hash{}
-	for {
-		status := bc.domClient.GetBlockStatus(context.Background(), header)
-		// If the header is cononical break else keep looking
-		switch status {
-		case quaiclient.CanonStatTy:
-			if (lastUncleHash != common.Hash{}) {
-				fmt.Println("header", header.Number, header.Hash(), lastUncleHeader.Number, lastUncleHash)
-				bc.ReOrgRollBack(lastUncleHeader, []*types.Header{}, []*types.Header{})
-				return consensus.ErrSubordinateNotSynced
-			}
-			return nil
-		default:
-			lastUncleHeader = header
-			lastUncleHash = lastUncleHeader.Hash()
-		}
-
-		if header.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
-			if (lastUncleHeader != &types.Header{}) {
-				return consensus.ErrSubordinateNotSynced
-			}
-			return nil
-		}
-
-		terminalHeader, err := bc.Engine().PreviousCoincidentOnPath(bc, header, header.Location, order, types.QuaiNetworkContext, true)
-		if err != nil {
-			log.Warn("Error in PCOP", "err", err)
-			return err
-		}
-
-		if terminalHeader.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
-			if (lastUncleHeader != &types.Header{}) {
-				return consensus.ErrSubordinateNotSynced
-			}
-			return nil
-		}
-
-		header = terminalHeader
 	}
 }
 
