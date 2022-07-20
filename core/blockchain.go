@@ -2199,32 +2199,16 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 
 		fmt.Println("Running CheckCanonical and PCRC for block", block.Header().Number, block.Header().Location, block.Header().Hash())
 
-		if order < types.QuaiNetworkContext {
-			status := bc.domClient.GetBlockStatus(context.Background(), block.Header())
-			// If the header is cononical break else keep looking
-			if status != quaiclient.CanonStatTy {
-				if status == quaiclient.SideStatTy {
-					// TODO: place holder for HLCRReorg
-					bc.HLCRReorg(block.Header())
-				} else {
-					if err := bc.addFutureBlock(block); err != nil {
-						return it.index, err
-					}
-					return it.index, nil
-				}
-			}
-		} else {
-			_, err = bc.PCRC(block.Header(), order)
-			if err != nil {
-				if err.Error() == "slice is not synced" {
-					fmt.Println("adding to future blocks", block.Header().Hash())
-					if err := bc.addFutureBlock(block); err != nil {
-						return it.index, err
-					}
-					return it.index, nil
-				} else {
+		_, err = bc.PCRC(block.Header(), order)
+		if err != nil {
+			if err.Error() == "slice is not synced" {
+				fmt.Println("adding to future blocks", block.Header().Hash())
+				if err := bc.addFutureBlock(block); err != nil {
 					return it.index, err
 				}
+				return it.index, nil
+			} else {
+				return it.index, err
 			}
 		}
 
@@ -3410,21 +3394,18 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTer
 		// PTZ and RTZ are essentially a signaling mechanism to know that we are building on the right terminal header.
 		// So running this only on a coincident block makes sure that the zones can move and sync past the coincident.
 		// Just run RTZ to make sure that its linked. This check decouples this signaling and linking paradigm.
-		if headerOrder < params.REGION {
-			PTZ, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.PRIME, params.ZONE, true)
-			if err != nil {
-				return types.PCRCTermini{}, err
-			}
-			PCRCTermini.PTZ = PTZ.Hash()
-		}
 
-		if headerOrder < params.ZONE {
-			RTZ, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.REGION, params.ZONE, true)
-			if err != nil {
-				return types.PCRCTermini{}, err
-			}
-			PCRCTermini.RTZ = RTZ.Hash()
+		PTZ, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.PRIME, params.ZONE, true)
+		if err != nil {
+			return types.PCRCTermini{}, err
 		}
+		PCRCTermini.PTZ = PTZ.Hash()
+
+		RTZ, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.REGION, params.ZONE, true)
+		if err != nil {
+			return types.PCRCTermini{}, err
+		}
+		PCRCTermini.RTZ = RTZ.Hash()
 
 		return PCRCTermini, nil
 	}
@@ -3458,7 +3439,8 @@ func (bc *BlockChain) PreviousCanonicalCoincidentOnPath(header *types.Header, sl
 			if status == quaiclient.CanonStatTy {
 				// If we have found a non-cononical dominant coincident header, reorg to prevTerminalHeader
 				if prevTerminalHeader.Hash() != header.Hash() {
-					return nil, errors.New("PCCOP has found chain is not being built on canonical dom")
+					bc.ReOrgRollBack(prevTerminalHeader, []*types.Header{}, []*types.Header{})
+					return prevTerminalHeader, errors.New("PCCOP has found chain is not being built on canonical dom")
 				} else {
 					return terminalHeader, nil
 				}
