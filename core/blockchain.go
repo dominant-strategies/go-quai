@@ -2208,6 +2208,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 				}
 				return it.index, nil
 			} else {
+				bc.futureBlocks.Remove(block.Hash())
 				return it.index, err
 			}
 		}
@@ -3436,15 +3437,15 @@ func (bc *BlockChain) PreviousCanonicalCoincidentOnPath(header *types.Header, sl
 		if order < types.QuaiNetworkContext {
 			status := bc.domClient.GetBlockStatus(context.Background(), terminalHeader)
 			// If the header is cononical break else keep looking
-			if status != quaiclient.UnknownStatTy {
-				// If we have found a non-cononical dominant coincident header, reorg to prevTerminalHeader
+			switch status {
+			case quaiclient.CanonStatTy:
 				if prevTerminalHeader.Hash() != header.Hash() {
 					bc.ReOrgRollBack(prevTerminalHeader, []*types.Header{}, []*types.Header{})
-					return prevTerminalHeader, errors.New("PCCOP has found chain is not being built on canonical dom")
-				} else {
-					return terminalHeader, nil
 				}
-			} else {
+				return terminalHeader, nil
+			case quaiclient.SideStatTy:
+				// Do nothing and continue
+			case quaiclient.UnknownStatTy:
 				return nil, consensus.ErrSliceNotSynced
 			}
 		} else if order == types.QuaiNetworkContext {
