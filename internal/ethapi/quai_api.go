@@ -740,10 +740,28 @@ func (s *PublicBlockChainQuaiAPI) GetBlockStatus(ctx context.Context, raw json.R
 }
 
 func (s *PublicBlockChainQuaiAPI) HLCRReorg(ctx context.Context, raw json.RawMessage) (bool, error) {
-	var block *types.Block
-	if err := json.Unmarshal(raw, &block); err != nil {
-		return false, nil
+	// Decode header and transactions.
+	var head *types.Header
+	var body rpcBlock
+	if err := json.Unmarshal(raw, &head); err != nil {
+		return false, err
 	}
+	if err := json.Unmarshal(raw, &body); err != nil {
+		return false, err
+	}
+
+	// Load uncles because they are not included in the block response.
+	txs := make([]*types.Transaction, len(body.Transactions))
+	for i, tx := range body.Transactions {
+		txs[i] = tx.tx
+	}
+
+	uncles := make([]*types.Header, len(body.Uncles))
+	for i, uncle := range body.Uncles {
+		uncles[i] = uncle
+	}
+
+	block := types.NewBlockWithHeader(head).WithBody(txs, uncles)
 	fmt.Println("Header", block.Hash())
 	return s.b.HLCRReorg(block)
 }
