@@ -671,7 +671,12 @@ func (b *Block) MapContext() ([]int, error) {
 	return currentBlockOntology(b.header.Number)
 }
 
-func (b *Block) Header() *Header { return CopyHeader(b.header) }
+func (b *Block) Header() *Header {
+	if b.header == nil {
+		return nil
+	}
+	return CopyHeader(b.header)
+}
 
 func (b *ReceiptBlock) Header() *Header { return CopyHeader(b.header) }
 

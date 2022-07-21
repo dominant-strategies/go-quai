@@ -2373,7 +2373,11 @@ func (bc *BlockChain) DomReorgNeeded(header *types.Header) (bool, error) {
 	domStatus := bc.domClient.GetBlockStatus(context.Background(), terminalHeader)
 	if domStatus == quaiclient.SideStatTy {
 		// Send HLCRReorg to dom
-		reorg, err := bc.HLCRReorg(bc.GetBlockByHash(terminalHeader.Hash()))
+		block := bc.GetBlockByHash(terminalHeader.Hash())
+		if block == nil {
+			return false, nil
+		}
+		reorg, err := bc.HLCRReorg(block)
 		if err != nil {
 			log.Info("Unable to reorg the dom ")
 			// If we got here our dom can't reorg so we shouldn't reorg but we also shouldn't err because it will drop a peer
@@ -2385,7 +2389,11 @@ func (bc *BlockChain) DomReorgNeeded(header *types.Header) (bool, error) {
 }
 
 func (bc *BlockChain) HLCRReorg(block *types.Block) (bool, error) {
-	if block == nil || block.Header() == nil {
+	if block == nil {
+		return false, errors.New("block provided in hlcrreorg is nil")
+	}
+
+	if block.Header() == nil {
 		return false, errors.New("block provided in hlcrreorg is nil")
 	}
 
