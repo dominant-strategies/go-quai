@@ -337,6 +337,10 @@ func (q *queue) Schedule(headers []*types.Header, from uint64) []*types.Header {
 	for _, header := range headers {
 		// Make sure chain order is honoured and preserved throughout
 		hash := header.Hash()
+		if header == nil {
+			log.Warn("Header nil", "expected", from)
+			break
+		}
 		if header.Number == nil || header.Number[types.QuaiNetworkContext].Uint64() != from {
 			log.Warn("Header broke chain ordering", "number", header.Number, "hash", hash, "expected", from)
 			break
