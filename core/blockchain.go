@@ -2208,7 +2208,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		}
 
 		if types.QuaiNetworkContext < params.ZONE {
-			err := bc.CheckSubordinateHeader(block.Header())
+			err := bc.CheckSubordinateBlock(block)
 			if err != nil {
 				return it.index, err
 			}
@@ -3570,9 +3570,10 @@ func (bc *BlockChain) CheckCanonical(header *types.Header, order int) error {
 	}
 }
 
-// CheckSubordinateHeader asks the subordinate chain what their header is and will manifest
+// CheckSubordinateBlock asks the subordinate chain what their header is and will manifest
 // the subordinate chain to the proper head.
-func (bc *BlockChain) CheckSubordinateHeader(header *types.Header) error {
+func (bc *BlockChain) CheckSubordinateBlock(block *types.Block) error {
+	header := block.Header()
 	subClient := bc.subClients[header.Location[types.QuaiNetworkContext]-1]
 	// Do not validate PCRC on a subclient you do not have.
 	if subClient == nil {
@@ -3604,6 +3605,23 @@ func (bc *BlockChain) CheckSubordinateHeader(header *types.Header) error {
 					fmt.Println("Err sending mined block to subordinate", err)
 				}
 			}
+		}
+	} else {
+		status := bc.GetBlockStatus(block.Header())
+		if status == WriteStatus(quaiclient.UnknownStatTy) {
+			extBlock, err := bc.GetExternalBlockByHashAndContext(header.Hash(), types.QuaiNetworkContext+1)
+			if err != nil {
+				return err
+			}
+
+			if extBlock == nil {
+				fmt.Println("ext block is nil for", block.Header().Hash())
+				return nil
+			}
+			block := types.NewBlockWithHeader(extBlock.Header()).WithBody(extBlock.Transactions(), extBlock.Uncles())
+			sealed := block.WithSeal(block.Header())
+			fmt.Println("sending subordinate block", block.Header().Number, block.Hash())
+			go subClient.SendMinedBlock(context.Background(), sealed, true, true)
 		}
 	}
 	return nil
