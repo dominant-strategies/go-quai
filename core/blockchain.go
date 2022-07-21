@@ -2235,40 +2235,47 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		// }
 
 		// Process our block and retrieve external blocks.
-		receipts, logs, usedGas, externalBlocks, err := bc.processor.Process(block, statedb, bc.vmConfig)
-		if err != nil {
-			bc.reportBlock(block, receipts, err)
-			atomic.StoreUint32(&followupInterrupt, 1)
-			bc.futureBlocks.Remove(block.Hash())
-			return it.index, err
-		}
-		// Update the metrics touched during block processing
-		accountReadTimer.Update(statedb.AccountReads)                 // Account reads are complete, we can mark them
-		storageReadTimer.Update(statedb.StorageReads)                 // Storage reads are complete, we can mark them
-		accountUpdateTimer.Update(statedb.AccountUpdates)             // Account updates are complete, we can mark them
-		storageUpdateTimer.Update(statedb.StorageUpdates)             // Storage updates are complete, we can mark them
-		snapshotAccountReadTimer.Update(statedb.SnapshotAccountReads) // Account reads are complete, we can mark them
-		snapshotStorageReadTimer.Update(statedb.SnapshotStorageReads) // Storage reads are complete, we can mark them
-		triehash := statedb.AccountHashes + statedb.StorageHashes     // Save to not double count in validation
-		trieproc := statedb.SnapshotAccountReads + statedb.AccountReads + statedb.AccountUpdates
-		trieproc += statedb.SnapshotStorageReads + statedb.StorageReads + statedb.StorageUpdates
-
-		blockExecutionTimer.Update(time.Since(substart) - trieproc - triehash)
-
-		// Validate the state using the default validator
-		substart = time.Now()
-		if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
-			bc.reportBlock(block, receipts, err)
-			atomic.StoreUint32(&followupInterrupt, 1)
-			return it.index, err
-		}
+		receipts := types.Receipts{}
+		logs := []*types.Log{}
+		usedGas := uint64(0)
+		externalBlocks := []*types.ExternalBlock{}
 		proctime := time.Since(start)
+		if !bc.chainConfig.NoBlockProc {
+			receipts, logs, usedGas, externalBlocks, err = bc.processor.Process(block, statedb, bc.vmConfig)
+			if err != nil {
+				bc.reportBlock(block, receipts, err)
+				atomic.StoreUint32(&followupInterrupt, 1)
+				bc.futureBlocks.Remove(block.Hash())
+				return it.index, err
+			}
+			// Update the metrics touched during block processing
+			accountReadTimer.Update(statedb.AccountReads)                 // Account reads are complete, we can mark them
+			storageReadTimer.Update(statedb.StorageReads)                 // Storage reads are complete, we can mark them
+			accountUpdateTimer.Update(statedb.AccountUpdates)             // Account updates are complete, we can mark them
+			storageUpdateTimer.Update(statedb.StorageUpdates)             // Storage updates are complete, we can mark them
+			snapshotAccountReadTimer.Update(statedb.SnapshotAccountReads) // Account reads are complete, we can mark them
+			snapshotStorageReadTimer.Update(statedb.SnapshotStorageReads) // Storage reads are complete, we can mark them
+			triehash := statedb.AccountHashes + statedb.StorageHashes     // Save to not double count in validation
+			trieproc := statedb.SnapshotAccountReads + statedb.AccountReads + statedb.AccountUpdates
+			trieproc += statedb.SnapshotStorageReads + statedb.StorageReads + statedb.StorageUpdates
 
-		// Update the metrics touched during block validation
-		accountHashTimer.Update(statedb.AccountHashes) // Account hashes are complete, we can mark them
-		storageHashTimer.Update(statedb.StorageHashes) // Storage hashes are complete, we can mark them
+			blockExecutionTimer.Update(time.Since(substart) - trieproc - triehash)
 
-		blockValidationTimer.Update(time.Since(substart) - (statedb.AccountHashes + statedb.StorageHashes - triehash))
+			// Validate the state using the default validator
+			substart = time.Now()
+			if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
+				bc.reportBlock(block, receipts, err)
+				atomic.StoreUint32(&followupInterrupt, 1)
+				return it.index, err
+			}
+			proctime = time.Since(start)
+
+			// Update the metrics touched during block validation
+			accountHashTimer.Update(statedb.AccountHashes) // Account hashes are complete, we can mark them
+			storageHashTimer.Update(statedb.StorageHashes) // Storage hashes are complete, we can mark them
+
+			blockValidationTimer.Update(time.Since(substart) - (statedb.AccountHashes + statedb.StorageHashes - triehash))
+		}
 
 		linkExtBlocks, err := bc.engine.GetLinkExternalBlocks(bc, block.Header(), true)
 		if err != nil {

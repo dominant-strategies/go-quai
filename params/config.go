@@ -701,7 +701,7 @@ var (
 		GenesisHashes:       nil,
 		FullerMapContext:    big.NewInt(0)}
 
-	TestChainConfig = &ChainConfig{big.NewInt(1), 0, []byte{0, 0}, big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, nil, big.NewInt(0)}
+	TestChainConfig = &ChainConfig{big.NewInt(1), 0, []byte{0, 0}, big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, nil, big.NewInt(0), false}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
@@ -791,6 +791,9 @@ type ChainConfig struct {
 
 	// Quai Network Ontology
 	FullerMapContext *big.Int // Block number effective for Fuller Map Context ontology
+
+	// Disable block processing & validation
+	NoBlockProc bool
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.

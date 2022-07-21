@@ -467,6 +467,10 @@ var (
 		Name:  "fakepow",
 		Usage: "Disables proof-of-work verification",
 	}
+	NoBlockProcessingFlag = cli.BoolFlag{
+		Name:  "noblockproc",
+		Usage: "Disables block processing and validation",
+	}
 	NoCompactionFlag = cli.BoolFlag{
 		Name:  "nocompaction",
 		Usage: "Disables db compaction after import",
@@ -1508,6 +1512,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.GlobalIsSet(FakePoWFlag.Name) {
 		cfg.Blake3.Fakepow = true
 	}
+	if ctx.GlobalIsSet(NoBlockProcessingFlag.Name) {
+		cfg.NoBlockProc = true
+	}
 	if ctx.GlobalIsSet(SyncModeFlag.Name) {
 		cfg.SyncMode = *GlobalTextMarshaler(ctx, SyncModeFlag.Name).(*downloader.SyncMode)
 	}
@@ -1914,6 +1921,9 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 
 	vmcfg := vm.Config{EnablePreimageRecording: ctx.GlobalBool(VMEnableDebugFlag.Name)}
 
+	if ctx.GlobalIsSet(NoBlockProcessingFlag.Name) {
+		config.NoBlockProc = true
+	}
 	// TODO(rjl493456442) disable snapshot generation/wiping if the chain is read only.
 	// Disable transaction indexing/unindexing by default.
 	chain, err = core.NewBlockChain(chainDb, cache, config, ctx.GlobalString(DomUrl.Name), makeSubUrls(ctx), engine, vmcfg, nil, nil)

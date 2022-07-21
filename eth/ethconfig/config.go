@@ -193,6 +193,9 @@ type Config struct {
 
 	// Sub node websoccket urls
 	SubUrls []string
+
+	// Disable block processing & validation
+	NoBlockProc bool
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.

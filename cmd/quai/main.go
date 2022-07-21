@@ -132,6 +132,7 @@ var (
 		utils.NetworkIdFlag,
 		utils.EthStatsURLFlag,
 		utils.FakePoWFlag,
+		utils.NoBlockProcessingFlag,
 		utils.NoCompactionFlag,
 		utils.GpoBlocksFlag,
 		utils.GpoPercentileFlag,
