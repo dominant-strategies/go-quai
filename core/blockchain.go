@@ -2238,9 +2238,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		if err != nil {
 			if err.Error() == "slice is not synced" {
 				fmt.Println("adding to future blocks", block.Header().Hash())
-				if err := bc.addFutureBlock(block); err != nil {
-					return it.index, err
-				}
+				// if err := bc.addFutureBlock(block); err != nil {
+				// 	return it.index, err
+				// }
 				return it.index, nil
 			} else {
 				bc.futureBlocks.Remove(block.Hash())
