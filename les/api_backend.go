@@ -209,6 +209,10 @@ func (b *LesApiBackend) GetTd(ctx context.Context, hash common.Hash) []*big.Int 
 	return nil
 }
 
+func (b *LesApiBackend) GetHeadTd() []*big.Int {
+	return nil
+}
+
 func (b *LesApiBackend) GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config) (*vm.EVM, func() error, error) {
 	if vmConfig == nil {
 		vmConfig = new(vm.Config)

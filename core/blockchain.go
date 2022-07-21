@@ -2887,6 +2887,11 @@ func (bc *BlockChain) GetTdByHash(hash common.Hash) []*big.Int {
 	return bc.hc.GetTdByHash(hash)
 }
 
+// GetTd gets the Total Difficulty tuple of the head block of chain.
+func (bc *BlockChain) GetHeadTd() []*big.Int {
+	return bc.hc.GetTdByHash(bc.CurrentBlock().Hash())
+}
+
 // GetHeader retrieves a block header from the database by hash and number,
 // caching it if found.
 func (bc *BlockChain) GetHeader(hash common.Hash, number uint64) *types.Header {

@@ -422,3 +422,7 @@ func (b *EthAPIBackend) StateAtTransaction(ctx context.Context, block *types.Blo
 func (b *EthAPIBackend) CalculateBaseFee(header *types.Header) *big.Int {
 	return b.eth.blockchain.CalculateBaseFee(header)
 }
+
+func (b *EthAPIBackend) GetHeadTd() []*big.Int {
+	return b.eth.blockchain.GetHeadTd()
+}
