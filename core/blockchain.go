@@ -2376,7 +2376,8 @@ func (bc *BlockChain) DomReorgNeeded(header *types.Header) (bool, error) {
 		reorg, err := bc.HLCRReorg(bc.GetBlockByHash(terminalHeader.Hash()))
 		if err != nil {
 			log.Info("Unable to reorg the dom ")
-			return false, err
+			// If we got here our dom can't reorg so we shouldn't reorg but we also shouldn't err because it will drop a peer
+			return false, nil
 		}
 		return reorg, err
 	}

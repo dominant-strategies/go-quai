@@ -678,7 +678,7 @@ func (d *Downloader) fetchHead(p *peerConnection) (head *types.Header, pivot *ty
 			// Make sure the peer gave us at least one and at most the requested headers
 			headers := packet.(*headerPack).headers
 			if len(headers) == 0 || len(headers) > fetch {
-				return nil, nil, fmt.Errorf("%w: returned headers %d != requested %d", errBadPeer, len(headers), fetch)
+				return nil, nil, fmt.Errorf("%w: returned headers %d != requested %d", nil, len(headers), fetch)
 			}
 			// The first header needs to be the head, validate against the checkpoint
 			// and request. If only 1 header was returned, make sure there's no pivot
@@ -1546,7 +1546,7 @@ func (d *Downloader) fetchParts(deliveryCh chan dataPack, deliver func(dataPack)
 			// Make sure that we have peers available for fetching. If all peers have been tried
 			// and all failed throw an error
 			if !progressed && !throttled && !running && len(idles) == total && pendCount > 0 {
-				return errPeersUnavailable
+				return nil
 			}
 		}
 	}
