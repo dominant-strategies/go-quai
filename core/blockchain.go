@@ -2384,7 +2384,7 @@ func (bc *BlockChain) DomReorgNeeded(header *types.Header) (bool, error) {
 }
 
 func (bc *BlockChain) HLCRReorg(block *types.Block) (bool, error) {
-	if block == nil {
+	if block == nil || block.Header() == nil {
 		return false, errors.New("block provided in hlcrreorg is nil")
 	}
 
