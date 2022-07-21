@@ -152,7 +152,11 @@ func (ec *Client) GetBlockStatus(ctx context.Context, header *types.Header) Writ
 
 func (ec *Client) HLCRReorg(ctx context.Context, block *types.Block) (bool, error) {
 	var domReorgNeeded bool
-	if err := ec.c.CallContext(ctx, &domReorgNeeded, "quai_hLCRReorg", block); err != nil {
+	data, err := RPCMarshalBlock(block, true, true)
+	if err != nil {
+		return false, err
+	}
+	if err := ec.c.CallContext(ctx, &domReorgNeeded, "quai_hLCRReorg", data); err != nil {
 		return false, err
 	}
 	return domReorgNeeded, nil
