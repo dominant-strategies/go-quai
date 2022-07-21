@@ -2224,6 +2224,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 						return it.index, err
 					}
 					return it.index, nil
+				} else if err.Error() == "dominant chain is uncled" {
+					return it.index, nil
 				} else {
 					return it.index, err
 				}
@@ -3552,6 +3554,7 @@ func (bc *BlockChain) CheckCanonical(header *types.Header, order int) error {
 		case quaiclient.CanonStatTy:
 			if (lastUncleHash != common.Hash{}) {
 				bc.ReOrgRollBack(lastUncleHeader, []*types.Header{}, []*types.Header{})
+				return errors.New("dominant chain is uncled")
 			}
 			return nil
 		case quaiclient.SideStatTy:
