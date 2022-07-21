@@ -2384,6 +2384,10 @@ func (bc *BlockChain) DomReorgNeeded(header *types.Header) (bool, error) {
 }
 
 func (bc *BlockChain) HLCRReorg(block *types.Block) (bool, error) {
+	if block == nil {
+		return false, errors.New("block provided in hlcrreorg is nil")
+	}
+
 	fmt.Println("HLCRReorg", block.Header().Hash(), " context ", types.QuaiNetworkContext)
 
 	fmt.Println("starting reorgrollback, context", types.QuaiNetworkContext)
