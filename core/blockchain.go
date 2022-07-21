@@ -3534,18 +3534,20 @@ func (bc *BlockChain) PreviousCanonicalCoincidentOnPath(header *types.Header, sl
 // dominant block is canonical.
 func (bc *BlockChain) CheckCanonical(header *types.Header, order int) error {
 	lastUncleHeader := &types.Header{}
+	lastUncleHash := common.Hash{}
 	for {
 		status := bc.domClient.GetBlockStatus(context.Background(), header)
 		// If the header is cononical break else keep looking
 		fmt.Println("status for CheckCanonical", status, header.Number)
 		switch status {
 		case quaiclient.CanonStatTy:
-			if (lastUncleHeader != &types.Header{}) {
+			if (lastUncleHash != common.Hash{}) {
 				bc.ReOrgRollBack(lastUncleHeader, []*types.Header{}, []*types.Header{})
 			}
 			return nil
 		case quaiclient.SideStatTy:
 			lastUncleHeader = header
+			lastUncleHash = header.Hash()
 		case quaiclient.UnknownStatTy:
 			return errors.New("dominant chain not synced")
 		}
