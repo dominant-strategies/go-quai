@@ -760,3 +760,8 @@ func (s *PublicBlockChainQuaiAPI) CheckPCRC(ctx context.Context, raw json.RawMes
 	}
 	return s.b.PCRC(headerWithOrder.Header, headerWithOrder.Order)
 }
+
+// GetTd gets the Total Difficulty tuple of the head block of chain.
+func (s *PublicBlockChainQuaiAPI) GetHeadTd(ctx context.Context) []*big.Int {
+	return s.b.GetHeadTd()
+}

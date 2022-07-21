@@ -409,6 +409,15 @@ func (ec *Client) SyncProgress(ctx context.Context) (*ethereum.SyncProgress, err
 	}, nil
 }
 
+// GetTd gets the Total Difficulty tuple of the head block of chain.
+func (ec *Client) GetHeadTd(ctx context.Context) []*big.Int {
+	var td []*big.Int
+	if err := ec.c.CallContext(ctx, &td, "quai_getHeadTd"); err != nil {
+		return nil
+	}
+	return td
+}
+
 // SubscribeNewHead subscribes to notifications about the current blockchain head
 // on the given channel.
 func (ec *Client) SubscribeNewHead(ctx context.Context, ch chan<- *types.Header) (ethereum.Subscription, error) {
