@@ -2225,8 +2225,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 					}
 					return it.index, nil
 				} else if err.Error() == "dominant chain is uncled" {
+					bc.futureBlocks.Remove(block.Hash())
 					return it.index, nil
 				} else {
+					bc.futureBlocks.Remove(block.Hash())
 					return it.index, err
 				}
 			}
