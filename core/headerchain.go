@@ -716,18 +716,17 @@ func (hc *HeaderChain) HLCR(localDifficulties []*big.Int, externDifficulties []*
 // CalcTd calculates the TD of the given header using PCRC and CalcHLCRNetDifficulty.
 func (hc *HeaderChain) CalcTd(header *types.Header) ([]*big.Int, error) {
 	// Check PCRC for the external block and return the terminal hash and net difficulties
-	externTerminalHash, err := hc.PCRC(header)
+	externTerminalHeader, err := hc.Engine().PreviousCoincidentOnPath(hc, header, header.Location, params.PRIME, params.ZONE, true)
 	if err != nil {
 		return nil, err
 	}
 
 	// Use HLCR to compute net total difficulty
-	externNd, err := hc.CalcHLCRNetDifficulty(externTerminalHash, header)
+	externNd, err := hc.CalcHLCRNetDifficulty(externTerminalHeader.Hash(), header)
 	if err != nil {
 		return nil, err
 	}
 
-	externTerminalHeader := hc.GetHeaderByHash(externTerminalHash)
 	externTd, err := hc.NdToTd(externTerminalHeader, externNd)
 	if err != nil {
 		return nil, err

@@ -3531,7 +3531,7 @@ func (bc *BlockChain) CheckCanonical(header *types.Header, order int) error {
 	case quaiclient.UnknownStatTy:
 		return errors.New("dominant chain not synced")
 	default:
-		return errors.New("subordinate is not canonical in dom")
+		return errors.New("dominant chain not synced")
 	}
 }
 
