@@ -2200,19 +2200,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 
 		fmt.Println("Running CheckCanonical and PCRC for block", block.Header().Number, block.Header().Location, block.Header().Hash())
 
-		err = bc.CheckCanonical(block.Header(), order)
-		if err != nil {
-			if err.Error() == "dominant chain not synced" {
-				fmt.Println("dom not synced, adding to future blocks", block.Header().Hash())
-				if err := bc.addFutureBlock(block); err != nil {
-					return it.index, err
-				}
-				return it.index, nil
-			} else {
-				return it.index, err
-			}
-		}
-
 		_, err = bc.PCRC(block.Header(), order)
 		if err != nil {
 			if err.Error() == "slice is not synced" {
@@ -2223,6 +2210,19 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 				return it.index, nil
 			} else {
 				bc.futureBlocks.Remove(block.Hash())
+				return it.index, err
+			}
+		}
+
+		err = bc.CheckCanonical(block.Header(), order)
+		if err != nil {
+			if err.Error() == "dominant chain not synced" {
+				fmt.Println("dom not synced, adding to future blocks", block.Header().Hash())
+				if err := bc.addFutureBlock(block); err != nil {
+					return it.index, err
+				}
+				return it.index, nil
+			} else {
 				return it.index, err
 			}
 		}
