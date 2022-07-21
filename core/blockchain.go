@@ -2214,16 +2214,18 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 			}
 		}
 
-		err = bc.CheckCanonical(block.Header(), order)
-		if err != nil {
-			if err.Error() == "dominant chain not synced" {
-				fmt.Println("dom not synced, adding to future blocks", block.Header().Hash())
-				if err := bc.addFutureBlock(block); err != nil {
+		if order < types.QuaiNetworkContext {
+			err = bc.CheckCanonical(block.Header(), order)
+			if err != nil {
+				if err.Error() == "dominant chain not synced" {
+					fmt.Println("dom not synced, adding to future blocks", block.Header().Hash())
+					if err := bc.addFutureBlock(block); err != nil {
+						return it.index, err
+					}
+					return it.index, nil
+				} else {
 					return it.index, err
 				}
-				return it.index, nil
-			} else {
-				return it.index, err
 			}
 		}
 
