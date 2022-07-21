@@ -2200,6 +2200,19 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 
 		fmt.Println("Running CheckCanonical and PCRC for block", block.Header().Number, block.Header().Location, block.Header().Hash())
 
+		err = bc.CheckCanonical(block.Header(), order)
+		if err != nil {
+			if err.Error() == "dominant chain not synced" {
+				fmt.Println("dom not synced, adding to future blocks", block.Header().Hash())
+				if err := bc.addFutureBlock(block); err != nil {
+					return it.index, err
+				}
+				return it.index, nil
+			} else {
+				return it.index, err
+			}
+		}
+
 		_, err = bc.PCRC(block.Header(), order)
 		if err != nil {
 			if err.Error() == "slice is not synced" {
@@ -3502,6 +3515,21 @@ func (bc *BlockChain) PreviousCanonicalCoincidentOnPath(header *types.Header, sl
 		}
 
 		prevTerminalHeader = terminalHeader
+	}
+}
+
+// CheckCanonical retrieves whether or not the block to be imported is canonical. Will rollback our chain until the
+// dominant block is canonical.
+func (bc *BlockChain) CheckCanonical(header *types.Header, order int) error {
+	status := bc.domClient.GetBlockStatus(context.Background(), header)
+	// If the header is cononical break else keep looking
+	switch status {
+	case quaiclient.CanonStatTy:
+		return nil
+	case quaiclient.UnknownStatTy:
+		return errors.New("dominant chain not synced")
+	default:
+		return errors.New("subordinate is not canonical in dom")
 	}
 }
 
