@@ -2186,9 +2186,25 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		// Process block using the parent state as reference point
 		substart := time.Now()
 
+		// Process our block and retrieve external blocks.
+		receipts, logs, usedGas, externalBlocks, err := bc.processor.Process(block, statedb, bc.vmConfig)
+		if err != nil {
+			bc.reportBlock(block, receipts, err)
+			atomic.StoreUint32(&followupInterrupt, 1)
+			bc.futureBlocks.Remove(block.Hash())
+			return it.index, err
+		}
+
 		order, err := bc.Engine().GetDifficultyOrder(block.Header())
 		if err != nil {
 			return it.index, err
+		}
+
+		if order < types.QuaiNetworkContext {
+			err := bc.CheckDominantBlock(block)
+			if err != nil {
+				return it.index, err
+			}
 		}
 
 		if types.QuaiNetworkContext < params.ZONE {
@@ -2199,21 +2215,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		}
 
 		fmt.Println("Running CheckCanonical and PCRC for block", block.Header().Number, block.Header().Location, block.Header().Hash())
-
-		_, err = bc.PCRC(block.Header(), order)
-		if err != nil {
-			if err.Error() == "slice is not synced" {
-				fmt.Println("adding to future blocks", block.Header().Hash())
-				if err := bc.addFutureBlock(block); err != nil {
-					return it.index, err
-				}
-				return it.index, nil
-			} else {
-				bc.futureBlocks.Remove(block.Hash())
-				return it.index, err
-			}
-		}
-
 		if order < types.QuaiNetworkContext {
 			err = bc.CheckCanonical(block.Header(), order)
 			if err != nil {
@@ -2229,13 +2230,18 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 			}
 		}
 
-		// Process our block and retrieve external blocks.
-		receipts, logs, usedGas, externalBlocks, err := bc.processor.Process(block, statedb, bc.vmConfig)
+		_, err = bc.PCRC(block.Header(), order)
 		if err != nil {
-			bc.reportBlock(block, receipts, err)
-			atomic.StoreUint32(&followupInterrupt, 1)
-			bc.futureBlocks.Remove(block.Hash())
-			return it.index, err
+			if err.Error() == "slice is not synced" {
+				fmt.Println("adding to future blocks", block.Header().Hash())
+				if err := bc.addFutureBlock(block); err != nil {
+					return it.index, err
+				}
+				return it.index, nil
+			} else {
+				bc.futureBlocks.Remove(block.Hash())
+				return it.index, err
+			}
 		}
 		// Update the metrics touched during block processing
 		accountReadTimer.Update(statedb.AccountReads)                 // Account reads are complete, we can mark them
@@ -3523,15 +3529,34 @@ func (bc *BlockChain) PreviousCanonicalCoincidentOnPath(header *types.Header, sl
 // CheckCanonical retrieves whether or not the block to be imported is canonical. Will rollback our chain until the
 // dominant block is canonical.
 func (bc *BlockChain) CheckCanonical(header *types.Header, order int) error {
-	status := bc.domClient.GetBlockStatus(context.Background(), header)
-	// If the header is cononical break else keep looking
-	switch status {
-	case quaiclient.CanonStatTy:
-		return nil
-	case quaiclient.UnknownStatTy:
-		return errors.New("dominant chain not synced")
-	default:
-		return errors.New("dominant chain not synced")
+	lastUncleHeader := &types.Header{}
+	for {
+		status := bc.domClient.GetBlockStatus(context.Background(), header)
+		// If the header is cononical break else keep looking
+		switch status {
+		case quaiclient.CanonStatTy:
+			if (lastUncleHeader != &types.Header{}) {
+				bc.ReOrgRollBack(lastUncleHeader, []*types.Header{}, []*types.Header{})
+			}
+			return nil
+		default:
+			lastUncleHeader = header
+		}
+
+		if header.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
+			return nil
+		}
+
+		terminalHeader, err := bc.Engine().PreviousCoincidentOnPath(bc, header, header.Location, order, types.QuaiNetworkContext, true)
+		if err != nil {
+			return err
+		}
+
+		if terminalHeader.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
+			return nil
+		}
+
+		header = terminalHeader
 	}
 }
 
@@ -3571,6 +3596,32 @@ func (bc *BlockChain) CheckSubordinateHeader(header *types.Header) error {
 			}
 		}
 	}
+	return nil
+}
+
+// CheckDominantBlock sends the block to the dominant chain.
+func (bc *BlockChain) CheckDominantBlock(block *types.Block) error {
+	if bc.domClient == nil {
+		return errors.New("dom client is nil")
+	}
+
+	status := bc.GetBlockStatus(block.Header())
+	if status == WriteStatus(quaiclient.UnknownStatTy) {
+		extBlock, err := bc.GetExternalBlockByHashAndContext(block.Header().Hash(), types.QuaiNetworkContext-1)
+		if err != nil {
+			return err
+		}
+
+		if extBlock == nil {
+			fmt.Println("ext block is nil for", block.Header().Hash())
+			return nil
+		}
+		block := types.NewBlockWithHeader(extBlock.Header()).WithBody(extBlock.Transactions(), extBlock.Uncles())
+		sealed := block.WithSeal(block.Header())
+		fmt.Println("sending dominant block", block.Header().Number, block.Hash())
+		go bc.domClient.SendMinedBlock(context.Background(), sealed, true, true)
+	}
+
 	return nil
 }
 
