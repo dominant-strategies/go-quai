@@ -3537,14 +3537,17 @@ func (bc *BlockChain) CheckCanonical(header *types.Header, order int) error {
 	for {
 		status := bc.domClient.GetBlockStatus(context.Background(), header)
 		// If the header is cononical break else keep looking
+		fmt.Println("status for CheckCanonical", status, header.Number)
 		switch status {
 		case quaiclient.CanonStatTy:
 			if (lastUncleHeader != &types.Header{}) {
 				bc.ReOrgRollBack(lastUncleHeader, []*types.Header{}, []*types.Header{})
 			}
 			return nil
-		default:
+		case quaiclient.SideStatTy:
 			lastUncleHeader = header
+		case quaiclient.UnknownStatTy:
+			return errors.New("dominant chain not synced")
 		}
 
 		if header.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
@@ -3595,7 +3598,7 @@ func (bc *BlockChain) CheckSubordinateHeader(header *types.Header) error {
 				sealed := block.WithSeal(block.Header())
 				err := subClient.SendMinedBlock(context.Background(), sealed, true, true)
 				if err != nil {
-					return err
+					fmt.Println("Err sending mined block to subordinate", err)
 				}
 			}
 		}
