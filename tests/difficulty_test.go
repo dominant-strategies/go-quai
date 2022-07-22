@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/spruce-solutions/go-quai/common"
+	"github.com/spruce-solutions/go-quai/core/types"
 	"github.com/spruce-solutions/go-quai/params"
 )
 
@@ -78,7 +79,7 @@ func TestDifficulty(t *testing.T) {
 
 	dt.walk(t, difficultyTestDir, func(t *testing.T, name string, test *DifficultyTest) {
 		cfg := dt.findConfig(t)
-		if test.ParentDifficulty.Cmp(params.MinimumDifficulty) < 0 {
+		if test.ParentDifficulty.Cmp(params.MinimumDifficulty[types.QuaiNetworkContext]) < 0 {
 			t.Skip("difficulty below minimum")
 			return
 		}

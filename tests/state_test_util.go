@@ -270,10 +270,10 @@ func MakePreState(db ethdb.Database, accounts core.GenesisAlloc, snapshotter boo
 func (t *StateTest) genesis(config *params.ChainConfig) *core.Genesis {
 	return &core.Genesis{
 		Config:     config,
-		Coinbase:   t.json.Env.Coinbase,
-		Difficulty: t.json.Env.Difficulty,
-		GasLimit:   t.json.Env.GasLimit,
-		Number:     t.json.Env.Number,
+		Coinbase:   []common.Address{t.json.Env.Coinbase, t.json.Env.Coinbase, t.json.Env.Coinbase},
+		Difficulty: []*big.Int{t.json.Env.Difficulty, t.json.Env.Difficulty, t.json.Env.Difficulty},
+		GasLimit:   []uint64{t.json.Env.GasLimit, t.json.Env.GasLimit, t.json.Env.GasLimit},
+		Number:     []*big.Int{big.NewInt(int64(t.json.Env.Number)), big.NewInt(int64(t.json.Env.Number)), big.NewInt(int64(t.json.Env.Number))},
 		Timestamp:  t.json.Env.Timestamp,
 		Alloc:      t.json.Pre,
 	}

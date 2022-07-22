@@ -104,8 +104,8 @@ func TestDifficultyCalculators(t *testing.T) {
 		// 1 to 300 seconds diff
 		var timeDelta = uint64(1 + rand.Uint32()%3000)
 		diffBig := big.NewInt(0).SetBytes(randSlice(2, 10))
-		if diffBig.Cmp(params.MinimumDifficulty) < 0 {
-			diffBig.Set(params.MinimumDifficulty)
+		if diffBig.Cmp(params.MinimumDifficulty[types.QuaiNetworkContext]) < 0 {
+			diffBig.Set(params.MinimumDifficulty[types.QuaiNetworkContext])
 		}
 		//rand.Read(difficulty)
 		header := &types.Header{

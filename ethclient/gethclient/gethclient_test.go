@@ -74,7 +74,7 @@ func generateTestChain() (*core.Genesis, []*types.Block) {
 	genesis := &core.Genesis{
 		Config:    config,
 		Alloc:     core.GenesisAlloc{testAddr: {Balance: testBalance}},
-		ExtraData: []byte("test genesis"),
+		ExtraData: [][]byte{[]byte("test genesis"), []byte("test genesis"), []byte("test genesis")},
 		Timestamp: 9000,
 	}
 	generate := func(i int, g *core.BlockGen) {

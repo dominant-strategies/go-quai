@@ -239,8 +239,8 @@ func createGQLService(t *testing.T, stack *node.Node) {
 	ethConf := &ethconfig.Config{
 		Genesis: &core.Genesis{
 			Config:     params.AllEthashProtocolChanges,
-			GasLimit:   11500000,
-			Difficulty: big.NewInt(1048576),
+			GasLimit:   []uint64{11500000, 11500000, 11500000},
+			Difficulty: []*big.Int{big.NewInt(1048576), big.NewInt(1048576), big.NewInt(1048576)},
 		},
 		Blake3: blake3.Config{
 			Fakepow: true,
@@ -281,8 +281,8 @@ func createGQLServiceWithTransactions(t *testing.T, stack *node.Node) {
 	ethConf := &ethconfig.Config{
 		Genesis: &core.Genesis{
 			Config:     params.AllEthashProtocolChanges,
-			GasLimit:   11500000,
-			Difficulty: big.NewInt(1048576),
+			GasLimit:   []uint64{11500000, 11500000, 11500000},
+			Difficulty: []*big.Int{big.NewInt(1048576), big.NewInt(1048576), big.NewInt(1048576)},
 			Alloc: core.GenesisAlloc{
 				address: {Balance: funds},
 				// The address 0xdad sloads 0x00 and 0x01
@@ -297,7 +297,7 @@ func createGQLServiceWithTransactions(t *testing.T, stack *node.Node) {
 					Balance: big.NewInt(0),
 				},
 			},
-			BaseFee: big.NewInt(params.InitialBaseFee),
+			BaseFee: []*big.Int{big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee)},
 		},
 		Blake3: blake3.Config{
 			Fakepow: true,

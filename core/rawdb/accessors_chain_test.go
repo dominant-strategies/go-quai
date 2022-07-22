@@ -267,7 +267,7 @@ func TestTdStorage(t *testing.T) {
 	db := NewMemoryDatabase()
 
 	// Create a test TD to move around the database and make sure it's really new
-	hash, td := common.Hash{}, big.NewInt(314)
+	hash, td := common.Hash{}, []*big.Int{big.NewInt(314), big.NewInt(314), big.NewInt(314)}
 	if entry := ReadTd(db, hash, 0); entry != nil {
 		t.Fatalf("Non existent TD returned: %v", entry)
 	}
@@ -275,7 +275,7 @@ func TestTdStorage(t *testing.T) {
 	WriteTd(db, hash, 0, td)
 	if entry := ReadTd(db, hash, 0); entry == nil {
 		t.Fatalf("Stored TD not found")
-	} else if entry.Cmp(td) != 0 {
+	} else if entry[types.QuaiNetworkContext].Cmp(td[types.QuaiNetworkContext]) != 0 {
 		t.Fatalf("Retrieved TD mismatch: have %v, want %v", entry, td)
 	}
 	// Delete the TD and verify the execution
@@ -526,7 +526,7 @@ func TestCanonicalHashIteration(t *testing.T) {
 	// Fill database with testing data.
 	for i := uint64(1); i <= 8; i++ {
 		WriteCanonicalHash(db, common.Hash{}, i)
-		WriteTd(db, common.Hash{}, i, big.NewInt(10)) // Write some interferential data
+		WriteTd(db, common.Hash{}, i, []*big.Int{big.NewInt(10), big.NewInt(10), big.NewInt(10)}) // Write some interferential data
 	}
 	for i, c := range cases {
 		numbers, _ := ReadAllCanonicalHashes(db, c.from, c.to, c.limit)
