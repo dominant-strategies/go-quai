@@ -80,8 +80,11 @@ func answerGetBlockHeadersQuery(backend Backend, query *GetBlockHeadersPacket, p
 		headers = append(headers, origin)
 		bytes += estHeaderSize
 
-		if order, _ := backend.Chain().Engine().GetDifficultyOrder(origin); order < types.QuaiNetworkContext {
-			break
+		// lock step sync only when going towards latest.
+		if hashMode && !query.Reverse {
+			if order, _ := backend.Chain().Engine().GetDifficultyOrder(origin); order < types.QuaiNetworkContext {
+				break
+			}
 		}
 
 		// Advance to the next header of the query
