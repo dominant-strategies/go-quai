@@ -2207,13 +2207,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 			}
 		}
 
-		if types.QuaiNetworkContext < params.ZONE {
-			err := bc.CheckSubordinateBlock(block)
-			if err != nil {
-				return it.index, err
-			}
-		}
-
 		fmt.Println("Running CheckCanonical and PCRC for block", block.Header().Number, block.Header().Location, block.Header().Hash())
 		if order < types.QuaiNetworkContext {
 			err = bc.CheckCanonical(block.Header(), order)
@@ -3580,63 +3573,6 @@ func (bc *BlockChain) CheckCanonical(header *types.Header, order int) error {
 
 		header = terminalHeader
 	}
-}
-
-// CheckSubordinateBlock asks the subordinate chain what their header is and will manifest
-// the subordinate chain to the proper head.
-func (bc *BlockChain) CheckSubordinateBlock(block *types.Block) error {
-	header := block.Header()
-	subClient := bc.subClients[header.Location[types.QuaiNetworkContext]-1]
-	// Do not validate PCRC on a subclient you do not have.
-	if subClient == nil {
-		return nil
-	}
-
-	subHead, err := subClient.HeaderByNumber(context.Background(), nil)
-	if err != nil {
-		return err
-	}
-	// If sub is not ready to run PCRC on a dominant block, sync the subordinate chain.
-	if subHead.Hash() != header.ParentHash[types.QuaiNetworkContext+1] {
-		extBlocks, err := bc.GetExternalBlockTraceSet(subHead.Hash(), header, types.QuaiNetworkContext+1)
-		if err != nil {
-			log.Warn("Error in extBlockTrace", "err", err)
-			return err
-		}
-		for i, j := 0, len(extBlocks)-1; i < j; i, j = i+1, j-1 {
-			extBlocks[i], extBlocks[j] = extBlocks[j], extBlocks[i]
-		}
-
-		log.Info("Sending blocks to subordinate", "len", len(extBlocks), "from", subHead.Number, "location", header.Location, "hash", header.Hash())
-		for _, extBlock := range extBlocks {
-			if extBlock != nil {
-				block := types.NewBlockWithHeader(extBlock.Header()).WithBody(extBlock.Transactions(), extBlock.Uncles())
-				sealed := block.WithSeal(block.Header())
-				err := subClient.SendMinedBlock(context.Background(), sealed, true, true)
-				if err != nil {
-					fmt.Println("Err sending mined block to subordinate", err)
-				}
-			}
-		}
-	} else {
-		status := bc.GetBlockStatus(block.Header())
-		if status == WriteStatus(quaiclient.UnknownStatTy) {
-			extBlock, err := bc.GetExternalBlockByHashAndContext(header.Hash(), types.QuaiNetworkContext+1)
-			if err != nil {
-				return err
-			}
-
-			if extBlock == nil {
-				fmt.Println("ext block is nil for", block.Header().Hash())
-				return nil
-			}
-			block := types.NewBlockWithHeader(extBlock.Header()).WithBody(extBlock.Transactions(), extBlock.Uncles())
-			sealed := block.WithSeal(block.Header())
-			fmt.Println("sending subordinate block", block.Header().Number, block.Hash())
-			go subClient.SendMinedBlock(context.Background(), sealed, true, true)
-		}
-	}
-	return nil
 }
 
 // CheckDominantBlock sends the block to the dominant chain.
