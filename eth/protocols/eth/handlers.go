@@ -27,8 +27,8 @@ import (
 	"github.com/spruce-solutions/go-quai/trie"
 )
 
-// breakOnCoincident returns true on a coincident block with a given hash
-func breakOnCoincident(backend Backend, hash common.Hash) bool {
+// IsCoincident returns true on a coincident block with a given hash
+func IsCoincident(backend Backend, hash common.Hash) bool {
 	order, _ := backend.Chain().Engine().GetDifficultyOrder(backend.Chain().GetHeaderByHash(hash))
 	return order < types.QuaiNetworkContext
 }
@@ -81,10 +81,8 @@ func answerGetBlockHeadersQuery(backend Backend, query *GetBlockHeadersPacket, p
 		bytes += estHeaderSize
 
 		// lock step sync only when going towards latest.
-		if hashMode && !query.Reverse {
-			if order, _ := backend.Chain().Engine().GetDifficultyOrder(origin); order < types.QuaiNetworkContext {
-				break
-			}
+		if hashMode && !query.Reverse && IsCoincident(backend, origin.Hash()) {
+			break
 		}
 
 		// Advance to the next header of the query
@@ -164,7 +162,7 @@ func answerGetBlockBodiesQuery(backend Backend, query GetBlockBodiesPacket, peer
 		}
 
 		// stopping at a coincident block after including the block body for the coincident block.
-		if breakOnCoincident(backend, hash) {
+		if IsCoincident(backend, hash) {
 			break
 		}
 	}
@@ -301,7 +299,7 @@ func answerGetExtBlocksQuery(backend Backend, query GetExtBlocksPacket, peer *Pe
 		}
 
 		// stopping at a coincident block after including the external block for the coincident block.
-		if breakOnCoincident(backend, hash) {
+		if IsCoincident(backend, hash) {
 			break
 		}
 	}
