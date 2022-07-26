@@ -2215,23 +2215,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 			}
 		}
 
-		if order < types.QuaiNetworkContext {
-			err = bc.CheckCanonical(block.Header(), order)
-			if err != nil {
-				if err == errSliceNotSynced {
-					td, err := bc.CalcTd(block.Header())
-					if err != nil {
-						return it.index, err
-					}
-					fmt.Println("dom is not canonical", block.Header().Hash(), block.Header().Number)
-					bc.writeBlockWithoutState(block, td)
-					return it.index, nil
-				} else {
-					return it.index, err
-				}
-			}
-		}
-
 		_, err = bc.PCRC(block.Header(), order)
 		if err != nil {
 			fmt.Println("PCRC Error", err)
@@ -2276,6 +2259,17 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 			bc.reportBlock(block, receipts, err)
 			bc.chainUncleFeed.Send(block.Header())
 			return it.index, err
+		}
+
+		if order < types.QuaiNetworkContext {
+			err = bc.CheckCanonical(block.Header(), order)
+			if err != nil {
+				if err == errSliceNotSynced {
+					setHead = false
+				} else {
+					return it.index, err
+				}
+			}
 		}
 
 		// Write the block to the chain and get the status.
