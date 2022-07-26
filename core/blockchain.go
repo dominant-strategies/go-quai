@@ -3529,7 +3529,7 @@ func (bc *BlockChain) PreviousCanonicalCoincidentOnPath(header *types.Header, sl
 				// do nothing and find latest uncle or canonical in dom
 			default:
 				if prevTerminalHeader.Hash() != header.Hash() {
-					bc.ReOrgRollBack(prevTerminalHeader, []*types.Header{}, []*types.Header{})
+					// bc.ReOrgRollBack(prevTerminalHeader, []*types.Header{}, []*types.Header{})
 					return nil, errSliceNotSynced
 				}
 				return terminalHeader, nil
