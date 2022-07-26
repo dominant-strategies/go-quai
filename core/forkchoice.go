@@ -24,6 +24,7 @@ import (
 
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/common/math"
+	"github.com/spruce-solutions/go-quai/consensus"
 	"github.com/spruce-solutions/go-quai/core/types"
 	"github.com/spruce-solutions/go-quai/log"
 	"github.com/spruce-solutions/go-quai/params"
@@ -50,6 +51,12 @@ type ChainReader interface {
 
 	// DomReorgNeeded checks the dominant chain for the reorg status.
 	DomReorgNeeded(header *types.Header) (bool, error)
+
+	// PCCRC The purpose of the Previous Coincident Reference Check (PCRC) is to establish
+	PCCRC(header *types.Header, headerOrder int) (types.PCRCTermini, error)
+
+	// Gets the difficulty order of a header
+	GetDifficultyOrder(header *types.Header) (int, error)
 }
 
 // ForkChoice is the fork chooser based on the highest total difficulty of the
@@ -119,6 +126,22 @@ func (f *ForkChoice) ReorgNeeded(current *types.Header, header *types.Header) (b
 			reorg = !currentPreserve && (externPreserve || f.rand.Float64() < 0.5)
 		}
 	}
+	headerOrder, err := f.chain.GetDifficultyOrder(header)
+	if err != nil {
+		return false, err
+	}
+
+	_, err = f.chain.PCCRC(header, headerOrder)
+
+	if err != nil {
+		if err.Error() == "slice is not synced" {
+			log.Debug("Slice not synced, no nothing", "hash", header.Hash())
+			return false, nil
+		} else {
+			return false, consensus.ErrFutureBlock
+		}
+	}
+
 	if reorg && types.QuaiNetworkContext != params.PRIME {
 		domReorg, err := f.chain.DomReorgNeeded(header)
 		if err != nil {
