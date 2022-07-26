@@ -168,6 +168,12 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 	}
 	op := peerToSyncOp(mode, peer)
 
+	// Sanity check on the TD tuple given by the Peer.
+	// Ideally this should never get triggered.
+	if op.td[0] == nil || op.td[1] == nil || op.td[2] == nil {
+		return op
+	}
+
 	if len(op.td) > 0 {
 		if cs.handler.chain.HLCR(op.td, ourTD) {
 			return nil // We're in sync.
