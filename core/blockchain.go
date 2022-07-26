@@ -1703,6 +1703,9 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 		}
 	} else {
 		status = SideStatTy
+		if err := bc.RollbackToCanonical(block.Header()); err != nil {
+			return NonStatTy, err
+		}
 	}
 	// Set new head.
 	if status == CanonStatTy {
@@ -2208,24 +2211,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		}
 
 		log.Info("Running CheckCanonical and PCRC for block", "num", block.Header().Number, "location", block.Header().Location, "hash", block.Header().Hash())
-		if order < types.QuaiNetworkContext {
-			err = bc.CheckCanonical(block.Header(), order)
-			if err != nil {
-				if err.Error() == "dominant chain not synced" {
-					log.Debug("Dom not synced, adding to future blocks", "hash", block.Header().Hash())
-					if err := bc.addFutureBlock(block); err != nil {
-						return it.index, err
-					}
-					return it.index, nil
-				} else if err.Error() == "dominant chain is uncled" {
-					bc.futureBlocks.Remove(block.Hash())
-					return it.index, nil
-				} else {
-					bc.futureBlocks.Remove(block.Hash())
-					return it.index, err
-				}
-			}
-		}
 
 		_, err = bc.PCRC(block.Header(), order)
 		if err != nil {
@@ -2368,7 +2353,7 @@ func (bc *BlockChain) DomReorgNeeded(header *types.Header) (bool, error) {
 	}
 
 	domStatus := bc.domClient.GetBlockStatus(context.Background(), terminalHeader)
-	if domStatus == quaiclient.SideStatTy {
+	if domStatus != quaiclient.CanonStatTy {
 		// Send HLCRReorg to dom
 		block := bc.GetBlockByHash(terminalHeader.Hash())
 		if block == nil {
@@ -2423,7 +2408,7 @@ func (bc *BlockChain) HLCRReorg(block *types.Block) (bool, error) {
 		return false, nil
 	}
 
-	err = bc.ReOrgRollBack(bc.CurrentHeader(), []*types.Header{}, []*types.Header{})
+	err = bc.ReOrgRollBack(bc.CurrentBlock().Header(), []*types.Header{}, []*types.Header{})
 	if err != nil {
 		return false, err
 	}
@@ -3534,9 +3519,8 @@ func (bc *BlockChain) PreviousCanonicalCoincidentOnPath(header *types.Header, sl
 	}
 }
 
-// CheckCanonical retrieves whether or not the block to be imported is canonical. Will rollback our chain until the
-// dominant block is canonical.
-func (bc *BlockChain) CheckCanonical(header *types.Header, order int) error {
+// RollbackToCanonical ensures that we are building on a canonical peg.
+func (bc *BlockChain) RollbackToCanonical(header *types.Header) error {
 	lastUncleHeader := &types.Header{}
 	lastUncleHash := common.Hash{}
 	for {
@@ -3547,21 +3531,18 @@ func (bc *BlockChain) CheckCanonical(header *types.Header, order int) error {
 		case quaiclient.CanonStatTy:
 			if (lastUncleHash != common.Hash{}) {
 				bc.ReOrgRollBack(lastUncleHeader, []*types.Header{}, []*types.Header{})
-				return errors.New("dominant chain is uncled")
 			}
 			return nil
-		case quaiclient.SideStatTy:
+		default:
 			lastUncleHeader = header
 			lastUncleHash = header.Hash()
-		case quaiclient.UnknownStatTy:
-			return errors.New("dominant chain not synced")
 		}
 
 		if header.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
 			return nil
 		}
 
-		terminalHeader, err := bc.Engine().PreviousCoincidentOnPath(bc, header, header.Location, order, types.QuaiNetworkContext, true)
+		terminalHeader, err := bc.Engine().PreviousCoincidentOnPath(bc, header, header.Location, types.QuaiNetworkContext-1, types.QuaiNetworkContext, true)
 		if err != nil {
 			return err
 		}
