@@ -2207,12 +2207,12 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 			}
 		}
 
-		fmt.Println("Running CheckCanonical and PCRC for block", block.Header().Number, block.Header().Location, block.Header().Hash())
+		log.Info("Running CheckCanonical and PCRC for block", "num", block.Header().Number, "location", block.Header().Location, "hash", block.Header().Hash())
 		if order < types.QuaiNetworkContext {
 			err = bc.CheckCanonical(block.Header(), order)
 			if err != nil {
 				if err.Error() == "dominant chain not synced" {
-					fmt.Println("dom not synced, adding to future blocks", block.Header().Hash())
+					log.Debug("Dom not synced, adding to future blocks", "hash", block.Header().Hash())
 					if err := bc.addFutureBlock(block); err != nil {
 						return it.index, err
 					}
@@ -2230,7 +2230,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		_, err = bc.PCRC(block.Header(), order)
 		if err != nil {
 			if err.Error() == "slice is not synced" {
-				fmt.Println("adding to future blocks", block.Header().Hash())
+				log.Debug("Slice not synced, no nothing", "hash", block.Header().Hash())
 				// if err := bc.addFutureBlock(block); err != nil {
 				// 	return it.index, err
 				// }
@@ -3543,7 +3543,7 @@ func (bc *BlockChain) CheckCanonical(header *types.Header, order int) error {
 	for {
 		status := bc.domClient.GetBlockStatus(context.Background(), header)
 		// If the header is cononical break else keep looking
-		fmt.Println("status for CheckCanonical", status, header.Number)
+		log.Debug("Status for CheckCanonical", "status", status, "number", header.Number)
 		switch status {
 		case quaiclient.CanonStatTy:
 			if (lastUncleHash != common.Hash{}) {
@@ -3594,7 +3594,7 @@ func (bc *BlockChain) CheckDominantBlock(block *types.Block) error {
 		}
 		block := types.NewBlockWithHeader(extBlock.Header()).WithBody(extBlock.Transactions(), extBlock.Uncles())
 		sealed := block.WithSeal(block.Header())
-		fmt.Println("sending dominant block", block.Header().Number, block.Hash())
+		log.Debug("Sending dominant block", "number", block.Header().Number, "hash", block.Hash())
 		go bc.domClient.SendMinedBlock(context.Background(), sealed, true, true)
 	}
 
