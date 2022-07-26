@@ -113,7 +113,7 @@ func AssembleGraph(start int, end int, chains []Chain) {
 		//Sets the default range if start and end parameters are 0. Also checks to see if they are out of bounds
 		if start == 0 && end == 0 {
 			end = int(numBlocks)
-			start = int(numBlocks) - 100
+			start = int(numBlocks) - 10
 		}
 		if end > int(numBlocks) {
 			end = int(numBlocks)

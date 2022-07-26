@@ -87,6 +87,7 @@ var (
 	errInsertionInterrupted = errors.New("insertion is interrupted")
 	errChainStopped         = errors.New("blockchain is stopped")
 	errExtBlockNotFound     = errors.New("error finding external block by context and hash")
+	errSliceNotSynced       = errors.New("slice is not synced")
 )
 
 const (
@@ -2207,21 +2208,25 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 			}
 		}
 
-		fmt.Println("Running CheckCanonical and PCRC for block", block.Header().Number, block.Header().Location, block.Header().Hash())
+		if types.QuaiNetworkContext < params.ZONE {
+			err := bc.CheckSubordinateBlock(block)
+			if err != nil {
+				return it.index, err
+			}
+		}
+
 		if order < types.QuaiNetworkContext {
 			err = bc.CheckCanonical(block.Header(), order)
 			if err != nil {
-				if err.Error() == "dominant chain not synced" {
-					fmt.Println("dom not synced, adding to future blocks", block.Header().Hash())
-					if err := bc.addFutureBlock(block); err != nil {
+				if err == errSliceNotSynced {
+					td, err := bc.CalcTd(block.Header())
+					if err != nil {
 						return it.index, err
 					}
-					return it.index, nil
-				} else if err.Error() == "dominant chain is uncled" {
-					bc.futureBlocks.Remove(block.Hash())
+					fmt.Println("dom is not canonical", block.Header().Hash(), block.Header().Number)
+					bc.writeBlockWithoutState(block, td)
 					return it.index, nil
 				} else {
-					bc.futureBlocks.Remove(block.Hash())
 					return it.index, err
 				}
 			}
@@ -2229,14 +2234,12 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 
 		_, err = bc.PCRC(block.Header(), order)
 		if err != nil {
-			if err.Error() == "slice is not synced" {
-				fmt.Println("adding to future blocks", block.Header().Hash())
-				// if err := bc.addFutureBlock(block); err != nil {
-				// 	return it.index, err
-				// }
+			fmt.Println("PCRC Error", err)
+			if err == errSliceNotSynced {
+				fmt.Println("we're in this error")
 				return it.index, nil
 			} else {
-				bc.futureBlocks.Remove(block.Hash())
+				fmt.Println("are we in this error?")
 				return it.index, err
 			}
 		}
@@ -2374,6 +2377,7 @@ func (bc *BlockChain) DomReorgNeeded(header *types.Header) (bool, error) {
 		if block == nil {
 			return false, nil
 		}
+		fmt.Println("calling HLCR Reorg", block.Hash(), block.Header().Number)
 		reorg, err := bc.HLCRReorg(block)
 		if err != nil {
 			log.Info("Unable to reorg the dom ")
@@ -2411,6 +2415,12 @@ func (bc *BlockChain) HLCRReorg(block *types.Block) (bool, error) {
 			return false, errors.New("unable to reorg the dom")
 		}
 	} else {
+		// In the dom we are telling the sub that we are not on the same location.
+		if !bytes.Equal(bc.CurrentBlock().Header().Location, block.Header().Location) {
+			fmt.Println("dom reorg not needed, location is different.")
+			return false, nil
+		}
+
 		currentTd := bc.GetTdByHash(bc.CurrentBlock().Hash())
 		externTd, err := bc.CalcTd(block.Header())
 		if err != nil {
@@ -2420,10 +2430,13 @@ func (bc *BlockChain) HLCRReorg(block *types.Block) (bool, error) {
 	}
 
 	if !reorgFromDom {
+		fmt.Println("returning reorg from dom is false")
 		return false, nil
 	}
 
-	err = bc.ReOrgRollBack(bc.CurrentHeader(), []*types.Header{}, []*types.Header{})
+	fmt.Println("Rolling back our chain, taking out", bc.CurrentHeader().Hash())
+
+	err = bc.ReOrgRollBack(bc.CurrentBlock().Header(), []*types.Header{}, []*types.Header{})
 	if err != nil {
 		return false, err
 	}
@@ -2800,7 +2813,7 @@ func (bc *BlockChain) skipBlock(err error, it *insertIterator) bool {
 }
 
 func (bc *BlockChain) update() {
-	futureTimer := time.NewTicker(1 * time.Second)
+	futureTimer := time.NewTicker(5 * time.Second)
 	defer futureTimer.Stop()
 	defer bc.wg.Done()
 	for {
@@ -3412,7 +3425,7 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTer
 		}
 
 		if (PCRCTermini.PTR == common.Hash{} || PCRCTermini.PRTR == common.Hash{}) {
-			return PCRCTermini, consensus.ErrSliceNotSynced
+			return PCRCTermini, errSliceNotSynced
 		}
 
 		PCRCTermini.PTP = PTP.Hash()
@@ -3445,7 +3458,7 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTer
 		}
 
 		if (PCRCTermini.RTZ == common.Hash{}) {
-			return PCRCTermini, consensus.ErrSliceNotSynced
+			return PCRCTermini, errSliceNotSynced
 		}
 
 		if RTR.Hash() != PCRCTermini.RTZ {
@@ -3523,7 +3536,7 @@ func (bc *BlockChain) PreviousCanonicalCoincidentOnPath(header *types.Header, sl
 			default:
 				if prevTerminalHeader.Hash() != header.Hash() {
 					bc.ReOrgRollBack(prevTerminalHeader, []*types.Header{}, []*types.Header{})
-					return nil, consensus.ErrSliceNotSynced
+					return nil, errSliceNotSynced
 				}
 				return terminalHeader, nil
 			}
@@ -3543,19 +3556,18 @@ func (bc *BlockChain) CheckCanonical(header *types.Header, order int) error {
 	for {
 		status := bc.domClient.GetBlockStatus(context.Background(), header)
 		// If the header is cononical break else keep looking
-		fmt.Println("status for CheckCanonical", status, header.Number)
 		switch status {
 		case quaiclient.CanonStatTy:
 			if (lastUncleHash != common.Hash{}) {
 				bc.ReOrgRollBack(lastUncleHeader, []*types.Header{}, []*types.Header{})
-				return errors.New("dominant chain is uncled")
+				return errSliceNotSynced
 			}
 			return nil
 		case quaiclient.SideStatTy:
 			lastUncleHeader = header
 			lastUncleHash = header.Hash()
 		case quaiclient.UnknownStatTy:
-			return errors.New("dominant chain not synced")
+			return errSliceNotSynced
 		}
 
 		if header.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
@@ -3575,6 +3587,47 @@ func (bc *BlockChain) CheckCanonical(header *types.Header, order int) error {
 	}
 }
 
+// CheckSubordinateBlock asks the subordinate chain what their header is and will manifest
+// the subordinate chain to the proper head.
+func (bc *BlockChain) CheckSubordinateBlock(block *types.Block) error {
+	header := block.Header()
+	subClient := bc.subClients[header.Location[types.QuaiNetworkContext]-1]
+	// Do not validate PCRC on a subclient you do not have.
+	if subClient == nil {
+		return nil
+	}
+
+	subHead, err := subClient.HeaderByNumber(context.Background(), nil)
+	if err != nil {
+		return err
+	}
+	// If sub is not ready to run PCRC on a dominant block, sync the subordinate chain.
+	if subHead.Hash() != header.ParentHash[types.QuaiNetworkContext+1] {
+		extBlocks, err := bc.GetExternalBlockTraceSet(subHead.Hash(), header, types.QuaiNetworkContext+1)
+		if err != nil {
+			log.Warn("Error in extBlockTrace", "err", err)
+			return err
+		}
+		for i, j := 0, len(extBlocks)-1; i < j; i, j = i+1, j-1 {
+			extBlocks[i], extBlocks[j] = extBlocks[j], extBlocks[i]
+		}
+
+		log.Info("Sending blocks to subordinate", "len", len(extBlocks), "from", subHead.Number, "location", header.Location, "hash", header.Hash())
+		for _, extBlock := range extBlocks {
+			if extBlock != nil {
+				block := types.NewBlockWithHeader(extBlock.Header()).WithBody(extBlock.Transactions(), extBlock.Uncles())
+				sealed := block.WithSeal(block.Header())
+				err := subClient.SendMinedBlock(context.Background(), sealed, true, true)
+				if err != nil {
+					fmt.Println("Err sending mined block to subordinate", err)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
 // CheckDominantBlock sends the block to the dominant chain.
 func (bc *BlockChain) CheckDominantBlock(block *types.Block) error {
 	if bc.domClient == nil {
@@ -3582,6 +3635,7 @@ func (bc *BlockChain) CheckDominantBlock(block *types.Block) error {
 	}
 
 	status := bc.GetBlockStatus(block.Header())
+	fmt.Println("status for dominant block", status, block.Header().Hash())
 	if status == WriteStatus(quaiclient.UnknownStatTy) {
 		extBlock, err := bc.GetExternalBlockByHashAndContext(block.Header().Hash(), types.QuaiNetworkContext-1)
 		if err != nil {
@@ -3589,7 +3643,7 @@ func (bc *BlockChain) CheckDominantBlock(block *types.Block) error {
 		}
 
 		if extBlock == nil {
-			fmt.Println("ext block is nil for", block.Header().Hash())
+			fmt.Println("ext block is nil in CheckDominantBlock")
 			return nil
 		}
 		block := types.NewBlockWithHeader(extBlock.Header()).WithBody(extBlock.Transactions(), extBlock.Uncles())
