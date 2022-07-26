@@ -3522,8 +3522,7 @@ func (bc *BlockChain) PreviousCanonicalCoincidentOnPath(header *types.Header, sl
 				// do nothing and find latest uncle or canonical in dom
 			default:
 				if prevTerminalHeader.Hash() != header.Hash() {
-					bc.ReOrgRollBack(prevTerminalHeader, []*types.Header{}, []*types.Header{})
-					return nil, consensus.ErrSliceNotSynced
+					return nil, errors.New("subordinate terminus mismatch")
 				}
 				return terminalHeader, nil
 			}
