@@ -96,6 +96,10 @@ func NewForkChoice(chainReader ChainReader, preserve func(header *types.Header) 
 // header is always selected as the head.
 func (f *ForkChoice) ReorgNeeded(current *types.Header, header *types.Header) (bool, error) {
 
+	if current == nil || header == nil {
+		return false, errors.New("reorg beeing calculated on nil header")
+	}
+
 	localTd := f.chain.GetTd(current.Hash(), current.Number[types.QuaiNetworkContext].Uint64())
 
 	externTd, err := f.chain.CalcTd(header)
@@ -107,16 +111,13 @@ func (f *ForkChoice) ReorgNeeded(current *types.Header, header *types.Header) (b
 		return false, errors.New("missing td")
 	}
 
-	currentBlock := f.chain.GetBlockByHash(current.Hash())
-	externBlock := f.chain.GetBlockByHash(header.Hash())
-
 	// If the total difficulty is higher than our known, add it to the canonical chain
 	// Second clause in the if statement reduces the vulnerability to selfish mining.
 	// Please refer to http://www.cs.cornell.edu/~ie53/publications/btcProcFC.pdf
 	reorg := f.chain.HLCR(localTd, externTd)
 	equalTd := externTd[0].Cmp(localTd[0]) == 0 && externTd[1].Cmp(localTd[1]) == 0 && externTd[2].Cmp(localTd[2]) == 0
 	if !reorg && equalTd {
-		number, headNumber := externBlock.NumberU64(), currentBlock.NumberU64()
+		number, headNumber := header.Number[types.QuaiNetworkContext].Uint64(), current.Number[types.QuaiNetworkContext].Uint64()
 		if number < headNumber {
 			reorg = true
 		} else if number == headNumber {
