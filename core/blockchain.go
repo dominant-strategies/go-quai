@@ -1703,8 +1703,10 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 		}
 	} else {
 		status = SideStatTy
-		if err := bc.RollbackToCanonical(block.Header()); err != nil {
-			return NonStatTy, err
+		if types.QuaiNetworkContext != params.PRIME {
+			if err := bc.RollbackToCanonical(block.Header()); err != nil {
+				return NonStatTy, err
+			}
 		}
 	}
 	// Set new head.
@@ -2206,6 +2208,13 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 
 		_, err = bc.PCRC(block.Header(), order)
 		if err != nil {
+			if err.Error() == "block in the future" || errors.Is(err, consensus.ErrFutureBlock) {
+				fmt.Println("adding future block")
+				if err := bc.addFutureBlock(block); err != nil {
+					return it.index, err
+				}
+				return it.index, nil
+			}
 			return it.index, err
 		}
 		// Update the metrics touched during block processing
@@ -2253,6 +2262,15 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 			status, err = bc.writeBlockAndSetHead(block, receipts, logs, statedb, linkExtBlocks, false)
 		}
 		atomic.StoreUint32(&followupInterrupt, 1)
+
+		if errors.Is(err, consensus.ErrFutureBlock) {
+			fmt.Println("adding future block")
+			if err := bc.addFutureBlock(block); err != nil {
+				return it.index, err
+			}
+			return it.index, nil
+		}
+
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			bc.chainUncleFeed.Send(block.Header())
@@ -2352,7 +2370,7 @@ func (bc *BlockChain) DomReorgNeeded(header *types.Header) (bool, error) {
 		return reorg, err
 	}
 	if domStatus == quaiclient.UnknownStatTy {
-		return false, nil
+		return false, consensus.ErrFutureBlock
 	}
 	return true, nil
 }
@@ -3387,7 +3405,7 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTer
 		}
 
 		if (PCRCTermini.PTR == common.Hash{} || PCRCTermini.PRTR == common.Hash{}) {
-			return PCRCTermini, consensus.ErrSliceNotSynced
+			return PCRCTermini, consensus.ErrFutureBlock
 		}
 
 		PCRCTermini.PTP = PTP.Hash()
@@ -3421,7 +3439,7 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTer
 		}
 
 		if (PCRCTermini.RTZ == common.Hash{}) {
-			return PCRCTermini, consensus.ErrSliceNotSynced
+			return PCRCTermini, consensus.ErrFutureBlock
 		}
 
 		if RTR.Hash() != PCRCTermini.RTZ {
@@ -3540,7 +3558,6 @@ func (bc *BlockChain) RollbackToCanonical(header *types.Header) error {
 		}
 
 		if terminalHeader.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
-			bc.ReOrgRollBack(lastUncleHeader, []*types.Header{}, []*types.Header{})
 			return nil
 		}
 
@@ -3555,7 +3572,7 @@ func (bc *BlockChain) CheckDominantBlock(block *types.Block) error {
 	}
 
 	status := bc.GetBlockStatus(block.Header())
-	fmt.Println("CheckDomBlock: status", status)
+	log.Debug("CheckDomBlock:", "status", status)
 	if status == WriteStatus(quaiclient.UnknownStatTy) {
 		extBlock, err := bc.GetExternalBlockByHashAndContext(block.Header().Hash(), types.QuaiNetworkContext-1)
 		if err != nil {
