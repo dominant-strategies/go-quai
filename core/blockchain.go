@@ -2090,6 +2090,13 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		return it.index, err
 	}
 
+	_, err = bc.forker.ReorgNeeded(bc.CurrentBlock().Header(), chain[0].Header())
+	if errors.Is(err, consensus.ErrFutureBlock) {
+		fmt.Println("ReorgNeeded, Block added to future blocks", err)
+		bc.addFutureBlock(block)
+		return it.index, nil
+	}
+
 	// No validation errors for the first block (or chain prefix skipped)
 	var activeState *state.StateDB
 	defer func() {
@@ -2150,13 +2157,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 			// Clique blocks to have the same state is if there are no transactions.
 			lastCanon = block
 			continue
-		}
-
-		_, err = bc.forker.ReorgNeeded(bc.CurrentBlock().Header(), block.Header())
-		if errors.Is(err, consensus.ErrFutureBlock) {
-			fmt.Println("ReorgNeeded, Block added to future blocks", err)
-			bc.addFutureBlock(block)
-			return it.index, nil
 		}
 
 		// Retrieve the parent block and it's state to execute on top
