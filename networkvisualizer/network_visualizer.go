@@ -321,7 +321,7 @@ func OrderChains(chains []Chain) []Chain {
 	for i := 0; i < len(chains); i++ {
 		for j := 0; j < len(chains[i].nodes)-1; j++ {
 			if i != 0 {
-				chains[i].AddEdge(true, chains[i].nodes[j].nodehash[2:11], chains[i].nodes[j+1].nodehash[2:11], "blue")
+				chains[i].AddEdge(true, chains[i].nodes[j].nodehash[2:hashLength+3], chains[i].nodes[j+1].nodehash[2:hashLength+3], "blue")
 			}
 		}
 	}
