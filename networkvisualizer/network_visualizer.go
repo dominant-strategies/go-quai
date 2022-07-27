@@ -10,8 +10,8 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
+	"log"
 	"math/big"
 	"os"
 	"strings"
@@ -21,6 +21,7 @@ import (
 	"github.com/spruce-solutions/go-quai/ethclient"
 	"github.com/spruce-solutions/go-quai/rlp"
 	"golang.org/x/crypto/sha3"
+	"gopkg.in/urfave/cli.v1"
 )
 
 var (
@@ -57,6 +58,15 @@ var (
 	start      int
 	end        int
 	f          *os.File
+	//Destination for Flag arguments
+	StartFlag      int
+	RangeFlag      int
+	CompressedFlag = true
+	LiveFlag       = false
+	UnclesFlag     = false
+	SaveFileFlag   = "TestGraph.dot"
+	//Inclusion flag to be implemented
+	//inclusionFlag =
 )
 
 type Chain struct {
@@ -95,13 +105,57 @@ func main() {
 	chains := make([]Chain, 0)
 	chains = append(chains, primeChain, region1Chain, region2Chain, region3Chain, zone11Chain, zone12Chain, zone13Chain, zone21Chain, zone22Chain, zone23Chain, zone31Chain, zone32Chain, zone33Chain)
 
-	//Flags for the Network Visualizer
-	flag.IntVar(&start, "start", 0, "Determines the start block for the graph in terms of block number")
-	flag.IntVar(&end, "end", 0, "Determines the end block for the graph in terms of prime block numbers")
-	flag.BoolVar(&compressed, "compressed", true, "Hides blocks inbetween coincident blocks")
-	flag.Parse()
-	//Parameters for the program can be modified here.
-
+	app := cli.NewApp()
+	app.Name = "visualizenetwork"
+	app.Usage = "Generates graphs of Quai Network"
+	app.Action = func(c *cli.Context) error {
+		return nil
+	}
+	//Slice of flags used by CLI, connnect the Destination value to respective flag variable
+	app.Flags = []cli.Flag{
+		cli.IntFlag{
+			Name:        "start",
+			Value:       0,
+			Usage:       "Determines the start block for the graph in terms of block number",
+			Destination: &StartFlag,
+		},
+		cli.IntFlag{
+			Name:        "range",
+			Value:       100,
+			Usage:       "Sets how many blocks to include in the graph(default = 100)",
+			Destination: &RangeFlag,
+		},
+		cli.BoolTFlag{
+			Name:        "compressed",
+			Usage:       "Hides blocks inbetween coincident blocks, aside from those within the specified range(default = true)",
+			Destination: &CompressedFlag,
+		},
+		cli.BoolFlag{
+			Name:        "live",
+			Usage:       "Allows for the graph to update real-time(default = false)",
+			Destination: &LiveFlag,
+		},
+		cli.BoolFlag{
+			Name:        "uncles",
+			Usage:       "Includes uncle blocks in the live version of the graph, only works if live is true(default = false)",
+			Destination: &UnclesFlag,
+		},
+		cli.StringFlag{
+			Name:        "savefile",
+			Value:       "TestGraph.dot",
+			Usage:       "Allows for specification of output file for the graph(default = \"TestGraph.dot\")",
+			Destination: &SaveFileFlag,
+		},
+	}
+	err := app.Run(os.Args)
+	if err != nil {
+		log.Fatal(err)
+	}
+	//Opening IO file to write to, WiP for flag options to specify file
+	f, err = os.Create(SaveFileFlag)
+	if err != nil {
+		panic(err)
+	}
 	if start == 0 && end == 0 {
 		for i := range chains {
 			blockNum, _ := chains[i].client.BlockNumber(context.Background())
