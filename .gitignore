@@ -52,4 +52,5 @@ bootnode.key
 nodelogs/*
 nodelogs
 
+*.dot
 network.env
