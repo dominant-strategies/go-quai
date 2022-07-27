@@ -128,9 +128,23 @@ func (f *ForkChoice) ReorgNeeded(current *types.Header, header *types.Header) (b
 			reorg = !currentPreserve && (externPreserve || f.rand.Float64() < 0.5)
 		}
 	}
+
+	// if reorg && types.QuaiNetworkContext != params.PRIME {
+	// 	domReorg, err := f.chain.DomReorgNeeded(header)
+	// 	fmt.Println("domReorg", err)
+	// 	if err != nil {
+	// 		return false, err
+	// 	}
+	// 	reorg = domReorg
+	// }
+
+	return reorg, nil
+}
+
+func (f *ForkChoice) UntwistAndTrim(header *types.Header) error {
 	headerOrder, err := f.chain.GetDifficultyOrder(header)
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	_, err = f.chain.PCCRC(header, headerOrder)
@@ -140,23 +154,13 @@ func (f *ForkChoice) ReorgNeeded(current *types.Header, header *types.Header) (b
 		if err.Error() == "slice is not synced" {
 			fmt.Println("PCCRC", err)
 			log.Debug("Slice not synced, no nothing", "hash", header.Hash())
-			return false, nil
+			return nil
 		} else if err.Error() == "PCCOP has found chain is not being built on canonical dom" {
-			return false, err
+			return nil
 		} else {
 			fmt.Println("PCCRC", err)
-			return false, consensus.ErrFutureBlock
+			return consensus.ErrFutureBlock
 		}
 	}
-
-	if reorg && types.QuaiNetworkContext != params.PRIME {
-		domReorg, err := f.chain.DomReorgNeeded(header)
-		fmt.Println("domReorg", err)
-		if err != nil {
-			return false, err
-		}
-		reorg = domReorg
-	}
-
-	return reorg, nil
+	return nil
 }

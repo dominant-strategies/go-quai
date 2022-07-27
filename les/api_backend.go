@@ -132,6 +132,10 @@ func (b *LesApiBackend) PCRC(header *types.Header, order int) (types.PCRCTermini
 	return types.PCRCTermini{}, errors.New("light client does not support running PCRC")
 }
 
+func (b *LesApiBackend) PCCRC(header *types.Header, order int) (types.PCRCTermini, error) {
+	return types.PCRCTermini{}, errors.New("light client does not support running PCCRC")
+}
+
 func (b *LesApiBackend) ReOrgRollBack(header *types.Header, validHeaders []*types.Header, invalidHeaders []*types.Header) error {
 	return errors.New("light client does not support reorg")
 }

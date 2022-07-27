@@ -81,6 +81,7 @@ type Backend interface {
 	GetBlockStatus(header *types.Header) core.WriteStatus
 	HLCRReorg(block *types.Block) (bool, error)
 	PCRC(header *types.Header, order int) (types.PCRCTermini, error)
+	PCCRC(header *types.Header, order int) (types.PCRCTermini, error)
 	EventMux() *event.TypeMux
 	CalculateBaseFee(header *types.Header) *big.Int
 	GetUncleFromWorker(uncleHash common.Hash) (*types.Block, error)

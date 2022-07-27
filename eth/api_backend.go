@@ -156,6 +156,10 @@ func (b *EthAPIBackend) PCRC(header *types.Header, order int) (types.PCRCTermini
 	return b.eth.blockchain.PCRC(header, order)
 }
 
+func (b *EthAPIBackend) PCCRC(header *types.Header, order int) (types.PCRCTermini, error) {
+	return b.eth.blockchain.PCCRC(header, order)
+}
+
 func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
 	return b.eth.blockchain.GetBlockByHash(hash), nil
 }

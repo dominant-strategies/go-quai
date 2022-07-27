@@ -255,6 +255,18 @@ func (ec *Client) CheckPCRC(ctx context.Context, header *types.Header, order int
 	return PCRCTermini, nil
 }
 
+// CheckPCCRC runs PCCRC on the node with a given header
+func (ec *Client) CheckPCCRC(ctx context.Context, header *types.Header, order int) (types.PCRCTermini, error) {
+	data := map[string]interface{}{"Header": RPCMarshalHeader(header)}
+	data["Order"] = order
+
+	var PCCRCTermini types.PCRCTermini
+	if err := ec.c.CallContext(ctx, &PCCRCTermini, "quai_checkPCCRC", data); err != nil {
+		return types.PCRCTermini{}, err
+	}
+	return PCCRCTermini, nil
+}
+
 func (ec *Client) getExternalBlock(ctx context.Context, method string, args ...interface{}) (*types.ExternalBlock, error) {
 	var raw json.RawMessage
 	err := ec.c.CallContext(ctx, &raw, method, args...)

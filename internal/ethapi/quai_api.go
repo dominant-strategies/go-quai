@@ -786,8 +786,21 @@ func (s *PublicBlockChainAPI) GetTerminusAtOrder(ctx context.Context, raw json.R
 // CheckPCRC runs PCRC on a node and returns the response codes.
 func (s *PublicBlockChainQuaiAPI) CheckPCRC(ctx context.Context, raw json.RawMessage) (types.PCRCTermini, error) {
 	var headerWithOrder HeaderWithOrder
+
 	if err := json.Unmarshal(raw, &headerWithOrder); err != nil {
 		return types.PCRCTermini{}, err
 	}
+	fmt.Println("Header Number:", headerWithOrder.Header.Number, "Order:", headerWithOrder.Order, "Hash:", headerWithOrder.Header.Hash())
 	return s.b.PCRC(headerWithOrder.Header, headerWithOrder.Order)
+}
+
+// CheckPCCRC runs PCCRC on a node and returns the response codes.
+func (s *PublicBlockChainQuaiAPI) CheckPCCRC(ctx context.Context, raw json.RawMessage) (types.PCRCTermini, error) {
+	var headerWithOrder HeaderWithOrder
+
+	if err := json.Unmarshal(raw, &headerWithOrder); err != nil {
+		return types.PCRCTermini{}, err
+	}
+	fmt.Println("Header Number:", headerWithOrder.Header.Number, "Order:", headerWithOrder.Order, "Hash:", headerWithOrder.Header.Hash())
+	return s.b.PCCRC(headerWithOrder.Header, headerWithOrder.Order)
 }
