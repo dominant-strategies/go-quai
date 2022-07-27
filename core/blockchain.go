@@ -3418,7 +3418,7 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTer
 		PCRCTermini.PTP = PTP.Hash()
 		PCRCTermini.PRTP = PRTP.Hash()
 
-		if (PTP.Hash() != PCRCTermini.PTR) && (PCRCTermini.PTR != PCRCTermini.PTZ) && (PCRCTermini.PTZ != PTP.Hash(), "error:", err) {
+		if (PTP.Hash() != PCRCTermini.PTR) && (PCRCTermini.PTR != PCRCTermini.PTZ) && (PCRCTermini.PTZ != PTP.Hash()) {
 			fmt.Println("PTP", PTP.Hash(), "PTR", PCRCTermini.PTR, "PTZ", PCRCTermini.PTZ)
 			return types.PCRCTermini{}, errors.New("there exists a Prime twist (PTP != PTR != PTZ")
 		}
