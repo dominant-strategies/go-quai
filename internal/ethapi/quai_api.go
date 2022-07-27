@@ -704,7 +704,7 @@ func (s *PublicBlockChainQuaiAPI) GetExternalBlockByHashAndContext(ctx context.C
 		return nil, err
 	}
 	if extBlock == nil {
-		return nil, nil
+		return nil, errors.New("err with ext block")
 	}
 	block := types.NewBlockWithHeader(extBlock.Header()).WithBody(extBlock.Transactions(), extBlock.Uncles())
 
@@ -762,7 +762,6 @@ func (s *PublicBlockChainQuaiAPI) HLCRReorg(ctx context.Context, raw json.RawMes
 	}
 
 	block := types.NewBlockWithHeader(head).WithBody(txs, uncles)
-	fmt.Println("Header", block.Hash())
 	return s.b.HLCRReorg(block)
 }
 

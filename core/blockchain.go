@@ -1833,7 +1833,7 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header, validHeaders []*types.
 
 	if header != nil {
 		// get the commonBlock
-		commonBlock := bc.GetBlockByHash(header.Hash())
+		commonBlock := bc.GetBlockByHash(header.ParentHash[types.QuaiNetworkContext])
 
 		// if commonBlock isn't canoncial in our chain, do not reorg
 		// because commonBlock parentHash could potentially be in our chain.
@@ -1857,34 +1857,26 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header, validHeaders []*types.
 			}
 		}
 
-		// Additional step is needed since we want to rollback 1 past the commonBlock.
-		deletedTxs = append(deletedTxs, currentBlock.Transactions()...)
-		collectLogs(currentBlock.Hash())
-		currentBlock = bc.GetBlock(currentBlock.ParentHash(), currentBlock.NumberU64()-1)
-		if currentBlock == nil {
-			return fmt.Errorf("invalid current chain")
-		}
-
 		// set the head back to the block before the rollback point
-		if err := bc.SetHead(commonBlock.NumberU64() - 1); err != nil {
+		if err := bc.SetHead(commonBlock.NumberU64()); err != nil {
 			return err
 		}
 		// writing the head to the blockchain state
-		bc.writeHeadBlock(currentBlock)
-		bc.futureBlocks.Remove(currentBlock.Hash())
+		bc.writeHeadBlock(commonBlock)
+		bc.futureBlocks.Remove(commonBlock.Hash())
 
 		// get all the receipts and extract the logs from it
-		receipts := bc.GetReceiptsByHash(currentBlock.Hash())
+		receipts := bc.GetReceiptsByHash(commonBlock.Hash())
 		var logs []*types.Log
 
 		for _, receipt := range receipts {
 			logs = append(logs, receipt.Logs...)
 		}
 		// send a chain event so that it updates the pending header
-		bc.chainFeed.Send(ChainEvent{Block: currentBlock, Hash: currentBlock.Hash(), Logs: logs})
-		bc.chainHeadFeed.Send(ChainHeadEvent{Block: currentBlock})
+		bc.chainFeed.Send(ChainEvent{Block: commonBlock, Hash: commonBlock.Hash(), Logs: logs})
+		bc.chainHeadFeed.Send(ChainHeadEvent{Block: commonBlock})
 
-		log.Info("Header is now rolled back and the current head is at block with ", "Hash ", bc.CurrentBlock().Hash(), " Number ", bc.CurrentBlock().NumberU64())
+		log.Info("Header is now rolled back and the current head is at block with", "Hash", bc.CurrentBlock().Hash(), "Number", bc.CurrentBlock().NumberU64())
 
 		// Delete useless indexes right now which includes the non-canonical
 		// transaction indexes, canonical chain indexes which above the head.
@@ -2214,16 +2206,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 
 		_, err = bc.PCRC(block.Header(), order)
 		if err != nil {
-			if err.Error() == "slice is not synced" {
-				log.Debug("Slice not synced, no nothing", "hash", block.Header().Hash())
-				// if err := bc.addFutureBlock(block); err != nil {
-				// 	return it.index, err
-				// }
-				return it.index, nil
-			} else {
-				bc.futureBlocks.Remove(block.Hash())
-				return it.index, err
-			}
+			return it.index, err
 		}
 		// Update the metrics touched during block processing
 		accountReadTimer.Update(statedb.AccountReads)                 // Account reads are complete, we can mark them
@@ -2353,7 +2336,8 @@ func (bc *BlockChain) DomReorgNeeded(header *types.Header) (bool, error) {
 	}
 
 	domStatus := bc.domClient.GetBlockStatus(context.Background(), terminalHeader)
-	if domStatus != quaiclient.CanonStatTy {
+	fmt.Println("Dom status for terminal", domStatus, terminalHeader.Number, terminalHeader.Hash())
+	if domStatus == quaiclient.SideStatTy {
 		// Send HLCRReorg to dom
 		block := bc.GetBlockByHash(terminalHeader.Hash())
 		if block == nil {
@@ -2361,11 +2345,14 @@ func (bc *BlockChain) DomReorgNeeded(header *types.Header) (bool, error) {
 		}
 		reorg, err := bc.HLCRReorg(block)
 		if err != nil {
-			log.Info("Unable to reorg the dom ")
+			log.Info("Unable to reorg the dom")
 			// If we got here our dom can't reorg so we shouldn't reorg but we also shouldn't err because it will drop a peer
 			return false, nil
 		}
 		return reorg, err
+	}
+	if domStatus == quaiclient.UnknownStatTy {
+		return false, nil
 	}
 	return true, nil
 }
@@ -2379,10 +2366,7 @@ func (bc *BlockChain) HLCRReorg(block *types.Block) (bool, error) {
 		return false, errors.New("block provided in hlcrreorg is nil")
 	}
 
-	fmt.Println("HLCRReorg", block.Header().Hash(), " context ", types.QuaiNetworkContext)
-
-	fmt.Println("starting reorgrollback, context", types.QuaiNetworkContext)
-
+	fmt.Println("HLCRReorg", block.Header().Number, block.Header().Hash(), "context", types.QuaiNetworkContext)
 	order, err := bc.engine.GetDifficultyOrder(block.Header())
 	if err != nil {
 		return false, err
@@ -2402,6 +2386,12 @@ func (bc *BlockChain) HLCRReorg(block *types.Block) (bool, error) {
 			return false, err
 		}
 		reorgFromDom = externTd[types.QuaiNetworkContext].Cmp(currentTd[types.QuaiNetworkContext]) >= 0
+	}
+
+	// In the dom we are telling the sub that we are not on the same location.
+	if !bytes.Equal(bc.CurrentBlock().Header().Location, block.Header().Location) {
+		log.Debug("Dom reorg not needed, location is different.")
+		return false, nil
 	}
 
 	if !reorgFromDom {
@@ -3378,12 +3368,12 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTer
 
 	switch types.QuaiNetworkContext {
 	case params.PRIME:
-		PTP, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.PRIME, params.PRIME, true)
+		PTP, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.PRIME, true)
 		if err != nil {
 			return types.PCRCTermini{}, err
 		}
 
-		PRTP, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.PRIME, params.PRIME, false)
+		PRTP, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.PRIME, false)
 		if err != nil {
 			return types.PCRCTermini{}, err
 		}
@@ -3412,10 +3402,11 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTer
 			return types.PCRCTermini{}, errors.New("there exists a Prime twist (PRTP != PRTR")
 		}
 
+		log.Debug("PCRC Termini", "PTP", PCRCTermini.PTP, "PTR", PCRCTermini.PTR, "PTZ", PCRCTermini.PTZ)
 		return PCRCTermini, nil
 
 	case params.REGION:
-		RTR, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.REGION, params.REGION, true)
+		RTR, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.REGION, params.REGION, true)
 		if err != nil {
 			return types.PCRCTermini{}, err
 		}
@@ -3438,12 +3429,12 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTer
 			return types.PCRCTermini{}, errors.New("there exists a Region twist (RTR != RTZ)")
 		}
 		if headerOrder < params.REGION {
-			PTR, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.PRIME, params.REGION, true)
+			PTR, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.REGION, true)
 			if err != nil {
 				return types.PCRCTermini{}, err
 			}
 
-			PRTR, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.PRIME, params.REGION, false)
+			PRTR, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.REGION, false)
 			if err != nil {
 				return types.PCRCTermini{}, err
 			}
@@ -3451,6 +3442,7 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTer
 			PCRCTermini.PTR = PTR.Hash()
 			PCRCTermini.PRTR = PRTR.Hash()
 		}
+		log.Debug("PCRC Termini", "RTR", PCRCTermini.RTR, "RTZ", PCRCTermini.RTZ)
 		return PCRCTermini, nil
 
 	case params.ZONE:
@@ -3461,13 +3453,13 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTer
 		// So running this only on a coincident block makes sure that the zones can move and sync past the coincident.
 		// Just run RTZ to make sure that its linked. This check decouples this signaling and linking paradigm.
 
-		PTZ, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.PRIME, params.ZONE, true)
+		PTZ, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.ZONE, true)
 		if err != nil {
 			return types.PCRCTermini{}, err
 		}
 		PCRCTermini.PTZ = PTZ.Hash()
 
-		RTZ, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.REGION, params.ZONE, true)
+		RTZ, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.REGION, params.ZONE, true)
 		if err != nil {
 			return types.PCRCTermini{}, err
 		}
@@ -3548,6 +3540,7 @@ func (bc *BlockChain) RollbackToCanonical(header *types.Header) error {
 		}
 
 		if terminalHeader.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
+			bc.ReOrgRollBack(lastUncleHeader, []*types.Header{}, []*types.Header{})
 			return nil
 		}
 
@@ -3562,6 +3555,7 @@ func (bc *BlockChain) CheckDominantBlock(block *types.Block) error {
 	}
 
 	status := bc.GetBlockStatus(block.Header())
+	fmt.Println("CheckDomBlock: status", status)
 	if status == WriteStatus(quaiclient.UnknownStatTy) {
 		extBlock, err := bc.GetExternalBlockByHashAndContext(block.Header().Hash(), types.QuaiNetworkContext-1)
 		if err != nil {

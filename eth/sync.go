@@ -153,6 +153,7 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 	} else if minPeers > cs.handler.maxPeers {
 		minPeers = cs.handler.maxPeers
 	}
+	minPeers = 1
 	if cs.handler.peers.len() < minPeers {
 		return nil
 	}
