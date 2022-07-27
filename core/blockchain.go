@@ -2211,15 +2211,17 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 
 		log.Info("Running CheckCanonical and PCRC for block", "num", block.Header().Number, "location", block.Header().Location, "hash", block.Header().Hash())
 
-		_, err = bc.PCRC(block.Header(), order)
-		if err != nil {
-			if err.Error() == "block in the future" || errors.Is(err, consensus.ErrFutureBlock) {
-				if err := bc.addFutureBlock(block); err != nil {
-					return it.index, err
+		if order == types.QuaiNetworkContext && types.QuaiNetworkContext != params.ZONE {
+			_, err = bc.PCRC(block.Header(), order)
+			if err != nil {
+				if err.Error() == "block in the future" || errors.Is(err, consensus.ErrFutureBlock) {
+					if err := bc.addFutureBlock(block); err != nil {
+						return it.index, err
+					}
+					return it.index, nil
 				}
-				return it.index, nil
+				return it.index, err
 			}
-			return it.index, err
 		}
 		// Update the metrics touched during block processing
 		accountReadTimer.Update(statedb.AccountReads)                 // Account reads are complete, we can mark them
@@ -3388,12 +3390,12 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTer
 
 	switch types.QuaiNetworkContext {
 	case params.PRIME:
-		PTP, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.PRIME, true)
+		PTP, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.PRIME, params.PRIME, true)
 		if err != nil {
 			return types.PCRCTermini{}, err
 		}
 
-		PRTP, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.PRIME, false)
+		PRTP, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.PRIME, params.PRIME, false)
 		if err != nil {
 			return types.PCRCTermini{}, err
 		}
@@ -3426,7 +3428,7 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTer
 		return PCRCTermini, nil
 
 	case params.REGION:
-		RTR, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.REGION, params.REGION, true)
+		RTR, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.REGION, params.REGION, true)
 		if err != nil {
 			return types.PCRCTermini{}, err
 		}
@@ -3449,12 +3451,12 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTer
 			return types.PCRCTermini{}, errors.New("there exists a Region twist (RTR != RTZ)")
 		}
 		if headerOrder < params.REGION {
-			PTR, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.REGION, true)
+			PTR, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.PRIME, params.REGION, true)
 			if err != nil {
 				return types.PCRCTermini{}, err
 			}
 
-			PRTR, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.REGION, false)
+			PRTR, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.PRIME, params.REGION, false)
 			if err != nil {
 				return types.PCRCTermini{}, err
 			}
@@ -3473,13 +3475,13 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTer
 		// So running this only on a coincident block makes sure that the zones can move and sync past the coincident.
 		// Just run RTZ to make sure that its linked. This check decouples this signaling and linking paradigm.
 
-		PTZ, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.PRIME, params.ZONE, true)
+		PTZ, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.PRIME, params.ZONE, true)
 		if err != nil {
 			return types.PCRCTermini{}, err
 		}
 		PCRCTermini.PTZ = PTZ.Hash()
 
-		RTZ, err := bc.Engine().PreviousCoincidentOnPath(bc, header, slice, params.REGION, params.ZONE, true)
+		RTZ, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.REGION, params.ZONE, true)
 		if err != nil {
 			return types.PCRCTermini{}, err
 		}
@@ -3519,7 +3521,7 @@ func (bc *BlockChain) PreviousCanonicalCoincidentOnPath(header *types.Header, sl
 				// do nothing and find latest uncle or canonical in dom
 			default:
 				if prevTerminalHeader.Hash() != header.Hash() {
-					return nil, errors.New("subordinate terminus mismatch")
+					return nil, consensus.ErrFutureBlock
 				}
 				return terminalHeader, nil
 			}
