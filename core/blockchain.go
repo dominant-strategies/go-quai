@@ -2151,6 +2151,14 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 			lastCanon = block
 			continue
 		}
+
+		_, err = bc.forker.ReorgNeeded(bc.CurrentBlock().Header(), block.Header())
+		if errors.Is(err, consensus.ErrFutureBlock) {
+			fmt.Println("ReorgNeeded, Block added to future blocks", err)
+			bc.addFutureBlock(block)
+			return it.index, nil
+		}
+
 		// Retrieve the parent block and it's state to execute on top
 		start := time.Now()
 
@@ -2205,12 +2213,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 			if err != nil {
 				return it.index, err
 			}
-		}
-		_, err = bc.forker.ReorgNeeded(bc.CurrentBlock().Header(), block.Header())
-		if errors.Is(err, consensus.ErrFutureBlock) {
-			fmt.Println("ReorgNeeded, Block added to future blocks", err)
-			bc.addFutureBlock(block)
-			return it.index, nil
 		}
 
 		log.Info("Running CheckCanonical and PCRC for block", "num", block.Header().Number, "location", block.Header().Location, "hash", block.Header().Hash())
