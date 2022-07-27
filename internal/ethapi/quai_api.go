@@ -704,7 +704,7 @@ func (s *PublicBlockChainQuaiAPI) GetExternalBlockByHashAndContext(ctx context.C
 		return nil, err
 	}
 	if extBlock == nil {
-		return nil, errors.New("err with ext block")
+		return nil, nil
 	}
 	block := types.NewBlockWithHeader(extBlock.Header()).WithBody(extBlock.Transactions(), extBlock.Uncles())
 

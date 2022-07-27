@@ -1171,7 +1171,10 @@ func (bc *BlockChain) procFutureBlocks() {
 		})
 		// Insert one by one as chain insertion needs contiguous ancestry between blocks
 		for i := range blocks {
-			bc.InsertChain(blocks[i : i+1])
+			_, err := bc.InsertChain(blocks[i : i+1])
+			if errors.Is(err, consensus.ErrFutureBlock) {
+				break
+			}
 		}
 	}
 }
@@ -1743,7 +1746,9 @@ func (bc *BlockChain) addFutureBlock(block *types.Block) error {
 	if block.Time() > max {
 		return fmt.Errorf("future block timestamp %v > allowed %v", block.Time(), max)
 	}
-	bc.futureBlocks.Add(block.Hash(), block)
+	if !bc.futureBlocks.Contains(block.Hash()) {
+		bc.futureBlocks.Add(block.Hash(), block)
+	}
 	return nil
 }
 
@@ -2352,7 +2357,6 @@ func (bc *BlockChain) DomReorgNeeded(header *types.Header) (bool, error) {
 	}
 
 	domStatus := bc.domClient.GetBlockStatus(context.Background(), terminalHeader)
-	fmt.Println("Dom status for terminal", domStatus, terminalHeader.Number, terminalHeader.Hash())
 	if domStatus == quaiclient.SideStatTy {
 		// Send HLCRReorg to dom
 		block := bc.GetBlockByHash(terminalHeader.Hash())
@@ -2791,7 +2795,7 @@ func (bc *BlockChain) skipBlock(err error, it *insertIterator) bool {
 }
 
 func (bc *BlockChain) update() {
-	futureTimer := time.NewTicker(1 * time.Second)
+	futureTimer := time.NewTicker(5 * time.Second)
 	defer futureTimer.Stop()
 	defer bc.wg.Done()
 	for {
@@ -3570,7 +3574,6 @@ func (bc *BlockChain) CheckDominantBlock(block *types.Block) error {
 	}
 
 	status := bc.GetBlockStatus(block.Header())
-	log.Debug("CheckDomBlock:", "status", status)
 	if status == WriteStatus(quaiclient.UnknownStatTy) {
 		extBlock, err := bc.GetExternalBlockByHashAndContext(block.Header().Hash(), types.QuaiNetworkContext-1)
 		if err != nil {
