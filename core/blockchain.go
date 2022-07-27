@@ -2025,6 +2025,11 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		for block != nil && bc.skipBlock(err, it) {
 			reorg, err = bc.forker.ReorgNeeded(current.Header(), block.Header())
 			if err != nil {
+				fmt.Println("skipblock future blcok catch", err)
+				if errors.Is(err, consensus.ErrFutureBlock) {
+					fmt.Println("skipblock inside if", err)
+					break
+				}
 				return it.index, err
 			}
 			if reorg {
@@ -2090,13 +2095,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		return it.index, err
 	}
 
-	_, err = bc.forker.ReorgNeeded(bc.CurrentBlock().Header(), chain[0].Header())
-	if errors.Is(err, consensus.ErrFutureBlock) {
-		fmt.Println("ReorgNeeded, Block added to future blocks", err)
-		bc.addFutureBlock(block)
-		return it.index, nil
-	}
-
 	// No validation errors for the first block (or chain prefix skipped)
 	var activeState *state.StateDB
 	defer func() {
@@ -2159,13 +2157,27 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 			continue
 		}
 
+		_, err = bc.forker.ReorgNeeded(bc.CurrentBlock().Header(), block.Header())
+		if errors.Is(err, consensus.ErrFutureBlock) {
+			fmt.Println("ReorgNeeded, Block added to future blocks", err, "block ", block.NumberU64(), block.Hash())
+			bc.addFutureBlock(block)
+			return it.index, nil
+		}
+
 		// Retrieve the parent block and it's state to execute on top
 		start := time.Now()
 
 		parent := it.previous()
 		if parent == nil {
-			parent = bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
+			fmt.Println("parent is nil for block ", block, block.ParentHash())
+			parentBlock := bc.GetBlockByHash(block.ParentHash())
+
+			if parentBlock == nil {
+				return it.index, errors.New("parent is nil")
+			}
+			parent = parentBlock.Header()
 		}
+
 		statedb, err := state.New(parent.Root[types.QuaiNetworkContext], bc.stateCache, bc.snaps)
 		if err != nil {
 			return it.index, err
@@ -2220,7 +2232,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		_, err = bc.PCRC(block.Header(), order)
 		fmt.Println("PCRC", err)
 		if err != nil {
-			return it.index, err
+			return it.index, nil
 		}
 
 		// Update the metrics touched during block processing

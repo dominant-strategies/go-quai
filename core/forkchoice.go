@@ -141,6 +141,8 @@ func (f *ForkChoice) ReorgNeeded(current *types.Header, header *types.Header) (b
 			fmt.Println("PCCRC", err)
 			log.Debug("Slice not synced, no nothing", "hash", header.Hash())
 			return false, nil
+		} else if err.Error() == "PCCOP has found chain is not being built on canonical dom" {
+			return false, err
 		} else {
 			fmt.Println("PCCRC", err)
 			return false, consensus.ErrFutureBlock

@@ -174,6 +174,10 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 		return op
 	}
 
+	if ourTD[0] == nil || ourTD[1] == nil || ourTD[2] == nil {
+		return op
+	}
+
 	if len(op.td) > 0 {
 		if cs.handler.chain.HLCR(op.td, ourTD) {
 			return nil // We're in sync.
