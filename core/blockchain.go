@@ -2388,7 +2388,6 @@ func (bc *BlockChain) HLCRReorg(block *types.Block) (bool, error) {
 		return false, errors.New("block provided in hlcrreorg is nil")
 	}
 
-	fmt.Println("HLCRReorg", block.Header().Number, block.Header().Hash(), "context", types.QuaiNetworkContext)
 	order, err := bc.engine.GetDifficultyOrder(block.Header())
 	if err != nil {
 		return false, err
@@ -2412,7 +2411,7 @@ func (bc *BlockChain) HLCRReorg(block *types.Block) (bool, error) {
 
 	// In the dom we are telling the sub that we are not on the same location.
 	if !bytes.Equal(bc.CurrentBlock().Header().Location, block.Header().Location) {
-		log.Debug("Dom reorg not needed, location is different.")
+		log.Info("Dom reorg not needed, location is different.")
 		return false, nil
 	}
 
