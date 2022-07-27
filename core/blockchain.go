@@ -2089,6 +2089,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		bc.reportBlock(block, nil, err)
 		return it.index, err
 	}
+
 	// No validation errors for the first block (or chain prefix skipped)
 	var activeState *state.StateDB
 	defer func() {
@@ -2205,21 +2206,19 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 				return it.index, err
 			}
 		}
+		_, err = bc.forker.ReorgNeeded(bc.CurrentBlock().Header(), block.Header())
+		if errors.Is(err, consensus.ErrFutureBlock) {
+			fmt.Println("ReorgNeeded, Block added to future blocks", err)
+			bc.addFutureBlock(block)
+			return it.index, nil
+		}
 
 		log.Info("Running CheckCanonical and PCRC for block", "num", block.Header().Number, "location", block.Header().Location, "hash", block.Header().Hash())
 
 		_, err = bc.PCRC(block.Header(), order)
+		fmt.Println("PCRC", err)
 		if err != nil {
 			return it.index, err
-		}
-
-		if order < types.QuaiNetworkContext {
-			status := bc.domClient.GetBlockStatus(context.Background(), block.Header())
-			// If the header is cononical break else keep looking
-			if status != quaiclient.CanonStatTy {
-				return it.index, errors.New("cannot append non-canonical dom block in sub")
-			}
-
 		}
 
 		// Update the metrics touched during block processing

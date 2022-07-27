@@ -19,6 +19,7 @@ package core
 import (
 	crand "crypto/rand"
 	"errors"
+	"fmt"
 	"math/big"
 	mrand "math/rand"
 
@@ -132,18 +133,22 @@ func (f *ForkChoice) ReorgNeeded(current *types.Header, header *types.Header) (b
 	}
 
 	_, err = f.chain.PCCRC(header, headerOrder)
+	fmt.Println("PCCRC", err)
 
 	if err != nil {
 		if err.Error() == "slice is not synced" {
+			fmt.Println("PCCRC", err)
 			log.Debug("Slice not synced, no nothing", "hash", header.Hash())
 			return false, nil
 		} else {
+			fmt.Println("PCCRC", err)
 			return false, consensus.ErrFutureBlock
 		}
 	}
 
 	if reorg && types.QuaiNetworkContext != params.PRIME {
 		domReorg, err := f.chain.DomReorgNeeded(header)
+		fmt.Println("domReorg", err)
 		if err != nil {
 			return false, err
 		}

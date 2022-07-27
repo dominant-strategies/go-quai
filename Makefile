@@ -156,7 +156,7 @@ quai-windows-amd64:
 
 include network.env
 
-BASE_COMMAND = ./build/bin/quai --$(NETWORK) --syncmode full --verbosity 4
+BASE_COMMAND = ./build/bin/quai --$(NETWORK) --syncmode full --verbosity 3
 
 ifeq ($(ENABLE_ARCHIVE),true)
 	BASE_COMMAND += --gcmode archive
