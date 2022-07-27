@@ -2209,7 +2209,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		_, err = bc.PCRC(block.Header(), order)
 		if err != nil {
 			if err.Error() == "block in the future" || errors.Is(err, consensus.ErrFutureBlock) {
-				fmt.Println("adding future block")
 				if err := bc.addFutureBlock(block); err != nil {
 					return it.index, err
 				}
@@ -2264,11 +2263,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		atomic.StoreUint32(&followupInterrupt, 1)
 
 		if errors.Is(err, consensus.ErrFutureBlock) {
-			fmt.Println("adding future block")
 			if err := bc.addFutureBlock(block); err != nil {
 				return it.index, err
 			}
-			return it.index, nil
+			continue
 		}
 
 		if err != nil {
