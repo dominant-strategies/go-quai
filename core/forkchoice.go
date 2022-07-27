@@ -25,7 +25,6 @@ import (
 
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/common/math"
-	"github.com/spruce-solutions/go-quai/consensus"
 	"github.com/spruce-solutions/go-quai/core/types"
 	"github.com/spruce-solutions/go-quai/log"
 	"github.com/spruce-solutions/go-quai/params"
@@ -159,7 +158,7 @@ func (f *ForkChoice) UntwistAndTrim(header *types.Header) error {
 			return nil
 		} else {
 			fmt.Println("PCCRC", err)
-			return consensus.ErrFutureBlock
+			return err
 		}
 	}
 	return nil

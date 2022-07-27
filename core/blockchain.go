@@ -2227,13 +2227,19 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		}
 
 		err = bc.forker.UntwistAndTrim(block.Header())
-		if errors.Is(err, consensus.ErrFutureBlock) {
-			fmt.Println("ReorgNeeded, Block added to future blocks", err, "block ", block.NumberU64(), block.Hash())
-			bc.addFutureBlock(block)
+		if err != nil {
 			return it.index, nil
 		}
 
 		log.Info("Running CheckCanonical and PCRC for block", "num", block.Header().Number, "location", block.Header().Location, "hash", block.Header().Hash())
+
+		if order < types.QuaiNetworkContext {
+			status := bc.domClient.GetBlockStatus(context.Background(), block.Header())
+			// If the header is cononical break else keep looking
+			if status != quaiclient.CanonStatTy {
+				return it.index, errors.New("cannot append non-canonical dom block in sub")
+			}
+		}
 
 		_, err = bc.PCRC(block.Header(), order)
 		fmt.Println("PCRC", err)
@@ -3391,13 +3397,13 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTer
 	case params.PRIME:
 		fmt.Println("PCRC Running PTP")
 		PTP, err := bc.PreviousValidCoincidentOnPath(header, slice, params.PRIME, params.PRIME, true)
-		fmt.Println("Hash:", PTP.Hash(), "error:", err)
+		fmt.Println("Hash: PTP", PTP.Hash(), "error:", err)
 		if err != nil {
 			return types.PCRCTermini{}, err
 		}
 		fmt.Println("PCRC Running PRTP")
 		PRTP, err := bc.PreviousValidCoincidentOnPath(header, slice, params.PRIME, params.PRIME, false)
-		fmt.Println("Hash:", PRTP.Hash(), "error:", err)
+		fmt.Println("Hash: PRTP", PRTP.Hash(), "error:", err)
 		if err != nil {
 			return types.PCRCTermini{}, err
 		}
@@ -3432,7 +3438,7 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTer
 	case params.REGION:
 		fmt.Println("PCRC Running RTR")
 		RTR, err := bc.PreviousValidCoincidentOnPath(header, slice, params.REGION, params.REGION, true)
-		fmt.Println("Hash:", RTR.Hash(), "error:", err)
+		fmt.Println("Hash: RTR", RTR.Hash(), "error:", err)
 		if err != nil {
 			return types.PCRCTermini{}, err
 		}
@@ -3457,13 +3463,13 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTer
 		if headerOrder < params.REGION {
 			fmt.Println("PCRC Running PTR")
 			PTR, err := bc.PreviousValidCoincidentOnPath(header, slice, params.PRIME, params.REGION, true)
-			fmt.Println("Hash:", PTR.Hash(), "error:", err)
+			fmt.Println("Hash: PTR", PTR.Hash(), "error:", err)
 			if err != nil {
 				return types.PCRCTermini{}, err
 			}
 			fmt.Println("PCRC Running PRTR")
 			PRTR, err := bc.PreviousValidCoincidentOnPath(header, slice, params.PRIME, params.REGION, false)
-			fmt.Println("Hash:", PRTR.Hash(), "error:", err)
+			fmt.Println("Hash: PRTR", PRTR.Hash(), "error:", err)
 			if err != nil {
 				return types.PCRCTermini{}, err
 			}
@@ -3483,7 +3489,7 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTer
 		if headerOrder < params.REGION {
 			fmt.Println("PCRC Running PTZ")
 			PTZ, err := bc.PreviousValidCoincidentOnPath(header, slice, params.PRIME, params.ZONE, true)
-			fmt.Println("Hash:", PTZ.Hash(), "error:", err)
+			fmt.Println("Hash: PTZ", PTZ.Hash(), "error:", err)
 			if err != nil {
 				return types.PCRCTermini{}, err
 			}
@@ -3493,7 +3499,7 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTer
 		if headerOrder < params.ZONE {
 			fmt.Println("PCRC Running RTZ")
 			RTZ, err := bc.PreviousValidCoincidentOnPath(header, slice, params.REGION, params.ZONE, true)
-			fmt.Println("Hash:", RTZ.Hash(), "error:", err)
+			fmt.Println("Hash: RTZ", RTZ.Hash(), "error:", err)
 			if err != nil {
 				return types.PCRCTermini{}, err
 			}
@@ -3521,6 +3527,8 @@ func (bc *BlockChain) PreviousValidCoincidentOnPath(header *types.Header, slice 
 			return nil, err
 		}
 
+		fmt.Println("Running PVCOP for header: ", header.Hash(), header.Number, "terminal Header", terminalHeader.Hash(), terminalHeader.Number)
+
 		if terminalHeader.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
 			return bc.GetHeaderByHash(bc.Config().GenesisHashes[0]), nil
 		}
@@ -3528,6 +3536,7 @@ func (bc *BlockChain) PreviousValidCoincidentOnPath(header *types.Header, slice 
 		// If the current header is dominant coincident check the status with the dom node
 		if order < types.QuaiNetworkContext {
 			status := bc.domClient.GetBlockStatus(context.Background(), terminalHeader)
+			fmt.Println("terminal Header status", status)
 			// If the header is cononical break else keep looking
 			switch status {
 			case quaiclient.UnknownStatTy:
@@ -3663,20 +3672,26 @@ func (bc *BlockChain) PCCRC(header *types.Header, headerOrder int) (types.PCRCTe
 		// PTZ and RTZ are essentially a signaling mechanism to know that we are building on the right terminal header.
 		// So running this only on a coincident block makes sure that the zones can move and sync past the coincident.
 		// Just run RTZ to make sure that its linked. This check decouples this signaling and linking paradigm.
-		fmt.Println("PCCRC Running PTZ")
-		PTZ, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.PRIME, params.ZONE, true)
-		fmt.Println("Hash:", PTZ.Hash(), "error:", err)
-		if err != nil {
-			return types.PCRCTermini{}, err
+
+		if headerOrder < params.REGION {
+			fmt.Println("PCCRC Running PTZ")
+			PTZ, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.PRIME, params.ZONE, true)
+			fmt.Println("Hash: PTZ", PTZ.Hash(), "error:", err)
+			if err != nil {
+				return types.PCRCTermini{}, err
+			}
+			PCRCTermini.PTZ = PTZ.Hash()
 		}
-		PCRCTermini.PTZ = PTZ.Hash()
-		fmt.Println("PCCRC Running RTZ")
-		RTZ, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.REGION, params.ZONE, true)
-		fmt.Println("Hash:", RTZ.Hash(), "error:", err)
-		if err != nil {
-			return types.PCRCTermini{}, err
+
+		if headerOrder < params.ZONE {
+			fmt.Println("PCCRC Running RTZ")
+			RTZ, err := bc.PreviousCanonicalCoincidentOnPath(header, slice, params.REGION, params.ZONE, true)
+			fmt.Println("Hash: RTZ", RTZ.Hash(), "error:", err)
+			if err != nil {
+				return types.PCRCTermini{}, err
+			}
+			PCRCTermini.RTZ = RTZ.Hash()
 		}
-		PCRCTermini.RTZ = RTZ.Hash()
 
 		return PCRCTermini, nil
 	}
@@ -3706,24 +3721,26 @@ func (bc *BlockChain) PreviousCanonicalCoincidentOnPath(header *types.Header, sl
 		// If the current header is dominant coincident check the status with the dom node
 		if order < types.QuaiNetworkContext {
 			status := bc.domClient.GetBlockStatus(context.Background(), terminalHeader)
-			// If the header is cononical break else keep looking
-			if status == quaiclient.CanonStatTy {
-				// If we have found a non-cononical dominant coincident header, reorg to prevTerminalHeader
-				prevStatus := bc.domClient.GetBlockStatus(context.Background(), prevTerminalHeader)
-				if prevStatus == quaiclient.UnknownStatTy {
-					block := bc.GetBlockByHash(terminalHeader.Hash())
-					if block == nil {
-						return nil, errors.New("terminal header block is nil")
-					}
-					err := bc.addFutureBlock(block)
-					if err != nil {
-						return nil, err
-					}
-					return terminalHeader, nil
-				} else if prevStatus == quaiclient.SideStatTy {
-					bc.ReOrgRollBack(prevTerminalHeader, []*types.Header{}, []*types.Header{})
-					return prevTerminalHeader, errors.New("PCCOP has found chain is not being built on canonical dom")
+
+			switch status {
+			case quaiclient.UnknownStatTy:
+				// do nothing and find latest uncle or canonical in dom
+				block := bc.GetBlockByHash(terminalHeader.Hash())
+				if block == nil {
+					return nil, errors.New("terminal header block is nil")
 				}
+				err := bc.addFutureBlock(block)
+				if err != nil {
+					return nil, err
+				}
+			case quaiclient.SideStatTy:
+				bc.ReOrgRollBack(prevTerminalHeader, []*types.Header{}, []*types.Header{})
+				return prevTerminalHeader, errors.New("PCCOP has found chain is not being built on canonical dom")
+			default:
+				if prevTerminalHeader.Hash() != header.Hash() {
+					return nil, errors.New("subordinate terminus mismatch")
+				}
+				return terminalHeader, nil
 			}
 		} else if order == types.QuaiNetworkContext {
 			return terminalHeader, err

@@ -47,4 +47,7 @@ var (
 
 	// ErrSliceNotSynced is returned if PCRC returns an unlinked chain in the subordinate.
 	ErrSliceNotSynced = errors.New("slice is not synced")
+
+	// ErrPCCOPFailed is returned if PCCOP fails and we add the terminal header to future block.
+	ErrPCCOPFailed = errors.New("pccop failed")
 )
