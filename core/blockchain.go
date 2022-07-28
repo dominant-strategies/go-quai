@@ -1562,6 +1562,11 @@ func (bc *BlockChain) NdToTd(header *types.Header, nD []*big.Int) ([]*big.Int, e
 // CalcTd calculates the TD of the given header using PCRC and CalcHLCRNetDifficulty.
 func (bc *BlockChain) CalcTd(header *types.Header) ([]*big.Int, error) {
 	fmt.Println("Starting CalcTd Block Number", header.Number, " Hash:", header.Hash())
+	// If the TD is already calculated for a block, read it from the DB.
+	if td := bc.GetTdByHash(header.Hash()); td[0] != nil && td[1] != nil && td[2] != nil {
+		return td, nil
+	}
+
 	// Always calculate PTZ because it is always valid and we need terminus for calcHLCRDifficulty
 	externTerminal, err := bc.Engine().PreviousCoincidentOnPath(bc, header, header.Location, params.PRIME, params.ZONE, true)
 	if err != nil {
