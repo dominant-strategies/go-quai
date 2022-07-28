@@ -98,6 +98,7 @@ func (p *Peer) readStatus(network uint64, status *StatusPacket, genesis common.H
 	status.Genesis = ann.Genesis
 	status.ForkID = ann.ForkID
 	status.TD = ann.TD
+	status.Head = ann.Head
 
 	if status.NetworkID != network {
 		return fmt.Errorf("%w: %d (!= %d)", errNetworkIDMismatch, status.NetworkID, network)
