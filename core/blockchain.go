@@ -1566,7 +1566,6 @@ func (bc *BlockChain) CalcTd(header *types.Header) ([]*big.Int, error) {
 	if td := bc.GetTdByHash(header.Hash()); td[0] != nil && td[1] != nil && td[2] != nil {
 		return td, nil
 	}
-
 	// Always calculate PTZ because it is always valid and we need terminus for calcHLCRDifficulty
 	externTerminal, err := bc.Engine().PreviousCoincidentOnPath(bc, header, header.Location, params.PRIME, params.ZONE, true)
 	if err != nil {
@@ -1707,6 +1706,8 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 		if err := bc.CheckLinkExtBlocks(block, linkExtBlocks); err != nil {
 			return NonStatTy, err
 		}
+	} else {
+		status = SideStatTy
 	}
 
 	// Set new head.
@@ -1729,7 +1730,6 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 			bc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
 		}
 	} else {
-		bc.chainUncleFeed.Send(block.Header())
 		bc.chainSideFeed.Send(ChainSideEvent{Block: block})
 	}
 	return status, nil
@@ -2071,7 +2071,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		return bc.insertSideChain(block, it)
 
 	// First block is future, shove it (and all children) to the future queue (unknown ancestor)
-	case errors.Is(err, consensus.ErrFutureBlock) || (errors.Is(err, consensus.ErrUnknownAncestor)):
+	case errors.Is(err, consensus.ErrFutureBlock) || (errors.Is(err, consensus.ErrUnknownAncestor)) && bc.futureBlocks.Contains(it.first().ParentHash()):
 		for block != nil && (it.index == 0 || errors.Is(err, consensus.ErrUnknownAncestor)) {
 			log.Debug("Future block, postponing import", "number", block.Number(), "hash", block.Hash())
 			if err := bc.addFutureBlock(block); err != nil {
@@ -2224,17 +2224,21 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		log.Info("Running CheckCanonical and PCRC for block", "num", block.Header().Number, "location", block.Header().Location, "hash", block.Header().Hash())
 
 		if order < types.QuaiNetworkContext {
-			status := bc.domClient.GetBlockStatus(context.Background(), block.Header())
+			domStatus := bc.domClient.GetBlockStatus(context.Background(), block.Header())
 			// If the header is cononical break else keep looking
-			if status != quaiclient.CanonStatTy {
-				return it.index, errors.New("cannot append non-canonical dom block in sub")
+			switch domStatus {
+			case quaiclient.UnknownStatTy:
+				bc.addFutureBlock(block)
+				return it.index, nil
+			case quaiclient.SideStatTy:
+				return it.index, errors.New("block is uncled in dom")
 			}
 		}
 
 		_, err = bc.PCRC(block.Header(), order)
 		fmt.Println("PCRC", err)
 		if err != nil {
-			return it.index, nil
+			return it.index, err
 		}
 
 		// Update the metrics touched during block processing
@@ -2268,7 +2272,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		linkExtBlocks, err := bc.engine.GetLinkExternalBlocks(bc, block.Header(), true)
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
-			bc.chainUncleFeed.Send(block.Header())
 			return it.index, err
 		}
 
@@ -2283,8 +2286,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		}
 		atomic.StoreUint32(&followupInterrupt, 1)
 		if err != nil {
-			bc.reportBlock(block, receipts, err)
-			bc.chainUncleFeed.Send(block.Header())
 			return it.index, err
 		}
 
