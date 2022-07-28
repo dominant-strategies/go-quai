@@ -2021,11 +2021,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 			fmt.Println("skip block")
 			reorg, err = bc.forker.ReorgNeeded(current.Header(), block.Header())
 			if err != nil {
-				fmt.Println("skipblock future blcok catch", err)
-				if errors.Is(err, consensus.ErrFutureBlock) {
-					fmt.Println("skipblock inside if", err)
-					break
-				}
 				return it.index, err
 			}
 			if reorg {
@@ -2086,7 +2081,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		return it.index, nil
 
 		// Some other error occurred, abort
-	case err != nil:
+	case err != nil && !errors.Is(err, ErrKnownBlock):
 		bc.futureBlocks.Remove(block.Hash())
 		stats.ignored += len(it.chain)
 		bc.reportBlock(block, nil, err)
@@ -2105,7 +2100,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		}
 	}()
 
-	for ; block != nil && err == nil || err == ErrKnownBlock; block, err = it.next() {
+	for ; block != nil && err == nil || errors.Is(err, ErrKnownBlock); block, err = it.next() {
 		// If the chain is terminating, stop processing blocks
 		if bc.insertStopped() {
 			log.Debug("Abort during block processing")
@@ -2121,7 +2116,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		// older block might complete the state of the subsequent one. In this case,
 		// just skip the block (we already validated it once fully (and crashed), since
 		// its header and body was already in the database).
-		if err == ErrKnownBlock {
+		if bc.skipBlock(err, it) {
 			logger := log.Debug
 			if bc.chainConfig.Clique == nil {
 				logger = log.Warn
@@ -2160,9 +2155,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 
 		parent := it.previous()
 		if parent == nil {
-			fmt.Println("parent is nil for block ", block, block.ParentHash())
 			parentBlock := bc.GetBlockByHash(block.ParentHash())
-
 			if parentBlock == nil {
 				return it.index, errors.New("parent is nil")
 			}
