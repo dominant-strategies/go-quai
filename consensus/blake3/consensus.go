@@ -718,7 +718,6 @@ func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader
 		if header.Number[path].Cmp(big.NewInt(1)) == 0 {
 			return chain.GetHeaderByHash(chain.Config().GenesisHashes[0]), nil
 		}
-		fmt.Println("PCOP Header Number:", header.Number, "Hash:", header.Hash(), "Parent Hash", header.ParentHash[path])
 		if path == types.QuaiNetworkContext {
 			// Get previous header on local chain by hash
 			prevHeader := chain.GetHeaderByHash(header.ParentHash[path])

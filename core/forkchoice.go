@@ -101,6 +101,7 @@ func (f *ForkChoice) ReorgNeeded(current *types.Header, header *types.Header) (b
 
 	localTd := f.chain.GetTd(current.Hash(), current.Number[types.QuaiNetworkContext].Uint64())
 
+	fmt.Println("calctd from forker")
 	externTd, err := f.chain.CalcTd(header)
 	if err != nil {
 		return false, err
@@ -128,14 +129,14 @@ func (f *ForkChoice) ReorgNeeded(current *types.Header, header *types.Header) (b
 		}
 	}
 
-	// if reorg && types.QuaiNetworkContext != params.PRIME {
-	// 	domReorg, err := f.chain.DomReorgNeeded(header)
-	// 	fmt.Println("domReorg", err)
-	// 	if err != nil {
-	// 		return false, err
-	// 	}
-	// 	reorg = domReorg
-	// }
+	if reorg && types.QuaiNetworkContext != params.PRIME {
+		domReorg, err := f.chain.DomReorgNeeded(header)
+		fmt.Println("domReorg", err)
+		if err != nil {
+			return false, err
+		}
+		reorg = domReorg
+	}
 
 	return reorg, nil
 }

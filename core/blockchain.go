@@ -1588,6 +1588,7 @@ func (bc *BlockChain) CalcTd(header *types.Header) ([]*big.Int, error) {
 // but is expects the chain mutex to be held.
 func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, linkExtBlocks []*types.ExternalBlock) error {
 
+	fmt.Println("calcTd from wbws")
 	externTd, err := bc.CalcTd(block.Header())
 	if err != nil {
 		return err
@@ -1737,7 +1738,9 @@ func (bc *BlockChain) addFutureBlock(block *types.Block) error {
 	if block.Time() > max {
 		return fmt.Errorf("future block timestamp %v > allowed %v", block.Time(), max)
 	}
-	bc.futureBlocks.Add(block.Hash(), block)
+	if !bc.futureBlocks.Contains(block.Hash()) {
+		bc.futureBlocks.Add(block.Hash(), block)
+	}
 	return nil
 }
 
@@ -1829,7 +1832,7 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header, validHeaders []*types.
 
 	if header != nil {
 		// get the commonBlock
-		commonBlock := bc.GetBlockByHash(header.Hash())
+		commonBlock := bc.GetBlockByHash(header.ParentHash[types.QuaiNetworkContext])
 
 		// if commonBlock isn't canoncial in our chain, do not reorg
 		// because commonBlock parentHash could potentially be in our chain.
@@ -1853,32 +1856,24 @@ func (bc *BlockChain) ReOrgRollBack(header *types.Header, validHeaders []*types.
 			}
 		}
 
-		// Additional step is needed since we want to rollback 1 past the commonBlock.
-		deletedTxs = append(deletedTxs, currentBlock.Transactions()...)
-		collectLogs(currentBlock.Hash())
-		currentBlock = bc.GetBlock(currentBlock.ParentHash(), currentBlock.NumberU64()-1)
-		if currentBlock == nil {
-			return fmt.Errorf("invalid current chain")
-		}
-
 		// set the head back to the block before the rollback point
-		if err := bc.SetHead(commonBlock.NumberU64() - 1); err != nil {
+		if err := bc.SetHead(commonBlock.NumberU64()); err != nil {
 			return err
 		}
 		// writing the head to the blockchain state
-		bc.writeHeadBlock(currentBlock)
-		bc.futureBlocks.Remove(currentBlock.Hash())
+		bc.writeHeadBlock(commonBlock)
+		bc.futureBlocks.Remove(commonBlock.Hash())
 
 		// get all the receipts and extract the logs from it
-		receipts := bc.GetReceiptsByHash(currentBlock.Hash())
+		receipts := bc.GetReceiptsByHash(commonBlock.Hash())
 		var logs []*types.Log
 
 		for _, receipt := range receipts {
 			logs = append(logs, receipt.Logs...)
 		}
 		// send a chain event so that it updates the pending header
-		bc.chainFeed.Send(ChainEvent{Block: currentBlock, Hash: currentBlock.Hash(), Logs: logs})
-		bc.chainHeadFeed.Send(ChainHeadEvent{Block: currentBlock})
+		bc.chainFeed.Send(ChainEvent{Block: commonBlock, Hash: commonBlock.Hash(), Logs: logs})
+		bc.chainHeadFeed.Send(ChainHeadEvent{Block: commonBlock})
 
 		log.Info("Header is now rolled back and the current head is at block with ", "Hash ", bc.CurrentBlock().Hash(), " Number ", bc.CurrentBlock().NumberU64())
 
@@ -2023,6 +2018,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 			current = bc.CurrentBlock()
 		)
 		for block != nil && bc.skipBlock(err, it) {
+			fmt.Println("skip block")
 			reorg, err = bc.forker.ReorgNeeded(current.Header(), block.Header())
 			if err != nil {
 				fmt.Println("skipblock future blcok catch", err)
@@ -2222,10 +2218,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 			}
 		}
 
-		if block.Hash() == common.HexToHash("0xd60934f86ddbf0b93d07031b6df5227bc511671f4e6f1a0e34e3e17adb4f5db2") {
-			fmt.Println("problem block")
-		}
-
 		err = bc.forker.UntwistAndTrim(block.Header())
 		if err != nil {
 			return it.index, nil
@@ -2414,6 +2406,7 @@ func (bc *BlockChain) HLCRReorg(block *types.Block) (bool, error) {
 		}
 	} else {
 		currentTd := bc.GetTdByHash(bc.CurrentBlock().Hash())
+		fmt.Println("calcTd from hlcrreorg")
 		externTd, err := bc.CalcTd(block.Header())
 		if err != nil {
 			return false, err
@@ -2485,6 +2478,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 			}
 		}
 		if externTd == nil {
+			fmt.Println("culprit")
 			externTd, err = bc.CalcTd(block.Header())
 			if err != nil {
 				return it.index, err
@@ -2509,6 +2503,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 	//
 	// If the externTd was larger than our local TD, we now need to reimport the previous
 	// blocks to regenerate the required state
+	fmt.Println("Insert side chain")
 	reorg, err := bc.forker.ReorgNeeded(current.Header(), lastBlock.Header())
 	if err != nil {
 		return it.index, err
