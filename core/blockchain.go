@@ -1464,80 +1464,12 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 
 // NdToTd returns the total difficulty for a header given the net difficulty
 func (bc *BlockChain) NdToTd(header *types.Header, nD []*big.Int) ([]*big.Int, error) {
-	if header == nil {
-		return nil, errors.New("header provided to ndtotd is nil")
-	}
-	startingHeader := header
-	k := big.NewInt(0)
-
-	var prevExternTerminus *types.Header
-	var err error
-	for {
-		if bc.hc.GetBlockNumber(header.Hash()) != nil {
-			break
-		}
-		prevExternTerminus, err = bc.Engine().PreviousCoincidentOnPath(bc, header, header.Location, params.PRIME, params.PRIME, true)
-		if err != nil {
-			return nil, err
-		}
-		header = prevExternTerminus
-	}
-	header = startingHeader
-	for prevExternTerminus.Hash() != header.Hash() {
-		k.Add(k, header.Difficulty[0])
-		if header.Hash() == bc.Config().GenesisHashes[0] {
-			break
-		}
-
-		// Get previous header on local chain by hash
-		prevHeader := bc.GetHeaderByHash(header.ParentHash[params.PRIME])
-		if prevHeader == nil {
-			// Get previous header on external chain by hash
-			prevExtBlock, err := bc.GetExternalBlock(header.ParentHash[params.PRIME], header.Location, uint64(params.PRIME))
-			if err != nil {
-				return nil, err
-			}
-			// Increment previous header
-			prevHeader = prevExtBlock.Header()
-		}
-		header = prevHeader
-	}
-	// subtract the terminal block difficulty
-	k.Sub(k, header.Difficulty[0])
-
-	k.Add(k, bc.GetTdByHash(header.Hash())[params.PRIME])
-
-	// adding the common total difficulty to the net
-	nD[0].Add(nD[0], k)
-	nD[1].Add(nD[1], k)
-	nD[2].Add(nD[2], k)
-
-	return nD, nil
+	return bc.hc.NdToTd(header, nD)
 }
 
 // CalcTd calculates the TD of the given header using PCRC and CalcHLCRNetDifficulty.
 func (bc *BlockChain) CalcTd(header *types.Header) ([]*big.Int, error) {
-	fmt.Println("Starting CalcTd Block Number", header.Number, " Hash:", header.Hash())
-	// Always calculate PTZ because it is always valid and we need terminus for calcHLCRDifficulty
-	externTerminal, err := bc.Engine().PreviousCoincidentOnPath(bc, header, header.Location, params.PRIME, params.ZONE, true)
-	if err != nil {
-		return nil, err
-	}
-	externTerminalHash := externTerminal.Hash()
-
-	// Use HLCR to compute net total difficulty
-	externNd, err := bc.CalcHLCRNetDifficulty(externTerminalHash, header)
-	if err != nil {
-		return nil, err
-	}
-
-	externTerminalHeader := bc.GetHeaderByHash(externTerminalHash)
-	externTd, err := bc.NdToTd(externTerminalHeader, externNd)
-	if err != nil {
-		return nil, err
-	}
-
-	return externTd, nil
+	return bc.hc.CalcTd(header)
 }
 
 // writeBlockWithState writes the block and all associated state to the database,
@@ -3726,60 +3658,6 @@ func (bc *BlockChain) CheckDominantBlock(block *types.Block) error {
 	}
 
 	return nil
-}
-
-// calcHLCRNetDifficulty calculates the net difficulty from previous prime.
-// The netDifficulties parameter inputs the nets of instantaneous difficulties from the terminus block.
-// By correctly summing the net difficulties we have obtained the proper array to be compared in HLCR.
-func (bc *BlockChain) CalcHLCRNetDifficulty(terminalHash common.Hash, header *types.Header) ([]*big.Int, error) {
-
-	if (terminalHash == common.Hash{}) {
-		return nil, errors.New("one or many of the  terminal hashes were nil")
-	}
-
-	primeNd := big.NewInt(0)
-	regionNd := big.NewInt(0)
-	zoneNd := big.NewInt(0)
-
-	for {
-		if header.Hash() == terminalHash {
-			break
-		}
-
-		order, err := bc.engine.GetDifficultyOrder(header)
-		if err != nil {
-			return nil, err
-		}
-		nD := header.Difficulty[order]
-		if order <= params.PRIME {
-			primeNd.Add(primeNd, nD)
-		}
-		if order <= params.REGION {
-			regionNd.Add(regionNd, nD)
-		}
-		if order <= params.ZONE {
-			zoneNd.Add(zoneNd, nD)
-		}
-
-		// Get previous header on local chain by hash
-		prevHeader := bc.GetHeaderByHash(header.ParentHash[order])
-		if prevHeader == nil {
-			// Get previous header on external chain by hash
-			prevExtBlock, err := bc.GetExternalBlock(header.ParentHash[order], header.Location, uint64(order))
-			if err != nil {
-				return nil, err
-			}
-			// Increment previous header
-			prevHeader = prevExtBlock.Header()
-		}
-		header = prevHeader
-
-		if header.Hash() == bc.Config().GenesisHashes[0] {
-			break
-		}
-	}
-
-	return []*big.Int{primeNd, regionNd, zoneNd}, nil
 }
 
 // HasHeader checks if a block header is present in the database or not, caching

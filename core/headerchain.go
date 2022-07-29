@@ -18,6 +18,7 @@ package core
 
 import (
 	"bytes"
+	"context"
 	crand "crypto/rand"
 	"errors"
 	"fmt"
@@ -758,80 +759,51 @@ func (hc *HeaderChain) HLCR(localDifficulties []*big.Int, externDifficulties []*
 	return false
 }
 
-// CalcTd calculates the TD of the given header using PCRC and CalcHLCRNetDifficulty.
-func (hc *HeaderChain) CalcTd(header *types.Header) ([]*big.Int, error) {
-	// Check PCRC for the external block and return the terminal hash and net difficulties
-	externTerminalHeader, err := hc.Engine().PreviousCoincidentOnPath(hc, header, header.Location, params.PRIME, params.ZONE, true)
-	if err != nil {
-		return nil, err
-	}
-
-	// Use HLCR to compute net total difficulty
-	externNd, err := hc.CalcHLCRNetDifficulty(externTerminalHeader.Hash(), header)
-	if err != nil {
-		return nil, err
-	}
-
-	externTd, err := hc.NdToTd(externTerminalHeader, externNd)
-	if err != nil {
-		return nil, err
-	}
-
-	return externTd, nil
-}
-
 // NdToTd returns the total difficulty for a header given the net difficulty
 func (hc *HeaderChain) NdToTd(header *types.Header, nD []*big.Int) ([]*big.Int, error) {
-	if header == nil {
-		return nil, errors.New("header provided to ndtotd is nil")
-	}
-	startingHeader := header
-	k := big.NewInt(0)
-	k.Sub(k, header.Difficulty[0])
+	return nil, errors.New("Unimplemented")
+}
 
-	var prevExternTerminus *types.Header
-	var err error
+// CalcTd calculates the TD of the given header using PCRC and CalcHLCRNetDifficulty.
+func (hc *HeaderChain) CalcTd(header *types.Header) ([]*big.Int, error) {
+	// Iterate ancestors, stopping when a TD value is found in cache or a coincident block is found.
+	// If coincident is found, ask dom client for TD at that block
+	aggDiff := new(big.Int)
+	cursor := header
 	for {
-		if hc.GetBlockNumber(header.Hash()) != nil {
-			break
+		// First, check if this block's TD is already cached
+		td := hc.GetTd(cursor.Hash(), (*cursor.Number[types.QuaiNetworkContext]).Uint64())
+		if td != nil {
+			// Add the difficulty we accumulated up till this block
+			blockTd := td[types.QuaiNetworkContext]
+			td[types.QuaiNetworkContext] = blockTd.Add(blockTd, aggDiff)
+			return td, nil
 		}
-		prevExternTerminus, err = hc.Engine().PreviousCoincidentOnPath(hc, header, header.Location, params.PRIME, params.PRIME, true)
+
+		// If not cached, check if this block coincides with a dominant chain
+		order, err := hc.GetDifficultyOrder(cursor)
 		if err != nil {
 			return nil, err
-		}
-		header = prevExternTerminus
-	}
-	header = startingHeader
-	for prevExternTerminus.Hash() != header.Hash() {
-		k.Add(k, header.Difficulty[0])
-		if header.Hash() == hc.Config().GenesisHashes[0] {
-			k.Add(k, header.Difficulty[0])
-			break
-		}
-		// Get previous header on local chain by hash
-		prevHeader := hc.GetHeaderByHash(header.ParentHash[params.PRIME])
-		if prevHeader == nil {
-			// Get previous header on external chain by hash
-			prevExtBlock, err := hc.GetExternalBlock(header.ParentHash[params.PRIME], header.Location, uint64(params.PRIME))
+		} else if order < types.QuaiNetworkContext {
+			// TODO: Ask dom to CalcTd on coincident block
+			td, err = hc.domClient.CalcTd(context.Background(), header)
+			err = errors.New("TODO: Ask dom to CalcTd")
 			if err != nil {
 				return nil, err
+			} else {
+				blockTd := td[types.QuaiNetworkContext]
+				td[types.QuaiNetworkContext] = blockTd.Add(blockTd, aggDiff)
 			}
-			// Increment previous header
-			prevHeader = prevExtBlock.Header()
 		}
-		header = prevHeader
+
+		// If not cached AND not coincident, aggregate the difficulty and iterate to the parent
+		aggDiff = aggDiff.Add(aggDiff, cursor.Difficulty[types.QuaiNetworkContext])
+		parentHash := cursor.ParentHash[types.QuaiNetworkContext]
+		cursor = hc.GetHeader(cursor.Hash(), (*cursor.Number[types.QuaiNetworkContext]).Uint64())
+		if cursor == nil {
+			return nil, fmt.Errorf("Unable to find parent: %s", parentHash)
+		}
 	}
-	// subtract the terminal block difficulty
-	k.Sub(k, header.Difficulty[0])
-
-	k.Add(k, hc.GetTdByHash(header.Hash())[params.PRIME])
-
-	// adding the common total difficulty to the net
-	nD[0].Add(nD[0], k)
-	nD[1].Add(nD[1], k)
-	nD[2].Add(nD[2], k)
-
-	return nD, nil
 }
 
 // The purpose of the Previous Coincident Reference Check (PCRC) is to establish
@@ -887,6 +859,14 @@ func (hc *HeaderChain) PCRC(header *types.Header) (common.Hash, error) {
 	}
 
 	return PTP.Hash(), nil
+}
+
+func (hc *HeaderChain) GetDifficultyOrder(header *types.Header) (int, error) {
+	headerOrder, err := hc.Engine().GetDifficultyOrder(header)
+	if err != nil {
+		return headerOrder, err
+	}
+	return headerOrder, nil
 }
 
 // calcHLCRNetDifficulty calculates the net difficulty from previous prime.
