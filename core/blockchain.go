@@ -3536,11 +3536,7 @@ func (bc *BlockChain) PreviousValidCoincidentOnPath(header *types.Header, slice 
 		if order < types.QuaiNetworkContext {
 			status := bc.domClient.GetBlockStatus(context.Background(), terminalHeader)
 			fmt.Println("terminal Header status", status)
-			// If the header is cononical break else keep looking
-			switch status {
-			case quaiclient.UnknownStatTy:
-				// do nothing and find latest uncle or canonical in dom
-			default:
+			if status == quaiclient.CanonStatTy {
 				if prevTerminalHeader.Hash() != header.Hash() {
 					return nil, errors.New("subordinate terminus mismatch")
 				}
