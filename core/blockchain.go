@@ -3485,25 +3485,22 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTer
 		// PTZ and RTZ are essentially a signaling mechanism to know that we are building on the right terminal header.
 		// So running this only on a coincident block makes sure that the zones can move and sync past the coincident.
 		// Just run RTZ to make sure that its linked. This check decouples this signaling and linking paradigm.
-		if headerOrder < params.REGION {
-			fmt.Println("PCRC Running PTZ")
-			PTZ, err := bc.PreviousValidCoincidentOnPath(header, slice, params.PRIME, params.ZONE, true)
-			fmt.Println("Hash: PTZ", PTZ.Hash(), "error:", err)
-			if err != nil {
-				return types.PCRCTermini{}, err
-			}
-			PCRCTermini.PTZ = PTZ.Hash()
-		}
 
-		if headerOrder < params.ZONE {
-			fmt.Println("PCRC Running RTZ")
-			RTZ, err := bc.PreviousValidCoincidentOnPath(header, slice, params.REGION, params.ZONE, true)
-			fmt.Println("Hash: RTZ", RTZ.Hash(), "error:", err)
-			if err != nil {
-				return types.PCRCTermini{}, err
-			}
-			PCRCTermini.RTZ = RTZ.Hash()
+		fmt.Println("PCRC Running PTZ")
+		PTZ, err := bc.PreviousValidCoincidentOnPath(header, slice, params.PRIME, params.ZONE, true)
+		fmt.Println("Hash: PTZ", PTZ.Hash(), "error:", err)
+		if err != nil {
+			return types.PCRCTermini{}, err
 		}
+		PCRCTermini.PTZ = PTZ.Hash()
+
+		fmt.Println("PCRC Running RTZ")
+		RTZ, err := bc.PreviousValidCoincidentOnPath(header, slice, params.REGION, params.ZONE, true)
+		fmt.Println("Hash: RTZ", RTZ.Hash(), "error:", err)
+		if err != nil {
+			return types.PCRCTermini{}, err
+		}
+		PCRCTermini.RTZ = RTZ.Hash()
 
 		return PCRCTermini, nil
 	}
