@@ -2229,12 +2229,14 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 			switch domStatus {
 			case quaiclient.UnknownStatTy:
 				bc.addFutureBlock(block)
+				err = consensus.ErrFutureBlock
+				fmt.Println("trying to break insert", err)
 			case quaiclient.SideStatTy:
 				return it.index, errors.New("block is uncled in dom")
 			}
-			err = consensus.ErrFutureBlock
-			fmt.Println("trying to break insert", err)
-			break
+			if errors.Is(err, consensus.ErrFutureBlock) {
+				break
+			}
 		}
 
 		_, err = bc.PCRC(block.Header(), order)
