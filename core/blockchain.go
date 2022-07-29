@@ -227,9 +227,6 @@ type BlockChain struct {
 	forker     *ForkChoice
 
 	shouldPreserve func(*types.Block) bool // Function used to determine whether should preserve the given block.
-
-	domClient  *quaiclient.Client   // domClient is used to check if a given dominant block in the chain is canonical in dominant chain.
-	subClients []*quaiclient.Client // subClinets is used to check is a coincident block is valid in the subordinate context
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -282,21 +279,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
 	bc.processor = NewStateProcessor(chainConfig, bc, engine)
 
-	// only set the domClient if the chain is not prime
-	if types.QuaiNetworkContext != params.PRIME {
-		bc.domClient = MakeDomClient(domClientUrl)
-	}
-
-	bc.subClients = make([]*quaiclient.Client, 3)
-	// only set the subClients if the chain is not region
-	if types.QuaiNetworkContext != params.ZONE {
-		go func() {
-			bc.subClients = MakeSubClients(subClientUrls)
-		}()
-	}
-
 	var err error
-	bc.hc, err = NewHeaderChain(db, chainConfig, engine, bc.insertStopped)
+	bc.hc, err = NewHeaderChain(db, chainConfig, engine, domClientUrl, subClientUrls, bc.insertStopped)
 	if err != nil {
 		return nil, err
 	}
@@ -518,34 +502,6 @@ func (bc *BlockChain) loadLastState() error {
 		log.Info("Loaded last fast-sync pivot marker", "number", *pivot)
 	}
 	return nil
-}
-
-// MakeDomClient creates the quaiclient for the given domurl
-func MakeDomClient(domurl string) *quaiclient.Client {
-	if domurl == "" {
-		log.Crit("dom client url is empty")
-	}
-	domClient, err := quaiclient.Dial(domurl)
-	if err != nil {
-		log.Crit("Error connecting to the dominant go-quai client", "err", err)
-	}
-	return domClient
-}
-
-// MakeSubClients creates the quaiclient for the given suburls
-func MakeSubClients(suburls []string) []*quaiclient.Client {
-	subClients := make([]*quaiclient.Client, 3)
-	for i, suburl := range suburls {
-		if suburl == "" {
-			log.Warn("sub client url is empty")
-		}
-		subClient, err := quaiclient.Dial(suburl)
-		if err != nil {
-			log.Crit("Error connecting to the subordinate go-quai client for index", "index", i, " err ", err)
-		}
-		subClients[i] = subClient
-	}
-	return subClients
 }
 
 // SetHead rewinds the local chain to a new head. Depending on whether the node
@@ -2219,7 +2175,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		log.Info("Running CheckCanonical and PCRC for block", "num", block.Header().Number, "location", block.Header().Location, "hash", block.Header().Hash())
 
 		if order < types.QuaiNetworkContext {
-			status := bc.domClient.GetBlockStatus(context.Background(), block.Header())
+			status := bc.hc.domClient.GetBlockStatus(context.Background(), block.Header())
 			// If the header is cononical break else keep looking
 			if status != quaiclient.CanonStatTy {
 				return it.index, errors.New("cannot append non-canonical dom block in sub")
@@ -2392,7 +2348,7 @@ func (bc *BlockChain) HLCRReorg(block *types.Block) (bool, error) {
 
 	var reorgFromDom bool
 	if order < types.QuaiNetworkContext {
-		reorgFromDom, err = bc.domClient.HLCRReorg(context.Background(), block)
+		reorgFromDom, err = bc.hc.domClient.HLCRReorg(context.Background(), block)
 		if err != nil {
 			fmt.Println("hlcrreorg dom reorg failed, context", types.QuaiNetworkContext)
 			return false, errors.New("unable to reorg the dom")
@@ -3047,14 +3003,14 @@ func (bc *BlockChain) GetExternalBlock(hash common.Hash, location []byte, contex
 
 // requestExternalBlock sends an external block event to the missingExternalBlockFeed in order to be fulfilled by a manager or client.
 func (bc *BlockChain) requestExternalBlock(hash common.Hash, blockContext uint64) *types.ExternalBlock {
-	if bc.domClient != nil {
-		extBlock := FindExternalBlock(bc.domClient, hash, blockContext)
+	if bc.hc.domClient != nil {
+		extBlock := FindExternalBlock(bc.hc.domClient, hash, blockContext)
 		if extBlock != nil {
 			return extBlock
 		}
 	}
 
-	for _, client := range bc.subClients {
+	for _, client := range bc.hc.subClients {
 		if client != nil {
 			extBlock := FindExternalBlock(client, hash, blockContext)
 			if extBlock != nil {
@@ -3396,10 +3352,10 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTer
 			return types.PCRCTermini{}, err
 		}
 
-		if bc.subClients[slice[0]-1] == nil {
+		if bc.hc.subClients[slice[0]-1] == nil {
 			return types.PCRCTermini{}, nil
 		}
-		PCRCTermini, err := bc.subClients[slice[0]-1].CheckPCRC(context.Background(), header, headerOrder)
+		PCRCTermini, err := bc.hc.subClients[slice[0]-1].CheckPCRC(context.Background(), header, headerOrder)
 		if err != nil {
 			return types.PCRCTermini{}, err
 		}
@@ -3431,11 +3387,11 @@ func (bc *BlockChain) PCRC(header *types.Header, headerOrder int) (types.PCRCTer
 			return types.PCRCTermini{}, err
 		}
 
-		if bc.subClients[slice[1]-1] == nil {
+		if bc.hc.subClients[slice[1]-1] == nil {
 			return types.PCRCTermini{}, nil
 		}
 
-		PCRCTermini, err := bc.subClients[slice[1]-1].CheckPCRC(context.Background(), header, headerOrder)
+		PCRCTermini, err := bc.hc.subClients[slice[1]-1].CheckPCRC(context.Background(), header, headerOrder)
 		if err != nil {
 			return types.PCRCTermini{}, err
 		}
@@ -3523,7 +3479,7 @@ func (bc *BlockChain) PreviousValidCoincidentOnPath(header *types.Header, slice 
 
 		// If the current header is dominant coincident check the status with the dom node
 		if order < types.QuaiNetworkContext {
-			status := bc.domClient.GetBlockStatus(context.Background(), terminalHeader)
+			status := bc.hc.domClient.GetBlockStatus(context.Background(), terminalHeader)
 			fmt.Println("terminal Header status", status)
 			// If the header is cononical break else keep looking
 			switch status {
@@ -3582,10 +3538,10 @@ func (bc *BlockChain) PCCRC(header *types.Header, headerOrder int) (types.PCRCTe
 			return types.PCRCTermini{}, err
 		}
 
-		if bc.subClients[slice[0]-1] == nil {
+		if bc.hc.subClients[slice[0]-1] == nil {
 			return types.PCRCTermini{}, nil
 		}
-		PCRCTermini, err := bc.subClients[slice[0]-1].CheckPCCRC(context.Background(), header, headerOrder)
+		PCRCTermini, err := bc.hc.subClients[slice[0]-1].CheckPCCRC(context.Background(), header, headerOrder)
 		if err != nil {
 			return types.PCRCTermini{}, err
 		}
@@ -3617,11 +3573,11 @@ func (bc *BlockChain) PCCRC(header *types.Header, headerOrder int) (types.PCRCTe
 			return types.PCRCTermini{}, err
 		}
 
-		if bc.subClients[slice[1]-1] == nil {
+		if bc.hc.subClients[slice[1]-1] == nil {
 			return types.PCRCTermini{}, nil
 		}
 
-		PCRCTermini, err := bc.subClients[slice[1]-1].CheckPCCRC(context.Background(), header, headerOrder)
+		PCRCTermini, err := bc.hc.subClients[slice[1]-1].CheckPCCRC(context.Background(), header, headerOrder)
 		if err != nil {
 			return types.PCRCTermini{}, err
 		}
@@ -3708,7 +3664,7 @@ func (bc *BlockChain) PreviousCanonicalCoincidentOnPath(header *types.Header, sl
 
 		// If the current header is dominant coincident check the status with the dom node
 		if order < types.QuaiNetworkContext {
-			status := bc.domClient.GetBlockStatus(context.Background(), terminalHeader)
+			status := bc.hc.domClient.GetBlockStatus(context.Background(), terminalHeader)
 
 			switch status {
 			case quaiclient.UnknownStatTy:
@@ -3748,7 +3704,7 @@ func (bc *BlockChain) GetDifficultyOrder(header *types.Header) (int, error) {
 
 // CheckDominantBlock sends the block to the dominant chain.
 func (bc *BlockChain) CheckDominantBlock(block *types.Block) error {
-	if bc.domClient == nil {
+	if bc.hc.domClient == nil {
 		return errors.New("dom client is nil")
 	}
 
@@ -3766,7 +3722,7 @@ func (bc *BlockChain) CheckDominantBlock(block *types.Block) error {
 		block := types.NewBlockWithHeader(extBlock.Header()).WithBody(extBlock.Transactions(), extBlock.Uncles())
 		sealed := block.WithSeal(block.Header())
 		log.Debug("Sending dominant block", "number", block.Header().Number, "hash", block.Hash())
-		go bc.domClient.SendMinedBlock(context.Background(), sealed, true, true)
+		go bc.hc.domClient.SendMinedBlock(context.Background(), sealed, true, true)
 	}
 
 	return nil

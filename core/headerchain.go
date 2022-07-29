@@ -32,6 +32,7 @@ import (
 	"github.com/spruce-solutions/go-quai/consensus"
 	"github.com/spruce-solutions/go-quai/core/rawdb"
 	"github.com/spruce-solutions/go-quai/core/types"
+	"github.com/spruce-solutions/go-quai/ethclient/quaiclient"
 	"github.com/spruce-solutions/go-quai/ethdb"
 	"github.com/spruce-solutions/go-quai/log"
 	"github.com/spruce-solutions/go-quai/params"
@@ -73,11 +74,14 @@ type HeaderChain struct {
 
 	rand   *mrand.Rand
 	engine consensus.Engine
+
+	domClient  *quaiclient.Client   // domClient is used to check if a given dominant block in the chain is canonical in dominant chain.
+	subClients []*quaiclient.Client // subClinets is used to check is a coincident block is valid in the subordinate context
 }
 
 // NewHeaderChain creates a new HeaderChain structure. ProcInterrupt points
 // to the parent's interrupt semaphore.
-func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine consensus.Engine, procInterrupt func() bool) (*HeaderChain, error) {
+func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine consensus.Engine, domClientUrl string, subClientUrls []string, procInterrupt func() bool) (*HeaderChain, error) {
 	headerCache, _ := lru.New(headerCacheLimit)
 	tdCache, _ := lru.New(tdCacheLimit)
 	numberCache, _ := lru.New(numberCacheLimit)
@@ -99,6 +103,19 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine c
 		engine:        engine,
 	}
 
+	// only set the domClient if the chain is not prime
+	if types.QuaiNetworkContext != params.PRIME {
+		hc.domClient = MakeDomClient(domClientUrl)
+	}
+
+	hc.subClients = make([]*quaiclient.Client, 3)
+	// only set the subClients if the chain is not region
+	if types.QuaiNetworkContext != params.ZONE {
+		go func() {
+			hc.subClients = MakeSubClients(subClientUrls)
+		}()
+	}
+
 	hc.genesisHeader = hc.GetHeaderByNumber(0)
 	if hc.genesisHeader == nil {
 		return nil, ErrNoGenesis
@@ -114,6 +131,34 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine c
 	headHeaderGauge.Update(hc.CurrentHeader().Number[types.QuaiNetworkContext].Int64())
 
 	return hc, nil
+}
+
+// MakeDomClient creates the quaiclient for the given domurl
+func MakeDomClient(domurl string) *quaiclient.Client {
+	if domurl == "" {
+		log.Crit("dom client url is empty")
+	}
+	domClient, err := quaiclient.Dial(domurl)
+	if err != nil {
+		log.Crit("Error connecting to the dominant go-quai client", "err", err)
+	}
+	return domClient
+}
+
+// MakeSubClients creates the quaiclient for the given suburls
+func MakeSubClients(suburls []string) []*quaiclient.Client {
+	subClients := make([]*quaiclient.Client, 3)
+	for i, suburl := range suburls {
+		if suburl == "" {
+			log.Warn("sub client url is empty")
+		}
+		subClient, err := quaiclient.Dial(suburl)
+		if err != nil {
+			log.Crit("Error connecting to the subordinate go-quai client for index", "index", i, " err ", err)
+		}
+		subClients[i] = subClient
+	}
+	return subClients
 }
 
 // GetBlockNumber retrieves the block number belonging to the given hash

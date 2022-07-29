@@ -92,8 +92,12 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 		blockCache:    blockCache,
 		engine:        engine,
 	}
+
+	var domUrl string
+	var subUrls []string
+
 	var err error
-	bc.hc, err = core.NewHeaderChain(odr.Database(), config, bc.engine, bc.getProcInterrupt)
+	bc.hc, err = core.NewHeaderChain(odr.Database(), config, bc.engine, domUrl, subUrls, bc.getProcInterrupt)
 	if err != nil {
 		return nil, err
 	}
