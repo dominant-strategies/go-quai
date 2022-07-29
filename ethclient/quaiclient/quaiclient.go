@@ -150,6 +150,13 @@ func (ec *Client) GetBlockStatus(ctx context.Context, header *types.Header) Writ
 	return blockStatus
 }
 
+// CalcTd calculates the total difficulty for a block
+func (ec *Client) CalcTd(ctx context.Context, header *types.Header) ([]*big.Int, error) {
+	var td []*big.Int
+	err := ec.c.CallContext(ctx, &td, "quai_calcTd")
+	return td, err
+}
+
 func (ec *Client) HLCRReorg(ctx context.Context, block *types.Block) (bool, error) {
 	var domReorgNeeded bool
 	data, err := RPCMarshalBlock(block, true, true)

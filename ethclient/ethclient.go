@@ -409,6 +409,13 @@ func (ec *Client) SyncProgress(ctx context.Context) (*ethereum.SyncProgress, err
 	}, nil
 }
 
+// CalcTd calculates the total difficulty for a block
+func (ec *Client) CalcTd(ctx context.Context, header *types.Header) ([]*big.Int, error) {
+	var td []*big.Int
+	err := ec.c.CallContext(ctx, &td, "quai_calcTd")
+	return td, err
+}
+
 // SubscribeNewHead subscribes to notifications about the current blockchain head
 // on the given channel.
 func (ec *Client) SubscribeNewHead(ctx context.Context, ch chan<- *types.Header) (ethereum.Subscription, error) {

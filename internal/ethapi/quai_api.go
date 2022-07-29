@@ -766,6 +766,15 @@ func (s *PublicBlockChainQuaiAPI) HLCRReorg(ctx context.Context, raw json.RawMes
 	return s.b.HLCRReorg(block)
 }
 
+// CalcTd calculates the total difficulty of a blockchain up to a block
+func (s *PublicBlockChainQuaiAPI) CalcTd(ctx context.Context, raw json.RawMessage) ([]*big.Int, error) {
+	var header *types.Header
+	if err := json.Unmarshal(raw, &header); err != nil {
+		return nil, err
+	}
+	return s.b.CalcTd(ctx, header)
+}
+
 // GetSubordinateSet returns the valid mined blocks from a dominant chain to the subordinate
 func (s *PublicBlockChainQuaiAPI) GetSubordinateSet(ctx context.Context, raw json.RawMessage) ([]common.Hash, error) {
 	var hashWithLocation HashWithLocation
