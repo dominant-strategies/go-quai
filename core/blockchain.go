@@ -2229,10 +2229,12 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 			switch domStatus {
 			case quaiclient.UnknownStatTy:
 				bc.addFutureBlock(block)
-				return it.index, nil
 			case quaiclient.SideStatTy:
 				return it.index, errors.New("block is uncled in dom")
 			}
+			err = consensus.ErrFutureBlock
+			fmt.Println("trying to break insert", err)
+			break
 		}
 
 		_, err = bc.PCRC(block.Header(), order)
@@ -2336,6 +2338,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool, setHead 
 		dirty, _ := bc.stateCache.TrieDB().Size()
 		stats.report(chain, it.index, dirty)
 	}
+	fmt.Println("arrived at insert remaining, err:", err)
 	// Any blocks remaining here? The only ones we care about are the future ones
 	if block != nil && errors.Is(err, consensus.ErrFutureBlock) {
 		if err := bc.addFutureBlock(block); err != nil {
