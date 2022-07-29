@@ -129,14 +129,14 @@ func (f *ForkChoice) ReorgNeeded(current *types.Header, header *types.Header) (b
 		}
 	}
 
-	// if reorg && types.QuaiNetworkContext != params.PRIME {
-	// 	domReorg, err := f.chain.DomReorgNeeded(header)
-	// 	fmt.Println("domReorg", err)
-	// 	if err != nil {
-	// 		return false, err
-	// 	}
-	// 	reorg = domReorg
-	// }
+	if reorg && types.QuaiNetworkContext != params.PRIME {
+		domReorg, err := f.chain.DomReorgNeeded(header)
+		fmt.Println("domReorg", err)
+		if err != nil {
+			return false, err
+		}
+		reorg = domReorg
+	}
 
 	return reorg, nil
 }
