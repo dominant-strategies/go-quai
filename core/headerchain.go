@@ -30,10 +30,13 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/consensus"
+	"github.com/spruce-solutions/go-quai/consensus/misc"
 	"github.com/spruce-solutions/go-quai/core/rawdb"
+	"github.com/spruce-solutions/go-quai/core/state"
 	"github.com/spruce-solutions/go-quai/core/types"
 	"github.com/spruce-solutions/go-quai/core/vm"
 	"github.com/spruce-solutions/go-quai/ethdb"
+	"github.com/spruce-solutions/go-quai/event"
 	"github.com/spruce-solutions/go-quai/log"
 	"github.com/spruce-solutions/go-quai/params"
 )
@@ -948,4 +951,204 @@ func (hc *HeaderChain) CheckLocationRange(location []byte) error {
 		return errors.New("the provided location is outside the allowable zone range")
 	}
 	return nil
+}
+
+// GasLimit returns the gas limit of the current HEAD block.
+func (bc *BlockChain) GasLimit() uint64 {
+	return bc.CurrentBlock().GasLimit()
+}
+
+// CurrentBlock retrieves the current head block of the canonical chain. The
+// block is retrieved from the blockchain's internal cache.
+func (bc *BlockChain) CurrentBlock() *types.Block {
+	return bc.currentBlock.Load().(*types.Block)
+}
+
+// writeHeadBlock injects a new head block into the current block chain. This method
+// assumes that the block is indeed a true head. It will also reset the head
+// header and the head fast sync block to this very same block if they are older
+// or if they are on a different side chain.
+//
+// Note, this function assumes that the `mu` mutex is held!
+func (bc *BlockChain) writeHeadBlock(block *types.Block) {
+	// If the block is on a side chain or an unknown one, force other heads onto it too
+	updateHeads := rawdb.ReadCanonicalHash(bc.db, block.NumberU64()) != block.Hash()
+
+	// Add the block to the canonical chain number scheme and mark as the head
+	batch := bc.db.NewBatch()
+	rawdb.WriteCanonicalHash(batch, block.Hash(), block.NumberU64())
+	rawdb.WriteTxLookupEntriesByBlock(batch, block)
+	rawdb.WriteHeadBlockHash(batch, block.Hash())
+
+	// If the block is better than our head or is on a different chain, force update heads
+	if updateHeads {
+		rawdb.WriteHeadHeaderHash(batch, block.Hash())
+		rawdb.WriteHeadFastBlockHash(batch, block.Hash())
+	}
+	// Flush the whole batch into the disk, exit the node if failed
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed to update chain indexes and markers", "err", err)
+	}
+	// Update all in-memory chain markers in the last step
+	if updateHeads {
+		bc.hc.SetCurrentHeader(block.Header())
+		bc.currentFastBlock.Store(block)
+		headFastBlockGauge.Update(int64(block.NumberU64()))
+	}
+	bc.currentBlock.Store(block)
+	headBlockGauge.Update(int64(block.NumberU64()))
+}
+
+// GetUnclesInChain retrieves all the uncles from a given block backwards until
+// a specific distance is reached.
+func (bc *BlockChain) GetUnclesInChain(block *types.Block, length int) []*types.Header {
+	uncles := []*types.Header{}
+	for i := 0; block != nil && i < length; i++ {
+		uncles = append(uncles, block.Uncles()...)
+		block = bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
+	}
+	return uncles
+}
+
+// GetGasUsedInChain retrieves all the gas used from a given block backwards until
+// a specific distance is reached.
+func (bc *BlockChain) GetGasUsedInChain(block *types.Block, length int) int64 {
+	gasUsed := 0
+	for i := 0; block != nil && i < length; i++ {
+		gasUsed += int(block.GasUsed())
+		block = bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
+	}
+	return int64(gasUsed)
+}
+
+// GetGasUsedInChain retrieves all the gas used from a given block backwards until
+// a specific distance is reached.
+func (bc *BlockChain) CalculateBaseFee(header *types.Header) *big.Int {
+	return misc.CalcBaseFee(bc.Config(), header, bc.GetHeaderByNumber, bc.GetUnclesInChain, bc.GetGasUsedInChain)
+}
+
+// WriteBlockWithState writes the block and all associated state to the database.
+func (bc *BlockChain) WriteBlockAndSetHead(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, linkExtBlocks []*types.ExternalBlock, emitHeadEvent bool) (status WriteStatus, err error) {
+	bc.chainmu.Lock()
+	defer bc.chainmu.Unlock()
+
+	return bc.writeBlockAndSetHead(block, receipts, logs, state, linkExtBlocks, emitHeadEvent)
+}
+
+// writeBlockAndSetHead writes the block and all associated state to the database,
+// and also it applies the given block as the new chain head. This function expects
+// the chain mutex to be held.
+func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, linkExtBlocks []*types.ExternalBlock, emitHeadEvent bool) (status WriteStatus, err error) {
+	if err := bc.writeBlockWithState(block, receipts, logs, state, linkExtBlocks); err != nil {
+		return NonStatTy, err
+	}
+	currentBlock := bc.CurrentBlock()
+	reorg, err := bc.forker.ReorgNeeded(currentBlock.Header(), block.Header())
+	if err != nil {
+		return NonStatTy, err
+	}
+
+	// If the total difficulty is higher than our known, add it to the canonical chain
+	// Second clause in the if statement reduces the vulnerability to selfish mining.
+	// Please refer to http://www.cs.cornell.edu/~ie53/publications/btcProcFC.pdf
+	if reorg {
+		// Reorganise the chain if the parent is not the head block
+		if block.ParentHash() != currentBlock.Hash() {
+			if err := bc.reorg(currentBlock, block); err != nil {
+				return NonStatTy, err
+			}
+		}
+		status = CanonStatTy
+		if err := bc.CheckLinkExtBlocks(block, linkExtBlocks); err != nil {
+			return NonStatTy, err
+		}
+	} else {
+		status = SideStatTy
+	}
+
+	// Set new head.
+	if status == CanonStatTy {
+		bc.writeHeadBlock(block)
+	}
+	bc.futureBlocks.Remove(block.Hash())
+
+	if status == CanonStatTy {
+		bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
+		if len(logs) > 0 {
+			bc.logsFeed.Send(logs)
+		}
+		// In theory we should fire a ChainHeadEvent when we inject
+		// a canonical block, but sometimes we can insert a batch of
+		// canonicial blocks. Avoid firing too many ChainHeadEvents,
+		// we will fire an accumulated ChainHeadEvent and disable fire
+		// event here.
+		if emitHeadEvent {
+			bc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
+		}
+	} else {
+		bc.chainSideFeed.Send(ChainSideEvent{Block: block})
+	}
+	return status, nil
+}
+
+// GetBlockStatus returns the status of the block for a given header
+func (bc *BlockChain) GetBlockStatus(header *types.Header) WriteStatus {
+	canonHash := bc.GetCanonicalHash(header.Number[types.QuaiNetworkContext].Uint64())
+	if (canonHash == common.Hash{}) {
+		return UnknownStatTy
+	}
+	if canonHash != header.Hash() {
+		return SideStatTy
+	}
+	return CanonStatTy
+}
+
+// CurrentHeader retrieves the current head header of the canonical chain. The
+// header is retrieved from the HeaderChain's internal cache.
+func (bc *BlockChain) CurrentHeader() *types.Header {
+	return bc.hc.CurrentHeader()
+}
+
+// GetTd retrieves a block's total difficulty in the canonical chain from the
+// database by hash and number, caching it if found.
+func (bc *BlockChain) GetTd(hash common.Hash, number uint64) []*big.Int {
+	return bc.hc.GetTd(hash, number)
+}
+
+// GetTdByHash retrieves a block's total difficulty in the canonical chain from the
+// database by hash, caching it if found.
+func (bc *BlockChain) GetTdByHash(hash common.Hash) []*big.Int {
+	return bc.hc.GetTdByHash(hash)
+}
+
+// GetHeader retrieves a block header from the database by hash and number,
+// caching it if found.
+func (bc *BlockChain) GetHeader(hash common.Hash, number uint64) *types.Header {
+	// Blockchain might have cached the whole block, only if not go to headerchain
+	if block, ok := bc.blockCache.Get(hash); ok {
+		return block.(*types.Block).Header()
+	}
+
+	return bc.hc.GetHeader(hash, number)
+}
+
+// GetHeaderByHash retrieves a block header from the database by hash, caching it if
+// found.
+func (bc *BlockChain) GetHeaderByHash(hash common.Hash) *types.Header {
+	// Blockchain might have cached the whole block, only if not go to headerchain
+	if block, ok := bc.blockCache.Get(hash); ok {
+		return block.(*types.Block).Header()
+	}
+
+	return bc.hc.GetHeaderByHash(hash)
+}
+
+// SubscribeChainHeadEvent registers a subscription of ChainHeadEvent.
+func (bc *BlockChain) SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription {
+	return bc.scope.Track(bc.chainHeadFeed.Subscribe(ch))
+}
+
+// SubscribeChainSideEvent registers a subscription of ChainSideEvent.
+func (bc *BlockChain) SubscribeChainSideEvent(ch chan<- ChainSideEvent) event.Subscription {
+	return bc.scope.Track(bc.chainSideFeed.Subscribe(ch))
 }
