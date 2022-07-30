@@ -32,6 +32,7 @@ import (
 	"github.com/spruce-solutions/go-quai/consensus"
 	"github.com/spruce-solutions/go-quai/core/rawdb"
 	"github.com/spruce-solutions/go-quai/core/types"
+	"github.com/spruce-solutions/go-quai/core/vm"
 	"github.com/spruce-solutions/go-quai/ethdb"
 	"github.com/spruce-solutions/go-quai/log"
 	"github.com/spruce-solutions/go-quai/params"
@@ -59,6 +60,8 @@ const (
 type HeaderChain struct {
 	config *params.ChainConfig
 
+	bc *BlockChain
+
 	chainDb       ethdb.Database
 	genesisHeader *types.Header
 
@@ -77,7 +80,7 @@ type HeaderChain struct {
 
 // NewHeaderChain creates a new HeaderChain structure. ProcInterrupt points
 // to the parent's interrupt semaphore.
-func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine consensus.Engine, procInterrupt func() bool) (*HeaderChain, error) {
+func NewHeaderChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, domClientUrl string, subClientUrls []string, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64) (*HeaderChain, error) {
 	headerCache, _ := lru.New(headerCacheLimit)
 	tdCache, _ := lru.New(tdCacheLimit)
 	numberCache, _ := lru.New(numberCacheLimit)
@@ -89,8 +92,8 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine c
 	}
 
 	hc := &HeaderChain{
-		config:        config,
-		chainDb:       chainDb,
+		config:        chainConfig,
+		chainDb:       db,
 		headerCache:   headerCache,
 		tdCache:       tdCache,
 		numberCache:   numberCache,
@@ -99,13 +102,18 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine c
 		engine:        engine,
 	}
 
+	hc.bc, err = NewBlockChain(db, cacheConfig, chainConfig, domClientUrl, subClientUrls, engine, vmConfig, shouldPreserve, txLookupLimit)
+	if err != nil {
+		return nil, err
+	}
+
 	hc.genesisHeader = hc.GetHeaderByNumber(0)
 	if hc.genesisHeader == nil {
 		return nil, ErrNoGenesis
 	}
 
 	hc.currentHeader.Store(hc.genesisHeader)
-	if head := rawdb.ReadHeadBlockHash(chainDb); head != (common.Hash{}) {
+	if head := rawdb.ReadHeadBlockHash(db); head != (common.Hash{}) {
 		if chead := hc.GetHeaderByHash(head); chead != nil {
 			hc.currentHeader.Store(chead)
 		}
