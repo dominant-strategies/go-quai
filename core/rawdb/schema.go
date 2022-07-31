@@ -36,6 +36,9 @@ var (
 	// headBlockKey tracks the latest known full block's hash.
 	headBlockKey = []byte("LastBlock")
 
+	// headersHashKey tracks the latest known headers hash in Blockchain.
+	headsHashesKey = []byte("HeadersHash")
+
 	// headFastBlockKey tracks the latest known incomplete block's hash during fast sync.
 	headFastBlockKey = []byte("LastFast")
 

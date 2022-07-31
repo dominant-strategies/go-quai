@@ -133,6 +133,14 @@ func (h *Header) Size() common.StorageSize {
 	return headerSize + common.StorageSize(len(h.Extra)+(TotalBitLen(h.Difficulty)+TotalBitLen(h.Number))/24)
 }
 
+func (h *Header) Number64() uint64 {
+	return h.Number[QuaiNetworkContext].Uint64()
+}
+
+func (h *Header) Parent() common.Hash {
+	return h.ParentHash[QuaiNetworkContext]
+}
+
 // TotalBitLen returns the BitLen at each element in a big.Int slice.
 func TotalBitLen(array []*big.Int) int {
 	bitLen := 0

@@ -600,6 +600,35 @@ func ReadTdRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 	return nil // Can't find the data anywhere.
 }
 
+// ReadHeadsHashes retreive's the heads hashes of the blockchain.
+func ReadHeadsHashes(db ethdb.Reader) []common.Hash {
+	data, _ := db.Get(headBlockKey)
+	if len(data) == 0 {
+		return []common.Hash{}
+	}
+	var hashes []common.Hash
+	rlp.DecodeBytes(data, hashes)
+	return hashes
+}
+
+// WriteHeadsHashes writes the heads hashes of the blockchain.
+func WriteHeadsHashes(db ethdb.KeyValueWriter, hashes []common.Hash) {
+	data, err := rlp.EncodeToBytes(hashes)
+	if err != nil {
+		log.Crit("Failed to RLP encode block total difficulty", "err", err)
+	}
+	if err := db.Put(headsHashesKey, data); err != nil {
+		log.Crit("Failed to store last block's hash", "err", err)
+	}
+}
+
+// DeleteHeadsHashes writes the heads hashes of the blockchain.
+func DeleteHeadsHashes(db ethdb.KeyValueWriter, hashes []common.Hash) {
+	if err := db.Delete(headsHashesKey); err != nil {
+		log.Crit("Failed to delete block total difficulty", "err", err)
+	}
+}
+
 // ReadTd retrieves a block's total difficulty corresponding to the hash.
 func ReadTd(db ethdb.Reader, hash common.Hash, number uint64) []*big.Int {
 	data := ReadTdRLP(db, hash, number)
