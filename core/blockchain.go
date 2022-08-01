@@ -94,7 +94,7 @@ type BlockChain struct {
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator and
 // Processor.
-func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, domClientUrl string, subClientUrls []string, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64) (*BlockChain, error) {
+func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config) (*BlockChain, error) {
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
 	}
@@ -125,20 +125,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	return bc, nil
 }
 
-// empty returns an indicator whether the blockchain is empty.
-// Note, it's a special case that we connect a non-empty ancient
-// database with an empty node, so that we can plugin the ancient
-// into node seamlessly.
-func (bc *BlockChain) empty() bool {
-	genesis := bc.genesisBlock.Hash()
-	for _, hash := range []common.Hash{rawdb.ReadHeadBlockHash(bc.db), rawdb.ReadHeadHeaderHash(bc.db), rawdb.ReadHeadFastBlockHash(bc.db)} {
-		if hash != genesis {
-			return false
-		}
-	}
-	return true
-}
-
 // loadLastState loads the last known chain state from the database. This method
 // assumes that the chain manager mutex is held.
 func (bc *BlockChain) loadLastState() error {
@@ -154,25 +140,6 @@ func (bc *BlockChain) loadLastState() error {
 	return nil
 }
 
-// Trim
-func (bc *BlockChain) trim(commonBlock *types.Block, startBlock *types.Block) error {
-	parent := startBlock
-	// Delete each block unitl common is found
-	for {
-		if parent.Hash() == commonBlock.Hash() {
-			break
-		}
-		rawdb.DeleteBlock(bc.db, parent.Hash(), parent.Header().Number[types.QuaiNetworkContext].Uint64())
-		parent = bc.GetBlockByHash(parent.Header().ParentHash[types.QuaiNetworkContext])
-
-		if parent == nil {
-			log.Warn("unable to trim blockchain state, one of trimmed blocks not found")
-			return nil
-		}
-	}
-	return nil
-}
-
 // Append
 func (bc *BlockChain) Append(block *types.Block) error {
 	bc.chainmu.Lock()
@@ -185,9 +152,10 @@ func (bc *BlockChain) Append(block *types.Block) error {
 		return err
 	}
 
-	err = bc.writeBlockWithoutState(block)
-	if err != nil {
-		return errors.New("error writing the block to state")
+	batch := bc.db.NewBatch()
+	rawdb.WriteBlock(batch, block)
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed to write block into disk", "err", err)
 	}
 
 	var nilHeader *types.Header
@@ -212,6 +180,25 @@ func (bc *BlockChain) Append(block *types.Block) error {
 		return bc.heads[i].Number[types.QuaiNetworkContext].Uint64() < bc.heads[j].Number[types.QuaiNetworkContext].Uint64()
 	})
 
+	return nil
+}
+
+// Trim
+func (bc *BlockChain) trim(commonBlock *types.Block, startBlock *types.Block) error {
+	parent := startBlock
+	// Delete each block unitl common is found
+	for {
+		if parent.Hash() == commonBlock.Hash() {
+			break
+		}
+		rawdb.DeleteBlock(bc.db, parent.Hash(), parent.Header().Number[types.QuaiNetworkContext].Uint64())
+		parent = bc.GetBlockByHash(parent.Header().ParentHash[types.QuaiNetworkContext])
+
+		if parent == nil {
+			log.Warn("unable to trim blockchain state, one of trimmed blocks not found")
+			return nil
+		}
+	}
 	return nil
 }
 
@@ -398,82 +385,8 @@ func (bc *BlockChain) insertStopped() bool {
 	return atomic.LoadInt32(&bc.procInterrupt) == 1
 }
 
-func (bc *BlockChain) procFutureBlocks() {
-	blocks := make([]*types.Block, 0, bc.futureBlocks.Len())
-	for _, hash := range bc.futureBlocks.Keys() {
-		if block, exist := bc.futureBlocks.Peek(hash); exist {
-			blocks = append(blocks, block.(*types.Block))
-		}
-	}
-	if len(blocks) > 0 {
-		sort.Slice(blocks, func(i, j int) bool {
-			return blocks[i].NumberU64() < blocks[j].NumberU64()
-		})
-		// Insert one by one as chain insertion needs contiguous ancestry between blocks
-		for i := range blocks {
-			bc.Append(blocks[i])
-		}
-	}
-}
-
-// WriteStatus status of write
-type WriteStatus byte
-
-const (
-	NonStatTy WriteStatus = iota
-	CanonStatTy
-	SideStatTy
-	UnknownStatTy
-)
-
-// writeBlockWithoutState writes only the block and its metadata to the database,
-// but does not write any state. This is used to construct competing side forks
-// up to the point where they exceed the canonical total difficulty.
-func (bc *BlockChain) writeBlockWithoutState(block *types.Block) (err error) {
-	bc.wg.Add(1)
-	defer bc.wg.Done()
-
-	batch := bc.db.NewBatch()
-	rawdb.WriteBlock(batch, block)
-	if err := batch.Write(); err != nil {
-		log.Crit("Failed to write block into disk", "err", err)
-	}
-	return nil
-}
-
-// addFutureBlock checks if the block is within the max allowed window to get
-// accepted for future processing, and returns an error if the block is too far
-// ahead and was not added.
-func (bc *BlockChain) addFutureBlock(block *types.Block) error {
-	max := uint64(time.Now().Unix() + maxTimeFutureBlocks)
-	if block.Time() > max {
-		return fmt.Errorf("future block timestamp %v > allowed %v", block.Time(), max)
-	}
-	if !bc.futureBlocks.Contains(block.Hash()) {
-		bc.futureBlocks.Add(block.Hash(), block)
-	}
-	return nil
-}
-
-func (bc *BlockChain) update() {
-	futureTimer := time.NewTicker(1 * time.Second)
-	defer futureTimer.Stop()
-	defer bc.wg.Done()
-	for {
-		select {
-		case <-futureTimer.C:
-			bc.procFutureBlocks()
-		case <-bc.quit:
-			return
-		}
-	}
-}
-
 // Config retrieves the chain's fork configuration.
 func (bc *BlockChain) Config() *params.ChainConfig { return bc.chainConfig }
-
-// Engine retrieves the blockchain's consensus engine.
-func (bc *BlockChain) Engine() consensus.Engine { return bc.engine }
 
 // SubscribeChainEvent registers a subscription of ChainEvent.
 func (bc *BlockChain) SubscribeChainEvent(ch chan<- ChainEvent) event.Subscription {
