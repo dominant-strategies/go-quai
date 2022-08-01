@@ -20,7 +20,6 @@ import (
 	"bytes"
 	crand "crypto/rand"
 	"errors"
-	"fmt"
 	"math"
 	"math/big"
 	mrand "math/rand"
@@ -30,7 +29,6 @@ import (
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/consensus"
 	"github.com/spruce-solutions/go-quai/consensus/misc"
 	"github.com/spruce-solutions/go-quai/core/rawdb"
 	"github.com/spruce-solutions/go-quai/core/types"
@@ -59,6 +57,16 @@ const (
 	numberCacheLimit = 2048
 )
 
+// WriteStatus status of write
+type WriteStatus byte
+
+const (
+	NonStatTy WriteStatus = iota
+	CanonStatTy
+	SideStatTy
+	UnknownStatTy
+)
+
 // HeaderChain is responsible for maintaining the header chain including the
 // header query and updating.
 //
@@ -84,7 +92,6 @@ type HeaderChain struct {
 	procInterrupt func() bool
 
 	rand          *mrand.Rand
-	engine        consensus.Engine
 	chainHeadFeed event.Feed
 	headermu      sync.RWMutex
 	heads         []*types.Header
@@ -92,7 +99,7 @@ type HeaderChain struct {
 
 // NewHeaderChain creates a new HeaderChain structure. ProcInterrupt points
 // to the parent's interrupt semaphore.
-func NewHeaderChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, domClientUrl string, subClientUrls []string, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64) (*HeaderChain, error) {
+func NewHeaderChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, vmConfig vm.Config) (*HeaderChain, error) {
 	headerCache, _ := lru.New(headerCacheLimit)
 	tdCache, _ := lru.New(tdCacheLimit)
 	numberCache, _ := lru.New(numberCacheLimit)
@@ -104,17 +111,15 @@ func NewHeaderChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *pa
 	}
 
 	hc := &HeaderChain{
-		config:        chainConfig,
-		headerDb:      db,
-		headerCache:   headerCache,
-		tdCache:       tdCache,
-		numberCache:   numberCache,
-		procInterrupt: procInterrupt,
-		rand:          mrand.New(mrand.NewSource(seed.Int64())),
-		engine:        engine,
+		config:      chainConfig,
+		headerDb:    db,
+		headerCache: headerCache,
+		tdCache:     tdCache,
+		numberCache: numberCache,
+		rand:        mrand.New(mrand.NewSource(seed.Int64())),
 	}
 
-	hc.bc, err = NewBlockChain(db, cacheConfig, chainConfig, engine, vmConfig)
+	hc.bc, err = NewBlockChain(db, cacheConfig, chainConfig, vmConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -155,12 +160,16 @@ func (hc *HeaderChain) Append(block *types.Block) error {
 		return err
 	}
 
+	/////////////////////
+	// Garbage Collection
+	////////////////////
 	var nilHeader *types.Header
 	// check if the size of the queue is at the maxHeadsQueueLimit
 	if len(hc.heads) == maxHeadsQueueLimit {
 
 		// Trim the branch before dequeueing
-		err = hc.trimBranch(hc.heads[0], hc.heads[maxHeadsQueueLimit-1])
+		commonHeader := hc.findCommonHeader(hc.heads[0])
+		err = hc.trim(commonHeader, hc.heads[0])
 		if err != nil {
 			return err
 		}
@@ -174,7 +183,7 @@ func (hc *HeaderChain) Append(block *types.Block) error {
 
 	// Sort the heads by number
 	sort.Slice(hc.heads, func(i, j int) bool {
-		return hc.heads[i].Number[types.QuaiNetworkContext].Uint64() < bc.heads[j].Number[types.QuaiNetworkContext].Uint64()
+		return hc.heads[i].Number[types.QuaiNetworkContext].Uint64() < hc.heads[j].Number[types.QuaiNetworkContext].Uint64()
 	})
 
 	return nil
@@ -182,10 +191,47 @@ func (hc *HeaderChain) Append(block *types.Block) error {
 
 // SetCurrentHeader sets the in-memory head header marker of the canonical chan
 // as the given header.
-func (hc *HeaderChain) SetCurrentHeader(head *types.Header) {
+func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 	hc.currentHeader.Store(head)
 	hc.currentHeaderHash = head.Hash()
 	headHeaderGauge.Update(head.Number[types.QuaiNetworkContext].Int64())
+
+	//Update canonical state db
+	//Find a common header
+	commonHeader := hc.findCommonHeader(head)
+	parent := head
+
+	// Delete each header and rollback state processor until common header
+	// Accumulate the hash slice stack
+	var hashStack []*types.Header
+	for {
+		if parent.Hash() == commonHeader.Hash() {
+			break
+		}
+
+		// Delete the header and the block
+		rawdb.DeleteCanonicalHash(hc.headerDb, parent.Number64())
+
+		//TODO: Run state processor to rollback state
+
+		// Add to the stack
+		hashStack = append(hashStack, parent)
+		parent = hc.GetHeader(parent.Parent(), parent.Number64()-1)
+
+		if parent == nil {
+			log.Warn("unable to trim blockchain state, one of trimmed blocks not found")
+			return nil
+		}
+	}
+
+	// Run through the hash stack to update canonicalHash and forward state processor
+	for i := len(hashStack); i > 0; i-- {
+		rawdb.WriteCanonicalHash(hc.headerDb, hashStack[i].Hash(), hashStack[i].Number64())
+
+		//TODO: Run the state processor forward
+	}
+
+	return nil
 }
 
 // Trim
@@ -211,44 +257,17 @@ func (hc *HeaderChain) trim(commonHeader *types.Header, startHeader *types.Heade
 	return nil
 }
 
-// TrimBranch
-func (hc *HeaderChain) trimBranch(oldHeader *types.Header, newHeader *types.Header) error {
-	startIndex := oldHeader.Number64()
-	startHeader := oldHeader
+// findCommonHeader
+func (hc *HeaderChain) findCommonHeader(header *types.Header) *types.Header {
 
 	for {
-		if newHeader.Number64() == startIndex {
-			break
+		canonicalHash := rawdb.ReadCanonicalHash(hc.headerDb, header.Number64())
+		if (canonicalHash != common.Hash{} || canonicalHash == hc.config.GenesisHashes[types.QuaiNetworkContext]) {
+			return hc.GetHeaderByHash(canonicalHash)
 		}
-		newHeader = hc.GetHeader(newHeader.ParentHash[types.QuaiNetworkContext], newHeader.Number64()-1)
+		header = hc.GetHeader(header.ParentHash[types.QuaiNetworkContext], header.Number64()-1)
 	}
 
-	var commonHeader *types.Header
-
-	// Both sides of the reorg are at the same number, reduce both until the common
-	// ancestor is found
-	for {
-		// If the common ancestor was found, bail out
-		if oldHeader.Hash() == newHeader.Hash() {
-			commonHeader = oldHeader
-			break
-		}
-
-		// Step back with both chains
-		oldHeader := hc.GetHeader(oldHeader.Parent(), oldHeader.Number64()-1)
-		if oldHeader == nil {
-			return fmt.Errorf("invalid old chain")
-		}
-
-		newBlock := hc.GetHeader(newHeader.Parent(), newHeader.Number64()-1)
-		if newBlock == nil {
-			return fmt.Errorf("invalid new chain")
-		}
-
-	}
-	err := hc.trim(commonHeader, startHeader)
-
-	return err
 }
 
 // NOTES: Headerchain needs to have head
@@ -310,9 +329,9 @@ func (hc *HeaderChain) GetAncestor(hash common.Hash, number, ancestor uint64, ma
 		return common.Hash{}, 0
 	}
 	for ancestor != 0 {
-		if rawdb.ReadCanonicalHash(hc.chainDb, number) == hash {
-			ancestorHash := rawdb.ReadCanonicalHash(hc.chainDb, number-ancestor)
-			if rawdb.ReadCanonicalHash(hc.chainDb, number) == hash {
+		if rawdb.ReadCanonicalHash(hc.headerDb, number) == hash {
+			ancestorHash := rawdb.ReadCanonicalHash(hc.headerDb, number-ancestor)
+			if rawdb.ReadCanonicalHash(hc.headerDb, number) == hash {
 				number -= ancestor
 				return ancestorHash, number
 			}
@@ -359,7 +378,7 @@ func (hc *HeaderChain) GetTd(hash common.Hash, number uint64) []*big.Int {
 	if cached, ok := hc.tdCache.Get(hash); ok {
 		return cached.([]*big.Int)
 	}
-	td := rawdb.ReadTd(hc.chainDb, hash, number)
+	td := rawdb.ReadTd(hc.headerDb, hash, number)
 	if td == nil {
 		return make([]*big.Int, 3)
 	}
@@ -385,7 +404,7 @@ func (hc *HeaderChain) GetHeader(hash common.Hash, number uint64) *types.Header 
 	if header, ok := hc.headerCache.Get(hash); ok {
 		return header.(*types.Header)
 	}
-	header := rawdb.ReadHeader(hc.chainDb, hash, number)
+	header := rawdb.ReadHeader(hc.headerDb, hash, number)
 	if header == nil {
 		return nil
 	}
@@ -411,13 +430,13 @@ func (hc *HeaderChain) HasHeader(hash common.Hash, number uint64) bool {
 	if hc.numberCache.Contains(hash) || hc.headerCache.Contains(hash) {
 		return true
 	}
-	return rawdb.HasHeader(hc.chainDb, hash, number)
+	return rawdb.HasHeader(hc.headerDb, hash, number)
 }
 
 // GetHeaderByNumber retrieves a block header from the database by number,
 // caching it (associated with its hash) if found.
 func (hc *HeaderChain) GetHeaderByNumber(number uint64) *types.Header {
-	hash := rawdb.ReadCanonicalHash(hc.chainDb, number)
+	hash := rawdb.ReadCanonicalHash(hc.headerDb, number)
 	if hash == (common.Hash{}) {
 		return nil
 	}
@@ -425,7 +444,7 @@ func (hc *HeaderChain) GetHeaderByNumber(number uint64) *types.Header {
 }
 
 func (hc *HeaderChain) GetCanonicalHash(number uint64) common.Hash {
-	return rawdb.ReadCanonicalHash(hc.chainDb, number)
+	return rawdb.ReadCanonicalHash(hc.headerDb, number)
 }
 
 // CurrentHeader retrieves the current head header of the canonical chain. The
@@ -442,24 +461,9 @@ func (hc *HeaderChain) SetGenesis(head *types.Header) {
 // Config retrieves the header chain's chain configuration.
 func (hc *HeaderChain) Config() *params.ChainConfig { return hc.config }
 
-// Engine retrieves the header chain's consensus engine.
-func (hc *HeaderChain) Engine() consensus.Engine { return hc.engine }
-
 // GetBlock implements consensus.ChainReader, and returns nil for every input as
 // a header chain does not have blocks available for retrieval.
 func (hc *HeaderChain) GetBlock(hash common.Hash, number uint64) *types.Block {
-	return nil
-}
-
-// GetGasUsedInChain retrieves all the gas used from a given block backwards until
-// a specific distance is reached.
-func (hc *HeaderChain) GetGasUsedInChain(block *types.Block, length int) int64 {
-	return int64(0)
-}
-
-// GetUnclesInChain retrieves all the uncles from a given block backwards until
-// a specific distance is reached.
-func (hc *HeaderChain) GetUnclesInChain(block *types.Block, length int) []*types.Header {
 	return nil
 }
 
@@ -483,92 +487,34 @@ func (hc *HeaderChain) CheckLocationRange(location []byte) error {
 }
 
 // GasLimit returns the gas limit of the current HEAD block.
-func (bc *BlockChain) GasLimit() uint64 {
-	return bc.CurrentBlock().GasLimit()
-}
-
-// CurrentBlock retrieves the current head block of the canonical chain. The
-// block is retrieved from the blockchain's internal cache.
-func (bc *BlockChain) CurrentBlock() *types.Block {
-	return bc.currentBlock.Load().(*types.Block)
+func (hc *HeaderChain) GasLimit() uint64 {
+	return hc.CurrentHeader().GasLimit[types.QuaiNetworkContext]
 }
 
 // GetUnclesInChain retrieves all the uncles from a given block backwards until
 // a specific distance is reached.
-func (bc *BlockChain) GetUnclesInChain(block *types.Block, length int) []*types.Header {
+func (hc *HeaderChain) GetUnclesInChain(block *types.Block, length int) []*types.Header {
 	uncles := []*types.Header{}
 	for i := 0; block != nil && i < length; i++ {
 		uncles = append(uncles, block.Uncles()...)
-		block = bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
+		block = hc.GetBlock(block.ParentHash(), block.NumberU64()-1)
 	}
 	return uncles
 }
 
 // GetGasUsedInChain retrieves all the gas used from a given block backwards until
 // a specific distance is reached.
-func (bc *BlockChain) GetGasUsedInChain(block *types.Block, length int) int64 {
+func (hc *HeaderChain) GetGasUsedInChain(block *types.Block, length int) int64 {
 	gasUsed := 0
 	for i := 0; block != nil && i < length; i++ {
 		gasUsed += int(block.GasUsed())
-		block = bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
+		block = hc.GetBlock(block.ParentHash(), block.NumberU64()-1)
 	}
 	return int64(gasUsed)
 }
 
 // GetGasUsedInChain retrieves all the gas used from a given block backwards until
 // a specific distance is reached.
-func (bc *BlockChain) CalculateBaseFee(header *types.Header) *big.Int {
-	return misc.CalcBaseFee(bc.Config(), header, bc.GetHeaderByNumber, bc.GetUnclesInChain, bc.GetGasUsedInChain)
-}
-
-// GetBlockStatus returns the status of the block for a given header
-func (bc *BlockChain) GetBlockStatus(header *types.Header) WriteStatus {
-	canonHash := bc.GetCanonicalHash(header.Number[types.QuaiNetworkContext].Uint64())
-	if (canonHash == common.Hash{}) {
-		return UnknownStatTy
-	}
-	if canonHash != header.Hash() {
-		return SideStatTy
-	}
-	return CanonStatTy
-}
-
-// CurrentHeader retrieves the current head header of the canonical chain. The
-// header is retrieved from the HeaderChain's internal cache.
-func (bc *BlockChain) CurrentHeader() *types.Header {
-	return bc.hc.CurrentHeader()
-}
-
-// GetTd retrieves a block's total difficulty in the canonical chain from the
-// database by hash and number, caching it if found.
-func (bc *BlockChain) GetTd(hash common.Hash, number uint64) []*big.Int {
-	return bc.hc.GetTd(hash, number)
-}
-
-// GetTdByHash retrieves a block's total difficulty in the canonical chain from the
-// database by hash, caching it if found.
-func (bc *BlockChain) GetTdByHash(hash common.Hash) []*big.Int {
-	return bc.hc.GetTdByHash(hash)
-}
-
-// GetHeader retrieves a block header from the database by hash and number,
-// caching it if found.
-func (bc *BlockChain) GetHeader(hash common.Hash, number uint64) *types.Header {
-	// Blockchain might have cached the whole block, only if not go to headerchain
-	if block, ok := bc.blockCache.Get(hash); ok {
-		return block.(*types.Block).Header()
-	}
-
-	return bc.hc.GetHeader(hash, number)
-}
-
-// GetHeaderByHash retrieves a block header from the database by hash, caching it if
-// found.
-func (bc *BlockChain) GetHeaderByHash(hash common.Hash) *types.Header {
-	// Blockchain might have cached the whole block, only if not go to headerchain
-	if block, ok := bc.blockCache.Get(hash); ok {
-		return block.(*types.Block).Header()
-	}
-
-	return bc.hc.GetHeaderByHash(hash)
+func (hc *HeaderChain) CalculateBaseFee(header *types.Header) *big.Int {
+	return misc.CalcBaseFee(hc.Config(), header, hc.GetHeaderByNumber, hc.GetUnclesInChain, hc.GetGasUsedInChain)
 }
