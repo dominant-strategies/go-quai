@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -158,85 +157,12 @@ func (bc *BlockChain) Append(block *types.Block) error {
 		log.Crit("Failed to write block into disk", "err", err)
 	}
 
-	var nilHeader *types.Header
-	// check if the size of the queue is at the maxHeadsQueueLimit
-	if len(bc.heads) == maxHeadsQueueLimit {
-
-		// Trim the branch before dequeueing
-		err = bc.trimBranch(bc.heads[0], bc.heads[maxHeadsQueueLimit-1])
-		if err != nil {
-			return err
-		}
-
-		// dequeue
-		bc.heads[0] = nilHeader
-		bc.heads = bc.heads[1:]
-	}
-	// Add to the heads queue
-	bc.heads = append(bc.heads, block.Header())
-
-	// Sort the heads by number
-	sort.Slice(bc.heads, func(i, j int) bool {
-		return bc.heads[i].Number[types.QuaiNetworkContext].Uint64() < bc.heads[j].Number[types.QuaiNetworkContext].Uint64()
-	})
-
 	return nil
 }
 
 // Trim
-func (bc *BlockChain) trim(commonBlock *types.Block, startBlock *types.Block) error {
-	parent := startBlock
-	// Delete each block unitl common is found
-	for {
-		if parent.Hash() == commonBlock.Hash() {
-			break
-		}
-		rawdb.DeleteBlock(bc.db, parent.Hash(), parent.Header().Number[types.QuaiNetworkContext].Uint64())
-		parent = bc.GetBlockByHash(parent.Header().ParentHash[types.QuaiNetworkContext])
-
-		if parent == nil {
-			log.Warn("unable to trim blockchain state, one of trimmed blocks not found")
-			return nil
-		}
-	}
-	return nil
-}
-
-// TrimBranch
-func (bc *BlockChain) trimBranch(oldHeader *types.Header, newHeader *types.Header) error {
-	startIndex := oldHeader.Number64()
-	startBlock := bc.GetBlock(oldHeader.Hash(), oldHeader.Number64())
-
-	newBlock := bc.GetBlock(newHeader.Parent(), startIndex)
-	newHeader = newBlock.Header()
-	var commonBlock *types.Block
-
-	// Both sides of the reorg are at the same number, reduce both until the common
-	// ancestor is found
-	for {
-		// If the common ancestor was found, bail out
-		if oldHeader.Hash() == newHeader.Hash() {
-			commonBlock = bc.GetBlock(oldHeader.Hash(), oldHeader.Number64())
-			break
-		}
-
-		// Step back with both chains
-		oldBlock := bc.GetBlock(oldHeader.Parent(), oldHeader.Number64()-1)
-		if oldHeader == nil {
-			return fmt.Errorf("invalid old chain")
-		}
-		oldHeader = oldBlock.Header()
-
-		newBlock := bc.GetBlock(newHeader.Parent(), newHeader.Number64()-1)
-		if newBlock == nil {
-			return fmt.Errorf("invalid new chain")
-		}
-		newHeader = newBlock.Header()
-
-	}
-	err := bc.trim(commonBlock, startBlock)
-
-	return err
+func (bc *BlockChain) Trim(header *types.Header) {
+	rawdb.DeleteBlock(bc.db, header.Hash(), header.Number[types.QuaiNetworkContext].Uint64())
 }
 
 // Reset purges the entire blockchain, restoring it to its genesis state.

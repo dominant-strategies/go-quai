@@ -420,3 +420,45 @@ func (bc *BlockChain) update() {
 		}
 	}
 }
+
+// CalcTd calculates the TD of the given header using PCRC and CalcHLCRNetDifficulty.
+func (hc *HeaderChain) CalcTd(header *types.Header) ([]*big.Int, error) {
+	// Iterate ancestors, stopping when a TD value is found in cache or a coincident block is found.
+	// If coincident is found, ask dom client for TD at that block
+	aggDiff := new(big.Int)
+	cursor := header
+	for {
+		// First, check if this block's TD is already cached
+		td := hc.GetTd(cursor.Hash(), (*cursor.Number[types.QuaiNetworkContext]).Uint64())
+		if td != nil {
+			// Add the difficulty we accumulated up till this block
+			blockTd := td[types.QuaiNetworkContext]
+			td[types.QuaiNetworkContext] = blockTd.Add(blockTd, aggDiff)
+			return td, nil
+		}
+
+		// If not cached, check if this block coincides with a dominant chain
+		order, err := hc.GetDifficultyOrder(cursor)
+		if err != nil {
+			return nil, err
+		} else if order < types.QuaiNetworkContext {
+			// TODO: Ask dom to CalcTd on coincident block
+			td, err = hc.domClient.CalcTd(context.Background(), header)
+			err = errors.New("TODO: Ask dom to CalcTd")
+			if err != nil {
+				return nil, err
+			} else {
+				blockTd := td[types.QuaiNetworkContext]
+				td[types.QuaiNetworkContext] = blockTd.Add(blockTd, aggDiff)
+			}
+		}
+
+		// If not cached AND not coincident, aggregate the difficulty and iterate to the parent
+		aggDiff = aggDiff.Add(aggDiff, cursor.Difficulty[types.QuaiNetworkContext])
+		parentHash := cursor.ParentHash[types.QuaiNetworkContext]
+		cursor = hc.GetHeader(cursor.Hash(), (*cursor.Number[types.QuaiNetworkContext]).Uint64())
+		if cursor == nil {
+			return nil, fmt.Errorf("Unable to find parent: %s", parentHash)
+		}
+	}
+}
