@@ -16,6 +16,7 @@ import (
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/spruce-solutions/go-quai/common"
+	"github.com/spruce-solutions/go-quai/consensus"
 	"github.com/spruce-solutions/go-quai/consensus/misc"
 	"github.com/spruce-solutions/go-quai/core/rawdb"
 	"github.com/spruce-solutions/go-quai/core/types"
@@ -64,7 +65,8 @@ const (
 type HeaderChain struct {
 	config *params.ChainConfig
 
-	bc *BlockChain
+	bc     *BlockChain
+	engine consensus.Engine
 
 	headerDb      ethdb.Database
 	genesisHeader *types.Header
@@ -86,7 +88,7 @@ type HeaderChain struct {
 
 // NewHeaderChain creates a new HeaderChain structure. ProcInterrupt points
 // to the parent's interrupt semaphore.
-func NewHeaderChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, vmConfig vm.Config) (*HeaderChain, error) {
+func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *params.ChainConfig, vmConfig vm.Config) (*HeaderChain, error) {
 	headerCache, _ := lru.New(headerCacheLimit)
 	tdCache, _ := lru.New(tdCacheLimit)
 	numberCache, _ := lru.New(numberCacheLimit)
@@ -106,7 +108,7 @@ func NewHeaderChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *pa
 		rand:        mrand.New(mrand.NewSource(seed.Int64())),
 	}
 
-	hc.bc, err = NewBlockChain(db, cacheConfig, chainConfig, vmConfig)
+	hc.bc, err = NewBlockChain(db, engine, hc, chainConfig, vmConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -599,4 +601,9 @@ func (hc *HeaderChain) GetBlockByNumber(number uint64) *types.Block {
 		return nil
 	}
 	return hc.GetBlock(hash, number)
+}
+
+// Engine reterives the consensus engine.
+func (hc *HeaderChain) Engine() consensus.Engine {
+	return hc.engine
 }

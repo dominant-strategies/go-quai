@@ -5,13 +5,11 @@ import (
 	"fmt"
 	"math/big"
 	"sync"
-	"time"
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/spruce-solutions/go-quai/event"
 	"github.com/spruce-solutions/go-quai/log"
 	"github.com/spruce-solutions/go-quai/metrics"
-	"github.com/spruce-solutions/go-quai/trie"
 
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/consensus"
@@ -82,16 +80,12 @@ const (
 // StateProcessor implements Processor.
 type StateProcessor struct {
 	config        *params.ChainConfig // Chain configuration options
-	bc            *BlockChain         // Canonical block chain
+	hc            *HeaderChain        // Canonical block chain
 	engine        consensus.Engine    // Consensus engine used for block rewards
 	logsFeed      event.Feed
 	rmLogsFeed    event.Feed
 	stateCache    state.Database // State database to reuse between imports (contains state cache)
-	bodyCache     *lru.Cache     // Cache for the most recent block bodies
-	bodyRLPCache  *lru.Cache     // Cache for the most recent block bodies in RLP encoded format
 	receiptsCache *lru.Cache     // Cache for the most recent receipts per block
-	blockCache    *lru.Cache     // Cache for the most recent entire blocks
-	txLookupCache *lru.Cache     // Cache for the most recent transaction lookup data.
 	validator     Validator      // Block and state validator interface
 	prefetcher    Prefetcher
 	vmConfig      vm.Config
@@ -101,52 +95,17 @@ type StateProcessor struct {
 }
 
 // NewStateProcessor initialises a new StateProcessor.
-func NewStateProcessor(config *params.ChainConfig, bc *BlockChain, engine consensus.Engine, vmConfig vm.Config) *StateProcessor {
-	if cacheConfig == nil {
-		cacheConfig = defaultCacheConfig
-	}
+func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine consensus.Engine, vmConfig vm.Config) *StateProcessor {
 	receiptsCache, _ := lru.New(receiptsCacheLimit)
-	txLookupCache, _ := lru.New(txLookupCacheLimit)
 
-	// Initialize the chain with ancient data if it isn't empty.
-	var txIndexBlock uint64
-
-	// The first thing the node will do is reconstruct the verification data for
-	// the head block (ethash cache or clique voting snapshot). Might as well do
-	// it in advance.
-	engine.VerifyHeader(bc, bc.CurrentHeader(), true)
-
-	if txLookupLimit != nil {
-		bc.txLookupLimit = *txLookupLimit
-
-		bc.wg.Add(1)
-		go maintainTxIndex(txIndexBlock)
+	sp := &StateProcessor{
+		config:        config,
+		hc:            hc,
+		receiptsCache: receiptsCache,
+		vmConfig:      vmConfig,
 	}
-	// If periodic cache journal is required, spin it up.
-	if bc.cacheConfig.TrieCleanRejournal > 0 {
-		if bc.cacheConfig.TrieCleanRejournal < time.Minute {
-			log.Warn("Sanitizing invalid trie cache journal time", "provided", bc.cacheConfig.TrieCleanRejournal, "updated", time.Minute)
-			bc.cacheConfig.TrieCleanRejournal = time.Minute
-		}
-		triedb := p.stateCache.TrieDB()
-		bc.wg.Add(1)
-		go func() {
-			defer bc.wg.Done()
-			triedb.SaveCachePeriodically(bc.cacheConfig.TrieCleanJournal, bc.cacheConfig.TrieCleanRejournal, bc.quit)
-		}()
-	}
-
-	return &StateProcessor{
-		config:      config,
-		cacheConfig: cacheConfig,
-		bc:          bc,
-		stateCache: state.NewDatabaseWithConfig(bc.db, &trie.Config{
-			Cache:     cacheConfig.TrieCleanLimit,
-			Journal:   cacheConfig.TrieCleanJournal,
-			Preimages: cacheConfig.Preimages,
-		}),
-		vmConfig: vmConfig,
-	}
+	sp.validator = NewBlockValidator(config, hc.bc, engine)
+	return sp
 }
 
 // Process processes the state changes according to the Ethereum rules by running
@@ -167,34 +126,34 @@ func (p *StateProcessor) Process(block *types.Block) (types.Receipts, []*types.L
 		gp          = new(GasPool).AddGas(block.GasLimit())
 	)
 
-	parent := p.bc.GetBlock(block.Hash(), block.NumberU64())
+	parent := p.hc.GetBlock(block.Hash(), block.NumberU64())
 	if parent == nil {
-		return types.Receipts{}, []*types.Log{}, 0, errors.New("parent block is nil for the block given to process")
+		return types.Receipts{}, []*types.Log{}, nil, 0, errors.New("parent block is nil for the block given to process")
 	}
 
 	// Initialize a statedb
-	statedb, err := state.New(parent.Header().Root[types.QuaiNetworkContext], p.stateCache, p.snaps)
+	statedb, err := state.New(parent.Header().Root[types.QuaiNetworkContext], p.stateCache)
 	if err != nil {
-		return types.Receipts{}, []*types.Log{}, 0, err
+		return types.Receipts{}, []*types.Log{}, nil, 0, err
 	}
 
-	blockContext := NewEVMBlockContext(header, p.bc, nil)
+	blockContext := NewEVMBlockContext(header, p.hc, nil)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, p.vmConfig)
 
 	// Iterate over and process the individual transactions.
 	for i, tx := range block.Transactions() {
 		msg, err := tx.AsMessage(types.MakeSigner(p.config, header.Number[types.QuaiNetworkContext]), header.BaseFee[types.QuaiNetworkContext])
 		if err != nil {
-			return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+			return nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
 		// All ETxs applied to state must be generated from our cache.
 		if msg.FromExternal() {
 			continue
 		}
 		statedb.Prepare(tx.Hash(), i)
-		receipt, err := applyTransaction(msg, p.config, p.bc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv)
+		receipt, err := applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv)
 		if err != nil {
-			return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+			return nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
@@ -202,7 +161,7 @@ func (p *StateProcessor) Process(block *types.Block) (types.Receipts, []*types.L
 	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
-	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles())
+	p.engine.Finalize(p.hc, header, statedb, block.Transactions(), block.Uncles())
 
 	return receipts, allLogs, statedb, *usedGas, nil
 }
@@ -276,7 +235,7 @@ func (p *StateProcessor) Apply(block *types.Block) error {
 		return err
 	}
 
-	blockBatch := p.bc.db.NewBatch()
+	blockBatch := p.hc.headerDb.NewBatch()
 	rawdb.WriteReceipts(blockBatch, block.Hash(), block.NumberU64(), receipts)
 	if err := blockBatch.Write(); err != nil {
 		log.Crit("Failed to write block into disk", "err", err)
@@ -318,12 +277,12 @@ func (p *StateProcessor) GetVMConfig() *vm.Config {
 
 // State returns a new mutable state based on the current HEAD block.
 func (p *StateProcessor) State() (*state.StateDB, error) {
-	return p.StateAt(p.bc.CurrentBlock().Root())
+	return p.StateAt(p.hc.GetBlockByHash(p.hc.CurrentHeader().Hash()).Root())
 }
 
 // StateAt returns a new mutable state based on a particular point in time.
 func (p *StateProcessor) StateAt(root common.Hash) (*state.StateDB, error) {
-	return state.New(root, p.stateCache, p.snaps)
+	return state.New(root, p.stateCache)
 }
 
 // StateCache returns the caching database underpinning the blockchain instance.
@@ -341,7 +300,7 @@ func (p *StateProcessor) HasState(hash common.Hash) bool {
 // in the database or not, caching it if present.
 func (p *StateProcessor) HasBlockAndState(hash common.Hash, number uint64) bool {
 	// Check first that the block itself is known
-	block := p.bc.GetBlock(hash, number)
+	block := p.hc.GetBlock(hash, number)
 	if block == nil {
 		return false
 	}
@@ -353,11 +312,11 @@ func (p *StateProcessor) GetReceiptsByHash(hash common.Hash) types.Receipts {
 	if receipts, ok := p.receiptsCache.Get(hash); ok {
 		return receipts.(types.Receipts)
 	}
-	number := rawdb.ReadHeaderNumber(p.bc.db, hash)
+	number := rawdb.ReadHeaderNumber(p.hc.headerDb, hash)
 	if number == nil {
 		return nil
 	}
-	receipts := rawdb.ReadReceipts(p.bc.db, hash, *number, p.bc.chainConfig)
+	receipts := rawdb.ReadReceipts(p.hc.headerDb, hash, *number, p.hc.config)
 	if receipts == nil {
 		return nil
 	}
