@@ -365,12 +365,6 @@ func (p *StateProcessor) GetReceiptsByHash(hash common.Hash) types.Receipts {
 	return receipts
 }
 
-// TrieNode retrieves a blob of data associated with a trie node
-// either from ephemeral in-memory cache, or from persistent storage.
-func (p *StateProcessor) TrieNode(hash common.Hash) ([]byte, error) {
-	return p.stateCache.TrieDB().Node(hash)
-}
-
 // ContractCode retrieves a blob of data associated with a contract hash
 // either from ephemeral in-memory cache, or from persistent storage.
 func (p *StateProcessor) ContractCode(hash common.Hash) ([]byte, error) {
@@ -387,76 +381,4 @@ func (p *StateProcessor) ContractCodeWithPrefix(hash common.Hash) ([]byte, error
 		ContractCodeWithPrefix(addrHash, codeHash common.Hash) ([]byte, error)
 	}
 	return p.stateCache.(codeReader).ContractCodeWithPrefix(common.Hash{}, hash)
-}
-
-// SubscribeRemovedLogsEvent registers a subscription of RemovedLogsEvent.
-func (p *StateProcessor) SubscribeRemovedLogsEvent(ch chan<- RemovedLogsEvent) event.Subscription {
-	return p.scope.Track(p.rmLogsFeed.Subscribe(ch))
-}
-
-// SubscribeLogsEvent registers a subscription of []*types.Log.
-func (p *StateProcessor) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
-	return p.scope.Track(p.logsFeed.Subscribe(ch))
-}
-
-func (p *StateProcessor) Stop() error {
-	// Ensure that the entirety of the state snapshot is journalled to disk.
-	var snapBase common.Hash
-	if p.snaps != nil {
-		var err error
-		if snapBase, err = p.snaps.Journal(p.bc.CurrentBlock().Root()); err != nil {
-			log.Error("Failed to journal state snapshot", "err", err)
-		}
-	}
-
-	// Ensure the state of a recent block is also stored to disk before exiting.
-	// We're writing three different states to catch different restart scenarios:
-	//  - HEAD:     So we don't need to reprocess any blocks in the general case
-	//  - HEAD-1:   So we don't do large reorgs if our HEAD becomes an uncle
-	//  - HEAD-127: So we have a hard limit on the number of blocks reexecuted
-	if !bc.cacheConfig.TrieDirtyDisabled {
-		triedb := bc.stateCache.TrieDB()
-
-		for _, offset := range []uint64{0, 1, TriesInMemory - 1} {
-			if number := bc.CurrentBlock().NumberU64(); number > offset {
-				recent := bc.GetBlockByNumber(number - offset)
-				if recent != nil {
-					log.Info("Writing cached state to disk", "block", recent.Number(), "hash", recent.Hash(), "root", recent.Root())
-					if err := triedb.Commit(recent.Root(), true, nil); err != nil {
-						log.Error("Failed to commit recent state trie", "err", err)
-					}
-				}
-			}
-		}
-		if snapBase != (common.Hash{}) {
-			log.Info("Writing snapshot state to disk", "root", snapBase)
-			if err := triedb.Commit(snapBase, true, nil); err != nil {
-				log.Error("Failed to commit recent state trie", "err", err)
-			}
-		}
-		for !bc.triegc.Empty() {
-			triedb.Dereference(bc.triegc.PopItem().(common.Hash))
-		}
-		if size, _ := triedb.Size(); size != 0 {
-			log.Error("Dangling trie nodes after full cleanup")
-		}
-	}
-	// Ensure all live cached entries be saved into disk, so that we can skip
-	// cache warmup when node restarts.
-	if bc.cacheConfig.TrieCleanJournal != "" {
-		triedb := bc.stateCache.TrieDB()
-		triedb.SaveCache(bc.cacheConfig.TrieCleanJournal)
-	}
-}
-
-// SetTxLookupLimit is responsible for updating the txlookup limit to the
-// original one stored in db if the new mismatches with the old one.
-func (p *StateProcessor) SetTxLookupLimit(limit uint64) {
-	p.txLookupLimit = limit
-}
-
-// TxLookupLimit retrieves the txlookup limit used by blockchain to prune
-// stale transaction indices.
-func (p *StateProcessor) TxLookupLimit() uint64 {
-	return p.txLookupLimit
 }
