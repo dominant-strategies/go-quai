@@ -19,11 +19,8 @@ package core
 
 import (
 	"errors"
-	"fmt"
-	"io"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/spruce-solutions/go-quai/common"
@@ -77,10 +74,10 @@ type BlockChain struct {
 	chainFeed     event.Feed
 	blockProcFeed event.Feed
 	scope         event.SubscriptionScope
-	genesisBlock  *types.Block
 
-	chainmu       sync.RWMutex    // blockchain insertion lock
-	futureBlocks  *lru.Cache      // future blocks are blocks added for later processing
+	chainmu       sync.RWMutex // blockchain insertion lock
+	futureBlocks  *lru.Cache   // future blocks are blocks added for later processing
+	blockCache    *lru.Cache
 	heads         []*types.Header // heads are tips of blockchain branches
 	quit          chan struct{}   // blockchain quit channel
 	wg            sync.WaitGroup  // chain processing wait group for shutting down
@@ -97,45 +94,19 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		cacheConfig = defaultCacheConfig
 	}
 
-	futureBlocks, _ := lru.New(maxFutureBlocks)
+	blockCache, _ := lru.New(blockCacheLimit)
 
 	bc := &BlockChain{
 		chainConfig: chainConfig,
 		cacheConfig: cacheConfig,
 		db:          db,
 		quit:        make(chan struct{}),
+		blockCache:  blockCache,
 	}
 
-	bc.processor = NewStateProcessor(chainConfig, bc)
-
-	bc.genesisBlock = bc.GetBlockByNumber(0)
-	if bc.genesisBlock == nil {
-		return nil, ErrNoGenesis
-	}
-
-	heads := make([]*types.Header, maxHeadsQueueLimit)
-	bc.heads = heads
-
-	if err := bc.loadLastState(); err != nil {
-		return nil, err
-	}
+	bc.processor = NewStateProcessor(chainConfig)
 
 	return bc, nil
-}
-
-// loadLastState loads the last known chain state from the database. This method
-// assumes that the chain manager mutex is held.
-func (bc *BlockChain) loadLastState() error {
-	// TODO: create function to find highest block number and fill Head FIFO
-	headsHashes := rawdb.ReadHeadsHashes(bc.db)
-
-	heads := make([]*types.Header, maxHeadsQueueLimit)
-	for i, hash := range headsHashes {
-		heads[i] = bc.GetHeaderByHash(hash)
-	}
-	bc.heads = heads
-
-	return nil
 }
 
 // Append
@@ -153,7 +124,7 @@ func (bc *BlockChain) Append(block *types.Block) error {
 	batch := bc.db.NewBatch()
 	rawdb.WriteBlock(batch, block)
 	if err := batch.Write(); err != nil {
-		log.Crit("Failed to write block into disk", "err", err)
+		return err
 	}
 
 	return nil
@@ -162,63 +133,6 @@ func (bc *BlockChain) Append(block *types.Block) error {
 // Trim
 func (bc *BlockChain) Trim(header *types.Header) {
 	rawdb.DeleteBlock(bc.db, header.Hash(), header.Number[types.QuaiNetworkContext].Uint64())
-}
-
-// Reset purges the entire blockchain, restoring it to its genesis state.
-func (bc *BlockChain) Reset() error {
-	return bc.ResetWithGenesisBlock(bc.genesisBlock)
-}
-
-// ResetWithGenesisBlock purges the entire blockchain, restoring it to the
-// specified genesis state.
-func (bc *BlockChain) ResetWithGenesisBlock(genesis *types.Block) error {
-
-	bc.chainmu.Lock()
-	defer bc.chainmu.Unlock()
-
-	//Iterate through my heads and trim each back to genesis
-	for _, head := range bc.heads {
-		bc.trim(bc.genesisBlock, bc.GetBlock(head.Hash(), head.Number64()))
-	}
-
-	return nil
-}
-
-// Export writes the active chain to the given writer.
-func (bc *BlockChain) Export(w io.Writer) error {
-	return bc.ExportN(w, uint64(0), bc.CurrentBlock().NumberU64())
-}
-
-// ExportN writes a subset of the active chain to the given writer.
-func (bc *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
-	bc.chainmu.RLock()
-	defer bc.chainmu.RUnlock()
-
-	if first > last {
-		return fmt.Errorf("export failed: first (%d) is greater than last (%d)", first, last)
-	}
-	log.Info("Exporting batch of blocks", "count", last-first+1)
-
-	start, reported := time.Now(), time.Now()
-	for nr := first; nr <= last; nr++ {
-		block := bc.GetBlockByNumber(nr)
-		if block == nil {
-			return fmt.Errorf("export failed on #%d: not found", nr)
-		}
-		if err := block.EncodeRLP(w); err != nil {
-			return err
-		}
-		if time.Since(reported) >= statsReportLimit {
-			log.Info("Exporting blocks", "exported", block.NumberU64()-first, "elapsed", common.PrettyDuration(time.Since(start)))
-			reported = time.Now()
-		}
-	}
-	return nil
-}
-
-// Genesis retrieves the chain's genesis block.
-func (bc *BlockChain) Genesis() *types.Block {
-	return bc.genesisBlock
 }
 
 // HasBlock checks if a block is fully present in the database or not.
@@ -243,44 +157,6 @@ func (bc *BlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
 	// Cache the found block for next time and return
 	bc.blockCache.Add(block.Hash(), block)
 	return block
-}
-
-// GetBlockByHash retrieves a block from the database by hash, caching it if found.
-func (bc *BlockChain) GetBlockByHash(hash common.Hash) *types.Block {
-	number := bc.hc.GetBlockNumber(hash)
-	if number == nil {
-		return nil
-	}
-	return bc.GetBlock(hash, *number)
-}
-
-// GetBlockByNumber retrieves a block from the database by number, caching it
-// (associated with its hash) if found.
-func (bc *BlockChain) GetBlockByNumber(number uint64) *types.Block {
-	hash := rawdb.ReadCanonicalHash(bc.db, number)
-	if hash == (common.Hash{}) {
-		return nil
-	}
-	return bc.GetBlock(hash, number)
-}
-
-// GetBlocksFromHash returns the block corresponding to hash and up to n-1 ancestors.
-// [deprecated by eth/62]
-func (bc *BlockChain) GetBlocksFromHash(hash common.Hash, n int) (blocks []*types.Block) {
-	number := bc.hc.GetBlockNumber(hash)
-	if number == nil {
-		return nil
-	}
-	for i := 0; i < n; i++ {
-		block := bc.GetBlock(hash, *number)
-		if block == nil {
-			break
-		}
-		blocks = append(blocks, block)
-		hash = block.ParentHash()
-		*number--
-	}
-	return
 }
 
 // Stop stops the blockchain service. If any imports are currently in progress

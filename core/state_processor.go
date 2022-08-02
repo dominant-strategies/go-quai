@@ -151,7 +151,7 @@ type StateProcessor struct {
 }
 
 // NewStateProcessor initialises a new StateProcessor.
-func NewStateProcessor(config *params.ChainConfig, bc *BlockChain, engine consensus.Engine) *StateProcessor {
+func NewStateProcessor(config *params.ChainConfig) *StateProcessor {
 	bodyCache, _ := lru.New(bodyCacheLimit)
 	bodyRLPCache, _ := lru.New(bodyCacheLimit)
 	receiptsCache, _ := lru.New(receiptsCacheLimit)
@@ -292,8 +292,6 @@ func NewStateProcessor(config *params.ChainConfig, bc *BlockChain, engine consen
 
 	return &StateProcessor{
 		config: config,
-		bc:     bc,
-		engine: engine,
 	}
 }
 

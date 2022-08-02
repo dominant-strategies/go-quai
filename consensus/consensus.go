@@ -130,9 +130,6 @@ type Engine interface {
 	// CheckPrevHeaderCoincident checks if previous header is a coincident header.
 	CheckPrevHeaderCoincident(chain ChainHeaderReader, context int, header *types.Header) (int, error)
 
-	// This function determines the difficulty order of a block
-	GetDifficultyOrder(header *types.Header) (int, error)
-
 	// TraceBranches recursively traces region and zone branches to find external blocks.
 	TraceBranches(chain ChainHeaderReader, header *types.Header, context int, originalContext int, originalLocation []byte) ([]*types.ExternalBlock, error)
 

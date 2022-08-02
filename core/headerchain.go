@@ -20,12 +20,15 @@ import (
 	"bytes"
 	crand "crypto/rand"
 	"errors"
+	"fmt"
+	"io"
 	"math"
 	"math/big"
 	mrand "math/rand"
 	"sort"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/spruce-solutions/go-quai/common"
@@ -138,6 +141,15 @@ func NewHeaderChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *pa
 	hc.currentHeaderHash = hc.CurrentHeader().Hash()
 	headHeaderGauge.Update(hc.CurrentHeader().Number[types.QuaiNetworkContext].Int64())
 
+	//Initialize the heads slice
+	heads := make([]*types.Header, maxHeadsQueueLimit)
+	hc.heads = heads
+
+	//Load any state that is in our db
+	if err := hc.loadLastState(); err != nil {
+		return nil, err
+	}
+
 	return hc, nil
 }
 
@@ -234,6 +246,26 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 	return nil
 }
 
+// Reset purges the entire blockchain, restoring it to its genesis state.
+func (hc *HeaderChain) Reset() error {
+	return hc.ResetWithGenesisBlock(hc.genesisHeader)
+}
+
+// ResetWithGenesisBlock purges the entire blockchain, restoring it to the
+// specified genesis state.
+func (hc *HeaderChain) ResetWithGenesisBlock(genesis *types.Header) error {
+
+	hc.headermu.Lock()
+	defer hc.headermu.Unlock()
+
+	//Iterate through my heads and trim each back to genesis
+	for _, head := range hc.heads {
+		hc.trim(hc.genesisHeader, head)
+	}
+
+	return nil
+}
+
 // Trim
 func (hc *HeaderChain) trim(commonHeader *types.Header, startHeader *types.Header) error {
 	parent := startHeader
@@ -268,6 +300,21 @@ func (hc *HeaderChain) findCommonHeader(header *types.Header) *types.Header {
 		header = hc.GetHeader(header.ParentHash[types.QuaiNetworkContext], header.Number64()-1)
 	}
 
+}
+
+// loadLastState loads the last known chain state from the database. This method
+// assumes that the chain manager mutex is held.
+func (hc *HeaderChain) loadLastState() error {
+	// TODO: create function to find highest block number and fill Head FIFO
+	headsHashes := rawdb.ReadHeadsHashes(hc.headerDb)
+
+	heads := make([]*types.Header, maxHeadsQueueLimit)
+	for i, hash := range headsHashes {
+		heads[i] = hc.GetHeaderByHash(hash)
+	}
+	hc.heads = heads
+
+	return nil
 }
 
 // NOTES: Headerchain needs to have head
@@ -517,4 +564,55 @@ func (hc *HeaderChain) GetGasUsedInChain(block *types.Block, length int) int64 {
 // a specific distance is reached.
 func (hc *HeaderChain) CalculateBaseFee(header *types.Header) *big.Int {
 	return misc.CalcBaseFee(hc.Config(), header, hc.GetHeaderByNumber, hc.GetUnclesInChain, hc.GetGasUsedInChain)
+}
+
+// Export writes the active chain to the given writer.
+func (hc *HeaderChain) Export(w io.Writer) error {
+	return hc.ExportN(w, uint64(0), hc.CurrentHeader().Number64())
+}
+
+// ExportN writes a subset of the active chain to the given writer.
+func (hc *HeaderChain) ExportN(w io.Writer, first uint64, last uint64) error {
+	hc.headermu.RLock()
+	defer hc.headermu.RUnlock()
+
+	if first > last {
+		return fmt.Errorf("export failed: first (%d) is greater than last (%d)", first, last)
+	}
+	log.Info("Exporting batch of blocks", "count", last-first+1)
+
+	start, reported := time.Now(), time.Now()
+	for nr := first; nr <= last; nr++ {
+		block := hc.GetBlockByNumber(nr)
+		if block == nil {
+			return fmt.Errorf("export failed on #%d: not found", nr)
+		}
+		if err := block.EncodeRLP(w); err != nil {
+			return err
+		}
+		if time.Since(reported) >= statsReportLimit {
+			log.Info("Exporting blocks", "exported", block.NumberU64()-first, "elapsed", common.PrettyDuration(time.Since(start)))
+			reported = time.Now()
+		}
+	}
+	return nil
+}
+
+// GetBlockByHash retrieves a block from the database by hash, caching it if found.
+func (hc *HeaderChain) GetBlockByHash(hash common.Hash) *types.Block {
+	number := hc.GetBlockNumber(hash)
+	if number == nil {
+		return nil
+	}
+	return hc.GetBlock(hash, *number)
+}
+
+// GetBlockByNumber retrieves a block from the database by number, caching it
+// (associated with its hash) if found.
+func (hc *HeaderChain) GetBlockByNumber(number uint64) *types.Block {
+	hash := rawdb.ReadCanonicalHash(hc.headerDb, number)
+	if hash == (common.Hash{}) {
+		return nil
+	}
+	return hc.GetBlock(hash, number)
 }

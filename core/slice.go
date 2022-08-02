@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -28,7 +29,7 @@ type Slice struct {
 	subClients []*quaiclient.Client // subClinets is used to check is a coincident block is valid in the subordinate context
 }
 
-func NewSlice(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, domClientUrl string, subClientUrls []string, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64) (*Slice, error) {
+func NewSlice(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, domClientUrl string, subClientUrls []string, engine consensus.Engine, vmConfig vm.Config) (*Slice, error) {
 
 	sl := &Slice{
 		config: chainConfig,
@@ -36,7 +37,7 @@ func NewSlice(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.C
 	}
 
 	var err error
-	sl.hc, err = NewHeaderChain(db, cacheConfig, chainConfig, domClientUrl, subClientUrls, engine, vmConfig, shouldPreserve, txLookupLimit)
+	sl.hc, err = NewHeaderChain(db, cacheConfig, chainConfig, vmConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -102,30 +103,14 @@ func (sl *Slice) PCRC(header *types.Header, headerOrder int) (types.PCRCTermini,
 	}
 
 	slice := header.Location
-	// Prime twist check
-	// PTZ -- Prime coincident along zone path
-	// PTR -- Prime coincident along region path
-	// PTP -- Prime coincident along prime path
-	// Region twist check
-	// RTZ -- Region coincident along zone path
-	// RTR -- Region coincident along region path
-
-	// o/c			| prime 			| region 						| zone
-	// prime    	| x PTP, RTR		| x PTP, RTR					| x PTP, PTR, RTR
-	// region   	| X					| x PTP, RTR, PRTP, PRTR		| x PTP, PTR, RTR, PRTP, PRTR
-	// zone			| X					| X								| x PTP, PTR, RTR, PRTP, PRTR
 
 	switch types.QuaiNetworkContext {
 	case params.PRIME:
-		fmt.Println("PCRC Running PTP")
 		PTP, err := sl.PreviousValidCoincidentOnPath(header, slice, params.PRIME, params.PRIME, true)
-		fmt.Println("Hash: PTP", PTP.Hash(), "error:", err)
 		if err != nil {
 			return types.PCRCTermini{}, err
 		}
-		fmt.Println("PCRC Running PRTP")
 		PRTP, err := sl.PreviousValidCoincidentOnPath(header, slice, params.PRIME, params.PRIME, false)
-		fmt.Println("Hash: PRTP", PRTP.Hash(), "error:", err)
 		if err != nil {
 			return types.PCRCTermini{}, err
 		}
@@ -139,7 +124,6 @@ func (sl *Slice) PCRC(header *types.Header, headerOrder int) (types.PCRCTermini,
 		}
 
 		if (PCRCTermini.PTR == common.Hash{} || PCRCTermini.PRTR == common.Hash{}) {
-			fmt.Println("nil escape in PCRC, PTR:", PCRCTermini.PTR, "PRTR:", PCRCTermini.PRTR)
 			return PCRCTermini, consensus.ErrSliceNotSynced
 		}
 
@@ -147,20 +131,16 @@ func (sl *Slice) PCRC(header *types.Header, headerOrder int) (types.PCRCTermini,
 		PCRCTermini.PRTP = PRTP.Hash()
 
 		if (PTP.Hash() != PCRCTermini.PTR) && (PCRCTermini.PTR != PCRCTermini.PTZ) && (PCRCTermini.PTZ != PTP.Hash()) {
-			fmt.Println("PTP", PTP.Hash(), "PTR", PCRCTermini.PTR, "PTZ", PCRCTermini.PTZ)
 			return types.PCRCTermini{}, errors.New("there exists a Prime twist (PTP != PTR != PTZ")
 		}
 		if PRTP.Hash() != PCRCTermini.PRTR {
-			fmt.Println("PRTP", PRTP.Hash(), PCRCTermini.PRTR)
 			return types.PCRCTermini{}, errors.New("there exists a Prime twist (PRTP != PRTR")
 		}
 
 		return PCRCTermini, nil
 
 	case params.REGION:
-		fmt.Println("PCRC Running RTR")
 		RTR, err := sl.PreviousValidCoincidentOnPath(header, slice, params.REGION, params.REGION, true)
-		fmt.Println("Hash: RTR", RTR.Hash(), "error:", err)
 		if err != nil {
 			return types.PCRCTermini{}, err
 		}
@@ -179,19 +159,14 @@ func (sl *Slice) PCRC(header *types.Header, headerOrder int) (types.PCRCTermini,
 		}
 
 		if RTR.Hash() != PCRCTermini.RTZ {
-			fmt.Println("RTR", RTR.Number, RTR.Hash(), "RTZ", PCRCTermini.RTZ)
 			return types.PCRCTermini{}, errors.New("there exists a Region twist (RTR != RTZ)")
 		}
 		if headerOrder < params.REGION {
-			fmt.Println("PCRC Running PTR")
 			PTR, err := sl.PreviousValidCoincidentOnPath(header, slice, params.PRIME, params.REGION, true)
-			fmt.Println("Hash: PTR", PTR.Hash(), "error:", err)
 			if err != nil {
 				return types.PCRCTermini{}, err
 			}
-			fmt.Println("PCRC Running PRTR")
 			PRTR, err := sl.PreviousValidCoincidentOnPath(header, slice, params.PRIME, params.REGION, false)
-			fmt.Println("Hash: PRTR", PRTR.Hash(), "error:", err)
 			if err != nil {
 				return types.PCRCTermini{}, err
 			}
@@ -208,18 +183,13 @@ func (sl *Slice) PCRC(header *types.Header, headerOrder int) (types.PCRCTermini,
 		// PTZ and RTZ are essentially a signaling mechanism to know that we are building on the right terminal header.
 		// So running this only on a coincident block makes sure that the zones can move and sync past the coincident.
 		// Just run RTZ to make sure that its linked. This check decouples this signaling and linking paradigm.
-
-		fmt.Println("PCRC Running PTZ")
 		PTZ, err := sl.PreviousValidCoincidentOnPath(header, slice, params.PRIME, params.ZONE, true)
-		fmt.Println("Hash: PTZ", PTZ.Hash(), "error:", err)
 		if err != nil {
 			return types.PCRCTermini{}, err
 		}
 		PCRCTermini.PTZ = PTZ.Hash()
 
-		fmt.Println("PCRC Running RTZ")
 		RTZ, err := sl.PreviousValidCoincidentOnPath(header, slice, params.REGION, params.ZONE, true)
-		fmt.Println("Hash: RTZ", RTZ.Hash(), "error:", err)
 		if err != nil {
 			return types.PCRCTermini{}, err
 		}
@@ -267,6 +237,87 @@ func (sl *Slice) PreviousValidCoincidentOnPath(header *types.Header, slice []byt
 		}
 
 		prevTerminalHeader = terminalHeader
+	}
+}
+
+// PreviousCoincidentOnPath searches the path for a block of specified order in the specified slice
+//     *slice - The zone location which defines the slice in which we are validating
+//     *order - The order of the conincidence that is desired
+//     *path - Search among ancestors of this path in the specified slice
+func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader, header *types.Header, slice []byte, order, path int, fullSliceEqual bool) (*types.Header, error) {
+
+	if header.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
+		return chain.GetHeaderByHash(chain.Config().GenesisHashes[0]), nil
+	}
+
+	if err := chain.CheckContext(path); err != nil {
+		return nil, err
+	}
+	if err := chain.CheckContext(order); err != nil {
+		return nil, err
+	}
+	if err := chain.CheckLocationRange(slice); err != nil {
+		return nil, err
+	}
+
+	// Check for non-allowed input combinations
+	// Table for the expected output of Hashes from PreviousCoincidentOnPath for various combinations of given order(o) and path(p)
+	// -------------------
+	// |o\p| 0 | 1    | 2 |
+	// | 0 |PPB|PPB   |PPB|
+	// | 1 | X |PB/PPB|PDB|
+	// | 2 | X |  X   |PB |
+	// --------------------
+	// PB  = Previous Block
+	// PDB = Previous Dominant Block
+	// PPB = Previous Prime Block
+	// X   = Not Allowed
+	if order > path {
+		return nil, errors.New("tracing along a dominant chain for a subordinate order block is non-sensical")
+	}
+
+	for {
+		// If block header is Genesis return it as coincident
+		if header.Number[path].Cmp(big.NewInt(1)) == 0 {
+			return chain.GetHeaderByHash(chain.Config().GenesisHashes[0]), nil
+		}
+		if path == types.QuaiNetworkContext {
+			// Get previous header on local chain by hash
+			prevHeader := chain.GetHeaderByHash(header.ParentHash[path])
+			if prevHeader == nil {
+				return nil, consensus.ErrSliceNotSynced
+			}
+			// Increment previous header
+			header = prevHeader
+		} else {
+			// Get previous header on external chain by hash
+			prevExtBlock, err := chain.GetExternalBlock(header.ParentHash[path], header.Location, uint64(path))
+			if err != nil {
+				return nil, err
+			}
+			if prevExtBlock == nil {
+				return nil, fmt.Errorf("prevExtBlock nil in prev coincident on path %s", header.ParentHash[path])
+			}
+			// Increment previous header
+			header = prevExtBlock.Header()
+		}
+
+		// Find the order of the header
+		difficultyOrder, err := blake3.GetDifficultyOrder(header)
+		if err != nil {
+			return nil, err
+		}
+
+		// If we have reached a coincident block of desired order in our desired slice
+		var equal bool
+		if fullSliceEqual {
+			equal = bytes.Equal(header.Location, slice)
+		} else {
+			equal = header.Location[0] == slice[0]
+		}
+		if equal && difficultyOrder <= order {
+			return header, nil
+		}
 	}
 }
 
@@ -461,4 +512,28 @@ func (hc *HeaderChain) CalcTd(header *types.Header) ([]*big.Int, error) {
 			return nil, fmt.Errorf("Unable to find parent: %s", parentHash)
 		}
 	}
+}
+
+// This function determines the difficulty order of a block
+func (blake3 *Blake3) GetDifficultyOrder(header *types.Header) (int, error) {
+	var difficulties []*big.Int
+
+	if header == nil {
+		return types.ContextDepth, errors.New("no header provided")
+	}
+	if !blake3.config.Fakepow {
+		difficulties = header.Difficulty
+	} else {
+		difficulties = fakeDifficulties
+	}
+	blockhash := blake3.SealHash(header)
+	for i, difficulty := range difficulties {
+		if difficulty != nil && big.NewInt(0).Cmp(difficulty) < 0 {
+			target := new(big.Int).Div(big2e256, difficulty)
+			if new(big.Int).SetBytes(blockhash.Bytes()).Cmp(target) <= 0 {
+				return i, nil
+			}
+		}
+	}
+	return -1, errors.New("block does not satisfy minimum difficulty")
 }
