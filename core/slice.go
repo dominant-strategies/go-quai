@@ -446,5 +446,8 @@ func (sl *Slice) CalcTd(header *types.Header) ([]*big.Int, error) {
 // This function determines the difficulty order of a block
 func (sl *Slice) GetDifficultyOrder(header *types.Header) (int, error) {
 	//TODO: need to write this function
+	var order int
+	// check if the header exists in the headerchain
+
 	return 0, nil
 }

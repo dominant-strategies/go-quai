@@ -569,3 +569,10 @@ func (ec *Client) CalcTd(ctx context.Context, header *types.Header) ([]*big.Int,
 	err := ec.c.CallContext(ctx, &td, "quai_calcTd")
 	return td, err
 }
+
+// calcDifficulty
+func (ec *Client) CalcDifficulty(ctx context.Context, header *types.Header) (*big.Int, error) {
+	var td *big.Int
+	err := ec.c.CallContext(ctx, &td, "quai_calcDifficulty")
+	return td, err
+}

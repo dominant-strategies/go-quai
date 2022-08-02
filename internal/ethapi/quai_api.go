@@ -813,3 +813,12 @@ func (s *PublicBlockChainQuaiAPI) CalcTd(ctx context.Context, raw json.RawMessag
 	}
 	return s.b.CalcTd(ctx, header)
 }
+
+// CalcDifficulty
+func (s *PublicBlockChainQuaiAPI) CalcDifficulty(ctx context.Context, raw json.RawMessage) (*big.Int, error) {
+	var header *types.Header
+	if err := json.Unmarshal(raw, &header); err != nil {
+		return nil, err
+	}
+	return s.b.CalcDifficulty(ctx, header)
+}
