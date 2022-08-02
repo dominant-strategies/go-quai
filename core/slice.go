@@ -7,10 +7,13 @@ import (
 	"fmt"
 	"math/big"
 	"sort"
+	"sync"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/consensus"
+	"github.com/spruce-solutions/go-quai/core/rawdb"
 	"github.com/spruce-solutions/go-quai/core/types"
 	"github.com/spruce-solutions/go-quai/core/vm"
 	"github.com/spruce-solutions/go-quai/ethclient/quaiclient"
@@ -25,8 +28,13 @@ type Slice struct {
 	config *params.ChainConfig
 	engine consensus.Engine
 
-	domClient  *quaiclient.Client   // domClient is used to check if a given dominant block in the chain is canonical in dominant chain.
-	subClients []*quaiclient.Client // subClinets is used to check is a coincident block is valid in the subordinate context
+	quit chan struct{} // slice quit channel
+
+	domClient    *quaiclient.Client   // domClient is used to check if a given dominant block in the chain is canonical in dominant chain.
+	subClients   []*quaiclient.Client // subClinets is used to check is a coincident block is valid in the subordinate context
+	futureBlocks *lru.Cache
+
+	wg sync.WaitGroup // slice processing wait group for shutting down
 }
 
 func NewSlice(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, domClientUrl string, subClientUrls []string, engine consensus.Engine, vmConfig vm.Config) (*Slice, error) {
@@ -35,6 +43,9 @@ func NewSlice(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.C
 		config: chainConfig,
 		engine: engine,
 	}
+
+	futureBlocks, _ := lru.New(maxFutureBlocks)
+	sl.futureBlocks = futureBlocks
 
 	var err error
 	sl.hc, err = NewHeaderChain(db, cacheConfig, chainConfig, vmConfig)
@@ -91,6 +102,44 @@ func (sl *Slice) Config() *params.ChainConfig { return sl.config }
 
 // Engine retrieves the header chain's consensus engine.
 func (sl *Slice) Engine() consensus.Engine { return sl.engine }
+
+// Append
+func (sl *Slice) Append(block *types.Block) error {
+	order, err := sl.GetDifficultyOrder(block.Header())
+	if err != nil {
+		return err
+	}
+
+	_, err = sl.PCRC(block.Header(), order)
+	if err != nil {
+		return err
+	}
+
+	err = sl.hc.Append(block)
+	if err != nil {
+		return err
+	}
+
+	td, err := sl.CalcTd(block.Header())
+	if err != nil {
+		return err
+	}
+
+	// write the tds
+	rawdb.WriteTd(sl.hc.headerDb, block.Hash(), block.NumberU64(), td)
+
+	// We have a new possible head call HLCR to potentially set
+	reorg := sl.HLCR(sl.hc.GetTd(sl.hc.currentHeaderHash, sl.hc.CurrentHeader().Number64()), td)
+
+	if reorg {
+		err = sl.hc.SetCurrentHeader(block.Header())
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
 
 // The purpose of the Previous Coincident Reference Check (PCRC) is to establish
 // that we have linked untwisted chains prior to checking HLCR & applying external state transfers.
@@ -183,17 +232,21 @@ func (sl *Slice) PCRC(header *types.Header, headerOrder int) (types.PCRCTermini,
 		// PTZ and RTZ are essentially a signaling mechanism to know that we are building on the right terminal header.
 		// So running this only on a coincident block makes sure that the zones can move and sync past the coincident.
 		// Just run RTZ to make sure that its linked. This check decouples this signaling and linking paradigm.
-		PTZ, err := sl.PreviousValidCoincidentOnPath(header, slice, params.PRIME, params.ZONE, true)
-		if err != nil {
-			return types.PCRCTermini{}, err
+		if headerOrder < params.REGION {
+			PTZ, err := sl.PreviousValidCoincidentOnPath(header, slice, params.PRIME, params.ZONE, true)
+			if err != nil {
+				return types.PCRCTermini{}, err
+			}
+			PCRCTermini.PTZ = PTZ.Hash()
 		}
-		PCRCTermini.PTZ = PTZ.Hash()
 
-		RTZ, err := sl.PreviousValidCoincidentOnPath(header, slice, params.REGION, params.ZONE, true)
-		if err != nil {
-			return types.PCRCTermini{}, err
+		if headerOrder < params.ZONE {
+			RTZ, err := sl.PreviousValidCoincidentOnPath(header, slice, params.REGION, params.ZONE, true)
+			if err != nil {
+				return types.PCRCTermini{}, err
+			}
+			PCRCTermini.RTZ = RTZ.Hash()
 		}
-		PCRCTermini.RTZ = RTZ.Hash()
 
 		return PCRCTermini, nil
 	}
@@ -211,7 +264,7 @@ func (sl *Slice) PreviousValidCoincidentOnPath(header *types.Header, slice []byt
 			return sl.hc.GetHeaderByHash(sl.Config().GenesisHashes[0]), nil
 		}
 
-		terminalHeader, err := sl.Engine().PreviousCoincidentOnPath(sl.hc, prevTerminalHeader, slice, order, path, fullSliceEqual)
+		terminalHeader, err := sl.PreviousCoincidentOnPath(prevTerminalHeader, slice, order, fullSliceEqual)
 		if err != nil {
 			return nil, err
 		}
@@ -224,9 +277,9 @@ func (sl *Slice) PreviousValidCoincidentOnPath(header *types.Header, slice []byt
 
 		// If the current header is dominant coincident check the status with the dom node
 		if order < types.QuaiNetworkContext {
-			status := sl.domClient.GetBlockStatus(context.Background(), terminalHeader)
+			status := sl.hc.GetHeaderByHash(terminalHeader.Hash())
 			fmt.Println("terminal Header status", status)
-			if status == quaiclient.CanonStatTy {
+			if status != nil {
 				if prevTerminalHeader.Hash() != header.Hash() {
 					return nil, errors.New("subordinate terminus mismatch")
 				}
@@ -244,66 +297,35 @@ func (sl *Slice) PreviousValidCoincidentOnPath(header *types.Header, slice []byt
 //     *slice - The zone location which defines the slice in which we are validating
 //     *order - The order of the conincidence that is desired
 //     *path - Search among ancestors of this path in the specified slice
-func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader, header *types.Header, slice []byte, order, path int, fullSliceEqual bool) (*types.Header, error) {
+func (sl *Slice) PreviousCoincidentOnPath(header *types.Header, slice []byte, order int, fullSliceEqual bool) (*types.Header, error) {
 
 	if header.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
-		return chain.GetHeaderByHash(chain.Config().GenesisHashes[0]), nil
+		return sl.hc.GetHeaderByHash(sl.hc.Config().GenesisHashes[0]), nil
 	}
 
-	if err := chain.CheckContext(path); err != nil {
+	if err := sl.hc.CheckContext(order); err != nil {
 		return nil, err
 	}
-	if err := chain.CheckContext(order); err != nil {
+	if err := sl.hc.CheckLocationRange(slice); err != nil {
 		return nil, err
-	}
-	if err := chain.CheckLocationRange(slice); err != nil {
-		return nil, err
-	}
-
-	// Check for non-allowed input combinations
-	// Table for the expected output of Hashes from PreviousCoincidentOnPath for various combinations of given order(o) and path(p)
-	// -------------------
-	// |o\p| 0 | 1    | 2 |
-	// | 0 |PPB|PPB   |PPB|
-	// | 1 | X |PB/PPB|PDB|
-	// | 2 | X |  X   |PB |
-	// --------------------
-	// PB  = Previous Block
-	// PDB = Previous Dominant Block
-	// PPB = Previous Prime Block
-	// X   = Not Allowed
-	if order > path {
-		return nil, errors.New("tracing along a dominant chain for a subordinate order block is non-sensical")
 	}
 
 	for {
 		// If block header is Genesis return it as coincident
-		if header.Number[path].Cmp(big.NewInt(1)) == 0 {
-			return chain.GetHeaderByHash(chain.Config().GenesisHashes[0]), nil
-		}
-		if path == types.QuaiNetworkContext {
-			// Get previous header on local chain by hash
-			prevHeader := chain.GetHeaderByHash(header.ParentHash[path])
-			if prevHeader == nil {
-				return nil, consensus.ErrSliceNotSynced
-			}
-			// Increment previous header
-			header = prevHeader
-		} else {
-			// Get previous header on external chain by hash
-			prevExtBlock, err := chain.GetExternalBlock(header.ParentHash[path], header.Location, uint64(path))
-			if err != nil {
-				return nil, err
-			}
-			if prevExtBlock == nil {
-				return nil, fmt.Errorf("prevExtBlock nil in prev coincident on path %s", header.ParentHash[path])
-			}
-			// Increment previous header
-			header = prevExtBlock.Header()
+		if header.Number[types.QuaiNetworkContext].Cmp(big.NewInt(1)) == 0 {
+			return sl.hc.GetHeaderByHash(sl.hc.Config().GenesisHashes[0]), nil
 		}
 
+		// Get previous header on local chain by hash
+		prevHeader := sl.hc.GetHeaderByHash(header.ParentHash[types.QuaiNetworkContext])
+		if prevHeader == nil {
+			return nil, consensus.ErrSliceNotSynced
+		}
+		// Increment previous header
+		header = prevHeader
+
 		// Find the order of the header
-		difficultyOrder, err := blake3.GetDifficultyOrder(header)
+		difficultyOrder, err := sl.GetDifficultyOrder(header)
 		if err != nil {
 			return nil, err
 		}
@@ -321,115 +343,22 @@ func (blake3 *Blake3) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader
 	}
 }
 
-func (bc *BlockChain) DomReorgNeeded(header *types.Header) (bool, error) {
-	terminalHeader, err := bc.PreviousCanonicalCoincidentOnPath(header, header.Location, types.QuaiNetworkContext-1, types.QuaiNetworkContext, true)
-
-	if err != nil {
-		// Send HLCRReorg to dom
-		block := bc.GetBlockByHash(terminalHeader.Hash())
-		if block == nil {
-			return false, nil
-		}
-		reorg, err := bc.HLCRReorg(block)
-		if err != nil {
-			log.Info("Unable to reorg the dom ")
-			// If we got here our dom can't reorg so we shouldn't reorg but we also shouldn't err because it will drop a peer
-			return false, nil
-		}
-		return reorg, err
-	} else {
-		return true, nil
-	}
-
-}
-
-func (bc *BlockChain) HLCRReorg(block *types.Block) (bool, error) {
-	fmt.Println("Starting HLCRReorg for block number", block.Header().Number, " Hash:", block.Header().Hash())
-	if block == nil {
-		return false, errors.New("block provided in hlcrreorg is nil")
-	}
-
-	if block.Header() == nil {
-		return false, errors.New("block provided in hlcrreorg is nil")
-	}
-
-	fmt.Println("HLCRReorg", block.Header().Hash(), " context ", types.QuaiNetworkContext)
-
-	fmt.Println("starting reorgrollback, context", types.QuaiNetworkContext)
-
-	order, err := bc.engine.GetDifficultyOrder(block.Header())
-	if err != nil {
-		return false, err
-	}
-
-	var reorgFromDom bool
-	if order < types.QuaiNetworkContext {
-		reorgFromDom, err = bc.slice.domClient.HLCRReorg(context.Background(), block)
-		if err != nil {
-			fmt.Println("hlcrreorg dom reorg failed, context", types.QuaiNetworkContext)
-			return false, errors.New("unable to reorg the dom")
-		}
-	} else {
-		currentTd := bc.GetTdByHash(bc.CurrentBlock().Hash())
-		fmt.Println("calcTd from hlcrreorg")
-		externTd, err := bc.CalcTd(block.Header())
-		if err != nil {
-			return false, err
-		}
-		reorgFromDom = externTd[types.QuaiNetworkContext].Cmp(currentTd[types.QuaiNetworkContext]) >= 0
-	}
-
-	if !reorgFromDom {
-		return false, nil
-	}
-
-	err = bc.ReOrgRollBack(bc.CurrentBlock().Header(), []*types.Header{}, []*types.Header{})
-	if err != nil {
-		return false, err
-	}
-
-	_, err = bc.insertChain([]*types.Block{block}, true, true)
-	if err != nil {
-		return false, err
-	}
-
-	return true, nil
-}
-
 // HLCR does hierarchical comparison of two difficulty tuples and returns true if second tuple is greater than the first
-func (bc *BlockChain) HLCR(localDifficulties []*big.Int, externDifficulties []*big.Int) bool {
-	if externDifficulties == nil || len(externDifficulties) == 0 || localDifficulties == nil || len(localDifficulties) == 0 {
-		return false
-	}
-	if localDifficulties[0].Cmp(externDifficulties[0]) < 0 {
+func (sl *Slice) HLCR(localDifficulties []*big.Int, externDifficulties []*big.Int) bool {
+
+	if localDifficulties[types.QuaiNetworkContext].Cmp(externDifficulties[types.QuaiNetworkContext]) < 0 {
 		return true
-	} else if localDifficulties[0].Cmp(externDifficulties[0]) > 0 {
+	} else if localDifficulties[types.QuaiNetworkContext].Cmp(externDifficulties[types.QuaiNetworkContext]) > 0 {
 		return false
 	}
-	if localDifficulties[1].Cmp(externDifficulties[1]) < 0 {
-		return true
-	} else if localDifficulties[1].Cmp(externDifficulties[1]) > 0 {
-		return false
-	}
-	if localDifficulties[2].Cmp(externDifficulties[2]) < 0 {
-		return true
-	} else if localDifficulties[2].Cmp(externDifficulties[2]) > 0 {
-		return false
-	}
+
 	return false
 }
 
-func (bc *BlockChain) GetDifficultyOrder(header *types.Header) (int, error) {
-	headerOrder, err := bc.Engine().GetDifficultyOrder(header)
-	if err != nil {
-		return headerOrder, err
-	}
-	return headerOrder, nil
-}
-func (bc *BlockChain) procFutureBlocks() {
-	blocks := make([]*types.Block, 0, bc.futureBlocks.Len())
-	for _, hash := range bc.futureBlocks.Keys() {
-		if block, exist := bc.futureBlocks.Peek(hash); exist {
+func (sl *Slice) procFutureBlocks() {
+	blocks := make([]*types.Block, 0, sl.futureBlocks.Len())
+	for _, hash := range sl.futureBlocks.Keys() {
+		if block, exist := sl.futureBlocks.Peek(hash); exist {
 			blocks = append(blocks, block.(*types.Block))
 		}
 	}
@@ -439,7 +368,7 @@ func (bc *BlockChain) procFutureBlocks() {
 		})
 		// Insert one by one as chain insertion needs contiguous ancestry between blocks
 		for i := range blocks {
-			bc.Append(blocks[i])
+			sl.Append(blocks[i])
 		}
 	}
 }
@@ -447,40 +376,40 @@ func (bc *BlockChain) procFutureBlocks() {
 // addFutureBlock checks if the block is within the max allowed window to get
 // accepted for future processing, and returns an error if the block is too far
 // ahead and was not added.
-func (bc *BlockChain) addFutureBlock(block *types.Block) error {
+func (sl *Slice) addFutureBlock(block *types.Block) error {
 	max := uint64(time.Now().Unix() + maxTimeFutureBlocks)
 	if block.Time() > max {
 		return fmt.Errorf("future block timestamp %v > allowed %v", block.Time(), max)
 	}
-	if !bc.futureBlocks.Contains(block.Hash()) {
-		bc.futureBlocks.Add(block.Hash(), block)
+	if !sl.futureBlocks.Contains(block.Hash()) {
+		sl.futureBlocks.Add(block.Hash(), block)
 	}
 	return nil
 }
 
-func (bc *BlockChain) update() {
+func (sl *Slice) update() {
 	futureTimer := time.NewTicker(1 * time.Second)
 	defer futureTimer.Stop()
-	defer bc.wg.Done()
+	defer sl.wg.Done()
 	for {
 		select {
 		case <-futureTimer.C:
-			bc.procFutureBlocks()
-		case <-bc.quit:
+			sl.procFutureBlocks()
+		case <-sl.quit:
 			return
 		}
 	}
 }
 
 // CalcTd calculates the TD of the given header using PCRC and CalcHLCRNetDifficulty.
-func (hc *HeaderChain) CalcTd(header *types.Header) ([]*big.Int, error) {
+func (sl *Slice) CalcTd(header *types.Header) ([]*big.Int, error) {
 	// Iterate ancestors, stopping when a TD value is found in cache or a coincident block is found.
 	// If coincident is found, ask dom client for TD at that block
 	aggDiff := new(big.Int)
 	cursor := header
 	for {
 		// First, check if this block's TD is already cached
-		td := hc.GetTd(cursor.Hash(), (*cursor.Number[types.QuaiNetworkContext]).Uint64())
+		td := sl.hc.GetTd(cursor.Hash(), (*cursor.Number[types.QuaiNetworkContext]).Uint64())
 		if td != nil {
 			// Add the difficulty we accumulated up till this block
 			blockTd := td[types.QuaiNetworkContext]
@@ -489,12 +418,12 @@ func (hc *HeaderChain) CalcTd(header *types.Header) ([]*big.Int, error) {
 		}
 
 		// If not cached, check if this block coincides with a dominant chain
-		order, err := hc.GetDifficultyOrder(cursor)
+		order, err := sl.GetDifficultyOrder(cursor)
 		if err != nil {
 			return nil, err
 		} else if order < types.QuaiNetworkContext {
 			// TODO: Ask dom to CalcTd on coincident block
-			td, err = hc.domClient.CalcTd(context.Background(), header)
+			td, err = sl.domClient.CalcTd(context.Background(), header)
 			err = errors.New("TODO: Ask dom to CalcTd")
 			if err != nil {
 				return nil, err
@@ -507,7 +436,7 @@ func (hc *HeaderChain) CalcTd(header *types.Header) ([]*big.Int, error) {
 		// If not cached AND not coincident, aggregate the difficulty and iterate to the parent
 		aggDiff = aggDiff.Add(aggDiff, cursor.Difficulty[types.QuaiNetworkContext])
 		parentHash := cursor.ParentHash[types.QuaiNetworkContext]
-		cursor = hc.GetHeader(cursor.Hash(), (*cursor.Number[types.QuaiNetworkContext]).Uint64())
+		cursor = sl.hc.GetHeader(cursor.Hash(), (*cursor.Number[types.QuaiNetworkContext]).Uint64())
 		if cursor == nil {
 			return nil, fmt.Errorf("Unable to find parent: %s", parentHash)
 		}
@@ -515,25 +444,7 @@ func (hc *HeaderChain) CalcTd(header *types.Header) ([]*big.Int, error) {
 }
 
 // This function determines the difficulty order of a block
-func (blake3 *Blake3) GetDifficultyOrder(header *types.Header) (int, error) {
-	var difficulties []*big.Int
-
-	if header == nil {
-		return types.ContextDepth, errors.New("no header provided")
-	}
-	if !blake3.config.Fakepow {
-		difficulties = header.Difficulty
-	} else {
-		difficulties = fakeDifficulties
-	}
-	blockhash := blake3.SealHash(header)
-	for i, difficulty := range difficulties {
-		if difficulty != nil && big.NewInt(0).Cmp(difficulty) < 0 {
-			target := new(big.Int).Div(big2e256, difficulty)
-			if new(big.Int).SetBytes(blockhash.Bytes()).Cmp(target) <= 0 {
-				return i, nil
-			}
-		}
-	}
-	return -1, errors.New("block does not satisfy minimum difficulty")
+func (sl *Slice) GetDifficultyOrder(header *types.Header) (int, error) {
+	//TODO: need to write this function
+	return 0, nil
 }
