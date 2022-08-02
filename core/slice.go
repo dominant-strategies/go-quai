@@ -37,7 +37,7 @@ type Slice struct {
 	wg sync.WaitGroup // slice processing wait group for shutting down
 }
 
-func NewSlice(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, domClientUrl string, subClientUrls []string, engine consensus.Engine, vmConfig vm.Config) (*Slice, error) {
+func NewSlice(db ethdb.Database, chainConfig *params.ChainConfig, domClientUrl string, subClientUrls []string, engine consensus.Engine, vmConfig vm.Config) (*Slice, error) {
 
 	sl := &Slice{
 		config: chainConfig,
@@ -48,7 +48,7 @@ func NewSlice(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.C
 	sl.futureBlocks = futureBlocks
 
 	var err error
-	sl.hc, err = NewHeaderChain(db, cacheConfig, chainConfig, vmConfig)
+	sl.hc, err = NewHeaderChain(db, engine, chainConfig, vmConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -445,9 +445,54 @@ func (sl *Slice) CalcTd(header *types.Header) ([]*big.Int, error) {
 
 // This function determines the difficulty order of a block
 func (sl *Slice) GetDifficultyOrder(header *types.Header) (int, error) {
-	//TODO: need to write this function
-	var order int
-	// check if the header exists in the headerchain
 
-	return 0, nil
+	// check if the block exists in the chain.
+	parentHeader := sl.hc.GetHeaderByHash(header.Parent())
+	if parentHeader == nil {
+		return -1, errors.New("parent does not exist in the chain")
+	}
+
+	expected := sl.engine.CalcDifficulty(sl.hc, parentHeader.Time, parentHeader, types.QuaiNetworkContext)
+	if expected.Cmp(header.Difficulty[types.QuaiNetworkContext]) > 0 {
+		return -1, fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty[types.QuaiNetworkContext], expected)
+	}
+
+	order := types.QuaiNetworkContext
+	if types.QuaiNetworkContext > params.REGION {
+
+		// check if the block exists in the chain.
+		parentBlock, err := sl.domClient.BlockByHash(context.Background(), header.ParentHash[params.REGION])
+		if err != nil {
+			return -1, errors.New("region parent does not exist in the region chain")
+		}
+
+		expectedRegion, err := sl.domClient.CalcDifficulty(context.Background(), parentBlock.Header())
+		if err != nil {
+			return -1, err
+		}
+
+		if expectedRegion.Cmp(header.Difficulty[params.REGION]) < 0 {
+			order = order - 1
+		}
+	}
+
+	// check if the header exists in the headerchain
+	if types.QuaiNetworkContext > params.PRIME {
+		// check if the block exists in the chain.
+		parentBlock, err := sl.domClient.BlockByHash(context.Background(), header.ParentHash[params.PRIME])
+		if err != nil {
+			return -1, errors.New("prime parent does not exist in the prime chain")
+		}
+
+		expectedPrime, err := sl.domClient.CalcDifficulty(context.Background(), parentBlock.Header())
+		if err != nil {
+			return -1, err
+		}
+
+		if expectedPrime.Cmp(header.Difficulty[params.PRIME]) < 0 {
+			return order - 1, nil
+		}
+	}
+
+	return order, nil
 }
