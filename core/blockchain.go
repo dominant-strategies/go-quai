@@ -2,6 +2,7 @@ package core
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -51,7 +52,6 @@ var (
 // canonical chain.
 type BlockChain struct {
 	chainConfig *params.ChainConfig // Chain & network configuration
-	cacheConfig *CacheConfig        // Cache configuration for pruning
 
 	db ethdb.Database // Low level persistent database to store final content in
 
@@ -74,23 +74,19 @@ type BlockChain struct {
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator and
 // Processor.
-func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, engine consensus.Engine, chainConfig *params.ChainConfig, vmConfig vm.Config) (*BlockChain, error) {
-	if cacheConfig == nil {
-		cacheConfig = defaultCacheConfig
-	}
+func NewBlockChain(db ethdb.Database, engine consensus.Engine, chainConfig *params.ChainConfig, vmConfig vm.Config) (*BlockChain, error) {
 
 	blockCache, _ := lru.New(blockCacheLimit)
 
 	bc := &BlockChain{
 		chainConfig: chainConfig,
-		cacheConfig: cacheConfig,
 		engine:      engine,
 		db:          db,
 		quit:        make(chan struct{}),
 		blockCache:  blockCache,
 	}
 
-	bc.processor = NewStateProcessor(chainConfig, cacheConfig, bc, engine, vmConfig)
+	bc.processor = NewStateProcessor(chainConfig, bc, engine, vmConfig)
 
 	return bc, nil
 }
@@ -101,8 +97,9 @@ func (bc *BlockChain) Append(block *types.Block) error {
 	defer bc.chainmu.Unlock()
 
 	// Process our block and retrieve external blocks.
-	_, _, _, err := bc.processor.Process(block)
+	err := bc.processor.Apply(block)
 	if err != nil {
+		bc.reportBlock(block, err)
 		bc.futureBlocks.Remove(block.Hash())
 		return err
 	}
@@ -183,4 +180,18 @@ func (bc *BlockChain) Config() *params.ChainConfig { return bc.chainConfig }
 // SubscribeChainEvent registers a subscription of ChainEvent.
 func (bc *BlockChain) SubscribeChainEvent(ch chan<- ChainEvent) event.Subscription {
 	return bc.scope.Track(bc.chainFeed.Subscribe(ch))
+}
+
+// reportBlock logs a bad block error.
+func (bc *BlockChain) reportBlock(block *types.Block, err error) {
+	rawdb.WriteBadBlock(bc.db, block)
+
+	log.Error(fmt.Sprintf(`
+########## BAD BLOCK #########
+Chain config: %v
+Number: %v
+Hash: 0x%x
+Error: %v
+##############################
+`, bc.chainConfig, block.Number(), block.Hash(), err))
 }

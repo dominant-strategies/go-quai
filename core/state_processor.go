@@ -8,7 +8,6 @@ import (
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/spruce-solutions/go-quai/common/prque"
 	"github.com/spruce-solutions/go-quai/event"
 	"github.com/spruce-solutions/go-quai/log"
 	"github.com/spruce-solutions/go-quai/metrics"
@@ -18,7 +17,6 @@ import (
 	"github.com/spruce-solutions/go-quai/consensus"
 	"github.com/spruce-solutions/go-quai/core/rawdb"
 	"github.com/spruce-solutions/go-quai/core/state"
-	"github.com/spruce-solutions/go-quai/core/state/snapshot"
 	"github.com/spruce-solutions/go-quai/core/types"
 	"github.com/spruce-solutions/go-quai/core/vm"
 	"github.com/spruce-solutions/go-quai/crypto"
@@ -78,41 +76,14 @@ const (
 	BlockChainVersion uint64 = 8
 )
 
-// CacheConfig contains the configuration values for the trie caching/pruning
-// that's resident in a blockchain.
-type CacheConfig struct {
-	TrieCleanLimit      int           // Memory allowance (MB) to use for caching trie nodes in memory
-	TrieCleanJournal    string        // Disk journal for saving clean cache entries.
-	TrieCleanRejournal  time.Duration // Time interval to dump clean cache to disk periodically
-	TrieCleanNoPrefetch bool          // Whether to disable heuristic state prefetching for followup blocks
-	TrieDirtyLimit      int           // Memory limit (MB) at which to start flushing dirty trie nodes to disk
-	TrieDirtyDisabled   bool          // Whether to disable trie write caching and GC altogether (archive node)
-	TrieTimeLimit       time.Duration // Time limit after which to flush the current in-memory trie to disk
-	SnapshotLimit       int           // Memory allowance (MB) to use for caching snapshot entries in memory
-	Preimages           bool          // Whether to store preimage of trie key to the disk
-
-	SnapshotWait bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
-}
-
-// defaultCacheConfig are the default caching values if none are specified by the
-// user (also used during testing).
-var defaultCacheConfig = &CacheConfig{
-	TrieCleanLimit: 256,
-	TrieDirtyLimit: 256,
-	TrieTimeLimit:  5 * time.Minute,
-	SnapshotLimit:  256,
-	SnapshotWait:   true,
-}
-
 // StateProcessor is a basic Processor, which takes care of transitioning
 // state from one point to another.
 //
 // StateProcessor implements Processor.
 type StateProcessor struct {
 	config        *params.ChainConfig // Chain configuration options
-	cacheConfig   *CacheConfig
-	bc            *BlockChain      // Canonical block chain
-	engine        consensus.Engine // Consensus engine used for block rewards
+	bc            *BlockChain         // Canonical block chain
+	engine        consensus.Engine    // Consensus engine used for block rewards
 	logsFeed      event.Feed
 	rmLogsFeed    event.Feed
 	stateCache    state.Database // State database to reuse between imports (contains state cache)
@@ -124,22 +95,13 @@ type StateProcessor struct {
 	validator     Validator      // Block and state validator interface
 	prefetcher    Prefetcher
 	vmConfig      vm.Config
-	// txLookupLimit is the maximum number of blocks from head whose tx indices
-	// are reserved:
-	//  * 0:   means no limit and regenerate any missing indexes
-	//  * N:   means N block limit [HEAD-N+1, HEAD] and delete extra indexes
-	//  * nil: disable tx reindexer/deleter, but still index new blocks
-	txLookupLimit uint64
-	snaps         *snapshot.Tree // Snapshot tree for fast trie leaf access
-	triegc        *prque.Prque   // Priority queue mapping block numbers to tries to gc
-	gcproc        time.Duration  // Accumulates canonical block processing for trie dumping
 
 	scope event.SubscriptionScope
 	wg    sync.WaitGroup // chain processing wait group for shutting down
 }
 
 // NewStateProcessor initialises a new StateProcessor.
-func NewStateProcessor(config *params.ChainConfig, cacheConfig *CacheConfig, bc *BlockChain, engine consensus.Engine, vmConfig vm.Config) *StateProcessor {
+func NewStateProcessor(config *params.ChainConfig, bc *BlockChain, engine consensus.Engine, vmConfig vm.Config) *StateProcessor {
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
 	}
@@ -194,7 +156,7 @@ func NewStateProcessor(config *params.ChainConfig, cacheConfig *CacheConfig, bc 
 // Process returns the receipts and logs accumulated during the process and
 // returns the amount of gas that was used in the process. If any of the
 // transactions failed to execute due to insufficient gas it will return an error.
-func (p *StateProcessor) Process(block *types.Block) (types.Receipts, []*types.Log, uint64, error) {
+func (p *StateProcessor) Process(block *types.Block) (types.Receipts, []*types.Log, *state.StateDB, uint64, error) {
 	var (
 		receipts    types.Receipts
 		usedGas     = new(uint64)
@@ -242,7 +204,7 @@ func (p *StateProcessor) Process(block *types.Block) (types.Receipts, []*types.L
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles())
 
-	return receipts, allLogs, *usedGas, nil
+	return receipts, allLogs, statedb, *usedGas, nil
 }
 
 func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (*types.Receipt, error) {
@@ -301,20 +263,25 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 }
 
 // Apply State
-func (p *StateProcessor) Apply(block *types.Block, td []*big.Int) error {
+func (p *StateProcessor) Apply(block *types.Block) error {
+	// Process our block and retrieve external blocks.
+	receipts, _, statedb, usedGas, err := p.Process(block)
 
-	// Irrelevant of the canonical status, write the block itself to the database.
-	//
-	// Note all the components of block(td, hash->number map, header, body, receipts)
-	// should be written atomically. BlockBatch is used for containing all components.
+	if err != nil {
+		return err
+	}
+
+	err = p.validator.ValidateState(block, statedb, receipts, usedGas)
+	if err != nil {
+		return err
+	}
+
 	blockBatch := p.bc.db.NewBatch()
-	rawdb.WriteTd(blockBatch, block.Hash(), block.NumberU64(), td)
-	rawdb.WriteBlock(blockBatch, block)
 	rawdb.WriteReceipts(blockBatch, block.Hash(), block.NumberU64(), receipts)
-	rawdb.WritePreimages(blockBatch, state.Preimages())
 	if err := blockBatch.Write(); err != nil {
 		log.Crit("Failed to write block into disk", "err", err)
 	}
+	return nil
 }
 
 // ApplyTransaction attempts to apply a transaction to the given state database
