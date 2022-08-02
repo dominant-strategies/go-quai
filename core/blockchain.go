@@ -7,6 +7,7 @@ import (
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/spruce-solutions/go-quai/common"
+	"github.com/spruce-solutions/go-quai/consensus"
 	"github.com/spruce-solutions/go-quai/core/rawdb"
 	"github.com/spruce-solutions/go-quai/core/types"
 	"github.com/spruce-solutions/go-quai/core/vm"
@@ -58,6 +59,7 @@ type BlockChain struct {
 	blockProcFeed event.Feed
 	scope         event.SubscriptionScope
 
+	engine        consensus.Engine
 	chainmu       sync.RWMutex // blockchain insertion lock
 	futureBlocks  *lru.Cache   // future blocks are blocks added for later processing
 	blockCache    *lru.Cache
@@ -72,7 +74,7 @@ type BlockChain struct {
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator and
 // Processor.
-func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, vmConfig vm.Config) (*BlockChain, error) {
+func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, engine consensus.Engine, chainConfig *params.ChainConfig, vmConfig vm.Config) (*BlockChain, error) {
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
 	}
@@ -82,12 +84,13 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	bc := &BlockChain{
 		chainConfig: chainConfig,
 		cacheConfig: cacheConfig,
+		engine:      engine,
 		db:          db,
 		quit:        make(chan struct{}),
 		blockCache:  blockCache,
 	}
 
-	bc.processor = NewStateProcessor(chainConfig)
+	bc.processor = NewStateProcessor(chainConfig, cacheConfig, bc, engine, vmConfig)
 
 	return bc, nil
 }
@@ -124,6 +127,11 @@ func (bc *BlockChain) HasBlock(hash common.Hash, number uint64) bool {
 		return true
 	}
 	return rawdb.HasBody(bc.db, hash, number)
+}
+
+// Engine retreives the blockchain consensus engine.
+func (bc *BlockChain) Engine() consensus.Engine {
+	return bc.engine
 }
 
 // GetBlock retrieves a block from the database by hash and number,

@@ -45,29 +45,11 @@ type ChainHeaderReader interface {
 	// GetHeaderByHash retrieves a block header from the database by its hash.
 	GetHeaderByHash(hash common.Hash) *types.Header
 
-	// GetExternalBlocks retrieve all external blocks for a header.
-	GetExternalBlocks(header *types.Header) ([]*types.ExternalBlock, error)
-
-	// GetExternalBlocks retrieve all external link blocks for a header.
-	GetLinkExternalBlocks(header *types.Header) ([]*types.ExternalBlock, error)
-
-	// GetExternalBlock retrieves an external block header by its hash and context.
-	GetExternalBlock(hash common.Hash, location []byte, context uint64) (*types.ExternalBlock, error)
-
-	// QueueAndRetrieveExtBlocks passes external blocks to the queue and returns the amount available for this block
-	QueueAndRetrieveExtBlocks(externalBlocks []*types.ExternalBlock, header *types.Header) []*types.ExternalBlock
-
 	// GetUnclesInChain retrieves the uncles in the chain based on header.
 	GetUnclesInChain(block *types.Block, length int) []*types.Header
 
 	// GetGasUsedInChain gets the number value of gas used in the chain up until a certain number.
 	GetGasUsedInChain(block *types.Block, length int) int64
-
-	// CheckContextchecks to make sure the range of a context or order is valid
-	CheckContext(context int) error
-
-	// CheckLocationRange checks to make sure the range of r and z are valid
-	CheckLocationRange(location []byte) error
 }
 
 // ChainReader defines a small collection of methods needed to access the local
