@@ -712,3 +712,10 @@ func toCallArg(msg ethereum.CallMsg) interface{} {
 	}
 	return arg
 }
+
+// CalcTd calculates the total difficulty for a block
+func (ec *Client) CalcTd(ctx context.Context, header *types.Header) ([]*big.Int, error) {
+	var td []*big.Int
+	err := ec.c.CallContext(ctx, &td, "quai_calcTd")
+	return td, err
+}

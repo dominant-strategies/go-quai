@@ -804,3 +804,12 @@ func (s *PublicBlockChainQuaiAPI) CheckPCCRC(ctx context.Context, raw json.RawMe
 	fmt.Println("Header Number:", headerWithOrder.Header.Number, "Order:", headerWithOrder.Order, "Hash:", headerWithOrder.Header.Hash())
 	return s.b.PCCRC(headerWithOrder.Header, headerWithOrder.Order)
 }
+
+// CalcTd calculates the total difficulty of a blockchain up to a block
+func (s *PublicBlockChainQuaiAPI) CalcTd(ctx context.Context, raw json.RawMessage) ([]*big.Int, error) {
+	var header *types.Header
+	if err := json.Unmarshal(raw, &header); err != nil {
+		return nil, err
+	}
+	return s.b.CalcTd(ctx, header)
+}

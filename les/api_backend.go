@@ -396,6 +396,10 @@ func (b *LesApiBackend) HLCRReorg(block *types.Block) (bool, error) {
 	return false, nil
 }
 
+func (b *LesApiBackend) CalcTd(ctx context.Context, header *types.Header) ([]*big.Int, error) {
+	return nil, errors.New("Unimplemented")
+}
+
 func (b *LesApiBackend) GetSubordinateSet(hash common.Hash, location []byte) ([]common.Hash, error) {
 	return nil, errors.New("light client does not support retrieving subordinate set")
 }
