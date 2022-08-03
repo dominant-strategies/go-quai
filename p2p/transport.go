@@ -25,11 +25,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/bitutil"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/p2p/rlpx"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/spruce-solutions/go-quai/common"
+	"github.com/spruce-solutions/go-quai/common/bitutil"
+	"github.com/spruce-solutions/go-quai/metrics"
+	"github.com/spruce-solutions/go-quai/p2p/rlpx"
+	"github.com/spruce-solutions/go-quai/rlp"
 )
 
 const (

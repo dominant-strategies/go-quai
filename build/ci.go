@@ -59,9 +59,9 @@ import (
 	"time"
 
 	"github.com/cespare/cp"
-	"github.com/ethereum/go-ethereum/crypto/signify"
-	"github.com/ethereum/go-ethereum/internal/build"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/spruce-solutions/go-quai/crypto/signify"
+	"github.com/spruce-solutions/go-quai/internal/build"
+	"github.com/spruce-solutions/go-quai/params"
 )
 
 var (
