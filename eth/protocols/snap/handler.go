@@ -65,7 +65,7 @@ type Handler func(peer *Peer) error
 // callback methods to invoke on remote deliveries.
 type Backend interface {
 	// Chain retrieves the blockchain object to serve data.
-	Chain() *core.BlockChain
+	Core() *core.Core
 
 	// RunPeer is invoked when a peer joins on the `eth` protocol. The handler
 	// should do any peer maintenance work, handshakes and validations. If all
@@ -104,7 +104,7 @@ func MakeProtocols(backend Backend, dnsdisc enode.Iterator) []p2p.Protocol {
 				})
 			},
 			NodeInfo: func() interface{} {
-				return nodeInfo(backend.Chain())
+				return nodeInfo(backend.Core())
 			},
 			PeerInfo: func(id enode.ID) interface{} {
 				return backend.PeerInfo(id)
@@ -165,11 +165,11 @@ func handleMessage(backend Backend, peer *Peer) error {
 			req.Bytes = softResponseLimit
 		}
 		// Retrieve the requested state and bail out if non existent
-		tr, err := trie.New(req.Root, backend.Chain().StateCache().TrieDB())
+		tr, err := trie.New(req.Root, backend.Core().StateCache().TrieDB())
 		if err != nil {
 			return p2p.Send(peer.rw, AccountRangeMsg, &AccountRangePacket{ID: req.ID})
 		}
-		it, err := backend.Chain().Snapshots().AccountIterator(req.Root, req.Origin)
+		it, err := backend.Core().Snapshots().AccountIterator(req.Root, req.Origin)
 		if err != nil {
 			return p2p.Send(peer.rw, AccountRangeMsg, &AccountRangePacket{ID: req.ID})
 		}
@@ -275,7 +275,7 @@ func handleMessage(backend Backend, peer *Peer) error {
 				limit, req.Limit = common.BytesToHash(req.Limit), nil
 			}
 			// Retrieve the requested state and bail out if non existent
-			it, err := backend.Chain().Snapshots().StorageIterator(req.Root, account, origin)
+			it, err := backend.Core().Snapshots().StorageIterator(req.Root, account, origin)
 			if err != nil {
 				return p2p.Send(peer.rw, StorageRangesMsg, &StorageRangesPacket{ID: req.ID})
 			}
@@ -315,7 +315,7 @@ func handleMessage(backend Backend, peer *Peer) error {
 			if origin != (common.Hash{}) || abort {
 				// Request started at a non-zero hash or was capped prematurely, add
 				// the endpoint Merkle proofs
-				accTrie, err := trie.New(req.Root, backend.Chain().StateCache().TrieDB())
+				accTrie, err := trie.New(req.Root, backend.Core().StateCache().TrieDB())
 				if err != nil {
 					return p2p.Send(peer.rw, StorageRangesMsg, &StorageRangesPacket{ID: req.ID})
 				}
@@ -323,7 +323,7 @@ func handleMessage(backend Backend, peer *Peer) error {
 				if err := rlp.DecodeBytes(accTrie.Get(account[:]), &acc); err != nil {
 					return p2p.Send(peer.rw, StorageRangesMsg, &StorageRangesPacket{ID: req.ID})
 				}
-				stTrie, err := trie.New(acc.Root, backend.Chain().StateCache().TrieDB())
+				stTrie, err := trie.New(acc.Root, backend.Core().StateCache().TrieDB())
 				if err != nil {
 					return p2p.Send(peer.rw, StorageRangesMsg, &StorageRangesPacket{ID: req.ID})
 				}
@@ -394,7 +394,7 @@ func handleMessage(backend Backend, peer *Peer) error {
 				// Peers should not request the empty code, but if they do, at
 				// least sent them back a correct response without db lookups
 				codes = append(codes, []byte{})
-			} else if blob, err := backend.Chain().ContractCode(hash); err == nil {
+			} else if blob, err := backend.Core().ContractCode(hash); err == nil {
 				codes = append(codes, blob)
 				bytes += uint64(len(blob))
 			}
@@ -428,14 +428,14 @@ func handleMessage(backend Backend, peer *Peer) error {
 			req.Bytes = softResponseLimit
 		}
 		// Make sure we have the state associated with the request
-		triedb := backend.Chain().StateCache().TrieDB()
+		triedb := backend.Core().StateCache().TrieDB()
 
 		accTrie, err := trie.NewSecure(req.Root, triedb)
 		if err != nil {
 			// We don't have the requested state available, bail out
 			return p2p.Send(peer.rw, TrieNodesMsg, &TrieNodesPacket{ID: req.ID})
 		}
-		snap := backend.Chain().Snapshots().Snapshot(req.Root)
+		snap := backend.Core().Snapshots().Snapshot(req.Root)
 		if snap == nil {
 			// We don't have the requested state snapshotted yet, bail out.
 			// In reality we could still serve using the account and storage
@@ -523,6 +523,6 @@ func handleMessage(backend Backend, peer *Peer) error {
 type NodeInfo struct{}
 
 // nodeInfo retrieves some `snap` protocol metadata about the running host node.
-func nodeInfo(chain *core.BlockChain) *NodeInfo {
+func nodeInfo(core *core.Core) *NodeInfo {
 	return &NodeInfo{}
 }

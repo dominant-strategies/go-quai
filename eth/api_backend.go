@@ -49,16 +49,16 @@ type EthAPIBackend struct {
 
 // ChainConfig returns the active chain configuration.
 func (b *EthAPIBackend) ChainConfig() *params.ChainConfig {
-	return b.eth.blockchain.Config()
+	return b.eth.core.Config()
 }
 
 func (b *EthAPIBackend) CurrentBlock() *types.Block {
-	return b.eth.blockchain.CurrentBlock()
+	return b.eth.core.CurrentBlock()
 }
 
 func (b *EthAPIBackend) SetHead(number uint64) {
 	b.eth.handler.downloader.Cancel()
-	b.eth.blockchain.SetHead(number)
+	b.eth.core.SetHead(number)
 }
 
 func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
@@ -69,9 +69,9 @@ func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumb
 	}
 	// Otherwise resolve and return the block
 	if number == rpc.LatestBlockNumber {
-		return b.eth.blockchain.CurrentBlock().Header(), nil
+		return b.eth.core.CurrentBlock().Header(), nil
 	}
-	return b.eth.blockchain.GetHeaderByNumber(uint64(number)), nil
+	return b.eth.core.GetHeaderByNumber(uint64(number)), nil
 }
 
 func (b *EthAPIBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Header, error) {
@@ -79,11 +79,11 @@ func (b *EthAPIBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash 
 		return b.HeaderByNumber(ctx, blockNr)
 	}
 	if hash, ok := blockNrOrHash.Hash(); ok {
-		header := b.eth.blockchain.GetHeaderByHash(hash)
+		header := b.eth.core.GetHeaderByHash(hash)
 		if header == nil {
 			return nil, errors.New("header for hash not found")
 		}
-		if blockNrOrHash.RequireCanonical && b.eth.blockchain.GetCanonicalHash(header.Number[types.QuaiNetworkContext].Uint64()) != hash {
+		if blockNrOrHash.RequireCanonical && b.eth.core.GetCanonicalHash(header.Number[types.QuaiNetworkContext].Uint64()) != hash {
 			return nil, errors.New("hash is not currently canonical")
 		}
 		return header, nil
@@ -92,7 +92,7 @@ func (b *EthAPIBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash 
 }
 
 func (b *EthAPIBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
-	return b.eth.blockchain.GetHeaderByHash(hash), nil
+	return b.eth.core.GetHeaderByHash(hash), nil
 }
 
 func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
@@ -103,9 +103,9 @@ func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumbe
 	}
 	// Otherwise resolve and return the block
 	if number == rpc.LatestBlockNumber {
-		return b.eth.blockchain.CurrentBlock(), nil
+		return b.eth.core.CurrentBlock(), nil
 	}
-	return b.eth.blockchain.GetBlockByNumber(uint64(number)), nil
+	return b.eth.core.GetBlockByNumber(uint64(number)), nil
 }
 
 func (b *EthAPIBackend) PendingBlock(ctx context.Context) (*types.Block, error) {
@@ -117,59 +117,31 @@ func (b *EthAPIBackend) PendingBlock(ctx context.Context) (*types.Block, error) 
 }
 
 func (b *EthAPIBackend) InsertBlock(ctx context.Context, block *types.Block) (int, error) {
-	return b.eth.blockchain.InsertChain([]*types.Block{block})
-}
-
-func (b *EthAPIBackend) AddExternalBlock(block *types.ExternalBlock) error {
-	return b.eth.blockchain.AddExternalBlock(block)
-}
-
-func (b *EthAPIBackend) ReOrgRollBack(header *types.Header, validDoms []*types.Header, invalidDoms []*types.Header) error {
-	return b.eth.blockchain.ReOrgRollBack(header, validDoms, invalidDoms)
-}
-
-func (b *EthAPIBackend) GetExternalBlockByHashAndContext(hash common.Hash, context int) (*types.ExternalBlock, error) {
-	return b.eth.blockchain.GetExternalBlockByHashAndContext(hash, context)
-}
-
-func (b *EthAPIBackend) GetSubordinateSet(stopHash common.Hash, location []byte) ([]common.Hash, error) {
-	return b.eth.blockchain.GetSubordinateSet(stopHash, location)
-}
-
-func (b *EthAPIBackend) GetBlockStatus(header *types.Header) core.WriteStatus {
-	return b.eth.blockchain.GetBlockStatus(header)
-}
-
-func (b *EthAPIBackend) HLCRReorg(block *types.Block) (bool, error) {
-	return b.eth.blockchain.HLCRReorg(block)
+	return b.eth.core.InsertChain([]*types.Block{block})
 }
 
 func (b *EthAPIBackend) GetAncestorByLocation(hash common.Hash, location []byte) (*types.Header, error) {
-	return b.eth.blockchain.GetAncestorByLocation(hash, location)
+	return b.eth.core.GetAncestorByLocation(hash, location)
 }
 
 func (b *EthAPIBackend) GetTerminusAtOrder(header *types.Header, order int) (common.Hash, error) {
-	return b.eth.blockchain.GetTerminusAtOrder(header, order)
+	return b.eth.core.GetTerminusAtOrder(header, order)
 }
 
 func (b *EthAPIBackend) PCRC(header *types.Header, order int) (types.PCRCTermini, error) {
-	return b.eth.blockchain.PCRC(header, order)
-}
-
-func (b *EthAPIBackend) PCCRC(header *types.Header, order int) (types.PCRCTermini, error) {
-	return b.eth.blockchain.PCCRC(header, order)
+	return b.eth.core.PCRC(header, order)
 }
 
 func (b *EthAPIBackend) CalcTd(ctx context.Context, header *types.Header) ([]*big.Int, error) {
-	return b.eth.blockchain.CalcTd(header)
+	return b.eth.core.CalcTd(header)
 }
 
-func (b *EthAPIBackend) CalcDifficulty(ctx context.Context, header *types.Header) ([]*big.Int, error) {
-	return b.eth.blockchain.CalcDifficulty(header)
+func (b *EthAPIBackend) CalcDifficulty(ctx context.Context, header *types.Header) (*big.Int, error) {
+	return b.eth.core.CalcDifficulty(header)
 }
 
 func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
-	return b.eth.blockchain.GetBlockByHash(hash), nil
+	return b.eth.core.GetBlockByHash(hash), nil
 }
 
 func (b *EthAPIBackend) GetUncleFromWorker(hash common.Hash) (*types.Block, error) {
@@ -181,14 +153,14 @@ func (b *EthAPIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash r
 		return b.BlockByNumber(ctx, blockNr)
 	}
 	if hash, ok := blockNrOrHash.Hash(); ok {
-		header := b.eth.blockchain.GetHeaderByHash(hash)
+		header := b.eth.core.GetHeaderByHash(hash)
 		if header == nil {
 			return nil, errors.New("header for hash not found")
 		}
-		if blockNrOrHash.RequireCanonical && b.eth.blockchain.GetCanonicalHash(header.Number[types.QuaiNetworkContext].Uint64()) != hash {
+		if blockNrOrHash.RequireCanonical && b.eth.core.GetCanonicalHash(header.Number[types.QuaiNetworkContext].Uint64()) != hash {
 			return nil, errors.New("hash is not currently canonical")
 		}
-		block := b.eth.blockchain.GetBlock(hash, header.Number[types.QuaiNetworkContext].Uint64())
+		block := b.eth.core.GetBlock(hash, header.Number[types.QuaiNetworkContext].Uint64())
 		if block == nil {
 			return nil, errors.New("header found, but block body is missing")
 		}
@@ -215,7 +187,7 @@ func (b *EthAPIBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.B
 	if header == nil {
 		return nil, nil, errors.New("header not found")
 	}
-	stateDb, err := b.eth.BlockChain().StateAt(header.Root[types.QuaiNetworkContext])
+	stateDb, err := b.eth.core.StateAt(header.Root[types.QuaiNetworkContext])
 	return stateDb, header, err
 }
 
@@ -231,17 +203,17 @@ func (b *EthAPIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockN
 		if header == nil {
 			return nil, nil, errors.New("header for hash not found")
 		}
-		if blockNrOrHash.RequireCanonical && b.eth.blockchain.GetCanonicalHash(header.Number[types.QuaiNetworkContext].Uint64()) != hash {
+		if blockNrOrHash.RequireCanonical && b.eth.core.GetCanonicalHash(header.Number[types.QuaiNetworkContext].Uint64()) != hash {
 			return nil, nil, errors.New("hash is not currently canonical")
 		}
-		stateDb, err := b.eth.BlockChain().StateAt(header.Root[types.QuaiNetworkContext])
+		stateDb, err := b.eth.core.StateAt(header.Root[types.QuaiNetworkContext])
 		return stateDb, header, err
 	}
 	return nil, nil, errors.New("invalid arguments; neither block nor hash specified")
 }
 
 func (b *EthAPIBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
-	return b.eth.blockchain.GetReceiptsByHash(hash), nil
+	return b.eth.core.GetReceiptsByHash(hash), nil
 }
 
 func (b *EthAPIBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*types.Log, error) {
@@ -258,21 +230,21 @@ func (b *EthAPIBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*typ
 }
 
 func (b *EthAPIBackend) GetTd(ctx context.Context, hash common.Hash) []*big.Int {
-	return b.eth.blockchain.GetTdByHash(hash)
+	return b.eth.core.GetTdByHash(hash)
 }
 
 func (b *EthAPIBackend) GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config) (*vm.EVM, func() error, error) {
 	vmError := func() error { return nil }
 	if vmConfig == nil {
-		vmConfig = b.eth.blockchain.GetVMConfig()
+		vmConfig = b.eth.core.GetVMConfig()
 	}
 	txContext := core.NewEVMTxContext(msg)
-	context := core.NewEVMBlockContext(header, b.eth.BlockChain(), nil)
-	return vm.NewEVM(context, txContext, state, b.eth.blockchain.Config(), *vmConfig), vmError, nil
+	context := core.NewEVMBlockContext(header, b.eth.core, nil)
+	return vm.NewEVM(context, txContext, state, b.eth.core.Config(), *vmConfig), vmError, nil
 }
 
 func (b *EthAPIBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {
-	return b.eth.BlockChain().SubscribeRemovedLogsEvent(ch)
+	return b.eth.core.SubscribeRemovedLogsEvent(ch)
 }
 
 func (b *EthAPIBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription {
@@ -283,32 +255,20 @@ func (b *EthAPIBackend) SubscribePendingBlockEvent(ch chan<- *types.Header) even
 	return b.eth.miner.SubscribePendingBlock(ch)
 }
 
-func (b *EthAPIBackend) SubscribeReOrgEvent(ch chan<- core.ReOrgRollup) event.Subscription {
-	return b.eth.BlockChain().SubscribeReOrgEvent(ch)
-}
-
-func (b *EthAPIBackend) SubscribeMissingExternalBlockEvent(ch chan<- core.MissingExternalBlock) event.Subscription {
-	return b.eth.BlockChain().SubscribeMissingExternalBlockEvent(ch)
-}
-
 func (b *EthAPIBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
-	return b.eth.BlockChain().SubscribeChainEvent(ch)
+	return b.eth.core.SubscribeChainEvent(ch)
 }
 
 func (b *EthAPIBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
-	return b.eth.BlockChain().SubscribeChainHeadEvent(ch)
+	return b.eth.core.SubscribeChainHeadEvent(ch)
 }
 
 func (b *EthAPIBackend) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription {
-	return b.eth.BlockChain().SubscribeChainSideEvent(ch)
-}
-
-func (b *EthAPIBackend) SubscribeChainUncleEvent(ch chan<- *types.Header) event.Subscription {
-	return b.eth.BlockChain().SubscribeChainUncleEvent(ch)
+	return b.eth.core.SubscribeChainSideEvent(ch)
 }
 
 func (b *EthAPIBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
-	return b.eth.BlockChain().SubscribeLogsEvent(ch)
+	return b.eth.core.SubscribeLogsEvent(ch)
 }
 
 func (b *EthAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
@@ -416,7 +376,7 @@ func (b *EthAPIBackend) Engine() consensus.Engine {
 }
 
 func (b *EthAPIBackend) CurrentHeader() *types.Header {
-	return b.eth.blockchain.CurrentHeader()
+	return b.eth.core.CurrentHeader()
 }
 
 func (b *EthAPIBackend) Miner() *miner.Miner {
@@ -436,5 +396,5 @@ func (b *EthAPIBackend) StateAtTransaction(ctx context.Context, block *types.Blo
 }
 
 func (b *EthAPIBackend) CalculateBaseFee(header *types.Header) *big.Int {
-	return b.eth.blockchain.CalculateBaseFee(header)
+	return b.eth.core.CalculateBaseFee(header)
 }

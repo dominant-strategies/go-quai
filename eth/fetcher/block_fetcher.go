@@ -91,7 +91,7 @@ type extBlockRequesterFn func([]common.Hash) error
 type headerVerifierFn func(header *types.Header) error
 
 // blockBroadcasterFn is a callback type for broadcasting a block to connected peers.
-type blockBroadcasterFn func(block *types.Block, extBlocks []*types.ExternalBlock, propagate bool)
+type blockBroadcasterFn func(block *types.Block, propagate bool)
 
 // chainHeightFn is a callback type to retrieve the current chain height.
 type chainHeightFn func() uint64
@@ -285,11 +285,10 @@ func (f *BlockFetcher) Notify(peer string, hash common.Hash, number uint64, time
 }
 
 // Enqueue tries to fill gaps the fetcher's future import queue.
-func (f *BlockFetcher) Enqueue(peer string, block *types.Block, extBlocks []*types.ExternalBlock) error {
+func (f *BlockFetcher) Enqueue(peer string, block *types.Block) error {
 	op := &blockOrHeaderInject{
-		origin:    peer,
-		block:     block,
-		extBlocks: extBlocks,
+		origin: peer,
+		block:  block,
 	}
 	select {
 	case f.inject <- op:
@@ -931,11 +930,6 @@ func (f *BlockFetcher) importBlocks(peer string, block *types.Block, extBlocks [
 		case nil:
 			// All ok, quickly propagate to our peers
 			blockBroadcastOutTimer.UpdateSince(block.ReceivedAt)
-			extBlocks, err = f.getExtBlocks(block.Header())
-			if err == nil {
-				go f.broadcastBlock(block, extBlocks, true)
-			}
-
 		case consensus.ErrFutureBlock:
 			// Weird future block, don't fail, but neither propagate
 
@@ -954,11 +948,6 @@ func (f *BlockFetcher) importBlocks(peer string, block *types.Block, extBlocks [
 		}
 		// If import succeeded, broadcast the block
 		blockAnnounceOutTimer.UpdateSince(block.ReceivedAt)
-		var err error
-		extBlocks, err = f.getExtBlocks(block.Header())
-		if err == nil {
-			go f.broadcastBlock(block, extBlocks, false)
-		}
 		// Invoke the testing hook if needed
 		if f.importedHook != nil {
 			f.importedHook(nil, block)

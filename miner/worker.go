@@ -168,7 +168,7 @@ type worker struct {
 	chainConfig *params.ChainConfig
 	engine      consensus.Engine
 	eth         Backend
-	chain       *core.BlockChain
+	core        *core.Core
 
 	// Feeds
 	pendingLogsFeed  event.Feed
@@ -240,11 +240,11 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		engine:             engine,
 		eth:                eth,
 		mux:                mux,
-		chain:              eth.BlockChain(),
+		core:               eth.Core(),
 		isLocalBlock:       isLocalBlock,
 		localUncles:        make(map[common.Hash]*types.Block),
 		remoteUncles:       make(map[common.Hash]*types.Block),
-		unconfirmed:        newUnconfirmedBlocks(eth.BlockChain(), sealingLogAtDepth),
+		unconfirmed:        newUnconfirmedBlocks(eth.Core(), sealingLogAtDepth),
 		pendingTasks:       make(map[common.Hash]*task),
 		txsCh:              make(chan core.NewTxsEvent, txChanSize),
 		chainHeadCh:        make(chan core.ChainHeadEvent, chainHeadChanSize),
@@ -261,8 +261,8 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 	// Subscribe NewTxsEvent for tx pool
 	worker.txsSub = eth.TxPool().SubscribeNewTxsEvent(worker.txsCh)
 	// Subscribe events for blockchain
-	worker.chainHeadSub = eth.BlockChain().SubscribeChainHeadEvent(worker.chainHeadCh)
-	worker.chainSideSub = eth.BlockChain().SubscribeChainSideEvent(worker.chainSideCh)
+	worker.chainHeadSub = eth.Core().SubscribeChainHeadEvent(worker.chainHeadCh)
+	worker.chainSideSub = eth.Core().SubscribeChainSideEvent(worker.chainSideCh)
 
 	// Sanitize recommit interval if the user-specified one is too short.
 	recommit := worker.config.Recommit
@@ -436,7 +436,7 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 	for {
 		select {
 		case <-w.startCh:
-			clearPending(w.chain.CurrentBlock().NumberU64())
+			clearPending(w.core.CurrentBlock().NumberU64())
 			timestamp = time.Now().Unix()
 			commit(false, commitInterruptNewHead)
 
@@ -549,7 +549,7 @@ func (w *worker) mainLoop() {
 			}
 
 		case <-cleanTicker.C:
-			chainHead := w.chain.CurrentBlock()
+			chainHead := w.core.CurrentBlock()
 			for hash, uncle := range w.localUncles {
 				if uncle.NumberU64()+staleThreshold <= chainHead.NumberU64() {
 					delete(w.localUncles, hash)
@@ -670,7 +670,7 @@ func (w *worker) resultLoop() {
 				continue
 			}
 			// Short circuit when receiving duplicate result caused by resubmitting.
-			if w.chain.HasBlock(block.Hash(), block.NumberU64()) {
+			if w.core.HasBlock(block.Hash(), block.NumberU64()) {
 				continue
 			}
 			var (
@@ -730,7 +730,7 @@ func (w *worker) resultLoop() {
 func (w *worker) makeEnv(parent *types.Block, header *types.Header, coinbase common.Address) (*environment, error) {
 	// Retrieve the parent state to execute on top and start a prefetcher for
 	// the miner to speed block sealing up a bit.
-	state, err := w.chain.StateAt(parent.Root())
+	state, err := w.core.StateAt(parent.Root())
 	if err != nil {
 		// Note since the sealing block can be created upon the arbitrary parent
 		// block, but the state of parent block may already be pruned, so the necessary
@@ -758,7 +758,7 @@ func (w *worker) makeEnv(parent *types.Block, header *types.Header, coinbase com
 		externalGasUsed: uint64(0),
 	}
 	// when 08 is processed ancestors contain 07 (quick block)
-	for _, ancestor := range w.chain.GetBlocksFromHash(parent.Hash(), 7) {
+	for _, ancestor := range w.core.GetBlocksFromHash(parent.Hash(), 7) {
 		for _, uncle := range ancestor.Uncles() {
 			env.family.Add(uncle.Hash())
 		}
@@ -808,7 +808,7 @@ func (w *worker) updateSnapshot(env *environment) {
 func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*types.Log, error) {
 	if tx != nil {
 		snap := env.state.Snapshot()
-		receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed[types.QuaiNetworkContext], *w.chain.GetVMConfig())
+		receipt, err := core.ApplyTransaction(w.chainConfig, w.core, &env.coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed[types.QuaiNetworkContext], *w.core.GetVMConfig())
 		if err != nil {
 			env.state.RevertToSnapshot(snap)
 			return nil, err
@@ -819,24 +819,6 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*
 		return receipt.Logs, nil
 	}
 	return nil, errors.New("error finding transaction")
-}
-
-func (w *worker) commitExternalTransaction(env *environment, tx *types.Transaction, externalBlock *types.ExternalBlock) ([]*types.Log, error) {
-	if tx != nil {
-
-		snap := env.state.Snapshot()
-
-		receipt, err := core.ApplyExternalTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, externalBlock, tx, &env.header.GasUsed[types.QuaiNetworkContext], *w.chain.GetVMConfig())
-		if err != nil {
-			env.state.RevertToSnapshot(snap)
-			return nil, err
-		}
-		env.txs = append(env.txs, tx)
-		env.receipts = append(env.receipts, receipt)
-
-		return receipt.Logs, nil
-	}
-	return nil, errors.New("error finding external transaction")
 }
 
 func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByPriceAndNonce, interrupt *int32) bool {
@@ -971,7 +953,7 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	defer w.mu.RUnlock()
 
 	// Find the parent block for sealing task
-	parent := w.chain.CurrentBlock()
+	parent := w.core.CurrentBlock()
 	if parent == nil {
 		return nil, fmt.Errorf("missing parent")
 	}
@@ -1006,7 +988,7 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	header.ParentHash[types.QuaiNetworkContext] = parent.Hash()
 	header.Number[types.QuaiNetworkContext] = big.NewInt(int64(num.Uint64()) + 1)
 	header.Extra[types.QuaiNetworkContext] = w.extra
-	header.BaseFee[types.QuaiNetworkContext] = misc.CalcBaseFee(w.chainConfig, parent.Header(), w.chain.GetHeaderByNumber, w.chain.GetUnclesInChain, w.chain.GetGasUsedInChain)
+	header.BaseFee[types.QuaiNetworkContext] = misc.CalcBaseFee(w.chainConfig, parent.Header(), w.core.GetHeaderByNumber, w.core.GetUnclesInChain, w.core.GetGasUsedInChain)
 	if w.isRunning() {
 		if w.coinbase == (common.Address{}) {
 			log.Error("Refusing to mine without etherbase")
@@ -1016,7 +998,7 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	}
 
 	// Run the consensus preparation with the default or customized consensus engine.
-	if err := w.engine.Prepare(w.chain, header); err != nil {
+	if err := w.engine.Prepare(w.core, header); err != nil {
 		log.Error("Failed to prepare header for sealing", "err", err)
 		return nil, err
 	}
@@ -1044,27 +1026,6 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	commitUncles(w.remoteUncles)
 
 	return env, nil
-}
-
-func (w *worker) fillExternalTransactions(interrupt *int32, env *environment) {
-	// Gather external blocks and apply transactions
-	externalBlocks, extBlockErr := w.engine.GetExternalBlocks(w.chain, env.header, false)
-	log.Info("Worker: Length of external blocks", "len", len(externalBlocks))
-	if extBlockErr != nil {
-		log.Error("commitNewWork: Unable to retrieve external blocks", "height", env.header.Number)
-		return
-	}
-
-	externalGasUsed := uint64(0)
-	for _, externalBlock := range externalBlocks {
-		externalBlock.Receipts().DeriveFields(w.chainConfig, externalBlock.Hash(), externalBlock.Header().Number[externalBlock.Context().Int64()].Uint64(), externalBlock.Transactions())
-		externalGasUsed += uint64(externalBlock.Header().GasUsed[externalBlock.Context().Uint64()])
-		for _, tx := range externalBlock.Transactions() {
-			w.commitExternalTransaction(env, tx, externalBlock)
-		}
-	}
-	env.externalGasUsed = externalGasUsed
-	env.externalBlockLength = len(externalBlocks)
 }
 
 // fillTransactions retrieves the pending transactions from the txpool and fills them
@@ -1103,13 +1064,13 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment) {
 // be customized with the plugin in the future.
 func (w *worker) adjustGasLimit(interrupt *int32, env *environment) {
 	// Find the parent block for sealing task
-	parent := w.chain.CurrentBlock()
+	parent := w.core.CurrentBlock()
 
 	gasUsed := (parent.GasUsed() + env.externalGasUsed) / uint64(env.externalBlockLength+1)
 
 	// Get the amount of uncles for the past 1000 blocks
-	prevBlock := w.chain.GetBlockByHash(env.header.ParentHash[types.QuaiNetworkContext])
-	uncleCount := len(w.chain.GetUnclesInChain(prevBlock, 1000))
+	prevBlock := w.core.GetBlockByHash(env.header.ParentHash[types.QuaiNetworkContext])
+	uncleCount := len(w.core.GetUnclesInChain(prevBlock, 1000))
 
 	env.header.GasLimit[types.QuaiNetworkContext] = core.CalcGasLimit(parent.GasLimit(), gasUsed, uncleCount)
 }
@@ -1122,10 +1083,9 @@ func (w *worker) generateWork(params *generateParams) (*types.Block, error) {
 	}
 	defer work.discard()
 
-	w.fillExternalTransactions(nil, work)
 	w.adjustGasLimit(nil, work)
 	w.fillTransactions(nil, work)
-	return w.engine.FinalizeAndAssemble(w.chain, work.header, work.state, work.txs, work.unclelist(), work.receipts)
+	return w.engine.FinalizeAndAssemble(w.core, work.header, work.state, work.txs, work.unclelist(), work.receipts)
 }
 
 // commitWork generates several new sealing tasks based on the parent block
@@ -1155,7 +1115,6 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 	// 	w.commit(work.copy(), nil, false, start)
 	// }
 	// Fill pending transactions from the txpool
-	w.fillExternalTransactions(nil, work)
 	w.adjustGasLimit(nil, work)
 	w.fillTransactions(interrupt, work)
 	w.commit(work.copy(), w.fullTaskHook, true, start)
@@ -1180,7 +1139,7 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 		// Create a local environment copy, avoid the data race with snapshot state.
 		// https://github.com/ethereum/go-ethereum/issues/24299
 		env := env.copy()
-		block, err := w.engine.FinalizeAndAssemble(w.chain, env.header, env.state, env.txs, env.unclelist(), env.receipts)
+		block, err := w.engine.FinalizeAndAssemble(w.core, env.header, env.state, env.txs, env.unclelist(), env.receipts)
 		if err != nil {
 			return err
 		}

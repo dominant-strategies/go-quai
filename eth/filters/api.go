@@ -28,7 +28,6 @@ import (
 	ethereum "github.com/spruce-solutions/go-quai"
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/common/hexutil"
-	"github.com/spruce-solutions/go-quai/core"
 	"github.com/spruce-solutions/go-quai/core/types"
 	"github.com/spruce-solutions/go-quai/ethdb"
 	"github.com/spruce-solutions/go-quai/event"
@@ -241,36 +240,6 @@ func (api *PublicFilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, er
 	return rpcSub, nil
 }
 
-// UncleEvent send a notification each time a new (header) uncle is sent in.
-func (api *PublicFilterAPI) UncleEvent(ctx context.Context) (*rpc.Subscription, error) {
-	notifier, supported := rpc.NotifierFromContext(ctx)
-	if !supported {
-		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
-	}
-
-	rpcSub := notifier.CreateSubscription()
-
-	go func() {
-		uncleEvent := make(chan *types.Header)
-		uncleEventSub := api.events.SubscribeChainUncleEvent(uncleEvent)
-
-		for {
-			select {
-			case h := <-uncleEvent:
-				notifier.Notify(rpcSub.ID, h)
-			case <-uncleEventSub.Err():
-				uncleEventSub.Unsubscribe()
-				return
-			case <-notifier.Closed():
-				uncleEventSub.Unsubscribe()
-				return
-			}
-		}
-	}()
-
-	return rpcSub, nil
-}
-
 // PendingBlock sends a notification each time a new pending block is created.
 func (api *PublicFilterAPI) PendingBlock(ctx context.Context) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
@@ -293,66 +262,6 @@ func (api *PublicFilterAPI) PendingBlock(ctx context.Context) (*rpc.Subscription
 				return
 			case <-notifier.Closed():
 				blockSub.Unsubscribe()
-				return
-			}
-		}
-	}()
-
-	return rpcSub, nil
-}
-
-// reOrg sends a notification each time a new pending block is created.
-func (api *PublicFilterAPI) ReOrg(ctx context.Context) (*rpc.Subscription, error) {
-	notifier, supported := rpc.NotifierFromContext(ctx)
-	if !supported {
-		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
-	}
-
-	rpcSub := notifier.CreateSubscription()
-
-	go func() {
-		reOrg := make(chan core.ReOrgRollup)
-		reOrgSub := api.events.SubscribeReOrg(reOrg)
-
-		for {
-			select {
-			case b := <-reOrg:
-				notifier.Notify(rpcSub.ID, b)
-			case <-rpcSub.Err():
-				reOrgSub.Unsubscribe()
-				return
-			case <-notifier.Closed():
-				reOrgSub.Unsubscribe()
-				return
-			}
-		}
-	}()
-
-	return rpcSub, nil
-}
-
-// MissedExtBlock sends a notification whenever a missingExternalBlock event is triggered.
-func (api *PublicFilterAPI) MissingExtBlock(ctx context.Context) (*rpc.Subscription, error) {
-	notifier, supported := rpc.NotifierFromContext(ctx)
-	if !supported {
-		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
-	}
-
-	rpcSub := notifier.CreateSubscription()
-
-	go func() {
-		extBlockMiss := make(chan core.MissingExternalBlock)
-		extBlockMissSub := api.events.SubscribeMissingExternalBlock(extBlockMiss)
-
-		for {
-			select {
-			case b := <-extBlockMiss:
-				notifier.Notify(rpcSub.ID, b)
-			case <-rpcSub.Err():
-				extBlockMissSub.Unsubscribe()
-				return
-			case <-notifier.Closed():
-				extBlockMissSub.Unsubscribe()
 				return
 			}
 		}

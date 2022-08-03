@@ -1,16 +1,19 @@
 package core
 
 import (
+	"io"
 	"math/big"
 
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/consensus"
 	"github.com/spruce-solutions/go-quai/core/state"
+	"github.com/spruce-solutions/go-quai/core/state/snapshot"
 	"github.com/spruce-solutions/go-quai/core/types"
 	"github.com/spruce-solutions/go-quai/core/vm"
 	"github.com/spruce-solutions/go-quai/ethdb"
 	"github.com/spruce-solutions/go-quai/event"
 	"github.com/spruce-solutions/go-quai/params"
+	"github.com/spruce-solutions/go-quai/rlp"
 )
 
 type Core struct {
@@ -29,6 +32,19 @@ func NewCore(db ethdb.Database, chainConfig *params.ChainConfig, domClientUrl st
 		sl:     slice,
 		engine: engine,
 	}, nil
+}
+
+// TODO
+func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
+	return 0, nil
+}
+
+func (c *Core) InsertHeaderChain(headers []*types.Header, checkFreq int) (int, error) {
+	return 0, nil
+}
+
+func (c *Core) InsertReceiptChain(blocks types.Blocks, receipts []types.Receipts, ancientLimit uint64) (int, error) {
+	return 0, nil
 }
 
 func (c *Core) Config() *params.ChainConfig {
@@ -132,6 +148,11 @@ func (c *Core) HasBlock(hash common.Hash, number uint64) bool {
 	return c.sl.hc.bc.HasBlock(hash, number)
 }
 
+// HasBlock checks if a block is fully present in the database or not.
+func (c *Core) HasFastBlock(hash common.Hash, number uint64) bool {
+	return c.sl.hc.bc.HasBlock(hash, number)
+}
+
 // HasHeader checks if a block header is present in the database or not, caching
 // it if present.
 func (c *Core) HasHeader(hash common.Hash, number uint64) bool {
@@ -171,9 +192,19 @@ func (c *Core) ContractCode(hash common.Hash) ([]byte, error) {
 	return c.sl.hc.bc.processor.ContractCode(hash)
 }
 
+// State returns a new mutable state based on the current HEAD block.
+func (c *Core) State() (*state.StateDB, error) {
+	return c.sl.hc.bc.processor.State()
+}
+
 // StateAt returns a new mutable state based on a particular point in time.
 func (c *Core) StateAt(root common.Hash) (*state.StateDB, error) {
 	return state.New(root, c.sl.hc.bc.processor.stateCache, nil)
+}
+
+// StateCache returns the caching database underpinning the blockchain instance.
+func (c *Core) StateCache() state.Database {
+	return c.sl.hc.bc.processor.stateCache
 }
 
 // ContractCodeWithPrefix retrieves a blob of data associated with a contract
@@ -197,9 +228,19 @@ func (c *Core) Stop() {
 	c.sl.hc.bc.Stop()
 }
 
+// SubscribeChainEvent registers a subscription of ChainEvent.
+func (c *Core) SubscribeChainEvent(ch chan<- ChainEvent) event.Subscription {
+	return c.sl.hc.bc.SubscribeChainEvent(ch)
+}
+
 // SubscribeChainHeadEvent registers a subscription of ChainHeadEvent.
 func (c *Core) SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription {
-	return c.sl.hc.scope.Track(c.sl.hc.chainHeadFeed.Subscribe(ch))
+	return c.sl.hc.SubscribeChainHeadEvent(ch)
+}
+
+// SubscribeChainSideEvent registers a subscription of ChainSideEvent.
+func (c *Core) SubscribeChainSideEvent(ch chan<- ChainSideEvent) event.Subscription {
+	return c.sl.hc.bc.SubscribeChainSideEvent(ch)
 }
 
 // GetDifficultyOrder determines the difficulty order of the given header.
@@ -207,7 +248,81 @@ func (c *Core) GetDifficultyOrder(header *types.Header) (int, error) {
 	return c.sl.GetDifficultyOrder(header)
 }
 
+// SubscribeChainHeadEvent registers a subscription of ChainHeadEvent.
+func (c *Core) SubscribeRemovedLogsEvent(ch chan<- RemovedLogsEvent) event.Subscription {
+	return c.sl.hc.bc.SubscribeRemovedLogsEvent(ch)
+}
+
+// SubscribeChainSideEvent registers a subscription of ChainSideEvent.
+func (c *Core) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
+	return c.sl.hc.bc.SubscribeLogsEvent(ch)
+}
+
 // HLCR does hierarchical comparison of two difficulty tuples and returns true if second tuple is greater than the first
 func (c *Core) HLCR(localDifficulties []*big.Int, externDifficulties []*big.Int) bool {
 	return c.sl.HLCR(localDifficulties, externDifficulties)
+}
+
+// GetBody retrieves a block body (transactions and uncles) from the database by
+// hash, caching it if found.
+func (c *Core) GetBody(hash common.Hash) *types.Body {
+	return c.sl.hc.GetBody(hash)
+}
+
+// GetBodyRLP retrieves a block body in RLP encoding from the database by hash,
+// caching it if found.
+func (c *Core) GetBodyRLP(hash common.Hash) rlp.RawValue {
+	return c.sl.hc.GetBodyRLP(hash)
+}
+
+// GetReceiptsByHash retrieves the receipts for all transactions in a given block.
+func (c *Core) GetReceiptsByHash(hash common.Hash) types.Receipts {
+	return c.sl.hc.bc.processor.GetReceiptsByHash(hash)
+}
+
+// GetVMConfig returns the block chain VM config.
+func (c *Core) GetVMConfig() *vm.Config {
+	return &c.sl.hc.bc.processor.vmConfig
+}
+
+// Export writes the active chain to the given writer.
+func (c *Core) Export(w io.Writer) error {
+	return c.sl.hc.Export(w)
+}
+
+// ExportN writes a subset of the active chain to the given writer.
+func (c *Core) ExportN(w io.Writer, first uint64, last uint64) error {
+	return c.sl.hc.ExportN(w, first, last)
+}
+
+// Snapshots returns the blockchain snapshot tree.
+func (c *Core) Snapshots() *snapshot.Tree {
+	return nil
+}
+
+// this needs to be deleted
+func (c *Core) CurrentFastBlock() *types.Block {
+	return c.CurrentBlock()
+}
+
+// this needs to be implemented, it is being used by a lot of modules
+func (c *Core) SetHead(number uint64) error {
+	block := c.GetBlockByNumber(number)
+	return c.sl.hc.SetCurrentHeader(block.Header())
+}
+
+func (c *Core) GetTerminusAtOrder(header *types.Header, order int) (common.Hash, error) {
+	return common.Hash{}, nil
+}
+
+func (c *Core) PCRC(header *types.Header, order int) (types.PCRCTermini, error) {
+	return c.sl.PCRC(header, order)
+}
+
+func (c *Core) CalcTd(header *types.Header) ([]*big.Int, error) {
+	return c.sl.CalcTd(header)
+}
+
+func (c *Core) CalcDifficulty(header *types.Header) (*big.Int, error) {
+	return nil, nil
 }

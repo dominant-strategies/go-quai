@@ -33,6 +33,7 @@ import (
 	"github.com/spruce-solutions/go-quai/core/rawdb"
 	"github.com/spruce-solutions/go-quai/core/state"
 	"github.com/spruce-solutions/go-quai/core/types"
+	"github.com/spruce-solutions/go-quai/core/vm"
 	"github.com/spruce-solutions/go-quai/ethdb"
 	"github.com/spruce-solutions/go-quai/event"
 	"github.com/spruce-solutions/go-quai/log"
@@ -93,7 +94,7 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 		engine:        engine,
 	}
 	var err error
-	bc.hc, err = core.NewHeaderChain(odr.Database(), config, bc.engine, bc.getProcInterrupt)
+	bc.hc, err = core.NewHeaderChain(odr.Database(), bc.engine, config, vm.Config{})
 	if err != nil {
 		return nil, err
 	}
@@ -173,11 +174,7 @@ func (lc *LightChain) loadLastState() error {
 // SetHead rewinds the local chain to a new head. Everything above the new
 // head will be deleted and the new one set.
 func (lc *LightChain) SetHead(head uint64) error {
-	lc.chainmu.Lock()
-	defer lc.chainmu.Unlock()
-
-	lc.hc.SetHead(head, nil, nil)
-	return lc.loadLastState()
+	return nil
 }
 
 // GasLimit returns the gas limit of the current HEAD block.
@@ -381,41 +378,7 @@ func (lc *LightChain) postChainEvents(events []interface{}) {
 // In the case of a light chain, InsertHeaderChain also creates and posts light
 // chain events when necessary.
 func (lc *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (int, error) {
-	if atomic.LoadInt32(&lc.disableCheckFreq) == 1 {
-		checkFreq = 0
-	}
-	start := time.Now()
-	if i, err := lc.hc.ValidateHeaderChain(chain, checkFreq); err != nil {
-		return i, err
-	}
-
-	// Make sure only one thread manipulates the chain at once
-	lc.chainmu.Lock()
-	defer lc.chainmu.Unlock()
-
-	lc.wg.Add(1)
-	defer lc.wg.Done()
-
-	status, err := lc.hc.InsertHeaderChain(chain, start)
-	if err != nil || len(chain) == 0 {
-		return 0, err
-	}
-
-	// Create chain event for the new head block of this insertion.
-	var (
-		events     = make([]interface{}, 0, 1)
-		lastHeader = chain[len(chain)-1]
-		block      = types.NewBlockWithHeader(lastHeader)
-	)
-	switch status {
-	case core.CanonStatTy:
-		events = append(events, core.ChainEvent{Block: block, Hash: block.Hash()})
-	case core.SideStatTy:
-		events = append(events, core.ChainSideEvent{Block: block})
-	}
-	lc.postChainEvents(events)
-
-	return 0, err
+	return 0, nil
 }
 
 // CurrentHeader retrieves the current head header of the canonical chain. The
@@ -510,18 +473,6 @@ func (lc *LightChain) CalculateBaseFee(header *types.Header) *big.Int {
 	return big.NewInt(0)
 }
 
-// TODO: GetExternalBlocks is not a feature of light clients. Light clients will be unable to process
-// and validate cross-context transitions until further implementation.
-func (lc *LightChain) GetExternalBlocks(header *types.Header) ([]*types.ExternalBlock, error) {
-	return nil, nil
-}
-
-// TODO: GetLinkExternalBlocks is not a feature of light clients. Light clients will be unable to process
-// and validate cross-context transitions until further implementation.
-func (lc *LightChain) GetLinkExternalBlocks(header *types.Header) ([]*types.ExternalBlock, error) {
-	return nil, nil
-}
-
 // GetExternalBlock is not applicable in the header chain since the BlockChain contains
 // the external blocks cache.
 func (lc *LightChain) GetExternalBlock(hash common.Hash, location []byte, context uint64) (*types.ExternalBlock, error) {
@@ -597,11 +548,6 @@ func (lc *LightChain) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subsc
 // SubscribeChainHeadEvent registers a subscription of ChainHeadEvent.
 func (lc *LightChain) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
 	return lc.scope.Track(lc.chainHeadFeed.Subscribe(ch))
-}
-
-// SubscribeChainSideEvent registers a subscription of an uncled header.
-func (lc *LightChain) SubscribeChainUncleEvent(ch chan<- *types.Header) event.Subscription {
-	return lc.scope.Track(lc.chainSideFeed.Subscribe(ch))
 }
 
 // SubscribeLogsEvent implements the interface of filters.Backend

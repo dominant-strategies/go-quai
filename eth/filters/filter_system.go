@@ -134,19 +134,16 @@ type EventSystem struct {
 // or by stopping the given mux.
 func NewEventSystem(backend Backend, lightMode bool) *EventSystem {
 	m := &EventSystem{
-		backend:                backend,
-		lightMode:              lightMode,
-		install:                make(chan *subscription),
-		uninstall:              make(chan *subscription),
-		txsCh:                  make(chan core.NewTxsEvent, txChanSize),
-		logsCh:                 make(chan []*types.Log, logsChanSize),
-		rmLogsCh:               make(chan core.RemovedLogsEvent, rmLogsChanSize),
-		pendingLogsCh:          make(chan []*types.Log, logsChanSize),
-		pendingBlockCh:         make(chan *types.Header),
-		chainCh:                make(chan core.ChainEvent, chainEvChanSize),
-		reOrgCh:                make(chan core.ReOrgRollup),
-		uncleCh:                make(chan *types.Header),
-		missingExternalBlockCh: make(chan core.MissingExternalBlock),
+		backend:        backend,
+		lightMode:      lightMode,
+		install:        make(chan *subscription),
+		uninstall:      make(chan *subscription),
+		txsCh:          make(chan core.NewTxsEvent, txChanSize),
+		logsCh:         make(chan []*types.Log, logsChanSize),
+		rmLogsCh:       make(chan core.RemovedLogsEvent, rmLogsChanSize),
+		pendingLogsCh:  make(chan []*types.Log, logsChanSize),
+		pendingBlockCh: make(chan *types.Header),
+		chainCh:        make(chan core.ChainEvent, chainEvChanSize),
 	}
 
 	// Subscribe events
@@ -156,9 +153,6 @@ func NewEventSystem(backend Backend, lightMode bool) *EventSystem {
 	m.chainSub = m.backend.SubscribeChainEvent(m.chainCh)
 	m.pendingLogsSub = m.backend.SubscribePendingLogsEvent(m.pendingLogsCh)
 	m.pendingBlockSub = m.backend.SubscribePendingBlockEvent(m.pendingBlockCh)
-	m.reOrgSub = m.backend.SubscribeReOrgEvent(m.reOrgCh)
-	m.missingExternalBlockSub = m.backend.SubscribeMissingExternalBlockEvent(m.missingExternalBlockCh)
-	m.uncleChSub = m.backend.SubscribeChainUncleEvent(m.uncleCh)
 
 	// Make sure none of the subscriptions are empty
 	if m.txsSub == nil || m.logsSub == nil || m.rmLogsSub == nil || m.chainSub == nil || m.pendingLogsSub == nil || m.reOrgSub == nil || m.uncleChSub == nil {
@@ -365,44 +359,6 @@ func (es *EventSystem) SubscribePendingTxs(hashes chan []common.Hash) *Subscript
 		err:             make(chan error),
 		reOrg:           make(chan core.ReOrgRollup),
 		uncleEvent:      make(chan *types.Header),
-		missingExtBlock: make(chan core.MissingExternalBlock),
-	}
-	return es.subscribe(sub)
-}
-
-// SubscribeReOrg creates a subscription that write the header and array of headers
-// of the newChain from a newly found chain.
-func (es *EventSystem) SubscribeReOrg(reOrg chan core.ReOrgRollup) *Subscription {
-	sub := &subscription{
-		id:              rpc.NewID(),
-		typ:             ReOrgSubscription,
-		created:         time.Now(),
-		logs:            make(chan []*types.Log),
-		hashes:          make(chan []common.Hash),
-		headers:         make(chan *types.Header),
-		installed:       make(chan struct{}),
-		err:             make(chan error),
-		reOrg:           reOrg,
-		uncleEvent:      make(chan *types.Header),
-		missingExtBlock: make(chan core.MissingExternalBlock),
-	}
-	return es.subscribe(sub)
-}
-
-// SubscribeChainUncleEvent creates a subscription that writes the header of a block that is
-// notified as an uncle.
-func (es *EventSystem) SubscribeChainUncleEvent(uncleEvent chan *types.Header) *Subscription {
-	sub := &subscription{
-		id:              rpc.NewID(),
-		typ:             uncleChSubscription,
-		created:         time.Now(),
-		logs:            make(chan []*types.Log),
-		hashes:          make(chan []common.Hash),
-		headers:         make(chan *types.Header),
-		installed:       make(chan struct{}),
-		err:             make(chan error),
-		reOrg:           make(chan core.ReOrgRollup),
-		uncleEvent:      uncleEvent,
 		missingExtBlock: make(chan core.MissingExternalBlock),
 	}
 	return es.subscribe(sub)

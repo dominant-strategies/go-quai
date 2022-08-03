@@ -116,10 +116,6 @@ func (b *LesApiBackend) InsertBlock(ctx context.Context, block *types.Block) (in
 	return 0, nil
 }
 
-func (b *LesApiBackend) AddExternalBlock(block *types.ExternalBlock) error {
-	return errors.New("light client does not support external block caching")
-}
-
 func (b *LesApiBackend) GetExternalBlockByHashAndContext(hash common.Hash, context int) (*types.ExternalBlock, error) {
 	return nil, errors.New("light client does not support external block caching")
 }
@@ -270,10 +266,6 @@ func (b *LesApiBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) e
 	return b.eth.blockchain.SubscribeChainHeadEvent(ch)
 }
 
-func (b *LesApiBackend) SubscribeChainUncleEvent(ch chan<- *types.Header) event.Subscription {
-	return b.eth.blockchain.SubscribeChainUncleEvent(ch)
-}
-
 func (b *LesApiBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
 	return b.eth.blockchain.SubscribeLogsEvent(ch)
 }
@@ -293,13 +285,6 @@ func (b *LesApiBackend) SubscribePendingBlockEvent(ch chan<- *types.Header) even
 }
 
 func (b *LesApiBackend) SubscribeReOrgEvent(ch chan<- core.ReOrgRollup) event.Subscription {
-	return event.NewSubscription(func(quit <-chan struct{}) error {
-		<-quit
-		return nil
-	})
-}
-
-func (b *LesApiBackend) SubscribeMissingExternalBlockEvent(ch chan<- core.MissingExternalBlock) event.Subscription {
 	return event.NewSubscription(func(quit <-chan struct{}) error {
 		<-quit
 		return nil
@@ -388,20 +373,12 @@ func (b *LesApiBackend) CalculateBaseFee(header *types.Header) *big.Int {
 	return b.CalculateBaseFee(header)
 }
 
-func (b *LesApiBackend) GetBlockStatus(header *types.Header) core.WriteStatus {
-	return core.NonStatTy
-}
-
-func (b *LesApiBackend) HLCRReorg(block *types.Block) (bool, error) {
-	return false, nil
+func (b *LesApiBackend) CalcDifficulty(ctx context.Context, header *types.Header) (*big.Int, error) {
+	return nil, nil
 }
 
 func (b *LesApiBackend) CalcTd(ctx context.Context, header *types.Header) ([]*big.Int, error) {
 	return nil, errors.New("Unimplemented")
-}
-
-func (b *LesApiBackend) GetSubordinateSet(hash common.Hash, location []byte) ([]common.Hash, error) {
-	return nil, errors.New("light client does not support retrieving subordinate set")
 }
 
 func (b *LesApiBackend) GetTerminusAtOrder(header *types.Header, order int) (common.Hash, error) {

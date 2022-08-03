@@ -343,14 +343,6 @@ func (cr *fakeChainReader) GetUnclesInChain(block *types.Block, length int) []*t
 }
 func (cr *fakeChainReader) GetGasUsedInChain(block *types.Block, length int) int64 { return 0 }
 
-func (cr *fakeChainReader) GetExternalBlocks(header *types.Header) ([]*types.ExternalBlock, error) {
-	return nil, nil
-}
-
-func (cr *fakeChainReader) GetLinkExternalBlocks(header *types.Header) ([]*types.ExternalBlock, error) {
-	return nil, nil
-}
-
 // CheckContext checks to make sure the range of a context or order is valid
 func (cr *fakeChainReader) CheckContext(context int) error {
 	if context < 0 || context > len(params.FullerOntology) {

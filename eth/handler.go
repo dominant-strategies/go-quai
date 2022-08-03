@@ -182,7 +182,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	if atomic.LoadUint32(&h.fastSync) == 1 && atomic.LoadUint32(&h.snapSync) == 0 {
 		h.stateBloom = trie.NewSyncBloom(config.BloomCache, config.Database)
 	}
-	h.downloader = downloader.New(h.checkpointNumber, config.Database, h.stateBloom, h.eventMux, h.chain, nil, h.removePeer)
+	h.downloader = downloader.New(h.checkpointNumber, config.Database, h.stateBloom, h.eventMux, h.core, nil, h.removePeer)
 
 	// Construct the fetcher (short sync)
 	validator := func(header *types.Header) error {
@@ -208,7 +208,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 			return 0, nil
 		}
 
-		n, err := h.chain.InsertChain(blocks)
+		n, err := h.core.InsertChain(blocks)
 		if err == nil {
 			atomic.StoreUint32(&h.acceptTxs, 1) // Mark initial sync done on any fetcher import
 		}

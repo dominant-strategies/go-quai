@@ -103,24 +103,6 @@ type Engine interface {
 	FinalizeAndAssemble(chain ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction,
 		uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error)
 
-	// GetExternalBlocks retrieves all valid external blocks from external chains
-	GetExternalBlocks(chain ChainHeaderReader, header *types.Header, logging bool) ([]*types.ExternalBlock, error)
-
-	// GetCoincidentAtOrder retrieves the coincident header.
-	GetCoincidentAtOrder(chain ChainHeaderReader, context int, expectedOrder int, header *types.Header) (*types.Header, error)
-
-	// CheckPrevHeaderCoincident checks if previous header is a coincident header.
-	CheckPrevHeaderCoincident(chain ChainHeaderReader, context int, header *types.Header) (int, error)
-
-	// TraceBranches recursively traces region and zone branches to find external blocks.
-	TraceBranches(chain ChainHeaderReader, header *types.Header, context int, originalContext int, originalLocation []byte) ([]*types.ExternalBlock, error)
-
-	// GetLinkExternalBlocks links every block to the correct previous block
-	GetLinkExternalBlocks(chain ChainHeaderReader, header *types.Header, logging bool) ([]*types.ExternalBlock, error)
-
-	// PreviousCoincidentOnPath searches the path for a block of specified order in the specified slice
-	PreviousCoincidentOnPath(chain ChainHeaderReader, header *types.Header, slice []byte, order, path int, fullSliceEqual bool) (*types.Header, error)
-
 	// Seal generates a new sealing request for the given input block and pushes
 	// the result into the given channel.
 	//

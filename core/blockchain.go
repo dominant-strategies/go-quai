@@ -53,6 +53,9 @@ type BlockChain struct {
 	db ethdb.Database // Low level persistent database to store final content in
 
 	chainFeed     event.Feed
+	chainSideFeed event.Feed
+	rmLogsFeed    event.Feed
+	logsFeed      event.Feed
 	blockProcFeed event.Feed
 	scope         event.SubscriptionScope
 
@@ -179,6 +182,21 @@ func (bc *BlockChain) Config() *params.ChainConfig { return bc.chainConfig }
 // SubscribeChainEvent registers a subscription of ChainEvent.
 func (bc *BlockChain) SubscribeChainEvent(ch chan<- ChainEvent) event.Subscription {
 	return bc.scope.Track(bc.chainFeed.Subscribe(ch))
+}
+
+// SubscribeChainSideEvent registers a subscription of ChainSideEvent.
+func (bc *BlockChain) SubscribeChainSideEvent(ch chan<- ChainSideEvent) event.Subscription {
+	return bc.scope.Track(bc.chainSideFeed.Subscribe(ch))
+}
+
+// SubscribeRemovedLogsEvent registers a subscription of RemovedLogsEvent.
+func (bc *BlockChain) SubscribeRemovedLogsEvent(ch chan<- RemovedLogsEvent) event.Subscription {
+	return bc.scope.Track(bc.rmLogsFeed.Subscribe(ch))
+}
+
+// SubscribeLogsEvent registers a subscription of []*types.Log.
+func (bc *BlockChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
+	return bc.scope.Track(bc.logsFeed.Subscribe(ch))
 }
 
 // reportBlock logs a bad block error.

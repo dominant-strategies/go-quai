@@ -47,16 +47,16 @@ type unconfirmedBlock struct {
 // used by the miner to provide logs to the user when a previously mined block
 // has a high enough guarantee to not be reorged out of the canonical chain.
 type unconfirmedBlocks struct {
-	chain  chainRetriever // Blockchain to verify canonical status through
+	core   chainRetriever // Blockchain to verify canonical status through
 	depth  uint           // Depth after which to discard previous blocks
 	blocks *ring.Ring     // Block infos to allow canonical chain cross checks
 	lock   sync.Mutex     // Protects the fields from concurrent access
 }
 
 // newUnconfirmedBlocks returns new data structure to track currently unconfirmed blocks.
-func newUnconfirmedBlocks(chain chainRetriever, depth uint) *unconfirmedBlocks {
+func newUnconfirmedBlocks(core chainRetriever, depth uint) *unconfirmedBlocks {
 	return &unconfirmedBlocks{
-		chain: chain,
+		core:  core,
 		depth: depth,
 	}
 }
@@ -99,7 +99,7 @@ func (set *unconfirmedBlocks) Shift(height uint64) {
 			break
 		}
 		// Block seems to exceed depth allowance, check for canonical status
-		header := set.chain.GetHeaderByNumber(next.index)
+		header := set.core.GetHeaderByNumber(next.index)
 		switch {
 		case header == nil:
 			log.Warn("Failed to retrieve header of mined block", "number", next.index, "hash", next.hash)
@@ -109,7 +109,7 @@ func (set *unconfirmedBlocks) Shift(height uint64) {
 			// Block is not canonical, check whether we have an uncle or a lost block
 			included := false
 			for number := next.index; !included && number < next.index+uint64(set.depth) && number <= height; number++ {
-				if block := set.chain.GetBlockByNumber(number); block != nil {
+				if block := set.core.GetBlockByNumber(number); block != nil {
 					for _, uncle := range block.Uncles() {
 						if uncle.Hash() == next.hash {
 							included = true

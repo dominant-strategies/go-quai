@@ -186,7 +186,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	// Rewind the chain in case of an incompatible config upgrade.
 	if compat, ok := genesisErr.(*params.ConfigCompatError); ok {
 		log.Warn("Rewinding chain to upgrade configuration", "err", compat)
-		eth.core.Slice().HeaderChain().SetHeadHead(compat.RewindTo)
+		eth.core.SetHead(compat.RewindTo)
 		rawdb.WriteChainConfig(chainDb, genesisHash, chainConfig)
 	}
 	eth.bloomIndexer.Start(eth.core.Slice().HeaderChain())

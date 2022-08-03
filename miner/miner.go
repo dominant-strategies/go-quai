@@ -36,7 +36,7 @@ import (
 
 // Backend wraps all methods required for mining.
 type Backend interface {
-	BlockChain() *core.BlockChain
+	Core() *core.Core
 	TxPool() *core.TxPool
 	StateAtBlock(block *types.Block, reexec uint64, base *state.StateDB, checkLive bool, preferDisk bool) (statedb *state.StateDB, err error)
 }

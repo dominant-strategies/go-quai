@@ -584,21 +584,6 @@ func (c *Clique) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *
 	return types.NewBlock(header, txs, nil, receipts, trie.NewStackTrie(nil)), nil
 }
 
-// GetExternalBlocks traces all available branches to find external blocks
-func (c *Clique) GetExternalBlocks(chain consensus.ChainHeaderReader, header *types.Header, logging bool) ([]*types.ExternalBlock, error) {
-	return make([]*types.ExternalBlock, 0), nil
-}
-
-// GetExternalBlocks traces all available branches to find external blocks
-func (c *Clique) GetLinkExternalBlocks(chain consensus.ChainHeaderReader, header *types.Header, logging bool) ([]*types.ExternalBlock, error) {
-	return make([]*types.ExternalBlock, 0), nil
-}
-
-// PreviousCoincidentOnPath searches the path for a block of specified order in the specified slice
-func (c *Clique) PreviousCoincidentOnPath(chain consensus.ChainHeaderReader, header *types.Header, slice []byte, order, path int, fullSliceEqual bool) (*types.Header, error) {
-	return nil, nil
-}
-
 // GetCoincidentHeader retrieves the furthest coincident header back
 func (c *Clique) GetDifficultyOrder(header *types.Header) (int, error) {
 	return 0, nil
@@ -609,24 +594,9 @@ func (c *Clique) GetCoincidentHeader(chain consensus.ChainHeaderReader, context 
 	return nil, 0
 }
 
-// GetCoincidentHeader retrieves the furthest coincident header back
-func (c *Clique) GetCoincidentAtOrder(chain consensus.ChainHeaderReader, context int, expectedOrder int, header *types.Header) (*types.Header, error) {
-	return nil, nil
-}
-
-// CheckPrevHeaderCoincident checks if previous header is a coincident header.
-func (c *Clique) CheckPrevHeaderCoincident(chain consensus.ChainHeaderReader, context int, header *types.Header) (int, error) {
-	return 0, nil
-}
-
 // GetStopHash retrieves the stop hash for tracing of blocks in a trace branch
 func (c *Clique) GetStopHash(chain consensus.ChainHeaderReader, difficultyContext int, originalContext int, startingHeader *types.Header) (common.Hash, int) {
 	return common.Hash{}, 0
-}
-
-// TraceBranches recursively traces branches to find external blocks.
-func (c *Clique) TraceBranches(chain consensus.ChainHeaderReader, header *types.Header, context int, originalContext int, originalLocation []byte) ([]*types.ExternalBlock, error) {
-	return make([]*types.ExternalBlock, 0), nil
 }
 
 // Authorize injects a private key into the consensus engine to mint new blocks

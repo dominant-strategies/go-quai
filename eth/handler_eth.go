@@ -37,7 +37,7 @@ import (
 // packets that are sent as replies or broadcasts.
 type ethHandler handler
 
-func (h *ethHandler) Chain() *core.BlockChain     { return h.chain }
+func (h *ethHandler) Core() *core.Core            { return h.core }
 func (h *ethHandler) StateBloom() *trie.SyncBloom { return h.stateBloom }
 func (h *ethHandler) TxPool() eth.TxPool          { return h.txpool }
 
@@ -92,7 +92,7 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 		return h.handleBlockAnnounces(peer, hashes, numbers)
 
 	case *eth.NewBlockPacket:
-		return h.handleBlockBroadcast(peer, packet.Block, packet.TD, packet.ExtBlocks)
+		return h.handleBlockBroadcast(peer, packet.Block, packet.TD)
 
 	case *eth.NewPooledTransactionHashesPacket:
 		return h.txFetcher.Notify(peer.ID(), *packet)
@@ -205,7 +205,7 @@ func (h *ethHandler) handleBlockAnnounces(peer *eth.Peer, hashes []common.Hash, 
 		unknownNumbers = make([]uint64, 0, len(numbers))
 	)
 	for i := 0; i < len(hashes); i++ {
-		if !h.chain.HasBlock(hashes[i], numbers[i]) {
+		if !h.core.HasBlock(hashes[i], numbers[i]) {
 			unknownHashes = append(unknownHashes, hashes[i])
 			unknownNumbers = append(unknownNumbers, numbers[i])
 		}
@@ -218,14 +218,11 @@ func (h *ethHandler) handleBlockAnnounces(peer *eth.Peer, hashes []common.Hash, 
 
 // handleBlockBroadcast is invoked from a peer's message handler when it transmits a
 // block broadcast for the local node to process.
-func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block, td []*big.Int, extBlocks []*types.ExternalBlock) error {
-	log.Info("handleBlockBroadcast: Received block broadcast", "hash", block.Hash(), "num", block.Header().Number, "extBlocks", len(extBlocks))
+func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block, td []*big.Int) error {
+	log.Info("handleBlockBroadcast: Received block broadcast", "hash", block.Hash(), "num", block.Header().Number)
 
-	for _, extBlock := range extBlocks {
-		h.chain.AddExternalBlock(extBlock)
-	}
 	// Schedule the block for import
-	h.blockFetcher.Enqueue(peer.ID(), block, extBlocks)
+	h.blockFetcher.Enqueue(peer.ID(), block)
 
 	// Assuming the block is importable by the peer, but possibly not yet done so,
 	// calculate the head hash and TD that the peer truly must have.
@@ -234,7 +231,7 @@ func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block, td
 		trueTD   = make([]*big.Int, 3)
 		tempTD   = big.NewInt(0)
 	)
-	order, _ := h.chain.Engine().GetDifficultyOrder(block.Header())
+	order, _ := h.core.GetDifficultyOrder(block.Header())
 	switch order {
 	case params.PRIME:
 		tempTD = new(big.Int).Sub(td[0], block.Header().Difficulty[0])
@@ -247,7 +244,7 @@ func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block, td
 		trueTD = []*big.Int{td[0], td[1], tempTD}
 	}
 	// Update the peer's total difficulty if better than the previous
-	if _, td := peer.Head(); h.chain.HLCR(td, trueTD) {
+	if _, td := peer.Head(); h.core.HLCR(td, trueTD) {
 		peer.SetHead(trueHead, trueTD)
 		h.chainSync.handlePeerEvent(peer)
 	}

@@ -1032,7 +1032,7 @@ func (p *clientPeer) freezeClient() {
 // Handshake executes the les protocol handshake, negotiating version number,
 // network IDs, difficulties, head and genesis blocks.
 func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, forkID forkid.ID, forkFilter forkid.Filter, server *LesServer) error {
-	recentTx := server.handler.blockchain.TxLookupLimit()
+	recentTx := server.handler.core.TxLookupLimit()
 	if recentTx != txIndexUnlimited {
 		if recentTx < blockSafetyMargin {
 			recentTx = txIndexDisabled

@@ -622,18 +622,6 @@ type rpcReorgData struct {
 	OldHeaders []*types.Header `json:"oldHeaders"`
 }
 
-// ReOrgRollBack will send the reorg data to perform reorg rollback
-func (s *PublicBlockChainQuaiAPI) SendReOrgData(ctx context.Context, raw json.RawMessage) error {
-	// Decode reOrgHeader and body.
-	var reorgData rpcReorgData
-	if err := json.Unmarshal(raw, &reorgData); err != nil {
-		return err
-	}
-
-	s.b.ReOrgRollBack(reorgData.Header, reorgData.NewHeaders, reorgData.OldHeaders)
-	return nil
-}
-
 type rpcExternalBlock struct {
 	Hash         common.Hash      `json:"hash"`
 	Transactions []rpcTransaction `json:"transactions"`
@@ -670,9 +658,7 @@ func (s *PublicBlockChainQuaiAPI) SendExternalBlock(ctx context.Context, raw jso
 		receipts[i] = receipt
 	}
 
-	block := types.NewExternalBlockWithHeader(head).WithBody(txs, uncles, receipts, body.Context)
-
-	s.b.AddExternalBlock(block)
+	// block := types.NewExternalBlockWithHeader(head).WithBody(txs, uncles, receipts, body.Context)
 
 	return nil
 }
@@ -691,26 +677,6 @@ type HashWithLocation struct {
 	Location []byte
 }
 
-// GetExternalBlockByHashAndContext will run checks on the header and get the External Block from the cache.
-func (s *PublicBlockChainQuaiAPI) GetExternalBlockByHashAndContext(ctx context.Context, raw json.RawMessage) (map[string]interface{}, error) {
-	// Decode header and transactions.
-	var headerHashWithContext HeaderHashWithContext
-	if err := json.Unmarshal(raw, &headerHashWithContext); err != nil {
-		return nil, err
-	}
-
-	extBlock, err := s.b.GetExternalBlockByHashAndContext(headerHashWithContext.Hash, headerHashWithContext.Context)
-	if err != nil {
-		return nil, err
-	}
-	if extBlock == nil {
-		return nil, nil
-	}
-	block := types.NewBlockWithHeader(extBlock.Header()).WithBody(extBlock.Transactions(), extBlock.Uncles())
-
-	return RPCMarshalExternalBlock(block, extBlock.Receipts(), extBlock.Context())
-}
-
 func (s *PublicBlockChainQuaiAPI) GetAncestorByLocation(ctx context.Context, raw json.RawMessage) (map[string]interface{}, error) {
 	var hashWithLocation HashWithLocation
 	if err := json.Unmarshal(raw, &hashWithLocation); err != nil {
@@ -723,56 +689,6 @@ func (s *PublicBlockChainQuaiAPI) GetAncestorByLocation(ctx context.Context, raw
 	}
 
 	return RPCMarshalHeader(header), nil
-}
-
-// GetBlockStatus returns the status of the block for a given header
-func (s *PublicBlockChainQuaiAPI) GetBlockStatus(ctx context.Context, raw json.RawMessage) core.WriteStatus {
-	var head *types.Header
-	if err := json.Unmarshal(raw, &head); err != nil {
-		return core.NonStatTy
-	}
-
-	if head == nil {
-		return core.NonStatTy
-	}
-
-	return s.b.GetBlockStatus(head)
-}
-
-func (s *PublicBlockChainQuaiAPI) HLCRReorg(ctx context.Context, raw json.RawMessage) (bool, error) {
-	// Decode header and transactions.
-	var head *types.Header
-	var body rpcBlock
-	if err := json.Unmarshal(raw, &head); err != nil {
-		return false, err
-	}
-	if err := json.Unmarshal(raw, &body); err != nil {
-		return false, err
-	}
-
-	// Load uncles because they are not included in the block response.
-	txs := make([]*types.Transaction, len(body.Transactions))
-	for i, tx := range body.Transactions {
-		txs[i] = tx.tx
-	}
-
-	uncles := make([]*types.Header, len(body.Uncles))
-	for i, uncle := range body.Uncles {
-		uncles[i] = uncle
-	}
-
-	block := types.NewBlockWithHeader(head).WithBody(txs, uncles)
-	fmt.Println("Header", block.Hash())
-	return s.b.HLCRReorg(block)
-}
-
-// GetSubordinateSet returns the valid mined blocks from a dominant chain to the subordinate
-func (s *PublicBlockChainQuaiAPI) GetSubordinateSet(ctx context.Context, raw json.RawMessage) ([]common.Hash, error) {
-	var hashWithLocation HashWithLocation
-	if err := json.Unmarshal(raw, &hashWithLocation); err != nil {
-		return nil, err
-	}
-	return s.b.GetSubordinateSet(hashWithLocation.Hash, hashWithLocation.Location)
 }
 
 func (s *PublicBlockChainAPI) GetTerminusAtOrder(ctx context.Context, raw json.RawMessage) (common.Hash, error) {
@@ -792,17 +708,6 @@ func (s *PublicBlockChainQuaiAPI) CheckPCRC(ctx context.Context, raw json.RawMes
 	}
 	fmt.Println("Header Number:", headerWithOrder.Header.Number, "Order:", headerWithOrder.Order, "Hash:", headerWithOrder.Header.Hash())
 	return s.b.PCRC(headerWithOrder.Header, headerWithOrder.Order)
-}
-
-// CheckPCCRC runs PCCRC on a node and returns the response codes.
-func (s *PublicBlockChainQuaiAPI) CheckPCCRC(ctx context.Context, raw json.RawMessage) (types.PCRCTermini, error) {
-	var headerWithOrder HeaderWithOrder
-
-	if err := json.Unmarshal(raw, &headerWithOrder); err != nil {
-		return types.PCRCTermini{}, err
-	}
-	fmt.Println("Header Number:", headerWithOrder.Header.Number, "Order:", headerWithOrder.Order, "Hash:", headerWithOrder.Header.Hash())
-	return s.b.PCCRC(headerWithOrder.Header, headerWithOrder.Order)
 }
 
 // CalcTd calculates the total difficulty of a blockchain up to a block

@@ -182,7 +182,7 @@ type Core interface {
 	// HasBlock verifies a block's presence in the local chain.
 	HasBlock(common.Hash, uint64) bool
 
-	// HasFastBlock verifies a fast block's presence in the local chain.
+	// HasBlock verifies a block's presence in the local chain.
 	HasFastBlock(common.Hash, uint64) bool
 
 	// GetBlockByHash retrieves a block from the local chain.
@@ -194,9 +194,6 @@ type Core interface {
 	// CurrentFastBlock retrieves the head fast block from the local chain.
 	CurrentFastBlock() *types.Block
 
-	// FastSyncCommitHead directly commits the head block to a certain entity.
-	FastSyncCommitHead(common.Hash) error
-
 	// InsertChain inserts a batch of blocks into the local chain.
 	InsertChain(types.Blocks) (int, error)
 
@@ -205,9 +202,6 @@ type Core interface {
 
 	// Snapshots returns the blockchain snapshot tree to paused it during sync.
 	Snapshots() *snapshot.Tree
-
-	// Adds ExternalBlock to external block cache
-	AddExternalBlock(block *types.ExternalBlock) error
 
 	// HLCR does hierarchical comparison of two difficulty tuples and returns true if second tuple is greater than the first
 	HLCR(localDifficulties []*big.Int, externDifficulties []*big.Int) bool
@@ -1974,9 +1968,7 @@ func (d *Downloader) commitPivotBlock(result *fetchResult) error {
 	if _, err := d.core.InsertReceiptChain([]*types.Block{block}, []types.Receipts{result.Receipts}, d.ancientLimit); err != nil {
 		return err
 	}
-	if err := d.core.FastSyncCommitHead(block.Hash()); err != nil {
-		return err
-	}
+
 	atomic.StoreInt32(&d.committed, 1)
 
 	// If we had a bloom filter for the state sync, deallocate it now. Note, we only

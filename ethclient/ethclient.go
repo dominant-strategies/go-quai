@@ -27,7 +27,6 @@ import (
 	ethereum "github.com/spruce-solutions/go-quai"
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/common/hexutil"
-	"github.com/spruce-solutions/go-quai/core"
 	"github.com/spruce-solutions/go-quai/core/types"
 	"github.com/spruce-solutions/go-quai/internal/ethapi"
 	"github.com/spruce-solutions/go-quai/rpc"
@@ -418,20 +417,6 @@ func (ec *Client) SubscribeNewHead(ctx context.Context, ch chan<- *types.Header)
 // SubscribePendingBlock subscribes to notifications about the current pending block on the node.
 func (ec *Client) SubscribePendingBlock(ctx context.Context, ch chan<- *types.Header) (ethereum.Subscription, error) {
 	return ec.c.EthSubscribe(ctx, ch, "pendingBlock")
-}
-
-// SubscribeReOrg subscribes to notifications about the reorg event.
-func (ec *Client) SubscribeReOrg(ctx context.Context, ch chan<- core.ReOrgRollup) (ethereum.Subscription, error) {
-	return ec.c.EthSubscribe(ctx, ch, "reOrg")
-}
-
-// SubscribeMissingExternalBlock subscribes to notifications about the missingExternalBlock event.
-func (ec *Client) SubscribeMissingExternalBlock(ctx context.Context, ch chan<- core.MissingExternalBlock) (ethereum.Subscription, error) {
-	return ec.c.EthSubscribe(ctx, ch, "missingExtBlock")
-}
-
-func (ec *Client) SubscribeChainUncleEvent(ctx context.Context, ch chan<- *types.Header) (ethereum.Subscription, error) {
-	return ec.c.EthSubscribe(ctx, ch, "uncleEvent")
 }
 
 // State Access

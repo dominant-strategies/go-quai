@@ -60,7 +60,7 @@ var (
 // all incoming light requests.
 type serverHandler struct {
 	forkFilter forkid.Filter
-	blockchain *core.BlockChain
+	core       *core.Core
 	chainDb    ethdb.Database
 	txpool     *core.TxPool
 	server     *LesServer
@@ -73,11 +73,11 @@ type serverHandler struct {
 	addTxsSync bool
 }
 
-func newServerHandler(server *LesServer, blockchain *core.BlockChain, chainDb ethdb.Database, txpool *core.TxPool, synced func() bool) *serverHandler {
+func newServerHandler(server *LesServer, core *core.Core, chainDb ethdb.Database, txpool *core.TxPool, synced func() bool) *serverHandler {
 	handler := &serverHandler{
-		forkFilter: forkid.NewFilter(blockchain),
+		forkFilter: forkid.NewFilter(core),
 		server:     server,
-		blockchain: blockchain,
+		core:       core,
 		chainDb:    chainDb,
 		txpool:     txpool,
 		closeCh:    make(chan struct{}),
@@ -112,13 +112,13 @@ func (h *serverHandler) handle(p *clientPeer) error {
 
 	// Execute the LES handshake
 	var (
-		head   = h.blockchain.CurrentHeader()
+		head   = h.core.CurrentHeader()
 		hash   = head.Hash()
 		number = head.Number[types.QuaiNetworkContext].Uint64()
-		td     = h.blockchain.GetTd(hash, number)
-		forkID = forkid.NewID(h.blockchain.Config(), h.blockchain.Genesis().Hash(), h.blockchain.CurrentBlock().NumberU64())
+		td     = h.core.GetTd(hash, number)
+		forkID = forkid.NewID(h.core.Config(), h.core.Genesis().Hash(), h.core.CurrentBlock().NumberU64())
 	)
-	if err := p.Handshake(td[types.QuaiNetworkContext], hash, number, h.blockchain.Genesis().Hash(), forkID, h.forkFilter, h.server); err != nil {
+	if err := p.Handshake(td[types.QuaiNetworkContext], hash, number, h.core.Genesis().Hash(), forkID, h.forkFilter, h.server); err != nil {
 		p.Log().Debug("Light Ethereum handshake failed", "err", err)
 		return err
 	}
@@ -337,9 +337,9 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 	return nil
 }
 
-// BlockChain implements serverBackend
-func (h *serverHandler) BlockChain() *core.BlockChain {
-	return h.blockchain
+// Core implements serverBackend
+func (h *serverHandler) Core() *core.Core {
+	return h.core
 }
 
 // TxPool implements serverBackend
@@ -403,11 +403,11 @@ func (h *serverHandler) broadcastLoop() {
 	defer h.wg.Done()
 
 	headCh := make(chan core.ChainHeadEvent, 10)
-	headSub := h.blockchain.SubscribeChainHeadEvent(headCh)
+	headSub := h.core.SubscribeChainHeadEvent(headCh)
 	defer headSub.Unsubscribe()
 
 	var (
-		lastHead = h.blockchain.CurrentHeader()
+		lastHead = h.core.CurrentHeader()
 		lastTd   = common.Big0
 	)
 	for {
@@ -415,7 +415,7 @@ func (h *serverHandler) broadcastLoop() {
 		case ev := <-headCh:
 			header := ev.Block.Header()
 			hash, number := header.Hash(), header.Number[types.QuaiNetworkContext].Uint64()
-			td := h.blockchain.GetTd(hash, number)
+			td := h.core.GetTd(hash, number)
 			if td == nil || td[types.QuaiNetworkContext].Cmp(lastTd) <= 0 {
 				continue
 			}

@@ -70,20 +70,12 @@ type Backend interface {
 	GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config) (*vm.EVM, func() error, error)
 	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
-	SubscribeChainUncleEvent(ch chan<- *types.Header) event.Subscription
 	InsertBlock(ctx context.Context, block *types.Block) (int, error)
-	ReOrgRollBack(header *types.Header, validHeaders []*types.Header, invalidHeaders []*types.Header) error
 	PendingBlockAndReceipts() (*types.Block, types.Receipts)
-	AddExternalBlock(block *types.ExternalBlock) error
-	GetExternalBlockByHashAndContext(hash common.Hash, context int) (*types.ExternalBlock, error)
 	GetAncestorByLocation(hash common.Hash, location []byte) (*types.Header, error)
-	GetSubordinateSet(stopHash common.Hash, location []byte) ([]common.Hash, error)
 	GetTerminusAtOrder(header *types.Header, order int) (common.Hash, error)
 
-	GetBlockStatus(header *types.Header) core.WriteStatus
-	HLCRReorg(block *types.Block) (bool, error)
 	PCRC(header *types.Header, order int) (types.PCRCTermini, error)
-	PCCRC(header *types.Header, order int) (types.PCRCTermini, error)
 	EventMux() *event.TypeMux
 	CalculateBaseFee(header *types.Header) *big.Int
 	GetUncleFromWorker(uncleHash common.Hash) (*types.Block, error)
@@ -107,8 +99,6 @@ type Backend interface {
 	SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription
 	SubscribePendingBlockEvent(ch chan<- *types.Header) event.Subscription
 	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
-	SubscribeReOrgEvent(ch chan<- core.ReOrgRollup) event.Subscription
-	SubscribeMissingExternalBlockEvent(ch chan<- core.MissingExternalBlock) event.Subscription
 
 	ChainConfig() *params.ChainConfig
 	Engine() consensus.Engine
