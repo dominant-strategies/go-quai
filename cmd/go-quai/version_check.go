@@ -30,7 +30,7 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-var gethPubKeys []string = []string{
+var quaiPubKeys []string = []string{
 	//@holiman, minisign public key FB1D084D39BAEC24
 	"RWQk7Lo5TQgd+wxBNZM+Zoy+7UhhMHaWKzqoes9tvSbFLJYZhNTbrIjx",
 	//minisign public key 138B1CA303E51687
@@ -72,7 +72,7 @@ func checkCurrent(url, current string) error {
 	if sig, err = fetch(fmt.Sprintf("%v.minisig", url)); err != nil {
 		return fmt.Errorf("could not retrieve signature: %w", err)
 	}
-	if err = verifySignature(gethPubKeys, data, sig); err != nil {
+	if err = verifySignature(quaiPubKeys, data, sig); err != nil {
 		return err
 	}
 	var vulns []vulnJson
@@ -127,7 +127,7 @@ func fetch(url string) ([]byte, error) {
 }
 
 // verifySignature checks that the sigData is a valid signature of the given
-// data, for pubkey GethPubkey
+// data, for pubkey QuaiPubkey
 func verifySignature(pubkeys []string, data, sigdata []byte) error {
 	sig, err := minisign.DecodeSignature(string(sigdata))
 	if err != nil {
