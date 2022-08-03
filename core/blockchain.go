@@ -63,12 +63,14 @@ type BlockChain struct {
 	chainmu       sync.RWMutex // blockchain insertion lock
 	futureBlocks  *lru.Cache   // future blocks are blocks added for later processing
 	blockCache    *lru.Cache
+	bodyCache     *lru.Cache
+	bodyRLPCache  *lru.Cache
 	heads         []*types.Header // heads are tips of blockchain branches
 	quit          chan struct{}   // blockchain quit channel
 	wg            sync.WaitGroup  // chain processing wait group for shutting down
 	running       int32           // 0 if chain is running, 1 when stopped
 	procInterrupt int32           // interrupt signaler for block processing
-	processor     Processor       // Block transaction processor interface
+	processor     *StateProcessor // Block transaction processor interface
 }
 
 // NewBlockChain returns a fully initialised block chain using information

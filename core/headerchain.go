@@ -26,6 +26,7 @@ import (
 	"github.com/spruce-solutions/go-quai/log"
 	"github.com/spruce-solutions/go-quai/metrics"
 	"github.com/spruce-solutions/go-quai/params"
+	"github.com/spruce-solutions/go-quai/rlp"
 )
 
 var (
@@ -601,6 +602,66 @@ func (hc *HeaderChain) GetBlockByNumber(number uint64) *types.Block {
 		return nil
 	}
 	return hc.GetBlock(hash, number)
+}
+
+// GetBody retrieves a block body (transactions and uncles) from the database by
+// hash, caching it if found.
+func (hc *HeaderChain) GetBody(hash common.Hash) *types.Body {
+	// Short circuit if the body's already in the cache, retrieve otherwise
+	if cached, ok := hc.bc.bodyCache.Get(hash); ok {
+		body := cached.(*types.Body)
+		return body
+	}
+	number := hc.GetBlockNumber(hash)
+	if number == nil {
+		return nil
+	}
+	body := rawdb.ReadBody(hc.headerDb, hash, *number)
+	if body == nil {
+		return nil
+	}
+	// Cache the found body for next time and return
+	hc.bc.bodyCache.Add(hash, body)
+	return body
+}
+
+// GetBodyRLP retrieves a block body in RLP encoding from the database by hash,
+// caching it if found.
+func (hc *HeaderChain) GetBodyRLP(hash common.Hash) rlp.RawValue {
+	// Short circuit if the body's already in the cache, retrieve otherwise
+	if cached, ok := hc.bc.bodyRLPCache.Get(hash); ok {
+		return cached.(rlp.RawValue)
+	}
+	number := hc.GetBlockNumber(hash)
+	if number == nil {
+		return nil
+	}
+	body := rawdb.ReadBodyRLP(hc.headerDb, hash, *number)
+	if len(body) == 0 {
+		return nil
+	}
+	// Cache the found body for next time and return
+	hc.bc.bodyRLPCache.Add(hash, body)
+	return body
+}
+
+// GetBlocksFromHash returns the block corresponding to hash and up to n-1 ancestors.
+// [deprecated by eth/62]
+func (hc *HeaderChain) GetBlocksFromHash(hash common.Hash, n int) (blocks []*types.Block) {
+	number := hc.GetBlockNumber(hash)
+	if number == nil {
+		return nil
+	}
+	for i := 0; i < n; i++ {
+		block := hc.GetBlock(hash, *number)
+		if block == nil {
+			break
+		}
+		blocks = append(blocks, block)
+		hash = block.ParentHash()
+		*number--
+	}
+	return
 }
 
 // Engine reterives the consensus engine.
