@@ -69,6 +69,11 @@ func NewSlice(db ethdb.Database, chainConfig *params.ChainConfig, domClientUrl s
 	return sl, nil
 }
 
+// HeaderChain retrieves the headerchain.
+func (sl *Slice) HeaderChain() *HeaderChain {
+	return sl.hc
+}
+
 // MakeDomClient creates the quaiclient for the given domurl
 func MakeDomClient(domurl string) *quaiclient.Client {
 	if domurl == "" {

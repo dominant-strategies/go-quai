@@ -69,6 +69,9 @@ type HeaderChain struct {
 	bc     *BlockChain
 	engine consensus.Engine
 
+	chainHeadFeed event.Feed
+	scope         event.SubscriptionScope
+
 	headerDb      ethdb.Database
 	genesisHeader *types.Header
 
@@ -81,10 +84,9 @@ type HeaderChain struct {
 
 	procInterrupt func() bool
 
-	rand          *mrand.Rand
-	chainHeadFeed event.Feed
-	headermu      sync.RWMutex
-	heads         []*types.Header
+	rand     *mrand.Rand
+	headermu sync.RWMutex
+	heads    []*types.Header
 }
 
 // NewHeaderChain creates a new HeaderChain structure. ProcInterrupt points
@@ -302,6 +304,11 @@ func (hc *HeaderChain) loadLastState() error {
 	hc.heads = heads
 
 	return nil
+}
+
+// Blockchain retrieves the blockchain from the headerchain.
+func (hc *HeaderChain) BlockChain() *BlockChain {
+	return hc.bc
 }
 
 // NOTES: Headerchain needs to have head
@@ -667,4 +674,9 @@ func (hc *HeaderChain) GetBlocksFromHash(hash common.Hash, n int) (blocks []*typ
 // Engine reterives the consensus engine.
 func (hc *HeaderChain) Engine() consensus.Engine {
 	return hc.engine
+}
+
+// SubscribeChainHeadEvent registers a subscription of ChainHeadEvent.
+func (hc *HeaderChain) SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription {
+	return hc.scope.Track(hc.chainHeadFeed.Subscribe(ch))
 }

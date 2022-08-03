@@ -77,7 +77,7 @@ type txPool interface {
 // node network handler.
 type handlerConfig struct {
 	Database   ethdb.Database            // Database for direct sync insertions
-	Chain      *core.BlockChain          // Blockchain to serve data from
+	Core       *core.Core                // Blockchain to serve data from
 	TxPool     txPool                    // Transaction pool to propagate from
 	Network    uint64                    // Network identifier to adfvertise
 	Sync       downloader.SyncMode       // Whether to fast or full sync
@@ -100,7 +100,7 @@ type handler struct {
 
 	database ethdb.Database
 	txpool   txPool
-	chain    *core.BlockChain
+	core     *core.Core
 	maxPeers int
 
 	downloader   *downloader.Downloader
@@ -132,11 +132,11 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	}
 	h := &handler{
 		networkID:  config.Network,
-		forkFilter: forkid.NewFilter(config.Chain),
+		forkFilter: forkid.NewFilter(config.Core),
 		eventMux:   config.EventMux,
 		database:   config.Database,
 		txpool:     config.TxPool,
-		chain:      config.Chain,
+		core:       config.Core,
 		peers:      newPeerSet(),
 		whitelist:  config.Whitelist,
 		quitSync:   make(chan struct{}),
@@ -150,13 +150,13 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		// * the last fast sync is not finished while user specifies a full sync this
 		//   time. But we don't have any recent state for full sync.
 		// In these cases however it's safe to reenable fast sync.
-		fullBlock, fastBlock := h.chain.CurrentBlock(), h.chain.CurrentFastBlock()
-		if fullBlock.NumberU64() == 0 && fastBlock.NumberU64() > 0 {
+		fullBlock := h.core.CurrentBlock()
+		if fullBlock.NumberU64() == 0 {
 			h.fastSync = uint32(1)
 			log.Warn("Switch sync mode from full sync to fast sync")
 		}
 	} else {
-		if h.chain.CurrentBlock().NumberU64() > 0 {
+		if h.core.CurrentBlock().NumberU64() > 0 {
 			// Print warning log if database is not empty to run fast sync.
 			log.Warn("Switch sync mode from fast sync to full sync")
 		} else {
@@ -186,10 +186,10 @@ func newHandler(config *handlerConfig) (*handler, error) {
 
 	// Construct the fetcher (short sync)
 	validator := func(header *types.Header) error {
-		return h.chain.Engine().VerifyHeader(h.chain, header, true)
+		return h.core.Engine().VerifyHeader(h.core, header, true)
 	}
 	heighter := func() uint64 {
-		return h.chain.CurrentBlock().NumberU64()
+		return h.core.CurrentBlock().NumberU64()
 	}
 	inserter := func(blocks types.Blocks, extBlocks []*types.ExternalBlock) (int, error) {
 		// If sync hasn't reached the checkpoint yet, deny importing weird blocks.
@@ -208,19 +208,13 @@ func newHandler(config *handlerConfig) (*handler, error) {
 			return 0, nil
 		}
 
-		log.Info("Adding external blocks from peer", "len", len(extBlocks), "number", blocks[0].Number())
-		err := h.chain.AddExternalBlocks(extBlocks)
-		if err != nil {
-			log.Warn("Error importing external blocks", "number", blocks[0].Number(), "hash", blocks[0].Hash())
-		}
-
 		n, err := h.chain.InsertChain(blocks)
 		if err == nil {
 			atomic.StoreUint32(&h.acceptTxs, 1) // Mark initial sync done on any fetcher import
 		}
 		return n, err
 	}
-	h.blockFetcher = fetcher.NewBlockFetcher(false, nil, h.chain.GetBlockByHash, validator, h.BroadcastBlock, heighter, nil, inserter, h.removePeer, h.chain.GetLinkExternalBlocks, h.chain.AddExternalBlocks)
+	h.blockFetcher = fetcher.NewBlockFetcher(false, nil, h.core.GetBlockByHash, validator, h.BroadcastBlock, heighter, nil, inserter, h.removePeer)
 
 	fetchTx := func(peer string, hashes []common.Hash) error {
 		p := h.peers.peer(peer)
@@ -253,13 +247,13 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 
 	// Execute the Ethereum handshake
 	var (
-		genesis = h.chain.Genesis()
-		head    = h.chain.CurrentHeader()
+		genesis = h.core.Genesis()
+		head    = h.core.CurrentHeader()
 		hash    = head.Hash()
 		number  = head.Number[types.QuaiNetworkContext].Uint64()
-		td      = h.chain.GetTd(hash, number)
+		td      = h.core.GetTd(hash, number)
 	)
-	forkID := forkid.NewID(h.chain.Config(), h.chain.Genesis().Hash(), h.chain.CurrentHeader().Number[types.QuaiNetworkContext].Uint64())
+	forkID := forkid.NewID(h.core.Config(), h.core.Genesis().Hash(), h.core.CurrentHeader().Number[types.QuaiNetworkContext].Uint64())
 	if err := peer.Handshake(h.networkID, td, hash, genesis.Hash(), forkID, h.forkFilter); err != nil {
 		peer.Log().Debug("Ethereum handshake failed", "err", err)
 		return err
@@ -434,7 +428,7 @@ func (h *handler) Stop() {
 
 // BroadcastBlock will either propagate a block to a subset of its peers, or
 // will only announce its availability (depending what's requested).
-func (h *handler) BroadcastBlock(block *types.Block, extBlocks []*types.ExternalBlock, propagate bool) {
+func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 	hash := block.Hash()
 	peers := h.peers.peersWithoutBlock(hash)
 
@@ -442,8 +436,8 @@ func (h *handler) BroadcastBlock(block *types.Block, extBlocks []*types.External
 	if propagate {
 		// Calculate the TD of the block (it's not imported yet, so block.Td is not valid)
 		var td []*big.Int
-		if parent := h.chain.GetBlock(block.ParentHash(), block.NumberU64()-1); parent != nil {
-			order, err := h.chain.Engine().GetDifficultyOrder(block.Header())
+		if parent := h.core.GetBlock(block.ParentHash(), block.NumberU64()-1); parent != nil {
+			order, err := h.core.GetDifficultyOrder(block.Header())
 			if err != nil {
 				log.Error("Error calculating block order in BroadcastBlock, err: ", err)
 				return
@@ -453,9 +447,9 @@ func (h *handler) BroadcastBlock(block *types.Block, extBlocks []*types.External
 				return
 			}
 			var tempTD = big.NewInt(0)
-			parentPrimeTd := h.chain.GetTd(block.Header().ParentHash[types.QuaiNetworkContext], block.Header().Number[types.QuaiNetworkContext].Uint64()-1)[0]
-			parentRegionTd := h.chain.GetTd(block.Header().ParentHash[types.QuaiNetworkContext], block.Header().Number[types.QuaiNetworkContext].Uint64()-1)[1]
-			parentZoneTd := h.chain.GetTd(block.Header().ParentHash[types.QuaiNetworkContext], block.Header().Number[types.QuaiNetworkContext].Uint64()-1)[2]
+			parentPrimeTd := h.core.GetTd(block.Header().ParentHash[types.QuaiNetworkContext], block.Header().Number[types.QuaiNetworkContext].Uint64()-1)[0]
+			parentRegionTd := h.core.GetTd(block.Header().ParentHash[types.QuaiNetworkContext], block.Header().Number[types.QuaiNetworkContext].Uint64()-1)[1]
+			parentZoneTd := h.core.GetTd(block.Header().ParentHash[types.QuaiNetworkContext], block.Header().Number[types.QuaiNetworkContext].Uint64()-1)[2]
 			switch order {
 			case params.PRIME:
 				tempTD = new(big.Int).Add(block.Header().Difficulty[0], parentPrimeTd)
@@ -476,13 +470,13 @@ func (h *handler) BroadcastBlock(block *types.Block, extBlocks []*types.External
 			peers = peers[:int(math.Sqrt(float64(len(peers))))]
 		}
 		for _, peer := range peers {
-			peer.AsyncSendNewBlock(block, td, extBlocks)
+			peer.AsyncSendNewBlock(block, td)
 		}
 		log.Trace("Propagated block", "hash", hash, "recipients", len(peers), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
 		return
 	}
 	// Otherwise if the block is indeed in out own chain, announce it
-	if h.chain.HasBlock(hash, block.NumberU64()) {
+	if h.core.HasBlock(hash, block.NumberU64()) {
 		for _, peer := range peers {
 			peer.AsyncSendNewBlockHash(block)
 		}
@@ -540,16 +534,11 @@ func (h *handler) minedBroadcastLoop() {
 	for obj := range h.minedBlockSub.Chan() {
 		if ev, ok := obj.Data.(core.NewMinedBlockEvent); ok {
 			// Retrieve the requested block's external blocks
-			header := h.chain.GetHeaderByHash(ev.Block.Hash())
+			header := h.core.GetHeaderByHash(ev.Block.Hash())
 			if header != nil {
-				extBlocks, err := h.chain.GetLinkExternalBlocks(header)
-				if err != nil {
-					log.Info("Error sending external blocks to peer", "err", err)
-				} else {
-					log.Info("minedBroadcastLoop", "hash", header.Hash(), "extBlocks", len(extBlocks))
-					h.BroadcastBlock(ev.Block, extBlocks, true)  // First propagate block to peers
-					h.BroadcastBlock(ev.Block, extBlocks, false) // Only then announce to the rest
-				}
+				log.Info("minedBroadcastLoop", "hash", header.Hash())
+				h.BroadcastBlock(ev.Block, true)  // First propagate block to peers
+				h.BroadcastBlock(ev.Block, false) // Only then announce to the rest
 			}
 		}
 	}

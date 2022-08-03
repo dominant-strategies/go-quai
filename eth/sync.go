@@ -127,10 +127,10 @@ func (cs *chainSyncer) loop() {
 			cs.forced = true
 
 		case <-cs.handler.quitSync:
-			// Disable all insertion on the blockchain. This needs to happen before
+			// Disable all insertion on the blockcore. This needs to happen before
 			// terminating the downloader because the downloader waits for blockchain
 			// inserts, and these can take a long time to finish.
-			cs.handler.chain.StopInsert()
+			cs.handler.core.StopInsert()
 			cs.handler.downloader.Terminate()
 			if cs.doneCh != nil {
 				<-cs.doneCh
@@ -179,7 +179,7 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 	}
 
 	if len(op.td) > 0 {
-		if cs.handler.chain.HLCR(op.td, ourTD) {
+		if cs.handler.core.HLCR(op.td, ourTD) {
 			return nil // We're in sync.
 		}
 	}
@@ -194,22 +194,22 @@ func peerToSyncOp(mode downloader.SyncMode, p *eth.Peer) *chainSyncOp {
 func (cs *chainSyncer) modeAndLocalHead() (downloader.SyncMode, []*big.Int) {
 	// If we're in fast sync mode, return that directly
 	if atomic.LoadUint32(&cs.handler.fastSync) == 1 {
-		block := cs.handler.chain.CurrentFastBlock()
-		td := cs.handler.chain.GetTdByHash(block.Hash())
+		block := cs.handler.core.CurrentFastBlock()
+		td := cs.handler.core.GetTdByHash(block.Hash())
 		return downloader.FastSync, td
 	}
 	// We are probably in full sync, but we might have rewound to before the
 	// fast sync pivot, check if we should reenable
 	if pivot := rawdb.ReadLastPivotNumber(cs.handler.database); pivot != nil {
-		if head := cs.handler.chain.CurrentBlock(); head.NumberU64() < *pivot {
-			block := cs.handler.chain.CurrentFastBlock()
-			td := cs.handler.chain.GetTdByHash(block.Hash())
+		if head := cs.handler.core.CurrentBlock(); head.NumberU64() < *pivot {
+			block := cs.handler.core.CurrentFastBlock()
+			td := cs.handler.core.GetTdByHash(block.Hash())
 			return downloader.FastSync, td
 		}
 	}
 	// Nope, we're really full syncing
-	head := cs.handler.chain.CurrentBlock()
-	td := cs.handler.chain.GetTd(head.Hash(), head.NumberU64())
+	head := cs.handler.core.CurrentBlock()
+	td := cs.handler.core.GetTd(head.Hash(), head.NumberU64())
 	return downloader.FullSync, td
 }
 
@@ -231,11 +231,11 @@ func (h *handler) doSync(op *chainSyncOp) error {
 		// has been indexed. So here for the user-experience wise, it's non-optimal
 		// that user can't change limit during the fast sync. If changed, Geth
 		// will just blindly use the original one.
-		limit := h.chain.TxLookupLimit()
+		limit := h.core.TxLookupLimit()
 		if stored := rawdb.ReadFastTxLookupLimit(h.database); stored == nil {
 			rawdb.WriteFastTxLookupLimit(h.database, limit)
 		} else if *stored != limit {
-			h.chain.SetTxLookupLimit(*stored)
+			h.core.SetTxLookupLimit(*stored)
 			log.Warn("Update txLookup limit", "provided", limit, "updated", *stored)
 		}
 	}
@@ -254,7 +254,7 @@ func (h *handler) doSync(op *chainSyncOp) error {
 	}
 	// If we've successfully finished a sync cycle and passed any required checkpoint,
 	// enable accepting transactions from the network.
-	head := h.chain.CurrentBlock()
+	head := h.core.CurrentBlock()
 	if head.NumberU64() >= h.checkpointNumber {
 		// Checkpoint passed, sanity check the timestamp to have a fallback mechanism
 		// for non-checkpointed (number = 0) private networks.
@@ -269,12 +269,7 @@ func (h *handler) doSync(op *chainSyncOp) error {
 		// scenario will most often crop up in private and hackathon networks with
 		// degenerate connectivity, but it should be healthy for the mainnet too to
 		// more reliably update peers or the local TD state.
-		extBlocks, err := h.chain.GetLinkExternalBlocks(head.Header())
-		if err != nil {
-			log.Info("Error sending external blocks to peer", "err", err)
-		} else {
-			h.BroadcastBlock(head, extBlocks, false)
-		}
+		h.BroadcastBlock(head, false)
 	}
 	return nil
 }

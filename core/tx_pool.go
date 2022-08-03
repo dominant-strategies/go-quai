@@ -141,8 +141,9 @@ const (
 
 // blockChain provides the state of blockchain and current gas limit to do
 // some pre checks in tx pool and event subscribers.
-type blockChain interface {
+type core interface {
 	CurrentBlock() *types.Block
+	CurrentHeader() *types.Header
 	GetBlock(hash common.Hash, number uint64) *types.Block
 	StateAt(root common.Hash) (*state.StateDB, error)
 
@@ -228,7 +229,7 @@ func (config *TxPoolConfig) sanitize() TxPoolConfig {
 
 // TxPool contains all currently known transactions. Transactions
 // enter the pool when they are received from the network or submitted
-// locally. They exit the pool when they are included in the blockchain.
+// locally. They exit the pool when they are included in the blockcore.
 //
 // The pool separates processable transactions (which can be applied to the
 // current state) and future transactions. Transactions move between those
@@ -236,7 +237,7 @@ func (config *TxPoolConfig) sanitize() TxPoolConfig {
 type TxPool struct {
 	config      TxPoolConfig
 	chainconfig *params.ChainConfig
-	chain       blockChain
+	core        core
 	gasPrice    *big.Int
 	txFeed      event.Feed
 	scope       event.SubscriptionScope
@@ -279,7 +280,7 @@ type txpoolResetRequest struct {
 
 // NewTxPool creates a new transaction pool to gather, sort and filter inbound
 // transactions from the network.
-func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain blockChain) *TxPool {
+func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, core core) *TxPool {
 	// Sanitize the input to ensure no vulnerable gas prices are set
 	config = (&config).sanitize()
 
@@ -287,7 +288,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 	pool := &TxPool{
 		config:          config,
 		chainconfig:     chainconfig,
-		chain:           chain,
+		core:            core,
 		signer:          types.LatestSigner(chainconfig),
 		pending:         make(map[common.Address]*txList),
 		queue:           make(map[common.Address]*txList),
@@ -308,7 +309,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		pool.locals.add(addr)
 	}
 	pool.priced = newTxPricedList(pool.all)
-	pool.reset(nil, chain.CurrentBlock().Header())
+	pool.reset(nil, core.CurrentHeader())
 
 	// Start the reorg loop early so it can handle requests generated during journal loading.
 	pool.wg.Add(1)
@@ -327,7 +328,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 	}
 
 	// Subscribe events from blockchain and start the main event loop.
-	pool.chainHeadSub = pool.chain.SubscribeChainHeadEvent(pool.chainHeadCh)
+	pool.chainHeadSub = pool.core.SubscribeChainHeadEvent(pool.chainHeadCh)
 	pool.wg.Add(1)
 	go pool.loop()
 
@@ -347,7 +348,7 @@ func (pool *TxPool) loop() {
 		evict   = time.NewTicker(evictionInterval)
 		journal = time.NewTicker(pool.config.Rejournal)
 		// Track the previous head headers for transaction reorgs
-		head = pool.chain.CurrentBlock()
+		head = pool.core.CurrentBlock()
 	)
 	defer report.Stop()
 	defer evict.Stop()
@@ -1190,7 +1191,7 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 	if reset != nil {
 		pool.demoteUnexecutables()
 		if reset.newHead != nil && pool.chainconfig.IsLondon(new(big.Int).Add(reset.newHead.Number[types.QuaiNetworkContext], big.NewInt(1))) {
-			pendingBaseFee := misc.CalcBaseFee(pool.chainconfig, reset.newHead, pool.chain.GetHeaderByNumber, pool.chain.GetUnclesInChain, pool.chain.GetGasUsedInChain)
+			pendingBaseFee := misc.CalcBaseFee(pool.chainconfig, reset.newHead, pool.core.GetHeaderByNumber, pool.core.GetUnclesInChain, pool.core.GetGasUsedInChain)
 			pool.priced.SetBaseFee(pendingBaseFee)
 		}
 	}
@@ -1241,12 +1242,12 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 			// Reorg seems shallow enough to pull in all transactions into memory
 			var discarded, included types.Transactions
 			var (
-				rem = pool.chain.GetBlock(oldHead.Hash(), oldHead.Number[types.QuaiNetworkContext].Uint64())
-				add = pool.chain.GetBlock(newHead.Hash(), newHead.Number[types.QuaiNetworkContext].Uint64())
+				rem = pool.core.GetBlock(oldHead.Hash(), oldHead.Number[types.QuaiNetworkContext].Uint64())
+				add = pool.core.GetBlock(newHead.Hash(), newHead.Number[types.QuaiNetworkContext].Uint64())
 			)
 			if rem == nil {
 				// This can happen if a setHead is performed, where we simply discard the old
-				// head from the chain.
+				// head from the core.
 				// If that is the case, we don't have the lost transactions any more, and
 				// there's nothing to add
 				if newNum >= oldNum {
@@ -1265,7 +1266,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 			} else {
 				for rem.NumberU64() > add.NumberU64() {
 					discarded = append(discarded, rem.Transactions()...)
-					if rem = pool.chain.GetBlock(rem.ParentHash(), rem.NumberU64()-1); rem == nil {
+					if rem = pool.core.GetBlock(rem.ParentHash(), rem.NumberU64()-1); rem == nil {
 						log.Error("Unrooted old chain seen by tx pool", "block", oldHead.Number, "hash", oldHead.Hash())
 						return
 					}
@@ -1280,7 +1281,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 				}
 				for add.NumberU64() > rem.NumberU64() {
 					included = append(included, add.Transactions()...)
-					if add = pool.chain.GetBlock(add.ParentHash(), add.NumberU64()-1); add == nil {
+					if add = pool.core.GetBlock(add.ParentHash(), add.NumberU64()-1); add == nil {
 						log.Error("Unrooted new chain seen by tx pool", "block", newHead.Number, "hash", newHead.Hash())
 						return
 					}
@@ -1295,12 +1296,12 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 				}
 				for rem.Hash() != add.Hash() {
 					discarded = append(discarded, rem.Transactions()...)
-					if rem = pool.chain.GetBlock(rem.ParentHash(), rem.NumberU64()-1); rem == nil {
+					if rem = pool.core.GetBlock(rem.ParentHash(), rem.NumberU64()-1); rem == nil {
 						log.Error("Unrooted old chain seen by tx pool", "block", oldHead.Number, "hash", oldHead.Hash())
 						return
 					}
 					included = append(included, add.Transactions()...)
-					if add = pool.chain.GetBlock(add.ParentHash(), add.NumberU64()-1); add == nil {
+					if add = pool.core.GetBlock(add.ParentHash(), add.NumberU64()-1); add == nil {
 						log.Error("Unrooted new chain seen by tx pool", "block", newHead.Number, "hash", newHead.Hash())
 						return
 					}
@@ -1311,9 +1312,9 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	}
 	// Initialize the internal state to the current head
 	if newHead == nil {
-		newHead = pool.chain.CurrentBlock().Header() // Special case during testing
+		newHead = pool.core.CurrentBlock().Header() // Special case during testing
 	}
-	statedb, err := pool.chain.StateAt(newHead.Root[types.QuaiNetworkContext])
+	statedb, err := pool.core.StateAt(newHead.Root[types.QuaiNetworkContext])
 	if err != nil {
 		log.Error("Failed to reset txpool state", "err", err)
 		return

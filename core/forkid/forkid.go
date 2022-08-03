@@ -45,7 +45,7 @@ var (
 )
 
 // Blockchain defines all necessary method to build a forkID.
-type Blockchain interface {
+type Core interface {
 	// Config retrieves the chain's fork configuration.
 	Config() *params.ChainConfig
 
@@ -85,22 +85,22 @@ func NewID(config *params.ChainConfig, genesis common.Hash, head uint64) ID {
 }
 
 // NewIDWithChain calculates the Ethereum fork ID from an existing chain instance.
-func NewIDWithChain(chain Blockchain) ID {
+func NewIDWithChain(core Core) ID {
 	return NewID(
-		chain.Config(),
-		chain.Genesis().Hash(),
-		chain.CurrentHeader().Number[types.QuaiNetworkContext].Uint64(),
+		core.Config(),
+		core.Genesis().Hash(),
+		core.CurrentHeader().Number[types.QuaiNetworkContext].Uint64(),
 	)
 }
 
 // NewFilter creates a filter that returns if a fork ID should be rejected or not
 // based on the local chain's status.
-func NewFilter(chain Blockchain) Filter {
+func NewFilter(core Core) Filter {
 	return newFilter(
-		chain.Config(),
-		chain.Genesis().Hash(),
+		core.Config(),
+		core.Genesis().Hash(),
 		func() uint64 {
-			return chain.CurrentHeader().Number[types.QuaiNetworkContext].Uint64()
+			return core.CurrentHeader().Number[types.QuaiNetworkContext].Uint64()
 		},
 	)
 }

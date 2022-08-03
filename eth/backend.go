@@ -67,7 +67,7 @@ type Ethereum struct {
 
 	// Handlers
 	txPool             *core.TxPool
-	blockchain         *core.BlockChain
+	core               *core.Core
 	handler            *handler
 	ethDialCandidates  enode.Iterator
 	snapDialCandidates enode.Iterator
@@ -176,47 +176,35 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		vmConfig = vm.Config{
 			EnablePreimageRecording: config.EnablePreimageRecording,
 		}
-		cacheConfig = &core.CacheConfig{
-			TrieCleanLimit:       config.TrieCleanCache,
-			TrieCleanJournal:     stack.ResolvePath(config.TrieCleanCacheJournal),
-			TrieCleanRejournal:   config.TrieCleanCacheRejournal,
-			TrieCleanNoPrefetch:  config.NoPrefetch,
-			TrieDirtyLimit:       config.TrieDirtyCache,
-			TrieDirtyDisabled:    config.NoPruning,
-			TrieTimeLimit:        config.TrieTimeout,
-			SnapshotLimit:        config.SnapshotCache,
-			Preimages:            config.Preimages,
-			ExternalBlockLimit:   config.ExternalBlockCache,
-			ExternalBlockJournal: stack.ResolvePath(config.ExternalBlocksCacheJournal),
-		}
 	)
 
-	eth.blockchain, err = core.Slice(chainDb, cacheConfig, chainConfig, eth.config.DomUrl, eth.config.SubUrls, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit)
+	eth.core, err = core.NewCore(chainDb, chainConfig, eth.config.DomUrl, eth.config.SubUrls, eth.engine, vmConfig)
 	if err != nil {
 		return nil, err
 	}
+
 	// Rewind the chain in case of an incompatible config upgrade.
 	if compat, ok := genesisErr.(*params.ConfigCompatError); ok {
 		log.Warn("Rewinding chain to upgrade configuration", "err", compat)
-		eth.blockchain.SetHead(compat.RewindTo)
+		eth.core.Slice().HeaderChain().SetHeadHead(compat.RewindTo)
 		rawdb.WriteChainConfig(chainDb, genesisHash, chainConfig)
 	}
-	eth.bloomIndexer.Start(eth.blockchain)
+	eth.bloomIndexer.Start(eth.core.Slice().HeaderChain())
 
 	if config.TxPool.Journal != "" {
 		config.TxPool.Journal = stack.ResolvePath(config.TxPool.Journal)
 	}
-	eth.txPool = core.NewTxPool(config.TxPool, chainConfig, eth.blockchain)
+	eth.txPool = core.NewTxPool(config.TxPool, chainConfig, eth.core)
 
 	// Permit the downloader to use the trie cache allowance during fast sync
-	cacheLimit := cacheConfig.TrieCleanLimit + cacheConfig.TrieDirtyLimit + cacheConfig.SnapshotLimit
+	cacheLimit := config.TrieCleanCache + config.TrieDirtyCache + config.SnapshotCache
 	checkpoint := config.Checkpoint
 	if checkpoint == nil {
 		checkpoint = params.TrustedCheckpoints[genesisHash]
 	}
 	if eth.handler, err = newHandler(&handlerConfig{
 		Database:   chainDb,
-		Chain:      eth.blockchain,
+		Core:       eth.core,
 		TxPool:     eth.txPool,
 		Network:    config.NetworkId,
 		Sync:       config.SyncMode,
@@ -298,7 +286,7 @@ func (s *Ethereum) APIs() []rpc.API {
 	apis := ethapi.GetAPIs(s.APIBackend)
 
 	// Append any APIs exposed explicitly by the consensus engine
-	apis = append(apis, s.engine.APIs(s.BlockChain())...)
+	apis = append(apis, s.engine.APIs(s.Core())...)
 
 	// Append all the local APIs and return
 	return append(apis, []rpc.API{
@@ -370,7 +358,7 @@ func (s *Ethereum) APIs() []rpc.API {
 }
 
 func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
-	s.blockchain.ResetWithGenesisBlock(gb)
+	s.core.ResetWithGenesisBlock(gb.Header())
 }
 
 func (s *Ethereum) Etherbase() (eb common.Address, err error) {
@@ -523,7 +511,7 @@ func (s *Ethereum) IsMining() bool      { return s.miner.Mining() }
 func (s *Ethereum) Miner() *miner.Miner { return s.miner }
 
 func (s *Ethereum) AccountManager() *accounts.Manager  { return s.accountManager }
-func (s *Ethereum) BlockChain() *core.BlockChain       { return s.blockchain }
+func (s *Ethereum) Core() *core.Core                   { return s.core }
 func (s *Ethereum) TxPool() *core.TxPool               { return s.txPool }
 func (s *Ethereum) EventMux() *event.TypeMux           { return s.eventMux }
 func (s *Ethereum) Engine() consensus.Engine           { return s.engine }
@@ -547,7 +535,7 @@ func (s *Ethereum) Protocols() []p2p.Protocol {
 // Start implements node.Lifecycle, starting all internal goroutines needed by the
 // Ethereum protocol implementation.
 func (s *Ethereum) Start() error {
-	eth.StartENRUpdater(s.blockchain, s.p2pServer.LocalNode())
+	eth.StartENRUpdater(s.core, s.p2pServer.LocalNode())
 
 	// Start the bloom bits servicing goroutines
 	s.startBloomHandlers(params.BloomBitsBlocks)
@@ -578,7 +566,7 @@ func (s *Ethereum) Stop() error {
 	close(s.closeBloomHandler)
 	s.txPool.Stop()
 	s.miner.Stop()
-	s.blockchain.Stop()
+	s.Core().Stop()
 	s.engine.Close()
 	rawdb.PopUncleanShutdownMarker(s.chainDb)
 	s.chainDb.Close()

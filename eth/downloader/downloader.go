@@ -105,7 +105,7 @@ type Downloader struct {
 	syncStatsLock        sync.RWMutex // Lock protecting the sync stats fields
 
 	lightchain LightChain
-	blockchain BlockChain
+	core       Core
 
 	// Callbacks
 	dropPeer peerDropFn // Drops a peer for misbehaving
@@ -176,7 +176,7 @@ type LightChain interface {
 }
 
 // BlockChain encapsulates functions required to sync a (full or fast) blockchain.
-type BlockChain interface {
+type Core interface {
 	LightChain
 
 	// HasBlock verifies a block's presence in the local chain.
@@ -214,9 +214,9 @@ type BlockChain interface {
 }
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
-func New(checkpoint uint64, stateDb ethdb.Database, stateBloom *trie.SyncBloom, mux *event.TypeMux, chain BlockChain, lightchain LightChain, dropPeer peerDropFn) *Downloader {
+func New(checkpoint uint64, stateDb ethdb.Database, stateBloom *trie.SyncBloom, mux *event.TypeMux, core Core, lightchain LightChain, dropPeer peerDropFn) *Downloader {
 	if lightchain == nil {
-		lightchain = chain
+		lightchain = core
 	}
 	dl := &Downloader{
 		stateDB:        stateDb,
@@ -225,7 +225,7 @@ func New(checkpoint uint64, stateDb ethdb.Database, stateBloom *trie.SyncBloom, 
 		checkpoint:     checkpoint,
 		queue:          newQueue(blockCacheMaxItems, blockCacheInitialItems),
 		peers:          newPeerSet(),
-		blockchain:     chain,
+		core:           core,
 		lightchain:     lightchain,
 		dropPeer:       dropPeer,
 		headerCh:       make(chan dataPack, 1),
@@ -264,14 +264,14 @@ func (d *Downloader) Progress() ethereum.SyncProgress {
 	current := uint64(0)
 	mode := d.getMode()
 	switch {
-	case d.blockchain != nil && mode == FullSync:
-		current = d.blockchain.CurrentBlock().NumberU64()
-	case d.blockchain != nil && mode == FastSync:
-		current = d.blockchain.CurrentFastBlock().NumberU64()
+	case d.core != nil && mode == FullSync:
+		current = d.core.CurrentBlock().NumberU64()
+	case d.core != nil && mode == FastSync:
+		current = d.core.CurrentFastBlock().NumberU64()
 	case d.lightchain != nil:
 		current = d.lightchain.CurrentHeader().Number[types.QuaiNetworkContext].Uint64()
 	default:
-		log.Error("Unknown downloader chain/mode combo", "light", d.lightchain != nil, "full", d.blockchain != nil, "mode", mode)
+		log.Error("Unknown downloader chain/mode combo", "light", d.lightchain != nil, "full", d.core != nil, "mode", mode)
 	}
 	return ethereum.SyncProgress{
 		StartingBlock: d.syncStatsChainOrigin,
@@ -390,7 +390,7 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td []*big.Int, mod
 			// Snap sync uses the snapshot namespace to store potentially flakey data until
 			// sync completely heals and finishes. Pause snapshot maintenance in the mean
 			// time to prevent access.
-			if snapshots := d.blockchain.Snapshots(); snapshots != nil { // Only nil in tests
+			if snapshots := d.core.Snapshots(); snapshots != nil { // Only nil in tests
 				snapshots.Disable()
 			}
 			log.Warn("Enabling snapshot sync prototype")
@@ -481,7 +481,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td []*big
 		// threshold (i.e. new chain). In that case we won't really fast sync
 		// anyway, but still need a valid pivot block to avoid some code hitting
 		// nil panics on an access.
-		pivot = d.blockchain.CurrentBlock().Header()
+		pivot = d.core.CurrentBlock().Header()
 	}
 	height := latest.Number[types.QuaiNetworkContext].Uint64()
 
@@ -781,9 +781,9 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 	mode := d.getMode()
 	switch mode {
 	case FullSync:
-		localHeight = d.blockchain.CurrentBlock().NumberU64()
+		localHeight = d.core.CurrentBlock().NumberU64()
 	case FastSync:
-		localHeight = d.blockchain.CurrentFastBlock().NumberU64()
+		localHeight = d.core.CurrentFastBlock().NumberU64()
 	default:
 		localHeight = d.lightchain.CurrentHeader().Number[types.QuaiNetworkContext].Uint64()
 	}
@@ -888,9 +888,9 @@ func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, re
 				var known bool
 				switch mode {
 				case FullSync:
-					known = d.blockchain.HasBlock(h, n)
+					known = d.core.HasBlock(h, n)
 				case FastSync:
-					known = d.blockchain.HasFastBlock(h, n)
+					known = d.core.HasFastBlock(h, n)
 				default:
 					known = d.lightchain.HasHeader(h, n)
 				}
@@ -968,17 +968,17 @@ func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, 
 				var known bool
 				switch mode {
 				case FullSync:
-					known = d.blockchain.HasBlock(h, n)
+					known = d.core.HasBlock(h, n)
 				case FastSync:
-					known = d.blockchain.HasFastBlock(h, n)
+					known = d.core.HasFastBlock(h, n)
 				default:
-					known = d.blockchain.HasBlock(h, n)
+					known = d.core.HasBlock(h, n)
 				}
 				if !known {
 					end = check
 					break
 				}
-				header := d.blockchain.GetHeaderByHash(h) // Independent of sync mode, header surely exists
+				header := d.core.GetHeaderByHash(h) // Independent of sync mode, header surely exists
 				// Somehow got past known check
 				if header == nil {
 					break
@@ -1165,8 +1165,8 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 					if mode == LightSync {
 						head = d.lightchain.CurrentHeader().Number[types.QuaiNetworkContext].Uint64()
 					} else {
-						head = d.blockchain.CurrentFastBlock().NumberU64()
-						if full := d.blockchain.CurrentBlock().NumberU64(); head < full {
+						head = d.core.CurrentFastBlock().NumberU64()
+						if full := d.core.CurrentBlock().NumberU64(); head < full {
 							head = full
 						}
 					}
@@ -1566,8 +1566,8 @@ func (d *Downloader) processHeaders(origin uint64, td []*big.Int) error {
 		if rollback > 0 {
 			lastHeader, lastFastBlock, lastBlock := d.lightchain.CurrentHeader().Number, common.Big0, common.Big0
 			if mode != LightSync {
-				lastFastBlock = d.blockchain.CurrentFastBlock().Number()
-				lastBlock = d.blockchain.CurrentBlock().Number()
+				lastFastBlock = d.core.CurrentFastBlock().Number()
+				lastBlock = d.core.CurrentBlock().Number()
 			}
 			if err := d.lightchain.SetHead(rollback - 1); err != nil { // -1 to target the parent of the first uncertain block
 				// We're already unwinding the stack, only print the error to make it more visible
@@ -1575,8 +1575,8 @@ func (d *Downloader) processHeaders(origin uint64, td []*big.Int) error {
 			}
 			curFastBlock, curBlock := common.Big0, common.Big0
 			if mode != LightSync {
-				curFastBlock = d.blockchain.CurrentFastBlock().Number()
-				curBlock = d.blockchain.CurrentBlock().Number()
+				curFastBlock = d.core.CurrentFastBlock().Number()
+				curBlock = d.core.CurrentBlock().Number()
 			}
 			log.Warn("Rolled back chain segment",
 				"header", fmt.Sprintf("%d->%d", lastHeader, d.lightchain.CurrentHeader().Number),
@@ -1616,8 +1616,8 @@ func (d *Downloader) processHeaders(origin uint64, td []*big.Int) error {
 				// L: Request new headers up from 11 (R's TD was higher, it must have something)
 				// R: Nothing to give
 				if mode != LightSync {
-					head := d.blockchain.CurrentBlock()
-					if !gotHeaders && d.blockchain.HLCR(d.blockchain.GetTd(head.Hash(), head.NumberU64()), td) {
+					head := d.core.CurrentBlock()
+					if !gotHeaders && d.core.HLCR(d.core.GetTd(head.Hash(), head.NumberU64()), td) {
 						return errStallingPeer
 					}
 				}
@@ -1630,7 +1630,7 @@ func (d *Downloader) processHeaders(origin uint64, td []*big.Int) error {
 				// peer gave us something useful, we're already happy/progressed (above check).
 				if mode == FastSync || mode == LightSync {
 					head := d.lightchain.CurrentHeader()
-					if d.blockchain.HLCR(d.lightchain.GetTd(head.Hash(), head.Number[types.QuaiNetworkContext].Uint64()), td) {
+					if d.core.HLCR(d.lightchain.GetTd(head.Hash(), head.Number[types.QuaiNetworkContext].Uint64()), td) {
 						return errStallingPeer
 					}
 				}
@@ -1771,11 +1771,7 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 		"extBlocks", len(extBlocks),
 	)
 
-	// Add external blocks to chain before inserting blocks
-	for _, extBlock := range extBlocks {
-		d.blockchain.AddExternalBlock(extBlock)
-	}
-	if index, err := d.blockchain.InsertChain(blocks); err != nil {
+	if index, err := d.core.InsertChain(blocks); err != nil {
 		if index < len(results) {
 			log.Debug("Downloaded item processing failed", "number", results[index].Header.Number, "hash", results[index].Header.Hash(), "err", err)
 		} else {
@@ -1963,7 +1959,7 @@ func (d *Downloader) commitFastSyncData(results []*fetchResult, stateSync *state
 		blocks[i] = types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles)
 		receipts[i] = result.Receipts
 	}
-	if index, err := d.blockchain.InsertReceiptChain(blocks, receipts, d.ancientLimit); err != nil {
+	if index, err := d.core.InsertReceiptChain(blocks, receipts, d.ancientLimit); err != nil {
 		log.Debug("Downloaded item processing failed", "number", results[index].Header.Number, "hash", results[index].Header.Hash(), "err", err)
 		return fmt.Errorf("%w: %v", errInvalidChain, err)
 	}
@@ -1975,10 +1971,10 @@ func (d *Downloader) commitPivotBlock(result *fetchResult) error {
 	log.Debug("Committing fast sync pivot as new head", "number", block.Number(), "hash", block.Hash())
 
 	// Commit the pivot block as the new head, will require full sync from here on
-	if _, err := d.blockchain.InsertReceiptChain([]*types.Block{block}, []types.Receipts{result.Receipts}, d.ancientLimit); err != nil {
+	if _, err := d.core.InsertReceiptChain([]*types.Block{block}, []types.Receipts{result.Receipts}, d.ancientLimit); err != nil {
 		return err
 	}
-	if err := d.blockchain.FastSyncCommitHead(block.Hash()); err != nil {
+	if err := d.core.FastSyncCommitHead(block.Hash()); err != nil {
 		return err
 	}
 	atomic.StoreInt32(&d.committed, 1)
