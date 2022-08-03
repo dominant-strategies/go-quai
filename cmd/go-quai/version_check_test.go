@@ -91,7 +91,7 @@ func TestMatching(t *testing.T) {
 		t.Fatal(err)
 	}
 	check := func(version string) {
-		vFull := fmt.Sprintf("Geth/%v-unstable-15339cf1-20201204/linux-amd64/go1.15.4", version)
+		vFull := fmt.Sprintf("Quai/%v-unstable-15339cf1-20201204/linux-amd64/go1.15.4", version)
 		for _, vuln := range vulns {
 			r, err := regexp.Compile(vuln.Check)
 			vulnIntro := versionUint(vuln.Introduced)
@@ -101,7 +101,7 @@ func TestMatching(t *testing.T) {
 				t.Fatal(err)
 			}
 			if vuln.Name == "Denial of service due to Go CVE-2020-28362" {
-				// this one is not tied to geth-versions
+				// this one is not tied to quai-versions
 				continue
 			}
 			if vulnIntro <= current && vulnFixed > current {
