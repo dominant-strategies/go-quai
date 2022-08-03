@@ -21,13 +21,13 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/bloombits"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/spruce-solutions/go-quai/common"
+	"github.com/spruce-solutions/go-quai/core"
+	"github.com/spruce-solutions/go-quai/core/bloombits"
+	"github.com/spruce-solutions/go-quai/core/types"
+	"github.com/spruce-solutions/go-quai/ethdb"
+	"github.com/spruce-solutions/go-quai/event"
+	"github.com/spruce-solutions/go-quai/rpc"
 )
 
 type Backend interface {

@@ -25,11 +25,11 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/console/prompt"
-	"github.com/ethereum/go-ethereum/p2p/dnsdisc"
-	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/spruce-solutions/go-quai/accounts/keystore"
+	"github.com/spruce-solutions/go-quai/common"
+	"github.com/spruce-solutions/go-quai/console/prompt"
+	"github.com/spruce-solutions/go-quai/p2p/dnsdisc"
+	"github.com/spruce-solutions/go-quai/p2p/enode"
 	"gopkg.in/urfave/cli.v1"
 )
 

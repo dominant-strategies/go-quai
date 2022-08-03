@@ -22,16 +22,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/fetcher"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/light"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/spruce-solutions/go-quai/common"
+	"github.com/spruce-solutions/go-quai/consensus"
+	"github.com/spruce-solutions/go-quai/core"
+	"github.com/spruce-solutions/go-quai/core/rawdb"
+	"github.com/spruce-solutions/go-quai/core/types"
+	"github.com/spruce-solutions/go-quai/eth/fetcher"
+	"github.com/spruce-solutions/go-quai/ethdb"
+	"github.com/spruce-solutions/go-quai/light"
+	"github.com/spruce-solutions/go-quai/log"
+	"github.com/spruce-solutions/go-quai/p2p/enode"
 )
 
 const (

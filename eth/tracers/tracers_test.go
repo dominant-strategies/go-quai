@@ -27,17 +27,17 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/tests"
+	"github.com/spruce-solutions/go-quai/common"
+	"github.com/spruce-solutions/go-quai/common/hexutil"
+	"github.com/spruce-solutions/go-quai/common/math"
+	"github.com/spruce-solutions/go-quai/core"
+	"github.com/spruce-solutions/go-quai/core/rawdb"
+	"github.com/spruce-solutions/go-quai/core/types"
+	"github.com/spruce-solutions/go-quai/core/vm"
+	"github.com/spruce-solutions/go-quai/crypto"
+	"github.com/spruce-solutions/go-quai/params"
+	"github.com/spruce-solutions/go-quai/rlp"
+	"github.com/spruce-solutions/go-quai/tests"
 )
 
 // To generate a new callTracer test, copy paste the makeTest method below into

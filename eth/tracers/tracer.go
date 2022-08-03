@@ -25,12 +25,12 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/spruce-solutions/go-quai/common"
+	"github.com/spruce-solutions/go-quai/common/hexutil"
+	"github.com/spruce-solutions/go-quai/core"
+	"github.com/spruce-solutions/go-quai/core/vm"
+	"github.com/spruce-solutions/go-quai/crypto"
+	"github.com/spruce-solutions/go-quai/log"
 	"gopkg.in/olebedev/go-duktape.v3"
 )
 

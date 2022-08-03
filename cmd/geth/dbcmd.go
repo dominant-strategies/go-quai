@@ -24,14 +24,14 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/console/prompt"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/spruce-solutions/go-quai/cmd/utils"
+	"github.com/spruce-solutions/go-quai/common"
+	"github.com/spruce-solutions/go-quai/common/hexutil"
+	"github.com/spruce-solutions/go-quai/console/prompt"
+	"github.com/spruce-solutions/go-quai/core/rawdb"
+	"github.com/spruce-solutions/go-quai/ethdb"
+	"github.com/spruce-solutions/go-quai/log"
+	"github.com/spruce-solutions/go-quai/trie"
 	"gopkg.in/urfave/cli.v1"
 )
 

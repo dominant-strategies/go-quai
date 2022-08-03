@@ -17,9 +17,9 @@
 package vm
 
 import (
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/spruce-solutions/go-quai/common"
+	"github.com/spruce-solutions/go-quai/core/types"
+	"github.com/spruce-solutions/go-quai/params"
 	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
 )

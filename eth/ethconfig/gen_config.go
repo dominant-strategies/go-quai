@@ -6,13 +6,13 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/eth/gasprice"
-	"github.com/ethereum/go-ethereum/miner"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/spruce-solutions/go-quai/common"
+	"github.com/spruce-solutions/go-quai/consensus/ethash"
+	"github.com/spruce-solutions/go-quai/core"
+	"github.com/spruce-solutions/go-quai/eth/downloader"
+	"github.com/spruce-solutions/go-quai/eth/gasprice"
+	"github.com/spruce-solutions/go-quai/miner"
+	"github.com/spruce-solutions/go-quai/params"
 )
 
 // MarshalTOML marshals as TOML.

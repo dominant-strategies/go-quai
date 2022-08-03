@@ -27,14 +27,14 @@ import (
 
 	"gopkg.in/urfave/cli.v1"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/eth/catalyst"
-	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/spruce-solutions/go-quai/cmd/utils"
+	"github.com/spruce-solutions/go-quai/eth/catalyst"
+	"github.com/spruce-solutions/go-quai/eth/ethconfig"
+	"github.com/spruce-solutions/go-quai/internal/ethapi"
+	"github.com/spruce-solutions/go-quai/log"
+	"github.com/spruce-solutions/go-quai/metrics"
+	"github.com/spruce-solutions/go-quai/node"
+	"github.com/spruce-solutions/go-quai/params"
 	"github.com/naoina/toml"
 )
 

@@ -20,10 +20,10 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/eth/protocols/eth"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/rlpx"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/spruce-solutions/go-quai/eth/protocols/eth"
+	"github.com/spruce-solutions/go-quai/p2p"
+	"github.com/spruce-solutions/go-quai/p2p/rlpx"
+	"github.com/spruce-solutions/go-quai/rlp"
 )
 
 type Message interface {

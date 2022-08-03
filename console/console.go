@@ -29,11 +29,11 @@ import (
 	"syscall"
 
 	"github.com/dop251/goja"
-	"github.com/ethereum/go-ethereum/console/prompt"
-	"github.com/ethereum/go-ethereum/internal/jsre"
-	"github.com/ethereum/go-ethereum/internal/jsre/deps"
-	"github.com/ethereum/go-ethereum/internal/web3ext"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/spruce-solutions/go-quai/console/prompt"
+	"github.com/spruce-solutions/go-quai/internal/jsre"
+	"github.com/spruce-solutions/go-quai/internal/jsre/deps"
+	"github.com/spruce-solutions/go-quai/internal/web3ext"
+	"github.com/spruce-solutions/go-quai/rpc"
 	"github.com/mattn/go-colorable"
 	"github.com/peterh/liner"
 )

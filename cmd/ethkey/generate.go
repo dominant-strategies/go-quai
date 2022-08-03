@@ -23,9 +23,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/spruce-solutions/go-quai/accounts/keystore"
+	"github.com/spruce-solutions/go-quai/cmd/utils"
+	"github.com/spruce-solutions/go-quai/crypto"
 	"github.com/google/uuid"
 	"gopkg.in/urfave/cli.v1"
 )

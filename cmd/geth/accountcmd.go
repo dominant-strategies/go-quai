@@ -20,11 +20,11 @@ import (
 	"fmt"
 	"io/ioutil"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/spruce-solutions/go-quai/accounts"
+	"github.com/spruce-solutions/go-quai/accounts/keystore"
+	"github.com/spruce-solutions/go-quai/cmd/utils"
+	"github.com/spruce-solutions/go-quai/crypto"
+	"github.com/spruce-solutions/go-quai/log"
 	"gopkg.in/urfave/cli.v1"
 )
 
