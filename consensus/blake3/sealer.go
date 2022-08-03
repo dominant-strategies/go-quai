@@ -80,6 +80,7 @@ func (blake3 *Blake3) Seal(chain consensus.ChainHeaderReader, block *types.Block
 			blake3.mine(block, id, nonce, abort, locals)
 		}(i, uint64(blake3.rand.Int63()))
 	}
+
 	// Wait until sealing is terminated or a nonce is found
 	go func() {
 		var result *types.Block
@@ -271,14 +272,9 @@ search:
 			header.Nonce = types.EncodeNonce(nonce)
 			blockhash := blake3.SealHash(&header)
 			if powBuffer.SetBytes(blockhash.Bytes()).Cmp(targets[2]) <= 0 {
-				order, err := blake3.GetDifficultyOrder(&header)
-				if nil != err {
-					logger.Error("Failed to get difficulty order")
-					break search
-				}
+
 				headerBundle := &types.HeaderBundle{
-					Header:  &header,
-					Context: order,
+					Header: &header,
 				}
 
 				// Seal and return a block (if still needed)

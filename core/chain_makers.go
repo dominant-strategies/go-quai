@@ -99,12 +99,12 @@ func (b *BlockGen) AddTx(tx *types.Transaction) {
 // further limitations on the content of transactions that can be
 // added. If contract code relies on the BLOCKHASH instruction,
 // the block in chain will be returned.
-func (b *BlockGen) AddTxWithChain(bc *BlockChain, tx *types.Transaction) {
+func (b *BlockGen) AddTxWithChain(c *Core, tx *types.Transaction) {
 	if b.gasPool == nil {
 		b.SetCoinbase(common.Address{})
 	}
 	b.statedb.Prepare(tx.Hash(), len(b.txs))
-	receipt, err := ApplyTransaction(b.config, bc, &b.header.Coinbase[types.QuaiNetworkContext], b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed[types.QuaiNetworkContext], vm.Config{})
+	receipt, err := ApplyTransaction(b.config, c, &b.header.Coinbase[types.QuaiNetworkContext], b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed[types.QuaiNetworkContext], vm.Config{})
 	if err != nil {
 		panic(err)
 	}

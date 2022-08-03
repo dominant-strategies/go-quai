@@ -23,9 +23,6 @@ const (
 	maxHeadsQueueLimit = 1024
 )
 
-type List struct {
-}
-
 var (
 	blockInsertTimer     = metrics.NewRegisteredTimer("chain/inserts", nil)
 	blockValidationTimer = metrics.NewRegisteredTimer("chain/validation", nil)
@@ -196,4 +193,8 @@ Hash: 0x%x
 Error: %v
 ##############################
 `, bc.chainConfig, block.Number(), block.Hash(), err))
+}
+
+func (bc *BlockChain) HasBlockAndState(hash common.Hash, number uint64) bool {
+	return bc.processor.HasBlockAndState(hash, number)
 }

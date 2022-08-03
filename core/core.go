@@ -12,7 +12,8 @@ import (
 )
 
 type Core struct {
-	sl *Slice
+	sl     *Slice
+	engine consensus.Engine
 }
 
 func NewCore(db ethdb.Database, chainConfig *params.ChainConfig, domClientUrl string, subClientUrls []string, engine consensus.Engine, vmConfig vm.Config) (*Core, error) {
@@ -23,8 +24,14 @@ func NewCore(db ethdb.Database, chainConfig *params.ChainConfig, domClientUrl st
 	}
 
 	return &Core{
-		sl: slice,
+		sl:     slice,
+		engine: engine,
 	}, nil
+}
+
+// Engine retreives the blake3 consensus engine.
+func (c *Core) Engine() consensus.Engine {
+	return c.engine
 }
 
 // GetBlock retrieves a block from the database by hash and number,

@@ -104,7 +104,7 @@ func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine conse
 		receiptsCache: receiptsCache,
 		vmConfig:      vmConfig,
 	}
-	sp.validator = NewBlockValidator(config, hc.bc, engine)
+	sp.validator = NewBlockValidator(config, hc, engine)
 	return sp
 }
 
@@ -132,7 +132,7 @@ func (p *StateProcessor) Process(block *types.Block) (types.Receipts, []*types.L
 	}
 
 	// Initialize a statedb
-	statedb, err := state.New(parent.Header().Root[types.QuaiNetworkContext], p.stateCache)
+	statedb, err := state.New(parent.Header().Root[types.QuaiNetworkContext], p.stateCache, nil)
 	if err != nil {
 		return types.Receipts{}, []*types.Log{}, nil, 0, err
 	}
@@ -282,7 +282,7 @@ func (p *StateProcessor) State() (*state.StateDB, error) {
 
 // StateAt returns a new mutable state based on a particular point in time.
 func (p *StateProcessor) StateAt(root common.Hash) (*state.StateDB, error) {
-	return state.New(root, p.stateCache)
+	return state.New(root, p.stateCache, nil)
 }
 
 // StateCache returns the caching database underpinning the blockchain instance.

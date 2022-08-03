@@ -69,8 +69,7 @@ func (n *BlockNonce) UnmarshalText(input []byte) error {
 }
 
 type HeaderBundle struct {
-	Header  *Header
-	Context int
+	Header *Header
 }
 
 //go:generate gencodec -type Header -field-override headerMarshaling -out gen_header_json.go
