@@ -269,7 +269,7 @@ func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Da
 
 	txpoolConfig := core.DefaultTxPoolConfig
 	txpoolConfig.Journal = ""
-	txpool := core.NewTxPool(txpoolConfig, gspec.Config, simulation.Blockchain())
+	txpool := core.NewTxPool(txpoolConfig, gspec.Config, simulation.Core())
 	if indexers != nil {
 		checkpointConfig := &params.CheckpointOracleConfig{
 			Address:   crypto.CreateAddress(bankAddr, 0),
@@ -295,7 +295,7 @@ func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Da
 			chainConfig: params.AllEthashProtocolChanges,
 			iConfig:     light.TestServerIndexerConfig,
 			chainDb:     db,
-			chainReader: simulation.Blockchain(),
+			chainReader: simulation.Core(),
 			oracle:      oracle,
 			closeCh:     make(chan struct{}),
 		},
@@ -312,7 +312,7 @@ func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Da
 	server.clientPool = vfs.NewClientPool(db, testBufRecharge, defaultConnectedBias, clock, alwaysTrueFn)
 	server.clientPool.Start()
 	server.clientPool.SetLimits(10000, 10000) // Assign enough capacity for clientpool
-	server.handler = newServerHandler(server, simulation.Blockchain(), db, txpool, func() bool { return true })
+	server.handler = newServerHandler(server, simulation.Core(), db, txpool, func() bool { return true })
 	if server.oracle != nil {
 		server.oracle.Start(simulation)
 	}
@@ -546,11 +546,11 @@ func (server *testServer) newRawPeer(t *testing.T, name string, version int) (*t
 		cpeer: peer,
 	}
 	var (
-		genesis = server.handler.blockchain.Genesis()
-		head    = server.handler.blockchain.CurrentHeader()
-		td      = server.handler.blockchain.GetTd(head.Hash(), head.Number[types.QuaiNetworkContext].Uint64())
+		genesis = server.handler.core.Genesis()
+		head    = server.handler.core.CurrentHeader()
+		td      = server.handler.core.GetTd(head.Hash(), head.Number[types.QuaiNetworkContext].Uint64())
 	)
-	forkID := forkid.NewID(server.handler.blockchain.Config(), genesis.Hash(), head.Number[types.QuaiNetworkContext].Uint64())
+	forkID := forkid.NewID(server.handler.core.Config(), genesis.Hash(), head.Number[types.QuaiNetworkContext].Uint64())
 	tp.handshakeWithServer(t, td, head.Hash(), head.Number[types.QuaiNetworkContext].Uint64(), genesis.Hash(), forkID)
 
 	// Ensure the connection is established or exits when any error occurs
@@ -608,8 +608,8 @@ func newClientServerEnv(t *testing.T, config testnetConfig) (*testServer, *testC
 	server, b, serverClose := newTestServerHandler(config.blocks, sindexers, sdb, clock)
 	client, clientClose := newTestClientHandler(b, odr, cIndexers, cdb, speers, config.ulcServers, config.ulcFraction)
 
-	scIndexer.Start(server.blockchain)
-	sbIndexer.Start(server.blockchain)
+	scIndexer.Start(server.core)
+	sbIndexer.Start(server.core)
 	ccIndexer.Start(client.backend.blockchain)
 	cbIndexer.Start(client.backend.blockchain)
 

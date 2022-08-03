@@ -237,7 +237,7 @@ func importChain(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	chain, db := utils.MakeChain(ctx, stack)
+	core, db := utils.MakeChain(ctx, stack)
 	defer db.Close()
 
 	// Start periodically gathering memory profiles
@@ -261,19 +261,19 @@ func importChain(ctx *cli.Context) error {
 	var importErr error
 
 	if len(ctx.Args()) == 1 {
-		if err := utils.ImportChain(chain, ctx.Args().First()); err != nil {
+		if err := utils.ImportChain(core, ctx.Args().First()); err != nil {
 			importErr = err
 			log.Error("Import error", "err", err)
 		}
 	} else {
 		for _, arg := range ctx.Args() {
-			if err := utils.ImportChain(chain, arg); err != nil {
+			if err := utils.ImportChain(core, arg); err != nil {
 				importErr = err
 				log.Error("Import error", "file", arg, "err", err)
 			}
 		}
 	}
-	chain.Stop()
+	core.Stop()
 	fmt.Printf("Import done in %v.\n\n", time.Since(start))
 
 	// Output pre-compaction stats mostly to see the import trashing

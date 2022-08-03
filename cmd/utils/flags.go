@@ -1862,7 +1862,7 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 }
 
 // MakeChain creates a chain manager from set command line flags.
-func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chainDb ethdb.Database) {
+func MakeChain(ctx *cli.Context, stack *node.Node) (core *core.Core, chainDb ethdb.Database) {
 	var err error
 	chainDb = MakeChainDatabase(ctx, stack, false) // TODO(rjl493456442) support read-only database
 	config, _, err := core.SetupGenesisBlock(chainDb, MakeGenesis(ctx))
@@ -1909,11 +1909,11 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 
 	// TODO(rjl493456442) disable snapshot generation/wiping if the chain is read only.
 	// Disable transaction indexing/unindexing by default.
-	chain, err = core.Slice(chainDb, cache, config, ctx.GlobalString(DomUrl.Name), makeSubUrls(ctx), engine, vmcfg, nil, nil)
+	core, err = core.NewCore(chainDb, config, ctx.GlobalString(DomUrl.Name), makeSubUrls(ctx), engine, vmcfg)
 	if err != nil {
 		Fatalf("Can't create BlockChain: %v", err)
 	}
-	return chain, chainDb
+	return core, chainDb
 }
 
 // MakeConsolePreloads retrieves the absolute paths for the console JavaScript

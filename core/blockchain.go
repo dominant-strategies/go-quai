@@ -65,6 +65,7 @@ type BlockChain struct {
 	blockCache    *lru.Cache
 	bodyCache     *lru.Cache
 	bodyRLPCache  *lru.Cache
+	txLookupCache *lru.Cache
 	heads         []*types.Header // heads are tips of blockchain branches
 	quit          chan struct{}   // blockchain quit channel
 	wg            sync.WaitGroup  // chain processing wait group for shutting down
@@ -176,6 +177,10 @@ func (bc *BlockChain) insertStopped() bool {
 	return atomic.LoadInt32(&bc.procInterrupt) == 1
 }
 
+func (bc *BlockChain) Processor() *StateProcessor {
+	return bc.processor
+}
+
 // Config retrieves the chain's fork configuration.
 func (bc *BlockChain) Config() *params.ChainConfig { return bc.chainConfig }
 
@@ -197,6 +202,28 @@ func (bc *BlockChain) SubscribeRemovedLogsEvent(ch chan<- RemovedLogsEvent) even
 // SubscribeLogsEvent registers a subscription of []*types.Log.
 func (bc *BlockChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
 	return bc.scope.Track(bc.logsFeed.Subscribe(ch))
+}
+
+// SubscribeBlockProcessingEvent registers a subscription of bool where true means
+// block processing has started while false means it has stopped.
+func (bc *BlockChain) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscription {
+	return bc.scope.Track(bc.blockProcFeed.Subscribe(ch))
+}
+
+// GetTransactionLookup retrieves the lookup associate with the given transaction
+// hash from the cache or database.
+func (bc *BlockChain) GetTransactionLookup(hash common.Hash) *rawdb.LegacyTxLookupEntry {
+	// Short circuit if the txlookup already in the cache, retrieve otherwise
+	if lookup, exist := bc.txLookupCache.Get(hash); exist {
+		return lookup.(*rawdb.LegacyTxLookupEntry)
+	}
+	tx, blockHash, blockNumber, txIndex := rawdb.ReadTransaction(bc.db, hash)
+	if tx == nil {
+		return nil
+	}
+	lookup := &rawdb.LegacyTxLookupEntry{BlockHash: blockHash, BlockIndex: blockNumber, Index: txIndex}
+	bc.txLookupCache.Add(hash, lookup)
+	return lookup
 }
 
 // reportBlock logs a bad block error.

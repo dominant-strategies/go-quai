@@ -38,7 +38,7 @@ import (
 
 // Register adds catalyst APIs to the node.
 func Register(stack *node.Node, backend *eth.Ethereum) error {
-	chainconfig := backend.BlockChain().Config()
+	chainconfig := backend.Core().Config()
 	if chainconfig.CatalystBlock == nil {
 		return errors.New("catalystBlock is not set in genesis config")
 	} else if chainconfig.CatalystBlock.Sign() != 0 {
@@ -68,7 +68,7 @@ func newConsensusAPI(eth *eth.Ethereum) *consensusAPI {
 // blockExecutionEnv gathers all the data required to execute
 // a block, either when assembling it or when inserting it.
 type blockExecutionEnv struct {
-	chain   *core.BlockChain
+	core    *core.Core
 	state   *state.StateDB
 	tcount  int
 	gasPool *core.GasPool
@@ -79,9 +79,9 @@ type blockExecutionEnv struct {
 }
 
 func (env *blockExecutionEnv) commitTransaction(tx *types.Transaction, coinbase common.Address) error {
-	vmconfig := *env.chain.GetVMConfig()
+	vmconfig := *env.core.GetVMConfig()
 	snap := env.state.Snapshot()
-	receipt, err := core.ApplyTransaction(env.chain.Config(), env.chain, &coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed[types.QuaiNetworkContext], vmconfig)
+	receipt, err := core.ApplyTransaction(env.core.Config(), env.core, &coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed[types.QuaiNetworkContext], vmconfig)
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
 		return err
@@ -92,12 +92,12 @@ func (env *blockExecutionEnv) commitTransaction(tx *types.Transaction, coinbase 
 }
 
 func (api *consensusAPI) makeEnv(parent *types.Block, header *types.Header) (*blockExecutionEnv, error) {
-	state, err := api.eth.BlockChain().StateAt(parent.Root())
+	state, err := api.eth.Core().StateAt(parent.Root())
 	if err != nil {
 		return nil, err
 	}
 	env := &blockExecutionEnv{
-		chain:   api.eth.BlockChain(),
+		core:    api.eth.Core(),
 		state:   state,
 		header:  header,
 		gasPool: new(core.GasPool).AddGas(header.GasLimit[types.QuaiNetworkContext]),
@@ -110,7 +110,7 @@ func (api *consensusAPI) makeEnv(parent *types.Block, header *types.Header) (*bl
 func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableData, error) {
 	log.Info("Producing block", "parentHash", params.ParentHash)
 
-	bc := api.eth.BlockChain()
+	bc := api.eth.Core()
 	parent := bc.GetBlockByHash(params.ParentHash)
 	if parent == nil {
 		log.Warn("Cannot assemble block with parent hash to unknown block", "parentHash", params.ParentHash)
@@ -146,8 +146,8 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 	header.Number[types.QuaiNetworkContext] = num.Add(num, common.Big1)
 	header.Coinbase[types.QuaiNetworkContext] = coinbase
 
-	if config := api.eth.BlockChain().Config(); config.IsLondon(header.Number[types.QuaiNetworkContext]) {
-		header.BaseFee[types.QuaiNetworkContext] = misc.CalcBaseFee(config, parent.Header(), api.eth.BlockChain().GetHeaderByNumber, api.eth.BlockChain().GetUnclesInChain, api.eth.BlockChain().GetGasUsedInChain)
+	if config := api.eth.Core().Config(); config.IsLondon(header.Number[types.QuaiNetworkContext]) {
+		header.BaseFee[types.QuaiNetworkContext] = misc.CalcBaseFee(config, parent.Header(), api.eth.Core().GetHeaderByNumber, api.eth.Core().GetUnclesInChain, api.eth.Core().GetGasUsedInChain)
 	}
 	err = api.eth.Engine().Prepare(bc, header)
 	if err != nil {
@@ -250,8 +250,8 @@ func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 	return txs, nil
 }
 
-func insertBlockParamsToBlock(chain *core.BlockChain, parent *types.Header, params executableData) (*types.Block, error) {
-	config := chain.Config()
+func insertBlockParamsToBlock(core *core.Core, parent *types.Header, params executableData) (*types.Block, error) {
+	config := core.Config()
 
 	txs, err := decodeTransactions(params.Transactions)
 	if err != nil {
@@ -287,7 +287,7 @@ func insertBlockParamsToBlock(chain *core.BlockChain, parent *types.Header, para
 	header.Number[types.QuaiNetworkContext] = number
 	header.GasUsed[types.QuaiNetworkContext] = params.GasUsed
 
-	header.BaseFee[types.QuaiNetworkContext] = misc.CalcBaseFee(config, parent, chain.GetHeaderByNumber, chain.GetUnclesInChain, chain.GetGasUsedInChain)
+	header.BaseFee[types.QuaiNetworkContext] = misc.CalcBaseFee(config, parent, core.GetHeaderByNumber, core.GetUnclesInChain, core.GetGasUsedInChain)
 
 	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */)
 	return block, nil
@@ -297,15 +297,15 @@ func insertBlockParamsToBlock(chain *core.BlockChain, parent *types.Header, para
 // or false + an error. This is a bit redundant for go, but simplifies things on the
 // eth2 side.
 func (api *consensusAPI) NewBlock(params executableData) (*newBlockResponse, error) {
-	parent := api.eth.BlockChain().GetBlockByHash(params.ParentHash)
+	parent := api.eth.Core().GetBlockByHash(params.ParentHash)
 	if parent == nil {
 		return &newBlockResponse{false}, fmt.Errorf("could not find parent %x", params.ParentHash)
 	}
-	block, err := insertBlockParamsToBlock(api.eth.BlockChain(), parent.Header(), params)
+	block, err := insertBlockParamsToBlock(api.eth.Core(), parent.Header(), params)
 	if err != nil {
 		return nil, err
 	}
-	_, err = api.eth.BlockChain().InsertChainWithoutSealVerification(block)
+	_, err = api.eth.Core().InsertChainWithoutSealVerification(block)
 	return &newBlockResponse{err == nil}, err
 }
 

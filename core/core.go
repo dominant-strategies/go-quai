@@ -6,6 +6,7 @@ import (
 
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/consensus"
+	"github.com/spruce-solutions/go-quai/core/rawdb"
 	"github.com/spruce-solutions/go-quai/core/state"
 	"github.com/spruce-solutions/go-quai/core/state/snapshot"
 	"github.com/spruce-solutions/go-quai/core/types"
@@ -47,6 +48,19 @@ func (c *Core) InsertReceiptChain(blocks types.Blocks, receipts []types.Receipts
 	return 0, nil
 }
 
+// InsertChainWithoutSealVerification works exactly the same
+// except for seal verification, seal verification is omitted
+func (c *Core) InsertChainWithoutSealVerification(block *types.Block) (int, error) {
+	return 0, nil
+}
+
+func (c *Core) SetTxLookupLimit(limit uint64) {
+}
+
+func (c *Core) Processor() *StateProcessor {
+	return c.sl.hc.bc.processor
+}
+
 func (c *Core) Config() *params.ChainConfig {
 	return c.sl.hc.bc.chainConfig
 }
@@ -59,6 +73,10 @@ func (c *Core) Engine() consensus.Engine {
 // Slice retrieves the slice struct.
 func (c *Core) Slice() *Slice {
 	return c.sl
+}
+
+func (c *Core) StopInsert() {
+	c.sl.hc.bc.StopInsert()
 }
 
 // GetBlock retrieves a block from the database by hash and number,
@@ -100,6 +118,12 @@ func (c *Core) GetUnclesInChain(block *types.Block, length int) []*types.Header 
 // a specific distance is reached.
 func (c *Core) GetGasUsedInChain(block *types.Block, length int) int64 {
 	return c.sl.hc.GetGasUsedInChain(block, length)
+}
+
+// GetTransactionLookup retrieves the lookup associate with the given transaction
+// hash from the cache or database.
+func (c *Core) GetTransactionLookup(hash common.Hash) *rawdb.LegacyTxLookupEntry {
+	return c.sl.hc.bc.GetTransactionLookup(hash)
 }
 
 // GetGasUsedInChain retrieves all the gas used from a given block backwards until
@@ -157,6 +181,10 @@ func (c *Core) HasFastBlock(hash common.Hash, number uint64) bool {
 // it if present.
 func (c *Core) HasHeader(hash common.Hash, number uint64) bool {
 	return c.sl.hc.HasHeader(hash, number)
+}
+
+func (c *Core) HasBlockAndState(hash common.Hash, number uint64) bool {
+	return c.Processor().HasBlockAndState(hash, number)
 }
 
 // GetCanonicalHash returns the canonical hash for a given block number
@@ -258,6 +286,12 @@ func (c *Core) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
 	return c.sl.hc.bc.SubscribeLogsEvent(ch)
 }
 
+// SubscribeBlockProcessingEvent registers a subscription of bool where true means
+// block processing has started while false means it has stopped.
+func (c *Core) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscription {
+	return c.sl.hc.bc.SubscribeBlockProcessingEvent(ch)
+}
+
 // HLCR does hierarchical comparison of two difficulty tuples and returns true if second tuple is greater than the first
 func (c *Core) HLCR(localDifficulties []*big.Int, externDifficulties []*big.Int) bool {
 	return c.sl.HLCR(localDifficulties, externDifficulties)
@@ -325,4 +359,8 @@ func (c *Core) CalcTd(header *types.Header) ([]*big.Int, error) {
 
 func (c *Core) CalcDifficulty(header *types.Header) (*big.Int, error) {
 	return nil, nil
+}
+
+func (c *Core) TxLookupLimit() uint64 {
+	return 0
 }

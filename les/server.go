@@ -45,7 +45,7 @@ const defaultConnectedBias = time.Minute * 3
 
 type ethBackend interface {
 	ArchiveMode() bool
-	BlockChain() *core.BlockChain
+	Core() *core.Core
 	BloomIndexer() *core.ChainIndexer
 	ChainDb() ethdb.Database
 	Synced() bool
@@ -89,13 +89,13 @@ func NewLesServer(node *node.Node, e ethBackend, config *ethconfig.Config) (*Les
 	}
 	srv := &LesServer{
 		lesCommons: lesCommons{
-			genesis:          e.BlockChain().Genesis().Hash(),
+			genesis:          e.Core().Genesis().Hash(),
 			config:           config,
-			chainConfig:      e.BlockChain().Config(),
+			chainConfig:      e.Core().Config(),
 			iConfig:          light.DefaultServerIndexerConfig,
 			chainDb:          e.ChainDb(),
 			lesDb:            lesDb,
-			chainReader:      e.BlockChain(),
+			chainReader:      e.Core(),
 			chtIndexer:       light.NewChtIndexer(e.ChainDb(), nil, params.CHTFrequency, params.HelperTrieProcessConfirmations, true),
 			bloomTrieIndexer: light.NewBloomTrieIndexer(e.ChainDb(), nil, params.BloomBitsBlocks, params.BloomTrieFrequency, true),
 			closeCh:          make(chan struct{}),
@@ -114,9 +114,9 @@ func NewLesServer(node *node.Node, e ethBackend, config *ethconfig.Config) (*Les
 	if config.LightNoSyncServe {
 		issync = func() bool { return true }
 	}
-	srv.handler = newServerHandler(srv, e.BlockChain(), e.ChainDb(), e.TxPool(), issync)
+	srv.handler = newServerHandler(srv, e.Core(), e.ChainDb(), e.TxPool(), issync)
 	srv.costTracker, srv.minCapacity = newCostTracker(e.ChainDb(), config)
-	srv.oracle = srv.setupOracle(node, e.BlockChain().Genesis().Hash(), config)
+	srv.oracle = srv.setupOracle(node, e.Core().Genesis().Hash(), config)
 
 	// Initialize the bloom trie indexer.
 	e.BloomIndexer().AddChildIndexer(srv.bloomTrieIndexer)
@@ -147,7 +147,7 @@ func NewLesServer(node *node.Node, e ethBackend, config *ethconfig.Config) (*Les
 		log.Info("Loaded latest checkpoint", "section", checkpoint.SectionIndex, "head", checkpoint.SectionHead,
 			"chtroot", checkpoint.CHTRoot, "bloomroot", checkpoint.BloomRoot)
 	}
-	srv.chtIndexer.Start(e.BlockChain())
+	srv.chtIndexer.Start(e.Core())
 
 	node.RegisterProtocols(srv.Protocols())
 	node.RegisterAPIs(srv.APIs())
@@ -244,7 +244,7 @@ func (s *LesServer) capacityManagement() {
 	defer s.wg.Done()
 
 	processCh := make(chan bool, 100)
-	sub := s.handler.blockchain.SubscribeBlockProcessingEvent(processCh)
+	sub := s.handler.core.SubscribeBlockProcessingEvent(processCh)
 	defer sub.Unsubscribe()
 
 	totalRechargeCh := make(chan uint64, 100)

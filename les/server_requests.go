@@ -35,7 +35,7 @@ import (
 type serverBackend interface {
 	ArchiveMode() bool
 	AddTxsSync() bool
-	BlockChain() *core.BlockChain
+	Core() *core.Core
 	TxPool() *core.TxPool
 	GetHelperTrie(typ uint, index uint64) *trie.Trie
 }
@@ -156,7 +156,7 @@ func handleGetBlockHeaders(msg Decoder) (serveRequestFn, uint64, uint64, error) 
 	return func(backend serverBackend, p *clientPeer, waitOrStop func() bool) *reply {
 		// Gather headers until the fetch or network limits is reached
 		var (
-			bc              = backend.BlockChain()
+			bc              = backend.Core()
 			hashMode        = r.Query.Origin.Hash != (common.Hash{})
 			first           = true
 			maxNonCanonical = uint64(100)
@@ -251,7 +251,7 @@ func handleGetBlockBodies(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 			bytes  int
 			bodies []rlp.RawValue
 		)
-		bc := backend.BlockChain()
+		bc := backend.Core()
 		for i, hash := range r.Hashes {
 			if i != 0 && !waitOrStop() {
 				return nil
@@ -282,7 +282,7 @@ func handleGetCode(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 			bytes int
 			data  [][]byte
 		)
-		bc := backend.BlockChain()
+		bc := backend.Core()
 		for i, request := range r.Reqs {
 			if i != 0 && !waitOrStop() {
 				return nil
@@ -336,7 +336,7 @@ func handleGetReceipts(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 			bytes    int
 			receipts []rlp.RawValue
 		)
-		bc := backend.BlockChain()
+		bc := backend.Core()
 		for i, hash := range r.Hashes {
 			if i != 0 && !waitOrStop() {
 				return nil
@@ -377,7 +377,7 @@ func handleGetProofs(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 			header    *types.Header
 			err       error
 		)
-		bc := backend.BlockChain()
+		bc := backend.Core()
 		nodes := light.NewNodeSet()
 
 		for i, request := range r.Reqs {
@@ -461,7 +461,7 @@ func handleGetHelperTrieProofs(msg Decoder) (serveRequestFn, uint64, uint64, err
 			auxBytes int
 			auxData  [][]byte
 		)
-		bc := backend.BlockChain()
+		bc := backend.Core()
 		nodes := light.NewNodeSet()
 		for i, request := range r.Reqs {
 			if i != 0 && !waitOrStop() {
@@ -559,7 +559,7 @@ func txStatus(b serverBackend, hash common.Hash) light.TxStatus {
 
 	// If the transaction is unknown to the pool, try looking it up locally.
 	if stat.Status == core.TxStatusUnknown {
-		lookup := b.BlockChain().GetTransactionLookup(hash)
+		lookup := b.Core().GetTransactionLookup(hash)
 		if lookup != nil {
 			stat.Status = core.TxStatusIncluded
 			stat.Lookup = lookup

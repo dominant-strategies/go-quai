@@ -117,7 +117,7 @@ func monitorFreeDiskSpace(sigc chan os.Signal, path string, freeDiskSpaceCritica
 	}
 }
 
-func ImportChain(chain *core.BlockChain, fn string) error {
+func ImportChain(core *core.Core, fn string) error {
 	// Watch for Ctrl-C while the import is running.
 	// If a signal is received, the import will stop at the next batch.
 	interrupt := make(chan os.Signal, 1)
@@ -188,30 +188,30 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 		if checkInterrupt() {
 			return fmt.Errorf("interrupted")
 		}
-		missing := missingBlocks(chain, blocks[:i])
+		missing := missingBlocks(core, blocks[:i])
 		if len(missing) == 0 {
 			log.Info("Skipping batch as all blocks present", "batch", batch, "first", blocks[0].Hash(), "last", blocks[i-1].Hash())
 			continue
 		}
-		if _, err := chain.InsertChain(missing); err != nil {
+		if _, err := core.InsertChain(missing); err != nil {
 			return fmt.Errorf("invalid block %d: %v", n, err)
 		}
 	}
 	return nil
 }
 
-func missingBlocks(chain *core.BlockChain, blocks []*types.Block) []*types.Block {
-	head := chain.CurrentBlock()
+func missingBlocks(core *core.Core, blocks []*types.Block) []*types.Block {
+	head := core.CurrentBlock()
 	for i, block := range blocks {
 		// If we're behind the chain head, only check block, state is available at head
 		if head.NumberU64() > block.NumberU64() {
-			if !chain.HasBlock(block.Hash(), block.NumberU64()) {
+			if !core.HasBlock(block.Hash(), block.NumberU64()) {
 				return blocks[i:]
 			}
 			continue
 		}
 		// If we're above the chain head, state availability is a must
-		if !chain.HasBlockAndState(block.Hash(), block.NumberU64()) {
+		if !core.HasBlockAndState(block.Hash(), block.NumberU64()) {
 			return blocks[i:]
 		}
 	}
@@ -220,7 +220,7 @@ func missingBlocks(chain *core.BlockChain, blocks []*types.Block) []*types.Block
 
 // ExportChain exports a blockchain into the specified file, truncating any data
 // already present in the file.
-func ExportChain(blockchain *core.BlockChain, fn string) error {
+func ExportChain(core *core.Core, fn string) error {
 	log.Info("Exporting blockchain", "file", fn)
 
 	// Open the file handle and potentially wrap with a gzip stream
@@ -236,7 +236,7 @@ func ExportChain(blockchain *core.BlockChain, fn string) error {
 		defer writer.(*gzip.Writer).Close()
 	}
 	// Iterate over the blocks and export them
-	if err := blockchain.Export(writer); err != nil {
+	if err := core.Export(writer); err != nil {
 		return err
 	}
 	log.Info("Exported blockchain", "file", fn)
@@ -246,7 +246,7 @@ func ExportChain(blockchain *core.BlockChain, fn string) error {
 
 // ExportAppendChain exports a blockchain into the specified file, appending to
 // the file if data already exists in it.
-func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, last uint64) error {
+func ExportAppendChain(core *core.Core, fn string, first uint64, last uint64) error {
 	log.Info("Exporting blockchain", "file", fn)
 
 	// Open the file handle and potentially wrap with a gzip stream
@@ -262,7 +262,7 @@ func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, las
 		defer writer.(*gzip.Writer).Close()
 	}
 	// Iterate over the blocks and export them
-	if err := blockchain.ExportN(writer, first, last); err != nil {
+	if err := core.ExportN(writer, first, last); err != nil {
 		return err
 	}
 	log.Info("Exported blockchain to", "file", fn)

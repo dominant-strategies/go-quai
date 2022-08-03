@@ -26,7 +26,7 @@ import (
 // packets that are sent as replies or broadcasts.
 type snapHandler handler
 
-func (h *snapHandler) Chain() *core.BlockChain { return h.chain }
+func (h *snapHandler) Core() *core.Core { return h.core }
 
 // RunPeer is invoked when a peer joins on the `snap` protocol.
 func (h *snapHandler) RunPeer(peer *snap.Peer, hand snap.Handler) error {

@@ -77,7 +77,7 @@ type txPool interface {
 // node network handler.
 type handlerConfig struct {
 	Database   ethdb.Database            // Database for direct sync insertions
-	Core       *core.Core                // Blockchain to serve data from
+	Core       *core.Core                // core to serve data from
 	TxPool     txPool                    // Transaction pool to propagate from
 	Network    uint64                    // Network identifier to adfvertise
 	Sync       downloader.SyncMode       // Whether to fast or full sync

@@ -54,7 +54,7 @@ func (eth *Ethereum) StateAtBlock(block *types.Block, reexec uint64, base *state
 	)
 	// Check the live database first if we have the state fully available, use that.
 	if checkLive {
-		statedb, err = eth.blockchain.StateAt(block.Root())
+		statedb, err = eth.core.StateAt(block.Root())
 		if err == nil {
 			return statedb, nil
 		}
@@ -71,7 +71,7 @@ func (eth *Ethereum) StateAtBlock(block *types.Block, reexec uint64, base *state
 		}
 		// The optional base statedb is given, mark the start point as parent block
 		statedb, database, report = base, base.Database(), false
-		current = eth.blockchain.GetBlock(block.ParentHash(), block.NumberU64()-1)
+		current = eth.core.GetBlock(block.ParentHash(), block.NumberU64()-1)
 	} else {
 		// Otherwise try to reexec blocks until we find a state or reach our limit
 		current = block
@@ -94,7 +94,7 @@ func (eth *Ethereum) StateAtBlock(block *types.Block, reexec uint64, base *state
 			if current.NumberU64() == 0 {
 				return nil, errors.New("genesis state is missing")
 			}
-			parent := eth.blockchain.GetBlock(current.ParentHash(), current.NumberU64()-1)
+			parent := eth.core.GetBlock(current.ParentHash(), current.NumberU64()-1)
 			if parent == nil {
 				return nil, fmt.Errorf("missing block %v %d", current.ParentHash(), current.NumberU64()-1)
 			}
@@ -128,15 +128,15 @@ func (eth *Ethereum) StateAtBlock(block *types.Block, reexec uint64, base *state
 		}
 		// Retrieve the next block to regenerate and process it
 		next := current.NumberU64() + 1
-		if current = eth.blockchain.GetBlockByNumber(next); current == nil {
+		if current = eth.core.GetBlockByNumber(next); current == nil {
 			return nil, fmt.Errorf("block #%d not found", next)
 		}
-		_, _, _, _, err := eth.blockchain.Processor().Process(current, statedb, vm.Config{})
+		_, _, _, _, err := eth.core.Processor().Process(current)
 		if err != nil {
 			return nil, fmt.Errorf("processing block %d failed: %v", current.NumberU64(), err)
 		}
 		// Finalize the state so any modifications are written to the trie
-		root, err := statedb.Commit(eth.blockchain.Config().IsEIP158(current.Number()))
+		root, err := statedb.Commit(eth.core.Config().IsEIP158(current.Number()))
 		if err != nil {
 			return nil, fmt.Errorf("stateAtBlock commit failed, number %d root %v: %w",
 				current.NumberU64(), current.Root().Hex(), err)
@@ -165,7 +165,7 @@ func (eth *Ethereum) stateAtTransaction(block *types.Block, txIndex int, reexec 
 		return nil, vm.BlockContext{}, nil, errors.New("no transaction in genesis")
 	}
 	// Create the parent state database
-	parent := eth.blockchain.GetBlock(block.ParentHash(), block.NumberU64()-1)
+	parent := eth.core.GetBlock(block.ParentHash(), block.NumberU64()-1)
 	if parent == nil {
 		return nil, vm.BlockContext{}, nil, fmt.Errorf("parent %#x not found", block.ParentHash())
 	}
@@ -179,17 +179,17 @@ func (eth *Ethereum) stateAtTransaction(block *types.Block, txIndex int, reexec 
 		return nil, vm.BlockContext{}, statedb, nil
 	}
 	// Recompute transactions up to the target index.
-	signer := types.MakeSigner(eth.blockchain.Config(), block.Number())
+	signer := types.MakeSigner(eth.core.Config(), block.Number())
 	for idx, tx := range block.Transactions() {
 		// Assemble the transaction call message and return if the requested offset
 		msg, _ := tx.AsMessage(signer, block.BaseFee())
 		txContext := core.NewEVMTxContext(msg)
-		context := core.NewEVMBlockContext(block.Header(), eth.blockchain, nil)
+		context := core.NewEVMBlockContext(block.Header(), eth.core, nil)
 		if idx == txIndex {
 			return msg, context, statedb, nil
 		}
 		// Not yet the searched for transaction, execute on top of the current state
-		vmenv := vm.NewEVM(context, txContext, statedb, eth.blockchain.Config(), vm.Config{})
+		vmenv := vm.NewEVM(context, txContext, statedb, eth.core.Config(), vm.Config{})
 		statedb.Prepare(tx.Hash(), idx)
 		if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas())); err != nil {
 			return nil, vm.BlockContext{}, nil, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
