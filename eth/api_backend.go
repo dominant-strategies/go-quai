@@ -136,10 +136,6 @@ func (b *EthAPIBackend) CalcTd(ctx context.Context, header *types.Header) ([]*bi
 	return b.eth.core.CalcTd(header)
 }
 
-func (b *EthAPIBackend) CalcDifficulty(ctx context.Context, header *types.Header) (*big.Int, error) {
-	return b.eth.core.CalcDifficulty(header)
-}
-
 func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
 	return b.eth.core.GetBlockByHash(hash), nil
 }

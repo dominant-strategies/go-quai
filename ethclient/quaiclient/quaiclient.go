@@ -566,13 +566,6 @@ func newRPCTransactionFromBlockHash(b *types.Block, hash common.Hash) *RPCTransa
 // CalcTd calculates the total difficulty for a block
 func (ec *Client) CalcTd(ctx context.Context, header *types.Header) ([]*big.Int, error) {
 	var td []*big.Int
-	err := ec.c.CallContext(ctx, &td, "quai_calcTd")
-	return td, err
-}
-
-// calcDifficulty
-func (ec *Client) CalcDifficulty(ctx context.Context, header *types.Header) (*big.Int, error) {
-	var td *big.Int
-	err := ec.c.CallContext(ctx, &td, "quai_calcDifficulty")
+	err := ec.c.CallContext(ctx, &td, "quai_calcTd", header)
 	return td, err
 }

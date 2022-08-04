@@ -130,6 +130,7 @@ func (sl *Slice) Append(block *types.Block) error {
 	}
 
 	td, err := sl.CalcTd(block.Header())
+	fmt.Println("td for block", block.Hash(), td, "err ", err)
 	if err != nil {
 		return err
 	}
@@ -466,7 +467,6 @@ func (sl *Slice) CalcTd(header *types.Header) ([]*big.Int, error) {
 		} else if order < types.QuaiNetworkContext {
 			// TODO: Ask dom to CalcTd on coincident block
 			td, err = sl.domClient.CalcTd(context.Background(), header)
-			err = errors.New("TODO: Ask dom to CalcTd")
 			if err != nil {
 				return nil, err
 			} else {
@@ -475,13 +475,12 @@ func (sl *Slice) CalcTd(header *types.Header) ([]*big.Int, error) {
 			}
 		}
 
-		cursorTd = sl.hc.GetTd(cursor.Hash(), (*cursor.Number[types.QuaiNetworkContext]).Uint64())
 		// If not cached AND not coincident, aggregate the difficulty and iterate to the parent
 		aggDiff = aggDiff.Add(aggDiff, cursor.Difficulty[types.QuaiNetworkContext])
 		parentHash := cursor.ParentHash[types.QuaiNetworkContext]
 		cursor = sl.hc.GetHeader(cursor.Parent(), (*cursor.Number[types.QuaiNetworkContext]).Uint64()-1)
 		if cursor == nil {
-			return nil, fmt.Errorf("Unable to find parent: %s", parentHash)
+			return nil, fmt.Errorf("unable to find parent: %s", parentHash)
 		}
 	}
 }

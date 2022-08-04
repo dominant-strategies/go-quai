@@ -363,10 +363,6 @@ func (c *Core) CalcTd(header *types.Header) ([]*big.Int, error) {
 	return c.sl.CalcTd(header)
 }
 
-func (c *Core) CalcDifficulty(header *types.Header) (*big.Int, error) {
-	return nil, nil
-}
-
 func (c *Core) TxLookupLimit() uint64 {
 	return 0
 }
