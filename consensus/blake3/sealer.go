@@ -164,7 +164,7 @@ search:
 }
 
 // Seal using header data only
-func (blake3 *Blake3) SealHeader(header *types.Header, results chan<- *types.HeaderBundle, stop <-chan struct{}) error {
+func (blake3 *Blake3) SealHeader(header *types.Header, results chan<- *types.Header, stop <-chan struct{}) error {
 	// Create a runner and the multiple search threads it directs
 	abort := make(chan struct{})
 
@@ -187,7 +187,7 @@ func (blake3 *Blake3) SealHeader(header *types.Header, results chan<- *types.Hea
 	}
 	var (
 		pend   sync.WaitGroup
-		locals = make(chan *types.HeaderBundle)
+		locals = make(chan *types.Header)
 	)
 	for i := 0; i < threads; i++ {
 		pend.Add(1)
@@ -198,7 +198,7 @@ func (blake3 *Blake3) SealHeader(header *types.Header, results chan<- *types.Hea
 	}
 	// Wait until sealing is terminated or a nonce is found
 	go func() {
-		var result *types.HeaderBundle
+		var result *types.Header
 		select {
 		case <-stop:
 			// Outside abort, stop all miner threads
@@ -225,7 +225,7 @@ func (blake3 *Blake3) SealHeader(header *types.Header, results chan<- *types.Hea
 }
 
 // Mine using header data only
-func (blake3 *Blake3) mineHeader(header types.Header, id int, seed uint64, abort chan struct{}, found chan *types.HeaderBundle) {
+func (blake3 *Blake3) mineHeader(header types.Header, id int, seed uint64, abort chan struct{}, found chan *types.Header) {
 	// Extract some data from the header
 	var (
 		targets = make([]*big.Int, 3)
@@ -272,14 +272,9 @@ search:
 			header.Nonce = types.EncodeNonce(nonce)
 			blockhash := blake3.SealHash(&header)
 			if powBuffer.SetBytes(blockhash.Bytes()).Cmp(targets[2]) <= 0 {
-
-				headerBundle := &types.HeaderBundle{
-					Header: &header,
-				}
-
 				// Seal and return a block (if still needed)
 				select {
-				case found <- headerBundle:
+				case found <- &header:
 					logger.Trace("Blake3 nonce found and reported", "attempts", nonce-seed, "nonce", nonce)
 				case <-abort:
 					logger.Trace("Blake3 nonce found but discarded", "attempts", nonce-seed, "nonce", nonce)
