@@ -148,6 +148,11 @@ func (hc *HeaderChain) Append(block *types.Block) ([]*types.Log, error) {
 	hc.headermu.Lock()
 	defer hc.headermu.Unlock()
 
+	err := hc.Appendable(block)
+	if err != nil {
+		return []*types.Log{}, err
+	}
+
 	// Append header to the headerchain
 	batch := hc.headerDb.NewBatch()
 	rawdb.WriteHeader(batch, block.Header())
@@ -193,6 +198,15 @@ func (hc *HeaderChain) Append(block *types.Block) ([]*types.Log, error) {
 	return logs, nil
 }
 
+func (hc *HeaderChain) Appendable(block *types.Block) error {
+	err := hc.engine.VerifyHeader(hc, block.Header(), true)
+	if err != nil {
+		return err
+	}
+	err = hc.bc.Appendable(block)
+	return err
+}
+
 // SetCurrentHeader sets the in-memory head header marker of the canonical chan
 // as the given header.
 func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
@@ -204,6 +218,7 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 	//Update canonical state db
 	//Find a common header
 	commonHeader := hc.findCommonHeader(head)
+	fmt.Println("head ", head.Hash(), " common Header ", commonHeader.Hash(), "prev header ", prevHeader)
 
 	// Delete each header and rollback state processor until common header
 	// Accumulate the hash slice stack
@@ -222,6 +237,7 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 		hashStack = append(hashStack, prevHeader)
 		prevHeader = hc.GetHeader(prevHeader.Parent(), prevHeader.Number64()-1)
 
+		fmt.Println("prevheader: ", prevHeader.Hash())
 		if prevHeader == nil {
 			log.Warn("unable to trim blockchain state, one of trimmed blocks not found")
 			return nil

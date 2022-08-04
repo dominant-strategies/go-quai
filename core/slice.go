@@ -109,27 +109,26 @@ func (sl *Slice) Engine() consensus.Engine { return sl.engine }
 
 // Append
 func (sl *Slice) Append(block *types.Block) error {
-	err := sl.engine.VerifyHeader(sl.hc, block.Header(), true)
-	if err != nil {
-		return err
-	}
 
 	order, err := sl.engine.GetDifficultyOrder(block.Header())
 	if err != nil {
 		return err
 	}
+	fmt.Println("after difficulty header")
 
-	_, err = sl.PCRC(block.Header(), order)
+	_, err = sl.PCRC(block, order)
 	if err != nil {
 		fmt.Println("Slice error in PCRC", err)
 		return err
 	}
+	fmt.Println("after PCRC")
 
 	logs, err := sl.hc.Append(block)
 	if err != nil {
 		fmt.Println("Slice error in append", err)
 		return err
 	}
+	fmt.Println("after headerchain append")
 
 	td, err := sl.CalcTd(block.Header())
 	fmt.Println("td for block", td)
@@ -137,6 +136,7 @@ func (sl *Slice) Append(block *types.Block) error {
 		fmt.Println("Slice error in CalcTd", err)
 		return err
 	}
+	fmt.Println("after calctd")
 
 	// write the tds
 	rawdb.WriteTd(sl.hc.headerDb, block.Hash(), block.NumberU64(), td)
@@ -169,6 +169,7 @@ func (sl *Slice) Append(block *types.Block) error {
 	if true {
 		sl.hc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
 	}
+
 	return nil
 }
 
@@ -176,13 +177,22 @@ func (sl *Slice) Append(block *types.Block) error {
 // that we have linked untwisted chains prior to checking HLCR & applying external state transfers.
 // NOTE: note that it only guarantees linked & untwisted back to the prime terminus, assuming the
 // prime termini match. To check deeper than that, you need to iteratively apply PCRC to get that guarantee.
-func (sl *Slice) PCRC(header *types.Header, headerOrder int) (types.PCRCTermini, error) {
+func (sl *Slice) PCRC(block *types.Block, headerOrder int) (types.PCRCTermini, error) {
 
+	header := block.Header()
 	if header.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
 		return types.PCRCTermini{}, nil
 	}
 
 	slice := header.Location
+
+	if headerOrder < types.QuaiNetworkContext {
+		// Run Appendable on every block.
+		err := sl.hc.Appendable(block)
+		if err != nil {
+			return types.PCRCTermini{}, err
+		}
+	}
 
 	switch types.QuaiNetworkContext {
 	case params.PRIME:
@@ -198,7 +208,7 @@ func (sl *Slice) PCRC(header *types.Header, headerOrder int) (types.PCRCTermini,
 		if sl.subClients[slice[0]-1] == nil {
 			return types.PCRCTermini{}, nil
 		}
-		PCRCTermini, err := sl.subClients[slice[0]-1].CheckPCRC(context.Background(), header, headerOrder)
+		PCRCTermini, err := sl.subClients[slice[0]-1].CheckPCRC(context.Background(), block, headerOrder)
 		if err != nil {
 			return types.PCRCTermini{}, err
 		}
@@ -229,7 +239,7 @@ func (sl *Slice) PCRC(header *types.Header, headerOrder int) (types.PCRCTermini,
 			return types.PCRCTermini{}, nil
 		}
 
-		PCRCTermini, err := sl.subClients[slice[1]-1].CheckPCRC(context.Background(), header, headerOrder)
+		PCRCTermini, err := sl.subClients[slice[1]-1].CheckPCRC(context.Background(), block, headerOrder)
 		if err != nil {
 			return types.PCRCTermini{}, err
 		}

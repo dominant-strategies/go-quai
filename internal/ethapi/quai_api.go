@@ -672,6 +672,10 @@ type HeaderWithOrder struct {
 	Header *types.Header
 	Order  int
 }
+type BlockWithOrder struct {
+	Block *types.Block
+	Order int
+}
 type HashWithLocation struct {
 	Hash     common.Hash
 	Location []byte
@@ -701,13 +705,13 @@ func (s *PublicBlockChainAPI) GetTerminusAtOrder(ctx context.Context, raw json.R
 
 // CheckPCRC runs PCRC on a node and returns the response codes.
 func (s *PublicBlockChainQuaiAPI) CheckPCRC(ctx context.Context, raw json.RawMessage) (types.PCRCTermini, error) {
-	var headerWithOrder HeaderWithOrder
+	var blockWithOrder BlockWithOrder
 
-	if err := json.Unmarshal(raw, &headerWithOrder); err != nil {
+	if err := json.Unmarshal(raw, &blockWithOrder); err != nil {
 		return types.PCRCTermini{}, err
 	}
-	fmt.Println("Header Number:", headerWithOrder.Header.Number, "Order:", headerWithOrder.Order, "Hash:", headerWithOrder.Header.Hash())
-	return s.b.PCRC(headerWithOrder.Header, headerWithOrder.Order)
+	fmt.Println("Header Number:", blockWithOrder.Block.Header().Number, "Order:", blockWithOrder.Order, "Hash:", blockWithOrder.Block.Header().Hash())
+	return s.b.PCRC(blockWithOrder.Block, blockWithOrder.Order)
 }
 
 // CalcTd calculates the total difficulty of a blockchain up to a block

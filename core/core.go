@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"io"
 	"math/big"
 
@@ -36,9 +37,12 @@ func NewCore(db ethdb.Database, chainConfig *params.ChainConfig, domClientUrl st
 
 // TODO
 func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
+	fmt.Println("Insertchain on")
 	for i, block := range blocks {
+		fmt.Println("Insert chain block ", block.Hash())
 		err := c.sl.Append(block)
 		if err != nil {
+			fmt.Println("err in Append core: ", err)
 			return i, err
 		}
 	}
@@ -355,8 +359,8 @@ func (c *Core) GetTerminusAtOrder(header *types.Header, order int) (common.Hash,
 	return common.Hash{}, nil
 }
 
-func (c *Core) PCRC(header *types.Header, order int) (types.PCRCTermini, error) {
-	return c.sl.PCRC(header, order)
+func (c *Core) PCRC(block *types.Block, order int) (types.PCRCTermini, error) {
+	return c.sl.PCRC(block, order)
 }
 
 func (c *Core) CalcTd(header *types.Header) ([]*big.Int, error) {

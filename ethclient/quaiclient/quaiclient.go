@@ -244,8 +244,12 @@ func (ec *Client) GetTerminusAtOrder(ctx context.Context, header *types.Header, 
 }
 
 // CheckPCRC runs PCRC on the node with a given header
-func (ec *Client) CheckPCRC(ctx context.Context, header *types.Header, order int) (types.PCRCTermini, error) {
-	data := map[string]interface{}{"Header": RPCMarshalHeader(header)}
+func (ec *Client) CheckPCRC(ctx context.Context, block *types.Block, order int) (types.PCRCTermini, error) {
+	blockData, err := RPCMarshalBlock(block, true, true)
+	if err != nil {
+		return types.PCRCTermini{}, err
+	}
+	data := map[string]interface{}{"Block": blockData}
 	data["Order"] = order
 
 	var PCRCTermini types.PCRCTermini
@@ -253,18 +257,6 @@ func (ec *Client) CheckPCRC(ctx context.Context, header *types.Header, order int
 		return types.PCRCTermini{}, err
 	}
 	return PCRCTermini, nil
-}
-
-// CheckPCCRC runs PCCRC on the node with a given header
-func (ec *Client) CheckPCCRC(ctx context.Context, header *types.Header, order int) (types.PCRCTermini, error) {
-	data := map[string]interface{}{"Header": RPCMarshalHeader(header)}
-	data["Order"] = order
-
-	var PCCRCTermini types.PCRCTermini
-	if err := ec.c.CallContext(ctx, &PCCRCTermini, "quai_checkPCCRC", data); err != nil {
-		return types.PCRCTermini{}, err
-	}
-	return PCCRCTermini, nil
 }
 
 func (ec *Client) getExternalBlock(ctx context.Context, method string, args ...interface{}) (*types.ExternalBlock, error) {

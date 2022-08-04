@@ -116,6 +116,11 @@ func (bc *BlockChain) Append(block *types.Block) ([]*types.Log, error) {
 	return logs, nil
 }
 
+func (bc *BlockChain) Appendable(block *types.Block) error {
+	_, _, _, _, err := bc.processor.Process(block)
+	return err
+}
+
 // Trim
 func (bc *BlockChain) Trim(header *types.Header) {
 	rawdb.DeleteBlock(bc.db, header.Hash(), header.Number[types.QuaiNetworkContext].Uint64())
