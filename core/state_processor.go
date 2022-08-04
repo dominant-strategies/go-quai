@@ -8,6 +8,8 @@ import (
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
+	"github.com/spruce-solutions/go-quai/common/prque"
+	"github.com/spruce-solutions/go-quai/ethdb"
 	"github.com/spruce-solutions/go-quai/event"
 	"github.com/spruce-solutions/go-quai/log"
 	"github.com/spruce-solutions/go-quai/metrics"
@@ -115,6 +117,7 @@ type StateProcessor struct {
 	engine        consensus.Engine    // Consensus engine used for block rewards
 	logsFeed      event.Feed
 	rmLogsFeed    event.Feed
+	cacheConfig   *CacheConfig   // CacheConfig for StateProcessor
 	stateCache    state.Database // State database to reuse between imports (contains state cache)
 	receiptsCache *lru.Cache     // Cache for the most recent receipts per block
 	validator     Validator      // Block and state validator interface
@@ -123,22 +126,31 @@ type StateProcessor struct {
 
 	scope event.SubscriptionScope
 	wg    sync.WaitGroup // chain processing wait group for shutting down
+
+	triegc *prque.Prque  // Priority queue mapping block numbers to tries to gc
+	gcproc time.Duration // Accumulates canonical block processing for trie dumping
 }
 
 // NewStateProcessor initialises a new StateProcessor.
-func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine consensus.Engine, vmConfig vm.Config) *StateProcessor {
+func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine consensus.Engine, vmConfig vm.Config, cacheConfig *CacheConfig) *StateProcessor {
 	receiptsCache, _ := lru.New(receiptsCacheLimit)
+	if cacheConfig == nil {
+		cacheConfig = defaultCacheConfig
+	}
 
 	sp := &StateProcessor{
 		config:        config,
 		hc:            hc,
 		receiptsCache: receiptsCache,
 		vmConfig:      vmConfig,
+		cacheConfig:   cacheConfig,
 		stateCache: state.NewDatabaseWithConfig(hc.headerDb, &trie.Config{
-			Cache:     defaultCacheConfig.TrieCleanLimit,
-			Journal:   defaultCacheConfig.TrieCleanJournal,
-			Preimages: defaultCacheConfig.Preimages,
+			Cache:     cacheConfig.TrieCleanLimit,
+			Journal:   cacheConfig.TrieCleanJournal,
+			Preimages: cacheConfig.Preimages,
 		}),
+		engine: engine,
+		triegc: prque.New(nil),
 	}
 	sp.validator = NewBlockValidator(config, hc, engine)
 	return sp
@@ -162,7 +174,7 @@ func (p *StateProcessor) Process(block *types.Block) (types.Receipts, []*types.L
 		gp          = new(GasPool).AddGas(block.GasLimit())
 	)
 
-	parent := p.hc.GetBlock(block.Hash(), block.NumberU64())
+	parent := p.hc.GetBlock(block.Header().ParentHash[types.QuaiNetworkContext], block.NumberU64()-1)
 	if parent == nil {
 		return types.Receipts{}, []*types.Log{}, nil, 0, errors.New("parent block is nil for the block given to process")
 	}
@@ -257,26 +269,88 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	return receipt, err
 }
 
-// Apply State
-func (p *StateProcessor) Apply(block *types.Block) error {
-	// Process our block and retrieve external blocks.
-	receipts, _, statedb, usedGas, err := p.Process(block)
+var lastWrite uint64
 
+// Apply State
+func (p *StateProcessor) Apply(block *types.Block) ([]*types.Log, error) {
+	// Process our block and retrieve external blocks.
+	receipts, logs, statedb, usedGas, err := p.Process(block)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	err = p.validator.ValidateState(block, statedb, receipts, usedGas)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	blockBatch := p.hc.headerDb.NewBatch()
 	rawdb.WriteReceipts(blockBatch, block.Hash(), block.NumberU64(), receipts)
+	rawdb.WritePreimages(blockBatch, statedb.Preimages())
 	if err := blockBatch.Write(); err != nil {
 		log.Crit("Failed to write block into disk", "err", err)
 	}
-	return nil
+	// Commit all cached state changes into underlying memory database.
+	root, err := statedb.Commit(true)
+	if err != nil {
+		return nil, err
+	}
+	triedb := p.stateCache.TrieDB()
+
+	// If we're running an archive node, always flush
+	if p.cacheConfig.TrieDirtyDisabled {
+		if err := triedb.Commit(root, false, nil); err != nil {
+			return nil, err
+		}
+	} else {
+		// Full but not archive node, do proper garbage collection
+		triedb.Reference(root, common.Hash{}) // metadata reference to keep trie alive
+		p.triegc.Push(root, -int64(block.NumberU64()))
+
+		if current := block.NumberU64(); current > TriesInMemory {
+			// If we exceeded our memory allowance, flush matured singleton nodes to disk
+			var (
+				nodes, imgs = triedb.Size()
+				limit       = common.StorageSize(p.cacheConfig.TrieDirtyLimit) * 1024 * 1024
+			)
+			if nodes > limit || imgs > 4*1024*1024 {
+				triedb.Cap(limit - ethdb.IdealBatchSize)
+			}
+			// Find the next state trie we need to commit
+			chosen := current - TriesInMemory
+
+			// If we exceeded out time allowance, flush an entire trie to disk
+			if p.gcproc > p.cacheConfig.TrieTimeLimit {
+				// If the header is missing (canonical chain behind), we're reorging a low
+				// diff sidechain. Suspend committing until this operation is completed.
+				header := p.hc.GetHeaderByNumber(chosen)
+				if header == nil {
+					log.Warn("Reorg in progress, trie commit postponed", "number", chosen)
+				} else {
+					// If we're exceeding limits but haven't reached a large enough memory gap,
+					// warn the user that the system is becoming unstable.
+					if chosen < lastWrite+TriesInMemory && p.gcproc >= 2*p.cacheConfig.TrieTimeLimit {
+						log.Info("State in memory for too long, committing", "time", p.gcproc, "allowance", p.cacheConfig.TrieTimeLimit, "optimum", float64(chosen-lastWrite)/TriesInMemory)
+					}
+					// Flush an entire trie and restart the counters
+					triedb.Commit(header.Root[types.QuaiNetworkContext], true, nil)
+					lastWrite = chosen
+					p.gcproc = 0
+				}
+			}
+			// Garbage collect anything below our required write retention
+			for !p.triegc.Empty() {
+				root, number := p.triegc.Pop()
+				if uint64(-number) > chosen {
+					p.triegc.Push(root, number)
+					break
+				}
+				triedb.Dereference(root.(common.Hash))
+			}
+		}
+	}
+
+	return logs, nil
 }
 
 // ApplyTransaction attempts to apply a transaction to the given state database

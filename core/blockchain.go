@@ -77,7 +77,7 @@ type BlockChain struct {
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator and
 // Processor.
-func NewBlockChain(db ethdb.Database, engine consensus.Engine, hc *HeaderChain, chainConfig *params.ChainConfig, vmConfig vm.Config) (*BlockChain, error) {
+func NewBlockChain(db ethdb.Database, engine consensus.Engine, hc *HeaderChain, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, vmConfig vm.Config) (*BlockChain, error) {
 
 	blockCache, _ := lru.New(blockCacheLimit)
 
@@ -89,31 +89,31 @@ func NewBlockChain(db ethdb.Database, engine consensus.Engine, hc *HeaderChain, 
 		blockCache:  blockCache,
 	}
 
-	bc.processor = NewStateProcessor(chainConfig, hc, engine, vmConfig)
+	bc.processor = NewStateProcessor(chainConfig, hc, engine, vmConfig, cacheConfig)
 
 	return bc, nil
 }
 
 // Append
-func (bc *BlockChain) Append(block *types.Block) error {
+func (bc *BlockChain) Append(block *types.Block) ([]*types.Log, error) {
 	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
 
 	// Process our block and retrieve external blocks.
-	err := bc.processor.Apply(block)
+	logs, err := bc.processor.Apply(block)
 	if err != nil {
 		bc.reportBlock(block, err)
 		bc.futureBlocks.Remove(block.Hash())
-		return err
+		return nil, err
 	}
 
 	batch := bc.db.NewBatch()
 	rawdb.WriteBlock(batch, block)
 	if err := batch.Write(); err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return logs, nil
 }
 
 // Trim

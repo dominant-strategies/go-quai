@@ -91,7 +91,7 @@ type HeaderChain struct {
 
 // NewHeaderChain creates a new HeaderChain structure. ProcInterrupt points
 // to the parent's interrupt semaphore.
-func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *params.ChainConfig, vmConfig vm.Config) (*HeaderChain, error) {
+func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, vmConfig vm.Config) (*HeaderChain, error) {
 	headerCache, _ := lru.New(headerCacheLimit)
 	tdCache, _ := lru.New(tdCacheLimit)
 	numberCache, _ := lru.New(numberCacheLimit)
@@ -109,9 +109,10 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *par
 		tdCache:     tdCache,
 		numberCache: numberCache,
 		rand:        mrand.New(mrand.NewSource(seed.Int64())),
+		engine:      engine,
 	}
 
-	hc.bc, err = NewBlockChain(db, engine, hc, chainConfig, vmConfig)
+	hc.bc, err = NewBlockChain(db, engine, hc, chainConfig, cacheConfig, vmConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -130,8 +131,8 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *par
 	hc.currentHeaderHash = hc.CurrentHeader().Hash()
 	headHeaderGauge.Update(hc.CurrentHeader().Number[types.QuaiNetworkContext].Int64())
 
-	//Initialize the heads slice
-	heads := make([]*types.Header, maxHeadsQueueLimit)
+	// Initialize the heads slice
+	heads := make([]*types.Header, 0)
 	hc.heads = heads
 
 	//Load any state that is in our db
@@ -143,7 +144,7 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *par
 }
 
 // Append
-func (hc *HeaderChain) Append(block *types.Block) error {
+func (hc *HeaderChain) Append(block *types.Block) ([]*types.Log, error) {
 	hc.headermu.Lock()
 	defer hc.headermu.Unlock()
 
@@ -151,28 +152,30 @@ func (hc *HeaderChain) Append(block *types.Block) error {
 	batch := hc.headerDb.NewBatch()
 	rawdb.WriteHeader(batch, block.Header())
 	if err := batch.Write(); err != nil {
-		return err
+		return nil, err
 	}
 
 	// Append block else revert header append
-	err := hc.bc.Append(block)
+	logs, err := hc.bc.Append(block)
 	if err != nil {
 		rawdb.DeleteHeader(hc.headerDb, block.Header().Hash(), block.Header().Number64())
-		return err
+		return nil, err
 	}
 
-	/////////////////////
-	// Garbage Collection
-	////////////////////
+	/////////////////////////
+	// Garbage Collection //
+	///////////////////////
 	var nilHeader *types.Header
 	// check if the size of the queue is at the maxHeadsQueueLimit
 	if len(hc.heads) == maxHeadsQueueLimit {
-
 		// Trim the branch before dequeueing
 		commonHeader := hc.findCommonHeader(hc.heads[0])
+		if commonHeader == nil {
+			return nil, errors.New("nil head in hc.heads")
+		}
 		err = hc.trim(commonHeader, hc.heads[0])
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		// dequeue
@@ -187,12 +190,13 @@ func (hc *HeaderChain) Append(block *types.Block) error {
 		return hc.heads[i].Number[types.QuaiNetworkContext].Uint64() < hc.heads[j].Number[types.QuaiNetworkContext].Uint64()
 	})
 
-	return nil
+	return logs, nil
 }
 
 // SetCurrentHeader sets the in-memory head header marker of the canonical chan
 // as the given header.
 func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
+	prevHeader := hc.CurrentHeader()
 	hc.currentHeader.Store(head)
 	hc.currentHeaderHash = head.Hash()
 	headHeaderGauge.Update(head.Number[types.QuaiNetworkContext].Int64())
@@ -200,35 +204,33 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 	//Update canonical state db
 	//Find a common header
 	commonHeader := hc.findCommonHeader(head)
-	parent := head
 
 	// Delete each header and rollback state processor until common header
 	// Accumulate the hash slice stack
 	var hashStack []*types.Header
 	for {
-		if parent.Hash() == commonHeader.Hash() {
+		if prevHeader.Hash() == commonHeader.Hash() {
 			break
 		}
 
 		// Delete the header and the block
-		rawdb.DeleteCanonicalHash(hc.headerDb, parent.Number64())
+		rawdb.DeleteCanonicalHash(hc.headerDb, prevHeader.Number64())
 
 		//TODO: Run state processor to rollback state
 
 		// Add to the stack
-		hashStack = append(hashStack, parent)
-		parent = hc.GetHeader(parent.Parent(), parent.Number64()-1)
+		hashStack = append(hashStack, prevHeader)
+		prevHeader = hc.GetHeader(prevHeader.Parent(), prevHeader.Number64()-1)
 
-		if parent == nil {
+		if prevHeader == nil {
 			log.Warn("unable to trim blockchain state, one of trimmed blocks not found")
 			return nil
 		}
 	}
 
 	// Run through the hash stack to update canonicalHash and forward state processor
-	for i := len(hashStack); i > 0; i-- {
+	for i := len(hashStack) - 1; i >= 0; i-- {
 		rawdb.WriteCanonicalHash(hc.headerDb, hashStack[i].Hash(), hashStack[i].Number64())
-
 		//TODO: Run the state processor forward
 	}
 
@@ -280,8 +282,10 @@ func (hc *HeaderChain) trim(commonHeader *types.Header, startHeader *types.Heade
 
 // findCommonHeader
 func (hc *HeaderChain) findCommonHeader(header *types.Header) *types.Header {
-
 	for {
+		if header == nil {
+			return nil
+		}
 		canonicalHash := rawdb.ReadCanonicalHash(hc.headerDb, header.Number64())
 		if (canonicalHash != common.Hash{} || canonicalHash == hc.config.GenesisHashes[types.QuaiNetworkContext]) {
 			return hc.GetHeaderByHash(canonicalHash)
@@ -297,9 +301,9 @@ func (hc *HeaderChain) loadLastState() error {
 	// TODO: create function to find highest block number and fill Head FIFO
 	headsHashes := rawdb.ReadHeadsHashes(hc.headerDb)
 
-	heads := make([]*types.Header, maxHeadsQueueLimit)
-	for i, hash := range headsHashes {
-		heads[i] = hc.GetHeaderByHash(hash)
+	heads := make([]*types.Header, 0)
+	for _, hash := range headsHashes {
+		heads = append(heads, hc.GetHeaderByHash(hash))
 	}
 	hc.heads = heads
 

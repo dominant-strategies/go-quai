@@ -37,7 +37,7 @@ type Slice struct {
 	wg sync.WaitGroup // slice processing wait group for shutting down
 }
 
-func NewSlice(db ethdb.Database, chainConfig *params.ChainConfig, domClientUrl string, subClientUrls []string, engine consensus.Engine, vmConfig vm.Config) (*Slice, error) {
+func NewSlice(db ethdb.Database, chainConfig *params.ChainConfig, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config) (*Slice, error) {
 	sl := &Slice{
 		config: chainConfig,
 		engine: engine,
@@ -47,7 +47,7 @@ func NewSlice(db ethdb.Database, chainConfig *params.ChainConfig, domClientUrl s
 	sl.futureBlocks = futureBlocks
 
 	var err error
-	sl.hc, err = NewHeaderChain(db, engine, chainConfig, vmConfig)
+	sl.hc, err = NewHeaderChain(db, engine, chainConfig, cacheConfig, vmConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +109,6 @@ func (sl *Slice) Engine() consensus.Engine { return sl.engine }
 
 // Append
 func (sl *Slice) Append(block *types.Block) error {
-
 	err := sl.engine.VerifyHeader(sl.hc, block.Header(), true)
 	if err != nil {
 		return err
@@ -125,7 +124,7 @@ func (sl *Slice) Append(block *types.Block) error {
 		return err
 	}
 
-	err = sl.hc.Append(block)
+	logs, err := sl.hc.Append(block)
 	if err != nil {
 		return err
 	}
@@ -139,15 +138,32 @@ func (sl *Slice) Append(block *types.Block) error {
 	rawdb.WriteTd(sl.hc.headerDb, block.Hash(), block.NumberU64(), td)
 
 	// We have a new possible head call HLCR to potentially set
-	reorg := sl.HLCR(sl.hc.GetTd(sl.hc.currentHeaderHash, sl.hc.CurrentHeader().Number64()), td)
+	currentTd := sl.hc.GetTd(sl.hc.currentHeaderHash, sl.hc.CurrentHeader().Number64())
+	fmt.Println(sl.hc.currentHeaderHash, currentTd, block.Header().Hash(), td)
+	reorg := sl.HLCR(currentTd, td)
 
 	if reorg {
 		err = sl.hc.SetCurrentHeader(block.Header())
 		if err != nil {
 			return err
 		}
+	} else {
+		sl.hc.bc.chainSideFeed.Send(ChainSideEvent{Block: block})
 	}
 
+	sl.hc.bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
+	if len(logs) > 0 {
+		sl.hc.bc.logsFeed.Send(logs)
+	}
+
+	// In theory we should fire a ChainHeadEvent when we inject
+	// a canonical block, but sometimes we can insert a batch of
+	// canonicial blocks. Avoid firing too many ChainHeadEvents,
+	// we will fire an accumulated ChainHeadEvent and disable fire
+	// event here.
+	if true {
+		sl.hc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
+	}
 	return nil
 }
 
@@ -430,10 +446,15 @@ func (sl *Slice) CalcTd(header *types.Header) ([]*big.Int, error) {
 	cursor := header
 	for {
 		// First, check if this block's TD is already cached
-		td := sl.hc.GetTd(cursor.Hash(), (*cursor.Number[types.QuaiNetworkContext]).Uint64())
-		if td != nil {
+		cursorTd := sl.hc.GetTd(cursor.Hash(), (*cursor.Number[types.QuaiNetworkContext]).Uint64())
+		td := make([]*big.Int, len(cursorTd))
+		for i, diff := range cursorTd {
+			td[i] = diff
+		}
+
+		if td[types.QuaiNetworkContext] != nil {
 			// Add the difficulty we accumulated up till this block
-			blockTd := td[types.QuaiNetworkContext]
+			blockTd := big.NewInt(td[types.QuaiNetworkContext].Int64())
 			td[types.QuaiNetworkContext] = blockTd.Add(blockTd, aggDiff)
 			return td, nil
 		}
@@ -454,10 +475,11 @@ func (sl *Slice) CalcTd(header *types.Header) ([]*big.Int, error) {
 			}
 		}
 
+		cursorTd = sl.hc.GetTd(cursor.Hash(), (*cursor.Number[types.QuaiNetworkContext]).Uint64())
 		// If not cached AND not coincident, aggregate the difficulty and iterate to the parent
 		aggDiff = aggDiff.Add(aggDiff, cursor.Difficulty[types.QuaiNetworkContext])
 		parentHash := cursor.ParentHash[types.QuaiNetworkContext]
-		cursor = sl.hc.GetHeader(cursor.Hash(), (*cursor.Number[types.QuaiNetworkContext]).Uint64())
+		cursor = sl.hc.GetHeader(cursor.Parent(), (*cursor.Number[types.QuaiNetworkContext]).Uint64()-1)
 		if cursor == nil {
 			return nil, fmt.Errorf("Unable to find parent: %s", parentHash)
 		}

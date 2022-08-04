@@ -94,7 +94,7 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 		engine:        engine,
 	}
 	var err error
-	bc.hc, err = core.NewHeaderChain(odr.Database(), bc.engine, config, vm.Config{})
+	bc.hc, err = core.NewHeaderChain(odr.Database(), bc.engine, config, nil, vm.Config{})
 	if err != nil {
 		return nil, err
 	}
