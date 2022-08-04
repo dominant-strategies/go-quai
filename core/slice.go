@@ -121,17 +121,20 @@ func (sl *Slice) Append(block *types.Block) error {
 
 	_, err = sl.PCRC(block.Header(), order)
 	if err != nil {
+		fmt.Println("Slice error in PCRC", err)
 		return err
 	}
 
 	logs, err := sl.hc.Append(block)
 	if err != nil {
+		fmt.Println("Slice error in append", err)
 		return err
 	}
 
 	td, err := sl.CalcTd(block.Header())
-	fmt.Println("td for block", block.Hash(), td, "err ", err)
+	fmt.Println("td for block", td)
 	if err != nil {
+		fmt.Println("Slice error in CalcTd", err)
 		return err
 	}
 
@@ -140,7 +143,7 @@ func (sl *Slice) Append(block *types.Block) error {
 
 	// We have a new possible head call HLCR to potentially set
 	currentTd := sl.hc.GetTd(sl.hc.currentHeaderHash, sl.hc.CurrentHeader().Number64())
-	fmt.Println(sl.hc.currentHeaderHash, currentTd, block.Header().Hash(), td)
+	fmt.Println("Slice difficulties", sl.hc.currentHeaderHash, currentTd, block.Header().Hash(), td)
 	reorg := sl.HLCR(currentTd, td)
 
 	if reorg {
@@ -148,6 +151,7 @@ func (sl *Slice) Append(block *types.Block) error {
 		if err != nil {
 			return err
 		}
+		fmt.Println("Set current header", block.Header().Hash())
 	} else {
 		sl.hc.bc.chainSideFeed.Send(ChainSideEvent{Block: block})
 	}
@@ -457,7 +461,7 @@ func (sl *Slice) CalcTd(header *types.Header) ([]*big.Int, error) {
 			// Add the difficulty we accumulated up till this block
 			blockTd := big.NewInt(td[types.QuaiNetworkContext].Int64())
 			td[types.QuaiNetworkContext] = blockTd.Add(blockTd, aggDiff)
-			return td, nil
+			return flattenTd(td), nil
 		}
 
 		// If not cached, check if this block coincides with a dominant chain
@@ -470,8 +474,10 @@ func (sl *Slice) CalcTd(header *types.Header) ([]*big.Int, error) {
 			if err != nil {
 				return nil, err
 			} else {
-				blockTd := td[types.QuaiNetworkContext]
+				blockTd := big.NewInt(td[types.QuaiNetworkContext].Int64())
 				td[types.QuaiNetworkContext] = blockTd.Add(blockTd, aggDiff)
+				fmt.Println("returning coincident", td)
+				return flattenTd(td), nil
 			}
 		}
 
@@ -483,4 +489,15 @@ func (sl *Slice) CalcTd(header *types.Header) ([]*big.Int, error) {
 			return nil, fmt.Errorf("unable to find parent: %s", parentHash)
 		}
 	}
+}
+
+func flattenTd(td []*big.Int) []*big.Int {
+	switch types.QuaiNetworkContext {
+	case params.PRIME:
+		td[1].Set(td[0])
+		td[2].Set(td[0])
+	case params.REGION:
+		td[2].Set(td[1])
+	}
+	return td
 }
