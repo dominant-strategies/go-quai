@@ -38,7 +38,6 @@ type Slice struct {
 }
 
 func NewSlice(db ethdb.Database, chainConfig *params.ChainConfig, domClientUrl string, subClientUrls []string, engine consensus.Engine, vmConfig vm.Config) (*Slice, error) {
-
 	sl := &Slice{
 		config: chainConfig,
 		engine: engine,
@@ -350,13 +349,24 @@ func (sl *Slice) PreviousCoincidentOnPath(header *types.Header, slice []byte, or
 
 // HLCR does hierarchical comparison of two difficulty tuples and returns true if second tuple is greater than the first
 func (sl *Slice) HLCR(localDifficulties []*big.Int, externDifficulties []*big.Int) bool {
-
-	if localDifficulties[types.QuaiNetworkContext].Cmp(externDifficulties[types.QuaiNetworkContext]) < 0 {
-		return true
-	} else if localDifficulties[types.QuaiNetworkContext].Cmp(externDifficulties[types.QuaiNetworkContext]) > 0 {
+	if len(externDifficulties) == 0 || len(localDifficulties) == 0 {
 		return false
 	}
-
+	if localDifficulties[0].Cmp(externDifficulties[0]) < 0 {
+		return true
+	} else if localDifficulties[0].Cmp(externDifficulties[0]) > 0 {
+		return false
+	}
+	if localDifficulties[1].Cmp(externDifficulties[1]) < 0 {
+		return true
+	} else if localDifficulties[1].Cmp(externDifficulties[1]) > 0 {
+		return false
+	}
+	if localDifficulties[2].Cmp(externDifficulties[2]) < 0 {
+		return true
+	} else if localDifficulties[2].Cmp(externDifficulties[2]) > 0 {
+		return false
+	}
 	return false
 }
 
@@ -457,14 +467,14 @@ func (sl *Slice) GetDifficultyOrder(header *types.Header) (int, error) {
 		return -1, errors.New("parent does not exist in the chain")
 	}
 
-	expected := sl.engine.CalcDifficulty(sl.hc, parentHeader.Time, parentHeader, types.QuaiNetworkContext)
-	if expected.Cmp(header.Difficulty[types.QuaiNetworkContext]) > 0 {
-		return -1, fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty[types.QuaiNetworkContext], expected)
+	// VerifyHeader checks the PoW on the header and all other associated pieces of data.
+	err := sl.engine.VerifyHeader(sl.hc, header, true)
+	if err != nil {
+		return -1, err
 	}
 
 	order := types.QuaiNetworkContext
 	if types.QuaiNetworkContext > params.REGION {
-
 		// check if the block exists in the chain.
 		parentBlock, err := sl.domClient.BlockByHash(context.Background(), header.ParentHash[params.REGION])
 		if err != nil {

@@ -505,7 +505,7 @@ func (hc *HeaderChain) Config() *params.ChainConfig { return hc.config }
 // GetBlock implements consensus.ChainReader, and returns nil for every input as
 // a header chain does not have blocks available for retrieval.
 func (hc *HeaderChain) GetBlock(hash common.Hash, number uint64) *types.Block {
-	return nil
+	return hc.bc.GetBlock(hash, number)
 }
 
 // CheckContext checks to make sure the range of a context or order is valid

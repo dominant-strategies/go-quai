@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"math/big"
 	"sync"
+	"time"
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/spruce-solutions/go-quai/event"
 	"github.com/spruce-solutions/go-quai/log"
 	"github.com/spruce-solutions/go-quai/metrics"
+	"github.com/spruce-solutions/go-quai/trie"
 
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/consensus"
@@ -74,6 +76,35 @@ const (
 	BlockChainVersion uint64 = 8
 )
 
+// CacheConfig contains the configuration values for the trie caching/pruning
+// that's resident in a blockchain.
+type CacheConfig struct {
+	TrieCleanLimit      int           // Memory allowance (MB) to use for caching trie nodes in memory
+	TrieCleanJournal    string        // Disk journal for saving clean cache entries.
+	TrieCleanRejournal  time.Duration // Time interval to dump clean cache to disk periodically
+	TrieCleanNoPrefetch bool          // Whether to disable heuristic state prefetching for followup blocks
+	TrieDirtyLimit      int           // Memory limit (MB) at which to start flushing dirty trie nodes to disk
+	TrieDirtyDisabled   bool          // Whether to disable trie write caching and GC altogether (archive node)
+	TrieTimeLimit       time.Duration // Time limit after which to flush the current in-memory trie to disk
+	SnapshotLimit       int           // Memory allowance (MB) to use for caching snapshot entries in memory
+	Preimages           bool          // Whether to store preimage of trie key to the disk
+
+	SnapshotWait bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
+
+	ExternalBlockLimit   int    // Memory allowance (MB) to use for caching trie nodes in memory
+	ExternalBlockJournal string // Disk journal for saving clean cache entries.
+}
+
+// defaultCacheConfig are the default caching values if none are specified by the
+// user (also used during testing).
+var defaultCacheConfig = &CacheConfig{
+	TrieCleanLimit: 256,
+	TrieDirtyLimit: 256,
+	TrieTimeLimit:  5 * time.Minute,
+	SnapshotLimit:  256,
+	SnapshotWait:   true,
+}
+
 // StateProcessor is a basic Processor, which takes care of transitioning
 // state from one point to another.
 //
@@ -103,6 +134,11 @@ func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine conse
 		hc:            hc,
 		receiptsCache: receiptsCache,
 		vmConfig:      vmConfig,
+		stateCache: state.NewDatabaseWithConfig(hc.headerDb, &trie.Config{
+			Cache:     defaultCacheConfig.TrieCleanLimit,
+			Journal:   defaultCacheConfig.TrieCleanJournal,
+			Preimages: defaultCacheConfig.Preimages,
+		}),
 	}
 	sp.validator = NewBlockValidator(config, hc, engine)
 	return sp

@@ -23,7 +23,6 @@ type Core struct {
 }
 
 func NewCore(db ethdb.Database, chainConfig *params.ChainConfig, domClientUrl string, subClientUrls []string, engine consensus.Engine, vmConfig vm.Config) (*Core, error) {
-
 	slice, err := NewSlice(db, chainConfig, domClientUrl, subClientUrls, engine, vmConfig)
 	if err != nil {
 		return nil, err
@@ -37,7 +36,13 @@ func NewCore(db ethdb.Database, chainConfig *params.ChainConfig, domClientUrl st
 
 // TODO
 func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
-	return 0, nil
+	for i, block := range blocks {
+		err := c.sl.Append(block)
+		if err != nil {
+			return i, err
+		}
+	}
+	return len(blocks), nil
 }
 
 func (c *Core) InsertHeaderChain(headers []*types.Header, checkFreq int) (int, error) {
@@ -248,6 +253,7 @@ func (c *Core) ContractCodeWithPrefix(hash common.Hash) ([]byte, error) {
 func (c *Core) Genesis() *types.Block {
 	return c.GetBlockByHash(c.sl.hc.genesisHeader.Hash())
 }
+
 func (c *Core) ResetWithGenesisBlock(genesis *types.Header) error {
 	return c.sl.hc.ResetWithGenesisBlock(genesis)
 }
