@@ -372,6 +372,23 @@ func (blake3 *Blake3) verifySeal(header *types.Header) error {
 	return nil
 }
 
+// This function determines the difficulty order of a block
+func (blake3 *Blake3) GetDifficultyOrder(header *types.Header) (int, error) {
+	if header == nil {
+		return types.ContextDepth, errors.New("no header provided")
+	}
+	blockhash := blake3.SealHash(header)
+	for i, difficulty := range header.Difficulty {
+		if difficulty != nil && big.NewInt(0).Cmp(difficulty) < 0 {
+			target := new(big.Int).Div(big2e256, difficulty)
+			if new(big.Int).SetBytes(blockhash.Bytes()).Cmp(target) <= 0 {
+				return i, nil
+			}
+		}
+	}
+	return -1, errors.New("block does not satisfy minimum difficulty")
+}
+
 // Prepare implements consensus.Engine, initializing the difficulty field of a
 // header to conform to the protocol. The changes are done inline.
 func (blake3 *Blake3) Prepare(chain consensus.ChainHeaderReader, header *types.Header) error {

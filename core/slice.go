@@ -114,7 +114,7 @@ func (sl *Slice) Append(block *types.Block) error {
 		return err
 	}
 
-	order, err := sl.GetDifficultyOrder(block.Header())
+	order, err := sl.engine.GetDifficultyOrder(block.Header())
 	if err != nil {
 		return err
 	}
@@ -351,7 +351,7 @@ func (sl *Slice) PreviousCoincidentOnPath(header *types.Header, slice []byte, or
 		header = prevHeader
 
 		// Find the order of the header
-		difficultyOrder, err := sl.GetDifficultyOrder(header)
+		difficultyOrder, err := sl.engine.GetDifficultyOrder(header)
 		if err != nil {
 			return nil, err
 		}
@@ -460,7 +460,7 @@ func (sl *Slice) CalcTd(header *types.Header) ([]*big.Int, error) {
 		}
 
 		// If not cached, check if this block coincides with a dominant chain
-		order, err := sl.GetDifficultyOrder(cursor)
+		order, err := sl.engine.GetDifficultyOrder(cursor)
 		if err != nil {
 			return nil, err
 		} else if order < types.QuaiNetworkContext {
@@ -484,23 +484,4 @@ func (sl *Slice) CalcTd(header *types.Header) ([]*big.Int, error) {
 			return nil, fmt.Errorf("Unable to find parent: %s", parentHash)
 		}
 	}
-}
-
-var big2e256 = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0)) // 2^256
-
-// This function determines the difficulty order of a block
-func (sl *Slice) GetDifficultyOrder(header *types.Header) (int, error) {
-	if header == nil {
-		return types.ContextDepth, errors.New("no header provided")
-	}
-	blockhash := sl.engine.SealHash(header)
-	for i, difficulty := range header.Difficulty {
-		if difficulty != nil && big.NewInt(0).Cmp(difficulty) < 0 {
-			target := new(big.Int).Div(big2e256, difficulty)
-			if new(big.Int).SetBytes(blockhash.Bytes()).Cmp(target) <= 0 {
-				return i, nil
-			}
-		}
-	}
-	return -1, errors.New("block does not satisfy minimum difficulty")
 }

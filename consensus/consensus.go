@@ -117,6 +117,9 @@ type Engine interface {
 	// that a new block should have.
 	CalcDifficulty(chain ChainHeaderReader, time uint64, parent *types.Header, context int) *big.Int
 
+	// GetDifficultyOrder returns in order index of a given header.
+	GetDifficultyOrder(header *types.Header) (int, error)
+
 	// APIs returns the RPC APIs this consensus engine provides.
 	APIs(chain ChainHeaderReader) []rpc.API
 

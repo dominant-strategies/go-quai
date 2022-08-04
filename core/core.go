@@ -279,7 +279,7 @@ func (c *Core) SubscribeChainSideEvent(ch chan<- ChainSideEvent) event.Subscript
 
 // GetDifficultyOrder determines the difficulty order of the given header.
 func (c *Core) GetDifficultyOrder(header *types.Header) (int, error) {
-	return c.sl.GetDifficultyOrder(header)
+	return c.sl.engine.GetDifficultyOrder(header)
 }
 
 // SubscribeChainHeadEvent registers a subscription of ChainHeadEvent.
