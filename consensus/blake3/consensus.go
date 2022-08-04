@@ -350,7 +350,6 @@ func calcDifficultyFrontier(time uint64, parent *types.Header, context int) *big
 		diff.Add(diff, expDiff)
 		diff = math.BigMax(diff, params.MinimumDifficulty[types.QuaiNetworkContext])
 	}
-	fmt.Println("time", time, "parent", parent.Number, "context", context)
 	return diff
 }
 
