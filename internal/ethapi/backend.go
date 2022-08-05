@@ -54,6 +54,7 @@ type Backend interface {
 	// Blockchain API
 	SetHead(number uint64)
 	HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error)
+	CanonicalHashByNumber(ctx context.Context, number rpc.BlockNumber) common.Hash
 	HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error)
 	HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Header, error)
 	CurrentHeader() *types.Header

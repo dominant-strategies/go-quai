@@ -197,23 +197,28 @@ func (hc *HeaderChain) Append(block *types.Block) ([]*types.Log, error) {
 // as the given header.
 func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 	prevHeader := hc.CurrentHeader()
+
+	//Find a common header
+	commonHeader := hc.findCommonHeader(head)
+
+	//Update canonical state db
 	hc.currentHeader.Store(head)
 	hc.currentHeaderHash = head.Hash()
 	headHeaderGauge.Update(head.Number[types.QuaiNetworkContext].Int64())
 
-	//Update canonical state db
-	//Find a common header
-	commonHeader := hc.findCommonHeader(head)
-
+	fmt.Println("prevHeader", prevHeader.Hash(), "commonHeader", commonHeader.Hash())
 	// Delete each header and rollback state processor until common header
 	// Accumulate the hash slice stack
 	var hashStack []*types.Header
 	for {
 		if prevHeader.Hash() == commonHeader.Hash() {
+			fmt.Println("appending on prevHeader == commonHeader")
+			hashStack = append(hashStack, head)
 			break
 		}
 
 		// Delete the header and the block
+		fmt.Println("delete prev", prevHeader.Hash())
 		rawdb.DeleteCanonicalHash(hc.headerDb, prevHeader.Number64())
 
 		//TODO: Run state processor to rollback state
@@ -228,8 +233,12 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 		}
 	}
 
+	fmt.Println("Attempting to write canonical hash")
+	fmt.Println("hashStack", hashStack)
+
 	// Run through the hash stack to update canonicalHash and forward state processor
 	for i := len(hashStack) - 1; i >= 0; i-- {
+		fmt.Println("WriteCanonicalHash", hashStack[i].Hash())
 		rawdb.WriteCanonicalHash(hc.headerDb, hashStack[i].Hash(), hashStack[i].Number64())
 		//TODO: Run the state processor forward
 	}
@@ -287,7 +296,7 @@ func (hc *HeaderChain) findCommonHeader(header *types.Header) *types.Header {
 			return nil
 		}
 		canonicalHash := rawdb.ReadCanonicalHash(hc.headerDb, header.Number64())
-		if (canonicalHash != common.Hash{} || canonicalHash == hc.config.GenesisHashes[types.QuaiNetworkContext]) {
+		if canonicalHash == header.Hash() || canonicalHash == hc.config.GenesisHashes[types.QuaiNetworkContext] {
 			return hc.GetHeaderByHash(canonicalHash)
 		}
 		header = hc.GetHeader(header.ParentHash[types.QuaiNetworkContext], header.Number64()-1)
@@ -489,7 +498,9 @@ func (hc *HeaderChain) GetHeaderByNumber(number uint64) *types.Header {
 }
 
 func (hc *HeaderChain) GetCanonicalHash(number uint64) common.Hash {
-	return rawdb.ReadCanonicalHash(hc.headerDb, number)
+	hash := rawdb.ReadCanonicalHash(hc.headerDb, number)
+	fmt.Println("GetCanonicalHash", hash)
+	return hash
 }
 
 // CurrentHeader retrieves the current head header of the canonical chain. The

@@ -141,15 +141,6 @@ func toBlockNumArg(number *big.Int) string {
 	return hexutil.EncodeBig(number)
 }
 
-// GetBlockStatus returns the status of the block for a given header
-func (ec *Client) GetBlockStatus(ctx context.Context, header *types.Header) WriteStatus {
-	var blockStatus WriteStatus
-	if err := ec.c.CallContext(ctx, &blockStatus, "quai_getBlockStatus", header); err != nil {
-		return NonStatTy
-	}
-	return blockStatus
-}
-
 func (ec *Client) HLCRReorg(ctx context.Context, block *types.Block) (bool, error) {
 	var domReorgNeeded bool
 	data, err := RPCMarshalBlock(block, true, true)
@@ -183,13 +174,13 @@ func (ec *Client) GetBlockReceipts(ctx context.Context, blockHash common.Hash) (
 
 // HeaderByNumber returns a block header from the current canonical chain. If number is
 // nil, the latest known header is returned.
-func (ec *Client) HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error) {
-	var head *types.Header
-	err := ec.c.CallContext(ctx, &head, "quai_getBlockByNumber", toBlockNumArg(number), false)
-	if err == nil && head == nil {
-		err = quai.NotFound
+func (ec *Client) GetCanonicalHashByNumber(ctx context.Context, number *big.Int) common.Hash {
+	var hash common.Hash
+	err := ec.c.CallContext(ctx, &hash, "quai_getCanonicalHashByNumber", toBlockNumArg(number))
+	if err != nil {
+		return common.Hash{}
 	}
-	return head, err
+	return hash
 }
 
 // SendMinedBlock sends a mined block back to the node
@@ -253,18 +244,6 @@ func (ec *Client) CheckPCRC(ctx context.Context, header *types.Header, order int
 		return types.PCRCTermini{}, err
 	}
 	return PCRCTermini, nil
-}
-
-// CheckPCCRC runs PCCRC on the node with a given header
-func (ec *Client) CheckPCCRC(ctx context.Context, header *types.Header, order int) (types.PCRCTermini, error) {
-	data := map[string]interface{}{"Header": RPCMarshalHeader(header)}
-	data["Order"] = order
-
-	var PCCRCTermini types.PCRCTermini
-	if err := ec.c.CallContext(ctx, &PCCRCTermini, "quai_checkPCCRC", data); err != nil {
-		return types.PCRCTermini{}, err
-	}
-	return PCCRCTermini, nil
 }
 
 func (ec *Client) getExternalBlock(ctx context.Context, method string, args ...interface{}) (*types.ExternalBlock, error) {

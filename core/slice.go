@@ -65,6 +65,8 @@ func NewSlice(db ethdb.Database, chainConfig *params.ChainConfig, domClientUrl s
 		}()
 	}
 
+	go sl.update()
+
 	return sl, nil
 }
 
@@ -146,6 +148,23 @@ func (sl *Slice) Append(block *types.Block) error {
 	fmt.Println("Slice difficulties", sl.hc.currentHeaderHash, currentTd, block.Header().Hash(), td)
 	reorg := sl.HLCR(currentTd, td)
 
+	if order < types.QuaiNetworkContext {
+		canonical := sl.domClient.GetCanonicalHashByNumber(context.Background(), block.Header().Number[types.QuaiNetworkContext-1])
+		fmt.Println("canonical", canonical, block.Header().Number, block.Header().Hash())
+		if (canonical == common.Hash{}) {
+			fmt.Println("add to future block", block.Header().Number, block.Header().Hash())
+			sl.addFutureBlock(block)
+			return nil
+		}
+		fmt.Println("remove from future block", block.Header().Number, block.Header().Hash())
+		sl.futureBlocks.Remove(block.Hash())
+		// If the header is cononical break else keep looking
+		if canonical != block.Header().Hash() {
+			reorg = false
+		}
+	}
+
+	fmt.Println("calling events in slice append", block.Header().Number, block.Header().Hash())
 	if reorg {
 		err = sl.hc.SetCurrentHeader(block.Header())
 		if err != nil {
@@ -408,6 +427,10 @@ func (sl *Slice) procFutureBlocks() {
 		sort.Slice(blocks, func(i, j int) bool {
 			return blocks[i].NumberU64() < blocks[j].NumberU64()
 		})
+		// Insert one by one as chain insertion needs contiguous ancestry between blocks
+		for i := range blocks {
+			fmt.Println("blocks in future blocks", blocks[i].Header().Number, blocks[i].Header().Hash())
+		}
 		// Insert one by one as chain insertion needs contiguous ancestry between blocks
 		for i := range blocks {
 			sl.Append(blocks[i])

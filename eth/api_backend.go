@@ -74,6 +74,10 @@ func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumb
 	return b.eth.core.GetHeaderByNumber(uint64(number)), nil
 }
 
+func (b *EthAPIBackend) CanonicalHashByNumber(ctx context.Context, number rpc.BlockNumber) common.Hash {
+	return b.eth.core.GetCanonicalHash(uint64(number))
+}
+
 func (b *EthAPIBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Header, error) {
 	if blockNr, ok := blockNrOrHash.Number(); ok {
 		return b.HeaderByNumber(ctx, blockNr)

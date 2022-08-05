@@ -380,3 +380,7 @@ func (b *LesApiBackend) CalcTd(ctx context.Context, header *types.Header) ([]*bi
 func (b *LesApiBackend) GetTerminusAtOrder(header *types.Header, order int) (common.Hash, error) {
 	return common.Hash{}, errors.New("light client does not support retrieving terminus at order")
 }
+
+func (b *LesApiBackend) CanonicalHashByNumber(ctx context.Context, number rpc.BlockNumber) common.Hash {
+	return common.Hash{}
+}
