@@ -38,11 +38,8 @@ var (
 	receiptDropMeter    = metrics.NewRegisteredMeter("eth/downloader/receipts/drop", nil)
 	receiptTimeoutMeter = metrics.NewRegisteredMeter("eth/downloader/receipts/timeout", nil)
 
-	extBlockInMeter      = metrics.NewRegisteredMeter("eth/downloader/extblocks/in", nil)
-	extBlockDropMeter    = metrics.NewRegisteredMeter("eth/downloader/extblocks/drop", nil)
-	extBlockTimeoutMeter = metrics.NewRegisteredMeter("eth/downloader/extblocks/timeout", nil)
-	stateInMeter         = metrics.NewRegisteredMeter("eth/downloader/states/in", nil)
-	stateDropMeter       = metrics.NewRegisteredMeter("eth/downloader/states/drop", nil)
+	stateInMeter   = metrics.NewRegisteredMeter("eth/downloader/states/in", nil)
+	stateDropMeter = metrics.NewRegisteredMeter("eth/downloader/states/drop", nil)
 
 	throttleCounter = metrics.NewRegisteredCounter("eth/downloader/throttle", nil)
 )

@@ -473,18 +473,6 @@ func (lc *LightChain) CalculateBaseFee(header *types.Header) *big.Int {
 	return big.NewInt(0)
 }
 
-// GetExternalBlock is not applicable in the header chain since the BlockChain contains
-// the external blocks cache.
-func (lc *LightChain) GetExternalBlock(hash common.Hash, location []byte, context uint64) (*types.ExternalBlock, error) {
-	return nil, nil
-}
-
-// QueueAndRetrieveExtBlocks is not applicable in the header chain since the BlockChain contains
-// the external blocks cache.
-func (lc *LightChain) QueueAndRetrieveExtBlocks(blocks []*types.ExternalBlock, header *types.Header) []*types.ExternalBlock {
-	return nil
-}
-
 // GetHeaderByNumberOdr retrieves a block header from the database or network
 // by number, caching it (associated with its hash) if found.
 func (lc *LightChain) GetHeaderByNumberOdr(ctx context.Context, number uint64) (*types.Header, error) {

@@ -19,7 +19,6 @@ package types
 
 import (
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -253,155 +252,11 @@ type rlpblock struct {
 	Uncles []*Header
 }
 
-type ExternalBody struct {
-	Transactions Transactions
-	Uncles       []*Header
-	Receipts     []*Receipt
-	Context      *big.Int
-}
-
-// ExternalBlock represents an entire Quai block with multiple contexts.
-type ExternalBlock struct {
-	header       *Header
-	transactions Transactions
-	uncles       []*Header
-	receipts     []*Receipt
-	context      *big.Int
-
-	// caches
-	hash atomic.Value
-	size atomic.Value
-}
-
-// rlp external block encoding. used for eth protocol, etc.
-type rlpexternalblock struct {
-	Header   *Header
-	Txs      []*Transaction
-	Uncles   []*Header
-	Receipts []*Receipt
-	Context  *big.Int
-}
-
-// DecodeRLP decodes the Ethereum
-func (b *ExternalBlock) DecodeRLP(s *rlp.Stream) error {
-	var eb rlpexternalblock
-	_, size, _ := s.Kind()
-	if err := s.Decode(&eb); err != nil {
-		return err
-	}
-	b.header, b.context, b.transactions, b.uncles, b.receipts = eb.Header, eb.Context, eb.Txs, eb.Uncles, eb.Receipts
-	b.size.Store(common.StorageSize(rlp.ListSize(size)))
-	return nil
-}
-
-// EncodeRLP serializes b into the Ethereum RLP block format.
-func (b *ExternalBlock) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, rlpexternalblock{
-		Header:   b.header,
-		Txs:      b.transactions,
-		Uncles:   b.uncles,
-		Context:  b.context,
-		Receipts: b.receipts,
-	})
-}
-
-// NewExternalBlockWithHeader creates a block with the given header data. The
-// header data is copied, changes to header and to the field values
-// will not affect the block.
-func NewExternalBlockWithHeader(header *Header) *ExternalBlock {
-	return &ExternalBlock{header: CopyHeader(header)}
-}
-
-// WithBody returns a new block with the given transaction and uncle contents.
-func (b *ExternalBlock) WithBody(transactions []*Transaction, uncles []*Header, receipts []*Receipt, context *big.Int) *ExternalBlock {
-	block := &ExternalBlock{
-		header:       CopyHeader(b.header),
-		transactions: make([]*Transaction, len(transactions)),
-		uncles:       make([]*Header, len(uncles)),
-		receipts:     make([]*Receipt, len(receipts)),
-		context:      context,
-	}
-	copy(block.transactions, transactions)
-	for i := range uncles {
-		block.uncles[i] = CopyHeader(uncles[i])
-	}
-	copy(block.receipts, receipts)
-	return block
-}
-
-// Simple access methods for ExternalBlocks
-func (b *ExternalBlock) Header() *Header            { return CopyHeader(b.header) }
-func (b *ExternalBlock) Transactions() Transactions { return b.transactions }
-func (b *ExternalBlock) Uncles() []*Header          { return b.uncles }
-func (b *ExternalBlock) Receipts() Receipts         { return b.receipts }
-func (b *ExternalBlock) Context() *big.Int          { return b.context }
-func (b *ExternalBlock) CacheKey() []byte {
-	hash := b.header.Hash()
-	return ExtBlockCacheKey(b.context.Uint64(), hash)
-}
-
-// Returns current MapContext for a given block.
-func (b *ExternalBlock) MapContext() ([]int, error) {
-	return currentBlockOntology(b.header.Number)
-}
-
 // encodeBlockNumber encodes a block number as big endian uint64
 func encodeBlockNumber(number uint64) []byte {
 	enc := make([]byte, 8)
 	binary.BigEndian.PutUint64(enc, number)
 	return enc
-}
-
-// extBlockBodyKey = blockBodyPrefix + num (uint64 big endian) + location + context + hash
-func ExtBlockCacheKey(context uint64, hash common.Hash) []byte {
-	return append(append([]byte("e"), encodeBlockNumber(context)...), hash.Bytes()...)
-}
-
-// Body returns the non-header content of the block.
-func (b *ExternalBlock) Body() *ExternalBody {
-	return &ExternalBody{b.transactions, b.uncles, b.receipts, b.context}
-}
-
-// ReceiptForTransaction searches receipts within an external block for a specific transaction
-func (b *ExternalBlock) ReceiptForTransaction(tx *Transaction) *Receipt {
-	for _, receipt := range b.receipts {
-		if receipt.TxHash == tx.Hash() {
-			return receipt
-		}
-	}
-	return &Receipt{}
-}
-
-func (b *ExternalBlock) Hash() common.Hash {
-	if hash := b.hash.Load(); hash != nil {
-		return hash.(common.Hash)
-	}
-	v := b.header.Hash()
-	b.hash.Store(v)
-	return v
-}
-
-// Size returns the true RLP encoded storage size of the block, either by encoding
-// and returning it, or returning a previsouly cached value.
-func (b *ExternalBlock) Size() common.StorageSize {
-	if size := b.size.Load(); size != nil {
-		return size.(common.StorageSize)
-	}
-	c := writeCounter(0)
-	rlp.Encode(&c, b)
-	b.size.Store(common.StorageSize(c))
-	return common.StorageSize(c)
-}
-
-func (b *ExternalBlock) UnmarshalJSON(data []byte) error {
-	var res []interface{}
-	if err := json.Unmarshal(data, &res); err != nil {
-		return err
-	}
-
-	fmt.Println(res)
-
-	return nil
 }
 
 // NewBlock creates a new block. The input data is copied,

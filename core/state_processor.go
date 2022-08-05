@@ -49,8 +49,7 @@ const (
 	maxFutureBlocks     = 256
 	maxTimeFutureBlocks = 30
 
-	TriesInMemory      = 128
-	extBlockQueueLimit = 1024
+	TriesInMemory = 128
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	//
@@ -92,9 +91,6 @@ type CacheConfig struct {
 	Preimages           bool          // Whether to store preimage of trie key to the disk
 
 	SnapshotWait bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
-
-	ExternalBlockLimit   int    // Memory allowance (MB) to use for caching trie nodes in memory
-	ExternalBlockJournal string // Disk journal for saving clean cache entries.
 }
 
 // defaultCacheConfig are the default caching values if none are specified by the

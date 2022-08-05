@@ -72,7 +72,6 @@ var (
 	errInvalidDifficulty = errors.New("non-positive difficulty")
 	errInvalidMixDigest  = errors.New("invalid mix digest")
 	errInvalidPoW        = errors.New("invalid proof-of-work")
-	errExtBlockNotFound  = errors.New("external block not found")
 )
 
 // Exported for fuzzing

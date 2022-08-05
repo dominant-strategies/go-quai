@@ -462,13 +462,6 @@ func (dlp *downloadTesterPeer) RequestBodies(hashes []common.Hash) error {
 	return nil
 }
 
-//RequestExteralBlocks
-func (dlp *downloadTesterPeer) RequestExternalBlocks(hashes []common.Hash) error {
-	//extBlocks := dlp.chain
-	//go dlp.dl.downloader.DeliverExtBlocks(dlp.id,extBlocks)
-	return nil
-}
-
 // RequestReceipts constructs a getReceipts method associated with a particular
 // peer in the download tester. The returned function can be used to retrieve
 // batches of block receipts from the particularly requested peer.

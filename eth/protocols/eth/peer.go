@@ -24,7 +24,6 @@ import (
 	mapset "github.com/deckarep/golang-set"
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/core/types"
-	"github.com/spruce-solutions/go-quai/log"
 	"github.com/spruce-solutions/go-quai/p2p"
 	"github.com/spruce-solutions/go-quai/rlp"
 )
@@ -279,24 +278,6 @@ func (p *Peer) SendNewBlock(block *types.Block, td []*big.Int) error {
 	})
 }
 
-// SendExtBlocks propagates an entire block to a remote peer.
-func (p *Peer) SendExtBlocks(blocks []*types.ExternalBlock) error {
-	var (
-		bytes     int
-		extBlocks []rlp.RawValue
-	)
-
-	// If known, encode and queue for response packet
-	if encoded, err := rlp.EncodeToBytes(blocks); err != nil {
-		log.Error("Failed to encode receipt", "err", err)
-	} else {
-		extBlocks = append(extBlocks, encoded)
-		bytes += len(encoded)
-	}
-
-	return p.SendExtBlocksRLP(extBlocks)
-}
-
 // AsyncSendNewBlock queues an entire block for propagation to a remote peer. If
 // the peer's broadcast queue is full, the event is silently dropped.
 func (p *Peer) AsyncSendNewBlock(block *types.Block, td []*big.Int) {
@@ -339,21 +320,6 @@ func (p *Peer) ReplyReceiptsRLP(id uint64, receipts []rlp.RawValue) error {
 	return p2p.Send(p.rw, ReceiptsMsg, ReceiptsRLPPacket66{
 		RequestId:         id,
 		ReceiptsRLPPacket: receipts,
-	})
-}
-
-// SendExtBlocksRLP sends a batch of external blocks, corresponding to the
-// ones requested from an already RLP encoded format.
-func (p *Peer) SendExtBlocksRLP(extblocks []rlp.RawValue) error {
-	return p2p.Send(p.rw, ExtBlocksMsg, extblocks) // Not packed into ReceiptsPacket to avoid RLP decoding
-}
-
-// ReplyExtBlocksRLP is the eth/66 response to GetExtBlocks.
-func (p *Peer) ReplyExtBlocksRLP(id uint64, extblocks []rlp.RawValue) error {
-	// log.Info("Sending replyExtBlocksRLP", "len", len(extblocks))
-	return p2p.Send(p.rw, ExtBlocksMsg, ExtBlocksRLPPacket66{
-		RequestId:          id,
-		ExtBlocksRLPPacket: extblocks,
 	})
 }
 
@@ -504,19 +470,4 @@ func (k *knownCache) Contains(hash common.Hash) bool {
 // Cardinality returns the number of elements in the set.
 func (k *knownCache) Cardinality() int {
 	return k.hashes.Cardinality()
-}
-
-// RequestExternalBlocks fetches a batch of external blocks from a remote node.
-func (p *Peer) RequestExternalBlocks(hashes []common.Hash) error {
-	p.Log().Debug("Fetching batch of external blocks", "count", len(hashes))
-	if p.Version() >= QUAI66 {
-		id := rand.Uint64()
-
-		requestTracker.Track(p.id, p.version, GetExtBlocksMsg, ExtBlocksMsg, id)
-		return p2p.Send(p.rw, GetExtBlocksMsg, &GetExtBlocksPacket66{
-			RequestId:          id,
-			GetExtBlocksPacket: hashes,
-		})
-	}
-	return p2p.Send(p.rw, GetExtBlocksMsg, GetExtBlocksPacket(hashes))
 }

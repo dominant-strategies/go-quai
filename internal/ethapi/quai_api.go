@@ -442,44 +442,6 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool) (map[string]i
 	return fields, nil
 }
 
-// RPCMarshalBlock converts the given block to the RPC output which depends on fullTx. If inclTx is true transactions are
-// returned. When fullTx is true the returned block contains full transaction details, otherwise it will only contain
-// transaction hashes.
-func RPCMarshalExternalBlock(block *types.Block, receipts []*types.Receipt, context *big.Int) (map[string]interface{}, error) {
-	fields := RPCMarshalHeader(block.Header())
-	fields["size"] = hexutil.Uint64(block.Size())
-
-	formatTx := func(tx *types.Transaction) (interface{}, error) {
-		return newRPCTransactionFromBlockHash(block, tx.Hash()), nil
-	}
-
-	txs := block.Transactions()
-	transactions := make([]interface{}, len(txs))
-	var err error
-	for i, tx := range txs {
-		if transactions[i], err = formatTx(tx); err != nil {
-			return nil, err
-		}
-	}
-
-	ucls := block.Uncles()
-	uncles := make([]interface{}, len(ucls))
-	for i, ucl := range ucls {
-		uncles[i] = RPCMarshalHeader(ucl)
-	}
-
-	fieldReceipts := make([]interface{}, len(receipts))
-	for i, receipt := range receipts {
-		fieldReceipts[i], _ = RPCMarshalReceipt(receipt)
-	}
-	fields["receipts"] = fieldReceipts
-
-	fields["transactions"] = transactions
-	fields["uncles"] = uncles
-	fields["context"] = context
-	return fields, nil
-}
-
 // rpcMarshalReOrgData converts the reOrgData obtained to the right header format
 func RPCMarshalReOrgData(header *types.Header, newHeaders []*types.Header, oldHeaders []*types.Header) (map[string]interface{}, error) {
 	fields := map[string]interface{}{"header": RPCMarshalHeader(header)}
@@ -496,13 +458,6 @@ func RPCMarshalReOrgData(header *types.Header, newHeaders []*types.Header, oldHe
 
 	fields["newHeaders"] = fieldNewHeaders
 	fields["oldHeaders"] = fieldOldHeaders
-	return fields, nil
-}
-
-// RPCMarshalExternalBlockTraceSet converts the header and context into the right format
-func RPCMarshalExternalBlockTraceSet(hash common.Hash, context int) (map[string]interface{}, error) {
-	fields := map[string]interface{}{"Hash": hash}
-	fields["Context"] = context
 	return fields, nil
 }
 
@@ -607,47 +562,6 @@ type rpcReorgData struct {
 	Header     *types.Header   `json:"header"`
 	NewHeaders []*types.Header `json:"newHeaders"`
 	OldHeaders []*types.Header `json:"oldHeaders"`
-}
-
-type rpcExternalBlock struct {
-	Hash         common.Hash      `json:"hash"`
-	Transactions []rpcTransaction `json:"transactions"`
-	Uncles       []*types.Header  `json:"uncles"`
-	Receipts     []*types.Receipt `json:"receipts"`
-	Context      *big.Int         `json:"context"`
-}
-
-// SendExternalBlock will run checks on the block and add to canonical chain if valid.
-func (s *PublicBlockChainQuaiAPI) SendExternalBlock(ctx context.Context, raw json.RawMessage) error {
-	// Decode header and transactions.
-	var head *types.Header
-	var body rpcExternalBlock
-	if err := json.Unmarshal(raw, &head); err != nil {
-		return err
-	}
-	if err := json.Unmarshal(raw, &body); err != nil {
-		return err
-	}
-
-	// Load transactions
-	txs := make([]*types.Transaction, len(body.Transactions))
-	for i, tx := range body.Transactions {
-		txs[i] = tx.tx
-	}
-
-	uncles := make([]*types.Header, len(body.Uncles))
-	for i, uncle := range body.Uncles {
-		uncles[i] = uncle
-	}
-
-	receipts := make([]*types.Receipt, len(body.Receipts))
-	for i, receipt := range body.Receipts {
-		receipts[i] = receipt
-	}
-
-	// block := types.NewExternalBlockWithHeader(head).WithBody(txs, uncles, receipts, body.Context)
-
-	return nil
 }
 
 type HeaderHashWithContext struct {

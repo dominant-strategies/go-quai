@@ -62,8 +62,6 @@ const (
 	NodeDataMsg        = 0x0e
 	GetReceiptsMsg     = 0x0f
 	ReceiptsMsg        = 0x10
-	GetExtBlocksMsg    = 0x11
-	ExtBlocksMsg       = 0x12
 
 	// Protocol messages overloaded in eth/65
 	NewPooledTransactionHashesMsg = 0x08
@@ -182,9 +180,8 @@ type BlockHeadersPacket66 struct {
 
 // NewBlockPacket is the network packet for the block propagation message.
 type NewBlockPacket struct {
-	Block     *types.Block
-	TD        []*big.Int
-	ExtBlocks []*types.ExternalBlock
+	Block *types.Block
+	TD    []*big.Int
 }
 
 // sanityCheck verifies that the values are reasonable, as a DoS protection
@@ -295,33 +292,6 @@ type ReceiptsRLPPacket66 struct {
 	ReceiptsRLPPacket
 }
 
-// GetExtBlockPacket represents a block external block query.
-type GetExtBlocksPacket []common.Hash
-
-// GetExtBlockPacket represents a a block external block query over eth/66.
-type GetExtBlocksPacket66 struct {
-	RequestId uint64
-	GetExtBlocksPacket
-}
-
-// ExtBlocksPacket is the network packet for block external block distribution.
-type ExtBlocksPacket [][]*types.ExternalBlock
-
-// ReceiptsPacket is the network packet for block external block distribution over eth/66.
-type ExtBlocksPacket66 struct {
-	RequestId uint64
-	ExtBlocksPacket
-}
-
-// ExtBlocksRLPPacket is used for external blocks, when we already have it encoded
-type ExtBlocksRLPPacket []rlp.RawValue
-
-// ExtBlocksRLPPacket66 is the eth-66 version of ExtBlocksRLPPacket
-type ExtBlocksRLPPacket66 struct {
-	RequestId uint64
-	ExtBlocksRLPPacket
-}
-
 // NewPooledTransactionHashesPacket represents a transaction announcement packet.
 type NewPooledTransactionHashesPacket []common.Hash
 
@@ -387,12 +357,6 @@ func (*GetReceiptsPacket) Kind() byte   { return GetReceiptsMsg }
 
 func (*ReceiptsPacket) Name() string { return "Receipts" }
 func (*ReceiptsPacket) Kind() byte   { return ReceiptsMsg }
-
-func (*GetExtBlocksPacket) Name() string { return "GetExtBlocks" }
-func (*GetExtBlocksPacket) Kind() byte   { return GetExtBlocksMsg }
-
-func (*ExtBlocksPacket) Name() string { return "ExtBlocks" }
-func (*ExtBlocksPacket) Kind() byte   { return ExtBlocksMsg }
 
 func (*NewPooledTransactionHashesPacket) Name() string { return "NewPooledTransactionHashes" }
 func (*NewPooledTransactionHashesPacket) Kind() byte   { return NewPooledTransactionHashesMsg }

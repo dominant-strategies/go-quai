@@ -116,10 +116,6 @@ func (b *LesApiBackend) InsertBlock(ctx context.Context, block *types.Block) (in
 	return 0, nil
 }
 
-func (b *LesApiBackend) GetExternalBlockByHashAndContext(hash common.Hash, context int) (*types.ExternalBlock, error) {
-	return nil, errors.New("light client does not support external block caching")
-}
-
 func (b *LesApiBackend) GetAncestorByLocation(hash common.Hash, location []byte) (*types.Header, error) {
 	return nil, errors.New("light client does not support getting ancestor by location")
 }

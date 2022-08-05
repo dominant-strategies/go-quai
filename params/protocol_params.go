@@ -160,9 +160,6 @@ const (
 	// up to half the consumed gas could be refunded. Redefined as 1/5th in EIP-3529
 	RefundQuotient        uint64 = 2
 	RefundQuotientEIP3529 uint64 = 5
-
-	ExternalBlockLookupLimit int   = 75 // Amount of iterations to lookup external block
-	ExternalBlockLookupDelay int64 = 25 // Delay time (ms) for external block lookup during polling
 )
 
 // Gas discount table for BLS12-381 G1 and G2 multi exponentiation operations

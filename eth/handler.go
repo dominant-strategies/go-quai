@@ -191,7 +191,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	heighter := func() uint64 {
 		return h.core.CurrentBlock().NumberU64()
 	}
-	inserter := func(blocks types.Blocks, extBlocks []*types.ExternalBlock) (int, error) {
+	inserter := func(blocks types.Blocks) (int, error) {
 		// If sync hasn't reached the checkpoint yet, deny importing weird blocks.
 		//
 		// Ideally we would also compare the head block's timestamp and similarly reject

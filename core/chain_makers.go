@@ -331,12 +331,6 @@ func (cr *fakeChainReader) GetHeaderByNumber(number uint64) *types.Header       
 func (cr *fakeChainReader) GetHeaderByHash(hash common.Hash) *types.Header          { return nil }
 func (cr *fakeChainReader) GetHeader(hash common.Hash, number uint64) *types.Header { return nil }
 func (cr *fakeChainReader) GetBlock(hash common.Hash, number uint64) *types.Block   { return nil }
-func (cr *fakeChainReader) GetExternalBlock(hash common.Hash, location []byte, context uint64) (*types.ExternalBlock, error) {
-	return nil, nil
-}
-func (cr *fakeChainReader) QueueAndRetrieveExtBlocks(blocks []*types.ExternalBlock, header *types.Header) []*types.ExternalBlock {
-	return nil
-}
 
 func (cr *fakeChainReader) GetUnclesInChain(block *types.Block, length int) []*types.Header {
 	return nil

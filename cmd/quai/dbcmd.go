@@ -205,20 +205,6 @@ func removeDB(ctx *cli.Context) error {
 		} else {
 			log.Info("Full node ancient database missing", "path", path)
 		}
-
-		extPath := filepath.Join(d, "quai", "externalblocks")
-		if common.FileExist(extPath) {
-			confirmAndRemoveDB(extPath, "full external blocks db")
-		} else {
-			log.Info("Full external blocks database missing", "path", extPath)
-		}
-		// Remove the light node database
-		/* path = d.ResolvePath("lightchaindata")
-		if common.FileExist(path) {
-			confirmAndRemoveDB(path, "light node database")
-		} else {
-			log.Info("Light node database missing", "path", path)
-		} */
 	}
 
 	return nil
