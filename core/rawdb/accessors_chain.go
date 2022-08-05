@@ -602,12 +602,14 @@ func ReadTdRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 
 // ReadHeadsHashes retreive's the heads hashes of the blockchain.
 func ReadHeadsHashes(db ethdb.Reader) []common.Hash {
-	data, _ := db.Get(headBlockKey)
+	data, _ := db.Get(headsHashesKey)
 	if len(data) == 0 {
 		return []common.Hash{}
 	}
-	var hashes []common.Hash
-	rlp.DecodeBytes(data, hashes)
+	hashes := []common.Hash{}
+	if err := rlp.DecodeBytes(data, &hashes); err != nil {
+		return []common.Hash{}
+	}
 	return hashes
 }
 

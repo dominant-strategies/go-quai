@@ -320,6 +320,7 @@ func (hc *HeaderChain) findCommonHeader(header *types.Header) *types.Header {
 func (hc *HeaderChain) loadLastState() error {
 	// TODO: create function to find highest block number and fill Head FIFO
 	headsHashes := rawdb.ReadHeadsHashes(hc.headerDb)
+	fmt.Println("heads hashes: ", headsHashes)
 
 	if head := rawdb.ReadHeadBlockHash(hc.headerDb); head != (common.Hash{}) {
 		if chead := hc.GetHeaderByHash(head); chead != nil {
@@ -344,6 +345,14 @@ func (hc *HeaderChain) Stop() {
 	if !atomic.CompareAndSwapInt32(&hc.running, 0, 1) {
 		return
 	}
+
+	hashes := make([]common.Hash, 0)
+	for i := 0; i < len(hc.heads); i++ {
+		hashes = append(hashes, hc.heads[i].Hash())
+	}
+	// Save the heads
+	rawdb.WriteHeadsHashes(hc.headerDb, hashes)
+
 	// Unsubscribe all subscriptions registered from blockchain
 	hc.bc.scope.Close()
 	close(hc.quit)
