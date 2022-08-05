@@ -143,6 +143,17 @@ func (sl *Slice) Append(block *types.Block) error {
 	// write the tds
 	rawdb.WriteTd(sl.hc.headerDb, block.Hash(), block.NumberU64(), td)
 
+	// Everytime the total difficulty is written the PreviousCanonicalCoincident(PCC) check is done on our chain
+	// and if we have a sub client in the given slice, PCC is triggered there as well
+	_, err = sl.PreviousCanonicalCoincident(block.Header(), block.Header().Location, types.QuaiNetworkContext, true)
+	if err != nil {
+		return err
+	}
+	// check if we have a subsclient on that slice
+	if sl.subClients[block.Header().Location[1]-1] != nil {
+		sl.subClients[block.Header().Location[1]-1].PCC(context.Background(), block.Header(), block.Header().Location, types.QuaiNetworkContext)
+	}
+
 	// We have a new possible head call HLCR to potentially set
 	currentTd := sl.hc.GetTd(sl.hc.currentHeaderHash, sl.hc.CurrentHeader().Number64())
 	fmt.Println("Slice difficulties", sl.hc.currentHeaderHash, currentTd, block.Header().Hash(), td)
@@ -215,11 +226,11 @@ func (sl *Slice) PCRC(block *types.Block, headerOrder int) (types.PCRCTermini, e
 
 	switch types.QuaiNetworkContext {
 	case params.PRIME:
-		PTP, err := sl.PreviousValidCoincidentOnPath(header, slice, params.PRIME, params.PRIME, true)
+		PTP, err := sl.PreviousValidCoincident(header, slice, params.PRIME, true)
 		if err != nil {
 			return types.PCRCTermini{}, err
 		}
-		PRTP, err := sl.PreviousValidCoincidentOnPath(header, slice, params.PRIME, params.PRIME, false)
+		PRTP, err := sl.PreviousValidCoincident(header, slice, params.PRIME, false)
 		if err != nil {
 			return types.PCRCTermini{}, err
 		}
@@ -249,7 +260,7 @@ func (sl *Slice) PCRC(block *types.Block, headerOrder int) (types.PCRCTermini, e
 		return PCRCTermini, nil
 
 	case params.REGION:
-		RTR, err := sl.PreviousValidCoincidentOnPath(header, slice, params.REGION, params.REGION, true)
+		RTR, err := sl.PreviousValidCoincident(header, slice, params.REGION, true)
 		if err != nil {
 			return types.PCRCTermini{}, err
 		}
@@ -271,11 +282,11 @@ func (sl *Slice) PCRC(block *types.Block, headerOrder int) (types.PCRCTermini, e
 			return types.PCRCTermini{}, errors.New("there exists a Region twist (RTR != RTZ)")
 		}
 		if headerOrder < params.REGION {
-			PTR, err := sl.PreviousValidCoincidentOnPath(header, slice, params.PRIME, params.REGION, true)
+			PTR, err := sl.PreviousValidCoincident(header, slice, params.PRIME, true)
 			if err != nil {
 				return types.PCRCTermini{}, err
 			}
-			PRTR, err := sl.PreviousValidCoincidentOnPath(header, slice, params.PRIME, params.REGION, false)
+			PRTR, err := sl.PreviousValidCoincident(header, slice, params.PRIME, false)
 			if err != nil {
 				return types.PCRCTermini{}, err
 			}
@@ -293,7 +304,7 @@ func (sl *Slice) PCRC(block *types.Block, headerOrder int) (types.PCRCTermini, e
 		// So running this only on a coincident block makes sure that the zones can move and sync past the coincident.
 		// Just run RTZ to make sure that its linked. This check decouples this signaling and linking paradigm.
 		if headerOrder < params.REGION {
-			PTZ, err := sl.PreviousValidCoincidentOnPath(header, slice, params.PRIME, params.ZONE, true)
+			PTZ, err := sl.PreviousValidCoincident(header, slice, params.PRIME, true)
 			if err != nil {
 				return types.PCRCTermini{}, err
 			}
@@ -301,7 +312,7 @@ func (sl *Slice) PCRC(block *types.Block, headerOrder int) (types.PCRCTermini, e
 		}
 
 		if headerOrder < params.ZONE {
-			RTZ, err := sl.PreviousValidCoincidentOnPath(header, slice, params.REGION, params.ZONE, true)
+			RTZ, err := sl.PreviousValidCoincident(header, slice, params.REGION, true)
 			if err != nil {
 				return types.PCRCTermini{}, err
 			}
@@ -313,18 +324,19 @@ func (sl *Slice) PCRC(block *types.Block, headerOrder int) (types.PCRCTermini, e
 	return types.PCRCTermini{}, errors.New("running in unsupported context")
 }
 
-// PreviousValidCoincidentOnPath searches the path for a cononical block of specified order in the specified slice
+// PreviousCanonicalCoincident searches the path for a cononical block of specified order in the specified slice
 //     *slice - The zone location which defines the slice in which we are validating
 //     *order - The order of the conincidence that is desired
 //     *path - Search among ancestors of this path in the specified slice
-func (sl *Slice) PreviousValidCoincidentOnPath(header *types.Header, slice []byte, order, path int, fullSliceEqual bool) (*types.Header, error) {
+func (sl *Slice) PreviousCanonicalCoincident(header *types.Header, slice []byte, order int, fullSliceEqual bool) (*types.Header, error) {
+	fmt.Println("header: ", header.Hash(), "slice: ", slice, "order: ", order)
 	prevTerminalHeader := header
 	for {
 		if prevTerminalHeader.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
 			return sl.hc.GetHeaderByHash(sl.Config().GenesisHashes[0]), nil
 		}
 
-		terminalHeader, err := sl.PreviousCoincidentOnPath(prevTerminalHeader, slice, order, fullSliceEqual)
+		terminalHeader, err := sl.PreviousValidCoincident(prevTerminalHeader, slice, order, fullSliceEqual)
 		if err != nil {
 			return nil, err
 		}
@@ -337,9 +349,9 @@ func (sl *Slice) PreviousValidCoincidentOnPath(header *types.Header, slice []byt
 
 		// If the current header is dominant coincident check the status with the dom node
 		if order < types.QuaiNetworkContext {
-			status := sl.hc.GetHeaderByHash(terminalHeader.Hash())
+			status := sl.domClient.GetCanonicalHashByNumber(context.Background(), terminalHeader.Number[types.QuaiNetworkContext-1])
 			fmt.Println("terminal Header status", status)
-			if status != nil {
+			if (status != common.Hash{}) {
 				if prevTerminalHeader.Hash() != header.Hash() {
 					return nil, errors.New("subordinate terminus mismatch")
 				}
@@ -353,11 +365,11 @@ func (sl *Slice) PreviousValidCoincidentOnPath(header *types.Header, slice []byt
 	}
 }
 
-// PreviousCoincidentOnPath searches the path for a block of specified order in the specified slice
+// PreviousValidCoincident searches the path for a block of specified order in the specified slice
 //     *slice - The zone location which defines the slice in which we are validating
 //     *order - The order of the conincidence that is desired
 //     *path - Search among ancestors of this path in the specified slice
-func (sl *Slice) PreviousCoincidentOnPath(header *types.Header, slice []byte, order int, fullSliceEqual bool) (*types.Header, error) {
+func (sl *Slice) PreviousValidCoincident(header *types.Header, slice []byte, order int, fullSliceEqual bool) (*types.Header, error) {
 
 	if header.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
 		return sl.hc.GetHeaderByHash(sl.hc.Config().GenesisHashes[0]), nil

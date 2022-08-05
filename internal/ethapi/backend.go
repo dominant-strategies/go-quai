@@ -76,6 +76,7 @@ type Backend interface {
 	GetTerminusAtOrder(header *types.Header, order int) (common.Hash, error)
 
 	PCRC(block *types.Block, order int) (types.PCRCTermini, error)
+	PCC(header *types.Header, slice []byte, order int) error
 	EventMux() *event.TypeMux
 	CalculateBaseFee(header *types.Header) *big.Int
 	GetUncleFromWorker(uncleHash common.Hash) (*types.Block, error)

@@ -136,6 +136,10 @@ func (b *EthAPIBackend) PCRC(block *types.Block, order int) (types.PCRCTermini, 
 	return b.eth.core.PCRC(block, order)
 }
 
+func (b *EthAPIBackend) PCC(header *types.Header, slice []byte, order int) error {
+	return b.eth.core.PCC(header, slice, order)
+}
+
 func (b *EthAPIBackend) CalcTd(ctx context.Context, header *types.Header) ([]*big.Int, error) {
 	return b.eth.core.CalcTd(header)
 }

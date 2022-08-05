@@ -716,6 +716,21 @@ func (s *PublicBlockChainQuaiAPI) CheckPCRC(ctx context.Context, raw json.RawMes
 	return s.b.PCRC(block, body.Order)
 }
 
+type HeaderWithSliceAndOrder struct {
+	Header *types.Header
+	Slice  []byte
+	Order  int
+}
+
+// PCC gets the previous coincident on path for a given header, order and slice.
+func (s *PublicBlockChainQuaiAPI) PCC(ctx context.Context, raw json.RawMessage) error {
+	var headerWithSliceAndOrder HeaderWithSliceAndOrder
+	if err := json.Unmarshal(raw, &headerWithSliceAndOrder); err != nil {
+		return err
+	}
+	return s.b.PCC(headerWithSliceAndOrder.Header, headerWithSliceAndOrder.Slice, headerWithSliceAndOrder.Order)
+}
+
 // CalcTd calculates the total difficulty of a blockchain up to a block
 func (s *PublicBlockChainQuaiAPI) CalcTd(ctx context.Context, raw json.RawMessage) ([]*big.Int, error) {
 	var header *types.Header

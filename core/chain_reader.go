@@ -31,12 +31,6 @@ type ChainReader interface {
 	// HLCR does hierarchical comparison of two difficulty tuples and returns true if second tuple is greater than the first
 	HLCR(localDifficulties []*big.Int, externDifficulties []*big.Int) bool
 
-	// DomReorgNeeded checks the dominant chain for the reorg status.
-	DomReorgNeeded(header *types.Header) (bool, error)
-
-	// PCCRC The purpose of the Previous Coincident Reference Check (PCRC) is to establish
-	PCCRC(header *types.Header, headerOrder int) (types.PCRCTermini, error)
-
 	// Gets the difficulty order of a header
 	GetDifficultyOrder(header *types.Header) (int, error)
 }

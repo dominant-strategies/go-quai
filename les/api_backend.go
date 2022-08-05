@@ -128,14 +128,6 @@ func (b *LesApiBackend) PCRC(block *types.Block, order int) (types.PCRCTermini, 
 	return types.PCRCTermini{}, errors.New("light client does not support running PCRC")
 }
 
-func (b *LesApiBackend) PCCRC(header *types.Header, order int) (types.PCRCTermini, error) {
-	return types.PCRCTermini{}, errors.New("light client does not support running PCCRC")
-}
-
-func (b *LesApiBackend) ReOrgRollBack(header *types.Header, validHeaders []*types.Header, invalidHeaders []*types.Header) error {
-	return errors.New("light client does not support reorg")
-}
-
 func (b *LesApiBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Block, error) {
 	if blockNr, ok := blockNrOrHash.Number(); ok {
 		return b.BlockByNumber(ctx, blockNr)
@@ -206,6 +198,10 @@ func (b *LesApiBackend) GetTd(ctx context.Context, hash common.Hash) []*big.Int 
 	if number := rawdb.ReadHeaderNumber(b.eth.chainDb, hash); number != nil {
 		return b.eth.blockchain.GetTdOdr(ctx, hash, *number)
 	}
+	return nil
+}
+
+func (b *LesApiBackend) PCC(header *types.Header, slice []byte, order int) error {
 	return nil
 }
 

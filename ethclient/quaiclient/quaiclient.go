@@ -241,7 +241,6 @@ func (ec *Client) CheckPCRC(ctx context.Context, block *types.Block, order int) 
 		return types.PCRCTermini{}, err
 	}
 
-	fmt.Println("check pcrc is crashing: ", block.Hash(), order, data)
 	var PCRCTermini types.PCRCTermini
 	if err := ec.c.CallContext(ctx, &PCRCTermini, "quai_checkPCRC", data); err != nil {
 		return types.PCRCTermini{}, err
@@ -560,4 +559,13 @@ func (ec *Client) CalcTd(ctx context.Context, header *types.Header) ([]*big.Int,
 	var td []*big.Int
 	err := ec.c.CallContext(ctx, &td, "quai_calcTd", header)
 	return td, err
+}
+
+// PCC checks if the previous terminal header is canonical in dom and iterates until a canonical dom is found.
+func (ec *Client) PCC(ctx context.Context, header *types.Header, slice []byte, order int) error {
+	data := map[string]interface{}{"Header": RPCMarshalHeader(header)}
+	data["Slice"] = slice
+	data["Order"] = order
+	err := ec.c.CallContext(ctx, nil, "quai_pCC", header)
+	return err
 }

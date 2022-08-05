@@ -363,6 +363,11 @@ func (c *Core) PCRC(block *types.Block, order int) (types.PCRCTermini, error) {
 	return c.sl.PCRC(block, order)
 }
 
+func (c *Core) PCC(header *types.Header, slice []byte, order int) error {
+	_, err := c.sl.PreviousCanonicalCoincident(header, slice, order, true)
+	return err
+}
+
 func (c *Core) CalcTd(header *types.Header) ([]*big.Int, error) {
 	return c.sl.CalcTd(header)
 }
