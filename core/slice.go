@@ -143,17 +143,6 @@ func (sl *Slice) Append(block *types.Block) error {
 	// write the tds
 	rawdb.WriteTd(sl.hc.headerDb, block.Hash(), block.NumberU64(), td)
 
-	// Everytime the total difficulty is written the PreviousCanonicalCoincident(PCC) check is done on our chain
-	// and if we have a sub client in the given slice, PCC is triggered there as well
-	_, err = sl.PreviousCanonicalCoincident(block.Header(), block.Header().Location, types.QuaiNetworkContext, true)
-	if err != nil {
-		return err
-	}
-	// check if we have a subsclient on that slice
-	if sl.subClients[block.Header().Location[1]-1] != nil {
-		sl.subClients[block.Header().Location[1]-1].PCC(context.Background(), block.Header(), block.Header().Location, types.QuaiNetworkContext)
-	}
-
 	// We have a new possible head call HLCR to potentially set
 	currentTd := sl.hc.GetTd(sl.hc.currentHeaderHash, sl.hc.CurrentHeader().Number64())
 	fmt.Println("Slice difficulties", sl.hc.currentHeaderHash, currentTd, block.Header().Hash(), td)
@@ -181,23 +170,38 @@ func (sl *Slice) Append(block *types.Block) error {
 		if err != nil {
 			return err
 		}
+		sl.hc.bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
+		if len(logs) > 0 {
+			sl.hc.bc.logsFeed.Send(logs)
+		}
+
+		// In theory we should fire a ChainHeadEvent when we inject
+		// a canonical block, but sometimes we can insert a batch of
+		// canonicial blocks. Avoid firing too many ChainHeadEvents,
+		// we will fire an accumulated ChainHeadEvent and disable fire
+		// event here.
+		if true {
+			sl.hc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
+		}
+
+		// Everytime the total difficulty is written the PreviousCanonicalCoincident(PCC) check is done on our chain
+		// and if we have a sub client in the given slice, PCC is triggered there as well
+		if types.QuaiNetworkContext != params.PRIME {
+			err = sl.PreviousCanonicalCoincident()
+			if err != nil {
+				return err
+			}
+		}
+		for i := 0; i < len(params.FullerOntology); i++ {
+			// check if we have a subsclient on that slice
+			if sl.subClients[i] != nil {
+				fmt.Println("header hash, location and order: ", block.Header().Hash(), block.Header().Location, types.QuaiNetworkContext)
+				sl.subClients[block.Header().Location[1]-1].PCC(context.Background())
+			}
+		}
 		fmt.Println("Set current header", block.Header().Hash())
 	} else {
 		sl.hc.bc.chainSideFeed.Send(ChainSideEvent{Block: block})
-	}
-
-	sl.hc.bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
-	if len(logs) > 0 {
-		sl.hc.bc.logsFeed.Send(logs)
-	}
-
-	// In theory we should fire a ChainHeadEvent when we inject
-	// a canonical block, but sometimes we can insert a batch of
-	// canonicial blocks. Avoid firing too many ChainHeadEvents,
-	// we will fire an accumulated ChainHeadEvent and disable fire
-	// event here.
-	if true {
-		sl.hc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
 	}
 
 	return nil
@@ -208,7 +212,6 @@ func (sl *Slice) Append(block *types.Block) error {
 // NOTE: note that it only guarantees linked & untwisted back to the prime terminus, assuming the
 // prime termini match. To check deeper than that, you need to iteratively apply PCRC to get that guarantee.
 func (sl *Slice) PCRC(block *types.Block, headerOrder int) (types.PCRCTermini, error) {
-
 	header := block.Header()
 	if header.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
 		return types.PCRCTermini{}, nil
@@ -325,26 +328,25 @@ func (sl *Slice) PCRC(block *types.Block, headerOrder int) (types.PCRCTermini, e
 }
 
 // PreviousCanonicalCoincident searches the path for a cononical block of specified order in the specified slice
-//     *slice - The zone location which defines the slice in which we are validating
-//     *order - The order of the conincidence that is desired
-//     *path - Search among ancestors of this path in the specified slice
-func (sl *Slice) PreviousCanonicalCoincident(header *types.Header, slice []byte, order int, fullSliceEqual bool) (*types.Header, error) {
-	fmt.Println("header: ", header.Hash(), "slice: ", slice, "order: ", order)
+func (sl *Slice) PreviousCanonicalCoincident() error {
+	header := sl.hc.CurrentHeader()
+	slice := header.Location
+	order := types.QuaiNetworkContext - 1
 	prevTerminalHeader := header
 	for {
 		if prevTerminalHeader.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
-			return sl.hc.GetHeaderByHash(sl.Config().GenesisHashes[0]), nil
+			return nil
 		}
 
-		terminalHeader, err := sl.PreviousValidCoincident(prevTerminalHeader, slice, order, fullSliceEqual)
+		terminalHeader, err := sl.PreviousValidCoincident(prevTerminalHeader, slice, order, true)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		fmt.Println("Running PVCOP for header: ", header.Hash(), header.Number, "terminal Header", terminalHeader.Hash(), terminalHeader.Number)
 
 		if terminalHeader.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
-			return sl.hc.GetHeaderByHash(sl.Config().GenesisHashes[0]), nil
+			return nil
 		}
 
 		// If the current header is dominant coincident check the status with the dom node
@@ -353,12 +355,13 @@ func (sl *Slice) PreviousCanonicalCoincident(header *types.Header, slice []byte,
 			fmt.Println("terminal Header status", status)
 			if (status != common.Hash{}) {
 				if prevTerminalHeader.Hash() != header.Hash() {
-					return nil, errors.New("subordinate terminus mismatch")
+					sl.hc.SetCurrentHeader(sl.hc.GetHeaderByHash(prevTerminalHeader.Parent()))
+					return errors.New("subordinate terminus mismatch")
 				}
-				return terminalHeader, nil
+				return nil
 			}
 		} else if order == types.QuaiNetworkContext {
-			return terminalHeader, err
+			return err
 		}
 
 		prevTerminalHeader = terminalHeader

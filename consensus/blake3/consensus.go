@@ -41,8 +41,8 @@ import (
 var (
 	BlockReward = big.NewInt(5e+18) // Block reward in wei for successfully mining a block
 
-	allowedFutureBlockTimeSeconds = int64(15) // Max seconds from current time allowed for blocks, before they're considered future blocks
-	maxUncles                     = 2         // Maximum number of uncles allowed in a single block
+	allowedFutureBlockTimeSeconds = int64(1000) // Max seconds from current time allowed for blocks, before they're considered future blocks
+	maxUncles                     = 2           // Maximum number of uncles allowed in a single block
 	fakeDifficulties              = []*big.Int{new(big.Int).Mul(params.MinimumDifficulty[params.PRIME], big.NewInt(4)), new(big.Int).Mul(params.MinimumDifficulty[params.REGION], big.NewInt(2)), params.MinimumDifficulty[params.ZONE]}
 )
 

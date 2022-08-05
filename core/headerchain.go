@@ -209,7 +209,6 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 
 	//Find a common header
 	commonHeader := hc.findCommonHeader(head)
-	fmt.Println("head ", head.Hash(), " common Header ", commonHeader.Hash(), "prev header ", prevHeader)
 
 	//Update canonical state db
 	hc.currentHeader.Store(head)

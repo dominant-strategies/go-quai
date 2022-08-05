@@ -201,7 +201,7 @@ func (b *LesApiBackend) GetTd(ctx context.Context, hash common.Hash) []*big.Int 
 	return nil
 }
 
-func (b *LesApiBackend) PCC(header *types.Header, slice []byte, order int) error {
+func (b *LesApiBackend) PCC() error {
 	return nil
 }
 

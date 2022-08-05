@@ -562,10 +562,7 @@ func (ec *Client) CalcTd(ctx context.Context, header *types.Header) ([]*big.Int,
 }
 
 // PCC checks if the previous terminal header is canonical in dom and iterates until a canonical dom is found.
-func (ec *Client) PCC(ctx context.Context, header *types.Header, slice []byte, order int) error {
-	data := map[string]interface{}{"Header": RPCMarshalHeader(header)}
-	data["Slice"] = slice
-	data["Order"] = order
-	err := ec.c.CallContext(ctx, nil, "quai_pCC", header)
+func (ec *Client) PCC(ctx context.Context) error {
+	err := ec.c.CallContext(ctx, nil, "quai_pCC")
 	return err
 }

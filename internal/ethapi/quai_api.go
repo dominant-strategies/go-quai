@@ -723,12 +723,8 @@ type HeaderWithSliceAndOrder struct {
 }
 
 // PCC gets the previous coincident on path for a given header, order and slice.
-func (s *PublicBlockChainQuaiAPI) PCC(ctx context.Context, raw json.RawMessage) error {
-	var headerWithSliceAndOrder HeaderWithSliceAndOrder
-	if err := json.Unmarshal(raw, &headerWithSliceAndOrder); err != nil {
-		return err
-	}
-	return s.b.PCC(headerWithSliceAndOrder.Header, headerWithSliceAndOrder.Slice, headerWithSliceAndOrder.Order)
+func (s *PublicBlockChainQuaiAPI) PCC(ctx context.Context) error {
+	return s.b.PCC()
 }
 
 // CalcTd calculates the total difficulty of a blockchain up to a block
