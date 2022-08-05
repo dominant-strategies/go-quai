@@ -216,7 +216,9 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 	hc.currentHeaderHash = head.Hash()
 	headHeaderGauge.Update(head.Number[types.QuaiNetworkContext].Int64())
 
-	fmt.Println("prevHeader", prevHeader.Hash(), "commonHeader", commonHeader.Hash())
+	// write the head block hash to the db
+	rawdb.WriteHeadBlockHash(hc.headerDb, head.Hash())
+
 	// Delete each header and rollback state processor until common header
 	// Accumulate the hash slice stack
 	var hashStack []*types.Header
@@ -323,6 +325,7 @@ func (hc *HeaderChain) loadLastState() error {
 	fmt.Println("heads hashes: ", headsHashes)
 
 	if head := rawdb.ReadHeadBlockHash(hc.headerDb); head != (common.Hash{}) {
+		fmt.Println("head hash: ", head)
 		if chead := hc.GetHeaderByHash(head); chead != nil {
 			hc.currentHeader.Store(chead)
 		}
@@ -352,6 +355,7 @@ func (hc *HeaderChain) Stop() {
 	}
 	// Save the heads
 	rawdb.WriteHeadsHashes(hc.headerDb, hashes)
+	//
 
 	// Unsubscribe all subscriptions registered from blockchain
 	hc.bc.scope.Close()
