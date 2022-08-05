@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"sync/atomic"
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/spruce-solutions/go-quai/common"
@@ -66,11 +65,6 @@ type BlockChain struct {
 	bodyCache     *lru.Cache
 	bodyRLPCache  *lru.Cache
 	txLookupCache *lru.Cache
-	heads         []*types.Header // heads are tips of blockchain branches
-	quit          chan struct{}   // blockchain quit channel
-	wg            sync.WaitGroup  // chain processing wait group for shutting down
-	running       int32           // 0 if chain is running, 1 when stopped
-	procInterrupt int32           // interrupt signaler for block processing
 	processor     *StateProcessor // Block transaction processor interface
 }
 
@@ -85,7 +79,6 @@ func NewBlockChain(db ethdb.Database, engine consensus.Engine, hc *HeaderChain, 
 		chainConfig: chainConfig,
 		engine:      engine,
 		db:          db,
-		quit:        make(chan struct{}),
 		blockCache:  blockCache,
 	}
 
@@ -153,33 +146,6 @@ func (bc *BlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
 	// Cache the found block for next time and return
 	bc.blockCache.Add(block.Hash(), block)
 	return block
-}
-
-// Stop stops the blockchain service. If any imports are currently in progress
-// it will abort them using the procInterrupt.
-func (bc *BlockChain) Stop() {
-	if !atomic.CompareAndSwapInt32(&bc.running, 0, 1) {
-		return
-	}
-	// Unsubscribe all subscriptions registered from blockchain
-	bc.scope.Close()
-	close(bc.quit)
-	bc.StopInsert()
-	bc.wg.Wait()
-
-	log.Info("Blockchain stopped")
-}
-
-// StopInsert interrupts all insertion methods, causing them to return
-// errInsertionInterrupted as soon as possible. Insertion is permanently disabled after
-// calling this method.
-func (bc *BlockChain) StopInsert() {
-	atomic.StoreInt32(&bc.procInterrupt, 1)
-}
-
-// insertStopped returns true after StopInsert has been called.
-func (bc *BlockChain) insertStopped() bool {
-	return atomic.LoadInt32(&bc.procInterrupt) == 1
 }
 
 func (bc *BlockChain) Processor() *StateProcessor {

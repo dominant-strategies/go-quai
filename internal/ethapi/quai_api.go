@@ -705,13 +705,28 @@ func (s *PublicBlockChainAPI) GetTerminusAtOrder(ctx context.Context, raw json.R
 
 // CheckPCRC runs PCRC on a node and returns the response codes.
 func (s *PublicBlockChainQuaiAPI) CheckPCRC(ctx context.Context, raw json.RawMessage) (types.PCRCTermini, error) {
-	var blockWithOrder BlockWithOrder
-
-	if err := json.Unmarshal(raw, &blockWithOrder); err != nil {
+	// Decode header and transactions.
+	var head *types.Header
+	var body orderBlock
+	if err := json.Unmarshal(raw, &head); err != nil {
 		return types.PCRCTermini{}, err
 	}
-	fmt.Println("Header Number:", blockWithOrder.Block.Header().Number, "Order:", blockWithOrder.Order, "Hash:", blockWithOrder.Block.Header().Hash())
-	return s.b.PCRC(blockWithOrder.Block, blockWithOrder.Order)
+	if err := json.Unmarshal(raw, &body); err != nil {
+		return types.PCRCTermini{}, err
+	}
+
+	// Load uncles because they are not included in the block response.
+	txs := make([]*types.Transaction, len(body.Transactions))
+	for i, tx := range body.Transactions {
+		txs[i] = tx.tx
+	}
+
+	uncles := make([]*types.Header, len(body.Uncles))
+	for i, uncle := range body.Uncles {
+		uncles[i] = uncle
+	}
+	block := types.NewBlockWithHeader(head).WithBody(txs, uncles)
+	return s.b.PCRC(block, body.Order)
 }
 
 // CalcTd calculates the total difficulty of a blockchain up to a block

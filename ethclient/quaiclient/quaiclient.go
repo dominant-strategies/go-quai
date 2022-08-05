@@ -245,13 +245,12 @@ func (ec *Client) GetTerminusAtOrder(ctx context.Context, header *types.Header, 
 
 // CheckPCRC runs PCRC on the node with a given header
 func (ec *Client) CheckPCRC(ctx context.Context, block *types.Block, order int) (types.PCRCTermini, error) {
-	blockData, err := RPCMarshalBlock(block, true, true)
+	data, err := RPCMarshalOrderBlock(block, order)
 	if err != nil {
 		return types.PCRCTermini{}, err
 	}
-	data := map[string]interface{}{"Block": blockData}
-	data["Order"] = order
 
+	fmt.Println("check pcrc is crashing: ", block.Hash(), order, data)
 	var PCRCTermini types.PCRCTermini
 	if err := ec.c.CallContext(ctx, &PCRCTermini, "quai_checkPCRC", data); err != nil {
 		return types.PCRCTermini{}, err
@@ -332,6 +331,16 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 	}
 
 	return result
+}
+
+// RPCMarshalOrderBlock converts the block and order as input to PCRC.
+func RPCMarshalOrderBlock(block *types.Block, Order int) (map[string]interface{}, error) {
+	fields, err := RPCMarshalBlock(block, true, true)
+	if err != nil {
+		return nil, err
+	}
+	fields["order"] = Order
+	return fields, nil
 }
 
 // RPCMarshalBlock converts the given block to the RPC output which depends on fullTx. If inclTx is true transactions are

@@ -85,7 +85,7 @@ func (c *Core) Slice() *Slice {
 }
 
 func (c *Core) StopInsert() {
-	c.sl.hc.bc.StopInsert()
+	c.sl.hc.StopInsert()
 }
 
 // GetBlock retrieves a block from the database by hash and number,
@@ -263,7 +263,7 @@ func (c *Core) ResetWithGenesisBlock(genesis *types.Header) error {
 }
 
 func (c *Core) Stop() {
-	c.sl.hc.bc.Stop()
+	c.sl.hc.Stop()
 }
 
 // SubscribeChainEvent registers a subscription of ChainEvent.
