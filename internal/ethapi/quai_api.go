@@ -659,6 +659,10 @@ type HeaderWithOrder struct {
 	Header *types.Header
 	Order  int
 }
+type BlockWithOrder struct {
+	Block *types.Block
+	Order int
+}
 type HashWithLocation struct {
 	Hash     common.Hash
 	Location []byte
@@ -688,13 +692,28 @@ func (s *PublicBlockChainAPI) GetTerminusAtOrder(ctx context.Context, raw json.R
 
 // CheckPCRC runs PCRC on a node and returns the response codes.
 func (s *PublicBlockChainQuaiAPI) CheckPCRC(ctx context.Context, raw json.RawMessage) (types.PCRCTermini, error) {
-	var headerWithOrder HeaderWithOrder
-
-	if err := json.Unmarshal(raw, &headerWithOrder); err != nil {
+	// Decode header and transactions.
+	var head *types.Header
+	var body orderBlock
+	if err := json.Unmarshal(raw, &head); err != nil {
 		return types.PCRCTermini{}, err
 	}
-	fmt.Println("Header Number:", headerWithOrder.Header.Number, "Order:", headerWithOrder.Order, "Hash:", headerWithOrder.Header.Hash())
-	return s.b.PCRC(headerWithOrder.Header, headerWithOrder.Order)
+	if err := json.Unmarshal(raw, &body); err != nil {
+		return types.PCRCTermini{}, err
+	}
+
+	// Load uncles because they are not included in the block response.
+	txs := make([]*types.Transaction, len(body.Transactions))
+	for i, tx := range body.Transactions {
+		txs[i] = tx.tx
+	}
+
+	uncles := make([]*types.Header, len(body.Uncles))
+	for i, uncle := range body.Uncles {
+		uncles[i] = uncle
+	}
+	block := types.NewBlockWithHeader(head).WithBody(txs, uncles)
+	return s.b.PCRC(block, body.Order)
 }
 
 // CalcTd calculates the total difficulty of a blockchain up to a block

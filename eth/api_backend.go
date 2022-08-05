@@ -132,8 +132,8 @@ func (b *EthAPIBackend) GetTerminusAtOrder(header *types.Header, order int) (com
 	return b.eth.core.GetTerminusAtOrder(header, order)
 }
 
-func (b *EthAPIBackend) PCRC(header *types.Header, order int) (types.PCRCTermini, error) {
-	return b.eth.core.PCRC(header, order)
+func (b *EthAPIBackend) PCRC(block *types.Block, order int) (types.PCRCTermini, error) {
+	return b.eth.core.PCRC(block, order)
 }
 
 func (b *EthAPIBackend) CalcTd(ctx context.Context, header *types.Header) ([]*big.Int, error) {

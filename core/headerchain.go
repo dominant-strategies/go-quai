@@ -82,7 +82,10 @@ type HeaderChain struct {
 	tdCache     *lru.Cache // Cache for the most recent block total difficulties
 	numberCache *lru.Cache // Cache for the most recent block numbers
 
-	procInterrupt func() bool
+	quit          chan struct{}  // headerchain quit channel
+	wg            sync.WaitGroup // chain processing wait group for shutting down
+	running       int32          // 0 if chain is running, 1 when stopped
+	procInterrupt int32          // interrupt signaler for block processing
 
 	rand     *mrand.Rand
 	headermu sync.RWMutex
@@ -110,6 +113,7 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *par
 		numberCache: numberCache,
 		rand:        mrand.New(mrand.NewSource(seed.Int64())),
 		engine:      engine,
+		quit:        make(chan struct{}),
 	}
 
 	hc.bc, err = NewBlockChain(db, engine, hc, chainConfig, cacheConfig, vmConfig)
@@ -121,15 +125,6 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *par
 	if hc.genesisHeader == nil {
 		return nil, ErrNoGenesis
 	}
-
-	hc.currentHeader.Store(hc.genesisHeader)
-	if head := rawdb.ReadHeadBlockHash(db); head != (common.Hash{}) {
-		if chead := hc.GetHeaderByHash(head); chead != nil {
-			hc.currentHeader.Store(chead)
-		}
-	}
-	hc.currentHeaderHash = hc.CurrentHeader().Hash()
-	headHeaderGauge.Update(hc.CurrentHeader().Number[types.QuaiNetworkContext].Int64())
 
 	// Initialize the heads slice
 	heads := make([]*types.Header, 0)
@@ -147,6 +142,11 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *par
 func (hc *HeaderChain) Append(block *types.Block) ([]*types.Log, error) {
 	hc.headermu.Lock()
 	defer hc.headermu.Unlock()
+
+	err := hc.Appendable(block)
+	if err != nil {
+		return []*types.Log{}, err
+	}
 
 	// Append header to the headerchain
 	batch := hc.headerDb.NewBatch()
@@ -193,6 +193,15 @@ func (hc *HeaderChain) Append(block *types.Block) ([]*types.Log, error) {
 	return logs, nil
 }
 
+func (hc *HeaderChain) Appendable(block *types.Block) error {
+	err := hc.engine.VerifyHeader(hc, block.Header(), true)
+	if err != nil {
+		return err
+	}
+	err = hc.bc.Appendable(block)
+	return err
+}
+
 // SetCurrentHeader sets the in-memory head header marker of the canonical chan
 // as the given header.
 func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
@@ -200,6 +209,7 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 
 	//Find a common header
 	commonHeader := hc.findCommonHeader(head)
+	fmt.Println("head ", head.Hash(), " common Header ", commonHeader.Hash(), "prev header ", prevHeader)
 
 	//Update canonical state db
 	hc.currentHeader.Store(head)
@@ -227,6 +237,7 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 		hashStack = append(hashStack, prevHeader)
 		prevHeader = hc.GetHeader(prevHeader.Parent(), prevHeader.Number64()-1)
 
+		fmt.Println("prevheader: ", prevHeader.Hash())
 		if prevHeader == nil {
 			log.Warn("unable to trim blockchain state, one of trimmed blocks not found")
 			return nil
@@ -310,6 +321,14 @@ func (hc *HeaderChain) loadLastState() error {
 	// TODO: create function to find highest block number and fill Head FIFO
 	headsHashes := rawdb.ReadHeadsHashes(hc.headerDb)
 
+	if head := rawdb.ReadHeadBlockHash(hc.headerDb); head != (common.Hash{}) {
+		if chead := hc.GetHeaderByHash(head); chead != nil {
+			hc.currentHeader.Store(chead)
+		}
+	}
+	hc.currentHeaderHash = hc.CurrentHeader().Hash()
+	headHeaderGauge.Update(hc.CurrentHeader().Number[types.QuaiNetworkContext].Int64())
+
 	heads := make([]*types.Header, 0)
 	for _, hash := range headsHashes {
 		heads = append(heads, hc.GetHeaderByHash(hash))
@@ -317,6 +336,33 @@ func (hc *HeaderChain) loadLastState() error {
 	hc.heads = heads
 
 	return nil
+}
+
+// Stop stops the blockchain service. If any imports are currently in progress
+// it will abort them using the procInterrupt.
+func (hc *HeaderChain) Stop() {
+	if !atomic.CompareAndSwapInt32(&hc.running, 0, 1) {
+		return
+	}
+	// Unsubscribe all subscriptions registered from blockchain
+	hc.bc.scope.Close()
+	close(hc.quit)
+	hc.StopInsert()
+	hc.wg.Wait()
+
+	log.Info("headerchain stopped")
+}
+
+// StopInsert interrupts all insertion methods, causing them to return
+// errInsertionInterrupted as soon as possible. Insertion is permanently disabled after
+// calling this method.
+func (hc *HeaderChain) StopInsert() {
+	atomic.StoreInt32(&hc.procInterrupt, 1)
+}
+
+// insertStopped returns true after StopInsert has been called.
+func (hc *HeaderChain) insertStopped() bool {
+	return atomic.LoadInt32(&hc.procInterrupt) == 1
 }
 
 // Blockchain retrieves the blockchain from the headerchain.

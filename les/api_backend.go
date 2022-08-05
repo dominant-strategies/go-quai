@@ -124,7 +124,7 @@ func (b *LesApiBackend) GetAncestorByLocation(hash common.Hash, location []byte)
 	return nil, errors.New("light client does not support getting ancestor by location")
 }
 
-func (b *LesApiBackend) PCRC(header *types.Header, order int) (types.PCRCTermini, error) {
+func (b *LesApiBackend) PCRC(block *types.Block, order int) (types.PCRCTermini, error) {
 	return types.PCRCTermini{}, errors.New("light client does not support running PCRC")
 }
 
