@@ -846,6 +846,9 @@ func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, re
 			}
 			// Make sure the peer actually gave something valid
 			headers := packet.(*headerPack).headers
+			for i := 0; i < len(headers); i++ {
+				fmt.Println("header: ", headers[i])
+			}
 			if len(headers) == 0 {
 				p.log.Warn("Empty head header set")
 				return 0, errEmptyHeaderSet

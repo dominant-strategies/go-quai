@@ -351,8 +351,7 @@ func (c *Core) CurrentFastBlock() *types.Block {
 
 // this needs to be implemented, it is being used by a lot of modules
 func (c *Core) SetHead(number uint64) error {
-	block := c.GetBlockByNumber(number)
-	return c.sl.hc.SetCurrentHeader(block.Header())
+	return nil
 }
 
 func (c *Core) GetTerminusAtOrder(header *types.Header, order int) (common.Hash, error) {
