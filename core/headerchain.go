@@ -241,7 +241,6 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 		fmt.Println("prevheader: ", prevHeader.Hash())
 		if prevHeader == nil {
 			log.Warn("unable to trim blockchain state, one of trimmed blocks not found")
-			return nil
 		}
 	}
 
