@@ -57,7 +57,7 @@ var LightClientGPO = gasprice.Config{
 
 // Defaults contains default settings for use on the Quai Network Prime main net.
 var Defaults = Config{
-	SyncMode:                downloader.SnapSync,
+	SyncMode:                downloader.FullSync,
 	Blake3:                  blake3.Config{},
 	NetworkId:               9000,
 	TxLookupLimit:           2350000,
