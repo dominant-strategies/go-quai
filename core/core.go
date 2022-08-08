@@ -132,7 +132,7 @@ func (c *Core) GetGasUsedInChain(block *types.Block, length int) int64 {
 // GetTransactionLookup retrieves the lookup associate with the given transaction
 // hash from the cache or database.
 func (c *Core) GetTransactionLookup(hash common.Hash) *rawdb.LegacyTxLookupEntry {
-	return c.sl.hc.bc.GetTransactionLookup(hash)
+	return c.sl.hc.bc.processor.GetTransactionLookup(hash)
 }
 
 // GetGasUsedInChain retrieves all the gas used from a given block backwards until

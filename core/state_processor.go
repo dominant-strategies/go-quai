@@ -116,7 +116,8 @@ type StateProcessor struct {
 	cacheConfig   *CacheConfig   // CacheConfig for StateProcessor
 	stateCache    state.Database // State database to reuse between imports (contains state cache)
 	receiptsCache *lru.Cache     // Cache for the most recent receipts per block
-	validator     Validator      // Block and state validator interface
+	txLookupCache *lru.Cache
+	validator     Validator // Block and state validator interface
 	prefetcher    Prefetcher
 	vmConfig      vm.Config
 
@@ -130,6 +131,8 @@ type StateProcessor struct {
 // NewStateProcessor initialises a new StateProcessor.
 func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine consensus.Engine, vmConfig vm.Config, cacheConfig *CacheConfig) *StateProcessor {
 	receiptsCache, _ := lru.New(receiptsCacheLimit)
+	txLookupCache, _ := lru.New(txLookupCacheLimit)
+
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
 	}
@@ -138,6 +141,7 @@ func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine conse
 		config:        config,
 		hc:            hc,
 		receiptsCache: receiptsCache,
+		txLookupCache: txLookupCache,
 		vmConfig:      vmConfig,
 		cacheConfig:   cacheConfig,
 		stateCache: state.NewDatabaseWithConfig(hc.headerDb, &trie.Config{
@@ -428,6 +432,22 @@ func (p *StateProcessor) GetReceiptsByHash(hash common.Hash) types.Receipts {
 	}
 	p.receiptsCache.Add(hash, receipts)
 	return receipts
+}
+
+// GetTransactionLookup retrieves the lookup associate with the given transaction
+// hash from the cache or database.
+func (p *StateProcessor) GetTransactionLookup(hash common.Hash) *rawdb.LegacyTxLookupEntry {
+	// Short circuit if the txlookup already in the cache, retrieve otherwise
+	if lookup, exist := p.txLookupCache.Get(hash); exist {
+		return lookup.(*rawdb.LegacyTxLookupEntry)
+	}
+	tx, blockHash, blockNumber, txIndex := rawdb.ReadTransaction(p.hc.headerDb, hash)
+	if tx == nil {
+		return nil
+	}
+	lookup := &rawdb.LegacyTxLookupEntry{BlockHash: blockHash, BlockIndex: blockNumber, Index: txIndex}
+	p.txLookupCache.Add(hash, lookup)
+	return lookup
 }
 
 // ContractCode retrieves a blob of data associated with a contract hash

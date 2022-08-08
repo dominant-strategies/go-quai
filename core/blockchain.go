@@ -58,14 +58,13 @@ type BlockChain struct {
 	blockProcFeed event.Feed
 	scope         event.SubscriptionScope
 
-	engine        consensus.Engine
-	chainmu       sync.RWMutex // blockchain insertion lock
-	futureBlocks  *lru.Cache   // future blocks are blocks added for later processing
-	blockCache    *lru.Cache
-	bodyCache     *lru.Cache
-	bodyRLPCache  *lru.Cache
-	txLookupCache *lru.Cache
-	processor     *StateProcessor // Block transaction processor interface
+	engine       consensus.Engine
+	chainmu      sync.RWMutex // blockchain insertion lock
+	futureBlocks *lru.Cache   // future blocks are blocks added for later processing
+	blockCache   *lru.Cache
+	bodyCache    *lru.Cache
+	bodyRLPCache *lru.Cache
+	processor    *StateProcessor // Block transaction processor interface
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -74,12 +73,16 @@ type BlockChain struct {
 func NewBlockChain(db ethdb.Database, engine consensus.Engine, hc *HeaderChain, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, vmConfig vm.Config) (*BlockChain, error) {
 
 	blockCache, _ := lru.New(blockCacheLimit)
+	bodyCache, _ := lru.New(bodyCacheLimit)
+	bodyRLPCache, _ := lru.New(bodyCacheLimit)
 
 	bc := &BlockChain{
-		chainConfig: chainConfig,
-		engine:      engine,
-		db:          db,
-		blockCache:  blockCache,
+		chainConfig:  chainConfig,
+		engine:       engine,
+		db:           db,
+		blockCache:   blockCache,
+		bodyCache:    bodyCache,
+		bodyRLPCache: bodyRLPCache,
 	}
 
 	bc.processor = NewStateProcessor(chainConfig, hc, engine, vmConfig, cacheConfig)
@@ -179,22 +182,6 @@ func (bc *BlockChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscript
 // block processing has started while false means it has stopped.
 func (bc *BlockChain) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscription {
 	return bc.scope.Track(bc.blockProcFeed.Subscribe(ch))
-}
-
-// GetTransactionLookup retrieves the lookup associate with the given transaction
-// hash from the cache or database.
-func (bc *BlockChain) GetTransactionLookup(hash common.Hash) *rawdb.LegacyTxLookupEntry {
-	// Short circuit if the txlookup already in the cache, retrieve otherwise
-	if lookup, exist := bc.txLookupCache.Get(hash); exist {
-		return lookup.(*rawdb.LegacyTxLookupEntry)
-	}
-	tx, blockHash, blockNumber, txIndex := rawdb.ReadTransaction(bc.db, hash)
-	if tx == nil {
-		return nil
-	}
-	lookup := &rawdb.LegacyTxLookupEntry{BlockHash: blockHash, BlockIndex: blockNumber, Index: txIndex}
-	bc.txLookupCache.Add(hash, lookup)
-	return lookup
 }
 
 // reportBlock logs a bad block error.
