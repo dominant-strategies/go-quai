@@ -18,6 +18,7 @@ package eth
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"math/big"
 	"sync"
@@ -452,12 +453,24 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 			parentZoneTd := h.core.GetTd(block.Header().ParentHash[types.QuaiNetworkContext], block.Header().Number[types.QuaiNetworkContext].Uint64()-1)[2]
 			switch order {
 			case params.PRIME:
+				fmt.Println("block:", block)
+				fmt.Println("header:", block.Header())
+				fmt.Println("difficulty:", block.Header().Difficulty[0])
+				fmt.Println("parentPrimeTd:", parentPrimeTd)
 				tempTD = new(big.Int).Add(block.Header().Difficulty[0], parentPrimeTd)
 				td = []*big.Int{tempTD, tempTD, tempTD}
 			case params.REGION:
+				fmt.Println("block:", block)
+				fmt.Println("header:", block.Header())
+				fmt.Println("difficulty:", block.Header().Difficulty[1])
+				fmt.Println("parentRegionTd:", parentRegionTd)
 				tempTD = new(big.Int).Add(block.Header().Difficulty[1], parentRegionTd)
 				td = []*big.Int{parentPrimeTd, tempTD, tempTD}
 			case params.ZONE:
+				fmt.Println("block:", block)
+				fmt.Println("header:", block.Header())
+				fmt.Println("difficulty:", block.Header().Difficulty[2])
+				fmt.Println("parentZoneTd:", parentZoneTd)
 				tempTD = new(big.Int).Add(block.Header().Difficulty[2], parentZoneTd)
 				td = []*big.Int{parentPrimeTd, parentRegionTd, tempTD}
 			}

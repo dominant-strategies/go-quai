@@ -125,6 +125,17 @@ func (sl *Slice) Append(block *types.Block) error {
 	}
 	fmt.Println("after PCRC")
 
+	td, err := sl.CalcTd(block.Header())
+	fmt.Println("td for block", td)
+	if err != nil {
+		if errors.Is(err, consensus.ErrFutureBlock) {
+			sl.addFutureBlock(block)
+		}
+		fmt.Println("Slice error in CalcTd", err)
+		return err
+	}
+	fmt.Println("after calctd, td:", td)
+
 	logs, err := sl.hc.Append(block)
 	if err != nil {
 		fmt.Println("Slice error in append", err)
@@ -132,15 +143,6 @@ func (sl *Slice) Append(block *types.Block) error {
 	}
 	fmt.Println("after headerchain append")
 
-	td, err := sl.CalcTd(block.Header())
-	fmt.Println("td for block", td)
-	if err != nil {
-		fmt.Println("Slice error in CalcTd", err)
-		return err
-	}
-	fmt.Println("after calctd")
-
-	// write the tds
 	rawdb.WriteTd(sl.hc.headerDb, block.Hash(), block.NumberU64(), td)
 
 	// We have a new possible head call HLCR to potentially set
@@ -492,13 +494,13 @@ func (sl *Slice) update() {
 }
 
 // CalcTd calculates the TD of the given header using PCRC and CalcHLCRNetDifficulty.
-func (sl *Slice) CalcTd(header *types.Header) ([]*big.Int, error) {
+func (sl *Slice) CalcLocalTd(header *types.Header) ([]*big.Int, error) {
 	// Iterate ancestors, stopping when a TD value is found in cache or a coincident block is found.
 	// If coincident is found, ask dom client for TD at that block
 	aggDiff := new(big.Int)
 	cursor := header
 	for {
-		// First, check if this block's TD is already cached
+		// First, check if this block's TD is already written locally
 		cursorTd := sl.hc.GetTd(cursor.Hash(), (*cursor.Number[types.QuaiNetworkContext]).Uint64())
 		td := make([]*big.Int, len(cursorTd))
 		for i, diff := range cursorTd {
@@ -509,10 +511,10 @@ func (sl *Slice) CalcTd(header *types.Header) ([]*big.Int, error) {
 			// Add the difficulty we accumulated up till this block
 			blockTd := big.NewInt(td[types.QuaiNetworkContext].Int64())
 			td[types.QuaiNetworkContext] = blockTd.Add(blockTd, aggDiff)
-			return flattenTd(td), nil
+			return td, nil
 		}
 
-		// If not cached, check if this block coincides with a dominant chain
+		// If not written locally, check if this block coincides with a dominant chain
 		order, err := sl.engine.GetDifficultyOrder(cursor)
 		if err != nil {
 			return nil, err
@@ -525,7 +527,7 @@ func (sl *Slice) CalcTd(header *types.Header) ([]*big.Int, error) {
 				blockTd := big.NewInt(td[types.QuaiNetworkContext].Int64())
 				td[types.QuaiNetworkContext] = blockTd.Add(blockTd, aggDiff)
 				fmt.Println("returning coincident", td)
-				return flattenTd(td), nil
+				return td, nil
 			}
 		}
 
@@ -534,12 +536,17 @@ func (sl *Slice) CalcTd(header *types.Header) ([]*big.Int, error) {
 		parentHash := cursor.ParentHash[types.QuaiNetworkContext]
 		cursor = sl.hc.GetHeader(cursor.Parent(), (*cursor.Number[types.QuaiNetworkContext]).Uint64()-1)
 		if cursor == nil {
-			return nil, fmt.Errorf("unable to find parent: %s", parentHash)
+			log.Warn("unable to find parent: %s", parentHash)
+			return nil, consensus.ErrFutureBlock
 		}
 	}
 }
 
-func flattenTd(td []*big.Int) []*big.Int {
+func (sl *Slice) CalcTd(header *types.Header) ([]*big.Int, error) {
+	td, err := sl.CalcLocalTd(header)
+	if err != nil {
+		return nil, err
+	}
 	switch types.QuaiNetworkContext {
 	case params.PRIME:
 		td[1].Set(td[0])
@@ -547,5 +554,5 @@ func flattenTd(td []*big.Int) []*big.Int {
 	case params.REGION:
 		td[2].Set(td[1])
 	}
-	return td
+	return td, nil
 }
