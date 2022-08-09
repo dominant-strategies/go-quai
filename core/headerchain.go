@@ -207,9 +207,6 @@ func (hc *HeaderChain) Appendable(block *types.Block) error {
 func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 	prevHeader := hc.CurrentHeader()
 
-	//Find a common header
-	commonHeader := hc.findCommonHeader(head)
-
 	//Update canonical state db
 	hc.currentHeader.Store(head)
 	hc.currentHeaderHash = head.Hash()
@@ -217,6 +214,15 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 
 	// write the head block hash to the db
 	rawdb.WriteHeadBlockHash(hc.headerDb, head.Hash())
+
+	// If head is the normal extension of canonical head, we can return by just wiring the canonical hash.
+	if prevHeader.Hash() == head.Parent() {
+		rawdb.WriteCanonicalHash(hc.headerDb, head.Hash(), head.Number64())
+		return nil
+	}
+
+	//Find a common header
+	commonHeader := hc.findCommonHeader(head)
 
 	// Delete each header and rollback state processor until common header
 	// Accumulate the hash slice stack
@@ -237,6 +243,11 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 		// Add to the stack
 		hashStack = append(hashStack, prevHeader)
 		prevHeader = hc.GetHeader(prevHeader.Parent(), prevHeader.Number64()-1)
+
+		// genesis check to not delete the genesis block
+		if prevHeader.Hash() == hc.config.GenesisHashes[0] {
+			break
+		}
 
 		fmt.Println("prevheader: ", prevHeader.Hash())
 		if prevHeader == nil {
