@@ -32,7 +32,7 @@ type Slice struct {
 
 	domClient    *quaiclient.Client   // domClient is used to check if a given dominant block in the chain is canonical in dominant chain.
 	subClients   []*quaiclient.Client // subClinets is used to check is a coincident block is valid in the subordinate context
-	futureBlocks *lru.Cache
+	futureBlocks *lru.Cache           // future blocks are blocks added for later processing
 
 	wg sync.WaitGroup // slice processing wait group for shutting down
 }
@@ -137,6 +137,7 @@ func (sl *Slice) Append(block *types.Block) error {
 	fmt.Println("after calctd, td:", td)
 
 	logs, err := sl.hc.Append(block)
+	sl.futureBlocks.Remove(block.Hash())
 	if err != nil {
 		fmt.Println("Slice error in append", err)
 		return err
@@ -158,8 +159,7 @@ func (sl *Slice) Append(block *types.Block) error {
 			sl.addFutureBlock(block)
 			return nil
 		}
-		fmt.Println("remove from future block", block.Header().Number, block.Header().Hash())
-		sl.futureBlocks.Remove(block.Hash())
+
 		// If the header is cononical break else keep looking
 		if canonical != block.Header().Hash() {
 			reorg = false

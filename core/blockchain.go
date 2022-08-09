@@ -60,7 +60,6 @@ type BlockChain struct {
 
 	engine       consensus.Engine
 	chainmu      sync.RWMutex // blockchain insertion lock
-	futureBlocks *lru.Cache   // future blocks are blocks added for later processing
 	blockCache   *lru.Cache
 	bodyCache    *lru.Cache
 	bodyRLPCache *lru.Cache
@@ -99,7 +98,6 @@ func (bc *BlockChain) Append(block *types.Block) ([]*types.Log, error) {
 	logs, err := bc.processor.Apply(block)
 	if err != nil {
 		bc.reportBlock(block, err)
-		bc.futureBlocks.Remove(block.Hash())
 		return nil, err
 	}
 
