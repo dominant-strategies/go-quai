@@ -198,9 +198,6 @@ type Core interface {
 
 	// Snapshots returns the blockchain snapshot tree to paused it during sync.
 	Snapshots() *snapshot.Tree
-
-	// HLCR does hierarchical comparison of two difficulty tuples and returns true if second tuple is greater than the first
-	HLCR(localDifficulties []*big.Int, externDifficulties []*big.Int) bool
 }
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
@@ -1576,7 +1573,7 @@ func (d *Downloader) processHeaders(origin uint64, td []*big.Int) error {
 				// R: Nothing to give
 				if mode != LightSync {
 					head := d.core.CurrentBlock()
-					if !gotHeaders && d.core.HLCR(d.core.GetTd(head.Hash(), head.NumberU64()), td) {
+					if !gotHeaders && d.core.GetTd(head.Hash(), head.NumberU64())[types.QuaiNetworkContext].Cmp(td[types.QuaiNetworkContext]) < 0 {
 						return errStallingPeer
 					}
 				}
@@ -1589,7 +1586,7 @@ func (d *Downloader) processHeaders(origin uint64, td []*big.Int) error {
 				// peer gave us something useful, we're already happy/progressed (above check).
 				if mode == FastSync || mode == LightSync {
 					head := d.lightchain.CurrentHeader()
-					if d.core.HLCR(d.lightchain.GetTd(head.Hash(), head.Number[types.QuaiNetworkContext].Uint64()), td) {
+					if d.lightchain.GetTd(head.Hash(), head.Number[types.QuaiNetworkContext].Uint64())[types.QuaiNetworkContext].Cmp(td[types.QuaiNetworkContext]) < 0 {
 						return errStallingPeer
 					}
 				}

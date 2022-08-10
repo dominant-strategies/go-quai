@@ -309,10 +309,10 @@ func (q *queue) Schedule(headers []*types.Header, from uint64) []*types.Header {
 			log.Warn("Header broke chain ordering", "number", header.Number, "hash", hash, "expected", from)
 			break
 		}
-		if q.headerHead != (common.Hash{}) && q.headerHead != header.ParentHash[types.QuaiNetworkContext] {
-			log.Warn("Header broke chain ancestry", "number", header.Number, "hash", hash)
-			break
-		}
+		// if q.headerHead != (common.Hash{}) && q.headerHead != header.ParentHash[types.QuaiNetworkContext] {
+		// 	log.Warn("Header broke chain ancestry", "number", header.Number, "hash", hash)
+		// 	break
+		// }
 		// Make sure no duplicate requests are executed
 		// We cannot skip this, even if the block is empty, since this is
 		// what triggers the fetchResult creation.

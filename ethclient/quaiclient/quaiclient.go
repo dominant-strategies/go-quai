@@ -133,18 +133,6 @@ func toBlockNumArg(number *big.Int) string {
 	return hexutil.EncodeBig(number)
 }
 
-func (ec *Client) HLCRReorg(ctx context.Context, block *types.Block) (bool, error) {
-	var domReorgNeeded bool
-	data, err := RPCMarshalBlock(block, true, true)
-	if err != nil {
-		return false, err
-	}
-	if err := ec.c.CallContext(ctx, &domReorgNeeded, "quai_hLCRReorg", data); err != nil {
-		return false, err
-	}
-	return domReorgNeeded, nil
-}
-
 // SubscribeNewHead subscribes to notifications about the current blockchain head
 // on the given channel.
 func (ec *Client) SubscribeNewHead(ctx context.Context, ch chan<- *types.Header) (quai.Subscription, error) {
@@ -166,9 +154,9 @@ func (ec *Client) GetBlockReceipts(ctx context.Context, blockHash common.Hash) (
 
 // HeaderByNumber returns a block header from the current canonical chain. If number is
 // nil, the latest known header is returned.
-func (ec *Client) GetCanonicalHashByNumber(ctx context.Context, number *big.Int) common.Hash {
+func (ec *Client) GetHeaderHashByNumber(ctx context.Context, number *big.Int) common.Hash {
 	var hash common.Hash
-	err := ec.c.CallContext(ctx, &hash, "quai_getCanonicalHashByNumber", toBlockNumArg(number))
+	err := ec.c.CallContext(ctx, &hash, "quai_getHeaderHashByNumber", toBlockNumArg(number))
 	if err != nil {
 		return common.Hash{}
 	}
@@ -483,8 +471,8 @@ func newRPCTransactionFromBlockHash(b *types.Block, hash common.Hash) *RPCTransa
 }
 
 // CalcTd calculates the total difficulty for a block
-func (ec *Client) CalcTd(ctx context.Context, header *types.Header) ([]*big.Int, error) {
-	var td []*big.Int
+func (ec *Client) CalcTd(ctx context.Context, header *types.Header) (*big.Int, error) {
+	var td *big.Int
 	err := ec.c.CallContext(ctx, &td, "quai_calcTd", header)
 	return td, err
 }

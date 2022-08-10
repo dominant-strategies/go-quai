@@ -18,7 +18,6 @@ package eth
 
 import (
 	"errors"
-	"fmt"
 	"math"
 	"math/big"
 	"sync"
@@ -409,49 +408,32 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 
 	// If propagation is requested, send to a subset of the peer
 	if propagate {
-		// Calculate the TD of the block (it's not imported yet, so block.Td is not valid)
-		var td []*big.Int
-		if parent := h.core.GetBlock(block.ParentHash(), block.NumberU64()-1); parent != nil {
-			order, err := h.core.GetDifficultyOrder(block.Header())
-			if err != nil {
-				log.Error("Error calculating block order in BroadcastBlock, err: ", err)
-				return
-			}
-			if block.Header() == nil {
-				log.Error("Error header is nil for block in BroadcastBlock")
-				return
-			}
-			var tempTD = big.NewInt(0)
-			parentPrimeTd := h.core.GetTd(block.Header().ParentHash[types.QuaiNetworkContext], block.Header().Number[types.QuaiNetworkContext].Uint64()-1)[0]
-			parentRegionTd := h.core.GetTd(block.Header().ParentHash[types.QuaiNetworkContext], block.Header().Number[types.QuaiNetworkContext].Uint64()-1)[1]
-			parentZoneTd := h.core.GetTd(block.Header().ParentHash[types.QuaiNetworkContext], block.Header().Number[types.QuaiNetworkContext].Uint64()-1)[2]
-			switch order {
-			case params.PRIME:
-				fmt.Println("block:", block)
-				fmt.Println("header:", block.Header())
-				fmt.Println("difficulty:", block.Header().Difficulty[0])
-				fmt.Println("parentPrimeTd:", parentPrimeTd)
-				tempTD = new(big.Int).Add(block.Header().Difficulty[0], parentPrimeTd)
-				td = []*big.Int{tempTD, tempTD, tempTD}
-			case params.REGION:
-				fmt.Println("block:", block)
-				fmt.Println("header:", block.Header())
-				fmt.Println("difficulty:", block.Header().Difficulty[1])
-				fmt.Println("parentRegionTd:", parentRegionTd)
-				tempTD = new(big.Int).Add(block.Header().Difficulty[1], parentRegionTd)
-				td = []*big.Int{parentPrimeTd, tempTD, tempTD}
-			case params.ZONE:
-				fmt.Println("block:", block)
-				fmt.Println("header:", block.Header())
-				fmt.Println("difficulty:", block.Header().Difficulty[2])
-				fmt.Println("parentZoneTd:", parentZoneTd)
-				tempTD = new(big.Int).Add(block.Header().Difficulty[2], parentZoneTd)
-				td = []*big.Int{parentPrimeTd, parentRegionTd, tempTD}
-			}
-		} else {
-			log.Error("Propagating dangling block", "number", block.Number(), "hash", hash)
+		order, err := h.core.GetDifficultyOrder(block.Header())
+		if err != nil {
 			return
 		}
+
+		var td []*big.Int
+		// the peer head updates only on a prime order block
+		if order == params.PRIME {
+			var primeTd *big.Int
+			if parent := h.core.GetBlock(block.ParentHash(), block.NumberU64()-1); parent != nil {
+				primeTd = new(big.Int).Add(block.Difficulty(), h.core.GetTd(block.ParentHash(), block.NumberU64()-1)[types.QuaiNetworkContext])
+			} else {
+				log.Error("Propagating dangling block", "number", block.Number(), "hash", hash)
+				return
+			}
+			td = []*big.Int{primeTd, nil, nil}
+		} else {
+			terminusHeader, err := h.core.Slice().PreviousValidCoincident(block.Header(), block.Header().Location, params.PRIME, true)
+			if err != nil {
+				log.Error("Propagating dangling block", "number", block.Number(), "hash", hash)
+				return
+			}
+			td = h.core.GetTd(terminusHeader.Hash(), terminusHeader.Number64())
+			td[types.QuaiNetworkContext].Add(td[types.QuaiNetworkContext], block.Difficulty())
+		}
+
 		// Send the block to a subset of our peers if less than 10
 		if len(peers) > 9 {
 			peers = peers[:int(math.Sqrt(float64(len(peers))))]

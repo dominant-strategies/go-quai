@@ -206,29 +206,31 @@ func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block, td
 	// Schedule the block for import
 	h.blockFetcher.Enqueue(peer.ID(), block)
 
-	// Assuming the block is importable by the peer, but possibly not yet done so,
-	// calculate the head hash and TD that the peer truly must have.
-	var (
-		trueHead = block.ParentHash()
-		trueTD   = make([]*big.Int, 3)
-		tempTD   = big.NewInt(0)
-	)
-	order, _ := h.core.GetDifficultyOrder(block.Header())
-	switch order {
-	case params.PRIME:
-		tempTD = new(big.Int).Sub(td[0], block.Header().Difficulty[0])
-		trueTD = []*big.Int{tempTD, tempTD, tempTD}
-	case params.REGION:
-		tempTD = new(big.Int).Sub(td[1], block.Header().Difficulty[1])
-		trueTD = []*big.Int{td[0], tempTD, tempTD}
-	case params.ZONE:
-		tempTD = new(big.Int).Sub(td[2], block.Header().Difficulty[2])
-		trueTD = []*big.Int{td[0], td[1], tempTD}
+	order, err := h.core.GetDifficultyOrder(block.Header())
+	if err != nil {
+		return err
 	}
-	// Update the peer's total difficulty if better than the previous
-	if _, td := peer.Head(); h.core.HLCR(td, trueTD) {
-		peer.SetHead(trueHead, trueTD)
-		h.chainSync.handlePeerEvent(peer)
+
+	// the peer head updates only on a prime order block
+	if order == params.PRIME {
+		if types.QuaiNetworkContext == params.PRIME {
+			// Assuming the block is importable by the peer, but possibly not yet done so,
+			// calculate the head hash and TD that the peer truly must have.
+			var (
+				trueHead = block.ParentHash()
+				trueTD   = new(big.Int).Sub(td[types.QuaiNetworkContext], block.Difficulty())
+			)
+			// Update the peer's total difficulty if better than the previous
+			if _, td := peer.Head(); trueTD.Cmp(td[types.QuaiNetworkContext]) > 0 {
+				trueTd := make([]*big.Int, 3)
+				trueTd[types.QuaiNetworkContext] = td[types.QuaiNetworkContext]
+				peer.SetHead(trueHead, trueTd)
+				h.chainSync.handlePeerEvent(peer)
+			}
+		} else {
+			// don't set head of peer prior to finalization horizon because all blocks in fray should be transmitted.
+			peer.SetHead(block.Hash(), td)
+		}
 	}
 	return nil
 }

@@ -365,7 +365,7 @@ func (b *LesApiBackend) CalculateBaseFee(header *types.Header) *big.Int {
 	return b.CalculateBaseFee(header)
 }
 
-func (b *LesApiBackend) CalcTd(ctx context.Context, header *types.Header) ([]*big.Int, error) {
+func (b *LesApiBackend) CalcTd(ctx context.Context, header *types.Header) (*big.Int, error) {
 	return nil, errors.New("Unimplemented")
 }
 

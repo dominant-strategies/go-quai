@@ -170,16 +170,16 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 
 	// Sanity check on the TD tuple given by the Peer.
 	// Ideally this should never get triggered.
-	if op.td[0] == nil || op.td[1] == nil || op.td[2] == nil {
+	if op.td[types.QuaiNetworkContext] == nil {
 		return op
 	}
 
-	if ourTD[0] == nil || ourTD[1] == nil || ourTD[2] == nil {
+	if ourTD[types.QuaiNetworkContext] == nil {
 		return op
 	}
 
 	if len(op.td) > 0 {
-		if cs.handler.core.HLCR(op.td, ourTD) {
+		if op.td[types.QuaiNetworkContext].Cmp(ourTD[types.QuaiNetworkContext]) < 0 {
 			return nil // We're in sync.
 		}
 	}

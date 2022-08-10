@@ -302,11 +302,6 @@ func (c *Core) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscription 
 	return c.sl.hc.bc.SubscribeBlockProcessingEvent(ch)
 }
 
-// HLCR does hierarchical comparison of two difficulty tuples and returns true if second tuple is greater than the first
-func (c *Core) HLCR(localDifficulties []*big.Int, externDifficulties []*big.Int) bool {
-	return c.sl.HLCR(localDifficulties, externDifficulties)
-}
-
 // GetBody retrieves a block body (transactions and uncles) from the database by
 // hash, caching it if found.
 func (c *Core) GetBody(hash common.Hash) *types.Body {
@@ -366,7 +361,7 @@ func (c *Core) PCC() error {
 	return c.sl.PreviousCanonicalCoincident()
 }
 
-func (c *Core) CalcTd(header *types.Header) ([]*big.Int, error) {
+func (c *Core) CalcTd(header *types.Header) (*big.Int, error) {
 	return c.sl.CalcTd(header)
 }
 

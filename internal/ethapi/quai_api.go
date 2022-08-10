@@ -204,8 +204,12 @@ func (s *PublicBlockChainQuaiAPI) GetProof(ctx context.Context, address common.A
 }
 
 // GetHeaderByHash returns the requested header by hash.
-func (s *PublicBlockChainQuaiAPI) GetCanonicalHashByNumber(ctx context.Context, number rpc.BlockNumber) common.Hash {
-	return s.b.CanonicalHashByNumber(ctx, number)
+func (s *PublicBlockChainQuaiAPI) GetHeaderHashByNumber(ctx context.Context, number rpc.BlockNumber) common.Hash {
+	header, err := s.b.HeaderByNumber(ctx, number)
+	if err != nil {
+		return common.Hash{}
+	}
+	return header.Hash()
 }
 
 // GetHeaderByHash returns the requested header by hash.
@@ -642,7 +646,7 @@ func (s *PublicBlockChainQuaiAPI) PCC(ctx context.Context) error {
 }
 
 // CalcTd calculates the total difficulty of a blockchain up to a block
-func (s *PublicBlockChainQuaiAPI) CalcTd(ctx context.Context, raw json.RawMessage) ([]*big.Int, error) {
+func (s *PublicBlockChainQuaiAPI) CalcTd(ctx context.Context, raw json.RawMessage) (*big.Int, error) {
 	var header *types.Header
 	if err := json.Unmarshal(raw, &header); err != nil {
 		return nil, err
