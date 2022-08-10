@@ -510,9 +510,9 @@ func (hc *HeaderChain) GetAncestorByLocation(hash common.Hash, location []byte) 
 // database by hash and number, caching it if found.
 func (hc *HeaderChain) GetTd(hash common.Hash, number uint64) []*big.Int {
 	// Short circuit if the td's already in the cache, retrieve otherwise
-	if cached, ok := hc.tdCache.Get(hash); ok {
-		return cached.([]*big.Int)
-	}
+	// if cached, ok := hc.tdCache.Get(hash); ok {
+	// 	return cached.([]*big.Int)
+	// }
 	td := rawdb.ReadTd(hc.headerDb, hash, number)
 	if td == nil {
 		return make([]*big.Int, 3)

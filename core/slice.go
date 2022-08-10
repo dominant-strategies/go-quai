@@ -137,32 +137,51 @@ func (sl *Slice) Append(block *types.Block) error {
 		return err
 	}
 
+	fmt.Println("PCRC")
 	_, err = sl.PCRC(block, order)
 	if err != nil {
 		fmt.Println("Slice error in PCRC", err)
+		// Untwist
+		if types.QuaiNetworkContext != params.PRIME {
+			newHash := sl.domClient.GetSliceHeadHash(context.Background(), block.Header().Location[types.QuaiNetworkContext-1]-1)
+			if (newHash != common.Hash{}) {
+				newHeadBlock := sl.hc.GetBlockByHash(newHash)
+				if newHeadBlock != nil {
+					sl.hc.SetCurrentHeader(newHeadBlock.Header())
+					sl.hc.chainHeadFeed.Send(ChainHeadEvent{Block: newHeadBlock})
+				}
+			}
+		} else {
+			if block.Header().Parent() == sl.config.GenesisHashes[types.QuaiNetworkContext] {
+				return err
+			}
+			newHeadBlock := sl.hc.GetBlockByHash(block.Header().Parent())
+			if newHeadBlock != nil {
+				sl.hc.SetCurrentHeader(newHeadBlock.Header())
+				sl.hc.chainHeadFeed.Send(ChainHeadEvent{Block: newHeadBlock})
+			}
+
+		}
+
 		return err
 	}
 
+	fmt.Println("Append in Slice")
 	logs, err := sl.hc.Append(block)
 	if err != nil {
 		fmt.Println("Slice error in append", err)
 		return err
 	}
 
+	fmt.Println("HLCR")
 	td, reorg := sl.HLCR(block.Header(), false)
-	if err != nil {
-		if errors.Is(err, consensus.ErrFutureBlock) {
-			sl.addFutureBlock(block)
-		}
-		fmt.Println("Slice error in CalcTd", err)
-		return err
-	}
 
 	// Remove this once td is converted to a single value.
 	externTd := make([]*big.Int, 3)
 	externTd[types.QuaiNetworkContext] = td
 	rawdb.WriteTd(sl.hc.headerDb, block.Hash(), block.NumberU64(), externTd)
 
+	fmt.Println("Reorg?:", reorg)
 	if reorg {
 		if err := sl.reorg(block, logs); err != nil {
 			return err
@@ -198,11 +217,7 @@ func (sl *Slice) reorg(block *types.Block, logs []*types.Log) error {
 		fmt.Println("Region Slice Heads:", sl.currentHeads[0].Hash())
 	}
 
-	sl.hc.bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
-	if len(logs) > 0 {
-		sl.hc.bc.logsFeed.Send(logs)
-	}
-	sl.hc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
+	sl.updateHeadFeed(block, logs)
 
 	// Everytime the total difficulty is written the PreviousCanonicalCoincident(PCC) check is done on our chain
 	// and if we have a sub client in the given slice, PCC is triggered there as well
@@ -220,6 +235,13 @@ func (sl *Slice) reorg(block *types.Block, logs []*types.Log) error {
 		}
 	}
 	return nil
+}
+func (sl *Slice) updateHeadFeed(block *types.Block, logs []*types.Log) {
+	sl.hc.bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
+	if len(logs) > 0 {
+		sl.hc.bc.logsFeed.Send(logs)
+	}
+	sl.hc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
 }
 
 // The purpose of the Previous Coincident Reference Check (PCRC) is to establish
@@ -321,21 +343,18 @@ func (sl *Slice) PCRC(block *types.Block, headerOrder int) (types.PCRCTermini, e
 		// PTZ and RTZ are essentially a signaling mechanism to know that we are building on the right terminal header.
 		// So running this only on a coincident block makes sure that the zones can move and sync past the coincident.
 		// Just run RTZ to make sure that its linked. This check decouples this signaling and linking paradigm.
-		if headerOrder < params.REGION {
-			PTZ, err := sl.PreviousValidCoincident(header, slice, params.PRIME, true)
-			if err != nil {
-				return types.PCRCTermini{}, err
-			}
-			PCRCTermini.PTZ = PTZ.Hash()
-		}
 
-		if headerOrder < params.ZONE {
-			RTZ, err := sl.PreviousValidCoincident(header, slice, params.REGION, true)
-			if err != nil {
-				return types.PCRCTermini{}, err
-			}
-			PCRCTermini.RTZ = RTZ.Hash()
+		PTZ, err := sl.PreviousValidCoincident(header, slice, params.PRIME, true)
+		if err != nil {
+			return types.PCRCTermini{}, err
 		}
+		PCRCTermini.PTZ = PTZ.Hash()
+
+		RTZ, err := sl.PreviousValidCoincident(header, slice, params.REGION, true)
+		if err != nil {
+			return types.PCRCTermini{}, err
+		}
+		PCRCTermini.RTZ = RTZ.Hash()
 
 		return PCRCTermini, nil
 	}
@@ -451,17 +470,21 @@ func (sl *Slice) HLCR(header *types.Header, sub bool) (*big.Int, bool) {
 		externTd, err := sl.CalcTd(header)
 		if err != nil {
 			if errors.Is(err, consensus.ErrFutureBlock) {
-				sl.addFutureBlock(sl.hc.GetBlockByHash(header.Hash()))
+				sl.addFutureHead(header)
 			}
 			return nil, false
 		}
 
 		var currentTd []*big.Int
 		if types.QuaiNetworkContext == params.ZONE {
+			fmt.Println("HLCR current header:", sl.hc.CurrentHeader().Hash())
 			currentTd = sl.hc.GetTdByHash(sl.hc.CurrentHeader().Hash())
 		} else {
 			if sub {
+				fmt.Println("sub == true, hash:", sl.currentHeads[header.Location[types.QuaiNetworkContext]-1].Hash())
 				currentTd = sl.hc.GetTdByHash(sl.currentHeads[header.Location[types.QuaiNetworkContext]-1].Hash())
+				fmt.Println("sub == true, currentTd", currentTd)
+				return externTd, true
 			} else {
 				currentTd = sl.hc.GetTdByHash(sl.hc.CurrentHeader().Hash())
 			}
@@ -519,25 +542,11 @@ func (sl *Slice) procFutureHeads() {
 	}
 }
 
-// addFutureBlock checks if the block is within the max allowed window to get
-// accepted for future processing, and returns an error if the block is too far
-// ahead and was not added.
-func (sl *Slice) addFutureBlock(block *types.Block) error {
-	max := uint64(time.Now().Unix() + maxTimeFutureBlocks)
-	if block.Time() > max {
-		return fmt.Errorf("future block timestamp %v > allowed %v", block.Time(), max)
-	}
-	if !sl.futureBlocks.Contains(block.Hash()) {
-		sl.futureBlocks.Add(block.Hash(), block)
-	}
-	return nil
-}
-
 // addFutureHeads checks if the header is within the max allowed window to get
 // accepted for future processing, and returns an error if the block is too far
 // ahead and was not added.
-func (sl *Slice) addFutureHeader(header *types.Header) error {
-	max := uint64(time.Now().Unix() + maxTimeFutureBlocks)
+func (sl *Slice) addFutureHead(header *types.Header) error {
+	max := uint64(time.Now().Unix() + maxTimeFutureHeads)
 	if header.HeaderTime() > max {
 		return fmt.Errorf("future header timestamp %v > allowed %v", header.HeaderTime(), max)
 	}
@@ -583,7 +592,7 @@ func (sl *Slice) updateFutureHeads() {
 // CalcTd calculates the TD of the given header using PCRC and CalcHLCRNetDifficulty.
 func (sl *Slice) CalcTd(header *types.Header) (*big.Int, error) {
 	priorTd := sl.hc.GetTd(header.Parent(), header.Number64()-1)
-	if priorTd[types.QuaiNetworkContext] != nil {
+	if priorTd[types.QuaiNetworkContext] == nil {
 		return nil, consensus.ErrFutureBlock
 	}
 	Td := priorTd[types.QuaiNetworkContext].Add(priorTd[types.QuaiNetworkContext], header.Difficulty[types.QuaiNetworkContext])
