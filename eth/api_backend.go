@@ -398,3 +398,7 @@ func (b *EthAPIBackend) StateAtTransaction(ctx context.Context, block *types.Blo
 func (b *EthAPIBackend) CalculateBaseFee(header *types.Header) *big.Int {
 	return b.eth.core.CalculateBaseFee(header)
 }
+
+func (b *EthAPIBackend) GetSliceHeadHash(index byte) common.Hash {
+	return b.eth.core.GetSliceHeadHash(index)
+}

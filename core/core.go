@@ -368,3 +368,7 @@ func (c *Core) CalcTd(header *types.Header) (*big.Int, error) {
 func (c *Core) TxLookupLimit() uint64 {
 	return 0
 }
+
+func (c *Core) GetSliceHeadHash(index byte) common.Hash {
+	return c.sl.GetSliceHeadHash(index)
+}

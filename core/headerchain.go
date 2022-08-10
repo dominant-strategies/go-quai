@@ -204,8 +204,10 @@ func (hc *HeaderChain) Appendable(block *types.Block) error {
 
 // SetCurrentHeader sets the in-memory head header marker of the canonical chan
 // as the given header.
-func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
+func (hc *HeaderChain) SetCurrentHeader(head *types.Header) ([]*types.Header, error) {
 	prevHeader := hc.CurrentHeader()
+
+	sliceHeaders := make([]*types.Header, 3)
 
 	//Update canonical state db
 	hc.currentHeader.Store(head)
@@ -218,7 +220,10 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 	// If head is the normal extension of canonical head, we can return by just wiring the canonical hash.
 	if prevHeader.Hash() == head.Parent() {
 		rawdb.WriteCanonicalHash(hc.headerDb, head.Hash(), head.Number64())
-		return nil
+		if types.QuaiNetworkContext != params.ZONE {
+			sliceHeaders[head.Location[types.QuaiNetworkContext]-1] = head
+		}
+		return sliceHeaders, nil
 	}
 
 	//Find a common header
@@ -238,8 +243,6 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 		fmt.Println("delete prev", prevHeader.Hash())
 		rawdb.DeleteCanonicalHash(hc.headerDb, prevHeader.Number64())
 
-		//TODO: Run state processor to rollback state
-
 		// Add to the stack
 		hashStack = append(hashStack, prevHeader)
 		prevHeader = hc.GetHeader(prevHeader.Parent(), prevHeader.Number64()-1)
@@ -247,6 +250,11 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 		// genesis check to not delete the genesis block
 		if prevHeader.Hash() == hc.config.GenesisHashes[0] {
 			break
+		}
+
+		// Setting the appropriate sliceHeader to rollback point
+		if types.QuaiNetworkContext != params.ZONE {
+			sliceHeaders[prevHeader.Location[types.QuaiNetworkContext]-1] = prevHeader
 		}
 
 		fmt.Println("prevheader: ", prevHeader.Hash())
@@ -262,10 +270,14 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 	for i := len(hashStack) - 1; i >= 0; i-- {
 		fmt.Println("WriteCanonicalHash", hashStack[i].Hash())
 		rawdb.WriteCanonicalHash(hc.headerDb, hashStack[i].Hash(), hashStack[i].Number64())
-		//TODO: Run the state processor forward
+
+		// Setting the appropriate sliceHeader to rollforward point
+		if types.QuaiNetworkContext != params.ZONE {
+			sliceHeaders[hashStack[i].Location[types.QuaiNetworkContext]-1] = hashStack[i]
+		}
 	}
 
-	return nil
+	return sliceHeaders, nil
 }
 
 // Reset purges the entire blockchain, restoring it to its genesis state.
@@ -337,6 +349,7 @@ func (hc *HeaderChain) loadLastState() error {
 		fmt.Println("head hash: ", head)
 		if chead := hc.GetHeaderByHash(head); chead != nil {
 			hc.currentHeader.Store(chead)
+			hc.currentHeaderHash = chead.Hash()
 		}
 	}
 	hc.currentHeaderHash = hc.CurrentHeader().Hash()

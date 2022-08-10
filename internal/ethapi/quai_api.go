@@ -653,3 +653,9 @@ func (s *PublicBlockChainQuaiAPI) CalcTd(ctx context.Context, raw json.RawMessag
 	}
 	return s.b.CalcTd(ctx, header)
 }
+
+// GetSliceHeadHash returns the current head hash for the slice and the provided index
+func (s *PublicBlockChainQuaiAPI) GetSliceHeadHash(ctx context.Context, index byte) common.Hash {
+	fmt.Println("GetSliceHeadHash index:", index)
+	return s.b.GetSliceHeadHash(index)
+}

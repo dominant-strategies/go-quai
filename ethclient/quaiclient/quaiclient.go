@@ -482,3 +482,13 @@ func (ec *Client) PCC(ctx context.Context) error {
 	err := ec.c.CallContext(ctx, nil, "quai_pCC")
 	return err
 }
+
+// GetSliceHeadHash returns the current head hash for the slice and the provided index
+func (ec *Client) GetSliceHeadHash(ctx context.Context, index byte) common.Hash {
+	var headHash common.Hash
+	err := ec.c.CallContext(ctx, &headHash, "quai_getSliceHeadHash", index)
+	if err != nil {
+		return common.Hash{}
+	}
+	return headHash
+}

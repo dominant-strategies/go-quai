@@ -23,7 +23,8 @@ import (
 )
 
 type Slice struct {
-	hc *HeaderChain
+	hc           *HeaderChain
+	currentHeads []*types.Header
 
 	config *params.ChainConfig
 	engine consensus.Engine
@@ -33,6 +34,7 @@ type Slice struct {
 	domClient    *quaiclient.Client   // domClient is used to check if a given dominant block in the chain is canonical in dominant chain.
 	subClients   []*quaiclient.Client // subClinets is used to check is a coincident block is valid in the subordinate context
 	futureBlocks *lru.Cache
+	slicemu      sync.RWMutex
 
 	wg sync.WaitGroup // slice processing wait group for shutting down
 }
@@ -45,12 +47,17 @@ func NewSlice(db ethdb.Database, chainConfig *params.ChainConfig, domClientUrl s
 
 	futureBlocks, _ := lru.New(maxFutureBlocks)
 	sl.futureBlocks = futureBlocks
+	sl.currentHeads = make([]*types.Header, 3)
 
 	var err error
 	sl.hc, err = NewHeaderChain(db, engine, chainConfig, cacheConfig, vmConfig)
 	if err != nil {
 		return nil, err
 	}
+
+	sl.currentHeads[0] = sl.hc.genesisHeader
+	sl.currentHeads[1] = sl.hc.genesisHeader
+	sl.currentHeads[2] = sl.hc.genesisHeader
 
 	// only set the domClient if the chain is not prime
 	if types.QuaiNetworkContext != params.PRIME {
@@ -111,6 +118,8 @@ func (sl *Slice) Engine() consensus.Engine { return sl.engine }
 
 // Append
 func (sl *Slice) Append(block *types.Block) error {
+	sl.slicemu.Lock()
+	defer sl.slicemu.Unlock()
 
 	order, err := sl.engine.GetDifficultyOrder(block.Header())
 	if err != nil {
@@ -157,9 +166,28 @@ func (sl *Slice) Append(block *types.Block) error {
 }
 
 func (sl *Slice) reorg(block *types.Block, logs []*types.Log) error {
-	err := sl.hc.SetCurrentHeader(block.Header())
+
+	sliceHeaders, err := sl.hc.SetCurrentHeader(block.Header())
+
 	if err != nil {
 		return err
+	}
+	for i, header := range sliceHeaders {
+		if header != nil && types.QuaiNetworkContext != params.ZONE {
+
+			sl.currentHeads[i] = header
+
+		}
+	}
+
+	if types.QuaiNetworkContext != params.PRIME {
+		if sliceHeaders[block.Header().Location[types.QuaiNetworkContext-1]-1] != nil {
+			fmt.Println("Zone Slice Header Hash:", sliceHeaders[block.Header().Location[types.QuaiNetworkContext-1]-1].Hash())
+		} else {
+			fmt.Println("Zone Header Hash:", sl.hc.currentHeaderHash)
+		}
+	} else {
+		fmt.Println("Region Slice Heads:", sl.currentHeads[0].Hash())
 	}
 
 	sl.hc.bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
@@ -405,28 +433,38 @@ func (sl *Slice) HLCR(externDifficulty *big.Int, header *types.Header) bool {
 
 	// We have a new possible head call HLCR to potentially set
 	// TODO: Remove the td as tuple and remove the contextual comparison after that
-	currentTd := sl.hc.GetTd(sl.hc.currentHeaderHash, sl.hc.CurrentHeader().Number64())
+	currentTd := sl.hc.GetTd(sl.hc.CurrentHeader().Hash(), sl.hc.CurrentHeader().Number64())
 
 	if currentTd[types.QuaiNetworkContext].Cmp(externDifficulty) > 0 {
 		return false
 	}
 
-	// check if the previous terminus of the header is actually in the canonical chain in dom.
-	previousTerminus, err := sl.PreviousValidCoincident(header, header.Location, types.QuaiNetworkContext-1, true)
-	if err != nil {
-		return false
-	}
-	hash := sl.domClient.GetHeaderHashByNumber(context.Background(), previousTerminus.Number[types.QuaiNetworkContext-1])
-	// check if the hash matches the has associated with previousTerminus.
-	if (hash == common.Hash{}) {
-		return false
+	if types.QuaiNetworkContext != params.PRIME {
+		// check if the previous terminus of the header is actually in the canonical chain in dom.
+		previousTerminus, err := sl.PreviousValidCoincident(header, header.Location, types.QuaiNetworkContext-1, true)
+		if err != nil {
+			return false
+		}
+
+		domSliceHeadHash := sl.domClient.GetSliceHeadHash(context.Background(), header.Location[types.QuaiNetworkContext-1]-1)
+		fmt.Println("domSliceHeadHash", domSliceHeadHash)
+		// check if the hash matches the has associated with previousTerminus.
+		if (domSliceHeadHash == common.Hash{}) {
+			return true
+		}
+		if domSliceHeadHash == header.Hash() {
+			return true
+		}
+		if domSliceHeadHash != previousTerminus.Hash() {
+			domSliceHeader := sl.hc.GetHeaderByHash(domSliceHeadHash)
+			if domSliceHeader != nil {
+				sl.hc.SetCurrentHeader(sl.hc.GetHeaderByHash(domSliceHeadHash))
+			}
+			return false
+		}
 	}
 
-	if hash == previousTerminus.Hash() {
-		return true
-	}
-
-	return false
+	return true
 }
 
 func (sl *Slice) procFutureBlocks() {
@@ -524,4 +562,12 @@ func (sl *Slice) CalcTd(header *types.Header) (*big.Int, error) {
 			return nil, consensus.ErrFutureBlock
 		}
 	}
+}
+
+func (sl *Slice) GetSliceHeadHash(index byte) common.Hash {
+	if index < 3 {
+		fmt.Println("current Head:", sl.currentHeads[index].Hash())
+		return sl.currentHeads[index].Hash()
+	}
+	return common.Hash{}
 }
