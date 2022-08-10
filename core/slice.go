@@ -143,8 +143,13 @@ func (sl *Slice) Append(block *types.Block) error {
 		return err
 	}
 
-	td, err := sl.CalcTd(block.Header())
-	fmt.Println("td for block", td)
+	logs, err := sl.hc.Append(block)
+	if err != nil {
+		fmt.Println("Slice error in append", err)
+		return err
+	}
+
+	td, reorg := sl.HLCR(block.Header(), false)
 	if err != nil {
 		if errors.Is(err, consensus.ErrFutureBlock) {
 			sl.addFutureBlock(block)
@@ -153,18 +158,10 @@ func (sl *Slice) Append(block *types.Block) error {
 		return err
 	}
 
-	logs, err := sl.hc.Append(block)
-	if err != nil {
-		fmt.Println("Slice error in append", err)
-		return err
-	}
-
 	// Remove this once td is converted to a single value.
 	externTd := make([]*big.Int, 3)
 	externTd[types.QuaiNetworkContext] = td
 	rawdb.WriteTd(sl.hc.headerDb, block.Hash(), block.NumberU64(), externTd)
-
-	reorg := sl.HLCR(td, block.Header())
 
 	if reorg {
 		if err := sl.reorg(block, logs); err != nil {
@@ -437,45 +434,45 @@ func (sl *Slice) PreviousValidCoincident(header *types.Header, slice []byte, ord
 }
 
 // HLCR
-func (sl *Slice) HLCR(externDifficulty *big.Int, header *types.Header) bool {
-	if externDifficulty == nil {
-		return false
+func (sl *Slice) HLCR(header *types.Header, sub bool) (*big.Int, bool) {
+	if header == nil {
+		return nil, false
 	}
 
-	// We have a new possible head call HLCR to potentially set
-	// TODO: Remove the td as tuple and remove the contextual comparison after that
-	currentTd := sl.hc.GetTd(sl.hc.CurrentHeader().Hash(), sl.hc.CurrentHeader().Number64())
-
-	if currentTd[types.QuaiNetworkContext].Cmp(externDifficulty) > 0 {
-		return false
+	order, err := sl.engine.GetDifficultyOrder(header)
+	if err != nil {
+		return nil, false
 	}
 
-	if types.QuaiNetworkContext != params.PRIME {
-		// check if the previous terminus of the header is actually in the canonical chain in dom.
-		previousTerminus, err := sl.PreviousValidCoincident(header, header.Location, types.QuaiNetworkContext-1, true)
+	if order < types.QuaiNetworkContext {
+		return sl.domClient.HLCR(context.Background(), header, true)
+	} else {
+
+		externTd, err := sl.CalcTd(header)
 		if err != nil {
-			return false
-		}
-
-		domSliceHeadHash := sl.domClient.GetSliceHeadHash(context.Background(), header.Location[types.QuaiNetworkContext-1]-1)
-		fmt.Println("domSliceHeadHash", domSliceHeadHash)
-		// check if the hash matches the has associated with previousTerminus.
-		if (domSliceHeadHash == common.Hash{}) {
-			return true
-		}
-		if domSliceHeadHash == header.Hash() {
-			return true
-		}
-		if domSliceHeadHash != previousTerminus.Hash() {
-			domSliceHeader := sl.hc.GetHeaderByHash(domSliceHeadHash)
-			if domSliceHeader != nil {
-				sl.hc.SetCurrentHeader(sl.hc.GetHeaderByHash(domSliceHeadHash))
+			if errors.Is(err, consensus.ErrFutureBlock) {
+				sl.addFutureBlock(sl.hc.GetBlockByHash(header.Hash()))
 			}
-			return false
+			return nil, false
 		}
-	}
 
-	return true
+		var currentTd []*big.Int
+		if types.QuaiNetworkContext == params.ZONE {
+			currentTd = sl.hc.GetTdByHash(sl.hc.CurrentHeader().Hash())
+		} else {
+			if sub {
+				currentTd = sl.hc.GetTdByHash(sl.currentHeads[header.Location[types.QuaiNetworkContext]-1].Hash())
+			} else {
+				currentTd = sl.hc.GetTdByHash(sl.hc.CurrentHeader().Hash())
+			}
+		}
+
+		// LCR
+		if currentTd[types.QuaiNetworkContext].Cmp(externTd) < 0 {
+			return externTd, true
+		}
+		return externTd, false
+	}
 }
 
 func (sl *Slice) procFutureBlocks() {
@@ -585,49 +582,12 @@ func (sl *Slice) updateFutureHeads() {
 
 // CalcTd calculates the TD of the given header using PCRC and CalcHLCRNetDifficulty.
 func (sl *Slice) CalcTd(header *types.Header) (*big.Int, error) {
-	// Iterate ancestors, stopping when a TD value is found in cache or a coincident block is found.
-	// If coincident is found, ask dom client for TD at that block
-	aggDiff := new(big.Int)
-	cursor := header
-	for {
-		// First, check if this block's TD is already written locally
-		cursorTd := sl.hc.GetTd(cursor.Hash(), (*cursor.Number[types.QuaiNetworkContext]).Uint64())
-		td := make([]*big.Int, len(cursorTd))
-		for i, diff := range cursorTd {
-			td[i] = diff
-		}
-
-		if td[types.QuaiNetworkContext] != nil {
-			// Add the difficulty we accumulated up till this block
-			blockTd := big.NewInt(td[types.QuaiNetworkContext].Int64())
-			blockTd.Add(blockTd, aggDiff)
-			return blockTd, nil
-		}
-
-		// If not written locally, check if this block coincides with a dominant chain
-		order, err := sl.engine.GetDifficultyOrder(cursor)
-		if err != nil {
-			return nil, err
-		} else if order < types.QuaiNetworkContext {
-			// TODO: Ask dom to CalcTd on coincident block
-			domTd, err := sl.domClient.CalcTd(context.Background(), cursor)
-			if err != nil {
-				return nil, err
-			} else {
-				blockTd := big.NewInt(domTd.Int64())
-				blockTd.Add(blockTd, aggDiff)
-				return blockTd, nil
-			}
-		}
-
-		// If not cached AND not coincident, aggregate the difficulty and iterate to the parent
-		aggDiff = aggDiff.Add(aggDiff, cursor.Difficulty[types.QuaiNetworkContext])
-		cursor = sl.hc.GetHeader(cursor.Parent(), (*cursor.Number[types.QuaiNetworkContext]).Uint64()-1)
-		if cursor == nil {
-			log.Warn("unable to find parent: %s", cursor.Parent())
-			return nil, consensus.ErrFutureBlock
-		}
+	priorTd := sl.hc.GetTd(header.Parent(), header.Number64()-1)
+	if priorTd[types.QuaiNetworkContext] != nil {
+		return nil, consensus.ErrFutureBlock
 	}
+	Td := priorTd[types.QuaiNetworkContext].Add(priorTd[types.QuaiNetworkContext], header.Difficulty[types.QuaiNetworkContext])
+	return Td, nil
 }
 
 func (sl *Slice) GetSliceHeadHash(index byte) common.Hash {

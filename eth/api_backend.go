@@ -136,10 +136,6 @@ func (b *EthAPIBackend) PCC() error {
 	return b.eth.core.PCC()
 }
 
-func (b *EthAPIBackend) CalcTd(ctx context.Context, header *types.Header) (*big.Int, error) {
-	return b.eth.core.CalcTd(header)
-}
-
 func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
 	return b.eth.core.GetBlockByHash(hash), nil
 }
@@ -401,4 +397,8 @@ func (b *EthAPIBackend) CalculateBaseFee(header *types.Header) *big.Int {
 
 func (b *EthAPIBackend) GetSliceHeadHash(index byte) common.Hash {
 	return b.eth.core.GetSliceHeadHash(index)
+}
+
+func (b *EthAPIBackend) HLCR(header *types.Header, sub bool) (*big.Int, bool) {
+	return b.eth.core.HLCR(header, sub)
 }

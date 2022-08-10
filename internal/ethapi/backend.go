@@ -66,7 +66,7 @@ type Backend interface {
 	GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error)
 	GetTd(ctx context.Context, hash common.Hash) []*big.Int
 	GetSliceHeadHash(index byte) common.Hash
-	CalcTd(ctx context.Context, header *types.Header) (*big.Int, error)
+	HLCR(header *types.Header, sub bool) (*big.Int, bool)
 	GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config) (*vm.EVM, func() error, error)
 	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription

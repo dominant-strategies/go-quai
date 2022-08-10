@@ -361,14 +361,14 @@ func (c *Core) PCC() error {
 	return c.sl.PreviousCanonicalCoincident()
 }
 
-func (c *Core) CalcTd(header *types.Header) (*big.Int, error) {
-	return c.sl.CalcTd(header)
-}
-
 func (c *Core) TxLookupLimit() uint64 {
 	return 0
 }
 
 func (c *Core) GetSliceHeadHash(index byte) common.Hash {
 	return c.sl.GetSliceHeadHash(index)
+}
+
+func (c *Core) HLCR(header *types.Header, sub bool) (*big.Int, bool) {
+	return c.sl.HLCR(header, sub)
 }

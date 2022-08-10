@@ -470,13 +470,6 @@ func newRPCTransactionFromBlockHash(b *types.Block, hash common.Hash) *RPCTransa
 	return nil
 }
 
-// CalcTd calculates the total difficulty for a block
-func (ec *Client) CalcTd(ctx context.Context, header *types.Header) (*big.Int, error) {
-	var td *big.Int
-	err := ec.c.CallContext(ctx, &td, "quai_calcTd", header)
-	return td, err
-}
-
 // PCC checks if the previous terminal header is canonical in dom and iterates until a canonical dom is found.
 func (ec *Client) PCC(ctx context.Context) error {
 	err := ec.c.CallContext(ctx, nil, "quai_pCC")
@@ -491,4 +484,21 @@ func (ec *Client) GetSliceHeadHash(ctx context.Context, index byte) common.Hash 
 		return common.Hash{}
 	}
 	return headHash
+}
+
+type TdWithReorg struct {
+	Td    *big.Int
+	Reorg bool
+}
+
+func (ec *Client) HLCR(ctx context.Context, header *types.Header, sub bool) (*big.Int, bool) {
+	data := map[string]interface{}{"Header": RPCMarshalHeader(header)}
+	data["Flag"] = sub
+
+	var tdAndReorg TdWithReorg
+	err := ec.c.CallContext(ctx, &tdAndReorg, "quai_hLCR", data)
+	if err != nil {
+		return nil, false
+	}
+	return tdAndReorg.Td, tdAndReorg.Reorg
 }

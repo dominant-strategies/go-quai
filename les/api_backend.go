@@ -376,3 +376,7 @@ func (b *LesApiBackend) GetTerminusAtOrder(header *types.Header, order int) (com
 func (b *LesApiBackend) GetSliceHeadHash(index byte) common.Hash {
 	return common.Hash{}
 }
+
+func (b *LesApiBackend) HLCR(header *types.Header, sub bool) (*big.Int, bool) {
+	return nil, false
+}

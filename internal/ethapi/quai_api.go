@@ -586,6 +586,11 @@ type HashWithLocation struct {
 	Location []byte
 }
 
+type HeaderWithFlag struct {
+	Header *types.Header
+	Flag   bool
+}
+
 func (s *PublicBlockChainQuaiAPI) GetAncestorByLocation(ctx context.Context, raw json.RawMessage) (map[string]interface{}, error) {
 	var hashWithLocation HashWithLocation
 	if err := json.Unmarshal(raw, &hashWithLocation); err != nil {
@@ -645,17 +650,22 @@ func (s *PublicBlockChainQuaiAPI) PCC(ctx context.Context) error {
 	return s.b.PCC()
 }
 
-// CalcTd calculates the total difficulty of a blockchain up to a block
-func (s *PublicBlockChainQuaiAPI) CalcTd(ctx context.Context, raw json.RawMessage) (*big.Int, error) {
-	var header *types.Header
-	if err := json.Unmarshal(raw, &header); err != nil {
-		return nil, err
-	}
-	return s.b.CalcTd(ctx, header)
-}
-
 // GetSliceHeadHash returns the current head hash for the slice and the provided index
 func (s *PublicBlockChainQuaiAPI) GetSliceHeadHash(ctx context.Context, index byte) common.Hash {
 	fmt.Println("GetSliceHeadHash index:", index)
 	return s.b.GetSliceHeadHash(index)
+}
+
+type TdWithReorg struct {
+	Td    *big.Int
+	Reorg bool
+}
+
+func (s *PublicBlockChainQuaiAPI) HLCR(ctx context.Context, raw json.RawMessage) (TdWithReorg, error) {
+	var headerWithFlag HeaderWithFlag
+	if err := json.Unmarshal(raw, &headerWithFlag); err != nil {
+		return TdWithReorg{}, nil
+	}
+	td, reorg := s.b.HLCR(headerWithFlag.Header, headerWithFlag.Flag)
+	return TdWithReorg{Td: td, Reorg: reorg}, nil
 }
