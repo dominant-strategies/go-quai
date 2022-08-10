@@ -135,6 +135,10 @@ func (h *Header) Parent() common.Hash {
 	return h.ParentHash[QuaiNetworkContext]
 }
 
+func (h *Header) HeaderTime() uint64 {
+	return h.Time
+}
+
 // TotalBitLen returns the BitLen at each element in a big.Int slice.
 func TotalBitLen(array []*big.Int) int {
 	bitLen := 0

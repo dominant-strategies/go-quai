@@ -22,6 +22,13 @@ import (
 	"github.com/spruce-solutions/go-quai/params"
 )
 
+const (
+	maxFutureBlocks     = 256
+	maxFutureHeads      = 20
+	maxTimeFutureBlocks = 30
+	maxTimeFutureHeads  = 5
+)
+
 type Slice struct {
 	hc           *HeaderChain
 	currentHeads []*types.Header
@@ -34,6 +41,7 @@ type Slice struct {
 	domClient    *quaiclient.Client   // domClient is used to check if a given dominant block in the chain is canonical in dominant chain.
 	subClients   []*quaiclient.Client // subClinets is used to check is a coincident block is valid in the subordinate context
 	futureBlocks *lru.Cache
+	futureHeads  *lru.Cache
 	slicemu      sync.RWMutex
 
 	wg sync.WaitGroup // slice processing wait group for shutting down
@@ -47,6 +55,8 @@ func NewSlice(db ethdb.Database, chainConfig *params.ChainConfig, domClientUrl s
 
 	futureBlocks, _ := lru.New(maxFutureBlocks)
 	sl.futureBlocks = futureBlocks
+	futureHeads, _ := lru.New(maxFutureHeads)
+	sl.futureHeads = futureHeads
 	sl.currentHeads = make([]*types.Header, 3)
 
 	var err error
@@ -72,7 +82,8 @@ func NewSlice(db ethdb.Database, chainConfig *params.ChainConfig, domClientUrl s
 		}()
 	}
 
-	go sl.update()
+	go sl.updateFutureBlocks()
+	go sl.updateFutureHeads()
 
 	return sl, nil
 }
@@ -489,6 +500,28 @@ func (sl *Slice) procFutureBlocks() {
 	}
 }
 
+func (sl *Slice) procFutureHeads() {
+	headers := make([]*types.Header, 0, sl.futureHeads.Len())
+	for _, hash := range sl.futureHeads.Keys() {
+		if head, exist := sl.futureHeads.Peek(hash); exist {
+			headers = append(headers, head.(*types.Header))
+		}
+	}
+	if len(headers) > 0 {
+		sort.Slice(headers, func(i, j int) bool {
+			return headers[i].Number64() < headers[j].Number64()
+		})
+		// Insert one by one as chain insertion needs contiguous ancestry between blocks
+		for i := range headers {
+			fmt.Println("blocks in future blocks", headers[i].Number, headers[i].Hash())
+		}
+		// Insert one by one as chain insertion needs contiguous ancestry between blocks
+		for i := range headers {
+			sl.hc.SetCurrentHeader(headers[i])
+		}
+	}
+}
+
 // addFutureBlock checks if the block is within the max allowed window to get
 // accepted for future processing, and returns an error if the block is too far
 // ahead and was not added.
@@ -503,7 +536,26 @@ func (sl *Slice) addFutureBlock(block *types.Block) error {
 	return nil
 }
 
-func (sl *Slice) update() {
+// addFutureHeads checks if the header is within the max allowed window to get
+// accepted for future processing, and returns an error if the block is too far
+// ahead and was not added.
+func (sl *Slice) addFutureHeader(header *types.Header) error {
+	max := uint64(time.Now().Unix() + maxTimeFutureBlocks)
+	if header.HeaderTime() > max {
+		return fmt.Errorf("future header timestamp %v > allowed %v", header.HeaderTime(), max)
+	}
+	if !sl.futureHeads.Contains(header.Hash()) {
+		// add the header
+		sl.futureHeads.Add(header.Hash(), header)
+		// remove the parent if it exists in the futureHeads cache after adding the header.
+		if sl.futureHeads.Contains(header.Parent()) {
+			sl.futureHeads.Remove(header.Parent())
+		}
+	}
+	return nil
+}
+
+func (sl *Slice) updateFutureBlocks() {
 	futureTimer := time.NewTicker(1 * time.Second)
 	defer futureTimer.Stop()
 	defer sl.wg.Done()
@@ -511,6 +563,20 @@ func (sl *Slice) update() {
 		select {
 		case <-futureTimer.C:
 			sl.procFutureBlocks()
+		case <-sl.quit:
+			return
+		}
+	}
+}
+
+func (sl *Slice) updateFutureHeads() {
+	futureTimer := time.NewTicker(1 * time.Second)
+	defer futureTimer.Stop()
+	defer sl.wg.Done()
+	for {
+		select {
+		case <-futureTimer.C:
+			sl.procFutureHeads()
 		case <-sl.quit:
 			return
 		}

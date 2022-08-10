@@ -19,6 +19,8 @@ import (
 )
 
 const (
+	bodyCacheLimit     = 256
+	blockCacheLimit    = 256
 	maxHeadsQueueLimit = 1024
 )
 
