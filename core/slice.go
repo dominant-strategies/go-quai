@@ -82,7 +82,6 @@ func NewSlice(db ethdb.Database, chainConfig *params.ChainConfig, domClientUrl s
 		}()
 	}
 
-	go sl.updateFutureBlocks()
 	go sl.updateFutureHeads()
 
 	return sl, nil
@@ -137,12 +136,11 @@ func (sl *Slice) Append(block *types.Block) error {
 		return err
 	}
 
-	fmt.Println("PCRC")
 	_, err = sl.PCRC(block, order)
 	if err != nil {
 		fmt.Println("Slice error in PCRC", err)
 		// Untwist
-		if types.QuaiNetworkContext != params.PRIME {
+		if types.QuaiNetworkContext != params.PRIME && order < types.QuaiNetworkContext {
 			newHash := sl.domClient.GetSliceHeadHash(context.Background(), block.Header().Location[types.QuaiNetworkContext-1]-1)
 			if (newHash != common.Hash{}) {
 				newHeadBlock := sl.hc.GetBlockByHash(newHash)
@@ -201,9 +199,7 @@ func (sl *Slice) reorg(block *types.Block, logs []*types.Log) error {
 	}
 	for i, header := range sliceHeaders {
 		if header != nil && types.QuaiNetworkContext != params.ZONE {
-
 			sl.currentHeads[i] = header
-
 		}
 	}
 
@@ -419,6 +415,7 @@ func (sl *Slice) PreviousValidCoincident(header *types.Header, slice []byte, ord
 		return nil, err
 	}
 
+	var terminalHeader *types.Header
 	for {
 		// If block header is Genesis return it as coincident
 		if header.Number[types.QuaiNetworkContext].Cmp(big.NewInt(1)) == 0 {
@@ -447,8 +444,24 @@ func (sl *Slice) PreviousValidCoincident(header *types.Header, slice []byte, ord
 			equal = header.Location[0] == slice[0]
 		}
 		if equal && difficultyOrder <= order {
-			return header, nil
+			terminalHeader = header
+			break
 		}
+	}
+
+	if types.QuaiNetworkContext != params.PRIME && order < types.QuaiNetworkContext {
+		// check if the terminus is valid
+		terminalBlock, err := sl.domClient.BlockByHash(context.Background(), terminalHeader.Hash())
+		if err != nil {
+			return nil, errors.New("terminal header not found")
+		}
+		if terminalBlock != nil {
+			return terminalHeader, nil
+		} else {
+			return nil, errors.New("terminal header is not valid")
+		}
+	} else {
+		return terminalHeader, nil
 	}
 }
 
@@ -469,9 +482,9 @@ func (sl *Slice) HLCR(header *types.Header, sub bool) (*big.Int, bool) {
 
 		externTd, err := sl.CalcTd(header)
 		if err != nil {
-			if errors.Is(err, consensus.ErrFutureBlock) {
-				sl.addFutureHead(header)
-			}
+			// if errors.Is(err, consensus.ErrFutureBlock) {
+			// 	sl.addFutureHead(header)
+			// }
 			return nil, false
 		}
 
@@ -481,10 +494,10 @@ func (sl *Slice) HLCR(header *types.Header, sub bool) (*big.Int, bool) {
 			currentTd = sl.hc.GetTdByHash(sl.hc.CurrentHeader().Hash())
 		} else {
 			if sub {
-				fmt.Println("sub == true, hash:", sl.currentHeads[header.Location[types.QuaiNetworkContext]-1].Hash())
+				if header.Hash() == sl.currentHeads[header.Location[types.QuaiNetworkContext]-1].Hash() {
+					return externTd, true
+				}
 				currentTd = sl.hc.GetTdByHash(sl.currentHeads[header.Location[types.QuaiNetworkContext]-1].Hash())
-				fmt.Println("sub == true, currentTd", currentTd)
-				return externTd, true
 			} else {
 				currentTd = sl.hc.GetTdByHash(sl.hc.CurrentHeader().Hash())
 			}
@@ -495,28 +508,6 @@ func (sl *Slice) HLCR(header *types.Header, sub bool) (*big.Int, bool) {
 			return externTd, true
 		}
 		return externTd, false
-	}
-}
-
-func (sl *Slice) procFutureBlocks() {
-	blocks := make([]*types.Block, 0, sl.futureBlocks.Len())
-	for _, hash := range sl.futureBlocks.Keys() {
-		if block, exist := sl.futureBlocks.Peek(hash); exist {
-			blocks = append(blocks, block.(*types.Block))
-		}
-	}
-	if len(blocks) > 0 {
-		sort.Slice(blocks, func(i, j int) bool {
-			return blocks[i].NumberU64() < blocks[j].NumberU64()
-		})
-		// Insert one by one as chain insertion needs contiguous ancestry between blocks
-		for i := range blocks {
-			fmt.Println("blocks in future blocks", blocks[i].Header().Number, blocks[i].Header().Hash())
-		}
-		// Insert one by one as chain insertion needs contiguous ancestry between blocks
-		for i := range blocks {
-			sl.Append(blocks[i])
-		}
 	}
 }
 
@@ -533,10 +524,7 @@ func (sl *Slice) procFutureHeads() {
 		})
 		// Insert one by one as chain insertion needs contiguous ancestry between blocks
 		for i := range headers {
-			fmt.Println("blocks in future blocks", headers[i].Number, headers[i].Hash())
-		}
-		// Insert one by one as chain insertion needs contiguous ancestry between blocks
-		for i := range headers {
+			fmt.Println("headers i", headers[i])
 			sl.hc.SetCurrentHeader(headers[i])
 		}
 	}
@@ -561,24 +549,9 @@ func (sl *Slice) addFutureHead(header *types.Header) error {
 	return nil
 }
 
-func (sl *Slice) updateFutureBlocks() {
-	futureTimer := time.NewTicker(1 * time.Second)
-	defer futureTimer.Stop()
-	defer sl.wg.Done()
-	for {
-		select {
-		case <-futureTimer.C:
-			sl.procFutureBlocks()
-		case <-sl.quit:
-			return
-		}
-	}
-}
-
 func (sl *Slice) updateFutureHeads() {
 	futureTimer := time.NewTicker(1 * time.Second)
 	defer futureTimer.Stop()
-	defer sl.wg.Done()
 	for {
 		select {
 		case <-futureTimer.C:

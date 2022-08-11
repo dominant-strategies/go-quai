@@ -252,15 +252,16 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) ([]*types.Header, er
 			break
 		}
 
+		if prevHeader == nil {
+			break
+		}
+
 		// Setting the appropriate sliceHeader to rollback point
 		if types.QuaiNetworkContext != params.ZONE {
 			sliceHeaders[prevHeader.Location[types.QuaiNetworkContext]-1] = prevHeader
 		}
 
 		fmt.Println("prevheader: ", prevHeader.Hash())
-		if prevHeader == nil {
-			log.Warn("unable to trim blockchain state, one of trimmed blocks not found")
-		}
 	}
 
 	fmt.Println("Attempting to write canonical hash")
@@ -273,7 +274,9 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) ([]*types.Header, er
 
 		// Setting the appropriate sliceHeader to rollforward point
 		if types.QuaiNetworkContext != params.ZONE {
-			sliceHeaders[hashStack[i].Location[types.QuaiNetworkContext]-1] = hashStack[i]
+			if len(hashStack[i].Location) != 0 {
+				sliceHeaders[hashStack[i].Location[types.QuaiNetworkContext]-1] = hashStack[i]
+			}
 		}
 	}
 

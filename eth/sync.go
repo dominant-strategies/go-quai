@@ -170,11 +170,11 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 
 	// Sanity check on the TD tuple given by the Peer.
 	// Ideally this should never get triggered.
-	if op.td[types.QuaiNetworkContext] == nil {
+	if len(op.td) == 0 {
 		return op
 	}
 
-	if ourTD[types.QuaiNetworkContext] == nil {
+	if len(ourTD) == 0 {
 		return op
 	}
 
@@ -209,7 +209,11 @@ func (cs *chainSyncer) modeAndLocalHead() (downloader.SyncMode, []*big.Int) {
 	}
 	// Nope, we're really full syncing
 	head := cs.handler.core.CurrentBlock()
-	td := cs.handler.core.GetTd(head.Hash(), head.NumberU64())
+
+	var td []*big.Int
+	if head != nil {
+		td = cs.handler.core.GetTd(head.Hash(), head.NumberU64())
+	}
 	return downloader.FullSync, td
 }
 
