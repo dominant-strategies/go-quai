@@ -482,9 +482,9 @@ func (sl *Slice) HLCR(header *types.Header, sub bool) (*big.Int, bool) {
 
 		externTd, err := sl.CalcTd(header)
 		if err != nil {
-			// if errors.Is(err, consensus.ErrFutureBlock) {
-			// 	sl.addFutureHead(header)
-			// }
+			if errors.Is(err, consensus.ErrFutureBlock) {
+				sl.addFutureHead(header)
+			}
 			return nil, false
 		}
 
