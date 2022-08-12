@@ -1877,6 +1877,13 @@ type orderBlock struct {
 	Receipts     types.Receipts   `json:"receipts"`
 }
 
+type tdBlock struct {
+	Td           *big.Int         `json:"td"`
+	Transactions []rpcTransaction `json:"transactions"`
+	Uncles       []*types.Header  `json:"uncles"`
+	Receipts     types.Receipts   `json:"receipts"`
+}
+
 // Sign calculates an ECDSA signature for:
 // keccack256("\x19Ethereum Signed Message:\n" + len(message) + message).
 //

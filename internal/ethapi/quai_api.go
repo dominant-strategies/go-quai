@@ -661,19 +661,18 @@ type TdWithReorg struct {
 	Reorg bool
 }
 
-func (s *PublicBlockChainQuaiAPI) HLCR(ctx context.Context, raw json.RawMessage) (TdWithReorg, error) {
+func (s *PublicBlockChainQuaiAPI) HLCR(ctx context.Context, raw json.RawMessage) bool {
 	var headerWithFlag HeaderWithFlag
 	if err := json.Unmarshal(raw, &headerWithFlag); err != nil {
-		return TdWithReorg{}, nil
+		return false
 	}
-	td, reorg := s.b.HLCR(headerWithFlag.Header, headerWithFlag.Flag)
-	return TdWithReorg{Td: td, Reorg: reorg}, nil
+	return s.b.HLCR(headerWithFlag.Header, headerWithFlag.Flag)
 }
 
-func (s *PublicBlockChainQuaiAPI) Append(ctx context.Context, raw json.RawMessage) error {
+func (s *PublicBlockChainQuaiAPI) SliceAppend(ctx context.Context, raw json.RawMessage) error {
 	// Decode header and transactions.
 	var head *types.Header
-	var body rpcBlock
+	var body tdBlock
 	if err := json.Unmarshal(raw, &head); err != nil {
 		return err
 	}
@@ -693,5 +692,5 @@ func (s *PublicBlockChainQuaiAPI) Append(ctx context.Context, raw json.RawMessag
 	}
 
 	block := types.NewBlockWithHeader(head).WithBody(txs, uncles)
-	return s.b.Append(block)
+	return s.b.SliceAppend(block, body.Td)
 }

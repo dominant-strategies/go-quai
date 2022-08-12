@@ -249,6 +249,16 @@ func RPCMarshalOrderBlock(block *types.Block, Order int) (map[string]interface{}
 	return fields, nil
 }
 
+// RPCMarshalOrderBlock converts the block and order as input to PCRC.
+func RPCMarshalTdBlock(block *types.Block, td *big.Int) (map[string]interface{}, error) {
+	fields, err := RPCMarshalBlock(block, true, true)
+	if err != nil {
+		return nil, err
+	}
+	fields["td"] = td
+	return fields, nil
+}
+
 // RPCMarshalBlock converts the given block to the RPC output which depends on fullTx. If inclTx is true transactions are
 // returned. When fullTx is true the returned block contains full transaction details, otherwise it will only contain
 // transaction hashes.
@@ -486,30 +496,25 @@ func (ec *Client) GetSliceHeadHash(ctx context.Context, index byte) common.Hash 
 	return headHash
 }
 
-type TdWithReorg struct {
-	Td    *big.Int
-	Reorg bool
-}
-
-func (ec *Client) HLCR(ctx context.Context, header *types.Header, sub bool) (*big.Int, bool) {
+func (ec *Client) HLCR(ctx context.Context, header *types.Header, sub bool) bool {
 	data := map[string]interface{}{"Header": RPCMarshalHeader(header)}
 	data["Flag"] = sub
 
-	var tdAndReorg TdWithReorg
-	err := ec.c.CallContext(ctx, &tdAndReorg, "quai_hLCR", data)
+	var reorg bool
+	err := ec.c.CallContext(ctx, &reorg, "quai_hLCR", data)
 	if err != nil {
-		return nil, false
+		return false
 	}
-	return tdAndReorg.Td, tdAndReorg.Reorg
+	return reorg
 }
 
-func (ec *Client) Append(ctx context.Context, block *types.Block) error {
-	data, err := RPCMarshalBlock(block, true, true)
+func (ec *Client) SliceAppend(ctx context.Context, block *types.Block, td *big.Int) error {
+	data, err := RPCMarshalTdBlock(block, td)
 	if err != nil {
 		return err
 	}
 
-	err = ec.c.CallContext(ctx, nil, "quai_append", data)
+	err = ec.c.CallContext(ctx, nil, "quai_sliceAppend", data)
 	if err != nil {
 		return err
 	}

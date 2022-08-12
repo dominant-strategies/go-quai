@@ -377,10 +377,10 @@ func (b *LesApiBackend) GetSliceHeadHash(index byte) common.Hash {
 	return common.Hash{}
 }
 
-func (b *LesApiBackend) HLCR(header *types.Header, sub bool) (*big.Int, bool) {
-	return nil, false
+func (b *LesApiBackend) HLCR(header *types.Header, sub bool) bool {
+	return false
 }
 
-func (b *LesApiBackend) Append(block *types.Block) error {
+func (b *LesApiBackend) SliceAppend(block *types.Block, td *big.Int) error {
 	return nil
 }

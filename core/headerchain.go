@@ -139,27 +139,32 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *par
 }
 
 // Append
-func (hc *HeaderChain) Append(block *types.Block) ([]*types.Log, error) {
+func (hc *HeaderChain) Append(block *types.Block) error {
 	hc.headermu.Lock()
 	defer hc.headermu.Unlock()
 
 	err := hc.Appendable(block)
 	if err != nil {
-		return []*types.Log{}, err
+		return err
 	}
 
 	// Append header to the headerchain
 	batch := hc.headerDb.NewBatch()
 	rawdb.WriteHeader(batch, block.Header())
 	if err := batch.Write(); err != nil {
-		return nil, err
+		return err
 	}
 
 	// Append block else revert header append
 	logs, err := hc.bc.Append(block)
 	if err != nil {
 		rawdb.DeleteHeader(hc.headerDb, block.Header().Hash(), block.Header().Number64())
-		return nil, err
+		return err
+	}
+
+	hc.bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
+	if len(logs) > 0 {
+		hc.bc.logsFeed.Send(logs)
 	}
 
 	/////////////////////////
@@ -171,11 +176,11 @@ func (hc *HeaderChain) Append(block *types.Block) ([]*types.Log, error) {
 		// Trim the branch before dequeueing
 		commonHeader := hc.findCommonHeader(hc.heads[0])
 		if commonHeader == nil {
-			return nil, errors.New("nil head in hc.heads")
+			return errors.New("nil head in hc.heads")
 		}
 		err = hc.trim(commonHeader, hc.heads[0])
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		// dequeue
@@ -190,7 +195,7 @@ func (hc *HeaderChain) Append(block *types.Block) ([]*types.Log, error) {
 		return hc.heads[i].Number[types.QuaiNetworkContext].Uint64() < hc.heads[j].Number[types.QuaiNetworkContext].Uint64()
 	})
 
-	return logs, nil
+	return nil
 }
 
 func (hc *HeaderChain) Appendable(block *types.Block) error {

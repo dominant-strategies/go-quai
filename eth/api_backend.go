@@ -136,8 +136,8 @@ func (b *EthAPIBackend) PCC() error {
 	return b.eth.core.PCC()
 }
 
-func (b *EthAPIBackend) Append(block *types.Block) error {
-	return b.eth.core.Append(block)
+func (b *EthAPIBackend) SliceAppend(block *types.Block, td *big.Int) error {
+	return b.eth.core.SliceAppend(block, td)
 }
 
 func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
@@ -403,6 +403,6 @@ func (b *EthAPIBackend) GetSliceHeadHash(index byte) common.Hash {
 	return b.eth.core.GetSliceHeadHash(index)
 }
 
-func (b *EthAPIBackend) HLCR(header *types.Header, sub bool) (*big.Int, bool) {
+func (b *EthAPIBackend) HLCR(header *types.Header, sub bool) bool {
 	return b.eth.core.HLCR(header, sub)
 }
