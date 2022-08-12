@@ -480,12 +480,6 @@ func newRPCTransactionFromBlockHash(b *types.Block, hash common.Hash) *RPCTransa
 	return nil
 }
 
-// PCC checks if the previous terminal header is canonical in dom and iterates until a canonical dom is found.
-func (ec *Client) PCC(ctx context.Context) error {
-	err := ec.c.CallContext(ctx, nil, "quai_pCC")
-	return err
-}
-
 // GetSliceHeadHash returns the current head hash for the slice and the provided index
 func (ec *Client) GetSliceHeadHash(ctx context.Context, index byte) common.Hash {
 	var headHash common.Hash
@@ -496,25 +490,23 @@ func (ec *Client) GetSliceHeadHash(ctx context.Context, index byte) common.Hash 
 	return headHash
 }
 
-func (ec *Client) HLCR(ctx context.Context, header *types.Header, sub bool) bool {
-	data := map[string]interface{}{"Header": RPCMarshalHeader(header)}
-	data["Flag"] = sub
-
-	var reorg bool
-	err := ec.c.CallContext(ctx, &reorg, "quai_hLCR", data)
-	if err != nil {
-		return false
-	}
-	return reorg
-}
-
-func (ec *Client) SliceAppend(ctx context.Context, block *types.Block, td *big.Int) error {
+func (ec *Client) Append(ctx context.Context, block *types.Block, td *big.Int) error {
 	data, err := RPCMarshalTdBlock(block, td)
 	if err != nil {
 		return err
 	}
 
-	err = ec.c.CallContext(ctx, nil, "quai_sliceAppend", data)
+	err = ec.c.CallContext(ctx, nil, "quai_append", data)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (ec *Client) SetHeaderChainHead(ctx context.Context, header *types.Header) error {
+	data := RPCMarshalHeader(header)
+
+	err := ec.c.CallContext(ctx, nil, "quai_setHeaderChainHead", data)
 	if err != nil {
 		return err
 	}

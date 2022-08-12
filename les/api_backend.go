@@ -197,10 +197,6 @@ func (b *LesApiBackend) GetTd(ctx context.Context, hash common.Hash) []*big.Int 
 	return nil
 }
 
-func (b *LesApiBackend) PCC() error {
-	return nil
-}
-
 func (b *LesApiBackend) GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config) (*vm.EVM, func() error, error) {
 	if vmConfig == nil {
 		vmConfig = new(vm.Config)
@@ -365,10 +361,6 @@ func (b *LesApiBackend) CalculateBaseFee(header *types.Header) *big.Int {
 	return b.CalculateBaseFee(header)
 }
 
-func (b *LesApiBackend) CalcTd(ctx context.Context, header *types.Header) (*big.Int, error) {
-	return nil, errors.New("Unimplemented")
-}
-
 func (b *LesApiBackend) GetTerminusAtOrder(header *types.Header, order int) (common.Hash, error) {
 	return common.Hash{}, errors.New("light client does not support retrieving terminus at order")
 }
@@ -377,10 +369,10 @@ func (b *LesApiBackend) GetSliceHeadHash(index byte) common.Hash {
 	return common.Hash{}
 }
 
-func (b *LesApiBackend) HLCR(header *types.Header, sub bool) bool {
-	return false
+func (b *LesApiBackend) Append(block *types.Block, td *big.Int) error {
+	return nil
 }
 
-func (b *LesApiBackend) SliceAppend(block *types.Block, td *big.Int) error {
+func (b *LesApiBackend) SetHeaderChainHead(header *types.Header) error {
 	return nil
 }

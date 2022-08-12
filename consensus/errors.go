@@ -50,4 +50,7 @@ var (
 
 	// ErrPCCOPFailed is returned if PCCOP fails and we add the terminal header to future block.
 	ErrPCCOPFailed = errors.New("pccop failed")
+
+	// ErrPrimeTwist in PCRC there exists a Prime twist (PRTP != PRTR)
+	ErrPrimeTwist = errors.New("prime twist prtp != prtr")
 )

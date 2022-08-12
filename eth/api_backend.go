@@ -132,12 +132,12 @@ func (b *EthAPIBackend) PCRC(block *types.Block, order int) (types.PCRCTermini, 
 	return b.eth.core.PCRC(block, order)
 }
 
-func (b *EthAPIBackend) PCC() error {
-	return b.eth.core.PCC()
+func (b *EthAPIBackend) Append(block *types.Block, td *big.Int) error {
+	return b.eth.core.Append(block, td)
 }
 
-func (b *EthAPIBackend) SliceAppend(block *types.Block, td *big.Int) error {
-	return b.eth.core.SliceAppend(block, td)
+func (b *EthAPIBackend) SetHeaderChainHead(header *types.Header) error {
+	return b.eth.core.SetHeaderChainHead(header)
 }
 
 func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
@@ -401,8 +401,4 @@ func (b *EthAPIBackend) CalculateBaseFee(header *types.Header) *big.Int {
 
 func (b *EthAPIBackend) GetSliceHeadHash(index byte) common.Hash {
 	return b.eth.core.GetSliceHeadHash(index)
-}
-
-func (b *EthAPIBackend) HLCR(header *types.Header, sub bool) bool {
-	return b.eth.core.HLCR(header, sub)
 }

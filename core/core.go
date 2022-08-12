@@ -51,12 +51,7 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 		// add the rest of the blocks in the queue to the future blocks.
 		if blockOrder == types.QuaiNetworkContext {
 
-			blockTd, err := c.sl.CalcTd(block.Header())
-			if err != nil {
-				return i, err
-			}
-
-			err = c.sl.SliceAppend(block, blockTd)
+			err = c.sl.SliceAppend(block)
 			if err != nil {
 				fmt.Println("err in Append core: ", err)
 				return i, err
@@ -374,12 +369,8 @@ func (c *Core) PCRC(block *types.Block, order int) (types.PCRCTermini, error) {
 	return c.sl.PCRC(block, order)
 }
 
-func (c *Core) SliceAppend(block *types.Block, td *big.Int) error {
-	return c.sl.SliceAppend(block, td)
-}
-
-func (c *Core) PCC() error {
-	return c.sl.PreviousCanonicalCoincident()
+func (c *Core) Append(block *types.Block, td *big.Int) error {
+	return c.sl.Append(block, td)
 }
 
 func (c *Core) TxLookupLimit() uint64 {
@@ -390,6 +381,10 @@ func (c *Core) GetSliceHeadHash(index byte) common.Hash {
 	return c.sl.GetSliceHeadHash(index)
 }
 
-func (c *Core) HLCR(header *types.Header, sub bool) bool {
-	return c.sl.HLCR(header, sub)
+func (c *Core) HLCR(td *big.Int) bool {
+	return c.sl.HLCR(td)
+}
+
+func (c *Core) SetHeaderChainHead(header *types.Header) error {
+	return c.sl.SetHeaderChainHead(header)
 }

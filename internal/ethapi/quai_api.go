@@ -645,11 +645,6 @@ type HeaderWithSliceAndOrder struct {
 	Order  int
 }
 
-// PCC gets the previous coincident on path for a given header, order and slice.
-func (s *PublicBlockChainQuaiAPI) PCC(ctx context.Context) error {
-	return s.b.PCC()
-}
-
 // GetSliceHeadHash returns the current head hash for the slice and the provided index
 func (s *PublicBlockChainQuaiAPI) GetSliceHeadHash(ctx context.Context, index byte) common.Hash {
 	fmt.Println("GetSliceHeadHash index:", index)
@@ -661,15 +656,7 @@ type TdWithReorg struct {
 	Reorg bool
 }
 
-func (s *PublicBlockChainQuaiAPI) HLCR(ctx context.Context, raw json.RawMessage) bool {
-	var headerWithFlag HeaderWithFlag
-	if err := json.Unmarshal(raw, &headerWithFlag); err != nil {
-		return false
-	}
-	return s.b.HLCR(headerWithFlag.Header, headerWithFlag.Flag)
-}
-
-func (s *PublicBlockChainQuaiAPI) SliceAppend(ctx context.Context, raw json.RawMessage) error {
+func (s *PublicBlockChainQuaiAPI) Append(ctx context.Context, raw json.RawMessage) error {
 	// Decode header and transactions.
 	var head *types.Header
 	var body tdBlock
@@ -692,5 +679,14 @@ func (s *PublicBlockChainQuaiAPI) SliceAppend(ctx context.Context, raw json.RawM
 	}
 
 	block := types.NewBlockWithHeader(head).WithBody(txs, uncles)
-	return s.b.SliceAppend(block, body.Td)
+	return s.b.Append(block, body.Td)
+}
+
+func (s *PublicBlockChainQuaiAPI) SetHeaderChainHead(ctx context.Context, raw json.RawMessage) error {
+	// Decode header.
+	var header *types.Header
+	if err := json.Unmarshal(raw, &header); err != nil {
+		return err
+	}
+	return s.b.SetHeaderChainHead(header)
 }
