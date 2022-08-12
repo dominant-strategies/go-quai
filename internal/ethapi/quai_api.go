@@ -669,3 +669,29 @@ func (s *PublicBlockChainQuaiAPI) HLCR(ctx context.Context, raw json.RawMessage)
 	td, reorg := s.b.HLCR(headerWithFlag.Header, headerWithFlag.Flag)
 	return TdWithReorg{Td: td, Reorg: reorg}, nil
 }
+
+func (s *PublicBlockChainQuaiAPI) Append(ctx context.Context, raw json.RawMessage) error {
+	// Decode header and transactions.
+	var head *types.Header
+	var body rpcBlock
+	if err := json.Unmarshal(raw, &head); err != nil {
+		return err
+	}
+	if err := json.Unmarshal(raw, &body); err != nil {
+		return err
+	}
+
+	// Load uncles because they are not included in the block response.
+	txs := make([]*types.Transaction, len(body.Transactions))
+	for i, tx := range body.Transactions {
+		txs[i] = tx.tx
+	}
+
+	uncles := make([]*types.Header, len(body.Uncles))
+	for i, uncle := range body.Uncles {
+		uncles[i] = uncle
+	}
+
+	block := types.NewBlockWithHeader(head).WithBody(txs, uncles)
+	return s.b.Append(block)
+}

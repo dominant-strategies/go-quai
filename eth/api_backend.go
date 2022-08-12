@@ -136,6 +136,10 @@ func (b *EthAPIBackend) PCC() error {
 	return b.eth.core.PCC()
 }
 
+func (b *EthAPIBackend) Append(block *types.Block) error {
+	return b.eth.core.Append(block)
+}
+
 func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
 	return b.eth.core.GetBlockByHash(hash), nil
 }

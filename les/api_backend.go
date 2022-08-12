@@ -380,3 +380,7 @@ func (b *LesApiBackend) GetSliceHeadHash(index byte) common.Hash {
 func (b *LesApiBackend) HLCR(header *types.Header, sub bool) (*big.Int, bool) {
 	return nil, false
 }
+
+func (b *LesApiBackend) Append(block *types.Block) error {
+	return nil
+}

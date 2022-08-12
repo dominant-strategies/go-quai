@@ -502,3 +502,16 @@ func (ec *Client) HLCR(ctx context.Context, header *types.Header, sub bool) (*bi
 	}
 	return tdAndReorg.Td, tdAndReorg.Reorg
 }
+
+func (ec *Client) Append(ctx context.Context, block *types.Block) error {
+	data, err := RPCMarshalBlock(block, true, true)
+	if err != nil {
+		return err
+	}
+
+	err = ec.c.CallContext(ctx, nil, "quai_append", data)
+	if err != nil {
+		return err
+	}
+	return nil
+}

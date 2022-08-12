@@ -357,6 +357,10 @@ func (c *Core) PCRC(block *types.Block, order int) (types.PCRCTermini, error) {
 	return c.sl.PCRC(block, order)
 }
 
+func (c *Core) Append(block *types.Block) error {
+	return c.sl.Append(block)
+}
+
 func (c *Core) PCC() error {
 	return c.sl.PreviousCanonicalCoincident()
 }
