@@ -40,7 +40,24 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 	fmt.Println("Insertchain on")
 	for i, block := range blocks {
 		fmt.Println("Insert chain block ", block.Hash())
-		err := c.sl.Append(block)
+
+		// check the order of the block
+		blockOrder, err := c.engine.GetDifficultyOrder(block.Header())
+		if err != nil {
+			return i, err
+		}
+
+		// if the order of the block is less than the context
+		// add the rest of the blocks in the queue to the future blocks.
+		if blockOrder < types.QuaiNetworkContext {
+			err := c.sl.AddFutureBlocks(blocks[i:])
+			if err != nil {
+				return i, err
+			}
+			return i, nil
+		}
+
+		err = c.sl.Append(block)
 		if err != nil {
 			fmt.Println("err in Append core: ", err)
 			return i, err

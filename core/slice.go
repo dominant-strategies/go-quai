@@ -82,6 +82,7 @@ func NewSlice(db ethdb.Database, chainConfig *params.ChainConfig, domClientUrl s
 		}()
 	}
 
+	go sl.updateFutureBlocks()
 	go sl.updateFutureHeads()
 
 	return sl, nil
@@ -511,6 +512,28 @@ func (sl *Slice) HLCR(header *types.Header, sub bool) (*big.Int, bool) {
 	}
 }
 
+func (sl *Slice) procFutureBlocks() {
+	blocks := make([]*types.Block, 0, sl.futureBlocks.Len())
+	for _, hash := range sl.futureBlocks.Keys() {
+		if block, exist := sl.futureBlocks.Peek(hash); exist {
+			blocks = append(blocks, block.(*types.Block))
+		}
+	}
+	if len(blocks) > 0 {
+		sort.Slice(blocks, func(i, j int) bool {
+			return blocks[i].NumberU64() < blocks[j].NumberU64()
+		})
+		// Insert one by one as chain insertion needs contiguous ancestry between blocks
+		for i := range blocks {
+			fmt.Println("blocks in future blocks", blocks[i].Header().Number, blocks[i].Header().Hash())
+		}
+		// Insert one by one as chain insertion needs contiguous ancestry between blocks
+		for i := range blocks {
+			sl.Append(blocks[i])
+		}
+	}
+}
+
 func (sl *Slice) procFutureHeads() {
 	headers := make([]*types.Header, 0, sl.futureHeads.Len())
 	for _, hash := range sl.futureHeads.Keys() {
@@ -530,6 +553,31 @@ func (sl *Slice) procFutureHeads() {
 	}
 }
 
+// addFutureBlock checks if the block is within the max allowed window to get
+// accepted for future processing, and returns an error if the block is too far
+// ahead and was not added.
+func (sl *Slice) addFutureBlock(block *types.Block) error {
+	max := uint64(time.Now().Unix() + maxTimeFutureBlocks)
+	if block.Time() > max {
+		return fmt.Errorf("future block timestamp %v > allowed %v", block.Time(), max)
+	}
+	if !sl.futureBlocks.Contains(block.Hash()) {
+		sl.futureBlocks.Add(block.Hash(), block)
+	}
+	return nil
+}
+
+// AddFutureBlocks add batch of blocks to the future blocks queue.
+func (sl *Slice) AddFutureBlocks(blocks []*types.Block) error {
+	for i := range blocks {
+		err := sl.addFutureBlock(blocks[i])
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // addFutureHeads checks if the header is within the max allowed window to get
 // accepted for future processing, and returns an error if the block is too far
 // ahead and was not added.
@@ -547,6 +595,20 @@ func (sl *Slice) addFutureHead(header *types.Header) error {
 		}
 	}
 	return nil
+}
+
+func (sl *Slice) updateFutureBlocks() {
+	futureTimer := time.NewTicker(3 * time.Second)
+	defer futureTimer.Stop()
+	defer sl.wg.Done()
+	for {
+		select {
+		case <-futureTimer.C:
+			sl.procFutureBlocks()
+		case <-sl.quit:
+			return
+		}
+	}
 }
 
 func (sl *Slice) updateFutureHeads() {
