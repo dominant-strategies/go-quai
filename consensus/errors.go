@@ -53,4 +53,7 @@ var (
 
 	// ErrPrimeTwist in PCRC there exists a Prime twist (PRTP != PRTR)
 	ErrPrimeTwist = errors.New("prime twist prtp != prtr")
+
+	// ErrRegionTwist in PCRC there exists a Region twist (RTR != RTZ)
+	ErrRegionTwist = errors.New("there exists a Region twist (RTR != RTZ)")
 )

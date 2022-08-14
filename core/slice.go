@@ -138,7 +138,7 @@ func (sl *Slice) SliceAppend(block *types.Block) error {
 	_, err = sl.PCRC(block, order)
 	if err != nil {
 		fmt.Println("Slice error in PCRC", err)
-		if errors.Is(err, consensus.ErrPrimeTwist) {
+		if errors.Is(err, consensus.ErrPrimeTwist) || errors.Is(err, consensus.ErrRegionTwist) {
 			sl.SetHeaderChainHead(sl.currentHeads[block.Header().Location[types.QuaiNetworkContext]-1])
 		}
 		return err
@@ -201,6 +201,7 @@ func (sl *Slice) Append(block *types.Block, td *big.Int) error {
 
 func (sl *Slice) SetHeaderChainHead(head *types.Header) error {
 	oldHead := sl.hc.CurrentHeader()
+	fmt.Println("setting head to:", head.Hash())
 	sliceHeaders, err := sl.hc.SetCurrentHeader(head)
 
 	if err != nil {
@@ -208,6 +209,7 @@ func (sl *Slice) SetHeaderChainHead(head *types.Header) error {
 	}
 
 	for i, header := range sliceHeaders {
+		fmt.Println("sliceHeader[i]:", i, header.Hash())
 		if header != nil && types.QuaiNetworkContext != params.ZONE {
 			sl.currentHeads[i] = header
 		}
@@ -219,8 +221,10 @@ func (sl *Slice) SetHeaderChainHead(head *types.Header) error {
 		err = sl.subClients[head.Location[types.QuaiNetworkContext]-1].SetHeaderChainHead(context.Background(), head)
 		// If the append errors out in the sub we can delete the block from the headerchain.
 		if err != nil {
+			fmt.Println("reverting to old headers")
 			sliceHeaders, _ := sl.hc.SetCurrentHeader(oldHead)
 			for i, header := range sliceHeaders {
+				fmt.Println("sliceHeader[i]:", i, header.Hash())
 				if header != nil && types.QuaiNetworkContext != params.ZONE {
 					sl.currentHeads[i] = header
 				}
@@ -320,7 +324,7 @@ func (sl *Slice) PCRC(block *types.Block, headerOrder int) (types.PCRCTermini, e
 		}
 
 		if RTR.Hash() != PCRCTermini.RTZ {
-			return types.PCRCTermini{}, errors.New("there exists a Region twist (RTR != RTZ)")
+			return types.PCRCTermini{}, consensus.ErrRegionTwist
 		}
 		if headerOrder < params.REGION {
 			PTR, err := sl.PreviousValidCoincident(header, slice, params.PRIME, true)
