@@ -402,3 +402,7 @@ func (b *EthAPIBackend) CalculateBaseFee(header *types.Header) *big.Int {
 func (b *EthAPIBackend) GetSliceHeadHash(index byte) common.Hash {
 	return b.eth.core.GetSliceHeadHash(index)
 }
+
+func (b *EthAPIBackend) GetHeadHash() common.Hash {
+	return b.eth.core.GetHeadHash()
+}

@@ -138,8 +138,14 @@ func (sl *Slice) SliceAppend(block *types.Block) error {
 	_, err = sl.PCRC(block, order)
 	if err != nil {
 		fmt.Println("Slice error in PCRC", err)
+		// If we have a twist we may need to redirect head/(s)
 		if errors.Is(err, consensus.ErrPrimeTwist) || errors.Is(err, consensus.ErrRegionTwist) {
-			sl.SetHeaderChainHead(sl.currentHeads[block.Header().Location[types.QuaiNetworkContext]-1])
+			// Only if the twisted block was mined by or could have been mined by me switch heads
+			if sl.hc.currentHeaderHash == block.Header().ParentHash[types.QuaiNetworkContext] &&
+				sl.subClients[block.Header().Location[types.QuaiNetworkContext]-1].GetHeadHash(context.Background()) == block.Header().ParentHash[types.QuaiNetworkContext-1] {
+				sl.SetHeaderChainHead(sl.currentHeads[block.Header().Location[types.QuaiNetworkContext]-1])
+			}
+
 		}
 		return err
 	}
@@ -532,4 +538,8 @@ func (sl *Slice) GetSliceHeadHash(index byte) common.Hash {
 		return sl.currentHeads[index].Hash()
 	}
 	return common.Hash{}
+}
+
+func (sl *Slice) GetHeadHash() common.Hash {
+	return sl.hc.currentHeaderHash
 }

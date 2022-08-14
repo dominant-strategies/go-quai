@@ -490,6 +490,16 @@ func (ec *Client) GetSliceHeadHash(ctx context.Context, index byte) common.Hash 
 	return headHash
 }
 
+// GetHeadHash returns the current head hash
+func (ec *Client) GetHeadHash(ctx context.Context) common.Hash {
+	var headHash common.Hash
+	err := ec.c.CallContext(ctx, &headHash, "quai_getHeadHash")
+	if err != nil {
+		return common.Hash{}
+	}
+	return headHash
+}
+
 func (ec *Client) Append(ctx context.Context, block *types.Block, td *big.Int) error {
 	data, err := RPCMarshalTdBlock(block, td)
 	if err != nil {

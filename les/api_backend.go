@@ -369,6 +369,10 @@ func (b *LesApiBackend) GetSliceHeadHash(index byte) common.Hash {
 	return common.Hash{}
 }
 
+func (b *LesApiBackend) GetHeadHash() common.Hash {
+	return common.Hash{}
+}
+
 func (b *LesApiBackend) Append(block *types.Block, td *big.Int) error {
 	return nil
 }

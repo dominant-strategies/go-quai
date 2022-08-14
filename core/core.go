@@ -381,6 +381,10 @@ func (c *Core) GetSliceHeadHash(index byte) common.Hash {
 	return c.sl.GetSliceHeadHash(index)
 }
 
+func (c *Core) GetHeadHash() common.Hash {
+	return c.sl.GetHeadHash()
+}
+
 func (c *Core) HLCR(td *big.Int) bool {
 	return c.sl.HLCR(td)
 }

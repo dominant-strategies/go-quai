@@ -651,6 +651,11 @@ func (s *PublicBlockChainQuaiAPI) GetSliceHeadHash(ctx context.Context, index by
 	return s.b.GetSliceHeadHash(index)
 }
 
+// GetHeadHash returns the current head hash for the slice and the provided index
+func (s *PublicBlockChainQuaiAPI) GetHeadHash(ctx context.Context) common.Hash {
+	return s.b.GetHeadHash()
+}
+
 type TdWithReorg struct {
 	Td    *big.Int
 	Reorg bool
