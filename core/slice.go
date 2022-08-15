@@ -74,8 +74,8 @@ func NewSlice(db ethdb.Database, chainConfig *params.ChainConfig, domClientUrl s
 		sl.domClient = MakeDomClient(domClientUrl)
 	}
 
+	// only set the subClients if the chain is not zone
 	sl.subClients = make([]*quaiclient.Client, 3)
-	// only set the subClients if the chain is not region
 	if types.QuaiNetworkContext != params.ZONE {
 		go func() {
 			sl.subClients = MakeSubClients(subClientUrls)
@@ -138,14 +138,9 @@ func (sl *Slice) SliceAppend(block *types.Block) error {
 	_, err = sl.PCRC(block, order)
 	if err != nil {
 		fmt.Println("Slice error in PCRC", err)
-		// If we have a twist we may need to redirect head/(s)
-		if errors.Is(err, consensus.ErrPrimeTwist) || errors.Is(err, consensus.ErrRegionTwist) {
-			// Only if the twisted block was mined by or could have been mined by me switch heads
-			if sl.hc.currentHeaderHash == block.Header().ParentHash[types.QuaiNetworkContext] &&
-				sl.subClients[block.Header().Location[types.QuaiNetworkContext]-1].GetHeadHash(context.Background()) == block.Header().ParentHash[types.QuaiNetworkContext-1] {
-				sl.SetHeaderChainHead(sl.currentHeads[block.Header().Location[types.QuaiNetworkContext]-1])
-			}
-
+		errUntwist := sl.untwistHead(block, err)
+		if errUntwist != nil {
+			return errUntwist
 		}
 		return err
 	}
@@ -173,6 +168,40 @@ func (sl *Slice) SliceAppend(block *types.Block) error {
 		//sl.hc.bc.chainSideFeed.Send(ChainSideEvent{Block: block})
 	}
 
+	return nil
+}
+
+func (sl *Slice) untwistHead(block *types.Block, err error) error {
+	// If we have a twist we may need to redirect head/(s)
+	if errors.Is(err, consensus.ErrPrimeTwist) || errors.Is(err, consensus.ErrRegionTwist) {
+		// fmt.Println("type of twist in PCRC:", err)
+		// fmt.Println("Conditions to reset head:")
+		// fmt.Println("currentHeaderHash:", sl.hc.currentHeaderHash)
+		// fmt.Println("parentHash:", block.Header().ParentHash[types.QuaiNetworkContext])
+		// fmt.Println("subClient.HeadHash:", sl.subClients[block.Header().Location[types.QuaiNetworkContext]-1].GetHeadHash(context.Background()))
+		// fmt.Println("currentBlock_sub_parent:", block.Header().ParentHash[types.QuaiNetworkContext+1])
+
+		// Only if the twisted block was mined by or could have been mined by me switch heads
+		// This check prevents us from repointing our head if old or non-relavent twisted blocks
+		// are presented
+		if sl.hc.currentHeaderHash == block.Header().ParentHash[types.QuaiNetworkContext] &&
+			sl.subClients[block.Header().Location[types.QuaiNetworkContext]-1].GetHeadHash(context.Background()) == block.Header().ParentHash[types.QuaiNetworkContext+1] {
+
+			// If there is a prime twist this is a PRTP != PRTR so we should drop back to previous slice head
+			if errors.Is(err, consensus.ErrPrimeTwist) {
+				sl.SetHeaderChainHead(sl.currentHeads[block.Header().Location[types.QuaiNetworkContext]-1])
+				return nil
+				// If there is a region twist the region needs to fall back to the parent of the previous slice head
+			} else if errors.Is(err, consensus.ErrRegionTwist) {
+				parentHeader := sl.hc.GetHeaderByHash(sl.currentHeads[block.Header().Location[types.QuaiNetworkContext]-1].ParentHash[types.QuaiNetworkContext])
+				if parentHeader != nil {
+					sl.SetHeaderChainHead(parentHeader)
+					return nil
+				}
+			}
+			return err
+		}
+	}
 	return nil
 }
 
@@ -247,10 +276,7 @@ func (sl *Slice) SetHeaderChainHead(head *types.Header) error {
 // HLCR
 func (sl *Slice) HLCR(externTd *big.Int) bool {
 	currentTd := sl.hc.GetTdByHash(sl.hc.CurrentHeader().Hash())
-	if currentTd[types.QuaiNetworkContext].Cmp(externTd) < 0 {
-		return true
-	}
-	return false
+	return currentTd[types.QuaiNetworkContext].Cmp(externTd) < 0
 }
 
 // CalcTd calculates the TD of the given header using PCRC and CalcHLCRNetDifficulty.

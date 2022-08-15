@@ -405,6 +405,9 @@ func (b *Block) Transaction(hash common.Hash) *Transaction {
 }
 
 func (b *Block) Number(params ...int) *big.Int {
+	if b == nil {
+		return nil
+	}
 	context := QuaiNetworkContext
 	if len(params) > 0 {
 		context = params[0]
@@ -416,20 +419,29 @@ func (b *Block) Number(params ...int) *big.Int {
 	return b.header.Number[context]
 }
 func (b *Block) GasLimit(params ...int) uint64 {
+	if b == nil {
+		return 0
+	}
 	context := QuaiNetworkContext
-	if len(params) > 0 {
+	if b == nil || len(params) > 0 {
 		context = params[0]
 	}
 	return b.header.GasLimit[context]
 }
 func (b *Block) GasUsed(params ...int) uint64 {
+	if b == nil {
+		return 0
+	}
 	context := QuaiNetworkContext
-	if len(params) > 0 {
+	if b == nil || len(params) > 0 {
 		context = params[0]
 	}
 	return b.header.GasUsed[context]
 }
 func (b *Block) Difficulty(params ...int) *big.Int {
+	if b == nil {
+		return nil
+	}
 	context := QuaiNetworkContext
 	if len(params) > 0 {
 		context = params[0]
@@ -440,6 +452,9 @@ func (b *Block) Difficulty(params ...int) *big.Int {
 	return new(big.Int).Set(b.header.Difficulty[context])
 }
 func (b *Block) NetworkDifficulty(params ...int) *big.Int {
+	if b == nil {
+		return nil
+	}
 	context := QuaiNetworkContext
 	if len(params) > 0 {
 		context = params[0]
@@ -451,6 +466,9 @@ func (b *Block) NetworkDifficulty(params ...int) *big.Int {
 }
 func (b *Block) Time() uint64 { return b.header.Time }
 func (b *Block) NumberU64(params ...int) uint64 {
+	if b == nil {
+		return 0
+	}
 	context := QuaiNetworkContext
 	if len(params) > 0 {
 		context = params[0]
@@ -534,7 +552,7 @@ func (b *Block) MapContext() ([]int, error) {
 }
 
 func (b *Block) Header() *Header {
-	if b.header == nil {
+	if b == nil || b.header == nil {
 		return nil
 	}
 	return CopyHeader(b.header)
