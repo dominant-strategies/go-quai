@@ -23,8 +23,8 @@ type Core struct {
 	engine consensus.Engine
 }
 
-func NewCore(db ethdb.Database, chainConfig *params.ChainConfig, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config) (*Core, error) {
-	slice, err := NewSlice(db, chainConfig, domClientUrl, subClientUrls, engine, cacheConfig, vmConfig)
+func NewCore(db ethdb.Database, config *Config, mux *event.TypeMux, isLocalBlock func(block *types.Header) bool, txConfig *TxPoolConfig, chainConfig *params.ChainConfig, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config) (*Core, error) {
+	slice, err := NewSlice(db, config, txConfig, mux, isLocalBlock, chainConfig, domClientUrl, subClientUrls, engine, cacheConfig, vmConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -155,7 +155,7 @@ func (c *Core) CalculateBaseFee(header *types.Header) *big.Int {
 
 // CurrentBlock returns the block for the current header.
 func (c *Core) CurrentBlock() *types.Block {
-	return c.GetBlockByHash(c.CurrentHeader().Hash())
+	return c.sl.hc.CurrentBlock()
 }
 
 // CurrentHeader retrieves the current head header of the canonical chain. The
@@ -391,4 +391,87 @@ func (c *Core) HLCR(td *big.Int) bool {
 
 func (c *Core) SetHeaderChainHead(header *types.Header) error {
 	return c.sl.SetHeaderChainHead(header)
+}
+
+// SubscribePendingLogs starts delivering logs from pending transactions
+// to the given channel.
+func (c *Core) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscription {
+	return c.sl.worker.pendingLogsFeed.Subscribe(ch)
+}
+
+// SubscribePendingBlock starts delivering the pending block to the given channel.
+func (c *Core) SubscribePendingBlock(ch chan<- *types.Header) event.Subscription {
+	return c.sl.worker.pendingBlockFeed.Subscribe(ch)
+}
+
+// Method to retrieve uncles from the worker in case not found in normal DB.
+func (c *Core) GetUncle(hash common.Hash) *types.Block {
+	if uncle, exist := c.sl.worker.localUncles[hash]; exist {
+		return uncle
+	}
+	if uncle, exist := c.sl.worker.remoteUncles[hash]; exist {
+		return uncle
+	}
+	return nil
+}
+
+func (c *Core) SetEtherbase(addr common.Address) {
+	c.sl.worker.setEtherbase(addr)
+}
+
+// SetGasCeil sets the gaslimit to strive for when mining blocks post 1559.
+// For pre-1559 blocks, it sets the ceiling.
+func (c *Core) SetGasCeil(ceil uint64) {
+	c.sl.worker.setGasCeil(ceil)
+}
+
+// EnablePreseal turns on the preseal mining feature. It's enabled by default.
+// Note this function shouldn't be exposed to API, it's unnecessary for users
+// (miners) to actually know the underlying detail. It's only for outside project
+// which uses this library.
+func (c *Core) EnablePreseal() {
+	c.sl.worker.enablePreseal()
+}
+
+// DisablePreseal turns off the preseal mining feature. It's necessary for some
+// fake consensus engine which can seal blocks instantaneously.
+// Note this function shouldn't be exposed to API, it's unnecessary for users
+// (miners) to actually know the underlying detail. It's only for outside project
+// which uses this library.
+func (c *Core) DisablePreseal() {
+	c.sl.worker.disablePreseal()
+}
+
+// Pending returns the currently pending block and associated state.
+func (c *Core) Pending() (*types.Block, *state.StateDB) {
+	return c.sl.worker.pending()
+}
+
+// PendingBlock returns the currently pending block.
+//
+// Note, to access both the pending block and the pending state
+// simultaneously, please use Pending(), as the pending state can
+// change between multiple method calls
+func (c *Core) PendingBlock() *types.Block {
+	return c.sl.worker.pendingBlock()
+}
+
+// PendingBlockAndReceipts returns the currently pending block and corresponding receipts.
+func (c *Core) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
+	return c.sl.worker.pendingBlockAndReceipts()
+}
+
+func (c *Core) Hashrate() uint64 {
+	if pow, ok := c.sl.engine.(consensus.PoW); ok {
+		return uint64(pow.Hashrate())
+	}
+	return 0
+}
+
+func (c *Core) StateAtBlock(block *types.Block, reexec uint64, base *state.StateDB, checkLive bool, preferDisk bool) (statedb *state.StateDB, err error) {
+	return c.sl.hc.bc.processor.StateAtBlock(block, reexec, base, checkLive, preferDisk)
+}
+
+func (c *Core) StateAtTransaction(block *types.Block, txIndex int, reexec uint64) (Message, vm.BlockContext, *state.StateDB, error) {
+	return c.sl.hc.bc.processor.StateAtTransaction(block, txIndex, reexec)
 }

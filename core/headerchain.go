@@ -19,6 +19,7 @@ import (
 	"github.com/spruce-solutions/go-quai/consensus"
 	"github.com/spruce-solutions/go-quai/consensus/misc"
 	"github.com/spruce-solutions/go-quai/core/rawdb"
+	"github.com/spruce-solutions/go-quai/core/state"
 	"github.com/spruce-solutions/go-quai/core/types"
 	"github.com/spruce-solutions/go-quai/core/vm"
 	"github.com/spruce-solutions/go-quai/ethdb"
@@ -598,6 +599,11 @@ func (hc *HeaderChain) CurrentHeader() *types.Header {
 	return hc.currentHeader.Load().(*types.Header)
 }
 
+// CurrentBlock returns the block for the current header.
+func (hc *HeaderChain) CurrentBlock() *types.Block {
+	return hc.GetBlockByHash(hc.CurrentHeader().Hash())
+}
+
 // SetGenesis sets a new genesis block header for the chain
 func (hc *HeaderChain) SetGenesis(head *types.Header) {
 	hc.genesisHeader = head
@@ -783,4 +789,8 @@ func (hc *HeaderChain) Engine() consensus.Engine {
 // SubscribeChainHeadEvent registers a subscription of ChainHeadEvent.
 func (hc *HeaderChain) SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription {
 	return hc.scope.Track(hc.chainHeadFeed.Subscribe(ch))
+}
+
+func (hc *HeaderChain) StateAt(root common.Hash) (*state.StateDB, error) {
+	return hc.bc.processor.StateAt(root)
 }

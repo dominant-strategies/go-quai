@@ -18,6 +18,7 @@ import (
 	"github.com/spruce-solutions/go-quai/core/vm"
 	"github.com/spruce-solutions/go-quai/ethclient/quaiclient"
 	"github.com/spruce-solutions/go-quai/ethdb"
+	"github.com/spruce-solutions/go-quai/event"
 	"github.com/spruce-solutions/go-quai/log"
 	"github.com/spruce-solutions/go-quai/params"
 )
@@ -33,6 +34,9 @@ type Slice struct {
 	hc           *HeaderChain
 	currentHeads []*types.Header
 
+	txPool *TxPool
+	worker *Worker
+
 	config *params.ChainConfig
 	engine consensus.Engine
 
@@ -47,7 +51,7 @@ type Slice struct {
 	wg sync.WaitGroup // slice processing wait group for shutting down
 }
 
-func NewSlice(db ethdb.Database, chainConfig *params.ChainConfig, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config) (*Slice, error) {
+func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, mux *event.TypeMux, isLocalBlock func(block *types.Header) bool, chainConfig *params.ChainConfig, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config) (*Slice, error) {
 	sl := &Slice{
 		config: chainConfig,
 		engine: engine,
@@ -64,6 +68,9 @@ func NewSlice(db ethdb.Database, chainConfig *params.ChainConfig, domClientUrl s
 	if err != nil {
 		return nil, err
 	}
+
+	sl.txPool = NewTxPool(*txConfig, chainConfig, sl.hc)
+	sl.worker = NewWorker(config, chainConfig, engine, sl.hc, sl.txPool, mux, isLocalBlock, true)
 
 	sl.currentHeads[0] = sl.hc.genesisHeader
 	sl.currentHeads[1] = sl.hc.genesisHeader
@@ -91,6 +98,16 @@ func NewSlice(db ethdb.Database, chainConfig *params.ChainConfig, domClientUrl s
 // HeaderChain retrieves the headerchain.
 func (sl *Slice) HeaderChain() *HeaderChain {
 	return sl.hc
+}
+
+// TxPool retrieves the txpool.
+func (sl *Slice) TxPool() *TxPool {
+	return sl.txPool
+}
+
+// Worker retieves the worker.
+func (sl *Slice) Worker() *Worker {
+	return sl.worker
 }
 
 // MakeDomClient creates the quaiclient for the given domurl

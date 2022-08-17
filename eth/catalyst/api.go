@@ -117,7 +117,7 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 		return nil, fmt.Errorf("cannot assemble block with unknown parent %s", params.ParentHash)
 	}
 
-	pool := api.eth.TxPool()
+	pool := api.eth.Core().Slice().TxPool()
 
 	if parent.Time() >= params.Timestamp {
 		return nil, fmt.Errorf("child timestamp lower than parent's: %d >= %d", parent.Time(), params.Timestamp)
@@ -312,7 +312,7 @@ func (api *consensusAPI) NewBlock(params executableData) (*newBlockResponse, err
 // Used in tests to add a the list of transactions from a block to the tx pool.
 func (api *consensusAPI) addBlockTxs(block *types.Block) error {
 	for _, tx := range block.Transactions() {
-		api.eth.TxPool().AddLocal(tx)
+		api.eth.Core().Slice().TxPool().AddLocal(tx)
 	}
 	return nil
 }

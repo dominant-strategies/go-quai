@@ -18,6 +18,7 @@ package gasprice
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 	"sort"
 	"sync"
@@ -112,6 +113,7 @@ func NewOracle(backend OracleBackend, params Config) *Oracle {
 	go func() {
 		var lastHead common.Hash
 		for ev := range headEvent {
+			fmt.Println("ev block hash: ", ev.Block)
 			if ev.Block.ParentHash() != lastHead {
 				cache.Purge()
 			}

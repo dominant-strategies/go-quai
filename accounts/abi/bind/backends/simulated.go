@@ -80,7 +80,7 @@ func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.Genesis
 	genesis.MustCommit(database)
 	var domClientUrl string
 	var subClientUrls []string
-	core, _ := core.NewCore(database, genesis.Config, domClientUrl, subClientUrls, blake3.NewFaker(), nil, vm.Config{})
+	core, _ := core.NewCore(database, nil, nil, nil, nil, genesis.Config, domClientUrl, subClientUrls, blake3.NewFaker(), nil, vm.Config{})
 
 	backend := &SimulatedBackend{
 		database: database,

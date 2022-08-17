@@ -30,7 +30,6 @@ import (
 	"github.com/spruce-solutions/go-quai/eth/downloader"
 	"github.com/spruce-solutions/go-quai/eth/gasprice"
 	"github.com/spruce-solutions/go-quai/ethdb"
-	"github.com/spruce-solutions/go-quai/miner"
 	"github.com/spruce-solutions/go-quai/node"
 	"github.com/spruce-solutions/go-quai/params"
 )
@@ -71,7 +70,7 @@ var Defaults = Config{
 	TrieTimeout:             60 * time.Minute,
 
 	SnapshotCache: 102,
-	Miner: miner.Config{
+	Miner: core.Config{
 		GasCeil:  8000000,
 		GasPrice: big.NewInt(1),
 		Recommit: 3 * time.Second,
@@ -143,7 +142,7 @@ type Config struct {
 	Preimages               bool
 
 	// Mining options
-	Miner miner.Config
+	Miner core.Config
 
 	// Ethash options
 	Blake3 blake3.Config

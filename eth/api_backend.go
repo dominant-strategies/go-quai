@@ -34,7 +34,6 @@ import (
 	"github.com/spruce-solutions/go-quai/eth/gasprice"
 	"github.com/spruce-solutions/go-quai/ethdb"
 	"github.com/spruce-solutions/go-quai/event"
-	"github.com/spruce-solutions/go-quai/miner"
 	"github.com/spruce-solutions/go-quai/params"
 	"github.com/spruce-solutions/go-quai/rpc"
 )
@@ -64,7 +63,7 @@ func (b *EthAPIBackend) SetHead(number uint64) {
 func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
 	// Pending block is only known by the miner
 	if number == rpc.PendingBlockNumber {
-		block := b.eth.miner.PendingBlock()
+		block := b.eth.core.PendingBlock()
 		return block.Header(), nil
 	}
 	// Otherwise resolve and return the block
@@ -98,7 +97,7 @@ func (b *EthAPIBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*ty
 func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
 	// Pending block is only known by the miner
 	if number == rpc.PendingBlockNumber {
-		block := b.eth.miner.PendingBlock()
+		block := b.eth.core.PendingBlock()
 		return block, nil
 	}
 	// Otherwise resolve and return the block
@@ -109,7 +108,7 @@ func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumbe
 }
 
 func (b *EthAPIBackend) PendingBlock(ctx context.Context) (*types.Block, error) {
-	block := b.eth.miner.PendingBlock()
+	block := b.eth.core.PendingBlock()
 	if block == nil {
 		return nil, errors.New("no pending block")
 	}
@@ -145,7 +144,7 @@ func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*typ
 }
 
 func (b *EthAPIBackend) GetUncleFromWorker(hash common.Hash) (*types.Block, error) {
-	return b.eth.miner.GetUncle(hash), nil
+	return b.eth.core.GetUncle(hash), nil
 }
 
 func (b *EthAPIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Block, error) {
@@ -170,13 +169,13 @@ func (b *EthAPIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash r
 }
 
 func (b *EthAPIBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
-	return b.eth.miner.PendingBlockAndReceipts()
+	return b.eth.core.PendingBlockAndReceipts()
 }
 
 func (b *EthAPIBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.Header, error) {
 	// Pending state is only known by the miner
 	if number == rpc.PendingBlockNumber {
-		block, state := b.eth.miner.Pending()
+		block, state := b.eth.core.Pending()
 		return state, block.Header(), nil
 	}
 	// Otherwise resolve the block number and return its state
@@ -248,11 +247,11 @@ func (b *EthAPIBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEven
 }
 
 func (b *EthAPIBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription {
-	return b.eth.miner.SubscribePendingLogs(ch)
+	return b.eth.core.SubscribePendingLogs(ch)
 }
 
 func (b *EthAPIBackend) SubscribePendingBlockEvent(ch chan<- *types.Header) event.Subscription {
-	return b.eth.miner.SubscribePendingBlock(ch)
+	return b.eth.core.SubscribePendingBlock(ch)
 }
 
 func (b *EthAPIBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
@@ -305,19 +304,19 @@ func (b *EthAPIBackend) Stats() (pending int, queued int) {
 }
 
 func (b *EthAPIBackend) TxPoolContent() (map[common.Address]types.Transactions, map[common.Address]types.Transactions) {
-	return b.eth.TxPool().Content()
+	return b.eth.Core().Slice().TxPool().Content()
 }
 
 func (b *EthAPIBackend) TxPoolContentFrom(addr common.Address) (types.Transactions, types.Transactions) {
-	return b.eth.TxPool().ContentFrom(addr)
+	return b.eth.Core().Slice().TxPool().ContentFrom(addr)
 }
 
 func (b *EthAPIBackend) TxPool() *core.TxPool {
-	return b.eth.TxPool()
+	return b.eth.Core().Slice().TxPool()
 }
 
 func (b *EthAPIBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
-	return b.eth.TxPool().SubscribeNewTxsEvent(ch)
+	return b.eth.Core().Slice().TxPool().SubscribeNewTxsEvent(ch)
 }
 
 func (b *EthAPIBackend) SyncProgress() ethereum.SyncProgress {
@@ -379,20 +378,12 @@ func (b *EthAPIBackend) CurrentHeader() *types.Header {
 	return b.eth.core.CurrentHeader()
 }
 
-func (b *EthAPIBackend) Miner() *miner.Miner {
-	return b.eth.Miner()
-}
-
-func (b *EthAPIBackend) StartMining(threads int) error {
-	return b.eth.StartMining(threads)
-}
-
 func (b *EthAPIBackend) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, checkLive, preferDisk bool) (*state.StateDB, error) {
-	return b.eth.StateAtBlock(block, reexec, base, checkLive, preferDisk)
+	return b.eth.core.StateAtBlock(block, reexec, base, checkLive, preferDisk)
 }
 
 func (b *EthAPIBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, error) {
-	return b.eth.stateAtTransaction(block, txIndex, reexec)
+	return b.eth.core.StateAtTransaction(block, txIndex, reexec)
 }
 
 func (b *EthAPIBackend) CalculateBaseFee(header *types.Header) *big.Int {

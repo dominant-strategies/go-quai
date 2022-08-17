@@ -41,7 +41,6 @@ import (
 	"github.com/spruce-solutions/go-quai/event"
 	"github.com/spruce-solutions/go-quai/les"
 	"github.com/spruce-solutions/go-quai/log"
-	"github.com/spruce-solutions/go-quai/miner"
 	"github.com/spruce-solutions/go-quai/node"
 	"github.com/spruce-solutions/go-quai/p2p"
 	"github.com/spruce-solutions/go-quai/rpc"
@@ -74,7 +73,6 @@ type backend interface {
 // reporting to ethstats
 type fullNodeBackend interface {
 	backend
-	Miner() *miner.Miner
 	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
 	CurrentBlock() *types.Block
 	SuggestGasTipCap(ctx context.Context) (*big.Int, error)
@@ -774,8 +772,9 @@ func (s *Service) reportStats(conn *connWrapper) error {
 	// check if backend is a full node
 	fullBackend, ok := s.backend.(fullNodeBackend)
 	if ok {
-		mining = fullBackend.Miner().Mining()
-		hashrate = int(fullBackend.Miner().Hashrate())
+		// Miner is no longer available
+		mining = true
+		hashrate = int(0)
 
 		sync := fullBackend.SyncProgress()
 		syncing = fullBackend.CurrentHeader().Number[types.QuaiNetworkContext].Uint64() >= sync.HighestBlock

@@ -11,7 +11,6 @@ import (
 	"github.com/spruce-solutions/go-quai/core"
 	"github.com/spruce-solutions/go-quai/eth/downloader"
 	"github.com/spruce-solutions/go-quai/eth/gasprice"
-	"github.com/spruce-solutions/go-quai/miner"
 	"github.com/spruce-solutions/go-quai/params"
 )
 
@@ -48,7 +47,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		TrieTimeout             time.Duration
 		SnapshotCache           int
 		Preimages               bool
-		Miner                   miner.Config
+		Miner                   core.Config
 		Blake3                  blake3.Config
 		TxPool                  core.TxPoolConfig
 		GPO                     gasprice.Config
@@ -138,7 +137,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		TrieTimeout             *time.Duration
 		SnapshotCache           *int
 		Preimages               *bool
-		Miner                   *miner.Config
+		Miner                   *core.Config
 		Blake3                  *blake3.Config
 		TxPool                  *core.TxPoolConfig
 		GPO                     *gasprice.Config
