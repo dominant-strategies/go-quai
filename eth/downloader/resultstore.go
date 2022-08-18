@@ -80,7 +80,7 @@ func (r *resultStore) AddFetch(header *types.Header, fastSync bool) (stale, thro
 	defer r.lock.Unlock()
 
 	var index int
-	item, index, stale, throttled, err = r.getFetchResult(header.Number.Uint64())
+	item, index, stale, throttled, err = r.getFetchResult(header.Number().Uint64())
 	if err != nil || stale || throttled {
 		return stale, throttled, item, err
 	}

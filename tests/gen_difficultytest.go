@@ -25,7 +25,7 @@ func (d DifficultyTest) MarshalJSON() ([]byte, error) {
 	var enc DifficultyTest
 	enc.ParentTimestamp = math.HexOrDecimal64(d.ParentTimestamp)
 	enc.ParentDifficulty = (*math.HexOrDecimal256)(d.ParentDifficulty)
-	enc.UncleHash = d.UncleHash
+	enc.UncleHash() = d.UncleHash
 	enc.CurrentTimestamp = math.HexOrDecimal64(d.CurrentTimestamp)
 	enc.CurrentBlockNumber = math.HexOrDecimal64(d.CurrentBlockNumber)
 	enc.CurrentDifficulty = (*math.HexOrDecimal256)(d.CurrentDifficulty)
@@ -52,8 +52,8 @@ func (d *DifficultyTest) UnmarshalJSON(input []byte) error {
 	if dec.ParentDifficulty != nil {
 		d.ParentDifficulty = (*big.Int)(dec.ParentDifficulty)
 	}
-	if dec.UncleHash != nil {
-		d.UncleHash = *dec.UncleHash
+	if dec.UncleHash() != nil {
+		d.UncleHash() = *dec.UncleHash
 	}
 	if dec.CurrentTimestamp != nil {
 		d.CurrentTimestamp = uint64(*dec.CurrentTimestamp)

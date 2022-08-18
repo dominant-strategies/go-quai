@@ -50,7 +50,7 @@ type ExecutionResult struct {
 	TxRoot      common.Hash    `json:"txRoot"`
 	ReceiptRoot common.Hash    `json:"receiptRoot"`
 	LogsHash    common.Hash    `json:"logsHash"`
-	Bloom       types.Bloom    `json:"logsBloom"        gencodec:"required"`
+	Bloom       types.Bloom()    `json:"logsBloom"        gencodec:"required"`
 	Receipts    types.Receipts `json:"receipts"`
 	Rejected    []*rejectedTx  `json:"rejected,omitempty"`
 }
@@ -107,7 +107,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 	}
 	var (
 		statedb     = MakePreState(rawdb.NewMemoryDatabase(), pre.Pre)
-		signer      = types.MakeSigner(chainConfig, new(big.Int).SetUint64(pre.Env.Number))
+		signer      = types.MakeSigner(chainConfig, new(big.Int).SetUint64(pre.Env.Number()))
 		gaspool     = new(core.GasPool)
 		blockHash   = common.Hash{0x13, 0x37}
 		rejectedTxs []*rejectedTx
@@ -116,31 +116,31 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		receipts    = make(types.Receipts, 0)
 		txIndex     = 0
 	)
-	gaspool.AddGas(pre.Env.GasLimit)
+	gaspool.AddGas(pre.Env.GasLimit())
 	vmContext := vm.BlockContext{
 		CanTransfer: core.CanTransfer,
 		Transfer:    core.Transfer,
-		Coinbase:    pre.Env.Coinbase,
-		BlockNumber: new(big.Int).SetUint64(pre.Env.Number),
+		Coinbase:    pre.Env.Coinbase(),
+		BlockNumber: new(big.Int).SetUint64(pre.Env.Number()),
 		Time:        new(big.Int).SetUint64(pre.Env.Timestamp),
-		Difficulty:  pre.Env.Difficulty,
-		GasLimit:    pre.Env.GasLimit,
+		Difficulty:  pre.Env.Difficulty(),
+		GasLimit:    pre.Env.GasLimit(),
 		GetHash:     getHash,
 	}
 	// If currentBaseFee is defined, add it to the vmContext.
-	if pre.Env.BaseFee != nil {
-		vmContext.BaseFee = new(big.Int).Set(pre.Env.BaseFee)
+	if pre.Env.BaseFee() != nil {
+		vmContext.BaseFee() = new(big.Int).Set(pre.Env.BaseFee())
 	}
 	// If DAO is supported/enabled, we need to handle it here. In geth 'proper', it's
 	// done in StateProcessor.Process(block, ...), right before transactions are applied.
 	if chainConfig.DAOForkSupport &&
 		chainConfig.DAOForkBlock != nil &&
-		chainConfig.DAOForkBlock.Cmp(new(big.Int).SetUint64(pre.Env.Number)) == 0 {
+		chainConfig.DAOForkBlock.Cmp(new(big.Int).SetUint64(pre.Env.Number())) == 0 {
 		misc.ApplyDAOHardFork(statedb)
 	}
 
 	for i, tx := range txs {
-		msg, err := tx.AsMessage(signer, pre.Env.BaseFee)
+		msg, err := tx.AsMessage(signer, pre.Env.BaseFee())
 		if err != nil {
 			log.Warn("rejected tx", "index", i, "hash", tx.Hash(), "error", err)
 			rejectedTxs = append(rejectedTxs, &rejectedTx{i, err.Error()})
@@ -188,8 +188,8 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			} else {
 				receipt.Status = types.ReceiptStatusSuccessful
 			}
-			receipt.TxHash = tx.Hash()
-			receipt.GasUsed = msgResult.UsedGas
+			receipt.TxHash() = tx.Hash()
+			receipt.GasUsed() = msgResult.UsedGas
 
 			// If the transaction created a contract, store the creation address in the receipt.
 			if msg.To() == nil {
@@ -198,7 +198,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 
 			// Set the receipt logs and create the bloom filter.
 			receipt.Logs = statedb.GetLogs(tx.Hash(), blockHash)
-			receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+			receipt.Bloom() = types.CreateBloom(types.Receipts{receipt})
 			// These three are non-consensus fields:
 			//receipt.BlockHash
 			//receipt.BlockNumber
@@ -231,7 +231,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			reward.Div(reward, big.NewInt(8))
 			statedb.AddBalance(ommer.Address, reward)
 		}
-		statedb.AddBalance(pre.Env.Coinbase, minerReward)
+		statedb.AddBalance(pre.Env.Coinbase(), minerReward)
 	}
 	// Commit block
 	root, err := statedb.Commit(chainConfig.IsEIP158(vmContext.BlockNumber))
@@ -256,7 +256,7 @@ func MakePreState(db ethdb.Database, accounts core.GenesisAlloc) *state.StateDB 
 	statedb, _ := state.New(common.Hash{}, sdb, nil)
 	for addr, a := range accounts {
 		statedb.SetCode(addr, a.Code)
-		statedb.SetNonce(addr, a.Nonce)
+		statedb.SetNonce(addr, a.Nonce())
 		statedb.SetBalance(addr, a.Balance)
 		for k, v := range a.Storage {
 			statedb.SetState(addr, k, v)

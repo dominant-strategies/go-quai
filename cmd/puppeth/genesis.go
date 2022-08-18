@@ -146,14 +146,14 @@ func newAlethGenesisSpec(network string, genesis *core.Genesis) (*alethGenesisSp
 	spec.Params.DurationLimit = (*math2.HexOrDecimal256)(params.DurationLimit)
 	spec.Params.BlockReward = (*hexutil.Big)(ethash.FrontierBlockReward)
 
-	spec.Genesis.Nonce = types.EncodeNonce(genesis.Nonce)
+	spec.Genesis.Nonce() = types.EncodeNonce(genesis.Nonce())
 	spec.Genesis.MixHash = genesis.Mixhash
-	spec.Genesis.Difficulty = (*hexutil.Big)(genesis.Difficulty)
+	spec.Genesis.Difficulty() = (*hexutil.Big)(genesis.Difficulty())
 	spec.Genesis.Author = genesis.Coinbase
 	spec.Genesis.Timestamp = (hexutil.Uint64)(genesis.Timestamp)
-	spec.Genesis.ParentHash = genesis.ParentHash
+	spec.Genesis.ParentHash() = genesis.ParentHash
 	spec.Genesis.ExtraData = genesis.ExtraData
-	spec.Genesis.GasLimit = (hexutil.Uint64)(genesis.GasLimit)
+	spec.Genesis.GasLimit() = (hexutil.Uint64)(genesis.GasLimit())
 
 	for address, account := range genesis.Alloc {
 		spec.setAccount(address, account)
@@ -221,7 +221,7 @@ func (spec *alethGenesisSpec) setAccount(address common.Address, account core.Ge
 		spec.Accounts[common.UnprefixedAddress(address)] = a
 	}
 	a.Balance = (*math2.HexOrDecimal256)(account.Balance)
-	a.Nonce = account.Nonce
+	a.Nonce() = account.Nonce
 
 }
 
@@ -424,14 +424,14 @@ func newParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 	// Disable this one
 	spec.Params.EIP98Transition = math.MaxInt64
 
-	spec.Genesis.Seal.Ethereum.Nonce = types.EncodeNonce(genesis.Nonce)
+	spec.Genesis.Seal.Ethereum.Nonce() = types.EncodeNonce(genesis.Nonce())
 	spec.Genesis.Seal.Ethereum.MixHash = genesis.Mixhash[:]
-	spec.Genesis.Difficulty = (*hexutil.Big)(genesis.Difficulty)
+	spec.Genesis.Difficulty() = (*hexutil.Big)(genesis.Difficulty())
 	spec.Genesis.Author = genesis.Coinbase
 	spec.Genesis.Timestamp = (hexutil.Uint64)(genesis.Timestamp)
-	spec.Genesis.ParentHash = genesis.ParentHash
+	spec.Genesis.ParentHash() = genesis.ParentHash
 	spec.Genesis.ExtraData = genesis.ExtraData
-	spec.Genesis.GasLimit = (hexutil.Uint64)(genesis.GasLimit)
+	spec.Genesis.GasLimit() = (hexutil.Uint64)(genesis.GasLimit())
 
 	spec.Accounts = make(map[common.UnprefixedAddress]*parityChainSpecAccount)
 	for address, account := range genesis.Alloc {
@@ -439,7 +439,7 @@ func newParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 
 		spec.Accounts[common.UnprefixedAddress(address)] = &parityChainSpecAccount{
 			Balance: bal,
-			Nonce:   math2.HexOrDecimal64(account.Nonce),
+			Nonce:   math2.HexOrDecimal64(account.Nonce()),
 		}
 	}
 	spec.setPrecompile(1, &parityChainSpecBuiltin{Name: "ecrecover",
@@ -612,15 +612,15 @@ func newPyEthereumGenesisSpec(network string, genesis *core.Genesis) (*pyEthereu
 		return nil, errors.New("unsupported consensus engine")
 	}
 	spec := &pyEthereumGenesisSpec{
-		Nonce:      types.EncodeNonce(genesis.Nonce),
+		Nonce:      types.EncodeNonce(genesis.Nonce()),
 		Timestamp:  (hexutil.Uint64)(genesis.Timestamp),
 		ExtraData:  genesis.ExtraData,
-		GasLimit:   (hexutil.Uint64)(genesis.GasLimit),
-		Difficulty: (*hexutil.Big)(genesis.Difficulty),
+		GasLimit:   (hexutil.Uint64)(genesis.GasLimit()),
+		Difficulty: (*hexutil.Big)(genesis.Difficulty()),
 		Mixhash:    genesis.Mixhash,
-		Coinbase:   genesis.Coinbase,
+		Coinbase:   genesis.Coinbase(),
 		Alloc:      genesis.Alloc,
-		ParentHash: genesis.ParentHash,
+		ParentHash: genesis.ParentHash(),
 	}
 	return spec, nil
 }

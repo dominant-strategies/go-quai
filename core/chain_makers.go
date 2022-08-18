@@ -57,25 +57,25 @@ func (b *BlockGen) SetCoinbase(addr common.Address) {
 		}
 		panic("coinbase can only be set once")
 	}
-	b.header.Coinbase = addr
-	b.gasPool = new(GasPool).AddGas(b.header.GasLimit)
+	b.header.SetCoinbase(addr)
+	b.gasPool = new(GasPool).AddGas(b.header.GasLimit())
 }
 
 // SetExtra sets the extra data field of the generated block.
 func (b *BlockGen) SetExtra(data []byte) {
-	b.header.Extra = data
+	b.header.SetExtra(data)
 }
 
 // SetNonce sets the nonce field of the generated block.
 func (b *BlockGen) SetNonce(nonce types.BlockNonce) {
-	b.header.Nonce = nonce
+	b.header.SetNonce(nonce)
 }
 
 // SetDifficulty sets the difficulty field of the generated block. This method is
 // useful for Clique tests where the difficulty does not depend on time. For the
 // ethash tests, please use OffsetTime, which implicitly recalculates the diff.
 func (b *BlockGen) SetDifficulty(diff *big.Int) {
-	b.header.Difficulty = diff
+	b.header.SetDifficulty(diff)
 }
 
 // AddTx adds a transaction to the generated block. If no coinbase has
@@ -103,7 +103,9 @@ func (b *BlockGen) AddTxWithChain(bc *BlockChain, tx *types.Transaction) {
 		b.SetCoinbase(common.Address{})
 	}
 	b.statedb.Prepare(tx.Hash(), len(b.txs))
-	receipt, err := ApplyTransaction(b.config, bc, &b.header.Coinbase, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed, vm.Config{})
+	coinbase := b.header.Coinbase()
+	gasUsed := b.header.GasUsed()
+	receipt, err := ApplyTransaction(b.config, bc, &coinbase, b.gasPool, b.statedb, b.header, tx, &gasUsed, vm.Config{})
 	if err != nil {
 		panic(err)
 	}
@@ -127,12 +129,12 @@ func (b *BlockGen) AddUncheckedTx(tx *types.Transaction) {
 
 // Number returns the block number of the block being generated.
 func (b *BlockGen) Number() *big.Int {
-	return new(big.Int).Set(b.header.Number)
+	return new(big.Int).Set(b.header.Number())
 }
 
 // BaseFee returns the EIP-1559 base fee of the block being generated.
 func (b *BlockGen) BaseFee() *big.Int {
-	return new(big.Int).Set(b.header.BaseFee)
+	return new(big.Int).Set(b.header.BaseFee())
 }
 
 // AddUncheckedReceipt forcefully adds a receipts to the block without a
@@ -175,12 +177,12 @@ func (b *BlockGen) PrevBlock(index int) *types.Block {
 // associated difficulty. It's useful to test scenarios where forking is not
 // tied to chain length directly.
 func (b *BlockGen) OffsetTime(seconds int64) {
-	b.header.Time += uint64(seconds)
-	if b.header.Time <= b.parent.Header().Time {
+	b.header.SetTime(b.header.Time() + uint64(seconds))
+	if b.header.Time() <= b.parent.Header().Time() {
 		panic("block time out of range")
 	}
 	chainreader := &fakeChainReader{config: b.config}
-	b.header.Difficulty = b.engine.CalcDifficulty(chainreader, b.header.Time, b.parent.Header())
+	b.header.SetDifficulty(b.engine.CalcDifficulty(chainreader, b.header.Time(), b.parent.Header()))
 }
 
 // GenerateChain creates a chain of n blocks. The first block's
@@ -208,13 +210,13 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		// Mutate the state and block according to any hard-fork specs
 		if daoBlock := config.DAOForkBlock; daoBlock != nil {
 			limit := new(big.Int).Add(daoBlock, params.DAOForkExtraRange)
-			if b.header.Number.Cmp(daoBlock) >= 0 && b.header.Number.Cmp(limit) < 0 {
+			if b.header.Number().Cmp(daoBlock) >= 0 && b.header.Number().Cmp(limit) < 0 {
 				if config.DAOForkSupport {
-					b.header.Extra = common.CopyBytes(params.DAOForkBlockExtra)
+					b.header.SetExtra(common.CopyBytes(params.DAOForkBlockExtra))
 				}
 			}
 		}
-		if config.DAOForkSupport && config.DAOForkBlock != nil && config.DAOForkBlock.Cmp(b.header.Number) == 0 {
+		if config.DAOForkSupport && config.DAOForkBlock != nil && config.DAOForkBlock.Cmp(b.header.Number()) == 0 {
 			misc.ApplyDAOHardFork(statedb)
 		}
 		// Execute any user modifications to the block
@@ -226,7 +228,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			block, _ := b.engine.FinalizeAndAssemble(chainreader, b.header, statedb, b.txs, b.uncles, b.receipts)
 
 			// Write state changes to db
-			root, err := statedb.Commit(config.IsEIP158(b.header.Number))
+			root, err := statedb.Commit(config.IsEIP158(b.header.Number()))
 			if err != nil {
 				panic(fmt.Sprintf("state write error: %v", err))
 			}
@@ -257,25 +259,28 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 	} else {
 		time = parent.Time() + 10 // block time is fixed at 10 seconds
 	}
-	header := &types.Header{
-		Root:       state.IntermediateRoot(chain.Config().IsEIP158(parent.Number())),
-		ParentHash: parent.Hash(),
-		Coinbase:   parent.Coinbase(),
-		Difficulty: engine.CalcDifficulty(chain, time, &types.Header{
-			Number:     parent.Number(),
-			Time:       time - 10,
-			Difficulty: parent.Difficulty(),
-			UncleHash:  parent.UncleHash(),
-		}),
-		GasLimit: parent.GasLimit(),
-		Number:   new(big.Int).Add(parent.Number(), common.Big1),
-		Time:     time,
-	}
-	if chain.Config().IsLondon(header.Number) {
-		header.BaseFee = misc.CalcBaseFee(chain.Config(), parent.Header())
+
+	// Temporary header values just to calc difficulty
+	diffheader := types.EmptyHeader()
+	diffheader.SetDifficulty(parent.Difficulty())
+	diffheader.SetNumber(parent.Number())
+	diffheader.SetTime(time - 10)
+	diffheader.SetUncleHash(parent.UncleHash())
+
+	// Make new header
+	header := types.EmptyHeader()
+	header.SetRoot(state.IntermediateRoot(chain.Config().IsEIP158(parent.Number())))
+	header.SetParentHash(parent.Hash())
+	header.SetCoinbase(parent.Coinbase())
+	header.SetDifficulty(engine.CalcDifficulty(chain, time, diffheader))
+	header.SetGasLimit(parent.GasLimit())
+	header.SetNumber(new(big.Int).Add(parent.Number(), common.Big1))
+	header.SetTime(time)
+	if chain.Config().IsLondon(header.Number()) {
+		header.SetBaseFee(misc.CalcBaseFee(chain.Config(), parent.Header()))
 		if !chain.Config().IsLondon(parent.Number()) {
 			parentGasLimit := parent.GasLimit() * params.ElasticityMultiplier
-			header.GasLimit = CalcGasLimit(parentGasLimit, parentGasLimit)
+			header.SetGasLimit(CalcGasLimit(parentGasLimit, parentGasLimit))
 		}
 	}
 	return header

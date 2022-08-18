@@ -140,7 +140,7 @@ func (oracle *Oracle) SuggestTipCap(ctx context.Context) (*big.Int, error) {
 	}
 	var (
 		sent, exp int
-		number    = head.Number.Uint64()
+		number    = head.Number().Uint64()
 		result    = make(chan results, oracle.checkBlocks)
 		quit      = make(chan struct{})
 		results   []*big.Int

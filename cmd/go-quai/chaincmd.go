@@ -431,10 +431,10 @@ func parseDumpConfig(ctx *cli.Context, stack *node.Node) (*state.DumpConfig, eth
 		Start:             start.Bytes(),
 		Max:               ctx.Uint64(utils.DumpLimitFlag.Name),
 	}
-	log.Info("State dump configured", "block", header.Number, "hash", header.Hash().Hex(),
+	log.Info("State dump configured", "block", header.Number(), "hash", header.Hash().Hex(),
 		"skipcode", conf.SkipCode, "skipstorage", conf.SkipStorage,
 		"start", hexutil.Encode(conf.Start), "limit", conf.Max)
-	return conf, db, header.Root, nil
+	return conf, db, header.Root(), nil
 }
 
 func dump(ctx *cli.Context) error {

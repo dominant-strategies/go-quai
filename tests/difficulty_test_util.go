@@ -53,7 +53,7 @@ func (test *DifficultyTest) Run(config *params.ChainConfig) error {
 		Difficulty: test.ParentDifficulty,
 		Time:       test.ParentTimestamp,
 		Number:     parentNumber,
-		UncleHash:  test.UncleHash,
+		UncleHash:  test.UncleHash(),
 	}
 
 	actual := ethash.CalcDifficulty(config, test.CurrentTimestamp, parent)
@@ -61,7 +61,7 @@ func (test *DifficultyTest) Run(config *params.ChainConfig) error {
 
 	if actual.Cmp(exp) != 0 {
 		return fmt.Errorf("parent[time %v diff %v unclehash:%x] child[time %v number %v] diff %v != expected %v",
-			test.ParentTimestamp, test.ParentDifficulty, test.UncleHash,
+			test.ParentTimestamp, test.ParentDifficulty, test.UncleHash(),
 			test.CurrentTimestamp, test.CurrentBlockNumber, actual, exp)
 	}
 	return nil

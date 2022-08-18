@@ -62,7 +62,7 @@ func TestGetBlockHeadersDataEncodeDecode(t *testing.T) {
 			if err := rlp.DecodeBytes(bytes, packet); err != nil {
 				t.Fatalf("test %d: failed to decode packet: %v", i, err)
 			}
-			if packet.Origin.Hash != tt.packet.Origin.Hash || packet.Origin.Number != tt.packet.Origin.Number || packet.Amount != tt.packet.Amount ||
+			if packet.Origin.Hash != tt.packet.Origin.Hash || packet.Origin.Number() != tt.packet.Origin.Number() || packet.Amount != tt.packet.Amount ||
 				packet.Skip != tt.packet.Skip || packet.Reverse != tt.packet.Reverse {
 				t.Fatalf("test %d: encode decode mismatch: have %+v, want %+v", i, packet, tt.packet)
 			}

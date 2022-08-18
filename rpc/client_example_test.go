@@ -55,7 +55,7 @@ func ExampleClientSubscription() {
 
 	// Print events from the subscription as they arrive.
 	for block := range subch {
-		fmt.Println("latest block:", block.Number)
+		fmt.Println("latest block:", block.Number())
 	}
 }
 
