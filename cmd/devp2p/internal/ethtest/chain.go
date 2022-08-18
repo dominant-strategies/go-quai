@@ -109,13 +109,13 @@ func (c *Chain) GetHeaders(req GetBlockHeaders) (BlockHeaders, error) {
 
 	// range over blocks to check if our chain has the requested header
 	for _, block := range c.blocks {
-		if block.Hash() == req.Origin.Hash || block.Number().Uint64() == req.Origin.Number {
+		if block.Hash() == req.Origin.Hash || block.Number().Uint64() == req.Origin.Number() {
 			headers[0] = block.Header()
 			blockNumber = block.Number().Uint64()
 		}
 	}
 	if headers[0] == nil {
-		return nil, fmt.Errorf("no headers found for given origin number %v, hash %v", req.Origin.Number, req.Origin.Hash)
+		return nil, fmt.Errorf("no headers found for given origin number %v, hash %v", req.Origin.Number(), req.Origin.Hash)
 	}
 
 	if req.Reverse {

@@ -25,7 +25,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/spruce-solutions/go-quai"
+	ethereum "github.com/spruce-solutions/go-quai"
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/common/hexutil"
 	"github.com/spruce-solutions/go-quai/common/math"
@@ -250,10 +250,10 @@ func (t *Transaction) EffectiveGasPrice(ctx context.Context) (*hexutil.Big, erro
 	if err != nil || header == nil {
 		return nil, err
 	}
-	if header.BaseFee == nil {
+	if header.BaseFee() == nil {
 		return (*hexutil.Big)(tx.GasPrice()), nil
 	}
-	return (*hexutil.Big)(math.BigMin(new(big.Int).Add(tx.GasTipCap(), header.BaseFee), tx.GasFeeCap())), nil
+	return (*hexutil.Big)(math.BigMin(new(big.Int).Add(tx.GasTipCap(), header.BaseFee()), tx.GasFeeCap())), nil
 }
 
 func (t *Transaction) MaxFeePerGas(ctx context.Context) (*hexutil.Big, error) {
@@ -555,7 +555,7 @@ func (b *Block) Number(ctx context.Context) (Long, error) {
 		return 0, err
 	}
 
-	return Long(header.Number.Uint64()), nil
+	return Long(header.Number().Uint64()), nil
 }
 
 func (b *Block) Hash(ctx context.Context) (common.Hash, error) {
@@ -574,7 +574,7 @@ func (b *Block) GasLimit(ctx context.Context) (Long, error) {
 	if err != nil {
 		return 0, err
 	}
-	return Long(header.GasLimit), nil
+	return Long(header.GasLimit()), nil
 }
 
 func (b *Block) GasUsed(ctx context.Context) (Long, error) {
@@ -582,7 +582,7 @@ func (b *Block) GasUsed(ctx context.Context) (Long, error) {
 	if err != nil {
 		return 0, err
 	}
-	return Long(header.GasUsed), nil
+	return Long(header.GasUsed()), nil
 }
 
 func (b *Block) BaseFeePerGas(ctx context.Context) (*hexutil.Big, error) {
@@ -590,10 +590,10 @@ func (b *Block) BaseFeePerGas(ctx context.Context) (*hexutil.Big, error) {
 	if err != nil {
 		return nil, err
 	}
-	if header.BaseFee == nil {
+	if header.BaseFee() == nil {
 		return nil, nil
 	}
-	return (*hexutil.Big)(header.BaseFee), nil
+	return (*hexutil.Big)(header.BaseFee()), nil
 }
 
 func (b *Block) Parent(ctx context.Context) (*Block, error) {
@@ -603,12 +603,12 @@ func (b *Block) Parent(ctx context.Context) (*Block, error) {
 			return nil, err
 		}
 	}
-	if b.header != nil && b.header.Number.Uint64() > 0 {
-		num := rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(b.header.Number.Uint64() - 1))
+	if b.header != nil && b.header.Number().Uint64() > 0 {
+		num := rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(b.header.Number().Uint64() - 1))
 		return &Block{
 			backend:      b.backend,
 			numberOrHash: &num,
-			hash:         b.header.ParentHash,
+			hash:         b.header.ParentHash(),
 		}, nil
 	}
 	return nil, nil
@@ -619,7 +619,7 @@ func (b *Block) Difficulty(ctx context.Context) (hexutil.Big, error) {
 	if err != nil {
 		return hexutil.Big{}, err
 	}
-	return hexutil.Big(*header.Difficulty), nil
+	return hexutil.Big(*header.Difficulty()), nil
 }
 
 func (b *Block) Timestamp(ctx context.Context) (hexutil.Uint64, error) {
@@ -627,7 +627,7 @@ func (b *Block) Timestamp(ctx context.Context) (hexutil.Uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return hexutil.Uint64(header.Time), nil
+	return hexutil.Uint64(header.Time()), nil
 }
 
 func (b *Block) Nonce(ctx context.Context) (hexutil.Bytes, error) {
@@ -635,7 +635,8 @@ func (b *Block) Nonce(ctx context.Context) (hexutil.Bytes, error) {
 	if err != nil {
 		return hexutil.Bytes{}, err
 	}
-	return header.Nonce[:], nil
+	nonce := header.Nonce()
+	return nonce[:], nil
 }
 
 func (b *Block) MixHash(ctx context.Context) (common.Hash, error) {
@@ -643,7 +644,7 @@ func (b *Block) MixHash(ctx context.Context) (common.Hash, error) {
 	if err != nil {
 		return common.Hash{}, err
 	}
-	return header.MixDigest, nil
+	return header.MixDigest(), nil
 }
 
 func (b *Block) TransactionsRoot(ctx context.Context) (common.Hash, error) {
@@ -651,7 +652,7 @@ func (b *Block) TransactionsRoot(ctx context.Context) (common.Hash, error) {
 	if err != nil {
 		return common.Hash{}, err
 	}
-	return header.TxHash, nil
+	return header.TxHash(), nil
 }
 
 func (b *Block) StateRoot(ctx context.Context) (common.Hash, error) {
@@ -659,7 +660,7 @@ func (b *Block) StateRoot(ctx context.Context) (common.Hash, error) {
 	if err != nil {
 		return common.Hash{}, err
 	}
-	return header.Root, nil
+	return header.Root(), nil
 }
 
 func (b *Block) ReceiptsRoot(ctx context.Context) (common.Hash, error) {
@@ -667,7 +668,7 @@ func (b *Block) ReceiptsRoot(ctx context.Context) (common.Hash, error) {
 	if err != nil {
 		return common.Hash{}, err
 	}
-	return header.ReceiptHash, nil
+	return header.ReceiptHash(), nil
 }
 
 func (b *Block) OmmerHash(ctx context.Context) (common.Hash, error) {
@@ -675,7 +676,7 @@ func (b *Block) OmmerHash(ctx context.Context) (common.Hash, error) {
 	if err != nil {
 		return common.Hash{}, err
 	}
-	return header.UncleHash, nil
+	return header.UncleHash(), nil
 }
 
 func (b *Block) OmmerCount(ctx context.Context) (*int32, error) {
@@ -709,7 +710,7 @@ func (b *Block) ExtraData(ctx context.Context) (hexutil.Bytes, error) {
 	if err != nil {
 		return hexutil.Bytes{}, err
 	}
-	return header.Extra, nil
+	return header.Extra(), nil
 }
 
 func (b *Block) LogsBloom(ctx context.Context) (hexutil.Bytes, error) {
@@ -717,7 +718,7 @@ func (b *Block) LogsBloom(ctx context.Context) (hexutil.Bytes, error) {
 	if err != nil {
 		return hexutil.Bytes{}, err
 	}
-	return header.Bloom.Bytes(), nil
+	return header.Bloom().Bytes(), nil
 }
 
 func (b *Block) TotalDifficulty(ctx context.Context) (hexutil.Big, error) {
@@ -767,7 +768,7 @@ func (b *Block) Miner(ctx context.Context, args BlockNumberArgs) (*Account, erro
 	}
 	return &Account{
 		backend:       b.backend,
-		address:       header.Coinbase,
+		address:       header.Coinbase(),
 		blockNrOrHash: args.NumberOrLatest(),
 	}, nil
 }
@@ -1195,8 +1196,8 @@ func (r *Resolver) GasPrice(ctx context.Context) (hexutil.Big, error) {
 	if err != nil {
 		return hexutil.Big{}, err
 	}
-	if head := r.backend.CurrentHeader(); head.BaseFee != nil {
-		tipcap.Add(tipcap, head.BaseFee)
+	if head := r.backend.CurrentHeader(); head.BaseFee() != nil {
+		tipcap.Add(tipcap, head.BaseFee())
 	}
 	return (hexutil.Big)(*tipcap), nil
 }

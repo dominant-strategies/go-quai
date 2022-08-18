@@ -25,7 +25,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/spruce-solutions/go-quai"
+	ethereum "github.com/spruce-solutions/go-quai"
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/core/rawdb"
 	"github.com/spruce-solutions/go-quai/core/state/snapshot"
@@ -257,7 +257,7 @@ func (d *Downloader) Progress() ethereum.SyncProgress {
 	case d.blockchain != nil && mode == FastSync:
 		current = d.blockchain.CurrentFastBlock().NumberU64()
 	case d.lightchain != nil:
-		current = d.lightchain.CurrentHeader().Number.Uint64()
+		current = d.lightchain.CurrentHeader().Number().Uint64()
 	default:
 		log.Error("Unknown downloader chain/mode combo", "light", d.lightchain != nil, "full", d.blockchain != nil, "mode", mode)
 	}
@@ -470,7 +470,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 		// nil panics on an access.
 		pivot = d.blockchain.CurrentBlock().Header()
 	}
-	height := latest.Number.Uint64()
+	height := latest.Number().Uint64()
 
 	origin, err := d.findAncestor(p, latest)
 	if err != nil {
@@ -488,7 +488,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 		if height <= uint64(fsMinFullBlocks) {
 			origin = 0
 		} else {
-			pivotNumber := pivot.Number.Uint64()
+			pivotNumber := pivot.Number().Uint64()
 			if pivotNumber <= origin {
 				origin = pivotNumber - 1
 			}
@@ -498,7 +498,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 		}
 	}
 	d.committed = 1
-	if mode == FastSync && pivot.Number.Uint64() != 0 {
+	if mode == FastSync && pivot.Number().Uint64() != 0 {
 		d.committed = 0
 	}
 	if mode == FastSync {
@@ -670,21 +670,21 @@ func (d *Downloader) fetchHead(p *peerConnection) (head *types.Header, pivot *ty
 			// and request. If only 1 header was returned, make sure there's no pivot
 			// or there was not one requested.
 			head := headers[0]
-			if (mode == FastSync || mode == LightSync) && head.Number.Uint64() < d.checkpoint {
-				return nil, nil, fmt.Errorf("%w: remote head %d below checkpoint %d", errUnsyncedPeer, head.Number, d.checkpoint)
+			if (mode == FastSync || mode == LightSync) && head.Number().Uint64() < d.checkpoint {
+				return nil, nil, fmt.Errorf("%w: remote head %d below checkpoint %d", errUnsyncedPeer, head.Number(), d.checkpoint)
 			}
 			if len(headers) == 1 {
-				if mode == FastSync && head.Number.Uint64() > uint64(fsMinFullBlocks) {
+				if mode == FastSync && head.Number().Uint64() > uint64(fsMinFullBlocks) {
 					return nil, nil, fmt.Errorf("%w: no pivot included along head header", errBadPeer)
 				}
-				p.log.Debug("Remote head identified, no pivot", "number", head.Number, "hash", head.Hash())
+				p.log.Debug("Remote head identified, no pivot", "number", head.Number(), "hash", head.Hash())
 				return head, nil, nil
 			}
 			// At this point we have 2 headers in total and the first is the
 			// validated head of the chian. Check the pivot number and return,
 			pivot := headers[1]
-			if pivot.Number.Uint64() != head.Number.Uint64()-uint64(fsMinFullBlocks) {
-				return nil, nil, fmt.Errorf("%w: remote pivot %d != requested %d", errInvalidChain, pivot.Number, head.Number.Uint64()-uint64(fsMinFullBlocks))
+			if pivot.Number().Uint64() != head.Number().Uint64()-uint64(fsMinFullBlocks) {
+				return nil, nil, fmt.Errorf("%w: remote pivot %d != requested %d", errInvalidChain, pivot.Number(), head.Number().Uint64()-uint64(fsMinFullBlocks))
 			}
 			return head, pivot, nil
 
@@ -761,7 +761,7 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 	var (
 		floor        = int64(-1)
 		localHeight  uint64
-		remoteHeight = remoteHeader.Number.Uint64()
+		remoteHeight = remoteHeader.Number().Uint64()
 	)
 	mode := d.getMode()
 	switch mode {
@@ -770,7 +770,7 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 	case FastSync:
 		localHeight = d.blockchain.CurrentFastBlock().NumberU64()
 	default:
-		localHeight = d.lightchain.CurrentHeader().Number.Uint64()
+		localHeight = d.lightchain.CurrentHeader().Number().Uint64()
 	}
 	p.log.Debug("Looking for common ancestor", "local", localHeight, "remote", remoteHeight)
 
@@ -790,11 +790,11 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 		if d.genesis == 0 {
 			header := d.lightchain.CurrentHeader()
 			for header != nil {
-				d.genesis = header.Number.Uint64()
+				d.genesis = header.Number().Uint64()
 				if floor >= int64(d.genesis)-1 {
 					break
 				}
-				header = d.lightchain.GetHeaderByHash(header.ParentHash)
+				header = d.lightchain.GetHeaderByHash(header.ParentHash())
 			}
 		}
 		// We already know the "genesis" block number, cap floor to that
@@ -854,7 +854,7 @@ func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, re
 			// Make sure the peer's reply conforms to the request
 			for i, header := range headers {
 				expectNumber := from + int64(i)*int64(skip+1)
-				if number := header.Number.Int64(); number != expectNumber {
+				if number := header.Number().Int64(); number != expectNumber {
 					p.log.Warn("Head headers broke chain ordering", "index", i, "requested", expectNumber, "received", number)
 					return 0, fmt.Errorf("%w: %v", errInvalidChain, errors.New("head headers broke chain ordering"))
 				}
@@ -863,12 +863,12 @@ func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, re
 			finished = true
 			for i := len(headers) - 1; i >= 0; i-- {
 				// Skip any headers that underflow/overflow our requested set
-				if headers[i].Number.Int64() < from || headers[i].Number.Uint64() > max {
+				if headers[i].Number().Int64() < from || headers[i].Number().Uint64() > max {
 					continue
 				}
 				// Otherwise check if we already know the header or not
 				h := headers[i].Hash()
-				n := headers[i].Number.Uint64()
+				n := headers[i].Number().Uint64()
 
 				var known bool
 				switch mode {
@@ -947,7 +947,7 @@ func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, 
 
 				// Modify the search interval based on the response
 				h := headers[0].Hash()
-				n := headers[0].Number.Uint64()
+				n := headers[0].Number().Uint64()
 
 				var known bool
 				switch mode {
@@ -963,9 +963,9 @@ func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, 
 					break
 				}
 				header := d.lightchain.GetHeaderByHash(h) // Independent of sync mode, header surely exists
-				if header.Number.Uint64() != check {
-					p.log.Warn("Received non requested header", "number", header.Number, "hash", header.Hash(), "request", check)
-					return 0, fmt.Errorf("%w: non-requested header (%d)", errBadPeer, header.Number)
+				if header.Number().Uint64() != check {
+					p.log.Warn("Received non requested header", "number", header.Number(), "hash", header.Hash(), "request", check)
+					return 0, fmt.Errorf("%w: non-requested header (%d)", errBadPeer, header.Number())
 				}
 				start = check
 				hash = h
@@ -1032,7 +1032,7 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 		timeout.Reset(ttl)
 
 		d.pivotLock.RLock()
-		pivot := d.pivotHeader.Number.Uint64()
+		pivot := d.pivotHeader.Number().Uint64()
 		d.pivotLock.RUnlock()
 
 		p.log.Trace("Fetching next pivot header", "number", pivot+uint64(fsMinFullBlocks))
@@ -1062,7 +1062,7 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 
 			d.pivotLock.RLock()
 			if d.pivotHeader != nil {
-				pivot = d.pivotHeader.Number.Uint64()
+				pivot = d.pivotHeader.Number().Uint64()
 			}
 			d.pivotLock.RUnlock()
 
@@ -1071,16 +1071,16 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 					// Retrieve the headers and do some sanity checks, just in case
 					headers := packet.(*headerPack).headers
 
-					if have, want := headers[0].Number.Uint64(), pivot+uint64(fsMinFullBlocks); have != want {
+					if have, want := headers[0].Number().Uint64(), pivot+uint64(fsMinFullBlocks); have != want {
 						log.Warn("Peer sent invalid next pivot", "have", have, "want", want)
 						return fmt.Errorf("%w: next pivot number %d != requested %d", errInvalidChain, have, want)
 					}
-					if have, want := headers[1].Number.Uint64(), pivot+2*uint64(fsMinFullBlocks)-8; have != want {
+					if have, want := headers[1].Number().Uint64(), pivot+2*uint64(fsMinFullBlocks)-8; have != want {
 						log.Warn("Peer sent invalid pivot confirmer", "have", have, "want", want)
 						return fmt.Errorf("%w: next pivot confirmer number %d != requested %d", errInvalidChain, have, want)
 					}
-					log.Warn("Pivot seemingly stale, moving", "old", pivot, "new", headers[0].Number)
-					pivot = headers[0].Number.Uint64()
+					log.Warn("Pivot seemingly stale, moving", "old", pivot, "new", headers[0].Number())
+					pivot = headers[0].Number().Uint64()
 
 					d.pivotLock.Lock()
 					d.pivotHeader = headers[0]
@@ -1142,7 +1142,7 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 					// Retrieve the current head we're at
 					var head uint64
 					if mode == LightSync {
-						head = d.lightchain.CurrentHeader().Number.Uint64()
+						head = d.lightchain.CurrentHeader().Number().Uint64()
 					} else {
 						head = d.blockchain.CurrentFastBlock().NumberU64()
 						if full := d.blockchain.CurrentBlock().NumberU64(); head < full {
@@ -1156,7 +1156,7 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 						head = ancestor
 					}
 					// If the head is way older than this batch, delay the last few headers
-					if head+uint64(reorgProtThreshold) < headers[n-1].Number.Uint64() {
+					if head+uint64(reorgProtThreshold) < headers[n-1].Number().Uint64() {
 						delay := reorgProtHeaderDelay
 						if delay > n {
 							delay = n
@@ -1482,7 +1482,7 @@ func (d *Downloader) fetchParts(deliveryCh chan dataPack, deliver func(dataPack)
 				if request.From > 0 {
 					peer.log.Trace("Requesting new batch of data", "type", kind, "from", request.From)
 				} else {
-					peer.log.Trace("Requesting new batch of data", "type", kind, "count", len(request.Headers), "from", request.Headers[0].Number)
+					peer.log.Trace("Requesting new batch of data", "type", kind, "count", len(request.Headers), "from", request.Headers[0].Number())
 				}
 				// Fetch the chunk and make sure any errors return the hashes to the queue
 				if fetchHook != nil {
@@ -1519,7 +1519,7 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 	)
 	defer func() {
 		if rollback > 0 {
-			lastHeader, lastFastBlock, lastBlock := d.lightchain.CurrentHeader().Number, common.Big0, common.Big0
+			lastHeader, lastFastBlock, lastBlock := d.lightchain.CurrentHeader().Number(), common.Big0, common.Big0
 			if mode != LightSync {
 				lastFastBlock = d.blockchain.CurrentFastBlock().Number()
 				lastBlock = d.blockchain.CurrentBlock().Number()
@@ -1534,7 +1534,7 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 				curBlock = d.blockchain.CurrentBlock().Number()
 			}
 			log.Warn("Rolled back chain segment",
-				"header", fmt.Sprintf("%d->%d", lastHeader, d.lightchain.CurrentHeader().Number),
+				"header", fmt.Sprintf("%d->%d", lastHeader, d.lightchain.CurrentHeader().Number()),
 				"fast", fmt.Sprintf("%d->%d", lastFastBlock, curFastBlock),
 				"block", fmt.Sprintf("%d->%d", lastBlock, curBlock), "reason", rollbackErr)
 		}
@@ -1585,7 +1585,7 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 				// peer gave us something useful, we're already happy/progressed (above check).
 				if mode == FastSync || mode == LightSync {
 					head := d.lightchain.CurrentHeader()
-					if td.Cmp(d.lightchain.GetTd(head.Hash(), head.Number.Uint64())) > 0 {
+					if td.Cmp(d.lightchain.GetTd(head.Hash(), head.Number().Uint64())) > 0 {
 						return errStallingPeer
 					}
 				}
@@ -1617,12 +1617,12 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 
 					d.pivotLock.RLock()
 					if d.pivotHeader != nil {
-						pivot = d.pivotHeader.Number.Uint64()
+						pivot = d.pivotHeader.Number().Uint64()
 					}
 					d.pivotLock.RUnlock()
 
 					frequency := fsHeaderCheckFrequency
-					if chunk[len(chunk)-1].Number.Uint64()+uint64(fsHeaderForceVerify) > pivot {
+					if chunk[len(chunk)-1].Number().Uint64()+uint64(fsHeaderForceVerify) > pivot {
 						frequency = 1
 					}
 					if n, err := d.lightchain.InsertHeaderChain(chunk, frequency); err != nil {
@@ -1630,14 +1630,14 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 
 						// If some headers were inserted, track them as uncertain
 						if (mode == FastSync || frequency > 1) && n > 0 && rollback == 0 {
-							rollback = chunk[0].Number.Uint64()
+							rollback = chunk[0].Number().Uint64()
 						}
-						log.Warn("Invalid header encountered", "number", chunk[n].Number, "hash", chunk[n].Hash(), "parent", chunk[n].ParentHash, "err", err)
+						log.Warn("Invalid header encountered", "number", chunk[n].Number(), "hash", chunk[n].Hash(), "parent", chunk[n].ParentHash(), "err", err)
 						return fmt.Errorf("%w: %v", errInvalidChain, err)
 					}
 					// All verifications passed, track all headers within the alloted limits
 					if mode == FastSync {
-						head := chunk[len(chunk)-1].Number.Uint64()
+						head := chunk[len(chunk)-1].Number().Uint64()
 						if head-rollback > uint64(fsHeaderSafetyNet) {
 							rollback = head - uint64(fsHeaderSafetyNet)
 						} else {
@@ -1713,8 +1713,8 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 	// Retrieve the a batch of results to import
 	first, last := results[0].Header, results[len(results)-1].Header
 	log.Debug("Inserting downloaded chain", "items", len(results),
-		"firstnum", first.Number, "firsthash", first.Hash(),
-		"lastnum", last.Number, "lasthash", last.Hash(),
+		"firstnum", first.Number(), "firsthash", first.Hash(),
+		"lastnum", last.Number(), "lasthash", last.Hash(),
 	)
 	blocks := make([]*types.Block, len(results))
 	for i, result := range results {
@@ -1722,7 +1722,7 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 	}
 	if index, err := d.blockchain.InsertChain(blocks); err != nil {
 		if index < len(results) {
-			log.Debug("Downloaded item processing failed", "number", results[index].Header.Number, "hash", results[index].Header.Hash(), "err", err)
+			log.Debug("Downloaded item processing failed", "number", results[index].Header.Number(), "hash", results[index].Header.Hash(), "err", err)
 		} else {
 			// The InsertChain method in blockchain.go will sometimes return an out-of-bounds index,
 			// when it needs to preprocess blocks to import a sidechain.
@@ -1741,7 +1741,7 @@ func (d *Downloader) processFastSyncContent() error {
 	// Start syncing state of the reported head block. This should get us most of
 	// the state of the pivot block.
 	d.pivotLock.RLock()
-	sync := d.syncState(d.pivotHeader.Root)
+	sync := d.syncState(d.pivotHeader.Root())
 	d.pivotLock.RUnlock()
 
 	defer func() {
@@ -1791,9 +1791,9 @@ func (d *Downloader) processFastSyncContent() error {
 		d.pivotLock.RUnlock()
 
 		if oldPivot == nil {
-			if pivot.Root != sync.root {
+			if pivot.Root() != sync.root {
 				sync.Cancel()
-				sync = d.syncState(pivot.Root)
+				sync = d.syncState(pivot.Root())
 
 				go closeOnErr(sync)
 			}
@@ -1810,8 +1810,8 @@ func (d *Downloader) processFastSyncContent() error {
 			// Note, we have `reorgProtHeaderDelay` number of blocks withheld, Those
 			// need to be taken into account, otherwise we're detecting the pivot move
 			// late and will drop peers due to unavailable state!!!
-			if height := latest.Number.Uint64(); height >= pivot.Number.Uint64()+2*uint64(fsMinFullBlocks)-uint64(reorgProtHeaderDelay) {
-				log.Warn("Pivot became stale, moving", "old", pivot.Number.Uint64(), "new", height-uint64(fsMinFullBlocks)+uint64(reorgProtHeaderDelay))
+			if height := latest.Number().Uint64(); height >= pivot.Number().Uint64()+2*uint64(fsMinFullBlocks)-uint64(reorgProtHeaderDelay) {
+				log.Warn("Pivot became stale, moving", "old", pivot.Number().Uint64(), "new", height-uint64(fsMinFullBlocks)+uint64(reorgProtHeaderDelay))
 				pivot = results[len(results)-1-fsMinFullBlocks+reorgProtHeaderDelay].Header // must exist as lower old pivot is uncommitted
 
 				d.pivotLock.Lock()
@@ -1820,10 +1820,10 @@ func (d *Downloader) processFastSyncContent() error {
 
 				// Write out the pivot into the database so a rollback beyond it will
 				// reenable fast sync
-				rawdb.WriteLastPivotNumber(d.stateDB, pivot.Number.Uint64())
+				rawdb.WriteLastPivotNumber(d.stateDB, pivot.Number().Uint64())
 			}
 		}
-		P, beforeP, afterP := splitAroundPivot(pivot.Number.Uint64(), results)
+		P, beforeP, afterP := splitAroundPivot(pivot.Number().Uint64(), results)
 		if err := d.commitFastSyncData(beforeP, sync); err != nil {
 			return err
 		}
@@ -1831,7 +1831,7 @@ func (d *Downloader) processFastSyncContent() error {
 			// If new pivot block found, cancel old state retrieval and restart
 			if oldPivot != P {
 				sync.Cancel()
-				sync = d.syncState(P.Header.Root)
+				sync = d.syncState(P.Header.Root())
 
 				go closeOnErr(sync)
 				oldPivot = P
@@ -1863,13 +1863,13 @@ func splitAroundPivot(pivot uint64, results []*fetchResult) (p *fetchResult, bef
 	if len(results) == 0 {
 		return nil, nil, nil
 	}
-	if lastNum := results[len(results)-1].Header.Number.Uint64(); lastNum < pivot {
+	if lastNum := results[len(results)-1].Header.Number().Uint64(); lastNum < pivot {
 		// the pivot is somewhere in the future
 		return nil, results, nil
 	}
 	// This can also be optimized, but only happens very seldom
 	for _, result := range results {
-		num := result.Header.Number.Uint64()
+		num := result.Header.Number().Uint64()
 		switch {
 		case num < pivot:
 			before = append(before, result)
@@ -1899,8 +1899,8 @@ func (d *Downloader) commitFastSyncData(results []*fetchResult, stateSync *state
 	// Retrieve the a batch of results to import
 	first, last := results[0].Header, results[len(results)-1].Header
 	log.Debug("Inserting fast-sync blocks", "items", len(results),
-		"firstnum", first.Number, "firsthash", first.Hash(),
-		"lastnumn", last.Number, "lasthash", last.Hash(),
+		"firstnum", first.Number(), "firsthash", first.Hash(),
+		"lastnumn", last.Number(), "lasthash", last.Hash(),
 	)
 	blocks := make([]*types.Block, len(results))
 	receipts := make([]types.Receipts, len(results))
@@ -1909,7 +1909,7 @@ func (d *Downloader) commitFastSyncData(results []*fetchResult, stateSync *state
 		receipts[i] = result.Receipts
 	}
 	if index, err := d.blockchain.InsertReceiptChain(blocks, receipts, d.ancientLimit); err != nil {
-		log.Debug("Downloaded item processing failed", "number", results[index].Header.Number, "hash", results[index].Header.Hash(), "err", err)
+		log.Debug("Downloaded item processing failed", "number", results[index].Header.Number(), "hash", results[index].Header.Hash(), "err", err)
 		return fmt.Errorf("%w: %v", errInvalidChain, err)
 	}
 	return nil

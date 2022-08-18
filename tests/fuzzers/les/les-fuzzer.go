@@ -297,7 +297,7 @@ func Fuzz(input []byte) int {
 			if f.randomBool() {
 				req.Query.Origin.Hash = f.randomBlockHash()
 			} else {
-				req.Query.Origin.Number = uint64(f.randomInt(f.chainLen * 2))
+				req.Query.Origin.Number() = uint64(f.randomInt(f.chainLen * 2))
 			}
 			f.doFuzz(l.GetBlockHeadersMsg, req)
 

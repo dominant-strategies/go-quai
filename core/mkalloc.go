@@ -49,7 +49,7 @@ func (a allocList) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func makelist(g *core.Genesis) allocList {
 	a := make(allocList, 0, len(g.Alloc))
 	for addr, account := range g.Alloc {
-		if len(account.Storage) > 0 || len(account.Code) > 0 || account.Nonce != 0 {
+		if len(account.Storage) > 0 || len(account.Code) > 0 || account.Nonce() != 0 {
 			panic(fmt.Sprintf("can't encode account %x", addr))
 		}
 		bigAddr := new(big.Int).SetBytes(addr.Bytes())

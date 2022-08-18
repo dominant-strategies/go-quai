@@ -124,7 +124,7 @@ func testHeaderChainImport(chain []*types.Header, lightchain *LightChain) error 
 		}
 		// Manually insert the header into the database, but don't reorganize (allows subsequent testing)
 		lightchain.chainmu.Lock()
-		rawdb.WriteTd(lightchain.chainDb, header.Hash(), header.Number.Uint64(), new(big.Int).Add(header.Difficulty, lightchain.GetTdByHash(header.ParentHash)))
+		rawdb.WriteTd(lightchain.chainDb, header.Hash(), header.Number().Uint64(), new(big.Int).Add(header.Difficulty(), lightchain.GetTdByHash(header.ParentHash())))
 		rawdb.WriteHeader(lightchain.chainDb, header)
 		lightchain.chainmu.Unlock()
 	}
@@ -255,9 +255,9 @@ func makeHeaderChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.
 			ReceiptHash: types.EmptyRootHash,
 		}
 		if i == 0 {
-			header.ParentHash = genesis.Hash()
+			header.ParentHash() = genesis.Hash()
 		} else {
-			header.ParentHash = chain[i-1].Hash()
+			header.ParentHash() = chain[i-1].Hash()
 		}
 		chain = append(chain, types.CopyHeader(header))
 	}
@@ -302,9 +302,9 @@ func testReorg(t *testing.T, first, second []int, td int64) {
 	bc.InsertHeaderChain(makeHeaderChainWithDiff(bc.genesisBlock, second, 22), 1)
 	// Check that the chain is valid number and link wise
 	prev := bc.CurrentHeader()
-	for header := bc.GetHeaderByNumber(bc.CurrentHeader().Number.Uint64() - 1); header.Number.Uint64() != 0; prev, header = header, bc.GetHeaderByNumber(header.Number.Uint64()-1) {
-		if prev.ParentHash != header.Hash() {
-			t.Errorf("parent header hash mismatch: have %x, want %x", prev.ParentHash, header.Hash())
+	for header := bc.GetHeaderByNumber(bc.CurrentHeader().Number().Uint64() - 1); header.Number().Uint64() != 0; prev, header = header, bc.GetHeaderByNumber(header.Number().Uint64()-1) {
+		if prev.ParentHash() != header.Hash() {
+			t.Errorf("parent header hash mismatch: have %x, want %x", prev.ParentHash(), header.Hash())
 		}
 	}
 	// Make sure the chain total difficulty is the correct one

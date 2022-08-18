@@ -69,7 +69,7 @@ func (tx *GnosisSafeTx) ToTypedData() TypedData {
 			"gasPrice":       tx.GasPrice.String(),
 			"gasToken":       tx.GasToken.Hex(),
 			"refundReceiver": tx.RefundReceiver.Hex(),
-			"nonce":          fmt.Sprintf("%d", tx.Nonce.Uint64()),
+			"nonce":          fmt.Sprintf("%d", tx.Nonce().Uint64()),
 		},
 	}
 	return gnosisTypedData
@@ -85,7 +85,7 @@ func (tx *GnosisSafeTx) ArgsForValidation() *apitypes.SendTxArgs {
 		Gas:      hexutil.Uint64(tx.SafeTxGas.Uint64()),
 		GasPrice: &gp,
 		Value:    hexutil.Big(tx.Value),
-		Nonce:    hexutil.Uint64(tx.Nonce.Uint64()),
+		Nonce:    hexutil.Uint64(tx.Nonce().Uint64()),
 		Data:     tx.Data,
 		Input:    nil,
 	}

@@ -95,10 +95,10 @@ func NewKeyedTransactOpts(keyJson []byte, passphrase string, chainID *big.Int) (
 }
 
 func (opts *TransactOpts) GetFrom() *Address    { return &Address{opts.opts.From} }
-func (opts *TransactOpts) GetNonce() int64      { return opts.opts.Nonce.Int64() }
+func (opts *TransactOpts) GetNonce() int64      { return opts.opts.Nonce().Int64() }
 func (opts *TransactOpts) GetValue() *BigInt    { return &BigInt{opts.opts.Value} }
 func (opts *TransactOpts) GetGasPrice() *BigInt { return &BigInt{opts.opts.GasPrice} }
-func (opts *TransactOpts) GetGasLimit() int64   { return int64(opts.opts.GasLimit) }
+func (opts *TransactOpts) GetGasLimit() int64   { return int64(opts.opts.GasLimit()) }
 
 // GetSigner cannot be reliably implemented without identity preservation (https://github.com/golang/go/issues/16876)
 // func (opts *TransactOpts) GetSigner() Signer { return &signer{opts.opts.Signer} }
@@ -108,7 +108,7 @@ func (opts *TransactOpts) GetGasLimit() int64   { return int64(opts.opts.GasLimi
 //func (opts *TransactOpts) GetContext() *Context { return &Context{opts.opts.Context} }
 
 func (opts *TransactOpts) SetFrom(from *Address) { opts.opts.From = from.address }
-func (opts *TransactOpts) SetNonce(nonce int64)  { opts.opts.Nonce = big.NewInt(nonce) }
+func (opts *TransactOpts) SetNonce(nonce int64)  { opts.opts.Nonce() = big.NewInt(nonce) }
 func (opts *TransactOpts) SetSigner(s Signer) {
 	opts.opts.Signer = func(addr common.Address, tx *types.Transaction) (*types.Transaction, error) {
 		sig, err := s.Sign(&Address{addr}, &Transaction{tx})
@@ -120,7 +120,7 @@ func (opts *TransactOpts) SetSigner(s Signer) {
 }
 func (opts *TransactOpts) SetValue(value *BigInt)      { opts.opts.Value = value.bigint }
 func (opts *TransactOpts) SetGasPrice(price *BigInt)   { opts.opts.GasPrice = price.bigint }
-func (opts *TransactOpts) SetGasLimit(limit int64)     { opts.opts.GasLimit = uint64(limit) }
+func (opts *TransactOpts) SetGasLimit(limit int64)     { opts.opts.GasLimit() = uint64(limit) }
 func (opts *TransactOpts) SetContext(context *Context) { opts.opts.Context = context.context }
 
 // BoundContract is the base wrapper object that reflects a contract on the

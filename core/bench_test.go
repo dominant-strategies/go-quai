@@ -138,10 +138,10 @@ func genTxRing(naccounts int) func(int, *BlockGen) {
 func genUncles(i int, gen *BlockGen) {
 	if i >= 6 {
 		b2 := gen.PrevBlock(i - 6).Header()
-		b2.Extra = []byte("foo")
+		b2.Extra() = []byte("foo")
 		gen.AddUncle(b2)
 		b3 := gen.PrevBlock(i - 6).Header()
-		b3.Extra = []byte("bar")
+		b3.Extra() = []byte("bar")
 		gen.AddUncle(b3)
 	}
 }

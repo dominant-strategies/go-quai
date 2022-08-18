@@ -233,16 +233,16 @@ func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType 
 		if err != nil {
 			return nil, useEthereumV, err
 		}
-		header := &types.Header{}
+		header := types.EmptyHeader()
 		if err := rlp.DecodeBytes(cliqueData, header); err != nil {
 			return nil, useEthereumV, err
 		}
 		// The incoming clique header is already truncated, sent to us with a extradata already shortened
-		if len(header.Extra) < 65 {
+		if len(header.Extra()) < 65 {
 			// Need to add it back, to get a suitable length for hashing
-			newExtra := make([]byte, len(header.Extra)+65)
-			copy(newExtra, header.Extra)
-			header.Extra = newExtra
+			newExtra := make([]byte, len(header.Extra())+65)
+			copy(newExtra, header.Extra())
+			header.Extra() = newExtra
 		}
 		// Get back the rlp data, encoded by us
 		sighash, cliqueRlp, err := cliqueHeaderHashAndRlp(header)
@@ -253,7 +253,7 @@ func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType 
 			{
 				Name:  "Clique header",
 				Typ:   "clique",
-				Value: fmt.Sprintf("clique header %d [0x%x]", header.Number, header.Hash()),
+				Value: fmt.Sprintf("clique header %d [0x%x]", header.Number(), header.Hash()),
 			},
 		}
 		// Clique uses V on the form 0 or 1
@@ -302,8 +302,8 @@ func SignTextValidator(validatorData ValidatorData) (hexutil.Bytes, string) {
 // in clique.go panics if this is the case, thus it's been reimplemented here to avoid the panic
 // and simply return an error instead
 func cliqueHeaderHashAndRlp(header *types.Header) (hash, rlp []byte, err error) {
-	if len(header.Extra) < 65 {
-		err = fmt.Errorf("clique header extradata too short, %d < 65", len(header.Extra))
+	if len(header.Extra()) < 65 {
+		err = fmt.Errorf("clique header extradata too short, %d < 65", len(header.Extra()))
 		return
 	}
 	rlp = clique.CliqueRLP(header)
