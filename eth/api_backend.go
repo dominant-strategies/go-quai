@@ -254,6 +254,10 @@ func (b *EthAPIBackend) SubscribePendingBlockEvent(ch chan<- *types.Header) even
 	return b.eth.core.SubscribePendingBlock(ch)
 }
 
+func (b *EthAPIBackend) SubscribeCombinedHeaderEvent(ch chan<- *types.Header) event.Subscription {
+	return b.eth.core.SubscribeCombinedHeader(ch)
+}
+
 func (b *EthAPIBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
 	return b.eth.core.SubscribeChainEvent(ch)
 }
@@ -404,4 +408,8 @@ func (b *EthAPIBackend) GetSliceHeadHash(index byte) common.Hash {
 
 func (b *EthAPIBackend) GetHeadHash() common.Hash {
 	return b.eth.core.GetHeadHash()
+}
+
+func (b *EthAPIBackend) UpdatePendingHeader(header *types.Header, pendingHeader *types.Header) error {
+	return b.eth.core.UpdatePendingHeader(header, pendingHeader)
 }

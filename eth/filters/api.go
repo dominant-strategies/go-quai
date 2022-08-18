@@ -270,6 +270,36 @@ func (api *PublicFilterAPI) PendingBlock(ctx context.Context) (*rpc.Subscription
 	return rpcSub, nil
 }
 
+// CombinedHeader sends a notification each time a new combinedHeader is created.
+func (api *PublicFilterAPI) CombinedHeader(ctx context.Context) (*rpc.Subscription, error) {
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+
+	rpcSub := notifier.CreateSubscription()
+
+	go func() {
+		combinedHeaders := make(chan *types.Header)
+		combinedHeaderSub := api.events.SubscribeCombinedHeader(combinedHeaders)
+
+		for {
+			select {
+			case b := <-combinedHeaders:
+				notifier.Notify(rpcSub.ID, b)
+			case <-rpcSub.Err():
+				combinedHeaderSub.Unsubscribe()
+				return
+			case <-notifier.Closed():
+				combinedHeaderSub.Unsubscribe()
+				return
+			}
+		}
+	}()
+
+	return rpcSub, nil
+}
+
 // Logs creates a subscription that fires for all new log that match the given filter criteria.
 func (api *PublicFilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)

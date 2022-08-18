@@ -69,6 +69,7 @@ type Backend interface {
 	GetHeadHash() common.Hash
 	Append(block *types.Block, td *big.Int) error
 	SetHeaderChainHead(header *types.Header) error
+	UpdatePendingHeader(header *types.Header, pendingHeader *types.Header) error
 	GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config) (*vm.EVM, func() error, error)
 	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
@@ -100,6 +101,7 @@ type Backend interface {
 	SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription
 	SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription
 	SubscribePendingBlockEvent(ch chan<- *types.Header) event.Subscription
+	SubscribeCombinedHeaderEvent(ch chan<- *types.Header) event.Subscription
 	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
 
 	ChainConfig() *params.ChainConfig

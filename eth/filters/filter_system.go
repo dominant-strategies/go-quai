@@ -54,6 +54,8 @@ const (
 	PendingTransactionsSubscription
 	// BlocksSubscription queries hashes for blocks that are imported
 	BlocksSubscription
+	// CombinedHeaderSubscription queries for the combined header.
+	CombinedHeaderSubscription
 	// LastSubscription keeps track of the last index
 	LastIndexSubscription
 )
@@ -73,16 +75,17 @@ const (
 )
 
 type subscription struct {
-	id        rpc.ID
-	typ       Type
-	created   time.Time
-	logsCrit  ethereum.FilterQuery
-	logs      chan []*types.Log
-	hashes    chan []common.Hash
-	headers   chan *types.Header
-	block     chan *types.Header
-	installed chan struct{} // closed when the filter is installed
-	err       chan error    // closed when the filter is uninstalled
+	id             rpc.ID
+	typ            Type
+	created        time.Time
+	logsCrit       ethereum.FilterQuery
+	logs           chan []*types.Log
+	hashes         chan []common.Hash
+	headers        chan *types.Header
+	combinedHeader chan *types.Header
+	block          chan *types.Header
+	installed      chan struct{} // closed when the filter is installed
+	err            chan error    // closed when the filter is uninstalled
 }
 
 // EventSystem creates subscriptions, processes events and broadcasts them to the
@@ -93,22 +96,24 @@ type EventSystem struct {
 	lastHead  *types.Header
 
 	// Subscriptions
-	txsSub          event.Subscription // Subscription for new transaction event
-	logsSub         event.Subscription // Subscription for new log event
-	rmLogsSub       event.Subscription // Subscription for removed log event
-	pendingLogsSub  event.Subscription // Subscription for pending log event
-	pendingBlockSub event.Subscription // Subscription for pending block event
-	chainSub        event.Subscription // Subscription for new chain event
+	txsSub            event.Subscription // Subscription for new transaction event
+	logsSub           event.Subscription // Subscription for new log event
+	rmLogsSub         event.Subscription // Subscription for removed log event
+	pendingLogsSub    event.Subscription // Subscription for pending log event
+	pendingBlockSub   event.Subscription // Subscription for pending block event
+	combinedHeaderSub event.Subscription // Subscription for combined header event.
+	chainSub          event.Subscription // Subscription for new chain event
 
 	// Channels
-	install        chan *subscription         // install filter for event notification
-	uninstall      chan *subscription         // remove filter for event notification
-	txsCh          chan core.NewTxsEvent      // Channel to receive new transactions event
-	logsCh         chan []*types.Log          // Channel to receive new log event
-	pendingLogsCh  chan []*types.Log          // Channel to receive new log event
-	pendingBlockCh chan *types.Header         // Channel to receive new pending block event
-	rmLogsCh       chan core.RemovedLogsEvent // Channel to receive removed log event
-	chainCh        chan core.ChainEvent       // Channel to receive new chain event
+	install          chan *subscription         // install filter for event notification
+	uninstall        chan *subscription         // remove filter for event notification
+	txsCh            chan core.NewTxsEvent      // Channel to receive new transactions event
+	logsCh           chan []*types.Log          // Channel to receive new log event
+	pendingLogsCh    chan []*types.Log          // Channel to receive new log event
+	pendingBlockCh   chan *types.Header         // Channel to receive new pending block event
+	combinedHeaderCh chan *types.Header         // Channel to receive new combined header event
+	rmLogsCh         chan core.RemovedLogsEvent // Channel to receive removed log event
+	chainCh          chan core.ChainEvent       // Channel to receive new chain event
 }
 
 // NewEventSystem creates a new manager that listens for event on the given mux,
@@ -119,16 +124,17 @@ type EventSystem struct {
 // or by stopping the given mux.
 func NewEventSystem(backend Backend, lightMode bool) *EventSystem {
 	m := &EventSystem{
-		backend:        backend,
-		lightMode:      lightMode,
-		install:        make(chan *subscription),
-		uninstall:      make(chan *subscription),
-		txsCh:          make(chan core.NewTxsEvent, txChanSize),
-		logsCh:         make(chan []*types.Log, logsChanSize),
-		rmLogsCh:       make(chan core.RemovedLogsEvent, rmLogsChanSize),
-		pendingLogsCh:  make(chan []*types.Log, logsChanSize),
-		pendingBlockCh: make(chan *types.Header),
-		chainCh:        make(chan core.ChainEvent, chainEvChanSize),
+		backend:          backend,
+		lightMode:        lightMode,
+		install:          make(chan *subscription),
+		uninstall:        make(chan *subscription),
+		txsCh:            make(chan core.NewTxsEvent, txChanSize),
+		logsCh:           make(chan []*types.Log, logsChanSize),
+		rmLogsCh:         make(chan core.RemovedLogsEvent, rmLogsChanSize),
+		pendingLogsCh:    make(chan []*types.Log, logsChanSize),
+		pendingBlockCh:   make(chan *types.Header),
+		combinedHeaderCh: make(chan *types.Header),
+		chainCh:          make(chan core.ChainEvent, chainEvChanSize),
 	}
 
 	// Subscribe events
@@ -295,6 +301,22 @@ func (es *EventSystem) SubscribePendingBlock(block chan *types.Header) *Subscrip
 		block:     block,
 		installed: make(chan struct{}),
 		err:       make(chan error),
+	}
+	return es.subscribe(sub)
+}
+
+// SubscribePendingBlock creates a subscription that writes pending block that are created in the miner.
+func (es *EventSystem) SubscribeCombinedHeader(combinedHeader chan *types.Header) *Subscription {
+	sub := &subscription{
+		id:             rpc.NewID(),
+		typ:            CombinedHeaderSubscription,
+		created:        time.Now(),
+		logs:           make(chan []*types.Log),
+		hashes:         make(chan []common.Hash),
+		headers:        make(chan *types.Header),
+		combinedHeader: combinedHeader,
+		installed:      make(chan struct{}),
+		err:            make(chan error),
 	}
 	return es.subscribe(sub)
 }

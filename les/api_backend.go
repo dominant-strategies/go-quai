@@ -34,7 +34,6 @@ import (
 	"github.com/spruce-solutions/go-quai/eth/gasprice"
 	"github.com/spruce-solutions/go-quai/ethdb"
 	"github.com/spruce-solutions/go-quai/event"
-	"github.com/spruce-solutions/go-quai/light"
 	"github.com/spruce-solutions/go-quai/params"
 	"github.com/spruce-solutions/go-quai/rpc"
 )
@@ -156,7 +155,7 @@ func (b *LesApiBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.B
 	if header == nil {
 		return nil, nil, errors.New("header not found")
 	}
-	return light.NewState(ctx, header, b.eth.odr), header, nil
+	return nil, header, nil
 }
 
 func (b *LesApiBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error) {
@@ -171,22 +170,16 @@ func (b *LesApiBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockN
 		if blockNrOrHash.RequireCanonical && b.eth.blockchain.GetCanonicalHash(header.Number[types.QuaiNetworkContext].Uint64()) != hash {
 			return nil, nil, errors.New("hash is not currently canonical")
 		}
-		return light.NewState(ctx, header, b.eth.odr), header, nil
+		return nil, header, nil
 	}
 	return nil, nil, errors.New("invalid arguments; neither block nor hash specified")
 }
 
 func (b *LesApiBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
-	if number := rawdb.ReadHeaderNumber(b.eth.chainDb, hash); number != nil {
-		return light.GetBlockReceipts(ctx, b.eth.odr, hash, *number)
-	}
 	return nil, nil
 }
 
 func (b *LesApiBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*types.Log, error) {
-	if number := rawdb.ReadHeaderNumber(b.eth.chainDb, hash); number != nil {
-		return light.GetBlockLogs(ctx, b.eth.odr, hash, *number)
-	}
 	return nil, nil
 }
 
@@ -223,7 +216,7 @@ func (b *LesApiBackend) GetPoolTransaction(txHash common.Hash) *types.Transactio
 }
 
 func (b *LesApiBackend) GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
-	return light.GetTransaction(ctx, b.eth.odr, txHash)
+	return nil, common.Hash{}, uint64(0), uint64(0), nil
 }
 
 func (b *LesApiBackend) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
@@ -243,15 +236,19 @@ func (b *LesApiBackend) TxPoolContentFrom(addr common.Address) (types.Transactio
 }
 
 func (b *LesApiBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
-	return b.eth.txPool.SubscribeNewTxsEvent(ch)
+	return nil
+}
+
+func (b *LesApiBackend) SubscribeCombinedHeader(ch chan<- *types.Header) event.Subscription {
+	return nil
 }
 
 func (b *LesApiBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
-	return b.eth.blockchain.SubscribeChainEvent(ch)
+	return nil
 }
 
 func (b *LesApiBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
-	return b.eth.blockchain.SubscribeChainHeadEvent(ch)
+	return nil
 }
 
 func (b *LesApiBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
@@ -378,5 +375,13 @@ func (b *LesApiBackend) Append(block *types.Block, td *big.Int) error {
 }
 
 func (b *LesApiBackend) SetHeaderChainHead(header *types.Header) error {
+	return nil
+}
+
+func (b *LesApiBackend) UpdatePendingHeader(header *types.Header, pendingHeader *types.Header) error {
+	return nil
+}
+
+func (b *LesApiBackend) SubscribeCombinedHeaderEvent(header chan<- *types.Header) event.Subscription {
 	return nil
 }

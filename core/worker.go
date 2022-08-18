@@ -503,6 +503,69 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 	}
 }
 
+// GeneratePendingBlock generates pending block given a commited block.
+func (w *worker) GeneratePendingHeader(header *types.Header) (*types.Header, error) {
+
+	// Sanitize recommit interval if the user-specified one is too short.
+	recommit := w.config.Recommit
+	if recommit < minRecommitInterval {
+		log.Warn("Sanitizing miner recommit interval", "provided", recommit, "updated", minRecommitInterval)
+		recommit = minRecommitInterval
+	}
+
+	var (
+		interrupt *int32
+		timestamp int64 // timestamp for each round of sealing.
+	)
+
+	timer := time.NewTimer(0)
+	defer timer.Stop()
+	<-timer.C // discard the initial tick
+
+	// clearPending cleans the stale pending tasks.
+	clearPending := func(number uint64) {
+		w.pendingMu.Lock()
+		for h, t := range w.pendingTasks {
+			if t.block.NumberU64()+staleThreshold <= number {
+				delete(w.pendingTasks, h)
+			}
+		}
+		w.pendingMu.Unlock()
+	}
+
+	// clear the pending block queue.
+	clearPending(header.Number64())
+
+	timestamp = time.Now().Unix()
+	if interrupt != nil {
+		atomic.StoreInt32(interrupt, commitInterruptNewHead)
+	}
+	interrupt = new(int32)
+
+	// reset the timer and update the newTx to zero.
+	timer.Reset(recommit)
+	atomic.StoreInt32(&w.newTxs, 0)
+
+	// Set the coinbase if the worker is running or it's required
+	var coinbase common.Address
+	if w.isRunning() {
+		if w.coinbase == (common.Address{}) {
+			log.Error("Refusing to mine without etherbase")
+			return nil, errors.New("etherbase not found")
+		}
+		coinbase = w.coinbase // Use the preset address as the fee recipient
+	}
+	work, err := w.prepareWork(&generateParams{
+		timestamp: uint64(timestamp),
+		coinbase:  coinbase,
+	})
+	if err != nil {
+		return nil, err
+	}
+	env := work.copy()
+	return env.header, nil
+}
+
 // mainLoop is responsible for generating and submitting sealing work based on
 // the received event. It can support two modes: automatically generate task and
 // submit it or return task according to given parameters for various proposes.
@@ -658,9 +721,9 @@ func (w *worker) taskLoop() {
 			w.pendingTasks[sealHash] = task
 			w.pendingMu.Unlock()
 
-			w.snapshotMu.Lock()
-			w.pendingBlockFeed.Send(task.block.Header())
-			w.snapshotMu.Unlock()
+			// w.snapshotMu.Lock()
+			// w.pendingBlockFeed.Send(task.block.Header())
+			// w.snapshotMu.Unlock()
 		case <-w.exitCh:
 			interrupt()
 			return

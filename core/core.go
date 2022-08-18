@@ -388,6 +388,10 @@ func (c *Core) SetHeaderChainHead(header *types.Header) error {
 	return c.sl.SetHeaderChainHead(header)
 }
 
+func (c *Core) UpdatePendingHeader(header *types.Header, pendingHeader *types.Header) error {
+	return c.sl.UpdatePendingHeader(header, pendingHeader)
+}
+
 // SubscribePendingLogs starts delivering logs from pending transactions
 // to the given channel.
 func (c *Core) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscription {
@@ -397,6 +401,10 @@ func (c *Core) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscription {
 // SubscribePendingBlock starts delivering the pending block to the given channel.
 func (c *Core) SubscribePendingBlock(ch chan<- *types.Header) event.Subscription {
 	return c.sl.miner.worker.pendingBlockFeed.Subscribe(ch)
+}
+
+func (c *Core) SubscribeCombinedHeader(ch chan<- *types.Header) event.Subscription {
+	return c.sl.combinedHeaderFeed.Subscribe(ch)
 }
 
 // Method to retrieve uncles from the worker in case not found in normal DB.

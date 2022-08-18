@@ -366,6 +366,11 @@ func (ec *Client) SubscribePendingBlock(ctx context.Context, ch chan<- *types.He
 	return ec.c.EthSubscribe(ctx, ch, "pendingBlock")
 }
 
+// SubscribeCombinedHeader subscribes to notifications about the latest combined header for the slice.
+func (ec *Client) SubscribeCombinedHeader(ctx context.Context, ch chan<- *types.Header) (ethereum.Subscription, error) {
+	return ec.c.EthSubscribe(ctx, ch, "combinedHeader")
+}
+
 // State Access
 
 // NetworkID returns the network ID (also known as the chain ID) for this chain.

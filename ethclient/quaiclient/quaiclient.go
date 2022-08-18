@@ -139,6 +139,11 @@ func (ec *Client) SubscribeNewHead(ctx context.Context, ch chan<- *types.Header)
 	return ec.c.EthSubscribe(ctx, ch, "newHeads")
 }
 
+// SubscribeCombinedHeader subscribes to notifications about the latest combined header for the slice.
+func (ec *Client) SubscribeCombinedHeader(ctx context.Context, ch chan<- *types.Header) (quai.Subscription, error) {
+	return ec.c.EthSubscribe(ctx, ch, "combinedHeader")
+}
+
 // BlockByHash returns the given full block.
 //
 // Note that loading full blocks requires two requests. Use HeaderByHash
@@ -517,6 +522,17 @@ func (ec *Client) SetHeaderChainHead(ctx context.Context, header *types.Header) 
 	data := RPCMarshalHeader(header)
 
 	err := ec.c.CallContext(ctx, nil, "quai_setHeaderChainHead", data)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (ec *Client) UpdatePendingHeader(ctx context.Context, header *types.Header, pendingHeader *types.Header) error {
+	data := map[string]interface{}{"Header": RPCMarshalHeader(header)}
+	data["PendingHeader"] = RPCMarshalHeader(pendingHeader)
+
+	err := ec.c.CallContext(ctx, nil, "quai_updatePendingHeader", data)
 	if err != nil {
 		return err
 	}

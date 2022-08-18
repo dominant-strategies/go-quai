@@ -695,3 +695,21 @@ func (s *PublicBlockChainQuaiAPI) SetHeaderChainHead(ctx context.Context, raw js
 	}
 	return s.b.SetHeaderChainHead(header)
 }
+
+type HeaderAndPendingHeader struct {
+	Header        *types.Header
+	PendingHeader *types.Header
+}
+
+func (s *PublicBlockChainQuaiAPI) UpdatePendingHeader(ctx context.Context, raw json.RawMessage) error {
+	// Decode header.
+	var headerAndPendingHeader HeaderAndPendingHeader
+
+	if err := json.Unmarshal(raw, &headerAndPendingHeader); err != nil {
+		return err
+	}
+
+	fmt.Println("quai api header: ", headerAndPendingHeader.Header)
+	fmt.Println("quai api pending header: ", headerAndPendingHeader.PendingHeader)
+	return s.b.UpdatePendingHeader(headerAndPendingHeader.Header, headerAndPendingHeader.PendingHeader)
+}
