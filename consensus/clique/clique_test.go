@@ -76,13 +76,13 @@ func TestReimportMirroredState(t *testing.T) {
 	for i, block := range blocks {
 		header := block.Header()
 		if i > 0 {
-			header.ParentHash = blocks[i-1].Hash()
+			header.ParentHash() = blocks[i-1].Hash()
 		}
-		header.Extra = make([]byte, extraVanity+extraSeal)
-		header.Difficulty = diffInTurn
+		header.Extra() = make([]byte, extraVanity+extraSeal)
+		header.Difficulty() = diffInTurn
 
 		sig, _ := crypto.Sign(SealHash(header).Bytes(), key)
-		copy(header.Extra[len(header.Extra)-extraSeal:], sig)
+		copy(header.Extra[len(header.Extra())-extraSeal:], sig)
 		blocks[i] = block.WithSeal(header)
 	}
 	// Insert the first two blocks and make sure the chain is valid

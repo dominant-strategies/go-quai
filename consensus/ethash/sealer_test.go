@@ -63,10 +63,10 @@ func TestRemoteNotify(t *testing.T) {
 		if want := ethash.SealHash(header).Hex(); work[0] != want {
 			t.Errorf("work packet hash mismatch: have %s, want %s", work[0], want)
 		}
-		if want := common.BytesToHash(SeedHash(header.Number.Uint64())).Hex(); work[1] != want {
+		if want := common.BytesToHash(SeedHash(header.Number().Uint64())).Hex(); work[1] != want {
 			t.Errorf("work packet seed mismatch: have %s, want %s", work[1], want)
 		}
-		target := new(big.Int).Div(new(big.Int).Lsh(big.NewInt(1), 256), header.Difficulty)
+		target := new(big.Int).Div(new(big.Int).Lsh(big.NewInt(1), 256), header.Difficulty())
 		if want := common.BytesToHash(target.Bytes()).Hex(); work[2] != want {
 			t.Errorf("work packet target mismatch: have %s, want %s", work[2], want)
 		}
@@ -108,10 +108,10 @@ func TestRemoteNotifyFull(t *testing.T) {
 	ethash.Seal(nil, block, nil, nil)
 	select {
 	case work := <-sink:
-		if want := "0x" + strconv.FormatUint(header.Number.Uint64(), 16); work["number"] != want {
+		if want := "0x" + strconv.FormatUint(header.Number().Uint64(), 16); work["number"] != want {
 			t.Errorf("pending block number mismatch: have %v, want %v", work["number"], want)
 		}
-		if want := "0x" + header.Difficulty.Text(16); work["difficulty"] != want {
+		if want := "0x" + header.Difficulty().Text(16); work["difficulty"] != want {
 			t.Errorf("pending block difficulty mismatch: have %s, want %s", work["difficulty"], want)
 		}
 	case <-time.After(3 * time.Second):
@@ -276,20 +276,20 @@ func TestStaleSubmission(t *testing.T) {
 		}
 		select {
 		case res := <-results:
-			if res.Header().Nonce != fakeNonce {
-				t.Errorf("case %d block nonce mismatch, want %x, get %x", id+1, fakeNonce, res.Header().Nonce)
+			if res.Header().Nonce() != fakeNonce {
+				t.Errorf("case %d block nonce mismatch, want %x, get %x", id+1, fakeNonce, res.Header().Nonce())
 			}
-			if res.Header().MixDigest != fakeDigest {
-				t.Errorf("case %d block digest mismatch, want %x, get %x", id+1, fakeDigest, res.Header().MixDigest)
+			if res.Header().MixDigest() != fakeDigest {
+				t.Errorf("case %d block digest mismatch, want %x, get %x", id+1, fakeDigest, res.Header().MixDigest())
 			}
-			if res.Header().Difficulty.Uint64() != c.headers[c.submitIndex].Difficulty.Uint64() {
-				t.Errorf("case %d block difficulty mismatch, want %d, get %d", id+1, c.headers[c.submitIndex].Difficulty, res.Header().Difficulty)
+			if res.Header().Difficulty().Uint64() != c.headers[c.submitIndex].Difficulty().Uint64() {
+				t.Errorf("case %d block difficulty mismatch, want %d, get %d", id+1, c.headers[c.submitIndex].Difficulty(), res.Header().Difficulty())
 			}
-			if res.Header().Number.Uint64() != c.headers[c.submitIndex].Number.Uint64() {
-				t.Errorf("case %d block number mismatch, want %d, get %d", id+1, c.headers[c.submitIndex].Number.Uint64(), res.Header().Number.Uint64())
+			if res.Header().Number().Uint64() != c.headers[c.submitIndex].Number().Uint64() {
+				t.Errorf("case %d block number mismatch, want %d, get %d", id+1, c.headers[c.submitIndex].Number().Uint64(), res.Header().Number().Uint64())
 			}
-			if res.Header().ParentHash != c.headers[c.submitIndex].ParentHash {
-				t.Errorf("case %d block parent hash mismatch, want %s, get %s", id+1, c.headers[c.submitIndex].ParentHash.Hex(), res.Header().ParentHash.Hex())
+			if res.Header().ParentHash() != c.headers[c.submitIndex].ParentHash() {
+				t.Errorf("case %d block parent hash mismatch, want %s, get %s", id+1, c.headers[c.submitIndex].ParentHash().Hex(), res.Header().ParentHash().Hex())
 			}
 		case <-time.NewTimer(time.Second).C:
 			t.Errorf("case %d fetch ethash result timeout", id+1)

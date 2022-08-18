@@ -91,7 +91,7 @@ type Header struct {
 // NewHeaderFromRLP parses a header from an RLP data dump.
 func NewHeaderFromRLP(data []byte) (*Header, error) {
 	h := &Header{
-		header: new(types.Header),
+		header: types.EmptyHeader(),
 	}
 	if err := rlp.DecodeBytes(common.CopyBytes(data), h.header); err != nil {
 		return nil, err
@@ -107,7 +107,7 @@ func (h *Header) EncodeRLP() ([]byte, error) {
 // NewHeaderFromJSON parses a header from a JSON data dump.
 func NewHeaderFromJSON(data string) (*Header, error) {
 	h := &Header{
-		header: new(types.Header),
+		header: types.EmptyHeader(),
 	}
 	if err := json.Unmarshal([]byte(data), h.header); err != nil {
 		return nil, err
@@ -134,11 +134,11 @@ func (h *Header) GetTxHash() *Hash       { return &Hash{h.header.TxHash} }
 func (h *Header) GetReceiptHash() *Hash  { return &Hash{h.header.ReceiptHash} }
 func (h *Header) GetBloom() *Bloom       { return &Bloom{h.header.Bloom} }
 func (h *Header) GetDifficulty() *BigInt { return &BigInt{h.header.Difficulty} }
-func (h *Header) GetNumber() int64       { return h.header.Number.Int64() }
-func (h *Header) GetGasLimit() int64     { return int64(h.header.GasLimit) }
-func (h *Header) GetGasUsed() int64      { return int64(h.header.GasUsed) }
-func (h *Header) GetTime() int64         { return int64(h.header.Time) }
-func (h *Header) GetExtra() []byte       { return h.header.Extra }
+func (h *Header) GetNumber() int64       { return h.header.Number().Int64() }
+func (h *Header) GetGasLimit() int64     { return int64(h.header.GasLimit()) }
+func (h *Header) GetGasUsed() int64      { return int64(h.header.GasUsed()) }
+func (h *Header) GetTime() int64         { return int64(h.header.Time()) }
+func (h *Header) GetExtra() []byte       { return h.header.Extra() }
 func (h *Header) GetMixDigest() *Hash    { return &Hash{h.header.MixDigest} }
 func (h *Header) GetNonce() *Nonce       { return &Nonce{h.header.Nonce} }
 func (h *Header) GetHash() *Hash         { return &Hash{h.header.Hash()} }
@@ -374,4 +374,4 @@ func (r *Receipt) GetBloom() *Bloom             { return &Bloom{r.receipt.Bloom}
 func (r *Receipt) GetLogs() *Logs               { return &Logs{r.receipt.Logs} }
 func (r *Receipt) GetTxHash() *Hash             { return &Hash{r.receipt.TxHash} }
 func (r *Receipt) GetContractAddress() *Address { return &Address{r.receipt.ContractAddress} }
-func (r *Receipt) GetGasUsed() int64            { return int64(r.receipt.GasUsed) }
+func (r *Receipt) GetGasUsed() int64            { return int64(r.receipt.GasUsed()) }

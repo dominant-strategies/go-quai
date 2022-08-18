@@ -125,7 +125,7 @@ func (t *VMTest) Run(vmconfig vm.Config, snapshotter bool) error {
 func (t *VMTest) exec(statedb *state.StateDB, vmconfig vm.Config) ([]byte, uint64, error) {
 	evm := t.newEVM(statedb, vmconfig)
 	e := t.json.Exec
-	return evm.Call(vm.AccountRef(e.Caller), e.Address, e.Data, e.GasLimit, e.Value)
+	return evm.Call(vm.AccountRef(e.Caller), e.Address, e.Data, e.GasLimit(), e.Value)
 }
 
 func (t *VMTest) newEVM(statedb *state.StateDB, vmconfig vm.Config) *vm.EVM {
@@ -146,11 +146,11 @@ func (t *VMTest) newEVM(statedb *state.StateDB, vmconfig vm.Config) *vm.EVM {
 		CanTransfer: canTransfer,
 		Transfer:    transfer,
 		GetHash:     vmTestBlockHash,
-		Coinbase:    t.json.Env.Coinbase,
-		BlockNumber: new(big.Int).SetUint64(t.json.Env.Number),
+		Coinbase:    t.json.Env.Coinbase(),
+		BlockNumber: new(big.Int).SetUint64(t.json.Env.Number()),
 		Time:        new(big.Int).SetUint64(t.json.Env.Timestamp),
-		GasLimit:    t.json.Env.GasLimit,
-		Difficulty:  t.json.Env.Difficulty,
+		GasLimit:    t.json.Env.GasLimit(),
+		Difficulty:  t.json.Env.Difficulty(),
 	}
 	vmconfig.NoRecursion = true
 	return vm.NewEVM(context, txContext, statedb, params.MainnetChainConfig, vmconfig)

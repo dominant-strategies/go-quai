@@ -66,7 +66,7 @@ func (s *PublicEthereumAPI) GasPrice(ctx context.Context) (*hexutil.Big, error) 
 		return nil, err
 	}
 	if head := s.b.CurrentHeader(); head.BaseFee != nil {
-		tipcap.Add(tipcap, head.BaseFee)
+		tipcap.Add(tipcap, head.BaseFee())
 	}
 	return (*hexutil.Big)(tipcap), err
 }
@@ -618,7 +618,7 @@ func (api *PublicBlockChainAPI) ChainId() (*hexutil.Big, error) {
 // BlockNumber returns the block number of the chain head.
 func (s *PublicBlockChainAPI) BlockNumber() hexutil.Uint64 {
 	header, _ := s.b.HeaderByNumber(context.Background(), rpc.LatestBlockNumber) // latest header should always be available
-	return hexutil.Uint64(header.Number.Uint64())
+	return hexutil.Uint64(header.NumberU64())
 }
 
 // GetBalance returns the amount of wei for the given address in the state of the
@@ -903,7 +903,7 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	defer cancel()
 
 	// Get a new instance of the EVM.
-	msg, err := args.ToMessage(globalGasCap, header.BaseFee)
+	msg, err := args.ToMessage(globalGasCap, header.BaseFee())
 	if err != nil {
 		return nil, err
 	}
@@ -1177,7 +1177,7 @@ func FormatLogs(logs []vm.StructLog) []StructLogRes {
 // RPCMarshalHeader converts the given header to the RPC output .
 func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 	result := map[string]interface{}{
-		"number":           (*hexutil.Big)(head.Number),
+		"number":           (*hexutil.Big)(head.Number()),
 		"hash":             head.Hash(),
 		"parentHash":       head.ParentHash,
 		"nonce":            head.Nonce,
@@ -1186,18 +1186,16 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 		"logsBloom":        head.Bloom,
 		"stateRoot":        head.Root,
 		"miner":            head.Coinbase,
-		"difficulty":       (*hexutil.Big)(head.Difficulty),
-		"extraData":        hexutil.Bytes(head.Extra),
+		"difficulty":       (*hexutil.Big)(head.Difficulty()),
+		"extraData":        hexutil.Bytes(head.Extra()),
 		"size":             hexutil.Uint64(head.Size()),
-		"gasLimit":         hexutil.Uint64(head.GasLimit),
-		"gasUsed":          hexutil.Uint64(head.GasUsed),
-		"timestamp":        hexutil.Uint64(head.Time),
+		"gasLimit":         hexutil.Uint64(head.GasLimit()),
+		"gasUsed":          hexutil.Uint64(head.GasUsed()),
+		"baseFee":          hexutil.Big(*head.BaseFee()),
+		"location":         head.Location(),
+		"timestamp":        hexutil.Uint64(head.Time()),
 		"transactionsRoot": head.TxHash,
 		"receiptsRoot":     head.ReceiptHash,
-	}
-
-	if head.BaseFee != nil {
-		result["baseFeePerGas"] = (*hexutil.Big)(head.BaseFee)
 	}
 
 	return result
@@ -1429,7 +1427,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		to = crypto.CreateAddress(args.from(), uint64(*args.Nonce))
 	}
 	// Retrieve the precompiles since they don't need to be added to the access list
-	precompiles := vm.ActivePrecompiles(b.ChainConfig().Rules(header.Number))
+	precompiles := vm.ActivePrecompiles(b.ChainConfig().Rules(header.Number()))
 
 	// Create an initial tracer
 	prevTracer := vm.NewAccessListTracer(nil, args.from(), to, precompiles)
@@ -1454,7 +1452,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		statedb := db.Copy()
 		// Set the accesslist to the last al
 		args.AccessList = &accessList
-		msg, err := args.ToMessage(b.RPCGasCap(), header.BaseFee)
+		msg, err := args.ToMessage(b.RPCGasCap(), header.BaseFee())
 		if err != nil {
 			return nil, 0, nil, err
 		}
@@ -1573,7 +1571,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionByHash(ctx context.Context, has
 		if err != nil {
 			return nil, err
 		}
-		return newRPCTransaction(tx, blockHash, blockNumber, index, header.BaseFee), nil
+		return newRPCTransaction(tx, blockHash, blockNumber, index, header.BaseFee()), nil
 	}
 	// No finalized transaction, try to retrieve it from the pool
 	if tx := s.b.GetPoolTransaction(hash); tx != nil {
@@ -1643,7 +1641,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 		if err != nil {
 			return nil, err
 		}
-		gasPrice := new(big.Int).Add(header.BaseFee, tx.EffectiveGasTipValue(header.BaseFee))
+		gasPrice := new(big.Int).Add(header.BaseFee(), tx.EffectiveGasTipValue(header.BaseFee()))
 		fields["effectiveGasPrice"] = hexutil.Uint64(gasPrice.Uint64())
 	}
 	// Assign receipt status or post state.
@@ -1939,7 +1937,7 @@ func (api *PublicDebugAPI) TestSignCliqueBlock(ctx context.Context, address comm
 		return common.Address{}, fmt.Errorf("block #%d not found", number)
 	}
 	header := block.Header()
-	header.Extra = make([]byte, 32+65)
+	header.SetExtra(make([]byte, 32+65))
 	encoded := clique.CliqueRLP(header)
 
 	// Look up the wallet containing the requested signer

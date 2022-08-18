@@ -174,7 +174,7 @@ func handleGetBlockHeaders(msg Decoder) (serveRequestFn, uint64, uint64, error) 
 				if first {
 					origin = bc.GetHeaderByHash(r.Query.Origin.Hash)
 					if origin != nil {
-						r.Query.Origin.Number = origin.Number.Uint64()
+						r.Query.Origin.Number = origin.Number().Uint64()
 					}
 				} else {
 					origin = bc.GetHeader(r.Query.Origin.Hash, r.Query.Origin.Number)
@@ -202,7 +202,7 @@ func handleGetBlockHeaders(msg Decoder) (serveRequestFn, uint64, uint64, error) 
 			case hashMode && !r.Query.Reverse:
 				// Hash based traversal towards the leaf block
 				var (
-					current = origin.Number.Uint64()
+					current = origin.Number().Uint64()
 					next    = current + r.Query.Skip + 1
 				)
 				if next <= current {
@@ -296,23 +296,23 @@ func handleGetCode(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 			}
 			// Refuse to search stale state data in the database since looking for
 			// a non-exist key is kind of expensive.
-			local := bc.CurrentHeader().Number.Uint64()
-			if !backend.ArchiveMode() && header.Number.Uint64()+core.TriesInMemory <= local {
-				p.Log().Debug("Reject stale code request", "number", header.Number.Uint64(), "head", local)
+			local := bc.CurrentHeader().Number().Uint64()
+			if !backend.ArchiveMode() && header.Number().Uint64()+core.TriesInMemory <= local {
+				p.Log().Debug("Reject stale code request", "number", header.Number().Uint64(), "head", local)
 				p.bumpInvalid()
 				continue
 			}
 			triedb := bc.StateCache().TrieDB()
 
-			account, err := getAccount(triedb, header.Root, common.BytesToHash(request.AccKey))
+			account, err := getAccount(triedb, header.Root(), common.BytesToHash(request.AccKey))
 			if err != nil {
-				p.Log().Warn("Failed to retrieve account for code", "block", header.Number, "hash", header.Hash(), "account", common.BytesToHash(request.AccKey), "err", err)
+				p.Log().Warn("Failed to retrieve account for code", "block", header.Number(), "hash", header.Hash(), "account", common.BytesToHash(request.AccKey), "err", err)
 				p.bumpInvalid()
 				continue
 			}
 			code, err := bc.StateCache().ContractCode(common.BytesToHash(request.AccKey), common.BytesToHash(account.CodeHash))
 			if err != nil {
-				p.Log().Warn("Failed to retrieve account code", "block", header.Number, "hash", header.Hash(), "account", common.BytesToHash(request.AccKey), "codehash", common.BytesToHash(account.CodeHash), "err", err)
+				p.Log().Warn("Failed to retrieve account code", "block", header.Number(), "hash", header.Hash(), "account", common.BytesToHash(request.AccKey), "codehash", common.BytesToHash(account.CodeHash), "err", err)
 				continue
 			}
 			// Accumulate the code and abort if enough data was retrieved
@@ -347,7 +347,7 @@ func handleGetReceipts(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 			// Retrieve the requested block's receipts, skipping if unknown to us
 			results := bc.GetReceiptsByHash(hash)
 			if results == nil {
-				if header := bc.GetHeaderByHash(hash); header == nil || header.ReceiptHash != types.EmptyRootHash {
+				if header := bc.GetHeaderByHash(hash); header == nil || header.ReceiptHash() != types.EmptyRootHash {
 					p.bumpInvalid()
 					continue
 				}
@@ -395,13 +395,13 @@ func handleGetProofs(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 				}
 				// Refuse to search stale state data in the database since looking for
 				// a non-exist key is kind of expensive.
-				local := bc.CurrentHeader().Number.Uint64()
-				if !backend.ArchiveMode() && header.Number.Uint64()+core.TriesInMemory <= local {
-					p.Log().Debug("Reject stale trie request", "number", header.Number.Uint64(), "head", local)
+				local := bc.CurrentHeader().Number().Uint64()
+				if !backend.ArchiveMode() && header.Number().Uint64()+core.TriesInMemory <= local {
+					p.Log().Debug("Reject stale trie request", "number", header.Number().Uint64(), "head", local)
 					p.bumpInvalid()
 					continue
 				}
-				root = header.Root
+				root = header.Root()
 			}
 			// If a header lookup failed (non existent), ignore subsequent requests for the same header
 			if root == (common.Hash{}) {
@@ -417,26 +417,26 @@ func handleGetProofs(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 				// No account key specified, open an account trie
 				trie, err = statedb.OpenTrie(root)
 				if trie == nil || err != nil {
-					p.Log().Warn("Failed to open storage trie for proof", "block", header.Number, "hash", header.Hash(), "root", root, "err", err)
+					p.Log().Warn("Failed to open storage trie for proof", "block", header.Number(), "hash", header.Hash(), "root", root, "err", err)
 					continue
 				}
 			default:
 				// Account key specified, open a storage trie
 				account, err := getAccount(statedb.TrieDB(), root, common.BytesToHash(request.AccKey))
 				if err != nil {
-					p.Log().Warn("Failed to retrieve account for proof", "block", header.Number, "hash", header.Hash(), "account", common.BytesToHash(request.AccKey), "err", err)
+					p.Log().Warn("Failed to retrieve account for proof", "block", header.Number(), "hash", header.Hash(), "account", common.BytesToHash(request.AccKey), "err", err)
 					p.bumpInvalid()
 					continue
 				}
 				trie, err = statedb.OpenStorageTrie(common.BytesToHash(request.AccKey), account.Root)
 				if trie == nil || err != nil {
-					p.Log().Warn("Failed to open storage trie for proof", "block", header.Number, "hash", header.Hash(), "account", common.BytesToHash(request.AccKey), "root", account.Root, "err", err)
+					p.Log().Warn("Failed to open storage trie for proof", "block", header.Number(), "hash", header.Hash(), "account", common.BytesToHash(request.AccKey), "root", account.Root, "err", err)
 					continue
 				}
 			}
 			// Prove the user's request from the account or stroage trie
 			if err := trie.Prove(request.Key, request.FromLevel, nodes); err != nil {
-				p.Log().Warn("Failed to prove state request", "block", header.Number, "hash", header.Hash(), "err", err)
+				p.Log().Warn("Failed to prove state request", "block", header.Number(), "hash", header.Hash(), "err", err)
 				continue
 			}
 			if nodes.DataSize() >= softResponseLimit {
