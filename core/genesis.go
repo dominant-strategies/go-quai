@@ -180,7 +180,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 	// We have the genesis block in database(perhaps in ancient database)
 	// but the corresponding state is missing.
 	header := rawdb.ReadHeader(db, stored, 0)
-	if _, err := state.New(header.Root, state.NewDatabaseWithConfig(db, nil), nil); err != nil {
+	if _, err := state.New(header.Root(), state.NewDatabaseWithConfig(db, nil), nil); err != nil {
 		if genesis == nil {
 			genesis = DefaultGenesisBlock()
 		}
@@ -274,31 +274,30 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		}
 	}
 	root := statedb.IntermediateRoot(false)
-	head := &types.Header{
-		Number:     new(big.Int).SetUint64(g.Number),
-		Nonce:      types.EncodeNonce(g.Nonce),
-		Time:       g.Timestamp,
-		ParentHash: g.ParentHash,
-		Extra:      g.ExtraData,
-		GasLimit:   g.GasLimit,
-		GasUsed:    g.GasUsed,
-		BaseFee:    g.BaseFee,
-		Difficulty: g.Difficulty,
-		MixDigest:  g.Mixhash,
-		Coinbase:   g.Coinbase,
-		Root:       root,
-	}
+	head := types.EmptyHeader()
+	head.SetNumber(new(big.Int).SetUint64(g.Number))
+	head.SetNonce(types.EncodeNonce(g.Nonce))
+	head.SetTime(g.Timestamp)
+	head.SetParentHash(g.ParentHash)
+	head.SetExtra(g.ExtraData)
+	head.SetGasLimit(g.GasLimit)
+	head.SetGasUsed(g.GasUsed)
+	head.SetBaseFee(g.BaseFee)
+	head.SetDifficulty(g.Difficulty)
+	head.SetMixDigest(g.Mixhash)
+	head.SetCoinbase(g.Coinbase)
+	head.SetRoot(root)
 	if g.GasLimit == 0 {
-		head.GasLimit = params.GenesisGasLimit
+		head.SetGasLimit(params.GenesisGasLimit)
 	}
 	if g.Difficulty == nil {
-		head.Difficulty = params.GenesisDifficulty
+		head.SetDifficulty(params.GenesisDifficulty)
 	}
 	if g.Config != nil && g.Config.IsLondon(common.Big0) {
 		if g.BaseFee != nil {
-			head.BaseFee = g.BaseFee
+			head.SetBaseFee(g.BaseFee)
 		} else {
-			head.BaseFee = new(big.Int).SetUint64(params.InitialBaseFee)
+			head.SetBaseFee(new(big.Int).SetUint64(params.InitialBaseFee))
 		}
 	}
 	statedb.Commit(false)

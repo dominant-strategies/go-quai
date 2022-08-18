@@ -31,13 +31,13 @@ func (s stTransaction) MarshalJSON() ([]byte, error) {
 	enc.GasPrice = (*math.HexOrDecimal256)(s.GasPrice)
 	enc.MaxFeePerGas = (*math.HexOrDecimal256)(s.MaxFeePerGas)
 	enc.MaxPriorityFeePerGas = (*math.HexOrDecimal256)(s.MaxPriorityFeePerGas)
-	enc.Nonce = math.HexOrDecimal64(s.Nonce)
+	enc.Nonce() = math.HexOrDecimal64(s.Nonce())
 	enc.To = s.To
 	enc.Data = s.Data
 	enc.AccessLists = s.AccessLists
-	if s.GasLimit != nil {
-		enc.GasLimit = make([]math.HexOrDecimal64, len(s.GasLimit))
-		for k, v := range s.GasLimit {
+	if s.GasLimit() != nil {
+		enc.GasLimit() = make([]math.HexOrDecimal64, len(s.GasLimit()))
+		for k, v := range s.GasLimit() {
 			enc.GasLimit[k] = math.HexOrDecimal64(v)
 		}
 	}
@@ -73,8 +73,8 @@ func (s *stTransaction) UnmarshalJSON(input []byte) error {
 	if dec.MaxPriorityFeePerGas != nil {
 		s.MaxPriorityFeePerGas = (*big.Int)(dec.MaxPriorityFeePerGas)
 	}
-	if dec.Nonce != nil {
-		s.Nonce = uint64(*dec.Nonce)
+	if dec.Nonce() != nil {
+		s.Nonce() = uint64(*dec.Nonce())
 	}
 	if dec.To != nil {
 		s.To = *dec.To
@@ -85,9 +85,9 @@ func (s *stTransaction) UnmarshalJSON(input []byte) error {
 	if dec.AccessLists != nil {
 		s.AccessLists = dec.AccessLists
 	}
-	if dec.GasLimit != nil {
-		s.GasLimit = make([]uint64, len(dec.GasLimit))
-		for k, v := range dec.GasLimit {
+	if dec.GasLimit() != nil {
+		s.GasLimit() = make([]uint64, len(dec.GasLimit()))
+		for k, v := range dec.GasLimit() {
 			s.GasLimit[k] = uint64(v)
 		}
 	}

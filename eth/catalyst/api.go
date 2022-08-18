@@ -81,7 +81,8 @@ type blockExecutionEnv struct {
 func (env *blockExecutionEnv) commitTransaction(tx *types.Transaction, coinbase common.Address) error {
 	vmconfig := *env.chain.GetVMConfig()
 	snap := env.state.Snapshot()
-	receipt, err := core.ApplyTransaction(env.chain.Config(), env.chain, &coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, vmconfig)
+	gasUsed := env.header.GasUsed()
+	receipt, err := core.ApplyTransaction(env.chain.Config(), env.chain, &coinbase, env.gasPool, env.state, env.header, tx, &gasUsed, vmconfig)
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
 		return err
@@ -100,7 +101,7 @@ func (api *consensusAPI) makeEnv(parent *types.Block, header *types.Header) (*bl
 		chain:   api.eth.BlockChain(),
 		state:   state,
 		header:  header,
-		gasPool: new(core.GasPool).AddGas(header.GasLimit),
+		gasPool: new(core.GasPool).AddGas(header.GasLimit()),
 	}
 	return env, nil
 }
@@ -138,16 +139,15 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 		return nil, err
 	}
 	num := parent.Number()
-	header := &types.Header{
-		ParentHash: parent.Hash(),
-		Number:     num.Add(num, common.Big1),
-		Coinbase:   coinbase,
-		GasLimit:   parent.GasLimit(), // Keep the gas limit constant in this prototype
-		Extra:      []byte{},
-		Time:       params.Timestamp,
-	}
-	if config := api.eth.BlockChain().Config(); config.IsLondon(header.Number) {
-		header.BaseFee = misc.CalcBaseFee(config, parent.Header())
+	header := types.EmptyHeader()
+	header.SetParentHash(parent.Hash())
+	header.SetNumber(num.Add(num, common.Big1))
+	header.SetCoinbase(coinbase)
+	header.SetGasLimit(parent.GasLimit()) // Keep the gas limit constant in this prototype
+	header.SetExtra([]byte{})
+	header.SetTime(params.Timestamp)
+	if config := api.eth.BlockChain().Config(); config.IsLondon(header.Number()) {
+		header.SetBaseFee(misc.CalcBaseFee(config, parent.Header()))
 	}
 	err = api.eth.Engine().Prepare(bc, header)
 	if err != nil {
@@ -160,7 +160,7 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 	}
 
 	var (
-		signer       = types.MakeSigner(bc.Config(), header.Number)
+		signer       = types.MakeSigner(bc.Config(), header.Number())
 		txHeap       = types.NewTransactionsByPriceAndNonce(signer, pending, nil)
 		transactions []*types.Transaction
 	)
@@ -258,22 +258,21 @@ func insertBlockParamsToBlock(config *chainParams.ChainConfig, parent *types.Hea
 
 	number := big.NewInt(0)
 	number.SetUint64(params.Number)
-	header := &types.Header{
-		ParentHash:  params.ParentHash,
-		UncleHash:   types.EmptyUncleHash,
-		Coinbase:    params.Miner,
-		Root:        params.StateRoot,
-		TxHash:      types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)),
-		ReceiptHash: params.ReceiptRoot,
-		Bloom:       types.BytesToBloom(params.LogsBloom),
-		Difficulty:  big.NewInt(1),
-		Number:      number,
-		GasLimit:    params.GasLimit,
-		GasUsed:     params.GasUsed,
-		Time:        params.Timestamp,
-	}
+	header := types.EmptyHeader()
+	header.SetParentHash(params.ParentHash)
+	header.SetUncleHash(types.EmptyUncleHash)
+	header.SetCoinbase(params.Miner)
+	header.SetRoot(params.StateRoot)
+	header.SetTxHash(types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)))
+	header.SetReceiptHash(params.ReceiptRoot)
+	header.SetBloom(types.BytesToBloom(params.LogsBloom))
+	header.SetDifficulty(big.NewInt(1))
+	header.SetNumber(number)
+	header.SetGasLimit(params.GasLimit)
+	header.SetGasUsed(params.GasUsed)
+	header.SetTime(params.Timestamp)
 	if config.IsLondon(number) {
-		header.BaseFee = misc.CalcBaseFee(config, parent)
+		header.SetBaseFee(misc.CalcBaseFee(config, parent))
 	}
 	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */)
 	return block, nil

@@ -114,7 +114,7 @@ func TestDifficultyCalculators(t *testing.T) {
 			Time:       rand.Uint64() - timeDelta,
 		}
 		if rand.Uint32()&1 == 0 {
-			header.UncleHash = types.EmptyUncleHash
+			header.UncleHash() = types.EmptyUncleHash
 		}
 		bombDelay := new(big.Int).SetUint64(rand.Uint64() % 50_000_000)
 		for i, pair := range []struct {
@@ -125,7 +125,7 @@ func TestDifficultyCalculators(t *testing.T) {
 			{HomesteadDifficultyCalulator, CalcDifficultyHomesteadU256},
 			{DynamicDifficultyCalculator(bombDelay), MakeDifficultyCalculatorU256(bombDelay)},
 		} {
-			time := header.Time + timeDelta
+			time := header.Time() + timeDelta
 			want := pair.bigFn(time, header)
 			have := pair.u256Fn(time, header)
 			if want.BitLen() > 256 {
@@ -133,7 +133,7 @@ func TestDifficultyCalculators(t *testing.T) {
 			}
 			if want.Cmp(have) != 0 {
 				t.Fatalf("pair %d: want %x have %x\nparent.Number: %x\np.Time: %x\nc.Time: %x\nBombdelay: %v\n", i, want, have,
-					header.Number, header.Time, time, bombDelay)
+					header.Number(), header.Time(), time, bombDelay)
 			}
 		}
 	}

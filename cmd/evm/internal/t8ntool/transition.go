@@ -241,14 +241,14 @@ func Main(ctx *cli.Context) error {
 		}
 	}
 	// We may have to sign the transactions.
-	signer := types.MakeSigner(chainConfig, big.NewInt(int64(prestate.Env.Number)))
+	signer := types.MakeSigner(chainConfig, big.NewInt(int64(prestate.Env.Number())))
 
 	if txs, err = signUnsignedTransactions(txsWithKeys, signer); err != nil {
 		return NewError(ErrorJson, fmt.Errorf("failed signing transactions: %v", err))
 	}
 	// Sanity check, to not `panic` in state_transition
-	if chainConfig.IsLondon(big.NewInt(int64(prestate.Env.Number))) {
-		if prestate.Env.BaseFee == nil {
+	if chainConfig.IsLondon(big.NewInt(int64(prestate.Env.Number()))) {
+		if prestate.Env.BaseFee() == nil {
 			return NewError(ErrorVMConfig, errors.New("EIP-1559 config but missing 'currentBaseFee' in env section"))
 		}
 	}
@@ -346,7 +346,7 @@ func (g Alloc) OnAccount(addr common.Address, dumpAccount state.DumpAccount) {
 		Code:    dumpAccount.Code,
 		Storage: storage,
 		Balance: balance,
-		Nonce:   dumpAccount.Nonce,
+		Nonce:   dumpAccount.Nonce(),
 	}
 	g[addr] = genesisAccount
 }

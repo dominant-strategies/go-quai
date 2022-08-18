@@ -203,7 +203,7 @@ func GetBlockLogs(ctx context.Context, odr OdrBackend, hash common.Hash, number 
 // database. This function should only be used in light client checkpoint syncing.
 func GetUntrustedBlockLogs(ctx context.Context, odr OdrBackend, header *types.Header) ([][]*types.Log, error) {
 	// Retrieve the potentially incomplete receipts from disk or network
-	hash, number := header.Hash(), header.Number.Uint64()
+	hash, number := header.Hash(), header.NumberU64()
 	receipts := rawdb.ReadRawReceipts(odr.Database(), hash, number)
 	if receipts == nil {
 		r := &ReceiptsRequest{Hash: hash, Number: number, Header: header, Untrusted: true}

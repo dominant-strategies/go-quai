@@ -97,7 +97,7 @@ func odrAccounts(ctx context.Context, db ethdb.Database, config *params.ChainCon
 	for _, addr := range acc {
 		if bc != nil {
 			header := bc.GetHeaderByHash(bhash)
-			st, err = state.New(header.Root, state.NewDatabase(db), nil)
+			st, err = state.New(header.Root(), state.NewDatabase(db), nil)
 		} else {
 			header := lc.GetHeaderByHash(bhash)
 			st = light.NewState(ctx, header, lc.Odr())
@@ -129,7 +129,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 		data[35] = byte(i)
 		if bc != nil {
 			header := bc.GetHeaderByHash(bhash)
-			statedb, err := state.New(header.Root, state.NewDatabase(db), nil)
+			statedb, err := state.New(header.Root(), state.NewDatabase(db), nil)
 
 			if err == nil {
 				from := statedb.GetOrNewStateObject(bankAddr)
@@ -204,8 +204,8 @@ func testOdr(t *testing.T, protocol int, expFail uint64, checkCached bool, fn od
 
 	// Ensure the client has synced all necessary data.
 	clientHead := client.handler.backend.blockchain.CurrentHeader()
-	if clientHead.Number.Uint64() != 4 {
-		t.Fatalf("Failed to sync the chain with server, head: %v", clientHead.Number.Uint64())
+	if clientHead.Number().Uint64() != 4 {
+		t.Fatalf("Failed to sync the chain with server, head: %v", clientHead.Number().Uint64())
 	}
 	// Disable the mechanism that we will wait a few time for request
 	// even there is no suitable peer to send right now.
@@ -215,7 +215,7 @@ func testOdr(t *testing.T, protocol int, expFail uint64, checkCached bool, fn od
 		// Mark this as a helper to put the failures at the correct lines
 		t.Helper()
 
-		for i := uint64(0); i <= server.handler.blockchain.CurrentHeader().Number.Uint64(); i++ {
+		for i := uint64(0); i <= server.handler.blockchain.CurrentHeader().Number().Uint64(); i++ {
 			bhash := rawdb.ReadCanonicalHash(server.db, i)
 			b1 := fn(light.NoOdr, server.db, server.handler.server.chainConfig, server.handler.blockchain, nil, bhash)
 

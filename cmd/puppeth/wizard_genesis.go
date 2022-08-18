@@ -69,7 +69,7 @@ func (w *wizard) makeGenesis() {
 
 	case choice == "" || choice == "2":
 		// In the case of clique, configure the consensus parameters
-		genesis.Difficulty = big.NewInt(1)
+		genesis.Difficulty() = big.NewInt(1)
 		genesis.Config.Clique = &params.CliqueConfig{
 			Period: 15,
 			Epoch:  30000,
