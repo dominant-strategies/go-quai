@@ -1,0 +1,79 @@
+INFO [07-14|14:31:09.636] Starting go-quai on Quai Network mainnet... 
+INFO [07-14|14:31:09.636] Maximum peer count                       ETH=50 LES=0 total=50
+INFO [07-14|14:31:09.636] Set global gas cap                       cap=50,000,000
+INFO [07-14|14:31:09.640] Allocated trie memory caches             clean=154.00MiB dirty=256.00MiB
+INFO [07-14|14:31:09.640] Allocated cache and file handles         database=/Users/jonathan/Library/Quai/Prime/quai/chaindata cache=512.00MiB handles=5120
+INFO [07-14|14:31:09.810] Opened ancient database                  database=/Users/jonathan/Library/Quai/Prime/quai/chaindata/ancient readonly=false
+INFO [07-14|14:31:09.887] Persisted trie from memory database      nodes=12356 size=1.78MiB time=14.74575ms gcnodes=0 gcsize=0.00B gctime=0s livenodes=1 livesize=0.00B
+INFO [07-14|14:31:09.888] Initialised chain configuration          config="{ChainID: 9000 Homestead: 0 EIP150: 0 EIP155: 0 EIP158: 0 Byzantium: 0 Constantinople: 0 Petersburg: 0 Istanbul: 0, Muir Glacier: 0, Berlin: 0, London: 0, Engine: ethash, GenesisHashes: [0xfce9bedc6557777642ec64a707e8eb72c9d6f3a3fc021a6d36c6b4eb334808ec 0xfce9bedc6557777642ec64a707e8eb72c9d6f3a3fc021a6d36c6b4eb334808ec 0xfce9bedc6557777642ec64a707e8eb72c9d6f3a3fc021a6d36c6b4eb334808ec], Fuller: 0}"
+INFO [07-14|14:31:09.889] Initialising Quai Network protocol       network=9000 dbversion=8
+INFO [07-14|14:31:09.894] Loaded most recent local header          number="[+0 +0 +0]" hash=fce9be..4808ec td="[+32048576 +8048576 +2048576]" age=53y3mo2w
+INFO [07-14|14:31:09.894] Loaded most recent local full block      number=0            hash=fce9be..4808ec td="[+32048576 +8048576 +2048576]" age=53y3mo2w
+INFO [07-14|14:31:09.894] Loaded most recent local fast block      number=0            hash=fce9be..4808ec td="[+32048576 +8048576 +2048576]" age=53y3mo2w
+INFO [07-14|14:31:09.895] Loaded local transaction journal         transactions=0 dropped=0
+INFO [07-14|14:31:09.895] Regenerated local transaction journal    transactions=0 accounts=0
+INFO [07-14|14:31:09.895] Gasprice oracle is ignoring threshold set threshold=2
+INFO [07-14|14:31:09.895] Worker: Length of external blocks        len=0
+INFO [07-14|14:31:09.895] Starting peer-to-peer node               instance=Quai/v1.10.10-unstable-cf6863ca-20220713/darwin-arm64/go1.17.5
+INFO [07-14|14:31:10.013] New local node record                    seq=1,657,826,137,155 id=2901a413d0081ced ip=127.0.0.1 udp=30303 tcp=30303
+INFO [07-14|14:31:10.014] Started P2P networking                   self=enode://304f74ff4112ba6418679587a2e416c1425df694790d9fe392e028c0a17c58bf58e5d3f738bd336c65b96ad153e182302d9a3fc3957901f3a6fd54c5f2dedabd@127.0.0.1:30303
+INFO [07-14|14:31:10.022] Mapped network port                      proto=tcp extport=30303 intport=30303 interface=NAT-PMP(192.168.0.1)
+INFO [07-14|14:31:10.032] IPC endpoint opened                      url=/Users/jonathan/Library/Quai/Prime/geth.ipc
+INFO [07-14|14:31:10.032] Mapped network port                      proto=udp extport=30303 intport=30303 interface=NAT-PMP(192.168.0.1)
+INFO [07-14|14:31:10.032] New local node record                    seq=1,657,826,137,156 id=2901a413d0081ced ip=65.36.116.243 udp=30303 tcp=30303
+INFO [07-14|14:31:10.033] HTTP server started                      endpoint=[::]:8546 prefix= cors= vhosts=*
+INFO [07-14|14:31:10.033] WebSocket enabled                        url=ws://[::]:8547
+INFO [07-14|14:31:17.171] Got interrupt, shutting down... 
+INFO [07-14|14:31:17.173] HTTP server stopped                      endpoint=[::]:8546
+INFO [07-14|14:31:17.174] HTTP server stopped                      endpoint=[::]:8547
+INFO [07-14|14:31:17.175] IPC endpoint closed                      url=/Users/jonathan/Library/Quai/Prime/geth.ipc
+INFO [07-14|14:31:17.175] Ethereum protocol stopped 
+INFO [07-14|14:31:17.175] Transaction pool stopped 
+INFO [07-14|14:31:17.175] Writing external blocks state to disk    dir=/Users/jonathan/Library/Quai/Prime/quai/externalblocks
+INFO [07-14|14:31:17.178] Writing snapshot state to disk           root=d7f897..0f0544
+INFO [07-14|14:31:17.178] Persisted trie from memory database      nodes=0     size=0.00B   time="5.041µs"  gcnodes=0 gcsize=0.00B gctime=0s livenodes=1 livesize=0.00B
+INFO [07-14|14:31:17.178] Writing clean trie cache to disk         path=/Users/jonathan/Library/Quai/Prime/quai/triecache threads=10
+INFO [07-14|14:31:17.194] Persisted the clean trie cache           path=/Users/jonathan/Library/Quai/Prime/quai/triecache elapsed=15.975ms
+INFO [07-14|14:31:17.194] Blockchain stopped 
+INFO [07-14|14:46:23.397] Starting go-quai on Quai Network mainnet... 
+INFO [07-14|14:46:23.398] Maximum peer count                       ETH=50 LES=0 total=50
+INFO [07-14|14:46:23.398] Set global gas cap                       cap=50,000,000
+INFO [07-14|14:46:23.403] Allocated trie memory caches             clean=154.00MiB dirty=256.00MiB
+INFO [07-14|14:46:23.403] Allocated cache and file handles         database=/Users/jonathan/Library/Quai/Prime/quai/chaindata cache=512.00MiB handles=5120
+INFO [07-14|14:46:23.573] Opened ancient database                  database=/Users/jonathan/Library/Quai/Prime/quai/chaindata/ancient readonly=false
+INFO [07-14|14:46:23.661] Persisted trie from memory database      nodes=12356 size=1.78MiB time=14.905792ms gcnodes=0 gcsize=0.00B gctime=0s livenodes=1 livesize=0.00B
+INFO [07-14|14:46:23.662] Initialised chain configuration          config="{ChainID: 9000 Homestead: 0 EIP150: 0 EIP155: 0 EIP158: 0 Byzantium: 0 Constantinople: 0 Petersburg: 0 Istanbul: 0, Muir Glacier: 0, Berlin: 0, London: 0, Engine: ethash, GenesisHashes: [0xfce9bedc6557777642ec64a707e8eb72c9d6f3a3fc021a6d36c6b4eb334808ec 0xfce9bedc6557777642ec64a707e8eb72c9d6f3a3fc021a6d36c6b4eb334808ec 0xfce9bedc6557777642ec64a707e8eb72c9d6f3a3fc021a6d36c6b4eb334808ec], Fuller: 0}"
+INFO [07-14|14:46:23.662] Initialising Quai Network protocol       network=9000 dbversion=8
+INFO [07-14|14:46:23.668] Loaded most recent local header          number="[+0 +0 +0]" hash=fce9be..4808ec td="[+32048576 +8048576 +2048576]" age=53y3mo2w
+INFO [07-14|14:46:23.668] Loaded most recent local full block      number=0            hash=fce9be..4808ec td="[+32048576 +8048576 +2048576]" age=53y3mo2w
+INFO [07-14|14:46:23.668] Loaded most recent local fast block      number=0            hash=fce9be..4808ec td="[+32048576 +8048576 +2048576]" age=53y3mo2w
+INFO [07-14|14:46:23.669] Loaded local transaction journal         transactions=0 dropped=0
+INFO [07-14|14:46:23.669] Regenerated local transaction journal    transactions=0 accounts=0
+INFO [07-14|14:46:23.669] Gasprice oracle is ignoring threshold set threshold=2
+INFO [07-14|14:46:23.669] Worker: Length of external blocks        len=0
+INFO [07-14|14:46:23.669] Starting peer-to-peer node               instance=Quai/v1.10.10-unstable-cf6863ca-20220713/darwin-arm64/go1.17.5
+INFO [07-14|14:46:23.807] New local node record                    seq=1,657,826,137,157 id=2901a413d0081ced ip=127.0.0.1 udp=30303 tcp=30303
+INFO [07-14|14:46:23.807] Started P2P networking                   self=enode://304f74ff4112ba6418679587a2e416c1425df694790d9fe392e028c0a17c58bf58e5d3f738bd336c65b96ad153e182302d9a3fc3957901f3a6fd54c5f2dedabd@127.0.0.1:30303
+INFO [07-14|14:46:23.808] IPC endpoint opened                      url=/Users/jonathan/Library/Quai/Prime/geth.ipc
+INFO [07-14|14:46:23.809] HTTP server started                      endpoint=[::]:8546 prefix= cors= vhosts=*
+INFO [07-14|14:46:23.827] WebSocket enabled                        url=ws://[::]:8547
+INFO [07-14|14:46:23.828] Transaction pool price threshold updated price=1
+INFO [07-14|14:46:23.829] Transaction pool price threshold updated price=1
+INFO [07-14|14:46:23.829] Worker: Length of external blocks        len=0
+INFO [07-14|14:46:23.829] Commit new sealing work                  number=1            sealhash=c09d96..9fe04f uncles=0 txs=0 gas=0 fees=0 elapsed="721.75µs"
+INFO [07-14|14:46:23.843] Mapped network port                      proto=tcp extport=30303 intport=30303 interface=NAT-PMP(192.168.0.1)
+INFO [07-14|14:46:23.850] Mapped network port                      proto=udp extport=30303 intport=30303 interface=NAT-PMP(192.168.0.1)
+INFO [07-14|14:46:23.876] New local node record                    seq=1,657,826,137,158 id=2901a413d0081ced ip=65.36.116.243 udp=30303 tcp=30303
+INFO [07-14|14:46:33.810] Looking for peers                        peercount=0 tried=2 static=0
+INFO [07-14|14:46:37.189] Got interrupt, shutting down... 
+INFO [07-14|14:46:37.191] HTTP server stopped                      endpoint=[::]:8546
+INFO [07-14|14:46:37.192] HTTP server stopped                      endpoint=[::]:8547
+INFO [07-14|14:46:37.192] IPC endpoint closed                      url=/Users/jonathan/Library/Quai/Prime/geth.ipc
+INFO [07-14|14:46:37.193] Ethereum protocol stopped 
+INFO [07-14|14:46:37.193] Transaction pool stopped 
+INFO [07-14|14:46:37.193] Writing external blocks state to disk    dir=/Users/jonathan/Library/Quai/Prime/quai/externalblocks
+INFO [07-14|14:46:37.197] Writing snapshot state to disk           root=d7f897..0f0544
+INFO [07-14|14:46:37.197] Persisted trie from memory database      nodes=0     size=0.00B   time="6.167µs"   gcnodes=0 gcsize=0.00B gctime=0s livenodes=1 livesize=0.00B
+INFO [07-14|14:46:37.197] Writing clean trie cache to disk         path=/Users/jonathan/Library/Quai/Prime/quai/triecache threads=10
+INFO [07-14|14:46:37.210] Persisted the clean trie cache           path=/Users/jonathan/Library/Quai/Prime/quai/triecache elapsed=13.485ms
+INFO [07-14|14:46:37.210] Blockchain stopped 
