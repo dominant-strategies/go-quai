@@ -35,7 +35,7 @@ type Slice struct {
 	currentHeads []*types.Header
 
 	txPool *TxPool
-	worker *Worker
+	miner  *Miner
 
 	config *params.ChainConfig
 	engine consensus.Engine
@@ -70,7 +70,8 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, mux *ev
 	}
 
 	sl.txPool = NewTxPool(*txConfig, chainConfig, sl.hc)
-	sl.worker = NewWorker(config, chainConfig, engine, sl.hc, sl.txPool, mux, isLocalBlock, true)
+	sl.miner = New(sl.hc, sl.txPool, config, chainConfig, mux, engine, isLocalBlock)
+	sl.miner.SetExtra(sl.miner.MakeExtraData(config.ExtraData))
 
 	sl.currentHeads[0] = sl.hc.genesisHeader
 	sl.currentHeads[1] = sl.hc.genesisHeader
@@ -105,9 +106,9 @@ func (sl *Slice) TxPool() *TxPool {
 	return sl.txPool
 }
 
-// Worker retieves the worker.
-func (sl *Slice) Worker() *Worker {
-	return sl.worker
+// Miner retrieves the miner.
+func (sl *Slice) Miner() *Miner {
+	return sl.miner
 }
 
 // MakeDomClient creates the quaiclient for the given domurl

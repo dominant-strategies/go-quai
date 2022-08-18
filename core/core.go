@@ -37,20 +37,15 @@ func NewCore(db ethdb.Database, config *Config, mux *event.TypeMux, isLocalBlock
 
 // TODO
 func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
-	fmt.Println("Insertchain on")
 	for i, block := range blocks {
-		fmt.Println("Insert chain block ", block.Hash())
-
 		// check the order of the block
 		blockOrder, err := c.engine.GetDifficultyOrder(block.Header())
 		if err != nil {
 			return i, err
 		}
-
 		// if the order of the block is less than the context
 		// add the rest of the blocks in the queue to the future blocks.
 		if blockOrder == types.QuaiNetworkContext {
-
 			err = c.sl.SliceAppend(block)
 			if err != nil {
 				fmt.Println("err in Append core: ", err)
@@ -396,33 +391,33 @@ func (c *Core) SetHeaderChainHead(header *types.Header) error {
 // SubscribePendingLogs starts delivering logs from pending transactions
 // to the given channel.
 func (c *Core) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscription {
-	return c.sl.worker.pendingLogsFeed.Subscribe(ch)
+	return c.sl.miner.worker.pendingLogsFeed.Subscribe(ch)
 }
 
 // SubscribePendingBlock starts delivering the pending block to the given channel.
 func (c *Core) SubscribePendingBlock(ch chan<- *types.Header) event.Subscription {
-	return c.sl.worker.pendingBlockFeed.Subscribe(ch)
+	return c.sl.miner.worker.pendingBlockFeed.Subscribe(ch)
 }
 
 // Method to retrieve uncles from the worker in case not found in normal DB.
 func (c *Core) GetUncle(hash common.Hash) *types.Block {
-	if uncle, exist := c.sl.worker.localUncles[hash]; exist {
+	if uncle, exist := c.sl.miner.worker.localUncles[hash]; exist {
 		return uncle
 	}
-	if uncle, exist := c.sl.worker.remoteUncles[hash]; exist {
+	if uncle, exist := c.sl.miner.worker.remoteUncles[hash]; exist {
 		return uncle
 	}
 	return nil
 }
 
 func (c *Core) SetEtherbase(addr common.Address) {
-	c.sl.worker.setEtherbase(addr)
+	c.sl.miner.SetEtherbase(addr)
 }
 
 // SetGasCeil sets the gaslimit to strive for when mining blocks post 1559.
 // For pre-1559 blocks, it sets the ceiling.
 func (c *Core) SetGasCeil(ceil uint64) {
-	c.sl.worker.setGasCeil(ceil)
+	c.sl.miner.SetGasCeil(ceil)
 }
 
 // EnablePreseal turns on the preseal mining feature. It's enabled by default.
@@ -430,7 +425,7 @@ func (c *Core) SetGasCeil(ceil uint64) {
 // (miners) to actually know the underlying detail. It's only for outside project
 // which uses this library.
 func (c *Core) EnablePreseal() {
-	c.sl.worker.enablePreseal()
+	c.sl.miner.EnablePreseal()
 }
 
 // DisablePreseal turns off the preseal mining feature. It's necessary for some
@@ -439,12 +434,12 @@ func (c *Core) EnablePreseal() {
 // (miners) to actually know the underlying detail. It's only for outside project
 // which uses this library.
 func (c *Core) DisablePreseal() {
-	c.sl.worker.disablePreseal()
+	c.sl.miner.DisablePreseal()
 }
 
 // Pending returns the currently pending block and associated state.
 func (c *Core) Pending() (*types.Block, *state.StateDB) {
-	return c.sl.worker.pending()
+	return c.sl.miner.Pending()
 }
 
 // PendingBlock returns the currently pending block.
@@ -453,12 +448,12 @@ func (c *Core) Pending() (*types.Block, *state.StateDB) {
 // simultaneously, please use Pending(), as the pending state can
 // change between multiple method calls
 func (c *Core) PendingBlock() *types.Block {
-	return c.sl.worker.pendingBlock()
+	return c.sl.miner.PendingBlock()
 }
 
 // PendingBlockAndReceipts returns the currently pending block and corresponding receipts.
 func (c *Core) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
-	return c.sl.worker.pendingBlockAndReceipts()
+	return c.sl.miner.PendingBlockAndReceipts()
 }
 
 func (c *Core) Hashrate() uint64 {
@@ -466,6 +461,10 @@ func (c *Core) Hashrate() uint64 {
 		return uint64(pow.Hashrate())
 	}
 	return 0
+}
+
+func (c *Core) Miner() *Miner {
+	return c.sl.Miner()
 }
 
 func (c *Core) StateAtBlock(block *types.Block, reexec uint64, base *state.StateDB, checkLive bool, preferDisk bool) (statedb *state.StateDB, err error) {

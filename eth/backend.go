@@ -65,7 +65,6 @@ type Ethereum struct {
 	config *ethconfig.Config
 
 	// Handlers
-	txPool             *core.TxPool
 	core               *core.Core
 	handler            *handler
 	ethDialCandidates  enode.Iterator
@@ -308,6 +307,16 @@ func (s *Ethereum) APIs() []rpc.API {
 		}, {
 			Namespace: "eth",
 			Version:   "1.0",
+			Service:   NewPublicMinerAPI(s),
+			Public:    true,
+		}, {
+			Namespace: "quai",
+			Version:   "1.0",
+			Service:   NewPublicMinerAPI(s),
+			Public:    true,
+		}, {
+			Namespace: "eth",
+			Version:   "1.0",
 			Service:   downloader.NewPublicDownloaderAPI(s.handler.downloader, s.eventMux),
 			Public:    true,
 		}, {
@@ -325,6 +334,11 @@ func (s *Ethereum) APIs() []rpc.API {
 			Version:   "1.0",
 			Service:   filters.NewPublicFilterAPI(s.APIBackend, false, 5*time.Minute),
 			Public:    true,
+		}, {
+			Namespace: "miner",
+			Version:   "1.0",
+			Service:   NewPrivateMinerAPI(s),
+			Public:    false,
 		}, {
 			Namespace: "admin",
 			Version:   "1.0",
@@ -428,6 +442,77 @@ func (s *Ethereum) shouldPreserve(header *types.Header) bool {
 	return s.isLocalBlock(header)
 }
 
+// SetEtherbase sets the mining reward address.
+func (s *Ethereum) SetEtherbase(etherbase common.Address) {
+	s.lock.Lock()
+	s.etherbase = etherbase
+	s.lock.Unlock()
+
+	s.core.SetEtherbase(etherbase)
+}
+
+// StartMining starts the miner with the given number of CPU threads. If mining
+// is already running, this method adjust the number of threads allowed to use
+// and updates the minimum price required by the transaction pool.
+func (s *Ethereum) StartMining(threads int) error {
+	// Update the thread count within the consensus engine
+	type threaded interface {
+		SetThreads(threads int)
+	}
+	if th, ok := s.engine.(threaded); ok {
+		log.Info("Updated mining threads", "threads", threads)
+		if threads == 0 {
+			threads = -1 // Disable the miner from within
+		}
+		th.SetThreads(threads)
+	}
+	// If the miner was not running, initialize it
+	if !s.IsMining() {
+		// Propagate the initial price point to the transaction pool
+		s.lock.RLock()
+		price := s.gasPrice
+		s.lock.RUnlock()
+		s.TxPool().SetGasPrice(price)
+
+		// Configure the local mining address
+		eb, err := s.Etherbase()
+		if err != nil {
+			log.Error("Cannot start mining without etherbase", "err", err)
+			return fmt.Errorf("etherbase missing: %v", err)
+		}
+		if clique, ok := s.engine.(*clique.Clique); ok {
+			wallet, err := s.accountManager.Find(accounts.Account{Address: eb})
+			if wallet == nil || err != nil {
+				log.Error("Etherbase account unavailable locally", "err", err)
+				return fmt.Errorf("signer missing: %v", err)
+			}
+			clique.Authorize(eb, wallet.SignData)
+		}
+		// If mining is started, we can disable the transaction rejection mechanism
+		// introduced to speed sync times.
+		atomic.StoreUint32(&s.handler.acceptTxs, 1)
+
+		go s.core.Slice().Miner().Start(eb)
+	}
+	return nil
+}
+
+// StopMining terminates the miner, both at the consensus engine level as well as
+// at the block creation level.
+func (s *Ethereum) StopMining() {
+	// Update the thread count within the consensus engine
+	type threaded interface {
+		SetThreads(threads int)
+	}
+	if th, ok := s.engine.(threaded); ok {
+		th.SetThreads(-1)
+	}
+	// Stop the block creating itself
+	s.core.Slice().Miner().Stop()
+}
+
+func (s *Ethereum) Miner() *core.Miner                 { return s.core.Slice().Miner() }
+func (s *Ethereum) IsMining() bool                     { return s.core.Miner().Mining() }
 func (s *Ethereum) AccountManager() *accounts.Manager  { return s.accountManager }
 func (s *Ethereum) Core() *core.Core                   { return s.core }
 func (s *Ethereum) TxPool() *core.TxPool               { return s.core.Slice().TxPool() }
@@ -483,6 +568,7 @@ func (s *Ethereum) Stop() error {
 	s.bloomIndexer.Close()
 	close(s.closeBloomHandler)
 	s.core.Slice().TxPool().Stop()
+	s.core.Slice().Miner().Stop()
 	s.core.Stop()
 	s.engine.Close()
 	rawdb.PopUncleanShutdownMarker(s.chainDb)

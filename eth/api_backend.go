@@ -271,11 +271,11 @@ func (b *EthAPIBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscri
 }
 
 func (b *EthAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
-	return b.eth.txPool.AddLocal(signedTx)
+	return b.eth.TxPool().AddLocal(signedTx)
 }
 
 func (b *EthAPIBackend) GetPoolTransactions() (types.Transactions, error) {
-	pending, err := b.eth.txPool.Pending(false)
+	pending, err := b.eth.TxPool().Pending(false)
 	if err != nil {
 		return nil, err
 	}
@@ -287,7 +287,7 @@ func (b *EthAPIBackend) GetPoolTransactions() (types.Transactions, error) {
 }
 
 func (b *EthAPIBackend) GetPoolTransaction(hash common.Hash) *types.Transaction {
-	return b.eth.txPool.Get(hash)
+	return b.eth.TxPool().Get(hash)
 }
 
 func (b *EthAPIBackend) GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
@@ -296,11 +296,11 @@ func (b *EthAPIBackend) GetTransaction(ctx context.Context, txHash common.Hash) 
 }
 
 func (b *EthAPIBackend) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
-	return b.eth.txPool.Nonce(addr), nil
+	return b.eth.TxPool().Nonce(addr), nil
 }
 
 func (b *EthAPIBackend) Stats() (pending int, queued int) {
-	return b.eth.txPool.Stats()
+	return b.eth.TxPool().Stats()
 }
 
 func (b *EthAPIBackend) TxPoolContent() (map[common.Address]types.Transactions, map[common.Address]types.Transactions) {
@@ -376,6 +376,14 @@ func (b *EthAPIBackend) Engine() consensus.Engine {
 
 func (b *EthAPIBackend) CurrentHeader() *types.Header {
 	return b.eth.core.CurrentHeader()
+}
+
+func (b *EthAPIBackend) Miner() *core.Miner {
+	return b.eth.core.Miner()
+}
+
+func (b *EthAPIBackend) StartMining(threads int) error {
+	return b.eth.StartMining(threads)
 }
 
 func (b *EthAPIBackend) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, checkLive, preferDisk bool) (*state.StateDB, error) {

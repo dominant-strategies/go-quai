@@ -152,6 +152,7 @@ func (hc *HeaderChain) Append(block *types.Block) error {
 	// Append header to the headerchain
 	batch := hc.headerDb.NewBatch()
 	rawdb.WriteHeader(batch, block.Header())
+	rawdb.WriteBlock(batch, block)
 	if err := batch.Write(); err != nil {
 		return err
 	}
@@ -160,6 +161,7 @@ func (hc *HeaderChain) Append(block *types.Block) error {
 	logs, err := hc.bc.Append(block)
 	if err != nil {
 		rawdb.DeleteHeader(hc.headerDb, block.Header().Hash(), block.Header().Number64())
+		rawdb.DeleteBlock(hc.headerDb, block.Header().Hash(), block.Header().Number64())
 		return err
 	}
 
@@ -211,6 +213,7 @@ func (hc *HeaderChain) Appendable(block *types.Block) error {
 // SetCurrentHeader sets the in-memory head header marker of the canonical chan
 // as the given header.
 func (hc *HeaderChain) SetCurrentHeader(head *types.Header) ([]*types.Header, error) {
+	fmt.Println("Setting Current Header", head.Hash())
 	prevHeader := hc.CurrentHeader()
 
 	sliceHeaders := make([]*types.Header, 3)
