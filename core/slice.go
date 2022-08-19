@@ -18,7 +18,6 @@ import (
 	"github.com/spruce-solutions/go-quai/core/vm"
 	"github.com/spruce-solutions/go-quai/ethclient/quaiclient"
 	"github.com/spruce-solutions/go-quai/ethdb"
-	"github.com/spruce-solutions/go-quai/event"
 	"github.com/spruce-solutions/go-quai/log"
 	"github.com/spruce-solutions/go-quai/params"
 )
@@ -51,7 +50,7 @@ type Slice struct {
 	wg sync.WaitGroup // slice processing wait group for shutting down
 }
 
-func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, mux *event.TypeMux, isLocalBlock func(block *types.Header) bool, chainConfig *params.ChainConfig, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config) (*Slice, error) {
+func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocalBlock func(block *types.Header) bool, chainConfig *params.ChainConfig, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config) (*Slice, error) {
 	sl := &Slice{
 		config: chainConfig,
 		engine: engine,
@@ -70,7 +69,7 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, mux *ev
 	}
 
 	sl.txPool = NewTxPool(*txConfig, chainConfig, sl.hc)
-	sl.miner = New(sl.hc, sl.txPool, config, chainConfig, mux, engine, isLocalBlock)
+	sl.miner = New(sl.hc, sl.txPool, config, chainConfig, engine, isLocalBlock)
 	sl.miner.SetExtra(sl.miner.MakeExtraData(config.ExtraData))
 
 	sl.currentHeads[0] = sl.hc.genesisHeader

@@ -185,7 +185,6 @@ type worker struct {
 	pendingHeaderFeed event.Feed
 
 	// Subscriptions
-	mux          *event.TypeMux
 	txsCh        chan NewTxsEvent
 	txsSub       event.Subscription
 	chainHeadCh  chan ChainHeadEvent
@@ -243,12 +242,11 @@ type worker struct {
 	resubmitHook func(time.Duration, time.Duration) // Method to call upon updating resubmitting interval.
 }
 
-func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, headerchain *HeaderChain, txPool *TxPool, mux *event.TypeMux, isLocalBlock func(header *types.Header) bool, init bool) *worker {
+func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, headerchain *HeaderChain, txPool *TxPool, isLocalBlock func(header *types.Header) bool, init bool) *worker {
 	worker := &worker{
 		config:             config,
 		chainConfig:        chainConfig,
 		engine:             engine,
-		mux:                mux,
 		hc:                 headerchain,
 		txPool:             txPool,
 		isLocalBlock:       isLocalBlock,

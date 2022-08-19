@@ -35,7 +35,6 @@ import (
 
 // Miner creates blocks and searches for proof-of-work values.
 type Miner struct {
-	mux      *event.TypeMux
 	worker   *worker
 	coinbase common.Address
 	hc       *HeaderChain
@@ -45,15 +44,14 @@ type Miner struct {
 	stopCh   chan struct{}
 }
 
-func New(hc *HeaderChain, txPool *TxPool, config *Config, chainConfig *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, isLocalBlock func(block *types.Header) bool) *Miner {
+func New(hc *HeaderChain, txPool *TxPool, config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, isLocalBlock func(block *types.Header) bool) *Miner {
 	miner := &Miner{
 		hc:      hc,
-		mux:     mux,
 		engine:  engine,
 		exitCh:  make(chan struct{}),
 		startCh: make(chan common.Address),
 		stopCh:  make(chan struct{}),
-		worker:  newWorker(config, chainConfig, engine, hc, txPool, mux, isLocalBlock, true),
+		worker:  newWorker(config, chainConfig, engine, hc, txPool, isLocalBlock, true),
 	}
 	go miner.update()
 
