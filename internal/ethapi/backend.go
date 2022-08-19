@@ -100,8 +100,7 @@ type Backend interface {
 	ServiceFilter(ctx context.Context, session *bloombits.MatcherSession)
 	SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription
 	SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription
-	SubscribePendingBlockEvent(ch chan<- *types.Header) event.Subscription
-	SubscribeCombinedHeaderEvent(ch chan<- *types.Header) event.Subscription
+	SubscribePendingHeaderEvent(ch chan<- *types.Header) event.Subscription
 	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
 
 	ChainConfig() *params.ChainConfig

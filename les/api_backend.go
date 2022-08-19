@@ -239,10 +239,6 @@ func (b *LesApiBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.S
 	return nil
 }
 
-func (b *LesApiBackend) SubscribeCombinedHeader(ch chan<- *types.Header) event.Subscription {
-	return nil
-}
-
 func (b *LesApiBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
 	return nil
 }
@@ -262,14 +258,7 @@ func (b *LesApiBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.
 	})
 }
 
-func (b *LesApiBackend) SubscribePendingBlockEvent(ch chan<- *types.Header) event.Subscription {
-	return event.NewSubscription(func(quit <-chan struct{}) error {
-		<-quit
-		return nil
-	})
-}
-
-func (b *LesApiBackend) SubscribeReOrgEvent(ch chan<- core.ReOrgRollup) event.Subscription {
+func (b *LesApiBackend) SubscribePendingHeaderEvent(ch chan<- *types.Header) event.Subscription {
 	return event.NewSubscription(func(quit <-chan struct{}) error {
 		<-quit
 		return nil
@@ -379,9 +368,5 @@ func (b *LesApiBackend) SetHeaderChainHead(header *types.Header) error {
 }
 
 func (b *LesApiBackend) UpdatePendingHeader(header *types.Header, pendingHeader *types.Header) error {
-	return nil
-}
-
-func (b *LesApiBackend) SubscribeCombinedHeaderEvent(header chan<- *types.Header) event.Subscription {
 	return nil
 }

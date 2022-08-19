@@ -48,8 +48,6 @@ type Slice struct {
 	futureHeads  *lru.Cache
 	slicemu      sync.RWMutex
 
-	combinedHeaderFeed event.Feed
-
 	wg sync.WaitGroup // slice processing wait group for shutting down
 }
 
@@ -250,7 +248,7 @@ func (sl *Slice) UpdatePendingHeader(header *types.Header, pendingHeader *types.
 		sl.pendingHeader = pendingHeader
 		fmt.Println("Pending Header: ", pendingHeader)
 		fmt.Println("Header: ", header)
-		sl.miner.worker.pendingBlockFeed.Send(pendingHeader)
+		sl.miner.worker.pendingHeaderFeed.Send(pendingHeader)
 	}
 	return nil
 }

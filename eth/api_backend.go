@@ -250,12 +250,8 @@ func (b *EthAPIBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.
 	return b.eth.core.SubscribePendingLogs(ch)
 }
 
-func (b *EthAPIBackend) SubscribePendingBlockEvent(ch chan<- *types.Header) event.Subscription {
-	return b.eth.core.SubscribePendingBlock(ch)
-}
-
-func (b *EthAPIBackend) SubscribeCombinedHeaderEvent(ch chan<- *types.Header) event.Subscription {
-	return b.eth.core.SubscribeCombinedHeader(ch)
+func (b *EthAPIBackend) SubscribePendingHeaderEvent(ch chan<- *types.Header) event.Subscription {
+	return b.eth.core.SubscribePendingHeader(ch)
 }
 
 func (b *EthAPIBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {

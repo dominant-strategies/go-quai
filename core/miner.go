@@ -189,8 +189,8 @@ func (miner *Miner) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscript
 }
 
 // SubscribePendingBlock starts delivering the pending block to the given channel.
-func (miner *Miner) SubscribePendingBlock(ch chan<- *types.Header) event.Subscription {
-	return miner.worker.pendingBlockFeed.Subscribe(ch)
+func (miner *Miner) SubscribePendingHeader(ch chan<- *types.Header) event.Subscription {
+	return miner.worker.pendingHeaderFeed.Subscribe(ch)
 }
 
 // Method to retrieve uncles from the worker in case not found in normal DB.

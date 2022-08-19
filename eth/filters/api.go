@@ -241,7 +241,7 @@ func (api *PublicFilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, er
 }
 
 // PendingBlock sends a notification each time a new pending block is created.
-func (api *PublicFilterAPI) PendingBlock(ctx context.Context) (*rpc.Subscription, error) {
+func (api *PublicFilterAPI) PendingHeader(ctx context.Context) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
@@ -250,48 +250,18 @@ func (api *PublicFilterAPI) PendingBlock(ctx context.Context) (*rpc.Subscription
 	rpcSub := notifier.CreateSubscription()
 
 	go func() {
-		blocks := make(chan *types.Header)
-		blockSub := api.events.SubscribePendingBlock(blocks)
+		header := make(chan *types.Header)
+		headerSub := api.events.SubscribePendingHeader(header)
 
 		for {
 			select {
-			case b := <-blocks:
+			case b := <-header:
 				notifier.Notify(rpcSub.ID, b)
 			case <-rpcSub.Err():
-				blockSub.Unsubscribe()
+				headerSub.Unsubscribe()
 				return
 			case <-notifier.Closed():
-				blockSub.Unsubscribe()
-				return
-			}
-		}
-	}()
-
-	return rpcSub, nil
-}
-
-// CombinedHeader sends a notification each time a new combinedHeader is created.
-func (api *PublicFilterAPI) CombinedHeader(ctx context.Context) (*rpc.Subscription, error) {
-	notifier, supported := rpc.NotifierFromContext(ctx)
-	if !supported {
-		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
-	}
-
-	rpcSub := notifier.CreateSubscription()
-
-	go func() {
-		combinedHeaders := make(chan *types.Header)
-		combinedHeaderSub := api.events.SubscribeCombinedHeader(combinedHeaders)
-
-		for {
-			select {
-			case b := <-combinedHeaders:
-				notifier.Notify(rpcSub.ID, b)
-			case <-rpcSub.Err():
-				combinedHeaderSub.Unsubscribe()
-				return
-			case <-notifier.Closed():
-				combinedHeaderSub.Unsubscribe()
+				headerSub.Unsubscribe()
 				return
 			}
 		}

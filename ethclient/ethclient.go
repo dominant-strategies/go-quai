@@ -88,16 +88,6 @@ func (ec *Client) BlockByNumber(ctx context.Context, number *big.Int) (*types.Bl
 	return ec.getBlock(ctx, "quai_getBlockByNumber", toBlockNumArg(number), true)
 }
 
-// Pending block returns a pending block if one exists
-func (ec *Client) GetPendingBlock(ctx context.Context) (*types.ReceiptBlock, error) {
-	return ec.getBlockWithReceipts(ctx, "quai_pendingBlock")
-}
-
-// Pending block returns a pending block if one exists
-func (ec *Client) ReceiptBlockByHash(ctx context.Context) (*types.ReceiptBlock, error) {
-	return ec.getBlockWithReceipts(ctx, "quai_getBlockWithReceiptsByHash")
-}
-
 // BlockNumber returns the most recent block number
 func (ec *Client) BlockNumber(ctx context.Context) (uint64, error) {
 	var result hexutil.Uint64
@@ -361,14 +351,9 @@ func (ec *Client) SubscribeNewHead(ctx context.Context, ch chan<- *types.Header)
 	return ec.c.EthSubscribe(ctx, ch, "newHeads")
 }
 
-// SubscribePendingBlock subscribes to notifications about the current pending block on the node.
-func (ec *Client) SubscribePendingBlock(ctx context.Context, ch chan<- *types.Header) (ethereum.Subscription, error) {
-	return ec.c.EthSubscribe(ctx, ch, "pendingBlock")
-}
-
-// SubscribeCombinedHeader subscribes to notifications about the latest combined header for the slice.
-func (ec *Client) SubscribeCombinedHeader(ctx context.Context, ch chan<- *types.Header) (ethereum.Subscription, error) {
-	return ec.c.EthSubscribe(ctx, ch, "combinedHeader")
+// SubscribePendingHeader subscribes to notifications about the current pending block on the node.
+func (ec *Client) SubscribePendingHeader(ctx context.Context, ch chan<- *types.Header) (ethereum.Subscription, error) {
+	return ec.c.EthSubscribe(ctx, ch, "pendingHeader")
 }
 
 // State Access

@@ -139,11 +139,6 @@ func (ec *Client) SubscribeNewHead(ctx context.Context, ch chan<- *types.Header)
 	return ec.c.EthSubscribe(ctx, ch, "newHeads")
 }
 
-// SubscribeCombinedHeader subscribes to notifications about the latest combined header for the slice.
-func (ec *Client) SubscribeCombinedHeader(ctx context.Context, ch chan<- *types.Header) (quai.Subscription, error) {
-	return ec.c.EthSubscribe(ctx, ch, "combinedHeader")
-}
-
 // BlockByHash returns the given full block.
 //
 // Note that loading full blocks requires two requests. Use HeaderByHash

@@ -181,8 +181,8 @@ type worker struct {
 	txPool      *TxPool
 
 	// Feeds
-	pendingLogsFeed  event.Feed
-	pendingBlockFeed event.Feed
+	pendingLogsFeed   event.Feed
+	pendingHeaderFeed event.Feed
 
 	// Subscriptions
 	mux          *event.TypeMux
@@ -281,10 +281,9 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		recommit = minRecommitInterval
 	}
 
-	worker.wg.Add(4)
+	worker.wg.Add(3)
 	go worker.mainLoop()
 	go worker.newWorkLoop(recommit)
-	go worker.resultLoop()
 	go worker.taskLoop()
 
 	// Submit first work to initialize pending state.
@@ -358,6 +357,8 @@ func (w *worker) pendingBlockAndReceipts() (*types.Block, types.Receipts) {
 	defer w.snapshotMu.RUnlock()
 	return w.snapshotBlock, w.snapshotReceipts
 }
+
+//
 
 // start sets the running status as 1 and triggers new work submitting.
 func (w *worker) start() {
@@ -726,74 +727,6 @@ func (w *worker) taskLoop() {
 			// w.snapshotMu.Unlock()
 		case <-w.exitCh:
 			interrupt()
-			return
-		}
-	}
-}
-
-// resultLoop is a standalone goroutine to handle sealing result submitting
-// and flush relative data to the database.
-func (w *worker) resultLoop() {
-	defer w.wg.Done()
-	for {
-		select {
-		case block := <-w.resultCh:
-			// Short circuit when receiving empty result.
-			if block == nil {
-				continue
-			}
-			// Short circuit when receiving duplicate result caused by resubmitting.
-			if w.hc.bc.HasBlock(block.Hash(), block.NumberU64()) {
-				continue
-			}
-			var (
-				sealhash = w.engine.SealHash(block.Header())
-				hash     = block.Hash()
-			)
-			w.pendingMu.RLock()
-			task, exist := w.pendingTasks[sealhash]
-			w.pendingMu.RUnlock()
-			if !exist {
-				log.Error("Block found but no relative pending task", "number", block.Number(), "sealhash", sealhash, "hash", hash)
-				continue
-			}
-			// Different block could share same sealhash, deep copy here to prevent write-write conflict.
-			var (
-				receipts = make([]*types.Receipt, len(task.receipts))
-				logs     []*types.Log
-			)
-			for i, taskReceipt := range task.receipts {
-				receipt := new(types.Receipt)
-				receipts[i] = receipt
-				*receipt = *taskReceipt
-
-				// add block location fields
-				receipt.BlockHash = hash
-				receipt.BlockNumber = block.Number()
-				receipt.TransactionIndex = uint(i)
-
-				// Update the block hash in all logs since it is now available and not when the
-				// receipt/log of individual transactions were created.
-				receipt.Logs = make([]*types.Log, len(taskReceipt.Logs))
-				for i, taskLog := range taskReceipt.Logs {
-					log := new(types.Log)
-					receipt.Logs[i] = log
-					*log = *taskLog
-					log.BlockHash = hash
-				}
-				logs = append(logs, receipt.Logs...)
-			}
-
-			log.Info("Successfully sealed new block", "number", block.Number(), "sealhash", sealhash, "hash", hash,
-				"elapsed", common.PrettyDuration(time.Since(task.createdAt)))
-
-			// Broadcast the block and announce chain insertion event
-			w.mux.Post(NewMinedBlockEvent{Block: block})
-
-			// Insert the block into the set of pending ones to resultLoop for confirmations
-			w.unconfirmed.Insert(block.NumberU64(), block.Hash())
-
-		case <-w.exitCh:
 			return
 		}
 	}

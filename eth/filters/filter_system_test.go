@@ -127,8 +127,8 @@ func (b *testBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Su
 	return b.pendingLogsFeed.Subscribe(ch)
 }
 
-func (b *testBackend) SubscribePendingBlockEvent(ch chan<- *types.Header) event.Subscription {
-	return b.pendingBlockFeed.Subscribe(ch)
+func (b *testBackend) SubscribePendingHeaderEvent(ch chan<- *types.Header) event.Subscription {
+	return b.pendingHeaderFeed.Subscribe(ch)
 }
 
 func (b *testBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
