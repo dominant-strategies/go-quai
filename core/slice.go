@@ -43,7 +43,6 @@ type Slice struct {
 
 	quit chan struct{} // slice quit channel
 
-	domClient    *quaiclient.Client   // domClient is used to check if a given dominant block in the chain is canonical in dominant chain.
 	subClients   []*quaiclient.Client // subClinets is used to check is a coincident block is valid in the subordinate context
 	futureBlocks *lru.Cache
 	futureHeads  *lru.Cache
@@ -83,20 +82,12 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, mux *ev
 	// Update the pending header to the genesis Header.
 	sl.pendingHeader = sl.hc.genesisHeader
 
-	// only set the domClient if the chain is not prime
-	if types.QuaiNetworkContext != params.PRIME {
-		sl.domClient = MakeDomClient(domClientUrl)
-	}
-
 	// only set the subClients if the chain is not zone
 	sl.subClients = make([]*quaiclient.Client, 3)
 	if types.QuaiNetworkContext != params.ZONE {
-		go func() {
-			sl.subClients = MakeSubClients(subClientUrls)
-		}()
+		sl.subClients = MakeSubClients(subClientUrls)
 	}
 
-	time.Sleep(10 * time.Second)
 	if types.QuaiNetworkContext == params.PRIME {
 		var nilHeader *types.Header
 		sl.UpdatePendingHeader(sl.pendingHeader, nilHeader)
@@ -121,18 +112,6 @@ func (sl *Slice) TxPool() *TxPool {
 // Miner retrieves the miner.
 func (sl *Slice) Miner() *Miner {
 	return sl.miner
-}
-
-// MakeDomClient creates the quaiclient for the given domurl
-func MakeDomClient(domurl string) *quaiclient.Client {
-	if domurl == "" {
-		log.Crit("dom client url is empty")
-	}
-	domClient, err := quaiclient.Dial(domurl)
-	if err != nil {
-		log.Crit("Error connecting to the dominant go-quai client", "err", err)
-	}
-	return domClient
 }
 
 // MakeSubClients creates the quaiclient for the given suburls
