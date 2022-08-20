@@ -210,6 +210,7 @@ func (sl *Slice) UpdatePendingHeader(header *types.Header, pendingHeader *types.
 		localPendingHeader, err := sl.miner.worker.GeneratePendingHeader(header)
 		if err != nil {
 			fmt.Println("pending block error: ", err)
+			return err
 		}
 		fmt.Println("pending Header: ", localPendingHeader)
 
@@ -231,11 +232,12 @@ func (sl *Slice) UpdatePendingHeader(header *types.Header, pendingHeader *types.
 		sl.pendingHeader.Location = localPendingHeader.Location
 		sl.pendingHeader.Time = localPendingHeader.Time
 
-	} else if header.Location[0] == sl.config.Location[0] || bytes.Equal(header.Location, sl.config.Location) || types.QuaiNetworkContext == params.PRIME {
+	} else {
 		// Collect the pending block.
 		localPendingHeader, err := sl.miner.worker.GeneratePendingHeader(header)
 		if err != nil {
 			fmt.Println("pending block error: ", err)
+			return err
 		}
 		fmt.Println("pending Header: ", localPendingHeader)
 
@@ -669,7 +671,7 @@ func (sl *Slice) sendPendingHeaderToFeed() {
 	for {
 		select {
 		case <-futureTimer.C:
-			if count < 10 {
+			if count < 100 {
 				sl.miner.worker.pendingHeaderFeed.Send(sl.pendingHeader)
 				count++
 			}

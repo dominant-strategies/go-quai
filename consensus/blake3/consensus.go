@@ -247,9 +247,9 @@ func (blake3 *Blake3) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 			return consensus.ErrFutureBlock
 		}
 	}
-	if header.Time <= parent.Time {
-		return errOlderBlockTime
-	}
+	// if header.Time <= parent.Time {
+	// 	return errOlderBlockTime
+	// }
 	// Verify the block's difficulty based on its timestamp and parent's difficulty
 	expected := blake3.CalcDifficulty(chain, header.Time, parent, types.QuaiNetworkContext)
 	if blake3.config.Fakepow {

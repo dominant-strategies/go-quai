@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"math/big"
@@ -1063,7 +1064,15 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 		Location:          w.chainConfig.Location,
 	}
 	header.ParentHash[types.QuaiNetworkContext] = parent.Hash()
-	header.Number[types.QuaiNetworkContext] = big.NewInt(int64(num.Uint64()) + 1)
+	fmt.Println("Location: ", parent.Header().Location)
+	fmt.Println("config: ", w.chainConfig.Location)
+	if len(parent.Header().Location) != 0 {
+		if w.chainConfig.Location[0] == 0 || parent.Header().Location[0] == w.chainConfig.Location[0] || bytes.Equal(parent.Header().Location, w.chainConfig.Location) {
+			header.Number[types.QuaiNetworkContext] = big.NewInt(int64(num.Uint64()) + 1)
+		}
+	} else {
+		header.Number[types.QuaiNetworkContext] = big.NewInt(1)
+	}
 	header.Extra[types.QuaiNetworkContext] = w.extra
 	header.BaseFee[types.QuaiNetworkContext] = misc.CalcBaseFee(w.chainConfig, parent.Header(), w.hc.GetHeaderByNumber, w.hc.GetUnclesInChain, w.hc.GetGasUsedInChain)
 	if w.isRunning() {
