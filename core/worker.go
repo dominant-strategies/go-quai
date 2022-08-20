@@ -558,7 +558,7 @@ func (w *worker) GeneratePendingHeader(header *types.Header) (*types.Header, err
 	work, err := w.prepareWork(&generateParams{
 		timestamp: uint64(timestamp),
 		coinbase:  coinbase,
-	})
+	}, header)
 	if err != nil {
 		return nil, err
 	}
@@ -658,17 +658,10 @@ func (w *worker) mainLoop() {
 
 	for {
 		select {
-		case req := <-w.newWorkCh:
-			w.commitWork(req.interrupt, req.noempty, req.timestamp)
+		case <-w.newWorkCh:
+			//w.commitWork(req.interrupt, req.noempty, req.timestamp)
 
-		case req := <-w.getWorkCh:
-			block, err := w.generateWork(req.params)
-			if err != nil {
-				req.err = err
-				req.result <- nil
-			} else {
-				req.result <- block
-			}
+		case <-w.getWorkCh:
 
 		case ev := <-w.chainSideCh:
 			// Short circuit for duplicate side blocks
@@ -1026,12 +1019,12 @@ type generateParams struct {
 // prepareWork constructs the sealing task according to the given parameters,
 // either based on the last chain head or specified parent. In this function
 // the pending transactions are not filled yet, only the empty task returned.
-func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
+func (w *worker) prepareWork(genParams *generateParams, parentHeader *types.Header) (*environment, error) {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 
 	// Find the parent block for sealing task
-	parent := w.hc.CurrentBlock()
+	parent := w.hc.GetBlockByHash(parentHeader.Hash())
 	if parent == nil {
 		return nil, fmt.Errorf("missing parent")
 	}
@@ -1063,11 +1056,18 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 		Bloom:             make([]types.Bloom, 3),
 		Location:          w.chainConfig.Location,
 	}
-	header.ParentHash[types.QuaiNetworkContext] = parent.Hash()
+
+	header.ParentHash[types.QuaiNetworkContext] = parentHeader.Hash()
 	fmt.Println("Location: ", parent.Header().Location)
 	fmt.Println("config: ", w.chainConfig.Location)
 	if len(parent.Header().Location) != 0 {
-		if w.chainConfig.Location[0] == 0 || parent.Header().Location[0] == w.chainConfig.Location[0] || bytes.Equal(parent.Header().Location, w.chainConfig.Location) {
+		if types.QuaiNetworkContext == params.PRIME {
+			header.Number[types.QuaiNetworkContext] = big.NewInt(int64(num.Uint64()) + 1)
+		}
+		if types.QuaiNetworkContext == params.REGION && parent.Header().Location[0] == w.chainConfig.Location[0] {
+			header.Number[types.QuaiNetworkContext] = big.NewInt(int64(num.Uint64()) + 1)
+		}
+		if types.QuaiNetworkContext == params.ZONE && bytes.Equal(parent.Header().Location, w.chainConfig.Location) {
 			header.Number[types.QuaiNetworkContext] = big.NewInt(int64(num.Uint64()) + 1)
 		}
 	} else {
@@ -1161,19 +1161,6 @@ func (w *worker) adjustGasLimit(interrupt *int32, env *environment) {
 	env.header.GasLimit[types.QuaiNetworkContext] = CalcGasLimit(parent.GasLimit(), gasUsed, uncleCount)
 }
 
-// generateWork generates a sealing block based on the given parameters.
-func (w *worker) generateWork(params *generateParams) (*types.Block, error) {
-	work, err := w.prepareWork(params)
-	if err != nil {
-		return nil, err
-	}
-	defer work.discard()
-
-	w.adjustGasLimit(nil, work)
-	w.fillTransactions(nil, work)
-	return w.FinalizeAssembleAndBroadcast(w.hc, work.header, work.state, work.txs, work.unclelist(), work.receipts)
-}
-
 func (w *worker) FinalizeAssembleAndBroadcast(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
 	block, err := w.engine.FinalizeAndAssemble(chain, header, state, txs, uncles, receipts)
 	if err != nil {
@@ -1201,7 +1188,7 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 	work, err := w.prepareWork(&generateParams{
 		timestamp: uint64(timestamp),
 		coinbase:  coinbase,
-	})
+	}, w.hc.CurrentHeader())
 	if err != nil {
 		return
 	}
