@@ -356,6 +356,11 @@ func (ec *Client) SubscribePendingHeader(ctx context.Context, ch chan<- *types.H
 	return ec.c.EthSubscribe(ctx, ch, "pendingHeader")
 }
 
+// SubscribeHeadersRoot subscribes to notifications about the changes in the header root on the node.
+func (ec *Client) SubscribeHeaderRoots(ctx context.Context, ch chan<- types.HeaderRoots) (ethereum.Subscription, error) {
+	return ec.c.EthSubscribe(ctx, ch, "headerRoots")
+}
+
 // State Access
 
 // NetworkID returns the network ID (also known as the chain ID) for this chain.
@@ -557,13 +562,10 @@ func (ec *Client) SendTransaction(ctx context.Context, tx *types.Transaction) er
 	return ec.c.CallContext(ctx, nil, "quai_sendRawTransaction", hexutil.Encode(data))
 }
 
-// SendMinedBlock sends a mined block back to the node
-func (ec *Client) SendMinedBlock(ctx context.Context, block *types.Block, inclTx bool, fullTx bool) error {
-	data, err := ethapi.RPCMarshalBlock(block, inclTx, fullTx)
-	if err != nil {
-		return err
-	}
-	return ec.c.CallContext(ctx, nil, "quai_sendMinedBlock", data)
+// ReceiveMinedHeader sends a mined block back to the node
+func (ec *Client) ReceiveMinedHeader(ctx context.Context, header *types.Header) error {
+	data := ethapi.RPCMarshalHeader(header)
+	return ec.c.CallContext(ctx, nil, "quai_receiveMinedHeader", data)
 }
 
 // header: header in which the intended chain is to roll back to.

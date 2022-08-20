@@ -107,7 +107,7 @@ func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumbe
 	return b.eth.core.GetBlockByNumber(uint64(number)), nil
 }
 
-func (b *EthAPIBackend) PendingBlock(ctx context.Context) (*types.Block, error) {
+func (b *EthAPIBackend) PendingBlock() (*types.Block, error) {
 	block := b.eth.core.PendingBlock()
 	if block == nil {
 		return nil, errors.New("no pending block")
@@ -252,6 +252,10 @@ func (b *EthAPIBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.
 
 func (b *EthAPIBackend) SubscribePendingHeaderEvent(ch chan<- *types.Header) event.Subscription {
 	return b.eth.core.SubscribePendingHeader(ch)
+}
+
+func (b *EthAPIBackend) SubscribeHeaderRootsEvent(ch chan<- types.HeaderRoots) event.Subscription {
+	return b.eth.core.SubscribeHeaderRoots(ch)
 }
 
 func (b *EthAPIBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {

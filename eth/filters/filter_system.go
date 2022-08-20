@@ -47,6 +47,8 @@ const (
 	PendingLogsSubscription
 	// PendingHeaderSubscription queries for pending blocks
 	PendingHeaderSubscription
+	// HeaderRootsSubscription queries for the header roots update.
+	HeaderRootsSubscription
 	// MinedAndPendingLogsSubscription queries for logs in mined and pending blocks.
 	MinedAndPendingLogsSubscription
 	// PendingTransactionsSubscription queries tx hashes for pending
@@ -68,21 +70,22 @@ const (
 	logsChanSize = 10
 	// chainEvChanSize is the size of channel listening to ChainEvent.
 	chainEvChanSize = 10
-	// chainuncleChanSize is the size of channel listening to ChainuncleEvent.
-	chainuncleChanSize = 1
+	// headerRootsChanSize is the size of the channel listening to HeaderRootsEvent.
+	headerRootsChanSize = 1
 )
 
 type subscription struct {
-	id        rpc.ID
-	typ       Type
-	created   time.Time
-	logsCrit  ethereum.FilterQuery
-	logs      chan []*types.Log
-	hashes    chan []common.Hash
-	headers   chan *types.Header
-	block     chan *types.Header
-	installed chan struct{} // closed when the filter is installed
-	err       chan error    // closed when the filter is uninstalled
+	id          rpc.ID
+	typ         Type
+	created     time.Time
+	logsCrit    ethereum.FilterQuery
+	logs        chan []*types.Log
+	hashes      chan []common.Hash
+	headers     chan *types.Header
+	block       chan *types.Header
+	headerRoots chan types.HeaderRoots
+	installed   chan struct{} // closed when the filter is installed
+	err         chan error    // closed when the filter is uninstalled
 }
 
 // EventSystem creates subscriptions, processes events and broadcasts them to the
@@ -99,6 +102,7 @@ type EventSystem struct {
 	pendingLogsSub   event.Subscription // Subscription for pending log event
 	pendingHeaderSub event.Subscription // Subscription for pending block event
 	chainSub         event.Subscription // Subscription for new chain event
+	headerRootsSub   event.Subscription // Subscription for new header roots event.
 
 	// Channels
 	install         chan *subscription         // install filter for event notification
@@ -107,6 +111,7 @@ type EventSystem struct {
 	logsCh          chan []*types.Log          // Channel to receive new log event
 	pendingLogsCh   chan []*types.Log          // Channel to receive new log event
 	pendingHeaderCh chan *types.Header         // Channel to receive new pending block event
+	headerRootsCh   chan types.HeaderRoots     // Channel to receive new header roots event.
 	rmLogsCh        chan core.RemovedLogsEvent // Channel to receive removed log event
 	chainCh         chan core.ChainEvent       // Channel to receive new chain event
 }
@@ -128,6 +133,7 @@ func NewEventSystem(backend Backend, lightMode bool) *EventSystem {
 		rmLogsCh:        make(chan core.RemovedLogsEvent, rmLogsChanSize),
 		pendingLogsCh:   make(chan []*types.Log, logsChanSize),
 		pendingHeaderCh: make(chan *types.Header),
+		headerRootsCh:   make(chan types.HeaderRoots, headerRootsChanSize),
 		chainCh:         make(chan core.ChainEvent, chainEvChanSize),
 	}
 
@@ -138,6 +144,7 @@ func NewEventSystem(backend Backend, lightMode bool) *EventSystem {
 	m.chainSub = m.backend.SubscribeChainEvent(m.chainCh)
 	m.pendingLogsSub = m.backend.SubscribePendingLogsEvent(m.pendingLogsCh)
 	m.pendingHeaderSub = m.backend.SubscribePendingHeaderEvent(m.pendingHeaderCh)
+	m.headerRootsSub = m.backend.SubscribeHeaderRootsEvent(m.headerRootsCh)
 
 	// Make sure none of the subscriptions are empty
 	if m.txsSub == nil || m.logsSub == nil || m.rmLogsSub == nil || m.chainSub == nil || m.pendingLogsSub == nil {
@@ -299,6 +306,23 @@ func (es *EventSystem) SubscribePendingHeader(block chan *types.Header) *Subscri
 	return es.subscribe(sub)
 }
 
+// SubscribeHeaderRoots creates a subscription that sends an update on the header roots update.
+func (es *EventSystem) SubscribeHeaderRoots(headerRoots chan types.HeaderRoots) *Subscription {
+	sub := &subscription{
+		id:          rpc.NewID(),
+		typ:         HeaderRootsSubscription,
+		created:     time.Now(),
+		logs:        make(chan []*types.Log),
+		hashes:      make(chan []common.Hash),
+		headers:     make(chan *types.Header),
+		block:       make(chan *types.Header),
+		installed:   make(chan struct{}),
+		headerRoots: headerRoots,
+		err:         make(chan error),
+	}
+	return es.subscribe(sub)
+}
+
 // SubscribeNewHeads creates a subscription that writes the header of a block that is
 // imported in the chain.
 func (es *EventSystem) SubscribeNewHeads(headers chan *types.Header) *Subscription {
@@ -360,6 +384,12 @@ func (es *EventSystem) handlePendingLogs(filters filterIndex, ev []*types.Log) {
 func (es *EventSystem) handlePendingHeader(filters filterIndex, ev *types.Header) {
 	for _, f := range filters[PendingHeaderSubscription] {
 		f.block <- ev
+	}
+}
+
+func (es *EventSystem) handleHeaderRoots(filters filterIndex, ev types.HeaderRoots) {
+	for _, f := range filters[HeaderRootsSubscription] {
+		f.headerRoots <- ev
 	}
 }
 
@@ -479,6 +509,7 @@ func (es *EventSystem) eventLoop() {
 		es.rmLogsSub.Unsubscribe()
 		es.pendingLogsSub.Unsubscribe()
 		es.pendingHeaderSub.Unsubscribe()
+		es.headerRootsSub.Unsubscribe()
 		es.chainSub.Unsubscribe()
 	}()
 
@@ -501,6 +532,8 @@ func (es *EventSystem) eventLoop() {
 			es.handlePendingHeader(index, ev)
 		case ev := <-es.chainCh:
 			es.handleChainEvent(index, ev)
+		case ev := <-es.headerRootsCh:
+			es.handleHeaderRoots(index, ev)
 
 		case f := <-es.install:
 			if f.typ == MinedAndPendingLogsSubscription {
@@ -530,6 +563,10 @@ func (es *EventSystem) eventLoop() {
 		case <-es.rmLogsSub.Err():
 			return
 		case <-es.chainSub.Err():
+			return
+		case <-es.headerRootsSub.Err():
+			return
+		case <-es.pendingHeaderSub.Err():
 			return
 		}
 	}

@@ -74,6 +74,7 @@ type Backend interface {
 	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 	InsertBlock(ctx context.Context, block *types.Block) (int, error)
+	PendingBlock() (*types.Block, error)
 	PendingBlockAndReceipts() (*types.Block, types.Receipts)
 	GetAncestorByLocation(hash common.Hash, location []byte) (*types.Header, error)
 	GetTerminusAtOrder(header *types.Header, order int) (common.Hash, error)
@@ -101,6 +102,7 @@ type Backend interface {
 	SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription
 	SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription
 	SubscribePendingHeaderEvent(ch chan<- *types.Header) event.Subscription
+	SubscribeHeaderRootsEvent(ch chan<- types.HeaderRoots) event.Subscription
 	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
 
 	ChainConfig() *params.ChainConfig

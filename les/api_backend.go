@@ -265,6 +265,13 @@ func (b *LesApiBackend) SubscribePendingHeaderEvent(ch chan<- *types.Header) eve
 	})
 }
 
+func (b *LesApiBackend) SubscribeHeaderRootsEvent(ch chan<- types.HeaderRoots) event.Subscription {
+	return event.NewSubscription(func(quit <-chan struct{}) error {
+		<-quit
+		return nil
+	})
+}
+
 func (b *LesApiBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {
 	return b.eth.blockchain.SubscribeRemovedLogsEvent(ch)
 }
@@ -369,4 +376,8 @@ func (b *LesApiBackend) SetHeaderChainHead(header *types.Header) error {
 
 func (b *LesApiBackend) UpdatePendingHeader(header *types.Header, pendingHeader *types.Header) error {
 	return nil
+}
+
+func (b *LesApiBackend) PendingBlock() (*types.Block, error) {
+	return nil, nil
 }

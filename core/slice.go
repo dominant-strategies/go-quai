@@ -47,6 +47,8 @@ type Slice struct {
 	futureHeads  *lru.Cache
 	slicemu      sync.RWMutex
 
+	nilHeader *types.Header
+
 	wg sync.WaitGroup // slice processing wait group for shutting down
 }
 
@@ -85,13 +87,31 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 		sl.subClients = MakeSubClients(subClientUrls)
 	}
 
+	sl.nilHeader = &types.Header{
+		ParentHash:        make([]common.Hash, 3),
+		Number:            make([]*big.Int, 3),
+		Extra:             make([][]byte, 3),
+		Time:              uint64(0),
+		BaseFee:           make([]*big.Int, 3),
+		GasLimit:          make([]uint64, 3),
+		Coinbase:          make([]common.Address, 3),
+		Difficulty:        make([]*big.Int, 3),
+		NetworkDifficulty: make([]*big.Int, 3),
+		Root:              make([]common.Hash, 3),
+		TxHash:            make([]common.Hash, 3),
+		UncleHash:         make([]common.Hash, 3),
+		ReceiptHash:       make([]common.Hash, 3),
+		GasUsed:           make([]uint64, 3),
+		Bloom:             make([]types.Bloom, 3),
+	}
+
 	if types.QuaiNetworkContext == params.PRIME {
-		var nilHeader *types.Header
-		sl.UpdatePendingHeader(sl.pendingHeader, nilHeader)
+		sl.UpdatePendingHeader(sl.pendingHeader, sl.nilHeader)
 	}
 
 	go sl.updateFutureBlocks()
 	go sl.updateFutureHeads()
+	go sl.sendPendingHeaderToFeed()
 
 	return sl, nil
 }
@@ -171,8 +191,7 @@ func (sl *Slice) SliceAppend(block *types.Block) error {
 			return err
 		}
 		// Update the pending Header.
-		var nilHeader *types.Header
-		sl.UpdatePendingHeader(block.Header(), nilHeader)
+		sl.UpdatePendingHeader(block.Header(), sl.pendingHeader)
 	} else {
 		//sl.hc.bc.chainSideFeed.Send(ChainSideEvent{Block: block})
 	}
@@ -182,10 +201,11 @@ func (sl *Slice) SliceAppend(block *types.Block) error {
 
 func (sl *Slice) UpdatePendingHeader(header *types.Header, pendingHeader *types.Header) error {
 
+	sl.pendingHeader = pendingHeader
 	fmt.Println("header: ", header)
 	fmt.Println("pendingHeader: ", pendingHeader)
 
-	if header.Hash() == sl.config.GenesisHashes[0] {
+	if header.Hash() == sl.config.GenesisHashes[types.QuaiNetworkContext] {
 		// Collect the pending block.
 		localPendingHeader, err := sl.miner.worker.GeneratePendingHeader(header)
 		if err != nil {
@@ -194,43 +214,49 @@ func (sl *Slice) UpdatePendingHeader(header *types.Header, pendingHeader *types.
 		fmt.Println("pending Header: ", localPendingHeader)
 
 		index := types.QuaiNetworkContext
-		if types.QuaiNetworkContext == params.PRIME {
-			pendingHeader = localPendingHeader
-		} else {
-			pendingHeader.ParentHash[index] = localPendingHeader.ParentHash[index]
-			pendingHeader.Number[index] = localPendingHeader.Number[index]
-			pendingHeader.Extra[index] = localPendingHeader.Extra[index]
-			pendingHeader.BaseFee[index] = localPendingHeader.BaseFee[index]
-			pendingHeader.GasLimit[index] = localPendingHeader.GasLimit[index]
-			pendingHeader.GasUsed[index] = localPendingHeader.GasUsed[index]
-			pendingHeader.Difficulty[index] = localPendingHeader.Difficulty[index]
-		}
-	} else {
-		if header.Location[0] == sl.config.Location[0] || bytes.Equal(header.Location, sl.config.Location) {
-			// Collect the pending block.
-			localPendingHeader, err := sl.miner.worker.GeneratePendingHeader(header)
-			if err != nil {
-				fmt.Println("pending block error: ", err)
-			}
-			fmt.Println("pending Header: ", localPendingHeader)
 
-			index := types.QuaiNetworkContext
+		sl.pendingHeader.ParentHash[index] = localPendingHeader.ParentHash[index]
+		sl.pendingHeader.UncleHash[index] = localPendingHeader.UncleHash[index]
+		sl.pendingHeader.Number[index] = localPendingHeader.Number[index]
+		sl.pendingHeader.Extra[index] = localPendingHeader.Extra[index]
+		sl.pendingHeader.BaseFee[index] = localPendingHeader.BaseFee[index]
+		sl.pendingHeader.GasLimit[index] = localPendingHeader.GasLimit[index]
+		sl.pendingHeader.GasUsed[index] = localPendingHeader.GasUsed[index]
+		sl.pendingHeader.TxHash[index] = localPendingHeader.TxHash[index]
+		sl.pendingHeader.ReceiptHash[index] = localPendingHeader.ReceiptHash[index]
+		sl.pendingHeader.Root[index] = localPendingHeader.Root[index]
+		sl.pendingHeader.Difficulty[index] = localPendingHeader.Difficulty[index]
+		sl.pendingHeader.Coinbase[index] = localPendingHeader.Coinbase[index]
+		sl.pendingHeader.Bloom[index] = localPendingHeader.Bloom[index]
+		sl.pendingHeader.Location = localPendingHeader.Location
+		sl.pendingHeader.Time = localPendingHeader.Time
 
-			pendingHeader.ParentHash[index] = localPendingHeader.ParentHash[index]
-			pendingHeader.UncleHash[index] = localPendingHeader.UncleHash[index]
-			pendingHeader.Number[index] = localPendingHeader.Number[index]
-			pendingHeader.Extra[index] = localPendingHeader.Extra[index]
-			pendingHeader.BaseFee[index] = localPendingHeader.BaseFee[index]
-			pendingHeader.GasLimit[index] = localPendingHeader.GasLimit[index]
-			pendingHeader.GasUsed[index] = localPendingHeader.GasUsed[index]
-			pendingHeader.TxHash[index] = localPendingHeader.TxHash[index]
-			pendingHeader.ReceiptHash[index] = localPendingHeader.ReceiptHash[index]
-			pendingHeader.Root[index] = localPendingHeader.Root[index]
-			pendingHeader.Difficulty[index] = localPendingHeader.Difficulty[index]
-			pendingHeader.NetworkDifficulty[index] = localPendingHeader.NetworkDifficulty[index]
-			pendingHeader.Coinbase[index] = localPendingHeader.Coinbase[index]
-			pendingHeader.Bloom[index] = localPendingHeader.Bloom[index]
+	} else if header.Location[0] == sl.config.Location[0] || bytes.Equal(header.Location, sl.config.Location) || types.QuaiNetworkContext == params.PRIME {
+		// Collect the pending block.
+		localPendingHeader, err := sl.miner.worker.GeneratePendingHeader(header)
+		if err != nil {
+			fmt.Println("pending block error: ", err)
 		}
+		fmt.Println("pending Header: ", localPendingHeader)
+
+		index := types.QuaiNetworkContext
+
+		sl.pendingHeader.ParentHash[index] = localPendingHeader.ParentHash[index]
+		sl.pendingHeader.UncleHash[index] = localPendingHeader.UncleHash[index]
+		sl.pendingHeader.Number[index] = localPendingHeader.Number[index]
+		sl.pendingHeader.Extra[index] = localPendingHeader.Extra[index]
+		sl.pendingHeader.BaseFee[index] = localPendingHeader.BaseFee[index]
+		sl.pendingHeader.GasLimit[index] = localPendingHeader.GasLimit[index]
+		sl.pendingHeader.GasUsed[index] = localPendingHeader.GasUsed[index]
+		sl.pendingHeader.TxHash[index] = localPendingHeader.TxHash[index]
+		sl.pendingHeader.ReceiptHash[index] = localPendingHeader.ReceiptHash[index]
+		sl.pendingHeader.Root[index] = localPendingHeader.Root[index]
+		sl.pendingHeader.Difficulty[index] = localPendingHeader.Difficulty[index]
+		sl.pendingHeader.Coinbase[index] = localPendingHeader.Coinbase[index]
+		sl.pendingHeader.Bloom[index] = localPendingHeader.Bloom[index]
+
+		sl.pendingHeader.Location = localPendingHeader.Location
+		sl.pendingHeader.Time = localPendingHeader.Time
 	}
 
 	// Send the pending blocks down to all the subclients.
@@ -244,10 +270,9 @@ func (sl *Slice) UpdatePendingHeader(header *types.Header, pendingHeader *types.
 			}
 		}
 	} else {
-		sl.pendingHeader = pendingHeader
-		fmt.Println("Pending Header: ", pendingHeader)
+		fmt.Println("Pending Header: ", sl.pendingHeader)
 		fmt.Println("Header: ", header)
-		sl.miner.worker.pendingHeaderFeed.Send(pendingHeader)
+		sl.miner.worker.pendingHeaderFeed.Send(sl.pendingHeader)
 	}
 	return nil
 }
@@ -347,9 +372,6 @@ func (sl *Slice) SetHeaderChainHead(head *types.Header) error {
 			}
 		}
 	}
-
-	block := sl.hc.GetBlockByHash(head.Hash())
-	sl.hc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
 
 	return nil
 }
@@ -633,6 +655,24 @@ func (sl *Slice) updateFutureHeads() {
 		select {
 		case <-futureTimer.C:
 			sl.procFutureHeads()
+		case <-sl.quit:
+			return
+		}
+	}
+}
+
+func (sl *Slice) sendPendingHeaderToFeed() {
+	futureTimer := time.NewTicker(3 * time.Second)
+	var count int
+	defer futureTimer.Stop()
+	defer sl.wg.Done()
+	for {
+		select {
+		case <-futureTimer.C:
+			if count < 10 {
+				sl.miner.worker.pendingHeaderFeed.Send(sl.pendingHeader)
+				count++
+			}
 		case <-sl.quit:
 			return
 		}

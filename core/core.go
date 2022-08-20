@@ -400,7 +400,12 @@ func (c *Core) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscription {
 
 // SubscribePendingBlock starts delivering the pending block to the given channel.
 func (c *Core) SubscribePendingHeader(ch chan<- *types.Header) event.Subscription {
-	return c.sl.miner.worker.pendingHeaderFeed.Subscribe(ch)
+	return c.sl.miner.SubscribePendingHeader(ch)
+}
+
+// SubscribeHeaderRoots starts delivering the header roots update to the given channel.
+func (c *Core) SubscribeHeaderRoots(ch chan<- types.HeaderRoots) event.Subscription {
+	return c.sl.miner.SubscribeHeaderRoots(ch)
 }
 
 // Method to retrieve uncles from the worker in case not found in normal DB.

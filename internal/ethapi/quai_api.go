@@ -528,31 +528,45 @@ func (s *PublicBlockChainQuaiAPI) CreateAccessList(ctx context.Context, args Tra
 	return result, nil
 }
 
-// SendMinedBlock will run checks on the block and add to canonical chain if valid.
-func (s *PublicBlockChainQuaiAPI) SendMinedBlock(ctx context.Context, raw json.RawMessage) error {
+// ReceiveMinedHeader will run checks on the block and add to canonical chain if valid.
+func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw json.RawMessage) error {
 	// Decode header and transactions.
-	var head *types.Header
-	var body rpcBlock
-	if err := json.Unmarshal(raw, &head); err != nil {
-		return err
-	}
-	if err := json.Unmarshal(raw, &body); err != nil {
+	var header *types.Header
+	if err := json.Unmarshal(raw, &header); err != nil {
 		return err
 	}
 
-	// Load uncles because they are not included in the block response.
-	txs := make([]*types.Transaction, len(body.Transactions))
-	for i, tx := range body.Transactions {
-		txs[i] = tx.tx
+	//
+	pendingBlock, err := s.b.PendingBlock()
+	if err != nil {
+		log.Warn("Unable to find the pending block")
+		return err
 	}
 
-	uncles := make([]*types.Header, len(body.Uncles))
-	for i, uncle := range body.Uncles {
-		uncles[i] = uncle
+	fmt.Println("pending Header in api: ", pendingBlock.Header())
+	fmt.Println("Header in api: ", header)
+
+	// check if the header mined matches the pending block
+	// Match the root hashes
+	// TODO: On fail send the header into the uncle feed.
+	if pendingBlock.Root() != header.Root[types.QuaiNetworkContext] {
+		fmt.Println("pending root: ", pendingBlock.Root())
+		fmt.Println("header root: ", header.Root[types.QuaiNetworkContext])
+		return errors.New("state root mismatch")
+	}
+	if pendingBlock.TxHash() != header.TxHash[types.QuaiNetworkContext] {
+		fmt.Println("pending tx root: ", pendingBlock.TxHash())
+		fmt.Println("header tx root: ", header.TxHash[types.QuaiNetworkContext])
+		return errors.New("tx root mismatch")
+	}
+	if pendingBlock.ReceiptHash() != header.ReceiptHash[types.QuaiNetworkContext] {
+		fmt.Println("pending receipt root: ", pendingBlock.ReceiptHash())
+		fmt.Println("header receipt root: ", header.ReceiptHash[types.QuaiNetworkContext])
+		return errors.New("receipt root mismatch")
 	}
 
-	block := types.NewBlockWithHeader(head).WithBody(txs, uncles)
-	log.Info("Retrieved mined block", "number", head.Number, "location", head.Location)
+	block := types.NewBlockWithHeader(header).WithBody(pendingBlock.Transactions(), pendingBlock.Uncles())
+	log.Info("Retrieved mined block", "number", header.Number, "location", header.Location)
 	s.b.InsertBlock(ctx, block)
 	// Broadcast the block and announce chain insertion event
 	if block.Header() != nil {
@@ -560,12 +574,6 @@ func (s *PublicBlockChainQuaiAPI) SendMinedBlock(ctx context.Context, raw json.R
 	}
 
 	return nil
-}
-
-type rpcReorgData struct {
-	Header     *types.Header   `json:"header"`
-	NewHeaders []*types.Header `json:"newHeaders"`
-	OldHeaders []*types.Header `json:"oldHeaders"`
 }
 
 type HeaderHashWithContext struct {

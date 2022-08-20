@@ -183,6 +183,7 @@ type worker struct {
 	// Feeds
 	pendingLogsFeed   event.Feed
 	pendingHeaderFeed event.Feed
+	headerRootsFeed   event.Feed
 
 	// Subscriptions
 	txsCh        chan NewTxsEvent
@@ -249,6 +250,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		engine:             engine,
 		hc:                 headerchain,
 		txPool:             txPool,
+		coinbase:           config.Etherbase,
 		isLocalBlock:       isLocalBlock,
 		localUncles:        make(map[common.Hash]*types.Block),
 		remoteUncles:       make(map[common.Hash]*types.Block),
@@ -281,8 +283,6 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 
 	worker.wg.Add(3)
 	go worker.mainLoop()
-	go worker.newWorkLoop(recommit)
-	go worker.taskLoop()
 
 	// Submit first work to initialize pending state.
 	if init {
@@ -355,8 +355,6 @@ func (w *worker) pendingBlockAndReceipts() (*types.Block, types.Receipts) {
 	defer w.snapshotMu.RUnlock()
 	return w.snapshotBlock, w.snapshotReceipts
 }
-
-//
 
 // start sets the running status as 1 and triggers new work submitting.
 func (w *worker) start() {
@@ -545,15 +543,17 @@ func (w *worker) GeneratePendingHeader(header *types.Header) (*types.Header, err
 	timer.Reset(recommit)
 	atomic.StoreInt32(&w.newTxs, 0)
 
+	start := time.Now()
 	// Set the coinbase if the worker is running or it's required
 	var coinbase common.Address
-	if w.isRunning() {
-		if w.coinbase == (common.Address{}) {
-			log.Error("Refusing to mine without etherbase")
-			return nil, errors.New("etherbase not found")
-		}
-		coinbase = w.coinbase // Use the preset address as the fee recipient
+	if w.coinbase == (common.Address{}) {
+		log.Error("Refusing to mine without etherbase")
+		return nil, errors.New("etherbase not found")
 	}
+	coinbase = w.coinbase // Use the preset address as the fee recipient
+
+	fmt.Println("coinbase: ", coinbase)
+
 	work, err := w.prepareWork(&generateParams{
 		timestamp: uint64(timestamp),
 		coinbase:  coinbase,
@@ -561,8 +561,81 @@ func (w *worker) GeneratePendingHeader(header *types.Header) (*types.Header, err
 	if err != nil {
 		return nil, err
 	}
+	// Create an empty block based on temporary copied state for
+	// sealing in advance without waiting block execution finished.
+	// if !noempty && atomic.LoadUint32(&w.noempty) == 0 {
+	// 	w.commit(work.copy(), nil, false, start)
+	// }
+	// Fill pending transactions from the txpool
+	w.adjustGasLimit(nil, work)
+	w.fillTransactions(interrupt, work)
+
 	env := work.copy()
-	return env.header, nil
+	interval := w.fullTaskHook
+
+	// Swap out the old work with the new one, terminating any leftover
+	// prefetcher processes in the mean time and starting a new one.
+	if w.current != nil {
+		w.current.discard()
+	}
+	w.current = work
+
+	if interval != nil {
+		interval()
+	}
+	// Create a local environment copy, avoid the data race with snapshot state.
+	// https://github.com/ethereum/go-ethereum/issues/24299
+	block, err := w.FinalizeAssembleAndBroadcast(w.hc, env.header, env.state, env.txs, env.unclelist(), env.receipts)
+	if err != nil {
+		return nil, err
+	}
+
+	task := &task{receipts: env.receipts, state: env.state, block: block, createdAt: time.Now()}
+	w.unconfirmed.Shift(block.NumberU64() - 1)
+	log.Info("Commit new sealing work", "number", block.Number(), "sealhash", w.engine.SealHash(block.Header()),
+		"uncles", len(env.uncles), "txs", env.tcount,
+		"gas", block.GasUsed(), "fees", totalFees(block, env.receipts),
+		"elapsed", common.PrettyDuration(time.Since(start)))
+
+	w.updateSnapshot(env)
+
+	var (
+		stopCh chan struct{}
+		prev   common.Hash
+	)
+
+	// interrupt aborts the in-flight sealing task.
+	interruptFunc := func() {
+		if stopCh != nil {
+			close(stopCh)
+			stopCh = nil
+		}
+	}
+	if w.newTaskHook != nil {
+		w.newTaskHook(task)
+	}
+	// Reject duplicate sealing work due to resubmitting.
+	sealHash := w.engine.SealHash(task.block.Header())
+	if sealHash == prev {
+		log.Info("sealHash == prev, continuing with sending task to pending channel", "seal", sealHash, "prev", prev)
+		// continue
+	}
+	// Interrupt previous sealing operation
+	interruptFunc()
+	stopCh, prev = make(chan struct{}), sealHash
+
+	// if w.skipSealHook != nil && w.skipSealHook(task) {
+	// 	continue
+	// }
+	w.pendingMu.Lock()
+	w.pendingTasks[sealHash] = task
+	w.pendingMu.Unlock()
+
+	fmt.Println("pending root: ", w.snapshotBlock.Root())
+	fmt.Println("pending tx hash: ", w.snapshotBlock.TxHash())
+	fmt.Println("pending receipt hash: ", w.snapshotBlock.ReceiptHash())
+	return w.snapshotBlock.Header(), nil
+
 }
 
 // mainLoop is responsible for generating and submitting sealing work based on
@@ -1089,7 +1162,17 @@ func (w *worker) generateWork(params *generateParams) (*types.Block, error) {
 
 	w.adjustGasLimit(nil, work)
 	w.fillTransactions(nil, work)
-	return w.engine.FinalizeAndAssemble(w.hc, work.header, work.state, work.txs, work.unclelist(), work.receipts)
+	return w.FinalizeAssembleAndBroadcast(w.hc, work.header, work.state, work.txs, work.unclelist(), work.receipts)
+}
+
+func (w *worker) FinalizeAssembleAndBroadcast(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
+	block, err := w.engine.FinalizeAndAssemble(chain, header, state, txs, uncles, receipts)
+	if err != nil {
+		return nil, err
+	}
+	fmt.Println("Sending a header roots update: ", types.HeaderRoots{StateRoot: block.Root(), TxsRoot: block.TxHash(), ReceiptsRoot: block.ReceiptHash()})
+	w.headerRootsFeed.Send(types.HeaderRoots{StateRoot: block.Root(), TxsRoot: block.TxHash(), ReceiptsRoot: block.ReceiptHash()})
+	return block, nil
 }
 
 // commitWork generates several new sealing tasks based on the parent block
@@ -1143,7 +1226,7 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 		// Create a local environment copy, avoid the data race with snapshot state.
 		// https://github.com/ethereum/go-ethereum/issues/24299
 		env := env.copy()
-		block, err := w.engine.FinalizeAndAssemble(w.hc, env.header, env.state, env.txs, env.unclelist(), env.receipts)
+		block, err := w.FinalizeAssembleAndBroadcast(w.hc, env.header, env.state, env.txs, env.unclelist(), env.receipts)
 		if err != nil {
 			return err
 		}
@@ -1166,32 +1249,6 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 	return nil
 }
 
-// getSealingBlock generates the sealing block based on the given parameters.
-func (w *worker) getSealingBlock(parent common.Hash, timestamp uint64, coinbase common.Address, random common.Hash) (*types.Block, error) {
-	req := &getWorkReq{
-		params: &generateParams{
-			timestamp:  timestamp,
-			forceTime:  true,
-			parentHash: parent,
-			coinbase:   coinbase,
-			random:     random,
-			noUncle:    true,
-			noExtra:    true,
-		},
-		result: make(chan *types.Block, 1),
-	}
-	select {
-	case w.getWorkCh <- req:
-		block := <-req.result
-		if block == nil {
-			return nil, req.err
-		}
-		return block, nil
-	case <-w.exitCh:
-		return nil, errors.New("miner closed")
-	}
-}
-
 // copyReceipts makes a deep copy of the given receipts.
 func copyReceipts(receipts []*types.Receipt) []*types.Receipt {
 	result := make([]*types.Receipt, len(receipts))
@@ -1200,14 +1257,6 @@ func copyReceipts(receipts []*types.Receipt) []*types.Receipt {
 		result[i] = &cpy
 	}
 	return result
-}
-
-// postSideBlock fires a side chain event, only use it for testing.
-func (w *worker) postSideBlock(event ChainSideEvent) {
-	select {
-	case w.chainSideCh <- event:
-	case <-w.exitCh:
-	}
 }
 
 // totalFees computes total consumed miner fees in ETH. Block transactions and receipts have to have the same order.

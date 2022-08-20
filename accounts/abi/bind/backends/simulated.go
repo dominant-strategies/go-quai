@@ -877,6 +877,10 @@ func (fb *filterBackend) SubscribePendingHeaderEvent(ch chan<- *types.Header) ev
 	return nullSubscription()
 }
 
+func (fb *filterBackend) SubscribeHeaderRootsEvent(ch chan<- types.HeaderRoots) event.Subscription {
+	return nullSubscription()
+}
+
 func (fb *filterBackend) BloomStatus() (uint64, uint64) { return 4096, 0 }
 
 func (fb *filterBackend) ServiceFilter(ctx context.Context, ms *bloombits.MatcherSession) {

@@ -46,12 +46,13 @@ type Miner struct {
 
 func New(hc *HeaderChain, txPool *TxPool, config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, isLocalBlock func(block *types.Header) bool) *Miner {
 	miner := &Miner{
-		hc:      hc,
-		engine:  engine,
-		exitCh:  make(chan struct{}),
-		startCh: make(chan common.Address),
-		stopCh:  make(chan struct{}),
-		worker:  newWorker(config, chainConfig, engine, hc, txPool, isLocalBlock, true),
+		hc:       hc,
+		engine:   engine,
+		exitCh:   make(chan struct{}),
+		startCh:  make(chan common.Address),
+		stopCh:   make(chan struct{}),
+		worker:   newWorker(config, chainConfig, engine, hc, txPool, isLocalBlock, true),
+		coinbase: config.Etherbase,
 	}
 	go miner.update()
 
@@ -189,6 +190,11 @@ func (miner *Miner) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscript
 // SubscribePendingBlock starts delivering the pending block to the given channel.
 func (miner *Miner) SubscribePendingHeader(ch chan<- *types.Header) event.Subscription {
 	return miner.worker.pendingHeaderFeed.Subscribe(ch)
+}
+
+// SubscribeHeaderRoots starts delivering the headerRootUpdates to the given channel.
+func (miner *Miner) SubscribeHeaderRoots(ch chan<- types.HeaderRoots) event.Subscription {
+	return miner.worker.headerRootsFeed.Subscribe(ch)
 }
 
 // Method to retrieve uncles from the worker in case not found in normal DB.

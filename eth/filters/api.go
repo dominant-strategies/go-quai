@@ -270,6 +270,37 @@ func (api *PublicFilterAPI) PendingHeader(ctx context.Context) (*rpc.Subscriptio
 	return rpcSub, nil
 }
 
+// HeaderRoots sends a notification each time a new header root update takes place.
+func (api *PublicFilterAPI) HeaderRoots(ctx context.Context) (*rpc.Subscription, error) {
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+
+	rpcSub := notifier.CreateSubscription()
+
+	go func() {
+		headerRoots := make(chan types.HeaderRoots)
+		headerRootsSub := api.events.SubscribeHeaderRoots(headerRoots)
+
+		for {
+			select {
+			case b := <-headerRoots:
+				fmt.Println("Received header roots update: ", b)
+				notifier.Notify(rpcSub.ID, b)
+			case <-rpcSub.Err():
+				headerRootsSub.Unsubscribe()
+				return
+			case <-notifier.Closed():
+				headerRootsSub.Unsubscribe()
+				return
+			}
+		}
+	}()
+
+	return rpcSub, nil
+}
+
 // Logs creates a subscription that fires for all new log that match the given filter criteria.
 func (api *PublicFilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
