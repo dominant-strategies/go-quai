@@ -728,9 +728,9 @@ func (w *worker) mainLoop() {
 				// Special case, if the consensus engine is 0 period clique(dev mode),
 				// submit sealing work here since all empty submission will be rejected
 				// by clique. Of course the advance sealing(empty submission) is disabled.
-				if w.chainConfig.Clique != nil && w.chainConfig.Clique.Period == 0 {
-					w.commitWork(nil, true, time.Now().Unix())
-				}
+				// if w.chainConfig.Clique != nil && w.chainConfig.Clique.Period == 0 {
+				// 	//w.commitWork(nil, true, time.Now().Unix())
+				// }
 			}
 			atomic.AddInt32(&w.newTxs, int32(len(ev.Txs)))
 
@@ -1023,7 +1023,8 @@ func (w *worker) prepareWork(genParams *generateParams, parentHeader *types.Head
 	defer w.mu.RUnlock()
 
 	// Find the parent block for sealing task
-	parent := w.hc.GetBlockByHash(parentHeader.Hash())
+	fmt.Println("parentHeader.Hash:", parentHeader.Hash(), "parentHeader.Number:", parentHeader.Number64())
+	parent := w.hc.bc.GetBlock(parentHeader.Hash(), parentHeader.Number64())
 	if parent == nil {
 		return nil, fmt.Errorf("missing parent")
 	}
