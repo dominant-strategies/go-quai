@@ -359,9 +359,9 @@ func (sl *Slice) untwistHead(block *types.Block, err error) error {
 				return nil
 				// If there is a region twist the region needs to fall back to the parent of the previous slice head
 			} else if errors.Is(err, consensus.ErrRegionTwist) {
-				parentHeader := sl.hc.GetHeaderByHash(sl.currentHeads[block.Header().Location[types.QuaiNetworkContext]-1].ParentHash[types.QuaiNetworkContext])
-				if parentHeader != nil {
-					sl.SetHeaderChainHead(parentHeader)
+				parentBlock := sl.hc.bc.GetBlock(sl.currentHeads[block.Header().Location[types.QuaiNetworkContext]-1].ParentHash[types.QuaiNetworkContext], sl.currentHeads[block.Header().Location[types.QuaiNetworkContext]-1].Number64()-1)
+				if parentBlock != nil {
+					sl.SetHeaderChainHead(parentBlock.Header())
 					return nil
 				}
 			}

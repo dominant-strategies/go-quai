@@ -237,6 +237,7 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) ([]*types.Header, er
 
 	//Find a common header
 	commonHeader := hc.findCommonHeader(head)
+	newHeader := head
 
 	// Delete each header and rollback state processor until common header
 	// Accumulate the hash slice stack
@@ -244,17 +245,55 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) ([]*types.Header, er
 	for {
 		if prevHeader.Hash() == commonHeader.Hash() {
 			fmt.Println("appending on prevHeader == commonHeader")
-			hashStack = append(hashStack, head)
+			for {
+				if newHeader.Hash() == commonHeader.Hash() {
+					break
+				}
+				newHeader = hc.GetHeader(newHeader.Parent(), newHeader.Number64()-1)
+				hashStack = append(hashStack, newHeader)
+
+				// genesis check to not delete the genesis block
+				if newHeader.Hash() == hc.config.GenesisHashes[0] {
+					break
+				}
+
+				if newHeader == nil {
+					break
+				}
+			}
 			break
 		}
 
 		// Delete the header and the block
 		fmt.Println("delete prev", prevHeader.Hash())
 		rawdb.DeleteCanonicalHash(hc.headerDb, prevHeader.Number64())
+		prevHeader = hc.GetHeader(prevHeader.Parent(), prevHeader.Number64()-1)
+
+		if newHeader.Hash() == commonHeader.Hash() {
+			fmt.Println("appending on newHeader == commonHeader")
+			for {
+				if prevHeader.Hash() == commonHeader.Hash() {
+					break
+				}
+				fmt.Println("delete prev", prevHeader.Hash())
+				rawdb.DeleteCanonicalHash(hc.headerDb, prevHeader.Number64())
+				prevHeader = hc.GetHeader(prevHeader.Parent(), prevHeader.Number64()-1)
+
+				// genesis check to not delete the genesis block
+				if prevHeader.Hash() == hc.config.GenesisHashes[0] {
+					break
+				}
+
+				if prevHeader == nil {
+					break
+				}
+			}
+			break
+		}
 
 		// Add to the stack
-		hashStack = append(hashStack, prevHeader)
-		prevHeader = hc.GetHeader(prevHeader.Parent(), prevHeader.Number64()-1)
+		newHeader = hc.GetHeader(newHeader.Parent(), newHeader.Number64()-1)
+		hashStack = append(hashStack, newHeader)
 
 		// genesis check to not delete the genesis block
 		if prevHeader.Hash() == hc.config.GenesisHashes[0] {
