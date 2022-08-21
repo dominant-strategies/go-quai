@@ -233,21 +233,8 @@ func (sl *Slice) UpdatePendingHeader(header *types.Header, pendingHeader *types.
 		sl.pendingHeader.Time = localPendingHeader.Time
 
 	} else {
-		updateLocal := false
-
-		if len(pendingHeader.Location) != 0 {
-			if types.QuaiNetworkContext == params.PRIME {
-				updateLocal = true
-			}
-			if types.QuaiNetworkContext == params.REGION && pendingHeader.Location[0] == sl.config.Location[0] {
-				updateLocal = true
-			}
-			if types.QuaiNetworkContext == params.ZONE && pendingHeader.Location[0] == sl.config.Location[0] && pendingHeader.Location[1] == sl.config.Location[1] {
-				updateLocal = true
-			}
-		}
-
-		if updateLocal {
+		fmt.Println("header.hash:", header.Hash(), "sl.nilHeader.Hash:", sl.nilHeader.Hash())
+		if header.Number[0] != nil && header.Number[1] != nil && header.Number[2] != nil {
 			sl.pendingHeader = pendingHeader
 
 			// Collect the pending block.
@@ -277,24 +264,27 @@ func (sl *Slice) UpdatePendingHeader(header *types.Header, pendingHeader *types.
 			sl.pendingHeader.Time = localPendingHeader.Time
 
 		} else {
+			for index := types.QuaiNetworkContext - 1; index >= 0; index-- {
+				if types.QuaiNetworkContext != params.PRIME {
+					//index := types.QuaiNetworkContext - 1
 
-			index := types.QuaiNetworkContext - 1
+					sl.pendingHeader.ParentHash[index] = pendingHeader.ParentHash[index]
+					sl.pendingHeader.UncleHash[index] = pendingHeader.UncleHash[index]
+					sl.pendingHeader.Number[index] = pendingHeader.Number[index]
+					sl.pendingHeader.Extra[index] = pendingHeader.Extra[index]
+					sl.pendingHeader.BaseFee[index] = pendingHeader.BaseFee[index]
+					sl.pendingHeader.GasLimit[index] = pendingHeader.GasLimit[index]
+					sl.pendingHeader.GasUsed[index] = pendingHeader.GasUsed[index]
+					sl.pendingHeader.TxHash[index] = pendingHeader.TxHash[index]
+					sl.pendingHeader.ReceiptHash[index] = pendingHeader.ReceiptHash[index]
+					sl.pendingHeader.Root[index] = pendingHeader.Root[index]
+					sl.pendingHeader.Difficulty[index] = pendingHeader.Difficulty[index]
+					sl.pendingHeader.Coinbase[index] = pendingHeader.Coinbase[index]
+					sl.pendingHeader.Bloom[index] = pendingHeader.Bloom[index]
 
-			sl.pendingHeader.ParentHash[index] = pendingHeader.ParentHash[index]
-			sl.pendingHeader.UncleHash[index] = pendingHeader.UncleHash[index]
-			sl.pendingHeader.Number[index] = pendingHeader.Number[index]
-			sl.pendingHeader.Extra[index] = pendingHeader.Extra[index]
-			sl.pendingHeader.BaseFee[index] = pendingHeader.BaseFee[index]
-			sl.pendingHeader.GasLimit[index] = pendingHeader.GasLimit[index]
-			sl.pendingHeader.GasUsed[index] = pendingHeader.GasUsed[index]
-			sl.pendingHeader.TxHash[index] = pendingHeader.TxHash[index]
-			sl.pendingHeader.ReceiptHash[index] = pendingHeader.ReceiptHash[index]
-			sl.pendingHeader.Root[index] = pendingHeader.Root[index]
-			sl.pendingHeader.Difficulty[index] = pendingHeader.Difficulty[index]
-			sl.pendingHeader.Coinbase[index] = pendingHeader.Coinbase[index]
-			sl.pendingHeader.Bloom[index] = pendingHeader.Bloom[index]
-
-			sl.pendingHeader.Time = pendingHeader.Time
+					sl.pendingHeader.Time = pendingHeader.Time
+				}
+			}
 
 		}
 
@@ -304,10 +294,34 @@ func (sl *Slice) UpdatePendingHeader(header *types.Header, pendingHeader *types.
 	if types.QuaiNetworkContext != params.ZONE {
 		for i := range sl.subClients {
 			if sl.subClients[i] != nil {
-				err := sl.subClients[i].UpdatePendingHeader(context.Background(), header, pendingHeader)
-				if err != nil {
-					return err
+				if header.Hash() == sl.config.GenesisHashes[types.QuaiNetworkContext] {
+					fmt.Println("sending on genesis from context: ", types.QuaiNetworkContext, "to sub", i)
+					err := sl.subClients[i].UpdatePendingHeader(context.Background(), header, sl.pendingHeader)
+					if err != nil {
+						return err
+					}
+				} else if len(header.Location) != 0 {
+					if header.Location[types.QuaiNetworkContext]-1 == byte(i) {
+						fmt.Println("sending on overlapping context: ", types.QuaiNetworkContext, "to sub", i)
+						err := sl.subClients[i].UpdatePendingHeader(context.Background(), header, sl.pendingHeader)
+						if err != nil {
+							return err
+						}
+					} else {
+						fmt.Println("sending on nilHeader on coordinate context: ", types.QuaiNetworkContext, "to sub", i)
+						err := sl.subClients[i].UpdatePendingHeader(context.Background(), sl.nilHeader, sl.pendingHeader)
+						if err != nil {
+							return err
+						}
+					}
+				} else {
+					fmt.Println("sending on nilHeader on coordinate context: ", types.QuaiNetworkContext, "to sub", i)
+					err := sl.subClients[i].UpdatePendingHeader(context.Background(), sl.nilHeader, sl.pendingHeader)
+					if err != nil {
+						return err
+					}
 				}
+
 			}
 		}
 	} else {
