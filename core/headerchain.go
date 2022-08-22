@@ -154,7 +154,6 @@ func (hc *HeaderChain) Append(block *types.Block) error {
 	// Append header to the headerchain
 	batch := hc.headerDb.NewBatch()
 	rawdb.WriteHeader(batch, block.Header())
-	rawdb.WriteBlock(batch, block)
 	if err := batch.Write(); err != nil {
 		return err
 	}
@@ -164,7 +163,6 @@ func (hc *HeaderChain) Append(block *types.Block) error {
 	if err != nil {
 		fmt.Println("Error on Append, err:", err)
 		rawdb.DeleteHeader(hc.headerDb, block.Header().Hash(), block.Header().Number64())
-		rawdb.DeleteBlock(hc.headerDb, block.Header().Hash(), block.Header().Number64())
 		return err
 	}
 
