@@ -190,6 +190,8 @@ func (sl *Slice) SliceAppend(block *types.Block) error {
 
 	if reorg {
 		if err := sl.SetHeaderChainHead(block.Header()); err != nil {
+			// updating pending header again since block insertion failed
+			sl.UpdatePendingHeader(sl.hc.CurrentHeader(), sl.pendingHeader)
 			return err
 		}
 
@@ -326,14 +328,13 @@ func (sl *Slice) untwistHead(block *types.Block, err error) error {
 			// If there is a prime twist this is a PRTP != PRTR so we should drop back to previous slice head
 			if errors.Is(err, consensus.ErrPrimeTwist) {
 				sl.SetHeaderChainHead(sl.currentHeads[block.Header().Location[types.QuaiNetworkContext]-1])
+				sl.UpdatePendingHeader(sl.hc.CurrentHeader(), sl.pendingHeader)
 				return nil
 				// If there is a region twist the region needs to fall back to the parent of the previous slice head
 			} else if errors.Is(err, consensus.ErrRegionTwist) {
-				parentBlock := sl.hc.bc.GetBlock(sl.currentHeads[block.Header().Location[types.QuaiNetworkContext]-1].ParentHash[types.QuaiNetworkContext], sl.currentHeads[block.Header().Location[types.QuaiNetworkContext]-1].Number64()-1)
-				if parentBlock != nil {
-					sl.SetHeaderChainHead(parentBlock.Header())
-					return nil
-				}
+				sl.SetHeaderChainHead(sl.currentHeads[block.Header().Location[types.QuaiNetworkContext]-1])
+				sl.UpdatePendingHeader(sl.hc.CurrentHeader(), sl.pendingHeader)
+				return nil
 			}
 			return err
 		}
@@ -401,6 +402,7 @@ func (sl *Slice) SetHeaderChainHead(head *types.Header) error {
 					sl.currentHeads[i] = header
 				}
 			}
+			return err
 		}
 	}
 
