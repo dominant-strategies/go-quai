@@ -271,7 +271,6 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 	// Subscribe NewTxsEvent for tx pool
 	worker.txsSub = txPool.SubscribeNewTxsEvent(worker.txsCh)
 	// Subscribe events for blockchain
-	worker.chainHeadSub = headerchain.SubscribeChainHeadEvent(worker.chainHeadCh)
 	worker.chainSideSub = headerchain.bc.SubscribeChainSideEvent(worker.chainSideCh)
 
 	// Sanitize recommit interval if the user-specified one is too short.
@@ -281,7 +280,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		recommit = minRecommitInterval
 	}
 
-	worker.wg.Add(3)
+	worker.wg.Add(1)
 	go worker.mainLoop()
 
 	// Submit first work to initialize pending state.

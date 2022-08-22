@@ -186,18 +186,19 @@ func (sl *Slice) SliceAppend(block *types.Block) error {
 		return err
 	}
 
-	time.Sleep(100 * time.Millisecond)
 	reorg := sl.HLCR(td)
 
 	if reorg {
 		if err := sl.SetHeaderChainHead(block.Header()); err != nil {
 			return err
 		}
+
 		// Update the pending Header.
 		currentPending := sl.pendingHeader
 		err := sl.UpdatePendingHeader(block.Header(), sl.pendingHeader)
 		if err != nil {
 			sl.pendingHeader = currentPending
+			return err
 		}
 	} else {
 		//sl.hc.bc.chainSideFeed.Send(ChainSideEvent{Block: block})
