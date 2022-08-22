@@ -42,18 +42,6 @@ const (
 	// any newly arrived transactions.
 	minRecommitInterval = 1 * time.Second
 
-	// maxRecommitInterval is the maximum time interval to recreate the sealing block with
-	// any newly arrived transactions.
-	maxRecommitInterval = 15 * time.Second
-
-	// intervalAdjustRatio is the impact a single interval adjustment has on sealing work
-	// resubmitting interval.
-	intervalAdjustRatio = 0.1
-
-	// intervalAdjustBias is applied during the new resubmit interval calculation in favor of
-	// increasing upper limit or decreasing lower limit so that the limit can be reachable.
-	intervalAdjustBias = 200 * 1000.0 * 1000.0
-
 	// staleThreshold is the maximum depth of the acceptable stale block.
 	staleThreshold = 7
 )
@@ -138,20 +126,6 @@ const (
 	commitInterruptResubmit
 )
 
-// newWorkReq represents a request for new sealing work submitting with relative interrupt notifier.
-type newWorkReq struct {
-	interrupt *int32
-	noempty   bool
-	timestamp int64
-}
-
-// getWorkReq represents a request for getting a new sealing work with provided parameters.
-type getWorkReq struct {
-	params *generateParams
-	err    error
-	result chan *types.Block
-}
-
 // intervalAdjust represents a resubmitting interval adjustment.
 type intervalAdjust struct {
 	ratio float64
@@ -189,13 +163,10 @@ type worker struct {
 	txsCh        chan NewTxsEvent
 	txsSub       event.Subscription
 	chainHeadCh  chan ChainHeadEvent
-	chainHeadSub event.Subscription
 	chainSideCh  chan ChainSideEvent
 	chainSideSub event.Subscription
 
 	// Channels
-	newWorkCh          chan *newWorkReq
-	getWorkCh          chan *getWorkReq
 	taskCh             chan *task
 	resultCh           chan *types.Block
 	startCh            chan struct{}
@@ -237,10 +208,8 @@ type worker struct {
 	isLocalBlock func(header *types.Header) bool // Function used to determine whether the specified block is mined by local miner.
 
 	// Test hooks
-	newTaskHook  func(*task)                        // Method to call upon receiving a new sealing task.
-	skipSealHook func(*task) bool                   // Method to decide whether skipping the sealing.
-	fullTaskHook func()                             // Method to call before pushing the full sealing task.
-	resubmitHook func(time.Duration, time.Duration) // Method to call upon updating resubmitting interval.
+	newTaskHook  func(*task) // Method to call upon receiving a new sealing task.
+	fullTaskHook func()      // Method to call before pushing the full sealing task.
 }
 
 func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, headerchain *HeaderChain, txPool *TxPool, isLocalBlock func(header *types.Header) bool, init bool) *worker {
@@ -259,8 +228,6 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		txsCh:              make(chan NewTxsEvent, txChanSize),
 		chainHeadCh:        make(chan ChainHeadEvent, chainHeadChanSize),
 		chainSideCh:        make(chan ChainSideEvent, chainSideChanSize),
-		newWorkCh:          make(chan *newWorkReq),
-		getWorkCh:          make(chan *getWorkReq),
 		taskCh:             make(chan *task),
 		resultCh:           make(chan *types.Block, resultQueueSize),
 		exitCh:             make(chan struct{}),
@@ -377,126 +344,6 @@ func (w *worker) close() {
 	atomic.StoreInt32(&w.running, 0)
 	close(w.exitCh)
 	w.wg.Wait()
-}
-
-// recalcRecommit recalculates the resubmitting interval upon feedback.
-func recalcRecommit(minRecommit, prev time.Duration, target float64, inc bool) time.Duration {
-	var (
-		prevF = float64(prev.Nanoseconds())
-		next  float64
-	)
-	if inc {
-		next = prevF*(1-intervalAdjustRatio) + intervalAdjustRatio*(target+intervalAdjustBias)
-		max := float64(maxRecommitInterval.Nanoseconds())
-		if next > max {
-			next = max
-		}
-	} else {
-		next = prevF*(1-intervalAdjustRatio) + intervalAdjustRatio*(target-intervalAdjustBias)
-		min := float64(minRecommit.Nanoseconds())
-		if next < min {
-			next = min
-		}
-	}
-	return time.Duration(int64(next))
-}
-
-// newWorkLoop is a standalone goroutine to submit new sealing work upon received events.
-func (w *worker) newWorkLoop(recommit time.Duration) {
-	defer w.wg.Done()
-	var (
-		interrupt   *int32
-		minRecommit = recommit // minimal resubmit interval specified by user.
-		timestamp   int64      // timestamp for each round of sealing.
-	)
-
-	timer := time.NewTimer(0)
-	defer timer.Stop()
-	<-timer.C // discard the initial tick
-
-	// commit aborts in-flight transaction execution with given signal and resubmits a new one.
-	commit := func(noempty bool, s int32) {
-		if interrupt != nil {
-			atomic.StoreInt32(interrupt, s)
-		}
-		interrupt = new(int32)
-		select {
-		case w.newWorkCh <- &newWorkReq{interrupt: interrupt, noempty: noempty, timestamp: timestamp}:
-		case <-w.exitCh:
-			return
-		}
-		timer.Reset(recommit)
-		atomic.StoreInt32(&w.newTxs, 0)
-	}
-	// clearPending cleans the stale pending tasks.
-	clearPending := func(number uint64) {
-		w.pendingMu.Lock()
-		for h, t := range w.pendingTasks {
-			if t.block.NumberU64()+staleThreshold <= number {
-				delete(w.pendingTasks, h)
-			}
-		}
-		w.pendingMu.Unlock()
-	}
-
-	for {
-		select {
-		case <-w.startCh:
-			clearPending(w.hc.CurrentBlock().NumberU64())
-			timestamp = time.Now().Unix()
-			commit(false, commitInterruptNewHead)
-
-		case head := <-w.chainHeadCh:
-			clearPending(head.Block.NumberU64())
-			timestamp = time.Now().Unix()
-			commit(false, commitInterruptNewHead)
-
-		case <-timer.C:
-			// If sealing is running resubmit a new work cycle periodically to pull in
-			// higher priced transactions. Disable this overhead for pending blocks.
-			if w.isRunning() && (w.chainConfig.Clique == nil || w.chainConfig.Clique.Period > 0) {
-				// Short circuit if no new transaction arrives.
-				if atomic.LoadInt32(&w.newTxs) == 0 {
-					timer.Reset(recommit)
-					continue
-				}
-				commit(true, commitInterruptResubmit)
-			}
-
-		case interval := <-w.resubmitIntervalCh:
-			// Adjust resubmit interval explicitly by user.
-			if interval < minRecommitInterval {
-				log.Warn("Sanitizing miner recommit interval", "provided", interval, "updated", minRecommitInterval)
-				interval = minRecommitInterval
-			}
-			log.Info("Miner recommit interval update", "from", minRecommit, "to", interval)
-			minRecommit, recommit = interval, interval
-
-			if w.resubmitHook != nil {
-				w.resubmitHook(minRecommit, recommit)
-			}
-
-		case adjust := <-w.resubmitAdjustCh:
-			// Adjust resubmit interval by feedback.
-			if adjust.inc {
-				before := recommit
-				target := float64(recommit.Nanoseconds()) / adjust.ratio
-				recommit = recalcRecommit(minRecommit, recommit, target, true)
-				log.Trace("Increase miner recommit interval", "from", before, "to", recommit)
-			} else {
-				before := recommit
-				recommit = recalcRecommit(minRecommit, recommit, float64(minRecommit.Nanoseconds()), false)
-				log.Trace("Decrease miner recommit interval", "from", before, "to", recommit)
-			}
-
-			if w.resubmitHook != nil {
-				w.resubmitHook(minRecommit, recommit)
-			}
-
-		case <-w.exitCh:
-			return
-		}
-	}
 }
 
 // GeneratePendingBlock generates pending block given a commited block.
@@ -655,11 +502,6 @@ func (w *worker) mainLoop() {
 
 	for {
 		select {
-		case <-w.newWorkCh:
-			//w.commitWork(req.interrupt, req.noempty, req.timestamp)
-
-		case <-w.getWorkCh:
-
 		case ev := <-w.chainSideCh:
 			// Short circuit for duplicate side blocks
 			if _, exist := w.localUncles[ev.Block.Hash()]; exist {
@@ -722,13 +564,6 @@ func (w *worker) mainLoop() {
 				if tcount != w.current.tcount {
 					w.updateSnapshot(w.current)
 				}
-			} else {
-				// Special case, if the consensus engine is 0 period clique(dev mode),
-				// submit sealing work here since all empty submission will be rejected
-				// by clique. Of course the advance sealing(empty submission) is disabled.
-				// if w.chainConfig.Clique != nil && w.chainConfig.Clique.Period == 0 {
-				// 	//w.commitWork(nil, true, time.Now().Unix())
-				// }
 			}
 			atomic.AddInt32(&w.newTxs, int32(len(ev.Txs)))
 
@@ -738,55 +573,6 @@ func (w *worker) mainLoop() {
 		case <-w.txsSub.Err():
 			return
 		case <-w.chainSideSub.Err():
-			return
-		}
-	}
-}
-
-// taskLoop is a standalone goroutine to fetch sealing task from the generator and
-// push them to consensus engine.
-func (w *worker) taskLoop() {
-	defer w.wg.Done()
-	var (
-		stopCh chan struct{}
-		prev   common.Hash
-	)
-
-	// interrupt aborts the in-flight sealing task.
-	interrupt := func() {
-		if stopCh != nil {
-			close(stopCh)
-			stopCh = nil
-		}
-	}
-	for {
-		select {
-		case task := <-w.taskCh:
-			if w.newTaskHook != nil {
-				w.newTaskHook(task)
-			}
-			// Reject duplicate sealing work due to resubmitting.
-			sealHash := w.engine.SealHash(task.block.Header())
-			if sealHash == prev {
-				log.Info("sealHash == prev, continuing with sending task to pending channel", "seal", sealHash, "prev", prev)
-				// continue
-			}
-			// Interrupt previous sealing operation
-			interrupt()
-			stopCh, prev = make(chan struct{}), sealHash
-
-			// if w.skipSealHook != nil && w.skipSealHook(task) {
-			// 	continue
-			// }
-			w.pendingMu.Lock()
-			w.pendingTasks[sealHash] = task
-			w.pendingMu.Unlock()
-
-			// w.snapshotMu.Lock()
-			// w.pendingBlockFeed.Send(task.block.Header())
-			// w.snapshotMu.Unlock()
-		case <-w.exitCh:
-			interrupt()
 			return
 		}
 	}
@@ -1002,13 +788,9 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 
 // generateParams wraps various of settings for generating sealing task.
 type generateParams struct {
-	timestamp  uint64         // The timstamp for sealing task
-	forceTime  bool           // Flag whether the given timestamp is immutable or not
-	parentHash common.Hash    // Parent block hash, empty means the latest chain head
-	coinbase   common.Address // The fee recipient address for including transaction
-	random     common.Hash    // The randomness generated by beacon chain, empty before the merge
-	noUncle    bool           // Flag whether the uncle block inclusion is allowed
-	noExtra    bool           // Flag whether the extra field assignment is allowed
+	timestamp uint64         // The timstamp for sealing task
+	forceTime bool           // Flag whether the given timestamp is immutable or not
+	coinbase  common.Address // The fee recipient address for including transaction
 }
 
 // prepareWork constructs the sealing task according to the given parameters,
@@ -1151,45 +933,6 @@ func (w *worker) FinalizeAssembleAndBroadcast(chain consensus.ChainHeaderReader,
 	fmt.Println("Sending a header roots update: ", types.HeaderRoots{StateRoot: block.Root(), TxsRoot: block.TxHash(), ReceiptsRoot: block.ReceiptHash()})
 	w.headerRootsFeed.Send(types.HeaderRoots{StateRoot: block.Root(), TxsRoot: block.TxHash(), ReceiptsRoot: block.ReceiptHash()})
 	return block, nil
-}
-
-// commitWork generates several new sealing tasks based on the parent block
-// and submit them to the sealer.
-func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
-	start := time.Now()
-
-	// Set the coinbase if the worker is running or it's required
-	var coinbase common.Address
-	if w.isRunning() {
-		if w.coinbase == (common.Address{}) {
-			log.Error("Refusing to mine without etherbase")
-			return
-		}
-		coinbase = w.coinbase // Use the preset address as the fee recipient
-	}
-	work, err := w.prepareWork(&generateParams{
-		timestamp: uint64(timestamp),
-		coinbase:  coinbase,
-	}, w.hc.CurrentHeader())
-	if err != nil {
-		return
-	}
-	// Create an empty block based on temporary copied state for
-	// sealing in advance without waiting block execution finished.
-	// if !noempty && atomic.LoadUint32(&w.noempty) == 0 {
-	// 	w.commit(work.copy(), nil, false, start)
-	// }
-	// Fill pending transactions from the txpool
-	w.adjustGasLimit(nil, work)
-	w.fillTransactions(interrupt, work)
-	w.commit(work.copy(), w.fullTaskHook, true, start)
-
-	// Swap out the old work with the new one, terminating any leftover
-	// prefetcher processes in the mean time and starting a new one.
-	if w.current != nil {
-		w.current.discard()
-	}
-	w.current = work
 }
 
 // commit runs any post-transaction state modifications, assembles the final block
