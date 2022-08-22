@@ -154,6 +154,8 @@ func (sl *Slice) Config() *params.ChainConfig { return sl.config }
 func (sl *Slice) Engine() consensus.Engine { return sl.engine }
 
 func (sl *Slice) SliceAppend(block *types.Block) error {
+	sl.slicemu.Lock()
+	defer sl.slicemu.Unlock()
 
 	// PCRC
 	order, err := sl.engine.GetDifficultyOrder(block.Header())
@@ -184,6 +186,7 @@ func (sl *Slice) SliceAppend(block *types.Block) error {
 		return err
 	}
 
+	time.Sleep(100 * time.Millisecond)
 	reorg := sl.HLCR(td)
 
 	if reorg {
@@ -373,8 +376,7 @@ func (sl *Slice) untwistHead(block *types.Block, err error) error {
 
 // Append
 func (sl *Slice) Append(block *types.Block, td *big.Int) error {
-	sl.slicemu.Lock()
-	defer sl.slicemu.Unlock()
+
 	err := sl.hc.Append(block)
 	if err != nil {
 		fmt.Println("Slice error in append", err)
@@ -394,6 +396,7 @@ func (sl *Slice) Append(block *types.Block, td *big.Int) error {
 		if err != nil {
 			rawdb.DeleteTd(sl.hc.headerDb, block.Header().Hash(), block.Header().Number64())
 			rawdb.DeleteHeader(sl.hc.headerDb, block.Header().Hash(), block.Header().Number64())
+			return err
 		}
 	}
 

@@ -144,8 +144,10 @@ func (hc *HeaderChain) Append(block *types.Block) error {
 	hc.headermu.Lock()
 	defer hc.headermu.Unlock()
 
+	fmt.Println("Block information: Hash:", block.Hash(), "Number:", block.NumberU64(), "Location:", block.Header().Location, "Parent:", block.ParentHash())
 	err := hc.Appendable(block)
 	if err != nil {
+		fmt.Println("Error on appendable, err:", err)
 		return err
 	}
 
@@ -160,6 +162,7 @@ func (hc *HeaderChain) Append(block *types.Block) error {
 	// Append block else revert header append
 	logs, err := hc.bc.Append(block)
 	if err != nil {
+		fmt.Println("Error on Append, err:", err)
 		rawdb.DeleteHeader(hc.headerDb, block.Header().Hash(), block.Header().Number64())
 		rawdb.DeleteBlock(hc.headerDb, block.Header().Hash(), block.Header().Number64())
 		return err
@@ -292,8 +295,8 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) ([]*types.Header, er
 		}
 
 		// Add to the stack
-		newHeader = hc.GetHeader(newHeader.Parent(), newHeader.Number64()-1)
 		hashStack = append(hashStack, newHeader)
+		newHeader = hc.GetHeader(newHeader.Parent(), newHeader.Number64()-1)
 
 		// genesis check to not delete the genesis block
 		if prevHeader.Hash() == hc.config.GenesisHashes[0] {

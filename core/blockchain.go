@@ -104,7 +104,8 @@ func (bc *BlockChain) Append(block *types.Block) ([]*types.Log, error) {
 		bc.futureBlocks.Remove(block.Hash())
 		return nil, err
 	}
-
+	fmt.Println("bc.Append:")
+	fmt.Println("parentHeader.Hash:", block.Hash(), "parentHeader.Number:", block.NumberU64())
 	batch := bc.db.NewBatch()
 	rawdb.WriteBlock(batch, block)
 	if err := batch.Write(); err != nil {
