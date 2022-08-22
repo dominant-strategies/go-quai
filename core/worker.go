@@ -643,7 +643,6 @@ func (w *worker) GeneratePendingHeader(header *types.Header) (*types.Header, err
 func (w *worker) mainLoop() {
 	defer w.wg.Done()
 	defer w.txsSub.Unsubscribe()
-	defer w.chainHeadSub.Unsubscribe()
 	defer w.chainSideSub.Unsubscribe()
 	defer func() {
 		if w.current != nil {
@@ -737,8 +736,6 @@ func (w *worker) mainLoop() {
 		case <-w.exitCh:
 			return
 		case <-w.txsSub.Err():
-			return
-		case <-w.chainHeadSub.Err():
 			return
 		case <-w.chainSideSub.Err():
 			return

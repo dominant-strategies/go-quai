@@ -19,6 +19,8 @@ package params
 import (
 	"math"
 	"math/big"
+
+	"github.com/spruce-solutions/go-quai/common"
 )
 
 const (
@@ -191,4 +193,7 @@ var (
 	LovelaceOntology = []int{5, 5} // named after Ada Lovelace
 	// future ontology expansion markers go here
 	QuaiOntologies = [][]int{FullerOntology, TuringOntology, LovelaceOntology}
+
+	// Nil header hash
+	NilHeaderHash = common.HexToHash("0x945cec49d0937012c8ad92287bcdd1ab744b062e06993cf4dd26fa3d7b7b0641")
 )

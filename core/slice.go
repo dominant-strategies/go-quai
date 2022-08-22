@@ -380,9 +380,10 @@ func (sl *Slice) SetHeaderChainHead(head *types.Header) error {
 	}
 
 	for i, header := range sliceHeaders {
-		fmt.Println("sliceHeader[i]:", i, header.Hash())
 		if header != nil && types.QuaiNetworkContext != params.ZONE {
-			sl.currentHeads[i] = header
+			if header.Hash() != params.NilHeaderHash {
+				sl.currentHeads[i] = header
+			}
 		}
 	}
 
