@@ -46,6 +46,7 @@ type Slice struct {
 	futureBlocks *lru.Cache
 	futureHeads  *lru.Cache
 	slicemu      sync.RWMutex
+	appendmu     sync.RWMutex
 
 	nilHeader *types.Header
 
@@ -344,6 +345,8 @@ func (sl *Slice) untwistHead(block *types.Block, err error) error {
 
 // Append
 func (sl *Slice) Append(block *types.Block, td *big.Int) error {
+	sl.appendmu.Lock()
+	defer sl.appendmu.Unlock()
 
 	err := sl.hc.Append(block)
 	if err != nil {
