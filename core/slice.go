@@ -329,12 +329,12 @@ func (sl *Slice) untwistHead(block *types.Block, err error) error {
 			if errors.Is(err, consensus.ErrPrimeTwist) {
 				sl.SetHeaderChainHead(sl.currentHeads[block.Header().Location[types.QuaiNetworkContext]-1])
 				sl.UpdatePendingHeader(sl.hc.CurrentHeader(), sl.pendingHeader)
-				return nil
+				return err
 				// If there is a region twist the region needs to fall back to the parent of the previous slice head
 			} else if errors.Is(err, consensus.ErrRegionTwist) {
 				sl.SetHeaderChainHead(sl.currentHeads[block.Header().Location[types.QuaiNetworkContext]-1])
 				sl.UpdatePendingHeader(sl.hc.CurrentHeader(), sl.pendingHeader)
-				return nil
+				return err
 			}
 			return err
 		}
