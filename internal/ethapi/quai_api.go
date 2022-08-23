@@ -653,12 +653,6 @@ type HeaderWithSliceAndOrder struct {
 	Order  int
 }
 
-// GetSliceHeadHash returns the current head hash for the slice and the provided index
-func (s *PublicBlockChainQuaiAPI) GetSliceHeadHash(ctx context.Context, index byte) common.Hash {
-	fmt.Println("GetSliceHeadHash index:", index)
-	return s.b.GetSliceHeadHash(index)
-}
-
 // GetHeadHash returns the current head hash for the slice and the provided index
 func (s *PublicBlockChainQuaiAPI) GetHeadHash(ctx context.Context) common.Hash {
 	return s.b.GetHeadHash()

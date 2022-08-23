@@ -398,7 +398,7 @@ func (w *worker) GeneratePendingHeader(header *types.Header) (*types.Header, err
 	}
 	coinbase = w.coinbase // Use the preset address as the fee recipient
 
-	fmt.Println("coinbase: ", coinbase)
+	fmt.Println("coinbase on header: ", coinbase, header.Hash())
 
 	work, err := w.prepareWork(&generateParams{
 		timestamp: uint64(timestamp),
@@ -839,13 +839,7 @@ func (w *worker) prepareWork(genParams *generateParams, parentHeader *types.Head
 	header.Number[types.QuaiNetworkContext] = big.NewInt(int64(num.Uint64()) + 1)
 	header.Extra[types.QuaiNetworkContext] = w.extra
 	header.BaseFee[types.QuaiNetworkContext] = misc.CalcBaseFee(w.chainConfig, parent.Header(), w.hc.GetHeaderByNumber, w.hc.GetUnclesInChain, w.hc.GetGasUsedInChain)
-	if w.isRunning() {
-		if w.coinbase == (common.Address{}) {
-			log.Error("Refusing to mine without etherbase")
-			return nil, errors.New("refusing to mine without etherbase")
-		}
-		header.Coinbase[types.QuaiNetworkContext] = w.coinbase
-	}
+	header.Coinbase[types.QuaiNetworkContext] = genParams.coinbase
 
 	// Run the consensus preparation with the default or customized consensus engine.
 	if err := w.engine.Prepare(w.hc, header); err != nil {

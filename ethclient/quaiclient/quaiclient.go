@@ -480,16 +480,6 @@ func newRPCTransactionFromBlockHash(b *types.Block, hash common.Hash) *RPCTransa
 	return nil
 }
 
-// GetSliceHeadHash returns the current head hash for the slice and the provided index
-func (ec *Client) GetSliceHeadHash(ctx context.Context, index byte) common.Hash {
-	var headHash common.Hash
-	err := ec.c.CallContext(ctx, &headHash, "quai_getSliceHeadHash", index)
-	if err != nil {
-		return common.Hash{}
-	}
-	return headHash
-}
-
 // GetHeadHash returns the current head hash
 func (ec *Client) GetHeadHash(ctx context.Context) common.Hash {
 	var headHash common.Hash

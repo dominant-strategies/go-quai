@@ -358,10 +358,6 @@ func (b *LesApiBackend) GetTerminusAtOrder(header *types.Header, order int) (com
 	return common.Hash{}, errors.New("light client does not support retrieving terminus at order")
 }
 
-func (b *LesApiBackend) GetSliceHeadHash(index byte) common.Hash {
-	return common.Hash{}
-}
-
 func (b *LesApiBackend) GetHeadHash() common.Hash {
 	return common.Hash{}
 }

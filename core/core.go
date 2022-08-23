@@ -372,10 +372,6 @@ func (c *Core) TxLookupLimit() uint64 {
 	return 0
 }
 
-func (c *Core) GetSliceHeadHash(index byte) common.Hash {
-	return c.sl.GetSliceHeadHash(index)
-}
-
 func (c *Core) GetHeadHash() common.Hash {
 	return c.sl.GetHeadHash()
 }
