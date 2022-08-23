@@ -270,7 +270,7 @@ func (c *Core) ResetWithGenesisBlock(genesis *types.Header) error {
 }
 
 func (c *Core) Stop() {
-	c.sl.hc.Stop()
+	c.sl.Stop()
 }
 
 // SubscribeChainEvent registers a subscription of ChainEvent.

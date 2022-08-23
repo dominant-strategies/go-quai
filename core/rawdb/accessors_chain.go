@@ -560,6 +560,72 @@ func ReadTdRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 	return nil // Can't find the data anywhere.
 }
 
+// ReadSliceCurrentHeads retreive's the pending header stored in slice.
+func ReadSliceCurrentHeads(db ethdb.Reader) []*types.Header {
+	data, _ := db.Get(sliceCurrentHeads)
+	if len(data) == 0 {
+		return nil
+	}
+	headers := []*types.Header{}
+	if err := rlp.Decode(bytes.NewReader(data), &headers); err != nil {
+		log.Error("Invalid pendingHeader RLP")
+		return nil
+	}
+	return headers
+}
+
+// WriteSliceCurrentHeads writes the pending header of the slice.
+func WriteSliceCurrentHeads(db ethdb.KeyValueWriter, currentHeads []*types.Header) {
+	// Write the encoded pending header
+	data, err := rlp.EncodeToBytes(currentHeads)
+	if err != nil {
+		log.Crit("Failed to RLP encode pending header", "err", err)
+	}
+	if err := db.Put(sliceCurrentHeads, data); err != nil {
+		log.Crit("Failed to store header", "err", err)
+	}
+}
+
+// DeleteSliceCurrentHeads deletes the pending header stored for the slice.
+func DeleteSliceCurrentHeads(db ethdb.KeyValueWriter) {
+	if err := db.Delete(sliceCurrentHeads); err != nil {
+		log.Crit("Failed to delete slice pending header ", "err", err)
+	}
+}
+
+// ReadSlicePendingHeader retreive's the pending header stored in slice.
+func ReadSlicePendingHeader(db ethdb.Reader) *types.Header {
+	data, _ := db.Get(slicePendingHeaderKey)
+	if len(data) == 0 {
+		return nil
+	}
+	header := new(types.Header)
+	if err := rlp.Decode(bytes.NewReader(data), header); err != nil {
+		log.Error("Invalid pendingHeader RLP")
+		return nil
+	}
+	return header
+}
+
+// WritePendingHeader writes the pending header of the slice.
+func WriteSlicePendingHeader(db ethdb.KeyValueWriter, pendingHeader *types.Header) {
+	// Write the encoded pending header
+	data, err := rlp.EncodeToBytes(pendingHeader)
+	if err != nil {
+		log.Crit("Failed to RLP encode pending header", "err", err)
+	}
+	if err := db.Put(slicePendingHeaderKey, data); err != nil {
+		log.Crit("Failed to store header", "err", err)
+	}
+}
+
+// DeletePendingHeader deletes the pending header stored for the slice.
+func DeleteSlicePendingHeader(db ethdb.KeyValueWriter) {
+	if err := db.Delete(slicePendingHeaderKey); err != nil {
+		log.Crit("Failed to delete slice pending header ", "err", err)
+	}
+}
+
 // ReadHeadsHashes retreive's the heads hashes of the blockchain.
 func ReadHeadsHashes(db ethdb.Reader) []common.Hash {
 	data, _ := db.Get(headsHashesKey)
@@ -585,9 +651,9 @@ func WriteHeadsHashes(db ethdb.KeyValueWriter, hashes []common.Hash) {
 }
 
 // DeleteHeadsHashes writes the heads hashes of the blockchain.
-func DeleteHeadsHashes(db ethdb.KeyValueWriter, hashes []common.Hash) {
+func DeleteHeadsHashes(db ethdb.KeyValueWriter) {
 	if err := db.Delete(headsHashesKey); err != nil {
-		log.Crit("Failed to delete block total difficulty", "err", err)
+		log.Crit("Failed to delete heads hashes ", "err", err)
 	}
 }
 

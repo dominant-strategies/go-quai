@@ -39,6 +39,12 @@ var (
 	// headersHashKey tracks the latest known headers hash in Blockchain.
 	headsHashesKey = []byte("HeadersHash")
 
+	// slicePendingHeaderKey tracks the latest known headers hash in Blockchain.
+	slicePendingHeaderKey = []byte("PendingHeader")
+
+	// sliceCurrentHeads tracks the latest known headers hash in Blockchain.
+	sliceCurrentHeads = []byte("CurrentHeads")
+
 	// headFastBlockKey tracks the latest known incomplete block's hash during fast sync.
 	headFastBlockKey = []byte("LastFast")
 

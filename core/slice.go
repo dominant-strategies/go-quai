@@ -6,11 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"sort"
 	"sync"
 	"time"
 
-	lru "github.com/hashicorp/golang-lru"
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/consensus"
 	"github.com/spruce-solutions/go-quai/core/rawdb"
@@ -22,13 +20,6 @@ import (
 	"github.com/spruce-solutions/go-quai/params"
 )
 
-const (
-	maxFutureBlocks     = 256
-	maxFutureHeads      = 20
-	maxTimeFutureBlocks = 30
-	maxTimeFutureHeads  = 5
-)
-
 type Slice struct {
 	hc            *HeaderChain
 	currentHeads  []*types.Header
@@ -37,16 +28,16 @@ type Slice struct {
 	txPool *TxPool
 	miner  *Miner
 
+	sliceDb ethdb.Database
+
 	config *params.ChainConfig
 	engine consensus.Engine
 
 	quit chan struct{} // slice quit channel
 
-	subClients   []*quaiclient.Client // subClinets is used to check is a coincident block is valid in the subordinate context
-	futureBlocks *lru.Cache
-	futureHeads  *lru.Cache
-	slicemu      sync.RWMutex
-	appendmu     sync.RWMutex
+	subClients []*quaiclient.Client // subClinets is used to check is a coincident block is valid in the subordinate context
+	slicemu    sync.RWMutex
+	appendmu   sync.RWMutex
 
 	nilHeader *types.Header
 
@@ -55,14 +46,11 @@ type Slice struct {
 
 func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocalBlock func(block *types.Header) bool, chainConfig *params.ChainConfig, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config) (*Slice, error) {
 	sl := &Slice{
-		config: chainConfig,
-		engine: engine,
+		config:  chainConfig,
+		engine:  engine,
+		sliceDb: db,
 	}
 
-	futureBlocks, _ := lru.New(maxFutureBlocks)
-	sl.futureBlocks = futureBlocks
-	futureHeads, _ := lru.New(maxFutureHeads)
-	sl.futureHeads = futureHeads
 	sl.currentHeads = make([]*types.Header, 3)
 
 	var err error
@@ -74,13 +62,6 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 	sl.txPool = NewTxPool(*txConfig, chainConfig, sl.hc)
 	sl.miner = New(sl.hc, sl.txPool, config, chainConfig, engine, isLocalBlock)
 	sl.miner.SetExtra(sl.miner.MakeExtraData(config.ExtraData))
-
-	sl.currentHeads[0] = sl.hc.genesisHeader
-	sl.currentHeads[1] = sl.hc.genesisHeader
-	sl.currentHeads[2] = sl.hc.genesisHeader
-
-	// Update the pending header to the genesis Header.
-	sl.pendingHeader = sl.hc.genesisHeader
 
 	// only set the subClients if the chain is not zone
 	sl.subClients = make([]*quaiclient.Client, 3)
@@ -106,12 +87,29 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 		Bloom:             make([]types.Bloom, 3),
 	}
 
+	// only set the currentheads and the genesis header to genesis value if the blockchain is empty.
+	if sl.hc.empty() {
+		sl.currentHeads[0] = sl.hc.genesisHeader
+		sl.currentHeads[1] = sl.hc.genesisHeader
+		sl.currentHeads[2] = sl.hc.genesisHeader
+
+		// Update the pending header to the genesis Header.
+		sl.pendingHeader = sl.hc.genesisHeader
+
+	} else {
+		currentHeads := rawdb.ReadSliceCurrentHeads(sl.sliceDb)
+		sl.currentHeads[0] = currentHeads[0]
+		sl.currentHeads[1] = currentHeads[1]
+		sl.currentHeads[2] = currentHeads[2]
+
+		// load the pending header
+		sl.pendingHeader = rawdb.ReadSlicePendingHeader(sl.sliceDb)
+	}
+
 	if types.QuaiNetworkContext == params.PRIME {
 		sl.UpdatePendingHeader(sl.pendingHeader, sl.nilHeader)
 	}
 
-	go sl.updateFutureBlocks()
-	go sl.updateFutureHeads()
 	go sl.sendPendingHeaderToFeed()
 
 	return sl, nil
@@ -600,117 +598,12 @@ func (sl *Slice) PreviousValidCoincident(header *types.Header, slice []byte, ord
 	}
 }
 
-func (sl *Slice) procFutureBlocks() {
-	blocks := make([]*types.Block, 0, sl.futureBlocks.Len())
-	for _, hash := range sl.futureBlocks.Keys() {
-		if block, exist := sl.futureBlocks.Peek(hash); exist {
-			blocks = append(blocks, block.(*types.Block))
-		}
-	}
-	if len(blocks) > 0 {
-		sort.Slice(blocks, func(i, j int) bool {
-			return blocks[i].NumberU64() < blocks[j].NumberU64()
-		})
-		// Insert one by one as chain insertion needs contiguous ancestry between blocks
-		for i := range blocks {
-			fmt.Println("blocks in future blocks", blocks[i].Header().Number, blocks[i].Header().Hash())
-		}
-		// Insert one by one as chain insertion needs contiguous ancestry between blocks
-		for i := range blocks {
-			td, _ := sl.CalcTd(blocks[i].Header())
-			sl.Append(blocks[i], td)
-		}
-	}
-}
+func (sl *Slice) Stop() {
+	rawdb.WriteSliceCurrentHeads(sl.sliceDb, sl.currentHeads)
+	rawdb.WriteSlicePendingHeader(sl.sliceDb, sl.pendingHeader)
 
-func (sl *Slice) procFutureHeads() {
-	headers := make([]*types.Header, 0, sl.futureHeads.Len())
-	for _, hash := range sl.futureHeads.Keys() {
-		if head, exist := sl.futureHeads.Peek(hash); exist {
-			headers = append(headers, head.(*types.Header))
-		}
-	}
-	if len(headers) > 0 {
-		sort.Slice(headers, func(i, j int) bool {
-			return headers[i].Number64() < headers[j].Number64()
-		})
-		// Insert one by one as chain insertion needs contiguous ancestry between blocks
-		for i := range headers {
-			fmt.Println("headers i", headers[i])
-			sl.hc.SetCurrentHeader(headers[i])
-		}
-	}
-}
-
-// addFutureBlock checks if the block is within the max allowed window to get
-// accepted for future processing, and returns an error if the block is too far
-// ahead and was not added.
-func (sl *Slice) addFutureBlock(block *types.Block) error {
-	max := uint64(time.Now().Unix() + maxTimeFutureBlocks)
-	if block.Time() > max {
-		return fmt.Errorf("future block timestamp %v > allowed %v", block.Time(), max)
-	}
-	if !sl.futureBlocks.Contains(block.Hash()) {
-		sl.futureBlocks.Add(block.Hash(), block)
-	}
-	return nil
-}
-
-// AddFutureBlocks add batch of blocks to the future blocks queue.
-func (sl *Slice) AddFutureBlocks(blocks []*types.Block) error {
-	for i := range blocks {
-		err := sl.addFutureBlock(blocks[i])
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// addFutureHeads checks if the header is within the max allowed window to get
-// accepted for future processing, and returns an error if the block is too far
-// ahead and was not added.
-func (sl *Slice) addFutureHead(header *types.Header) error {
-	max := uint64(time.Now().Unix() + maxTimeFutureHeads)
-	if header.HeaderTime() > max {
-		return fmt.Errorf("future header timestamp %v > allowed %v", header.HeaderTime(), max)
-	}
-	if !sl.futureHeads.Contains(header.Hash()) {
-		// add the header
-		sl.futureHeads.Add(header.Hash(), header)
-		// remove the parent if it exists in the futureHeads cache after adding the header.
-		if sl.futureHeads.Contains(header.Parent()) {
-			sl.futureHeads.Remove(header.Parent())
-		}
-	}
-	return nil
-}
-
-func (sl *Slice) updateFutureBlocks() {
-	futureTimer := time.NewTicker(3 * time.Second)
-	defer futureTimer.Stop()
-	defer sl.wg.Done()
-	for {
-		select {
-		case <-futureTimer.C:
-			sl.procFutureBlocks()
-		case <-sl.quit:
-			return
-		}
-	}
-}
-
-func (sl *Slice) updateFutureHeads() {
-	futureTimer := time.NewTicker(1 * time.Second)
-	defer futureTimer.Stop()
-	for {
-		select {
-		case <-futureTimer.C:
-			sl.procFutureHeads()
-		case <-sl.quit:
-			return
-		}
-	}
+	// stop the headerchain
+	sl.hc.Stop()
 }
 
 func (sl *Slice) sendPendingHeaderToFeed() {
