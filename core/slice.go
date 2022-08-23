@@ -184,8 +184,6 @@ func (sl *Slice) SliceAppend(block *types.Block) error {
 		fmt.Println("parent hash: ", block.Header().Parent())
 		currentPending := rawdb.ReadPendingHeader(sl.sliceDb, block.Header().Parent())
 		if err := sl.SetHeaderChainHead(block.Header()); err != nil {
-			// updating pending header again since block insertion failed
-			sl.UpdatePendingHeader(sl.hc.CurrentHeader(), currentPending)
 			return err
 		}
 
@@ -216,7 +214,7 @@ func (sl *Slice) UpdatePendingHeader(header *types.Header, pendingHeader *types.
 			return err
 		}
 		fmt.Println("pending Header: ", localPendingHeader)
-		sl.writePendingHeader(pendingHeader, localPendingHeader, types.QuaiNetworkContext)
+		sl.writePendingHeader(header, pendingHeader, localPendingHeader, types.QuaiNetworkContext)
 		slPendingHeader = localPendingHeader
 	} else {
 		if header.Number[0] != nil && header.Number[1] != nil && header.Number[2] != nil {
@@ -228,11 +226,11 @@ func (sl *Slice) UpdatePendingHeader(header *types.Header, pendingHeader *types.
 			}
 			fmt.Println("pending Header: ", localPendingHeader)
 			fmt.Println("current pending Header: ", pendingHeader)
-			sl.writePendingHeader(pendingHeader, localPendingHeader, types.QuaiNetworkContext)
+			sl.writePendingHeader(header, pendingHeader, localPendingHeader, types.QuaiNetworkContext)
 		} else {
 			for index := types.QuaiNetworkContext - 1; index >= 0; index-- {
 				if types.QuaiNetworkContext != params.PRIME {
-					sl.writePendingHeader(rawdb.ReadPendingHeader(sl.sliceDb, sl.hc.currentHeaderHash), pendingHeader, index)
+					sl.writePendingHeader(header, rawdb.ReadPendingHeader(sl.sliceDb, sl.hc.currentHeaderHash), pendingHeader, index)
 				}
 			}
 		}
@@ -286,7 +284,7 @@ func (sl *Slice) UpdatePendingHeader(header *types.Header, pendingHeader *types.
 }
 
 // writePendingHeader updates the slice pending header at the given index with the value from given header.
-func (sl *Slice) writePendingHeader(pendingHeader *types.Header, header *types.Header, index int) {
+func (sl *Slice) writePendingHeader(appendingHeader *types.Header, pendingHeader *types.Header, header *types.Header, index int) {
 	pendingHeader.ParentHash[index] = header.ParentHash[index]
 	pendingHeader.UncleHash[index] = header.UncleHash[index]
 	pendingHeader.Number[index] = header.Number[index]
@@ -307,7 +305,7 @@ func (sl *Slice) writePendingHeader(pendingHeader *types.Header, header *types.H
 		rawdb.WritePendingHeader(sl.sliceDb, pendingHeader.ParentHash[index], pendingHeader)
 	}
 	// write the pending header to the datebase
-	rawdb.WritePendingHeader(sl.sliceDb, header.Hash(), pendingHeader)
+	rawdb.WritePendingHeader(sl.sliceDb, appendingHeader.Hash(), pendingHeader)
 }
 
 func (sl *Slice) untwistHead(block *types.Block, err error) error {
