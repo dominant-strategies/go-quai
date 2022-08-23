@@ -327,14 +327,30 @@ func (sl *Slice) untwistHead(block *types.Block, err error) error {
 			sl.subClients[block.Header().Location[types.QuaiNetworkContext]-1].GetHeadHash(context.Background()) == block.Header().ParentHash[types.QuaiNetworkContext+1] {
 
 			// If there is a prime twist this is a PRTP != PRTR so we should drop back to previous slice head
-			if errors.Is(err, consensus.ErrPrimeTwist) {
-				sl.SetHeaderChainHead(sl.currentHeads[block.Header().Location[types.QuaiNetworkContext]-1])
-				sl.UpdatePendingHeader(sl.hc.CurrentHeader(), sl.pendingHeader)
-				return err
-				// If there is a region twist the region needs to fall back to the parent of the previous slice head
-			} else if errors.Is(err, consensus.ErrRegionTwist) {
-				sl.SetHeaderChainHead(sl.currentHeads[block.Header().Location[types.QuaiNetworkContext]-1])
-				sl.UpdatePendingHeader(sl.hc.CurrentHeader(), sl.pendingHeader)
+			if errors.Is(err, consensus.ErrPrimeTwist) || errors.Is(err, consensus.ErrRegionTwist) {
+				err = sl.SetHeaderChainHead(sl.currentHeads[block.Header().Location[types.QuaiNetworkContext]-1])
+				if err != nil {
+					return err
+				}
+				err = sl.UpdatePendingHeader(sl.hc.CurrentHeader(), sl.pendingHeader)
+				if err != nil {
+					return err
+				}
+
+				reorgNumber := sl.currentHeads[block.Header().Location[types.QuaiNetworkContext]-1].Number64()
+				for i := 0; i < params.FullerOntology[types.QuaiNetworkContext]; i++ {
+					if sl.currentHeads[i].Number64() > reorgNumber && block.Header().Location[types.QuaiNetworkContext]-1 != byte(i) {
+						err = sl.subClients[i].SetHeaderChainHead(context.Background(), sl.currentHeads[i])
+						if err != nil {
+							return err
+						}
+						err = sl.subClients[i].UpdatePendingHeader(context.Background(), sl.currentHeads[i], sl.pendingHeader)
+						if err != nil {
+							return err
+						}
+					}
+				}
+
 				return err
 			}
 			return err
