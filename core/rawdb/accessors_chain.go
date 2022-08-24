@@ -519,13 +519,8 @@ func ReadTdRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 }
 
 // ReadSliceCurrentHeads retreive's the curent heads stored in slice for a header hash.
-func ReadSliceCurrentHeads(db ethdb.Reader, header *types.Header) []*types.Header {
-	var key []byte
-	if types.QuaiNetworkContext != params.PRIME {
-		key = currentHeadsKey(header.ParentHash[types.QuaiNetworkContext-1], header.Parent())
-	} else {
-		key = currentHeadsKey(header.Parent(), header.Parent())
-	}
+func ReadSliceCurrentHeads(db ethdb.Reader, hash common.Hash) []*types.Header {
+	key := currentHeadsKey(hash)
 
 	data, _ := db.Get(key)
 	if len(data) == 0 {
@@ -546,7 +541,7 @@ func ReadSliceCurrentHeads(db ethdb.Reader, header *types.Header) []*types.Heade
 }
 
 // WriteSliceCurrentHeads writes the slice current heads hashes for a given header hash.
-func WriteSliceCurrentHeads(db ethdb.KeyValueWriter, currentHeads []*types.Header, header *types.Header) {
+func WriteSliceCurrentHeads(db ethdb.KeyValueWriter, currentHeads []*types.Header, hash common.Hash) {
 
 	var currentHeadsHash []common.Hash
 	for _, header := range currentHeads {
@@ -557,12 +552,8 @@ func WriteSliceCurrentHeads(db ethdb.KeyValueWriter, currentHeads []*types.Heade
 	if err != nil {
 		log.Crit("Failed to RLP encode pending header", "err", err)
 	}
-	var key []byte
-	if types.QuaiNetworkContext != params.PRIME {
-		key = currentHeadsKey(header.ParentHash[types.QuaiNetworkContext-1], header.Parent())
-	} else {
-		key = currentHeadsKey(header.Parent(), header.Parent())
-	}
+
+	key := currentHeadsKey(hash)
 
 	if err := db.Put(key, data); err != nil {
 		log.Crit("Failed to store header", "err", err)
@@ -570,13 +561,8 @@ func WriteSliceCurrentHeads(db ethdb.KeyValueWriter, currentHeads []*types.Heade
 }
 
 // DeleteSliceCurrentHeads deletes the current heads stored for the slice.
-func DeleteSliceCurrentHeads(db ethdb.KeyValueWriter, header *types.Header) {
-	var key []byte
-	if types.QuaiNetworkContext != params.PRIME {
-		key = currentHeadsKey(header.ParentHash[types.QuaiNetworkContext-1], header.Parent())
-	} else {
-		key = currentHeadsKey(header.Parent(), header.Parent())
-	}
+func DeleteSliceCurrentHeads(db ethdb.KeyValueWriter, hash common.Hash) {
+	key := currentHeadsKey(hash)
 
 	if err := db.Delete(key); err != nil {
 		log.Crit("Failed to delete slice pending header ", "err", err)
@@ -584,20 +570,15 @@ func DeleteSliceCurrentHeads(db ethdb.KeyValueWriter, header *types.Header) {
 }
 
 // ReadSlicePendingHeader retreive's the pending header stored in hash.
-func ReadPendingHeader(db ethdb.Reader, header *types.Header) *types.Header {
-	var key []byte
-	if types.QuaiNetworkContext != params.PRIME {
-		key = pendingHeaderKey(header.ParentHash[types.QuaiNetworkContext-1], header.Parent())
-	} else {
-		key = pendingHeaderKey(header.Parent(), header.Parent())
-	}
-
+func ReadPendingHeader(db ethdb.Reader, hash common.Hash) *types.Header {
+	key := pendingHeaderKey(hash)
+	fmt.Println("ReadPendingHeader Key:", hash)
 	data, _ := db.Get(key)
 	if len(data) == 0 {
 		return nil
 	}
 
-	header = new(types.Header)
+	header := new(types.Header)
 	if err := rlp.Decode(bytes.NewReader(data), header); err != nil {
 		log.Error("Invalid pendingHeader RLP")
 		return nil
@@ -606,13 +587,9 @@ func ReadPendingHeader(db ethdb.Reader, header *types.Header) *types.Header {
 }
 
 // WritePendingHeader writes the pending header of the header hash.
-func WritePendingHeader(db ethdb.KeyValueWriter, header *types.Header, pendingHeader *types.Header) {
-	var key []byte
-	if types.QuaiNetworkContext != params.PRIME {
-		key = pendingHeaderKey(header.ParentHash[types.QuaiNetworkContext-1], header.Parent())
-	} else {
-		key = pendingHeaderKey(header.Parent(), header.Parent())
-	}
+func WritePendingHeader(db ethdb.KeyValueWriter, hash common.Hash, pendingHeader *types.Header) {
+	key := pendingHeaderKey(hash)
+	fmt.Println("WritePendingHeader Key:", hash)
 
 	// Write the encoded pending header
 	data, err := rlp.EncodeToBytes(pendingHeader)
@@ -626,13 +603,8 @@ func WritePendingHeader(db ethdb.KeyValueWriter, header *types.Header, pendingHe
 }
 
 // DeletePendingHeader deletes the pending header stored for the header hash.
-func DeletePendingHeader(db ethdb.KeyValueWriter, header *types.Header) {
-	var key []byte
-	if types.QuaiNetworkContext != params.PRIME {
-		key = pendingHeaderKey(header.ParentHash[types.QuaiNetworkContext-1], header.Parent())
-	} else {
-		key = pendingHeaderKey(header.Parent(), header.Parent())
-	}
+func DeletePendingHeader(db ethdb.KeyValueWriter, hash common.Hash) {
+	key := pendingHeaderKey(hash)
 
 	if err := db.Delete(key); err != nil {
 		log.Crit("Failed to delete slice pending header ", "err", err)

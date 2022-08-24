@@ -158,14 +158,14 @@ func headerKey(number uint64, hash common.Hash) []byte {
 	return append(append(headerPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
 }
 
-// currentHeadsKey = currentHeadsPrefix + hash1 + hash2
-func currentHeadsKey(hash1, hash2 common.Hash) []byte {
-	return append(append(currentHeadsPrefix, hash1.Bytes()...), hash2.Bytes()...)
+// currentHeadsKey = currentHeadsPrefix + hash
+func currentHeadsKey(hash common.Hash) []byte {
+	return append(currentHeadsPrefix, hash.Bytes()...)
 }
 
-// pendingHeaderKey = pendingHeaderPrefix + hash1 + hash2
-func pendingHeaderKey(hash1, hash2 common.Hash) []byte {
-	return append(append(pendingHeaderPrefix, hash1.Bytes()...), hash2.Bytes()...)
+// pendingHeaderKey = pendingHeaderPrefix + hash
+func pendingHeaderKey(hash common.Hash) []byte {
+	return append(pendingHeaderPrefix, hash.Bytes()...)
 }
 
 // headerTDKey = headerPrefix + num (uint64 big endian) + hash + headerTDSuffix

@@ -100,7 +100,7 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 
 	var pendingHeader *types.Header
 	// only set the currentheads and the genesis header to genesis value if the blockchain is empty.
-	if sl.hc.empty() {
+	if true {
 		// Update the pending header to the genesis Header.
 		pendingHeader = sl.hc.genesisHeader
 
@@ -108,13 +108,14 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 		currentHeads[0] = sl.hc.genesisHeader
 		currentHeads[1] = sl.hc.genesisHeader
 		currentHeads[2] = sl.hc.genesisHeader
-		rawdb.WriteSliceCurrentHeads(sl.sliceDb, currentHeads, sl.hc.genesisHeader)
+		rawdb.WriteSliceCurrentHeads(sl.sliceDb, currentHeads, sl.hc.genesisHeader.Hash())
 	} else {
 		// load the pending header
-		pendingHeader = rawdb.ReadPendingHeader(sl.sliceDb, sl.hc.CurrentHeader())
+		pendingHeader = rawdb.ReadPendingHeader(sl.sliceDb, sl.hc.CurrentHeader().Parent())
 	}
 
 	if types.QuaiNetworkContext == params.PRIME {
+		fmt.Println("update pending from PRIME on initial")
 		sl.UpdatePendingHeader(pendingHeader, sl.nilHeader)
 	}
 
@@ -200,19 +201,19 @@ func (sl *Slice) SliceAppend(block *types.Block) error {
 	if reorg {
 		if err := sl.SetHeaderChainHead(block.Header()); err != nil {
 			// updating pending header again since block insertion failed
-			sl.UpdatePendingHeader(sl.hc.CurrentHeader(), rawdb.ReadPendingHeader(sl.sliceDb, sl.hc.CurrentHeader()))
 			return err
 		}
 
 		// Update the pending Header.
-		err := sl.UpdatePendingHeader(block.Header(), rawdb.ReadPendingHeader(sl.sliceDb, block.Header()))
+		pendingHeader := rawdb.ReadPendingHeader(sl.sliceDb, block.ParentHash())
+		if pendingHeader == nil {
+			pendingHeader = sl.nilHeader
+		}
+		err := sl.UpdatePendingHeader(block.Header(), pendingHeader)
 		if err != nil {
-			parentBlock := sl.hc.bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
-			if parentBlock != nil {
-				sl.UpdatePendingHeader(parentBlock.Header(), rawdb.ReadPendingHeader(sl.sliceDb, parentBlock.Header()))
-			}
 			return err
 		}
+
 	} else {
 		sl.hc.bc.chainSideFeed.Send(ChainSideEvent{Block: block})
 	}
@@ -237,8 +238,7 @@ func (sl *Slice) UpdatePendingHeader(header *types.Header, pendingHeader *types.
 		}
 		fmt.Println("pending Header: ", localPendingHeader)
 		fmt.Println("sl pending Header: ", slPendingHeader)
-		slPendingHeader.ParentHash[types.QuaiNetworkContext] = common.HexToHash("0x0475118DB2D0E39D7051ee9Eb39aCC5D0be738CD")
-		sl.writePendingHeader(slPendingHeader, localPendingHeader, types.QuaiNetworkContext)
+		slPendingHeader = sl.writePendingHeader(header.Hash(), slPendingHeader, localPendingHeader, types.QuaiNetworkContext)
 	} else {
 		fmt.Println("header.hash:", header.Hash(), "sl.nilHeader.Hash:", sl.nilHeader.Hash())
 		if header.Number[0] != nil && header.Number[1] != nil && header.Number[2] != nil {
@@ -251,11 +251,11 @@ func (sl *Slice) UpdatePendingHeader(header *types.Header, pendingHeader *types.
 				return err
 			}
 			fmt.Println("pending Header: ", localPendingHeader)
-			sl.writePendingHeader(slPendingHeader, localPendingHeader, types.QuaiNetworkContext)
+			slPendingHeader = sl.writePendingHeader(header.Hash(), slPendingHeader, localPendingHeader, types.QuaiNetworkContext)
 		} else {
 			for index := types.QuaiNetworkContext - 1; index >= 0; index-- {
 				if types.QuaiNetworkContext != params.PRIME {
-					sl.writePendingHeader(rawdb.ReadPendingHeader(sl.sliceDb, sl.hc.CurrentHeader()), pendingHeader, index)
+					slPendingHeader = sl.writePendingHeader(sl.hc.CurrentHeader().Hash(), rawdb.ReadPendingHeader(sl.sliceDb, sl.hc.CurrentHeader().Parent()), pendingHeader, index)
 				}
 			}
 		}
@@ -296,17 +296,17 @@ func (sl *Slice) UpdatePendingHeader(header *types.Header, pendingHeader *types.
 			}
 		}
 	} else {
+		slPendingHeader.Location = sl.config.Location
 		fmt.Println("Pending Header location: ", slPendingHeader.Location, "Pending Header Number:", slPendingHeader.Number)
 		fmt.Println("Header location: ", header.Location, "Header Number:", header.Number)
-		slPendingHeader.Location = sl.config.Location
-		rawdb.WritePendingHeader(sl.sliceDb, header, slPendingHeader)
+		rawdb.WritePendingHeader(sl.sliceDb, header.Hash(), slPendingHeader)
 		sl.miner.worker.pendingHeaderFeed.Send(slPendingHeader)
 	}
 	return nil
 }
 
 // writePendingHeader updates the slice pending header at the given index with the value from given header.
-func (sl *Slice) writePendingHeader(slPendingHeader *types.Header, header *types.Header, index int) {
+func (sl *Slice) writePendingHeader(indexHash common.Hash, slPendingHeader *types.Header, header *types.Header, index int) *types.Header {
 	slPendingHeader.ParentHash[index] = header.ParentHash[index]
 	slPendingHeader.UncleHash[index] = header.UncleHash[index]
 	slPendingHeader.Number[index] = header.Number[index]
@@ -323,11 +323,10 @@ func (sl *Slice) writePendingHeader(slPendingHeader *types.Header, header *types
 	slPendingHeader.Time = header.Time
 
 	fmt.Println("pending header on write: ", slPendingHeader)
-	if slPendingHeader.ParentHash[index] == sl.Config().GenesisHashes[index] {
-		rawdb.WritePendingHeader(sl.sliceDb, slPendingHeader, slPendingHeader)
-	}
 	// write the pending header to the datebase
-	rawdb.WritePendingHeader(sl.sliceDb, slPendingHeader, slPendingHeader)
+	rawdb.WritePendingHeader(sl.sliceDb, indexHash, slPendingHeader)
+
+	return slPendingHeader
 }
 
 func (sl *Slice) untwistHead(block *types.Block, err error) error {
@@ -348,12 +347,12 @@ func (sl *Slice) untwistHead(block *types.Block, err error) error {
 
 			// If there is a prime twist this is a PRTP != PRTR so we should drop back to previous slice head
 			if errors.Is(err, consensus.ErrPrimeTwist) || errors.Is(err, consensus.ErrRegionTwist) {
-				currentHeads := rawdb.ReadSliceCurrentHeads(sl.sliceDb, sl.hc.CurrentHeader())
+				currentHeads := rawdb.ReadSliceCurrentHeads(sl.sliceDb, sl.hc.CurrentHeader().Parent())
 				err = sl.SetHeaderChainHead(currentHeads[block.Header().Location[types.QuaiNetworkContext]-1])
 				if err != nil {
 					return err
 				}
-				err = sl.UpdatePendingHeader(sl.hc.CurrentHeader(), rawdb.ReadPendingHeader(sl.sliceDb, sl.hc.CurrentHeader()))
+				err = sl.UpdatePendingHeader(sl.hc.CurrentHeader(), rawdb.ReadPendingHeader(sl.sliceDb, sl.hc.CurrentHeader().Parent()))
 				if err != nil {
 					return err
 				}
@@ -365,7 +364,7 @@ func (sl *Slice) untwistHead(block *types.Block, err error) error {
 						if err != nil {
 							return err
 						}
-						err = sl.subClients[i].UpdatePendingHeader(context.Background(), currentHeads[i], rawdb.ReadPendingHeader(sl.sliceDb, sl.hc.CurrentHeader()))
+						err = sl.subClients[i].UpdatePendingHeader(context.Background(), currentHeads[i], rawdb.ReadPendingHeader(sl.sliceDb, sl.hc.CurrentHeader().Parent()))
 						if err != nil {
 							return err
 						}
@@ -625,13 +624,10 @@ func (sl *Slice) PreviousValidCoincident(header *types.Header, slice []byte, ord
 
 func (sl *Slice) writeCurrentHeads(header *types.Header, index int) {
 	// get the current heads of the parent
-	parentBlock := sl.hc.bc.GetBlock(header.Parent(), header.Number64()-1)
-	if parentBlock != nil {
-		currentHeads := rawdb.ReadSliceCurrentHeads(sl.sliceDb, parentBlock.Header())
-		currentHeads[index] = header
-		// write the currentHeads
-		rawdb.WriteSliceCurrentHeads(sl.sliceDb, currentHeads, header)
-	}
+	currentHeads := rawdb.ReadSliceCurrentHeads(sl.sliceDb, header.Parent())
+	currentHeads[index] = header
+	// write the currentHeads
+	rawdb.WriteSliceCurrentHeads(sl.sliceDb, currentHeads, header.Hash())
 
 }
 
@@ -756,8 +752,10 @@ func (sl *Slice) sendPendingHeaderToFeed() {
 	for {
 		select {
 		case <-futureTimer.C:
-			if count < 100 {
-				sl.miner.worker.pendingHeaderFeed.Send(rawdb.ReadPendingHeader(sl.sliceDb, sl.hc.CurrentHeader()))
+			if count < 100 && types.QuaiNetworkContext == params.ZONE {
+				header := rawdb.ReadPendingHeader(sl.sliceDb, sl.hc.CurrentHeader().Hash())
+				fmt.Println("header sent to miner by proc:", header)
+				sl.miner.worker.pendingHeaderFeed.Send(header)
 				count++
 			}
 		case <-sl.quit:
