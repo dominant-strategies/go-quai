@@ -84,6 +84,9 @@ var (
 	headerHashSuffix   = []byte("n") // headerPrefix + num (uint64 big endian) + headerHashSuffix -> hash
 	headerNumberPrefix = []byte("H") // headerNumberPrefix + hash -> num (uint64 big endian)
 
+	currentHeadsPrefix  = []byte("ch") // currentHeadsPrefix + hash -> []common.Hash (current heads hash)
+	pendingHeaderPrefix = []byte("ph") // pendingHeaderPrefix + hash -> header
+
 	blockBodyPrefix     = []byte("b") // blockBodyPrefix + num (uint64 big endian) + hash -> block body
 	blockReceiptsPrefix = []byte("r") // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
 
@@ -155,9 +158,14 @@ func headerKey(number uint64, hash common.Hash) []byte {
 	return append(append(headerPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
 }
 
-// extHeaderKey = headerPrefix + num (uint64 big endian) + location + context + hash
-func extHeaderKey(context uint64, hash common.Hash) []byte {
-	return append(append(headerPrefix, encodeBlockNumber(context)...), hash.Bytes()...)
+// currentHeadsKey = currentHeadsPrefix + hash1 + hash2
+func currentHeadsKey(hash1, hash2 common.Hash) []byte {
+	return append(append(currentHeadsPrefix, hash1.Bytes()...), hash2.Bytes()...)
+}
+
+// pendingHeaderKey = pendingHeaderPrefix + hash1 + hash2
+func pendingHeaderKey(hash1, hash2 common.Hash) []byte {
+	return append(append(pendingHeaderPrefix, hash1.Bytes()...), hash2.Bytes()...)
 }
 
 // headerTDKey = headerPrefix + num (uint64 big endian) + hash + headerTDSuffix

@@ -327,16 +327,6 @@ func ReadHeaderRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValu
 	return nil // Can't find the data anywhere.
 }
 
-// ReadExternalHeaderRLP retrieves a block header in its raw RLP database encoding.
-func ReadExternalHeaderRLP(db ethdb.Reader, hash common.Hash, context uint64) rlp.RawValue {
-	// look up the data in leveldb.
-	data, _ := db.Get(extHeaderKey(context, hash))
-	if len(data) > 0 {
-		return data
-	}
-	return nil // Can't find the data anywhere.
-}
-
 // HasHeader verifies the existence of a block header corresponding to the hash.
 func HasHeader(db ethdb.Reader, hash common.Hash, number uint64) bool {
 	if has, err := db.Ancient(freezerHashTable, number); err == nil && common.BytesToHash(has) == hash {
@@ -351,20 +341,6 @@ func HasHeader(db ethdb.Reader, hash common.Hash, number uint64) bool {
 // ReadHeader retrieves the block header corresponding to the hash.
 func ReadHeader(db ethdb.Reader, hash common.Hash, number uint64) *types.Header {
 	data := ReadHeaderRLP(db, hash, number)
-	if len(data) == 0 {
-		return nil
-	}
-	header := new(types.Header)
-	if err := rlp.Decode(bytes.NewReader(data), header); err != nil {
-		log.Error("Invalid block header RLP", "hash", hash, "err", err)
-		return nil
-	}
-	return header
-}
-
-// ReadExternalHeader retrieves the block header corresponding to the hash.
-func ReadExternalHeader(db ethdb.Reader, hash common.Hash, context uint64) *types.Header {
-	data := ReadExternalHeaderRLP(db, hash, context)
 	if len(data) == 0 {
 		return nil
 	}
@@ -392,24 +368,6 @@ func WriteHeader(db ethdb.KeyValueWriter, header *types.Header) {
 		log.Crit("Failed to RLP encode header", "err", err)
 	}
 	key := headerKey(number, hash)
-	if err := db.Put(key, data); err != nil {
-		log.Crit("Failed to store header", "err", err)
-	}
-}
-
-// WriteExternalHeader stores a block header into the database and also stores the hash-
-// to-number mapping.
-func WriteExternalHeader(db ethdb.KeyValueWriter, header *types.Header, context uint64) {
-	var (
-		hash = header.Hash()
-	)
-
-	// Write the encoded header
-	data, err := rlp.EncodeToBytes(header)
-	if err != nil {
-		log.Crit("Failed to RLP encode header", "err", err)
-	}
-	key := extHeaderKey(context, hash)
 	if err := db.Put(key, data); err != nil {
 		log.Crit("Failed to store header", "err", err)
 	}
@@ -558,6 +516,127 @@ func ReadTdRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 		}
 	}
 	return nil // Can't find the data anywhere.
+}
+
+// ReadSliceCurrentHeads retreive's the curent heads stored in slice for a header hash.
+func ReadSliceCurrentHeads(db ethdb.Reader, header *types.Header) []*types.Header {
+	var key []byte
+	if types.QuaiNetworkContext != params.PRIME {
+		key = currentHeadsKey(header.ParentHash[types.QuaiNetworkContext-1], header.Parent())
+	} else {
+		key = currentHeadsKey(header.Parent(), header.Parent())
+	}
+
+	data, _ := db.Get(key)
+	if len(data) == 0 {
+		return nil
+	}
+	headsHash := []common.Hash{}
+	if err := rlp.Decode(bytes.NewReader(data), &headsHash); err != nil {
+		log.Error("Invalid pendingHeader RLP")
+		return nil
+	}
+	// get the headers for the headsHash
+	currentHeads := []*types.Header{}
+	for _, hash := range headsHash {
+		headerNumber := ReadHeaderNumber(db, hash)
+		currentHeads = append(currentHeads, ReadHeader(db, hash, *headerNumber))
+	}
+	return currentHeads
+}
+
+// WriteSliceCurrentHeads writes the slice current heads hashes for a given header hash.
+func WriteSliceCurrentHeads(db ethdb.KeyValueWriter, currentHeads []*types.Header, header *types.Header) {
+
+	var currentHeadsHash []common.Hash
+	for _, header := range currentHeads {
+		currentHeadsHash = append(currentHeadsHash, header.Hash())
+	}
+	// Write the encoded pending header
+	data, err := rlp.EncodeToBytes(currentHeadsHash)
+	if err != nil {
+		log.Crit("Failed to RLP encode pending header", "err", err)
+	}
+	var key []byte
+	if types.QuaiNetworkContext != params.PRIME {
+		key = currentHeadsKey(header.ParentHash[types.QuaiNetworkContext-1], header.Parent())
+	} else {
+		key = currentHeadsKey(header.Parent(), header.Parent())
+	}
+
+	if err := db.Put(key, data); err != nil {
+		log.Crit("Failed to store header", "err", err)
+	}
+}
+
+// DeleteSliceCurrentHeads deletes the current heads stored for the slice.
+func DeleteSliceCurrentHeads(db ethdb.KeyValueWriter, header *types.Header) {
+	var key []byte
+	if types.QuaiNetworkContext != params.PRIME {
+		key = currentHeadsKey(header.ParentHash[types.QuaiNetworkContext-1], header.Parent())
+	} else {
+		key = currentHeadsKey(header.Parent(), header.Parent())
+	}
+
+	if err := db.Delete(key); err != nil {
+		log.Crit("Failed to delete slice pending header ", "err", err)
+	}
+}
+
+// ReadSlicePendingHeader retreive's the pending header stored in hash.
+func ReadPendingHeader(db ethdb.Reader, header *types.Header) *types.Header {
+	var key []byte
+	if types.QuaiNetworkContext != params.PRIME {
+		key = pendingHeaderKey(header.ParentHash[types.QuaiNetworkContext-1], header.Parent())
+	} else {
+		key = pendingHeaderKey(header.Parent(), header.Parent())
+	}
+
+	data, _ := db.Get(key)
+	if len(data) == 0 {
+		return nil
+	}
+
+	header = new(types.Header)
+	if err := rlp.Decode(bytes.NewReader(data), header); err != nil {
+		log.Error("Invalid pendingHeader RLP")
+		return nil
+	}
+	return header
+}
+
+// WritePendingHeader writes the pending header of the header hash.
+func WritePendingHeader(db ethdb.KeyValueWriter, header *types.Header, pendingHeader *types.Header) {
+	var key []byte
+	if types.QuaiNetworkContext != params.PRIME {
+		key = pendingHeaderKey(header.ParentHash[types.QuaiNetworkContext-1], header.Parent())
+	} else {
+		key = pendingHeaderKey(header.Parent(), header.Parent())
+	}
+
+	// Write the encoded pending header
+	data, err := rlp.EncodeToBytes(pendingHeader)
+	if err != nil {
+		log.Crit("Failed to RLP encode pending header", "err", err)
+	}
+
+	if err := db.Put(key, data); err != nil {
+		log.Crit("Failed to store header", "err", err)
+	}
+}
+
+// DeletePendingHeader deletes the pending header stored for the header hash.
+func DeletePendingHeader(db ethdb.KeyValueWriter, header *types.Header) {
+	var key []byte
+	if types.QuaiNetworkContext != params.PRIME {
+		key = pendingHeaderKey(header.ParentHash[types.QuaiNetworkContext-1], header.Parent())
+	} else {
+		key = pendingHeaderKey(header.Parent(), header.Parent())
+	}
+
+	if err := db.Delete(key); err != nil {
+		log.Crit("Failed to delete slice pending header ", "err", err)
+	}
 }
 
 // ReadHeadsHashes retreive's the heads hashes of the blockchain.

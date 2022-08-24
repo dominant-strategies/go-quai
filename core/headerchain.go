@@ -430,7 +430,7 @@ func (hc *HeaderChain) Stop() {
 	}
 	// Save the heads
 	rawdb.WriteHeadsHashes(hc.headerDb, hashes)
-	//
+	rawdb.WriteHeadBlockHash(hc.headerDb, hc.CurrentHeader().Hash())
 
 	// Unsubscribe all subscriptions registered from blockchain
 	hc.bc.scope.Close()
@@ -439,6 +439,16 @@ func (hc *HeaderChain) Stop() {
 	hc.wg.Wait()
 
 	log.Info("headerchain stopped")
+}
+
+// empty returns an indicator whether the blockchain is empty.
+func (hc *HeaderChain) empty() bool {
+	genesis := hc.genesisHeader.Hash()
+	if rawdb.ReadHeadBlockHash(hc.headerDb) == genesis {
+		return true
+	} else {
+		return false
+	}
 }
 
 // StopInsert interrupts all insertion methods, causing them to return
