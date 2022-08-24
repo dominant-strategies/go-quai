@@ -27,6 +27,7 @@ import (
 	"github.com/spruce-solutions/go-quai/consensus"
 	"github.com/spruce-solutions/go-quai/core/state"
 	"github.com/spruce-solutions/go-quai/core/types"
+	"github.com/spruce-solutions/go-quai/ethdb"
 	"github.com/spruce-solutions/go-quai/event"
 	"github.com/spruce-solutions/go-quai/log"
 	"github.com/spruce-solutions/go-quai/params"
@@ -44,14 +45,14 @@ type Miner struct {
 	stopCh   chan struct{}
 }
 
-func New(hc *HeaderChain, txPool *TxPool, config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, isLocalBlock func(block *types.Header) bool) *Miner {
+func New(hc *HeaderChain, txPool *TxPool, config *Config, db ethdb.Database, chainConfig *params.ChainConfig, engine consensus.Engine, isLocalBlock func(block *types.Header) bool) *Miner {
 	miner := &Miner{
 		hc:       hc,
 		engine:   engine,
 		exitCh:   make(chan struct{}),
 		startCh:  make(chan common.Address),
 		stopCh:   make(chan struct{}),
-		worker:   newWorker(config, chainConfig, engine, hc, txPool, isLocalBlock, true),
+		worker:   newWorker(config, chainConfig, db, engine, hc, txPool, isLocalBlock, true),
 		coinbase: config.Etherbase,
 	}
 	go miner.update()

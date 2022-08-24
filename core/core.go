@@ -460,6 +460,10 @@ func (c *Core) PendingBlock() *types.Block {
 	return c.sl.miner.PendingBlock()
 }
 
+func (c *Core) PendingBlockBody(hash common.Hash) *types.Body {
+	return c.sl.PendingBlockBody(hash)
+}
+
 // PendingBlockAndReceipts returns the currently pending block and corresponding receipts.
 func (c *Core) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
 	return c.sl.miner.PendingBlockAndReceipts()

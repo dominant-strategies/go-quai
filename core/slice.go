@@ -71,7 +71,7 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 	}
 
 	sl.txPool = NewTxPool(*txConfig, chainConfig, sl.hc)
-	sl.miner = New(sl.hc, sl.txPool, config, chainConfig, engine, isLocalBlock)
+	sl.miner = New(sl.hc, sl.txPool, config, db, chainConfig, engine, isLocalBlock)
 	sl.miner.SetExtra(sl.miner.MakeExtraData(config.ExtraData))
 
 	// only set the subClients if the chain is not zone
@@ -264,6 +264,18 @@ func (sl *Slice) UpdatePendingHeader(header *types.Header, pendingHeader *types.
 		}
 	}
 
+	// There is no more asynchronous updates on the roots.
+	// Need:
+	// Way to store the body associated with the roots for block construction
+	// 1. Storing it based on the root doesn't work because the roots might not update and we can overwrite the Body values. ????? Clearly Wrong.
+	// 2. Storing based on pendingHeader hash doesn't work because pendingHeader is only complete in the zone.
+	// 3. Since only zone has the complete data, there is no way for us to store the Body data in Region and Prime.
+	// 4. But the Header after mining goes to all the Chains but the Append only initiated by (order == context)
+	// 5. So Dom's don't have enough data to store the Body associated with the Root.
+
+	// All we have to do is to store the Body Data on the roots, and upon receiving a Header fetch the Body data from the db and make a block.
+	// Asynchronous root updates must happen. So we need FinalizeAssembleAndBroadcast.
+
 	// Send the pending blocks down to all the subclients.
 	if types.QuaiNetworkContext != params.ZONE {
 		for i := range sl.subClients {
@@ -303,7 +315,6 @@ func (sl *Slice) UpdatePendingHeader(header *types.Header, pendingHeader *types.
 		fmt.Println("Pending Header location: ", slPendingHeader.Location, "Pending Header Number:", slPendingHeader.Number)
 		fmt.Println("Header location: ", header.Location, "Header Number:", header.Number)
 		rawdb.WritePendingHeader(sl.sliceDb, header.Hash(), slPendingHeader)
-		sl.miner.worker.pendingHeaderFeed.Send(slPendingHeader)
 	}
 	return nil
 }
@@ -330,6 +341,10 @@ func (sl *Slice) writePendingHeader(indexHash common.Hash, slPendingHeader *type
 	rawdb.WritePendingHeader(sl.sliceDb, indexHash, slPendingHeader)
 
 	return slPendingHeader
+}
+
+func (sl *Slice) PendingBlockBody(hash common.Hash) *types.Body {
+	return rawdb.ReadPendginBlockBody(sl.sliceDb, hash)
 }
 
 func (sl *Slice) untwistHead(block *types.Block, err error) error {
@@ -391,7 +406,7 @@ func (sl *Slice) Append(block *types.Block, td *big.Int) error {
 		return err
 	}
 	fmt.Println("Appended Block Hash:", block.Hash(), "block header hash", block.Header().Hash(), "block Number:", block.Header().Number)
-	fmt.Println("Block found in db:", sl.hc.bc.GetBlock(block.Hash(), block.NumberU64()).Hash())
+	// fmt.Println("Block found in db:", sl.hc.bc.GetBlock(block.Hash(), block.NumberU64()).Hash())
 
 	// WriteTd
 	// Remove this once td is converted to a single value.

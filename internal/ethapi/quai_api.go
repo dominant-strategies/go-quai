@@ -537,40 +537,32 @@ func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw js
 	}
 
 	//
-	pendingBlock, err := s.b.PendingBlock()
-	if err != nil {
-		log.Warn("Unable to find the pending block")
-		return err
-	}
+	pendingBlockBody := s.b.PendingBlockBody(header.Root[types.QuaiNetworkContext])
+	fmt.Println("State Root: ", header.Root[types.QuaiNetworkContext])
+	if pendingBlockBody != nil {
+		fmt.Println("pending block body in api: ", pendingBlockBody)
+		fmt.Println("Header in api: ", header)
+		// Load uncles because they are not included in the block response.
+		txs := make([]*types.Transaction, len(pendingBlockBody.Transactions))
+		for i, tx := range pendingBlockBody.Transactions {
+			txs[i] = tx
+		}
 
-	fmt.Println("pending Header in api: ", pendingBlock.Header())
-	fmt.Println("Header in api: ", header)
+		uncles := make([]*types.Header, len(pendingBlockBody.Uncles))
+		for i, uncle := range pendingBlockBody.Uncles {
+			uncles[i] = uncle
+			fmt.Println("uncle hash: ", uncle.Hash())
+		}
 
-	// check if the header mined matches the pending block
-	// Match the root hashes
-	// TODO: On fail send the header into the uncle feed.
-	if pendingBlock.Root() != header.Root[types.QuaiNetworkContext] {
-		fmt.Println("pending root: ", pendingBlock.Root())
-		fmt.Println("header root: ", header.Root[types.QuaiNetworkContext])
-		return errors.New("state root mismatch")
-	}
-	if pendingBlock.TxHash() != header.TxHash[types.QuaiNetworkContext] {
-		fmt.Println("pending tx root: ", pendingBlock.TxHash())
-		fmt.Println("header tx root: ", header.TxHash[types.QuaiNetworkContext])
-		return errors.New("tx root mismatch")
-	}
-	if pendingBlock.ReceiptHash() != header.ReceiptHash[types.QuaiNetworkContext] {
-		fmt.Println("pending receipt root: ", pendingBlock.ReceiptHash())
-		fmt.Println("header receipt root: ", header.ReceiptHash[types.QuaiNetworkContext])
-		return errors.New("receipt root mismatch")
-	}
-
-	block := types.NewBlockWithHeader(header).WithBody(pendingBlock.Transactions(), pendingBlock.Uncles())
-	log.Info("Retrieved mined block", "number", header.Number, "location", header.Location)
-	s.b.InsertBlock(ctx, block)
-	// Broadcast the block and announce chain insertion event
-	if block.Header() != nil {
-		s.b.EventMux().Post(core.NewMinedBlockEvent{Block: block})
+		block := types.NewBlockWithHeader(header).WithBody(txs, uncles)
+		log.Info("Retrieved mined block", "number", header.Number, "location", header.Location)
+		s.b.InsertBlock(ctx, block)
+		// Broadcast the block and announce chain insertion event
+		if block.Header() != nil {
+			s.b.EventMux().Post(core.NewMinedBlockEvent{Block: block})
+		}
+	} else {
+		return errors.New("uncle")
 	}
 
 	return nil

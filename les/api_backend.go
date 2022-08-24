@@ -381,3 +381,7 @@ func (b *LesApiBackend) UpdatePendingHeader(header *types.Header, pendingHeader 
 func (b *LesApiBackend) PendingBlock() (*types.Block, error) {
 	return nil, nil
 }
+
+func (b *LesApiBackend) PendingBlockBody(hash common.Hash) *types.Body {
+	return nil
+}

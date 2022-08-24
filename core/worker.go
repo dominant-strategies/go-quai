@@ -13,8 +13,10 @@ import (
 	"github.com/spruce-solutions/go-quai/common/hexutil"
 	"github.com/spruce-solutions/go-quai/consensus"
 	"github.com/spruce-solutions/go-quai/consensus/misc"
+	"github.com/spruce-solutions/go-quai/core/rawdb"
 	"github.com/spruce-solutions/go-quai/core/state"
 	"github.com/spruce-solutions/go-quai/core/types"
+	"github.com/spruce-solutions/go-quai/ethdb"
 	"github.com/spruce-solutions/go-quai/event"
 	"github.com/spruce-solutions/go-quai/log"
 	"github.com/spruce-solutions/go-quai/params"
@@ -185,6 +187,8 @@ type worker struct {
 	coinbase common.Address
 	extra    []byte
 
+	workerDb ethdb.Database
+
 	pendingMu    sync.RWMutex
 	pendingTasks map[common.Hash]*task
 
@@ -212,7 +216,7 @@ type worker struct {
 	fullTaskHook func()      // Method to call before pushing the full sealing task.
 }
 
-func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, headerchain *HeaderChain, txPool *TxPool, isLocalBlock func(header *types.Header) bool, init bool) *worker {
+func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Database, engine consensus.Engine, headerchain *HeaderChain, txPool *TxPool, isLocalBlock func(header *types.Header) bool, init bool) *worker {
 	worker := &worker{
 		config:             config,
 		chainConfig:        chainConfig,
@@ -221,6 +225,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		txPool:             txPool,
 		coinbase:           config.Etherbase,
 		isLocalBlock:       isLocalBlock,
+		workerDb:           db,
 		localUncles:        make(map[common.Hash]*types.Block),
 		remoteUncles:       make(map[common.Hash]*types.Block),
 		unconfirmed:        newUnconfirmedBlocks(headerchain, sealingLogAtDepth),
@@ -431,7 +436,7 @@ func (w *worker) GeneratePendingHeader(header *types.Header) (*types.Header, err
 	}
 	// Create a local environment copy, avoid the data race with snapshot state.
 	// https://github.com/ethereum/go-ethereum/issues/24299
-	block, err := w.engine.FinalizeAndAssemble(w.hc, env.header, env.state, env.txs, env.unclelist(), env.receipts)
+	block, err := w.FinalizeAssembleAndBroadcast(w.hc, env.header, env.state, env.txs, env.unclelist(), env.receipts)
 	if err != nil {
 		return nil, err
 	}
@@ -925,6 +930,21 @@ func (w *worker) adjustGasLimit(interrupt *int32, env *environment) {
 	env.header.GasLimit[types.QuaiNetworkContext] = CalcGasLimit(parent.GasLimit(), gasUsed, uncleCount)
 }
 
+func (w *worker) FinalizeAssembleAndBroadcast(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
+	block, err := w.engine.FinalizeAndAssemble(chain, header, state, txs, uncles, receipts)
+	if err != nil {
+		return nil, err
+	}
+
+	if chain.CurrentHeader().Hash() == block.Header().Hash() {
+		fmt.Println("Sending a header roots update: ", types.HeaderRoots{StateRoot: block.Root(), TxsRoot: block.TxHash(), ReceiptsRoot: block.ReceiptHash()})
+		w.headerRootsFeed.Send(types.HeaderRoots{StateRoot: block.Root(), TxsRoot: block.TxHash(), ReceiptsRoot: block.ReceiptHash()})
+	}
+	// store the pending block body details for the given stateroot
+	rawdb.WritePendingBlockBody(w.workerDb, block.Root(), block.Body())
+	return block, nil
+}
+
 // commit runs any post-transaction state modifications, assembles the final block
 // and commits new work if consensus engine is running.
 // Note the assumption is held that the mutation is allowed to the passed env, do
@@ -937,7 +957,7 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 		// Create a local environment copy, avoid the data race with snapshot state.
 		// https://github.com/ethereum/go-ethereum/issues/24299
 		env := env.copy()
-		block, err := w.engine.FinalizeAndAssemble(w.hc, env.header, env.state, env.txs, env.unclelist(), env.receipts)
+		block, err := w.FinalizeAssembleAndBroadcast(w.hc, env.header, env.state, env.txs, env.unclelist(), env.receipts)
 		if err != nil {
 			return err
 		}
