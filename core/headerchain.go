@@ -153,11 +153,7 @@ func (hc *HeaderChain) Append(block *types.Block) error {
 	}
 
 	// Append header to the headerchain
-	batch := hc.headerDb.NewBatch()
-	rawdb.WriteHeader(batch, block.Header())
-	if err := batch.Write(); err != nil {
-		return err
-	}
+	rawdb.WriteHeader(hc.headerDb, block.Header())
 
 	// Append block else revert header append
 	logs, err := hc.bc.Append(block)

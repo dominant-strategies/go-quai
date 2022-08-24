@@ -195,7 +195,8 @@ func (sl *Slice) SliceAppend(block *types.Block) error {
 	if err != nil {
 		return err
 	}
-
+	fmt.Println("Appended Block Hash:", block.Hash(), "block header hash", block.Header().Hash(), "block Number:", block.Header().Number)
+	fmt.Println("Block found in db:", sl.hc.bc.GetBlock(block.Hash(), block.NumberU64()).Hash())
 	reorg := sl.HLCR(td)
 
 	if reorg {
@@ -209,11 +210,13 @@ func (sl *Slice) SliceAppend(block *types.Block) error {
 		if pendingHeader == nil {
 			pendingHeader = sl.nilHeader
 		}
+
 		err := sl.UpdatePendingHeader(block.Header(), pendingHeader)
 		if err != nil {
 			return err
 		}
 
+		sl.miner.worker.headerRootsFeed.Send(types.HeaderRoots{StateRoot: block.Root(), TxsRoot: block.TxHash(), ReceiptsRoot: block.ReceiptHash()})
 	} else {
 		sl.hc.bc.chainSideFeed.Send(ChainSideEvent{Block: block})
 	}
@@ -342,39 +345,37 @@ func (sl *Slice) untwistHead(block *types.Block, err error) error {
 		// Only if the twisted block was mined by or could have been mined by me switch heads
 		// This check prevents us from repointing our head if old or non-relavent twisted blocks
 		// are presented
-		if sl.hc.currentHeaderHash == block.Header().ParentHash[types.QuaiNetworkContext] &&
-			sl.subClients[block.Header().Location[types.QuaiNetworkContext]-1].GetHeadHash(context.Background()) == block.Header().ParentHash[types.QuaiNetworkContext+1] {
 
-			// If there is a prime twist this is a PRTP != PRTR so we should drop back to previous slice head
-			if errors.Is(err, consensus.ErrPrimeTwist) || errors.Is(err, consensus.ErrRegionTwist) {
-				currentHeads := rawdb.ReadSliceCurrentHeads(sl.sliceDb, sl.hc.CurrentHeader().Parent())
-				err = sl.SetHeaderChainHead(currentHeads[block.Header().Location[types.QuaiNetworkContext]-1])
-				if err != nil {
-					return err
-				}
-				err = sl.UpdatePendingHeader(sl.hc.CurrentHeader(), rawdb.ReadPendingHeader(sl.sliceDb, sl.hc.CurrentHeader().Hash()))
-				if err != nil {
-					return err
-				}
-
-				reorgNumber := currentHeads[block.Header().Location[types.QuaiNetworkContext]-1].Number64()
-				for i := 0; i < params.FullerOntology[types.QuaiNetworkContext]; i++ {
-					if currentHeads[i].Number64() > reorgNumber && block.Header().Location[types.QuaiNetworkContext]-1 != byte(i) {
-						err = sl.subClients[i].SetHeaderChainHead(context.Background(), currentHeads[i])
-						if err != nil {
-							return err
-						}
-						err = sl.subClients[i].UpdatePendingHeader(context.Background(), currentHeads[i], rawdb.ReadPendingHeader(sl.sliceDb, sl.hc.CurrentHeader().Hash()))
-						if err != nil {
-							return err
-						}
-					}
-				}
-
+		// If there is a prime twist this is a PRTP != PRTR so we should drop back to previous slice head
+		if errors.Is(err, consensus.ErrPrimeTwist) || errors.Is(err, consensus.ErrRegionTwist) {
+			currentHeads := rawdb.ReadSliceCurrentHeads(sl.sliceDb, sl.hc.CurrentHeader().Parent())
+			err = sl.SetHeaderChainHead(currentHeads[block.Header().Location[types.QuaiNetworkContext]-1])
+			if err != nil {
 				return err
 			}
+			err = sl.UpdatePendingHeader(sl.hc.CurrentHeader(), rawdb.ReadPendingHeader(sl.sliceDb, sl.hc.CurrentHeader().Hash()))
+			if err != nil {
+				return err
+			}
+
+			reorgNumber := currentHeads[block.Header().Location[types.QuaiNetworkContext]-1].Number64()
+			for i := 0; i < params.FullerOntology[types.QuaiNetworkContext]; i++ {
+				if currentHeads[i].Number64() > reorgNumber && block.Header().Location[types.QuaiNetworkContext]-1 != byte(i) {
+					err = sl.subClients[i].SetHeaderChainHead(context.Background(), currentHeads[i])
+					if err != nil {
+						return err
+					}
+					err = sl.subClients[i].UpdatePendingHeader(context.Background(), currentHeads[i], rawdb.ReadPendingHeader(sl.sliceDb, sl.hc.CurrentHeader().Hash()))
+					if err != nil {
+						return err
+					}
+				}
+			}
+
 			return err
 		}
+		return err
+
 	}
 	return nil
 }
@@ -389,6 +390,8 @@ func (sl *Slice) Append(block *types.Block, td *big.Int) error {
 		fmt.Println("Slice error in append", err)
 		return err
 	}
+	fmt.Println("Appended Block Hash:", block.Hash(), "block header hash", block.Header().Hash(), "block Number:", block.Header().Number)
+	fmt.Println("Block found in db:", sl.hc.bc.GetBlock(block.Hash(), block.NumberU64()).Hash())
 
 	// WriteTd
 	// Remove this once td is converted to a single value.
@@ -746,17 +749,19 @@ func (sl *Slice) updateFutureHeads() {
 
 func (sl *Slice) sendPendingHeaderToFeed() {
 	futureTimer := time.NewTicker(3 * time.Second)
-	var count int
+
 	defer futureTimer.Stop()
 	defer sl.wg.Done()
 	for {
 		select {
 		case <-futureTimer.C:
-			if count < 100 && types.QuaiNetworkContext == params.ZONE {
+			if types.QuaiNetworkContext == params.ZONE {
 				header := rawdb.ReadPendingHeader(sl.sliceDb, sl.hc.CurrentHeader().Hash())
 				fmt.Println("header sent to miner by proc:", header)
-				sl.miner.worker.pendingHeaderFeed.Send(header)
-				count++
+				if header != nil {
+					sl.miner.worker.pendingHeaderFeed.Send(header)
+				}
+
 			}
 		case <-sl.quit:
 			return

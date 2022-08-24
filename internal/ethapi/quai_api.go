@@ -552,17 +552,17 @@ func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw js
 	if pendingBlock.Root() != header.Root[types.QuaiNetworkContext] {
 		fmt.Println("pending root: ", pendingBlock.Root())
 		fmt.Println("header root: ", header.Root[types.QuaiNetworkContext])
-		return nil //errors.New("state root mismatch")
+		return errors.New("state root mismatch")
 	}
 	if pendingBlock.TxHash() != header.TxHash[types.QuaiNetworkContext] {
 		fmt.Println("pending tx root: ", pendingBlock.TxHash())
 		fmt.Println("header tx root: ", header.TxHash[types.QuaiNetworkContext])
-		return nil //errors.New("tx root mismatch")
+		return errors.New("tx root mismatch")
 	}
 	if pendingBlock.ReceiptHash() != header.ReceiptHash[types.QuaiNetworkContext] {
 		fmt.Println("pending receipt root: ", pendingBlock.ReceiptHash())
 		fmt.Println("header receipt root: ", header.ReceiptHash[types.QuaiNetworkContext])
-		return nil //errors.New("receipt root mismatch")
+		return errors.New("receipt root mismatch")
 	}
 
 	block := types.NewBlockWithHeader(header).WithBody(pendingBlock.Transactions(), pendingBlock.Uncles())

@@ -431,7 +431,7 @@ func (w *worker) GeneratePendingHeader(header *types.Header) (*types.Header, err
 	}
 	// Create a local environment copy, avoid the data race with snapshot state.
 	// https://github.com/ethereum/go-ethereum/issues/24299
-	block, err := w.FinalizeAssembleAndBroadcast(w.hc, env.header, env.state, env.txs, env.unclelist(), env.receipts)
+	block, err := w.engine.FinalizeAndAssemble(w.hc, env.header, env.state, env.txs, env.unclelist(), env.receipts)
 	if err != nil {
 		return nil, err
 	}
@@ -925,16 +925,6 @@ func (w *worker) adjustGasLimit(interrupt *int32, env *environment) {
 	env.header.GasLimit[types.QuaiNetworkContext] = CalcGasLimit(parent.GasLimit(), gasUsed, uncleCount)
 }
 
-func (w *worker) FinalizeAssembleAndBroadcast(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
-	block, err := w.engine.FinalizeAndAssemble(chain, header, state, txs, uncles, receipts)
-	if err != nil {
-		return nil, err
-	}
-	fmt.Println("Sending a header roots update: ", types.HeaderRoots{StateRoot: block.Root(), TxsRoot: block.TxHash(), ReceiptsRoot: block.ReceiptHash()})
-	w.headerRootsFeed.Send(types.HeaderRoots{StateRoot: block.Root(), TxsRoot: block.TxHash(), ReceiptsRoot: block.ReceiptHash()})
-	return block, nil
-}
-
 // commit runs any post-transaction state modifications, assembles the final block
 // and commits new work if consensus engine is running.
 // Note the assumption is held that the mutation is allowed to the passed env, do
@@ -947,7 +937,7 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 		// Create a local environment copy, avoid the data race with snapshot state.
 		// https://github.com/ethereum/go-ethereum/issues/24299
 		env := env.copy()
-		block, err := w.FinalizeAssembleAndBroadcast(w.hc, env.header, env.state, env.txs, env.unclelist(), env.receipts)
+		block, err := w.engine.FinalizeAndAssemble(w.hc, env.header, env.state, env.txs, env.unclelist(), env.receipts)
 		if err != nil {
 			return err
 		}

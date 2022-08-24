@@ -106,11 +106,7 @@ func (bc *BlockChain) Append(block *types.Block) ([]*types.Log, error) {
 	}
 	fmt.Println("bc.Append:")
 	fmt.Println("parentHeader.Hash:", block.Hash(), "parentHeader.Number:", block.NumberU64())
-	batch := bc.db.NewBatch()
-	rawdb.WriteBlock(batch, block)
-	if err := batch.Write(); err != nil {
-		return nil, err
-	}
+	rawdb.WriteBlock(bc.db, block)
 
 	return logs, nil
 }
