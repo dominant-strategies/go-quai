@@ -255,7 +255,7 @@ func (sl *Slice) UpdatePendingHeader(header *types.Header, pendingHeader *types.
 		} else {
 			for index := types.QuaiNetworkContext - 1; index >= 0; index-- {
 				if types.QuaiNetworkContext != params.PRIME {
-					slPendingHeader = sl.writePendingHeader(sl.hc.CurrentHeader().Hash(), rawdb.ReadPendingHeader(sl.sliceDb, sl.hc.CurrentHeader().Parent()), pendingHeader, index)
+					slPendingHeader = sl.writePendingHeader(sl.hc.CurrentHeader().Hash(), rawdb.ReadPendingHeader(sl.sliceDb, sl.hc.CurrentHeader().Hash()), pendingHeader, index)
 				}
 			}
 		}
@@ -352,7 +352,7 @@ func (sl *Slice) untwistHead(block *types.Block, err error) error {
 				if err != nil {
 					return err
 				}
-				err = sl.UpdatePendingHeader(sl.hc.CurrentHeader(), rawdb.ReadPendingHeader(sl.sliceDb, sl.hc.CurrentHeader().Parent()))
+				err = sl.UpdatePendingHeader(sl.hc.CurrentHeader(), rawdb.ReadPendingHeader(sl.sliceDb, sl.hc.CurrentHeader().Hash()))
 				if err != nil {
 					return err
 				}
@@ -364,7 +364,7 @@ func (sl *Slice) untwistHead(block *types.Block, err error) error {
 						if err != nil {
 							return err
 						}
-						err = sl.subClients[i].UpdatePendingHeader(context.Background(), currentHeads[i], rawdb.ReadPendingHeader(sl.sliceDb, sl.hc.CurrentHeader().Parent()))
+						err = sl.subClients[i].UpdatePendingHeader(context.Background(), currentHeads[i], rawdb.ReadPendingHeader(sl.sliceDb, sl.hc.CurrentHeader().Hash()))
 						if err != nil {
 							return err
 						}
