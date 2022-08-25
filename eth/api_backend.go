@@ -139,6 +139,10 @@ func (b *EthAPIBackend) SetHeaderChainHead(header *types.Header) error {
 	return b.eth.core.SetHeaderChainHead(header)
 }
 
+func (b *EthAPIBackend) SetHeaderChainHeadToParent(hash common.Hash) error {
+	return b.eth.core.SetHeaderChainHeadToParent(hash)
+}
+
 func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
 	return b.eth.core.GetBlockByHash(hash), nil
 }

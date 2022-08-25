@@ -388,6 +388,10 @@ func (c *Core) SetHeaderChainHead(header *types.Header) error {
 	return c.sl.SetHeaderChainHead(header)
 }
 
+func (c *Core) SetHeaderChainHeadToParent(hash common.Hash) error {
+	return c.sl.SetHeaderChainHeadToParent(hash)
+}
+
 func (c *Core) UpdatePendingHeader(header *types.Header, pendingHeader *types.Header) error {
 	return c.sl.UpdatePendingHeader(header, pendingHeader)
 }

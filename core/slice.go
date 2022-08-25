@@ -193,7 +193,7 @@ func (sl *Slice) SliceAppend(block *types.Block) error {
 	}
 	fmt.Println("Appended Block Hash:", block.Hash(), "block header hash", block.Header().Hash(), "block Number:", block.Header().Number)
 	fmt.Println("Block found in db:", sl.hc.bc.GetBlock(block.Hash(), block.NumberU64()).Hash())
-	reorg := sl.HLCR(block.Header(), td)
+	reorg := sl.HLCR(td)
 
 	if reorg {
 		if err := sl.SetHeaderChainHead(block.Header()); err != nil {
@@ -404,16 +404,14 @@ func (sl *Slice) SetHeaderChainHead(head *types.Header) error {
 	return nil
 }
 
+func (sl *Slice) SetHeaderChainHeadToParent(hash common.Hash) error {
+
+}
+
 // HLCR
-func (sl *Slice) HLCR(externHeader *types.Header, externTd *big.Int) bool {
+func (sl *Slice) HLCR(externTd *big.Int) bool {
 	currentTd := sl.hc.GetTdByHash(sl.hc.CurrentHeader().Hash())
-	if currentTd[types.QuaiNetworkContext].Cmp(externTd) < 0 {
-		return true
-	} else if currentTd[types.QuaiNetworkContext].Cmp(externTd) < 0 {
-		return new(big.Int).SetBytes(sl.engine.SealHash(externHeader).Bytes()).Cmp(sl.engine.SealHash(sl.hc.CurrentHeader().Bytes())) > 0
-	} else {
-		return false
-	}
+	return currentTd[types.QuaiNetworkContext].Cmp(externTd) < 0
 }
 
 // CalcTd calculates the TD of the given header using PCRC and CalcHLCRNetDifficulty.

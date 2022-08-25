@@ -523,6 +523,14 @@ func (ec *Client) SetHeaderChainHead(ctx context.Context, header *types.Header) 
 	return nil
 }
 
+func (ec *Client) SetHeaderChainHeadToParent(ctx context.Context, hash common.Hash) error {
+	err := ec.c.CallContext(ctx, nil, "quai_setHeaderChainHeadToParent", hash)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (ec *Client) UpdatePendingHeader(ctx context.Context, header *types.Header, pendingHeader *types.Header) error {
 	data := map[string]interface{}{"Header": RPCMarshalHeader(header)}
 	data["PendingHeader"] = RPCMarshalHeader(pendingHeader)
