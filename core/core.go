@@ -392,8 +392,8 @@ func (c *Core) SetHeaderChainHeadToHash(hash common.Hash) error {
 	return c.sl.SetHeaderChainHeadToHash(hash)
 }
 
-func (c *Core) UpdatePendingHeader(header *types.Header, pendingHeader *types.Header) error {
-	return c.sl.UpdatePendingHeader(header, pendingHeader)
+func (c *Core) UpdatePendingHeader(header *types.Header, pendingHeader *types.Header, dom bool) error {
+	return c.sl.UpdatePendingHeader(header, pendingHeader, dom)
 }
 
 // SubscribePendingLogs starts delivering logs from pending transactions

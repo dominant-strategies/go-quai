@@ -237,7 +237,7 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) ([]*types.Header, er
 	// If head is the normal extension of canonical head, we can return by just wiring the canonical hash.
 	if prevHeader.Hash() == head.Parent() {
 		rawdb.WriteCanonicalHash(hc.headerDb, head.Hash(), head.Number64())
-		if types.QuaiNetworkContext != params.ZONE {
+		if types.QuaiNetworkContext != params.ZONE && prevHeader.Hash() == hc.config.GenesisHashes[types.QuaiNetworkContext] {
 			sliceHeaders[head.Location[types.QuaiNetworkContext]-1] = head
 		}
 		return sliceHeaders, nil
@@ -276,7 +276,7 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) ([]*types.Header, er
 		fmt.Println("delete prev", prevHeader.Hash())
 		rawdb.DeleteCanonicalHash(hc.headerDb, prevHeader.Number64())
 		prevHeader = hc.GetHeader(prevHeader.Parent(), prevHeader.Number64()-1)
-		if types.QuaiNetworkContext != params.ZONE {
+		if types.QuaiNetworkContext != params.ZONE && prevHeader.Hash() == hc.config.GenesisHashes[types.QuaiNetworkContext] {
 			sliceHeaders[prevHeader.Location[types.QuaiNetworkContext]-1] = prevHeader
 		}
 
@@ -289,7 +289,7 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) ([]*types.Header, er
 				fmt.Println("delete prev", prevHeader.Hash())
 				rawdb.DeleteCanonicalHash(hc.headerDb, prevHeader.Number64())
 				prevHeader = hc.GetHeader(prevHeader.Parent(), prevHeader.Number64()-1)
-				if types.QuaiNetworkContext != params.ZONE {
+				if types.QuaiNetworkContext != params.ZONE && prevHeader.Hash() == hc.config.GenesisHashes[types.QuaiNetworkContext] {
 					sliceHeaders[prevHeader.Location[types.QuaiNetworkContext]-1] = prevHeader
 				}
 

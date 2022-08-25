@@ -414,8 +414,8 @@ func (b *EthAPIBackend) GetHeadHash() common.Hash {
 	return b.eth.core.GetHeadHash()
 }
 
-func (b *EthAPIBackend) UpdatePendingHeader(header *types.Header, pendingHeader *types.Header) error {
-	return b.eth.core.UpdatePendingHeader(header, pendingHeader)
+func (b *EthAPIBackend) UpdatePendingHeader(header *types.Header, pendingHeader *types.Header, dom bool) error {
+	return b.eth.core.UpdatePendingHeader(header, pendingHeader, dom)
 }
 
 func (b *EthAPIBackend) PendingBlockBody(hash common.Hash) *types.Body {
