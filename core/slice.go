@@ -221,8 +221,8 @@ func (sl *Slice) SliceAppend(block *types.Block) error {
 
 func (sl *Slice) UpdatePendingHeader(header *types.Header, pendingHeader *types.Header) error {
 
-	//fmt.Println("header location: ", header.Location, "header number:", header.Number)
-	//fmt.Println("pending location: ", pendingHeader.Location, "pending number", pendingHeader.Number)
+	// fmt.Println("header location: ", header.Location, "header number:", header.Number)
+	// fmt.Println("pending location: ", pendingHeader.Location, "pending number", pendingHeader.Number)
 
 	var slPendingHeader *types.Header
 	if header.Hash() == sl.config.GenesisHashes[types.QuaiNetworkContext] {
@@ -253,7 +253,8 @@ func (sl *Slice) UpdatePendingHeader(header *types.Header, pendingHeader *types.
 		} else {
 			for index := types.QuaiNetworkContext - 1; index >= 0; index-- {
 				if types.QuaiNetworkContext != params.PRIME {
-					slPendingHeader = sl.writePendingHeader(sl.hc.CurrentHeader().Hash(), rawdb.ReadPendingHeader(sl.sliceDb, sl.hc.CurrentHeader().Hash()), pendingHeader, index)
+					fmt.Println("co ordinate pending header update: ", pendingHeader)
+					slPendingHeader = sl.writePendingHeader(header.Hash(), rawdb.ReadPendingHeader(sl.sliceDb, sl.hc.CurrentHeader().Hash()), pendingHeader, index)
 				}
 			}
 		}
@@ -284,11 +285,7 @@ func (sl *Slice) UpdatePendingHeader(header *types.Header, pendingHeader *types.
 						}
 					}
 				} else {
-					fmt.Println("sending on nilHeader on coordinate context: ", types.QuaiNetworkContext, "to sub", i)
-					err := sl.subClients[i].UpdatePendingHeader(context.Background(), sl.nilHeader, slPendingHeader)
-					if err != nil {
-						return err
-					}
+					return errors.New("current block location unknown in update pending header")
 				}
 
 			}
@@ -365,47 +362,75 @@ func (sl *Slice) Append(block *types.Block, td *big.Int) error {
 }
 
 func (sl *Slice) SetHeaderChainHead(head *types.Header) error {
+	var dom bool
+	dom = false
 	oldHead := sl.hc.CurrentHeader()
 	fmt.Println("setting head to:", head.Hash())
 	sliceHeaders, err := sl.hc.SetCurrentHeader(head)
-
 	if err != nil {
 		return err
 	}
 
-	for i, header := range sliceHeaders {
-		if header != nil && types.QuaiNetworkContext != params.ZONE {
-			if header.Hash() != params.NilHeaderHash {
-				sl.writeCurrentHeads(header, i)
-			}
+	//Check to see if this is a rollback type reorg
+	if head.Parent() != oldHead.Hash() {
+		//Check to see if this is a dom reorg
+		oldHeadOrder, _ := sl.engine.GetDifficultyOrder(oldHead)
+		newHeadOrder, _ := sl.engine.GetDifficultyOrder(head)
+		if oldHeadOrder > newHeadOrder {
+			dom = true
 		}
 	}
 
 	// set head of subs
 	if types.QuaiNetworkContext != params.ZONE {
-		// Perform the sub append
+		// Perform the sub set head
 		err = sl.subClients[head.Location[types.QuaiNetworkContext]-1].SetHeaderChainHead(context.Background(), head)
-		// If the append errors out in the sub we can delete the block from the headerchain.
-		if err != nil {
-			fmt.Println("reverting to old headers")
-			sliceHeaders, _ := sl.hc.SetCurrentHeader(oldHead)
-			for i, header := range sliceHeaders {
-				fmt.Println("sliceHeader[i]:", i, header.Hash())
-				if header != nil && types.QuaiNetworkContext != params.ZONE {
-					if header.Hash() != params.NilHeaderHash {
-						sl.writeCurrentHeads(header, i)
+		if dom {
+			for i := 1; i < params.FullerOntology[types.QuaiNetworkContext]-1; i++ {
+				if head.Location[types.QuaiNetworkContext]-1 != byte(i) {
+					//I need sub to not have a reference after the common
+					//I can't answer that question because I don't have my subs chain
+					//Ergo I should find the common and tell them to set head to somewhere prior to common
+					//I need to find the sub-parent hash from the common and request the sub set to that head
+					//However, the common sub could be a coord therefore I can't determine where to set from here
+					//This isn't even a reorg, this is a straight fucking tree trim
+					//So we need a call which trims this branch back to common. branch common->current
+					//Question? Is there another way to find common? Answer: No. Common must be found in current context
+					//Sub likely won't have the common. So the trim function isn't trim block, its trim reference.
+					//We need to find the last reference that is in the current chain for each sub prior to common
+					//We then need to send that reference using SetHeaderChainHeadToHash to sub
+					if sliceHeaders[i] != nil {
+						err = sl.subClients[i].SetHeaderChainHeadToHash(context.Background(), sliceHeaders[i].ParentHash[types.QuaiNetworkContext+1])
+						if err != nil {
+							return err
+						}
 					}
 				}
 			}
-			return err
+		}
+		// If the append errors out in the sub we can delete the block from the headerchain.
+		if err != nil {
+			fmt.Println("reverting to old headers")
+			_, err = sl.hc.SetCurrentHeader(oldHead)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
 	return nil
 }
 
-func (sl *Slice) SetHeaderChainHeadToParent(hash common.Hash) error {
-
+func (sl *Slice) SetHeaderChainHeadToHash(hash common.Hash) error {
+	header := sl.hc.GetHeaderByHash(hash)
+	if header != nil {
+		return errors.New("header not found in SetHeaderChainHeadToHash")
+	}
+	err := sl.SetHeaderChainHead(header)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // HLCR
@@ -578,15 +603,6 @@ func (sl *Slice) PreviousValidCoincident(header *types.Header, slice []byte, ord
 			return header, nil
 		}
 	}
-}
-
-func (sl *Slice) writeCurrentHeads(header *types.Header, index int) {
-	// get the current heads of the parent
-	currentHeads := rawdb.ReadSliceCurrentHeads(sl.sliceDb, header.Parent())
-	currentHeads[index] = header
-	// write the currentHeads
-	rawdb.WriteSliceCurrentHeads(sl.sliceDb, currentHeads, header.Hash())
-
 }
 
 func (sl *Slice) procFutureBlocks() {

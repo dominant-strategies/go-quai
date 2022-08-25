@@ -431,6 +431,9 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 				return
 			}
 			td = h.core.GetTd(terminusHeader.Hash(), terminusHeader.Number64())
+			if td == nil {
+				return
+			}
 			td[types.QuaiNetworkContext].Add(td[types.QuaiNetworkContext], block.Difficulty())
 		}
 

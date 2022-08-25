@@ -276,6 +276,9 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) ([]*types.Header, er
 		fmt.Println("delete prev", prevHeader.Hash())
 		rawdb.DeleteCanonicalHash(hc.headerDb, prevHeader.Number64())
 		prevHeader = hc.GetHeader(prevHeader.Parent(), prevHeader.Number64()-1)
+		if types.QuaiNetworkContext != params.ZONE {
+			sliceHeaders[prevHeader.Location[types.QuaiNetworkContext]-1] = prevHeader
+		}
 
 		if newHeader.Hash() == commonHeader.Hash() {
 			fmt.Println("appending on newHeader == commonHeader")
@@ -286,6 +289,9 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) ([]*types.Header, er
 				fmt.Println("delete prev", prevHeader.Hash())
 				rawdb.DeleteCanonicalHash(hc.headerDb, prevHeader.Number64())
 				prevHeader = hc.GetHeader(prevHeader.Parent(), prevHeader.Number64()-1)
+				if types.QuaiNetworkContext != params.ZONE {
+					sliceHeaders[prevHeader.Location[types.QuaiNetworkContext]-1] = prevHeader
+				}
 
 				// genesis check to not delete the genesis block
 				if prevHeader.Hash() == hc.config.GenesisHashes[0] {

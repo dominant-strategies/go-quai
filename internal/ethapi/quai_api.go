@@ -697,8 +697,8 @@ func (s *PublicBlockChainQuaiAPI) SetHeaderChainHead(ctx context.Context, raw js
 	return s.b.SetHeaderChainHead(header)
 }
 
-func (s *PublicBlockChainQuaiAPI) SetHeaderChainHeadToParent(ctx context.Context, hash common.Hash) error {
-	return s.b.SetHeaderChainHeadToParent(hash)
+func (s *PublicBlockChainQuaiAPI) SetHeaderChainHeadToHash(ctx context.Context, hash common.Hash) error {
+	return s.b.SetHeaderChainHeadToHash(hash)
 }
 
 type HeaderAndPendingHeader struct {

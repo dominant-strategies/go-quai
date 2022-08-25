@@ -523,8 +523,8 @@ func (ec *Client) SetHeaderChainHead(ctx context.Context, header *types.Header) 
 	return nil
 }
 
-func (ec *Client) SetHeaderChainHeadToParent(ctx context.Context, hash common.Hash) error {
-	err := ec.c.CallContext(ctx, nil, "quai_setHeaderChainHeadToParent", hash)
+func (ec *Client) SetHeaderChainHeadToHash(ctx context.Context, hash common.Hash) error {
+	err := ec.c.CallContext(ctx, nil, "quai_setHeaderChainHeadToHash", hash)
 	if err != nil {
 		return err
 	}
