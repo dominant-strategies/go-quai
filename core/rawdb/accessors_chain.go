@@ -608,10 +608,49 @@ func DeleteSliceCurrentHeads(db ethdb.KeyValueWriter, hash common.Hash) {
 	}
 }
 
-// ReadSlicePendingHeader retreive's the pending header stored in hash.
+// ReadPendingHeader retreive's the pending header stored in hash.
 func ReadPendingHeader(db ethdb.Reader, hash common.Hash) *types.Header {
 	key := pendingHeaderKey(hash)
 	fmt.Println("ReadPendingHeader Key:", hash)
+	data, _ := db.Get(key)
+	if len(data) == 0 {
+		return nil
+	}
+
+	header := new(types.Header)
+	if err := rlp.Decode(bytes.NewReader(data), header); err != nil {
+		log.Error("Invalid pendingHeader RLP")
+		return nil
+	}
+	return header
+}
+
+// WriteDomPendingHeader writes the pending header of the header hash.
+func WriteDomPendingHeader(db ethdb.KeyValueWriter, hash common.Hash, pendingHeader *types.Header) {
+	key := domPendingHeaderKey(hash)
+	// Write the encoded pending header
+	data, err := rlp.EncodeToBytes(pendingHeader)
+	if err != nil {
+		log.Crit("Failed to RLP encode pending header", "err", err)
+	}
+
+	if err := db.Put(key, data); err != nil {
+		log.Crit("Failed to store header", "err", err)
+	}
+}
+
+// DeleteDomPendingHeader deletes the pending header stored for the header hash.
+func DeleteDomPendingHeader(db ethdb.KeyValueWriter, hash common.Hash) {
+	key := domPendingHeaderKey(hash)
+
+	if err := db.Delete(key); err != nil {
+		log.Crit("Failed to delete slice pending header ", "err", err)
+	}
+}
+
+// ReadDomPendingHeader retreive's the pending header stored in hash.
+func ReadDomPendingHeader(db ethdb.Reader, hash common.Hash) *types.Header {
+	key := domPendingHeaderKey(hash)
 	data, _ := db.Get(key)
 	if len(data) == 0 {
 		return nil
