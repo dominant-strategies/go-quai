@@ -555,6 +555,7 @@ func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw js
 		}
 
 		block := types.NewBlockWithHeader(header).WithBody(txs, uncles)
+		block = block.WithSeal(header)
 		log.Info("Retrieved mined block", "number", header.Number, "location", header.Location)
 		s.b.InsertBlock(ctx, block)
 		// Broadcast the block and announce chain insertion event
@@ -562,7 +563,7 @@ func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw js
 			s.b.EventMux().Post(core.NewMinedBlockEvent{Block: block})
 		}
 	} else {
-		return errors.New("uncle")
+		log.Info("Uncle Block Found:", header.Hash(), "Block Number:", header.Number)
 	}
 
 	return nil

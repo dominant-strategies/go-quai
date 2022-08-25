@@ -87,9 +87,7 @@ func (blake3 *Blake3) Author(header *types.Header) (common.Address, error) {
 func (blake3 *Blake3) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Header, seal bool) error {
 	// Short circuit if the header is known, or its parent not
 	number := header.Number[types.QuaiNetworkContext].Uint64()
-	if chain.GetHeader(header.Hash(), number) != nil {
-		return nil
-	}
+
 	parent := chain.GetHeader(header.ParentHash[types.QuaiNetworkContext], number-1)
 	if parent == nil {
 		return consensus.ErrUnknownAncestor

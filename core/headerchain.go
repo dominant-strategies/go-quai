@@ -145,15 +145,24 @@ func (hc *HeaderChain) Append(block *types.Block) error {
 	hc.headermu.Lock()
 	defer hc.headermu.Unlock()
 
-	fmt.Println("Block information: Hash:", block.Hash(), "Number:", block.NumberU64(), "Location:", block.Header().Location, "Parent:", block.ParentHash())
-	err := hc.Appendable(block)
+	fmt.Println("Block information: Hash:", block.Hash(), "block header hash:", block.Header().Hash(), "Number:", block.NumberU64(), "Location:", block.Header().Location, "Parent:", block.ParentHash())
+	// err := hc.Appendable(block)
+	// if err != nil {
+	// 	fmt.Println("Error on appendable, err:", err)
+	// 	return err
+	// }
+
+	err := hc.engine.VerifyHeader(hc, block.Header(), true)
 	if err != nil {
-		fmt.Println("Error on appendable, err:", err)
 		return err
 	}
-
+	fmt.Println("After Appendable Block information: Hash:", block.Hash(), "block header hash:", block.Header().Hash(), "Number:", block.NumberU64(), "Location:", block.Header().Location, "Parent:", block.ParentHash())
 	// Append header to the headerchain
-	rawdb.WriteHeader(hc.headerDb, block.Header())
+	batch := hc.headerDb.NewBatch()
+	rawdb.WriteHeader(batch, block.Header())
+	if err := batch.Write(); err != nil {
+		return err
+	}
 
 	// Append block else revert header append
 	logs, err := hc.bc.Append(block)
@@ -163,6 +172,7 @@ func (hc *HeaderChain) Append(block *types.Block) error {
 		return err
 	}
 
+	fmt.Println("After Append Block information: Hash:", block.Hash(), "block header hash:", block.Header().Hash(), "Number:", block.NumberU64(), "Location:", block.Header().Location, "Parent:", block.ParentHash())
 	hc.bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
 	if len(logs) > 0 {
 		hc.bc.logsFeed.Send(logs)

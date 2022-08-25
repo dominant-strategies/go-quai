@@ -936,7 +936,7 @@ func (w *worker) FinalizeAssembleAndBroadcast(chain consensus.ChainHeaderReader,
 		return nil, err
 	}
 
-	if chain.CurrentHeader().Hash() == block.Header().Hash() {
+	if chain.CurrentHeader().Hash() == block.ParentHash() {
 		fmt.Println("Sending a header roots update: ", types.HeaderRoots{StateRoot: block.Root(), TxsRoot: block.TxHash(), ReceiptsRoot: block.ReceiptHash()})
 		w.headerRootsFeed.Send(types.HeaderRoots{StateRoot: block.Root(), TxsRoot: block.TxHash(), ReceiptsRoot: block.ReceiptHash()})
 	}

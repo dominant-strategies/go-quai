@@ -279,8 +279,12 @@ func (p *StateProcessor) Apply(block *types.Block) ([]*types.Log, error) {
 		return nil, err
 	}
 
-	rawdb.WriteReceipts(p.hc.headerDb, block.Hash(), block.NumberU64(), receipts)
-	rawdb.WritePreimages(p.hc.headerDb, statedb.Preimages())
+	blockBatch := p.hc.headerDb.NewBatch()
+	rawdb.WriteReceipts(blockBatch, block.Hash(), block.NumberU64(), receipts)
+	rawdb.WritePreimages(blockBatch, statedb.Preimages())
+	if err := blockBatch.Write(); err != nil {
+		log.Crit("Failed to write block into disk", "err", err)
+	}
 
 	// Commit all cached state changes into underlying memory database.
 	root, err := statedb.Commit(true)

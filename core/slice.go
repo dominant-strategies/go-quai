@@ -176,10 +176,6 @@ func (sl *Slice) SliceAppend(block *types.Block) error {
 	_, err = sl.PCRC(block, order)
 	if err != nil {
 		fmt.Println("Slice error in PCRC", err)
-		errUntwist := sl.untwistHead(block, err)
-		if errUntwist != nil {
-			return errUntwist
-		}
 		return err
 	}
 
@@ -216,9 +212,8 @@ func (sl *Slice) SliceAppend(block *types.Block) error {
 			return err
 		}
 
-		sl.miner.worker.headerRootsFeed.Send(types.HeaderRoots{StateRoot: block.Root(), TxsRoot: block.TxHash(), ReceiptsRoot: block.ReceiptHash()})
 	} else {
-		sl.hc.bc.chainSideFeed.Send(ChainSideEvent{Block: block})
+		//sl.hc.bc.chainSideFeed.Send(ChainSideEvent{Block: block})
 	}
 
 	return nil
@@ -264,18 +259,6 @@ func (sl *Slice) UpdatePendingHeader(header *types.Header, pendingHeader *types.
 		}
 	}
 
-	// There is no more asynchronous updates on the roots.
-	// Need:
-	// Way to store the body associated with the roots for block construction
-	// 1. Storing it based on the root doesn't work because the roots might not update and we can overwrite the Body values. ????? Clearly Wrong.
-	// 2. Storing based on pendingHeader hash doesn't work because pendingHeader is only complete in the zone.
-	// 3. Since only zone has the complete data, there is no way for us to store the Body data in Region and Prime.
-	// 4. But the Header after mining goes to all the Chains but the Append only initiated by (order == context)
-	// 5. So Dom's don't have enough data to store the Body associated with the Root.
-
-	// All we have to do is to store the Body Data on the roots, and upon receiving a Header fetch the Body data from the db and make a block.
-	// Asynchronous root updates must happen. So we need FinalizeAssembleAndBroadcast.
-
 	// Send the pending blocks down to all the subclients.
 	if types.QuaiNetworkContext != params.ZONE {
 		for i := range sl.subClients {
@@ -315,6 +298,7 @@ func (sl *Slice) UpdatePendingHeader(header *types.Header, pendingHeader *types.
 		fmt.Println("Pending Header location: ", slPendingHeader.Location, "Pending Header Number:", slPendingHeader.Number)
 		fmt.Println("Header location: ", header.Location, "Header Number:", header.Number)
 		rawdb.WritePendingHeader(sl.sliceDb, header.Hash(), slPendingHeader)
+		sl.miner.worker.pendingHeaderFeed.Send(slPendingHeader)
 	}
 	return nil
 }
@@ -347,54 +331,6 @@ func (sl *Slice) PendingBlockBody(hash common.Hash) *types.Body {
 	return rawdb.ReadPendginBlockBody(sl.sliceDb, hash)
 }
 
-func (sl *Slice) untwistHead(block *types.Block, err error) error {
-	// If we have a twist we may need to redirect head/(s)
-	if errors.Is(err, consensus.ErrPrimeTwist) || errors.Is(err, consensus.ErrRegionTwist) {
-		// fmt.Println("type of twist in PCRC:", err)
-		// fmt.Println("Conditions to reset head:")
-		// fmt.Println("currentHeaderHash:", sl.hc.currentHeaderHash)
-		// fmt.Println("parentHash:", block.Header().ParentHash[types.QuaiNetworkContext])
-		// fmt.Println("subClient.HeadHash:", sl.subClients[block.Header().Location[types.QuaiNetworkContext]-1].GetHeadHash(context.Background()))
-		// fmt.Println("currentBlock_sub_parent:", block.Header().ParentHash[types.QuaiNetworkContext+1])
-
-		// Only if the twisted block was mined by or could have been mined by me switch heads
-		// This check prevents us from repointing our head if old or non-relavent twisted blocks
-		// are presented
-
-		// If there is a prime twist this is a PRTP != PRTR so we should drop back to previous slice head
-		if errors.Is(err, consensus.ErrPrimeTwist) || errors.Is(err, consensus.ErrRegionTwist) {
-			currentHeads := rawdb.ReadSliceCurrentHeads(sl.sliceDb, sl.hc.CurrentHeader().Parent())
-			err = sl.SetHeaderChainHead(currentHeads[block.Header().Location[types.QuaiNetworkContext]-1])
-			if err != nil {
-				return err
-			}
-			err = sl.UpdatePendingHeader(sl.hc.CurrentHeader(), rawdb.ReadPendingHeader(sl.sliceDb, sl.hc.CurrentHeader().Hash()))
-			if err != nil {
-				return err
-			}
-
-			reorgNumber := currentHeads[block.Header().Location[types.QuaiNetworkContext]-1].Number64()
-			for i := 0; i < params.FullerOntology[types.QuaiNetworkContext]; i++ {
-				if currentHeads[i].Number64() > reorgNumber && block.Header().Location[types.QuaiNetworkContext]-1 != byte(i) {
-					err = sl.subClients[i].SetHeaderChainHead(context.Background(), currentHeads[i])
-					if err != nil {
-						return err
-					}
-					err = sl.subClients[i].UpdatePendingHeader(context.Background(), currentHeads[i], rawdb.ReadPendingHeader(sl.sliceDb, sl.hc.CurrentHeader().Hash()))
-					if err != nil {
-						return err
-					}
-				}
-			}
-
-			return err
-		}
-		return err
-
-	}
-	return nil
-}
-
 // Append
 func (sl *Slice) Append(block *types.Block, td *big.Int) error {
 	sl.appendmu.Lock()
@@ -412,7 +348,7 @@ func (sl *Slice) Append(block *types.Block, td *big.Int) error {
 	// Remove this once td is converted to a single value.
 	externTd := make([]*big.Int, 3)
 	externTd[types.QuaiNetworkContext] = td
-	rawdb.WriteTd(sl.hc.headerDb, block.Hash(), block.NumberU64(), externTd)
+	rawdb.WriteTd(sl.hc.headerDb, block.Header().Hash(), block.NumberU64(), externTd)
 
 	if types.QuaiNetworkContext != params.ZONE {
 		// Perform the sub append
