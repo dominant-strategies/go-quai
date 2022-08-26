@@ -225,18 +225,25 @@ func (sl *Slice) SliceAppend(block *types.Block) error {
 	return nil
 }
 
-func (sl *Slice) UpdatePendingHeader(header *types.Header, pendingHeader *types.Header) error {
+func (sl *Slice) UpdatePendingHeader(header *types.Header, pendingHeader *types.Header) (err error) {
+	defer func() {
+		if err != nil {
+			fmt.Println("Pending Header update failed for block: ", header.Hash())
+			sl.SetHeaderChainHead(sl.hc.GetHeaderByHash(header.Parent()))
+		}
+	}()
 
 	fmt.Println("Write DOM pending:")
 	fmt.Println("header hash:", header.Hash(), "header location: ", header.Location, "header number:", header.Number)
 	fmt.Println("pending hash:", pendingHeader.Hash(), "pending location: ", pendingHeader.Location, "pending number", pendingHeader.Number, "pending header:", pendingHeader)
 
 	var slPendingHeader *types.Header
+	var localPendingHeader *types.Header
 
 	if header.Hash() == sl.config.GenesisHashes[types.QuaiNetworkContext] {
 		slPendingHeader = pendingHeader
 		// Collect the pending block.
-		localPendingHeader, err := sl.miner.worker.GeneratePendingHeader(header)
+		localPendingHeader, err = sl.miner.worker.GeneratePendingHeader(header)
 		if err != nil {
 			fmt.Println("pending block error: ", err)
 			return err
@@ -266,7 +273,7 @@ func (sl *Slice) UpdatePendingHeader(header *types.Header, pendingHeader *types.
 			(header.Location[0] == sl.config.Location[0] && types.QuaiNetworkContext == params.REGION) ||
 			(bytes.Equal(header.Location, sl.config.Location) && types.QuaiNetworkContext == params.ZONE) {
 			// Collect the pending block.
-			localPendingHeader, err := sl.miner.worker.GeneratePendingHeader(header)
+			localPendingHeader, err = sl.miner.worker.GeneratePendingHeader(header)
 			if err != nil {
 				fmt.Println("pending block error: ", err)
 				return err
