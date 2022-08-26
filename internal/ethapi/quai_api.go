@@ -704,7 +704,6 @@ func (s *PublicBlockChainQuaiAPI) SetHeaderChainHeadToHash(ctx context.Context, 
 type HeaderAndPendingHeader struct {
 	Header        *types.Header
 	PendingHeader *types.Header
-	Dom           bool
 }
 
 func (s *PublicBlockChainQuaiAPI) UpdatePendingHeader(ctx context.Context, raw json.RawMessage) error {
@@ -717,6 +716,5 @@ func (s *PublicBlockChainQuaiAPI) UpdatePendingHeader(ctx context.Context, raw j
 
 	fmt.Println("quai api header: ", headerAndPendingHeader.Header)
 	fmt.Println("quai api pending header: ", headerAndPendingHeader.PendingHeader)
-	fmt.Println("UPdatePendingHeader inSlice?:", headerAndPendingHeader.Dom)
-	return s.b.UpdatePendingHeader(headerAndPendingHeader.Header, headerAndPendingHeader.PendingHeader, headerAndPendingHeader.Dom)
+	return s.b.UpdatePendingHeader(headerAndPendingHeader.Header, headerAndPendingHeader.PendingHeader)
 }

@@ -116,7 +116,8 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 
 	if types.QuaiNetworkContext == params.PRIME {
 		fmt.Println("update pending from PRIME on initial")
-		sl.UpdatePendingHeader(pendingHeader, sl.nilHeader, true)
+		sl.UpdatePendingHeader(pendingHeader, sl.nilHeader)
+
 	}
 
 	go sl.updateFutureBlocks()
@@ -196,6 +197,7 @@ func (sl *Slice) SliceAppend(block *types.Block) error {
 	reorg := sl.HLCR(td)
 
 	if reorg {
+		currentHead := sl.hc.CurrentHeader()
 		if err := sl.SetHeaderChainHead(block.Header()); err != nil {
 			// updating pending header again since block insertion failed
 			return err
@@ -207,8 +209,12 @@ func (sl *Slice) SliceAppend(block *types.Block) error {
 			pendingHeader = sl.nilHeader
 		}
 
-		err := sl.UpdatePendingHeader(block.Header(), pendingHeader, true)
+		err := sl.UpdatePendingHeader(block.Header(), pendingHeader)
 		if err != nil {
+			if err := sl.SetHeaderChainHead(currentHead); err != nil {
+				// updating pending header again since block insertion failed
+				return err
+			}
 			return err
 		}
 
@@ -219,7 +225,7 @@ func (sl *Slice) SliceAppend(block *types.Block) error {
 	return nil
 }
 
-func (sl *Slice) UpdatePendingHeader(header *types.Header, pendingHeader *types.Header, dom bool) error {
+func (sl *Slice) UpdatePendingHeader(header *types.Header, pendingHeader *types.Header) error {
 
 	fmt.Println("Write DOM pending:")
 	fmt.Println("header hash:", header.Hash(), "header location: ", header.Location, "header number:", header.Number)
@@ -280,19 +286,19 @@ func (sl *Slice) UpdatePendingHeader(header *types.Header, pendingHeader *types.
 			if sl.subClients[i] != nil {
 				if header.Hash() == sl.config.GenesisHashes[types.QuaiNetworkContext] {
 					fmt.Println("sending on genesis from context: ", types.QuaiNetworkContext, "to sub", i)
-					err := sl.subClients[i].UpdatePendingHeader(context.Background(), header, slPendingHeader, true)
+					err := sl.subClients[i].UpdatePendingHeader(context.Background(), header, slPendingHeader)
 					if err != nil {
 						return err
 					}
 				} else if header.Location[types.QuaiNetworkContext]-1 == byte(i) {
 					fmt.Println("sending on overlapping context: ", types.QuaiNetworkContext, "to sub", i)
-					err := sl.subClients[i].UpdatePendingHeader(context.Background(), header, slPendingHeader, true)
+					err := sl.subClients[i].UpdatePendingHeader(context.Background(), header, slPendingHeader)
 					if err != nil {
 						return err
 					}
 				} else {
 					fmt.Println("sending on nilHeader on coordinate context: ", types.QuaiNetworkContext, "to sub", i)
-					err := sl.subClients[i].UpdatePendingHeader(context.Background(), header, slPendingHeader, false)
+					err := sl.subClients[i].UpdatePendingHeader(context.Background(), header, slPendingHeader)
 					if err != nil {
 						return err
 					}
@@ -743,7 +749,9 @@ func (sl *Slice) sendPendingHeaderToFeed() {
 				header := rawdb.ReadPendingHeader(sl.sliceDb, sl.hc.CurrentHeader().Hash())
 				fmt.Println("header sent to miner by proc:", header)
 				if header != nil {
-					sl.miner.worker.pendingHeaderFeed.Send(header)
+					if header.Location[0] != 0 && header.Location[1] != 0 {
+						sl.miner.worker.pendingHeaderFeed.Send(header)
+					}
 				}
 
 			}
