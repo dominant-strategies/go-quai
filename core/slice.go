@@ -41,6 +41,7 @@ type Slice struct {
 
 	quit chan struct{} // slice quit channel
 
+	domClient    *quaiclient.Client   // domClient is used to check canonical status of dom blocks
 	subClients   []*quaiclient.Client // subClinets is used to check is a coincident block is valid in the subordinate context
 	futureBlocks *lru.Cache
 	futureHeads  *lru.Cache
@@ -74,10 +75,16 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 	sl.miner = New(sl.hc, sl.txPool, config, db, chainConfig, engine, isLocalBlock)
 	sl.miner.SetExtra(sl.miner.MakeExtraData(config.ExtraData))
 
-	// only set the subClients if the chain is not zone
 	sl.subClients = make([]*quaiclient.Client, 3)
+	// only set the subClients if the chain is not region
 	if types.QuaiNetworkContext != params.ZONE {
 		sl.subClients = MakeSubClients(subClientUrls)
+	}
+
+	if types.QuaiNetworkContext != params.PRIME {
+		go func() {
+			sl.domClient = MakeDomClient(domClientUrl)
+		}()
 	}
 
 	sl.nilHeader = &types.Header{
@@ -117,7 +124,6 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 	if types.QuaiNetworkContext == params.PRIME {
 		fmt.Println("update pending from PRIME on initial")
 		sl.UpdatePendingHeader(pendingHeader, sl.nilHeader)
-
 	}
 
 	go sl.updateFutureBlocks()
@@ -156,6 +162,18 @@ func MakeSubClients(suburls []string) []*quaiclient.Client {
 		subClients[i] = subClient
 	}
 	return subClients
+}
+
+// MakeDomClient creates the quaiclient for the given domurl
+func MakeDomClient(domurl string) *quaiclient.Client {
+	if domurl == "" {
+		log.Crit("dom client url is empty")
+	}
+	domClient, err := quaiclient.Dial(domurl)
+	if err != nil {
+		log.Crit("Error connecting to the dominant go-quai client", "err", err)
+	}
+	return domClient
 }
 
 // Config retrieves the slice's chain configuration.
@@ -222,6 +240,11 @@ func (sl *Slice) SliceAppend(block *types.Block) error {
 
 	} else {
 		//sl.hc.bc.chainSideFeed.Send(ChainSideEvent{Block: block})
+	}
+
+	// Check if still on dom
+	if types.QuaiNetworkContext != params.PRIME {
+		sl.CheckAttached(sl.hc.CurrentHeader(), types.QuaiNetworkContext-1)
 	}
 
 	log.Info("Appended new block", "number", block.Header().Number, "hash", block.Hash(), "loc", block.Header().Location,
@@ -531,6 +554,7 @@ func (sl *Slice) PCRC(block *types.Block, headerOrder int) (types.PCRCTermini, e
 			return types.PCRCTermini{}, errors.New("there exists a Prime twist (PTP != PTR != PTZ")
 		}
 		if PRTP.Hash() != PCRCTermini.PRTR {
+			fmt.Println("PCRC Error:", "PRTP", PRTP.Hash(), "PRTR", PCRCTermini.PRTR)
 			return types.PCRCTermini{}, consensus.ErrPrimeTwist
 		}
 
@@ -642,6 +666,43 @@ func (sl *Slice) PreviousValidCoincident(header *types.Header, slice []byte, ord
 		if equal && difficultyOrder <= order {
 			return header, nil
 		}
+	}
+}
+
+// CheckAttached retrieves whether or not the block to be imported is canonical. Will rollback our chain until the
+// dominant block is canonical.
+func (sl *Slice) CheckAttached(header *types.Header, order int) error {
+	lastUncleHash := common.Hash{}
+	for {
+		terminalHeader, err := sl.PreviousValidCoincident(header, header.Location, order, true)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println("TerminalHeader", terminalHeader.Hash())
+		if terminalHeader.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
+			return nil
+		}
+
+		hash := sl.domClient.GetHeaderHashByNumber(context.Background(), terminalHeader.Number[types.QuaiNetworkContext-1])
+		fmt.Println("GetHeaderByHash in CheckAttached", hash)
+		// If the header is cononical break else keep looking
+		switch hash == terminalHeader.Hash() {
+		case true:
+			if (lastUncleHash != common.Hash{}) {
+				fmt.Println("Setting back to terminalHeader that is canon", terminalHeader.Hash())
+				sl.SetHeaderChainHead(terminalHeader)
+			}
+			return nil
+		case false:
+			lastUncleHash = header.Hash()
+		}
+
+		if header.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
+			return nil
+		}
+
+		header = terminalHeader
 	}
 }
 

@@ -41,6 +41,7 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 		// check the order of the block
 		blockOrder, err := c.engine.GetDifficultyOrder(block.Header())
 		if err != nil {
+			fmt.Println("Err getting blockOrder", err)
 			return i, err
 		}
 		// if the order of the block is less than the context
