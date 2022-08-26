@@ -357,7 +357,7 @@ func (sl *Slice) makePendingHeader(indexHash common.Hash, header *types.Header, 
 }
 
 func (sl *Slice) PendingBlockBody(hash common.Hash) *types.Body {
-	return rawdb.ReadPendginBlockBody(sl.sliceDb, hash)
+	return rawdb.ReadPendingBlockBody(sl.sliceDb, hash)
 }
 
 // Append
