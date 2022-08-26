@@ -159,8 +159,8 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		}
 	}
 
-	for i, block := range knotSet {
-		if i != 0 {
+	for _, block := range knotSet {
+		if block != nil {
 			rawdb.WriteTd(chainDb, block.Hash(), block.NumberU64(), config.Genesis.Difficulty)
 			rawdb.WriteBlock(chainDb, block)
 			rawdb.WriteReceipts(chainDb, block.Hash(), block.NumberU64(), nil)

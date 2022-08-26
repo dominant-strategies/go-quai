@@ -31,6 +31,7 @@ import (
 	"github.com/spruce-solutions/go-quai/core/vm"
 	"github.com/spruce-solutions/go-quai/ethdb"
 	"github.com/spruce-solutions/go-quai/params"
+	"github.com/spruce-solutions/go-quai/trie"
 )
 
 // BlockGen creates blocks for testing.
@@ -266,15 +267,6 @@ func GenerateKnot(config *params.ChainConfig, parent *types.Block, engine consen
 					log.Println("PRIME:", block.Header().Location, block.Header().Number, block.Header().Hash())
 				}
 
-				// Write state changes to db
-				root, err := statedb.Commit(config.IsEIP158(block.Number()))
-				if err != nil {
-					panic(fmt.Sprintf("state write error: %v", err))
-				}
-				if err := statedb.Database().TrieDB().Commit(root, false, nil); err != nil {
-					panic(fmt.Sprintf("trie write error: %v", err))
-				}
-
 				k.block = block
 
 				defer wg.Done()
@@ -294,7 +286,7 @@ func GenerateKnot(config *params.ChainConfig, parent *types.Block, engine consen
 		}
 		if b.engine != nil {
 			// Finalize and seal the block
-			block, _ := b.engine.FinalizeAndAssemble(chainreader, b.header, statedb, b.txs, b.uncles, b.receipts)
+			block := types.NewBlock(b.header, nil, nil, nil, trie.NewStackTrie(nil))
 
 			// Mine the block
 			if err := engine.Seal(chainreader, block, resultCh, stopCh); err != nil {
@@ -356,11 +348,10 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 	}
 
 	// Setting this to params.MinGasLimit for now since
-	header.GasLimit[types.QuaiNetworkContext] = params.MinGasLimit
+	header.GasLimit = []uint64{params.MinGasLimit, params.MinGasLimit, params.MinGasLimit}
 
 	parentHeader := parent.Header()
 
-	header.Root[types.QuaiNetworkContext] = state.IntermediateRoot(chain.Config().IsEIP158(parent.Number()))
 	header.ParentHash[types.QuaiNetworkContext] = parent.Hash()
 	header.Coinbase[types.QuaiNetworkContext] = parent.Coinbase()
 	header.Difficulty[types.QuaiNetworkContext] = engine.CalcDifficulty(chain, time, parentHeader, types.QuaiNetworkContext)
@@ -368,7 +359,7 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 	header.Number[types.QuaiNetworkContext] = new(big.Int).Add(parent.Number(), common.Big1)
 	if len(parent.Header().Location) > 0 && header.Location[0] == parent.Header().Location[0] {
 		header.Number[types.QuaiNetworkContext+1] = new(big.Int).Add(parent.Header().Number[types.QuaiNetworkContext+1], common.Big1)
-
+		header.ParentHash[types.QuaiNetworkContext+1] = parent.Hash()
 	}
 
 	return header
