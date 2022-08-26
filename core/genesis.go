@@ -291,7 +291,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	}
 
 	if len(g.GasLimit) == 0 {
-		head.GasLimit[types.QuaiNetworkContext] = params.GenesisGasLimit
+		head.GasLimit = []uint64{params.GenesisGasLimit, params.GenesisGasLimit, params.GenesisGasLimit}
 	}
 
 	statedb.Commit(false)
@@ -351,6 +351,7 @@ func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big
 func MainnetPrimeGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.MainnetPrimeChainConfig,
+		Knot:       ReadKnot("./core/knot/mainnet_knot.rlp"),
 		ParentHash: []common.Hash{common.Hash{}, common.Hash{}, common.Hash{}},
 		Coinbase:   []common.Address{common.Address{}, common.Address{}, common.Address{}},
 		Number:     []*big.Int{big.NewInt(0), big.NewInt(0), big.NewInt(0)},
@@ -367,7 +368,9 @@ func MainnetPrimeGenesisBlock() *Genesis {
 func MainnetRegionGenesisBlock(regionParams *params.ChainConfig) *Genesis {
 	return &Genesis{
 		Config:     regionParams,
+		Knot:       ReadKnot("./core/knot/mainnet_knot.rlp"),
 		ParentHash: []common.Hash{common.Hash{}, common.Hash{}, common.Hash{}},
+		Coinbase:   []common.Address{common.Address{}, common.Address{}, common.Address{}},
 		Number:     []*big.Int{big.NewInt(0), big.NewInt(0), big.NewInt(0)},
 		Nonce:      60066,
 		ExtraData:  [][]byte{hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"), hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"), hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa")},
@@ -382,7 +385,9 @@ func MainnetRegionGenesisBlock(regionParams *params.ChainConfig) *Genesis {
 func MainnetZoneGenesisBlock(zoneParams *params.ChainConfig) *Genesis {
 	return &Genesis{
 		Config:     zoneParams,
+		Knot:       ReadKnot("./core/knot/mainnet_knot.rlp"),
 		ParentHash: []common.Hash{common.Hash{}, common.Hash{}, common.Hash{}},
+		Coinbase:   []common.Address{common.Address{}, common.Address{}, common.Address{}},
 		Number:     []*big.Int{big.NewInt(0), big.NewInt(0), big.NewInt(0)},
 		Nonce:      60066,
 		ExtraData:  [][]byte{hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"), hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"), hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa")},
@@ -397,7 +402,7 @@ func MainnetZoneGenesisBlock(zoneParams *params.ChainConfig) *Genesis {
 func RopstenPrimeGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.RopstenPrimeChainConfig,
-		Knot:       ReadKnot("test_knot.rlp"),
+		Knot:       ReadKnot("./core/knot/ropsten_knot.rlp"),
 		ParentHash: []common.Hash{common.Hash{}, common.Hash{}, common.Hash{}},
 		Coinbase:   []common.Address{common.Address{}, common.Address{}, common.Address{}},
 		Number:     []*big.Int{big.NewInt(0), big.NewInt(0), big.NewInt(0)},
@@ -405,7 +410,7 @@ func RopstenPrimeGenesisBlock() *Genesis {
 		ExtraData:  [][]byte{hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"), hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"), hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa")},
 		GasLimit:   []uint64{500000, 500000, 500000},
 		GasUsed:    []uint64{0, 0, 0},
-		Difficulty: []*big.Int{big.NewInt(30), big.NewInt(20), big.NewInt(10)},
+		Difficulty: []*big.Int{big.NewInt(3448576), big.NewInt(1248576), big.NewInt(168576)},
 		Alloc:      decodePrealloc(ropstenAllocData),
 	}
 }
@@ -414,7 +419,7 @@ func RopstenPrimeGenesisBlock() *Genesis {
 func RopstenRegionGenesisBlock(regionParams *params.ChainConfig) *Genesis {
 	return &Genesis{
 		Config:     regionParams,
-		Knot:       ReadKnot("test_knot.rlp"),
+		Knot:       ReadKnot("./core/knot/ropsten_knot.rlp"),
 		ParentHash: []common.Hash{common.Hash{}, common.Hash{}, common.Hash{}},
 		Coinbase:   []common.Address{common.Address{}, common.Address{}, common.Address{}}, Number: []*big.Int{big.NewInt(0), big.NewInt(0), big.NewInt(0)},
 		Nonce:      11,
@@ -430,7 +435,7 @@ func RopstenRegionGenesisBlock(regionParams *params.ChainConfig) *Genesis {
 func RopstenZoneGenesisBlock(zoneParams *params.ChainConfig) *Genesis {
 	return &Genesis{
 		Config:     zoneParams,
-		Knot:       ReadKnot("test_knot.rlp"),
+		Knot:       ReadKnot("./core/knot/ropsten_knot.rlp"),
 		ParentHash: []common.Hash{common.Hash{}, common.Hash{}, common.Hash{}},
 		Coinbase:   []common.Address{common.Address{}, common.Address{}, common.Address{}}, Number: []*big.Int{big.NewInt(0), big.NewInt(0), big.NewInt(0)},
 		Nonce:      11,

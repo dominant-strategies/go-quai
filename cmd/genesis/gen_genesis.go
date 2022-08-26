@@ -17,7 +17,7 @@ func main() {
 	var (
 		testdb  = rawdb.NewMemoryDatabase()
 		genesis = core.RopstenPrimeGenesisBlock().MustCommit(testdb)
-		fn      = "test_knot.rlp"
+		fn      = "ropsten_knot.rlp"
 	)
 
 	blake3Config := blake3.Config{
@@ -46,7 +46,6 @@ func main() {
 	}
 
 	for _, block := range blocks {
-
 		if err := block.EncodeRLP(writer); err != nil {
 			log.Panic("error writing")
 		}
