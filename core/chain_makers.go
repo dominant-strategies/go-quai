@@ -263,7 +263,7 @@ func GenerateKnot(config *params.ChainConfig, parent *types.Block, engine consen
 					log.Println("Block mined has an invalid order")
 				}
 
-				if context == 0 {
+				if context == params.PRIME {
 					log.Println("PRIME:", block.Header().Location, block.Header().Number, block.Header().Hash())
 				}
 
