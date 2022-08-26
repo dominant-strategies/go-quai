@@ -27,6 +27,7 @@ import (
 // in relation to the parent gas limit.
 func VerifyGaslimit(parentGasLimit, headerGasLimit uint64) error {
 	// Verify that the gas limit remains within allowed bounds
+	fmt.Println("Parent Gas", parentGasLimit, headerGasLimit)
 	diff := int64(parentGasLimit) - int64(headerGasLimit)
 	if diff < 0 {
 		diff *= -1
