@@ -224,12 +224,11 @@ func (sl *Slice) UpdatePendingHeader(header *types.Header, pendingHeader *types.
 	fmt.Println("Write DOM pending:")
 	fmt.Println("header hash:", header.Hash(), "header location: ", header.Location, "header number:", header.Number)
 	fmt.Println("pending hash:", pendingHeader.Hash(), "pending location: ", pendingHeader.Location, "pending number", pendingHeader.Number, "pending header:", pendingHeader)
-	// Store the domPendingHeader
-	rawdb.WriteDomPendingHeader(sl.sliceDb, header.Hash(), pendingHeader)
 
 	var slPendingHeader *types.Header
-	slPendingHeader = pendingHeader
+
 	if header.Hash() == sl.config.GenesisHashes[types.QuaiNetworkContext] {
+		slPendingHeader = pendingHeader
 		// Collect the pending block.
 		localPendingHeader, err := sl.miner.worker.GeneratePendingHeader(header)
 		if err != nil {
@@ -241,8 +240,24 @@ func (sl *Slice) UpdatePendingHeader(header *types.Header, pendingHeader *types.
 		fmt.Println("pending hash:", localPendingHeader.Hash(), "pending location: ", localPendingHeader.Location, "pending number", localPendingHeader.Number, "pending header:", localPendingHeader)
 		slPendingHeader = sl.makePendingHeader(header.Hash(), localPendingHeader, slPendingHeader, types.QuaiNetworkContext)
 	} else {
+		// Store the domPendingHeader
+		order, err := sl.engine.GetDifficultyOrder(header)
+		if err != nil {
+			return err
+		}
+		fmt.Println("UpdatePendingHeader order:", order)
+		if order < types.QuaiNetworkContext {
+			fmt.Println("UpdatePendingHeader Using header value passed in")
+			rawdb.WritePendingHeader(sl.sliceDb, header.Hash(), pendingHeader)
+			slPendingHeader = pendingHeader
+		} else {
+			fmt.Println("UpdatePendingHeader using value read from db, hash:", header.Parent())
+			slPendingHeader = rawdb.ReadPendingHeader(sl.sliceDb, header.Parent())
+		}
 		fmt.Println("header.hash:", header.Hash(), "sl.nilHeader.Hash:", sl.nilHeader.Hash())
-		if dom {
+		if (order == params.PRIME && types.QuaiNetworkContext == params.PRIME) ||
+			(header.Location[0] == sl.config.Location[0] && types.QuaiNetworkContext == params.REGION) ||
+			(bytes.Equal(header.Location, sl.config.Location) && types.QuaiNetworkContext == params.ZONE) {
 			// Collect the pending block.
 			localPendingHeader, err := sl.miner.worker.GeneratePendingHeader(header)
 			if err != nil {
@@ -252,26 +267,10 @@ func (sl *Slice) UpdatePendingHeader(header *types.Header, pendingHeader *types.
 			fmt.Println("In Slice:")
 			fmt.Println("header hash:", header.Hash(), "header location: ", header.Location, "header number:", header.Number)
 			fmt.Println("pending hash:", localPendingHeader.Hash(), "pending location: ", localPendingHeader.Location, "pending number", localPendingHeader.Number, "pending header:", localPendingHeader)
+			fmt.Println("slpending hash:", slPendingHeader.Hash(), "slpending location: ", slPendingHeader.Location, "slpending number", slPendingHeader.Number, "slpending header:", slPendingHeader)
 			slPendingHeader = sl.makePendingHeader(header.Hash(), localPendingHeader, slPendingHeader, types.QuaiNetworkContext)
 		} else {
-			slPendingHeader = rawdb.ReadPendingHeader(sl.sliceDb, sl.hc.CurrentHeader().Hash())
-
-			// I should only update up to the order of the input I can sort on location
-			//Always update Prime
-			slPendingHeader = sl.makePendingHeader(sl.hc.CurrentHeader().Hash(), pendingHeader, slPendingHeader, params.PRIME)
-			if header.Location[0] == sl.config.Location[0] && types.QuaiNetworkContext == params.REGION {
-				//Update region
-				slPendingHeader = sl.makePendingHeader(sl.hc.CurrentHeader().Hash(), pendingHeader, slPendingHeader, params.REGION)
-			}
-			if bytes.Equal(header.Location, sl.config.Location) && types.QuaiNetworkContext == params.ZONE {
-				//Update region
-				slPendingHeader = sl.makePendingHeader(sl.hc.CurrentHeader().Hash(), pendingHeader, slPendingHeader, params.ZONE)
-			}
-
-			fmt.Println("Coordinate Pending Header Update:")
-			fmt.Println("CurrentHeader.Hash:", sl.hc.CurrentHeader().Hash())
-			fmt.Println("pending hash:", slPendingHeader.Hash(), "pending location: ", slPendingHeader.Location, "pending number", slPendingHeader.Number, "pending header:", slPendingHeader)
-
+			slPendingHeader = sl.makePendingHeader(sl.hc.CurrentHeader().Hash(), rawdb.ReadPendingHeader(sl.sliceDb, sl.hc.CurrentHeader().Hash()), slPendingHeader, types.QuaiNetworkContext)
 		}
 	}
 
@@ -302,7 +301,6 @@ func (sl *Slice) UpdatePendingHeader(header *types.Header, pendingHeader *types.
 			}
 		}
 	} else {
-		slPendingHeader.Location = sl.config.Location
 		fmt.Println("Finalized Pending Header:")
 		fmt.Println("Pending Header location: ", slPendingHeader.Location, "Pending Header Number:", slPendingHeader.Number, "slPendingHeader:", slPendingHeader)
 		fmt.Println("Header location: ", header.Location, "Header Number:", header.Number)
@@ -328,6 +326,8 @@ func (sl *Slice) makePendingHeader(indexHash common.Hash, header *types.Header, 
 	slPendingHeader.Difficulty[index] = header.Difficulty[index]
 	slPendingHeader.Coinbase[index] = header.Coinbase[index]
 	slPendingHeader.Bloom[index] = header.Bloom[index]
+
+	slPendingHeader.Location = sl.config.Location
 	slPendingHeader.Time = header.Time
 
 	fmt.Println("pending header on write: ", slPendingHeader)
