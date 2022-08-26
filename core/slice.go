@@ -168,6 +168,8 @@ func (sl *Slice) SliceAppend(block *types.Block) error {
 	sl.slicemu.Lock()
 	defer sl.slicemu.Unlock()
 
+	start := time.Now()
+
 	// PCRC
 	order, err := sl.engine.GetDifficultyOrder(block.Header())
 	if err != nil {
@@ -221,6 +223,11 @@ func (sl *Slice) SliceAppend(block *types.Block) error {
 	} else {
 		//sl.hc.bc.chainSideFeed.Send(ChainSideEvent{Block: block})
 	}
+
+	log.Info("Appended new block", "number", block.Header().Number, "hash", block.Hash(), "loc", block.Header().Location,
+		"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
+		"elapsed", common.PrettyDuration(time.Since(start)),
+		"root", block.Root())
 
 	return nil
 }
