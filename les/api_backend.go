@@ -378,7 +378,7 @@ func (b *LesApiBackend) SetHeaderChainHeadToHash(hash common.Hash) error {
 	return nil
 }
 
-func (b *LesApiBackend) UpdatePendingHeader(header *types.Header, pendingHeader *types.Header) error {
+func (b *LesApiBackend) UpdatePendingHeader(header *types.Header, pendingHeader *types.Header, slCurrentHeader *types.Header) error {
 	return nil
 }
 

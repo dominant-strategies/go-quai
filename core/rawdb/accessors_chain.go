@@ -557,6 +557,48 @@ func ReadTdRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 	return nil // Can't find the data anywhere.
 }
 
+// ReadSliceHead retreive's the curent header stored in slice for a header hash.
+func ReadSliceCurrentHeader(db ethdb.Reader, hash common.Hash) *types.Header {
+	key := sliceHeaderKey(hash)
+	fmt.Println("ReadSliceHeader Key:", hash)
+	data, _ := db.Get(key)
+	if len(data) == 0 {
+		return nil
+	}
+
+	header := new(types.Header)
+	if err := rlp.Decode(bytes.NewReader(data), header); err != nil {
+		log.Error("Invalid SliceHeader RLP")
+		return nil
+	}
+	return header
+}
+
+// WriteSliceCurrentHeader writes the slice current header for a given header hash.
+func WriteSliceCurrentHeader(db ethdb.KeyValueWriter, header *types.Header, hash common.Hash) {
+	key := sliceHeaderKey(hash)
+	fmt.Println("WriteSliceHeader Key:", hash)
+
+	// Write the encoded pending header
+	data, err := rlp.EncodeToBytes(header)
+	if err != nil {
+		log.Crit("Failed to RLP encode SliceCurrentHeader", "err", err)
+	}
+
+	if err := db.Put(key, data); err != nil {
+		log.Crit("Failed to store header", "err", err)
+	}
+}
+
+// DeleteSliceCurrentHeader deletes the current header stored for the slice.
+func DeleteSliceCurrentHeader(db ethdb.KeyValueWriter, hash common.Hash) {
+	key := sliceHeaderKey(hash)
+
+	if err := db.Delete(key); err != nil {
+		log.Crit("Failed to delete slice pending header ", "err", err)
+	}
+}
+
 // ReadSliceCurrentHeads retreive's the curent heads stored in slice for a header hash.
 func ReadSliceCurrentHeads(db ethdb.Reader, hash common.Hash) []*types.Header {
 	key := currentHeadsKey(hash)

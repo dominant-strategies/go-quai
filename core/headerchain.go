@@ -146,16 +146,12 @@ func (hc *HeaderChain) Append(block *types.Block) error {
 	defer hc.headermu.Unlock()
 
 	fmt.Println("Block information: Hash:", block.Hash(), "block header hash:", block.Header().Hash(), "Number:", block.NumberU64(), "Location:", block.Header().Location, "Parent:", block.ParentHash())
-	// err := hc.Appendable(block)
-	// if err != nil {
-	// 	fmt.Println("Error on appendable, err:", err)
-	// 	return err
-	// }
-
-	err := hc.engine.VerifyHeader(hc, block.Header(), true)
+	err := hc.Appendable(block)
 	if err != nil {
+		fmt.Println("Error on appendable, err:", err)
 		return err
 	}
+
 	fmt.Println("After Appendable Block information: Hash:", block.Hash(), "block header hash:", block.Header().Hash(), "Number:", block.NumberU64(), "Location:", block.Header().Location, "Parent:", block.ParentHash())
 	// Append header to the headerchain
 	batch := hc.headerDb.NewBatch()
@@ -222,23 +218,36 @@ func (hc *HeaderChain) Appendable(block *types.Block) error {
 // as the given header.
 func (hc *HeaderChain) SetCurrentHeader(head *types.Header) ([]*types.Header, error) {
 	fmt.Println("Setting Current Header", head.Hash())
+
 	prevHeader := hc.CurrentHeader()
 
+	fmt.Println("SetCurrentHeader prevHeader:", prevHeader)
+	fmt.Println("SetCurrentHeader head:", head)
 	sliceHeaders := make([]*types.Header, 3)
+
+	if head == nil || len(head.ParentHash) == 0 {
+		return sliceHeaders, errors.New("cannot set header to a nil head")
+	}
 
 	//Update canonical state db
 	hc.currentHeader.Store(head)
 	hc.currentHeaderHash = head.Hash()
-	headHeaderGauge.Update(head.Number[types.QuaiNetworkContext].Int64())
 
 	// write the head block hash to the db
 	rawdb.WriteHeadBlockHash(hc.headerDb, head.Hash())
 
+	if head.Hash() == hc.config.GenesisHashes[types.QuaiNetworkContext] {
+		return sliceHeaders, nil
+	}
+
 	// If head is the normal extension of canonical head, we can return by just wiring the canonical hash.
 	if prevHeader.Hash() == head.Parent() {
 		rawdb.WriteCanonicalHash(hc.headerDb, head.Hash(), head.Number64())
-		if types.QuaiNetworkContext != params.ZONE && prevHeader.Hash() == hc.config.GenesisHashes[types.QuaiNetworkContext] {
+		if types.QuaiNetworkContext != params.ZONE {
 			sliceHeaders[head.Location[types.QuaiNetworkContext]-1] = head
+		}
+		if prevHeader.Hash() == hc.config.GenesisHashes[types.QuaiNetworkContext] {
+			return sliceHeaders, nil
 		}
 		return sliceHeaders, nil
 	}
@@ -276,7 +285,10 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) ([]*types.Header, er
 		fmt.Println("delete prev", prevHeader.Hash())
 		rawdb.DeleteCanonicalHash(hc.headerDb, prevHeader.Number64())
 		prevHeader = hc.GetHeader(prevHeader.Parent(), prevHeader.Number64()-1)
-		if types.QuaiNetworkContext != params.ZONE && prevHeader.Hash() == hc.config.GenesisHashes[types.QuaiNetworkContext] {
+		if prevHeader.Hash() == hc.config.GenesisHashes[types.QuaiNetworkContext] {
+			break
+		}
+		if types.QuaiNetworkContext != params.ZONE {
 			sliceHeaders[prevHeader.Location[types.QuaiNetworkContext]-1] = prevHeader
 		}
 
@@ -289,13 +301,11 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) ([]*types.Header, er
 				fmt.Println("delete prev", prevHeader.Hash())
 				rawdb.DeleteCanonicalHash(hc.headerDb, prevHeader.Number64())
 				prevHeader = hc.GetHeader(prevHeader.Parent(), prevHeader.Number64()-1)
-				if types.QuaiNetworkContext != params.ZONE && prevHeader.Hash() == hc.config.GenesisHashes[types.QuaiNetworkContext] {
-					sliceHeaders[prevHeader.Location[types.QuaiNetworkContext]-1] = prevHeader
+				if prevHeader.Hash() == hc.config.GenesisHashes[types.QuaiNetworkContext] {
+					return sliceHeaders, nil
 				}
-
-				// genesis check to not delete the genesis block
-				if prevHeader.Hash() == hc.config.GenesisHashes[0] {
-					break
+				if types.QuaiNetworkContext != params.ZONE {
+					sliceHeaders[prevHeader.Location[types.QuaiNetworkContext]-1] = prevHeader
 				}
 
 				if prevHeader == nil {

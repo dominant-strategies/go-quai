@@ -347,7 +347,7 @@ func calcDifficultyFrontier(time uint64, parent *types.Header, context int) *big
 		diff.Add(diff, expDiff)
 		diff = math.BigMax(diff, params.MinimumDifficulty[types.QuaiNetworkContext])
 	}
-	return diff
+	return parentDifficulty
 }
 
 // verifySeal checks whether a block satisfies the PoW difficulty requirements,

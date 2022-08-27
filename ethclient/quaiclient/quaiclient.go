@@ -514,7 +514,7 @@ func (ec *Client) Append(ctx context.Context, block *types.Block, td *big.Int) e
 }
 
 func (ec *Client) SetHeaderChainHead(ctx context.Context, header *types.Header) error {
-	data := RPCMarshalHeader(header)
+	data := map[string]interface{}{"Header": RPCMarshalHeader(header)}
 
 	err := ec.c.CallContext(ctx, nil, "quai_setHeaderChainHead", data)
 	if err != nil {
@@ -531,9 +531,10 @@ func (ec *Client) SetHeaderChainHeadToHash(ctx context.Context, hash common.Hash
 	return nil
 }
 
-func (ec *Client) UpdatePendingHeader(ctx context.Context, header *types.Header, pendingHeader *types.Header) error {
+func (ec *Client) UpdatePendingHeader(ctx context.Context, header *types.Header, pendingHeader *types.Header, slCurrentHeader *types.Header) error {
 	data := map[string]interface{}{"Header": RPCMarshalHeader(header)}
 	data["PendingHeader"] = RPCMarshalHeader(pendingHeader)
+	data["SliceCurrentHeader"] = RPCMarshalHeader(slCurrentHeader)
 
 	err := ec.c.CallContext(ctx, nil, "quai_updatePendingHeader", data)
 	if err != nil {

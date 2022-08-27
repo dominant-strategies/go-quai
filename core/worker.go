@@ -352,7 +352,7 @@ func (w *worker) close() {
 }
 
 // GeneratePendingBlock generates pending block given a commited block.
-func (w *worker) GeneratePendingHeader(header *types.Header) (*types.Header, error) {
+func (w *worker) GeneratePendingHeader(header *types.Header, slCurrentHeader *types.Header) (*types.Header, error) {
 
 	// Sanitize recommit interval if the user-specified one is too short.
 	recommit := w.config.Recommit
@@ -418,7 +418,7 @@ func (w *worker) GeneratePendingHeader(header *types.Header) (*types.Header, err
 	// 	w.commit(work.copy(), nil, false, start)
 	// }
 	// Fill pending transactions from the txpool
-	w.adjustGasLimit(nil, work)
+	w.adjustGasLimit(nil, work, slCurrentHeader)
 	w.fillTransactions(interrupt, work)
 
 	env := work.copy()
@@ -917,10 +917,18 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment) {
 // fillTransactions retrieves the pending transactions from the txpool and fills them
 // into the given sealing block. The transaction selection and ordering strategy can
 // be customized with the plugin in the future.
-func (w *worker) adjustGasLimit(interrupt *int32, env *environment) {
-	// Find the parent block for sealing task
-	parent := w.hc.CurrentBlock()
+func (w *worker) adjustGasLimit(interrupt *int32, env *environment, slCurrentHeader *types.Header) {
+	// fmt.Println("adjustGasLimit slCurrentHeader:", slCurrentHeader.Hash())
+	// var parent *types.Block
+	// // Find the parent block for sealing task
+	// if slCurrentHeader.Hash() != params.NilHeaderHash || slCurrentHeader.Hash() != w.hc.genesisHeader.Hash() {
+	// 	parent = w.hc.GetBlockByHash(slCurrentHeader.Hash())
+	// 	fmt.Println("adjustGasLimit parent.hash:", parent.Hash())
+	// } else {
+	// 	parent = w.hc.CurrentBlock()
+	// }
 
+	parent := w.hc.CurrentBlock()
 	gasUsed := (parent.GasUsed() + env.externalGasUsed) / uint64(env.externalBlockLength+1)
 
 	// Get the amount of uncles for the past 1000 blocks

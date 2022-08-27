@@ -380,10 +380,6 @@ func (c *Core) GetHeadHash() common.Hash {
 	return c.sl.GetHeadHash()
 }
 
-func (c *Core) HLCR(td *big.Int) bool {
-	return c.sl.HLCR(td)
-}
-
 func (c *Core) SetHeaderChainHead(header *types.Header) error {
 	return c.sl.SetHeaderChainHead(header)
 }
@@ -392,8 +388,8 @@ func (c *Core) SetHeaderChainHeadToHash(hash common.Hash) error {
 	return c.sl.SetHeaderChainHeadToHash(hash)
 }
 
-func (c *Core) UpdatePendingHeader(header *types.Header, pendingHeader *types.Header) error {
-	return c.sl.UpdatePendingHeader(header, pendingHeader)
+func (c *Core) UpdatePendingHeader(header *types.Header, pendingHeader *types.Header, slCurrentHeader *types.Header) error {
+	return c.sl.UpdatePendingHeader(header, pendingHeader, slCurrentHeader)
 }
 
 // SubscribePendingLogs starts delivering logs from pending transactions

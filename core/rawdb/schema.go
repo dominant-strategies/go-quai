@@ -84,10 +84,11 @@ var (
 	headerHashSuffix   = []byte("n") // headerPrefix + num (uint64 big endian) + headerHashSuffix -> hash
 	headerNumberPrefix = []byte("H") // headerNumberPrefix + hash -> num (uint64 big endian)
 
-	currentHeadsPrefix     = []byte("ch") // currentHeadsPrefix + hash -> []common.Hash (current heads hash)
-	domPendingHeaderPrefix = []byte("dp") // pendingHeaderPrefix + hash -> header
-	pendingHeaderPrefix    = []byte("ph") // pendingHeaderPrefix + hash -> header
-	pendingBlockBodyPrefix = []byte("pb") // pendingBodyPrefix + hash -> Body
+	currentHeadsPrefix       = []byte("ch") // currentHeadsPrefix + hash -> []common.Hash (current heads hash)
+	domPendingHeaderPrefix   = []byte("dp") // pendingHeaderPrefix + hash -> header
+	pendingHeaderPrefix      = []byte("ph") // pendingHeaderPrefix + hash -> header
+	pendingBlockBodyPrefix   = []byte("pb") // pendingBodyPrefix + hash -> Body
+	sliceCurrentHeaderPrefix = []byte("sh") // pendingBodyPrefix + hash -> Body
 
 	blockBodyPrefix     = []byte("b") // blockBodyPrefix + num (uint64 big endian) + hash -> block body
 	blockReceiptsPrefix = []byte("r") // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
@@ -158,6 +159,11 @@ func headerKeyPrefix(number uint64) []byte {
 // headerKey = headerPrefix + num (uint64 big endian) + hash
 func headerKey(number uint64, hash common.Hash) []byte {
 	return append(append(headerPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
+}
+
+// sliceHeaderKey = currentHeadsPrefix + hash
+func sliceHeaderKey(hash common.Hash) []byte {
+	return append(sliceCurrentHeaderPrefix, hash.Bytes()...)
 }
 
 // currentHeadsKey = currentHeadsPrefix + hash

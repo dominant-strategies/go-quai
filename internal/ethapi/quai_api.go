@@ -689,7 +689,7 @@ func (s *PublicBlockChainQuaiAPI) Append(ctx context.Context, raw json.RawMessag
 }
 
 func (s *PublicBlockChainQuaiAPI) SetHeaderChainHead(ctx context.Context, raw json.RawMessage) error {
-	// Decode header.
+	// Decode headerAndSliceCurrentHeader.
 	var header *types.Header
 	if err := json.Unmarshal(raw, &header); err != nil {
 		return err
@@ -702,8 +702,9 @@ func (s *PublicBlockChainQuaiAPI) SetHeaderChainHeadToHash(ctx context.Context, 
 }
 
 type HeaderAndPendingHeader struct {
-	Header        *types.Header
-	PendingHeader *types.Header
+	Header             *types.Header
+	PendingHeader      *types.Header
+	SliceCurrentHeader *types.Header
 }
 
 func (s *PublicBlockChainQuaiAPI) UpdatePendingHeader(ctx context.Context, raw json.RawMessage) error {
@@ -716,5 +717,5 @@ func (s *PublicBlockChainQuaiAPI) UpdatePendingHeader(ctx context.Context, raw j
 
 	fmt.Println("quai api header: ", headerAndPendingHeader.Header)
 	fmt.Println("quai api pending header: ", headerAndPendingHeader.PendingHeader)
-	return s.b.UpdatePendingHeader(headerAndPendingHeader.Header, headerAndPendingHeader.PendingHeader)
+	return s.b.UpdatePendingHeader(headerAndPendingHeader.Header, headerAndPendingHeader.PendingHeader, headerAndPendingHeader.SliceCurrentHeader)
 }
