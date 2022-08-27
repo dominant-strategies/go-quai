@@ -232,7 +232,7 @@ func (sl *Slice) UpdatePendingHeader(header *types.Header, pendingHeader *types.
 			sl.SetHeaderChainHead(sl.hc.GetHeaderByHash(header.Parent()))
 		}
 	}()
-
+	currentHead := types.CopyHeader(sl.hc.CurrentHeader())
 	fmt.Println("Write DOM pending:")
 	fmt.Println("header hash:", header.Hash(), "header location: ", header.Location, "header number:", header.Number)
 	fmt.Println("pending hash:", pendingHeader.Hash(), "pending location: ", pendingHeader.Location, "pending number", pendingHeader.Number, "pending header:", pendingHeader)
@@ -285,8 +285,8 @@ func (sl *Slice) UpdatePendingHeader(header *types.Header, pendingHeader *types.
 			slPendingHeader = sl.makePendingHeader(header.Hash(), localPendingHeader, slPendingHeader, types.QuaiNetworkContext)
 			rawdb.WritePendingHeader(sl.sliceDb, header.Hash(), slPendingHeader)
 		} else {
-			slPendingHeader = sl.makePendingHeader(sl.hc.CurrentHeader().Hash(), rawdb.ReadPendingHeader(sl.sliceDb, sl.hc.CurrentHeader().Hash()), slPendingHeader, types.QuaiNetworkContext)
-			rawdb.WritePendingHeader(sl.sliceDb, sl.hc.CurrentHeader().Hash(), slPendingHeader)
+			slPendingHeader = sl.makePendingHeader(currentHead.Hash(), rawdb.ReadPendingHeader(sl.sliceDb, currentHead.Hash()), slPendingHeader, types.QuaiNetworkContext)
+			rawdb.WritePendingHeader(sl.sliceDb, currentHead.Hash(), slPendingHeader)
 		}
 	}
 
@@ -321,7 +321,17 @@ func (sl *Slice) UpdatePendingHeader(header *types.Header, pendingHeader *types.
 		fmt.Println("Pending Header location: ", slPendingHeader.Location, "Pending Header Number:", slPendingHeader.Number, "slPendingHeader:", slPendingHeader)
 		fmt.Println("Header location: ", header.Location, "Header Number:", header.Number)
 		rawdb.WritePendingHeader(sl.sliceDb, header.Hash(), slPendingHeader)
-		sl.miner.worker.pendingHeaderFeed.Send(slPendingHeader)
+		if slPendingHeader != nil {
+			if slPendingHeader != sl.nilHeader {
+				if slPendingHeader.Location[0] != 0 && slPendingHeader.Location[1] != 0 {
+					if slPendingHeader.Number[0] != nil && slPendingHeader.Number[1] != nil && slPendingHeader.Number[2] != nil {
+						if slPendingHeader.Number[0].Cmp(big.NewInt(0)) != 0 && slPendingHeader.Number[1].Cmp(big.NewInt(0)) != 0 && slPendingHeader.Number[2].Cmp(big.NewInt(0)) != 0 {
+							sl.miner.worker.pendingHeaderFeed.Send(slPendingHeader)
+						}
+					}
+				}
+			}
+		}
 	}
 	return nil
 }
@@ -763,8 +773,14 @@ func (sl *Slice) sendPendingHeaderToFeed() {
 				header := rawdb.ReadPendingHeader(sl.sliceDb, sl.hc.CurrentHeader().Hash())
 				fmt.Println("header sent to miner by proc:", header)
 				if header != nil {
-					if header.Location[0] != 0 && header.Location[1] != 0 {
-						sl.miner.worker.pendingHeaderFeed.Send(header)
+					if header != sl.nilHeader {
+						if header.Location[0] != 0 && header.Location[1] != 0 {
+							if header.Number[0] != nil && header.Number[1] != nil && header.Number[2] != nil {
+								if header.Number[0].Cmp(big.NewInt(0)) != 0 && header.Number[1].Cmp(big.NewInt(0)) != 0 && header.Number[2].Cmp(big.NewInt(0)) != 0 {
+									sl.miner.worker.pendingHeaderFeed.Send(header)
+								}
+							}
+						}
 					}
 				}
 
