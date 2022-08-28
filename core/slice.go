@@ -1,9 +1,7 @@
 package core
 
 import (
-	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"math/big"
 	"sort"
@@ -43,9 +41,8 @@ type Slice struct {
 
 	subClients   []*quaiclient.Client // subClinets is used to check is a coincident block is valid in the subordinate context
 	futureBlocks *lru.Cache
-	futureHeads  *lru.Cache
-	slicemu      sync.RWMutex
-	appendmu     sync.RWMutex
+
+	appendmu sync.RWMutex
 
 	nilHeader *types.Header
 
@@ -61,8 +58,6 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 
 	futureBlocks, _ := lru.New(maxFutureBlocks)
 	sl.futureBlocks = futureBlocks
-	futureHeads, _ := lru.New(maxFutureHeads)
-	sl.futureHeads = futureHeads
 
 	var err error
 	sl.hc, err = NewHeaderChain(db, engine, chainConfig, cacheConfig, vmConfig)
@@ -80,105 +75,32 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 		sl.subClients = MakeSubClients(subClientUrls)
 	}
 
-	sl.nilHeader = &types.Header{
-		ParentHash:        make([]common.Hash, 3),
-		Number:            make([]*big.Int, 3),
-		Extra:             make([][]byte, 3),
-		Time:              uint64(0),
-		BaseFee:           make([]*big.Int, 3),
-		GasLimit:          make([]uint64, 3),
-		Coinbase:          make([]common.Address, 3),
-		Difficulty:        make([]*big.Int, 3),
-		NetworkDifficulty: make([]*big.Int, 3),
-		Root:              make([]common.Hash, 3),
-		TxHash:            make([]common.Hash, 3),
-		UncleHash:         make([]common.Hash, 3),
-		ReceiptHash:       make([]common.Hash, 3),
-		GasUsed:           make([]uint64, 3),
-		Bloom:             make([]types.Bloom, 3),
-	}
-
 	var pendingHeader *types.Header
-	// only set the currentheads and the genesis header to genesis value if the blockchain is empty.
-	if true {
+
+	// load the pending header
+	pendingHeader = rawdb.ReadPendingHeader(sl.sliceDb, sl.hc.CurrentHeader().Parent())
+	if pendingHeader == nil {
 		// Update the pending header to the genesis Header.
 		pendingHeader = sl.hc.genesisHeader
-
-		currentHeads := make([]*types.Header, 3)
-		currentHeads[0] = sl.hc.genesisHeader
-		currentHeads[1] = sl.hc.genesisHeader
-		currentHeads[2] = sl.hc.genesisHeader
-		rawdb.WriteSliceCurrentHeads(sl.sliceDb, currentHeads, sl.hc.genesisHeader.Hash())
-	} else {
-		// load the pending header
-		pendingHeader = rawdb.ReadPendingHeader(sl.sliceDb, sl.hc.CurrentHeader().Parent())
 	}
 
 	if types.QuaiNetworkContext == params.PRIME {
 		fmt.Println("update pending from PRIME on initial")
-		sl.UpdatePendingHeader(pendingHeader, sl.nilHeader)
-
+		sl.SetHeaderChainHead(pendingHeader, sl.hc.GetTdByHash(pendingHeader.Hash())[params.PRIME])
 	}
 
 	go sl.updateFutureBlocks()
-	go sl.updateFutureHeads()
-	go sl.sendPendingHeaderToFeed()
 
 	return sl, nil
 }
 
-// HeaderChain retrieves the headerchain.
-func (sl *Slice) HeaderChain() *HeaderChain {
-	return sl.hc
-}
-
-// TxPool retrieves the txpool.
-func (sl *Slice) TxPool() *TxPool {
-	return sl.txPool
-}
-
-// Miner retrieves the miner.
-func (sl *Slice) Miner() *Miner {
-	return sl.miner
-}
-
-// MakeSubClients creates the quaiclient for the given suburls
-func MakeSubClients(suburls []string) []*quaiclient.Client {
-	subClients := make([]*quaiclient.Client, 3)
-	for i, suburl := range suburls {
-		if suburl == "" {
-			log.Warn("sub client url is empty")
-		}
-		subClient, err := quaiclient.Dial(suburl)
-		if err != nil {
-			log.Crit("Error connecting to the subordinate go-quai client for index", "index", i, " err ", err)
-		}
-		subClients[i] = subClient
-	}
-	return subClients
-}
-
-// Config retrieves the slice's chain configuration.
-func (sl *Slice) Config() *params.ChainConfig { return sl.config }
-
-// Engine retrieves the header chain's consensus engine.
-func (sl *Slice) Engine() consensus.Engine { return sl.engine }
-
-func (sl *Slice) SliceAppend(block *types.Block) error {
-	sl.slicemu.Lock()
-	defer sl.slicemu.Unlock()
-
-	// PCRC
-	order, err := sl.engine.GetDifficultyOrder(block.Header())
-	if err != nil {
-		return err
-	}
-
-	_, err = sl.PCRC(block, order)
-	if err != nil {
-		fmt.Println("Slice error in PCRC", err)
-		return err
-	}
+//NOTES:
+// Need header to have slice termini
+//
+// Append
+func (sl *Slice) Append(block *types.Block) error {
+	sl.appendmu.Lock()
+	defer sl.appendmu.Unlock()
 
 	// CalcTd on the new block
 	td, err := sl.CalcTd(block.Header())
@@ -186,226 +108,16 @@ func (sl *Slice) SliceAppend(block *types.Block) error {
 		return err
 	}
 
-	// Append
-	// if the context is not zone, we have to wait for the append in the sub
-	err = sl.Append(block, td)
-	if err != nil {
-		return err
-	}
-	fmt.Println("Appended Block Hash:", block.Hash(), "block header hash", block.Header().Hash(), "block Number:", block.Header().Number)
-	fmt.Println("Block found in db:", sl.hc.bc.GetBlock(block.Hash(), block.NumberU64()).Hash())
-	reorg := sl.HLCR(td)
-
-	if reorg {
-		fmt.Println("reading pendingHeader with key:", block.Header().ParentHash[types.QuaiNetworkContext])
-		if err := sl.SetHeaderChainHead(block.Header(), rawdb.ReadPendingHeader(sl.sliceDb, block.Header().ParentHash[types.QuaiNetworkContext])); err != nil {
-			// updating pending header again since block insertion failed
-			return err
-		}
-
-		// Update the pending Header.
-		pendingHeader := rawdb.ReadPendingHeader(sl.sliceDb, block.ParentHash())
-		if pendingHeader == nil {
-			pendingHeader = sl.nilHeader
-		}
-
-		err := sl.UpdatePendingHeader(block.Header(), pendingHeader)
-		if err != nil {
-			return err
-		}
-
-	} else {
-		//sl.hc.bc.chainSideFeed.Send(ChainSideEvent{Block: block})
-	}
-
-	return nil
-}
-func (sl *Slice) localUpdatePendingHeader(header *types.Header, pendingHeader *types.Header) (*types.Header, error) {
-	slPendingHeader := pendingHeader
-	// Collect the pending block.
-	localPendingHeader, err := sl.miner.worker.GeneratePendingHeader(header)
-	if err != nil {
-		fmt.Println("pending block error: ", err)
-		return nil, err
-	}
-	fmt.Println("localUpdatePending:")
-	fmt.Println("header hash:", header.Hash(), "header location: ", header.Location, "header number:", header.Number)
-	fmt.Println("pending hash:", localPendingHeader.Hash(), "pending location: ", localPendingHeader.Location, "pending number", localPendingHeader.Number, "pending header:", localPendingHeader)
-	fmt.Println("pending hash:", slPendingHeader.Hash(), "pending location: ", slPendingHeader.Location, "pending number", slPendingHeader.Number, "pending header:", slPendingHeader)
-	fmt.Println("writing pendingHeader with key:", header.Hash())
-	slPendingHeader = sl.makePendingHeader(header.Hash(), localPendingHeader, slPendingHeader, types.QuaiNetworkContext)
-	rawdb.WritePendingHeader(sl.sliceDb, header.Hash(), slPendingHeader)
-
-	fmt.Println("Finalized Pending Header from localUpdatePendingHeader:")
-	fmt.Println("Pending Header location: ", slPendingHeader.Location, "Pending Header Number:", slPendingHeader.Number, "slPendingHeader:", slPendingHeader)
-	fmt.Println("Header location: ", header.Location, "Header Number:", header.Number)
-	if types.QuaiNetworkContext == params.ZONE {
-		if slPendingHeader != nil {
-			if slPendingHeader != sl.nilHeader {
-				if slPendingHeader.Location[0] != 0 && slPendingHeader.Location[1] != 0 {
-					if slPendingHeader.Number[0] != nil && slPendingHeader.Number[1] != nil && slPendingHeader.Number[2] != nil {
-						if slPendingHeader.Number[0].Cmp(big.NewInt(0)) != 0 && slPendingHeader.Number[1].Cmp(big.NewInt(0)) != 0 && slPendingHeader.Number[2].Cmp(big.NewInt(0)) != 0 {
-							fmt.Println("localUpdatePendingHeader sending to miner")
-							sl.miner.worker.pendingHeaderFeed.Send(slPendingHeader)
-						}
-					}
-				}
-			}
-		}
-	}
-	return slPendingHeader, nil
-}
-
-func (sl *Slice) UpdatePendingHeader(header *types.Header, pendingHeader *types.Header) (err error) {
-
-	currentHead := types.CopyHeader(sl.hc.CurrentHeader())
-	fmt.Println("Write DOM pending:")
-	fmt.Println("header hash:", header.Hash(), "header location: ", header.Location, "header number:", header.Number)
-	fmt.Println("pending hash:", pendingHeader.Hash(), "pending location: ", pendingHeader.Location, "pending number", pendingHeader.Number, "pending header:", pendingHeader)
-
-	var slPendingHeader *types.Header
-	var localPendingHeader *types.Header
-	var order int
-
-	if header.Hash() == sl.config.GenesisHashes[types.QuaiNetworkContext] {
-		slPendingHeader = pendingHeader
-		// Collect the pending block.
-		localPendingHeader, err = sl.miner.worker.GeneratePendingHeader(header)
-		if err != nil {
-			fmt.Println("pending block error: ", err)
-			return err
-		}
-		fmt.Println("Genesis:")
-		fmt.Println("header hash:", header.Hash(), "header location: ", header.Location, "header number:", header.Number)
-		fmt.Println("pending hash:", localPendingHeader.Hash(), "pending location: ", localPendingHeader.Location, "pending number", localPendingHeader.Number, "pending header:", localPendingHeader)
-		slPendingHeader = sl.makePendingHeader(header.Hash(), localPendingHeader, slPendingHeader, types.QuaiNetworkContext)
-		rawdb.WritePendingHeader(sl.sliceDb, header.Hash(), slPendingHeader)
-	} else {
-		// Store the domPendingHeader
-		order, err = sl.engine.GetDifficultyOrder(header)
-		if err != nil {
-			return err
-		}
-		fmt.Println("UpdatePendingHeader order:", order)
-		if order < types.QuaiNetworkContext {
-			fmt.Println("UpdatePendingHeader Using header value passed in")
-			//rawdb.WritePendingHeader(sl.sliceDb, header.Hash(), pendingHeader)
-			slPendingHeader = pendingHeader
-		} else {
-			fmt.Println("UpdatePendingHeader using value read from db, hash:", header.Parent())
-			slPendingHeader = rawdb.ReadPendingHeader(sl.sliceDb, header.Parent())
-		}
-		fmt.Println("header.hash:", header.Hash(), "sl.nilHeader.Hash:", sl.nilHeader.Hash())
-		if (order == params.PRIME && types.QuaiNetworkContext == params.PRIME) ||
-			(header.Location[0] == sl.config.Location[0] && types.QuaiNetworkContext == params.REGION) ||
-			(bytes.Equal(header.Location, sl.config.Location) && types.QuaiNetworkContext == params.ZONE) {
-
-			slPendingHeader = rawdb.ReadPendingHeader(sl.sliceDb, header.Hash())
-		} else {
-			slPendingHeader = sl.makePendingHeader(currentHead.Hash(), rawdb.ReadPendingHeader(sl.sliceDb, currentHead.Hash()), slPendingHeader, types.QuaiNetworkContext)
-			rawdb.WritePendingHeader(sl.sliceDb, currentHead.Hash(), slPendingHeader)
-		}
-	}
-
-	// Send the pending blocks down to all the subclients.
-	if types.QuaiNetworkContext != params.ZONE {
-		for i := range sl.subClients {
-			if sl.subClients[i] != nil {
-				if header.Hash() == sl.config.GenesisHashes[types.QuaiNetworkContext] {
-					fmt.Println("sending on genesis from context: ", types.QuaiNetworkContext, "to sub", i)
-					err := sl.subClients[i].UpdatePendingHeader(context.Background(), header, slPendingHeader)
-					if err != nil {
-						return err
-					}
-				} else if header.Location[types.QuaiNetworkContext]-1 == byte(i) {
-					fmt.Println("sending on overlapping context: ", types.QuaiNetworkContext, "to sub", i)
-					err := sl.subClients[i].UpdatePendingHeader(context.Background(), header, slPendingHeader)
-					if err != nil {
-						return err
-					}
-				} else {
-					fmt.Println("sending on nilHeader on coordinate context: ", types.QuaiNetworkContext, "to sub", i)
-					err := sl.subClients[i].UpdatePendingHeader(context.Background(), header, slPendingHeader)
-					if err != nil {
-						return err
-					}
-				}
-
-			}
-		}
-	} else {
-		fmt.Println("Finalized Pending Header:")
-		fmt.Println("Pending Header location: ", slPendingHeader.Location, "Pending Header Number:", slPendingHeader.Number, "slPendingHeader:", slPendingHeader)
-		fmt.Println("Header location: ", header.Location, "Header Number:", header.Number)
-		if order >= types.QuaiNetworkContext {
-			fmt.Println("Not updating the pending header value")
-			rawdb.WritePendingHeader(sl.sliceDb, header.Hash(), slPendingHeader)
-		}
-
-		if slPendingHeader != nil {
-			if slPendingHeader != sl.nilHeader {
-				if slPendingHeader.Location[0] != 0 && slPendingHeader.Location[1] != 0 {
-					if slPendingHeader.Number[0] != nil && slPendingHeader.Number[1] != nil && slPendingHeader.Number[2] != nil {
-						if slPendingHeader.Number[0].Cmp(big.NewInt(0)) != 0 && slPendingHeader.Number[1].Cmp(big.NewInt(0)) != 0 && slPendingHeader.Number[2].Cmp(big.NewInt(0)) != 0 {
-							if !bytes.Equal(header.Location, sl.config.Location) && types.QuaiNetworkContext == params.ZONE {
-								sl.miner.worker.pendingHeaderFeed.Send(slPendingHeader)
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-	return nil
-}
-
-// writePendingHeader updates the slice pending header at the given index with the value from given header.
-func (sl *Slice) makePendingHeader(indexHash common.Hash, header *types.Header, slPendingHeader *types.Header, index int) *types.Header {
-
-	if slPendingHeader == nil {
-		fmt.Println("UpdatePendingHeader makePendingHeader nil return: slPendingHeader hash:", slPendingHeader.Hash())
-		slPendingHeader = sl.nilHeader
-	} else if header == nil {
-		fmt.Println("UpdatePendingHeader makePendingHeader nil return: header hash:", header.Hash())
-		header = sl.nilHeader
-	}
-	slPendingHeader.ParentHash[index] = header.ParentHash[index]
-	slPendingHeader.UncleHash[index] = header.UncleHash[index]
-	slPendingHeader.Number[index] = header.Number[index]
-	slPendingHeader.Extra[index] = header.Extra[index]
-	slPendingHeader.BaseFee[index] = header.BaseFee[index]
-	slPendingHeader.GasLimit[index] = header.GasLimit[index]
-	slPendingHeader.GasUsed[index] = header.GasUsed[index]
-	slPendingHeader.TxHash[index] = header.TxHash[index]
-	slPendingHeader.ReceiptHash[index] = header.ReceiptHash[index]
-	slPendingHeader.Root[index] = header.Root[index]
-	slPendingHeader.Difficulty[index] = header.Difficulty[index]
-	slPendingHeader.Coinbase[index] = header.Coinbase[index]
-	slPendingHeader.Bloom[index] = header.Bloom[index]
-
-	slPendingHeader.Location = sl.config.Location
-	slPendingHeader.Time = header.Time
-
-	return slPendingHeader
-}
-
-func (sl *Slice) PendingBlockBody(hash common.Hash) *types.Body {
-	return rawdb.ReadPendginBlockBody(sl.sliceDb, hash)
-}
-
-// Append
-func (sl *Slice) Append(block *types.Block, td *big.Int) error {
-	sl.appendmu.Lock()
-	defer sl.appendmu.Unlock()
-
-	err := sl.hc.Append(block)
+	err = sl.hc.Append(block)
 	if err != nil {
 		fmt.Println("Slice error in append", err)
 		return err
 	}
-	fmt.Println("Appended Block Hash:", block.Hash(), "block header hash", block.Header().Hash(), "block Number:", block.Header().Number)
-	// fmt.Println("Block found in db:", sl.hc.bc.GetBlock(block.Hash(), block.NumberU64()).Hash())
 
+	slPendingHeader, err := sl.SetHeaderChainHead(block.Header(), td)
+	if err != nil {
+		return err
+	}
 	// WriteTd
 	// Remove this once td is converted to a single value.
 	externTd := make([]*big.Int, 3)
@@ -426,82 +138,26 @@ func (sl *Slice) Append(block *types.Block, td *big.Int) error {
 	return nil
 }
 
-func (sl *Slice) SetHeaderChainHead(head *types.Header, slPendingHeader *types.Header) error {
-	var dom bool
-	dom = false
-	oldHead := types.CopyHeader(sl.hc.CurrentHeader())
-	fmt.Println("setting head to:", head.Hash())
-	sliceHeaders, err := sl.hc.SetCurrentHeader(head)
+func (sl *Slice) SetHeaderChainHead(head *types.Header, td *big.Int) (*types.Header, error) {
+
+	headerOrder, err := sl.engine.GetDifficultyOrder(head)
 	if err != nil {
-		return err
+		return sl.nilHeader, err
 	}
 
-	slPendingHeader, err = sl.localUpdatePendingHeader(head, slPendingHeader)
+	reorg := sl.HLCR(td)
+	if !reorg && !(headerOrder < types.QuaiNetworkContext) {
+		return sl.nilHeader, nil
+	}
+
+	// Upate the local pending header
+	slPendingHeader, err := sl.miner.worker.GeneratePendingHeader(head)
 	if err != nil {
-		return err
+		fmt.Println("pending block error: ", err)
+		return nil, err
 	}
 
-	//Check to see if this is a rollback type reorg
-	if head.Parent() != oldHead.Hash() {
-		//Check to see if this is a dom reorg
-		oldHeadOrder, _ := sl.engine.GetDifficultyOrder(oldHead)
-		newHeadOrder, _ := sl.engine.GetDifficultyOrder(head)
-		if oldHeadOrder > newHeadOrder {
-			dom = true
-		}
-	}
-
-	// set head of subs
-	if types.QuaiNetworkContext != params.ZONE {
-		// Perform the sub set head
-		err = sl.subClients[head.Location[types.QuaiNetworkContext]-1].SetHeaderChainHead(context.Background(), head, slPendingHeader)
-		if dom {
-			for i := 1; i < params.FullerOntology[types.QuaiNetworkContext]-1; i++ {
-				if head.Location[types.QuaiNetworkContext]-1 != byte(i) {
-					//I need sub to not have a reference after the common
-					//I can't answer that question because I don't have my subs chain
-					//Ergo I should find the common and tell them to set head to somewhere prior to common
-					//I need to find the sub-parent hash from the common and request the sub set to that head
-					//However, the common sub could be a coord therefore I can't determine where to set from here
-					//This isn't even a reorg, this is a straight fucking tree trim
-					//So we need a call which trims this branch back to common. branch common->current
-					//Question? Is there another way to find common? Answer: No. Common must be found in current context
-					//Sub likely won't have the common. So the trim function isn't trim block, its trim reference.
-					//We need to find the last reference that is in the current chain for each sub prior to common
-					//We then need to send that reference using SetHeaderChainHeadToHash to sub
-					if sliceHeaders[i] != nil {
-						err = sl.subClients[i].SetHeaderChainHeadToHash(context.Background(), sliceHeaders[i].ParentHash[types.QuaiNetworkContext+1])
-						if err != nil {
-							//TODO need to revert if this fails
-							return err
-						}
-					}
-				}
-			}
-		}
-		// If the append errors out in the sub we can delete the block from the headerchain.
-		if err != nil {
-			fmt.Println("reverting to old headers")
-			_, err = sl.hc.SetCurrentHeader(oldHead)
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
-func (sl *Slice) SetHeaderChainHeadToHash(hash common.Hash) error {
-	header := sl.hc.GetHeaderByHash(hash)
-	if header != nil {
-		return errors.New("header not found in SetHeaderChainHeadToHash")
-	}
-	err := sl.SetHeaderChainHead(header, rawdb.ReadPendingHeader(sl.sliceDb, header.Parent()))
-	if err != nil {
-		return err
-	}
-	return nil
+	return slPendingHeader, nil
 }
 
 // HLCR
@@ -520,160 +176,43 @@ func (sl *Slice) CalcTd(header *types.Header) (*big.Int, error) {
 	return Td, nil
 }
 
-// The purpose of the Previous Coincident Reference Check (PCRC) is to establish
-// that we have linked untwisted chains prior to checking HLCR & applying external state transfers.
-// NOTE: note that it only guarantees linked & untwisted back to the prime terminus, assuming the
-// prime termini match. To check deeper than that, you need to iteratively apply PCRC to get that guarantee.
-func (sl *Slice) PCRC(block *types.Block, headerOrder int) (types.PCRCTermini, error) {
-	header := block.Header()
-	if header.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
-		return types.PCRCTermini{}, nil
-	}
+// writePendingHeader updates the slice pending header at the given index with the value from given header.
+func (sl *Slice) combinePendingHeader(indexHash common.Hash, header *types.Header, slPendingHeader *types.Header, index int) *types.Header {
 
-	slice := header.Location
+	slPendingHeader.ParentHash[index] = header.ParentHash[index]
+	slPendingHeader.UncleHash[index] = header.UncleHash[index]
+	slPendingHeader.Number[index] = header.Number[index]
+	slPendingHeader.Extra[index] = header.Extra[index]
+	slPendingHeader.BaseFee[index] = header.BaseFee[index]
+	slPendingHeader.GasLimit[index] = header.GasLimit[index]
+	slPendingHeader.GasUsed[index] = header.GasUsed[index]
+	slPendingHeader.TxHash[index] = header.TxHash[index]
+	slPendingHeader.ReceiptHash[index] = header.ReceiptHash[index]
+	slPendingHeader.Root[index] = header.Root[index]
+	slPendingHeader.Difficulty[index] = header.Difficulty[index]
+	slPendingHeader.Coinbase[index] = header.Coinbase[index]
+	slPendingHeader.Bloom[index] = header.Bloom[index]
 
-	switch types.QuaiNetworkContext {
-	case params.PRIME:
-		PTP, err := sl.PreviousValidCoincident(header, slice, params.PRIME, true)
-		if err != nil {
-			return types.PCRCTermini{}, err
-		}
-		PRTP, err := sl.PreviousValidCoincident(header, slice, params.PRIME, false)
-		if err != nil {
-			return types.PCRCTermini{}, err
-		}
+	slPendingHeader.Location = sl.config.Location
+	slPendingHeader.Time = header.Time
 
-		if sl.subClients[slice[0]-1] == nil {
-			return types.PCRCTermini{}, nil
-		}
-		PCRCTermini, err := sl.subClients[slice[0]-1].CheckPCRC(context.Background(), block, headerOrder)
-		if err != nil {
-			return types.PCRCTermini{}, err
-		}
-
-		if (PCRCTermini.PTR == common.Hash{} || PCRCTermini.PRTR == common.Hash{}) {
-			return PCRCTermini, consensus.ErrSliceNotSynced
-		}
-
-		PCRCTermini.PTP = PTP.Hash()
-		PCRCTermini.PRTP = PRTP.Hash()
-
-		if (PTP.Hash() != PCRCTermini.PTR) && (PCRCTermini.PTR != PCRCTermini.PTZ) && (PCRCTermini.PTZ != PTP.Hash()) {
-			return types.PCRCTermini{}, errors.New("there exists a Prime twist (PTP != PTR != PTZ")
-		}
-		if PRTP.Hash() != PCRCTermini.PRTR {
-			return types.PCRCTermini{}, consensus.ErrPrimeTwist
-		}
-
-		return PCRCTermini, nil
-
-	case params.REGION:
-		RTR, err := sl.PreviousValidCoincident(header, slice, params.REGION, true)
-		if err != nil {
-			return types.PCRCTermini{}, err
-		}
-
-		if sl.subClients[slice[1]-1] == nil {
-			return types.PCRCTermini{}, nil
-		}
-
-		PCRCTermini, err := sl.subClients[slice[1]-1].CheckPCRC(context.Background(), block, headerOrder)
-		if err != nil {
-			return types.PCRCTermini{}, err
-		}
-
-		if (PCRCTermini.RTZ == common.Hash{}) {
-			return PCRCTermini, consensus.ErrSliceNotSynced
-		}
-
-		if RTR.Hash() != PCRCTermini.RTZ {
-			return types.PCRCTermini{}, consensus.ErrRegionTwist
-		}
-		if headerOrder < params.REGION {
-			PTR, err := sl.PreviousValidCoincident(header, slice, params.PRIME, true)
-			if err != nil {
-				return types.PCRCTermini{}, err
-			}
-			PRTR, err := sl.PreviousValidCoincident(header, slice, params.PRIME, false)
-			if err != nil {
-				return types.PCRCTermini{}, err
-			}
-
-			PCRCTermini.PTR = PTR.Hash()
-			PCRCTermini.PRTR = PRTR.Hash()
-		}
-		return PCRCTermini, nil
-
-	case params.ZONE:
-		PCRCTermini := types.PCRCTermini{}
-
-		// only compute PTZ and RTZ on the coincident block in zone.
-		// PTZ and RTZ are essentially a signaling mechanism to know that we are building on the right terminal header.
-		// So running this only on a coincident block makes sure that the zones can move and sync past the coincident.
-		// Just run RTZ to make sure that its linked. This check decouples this signaling and linking paradigm.
-
-		PTZ, err := sl.PreviousValidCoincident(header, slice, params.PRIME, true)
-		if err != nil {
-			return types.PCRCTermini{}, err
-		}
-		PCRCTermini.PTZ = PTZ.Hash()
-
-		RTZ, err := sl.PreviousValidCoincident(header, slice, params.REGION, true)
-		if err != nil {
-			return types.PCRCTermini{}, err
-		}
-		PCRCTermini.RTZ = RTZ.Hash()
-
-		return PCRCTermini, nil
-	}
-	return types.PCRCTermini{}, errors.New("running in unsupported context")
+	return slPendingHeader
 }
 
-// PreviousCoincident searches the path for a block of specified order in the specified slice
-func (sl *Slice) PreviousValidCoincident(header *types.Header, slice []byte, order int, fullSliceEqual bool) (*types.Header, error) {
-
-	if header.Number[types.QuaiNetworkContext].Cmp(big.NewInt(0)) == 0 {
-		return sl.hc.GetHeaderByHash(sl.hc.Config().GenesisHashes[0]), nil
-	}
-
-	if err := sl.hc.CheckContext(order); err != nil {
-		return nil, err
-	}
-	if err := sl.hc.CheckLocationRange(slice); err != nil {
-		return nil, err
-	}
-
-	for {
-		// If block header is Genesis return it as coincident
-		if header.Number[types.QuaiNetworkContext].Cmp(big.NewInt(1)) == 0 {
-			return sl.hc.GetHeaderByHash(sl.hc.Config().GenesisHashes[0]), nil
+// MakeSubClients creates the quaiclient for the given suburls
+func MakeSubClients(suburls []string) []*quaiclient.Client {
+	subClients := make([]*quaiclient.Client, 3)
+	for i, suburl := range suburls {
+		if suburl == "" {
+			log.Warn("sub client url is empty")
 		}
-
-		// Get previous header on local chain by hash
-		prevHeader := sl.hc.GetHeaderByHash(header.ParentHash[types.QuaiNetworkContext])
-		if prevHeader == nil {
-			return nil, consensus.ErrSliceNotSynced
-		}
-		// Increment previous header
-		header = prevHeader
-
-		// Find the order of the header
-		difficultyOrder, err := sl.engine.GetDifficultyOrder(header)
+		subClient, err := quaiclient.Dial(suburl)
 		if err != nil {
-			return nil, err
+			log.Crit("Error connecting to the subordinate go-quai client for index", "index", i, " err ", err)
 		}
-
-		// If we have reached a coincident block of desired order in our desired slice
-		var equal bool
-		if fullSliceEqual {
-			equal = bytes.Equal(header.Location, slice)
-		} else {
-			equal = header.Location[0] == slice[0]
-		}
-		if equal && difficultyOrder <= order {
-			return header, nil
-		}
+		subClients[i] = subClient
 	}
+	return subClients
 }
 
 func (sl *Slice) procFutureBlocks() {
@@ -695,25 +234,6 @@ func (sl *Slice) procFutureBlocks() {
 		for i := range blocks {
 			td, _ := sl.CalcTd(blocks[i].Header())
 			sl.Append(blocks[i], td)
-		}
-	}
-}
-
-func (sl *Slice) procFutureHeads() {
-	headers := make([]*types.Header, 0, sl.futureHeads.Len())
-	for _, hash := range sl.futureHeads.Keys() {
-		if head, exist := sl.futureHeads.Peek(hash); exist {
-			headers = append(headers, head.(*types.Header))
-		}
-	}
-	if len(headers) > 0 {
-		sort.Slice(headers, func(i, j int) bool {
-			return headers[i].Number64() < headers[j].Number64()
-		})
-		// Insert one by one as chain insertion needs contiguous ancestry between blocks
-		for i := range headers {
-			fmt.Println("headers i", headers[i])
-			sl.hc.SetCurrentHeader(headers[i])
 		}
 	}
 }
@@ -743,25 +263,6 @@ func (sl *Slice) AddFutureBlocks(blocks []*types.Block) error {
 	return nil
 }
 
-// addFutureHeads checks if the header is within the max allowed window to get
-// accepted for future processing, and returns an error if the block is too far
-// ahead and was not added.
-func (sl *Slice) addFutureHead(header *types.Header) error {
-	max := uint64(time.Now().Unix() + maxTimeFutureHeads)
-	if header.HeaderTime() > max {
-		return fmt.Errorf("future header timestamp %v > allowed %v", header.HeaderTime(), max)
-	}
-	if !sl.futureHeads.Contains(header.Hash()) {
-		// add the header
-		sl.futureHeads.Add(header.Hash(), header)
-		// remove the parent if it exists in the futureHeads cache after adding the header.
-		if sl.futureHeads.Contains(header.Parent()) {
-			sl.futureHeads.Remove(header.Parent())
-		}
-	}
-	return nil
-}
-
 func (sl *Slice) updateFutureBlocks() {
 	futureTimer := time.NewTicker(3 * time.Second)
 	defer futureTimer.Stop()
@@ -776,54 +277,35 @@ func (sl *Slice) updateFutureBlocks() {
 	}
 }
 
-func (sl *Slice) updateFutureHeads() {
-	futureTimer := time.NewTicker(1 * time.Second)
-	defer futureTimer.Stop()
-	for {
-		select {
-		case <-futureTimer.C:
-			sl.procFutureHeads()
-		case <-sl.quit:
-			return
-		}
-	}
-}
-
-func (sl *Slice) sendPendingHeaderToFeed() {
-	futureTimer := time.NewTicker(3 * time.Second)
-
-	defer futureTimer.Stop()
-	defer sl.wg.Done()
-	for {
-		select {
-		case <-futureTimer.C:
-			if types.QuaiNetworkContext == params.ZONE {
-				header := rawdb.ReadPendingHeader(sl.sliceDb, sl.hc.CurrentHeader().Hash())
-				fmt.Println("header sent to miner by proc:", header)
-				if header != nil {
-					if header != sl.nilHeader {
-						if header.Location[0] != 0 && header.Location[1] != 0 {
-							if header.Number[0] != nil && header.Number[1] != nil && header.Number[2] != nil {
-								if header.Number[0].Cmp(big.NewInt(0)) != 0 && header.Number[1].Cmp(big.NewInt(0)) != 0 && header.Number[2].Cmp(big.NewInt(0)) != 0 {
-									sl.miner.worker.pendingHeaderFeed.Send(header)
-								}
-							}
-						}
-					}
-				}
-
-			}
-		case <-sl.quit:
-			return
-		}
-	}
-}
-
 func (sl *Slice) GetSliceHeadHash(index byte) common.Hash {
-
 	return common.Hash{}
 }
 
 func (sl *Slice) GetHeadHash() common.Hash {
 	return sl.hc.currentHeaderHash
+}
+
+// Config retrieves the slice's chain configuration.
+func (sl *Slice) Config() *params.ChainConfig { return sl.config }
+
+// Engine retrieves the header chain's consensus engine.
+func (sl *Slice) Engine() consensus.Engine { return sl.engine }
+
+func (sl *Slice) PendingBlockBody(hash common.Hash) *types.Body {
+	return rawdb.ReadPendginBlockBody(sl.sliceDb, hash)
+}
+
+// HeaderChain retrieves the headerchain.
+func (sl *Slice) HeaderChain() *HeaderChain {
+	return sl.hc
+}
+
+// TxPool retrieves the txpool.
+func (sl *Slice) TxPool() *TxPool {
+	return sl.txPool
+}
+
+// Miner retrieves the miner.
+func (sl *Slice) Miner() *Miner {
+	return sl.miner
 }

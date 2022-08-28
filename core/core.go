@@ -46,7 +46,7 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 		// if the order of the block is less than the context
 		// add the rest of the blocks in the queue to the future blocks.
 		if blockOrder == types.QuaiNetworkContext {
-			err = c.sl.SliceAppend(block)
+			err = c.sl.Append(block)
 			if err != nil {
 				fmt.Println("err in Append core: ", err)
 				return i, err
