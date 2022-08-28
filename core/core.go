@@ -384,8 +384,8 @@ func (c *Core) HLCR(td *big.Int) bool {
 	return c.sl.HLCR(td)
 }
 
-func (c *Core) SetHeaderChainHead(header *types.Header) error {
-	return c.sl.SetHeaderChainHead(header)
+func (c *Core) SetHeaderChainHead(header *types.Header, slPendingHeader *types.Header) error {
+	return c.sl.SetHeaderChainHead(header, slPendingHeader)
 }
 
 func (c *Core) SetHeaderChainHeadToHash(hash common.Hash) error {

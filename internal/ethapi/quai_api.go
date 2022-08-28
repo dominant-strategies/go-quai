@@ -690,11 +690,15 @@ func (s *PublicBlockChainQuaiAPI) Append(ctx context.Context, raw json.RawMessag
 
 func (s *PublicBlockChainQuaiAPI) SetHeaderChainHead(ctx context.Context, raw json.RawMessage) error {
 	// Decode header.
-	var header *types.Header
-	if err := json.Unmarshal(raw, &header); err != nil {
+	var headerAndPendingHeader HeaderAndPendingHeader
+
+	if err := json.Unmarshal(raw, &headerAndPendingHeader); err != nil {
 		return err
 	}
-	return s.b.SetHeaderChainHead(header)
+
+	fmt.Println("quai api header: ", headerAndPendingHeader.Header)
+	fmt.Println("quai api pending header: ", headerAndPendingHeader.PendingHeader)
+	return s.b.SetHeaderChainHead(headerAndPendingHeader.Header, headerAndPendingHeader.PendingHeader)
 }
 
 func (s *PublicBlockChainQuaiAPI) SetHeaderChainHeadToHash(ctx context.Context, hash common.Hash) error {

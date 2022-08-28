@@ -135,8 +135,8 @@ func (b *EthAPIBackend) Append(block *types.Block, td *big.Int) error {
 	return b.eth.core.Append(block, td)
 }
 
-func (b *EthAPIBackend) SetHeaderChainHead(header *types.Header) error {
-	return b.eth.core.SetHeaderChainHead(header)
+func (b *EthAPIBackend) SetHeaderChainHead(header *types.Header, slPendingHeader *types.Header) error {
+	return b.eth.core.SetHeaderChainHead(header, slPendingHeader)
 }
 
 func (b *EthAPIBackend) SetHeaderChainHeadToHash(hash common.Hash) error {

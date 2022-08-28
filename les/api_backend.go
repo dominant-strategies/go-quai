@@ -370,7 +370,7 @@ func (b *LesApiBackend) Append(block *types.Block, td *big.Int) error {
 	return nil
 }
 
-func (b *LesApiBackend) SetHeaderChainHead(header *types.Header) error {
+func (b *LesApiBackend) SetHeaderChainHead(header *types.Header, slPendingHeader *types.Header) error {
 	return nil
 }
 
