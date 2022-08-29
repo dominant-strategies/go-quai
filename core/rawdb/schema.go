@@ -88,6 +88,7 @@ var (
 	domPendingHeaderPrefix = []byte("dp") // pendingHeaderPrefix + hash -> header
 	pendingHeaderPrefix    = []byte("ph") // pendingHeaderPrefix + hash -> header
 	pendingBlockBodyPrefix = []byte("pb") // pendingBodyPrefix + hash -> Body
+	terminiPrefix          = []byte("tk") //terminiPrefix + hash -> []common.Hash
 
 	blockBodyPrefix     = []byte("b") // blockBodyPrefix + num (uint64 big endian) + hash -> block body
 	blockReceiptsPrefix = []byte("r") // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
@@ -168,6 +169,11 @@ func currentHeadsKey(hash common.Hash) []byte {
 // domPendingHeaderKey = domPendingHeaderPrefix + hash
 func domPendingHeaderKey(hash common.Hash) []byte {
 	return append(domPendingHeaderPrefix, hash.Bytes()...)
+}
+
+// terminiKey = domPendingHeaderPrefix + hash
+func terminiKey(hash common.Hash) []byte {
+	return append(terminiPrefix, hash.Bytes()...)
 }
 
 // pendingHeaderKey = pendingHeaderPrefix + hash

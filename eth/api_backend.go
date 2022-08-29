@@ -127,20 +127,16 @@ func (b *EthAPIBackend) GetTerminusAtOrder(header *types.Header, order int) (com
 	return b.eth.core.GetTerminusAtOrder(header, order)
 }
 
-func (b *EthAPIBackend) PCRC(block *types.Block, order int) (types.PCRCTermini, error) {
-	return b.eth.core.PCRC(block, order)
+func (b *EthAPIBackend) PCRC(block *types.Block, domTerminus common.Hash) (common.Hash, error) {
+	return b.eth.core.PCRC(block, domTerminus)
 }
 
-func (b *EthAPIBackend) Append(block *types.Block, td *big.Int) error {
-	return b.eth.core.Append(block, td)
+func (b *EthAPIBackend) Append(block *types.Block, domTerminus common.Hash, td *big.Int, domReorg bool, currentContextOrigin bool) (*types.Header, error) {
+	return b.eth.core.Append(block, domTerminus, td, domReorg, currentContextOrigin)
 }
 
-func (b *EthAPIBackend) SetHeaderChainHead(header *types.Header, slPendingHeader *types.Header) error {
-	return b.eth.core.SetHeaderChainHead(header, slPendingHeader)
-}
-
-func (b *EthAPIBackend) SetHeaderChainHeadToHash(hash common.Hash) error {
-	return b.eth.core.SetHeaderChainHeadToHash(hash)
+func (b *EthAPIBackend) SetHeaderChainHead(head *types.Header, td *big.Int, domReorg bool, currentContextOrigin bool) (*types.Header, error) {
+	return b.eth.core.SetHeaderChainHead(head, td, domReorg, currentContextOrigin)
 }
 
 func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
@@ -412,10 +408,6 @@ func (b *EthAPIBackend) GetSliceHeadHash(index byte) common.Hash {
 
 func (b *EthAPIBackend) GetHeadHash() common.Hash {
 	return b.eth.core.GetHeadHash()
-}
-
-func (b *EthAPIBackend) UpdatePendingHeader(header *types.Header, pendingHeader *types.Header) error {
-	return b.eth.core.UpdatePendingHeader(header, pendingHeader)
 }
 
 func (b *EthAPIBackend) PendingBlockBody(hash common.Hash) *types.Body {

@@ -425,11 +425,13 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 			}
 			td = []*big.Int{primeTd, nil, nil}
 		} else {
-			terminusHeader, err := h.core.Slice().PreviousValidCoincident(block.Header(), block.Header().Location, params.PRIME, true)
+			var nilHash common.Hash
+			terminusHash, err := h.core.Slice().PCRC(block, nilHash)
 			if err != nil {
 				log.Error("Propagating dangling block", "number", block.Number(), "hash", hash)
 				return
 			}
+			terminusHeader := h.core.Slice().HeaderChain().GetHeaderByHash(terminusHash)
 			td = h.core.GetTd(terminusHeader.Hash(), terminusHeader.Number64())
 			if len(td) == 0 {
 				return

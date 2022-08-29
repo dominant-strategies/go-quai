@@ -499,6 +499,11 @@ func (hc *HeaderChain) GetBlockNumber(hash common.Hash) *uint64 {
 	return number
 }
 
+func (hc *HeaderChain) GetTerminiByHash(hash common.Hash) []common.Hash {
+	termini := rawdb.ReadTermini(hc.headerDb, hash)
+	return termini
+}
+
 // GetBlockHashesFromHash retrieves a number of block hashes starting at a given
 // hash, fetching towards the genesis block.
 func (hc *HeaderChain) GetBlockHashesFromHash(hash common.Hash, max uint64) []common.Hash {

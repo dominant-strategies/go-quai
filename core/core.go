@@ -46,8 +46,12 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 		// if the order of the block is less than the context
 		// add the rest of the blocks in the queue to the future blocks.
 		if blockOrder == types.QuaiNetworkContext {
-			err = c.sl.Append(block)
+			var nilHash common.Hash
+			_, err = c.sl.Append(block, nilHash, big.NewInt(0), false, true)
 			if err != nil {
+				if err == consensus.ErrFutureBlock {
+					c.sl.addFutureBlock(block)
+				}
 				fmt.Println("err in Append core: ", err)
 				return i, err
 			}
@@ -360,12 +364,12 @@ func (c *Core) GetTerminusAtOrder(header *types.Header, order int) (common.Hash,
 	return common.Hash{}, nil
 }
 
-func (c *Core) PCRC(block *types.Block, order int) (types.PCRCTermini, error) {
-	return c.sl.PCRC(block, order)
+func (c *Core) PCRC(block *types.Block, domTerminus common.Hash) (common.Hash, error) {
+	return c.sl.PCRC(block, domTerminus)
 }
 
-func (c *Core) Append(block *types.Block, td *big.Int) error {
-	return c.sl.Append(block, td)
+func (c *Core) Append(block *types.Block, domTerminus common.Hash, td *big.Int, domReorg bool, currentContextOrigin bool) (*types.Header, error) {
+	return c.sl.Append(block, domTerminus, td, domReorg, currentContextOrigin)
 }
 
 func (c *Core) TxLookupLimit() uint64 {
@@ -384,16 +388,8 @@ func (c *Core) HLCR(td *big.Int) bool {
 	return c.sl.HLCR(td)
 }
 
-func (c *Core) SetHeaderChainHead(header *types.Header, slPendingHeader *types.Header) error {
-	return c.sl.SetHeaderChainHead(header, slPendingHeader)
-}
-
-func (c *Core) SetHeaderChainHeadToHash(hash common.Hash) error {
-	return c.sl.SetHeaderChainHeadToHash(hash)
-}
-
-func (c *Core) UpdatePendingHeader(header *types.Header, pendingHeader *types.Header) error {
-	return c.sl.UpdatePendingHeader(header, pendingHeader)
+func (c *Core) SetHeaderChainHead(head *types.Header, td *big.Int, domReorg bool, currentContextOrigin bool) (*types.Header, error) {
+	return c.sl.SetHeaderChainHead(head, td, domReorg, currentContextOrigin)
 }
 
 // SubscribePendingLogs starts delivering logs from pending transactions

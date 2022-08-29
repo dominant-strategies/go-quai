@@ -648,6 +648,41 @@ func DeleteDomPendingHeader(db ethdb.KeyValueWriter, hash common.Hash) {
 	}
 }
 
+// ReadHeadsHashes retreive's the heads hashes of the blockchain.
+func ReadTermini(db ethdb.Reader, hash common.Hash) []common.Hash {
+	key := terminiKey(hash)
+	data, _ := db.Get(key)
+	if len(data) == 0 {
+		return []common.Hash{}
+	}
+	hashes := []common.Hash{}
+	if err := rlp.DecodeBytes(data, &hashes); err != nil {
+		return []common.Hash{}
+	}
+	return hashes
+}
+
+// WriteHeadsHashes writes the heads hashes of the blockchain.
+func WriteTermini(db ethdb.KeyValueWriter, index common.Hash, hashes []common.Hash) {
+	key := terminiKey(index)
+	data, err := rlp.EncodeToBytes(hashes)
+	if err != nil {
+		log.Crit("Failed to RLP encode termini", "err", err)
+	}
+	if err := db.Put(key, data); err != nil {
+		log.Crit("Failed to store last block's termini", "err", err)
+	}
+}
+
+// DeleteHeadsHashes writes the heads hashes of the blockchain.
+func DeleteTermini(db ethdb.KeyValueWriter, hash common.Hash) {
+	key := terminiKey(hash)
+
+	if err := db.Delete(key); err != nil {
+		log.Crit("Failed to delete termini ", "err", err)
+	}
+}
+
 // ReadDomPendingHeader retreive's the pending header stored in hash.
 func ReadDomPendingHeader(db ethdb.Reader, hash common.Hash) *types.Header {
 	key := domPendingHeaderKey(hash)

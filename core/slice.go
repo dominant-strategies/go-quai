@@ -87,7 +87,7 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 
 	if types.QuaiNetworkContext == params.PRIME {
 		fmt.Println("update pending from PRIME on initial")
-		sl.SetHeaderChainHead(pendingHeader, sl.hc.GetTdByHash(pendingHeader.Hash())[params.PRIME])
+		sl.SetHeaderChainHead(pendingHeader, sl.hc.GetTdByHash(pendingHeader.Hash())[params.PRIME], false, true)
 	}
 
 	go sl.updateFutureBlocks()
@@ -95,12 +95,18 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 	return sl, nil
 }
 
-func (sl *Slice) Append(block *types.Block, td *big.Int, domReorg bool, currentContextOrigin bool) (*types.Header, error) {
+func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int, domReorg bool, currentContextOrigin bool) (*types.Header, error) {
 	sl.appendmu.Lock()
 	defer sl.appendmu.Unlock()
 
+	//PCRC
+	domTerminus, err := sl.PCRC(block, domTerminus)
+	if err != nil {
+		return sl.nilHeader, err
+	}
+
 	// Append the new block
-	err := sl.hc.Append(block)
+	err = sl.hc.Append(block)
 	if err != nil {
 		fmt.Println("Slice error in append", err)
 		return sl.nilHeader, err
@@ -127,7 +133,7 @@ func (sl *Slice) Append(block *types.Block, td *big.Int, domReorg bool, currentC
 
 	if types.QuaiNetworkContext != params.ZONE {
 		// Perform the sub append
-		slPendingHeader, err = sl.subClients[block.Header().Location[types.QuaiNetworkContext]-1].Append(context.Background(), block, td)
+		slPendingHeader, err = sl.subClients[block.Header().Location[types.QuaiNetworkContext]-1].Append(context.Background(), block, domTerminus, td, domReorg, false)
 		if err != nil {
 			return sl.nilHeader, err
 		}
@@ -136,8 +142,10 @@ func (sl *Slice) Append(block *types.Block, td *big.Int, domReorg bool, currentC
 
 	if types.QuaiNetworkContext == params.PRIME {
 		//save the pending header
+		rawdb.WritePendingHeader(sl.sliceDb, block.Hash(), slPendingHeader)
 
 		//transmit it to the miner
+
 	}
 	return slPendingHeader, nil
 }
@@ -177,24 +185,22 @@ func (sl *Slice) SetHeaderChainHead(head *types.Header, td *big.Int, domReorg bo
 
 // PCRC
 func (sl *Slice) PCRC(block *types.Block, domTerminus common.Hash) (common.Hash, error) {
-	terminus, termini := sl.hc.GetTerminiByHash(block.Header().Parent())
+	termini := sl.hc.GetTerminiByHash(block.Header().Parent())
 
-	if terminus == nil {
+	if termini == nil {
 		return common.Hash{}, consensus.ErrFutureBlock
 	}
 
-	newTermini := make([]common.Hash, 3)
-	newTermini = termini
+	newTermini := termini
 
+	var nilHash common.Hash
 	// make sure the termini match
-	if domTerminus != nil {
+	if domTerminus != nilHash {
 		// There is a dom block so we must check the terminuses match
-		if terminus != domTerminus {
-			return common.Hash{}, errors.New("Termini do not match, block rejected due to twist with dom")
+		if termini[len(termini)-1] != domTerminus {
+			return common.Hash{}, errors.New("termini do not match, block rejected due to twist with dom")
 		} else {
-			// save the new subtermini for the block
 			newTermini[sl.config.Location[types.QuaiNetworkContext]-1] = block.Hash()
-			rawdb.WriteTermini(sl.hc.headerDb, block.Hash(), newTermini)
 		}
 
 		// Update the terminus for the block
@@ -204,10 +210,11 @@ func (sl *Slice) PCRC(block *types.Block, domTerminus common.Hash) (common.Hash,
 			return common.Hash{}, err
 		}
 		if parentOrder < types.QuaiNetworkContext {
-			rawdb.WriteTerminus(sl.hc.headerDb, block.Hash(), block.Header().Parent())
-		} else {
-			rawdb.WriteTerminus(sl.hc.headerDb, block.Hash(), terminus)
+			newTermini[len(newTermini)-1] = block.Header().Parent()
 		}
+
+		//Save the termini
+		rawdb.WriteTermini(sl.hc.headerDb, block.Hash(), newTermini)
 	}
 
 	return termini[sl.config.Location[types.QuaiNetworkContext]-1], nil
@@ -282,8 +289,8 @@ func (sl *Slice) procFutureBlocks() {
 		}
 		// Insert one by one as chain insertion needs contiguous ancestry between blocks
 		for i := range blocks {
-			td, _ := sl.CalcTd(blocks[i].Header())
-			sl.Append(blocks[i], td)
+			var nilHash common.Hash
+			sl.Append(blocks[i], nilHash, big.NewInt(0), false, true)
 		}
 	}
 }

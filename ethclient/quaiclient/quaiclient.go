@@ -250,12 +250,15 @@ func RPCMarshalOrderBlock(block *types.Block, Order int) (map[string]interface{}
 }
 
 // RPCMarshalOrderBlock converts the block and order as input to PCRC.
-func RPCMarshalTdBlock(block *types.Block, td *big.Int) (map[string]interface{}, error) {
+func RPCMarshalTdBlock(block *types.Block, domTerminus common.Hash, td *big.Int, domReorg bool, currentContextOrigin bool) (map[string]interface{}, error) {
 	fields, err := RPCMarshalBlock(block, true, true)
 	if err != nil {
 		return nil, err
 	}
 	fields["td"] = td
+	fields["DomTerminus"] = domTerminus
+	fields["DomReorg"] = domReorg
+	fields["CurrentContextOrigin"] = currentContextOrigin
 	return fields, nil
 }
 
@@ -500,17 +503,17 @@ func (ec *Client) GetHeadHash(ctx context.Context) common.Hash {
 	return headHash
 }
 
-func (ec *Client) Append(ctx context.Context, block *types.Block, td *big.Int) (*types.Header, error) {
-	data, err := RPCMarshalTdBlock(block, td)
+func (ec *Client) Append(ctx context.Context, block *types.Block, domTerminus common.Hash, td *big.Int, domReorg bool, currentContextOrigin bool) (*types.Header, error) {
+	data, err := RPCMarshalTdBlock(block, domTerminus, td, domReorg, currentContextOrigin)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	err = ec.c.CallContext(ctx, nil, "quai_append", data)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	return nil, nil
 }
 
 func (ec *Client) SetHeaderChainHead(ctx context.Context, header *types.Header, slPendingHeader *types.Header) error {
