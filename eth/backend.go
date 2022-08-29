@@ -18,6 +18,7 @@
 package eth
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"math/big"
@@ -132,6 +133,40 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
 		return nil, genesisErr
 	}
+	knotSet := make([]*types.Block, 0)
+	switch types.QuaiNetworkContext {
+	case params.PRIME:
+		knotSet = config.Genesis.Knot
+	case params.REGION:
+		for i, block := range config.Genesis.Knot {
+			if i != 0 {
+				if block.Header().Location[0] == chainConfig.Location[0] {
+					knotSet = append(knotSet, block)
+				}
+			}
+		}
+	case params.ZONE:
+		for i, block := range config.Genesis.Knot {
+			if i != 0 {
+				if bytes.Equal(block.Header().Location, chainConfig.Location) {
+					knotSet = append(knotSet, block)
+				}
+			}
+		}
+	}
+
+	for _, block := range knotSet {
+		if block != nil {
+			rawdb.WriteTd(chainDb, block.Hash(), block.NumberU64(), config.Genesis.Difficulty)
+			rawdb.WriteBlock(chainDb, block)
+			rawdb.WriteReceipts(chainDb, block.Hash(), block.NumberU64(), nil)
+			rawdb.WriteCanonicalHash(chainDb, block.Hash(), block.NumberU64())
+			rawdb.WriteHeadBlockHash(chainDb, block.Hash())
+			rawdb.WriteHeadFastBlockHash(chainDb, block.Hash())
+			rawdb.WriteHeadHeaderHash(chainDb, block.Hash())
+		}
+	}
+
 	log.Info("Initialised chain configuration", "config", chainConfig)
 
 	if err := pruner.RecoverPruning(stack.ResolvePath(""), chainDb, stack.ResolvePath(config.TrieCleanCacheJournal)); err != nil {

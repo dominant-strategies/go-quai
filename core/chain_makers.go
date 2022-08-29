@@ -19,7 +19,9 @@ package core
 import (
 	"errors"
 	"fmt"
+	"log"
 	"math/big"
+	"sync"
 
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/consensus"
@@ -29,6 +31,7 @@ import (
 	"github.com/spruce-solutions/go-quai/core/vm"
 	"github.com/spruce-solutions/go-quai/ethdb"
 	"github.com/spruce-solutions/go-quai/params"
+	"github.com/spruce-solutions/go-quai/trie"
 )
 
 // BlockGen creates blocks for testing.
@@ -204,7 +207,8 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	chainreader := &fakeChainReader{config: config}
 	genblock := func(i int, parent *types.Block, statedb *state.StateDB) (*types.Block, types.Receipts) {
 		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: config, engine: engine}
-		b.header = makeHeader(chainreader, parent, statedb, b.engine)
+		location := []byte{1, 1}
+		b.header = makeHeader(chainreader, parent, statedb, b.engine, location)
 
 		// Execute any user modifications to the block
 		if gen != nil {
@@ -239,7 +243,83 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	return blocks, receipts
 }
 
-func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.StateDB, engine consensus.Engine) *types.Header {
+type knot struct {
+	block *types.Block
+}
+
+func GenerateKnot(config *params.ChainConfig, parent *types.Block, engine consensus.Engine, db ethdb.Database, n int, gen func(int, *BlockGen)) ([]*types.Block, []types.Receipts) {
+	if config == nil {
+		config = params.TestChainConfig
+	}
+	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
+	chainreader := &fakeChainReader{config: config}
+
+	resultLoop := func(i int, k *knot, statedb *state.StateDB, results chan *types.Block, stop chan struct{}, wg *sync.WaitGroup) error {
+		for {
+			select {
+			case block := <-results:
+				context, err := engine.GetDifficultyOrder(block.Header())
+				if err != nil {
+					log.Println("Block mined has an invalid order")
+				}
+
+				if context == params.PRIME {
+					log.Println("PRIME:", block.Header().Location, block.Header().Number, block.Header().Hash())
+				}
+
+				k.block = block
+
+				defer wg.Done()
+
+				return nil
+			}
+		}
+	}
+
+	genblock := func(i int, parent *types.Block, statedb *state.StateDB, location []byte, resultCh chan *types.Block, stopCh chan struct{}) {
+		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: config, engine: engine}
+		b.header = makeHeader(chainreader, parent, statedb, b.engine, location)
+
+		// Execute any user modifications to the block
+		if gen != nil {
+			gen(i, b)
+		}
+		if b.engine != nil {
+			// Finalize and seal the block
+			block := types.NewBlock(b.header, nil, nil, nil, trie.NewStackTrie(nil))
+
+			// Mine the block
+			if err := engine.Seal(chainreader, block, resultCh, stopCh); err != nil {
+				log.Println("Block sealing failed", "err", err)
+			}
+		}
+	}
+
+	knot := &knot{
+		block: parent,
+	}
+
+	locations := [][]byte{[]byte{1, 1}, []byte{1, 2}, []byte{1, 3}, []byte{2, 1}, []byte{2, 2}, []byte{2, 3}, []byte{3, 1}, []byte{3, 2}, []byte{3, 3}}
+	for i := 0; i < len(locations); i++ {
+		statedb, err := state.New(parent.Root(), state.NewDatabase(db), nil)
+		if err != nil {
+			panic(err)
+		}
+		resultCh := make(chan *types.Block)
+		exitCh := make(chan struct{})
+
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go resultLoop(i, knot, statedb, resultCh, exitCh, &wg)
+		genblock(i, parent, statedb, locations[i], resultCh, exitCh)
+		wg.Wait()
+		blocks[i] = knot.block
+		parent = knot.block
+	}
+	return blocks, receipts
+}
+
+func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.StateDB, engine consensus.Engine, location []byte) *types.Header {
 	var time uint64
 	if parent.Time() == 0 {
 		time = 10
@@ -264,32 +344,23 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 		GasLimit:    []uint64{0, 0, 0},
 		GasUsed:     []uint64{0, 0, 0},
 		Extra:       [][]byte{[]byte(nil), []byte(nil), []byte(nil)},
-	}
-	header.GasLimit[types.QuaiNetworkContext] = parent.GasLimit()
-
-	parentHeader := &types.Header{
-		Number:     []*big.Int{big.NewInt(int64(1)), big.NewInt(int64(1)), big.NewInt(int64(1))},
-		Difficulty: []*big.Int{big.NewInt(1), big.NewInt(1), big.NewInt(1)},
-		UncleHash:  types.EmptyUncleHash,
-		Time:       time - 10,
+		Location:    location,
 	}
 
-	if chain.Config().IsLondon(header.Number[types.QuaiNetworkContext]) {
-		if !chain.Config().IsLondon(parent.Number()) {
-			parentGasLimit := parent.GasLimit() * params.ElasticityMultiplier
-			header.GasLimit[types.QuaiNetworkContext] = CalcGasLimit(parentGasLimit, parent.GasUsed(), 0)
-		}
-	}
+	// Setting this to params.MinGasLimit for now since
+	header.GasLimit = []uint64{params.MinGasLimit, params.MinGasLimit, params.MinGasLimit}
 
-	parentHeader.Number[types.QuaiNetworkContext] = new(big.Int).Add(parent.Number(), common.Big1)
-	parentHeader.Difficulty[types.QuaiNetworkContext] = parent.Difficulty()
-	parentHeader.UncleHash[types.QuaiNetworkContext] = parent.UncleHash()
+	parentHeader := parent.Header()
 
-	header.Root[types.QuaiNetworkContext] = state.IntermediateRoot(chain.Config().IsEIP158(parent.Number()))
 	header.ParentHash[types.QuaiNetworkContext] = parent.Hash()
 	header.Coinbase[types.QuaiNetworkContext] = parent.Coinbase()
 	header.Difficulty[types.QuaiNetworkContext] = engine.CalcDifficulty(chain, time, parentHeader, types.QuaiNetworkContext)
+
 	header.Number[types.QuaiNetworkContext] = new(big.Int).Add(parent.Number(), common.Big1)
+	if len(parent.Header().Location) > 0 && header.Location[0] == parent.Header().Location[0] {
+		header.Number[types.QuaiNetworkContext+1] = new(big.Int).Add(parent.Header().Number[types.QuaiNetworkContext+1], common.Big1)
+		header.ParentHash[types.QuaiNetworkContext+1] = parent.Hash()
+	}
 
 	return header
 }
@@ -331,7 +402,6 @@ func (cr *fakeChainReader) GetHeaderByNumber(number uint64) *types.Header       
 func (cr *fakeChainReader) GetHeaderByHash(hash common.Hash) *types.Header          { return nil }
 func (cr *fakeChainReader) GetHeader(hash common.Hash, number uint64) *types.Header { return nil }
 func (cr *fakeChainReader) GetBlock(hash common.Hash, number uint64) *types.Block   { return nil }
-
 func (cr *fakeChainReader) GetUnclesInChain(block *types.Block, length int) []*types.Header {
 	return nil
 }
