@@ -85,11 +85,14 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 	if types.QuaiNetworkContext != params.ZONE {
 		sl.subClients = MakeSubClients(subClientUrls)
 	}
+
+	domDoneCh := make(chan struct{})
 	// only set domClient if the chain is not Prime.
 	if types.QuaiNetworkContext != params.PRIME {
-		go func() {
+		go func(done chan struct{}) {
 			sl.domClient = MakeDomClient(domClientUrl)
-		}()
+			done <- struct{}{}
+		}(domDoneCh)
 	}
 
 	sl.nilHeader = &types.Header{
@@ -123,15 +126,8 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 		pendingHeader = sl.hc.genesisHeader
 	}
 
-	tempPendingHeader, _ := sl.setHeaderChainHead(pendingHeader, sl.hc.GetTdByHash(pendingHeader.Hash())[types.QuaiNetworkContext], true, false)
-	fmt.Println("tempPendingHeader on start: ", tempPendingHeader.header)
-
-	time.Sleep(5 * time.Second)
-	if types.QuaiNetworkContext == params.ZONE {
-		sl.domClient.SendPendingHeader(context.Background(), tempPendingHeader.header, chainConfig.GenesisHashes[types.QuaiNetworkContext])
-	}
-
 	go sl.updateFutureBlocks()
+	go sl.domDoneLoop(domDoneCh, pendingHeader)
 
 	return sl, nil
 }
@@ -304,7 +300,6 @@ func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *typ
 // ReceivePendingHeader receives a pendingHeader from the subs and if the order of the block
 // is less than the context of the chain, the pendingHeader is sent to the dom.
 func (sl *Slice) ReceivePendingHeader(slPendingHeader *types.Header, terminusHash common.Hash) error {
-
 	if sl.pendingHeader.termini[slPendingHeader.Location[types.QuaiNetworkContext]-1] != terminusHash {
 		log.Info("Stale update received from sub")
 		return nil
@@ -393,6 +388,21 @@ func (sl *Slice) updateFutureBlocks() {
 			sl.procFutureBlocks()
 		case <-sl.quit:
 			return
+		}
+	}
+}
+
+// domDoneLoop
+func (sl *Slice) domDoneLoop(domDone chan struct{}, pendingHeader *types.Header) error {
+	for {
+		select {
+		case <-domDone:
+			tempPendingHeader, _ := sl.setHeaderChainHead(pendingHeader, sl.hc.GetTdByHash(pendingHeader.Hash())[types.QuaiNetworkContext], true, false)
+			fmt.Println("tempPendingHeader on start: ", tempPendingHeader.header)
+
+			if types.QuaiNetworkContext == params.ZONE {
+				sl.domClient.SendPendingHeader(context.Background(), tempPendingHeader.header, sl.config.GenesisHashes[types.QuaiNetworkContext])
+			}
 		}
 	}
 }
