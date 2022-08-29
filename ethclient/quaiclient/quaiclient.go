@@ -500,7 +500,7 @@ func (ec *Client) GetHeadHash(ctx context.Context) common.Hash {
 	return headHash
 }
 
-func (ec *Client) Append(ctx context.Context, block *types.Block, td *big.Int) error {
+func (ec *Client) Append(ctx context.Context, block *types.Block, td *big.Int) (*types.Header, error) {
 	data, err := RPCMarshalTdBlock(block, td)
 	if err != nil {
 		return err
