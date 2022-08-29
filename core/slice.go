@@ -80,16 +80,16 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 	sl.miner = New(sl.hc, sl.txPool, config, db, chainConfig, engine, isLocalBlock)
 	sl.miner.SetExtra(sl.miner.MakeExtraData(config.ExtraData))
 
+	// only set the subClients if the chain is not Zone
+	sl.subClients = make([]*quaiclient.Client, 3)
+	if types.QuaiNetworkContext != params.ZONE {
+		sl.subClients = MakeSubClients(subClientUrls)
+	}
 	// only set domClient if the chain is not Prime.
 	if types.QuaiNetworkContext != params.PRIME {
 		go func() {
 			sl.domClient = MakeDomClient(domClientUrl)
 		}()
-	}
-	// only set the subClients if the chain is not Zone
-	sl.subClients = make([]*quaiclient.Client, 3)
-	if types.QuaiNetworkContext != params.ZONE {
-		sl.subClients = MakeSubClients(subClientUrls)
 	}
 
 	sl.nilHeader = &types.Header{
@@ -123,8 +123,10 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 		pendingHeader = sl.hc.genesisHeader
 	}
 
-	tempPendingHeader, _ := sl.setHeaderChainHead(pendingHeader, sl.hc.GetTdByHash(pendingHeader.Hash())[params.PRIME], false, true)
+	tempPendingHeader, _ := sl.setHeaderChainHead(pendingHeader, sl.hc.GetTdByHash(pendingHeader.Hash())[types.QuaiNetworkContext], true, false)
+	fmt.Println("tempPendingHeader on start: ", tempPendingHeader.header)
 
+	time.Sleep(5 * time.Second)
 	if types.QuaiNetworkContext == params.ZONE {
 		sl.domClient.SendPendingHeader(context.Background(), tempPendingHeader.header, chainConfig.GenesisHashes[types.QuaiNetworkContext])
 	}

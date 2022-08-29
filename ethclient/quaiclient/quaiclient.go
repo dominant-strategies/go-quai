@@ -518,6 +518,8 @@ func (ec *Client) SendPendingHeader(ctx context.Context, header *types.Header, t
 	data := map[string]interface{}{"Header": RPCMarshalHeader(header)}
 	data["TerminusHash"] = terminusHash
 
+	fmt.Println("data: ", data)
+
 	err := ec.c.CallContext(ctx, nil, "quai_receivePendingHeader", data)
 	if err != nil {
 		return err
