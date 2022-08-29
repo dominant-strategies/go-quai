@@ -426,7 +426,7 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 			td = []*big.Int{primeTd, nil, nil}
 		} else {
 			var nilHash common.Hash
-			terminusHash, err := h.core.Slice().PCRC(block, nilHash)
+			terminusHash, err := h.core.Slice().PCRC(block.Header(), nilHash)
 			if err != nil {
 				log.Error("Propagating dangling block", "number", block.Number(), "hash", hash)
 				return

@@ -364,8 +364,8 @@ func (c *Core) GetTerminusAtOrder(header *types.Header, order int) (common.Hash,
 	return common.Hash{}, nil
 }
 
-func (c *Core) PCRC(block *types.Block, domTerminus common.Hash) (common.Hash, error) {
-	return c.sl.PCRC(block, domTerminus)
+func (c *Core) PCRC(header *types.Header, domTerminus common.Hash) (common.Hash, error) {
+	return c.sl.PCRC(header, domTerminus)
 }
 
 func (c *Core) Append(block *types.Block, domTerminus common.Hash, td *big.Int, domReorg bool, currentContextOrigin bool) (*types.Header, error) {

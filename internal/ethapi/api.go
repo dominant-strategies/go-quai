@@ -1878,10 +1878,13 @@ type orderBlock struct {
 }
 
 type tdBlock struct {
-	Td           *big.Int         `json:"td"`
-	Transactions []rpcTransaction `json:"transactions"`
-	Uncles       []*types.Header  `json:"uncles"`
-	Receipts     types.Receipts   `json:"receipts"`
+	Td                   *big.Int         `json:"td"`
+	DomTerminus          common.Hash      `json:"domTerminus"`
+	DomReorg             bool             `json:"domReorg"`
+	CurrentContextOrigin bool             `json:"currentContextOrigin`
+	Transactions         []rpcTransaction `json:"transactions"`
+	Uncles               []*types.Header  `json:"uncles"`
+	Receipts             types.Receipts   `json:"receipts"`
 }
 
 // Sign calculates an ECDSA signature for:

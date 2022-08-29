@@ -119,8 +119,8 @@ func (b *LesApiBackend) GetAncestorByLocation(hash common.Hash, location []byte)
 	return nil, errors.New("light client does not support getting ancestor by location")
 }
 
-func (b *LesApiBackend) PCRC(block *types.Block, order int) (types.PCRCTermini, error) {
-	return types.PCRCTermini{}, errors.New("light client does not support running PCRC")
+func (b *LesApiBackend) PCRC(header *types.Header, domTerminus common.Hash) (common.Hash, error) {
+	return common.Hash{}, errors.New("light client does not support running PCRC")
 }
 
 func (b *LesApiBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Block, error) {
@@ -366,12 +366,12 @@ func (b *LesApiBackend) GetHeadHash() common.Hash {
 	return common.Hash{}
 }
 
-func (b *LesApiBackend) Append(block *types.Block, td *big.Int) error {
-	return nil
+func (b *LesApiBackend) Append(block *types.Block, domTerminus common.Hash, td *big.Int, domReorg bool, currentContextOrigin bool) (*types.Header, error) {
+	return nil, nil
 }
 
-func (b *LesApiBackend) SetHeaderChainHead(header *types.Header, slPendingHeader *types.Header) error {
-	return nil
+func (b *LesApiBackend) SetHeaderChainHead(head *types.Header, td *big.Int, domReorg bool, currentContextOrigin bool) (*types.Header, error) {
+	return nil, nil
 }
 
 func (b *LesApiBackend) SetHeaderChainHeadToHash(hash common.Hash) error {

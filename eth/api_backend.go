@@ -127,8 +127,8 @@ func (b *EthAPIBackend) GetTerminusAtOrder(header *types.Header, order int) (com
 	return b.eth.core.GetTerminusAtOrder(header, order)
 }
 
-func (b *EthAPIBackend) PCRC(block *types.Block, domTerminus common.Hash) (common.Hash, error) {
-	return b.eth.core.PCRC(block, domTerminus)
+func (b *EthAPIBackend) PCRC(header *types.Header, domTerminus common.Hash) (common.Hash, error) {
+	return b.eth.core.PCRC(header, domTerminus)
 }
 
 func (b *EthAPIBackend) Append(block *types.Block, domTerminus common.Hash, td *big.Int, domReorg bool, currentContextOrigin bool) (*types.Header, error) {

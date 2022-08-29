@@ -196,17 +196,15 @@ func (ec *Client) GetTerminusAtOrder(ctx context.Context, header *types.Header, 
 }
 
 // CheckPCRC runs PCRC on the node with a given header
-func (ec *Client) CheckPCRC(ctx context.Context, block *types.Block, order int) (types.PCRCTermini, error) {
-	data, err := RPCMarshalOrderBlock(block, order)
-	if err != nil {
-		return types.PCRCTermini{}, err
-	}
+func (ec *Client) CheckPCRC(ctx context.Context, header *types.Header, domTerminus common.Hash) (common.Hash, error) {
+	data := map[string]interface{}{"Header": RPCMarshalHeader(header)}
+	data["DomTerminus"] = domTerminus
 
-	var PCRCTermini types.PCRCTermini
-	if err := ec.c.CallContext(ctx, &PCRCTermini, "quai_checkPCRC", data); err != nil {
-		return types.PCRCTermini{}, err
+	var DomTerminus common.Hash
+	if err := ec.c.CallContext(ctx, &DomTerminus, "quai_checkPCRC", data); err != nil {
+		return common.Hash{}, err
 	}
-	return PCRCTermini, nil
+	return domTerminus, nil
 }
 
 // RPCMarshalHeader converts the given header to the RPC output .
@@ -239,7 +237,7 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 	return result
 }
 
-// RPCMarshalOrderBlock converts the block and order as input to PCRC.
+// RPCMarshal converts the block and order as input to PCRC.
 func RPCMarshalOrderBlock(block *types.Block, Order int) (map[string]interface{}, error) {
 	fields, err := RPCMarshalBlock(block, true, true)
 	if err != nil {
@@ -256,9 +254,9 @@ func RPCMarshalTdBlock(block *types.Block, domTerminus common.Hash, td *big.Int,
 		return nil, err
 	}
 	fields["td"] = td
-	fields["DomTerminus"] = domTerminus
-	fields["DomReorg"] = domReorg
-	fields["CurrentContextOrigin"] = currentContextOrigin
+	fields["domTerminus"] = domTerminus
+	fields["domReorg"] = domReorg
+	fields["currentContextOrigin"] = currentContextOrigin
 	return fields, nil
 }
 

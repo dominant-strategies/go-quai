@@ -67,10 +67,8 @@ type Backend interface {
 	GetTd(ctx context.Context, hash common.Hash) []*big.Int
 	GetSliceHeadHash(index byte) common.Hash
 	GetHeadHash() common.Hash
-	Append(block *types.Block, td *big.Int) error
-	SetHeaderChainHead(header *types.Header, slPendingHeader *types.Header) error
-	SetHeaderChainHeadToHash(hash common.Hash) error
-	UpdatePendingHeader(header *types.Header, pendingHeader *types.Header) error
+	Append(block *types.Block, domTerminus common.Hash, td *big.Int, domReorg bool, currentContextOrigin bool) (*types.Header, error)
+	SetHeaderChainHead(head *types.Header, td *big.Int, domReorg bool, currentContextOrigin bool) (*types.Header, error)
 	GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config) (*vm.EVM, func() error, error)
 	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
@@ -81,7 +79,7 @@ type Backend interface {
 	GetAncestorByLocation(hash common.Hash, location []byte) (*types.Header, error)
 	GetTerminusAtOrder(header *types.Header, order int) (common.Hash, error)
 
-	PCRC(block *types.Block, order int) (types.PCRCTermini, error)
+	PCRC(header *types.Header, domTerminus common.Hash) (common.Hash, error)
 	EventMux() *event.TypeMux
 	CalculateBaseFee(header *types.Header) *big.Int
 	GetUncleFromWorker(uncleHash common.Hash) (*types.Block, error)

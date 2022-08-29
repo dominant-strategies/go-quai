@@ -100,7 +100,7 @@ func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int
 	defer sl.appendmu.Unlock()
 
 	//PCRC
-	domTerminus, err := sl.PCRC(block, domTerminus)
+	domTerminus, err := sl.PCRC(block.Header(), domTerminus)
 	if err != nil {
 		return sl.nilHeader, err
 	}
@@ -184,8 +184,8 @@ func (sl *Slice) SetHeaderChainHead(head *types.Header, td *big.Int, domReorg bo
 }
 
 // PCRC
-func (sl *Slice) PCRC(block *types.Block, domTerminus common.Hash) (common.Hash, error) {
-	termini := sl.hc.GetTerminiByHash(block.Header().Parent())
+func (sl *Slice) PCRC(header *types.Header, domTerminus common.Hash) (common.Hash, error) {
+	termini := sl.hc.GetTerminiByHash(header.Parent())
 
 	if termini == nil {
 		return common.Hash{}, consensus.ErrFutureBlock
@@ -200,21 +200,21 @@ func (sl *Slice) PCRC(block *types.Block, domTerminus common.Hash) (common.Hash,
 		if termini[len(termini)-1] != domTerminus {
 			return common.Hash{}, errors.New("termini do not match, block rejected due to twist with dom")
 		} else {
-			newTermini[sl.config.Location[types.QuaiNetworkContext]-1] = block.Hash()
+			newTermini[sl.config.Location[types.QuaiNetworkContext]-1] = header.Hash()
 		}
 
 		// Update the terminus for the block
-		parentHeader := sl.hc.GetHeaderByHash(block.Header().Parent())
+		parentHeader := sl.hc.GetHeaderByHash(header.Parent())
 		parentOrder, err := sl.engine.GetDifficultyOrder(parentHeader)
 		if err != nil {
 			return common.Hash{}, err
 		}
 		if parentOrder < types.QuaiNetworkContext {
-			newTermini[len(newTermini)-1] = block.Header().Parent()
+			newTermini[len(newTermini)-1] = header.Parent()
 		}
 
 		//Save the termini
-		rawdb.WriteTermini(sl.hc.headerDb, block.Hash(), newTermini)
+		rawdb.WriteTermini(sl.hc.headerDb, header.Hash(), newTermini)
 	}
 
 	return termini[sl.config.Location[types.QuaiNetworkContext]-1], nil

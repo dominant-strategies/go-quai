@@ -614,30 +614,20 @@ func (s *PublicBlockChainAPI) GetTerminusAtOrder(ctx context.Context, raw json.R
 	return s.b.GetTerminusAtOrder(headerWithOrder.Header, headerWithOrder.Order)
 }
 
+type HeaderWithDomTerminus struct {
+	Header      *types.Header
+	DomTerminus common.Hash
+}
+
 // CheckPCRC runs PCRC on a node and returns the response codes.
-func (s *PublicBlockChainQuaiAPI) CheckPCRC(ctx context.Context, raw json.RawMessage) (types.PCRCTermini, error) {
-	// Decode header and transactions.
-	var head *types.Header
-	var body orderBlock
-	if err := json.Unmarshal(raw, &head); err != nil {
-		return types.PCRCTermini{}, err
-	}
-	if err := json.Unmarshal(raw, &body); err != nil {
-		return types.PCRCTermini{}, err
+func (s *PublicBlockChainQuaiAPI) CheckPCRC(ctx context.Context, raw json.RawMessage) (common.Hash, error) {
+	// Decode header.
+	var headerWithDomTerminus HeaderWithDomTerminus
+	if err := json.Unmarshal(raw, &headerWithDomTerminus); err != nil {
+		return common.Hash{}, err
 	}
 
-	// Load uncles because they are not included in the block response.
-	txs := make([]*types.Transaction, len(body.Transactions))
-	for i, tx := range body.Transactions {
-		txs[i] = tx.tx
-	}
-
-	uncles := make([]*types.Header, len(body.Uncles))
-	for i, uncle := range body.Uncles {
-		uncles[i] = uncle
-	}
-	block := types.NewBlockWithHeader(head).WithBody(txs, uncles)
-	return s.b.PCRC(block, body.Order)
+	return s.b.PCRC(headerWithDomTerminus.Header, headerWithDomTerminus.DomTerminus)
 }
 
 type HeaderWithSliceAndOrder struct {
@@ -662,15 +652,15 @@ type TdWithReorg struct {
 	Reorg bool
 }
 
-func (s *PublicBlockChainQuaiAPI) Append(ctx context.Context, raw json.RawMessage) error {
+func (s *PublicBlockChainQuaiAPI) Append(ctx context.Context, raw json.RawMessage) (*types.Header, error) {
 	// Decode header and transactions.
 	var head *types.Header
 	var body tdBlock
 	if err := json.Unmarshal(raw, &head); err != nil {
-		return err
+		return nil, err
 	}
 	if err := json.Unmarshal(raw, &body); err != nil {
-		return err
+		return nil, err
 	}
 
 	// Load uncles because they are not included in the block response.
@@ -685,5 +675,5 @@ func (s *PublicBlockChainQuaiAPI) Append(ctx context.Context, raw json.RawMessag
 	}
 
 	block := types.NewBlockWithHeader(head).WithBody(txs, uncles)
-	return s.b.Append(block, body.Td)
+	return s.b.Append(block, body.DomTerminus, body.Td, body.DomReorg, body.CurrentContextOrigin)
 }
