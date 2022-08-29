@@ -279,7 +279,6 @@ func (sl *Slice) CalcTd(header *types.Header) (*big.Int, error) {
 
 // writePendingHeader updates the slice pending header at the given index with the value from given header.
 func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *types.Header, index int) *types.Header {
-
 	slPendingHeader.ParentHash[index] = header.ParentHash[index]
 	slPendingHeader.UncleHash[index] = header.UncleHash[index]
 	slPendingHeader.Number[index] = header.Number[index]
@@ -300,9 +299,11 @@ func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *typ
 // ReceivePendingHeader receives a pendingHeader from the subs and if the order of the block
 // is less than the context of the chain, the pendingHeader is sent to the dom.
 func (sl *Slice) ReceivePendingHeader(slPendingHeader *types.Header, terminusHash common.Hash) error {
-	if sl.pendingHeader.termini[slPendingHeader.Location[types.QuaiNetworkContext]-1] != terminusHash {
-		log.Info("Stale update received from sub")
-		return nil
+	if slPendingHeader.ParentHash[types.QuaiNetworkContext+1] != sl.config.GenesisHashes[0] {
+		if sl.pendingHeader.termini[slPendingHeader.Location[types.QuaiNetworkContext]-1] != terminusHash {
+			log.Info("Stale update received from sub")
+			return nil
+		}
 	}
 
 	pendingHeader := sl.pendingHeader.header
