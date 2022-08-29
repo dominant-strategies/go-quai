@@ -372,6 +372,10 @@ func (c *Core) Append(block *types.Block, domTerminus common.Hash, td *big.Int, 
 	return c.sl.Append(block, domTerminus, td, domReorg, currentContextOrigin)
 }
 
+func (c *Core) ReceivePendingHeader(slPendingHeader *types.Header, terminusHash common.Hash) error {
+	return c.sl.ReceivePendingHeader(slPendingHeader, terminusHash)
+}
+
 func (c *Core) TxLookupLimit() uint64 {
 	return 0
 }

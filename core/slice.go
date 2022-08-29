@@ -40,7 +40,9 @@ type Slice struct {
 
 	quit chan struct{} // slice quit channel
 
-	subClients   []*quaiclient.Client // subClinets is used to check is a coincident block is valid in the subordinate context
+	domClient  *quaiclient.Client
+	subClients []*quaiclient.Client
+
 	futureBlocks *lru.Cache
 
 	appendmu sync.RWMutex
@@ -70,7 +72,13 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 	sl.miner = New(sl.hc, sl.txPool, config, db, chainConfig, engine, isLocalBlock)
 	sl.miner.SetExtra(sl.miner.MakeExtraData(config.ExtraData))
 
-	// only set the subClients if the chain is not zone
+	// only set domClients if the chain is not Prime.
+	if types.QuaiNetworkContext != params.PRIME {
+		go func() {
+			sl.domClient = MakeDomClient(domClientUrl)
+		}()
+	}
+	// only set the subClients if the chain is not Zone
 	sl.subClients = make([]*quaiclient.Client, 3)
 	if types.QuaiNetworkContext != params.ZONE {
 		sl.subClients = MakeSubClients(subClientUrls)
@@ -145,7 +153,14 @@ func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int
 		rawdb.WritePendingHeader(sl.sliceDb, block.Hash(), slPendingHeader)
 
 		//transmit it to the miner
+		sl.miner.worker.pendingHeaderFeed.Send(slPendingHeader)
+	} else {
+		order, err := sl.engine.GetDifficultyOrder(block.Header())
+		if err != nil {
+			return nil, err
+		}
 
+		sl.domClient.SendPendingHeader(context.Background(), slPendingHeader, order)
 	}
 	return slPendingHeader, nil
 }
@@ -254,6 +269,38 @@ func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *typ
 	slPendingHeader.Bloom[index] = header.Bloom[index]
 
 	return slPendingHeader
+}
+
+// ReceivePendingHeader receives a pendingHeader from the subs and if the order of the block
+// is less than the context of the chain, the pendingHeader is sent to the dom.
+func (sl *Slice) ReceivePendingHeader(slPendingHeader *types.Header, terminusHash common.Hash) error {
+
+	if types.QuaiNetworkContext == params.PRIME {
+		pendingHeader := rawdb.ReadPendingHeader(sl.sliceDb, terminusHash)
+		for i := 0; i < 3; i++ {
+			if slPendingHeader.Number[i] != nil {
+				if slPendingHeader.Number[i].Cmp(pendingHeader.Number[i]) > 0 {
+					slPendingHeader = sl.combinePendingHeader(slPendingHeader, pendingHeader, i)
+				}
+			}
+		}
+		sl.miner.worker.pendingHeaderFeed.Send(slPendingHeader)
+	} else {
+		sl.domClient.SendPendingHeader(context.Background(), slPendingHeader, terminusHash)
+	}
+	return nil
+}
+
+// MakeDomClient creates the quaiclient for the given domurl
+func MakeDomClient(domurl string) *quaiclient.Client {
+	if domurl == "" {
+		log.Crit("dom client url is empty")
+	}
+	domClient, err := quaiclient.Dial(domurl)
+	if err != nil {
+		log.Crit("Error connecting to the dominant go-quai client", "err", err)
+	}
+	return domClient
 }
 
 // MakeSubClients creates the quaiclient for the given suburls

@@ -413,3 +413,7 @@ func (b *EthAPIBackend) GetHeadHash() common.Hash {
 func (b *EthAPIBackend) PendingBlockBody(hash common.Hash) *types.Body {
 	return b.eth.core.PendingBlockBody(hash)
 }
+
+func (b *EthAPIBackend) ReceivePendingHeader(slPendingHeader *types.Header, terminusHash common.Hash) error {
+	return b.eth.core.ReceivePendingHeader(slPendingHeader, terminusHash)
+}

@@ -533,11 +533,11 @@ func (ec *Client) SetHeaderChainHeadToHash(ctx context.Context, hash common.Hash
 	return nil
 }
 
-func (ec *Client) UpdatePendingHeader(ctx context.Context, header *types.Header, pendingHeader *types.Header) error {
+func (ec *Client) SendPendingHeader(ctx context.Context, header *types.Header, terminusHash common.Hash) error {
 	data := map[string]interface{}{"Header": RPCMarshalHeader(header)}
-	data["PendingHeader"] = RPCMarshalHeader(pendingHeader)
+	data["TerminusHash"] = terminusHash
 
-	err := ec.c.CallContext(ctx, nil, "quai_updatePendingHeader", data)
+	err := ec.c.CallContext(ctx, nil, "quai_receivePendingHeader", data)
 	if err != nil {
 		return err
 	}

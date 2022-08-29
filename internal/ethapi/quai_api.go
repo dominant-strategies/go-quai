@@ -569,6 +569,11 @@ func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw js
 	return nil
 }
 
+type HeaderWithTerminusHash struct {
+	Header       *types.Header
+	TerminusHash common.Hash
+}
+
 type HeaderHashWithContext struct {
 	Hash    common.Hash
 	Context int
@@ -676,4 +681,12 @@ func (s *PublicBlockChainQuaiAPI) Append(ctx context.Context, raw json.RawMessag
 
 	block := types.NewBlockWithHeader(head).WithBody(txs, uncles)
 	return s.b.Append(block, body.DomTerminus, body.Td, body.DomReorg, body.CurrentContextOrigin)
+}
+
+func (s *PublicBlockChainQuaiAPI) ReceivePendingHeader(ctx context.Context, raw json.RawMessage) error {
+	var headerWithTerminusHash HeaderWithTerminusHash
+	if err := json.Unmarshal(raw, &headerWithTerminusHash); err != nil {
+		return err
+	}
+	return s.b.ReceivePendingHeader(headerWithTerminusHash.Header, headerWithTerminusHash.TerminusHash)
 }
