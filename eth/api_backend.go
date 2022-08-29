@@ -135,10 +135,6 @@ func (b *EthAPIBackend) Append(block *types.Block, domTerminus common.Hash, td *
 	return b.eth.core.Append(block, domTerminus, td, domReorg, currentContextOrigin)
 }
 
-func (b *EthAPIBackend) SetHeaderChainHead(head *types.Header, td *big.Int, domReorg bool, currentContextOrigin bool) (*types.Header, error) {
-	return b.eth.core.SetHeaderChainHead(head, td, domReorg, currentContextOrigin)
-}
-
 func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
 	return b.eth.core.GetBlockByHash(hash), nil
 }

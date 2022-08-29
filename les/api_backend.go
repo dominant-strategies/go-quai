@@ -370,14 +370,6 @@ func (b *LesApiBackend) Append(block *types.Block, domTerminus common.Hash, td *
 	return nil, nil
 }
 
-func (b *LesApiBackend) SetHeaderChainHead(head *types.Header, td *big.Int, domReorg bool, currentContextOrigin bool) (*types.Header, error) {
-	return nil, nil
-}
-
-func (b *LesApiBackend) SetHeaderChainHeadToHash(hash common.Hash) error {
-	return nil
-}
-
 func (b *LesApiBackend) ReceivePendingHeader(header *types.Header, terminusHash common.Hash) error {
 	return nil
 }

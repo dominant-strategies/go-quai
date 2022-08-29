@@ -392,10 +392,6 @@ func (c *Core) HLCR(td *big.Int) bool {
 	return c.sl.HLCR(td)
 }
 
-func (c *Core) SetHeaderChainHead(head *types.Header, td *big.Int, domReorg bool, currentContextOrigin bool) (*types.Header, error) {
-	return c.sl.SetHeaderChainHead(head, td, domReorg, currentContextOrigin)
-}
-
 // SubscribePendingLogs starts delivering logs from pending transactions
 // to the given channel.
 func (c *Core) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscription {

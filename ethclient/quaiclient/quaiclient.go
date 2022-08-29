@@ -514,25 +514,6 @@ func (ec *Client) Append(ctx context.Context, block *types.Block, domTerminus co
 	return nil, nil
 }
 
-func (ec *Client) SetHeaderChainHead(ctx context.Context, header *types.Header, slPendingHeader *types.Header) error {
-	data := map[string]interface{}{"Header": RPCMarshalHeader(header)}
-	data["PendingHeader"] = RPCMarshalHeader(slPendingHeader)
-
-	err := ec.c.CallContext(ctx, nil, "quai_setHeaderChainHead", data)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (ec *Client) SetHeaderChainHeadToHash(ctx context.Context, hash common.Hash) error {
-	err := ec.c.CallContext(ctx, nil, "quai_setHeaderChainHeadToHash", hash)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 func (ec *Client) SendPendingHeader(ctx context.Context, header *types.Header, terminusHash common.Hash) error {
 	data := map[string]interface{}{"Header": RPCMarshalHeader(header)}
 	data["TerminusHash"] = terminusHash
