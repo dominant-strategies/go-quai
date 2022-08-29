@@ -303,15 +303,10 @@ func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *typ
 // ReceivePendingHeader receives a pendingHeader from the subs and if the order of the block
 // is less than the context of the chain, the pendingHeader is sent to the dom.
 func (sl *Slice) ReceivePendingHeader(slPendingHeader *types.Header, terminusHash common.Hash) error {
-	if slPendingHeader.ParentHash[types.QuaiNetworkContext+1] == sl.config.GenesisHashes[types.QuaiNetworkContext] {
-		sl.pendingHeader, _ = sl.setHeaderChainHead(sl.hc.genesisHeader, sl.hc.GetTdByHash(sl.hc.genesisHeader.Hash())[types.QuaiNetworkContext], true, false)
-		fmt.Println("tempPendingHeader on start: ", sl.pendingHeader.header)
 
-	} else {
-		if sl.pendingHeader.termini[slPendingHeader.Location[types.QuaiNetworkContext]-1] != terminusHash {
-			log.Info("Stale update received from sub")
-			return nil
-		}
+	if sl.pendingHeader.termini[slPendingHeader.Location[types.QuaiNetworkContext]-1] != terminusHash {
+		log.Info("Stale update received from sub")
+		return nil
 	}
 
 	pendingHeader := sl.pendingHeader.header
