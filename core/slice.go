@@ -237,7 +237,10 @@ func (sl *Slice) setHeaderChainHead(head *types.Header, td *big.Int, domReorg bo
 
 // PCRC
 func (sl *Slice) PCRC(header *types.Header, domTerminus common.Hash) (common.Hash, error) {
-	fmt.Println(header.Parent())
+	fmt.Println("PCRC:")
+	fmt.Println("header.Hash", header.Hash())
+	fmt.Println("header.Parent", header.Parent())
+	fmt.Println("domTerminus", domTerminus)
 	termini := sl.hc.GetTerminiByHash(header.Parent())
 
 	if termini == nil {
@@ -256,6 +259,9 @@ func (sl *Slice) PCRC(header *types.Header, domTerminus common.Hash) (common.Has
 		if termini[len(termini)-1] != domTerminus {
 			return common.Hash{}, errors.New("termini do not match, block rejected due to twist with dom")
 		} else {
+			if newTermini[3] == sl.config.GenesisHashes[0] {
+				return newTermini[3], nil
+			}
 			newTermini[sl.config.Location[types.QuaiNetworkContext]-1] = header.Hash()
 		}
 
