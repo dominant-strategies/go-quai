@@ -119,17 +119,15 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 
 	go sl.updateFutureBlocks()
 
-	// Remove nil character from RLP read
-	knot := genesis.Knot[1:]
+	genesisHash := sl.Config().GenesisHashes[0]
+	genesisTermini := []common.Hash{genesisHash, genesisHash, genesisHash, genesisHash}
+	fmt.Println("write termini for genesisHash", genesisHash, genesisTermini)
+	rawdb.WriteTermini(sl.hc.headerDb, genesisHash, genesisTermini)
 
-	for i, block := range knot {
-		if i == 0 {
-			genesisHash := sl.Config().GenesisHashes[0]
-			genesisTermini := []common.Hash{genesisHash, genesisHash, genesisHash, genesisHash}
-			fmt.Println("write termini for genesisHash", genesisHash, genesisTermini)
-			rawdb.WriteTermini(sl.hc.headerDb, genesisHash, genesisTermini)
-		}
-		if types.QuaiNetworkContext == params.PRIME {
+	// Remove nil character from RLP read
+	if types.QuaiNetworkContext == params.PRIME {
+		knot := genesis.Knot[1:]
+		for _, block := range knot {
 			if block != nil {
 				sl.Append(block, common.Hash{}, block.Difficulty(), false, true)
 			}
