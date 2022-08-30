@@ -58,7 +58,7 @@ type Slice struct {
 	phCache       map[uint64][]types.PendingHeader
 }
 
-func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocalBlock func(block *types.Header) bool, chainConfig *params.ChainConfig, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config) (*Slice, error) {
+func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocalBlock func(block *types.Header) bool, chainConfig *params.ChainConfig, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis) (*Slice, error) {
 	sl := &Slice{
 		config:  chainConfig,
 		engine:  engine,
@@ -78,6 +78,14 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 	sl.txPool = NewTxPool(*txConfig, chainConfig, sl.hc)
 	sl.miner = New(sl.hc, sl.txPool, config, db, chainConfig, engine, isLocalBlock)
 	sl.miner.SetExtra(sl.miner.MakeExtraData(config.ExtraData))
+
+	if types.QuaiNetworkContext == params.PRIME {
+		for _, block := range genesis.Knot {
+			if block != nil {
+				sl.Append(block, common.Hash{}, block.Difficulty(), false, false)
+			}
+		}
+	}
 
 	// only set the subClients if the chain is not Zone
 	sl.subClients = make([]*quaiclient.Client, 3)
