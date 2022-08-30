@@ -280,6 +280,9 @@ func (sl *Slice) PCRC(header *types.Header, domTerminus common.Hash) (common.Has
 
 	fmt.Println(termini)
 	fmt.Println(sl.config.Location)
+	if termini[3] == sl.config.GenesisHashes[0] {
+		return termini[3], nil
+	}
 	return termini[sl.config.Location[types.QuaiNetworkContext]-1], nil
 }
 
