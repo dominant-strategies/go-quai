@@ -267,7 +267,7 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 var lastWrite uint64
 
 // Apply State
-func (p *StateProcessor) Apply(block *types.Block) ([]*types.Log, error) {
+func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block) ([]*types.Log, error) {
 	// Process our block and retrieve external blocks.
 	receipts, logs, statedb, usedGas, err := p.Process(block)
 	if err != nil {
@@ -279,12 +279,8 @@ func (p *StateProcessor) Apply(block *types.Block) ([]*types.Log, error) {
 		return nil, err
 	}
 
-	blockBatch := p.hc.headerDb.NewBatch()
-	rawdb.WriteReceipts(blockBatch, block.Hash(), block.NumberU64(), receipts)
-	rawdb.WritePreimages(blockBatch, statedb.Preimages())
-	if err := blockBatch.Write(); err != nil {
-		log.Crit("Failed to write block into disk", "err", err)
-	}
+	rawdb.WriteReceipts(batch, block.Hash(), block.NumberU64(), receipts)
+	rawdb.WritePreimages(batch, statedb.Preimages())
 
 	// Commit all cached state changes into underlying memory database.
 	root, err := statedb.Commit(true)

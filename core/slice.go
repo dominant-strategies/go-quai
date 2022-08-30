@@ -82,7 +82,7 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 	if types.QuaiNetworkContext == params.PRIME {
 		for _, block := range genesis.Knot {
 			if block != nil {
-				sl.Append(block, common.Hash{}, block.Difficulty(), false, false)
+				sl.Append(block, common.Hash{}, block.Difficulty(), false, true)
 			}
 		}
 	}
@@ -143,14 +143,17 @@ func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int
 	sl.appendmu.Lock()
 	defer sl.appendmu.Unlock()
 
+	batch := sl.sliceDb.NewBatch()
+	rawdb.WriteHeader(batch, block.Header())
+
 	//PCRC
-	domTerminus, err := sl.PCRC(block.Header(), domTerminus)
+	domTerminus, err := sl.PCRC(batch, block.Header(), domTerminus)
 	if err != nil {
 		return sl.nilPendingHeader, err
 	}
 
 	// Append the new block
-	err = sl.hc.Append(block)
+	err = sl.hc.Append(batch, block)
 	if err != nil {
 		fmt.Println("Slice error in append", err)
 		return sl.nilPendingHeader, err
@@ -164,7 +167,7 @@ func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int
 		}
 	}
 
-	localPendingHeader, err := sl.setHeaderChainHead(block.Header(), td, domReorg, currentContextOrigin)
+	localPendingHeader, err := sl.setHeaderChainHead(batch, block.Header(), td, domReorg, currentContextOrigin)
 	tempPendingHeader := types.CopyHeader(localPendingHeader.Header)
 	if err != nil {
 		return sl.nilPendingHeader, err
@@ -200,22 +203,26 @@ func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int
 		sl.domClient.SendPendingHeader(context.Background(), pendingHeader)
 	}
 
+	if err := batch.Write(); err != nil {
+		return types.PendingHeader{}, err
+	}
+
 	return types.PendingHeader{Header: tempPendingHeader, Termini: sl.pendingHeader.Termini, Td: sl.pendingHeader.Td}, nil
 }
 
-func (sl *Slice) setHeaderChainHead(head *types.Header, td *big.Int, domReorg bool, currentContextOrigin bool) (types.PendingHeader, error) {
+func (sl *Slice) setHeaderChainHead(batch ethdb.Batch, head *types.Header, td *big.Int, domReorg bool, currentContextOrigin bool) (types.PendingHeader, error) {
 
 	if currentContextOrigin {
 		reorg := sl.HLCR(td)
 		if reorg {
-			_, err := sl.hc.SetCurrentHeader(head)
+			_, err := sl.hc.SetCurrentHeader(batch, head)
 			if err != nil {
 				return sl.nilPendingHeader, err
 			}
 		}
 	} else {
 		if domReorg {
-			_, err := sl.hc.SetCurrentHeader(head)
+			_, err := sl.hc.SetCurrentHeader(batch, head)
 			if err != nil {
 				return sl.nilPendingHeader, err
 			}
@@ -238,7 +245,7 @@ func (sl *Slice) setHeaderChainHead(head *types.Header, td *big.Int, domReorg bo
 }
 
 // PCRC
-func (sl *Slice) PCRC(header *types.Header, domTerminus common.Hash) (common.Hash, error) {
+func (sl *Slice) PCRC(batch ethdb.Batch, header *types.Header, domTerminus common.Hash) (common.Hash, error) {
 	termini := sl.hc.GetTerminiByHash(header.Parent())
 
 	if termini == nil {
@@ -268,7 +275,7 @@ func (sl *Slice) PCRC(header *types.Header, domTerminus common.Hash) (common.Has
 		}
 
 		//Save the termini
-		rawdb.WriteTermini(sl.hc.headerDb, header.Hash(), newTermini)
+		rawdb.WriteTermini(batch, header.Hash(), newTermini)
 	}
 
 	return termini[sl.config.Location[types.QuaiNetworkContext]-1], nil

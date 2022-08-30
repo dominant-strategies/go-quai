@@ -93,22 +93,18 @@ func NewBlockChain(db ethdb.Database, engine consensus.Engine, hc *HeaderChain, 
 }
 
 // Append
-func (bc *BlockChain) Append(block *types.Block) ([]*types.Log, error) {
+func (bc *BlockChain) Append(batch ethdb.Batch, block *types.Block) ([]*types.Log, error) {
 	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
 
 	// Process our block and retrieve external blocks.
-	logs, err := bc.processor.Apply(block)
+	logs, err := bc.processor.Apply(batch, block)
 	if err != nil {
 		return nil, err
 	}
 	fmt.Println("bc.Append:")
 	fmt.Println("parentHeader.Hash:", block.Hash(), "parentHeader.Number:", block.NumberU64())
-	batch := bc.db.NewBatch()
 	rawdb.WriteBlock(batch, block)
-	if err := batch.Write(); err != nil {
-		return nil, err
-	}
 
 	return logs, nil
 }

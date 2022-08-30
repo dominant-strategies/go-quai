@@ -141,7 +141,7 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *par
 }
 
 // Append
-func (hc *HeaderChain) Append(block *types.Block) error {
+func (hc *HeaderChain) Append(batch ethdb.Batch, block *types.Block) error {
 	hc.headermu.Lock()
 	defer hc.headermu.Unlock()
 
@@ -158,17 +158,13 @@ func (hc *HeaderChain) Append(block *types.Block) error {
 	}
 	fmt.Println("After Appendable Block information: Hash:", block.Hash(), "block header hash:", block.Header().Hash(), "Number:", block.NumberU64(), "Location:", block.Header().Location, "Parent:", block.ParentHash())
 	// Append header to the headerchain
-	batch := hc.headerDb.NewBatch()
 	rawdb.WriteHeader(batch, block.Header())
-	if err := batch.Write(); err != nil {
-		return err
-	}
 
 	// Append block else revert header append
-	logs, err := hc.bc.Append(block)
+	logs, err := hc.bc.Append(batch, block)
 	if err != nil {
 		fmt.Println("Error on Append, err:", err)
-		rawdb.DeleteHeader(hc.headerDb, block.Header().Hash(), block.Header().Number64())
+		rawdb.DeleteHeader(batch, block.Header().Hash(), block.Header().Number64())
 		return err
 	}
 
@@ -220,7 +216,7 @@ func (hc *HeaderChain) Appendable(block *types.Block) error {
 
 // SetCurrentHeader sets the in-memory head header marker of the canonical chan
 // as the given header.
-func (hc *HeaderChain) SetCurrentHeader(head *types.Header) ([]*types.Header, error) {
+func (hc *HeaderChain) SetCurrentHeader(batch ethdb.Batch, head *types.Header) ([]*types.Header, error) {
 	fmt.Println("Setting Current Header", head.Hash())
 	prevHeader := hc.CurrentHeader()
 
@@ -232,11 +228,11 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) ([]*types.Header, er
 	headHeaderGauge.Update(head.Number[types.QuaiNetworkContext].Int64())
 
 	// write the head block hash to the db
-	rawdb.WriteHeadBlockHash(hc.headerDb, head.Hash())
+	rawdb.WriteHeadBlockHash(batch, head.Hash())
 
 	// If head is the normal extension of canonical head, we can return by just wiring the canonical hash.
 	if prevHeader.Hash() == head.Parent() {
-		rawdb.WriteCanonicalHash(hc.headerDb, head.Hash(), head.Number64())
+		rawdb.WriteCanonicalHash(batch, head.Hash(), head.Number64())
 		if types.QuaiNetworkContext != params.ZONE && prevHeader.Hash() == hc.config.GenesisHashes[types.QuaiNetworkContext] {
 			sliceHeaders[head.Location[types.QuaiNetworkContext]-1] = head
 		}
@@ -274,7 +270,7 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) ([]*types.Header, er
 
 		// Delete the header and the block
 		fmt.Println("delete prev", prevHeader.Hash())
-		rawdb.DeleteCanonicalHash(hc.headerDb, prevHeader.Number64())
+		rawdb.DeleteCanonicalHash(batch, prevHeader.Number64())
 		prevHeader = hc.GetHeader(prevHeader.Parent(), prevHeader.Number64()-1)
 		if types.QuaiNetworkContext != params.ZONE && prevHeader.Hash() == hc.config.GenesisHashes[types.QuaiNetworkContext] {
 			sliceHeaders[prevHeader.Location[types.QuaiNetworkContext]-1] = prevHeader
@@ -287,7 +283,7 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) ([]*types.Header, er
 					break
 				}
 				fmt.Println("delete prev", prevHeader.Hash())
-				rawdb.DeleteCanonicalHash(hc.headerDb, prevHeader.Number64())
+				rawdb.DeleteCanonicalHash(batch, prevHeader.Number64())
 				prevHeader = hc.GetHeader(prevHeader.Parent(), prevHeader.Number64()-1)
 				if types.QuaiNetworkContext != params.ZONE && prevHeader.Hash() == hc.config.GenesisHashes[types.QuaiNetworkContext] {
 					sliceHeaders[prevHeader.Location[types.QuaiNetworkContext]-1] = prevHeader
@@ -332,7 +328,7 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) ([]*types.Header, er
 	// Run through the hash stack to update canonicalHash and forward state processor
 	for i := len(hashStack) - 1; i >= 0; i-- {
 		fmt.Println("WriteCanonicalHash", hashStack[i].Hash())
-		rawdb.WriteCanonicalHash(hc.headerDb, hashStack[i].Hash(), hashStack[i].Number64())
+		rawdb.WriteCanonicalHash(batch, hashStack[i].Hash(), hashStack[i].Number64())
 
 		// Setting the appropriate sliceHeader to rollforward point
 		if types.QuaiNetworkContext != params.ZONE {
