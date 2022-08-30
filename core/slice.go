@@ -86,6 +86,7 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 			if i == 0 {
 				genesisHash := sl.Config().GenesisHashes[0]
 				genesisTermini := []common.Hash{genesisHash, genesisHash, genesisHash, genesisHash}
+				fmt.Println("write termini for genesisHash", genesisHash, genesisTermini)
 				rawdb.WriteTermini(sl.hc.headerDb, genesisHash, genesisTermini)
 			}
 			if block != nil {
@@ -246,6 +247,7 @@ func (sl *Slice) setHeaderChainHead(head *types.Header, td *big.Int, domReorg bo
 
 // PCRC
 func (sl *Slice) PCRC(header *types.Header, domTerminus common.Hash) (common.Hash, error) {
+	fmt.Println(header.Parent())
 	termini := sl.hc.GetTerminiByHash(header.Parent())
 
 	if termini == nil {

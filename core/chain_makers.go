@@ -31,7 +31,6 @@ import (
 	"github.com/spruce-solutions/go-quai/core/vm"
 	"github.com/spruce-solutions/go-quai/ethdb"
 	"github.com/spruce-solutions/go-quai/params"
-	"github.com/spruce-solutions/go-quai/trie"
 )
 
 // BlockGen creates blocks for testing.
@@ -286,7 +285,16 @@ func GenerateKnot(config *params.ChainConfig, parent *types.Block, engine consen
 		}
 		if b.engine != nil {
 			// Finalize and seal the block
-			block := types.NewBlock(b.header, nil, nil, nil, trie.NewStackTrie(nil))
+			block, _ := b.engine.FinalizeAndAssemble(chainreader, b.header, statedb, b.txs, b.uncles, b.receipts)
+
+			// Write state changes to db
+			root, err := statedb.Commit(config.IsEIP158(b.header.Number[types.QuaiNetworkContext]))
+			if err != nil {
+				panic(fmt.Sprintf("state write error: %v", err))
+			}
+			if err := statedb.Database().TrieDB().Commit(root, false, nil); err != nil {
+				panic(fmt.Sprintf("trie write error: %v", err))
+			}
 
 			// Mine the block
 			if err := engine.Seal(chainreader, block, resultCh, stopCh); err != nil {
