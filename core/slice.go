@@ -79,8 +79,15 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 	sl.miner = New(sl.hc, sl.txPool, config, db, chainConfig, engine, isLocalBlock)
 	sl.miner.SetExtra(sl.miner.MakeExtraData(config.ExtraData))
 
+	// Remove nil character from RLP read
+	knot := genesis.Knot[1:]
 	if types.QuaiNetworkContext == params.PRIME {
-		for _, block := range genesis.Knot {
+		for i, block := range knot {
+			if i == 0 {
+				genesisHash := sl.Config().GenesisHashes[0]
+				genesisTermini := []common.Hash{genesisHash, genesisHash, genesisHash, genesisHash}
+				rawdb.WriteTermini(sl.hc.headerDb, genesisHash, genesisTermini)
+			}
 			if block != nil {
 				sl.Append(block, common.Hash{}, block.Difficulty(), false, false)
 			}
@@ -271,6 +278,8 @@ func (sl *Slice) PCRC(header *types.Header, domTerminus common.Hash) (common.Has
 		rawdb.WriteTermini(sl.hc.headerDb, header.Hash(), newTermini)
 	}
 
+	fmt.Println(termini)
+	fmt.Println(sl.config.Location)
 	return termini[sl.config.Location[types.QuaiNetworkContext]-1], nil
 }
 
