@@ -79,22 +79,6 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 	sl.miner = New(sl.hc, sl.txPool, config, db, chainConfig, engine, isLocalBlock)
 	sl.miner.SetExtra(sl.miner.MakeExtraData(config.ExtraData))
 
-	// Remove nil character from RLP read
-	knot := genesis.Knot[1:]
-	if types.QuaiNetworkContext == params.PRIME {
-		for i, block := range knot {
-			if i == 0 {
-				genesisHash := sl.Config().GenesisHashes[0]
-				genesisTermini := []common.Hash{genesisHash, genesisHash, genesisHash, genesisHash}
-				fmt.Println("write termini for genesisHash", genesisHash, genesisTermini)
-				rawdb.WriteTermini(sl.hc.headerDb, genesisHash, genesisTermini)
-			}
-			if block != nil {
-				sl.Append(block, common.Hash{}, block.Difficulty(), false, false)
-			}
-		}
-	}
-
 	// only set the subClients if the chain is not Zone
 	sl.subClients = make([]*quaiclient.Client, 3)
 	if types.QuaiNetworkContext != params.ZONE {
@@ -133,16 +117,24 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 		Td:      big.NewInt(0),
 	}
 
-	var pendingHeader *types.Header
-
-	// load the pending header
-	pendingHeader = rawdb.ReadPendingHeader(sl.sliceDb, sl.hc.CurrentHeader().Parent())
-	if pendingHeader == nil {
-		// Update the pending header to the genesis Header.
-		pendingHeader = sl.hc.genesisHeader
-	}
-
 	go sl.updateFutureBlocks()
+
+	// Remove nil character from RLP read
+	knot := genesis.Knot[1:]
+
+	for i, block := range knot {
+		if i == 0 {
+			genesisHash := sl.Config().GenesisHashes[0]
+			genesisTermini := []common.Hash{genesisHash, genesisHash, genesisHash, genesisHash}
+			fmt.Println("write termini for genesisHash", genesisHash, genesisTermini)
+			rawdb.WriteTermini(sl.hc.headerDb, genesisHash, genesisTermini)
+		}
+		if types.QuaiNetworkContext == params.PRIME {
+			if block != nil {
+				sl.Append(block, common.Hash{}, block.Difficulty(), false, true)
+			}
+		}
+	}
 
 	return sl, nil
 }
@@ -259,6 +251,9 @@ func (sl *Slice) PCRC(header *types.Header, domTerminus common.Hash) (common.Has
 	var nilHash common.Hash
 	// make sure the termini match
 	if domTerminus != nilHash {
+		if len(termini) != 4 {
+			return common.Hash{}, errors.New("length of termini not equal to 4")
+		}
 		// There is a dom block so we must check the terminuses match
 		if termini[len(termini)-1] != domTerminus {
 			return common.Hash{}, errors.New("termini do not match, block rejected due to twist with dom")
@@ -276,9 +271,10 @@ func (sl *Slice) PCRC(header *types.Header, domTerminus common.Hash) (common.Has
 			newTermini[len(newTermini)-1] = header.Parent()
 		}
 
-		//Save the termini
-		rawdb.WriteTermini(sl.hc.headerDb, header.Hash(), newTermini)
 	}
+
+	//Save the termini
+	rawdb.WriteTermini(sl.hc.headerDb, header.Hash(), newTermini)
 
 	fmt.Println(termini)
 	fmt.Println(sl.config.Location)
