@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math/big"
@@ -23,15 +24,9 @@ import (
 
 const (
 	maxFutureBlocks     = 256
-	maxFutureHeads      = 20
 	maxTimeFutureBlocks = 30
-	maxTimeFutureHeads  = 5
+	pendingHeaderLimit  = 10
 )
-
-type PendingHeader struct {
-	header  *types.Header
-	termini []common.Hash
-}
 
 type Slice struct {
 	hc *HeaderChain
@@ -54,11 +49,12 @@ type Slice struct {
 	appendmu sync.RWMutex
 
 	nilHeader        *types.Header
-	nilPendingHeader PendingHeader
+	nilPendingHeader types.PendingHeader
 
 	wg sync.WaitGroup // slice processing wait group for shutting down
 
-	pendingHeader PendingHeader
+	pendingHeader types.PendingHeader
+	phCache       map[uint64][]types.PendingHeader
 }
 
 func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocalBlock func(block *types.Header) bool, chainConfig *params.ChainConfig, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config) (*Slice, error) {
@@ -114,9 +110,10 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 		GasUsed:           make([]uint64, 3),
 		Bloom:             make([]types.Bloom, 3),
 	}
-	sl.nilPendingHeader = PendingHeader{
-		header:  sl.nilHeader,
-		termini: make([]common.Hash, 3),
+	sl.nilPendingHeader = types.PendingHeader{
+		Header:  sl.nilHeader,
+		Termini: make([]common.Hash, 3),
+		Td:      big.NewInt(0),
 	}
 
 	var pendingHeader *types.Header
@@ -136,35 +133,45 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 	return sl, nil
 }
 
-func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int, domReorg bool, currentContextOrigin bool) (*types.Header, error) {
+func (sl *Slice) SliceAppend(block *types.Block, td *big.Int, domReorg bool, currentContextOrigin bool) error {
+	// Append the block
+	PendingHeader, err := sl.Append(block, common.Hash{}, big.NewInt(0), false, true)
+	if err != nil {
+		return err
+	}
+
+	bestPendingHeader := sl.sortAndGetBestPendingHeader(sl.phCache, PendingHeader)
+}
+
+func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int, domReorg bool, currentContextOrigin bool) (types.PendingHeader, error) {
 	sl.appendmu.Lock()
 	defer sl.appendmu.Unlock()
 
 	//PCRC
 	domTerminus, err := sl.PCRC(block.Header(), domTerminus)
 	if err != nil {
-		return sl.nilHeader, err
+		return sl.nilPendingHeader, err
 	}
 
 	// Append the new block
 	err = sl.hc.Append(block)
 	if err != nil {
 		fmt.Println("Slice error in append", err)
-		return sl.nilHeader, err
+		return sl.nilPendingHeader, err
 	}
 
 	if currentContextOrigin {
 		// CalcTd on the new block
 		td, err = sl.CalcTd(block.Header())
 		if err != nil {
-			return sl.nilHeader, err
+			return sl.nilPendingHeader, err
 		}
 	}
 
 	sl.pendingHeader, err = sl.setHeaderChainHead(block.Header(), td, domReorg, currentContextOrigin)
-	tempPendingHeader := types.CopyHeader(sl.pendingHeader.header)
+	tempPendingHeader := types.CopyHeader(sl.pendingHeader.Header)
 	if err != nil {
-		return sl.nilHeader, err
+		return sl.nilPendingHeader, err
 	}
 	// WriteTd
 	// Remove this once td is converted to a single value.
@@ -174,11 +181,12 @@ func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int
 
 	if types.QuaiNetworkContext != params.ZONE {
 		// Perform the sub append
-		tempPendingHeader, err = sl.subClients[block.Header().Location[types.QuaiNetworkContext]-1].Append(context.Background(), block, domTerminus, td, domReorg, false)
+		subPendingHeader, err := sl.subClients[block.Header().Location[types.QuaiNetworkContext]-1].Append(context.Background(), block, domTerminus, td, domReorg, false)
 		if err != nil {
-			return sl.nilHeader, err
+			return sl.nilPendingHeader, err
 		}
-		tempPendingHeader = sl.combinePendingHeader(sl.pendingHeader.header, tempPendingHeader, types.QuaiNetworkContext+1)
+		tempPendingHeader = subPendingHeader.Header
+		tempPendingHeader = sl.combinePendingHeader(sl.pendingHeader.Header, tempPendingHeader, types.QuaiNetworkContext+1)
 	}
 
 	if types.QuaiNetworkContext == params.PRIME {
@@ -190,10 +198,10 @@ func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int
 	} else {
 		sl.domClient.SendPendingHeader(context.Background(), tempPendingHeader, domTerminus)
 	}
-	return tempPendingHeader, nil
+	return types.PendingHeader{Header: tempPendingHeader, Termini: sl.pendingHeader.Termini, Td: sl.pendingHeader.Td}, nil
 }
 
-func (sl *Slice) setHeaderChainHead(head *types.Header, td *big.Int, domReorg bool, currentContextOrigin bool) (PendingHeader, error) {
+func (sl *Slice) setHeaderChainHead(head *types.Header, td *big.Int, domReorg bool, currentContextOrigin bool) (types.PendingHeader, error) {
 
 	if currentContextOrigin {
 		reorg := sl.HLCR(td)
@@ -225,7 +233,7 @@ func (sl *Slice) setHeaderChainHead(head *types.Header, td *big.Int, domReorg bo
 
 	termini := rawdb.ReadTermini(sl.sliceDb, head.Hash())
 
-	return PendingHeader{header: slPendingHeader, termini: termini}, nil
+	return types.PendingHeader{Header: slPendingHeader, Termini: termini, Td: td}, nil
 }
 
 // PCRC
@@ -300,16 +308,38 @@ func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *typ
 	return slPendingHeader
 }
 
+// sortAndGetBestPendingHeader takes in a phCache, and a pendingHeader. Filters though the cache
+// with location in int as a key and returns the pendingHeader with best Total Difficulty.
+func (sl *Slice) sortAndGetBestPendingHeader(phCache map[uint64][]types.PendingHeader, pendingHeader types.PendingHeader) types.PendingHeader {
+	location := pendingHeader.Header.Location
+	// convert location in bytes to int to use as the key
+	key := binary.BigEndian.Uint64(location)
+	pendingHeaders := phCache[key]
+	pendingHeaders = append(pendingHeaders, pendingHeader)
+
+	sort.Slice(pendingHeaders, func(i, j int) bool {
+		return pendingHeaders[i].Td.Cmp(pendingHeaders[j].Td) < 0
+	})
+
+	if len(pendingHeaders) > pendingHeaderLimit {
+		pendingHeaders[0] = sl.nilPendingHeader
+		pendingHeaders = pendingHeaders[1:]
+	}
+	phCache[key] = pendingHeaders
+
+	return pendingHeaders[len(pendingHeaders)-1]
+}
+
 // ReceivePendingHeader receives a pendingHeader from the subs and if the order of the block
 // is less than the context of the chain, the pendingHeader is sent to the dom.
 func (sl *Slice) ReceivePendingHeader(slPendingHeader *types.Header, terminusHash common.Hash) error {
 
-	if sl.pendingHeader.termini[slPendingHeader.Location[types.QuaiNetworkContext]-1] != terminusHash {
+	if sl.pendingHeader.Termini[slPendingHeader.Location[types.QuaiNetworkContext]-1] != terminusHash {
 		log.Info("Stale update received from sub")
 		return nil
 	}
 
-	pendingHeader := sl.pendingHeader.header
+	pendingHeader := sl.pendingHeader.Header
 	fmt.Println("ReceivePendingHeader pendingHeader", pendingHeader)
 	fmt.Println("ReceivePendingHeader slPendingHeader", slPendingHeader)
 	slPendingHeader = sl.combinePendingHeader(pendingHeader, slPendingHeader, types.QuaiNetworkContext)
@@ -333,7 +363,7 @@ func (sl *Slice) ReceivePendingHeader(slPendingHeader *types.Header, terminusHas
 			go sl.domDoneLoop(domDoneCh, slPendingHeader)
 
 		} else {
-			sl.domClient.SendPendingHeader(context.Background(), slPendingHeader, sl.pendingHeader.termini[3])
+			sl.domClient.SendPendingHeader(context.Background(), slPendingHeader, sl.pendingHeader.Termini[3])
 		}
 
 	}
@@ -423,12 +453,12 @@ func (sl *Slice) domDoneLoop(domDone chan struct{}, pendingHeader *types.Header)
 		case <-domDone:
 			if types.QuaiNetworkContext == params.ZONE {
 				sl.pendingHeader, _ = sl.setHeaderChainHead(pendingHeader, sl.hc.GetTdByHash(pendingHeader.Hash())[types.QuaiNetworkContext], true, false)
-				fmt.Println("tempPendingHeader on start: ", sl.pendingHeader.header)
+				fmt.Println("tempPendingHeader on start: ", sl.pendingHeader.Header)
 
-				sl.domClient.SendPendingHeader(context.Background(), sl.pendingHeader.header, sl.config.GenesisHashes[types.QuaiNetworkContext])
+				sl.domClient.SendPendingHeader(context.Background(), sl.pendingHeader.Header, sl.config.GenesisHashes[types.QuaiNetworkContext])
 			}
 			if types.QuaiNetworkContext == params.REGION {
-				sl.domClient.SendPendingHeader(context.Background(), sl.pendingHeader.header, sl.config.GenesisHashes[types.QuaiNetworkContext])
+				sl.domClient.SendPendingHeader(context.Background(), sl.pendingHeader.Header, sl.config.GenesisHashes[types.QuaiNetworkContext])
 			}
 		}
 	}

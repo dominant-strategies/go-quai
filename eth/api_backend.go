@@ -131,7 +131,7 @@ func (b *EthAPIBackend) PCRC(header *types.Header, domTerminus common.Hash) (com
 	return b.eth.core.PCRC(header, domTerminus)
 }
 
-func (b *EthAPIBackend) Append(block *types.Block, domTerminus common.Hash, td *big.Int, domReorg bool, currentContextOrigin bool) (*types.Header, error) {
+func (b *EthAPIBackend) Append(block *types.Block, domTerminus common.Hash, td *big.Int, domReorg bool, currentContextOrigin bool) (types.PendingHeader, error) {
 	return b.eth.core.Append(block, domTerminus, td, domReorg, currentContextOrigin)
 }
 

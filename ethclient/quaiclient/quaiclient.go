@@ -501,17 +501,18 @@ func (ec *Client) GetHeadHash(ctx context.Context) common.Hash {
 	return headHash
 }
 
-func (ec *Client) Append(ctx context.Context, block *types.Block, domTerminus common.Hash, td *big.Int, domReorg bool, currentContextOrigin bool) (*types.Header, error) {
+func (ec *Client) Append(ctx context.Context, block *types.Block, domTerminus common.Hash, td *big.Int, domReorg bool, currentContextOrigin bool) (types.PendingHeader, error) {
 	data, err := RPCMarshalTdBlock(block, domTerminus, td, domReorg, currentContextOrigin)
 	if err != nil {
-		return nil, err
+		return types.PendingHeader{}, err
 	}
 
-	err = ec.c.CallContext(ctx, nil, "quai_append", data)
+	var pendingHeader types.PendingHeader
+	err = ec.c.CallContext(ctx, &pendingHeader, "quai_append", data)
 	if err != nil {
-		return nil, err
+		return types.PendingHeader{}, err
 	}
-	return nil, nil
+	return pendingHeader, nil
 }
 
 func (ec *Client) SendPendingHeader(ctx context.Context, header *types.Header, terminusHash common.Hash) error {

@@ -366,8 +366,8 @@ func (b *LesApiBackend) GetHeadHash() common.Hash {
 	return common.Hash{}
 }
 
-func (b *LesApiBackend) Append(block *types.Block, domTerminus common.Hash, td *big.Int, domReorg bool, currentContextOrigin bool) (*types.Header, error) {
-	return nil, nil
+func (b *LesApiBackend) Append(block *types.Block, domTerminus common.Hash, td *big.Int, domReorg bool, currentContextOrigin bool) (types.PendingHeader, error) {
+	return types.PendingHeader{}, nil
 }
 
 func (b *LesApiBackend) ReceivePendingHeader(header *types.Header, terminusHash common.Hash) error {

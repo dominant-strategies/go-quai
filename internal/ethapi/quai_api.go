@@ -657,15 +657,15 @@ type TdWithReorg struct {
 	Reorg bool
 }
 
-func (s *PublicBlockChainQuaiAPI) Append(ctx context.Context, raw json.RawMessage) (*types.Header, error) {
+func (s *PublicBlockChainQuaiAPI) Append(ctx context.Context, raw json.RawMessage) (types.PendingHeader, error) {
 	// Decode header and transactions.
 	var head *types.Header
 	var body tdBlock
 	if err := json.Unmarshal(raw, &head); err != nil {
-		return nil, err
+		return types.PendingHeader{}, err
 	}
 	if err := json.Unmarshal(raw, &body); err != nil {
-		return nil, err
+		return types.PendingHeader{}, err
 	}
 
 	// Load uncles because they are not included in the block response.

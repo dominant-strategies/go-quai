@@ -46,8 +46,7 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 		// if the order of the block is less than the context
 		// add the rest of the blocks in the queue to the future blocks.
 		if blockOrder == types.QuaiNetworkContext {
-			var nilHash common.Hash
-			_, err = c.sl.Append(block, nilHash, big.NewInt(0), false, true)
+			err = c.sl.SliceAppend(block, big.NewInt(0), false, true)
 			if err != nil {
 				if err == consensus.ErrFutureBlock {
 					c.sl.addFutureBlock(block)
@@ -368,7 +367,7 @@ func (c *Core) PCRC(header *types.Header, domTerminus common.Hash) (common.Hash,
 	return c.sl.PCRC(header, domTerminus)
 }
 
-func (c *Core) Append(block *types.Block, domTerminus common.Hash, td *big.Int, domReorg bool, currentContextOrigin bool) (*types.Header, error) {
+func (c *Core) Append(block *types.Block, domTerminus common.Hash, td *big.Int, domReorg bool, currentContextOrigin bool) (types.PendingHeader, error) {
 	return c.sl.Append(block, domTerminus, td, domReorg, currentContextOrigin)
 }
 
