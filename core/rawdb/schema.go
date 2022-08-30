@@ -85,6 +85,7 @@ var (
 	headerNumberPrefix = []byte("H") // headerNumberPrefix + hash -> num (uint64 big endian)
 
 	currentHeadsPrefix     = []byte("ch") // currentHeadsPrefix + hash -> []common.Hash (current heads hash)
+	stalePhPrefix          = []byte("sp") //stalePendingHeaderPrefix + hash -> []PendingHeaders
 	domPendingHeaderPrefix = []byte("dp") // pendingHeaderPrefix + hash -> header
 	pendingHeaderPrefix    = []byte("ph") // pendingHeaderPrefix + hash -> header
 	pendingBlockBodyPrefix = []byte("pb") // pendingBodyPrefix + hash -> Body
@@ -164,6 +165,11 @@ func headerKey(number uint64, hash common.Hash) []byte {
 // currentHeadsKey = currentHeadsPrefix + hash
 func currentHeadsKey(hash common.Hash) []byte {
 	return append(currentHeadsPrefix, hash.Bytes()...)
+}
+
+// stalePhKey = stalePhPrefix + hash
+func stalePhKey(hash common.Hash) []byte {
+	return append(stalePhPrefix, hash.Bytes()...)
 }
 
 // domPendingHeaderKey = domPendingHeaderPrefix + hash

@@ -30,6 +30,7 @@ import (
 	"github.com/spruce-solutions/go-quai/core/types"
 	"github.com/spruce-solutions/go-quai/crypto"
 	"github.com/spruce-solutions/go-quai/log"
+	"github.com/spruce-solutions/go-quai/params"
 	"github.com/spruce-solutions/go-quai/rpc"
 )
 
@@ -569,11 +570,6 @@ func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw js
 	return nil
 }
 
-type HeaderWithTerminusHash struct {
-	Header       *types.Header
-	TerminusHash common.Hash
-}
-
 type HeaderHashWithContext struct {
 	Hash    common.Hash
 	Context int
@@ -684,9 +680,16 @@ func (s *PublicBlockChainQuaiAPI) Append(ctx context.Context, raw json.RawMessag
 }
 
 func (s *PublicBlockChainQuaiAPI) ReceivePendingHeader(ctx context.Context, raw json.RawMessage) error {
-	var headerWithTerminusHash HeaderWithTerminusHash
-	if err := json.Unmarshal(raw, &headerWithTerminusHash); err != nil {
+	var pendingHeader types.PendingHeader
+	if err := json.Unmarshal(raw, &pendingHeader); err != nil {
 		return err
 	}
-	return s.b.ReceivePendingHeader(headerWithTerminusHash.Header, headerWithTerminusHash.TerminusHash)
+	return s.b.ReceivePendingHeader(pendingHeader)
+}
+
+func (s *PublicBlockChainQuaiAPI) GetPendingHeaderByLocation(ctx context.Context, location []byte) (*types.Header, error) {
+	if types.QuaiNetworkContext != params.PRIME {
+		return nil, errors.New("get pending header location is a prime only call")
+	}
+	return s.b.GetPendingHeaderByLocation(location)
 }

@@ -74,7 +74,8 @@ type Backend interface {
 	InsertBlock(ctx context.Context, block *types.Block) (int, error)
 	PendingBlock() (*types.Block, error)
 	PendingBlockBody(hash common.Hash) *types.Body
-	ReceivePendingHeader(header *types.Header, terminusHash common.Hash) error
+	ReceivePendingHeader(pendingHeader types.PendingHeader) error
+	GetPendingHeaderByLocation(location []byte) (*types.Header, error)
 	PendingBlockAndReceipts() (*types.Block, types.Receipts)
 	GetAncestorByLocation(hash common.Hash, location []byte) (*types.Header, error)
 	GetTerminusAtOrder(header *types.Header, order int) (common.Hash, error)

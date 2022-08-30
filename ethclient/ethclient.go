@@ -579,6 +579,16 @@ func (ec *Client) SendReOrgData(ctx context.Context, header *types.Header, newHe
 	return ec.c.CallContext(ctx, nil, "quai_sendReOrgData", data)
 }
 
+// GetPendingHeaderByLocation gets the latest pending block from prime for the given location
+func (ec *Client) GetPendingHeaderByLocation(ctx context.Context, location []byte) (*types.Header, error) {
+	var pendingHeader *types.Header
+	err := ec.c.CallContext(ctx, &pendingHeader, "quai_getPendingHeaderByLocation", location)
+	if err != nil {
+		return nil, nil
+	}
+	return pendingHeader, nil
+}
+
 func toBlockNumArg(number *big.Int) string {
 	if number == nil {
 		return "latest"

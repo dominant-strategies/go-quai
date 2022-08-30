@@ -410,6 +410,10 @@ func (b *EthAPIBackend) PendingBlockBody(hash common.Hash) *types.Body {
 	return b.eth.core.PendingBlockBody(hash)
 }
 
-func (b *EthAPIBackend) ReceivePendingHeader(slPendingHeader *types.Header, terminusHash common.Hash) error {
-	return b.eth.core.ReceivePendingHeader(slPendingHeader, terminusHash)
+func (b *EthAPIBackend) ReceivePendingHeader(slPendingHeader types.PendingHeader) error {
+	return b.eth.core.ReceivePendingHeader(slPendingHeader)
+}
+
+func (b *EthAPIBackend) GetPendingHeaderByLocation(location []byte) (*types.Header, error) {
+	return b.eth.core.GetPendingHeaderByLocation(location)
 }

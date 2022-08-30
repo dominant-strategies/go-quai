@@ -370,8 +370,12 @@ func (b *LesApiBackend) Append(block *types.Block, domTerminus common.Hash, td *
 	return types.PendingHeader{}, nil
 }
 
-func (b *LesApiBackend) ReceivePendingHeader(header *types.Header, terminusHash common.Hash) error {
+func (b *LesApiBackend) ReceivePendingHeader(pendingHeader types.PendingHeader) error {
 	return nil
+}
+
+func (b *LesApiBackend) GetPendingHeaderByLocation(location []byte) (*types.Header, error) {
+	return nil, nil
 }
 
 func (b *LesApiBackend) PendingBlock() (*types.Block, error) {

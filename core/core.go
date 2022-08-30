@@ -46,7 +46,7 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 		// if the order of the block is less than the context
 		// add the rest of the blocks in the queue to the future blocks.
 		if blockOrder == types.QuaiNetworkContext {
-			err = c.sl.SliceAppend(block, big.NewInt(0), false, true)
+			_, err = c.sl.Append(block, common.Hash{}, big.NewInt(0), false, true)
 			if err != nil {
 				if err == consensus.ErrFutureBlock {
 					c.sl.addFutureBlock(block)
@@ -371,8 +371,12 @@ func (c *Core) Append(block *types.Block, domTerminus common.Hash, td *big.Int, 
 	return c.sl.Append(block, domTerminus, td, domReorg, currentContextOrigin)
 }
 
-func (c *Core) ReceivePendingHeader(slPendingHeader *types.Header, terminusHash common.Hash) error {
-	return c.sl.ReceivePendingHeader(slPendingHeader, terminusHash)
+func (c *Core) ReceivePendingHeader(slPendingHeader types.PendingHeader) error {
+	return c.sl.ReceivePendingHeader(slPendingHeader)
+}
+
+func (c *Core) GetPendingHeaderByLocation(location []byte) (*types.Header, error) {
+	return c.sl.GetPendingHeaderByLocation(location)
 }
 
 func (c *Core) TxLookupLimit() uint64 {

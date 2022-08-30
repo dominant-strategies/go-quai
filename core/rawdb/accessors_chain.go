@@ -557,6 +557,46 @@ func ReadTdRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 	return nil // Can't find the data anywhere.
 }
 
+// ReadStalePh retreive's the curent heads stored in slice for a header hash.
+func ReadStalePh(db ethdb.Reader, hash common.Hash) []types.PendingHeader {
+	key := stalePhKey(hash)
+
+	data, _ := db.Get(key)
+	if len(data) == 0 {
+		return nil
+	}
+	stalePh := new([]types.PendingHeader)
+	if err := rlp.Decode(bytes.NewReader(data), stalePh); err != nil {
+		log.Error("Invalid stalePh RLP")
+		return nil
+	}
+	return *stalePh
+}
+
+// WriteSliceCurrentHeads writes the slice current heads hashes for a given header hash.
+func WriteStalePh(db ethdb.KeyValueWriter, currentPendingHeaders []types.PendingHeader, hash common.Hash) {
+	// Write the encoded pending header
+	data, err := rlp.EncodeToBytes(currentPendingHeaders)
+	if err != nil {
+		log.Crit("Failed to RLP stalePh", "err", err)
+	}
+
+	key := stalePhKey(hash)
+
+	if err := db.Put(key, data); err != nil {
+		log.Crit("Failed to stalePh", "err", err)
+	}
+}
+
+// DeleteStalePh deletes the stalePh in the db by terminus hash.
+func DeleteStalePh(db ethdb.KeyValueWriter, hash common.Hash) {
+	key := stalePhKey(hash)
+
+	if err := db.Delete(key); err != nil {
+		log.Crit("Failed to delete stalePh ", "err", err)
+	}
+}
+
 // ReadSliceCurrentHeads retreive's the curent heads stored in slice for a header hash.
 func ReadSliceCurrentHeads(db ethdb.Reader, hash common.Hash) []*types.Header {
 	key := currentHeadsKey(hash)
