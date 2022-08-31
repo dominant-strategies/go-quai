@@ -388,12 +388,8 @@ func (blake3 *Blake3) GetDifficultyOrder(header *types.Header) (int, error) {
 
 // Prepare implements consensus.Engine, initializing the difficulty field of a
 // header to conform to the protocol. The changes are done inline.
-func (blake3 *Blake3) Prepare(chain consensus.ChainHeaderReader, header *types.Header) error {
-	parent := chain.GetHeader(header.ParentHash[types.QuaiNetworkContext], header.Number[types.QuaiNetworkContext].Uint64()-1)
-	if parent == nil {
-		return consensus.ErrUnknownAncestor
-	}
-	header.Difficulty[types.QuaiNetworkContext] = blake3.CalcDifficulty(chain, header.Time, parent, types.QuaiNetworkContext)
+func (blake3 *Blake3) Prepare(chain consensus.ChainHeaderReader, header *types.Header, parentBlock *types.Block) error {
+	header.Difficulty[types.QuaiNetworkContext] = blake3.CalcDifficulty(chain, header.Time, parentBlock.Header(), types.QuaiNetworkContext)
 	return nil
 }
 

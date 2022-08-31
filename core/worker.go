@@ -352,7 +352,7 @@ func (w *worker) close() {
 }
 
 // GeneratePendingBlock generates pending block given a commited block.
-func (w *worker) GeneratePendingHeader(header *types.Header) (*types.Header, error) {
+func (w *worker) GeneratePendingHeader(block *types.Block) (*types.Header, error) {
 
 	// Sanitize recommit interval if the user-specified one is too short.
 	recommit := w.config.Recommit
@@ -382,7 +382,7 @@ func (w *worker) GeneratePendingHeader(header *types.Header) (*types.Header, err
 	}
 
 	// clear the pending block queue.
-	clearPending(header.Number64())
+	clearPending(block.Header().Number64())
 
 	timestamp = time.Now().Unix()
 	if interrupt != nil {
@@ -408,7 +408,7 @@ func (w *worker) GeneratePendingHeader(header *types.Header) (*types.Header, err
 	work, err := w.prepareWork(&generateParams{
 		timestamp: uint64(timestamp),
 		coinbase:  coinbase,
-	}, header)
+	}, block)
 	if err != nil {
 		return nil, err
 	}
@@ -418,7 +418,7 @@ func (w *worker) GeneratePendingHeader(header *types.Header) (*types.Header, err
 	// 	w.commit(work.copy(), nil, false, start)
 	// }
 	// Fill pending transactions from the txpool
-	w.adjustGasLimit(nil, work)
+	w.adjustGasLimit(nil, work, block)
 	w.fillTransactions(interrupt, work)
 
 	env := work.copy()
@@ -436,7 +436,7 @@ func (w *worker) GeneratePendingHeader(header *types.Header) (*types.Header, err
 	}
 	// Create a local environment copy, avoid the data race with snapshot state.
 	// https://github.com/ethereum/go-ethereum/issues/24299
-	block, err := w.FinalizeAssembleAndBroadcast(w.hc, env.header, env.state, env.txs, env.unclelist(), env.receipts)
+	block, err = w.FinalizeAssembleAndBroadcast(w.hc, env.header, env.state, env.txs, env.unclelist(), env.receipts)
 	if err != nil {
 		return nil, err
 	}
@@ -801,16 +801,13 @@ type generateParams struct {
 // prepareWork constructs the sealing task according to the given parameters,
 // either based on the last chain head or specified parent. In this function
 // the pending transactions are not filled yet, only the empty task returned.
-func (w *worker) prepareWork(genParams *generateParams, parentHeader *types.Header) (*environment, error) {
+func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*environment, error) {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 
 	// Find the parent block for sealing task
-	fmt.Println("parentHeader.Hash:", parentHeader.Hash(), "parentHeader.Number:", parentHeader.Number64())
-	parent := w.hc.bc.GetBlock(parentHeader.Hash(), parentHeader.Number64())
-	if parent == nil {
-		return nil, fmt.Errorf("missing parent")
-	}
+	fmt.Println("block.Header().Hash:", block.Header().Hash(), "parentHeader.Number:", block.Header().Number64())
+	parent := block
 	// Sanity check the timestamp correctness, recap the timestamp
 	// to parent+1 if the mutation is allowed.
 	timestamp := genParams.timestamp
@@ -840,7 +837,7 @@ func (w *worker) prepareWork(genParams *generateParams, parentHeader *types.Head
 		Location:          w.chainConfig.Location,
 	}
 
-	header.ParentHash[types.QuaiNetworkContext] = parentHeader.Hash()
+	header.ParentHash[types.QuaiNetworkContext] = block.Header().Hash()
 	header.Number[types.QuaiNetworkContext] = big.NewInt(int64(num.Uint64()) + 1)
 	header.Extra[types.QuaiNetworkContext] = w.extra
 	header.BaseFee[types.QuaiNetworkContext] = misc.CalcBaseFee(w.chainConfig, parent.Header(), w.hc.GetHeaderByNumber, w.hc.GetUnclesInChain, w.hc.GetGasUsedInChain)
@@ -853,7 +850,7 @@ func (w *worker) prepareWork(genParams *generateParams, parentHeader *types.Head
 	}
 
 	// Run the consensus preparation with the default or customized consensus engine.
-	if err := w.engine.Prepare(w.hc, header); err != nil {
+	if err := w.engine.Prepare(w.hc, header, block); err != nil {
 		log.Error("Failed to prepare header for sealing", "err", err)
 		return nil, err
 	}
@@ -917,9 +914,7 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment) {
 // fillTransactions retrieves the pending transactions from the txpool and fills them
 // into the given sealing block. The transaction selection and ordering strategy can
 // be customized with the plugin in the future.
-func (w *worker) adjustGasLimit(interrupt *int32, env *environment) {
-	// Find the parent block for sealing task
-	parent := w.hc.CurrentBlock()
+func (w *worker) adjustGasLimit(interrupt *int32, env *environment, parent *types.Block) {
 
 	gasUsed := (parent.GasUsed() + env.externalGasUsed) / uint64(env.externalBlockLength+1)
 

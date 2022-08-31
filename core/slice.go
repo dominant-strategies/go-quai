@@ -79,6 +79,8 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 	sl.miner = New(sl.hc, sl.txPool, config, db, chainConfig, engine, isLocalBlock)
 	sl.miner.SetExtra(sl.miner.MakeExtraData(config.ExtraData))
 
+	sl.phCache = make(map[uint64][]types.PendingHeader)
+
 	// only set the subClients if the chain is not Zone
 	sl.subClients = make([]*quaiclient.Client, 3)
 	if types.QuaiNetworkContext != params.ZONE {
@@ -124,6 +126,7 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 	fmt.Println("write termini for genesisHash", genesisHash, genesisTermini)
 	rawdb.WriteTermini(sl.hc.headerDb, genesisHash, genesisTermini)
 
+	time.Sleep(5 * time.Second)
 	// Remove nil character from RLP read
 	if types.QuaiNetworkContext == params.PRIME {
 		knot := genesis.Knot[1:]
@@ -141,6 +144,7 @@ func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int
 	sl.appendmu.Lock()
 	defer sl.appendmu.Unlock()
 
+	fmt.Println("Starting Append... Block.Hash:", block.Hash(), "Number:", block.Number(), "Location:", block.Header().Location)
 	batch := sl.sliceDb.NewBatch()
 	rawdb.WriteHeader(batch, block.Header())
 
@@ -165,7 +169,7 @@ func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int
 		}
 	}
 
-	localPendingHeader, err := sl.setHeaderChainHead(batch, block.Header(), td, domReorg, currentContextOrigin)
+	localPendingHeader, err := sl.setHeaderChainHead(batch, block, td, domReorg, currentContextOrigin)
 	tempPendingHeader := types.CopyHeader(localPendingHeader.Header)
 	if err != nil {
 		return sl.nilPendingHeader, err
@@ -186,9 +190,18 @@ func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int
 		tempPendingHeader = sl.combinePendingHeader(localPendingHeader.Header, tempPendingHeader, types.QuaiNetworkContext+1)
 	}
 
+	//Append has succeeded write the batch
+	if err := batch.Write(); err != nil {
+		return types.PendingHeader{}, err
+	}
+
 	pendingHeader := types.PendingHeader{Header: tempPendingHeader, Termini: localPendingHeader.Termini, Td: localPendingHeader.Td}
 
-	if types.QuaiNetworkContext == params.PRIME {
+	order, err := sl.engine.GetDifficultyOrder(block.Header())
+	if err != nil {
+		return types.PendingHeader{}, err
+	}
+	if order == params.PRIME && types.QuaiNetworkContext == params.PRIME {
 		//save the pending header
 		rawdb.WritePendingHeader(sl.sliceDb, block.Hash(), tempPendingHeader)
 
@@ -198,31 +211,30 @@ func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int
 		//process pending header updates
 		fmt.Println("localPending", localPendingHeader.Termini)
 		sl.ReceivePendingHeader(localPendingHeader)
-	} else {
+	} else if order == params.REGION && types.QuaiNetworkContext == params.REGION {
 		fmt.Println("SendingPendingHeader", pendingHeader.Termini)
 		sl.domClient.SendPendingHeader(context.Background(), pendingHeader)
-	}
-
-	if err := batch.Write(); err != nil {
-		return types.PendingHeader{}, err
+	} else if order == params.ZONE && types.QuaiNetworkContext == params.ZONE {
+		fmt.Println("SendingPendingHeader", pendingHeader.Termini)
+		sl.domClient.SendPendingHeader(context.Background(), pendingHeader)
 	}
 
 	return types.PendingHeader{Header: tempPendingHeader, Termini: sl.pendingHeader.Termini, Td: sl.pendingHeader.Td}, nil
 }
 
-func (sl *Slice) setHeaderChainHead(batch ethdb.Batch, head *types.Header, td *big.Int, domReorg bool, currentContextOrigin bool) (types.PendingHeader, error) {
+func (sl *Slice) setHeaderChainHead(batch ethdb.Batch, block *types.Block, td *big.Int, domReorg bool, currentContextOrigin bool) (types.PendingHeader, error) {
 
 	if currentContextOrigin {
 		reorg := sl.HLCR(td)
 		if reorg {
-			_, err := sl.hc.SetCurrentHeader(batch, head)
+			_, err := sl.hc.SetCurrentHeader(batch, block.Header())
 			if err != nil {
 				return sl.nilPendingHeader, err
 			}
 		}
 	} else {
 		if domReorg {
-			_, err := sl.hc.SetCurrentHeader(batch, head)
+			_, err := sl.hc.SetCurrentHeader(batch, block.Header())
 			if err != nil {
 				return sl.nilPendingHeader, err
 			}
@@ -230,7 +242,7 @@ func (sl *Slice) setHeaderChainHead(batch ethdb.Batch, head *types.Header, td *b
 	}
 
 	// Upate the local pending header
-	slPendingHeader, err := sl.miner.worker.GeneratePendingHeader(head)
+	slPendingHeader, err := sl.miner.worker.GeneratePendingHeader(block)
 	if err != nil {
 		fmt.Println("pending block error: ", err)
 		return sl.nilPendingHeader, err
@@ -239,20 +251,22 @@ func (sl *Slice) setHeaderChainHead(batch ethdb.Batch, head *types.Header, td *b
 	slPendingHeader.Location = sl.config.Location
 	slPendingHeader.Time = uint64(time.Now().Unix())
 
-	termini := rawdb.ReadTermini(sl.sliceDb, head.Hash())
+	termini := rawdb.ReadTermini(sl.sliceDb, block.Header().Hash())
 
 	return types.PendingHeader{Header: slPendingHeader, Termini: termini, Td: td}, nil
 }
 
 // PCRC
 func (sl *Slice) PCRC(batch ethdb.Batch, header *types.Header, domTerminus common.Hash) (common.Hash, error) {
+	fmt.Println("PCRC Parent.Hash:", header.ParentHash, "Number", header.Number, "Location:", header.Location, "index:", types.QuaiNetworkContext)
 	termini := sl.hc.GetTerminiByHash(header.Parent())
 
 	if termini == nil {
 		return common.Hash{}, consensus.ErrFutureBlock
 	}
 
-	newTermini := termini
+	var newTermini []common.Hash
+	copy(newTermini, termini)
 
 	var nilHash common.Hash
 	// make sure the termini match
@@ -264,33 +278,34 @@ func (sl *Slice) PCRC(batch ethdb.Batch, header *types.Header, domTerminus commo
 		if termini[len(termini)-1] != domTerminus {
 			return common.Hash{}, errors.New("termini do not match, block rejected due to twist with dom")
 		} else {
-			if newTermini[3] == sl.config.GenesisHashes[0] {
-				return newTermini[3], nil
-			}
-			newTermini[sl.config.Location[types.QuaiNetworkContext]-1] = header.Hash()
+			newTermini[header.Location[types.QuaiNetworkContext]-1] = header.Hash()
 		}
 
 		// Update the terminus for the block
 		parentHeader := sl.hc.GetHeaderByHash(header.Parent())
-		parentOrder, err := sl.engine.GetDifficultyOrder(parentHeader)
-		if err != nil {
-			return common.Hash{}, err
+		var parentOrder int
+		if parentHeader.Hash() == sl.config.GenesisHashes[0] { //GENESIS ESCAPE
+			parentOrder = 0
+		} else {
+			var err error
+			parentOrder, err = sl.engine.GetDifficultyOrder(parentHeader)
+			if err != nil {
+				return common.Hash{}, err
+			}
 		}
+
 		if parentOrder < types.QuaiNetworkContext {
-			newTermini[len(newTermini)-1] = header.Parent()
+			newTermini[len(newTermini)-1] = header.ParentHash[parentOrder]
 		}
 
 	}
 
 	//Save the termini
-	rawdb.WriteTermini(sl.hc.headerDb, header.Hash(), newTermini)
+	rawdb.WriteTermini(sl.sliceDb, header.Hash(), newTermini)
 
 	fmt.Println(termini)
 	fmt.Println(sl.config.Location)
-	if termini[3] == sl.config.GenesisHashes[0] {
-		return termini[3], nil
-	}
-	return termini[sl.config.Location[types.QuaiNetworkContext]-1], nil
+	return termini[header.Location[types.QuaiNetworkContext]-1], nil
 }
 
 // HLCR
@@ -331,8 +346,8 @@ func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *typ
 func (sl *Slice) GetPendingHeaderByLocation(location []byte) (*types.Header, error) {
 	// search for the location in the pendingBlock key
 	// convert location in bytes to int to use as the key
-	key := binary.BigEndian.Uint64(location)
-	pendingHeaders := sl.phCache[key]
+	key := binary.BigEndian.Uint16(location)
+	pendingHeaders := sl.phCache[uint64(key)]
 	return pendingHeaders[len(pendingHeaders)-1].Header, nil
 }
 
@@ -341,16 +356,16 @@ func (sl *Slice) GetPendingHeaderByLocation(location []byte) (*types.Header, err
 func (sl *Slice) sortAndGetBestPendingHeader(pendingHeader types.PendingHeader, location []byte) types.PendingHeader {
 
 	// convert location in bytes to int to use as the key
-	key := binary.BigEndian.Uint64(location)
-	pendingHeaders := sl.phCache[key]
+	key := binary.BigEndian.Uint16(location)
+	pendingHeaders := sl.phCache[uint64(key)]
 	if len(pendingHeaders) > 0 {
 		if pendingHeaders[0].Termini[3] != pendingHeader.Termini[3] {
-			rawdb.WriteStalePh(sl.sliceDb, sl.phCache[key], pendingHeaders[0].Termini[3])
+			rawdb.WriteStalePh(sl.sliceDb, sl.phCache[uint64(key)], pendingHeaders[0].Termini[3])
 			//search for new termini
 			pendingHeaders = rawdb.ReadStalePh(sl.sliceDb, pendingHeader.Termini[3])
 			if pendingHeaders == nil {
 				// flush the phCache and start over
-				sl.phCache[key] = []types.PendingHeader{}
+				sl.phCache[uint64(key)] = []types.PendingHeader{}
 				pendingHeaders = []types.PendingHeader{}
 			}
 		}
@@ -361,7 +376,7 @@ func (sl *Slice) sortAndGetBestPendingHeader(pendingHeader types.PendingHeader, 
 		return pendingHeaders[i].Td.Cmp(pendingHeaders[j].Td) < 0
 	})
 
-	sl.phCache[key] = pendingHeaders
+	sl.phCache[uint64(key)] = pendingHeaders
 
 	//Once we get a new terminus we should write to stalephDb all pH with the old terminus
 	//If terminus changes we should check stalephDb for new terminus and load if found
