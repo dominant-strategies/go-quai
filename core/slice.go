@@ -193,8 +193,10 @@ func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int
 		sl.miner.worker.pendingHeaderFeed.Send(tempPendingHeader)
 
 		//process pending header updates
+		fmt.Println("localPending", localPendingHeader.Termini)
 		sl.ReceivePendingHeader(localPendingHeader)
 	} else {
+		fmt.Println("SendingPendingHeader", pendingHeader.Termini)
 		sl.domClient.SendPendingHeader(context.Background(), pendingHeader)
 	}
 
@@ -368,8 +370,7 @@ func (sl *Slice) sortAndGetBestPendingHeader(pendingHeader types.PendingHeader, 
 // ReceivePendingHeader receives a pendingHeader from the subs and if the order of the block
 // is less than the context of the chain, the pendingHeader is sent to the dom.
 func (sl *Slice) ReceivePendingHeader(slPendingHeader types.PendingHeader) error {
-	// If prime process
-
+	// If prime process, else send to dom.
 	if types.QuaiNetworkContext == params.PRIME {
 		if bytes.Equal(slPendingHeader.Header.Location, []byte{0, 0}) {
 			for i := 1; i < params.FullerOntology[0]; i++ {
@@ -390,8 +391,8 @@ func (sl *Slice) ReceivePendingHeader(slPendingHeader types.PendingHeader) error
 			newBestPendingHeader := sl.combinePendingHeader(slPendingHeader.Header, bestPendingHeader.Header, 2)
 			sl.miner.worker.pendingHeaderFeed.Send(newBestPendingHeader)
 		}
-
 	} else {
+		fmt.Println("Here", slPendingHeader.Termini)
 		slPendingHeader.Termini = rawdb.ReadTermini(sl.sliceDb, slPendingHeader.Termini[3])
 		sl.domClient.SendPendingHeader(context.Background(), slPendingHeader)
 	}

@@ -252,7 +252,7 @@ func GenerateKnot(config *params.ChainConfig, parent *types.Block, engine consen
 	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
 	chainreader := &fakeChainReader{config: config}
 
-	resultLoop := func(i int, k *knot, statedb *state.StateDB, results chan *types.Block, stop chan struct{}, wg *sync.WaitGroup) error {
+	resultLoop := func(i int, k *knot, results chan *types.Block, stop chan struct{}, wg *sync.WaitGroup) error {
 		for {
 			select {
 			case block := <-results:
@@ -274,9 +274,9 @@ func GenerateKnot(config *params.ChainConfig, parent *types.Block, engine consen
 		}
 	}
 
-	genblock := func(i int, parent *types.Block, genesis *types.Header, statedb *state.StateDB, location []byte, resultCh chan *types.Block, stopCh chan struct{}) {
-		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: config, engine: engine}
-		b.header = makeKnotHeader(chainreader, parent, genesis, statedb, b.engine, location)
+	genblock := func(i int, parent *types.Block, genesis *types.Header, primedb *state.StateDB, regiondb *state.StateDB, zonedb *state.StateDB, location []byte, resultCh chan *types.Block, stopCh chan struct{}) {
+		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: primedb, config: config, engine: engine}
+		b.header = makeKnotHeader(chainreader, parent, genesis, primedb, b.engine, location)
 
 		// Execute any user modifications to the block
 		if gen != nil {
@@ -284,14 +284,35 @@ func GenerateKnot(config *params.ChainConfig, parent *types.Block, engine consen
 		}
 		if b.engine != nil {
 			// Finalize and seal the block
-			block, _ := b.engine.FinalizeAndAssemble(chainreader, b.header, statedb, b.txs, b.uncles, b.receipts)
 
+			b.engine.FinalizeAtIndex(chainreader, b.header, zonedb, b.txs, b.uncles, params.ZONE)
 			// Write state changes to db
-			root, err := statedb.Commit(config.IsEIP158(b.header.Number[types.QuaiNetworkContext]))
+			root, err := zonedb.Commit(config.IsEIP158(b.header.Number[params.ZONE]))
 			if err != nil {
 				panic(fmt.Sprintf("state write error: %v", err))
 			}
-			if err := statedb.Database().TrieDB().Commit(root, false, nil); err != nil {
+			if err := zonedb.Database().TrieDB().Commit(root, false, nil); err != nil {
+				panic(fmt.Sprintf("trie write error: %v", err))
+			}
+
+			b.engine.FinalizeAtIndex(chainreader, b.header, regiondb, b.txs, b.uncles, params.REGION)
+			// Write state changes to db
+			root, err = regiondb.Commit(config.IsEIP158(b.header.Number[params.REGION]))
+			if err != nil {
+				panic(fmt.Sprintf("state write error: %v", err))
+			}
+			if err := regiondb.Database().TrieDB().Commit(root, false, nil); err != nil {
+				panic(fmt.Sprintf("trie write error: %v", err))
+			}
+
+			block, _ := b.engine.FinalizeAndAssemble(chainreader, b.header, primedb, b.txs, b.uncles, b.receipts)
+
+			// Write state changes to db
+			root, err = primedb.Commit(config.IsEIP158(b.header.Number[params.PRIME]))
+			if err != nil {
+				panic(fmt.Sprintf("state write error: %v", err))
+			}
+			if err := primedb.Database().TrieDB().Commit(root, false, nil); err != nil {
 				panic(fmt.Sprintf("trie write error: %v", err))
 			}
 
@@ -309,17 +330,28 @@ func GenerateKnot(config *params.ChainConfig, parent *types.Block, engine consen
 	genesis := parent.Header()
 	locations := [][]byte{[]byte{1, 1}, []byte{1, 2}, []byte{1, 3}, []byte{2, 1}, []byte{2, 2}, []byte{2, 3}, []byte{3, 1}, []byte{3, 2}, []byte{3, 3}}
 	for i := 0; i < len(locations); i++ {
-		statedb, err := state.New(parent.Root(), state.NewDatabase(db), nil)
+		primedb, err := state.New(parent.Root(), state.NewDatabase(db), nil)
 		if err != nil {
 			panic(err)
 		}
+
+		regiondb, err := state.New(parent.Header().Root[params.REGION], state.NewDatabase(db), nil)
+		if err != nil {
+			panic(err)
+		}
+
+		zonedb, err := state.New(parent.Header().Root[params.ZONE], state.NewDatabase(db), nil)
+		if err != nil {
+			panic(err)
+		}
+
 		resultCh := make(chan *types.Block)
 		exitCh := make(chan struct{})
 
 		var wg sync.WaitGroup
 		wg.Add(1)
-		go resultLoop(i, knot, statedb, resultCh, exitCh, &wg)
-		genblock(i, parent, genesis, statedb, locations[i], resultCh, exitCh)
+		go resultLoop(i, knot, resultCh, exitCh, &wg)
+		genblock(i, parent, genesis, primedb, regiondb, zonedb, locations[i], resultCh, exitCh)
 		wg.Wait()
 		blocks[i] = knot.block
 		parent = knot.block
@@ -425,9 +457,6 @@ func makeKnotHeader(chain consensus.ChainReader, parent *types.Block, genesis *t
 		header.Number[types.QuaiNetworkContext+1] = new(big.Int).Add(parent.Header().Number[types.QuaiNetworkContext+1], common.Big1)
 		header.ParentHash[types.QuaiNetworkContext+1] = parent.Hash()
 		header.Difficulty[types.QuaiNetworkContext+1] = engine.CalcDifficulty(chain, time, parentHeader, types.QuaiNetworkContext+1)
-		// Populate subordinate state roots
-		header.Root[types.QuaiNetworkContext+1] = state.IntermediateRoot(chain.Config().IsEIP158(header.Number[types.QuaiNetworkContext+1] - 1))
-		header.Root[types.QuaiNetworkContext+2] = state.IntermediateRoot(chain.Config().IsEIP158(header.Number[types.QuaiNetworkContext+1] - 1))
 	}
 
 	return header

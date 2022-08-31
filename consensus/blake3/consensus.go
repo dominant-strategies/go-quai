@@ -416,6 +416,15 @@ func (blake3 *Blake3) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 	return types.NewBlock(header, txs, uncles, receipts, trie.NewStackTrie(nil)), nil
 }
 
+// FinalizeAtIndex implements consensus.Engine, accumulating the block and uncle rewards,
+// setting the final state on the header at an index.
+func (blake3 *Blake3) FinalizeAtIndex(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, index int) {
+	// Accumulate any block and uncle rewards and commit the final state root
+	accumulateRewardsAtIndex(chain.Config(), state, header, uncles, index)
+	fmt.Println("FinalizeAtIndex: state root:", state.IntermediateRoot(chain.Config().IsEIP158(header.Number[index])))
+	header.Root[index] = state.IntermediateRoot(chain.Config().IsEIP158(header.Number[index]))
+}
+
 // SealHash returns the hash of a block prior to it being sealed.
 func (blake3 *Blake3) SealHash(header *types.Header) (hash common.Hash) {
 	hasher := blake3hash.New(32, nil)
@@ -471,6 +480,35 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		reward.Add(reward, r)
 	}
 	state.AddBalance(header.Coinbase[types.QuaiNetworkContext], reward)
+}
+
+// accumulateRewardsAtIndex credits the coinbase of the given block with the mining
+// reward. The total reward consists of the static block reward and rewards for
+// included uncles. The coinbase of each uncle block is also rewarded.
+func accumulateRewardsAtIndex(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header, index int) {
+	// Skip block reward in catalyst mode
+	if config.IsCatalyst(header.Number[index]) {
+		fmt.Println("ret in catalyst?")
+		return
+	}
+
+	// Select the correct block reward based on chain progression
+	blockReward := misc.CalculateRewardWithIndex(index)
+	fmt.Println("blockReward")
+	// Accumulate the rewards for the miner and any included uncles
+	reward := new(big.Int).Set(blockReward)
+	r := new(big.Int)
+	for _, uncle := range uncles {
+		r.Add(uncle.Number[index], big8)
+		r.Sub(r, header.Number[index])
+		r.Mul(r, blockReward)
+		r.Div(r, big8)
+		state.AddBalance(uncle.Coinbase[index], r)
+
+		r.Div(blockReward, big32)
+		reward.Add(reward, r)
+	}
+	state.AddBalance(header.Coinbase[index], reward)
 }
 
 // Verifies that a header location is valid for a specific config.
