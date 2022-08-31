@@ -620,17 +620,6 @@ type HeaderWithDomTerminus struct {
 	DomTerminus common.Hash
 }
 
-// CheckPCRC runs PCRC on a node and returns the response codes.
-func (s *PublicBlockChainQuaiAPI) CheckPCRC(ctx context.Context, raw json.RawMessage) (common.Hash, error) {
-	// Decode header.
-	var headerWithDomTerminus HeaderWithDomTerminus
-	if err := json.Unmarshal(raw, &headerWithDomTerminus); err != nil {
-		return common.Hash{}, err
-	}
-
-	return s.b.PCRC(headerWithDomTerminus.Header, headerWithDomTerminus.DomTerminus)
-}
-
 type HeaderWithSliceAndOrder struct {
 	Header *types.Header
 	Slice  []byte

@@ -44,16 +44,4 @@ var (
 
 	// ErrGhostState is returned if a side chain is attempted to be re-imported into state.
 	ErrGhostState = errors.New("sidechain ghost-state attack")
-
-	// ErrSliceNotSynced is returned if PCRC returns an unlinked chain in the subordinate.
-	ErrSliceNotSynced = errors.New("slice is not synced")
-
-	// ErrPCCOPFailed is returned if PCCOP fails and we add the terminal header to future block.
-	ErrPCCOPFailed = errors.New("pccop failed")
-
-	// ErrPrimeTwist in PCRC there exists a Prime twist (PRTP != PRTR)
-	ErrPrimeTwist = errors.New("prime twist prtp != prtr")
-
-	// ErrRegionTwist in PCRC there exists a Region twist (RTR != RTZ)
-	ErrRegionTwist = errors.New("there exists a Region twist (RTR != RTZ)")
 )

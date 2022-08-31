@@ -195,18 +195,6 @@ func (ec *Client) GetTerminusAtOrder(ctx context.Context, header *types.Header, 
 	return hash, nil
 }
 
-// CheckPCRC runs PCRC on the node with a given header
-func (ec *Client) CheckPCRC(ctx context.Context, header *types.Header, domTerminus common.Hash) (common.Hash, error) {
-	data := map[string]interface{}{"Header": RPCMarshalHeader(header)}
-	data["DomTerminus"] = domTerminus
-
-	var DomTerminus common.Hash
-	if err := ec.c.CallContext(ctx, &DomTerminus, "quai_checkPCRC", data); err != nil {
-		return common.Hash{}, err
-	}
-	return domTerminus, nil
-}
-
 // RPCMarshalHeader converts the given header to the RPC output .
 func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 	result := map[string]interface{}{

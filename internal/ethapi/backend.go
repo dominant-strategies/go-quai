@@ -80,7 +80,6 @@ type Backend interface {
 	GetAncestorByLocation(hash common.Hash, location []byte) (*types.Header, error)
 	GetTerminusAtOrder(header *types.Header, order int) (common.Hash, error)
 
-	PCRC(header *types.Header, domTerminus common.Hash) (common.Hash, error)
 	EventMux() *event.TypeMux
 	CalculateBaseFee(header *types.Header) *big.Int
 	GetUncleFromWorker(uncleHash common.Hash) (*types.Block, error)

@@ -119,10 +119,6 @@ func (b *LesApiBackend) GetAncestorByLocation(hash common.Hash, location []byte)
 	return nil, errors.New("light client does not support getting ancestor by location")
 }
 
-func (b *LesApiBackend) PCRC(header *types.Header, domTerminus common.Hash) (common.Hash, error) {
-	return common.Hash{}, errors.New("light client does not support running PCRC")
-}
-
 func (b *LesApiBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Block, error) {
 	if blockNr, ok := blockNrOrHash.Number(); ok {
 		return b.BlockByNumber(ctx, blockNr)

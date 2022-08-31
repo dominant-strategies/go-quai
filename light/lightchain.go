@@ -161,7 +161,7 @@ func (lc *LightChain) loadLastState() error {
 			// Corrupt or empty database, init from scratch
 			lc.Reset()
 		} else {
-			lc.hc.SetCurrentHeader(header)
+			// lc.hc.SetCurrentHeader(header)
 		}
 	}
 	// Issue a status log and return
@@ -206,7 +206,7 @@ func (lc *LightChain) ResetWithGenesisBlock(genesis *types.Block) {
 	}
 	lc.genesisBlock = genesis
 	lc.hc.SetGenesis(lc.genesisBlock.Header())
-	lc.hc.SetCurrentHeader(lc.genesisBlock.Header())
+	// lc.hc.SetCurrentHeader(lc.genesisBlock.Header())
 }
 
 // Accessors
@@ -342,7 +342,7 @@ func (lc *LightChain) Rollback(chain []common.Hash) {
 		// to low, so it's safe the update in-memory markers directly.
 		if head := lc.hc.CurrentHeader(); head.Hash() == hash {
 			rawdb.WriteHeadHeaderHash(batch, head.ParentHash[types.QuaiNetworkContext])
-			lc.hc.SetCurrentHeader(lc.GetHeader(head.ParentHash[types.QuaiNetworkContext], head.Number[types.QuaiNetworkContext].Uint64()-1))
+			// lc.hc.SetCurrentHeader(lc.GetHeader(head.ParentHash[types.QuaiNetworkContext], head.Number[types.QuaiNetworkContext].Uint64()-1))
 		}
 	}
 	if err := batch.Write(); err != nil {
@@ -510,7 +510,7 @@ func (lc *LightChain) SyncCheckpoint(ctx context.Context, checkpoint *params.Tru
 		if lc.hc.CurrentHeader().Number[types.QuaiNetworkContext].Uint64() < header.Number[types.QuaiNetworkContext].Uint64() {
 			log.Info("Updated latest header based on CHT", "number", header.Number, "hash", header.Hash(), "age", common.PrettyAge(time.Unix(int64(header.Time), 0)))
 			rawdb.WriteHeadHeaderHash(lc.chainDb, header.Hash())
-			lc.hc.SetCurrentHeader(header)
+			// lc.hc.SetCurrentHeader(header)
 		}
 		return true
 	}
