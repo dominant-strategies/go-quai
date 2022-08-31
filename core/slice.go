@@ -267,24 +267,12 @@ func (sl *Slice) PCRC(batch ethdb.Batch, header *types.Header, domTerminus commo
 		return common.Hash{}, consensus.ErrFutureBlock
 	}
 	fmt.Println("Dom Terminus: ", domTerminus)
+	fmt.Println("Termini: ", termini)
 
-	// var newTermini []common.Hash
-	// copy(newTermini, termini)
 	newTermini := make([]common.Hash, len(termini))
 	for i, terminus := range termini {
 		newTermini[i] = terminus
 	}
-	fmt.Println("Termini: ", termini)
-
-	var nilHash common.Hash
-	if domTerminus == nilHash {
-		if header.Parent() != sl.config.GenesisHashes[0] {
-			domTerminus = header.Parent()
-		} else {
-			domTerminus = sl.config.GenesisHashes[0]
-		}
-	}
-	fmt.Println("Dom Terminus: ", domTerminus)
 
 	if len(termini) != 4 {
 		return common.Hash{}, errors.New("length of termini not equal to 4")
@@ -307,16 +295,15 @@ func (sl *Slice) PCRC(batch ethdb.Batch, header *types.Header, domTerminus commo
 		}
 	}
 
-	parentTermini := sl.hc.GetTerminiByHash(header.Parent())
-	if parentOrder < types.QuaiNetworkContext {
-		newTermini[len(newTermini)-1] = parentTermini[header.Location[types.QuaiNetworkContext-1]-1]
-	} else if types.QuaiNetworkContext == params.PRIME {
-		newTermini[len(newTermini)-1] = header.Parent()
+	if parentOrder < types.QuaiNetworkContext || termini[3] == sl.config.GenesisHashes[0] { //GENESIS ESCAPE
+		newTermini[3] = header.Hash()
+	} else {
+		newTermini[3] = termini[3]
 	}
 
 	fmt.Println("header location: ", header.Location, newTermini, termini)
 	if types.QuaiNetworkContext != params.PRIME {
-		if newTermini[3] != domTerminus {
+		if termini[3] != domTerminus {
 			return common.Hash{}, errors.New("termini do not match, block rejected due to a twist")
 		}
 	}
@@ -324,12 +311,13 @@ func (sl *Slice) PCRC(batch ethdb.Batch, header *types.Header, domTerminus commo
 	//Save the termini
 	rawdb.WriteTermini(sl.sliceDb, header.Hash(), newTermini)
 
-	fmt.Println("Termini before return", termini)
-	if types.QuaiNetworkContext != params.ZONE {
-		return termini[header.Location[types.QuaiNetworkContext]-1], nil
-	} else {
-		return termini[3], nil
+	fmt.Println("Termini before return", newTermini)
+
+	if types.QuaiNetworkContext == params.ZONE {
+		return common.Hash{}, nil
 	}
+	return termini[header.Location[types.QuaiNetworkContext]-1], nil
+
 }
 
 // HLCR
@@ -372,6 +360,7 @@ func (sl *Slice) GetPendingHeaderByLocation(location []byte) (*types.Header, err
 	// convert location in bytes to int to use as the key
 	key := binary.BigEndian.Uint16(location)
 	pendingHeaders := sl.phCache[uint64(key)]
+	fmt.Println("PendingHeaders", pendingHeaders, "Location:", location, "key", key)
 	return pendingHeaders[len(pendingHeaders)-1].Header, nil
 }
 
@@ -381,6 +370,7 @@ func (sl *Slice) sortAndGetBestPendingHeader(pendingHeader types.PendingHeader, 
 
 	// convert location in bytes to int to use as the key
 	key := binary.BigEndian.Uint16(location)
+	fmt.Println("sortAndGetBest PendingHeaders", pendingHeader, "Location:", location, "key", key)
 	pendingHeaders := sl.phCache[uint64(key)]
 	if len(pendingHeaders) > 0 {
 		if pendingHeaders[0].Termini[3] != pendingHeader.Termini[3] {
@@ -419,6 +409,7 @@ func (sl *Slice) ReceivePendingHeader(slPendingHeader types.PendingHeader) error
 				for j := 1; j < params.FullerOntology[1]; j++ {
 					bestPendingHeader := sl.sortAndGetBestPendingHeader(slPendingHeader, []byte{byte(i), byte(j)})
 					newBestPendingHeader := sl.combinePendingHeader(slPendingHeader.Header, bestPendingHeader.Header, 2)
+					fmt.Println("Prime ReceivePendingHeaders slPendingHeader", slPendingHeader, "Location:", slPendingHeader.Header.Location)
 					sl.miner.worker.pendingHeaderFeed.Send(newBestPendingHeader)
 				}
 			}
@@ -426,16 +417,19 @@ func (sl *Slice) ReceivePendingHeader(slPendingHeader types.PendingHeader) error
 			for j := 1; j < params.FullerOntology[1]; j++ {
 				bestPendingHeader := sl.sortAndGetBestPendingHeader(slPendingHeader, []byte{byte(slPendingHeader.Header.Location[0]), byte(j)})
 				newBestPendingHeader := sl.combinePendingHeader(slPendingHeader.Header, bestPendingHeader.Header, 2)
+				fmt.Println("Region:", j, "ReceivePendingHeaders slPendingHeader", slPendingHeader, "Location:", slPendingHeader.Header.Location)
 				sl.miner.worker.pendingHeaderFeed.Send(newBestPendingHeader)
 			}
 		} else {
 			bestPendingHeader := sl.sortAndGetBestPendingHeader(slPendingHeader, slPendingHeader.Header.Location)
 			newBestPendingHeader := sl.combinePendingHeader(slPendingHeader.Header, bestPendingHeader.Header, 2)
+			fmt.Println("Zone", slPendingHeader.Header.Location, "ReceivePendingHeaders slPendingHeader", slPendingHeader, "Location:", slPendingHeader.Header.Location)
 			sl.miner.worker.pendingHeaderFeed.Send(newBestPendingHeader)
 		}
 	} else {
 		fmt.Println("Here", slPendingHeader.Termini)
 		slPendingHeader.Termini = rawdb.ReadTermini(sl.sliceDb, slPendingHeader.Termini[3])
+		fmt.Println("Relaying ReceivePendingHeaders slPendingHeader", slPendingHeader, "Location:", slPendingHeader.Header.Location)
 		sl.domClient.SendPendingHeader(context.Background(), slPendingHeader)
 	}
 
