@@ -132,7 +132,10 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 		knot := genesis.Knot[1:]
 		for _, block := range knot {
 			if block != nil {
-				sl.Append(block, common.Hash{}, block.Difficulty(), false, true)
+				_, err = sl.Append(block, common.Hash{}, block.Difficulty(), false, true)
+				if err != nil {
+					fmt.Println("Failed to append block, hash:", block.Hash(), "Number:", block.Number(), "Location:", block.Header().Location)
+				}
 			}
 		}
 	}
@@ -146,7 +149,6 @@ func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int
 
 	fmt.Println("Starting Append... Block.Hash:", block.Hash(), "Number:", block.Number(), "Location:", block.Header().Location)
 	batch := sl.sliceDb.NewBatch()
-	rawdb.WriteHeader(batch, block.Header())
 
 	//PCRC
 	domTerminus, err := sl.PCRC(batch, block.Header(), domTerminus)
@@ -287,11 +289,8 @@ func (sl *Slice) PCRC(batch ethdb.Batch, header *types.Header, domTerminus commo
 	if len(termini) != 4 {
 		return common.Hash{}, errors.New("length of termini not equal to 4")
 	}
-	// There is a dom block so we must check the terminuses match
-	if termini[len(termini)-1] != domTerminus {
-		return common.Hash{}, errors.New("termini do not match, block rejected due to twist with dom")
-	} else if header.Hash() != sl.config.GenesisHashes[0] && types.QuaiNetworkContext != params.ZONE {
-		fmt.Println("header location: ", header.Location, newTermini, termini)
+
+	if types.QuaiNetworkContext != params.ZONE {
 		newTermini[header.Location[types.QuaiNetworkContext]-1] = header.Hash()
 	}
 
@@ -308,8 +307,18 @@ func (sl *Slice) PCRC(batch ethdb.Batch, header *types.Header, domTerminus commo
 		}
 	}
 
+	parentTermini := sl.hc.GetTerminiByHash(header.Parent())
 	if parentOrder < types.QuaiNetworkContext {
-		newTermini[len(newTermini)-1] = header.ParentHash[parentOrder]
+		newTermini[len(newTermini)-1] = parentTermini[header.Location[types.QuaiNetworkContext-1]-1]
+	} else if types.QuaiNetworkContext == params.PRIME {
+		newTermini[len(newTermini)-1] = header.Parent()
+	}
+
+	fmt.Println("header location: ", header.Location, newTermini, termini)
+	if types.QuaiNetworkContext != params.PRIME {
+		if newTermini[3] != domTerminus {
+			return common.Hash{}, errors.New("termini do not match, block rejected due to a twist")
+		}
 	}
 
 	//Save the termini
