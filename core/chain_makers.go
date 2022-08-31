@@ -262,7 +262,9 @@ func GenerateKnot(config *params.ChainConfig, parent *types.Block, engine consen
 				}
 
 				if context == params.PRIME {
-					log.Println("PRIME:", block.Header().Location, block.Header().Number, block.Header().Hash())
+					fmt.Println("PRIME:", block.Header().Location, block.Header().Number)
+					fmt.Println("PRIME:", block.Header().Hash())
+					fmt.Println("PRIME:", block.Hash())
 				}
 
 				k.block = block
@@ -335,12 +337,20 @@ func GenerateKnot(config *params.ChainConfig, parent *types.Block, engine consen
 			panic(err)
 		}
 
-		regiondb, err := state.New(parent.Header().Root[params.REGION], state.NewDatabase(db), nil)
+		fmt.Println("Region parent root", parent.Header().Root[params.REGION])
+		regionParentRoot := common.Hash{}
+		// mod 3 is amount of regions
+		if i%3 == 0 {
+			regionParentRoot = genesis.Root[params.REGION]
+		} else {
+			regionParentRoot = parent.Header().Root[params.REGION]
+		}
+		regiondb, err := state.New(regionParentRoot, state.NewDatabase(db), nil)
 		if err != nil {
 			panic(err)
 		}
 
-		zonedb, err := state.New(parent.Header().Root[params.ZONE], state.NewDatabase(db), nil)
+		zonedb, err := state.New(genesis.Root[params.ZONE], state.NewDatabase(db), nil)
 		if err != nil {
 			panic(err)
 		}
@@ -450,13 +460,14 @@ func makeKnotHeader(chain consensus.ChainReader, parent *types.Block, genesis *t
 	header.ParentHash[types.QuaiNetworkContext] = parent.Hash()
 	header.Coinbase[types.QuaiNetworkContext] = parent.Coinbase()
 	header.Difficulty[types.QuaiNetworkContext] = engine.CalcDifficulty(chain, time, parentHeader, types.QuaiNetworkContext)
+	header.Difficulty[types.QuaiNetworkContext+1] = engine.CalcDifficulty(chain, time, parentHeader, types.QuaiNetworkContext+1)
+	header.Difficulty[types.QuaiNetworkContext+2] = engine.CalcDifficulty(chain, time, parentHeader, types.QuaiNetworkContext+2)
 
 	header.Number[types.QuaiNetworkContext] = new(big.Int).Add(parent.Number(), common.Big1)
 
 	if len(parent.Header().Location) > 0 && header.Location[0] == parent.Header().Location[0] {
 		header.Number[types.QuaiNetworkContext+1] = new(big.Int).Add(parent.Header().Number[types.QuaiNetworkContext+1], common.Big1)
 		header.ParentHash[types.QuaiNetworkContext+1] = parent.Hash()
-		header.Difficulty[types.QuaiNetworkContext+1] = engine.CalcDifficulty(chain, time, parentHeader, types.QuaiNetworkContext+1)
 	}
 
 	return header
