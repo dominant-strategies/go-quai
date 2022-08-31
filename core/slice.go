@@ -264,48 +264,63 @@ func (sl *Slice) PCRC(batch ethdb.Batch, header *types.Header, domTerminus commo
 	if termini == nil {
 		return common.Hash{}, consensus.ErrFutureBlock
 	}
+	fmt.Println("Dom Terminus: ", domTerminus)
 
-	var newTermini []common.Hash
-	copy(newTermini, termini)
+	// var newTermini []common.Hash
+	// copy(newTermini, termini)
+	newTermini := make([]common.Hash, len(termini))
+	for i, terminus := range termini {
+		newTermini[i] = terminus
+	}
+	fmt.Println("Termini: ", termini)
 
 	var nilHash common.Hash
-	// make sure the termini match
-	if domTerminus != nilHash {
-		if len(termini) != 4 {
-			return common.Hash{}, errors.New("length of termini not equal to 4")
-		}
-		// There is a dom block so we must check the terminuses match
-		if termini[len(termini)-1] != domTerminus {
-			return common.Hash{}, errors.New("termini do not match, block rejected due to twist with dom")
+	if domTerminus == nilHash {
+		if header.Parent() != sl.config.GenesisHashes[0] {
+			domTerminus = header.Parent()
 		} else {
-			newTermini[header.Location[types.QuaiNetworkContext]-1] = header.Hash()
+			domTerminus = sl.config.GenesisHashes[0]
 		}
+	}
+	fmt.Println("Dom Terminus: ", domTerminus)
 
-		// Update the terminus for the block
-		parentHeader := sl.hc.GetHeaderByHash(header.Parent())
-		var parentOrder int
-		if parentHeader.Hash() == sl.config.GenesisHashes[0] { //GENESIS ESCAPE
-			parentOrder = 0
-		} else {
-			var err error
-			parentOrder, err = sl.engine.GetDifficultyOrder(parentHeader)
-			if err != nil {
-				return common.Hash{}, err
-			}
+	if len(termini) != 4 {
+		return common.Hash{}, errors.New("length of termini not equal to 4")
+	}
+	// There is a dom block so we must check the terminuses match
+	if termini[len(termini)-1] != domTerminus {
+		return common.Hash{}, errors.New("termini do not match, block rejected due to twist with dom")
+	} else if header.Hash() != sl.config.GenesisHashes[0] && types.QuaiNetworkContext != params.ZONE {
+		fmt.Println("header location: ", header.Location, newTermini, termini)
+		newTermini[header.Location[types.QuaiNetworkContext]-1] = header.Hash()
+	}
+
+	// Update the terminus for the block
+	parentHeader := sl.hc.GetHeaderByHash(header.Parent())
+	var parentOrder int
+	if parentHeader.Hash() == sl.config.GenesisHashes[0] { //GENESIS ESCAPE
+		parentOrder = 0
+	} else {
+		var err error
+		parentOrder, err = sl.engine.GetDifficultyOrder(parentHeader)
+		if err != nil {
+			return common.Hash{}, err
 		}
+	}
 
-		if parentOrder < types.QuaiNetworkContext {
-			newTermini[len(newTermini)-1] = header.ParentHash[parentOrder]
-		}
-
+	if parentOrder < types.QuaiNetworkContext {
+		newTermini[len(newTermini)-1] = header.ParentHash[parentOrder]
 	}
 
 	//Save the termini
 	rawdb.WriteTermini(sl.sliceDb, header.Hash(), newTermini)
 
-	fmt.Println(termini)
-	fmt.Println(sl.config.Location)
-	return termini[header.Location[types.QuaiNetworkContext]-1], nil
+	fmt.Println("Termini before return", termini)
+	if types.QuaiNetworkContext != params.ZONE {
+		return termini[header.Location[types.QuaiNetworkContext]-1], nil
+	} else {
+		return termini[3], nil
+	}
 }
 
 // HLCR
