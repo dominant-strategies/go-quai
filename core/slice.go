@@ -213,14 +213,17 @@ func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int
 		//process pending header updates
 		fmt.Println("localPending", pendingHeader.Header)
 		fmt.Println("Termini", pendingHeader.Termini)
+		pendingHeader.Header.Location = sl.config.Location
 		sl.ReceivePendingHeader(pendingHeader)
 	} else if order == params.REGION && types.QuaiNetworkContext == params.REGION {
 		fmt.Println("SendingPendingHeader", pendingHeader.Header)
 		fmt.Println("Termini", pendingHeader.Termini)
+		pendingHeader.Header.Location = sl.config.Location
 		sl.domClient.SendPendingHeader(context.Background(), pendingHeader)
 	} else if order == params.ZONE && types.QuaiNetworkContext == params.ZONE {
 		fmt.Println("SendingPendingHeader", pendingHeader.Header)
 		fmt.Println("Termini", pendingHeader.Termini)
+		pendingHeader.Header.Location = sl.config.Location
 		sl.domClient.SendPendingHeader(context.Background(), pendingHeader)
 	}
 

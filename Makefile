@@ -250,7 +250,6 @@ run-full-mining:
 ifeq (,$(wildcard nodelogs))
 	mkdir nodelogs
 endif
-	@nohup $(MINING_BASE_COMMAND) --miner.etherbase $(PRIME_COINBASE) --http.addr $(HTTP_ADDR) --http.api $(HTTP_API) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(PRIME_PORT_TCP) --http.port $(PRIME_PORT_HTTP) --ws.port $(PRIME_PORT_WS) --sub.urls $(PRIME_SUB_URLS) >> nodelogs/prime.log 2>&1 &
 	@nohup $(MINING_BASE_COMMAND) --miner.etherbase $(REGION_1_COINBASE)  --http.addr $(HTTP_ADDR) --http.api $(HTTP_API) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(REGION_1_PORT_TCP) --http.port $(REGION_1_PORT_HTTP) --ws.port $(REGION_1_PORT_WS) --dom.url $(REGION_1_DOM_URL):$(PRIME_PORT_WS) --sub.urls $(REGION_1_SUB_URLS) --region 1 >> nodelogs/region-1.log 2>&1 &
 	@nohup $(MINING_BASE_COMMAND) --miner.etherbase $(REGION_2_COINBASE)  --http.addr $(HTTP_ADDR) --http.api $(HTTP_API) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(REGION_2_PORT_TCP) --http.port $(REGION_2_PORT_HTTP) --ws.port $(REGION_2_PORT_WS) --dom.url $(REGION_2_DOM_URL):$(PRIME_PORT_WS) --sub.urls $(REGION_2_SUB_URLS) --region 2 >> nodelogs/region-2.log 2>&1 &
 	@nohup $(MINING_BASE_COMMAND) --miner.etherbase $(REGION_3_COINBASE)  --http.addr $(HTTP_ADDR) --http.api $(HTTP_API) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(REGION_3_PORT_TCP) --http.port $(REGION_3_PORT_HTTP) --ws.port $(REGION_3_PORT_WS) --dom.url $(REGION_3_DOM_URL):$(PRIME_PORT_WS) --sub.urls $(REGION_3_SUB_URLS) --region 3 >> nodelogs/region-3.log 2>&1 &

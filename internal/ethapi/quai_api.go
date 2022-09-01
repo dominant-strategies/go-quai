@@ -564,7 +564,7 @@ func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw js
 			s.b.EventMux().Post(core.NewMinedBlockEvent{Block: block})
 		}
 	} else {
-		log.Info("Uncle Block Found:", header.Hash(), "Block Number:", header.Number)
+		fmt.Println("Uncle Block Found:", header.Hash(), "Block Number:", header.Number)
 	}
 
 	return nil
