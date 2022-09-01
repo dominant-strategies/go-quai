@@ -189,7 +189,7 @@ func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int
 			return sl.nilPendingHeader, err
 		}
 		tempPendingHeader = subPendingHeader.Header
-		tempPendingHeader = sl.combinePendingHeader(localPendingHeader.Header, tempPendingHeader, types.QuaiNetworkContext+1)
+		tempPendingHeader = sl.combinePendingHeader(localPendingHeader.Header, tempPendingHeader, types.QuaiNetworkContext)
 	}
 
 	//Append has succeeded write the batch
@@ -211,13 +211,16 @@ func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int
 		sl.miner.worker.pendingHeaderFeed.Send(tempPendingHeader)
 
 		//process pending header updates
-		fmt.Println("localPending", localPendingHeader.Termini)
-		sl.ReceivePendingHeader(localPendingHeader)
+		fmt.Println("localPending", pendingHeader.Header)
+		fmt.Println("Termini", pendingHeader.Termini)
+		sl.ReceivePendingHeader(pendingHeader)
 	} else if order == params.REGION && types.QuaiNetworkContext == params.REGION {
-		fmt.Println("SendingPendingHeader", pendingHeader.Termini)
+		fmt.Println("SendingPendingHeader", pendingHeader.Header)
+		fmt.Println("Termini", pendingHeader.Termini)
 		sl.domClient.SendPendingHeader(context.Background(), pendingHeader)
 	} else if order == params.ZONE && types.QuaiNetworkContext == params.ZONE {
-		fmt.Println("SendingPendingHeader", pendingHeader.Termini)
+		fmt.Println("SendingPendingHeader", pendingHeader.Header)
+		fmt.Println("Termini", pendingHeader.Termini)
 		sl.domClient.SendPendingHeader(context.Background(), pendingHeader)
 	}
 
@@ -295,7 +298,7 @@ func (sl *Slice) PCRC(batch ethdb.Batch, header *types.Header, domTerminus commo
 		}
 	}
 
-	if parentOrder < types.QuaiNetworkContext || termini[3] == sl.config.GenesisHashes[0] { //GENESIS ESCAPE
+	if parentOrder < types.QuaiNetworkContext || types.QuaiNetworkContext == params.PRIME { //GENESIS ESCAPE
 		newTermini[3] = header.Hash()
 	} else {
 		newTermini[3] = termini[3]
@@ -360,7 +363,7 @@ func (sl *Slice) GetPendingHeaderByLocation(location []byte) (*types.Header, err
 	// convert location in bytes to int to use as the key
 	key := binary.BigEndian.Uint16(location)
 	pendingHeaders := sl.phCache[uint64(key)]
-	fmt.Println("PendingHeaders", pendingHeaders, "Location:", location, "key", key)
+	fmt.Println("PendingHeaders", pendingHeaders[len(pendingHeaders)-1].Header, "Location:", location, "key", key)
 	return pendingHeaders[len(pendingHeaders)-1].Header, nil
 }
 
