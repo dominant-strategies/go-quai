@@ -1,7 +1,6 @@
 package core
 
 import (
-	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -188,8 +187,10 @@ func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int
 		if err != nil {
 			return sl.nilPendingHeader, err
 		}
+		fmt.Println("RET SUB PENDING", subPendingHeader.Header.Location, subPendingHeader.Header.Root)
 		tempPendingHeader = subPendingHeader.Header
 		tempPendingHeader = sl.combinePendingHeader(localPendingHeader.Header, tempPendingHeader, types.QuaiNetworkContext)
+		fmt.Println("TEMP PENDING", tempPendingHeader.Location, tempPendingHeader.Root)
 	}
 
 	//Append has succeeded write the batch
@@ -203,15 +204,19 @@ func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int
 	if err != nil {
 		return types.PendingHeader{}, err
 	}
+	fmt.Println("BEFORE SEND", order, types.QuaiNetworkContext, pendingHeader.Header.Root)
 	if order == params.PRIME && types.QuaiNetworkContext == params.PRIME {
 		//save the pending header
 		rawdb.WritePendingHeader(sl.sliceDb, block.Hash(), tempPendingHeader)
+
+		sl.sortAndGetBestPendingHeader(pendingHeader, pendingHeader.Header.Location)
 
 		//transmit it to the miner
 		sl.miner.worker.pendingHeaderFeed.Send(tempPendingHeader)
 
 		//process pending header updates
 		fmt.Println("localPending", pendingHeader.Header)
+		fmt.Println("localPending: Root", pendingHeader.Header.Root)
 		fmt.Println("Termini", pendingHeader.Termini)
 		pendingHeader.Header.Location = sl.config.Location
 		fmt.Println("Append State Root:", pendingHeader.Header.Root)
@@ -371,13 +376,29 @@ func (sl *Slice) GetPendingHeaderByLocation(location []byte) (*types.Header, err
 	return pendingHeaders[len(pendingHeaders)-1].Header, nil
 }
 
-// sortAndGetBestPendingHeader takes in a phCache, and a pendingHeader. Filters though the cache
+// GetBestPendingHeaderByLocation takes in a phCache and a location. Filters though the cache
 // with location in int as a key and returns the pendingHeader with best Total Difficulty.
-func (sl *Slice) sortAndGetBestPendingHeader(pendingHeader types.PendingHeader, location []byte) types.PendingHeader {
+func (sl *Slice) GetBestPendingHeaderByLocation(location []byte) types.PendingHeader {
 
 	// convert location in bytes to int to use as the key
 	key := binary.BigEndian.Uint16(location)
-	fmt.Println("sortAndGetBest PendingHeaders", pendingHeader, "Location:", location, "key", key)
+	pendingHeaders := sl.phCache[uint64(key)]
+	sort.Slice(pendingHeaders, func(i, j int) bool {
+		return pendingHeaders[i].Td.Cmp(pendingHeaders[j].Td) < 0
+	})
+
+	if len(pendingHeaders) > 0 {
+		return pendingHeaders[len(pendingHeaders)-1]
+	}
+	return types.PendingHeader{}
+}
+
+// sortAndGetBestPendingHeader takes in a phCache, and a pendingHeader. Filters though the cache
+// with location in int as a key and returns the pendingHeader with best Total Difficulty.
+func (sl *Slice) sortAndGetBestPendingHeader(pendingHeader types.PendingHeader, location []byte) types.PendingHeader {
+	// convert location in bytes to int to use as the key
+	key := binary.BigEndian.Uint16(location)
+	fmt.Println("sortAndGetBest PendingHeaders", pendingHeader.Header.Root, "Location:", location, "key", key)
 	pendingHeaders := sl.phCache[uint64(key)]
 	if len(pendingHeaders) > 0 {
 		if pendingHeaders[0].Termini[3] != pendingHeader.Termini[3] {
@@ -409,40 +430,28 @@ func (sl *Slice) sortAndGetBestPendingHeader(pendingHeader types.PendingHeader, 
 // ReceivePendingHeader receives a pendingHeader from the subs and if the order of the block
 // is less than the context of the chain, the pendingHeader is sent to the dom.
 func (sl *Slice) ReceivePendingHeader(slPendingHeader types.PendingHeader) error {
-	// If prime process, else send to dom.
 	if types.QuaiNetworkContext == params.PRIME {
-		if bytes.Equal(slPendingHeader.Header.Location, []byte{0, 0}) {
-			for i := 1; i < params.FullerOntology[0]; i++ {
-				for j := 1; j < params.FullerOntology[1]; j++ {
-					bestPendingHeader := sl.sortAndGetBestPendingHeader(slPendingHeader, []byte{byte(i), byte(j)})
-					newBestPendingHeader := sl.combinePendingHeader(slPendingHeader.Header, bestPendingHeader.Header, 0)
+		for i := 1; i <= params.FullerOntology[0]; i++ {
+			for j := 1; j <= params.FullerOntology[1]; j++ {
+				latestPendingHeader := sl.GetBestPendingHeaderByLocation([]byte{byte(i), byte(j)})
+				if latestPendingHeader.Header != nil {
+					combinedHeader := sl.combinePendingHeader(slPendingHeader.Header, latestPendingHeader.Header, 0)
+					combinedPendingHeader := types.PendingHeader{
+						Header:  combinedHeader,
+						Td:      latestPendingHeader.Td,
+						Termini: latestPendingHeader.Termini,
+					}
+					newBestPendingHeader := sl.sortAndGetBestPendingHeader(combinedPendingHeader, combinedPendingHeader.Header.Location)
 					fmt.Println("Prime ReceivePendingHeaders slPendingHeader", slPendingHeader, "Location:", slPendingHeader.Header.Location)
 					fmt.Println("Header Hash:", slPendingHeader.Header.Hash(), "Number", slPendingHeader.Header.Number)
-					fmt.Println("ReceivePendingHeader State Root:", slPendingHeader.Header.Root)
-					sl.miner.worker.pendingHeaderFeed.Send(newBestPendingHeader)
+					fmt.Println("newBestPendingHeader State Root:", newBestPendingHeader.Header.Root)
+					sl.miner.worker.pendingHeaderFeed.Send(newBestPendingHeader.Header)
 				}
 			}
-		} else if slPendingHeader.Header.Location[1] == 0 {
-			for j := 1; j < params.FullerOntology[1]; j++ {
-				bestPendingHeader := sl.sortAndGetBestPendingHeader(slPendingHeader, []byte{byte(slPendingHeader.Header.Location[0]), byte(j)})
-				newBestPendingHeader := sl.combinePendingHeader(slPendingHeader.Header, bestPendingHeader.Header, 1)
-				fmt.Println("Region:", j, "ReceivePendingHeaders slPendingHeader", slPendingHeader, "Location:", slPendingHeader.Header.Location)
-				fmt.Println("Header Hash:", slPendingHeader.Header.Hash(), "Number", slPendingHeader.Header.Number)
-				fmt.Println("ReceivePendingHeader State Root:", slPendingHeader.Header.Root)
-				sl.miner.worker.pendingHeaderFeed.Send(newBestPendingHeader)
-			}
-		} else {
-			bestPendingHeader := sl.sortAndGetBestPendingHeader(slPendingHeader, slPendingHeader.Header.Location)
-			newBestPendingHeader := sl.combinePendingHeader(slPendingHeader.Header, bestPendingHeader.Header, 2)
-			fmt.Println("Zone", slPendingHeader.Header.Location, "ReceivePendingHeaders slPendingHeader", slPendingHeader, "Location:", slPendingHeader.Header.Location)
-			fmt.Println("Header Hash:", slPendingHeader.Header.Hash(), "Number", slPendingHeader.Header.Number)
-			fmt.Println("ReceivePendingHeader State Root:", slPendingHeader.Header.Root)
-			sl.miner.worker.pendingHeaderFeed.Send(newBestPendingHeader)
 		}
 	} else {
 		fmt.Println("Here", slPendingHeader.Termini)
 		slPendingHeader.Termini = rawdb.ReadTermini(sl.sliceDb, slPendingHeader.Termini[3])
-		fmt.Println("Relaying ReceivePendingHeaders slPendingHeader", slPendingHeader, "Location:", slPendingHeader.Header.Location)
 		sl.domClient.SendPendingHeader(context.Background(), slPendingHeader)
 	}
 
