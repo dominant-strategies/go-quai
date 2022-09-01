@@ -503,12 +503,24 @@ func (ec *Client) Append(ctx context.Context, block *types.Block, domTerminus co
 	return pendingHeader, nil
 }
 
-func (ec *Client) SendPendingHeader(ctx context.Context, pendingHeader types.PendingHeader) error {
+func (ec *Client) DomRelayPendingHeader(ctx context.Context, pendingHeader types.PendingHeader) error {
 	data := map[string]interface{}{"Header": RPCMarshalHeader(pendingHeader.Header)}
 	data["Termini"] = pendingHeader.Termini
 	data["Td"] = pendingHeader.Td
 
-	err := ec.c.CallContext(ctx, nil, "quai_receivePendingHeader", data)
+	err := ec.c.CallContext(ctx, nil, "quai_domRelayPendingHeader", data)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (ec *Client) SubRelayPendingHeader(ctx context.Context, pendingHeader types.PendingHeader) error {
+	data := map[string]interface{}{"Header": RPCMarshalHeader(pendingHeader.Header)}
+	data["Termini"] = pendingHeader.Termini
+	data["Td"] = pendingHeader.Td
+
+	err := ec.c.CallContext(ctx, nil, "quai_subRelayPendingHeader", data)
 	if err != nil {
 		return err
 	}

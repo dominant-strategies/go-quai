@@ -366,11 +366,15 @@ func (b *LesApiBackend) Append(block *types.Block, domTerminus common.Hash, td *
 	return types.PendingHeader{}, nil
 }
 
-func (b *LesApiBackend) ReceivePendingHeader(pendingHeader types.PendingHeader) error {
+func (b *LesApiBackend) SubRelayPendingHeader(pendingHeader types.PendingHeader) error {
 	return nil
 }
 
-func (b *LesApiBackend) GetPendingHeaderByLocation(location []byte) (*types.Header, error) {
+func (b *LesApiBackend) DomRelayPendingHeader(pendingHeader types.PendingHeader) error {
+	return nil
+}
+
+func (b *LesApiBackend) GetPendingHeader() (*types.Header, error) {
 	return nil, nil
 }
 

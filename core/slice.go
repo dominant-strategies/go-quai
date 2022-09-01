@@ -352,6 +352,12 @@ func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *typ
 	return slPendingHeader
 }
 
+func (sl *Slice) GetPendingHeader() (*types.Header, error) {
+	// get the current header and get the pending header associated with the termini
+	termini := sl.hc.GetTerminiByHash(sl.hc.CurrentHeader().Hash())
+	return sl.phCache[termini[3]].Header, nil
+}
+
 func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader) error {
 	localBestPh := sl.GetBestPendingHeader(pendingHeader, pendingHeader.Termini[sl.config.Location[types.QuaiNetworkContext]-1])
 	pendingHeader.Header = sl.combinePendingHeader(localBestPh.Header, pendingHeader.Header, types.QuaiNetworkContext)
@@ -366,6 +372,7 @@ func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader) error 
 		pendingHeader.Header.Location = sl.config.Location
 		sl.miner.worker.pendingHeaderFeed.Send(pendingHeader.Header)
 	}
+	return nil
 }
 
 func (sl *Slice) DomRelayPendingHeader(pendingHeader types.PendingHeader) error {
@@ -379,6 +386,7 @@ func (sl *Slice) DomRelayPendingHeader(pendingHeader types.PendingHeader) error 
 	if types.QuaiNetworkContext == params.PRIME {
 		sl.miner.worker.pendingHeaderFeed.Send(pendingHeader.Header)
 	}
+	return nil
 }
 
 func (sl *Slice) GetBestPendingHeader(externPendingHeader types.PendingHeader, hash common.Hash) types.PendingHeader {

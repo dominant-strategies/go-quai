@@ -30,7 +30,6 @@ import (
 	"github.com/spruce-solutions/go-quai/core/types"
 	"github.com/spruce-solutions/go-quai/crypto"
 	"github.com/spruce-solutions/go-quai/log"
-	"github.com/spruce-solutions/go-quai/params"
 	"github.com/spruce-solutions/go-quai/rpc"
 )
 
@@ -668,17 +667,22 @@ func (s *PublicBlockChainQuaiAPI) Append(ctx context.Context, raw json.RawMessag
 	return s.b.Append(block, body.DomTerminus, body.Td, body.DomReorg, body.CurrentContextOrigin)
 }
 
-func (s *PublicBlockChainQuaiAPI) ReceivePendingHeader(ctx context.Context, raw json.RawMessage) error {
+func (s *PublicBlockChainQuaiAPI) SubRelayPendingHeader(ctx context.Context, raw json.RawMessage) error {
 	var pendingHeader types.PendingHeader
 	if err := json.Unmarshal(raw, &pendingHeader); err != nil {
 		return err
 	}
-	return s.b.ReceivePendingHeader(pendingHeader)
+	return s.b.SubRelayPendingHeader(pendingHeader)
 }
 
-func (s *PublicBlockChainQuaiAPI) GetPendingHeaderByLocation(ctx context.Context, location []byte) (*types.Header, error) {
-	if types.QuaiNetworkContext != params.PRIME {
-		return nil, errors.New("get pending header location is a prime only call")
+func (s *PublicBlockChainQuaiAPI) DomRelayPendingHeader(ctx context.Context, raw json.RawMessage) error {
+	var pendingHeader types.PendingHeader
+	if err := json.Unmarshal(raw, &pendingHeader); err != nil {
+		return err
 	}
-	return s.b.GetPendingHeaderByLocation(location)
+	return s.b.DomRelayPendingHeader(pendingHeader)
+}
+
+func (s *PublicBlockChainQuaiAPI) GetPendingHeader(ctx context.Context) (*types.Header, error) {
+	return s.b.GetPendingHeader()
 }

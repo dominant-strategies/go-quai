@@ -367,12 +367,16 @@ func (c *Core) Append(block *types.Block, domTerminus common.Hash, td *big.Int, 
 	return c.sl.Append(block, domTerminus, td, domReorg, currentContextOrigin)
 }
 
-func (c *Core) ReceivePendingHeader(slPendingHeader types.PendingHeader) error {
-	return c.sl.ReceivePendingHeader(slPendingHeader)
+func (c *Core) SubRelayPendingHeader(slPendingHeader types.PendingHeader) error {
+	return c.sl.SubRelayPendingHeader(slPendingHeader)
 }
 
-func (c *Core) GetPendingHeaderByLocation(location []byte) (*types.Header, error) {
-	return c.sl.GetPendingHeaderByLocation(location)
+func (c *Core) DomRelayPendingHeader(slPendingHeader types.PendingHeader) error {
+	return c.sl.DomRelayPendingHeader(slPendingHeader)
+}
+
+func (c *Core) GetPendingHeader() (*types.Header, error) {
+	return c.sl.GetPendingHeader()
 }
 
 func (c *Core) TxLookupLimit() uint64 {

@@ -406,10 +406,14 @@ func (b *EthAPIBackend) PendingBlockBody(hash common.Hash) *types.Body {
 	return b.eth.core.PendingBlockBody(hash)
 }
 
-func (b *EthAPIBackend) ReceivePendingHeader(slPendingHeader types.PendingHeader) error {
-	return b.eth.core.ReceivePendingHeader(slPendingHeader)
+func (b *EthAPIBackend) SubRelayPendingHeader(slPendingHeader types.PendingHeader) error {
+	return b.eth.core.SubRelayPendingHeader(slPendingHeader)
 }
 
-func (b *EthAPIBackend) GetPendingHeaderByLocation(location []byte) (*types.Header, error) {
-	return b.eth.core.GetPendingHeaderByLocation(location)
+func (b *EthAPIBackend) DomRelayPendingHeader(slPendingHeader types.PendingHeader) error {
+	return b.eth.core.DomRelayPendingHeader(slPendingHeader)
+}
+
+func (b *EthAPIBackend) GetPendingHeader() (*types.Header, error) {
+	return b.eth.core.GetPendingHeader()
 }
