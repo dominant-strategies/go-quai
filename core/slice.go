@@ -198,6 +198,7 @@ func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int
 	}
 
 	pendingHeader := types.PendingHeader{Header: tempPendingHeader, Termini: localPendingHeader.Termini, Td: localPendingHeader.Td}
+	sl.AddIfBestPendingHeader(pendingHeader)
 
 	order, err := sl.engine.GetDifficultyOrder(block.Header())
 	if err != nil {
@@ -254,7 +255,6 @@ func (sl *Slice) setHeaderChainHead(batch ethdb.Batch, block *types.Block, td *b
 	slPendingHeader.Time = uint64(time.Now().Unix())
 
 	termini := rawdb.ReadTermini(sl.sliceDb, block.Header().Hash())
-	sl.AddIfBestPendingHeader(types.PendingHeader{Header: slPendingHeader, Termini: termini, Td: td})
 
 	return types.PendingHeader{Header: slPendingHeader, Termini: termini, Td: td}, nil
 }
@@ -370,7 +370,7 @@ func (sl *Slice) GetPendingHeader() (*types.Header, error) {
 
 func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader) error {
 	localBestPh := sl.GetBestPendingHeader(pendingHeader, pendingHeader.Termini[sl.config.Location[types.QuaiNetworkContext-1]-1])
-	pendingHeader.Header = sl.combinePendingHeader(pendingHeader.Header, localBestPh.Header, types.QuaiNetworkContext)
+	pendingHeader.Header = sl.combinePendingHeader(pendingHeader.Header, localBestPh.Header, types.QuaiNetworkContext-1)
 	pendingHeader.Termini = localBestPh.Termini
 	if types.QuaiNetworkContext != params.ZONE {
 		for i := range sl.subClients {
@@ -388,7 +388,7 @@ func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader) error 
 
 func (sl *Slice) DomRelayPendingHeader(pendingHeader types.PendingHeader) error {
 	localBestPh := sl.GetBestPendingHeader(pendingHeader, pendingHeader.Termini[3])
-	pendingHeader.Header = sl.combinePendingHeader(pendingHeader.Header, localBestPh.Header, types.QuaiNetworkContext)
+	pendingHeader.Header = sl.combinePendingHeader(pendingHeader.Header, localBestPh.Header, types.QuaiNetworkContext+1)
 	pendingHeader.Termini = localBestPh.Termini
 	if types.QuaiNetworkContext == params.PRIME {
 		err := sl.domClient.DomRelayPendingHeader(context.Background(), pendingHeader)
