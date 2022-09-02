@@ -195,14 +195,13 @@ func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int
 		return types.PendingHeader{}, err
 	}
 
+	fmt.Println("GetDifficulty in Append", block.Header().Hash())
 	order, err := sl.engine.GetDifficultyOrder(block.Header())
 	if err != nil {
 		return types.PendingHeader{}, err
 	}
 
 	pendingHeader := types.PendingHeader{Header: tempPendingHeader, Termini: localPendingHeader.Termini, Td: localPendingHeader.Td, PrevOrder: order}
-	prevPh := sl.GetBestPendingHeader(pendingHeader, block.Header().Parent())
-	fmt.Println("Region: prevPh Number:", prevPh.Header.Number)
 
 	if order == params.PRIME && types.QuaiNetworkContext == params.PRIME {
 		for i := range sl.subClients {
@@ -211,11 +210,16 @@ func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int
 	} else if order == params.REGION && types.QuaiNetworkContext == params.REGION {
 		// DomRelay is primarily for avalanche detection.
 		// sl.DomRelayPendingHeader(pendingHeader)
+		prevPh := sl.GetBestPendingHeader(pendingHeader, block.Header().ParentHash[types.QuaiNetworkContext-1])
+		fmt.Println("Region: prevPh Number:", prevPh.Header.Number)
 		pendingHeader.Header = sl.combinePendingHeader(prevPh.Header, pendingHeader.Header, params.PRIME)
+		fmt.Println("Region down to Zone", pendingHeader.Header.Number)
 		for i := range sl.subClients {
 			sl.subClients[i].SubRelayPendingHeader(context.Background(), pendingHeader)
 		}
 	} else if order == params.ZONE && types.QuaiNetworkContext == params.ZONE {
+		prevPh := sl.GetBestPendingHeader(pendingHeader, block.Header().ParentHash[types.QuaiNetworkContext-1])
+		fmt.Println("Zone: prevPh Number:", prevPh.Header.Number)
 
 		fmt.Println("Best PH prior add if", prevPh.Header.Number)
 
@@ -293,6 +297,7 @@ func (sl *Slice) PCRC(batch ethdb.Batch, header *types.Header, domTerminus commo
 	}
 
 	var err error
+	fmt.Println("GetDifficulty in PCRC", header.Hash())
 	order, err := sl.engine.GetDifficultyOrder(header)
 	if err != nil {
 		return common.Hash{}, err
@@ -382,7 +387,6 @@ func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader) error 
 	pendingHeader.Header.Location = sl.config.Location
 	pendingHeader.Termini = localBestPh.Termini
 
-	fmt.Println("Pending header prev order sub relay", pendingHeader.PrevOrder)
 	fmt.Println("SubRelayPendingHeader: combined in Zone 3", pendingHeader.Header.Number, pendingHeader.Header.Location, pendingHeader.Header.ParentHash)
 	sl.SetAndSendPendingHeader(pendingHeader)
 
@@ -451,13 +455,21 @@ func (sl *Slice) SetAndSendPendingHeader(externPendingHeader types.PendingHeader
 		fmt.Println("TDs", externPendingHeader.Td, currPendingHeader.Td, externPendingHeader.Td.Cmp(currPendingHeader.Td) > 0)
 		fmt.Println("externPending", externPendingHeader.Header.Number)
 		fmt.Println("currPendingHeader", currPendingHeader.Header.Number)
-		fmt.Println("externPendingHeader.PrevOrder", externPendingHeader.PrevOrder)
-		if externPendingHeader.Td.Cmp(currPendingHeader.Td) > 0 {
-			fmt.Println("Adding to phCache", externPendingHeader.Header.Number, hash)
-			sl.phCache[hash] = externPendingHeader
-			sl.miner.worker.pendingHeaderFeed.Send(externPendingHeader.Header)
+		// if externPendingHeader.Td.Cmp(currPendingHeader.Td) > 0 {
+
+		if externPendingHeader.PrevOrder > params.PRIME {
+			fmt.Println("Updating Prime?")
+			externPendingHeader.Header = sl.combinePendingHeader(currPendingHeader.Header, externPendingHeader.Header, params.PRIME)
 		}
+		if externPendingHeader.PrevOrder > params.REGION {
+			externPendingHeader.Header = sl.combinePendingHeader(currPendingHeader.Header, externPendingHeader.Header, params.REGION)
+		}
+
+		fmt.Println("Adding to phCache", externPendingHeader.Header.Number, hash)
+		sl.phCache[hash] = externPendingHeader
+		// }
 	}
+	sl.miner.worker.pendingHeaderFeed.Send(externPendingHeader.Header)
 
 	return nil
 }
