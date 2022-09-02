@@ -353,7 +353,6 @@ func (w *worker) close() {
 
 // GeneratePendingBlock generates pending block given a commited block.
 func (w *worker) GeneratePendingHeader(block *types.Block) (*types.Header, error) {
-
 	// Sanitize recommit interval if the user-specified one is too short.
 	recommit := w.config.Recommit
 	if recommit < minRecommitInterval {

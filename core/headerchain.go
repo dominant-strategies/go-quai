@@ -146,11 +146,6 @@ func (hc *HeaderChain) Append(batch ethdb.Batch, block *types.Block) error {
 	defer hc.headermu.Unlock()
 
 	fmt.Println("Block information: Hash:", block.Hash(), "block header hash:", block.Header().Hash(), "Number:", block.NumberU64(), "Location:", block.Header().Location, "Parent:", block.ParentHash())
-	// err := hc.Appendable(block)
-	// if err != nil {
-	// 	fmt.Println("Error on appendable, err:", err)
-	// 	return err
-	// }
 
 	err := hc.engine.VerifyHeader(hc, block.Header(), true)
 	if err != nil {
@@ -203,15 +198,6 @@ func (hc *HeaderChain) Append(batch ethdb.Batch, block *types.Block) error {
 	})
 
 	return nil
-}
-
-func (hc *HeaderChain) Appendable(block *types.Block) error {
-	err := hc.engine.VerifyHeader(hc, block.Header(), true)
-	if err != nil {
-		return err
-	}
-	err = hc.bc.Appendable(block)
-	return err
 }
 
 // SetCurrentHeader sets the in-memory head header marker of the canonical chan
