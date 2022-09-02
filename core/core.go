@@ -52,7 +52,7 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 					c.sl.addFutureBlock(block)
 				}
 				fmt.Println("err in Append core: ", err)
-				return i, err
+				return i, nil
 			}
 		}
 	}

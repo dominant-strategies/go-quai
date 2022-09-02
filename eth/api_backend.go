@@ -19,6 +19,7 @@ package eth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 
 	ethereum "github.com/spruce-solutions/go-quai"
@@ -128,6 +129,8 @@ func (b *EthAPIBackend) GetTerminusAtOrder(header *types.Header, order int) (com
 }
 
 func (b *EthAPIBackend) Append(block *types.Block, domTerminus common.Hash, td *big.Int, domReorg bool, currentContextOrigin bool) (types.PendingHeader, error) {
+	fmt.Println("BACKEND APPEND")
+	fmt.Println(block.Header())
 	return b.eth.core.Append(block, domTerminus, td, domReorg, currentContextOrigin)
 }
 
