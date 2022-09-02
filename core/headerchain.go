@@ -145,13 +145,10 @@ func (hc *HeaderChain) Append(batch ethdb.Batch, block *types.Block) error {
 	hc.headermu.Lock()
 	defer hc.headermu.Unlock()
 
-	fmt.Println("Block information: Hash:", block.Hash(), "block header hash:", block.Header().Hash(), "Number:", block.NumberU64(), "Location:", block.Header().Location, "Parent:", block.ParentHash())
-
 	err := hc.engine.VerifyHeader(hc, block.Header(), true)
 	if err != nil {
 		return err
 	}
-	fmt.Println("After Appendable Block information: Hash:", block.Hash(), "block header hash:", block.Header().Hash(), "Number:", block.NumberU64(), "Location:", block.Header().Location, "Parent:", block.ParentHash())
 	// Append header to the headerchain
 	rawdb.WriteHeader(batch, block.Header())
 
@@ -163,7 +160,6 @@ func (hc *HeaderChain) Append(batch ethdb.Batch, block *types.Block) error {
 		return err
 	}
 
-	fmt.Println("After Append Block information: Hash:", block.Hash(), "block header hash:", block.Header().Hash(), "Number:", block.NumberU64(), "Location:", block.Header().Location, "Parent:", block.ParentHash())
 	hc.bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
 	if len(logs) > 0 {
 		hc.bc.logsFeed.Send(logs)

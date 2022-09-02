@@ -102,8 +102,6 @@ func (bc *BlockChain) Append(batch ethdb.Batch, block *types.Block) ([]*types.Lo
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("bc.Append:")
-	fmt.Println("parentHeader.Hash:", block.Hash(), "parentHeader.Number:", block.NumberU64())
 	rawdb.WriteBlock(batch, block)
 
 	return logs, nil

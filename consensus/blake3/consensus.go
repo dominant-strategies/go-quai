@@ -375,7 +375,6 @@ func (blake3 *Blake3) GetDifficultyOrder(header *types.Header) (int, error) {
 		return types.ContextDepth, errors.New("no header provided")
 	}
 	blockhash := blake3.SealHash(header)
-	fmt.Println("GetDifficultyOrder", header.Difficulty, header.Number, header.Hash())
 	for i, difficulty := range header.Difficulty {
 		if difficulty != nil && big.NewInt(0).Cmp(difficulty) < 0 {
 			target := new(big.Int).Div(big2e256, difficulty)
@@ -399,7 +398,6 @@ func (blake3 *Blake3) Prepare(chain consensus.ChainHeaderReader, header *types.H
 func (blake3 *Blake3) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
 	// Accumulate any block and uncle rewards and commit the final state root
 	accumulateRewards(chain.Config(), state, header, uncles)
-	fmt.Println("state root in consensus:", state.IntermediateRoot(chain.Config().IsEIP158(header.Number[types.QuaiNetworkContext])))
 	header.Root[types.QuaiNetworkContext] = state.IntermediateRoot(chain.Config().IsEIP158(header.Number[types.QuaiNetworkContext]))
 }
 

@@ -538,10 +538,7 @@ func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw js
 
 	//
 	pendingBlockBody := s.b.PendingBlockBody(header.Root[types.QuaiNetworkContext])
-	fmt.Println("State Root: ", header.Root[types.QuaiNetworkContext])
 	if pendingBlockBody != nil {
-		fmt.Println("pending block body in api: ", pendingBlockBody)
-		fmt.Println("Header in api: ", header)
 		// Load uncles because they are not included in the block response.
 		txs := make([]*types.Transaction, len(pendingBlockBody.Transactions))
 		for i, tx := range pendingBlockBody.Transactions {
@@ -556,7 +553,7 @@ func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw js
 
 		block := types.NewBlockWithHeader(header).WithBody(txs, uncles)
 		block = block.WithSeal(header)
-		log.Info("Retrieved mined block", "number", header.Number, "location", header.Location)
+		log.Info("Retrieved mined block", "number", header.Number, "location", header.Location, "hash", header.Hash())
 		s.b.InsertBlock(ctx, block)
 		// Broadcast the block and announce chain insertion event
 		if block.Header() != nil {

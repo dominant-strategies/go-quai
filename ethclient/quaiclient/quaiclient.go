@@ -507,6 +507,7 @@ func (ec *Client) DomRelayPendingHeader(ctx context.Context, pendingHeader types
 	data := map[string]interface{}{"Header": RPCMarshalHeader(pendingHeader.Header)}
 	data["Termini"] = pendingHeader.Termini
 	data["Td"] = pendingHeader.Td
+	data["PrevOrder"] = pendingHeader.PrevOrder
 
 	err := ec.c.CallContext(ctx, nil, "quai_domRelayPendingHeader", data)
 	if err != nil {
@@ -519,6 +520,7 @@ func (ec *Client) SubRelayPendingHeader(ctx context.Context, pendingHeader types
 	data := map[string]interface{}{"Header": RPCMarshalHeader(pendingHeader.Header)}
 	data["Termini"] = pendingHeader.Termini
 	data["Td"] = pendingHeader.Td
+	data["PrevOrder"] = pendingHeader.PrevOrder
 
 	err := ec.c.CallContext(ctx, nil, "quai_subRelayPendingHeader", data)
 	if err != nil {

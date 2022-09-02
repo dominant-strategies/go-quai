@@ -286,7 +286,6 @@ func (api *PublicFilterAPI) HeaderRoots(ctx context.Context) (*rpc.Subscription,
 		for {
 			select {
 			case b := <-headerRoots:
-				fmt.Println("Received header roots update: ", b)
 				notifier.Notify(rpcSub.ID, b)
 			case <-rpcSub.Err():
 				headerRootsSub.Unsubscribe()
