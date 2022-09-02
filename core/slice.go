@@ -206,31 +206,23 @@ func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int
 
 	fmt.Println("BEFORE SEND", order, types.QuaiNetworkContext, pendingHeader.Header.Root)
 	if order == params.PRIME && types.QuaiNetworkContext == params.PRIME {
-		bestPh := sl.GetBestPendingHeader(pendingHeader, pendingHeader.Header.Parent())
-		sl.AddIfBestPendingHeader(bestPh)
-		sl.miner.worker.pendingHeaderFeed.Send(bestPh.Header)
-		fmt.Println("Append Hash:", bestPh.Header.Hash(), "Number:", bestPh.Header.Number, "Parents:", bestPh.Header.Parent(), "bestPh:", bestPh)
-		for i := range sl.subClients {
-			sl.subClients[i].SubRelayPendingHeader(context.Background(), bestPh)
-		}
+		sl.AddIfBestPendingHeader(pendingHeader)
+		sl.miner.worker.pendingHeaderFeed.Send(pendingHeader.Header)
+		fmt.Println("Append Hash:", pendingHeader.Header.Hash(), "Number:", pendingHeader.Header.Number, "Parents:", pendingHeader.Header.Parent(), "bestPh:", pendingHeader)
+		sl.SubRelayPendingHeader(pendingHeader)
+
 	} else if order == params.REGION && types.QuaiNetworkContext == params.REGION {
-		bestPh := sl.GetBestPendingHeader(pendingHeader, pendingHeader.Termini[3])
-		bestPh.Header = sl.combinePendingHeader(bestPh.Header, pendingHeader.Header, params.PRIME)
-		bestPh.Td = pendingHeader.Td
-		sl.AddIfBestPendingHeader(bestPh)
-		fmt.Println("Append Hash:", bestPh.Header.Hash(), "Number:", bestPh.Header.Number, "Parents:", bestPh.Header.Parent(), "bestPh:", bestPh)
-		sl.domClient.DomRelayPendingHeader(context.Background(), bestPh)
-		for i := range sl.subClients {
-			sl.subClients[i].SubRelayPendingHeader(context.Background(), bestPh)
-		}
+
+		sl.AddIfBestPendingHeader(pendingHeader)
+		fmt.Println("Append Hash:", pendingHeader.Header.Hash(), "Number:", pendingHeader.Header.Number, "Parents:", pendingHeader.Header.Parent(), "pendingHeader:", pendingHeader)
+		sl.DomRelayPendingHeader(pendingHeader)
+		sl.SubRelayPendingHeader(pendingHeader)
+
 	} else if order == params.ZONE && types.QuaiNetworkContext == params.ZONE {
-		bestPh := sl.GetBestPendingHeader(pendingHeader, pendingHeader.Termini[3])
-		bestPh.Header = sl.combinePendingHeader(bestPh.Header, pendingHeader.Header, params.PRIME)
-		bestPh.Header = sl.combinePendingHeader(bestPh.Header, pendingHeader.Header, params.REGION)
-		bestPh.Td = pendingHeader.Td
-		sl.AddIfBestPendingHeader(bestPh)
-		fmt.Println("Append Hash:", bestPh.Header.Hash(), "Number:", bestPh.Header.Number, "Parents:", bestPh.Header.Parent(), "bestPh:", bestPh)
-		sl.domClient.DomRelayPendingHeader(context.Background(), bestPh)
+
+		sl.AddIfBestPendingHeader(pendingHeader)
+		fmt.Println("Append Hash:", pendingHeader.Header.Hash(), "Number:", pendingHeader.Header.Number, "Parents:", pendingHeader.Header.Parent(), "pendingHeader:", pendingHeader)
+		sl.DomRelayPendingHeader(pendingHeader)
 	}
 	return types.PendingHeader{Header: tempPendingHeader, Termini: sl.pendingHeader.Termini, Td: sl.pendingHeader.Td}, nil
 }
@@ -475,6 +467,8 @@ func (sl *Slice) updatePhCacheSubs(pendingHeader types.PendingHeader) types.Pend
 				slicePendingHeader = localPendingHeader
 			}
 		}
+	} else {
+		slicePendingHeader = sl.updatePhCache(pendingHeader, pendingHeader.Termini[sl.config.Location[types.QuaiNetworkContext-1]-1])
 	}
 
 	return slicePendingHeader
@@ -486,7 +480,7 @@ func (sl *Slice) updatePhCache(pendingHeader types.PendingHeader, hash common.Ha
 		sl.phCache[hash] = pendingHeader
 	} else {
 
-		localPendingHeader.Header = sl.combinePendingHeader(pendingHeader.Header, localPendingHeader.Header, types.QuaiNetworkContext)
+		localPendingHeader.Header = sl.combinePendingHeader(localPendingHeader.Header, pendingHeader.Header, types.QuaiNetworkContext)
 		localPendingHeader.Td = pendingHeader.Td
 		sl.phCache[hash] = localPendingHeader
 	}
