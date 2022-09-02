@@ -207,6 +207,7 @@ func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int
 		for i := range sl.subClients {
 			sl.subClients[i].SubRelayPendingHeader(context.Background(), pendingHeader)
 		}
+		sl.miner.worker.pendingHeaderFeed.Send(pendingHeader.Header)
 	} else if order == params.REGION && types.QuaiNetworkContext == params.REGION {
 		// DomRelay is primarily for avalanche detection.
 		prevPh := sl.GetBestPendingHeader(pendingHeader, pendingHeader.Termini[3])
@@ -217,6 +218,7 @@ func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int
 			sl.subClients[i].SubRelayPendingHeader(context.Background(), pendingHeader)
 		}
 		sl.domClient.DomRelayPendingHeader(context.Background(), pendingHeader)
+		sl.miner.worker.pendingHeaderFeed.Send(pendingHeader.Header)
 	} else if order == params.ZONE && types.QuaiNetworkContext == params.ZONE {
 		prevPh := sl.GetBestPendingHeader(pendingHeader, pendingHeader.Termini[3])
 		fmt.Println("Zone: prevPh Number:", prevPh.Header.Number)
@@ -451,22 +453,23 @@ func (sl *Slice) SetAndSendPendingHeader(externPendingHeader types.PendingHeader
 		fmt.Println("TDs", externPendingHeader.Td, currPendingHeader.Td, externPendingHeader.Td.Cmp(currPendingHeader.Td) > 0)
 		fmt.Println("externPending", externPendingHeader.Header.Number)
 		fmt.Println("currPendingHeader", currPendingHeader.Header.Number)
-		// if externPendingHeader.Td.Cmp(currPendingHeader.Td) > 0 {
+		if externPendingHeader.Td.Cmp(currPendingHeader.Td) > 0 || externPendingHeader.PrevOrder < types.QuaiNetworkContext {
 
-		if externPendingHeader.PrevOrder > params.PRIME {
-			fmt.Println("Updating Prime?")
-			externPendingHeader.Header = sl.combinePendingHeader(currPendingHeader.Header, externPendingHeader.Header, params.PRIME)
-		}
-		if externPendingHeader.PrevOrder > params.REGION {
-			externPendingHeader.Header = sl.combinePendingHeader(currPendingHeader.Header, externPendingHeader.Header, params.REGION)
-		}
+			if externPendingHeader.PrevOrder > params.PRIME {
+				fmt.Println("Updating Prime?")
+				externPendingHeader.Header = sl.combinePendingHeader(currPendingHeader.Header, externPendingHeader.Header, params.PRIME)
+			}
+			if externPendingHeader.PrevOrder > params.REGION {
+				externPendingHeader.Header = sl.combinePendingHeader(currPendingHeader.Header, externPendingHeader.Header, params.REGION)
+			}
 
-		fmt.Println("Adding to phCache", externPendingHeader.Header.Number, hash)
-		sl.phCache[hash] = externPendingHeader
-		// }
+			fmt.Println("Adding to phCache", externPendingHeader.Header.Number, hash)
+			sl.phCache[hash] = externPendingHeader
+		}
 	}
-	sl.miner.worker.pendingHeaderFeed.Send(externPendingHeader.Header)
-
+	if externPendingHeader.PrevOrder == params.ZONE {
+		sl.miner.worker.pendingHeaderFeed.Send(externPendingHeader.Header)
+	}
 	return nil
 }
 
