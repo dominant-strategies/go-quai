@@ -367,6 +367,9 @@ func (sl *Slice) GetPendingHeader() (*types.Header, error) {
 
 func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader) error {
 	localBestPh := sl.updatePhCacheSubs(pendingHeader)
+	if localBestPh.Header == nil {
+		return nil
+	}
 	fmt.Println("SubRelayPendingHeader Local Hash:", localBestPh.Header.Hash(), "Number:", localBestPh.Header.Number, "Parents:", localBestPh.Header.ParentHash, "bestPh:", localBestPh)
 	if types.QuaiNetworkContext != params.ZONE {
 		for i := range sl.subClients {
@@ -389,6 +392,7 @@ func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader) error 
 func (sl *Slice) DomRelayPendingHeader(pendingHeader types.PendingHeader) error {
 	localBestPh := sl.GetBestPendingHeader(pendingHeader, pendingHeader.Termini[3])
 	pendingHeader.Header = sl.combinePendingHeader(localBestPh.Header, pendingHeader.Header, types.QuaiNetworkContext)
+	pendingHeader.Termini = localBestPh.Termini
 	fmt.Println("DomRelayPendingHeader Local Hash:", pendingHeader.Header.Hash(), "Number:", pendingHeader.Header.Number, "Parents:", pendingHeader.Header.ParentHash, "bestPh:", pendingHeader)
 	if types.QuaiNetworkContext != params.PRIME {
 		err := sl.domClient.DomRelayPendingHeader(context.Background(), pendingHeader)
