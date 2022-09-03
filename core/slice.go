@@ -229,6 +229,34 @@ func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int
 	return types.PendingHeader{Header: tempPendingHeader, Termini: sl.pendingHeader.Termini, Td: sl.pendingHeader.Td}, nil
 }
 
+//prime pending headers
+//Reference table
+//key:terminus (ie parent.Hash) val ph
+//
+//if new ph, update entries whose subtermini are in the ph
+//use subrelay to send the header to region
+
+//region pending headers
+//key: terminus (ie PRIMEsubtermini(ph.header.Location[0]-1)) val ph
+//region originates
+//if new ph, store the ph by terminus
+//update by pushing cached dom into pendingHeader
+//send to miner
+//use the subrealy to send the header to zone
+//region receives
+//lookup the stored ph directly by PRIMEsubtermini(ph.header.Location[0]-1)
+//Update the header by pushing the sub portion into pendingHeader
+
+//zone pending headers
+//key: terminus (ie REGIONsubtermini(ph.head.Location[1]-1)) val ph
+//zone originates
+//if new ph, store the ph by terminus
+//update by pushing pendingHeader into cached ph
+//relay to mine
+//zone recieves
+//lookup ph directly by REGIONsubtermini(ph.head.Location[1]-1)
+//Update the header by pushing
+
 func (sl *Slice) setHeaderChainHead(batch ethdb.Batch, block *types.Block, td *big.Int, domReorg bool, currentContextOrigin bool) (types.PendingHeader, error) {
 
 	if currentContextOrigin {
