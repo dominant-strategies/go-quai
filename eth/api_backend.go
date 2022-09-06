@@ -410,10 +410,6 @@ func (b *EthAPIBackend) SubRelayPendingHeader(slPendingHeader types.PendingHeade
 	return b.eth.core.SubRelayPendingHeader(slPendingHeader)
 }
 
-func (b *EthAPIBackend) DomRelayPendingHeader(slPendingHeader types.PendingHeader) error {
-	return b.eth.core.DomRelayPendingHeader(slPendingHeader)
-}
-
 func (b *EthAPIBackend) GetPendingHeader() (*types.Header, error) {
 	return b.eth.core.GetPendingHeader()
 }

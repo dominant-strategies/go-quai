@@ -675,14 +675,6 @@ func (s *PublicBlockChainQuaiAPI) SubRelayPendingHeader(ctx context.Context, raw
 	return s.b.SubRelayPendingHeader(pendingHeader)
 }
 
-func (s *PublicBlockChainQuaiAPI) DomRelayPendingHeader(ctx context.Context, raw json.RawMessage) error {
-	var pendingHeader types.PendingHeader
-	if err := json.Unmarshal(raw, &pendingHeader); err != nil {
-		return err
-	}
-	return s.b.DomRelayPendingHeader(pendingHeader)
-}
-
 func (s *PublicBlockChainQuaiAPI) GetPendingHeader(ctx context.Context) (*types.Header, error) {
 	return s.b.GetPendingHeader()
 }

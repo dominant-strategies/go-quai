@@ -371,10 +371,6 @@ func (c *Core) SubRelayPendingHeader(slPendingHeader types.PendingHeader) error 
 	return c.sl.SubRelayPendingHeader(slPendingHeader)
 }
 
-func (c *Core) DomRelayPendingHeader(slPendingHeader types.PendingHeader) error {
-	return c.sl.DomRelayPendingHeader(slPendingHeader)
-}
-
 func (c *Core) GetPendingHeader() (*types.Header, error) {
 	return c.sl.GetPendingHeader()
 }

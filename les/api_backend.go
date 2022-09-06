@@ -370,10 +370,6 @@ func (b *LesApiBackend) SubRelayPendingHeader(pendingHeader types.PendingHeader)
 	return nil
 }
 
-func (b *LesApiBackend) DomRelayPendingHeader(pendingHeader types.PendingHeader) error {
-	return nil
-}
-
 func (b *LesApiBackend) GetPendingHeader() (*types.Header, error) {
 	return nil, nil
 }
