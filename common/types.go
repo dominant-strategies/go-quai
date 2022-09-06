@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"math/big"
 	"math/rand"
 	"reflect"
@@ -38,6 +39,21 @@ const (
 	HashLength = 32
 	// AddressLength is the expected length of the address
 	AddressLength = 20
+
+	// Constants to mnemonically index into context arrays
+	PRIME_CTX  = 0
+	REGION_CTX = 1
+	ZONE_CTX   = 2
+
+	// Depth of the hierarchy of chains
+	NumRegionsInPrime = 3
+	NumZonesInRegion  = 3
+	HierarchyDepth    = 3
+)
+
+var (
+	// Default to prime node, but changed at startup by config.
+	NodeLocation = Location{nil, nil}
 )
 
 var (
@@ -425,4 +441,59 @@ func (ma *MixedcaseAddress) ValidChecksum() bool {
 // Original returns the mixed-case input string
 func (ma *MixedcaseAddress) Original() string {
 	return ma.original
+}
+
+// Location of a chain within the Quai hierarchy
+// Location is encoded as a path from the root of the tree to the specified
+// chain. Each index may be nil to indicate a dominant chain. e.g:
+// prime = [nil, nil]
+// region[0] = [0, nil]
+// zone[1,2] = [1, 2]
+type Location [HierarchyDepth - 1]*byte
+
+func (l *Location) Region() int {
+	if region := l[0]; region != nil {
+		return int(*region)
+	} else {
+		return -1
+	}
+}
+
+func (l *Location) HasRegion() bool {
+	return l.Region() >= 0
+}
+
+func (l *Location) Zone() int {
+	if zone := l[1]; zone != nil {
+		return int(*zone)
+	} else {
+		return -1
+	}
+}
+
+func (l *Location) HasZone() bool {
+	return l.Zone() >= 0
+}
+
+func (l *Location) AssertValid() {
+	if !l.HasRegion() && l.HasZone() {
+		log.Fatal("cannot specify zone without also specifying region.")
+	}
+	if l.Region() >= NumRegionsInPrime {
+		log.Fatal("region index is not valid.")
+	}
+	if l.Zone() >= NumZonesInRegion {
+		log.Fatal("zone index is not valid.")
+	}
+}
+
+func (l *Location) Context() int {
+	l.AssertValid()
+	if l.Zone() >= 0 {
+		return ZONE_CTX
+	} else if l.Region() >= 0 {
+		return REGION_CTX
+	} else {
+		return PRIME_CTX
+	}
 }
