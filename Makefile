@@ -15,7 +15,15 @@ GORUN = env GO111MODULE=on go run
 go-quai:
 	$(GORUN) build/ci.go install ./cmd/go-quai
 	@echo "Done building."
-	@echo "Run \"$(GOBIN)/go-quai\" to launch geth."
+	@echo "Run \"$(GOBIN)/quai\" to launch go-quai."
+
+bootnode:
+	$(GORUN) build/ci.go install ./cmd/bootnode
+	@echo "Done building."
+	@echo "Run \"$(GOBIN)/bootnode\" to launch bootnode binary."
+
+debug:
+	go build -gcflags=all="-N -l" -v -o build/bin/go-quai ./cmd/go-quai
 
 all:
 	$(GORUN) build/ci.go install
@@ -30,7 +38,7 @@ android:
 ios:
 	$(GORUN) build/ci.go xcode --local
 	@echo "Done building."
-	@echo "Import \"$(GOBIN)/Geth.framework\" to use the library."
+	@echo "Import \"$(GOBIN)/Quai.framework\" to use the library."
 
 test: all
 	$(GORUN) build/ci.go test
@@ -56,92 +64,154 @@ devtools:
 
 # Cross Compilation Targets (xgo)
 
-go-quai-cross: geth-linux geth-darwin geth-windows geth-android geth-ios
+go-quai-cross: go-quai-linux go-quai-darwin go-quai-windows go-quai-android go-quai-ios
 	@echo "Full cross compilation done:"
 	@ls -ld $(GOBIN)/go-quai-*
 
-go-quai-linux: geth-linux-386 geth-linux-amd64 geth-linux-arm geth-linux-mips64 geth-linux-mips64le
+go-quai-linux: go-quai-linux-386 go-quai-linux-amd64 go-quai-linux-arm go-quai-linux-mips64 go-quai-linux-mips64le
 	@echo "Linux cross compilation done:"
 	@ls -ld $(GOBIN)/go-quai-linux-*
 
 go-quai-linux-386:
-	$(GORUN) build/ci.go xgo -- --go=$(GO) --targets=linux/386 -v ./cmd/go-quai
+	$(GORUN) build/ci.go xgo -- --go=$(GO) --targets=linux/386 -v ./cmd/quai
 	@echo "Linux 386 cross compilation done:"
 	@ls -ld $(GOBIN)/go-quai-linux-* | grep 386
 
 go-quai-linux-amd64:
-	$(GORUN) build/ci.go xgo -- --go=$(GO) --targets=linux/amd64 -v ./cmd/go-quai
+	$(GORUN) build/ci.go xgo -- --go=$(GO) --targets=linux/amd64 -v ./cmd/quai
 	@echo "Linux amd64 cross compilation done:"
 	@ls -ld $(GOBIN)/go-quai-linux-* | grep amd64
 
-go-quai-linux-arm: geth-linux-arm-5 geth-linux-arm-6 geth-linux-arm-7 geth-linux-arm64
+go-quai-linux-arm: go-quai-linux-arm-5 go-quai-linux-arm-6 go-quai-linux-arm-7 go-quai-linux-arm64
 	@echo "Linux ARM cross compilation done:"
 	@ls -ld $(GOBIN)/go-quai-linux-* | grep arm
 
 go-quai-linux-arm-5:
-	$(GORUN) build/ci.go xgo -- --go=$(GO) --targets=linux/arm-5 -v ./cmd/go-quai
+	$(GORUN) build/ci.go xgo -- --go=$(GO) --targets=linux/arm-5 -v ./cmd/quai
 	@echo "Linux ARMv5 cross compilation done:"
 	@ls -ld $(GOBIN)/go-quai-linux-* | grep arm-5
 
 go-quai-linux-arm-6:
-	$(GORUN) build/ci.go xgo -- --go=$(GO) --targets=linux/arm-6 -v ./cmd/go-quai
+	$(GORUN) build/ci.go xgo -- --go=$(GO) --targets=linux/arm-6 -v ./cmd/quai
 	@echo "Linux ARMv6 cross compilation done:"
 	@ls -ld $(GOBIN)/go-quai-linux-* | grep arm-6
 
 go-quai-linux-arm-7:
-	$(GORUN) build/ci.go xgo -- --go=$(GO) --targets=linux/arm-7 -v ./cmd/go-quai
+	$(GORUN) build/ci.go xgo -- --go=$(GO) --targets=linux/arm-7 -v ./cmd/quai
 	@echo "Linux ARMv7 cross compilation done:"
 	@ls -ld $(GOBIN)/go-quai-linux-* | grep arm-7
 
 go-quai-linux-arm64:
-	$(GORUN) build/ci.go xgo -- --go=$(GO) --targets=linux/arm64 -v ./cmd/go-quai
+	$(GORUN) build/ci.go xgo -- --go=$(GO) --targets=linux/arm64 -v ./cmd/quai
 	@echo "Linux ARM64 cross compilation done:"
 	@ls -ld $(GOBIN)/go-quai-linux-* | grep arm64
 
 go-quai-linux-mips:
-	$(GORUN) build/ci.go xgo -- --go=$(GO) --targets=linux/mips --ldflags '-extldflags "-static"' -v ./cmd/go-quai
+	$(GORUN) build/ci.go xgo -- --go=$(GO) --targets=linux/mips --ldflags '-extldflags "-static"' -v ./cmd/quai
 	@echo "Linux MIPS cross compilation done:"
 	@ls -ld $(GOBIN)/go-quai-linux-* | grep mips
 
 go-quai-linux-mipsle:
-	$(GORUN) build/ci.go xgo -- --go=$(GO) --targets=linux/mipsle --ldflags '-extldflags "-static"' -v ./cmd/go-quai
+	$(GORUN) build/ci.go xgo -- --go=$(GO) --targets=linux/mipsle --ldflags '-extldflags "-static"' -v ./cmd/quai
 	@echo "Linux MIPSle cross compilation done:"
 	@ls -ld $(GOBIN)/go-quai-linux-* | grep mipsle
 
 go-quai-linux-mips64:
-	$(GORUN) build/ci.go xgo -- --go=$(GO) --targets=linux/mips64 --ldflags '-extldflags "-static"' -v ./cmd/go-quai
+	$(GORUN) build/ci.go xgo -- --go=$(GO) --targets=linux/mips64 --ldflags '-extldflags "-static"' -v ./cmd/quai
 	@echo "Linux MIPS64 cross compilation done:"
 	@ls -ld $(GOBIN)/go-quai-linux-* | grep mips64
 
 go-quai-linux-mips64le:
-	$(GORUN) build/ci.go xgo -- --go=$(GO) --targets=linux/mips64le --ldflags '-extldflags "-static"' -v ./cmd/go-quai
+	$(GORUN) build/ci.go xgo -- --go=$(GO) --targets=linux/mips64le --ldflags '-extldflags "-static"' -v ./cmd/quai
 	@echo "Linux MIPS64le cross compilation done:"
 	@ls -ld $(GOBIN)/go-quai-linux-* | grep mips64le
 
-go-quai-darwin: geth-darwin-386 geth-darwin-amd64
+go-quai-darwin: go-quai-darwin-386 go-quai-darwin-amd64
 	@echo "Darwin cross compilation done:"
 	@ls -ld $(GOBIN)/go-quai-darwin-*
 
 go-quai-darwin-386:
-	$(GORUN) build/ci.go xgo -- --go=$(GO) --targets=darwin/386 -v ./cmd/go-quai
+	$(GORUN) build/ci.go xgo -- --go=$(GO) --targets=darwin/386 -v ./cmd/quai
 	@echo "Darwin 386 cross compilation done:"
 	@ls -ld $(GOBIN)/go-quai-darwin-* | grep 386
 
 go-quai-darwin-amd64:
-	$(GORUN) build/ci.go xgo -- --go=$(GO) --targets=darwin/amd64 -v ./cmd/go-quai
+	$(GORUN) build/ci.go xgo -- --go=$(GO) --targets=darwin/amd64 -v ./cmd/quai
 	@echo "Darwin amd64 cross compilation done:"
 	@ls -ld $(GOBIN)/go-quai-darwin-* | grep amd64
 
-go-quai-windows: geth-windows-386 geth-windows-amd64
+go-quai-windows: go-quai-windows-386 go-quai-windows-amd64
 	@echo "Windows cross compilation done:"
 	@ls -ld $(GOBIN)/go-quai-windows-*
 
 go-quai-windows-386:
-	$(GORUN) build/ci.go xgo -- --go=$(GO) --targets=windows/386 -v ./cmd/go-quai
+	$(GORUN) build/ci.go xgo -- --go=$(GO) --targets=windows/386 -v ./cmd/quai
 	@echo "Windows 386 cross compilation done:"
 	@ls -ld $(GOBIN)/go-quai-windows-* | grep 386
 
 go-quai-windows-amd64:
-	$(GORUN) build/ci.go xgo -- --go=$(GO) --targets=windows/amd64 -v ./cmd/go-quai
+	$(GORUN) build/ci.go xgo -- --go=$(GO) --targets=windows/amd64 -v ./cmd/quai
 	@echo "Windows amd64 cross compilation done:"
 	@ls -ld $(GOBIN)/go-quai-windows-* | grep amd64
+
+include network.env
+
+BASE_COMMAND = ./build/bin/go-quai --$(NETWORK) --syncmode full --verbosity 3
+
+ifeq ($(ENABLE_ARCHIVE),true)
+	BASE_COMMAND += --gcmode archive
+endif
+
+ifeq ($(ENABLE_HTTP),true)
+	BASE_COMMAND += --http --http.vhosts=* 
+endif
+
+ifeq ($(ENABLE_WS),true)
+	BASE_COMMAND += --ws
+endif
+
+ifeq ($(ENABLE_UNLOCK),true)
+	BASE_COMMAND += --allow-insecure-unlock
+endif
+
+ifeq ($(QUAI_MINING),true)
+	MINING_BASE_COMMAND = $(BASE_COMMAND) --mine --miner.threads $(THREADS)
+endif
+
+ifeq ($(BOOTNODE),true)
+	BASE_COMMAND += --nodekey bootnode.key --ws.origins=$(WS_ORIG) --http.corsdomain=$(HTTP_CORSDOMAIN)
+endif
+
+ifeq ($(CORS),true)
+	BASE_COMMAND += --ws.origins=$(WS_ORIG) --http.corsdomain=$(HTTP_CORSDOMAIN)
+endif
+
+run-full-node:
+ifeq (,$(wildcard nodelogs))
+	mkdir nodelogs
+endif
+	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(PRIME_PORT_TCP) --http.port $(PRIME_PORT_HTTP) --ws.port $(PRIME_PORT_WS) >> nodelogs/prime.log 2>&1 &
+	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(REGION_0_PORT_TCP) --http.port $(REGION_0_PORT_HTTP) --ws.port $(REGION_0_PORT_WS) --region 0 >> nodelogs/region-0.log 2>&1 &
+	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(REGION_1_PORT_TCP) --http.port $(REGION_1_PORT_HTTP) --ws.port $(REGION_1_PORT_WS) --region 1 >> nodelogs/region-1.log 2>&1 &
+	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(REGION_2_PORT_TCP) --http.port $(REGION_2_PORT_HTTP) --ws.port $(REGION_2_PORT_WS) --region 2 >> nodelogs/region-2.log 2>&1 &
+	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(ZONE_0_0_PORT_TCP) --http.port $(ZONE_0_0_PORT_HTTP) --ws.port $(ZONE_0_0_PORT_WS) --region 0 --zone 0 >> nodelogs/zone-0-0.log 2>&1 &
+	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(ZONE_0_1_PORT_TCP) --http.port $(ZONE_0_1_PORT_HTTP) --ws.port $(ZONE_0_1_PORT_WS) --region 0 --zone 1 >> nodelogs/zone-0-1.log 2>&1 &
+	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(ZONE_0_2_PORT_TCP) --http.port $(ZONE_0_2_PORT_HTTP) --ws.port $(ZONE_0_2_PORT_WS) --region 0 --zone 2 >> nodelogs/zone-0-2.log 2>&1 &
+	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(ZONE_1_0_PORT_TCP) --http.port $(ZONE_1_0_PORT_HTTP) --ws.port $(ZONE_1_0_PORT_WS) --region 1 --zone 0 >> nodelogs/zone-1-0.log 2>&1 &
+	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(ZONE_1_1_PORT_TCP) --http.port $(ZONE_1_1_PORT_HTTP) --ws.port $(ZONE_1_1_PORT_WS) --region 1 --zone 1 >> nodelogs/zone-1-1.log 2>&1 &
+	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(ZONE_1_2_PORT_TCP) --http.port $(ZONE_1_2_PORT_HTTP) --ws.port $(ZONE_1_2_PORT_WS) --region 1 --zone 2 >> nodelogs/zone-1-2.log 2>&1 &
+	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(ZONE_2_0_PORT_TCP) --http.port $(ZONE_2_0_PORT_HTTP) --ws.port $(ZONE_2_0_PORT_WS) --region 2 --zone 0 >> nodelogs/zone-2-0.log 2>&1 &
+	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(ZONE_2_1_PORT_TCP) --http.port $(ZONE_2_1_PORT_HTTP) --ws.port $(ZONE_2_1_PORT_WS) --region 2 --zone 1 >> nodelogs/zone-2-1.log 2>&1 &
+	@nohup $(BASE_COMMAND) --http.addr $(HTTP_ADDR) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(ZONE_2_2_PORT_TCP) --http.port $(ZONE_2_2_PORT_HTTP) --ws.port $(ZONE_2_2_PORT_WS) --region 2 --zone 2 >> nodelogs/zone-2-2.log 2>&1 &
+
+stop:
+ifeq ($(shell uname -s),Darwin)
+	@if pgrep quai; then pkill -f ./build/bin/go-quai; fi
+	@while pgrep quai >/dev/null; do \
+		echo "Stopping all Quai Network nodes, please wait until terminated."; \
+		sleep 3; \
+	done;
+else
+	@echo "Stopping all Quai Network nodes, please wait until terminated.";
+	@if pgrep quai; then killall -w quai; fi
+endif
