@@ -367,8 +367,8 @@ func (c *Core) Append(block *types.Block, domTerminus common.Hash, td *big.Int, 
 	return c.sl.Append(block, domTerminus, td, domReorg, currentContextOrigin)
 }
 
-func (c *Core) SubRelayPendingHeader(slPendingHeader types.PendingHeader) error {
-	return c.sl.SubRelayPendingHeader(slPendingHeader)
+func (c *Core) SubRelayPendingHeader(slPendingHeader types.PendingHeader, location []byte) error {
+	return c.sl.SubRelayPendingHeader(slPendingHeader, location)
 }
 
 func (c *Core) GetPendingHeader() (*types.Header, error) {

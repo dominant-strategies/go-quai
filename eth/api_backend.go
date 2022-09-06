@@ -406,8 +406,8 @@ func (b *EthAPIBackend) PendingBlockBody(hash common.Hash) *types.Body {
 	return b.eth.core.PendingBlockBody(hash)
 }
 
-func (b *EthAPIBackend) SubRelayPendingHeader(slPendingHeader types.PendingHeader) error {
-	return b.eth.core.SubRelayPendingHeader(slPendingHeader)
+func (b *EthAPIBackend) SubRelayPendingHeader(slPendingHeader types.PendingHeader, location []byte) error {
+	return b.eth.core.SubRelayPendingHeader(slPendingHeader, location)
 }
 
 func (b *EthAPIBackend) GetPendingHeader() (*types.Header, error) {
