@@ -473,6 +473,7 @@ func calcDifficultyHomestead(time uint64, parent *types.Header) *big.Int {
 // difficulty that a new block should have when created at time given the parent
 // block's time and difficulty. The calculation uses the Frontier rules.
 func calcDifficultyFrontier(time uint64, parent *types.Header) *big.Int {
+	nodeCtx := common.NodeLocation.Context()
 	diff := new(big.Int)
 	adjust := new(big.Int).Div(parent.Difficulty(), params.DifficultyBoundDivisor)
 	bigTime := new(big.Int)
@@ -481,7 +482,7 @@ func calcDifficultyFrontier(time uint64, parent *types.Header) *big.Int {
 	bigTime.SetUint64(time)
 	bigParentTime.SetUint64(parent.Time())
 
-	if bigTime.Sub(bigTime, bigParentTime).Cmp(params.DurationLimit) < 0 {
+	if bigTime.Sub(bigTime, bigParentTime).Cmp(params.DurationLimit[nodeCtx]) < 0 {
 		diff.Add(parent.Difficulty(), adjust)
 	} else {
 		diff.Sub(parent.Difficulty(), adjust)
