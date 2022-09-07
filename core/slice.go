@@ -164,6 +164,15 @@ func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int
 		return sl.nilPendingHeader, err
 	}
 
+	var subPendingHeader types.PendingHeader
+	if types.QuaiNetworkContext != params.ZONE {
+		// Perform the sub append
+		subPendingHeader, err = sl.subClients[block.Header().Location[types.QuaiNetworkContext]-1].Append(context.Background(), block, domTerminus, td, true, false)
+		if err != nil {
+			return sl.nilPendingHeader, err
+		}
+	}
+
 	if currentContextOrigin {
 		// CalcTd on the new block
 		td, err = sl.CalcTd(block.Header())
@@ -173,7 +182,7 @@ func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int
 	}
 
 	localPendingHeader, err := sl.setHeaderChainHead(batch, block, td, domReorg, currentContextOrigin)
-	tempPendingHeader := types.CopyHeader(localPendingHeader.Header)
+
 	if err != nil {
 		return sl.nilPendingHeader, err
 	}
@@ -181,20 +190,13 @@ func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int
 	// Remove this once td is converted to a single value.
 	externTd := make([]*big.Int, 3)
 	externTd[types.QuaiNetworkContext] = td
-	rawdb.WriteTd(sl.hc.headerDb, block.Header().Hash(), block.NumberU64(), externTd)
+	rawdb.WriteTd(batch, block.Header().Hash(), block.NumberU64(), externTd)
 
-	if types.QuaiNetworkContext != params.ZONE {
-		// Perform the sub append
-		subPendingHeader, err := sl.subClients[block.Header().Location[types.QuaiNetworkContext]-1].Append(context.Background(), block, domTerminus, td, true, false)
-		if err != nil {
-			return sl.nilPendingHeader, err
-		}
-		fmt.Println("RET SUB PENDING", subPendingHeader.Header.Location, subPendingHeader.Header.Root)
-		tempPendingHeader = subPendingHeader.Header
-		tempPendingHeader = sl.combinePendingHeader(localPendingHeader.Header, tempPendingHeader, types.QuaiNetworkContext)
-		tempPendingHeader.Location = subPendingHeader.Header.Location
-		fmt.Println("TEMP PENDING", tempPendingHeader.Location, tempPendingHeader.Root)
-	}
+	fmt.Println("RET SUB PENDING", subPendingHeader.Header.Location, subPendingHeader.Header.Root)
+	tempPendingHeader := subPendingHeader.Header
+	tempPendingHeader = sl.combinePendingHeader(localPendingHeader.Header, tempPendingHeader, types.QuaiNetworkContext)
+	tempPendingHeader.Location = subPendingHeader.Header.Location
+	fmt.Println("TEMP PENDING", tempPendingHeader.Location, tempPendingHeader.Root)
 
 	//Append has succeeded write the batch
 	if err := batch.Write(); err != nil {
@@ -370,7 +372,9 @@ func (sl *Slice) PCRC(batch ethdb.Batch, header *types.Header, domTerminus commo
 
 // HLCR
 func (sl *Slice) HLCR(externTd *big.Int) bool {
+	fmt.Println("HLCR externTd:", externTd, "CurrentHeader Hash:", sl.hc.CurrentHeader().Hash())
 	currentTd := sl.hc.GetTdByHash(sl.hc.CurrentHeader().Hash())
+	fmt.Println("HLCR CurrentTd:", currentTd)
 	return currentTd[types.QuaiNetworkContext].Cmp(externTd) < 0
 }
 
