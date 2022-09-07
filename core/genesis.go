@@ -51,18 +51,18 @@ type Genesis struct {
 	Nonce      uint64              `json:"nonce"`
 	Timestamp  uint64              `json:"timestamp"`
 	ExtraData  []byte              `json:"extraData"`
-	GasLimit   uint64              `json:"gasLimit"   gencodec:"required"`
-	Difficulty *big.Int            `json:"difficulty" gencodec:"required"`
+	GasLimit   []uint64            `json:"gasLimit"   gencodec:"required"`
+	Difficulty []*big.Int          `json:"difficulty" gencodec:"required"`
 	Mixhash    common.Hash         `json:"mixHash"`
-	Coinbase   common.Address      `json:"coinbase"`
+	Coinbase   []common.Address    `json:"coinbase"`
 	Alloc      GenesisAlloc        `json:"alloc"      gencodec:"required"`
 
 	// These fields are used for consensus tests. Please don't use them
 	// in actual genesis blocks.
-	Number     uint64      `json:"number"`
-	GasUsed    uint64      `json:"gasUsed"`
-	ParentHash common.Hash `json:"parentHash"`
-	BaseFee    *big.Int    `json:"baseFeePerGas"`
+	Number     []uint64      `json:"number"`
+	GasUsed    []uint64      `json:"gasUsed"`
+	ParentHash []common.Hash `json:"parentHash"`
+	BaseFee    []*big.Int    `json:"baseFeePerGas"`
 }
 
 // GenesisAlloc specifies the initial state that is part of the genesis block.
@@ -258,50 +258,64 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 // ToBlock creates the genesis block and writes state of a genesis specification
 // to the given database (or discards it if nil).
 func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
+	nodeCtx := common.NodeLocation.Context()
 	if db == nil {
 		db = rawdb.NewMemoryDatabase()
 	}
-	statedb, err := state.New(common.Hash{}, state.NewDatabase(db), nil)
+	// We only allow genesis allocations in Prime chain. We need to calculate
+	// the prime genesis state root, but all other chains will just have empty
+	// state roots.
+	primeStatedb, err := state.New(common.Hash{}, state.NewDatabase(db), nil)
 	if err != nil {
 		panic(err)
 	}
 	for addr, account := range g.Alloc {
-		statedb.AddBalance(addr, account.Balance)
-		statedb.SetCode(addr, account.Code)
-		statedb.SetNonce(addr, account.Nonce)
+		primeStatedb.AddBalance(addr, account.Balance)
+		primeStatedb.SetCode(addr, account.Code)
+		primeStatedb.SetNonce(addr, account.Nonce)
 		for key, value := range account.Storage {
-			statedb.SetState(addr, key, value)
+			primeStatedb.SetState(addr, key, value)
 		}
 	}
-	root := statedb.IntermediateRoot(false)
+	primeRoot := primeStatedb.IntermediateRoot(false)
 	head := types.EmptyHeader()
-	head.SetNumber(new(big.Int).SetUint64(g.Number))
 	head.SetNonce(types.EncodeNonce(g.Nonce))
 	head.SetTime(g.Timestamp)
-	head.SetParentHash(g.ParentHash)
 	head.SetExtra(g.ExtraData)
-	head.SetGasLimit(g.GasLimit)
-	head.SetGasUsed(g.GasUsed)
-	head.SetBaseFee(g.BaseFee)
-	head.SetDifficulty(g.Difficulty)
 	head.SetMixDigest(g.Mixhash)
-	head.SetCoinbase(g.Coinbase)
-	head.SetRoot(root)
-	if g.GasLimit == 0 {
-		head.SetGasLimit(params.GenesisGasLimit)
-	}
-	if g.Difficulty == nil {
-		head.SetDifficulty(params.GenesisDifficulty)
-	}
-	if g.Config != nil && g.Config.IsLondon(common.Big0) {
-		if g.BaseFee != nil {
-			head.SetBaseFee(g.BaseFee)
-		} else {
-			head.SetBaseFee(new(big.Int).SetUint64(params.InitialBaseFee))
+	head.SetRoot(primeRoot, common.PRIME_CTX)
+	head.SetRoot(types.EmptyRootHash, common.REGION_CTX) // Not genesis allocs allowed
+	head.SetRoot(types.EmptyRootHash, common.ZONE_CTX)   // Not genesis allocs allowed
+	for i := 0; i < common.HierarchyDepth; i++ {
+		head.SetNumber(big.NewInt(0), i)
+		head.SetParentHash(common.Hash{}, i)
+		head.SetGasLimit(g.GasLimit[i], i)
+		head.SetGasUsed(0, i)
+		head.SetBaseFee(new(big.Int).SetUint64(params.InitialBaseFee), i)
+		head.SetDifficulty(g.Difficulty[i], i)
+		head.SetCoinbase(common.Address{}, i)
+		if g.GasLimit[i] == 0 {
+			head.SetGasLimit(params.GenesisGasLimit, i)
+		}
+		if g.Difficulty[i] == nil {
+			head.SetDifficulty(params.GenesisDifficulty[i], i)
 		}
 	}
+
+	// If we are a prime node, commit the Prime state. If not, create a new
+	// empty state to be commited.
+	var statedb state.StateDB
+	if common.PRIME_CTX == nodeCtx {
+		statedb = *primeStatedb
+	} else {
+		localStatedb, err := state.New(common.Hash{}, state.NewDatabase(db), nil)
+		if err != nil {
+			panic(err)
+		}
+		statedb = *localStatedb
+	}
 	statedb.Commit(false)
-	statedb.Database().TrieDB().Commit(root, true, nil)
+	statedb.Database().TrieDB().Commit(head.Root(), true, nil)
 
 	return types.NewBlock(head, nil, nil, nil, trie.NewStackTrie(nil))
 }
@@ -309,6 +323,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 // Commit writes the block and state of a genesis specification to the database.
 // The block is committed as the canonical head block.
 func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
+	nodeCtx := common.NodeLocation.Context()
 	block := g.ToBlock(db)
 	if block.Number().Sign() != 0 {
 		return nil, fmt.Errorf("can't commit genesis block with number > 0")
@@ -320,7 +335,7 @@ func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
 	if err := config.CheckConfigForkOrder(); err != nil {
 		return nil, err
 	}
-	rawdb.WriteTd(db, block.Hash(), block.NumberU64(), g.Difficulty)
+	rawdb.WriteTd(db, block.Hash(), block.NumberU64(), g.Difficulty[nodeCtx])
 	rawdb.WriteBlock(db, block)
 	rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), nil)
 	rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())
@@ -345,7 +360,7 @@ func (g *Genesis) MustCommit(db ethdb.Database) *types.Block {
 func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big.Int) *types.Block {
 	g := Genesis{
 		Alloc:   GenesisAlloc{addr: {Balance: balance}},
-		BaseFee: big.NewInt(params.InitialBaseFee),
+		BaseFee: []*big.Int{big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee)},
 	}
 	return g.MustCommit(db)
 }
@@ -356,8 +371,8 @@ func DefaultGenesisBlock() *Genesis {
 		Config:     params.MainnetChainConfig,
 		Nonce:      66,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
-		GasLimit:   5000,
-		Difficulty: big.NewInt(17179869184),
+		GasLimit:   []uint64{5000, 5000, 5000},
+		Difficulty: []*big.Int{big.NewInt(17179869184), big.NewInt(17179869184), big.NewInt(17179869184)},
 		Alloc:      decodePrealloc(mainnetAllocData),
 	}
 }
@@ -368,8 +383,8 @@ func DefaultRopstenGenesisBlock() *Genesis {
 		Config:     params.RopstenChainConfig,
 		Nonce:      66,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
-		GasLimit:   16777216,
-		Difficulty: big.NewInt(1048576),
+		GasLimit:   []uint64{16777216, 16777216, 16777216},
+		Difficulty: []*big.Int{big.NewInt(1048576), big.NewInt(1048576), big.NewInt(1048576)},
 		Alloc:      decodePrealloc(ropstenAllocData),
 	}
 }
@@ -380,8 +395,8 @@ func DefaultRinkebyGenesisBlock() *Genesis {
 		Config:     params.RinkebyChainConfig,
 		Timestamp:  1492009146,
 		ExtraData:  hexutil.MustDecode("0x52657370656374206d7920617574686f7269746168207e452e436172746d616e42eb768f2244c8811c63729a21a3569731535f067ffc57839b00206d1ad20c69a1981b489f772031b279182d99e65703f0076e4812653aab85fca0f00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"),
-		GasLimit:   4700000,
-		Difficulty: big.NewInt(1),
+		GasLimit:   []uint64{4700000, 4700000, 4700000},
+		Difficulty: []*big.Int{big.NewInt(1), big.NewInt(1), big.NewInt(1)},
 		Alloc:      decodePrealloc(rinkebyAllocData),
 	}
 }
@@ -392,8 +407,8 @@ func DefaultGoerliGenesisBlock() *Genesis {
 		Config:     params.GoerliChainConfig,
 		Timestamp:  1548854791,
 		ExtraData:  hexutil.MustDecode("0x22466c6578692069732061207468696e6722202d204166726900000000000000e0a2bd4258d2768837baa26a28fe71dc079f84c70000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"),
-		GasLimit:   10485760,
-		Difficulty: big.NewInt(1),
+		GasLimit:   []uint64{10485760, 10485760, 10485760},
+		Difficulty: []*big.Int{big.NewInt(1), big.NewInt(1), big.NewInt(1)},
 		Alloc:      decodePrealloc(goerliAllocData),
 	}
 }
@@ -404,8 +419,8 @@ func DefaultCalaverasGenesisBlock() *Genesis {
 		Config:     params.CalaverasChainConfig,
 		Timestamp:  0x60b3877f,
 		ExtraData:  hexutil.MustDecode("0x00000000000000000000000000000000000000000000000000000000000000005211cea3870c7ba7c6c44b185e62eecdb864cd8c560228ce57d31efbf64c200b2c200aacec78cf17a7148e784fe95a7a750335f8b9572ee28d72e7650000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"),
-		GasLimit:   0x47b760,
-		Difficulty: big.NewInt(1),
+		GasLimit:   []uint64{0x47b760, 0x47b760, 0x47b760},
+		Difficulty: []*big.Int{big.NewInt(1), big.NewInt(1), big.NewInt(1)},
 		Alloc:      decodePrealloc(calaverasAllocData),
 	}
 }
@@ -423,9 +438,9 @@ func DeveloperGenesisBlock(period uint64, faucet common.Address) *Genesis {
 	return &Genesis{
 		Config:     &config,
 		ExtraData:  append(append(make([]byte, 32), faucet[:]...), make([]byte, crypto.SignatureLength)...),
-		GasLimit:   11500000,
-		BaseFee:    big.NewInt(params.InitialBaseFee),
-		Difficulty: big.NewInt(1),
+		GasLimit:   []uint64{0x47b760, 0x47b760, 0x47b760},
+		BaseFee:    []*big.Int{big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee)},
+		Difficulty: []*big.Int{big.NewInt(1), big.NewInt(1), big.NewInt(1)},
 		Alloc: map[common.Address]GenesisAccount{
 			common.BytesToAddress([]byte{1}): {Balance: big.NewInt(1)}, // ECRecover
 			common.BytesToAddress([]byte{2}): {Balance: big.NewInt(1)}, // SHA256
