@@ -24,7 +24,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/spruce-solutions/go-quai"
+	ethereum "github.com/spruce-solutions/go-quai"
 	"github.com/spruce-solutions/go-quai/accounts/abi"
 	"github.com/spruce-solutions/go-quai/accounts/abi/bind"
 	"github.com/spruce-solutions/go-quai/common"
@@ -76,7 +76,7 @@ type SimulatedBackend struct {
 // and uses a simulated blockchain for testing purposes.
 // A simulated backend always uses chainID 1337.
 func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBackend {
-	genesis := core.Genesis{Config: params.AllEthashProtocolChanges, GasLimit: gasLimit, Alloc: alloc}
+	genesis := core.Genesis{Config: params.AllEthashProtocolChanges, GasLimit: []uint64{gasLimit, gasLimit, gasLimit}, Alloc: alloc}
 	genesis.MustCommit(database)
 	blockchain, _ := core.NewBlockChain(database, nil, genesis.Config, ethash.NewFaker(), vm.Config{}, nil, nil)
 
