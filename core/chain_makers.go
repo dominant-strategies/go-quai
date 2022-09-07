@@ -286,7 +286,6 @@ func GenerateKnot(config *params.ChainConfig, parent *types.Block, engine consen
 		}
 		if b.engine != nil {
 			// Finalize and seal the block
-
 			b.engine.FinalizeAtIndex(chainreader, b.header, zonedb, b.txs, b.uncles, params.ZONE)
 			// Write state changes to db
 			root, err := zonedb.Commit(config.IsEIP158(b.header.Number[params.ZONE]))

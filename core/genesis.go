@@ -410,7 +410,7 @@ func RopstenPrimeGenesisBlock() *Genesis {
 		ExtraData:  [][]byte{hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"), hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"), hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa")},
 		GasLimit:   []uint64{100000, 100000, 100000},
 		GasUsed:    []uint64{0, 0, 0},
-		Difficulty: []*big.Int{big.NewInt(320000), big.NewInt(160000), big.NewInt(80000)},
+		Difficulty: []*big.Int{big.NewInt(1600000), big.NewInt(800000), big.NewInt(80000)},
 		Alloc:      decodePrealloc(ropstenAllocData),
 	}
 }
@@ -427,7 +427,7 @@ func RopstenRegionGenesisBlock(regionParams *params.ChainConfig) *Genesis {
 		ExtraData:  [][]byte{hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"), hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"), hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa")},
 		GasLimit:   []uint64{100000, 100000, 100000},
 		GasUsed:    []uint64{0, 0, 0},
-		Difficulty: []*big.Int{big.NewInt(320000), big.NewInt(160000), big.NewInt(80000)},
+		Difficulty: []*big.Int{big.NewInt(1600000), big.NewInt(800000), big.NewInt(80000)},
 		Alloc:      decodePrealloc(ropstenAllocData),
 	}
 }
@@ -443,7 +443,7 @@ func RopstenZoneGenesisBlock(zoneParams *params.ChainConfig) *Genesis {
 		ExtraData:  [][]byte{hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"), hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"), hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa")},
 		GasLimit:   []uint64{100000, 100000, 100000},
 		GasUsed:    []uint64{0, 0, 0},
-		Difficulty: []*big.Int{big.NewInt(320000), big.NewInt(160000), big.NewInt(80000)},
+		Difficulty: []*big.Int{big.NewInt(1600000), big.NewInt(800000), big.NewInt(80000)},
 		Alloc:      decodePrealloc(ropstenAllocData),
 	}
 }
@@ -458,7 +458,7 @@ func DefaultRopstenGenesisBlock() *Genesis {
 		ExtraData:  [][]byte{hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"), hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"), hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa")},
 		GasLimit:   []uint64{500000, 500000, 500000},
 		GasUsed:    []uint64{0, 0, 0},
-		Difficulty: []*big.Int{big.NewInt(320000), big.NewInt(160000), big.NewInt(80000)},
+		Difficulty: []*big.Int{big.NewInt(1600000), big.NewInt(800000), big.NewInt(80000)},
 	}
 }
 
