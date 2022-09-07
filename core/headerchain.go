@@ -180,22 +180,24 @@ func (hc *HeaderChain) Append(batch ethdb.Batch, block *types.Block) error {
 	var nilHeader *types.Header
 	// check if the size of the queue is at the maxHeadsQueueLimit
 	if len(hc.heads) == maxHeadsQueueLimit {
-		// Trim the branch before dequeueing
-		commonHeader := hc.findCommonHeader(hc.heads[0])
-		if commonHeader == nil {
-			return errors.New("nil head in hc.heads")
-		}
-		err = hc.trim(commonHeader, hc.heads[0])
-		if err != nil {
-			return err
-		}
+		// // Trim the branch before dequeueing
+		// commonHeader := hc.findCommonHeader(hc.heads[0])
+		// if commonHeader == nil {
+		// 	return errors.New("nil head in hc.heads")
+		// }
+		// err = hc.trim(commonHeader, hc.heads[0])
+		// if err != nil {
+		// 	return err
+		// }
 
 		// dequeue
 		hc.heads[0] = nilHeader
 		hc.heads = hc.heads[1:]
 	}
+
 	// Add to the heads queue
 	hc.heads = append(hc.heads, block.Header())
+	fmt.Println("hc.heads[0]: ", hc.heads[0].Hash())
 
 	// Sort the heads by number
 	sort.Slice(hc.heads, func(i, j int) bool {
