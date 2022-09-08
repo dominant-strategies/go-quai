@@ -98,6 +98,27 @@ type headerMarshaling struct {
 	Hash       common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
 }
 
+// "external" header encoding. used for eth protocol, etc.
+type extheader struct {
+	ParentHash  []common.Hash
+	UncleHash   []common.Hash
+	Coinbase    []common.Address
+	Root        []common.Hash
+	TxHash      []common.Hash
+	ReceiptHash []common.Hash
+	Bloom       []Bloom
+	Difficulty  []*big.Int
+	Number      []*big.Int
+	GasLimit    []uint64
+	GasUsed     []uint64
+	BaseFee     []*big.Int
+	Location    common.Location
+	Time        uint64
+	Extra       []byte
+	MixDigest   common.Hash
+	Nonce       BlockNonce
+}
+
 // Construct an empty header
 func EmptyHeader() *Header {
 	h := &Header{}
@@ -114,6 +135,56 @@ func EmptyHeader() *Header {
 	h.gasUsed = make([]uint64, common.HierarchyDepth)
 	h.baseFee = make([]*big.Int, common.HierarchyDepth)
 	return h
+}
+
+// DecodeRLP decodes the Ethereum
+func (h *Header) DecodeRLP(s *rlp.Stream) error {
+	var eh extheader
+	if err := s.Decode(&eh); err != nil {
+		return err
+	}
+	h.parentHash = eh.ParentHash
+	h.uncleHash = eh.UncleHash
+	h.coinbase = eh.Coinbase
+	h.root = eh.Root
+	h.txHash = eh.TxHash
+	h.receiptHash = eh.ReceiptHash
+	h.bloom = eh.Bloom
+	h.difficulty = eh.Difficulty
+	h.number = eh.Number
+	h.gasLimit = eh.GasLimit
+	h.gasUsed = eh.GasUsed
+	h.baseFee = eh.BaseFee
+	h.location = eh.Location
+	h.time = eh.Time
+	h.extra = eh.Extra
+	h.mixDigest = eh.MixDigest
+	h.nonce = eh.Nonce
+
+	return nil
+}
+
+// EncodeRLP serializes b into the Ethereum RLP block format.
+func (h *Header) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, extheader{
+		ParentHash:  h.parentHash,
+		UncleHash:   h.uncleHash,
+		Coinbase:    h.coinbase,
+		Root:        h.root,
+		TxHash:      h.txHash,
+		ReceiptHash: h.receiptHash,
+		Bloom:       h.bloom,
+		Difficulty:  h.difficulty,
+		Number:      h.number,
+		GasLimit:    h.gasLimit,
+		GasUsed:     h.gasUsed,
+		BaseFee:     h.baseFee,
+		Location:    h.location,
+		Time:        h.time,
+		Extra:       h.extra,
+		MixDigest:   h.mixDigest,
+		Nonce:       h.nonce,
+	})
 }
 
 // Localized accessors
