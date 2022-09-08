@@ -1,7 +1,6 @@
 package core
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -134,8 +133,9 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 		knot := genesis.Knot[1:]
 		for _, block := range knot {
 			if block != nil {
-				_, err = sl.Append(block, common.Hash{}, block.Difficulty(), false, true)
+				_, err = sl.Append(block, genesisHash, block.Difficulty(), false, true)
 				if err != nil {
+					fmt.Println("error:", err)
 					fmt.Println("Failed to append block, hash:", block.Hash(), "Number:", block.Number(), "Location:", block.Header().Location)
 				}
 			}
@@ -225,14 +225,25 @@ func (sl *Slice) relay(block *types.Block, pendingHeader types.PendingHeader) {
 
 	sl.AddIfBestPendingHeader(pendingHeader)
 	if order == params.PRIME && types.QuaiNetworkContext == params.PRIME {
-		sl.AddIfBestPendingHeader(pendingHeader)
-		sl.miner.worker.pendingHeaderFeed.Send(pendingHeader.Header)
-		for i := range sl.subClients {
-			sl.subClients[i].SubRelayPendingHeader(context.Background(), pendingHeader, block.Header().Location)
+		tempPendingHeader := sl.updatePhCache(pendingHeader, 3, []int{params.PRIME, params.REGION, params.ZONE})
+		if tempPendingHeader.Header != sl.nilHeader {
+			sl.AddIfBestPendingHeader(tempPendingHeader)
+			sl.miner.worker.pendingHeaderFeed.Send(tempPendingHeader.Header)
+			for i := range sl.subClients {
+				sl.subClients[i].SubRelayPendingHeader(context.Background(), tempPendingHeader, block.Header().Location)
+			}
+		} else {
+			sl.AddIfBestPendingHeader(pendingHeader)
+			sl.miner.worker.pendingHeaderFeed.Send(pendingHeader.Header)
+			for i := range sl.subClients {
+				sl.subClients[i].SubRelayPendingHeader(context.Background(), pendingHeader, block.Header().Location)
+			}
 		}
+
 	} else if order == params.REGION && types.QuaiNetworkContext == params.REGION {
 		pendingHeader = sl.updatePhCache(pendingHeader, 3, []int{params.REGION, params.ZONE})
 		sl.AddIfBestPendingHeader(pendingHeader)
+		sl.miner.worker.pendingHeaderFeed.Send(pendingHeader.Header)
 		for i := range sl.subClients {
 			sl.subClients[i].SubRelayPendingHeader(context.Background(), pendingHeader, block.Header().Location)
 		}
@@ -335,25 +346,42 @@ func (sl *Slice) PCRC(batch ethdb.Batch, header *types.Header, domTerminus commo
 		newTermini[header.Location[types.QuaiNetworkContext]-1] = header.Hash()
 	}
 
-	order, err := sl.engine.GetDifficultyOrder(header)
-	if err != nil {
-		return common.Hash{}, err
-	}
-
-	if header.ParentHash[0] == sl.config.GenesisHashes[0] {
-		domTerminus = sl.config.GenesisHashes[0]
+	var order int
+	var err error
+	parentHeader := sl.hc.GetHeaderByHash(header.Parent())
+	if parentHeader.Hash() != sl.config.GenesisHashes[0] {
+		order, err = sl.engine.GetDifficultyOrder(parentHeader)
+		if err != nil {
+			return common.Hash{}, err
+		}
+	} else {
+		order = 0
 	}
 
 	if order < types.QuaiNetworkContext {
-		newTermini[3] = header.Hash()
+		newTermini[3] = parentHeader.Hash()
+		// nilCommon := common.Hash{}
+		// if domTerminus == nilCommon {
+		// 	domTerminus = parentHeader.Hash()
+		// 	if termini[3] == nilCommon {
+		// 		termini[3] = parentHeader.Hash()
+		// 	} else {
+		// 		termini[3] = H
+		// 	}
+
+		// }
 	} else {
 		newTermini[3] = termini[3]
 	}
-
+	nilCommon := common.Hash{}
 	fmt.Println("header location: ", header.Location, newTermini, termini)
 	if order < types.QuaiNetworkContext {
-		if termini[3] != domTerminus {
-			return common.Hash{}, errors.New("termini do not match, block rejected due to a twist")
+		if header.Number64() > 9 {
+			if domTerminus != nilCommon {
+				if termini[3] != domTerminus {
+					return common.Hash{}, errors.New("termini do not match, block rejected due to a twist")
+				}
+			}
 		}
 	}
 
@@ -433,25 +461,24 @@ func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader, locati
 			}
 		}
 	} else {
-		fmt.Println("SubRelayPendingHeader Location:", pendingHeader.Header.Location, "sl.config.Location:", sl.config.Location)
-		if !bytes.Equal(location, sl.config.Location) {
-			localBestPh := sl.updatePhCache(pendingHeader, int(sl.config.Location[types.QuaiNetworkContext-1]-1), []int{params.PRIME, params.REGION})
-			if localBestPh.Header == nil {
-				return nil
-			}
-			localBestPh.Header.Location = sl.config.Location
-
-			sl.miner.worker.pendingHeaderFeed.Send(localBestPh.Header)
-
-		} else {
-			if pendingHeader.Header.Number[0] != nil && pendingHeader.Header.Number[1] != nil && pendingHeader.Header.Number[2] != nil {
-				fmt.Println("Subrelay write termini:", pendingHeader.Termini[sl.config.Location[types.QuaiNetworkContext-1]-1])
-				sl.phCache[pendingHeader.Termini[sl.config.Location[types.QuaiNetworkContext-1]-1]] = pendingHeader
-
-				pendingHeader.Header.Location = sl.config.Location
-				sl.miner.worker.pendingHeaderFeed.Send(pendingHeader.Header)
-			}
+		// fmt.Println("SubRelayPendingHeader Location:", pendingHeader.Header.Location, "sl.config.Location:", sl.config.Location)
+		// if !bytes.Equal(location, sl.config.Location) {
+		localBestPh := sl.updatePhCache(pendingHeader, int(sl.config.Location[types.QuaiNetworkContext-1]-1), []int{params.PRIME, params.REGION})
+		if localBestPh.Header == nil {
+			return nil
 		}
+		localBestPh.Header.Location = sl.config.Location
+
+		sl.miner.worker.pendingHeaderFeed.Send(localBestPh.Header)
+
+		// } else {
+		//sl.AddIfBestPendingHeader(pendingHeader)
+		// fmt.Println("Subrelay write termini:", pendingHeader.Termini[sl.config.Location[types.QuaiNetworkContext-1]-1])
+		// sl.phCache[pendingHeader.Header.Parent()] = pendingHeader
+
+		// pendingHeader.Header.Location = sl.config.Location
+		// sl.miner.worker.pendingHeaderFeed.Send(pendingHeader.Header)
+
 	}
 
 	return nil
@@ -473,7 +500,18 @@ func (sl *Slice) AddIfBestPendingHeader(externPendingHeader types.PendingHeader)
 		// 	oldPendingCache := sl.phCache[oldTermini[3]]
 		// 	externPendingHeader.Header = sl.combinePendingHeader(externPendingHeader.Header, oldPendingCache.Header, types.QuaiNetworkContext)
 		// }
-		sl.phCache[hash] = externPendingHeader
+		parentTermini := sl.hc.GetTerminiByHash(hash)
+		if len(parentTermini) == 4 {
+			pendingHeader, exists = sl.phCache[parentTermini[3]]
+			if !exists {
+				sl.phCache[hash] = externPendingHeader
+			} else {
+				pendingHeader.Header = sl.combinePendingHeader(externPendingHeader.Header, pendingHeader.Header, types.QuaiNetworkContext)
+				pendingHeader.Termini = externPendingHeader.Termini
+				sl.phCache[hash] = pendingHeader
+			}
+		}
+
 	} else {
 		fmt.Println("localPendingHeader Hash:", pendingHeader.Header.Hash(), "Number:", pendingHeader.Header.Number, "Td:", pendingHeader.Td, "Parents:", pendingHeader.Header.Parent(), "bestPh:", pendingHeader)
 		fmt.Println("externPendingHeader Hash:", externPendingHeader.Header.Hash(), "Number:", externPendingHeader.Header.Number, "Td:", externPendingHeader.Td, "Parents:", externPendingHeader.Header.Parent(), "bestPh:", externPendingHeader)
@@ -500,11 +538,13 @@ func (sl *Slice) updatePhCache(pendingHeader types.PendingHeader, terminiIndex i
 	localPendingHeader, exists := sl.phCache[hash]
 	if !exists {
 		parentTermini := sl.hc.GetTerminiByHash(hash)
-		localPendingHeader, exists = sl.phCache[parentTermini[terminiIndex]]
+		if len(parentTermini) == 4 {
+			localPendingHeader, exists = sl.phCache[parentTermini[terminiIndex]]
+		}
 	}
 
 	if !exists {
-		return types.PendingHeader{}
+		return pendingHeader
 	} else {
 		for _, i := range indices {
 			localPendingHeader.Header = sl.combinePendingHeader(pendingHeader.Header, localPendingHeader.Header, i)
