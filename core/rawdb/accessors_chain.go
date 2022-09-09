@@ -355,11 +355,12 @@ func ReadHeader(db ethdb.Reader, hash common.Hash, number uint64) *types.Header 
 // WriteHeader stores a block header into the database and also stores the hash-
 // to-number mapping.
 func WriteHeader(db ethdb.KeyValueWriter, header *types.Header) {
-	fmt.Println("WriteHeader Hash:", header.Hash(), "Header:", header)
 	var (
 		hash   = header.Hash()
 		number = header.Number[types.QuaiNetworkContext].Uint64()
 	)
+	fmt.Println("WriteHeader Hash:", number, hash)
+
 	// Write the hash -> number mapping
 	WriteHeaderNumber(db, hash, number)
 
@@ -369,6 +370,7 @@ func WriteHeader(db ethdb.KeyValueWriter, header *types.Header) {
 		log.Crit("Failed to RLP encode header", "err", err)
 	}
 	key := headerKey(number, hash)
+	fmt.Println("WriteHeader key:", key)
 	if err := db.Put(key, data); err != nil {
 		log.Crit("Failed to store header", "err", err)
 	}

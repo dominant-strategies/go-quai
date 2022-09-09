@@ -1573,6 +1573,7 @@ func (d *Downloader) processHeaders(origin uint64, td []*big.Int) error {
 				// R: Nothing to give
 				if mode != LightSync {
 					head := d.core.CurrentBlock()
+					fmt.Println("head ret from d.core.CurrentBlock()", head)
 					if !gotHeaders && d.core.GetTd(head.Hash(), head.NumberU64())[types.QuaiNetworkContext].Cmp(td[types.QuaiNetworkContext]) < 0 {
 						return errStallingPeer
 					}
