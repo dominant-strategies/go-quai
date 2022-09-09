@@ -1578,7 +1578,9 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 					head := d.core.CurrentHeader()
 					fmt.Println("head ret from d.core.CurrentBlock()", head)
 					fmt.Println("TD is nil?", td)
-					if !gotHeaders && d.core.GetTd(head.Hash(), head.Number[types.QuaiNetworkContext].Uint64())[types.QuaiNetworkContext].Cmp(td[types.QuaiNetworkContext]) < 0 {
+					ourTD := d.core.GetTd(head.Hash(), head.Number[types.QuaiNetworkContext].Uint64())
+					fmt.Println("Our td", ourTD)
+					if !gotHeaders && ourTD[types.QuaiNetworkContext].Cmp(td[types.QuaiNetworkContext]) < 0 {
 						return errStallingPeer
 					}
 				}
