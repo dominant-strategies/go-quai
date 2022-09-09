@@ -212,6 +212,7 @@ func (sl *Slice) Append(header *types.Header, domTerminus common.Hash, td *big.I
 	rawdb.WriteTd(batch, block.Header().Hash(), block.NumberU64(), td)
 
 	//Append has succeeded write the batch
+	fmt.Println("WRITING BATCH HERE")
 	if err := batch.Write(); err != nil {
 		return types.PendingHeader{}, err
 	}
