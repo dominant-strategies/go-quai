@@ -16,12 +16,12 @@ import (
 func main() {
 	var (
 		testdb  = rawdb.NewMemoryDatabase()
-		genesis = core.RopstenPrimeGenesisBlock().MustCommit(testdb)
-		fn      = "ropsten_knot.rlp"
+		genesis = core.MainnetPrimeGenesisBlock().MustCommit(testdb)
+		fn      = "mainnet_knot.rlp"
 	)
 
 	blake3Config := blake3.Config{
-		MiningThreads: 0,
+		MiningThreads: 4,
 		NotifyFull:    true,
 	}
 
