@@ -456,6 +456,7 @@ func (hc *HeaderChain) CurrentHeader() *types.Header {
 
 // CurrentBlock returns the block for the current header.
 func (hc *HeaderChain) CurrentBlock() *types.Block {
+	fmt.Println("CurrentBlock?", hc.CurrentHeader())
 	return hc.GetBlockByHash(hc.CurrentHeader().Hash())
 }
 
