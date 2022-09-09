@@ -614,28 +614,6 @@ func (s *PublicBlockChainAPI) GetTerminusAtOrder(ctx context.Context, raw json.R
 	return s.b.GetTerminusAtOrder(headerWithOrder.Header, headerWithOrder.Order)
 }
 
-type HeaderWithDomTerminus struct {
-	Header      *types.Header
-	DomTerminus common.Hash
-}
-
-type HeaderWithSliceAndOrder struct {
-	Header *types.Header
-	Slice  []byte
-	Order  int
-}
-
-// GetSliceHeadHash returns the current head hash for the slice and the provided index
-func (s *PublicBlockChainQuaiAPI) GetSliceHeadHash(ctx context.Context, index byte) common.Hash {
-	fmt.Println("GetSliceHeadHash index:", index)
-	return s.b.GetSliceHeadHash(index)
-}
-
-// GetHeadHash returns the current head hash for the slice and the provided index
-func (s *PublicBlockChainQuaiAPI) GetHeadHash(ctx context.Context) common.Hash {
-	return s.b.GetHeadHash()
-}
-
 type TdWithReorg struct {
 	Td    *big.Int
 	Reorg bool
@@ -664,7 +642,7 @@ func (s *PublicBlockChainQuaiAPI) Append(ctx context.Context, raw json.RawMessag
 	}
 
 	block := types.NewBlockWithHeader(head).WithBody(txs, uncles)
-	return s.b.Append(block, body.DomTerminus, body.Td, body.DomReorg, body.CurrentContextOrigin)
+	return s.b.Append(block, body.DomTerminus, body.Td, body.DomOrigin, body.Reorg)
 }
 
 type SubRelay struct {
@@ -672,6 +650,7 @@ type SubRelay struct {
 	Termini  []common.Hash
 	Td       *big.Int
 	Location []byte
+	Reorg    bool
 }
 
 func (s *PublicBlockChainQuaiAPI) SubRelayPendingHeader(ctx context.Context, raw json.RawMessage) error {
@@ -680,7 +659,7 @@ func (s *PublicBlockChainQuaiAPI) SubRelayPendingHeader(ctx context.Context, raw
 		return err
 	}
 	pendingHeader := types.PendingHeader{Header: subRelay.Header, Termini: subRelay.Termini, Td: subRelay.Td}
-	return s.b.SubRelayPendingHeader(pendingHeader, subRelay.Location)
+	return s.b.SubRelayPendingHeader(pendingHeader, subRelay.Location, subRelay.Reorg)
 }
 
 func (s *PublicBlockChainQuaiAPI) GetPendingHeader(ctx context.Context) (*types.Header, error) {

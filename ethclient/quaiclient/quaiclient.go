@@ -236,15 +236,15 @@ func RPCMarshalOrderBlock(block *types.Block, Order int) (map[string]interface{}
 }
 
 // RPCMarshalOrderBlock converts the block and order as input to PCRC.
-func RPCMarshalTdBlock(block *types.Block, domTerminus common.Hash, td *big.Int, domReorg bool, currentContextOrigin bool) (map[string]interface{}, error) {
+func RPCMarshalTdBlock(block *types.Block, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) (map[string]interface{}, error) {
 	fields, err := RPCMarshalBlock(block, true, true)
 	if err != nil {
 		return nil, err
 	}
 	fields["td"] = td
 	fields["domTerminus"] = domTerminus
-	fields["domReorg"] = domReorg
-	fields["currentContextOrigin"] = currentContextOrigin
+	fields["domOrigin"] = domOrigin
+	fields["reorg"] = reorg
 	return fields, nil
 }
 
@@ -469,28 +469,8 @@ func newRPCTransactionFromBlockHash(b *types.Block, hash common.Hash) *RPCTransa
 	return nil
 }
 
-// GetSliceHeadHash returns the current head hash for the slice and the provided index
-func (ec *Client) GetSliceHeadHash(ctx context.Context, index byte) common.Hash {
-	var headHash common.Hash
-	err := ec.c.CallContext(ctx, &headHash, "quai_getSliceHeadHash", index)
-	if err != nil {
-		return common.Hash{}
-	}
-	return headHash
-}
-
-// GetHeadHash returns the current head hash
-func (ec *Client) GetHeadHash(ctx context.Context) common.Hash {
-	var headHash common.Hash
-	err := ec.c.CallContext(ctx, &headHash, "quai_getHeadHash")
-	if err != nil {
-		return common.Hash{}
-	}
-	return headHash
-}
-
-func (ec *Client) Append(ctx context.Context, block *types.Block, domTerminus common.Hash, td *big.Int, domReorg bool, currentContextOrigin bool) (types.PendingHeader, error) {
-	data, err := RPCMarshalTdBlock(block, domTerminus, td, domReorg, currentContextOrigin)
+func (ec *Client) Append(ctx context.Context, block *types.Block, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) (types.PendingHeader, error) {
+	data, err := RPCMarshalTdBlock(block, domTerminus, td, domOrigin, reorg)
 	if err != nil {
 		return types.PendingHeader{}, err
 	}
@@ -503,11 +483,12 @@ func (ec *Client) Append(ctx context.Context, block *types.Block, domTerminus co
 	return pendingHeader, nil
 }
 
-func (ec *Client) SubRelayPendingHeader(ctx context.Context, pendingHeader types.PendingHeader, location []byte) error {
+func (ec *Client) SubRelayPendingHeader(ctx context.Context, pendingHeader types.PendingHeader, location []byte, reorg bool) error {
 	data := map[string]interface{}{"Header": RPCMarshalHeader(pendingHeader.Header)}
 	data["Termini"] = pendingHeader.Termini
 	data["Td"] = pendingHeader.Td
 	data["Location"] = location
+	data["Reorg"] = reorg
 
 	err := ec.c.CallContext(ctx, nil, "quai_subRelayPendingHeader", data)
 	if err != nil {

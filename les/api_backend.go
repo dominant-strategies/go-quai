@@ -362,11 +362,11 @@ func (b *LesApiBackend) GetHeadHash() common.Hash {
 	return common.Hash{}
 }
 
-func (b *LesApiBackend) Append(block *types.Block, domTerminus common.Hash, td *big.Int, domReorg bool, currentContextOrigin bool) (types.PendingHeader, error) {
+func (b *LesApiBackend) Append(block *types.Block, domTerminus common.Hash, td *big.Int, domReorg bool, reorg bool) (types.PendingHeader, error) {
 	return types.PendingHeader{}, nil
 }
 
-func (b *LesApiBackend) SubRelayPendingHeader(pendingHeader types.PendingHeader, location []byte) error {
+func (b *LesApiBackend) SubRelayPendingHeader(pendingHeader types.PendingHeader, location []byte, reorg bool) error {
 	return nil
 }
 

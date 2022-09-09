@@ -65,16 +65,14 @@ type Backend interface {
 	StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error)
 	GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error)
 	GetTd(ctx context.Context, hash common.Hash) []*big.Int
-	GetSliceHeadHash(index byte) common.Hash
-	GetHeadHash() common.Hash
-	Append(block *types.Block, domTerminus common.Hash, td *big.Int, domReorg bool, currentContextOrigin bool) (types.PendingHeader, error)
+	Append(block *types.Block, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) (types.PendingHeader, error)
 	GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config) (*vm.EVM, func() error, error)
 	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 	InsertBlock(ctx context.Context, block *types.Block) (int, error)
 	PendingBlock() (*types.Block, error)
 	PendingBlockBody(hash common.Hash) *types.Body
-	SubRelayPendingHeader(pendingHeader types.PendingHeader, location []byte) error
+	SubRelayPendingHeader(pendingHeader types.PendingHeader, location []byte, reorg bool) error
 	GetPendingHeader() (*types.Header, error)
 	PendingBlockAndReceipts() (*types.Block, types.Receipts)
 	GetAncestorByLocation(hash common.Hash, location []byte) (*types.Header, error)

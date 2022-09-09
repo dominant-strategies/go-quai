@@ -127,8 +127,8 @@ func (b *EthAPIBackend) GetTerminusAtOrder(header *types.Header, order int) (com
 	return b.eth.core.GetTerminusAtOrder(header, order)
 }
 
-func (b *EthAPIBackend) Append(block *types.Block, domTerminus common.Hash, td *big.Int, domReorg bool, currentContextOrigin bool) (types.PendingHeader, error) {
-	return b.eth.core.Append(block, domTerminus, td, domReorg, currentContextOrigin)
+func (b *EthAPIBackend) Append(block *types.Block, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) (types.PendingHeader, error) {
+	return b.eth.core.Append(block, domTerminus, td, domOrigin, reorg)
 }
 
 func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
@@ -394,20 +394,12 @@ func (b *EthAPIBackend) CalculateBaseFee(header *types.Header) *big.Int {
 	return b.eth.core.CalculateBaseFee(header)
 }
 
-func (b *EthAPIBackend) GetSliceHeadHash(index byte) common.Hash {
-	return b.eth.core.GetSliceHeadHash(index)
-}
-
-func (b *EthAPIBackend) GetHeadHash() common.Hash {
-	return b.eth.core.GetHeadHash()
-}
-
 func (b *EthAPIBackend) PendingBlockBody(hash common.Hash) *types.Body {
 	return b.eth.core.PendingBlockBody(hash)
 }
 
-func (b *EthAPIBackend) SubRelayPendingHeader(slPendingHeader types.PendingHeader, location []byte) error {
-	return b.eth.core.SubRelayPendingHeader(slPendingHeader, location)
+func (b *EthAPIBackend) SubRelayPendingHeader(slPendingHeader types.PendingHeader, location []byte, reorg bool) error {
+	return b.eth.core.SubRelayPendingHeader(slPendingHeader, location, reorg)
 }
 
 func (b *EthAPIBackend) GetPendingHeader() (*types.Header, error) {

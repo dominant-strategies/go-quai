@@ -363,12 +363,12 @@ func (c *Core) GetTerminusAtOrder(header *types.Header, order int) (common.Hash,
 	return common.Hash{}, nil
 }
 
-func (c *Core) Append(block *types.Block, domTerminus common.Hash, td *big.Int, domReorg bool, currentContextOrigin bool) (types.PendingHeader, error) {
-	return c.sl.Append(block, domTerminus, td, domReorg, currentContextOrigin)
+func (c *Core) Append(block *types.Block, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) (types.PendingHeader, error) {
+	return c.sl.Append(block, domTerminus, td, domOrigin, reorg)
 }
 
-func (c *Core) SubRelayPendingHeader(slPendingHeader types.PendingHeader, location []byte) error {
-	return c.sl.SubRelayPendingHeader(slPendingHeader, location)
+func (c *Core) SubRelayPendingHeader(slPendingHeader types.PendingHeader, location []byte, reorg bool) error {
+	return c.sl.SubRelayPendingHeader(slPendingHeader, location, reorg)
 }
 
 func (c *Core) GetPendingHeader() (*types.Header, error) {
@@ -377,14 +377,6 @@ func (c *Core) GetPendingHeader() (*types.Header, error) {
 
 func (c *Core) TxLookupLimit() uint64 {
 	return 0
-}
-
-func (c *Core) GetSliceHeadHash(index byte) common.Hash {
-	return c.sl.GetSliceHeadHash(index)
-}
-
-func (c *Core) GetHeadHash() common.Hash {
-	return c.sl.GetHeadHash()
 }
 
 func (c *Core) HLCR(td *big.Int) bool {
