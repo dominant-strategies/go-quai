@@ -154,7 +154,7 @@ func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int
 	batch := sl.sliceDb.NewBatch()
 
 	//PCRC
-	domTerminus, phTerminus, err := sl.PCRC(batch, block.Header(), domTerminus)
+	domTerminus, err := sl.PCRC(batch, block.Header(), domTerminus)
 	if err != nil {
 		return sl.nilPendingHeader, err
 	}
@@ -184,7 +184,6 @@ func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int
 	}
 
 	localPendingHeader, err := sl.setHeaderChainHead(batch, block, td, domReorg, currentContextOrigin)
-	localPendingHeader.Termini[3] = phTerminus
 
 	if err != nil {
 		return sl.nilPendingHeader, err
@@ -282,12 +281,12 @@ func (sl *Slice) setHeaderChainHead(batch ethdb.Batch, block *types.Block, td *b
 }
 
 // PCRC
-func (sl *Slice) PCRC(batch ethdb.Batch, header *types.Header, domTerminus common.Hash) (common.Hash, common.Hash, error) {
+func (sl *Slice) PCRC(batch ethdb.Batch, header *types.Header, domTerminus common.Hash) (common.Hash, error) {
 	fmt.Println("PCRC Parent.Hash:", header.ParentHash, "Number", header.Number, "Location:", header.Location, "index:", types.QuaiNetworkContext)
 	termini := sl.hc.GetTerminiByHash(header.Parent())
 
 	if termini == nil {
-		return common.Hash{}, common.Hash{}, consensus.ErrFutureBlock
+		return common.Hash{}, consensus.ErrFutureBlock
 	}
 	fmt.Println("Dom Terminus: ", domTerminus)
 	fmt.Println("Termini: ", termini)
@@ -298,60 +297,35 @@ func (sl *Slice) PCRC(batch ethdb.Batch, header *types.Header, domTerminus commo
 	}
 
 	if len(termini) != 4 {
-		return common.Hash{}, common.Hash{}, errors.New("length of termini not equal to 4")
+		return common.Hash{}, errors.New("length of termini not equal to 4")
 	}
 
 	if types.QuaiNetworkContext != params.ZONE {
 		newTermini[header.Location[types.QuaiNetworkContext]-1] = header.Hash()
 	}
 
-	var order int
-	var err error
-	parentHeader := sl.hc.GetHeaderByHash(header.Parent())
-	if parentHeader.Hash() != sl.config.GenesisHashes[0] {
-		order, err = sl.engine.GetDifficultyOrder(parentHeader)
-		if err != nil {
-			return common.Hash{}, common.Hash{}, err
-		}
-	} else {
-		order = 0
+	order, err := sl.engine.GetDifficultyOrder(header)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	if header.ParentHash[0] == sl.config.GenesisHashes[0] {
+		domTerminus = sl.config.GenesisHashes[0]
 	}
 
 	if order < types.QuaiNetworkContext {
-		if types.QuaiNetworkContext == params.REGION {
-			newTermini[3] = parentHeader.Hash()
-		}
+		newTermini[3] = header.Hash()
 	} else if types.QuaiNetworkContext == params.PRIME {
-		newTermini[3] = parentHeader.Hash()
+		newTermini[3] = header.Hash()
 	} else {
 		newTermini[3] = termini[3]
 	}
-	nilCommon := common.Hash{}
+
 	fmt.Println("header location: ", header.Location, newTermini, termini)
 	if order < types.QuaiNetworkContext {
-		if header.Number64() > 9 {
-			if domTerminus != nilCommon {
-				if termini[3] != domTerminus {
-					return common.Hash{}, common.Hash{}, errors.New("termini do not match, block rejected due to a twist")
-				}
-			}
+		if termini[3] != domTerminus {
+			return common.Hash{}, errors.New("termini do not match, block rejected due to a twist")
 		}
-	}
-
-	// pending header termini
-	order, err = sl.engine.GetDifficultyOrder(header)
-	if err != nil {
-		return common.Hash{}, common.Hash{}, err
-	}
-
-	var phTerminus common.Hash
-	if order < types.QuaiNetworkContext {
-		phTerminus = header.Hash()
-		if types.QuaiNetworkContext == params.ZONE {
-			newTermini[3] = header.Hash()
-		}
-	} else {
-		phTerminus = newTermini[3]
 	}
 
 	//Save the termini
@@ -360,11 +334,9 @@ func (sl *Slice) PCRC(batch ethdb.Batch, header *types.Header, domTerminus commo
 	fmt.Println("Termini before return", newTermini)
 
 	if types.QuaiNetworkContext == params.ZONE {
-		return common.Hash{}, phTerminus, nil
+		return common.Hash{}, nil
 	}
-	parentTermini := sl.hc.GetTerminiByHash(termini[header.Location[types.QuaiNetworkContext]-1])
-
-	return parentTermini[header.Location[types.QuaiNetworkContext]-1], phTerminus, nil
+	return termini[header.Location[types.QuaiNetworkContext]-1], nil
 
 }
 
@@ -418,15 +390,19 @@ func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader, locati
 	if types.QuaiNetworkContext == params.REGION {
 		sl.updatePhCacheFromDom(pendingHeader, int(sl.config.Location[types.QuaiNetworkContext-1]-1), []int{params.PRIME})
 		for i := range sl.subClients {
-			err := sl.subClients[i].SubRelayPendingHeader(context.Background(), sl.phCache[sl.pendingHeader], location)
+			err := sl.subClients[i].SubRelayPendingHeader(context.Background(), sl.phCache[pendingHeader.Termini[sl.config.Location[types.QuaiNetworkContext-1]-1]], location)
 			if err != nil {
 				fmt.Println("SubRelayPendingHeader err:", err)
 			}
 		}
 	} else {
 		sl.updatePhCacheFromDom(pendingHeader, int(sl.config.Location[types.QuaiNetworkContext-1]-1), []int{params.PRIME, params.REGION})
-		sl.phCache[sl.pendingHeader].Header.Location = sl.config.Location
-		sl.miner.worker.pendingHeaderFeed.Send(sl.phCache[sl.pendingHeader].Header)
+		sl.phCache[pendingHeader.Termini[sl.config.Location[types.QuaiNetworkContext-1]-1]].Header.Location = sl.config.Location
+		bestPh, exists := sl.phCache[sl.pendingHeader]
+		if exists {
+			sl.miner.worker.pendingHeaderFeed.Send(bestPh.Header)
+		}
+
 	}
 	return nil
 }
@@ -514,7 +490,7 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 		localPendingHeader.Td = pendingHeader.Td
 		sl.phCache[hash] = localPendingHeader
 	}
-
+	sl.pendingHeader = hash
 }
 
 func (sl *Slice) setCurrentPendingHeader(externPendingHeader types.PendingHeader) {
