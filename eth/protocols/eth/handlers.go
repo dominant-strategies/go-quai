@@ -61,26 +61,36 @@ func answerGetBlockHeadersQuery(backend Backend, query *GetBlockHeadersPacket, p
 		lookups++
 		// Retrieve the next header satisfying the query
 		var origin *types.Header
+		fmt.Println("query.Origin", query.Origin)
 		if hashMode {
 			if first {
 				first = false
 				origin = backend.Core().GetHeaderByHash(query.Origin.Hash)
+				fmt.Println("Origin 1")
 				if origin != nil {
 					query.Origin.Number = origin.Number[types.QuaiNetworkContext].Uint64()
+					fmt.Println("Origin 1 nil")
 				}
 			} else {
 				origin = backend.Core().GetHeader(query.Origin.Hash, query.Origin.Number)
+				fmt.Println("Origin 2")
 			}
 		} else {
 			origin = backend.Core().GetHeaderByNumber(query.Origin.Number)
+			fmt.Println("Origin 3")
+			fmt.Println(query.Origin.Number)
 		}
+		fmt.Println("Origin?", origin)
 		if origin == nil {
 			break
 		}
+		fmt.Println("Origin hash?", origin.Hash())
+
 		headers = append(headers, origin)
 		bytes += estHeaderSize
 
 		// lock step sync only when going towards latest.
+		fmt.Println(hashMode, query.Reverse)
 		if hashMode && !query.Reverse {
 			break
 		}
