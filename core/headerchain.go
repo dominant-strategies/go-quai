@@ -562,8 +562,10 @@ func (hc *HeaderChain) ExportN(w io.Writer, first uint64, last uint64) error {
 func (hc *HeaderChain) GetBlockByHash(hash common.Hash) *types.Block {
 	number := hc.GetBlockNumber(hash)
 	if number == nil {
+		fmt.Println("GetBlockByHash: Number is nil", hash)
 		return nil
 	}
+	fmt.Println("GetBlockByHash", number, hash)
 	return hc.GetBlock(hash, *number)
 }
 
