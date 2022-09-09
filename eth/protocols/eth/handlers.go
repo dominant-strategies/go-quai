@@ -90,7 +90,6 @@ func answerGetBlockHeadersQuery(backend Backend, query *GetBlockHeadersPacket, p
 		bytes += estHeaderSize
 
 		// lock step sync only when going towards latest.
-		fmt.Println(hashMode, query.Reverse)
 		if hashMode && !query.Reverse {
 			break
 		}
