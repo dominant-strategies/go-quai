@@ -126,6 +126,7 @@ func AssembleGraph(start int, end int, chains []Chain) {
 		for j := start; j <= end; j++ {
 			blockHeader, err := chain.HeaderByNumber(context.Background(), big.NewInt(int64(j)))
 			if err != nil {
+				fmt.Println("i:", i, "j:", j)
 				panic(err)
 			}
 			blockHash := rlpHash(blockHeader)
