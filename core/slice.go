@@ -438,11 +438,11 @@ func (sl *Slice) setCurrentPendingHeader(externPendingHeader types.PendingHeader
 
 // gcPendingHeader goes through the phCache and deletes entries older than the pendingHeaderCacheLimit
 func (sl *Slice) gcPendingHeaders() {
-	for hash, pendingHeader := range sl.phCache {
-		if pendingHeader.Header.Number64() < sl.hc.CurrentHeader().Number64()-pendingHeaderCacheLimit {
-			delete(sl.phCache, hash)
-		}
-	}
+	// for hash, pendingHeader := range sl.phCache {
+	// 	if pendingHeader.Header.Number64() < sl.hc.CurrentHeader().Number64()-pendingHeaderCacheLimit {
+	// 		delete(sl.phCache, hash)
+	// 	}
+	// }
 }
 
 // combinePendingHeader updates the pending header at the given index with the value from given header.
