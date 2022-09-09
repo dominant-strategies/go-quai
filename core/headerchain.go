@@ -407,6 +407,7 @@ func (hc *HeaderChain) GetHeader(hash common.Hash, number uint64) *types.Header 
 	}
 	header := rawdb.ReadHeader(hc.headerDb, hash, number)
 	if header == nil {
+		fmt.Println("nil header db read", number, hash)
 		return nil
 	}
 	// Cache the found header for next time and return
@@ -439,6 +440,7 @@ func (hc *HeaderChain) HasHeader(hash common.Hash, number uint64) bool {
 func (hc *HeaderChain) GetHeaderByNumber(number uint64) *types.Header {
 	hash := rawdb.ReadCanonicalHash(hc.headerDb, number)
 	if hash == (common.Hash{}) {
+		fmt.Println("nil canonical hash for number:", number)
 		return nil
 	}
 	return hc.GetHeader(hash, number)
