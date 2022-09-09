@@ -101,13 +101,14 @@ type Service struct {
 // websocket.
 //
 // From Gorilla websocket docs:
-//   Connections support one concurrent reader and one concurrent writer.
-//   Applications are responsible for ensuring that no more than one goroutine calls the write methods
-//     - NextWriter, SetWriteDeadline, WriteMessage, WriteJSON, EnableWriteCompression, SetCompressionLevel
-//   concurrently and that no more than one goroutine calls the read methods
-//     - NextReader, SetReadDeadline, ReadMessage, ReadJSON, SetPongHandler, SetPingHandler
-//   concurrently.
-//   The Close and WriteControl methods can be called concurrently with all other methods.
+//
+//	Connections support one concurrent reader and one concurrent writer.
+//	Applications are responsible for ensuring that no more than one goroutine calls the write methods
+//	  - NextWriter, SetWriteDeadline, WriteMessage, WriteJSON, EnableWriteCompression, SetCompressionLevel
+//	concurrently and that no more than one goroutine calls the read methods
+//	  - NextReader, SetReadDeadline, ReadMessage, ReadJSON, SetPongHandler, SetPingHandler
+//	concurrently.
+//	The Close and WriteControl methods can be called concurrently with all other methods.
 type connWrapper struct {
 	conn *websocket.Conn
 
@@ -569,7 +570,7 @@ type blockStats struct {
 	Miner      common.Address `json:"miner"`
 	GasUsed    uint64         `json:"gasUsed"`
 	GasLimit   uint64         `json:"gasLimit"`
-	Diff       *big.Int       `json:"difficulty"`
+	Diff       string         `json:"difficulty"`
 	TotalDiff  string         `json:"totalDifficulty"`
 	Txs        []txStats      `json:"transactions"`
 	TxHash     common.Hash    `json:"transactionsRoot"`
@@ -658,7 +659,7 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		Miner:      author,
 		GasUsed:    header.GasUsed[types.QuaiNetworkContext],
 		GasLimit:   header.GasLimit[types.QuaiNetworkContext],
-		Diff:       header.Difficulty[types.QuaiNetworkContext],
+		Diff:       header.Difficulty[types.QuaiNetworkContext].String(),
 		TotalDiff:  td.String(),
 		Txs:        txs,
 		TxHash:     header.TxHash[types.QuaiNetworkContext],
