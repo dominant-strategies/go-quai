@@ -187,6 +187,9 @@ type Core interface {
 	// CurrentBlock retrieves the head block from the local chain.
 	CurrentBlock() *types.Block
 
+	// CurrentHeader retrieves the head header from the local chain.
+	CurrentHeader() *types.Header
+
 	// CurrentFastBlock retrieves the head fast block from the local chain.
 	CurrentFastBlock() *types.Block
 
@@ -250,7 +253,7 @@ func (d *Downloader) Progress() ethereum.SyncProgress {
 	mode := d.getMode()
 	switch {
 	case d.core != nil && mode == FullSync:
-		current = d.core.CurrentBlock().NumberU64()
+		current = d.core.CurrentHeader().Number[types.QuaiNetworkContext].Uint64()
 	case d.core != nil && mode == FastSync:
 		current = d.core.CurrentFastBlock().NumberU64()
 	case d.lightchain != nil:
@@ -465,7 +468,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 		// threshold (i.e. new chain). In that case we won't really fast sync
 		// anyway, but still need a valid pivot block to avoid some code hitting
 		// nil panics on an access.
-		pivot = d.core.CurrentBlock().Header()
+		pivot = d.core.CurrentHeader()
 	}
 	height := latest.Number[types.QuaiNetworkContext].Uint64()
 
@@ -762,7 +765,7 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 	mode := d.getMode()
 	switch mode {
 	case FullSync:
-		localHeight = d.core.CurrentBlock().NumberU64()
+		localHeight = d.core.CurrentHeader().Number[types.QuaiNetworkContext].Uint64()
 	case FastSync:
 		localHeight = d.core.CurrentFastBlock().NumberU64()
 	default:
@@ -1146,7 +1149,7 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 						head = d.lightchain.CurrentHeader().Number[types.QuaiNetworkContext].Uint64()
 					} else {
 						head = d.core.CurrentFastBlock().NumberU64()
-						if full := d.core.CurrentBlock().NumberU64(); head < full {
+						if full := d.core.CurrentHeader().Number[types.QuaiNetworkContext].Uint64(); head < full {
 							head = full
 						}
 					}
@@ -1523,7 +1526,7 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 			lastHeader, lastFastBlock, lastBlock := d.lightchain.CurrentHeader().Number, common.Big0, common.Big0
 			if mode != LightSync {
 				lastFastBlock = d.core.CurrentFastBlock().Number()
-				lastBlock = d.core.CurrentBlock().Number()
+				lastBlock = d.core.CurrentHeader().Number[types.QuaiNetworkContext]
 			}
 			if err := d.lightchain.SetHead(rollback - 1); err != nil { // -1 to target the parent of the first uncertain block
 				// We're already unwinding the stack, only print the error to make it more visible
@@ -1532,7 +1535,7 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 			curFastBlock, curBlock := common.Big0, common.Big0
 			if mode != LightSync {
 				curFastBlock = d.core.CurrentFastBlock().Number()
-				curBlock = d.core.CurrentBlock().Number()
+				curBlock = d.core.CurrentHeader().Number[types.QuaiNetworkContext]
 			}
 			log.Warn("Rolled back chain segment",
 				"header", fmt.Sprintf("%d->%d", lastHeader, d.lightchain.CurrentHeader().Number),
@@ -1572,8 +1575,10 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 				// L: Request new headers up from 11 (R's TD was higher, it must have something)
 				// R: Nothing to give
 				if mode != LightSync {
-					head := d.core.CurrentBlock()
-					if !gotHeaders && d.core.GetTd(head.Hash(), head.NumberU64()).Cmp(td) < 0 {
+					head := d.core.CurrentHeader()
+					fmt.Println("head ret from d.core.CurrentBlock()", head)
+					fmt.Println("TD is nil?", td)
+					if !gotHeaders && d.core.GetTd(head.Hash(), head.Number[types.QuaiNetworkContext].Uint64())[types.QuaiNetworkContext].Cmp(td[types.QuaiNetworkContext]) < 0 {
 						return errStallingPeer
 					}
 				}
