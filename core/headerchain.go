@@ -2,13 +2,10 @@ package core
 
 import (
 	"bytes"
-	crand "crypto/rand"
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"math/big"
-	mrand "math/rand"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -31,13 +28,7 @@ import (
 )
 
 var (
-	headBlockGauge     = metrics.NewRegisteredGauge("chain/head/block", nil)
-	headHeaderGauge    = metrics.NewRegisteredGauge("chain/head/header", nil)
-	headFastBlockGauge = metrics.NewRegisteredGauge("chain/head/receipt", nil)
-
-	blockReorgMeter         = metrics.NewRegisteredMeter("chain/reorg/executes", nil)
-	blockReorgAddMeter      = metrics.NewRegisteredMeter("chain/reorg/add", nil)
-	blockReorgDropMeter     = metrics.NewRegisteredMeter("chain/reorg/drop", nil)
+	headHeaderGauge         = metrics.NewRegisteredGauge("chain/head/header", nil)
 	blockReorgInvalidatedTx = metrics.NewRegisteredMeter("chain/reorg/invalidTx", nil)
 )
 
@@ -46,23 +37,6 @@ const (
 	tdCacheLimit     = 1024
 	numberCacheLimit = 2048
 )
-
-// WriteStatus status of write
-type WriteStatus byte
-
-const (
-	NonStatTy WriteStatus = iota
-	CanonStatTy
-	SideStatTy
-	UnknownStatTy
-)
-
-// HeaderChain is responsible for maintaining the header chain including the
-// header query and updating.
-//
-// The components maintained by headerchain includes: (1) total difficult
-// (2) header (3) block hash -> number mapping (4) canonical number -> hash mapping
-// and (5) head header flag.
 
 type HeaderChain struct {
 	config *params.ChainConfig
@@ -76,19 +50,16 @@ type HeaderChain struct {
 	headerDb      ethdb.Database
 	genesisHeader *types.Header
 
-	currentHeader     atomic.Value // Current head of the header chain (may be above the block chain!)
-	currentHeaderHash common.Hash  // Hash of the current head of the header chain (prevent recomputing all the time)
+	currentHeader atomic.Value // Current head of the header chain (may be above the block chain!)
 
 	headerCache *lru.Cache // Cache for the most recent block headers
 	tdCache     *lru.Cache // Cache for the most recent block total difficulties
 	numberCache *lru.Cache // Cache for the most recent block numbers
 
-	quit          chan struct{}  // headerchain quit channel
 	wg            sync.WaitGroup // chain processing wait group for shutting down
 	running       int32          // 0 if chain is running, 1 when stopped
 	procInterrupt int32          // interrupt signaler for block processing
 
-	rand     *mrand.Rand
 	headermu sync.RWMutex
 	heads    []*types.Header
 }
@@ -100,23 +71,16 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *par
 	tdCache, _ := lru.New(tdCacheLimit)
 	numberCache, _ := lru.New(numberCacheLimit)
 
-	// Seed a fast but crypto originating random generator
-	seed, err := crand.Int(crand.Reader, big.NewInt(math.MaxInt64))
-	if err != nil {
-		return nil, err
-	}
-
 	hc := &HeaderChain{
 		config:      chainConfig,
 		headerDb:    db,
 		headerCache: headerCache,
 		tdCache:     tdCache,
 		numberCache: numberCache,
-		rand:        mrand.New(mrand.NewSource(seed.Int64())),
 		engine:      engine,
-		quit:        make(chan struct{}),
 	}
 
+	var err error
 	hc.bc, err = NewBlockChain(db, engine, hc, chainConfig, cacheConfig, vmConfig)
 	if err != nil {
 		return nil, err
@@ -145,30 +109,22 @@ func (hc *HeaderChain) Append(batch ethdb.Batch, block *types.Block) error {
 	hc.headermu.Lock()
 	defer hc.headermu.Unlock()
 
-	fmt.Println("Block information: Hash:", block.Hash(), "block header hash:", block.Header().Hash(), "Number:", block.NumberU64(), "Location:", block.Header().Location, "Parent:", block.ParentHash())
-	// err := hc.Appendable(block)
-	// if err != nil {
-	// 	fmt.Println("Error on appendable, err:", err)
-	// 	return err
-	// }
+	log.Debug("HeaderChain Append:", "Block information: Hash:", block.Hash(), "block header hash:", block.Header().Hash(), "Number:", block.NumberU64(), "Location:", block.Header().Location, "Parent:", block.ParentHash())
 
 	err := hc.engine.VerifyHeader(hc, block.Header(), true)
 	if err != nil {
 		return err
 	}
-	fmt.Println("After Appendable Block information: Hash:", block.Hash(), "block header hash:", block.Header().Hash(), "Number:", block.NumberU64(), "Location:", block.Header().Location, "Parent:", block.ParentHash())
+
 	// Append header to the headerchain
 	rawdb.WriteHeader(batch, block.Header())
 
 	// Append block else revert header append
 	logs, err := hc.bc.Append(batch, block)
 	if err != nil {
-		fmt.Println("Error on Append, err:", err)
-		rawdb.DeleteHeader(batch, block.Header().Hash(), block.Header().Number64())
 		return err
 	}
 
-	fmt.Println("After Append Block information: Hash:", block.Hash(), "block header hash:", block.Header().Hash(), "Number:", block.NumberU64(), "Location:", block.Header().Location, "Parent:", block.ParentHash())
 	hc.bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
 	if len(logs) > 0 {
 		hc.bc.logsFeed.Send(logs)
@@ -219,14 +175,12 @@ func (hc *HeaderChain) Appendable(block *types.Block) error {
 // SetCurrentHeader sets the in-memory head header marker of the canonical chan
 // as the given header.
 func (hc *HeaderChain) SetCurrentHeader(batch ethdb.Batch, head *types.Header) ([]*types.Header, error) {
-	fmt.Println("Setting Current Header", head.Hash())
 	prevHeader := hc.CurrentHeader()
 
 	sliceHeaders := make([]*types.Header, 3)
 
 	//Update canonical state db
 	hc.currentHeader.Store(head)
-	hc.currentHeaderHash = head.Hash()
 	headHeaderGauge.Update(head.Number[types.QuaiNetworkContext].Int64())
 
 	// write the head block hash to the db
@@ -250,7 +204,6 @@ func (hc *HeaderChain) SetCurrentHeader(batch ethdb.Batch, head *types.Header) (
 	var hashStack []*types.Header
 	for {
 		if prevHeader.Hash() == commonHeader.Hash() {
-			fmt.Println("appending on prevHeader == commonHeader")
 			for {
 				if newHeader.Hash() == commonHeader.Hash() {
 					break
@@ -271,7 +224,6 @@ func (hc *HeaderChain) SetCurrentHeader(batch ethdb.Batch, head *types.Header) (
 		}
 
 		// Delete the header and the block
-		fmt.Println("delete prev", prevHeader.Hash())
 		rawdb.DeleteCanonicalHash(batch, prevHeader.Number64())
 		prevHeader = hc.GetHeader(prevHeader.Parent(), prevHeader.Number64()-1)
 		if types.QuaiNetworkContext != params.ZONE && prevHeader.Hash() == hc.config.GenesisHashes[types.QuaiNetworkContext] {
@@ -279,12 +231,10 @@ func (hc *HeaderChain) SetCurrentHeader(batch ethdb.Batch, head *types.Header) (
 		}
 
 		if newHeader.Hash() == commonHeader.Hash() {
-			fmt.Println("appending on newHeader == commonHeader")
 			for {
 				if prevHeader.Hash() == commonHeader.Hash() {
 					break
 				}
-				fmt.Println("delete prev", prevHeader.Hash())
 				rawdb.DeleteCanonicalHash(batch, prevHeader.Number64())
 				prevHeader = hc.GetHeader(prevHeader.Parent(), prevHeader.Number64()-1)
 				if types.QuaiNetworkContext != params.ZONE && prevHeader.Hash() == hc.config.GenesisHashes[types.QuaiNetworkContext] {
@@ -320,16 +270,10 @@ func (hc *HeaderChain) SetCurrentHeader(batch ethdb.Batch, head *types.Header) (
 		if types.QuaiNetworkContext != params.ZONE {
 			sliceHeaders[prevHeader.Location[types.QuaiNetworkContext]-1] = prevHeader
 		}
-
-		fmt.Println("prevheader: ", prevHeader.Hash())
 	}
-
-	fmt.Println("Attempting to write canonical hash")
-	fmt.Println("hashStack", hashStack)
 
 	// Run through the hash stack to update canonicalHash and forward state processor
 	for i := len(hashStack) - 1; i >= 0; i-- {
-		fmt.Println("WriteCanonicalHash", hashStack[i].Hash())
 		rawdb.WriteCanonicalHash(batch, hashStack[i].Hash(), hashStack[i].Number64())
 
 		// Setting the appropriate sliceHeader to rollforward point
@@ -406,16 +350,12 @@ func (hc *HeaderChain) findCommonHeader(header *types.Header) *types.Header {
 func (hc *HeaderChain) loadLastState() error {
 	// TODO: create function to find highest block number and fill Head FIFO
 	headsHashes := rawdb.ReadHeadsHashes(hc.headerDb)
-	fmt.Println("heads hashes: ", headsHashes)
 
 	if head := rawdb.ReadHeadBlockHash(hc.headerDb); head != (common.Hash{}) {
-		fmt.Println("head hash: ", head)
 		if chead := hc.GetHeaderByHash(head); chead != nil {
 			hc.currentHeader.Store(chead)
-			hc.currentHeaderHash = chead.Hash()
 		}
 	}
-	hc.currentHeaderHash = hc.CurrentHeader().Hash()
 	headHeaderGauge.Update(hc.CurrentHeader().Number[types.QuaiNetworkContext].Int64())
 
 	heads := make([]*types.Header, 0)
@@ -444,21 +384,10 @@ func (hc *HeaderChain) Stop() {
 
 	// Unsubscribe all subscriptions registered from blockchain
 	hc.bc.scope.Close()
-	close(hc.quit)
 	hc.StopInsert()
 	hc.wg.Wait()
 
 	log.Info("headerchain stopped")
-}
-
-// empty returns an indicator whether the blockchain is empty.
-func (hc *HeaderChain) empty() bool {
-	genesis := hc.genesisHeader.Hash()
-	if rawdb.ReadHeadBlockHash(hc.headerDb) == genesis {
-		return true
-	} else {
-		return false
-	}
 }
 
 // StopInsert interrupts all insertion methods, causing them to return
@@ -468,20 +397,10 @@ func (hc *HeaderChain) StopInsert() {
 	atomic.StoreInt32(&hc.procInterrupt, 1)
 }
 
-// insertStopped returns true after StopInsert has been called.
-func (hc *HeaderChain) insertStopped() bool {
-	return atomic.LoadInt32(&hc.procInterrupt) == 1
-}
-
 // Blockchain retrieves the blockchain from the headerchain.
 func (hc *HeaderChain) BlockChain() *BlockChain {
 	return hc.bc
 }
-
-// NOTES: Headerchain needs to have head
-// Singleton Tds need to get calculated by slice after successful append and then written into headerchain
-// Slice uses HLCR to query Headerchains for Tds
-// Slice is a collection of references headerchains
 
 // GetBlockNumber retrieves the block number belonging to the given hash
 // from the cache or database
@@ -658,7 +577,6 @@ func (hc *HeaderChain) GetHeaderByNumber(number uint64) *types.Header {
 
 func (hc *HeaderChain) GetCanonicalHash(number uint64) common.Hash {
 	hash := rawdb.ReadCanonicalHash(hc.headerDb, number)
-	fmt.Println("GetCanonicalHash", hash)
 	return hash
 }
 
