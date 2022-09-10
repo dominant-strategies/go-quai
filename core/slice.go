@@ -84,13 +84,13 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 	// only set the subClients if the chain is not Zone
 	sl.subClients = make([]*quaiclient.Client, 3)
 	if types.QuaiNetworkContext != params.ZONE {
-		sl.subClients = MakeSubClients(subClientUrls)
+		sl.subClients = makeSubClients(subClientUrls)
 	}
 
 	// only set domClient if the chain is not Prime.
 	if types.QuaiNetworkContext != params.PRIME {
 		go func() {
-			sl.domClient = MakeDomClient(domClientUrl)
+			sl.domClient = makeDomClient(domClientUrl)
 		}()
 	}
 
@@ -158,7 +158,7 @@ func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int
 	}
 
 	// Run Previous Coincident Reference Check (PCRC)
-	domTerminus, newTermini, err := sl.PCRC(batch, block.Header(), domTerminus, order)
+	domTerminus, newTermini, err := sl.pcrc(batch, block.Header(), domTerminus, order)
 	if err != nil {
 		return sl.nilPendingHeader, err
 	}
@@ -171,12 +171,12 @@ func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int
 
 	if !domOrigin {
 		// CalcTd on the new block
-		td, err = sl.CalcTd(block.Header())
+		td, err = sl.calcTd(block.Header())
 		if err != nil {
 			return sl.nilPendingHeader, err
 		}
 		// HLCR
-		reorg = sl.HLCR(td)
+		reorg = sl.hlcr(td)
 	}
 
 	// Call my sub to append the block
@@ -271,7 +271,7 @@ func (sl *Slice) setHeaderChainHead(batch ethdb.Batch, block *types.Block, reorg
 }
 
 // PCRC previous coincidence reference check makes sure there are not any cyclic references in the graph and calculates new termini and the block terminus
-func (sl *Slice) PCRC(batch ethdb.Batch, header *types.Header, domTerminus common.Hash, order int) (common.Hash, []common.Hash, error) {
+func (sl *Slice) pcrc(batch ethdb.Batch, header *types.Header, domTerminus common.Hash, order int) (common.Hash, []common.Hash, error) {
 	log.Debug("PCRC:", "Parent Hash:", header.Parent(), "Number", header.Number, "Location:", header.Location)
 	termini := sl.hc.GetTerminiByHash(header.Parent())
 
@@ -319,7 +319,7 @@ func (sl *Slice) PCRC(batch ethdb.Batch, header *types.Header, domTerminus commo
 }
 
 // HLCR Hierarchical Longest Chain Rule compares externTd to the currentHead Td and returns true if externTd is greater
-func (sl *Slice) HLCR(externTd *big.Int) bool {
+func (sl *Slice) hlcr(externTd *big.Int) bool {
 	currentTd := sl.hc.GetTdByHash(sl.hc.CurrentHeader().Hash())
 	log.Debug("HLCR:", "Header hash:", sl.hc.CurrentHeader().Hash(), "currentTd:", currentTd, "externTd:", externTd)
 	reorg := currentTd[types.QuaiNetworkContext].Cmp(externTd) < 0
@@ -328,7 +328,7 @@ func (sl *Slice) HLCR(externTd *big.Int) bool {
 }
 
 // CalcTd calculates the TD of the given header using PCRC and CalcHLCRNetDifficulty.
-func (sl *Slice) CalcTd(header *types.Header) (*big.Int, error) {
+func (sl *Slice) calcTd(header *types.Header) (*big.Int, error) {
 	priorTd := sl.hc.GetTd(header.Parent(), header.Number64()-1)
 	if priorTd[types.QuaiNetworkContext] == nil {
 		return nil, consensus.ErrFutureBlock
@@ -438,11 +438,11 @@ func (sl *Slice) setCurrentPendingHeader(externPendingHeader types.PendingHeader
 
 // gcPendingHeader goes through the phCache and deletes entries older than the pendingHeaderCacheLimit
 func (sl *Slice) gcPendingHeaders() {
-	// for hash, pendingHeader := range sl.phCache {
-	// 	if pendingHeader.Header.Number64() < sl.hc.CurrentHeader().Number64()-pendingHeaderCacheLimit {
-	// 		delete(sl.phCache, hash)
-	// 	}
-	// }
+	for hash, pendingHeader := range sl.phCache {
+		if pendingHeader.Header.Number64()+pendingHeaderCacheLimit < sl.hc.CurrentHeader().Number64() {
+			delete(sl.phCache, hash)
+		}
+	}
 }
 
 // combinePendingHeader updates the pending header at the given index with the value from given header.
@@ -465,7 +465,7 @@ func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *typ
 }
 
 // MakeDomClient creates the quaiclient for the given domurl
-func MakeDomClient(domurl string) *quaiclient.Client {
+func makeDomClient(domurl string) *quaiclient.Client {
 	if domurl == "" {
 		log.Crit("dom client url is empty")
 	}
@@ -477,7 +477,7 @@ func MakeDomClient(domurl string) *quaiclient.Client {
 }
 
 // MakeSubClients creates the quaiclient for the given suburls
-func MakeSubClients(suburls []string) []*quaiclient.Client {
+func makeSubClients(suburls []string) []*quaiclient.Client {
 	subClients := make([]*quaiclient.Client, 3)
 	for i, suburl := range suburls {
 		if suburl == "" {

@@ -379,10 +379,6 @@ func (c *Core) TxLookupLimit() uint64 {
 	return 0
 }
 
-func (c *Core) HLCR(td *big.Int) bool {
-	return c.sl.HLCR(td)
-}
-
 // SubscribePendingLogs starts delivering logs from pending transactions
 // to the given channel.
 func (c *Core) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscription {
