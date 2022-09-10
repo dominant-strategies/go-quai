@@ -403,8 +403,6 @@ func (w *worker) GeneratePendingHeader(block *types.Block) (*types.Header, error
 	}
 	coinbase = w.coinbase // Use the preset address as the fee recipient
 
-	fmt.Println("coinbase: ", coinbase)
-
 	work, err := w.prepareWork(&generateParams{
 		timestamp: uint64(timestamp),
 		coinbase:  coinbase,
@@ -475,18 +473,11 @@ func (w *worker) GeneratePendingHeader(block *types.Block) (*types.Header, error
 	interruptFunc()
 	stopCh, prev = make(chan struct{}), sealHash
 
-	// if w.skipSealHook != nil && w.skipSealHook(task) {
-	// 	continue
-	// }
 	w.pendingMu.Lock()
 	w.pendingTasks[sealHash] = task
 	w.pendingMu.Unlock()
 
-	fmt.Println("pending root: ", w.snapshotBlock.Root())
-	fmt.Println("pending tx hash: ", w.snapshotBlock.TxHash())
-	fmt.Println("pending receipt hash: ", w.snapshotBlock.ReceiptHash())
 	return w.snapshotBlock.Header(), nil
-
 }
 
 // mainLoop is responsible for generating and submitting sealing work based on
@@ -806,7 +797,6 @@ func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*en
 	defer w.mu.RUnlock()
 
 	// Find the parent block for sealing task
-	fmt.Println("block.Header().Hash:", block.Header().Hash(), "parentHeader.Number:", block.Header().Number64())
 	parent := block
 	// Sanity check the timestamp correctness, recap the timestamp
 	// to parent+1 if the mutation is allowed.
@@ -932,11 +922,9 @@ func (w *worker) FinalizeAssembleAndBroadcast(chain consensus.ChainHeaderReader,
 	}
 
 	if chain.CurrentHeader().Hash() == block.ParentHash() {
-		fmt.Println("Sending a header roots update: ", types.HeaderRoots{StateRoot: block.Root(), TxsRoot: block.TxHash(), ReceiptsRoot: block.ReceiptHash()})
 		w.headerRootsFeed.Send(types.HeaderRoots{StateRoot: block.Root(), TxsRoot: block.TxHash(), ReceiptsRoot: block.ReceiptHash()})
 	}
 	// store the pending block body details for the given stateroot
-	fmt.Println("FinalizeAssembleAndBroadcast", block.Header().Number, block.Header().Location, block.Header().Root)
 	rawdb.WritePendingBlockBody(w.workerDb, block.Root(), block.Body())
 	return block, nil
 }

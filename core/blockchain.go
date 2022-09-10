@@ -102,8 +102,8 @@ func (bc *BlockChain) Append(batch ethdb.Batch, block *types.Block) ([]*types.Lo
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("bc.Append:")
-	fmt.Println("parentHeader.Hash:", block.Hash(), "parentHeader.Number:", block.NumberU64())
+
+	log.Debug("BlockChain Append:", "parentHeader.Hash:", block.Hash(), "parentHeader.Number:", block.NumberU64())
 	if block.Hash() != block.Header().Hash() {
 		return nil, errors.New("state roots do not match header, append fail")
 	}

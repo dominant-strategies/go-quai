@@ -564,7 +564,6 @@ func (ec *Client) SendTransaction(ctx context.Context, tx *types.Transaction) er
 
 // ReceiveMinedHeader sends a mined block back to the node
 func (ec *Client) ReceiveMinedHeader(ctx context.Context, header *types.Header) error {
-	//fmt.Println("ReceiveMinedHeader:", header)
 	data := ethapi.RPCMarshalHeader(header)
 	return ec.c.CallContext(ctx, nil, "quai_receiveMinedHeader", data)
 }

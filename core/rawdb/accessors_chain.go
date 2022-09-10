@@ -355,7 +355,6 @@ func ReadHeader(db ethdb.Reader, hash common.Hash, number uint64) *types.Header 
 // WriteHeader stores a block header into the database and also stores the hash-
 // to-number mapping.
 func WriteHeader(db ethdb.KeyValueWriter, header *types.Header) {
-	fmt.Println("WriteHeader Hash:", header.Hash(), "Header:", header)
 	var (
 		hash   = header.Hash()
 		number = header.Number[types.QuaiNetworkContext].Uint64()
@@ -652,7 +651,7 @@ func DeleteSliceCurrentHeads(db ethdb.KeyValueWriter, hash common.Hash) {
 // ReadPendingHeader retreive's the pending header stored in hash.
 func ReadPendingHeader(db ethdb.Reader, hash common.Hash) *types.Header {
 	key := pendingHeaderKey(hash)
-	fmt.Println("ReadPendingHeader Key:", hash)
+	log.Debug("ReadPendingHeader", "Key:", hash)
 	data, _ := db.Get(key)
 	if len(data) == 0 {
 		return nil
@@ -705,7 +704,7 @@ func ReadTermini(db ethdb.Reader, hash common.Hash) []common.Hash {
 
 // WriteHeadsHashes writes the heads hashes of the blockchain.
 func WriteTermini(db ethdb.KeyValueWriter, index common.Hash, hashes []common.Hash) {
-	fmt.Println("WriteTermini:", hashes, "index:", index)
+	log.Debug("WriteTermini:", "hashes:", hashes, "index:", index)
 	key := terminiKey(index)
 	data, err := rlp.EncodeToBytes(hashes)
 	if err != nil {

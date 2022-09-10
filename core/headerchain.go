@@ -87,7 +87,7 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *par
 	}
 
 	hc.genesisHeader = hc.GetHeaderByNumber(0)
-	fmt.Println(hc.genesisHeader.Hash())
+	log.Info("Genesis", "Hash:", hc.genesisHeader.Hash())
 	if hc.genesisHeader == nil {
 		return nil, ErrNoGenesis
 	}
@@ -153,7 +153,6 @@ func (hc *HeaderChain) Append(batch ethdb.Batch, block *types.Block) error {
 
 	// Add to the heads queue
 	hc.heads = append(hc.heads, block.Header())
-	fmt.Println("hc.heads[0]: ", hc.heads[0].Hash())
 
 	// Sort the heads by number
 	sort.Slice(hc.heads, func(i, j int) bool {

@@ -1,7 +1,6 @@
 package core
 
 import (
-	"fmt"
 	"io"
 	"math/big"
 
@@ -14,6 +13,7 @@ import (
 	"github.com/spruce-solutions/go-quai/core/vm"
 	"github.com/spruce-solutions/go-quai/ethdb"
 	"github.com/spruce-solutions/go-quai/event"
+	"github.com/spruce-solutions/go-quai/log"
 	"github.com/spruce-solutions/go-quai/params"
 	"github.com/spruce-solutions/go-quai/rlp"
 )
@@ -51,7 +51,7 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 				if err == consensus.ErrFutureBlock {
 					c.sl.addFutureBlock(block)
 				}
-				fmt.Println("err in Append core: ", err)
+				log.Info("InsertChain", "err in Append core: ", err)
 				return i, err
 			}
 		}

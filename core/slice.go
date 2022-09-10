@@ -134,7 +134,7 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 			if block != nil {
 				_, err = sl.Append(block, genesisHash, block.Difficulty(), false, false)
 				if err != nil {
-					fmt.Println("Failed to append block, hash:", block.Hash(), "Number:", block.Number(), "Location:", block.Header().Location, "error:", err)
+					log.Warn("Failed to append block", "hash:", block.Hash(), "Number:", block.Number(), "Location:", block.Header().Location, "error:", err)
 				}
 			}
 		}

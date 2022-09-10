@@ -399,7 +399,6 @@ func (blake3 *Blake3) Prepare(chain consensus.ChainHeaderReader, header *types.H
 func (blake3 *Blake3) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
 	// Accumulate any block and uncle rewards and commit the final state root
 	accumulateRewards(chain.Config(), state, header, uncles)
-	fmt.Println("state root in consensus:", state.IntermediateRoot(chain.Config().IsEIP158(header.Number[types.QuaiNetworkContext])))
 	header.Root[types.QuaiNetworkContext] = state.IntermediateRoot(chain.Config().IsEIP158(header.Number[types.QuaiNetworkContext]))
 }
 

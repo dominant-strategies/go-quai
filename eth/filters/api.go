@@ -31,6 +31,7 @@ import (
 	"github.com/spruce-solutions/go-quai/core/types"
 	"github.com/spruce-solutions/go-quai/ethdb"
 	"github.com/spruce-solutions/go-quai/event"
+	"github.com/spruce-solutions/go-quai/log"
 	"github.com/spruce-solutions/go-quai/rpc"
 )
 
@@ -286,7 +287,7 @@ func (api *PublicFilterAPI) HeaderRoots(ctx context.Context) (*rpc.Subscription,
 		for {
 			select {
 			case b := <-headerRoots:
-				fmt.Println("Received header roots update: ", b)
+				log.Debug("HeaderRoots", "Received header roots update: ", b)
 				notifier.Notify(rpcSub.ID, b)
 			case <-rpcSub.Err():
 				headerRootsSub.Unsubscribe()
