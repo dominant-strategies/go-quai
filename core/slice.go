@@ -223,8 +223,10 @@ func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int
 
 // updateCacheAndRelay updates the pending headers cache and sends pending headers to subordinates
 func (sl *Slice) updateCacheAndRelay(pendingHeader types.PendingHeader, location []byte, order int, reorg bool) {
-	sl.updatePhCache(pendingHeader)
+	sl.phCachemu.Lock()
+	defer sl.phCachemu.Unlock()
 
+	sl.updatePhCache(pendingHeader)
 	if order == params.PRIME && types.QuaiNetworkContext == params.PRIME {
 		sl.updatePhCacheFromDom(pendingHeader, 3, []int{params.REGION, params.ZONE}, reorg)
 		if reorg {
@@ -344,6 +346,9 @@ func (sl *Slice) GetPendingHeader() (*types.Header, error) {
 
 // SubRelayPendingHeader takes a pending header from the sender (ie dominant), updates the phCache with a composited header and relays result to subordinates
 func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader, location []byte, reorg bool) error {
+	sl.phCachemu.Lock()
+	defer sl.phCachemu.Unlock()
+
 	if types.QuaiNetworkContext == params.REGION {
 		sl.updatePhCacheFromDom(pendingHeader, int(sl.config.Location[types.QuaiNetworkContext-1]-1), []int{params.PRIME}, reorg)
 		for i := range sl.subClients {
