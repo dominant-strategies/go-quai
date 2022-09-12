@@ -18,6 +18,7 @@ package core
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"math/big"
 	"sort"
@@ -636,6 +637,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	// Transactor should have enough funds to cover the costs
 	// cost == V + GP * GL
 	if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
+		fmt.Println("Err insufficent funds in pool?")
 		return ErrInsufficientFunds
 	}
 	// Ensure the transaction has more gas than the basic tx fee.
@@ -1312,8 +1314,9 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	}
 	// Initialize the internal state to the current head
 	if newHead == nil {
-		newHead = pool.core.CurrentBlock().Header() // Special case during testing
+		newHead = pool.core.CurrentHeader() // Special case during testing
 	}
+	fmt.Println("Getting stateDB for newHead", newHead.Number, newHead.Hash())
 	statedb, err := pool.core.StateAt(newHead.Root[types.QuaiNetworkContext])
 	if err != nil {
 		log.Error("Failed to reset txpool state", "err", err)
