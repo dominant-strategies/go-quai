@@ -145,8 +145,6 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 // Append takes a proposed block and attempts to hierarchically append it to the block graph.
 // If this is called from a dominant context a domTerminus must be provided else a common.Hash{} should be used and domOrigin should be set to true.
 func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) (types.PendingHeader, error) {
-	sl.appendmu.Lock()
-	defer sl.appendmu.Unlock()
 
 	log.Info("Starting Append...", "Block.Hash:", block.Hash(), "Number:", block.Number(), "Location:", block.Header().Location)
 	batch := sl.sliceDb.NewBatch()
@@ -188,17 +186,22 @@ func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int
 		}
 	}
 
-	// Set my header chain head and generate new pending header
-	localPendingHeader, err := sl.setHeaderChainHead(batch, block, reorg)
-	if err != nil {
-		return sl.nilPendingHeader, err
-	}
-
 	// WriteTd
 	// Remove this once td is converted to a single value.
 	externTd := make([]*big.Int, 3)
 	externTd[types.QuaiNetworkContext] = td
 	rawdb.WriteTd(batch, block.Header().Hash(), block.NumberU64(), externTd)
+
+	//Append has succeeded write the batch
+	if err := batch.Write(); err != nil {
+		return types.PendingHeader{}, err
+	}
+
+	// Set my header chain head and generate new pending header
+	localPendingHeader, err := sl.setHeaderChainHead(batch, block, reorg)
+	if err != nil {
+		return sl.nilPendingHeader, err
+	}
 
 	// Combine subordinates pending header with local pending header
 	var pendingHeader types.PendingHeader
@@ -209,11 +212,6 @@ func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int
 		pendingHeader = types.PendingHeader{Header: tempPendingHeader, Termini: newTermini, Td: big.NewInt(0)}
 	} else {
 		pendingHeader = types.PendingHeader{Header: localPendingHeader, Termini: newTermini, Td: big.NewInt(0)}
-	}
-
-	//Append has succeeded write the batch
-	if err := batch.Write(); err != nil {
-		return types.PendingHeader{}, err
 	}
 
 	// Relay the new pendingHeader
@@ -250,7 +248,7 @@ func (sl *Slice) updateCacheAndRelay(pendingHeader types.PendingHeader, location
 func (sl *Slice) setHeaderChainHead(batch ethdb.Batch, block *types.Block, reorg bool) (*types.Header, error) {
 	// If reorg is true set to newly appended block
 	if reorg {
-		_, err := sl.hc.SetCurrentHeader(batch, block.Header())
+		err := sl.hc.SetCurrentHeader(block.Header())
 		if err != nil {
 			return sl.nilHeader, err
 		}

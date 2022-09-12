@@ -140,6 +140,7 @@ func (api *PublicBlockChainQuaiAPI) ChainId() (*hexutil.Big, error) {
 func (s *PublicBlockChainQuaiAPI) BlockNumber() hexutil.Uint64 {
 	header, _ := s.b.HeaderByNumber(context.Background(), rpc.LatestBlockNumber) // latest header should always be available
 	return hexutil.Uint64(header.Number[types.QuaiNetworkContext].Uint64())
+
 }
 
 // GetBalance returns the amount of wei for the given address in the state of the
@@ -538,10 +539,7 @@ func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw js
 
 	//
 	pendingBlockBody := s.b.PendingBlockBody(header.Root[types.QuaiNetworkContext])
-	fmt.Println("State Root: ", header.Root[types.QuaiNetworkContext])
 	if pendingBlockBody != nil {
-		fmt.Println("pending block body in api: ", pendingBlockBody)
-		fmt.Println("Header in api: ", header)
 		// Load uncles because they are not included in the block response.
 		txs := make([]*types.Transaction, len(pendingBlockBody.Transactions))
 		for i, tx := range pendingBlockBody.Transactions {
@@ -551,7 +549,7 @@ func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw js
 		uncles := make([]*types.Header, len(pendingBlockBody.Uncles))
 		for i, uncle := range pendingBlockBody.Uncles {
 			uncles[i] = uncle
-			fmt.Println("uncle hash: ", uncle.Hash())
+			log.Debug("Pending Block uncle", "hash: ", uncle.Hash())
 		}
 
 		block := types.NewBlockWithHeader(header).WithBody(txs, uncles)
@@ -563,7 +561,7 @@ func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw js
 			s.b.EventMux().Post(core.NewMinedBlockEvent{Block: block})
 		}
 	} else {
-		fmt.Println("Uncle Block Found:", header.Hash(), "Block Number:", header.Number)
+		log.Info("Uncle Block Found...", "Hash:", header.Hash(), "Block Number:", header.Number)
 	}
 
 	return nil

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -106,8 +105,6 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *par
 
 // Append
 func (hc *HeaderChain) Append(batch ethdb.Batch, block *types.Block) error {
-	hc.headermu.Lock()
-	defer hc.headermu.Unlock()
 
 	log.Debug("HeaderChain Append:", "Block information: Hash:", block.Hash(), "block header hash:", block.Header().Hash(), "Number:", block.NumberU64(), "Location:", block.Header().Location, "Parent:", block.ParentHash())
 
@@ -130,35 +127,6 @@ func (hc *HeaderChain) Append(batch ethdb.Batch, block *types.Block) error {
 		hc.bc.logsFeed.Send(logs)
 	}
 
-	/////////////////////////
-	// Garbage Collection //
-	///////////////////////
-	var nilHeader *types.Header
-	// check if the size of the queue is at the maxHeadsQueueLimit
-	if len(hc.heads) == maxHeadsQueueLimit {
-		// // Trim the branch before dequeueing
-		// commonHeader := hc.findCommonHeader(hc.heads[0])
-		// if commonHeader == nil {
-		// 	return errors.New("nil head in hc.heads")
-		// }
-		// err = hc.trim(commonHeader, hc.heads[0])
-		// if err != nil {
-		// 	return err
-		// }
-
-		// dequeue
-		hc.heads[0] = nilHeader
-		hc.heads = hc.heads[1:]
-	}
-
-	// Add to the heads queue
-	hc.heads = append(hc.heads, block.Header())
-
-	// Sort the heads by number
-	sort.Slice(hc.heads, func(i, j int) bool {
-		return hc.heads[i].Number[types.QuaiNetworkContext].Uint64() < hc.heads[j].Number[types.QuaiNetworkContext].Uint64()
-	})
-
 	return nil
 }
 
@@ -173,158 +141,58 @@ func (hc *HeaderChain) Appendable(block *types.Block) error {
 
 // SetCurrentHeader sets the in-memory head header marker of the canonical chan
 // as the given header.
-func (hc *HeaderChain) SetCurrentHeader(batch ethdb.Batch, head *types.Header) ([]*types.Header, error) {
+func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 	prevHeader := hc.CurrentHeader()
-
-	sliceHeaders := make([]*types.Header, 3)
-
-	//Update canonical state db
-	hc.currentHeader.Store(head)
-	headHeaderGauge.Update(head.Number[types.QuaiNetworkContext].Int64())
-
-	// write the head block hash to the db
-	rawdb.WriteHeadBlockHash(batch, head.Hash())
-
-	// If head is the normal extension of canonical head, we can return by just wiring the canonical hash.
-	if prevHeader.Hash() == head.Parent() {
-		rawdb.WriteCanonicalHash(batch, head.Hash(), head.Number64())
-		if types.QuaiNetworkContext != params.ZONE && prevHeader.Hash() == hc.config.GenesisHashes[types.QuaiNetworkContext] {
-			sliceHeaders[head.Location[types.QuaiNetworkContext]-1] = head
-		}
-		return sliceHeaders, nil
-	}
 
 	//Find a common header
 	commonHeader := hc.findCommonHeader(head)
 	newHeader := head
 
+	// write the head block hash to the db
+	rawdb.WriteHeadBlockHash(hc.headerDb, head.Hash())
+	hc.currentHeader.Store(head)
+	headHeaderGauge.Update(head.Number[types.QuaiNetworkContext].Int64())
+
+	// If head is the normal extension of canonical head, we can return by just wiring the canonical hash.
+	if prevHeader.Hash() == head.Parent() {
+		rawdb.WriteCanonicalHash(hc.headerDb, head.Hash(), head.Number64())
+		return nil
+	}
+
 	// Delete each header and rollback state processor until common header
 	// Accumulate the hash slice stack
 	var hashStack []*types.Header
 	for {
-		if prevHeader.Hash() == commonHeader.Hash() {
-			for {
-				if newHeader.Hash() == commonHeader.Hash() {
-					break
-				}
-				newHeader = hc.GetHeader(newHeader.Parent(), newHeader.Number64()-1)
-				hashStack = append(hashStack, newHeader)
+		hashStack = append(hashStack, newHeader)
+		newHeader = hc.GetHeader(newHeader.Parent(), newHeader.Number64()-1)
 
-				// genesis check to not delete the genesis block
-				if newHeader.Hash() == hc.config.GenesisHashes[0] {
-					break
-				}
-
-				if newHeader == nil {
-					break
-				}
-			}
+		// genesis check to not delete the genesis block
+		if newHeader.Hash() == hc.config.GenesisHashes[0] {
 			break
-		}
-
-		// Delete the header and the block
-		rawdb.DeleteCanonicalHash(batch, prevHeader.Number64())
-		prevHeader = hc.GetHeader(prevHeader.Parent(), prevHeader.Number64()-1)
-		if types.QuaiNetworkContext != params.ZONE && prevHeader.Hash() == hc.config.GenesisHashes[types.QuaiNetworkContext] {
-			sliceHeaders[prevHeader.Location[types.QuaiNetworkContext]-1] = prevHeader
 		}
 
 		if newHeader.Hash() == commonHeader.Hash() {
-			for {
-				if prevHeader.Hash() == commonHeader.Hash() {
-					break
-				}
-				rawdb.DeleteCanonicalHash(batch, prevHeader.Number64())
-				prevHeader = hc.GetHeader(prevHeader.Parent(), prevHeader.Number64()-1)
-				if types.QuaiNetworkContext != params.ZONE && prevHeader.Hash() == hc.config.GenesisHashes[types.QuaiNetworkContext] {
-					sliceHeaders[prevHeader.Location[types.QuaiNetworkContext]-1] = prevHeader
-				}
-
-				// genesis check to not delete the genesis block
-				if prevHeader.Hash() == hc.config.GenesisHashes[0] {
-					break
-				}
-
-				if prevHeader == nil {
-					break
-				}
-			}
 			break
 		}
+	}
 
-		// Add to the stack
-		hashStack = append(hashStack, newHeader)
-		newHeader = hc.GetHeader(newHeader.Parent(), newHeader.Number64()-1)
+	for {
+		rawdb.DeleteCanonicalHash(hc.headerDb, prevHeader.Number64())
+		prevHeader = hc.GetHeader(prevHeader.Parent(), prevHeader.Number64()-1)
 
 		// genesis check to not delete the genesis block
 		if prevHeader.Hash() == hc.config.GenesisHashes[0] {
 			break
 		}
 
-		if prevHeader == nil {
+		if prevHeader.Hash() == commonHeader.Hash() {
 			break
-		}
-
-		// Setting the appropriate sliceHeader to rollback point
-		if types.QuaiNetworkContext != params.ZONE {
-			sliceHeaders[prevHeader.Location[types.QuaiNetworkContext]-1] = prevHeader
 		}
 	}
 
 	// Run through the hash stack to update canonicalHash and forward state processor
 	for i := len(hashStack) - 1; i >= 0; i-- {
-		rawdb.WriteCanonicalHash(batch, hashStack[i].Hash(), hashStack[i].Number64())
-
-		// Setting the appropriate sliceHeader to rollforward point
-		if types.QuaiNetworkContext != params.ZONE {
-			if len(hashStack[i].Location) != 0 {
-				sliceHeaders[hashStack[i].Location[types.QuaiNetworkContext]-1] = hashStack[i]
-			}
-		}
-	}
-
-	return sliceHeaders, nil
-}
-
-// Reset purges the entire blockchain, restoring it to its genesis state.
-func (hc *HeaderChain) Reset() error {
-	return hc.ResetWithGenesisBlock(hc.genesisHeader)
-}
-
-// ResetWithGenesisBlock purges the entire blockchain, restoring it to the
-// specified genesis state.
-func (hc *HeaderChain) ResetWithGenesisBlock(genesis *types.Header) error {
-
-	hc.headermu.Lock()
-	defer hc.headermu.Unlock()
-
-	//Iterate through my heads and trim each back to genesis
-	for _, head := range hc.heads {
-		hc.trim(hc.genesisHeader, head)
-	}
-
-	return nil
-}
-
-// Trim
-func (hc *HeaderChain) trim(commonHeader *types.Header, startHeader *types.Header) error {
-	parent := startHeader
-	// Delete each header until common is found
-	for {
-		if parent.Hash() == commonHeader.Hash() {
-			break
-		}
-
-		// Delete the header and the block
-		rawdb.DeleteHeader(hc.headerDb, parent.Hash(), parent.Number64())
-		hc.bc.Trim(parent)
-
-		parent = hc.GetHeader(parent.Parent(), parent.Number64()-1)
-
-		if parent == nil {
-			log.Warn("unable to trim blockchain state, one of trimmed blocks not found")
-			return nil
-		}
+		rawdb.WriteCanonicalHash(hc.headerDb, hashStack[i].Hash(), hashStack[i].Number64())
 	}
 	return nil
 }
