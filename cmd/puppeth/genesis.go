@@ -25,7 +25,7 @@ import (
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/common/hexutil"
 	math2 "github.com/spruce-solutions/go-quai/common/math"
-	"github.com/spruce-solutions/go-quai/consensus/ethash"
+	"github.com/spruce-solutions/go-quai/consensus/blake3pow"
 	"github.com/spruce-solutions/go-quai/core"
 	"github.com/spruce-solutions/go-quai/core/types"
 	"github.com/spruce-solutions/go-quai/params"
@@ -96,13 +96,13 @@ type alethGenesisSpecLinearPricing struct {
 // newAlethGenesisSpec converts a go-ethereum genesis block into a Aleth-specific
 // chain specification format.
 func newAlethGenesisSpec(network string, genesis *core.Genesis) (*alethGenesisSpec, error) {
-	// Only ethash is currently supported between go-ethereum and aleth
-	if genesis.Config.Ethash == nil {
+	// Only blake3pow is currently supported between go-ethereum and aleth
+	if genesis.Config.Blake3pow == nil {
 		return nil, errors.New("unsupported consensus engine")
 	}
 	// Reconstruct the chain spec in Aleth format
 	spec := &alethGenesisSpec{
-		SealEngine: "Ethash",
+		SealEngine: "Blake3pow",
 	}
 	// Some defaults
 	spec.Params.AccountStartNonce = 0
@@ -144,7 +144,7 @@ func newAlethGenesisSpec(network string, genesis *core.Genesis) (*alethGenesisSp
 	spec.Params.DifficultyBoundDivisor = (*math2.HexOrDecimal256)(params.DifficultyBoundDivisor)
 	spec.Params.GasLimitBoundDivisor = (math2.HexOrDecimal64)(params.GasLimitBoundDivisor)
 	spec.Params.DurationLimit = (*math2.HexOrDecimal256)(params.DurationLimit)
-	spec.Params.BlockReward = (*hexutil.Big)(ethash.FrontierBlockReward)
+	spec.Params.BlockReward = (*hexutil.Big)(blake3pow.FrontierBlockReward)
 
 	spec.Genesis.Nonce() = types.EncodeNonce(genesis.Nonce())
 	spec.Genesis.MixHash = genesis.Mixhash
@@ -230,7 +230,7 @@ type parityChainSpec struct {
 	Name    string `json:"name"`
 	Datadir string `json:"dataDir"`
 	Engine  struct {
-		Ethash struct {
+		Blake3pow struct {
 			Params struct {
 				MinimumDifficulty      *hexutil.Big      `json:"minimumDifficulty"`
 				DifficultyBoundDivisor *hexutil.Big      `json:"difficultyBoundDivisor"`
@@ -240,7 +240,7 @@ type parityChainSpec struct {
 				HomesteadTransition    hexutil.Uint64    `json:"homesteadTransition"`
 				EIP100bTransition      hexutil.Uint64    `json:"eip100bTransition"`
 			} `json:"params"`
-		} `json:"Ethash"`
+		} `json:"Blake3pow"`
 	} `json:"engine"`
 
 	Params struct {
@@ -364,8 +364,8 @@ type parityChainSpecVersionedPricing struct {
 // newParityChainSpec converts a go-ethereum genesis block into a Parity specific
 // chain specification format.
 func newParityChainSpec(network string, genesis *core.Genesis, bootnodes []string) (*parityChainSpec, error) {
-	// Only ethash is currently supported between go-ethereum and Parity
-	if genesis.Config.Ethash == nil {
+	// Only blake3pow is currently supported between go-ethereum and Parity
+	if genesis.Config.Blake3pow == nil {
 		return nil, errors.New("unsupported consensus engine")
 	}
 	// Reconstruct the chain spec in Parity's format
@@ -374,16 +374,16 @@ func newParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 		Nodes:   bootnodes,
 		Datadir: strings.ToLower(network),
 	}
-	spec.Engine.Ethash.Params.BlockReward = make(map[string]string)
-	spec.Engine.Ethash.Params.DifficultyBombDelays = make(map[string]string)
+	spec.Engine.Blake3pow.Params.BlockReward = make(map[string]string)
+	spec.Engine.Blake3pow.Params.DifficultyBombDelays = make(map[string]string)
 	// Frontier
-	spec.Engine.Ethash.Params.MinimumDifficulty = (*hexutil.Big)(params.MinimumDifficulty)
-	spec.Engine.Ethash.Params.DifficultyBoundDivisor = (*hexutil.Big)(params.DifficultyBoundDivisor)
-	spec.Engine.Ethash.Params.DurationLimit = (*hexutil.Big)(params.DurationLimit)
-	spec.Engine.Ethash.Params.BlockReward["0x0"] = hexutil.EncodeBig(ethash.FrontierBlockReward)
+	spec.Engine.Blake3pow.Params.MinimumDifficulty = (*hexutil.Big)(params.MinimumDifficulty)
+	spec.Engine.Blake3pow.Params.DifficultyBoundDivisor = (*hexutil.Big)(params.DifficultyBoundDivisor)
+	spec.Engine.Blake3pow.Params.DurationLimit = (*hexutil.Big)(params.DurationLimit)
+	spec.Engine.Blake3pow.Params.BlockReward["0x0"] = hexutil.EncodeBig(blake3pow.FrontierBlockReward)
 
 	// Homestead
-	spec.Engine.Ethash.Params.HomesteadTransition = hexutil.Uint64(genesis.Config.HomesteadBlock.Uint64())
+	spec.Engine.Blake3pow.Params.HomesteadTransition = hexutil.Uint64(genesis.Config.HomesteadBlock.Uint64())
 
 	// Tangerine Whistle : 150
 	// https://github.com/ethereum/EIPs/blob/master/EIPS/eip-608.md
@@ -559,10 +559,10 @@ func (spec *parityChainSpec) setPrecompile(address byte, data *parityChainSpecBu
 }
 
 func (spec *parityChainSpec) setByzantium(num *big.Int) {
-	spec.Engine.Ethash.Params.BlockReward[hexutil.EncodeBig(num)] = hexutil.EncodeBig(ethash.ByzantiumBlockReward)
-	spec.Engine.Ethash.Params.DifficultyBombDelays[hexutil.EncodeBig(num)] = hexutil.EncodeUint64(3000000)
+	spec.Engine.Blake3pow.Params.BlockReward[hexutil.EncodeBig(num)] = hexutil.EncodeBig(blake3pow.ByzantiumBlockReward)
+	spec.Engine.Blake3pow.Params.DifficultyBombDelays[hexutil.EncodeBig(num)] = hexutil.EncodeUint64(3000000)
 	n := hexutil.Uint64(num.Uint64())
-	spec.Engine.Ethash.Params.EIP100bTransition = n
+	spec.Engine.Blake3pow.Params.EIP100bTransition = n
 	spec.Params.EIP140Transition = n
 	spec.Params.EIP211Transition = n
 	spec.Params.EIP214Transition = n
@@ -570,8 +570,8 @@ func (spec *parityChainSpec) setByzantium(num *big.Int) {
 }
 
 func (spec *parityChainSpec) setConstantinople(num *big.Int) {
-	spec.Engine.Ethash.Params.BlockReward[hexutil.EncodeBig(num)] = hexutil.EncodeBig(ethash.ConstantinopleBlockReward)
-	spec.Engine.Ethash.Params.DifficultyBombDelays[hexutil.EncodeBig(num)] = hexutil.EncodeUint64(2000000)
+	spec.Engine.Blake3pow.Params.BlockReward[hexutil.EncodeBig(num)] = hexutil.EncodeBig(blake3pow.ConstantinopleBlockReward)
+	spec.Engine.Blake3pow.Params.DifficultyBombDelays[hexutil.EncodeBig(num)] = hexutil.EncodeUint64(2000000)
 	n := hexutil.Uint64(num.Uint64())
 	spec.Params.EIP145Transition = n
 	spec.Params.EIP1014Transition = n
@@ -607,8 +607,8 @@ type pyEthereumGenesisSpec struct {
 // newPyEthereumGenesisSpec converts a go-ethereum genesis block into a Parity specific
 // chain specification format.
 func newPyEthereumGenesisSpec(network string, genesis *core.Genesis) (*pyEthereumGenesisSpec, error) {
-	// Only ethash is currently supported between go-ethereum and pyethereum
-	if genesis.Config.Ethash == nil {
+	// Only blake3pow is currently supported between go-ethereum and pyethereum
+	if genesis.Config.Blake3pow == nil {
 		return nil, errors.New("unsupported consensus engine")
 	}
 	spec := &pyEthereumGenesisSpec{
