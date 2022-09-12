@@ -64,7 +64,6 @@ func answerGetBlockHeadersQuery(backend Backend, query *GetBlockHeadersPacket, p
 		lookups++
 		// Retrieve the next header satisfying the query
 		var origin *types.Header
-		fmt.Println("query.Origin", query.Origin)
 		if hashMode {
 			if first {
 				first = false
@@ -77,9 +76,7 @@ func answerGetBlockHeadersQuery(backend Backend, query *GetBlockHeadersPacket, p
 			}
 		} else {
 			origin = backend.Core().GetHeaderByNumber(query.Origin.Number)
-			fmt.Println(query.Origin.Number)
 		}
-		fmt.Println("Origin nil?", origin == nil)
 		if origin == nil {
 			break
 		}
