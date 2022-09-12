@@ -115,7 +115,6 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 	sl.nilPendingHeader = types.PendingHeader{
 		Header:  sl.nilHeader,
 		Termini: make([]common.Hash, 3),
-		Td:      big.NewInt(0),
 	}
 
 	go sl.updateFutureBlocks()
@@ -210,9 +209,9 @@ func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int
 		tempPendingHeader := subPendingHeader.Header
 		tempPendingHeader = sl.combinePendingHeader(localPendingHeader, tempPendingHeader, types.QuaiNetworkContext)
 		tempPendingHeader.Location = subPendingHeader.Header.Location
-		pendingHeader = types.PendingHeader{Header: tempPendingHeader, Termini: newTermini, Td: big.NewInt(0)}
+		pendingHeader = types.PendingHeader{Header: tempPendingHeader, Termini: newTermini}
 	} else {
-		pendingHeader = types.PendingHeader{Header: localPendingHeader, Termini: newTermini, Td: big.NewInt(0)}
+		pendingHeader = types.PendingHeader{Header: localPendingHeader, Termini: newTermini}
 	}
 
 	// Relay the new pendingHeader
@@ -397,7 +396,6 @@ func (sl *Slice) updatePhCache(externPendingHeader types.PendingHeader) {
 	if externPendingHeader.Header.Number64() > localPendingHeader.Header.Number64() {
 		localPendingHeader.Header = sl.combinePendingHeader(externPendingHeader.Header, localPendingHeader.Header, types.QuaiNetworkContext)
 		localPendingHeader.Termini = externPendingHeader.Termini
-		localPendingHeader.Td = externPendingHeader.Td
 
 		sl.setCurrentPendingHeader(localPendingHeader)
 		sl.phCache[hash] = localPendingHeader
@@ -419,7 +417,6 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 			localPendingHeader.Header = sl.combinePendingHeader(pendingHeader.Header, localPendingHeader.Header, i)
 		}
 		localPendingHeader.Header.Location = pendingHeader.Header.Location
-		localPendingHeader.Td = pendingHeader.Td
 		sl.phCache[hash] = localPendingHeader
 	}
 

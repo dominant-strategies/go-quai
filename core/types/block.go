@@ -204,7 +204,6 @@ func IsEqualHashSlice(a, b []common.Hash) bool {
 type PendingHeader struct {
 	Header  *Header
 	Termini []common.Hash
-	Td      *big.Int
 }
 
 // Body is a simple (mutable, non-safe) data container for storing and moving

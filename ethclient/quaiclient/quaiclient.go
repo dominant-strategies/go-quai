@@ -486,7 +486,6 @@ func (ec *Client) Append(ctx context.Context, block *types.Block, domTerminus co
 func (ec *Client) SubRelayPendingHeader(ctx context.Context, pendingHeader types.PendingHeader, location []byte, reorg bool) error {
 	data := map[string]interface{}{"Header": RPCMarshalHeader(pendingHeader.Header)}
 	data["Termini"] = pendingHeader.Termini
-	data["Td"] = pendingHeader.Td
 	data["Location"] = location
 	data["Reorg"] = reorg
 
