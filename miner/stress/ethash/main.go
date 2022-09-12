@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// This file contains a miner stress test based on the Ethash consensus engine.
+// This file contains a miner stress test based on the Blake3pow consensus engine.
 package main
 
 import (
@@ -29,7 +29,7 @@ import (
 	"github.com/spruce-solutions/go-quai/accounts/keystore"
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/common/fdlimit"
-	"github.com/spruce-solutions/go-quai/consensus/ethash"
+	"github.com/spruce-solutions/go-quai/consensus/blake3pow"
 	"github.com/spruce-solutions/go-quai/core"
 	"github.com/spruce-solutions/go-quai/core/types"
 	"github.com/spruce-solutions/go-quai/crypto"
@@ -53,10 +53,10 @@ func main() {
 	for i := 0; i < len(faucets); i++ {
 		faucets[i], _ = crypto.GenerateKey()
 	}
-	// Pre-generate the ethash mining DAG so we don't race
-	ethash.MakeDataset(1, filepath.Join(os.Getenv("HOME"), ".ethash"))
+	// Pre-generate the blake3pow mining DAG so we don't race
+	blake3pow.MakeDataset(1, filepath.Join(os.Getenv("HOME"), ".blake3pow"))
 
-	// Create an Ethash network based off of the Ropsten config
+	// Create an Blake3pow network based off of the Ropsten config
 	genesis := makeGenesis(faucets)
 
 	var (
@@ -122,7 +122,7 @@ func main() {
 	}
 }
 
-// makeGenesis creates a custom Ethash genesis block based on some pre-defined
+// makeGenesis creates a custom Blake3pow genesis block based on some pre-defined
 // faucet accounts.
 func makeGenesis(faucets []*ecdsa.PrivateKey) *core.Genesis {
 	genesis := core.DefaultRopstenGenesisBlock()
@@ -169,7 +169,7 @@ func makeMiner(genesis *core.Genesis) (*node.Node, *eth.Ethereum, error) {
 		DatabaseHandles: 256,
 		TxPool:          core.DefaultTxPoolConfig,
 		GPO:             ethconfig.Defaults.GPO,
-		Ethash:          ethconfig.Defaults.Ethash,
+		Blake3pow:          ethconfig.Defaults.Blake3pow,
 		Miner: miner.Config{
 			GasCeil:  genesis.GasLimit() * 11 / 10,
 			GasPrice: big.NewInt(1),

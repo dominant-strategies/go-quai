@@ -30,7 +30,7 @@ import (
 
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/common/hexutil"
-	"github.com/spruce-solutions/go-quai/consensus/ethash"
+	"github.com/spruce-solutions/go-quai/consensus/blake3pow"
 	"github.com/spruce-solutions/go-quai/eth"
 	"github.com/spruce-solutions/go-quai/eth/downloader"
 	"github.com/spruce-solutions/go-quai/eth/ethconfig"
@@ -495,7 +495,7 @@ func testSim(t *testing.T, serverCount, clientCount int, serverDir, clientDir []
 func newLesClientService(ctx *adapters.ServiceContext, stack *node.Node) (node.Lifecycle, error) {
 	config := ethconfig.Defaults
 	config.SyncMode = downloader.LightSync
-	config.Ethash.PowMode = ethash.ModeFake
+	config.Blake3pow.PowMode = blake3pow.ModeFake
 	return New(stack, &config)
 }
 

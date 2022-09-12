@@ -61,7 +61,6 @@ func randHash() common.Hash {
 
 func largeHeader() *types.Header {
 	return &types.Header{
-		MixDigest:   randHash(),
 		ReceiptHash: randHash(),
 		TxHash:      randHash(),
 		Nonce:       types.BlockNonce{},
