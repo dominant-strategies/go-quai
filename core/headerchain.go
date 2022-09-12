@@ -142,6 +142,9 @@ func (hc *HeaderChain) Appendable(block *types.Block) error {
 // SetCurrentHeader sets the in-memory head header marker of the canonical chan
 // as the given header.
 func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
+	hc.headermu.Lock()
+	defer hc.headermu.Unlock()
+
 	prevHeader := hc.CurrentHeader()
 
 	//Find a common header

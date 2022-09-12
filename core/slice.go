@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -145,11 +146,11 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 // Append takes a proposed block and attempts to hierarchically append it to the block graph.
 // If this is called from a dominant context a domTerminus must be provided else a common.Hash{} should be used and domOrigin should be set to true.
 func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) (types.PendingHeader, error) {
-
 	log.Info("Starting Append...", "Block.Hash:", block.Hash(), "Number:", block.Number(), "Location:", block.Header().Location)
 	batch := sl.sliceDb.NewBatch()
 
 	// Calculate block order
+
 	order, err := sl.engine.GetDifficultyOrder(block.Header())
 	if err != nil {
 		return sl.nilPendingHeader, err
@@ -222,20 +223,21 @@ func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int
 
 // updateCacheAndRelay updates the pending headers cache and sends pending headers to subordinates
 func (sl *Slice) updateCacheAndRelay(pendingHeader types.PendingHeader, location []byte, order int, reorg bool) {
-	sl.phCachemu.Lock()
-	defer sl.phCachemu.Unlock()
-
 	sl.updatePhCache(pendingHeader)
 
 	if order == params.PRIME && types.QuaiNetworkContext == params.PRIME {
 		sl.updatePhCacheFromDom(pendingHeader, 3, []int{params.REGION, params.ZONE}, reorg)
-		sl.miner.worker.pendingHeaderFeed.Send(sl.phCache[sl.pendingHeader].Header)
+		if reorg {
+			sl.miner.worker.pendingHeaderFeed.Send(sl.phCache[sl.pendingHeader].Header)
+		}
 		for i := range sl.subClients {
 			sl.subClients[i].SubRelayPendingHeader(context.Background(), sl.phCache[sl.pendingHeader], location, reorg)
 		}
 	} else if order == params.REGION && types.QuaiNetworkContext == params.REGION {
 		sl.updatePhCacheFromDom(pendingHeader, 3, []int{params.ZONE}, reorg)
-		sl.miner.worker.pendingHeaderFeed.Send(sl.phCache[sl.pendingHeader].Header)
+		if reorg {
+			sl.miner.worker.pendingHeaderFeed.Send(sl.phCache[sl.pendingHeader].Header)
+		}
 		for i := range sl.subClients {
 			sl.subClients[i].SubRelayPendingHeader(context.Background(), sl.phCache[sl.pendingHeader], location, reorg)
 		}
@@ -342,9 +344,6 @@ func (sl *Slice) GetPendingHeader() (*types.Header, error) {
 
 // SubRelayPendingHeader takes a pending header from the sender (ie dominant), updates the phCache with a composited header and relays result to subordinates
 func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader, location []byte, reorg bool) error {
-	sl.phCachemu.Lock()
-	defer sl.phCachemu.Unlock()
-
 	if types.QuaiNetworkContext == params.REGION {
 		sl.updatePhCacheFromDom(pendingHeader, int(sl.config.Location[types.QuaiNetworkContext-1]-1), []int{params.PRIME}, reorg)
 		for i := range sl.subClients {
@@ -357,7 +356,7 @@ func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader, locati
 		sl.updatePhCacheFromDom(pendingHeader, int(sl.config.Location[types.QuaiNetworkContext-1]-1), []int{params.PRIME, params.REGION}, reorg)
 		sl.phCache[pendingHeader.Termini[sl.config.Location[types.QuaiNetworkContext-1]-1]].Header.Location = sl.config.Location
 		bestPh, exists := sl.phCache[sl.pendingHeader]
-		if exists {
+		if exists && !bytes.Equal(location, sl.config.Location) {
 			sl.miner.worker.pendingHeaderFeed.Send(bestPh.Header)
 		}
 	}
@@ -414,6 +413,7 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 		for _, i := range indices {
 			localPendingHeader.Header = sl.combinePendingHeader(pendingHeader.Header, localPendingHeader.Header, i)
 		}
+		localPendingHeader.Header.Location = pendingHeader.Header.Location
 		localPendingHeader.Td = pendingHeader.Td
 		sl.phCache[hash] = localPendingHeader
 	}

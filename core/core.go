@@ -268,10 +268,6 @@ func (c *Core) Genesis() *types.Block {
 	return c.GetBlockByHash(c.sl.hc.genesisHeader.Hash())
 }
 
-func (c *Core) ResetWithGenesisBlock(genesis *types.Header) error {
-	return c.sl.hc.ResetWithGenesisBlock(genesis)
-}
-
 func (c *Core) Stop() {
 	c.sl.hc.Stop()
 }
