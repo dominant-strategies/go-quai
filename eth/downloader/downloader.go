@@ -1576,7 +1576,6 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 				// R: Nothing to give
 				if mode != LightSync {
 					head := d.core.CurrentHeader()
-					fmt.Println("head ret from d.core.CurrentBlock()", head)
 					fmt.Println("TD is nil?", td)
 					ourTD := d.core.GetTd(head.Hash(), head.Number[types.QuaiNetworkContext].Uint64())
 					fmt.Println("Our td", ourTD)
