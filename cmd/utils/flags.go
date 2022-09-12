@@ -33,6 +33,8 @@ import (
 	"text/template"
 	"time"
 
+	pcsclite "github.com/gballet/go-libpcsclite"
+	gopsutil "github.com/shirou/gopsutil/mem"
 	"github.com/spruce-solutions/go-quai/accounts"
 	"github.com/spruce-solutions/go-quai/accounts/keystore"
 	"github.com/spruce-solutions/go-quai/common"
@@ -66,8 +68,6 @@ import (
 	"github.com/spruce-solutions/go-quai/p2p/nat"
 	"github.com/spruce-solutions/go-quai/p2p/netutil"
 	"github.com/spruce-solutions/go-quai/params"
-	pcsclite "github.com/gballet/go-libpcsclite"
-	gopsutil "github.com/shirou/gopsutil/mem"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -760,6 +760,17 @@ var (
 		Name:  "catalyst",
 		Usage: "Catalyst mode (eth2 integration testing)",
 	}
+
+	RegionFlag = cli.IntFlag{
+		Name:  "region",
+		Usage: "Quai Region flag",
+		Value: ethconfig.Defaults.Region,
+	}
+	ZoneFlag = cli.IntFlag{
+		Name:  "zone",
+		Usage: "Quai Zone flag",
+		Value: ethconfig.Defaults.Zone,
+	}
 )
 
 // MakeDataDir retrieves the currently requested data directory, terminating
@@ -770,16 +781,25 @@ func MakeDataDir(ctx *cli.Context) string {
 		if ctx.GlobalBool(RopstenFlag.Name) {
 			// Maintain compatibility with older Geth configurations storing the
 			// Ropsten database in `testnet` instead of `ropsten`.
-			return filepath.Join(path, "ropsten")
+			path = filepath.Join(path, "ropsten")
+		} else if ctx.GlobalBool(RinkebyFlag.Name) {
+			path = filepath.Join(path, "rinkeby")
+		} else if ctx.GlobalBool(GoerliFlag.Name) {
+			path = filepath.Join(path, "goerli")
+		} else if ctx.GlobalBool(CalaverasFlag.Name) {
+			path = filepath.Join(path, "calaveras")
 		}
-		if ctx.GlobalBool(RinkebyFlag.Name) {
-			return filepath.Join(path, "rinkeby")
-		}
-		if ctx.GlobalBool(GoerliFlag.Name) {
-			return filepath.Join(path, "goerli")
-		}
-		if ctx.GlobalBool(CalaverasFlag.Name) {
-			return filepath.Join(path, "calaveras")
+		// Set specific directory for node location within the hierarchy
+		switch common.NodeLocation.Context() {
+		case common.PRIME_CTX:
+			path = filepath.Join(path, "prime")
+		case common.REGION_CTX:
+			regionNum := strconv.Itoa(common.NodeLocation.Region())
+			path = filepath.Join(path, "region-"+regionNum)
+		case common.ZONE_CTX:
+			regionNum := strconv.Itoa(common.NodeLocation.Region())
+			zoneNum := strconv.Itoa(common.NodeLocation.Zone())
+			path = filepath.Join(path, "zone-"+regionNum+"-"+zoneNum)
 		}
 		return path
 	}
@@ -1263,16 +1283,6 @@ func setDataDir(ctx *cli.Context, cfg *node.Config) {
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		cfg.DataDir = "" // unless explicitly requested, use memory databases
 	case ctx.GlobalBool(RopstenFlag.Name) && cfg.DataDir == node.DefaultDataDir():
-		// Maintain compatibility with older Geth configurations storing the
-		// Ropsten database in `testnet` instead of `ropsten`.
-		legacyPath := filepath.Join(node.DefaultDataDir(), "testnet")
-		if _, err := os.Stat(legacyPath); !os.IsNotExist(err) {
-			log.Warn("Using the deprecated `testnet` datadir. Future versions will store the Ropsten chain in `ropsten`.")
-			cfg.DataDir = legacyPath
-		} else {
-			cfg.DataDir = filepath.Join(node.DefaultDataDir(), "ropsten")
-		}
-
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "ropsten")
 	case ctx.GlobalBool(RinkebyFlag.Name) && cfg.DataDir == node.DefaultDataDir():
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "rinkeby")
@@ -1280,6 +1290,18 @@ func setDataDir(ctx *cli.Context, cfg *node.Config) {
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "goerli")
 	case ctx.GlobalBool(CalaverasFlag.Name) && cfg.DataDir == node.DefaultDataDir():
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "calaveras")
+	}
+	// Set specific directory for node location within the hierarchy
+	switch common.NodeLocation.Context() {
+	case common.PRIME_CTX:
+		cfg.DataDir = filepath.Join(cfg.DataDir, "prime")
+	case common.REGION_CTX:
+		regionNum := strconv.Itoa(common.NodeLocation.Region())
+		cfg.DataDir = filepath.Join(cfg.DataDir, "region-"+regionNum)
+	case common.ZONE_CTX:
+		regionNum := strconv.Itoa(common.NodeLocation.Region())
+		zoneNum := strconv.Itoa(common.NodeLocation.Zone())
+		cfg.DataDir = filepath.Join(cfg.DataDir, "zone-"+regionNum+"-"+zoneNum)
 	}
 }
 
@@ -1462,12 +1484,28 @@ func CheckExclusive(ctx *cli.Context, args ...interface{}) {
 	}
 }
 
+func SetGlobalVars(ctx *cli.Context) {
+	// Configure global NodeLocation
+	if !ctx.GlobalIsSet(RegionFlag.Name) && ctx.GlobalIsSet(ZoneFlag.Name) {
+		log.Crit("zone idx given, but missing region idx!")
+	}
+	if ctx.GlobalIsSet(RegionFlag.Name) {
+		region := byte(ctx.GlobalInt(RegionFlag.Name))
+		common.NodeLocation[common.REGION_CTX-1] = &region
+	}
+	if ctx.GlobalIsSet(ZoneFlag.Name) {
+		zone := byte(ctx.GlobalInt(ZoneFlag.Name))
+		common.NodeLocation[common.ZONE_CTX-1] = &zone
+	}
+}
+
 // SetEthConfig applies eth-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Avoid conflicting network flags
 	CheckExclusive(ctx, MainnetFlag, DeveloperFlag, RopstenFlag, RinkebyFlag, GoerliFlag, CalaverasFlag)
 	CheckExclusive(ctx, LightServeFlag, SyncModeFlag, "light")
 	CheckExclusive(ctx, DeveloperFlag, ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer
+
 	if ctx.GlobalString(GCModeFlag.Name) == "archive" && ctx.GlobalUint64(TxLookupLimitFlag.Name) != 0 {
 		ctx.GlobalSet(TxLookupLimitFlag.Name, "0")
 		log.Warn("Disable transaction unindexing for archive node")
