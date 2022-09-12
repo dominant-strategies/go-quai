@@ -79,7 +79,7 @@ func answerGetBlockHeadersQuery(backend Backend, query *GetBlockHeadersPacket, p
 			origin = backend.Core().GetHeaderByNumber(query.Origin.Number)
 			fmt.Println(query.Origin.Number)
 		}
-		fmt.Println("Origin?", origin)
+		fmt.Println("Origin nil?", origin == nil)
 		if origin == nil {
 			break
 		}
