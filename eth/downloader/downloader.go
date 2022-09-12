@@ -1577,6 +1577,7 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 				if mode != LightSync {
 					head := d.core.CurrentHeader()
 					fmt.Println("TD is nil?", td)
+					fmt.Println("Head hash in downloader:", head.Hash())
 					ourTD := d.core.GetTd(head.Hash(), head.Number[types.QuaiNetworkContext].Uint64())
 					fmt.Println("Our td", ourTD)
 					fmt.Println("gotHeaders?", gotHeaders)
