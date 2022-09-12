@@ -71,7 +71,7 @@ func answerGetBlockHeadersQuery(backend Backend, query *GetBlockHeadersPacket, p
 				first = false
 				origin = backend.Chain().GetHeaderByHash(query.Origin.Hash)
 				if origin != nil {
-					query.Origin.Number = origin.Number.Uint64()
+					query.Origin.Number = origin.NumberU64()
 				}
 			} else {
 				origin = backend.Chain().GetHeader(query.Origin.Hash, query.Origin.Number)
@@ -99,7 +99,7 @@ func answerGetBlockHeadersQuery(backend Backend, query *GetBlockHeadersPacket, p
 		case hashMode && !query.Reverse:
 			// Hash based traversal towards the leaf block
 			var (
-				current = origin.Number.Uint64()
+				current = origin.Number().Uint64()
 				next    = current + query.Skip + 1
 			)
 			if next <= current {
@@ -257,7 +257,7 @@ func answerGetReceiptsQuery(backend Backend, query GetReceiptsPacket, peer *Peer
 		// Retrieve the requested block's receipts
 		results := backend.Chain().GetReceiptsByHash(hash)
 		if results == nil {
-			if header := backend.Chain().GetHeaderByHash(hash); header == nil || header.ReceiptHash != types.EmptyRootHash {
+			if header := backend.Chain().GetHeaderByHash(hash); header == nil || header.ReceiptHash() != types.EmptyRootHash {
 				continue
 			}
 		}

@@ -52,7 +52,8 @@ func (ethash *Ethash) Seal(chain consensus.ChainHeaderReader, block *types.Block
 	// If we're running a fake PoW, simply return a 0 nonce immediately
 	if ethash.config.PowMode == ModeFake || ethash.config.PowMode == ModeFullFake {
 		header := block.Header()
-		header.Nonce, header.MixDigest = types.BlockNonce{}, common.Hash{}
+		header.SetNonce(types.BlockNonce{})
+		header.SetMixDigest(common.Hash{})
 		select {
 		case results <- block.WithSeal(header):
 		default:
@@ -134,8 +135,8 @@ func (ethash *Ethash) mine(block *types.Block, id int, seed uint64, abort chan s
 	var (
 		header  = block.Header()
 		hash    = ethash.SealHash(header).Bytes()
-		target  = new(big.Int).Div(two256, header.Difficulty)
-		number  = header.Number.Uint64()
+		target  = new(big.Int).Div(two256, header.Difficulty())
+		number  = header.Number().Uint64()
 		dataset = ethash.dataset(number, false)
 	)
 	// Start generating random nonces until we abort or find a good one
@@ -167,8 +168,8 @@ search:
 			if powBuffer.SetBytes(result).Cmp(target) <= 0 {
 				// Correct nonce found, create a new header with it
 				header = types.CopyHeader(header)
-				header.Nonce = types.EncodeNonce(nonce)
-				header.MixDigest = common.BytesToHash(digest)
+				header.SetNonce(types.EncodeNonce(nonce))
+				header.SetMixDigest(common.BytesToHash(digest))
 
 				// Seal and return a block (if still needed)
 				select {
@@ -413,8 +414,8 @@ func (s *remoteSealer) submitWork(nonce types.BlockNonce, mixDigest common.Hash,
 	}
 	// Verify the correctness of submitted result.
 	header := block.Header()
-	header.Nonce = nonce
-	header.MixDigest = mixDigest
+	header.SetNonce(nonce)
+	header.SetMixDigest(mixDigest)
 
 	start := time.Now()
 	if !s.noverify {

@@ -39,18 +39,20 @@ func TestHeaderStorage(t *testing.T) {
 	db := NewMemoryDatabase()
 
 	// Create a test header to move around the database and make sure it's really new
-	header := &types.Header{Number: big.NewInt(42), Extra: []byte("test header")}
-	if entry := ReadHeader(db, header.Hash(), header.Number.Uint64()); entry != nil {
+	header := types.EmptyHeader()
+	header.SetNumber(big.NewInt(42))
+	header.SetExtra([]byte("test header"))
+	if entry := ReadHeader(db, header.Hash(), header.NumberU64()); entry != nil {
 		t.Fatalf("Non existent header returned: %v", entry)
 	}
 	// Write and verify the header in the database
 	WriteHeader(db, header)
-	if entry := ReadHeader(db, header.Hash(), header.Number.Uint64()); entry == nil {
+	if entry := ReadHeader(db, header.Hash(), header.NumberU64()); entry == nil {
 		t.Fatalf("Stored header not found")
 	} else if entry.Hash() != header.Hash() {
 		t.Fatalf("Retrieved header mismatch: have %v, want %v", entry, header)
 	}
-	if entry := ReadHeaderRLP(db, header.Hash(), header.Number.Uint64()); entry == nil {
+	if entry := ReadHeaderRLP(db, header.Hash(), header.NumberU64()); entry == nil {
 		t.Fatalf("Stored header RLP not found")
 	} else {
 		hasher := sha3.NewLegacyKeccak256()
@@ -61,8 +63,8 @@ func TestHeaderStorage(t *testing.T) {
 		}
 	}
 	// Delete the header and verify the execution
-	DeleteHeader(db, header.Hash(), header.Number.Uint64())
-	if entry := ReadHeader(db, header.Hash(), header.Number.Uint64()); entry != nil {
+	DeleteHeader(db, header.Hash(), header.NumberU64())
+	if entry := ReadHeader(db, header.Hash(), header.NumberU64()); entry != nil {
 		t.Fatalf("Deleted header returned: %v", entry)
 	}
 }
@@ -72,7 +74,9 @@ func TestBodyStorage(t *testing.T) {
 	db := NewMemoryDatabase()
 
 	// Create a test body to move around the database and make sure it's really new
-	body := &types.Body{Uncles: []*types.Header{{Extra: []byte("test header")}}}
+	header := types.EmptyHeader()
+	header.SetExtra([]byte("test header"))
+	body := &types.Body{Uncles: []*types.Header{header}}
 
 	hasher := sha3.NewLegacyKeccak256()
 	rlp.Encode(hasher, body)
@@ -361,7 +365,7 @@ func TestBlockReceiptStorage(t *testing.T) {
 		ContractAddress: common.BytesToAddress([]byte{0x01, 0x11, 0x11}),
 		GasUsed:         111111,
 	}
-	receipt1.Bloom = types.CreateBloom(types.Receipts{receipt1})
+	receipt1.Bloom() = types.CreateBloom(types.Receipts{receipt1})
 
 	receipt2 := &types.Receipt{
 		PostState:         common.Hash{2}.Bytes(),
@@ -374,7 +378,7 @@ func TestBlockReceiptStorage(t *testing.T) {
 		ContractAddress: common.BytesToAddress([]byte{0x02, 0x22, 0x22}),
 		GasUsed:         222222,
 	}
-	receipt2.Bloom = types.CreateBloom(types.Receipts{receipt2})
+	receipt2.Bloom() = types.CreateBloom(types.Receipts{receipt2})
 	receipts := []*types.Receipt{receipt1, receipt2}
 
 	// Check that no receipt entries are in a pristine database

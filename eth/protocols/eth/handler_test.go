@@ -273,8 +273,8 @@ func testGetBlockHeaders(t *testing.T, protocol uint) {
 		}
 		// If the test used number origins, repeat with hashes as the too
 		if tt.query.Origin.Hash == (common.Hash{}) {
-			if origin := backend.chain.GetBlockByNumber(tt.query.Origin.Number); origin != nil {
-				tt.query.Origin.Hash, tt.query.Origin.Number = origin.Hash(), 0
+			if origin := backend.chain.GetBlockByNumber(tt.query.Origin.Number()); origin != nil {
+				tt.query.Origin.Hash, tt.query.Origin.Number() = origin.Hash(), 0
 
 				if protocol <= ETH65 {
 					p2p.Send(peer.app, GetBlockHeadersMsg, tt.query)
@@ -424,10 +424,10 @@ func testGetNodeData(t *testing.T, protocol uint) {
 		case 3:
 			// Block 4 includes blocks 2 and 3 as uncle headers (with modified extra data).
 			b2 := block.PrevBlock(1).Header()
-			b2.Extra = []byte("foo")
+			b2.Extra() = []byte("foo")
 			block.AddUncle(b2)
 			b3 := block.PrevBlock(2).Header()
-			b3.Extra = []byte("foo")
+			b3.Extra() = []byte("foo")
 			block.AddUncle(b3)
 		}
 	}
@@ -540,10 +540,10 @@ func testGetBlockReceipts(t *testing.T, protocol uint) {
 		case 3:
 			// Block 4 includes blocks 2 and 3 as uncle headers (with modified extra data).
 			b2 := block.PrevBlock(1).Header()
-			b2.Extra = []byte("foo")
+			b2.Extra() = []byte("foo")
 			block.AddUncle(b2)
 			b3 := block.PrevBlock(2).Header()
-			b3.Extra = []byte("foo")
+			b3.Extra() = []byte("foo")
 			block.AddUncle(b3)
 		}
 	}

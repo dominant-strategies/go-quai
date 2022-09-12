@@ -986,8 +986,8 @@ var bindTests = []struct {
 			if !nit.Next() {
 				t.Fatalf("nodata log not found: %v", nit.Error())
 			}
-			if nit.Event.Number.Uint64() != 314 {
-				t.Errorf("nodata log content mismatch: have %v, want 314", nit.Event.Number)
+			if nit.Event.Number().Uint64() != 314 {
+				t.Errorf("nodata log content mismatch: have %v, want 314", nit.Event.Number())
 			}
 			if nit.Next() {
 				t.Errorf("unexpected nodata event found: %+v", nit.Event)

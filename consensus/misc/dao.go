@@ -51,16 +51,16 @@ func VerifyDAOHeaderExtraData(config *params.ChainConfig, header *types.Header) 
 	}
 	// Make sure the block is within the fork's modified extra-data range
 	limit := new(big.Int).Add(config.DAOForkBlock, params.DAOForkExtraRange)
-	if header.Number.Cmp(config.DAOForkBlock) < 0 || header.Number.Cmp(limit) >= 0 {
+	if header.Number().Cmp(config.DAOForkBlock) < 0 || header.Number().Cmp(limit) >= 0 {
 		return nil
 	}
 	// Depending on whether we support or oppose the fork, validate the extra-data contents
 	if config.DAOForkSupport {
-		if !bytes.Equal(header.Extra, params.DAOForkBlockExtra) {
+		if !bytes.Equal(header.Extra(), params.DAOForkBlockExtra) {
 			return ErrBadProDAOExtra
 		}
 	} else {
-		if bytes.Equal(header.Extra, params.DAOForkBlockExtra) {
+		if bytes.Equal(header.Extra(), params.DAOForkBlockExtra) {
 			return ErrBadNoDAOExtra
 		}
 	}

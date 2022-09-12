@@ -436,13 +436,13 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 						log.Error("Missing dangling header", "number", tip, "hash", children[i])
 						continue
 					}
-					if _, ok := drop[child.ParentHash]; !ok {
+					if _, ok := drop[child.ParentHash()]; !ok {
 						children = append(children[:i], children[i+1:]...)
 						i--
 						continue
 					}
 					// Delete all block data associated with the child
-					log.Debug("Deleting dangling block", "number", tip, "hash", children[i], "parent", child.ParentHash)
+					log.Debug("Deleting dangling block", "number", tip, "hash", children[i], "parent", child.ParentHash())
 					DeleteBlock(batch, children[i], tip)
 				}
 				dangling = children

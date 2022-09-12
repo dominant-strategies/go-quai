@@ -564,10 +564,10 @@ func (f *faucet) refresh(head *types.Header) error {
 		nonce   uint64
 		price   *big.Int
 	)
-	if balance, err = f.client.BalanceAt(ctx, f.account.Address, head.Number); err != nil {
+	if balance, err = f.client.BalanceAt(ctx, f.account.Address, head.Number()); err != nil {
 		return err
 	}
-	if nonce, err = f.client.NonceAt(ctx, f.account.Address, head.Number); err != nil {
+	if nonce, err = f.client.NonceAt(ctx, f.account.Address, head.Number()); err != nil {
 		return err
 	}
 	if price, err = f.client.SuggestGasPrice(ctx); err != nil {
@@ -602,18 +602,18 @@ func (f *faucet) loop() {
 	go func() {
 		for head := range update {
 			// New chain head arrived, query the current stats and stream to clients
-			timestamp := time.Unix(int64(head.Time), 0)
+			timestamp := time.Unix(int64(head.Time()), 0)
 			if time.Since(timestamp) > time.Hour {
-				log.Warn("Skipping faucet refresh, head too old", "number", head.Number, "hash", head.Hash(), "age", common.PrettyAge(timestamp))
+				log.Warn("Skipping faucet refresh, head too old", "number", head.Number(), "hash", head.Hash(), "age", common.PrettyAge(timestamp))
 				continue
 			}
 			if err := f.refresh(head); err != nil {
-				log.Warn("Failed to update faucet state", "block", head.Number, "hash", head.Hash(), "err", err)
+				log.Warn("Failed to update faucet state", "block", head.Number(), "hash", head.Hash(), "err", err)
 				continue
 			}
 			// Faucet state retrieved, update locally and send to clients
 			f.lock.RLock()
-			log.Info("Updated faucet state", "number", head.Number, "hash", head.Hash(), "age", common.PrettyAge(timestamp), "balance", f.balance, "nonce", f.nonce, "price", f.price)
+			log.Info("Updated faucet state", "number", head.Number(), "hash", head.Hash(), "age", common.PrettyAge(timestamp), "balance", f.balance, "nonce", f.nonce, "price", f.price)
 
 			balance := new(big.Int).Div(f.balance, ether)
 			peers := f.stack.Server().PeerCount()

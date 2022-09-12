@@ -1602,8 +1602,8 @@ func verifyTrie(db ethdb.KeyValueStore, root common.Hash, t *testing.T) {
 			log.Crit("Invalid account encountered during snapshot creation", "err", err)
 		}
 		accounts++
-		if acc.Root != emptyRoot {
-			storeTrie, err := trie.NewSecure(acc.Root, triedb)
+		if acc.Root() != emptyRoot {
+			storeTrie, err := trie.NewSecure(acc.Root(), triedb)
 			if err != nil {
 				t.Fatal(err)
 			}

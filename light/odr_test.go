@@ -82,7 +82,7 @@ func (odr *testOdr) Retrieve(ctx context.Context, req OdrRequest) error {
 			req.Receipts = rawdb.ReadRawReceipts(odr.sdb, req.Hash, *number)
 		}
 	case *TrieRequest:
-		t, _ := trie.New(req.Id.Root, trie.NewDatabase(odr.sdb))
+		t, _ := trie.New(req.Id.Root(), trie.NewDatabase(odr.sdb))
 		nodes := NewNodeSet()
 		t.Prove(req.Key, 0, nodes)
 		req.Proof = nodes
@@ -149,7 +149,7 @@ func odrAccounts(ctx context.Context, db ethdb.Database, bc *core.BlockChain, lc
 		st = NewState(ctx, header, lc.Odr())
 	} else {
 		header := bc.GetHeaderByHash(bhash)
-		st, _ = state.New(header.Root, state.NewDatabase(db), nil)
+		st, _ = state.New(header.Root(), state.NewDatabase(db), nil)
 	}
 
 	var res []byte
@@ -189,7 +189,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, bc *core.BlockChain
 		} else {
 			chain = bc
 			header = bc.GetHeaderByHash(bhash)
-			st, _ = state.New(header.Root, state.NewDatabase(db), nil)
+			st, _ = state.New(header.Root(), state.NewDatabase(db), nil)
 		}
 
 		// Perform read-only call.
@@ -238,10 +238,10 @@ func testChainGen(i int, block *core.BlockGen) {
 	case 3:
 		// Block 4 includes blocks 2 and 3 as uncle headers (with modified extra data).
 		b2 := block.PrevBlock(1).Header()
-		b2.Extra = []byte("foo")
+		b2.Extra() = []byte("foo")
 		block.AddUncle(b2)
 		b3 := block.PrevBlock(2).Header()
-		b3.Extra = []byte("foo")
+		b3.Extra() = []byte("foo")
 		block.AddUncle(b3)
 		data := common.Hex2Bytes("C16431B900000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002")
 		tx, _ := types.SignTx(types.NewTransaction(block.TxNonce(testBankAddress), testContractAddr, big.NewInt(0), 100000, block.BaseFee(), data), signer, testBankKey)
@@ -281,7 +281,7 @@ func testChainOdr(t *testing.T, protocol int, fn odrTestFn) {
 	}
 
 	test := func(expFail int) {
-		for i := uint64(0); i <= blockchain.CurrentHeader().Number.Uint64(); i++ {
+		for i := uint64(0); i <= blockchain.CurrentHeader().Number().Uint64(); i++ {
 			bhash := rawdb.ReadCanonicalHash(sdb, i)
 			b1, err := fn(NoOdr, sdb, blockchain, nil, bhash)
 			if err != nil {
