@@ -555,7 +555,7 @@ func (l *txPricedList) underpricedFor(h *priceHeap, tx *types.Transaction) bool 
 //
 // Note local transaction won't be considered for eviction.
 func (l *txPricedList) Discard(slots int, force bool) (types.Transactions, bool) {
-	drop := make(types.Transactions, 0, slots) // Remote underpriced transactions to drop
+	drop := make([]*types.Transaction, 0, slots) // Remote underpriced transactions to drop
 	for slots > 0 {
 		if len(l.urgent.list)*floatingRatio > len(l.floating.list)*urgentRatio || floatingRatio == 0 {
 			// Discard stale transactions if found during cleanup
@@ -609,7 +609,7 @@ func (l *txPricedList) Reheap() {
 	// is more efficiently. Also, Underpriced would work suboptimally the first time
 	// if the floating queue was empty.
 	floatingCount := len(l.urgent.list) * floatingRatio / (urgentRatio + floatingRatio)
-	l.floating.list = make([]*types.Transaction, floatingCount)
+	l.floating.list = make(types.Transactions, floatingCount)
 	for i := 0; i < floatingCount; i++ {
 		l.floating.list[i] = heap.Pop(&l.urgent).(*types.Transaction)
 	}

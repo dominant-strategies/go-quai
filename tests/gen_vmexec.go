@@ -33,7 +33,7 @@ func (v vmExec) MarshalJSON() ([]byte, error) {
 	enc.Code = v.Code
 	enc.Data = v.Data
 	enc.Value = (*math.HexOrDecimal256)(v.Value)
-	enc.GasLimit = math.HexOrDecimal64(v.GasLimit)
+	enc.GasLimit() = math.HexOrDecimal64(v.GasLimit())
 	enc.GasPrice = (*math.HexOrDecimal256)(v.GasPrice)
 	return json.Marshal(&enc)
 }
@@ -78,10 +78,10 @@ func (v *vmExec) UnmarshalJSON(input []byte) error {
 		return errors.New("missing required field 'value' for vmExec")
 	}
 	v.Value = (*big.Int)(dec.Value)
-	if dec.GasLimit == nil {
+	if dec.GasLimit() == nil {
 		return errors.New("missing required field 'gas' for vmExec")
 	}
-	v.GasLimit = uint64(*dec.GasLimit)
+	v.GasLimit() = uint64(*dec.GasLimit())
 	if dec.GasPrice == nil {
 		return errors.New("missing required field 'gasPrice' for vmExec")
 	}

@@ -94,7 +94,7 @@ func testChainIndexer(t *testing.T, count int) {
 	inject := func(number uint64) {
 		header := &types.Header{Number: big.NewInt(int64(number)), Extra: big.NewInt(rand.Int63()).Bytes()}
 		if number > 0 {
-			header.ParentHash = rawdb.ReadCanonicalHash(db, number-1)
+			header.ParentHash() = rawdb.ReadCanonicalHash(db, number-1)
 		}
 		rawdb.WriteHeader(db, header)
 		rawdb.WriteCanonicalHash(db, header.Hash(), number)
@@ -222,14 +222,14 @@ func (b *testChainIndexBackend) Process(ctx context.Context, header *types.Heade
 	if b.headerCnt > b.indexer.sectionSize {
 		b.t.Error("Processing too many headers")
 	}
-	//t.processCh <- header.Number.Uint64()
+	//t.processCh <- header.Number().Uint64()
 	select {
 	case <-time.After(10 * time.Second):
 		b.t.Error("Unexpected call to Process")
 		// Can't use Fatal since this is not the test's goroutine.
 		// Returning error stops the chainIndexer's updateLoop
 		return errors.New("Unexpected call to Process")
-	case b.processCh <- header.Number.Uint64():
+	case b.processCh <- header.Number().Uint64():
 	}
 	return nil
 }

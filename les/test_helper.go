@@ -196,8 +196,8 @@ func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, index
 		gspec  = core.Genesis{
 			Config:   params.AllEthashProtocolChanges,
 			Alloc:    core.GenesisAlloc{bankAddr: {Balance: bankFunds}},
-			GasLimit: 100000000,
-			BaseFee:  big.NewInt(params.InitialBaseFee),
+			GasLimit: []uint64{100000000, 100000000, 100000000},
+			BaseFee:  []*big.Int{big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee)},
 		}
 		oracle *checkpointoracle.CheckpointOracle
 	)
@@ -256,8 +256,8 @@ func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Da
 		gspec = core.Genesis{
 			Config:   params.AllEthashProtocolChanges,
 			Alloc:    core.GenesisAlloc{bankAddr: {Balance: bankFunds}},
-			GasLimit: 100000000,
-			BaseFee:  big.NewInt(params.InitialBaseFee),
+			GasLimit: []uint64{100000000, 100000000, 100000000},
+			BaseFee:  []*big.Int{big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee)},
 		}
 		oracle *checkpointoracle.CheckpointOracle
 	)
@@ -484,10 +484,10 @@ func (client *testClient) newRawPeer(t *testing.T, name string, version int, rec
 	var (
 		genesis = client.handler.backend.blockchain.Genesis()
 		head    = client.handler.backend.blockchain.CurrentHeader()
-		td      = client.handler.backend.blockchain.GetTd(head.Hash(), head.Number.Uint64())
+		td      = client.handler.backend.blockchain.GetTd(head.Hash(), head.Number().Uint64())
 	)
-	forkID := forkid.NewID(client.handler.backend.blockchain.Config(), genesis.Hash(), head.Number.Uint64())
-	tp.handshakeWithClient(t, td, head.Hash(), head.Number.Uint64(), genesis.Hash(), forkID, testCostList(0), recentTxLookup) // disable flow control by default
+	forkID := forkid.NewID(client.handler.backend.blockchain.Config(), genesis.Hash(), head.Number().Uint64())
+	tp.handshakeWithClient(t, td, head.Hash(), head.Number().Uint64(), genesis.Hash(), forkID, testCostList(0), recentTxLookup) // disable flow control by default
 
 	// Ensure the connection is established or exits when any error occurs
 	for {
@@ -548,10 +548,10 @@ func (server *testServer) newRawPeer(t *testing.T, name string, version int) (*t
 	var (
 		genesis = server.handler.blockchain.Genesis()
 		head    = server.handler.blockchain.CurrentHeader()
-		td      = server.handler.blockchain.GetTd(head.Hash(), head.Number.Uint64())
+		td      = server.handler.blockchain.GetTd(head.Hash(), head.Number().Uint64())
 	)
-	forkID := forkid.NewID(server.handler.blockchain.Config(), genesis.Hash(), head.Number.Uint64())
-	tp.handshakeWithServer(t, td, head.Hash(), head.Number.Uint64(), genesis.Hash(), forkID)
+	forkID := forkid.NewID(server.handler.blockchain.Config(), genesis.Hash(), head.Number().Uint64())
+	tp.handshakeWithServer(t, td, head.Hash(), head.Number().Uint64(), genesis.Hash(), forkID)
 
 	// Ensure the connection is established or exits when any error occurs
 	for {

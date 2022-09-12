@@ -88,9 +88,9 @@ type calculator func(time uint64, parent *types.Header) *big.Int
 
 func (f *fuzzer) fuzz() int {
 	// A parent header
-	header := &types.Header{}
+	header := types.EmptyHeader()
 	if f.readBool() {
-		header.UncleHash = types.EmptyUncleHash
+		header.UncleHash() = types.EmptyUncleHash
 	}
 	// Difficulty can range between 0x2000 (2 bytes) and up to 32 bytes
 	{
@@ -98,7 +98,7 @@ func (f *fuzzer) fuzz() int {
 		if diff.Cmp(minDifficulty) < 0 {
 			diff.Set(minDifficulty)
 		}
-		header.Difficulty = diff
+		header.Difficulty() = diff
 	}
 	// Number can range between 0 and up to 32 bytes (but not so that the child exceeds it)
 	{
@@ -106,7 +106,7 @@ func (f *fuzzer) fuzz() int {
 		// in the legacy methods)
 		// times out, so we limit it to fit within reasonable bounds
 		number := new(big.Int).SetBytes(f.readSlice(0, 4)) // 4 bytes: 32 bits: block num max 4 billion
-		header.Number = number
+		header.Number() = number
 	}
 	// Both parent and child time must fit within uint64
 	var time uint64
@@ -116,7 +116,7 @@ func (f *fuzzer) fuzz() int {
 		delta := f.readUint64(1, childTime)
 		//fmt.Printf("delta: %v\n", delta)
 		pTime := childTime - delta
-		header.Time = pTime
+		header.Time() = pTime
 		time = childTime
 	}
 	// Bomb delay will never exceed uint64
@@ -138,7 +138,7 @@ func (f *fuzzer) fuzz() int {
 		have := pair.u256Fn(time, header)
 		if want.Cmp(have) != 0 {
 			panic(fmt.Sprintf("pair %d: want %x have %x\nparent.Number: %x\np.Time: %x\nc.Time: %x\nBombdelay: %v\n", i, want, have,
-				header.Number, header.Time, time, bombDelay))
+				header.Number(), header.Time(), time, bombDelay))
 		}
 	}
 	return 1

@@ -2041,8 +2041,8 @@ func testSetHead(t *testing.T, tt *rewindTest, snapshots bool) {
 	verifyCutoff(t, chain, true, canonblocks, tt.expCanonicalBlocks)
 	verifyCutoff(t, chain, false, sideblocks, tt.expSidechainBlocks)
 
-	if head := chain.CurrentHeader(); head.Number.Uint64() != tt.expHeadHeader {
-		t.Errorf("Head header mismatch: have %d, want %d", head.Number, tt.expHeadHeader)
+	if head := chain.CurrentHeader(); head.Number().Uint64() != tt.expHeadHeader {
+		t.Errorf("Head header mismatch: have %d, want %d", head.Number(), tt.expHeadHeader)
 	}
 	if head := chain.CurrentFastBlock(); head.NumberU64() != tt.expHeadFastBlock {
 		t.Errorf("Head fast block mismatch: have %d, want %d", head.NumberU64(), tt.expHeadFastBlock)

@@ -195,7 +195,7 @@ func TestCheckpointRegister(t *testing.T) {
 
 	// getRecent returns block height and hash of the head parent.
 	getRecent := func() (*big.Int, common.Hash) {
-		parentNumber := new(big.Int).Sub(contractBackend.Blockchain().CurrentHeader().Number, big.NewInt(1))
+		parentNumber := new(big.Int).Sub(contractBackend.Blockchain().CurrentHeader().Number(), big.NewInt(1))
 		parentHash := contractBackend.Blockchain().CurrentHeader().ParentHash
 		return parentNumber, parentHash
 	}
@@ -297,7 +297,7 @@ func TestCheckpointRegister(t *testing.T) {
 		return assert(0, checkpoint0.Hash(), number.Add(number, big.NewInt(1)))
 	}, "test valid checkpoint registration")
 
-	distance := 3*sectionSize.Uint64() + processConfirms.Uint64() - contractBackend.Blockchain().CurrentHeader().Number.Uint64()
+	distance := 3*sectionSize.Uint64() + processConfirms.Uint64() - contractBackend.Blockchain().CurrentHeader().Number().Uint64()
 	insertEmptyBlocks(int(distance))
 
 	// Test uncontinuous checkpoint registration

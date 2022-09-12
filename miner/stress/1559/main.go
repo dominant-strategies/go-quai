@@ -190,10 +190,10 @@ func makeGenesis(faucets []*ecdsa.PrivateKey) *core.Genesis {
 
 	genesis.Config = params.AllEthashProtocolChanges
 	genesis.Config.LondonBlock = londonBlock
-	genesis.Difficulty = params.MinimumDifficulty
+	genesis.Difficulty() = params.MinimumDifficulty
 
 	// Small gaslimit for easier basefee moving testing.
-	genesis.GasLimit = 8_000_000
+	genesis.GasLimit() = 8_000_000
 
 	genesis.Config.ChainID = big.NewInt(18)
 	genesis.Config.EIP150Hash = common.Hash{}
@@ -242,7 +242,7 @@ func makeMiner(genesis *core.Genesis) (*node.Node, *eth.Ethereum, error) {
 		GPO:             ethconfig.Defaults.GPO,
 		Ethash:          ethconfig.Defaults.Ethash,
 		Miner: miner.Config{
-			GasCeil:  genesis.GasLimit * 11 / 10,
+			GasCeil:  genesis.GasLimit() * 11 / 10,
 			GasPrice: big.NewInt(1),
 			Recommit: time.Second,
 		},

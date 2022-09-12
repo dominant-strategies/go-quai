@@ -73,7 +73,7 @@ func testULCAnnounceThreshold(t *testing.T, protocol int) {
 			}
 		}
 		time.Sleep(1500 * time.Millisecond) // Ensure the fetcher has done its work.
-		head := c.handler.backend.blockchain.CurrentHeader().Number.Uint64()
+		head := c.handler.backend.blockchain.CurrentHeader().Number().Uint64()
 		if head != testcase.expect {
 			t.Fatalf("chain height mismatch, want %d, got %d", testcase.expect, head)
 		}

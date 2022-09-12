@@ -30,6 +30,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/common/mclock"
 	"github.com/spruce-solutions/go-quai/consensus"
@@ -44,7 +45,6 @@ import (
 	"github.com/spruce-solutions/go-quai/node"
 	"github.com/spruce-solutions/go-quai/p2p"
 	"github.com/spruce-solutions/go-quai/rpc"
-	"github.com/gorilla/websocket"
 )
 
 const (
@@ -652,18 +652,18 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 	author, _ := s.engine.Author(header)
 
 	return &blockStats{
-		Number:     header.Number,
+		Number:     header.Number(),
 		Hash:       header.Hash(),
-		ParentHash: header.ParentHash,
-		Timestamp:  new(big.Int).SetUint64(header.Time),
+		ParentHash: header.ParentHash(),
+		Timestamp:  new(big.Int).SetUint64(header.Time()),
 		Miner:      author,
-		GasUsed:    header.GasUsed,
-		GasLimit:   header.GasLimit,
-		Diff:       header.Difficulty.String(),
+		GasUsed:    header.GasUsed(),
+		GasLimit:   header.GasLimit(),
+		Diff:       header.Difficulty().String(),
 		TotalDiff:  td.String(),
 		Txs:        txs,
-		TxHash:     header.TxHash,
-		Root:       header.Root,
+		TxHash:     header.TxHash(),
+		Root:       header.Root(),
 		Uncles:     uncles,
 	}
 }
@@ -678,7 +678,7 @@ func (s *Service) reportHistory(conn *connWrapper, list []uint64) error {
 		indexes = append(indexes, list...)
 	} else {
 		// No indexes requested, send back the top ones
-		head := s.backend.CurrentHeader().Number.Int64()
+		head := s.backend.CurrentHeader().Number().Int64()
 		start := head - historyUpdateRange + 1
 		if start < 0 {
 			start = 0
@@ -778,16 +778,16 @@ func (s *Service) reportStats(conn *connWrapper) error {
 		hashrate = int(fullBackend.Miner().Hashrate())
 
 		sync := fullBackend.Downloader().Progress()
-		syncing = fullBackend.CurrentHeader().Number.Uint64() >= sync.HighestBlock
+		syncing = fullBackend.CurrentHeader().Number().Uint64() >= sync.HighestBlock
 
 		price, _ := fullBackend.SuggestGasTipCap(context.Background())
 		gasprice = int(price.Uint64())
-		if basefee := fullBackend.CurrentHeader().BaseFee; basefee != nil {
+		if basefee := fullBackend.CurrentHeader().BaseFee(); basefee != nil {
 			gasprice += int(basefee.Uint64())
 		}
 	} else {
 		sync := s.backend.Downloader().Progress()
-		syncing = s.backend.CurrentHeader().Number.Uint64() >= sync.HighestBlock
+		syncing = s.backend.CurrentHeader().Number().Uint64() >= sync.HighestBlock
 	}
 	// Assemble the node stats and send it to the server
 	log.Trace("Sending node details to ethstats")

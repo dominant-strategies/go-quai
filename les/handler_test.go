@@ -340,7 +340,7 @@ func testGetStaleCode(t *testing.T, protocol int) {
 	}
 	check(0, [][]byte{})                                                          // Non-exist contract
 	check(testContractDeployed, [][]byte{})                                       // Stale contract
-	check(bc.CurrentHeader().Number.Uint64(), [][]byte{testContractCodeDeployed}) // Fresh contract
+	check(bc.CurrentHeader().Number().Uint64(), [][]byte{testContractCodeDeployed}) // Fresh contract
 }
 
 // Tests that the transaction receipts can be retrieved based on hashes.
@@ -405,7 +405,7 @@ func testGetProofs(t *testing.T, protocol int) {
 	accounts := []common.Address{bankAddr, userAddr1, userAddr2, signerAddr, {}}
 	for i := uint64(0); i <= bc.CurrentBlock().NumberU64(); i++ {
 		header := bc.GetHeaderByNumber(i)
-		trie, _ := trie.New(header.Root, trie.NewDatabase(server.db))
+		trie, _ := trie.New(header.Root(), trie.NewDatabase(server.db))
 
 		for _, acc := range accounts {
 			req := ProofReq{
@@ -456,7 +456,7 @@ func testGetStaleProof(t *testing.T, protocol int) {
 		var expected []rlp.RawValue
 		if wantOK {
 			proofsV2 := light.NewNodeSet()
-			t, _ := trie.New(header.Root, trie.NewDatabase(server.db))
+			t, _ := trie.New(header.Root(), trie.NewDatabase(server.db))
 			t.Prove(account, 0, proofsV2)
 			expected = proofsV2.NodeList()
 		}
@@ -466,7 +466,7 @@ func testGetStaleProof(t *testing.T, protocol int) {
 	}
 	check(0, false)                                 // Non-exist proof
 	check(2, false)                                 // Stale proof
-	check(bc.CurrentHeader().Number.Uint64(), true) // Fresh proof
+	check(bc.CurrentHeader().Number().Uint64(), true) // Fresh proof
 }
 
 // Tests that CHT proofs can be correctly retrieved.
