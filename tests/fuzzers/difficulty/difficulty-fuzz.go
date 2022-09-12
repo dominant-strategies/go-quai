@@ -23,7 +23,7 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/spruce-solutions/go-quai/consensus/ethash"
+	"github.com/spruce-solutions/go-quai/consensus/blake3pow"
 	"github.com/spruce-solutions/go-quai/core/types"
 )
 
@@ -130,9 +130,9 @@ func (f *fuzzer) fuzz() int {
 		bigFn  calculator
 		u256Fn calculator
 	}{
-		{ethash.FrontierDifficultyCalulator, ethash.CalcDifficultyFrontierU256},
-		{ethash.HomesteadDifficultyCalulator, ethash.CalcDifficultyHomesteadU256},
-		{ethash.DynamicDifficultyCalculator(bombDelay), ethash.MakeDifficultyCalculatorU256(bombDelay)},
+		{blake3pow.FrontierDifficultyCalulator, blake3pow.CalcDifficultyFrontierU256},
+		{blake3pow.HomesteadDifficultyCalulator, blake3pow.CalcDifficultyHomesteadU256},
+		{blake3pow.DynamicDifficultyCalculator(bombDelay), blake3pow.MakeDifficultyCalculatorU256(bombDelay)},
 	} {
 		want := pair.bigFn(time, header)
 		have := pair.u256Fn(time, header)

@@ -35,6 +35,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mattn/go-colorable"
+	"github.com/mattn/go-isatty"
 	"github.com/spruce-solutions/go-quai/accounts"
 	"github.com/spruce-solutions/go-quai/accounts/keystore"
 	"github.com/spruce-solutions/go-quai/cmd/utils"
@@ -54,8 +56,6 @@ import (
 	"github.com/spruce-solutions/go-quai/signer/fourbyte"
 	"github.com/spruce-solutions/go-quai/signer/rules"
 	"github.com/spruce-solutions/go-quai/signer/storage"
-	"github.com/mattn/go-colorable"
-	"github.com/mattn/go-isatty"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -882,7 +882,6 @@ func testExternalUI(api *core.SignerAPI) {
 			GasUsed:     1338,
 			Time:        1338,
 			Extra:       []byte("Extra data Extra data Extra data  Extra data  Extra data  Extra data  Extra data Extra data"),
-			MixDigest:   common.HexToHash("0x0000H45H"),
 		}
 		cliqueRlp, err := rlp.EncodeToBytes(cliqueHeader)
 		if err != nil {

@@ -639,14 +639,6 @@ func (b *Block) Nonce(ctx context.Context) (hexutil.Bytes, error) {
 	return nonce[:], nil
 }
 
-func (b *Block) MixHash(ctx context.Context) (common.Hash, error) {
-	header, err := b.resolveHeader(ctx)
-	if err != nil {
-		return common.Hash{}, err
-	}
-	return header.MixDigest(), nil
-}
-
 func (b *Block) TransactionsRoot(ctx context.Context) (common.Hash, error) {
 	header, err := b.resolveHeader(ctx)
 	if err != nil {

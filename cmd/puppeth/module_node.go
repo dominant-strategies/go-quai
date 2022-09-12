@@ -60,8 +60,8 @@ services:
       - "{{.Port}}:{{.Port}}"
       - "{{.Port}}:{{.Port}}/udp"
     volumes:
-      - {{.Datadir}}:/root/.ethereum{{if .Ethashdir}}
-      - {{.Ethashdir}}:/root/.ethash{{end}}
+      - {{.Datadir}}:/root/.ethereum{{if .Blake3powdir}}
+      - {{.Blake3powdir}}:/root/.blake3pow{{end}}
     environment:
       - PORT={{.Port}}/tcp
       - TOTAL_PEERS={{.TotalPeers}}
@@ -117,7 +117,7 @@ func deployNode(client *sshClient, network string, bootnodes []string, config *n
 	template.Must(template.New("").Parse(nodeComposefile)).Execute(composefile, map[string]interface{}{
 		"Type":       kind,
 		"Datadir":    config.datadir,
-		"Ethashdir":  config.ethashdir,
+		"Blake3powdir":  config.blake3powdir,
 		"Network":    network,
 		"Port":       config.port,
 		"TotalPeers": config.peersTotal,
@@ -155,7 +155,7 @@ type nodeInfos struct {
 	genesis    []byte
 	network    int64
 	datadir    string
-	ethashdir  string
+	blake3powdir  string
 	ethstats   string
 	port       int
 	enode      string
@@ -186,8 +186,8 @@ func (info *nodeInfos) Report() map[string]string {
 		report["Gas ceil  (target maximum)"] = fmt.Sprintf("%0.3f MGas", info.gasLimit)
 
 		if info.etherbase != "" {
-			// Ethash proof-of-work miner
-			report["Ethash directory"] = info.ethashdir
+			// Blake3pow proof-of-work miner
+			report["Blake3pow directory"] = info.blake3powdir
 			report["Miner account"] = info.etherbase
 		}
 		if info.keyJSON != "" {
@@ -255,7 +255,7 @@ func checkNode(client *sshClient, network string, boot bool) (*nodeInfos, error)
 	stats := &nodeInfos{
 		genesis:    genesis,
 		datadir:    infos.volumes["/root/.ethereum"],
-		ethashdir:  infos.volumes["/root/.ethash"],
+		blake3powdir:  infos.volumes["/root/.blake3pow"],
 		port:       port,
 		peersTotal: totalPeers,
 		peersLight: lightPeers,

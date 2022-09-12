@@ -33,7 +33,6 @@ import (
 	"github.com/spruce-solutions/go-quai/common/hexutil"
 	"github.com/spruce-solutions/go-quai/common/math"
 	"github.com/spruce-solutions/go-quai/consensus/clique"
-	"github.com/spruce-solutions/go-quai/consensus/ethash"
 	"github.com/spruce-solutions/go-quai/consensus/misc"
 	"github.com/spruce-solutions/go-quai/core"
 	"github.com/spruce-solutions/go-quai/core/state"
@@ -1181,7 +1180,6 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 		"hash":             head.Hash(),
 		"parentHash":       head.ParentHash,
 		"nonce":            head.Nonce,
-		"mixHash":          head.MixDigest,
 		"sha3Uncles":       head.UncleHash,
 		"logsBloom":        head.Bloom,
 		"stateRoot":        head.Root,
@@ -1980,7 +1978,7 @@ func (api *PublicDebugAPI) SeedHash(ctx context.Context, number uint64) (string,
 	if block == nil {
 		return "", fmt.Errorf("block #%d not found", number)
 	}
-	return fmt.Sprintf("0x%x", ethash.SeedHash(number)), nil
+	return "", fmt.Errorf("blake3pow does not have seedhash")
 }
 
 // PrivateDebugAPI is the collection of Ethereum APIs exposed over the private
