@@ -31,7 +31,6 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		Location 	common.Location  `json:"location"         gencodec:"required"`
 		Time        hexutil.Uint64   `json:"timestamp"        gencodec:"required"`
 		Extra       hexutil.Bytes    `json:"extraData"        gencodec:"required"`
-		MixDigest   common.Hash      `json:"mixHash"`
 		Nonce       BlockNonce       `json:"nonce"`
 		Hash        common.Hash      `json:"hash"`
 	}
@@ -52,7 +51,6 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	enc.Location = h.Location()
 	enc.Time = hexutil.Uint64(h.Time())
 	enc.Extra = h.Extra()
-	enc.MixDigest = h.MixDigest()
 	enc.Nonce = h.Nonce()
 	enc.Hash = h.Hash()
 	return json.Marshal(&enc)
@@ -76,7 +74,6 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		Location *common.Location 	 `json:"location"         gencodec:"required"`
 		Time        *hexutil.Uint64  `json:"timestamp"        gencodec:"required"`
 		Extra       *hexutil.Bytes   `json:"extraData"        gencodec:"required"`
-		MixDigest   *common.Hash     `json:"mixHash"`
 		Nonce       *BlockNonce      `json:"nonce"`
 	}
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -140,7 +137,6 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	h.SetLocation(dec.Location)
 	h.SetTime(uint64(*dec.Time))
 	h.SetExtra(*dec.Extra)
-	h.SetMixDigest(*dec.MixDigest)
 	h.SetNonce(*dec.Nonce)
 	return nil
 }

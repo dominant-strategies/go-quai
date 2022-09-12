@@ -20,7 +20,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/spruce-solutions/go-quai/consensus/ethash"
+	"github.com/spruce-solutions/go-quai/consensus/blake3pow"
 	"github.com/spruce-solutions/go-quai/core"
 	"github.com/spruce-solutions/go-quai/core/rawdb"
 	"github.com/spruce-solutions/go-quai/core/types"
@@ -43,7 +43,7 @@ var (
 
 func generateTestChain() (*core.Genesis, []*types.Block) {
 	db := rawdb.NewMemoryDatabase()
-	config := params.AllEthashProtocolChanges
+	config := params.AllBlake3powProtocolChanges
 	genesis := &core.Genesis{
 		Config:    config,
 		Alloc:     core.GenesisAlloc{testAddr: {Balance: testBalance}},
@@ -56,7 +56,7 @@ func generateTestChain() (*core.Genesis, []*types.Block) {
 		g.SetExtra([]byte("test"))
 	}
 	gblock := genesis.ToBlock(db)
-	engine := ethash.NewFaker()
+	engine := blake3pow.NewFaker()
 	blocks, _ := core.GenerateChain(config, gblock, engine, db, 10, generate)
 	blocks = append([]*types.Block{gblock}, blocks...)
 	return genesis, blocks
@@ -81,7 +81,7 @@ func generateTestChainWithFork(n int, fork int) (*core.Genesis, []*types.Block, 
 		BerlinBlock:         big.NewInt(0),
 		LondonBlock:         big.NewInt(0),
 		CatalystBlock:       big.NewInt(0),
-		Ethash:              new(params.EthashConfig),
+		Blake3pow:              new(params.Blake3powConfig),
 	}
 	genesis := &core.Genesis{
 		Config:    config,
@@ -99,7 +99,7 @@ func generateTestChainWithFork(n int, fork int) (*core.Genesis, []*types.Block, 
 		g.SetExtra([]byte("testF"))
 	}
 	gblock := genesis.ToBlock(db)
-	engine := ethash.NewFaker()
+	engine := blake3pow.NewFaker()
 	blocks, _ := core.GenerateChain(config, gblock, engine, db, n, generate)
 	blocks = append([]*types.Block{gblock}, blocks...)
 	forkedBlocks, _ := core.GenerateChain(config, blocks[fork], engine, db, n-fork, generateFork)
@@ -226,7 +226,7 @@ func startEthService(t *testing.T, genesis *core.Genesis, blocks []*types.Block)
 		t.Fatal("can't create node:", err)
 	}
 
-	ethcfg := &ethconfig.Config{Genesis: genesis, Ethash: ethash.Config{PowMode: ethash.ModeFake}}
+	ethcfg := &ethconfig.Config{Genesis: genesis, Blake3pow: blake3pow.Config{PowMode: blake3pow.ModeFake}}
 	ethservice, err := eth.New(n, ethcfg)
 	if err != nil {
 		t.Fatal("can't create eth service:", err)
