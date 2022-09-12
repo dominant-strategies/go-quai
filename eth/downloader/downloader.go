@@ -1580,6 +1580,9 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 					fmt.Println("Head hash in downloader:", head.Hash())
 					ourTD := d.core.GetTd(head.Hash(), head.Number[types.QuaiNetworkContext].Uint64())
 					fmt.Println("Our td", ourTD)
+					if ourTD == nil {
+						return nil
+					}
 					fmt.Println("gotHeaders?", gotHeaders)
 					if !gotHeaders && ourTD[types.QuaiNetworkContext].Cmp(td[types.QuaiNetworkContext]) < 0 {
 						return errStallingPeer
