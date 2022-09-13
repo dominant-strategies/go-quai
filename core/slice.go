@@ -128,19 +128,24 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 		rawdb.WriteTermini(sl.sliceDb, genesisHash, genesisTermini)
 
 		// Append each of the knot blocks
-		if types.QuaiNetworkContext == params.PRIME {
-			knot := genesis.Knot[1:]
-			for _, block := range knot {
-				if block != nil {
-					rawdb.WritePendingBlockBody(sl.sliceDb, block.Root(), block.Body())
 
+		knot := genesis.Knot[1:]
+		for _, block := range knot {
+			if block != nil {
+				if types.QuaiNetworkContext == params.PRIME {
+					rawdb.WritePendingBlockBody(sl.sliceDb, block.Root(), block.Body())
 					_, err = sl.Append(block.Header(), genesisHash, block.Difficulty(), false, false)
 					if err != nil {
 						log.Warn("Failed to append block", "hash:", block.Hash(), "Number:", block.Number(), "Location:", block.Header().Location, "error:", err)
 					}
+				} else if block.Header().Location[0] == sl.config.Location[0] && types.QuaiNetworkContext == params.REGION {
+					rawdb.WritePendingBlockBody(sl.sliceDb, block.Root(), block.Body())
+				} else if bytes.Equal(block.Header().Location, sl.config.Location) {
+					rawdb.WritePendingBlockBody(sl.sliceDb, block.Root(), block.Body())
 				}
 			}
 		}
+
 	} else { // load the phCache and slice current pending header hash
 		if err := sl.loadLastState(); err != nil {
 			return nil, err
