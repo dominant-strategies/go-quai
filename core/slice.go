@@ -558,7 +558,7 @@ func (sl *Slice) procfutureHeaders() {
 	}
 	if len(headers) > 0 {
 		sort.Slice(headers, func(i, j int) bool {
-			return headers[i].Number64() < headers[j].Number64()
+			return headers[i].NumberU64() < headers[j].NumberU64()
 		})
 
 		for i := range headers {
