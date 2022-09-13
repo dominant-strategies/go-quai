@@ -96,7 +96,7 @@ func (p *Peer) readStatus(network uint64, status *StatusPacket, genesis common.H
 	status.ProtocolVersion = ann.ProtocolVersion
 	status.Genesis = ann.Genesis
 	status.ForkID = ann.ForkID
-	status.TD.Set(ann.TD)
+	status.TD = ann.TD
 	status.Head = ann.Head
 
 	if status.NetworkID != network {

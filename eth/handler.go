@@ -423,7 +423,7 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 				log.Error("Propagating dangling block", "number", block.Number(), "hash", hash)
 				return
 			}
-			td.Set(primeTd)
+			td = new(big.Int).Set(primeTd)
 		} else {
 			terminus := h.core.Slice().HeaderChain().GetTerminiByHash(block.ParentHash())
 			terminusHeader := h.core.Slice().HeaderChain().GetHeaderByHash(terminus[3])

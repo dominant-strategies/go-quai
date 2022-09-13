@@ -229,7 +229,6 @@ func (sl *Slice) updateCacheAndRelay(pendingHeader types.PendingHeader, location
 		if reorg {
 			sl.miner.worker.pendingHeaderFeed.Send(sl.phCache[sl.pendingHeader].Header)
 		}
-		fmt.Println(sl.phCache[sl.pendingHeader])
 		for i := range sl.subClients {
 			sl.subClients[i].SubRelayPendingHeader(context.Background(), sl.phCache[sl.pendingHeader], location, reorg)
 		}
