@@ -67,7 +67,7 @@ func (p *Peer) Handshake(network uint64, td *big.Int, head common.Hash, genesis 
 	}
 	p.td, p.head = status.TD, status.Head
 
-	if len(p.td) == 0 {
+	if p.td == nil {
 		return nil
 	}
 	// TD at mainnet block #7753254 is 76 bits. If it becomes 100 million times
