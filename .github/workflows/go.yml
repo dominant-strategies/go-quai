@@ -48,8 +48,7 @@ jobs:
       run: docker push quainetwork/go-quai:${{ env.VERSION }}
 
     - name: git tag
-      continue-on-error: true
-      run: git tag ${{ env.VERSION }} && git push origin ${{ env.VERSION }}
+      run: git tag ${{ env.VERSION }} && git push origin tag ${{ env.VERSION }}
 
   deploy:
     needs: build
