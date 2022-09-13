@@ -130,15 +130,6 @@ func (hc *HeaderChain) Append(batch ethdb.Batch, block *types.Block) error {
 	return nil
 }
 
-func (hc *HeaderChain) Appendable(block *types.Block) error {
-	err := hc.engine.VerifyHeader(hc, block.Header(), true)
-	if err != nil {
-		return err
-	}
-	err = hc.bc.Appendable(block)
-	return err
-}
-
 // SetCurrentHeader sets the in-memory head header marker of the canonical chan
 // as the given header.
 func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {

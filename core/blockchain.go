@@ -2,7 +2,6 @@ package core
 
 import (
 	"errors"
-	"fmt"
 	"sync"
 
 	lru "github.com/hashicorp/golang-lru"
@@ -14,7 +13,6 @@ import (
 	"github.com/spruce-solutions/go-quai/ethdb"
 	"github.com/spruce-solutions/go-quai/event"
 	"github.com/spruce-solutions/go-quai/log"
-	"github.com/spruce-solutions/go-quai/metrics"
 	"github.com/spruce-solutions/go-quai/params"
 )
 
@@ -24,30 +22,6 @@ const (
 	maxHeadsQueueLimit = 1024
 )
 
-var (
-	blockInsertTimer     = metrics.NewRegisteredTimer("chain/inserts", nil)
-	blockValidationTimer = metrics.NewRegisteredTimer("chain/validation", nil)
-	blockExecutionTimer  = metrics.NewRegisteredTimer("chain/execution", nil)
-	blockWriteTimer      = metrics.NewRegisteredTimer("chain/write", nil)
-
-	errInsertionInterrupted = errors.New("insertion is interrupted")
-	errChainStopped         = errors.New("blockchain is stopped")
-)
-
-// BlockChain represents the canonical chain given a database with a genesis
-// block. The Blockchain manages chain imports, reverts, chain reorganisations.
-//
-// Importing blocks in to the block chain happens according to the set of rules
-// defined by the two stage Validator. Processing of blocks is done using the
-// Processor which processes the included transaction. The validation of the state
-// is done in the second part of the Validator. Failing results in aborting of
-// the import.
-//
-// The BlockChain also helps in returning blocks from **any** chain included
-// in the database as well as blocks that represents the canonical chain. It's
-// important to note that GetBlock can return any block and does not need to be
-// included in the canonical one where as GetBlockByNumber always represents the
-// canonical chain.
 type BlockChain struct {
 	chainConfig *params.ChainConfig // Chain & network configuration
 
@@ -61,17 +35,13 @@ type BlockChain struct {
 	scope         event.SubscriptionScope
 
 	engine       consensus.Engine
-	chainmu      sync.RWMutex // blockchain insertion lock
-	futureBlocks *lru.Cache   // future blocks are blocks added for later processing
+	chainmu      sync.RWMutex
 	blockCache   *lru.Cache
 	bodyCache    *lru.Cache
 	bodyRLPCache *lru.Cache
-	processor    *StateProcessor // Block transaction processor interface
+	processor    *StateProcessor
 }
 
-// NewBlockChain returns a fully initialised block chain using information
-// available in the database. It initialises the default Ethereum Validator and
-// Processor.
 func NewBlockChain(db ethdb.Database, engine consensus.Engine, hc *HeaderChain, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, vmConfig vm.Config) (*BlockChain, error) {
 
 	blockCache, _ := lru.New(blockCacheLimit)
@@ -105,21 +75,12 @@ func (bc *BlockChain) Append(batch ethdb.Batch, block *types.Block) ([]*types.Lo
 
 	if block.Hash() != block.Header().Hash() {
 		log.Info("BlockChain Append, Roots Mismatch:", "block.Hash:", block.Hash(), "block.Header.Hash", block.Header().Hash(), "parentHeader.Number:", block.NumberU64())
+		bc.chainSideFeed.Send(block.Header())
 		return nil, errors.New("state roots do not match header, append fail")
 	}
 	rawdb.WriteBlock(batch, block)
 
 	return logs, nil
-}
-
-func (bc *BlockChain) Appendable(block *types.Block) error {
-	_, _, _, _, err := bc.processor.Process(block)
-	return err
-}
-
-// Trim
-func (bc *BlockChain) Trim(header *types.Header) {
-	rawdb.DeleteBlock(bc.db, header.Hash(), header.Number[types.QuaiNetworkContext].Uint64())
 }
 
 // HasBlock checks if a block is fully present in the database or not.
@@ -182,22 +143,4 @@ func (bc *BlockChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscript
 // block processing has started while false means it has stopped.
 func (bc *BlockChain) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscription {
 	return bc.scope.Track(bc.blockProcFeed.Subscribe(ch))
-}
-
-// reportBlock logs a bad block error.
-func (bc *BlockChain) reportBlock(block *types.Block, err error) {
-	rawdb.WriteBadBlock(bc.db, block)
-
-	log.Error(fmt.Sprintf(`
-########## BAD BLOCK #########
-Chain config: %v
-Number: %v
-Hash: 0x%x
-Error: %v
-##############################
-`, bc.chainConfig, block.Number(), block.Hash(), err))
-}
-
-func (bc *BlockChain) HasBlockAndState(hash common.Hash, number uint64) bool {
-	return bc.processor.HasBlockAndState(hash, number)
 }
