@@ -847,7 +847,7 @@ func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, re
 			// Make sure the peer actually gave something valid
 			headers := packet.(*headerPack).headers
 			for i := 0; i < len(headers); i++ {
-				fmt.Println("header: ", headers[i].Hash())
+				fmt.Println("findAncestorSpanSearch header: ", headers[i].Hash())
 			}
 			if len(headers) == 0 {
 				p.log.Warn("Empty head header set")
@@ -1576,14 +1576,10 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 				// R: Nothing to give
 				if mode != LightSync {
 					head := d.core.CurrentHeader()
-					fmt.Println("TD is nil?", td)
-					fmt.Println("Head hash in downloader:", head.Hash())
 					ourTD := d.core.GetTd(head.Hash(), head.Number[types.QuaiNetworkContext].Uint64())
-					fmt.Println("Our td", ourTD)
 					if ourTD[types.QuaiNetworkContext] == nil {
 						return nil
 					}
-					fmt.Println("gotHeaders?", gotHeaders)
 					if !gotHeaders && ourTD[types.QuaiNetworkContext].Cmp(td[types.QuaiNetworkContext]) < 0 {
 						return errStallingPeer
 					}
