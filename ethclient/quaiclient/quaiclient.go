@@ -235,12 +235,9 @@ func RPCMarshalOrderBlock(block *types.Block, Order int) (map[string]interface{}
 	return fields, nil
 }
 
-// RPCMarshalOrderBlock converts the block and order as input to PCRC.
-func RPCMarshalTdBlock(block *types.Block, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) (map[string]interface{}, error) {
-	fields, err := RPCMarshalBlock(block, true, true)
-	if err != nil {
-		return nil, err
-	}
+// RPCMarshalTdHeader converts the header and order as input to PCRC.
+func RPCMarshalTdHeader(header *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) (map[string]interface{}, error) {
+	fields := RPCMarshalHeader(header)
 	fields["td"] = td
 	fields["domTerminus"] = domTerminus
 	fields["domOrigin"] = domOrigin
@@ -469,8 +466,8 @@ func newRPCTransactionFromBlockHash(b *types.Block, hash common.Hash) *RPCTransa
 	return nil
 }
 
-func (ec *Client) Append(ctx context.Context, block *types.Block, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) (types.PendingHeader, error) {
-	data, err := RPCMarshalTdBlock(block, domTerminus, td, domOrigin, reorg)
+func (ec *Client) Append(ctx context.Context, header *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) (types.PendingHeader, error) {
+	data, err := RPCMarshalTdHeader(header, domTerminus, td, domOrigin, reorg)
 	if err != nil {
 		return types.PendingHeader{}, err
 	}

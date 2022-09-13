@@ -362,7 +362,7 @@ func (b *LesApiBackend) GetHeadHash() common.Hash {
 	return common.Hash{}
 }
 
-func (b *LesApiBackend) Append(block *types.Block, domTerminus common.Hash, td *big.Int, domReorg bool, reorg bool) (types.PendingHeader, error) {
+func (b *LesApiBackend) Append(header *types.Header, domTerminus common.Hash, td *big.Int, domReorg bool, reorg bool) (types.PendingHeader, error) {
 	return types.PendingHeader{}, nil
 }
 
@@ -379,5 +379,9 @@ func (b *LesApiBackend) PendingBlock() (*types.Block, error) {
 }
 
 func (b *LesApiBackend) PendingBlockBody(hash common.Hash) *types.Body {
+	return nil
+}
+
+func (b *LesApiBackend) ConstructLocalBlock(header *types.Header) *types.Block {
 	return nil
 }

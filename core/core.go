@@ -43,13 +43,17 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 		if err != nil {
 			return i, err
 		}
+
+		// Write the block body to the db.
+		rawdb.WritePendingBlockBody(c.sl.sliceDb, block.Header().Root[types.QuaiNetworkContext], block.Body())
+
 		// if the order of the block is less than the context
 		// add the rest of the blocks in the queue to the future blocks.
 		if blockOrder == types.QuaiNetworkContext {
-			_, err = c.sl.Append(block, common.Hash{}, big.NewInt(0), false, true)
+			_, err = c.sl.Append(block.Header(), common.Hash{}, big.NewInt(0), false, true)
 			if err != nil {
 				if err == consensus.ErrFutureBlock {
-					c.sl.addFutureBlock(block)
+					c.sl.addfutureHeader(block.Header())
 				}
 				log.Info("InsertChain", "err in Append core: ", err)
 				return i, err
@@ -57,6 +61,11 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 		}
 	}
 	return len(blocks), nil
+}
+
+// ConstructLocalBlock takes a header and construct the Block locally
+func (c *Core) ConstructLocalBlock(header *types.Header) *types.Block {
+	return c.sl.ConstructLocalBlock(header)
 }
 
 func (c *Core) InsertHeaderChain(headers []*types.Header, checkFreq int) (int, error) {
@@ -359,8 +368,8 @@ func (c *Core) GetTerminusAtOrder(header *types.Header, order int) (common.Hash,
 	return common.Hash{}, nil
 }
 
-func (c *Core) Append(block *types.Block, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) (types.PendingHeader, error) {
-	return c.sl.Append(block, domTerminus, td, domOrigin, reorg)
+func (c *Core) Append(header *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) (types.PendingHeader, error) {
+	return c.sl.Append(header, domTerminus, td, domOrigin, reorg)
 }
 
 func (c *Core) SubRelayPendingHeader(slPendingHeader types.PendingHeader, location []byte, reorg bool) error {

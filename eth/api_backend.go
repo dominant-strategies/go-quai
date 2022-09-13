@@ -127,8 +127,8 @@ func (b *EthAPIBackend) GetTerminusAtOrder(header *types.Header, order int) (com
 	return b.eth.core.GetTerminusAtOrder(header, order)
 }
 
-func (b *EthAPIBackend) Append(block *types.Block, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) (types.PendingHeader, error) {
-	return b.eth.core.Append(block, domTerminus, td, domOrigin, reorg)
+func (b *EthAPIBackend) Append(header *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) (types.PendingHeader, error) {
+	return b.eth.core.Append(header, domTerminus, td, domOrigin, reorg)
 }
 
 func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
@@ -404,4 +404,8 @@ func (b *EthAPIBackend) SubRelayPendingHeader(slPendingHeader types.PendingHeade
 
 func (b *EthAPIBackend) GetPendingHeader() (*types.Header, error) {
 	return b.eth.core.GetPendingHeader()
+}
+
+func (b *EthAPIBackend) ConstructLocalBlock(header *types.Header) *types.Block {
+	return b.eth.core.ConstructLocalBlock(header)
 }

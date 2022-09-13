@@ -23,8 +23,8 @@ import (
 )
 
 const (
-	maxFutureBlocks         = 256
-	maxTimeFutureBlocks     = 30
+	maxFutureHeaders        = 256
+	maxTimeFutureHeaders    = 30
 	pendingHeaderCacheLimit = 500
 	pendingHeaderGCTime     = 5
 )
@@ -45,10 +45,9 @@ type Slice struct {
 	domUrl     string
 	subClients []*quaiclient.Client
 
-	futureBlocks *lru.Cache
+	futureHeaders *lru.Cache
 
 	phCachemu sync.RWMutex
-	appendmu  sync.RWMutex
 
 	nilHeader        *types.Header
 	nilPendingHeader types.PendingHeader
@@ -67,8 +66,8 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 		domUrl:  domClientUrl,
 	}
 
-	futureBlocks, _ := lru.New(maxFutureBlocks)
-	sl.futureBlocks = futureBlocks
+	futureHeaders, _ := lru.New(maxFutureHeaders)
+	sl.futureHeaders = futureHeaders
 
 	var err error
 	sl.hc, err = NewHeaderChain(db, engine, chainConfig, cacheConfig, vmConfig)
@@ -117,7 +116,7 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 		Termini: make([]common.Hash, 3),
 	}
 
-	go sl.updateFutureBlocks()
+	go sl.updateFutureHeaders()
 	go sl.updatePendingHeadersCache()
 
 	// If the headerchain is empty start from genesis
@@ -133,7 +132,9 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 			knot := genesis.Knot[1:]
 			for _, block := range knot {
 				if block != nil {
-					_, err = sl.Append(block, genesisHash, block.Difficulty(), false, false)
+					rawdb.WritePendingBlockBody(sl.sliceDb, block.Root(), block.Body())
+
+					_, err = sl.Append(block.Header(), genesisHash, block.Difficulty(), false, false)
 					if err != nil {
 						log.Warn("Failed to append block", "hash:", block.Hash(), "Number:", block.Number(), "Location:", block.Header().Location, "error:", err)
 					}
@@ -148,9 +149,18 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 	return sl, nil
 }
 
-// Append takes a proposed block and attempts to hierarchically append it to the block graph.
+// Append takes a proposed header and constructs a local block and attempts to hierarchically append it to the block graph.
 // If this is called from a dominant context a domTerminus must be provided else a common.Hash{} should be used and domOrigin should be set to true.
-func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) (types.PendingHeader, error) {
+func (sl *Slice) Append(header *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) (types.PendingHeader, error) {
+
+	// Construct the block locally
+	block := sl.ConstructLocalBlock(header)
+	if block == nil {
+		// add the block to the future header cache
+		sl.addfutureHeader(header)
+		return sl.nilPendingHeader, errors.New("could not find the tx and uncle data to match the header root hash")
+	}
+
 	log.Info("Starting Append...", "Block.Hash:", block.Hash(), "Number:", block.Number(), "Location:", block.Header().Location)
 	batch := sl.sliceDb.NewBatch()
 
@@ -186,7 +196,7 @@ func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int
 	// Call my sub to append the block
 	var subPendingHeader types.PendingHeader
 	if types.QuaiNetworkContext != params.ZONE {
-		subPendingHeader, err = sl.subClients[block.Header().Location[types.QuaiNetworkContext]-1].Append(context.Background(), block, domTerminus, td, true, reorg)
+		subPendingHeader, err = sl.subClients[block.Header().Location[types.QuaiNetworkContext]-1].Append(context.Background(), block.Header(), domTerminus, td, true, reorg)
 		if err != nil {
 			return sl.nilPendingHeader, err
 		}
@@ -222,6 +232,33 @@ func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int
 	sl.updateCacheAndRelay(pendingHeader, block.Header().Location, order, reorg)
 
 	return pendingHeader, nil
+}
+
+// constructLocalBlock takes a header and construct the Block locally
+func (sl *Slice) ConstructLocalBlock(header *types.Header) *types.Block {
+	pendingBlockBody := sl.PendingBlockBody(header.Root[types.QuaiNetworkContext])
+	if pendingBlockBody != nil {
+		// Load uncles because they are not included in the block response.
+		txs := make([]*types.Transaction, len(pendingBlockBody.Transactions))
+		for i, tx := range pendingBlockBody.Transactions {
+			txs[i] = tx
+		}
+
+		uncles := make([]*types.Header, len(pendingBlockBody.Uncles))
+		for i, uncle := range pendingBlockBody.Uncles {
+			uncles[i] = uncle
+			log.Debug("Pending Block uncle", "hash: ", uncle.Hash())
+		}
+
+		block := types.NewBlockWithHeader(header).WithBody(txs, uncles)
+		block = block.WithSeal(header)
+
+		return block
+	} else {
+		// TODO: send the block to chainSideFeed
+		log.Info("Uncle Block Found...", "Hash:", header.Hash(), "Block Number:", header.Number)
+	}
+	return nil
 }
 
 // updateCacheAndRelay updates the pending headers cache and sends pending headers to subordinates
@@ -498,11 +535,11 @@ func makeSubClients(suburls []string) []*quaiclient.Client {
 	return subClients
 }
 
-// procFutureBlocks sorts the future block cache and attempts to append
-func (sl *Slice) procFutureBlocks() {
-	blocks := make([]*types.Block, 0, sl.futureBlocks.Len())
-	for _, hash := range sl.futureBlocks.Keys() {
-		if block, exist := sl.futureBlocks.Peek(hash); exist {
+// procfutureHeaders sorts the future block cache and attempts to append
+func (sl *Slice) procfutureHeaders() {
+	blocks := make([]*types.Block, 0, sl.futureHeaders.Len())
+	for _, hash := range sl.futureHeaders.Keys() {
+		if block, exist := sl.futureHeaders.Peek(hash); exist {
 			blocks = append(blocks, block.(*types.Block))
 		}
 	}
@@ -513,32 +550,32 @@ func (sl *Slice) procFutureBlocks() {
 
 		for i := range blocks {
 			var nilHash common.Hash
-			sl.Append(blocks[i], nilHash, big.NewInt(0), false, false)
+			sl.Append(blocks[i].Header(), nilHash, big.NewInt(0), false, false)
 		}
 	}
 }
 
-// addFutureBlock adds a block to the future block cache
-func (sl *Slice) addFutureBlock(block *types.Block) error {
-	max := uint64(time.Now().Unix() + maxTimeFutureBlocks)
-	if block.Time() > max {
-		return fmt.Errorf("future block timestamp %v > allowed %v", block.Time(), max)
+// addfutureHeader adds a block to the future block cache
+func (sl *Slice) addfutureHeader(header *types.Header) error {
+	max := uint64(time.Now().Unix() + maxTimeFutureHeaders)
+	if header.Time > max {
+		return fmt.Errorf("future block timestamp %v > allowed %v", header.Time, max)
 	}
-	if !sl.futureBlocks.Contains(block.Hash()) {
-		sl.futureBlocks.Add(block.Hash(), block)
+	if !sl.futureHeaders.Contains(header.Hash()) {
+		sl.futureHeaders.Add(header.Hash(), header)
 	}
 	return nil
 }
 
-// updateFutureBlocks is a time to procFutureBlocks
-func (sl *Slice) updateFutureBlocks() {
+// updatefutureHeaders is a time to procfutureHeaders
+func (sl *Slice) updateFutureHeaders() {
 	futureTimer := time.NewTicker(3 * time.Second)
 	defer futureTimer.Stop()
 	defer sl.wg.Done()
 	for {
 		select {
 		case <-futureTimer.C:
-			sl.procFutureBlocks()
+			sl.procfutureHeaders()
 		case <-sl.quit:
 			return
 		}

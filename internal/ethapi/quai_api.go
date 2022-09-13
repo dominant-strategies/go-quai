@@ -536,33 +536,16 @@ func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw js
 	if err := json.Unmarshal(raw, &header); err != nil {
 		return err
 	}
-
-	//
-	pendingBlockBody := s.b.PendingBlockBody(header.Root[types.QuaiNetworkContext])
-	if pendingBlockBody != nil {
-		// Load uncles because they are not included in the block response.
-		txs := make([]*types.Transaction, len(pendingBlockBody.Transactions))
-		for i, tx := range pendingBlockBody.Transactions {
-			txs[i] = tx
-		}
-
-		uncles := make([]*types.Header, len(pendingBlockBody.Uncles))
-		for i, uncle := range pendingBlockBody.Uncles {
-			uncles[i] = uncle
-			log.Debug("Pending Block uncle", "hash: ", uncle.Hash())
-		}
-
-		block := types.NewBlockWithHeader(header).WithBody(txs, uncles)
-		block = block.WithSeal(header)
-		log.Info("Retrieved mined block", "number", header.Number, "location", header.Location)
-		s.b.InsertBlock(ctx, block)
-		// Broadcast the block and announce chain insertion event
-		if block.Header() != nil {
-			s.b.EventMux().Post(core.NewMinedBlockEvent{Block: block})
-		}
-	} else {
-		log.Info("Uncle Block Found...", "Hash:", header.Hash(), "Block Number:", header.Number)
+	block := s.b.ConstructLocalBlock(header)
+	if block == nil {
+		return errors.New("could not find the block body in db")
 	}
+	// Broadcast the block and announce chain insertion event
+	if block.Header() != nil {
+		s.b.EventMux().Post(core.NewMinedBlockEvent{Block: block})
+	}
+	log.Info("Retrieved mined block", "number", header.Number, "location", header.Location)
+	s.b.InsertBlock(ctx, block)
 
 	return nil
 }
@@ -628,19 +611,7 @@ func (s *PublicBlockChainQuaiAPI) Append(ctx context.Context, raw json.RawMessag
 		return types.PendingHeader{}, err
 	}
 
-	// Load uncles because they are not included in the block response.
-	txs := make([]*types.Transaction, len(body.Transactions))
-	for i, tx := range body.Transactions {
-		txs[i] = tx.tx
-	}
-
-	uncles := make([]*types.Header, len(body.Uncles))
-	for i, uncle := range body.Uncles {
-		uncles[i] = uncle
-	}
-
-	block := types.NewBlockWithHeader(head).WithBody(txs, uncles)
-	return s.b.Append(block, body.DomTerminus, body.Td, body.DomOrigin, body.Reorg)
+	return s.b.Append(head, body.DomTerminus, body.Td, body.DomOrigin, body.Reorg)
 }
 
 type SubRelay struct {
