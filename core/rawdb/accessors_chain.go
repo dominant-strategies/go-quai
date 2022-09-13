@@ -142,7 +142,6 @@ func ReadAllCanonicalHashes(db ethdb.Iteratee, from uint64, to uint64, limit int
 func ReadHeaderNumber(db ethdb.KeyValueReader, hash common.Hash) *uint64 {
 	data, _ := db.Get(headerNumberKey(hash))
 	if len(data) != 8 {
-		fmt.Println("Data len not 8 for hash", hash)
 		return nil
 	}
 	number := binary.BigEndian.Uint64(data)
@@ -153,7 +152,6 @@ func ReadHeaderNumber(db ethdb.KeyValueReader, hash common.Hash) *uint64 {
 func WriteHeaderNumber(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	key := headerNumberKey(hash)
 	enc := encodeBlockNumber(number)
-	fmt.Println("WriteHeaderNumber", hash, headerNumberKey(hash))
 	if err := db.Put(key, enc); err != nil {
 		log.Crit("Failed to store hash to number mapping", "err", err)
 	}
@@ -352,8 +350,6 @@ func WriteHeader(db ethdb.KeyValueWriter, header *types.Header) {
 		hash   = header.Hash()
 		number = header.Number[types.QuaiNetworkContext].Uint64()
 	)
-	fmt.Println("WriteHeader Hash:", number, hash)
-
 	// Write the hash -> number mapping
 	WriteHeaderNumber(db, hash, number)
 
@@ -363,7 +359,6 @@ func WriteHeader(db ethdb.KeyValueWriter, header *types.Header) {
 		log.Crit("Failed to RLP encode header", "err", err)
 	}
 	key := headerKey(number, hash)
-	fmt.Println("WriteHeader key:", key)
 	if err := db.Put(key, data); err != nil {
 		log.Crit("Failed to store header", "err", err)
 	}
