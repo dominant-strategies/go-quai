@@ -1577,10 +1577,10 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 				if mode != LightSync {
 					head := d.core.CurrentHeader()
 					ourTD := d.core.GetTd(head.Hash(), head.Number[types.QuaiNetworkContext].Uint64())
-					if ourTD[types.QuaiNetworkContext] == nil {
+					if ourTD == nil {
 						return nil
 					}
-					if !gotHeaders && ourTD[types.QuaiNetworkContext].Cmp(td[types.QuaiNetworkContext]) < 0 {
+					if !gotHeaders && ourTD.Cmp(td) < 0 {
 						return errStallingPeer
 					}
 				}
