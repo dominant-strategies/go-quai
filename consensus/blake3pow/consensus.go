@@ -301,6 +301,7 @@ func (blake3pow *Blake3pow) CalcDifficulty(chain consensus.ChainHeaderReader, ti
 // given the parent block's time and difficulty.
 // NOTE: This is essentially the Ethereum DAA, without a 'difficulty bomb'
 func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Header) *big.Int {
+	nodeCtx := common.NodeLocation.Context()
 	// https://github.com/ethereum/EIPs/issues/100.
 	// algorithm:
 	// diff = (parent_diff +
@@ -314,9 +315,9 @@ func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Heade
 	x := new(big.Int)
 	y := new(big.Int)
 
-	// (2 if len(parent_uncles) else 1) - (block_timestamp - parent_timestamp) // 9
+	// (2 if len(parent_uncles) else 1) - (block_timestamp - parent_timestamp) // duration_limit
 	x.Sub(bigTime, bigParentTime)
-	x.Div(x, big9)
+	x.Div(x, params.DurationLimit[nodeCtx])
 	if parent.UncleHash() == types.EmptyUncleHash {
 		x.Sub(big1, x)
 	} else {
@@ -332,8 +333,8 @@ func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Heade
 	x.Add(parent.Difficulty(), x)
 
 	// minimum difficulty can ever be (before exponential factor)
-	if x.Cmp(params.MinimumDifficulty) < 0 {
-		x.Set(params.MinimumDifficulty)
+	if x.Cmp(params.MinimumDifficulty[nodeCtx]) < 0 {
+		x.Set(params.MinimumDifficulty[nodeCtx])
 	}
 
 	return x
