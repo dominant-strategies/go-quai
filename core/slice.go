@@ -576,7 +576,6 @@ func (sl *Slice) addfutureHeader(header *types.Header) error {
 func (sl *Slice) updateFutureHeaders() {
 	futureTimer := time.NewTicker(3 * time.Second)
 	defer futureTimer.Stop()
-	defer sl.wg.Done()
 	for {
 		select {
 		case <-futureTimer.C:
@@ -591,7 +590,6 @@ func (sl *Slice) updateFutureHeaders() {
 func (sl *Slice) updatePendingHeadersCache() {
 	futureTimer := time.NewTicker(pendingHeaderGCTime * time.Minute)
 	defer futureTimer.Stop()
-	defer sl.wg.Done()
 	for {
 		select {
 		case <-futureTimer.C:
