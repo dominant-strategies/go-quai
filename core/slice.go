@@ -188,9 +188,6 @@ func (sl *Slice) Append(header *types.Header, domTerminus common.Hash, td *big.I
 		return sl.nilPendingHeader, err
 	}
 
-	// Remove the header form the future headers cache
-	sl.futureHeaders.Remove(block.Hash())
-
 	if !domOrigin {
 		// CalcTd on the new block
 		td, err = sl.calcTd(block.Header())
@@ -238,6 +235,9 @@ func (sl *Slice) Append(header *types.Header, domTerminus common.Hash, td *big.I
 
 	// Relay the new pendingHeader
 	sl.updateCacheAndRelay(pendingHeader, block.Header().Location, order, reorg)
+
+	// Remove the header form the future headers cache
+	sl.futureHeaders.Remove(block.Hash())
 
 	return pendingHeader, nil
 }
