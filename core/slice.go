@@ -188,6 +188,9 @@ func (sl *Slice) Append(header *types.Header, domTerminus common.Hash, td *big.I
 		return sl.nilPendingHeader, err
 	}
 
+	// Remove the header form the future headers cache
+	sl.futureHeaders.Remove(block.Hash())
+
 	if !domOrigin {
 		// CalcTd on the new block
 		td, err = sl.calcTd(block.Header())
@@ -241,29 +244,31 @@ func (sl *Slice) Append(header *types.Header, domTerminus common.Hash, td *big.I
 
 // constructLocalBlock takes a header and construct the Block locally
 func (sl *Slice) ConstructLocalBlock(header *types.Header) *types.Block {
-	pendingBlockBody := sl.PendingBlockBody(header.Root[types.QuaiNetworkContext])
-	if pendingBlockBody != nil {
-		// Load uncles because they are not included in the block response.
-		txs := make([]*types.Transaction, len(pendingBlockBody.Transactions))
-		for i, tx := range pendingBlockBody.Transactions {
-			txs[i] = tx
-		}
-
-		uncles := make([]*types.Header, len(pendingBlockBody.Uncles))
-		for i, uncle := range pendingBlockBody.Uncles {
-			uncles[i] = uncle
-			log.Debug("Pending Block uncle", "hash: ", uncle.Hash())
-		}
-
-		block := types.NewBlockWithHeader(header).WithBody(txs, uncles)
-		block = block.WithSeal(header)
-
-		return block
+	var block *types.Block
+	// check if the header has empty uncle and tx root
+	if header.EmptyBody() {
+		// construct block with empty transactions and uncles
+		block = types.NewBlockWithHeader(header)
 	} else {
-		// TODO: send the block to chainSideFeed
-		log.Info("Uncle Block Found...", "Hash:", header.Hash(), "Block Number:", header.Number)
+		pendingBlockBody := sl.PendingBlockBody(header.Root[types.QuaiNetworkContext])
+		if pendingBlockBody != nil {
+			// Load uncles because they are not included in the block response.
+			txs := make([]*types.Transaction, len(pendingBlockBody.Transactions))
+			for i, tx := range pendingBlockBody.Transactions {
+				txs[i] = tx
+			}
+
+			uncles := make([]*types.Header, len(pendingBlockBody.Uncles))
+			for i, uncle := range pendingBlockBody.Uncles {
+				uncles[i] = uncle
+				log.Debug("Pending Block uncle", "hash: ", uncle.Hash())
+			}
+
+			block = types.NewBlockWithHeader(header).WithBody(txs, uncles)
+			block = block.WithSeal(header)
+		}
 	}
-	return nil
+	return block
 }
 
 // updateCacheAndRelay updates the pending headers cache and sends pending headers to subordinates
