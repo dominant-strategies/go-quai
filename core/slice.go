@@ -126,7 +126,6 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 	sl.pendingHeader = genesisHash
 	rawdb.WriteTermini(sl.sliceDb, genesisHash, genesisTermini)
 
-	time.Sleep(5 * time.Second)
 	// Append each of the knot blocks
 	if types.QuaiNetworkContext == params.PRIME {
 		knot := genesis.Knot[1:]
