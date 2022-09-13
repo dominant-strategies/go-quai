@@ -260,8 +260,7 @@ func opBalance(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 	slot := scope.Stack.peek()
 	address := common.Address(slot.Bytes20())
 	// Check if address is in proper context
-	idRange := interpreter.evm.chainConfig.ChainIDRange()
-	if int(address.Bytes()[0]) < idRange[0] || int(address.Bytes()[0]) > idRange[1] {
+	if !common.IsAddressInContext(address) {
 		return nil, ErrExecutionReverted
 	}
 	slot.SetFromBig(interpreter.evm.StateDB.GetBalance(address))
@@ -348,8 +347,7 @@ func opExtCodeSize(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 	slot := scope.Stack.peek()
 	address := common.Address(slot.Bytes20())
 	// Check if address is in proper context
-	idRange := interpreter.evm.chainConfig.ChainIDRange()
-	if int(address.Bytes()[0]) < idRange[0] || int(address.Bytes()[0]) > idRange[1] {
+	if !common.IsAddressInContext(address) {
 		return nil, ErrExecutionReverted
 	}
 	slot.SetUint64(uint64(interpreter.evm.StateDB.GetCodeSize(slot.Bytes20())))
@@ -393,8 +391,7 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 	}
 	addr := common.Address(a.Bytes20())
 	// Check if address is in proper context
-	idRange := interpreter.evm.chainConfig.ChainIDRange()
-	if int(addr.Bytes()[0]) < idRange[0] || int(addr.Bytes()[0]) > idRange[1] {
+	if !common.IsAddressInContext(addr) {
 		return nil, ErrExecutionReverted
 	}
 	codeCopy := getData(interpreter.evm.StateDB.GetCode(addr), uint64CodeOffset, length.Uint64())
@@ -433,8 +430,7 @@ func opExtCodeHash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 	slot := scope.Stack.peek()
 	address := common.Address(slot.Bytes20())
 	// Check if address is in proper context
-	idRange := interpreter.evm.chainConfig.ChainIDRange()
-	if int(address.Bytes()[0]) < idRange[0] || int(address.Bytes()[0]) > idRange[1] {
+	if !common.IsAddressInContext(address) {
 		return nil, ErrExecutionReverted
 	}
 	if interpreter.evm.StateDB.Empty(address) {
@@ -670,8 +666,7 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 	addr, value, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
 	// Check if address is in proper context
-	idRange := interpreter.evm.chainConfig.ChainIDRange()
-	if int(toAddr.Bytes()[0]) < idRange[0] || int(toAddr.Bytes()[0]) > idRange[1] {
+	if !common.IsAddressInContext(toAddr) {
 		return nil, ErrExecutionReverted
 	}
 	// Get the arguments from the memory.
@@ -712,8 +707,7 @@ func opCallCode(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 	addr, value, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
 	// Check if address is in proper context
-	idRange := interpreter.evm.chainConfig.ChainIDRange()
-	if int(toAddr.Bytes()[0]) < idRange[0] || int(toAddr.Bytes()[0]) > idRange[1] {
+	if !common.IsAddressInContext(toAddr) {
 		return nil, ErrExecutionReverted
 	}
 	// Get arguments from the memory.
@@ -751,8 +745,7 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 	addr, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
 	// Check if address is in proper context
-	idRange := interpreter.evm.chainConfig.ChainIDRange()
-	if int(toAddr.Bytes()[0]) < idRange[0] || int(toAddr.Bytes()[0]) > idRange[1] {
+	if !common.IsAddressInContext(toAddr) {
 		return nil, ErrExecutionReverted
 	}
 	// Get arguments from the memory.
@@ -783,8 +776,7 @@ func opStaticCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) 
 	addr, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
 	// Check if address is in proper context
-	idRange := interpreter.evm.chainConfig.ChainIDRange()
-	if int(toAddr.Bytes()[0]) < idRange[0] || int(toAddr.Bytes()[0]) > idRange[1] {
+	if !common.IsAddressInContext(toAddr) {
 		return nil, ErrExecutionReverted
 	}
 	// Get arguments from the memory.
@@ -835,8 +827,7 @@ func opSuicide(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 func opIsAddressInternal(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	addr := scope.Stack.peek()
 	commonAddr := common.Address(addr.Bytes20())
-	idRange := interpreter.evm.chainConfig.ChainIDRange()
-	if int(commonAddr.Bytes()[0]) >= idRange[0] && int(commonAddr.Bytes()[0]) <= idRange[1] {
+	if common.IsAddressInContext(commonAddr) {
 		addr.SetOne()
 	} else {
 		addr.Clear()
