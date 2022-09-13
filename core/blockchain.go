@@ -105,7 +105,6 @@ func (bc *BlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
 	}
 	block := rawdb.ReadBlock(bc.db, hash, number)
 	if block == nil {
-		fmt.Println("GetBlock nil ret", hash, number)
 		return nil
 	}
 	// Cache the found block for next time and return
