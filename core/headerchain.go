@@ -149,7 +149,7 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 
 	// If head is the normal extension of canonical head, we can return by just wiring the canonical hash.
 	if prevHeader.Hash() == head.Parent() {
-		rawdb.WriteCanonicalHash(hc.headerDb, head.Hash(), head.Number64())
+		rawdb.WriteCanonicalHash(hc.headerDb, head.Hash(), head.NumberU64())
 		return nil
 	}
 
@@ -158,7 +158,7 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 	var hashStack []*types.Header
 	for {
 		hashStack = append(hashStack, newHeader)
-		newHeader = hc.GetHeader(newHeader.Parent(), newHeader.Number64()-1)
+		newHeader = hc.GetHeader(newHeader.Parent(), newHeader.NumberU64()-1)
 
 		// genesis check to not delete the genesis block
 		if newHeader.Hash() == hc.config.GenesisHashes[0] {
@@ -171,8 +171,8 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 	}
 
 	for {
-		rawdb.DeleteCanonicalHash(hc.headerDb, prevHeader.Number64())
-		prevHeader = hc.GetHeader(prevHeader.Parent(), prevHeader.Number64()-1)
+		rawdb.DeleteCanonicalHash(hc.headerDb, prevHeader.NumberU64())
+		prevHeader = hc.GetHeader(prevHeader.Parent(), prevHeader.NumberU64()-1)
 
 		// genesis check to not delete the genesis block
 		if prevHeader.Hash() == hc.config.GenesisHashes[0] {
@@ -186,7 +186,7 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 
 	// Run through the hash stack to update canonicalHash and forward state processor
 	for i := len(hashStack) - 1; i >= 0; i-- {
-		rawdb.WriteCanonicalHash(hc.headerDb, hashStack[i].Hash(), hashStack[i].Number64())
+		rawdb.WriteCanonicalHash(hc.headerDb, hashStack[i].Hash(), hashStack[i].NumberU64())
 	}
 	return nil
 }
@@ -197,11 +197,11 @@ func (hc *HeaderChain) findCommonHeader(header *types.Header) *types.Header {
 		if header == nil {
 			return nil
 		}
-		canonicalHash := rawdb.ReadCanonicalHash(hc.headerDb, header.Number64())
+		canonicalHash := rawdb.ReadCanonicalHash(hc.headerDb, header.NumberU64())
 		if canonicalHash == header.Hash() || canonicalHash == hc.config.GenesisHashes[types.QuaiNetworkContext] {
 			return hc.GetHeaderByHash(canonicalHash)
 		}
-		header = hc.GetHeader(header.ParentHash[types.QuaiNetworkContext], header.Number64()-1)
+		header = hc.GetHeader(header.ParentHash[types.QuaiNetworkContext], header.NumberU64()-1)
 	}
 
 }
@@ -528,7 +528,7 @@ func (hc *HeaderChain) CalculateBaseFee(header *types.Header) *big.Int {
 
 // Export writes the active chain to the given writer.
 func (hc *HeaderChain) Export(w io.Writer) error {
-	return hc.ExportN(w, uint64(0), hc.CurrentHeader().Number64())
+	return hc.ExportN(w, uint64(0), hc.CurrentHeader().NumberU64())
 }
 
 // ExportN writes a subset of the active chain to the given writer.

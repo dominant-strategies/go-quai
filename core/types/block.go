@@ -127,7 +127,7 @@ func (h *Header) Size() common.StorageSize {
 	return headerSize + common.StorageSize(len(h.Extra)+(TotalBitLen(h.Difficulty)+TotalBitLen(h.Number))/24)
 }
 
-func (h *Header) Number64() uint64 {
+func (h *Header) NumberU64() uint64 {
 	return h.Number[QuaiNetworkContext].Uint64()
 }
 

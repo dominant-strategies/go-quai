@@ -384,7 +384,7 @@ func (sl *Slice) hlcr(externTd *big.Int) bool {
 
 // CalcTd calculates the TD of the given header using PCRC and CalcHLCRNetDifficulty.
 func (sl *Slice) calcTd(header *types.Header) (*big.Int, error) {
-	priorTd := sl.hc.GetTd(header.Parent(), header.Number64()-1)
+	priorTd := sl.hc.GetTd(header.Parent(), header.NumberU64()-1)
 	if priorTd == nil {
 		return nil, consensus.ErrFutureBlock
 	}
@@ -447,7 +447,7 @@ func (sl *Slice) updatePhCache(externPendingHeader types.PendingHeader) {
 		}
 	}
 
-	if externPendingHeader.Header.Number64() > localPendingHeader.Header.Number64() {
+	if externPendingHeader.Header.NumberU64() > localPendingHeader.Header.NumberU64() {
 		localPendingHeader.Header = sl.combinePendingHeader(externPendingHeader.Header, localPendingHeader.Header, types.QuaiNetworkContext)
 		localPendingHeader.Termini = externPendingHeader.Termini
 
@@ -495,7 +495,7 @@ func (sl *Slice) gcPendingHeaders() {
 	sl.phCachemu.Lock()
 	defer sl.phCachemu.Unlock()
 	for hash, pendingHeader := range sl.phCache {
-		if pendingHeader.Header.Number64()+pendingHeaderCacheLimit < sl.hc.CurrentHeader().Number64() {
+		if pendingHeader.Header.NumberU64()+pendingHeaderCacheLimit < sl.hc.CurrentHeader().NumberU64() {
 			delete(sl.phCache, hash)
 		}
 	}
