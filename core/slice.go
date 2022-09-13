@@ -306,6 +306,9 @@ func (sl *Slice) setHeaderChainHead(batch ethdb.Batch, block *types.Block, reorg
 		if err != nil {
 			return sl.nilHeader, err
 		}
+		sl.hc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
+	} else {
+		sl.hc.chainSideFeed.Send(block.Header())
 	}
 
 	// Upate the local pending header
