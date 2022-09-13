@@ -253,11 +253,11 @@ func (d *Downloader) Progress() ethereum.SyncProgress {
 	mode := d.getMode()
 	switch {
 	case d.core != nil && mode == FullSync:
-		current = d.core.CurrentHeader().Number[types.QuaiNetworkContext].Uint64()
+		current = d.core.CurrentHeader().NumberU64()
 	case d.core != nil && mode == FastSync:
 		current = d.core.CurrentFastBlock().NumberU64()
 	case d.lightchain != nil:
-		current = d.lightchain.CurrentHeader().Number[types.QuaiNetworkContext].Uint64()
+		current = d.lightchain.CurrentHeader().NumberU64()
 	default:
 		log.Error("Unknown downloader chain/mode combo", "light", d.lightchain != nil, "full", d.core != nil, "mode", mode)
 	}
@@ -760,16 +760,16 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 	var (
 		floor        = int64(-1)
 		localHeight  uint64
-		remoteHeight = remoteHeader.Number[types.QuaiNetworkContext].Uint64()
+		remoteHeight = remoteHeader.NumberU64()
 	)
 	mode := d.getMode()
 	switch mode {
 	case FullSync:
-		localHeight = d.core.CurrentHeader().Number[types.QuaiNetworkContext].Uint64()
+		localHeight = d.core.CurrentHeader().NumberU64()
 	case FastSync:
 		localHeight = d.core.CurrentFastBlock().NumberU64()
 	default:
-		localHeight = d.lightchain.CurrentHeader().Number[types.QuaiNetworkContext].Uint64()
+		localHeight = d.lightchain.CurrentHeader().NumberU64()
 	}
 	p.log.Debug("Looking for common ancestor", "local", localHeight, "remote", remoteHeight)
 
@@ -789,7 +789,7 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 		if d.genesis == 0 {
 			header := d.lightchain.CurrentHeader()
 			for header != nil {
-				d.genesis = header.Number[types.QuaiNetworkContext].Uint64()
+				d.genesis = header.NumberU64()
 				if floor >= int64(d.genesis)-1 {
 					break
 				}
@@ -1146,10 +1146,10 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 					// Retrieve the current head we're at
 					var head uint64
 					if mode == LightSync {
-						head = d.lightchain.CurrentHeader().Number[types.QuaiNetworkContext].Uint64()
+						head = d.lightchain.CurrentHeader().NumberU64()
 					} else {
 						head = d.core.CurrentFastBlock().NumberU64()
-						if full := d.core.CurrentHeader().Number[types.QuaiNetworkContext].Uint64(); head < full {
+						if full := d.core.CurrentHeader().NumberU64(); head < full {
 							head = full
 						}
 					}
@@ -1160,7 +1160,7 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 						head = ancestor
 					}
 					// If the head is way older than this batch, delay the last few headers
-					if head+uint64(reorgProtThreshold) < headers[n-1].Number[types.QuaiNetworkContext].Uint64() {
+					if head+uint64(reorgProtThreshold) < headers[n-1].NumberU64() {
 						delay := reorgProtHeaderDelay
 						if delay > n {
 							delay = n
@@ -1576,7 +1576,7 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 				// R: Nothing to give
 				if mode != LightSync {
 					head := d.core.CurrentHeader()
-					ourTD := d.core.GetTd(head.Hash(), head.Number[types.QuaiNetworkContext].Uint64())
+					ourTD := d.core.GetTd(head.Hash(), head.NumberU64())
 					if ourTD == nil {
 						return nil
 					}
@@ -1593,7 +1593,7 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 				// peer gave us something useful, we're already happy/progressed (above check).
 				if mode == FastSync || mode == LightSync {
 					head := d.lightchain.CurrentHeader()
-					if d.lightchain.GetTd(head.Hash(), head.Number[types.QuaiNetworkContext].Uint64()).Cmp(td) < 0 {
+					if d.lightchain.GetTd(head.Hash(), head.NumberU64()).Cmp(td) < 0 {
 						return errStallingPeer
 					}
 				}

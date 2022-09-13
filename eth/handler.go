@@ -427,7 +427,7 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 		} else {
 			terminus := h.core.Slice().HeaderChain().GetTerminiByHash(block.ParentHash())
 			terminusHeader := h.core.Slice().HeaderChain().GetHeaderByHash(terminus[3])
-			td = h.core.GetTd(terminusHeader.Hash(), terminusHeader.Number64())
+			td = h.core.GetTd(terminusHeader.Hash(), terminusHeader.NumberU64())
 			if td == nil {
 				return
 			}
