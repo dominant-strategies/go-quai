@@ -162,9 +162,9 @@ func answerGetBlockBodiesQuery(backend Backend, query GetBlockBodiesPacket, peer
 		}
 
 		// stopping at a coincident block after including the block body for the coincident block.
-		if IsCoincident(backend, hash) {
-			break
-		}
+		// if IsCoincident(backend, hash) {
+		// 	break
+		// }
 	}
 	return bodies
 }
