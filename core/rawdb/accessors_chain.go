@@ -548,137 +548,6 @@ func ReadTdRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 	return nil // Can't find the data anywhere.
 }
 
-// ReadStalePh retreive's the curent heads stored in slice for a header hash.
-func ReadStalePh(db ethdb.Reader, hash common.Hash) []types.PendingHeader {
-	key := stalePhKey(hash)
-
-	data, _ := db.Get(key)
-	if len(data) == 0 {
-		return nil
-	}
-	stalePh := new([]types.PendingHeader)
-	if err := rlp.Decode(bytes.NewReader(data), stalePh); err != nil {
-		log.Error("Invalid stalePh RLP")
-		return nil
-	}
-	return *stalePh
-}
-
-// WriteSliceCurrentHeads writes the slice current heads hashes for a given header hash.
-func WriteStalePh(db ethdb.KeyValueWriter, currentPendingHeaders []types.PendingHeader, hash common.Hash) {
-	// Write the encoded pending header
-	data, err := rlp.EncodeToBytes(currentPendingHeaders)
-	if err != nil {
-		log.Crit("Failed to RLP stalePh", "err", err)
-	}
-
-	key := stalePhKey(hash)
-
-	if err := db.Put(key, data); err != nil {
-		log.Crit("Failed to stalePh", "err", err)
-	}
-}
-
-// DeleteStalePh deletes the stalePh in the db by terminus hash.
-func DeleteStalePh(db ethdb.KeyValueWriter, hash common.Hash) {
-	key := stalePhKey(hash)
-
-	if err := db.Delete(key); err != nil {
-		log.Crit("Failed to delete stalePh ", "err", err)
-	}
-}
-
-// ReadSliceCurrentHeads retreive's the curent heads stored in slice for a header hash.
-func ReadSliceCurrentHeads(db ethdb.Reader, hash common.Hash) []*types.Header {
-	key := currentHeadsKey(hash)
-
-	data, _ := db.Get(key)
-	if len(data) == 0 {
-		return nil
-	}
-	headsHash := []common.Hash{}
-	if err := rlp.Decode(bytes.NewReader(data), &headsHash); err != nil {
-		log.Error("Invalid pendingHeader RLP")
-		return nil
-	}
-	// get the headers for the headsHash
-	currentHeads := []*types.Header{}
-	for _, hash := range headsHash {
-		headerNumber := ReadHeaderNumber(db, hash)
-		currentHeads = append(currentHeads, ReadHeader(db, hash, *headerNumber))
-	}
-	return currentHeads
-}
-
-// WriteSliceCurrentHeads writes the slice current heads hashes for a given header hash.
-func WriteSliceCurrentHeads(db ethdb.KeyValueWriter, currentHeads []*types.Header, hash common.Hash) {
-
-	var currentHeadsHash []common.Hash
-	for _, header := range currentHeads {
-		currentHeadsHash = append(currentHeadsHash, header.Hash())
-	}
-	// Write the encoded pending header
-	data, err := rlp.EncodeToBytes(currentHeadsHash)
-	if err != nil {
-		log.Crit("Failed to RLP encode pending header", "err", err)
-	}
-
-	key := currentHeadsKey(hash)
-
-	if err := db.Put(key, data); err != nil {
-		log.Crit("Failed to store header", "err", err)
-	}
-}
-
-// DeleteSliceCurrentHeads deletes the current heads stored for the slice.
-func DeleteSliceCurrentHeads(db ethdb.KeyValueWriter, hash common.Hash) {
-	key := currentHeadsKey(hash)
-
-	if err := db.Delete(key); err != nil {
-		log.Crit("Failed to delete slice pending header ", "err", err)
-	}
-}
-
-// ReadPendingHeader retreive's the pending header stored in hash.
-func ReadPendingHeader(db ethdb.Reader, hash common.Hash) *types.Header {
-	key := pendingHeaderKey(hash)
-	log.Debug("ReadPendingHeader", "Key:", hash)
-	data, _ := db.Get(key)
-	if len(data) == 0 {
-		return nil
-	}
-
-	header := new(types.Header)
-	if err := rlp.Decode(bytes.NewReader(data), header); err != nil {
-		log.Error("Invalid pendingHeader RLP")
-		return nil
-	}
-	return header
-}
-
-// WriteDomPendingHeader writes the pending header of the header hash.
-func WriteDomPendingHeader(db ethdb.KeyValueWriter, hash common.Hash, pendingHeader *types.Header) {
-	key := domPendingHeaderKey(hash)
-	// Write the encoded pending header
-	data, err := rlp.EncodeToBytes(pendingHeader)
-	if err != nil {
-		log.Crit("Failed to RLP encode pending header", "err", err)
-	}
-
-	if err := db.Put(key, data); err != nil {
-		log.Crit("Failed to store header", "err", err)
-	}
-}
-
-// DeleteDomPendingHeader deletes the pending header stored for the header hash.
-func DeleteDomPendingHeader(db ethdb.KeyValueWriter, hash common.Hash) {
-	key := domPendingHeaderKey(hash)
-
-	if err := db.Delete(key); err != nil {
-		log.Crit("Failed to delete slice pending header ", "err", err)
-	}
-}
-
 // ReadHeadsHashes retreive's the heads hashes of the blockchain.
 func ReadTermini(db ethdb.Reader, hash common.Hash) []common.Hash {
 	key := terminiKey(hash)
@@ -715,9 +584,9 @@ func DeleteTermini(db ethdb.KeyValueWriter, hash common.Hash) {
 	}
 }
 
-// ReadDomPendingHeader retreive's the pending header stored in hash.
-func ReadDomPendingHeader(db ethdb.Reader, hash common.Hash) *types.Header {
-	key := domPendingHeaderKey(hash)
+// ReadPendingHeader retreive's the pending header stored in hash.
+func ReadPendingHeader(db ethdb.Reader, hash common.Hash) *types.Header {
+	key := pendingHeaderKey(hash)
 	data, _ := db.Get(key)
 	if len(data) == 0 {
 		return nil
@@ -731,10 +600,9 @@ func ReadDomPendingHeader(db ethdb.Reader, hash common.Hash) *types.Header {
 	return header
 }
 
-// WritePendingHeader writes the pending header of the header hash.
+// WritePendingHeader writes the pending header of the terminus hash.
 func WritePendingHeader(db ethdb.KeyValueWriter, hash common.Hash, pendingHeader *types.Header) {
 	key := pendingHeaderKey(hash)
-	fmt.Println("WritePendingHeader Key:", hash)
 
 	// Write the encoded pending header
 	data, err := rlp.EncodeToBytes(pendingHeader)
@@ -750,9 +618,124 @@ func WritePendingHeader(db ethdb.KeyValueWriter, hash common.Hash, pendingHeader
 // DeletePendingHeader deletes the pending header stored for the header hash.
 func DeletePendingHeader(db ethdb.KeyValueWriter, hash common.Hash) {
 	key := pendingHeaderKey(hash)
-
 	if err := db.Delete(key); err != nil {
 		log.Crit("Failed to delete slice pending header ", "err", err)
+	}
+}
+
+// ReadPendingHeader retreive's the pending header stored in hash.
+func ReadPhCacheBody(db ethdb.Reader, hash common.Hash) []common.Hash {
+	key := phBodyKey(hash)
+	data, _ := db.Get(key)
+	if len(data) == 0 {
+		return nil
+	}
+	termini := []common.Hash{}
+	if err := rlp.Decode(bytes.NewReader(data), &termini); err != nil {
+		log.Error("Invalid pendingHeader RLP")
+		return nil
+	}
+	return termini
+}
+
+// WritePendingHeader writes the pending header of the terminus hash.
+func WritePhCacheBody(db ethdb.KeyValueWriter, hash common.Hash, termini []common.Hash) {
+	key := phBodyKey(hash)
+	// Write the encoded pending header
+	data, err := rlp.EncodeToBytes(termini)
+	if err != nil {
+		log.Crit("Failed to RLP encode pending header", "err", err)
+	}
+	if err := db.Put(key, data); err != nil {
+		log.Crit("Failed to store header", "err", err)
+	}
+}
+
+// DeletePendingHeader deletes the pending header stored for the header hash.
+func DeletePhCacheBody(db ethdb.KeyValueWriter, hash common.Hash) {
+	key := phBodyKey(hash)
+	if err := db.Delete(key); err != nil {
+		log.Crit("Failed to delete slice pending header ", "err", err)
+	}
+}
+
+// ReadPhCache retreive's the heads hashes of the blockchain.
+func ReadPhCache(db ethdb.Reader) map[common.Hash]types.PendingHeader {
+	data, _ := db.Get(phCacheKey)
+	// get the ph cache keys.
+	if len(data) == 0 {
+		return make(map[common.Hash]types.PendingHeader)
+	}
+	hashes := []common.Hash{}
+	if err := rlp.DecodeBytes(data, &hashes); err != nil {
+		return make(map[common.Hash]types.PendingHeader)
+	}
+
+	phCache := make(map[common.Hash]types.PendingHeader)
+	// Read the pending header and phBody.
+	for _, hash := range hashes {
+		header := ReadPendingHeader(db, hash)
+		termini := ReadPhCacheBody(db, hash)
+		pendingHeader := types.PendingHeader{Header: header, Termini: termini}
+		phCache[hash] = pendingHeader
+	}
+	return phCache
+}
+
+// WritePhCache writes the heads hashes of the blockchain.
+func WritePhCache(db ethdb.KeyValueWriter, phCache map[common.Hash]types.PendingHeader) {
+	var hashes []common.Hash
+	for hash, pendingHeader := range phCache {
+		hashes = append(hashes, hash)
+		WritePendingHeader(db, hash, pendingHeader.Header)
+		WritePhCacheBody(db, hash, pendingHeader.Termini)
+	}
+
+	data, err := rlp.EncodeToBytes(hashes)
+	if err != nil {
+		log.Crit("Failed to RLP encode block total difficulty", "err", err)
+	}
+	if err := db.Put(phCacheKey, data); err != nil {
+		log.Crit("Failed to store last block's hash", "err", err)
+	}
+}
+
+// ReadCurrentPendingHeaderHash retreive's the heads hashes of the blockchain.
+func ReadCurrentPendingHeaderHash(db ethdb.Reader) common.Hash {
+	data, _ := db.Get(phHeadKey)
+	// get the ph cache keys.
+	if len(data) == 0 {
+		return common.Hash{}
+	}
+	hash := common.Hash{}
+	if err := rlp.DecodeBytes(data, &hash); err != nil {
+		return common.Hash{}
+	}
+	return hash
+}
+
+// WriteCurrentPendingHeaderHash writes the heads hashes of the blockchain.
+func WriteCurrentPendingHeaderHash(db ethdb.KeyValueWriter, hash common.Hash) {
+	data, err := rlp.EncodeToBytes(hash)
+	if err != nil {
+		log.Crit("Failed to RLP encode block total difficulty", "err", err)
+	}
+	if err := db.Put(phHeadKey, data); err != nil {
+		log.Crit("Failed to store last block's hash", "err", err)
+	}
+}
+
+// DeleteCurrentPendingHeaderHash writes the heads hashes of the blockchain.
+func DeleteCurrentPendingHeaderHash(db ethdb.KeyValueWriter) {
+	if err := db.Delete(phHeadKey); err != nil {
+		log.Crit("Failed to delete ph head", "err", err)
+	}
+}
+
+// DeletePhCache writes the heads hashes of the blockchain.
+func DeletePhCache(db ethdb.KeyValueWriter) {
+	if err := db.Delete(phCacheKey); err != nil {
+		log.Crit("Failed to delete ph cache", "err", err)
 	}
 }
 

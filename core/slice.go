@@ -120,22 +120,29 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 	go sl.updateFutureBlocks()
 	go sl.updatePendingHeadersCache()
 
-	// Initialize slice state for genesis knot
-	genesisHash := sl.Config().GenesisHashes[0]
-	genesisTermini := []common.Hash{genesisHash, genesisHash, genesisHash, genesisHash}
-	sl.pendingHeader = genesisHash
-	rawdb.WriteTermini(sl.sliceDb, genesisHash, genesisTermini)
+	// If the headerchain is empty start from genesis
+	if sl.hc.Empty() {
+		// Initialize slice state for genesis knot
+		genesisHash := sl.Config().GenesisHashes[0]
+		genesisTermini := []common.Hash{genesisHash, genesisHash, genesisHash, genesisHash}
+		sl.pendingHeader = genesisHash
+		rawdb.WriteTermini(sl.sliceDb, genesisHash, genesisTermini)
 
-	// Append each of the knot blocks
-	if types.QuaiNetworkContext == params.PRIME {
-		knot := genesis.Knot[1:]
-		for _, block := range knot {
-			if block != nil {
-				_, err = sl.Append(block, genesisHash, block.Difficulty(), false, false)
-				if err != nil {
-					log.Warn("Failed to append block", "hash:", block.Hash(), "Number:", block.Number(), "Location:", block.Header().Location, "error:", err)
+		// Append each of the knot blocks
+		if types.QuaiNetworkContext == params.PRIME {
+			knot := genesis.Knot[1:]
+			for _, block := range knot {
+				if block != nil {
+					_, err = sl.Append(block, genesisHash, block.Difficulty(), false, false)
+					if err != nil {
+						log.Warn("Failed to append block", "hash:", block.Hash(), "Number:", block.Number(), "Location:", block.Header().Location, "error:", err)
+					}
 				}
 			}
+		}
+	} else { // load the phCache and slice current pending header hash
+		if err := sl.loadLastState(); err != nil {
+			return nil, err
 		}
 	}
 	return sl, nil
@@ -551,6 +558,22 @@ func (sl *Slice) updatePendingHeadersCache() {
 			return
 		}
 	}
+}
+
+// loadLastState loads the phCache and the slice pending header hash from the db.
+func (sl *Slice) loadLastState() error {
+	sl.phCache = rawdb.ReadPhCache(sl.sliceDb)
+	sl.pendingHeader = rawdb.ReadCurrentPendingHeaderHash(sl.sliceDb)
+	return nil
+}
+
+// Stop stores the phCache and the sl.pendingHeader hash value to the db.
+func (sl *Slice) Stop() {
+	// write the ph head hash to the db.
+	rawdb.WriteCurrentPendingHeaderHash(sl.sliceDb, sl.pendingHeader)
+	// Write the ph cache to the dd.
+	rawdb.WritePhCache(sl.sliceDb, sl.phCache)
+	sl.hc.Stop()
 }
 
 func (sl *Slice) Config() *params.ChainConfig { return sl.config }

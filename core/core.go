@@ -269,7 +269,7 @@ func (c *Core) Genesis() *types.Block {
 }
 
 func (c *Core) Stop() {
-	c.sl.hc.Stop()
+	c.sl.Stop()
 }
 
 // SubscribeChainEvent registers a subscription of ChainEvent.

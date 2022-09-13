@@ -39,6 +39,12 @@ var (
 	// headersHashKey tracks the latest known headers hash in Blockchain.
 	headsHashesKey = []byte("HeadersHash")
 
+	// phCacheKey tracks the latest known pending headers in Blockchain.
+	phCacheKey = []byte("PhCache")
+
+	// phHead tracks the latest known pending headers hash in Blockchain.
+	phHeadKey = []byte("PhHead")
+
 	// headFastBlockKey tracks the latest known incomplete block's hash during fast sync.
 	headFastBlockKey = []byte("LastFast")
 
@@ -84,10 +90,8 @@ var (
 	headerHashSuffix   = []byte("n") // headerPrefix + num (uint64 big endian) + headerHashSuffix -> hash
 	headerNumberPrefix = []byte("H") // headerNumberPrefix + hash -> num (uint64 big endian)
 
-	currentHeadsPrefix     = []byte("ch") // currentHeadsPrefix + hash -> []common.Hash (current heads hash)
-	stalePhPrefix          = []byte("sp") //stalePendingHeaderPrefix + hash -> []PendingHeaders
-	domPendingHeaderPrefix = []byte("dp") // pendingHeaderPrefix + hash -> header
 	pendingHeaderPrefix    = []byte("ph") // pendingHeaderPrefix + hash -> header
+	phBodyPrefix           = []byte("pb") // phBodyPrefix + hash -> []common.Hash + Td
 	pendingBlockBodyPrefix = []byte("pb") // pendingBodyPrefix + hash -> Body
 	terminiPrefix          = []byte("tk") //terminiPrefix + hash -> []common.Hash
 
@@ -162,21 +166,6 @@ func headerKey(number uint64, hash common.Hash) []byte {
 	return append(append(headerPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
 }
 
-// currentHeadsKey = currentHeadsPrefix + hash
-func currentHeadsKey(hash common.Hash) []byte {
-	return append(currentHeadsPrefix, hash.Bytes()...)
-}
-
-// stalePhKey = stalePhPrefix + hash
-func stalePhKey(hash common.Hash) []byte {
-	return append(stalePhPrefix, hash.Bytes()...)
-}
-
-// domPendingHeaderKey = domPendingHeaderPrefix + hash
-func domPendingHeaderKey(hash common.Hash) []byte {
-	return append(domPendingHeaderPrefix, hash.Bytes()...)
-}
-
 // terminiKey = domPendingHeaderPrefix + hash
 func terminiKey(hash common.Hash) []byte {
 	return append(terminiPrefix, hash.Bytes()...)
@@ -185,6 +174,11 @@ func terminiKey(hash common.Hash) []byte {
 // pendingHeaderKey = pendingHeaderPrefix + hash
 func pendingHeaderKey(hash common.Hash) []byte {
 	return append(pendingHeaderPrefix, hash.Bytes()...)
+}
+
+// phBodyKey = phPrefix + hash
+func phBodyKey(hash common.Hash) []byte {
+	return append(phBodyPrefix, hash.Bytes()...)
 }
 
 // headerTDKey = headerPrefix + num (uint64 big endian) + hash + headerTDSuffix

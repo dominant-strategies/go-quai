@@ -94,7 +94,6 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *par
 	// Initialize the heads slice
 	heads := make([]*types.Header, 0)
 	hc.heads = heads
-
 	//Load any state that is in our db
 	if err := hc.loadLastState(); err != nil {
 		return nil, err
@@ -249,6 +248,17 @@ func (hc *HeaderChain) Stop() {
 	hc.wg.Wait()
 
 	log.Info("headerchain stopped")
+}
+
+// Empty checks if the headerchain is empty.
+func (hc *HeaderChain) Empty() bool {
+	genesis := hc.config.GenesisHashes[0]
+	for _, hash := range []common.Hash{rawdb.ReadHeadBlockHash(hc.headerDb)} {
+		if hash != genesis {
+			return false
+		}
+	}
+	return true
 }
 
 // StopInsert interrupts all insertion methods, causing them to return
