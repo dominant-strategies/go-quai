@@ -80,7 +80,6 @@ func answerGetBlockHeadersQuery(backend Backend, query *GetBlockHeadersPacket, p
 		if origin == nil {
 			break
 		}
-
 		headers = append(headers, origin)
 		bytes += estHeaderSize
 

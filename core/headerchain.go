@@ -44,6 +44,7 @@ type HeaderChain struct {
 	engine consensus.Engine
 
 	chainHeadFeed event.Feed
+	chainSideFeed event.Feed
 	scope         event.SubscriptionScope
 
 	headerDb      ethdb.Database
@@ -406,7 +407,6 @@ func (hc *HeaderChain) GetHeader(hash common.Hash, number uint64) *types.Header 
 	}
 	header := rawdb.ReadHeader(hc.headerDb, hash, number)
 	if header == nil {
-		fmt.Println("nil header db read", number, hash)
 		return nil
 	}
 	// Cache the found header for next time and return
@@ -645,6 +645,11 @@ func (hc *HeaderChain) Engine() consensus.Engine {
 // SubscribeChainHeadEvent registers a subscription of ChainHeadEvent.
 func (hc *HeaderChain) SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription {
 	return hc.scope.Track(hc.chainHeadFeed.Subscribe(ch))
+}
+
+// SubscribeChainSideEvent registers a subscription of ChainSideEvent.
+func (hc *HeaderChain) SubscribeChainSideEvent(ch chan<- ChainSideEvent) event.Subscription {
+	return hc.scope.Track(hc.chainSideFeed.Subscribe(ch))
 }
 
 func (hc *HeaderChain) StateAt(root common.Hash) (*state.StateDB, error) {
