@@ -629,5 +629,5 @@ func (sl *Slice) TxPool() *TxPool { return sl.txPool }
 func (sl *Slice) Miner() *Miner { return sl.miner }
 
 func (sl *Slice) PendingBlockBody(hash common.Hash) *types.Body {
-	return rawdb.ReadPendginBlockBody(sl.sliceDb, hash)
+	return rawdb.ReadPendingBlockBody(sl.sliceDb, hash)
 }

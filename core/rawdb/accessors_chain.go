@@ -479,7 +479,7 @@ func DeleteBody(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 }
 
 // ReadPendingHeaderBody retrieves the pending block body corresponding to the state root hash.
-func ReadPendginBlockBody(db ethdb.Reader, hash common.Hash) *types.Body {
+func ReadPendingBlockBody(db ethdb.Reader, hash common.Hash) *types.Body {
 	key := pendingBlockBodyKey(hash)
 
 	data, _ := db.Get(key)
