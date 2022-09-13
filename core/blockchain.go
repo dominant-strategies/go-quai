@@ -144,3 +144,7 @@ func (bc *BlockChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscript
 func (bc *BlockChain) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscription {
 	return bc.scope.Track(bc.blockProcFeed.Subscribe(ch))
 }
+
+func (bc *BlockChain) HasBlockAndState(hash common.Hash, number uint64) bool {
+	return bc.processor.HasBlockAndState(hash, number)
+}
