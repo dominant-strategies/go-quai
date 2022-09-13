@@ -542,20 +542,20 @@ func makeSubClients(suburls []string) []*quaiclient.Client {
 
 // procfutureHeaders sorts the future block cache and attempts to append
 func (sl *Slice) procfutureHeaders() {
-	blocks := make([]*types.Block, 0, sl.futureHeaders.Len())
+	headers := make([]*types.Header, 0, sl.futureHeaders.Len())
 	for _, hash := range sl.futureHeaders.Keys() {
-		if block, exist := sl.futureHeaders.Peek(hash); exist {
-			blocks = append(blocks, block.(*types.Block))
+		if header, exist := sl.futureHeaders.Peek(hash); exist {
+			headers = append(headers, header.(*types.Header))
 		}
 	}
-	if len(blocks) > 0 {
-		sort.Slice(blocks, func(i, j int) bool {
-			return blocks[i].NumberU64() < blocks[j].NumberU64()
+	if len(headers) > 0 {
+		sort.Slice(headers, func(i, j int) bool {
+			return headers[i].Number64() < headers[j].Number64()
 		})
 
-		for i := range blocks {
+		for i := range headers {
 			var nilHash common.Hash
-			sl.Append(blocks[i].Header(), nilHash, big.NewInt(0), false, false)
+			sl.Append(headers[i], nilHash, big.NewInt(0), false, false)
 		}
 	}
 }
