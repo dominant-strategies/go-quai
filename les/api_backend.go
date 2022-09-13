@@ -179,7 +179,7 @@ func (b *LesApiBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*typ
 	return nil, nil
 }
 
-func (b *LesApiBackend) GetTd(ctx context.Context, hash common.Hash) []*big.Int {
+func (b *LesApiBackend) GetTd(ctx context.Context, hash common.Hash) *big.Int {
 	if number := rawdb.ReadHeaderNumber(b.eth.chainDb, hash); number != nil {
 		return b.eth.blockchain.GetTdOdr(ctx, hash, *number)
 	}

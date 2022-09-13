@@ -375,15 +375,12 @@ func (hc *HeaderChain) GetAncestorByLocation(hash common.Hash, location []byte) 
 
 // GetTd retrieves a block's total difficulty in the canonical chain from the
 // database by hash and number, caching it if found.
-func (hc *HeaderChain) GetTd(hash common.Hash, number uint64) []*big.Int {
+func (hc *HeaderChain) GetTd(hash common.Hash, number uint64) *big.Int {
 	// Short circuit if the td's already in the cache, retrieve otherwise
-	// if cached, ok := hc.tdCache.Get(hash); ok {
-	// 	return cached.([]*big.Int)
-	// }
-	td := rawdb.ReadTd(hc.headerDb, hash, number)
-	if td == nil {
-		return make([]*big.Int, 3)
+	if cached, ok := hc.tdCache.Get(hash); ok {
+		return cached.(*big.Int)
 	}
+	td := rawdb.ReadTd(hc.headerDb, hash, number)
 	// Cache the found body for next time and return
 	hc.tdCache.Add(hash, td)
 	return td
@@ -391,10 +388,10 @@ func (hc *HeaderChain) GetTd(hash common.Hash, number uint64) []*big.Int {
 
 // GetTdByHash retrieves a block's total difficulty in the canonical chain from the
 // database by hash, caching it if found.
-func (hc *HeaderChain) GetTdByHash(hash common.Hash) []*big.Int {
+func (hc *HeaderChain) GetTdByHash(hash common.Hash) *big.Int {
 	number := hc.GetBlockNumber(hash)
 	if number == nil {
-		return make([]*big.Int, 3)
+		return nil
 	}
 	return hc.GetTd(hash, *number)
 }

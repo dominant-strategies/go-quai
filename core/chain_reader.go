@@ -16,7 +16,7 @@ type ChainReader interface {
 	Config() *params.ChainConfig
 
 	// GetTd returns the total difficulty of a local block.
-	GetTd(common.Hash, uint64) []*big.Int
+	GetTd(common.Hash, uint64) *big.Int
 
 	// GetBlockByHash retrieves a block from the database by hash, caching it if found.
 	GetBlockByHash(hash common.Hash) *types.Block

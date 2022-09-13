@@ -164,13 +164,13 @@ func (c *Core) CurrentHeader() *types.Header {
 
 // GetTd retrieves a block's total difficulty in the canonical chain from the
 // database by hash and number, caching it if found.
-func (c *Core) GetTd(hash common.Hash, number uint64) []*big.Int {
+func (c *Core) GetTd(hash common.Hash, number uint64) *big.Int {
 	return c.sl.hc.GetTd(hash, number)
 }
 
 // GetTdByHash retrieves a block's total difficulty in the canonical chain from the
 // database by hash, caching it if found.
-func (c *Core) GetTdByHash(hash common.Hash) []*big.Int {
+func (c *Core) GetTdByHash(hash common.Hash) *big.Int {
 	return c.sl.hc.GetTdByHash(hash)
 }
 

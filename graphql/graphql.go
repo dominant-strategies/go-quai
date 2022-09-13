@@ -722,7 +722,7 @@ func (b *Block) TotalDifficulty(ctx context.Context) (hexutil.Big, error) {
 		h = header.Hash()
 	}
 	tempTd := b.backend.GetTd(ctx, h)
-	td := tempTd[types.QuaiNetworkContext]
+	td := tempTd
 	if td == nil {
 		return hexutil.Big{}, fmt.Errorf("total difficulty not found %x", b.hash)
 	}

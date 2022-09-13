@@ -146,7 +146,7 @@ func nodeInfo(core *core.Core, network uint64) *NodeInfo {
 	head := core.CurrentBlock()
 	return &NodeInfo{
 		Network:    network,
-		Difficulty: core.GetTd(head.Hash(), head.NumberU64())[types.QuaiNetworkContext],
+		Difficulty: core.GetTd(head.Hash(), head.NumberU64()),
 		Genesis:    core.Genesis().Hash(),
 		Config:     core.Config(),
 		Head:       head.Hash(),

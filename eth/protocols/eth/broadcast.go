@@ -33,7 +33,7 @@ const (
 // broadcast queue.
 type blockPropagation struct {
 	block *types.Block
-	td    []*big.Int
+	td    *big.Int
 }
 
 // broadcastBlocks is a write loop that multiplexes blocks and block accouncements

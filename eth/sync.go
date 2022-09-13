@@ -73,7 +73,7 @@ type chainSyncer struct {
 type chainSyncOp struct {
 	mode downloader.SyncMode
 	peer *eth.Peer
-	td   []*big.Int
+	td   *big.Int
 	head common.Hash
 }
 
@@ -170,18 +170,16 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 
 	// Sanity check on the TD tuple given by the Peer.
 	// Ideally this should never get triggered.
-	if len(op.td) == 0 {
+	if op.td == nil {
 		return op
 	}
 
-	if len(ourTD) == 0 {
+	if ourTD == nil {
 		return op
 	}
 
-	if len(op.td) > 0 {
-		if op.td[types.QuaiNetworkContext].Cmp(ourTD[types.QuaiNetworkContext]) < 0 {
-			return nil // We're in sync.
-		}
+	if op.td.Cmp(ourTD) < 0 {
+		return nil // We're in sync.
 	}
 	return op
 }
@@ -191,7 +189,7 @@ func peerToSyncOp(mode downloader.SyncMode, p *eth.Peer) *chainSyncOp {
 	return &chainSyncOp{mode: mode, peer: p, td: peerTD, head: peerHead}
 }
 
-func (cs *chainSyncer) modeAndLocalHead() (downloader.SyncMode, []*big.Int) {
+func (cs *chainSyncer) modeAndLocalHead() (downloader.SyncMode, *big.Int) {
 	// If we're in fast sync mode, return that directly
 	if atomic.LoadUint32(&cs.handler.fastSync) == 1 {
 		block := cs.handler.core.CurrentFastBlock()
@@ -210,7 +208,7 @@ func (cs *chainSyncer) modeAndLocalHead() (downloader.SyncMode, []*big.Int) {
 	// Nope, we're really full syncing
 	head := cs.handler.core.CurrentBlock()
 
-	var td []*big.Int
+	var td *big.Int
 	if head != nil {
 		td = cs.handler.core.GetTd(head.Hash(), head.NumberU64())
 	}

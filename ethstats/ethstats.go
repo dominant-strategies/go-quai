@@ -64,7 +64,7 @@ type backend interface {
 	SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription
 	CurrentHeader() *types.Header
 	HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error)
-	GetTd(ctx context.Context, hash common.Hash) []*big.Int
+	GetTd(ctx context.Context, hash common.Hash) *big.Int
 	Stats() (pending int, queued int)
 	SyncProgress() ethereum.SyncProgress
 }
@@ -629,7 +629,7 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 			block = fullBackend.CurrentBlock()
 		}
 		header = block.Header()
-		td = fullBackend.GetTd(context.Background(), header.Hash())[types.QuaiNetworkContext]
+		td = fullBackend.GetTd(context.Background(), header.Hash())
 
 		txs = make([]txStats, len(block.Transactions()))
 		for i, tx := range block.Transactions() {
@@ -643,7 +643,7 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		} else {
 			header = s.backend.CurrentHeader()
 		}
-		td = s.backend.GetTd(context.Background(), header.Hash())[types.QuaiNetworkContext]
+		td = s.backend.GetTd(context.Background(), header.Hash())
 		txs = []txStats{}
 	}
 

@@ -73,7 +73,7 @@ type Peer struct {
 	version   uint              // Protocol version negotiated
 
 	head common.Hash // Latest advertised head block hash
-	td   []*big.Int  // Latest advertised head block total difficulty
+	td   *big.Int    // Latest advertised head block total difficulty
 
 	knownBlocks     *knownCache            // Set of block hashes known to be known by this peer
 	queuedBlocks    chan *blockPropagation // Queue of blocks to broadcast to the peer
@@ -131,22 +131,20 @@ func (p *Peer) Version() uint {
 }
 
 // Head retrieves the current head hash and total difficulty of the peer.
-func (p *Peer) Head() (hash common.Hash, td []*big.Int) {
+func (p *Peer) Head() (hash common.Hash, td *big.Int) {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
 	copy(hash[:], p.head[:])
-	newTd := make([]*big.Int, 0)
-	newTd = append(newTd, p.td...)
-	return hash, newTd
+	return hash, new(big.Int).Set(p.td)
 }
 
 // SetHead updates the head hash and total difficulty of the peer.
-func (p *Peer) SetHead(hash common.Hash, td []*big.Int) {
+func (p *Peer) SetHead(hash common.Hash, td *big.Int) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	copy(p.head[:], hash[:])
-	p.td = td
+	p.td.Set(td)
 }
 
 // KnownBlock returns whether peer is known to already have a block.
@@ -268,7 +266,7 @@ func (p *Peer) AsyncSendNewBlockHash(block *types.Block) {
 }
 
 // SendNewBlock propagates an entire block to a remote peer.
-func (p *Peer) SendNewBlock(block *types.Block, td []*big.Int) error {
+func (p *Peer) SendNewBlock(block *types.Block, td *big.Int) error {
 	// Mark all the block hash as known, but ensure we don't overflow our limits
 	p.knownBlocks.Add(block.Hash())
 
@@ -280,7 +278,7 @@ func (p *Peer) SendNewBlock(block *types.Block, td []*big.Int) error {
 
 // AsyncSendNewBlock queues an entire block for propagation to a remote peer. If
 // the peer's broadcast queue is full, the event is silently dropped.
-func (p *Peer) AsyncSendNewBlock(block *types.Block, td []*big.Int) {
+func (p *Peer) AsyncSendNewBlock(block *types.Block, td *big.Int) {
 	select {
 	case p.queuedBlocks <- &blockPropagation{block: block, td: td}:
 		// Mark all the block hash as known, but ensure we don't overflow our limits

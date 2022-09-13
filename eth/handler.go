@@ -413,25 +413,25 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 			return
 		}
 
-		var td []*big.Int
+		var td *big.Int
 		// the peer head updates only on a prime order block
 		if order == params.PRIME {
 			var primeTd *big.Int
 			if parent := h.core.GetBlock(block.ParentHash(), block.NumberU64()-1); parent != nil {
-				primeTd = new(big.Int).Add(block.Difficulty(), h.core.GetTd(block.ParentHash(), block.NumberU64()-1)[types.QuaiNetworkContext])
+				primeTd = new(big.Int).Add(block.Difficulty(), h.core.GetTd(block.ParentHash(), block.NumberU64()-1))
 			} else {
 				log.Error("Propagating dangling block", "number", block.Number(), "hash", hash)
 				return
 			}
-			td = []*big.Int{primeTd, nil, nil}
+			td.Set(primeTd)
 		} else {
 			terminus := h.core.Slice().HeaderChain().GetTerminiByHash(block.ParentHash())
 			terminusHeader := h.core.Slice().HeaderChain().GetHeaderByHash(terminus[3])
 			td = h.core.GetTd(terminusHeader.Hash(), terminusHeader.Number64())
-			if len(td) == 0 {
+			if td == nil {
 				return
 			}
-			td[types.QuaiNetworkContext].Add(td[types.QuaiNetworkContext], block.Difficulty())
+			td.Add(td, block.Difficulty())
 		}
 
 		// Send the block to a subset of our peers if less than 10

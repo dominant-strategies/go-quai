@@ -22,7 +22,6 @@ import (
 	"sync"
 
 	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/core/types"
 	"github.com/spruce-solutions/go-quai/eth/protocols/eth"
 	"github.com/spruce-solutions/go-quai/eth/protocols/snap"
 	"github.com/spruce-solutions/go-quai/p2p"
@@ -238,10 +237,10 @@ func (ps *peerSet) peerWithHighestTD() *eth.Peer {
 
 	var (
 		bestPeer *eth.Peer
-		bestTd   []*big.Int
+		bestTd   *big.Int
 	)
 	for _, p := range ps.peers {
-		if _, td := p.Head(); bestPeer == nil || bestTd[types.QuaiNetworkContext].Cmp(td[types.QuaiNetworkContext]) < 0 {
+		if _, td := p.Head(); bestPeer == nil || bestTd.Cmp(td) < 0 {
 			bestPeer, bestTd = p.Peer, td
 		}
 	}

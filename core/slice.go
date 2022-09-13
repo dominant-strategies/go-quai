@@ -188,9 +188,7 @@ func (sl *Slice) Append(block *types.Block, domTerminus common.Hash, td *big.Int
 
 	// WriteTd
 	// Remove this once td is converted to a single value.
-	externTd := make([]*big.Int, 3)
-	externTd[types.QuaiNetworkContext] = td
-	rawdb.WriteTd(batch, block.Header().Hash(), block.NumberU64(), externTd)
+	rawdb.WriteTd(batch, block.Header().Hash(), block.NumberU64(), td)
 
 	//Append has succeeded write the batch
 	if err := batch.Write(); err != nil {
@@ -231,6 +229,7 @@ func (sl *Slice) updateCacheAndRelay(pendingHeader types.PendingHeader, location
 		if reorg {
 			sl.miner.worker.pendingHeaderFeed.Send(sl.phCache[sl.pendingHeader].Header)
 		}
+		fmt.Println(sl.phCache[sl.pendingHeader])
 		for i := range sl.subClients {
 			sl.subClients[i].SubRelayPendingHeader(context.Background(), sl.phCache[sl.pendingHeader], location, reorg)
 		}
@@ -323,7 +322,7 @@ func (sl *Slice) pcrc(batch ethdb.Batch, header *types.Header, domTerminus commo
 func (sl *Slice) hlcr(externTd *big.Int) bool {
 	currentTd := sl.hc.GetTdByHash(sl.hc.CurrentHeader().Hash())
 	log.Debug("HLCR:", "Header hash:", sl.hc.CurrentHeader().Hash(), "currentTd:", currentTd, "externTd:", externTd)
-	reorg := currentTd[types.QuaiNetworkContext].Cmp(externTd) < 0
+	reorg := currentTd.Cmp(externTd) < 0
 	//TODO need to handle the equal td case
 	return reorg
 }
@@ -331,10 +330,10 @@ func (sl *Slice) hlcr(externTd *big.Int) bool {
 // CalcTd calculates the TD of the given header using PCRC and CalcHLCRNetDifficulty.
 func (sl *Slice) calcTd(header *types.Header) (*big.Int, error) {
 	priorTd := sl.hc.GetTd(header.Parent(), header.Number64()-1)
-	if priorTd[types.QuaiNetworkContext] == nil {
+	if priorTd == nil {
 		return nil, consensus.ErrFutureBlock
 	}
-	Td := priorTd[types.QuaiNetworkContext].Add(priorTd[types.QuaiNetworkContext], header.Difficulty[types.QuaiNetworkContext])
+	Td := priorTd.Add(priorTd, header.Difficulty[types.QuaiNetworkContext])
 	return Td, nil
 }
 
@@ -431,7 +430,7 @@ func (sl *Slice) setCurrentPendingHeader(externPendingHeader types.PendingHeader
 	externTd := sl.hc.GetTdByHash(externPendingHeader.Header.Parent())
 	currentTd := sl.hc.GetTdByHash(sl.phCache[sl.pendingHeader].Header.Parent())
 	log.Debug("setCurrentPendingHeader:", "currentParent:", sl.phCache[sl.pendingHeader].Header.Parent(), "currentTd:", currentTd, "externParent:", externPendingHeader.Header.Parent(), "externTd:", externTd)
-	if currentTd[types.QuaiNetworkContext].Cmp(externTd[types.QuaiNetworkContext]) < 0 {
+	if currentTd.Cmp(externTd) < 0 {
 		sl.pendingHeader = externPendingHeader.Termini[3]
 	}
 }

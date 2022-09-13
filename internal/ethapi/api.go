@@ -1308,7 +1308,7 @@ func RPCMarshalReceipt(receipt *types.Receipt) (map[string]interface{}, error) {
 // a `PublicBlockchainAPI`.
 func (s *PublicBlockChainAPI) rpcMarshalEthHeader(ctx context.Context, header *types.Header) map[string]interface{} {
 	fields := RPCMarshalEthHeader(header)
-	fields["totalDifficulty"] = (*hexutil.Big)(s.b.GetTd(ctx, header.Hash())[types.QuaiNetworkContext])
+	fields["totalDifficulty"] = (*hexutil.Big)(s.b.GetTd(ctx, header.Hash()))
 	return fields
 }
 
@@ -1318,7 +1318,7 @@ func (s *PublicBlockChainAPI) rpcMarshalEthBlock(ctx context.Context, b *types.B
 		return nil, err
 	}
 	if inclTx {
-		fields["totalDifficulty"] = (*hexutil.Big)(s.b.GetTd(ctx, b.Hash())[types.QuaiNetworkContext])
+		fields["totalDifficulty"] = (*hexutil.Big)(s.b.GetTd(ctx, b.Hash()))
 	}
 	return fields, err
 }
@@ -1331,7 +1331,7 @@ func (s *PublicBlockChainAPI) rpcMarshalBlockWithReceipts(ctx context.Context, b
 		return nil, err
 	}
 	if inclTx {
-		fields["totalDifficulty"] = (*hexutil.Big)(s.b.GetTd(ctx, b.Hash())[types.QuaiNetworkContext])
+		fields["totalDifficulty"] = (*hexutil.Big)(s.b.GetTd(ctx, b.Hash()))
 	}
 	fieldReceipts := make([]interface{}, len(receipts))
 	for i, receipt := range receipts {
