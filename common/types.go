@@ -413,6 +413,46 @@ func (ma *MixedcaseAddress) Original() string {
 	return ma.original
 }
 
+// bytePrefixList expands the space with proper size for chain IDs to be indexed
+var (
+	mainnetBytePrefixList = make([][]int, 20000)
+	testnetBytePrefixList = make([][]int, 20000)
+	locationToChainID     = make(map[Location]int)
+)
+
+func init() {
+	mainnetBytePrefixList[9000] = []int{0, 9}
+	mainnetBytePrefixList[9100] = []int{10, 19}
+	mainnetBytePrefixList[9101] = []int{20, 29}
+	mainnetBytePrefixList[9102] = []int{30, 39}
+	mainnetBytePrefixList[9103] = []int{40, 49}
+	mainnetBytePrefixList[9200] = []int{50, 59}
+	mainnetBytePrefixList[9201] = []int{60, 69}
+	mainnetBytePrefixList[9202] = []int{70, 79}
+	mainnetBytePrefixList[9203] = []int{80, 89}
+	mainnetBytePrefixList[9300] = []int{90, 99}
+	mainnetBytePrefixList[9301] = []int{100, 109}
+	mainnetBytePrefixList[9302] = []int{110, 119}
+	mainnetBytePrefixList[9303] = []int{120, 129}
+
+	testnetBytePrefixList[12000] = []int{0, 9}
+	testnetBytePrefixList[12100] = []int{10, 19}
+	testnetBytePrefixList[12101] = []int{20, 29}
+	testnetBytePrefixList[12102] = []int{30, 39}
+	testnetBytePrefixList[12103] = []int{40, 49}
+	testnetBytePrefixList[12200] = []int{50, 59}
+	testnetBytePrefixList[12201] = []int{60, 69}
+	testnetBytePrefixList[12202] = []int{70, 79}
+	testnetBytePrefixList[12203] = []int{80, 89}
+	testnetBytePrefixList[12300] = []int{90, 99}
+	testnetBytePrefixList[12301] = []int{100, 109}
+	testnetBytePrefixList[12302] = []int{110, 119}
+	testnetBytePrefixList[12303] = []int{120, 129}
+
+	locationToChainID[Location{intToByte(0), intToByte(0)}] = 9000
+
+}
+
 // Location of a chain within the Quai hierarchy
 // Location is encoded as a path from the root of the tree to the specified
 // chain. Not all indices need to be populated, e.g:
@@ -476,5 +516,24 @@ func (l Location) SubLocation() int {
 		return l.Zone()
 	default:
 		return -1
+	}
+}
+
+func intToByte(num int) *byte {
+	ptr := new(byte)
+	*ptr = byte(num)
+	return ptr
+}
+
+func ChainIDRange(location Location) []int {
+	return mainnetBytePrefixList[locationToChainID[location]]
+}
+
+func IsAddressInContext(address Address) bool {
+	idRange := ChainIDRange(NodeLocation)
+	if int(address.Bytes()[0]) < idRange[0] || int(address.Bytes()[0]) > idRange[1] {
+		return false
+	} else {
+		return true
 	}
 }
