@@ -407,7 +407,6 @@ func (hc *HeaderChain) GetHeader(hash common.Hash, number uint64) *types.Header 
 	}
 	header := rawdb.ReadHeader(hc.headerDb, hash, number)
 	if header == nil {
-		fmt.Println("nil header db read", number, hash)
 		return nil
 	}
 	// Cache the found header for next time and return
