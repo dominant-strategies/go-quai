@@ -49,7 +49,11 @@ func (txn *txNoncer) get(addr common.Address) uint64 {
 	defer txn.lock.Unlock()
 
 	if _, ok := txn.nonces[addr]; !ok {
-		txn.nonces[addr] = txn.fallback.GetNonce(addr)
+		var err error
+		txn.nonces[addr], err = txn.fallback.GetNonce(addr)
+		if err != nil {
+			return 0 // Should we log an error here?
+		}
 	}
 	return txn.nonces[addr]
 }
@@ -70,7 +74,11 @@ func (txn *txNoncer) setIfLower(addr common.Address, nonce uint64) {
 	defer txn.lock.Unlock()
 
 	if _, ok := txn.nonces[addr]; !ok {
-		txn.nonces[addr] = txn.fallback.GetNonce(addr)
+		var err error
+		txn.nonces[addr], err = txn.fallback.GetNonce(addr)
+		if err != nil {
+			return // Should we log an error here?
+		}
 	}
 	if txn.nonces[addr] <= nonce {
 		return
