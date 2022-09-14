@@ -241,6 +241,7 @@ func (sl *Slice) Append(header *types.Header, domTerminus common.Hash, td *big.I
 	sl.updateCacheAndRelay(pendingHeader, block.Header().Location, order, reorg)
 
 	// Remove the header form the future headers cache
+	fmt.Println("Removing hash from future headers", block.Hash())
 	sl.futureHeaders.Remove(block.Hash())
 
 	return pendingHeader, nil
@@ -567,6 +568,7 @@ func (sl *Slice) procfutureHeaders() {
 
 		for i := range headers {
 			var nilHash common.Hash
+			fmt.Println("Appending from procFutureHeaders")
 			sl.Append(headers[i], nilHash, big.NewInt(0), false, false)
 		}
 	}
