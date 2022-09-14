@@ -502,11 +502,9 @@ func (h *handler) minedBroadcastLoop() {
 
 	for obj := range h.minedBlockSub.Chan() {
 		if ev, ok := obj.Data.(core.NewMinedBlockEvent); ok {
-			// Retrieve the requested block's external blocks
 			log.Info("minedBroadcastLoop", "hash", ev.Block.Hash())
 			h.BroadcastBlock(ev.Block, true)  // First propagate block to peers
 			h.BroadcastBlock(ev.Block, false) // Only then announce to the rest
-
 		}
 	}
 }

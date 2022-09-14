@@ -64,4 +64,10 @@ const (
 	// the downloader as a hard limit against deep ancestors, by the blockchain against deep
 	// reorgs, by the light pruner as the pruning validity guarantee.
 	LightImmutabilityThreshold = 30000
+
+	// MaxCoincident is the cutoff for the number of dom blocks to be included in the header/block response in a zone.
+	MaxCoincidentInZone = 20
+
+	// MaxCoincident is the cutoff for the number of dom blocks to be included in the header/block response in a region.
+	MaxCoincidentInRegion = 3
 )
