@@ -33,16 +33,18 @@ import (
 )
 
 var (
-	errInvalidMessageType  = errors.New("invalid message type")
-	errInvalidEntryCount   = errors.New("invalid number of response entries")
-	errHeaderUnavailable   = errors.New("header unavailable")
-	errTxHashMismatch      = errors.New("transaction hash mismatch")
-	errUncleHashMismatch   = errors.New("uncle hash mismatch")
-	errReceiptHashMismatch = errors.New("receipt hash mismatch")
-	errDataHashMismatch    = errors.New("data hash mismatch")
-	errCHTHashMismatch     = errors.New("cht hash mismatch")
-	errCHTNumberMismatch   = errors.New("cht number mismatch")
-	errUselessNodes        = errors.New("useless nodes in merkle proof nodeset")
+	errInvalidMessageType   = errors.New("invalid message type")
+	errInvalidEntryCount    = errors.New("invalid number of response entries")
+	errHeaderUnavailable    = errors.New("header unavailable")
+	errTxHashMismatch       = errors.New("transaction hash mismatch")
+	errUncleHashMismatch    = errors.New("uncle hash mismatch")
+	errEtxHashMismatch      = errors.New("external transaction hash mismatch")
+	errManifestHashMismatch = errors.New("manifest hash mismatch")
+	errReceiptHashMismatch  = errors.New("receipt hash mismatch")
+	errDataHashMismatch     = errors.New("data hash mismatch")
+	errCHTHashMismatch      = errors.New("cht hash mismatch")
+	errCHTNumberMismatch    = errors.New("cht number mismatch")
+	errUselessNodes         = errors.New("useless nodes in merkle proof nodeset")
 )
 
 type LesOdrRequest interface {
@@ -121,6 +123,12 @@ func (r *BlockRequest) Validate(db ethdb.Database, msg *Msg) error {
 	}
 	if r.Header.UncleHash() != types.CalcUncleHash(body.Uncles) {
 		return errUncleHashMismatch
+	}
+	if r.Header.EtxHash() != types.DeriveSha(types.Transactions(body.ExtTransactions), trie.NewStackTrie(nil)) {
+		return errEtxHashMismatch
+	}
+	if r.Header.ManifestHash() != types.DeriveSha(body.SubManifest, trie.NewStackTrie(nil)) {
+		return errManifestHashMismatch
 	}
 	// Validations passed, encode and store RLP
 	data, err := rlp.EncodeToBytes(body)

@@ -403,33 +403,35 @@ func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, header *
 
 // FinalizeAndAssemble implements consensus.Engine, accumulating the block and
 // uncle rewards, setting the final state and assembling the block.
-func (blake3pow *Blake3pow) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
+func (blake3pow *Blake3pow) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, etxs []*types.Transaction, manifest types.BlockManifest, receipts []*types.Receipt) (*types.Block, error) {
 	// Finalize block
 	blake3pow.Finalize(chain, header, state, txs, uncles)
 
 	// Header seems complete, assemble into a block and return
-	return types.NewBlock(header, txs, uncles, receipts, trie.NewStackTrie(nil)), nil
+	return types.NewBlock(header, txs, uncles, etxs, manifest, receipts, trie.NewStackTrie(nil)), nil
 }
 
 // headerData comprises all data fields of the header, excluding the nonce, so
 // that the nonce may be independently adjusted in the work algorithm.
 type headerData struct {
-	ParentHash  []common.Hash
-	UncleHash   []common.Hash
-	Coinbase    []common.Address
-	Root        []common.Hash
-	TxHash      []common.Hash
-	ReceiptHash []common.Hash
-	Bloom       []types.Bloom
-	Difficulty  []*big.Int
-	Number      []*big.Int
-	GasLimit    []uint64
-	GasUsed     []uint64
-	BaseFee     []*big.Int
-	Location    common.Location
-	Time        uint64
-	Extra       []byte
-	Nonce       types.BlockNonce
+	ParentHash   []common.Hash
+	UncleHash    []common.Hash
+	Coinbase     []common.Address
+	Root         []common.Hash
+	TxHash       []common.Hash
+	EtxHash      []common.Hash
+	ManifestHash []common.Hash
+	ReceiptHash  []common.Hash
+	Bloom        []types.Bloom
+	Difficulty   []*big.Int
+	Number       []*big.Int
+	GasLimit     []uint64
+	GasUsed      []uint64
+	BaseFee      []*big.Int
+	Location     common.Location
+	Time         uint64
+	Extra        []byte
+	Nonce        types.BlockNonce
 }
 
 // SealHash returns the hash of a block prior to it being sealed.
@@ -460,6 +462,8 @@ func (blake3pow *Blake3pow) SealHash(header *types.Header) (hash common.Hash) {
 		hdata.Coinbase[i] = header.Coinbase(i)
 		hdata.Root[i] = header.Root(i)
 		hdata.TxHash[i] = header.TxHash(i)
+		hdata.EtxHash[i] = header.EtxHash(i)
+		hdata.ManifestHash[i] = header.ManifestHash(i)
 		hdata.ReceiptHash[i] = header.ReceiptHash(i)
 		hdata.Bloom[i] = header.Bloom(i)
 		hdata.Difficulty[i] = header.Difficulty(i)

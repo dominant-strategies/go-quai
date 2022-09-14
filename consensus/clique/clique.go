@@ -569,12 +569,12 @@ func (c *Clique) Finalize(chain consensus.ChainHeaderReader, header *types.Heade
 
 // FinalizeAndAssemble implements consensus.Engine, ensuring no uncles are set,
 // nor block rewards given, and returns the final block.
-func (c *Clique) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
+func (c *Clique) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, etxs []*types.Transaction, manifest types.BlockManifest, receipts []*types.Receipt) (*types.Block, error) {
 	// Finalize block
 	c.Finalize(chain, header, state, txs, uncles)
 
 	// Assemble and return the final block for sealing
-	return types.NewBlock(header, txs, nil, receipts, trie.NewStackTrie(nil)), nil
+	return types.NewBlock(header, txs, nil, etxs, manifest, receipts, trie.NewStackTrie(nil)), nil
 }
 
 // Authorize injects a private key into the consensus engine to mint new blocks
@@ -734,6 +734,8 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 		header.Coinbase(),
 		header.Root(),
 		header.TxHash(),
+		header.EtxHash(),
+		header.ManifestHash(),
 		header.ReceiptHash(),
 		header.Bloom(),
 		header.Difficulty(),
