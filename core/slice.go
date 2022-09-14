@@ -222,10 +222,6 @@ func (sl *Slice) Append(header *types.Header, domTerminus common.Hash, td *big.I
 		return sl.nilPendingHeader, err
 	}
 
-	if order < types.QuaiNetworkContext {
-		sl.procfutureHeaders()
-	}
-
 	// Combine subordinates pending header with local pending header
 	var pendingHeader types.PendingHeader
 	if types.QuaiNetworkContext != params.ZONE {
@@ -243,6 +239,10 @@ func (sl *Slice) Append(header *types.Header, domTerminus common.Hash, td *big.I
 	// Remove the header form the future headers cache
 	fmt.Println("Removing hash from future headers", block.Hash())
 	sl.futureHeaders.Remove(block.Hash())
+
+	if order < types.QuaiNetworkContext {
+		sl.procfutureHeaders()
+	}
 
 	return pendingHeader, nil
 }
