@@ -235,15 +235,17 @@ type BlockBody struct {
 
 // Unpack retrieves the transactions and uncles from the range packet and returns
 // them in a split flat format that's more consistent with the internal data structures.
-func (p *BlockBodiesPacket) Unpack() ([][]*types.Transaction, [][]*types.Header) {
+func (p *BlockBodiesPacket) Unpack() ([][]*types.Transaction, [][]*types.Header, [][]*types.Transaction, []types.BlockManifest) {
 	var (
 		txset    = make([][]*types.Transaction, len(*p))
 		uncleset = make([][]*types.Header, len(*p))
+		etxset   = make([][]*types.Transaction, len(*p))
+		manifest = make([]types.BlockManifest, len(*p))
 	)
 	for i, body := range *p {
 		txset[i], uncleset[i] = body.Transactions, body.Uncles
 	}
-	return txset, uncleset
+	return txset, uncleset, etxset, manifest
 }
 
 // GetNodeDataPacket represents a trie node data query.

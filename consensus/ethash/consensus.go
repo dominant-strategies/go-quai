@@ -613,6 +613,8 @@ func (ethash *Ethash) SealHash(header *types.Header) (hash common.Hash) {
 		header.Coinbase(),
 		header.Root(),
 		header.TxHash(),
+		header.EtxHash(),
+		header.ManifestHash(),
 		header.ReceiptHash(),
 		header.Bloom(),
 		header.Difficulty(),

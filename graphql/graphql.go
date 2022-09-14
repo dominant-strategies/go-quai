@@ -647,6 +647,22 @@ func (b *Block) TransactionsRoot(ctx context.Context) (common.Hash, error) {
 	return header.TxHash(), nil
 }
 
+func (b *Block) ExtTransactionsRoot(ctx context.Context) (common.Hash, error) {
+	header, err := b.resolveHeader(ctx)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return header.EtxHash(), nil
+}
+
+func (b *Block) ManifestHash(ctx context.Context) (common.Hash, error) {
+	header, err := b.resolveHeader(ctx)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return header.ManifestHash(), nil
+}
+
 func (b *Block) StateRoot(ctx context.Context) (common.Hash, error) {
 	header, err := b.resolveHeader(ctx)
 	if err != nil {
