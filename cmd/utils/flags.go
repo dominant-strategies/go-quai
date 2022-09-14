@@ -1599,20 +1599,17 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			}
 			cfg.Genesis = core.MainnetRegionGenesisBlock(&params.MainnetRegionChainConfigs[ctx.GlobalInt(RegionFlag.Name)-1])
 			types.QuaiNetworkContext = cfg.Genesis.Config.Context
-			SetDNSDiscoveryDefaults(cfg, params.MainnetRegionGenesisHash)
 		case ctx.GlobalIsSet(RegionFlag.Name) && ctx.GlobalIsSet(ZoneFlag.Name):
 			if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 				cfg.NetworkId = params.MainnetZoneChainConfigs[ctx.GlobalInt(RegionFlag.Name)-1][ctx.GlobalInt(ZoneFlag.Name)-1].ChainID.Uint64()
 			}
 			cfg.Genesis = core.MainnetZoneGenesisBlock(&params.MainnetZoneChainConfigs[ctx.GlobalInt(RegionFlag.Name)-1][ctx.GlobalInt(ZoneFlag.Name)-1])
 			types.QuaiNetworkContext = cfg.Genesis.Config.Context
-			SetDNSDiscoveryDefaults(cfg, params.MainnetZoneGenesisHash)
 		default:
 			if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 				cfg.NetworkId = params.MainnetPrimeChainConfig.ChainID.Uint64()
 			}
 			cfg.Genesis = core.MainnetPrimeGenesisBlock()
-			SetDNSDiscoveryDefaults(cfg, params.MainnetPrimeGenesisHash)
 		}
 	case ctx.GlobalBool(RopstenFlag.Name):
 		switch {
@@ -1622,20 +1619,17 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			}
 			cfg.Genesis = core.RopstenRegionGenesisBlock(&params.RopstenRegionChainConfigs[ctx.GlobalInt(RegionFlag.Name)-1])
 			types.QuaiNetworkContext = cfg.Genesis.Config.Context
-			SetDNSDiscoveryDefaults(cfg, params.RopstenRegionGenesisHash)
 		case ctx.GlobalIsSet(RegionFlag.Name) && ctx.GlobalIsSet(ZoneFlag.Name):
 			if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 				cfg.NetworkId = params.RopstenZoneChainConfigs[ctx.GlobalInt(RegionFlag.Name)-1][ctx.GlobalInt(ZoneFlag.Name)-1].ChainID.Uint64()
 			}
 			cfg.Genesis = core.RopstenZoneGenesisBlock(&params.RopstenZoneChainConfigs[ctx.GlobalInt(RegionFlag.Name)-1][ctx.GlobalInt(ZoneFlag.Name)-1])
 			types.QuaiNetworkContext = cfg.Genesis.Config.Context
-			SetDNSDiscoveryDefaults(cfg, params.RopstenZoneGenesisHash)
 		default:
 			if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 				cfg.NetworkId = params.MainnetPrimeChainConfig.ChainID.Uint64()
 			}
 			cfg.Genesis = core.RopstenPrimeGenesisBlock()
-			SetDNSDiscoveryDefaults(cfg, params.RopstenPrimeGenesisHash)
 		}
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
@@ -1684,26 +1678,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		if !ctx.GlobalIsSet(MinerGasPriceFlag.Name) {
 			cfg.Miner.GasPrice = big.NewInt(1)
 		}
-	default:
-		if cfg.NetworkId == 1 {
-			SetDNSDiscoveryDefaults(cfg, params.MainnetPrimeGenesisHash)
-		}
-	}
-}
-
-// SetDNSDiscoveryDefaults configures DNS discovery with the given URL if
-// no URLs are set.
-func SetDNSDiscoveryDefaults(cfg *ethconfig.Config, genesis common.Hash) {
-	if cfg.EthDiscoveryURLs != nil {
-		return // already set through flags/config
-	}
-	protocol := "all"
-	if cfg.SyncMode == downloader.LightSync {
-		protocol = "les"
-	}
-	if url := params.KnownDNSNetwork(genesis, protocol); url != "" {
-		cfg.EthDiscoveryURLs = []string{url}
-		cfg.SnapDiscoveryURLs = cfg.EthDiscoveryURLs
 	}
 }
 
