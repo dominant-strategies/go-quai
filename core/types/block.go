@@ -82,7 +82,6 @@ type Header struct {
 	location    common.Location  `json:"location"         gencodec:"required"`
 	time        uint64           `json:"timestamp"        gencodec:"required"`
 	extra       []byte           `json:"extraData"        gencodec:"required"`
-	mixDigest   common.Hash      `json:"mixHash"`
 	nonce       BlockNonce       `json:"nonce"`
 }
 
@@ -115,7 +114,6 @@ type extheader struct {
 	Location    common.Location
 	Time        uint64
 	Extra       []byte
-	MixDigest   common.Hash
 	Nonce       BlockNonce
 }
 
@@ -158,7 +156,6 @@ func (h *Header) DecodeRLP(s *rlp.Stream) error {
 	h.location = eh.Location
 	h.time = eh.Time
 	h.extra = eh.Extra
-	h.mixDigest = eh.MixDigest
 	h.nonce = eh.Nonce
 
 	return nil
@@ -182,7 +179,6 @@ func (h *Header) EncodeRLP(w io.Writer) error {
 		Location:    h.location,
 		Time:        h.time,
 		Extra:       h.extra,
-		MixDigest:   h.mixDigest,
 		Nonce:       h.nonce,
 	})
 }
@@ -282,7 +278,6 @@ func (h *Header) BaseFee(args ...int) *big.Int {
 func (h *Header) Location() common.Location { return h.location }
 func (h *Header) Time() uint64              { return h.time }
 func (h *Header) Extra() []byte             { return common.CopyBytes(h.extra) }
-func (h *Header) MixDigest() common.Hash    { return h.mixDigest }
 func (h *Header) Nonce() BlockNonce         { return h.nonce }
 func (h *Header) NonceU64() uint64          { return binary.BigEndian.Uint64(h.nonce[:]) }
 
@@ -378,8 +373,7 @@ func (h *Header) SetExtra(val []byte) {
 		copy(h.extra, val)
 	}
 }
-func (h *Header) SetMixDigest(val common.Hash) { h.mixDigest = val }
-func (h *Header) SetNonce(val BlockNonce)      { h.nonce = val }
+func (h *Header) SetNonce(val BlockNonce) { h.nonce = val }
 
 // Array accessors
 func (h *Header) ParentHashArray() []common.Hash  { return h.parentHash }
@@ -648,7 +642,6 @@ func (b *Block) BaseFee(args ...int) *big.Int        { return b.header.BaseFee(a
 func (b *Block) Location() common.Location           { return b.header.Location() }
 func (b *Block) Time() uint64                        { return b.header.Time() }
 func (b *Block) Extra() []byte                       { return b.header.Extra() }
-func (b *Block) MixDigest() common.Hash              { return b.header.MixDigest() }
 func (b *Block) Nonce() BlockNonce                   { return b.header.Nonce() }
 func (b *Block) NonceU64() uint64                    { return b.header.NonceU64() }
 

@@ -29,7 +29,7 @@ import (
 	"github.com/spruce-solutions/go-quai/common/hexutil"
 	"github.com/spruce-solutions/go-quai/common/math"
 	"github.com/spruce-solutions/go-quai/consensus"
-	"github.com/spruce-solutions/go-quai/consensus/ethash"
+	"github.com/spruce-solutions/go-quai/consensus/blake3pow"
 	"github.com/spruce-solutions/go-quai/core"
 	"github.com/spruce-solutions/go-quai/core/rawdb"
 	"github.com/spruce-solutions/go-quai/core/state"
@@ -118,9 +118,9 @@ func (t *BlockTest) Run(snapshotter bool) error {
 	}
 	var engine consensus.Engine
 	if t.json.SealEngine == "NoProof" {
-		engine = ethash.NewFaker()
+		engine = blake3pow.NewFaker()
 	} else {
-		engine = ethash.NewShared()
+		engine = blake3pow.NewShared()
 	}
 	cache := &core.CacheConfig{TrieCleanLimit: 0}
 	if snapshotter {
@@ -232,9 +232,6 @@ func validateHeader(h *btHeader, h2 *types.Header) error {
 	}
 	if h.Coinbase() != h2.Coinbase() {
 		return fmt.Errorf("coinbase: want: %x have: %x", h.Coinbase(), h2.Coinbase())
-	}
-	if h.MixHash != h2.MixDigest() {
-		return fmt.Errorf("MixHash: want: %x have: %x", h.MixHash, h2.MixDigest())
 	}
 	if h.Nonce() != h2.Nonce() {
 		return fmt.Errorf("nonce: want: %x have: %x", h.Nonce(), h2.Nonce())

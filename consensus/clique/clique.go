@@ -110,9 +110,6 @@ var (
 	// list of signers different than the one the local node calculated.
 	errMismatchingCheckpointSigners = errors.New("mismatching signer list on checkpoint block")
 
-	// errInvalidMixDigest is returned if a block's mix digest is non-zero.
-	errInvalidMixDigest = errors.New("non-zero mix digest")
-
 	// errInvalidUncleHash is returned if a block contains an non-empty uncle list.
 	errInvalidUncleHash = errors.New("non empty uncle hash")
 
@@ -280,10 +277,6 @@ func (c *Clique) verifyHeader(chain consensus.ChainHeaderReader, header *types.H
 	}
 	if checkpoint && signersBytes%common.AddressLength != 0 {
 		return errInvalidCheckpointSigners
-	}
-	// Ensure that the mix digest is zero as we don't have fork protection currently
-	if header.MixDigest() != (common.Hash{}) {
-		return errInvalidMixDigest
 	}
 	// Ensure that the block doesn't contain any uncles which are meaningless in PoA
 	if header.UncleHash() != uncleHash {
@@ -554,9 +547,6 @@ func (c *Clique) Prepare(chain consensus.ChainHeaderReader, header *types.Header
 	}
 	header.SetExtra(append(header.Extra(), make([]byte, extraSeal)...))
 
-	// Mix digest is reserved for now, set to empty
-	header.SetMixDigest(common.Hash{})
-
 	// Ensure the timestamp has the correct delay
 	parent := chain.GetHeader(header.ParentHash(), number-1)
 	if parent == nil {
@@ -749,7 +739,6 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 		header.Location(),
 		header.Time(),
 		header.Extra()[:len(header.Extra())-crypto.SignatureLength], // Yes, this will panic if extra is too short
-		header.MixDigest(),
 		header.Nonce(),
 	}
 	if err := rlp.Encode(w, enc); err != nil {
