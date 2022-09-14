@@ -121,10 +121,12 @@ type headerFilterTask struct {
 // bodyFilterTask represents a batch of block bodies (transactions and uncles)
 // needing fetcher filtering.
 type bodyFilterTask struct {
-	peer         string                 // The source peer of block bodies
-	transactions [][]*types.Transaction // Collection of transactions per block bodies
-	uncles       [][]*types.Header      // Collection of uncles per block bodies
-	time         time.Time              // Arrival time of the blocks' contents
+	peer            string                 // The source peer of block bodies
+	transactions    [][]*types.Transaction // Collection of transactions per block bodies
+	uncles          [][]*types.Header      // Collection of uncles per block bodies
+	extTransactions [][]*types.Transaction // Collection of external transactions per block bodies
+	subManifest     []types.BlockManifest  // Collection of manifests per block bodies
+	time            time.Time              // Arrival time of the blocks' contents
 }
 
 // blockOrHeaderInject represents a schedules import operation.
@@ -545,7 +547,7 @@ func (f *BlockFetcher) loop() {
 						announce.time = task.time
 
 						// If the block is empty (header only), short circuit into the final import queue
-						if header.TxHash() == types.EmptyRootHash && header.UncleHash() == types.EmptyUncleHash {
+						if header.TxHash() == types.EmptyRootHash && header.UncleHash() == types.EmptyUncleHash && header.EtxHash() == types.EmptyRootHash && header.ManifestHash() == types.EmptyRootHash {
 							log.Trace("Block empty, skipping body retrieval", "peer", announce.origin, "number", header.Number(), "hash", header.Hash())
 
 							block := types.NewBlockWithHeader(header)
@@ -609,9 +611,11 @@ func (f *BlockFetcher) loop() {
 				for i := 0; i < len(task.transactions) && i < len(task.uncles); i++ {
 					// Match up a body to any possible completion request
 					var (
-						matched   = false
-						uncleHash common.Hash // calculated lazily and reused
-						txnHash   common.Hash // calculated lazily and reused
+						matched      = false
+						uncleHash    common.Hash // calculated lazily and reused
+						txnHash      common.Hash // calculated lazily and reused
+						etxnHash     common.Hash // calculated lazily and reused
+						manifestHash common.Hash // calculated lazily and reused
 					)
 					for hash, announce := range f.completing {
 						if f.queued[hash] != nil || announce.origin != task.peer {
@@ -629,10 +633,22 @@ func (f *BlockFetcher) loop() {
 						if txnHash != announce.header.TxHash() {
 							continue
 						}
+						if etxnHash == (common.Hash{}) {
+							etxnHash = types.DeriveSha(types.Transactions(task.extTransactions[i]), trie.NewStackTrie(nil))
+						}
+						if etxnHash != announce.header.EtxHash() {
+							continue
+						}
+						if manifestHash == (common.Hash{}) {
+							manifestHash = types.DeriveSha(task.subManifest[i], trie.NewStackTrie(nil))
+						}
+						if manifestHash != announce.header.ManifestHash() {
+							continue
+						}
 						// Mark the body matched, reassemble if still unknown
 						matched = true
 						if f.getBlock(hash) == nil {
-							block := types.NewBlockWithHeader(announce.header).WithBody(task.transactions[i], task.uncles[i])
+							block := types.NewBlockWithHeader(announce.header).WithBody(task.transactions[i], task.uncles[i], task.extTransactions[i], task.subManifest[i])
 							block.ReceivedAt = task.time
 							blocks = append(blocks, block)
 						} else {

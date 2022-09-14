@@ -504,7 +504,17 @@ func (sl *Slice) ConstructLocalBlock(header *types.Header) *types.Block {
 				log.Debug("Pending Block uncle", "hash: ", uncle.Hash())
 			}
 
-			block = types.NewBlockWithHeader(header).WithBody(txs, uncles)
+			etxs := make([]*types.Transaction, len(pendingBlockBody.ExtTransactions))
+			for i, etx := range pendingBlockBody.ExtTransactions {
+				etxs[i] = etx
+			}
+
+			subBlockHashes := make(types.BlockManifest, len(pendingBlockBody.SubManifest))
+			for i, blockHash := range pendingBlockBody.SubManifest {
+				subBlockHashes[i] = blockHash
+			}
+
+			block = types.NewBlockWithHeader(header).WithBody(txs, uncles, etxs, subBlockHashes)
 			block = block.WithSeal(header)
 		}
 	}
