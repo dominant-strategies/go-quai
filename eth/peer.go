@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/spruce-solutions/go-quai/eth/protocols/eth"
-	"github.com/spruce-solutions/go-quai/eth/protocols/snap"
 )
 
 // ethPeerInfo represents a short summary of the `eth` sub-protocol metadata known
@@ -36,11 +35,9 @@ type ethPeerInfo struct {
 // ethPeer is a wrapper around eth.Peer to maintain a few extra metadata.
 type ethPeer struct {
 	*eth.Peer
-	snapExt *snapPeer // Satellite `snap` connection
 
-	syncDrop *time.Timer   // Connection dropper if `eth` sync progress isn't validated in time
-	snapWait chan struct{} // Notification channel for snap connections
-	lock     sync.RWMutex  // Mutex protecting the internal fields
+	syncDrop *time.Timer  // Connection dropper if `eth` sync progress isn't validated in time
+	lock     sync.RWMutex // Mutex protecting the internal fields
 }
 
 // info gathers and returns some `eth` protocol metadata known about a peer.
@@ -51,23 +48,5 @@ func (p *ethPeer) info() *ethPeerInfo {
 		Version:    p.Version(),
 		Difficulty: td,
 		Head:       hash.Hex(),
-	}
-}
-
-// snapPeerInfo represents a short summary of the `snap` sub-protocol metadata known
-// about a connected peer.
-type snapPeerInfo struct {
-	Version uint `json:"version"` // Snapshot protocol version negotiated
-}
-
-// snapPeer is a wrapper around snap.Peer to maintain a few extra metadata.
-type snapPeer struct {
-	*snap.Peer
-}
-
-// info gathers and returns some `snap` protocol metadata known about a peer.
-func (p *snapPeer) info() *snapPeerInfo {
-	return &snapPeerInfo{
-		Version: p.Version(),
 	}
 }

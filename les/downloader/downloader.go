@@ -34,7 +34,6 @@ import (
 	"github.com/spruce-solutions/go-quai/core/state/snapshot"
 	"github.com/spruce-solutions/go-quai/core/types"
 	"github.com/spruce-solutions/go-quai/eth/protocols/eth"
-	"github.com/spruce-solutions/go-quai/eth/protocols/snap"
 	"github.com/spruce-solutions/go-quai/ethdb"
 	"github.com/spruce-solutions/go-quai/event"
 	"github.com/spruce-solutions/go-quai/log"
@@ -131,8 +130,6 @@ type Downloader struct {
 	pivotHeader *types.Header // Pivot block header to dynamically push the syncing state root
 	pivotLock   sync.RWMutex  // Lock protecting pivot header reads from updates
 
-	snapSync       bool         // Whether to run state sync over the snap protocol
-	SnapSyncer     *snap.Syncer // TODO(karalabe): make private! hack for now
 	stateSyncStart chan *stateSync
 	trackStateReq  chan *stateReq
 	stateCh        chan dataPack // Channel receiving inbound node state data
@@ -229,7 +226,6 @@ func New(checkpoint uint64, stateDb ethdb.Database, stateBloom *trie.SyncBloom, 
 		headerProcCh:   make(chan []*types.Header, 1),
 		quitCh:         make(chan struct{}),
 		stateCh:        make(chan dataPack),
-		SnapSyncer:     snap.NewSyncer(stateDb),
 		stateSyncStart: make(chan *stateSync),
 		syncStatsState: stateSyncStats{
 			processed: rawdb.ReadFastTrieProgress(stateDb),
@@ -373,22 +369,7 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int, mode 
 	if mode == FullSync && d.stateBloom != nil {
 		d.stateBloom.Close()
 	}
-	// If snap sync was requested, create the snap scheduler and switch to fast
-	// sync mode. Long term we could drop fast sync or merge the two together,
-	// but until snap becomes prevalent, we should support both. TODO(karalabe).
-	if mode == SnapSync {
-		if !d.snapSync {
-			// Snap sync uses the snapshot namespace to store potentially flakey data until
-			// sync completely heals and finishes. Pause snapshot maintenance in the mean
-			// time to prevent access.
-			if snapshots := d.blockchain.Snapshots(); snapshots != nil { // Only nil in tests
-				snapshots.Disable()
-			}
-			log.Warn("Enabling snapshot sync prototype")
-			d.snapSync = true
-		}
-		mode = FastSync
-	}
+
 	// Reset the queue, peer set and wake channels to clean any internal leftover state
 	d.queue.Reset(blockCacheMaxItems, blockCacheInitialItems)
 	d.peers.Reset()
@@ -1755,7 +1736,7 @@ func (d *Downloader) processFastSyncContent() error {
 	}()
 
 	closeOnErr := func(s *stateSync) {
-		if err := s.Wait(); err != nil && err != errCancelStateFetch && err != errCanceled && err != snap.ErrCancelled {
+		if err := s.Wait(); err != nil && err != errCancelStateFetch && err != errCanceled {
 			d.queue.Close() // wake up Results
 		}
 	}
@@ -1961,32 +1942,6 @@ func (d *Downloader) DeliverReceipts(id string, receipts [][]*types.Receipt) err
 // DeliverNodeData injects a new batch of node state data received from a remote node.
 func (d *Downloader) DeliverNodeData(id string, data [][]byte) error {
 	return d.deliver(d.stateCh, &statePack{id, data}, stateInMeter, stateDropMeter)
-}
-
-// DeliverSnapPacket is invoked from a peer's message handler when it transmits a
-// data packet for the local node to consume.
-func (d *Downloader) DeliverSnapPacket(peer *snap.Peer, packet snap.Packet) error {
-	switch packet := packet.(type) {
-	case *snap.AccountRangePacket:
-		hashes, accounts, err := packet.Unpack()
-		if err != nil {
-			return err
-		}
-		return d.SnapSyncer.OnAccounts(peer, packet.ID, hashes, accounts, packet.Proof)
-
-	case *snap.StorageRangesPacket:
-		hashset, slotset := packet.Unpack()
-		return d.SnapSyncer.OnStorage(peer, packet.ID, hashset, slotset, packet.Proof)
-
-	case *snap.ByteCodesPacket:
-		return d.SnapSyncer.OnByteCodes(peer, packet.ID, packet.Codes)
-
-	case *snap.TrieNodesPacket:
-		return d.SnapSyncer.OnTrieNodes(peer, packet.ID, packet.Nodes)
-
-	default:
-		return fmt.Errorf("unexpected snap packet type: %T", packet)
-	}
 }
 
 // deliver injects a new batch of data received from a remote node.
