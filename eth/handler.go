@@ -408,30 +408,13 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 
 	// If propagation is requested, send to a subset of the peer
 	if propagate {
-		order, err := h.core.GetDifficultyOrder(block.Header())
-		if err != nil {
-			return
-		}
-
 		var td *big.Int
 		// the peer head updates only on a prime order block
-		if order == params.PRIME {
-			var primeTd *big.Int
-			if parent := h.core.GetBlock(block.ParentHash(), block.NumberU64()-1); parent != nil {
-				primeTd = new(big.Int).Add(block.Difficulty(), h.core.GetTd(block.ParentHash(), block.NumberU64()-1))
-			} else {
-				log.Error("Propagating dangling block", "number", block.Number(), "hash", hash)
-				return
-			}
-			td = new(big.Int).Set(primeTd)
+		if parent := h.core.GetBlock(block.ParentHash(), block.NumberU64()-1); parent != nil {
+			td = new(big.Int).Add(block.Difficulty(), h.core.GetTd(block.ParentHash(), block.NumberU64()-1))
 		} else {
-			terminus := h.core.Slice().HeaderChain().GetTerminiByHash(block.ParentHash())
-			terminusHeader := h.core.Slice().HeaderChain().GetHeaderByHash(terminus[3])
-			td = h.core.GetTd(terminusHeader.Hash(), terminusHeader.NumberU64())
-			if td == nil {
-				return
-			}
-			td.Add(td, block.Difficulty())
+			log.Error("Propagating dangling block", "number", block.Number(), "hash", hash)
+			return
 		}
 
 		// Send the block to a subset of our peers if less than 10

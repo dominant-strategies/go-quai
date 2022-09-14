@@ -29,7 +29,6 @@ import (
 	"github.com/spruce-solutions/go-quai/eth/protocols/eth"
 	"github.com/spruce-solutions/go-quai/log"
 	"github.com/spruce-solutions/go-quai/p2p/enode"
-	"github.com/spruce-solutions/go-quai/params"
 	"github.com/spruce-solutions/go-quai/trie"
 )
 
@@ -206,29 +205,17 @@ func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block, td
 	// Schedule the block for import
 	h.blockFetcher.Enqueue(peer.ID(), block)
 
-	order, err := h.core.GetDifficultyOrder(block.Header())
-	if err != nil {
-		return err
+	// Assuming the block is importable by the peer, but possibly not yet done so,
+	// calculate the head hash and TD that the peer truly must have.
+	var (
+		trueHead = block.ParentHash()
+		trueTD   = new(big.Int).Sub(td, block.Difficulty())
+	)
+	// Update the peer's total difficulty if better than the previous
+	if _, td := peer.Head(); trueTD.Cmp(td) > 0 {
+		peer.SetHead(trueHead, td)
+		h.chainSync.handlePeerEvent(peer)
 	}
 
-	// the peer head updates only on a prime order block
-	if order == params.PRIME {
-		if types.QuaiNetworkContext == params.PRIME {
-			// Assuming the block is importable by the peer, but possibly not yet done so,
-			// calculate the head hash and TD that the peer truly must have.
-			var (
-				trueHead = block.ParentHash()
-				trueTD   = new(big.Int).Sub(td, block.Difficulty())
-			)
-			// Update the peer's total difficulty if better than the previous
-			if _, td := peer.Head(); trueTD.Cmp(td) > 0 {
-				peer.SetHead(trueHead, td)
-				h.chainSync.handlePeerEvent(peer)
-			}
-		} else {
-			// don't set head of peer prior to finalization horizon because all blocks in fray should be transmitted.
-			peer.SetHead(block.Hash(), td)
-		}
-	}
 	return nil
 }
