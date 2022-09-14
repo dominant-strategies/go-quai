@@ -42,7 +42,8 @@ type revision struct {
 
 var (
 	// emptyRoot is the known root hash of an empty trie.
-	emptyRoot = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
+	emptyRoot         = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
+	ErrInvalidContext = errors.New("address is not in context")
 )
 
 type proofList [][]byte
@@ -241,33 +242,45 @@ func (s *StateDB) SubRefund(gas uint64) {
 
 // Exist reports whether the given account address exists in the state.
 // Notably this also returns true for suicided accounts.
-func (s *StateDB) Exist(addr common.Address) bool {
-	return s.getStateObject(addr) != nil
+func (s *StateDB) Exist(addr common.Address) (bool, error) {
+	if !addr.IsInContext() {
+		return false, ErrInvalidContext
+	}
+	return s.getStateObject(addr) != nil, nil
 }
 
 // Empty returns whether the state object is either non-existent
 // or empty according to the EIP161 specification (balance = nonce = code = 0)
-func (s *StateDB) Empty(addr common.Address) bool {
+func (s *StateDB) Empty(addr common.Address) (bool, error) {
+	if !addr.IsInContext() {
+		return false, ErrInvalidContext
+	}
 	so := s.getStateObject(addr)
-	return so == nil || so.empty()
+	return so == nil || so.empty(), nil
 }
 
 // GetBalance retrieves the balance from the given address or 0 if object not found
-func (s *StateDB) GetBalance(addr common.Address) *big.Int {
+func (s *StateDB) GetBalance(addr common.Address) (*big.Int, error) {
+	if !addr.IsInContext() {
+		return common.Big0, ErrInvalidContext
+	}
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		return stateObject.Balance()
+		return stateObject.Balance(), nil
 	}
-	return common.Big0
+	return common.Big0, nil
 }
 
-func (s *StateDB) GetNonce(addr common.Address) uint64 {
+func (s *StateDB) GetNonce(addr common.Address) (uint64, error) {
+	if !addr.IsInContext() {
+		return 0, ErrInvalidContext
+	}
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		return stateObject.Nonce()
+		return stateObject.Nonce(), nil
 	}
 
-	return 0
+	return 0, nil
 }
 
 // TxIndex returns the current transaction index set by Prepare.
@@ -275,41 +288,56 @@ func (s *StateDB) TxIndex() int {
 	return s.txIndex
 }
 
-func (s *StateDB) GetCode(addr common.Address) []byte {
+func (s *StateDB) GetCode(addr common.Address) ([]byte, error) {
+	if !addr.IsInContext() {
+		return []byte{}, ErrInvalidContext
+	}
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		return stateObject.Code(s.db)
+		return stateObject.Code(s.db), nil
 	}
-	return nil
+	return nil, nil
 }
 
-func (s *StateDB) GetCodeSize(addr common.Address) int {
+func (s *StateDB) GetCodeSize(addr common.Address) (int, error) {
+	if !addr.IsInContext() {
+		return 0, ErrInvalidContext
+	}
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		return stateObject.CodeSize(s.db)
+		return stateObject.CodeSize(s.db), nil
 	}
-	return 0
+	return 0, nil
 }
 
-func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {
+func (s *StateDB) GetCodeHash(addr common.Address) (common.Hash, error) {
+	if !addr.IsInContext() {
+		return common.Hash{}, ErrInvalidContext
+	}
 	stateObject := s.getStateObject(addr)
 	if stateObject == nil {
-		return common.Hash{}
+		return common.Hash{}, nil
 	}
-	return common.BytesToHash(stateObject.CodeHash())
+	return common.BytesToHash(stateObject.CodeHash()), nil
 }
 
 // GetState retrieves a value from the given account's storage trie.
-func (s *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
+func (s *StateDB) GetState(addr common.Address, hash common.Hash) (common.Hash, error) {
+	if !addr.IsInContext() {
+		return common.Hash{}, ErrInvalidContext
+	}
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		return stateObject.GetState(s.db, hash)
+		return stateObject.GetState(s.db, hash), nil
 	}
-	return common.Hash{}
+	return common.Hash{}, nil
 }
 
 // GetProof returns the Merkle proof for a given account.
 func (s *StateDB) GetProof(addr common.Address) ([][]byte, error) {
+	if !addr.IsInContext() {
+		return [][]byte{}, ErrInvalidContext
+	}
 	return s.GetProofByHash(crypto.Keccak256Hash(addr.Bytes()))
 }
 
@@ -322,22 +350,31 @@ func (s *StateDB) GetProofByHash(addrHash common.Hash) ([][]byte, error) {
 
 // GetStorageProof returns the Merkle proof for given storage slot.
 func (s *StateDB) GetStorageProof(a common.Address, key common.Hash) ([][]byte, error) {
+	if !a.IsInContext() {
+		return [][]byte{}, ErrInvalidContext
+	}
 	var proof proofList
-	trie := s.StorageTrie(a)
+	trie, err := s.StorageTrie(a)
+	if err != nil {
+		return nil, err
+	}
 	if trie == nil {
 		return proof, errors.New("storage trie for requested address does not exist")
 	}
-	err := trie.Prove(crypto.Keccak256(key.Bytes()), 0, &proof)
+	err = trie.Prove(crypto.Keccak256(key.Bytes()), 0, &proof)
 	return proof, err
 }
 
 // GetCommittedState retrieves a value from the given account's committed storage trie.
-func (s *StateDB) GetCommittedState(addr common.Address, hash common.Hash) common.Hash {
+func (s *StateDB) GetCommittedState(addr common.Address, hash common.Hash) (common.Hash, error) {
+	if !addr.IsInContext() {
+		return common.Hash{}, ErrInvalidContext
+	}
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		return stateObject.GetCommittedState(s.db, hash)
+		return stateObject.GetCommittedState(s.db, hash), nil
 	}
-	return common.Hash{}
+	return common.Hash{}, nil
 }
 
 // Database retrieves the low level database supporting the lower level trie ops.
@@ -347,22 +384,28 @@ func (s *StateDB) Database() Database {
 
 // StorageTrie returns the storage trie of an account.
 // The return value is a copy and is nil for non-existent accounts.
-func (s *StateDB) StorageTrie(addr common.Address) Trie {
+func (s *StateDB) StorageTrie(addr common.Address) (Trie, error) {
+	if !addr.IsInContext() {
+		return nil, ErrInvalidContext
+	}
 	stateObject := s.getStateObject(addr)
 	if stateObject == nil {
-		return nil
+		return nil, nil
 	}
 	cpy := stateObject.deepCopy(s)
 	cpy.updateTrie(s.db)
-	return cpy.getTrie(s.db)
+	return cpy.getTrie(s.db), nil
 }
 
-func (s *StateDB) HasSuicided(addr common.Address) bool {
+func (s *StateDB) HasSuicided(addr common.Address) (bool, error) {
+	if !addr.IsInContext() {
+		return false, ErrInvalidContext
+	}
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		return stateObject.suicided
+		return stateObject.suicided, nil
 	}
-	return false
+	return false, nil
 }
 
 /*
@@ -370,56 +413,84 @@ func (s *StateDB) HasSuicided(addr common.Address) bool {
  */
 
 // AddBalance adds amount to the account associated with addr.
-func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
-	stateObject := s.GetOrNewStateObject(addr)
+func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) error {
+	if !addr.IsInContext() {
+		return ErrInvalidContext
+	}
+	stateObject, err := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.AddBalance(amount)
 	}
+	return err
 }
 
 // SubBalance subtracts amount from the account associated with addr.
-func (s *StateDB) SubBalance(addr common.Address, amount *big.Int) {
-	stateObject := s.GetOrNewStateObject(addr)
+func (s *StateDB) SubBalance(addr common.Address, amount *big.Int) error {
+	if !addr.IsInContext() {
+		return ErrInvalidContext
+	}
+	stateObject, err := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SubBalance(amount)
 	}
+	return err
 }
 
-func (s *StateDB) SetBalance(addr common.Address, amount *big.Int) {
-	stateObject := s.GetOrNewStateObject(addr)
+func (s *StateDB) SetBalance(addr common.Address, amount *big.Int) error {
+	if !addr.IsInContext() {
+		return ErrInvalidContext
+	}
+	stateObject, err := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetBalance(amount)
 	}
+	return err
 }
 
-func (s *StateDB) SetNonce(addr common.Address, nonce uint64) {
-	stateObject := s.GetOrNewStateObject(addr)
+func (s *StateDB) SetNonce(addr common.Address, nonce uint64) error {
+	if !addr.IsInContext() {
+		return ErrInvalidContext
+	}
+	stateObject, err := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetNonce(nonce)
 	}
+	return err
 }
 
-func (s *StateDB) SetCode(addr common.Address, code []byte) {
-	stateObject := s.GetOrNewStateObject(addr)
+func (s *StateDB) SetCode(addr common.Address, code []byte) error {
+	if !addr.IsInContext() {
+		return ErrInvalidContext
+	}
+	stateObject, err := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetCode(crypto.Keccak256Hash(code), code)
 	}
+	return err
 }
 
-func (s *StateDB) SetState(addr common.Address, key, value common.Hash) {
-	stateObject := s.GetOrNewStateObject(addr)
+func (s *StateDB) SetState(addr common.Address, key, value common.Hash) error {
+	if !addr.IsInContext() {
+		return ErrInvalidContext
+	}
+	stateObject, err := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetState(s.db, key, value)
 	}
+	return err
 }
 
 // SetStorage replaces the entire storage for the specified account with given
 // storage. This function should only be used for debugging.
-func (s *StateDB) SetStorage(addr common.Address, storage map[common.Hash]common.Hash) {
-	stateObject := s.GetOrNewStateObject(addr)
+func (s *StateDB) SetStorage(addr common.Address, storage map[common.Hash]common.Hash) error {
+	if !addr.IsInContext() {
+		return ErrInvalidContext
+	}
+	stateObject, err := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetStorage(storage)
 	}
+	return err
 }
 
 // Suicide marks the given account as suicided.
@@ -427,10 +498,13 @@ func (s *StateDB) SetStorage(addr common.Address, storage map[common.Hash]common
 //
 // The account's state object is still available until the state is committed,
 // getStateObject will return a non-nil account after Suicide.
-func (s *StateDB) Suicide(addr common.Address) bool {
+func (s *StateDB) Suicide(addr common.Address) (bool, error) {
+	if !addr.IsInContext() {
+		return false, ErrInvalidContext
+	}
 	stateObject := s.getStateObject(addr)
 	if stateObject == nil {
-		return false
+		return false, nil
 	}
 	s.journal.append(suicideChange{
 		account:     &addr,
@@ -440,7 +514,7 @@ func (s *StateDB) Suicide(addr common.Address) bool {
 	stateObject.markSuicided()
 	stateObject.data.Balance = new(big.Int)
 
-	return true
+	return true, nil
 }
 
 //
@@ -563,12 +637,15 @@ func (s *StateDB) setStateObject(object *stateObject) {
 }
 
 // GetOrNewStateObject retrieves a state object or create a new state object if nil.
-func (s *StateDB) GetOrNewStateObject(addr common.Address) *stateObject {
+func (s *StateDB) GetOrNewStateObject(addr common.Address) (*stateObject, error) {
+	if !addr.IsInContext() {
+		return nil, ErrInvalidContext
+	}
 	stateObject := s.getStateObject(addr)
 	if stateObject == nil {
 		stateObject, _ = s.createObject(addr)
 	}
-	return stateObject
+	return stateObject, nil
 }
 
 // createObject creates a new state object. If there is an existing account with
@@ -606,14 +683,21 @@ func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) 
 //   2. tx_create(sha(account ++ nonce)) (note that this gets the address of 1)
 //
 // Carrying over the balance ensures that Ether doesn't disappear.
-func (s *StateDB) CreateAccount(addr common.Address) {
+func (s *StateDB) CreateAccount(addr common.Address) error {
+	if !addr.IsInContext() {
+		return ErrInvalidContext
+	}
 	newObj, prev := s.createObject(addr)
 	if prev != nil {
 		newObj.setBalance(prev.data.Balance)
 	}
+	return nil
 }
 
 func (db *StateDB) ForEachStorage(addr common.Address, cb func(key, value common.Hash) bool) error {
+	if !addr.IsInContext() {
+		return ErrInvalidContext
+	}
 	so := db.getStateObject(addr)
 	if so == nil {
 		return nil
@@ -977,7 +1061,10 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 // - Add the contents of the optional tx access list (2930)
 //
 // This method should only be called if Berlin/2929+2930 is applicable at the current number.
-func (s *StateDB) PrepareAccessList(sender common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) {
+func (s *StateDB) PrepareAccessList(sender common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) error {
+	if !sender.IsInContext() {
+		return ErrInvalidContext
+	}
 	s.AddAddressToAccessList(sender)
 	if dst != nil {
 		s.AddAddressToAccessList(*dst)
@@ -992,6 +1079,7 @@ func (s *StateDB) PrepareAccessList(sender common.Address, dst *common.Address, 
 			s.AddSlotToAccessList(el.Address, key)
 		}
 	}
+	return nil
 }
 
 // AddAddressToAccessList adds the given address to the access list

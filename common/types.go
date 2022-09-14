@@ -370,6 +370,19 @@ func (a *Address) UnmarshalGraphQL(input interface{}) error {
 	return err
 }
 
+func (a Address) Location() (Location, error) {
+	for location, addrRange := range locationToAddressRange {
+		if int(a.Bytes()[0]) >= addrRange[0] && int(a.Bytes()[0]) <= addrRange[1] {
+			return location, nil
+		}
+	}
+	return Location{}, errors.New("Address location is out of bounds")
+}
+
+func (a Address) IsInContext() bool {
+	return IsAddressInContext(a)
+}
+
 // UnprefixedAddress allows marshaling an Address without 0x prefix.
 type UnprefixedAddress Address
 
@@ -445,9 +458,10 @@ func (ma *MixedcaseAddress) Original() string {
 
 // bytePrefixList expands the space with proper size for chain IDs to be indexed
 var (
-	mainnetBytePrefixList = make([][]int, 20000)
-	testnetBytePrefixList = make([][]int, 20000)
-	locationToChainID     = make(map[Location]int)
+	mainnetBytePrefixList  = make([][]int, 20000)
+	testnetBytePrefixList  = make([][]int, 20000)
+	locationToAddressRange = make(map[Location][]int)
+	addressToLocation      = make(map[[2]int]Location)
 )
 
 func init() {
@@ -479,7 +493,19 @@ func init() {
 	testnetBytePrefixList[12302] = []int{110, 119}
 	testnetBytePrefixList[12303] = []int{120, 129}
 
-	locationToChainID[Location{intToByte(0), intToByte(0)}] = 9000
+	locationToAddressRange[Location{intToByte(0), intToByte(0)}] = []int{0, 9}
+	locationToAddressRange[Location{intToByte(1), intToByte(0)}] = []int{10, 19}
+	locationToAddressRange[Location{intToByte(2), intToByte(0)}] = []int{50, 59}
+	locationToAddressRange[Location{intToByte(3), intToByte(0)}] = []int{90, 99}
+	locationToAddressRange[Location{intToByte(1), intToByte(1)}] = []int{20, 29}
+	locationToAddressRange[Location{intToByte(1), intToByte(2)}] = []int{30, 39}
+	locationToAddressRange[Location{intToByte(1), intToByte(3)}] = []int{40, 49}
+	locationToAddressRange[Location{intToByte(2), intToByte(1)}] = []int{60, 69}
+	locationToAddressRange[Location{intToByte(2), intToByte(2)}] = []int{70, 79}
+	locationToAddressRange[Location{intToByte(2), intToByte(3)}] = []int{80, 89}
+	locationToAddressRange[Location{intToByte(3), intToByte(1)}] = []int{100, 109}
+	locationToAddressRange[Location{intToByte(3), intToByte(2)}] = []int{110, 119}
+	locationToAddressRange[Location{intToByte(3), intToByte(3)}] = []int{120, 129}
 
 }
 
@@ -544,12 +570,8 @@ func intToByte(num int) *byte {
 	return ptr
 }
 
-func ChainIDRange(location Location) []int {
-	return mainnetBytePrefixList[locationToChainID[location]]
-}
-
 func IsAddressInContext(address Address) bool {
-	idRange := ChainIDRange(NodeLocation)
+	idRange := locationToAddressRange[NodeLocation]
 	if int(address.Bytes()[0]) < idRange[0] || int(address.Bytes()[0]) > idRange[1] {
 		return false
 	} else {
