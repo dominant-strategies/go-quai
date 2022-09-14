@@ -651,19 +651,21 @@ func (api *PublicFilterAPI) PendingHeader(ctx context.Context) (*rpc.Subscriptio
 // RPCMarshalHeader converts the given header to the RPC output .
 func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 	result := map[string]interface{}{
-		"hash":             head.Hash(),
-		"parentHash":       head.ParentHashArray(),
-		"nonce":            head.Nonce(),
-		"sha3Uncles":       head.UncleHashArray(),
-		"logsBloom":        head.BloomArray(),
-		"stateRoot":        head.RootArray(),
-		"miner":            head.CoinbaseArray(),
-		"extraData":        hexutil.Bytes(head.Extra()),
-		"size":             hexutil.Uint64(head.Size()),
-		"timestamp":        hexutil.Uint64(head.Time()),
-		"transactionsRoot": head.TxHashArray(),
-		"receiptsRoot":     head.ReceiptHashArray(),
-		"location":         head.Location(),
+		"hash":                head.Hash(),
+		"parentHash":          head.ParentHashArray(),
+		"nonce":               head.Nonce(),
+		"sha3Uncles":          head.UncleHashArray(),
+		"logsBloom":           head.BloomArray(),
+		"stateRoot":           head.RootArray(),
+		"miner":               head.CoinbaseArray(),
+		"extraData":           hexutil.Bytes(head.Extra()),
+		"size":                hexutil.Uint64(head.Size()),
+		"timestamp":           hexutil.Uint64(head.Time()),
+		"transactionsRoot":    head.TxHashArray(),
+		"receiptsRoot":        head.ReceiptHashArray(),
+		"extTransactionsRoot": head.EtxHashArray(),
+		"manifestHash":        head.ManifestHashArray(),
+		"location":            head.Location(),
 	}
 
 	number := make([]*hexutil.Big, common.HierarchyDepth)
