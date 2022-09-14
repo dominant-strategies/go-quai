@@ -64,10 +64,12 @@ type fetchRequest struct {
 type fetchResult struct {
 	pending int32 // Flag telling what deliveries are outstanding
 
-	Header       *types.Header
-	Uncles       []*types.Header
-	Transactions types.Transactions
-	Receipts     types.Receipts
+	Header          *types.Header
+	Uncles          []*types.Header
+	Transactions    types.Transactions
+	ExtTransactions types.Transactions
+	SubManifest     types.BlockManifest
+	Receipts        types.Receipts
 }
 
 func newFetchResult(header *types.Header) *fetchResult {
@@ -768,12 +770,18 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, headerProcCh 
 // DeliverBodies injects a block body retrieval response into the results queue.
 // The method returns the number of blocks bodies accepted from the delivery and
 // also wakes any threads waiting for data delivery.
-func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, uncleLists [][]*types.Header) (int, error) {
+func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, uncleLists [][]*types.Header, etxLists [][]*types.Transaction, manifests []types.BlockManifest) (int, error) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 	trieHasher := trie.NewStackTrie(nil)
 	validate := func(index int, header *types.Header) error {
 		if types.DeriveSha(types.Transactions(txLists[index]), trieHasher) != header.TxHash() {
+			return errInvalidBody
+		}
+		if types.DeriveSha(types.Transactions(etxLists[index]), trieHasher) != header.EtxHash() {
+			return errInvalidBody
+		}
+		if types.DeriveSha(manifests[index], trieHasher) != header.ManifestHash() {
 			return errInvalidBody
 		}
 		if types.CalcUncleHash(uncleLists[index]) != header.UncleHash() {
@@ -785,6 +793,8 @@ func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, uncleLi
 	reconstruct := func(index int, result *fetchResult) {
 		result.Transactions = txLists[index]
 		result.Uncles = uncleLists[index]
+		result.ExtTransactions = etxLists[index]
+		result.SubManifest = manifests[index]
 		result.SetBodyDone()
 	}
 	return q.deliver(id, q.blockTaskPool, q.blockTaskQueue, q.blockPendPool,

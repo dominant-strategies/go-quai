@@ -62,6 +62,8 @@ type environment struct {
 
 	header              *types.Header
 	txs                 []*types.Transaction
+	etxs                []*types.Transaction
+	subManifest         types.BlockManifest
 	receipts            []*types.Receipt
 	uncles              map[common.Hash]*types.Header
 	externalGasUsed     uint64
@@ -421,7 +423,7 @@ func (w *worker) GeneratePendingHeader(block *types.Block) (*types.Header, error
 	}
 	// Create a local environment copy, avoid the data race with snapshot state.
 	// https://github.com/ethereum/go-ethereum/issues/24299
-	block, err = w.FinalizeAssembleAndBroadcast(w.hc, env.header, env.state, env.txs, env.unclelist(), env.receipts)
+	block, err = w.FinalizeAssembleAndBroadcast(w.hc, env.header, env.state, env.txs, env.unclelist(), env.etxs, env.subManifest, env.receipts)
 	if err != nil {
 		return nil, err
 	}
@@ -632,6 +634,8 @@ func (w *worker) updateSnapshot(env *environment) {
 		env.header,
 		env.txs,
 		env.unclelist(),
+		env.etxs,
+		env.subManifest,
 		env.receipts,
 		trie.NewStackTrie(nil),
 	)
@@ -884,8 +888,8 @@ func (w *worker) adjustGasLimit(interrupt *int32, env *environment, parent *type
 	env.header.SetGasLimit(CalcGasLimit(parent.GasLimit(), gasUsed))
 }
 
-func (w *worker) FinalizeAssembleAndBroadcast(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
-	block, err := w.engine.FinalizeAndAssemble(chain, header, state, txs, uncles, receipts)
+func (w *worker) FinalizeAssembleAndBroadcast(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, etxs []*types.Transaction, manifest types.BlockManifest, receipts []*types.Receipt) (*types.Block, error) {
+	block, err := w.engine.FinalizeAndAssemble(chain, header, state, txs, uncles, etxs, manifest, receipts)
 	if err != nil {
 		return nil, err
 	}
@@ -910,7 +914,7 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 		// Create a local environment copy, avoid the data race with snapshot state.
 		// https://github.com/ethereum/go-ethereum/issues/24299
 		env := env.copy()
-		block, err := w.FinalizeAssembleAndBroadcast(w.hc, env.header, env.state, env.txs, env.unclelist(), env.receipts)
+		block, err := w.FinalizeAssembleAndBroadcast(w.hc, env.header, env.state, env.txs, env.unclelist(), env.etxs, env.subManifest, env.receipts)
 		if err != nil {
 			return err
 		}
