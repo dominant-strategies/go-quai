@@ -23,6 +23,7 @@ import (
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/core/types"
 	"github.com/spruce-solutions/go-quai/log"
+	"github.com/spruce-solutions/go-quai/params"
 	"github.com/spruce-solutions/go-quai/rlp"
 	"github.com/spruce-solutions/go-quai/trie"
 )
@@ -51,10 +52,12 @@ func answerGetBlockHeadersQuery(backend Backend, query *GetBlockHeadersPacket, p
 
 	// Gather headers until the fetch or network limits is reached
 	var (
-		bytes   common.StorageSize
-		headers []*types.Header
-		unknown bool
-		lookups int
+		bytes               common.StorageSize
+		headers             []*types.Header
+		unknown             bool
+		lookups             int
+		domThresholdReached bool
+		domCount            int
 	)
 	for !unknown && len(headers) < int(query.Amount) && bytes < softResponseLimit &&
 		len(headers) < maxHeadersServe && lookups < 2*maxHeadersServe {
@@ -80,8 +83,18 @@ func answerGetBlockHeadersQuery(backend Backend, query *GetBlockHeadersPacket, p
 		headers = append(headers, origin)
 		bytes += estHeaderSize
 
+		if IsCoincident(backend, origin.Hash()) {
+			domCount++
+			if types.QuaiNetworkContext == params.ZONE && domCount == params.MaxCoincidentInZone {
+				domThresholdReached = true
+			}
+			if types.QuaiNetworkContext == params.REGION && domCount == params.MaxCoincidentInRegion {
+				domThresholdReached = true
+			}
+		}
+
 		// lock step sync only when going towards latest.
-		if hashMode && !query.Reverse && IsCoincident(backend, origin.Hash()) {
+		if hashMode && !query.Reverse && domThresholdReached {
 			break
 		}
 
@@ -148,8 +161,10 @@ func handleGetBlockBodies66(backend Backend, msg Decoder, peer *Peer) error {
 func answerGetBlockBodiesQuery(backend Backend, query GetBlockBodiesPacket, peer *Peer) []rlp.RawValue {
 	// Gather blocks until the fetch or network limits is reached
 	var (
-		bytes  int
-		bodies []rlp.RawValue
+		bytes               int
+		bodies              []rlp.RawValue
+		domCount            int
+		domThresholdReached bool
 	)
 	for lookups, hash := range query {
 		if bytes >= softResponseLimit || len(bodies) >= maxBodiesServe ||
@@ -161,8 +176,18 @@ func answerGetBlockBodiesQuery(backend Backend, query GetBlockBodiesPacket, peer
 			bytes += len(data)
 		}
 
-		// stopping at a coincident block after including the block body for the coincident block.
 		if IsCoincident(backend, hash) {
+			domCount++
+			if types.QuaiNetworkContext == params.ZONE && domCount == params.MaxCoincidentInZone {
+				domThresholdReached = true
+			}
+			if types.QuaiNetworkContext == params.REGION && domCount == params.MaxCoincidentInRegion {
+				domThresholdReached = true
+			}
+		}
+
+		// stopping after n coincident blocks after including the block body for the coincident block.
+		if domThresholdReached {
 			break
 		}
 	}
