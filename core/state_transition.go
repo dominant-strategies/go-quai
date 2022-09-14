@@ -198,7 +198,11 @@ func (st *StateTransition) buyGas() error {
 		balanceCheck = balanceCheck.Mul(balanceCheck, st.gasFeeCap)
 		balanceCheck.Add(balanceCheck, st.value)
 	}
-	if have, want := st.state.GetBalance(st.msg.From()), balanceCheck; have.Cmp(want) < 0 {
+	balance, err := st.state.GetBalance(st.msg.From())
+	if err != nil {
+		return err
+	}
+	if have, want := balance, balanceCheck; have.Cmp(want) < 0 {
 		return fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFunds, st.msg.From().Hex(), have, want)
 	}
 	if err := st.gp.SubGas(st.msg.Gas()); err != nil {
@@ -214,7 +218,10 @@ func (st *StateTransition) buyGas() error {
 func (st *StateTransition) preCheck() error {
 	// Make sure this transaction's nonce is correct.
 	if st.msg.CheckNonce() {
-		stNonce := st.state.GetNonce(st.msg.From())
+		stNonce, err := st.state.GetNonce(st.msg.From())
+		if err != nil {
+			return err
+		}
 		if msgNonce := st.msg.Nonce(); stNonce < msgNonce {
 			return fmt.Errorf("%w: address %v, tx: %d state: %d", ErrNonceTooHigh,
 				st.msg.From().Hex(), msgNonce, stNonce)
@@ -224,7 +231,11 @@ func (st *StateTransition) preCheck() error {
 		}
 	}
 	// Make sure the sender is an EOA
-	if codeHash := st.state.GetCodeHash(st.msg.From()); codeHash != emptyCodeHash && codeHash != (common.Hash{}) {
+	codeHash, err := st.state.GetCodeHash(st.msg.From())
+	if err != nil {
+		return err
+	}
+	if codeHash != emptyCodeHash && codeHash != (common.Hash{}) {
 		return fmt.Errorf("%w: address %v, codehash: %s", ErrSenderNoEOA,
 			st.msg.From().Hex(), codeHash)
 	}
@@ -317,7 +328,11 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		ret, _, st.gas, vmerr = st.evm.Create(sender, st.data, st.gas, st.value)
 	} else {
 		// Increment the nonce for the next transaction
-		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
+		nonce, err := st.state.GetNonce(sender.Address())
+		if err != nil {
+			return nil, err
+		}
+		st.state.SetNonce(msg.From(), nonce+1)
 		ret, st.gas, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value)
 		// At this point, the execution completed, so the ETX cache can be dumped and reset
 		st.evm.ETXCacheLock.Lock()

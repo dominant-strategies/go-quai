@@ -22,6 +22,7 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/math"
+	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/log"
 )
 
@@ -267,7 +268,10 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 
 		switch {
 		case err != nil:
-			return nil, err
+			if err != state.ErrInvalidScope {
+				return nil, err
+			}
+			pc++ // ErrInvalidScope is ignored and execution continues
 		case operation.reverts:
 			return res, ErrExecutionReverted
 		case operation.halts:
