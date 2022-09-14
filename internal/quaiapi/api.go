@@ -270,7 +270,11 @@ func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Add
 	if state == nil || err != nil {
 		return nil, err
 	}
-	return (*hexutil.Big)(state.GetBalance(address)), state.Error()
+	balance, err := state.GetBalance(address)
+	if err != nil {
+		return nil, err
+	}
+	return (*hexutil.Big)(balance), state.Error()
 }
 
 // Result structs for GetProof
@@ -297,9 +301,15 @@ func (s *PublicBlockChainAPI) GetProof(ctx context.Context, address common.Addre
 		return nil, err
 	}
 
-	storageTrie := state.StorageTrie(address)
+	storageTrie, err := state.StorageTrie(address)
+	if err != nil {
+		return nil, err
+	}
 	storageHash := types.EmptyRootHash
-	codeHash := state.GetCodeHash(address)
+	codeHash, err := state.GetCodeHash(address)
+	if err != nil {
+		return nil, err
+	}
 	storageProof := make([]StorageResult, len(storageKeys))
 
 	// if we have a storageTrie, (which means the account exists), we can update the storagehash
@@ -317,7 +327,11 @@ func (s *PublicBlockChainAPI) GetProof(ctx context.Context, address common.Addre
 			if storageError != nil {
 				return nil, storageError
 			}
-			storageProof[i] = StorageResult{key, (*hexutil.Big)(state.GetState(address, common.HexToHash(key)).Big()), toHexSlice(proof)}
+			val, err := state.GetState(address, common.HexToHash(key))
+			if err != nil {
+				return nil, err
+			}
+			storageProof[i] = StorageResult{key, (*hexutil.Big)(val.Big()), toHexSlice(proof)}
 		} else {
 			storageProof[i] = StorageResult{key, &hexutil.Big{}, []string{}}
 		}
@@ -329,12 +343,20 @@ func (s *PublicBlockChainAPI) GetProof(ctx context.Context, address common.Addre
 		return nil, proofErr
 	}
 
+	balance, err := state.GetBalance(address)
+	if err != nil {
+		return nil, err
+	}
+	nonce, err := state.GetNonce(address)
+	if err != nil {
+		return nil, err
+	}
 	return &AccountResult{
 		Address:      address,
 		AccountProof: toHexSlice(accountProof),
-		Balance:      (*hexutil.Big)(state.GetBalance(address)),
+		Balance:      (*hexutil.Big)(balance),
 		CodeHash:     codeHash,
-		Nonce:        hexutil.Uint64(state.GetNonce(address)),
+		Nonce:        hexutil.Uint64(nonce),
 		StorageHash:  storageHash,
 		StorageProof: storageProof,
 	}, state.Error()
@@ -453,7 +475,10 @@ func (s *PublicBlockChainAPI) GetCode(ctx context.Context, address common.Addres
 	if state == nil || err != nil {
 		return nil, err
 	}
-	code := state.GetCode(address)
+	code, err := state.GetCode(address)
+	if err != nil {
+		return hexutil.Bytes{}, err
+	}
 	return code, state.Error()
 }
 
@@ -465,7 +490,10 @@ func (s *PublicBlockChainAPI) GetStorageAt(ctx context.Context, address common.A
 	if state == nil || err != nil {
 		return nil, err
 	}
-	res := state.GetState(address, common.HexToHash(key))
+	res, err := state.GetState(address, common.HexToHash(key))
+	if err != nil {
+		return hexutil.Bytes{}, err
+	}
 	return res[:], state.Error()
 }
 
@@ -666,7 +694,10 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		if err != nil {
 			return 0, err
 		}
-		balance := state.GetBalance(*args.From) // from can't be nil
+		balance, err := state.GetBalance(*args.From) // from can't be nil
+		if err != nil {
+			return 0, err
+		}
 		available := new(big.Int).Set(balance)
 		if args.Value != nil {
 			if args.Value.ToInt().Cmp(available) >= 0 {
@@ -1201,7 +1232,10 @@ func (s *PublicTransactionPoolAPI) GetTransactionCount(ctx context.Context, addr
 	if state == nil || err != nil {
 		return nil, err
 	}
-	nonce := state.GetNonce(address)
+	nonce, err := state.GetNonce(address)
+	if err != nil {
+		return nil, err
+	}
 	return (*hexutil.Uint64)(&nonce), state.Error()
 }
 

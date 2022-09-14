@@ -215,7 +215,9 @@ func (p *StateProcessor) Process(block *types.Block) (types.Receipts, []*types.L
 	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
-	p.engine.Finalize(p.hc, header, statedb, block.Transactions(), block.Uncles())
+	if err := p.engine.Finalize(p.hc, header, statedb, block.Transactions(), block.Uncles()); err != nil {
+		return nil, nil, nil, 0, err
+	}
 
 	return receipts, allLogs, statedb, *usedGas, nil
 }
@@ -234,9 +236,15 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	// Update the state with pending changes.
 	var root []byte
 	if config.IsByzantium(blockNumber) {
-		statedb.Finalise(true)
+		if err := statedb.Finalise(true); err != nil {
+			return nil, err
+		}
 	} else {
-		root = statedb.IntermediateRoot(config.IsEIP158(blockNumber)).Bytes()
+		intermediateRoot, err := statedb.IntermediateRoot(config.IsEIP158(blockNumber))
+		if err != nil {
+			return nil, err
+		}
+		root = intermediateRoot.Bytes()
 	}
 	*usedGas += result.UsedGas
 
@@ -609,7 +617,9 @@ func (p *StateProcessor) StateAtTransaction(block *types.Block, txIndex int, ree
 		}
 		// Ensure any modifications are committed to the state
 		// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
-		statedb.Finalise(vmenv.ChainConfig().IsEIP158(block.Number()))
+		if err := statedb.Finalise(vmenv.ChainConfig().IsEIP158(block.Number())); err != nil {
+			return nil, vm.BlockContext{}, nil, err
+		}
 	}
 	return nil, vm.BlockContext{}, nil, fmt.Errorf("transaction index %d out of range for block %#x", txIndex, block.Hash())
 }
