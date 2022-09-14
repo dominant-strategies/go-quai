@@ -17,6 +17,7 @@
 package eth
 
 import (
+	"fmt"
 	"math/big"
 	"sync/atomic"
 	"time"
@@ -241,6 +242,7 @@ func (h *handler) doSync(op *chainSyncOp) error {
 			log.Warn("Update txLookup limit", "provided", limit, "updated", *stored)
 		}
 	}
+	fmt.Println("doSync starting synchronise", op.peer.Info())
 	// Run the sync cycle, and disable fast sync if we're past the pivot block
 	err := h.downloader.Synchronise(op.peer.ID(), op.head, op.td, op.mode)
 	if err != nil {
