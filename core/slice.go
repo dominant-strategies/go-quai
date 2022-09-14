@@ -241,7 +241,7 @@ func (sl *Slice) Append(header *types.Header, domTerminus common.Hash, td *big.I
 	sl.futureHeaders.Remove(block.Hash())
 
 	if order < types.QuaiNetworkContext {
-		sl.procfutureHeaders()
+		go sl.procfutureHeaders()
 	}
 
 	return pendingHeader, nil
