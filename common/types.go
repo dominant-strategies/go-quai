@@ -497,3 +497,14 @@ func (l *Location) Context() int {
 		return PRIME_CTX
 	}
 }
+
+func (l *Location) SubLocation() int {
+	switch NodeLocation.Context() {
+	case PRIME_CTX:
+		return l.Region()
+	case REGION_CTX:
+		return l.Zone()
+	default:
+		return -1
+	}
+}

@@ -365,8 +365,8 @@ func (h *Header) SetBaseFee(val *big.Int, args ...int) {
 	}
 	h.baseFee[nodeCtx] = new(big.Int).Set(val)
 }
-func (h *Header) SetLocation(val *common.Location) { h.location = *val }
-func (h *Header) SetTime(val uint64)               { h.time = val }
+func (h *Header) SetLocation(val common.Location) { h.location = val }
+func (h *Header) SetTime(val uint64)              { h.time = val }
 func (h *Header) SetExtra(val []byte) {
 	if len(val) > 0 {
 		h.extra = make([]byte, len(val))
