@@ -382,7 +382,7 @@ func (w *worker) GeneratePendingHeader(block *types.Block) (*types.Header, error
 	}
 
 	// clear the pending block queue.
-	clearPending(block.Header().Number64())
+	clearPending(block.Header().NumberU64())
 
 	timestamp = time.Now().Unix()
 	if interrupt != nil {

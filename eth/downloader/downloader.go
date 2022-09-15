@@ -178,6 +178,9 @@ type Core interface {
 	// CurrentBlock retrieves the head block from the local chain.
 	CurrentBlock() *types.Block
 
+	// CurrentHeader retrieves the head header from the local chain.
+	CurrentHeader() *types.Header
+
 	// CurrentFastBlock retrieves the head fast block from the local chain.
 	CurrentFastBlock() *types.Block
 
@@ -242,7 +245,7 @@ func (d *Downloader) Progress() ethereum.SyncProgress {
 	case d.core != nil && mode == FullSync:
 		current = d.core.CurrentBlock().NumberU64()
 	case d.lightchain != nil:
-		current = d.lightchain.CurrentHeader().Number[types.QuaiNetworkContext].Uint64()
+		current = d.lightchain.CurrentHeader().NumberU64()
 	default:
 		log.Error("Unknown downloader chain/mode combo", "light", d.lightchain != nil, "full", d.core != nil, "mode", mode)
 	}
@@ -433,7 +436,6 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, number ui
 	if err != nil {
 		return err
 	}
-
 	height := latest.Number[types.QuaiNetworkContext].Uint64()
 
 	origin, err := d.findAncestor(p, latest)
@@ -563,7 +565,7 @@ func (d *Downloader) fetchHead(p *peerConnection) (head *types.Header, pivot *ty
 			// Make sure the peer gave us at least one and at most the requested headers
 			headers := packet.(*headerPack).headers
 			if len(headers) == 0 || len(headers) > fetch {
-				return nil, nil, nil
+				return nil, nil, fmt.Errorf("%w: returned headers %d != requested %d", errBadPeer, len(headers), fetch)
 			}
 			// The first header needs to be the head, validate against the checkpoint
 			// and request. If only 1 header was returned, make sure there's no pivot
@@ -653,14 +655,14 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 	var (
 		floor        = int64(-1)
 		localHeight  uint64
-		remoteHeight = remoteHeader.Number[types.QuaiNetworkContext].Uint64()
+		remoteHeight = remoteHeader.NumberU64()
 	)
 	mode := d.getMode()
 	switch mode {
 	case FullSync:
 		localHeight = d.core.CurrentBlock().NumberU64()
 	default:
-		localHeight = d.lightchain.CurrentHeader().Number[types.QuaiNetworkContext].Uint64()
+		localHeight = d.lightchain.CurrentHeader().NumberU64()
 	}
 	p.log.Debug("Looking for common ancestor", "local", localHeight, "remote", remoteHeight)
 
@@ -715,9 +717,6 @@ func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, re
 			}
 			// Make sure the peer actually gave something valid
 			headers := packet.(*headerPack).headers
-			for i := 0; i < len(headers); i++ {
-				fmt.Println("header: ", headers[i])
-			}
 			if len(headers) == 0 {
 				p.log.Warn("Empty head header set")
 				return 0, errEmptyHeaderSet
@@ -1016,7 +1015,7 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 						head = ancestor
 					}
 					// If the head is way older than this batch, delay the last few headers
-					if head+uint64(reorgProtThreshold) < headers[n-1].Number[types.QuaiNetworkContext].Uint64() {
+					if head+uint64(reorgProtThreshold) < headers[n-1].NumberU64() {
 						delay := reorgProtHeaderDelay
 						if delay > n {
 							delay = n

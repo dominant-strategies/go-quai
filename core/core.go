@@ -37,6 +37,7 @@ func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.H
 
 // TODO
 func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
+	domWait := false
 	for i, block := range blocks {
 		// check the order of the block
 		blockOrder, err := c.engine.GetDifficultyOrder(block.Header())
@@ -49,7 +50,7 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 
 		// if the order of the block is less than the context
 		// add the rest of the blocks in the queue to the future blocks.
-		if blockOrder == types.QuaiNetworkContext {
+		if blockOrder == types.QuaiNetworkContext && !domWait {
 			_, err = c.sl.Append(block.Header(), common.Hash{}, big.NewInt(0), false, true)
 			if err != nil {
 				if err == consensus.ErrFutureBlock {
@@ -58,6 +59,9 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 				log.Info("InsertChain", "err in Append core: ", err)
 				return i, err
 			}
+		} else {
+			domWait = true
+			c.sl.addfutureHeader(block.Header())
 		}
 	}
 	return len(blocks), nil

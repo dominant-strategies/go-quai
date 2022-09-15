@@ -1312,7 +1312,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	}
 	// Initialize the internal state to the current head
 	if newHead == nil {
-		newHead = pool.core.CurrentBlock().Header() // Special case during testing
+		newHead = pool.core.CurrentHeader() // Special case during testing
 	}
 	statedb, err := pool.core.StateAt(newHead.Root[types.QuaiNetworkContext])
 	if err != nil {

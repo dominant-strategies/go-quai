@@ -166,11 +166,12 @@ func (sl *Slice) Append(header *types.Header, domTerminus common.Hash, td *big.I
 		return sl.nilPendingHeader, errors.New("could not find the tx and uncle data to match the header root hash")
 	}
 
-	log.Info("Starting Append...", "Block.Hash:", block.Hash(), "Number:", block.Number(), "Location:", block.Header().Location)
+	start := time.Now()
+	log.Info("Starting slice append", "hash", block.Hash(), "number", block.Number(), "location", block.Header().Location)
+
 	batch := sl.sliceDb.NewBatch()
 
 	// Calculate block order
-
 	order, err := sl.engine.GetDifficultyOrder(block.Header())
 	if err != nil {
 		return sl.nilPendingHeader, err
@@ -239,6 +240,15 @@ func (sl *Slice) Append(header *types.Header, domTerminus common.Hash, td *big.I
 	// Remove the header form the future headers cache
 	sl.futureHeaders.Remove(block.Hash())
 
+	if order < types.QuaiNetworkContext {
+		go sl.procfutureHeaders()
+	}
+
+	log.Info("Appended new block", "number", block.Header().Number, "hash", block.Hash(),
+		"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
+		"elapsed", common.PrettyDuration(time.Since(start)),
+		"root", block.Root())
+
 	return pendingHeader, nil
 }
 
@@ -306,12 +316,14 @@ func (sl *Slice) setHeaderChainHead(batch ethdb.Batch, block *types.Block, reorg
 		if err != nil {
 			return sl.nilHeader, err
 		}
+		sl.hc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
+	} else {
+		sl.hc.chainSideFeed.Send(ChainSideEvent{Block: block})
 	}
 
 	// Upate the local pending header
 	pendingHeader, err := sl.miner.worker.GeneratePendingHeader(block)
 	if err != nil {
-		fmt.Println("pending block error: ", err)
 		return sl.nilHeader, err
 	}
 
@@ -381,7 +393,7 @@ func (sl *Slice) hlcr(externTd *big.Int) bool {
 
 // CalcTd calculates the TD of the given header using PCRC and CalcHLCRNetDifficulty.
 func (sl *Slice) calcTd(header *types.Header) (*big.Int, error) {
-	priorTd := sl.hc.GetTd(header.Parent(), header.Number64()-1)
+	priorTd := sl.hc.GetTd(header.Parent(), header.NumberU64()-1)
 	if priorTd == nil {
 		return nil, consensus.ErrFutureBlock
 	}
@@ -444,7 +456,7 @@ func (sl *Slice) updatePhCache(externPendingHeader types.PendingHeader) {
 		}
 	}
 
-	if externPendingHeader.Header.Number64() > localPendingHeader.Header.Number64() {
+	if externPendingHeader.Header.NumberU64() > localPendingHeader.Header.NumberU64() {
 		localPendingHeader.Header = sl.combinePendingHeader(externPendingHeader.Header, localPendingHeader.Header, types.QuaiNetworkContext)
 		localPendingHeader.Termini = externPendingHeader.Termini
 
@@ -492,7 +504,7 @@ func (sl *Slice) gcPendingHeaders() {
 	sl.phCachemu.Lock()
 	defer sl.phCachemu.Unlock()
 	for hash, pendingHeader := range sl.phCache {
-		if pendingHeader.Header.Number64()+pendingHeaderCacheLimit < sl.hc.CurrentHeader().Number64() {
+		if pendingHeader.Header.NumberU64()+pendingHeaderCacheLimit < sl.hc.CurrentHeader().NumberU64() {
 			delete(sl.phCache, hash)
 		}
 	}
@@ -555,7 +567,7 @@ func (sl *Slice) procfutureHeaders() {
 	}
 	if len(headers) > 0 {
 		sort.Slice(headers, func(i, j int) bool {
-			return headers[i].Number64() < headers[j].Number64()
+			return headers[i].NumberU64() < headers[j].NumberU64()
 		})
 
 		for i := range headers {
