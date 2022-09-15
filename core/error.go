@@ -90,4 +90,7 @@ var (
 
 	// ErrSenderNoEOA is returned if the sender of a transaction is a contract.
 	ErrSenderNoEOA = errors.New("sender not an eoa")
+
+	// ErrSenderInoperable is returned if the sender of a transaction is outside of context.
+	ErrSenderInoperable = errors.New("sender is in inoperable state")
 )
