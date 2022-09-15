@@ -237,6 +237,13 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.CatalystFlag,
 		},
 	},
+	{
+		Name: "QUAI NODE LOCATION",
+		Flags: []cli.Flag{
+			utils.RegionFlag,
+			utils.ZoneFlag,
+		},
+	},
 }
 
 func init() {

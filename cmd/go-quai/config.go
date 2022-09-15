@@ -27,6 +27,7 @@ import (
 
 	"gopkg.in/urfave/cli.v1"
 
+	"github.com/naoina/toml"
 	"github.com/spruce-solutions/go-quai/cmd/utils"
 	"github.com/spruce-solutions/go-quai/eth/catalyst"
 	"github.com/spruce-solutions/go-quai/eth/ethconfig"
@@ -35,7 +36,6 @@ import (
 	"github.com/spruce-solutions/go-quai/metrics"
 	"github.com/spruce-solutions/go-quai/node"
 	"github.com/spruce-solutions/go-quai/params"
-	"github.com/naoina/toml"
 )
 
 var (
@@ -130,6 +130,7 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, quaiConfig) {
 	}
 
 	// Apply flags.
+	utils.SetGlobalVars(ctx)
 	utils.SetNodeConfig(ctx, &cfg.Node)
 	stack, err := node.New(&cfg.Node)
 	if err != nil {
