@@ -428,7 +428,7 @@ func testTransactionPropagation(t *testing.T, protocol uint) {
 		defer sub.Unsubscribe()
 	}
 	// Fill the source pool with transactions and wait for them at the sinks
-	txs := make([]*types.Transaction, 1024)
+	txs := make([]*types.Transactions, 1024)
 	for nonce := range txs {
 		tx := types.NewTransaction(uint64(nonce), common.Address{}, big.NewInt(0), 100000, big.NewInt(0), nil)
 		tx, _ = types.SignTx(tx, types.HomesteadSigner{}, testKey)
@@ -546,7 +546,7 @@ func testCheckpointChallenge(t *testing.T, syncmode downloader.SyncMode, checkpo
 
 	// Connect a new peer and check that we receive the checkpoint challenge.
 	if checkpoint {
-		if err := remote.ExpectRequestHeadersByNumber(response.Number.Uint64(), 1, 0, false); err != nil {
+		if err := remote.ExpectRequestHeadersByNumber(response.Number().Uint64(), 1, 0, false); err != nil {
 			t.Fatalf("challenge mismatch: %v", err)
 		}
 		// Create a block to reply to the challenge if no timeout is simulated.

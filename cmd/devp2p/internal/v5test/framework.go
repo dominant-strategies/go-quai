@@ -129,7 +129,7 @@ func (tc *conn) reqresp(c net.PacketConn, req v5wire.Packet) v5wire.Packet {
 	reqnonce := tc.write(c, req, nil)
 	switch resp := tc.read(c).(type) {
 	case *v5wire.Whoareyou:
-		if resp.Nonce != reqnonce {
+		if resp.Nonce() != reqnonce {
 			return readErrorf("wrong nonce %x in WHOAREYOU (want %x)", resp.Nonce[:], reqnonce[:])
 		}
 		resp.Node = tc.remote
@@ -153,7 +153,7 @@ func (tc *conn) findnode(c net.PacketConn, dists []uint) ([]*enode.Node, error) 
 		switch resp := tc.read(c).(type) {
 		case *v5wire.Whoareyou:
 			// Handle handshake.
-			if resp.Nonce == reqnonce {
+			if resp.Nonce() == reqnonce {
 				resp.Node = tc.remote
 				tc.write(c, findnode, resp)
 			} else {
@@ -199,7 +199,7 @@ func (tc *conn) findnode(c net.PacketConn, dists []uint) ([]*enode.Node, error) 
 }
 
 // write sends a packet on the given connection.
-func (tc *conn) write(c net.PacketConn, p v5wire.Packet, challenge *v5wire.Whoareyou) v5wire.Nonce {
+func (tc *conn) write(c net.PacketConn, p v5wire.Packet, challenge *v5wire.Whoareyou) v5wire.Nonce() {
 	packet, nonce, err := tc.codec.Encode(tc.remote.ID(), tc.remoteAddr.String(), p, challenge)
 	if err != nil {
 		panic(fmt.Errorf("can't encode %v packet: %v", p.Name(), err))

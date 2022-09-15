@@ -138,7 +138,7 @@ type blockOrHeaderInject struct {
 // number returns the block number of the injected object.
 func (inject *blockOrHeaderInject) number() uint64 {
 	if inject.header != nil {
-		return inject.header.Number.Uint64()
+		return inject.header.Number().Uint64()
 	}
 	return inject.block.NumberU64()
 }
@@ -523,8 +523,8 @@ func (f *BlockFetcher) loop() {
 				// Filter fetcher-requested headers from other synchronisation algorithms
 				if announce := f.fetching[hash]; announce != nil && announce.origin == task.peer && f.fetched[hash] == nil && f.completing[hash] == nil && f.queued[hash] == nil {
 					// If the delivered header does not match the promised number, drop the announcer
-					if header.Number.Uint64() != announce.number {
-						log.Trace("Invalid block number fetched", "peer", announce.origin, "hash", header.Hash(), "announced", announce.number, "provided", header.Number)
+					if header.Number().Uint64() != announce.number {
+						log.Trace("Invalid block number fetched", "peer", announce.origin, "hash", header.Hash(), "announced", announce.number, "provided", header.Number())
 						f.dropPeer(announce.origin)
 						f.forgetHash(hash)
 						continue
@@ -545,8 +545,8 @@ func (f *BlockFetcher) loop() {
 						announce.time = task.time
 
 						// If the block is empty (header only), short circuit into the final import queue
-						if header.TxHash == types.EmptyRootHash && header.UncleHash == types.EmptyUncleHash {
-							log.Trace("Block empty, skipping body retrieval", "peer", announce.origin, "number", header.Number, "hash", header.Hash())
+						if header.TxHash() == types.EmptyRootHash && header.UncleHash() == types.EmptyUncleHash {
+							log.Trace("Block empty, skipping body retrieval", "peer", announce.origin, "number", header.Number(), "hash", header.Hash())
 
 							block := types.NewBlockWithHeader(header)
 							block.ReceivedAt = task.time
@@ -558,7 +558,7 @@ func (f *BlockFetcher) loop() {
 						// Otherwise add to the list of blocks needing completion
 						incomplete = append(incomplete, announce)
 					} else {
-						log.Trace("Block already imported, discarding header", "peer", announce.origin, "number", header.Number, "hash", header.Hash())
+						log.Trace("Block already imported, discarding header", "peer", announce.origin, "number", header.Number(), "hash", header.Hash())
 						f.forgetHash(hash)
 					}
 				} else {
@@ -620,13 +620,13 @@ func (f *BlockFetcher) loop() {
 						if uncleHash == (common.Hash{}) {
 							uncleHash = types.CalcUncleHash(task.uncles[i])
 						}
-						if uncleHash != announce.header.UncleHash {
+						if uncleHash != announce.header.UncleHash() {
 							continue
 						}
 						if txnHash == (common.Hash{}) {
 							txnHash = types.DeriveSha(types.Transactions(task.transactions[i]), trie.NewStackTrie(nil))
 						}
-						if txnHash != announce.header.TxHash {
+						if txnHash != announce.header.TxHash() {
 							continue
 						}
 						// Mark the body matched, reassemble if still unknown
@@ -710,7 +710,7 @@ func (f *BlockFetcher) enqueue(peer string, header *types.Header, block *types.B
 		number uint64
 	)
 	if header != nil {
-		hash, number = header.Hash(), header.Number.Uint64()
+		hash, number = header.Hash(), header.Number().Uint64()
 	} else {
 		hash, number = block.Hash(), block.NumberU64()
 	}
@@ -752,25 +752,25 @@ func (f *BlockFetcher) enqueue(peer string, header *types.Header, block *types.B
 // updates the phase states accordingly.
 func (f *BlockFetcher) importHeaders(peer string, header *types.Header) {
 	hash := header.Hash()
-	log.Debug("Importing propagated header", "peer", peer, "number", header.Number, "hash", hash)
+	log.Debug("Importing propagated header", "peer", peer, "number", header.Number(), "hash", hash)
 
 	go func() {
 		defer func() { f.done <- hash }()
 		// If the parent's unknown, abort insertion
-		parent := f.getHeader(header.ParentHash)
+		parent := f.getHeader(header.ParentHash())
 		if parent == nil {
-			log.Debug("Unknown parent of propagated header", "peer", peer, "number", header.Number, "hash", hash, "parent", header.ParentHash)
+			log.Debug("Unknown parent of propagated header", "peer", peer, "number", header.Number(), "hash", hash, "parent", header.ParentHash())
 			return
 		}
 		// Validate the header and if something went wrong, drop the peer
 		if err := f.verifyHeader(header); err != nil && err != consensus.ErrFutureBlock {
-			log.Debug("Propagated header verification failed", "peer", peer, "number", header.Number, "hash", hash, "err", err)
+			log.Debug("Propagated header verification failed", "peer", peer, "number", header.Number(), "hash", hash, "err", err)
 			f.dropPeer(peer)
 			return
 		}
 		// Run the actual import and log any issues
 		if _, err := f.insertHeaders([]*types.Header{header}); err != nil {
-			log.Debug("Propagated header import failed", "peer", peer, "number", header.Number, "hash", hash, "err", err)
+			log.Debug("Propagated header import failed", "peer", peer, "number", header.Number(), "hash", hash, "err", err)
 			return
 		}
 		// Invoke the testing hook if needed

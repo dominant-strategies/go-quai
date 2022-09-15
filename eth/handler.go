@@ -255,10 +255,10 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 		genesis = h.chain.Genesis()
 		head    = h.chain.CurrentHeader()
 		hash    = head.Hash()
-		number  = head.Number.Uint64()
+		number  = head.Number().Uint64()
 		td      = h.chain.GetTd(hash, number)
 	)
-	forkID := forkid.NewID(h.chain.Config(), h.chain.Genesis().Hash(), h.chain.CurrentHeader().Number.Uint64())
+	forkID := forkid.NewID(h.chain.Config(), h.chain.Genesis().Hash(), h.chain.CurrentHeader().Number().Uint64())
 	if err := peer.Handshake(h.networkID, td, hash, genesis.Hash(), forkID, h.forkFilter); err != nil {
 		peer.Log().Debug("Ethereum handshake failed", "err", err)
 		return err

@@ -73,7 +73,7 @@ func tfCodeAccess(db ethdb.Database, bhash common.Hash, num uint64) light.OdrReq
 		return nil
 	}
 	header := rawdb.ReadHeader(db, bhash, *number)
-	if header.Number.Uint64() < testContractDeployed {
+	if header.Number().Uint64() < testContractDeployed {
 		return nil
 	}
 	sti := light.StateTrieID(header)
@@ -95,12 +95,12 @@ func testAccess(t *testing.T, protocol int, fn accessTestFn) {
 
 	// Ensure the client has synced all necessary data.
 	clientHead := client.handler.backend.blockchain.CurrentHeader()
-	if clientHead.Number.Uint64() != 4 {
-		t.Fatalf("Failed to sync the chain with server, head: %v", clientHead.Number.Uint64())
+	if clientHead.Number().Uint64() != 4 {
+		t.Fatalf("Failed to sync the chain with server, head: %v", clientHead.Number().Uint64())
 	}
 
 	test := func(expFail uint64) {
-		for i := uint64(0); i <= server.handler.blockchain.CurrentHeader().Number.Uint64(); i++ {
+		for i := uint64(0); i <= server.handler.blockchain.CurrentHeader().Number().Uint64(); i++ {
 			bhash := rawdb.ReadCanonicalHash(server.db, i)
 			if req := fn(client.db, bhash, i); req != nil {
 				ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)

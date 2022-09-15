@@ -24,7 +24,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/spruce-solutions/go-quai"
+	ethereum "github.com/spruce-solutions/go-quai"
 	"github.com/spruce-solutions/go-quai/accounts/abi"
 	"github.com/spruce-solutions/go-quai/common"
 	"github.com/spruce-solutions/go-quai/core/types"
@@ -258,7 +258,7 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 	if err != nil {
 		return nil, err
 	}
-	if head.BaseFee != nil && opts.GasPrice == nil {
+	if head.BaseFee() != nil && opts.GasPrice == nil {
 		if opts.GasTipCap == nil {
 			tip, err := c.transactor.SuggestGasTipCap(ensureContext(opts.Context))
 			if err != nil {
@@ -269,7 +269,7 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 		if opts.GasFeeCap == nil {
 			gasFeeCap := new(big.Int).Add(
 				opts.GasTipCap,
-				new(big.Int).Mul(head.BaseFee, big.NewInt(2)),
+				new(big.Int).Mul(head.BaseFee(), big.NewInt(2)),
 			)
 			opts.GasFeeCap = gasFeeCap
 		}

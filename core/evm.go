@@ -48,19 +48,19 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 	} else {
 		beneficiary = *author
 	}
-	if header.BaseFee != nil {
-		baseFee = new(big.Int).Set(header.BaseFee)
+	if header.BaseFee() != nil {
+		baseFee = new(big.Int).Set(header.BaseFee())
 	}
 	return vm.BlockContext{
 		CanTransfer: CanTransfer,
 		Transfer:    Transfer,
 		GetHash:     GetHashFn(header, chain),
 		Coinbase:    beneficiary,
-		BlockNumber: new(big.Int).Set(header.Number),
-		Time:        new(big.Int).SetUint64(header.Time),
-		Difficulty:  new(big.Int).Set(header.Difficulty),
+		BlockNumber: new(big.Int).Set(header.Number()),
+		Time:        new(big.Int).SetUint64(header.Time()),
+		Difficulty:  new(big.Int).Set(header.Difficulty()),
 		BaseFee:     baseFee,
-		GasLimit:    header.GasLimit,
+		GasLimit:    header.GasLimit(),
 	}
 }
 
@@ -81,23 +81,23 @@ func GetHashFn(ref *types.Header, chain ChainContext) func(n uint64) common.Hash
 	return func(n uint64) common.Hash {
 		// If there's no hash cache yet, make one
 		if len(cache) == 0 {
-			cache = append(cache, ref.ParentHash)
+			cache = append(cache, ref.ParentHash())
 		}
-		if idx := ref.Number.Uint64() - n - 1; idx < uint64(len(cache)) {
+		if idx := ref.Number().Uint64() - n - 1; idx < uint64(len(cache)) {
 			return cache[idx]
 		}
 		// No luck in the cache, but we can start iterating from the last element we already know
 		lastKnownHash := cache[len(cache)-1]
-		lastKnownNumber := ref.Number.Uint64() - uint64(len(cache))
+		lastKnownNumber := ref.Number().Uint64() - uint64(len(cache))
 
 		for {
 			header := chain.GetHeader(lastKnownHash, lastKnownNumber)
 			if header == nil {
 				break
 			}
-			cache = append(cache, header.ParentHash)
-			lastKnownHash = header.ParentHash
-			lastKnownNumber = header.Number.Uint64() - 1
+			cache = append(cache, header.ParentHash())
+			lastKnownHash = header.ParentHash()
+			lastKnownNumber = header.Number().Uint64() - 1
 			if n == lastKnownNumber {
 				return lastKnownHash
 			}

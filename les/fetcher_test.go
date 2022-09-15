@@ -56,7 +56,7 @@ func verifyImportDone(t *testing.T, imported chan interface{}) {
 
 // verifyChainHeight verifies the chain height is as expected.
 func verifyChainHeight(t *testing.T, fetcher *lightFetcher, height uint64) {
-	local := fetcher.chain.CurrentHeader().Number.Uint64()
+	local := fetcher.chain.CurrentHeader().Number().Uint64()
 	if local != height {
 		t.Fatalf("chain height mismatch, got %d, want %d", local, height)
 	}
@@ -86,9 +86,9 @@ func testSequentialAnnouncements(t *testing.T, protocol int) {
 	c.handler.fetcher.newHeadHook = func(header *types.Header) {
 		importCh <- header
 	}
-	for i := uint64(1); i <= s.backend.Blockchain().CurrentHeader().Number.Uint64(); i++ {
+	for i := uint64(1); i <= s.backend.Blockchain().CurrentHeader().Number().Uint64(); i++ {
 		header := s.backend.Blockchain().GetHeaderByNumber(i)
-		hash, number := header.Hash(), header.Number.Uint64()
+		hash, number := header.Hash(), header.Number().Uint64()
 		td := rawdb.ReadTd(s.db, hash, number)
 
 		announce := announceData{hash, number, td, 0, nil}
@@ -127,7 +127,7 @@ func testGappedAnnouncements(t *testing.T, protocol int) {
 
 	// Prepare announcement by latest header.
 	latest := s.backend.Blockchain().CurrentHeader()
-	hash, number := latest.Hash(), latest.Number.Uint64()
+	hash, number := latest.Hash(), latest.Number().Uint64()
 	td := rawdb.ReadTd(s.db, hash, number)
 
 	// Sign the announcement if necessary.
@@ -156,7 +156,7 @@ func testGappedAnnouncements(t *testing.T, protocol int) {
 	c.handler.fetcher.newAnnounce = nil
 
 	latest = blocks[len(blocks)-1].Header()
-	hash, number = latest.Hash(), latest.Number.Uint64()
+	hash, number = latest.Hash(), latest.Number().Uint64()
 	td = rawdb.ReadTd(s.db, hash, number)
 
 	announce = announceData{hash, number, td, 1, nil}
@@ -227,7 +227,7 @@ func testTrustedAnnouncement(t *testing.T, protocol int) {
 		for i := 0; i < len(height); i++ {
 			for j := 0; j < len(servers); j++ {
 				h := servers[j].backend.Blockchain().GetHeaderByNumber(height[i])
-				hash, number := h.Hash(), h.Number.Uint64()
+				hash, number := h.Hash(), h.Number().Uint64()
 				td := rawdb.ReadTd(servers[j].db, hash, number)
 
 				// Sign the announcement if necessary.
@@ -275,7 +275,7 @@ func testInvalidAnnounces(t *testing.T, protocol int) {
 
 	// Prepare announcement by latest header.
 	headerOne := s.backend.Blockchain().GetHeaderByNumber(1)
-	hash, number := headerOne.Hash(), headerOne.Number.Uint64()
+	hash, number := headerOne.Hash(), headerOne.Number().Uint64()
 	td := big.NewInt(200) // bad td
 
 	// Sign the announcement if necessary.
