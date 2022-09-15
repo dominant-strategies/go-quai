@@ -160,7 +160,7 @@ func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig
 
 func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, overrideLondon *big.Int) (*params.ChainConfig, common.Hash, error) {
 	if genesis != nil && genesis.Config == nil {
-		return params.AllEthashProtocolChanges, common.Hash{}, errGenesisNoConfig
+		return params.AllBlake3powProtocolChanges, common.Hash{}, errGenesisNoConfig
 	}
 	// Just commit the new block if there is no stored genesis block.
 	stored := rawdb.ReadCanonicalHash(db, 0)
@@ -251,7 +251,7 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 	case ghash == params.CalaverasGenesisHash:
 		return params.CalaverasChainConfig
 	default:
-		return params.AllEthashProtocolChanges
+		return params.AllBlake3powProtocolChanges
 	}
 }
 
@@ -282,7 +282,6 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	head.SetNonce(types.EncodeNonce(g.Nonce))
 	head.SetTime(g.Timestamp)
 	head.SetExtra(g.ExtraData)
-	head.SetMixDigest(g.Mixhash)
 	head.SetRoot(primeRoot, common.PRIME_CTX)
 	head.SetRoot(types.EmptyRootHash, common.REGION_CTX) // Not genesis allocs allowed
 	head.SetRoot(types.EmptyRootHash, common.ZONE_CTX)   // Not genesis allocs allowed
@@ -330,7 +329,7 @@ func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
 	}
 	config := g.Config
 	if config == nil {
-		config = params.AllEthashProtocolChanges
+		config = params.AllBlake3powProtocolChanges
 	}
 	if err := config.CheckConfigForkOrder(); err != nil {
 		return nil, err
