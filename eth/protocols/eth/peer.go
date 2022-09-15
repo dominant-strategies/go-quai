@@ -135,7 +135,7 @@ func (p *Peer) Head() (hash common.Hash, number uint64) {
 	defer p.lock.RUnlock()
 
 	copy(hash[:], p.head[:])
-	return hash, number
+	return hash, p.number
 }
 
 // SetHead updates the head hash and header number of the peer.
