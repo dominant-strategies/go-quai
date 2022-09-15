@@ -39,19 +39,14 @@ func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.H
 func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 	domWait := false
 	for i, block := range blocks {
-		// check the order of the block
-		blockOrder, err := c.engine.GetDifficultyOrder(block.Header())
-		if err != nil {
-			return i, err
-		}
-
+		isCoincident := c.sl.engine.HasCoincidentDifficulty(block.Header())
 		// Write the block body to the db.
-		rawdb.WritePendingBlockBody(c.sl.sliceDb, block.Header().Root[types.QuaiNetworkContext], block.Body())
+		rawdb.WritePendingBlockBody(c.sl.sliceDb, block.Header().Root(), block.Body())
 
 		// if the order of the block is less than the context
 		// add the rest of the blocks in the queue to the future blocks.
-		if blockOrder == types.QuaiNetworkContext && !domWait {
-			_, err = c.sl.Append(block.Header(), common.Hash{}, big.NewInt(0), false, true)
+		if !isCoincident && !domWait {
+			_, err := c.sl.Append(block.Header(), common.Hash{}, big.NewInt(0), false, true)
 			if err != nil {
 				if err == consensus.ErrFutureBlock {
 					c.sl.addfutureHeader(block.Header())
@@ -288,11 +283,6 @@ func (c *Core) SubscribeChainSideEvent(ch chan<- ChainSideEvent) event.Subscript
 	return c.sl.hc.bc.SubscribeChainSideEvent(ch)
 }
 
-// GetDifficultyOrder determines the difficulty order of the given header.
-func (c *Core) GetDifficultyOrder(header *types.Header) (int, error) {
-	return c.sl.engine.GetDifficultyOrder(header)
-}
-
 // SubscribeChainHeadEvent registers a subscription of ChainHeadEvent.
 func (c *Core) SubscribeRemovedLogsEvent(ch chan<- RemovedLogsEvent) event.Subscription {
 	return c.sl.hc.bc.SubscribeRemovedLogsEvent(ch)
@@ -360,7 +350,7 @@ func (c *Core) Append(header *types.Header, domTerminus common.Hash, td *big.Int
 	return c.sl.Append(header, domTerminus, td, domOrigin, reorg)
 }
 
-func (c *Core) SubRelayPendingHeader(slPendingHeader types.PendingHeader, location []byte, reorg bool) error {
+func (c *Core) SubRelayPendingHeader(slPendingHeader types.PendingHeader, location common.Location, reorg bool) error {
 	return c.sl.SubRelayPendingHeader(slPendingHeader, location, reorg)
 }
 
