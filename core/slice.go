@@ -572,7 +572,6 @@ func (sl *Slice) procfutureHeaders() {
 
 		for i := range headers {
 			var nilHash common.Hash
-			fmt.Println("Appending from procFutureHeaders")
 			sl.Append(headers[i], nilHash, big.NewInt(0), false, false)
 		}
 	}
