@@ -46,20 +46,16 @@ var (
 	MaxReceiptFetch = 256 // Amount of transaction receipts to allow fetching per request
 	MaxStateFetch   = 384 // Amount of node state values to allow fetching per request
 
-	maxQueuedHeaders            = 32 * 1024                         // [eth/62] Maximum number of headers to queue for import (DOS protection)
-	maxHeadersProcess           = 2048                              // Number of header download results to import at once into the chain
-	maxResultsProcess           = 2048                              // Number of content download results to import at once into the chain
-	fullMaxForkAncestry  uint64 = params.FullImmutabilityThreshold  // Maximum chain reorganisation (locally redeclared so tests can reduce it)
-	lightMaxForkAncestry uint64 = params.LightImmutabilityThreshold // Maximum chain reorganisation (locally redeclared so tests can reduce it)
+	maxQueuedHeaders           = 32 * 1024                        // [eth/62] Maximum number of headers to queue for import (DOS protection)
+	maxHeadersProcess          = 2048                             // Number of header download results to import at once into the chain
+	maxResultsProcess          = 2048                             // Number of content download results to import at once into the chain
+	fullMaxForkAncestry uint64 = params.FullImmutabilityThreshold // Maximum chain reorganisation (locally redeclared so tests can reduce it)
 
 	reorgProtThreshold   = 48 // Threshold number of recent blocks to disable mini reorg protection
 	reorgProtHeaderDelay = 2  // Number of headers to delay delivering to cover mini reorgs
 
-	fsHeaderCheckFrequency = 100             // Verification frequency of the downloaded headers during fast sync
-	fsHeaderSafetyNet      = 2048            // Number of headers to discard in case a chain violation is detected
-	fsHeaderForceVerify    = 24              // Number of headers to verify before and after the pivot to accept it
-	fsHeaderContCheck      = 3 * time.Second // Time interval to check for header continuations during state download
-	fsMinFullBlocks        = 64              // Number of blocks to retrieve fully even in fast sync
+	fsHeaderContCheck = 3 * time.Second // Time interval to check for header continuations during state download
+	fsMinFullBlocks   = 64              // Number of blocks to retrieve fully even in fast sync
 )
 
 var (
@@ -89,7 +85,6 @@ type Downloader struct {
 	mux  *event.TypeMux // Event multiplexer to announce sync operation events
 
 	checkpoint uint64   // Checkpoint block number to enforce head against (e.g. fast sync)
-	genesis    uint64   // Genesis block number to limit sync to (e.g. light client CHT)
 	queue      *queue   // Scheduler for selecting the hashes to download
 	peers      *peerSet // Set of active peers from which download can proceed
 
@@ -113,7 +108,6 @@ type Downloader struct {
 	synchronising   int32
 	notified        int32
 	committed       int32
-	ancientLimit    uint64 // The maximum block number which can be regarded as ancient data.
 
 	// Channels
 	headerCh      chan dataPack        // Channel receiving inbound block headers
@@ -1385,15 +1379,13 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 	)
 	defer func() {
 		if rollback > 0 {
-			lastHeader, _, lastBlock := d.lightchain.CurrentHeader().Number, common.Big0, common.Big0
-			lastBlock = d.core.CurrentBlock().Number()
+			lastBlock := d.core.CurrentBlock().Number()
 			if err := d.lightchain.SetHead(rollback - 1); err != nil { // -1 to target the parent of the first uncertain block
 				// We're already unwinding the stack, only print the error to make it more visible
 				log.Error("Failed to roll back chain segment", "head", rollback-1, "err", err)
 			}
 			curBlock := d.core.CurrentBlock().Number()
 			log.Warn("Rolled back chain segment",
-				"header", fmt.Sprintf("%d->%d", lastHeader, d.lightchain.CurrentHeader().Number),
 				"block", fmt.Sprintf("%d->%d", lastBlock, curBlock), "reason", rollbackErr)
 		}
 	}()
@@ -1544,208 +1536,6 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 			log.Debug("Downloaded item processing failed on sidechain import", "index", index, "err", err)
 		}
 		return fmt.Errorf("%w: %v", errInvalidChain, err)
-	}
-	return nil
-}
-
-// processFastSyncContent takes fetch results from the queue and writes them to the
-// database. It also controls the synchronisation of state nodes of the pivot block.
-func (d *Downloader) processFastSyncContent() error {
-	// Start syncing state of the reported head block. This should get us most of
-	// the state of the pivot block.
-	d.pivotLock.RLock()
-	sync := d.syncState(d.pivotHeader.Root[types.QuaiNetworkContext])
-	d.pivotLock.RUnlock()
-
-	defer func() {
-		// The `sync` object is replaced every time the pivot moves. We need to
-		// defer close the very last active one, hence the lazy evaluation vs.
-		// calling defer sync.Cancel() !!!
-		sync.Cancel()
-	}()
-
-	closeOnErr := func(s *stateSync) {
-		if err := s.Wait(); err != nil && err != errCancelStateFetch && err != errCanceled {
-			d.queue.Close() // wake up Results
-		}
-	}
-	go closeOnErr(sync)
-
-	// To cater for moving pivot points, track the pivot block and subsequently
-	// accumulated download results separately.
-	var (
-		oldPivot *fetchResult   // Locked in pivot block, might change eventually
-		oldTail  []*fetchResult // Downloaded content after the pivot
-	)
-	for {
-		// Wait for the next batch of downloaded data to be available, and if the pivot
-		// block became stale, move the goalpost
-		results := d.queue.Results(oldPivot == nil) // Block if we're not monitoring pivot staleness
-		if len(results) == 0 {
-			// If pivot sync is done, stop
-			if oldPivot == nil {
-				return sync.Cancel()
-			}
-			// If sync failed, stop
-			select {
-			case <-d.cancelCh:
-				sync.Cancel()
-				return errCanceled
-			default:
-			}
-		}
-		if d.chainInsertHook != nil {
-			d.chainInsertHook(results)
-		}
-		// If we haven't downloaded the pivot block yet, check pivot staleness
-		// notifications from the header downloader
-		d.pivotLock.RLock()
-		pivot := d.pivotHeader
-		d.pivotLock.RUnlock()
-
-		if oldPivot == nil {
-			if pivot.Root[types.QuaiNetworkContext] != sync.root {
-				sync.Cancel()
-				sync = d.syncState(pivot.Root[types.QuaiNetworkContext])
-
-				go closeOnErr(sync)
-			}
-		} else {
-			results = append(append([]*fetchResult{oldPivot}, oldTail...), results...)
-		}
-		// Split around the pivot block and process the two sides via fast/full sync
-		if atomic.LoadInt32(&d.committed) == 0 {
-			latest := results[len(results)-1].Header
-			// If the height is above the pivot block by 2 sets, it means the pivot
-			// become stale in the network and it was garbage collected, move to a
-			// new pivot.
-			//
-			// Note, we have `reorgProtHeaderDelay` number of blocks withheld, Those
-			// need to be taken into account, otherwise we're detecting the pivot move
-			// late and will drop peers due to unavailable state!!!
-			if height := latest.Number[types.QuaiNetworkContext].Uint64(); height >= pivot.Number[types.QuaiNetworkContext].Uint64()+2*uint64(fsMinFullBlocks)-uint64(reorgProtHeaderDelay) {
-				log.Warn("Pivot became stale, moving", "old", pivot.Number[types.QuaiNetworkContext].Uint64(), "new", height-uint64(fsMinFullBlocks)+uint64(reorgProtHeaderDelay))
-				pivot = results[len(results)-1-fsMinFullBlocks+reorgProtHeaderDelay].Header // must exist as lower old pivot is uncommitted
-
-				d.pivotLock.Lock()
-				d.pivotHeader = pivot
-				d.pivotLock.Unlock()
-
-				// Write out the pivot into the database so a rollback beyond it will
-				// reenable fast sync
-				rawdb.WriteLastPivotNumber(d.stateDB, pivot.Number[types.QuaiNetworkContext].Uint64())
-			}
-		}
-		P, beforeP, afterP := splitAroundPivot(pivot.Number[types.QuaiNetworkContext].Uint64(), results)
-		if err := d.commitFastSyncData(beforeP, sync); err != nil {
-			return err
-		}
-		if P != nil {
-			// If new pivot block found, cancel old state retrieval and restart
-			if oldPivot != P {
-				sync.Cancel()
-				sync = d.syncState(P.Header.Root[types.QuaiNetworkContext])
-
-				go closeOnErr(sync)
-				oldPivot = P
-			}
-			// Wait for completion, occasionally checking for pivot staleness
-			select {
-			case <-sync.done:
-				if sync.err != nil {
-					return sync.err
-				}
-				if err := d.commitPivotBlock(P); err != nil {
-					return err
-				}
-				oldPivot = nil
-
-			case <-time.After(time.Second):
-				oldTail = afterP
-				continue
-			}
-		}
-		// Fast sync done, pivot commit done, full import
-		if err := d.importBlockResults(afterP); err != nil {
-			return err
-		}
-	}
-}
-
-func splitAroundPivot(pivot uint64, results []*fetchResult) (p *fetchResult, before, after []*fetchResult) {
-	if len(results) == 0 {
-		return nil, nil, nil
-	}
-	if lastNum := results[len(results)-1].Header.Number[types.QuaiNetworkContext].Uint64(); lastNum < pivot {
-		// the pivot is somewhere in the future
-		return nil, results, nil
-	}
-	// This can also be optimized, but only happens very seldom
-	for _, result := range results {
-		num := result.Header.Number[types.QuaiNetworkContext].Uint64()
-		switch {
-		case num < pivot:
-			before = append(before, result)
-		case num == pivot:
-			p = result
-		default:
-			after = append(after, result)
-		}
-	}
-	return p, before, after
-}
-
-func (d *Downloader) commitFastSyncData(results []*fetchResult, stateSync *stateSync) error {
-	// Check for any early termination requests
-	if len(results) == 0 {
-		return nil
-	}
-	select {
-	case <-d.quitCh:
-		return errCancelContentProcessing
-	case <-stateSync.done:
-		if err := stateSync.Wait(); err != nil {
-			return err
-		}
-	default:
-	}
-	// Retrieve the a batch of results to import
-	first, last := results[0].Header, results[len(results)-1].Header
-	log.Debug("Inserting fast-sync blocks", "items", len(results),
-		"firstnum", first.Number, "firsthash", first.Hash(),
-		"lastnumn", last.Number, "lasthash", last.Hash(),
-	)
-	blocks := make([]*types.Block, len(results))
-	receipts := make([]types.Receipts, len(results))
-	for i, result := range results {
-		blocks[i] = types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles)
-		receipts[i] = result.Receipts
-	}
-	if index, err := d.core.InsertReceiptChain(blocks, receipts, d.ancientLimit); err != nil {
-		log.Debug("Downloaded item processing failed", "number", results[index].Header.Number, "hash", results[index].Header.Hash(), "err", err)
-		return fmt.Errorf("%w: %v", errInvalidChain, err)
-	}
-	return nil
-}
-
-func (d *Downloader) commitPivotBlock(result *fetchResult) error {
-	block := types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles)
-	log.Debug("Committing fast sync pivot as new head", "number", block.Number(), "hash", block.Hash())
-
-	// Commit the pivot block as the new head, will require full sync from here on
-	if _, err := d.core.InsertReceiptChain([]*types.Block{block}, []types.Receipts{result.Receipts}, d.ancientLimit); err != nil {
-		return err
-	}
-
-	atomic.StoreInt32(&d.committed, 1)
-
-	// If we had a bloom filter for the state sync, deallocate it now. Note, we only
-	// deallocate internally, but keep the empty wrapper. This ensures that if we do
-	// a rollback after committing the pivot and restarting fast sync, we don't end
-	// up using a nil bloom. Empty bloom is fine, it just returns that it does not
-	// have the info we need, so reach down to the database instead.
-	if d.stateBloom != nil {
-		d.stateBloom.Close()
 	}
 	return nil
 }
