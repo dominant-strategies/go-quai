@@ -69,15 +69,15 @@ func answerGetBlockHeadersQuery(backend Backend, query *GetBlockHeadersPacket, p
 		if hashMode {
 			if first {
 				first = false
-				origin = backend.Chain().GetHeaderByHash(query.Origin.Hash)
+				origin = backend.Core().GetHeaderByHash(query.Origin.Hash)
 				if origin != nil {
 					query.Origin.Number = origin.NumberU64()
 				}
 			} else {
-				origin = backend.Chain().GetHeader(query.Origin.Hash, query.Origin.Number)
+				origin = backend.Core().GetHeader(query.Origin.Hash, query.Origin.Number)
 			}
 		} else {
-			origin = backend.Chain().GetHeaderByNumber(query.Origin.Number)
+			origin = backend.Core().GetHeaderByNumber(query.Origin.Number)
 		}
 		if origin == nil {
 			break
@@ -93,7 +93,7 @@ func answerGetBlockHeadersQuery(backend Backend, query *GetBlockHeadersPacket, p
 			if ancestor == 0 {
 				unknown = true
 			} else {
-				query.Origin.Hash, query.Origin.Number = backend.Chain().GetAncestor(query.Origin.Hash, query.Origin.Number, ancestor, &maxNonCanonical)
+				query.Origin.Hash, query.Origin.Number = backend.Core().GetAncestor(query.Origin.Hash, query.Origin.Number, ancestor, &maxNonCanonical)
 				unknown = (query.Origin.Hash == common.Hash{})
 			}
 		case hashMode && !query.Reverse:
@@ -107,9 +107,9 @@ func answerGetBlockHeadersQuery(backend Backend, query *GetBlockHeadersPacket, p
 				peer.Log().Warn("GetBlockHeaders skip overflow attack", "current", current, "skip", query.Skip, "next", next, "attacker", infos)
 				unknown = true
 			} else {
-				if header := backend.Chain().GetHeaderByNumber(next); header != nil {
+				if header := backend.Core().GetHeaderByNumber(next); header != nil {
 					nextHash := header.Hash()
-					expOldHash, _ := backend.Chain().GetAncestor(nextHash, next, query.Skip+1, &maxNonCanonical)
+					expOldHash, _ := backend.Core().GetAncestor(nextHash, next, query.Skip+1, &maxNonCanonical)
 					if expOldHash == query.Origin.Hash {
 						query.Origin.Hash, query.Origin.Number = nextHash, next
 					} else {
@@ -166,7 +166,7 @@ func answerGetBlockBodiesQuery(backend Backend, query GetBlockBodiesPacket, peer
 			lookups >= 2*maxBodiesServe {
 			break
 		}
-		if data := backend.Chain().GetBodyRLP(hash); len(data) != 0 {
+		if data := backend.Core().GetBodyRLP(hash); len(data) != 0 {
 			bodies = append(bodies, data)
 			bytes += len(data)
 		}
@@ -210,10 +210,10 @@ func answerGetNodeDataQuery(backend Backend, query GetNodeDataPacket, peer *Peer
 			// Only lookup the trie node if there's chance that we actually have it
 			continue
 		}
-		entry, err := backend.Chain().TrieNode(hash)
+		entry, err := backend.Core().TrieNode(hash)
 		if len(entry) == 0 || err != nil {
 			// Read the contract code with prefix only to save unnecessary lookups.
-			entry, err = backend.Chain().ContractCodeWithPrefix(hash)
+			entry, err = backend.Core().ContractCodeWithPrefix(hash)
 		}
 		if err == nil && len(entry) > 0 {
 			nodes = append(nodes, entry)
@@ -255,9 +255,9 @@ func answerGetReceiptsQuery(backend Backend, query GetReceiptsPacket, peer *Peer
 			break
 		}
 		// Retrieve the requested block's receipts
-		results := backend.Chain().GetReceiptsByHash(hash)
+		results := backend.Core().GetReceiptsByHash(hash)
 		if results == nil {
-			if header := backend.Chain().GetHeaderByHash(hash); header == nil || header.ReceiptHash() != types.EmptyRootHash {
+			if header := backend.Core().GetHeaderByHash(hash); header == nil || header.ReceiptHash() != types.EmptyRootHash {
 				continue
 			}
 		}

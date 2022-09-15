@@ -63,6 +63,8 @@ type Genesis struct {
 	GasUsed    []uint64      `json:"gasUsed"`
 	ParentHash []common.Hash `json:"parentHash"`
 	BaseFee    []*big.Int    `json:"baseFeePerGas"`
+
+	Knot []*types.Block `json:"knot"`
 }
 
 // GenesisAlloc specifies the initial state that is part of the genesis block.
@@ -367,6 +369,7 @@ func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big
 func DefaultGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.MainnetChainConfig,
+		Knot:       ReadKnot("./core/knot/mainnet_knot.rlp"),
 		Nonce:      66,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
 		GasLimit:   []uint64{5000, 5000, 5000},
@@ -379,6 +382,7 @@ func DefaultGenesisBlock() *Genesis {
 func DefaultRopstenGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.RopstenChainConfig,
+		Knot:       ReadKnot("./core/knot/ropsten_knot.rlp"),
 		Nonce:      66,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
 		GasLimit:   []uint64{16777216, 16777216, 16777216},

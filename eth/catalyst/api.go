@@ -38,7 +38,7 @@ import (
 
 // Register adds catalyst APIs to the node.
 func Register(stack *node.Node, backend *eth.Ethereum) error {
-	chainconfig := backend.BlockChain().Config()
+	chainconfig := backend.Core().Config()
 	if chainconfig.CatalystBlock == nil {
 		return errors.New("catalystBlock is not set in genesis config")
 	} else if chainconfig.CatalystBlock.Sign() != 0 {
@@ -68,7 +68,7 @@ func newConsensusAPI(eth *eth.Ethereum) *consensusAPI {
 // blockExecutionEnv gathers all the data required to execute
 // a block, either when assembling it or when inserting it.
 type blockExecutionEnv struct {
-	chain   *core.BlockChain
+	chain   *core.Core
 	state   *state.StateDB
 	tcount  int
 	gasPool *core.GasPool
@@ -93,12 +93,12 @@ func (env *blockExecutionEnv) commitTransaction(tx *types.Transaction, coinbase 
 }
 
 func (api *consensusAPI) makeEnv(parent *types.Block, header *types.Header) (*blockExecutionEnv, error) {
-	state, err := api.eth.BlockChain().StateAt(parent.Root())
+	state, err := api.eth.Core().StateAt(parent.Root())
 	if err != nil {
 		return nil, err
 	}
 	env := &blockExecutionEnv{
-		chain:   api.eth.BlockChain(),
+		chain:   api.eth.Core(),
 		state:   state,
 		header:  header,
 		gasPool: new(core.GasPool).AddGas(header.GasLimit()),
@@ -111,14 +111,14 @@ func (api *consensusAPI) makeEnv(parent *types.Block, header *types.Header) (*bl
 func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableData, error) {
 	log.Info("Producing block", "parentHash", params.ParentHash)
 
-	bc := api.eth.BlockChain()
+	bc := api.eth.Core()
 	parent := bc.GetBlockByHash(params.ParentHash)
 	if parent == nil {
 		log.Warn("Cannot assemble block with parent hash to unknown block", "parentHash", params.ParentHash)
 		return nil, fmt.Errorf("cannot assemble block with unknown parent %s", params.ParentHash)
 	}
 
-	pool := api.eth.TxPool()
+	pool := api.eth.Core().TxPool()
 
 	if parent.Time() >= params.Timestamp {
 		return nil, fmt.Errorf("child timestamp lower than parent's: %d >= %d", parent.Time(), params.Timestamp)
@@ -129,7 +129,7 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 		time.Sleep(wait)
 	}
 
-	pending, err := pool.Pending(true)
+	pending, err := pool.TxPoolPending(true)
 	if err != nil {
 		return nil, err
 	}
@@ -146,10 +146,10 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 	header.SetGasLimit(parent.GasLimit()) // Keep the gas limit constant in this prototype
 	header.SetExtra([]byte{})
 	header.SetTime(params.Timestamp)
-	if config := api.eth.BlockChain().Config(); config.IsLondon(header.Number()) {
+	if config := api.eth.Core().Config(); config.IsLondon(header.Number()) {
 		header.SetBaseFee(misc.CalcBaseFee(config, parent.Header()))
 	}
-	err = api.eth.Engine().Prepare(bc, header)
+	err = api.eth.Engine().Prepare(bc, header, parent.Header())
 	if err != nil {
 		return nil, err
 	}
@@ -282,22 +282,22 @@ func insertBlockParamsToBlock(config *chainParams.ChainConfig, parent *types.Hea
 // or false + an error. This is a bit redundant for go, but simplifies things on the
 // eth2 side.
 func (api *consensusAPI) NewBlock(params executableData) (*newBlockResponse, error) {
-	parent := api.eth.BlockChain().GetBlockByHash(params.ParentHash)
+	parent := api.eth.Core().GetBlockByHash(params.ParentHash)
 	if parent == nil {
 		return &newBlockResponse{false}, fmt.Errorf("could not find parent %x", params.ParentHash)
 	}
-	block, err := insertBlockParamsToBlock(api.eth.BlockChain().Config(), parent.Header(), params)
+	block, err := insertBlockParamsToBlock(api.eth.Core().Config(), parent.Header(), params)
 	if err != nil {
 		return nil, err
 	}
-	_, err = api.eth.BlockChain().InsertChainWithoutSealVerification(block)
+	_, err = api.eth.Core().InsertChainWithoutSealVerification(block)
 	return &newBlockResponse{err == nil}, err
 }
 
 // Used in tests to add a the list of transactions from a block to the tx pool.
 func (api *consensusAPI) addBlockTxs(block *types.Block) error {
 	for _, tx := range block.Transactions() {
-		api.eth.TxPool().AddLocal(tx)
+		api.eth.Core().TxPool().AddLocal(tx)
 	}
 	return nil
 }

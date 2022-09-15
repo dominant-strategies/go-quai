@@ -11,7 +11,6 @@ import (
 	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/eth/downloader"
 	"github.com/dominant-strategies/go-quai/eth/gasprice"
-	"github.com/dominant-strategies/go-quai/miner"
 	"github.com/dominant-strategies/go-quai/params"
 )
 
@@ -38,7 +37,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		TrieTimeout             time.Duration
 		SnapshotCache           int
 		Preimages               bool
-		Miner                   miner.Config
+		Miner                   core.Config
 		Blake3pow                  blake3pow.Config
 		TxPool                  core.TxPoolConfig
 		GPO                     gasprice.Config
@@ -118,7 +117,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		TrieTimeout             *time.Duration
 		SnapshotCache           *int
 		Preimages               *bool
-		Miner                   *miner.Config
+		Miner                   *core.Config
 		Blake3pow                  *blake3pow.Config
 		TxPool                  *core.TxPoolConfig
 		GPO                     *gasprice.Config

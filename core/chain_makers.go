@@ -98,14 +98,14 @@ func (b *BlockGen) AddTx(tx *types.Transaction) {
 // further limitations on the content of transactions that can be
 // added. If contract code relies on the BLOCKHASH instruction,
 // the block in chain will be returned.
-func (b *BlockGen) AddTxWithChain(bc *BlockChain, tx *types.Transaction) {
+func (b *BlockGen) AddTxWithChain(hc *HeaderChain, tx *types.Transaction) {
 	if b.gasPool == nil {
 		b.SetCoinbase(common.Address{})
 	}
 	b.statedb.Prepare(tx.Hash(), len(b.txs))
 	coinbase := b.header.Coinbase()
 	gasUsed := b.header.GasUsed()
-	receipt, err := ApplyTransaction(b.config, bc, &coinbase, b.gasPool, b.statedb, b.header, tx, &gasUsed, vm.Config{})
+	receipt, err := ApplyTransaction(b.config, hc, &coinbase, b.gasPool, b.statedb, b.header, tx, &gasUsed, vm.Config{})
 	if err != nil {
 		panic(err)
 	}

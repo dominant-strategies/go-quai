@@ -39,7 +39,6 @@ import (
 	ethproto "github.com/dominant-strategies/go-quai/eth/protocols/eth"
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/dominant-strategies/go-quai/miner"
 	"github.com/dominant-strategies/go-quai/node"
 	"github.com/dominant-strategies/go-quai/p2p"
 	"github.com/dominant-strategies/go-quai/rpc"
@@ -73,7 +72,7 @@ type backend interface {
 // reporting to ethstats
 type fullNodeBackend interface {
 	backend
-	Miner() *miner.Miner
+	Miner() *core.Miner
 	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
 	CurrentBlock() *types.Block
 	SuggestGasTipCap(ctx context.Context) (*big.Int, error)
