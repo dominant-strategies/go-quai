@@ -17,11 +17,6 @@
 package eth
 
 import (
-<<<<<<< HEAD
-	"fmt"
-	"math/big"
-=======
->>>>>>> refine-ind-ph
 	"sync/atomic"
 	"time"
 
