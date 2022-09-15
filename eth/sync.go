@@ -52,7 +52,7 @@ func (h *handler) syncTransactions(p *eth.Peer) {
 	//
 	// TODO(karalabe): Figure out if we could get away with random order somehow
 	var txs types.Transactions
-	pending, _ := h.txpool.Pending(false)
+	pending, _ := h.txpool.TxPoolPending(false)
 	for _, batch := range pending {
 		txs = append(txs, batch...)
 	}
@@ -222,7 +222,7 @@ func (cs *chainSyncer) loop() {
 			// Disable all insertion on the blockchain. This needs to happen before
 			// terminating the downloader because the downloader waits for blockchain
 			// inserts, and these can take a long time to finish.
-			cs.handler.chain.StopInsert()
+			cs.handler.core.StopInsert()
 			cs.handler.downloader.Terminate()
 			if cs.doneCh != nil {
 				<-cs.doneCh
@@ -268,8 +268,8 @@ func peerToSyncOp(mode downloader.SyncMode, p *eth.Peer) *chainSyncOp {
 
 func (cs *chainSyncer) modeAndLocalHead() (downloader.SyncMode, *big.Int) {
 	// Nope, we're really full syncing
-	head := cs.handler.chain.CurrentBlock()
-	td := cs.handler.chain.GetTd(head.Hash(), head.NumberU64())
+	head := cs.handler.core.CurrentBlock()
+	td := cs.handler.core.GetTd(head.Hash(), head.NumberU64())
 	return downloader.FullSync, td
 }
 
@@ -288,7 +288,7 @@ func (h *handler) doSync(op *chainSyncOp) error {
 	}
 	// If we've successfully finished a sync cycle and passed any required checkpoint,
 	// enable accepting transactions from the network.
-	head := h.chain.CurrentBlock()
+	head := h.core.CurrentBlock()
 	if head.NumberU64() >= h.checkpointNumber {
 		// Checkpoint passed, sanity check the timestamp to have a fallback mechanism
 		// for non-checkpointed (number = 0) private networks.

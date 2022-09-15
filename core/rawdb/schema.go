@@ -36,6 +36,15 @@ var (
 	// headBlockKey tracks the latest known full block's hash.
 	headBlockKey = []byte("LastBlock")
 
+	// headersHashKey tracks the latest known headers hash in Blockchain.
+	headsHashesKey = []byte("HeadersHash")
+
+	// phCacheKey tracks the latest known pending headers in Blockchain.
+	phCacheKey = []byte("PhCache")
+
+	// phHead tracks the latest known pending headers hash in Blockchain.
+	phHeadKey = []byte("PhHead")
+
 	// lastPivotKey tracks the last pivot block used by fast sync (to reenable on sethead).
 	lastPivotKey = []byte("LastPivot")
 
@@ -77,6 +86,11 @@ var (
 	headerTDSuffix     = []byte("t") // headerPrefix + num (uint64 big endian) + hash + headerTDSuffix -> td
 	headerHashSuffix   = []byte("n") // headerPrefix + num (uint64 big endian) + headerHashSuffix -> hash
 	headerNumberPrefix = []byte("H") // headerNumberPrefix + hash -> num (uint64 big endian)
+
+	pendingHeaderPrefix    = []byte("ph") // pendingHeaderPrefix + hash -> header
+	phBodyPrefix           = []byte("pb") // phBodyPrefix + hash -> []common.Hash + Td
+	pendingBlockBodyPrefix = []byte("pb") // pendingBodyPrefix + hash -> Body
+	terminiPrefix          = []byte("tk") //terminiPrefix + hash -> []common.Hash
 
 	blockBodyPrefix     = []byte("b") // blockBodyPrefix + num (uint64 big endian) + hash -> block body
 	blockReceiptsPrefix = []byte("r") // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
@@ -149,6 +163,21 @@ func headerKey(number uint64, hash common.Hash) []byte {
 	return append(append(headerPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
 }
 
+// terminiKey = domPendingHeaderPrefix + hash
+func terminiKey(hash common.Hash) []byte {
+	return append(terminiPrefix, hash.Bytes()...)
+}
+
+// pendingHeaderKey = pendingHeaderPrefix + hash
+func pendingHeaderKey(hash common.Hash) []byte {
+	return append(pendingHeaderPrefix, hash.Bytes()...)
+}
+
+// phBodyKey = phPrefix + hash
+func phBodyKey(hash common.Hash) []byte {
+	return append(phBodyPrefix, hash.Bytes()...)
+}
+
 // headerTDKey = headerPrefix + num (uint64 big endian) + hash + headerTDSuffix
 func headerTDKey(number uint64, hash common.Hash) []byte {
 	return append(headerKey(number, hash), headerTDSuffix...)
@@ -167,6 +196,11 @@ func headerNumberKey(hash common.Hash) []byte {
 // blockBodyKey = blockBodyPrefix + num (uint64 big endian) + hash
 func blockBodyKey(number uint64, hash common.Hash) []byte {
 	return append(append(blockBodyPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
+}
+
+// pendingBlockBodyKey = pendingBlockBodyPrefix + hash
+func pendingBlockBodyKey(hash common.Hash) []byte {
+	return append(pendingBlockBodyPrefix, hash.Bytes()...)
 }
 
 // blockReceiptsKey = blockReceiptsPrefix + num (uint64 big endian) + hash
