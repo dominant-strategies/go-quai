@@ -19,7 +19,6 @@ package eth
 import (
 	"errors"
 	"math"
-	"math/big"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -31,7 +30,6 @@ import (
 	"github.com/spruce-solutions/go-quai/eth/downloader"
 	"github.com/spruce-solutions/go-quai/eth/fetcher"
 	"github.com/spruce-solutions/go-quai/eth/protocols/eth"
-	"github.com/spruce-solutions/go-quai/eth/protocols/snap"
 	"github.com/spruce-solutions/go-quai/ethdb"
 	"github.com/spruce-solutions/go-quai/event"
 	"github.com/spruce-solutions/go-quai/log"
@@ -91,8 +89,6 @@ type handler struct {
 	networkID  uint64
 	forkFilter forkid.Filter // Fork ID filter, constant across the lifetime of the node
 
-	fastSync  uint32 // Flag whether fast sync is enabled (gets disabled if we already have blocks)
-	snapSync  uint32 // Flag whether fast sync should operate on top of the snap protocol
 	acceptTxs uint32 // Flag whether we're considered synchronised (enables transaction processing)
 
 	checkpointNumber uint64      // Block number for the sync progress validator to cross reference
@@ -149,13 +145,9 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	// Construct the downloader (long sync) and its backing state bloom if fast
 	// sync is requested. The downloader is responsible for deallocating the state
 	// bloom when it's done.
-	// Note: we don't enable it if snap-sync is performed, since it's very heavy
-	// and the heal-portion of the snap sync is much lighter than fast. What we particularly
-	// want to avoid, is a 90%-finished (but restarted) snap-sync to begin
-	// indexing the entire trie
-	if atomic.LoadUint32(&h.fastSync) == 1 && atomic.LoadUint32(&h.snapSync) == 0 {
-		h.stateBloom = trie.NewSyncBloom(config.BloomCache, config.Database)
-	}
+
+	h.stateBloom = trie.NewSyncBloom(config.BloomCache, config.Database)
+
 	h.downloader = downloader.New(h.checkpointNumber, config.Database, h.stateBloom, h.eventMux, h.core, nil, h.removePeer)
 
 	// Construct the fetcher (short sync)
@@ -166,21 +158,6 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		return h.core.CurrentBlock().NumberU64()
 	}
 	inserter := func(blocks types.Blocks) (int, error) {
-		// If sync hasn't reached the checkpoint yet, deny importing weird blocks.
-		//
-		// Ideally we would also compare the head block's timestamp and similarly reject
-		// the propagated block if the head is too old. Unfortunately there is a corner
-		// case when starting new networks, where the genesis might be ancient (0 unix)
-		// which would prevent full nodes from accepting it.
-		// If fast sync is running, deny importing weird blocks. This is a problematic
-		// clause when starting up a new network, because fast-syncing miners might not
-		// accept each others' blocks until a restart. Unfortunately we haven't figured
-		// out a way yet where nodes can decide unilaterally whether the network is new
-		// or not. This should be fixed if we figure out a solution.
-		if atomic.LoadUint32(&h.fastSync) == 1 {
-			log.Warn("Fast syncing, discarded propagated block", "number", blocks[0].Number(), "hash", blocks[0].Hash())
-			return 0, nil
-		}
 
 		n, err := h.core.InsertChain(blocks)
 		if err == nil {
@@ -205,13 +182,6 @@ func newHandler(config *handlerConfig) (*handler, error) {
 // runEthPeer registers an eth peer into the joint eth/snap peerset, adds it to
 // various subsistems and starts handling messages.
 func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
-	// If the peer has a `snap` extension, wait for it to connect so we can have
-	// a uniform initialization/teardown mechanism
-	snap, err := h.peers.waitSnapExtension(peer)
-	if err != nil {
-		peer.Log().Error("Snapshot extension barrier failed", "err", err)
-		return err
-	}
 	// TODO(karalabe): Not sure why this is needed
 	if !h.chainSync.handlePeerEvent(peer) {
 		return p2p.DiscQuitting
@@ -225,24 +195,14 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 		head    = h.core.CurrentHeader()
 		hash    = head.Hash()
 		number  = head.Number[types.QuaiNetworkContext].Uint64()
-		td      = h.core.GetTd(hash, number)
 	)
 	forkID := forkid.NewID(h.core.Config(), h.core.Genesis().Hash(), h.core.CurrentHeader().Number[types.QuaiNetworkContext].Uint64())
-	if err := peer.Handshake(h.networkID, td, hash, genesis.Hash(), forkID, h.forkFilter); err != nil {
+	if err := peer.Handshake(h.networkID, number, hash, genesis.Hash(), forkID, h.forkFilter); err != nil {
 		peer.Log().Debug("Ethereum handshake failed", "err", err)
 		return err
 	}
 	reject := false // reserved peer slots
-	if atomic.LoadUint32(&h.snapSync) == 1 {
-		if snap == nil {
-			// If we are running snap-sync, we want to reserve roughly half the peer
-			// slots for peers supporting the snap protocol.
-			// The logic here is; we only allow up to 5 more non-snap peers than snap-peers.
-			if all, snp := h.peers.len(), h.peers.snapLen(); all-snp > snp+5 {
-				reject = true
-			}
-		}
-	}
+
 	// Ignore maxPeers if this is a trusted peer
 	if !peer.Peer.Info().Network.Trusted {
 		if reject || h.peers.len() >= h.maxPeers {
@@ -252,7 +212,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	peer.Log().Debug("Ethereum peer connected", "name", peer.Name())
 
 	// Register the peer locally
-	if err := h.peers.registerPeer(peer, snap); err != nil {
+	if err := h.peers.registerPeer(peer); err != nil {
 		peer.Log().Error("Ethereum peer registration failed", "err", err)
 		return err
 	}
@@ -267,12 +227,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 		peer.Log().Error("Failed to register peer in eth syncer", "err", err)
 		return err
 	}
-	if snap != nil {
-		if err := h.downloader.SnapSyncer.Register(snap); err != nil {
-			peer.Log().Error("Failed to register peer in snap syncer", "err", err)
-			return err
-		}
-	}
+
 	h.chainSync.handlePeerEvent(peer)
 
 	// Propagate existing transactions. new transactions appearing
@@ -308,21 +263,6 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	return handler(peer)
 }
 
-// runSnapExtension registers a `snap` peer into the joint eth/snap peerset and
-// starts handling inbound messages. As `snap` is only a satellite protocol to
-// `eth`, all subsystem registrations and lifecycle management will be done by
-// the main `eth` handler to prevent strange races.
-func (h *handler) runSnapExtension(peer *snap.Peer, handler snap.Handler) error {
-	h.peerWG.Add(1)
-	defer h.peerWG.Done()
-
-	if err := h.peers.registerSnapExtension(peer); err != nil {
-		peer.Log().Error("Snapshot extension registration failed", "err", err)
-		return err
-	}
-	return handler(peer)
-}
-
 // removePeer requests disconnection of a peer.
 func (h *handler) removePeer(id string) {
 	// peer := h.peers.peer(id)
@@ -347,13 +287,7 @@ func (h *handler) unregisterPeer(id string) {
 		logger.Error("Ethereum peer removal failed", "err", errPeerNotRegistered)
 		return
 	}
-	// Remove the `eth` peer if it exists
-	logger.Debug("Removing Ethereum peer", "snap", peer.snapExt != nil)
 
-	// Remove the `snap` extension if it exists
-	if peer.snapExt != nil {
-		h.downloader.SnapSyncer.Unregister(id)
-	}
 	h.downloader.UnregisterPeer(id)
 	h.txFetcher.Drop(id)
 
@@ -408,21 +342,12 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 
 	// If propagation is requested, send to a subset of the peer
 	if propagate {
-		var td *big.Int
-		// the peer head updates only on a prime order block
-		if parent := h.core.GetBlock(block.ParentHash(), block.NumberU64()-1); parent != nil {
-			td = new(big.Int).Add(block.Difficulty(), h.core.GetTd(block.ParentHash(), block.NumberU64()-1))
-		} else {
-			log.Error("Propagating dangling block", "number", block.Number(), "hash", hash)
-			return
-		}
-
 		// Send the block to a subset of our peers if less than 10
 		if len(peers) > 9 {
 			peers = peers[:int(math.Sqrt(float64(len(peers))))]
 		}
 		for _, peer := range peers {
-			peer.AsyncSendNewBlock(block, td)
+			peer.AsyncSendNewBlock(block)
 		}
 		log.Trace("Propagated block", "hash", hash, "recipients", len(peers), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
 		return

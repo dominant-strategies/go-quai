@@ -19,7 +19,6 @@ package eth
 import (
 	"errors"
 	"fmt"
-	"math/big"
 	"sync/atomic"
 	"time"
 
@@ -88,7 +87,7 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 		return h.handleBlockAnnounces(peer, hashes, numbers)
 
 	case *eth.NewBlockPacket:
-		return h.handleBlockBroadcast(peer, packet.Block, packet.TD)
+		return h.handleBlockBroadcast(peer, packet.Block)
 
 	case *eth.NewPooledTransactionHashesPacket:
 		return h.txFetcher.Notify(peer.ID(), *packet)
@@ -116,14 +115,6 @@ func (h *ethHandler) handleHeaders(peer *eth.Peer, headers []*types.Header) erro
 		// Stop the timer either way, decide later to drop or not
 		p.syncDrop.Stop()
 		p.syncDrop = nil
-
-		// If we're doing a fast (or snap) sync, we must enforce the checkpoint block to avoid
-		// eclipse attacks. Unsynced nodes are welcome to connect after we're done
-		// joining the network
-		if atomic.LoadUint32(&h.fastSync) == 1 {
-			peer.Log().Warn("Dropping unsynced node during sync", "addr", peer.RemoteAddr(), "type", peer.Name())
-			return errors.New("unsynced node cannot serve sync")
-		}
 	}
 	// Filter out any explicitly requested headers, deliver the rest to the downloader
 	filter := len(headers) == 1
@@ -199,21 +190,15 @@ func (h *ethHandler) handleBlockAnnounces(peer *eth.Peer, hashes []common.Hash, 
 
 // handleBlockBroadcast is invoked from a peer's message handler when it transmits a
 // block broadcast for the local node to process.
-func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block, td *big.Int) error {
+func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block) error {
 	log.Info("handleBlockBroadcast: Received block broadcast", "hash", block.Hash(), "num", block.Header().Number)
 
 	// Schedule the block for import
 	h.blockFetcher.Enqueue(peer.ID(), block)
 
-	// Assuming the block is importable by the peer, but possibly not yet done so,
-	// calculate the head hash and TD that the peer truly must have.
-	var (
-		trueHead = block.ParentHash()
-		trueTD   = new(big.Int).Sub(td, block.Difficulty())
-	)
-	// Update the peer's total difficulty if better than the previous
-	if _, td := peer.Head(); trueTD.Cmp(td) > 0 {
-		peer.SetHead(trueHead, td)
+	_, number := peer.Head()
+	if (block.NumberU64() - 1) > number {
+		peer.SetHead(block.ParentHash(), number)
 		h.chainSync.handlePeerEvent(peer)
 	}
 

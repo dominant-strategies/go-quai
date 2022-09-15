@@ -31,7 +31,6 @@ import (
 	"github.com/spruce-solutions/go-quai/core/state/snapshot"
 	"github.com/spruce-solutions/go-quai/core/types"
 	"github.com/spruce-solutions/go-quai/eth/protocols/eth"
-	"github.com/spruce-solutions/go-quai/eth/protocols/snap"
 	"github.com/spruce-solutions/go-quai/ethdb"
 	"github.com/spruce-solutions/go-quai/event"
 	"github.com/spruce-solutions/go-quai/log"
@@ -47,20 +46,16 @@ var (
 	MaxReceiptFetch = 256 // Amount of transaction receipts to allow fetching per request
 	MaxStateFetch   = 384 // Amount of node state values to allow fetching per request
 
-	maxQueuedHeaders            = 32 * 1024                         // [eth/62] Maximum number of headers to queue for import (DOS protection)
-	maxHeadersProcess           = 2048                              // Number of header download results to import at once into the chain
-	maxResultsProcess           = 2048                              // Number of content download results to import at once into the chain
-	fullMaxForkAncestry  uint64 = params.FullImmutabilityThreshold  // Maximum chain reorganisation (locally redeclared so tests can reduce it)
-	lightMaxForkAncestry uint64 = params.LightImmutabilityThreshold // Maximum chain reorganisation (locally redeclared so tests can reduce it)
+	maxQueuedHeaders           = 32 * 1024                        // [eth/62] Maximum number of headers to queue for import (DOS protection)
+	maxHeadersProcess          = 2048                             // Number of header download results to import at once into the chain
+	maxResultsProcess          = 2048                             // Number of content download results to import at once into the chain
+	fullMaxForkAncestry uint64 = params.FullImmutabilityThreshold // Maximum chain reorganisation (locally redeclared so tests can reduce it)
 
 	reorgProtThreshold   = 48 // Threshold number of recent blocks to disable mini reorg protection
 	reorgProtHeaderDelay = 2  // Number of headers to delay delivering to cover mini reorgs
 
-	fsHeaderCheckFrequency = 100             // Verification frequency of the downloaded headers during fast sync
-	fsHeaderSafetyNet      = 2048            // Number of headers to discard in case a chain violation is detected
-	fsHeaderForceVerify    = 24              // Number of headers to verify before and after the pivot to accept it
-	fsHeaderContCheck      = 3 * time.Second // Time interval to check for header continuations during state download
-	fsMinFullBlocks        = 64              // Number of blocks to retrieve fully even in fast sync
+	fsHeaderContCheck = 3 * time.Second // Time interval to check for header continuations during state download
+	fsMinFullBlocks   = 64              // Number of blocks to retrieve fully even in fast sync
 )
 
 var (
@@ -90,7 +85,6 @@ type Downloader struct {
 	mux  *event.TypeMux // Event multiplexer to announce sync operation events
 
 	checkpoint uint64   // Checkpoint block number to enforce head against (e.g. fast sync)
-	genesis    uint64   // Genesis block number to limit sync to (e.g. light client CHT)
 	queue      *queue   // Scheduler for selecting the hashes to download
 	peers      *peerSet // Set of active peers from which download can proceed
 
@@ -114,7 +108,6 @@ type Downloader struct {
 	synchronising   int32
 	notified        int32
 	committed       int32
-	ancientLimit    uint64 // The maximum block number which can be regarded as ancient data.
 
 	// Channels
 	headerCh      chan dataPack        // Channel receiving inbound block headers
@@ -128,8 +121,6 @@ type Downloader struct {
 	pivotHeader *types.Header // Pivot block header to dynamically push the syncing state root
 	pivotLock   sync.RWMutex  // Lock protecting pivot header reads from updates
 
-	snapSync       bool         // Whether to run state sync over the snap protocol
-	SnapSyncer     *snap.Syncer // TODO(karalabe): make private! hack for now
 	stateSyncStart chan *stateSync
 	trackStateReq  chan *stateReq
 	stateCh        chan dataPack // Channel receiving inbound node state data
@@ -226,7 +217,6 @@ func New(checkpoint uint64, stateDb ethdb.Database, stateBloom *trie.SyncBloom, 
 		headerProcCh:   make(chan []*types.Header, 1),
 		quitCh:         make(chan struct{}),
 		stateCh:        make(chan dataPack),
-		SnapSyncer:     snap.NewSyncer(stateDb),
 		stateSyncStart: make(chan *stateSync),
 		syncStatsState: stateSyncStats{
 			processed: rawdb.ReadFastTrieProgress(stateDb),
@@ -253,9 +243,7 @@ func (d *Downloader) Progress() ethereum.SyncProgress {
 	mode := d.getMode()
 	switch {
 	case d.core != nil && mode == FullSync:
-		current = d.core.CurrentHeader().NumberU64()
-	case d.core != nil && mode == FastSync:
-		current = d.core.CurrentFastBlock().NumberU64()
+		current = d.core.CurrentBlock().NumberU64()
 	case d.lightchain != nil:
 		current = d.lightchain.CurrentHeader().NumberU64()
 	default:
@@ -322,8 +310,8 @@ func (d *Downloader) UnregisterPeer(id string) error {
 
 // Synchronise tries to sync up our local block chain with a remote peer, both
 // adding various sanity checks as well as wrapping it with various log entries.
-func (d *Downloader) Synchronise(id string, head common.Hash, td *big.Int, mode SyncMode) error {
-	err := d.synchronise(id, head, td, mode)
+func (d *Downloader) Synchronise(id string, head common.Hash, number uint64, mode SyncMode) error {
+	err := d.synchronise(id, head, number, mode)
 
 	switch err {
 	case nil, errBusy, errCanceled:
@@ -347,9 +335,9 @@ func (d *Downloader) Synchronise(id string, head common.Hash, td *big.Int, mode 
 }
 
 // synchronise will select the peer and use it for synchronising. If an empty string is given
-// it will use the best peer possible and synchronize if its TD is higher than our own. If any of the
+// it will use the best peer possible and synchronize if its number is higher than our own. If any of the
 // checks fail an error will be returned. This method is synchronous
-func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int, mode SyncMode) error {
+func (d *Downloader) synchronise(id string, hash common.Hash, number uint64, mode SyncMode) error {
 	// Mock out the synchronisation if testing
 	if d.synchroniseMock != nil {
 		return d.synchroniseMock(id, hash)
@@ -370,22 +358,7 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int, mode 
 	if mode == FullSync && d.stateBloom != nil {
 		d.stateBloom.Close()
 	}
-	// If snap sync was requested, create the snap scheduler and switch to fast
-	// sync mode. Long term we could drop fast sync or merge the two together,
-	// but until snap becomes prevalent, we should support both. TODO(karalabe).
-	if mode == SnapSync {
-		if !d.snapSync {
-			// Snap sync uses the snapshot namespace to store potentially flakey data until
-			// sync completely heals and finishes. Pause snapshot maintenance in the mean
-			// time to prevent access.
-			if snapshots := d.core.Snapshots(); snapshots != nil { // Only nil in tests
-				snapshots.Disable()
-			}
-			log.Warn("Enabling snapshot sync prototype")
-			d.snapSync = true
-		}
-		mode = FastSync
-	}
+
 	// Reset the queue, peer set and wake channels to clean any internal leftover state
 	d.queue.Reset(blockCacheMaxItems, blockCacheInitialItems)
 	d.peers.Reset()
@@ -428,7 +401,7 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int, mode 
 	if p == nil {
 		return errUnknownPeer
 	}
-	return d.syncWithPeer(p, hash, td)
+	return d.syncWithPeer(p, hash, number)
 }
 
 func (d *Downloader) getMode() SyncMode {
@@ -437,7 +410,7 @@ func (d *Downloader) getMode() SyncMode {
 
 // syncWithPeer starts a block synchronization based on the hash chain from the
 // specified peer and head hash.
-func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.Int) (err error) {
+func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, number uint64) (err error) {
 	d.mux.Post(StartEvent{})
 	defer func() {
 		// reset on error
@@ -453,22 +426,15 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 	}
 	mode := d.getMode()
 
-	log.Debug("Synchronising with the network", "peer", p.id, "eth", p.version, "head", hash, "td", td, "mode", mode)
+	log.Debug("Synchronising with the network", "peer", p.id, "eth", p.version, "head", hash, "number", number, "mode", mode)
 	defer func(start time.Time) {
 		log.Debug("Synchronisation terminated", "elapsed", common.PrettyDuration(time.Since(start)))
 	}(time.Now())
 
 	// Look up the sync boundaries: the common ancestor and the target block
-	latest, pivot, err := d.fetchHead(p)
+	latest, _, err := d.fetchHead(p)
 	if err != nil {
 		return err
-	}
-	if mode == FastSync && pivot == nil {
-		// If no pivot block was returned, the head is below the min full block
-		// threshold (i.e. new chain). In that case we won't really fast sync
-		// anyway, but still need a valid pivot block to avoid some code hitting
-		// nil panics on an access.
-		pivot = d.core.CurrentHeader()
 	}
 	height := latest.Number[types.QuaiNetworkContext].Uint64()
 
@@ -483,63 +449,8 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 	d.syncStatsChainHeight = height
 	d.syncStatsLock.Unlock()
 
-	// Ensure our origin point is below any fast sync pivot point
-	if mode == FastSync {
-		if height <= uint64(fsMinFullBlocks) {
-			origin = 0
-		} else {
-			pivotNumber := pivot.Number[types.QuaiNetworkContext].Uint64()
-			if pivotNumber <= origin {
-				origin = pivotNumber - 1
-			}
-			// Write out the pivot into the database so a rollback beyond it will
-			// reenable fast sync
-			rawdb.WriteLastPivotNumber(d.stateDB, pivotNumber)
-		}
-	}
 	d.committed = 1
-	if mode == FastSync && pivot.Number[types.QuaiNetworkContext].Uint64() != 0 {
-		d.committed = 0
-	}
-	if mode == FastSync {
-		// Set the ancient data limitation.
-		// If we are running fast sync, all block data older than ancientLimit will be
-		// written to the ancient store. More recent data will be written to the active
-		// database and will wait for the freezer to migrate.
-		//
-		// If there is a checkpoint available, then calculate the ancientLimit through
-		// that. Otherwise calculate the ancient limit through the advertised height
-		// of the remote peer.
-		//
-		// The reason for picking checkpoint first is that a malicious peer can give us
-		// a fake (very high) height, forcing the ancient limit to also be very high.
-		// The peer would start to feed us valid blocks until head, resulting in all of
-		// the blocks might be written into the ancient store. A following mini-reorg
-		// could cause issues.
-		if d.checkpoint != 0 && d.checkpoint > fullMaxForkAncestry+1 {
-			d.ancientLimit = d.checkpoint
-		} else if height > fullMaxForkAncestry+1 {
-			d.ancientLimit = height - fullMaxForkAncestry - 1
-		} else {
-			d.ancientLimit = 0
-		}
-		frozen, _ := d.stateDB.Ancients() // Ignore the error here since light client can also hit here.
 
-		// If a part of blockchain data has already been written into active store,
-		// disable the ancient style insertion explicitly.
-		if origin >= frozen && frozen != 0 {
-			d.ancientLimit = 0
-			log.Info("Disabling direct-ancient mode", "origin", origin, "ancient", frozen-1)
-		} else if d.ancientLimit > 0 {
-			log.Debug("Enabling direct-ancient mode", "ancient", d.ancientLimit)
-		}
-		// Rewind the ancient store and blockchain if reorg happens.
-		if origin+1 < frozen {
-			if err := d.lightchain.SetHead(origin + 1); err != nil {
-				return err
-			}
-		}
-	}
 	// Initiate the sync using a concurrent header and content retrieval algorithm
 	d.queue.Prepare(origin+1, mode)
 	if d.syncInitHook != nil {
@@ -549,17 +460,11 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 		func() error { return d.fetchHeaders(p, origin+1) }, // Headers are always retrieved
 		func() error { return d.fetchBodies(origin + 1) },   // Bodies are retrieved during normal and fast sync
 		func() error { return d.fetchReceipts(origin + 1) }, // Receipts are retrieved during fast sync
-		func() error { return d.processHeaders(origin+1, td) },
+		func() error { return d.processHeaders(origin+1, number) },
 	}
-	if mode == FastSync {
-		d.pivotLock.Lock()
-		d.pivotHeader = pivot
-		d.pivotLock.Unlock()
 
-		fetchers = append(fetchers, func() error { return d.processFastSyncContent() })
-	} else if mode == FullSync {
-		fetchers = append(fetchers, d.processFullSyncContent)
-	}
+	fetchers = append(fetchers, d.processFullSyncContent)
+
 	return d.spawnSync(fetchers)
 }
 
@@ -638,14 +543,10 @@ func (d *Downloader) Terminate() {
 // a remote peer.
 func (d *Downloader) fetchHead(p *peerConnection) (head *types.Header, pivot *types.Header, err error) {
 	p.log.Debug("Retrieving remote chain head")
-	mode := d.getMode()
 
 	// Request the advertised remote head block and wait for the response
 	latest, _ := p.peer.Head()
 	fetch := 1
-	if mode == FastSync {
-		fetch = 2 // head + pivot headers
-	}
 	go p.peer.RequestHeadersByHash(latest, fetch, fsMinFullBlocks-1, true)
 
 	ttl := d.peers.rates.TargetTimeout()
@@ -670,13 +571,7 @@ func (d *Downloader) fetchHead(p *peerConnection) (head *types.Header, pivot *ty
 			// and request. If only 1 header was returned, make sure there's no pivot
 			// or there was not one requested.
 			head := headers[0]
-			if (mode == FastSync || mode == LightSync) && head.Number[types.QuaiNetworkContext].Uint64() < d.checkpoint {
-				return nil, nil, fmt.Errorf("%w: remote head %d below checkpoint %d", errUnsyncedPeer, head.Number, d.checkpoint)
-			}
 			if len(headers) == 1 {
-				if mode == FastSync && head.Number[types.QuaiNetworkContext].Uint64() > uint64(fsMinFullBlocks) {
-					return nil, nil, fmt.Errorf("%w: no pivot included along head header", errBadPeer)
-				}
 				p.log.Debug("Remote head identified, no pivot", "number", head.Number, "hash", head.Hash())
 				return head, nil, nil
 			}
@@ -765,9 +660,7 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 	mode := d.getMode()
 	switch mode {
 	case FullSync:
-		localHeight = d.core.CurrentHeader().NumberU64()
-	case FastSync:
-		localHeight = d.core.CurrentFastBlock().NumberU64()
+		localHeight = d.core.CurrentBlock().NumberU64()
 	default:
 		localHeight = d.lightchain.CurrentHeader().NumberU64()
 	}
@@ -775,31 +668,9 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 
 	// Recap floor value for binary search
 	maxForkAncestry := fullMaxForkAncestry
-	if d.getMode() == LightSync {
-		maxForkAncestry = lightMaxForkAncestry
-	}
 	if localHeight >= maxForkAncestry {
 		// We're above the max reorg threshold, find the earliest fork point
 		floor = int64(localHeight - maxForkAncestry)
-	}
-	// If we're doing a light sync, ensure the floor doesn't go below the CHT, as
-	// all headers before that point will be missing.
-	if mode == LightSync {
-		// If we don't know the current CHT position, find it
-		if d.genesis == 0 {
-			header := d.lightchain.CurrentHeader()
-			for header != nil {
-				d.genesis = header.NumberU64()
-				if floor >= int64(d.genesis)-1 {
-					break
-				}
-				header = d.lightchain.GetHeaderByHash(header.ParentHash[types.QuaiNetworkContext])
-			}
-		}
-		// We already know the "genesis" block number, cap floor to that
-		if floor < int64(d.genesis)-1 {
-			floor = int64(d.genesis) - 1
-		}
 	}
 
 	ancestor, err := d.findAncestorSpanSearch(p, mode, remoteHeight, localHeight, floor)
@@ -876,8 +747,6 @@ func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, re
 				switch mode {
 				case FullSync:
 					known = d.core.HasBlock(h, n)
-				case FastSync:
-					known = d.core.HasFastBlock(h, n)
 				default:
 					known = d.lightchain.HasHeader(h, n)
 				}
@@ -954,8 +823,6 @@ func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, 
 				switch mode {
 				case FullSync:
 					known = d.core.HasBlock(h, n)
-				case FastSync:
-					known = d.core.HasFastBlock(h, n)
 				default:
 					known = d.core.HasBlock(h, n)
 				}
@@ -1046,7 +913,6 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 	ancestor := from
 	getHeaders(from)
 
-	mode := d.getMode()
 	for {
 		select {
 		case <-d.cancelCh:
@@ -1143,16 +1009,8 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 				// the last few headers so mini reorgs on the head don't cause invalid hash
 				// chain errors.
 				if n := len(headers); n > 0 {
-					// Retrieve the current head we're at
-					var head uint64
-					if mode == LightSync {
-						head = d.lightchain.CurrentHeader().NumberU64()
-					} else {
-						head = d.core.CurrentFastBlock().NumberU64()
-						if full := d.core.CurrentHeader().NumberU64(); head < full {
-							head = full
-						}
-					}
+					head := d.core.CurrentBlock().NumberU64()
+
 					// If the head is below the common ancestor, we're actually deduplicating
 					// already existing chain segments, so use the ancestor as the fake head.
 					// Otherwise we might end up delaying header deliveries pointlessly.
@@ -1514,7 +1372,7 @@ func (d *Downloader) fetchParts(deliveryCh chan dataPack, deliver func(dataPack)
 // processHeaders takes batches of retrieved headers from an input channel and
 // keeps processing and scheduling them into the header chain and downloader's
 // queue until the stream ends or a failure occurs.
-func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
+func (d *Downloader) processHeaders(origin uint64, number uint64) error {
 	// Keep a count of uncertain headers to roll back
 	var (
 		rollback    uint64 // Zero means no rollback (fine as you can't unroll the genesis)
@@ -1523,23 +1381,13 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 	)
 	defer func() {
 		if rollback > 0 {
-			lastHeader, lastFastBlock, lastBlock := d.lightchain.CurrentHeader().Number, common.Big0, common.Big0
-			if mode != LightSync {
-				lastFastBlock = d.core.CurrentFastBlock().Number()
-				lastBlock = d.core.CurrentHeader().Number[types.QuaiNetworkContext]
-			}
+			lastBlock := d.core.CurrentBlock().Number()
 			if err := d.lightchain.SetHead(rollback - 1); err != nil { // -1 to target the parent of the first uncertain block
 				// We're already unwinding the stack, only print the error to make it more visible
 				log.Error("Failed to roll back chain segment", "head", rollback-1, "err", err)
 			}
-			curFastBlock, curBlock := common.Big0, common.Big0
-			if mode != LightSync {
-				curFastBlock = d.core.CurrentFastBlock().Number()
-				curBlock = d.core.CurrentHeader().Number[types.QuaiNetworkContext]
-			}
+			curBlock := d.core.CurrentBlock().Number()
 			log.Warn("Rolled back chain segment",
-				"header", fmt.Sprintf("%d->%d", lastHeader, d.lightchain.CurrentHeader().Number),
-				"fast", fmt.Sprintf("%d->%d", lastFastBlock, curFastBlock),
 				"block", fmt.Sprintf("%d->%d", lastBlock, curBlock), "reason", rollbackErr)
 		}
 	}()
@@ -1574,29 +1422,12 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 				// L: Sync begins, and finds common ancestor at 11
 				// L: Request new headers up from 11 (R's TD was higher, it must have something)
 				// R: Nothing to give
-				if mode != LightSync {
-					head := d.core.CurrentHeader()
-					ourTD := d.core.GetTd(head.Hash(), head.NumberU64())
-					if ourTD == nil {
-						return nil
-					}
-					if !gotHeaders && ourTD.Cmp(td) < 0 {
-						return errStallingPeer
-					}
+
+				head := d.core.CurrentBlock()
+				if !gotHeaders && head.NumberU64() < number {
+					return errStallingPeer
 				}
-				// If fast or light syncing, ensure promised headers are indeed delivered. This is
-				// needed to detect scenarios where an attacker feeds a bad pivot and then bails out
-				// of delivering the post-pivot blocks that would flag the invalid content.
-				//
-				// This check cannot be executed "as is" for full imports, since blocks may still be
-				// queued for processing when the header download completes. However, as long as the
-				// peer gave us something useful, we're already happy/progressed (above check).
-				if mode == FastSync || mode == LightSync {
-					head := d.lightchain.CurrentHeader()
-					if d.lightchain.GetTd(head.Hash(), head.NumberU64()).Cmp(td) < 0 {
-						return errStallingPeer
-					}
-				}
+
 				// Disable any rollback and return
 				rollback = 0
 				return nil
@@ -1618,43 +1449,8 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 				}
 				chunk := headers[:limit]
 
-				// In case of header only syncing, validate the chunk immediately
-				if mode == FastSync || mode == LightSync {
-					// If we're importing pure headers, verify based on their recentness
-					var pivot uint64
-
-					d.pivotLock.RLock()
-					if d.pivotHeader != nil {
-						pivot = d.pivotHeader.Number[types.QuaiNetworkContext].Uint64()
-					}
-					d.pivotLock.RUnlock()
-
-					frequency := fsHeaderCheckFrequency
-					if chunk[len(chunk)-1].Number[types.QuaiNetworkContext].Uint64()+uint64(fsHeaderForceVerify) > pivot {
-						frequency = 1
-					}
-					if n, err := d.lightchain.InsertHeaderChain(chunk, frequency); err != nil {
-						rollbackErr = err
-
-						// If some headers were inserted, track them as uncertain
-						if (mode == FastSync || frequency > 1) && n > 0 && rollback == 0 {
-							rollback = chunk[0].Number[types.QuaiNetworkContext].Uint64()
-						}
-						log.Warn("Invalid header encountered", "number", chunk[n].Number, "hash", chunk[n].Hash(), "parent", chunk[n].ParentHash, "err", err)
-						return fmt.Errorf("%w: %v", errInvalidChain, err)
-					}
-					// All verifications passed, track all headers within the alloted limits
-					if mode == FastSync {
-						head := chunk[len(chunk)-1].Number[types.QuaiNetworkContext].Uint64()
-						if head-rollback > uint64(fsHeaderSafetyNet) {
-							rollback = head - uint64(fsHeaderSafetyNet)
-						} else {
-							rollback = 1
-						}
-					}
-				}
 				// Unless we're doing light chains, schedule the headers for associated content retrieval
-				if mode == FullSync || mode == FastSync {
+				if mode == FullSync {
 					// If we've reached the allowed number of pending headers, stall a bit
 					for d.queue.PendingBlocks() >= maxQueuedHeaders || d.queue.PendingReceipts() >= maxQueuedHeaders {
 						select {
@@ -1746,208 +1542,6 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 	return nil
 }
 
-// processFastSyncContent takes fetch results from the queue and writes them to the
-// database. It also controls the synchronisation of state nodes of the pivot block.
-func (d *Downloader) processFastSyncContent() error {
-	// Start syncing state of the reported head block. This should get us most of
-	// the state of the pivot block.
-	d.pivotLock.RLock()
-	sync := d.syncState(d.pivotHeader.Root[types.QuaiNetworkContext])
-	d.pivotLock.RUnlock()
-
-	defer func() {
-		// The `sync` object is replaced every time the pivot moves. We need to
-		// defer close the very last active one, hence the lazy evaluation vs.
-		// calling defer sync.Cancel() !!!
-		sync.Cancel()
-	}()
-
-	closeOnErr := func(s *stateSync) {
-		if err := s.Wait(); err != nil && err != errCancelStateFetch && err != errCanceled && err != snap.ErrCancelled {
-			d.queue.Close() // wake up Results
-		}
-	}
-	go closeOnErr(sync)
-
-	// To cater for moving pivot points, track the pivot block and subsequently
-	// accumulated download results separately.
-	var (
-		oldPivot *fetchResult   // Locked in pivot block, might change eventually
-		oldTail  []*fetchResult // Downloaded content after the pivot
-	)
-	for {
-		// Wait for the next batch of downloaded data to be available, and if the pivot
-		// block became stale, move the goalpost
-		results := d.queue.Results(oldPivot == nil) // Block if we're not monitoring pivot staleness
-		if len(results) == 0 {
-			// If pivot sync is done, stop
-			if oldPivot == nil {
-				return sync.Cancel()
-			}
-			// If sync failed, stop
-			select {
-			case <-d.cancelCh:
-				sync.Cancel()
-				return errCanceled
-			default:
-			}
-		}
-		if d.chainInsertHook != nil {
-			d.chainInsertHook(results)
-		}
-		// If we haven't downloaded the pivot block yet, check pivot staleness
-		// notifications from the header downloader
-		d.pivotLock.RLock()
-		pivot := d.pivotHeader
-		d.pivotLock.RUnlock()
-
-		if oldPivot == nil {
-			if pivot.Root[types.QuaiNetworkContext] != sync.root {
-				sync.Cancel()
-				sync = d.syncState(pivot.Root[types.QuaiNetworkContext])
-
-				go closeOnErr(sync)
-			}
-		} else {
-			results = append(append([]*fetchResult{oldPivot}, oldTail...), results...)
-		}
-		// Split around the pivot block and process the two sides via fast/full sync
-		if atomic.LoadInt32(&d.committed) == 0 {
-			latest := results[len(results)-1].Header
-			// If the height is above the pivot block by 2 sets, it means the pivot
-			// become stale in the network and it was garbage collected, move to a
-			// new pivot.
-			//
-			// Note, we have `reorgProtHeaderDelay` number of blocks withheld, Those
-			// need to be taken into account, otherwise we're detecting the pivot move
-			// late and will drop peers due to unavailable state!!!
-			if height := latest.Number[types.QuaiNetworkContext].Uint64(); height >= pivot.Number[types.QuaiNetworkContext].Uint64()+2*uint64(fsMinFullBlocks)-uint64(reorgProtHeaderDelay) {
-				log.Warn("Pivot became stale, moving", "old", pivot.Number[types.QuaiNetworkContext].Uint64(), "new", height-uint64(fsMinFullBlocks)+uint64(reorgProtHeaderDelay))
-				pivot = results[len(results)-1-fsMinFullBlocks+reorgProtHeaderDelay].Header // must exist as lower old pivot is uncommitted
-
-				d.pivotLock.Lock()
-				d.pivotHeader = pivot
-				d.pivotLock.Unlock()
-
-				// Write out the pivot into the database so a rollback beyond it will
-				// reenable fast sync
-				rawdb.WriteLastPivotNumber(d.stateDB, pivot.Number[types.QuaiNetworkContext].Uint64())
-			}
-		}
-		P, beforeP, afterP := splitAroundPivot(pivot.Number[types.QuaiNetworkContext].Uint64(), results)
-		if err := d.commitFastSyncData(beforeP, sync); err != nil {
-			return err
-		}
-		if P != nil {
-			// If new pivot block found, cancel old state retrieval and restart
-			if oldPivot != P {
-				sync.Cancel()
-				sync = d.syncState(P.Header.Root[types.QuaiNetworkContext])
-
-				go closeOnErr(sync)
-				oldPivot = P
-			}
-			// Wait for completion, occasionally checking for pivot staleness
-			select {
-			case <-sync.done:
-				if sync.err != nil {
-					return sync.err
-				}
-				if err := d.commitPivotBlock(P); err != nil {
-					return err
-				}
-				oldPivot = nil
-
-			case <-time.After(time.Second):
-				oldTail = afterP
-				continue
-			}
-		}
-		// Fast sync done, pivot commit done, full import
-		if err := d.importBlockResults(afterP); err != nil {
-			return err
-		}
-	}
-}
-
-func splitAroundPivot(pivot uint64, results []*fetchResult) (p *fetchResult, before, after []*fetchResult) {
-	if len(results) == 0 {
-		return nil, nil, nil
-	}
-	if lastNum := results[len(results)-1].Header.Number[types.QuaiNetworkContext].Uint64(); lastNum < pivot {
-		// the pivot is somewhere in the future
-		return nil, results, nil
-	}
-	// This can also be optimized, but only happens very seldom
-	for _, result := range results {
-		num := result.Header.Number[types.QuaiNetworkContext].Uint64()
-		switch {
-		case num < pivot:
-			before = append(before, result)
-		case num == pivot:
-			p = result
-		default:
-			after = append(after, result)
-		}
-	}
-	return p, before, after
-}
-
-func (d *Downloader) commitFastSyncData(results []*fetchResult, stateSync *stateSync) error {
-	// Check for any early termination requests
-	if len(results) == 0 {
-		return nil
-	}
-	select {
-	case <-d.quitCh:
-		return errCancelContentProcessing
-	case <-stateSync.done:
-		if err := stateSync.Wait(); err != nil {
-			return err
-		}
-	default:
-	}
-	// Retrieve the a batch of results to import
-	first, last := results[0].Header, results[len(results)-1].Header
-	log.Debug("Inserting fast-sync blocks", "items", len(results),
-		"firstnum", first.Number, "firsthash", first.Hash(),
-		"lastnumn", last.Number, "lasthash", last.Hash(),
-	)
-	blocks := make([]*types.Block, len(results))
-	receipts := make([]types.Receipts, len(results))
-	for i, result := range results {
-		blocks[i] = types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles)
-		receipts[i] = result.Receipts
-	}
-	if index, err := d.core.InsertReceiptChain(blocks, receipts, d.ancientLimit); err != nil {
-		log.Debug("Downloaded item processing failed", "number", results[index].Header.Number, "hash", results[index].Header.Hash(), "err", err)
-		return fmt.Errorf("%w: %v", errInvalidChain, err)
-	}
-	return nil
-}
-
-func (d *Downloader) commitPivotBlock(result *fetchResult) error {
-	block := types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles)
-	log.Debug("Committing fast sync pivot as new head", "number", block.Number(), "hash", block.Hash())
-
-	// Commit the pivot block as the new head, will require full sync from here on
-	if _, err := d.core.InsertReceiptChain([]*types.Block{block}, []types.Receipts{result.Receipts}, d.ancientLimit); err != nil {
-		return err
-	}
-
-	atomic.StoreInt32(&d.committed, 1)
-
-	// If we had a bloom filter for the state sync, deallocate it now. Note, we only
-	// deallocate internally, but keep the empty wrapper. This ensures that if we do
-	// a rollback after committing the pivot and restarting fast sync, we don't end
-	// up using a nil bloom. Empty bloom is fine, it just returns that it does not
-	// have the info we need, so reach down to the database instead.
-	if d.stateBloom != nil {
-		d.stateBloom.Close()
-	}
-	return nil
-}
-
 // DeliverHeaders injects a new batch of block headers received from a remote
 // node into the download schedule.
 func (d *Downloader) DeliverHeaders(id string, headers []*types.Header) error {
@@ -1967,32 +1561,6 @@ func (d *Downloader) DeliverReceipts(id string, receipts [][]*types.Receipt) err
 // DeliverNodeData injects a new batch of node state data received from a remote node.
 func (d *Downloader) DeliverNodeData(id string, data [][]byte) error {
 	return d.deliver(d.stateCh, &statePack{id, data}, stateInMeter, stateDropMeter)
-}
-
-// DeliverSnapPacket is invoked from a peer's message handler when it transmits a
-// data packet for the local node to consume.
-func (d *Downloader) DeliverSnapPacket(peer *snap.Peer, packet snap.Packet) error {
-	switch packet := packet.(type) {
-	case *snap.AccountRangePacket:
-		hashes, accounts, err := packet.Unpack()
-		if err != nil {
-			return err
-		}
-		return d.SnapSyncer.OnAccounts(peer, packet.ID, hashes, accounts, packet.Proof)
-
-	case *snap.StorageRangesPacket:
-		hashset, slotset := packet.Unpack()
-		return d.SnapSyncer.OnStorage(peer, packet.ID, hashset, slotset, packet.Proof)
-
-	case *snap.ByteCodesPacket:
-		return d.SnapSyncer.OnByteCodes(peer, packet.ID, packet.Codes)
-
-	case *snap.TrieNodesPacket:
-		return d.SnapSyncer.OnTrieNodes(peer, packet.ID, packet.Nodes)
-
-	default:
-		return fmt.Errorf("unexpected snap packet type: %T", packet)
-	}
 }
 
 // deliver injects a new batch of data received from a remote node.

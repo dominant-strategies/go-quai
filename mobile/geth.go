@@ -25,7 +25,6 @@ import (
 	"path/filepath"
 
 	"github.com/spruce-solutions/go-quai/core"
-	"github.com/spruce-solutions/go-quai/eth/downloader"
 	"github.com/spruce-solutions/go-quai/eth/ethconfig"
 	"github.com/spruce-solutions/go-quai/ethclient"
 	"github.com/spruce-solutions/go-quai/ethstats"
@@ -184,7 +183,6 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 	if config.EthereumEnabled {
 		ethConf := ethconfig.Defaults
 		ethConf.Genesis = genesis
-		ethConf.SyncMode = downloader.LightSync
 		ethConf.NetworkId = uint64(config.EthereumNetworkID)
 		ethConf.DatabaseCache = config.EthereumDatabaseCache
 		lesBackend, err := les.New(rawStack, &ethConf)

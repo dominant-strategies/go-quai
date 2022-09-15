@@ -17,7 +17,6 @@
 package eth
 
 import (
-	"math/big"
 	"math/rand"
 	"sync"
 
@@ -72,8 +71,8 @@ type Peer struct {
 	rw        p2p.MsgReadWriter // Input/output streams for snap
 	version   uint              // Protocol version negotiated
 
-	head common.Hash // Latest advertised head block hash
-	td   *big.Int    // Latest advertised head block total difficulty
+	head   common.Hash // Latest advertised head block hash
+	number uint64      // Latest advertised head block number
 
 	knownBlocks     *knownCache            // Set of block hashes known to be known by this peer
 	queuedBlocks    chan *blockPropagation // Queue of blocks to broadcast to the peer
@@ -130,21 +129,21 @@ func (p *Peer) Version() uint {
 	return p.version
 }
 
-// Head retrieves the current head hash and total difficulty of the peer.
-func (p *Peer) Head() (hash common.Hash, td *big.Int) {
+// Head retrieves the current head hash and header number of the peer.
+func (p *Peer) Head() (hash common.Hash, number uint64) {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
 	copy(hash[:], p.head[:])
-	return hash, new(big.Int).Set(p.td)
+	return hash, p.number
 }
 
-// SetHead updates the head hash and total difficulty of the peer.
-func (p *Peer) SetHead(hash common.Hash, td *big.Int) {
+// SetHead updates the head hash and header number of the peer.
+func (p *Peer) SetHead(hash common.Hash, number uint64) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	copy(p.head[:], hash[:])
-	p.td.Set(td)
+	p.number = number
 }
 
 // KnownBlock returns whether peer is known to already have a block.
@@ -266,21 +265,20 @@ func (p *Peer) AsyncSendNewBlockHash(block *types.Block) {
 }
 
 // SendNewBlock propagates an entire block to a remote peer.
-func (p *Peer) SendNewBlock(block *types.Block, td *big.Int) error {
+func (p *Peer) SendNewBlock(block *types.Block) error {
 	// Mark all the block hash as known, but ensure we don't overflow our limits
 	p.knownBlocks.Add(block.Hash())
 
 	return p2p.Send(p.rw, NewBlockMsg, &NewBlockPacket{
 		Block: block,
-		TD:    td,
 	})
 }
 
 // AsyncSendNewBlock queues an entire block for propagation to a remote peer. If
 // the peer's broadcast queue is full, the event is silently dropped.
-func (p *Peer) AsyncSendNewBlock(block *types.Block, td *big.Int) {
+func (p *Peer) AsyncSendNewBlock(block *types.Block) {
 	select {
-	case p.queuedBlocks <- &blockPropagation{block: block, td: td}:
+	case p.queuedBlocks <- &blockPropagation{block: block}:
 		// Mark all the block hash as known, but ensure we don't overflow our limits
 		p.knownBlocks.Add(block.Hash())
 	default:
