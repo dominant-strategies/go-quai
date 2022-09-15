@@ -19,7 +19,6 @@ package eth
 import (
 	"errors"
 	"fmt"
-	"math/big"
 	"sync/atomic"
 	"time"
 
@@ -29,7 +28,6 @@ import (
 	"github.com/spruce-solutions/go-quai/eth/protocols/eth"
 	"github.com/spruce-solutions/go-quai/log"
 	"github.com/spruce-solutions/go-quai/p2p/enode"
-	"github.com/spruce-solutions/go-quai/params"
 	"github.com/spruce-solutions/go-quai/trie"
 )
 
@@ -89,7 +87,7 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 		return h.handleBlockAnnounces(peer, hashes, numbers)
 
 	case *eth.NewBlockPacket:
-		return h.handleBlockBroadcast(peer, packet.Block, packet.TD)
+		return h.handleBlockBroadcast(peer, packet.Block)
 
 	case *eth.NewPooledTransactionHashesPacket:
 		return h.txFetcher.Notify(peer.ID(), *packet)
@@ -192,35 +190,17 @@ func (h *ethHandler) handleBlockAnnounces(peer *eth.Peer, hashes []common.Hash, 
 
 // handleBlockBroadcast is invoked from a peer's message handler when it transmits a
 // block broadcast for the local node to process.
-func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block, td *big.Int) error {
+func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block) error {
 	log.Info("handleBlockBroadcast: Received block broadcast", "hash", block.Hash(), "num", block.Header().Number)
 
 	// Schedule the block for import
 	h.blockFetcher.Enqueue(peer.ID(), block)
 
-	order, err := h.core.GetDifficultyOrder(block.Header())
-	if err != nil {
-		return err
+	_, number := peer.Head()
+	if (block.NumberU64() - 1) > number {
+		peer.SetHead(block.ParentHash(), number)
+		h.chainSync.handlePeerEvent(peer)
 	}
 
-	// the peer head updates only on a prime order block
-	if order == params.PRIME {
-		if types.QuaiNetworkContext == params.PRIME {
-			// Assuming the block is importable by the peer, but possibly not yet done so,
-			// calculate the head hash and TD that the peer truly must have.
-			var (
-				trueHead = block.ParentHash()
-				trueTD   = new(big.Int).Sub(td, block.Difficulty())
-			)
-			// Update the peer's total difficulty if better than the previous
-			if _, td := peer.Head(); trueTD.Cmp(td) > 0 {
-				peer.SetHead(trueHead, td)
-				h.chainSync.handlePeerEvent(peer)
-			}
-		} else {
-			// don't set head of peer prior to finalization horizon because all blocks in fray should be transmitted.
-			peer.SetHead(block.Hash(), td)
-		}
-	}
 	return nil
 }

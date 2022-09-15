@@ -19,7 +19,6 @@ package eth
 import (
 	"errors"
 	"math"
-	"math/big"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -196,10 +195,9 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 		head    = h.core.CurrentHeader()
 		hash    = head.Hash()
 		number  = head.Number[types.QuaiNetworkContext].Uint64()
-		td      = h.core.GetTd(hash, number)
 	)
 	forkID := forkid.NewID(h.core.Config(), h.core.Genesis().Hash(), h.core.CurrentHeader().Number[types.QuaiNetworkContext].Uint64())
-	if err := peer.Handshake(h.networkID, td, hash, genesis.Hash(), forkID, h.forkFilter); err != nil {
+	if err := peer.Handshake(h.networkID, number, hash, genesis.Hash(), forkID, h.forkFilter); err != nil {
 		peer.Log().Debug("Ethereum handshake failed", "err", err)
 		return err
 	}
@@ -344,38 +342,12 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 
 	// If propagation is requested, send to a subset of the peer
 	if propagate {
-		order, err := h.core.GetDifficultyOrder(block.Header())
-		if err != nil {
-			return
-		}
-
-		var td *big.Int
-		// the peer head updates only on a prime order block
-		if order == params.PRIME {
-			var primeTd *big.Int
-			if parent := h.core.GetBlock(block.ParentHash(), block.NumberU64()-1); parent != nil {
-				primeTd = new(big.Int).Add(block.Difficulty(), h.core.GetTd(block.ParentHash(), block.NumberU64()-1))
-			} else {
-				log.Error("Propagating dangling block", "number", block.Number(), "hash", hash)
-				return
-			}
-			td = new(big.Int).Set(primeTd)
-		} else {
-			terminus := h.core.Slice().HeaderChain().GetTerminiByHash(block.ParentHash())
-			terminusHeader := h.core.Slice().HeaderChain().GetHeaderByHash(terminus[3])
-			td = h.core.GetTd(terminusHeader.Hash(), terminusHeader.Number64())
-			if td == nil {
-				return
-			}
-			td.Add(td, block.Difficulty())
-		}
-
 		// Send the block to a subset of our peers if less than 10
 		if len(peers) > 9 {
 			peers = peers[:int(math.Sqrt(float64(len(peers))))]
 		}
 		for _, peer := range peers {
-			peer.AsyncSendNewBlock(block, td)
+			peer.AsyncSendNewBlock(block)
 		}
 		log.Trace("Propagated block", "hash", hash, "recipients", len(peers), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
 		return
