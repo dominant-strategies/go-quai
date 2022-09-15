@@ -415,6 +415,7 @@ type headerData struct {
 	location    common.Location
 	time        uint64
 	extra       []byte
+	nonce       types.BlockNonce
 }
 
 // SealHash returns the hash of a block prior to it being sealed.
@@ -425,6 +426,7 @@ func (blake3pow *Blake3pow) SealHash(header *types.Header) (hash common.Hash) {
 		location: header.Location(),
 		time:     header.Time(),
 		extra:    header.Extra(),
+		nonce:    header.Nonce(),
 	}
 	for i := 0; i < common.HierarchyDepth; i++ {
 		hdata.parentHash[i] = header.ParentHash(i)
