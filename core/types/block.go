@@ -731,3 +731,15 @@ func (b *Block) Hash() common.Hash {
 }
 
 type Blocks []*Block
+
+// PendingHeader stores the header and termini value associated with the header.
+type PendingHeader struct {
+	Header  *Header
+	Termini []common.Hash
+}
+
+type HeaderRoots struct {
+	StateRoot    common.Hash
+	TxsRoot      common.Hash
+	ReceiptsRoot common.Hash
+}

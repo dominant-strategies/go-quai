@@ -57,7 +57,6 @@ import (
 	"github.com/dominant-strategies/go-quai/metrics"
 	"github.com/dominant-strategies/go-quai/metrics/exp"
 	"github.com/dominant-strategies/go-quai/metrics/influxdb"
-	"github.com/dominant-strategies/go-quai/miner"
 	"github.com/dominant-strategies/go-quai/node"
 	"github.com/dominant-strategies/go-quai/p2p"
 	"github.com/dominant-strategies/go-quai/p2p/enode"
@@ -688,6 +687,16 @@ var (
 		Usage: "Quai Zone flag",
 		Value: ethconfig.Defaults.Zone,
 	}
+	DomUrl = cli.StringFlag{
+		Name:  "dom.url",
+		Usage: "Dominant chain websocket url",
+		Value: ethconfig.Defaults.DomUrl,
+	}
+	SubUrls = cli.StringFlag{
+		Name:  "sub.urls",
+		Usage: "Subordinate chain websocket urls",
+		Value: ethconfig.Defaults.DomUrl,
+	}
 )
 
 // MakeDataDir retrieves the currently requested data directory, terminating
@@ -937,6 +946,56 @@ func setWS(ctx *cli.Context, cfg *node.Config) {
 	if ctx.GlobalIsSet(WSPathPrefixFlag.Name) {
 		cfg.WSPathPrefix = ctx.GlobalString(WSPathPrefixFlag.Name)
 	}
+}
+
+// setDomUrl sets the dominant chain websocket url.
+func setDomUrl(ctx *cli.Context, cfg *ethconfig.Config) {
+	// only set the dom url if the node is not prime
+	if ctx.GlobalIsSet(RegionFlag.Name) || ctx.GlobalIsSet(ZoneFlag.Name) {
+		// Extract the domurl
+		var domurl string
+		if ctx.GlobalIsSet(DomUrl.Name) {
+			domurl = ctx.GlobalString(DomUrl.Name)
+		}
+		// do not start the node if the domurl is not configured
+		if domurl == "" {
+			Fatalf("No dom.url configured")
+		}
+		cfg.DomUrl = domurl
+	}
+}
+
+// setSubUrls sets the subordinate chain urls
+func setSubUrls(ctx *cli.Context, cfg *ethconfig.Config) {
+	// only set the sub urls if its not the zone
+	if !ctx.GlobalIsSet(ZoneFlag.Name) {
+		// Extract the suburls
+		suburls := strings.Split(ctx.GlobalString(SubUrls.Name), ",")
+
+		// check if all the suburls are nil
+		subNilCount := 0
+		for _, url := range suburls {
+			if url == "" {
+				subNilCount++
+			}
+		}
+		// some sanity checks
+		if subNilCount == common.HierarchyDepth {
+			Fatalf("All the suburls are nil")
+		}
+		if len(suburls) > common.HierarchyDepth {
+			Fatalf("More than 3 sub urls specified")
+		}
+		if len(suburls) == 0 {
+			Fatalf("No sub url is specified")
+		}
+		cfg.SubUrls = suburls
+	}
+}
+
+// makeSubUrls returns the subordinate chain urls
+func makeSubUrls(ctx *cli.Context) []string {
+	return strings.Split(ctx.GlobalString(SubUrls.Name), ",")
 }
 
 // setIPC creates an IPC path configuration from the set command line flags,
@@ -1223,7 +1282,7 @@ func setTxPool(ctx *cli.Context, cfg *core.TxPoolConfig) {
 func setBlake3pow(ctx *cli.Context, cfg *ethconfig.Config) {
 }
 
-func setMiner(ctx *cli.Context, cfg *miner.Config) {
+func setMiner(ctx *cli.Context, cfg *core.Config) {
 	if ctx.GlobalIsSet(MinerNotifyFlag.Name) {
 		cfg.Notify = strings.Split(ctx.GlobalString(MinerNotifyFlag.Name), ",")
 	}
@@ -1347,6 +1406,12 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	setBlake3pow(ctx, cfg)
 	setMiner(ctx, &cfg.Miner)
 	setWhitelist(ctx, cfg)
+
+	// set the dominant chain websocket url
+	setDomUrl(ctx, cfg)
+
+	// set the subordinate chain websocket urls
+	setSubUrls(ctx, cfg)
 
 	// Cap the cache allowance and tune the garbage collector
 	mem, err := gopsutil.VirtualMemory()
@@ -1655,9 +1720,9 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 }
 
 // MakeChain creates a chain manager from set command line flags.
-func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chainDb ethdb.Database) {
+func MakeChain(ctx *cli.Context, stack *node.Node) (*core.Core, ethdb.Database) {
 	var err error
-	chainDb = MakeChainDatabase(ctx, stack, false) // TODO(rjl493456442) support read-only database
+	chainDb := MakeChainDatabase(ctx, stack, false) // TODO(rjl493456442) support read-only database
 	config, _, err := core.SetupGenesisBlock(chainDb, MakeGenesis(ctx))
 	if err != nil {
 		Fatalf("%v", err)
@@ -1697,11 +1762,11 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 
 	// TODO(rjl493456442) disable snapshot generation/wiping if the chain is read only.
 	// Disable transaction indexing/unindexing by default.
-	chain, err = core.NewBlockChain(chainDb, cache, config, engine, vmcfg, nil, nil)
+	protocol, err := core.NewCore(chainDb, nil, nil, nil, config, ctx.GlobalString(DomUrl.Name), makeSubUrls(ctx), engine, cache, vmcfg, &core.Genesis{})
 	if err != nil {
 		Fatalf("Can't create BlockChain: %v", err)
 	}
-	return chain, chainDb
+	return protocol, chainDb
 }
 
 // MakeConsolePreloads retrieves the absolute paths for the console JavaScript
