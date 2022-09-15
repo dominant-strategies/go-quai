@@ -79,6 +79,7 @@ func (bc *BlockChain) Append(batch ethdb.Batch, block *types.Block) ([]*types.Lo
 		return nil, errors.New("state roots do not match header, append fail")
 	}
 	rawdb.WriteBlock(batch, block)
+	rawdb.WriteTxLookupEntriesByBlock(batch, block)
 
 	return logs, nil
 }

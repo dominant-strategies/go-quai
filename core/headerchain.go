@@ -134,10 +134,10 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 	// write the head block hash to the db
 	rawdb.WriteHeadBlockHash(hc.headerDb, head.Hash())
 	hc.currentHeader.Store(head)
-	headHeaderGauge.Update(head.Number[types.QuaiNetworkContext].Int64())
+	headHeaderGauge.Update(int64(head.NumberU64()))
 
 	// If head is the normal extension of canonical head, we can return by just wiring the canonical hash.
-	if prevHeader.Hash() == head.Parent() {
+	if prevHeader.Hash() == head.ParentHash() {
 		rawdb.WriteCanonicalHash(hc.headerDb, head.Hash(), head.NumberU64())
 		return nil
 	}
@@ -147,10 +147,10 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 	var hashStack []*types.Header
 	for {
 		hashStack = append(hashStack, newHeader)
-		newHeader = hc.GetHeader(newHeader.Parent(), newHeader.NumberU64()-1)
+		newHeader = hc.GetHeader(newHeader.ParentHash(), newHeader.NumberU64()-1)
 
 		// genesis check to not delete the genesis block
-		if newHeader.Hash() == hc.config.GenesisHashes[0] {
+		if newHeader.Hash() == hc.config.GenesisHash {
 			break
 		}
 
@@ -161,10 +161,10 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 
 	for {
 		rawdb.DeleteCanonicalHash(hc.headerDb, prevHeader.NumberU64())
-		prevHeader = hc.GetHeader(prevHeader.Parent(), prevHeader.NumberU64()-1)
+		prevHeader = hc.GetHeader(prevHeader.ParentHash(), prevHeader.NumberU64()-1)
 
 		// genesis check to not delete the genesis block
-		if prevHeader.Hash() == hc.config.GenesisHashes[0] {
+		if prevHeader.Hash() == hc.config.GenesisHash {
 			break
 		}
 
@@ -187,10 +187,10 @@ func (hc *HeaderChain) findCommonHeader(header *types.Header) *types.Header {
 			return nil
 		}
 		canonicalHash := rawdb.ReadCanonicalHash(hc.headerDb, header.NumberU64())
-		if canonicalHash == header.Hash() || canonicalHash == hc.config.GenesisHashes[types.QuaiNetworkContext] {
+		if canonicalHash == header.Hash() || canonicalHash == hc.config.GenesisHash {
 			return hc.GetHeaderByHash(canonicalHash)
 		}
-		header = hc.GetHeader(header.ParentHash[types.QuaiNetworkContext], header.NumberU64()-1)
+		header = hc.GetHeader(header.ParentHash(), header.NumberU64()-1)
 	}
 
 }
@@ -206,7 +206,7 @@ func (hc *HeaderChain) loadLastState() error {
 			hc.currentHeader.Store(chead)
 		}
 	}
-	headHeaderGauge.Update(hc.CurrentHeader().Number[types.QuaiNetworkContext].Int64())
+	headHeaderGauge.Update(int64(hc.CurrentHeader().NumberU64()))
 
 	heads := make([]*types.Header, 0)
 	for _, hash := range headsHashes {
@@ -233,6 +233,7 @@ func (hc *HeaderChain) Stop() {
 	rawdb.WriteHeadBlockHash(hc.headerDb, hc.CurrentHeader().Hash())
 
 	// Unsubscribe all subscriptions registered from blockchain
+	hc.scope.Close()
 	hc.bc.scope.Close()
 	hc.StopInsert()
 	hc.wg.Wait()
@@ -242,7 +243,7 @@ func (hc *HeaderChain) Stop() {
 
 // Empty checks if the headerchain is empty.
 func (hc *HeaderChain) Empty() bool {
-	genesis := hc.config.GenesisHashes[0]
+	genesis := hc.config.GenesisHash
 	for _, hash := range []common.Hash{rawdb.ReadHeadBlockHash(hc.headerDb)} {
 		if hash != genesis {
 			return false
@@ -293,12 +294,12 @@ func (hc *HeaderChain) GetBlockHashesFromHash(hash common.Hash, max uint64) []co
 	// Iterate the headers until enough is collected or the genesis reached
 	chain := make([]common.Hash, 0, max)
 	for i := uint64(0); i < max; i++ {
-		next := header.ParentHash[types.QuaiNetworkContext]
-		if header = hc.GetHeader(next, header.Number[types.QuaiNetworkContext].Uint64()-1); header == nil {
+		next := header.ParentHash()
+		if header = hc.GetHeader(next, header.NumberU64()-1); header == nil {
 			break
 		}
 		chain = append(chain, next)
-		if header.Number[types.QuaiNetworkContext].Sign() == 0 {
+		if header.Number().Sign() == 0 {
 			break
 		}
 	}
@@ -317,7 +318,7 @@ func (hc *HeaderChain) GetAncestor(hash common.Hash, number, ancestor uint64, ma
 	if ancestor == 1 {
 		// in this case it is cheaper to just read the header
 		if header := hc.GetHeader(hash, number); header != nil {
-			return header.ParentHash[types.QuaiNetworkContext], number - 1
+			return header.ParentHash(), number - 1
 		}
 		return common.Hash{}, 0
 	}
@@ -338,7 +339,7 @@ func (hc *HeaderChain) GetAncestor(hash common.Hash, number, ancestor uint64, ma
 		if header == nil {
 			return common.Hash{}, 0
 		}
-		hash = header.ParentHash[types.QuaiNetworkContext]
+		hash = header.ParentHash()
 		number--
 	}
 	return hash, number
@@ -439,7 +440,7 @@ func (hc *HeaderChain) GetBlock(hash common.Hash, number uint64) *types.Block {
 
 // CheckContext checks to make sure the range of a context or order is valid
 func (hc *HeaderChain) CheckContext(context int) error {
-	if context < 0 || context > len(params.FullerOntology) {
+	if context < 0 || context > common.HierarchyDepth {
 		return errors.New("the provided path is outside the allowable range")
 	}
 	return nil
@@ -447,10 +448,10 @@ func (hc *HeaderChain) CheckContext(context int) error {
 
 // CheckLocationRange checks to make sure the range of r and z are valid
 func (hc *HeaderChain) CheckLocationRange(location []byte) error {
-	if int(location[0]) < 1 || int(location[0]) > params.FullerOntology[0] {
+	if int(location[0]) < 1 || int(location[0]) > common.NumRegionsInPrime {
 		return errors.New("the provided location is outside the allowable region range")
 	}
-	if int(location[1]) < 1 || int(location[1]) > params.FullerOntology[1] {
+	if int(location[1]) < 1 || int(location[1]) > common.NumZonesInRegion {
 		return errors.New("the provided location is outside the allowable zone range")
 	}
 	return nil
@@ -458,7 +459,7 @@ func (hc *HeaderChain) CheckLocationRange(location []byte) error {
 
 // GasLimit returns the gas limit of the current HEAD block.
 func (hc *HeaderChain) GasLimit() uint64 {
-	return hc.CurrentHeader().GasLimit[types.QuaiNetworkContext]
+	return hc.CurrentHeader().GasLimit()
 }
 
 // GetUnclesInChain retrieves all the uncles from a given block backwards until
@@ -486,7 +487,7 @@ func (hc *HeaderChain) GetGasUsedInChain(block *types.Block, length int) int64 {
 // GetGasUsedInChain retrieves all the gas used from a given block backwards until
 // a specific distance is reached.
 func (hc *HeaderChain) CalculateBaseFee(header *types.Header) *big.Int {
-	return misc.CalcBaseFee(hc.Config(), header, hc.GetHeaderByNumber, hc.GetUnclesInChain, hc.GetGasUsedInChain)
+	return misc.CalcBaseFee(hc.Config(), header)
 }
 
 // Export writes the active chain to the given writer.

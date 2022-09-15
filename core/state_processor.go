@@ -184,13 +184,13 @@ func (p *StateProcessor) Process(block *types.Block) (types.Receipts, []*types.L
 		gp          = new(GasPool).AddGas(block.GasLimit())
 	)
 
-	parent := p.hc.GetBlock(block.Header().ParentHash[types.QuaiNetworkContext], block.NumberU64()-1)
+	parent := p.hc.GetBlock(block.Header().ParentHash(), block.NumberU64()-1)
 	if parent == nil {
 		return types.Receipts{}, []*types.Log{}, nil, 0, errors.New("parent block is nil for the block given to process")
 	}
 
 	// Initialize a statedb
-	statedb, err := state.New(parent.Header().Root[types.QuaiNetworkContext], p.stateCache, nil)
+	statedb, err := state.New(parent.Header().Root(), p.stateCache, nil)
 	if err != nil {
 		return types.Receipts{}, []*types.Log{}, nil, 0, err
 	}
@@ -200,13 +200,9 @@ func (p *StateProcessor) Process(block *types.Block) (types.Receipts, []*types.L
 
 	// Iterate over and process the individual transactions.
 	for i, tx := range block.Transactions() {
-		msg, err := tx.AsMessage(types.MakeSigner(p.config, header.Number[types.QuaiNetworkContext]), header.BaseFee[types.QuaiNetworkContext])
+		msg, err := tx.AsMessage(types.MakeSigner(p.config, header.Number()), header.BaseFee())
 		if err != nil {
 			return nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
-		}
-		// All ETxs applied to state must be generated from our cache.
-		if msg.FromExternal() {
-			continue
 		}
 		statedb.Prepare(tx.Hash(), i)
 		receipt, err := applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv)
@@ -225,16 +221,6 @@ func (p *StateProcessor) Process(block *types.Block) (types.Receipts, []*types.L
 }
 
 func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (*types.Receipt, error) {
-	if config.ChainID.Cmp(tx.ChainId()) != 0 {
-		return nil, ErrSenderInoperable
-	}
-
-	// Validate Address Operability
-	idRange := config.ChainIDRange()
-	if int(msg.From().Bytes()[0]) < idRange[0] || int(msg.From().Bytes()[0]) > idRange[1] {
-		return nil, ErrSenderInoperable
-	}
-
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(msg)
 	evm.Reset(txContext, statedb)
@@ -340,7 +326,7 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block) ([]*types.
 						log.Info("State in memory for too long, committing", "time", p.gcproc, "allowance", p.cacheConfig.TrieTimeLimit, "optimum", float64(chosen-lastWrite)/TriesInMemory)
 					}
 					// Flush an entire trie and restart the counters
-					triedb.Commit(header.Root[types.QuaiNetworkContext], true, nil)
+					triedb.Commit(header.Root(), true, nil)
 					lastWrite = chosen
 					p.gcproc = 0
 				}
@@ -365,26 +351,14 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block) ([]*types.
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
 func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config) (*types.Receipt, error) {
-	if header.BaseFee == nil {
-		return nil, errors.New("header BaseFee is nil")
-	}
-
-	if header.Number == nil {
-		return nil, errors.New("header number is nil")
-	}
-
-	if tx == nil {
-		return nil, errors.New("tx is nil")
-	}
-
-	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number[types.QuaiNetworkContext]), header.BaseFee[types.QuaiNetworkContext])
+	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number()), header.BaseFee())
 	if err != nil {
 		return nil, err
 	}
 	// Create a new context to be used in the EVM environment
 	blockContext := NewEVMBlockContext(header, bc, author)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, cfg)
-	return applyTransaction(msg, config, bc, author, gp, statedb, header.Number[types.QuaiNetworkContext], header.Hash(), tx, usedGas, vmenv)
+	return applyTransaction(msg, config, bc, author, gp, statedb, header.Number(), header.Hash(), tx, usedGas, vmenv)
 }
 
 // GetVMConfig returns the block chain VM config.

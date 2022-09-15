@@ -181,7 +181,6 @@ type worker struct {
 	current      *environment                 // An environment for current running cycle.
 	localUncles  map[common.Hash]*types.Block // A set of side blocks generated locally as the possible uncle blocks.
 	remoteUncles map[common.Hash]*types.Block // A set of side blocks as the possible uncle blocks.
-	unconfirmed  *unconfirmedBlocks           // A set of locally mined blocks pending canonicalness confirmations.
 
 	mu       sync.RWMutex // The lock used to protect the coinbase and extra fields
 	coinbase common.Address
@@ -228,7 +227,6 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 		workerDb:           db,
 		localUncles:        make(map[common.Hash]*types.Block),
 		remoteUncles:       make(map[common.Hash]*types.Block),
-		unconfirmed:        newUnconfirmedBlocks(headerchain, sealingLogAtDepth),
 		pendingTasks:       make(map[common.Hash]*task),
 		txsCh:              make(chan NewTxsEvent, txChanSize),
 		chainHeadCh:        make(chan ChainHeadEvent, chainHeadChanSize),
@@ -440,7 +438,6 @@ func (w *worker) GeneratePendingHeader(block *types.Block) (*types.Header, error
 	}
 
 	task := &task{receipts: env.receipts, state: env.state, block: block, createdAt: time.Now()}
-	w.unconfirmed.Shift(block.NumberU64() - 1)
 	log.Info("Commit new sealing work", "number", block.Number(), "sealhash", w.engine.SealHash(block.Header()),
 		"uncles", len(env.uncles), "txs", env.tcount,
 		"gas", block.GasUsed(), "fees", totalFees(block, env.receipts),
@@ -551,7 +548,7 @@ func (w *worker) mainLoop() {
 					acc, _ := types.Sender(w.current.signer, tx)
 					txs[acc] = append(txs[acc], tx)
 				}
-				txset := types.NewTransactionsByPriceAndNonce(w.current.signer, txs, w.current.header.BaseFee[types.QuaiNetworkContext])
+				txset := types.NewTransactionsByPriceAndNonce(w.current.signer, txs, w.current.header.BaseFee())
 				tcount := w.current.tcount
 				w.commitTransactions(w.current, txset, nil)
 
@@ -596,7 +593,7 @@ func (w *worker) makeEnv(parent *types.Block, header *types.Header, coinbase com
 
 	// Note the passed coinbase may be different with header.Coinbase.
 	env := &environment{
-		signer:          types.MakeSigner(w.chainConfig, header.Number[types.QuaiNetworkContext]),
+		signer:          types.MakeSigner(w.chainConfig, header.Number()),
 		state:           state,
 		coinbase:        coinbase,
 		ancestors:       mapset.NewSet(),
@@ -624,10 +621,10 @@ func (w *worker) commitUncle(env *environment, uncle *types.Header) error {
 	if _, exist := env.uncles[hash]; exist {
 		return errors.New("uncle not unique")
 	}
-	if env.header.ParentHash[types.QuaiNetworkContext] == uncle.ParentHash[types.QuaiNetworkContext] {
+	if env.header.ParentHash() == uncle.ParentHash() {
 		return errors.New("uncle is sibling")
 	}
-	if !env.ancestors.Contains(uncle.ParentHash[types.QuaiNetworkContext]) {
+	if !env.ancestors.Contains(uncle.ParentHash()) {
 		return errors.New("uncle's parent unknown")
 	}
 	if env.family.Contains(hash) {
@@ -656,7 +653,8 @@ func (w *worker) updateSnapshot(env *environment) {
 func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*types.Log, error) {
 	if tx != nil {
 		snap := env.state.Snapshot()
-		receipt, err := ApplyTransaction(w.chainConfig, w.hc, &env.coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed[types.QuaiNetworkContext], *w.hc.bc.processor.GetVMConfig())
+		gasUsed := env.header.GasUsed()
+		receipt, err := ApplyTransaction(w.chainConfig, w.hc, &env.coinbase, env.gasPool, env.state, env.header, tx, &gasUsed, *w.hc.bc.processor.GetVMConfig())
 		if err != nil {
 			env.state.RevertToSnapshot(snap)
 			return nil, err
@@ -672,7 +670,7 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*
 func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByPriceAndNonce, interrupt *int32) bool {
 	gasLimit := env.header.GasLimit
 	if env.gasPool == nil {
-		env.gasPool = new(GasPool).AddGas(gasLimit[types.QuaiNetworkContext])
+		env.gasPool = new(GasPool).AddGas(gasLimit())
 	}
 	var coalescedLogs []*types.Log
 
@@ -686,7 +684,7 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 		if interrupt != nil && atomic.LoadInt32(interrupt) != commitInterruptNone {
 			// Notify resubmit loop to increase resubmitting interval due to too frequent commits.
 			if atomic.LoadInt32(interrupt) == commitInterruptResubmit {
-				ratio := float64(gasLimit[types.QuaiNetworkContext]-env.gasPool.Gas()) / float64(gasLimit[types.QuaiNetworkContext])
+				ratio := float64(gasLimit()-env.gasPool.Gas()) / float64(gasLimit())
 				if ratio < 0.1 {
 					ratio = 0.1
 				}
@@ -714,7 +712,7 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 		from, _ := types.Sender(env.signer, tx)
 		// Check whether the tx is replay protected. If we're not in the EIP155 hf
 		// phase, start ignoring the sender until we do.
-		if tx.Protected() && !w.chainConfig.IsEIP155(env.header.Number[types.QuaiNetworkContext]) {
+		if tx.Protected() && !w.chainConfig.IsEIP155(env.header.Number()) {
 			log.Trace("Ignoring reply protected transaction", "hash", tx.Hash(), "eip155", w.chainConfig.EIP155Block)
 
 			txs.Pop()
@@ -774,11 +772,6 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 		}
 		w.pendingLogsFeed.Send(cpy)
 	}
-	// Notify resubmit loop to decrease resubmitting interval if current interval is larger
-	// than the user-specified one.
-	if interrupt != nil {
-		w.resubmitAdjustCh <- &intervalAdjust{inc: false}
-	}
 	return false
 }
 
@@ -809,38 +802,23 @@ func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*en
 	}
 	// Construct the sealing block header, set the extra field if it's allowed
 	num := parent.Number()
-	header := &types.Header{
-		ParentHash:        make([]common.Hash, 3),
-		Number:            make([]*big.Int, 3),
-		Extra:             make([][]byte, 3),
-		Time:              uint64(timestamp),
-		BaseFee:           make([]*big.Int, 3),
-		GasLimit:          make([]uint64, 3),
-		Coinbase:          make([]common.Address, 3),
-		Difficulty:        make([]*big.Int, 3),
-		NetworkDifficulty: make([]*big.Int, 3),
-		Root:              make([]common.Hash, 3),
-		TxHash:            make([]common.Hash, 3),
-		ReceiptHash:       make([]common.Hash, 3),
-		GasUsed:           make([]uint64, 3),
-		Bloom:             make([]types.Bloom, 3),
-		Location:          w.chainConfig.Location,
-	}
+	header := types.EmptyHeader()
+	header.SetParentHash(block.Header().Hash())
+	header.SetNumber(big.NewInt(int64(num.Uint64()) + 1))
+	header.SetExtra(w.extra)
+	header.SetBaseFee(misc.CalcBaseFee(w.chainConfig, parent.Header()))
+	header.SetTime(timestamp)
 
-	header.ParentHash[types.QuaiNetworkContext] = block.Header().Hash()
-	header.Number[types.QuaiNetworkContext] = big.NewInt(int64(num.Uint64()) + 1)
-	header.Extra[types.QuaiNetworkContext] = w.extra
-	header.BaseFee[types.QuaiNetworkContext] = misc.CalcBaseFee(w.chainConfig, parent.Header(), w.hc.GetHeaderByNumber, w.hc.GetUnclesInChain, w.hc.GetGasUsedInChain)
 	if w.isRunning() {
 		if w.coinbase == (common.Address{}) {
 			log.Error("Refusing to mine without etherbase")
 			return nil, errors.New("refusing to mine without etherbase")
 		}
-		header.Coinbase[types.QuaiNetworkContext] = w.coinbase
+		header.SetCoinbase(w.coinbase)
 	}
 
 	// Run the consensus preparation with the default or customized consensus engine.
-	if err := w.engine.Prepare(w.hc, header, block); err != nil {
+	if err := w.engine.Prepare(w.hc, header, block.Header()); err != nil {
 		log.Error("Failed to prepare header for sealing", "err", err)
 		return nil, err
 	}
@@ -888,13 +866,13 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment) {
 		}
 	}
 	if len(localTxs) > 0 {
-		txs := types.NewTransactionsByPriceAndNonce(env.signer, localTxs, env.header.BaseFee[types.QuaiNetworkContext])
+		txs := types.NewTransactionsByPriceAndNonce(env.signer, localTxs, env.header.BaseFee())
 		if w.commitTransactions(env, txs, interrupt) {
 			return
 		}
 	}
 	if len(remoteTxs) > 0 {
-		txs := types.NewTransactionsByPriceAndNonce(env.signer, remoteTxs, env.header.BaseFee[types.QuaiNetworkContext])
+		txs := types.NewTransactionsByPriceAndNonce(env.signer, remoteTxs, env.header.BaseFee())
 		if w.commitTransactions(env, txs, interrupt) {
 			return
 		}
@@ -908,11 +886,7 @@ func (w *worker) adjustGasLimit(interrupt *int32, env *environment, parent *type
 
 	gasUsed := (parent.GasUsed() + env.externalGasUsed) / uint64(env.externalBlockLength+1)
 
-	// Get the amount of uncles for the past 1000 blocks
-	prevBlock := w.hc.GetBlockByHash(env.header.ParentHash[types.QuaiNetworkContext])
-	uncleCount := len(w.hc.GetUnclesInChain(prevBlock, 1000))
-
-	env.header.GasLimit[types.QuaiNetworkContext] = CalcGasLimit(parent.GasLimit(), gasUsed, uncleCount)
+	env.header.SetGasLimit(CalcGasLimit(parent.GasLimit(), gasUsed))
 }
 
 func (w *worker) FinalizeAssembleAndBroadcast(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
@@ -947,7 +921,6 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 		}
 		select {
 		case w.taskCh <- &task{receipts: env.receipts, state: env.state, block: block, createdAt: time.Now()}:
-			w.unconfirmed.Shift(block.NumberU64() - 1)
 			log.Info("Commit new sealing work", "number", block.Number(), "sealhash", w.engine.SealHash(block.Header()),
 				"uncles", len(env.uncles), "txs", env.tcount,
 				"gas", block.GasUsed(), "fees", totalFees(block, env.receipts),
