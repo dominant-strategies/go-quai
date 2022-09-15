@@ -167,7 +167,7 @@ func (sl *Slice) Append(header *types.Header, domTerminus common.Hash, td *big.I
 	}
 
 	start := time.Now()
-	log.Info("Starting slice append", "hash", block.Hash(), "number", block.Number(), "location", block.Header().Location)
+	log.Info("Starting slice append", "hash", block.Hash(), "number", block.Number(), "location", block.Header().Location, "uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed())
 
 	batch := sl.sliceDb.NewBatch()
 

@@ -140,7 +140,7 @@ func insertBlockParamsToBlock(core *core.Core, parent *types.Header, params exec
 		ParentHash:  []common.Hash{emptyHash, emptyHash, emptyHash},
 		TxHash:      []common.Hash{emptyHash, emptyHash, emptyHash},
 		ReceiptHash: []common.Hash{emptyHash, emptyHash, emptyHash},
-		UncleHash:   types.EmptyUncleHash,
+		UncleHash:   []common.Hash{types.EmptyUncleHash, types.EmptyUncleHash, types.EmptyUncleHash},
 		Number:      []*big.Int{big.NewInt(0), big.NewInt(0), big.NewInt(0)},
 		Coinbase:    []common.Address{emptyAddress, emptyAddress, emptyAddress},
 		Difficulty:  []*big.Int{big.NewInt(1), big.NewInt(1), big.NewInt(1)},

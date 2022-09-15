@@ -141,7 +141,6 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 	//Find a common header
 	commonHeader := hc.findCommonHeader(head)
 	newHeader := head
-
 	// write the head block hash to the db
 	rawdb.WriteHeadBlockHash(hc.headerDb, head.Hash())
 	hc.currentHeader.Store(head)

@@ -20,7 +20,6 @@ package quaiclient
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"math/big"
 	"time"
 
@@ -294,13 +293,6 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 	if err := json.Unmarshal(raw, &body); err != nil {
 		return nil, err
 	}
-	// Quick-verify transaction and uncle lists. This mostly helps with debugging the server.
-	if types.IsEqualHashSlice(head.UncleHash, types.EmptyUncleHash) && len(body.Uncles) > 0 {
-		return nil, fmt.Errorf("server returned non-empty uncle list but block header indicates no uncles")
-	}
-	if types.IsEqualHashSlice(head.TxHash, types.EmptyRootHash) && len(body.Transactions) > 0 {
-		return nil, fmt.Errorf("server returned non-empty transaction list but block header indicates no transactions")
-	}
 	// Load uncles.
 	uncles := body.Uncles
 
@@ -332,13 +324,7 @@ func (ec *Client) getBlockWithReceipts(ctx context.Context, method string, args 
 	if err := json.Unmarshal(raw, &body); err != nil {
 		return nil, err
 	}
-	// Quick-verify transaction and uncle lists. This mostly helps with debugging the server.
-	if types.IsEqualHashSlice(head.UncleHash, types.EmptyUncleHash) && len(body.Uncles) > 0 {
-		return nil, fmt.Errorf("server returned non-empty uncle list but block header indicates no uncles")
-	}
-	if types.IsEqualHashSlice(head.TxHash, types.EmptyRootHash) && len(body.Transactions) > 0 {
-		return nil, fmt.Errorf("server returned non-empty transaction list but block header indicates no transactions")
-	}
+
 	// Load uncles because they are not included in the block response.
 	uncles := body.Uncles
 

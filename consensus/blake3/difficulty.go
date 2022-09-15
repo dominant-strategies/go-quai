@@ -146,7 +146,7 @@ func MakeDifficultyCalculatorU256(bombDelay *big.Int) func(time uint64, parent *
 		*/
 		x := (time - parent.Time) / 9 // (block_timestamp - parent_timestamp) // 9
 		c := uint64(1)                // if parent.unclehash == emptyUncleHashHash
-		if parent.UncleHash[types.QuaiNetworkContext] != types.EmptyUncleHash[types.QuaiNetworkContext] {
+		if parent.UncleHash[types.QuaiNetworkContext] != types.EmptyUncleHash {
 			c = 2
 		}
 		xNeg := x >= c

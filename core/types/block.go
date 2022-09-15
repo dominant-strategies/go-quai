@@ -34,8 +34,8 @@ import (
 )
 
 var (
-	EmptyRootHash      = []common.Hash{common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"), common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"), common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")}
-	EmptyUncleHash     = []common.Hash{rlpHash([]*Header(nil)), rlpHash([]*Header(nil)), rlpHash([]*Header(nil))}
+	EmptyRootHash      = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
+	EmptyUncleHash     = rlpHash([]*Header(nil))
 	ContextDepth       = 3
 	QuaiNetworkContext = 0
 )
@@ -180,12 +180,17 @@ func (h *Header) SanityCheck() error {
 // EmptyBody returns true if there is no additional 'body' to complete the header
 // that is: no transactions and no uncles.
 func (h *Header) EmptyBody() bool {
-	return h.TxHash[QuaiNetworkContext] == EmptyRootHash[QuaiNetworkContext] && h.UncleHash[QuaiNetworkContext] == EmptyUncleHash[QuaiNetworkContext]
+	fmt.Println("EmptyBody", QuaiNetworkContext)
+	fmt.Println("EmptyBody", h.TxHash[QuaiNetworkContext])
+	fmt.Println("EmptyBody", h.UncleHash[QuaiNetworkContext])
+	fmt.Println("EmptyRootHash", EmptyRootHash)
+	fmt.Println(h.TxHash[QuaiNetworkContext] == EmptyRootHash)
+	return h.TxHash[QuaiNetworkContext] == EmptyRootHash && h.UncleHash[QuaiNetworkContext] == EmptyUncleHash
 }
 
 // EmptyReceipts returns true if there are no receipts for this header/block.
 func (h *Header) EmptyReceipts() bool {
-	return h.ReceiptHash[QuaiNetworkContext] == EmptyRootHash[QuaiNetworkContext]
+	return h.ReceiptHash[QuaiNetworkContext] == EmptyRootHash
 }
 
 // IsEqualHashSlice compares each hash in a headers slice of hashes
@@ -278,23 +283,25 @@ func encodeBlockNumber(number uint64) []byte {
 func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*Receipt, hasher TrieHasher) *Block {
 	b := &Block{header: CopyHeader(header), td: new(big.Int)}
 	// TODO: panic if len(txs) != len(receipts)
+	fmt.Println("NewBlock len txs", len(txs))
 	if len(txs) == 0 {
-		b.header.TxHash = EmptyRootHash
+		b.header.TxHash = []common.Hash{EmptyRootHash, EmptyRootHash, EmptyRootHash}
 	} else {
 		b.header.TxHash = []common.Hash{DeriveSha(Transactions(txs), hasher), DeriveSha(Transactions(txs), hasher), DeriveSha(Transactions(txs), hasher)}
 		b.transactions = make(Transactions, len(txs))
+		fmt.Println("putting txs into new block", b.header.TxHash)
 		copy(b.transactions, txs)
 	}
 
 	if len(receipts) == 0 {
-		b.header.ReceiptHash = EmptyRootHash
+		b.header.ReceiptHash = []common.Hash{EmptyRootHash, EmptyRootHash, EmptyRootHash}
 	} else {
 		b.header.ReceiptHash = []common.Hash{DeriveSha(Receipts(receipts), hasher), DeriveSha(Receipts(receipts), hasher), DeriveSha(Receipts(receipts), hasher)}
 		b.header.Bloom = []Bloom{CreateBloom(receipts), CreateBloom(receipts), CreateBloom(receipts)}
 	}
 
 	if len(uncles) == 0 {
-		b.header.UncleHash = EmptyUncleHash
+		b.header.UncleHash = []common.Hash{EmptyUncleHash, EmptyUncleHash, EmptyUncleHash}
 	} else {
 		b.header.UncleHash = []common.Hash{CalcUncleHash(uncles), CalcUncleHash(uncles), CalcUncleHash(uncles)}
 		b.uncles = make([]*Header, len(uncles))
@@ -302,6 +309,7 @@ func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*
 			b.uncles[i] = CopyHeader(uncles[i])
 		}
 	}
+	fmt.Println("EmptyRootHash after", EmptyRootHash)
 
 	return b
 }
@@ -595,7 +603,7 @@ func (c *writeCounter) Write(b []byte) (int, error) {
 
 func CalcUncleHash(uncles []*Header) common.Hash {
 	if len(uncles) == 0 {
-		return EmptyUncleHash[0]
+		return EmptyUncleHash
 	}
 	return rlpHash(uncles)
 }
