@@ -1,7 +1,6 @@
 package core
 
 import (
-	"fmt"
 	"io"
 	"math/big"
 
@@ -46,7 +45,6 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 			return i, err
 		}
 
-		fmt.Println("InsertChain:", block.Hash())
 		// Write the block body to the db.
 		rawdb.WritePendingBlockBody(c.sl.sliceDb, block.Header().Root[types.QuaiNetworkContext], block.Body())
 

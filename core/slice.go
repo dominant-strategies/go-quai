@@ -166,11 +166,12 @@ func (sl *Slice) Append(header *types.Header, domTerminus common.Hash, td *big.I
 		return sl.nilPendingHeader, errors.New("could not find the tx and uncle data to match the header root hash")
 	}
 
-	log.Info("Starting Append...", "Block.Hash:", block.Hash(), "Number:", block.Number(), "Location:", block.Header().Location)
+	start := time.Now()
+	log.Info("Starting slice append", "hash", block.Hash(), "number", block.Number(), "location", block.Header().Location)
+
 	batch := sl.sliceDb.NewBatch()
 
 	// Calculate block order
-
 	order, err := sl.engine.GetDifficultyOrder(block.Header())
 	if err != nil {
 		return sl.nilPendingHeader, err
@@ -237,12 +238,16 @@ func (sl *Slice) Append(header *types.Header, domTerminus common.Hash, td *big.I
 	sl.updateCacheAndRelay(pendingHeader, block.Header().Location, order, reorg)
 
 	// Remove the header form the future headers cache
-	fmt.Println("Removing hash from future headers", block.Hash())
 	sl.futureHeaders.Remove(block.Hash())
 
 	if order < types.QuaiNetworkContext {
 		go sl.procfutureHeaders()
 	}
+
+	log.Info("Appended new block", "number", block.Header().Number, "hash", block.Hash(),
+		"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
+		"elapsed", common.PrettyDuration(time.Since(start)),
+		"root", block.Root())
 
 	return pendingHeader, nil
 }
@@ -319,7 +324,6 @@ func (sl *Slice) setHeaderChainHead(batch ethdb.Batch, block *types.Block, reorg
 	// Upate the local pending header
 	pendingHeader, err := sl.miner.worker.GeneratePendingHeader(block)
 	if err != nil {
-		fmt.Println("pending block error: ", err)
 		return sl.nilHeader, err
 	}
 
