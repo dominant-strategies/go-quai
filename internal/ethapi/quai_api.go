@@ -517,7 +517,7 @@ func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw js
 	if block.Header() != nil {
 		s.b.EventMux().Post(core.NewMinedBlockEvent{Block: block})
 	}
-	log.Info("Retrieved mined block", "number", header.Number, "location", header.Location)
+	log.Info("Retrieved mined block", "number", header.Number(), "location", header.Location())
 	s.b.InsertBlock(ctx, block)
 
 	return nil
@@ -568,6 +568,12 @@ func (s *PublicBlockChainQuaiAPI) SubRelayPendingHeader(ctx context.Context, raw
 	return s.b.SubRelayPendingHeader(pendingHeader, subRelay.Location, subRelay.Reorg)
 }
 
-func (s *PublicBlockChainQuaiAPI) GetPendingHeader(ctx context.Context) (*types.Header, error) {
-	return s.b.GetPendingHeader()
+func (s *PublicBlockChainQuaiAPI) GetPendingHeader(ctx context.Context) (map[string]interface{}, error) {
+	pendingHeader, err := s.b.GetPendingHeader()
+	if err != nil {
+		return nil, err
+	}
+	// Marshal the response.
+	marshaledPh := RPCMarshalHeader(pendingHeader)
+	return marshaledPh, nil
 }
