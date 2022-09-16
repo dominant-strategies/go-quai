@@ -35,8 +35,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mattn/go-colorable"
-	"github.com/mattn/go-isatty"
 	"github.com/dominant-strategies/go-quai/accounts"
 	"github.com/dominant-strategies/go-quai/accounts/keystore"
 	"github.com/dominant-strategies/go-quai/cmd/utils"
@@ -49,13 +47,14 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/node"
 	"github.com/dominant-strategies/go-quai/params"
-	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/dominant-strategies/go-quai/rpc"
 	"github.com/dominant-strategies/go-quai/signer/core"
 	"github.com/dominant-strategies/go-quai/signer/core/apitypes"
 	"github.com/dominant-strategies/go-quai/signer/fourbyte"
 	"github.com/dominant-strategies/go-quai/signer/rules"
 	"github.com/dominant-strategies/go-quai/signer/storage"
+	"github.com/mattn/go-colorable"
+	"github.com/mattn/go-isatty"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -865,31 +864,6 @@ func testExternalUI(api *core.SignerAPI) {
 		api.UI.ShowError("If you see this message, enter 'yes' to the next question")
 		time.Sleep(delay)
 		expectResponse("showerror", "Did you see the message? [yes/no]", "yes")
-	}
-	{ // Sign data test - clique header
-		api.UI.ShowInfo("Please approve the next request for signing a clique header")
-		time.Sleep(delay)
-		cliqueHeader := types.Header{
-			ParentHash:  common.HexToHash("0000H45H"),
-			UncleHash:   common.HexToHash("0000H45H"),
-			Coinbase:    common.HexToAddress("0000H45H"),
-			Root:        common.HexToHash("0000H00H"),
-			TxHash:      common.HexToHash("0000H45H"),
-			ReceiptHash: common.HexToHash("0000H45H"),
-			Difficulty:  big.NewInt(1337),
-			Number:      big.NewInt(1337),
-			GasLimit:    1338,
-			GasUsed:     1338,
-			Time:        1338,
-			Extra:       []byte("Extra data Extra data Extra data  Extra data  Extra data  Extra data  Extra data Extra data"),
-		}
-		cliqueRlp, err := rlp.EncodeToBytes(cliqueHeader)
-		if err != nil {
-			utils.Fatalf("Should not error: %v", err)
-		}
-		addr, _ := common.NewMixedcaseAddressFromString("0x0011223344556677889900112233445566778899")
-		_, err = api.SignData(ctx, accounts.MimetypeClique, *addr, hexutil.Encode(cliqueRlp))
-		expectApprove("signdata - clique header", err)
 	}
 	{ // Sign data test - typed data
 		api.UI.ShowInfo("Please approve the next request for signing EIP-712 typed data")
