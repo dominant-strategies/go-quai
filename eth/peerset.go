@@ -18,7 +18,6 @@ package eth
 
 import (
 	"errors"
-	"math/big"
 	"sync"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -141,19 +140,18 @@ func (ps *peerSet) len() int {
 	return len(ps.peers)
 }
 
-// peerWithHighestTD retrieves the known peer with the currently highest total
-// difficulty.
-func (ps *peerSet) peerWithHighestTD() *eth.Peer {
+// peerWithHighestTD retrieves the known peer with the currently highest Number
+func (ps *peerSet) peerWithHighestNumber() *eth.Peer {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
 	var (
-		bestPeer *eth.Peer
-		bestTd   *big.Int
+		bestPeer   *eth.Peer
+		bestNumber uint64
 	)
 	for _, p := range ps.peers {
-		if _, td := p.Head(); bestPeer == nil || td.Cmp(bestTd) > 0 {
-			bestPeer, bestTd = p.Peer, td
+		if _, number := p.Head(); bestPeer == nil || number > bestNumber {
+			bestPeer, bestNumber = p.Peer, number
 		}
 	}
 	return bestPeer
