@@ -117,7 +117,7 @@ func monitorFreeDiskSpace(sigc chan os.Signal, path string, freeDiskSpaceCritica
 	}
 }
 
-func ImportChain(chain *core.BlockChain, fn string) error {
+func ImportChain(chain *core.Core, fn string) error {
 	// Watch for Ctrl-C while the import is running.
 	// If a signal is received, the import will stop at the next batch.
 	interrupt := make(chan os.Signal, 1)
@@ -200,7 +200,7 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 	return nil
 }
 
-func missingBlocks(chain *core.BlockChain, blocks []*types.Block) []*types.Block {
+func missingBlocks(chain *core.Core, blocks []*types.Block) []*types.Block {
 	head := chain.CurrentBlock()
 	for i, block := range blocks {
 		// If we're behind the chain head, only check block, state is available at head
@@ -220,7 +220,7 @@ func missingBlocks(chain *core.BlockChain, blocks []*types.Block) []*types.Block
 
 // ExportChain exports a blockchain into the specified file, truncating any data
 // already present in the file.
-func ExportChain(blockchain *core.BlockChain, fn string) error {
+func ExportChain(core *core.Core, fn string) error {
 	log.Info("Exporting blockchain", "file", fn)
 
 	// Open the file handle and potentially wrap with a gzip stream
@@ -236,7 +236,7 @@ func ExportChain(blockchain *core.BlockChain, fn string) error {
 		defer writer.(*gzip.Writer).Close()
 	}
 	// Iterate over the blocks and export them
-	if err := blockchain.Export(writer); err != nil {
+	if err := core.Export(writer); err != nil {
 		return err
 	}
 	log.Info("Exported blockchain", "file", fn)
@@ -246,7 +246,7 @@ func ExportChain(blockchain *core.BlockChain, fn string) error {
 
 // ExportAppendChain exports a blockchain into the specified file, appending to
 // the file if data already exists in it.
-func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, last uint64) error {
+func ExportAppendChain(core *core.Core, fn string, first uint64, last uint64) error {
 	log.Info("Exporting blockchain", "file", fn)
 
 	// Open the file handle and potentially wrap with a gzip stream
@@ -262,7 +262,7 @@ func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, las
 		defer writer.(*gzip.Writer).Close()
 	}
 	// Iterate over the blocks and export them
-	if err := blockchain.ExportN(writer, first, last); err != nil {
+	if err := core.ExportN(writer, first, last); err != nil {
 		return err
 	}
 	log.Info("Exported blockchain to", "file", fn)
