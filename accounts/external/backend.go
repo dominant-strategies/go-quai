@@ -21,7 +21,7 @@ import (
 	"math/big"
 	"sync"
 
-	"github.com/dominant-strategies/go-quai"
+	ethereum "github.com/dominant-strategies/go-quai"
 	"github.com/dominant-strategies/go-quai/accounts"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
@@ -165,10 +165,6 @@ func (api *ExternalSigner) SignData(account accounts.Account, mimeType string, d
 		&signAddress, // Need to use the pointer here, because of how MarshalJSON is defined
 		hexutil.Encode(data)); err != nil {
 		return nil, err
-	}
-	// If V is on 27/28-form, convert to 0/1 for Clique
-	if mimeType == accounts.MimetypeClique && (res[64] == 27 || res[64] == 28) {
-		res[64] -= 27 // Transform V from 27/28 to 0/1 for Clique use
 	}
 	return res, nil
 }

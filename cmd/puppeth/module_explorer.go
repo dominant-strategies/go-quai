@@ -93,9 +93,6 @@ func deployExplorer(client *sshClient, network string, bootnodes []string, confi
 	files[filepath.Join(workdir, "Dockerfile")] = dockerfile.Bytes()
 
 	transformer := "base"
-	if isClique {
-		transformer = "clique"
-	}
 	composefile := new(bytes.Buffer)
 	template.Must(template.New("").Parse(explorerComposefile)).Execute(composefile, map[string]interface{}{
 		"Network":     network,
