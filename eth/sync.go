@@ -17,7 +17,6 @@
 package eth
 
 import (
-	"math/big"
 	"math/rand"
 	"sync/atomic"
 	"time"
@@ -163,10 +162,10 @@ type chainSyncer struct {
 
 // chainSyncOp is a scheduled sync operation.
 type chainSyncOp struct {
-	mode downloader.SyncMode
-	peer *eth.Peer
-	td   *big.Int
-	head common.Hash
+	mode   downloader.SyncMode
+	peer   *eth.Peer
+	number uint64
+	head   common.Hash
 }
 
 // newChainSyncer creates a chainSyncer.
@@ -249,28 +248,27 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 		return nil
 	}
 	// We have enough peers, check TD
-	peer := cs.handler.peers.peerWithHighestTD()
+	peer := cs.handler.peers.peerWithHighestNumber()
 	if peer == nil {
 		return nil
 	}
-	mode, ourTD := cs.modeAndLocalHead()
+	mode, ourNumber := cs.modeAndLocalHead()
 	op := peerToSyncOp(mode, peer)
-	if op.td.Cmp(ourTD) <= 0 {
+	if op.number <= ourNumber {
 		return nil // We're in sync.
 	}
 	return op
 }
 
 func peerToSyncOp(mode downloader.SyncMode, p *eth.Peer) *chainSyncOp {
-	peerHead, peerTD := p.Head()
-	return &chainSyncOp{mode: mode, peer: p, td: peerTD, head: peerHead}
+	peerHead, peerNumber := p.Head()
+	return &chainSyncOp{mode: mode, peer: p, number: peerNumber, head: peerHead}
 }
 
-func (cs *chainSyncer) modeAndLocalHead() (downloader.SyncMode, *big.Int) {
+func (cs *chainSyncer) modeAndLocalHead() (downloader.SyncMode, uint64) {
 	// Nope, we're really full syncing
 	head := cs.handler.core.CurrentBlock()
-	td := cs.handler.core.GetTd(head.Hash(), head.NumberU64())
-	return downloader.FullSync, td
+	return downloader.FullSync, head.NumberU64()
 }
 
 // startSync launches doSync in a new goroutine.
@@ -282,7 +280,7 @@ func (cs *chainSyncer) startSync(op *chainSyncOp) {
 // doSync synchronizes the local blockchain with a remote peer.
 func (h *handler) doSync(op *chainSyncOp) error {
 	// Run the sync cycle, and disable fast sync if we're past the pivot block
-	err := h.downloader.Synchronise(op.peer.ID(), op.head, op.td, op.mode)
+	err := h.downloader.Synchronise(op.peer.ID(), op.head, op.number, op.mode)
 	if err != nil {
 		return err
 	}
