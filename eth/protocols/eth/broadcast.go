@@ -17,8 +17,6 @@
 package eth
 
 import (
-	"math/big"
-
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
 )
@@ -33,7 +31,6 @@ const (
 // broadcast queue.
 type blockPropagation struct {
 	block *types.Block
-	td    *big.Int
 }
 
 // broadcastBlocks is a write loop that multiplexes blocks and block accouncements
@@ -43,10 +40,10 @@ func (p *Peer) broadcastBlocks() {
 	for {
 		select {
 		case prop := <-p.queuedBlocks:
-			if err := p.SendNewBlock(prop.block, prop.td); err != nil {
+			if err := p.SendNewBlock(prop.block); err != nil {
 				return
 			}
-			p.Log().Trace("Propagated block", "number", prop.block.Number(), "hash", prop.block.Hash(), "td", prop.td)
+			p.Log().Trace("Propagated block", "number", prop.block.Number(), "hash", prop.block.Hash(), "number", prop.block.NumberU64())
 
 		case block := <-p.queuedBlockAnns:
 			if err := p.SendNewBlockHashes([]common.Hash{block.Hash()}, []uint64{block.NumberU64()}); err != nil {
