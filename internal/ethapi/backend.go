@@ -40,6 +40,10 @@ import (
 // Backend interface provides the common API services (that are provided by
 // both full and light clients) with access to necessary functions.
 type Backend interface {
+	// General Ethereum and Quai API
+	SyncProgress() quai.SyncProgress
+	EventMux() *event.TypeMux
+
 	// General Ethereum API
 	Downloader() *downloader.Downloader
 	SuggestGasTipCap(ctx context.Context) (*big.Int, error)
@@ -69,6 +73,15 @@ type Backend interface {
 	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 	SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription
+
+	Append(header *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) (types.PendingHeader, error)
+	ConstructLocalBlock(header *types.Header) *types.Block
+	InsertBlock(ctx context.Context, block *types.Block) (int, error)
+	PendingBlock() *types.Block
+	PendingBlockBody(hash common.Hash) *types.Body
+	SubRelayPendingHeader(pendingHeader types.PendingHeader, location common.Location, reorg bool) error
+	GetPendingHeader() (*types.Header, error)
+	PendingBlockAndReceipts() (*types.Block, types.Receipts)
 
 	// Transaction pool API
 	SendTx(ctx context.Context, signedTx *types.Transaction) error
@@ -104,12 +117,27 @@ func GetAPIs(apiBackend Backend) []rpc.API {
 			Service:   NewPublicEthereumAPI(apiBackend),
 			Public:    true,
 		}, {
+			Namespace: "quai",
+			Version:   "1.0",
+			Service:   NewPublicQuaiAPI(apiBackend),
+			Public:    true,
+		}, {
 			Namespace: "eth",
 			Version:   "1.0",
 			Service:   NewPublicBlockChainAPI(apiBackend),
 			Public:    true,
 		}, {
+			Namespace: "quai",
+			Version:   "1.0",
+			Service:   NewPublicBlockChainQuaiAPI(apiBackend),
+			Public:    true,
+		}, {
 			Namespace: "eth",
+			Version:   "1.0",
+			Service:   NewPublicTransactionPoolAPI(apiBackend, nonceLock),
+			Public:    true,
+		}, {
+			Namespace: "quai",
 			Version:   "1.0",
 			Service:   NewPublicTransactionPoolAPI(apiBackend, nonceLock),
 			Public:    true,
@@ -129,6 +157,11 @@ func GetAPIs(apiBackend Backend) []rpc.API {
 			Service:   NewPrivateDebugAPI(apiBackend),
 		}, {
 			Namespace: "eth",
+			Version:   "1.0",
+			Service:   NewPublicAccountAPI(apiBackend.AccountManager()),
+			Public:    true,
+		}, {
+			Namespace: "quai",
 			Version:   "1.0",
 			Service:   NewPublicAccountAPI(apiBackend.AccountManager()),
 			Public:    true,
