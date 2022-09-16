@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/big"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/forkid"
@@ -91,7 +90,7 @@ type Packet interface {
 type StatusPacket struct {
 	ProtocolVersion uint32
 	NetworkID       uint64
-	TD              *big.Int
+	Number          uint64
 	Head            common.Hash
 	Genesis         common.Hash
 	ForkID          forkid.ID
@@ -182,18 +181,12 @@ type BlockHeadersPacket66 struct {
 // NewBlockPacket is the network packet for the block propagation message.
 type NewBlockPacket struct {
 	Block *types.Block
-	TD    *big.Int
 }
 
 // sanityCheck verifies that the values are reasonable, as a DoS protection
 func (request *NewBlockPacket) sanityCheck() error {
 	if err := request.Block.SanityCheck(); err != nil {
 		return err
-	}
-	//TD at mainnet block #7753254 is 76 bits. If it becomes 100 million times
-	// larger, it will still fit within 100 bits
-	if tdlen := request.TD.BitLen(); tdlen > 100 {
-		return fmt.Errorf("too large block TD: bitlen %d", tdlen)
 	}
 	return nil
 }
