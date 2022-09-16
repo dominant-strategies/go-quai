@@ -28,7 +28,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	lru "github.com/hashicorp/golang-lru"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/mclock"
 	"github.com/dominant-strategies/go-quai/common/prque"
@@ -45,6 +44,7 @@ import (
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/dominant-strategies/go-quai/trie"
+	lru "github.com/hashicorp/golang-lru"
 )
 
 var (
@@ -408,7 +408,7 @@ func (bc *BlockChain) GetVMConfig() *vm.Config {
 // into node seamlessly.
 func (bc *BlockChain) empty() bool {
 	genesis := bc.genesisBlock.Hash()
-	for _, hash := range []common.Hash{rawdb.ReadHeadBlockHash(bc.db), rawdb.ReadHeadHeaderHash(bc.db), rawdb.ReadHeadFastBlockHash(bc.db)} {
+	for _, hash := range []common.Hash{rawdb.ReadHeadBlockHash(bc.db), rawdb.ReadHeadHeaderHash(bc.db)} {
 		if hash != genesis {
 			return false
 		}
@@ -450,22 +450,11 @@ func (bc *BlockChain) loadLastState() error {
 	bc.currentFastBlock.Store(currentBlock)
 	headFastBlockGauge.Update(int64(currentBlock.NumberU64()))
 
-	if head := rawdb.ReadHeadFastBlockHash(bc.db); head != (common.Hash{}) {
-		if block := bc.GetBlockByHash(head); block != nil {
-			bc.currentFastBlock.Store(block)
-			headFastBlockGauge.Update(int64(block.NumberU64()))
-		}
-	}
-	// Issue a status log for the user
-	currentFastBlock := bc.CurrentFastBlock()
-
 	headerTd := bc.GetTd(currentHeader.Hash(), currentHeader.Number().Uint64())
 	blockTd := bc.GetTd(currentBlock.Hash(), currentBlock.NumberU64())
-	fastTd := bc.GetTd(currentFastBlock.Hash(), currentFastBlock.NumberU64())
 
 	log.Info("Loaded most recent local header", "number", currentHeader.Number(), "hash", currentHeader.Hash(), "td", headerTd, "age", common.PrettyAge(time.Unix(int64(currentHeader.Time()), 0)))
 	log.Info("Loaded most recent local full block", "number", currentBlock.Number(), "hash", currentBlock.Hash(), "td", blockTd, "age", common.PrettyAge(time.Unix(int64(currentBlock.Time()), 0)))
-	log.Info("Loaded most recent local fast block", "number", currentFastBlock.Number(), "hash", currentFastBlock.Hash(), "td", fastTd, "age", common.PrettyAge(time.Unix(int64(currentFastBlock.Time()), 0)))
 	if pivot := rawdb.ReadLastPivotNumber(bc.db); pivot != nil {
 		log.Info("Loaded last fast-sync pivot marker", "number", *pivot)
 	}
@@ -559,7 +548,6 @@ func (bc *BlockChain) SetHeadBeyondRoot(head uint64, root common.Hash) (uint64, 
 			if newHeadFastBlock == nil {
 				newHeadFastBlock = bc.genesisBlock
 			}
-			rawdb.WriteHeadFastBlockHash(db, newHeadFastBlock.Hash())
 
 			// Degrade the chain markers if they are explicitly reverted.
 			// In theory we should update all in-memory markers in the
@@ -782,7 +770,6 @@ func (bc *BlockChain) writeHeadBlock(block *types.Block) {
 	// If the block is better than our head or is on a different chain, force update heads
 	if updateHeads {
 		rawdb.WriteHeadHeaderHash(batch, block.Hash())
-		rawdb.WriteHeadFastBlockHash(batch, block.Hash())
 	}
 	// Flush the whole batch into the disk, exit the node if failed
 	if err := batch.Write(); err != nil {
@@ -1017,7 +1004,6 @@ func (bc *BlockChain) Stop() {
 		for _, offset := range []uint64{0, 1, TriesInMemory - 1} {
 			if number := bc.CurrentBlock().NumberU64(); number > offset {
 				recent := bc.GetBlockByNumber(number - offset)
-
 				log.Info("Writing cached state to disk", "block", recent.Number(), "hash", recent.Hash(), "root", recent.Root())
 				if err := triedb.Commit(recent.Root(), true, nil); err != nil {
 					log.Error("Failed to commit recent state trie", "err", err)
@@ -1166,7 +1152,6 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 		if bc.CurrentHeader().Number().Cmp(head.Number()) >= 0 {
 			currentFastBlock, td := bc.CurrentFastBlock(), bc.GetTd(head.Hash(), head.NumberU64())
 			if bc.GetTd(currentFastBlock.Hash(), currentFastBlock.NumberU64()).Cmp(td) < 0 {
-				rawdb.WriteHeadFastBlockHash(bc.db, head.Hash())
 				bc.currentFastBlock.Store(head)
 				headFastBlockGauge.Update(int64(head.NumberU64()))
 				bc.chainmu.Unlock()
@@ -1795,9 +1780,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		// its header and body was already in the database).
 		if err == ErrKnownBlock {
 			logger := log.Debug
-			if bc.chainConfig.Clique == nil {
-				logger = log.Warn
-			}
 			logger("Inserted known block", "number", block.Number(), "hash", block.Hash(),
 				"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"root", block.Root())

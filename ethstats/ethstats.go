@@ -30,7 +30,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gorilla/websocket"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/mclock"
 	"github.com/dominant-strategies/go-quai/consensus"
@@ -39,12 +38,12 @@ import (
 	"github.com/dominant-strategies/go-quai/eth/downloader"
 	ethproto "github.com/dominant-strategies/go-quai/eth/protocols/eth"
 	"github.com/dominant-strategies/go-quai/event"
-	"github.com/dominant-strategies/go-quai/les"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/miner"
 	"github.com/dominant-strategies/go-quai/node"
 	"github.com/dominant-strategies/go-quai/p2p"
 	"github.com/dominant-strategies/go-quai/rpc"
+	"github.com/gorilla/websocket"
 )
 
 const (
@@ -472,8 +471,6 @@ func (s *Service) login(conn *connWrapper) error {
 	var network string
 	if info := infos.Protocols["eth"]; info != nil {
 		network = fmt.Sprintf("%d", info.(*ethproto.NodeInfo).Network)
-	} else {
-		network = fmt.Sprintf("%d", infos.Protocols["les"].(*les.NodeInfo).Network)
 	}
 	auth := &authMsg{
 		ID: s.node,

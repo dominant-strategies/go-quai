@@ -31,7 +31,6 @@ import (
 	"github.com/dominant-strategies/go-quai/eth/downloader"
 	"github.com/dominant-strategies/go-quai/eth/fetcher"
 	"github.com/dominant-strategies/go-quai/eth/protocols/eth"
-	"github.com/dominant-strategies/go-quai/eth/protocols/snap"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
@@ -91,8 +90,6 @@ type handler struct {
 	networkID  uint64
 	forkFilter forkid.Filter // Fork ID filter, constant across the lifetime of the node
 
-	fastSync  uint32 // Flag whether fast sync is enabled (gets disabled if we already have blocks)
-	snapSync  uint32 // Flag whether fast sync should operate on top of the snap protocol
 	acceptTxs uint32 // Flag whether we're considered synchronised (enables transaction processing)
 
 	checkpointNumber uint64      // Block number for the sync progress validator to cross reference
@@ -143,48 +140,14 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		txsyncCh:   make(chan *txsync),
 		quitSync:   make(chan struct{}),
 	}
-	if config.Sync == downloader.FullSync {
-		// The database seems empty as the current block is the genesis. Yet the fast
-		// block is ahead, so fast sync was enabled for this node at a certain point.
-		// The scenarios where this can happen is
-		// * if the user manually (or via a bad block) rolled back a fast sync node
-		//   below the sync point.
-		// * the last fast sync is not finished while user specifies a full sync this
-		//   time. But we don't have any recent state for full sync.
-		// In these cases however it's safe to reenable fast sync.
-		fullBlock, fastBlock := h.chain.CurrentBlock(), h.chain.CurrentFastBlock()
-		if fullBlock.NumberU64() == 0 && fastBlock.NumberU64() > 0 {
-			h.fastSync = uint32(1)
-			log.Warn("Switch sync mode from full sync to fast sync")
-		}
-	} else {
-		if h.chain.CurrentBlock().NumberU64() > 0 {
-			// Print warning log if database is not empty to run fast sync.
-			log.Warn("Switch sync mode from fast sync to full sync")
-		} else {
-			// If fast sync was requested and our database is empty, grant it
-			h.fastSync = uint32(1)
-			if config.Sync == downloader.SnapSync {
-				h.snapSync = uint32(1)
-			}
-		}
-	}
+
 	// If we have trusted checkpoints, enforce them on the chain
 	if config.Checkpoint != nil {
 		h.checkpointNumber = (config.Checkpoint.SectionIndex+1)*params.CHTFrequency - 1
 		h.checkpointHash = config.Checkpoint.SectionHead
 	}
-	// Construct the downloader (long sync) and its backing state bloom if fast
-	// sync is requested. The downloader is responsible for deallocating the state
-	// bloom when it's done.
-	// Note: we don't enable it if snap-sync is performed, since it's very heavy
-	// and the heal-portion of the snap sync is much lighter than fast. What we particularly
-	// want to avoid, is a 90%-finished (but restarted) snap-sync to begin
-	// indexing the entire trie
-	if atomic.LoadUint32(&h.fastSync) == 1 && atomic.LoadUint32(&h.snapSync) == 0 {
-		h.stateBloom = trie.NewSyncBloom(config.BloomCache, config.Database)
-	}
-	h.downloader = downloader.New(h.checkpointNumber, config.Database, h.stateBloom, h.eventMux, h.chain, nil, h.removePeer)
+
+	h.downloader = downloader.New(h.checkpointNumber, config.Database, h.stateBloom, h.eventMux, h.chain, h.removePeer)
 
 	// Construct the fetcher (short sync)
 	validator := func(header *types.Header) error {
@@ -202,15 +165,6 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		// which would prevent full nodes from accepting it.
 		if h.chain.CurrentBlock().NumberU64() < h.checkpointNumber {
 			log.Warn("Unsynced yet, discarded propagated block", "number", blocks[0].Number(), "hash", blocks[0].Hash())
-			return 0, nil
-		}
-		// If fast sync is running, deny importing weird blocks. This is a problematic
-		// clause when starting up a new network, because fast-syncing miners might not
-		// accept each others' blocks until a restart. Unfortunately we haven't figured
-		// out a way yet where nodes can decide unilaterally whether the network is new
-		// or not. This should be fixed if we figure out a solution.
-		if atomic.LoadUint32(&h.fastSync) == 1 {
-			log.Warn("Fast syncing, discarded propagated block", "number", blocks[0].Number(), "hash", blocks[0].Hash())
 			return 0, nil
 		}
 		n, err := h.chain.InsertChain(blocks)
@@ -233,16 +187,9 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	return h, nil
 }
 
-// runEthPeer registers an eth peer into the joint eth/snap peerset, adds it to
+// runEthPeer registers an eth peer into the joint eth peerset, adds it to
 // various subsistems and starts handling messages.
 func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
-	// If the peer has a `snap` extension, wait for it to connect so we can have
-	// a uniform initialization/teardown mechanism
-	snap, err := h.peers.waitSnapExtension(peer)
-	if err != nil {
-		peer.Log().Error("Snapshot extension barrier failed", "err", err)
-		return err
-	}
 	// TODO(karalabe): Not sure why this is needed
 	if !h.chainSync.handlePeerEvent(peer) {
 		return p2p.DiscQuitting
@@ -264,16 +211,6 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 		return err
 	}
 	reject := false // reserved peer slots
-	if atomic.LoadUint32(&h.snapSync) == 1 {
-		if snap == nil {
-			// If we are running snap-sync, we want to reserve roughly half the peer
-			// slots for peers supporting the snap protocol.
-			// The logic here is; we only allow up to 5 more non-snap peers than snap-peers.
-			if all, snp := h.peers.len(), h.peers.snapLen(); all-snp > snp+5 {
-				reject = true
-			}
-		}
-	}
 	// Ignore maxPeers if this is a trusted peer
 	if !peer.Peer.Info().Network.Trusted {
 		if reject || h.peers.len() >= h.maxPeers {
@@ -283,7 +220,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	peer.Log().Debug("Ethereum peer connected", "name", peer.Name())
 
 	// Register the peer locally
-	if err := h.peers.registerPeer(peer, snap); err != nil {
+	if err := h.peers.registerPeer(peer); err != nil {
 		peer.Log().Error("Ethereum peer registration failed", "err", err)
 		return err
 	}
@@ -298,12 +235,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 		peer.Log().Error("Failed to register peer in eth syncer", "err", err)
 		return err
 	}
-	if snap != nil {
-		if err := h.downloader.SnapSyncer.Register(snap); err != nil {
-			peer.Log().Error("Failed to register peer in snap syncer", "err", err)
-			return err
-		}
-	}
+
 	h.chainSync.handlePeerEvent(peer)
 
 	// Propagate existing transactions. new transactions appearing
@@ -339,21 +271,6 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	return handler(peer)
 }
 
-// runSnapExtension registers a `snap` peer into the joint eth/snap peerset and
-// starts handling inbound messages. As `snap` is only a satellite protocol to
-// `eth`, all subsystem registrations and lifecycle management will be done by
-// the main `eth` handler to prevent strange races.
-func (h *handler) runSnapExtension(peer *snap.Peer, handler snap.Handler) error {
-	h.peerWG.Add(1)
-	defer h.peerWG.Done()
-
-	if err := h.peers.registerSnapExtension(peer); err != nil {
-		peer.Log().Error("Snapshot extension registration failed", "err", err)
-		return err
-	}
-	return handler(peer)
-}
-
 // removePeer requests disconnection of a peer.
 func (h *handler) removePeer(id string) {
 	peer := h.peers.peer(id)
@@ -378,13 +295,7 @@ func (h *handler) unregisterPeer(id string) {
 		logger.Error("Ethereum peer removal failed", "err", errPeerNotRegistered)
 		return
 	}
-	// Remove the `eth` peer if it exists
-	logger.Debug("Removing Ethereum peer", "snap", peer.snapExt != nil)
 
-	// Remove the `snap` extension if it exists
-	if peer.snapExt != nil {
-		h.downloader.SnapSyncer.Unregister(id)
-	}
 	h.downloader.UnregisterPeer(id)
 	h.txFetcher.Drop(id)
 

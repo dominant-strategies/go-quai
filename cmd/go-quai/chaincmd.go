@@ -197,7 +197,7 @@ func initGenesis(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	for _, name := range []string{"chaindata", "lightchaindata"} {
+	for _, name := range []string{"chaindata"} {
 		chaindb, err := stack.OpenDatabase(name, 0, 0, "", false)
 		if err != nil {
 			utils.Fatalf("Failed to open database: %v", err)
@@ -327,9 +327,6 @@ func exportChain(ctx *cli.Context) error {
 		}
 		if first < 0 || last < 0 {
 			utils.Fatalf("Export error: block number must be greater than 0\n")
-		}
-		if head := chain.CurrentFastBlock(); uint64(last) > head.NumberU64() {
-			utils.Fatalf("Export error: block number %d larger than head block %d\n", uint64(last), head.NumberU64())
 		}
 		err = utils.ExportAppendChain(chain, fp, uint64(first), uint64(last))
 	}
