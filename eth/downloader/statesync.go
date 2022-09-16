@@ -314,11 +314,7 @@ func newStateSync(d *Downloader, root common.Hash) *stateSync {
 // finish.
 func (s *stateSync) run() {
 	close(s.started)
-	if s.d.snapSync {
-		s.err = s.d.SnapSyncer.Sync(s.root, s.cancel)
-	} else {
-		s.err = s.loop()
-	}
+	s.err = s.loop()
 	close(s.done)
 }
 

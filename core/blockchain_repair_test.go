@@ -1851,9 +1851,6 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 	if head := chain.CurrentHeader(); head.Number().Uint64() != tt.expHeadHeader {
 		t.Errorf("Head header mismatch: have %d, want %d", head.Number(), tt.expHeadHeader)
 	}
-	if head := chain.CurrentFastBlock(); head.NumberU64() != tt.expHeadFastBlock {
-		t.Errorf("Head fast block mismatch: have %d, want %d", head.NumberU64(), tt.expHeadFastBlock)
-	}
 	if head := chain.CurrentBlock(); head.NumberU64() != tt.expHeadBlock {
 		t.Errorf("Head block mismatch: have %d, want %d", head.NumberU64(), tt.expHeadBlock)
 	}

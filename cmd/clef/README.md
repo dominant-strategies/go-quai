@@ -336,7 +336,6 @@ Bash example:
 #### Arguments
   - content type [string]: type of signed data
      - `text/validator`: hex data with custom validator defined in a contract
-     - `application/clique`: [clique](https://github.com/ethereum/EIPs/issues/225) headers
      - `text/plain`: simple hex data validated by `account_ecRecover`
   - account [address]: account to sign with
   - data [object]: data to sign

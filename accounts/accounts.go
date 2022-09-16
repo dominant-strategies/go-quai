@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/dominant-strategies/go-quai"
+	ethereum "github.com/dominant-strategies/go-quai"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/event"
@@ -38,7 +38,6 @@ type Account struct {
 const (
 	MimetypeDataWithValidator = "data/validator"
 	MimetypeTypedData         = "data/typed"
-	MimetypeClique            = "application/x-clique-header"
 	MimetypeTextPlain         = "text/plain"
 )
 
