@@ -40,7 +40,7 @@ func (e ethEntry) ENRKey() string {
 // startEthEntryUpdate starts the ENR updater loop.
 func (eth *Ethereum) startEthEntryUpdate(ln *enode.LocalNode) {
 	var newHead = make(chan core.ChainHeadEvent, 10)
-	sub := eth.blockchain.SubscribeChainHeadEvent(newHead)
+	sub := eth.core.SubscribeChainHeadEvent(newHead)
 
 	go func() {
 		defer sub.Unsubscribe()
@@ -58,6 +58,6 @@ func (eth *Ethereum) startEthEntryUpdate(ln *enode.LocalNode) {
 }
 
 func (eth *Ethereum) currentEthEntry() *ethEntry {
-	return &ethEntry{ForkID: forkid.NewID(eth.blockchain.Config(), eth.blockchain.Genesis().Hash(),
-		eth.blockchain.CurrentHeader().Number().Uint64())}
+	return &ethEntry{ForkID: forkid.NewID(eth.core.Config(), eth.core.Genesis().Hash(),
+		eth.core.CurrentHeader().Number().Uint64())}
 }

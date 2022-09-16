@@ -26,6 +26,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/prque"
 	"github.com/dominant-strategies/go-quai/consensus"
+	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/core/vm"
@@ -37,7 +38,6 @@ import (
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/trie"
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/spruce-solutions/go-quai/core/rawdb"
 )
 
 var (
@@ -437,6 +437,11 @@ func (p *StateProcessor) ContractCode(hash common.Hash) ([]byte, error) {
 	return p.stateCache.ContractCode(common.Hash{}, hash)
 }
 
+// either from ephemeral in-memory cache, or from persistent storage.
+func (p *StateProcessor) TrieNode(hash common.Hash) ([]byte, error) {
+	return p.stateCache.TrieDB().Node(hash)
+}
+
 // ContractCodeWithPrefix retrieves a blob of data associated with a contract
 // hash either from ephemeral in-memory cache, or from persistent storage.
 //
@@ -462,9 +467,7 @@ func (p *StateProcessor) ContractCodeWithPrefix(hash common.Hash) ([]byte, error
 // - checklive: if true, then the live 'blockchain' state database is used. If the caller want to
 //        perform Commit or other 'save-to-disk' changes, this should be set to false to avoid
 //        storing trash persistently
-// - preferDisk: this arg can be used by the caller to signal that even though the 'base' is provided,
-//        it would be preferrable to start from a fresh state, if we have it on disk.
-func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *state.StateDB, checkLive bool, preferDisk bool) (statedb *state.StateDB, err error) {
+func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *state.StateDB, checkLive bool) (statedb *state.StateDB, err error) {
 	var (
 		current  *types.Block
 		database state.Database
@@ -479,15 +482,6 @@ func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *s
 		}
 	}
 	if base != nil {
-		if preferDisk {
-			// Create an ephemeral trie.Database for isolating the live one. Otherwise
-			// the internal junks created by tracing will be persisted into the disk.
-			database = state.NewDatabaseWithConfig(p.hc.headerDb, &trie.Config{Cache: 16})
-			if statedb, err = state.New(block.Root(), database, nil); err == nil {
-				log.Info("Found disk backend for state trie", "root", block.Root(), "number", block.Number())
-				return statedb, nil
-			}
-		}
 		// The optional base statedb is given, mark the start point as parent block
 		statedb, database, report = base, base.Database(), false
 		current = p.hc.GetBlock(block.ParentHash(), block.NumberU64()-1)
@@ -590,7 +584,7 @@ func (p *StateProcessor) StateAtTransaction(block *types.Block, txIndex int, ree
 	}
 	// Lookup the statedb of parent block from the live database,
 	// otherwise regenerate it on the flight.
-	statedb, err := p.StateAtBlock(parent, reexec, nil, true, false)
+	statedb, err := p.StateAtBlock(parent, reexec, nil, true)
 	if err != nil {
 		return nil, vm.BlockContext{}, nil, err
 	}

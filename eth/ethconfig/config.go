@@ -31,7 +31,6 @@ import (
 	"github.com/dominant-strategies/go-quai/eth/gasprice"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/dominant-strategies/go-quai/miner"
 	"github.com/dominant-strategies/go-quai/node"
 	"github.com/dominant-strategies/go-quai/params"
 )
@@ -69,7 +68,7 @@ var Defaults = Config{
 	TrieDirtyCache:          256,
 	TrieTimeout:             60 * time.Minute,
 	SnapshotCache:           102,
-	Miner: miner.Config{
+	Miner: core.Config{
 		GasCeil:  8000000,
 		GasPrice: big.NewInt(params.GWei),
 		Recommit: 3 * time.Second,
@@ -78,6 +77,8 @@ var Defaults = Config{
 	RPCGasCap:   50000000,
 	GPO:         FullNodeGPO,
 	RPCTxFeeCap: 1, // 1 ether
+	DomUrl:      "ws://127.0.0.1:8546",
+	SubUrls:     []string{"ws://127.0.0.1:8546", "ws://127.0.0.1:8546", "ws://127.0.0.1:8546"},
 }
 
 func init() {
@@ -129,7 +130,7 @@ type Config struct {
 	Preimages               bool
 
 	// Mining options
-	Miner miner.Config
+	Miner core.Config
 
 	// Blake3pow options
 	Blake3pow blake3pow.Config
@@ -167,6 +168,12 @@ type Config struct {
 
 	// Zone location options
 	Zone int
+
+	// Dom node websocket url
+	DomUrl string
+
+	// Sub node websocket urls
+	SubUrls []string
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.

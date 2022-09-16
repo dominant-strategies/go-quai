@@ -81,7 +81,7 @@ func generateTestChainWithFork(n int, fork int) (*core.Genesis, []*types.Block, 
 		BerlinBlock:         big.NewInt(0),
 		LondonBlock:         big.NewInt(0),
 		CatalystBlock:       big.NewInt(0),
-		Blake3pow:              new(params.Blake3powConfig),
+		Blake3pow:           new(params.Blake3powConfig),
 	}
 	genesis := &core.Genesis{
 		Config:    config,
@@ -234,11 +234,11 @@ func startEthService(t *testing.T, genesis *core.Genesis, blocks []*types.Block)
 	if err := n.Start(); err != nil {
 		t.Fatal("can't start node:", err)
 	}
-	if _, err := ethservice.BlockChain().InsertChain(blocks); err != nil {
+	if _, err := ethservice.Core().InsertChain(blocks); err != nil {
 		n.Close()
 		t.Fatal("can't import test blocks:", err)
 	}
-	ethservice.SetEtherbase(testAddr)
+	ethservice.Core().SetEtherbase(testAddr)
 
 	return n, ethservice
 }

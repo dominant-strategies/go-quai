@@ -20,8 +20,8 @@ import (
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
+	"github.com/dominant-strategies/go-quai/rlp"
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/spruce-solutions/go-quai/rlp"
 )
 
 const (
@@ -134,7 +134,6 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 	// write the head block hash to the db
 	rawdb.WriteHeadBlockHash(hc.headerDb, head.Hash())
 	hc.currentHeader.Store(head)
-	headHeaderGauge.Update(int64(head.NumberU64()))
 
 	// If head is the normal extension of canonical head, we can return by just wiring the canonical hash.
 	if prevHeader.Hash() == head.ParentHash() {
@@ -206,7 +205,6 @@ func (hc *HeaderChain) loadLastState() error {
 			hc.currentHeader.Store(chead)
 		}
 	}
-	headHeaderGauge.Update(int64(hc.CurrentHeader().NumberU64()))
 
 	heads := make([]*types.Header, 0)
 	for _, hash := range headsHashes {

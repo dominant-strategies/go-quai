@@ -9,18 +9,18 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set"
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/common/hexutil"
-	"github.com/spruce-solutions/go-quai/consensus"
-	"github.com/spruce-solutions/go-quai/consensus/misc"
-	"github.com/spruce-solutions/go-quai/core/rawdb"
-	"github.com/spruce-solutions/go-quai/core/state"
-	"github.com/spruce-solutions/go-quai/core/types"
-	"github.com/spruce-solutions/go-quai/ethdb"
-	"github.com/spruce-solutions/go-quai/event"
-	"github.com/spruce-solutions/go-quai/log"
-	"github.com/spruce-solutions/go-quai/params"
-	"github.com/spruce-solutions/go-quai/trie"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/common/hexutil"
+	"github.com/dominant-strategies/go-quai/consensus"
+	"github.com/dominant-strategies/go-quai/consensus/misc"
+	"github.com/dominant-strategies/go-quai/core/rawdb"
+	"github.com/dominant-strategies/go-quai/core/state"
+	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/ethdb"
+	"github.com/dominant-strategies/go-quai/event"
+	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/params"
+	"github.com/dominant-strategies/go-quai/trie"
 )
 
 const (
@@ -583,7 +583,7 @@ func (w *worker) makeEnv(parent *types.Block, header *types.Header, coinbase com
 		//
 		// The maximum acceptable reorg depth can be limited by the finalised block
 		// somehow. TODO(rjl493456442) fix the hard-coded number here later.
-		state, err = w.hc.bc.processor.StateAtBlock(parent, 1024, nil, false, false)
+		state, err = w.hc.bc.processor.StateAtBlock(parent, 1024, nil, false)
 		log.Warn("Recovered mining state", "root", parent.Root(), "err", err)
 	}
 	if err != nil {
@@ -859,7 +859,7 @@ func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*en
 func (w *worker) fillTransactions(interrupt *int32, env *environment) {
 	// Split the pending transactions into locals and remotes
 	// Fill the block with all available pending transactions.
-	pending, err := w.txPool.Pending(true)
+	pending, err := w.txPool.TxPoolPending(true)
 	if err != nil {
 		return
 	}

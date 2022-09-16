@@ -66,8 +66,8 @@ type Handler func(peer *Peer) error
 // Backend defines the data retrieval methods to serve remote requests and the
 // callback methods to invoke on remote deliveries.
 type Backend interface {
-	// Chain retrieves the blockchain object to serve data.
-	Chain() *core.BlockChain
+	// Core retrieves the blockchain object to serve data.
+	Core() *core.Core
 
 	// StateBloom retrieves the bloom filter - if any - for state trie nodes.
 	StateBloom() *trie.SyncBloom
@@ -119,12 +119,12 @@ func MakeProtocols(backend Backend, network uint64, dnsdisc enode.Iterator) []p2
 				})
 			},
 			NodeInfo: func() interface{} {
-				return nodeInfo(backend.Chain(), network)
+				return nodeInfo(backend.Core(), network)
 			},
 			PeerInfo: func(id enode.ID) interface{} {
 				return backend.PeerInfo(id)
 			},
-			Attributes:     []enr.Entry{currentENREntry(backend.Chain())},
+			Attributes:     []enr.Entry{currentENREntry(backend.Core())},
 			DialCandidates: dnsdisc,
 		}
 	}
@@ -142,7 +142,7 @@ type NodeInfo struct {
 }
 
 // nodeInfo retrieves some `eth` protocol metadata about the running host node.
-func nodeInfo(chain *core.BlockChain, network uint64) *NodeInfo {
+func nodeInfo(chain *core.Core, network uint64) *NodeInfo {
 	head := chain.CurrentBlock()
 	return &NodeInfo{
 		Network:    network,
