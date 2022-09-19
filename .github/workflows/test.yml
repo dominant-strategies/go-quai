@@ -5,6 +5,7 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+    types: [ open, reopened ]
 jobs:
   test:
     runs-on: ubuntu-latest
