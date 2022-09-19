@@ -66,15 +66,15 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		TxHash      []*common.Hash    `json:"transactionsRoot" gencodec:"required"`
 		ReceiptHash []*common.Hash    `json:"receiptsRoot"     gencodec:"required"`
 		Bloom       []*Bloom          `json:"logsBloom"        gencodec:"required"`
-		Difficulty  []*hexutil.Big   `json:"difficulty"       gencodec:"required"`
-		Number      []*hexutil.Big   `json:"number"           gencodec:"required"`
+		Difficulty  []*hexutil.Big    `json:"difficulty"       gencodec:"required"`
+		Number      []*hexutil.Big    `json:"number"           gencodec:"required"`
 		GasLimit    []*hexutil.Uint64 `json:"gasLimit"         gencodec:"required"`
 		GasUsed     []*hexutil.Uint64 `json:"gasUsed"          gencodec:"required"`
-		BaseFee     []*hexutil.Big   `json:"baseFeePerGas"    gencodec:"required"`
-		Location *common.Location 	 `json:"location"         gencodec:"required"`
-		Time        *hexutil.Uint64  `json:"timestamp"        gencodec:"required"`
-		Extra       *hexutil.Bytes   `json:"extraData"        gencodec:"required"`
-		Nonce       *BlockNonce      `json:"nonce"`
+		BaseFee     []*hexutil.Big    `json:"baseFeePerGas"    gencodec:"required"`
+		Location    common.Location   `json:"location"         gencodec:"required"`
+		Time        *hexutil.Uint64   `json:"timestamp"        gencodec:"required"`
+		Extra       *hexutil.Bytes    `json:"extraData"        gencodec:"required"`
+		Nonce       *BlockNonce       `json:"nonce"`
 	}
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
