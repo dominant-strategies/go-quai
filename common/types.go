@@ -53,7 +53,7 @@ const (
 
 var (
 	// Default to prime node, but changed at startup by config.
-	NodeLocation = Location{nil, nil}
+	NodeLocation = Location{0, 0}
 )
 
 var (
@@ -445,37 +445,37 @@ func (ma *MixedcaseAddress) Original() string {
 
 // Location of a chain within the Quai hierarchy
 // Location is encoded as a path from the root of the tree to the specified
-// chain. Each index may be nil to indicate a dominant chain. e.g:
-// prime = [nil, nil]
-// region[0] = [0, nil]
+// chain. Not all indices need to be populated, e.g:
+// prime     = []
+// region[0] = [0]
 // zone[1,2] = [1, 2]
-type Location [HierarchyDepth - 1]*byte
+type Location []byte
 
-func (l *Location) Region() int {
-	if region := l[0]; region != nil {
-		return int(*region)
+func (l Location) Region() int {
+	if len(l) >= 1 {
+		return int(l[REGION_CTX-1])
 	} else {
 		return -1
 	}
 }
 
-func (l *Location) HasRegion() bool {
+func (l Location) HasRegion() bool {
 	return l.Region() >= 0
 }
 
-func (l *Location) Zone() int {
-	if zone := l[1]; zone != nil {
-		return int(*zone)
+func (l Location) Zone() int {
+	if len(l) >= 2 {
+		return int(l[ZONE_CTX-1])
 	} else {
 		return -1
 	}
 }
 
-func (l *Location) HasZone() bool {
+func (l Location) HasZone() bool {
 	return l.Zone() >= 0
 }
 
-func (l *Location) AssertValid() {
+func (l Location) AssertValid() {
 	if !l.HasRegion() && l.HasZone() {
 		log.Fatal("cannot specify zone without also specifying region.")
 	}
@@ -487,7 +487,7 @@ func (l *Location) AssertValid() {
 	}
 }
 
-func (l *Location) Context() int {
+func (l Location) Context() int {
 	l.AssertValid()
 	if l.Zone() >= 0 {
 		return ZONE_CTX
@@ -498,7 +498,7 @@ func (l *Location) Context() int {
 	}
 }
 
-func (l *Location) SubLocation() int {
+func (l Location) SubLocation() int {
 	switch NodeLocation.Context() {
 	case PRIME_CTX:
 		return l.Region()
