@@ -701,6 +701,11 @@ func (c *Clique) APIs(chain consensus.ChainHeaderReader) []rpc.API {
 	}}
 }
 
+func (c *Clique) HasCoincidentDifficulty(header *types.Header) bool {
+	// Clique has no concept of coincidence
+	return false
+}
+
 // SealHash returns the hash of a block prior to it being sealed.
 func SealHash(header *types.Header) (hash common.Hash) {
 	hasher := sha3.NewLegacyKeccak256()
