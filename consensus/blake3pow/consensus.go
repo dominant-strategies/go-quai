@@ -437,10 +437,22 @@ func (blake3pow *Blake3pow) SealHash(header *types.Header) (hash common.Hash) {
 	hasher := blake3.New(32, nil)
 	hasher.Reset()
 	hdata := headerData{
-		location: header.Location(),
-		time:     header.Time(),
-		extra:    header.Extra(),
-		nonce:    header.Nonce(),
+		parentHash:  make([]common.Hash, common.HierarchyDepth),
+		uncleHash:   make([]common.Hash, common.HierarchyDepth),
+		coinbase:    make([]common.Address, common.HierarchyDepth),
+		root:        make([]common.Hash, common.HierarchyDepth),
+		txHash:      make([]common.Hash, common.HierarchyDepth),
+		receiptHash: make([]common.Hash, common.HierarchyDepth),
+		bloom:       make([]types.Bloom, common.HierarchyDepth),
+		difficulty:  make([]*big.Int, common.HierarchyDepth),
+		number:      make([]*big.Int, common.HierarchyDepth),
+		gasLimit:    make([]uint64, common.HierarchyDepth),
+		gasUsed:     make([]uint64, common.HierarchyDepth),
+		baseFee:     make([]*big.Int, common.HierarchyDepth),
+		location:    header.Location(),
+		time:        header.Time(),
+		extra:       header.Extra(),
+		nonce:       header.Nonce(),
 	}
 	for i := 0; i < common.HierarchyDepth; i++ {
 		hdata.parentHash[i] = header.ParentHash(i)
