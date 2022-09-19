@@ -113,7 +113,7 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 
 		// Append each of the knot blocks
 
-		knot := genesis.Knot[1:]
+		knot := genesis.Knot[:]
 		for _, block := range knot {
 			if block != nil {
 				location := block.Header().Location()

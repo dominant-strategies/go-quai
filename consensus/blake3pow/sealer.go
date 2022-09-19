@@ -146,7 +146,6 @@ search:
 			hash := blake3pow.SealHash(header).Bytes()
 			if powBuffer.SetBytes(hash).Cmp(target) <= 0 {
 				// Correct nonce found, create a new header with it
-
 				// Seal and return a block (if still needed)
 				select {
 				case found <- header:
