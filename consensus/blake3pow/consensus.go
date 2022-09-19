@@ -340,6 +340,20 @@ func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Heade
 	return x
 }
 
+func (blake3pow *Blake3pow) HasCoincidentDifficulty(header *types.Header) bool {
+	nodeCtx := common.NodeLocation.Context()
+
+	// Since the Prime chain is the highest order, it cannot have coincident blocks
+	if nodeCtx > common.PRIME_CTX {
+		domCtx := nodeCtx - 1
+		domTarget := new(big.Int).Div(big2e256, header.Difficulty(domCtx))
+		if new(big.Int).SetBytes(blake3pow.SealHash(header).Bytes()).Cmp(domTarget) <= 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // verifySeal checks whether a block satisfies the PoW difficulty requirements,
 // either using the usual blake3pow cache for it, or alternatively using a full DAG
 // to make remote mining fast.
