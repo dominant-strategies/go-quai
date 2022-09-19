@@ -53,7 +53,7 @@ const (
 
 var (
 	// Default to prime node, but changed at startup by config.
-	NodeLocation = Location{0, 0}
+	NodeLocation = Location{}
 )
 
 var (
