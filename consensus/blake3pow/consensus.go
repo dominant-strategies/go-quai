@@ -414,22 +414,22 @@ func (blake3pow *Blake3pow) FinalizeAndAssemble(chain consensus.ChainHeaderReade
 // headerData comprises all data fields of the header, excluding the nonce, so
 // that the nonce may be independently adjusted in the work algorithm.
 type headerData struct {
-	parentHash  []common.Hash
-	uncleHash   []common.Hash
-	coinbase    []common.Address
-	root        []common.Hash
-	txHash      []common.Hash
-	receiptHash []common.Hash
-	bloom       []types.Bloom
-	difficulty  []*big.Int
-	number      []*big.Int
-	gasLimit    []uint64
-	gasUsed     []uint64
-	baseFee     []*big.Int
-	location    common.Location
-	time        uint64
-	extra       []byte
-	nonce       types.BlockNonce
+	ParentHash  []common.Hash
+	UncleHash   []common.Hash
+	Coinbase    []common.Address
+	Root        []common.Hash
+	TxHash      []common.Hash
+	ReceiptHash []common.Hash
+	Bloom       []types.Bloom
+	Difficulty  []*big.Int
+	Number      []*big.Int
+	GasLimit    []uint64
+	GasUsed     []uint64
+	BaseFee     []*big.Int
+	Location    common.Location
+	Time        uint64
+	Extra       []byte
+	Nonce       types.BlockNonce
 }
 
 // SealHash returns the hash of a block prior to it being sealed.
@@ -437,36 +437,36 @@ func (blake3pow *Blake3pow) SealHash(header *types.Header) (hash common.Hash) {
 	hasher := blake3.New(32, nil)
 	hasher.Reset()
 	hdata := headerData{
-		parentHash:  make([]common.Hash, common.HierarchyDepth),
-		uncleHash:   make([]common.Hash, common.HierarchyDepth),
-		coinbase:    make([]common.Address, common.HierarchyDepth),
-		root:        make([]common.Hash, common.HierarchyDepth),
-		txHash:      make([]common.Hash, common.HierarchyDepth),
-		receiptHash: make([]common.Hash, common.HierarchyDepth),
-		bloom:       make([]types.Bloom, common.HierarchyDepth),
-		difficulty:  make([]*big.Int, common.HierarchyDepth),
-		number:      make([]*big.Int, common.HierarchyDepth),
-		gasLimit:    make([]uint64, common.HierarchyDepth),
-		gasUsed:     make([]uint64, common.HierarchyDepth),
-		baseFee:     make([]*big.Int, common.HierarchyDepth),
-		location:    header.Location(),
-		time:        header.Time(),
-		extra:       header.Extra(),
-		nonce:       header.Nonce(),
+		ParentHash:  make([]common.Hash, common.HierarchyDepth),
+		UncleHash:   make([]common.Hash, common.HierarchyDepth),
+		Coinbase:    make([]common.Address, common.HierarchyDepth),
+		Root:        make([]common.Hash, common.HierarchyDepth),
+		TxHash:      make([]common.Hash, common.HierarchyDepth),
+		ReceiptHash: make([]common.Hash, common.HierarchyDepth),
+		Bloom:       make([]types.Bloom, common.HierarchyDepth),
+		Difficulty:  make([]*big.Int, common.HierarchyDepth),
+		Number:      make([]*big.Int, common.HierarchyDepth),
+		GasLimit:    make([]uint64, common.HierarchyDepth),
+		GasUsed:     make([]uint64, common.HierarchyDepth),
+		BaseFee:     make([]*big.Int, common.HierarchyDepth),
+		Location:    header.Location(),
+		Time:        header.Time(),
+		Extra:       header.Extra(),
+		Nonce:       header.Nonce(),
 	}
 	for i := 0; i < common.HierarchyDepth; i++ {
-		hdata.parentHash[i] = header.ParentHash(i)
-		hdata.uncleHash[i] = header.UncleHash(i)
-		hdata.coinbase[i] = header.Coinbase(i)
-		hdata.root[i] = header.Root(i)
-		hdata.txHash[i] = header.TxHash(i)
-		hdata.receiptHash[i] = header.ReceiptHash(i)
-		hdata.bloom[i] = header.Bloom(i)
-		hdata.difficulty[i] = header.Difficulty(i)
-		hdata.number[i] = header.Number(i)
-		hdata.gasLimit[i] = header.GasLimit(i)
-		hdata.gasUsed[i] = header.GasUsed(i)
-		hdata.baseFee[i] = header.BaseFee(i)
+		hdata.ParentHash[i] = header.ParentHash(i)
+		hdata.UncleHash[i] = header.UncleHash(i)
+		hdata.Coinbase[i] = header.Coinbase(i)
+		hdata.Root[i] = header.Root(i)
+		hdata.TxHash[i] = header.TxHash(i)
+		hdata.ReceiptHash[i] = header.ReceiptHash(i)
+		hdata.Bloom[i] = header.Bloom(i)
+		hdata.Difficulty[i] = header.Difficulty(i)
+		hdata.Number[i] = header.Number(i)
+		hdata.GasLimit[i] = header.GasLimit(i)
+		hdata.GasUsed[i] = header.GasUsed(i)
+		hdata.BaseFee[i] = header.BaseFee(i)
 	}
 	rlp.Encode(hasher, hdata)
 	hash.SetBytes(hasher.Sum(hash[:0]))
