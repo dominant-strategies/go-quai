@@ -386,7 +386,7 @@ func DefaultRopstenGenesisBlock() *Genesis {
 		Nonce:      66,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
 		GasLimit:   []uint64{16777216, 16777216, 16777216},
-		Difficulty: []*big.Int{big.NewInt(1048576), big.NewInt(1048576), big.NewInt(1048576)},
+		Difficulty: []*big.Int{big.NewInt(1600000), big.NewInt(800000), big.NewInt(80000)},
 		Alloc:      decodePrealloc(ropstenAllocData),
 	}
 }

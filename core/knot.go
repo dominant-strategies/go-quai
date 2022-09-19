@@ -24,15 +24,12 @@ func ReadKnot(chainfile string) []*types.Block {
 		}
 	}
 	stream := rlp.NewStream(reader, 0)
-	var blocks = make([]*types.Block, 1)
+	var blocks = make([]*types.Block, 0)
 	for i := 0; ; i++ {
 		var b types.Block
 		if err := stream.Decode(&b); err == io.EOF {
 			break
 		} else if err != nil {
-			return nil
-		}
-		if b.NumberU64() != uint64(i+1) {
 			return nil
 		}
 		blocks = append(blocks, &b)
