@@ -2,9 +2,9 @@ name: Build and Deploy Pre-Release
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, dev ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, dev ]
     types: [ open, reopened ]
 jobs:
   test:
