@@ -26,7 +26,7 @@ jobs:
       run: cat ./network.env.dist | sed "s/WS_API=eth,net,web3,quai/WS_API=eth,net,web3,quai,txpool/g" | sed "s/HTTP_API=eth,net,web3/HTTP_API=eth,net,web3,quai,txpool/g" | sed "s/CORS=false/CORS=true/g" > ./network.env
 
     - name: Lint go-quai
-      run: make go-quai
+      run: make lint
 
     - name: Build go-quai
       run: make go-quai
