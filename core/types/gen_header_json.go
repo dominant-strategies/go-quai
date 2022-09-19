@@ -34,6 +34,13 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		Nonce       BlockNonce       `json:"nonce"`
 		Hash        common.Hash      `json:"hash"`
 	}
+	// Initialize the enc struct
+	enc.Difficulty = make([]*hexutil.Big, common.HierarchyDepth)
+	enc.Number = make([]*hexutil.Big, common.HierarchyDepth)
+	enc.GasLimit= make([]hexutil.Uint64, common.HierarchyDepth)
+	enc.GasUsed= make([]hexutil.Uint64, common.HierarchyDepth)
+	enc.BaseFee= make([]*hexutil.Big, common.HierarchyDepth)
+
 	copy(enc.ParentHash, h.ParentHashArray())
 	copy(enc.UncleHash, h.UncleHashArray())
 	copy(enc.Coinbase, h.CoinbaseArray())
