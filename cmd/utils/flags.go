@@ -1428,12 +1428,12 @@ func SetGlobalVars(ctx *cli.Context) {
 		log.Crit("zone idx given, but missing region idx!")
 	}
 	if ctx.GlobalIsSet(RegionFlag.Name) {
-		region := byte(ctx.GlobalInt(RegionFlag.Name))
-		common.NodeLocation[common.REGION_CTX-1] = &region
+		region := ctx.GlobalInt(RegionFlag.Name)
+		common.NodeLocation[common.REGION_CTX-1] = byte(region)
 	}
 	if ctx.GlobalIsSet(ZoneFlag.Name) {
-		zone := byte(ctx.GlobalInt(ZoneFlag.Name))
-		common.NodeLocation[common.ZONE_CTX-1] = &zone
+		zone := ctx.GlobalInt(ZoneFlag.Name)
+		common.NodeLocation[common.ZONE_CTX-1] = byte(zone)
 	}
 }
 
