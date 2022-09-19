@@ -1429,11 +1429,11 @@ func SetGlobalVars(ctx *cli.Context) {
 	}
 	if ctx.GlobalIsSet(RegionFlag.Name) {
 		region := ctx.GlobalInt(RegionFlag.Name)
-		common.NodeLocation[common.REGION_CTX-1] = byte(region)
+		common.NodeLocation = append(common.NodeLocation, byte(region))
 	}
 	if ctx.GlobalIsSet(ZoneFlag.Name) {
 		zone := ctx.GlobalInt(ZoneFlag.Name)
-		common.NodeLocation[common.ZONE_CTX-1] = byte(zone)
+		common.NodeLocation = append(common.NodeLocation, byte(zone))
 	}
 }
 
