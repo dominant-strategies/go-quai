@@ -256,16 +256,8 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 	if header.GasUsed() > header.GasLimit() {
 		return fmt.Errorf("invalid gasUsed: have %d, gasLimit %d", header.GasUsed(), header.GasLimit())
 	}
-	// Verify the block's gas usage and (if applicable) verify the base fee.
-	if !chain.Config().IsLondon(header.Number()) {
-		// Verify BaseFee not present before EIP-1559 fork.
-		if header.BaseFee() != nil {
-			return fmt.Errorf("invalid baseFee before fork: have %d, expected 'nil'", header.BaseFee())
-		}
-		if err := misc.VerifyGaslimit(parent.GasLimit(), header.GasLimit()); err != nil {
-			return err
-		}
-	} else if err := misc.VerifyEip1559Header(chain.Config(), parent, header); err != nil {
+
+	if err := misc.VerifyEip1559Header(chain.Config(), parent, header); err != nil {
 		// Verify the header's EIP-1559 attributes.
 		return err
 	}
@@ -294,6 +286,13 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 // given the parent block's time and difficulty.
 func (blake3pow *Blake3pow) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, parent *types.Header) *big.Int {
 	return CalcDifficulty(chain.Config(), time, parent)
+}
+
+// CalcDifficultyAtIndex is the difficulty adjustment algorithm. It returns
+// the difficulty that a new block should have when created at time
+// given the parent block's time and difficulty at a given context.
+func (blake3pow *Blake3pow) CalcDifficultyAtIndex(chain consensus.ChainHeaderReader, time uint64, parent *types.Header, context int) *big.Int {
+	return CalcDifficultyAtIndex(chain.Config(), time, parent, context)
 }
 
 // CalcDifficulty is the difficulty adjustment algorithm. It returns
@@ -335,6 +334,49 @@ func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Heade
 	// minimum difficulty can ever be (before exponential factor)
 	if x.Cmp(params.MinimumDifficulty[nodeCtx]) < 0 {
 		x.Set(params.MinimumDifficulty[nodeCtx])
+	}
+
+	return x
+}
+
+// CalcDifficultyAtIndex is the difficulty adjustment algorithm. It returns
+// the difficulty that a new block should have when created at time
+// given the parent block's time and difficulty.
+// NOTE: This is essentially the Ethereum DAA, without a 'difficulty bomb'
+func CalcDifficultyAtIndex(config *params.ChainConfig, time uint64, parent *types.Header, context int) *big.Int {
+	// https://github.com/ethereum/EIPs/issues/100.
+	// algorithm:
+	// diff = (parent_diff +
+	//         (parent_diff / 2048 * max((2 if len(parent.uncles) else 1) - ((timestamp - parent.timestamp) // 9), -99))
+	//        ) + 2^(periodCount - 2)
+
+	bigTime := new(big.Int).SetUint64(time)
+	bigParentTime := new(big.Int).SetUint64(parent.Time())
+
+	// holds intermediate values to make the algo easier to read & audit
+	x := new(big.Int)
+	y := new(big.Int)
+
+	// (2 if len(parent_uncles) else 1) - (block_timestamp - parent_timestamp) // duration_limit
+	x.Sub(bigTime, bigParentTime)
+	x.Div(x, params.DurationLimit[context])
+	if parent.UncleHash(context) == types.EmptyUncleHash {
+		x.Sub(big1, x)
+	} else {
+		x.Sub(big2, x)
+	}
+	// max((2 if len(parent_uncles) else 1) - (block_timestamp - parent_timestamp) // 9, -99)
+	if x.Cmp(bigMinus99) < 0 {
+		x.Set(bigMinus99)
+	}
+	// parent_diff + (parent_diff / 2048 * max((2 if len(parent.uncles) else 1) - ((timestamp - parent.timestamp) // 9), -99))
+	y.Div(parent.Difficulty(context), params.DifficultyBoundDivisor)
+	x.Mul(y, x)
+	x.Add(parent.Difficulty(context), x)
+
+	// minimum difficulty can ever be (before exponential factor)
+	if x.Cmp(params.MinimumDifficulty[context]) < 0 {
+		x.Set(params.MinimumDifficulty[context])
 	}
 
 	return x
@@ -471,6 +513,41 @@ func (blake3pow *Blake3pow) SealHash(header *types.Header) (hash common.Hash) {
 	rlp.Encode(hasher, hdata)
 	hash.SetBytes(hasher.Sum(hash[:0]))
 	return hash
+}
+
+// FinalizeAtIndex implements consensus.Engine, accumulating the block and uncle rewards,
+// setting the final state on the header at an index.
+func (blake3 *Blake3pow) FinalizeAtIndex(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, index int) {
+	// Accumulate any block and uncle rewards and commit the final state root
+	accumulateRewardsAtIndex(chain.Config(), state, header, uncles, index)
+	header.SetRoot(state.IntermediateRoot(chain.Config().IsEIP158(header.Number(index))), index)
+}
+
+// accumulateRewardsAtIndex credits the coinbase of the given block with the mining
+// reward. The total reward consists of the static block reward and rewards for
+// included uncles. The coinbase of each uncle block is also rewarded.
+func accumulateRewardsAtIndex(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header, index int) {
+	// Skip block reward in catalyst mode
+	if config.IsCatalyst(header.Number(index)) {
+		return
+	}
+
+	// Select the correct block reward based on chain progression
+	blockReward := misc.CalculateRewardWithIndex(index)
+	// Accumulate the rewards for the miner and any included uncles
+	reward := new(big.Int).Set(blockReward)
+	r := new(big.Int)
+	for _, uncle := range uncles {
+		r.Add(uncle.Number(index), big8)
+		r.Sub(r, header.Number(index))
+		r.Mul(r, blockReward)
+		r.Div(r, big8)
+		state.AddBalance(uncle.Coinbase(index), r)
+
+		r.Div(blockReward, big32)
+		reward.Add(reward, r)
+	}
+	state.AddBalance(header.Coinbase(index), reward)
 }
 
 // AccumulateRewards credits the coinbase of the given block with the mining

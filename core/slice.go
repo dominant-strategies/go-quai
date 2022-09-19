@@ -104,6 +104,39 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 	go sl.updateFutureHeaders()
 	go sl.updatePendingHeadersCache()
 
+	// If the headerchain is empty start from genesis
+	if sl.hc.Empty() {
+		// Initialize slice state for genesis knot
+		genesisHash := sl.Config().GenesisHash
+		genesisTermini := []common.Hash{genesisHash, genesisHash, genesisHash, genesisHash}
+		sl.pendingHeader = genesisHash
+		rawdb.WriteTermini(sl.sliceDb, genesisHash, genesisTermini)
+
+		// Append each of the knot blocks
+
+		knot := genesis.Knot[:]
+		for _, block := range knot {
+			if block != nil {
+				location := block.Header().Location()
+				if nodeCtx == common.PRIME_CTX {
+					rawdb.WritePendingBlockBody(sl.sliceDb, block.Root(), block.Body())
+					_, err = sl.Append(block.Header(), genesisHash, block.Difficulty(), false, false)
+					if err != nil {
+						log.Warn("Failed to append block", "hash:", block.Hash(), "Number:", block.Number(), "Location:", block.Header().Location(), "error:", err)
+					}
+				} else if location.Region() == common.NodeLocation.Region() && len(common.NodeLocation) == common.REGION_CTX {
+					rawdb.WritePendingBlockBody(sl.sliceDb, block.Root(), block.Body())
+				} else if bytes.Equal(location, common.NodeLocation) {
+					rawdb.WritePendingBlockBody(sl.sliceDb, block.Root(), block.Body())
+				}
+			}
+		}
+
+	} else { // load the phCache and slice current pending header hash
+		if err := sl.loadLastState(); err != nil {
+			return nil, err
+		}
+	}
 	return sl, nil
 }
 

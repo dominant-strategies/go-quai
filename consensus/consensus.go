@@ -97,6 +97,10 @@ type Engine interface {
 	FinalizeAndAssemble(chain ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction,
 		uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error)
 
+	// FinalizeAtIndex implements consensus.Engine, accumulating the block and uncle rewards,
+	// setting the final state on the header at an index.
+	FinalizeAtIndex(chain ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, index int)
+
 	// Seal generates a new sealing request for the given input block and pushes
 	// the result into the given channel.
 	//
@@ -110,6 +114,10 @@ type Engine interface {
 	// CalcDifficulty is the difficulty adjustment algorithm. It returns the difficulty
 	// that a new block should have.
 	CalcDifficulty(chain ChainHeaderReader, time uint64, parent *types.Header) *big.Int
+
+	// CalcDifficultyAtIndex is the difficulty adjustment algorithm. It returns the difficulty
+	// that a new block should have.
+	CalcDifficultyAtIndex(chain ChainHeaderReader, time uint64, parent *types.Header, context int) *big.Int
 
 	// IsCoincident returns true if this block satisfies the difficulty order
 	// of a dominant chain. If this node does not have a dominant chain (i.e.

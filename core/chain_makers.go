@@ -18,7 +18,9 @@ package core
 
 import (
 	"fmt"
+	"log"
 	"math/big"
+	"sync"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
@@ -318,3 +320,171 @@ func (cr *fakeChainReader) GetHeaderByNumber(number uint64) *types.Header       
 func (cr *fakeChainReader) GetHeaderByHash(hash common.Hash) *types.Header          { return nil }
 func (cr *fakeChainReader) GetHeader(hash common.Hash, number uint64) *types.Header { return nil }
 func (cr *fakeChainReader) GetBlock(hash common.Hash, number uint64) *types.Block   { return nil }
+
+type knot struct {
+	block *types.Block
+}
+
+func GenerateKnot(config *params.ChainConfig, parent *types.Block, engine consensus.Engine, db ethdb.Database, n int, gen func(int, *BlockGen)) ([]*types.Block, []types.Receipts) {
+	if config == nil {
+		config = params.TestChainConfig
+	}
+	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
+	chainreader := &fakeChainReader{config: config}
+
+	resultLoop := func(i int, k *knot, results chan *types.Header, stop chan struct{}, wg *sync.WaitGroup) error {
+		for {
+			select {
+			case header := <-results:
+				k.block = types.NewBlockWithHeader(header)
+				fmt.Println("Mined block: ", k.block.Hash(), k.block.Header().NumberArray(), k.block.Header().DifficultyArray())
+				defer wg.Done()
+				return nil
+			}
+		}
+	}
+
+	genblock := func(i int, parent *types.Block, genesis *types.Header, primedb *state.StateDB, regiondb *state.StateDB, zonedb *state.StateDB, location common.Location, resultCh chan *types.Header, stopCh chan struct{}) {
+		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: primedb, config: config, engine: engine}
+		b.header = makeKnotHeader(chainreader, parent, genesis, primedb, b.engine, location, i)
+
+		// Execute any user modifications to the block
+		if gen != nil {
+			gen(i, b)
+		}
+		if b.engine != nil {
+			// Finalize and seal the block
+			b.engine.FinalizeAtIndex(chainreader, b.header, zonedb, b.txs, b.uncles, common.ZONE_CTX)
+			// Write state changes to db
+			root, err := zonedb.Commit(config.IsEIP158(b.header.Number(common.ZONE_CTX)))
+			if err != nil {
+				panic(fmt.Sprintf("state write error: %v", err))
+			}
+			if err := zonedb.Database().TrieDB().Commit(root, false, nil); err != nil {
+				panic(fmt.Sprintf("trie write error: %v", err))
+			}
+
+			b.engine.FinalizeAtIndex(chainreader, b.header, regiondb, b.txs, b.uncles, common.REGION_CTX)
+			// Write state changes to db
+			root, err = regiondb.Commit(config.IsEIP158(b.header.Number(common.REGION_CTX)))
+			if err != nil {
+				panic(fmt.Sprintf("state write error: %v", err))
+			}
+			if err := regiondb.Database().TrieDB().Commit(root, false, nil); err != nil {
+				panic(fmt.Sprintf("trie write error: %v", err))
+			}
+
+			block, _ := b.engine.FinalizeAndAssemble(chainreader, b.header, primedb, b.txs, b.uncles, b.receipts)
+
+			// Write state changes to db
+			root, err = primedb.Commit(config.IsEIP158(b.header.Number(common.PRIME_CTX)))
+			if err != nil {
+				panic(fmt.Sprintf("state write error: %v", err))
+			}
+			if err := primedb.Database().TrieDB().Commit(root, false, nil); err != nil {
+				panic(fmt.Sprintf("trie write error: %v", err))
+			}
+
+			// Mine the block
+			if err := engine.Seal(block.Header(), resultCh, stopCh); err != nil {
+				log.Println("Block sealing failed", "err", err)
+			}
+		}
+	}
+
+	knot := &knot{
+		block: parent,
+	}
+
+	genesis := parent.Header()
+	fmt.Println("genesis hash", genesis.Hash())
+
+	locations := []common.Location{{0, 0}, {0, 1}, {0, 2}, {1, 0}, {1, 1}, {1, 2}, {2, 0}, {2, 1}, {2, 2}}
+	for i := 0; i < len(locations); i++ {
+		primedb, err := state.New(parent.Root(), state.NewDatabase(db), nil)
+		if err != nil {
+			panic(err)
+		}
+
+		regionParentRoot := common.Hash{}
+		// mod 3 is amount of regions
+		if i%3 == 0 {
+			regionParentRoot = genesis.Root(common.REGION_CTX)
+		} else {
+			regionParentRoot = parent.Header().Root(common.REGION_CTX)
+		}
+		regiondb, err := state.New(regionParentRoot, state.NewDatabase(db), nil)
+		if err != nil {
+			panic(err)
+		}
+
+		zonedb, err := state.New(genesis.Root(common.ZONE_CTX), state.NewDatabase(db), nil)
+		if err != nil {
+			panic(err)
+		}
+
+		resultCh := make(chan *types.Header)
+		exitCh := make(chan struct{})
+
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go resultLoop(i, knot, resultCh, exitCh, &wg)
+		genblock(i, parent, genesis, primedb, regiondb, zonedb, locations[i], resultCh, exitCh)
+		wg.Wait()
+		blocks[i] = knot.block
+		parent = knot.block
+	}
+	return blocks, receipts
+}
+
+func makeKnotHeader(chain consensus.ChainReader, parent *types.Block, genesis *types.Header, state *state.StateDB, engine consensus.Engine, location common.Location, i int) *types.Header {
+	var time uint64
+	if parent.Time() == 0 {
+		time = 10
+	} else {
+		time = parent.Time() + 10 // block time is fixed at 10 seconds
+	}
+
+	baseFee := misc.CalcBaseFee(chain.Config(), parent.Header())
+
+	header := types.EmptyHeader()
+	for i := 0; i < common.HierarchyDepth; i++ {
+		header.SetNumber(big.NewInt(1), i)
+		header.SetParentHash(genesis.Hash(), i)
+		header.SetDifficulty(genesis.Difficulty(i), i)
+		header.SetUncleHash(types.EmptyUncleHash, i)
+		header.SetTxHash(types.EmptyRootHash, i)
+		header.SetReceiptHash(types.EmptyRootHash, i)
+		header.SetBaseFee(baseFee, i)
+		header.SetGasLimit(params.MinGasLimit, i)
+	}
+
+	header.SetLocation(location)
+	header.SetTime(time)
+
+	parentHeader := parent.Header()
+
+	header.SetParentHash(parent.Hash())
+	header.SetCoinbase(parent.Coinbase())
+	header.SetDifficulty(engine.CalcDifficultyAtIndex(chain, time, parentHeader, common.NodeLocation.Context()))
+	if i%common.HierarchyDepth == 0 {
+		header.SetDifficulty(engine.CalcDifficultyAtIndex(chain, time, genesis, common.NodeLocation.Context()+1), common.NodeLocation.Context()+1)
+	} else {
+		header.SetDifficulty(engine.CalcDifficultyAtIndex(chain, time, parentHeader, common.NodeLocation.Context()+1), common.NodeLocation.Context()+1)
+	}
+	header.SetDifficulty(engine.CalcDifficultyAtIndex(chain, time, genesis, common.NodeLocation.Context()+2), common.NodeLocation.Context()+2)
+
+	header.SetNumber(new(big.Int).Add(parent.Number(), common.Big1))
+
+	headerLocation := header.Location()
+	parentLocation := parent.Header().Location()
+
+	headerLocation.AssertValid()
+
+	if len(parentLocation) > 0 && headerLocation.Region() == parentLocation.Region() {
+		header.SetNumber(new(big.Int).Add(parent.Header().Number(common.NodeLocation.Context()+1), common.Big1), common.NodeLocation.Context()+1)
+		header.SetParentHash(parent.Hash(), common.NodeLocation.Context()+1)
+	}
+
+	return header
+}
