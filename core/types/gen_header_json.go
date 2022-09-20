@@ -57,7 +57,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	}
 	enc.Location = h.Location()
 	enc.Time = hexutil.Uint64(h.Time())
-	enc.Extra = h.Extra()
+	enc.Extra = hexutil.Bytes(h.Extra())
 	enc.Nonce = h.Nonce()
 	enc.Hash = h.Hash()
 	return json.Marshal(&enc)
@@ -66,22 +66,22 @@ func (h Header) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON unmarshals from JSON.
 func (h *Header) UnmarshalJSON(input []byte) error {
 	var dec struct {
-		ParentHash  []*common.Hash    `json:"parentHash"       gencodec:"required"`
-		UncleHash   []*common.Hash    `json:"sha3Uncles"       gencodec:"required"`
-		Coinbase    []*common.Address `json:"miner"            gencodec:"required"`
-		Root        []*common.Hash    `json:"stateRoot"        gencodec:"required"`
-		TxHash      []*common.Hash    `json:"transactionsRoot" gencodec:"required"`
-		ReceiptHash []*common.Hash    `json:"receiptsRoot"     gencodec:"required"`
-		Bloom       []*Bloom          `json:"logsBloom"        gencodec:"required"`
+		ParentHash  []common.Hash    `json:"parentHash"       gencodec:"required"`
+		UncleHash   []common.Hash    `json:"sha3Uncles"       gencodec:"required"`
+		Coinbase    []common.Address `json:"miner"            gencodec:"required"`
+		Root        []common.Hash    `json:"stateRoot"        gencodec:"required"`
+		TxHash      []common.Hash    `json:"transactionsRoot" gencodec:"required"`
+		ReceiptHash []common.Hash    `json:"receiptsRoot"     gencodec:"required"`
+		Bloom       []Bloom          `json:"logsBloom"        gencodec:"required"`
 		Difficulty  []*hexutil.Big    `json:"difficulty"       gencodec:"required"`
 		Number      []*hexutil.Big    `json:"number"           gencodec:"required"`
-		GasLimit    []*hexutil.Uint64 `json:"gasLimit"         gencodec:"required"`
-		GasUsed     []*hexutil.Uint64 `json:"gasUsed"          gencodec:"required"`
+		GasLimit    []hexutil.Uint64 `json:"gasLimit"         gencodec:"required"`
+		GasUsed     []hexutil.Uint64 `json:"gasUsed"          gencodec:"required"`
 		BaseFee     []*hexutil.Big    `json:"baseFeePerGas"    gencodec:"required"`
 		Location    common.Location   `json:"location"         gencodec:"required"`
-		Time        *hexutil.Uint64   `json:"timestamp"        gencodec:"required"`
-		Extra       *hexutil.Bytes    `json:"extraData"        gencodec:"required"`
-		Nonce       *BlockNonce       `json:"nonce"`
+		Time        hexutil.Uint64   `json:"timestamp"        gencodec:"required"`
+		Extra       hexutil.Bytes    `json:"extraData"        gencodec:"required"`
+		Nonce       BlockNonce       `json:"nonce"`
 	}
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
@@ -122,28 +122,43 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	if dec.BaseFee == nil {
 		return errors.New("missing required field 'baseFee' for Header")
 	}
-	if dec.Time == nil {
+	if dec.Time == 0 {
 		return errors.New("missing required field 'timestamp' for Header")
 	}
 	if dec.Extra == nil {
 		return errors.New("missing required field 'extraData' for Header")
 	}
+	// Initialize the header
+	h.parentHash = make([]common.Hash, common.HierarchyDepth)
+	h.uncleHash= make([]common.Hash, common.HierarchyDepth)
+	h.coinbase = make([]common.Address, common.HierarchyDepth)
+	h.root = make([]common.Hash, common.HierarchyDepth)
+	h.txHash = make([]common.Hash, common.HierarchyDepth)
+	h.receiptHash = make([]common.Hash, common.HierarchyDepth)
+	h.bloom= make([]Bloom, common.HierarchyDepth)
+	h.difficulty= make([]*big.Int, common.HierarchyDepth)
+	h.number = make([]*big.Int, common.HierarchyDepth)
+	h.gasLimit = make([]uint64, common.HierarchyDepth)
+	h.gasUsed = make([]uint64, common.HierarchyDepth)
+	h.baseFee = make([]*big.Int, common.HierarchyDepth)
+
 	for i := 0; i < common.HierarchyDepth; i++ {
-		h.SetParentHash(*dec.ParentHash[i], i)
-		h.SetUncleHash(*dec.UncleHash[i], i)
-		h.SetCoinbase(*dec.Coinbase[i], i)
-		h.SetRoot(*dec.Root[i], i)
-		h.SetTxHash(*dec.TxHash[i], i)
-		h.SetReceiptHash(*dec.ReceiptHash[i], i)
-		h.SetBloom(*dec.Bloom[i], i)
+		h.SetParentHash(dec.ParentHash[i], i)
+		h.SetUncleHash(dec.UncleHash[i], i)
+		h.SetCoinbase(dec.Coinbase[i], i)
+		h.SetRoot(dec.Root[i], i)
+		h.SetTxHash(dec.TxHash[i], i)
+		h.SetReceiptHash(dec.ReceiptHash[i], i)
+		h.SetBloom(dec.Bloom[i], i)
 		h.SetDifficulty((*big.Int)(dec.Difficulty[i]), i)
 		h.SetNumber((*big.Int)(dec.Number[i]), i)
-		h.SetGasLimit(uint64(*dec.GasLimit[i]), i)
-		h.SetGasUsed(uint64(*dec.GasUsed[i]), i)
+		h.SetGasLimit(uint64(dec.GasLimit[i]), i)
+		h.SetGasUsed(uint64(dec.GasUsed[i]), i)
+		h.SetBaseFee((*big.Int)(dec.BaseFee[i]), i)
 	}
-	h.SetLocation(*dec.Location)
-	h.SetTime(uint64(*dec.Time))
-	h.SetExtra(*dec.Extra)
-	h.SetNonce(*dec.Nonce)
+	h.SetLocation(dec.Location)
+	h.SetTime(uint64(dec.Time))
+	h.SetExtra(dec.Extra)
+	h.SetNonce(dec.Nonce)
 	return nil
 }
