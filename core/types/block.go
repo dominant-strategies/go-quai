@@ -180,11 +180,6 @@ func (h *Header) SanityCheck() error {
 // EmptyBody returns true if there is no additional 'body' to complete the header
 // that is: no transactions and no uncles.
 func (h *Header) EmptyBody() bool {
-	fmt.Println("EmptyBody", QuaiNetworkContext)
-	fmt.Println("EmptyBody", h.TxHash[QuaiNetworkContext])
-	fmt.Println("EmptyBody", h.UncleHash[QuaiNetworkContext])
-	fmt.Println("EmptyRootHash", EmptyRootHash)
-	fmt.Println(h.TxHash[QuaiNetworkContext] == EmptyRootHash)
 	return h.TxHash[QuaiNetworkContext] == EmptyRootHash && h.UncleHash[QuaiNetworkContext] == EmptyUncleHash
 }
 
@@ -283,7 +278,7 @@ func encodeBlockNumber(number uint64) []byte {
 func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*Receipt, hasher TrieHasher) *Block {
 	b := &Block{header: CopyHeader(header), td: new(big.Int)}
 	// TODO: panic if len(txs) != len(receipts)
-	fmt.Println("NewBlock len txs", len(txs))
+	fmt.Println("NewBlock", header.Number, "len txs", len(txs))
 	if len(txs) == 0 {
 		b.header.TxHash = []common.Hash{EmptyRootHash, EmptyRootHash, EmptyRootHash}
 	} else {
