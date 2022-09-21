@@ -23,8 +23,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/core"
-	"github.com/spruce-solutions/go-quai/light"
+	"github.com/dominant-strategies/go-quai/core"
+	"github.com/dominant-strategies/go-quai/light"
 )
 
 func TestLightPruner(t *testing.T) {

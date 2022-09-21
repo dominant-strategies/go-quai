@@ -7,10 +7,10 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/common/hexutil"
-	"github.com/spruce-solutions/go-quai/common/math"
-	"github.com/spruce-solutions/go-quai/params"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/common/hexutil"
+	"github.com/dominant-strategies/go-quai/common/math"
+	"github.com/dominant-strategies/go-quai/params"
 )
 
 var _ = (*genesisSpecMarshaling)(nil)

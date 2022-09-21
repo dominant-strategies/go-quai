@@ -22,10 +22,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/spruce-solutions/go-quai/cmd/utils"
-	"github.com/spruce-solutions/go-quai/console"
-	"github.com/spruce-solutions/go-quai/node"
-	"github.com/spruce-solutions/go-quai/rpc"
+	"github.com/dominant-strategies/go-quai/cmd/utils"
+	"github.com/dominant-strategies/go-quai/console"
+	"github.com/dominant-strategies/go-quai/node"
+	"github.com/dominant-strategies/go-quai/rpc"
 	"gopkg.in/urfave/cli.v1"
 )
 

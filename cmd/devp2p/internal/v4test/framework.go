@@ -22,9 +22,9 @@ import (
 	"net"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/crypto"
-	"github.com/spruce-solutions/go-quai/p2p/discover/v4wire"
-	"github.com/spruce-solutions/go-quai/p2p/enode"
+	"github.com/dominant-strategies/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/p2p/discover/v4wire"
+	"github.com/dominant-strategies/go-quai/p2p/enode"
 )
 
 const waitTime = 300 * time.Millisecond

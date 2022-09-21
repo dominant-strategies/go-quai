@@ -22,7 +22,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/light"
+	"github.com/dominant-strategies/go-quai/light"
 )
 
 var (

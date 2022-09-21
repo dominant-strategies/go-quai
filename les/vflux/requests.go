@@ -21,7 +21,7 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/spruce-solutions/go-quai/rlp"
+	"github.com/dominant-strategies/go-quai/rlp"
 )
 
 var ErrNoReply = errors.New("no reply for given request")

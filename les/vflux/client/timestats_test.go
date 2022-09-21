@@ -22,7 +22,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/les/utils"
+	"github.com/dominant-strategies/go-quai/les/utils"
 )
 
 func TestTransition(t *testing.T) {

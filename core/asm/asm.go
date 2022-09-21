@@ -21,7 +21,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/spruce-solutions/go-quai/core/vm"
+	"github.com/dominant-strategies/go-quai/core/vm"
 )
 
 // Iterator for disassembled EVM instructions

@@ -19,7 +19,7 @@ package vm
 import (
 	"testing"
 
-	"github.com/spruce-solutions/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/crypto"
 )
 
 func TestJumpDestAnalysis(t *testing.T) {

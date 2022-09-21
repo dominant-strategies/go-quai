@@ -17,9 +17,9 @@
 package eth
 
 import (
-	"github.com/spruce-solutions/go-quai/core"
-	"github.com/spruce-solutions/go-quai/eth/protocols/snap"
-	"github.com/spruce-solutions/go-quai/p2p/enode"
+	"github.com/dominant-strategies/go-quai/core"
+	"github.com/dominant-strategies/go-quai/eth/protocols/snap"
+	"github.com/dominant-strategies/go-quai/p2p/enode"
 )
 
 // snapHandler implements the snap.Backend interface to handle the various network

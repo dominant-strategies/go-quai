@@ -19,10 +19,10 @@ package state
 import (
 	"bytes"
 
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/ethdb"
-	"github.com/spruce-solutions/go-quai/rlp"
-	"github.com/spruce-solutions/go-quai/trie"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/ethdb"
+	"github.com/dominant-strategies/go-quai/rlp"
+	"github.com/dominant-strategies/go-quai/trie"
 )
 
 // NewStateSync create a new state trie download scheduler.

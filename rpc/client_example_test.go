@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/common/hexutil"
-	"github.com/spruce-solutions/go-quai/rpc"
+	"github.com/dominant-strategies/go-quai/common/hexutil"
+	"github.com/dominant-strategies/go-quai/rpc"
 )
 
 // In this example, our client wishes to track the latest 'block number'

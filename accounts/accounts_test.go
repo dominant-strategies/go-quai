@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/spruce-solutions/go-quai/common/hexutil"
+	"github.com/dominant-strategies/go-quai/common/hexutil"
 )
 
 func TestTextHash(t *testing.T) {

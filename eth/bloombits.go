@@ -19,8 +19,8 @@ package eth
 import (
 	"time"
 
-	"github.com/spruce-solutions/go-quai/common/bitutil"
-	"github.com/spruce-solutions/go-quai/core/rawdb"
+	"github.com/dominant-strategies/go-quai/common/bitutil"
+	"github.com/dominant-strategies/go-quai/core/rawdb"
 )
 
 const (

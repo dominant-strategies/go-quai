@@ -21,11 +21,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/eth"
-	"github.com/spruce-solutions/go-quai/eth/ethconfig"
-	"github.com/spruce-solutions/go-quai/internal/utesting"
-	"github.com/spruce-solutions/go-quai/node"
-	"github.com/spruce-solutions/go-quai/p2p"
+	"github.com/dominant-strategies/go-quai/eth"
+	"github.com/dominant-strategies/go-quai/eth/ethconfig"
+	"github.com/dominant-strategies/go-quai/internal/utesting"
+	"github.com/dominant-strategies/go-quai/node"
+	"github.com/dominant-strategies/go-quai/p2p"
 )
 
 var (

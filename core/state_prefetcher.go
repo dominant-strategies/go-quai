@@ -19,11 +19,11 @@ package core
 import (
 	"sync/atomic"
 
-	"github.com/spruce-solutions/go-quai/consensus"
-	"github.com/spruce-solutions/go-quai/core/state"
-	"github.com/spruce-solutions/go-quai/core/types"
-	"github.com/spruce-solutions/go-quai/core/vm"
-	"github.com/spruce-solutions/go-quai/params"
+	"github.com/dominant-strategies/go-quai/consensus"
+	"github.com/dominant-strategies/go-quai/core/state"
+	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/core/vm"
+	"github.com/dominant-strategies/go-quai/params"
 )
 
 // statePrefetcher is a basic Prefetcher, which blindly executes a block on top

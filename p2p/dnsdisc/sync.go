@@ -21,8 +21,8 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/common/mclock"
-	"github.com/spruce-solutions/go-quai/p2p/enode"
+	"github.com/dominant-strategies/go-quai/common/mclock"
+	"github.com/dominant-strategies/go-quai/p2p/enode"
 )
 
 // This is the number of consecutive leaf requests that may fail before

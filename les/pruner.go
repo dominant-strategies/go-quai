@@ -20,10 +20,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/common/math"
-	"github.com/spruce-solutions/go-quai/core"
-	"github.com/spruce-solutions/go-quai/ethdb"
-	"github.com/spruce-solutions/go-quai/log"
+	"github.com/dominant-strategies/go-quai/common/math"
+	"github.com/dominant-strategies/go-quai/core"
+	"github.com/dominant-strategies/go-quai/ethdb"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 // pruner is responsible for pruning historical light chain data.

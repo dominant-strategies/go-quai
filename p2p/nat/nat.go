@@ -25,7 +25,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/log"
+	"github.com/dominant-strategies/go-quai/log"
 	natpmp "github.com/jackpal/go-nat-pmp"
 )
 

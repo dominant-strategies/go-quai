@@ -19,7 +19,7 @@ package rlp
 import (
 	"testing"
 
-	"github.com/spruce-solutions/go-quai/common/hexutil"
+	"github.com/dominant-strategies/go-quai/common/hexutil"
 )
 
 // TestIterator tests some basic things about the ListIterator. A more

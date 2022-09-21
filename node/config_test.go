@@ -24,8 +24,8 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/spruce-solutions/go-quai/crypto"
-	"github.com/spruce-solutions/go-quai/p2p"
+	"github.com/dominant-strategies/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/p2p"
 )
 
 // Tests that datadirs can be successfully created, be them manually configured

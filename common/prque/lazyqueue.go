@@ -20,7 +20,7 @@ import (
 	"container/heap"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/common/mclock"
+	"github.com/dominant-strategies/go-quai/common/mclock"
 )
 
 // LazyQueue is a priority queue data structure where priorities can change over

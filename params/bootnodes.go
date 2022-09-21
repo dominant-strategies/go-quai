@@ -16,7 +16,7 @@
 
 package params
 
-import "github.com/spruce-solutions/go-quai/common"
+import "github.com/dominant-strategies/go-quai/common"
 
 // MainnetBootnodes are the enode URLs of the P2P bootstrap nodes running on
 // the main Ethereum network.

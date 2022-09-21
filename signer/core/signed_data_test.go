@@ -26,12 +26,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/spruce-solutions/go-quai/accounts/keystore"
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/common/hexutil"
-	"github.com/spruce-solutions/go-quai/common/math"
-	"github.com/spruce-solutions/go-quai/crypto"
-	"github.com/spruce-solutions/go-quai/signer/core"
+	"github.com/dominant-strategies/go-quai/accounts/keystore"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/common/hexutil"
+	"github.com/dominant-strategies/go-quai/common/math"
+	"github.com/dominant-strategies/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/signer/core"
 )
 
 var typesStandard = core.Types{

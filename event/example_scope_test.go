@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/spruce-solutions/go-quai/event"
+	"github.com/dominant-strategies/go-quai/event"
 )
 
 // This example demonstrates how SubscriptionScope can be used to control the lifetime of

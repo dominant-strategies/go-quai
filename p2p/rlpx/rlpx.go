@@ -34,9 +34,9 @@ import (
 	"net"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/crypto"
-	"github.com/spruce-solutions/go-quai/crypto/ecies"
-	"github.com/spruce-solutions/go-quai/rlp"
+	"github.com/dominant-strategies/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/crypto/ecies"
+	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/golang/snappy"
 	"golang.org/x/crypto/sha3"
 )

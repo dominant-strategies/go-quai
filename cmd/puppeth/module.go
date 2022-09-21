@@ -25,7 +25,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/log"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 var (

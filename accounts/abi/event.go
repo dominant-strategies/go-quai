@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/crypto"
 )
 
 // Event is an event potentially triggered by the EVM's LOG mechanism. The Event

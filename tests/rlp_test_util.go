@@ -24,7 +24,7 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/spruce-solutions/go-quai/rlp"
+	"github.com/dominant-strategies/go-quai/rlp"
 )
 
 // RLPTest is the JSON structure of a single RLP test.

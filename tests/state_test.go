@@ -23,7 +23,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/spruce-solutions/go-quai/core/vm"
+	"github.com/dominant-strategies/go-quai/core/vm"
 )
 
 func TestState(t *testing.T) {

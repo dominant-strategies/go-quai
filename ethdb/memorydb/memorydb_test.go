@@ -19,8 +19,8 @@ package memorydb
 import (
 	"testing"
 
-	"github.com/spruce-solutions/go-quai/ethdb"
-	"github.com/spruce-solutions/go-quai/ethdb/dbtest"
+	"github.com/dominant-strategies/go-quai/ethdb"
+	"github.com/dominant-strategies/go-quai/ethdb/dbtest"
 )
 
 func TestMemoryDB(t *testing.T) {

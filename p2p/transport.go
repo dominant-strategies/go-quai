@@ -25,11 +25,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/common/bitutil"
-	"github.com/spruce-solutions/go-quai/metrics"
-	"github.com/spruce-solutions/go-quai/p2p/rlpx"
-	"github.com/spruce-solutions/go-quai/rlp"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/common/bitutil"
+	"github.com/dominant-strategies/go-quai/metrics"
+	"github.com/dominant-strategies/go-quai/p2p/rlpx"
+	"github.com/dominant-strategies/go-quai/rlp"
 )
 
 const (

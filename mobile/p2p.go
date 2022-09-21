@@ -21,7 +21,7 @@ package geth
 import (
 	"errors"
 
-	"github.com/spruce-solutions/go-quai/p2p"
+	"github.com/dominant-strategies/go-quai/p2p"
 )
 
 // NodeInfo represents pi short summary of the information known about the host.

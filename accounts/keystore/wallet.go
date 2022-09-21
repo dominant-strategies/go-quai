@@ -19,10 +19,10 @@ package keystore
 import (
 	"math/big"
 
-	"github.com/spruce-solutions/go-quai"
-	"github.com/spruce-solutions/go-quai/accounts"
-	"github.com/spruce-solutions/go-quai/core/types"
-	"github.com/spruce-solutions/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai"
+	"github.com/dominant-strategies/go-quai/accounts"
+	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/crypto"
 )
 
 // keystoreWallet implements the accounts.Wallet interface for the original

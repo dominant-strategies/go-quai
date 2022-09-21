@@ -19,8 +19,8 @@ package client
 import (
 	"sync"
 
-	"github.com/spruce-solutions/go-quai/p2p/enode"
-	"github.com/spruce-solutions/go-quai/p2p/nodestate"
+	"github.com/dominant-strategies/go-quai/p2p/enode"
+	"github.com/dominant-strategies/go-quai/p2p/nodestate"
 )
 
 // FillSet tries to read nodes from an input iterator and add them to a node set by

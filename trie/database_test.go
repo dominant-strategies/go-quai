@@ -19,8 +19,8 @@ package trie
 import (
 	"testing"
 
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/ethdb/memorydb"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/ethdb/memorydb"
 )
 
 // Tests that the trie database returns a missing trie node error if attempting

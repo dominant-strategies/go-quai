@@ -23,11 +23,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/common/mclock"
-	"github.com/spruce-solutions/go-quai/ethdb/memorydb"
-	"github.com/spruce-solutions/go-quai/p2p/enode"
+	"github.com/dominant-strategies/go-quai/common/mclock"
+	"github.com/dominant-strategies/go-quai/ethdb/memorydb"
+	"github.com/dominant-strategies/go-quai/p2p/enode"
 
-	"github.com/spruce-solutions/go-quai/les/utils"
+	"github.com/dominant-strategies/go-quai/les/utils"
 )
 
 const (

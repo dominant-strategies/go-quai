@@ -24,11 +24,11 @@ import (
 	"fmt"
 	"math/big"
 
-	ethereum "github.com/spruce-solutions/go-quai"
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/common/hexutil"
-	"github.com/spruce-solutions/go-quai/core/types"
-	"github.com/spruce-solutions/go-quai/rpc"
+	ethereum "github.com/dominant-strategies/go-quai"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/common/hexutil"
+	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/rpc"
 )
 
 // Client defines typed wrappers for the Ethereum RPC API.

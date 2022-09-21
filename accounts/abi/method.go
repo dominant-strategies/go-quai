@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/spruce-solutions/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/crypto"
 )
 
 // FunctionType represents different types of functions a contract might have.

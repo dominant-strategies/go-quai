@@ -22,9 +22,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/spruce-solutions/go-quai/common/fdlimit"
-	"github.com/spruce-solutions/go-quai/internal/flags"
-	"github.com/spruce-solutions/go-quai/log"
+	"github.com/dominant-strategies/go-quai/common/fdlimit"
+	"github.com/dominant-strategies/go-quai/internal/flags"
+	"github.com/dominant-strategies/go-quai/log"
 	"gopkg.in/urfave/cli.v1"
 )
 

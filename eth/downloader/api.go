@@ -20,9 +20,9 @@ import (
 	"context"
 	"sync"
 
-	"github.com/spruce-solutions/go-quai"
-	"github.com/spruce-solutions/go-quai/event"
-	"github.com/spruce-solutions/go-quai/rpc"
+	"github.com/dominant-strategies/go-quai"
+	"github.com/dominant-strategies/go-quai/event"
+	"github.com/dominant-strategies/go-quai/rpc"
 )
 
 // PublicDownloaderAPI provides an API which gives information about the current synchronisation status.

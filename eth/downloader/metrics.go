@@ -19,7 +19,7 @@
 package downloader
 
 import (
-	"github.com/spruce-solutions/go-quai/metrics"
+	"github.com/dominant-strategies/go-quai/metrics"
 )
 
 var (
