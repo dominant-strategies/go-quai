@@ -26,7 +26,7 @@ import (
 	"crypto/sha512"
 	"fmt"
 
-	"github.com/spruce-solutions/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/crypto"
 	pcsc "github.com/gballet/go-libpcsclite"
 	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/text/unicode/norm"

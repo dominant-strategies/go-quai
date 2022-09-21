@@ -59,9 +59,9 @@ import (
 	"time"
 
 	"github.com/cespare/cp"
-	"github.com/spruce-solutions/go-quai/crypto/signify"
-	"github.com/spruce-solutions/go-quai/internal/build"
-	"github.com/spruce-solutions/go-quai/params"
+	"github.com/dominant-strategies/go-quai/crypto/signify"
+	"github.com/dominant-strategies/go-quai/internal/build"
+	"github.com/dominant-strategies/go-quai/params"
 )
 
 var (

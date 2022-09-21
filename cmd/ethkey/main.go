@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/spruce-solutions/go-quai/internal/flags"
+	"github.com/dominant-strategies/go-quai/internal/flags"
 	"gopkg.in/urfave/cli.v1"
 )
 

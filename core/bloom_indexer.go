@@ -20,12 +20,12 @@ import (
 	"context"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/common/bitutil"
-	"github.com/spruce-solutions/go-quai/core/bloombits"
-	"github.com/spruce-solutions/go-quai/core/rawdb"
-	"github.com/spruce-solutions/go-quai/core/types"
-	"github.com/spruce-solutions/go-quai/ethdb"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/common/bitutil"
+	"github.com/dominant-strategies/go-quai/core/bloombits"
+	"github.com/dominant-strategies/go-quai/core/rawdb"
+	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/ethdb"
 )
 
 const (

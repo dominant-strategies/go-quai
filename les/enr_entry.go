@@ -17,10 +17,10 @@
 package les
 
 import (
-	"github.com/spruce-solutions/go-quai/core/forkid"
-	"github.com/spruce-solutions/go-quai/p2p/dnsdisc"
-	"github.com/spruce-solutions/go-quai/p2p/enode"
-	"github.com/spruce-solutions/go-quai/rlp"
+	"github.com/dominant-strategies/go-quai/core/forkid"
+	"github.com/dominant-strategies/go-quai/p2p/dnsdisc"
+	"github.com/dominant-strategies/go-quai/p2p/enode"
+	"github.com/dominant-strategies/go-quai/rlp"
 )
 
 // lesEntry is the "les" ENR entry. This is set for LES servers only.

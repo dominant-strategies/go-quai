@@ -23,12 +23,12 @@ import (
 	"testing"
 
 	"github.com/VictoriaMetrics/fastcache"
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/core/rawdb"
-	"github.com/spruce-solutions/go-quai/ethdb"
-	"github.com/spruce-solutions/go-quai/ethdb/leveldb"
-	"github.com/spruce-solutions/go-quai/ethdb/memorydb"
-	"github.com/spruce-solutions/go-quai/rlp"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/core/rawdb"
+	"github.com/dominant-strategies/go-quai/ethdb"
+	"github.com/dominant-strategies/go-quai/ethdb/leveldb"
+	"github.com/dominant-strategies/go-quai/ethdb/memorydb"
+	"github.com/dominant-strategies/go-quai/rlp"
 )
 
 // reverse reverses the contents of a byte slice. It's used to update random accs

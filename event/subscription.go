@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/common/mclock"
+	"github.com/dominant-strategies/go-quai/common/mclock"
 )
 
 // Subscription represents a stream of events. The carrier of the events is typically a

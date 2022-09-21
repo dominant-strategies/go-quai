@@ -21,12 +21,12 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/spruce-solutions/go-quai/common"
-	cmath "github.com/spruce-solutions/go-quai/common/math"
-	"github.com/spruce-solutions/go-quai/core/types"
-	"github.com/spruce-solutions/go-quai/core/vm"
-	"github.com/spruce-solutions/go-quai/crypto"
-	"github.com/spruce-solutions/go-quai/params"
+	"github.com/dominant-strategies/go-quai/common"
+	cmath "github.com/dominant-strategies/go-quai/common/math"
+	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/core/vm"
+	"github.com/dominant-strategies/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/params"
 )
 
 var emptyCodeHash = crypto.Keccak256Hash(nil)

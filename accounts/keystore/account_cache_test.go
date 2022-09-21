@@ -29,8 +29,8 @@ import (
 
 	"github.com/cespare/cp"
 	"github.com/davecgh/go-spew/spew"
-	"github.com/spruce-solutions/go-quai/accounts"
-	"github.com/spruce-solutions/go-quai/common"
+	"github.com/dominant-strategies/go-quai/accounts"
+	"github.com/dominant-strategies/go-quai/common"
 )
 
 var (

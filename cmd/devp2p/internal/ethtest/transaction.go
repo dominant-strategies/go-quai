@@ -22,11 +22,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/core/types"
-	"github.com/spruce-solutions/go-quai/crypto"
-	"github.com/spruce-solutions/go-quai/internal/utesting"
-	"github.com/spruce-solutions/go-quai/params"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/internal/utesting"
+	"github.com/dominant-strategies/go-quai/params"
 )
 
 //var faucetAddr = common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7")

@@ -27,10 +27,10 @@ import (
 	"testing/quick"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/crypto"
-	"github.com/spruce-solutions/go-quai/p2p/enode"
-	"github.com/spruce-solutions/go-quai/p2p/enr"
-	"github.com/spruce-solutions/go-quai/p2p/netutil"
+	"github.com/dominant-strategies/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/p2p/enode"
+	"github.com/dominant-strategies/go-quai/p2p/enr"
+	"github.com/dominant-strategies/go-quai/p2p/netutil"
 )
 
 func TestTable_pingReplace(t *testing.T) {

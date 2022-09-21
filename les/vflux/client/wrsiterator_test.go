@@ -21,8 +21,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/common/mclock"
-	"github.com/spruce-solutions/go-quai/p2p/nodestate"
+	"github.com/dominant-strategies/go-quai/common/mclock"
+	"github.com/dominant-strategies/go-quai/p2p/nodestate"
 )
 
 var (

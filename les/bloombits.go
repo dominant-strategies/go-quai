@@ -19,8 +19,8 @@ package les
 import (
 	"time"
 
-	"github.com/spruce-solutions/go-quai/common/bitutil"
-	"github.com/spruce-solutions/go-quai/light"
+	"github.com/dominant-strategies/go-quai/common/bitutil"
+	"github.com/dominant-strategies/go-quai/light"
 )
 
 const (

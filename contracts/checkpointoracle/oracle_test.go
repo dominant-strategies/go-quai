@@ -27,13 +27,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/accounts/abi/bind"
-	"github.com/spruce-solutions/go-quai/accounts/abi/bind/backends"
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/contracts/checkpointoracle/contract"
-	"github.com/spruce-solutions/go-quai/core"
-	"github.com/spruce-solutions/go-quai/crypto"
-	"github.com/spruce-solutions/go-quai/params"
+	"github.com/dominant-strategies/go-quai/accounts/abi/bind"
+	"github.com/dominant-strategies/go-quai/accounts/abi/bind/backends"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/contracts/checkpointoracle/contract"
+	"github.com/dominant-strategies/go-quai/core"
+	"github.com/dominant-strategies/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/params"
 )
 
 var (

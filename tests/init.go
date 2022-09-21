@@ -21,7 +21,7 @@ import (
 	"math/big"
 	"sort"
 
-	"github.com/spruce-solutions/go-quai/params"
+	"github.com/dominant-strategies/go-quai/params"
 )
 
 // Forks table defines supported forks and their chain config.

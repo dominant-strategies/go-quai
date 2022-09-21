@@ -21,7 +21,7 @@ package p2p
 import (
 	"net"
 
-	"github.com/spruce-solutions/go-quai/metrics"
+	"github.com/dominant-strategies/go-quai/metrics"
 )
 
 const (

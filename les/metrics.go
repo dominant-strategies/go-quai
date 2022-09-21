@@ -17,8 +17,8 @@
 package les
 
 import (
-	"github.com/spruce-solutions/go-quai/metrics"
-	"github.com/spruce-solutions/go-quai/p2p"
+	"github.com/dominant-strategies/go-quai/metrics"
+	"github.com/dominant-strategies/go-quai/p2p"
 )
 
 var (

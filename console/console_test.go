@@ -26,15 +26,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/consensus/blake3pow"
-	"github.com/spruce-solutions/go-quai/console/prompt"
-	"github.com/spruce-solutions/go-quai/core"
-	"github.com/spruce-solutions/go-quai/eth"
-	"github.com/spruce-solutions/go-quai/eth/ethconfig"
-	"github.com/spruce-solutions/go-quai/internal/jsre"
-	"github.com/spruce-solutions/go-quai/miner"
-	"github.com/spruce-solutions/go-quai/node"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/consensus/blake3pow"
+	"github.com/dominant-strategies/go-quai/console/prompt"
+	"github.com/dominant-strategies/go-quai/core"
+	"github.com/dominant-strategies/go-quai/eth"
+	"github.com/dominant-strategies/go-quai/eth/ethconfig"
+	"github.com/dominant-strategies/go-quai/internal/jsre"
+	"github.com/dominant-strategies/go-quai/miner"
+	"github.com/dominant-strategies/go-quai/node"
 )
 
 const (

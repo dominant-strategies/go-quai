@@ -23,10 +23,10 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/spruce-solutions/go-quai/accounts/abi/bind"
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/contracts/checkpointoracle/contract"
-	"github.com/spruce-solutions/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/accounts/abi/bind"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/contracts/checkpointoracle/contract"
+	"github.com/dominant-strategies/go-quai/core/types"
 )
 
 // CheckpointOracle is a Go wrapper around an on-chain checkpoint oracle contract.

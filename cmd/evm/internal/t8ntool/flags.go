@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/spruce-solutions/go-quai/core/vm"
-	"github.com/spruce-solutions/go-quai/tests"
+	"github.com/dominant-strategies/go-quai/core/vm"
+	"github.com/dominant-strategies/go-quai/tests"
 	"gopkg.in/urfave/cli.v1"
 )
 

@@ -22,9 +22,9 @@ import (
 	"encoding/binary"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/common/mclock"
-	"github.com/spruce-solutions/go-quai/crypto"
-	"github.com/spruce-solutions/go-quai/p2p/enode"
+	"github.com/dominant-strategies/go-quai/common/mclock"
+	"github.com/dominant-strategies/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/p2p/enode"
 	"github.com/hashicorp/golang-lru/simplelru"
 )
 

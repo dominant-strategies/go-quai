@@ -19,9 +19,9 @@ package rawdb
 import (
 	"encoding/binary"
 
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/ethdb"
-	"github.com/spruce-solutions/go-quai/log"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/ethdb"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 // ReadSnapshotDisabled retrieves if the snapshot maintenance is disabled.

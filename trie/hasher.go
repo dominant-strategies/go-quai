@@ -19,8 +19,8 @@ package trie
 import (
 	"sync"
 
-	"github.com/spruce-solutions/go-quai/crypto"
-	"github.com/spruce-solutions/go-quai/rlp"
+	"github.com/dominant-strategies/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/rlp"
 	"golang.org/x/crypto/sha3"
 )
 

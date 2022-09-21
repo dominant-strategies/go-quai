@@ -20,9 +20,9 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/common/hexutil"
-	"github.com/spruce-solutions/go-quai/signer/core/apitypes"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/common/hexutil"
+	"github.com/dominant-strategies/go-quai/signer/core/apitypes"
 )
 
 func mixAddr(a string) (*common.MixedcaseAddress, error) {

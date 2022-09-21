@@ -25,7 +25,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/spruce-solutions/go-quai/log"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 // ethstatsDockerfile is the Dockerfile required to build an ethstats backend

@@ -16,7 +16,7 @@
 
 package downloader
 
-import "github.com/spruce-solutions/go-quai/core/types"
+import "github.com/dominant-strategies/go-quai/core/types"
 
 type DoneEvent struct {
 	Latest *types.Header

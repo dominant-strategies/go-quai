@@ -19,7 +19,7 @@ package netutil
 import (
 	"time"
 
-	"github.com/spruce-solutions/go-quai/common/mclock"
+	"github.com/dominant-strategies/go-quai/common/mclock"
 )
 
 // IPTracker predicts the external endpoint, i.e. IP address and port, of the local host

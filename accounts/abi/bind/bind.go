@@ -30,8 +30,8 @@ import (
 	"text/template"
 	"unicode"
 
-	"github.com/spruce-solutions/go-quai/accounts/abi"
-	"github.com/spruce-solutions/go-quai/log"
+	"github.com/dominant-strategies/go-quai/accounts/abi"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 // Lang is a target programming language selector to generate bindings for.

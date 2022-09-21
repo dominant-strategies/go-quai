@@ -23,8 +23,8 @@ import (
 	"crypto/elliptic"
 	"fmt"
 
-	"github.com/spruce-solutions/go-quai/common/math"
-	"github.com/spruce-solutions/go-quai/crypto/secp256k1"
+	"github.com/dominant-strategies/go-quai/common/math"
+	"github.com/dominant-strategies/go-quai/crypto/secp256k1"
 )
 
 // Ecrecover returns the uncompressed public key that created the given signature.

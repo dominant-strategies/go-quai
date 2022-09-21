@@ -29,11 +29,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/spruce-solutions/go-quai/event"
-	"github.com/spruce-solutions/go-quai/p2p"
-	"github.com/spruce-solutions/go-quai/p2p/enode"
-	"github.com/spruce-solutions/go-quai/p2p/simulations/adapters"
-	"github.com/spruce-solutions/go-quai/rpc"
+	"github.com/dominant-strategies/go-quai/event"
+	"github.com/dominant-strategies/go-quai/p2p"
+	"github.com/dominant-strategies/go-quai/p2p/enode"
+	"github.com/dominant-strategies/go-quai/p2p/simulations/adapters"
+	"github.com/dominant-strategies/go-quai/rpc"
 	"github.com/gorilla/websocket"
 	"github.com/julienschmidt/httprouter"
 )

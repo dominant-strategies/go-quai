@@ -20,8 +20,8 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/spruce-solutions/go-quai/core/types"
-	"github.com/spruce-solutions/go-quai/rlp"
+	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/rlp"
 )
 
 func decodeEncode(input []byte, val interface{}, i int) {

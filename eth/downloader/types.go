@@ -19,7 +19,7 @@ package downloader
 import (
 	"fmt"
 
-	"github.com/spruce-solutions/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/core/types"
 )
 
 // peerDropFn is a callback type for dropping a peer detected as malicious.

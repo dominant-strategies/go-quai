@@ -19,7 +19,7 @@ package bitutil
 import (
 	"bytes"
 
-	"github.com/spruce-solutions/go-quai/common/bitutil"
+	"github.com/dominant-strategies/go-quai/common/bitutil"
 )
 
 // Fuzz implements a go-fuzz fuzzer method to test various encoding method

@@ -20,8 +20,8 @@ import (
 	"context"
 	"net"
 
-	"github.com/spruce-solutions/go-quai/log"
-	"github.com/spruce-solutions/go-quai/p2p/netutil"
+	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/p2p/netutil"
 )
 
 // ServeListener accepts connections on l, serving JSON-RPC on them.

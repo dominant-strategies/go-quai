@@ -24,8 +24,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/common/hexutil"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/common/hexutil"
 )
 
 // API describes the set of methods offered over the RPC interface

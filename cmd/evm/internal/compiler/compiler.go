@@ -20,7 +20,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/spruce-solutions/go-quai/core/asm"
+	"github.com/dominant-strategies/go-quai/core/asm"
 )
 
 func Compile(fn string, src []byte, debug bool) (string, error) {

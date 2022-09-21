@@ -19,7 +19,7 @@ package snap
 import (
 	"time"
 
-	"github.com/spruce-solutions/go-quai/p2p/tracker"
+	"github.com/dominant-strategies/go-quai/p2p/tracker"
 )
 
 // requestTracker is a singleton tracker for request times.

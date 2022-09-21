@@ -19,7 +19,7 @@ package p2p
 import (
 	"container/heap"
 
-	"github.com/spruce-solutions/go-quai/common/mclock"
+	"github.com/dominant-strategies/go-quai/common/mclock"
 )
 
 // expHeap tracks strings and their expiry time.

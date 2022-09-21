@@ -21,9 +21,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/accounts/keystore"
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/log"
+	"github.com/dominant-strategies/go-quai/accounts/keystore"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 // deployNode creates a new node configuration based on some user input.

@@ -19,7 +19,7 @@ package miner
 import (
 	"testing"
 
-	"github.com/spruce-solutions/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/core/types"
 )
 
 // noopChainRetriever is an implementation of headerRetriever that always

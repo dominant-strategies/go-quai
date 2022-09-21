@@ -19,7 +19,7 @@ package utils
 import (
 	"testing"
 
-	"github.com/spruce-solutions/go-quai/common/mclock"
+	"github.com/dominant-strategies/go-quai/common/mclock"
 )
 
 func TestValueExpiration(t *testing.T) {

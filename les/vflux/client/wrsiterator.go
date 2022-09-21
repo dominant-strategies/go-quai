@@ -19,9 +19,9 @@ package client
 import (
 	"sync"
 
-	"github.com/spruce-solutions/go-quai/les/utils"
-	"github.com/spruce-solutions/go-quai/p2p/enode"
-	"github.com/spruce-solutions/go-quai/p2p/nodestate"
+	"github.com/dominant-strategies/go-quai/les/utils"
+	"github.com/dominant-strategies/go-quai/p2p/enode"
+	"github.com/dominant-strategies/go-quai/p2p/nodestate"
 )
 
 // WrsIterator returns nodes from the specified selectable set with a weighted random

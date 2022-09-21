@@ -22,11 +22,11 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/spruce-solutions/go-quai/accounts/abi"
-	"github.com/spruce-solutions/go-quai/accounts/abi/bind"
-	"github.com/spruce-solutions/go-quai/accounts/keystore"
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/accounts/abi"
+	"github.com/dominant-strategies/go-quai/accounts/abi/bind"
+	"github.com/dominant-strategies/go-quai/accounts/keystore"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/core/types"
 )
 
 // Signer is an interface defining the callback when a contract requires a

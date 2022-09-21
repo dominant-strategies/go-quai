@@ -19,8 +19,8 @@ package p2p
 import (
 	"fmt"
 
-	"github.com/spruce-solutions/go-quai/p2p/enode"
-	"github.com/spruce-solutions/go-quai/p2p/enr"
+	"github.com/dominant-strategies/go-quai/p2p/enode"
+	"github.com/dominant-strategies/go-quai/p2p/enr"
 )
 
 // Protocol represents a P2P subprotocol implementation.

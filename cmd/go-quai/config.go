@@ -28,14 +28,14 @@ import (
 	"gopkg.in/urfave/cli.v1"
 
 	"github.com/naoina/toml"
-	"github.com/spruce-solutions/go-quai/cmd/utils"
-	"github.com/spruce-solutions/go-quai/eth/catalyst"
-	"github.com/spruce-solutions/go-quai/eth/ethconfig"
-	"github.com/spruce-solutions/go-quai/internal/ethapi"
-	"github.com/spruce-solutions/go-quai/log"
-	"github.com/spruce-solutions/go-quai/metrics"
-	"github.com/spruce-solutions/go-quai/node"
-	"github.com/spruce-solutions/go-quai/params"
+	"github.com/dominant-strategies/go-quai/cmd/utils"
+	"github.com/dominant-strategies/go-quai/eth/catalyst"
+	"github.com/dominant-strategies/go-quai/eth/ethconfig"
+	"github.com/dominant-strategies/go-quai/internal/ethapi"
+	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/metrics"
+	"github.com/dominant-strategies/go-quai/node"
+	"github.com/dominant-strategies/go-quai/params"
 )
 
 var (

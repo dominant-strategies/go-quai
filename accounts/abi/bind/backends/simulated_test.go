@@ -27,14 +27,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spruce-solutions/go-quai"
-	"github.com/spruce-solutions/go-quai/accounts/abi"
-	"github.com/spruce-solutions/go-quai/accounts/abi/bind"
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/core"
-	"github.com/spruce-solutions/go-quai/core/types"
-	"github.com/spruce-solutions/go-quai/crypto"
-	"github.com/spruce-solutions/go-quai/params"
+	"github.com/dominant-strategies/go-quai"
+	"github.com/dominant-strategies/go-quai/accounts/abi"
+	"github.com/dominant-strategies/go-quai/accounts/abi/bind"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/core"
+	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/params"
 )
 
 func TestSimulatedBackend(t *testing.T) {

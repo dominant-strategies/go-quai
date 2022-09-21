@@ -21,7 +21,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/spruce-solutions/go-quai/accounts/abi"
+	"github.com/dominant-strategies/go-quai/accounts/abi"
 	fuzz "github.com/google/gofuzz"
 )
 

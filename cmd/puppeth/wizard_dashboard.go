@@ -19,7 +19,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/spruce-solutions/go-quai/log"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 // deployDashboard queries the user for various input on deploying a web-service

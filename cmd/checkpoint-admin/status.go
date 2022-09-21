@@ -19,8 +19,8 @@ package main
 import (
 	"fmt"
 
-	"github.com/spruce-solutions/go-quai/cmd/utils"
-	"github.com/spruce-solutions/go-quai/common"
+	"github.com/dominant-strategies/go-quai/cmd/utils"
+	"github.com/dominant-strategies/go-quai/common"
 	"gopkg.in/urfave/cli.v1"
 )
 

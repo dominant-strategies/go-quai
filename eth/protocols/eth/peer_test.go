@@ -22,8 +22,8 @@ package eth
 import (
 	"crypto/rand"
 
-	"github.com/spruce-solutions/go-quai/p2p"
-	"github.com/spruce-solutions/go-quai/p2p/enode"
+	"github.com/dominant-strategies/go-quai/p2p"
+	"github.com/dominant-strategies/go-quai/p2p/enode"
 )
 
 // testPeer is a simulated peer to allow testing direct network calls.

@@ -21,7 +21,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/spruce-solutions/go-quai/eth/tracers/internal/tracers"
+	"github.com/dominant-strategies/go-quai/eth/tracers/internal/tracers"
 )
 
 // all contains all the built in JavaScript tracers by name.

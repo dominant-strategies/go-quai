@@ -27,11 +27,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/eth/protocols/eth"
-	"github.com/spruce-solutions/go-quai/event"
-	"github.com/spruce-solutions/go-quai/log"
-	"github.com/spruce-solutions/go-quai/p2p/msgrate"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/eth/protocols/eth"
+	"github.com/dominant-strategies/go-quai/event"
+	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/p2p/msgrate"
 )
 
 const (

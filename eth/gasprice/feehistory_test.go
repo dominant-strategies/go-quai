@@ -22,7 +22,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/spruce-solutions/go-quai/rpc"
+	"github.com/dominant-strategies/go-quai/rpc"
 )
 
 func TestFeeHistory(t *testing.T) {

@@ -19,7 +19,7 @@ package server
 import (
 	"reflect"
 
-	"github.com/spruce-solutions/go-quai/p2p/nodestate"
+	"github.com/dominant-strategies/go-quai/p2p/nodestate"
 )
 
 type peerWrapper struct{ clientPeer } // the NodeStateMachine type system needs this wrapper

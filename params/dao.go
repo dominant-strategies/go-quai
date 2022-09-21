@@ -19,7 +19,7 @@ package params
 import (
 	"math/big"
 
-	"github.com/spruce-solutions/go-quai/common"
+	"github.com/dominant-strategies/go-quai/common"
 )
 
 // DAOForkBlockExtra is the block header extra-data field to set for the DAO fork

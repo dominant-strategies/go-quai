@@ -21,7 +21,7 @@ package keystore
 import (
 	"time"
 
-	"github.com/spruce-solutions/go-quai/log"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/rjeczalik/notify"
 )
 

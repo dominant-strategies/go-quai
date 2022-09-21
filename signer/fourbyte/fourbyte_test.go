@@ -22,8 +22,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/spruce-solutions/go-quai/accounts/abi"
-	"github.com/spruce-solutions/go-quai/common"
+	"github.com/dominant-strategies/go-quai/accounts/abi"
+	"github.com/dominant-strategies/go-quai/common"
 )
 
 // Tests that all the selectors contained in the 4byte database are valid.

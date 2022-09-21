@@ -7,12 +7,12 @@ import (
 	"math/big"
 	"strings"
 
-	ethereum "github.com/spruce-solutions/go-quai"
-	"github.com/spruce-solutions/go-quai/accounts/abi"
-	"github.com/spruce-solutions/go-quai/accounts/abi/bind"
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/core/types"
-	"github.com/spruce-solutions/go-quai/event"
+	ethereum "github.com/dominant-strategies/go-quai"
+	"github.com/dominant-strategies/go-quai/accounts/abi"
+	"github.com/dominant-strategies/go-quai/accounts/abi/bind"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/event"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.

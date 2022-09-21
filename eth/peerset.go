@@ -21,10 +21,10 @@ import (
 	"math/big"
 	"sync"
 
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/eth/protocols/eth"
-	"github.com/spruce-solutions/go-quai/eth/protocols/snap"
-	"github.com/spruce-solutions/go-quai/p2p"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/eth/protocols/eth"
+	"github.com/dominant-strategies/go-quai/eth/protocols/snap"
+	"github.com/dominant-strategies/go-quai/p2p"
 )
 
 var (

@@ -17,7 +17,7 @@
 package state
 
 import (
-	"github.com/spruce-solutions/go-quai/common"
+	"github.com/dominant-strategies/go-quai/common"
 )
 
 type accessList struct {

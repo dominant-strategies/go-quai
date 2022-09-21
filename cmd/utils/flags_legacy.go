@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/spruce-solutions/go-quai/eth/ethconfig"
-	"github.com/spruce-solutions/go-quai/node"
+	"github.com/dominant-strategies/go-quai/eth/ethconfig"
+	"github.com/dominant-strategies/go-quai/node"
 	"gopkg.in/urfave/cli.v1"
 )
 

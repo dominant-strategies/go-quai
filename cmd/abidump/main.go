@@ -23,8 +23,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/spruce-solutions/go-quai/signer/core/apitypes"
-	"github.com/spruce-solutions/go-quai/signer/fourbyte"
+	"github.com/dominant-strategies/go-quai/signer/core/apitypes"
+	"github.com/dominant-strategies/go-quai/signer/fourbyte"
 )
 
 func init() {

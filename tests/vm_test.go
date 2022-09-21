@@ -19,7 +19,7 @@ package tests
 import (
 	"testing"
 
-	"github.com/spruce-solutions/go-quai/core/vm"
+	"github.com/dominant-strategies/go-quai/core/vm"
 )
 
 func TestVM(t *testing.T) {

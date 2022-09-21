@@ -24,16 +24,16 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/common/mclock"
-	"github.com/spruce-solutions/go-quai/core/forkid"
-	"github.com/spruce-solutions/go-quai/core/types"
-	"github.com/spruce-solutions/go-quai/eth/downloader"
-	"github.com/spruce-solutions/go-quai/eth/protocols/eth"
-	"github.com/spruce-solutions/go-quai/light"
-	"github.com/spruce-solutions/go-quai/log"
-	"github.com/spruce-solutions/go-quai/p2p"
-	"github.com/spruce-solutions/go-quai/params"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/common/mclock"
+	"github.com/dominant-strategies/go-quai/core/forkid"
+	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/eth/downloader"
+	"github.com/dominant-strategies/go-quai/eth/protocols/eth"
+	"github.com/dominant-strategies/go-quai/light"
+	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/p2p"
+	"github.com/dominant-strategies/go-quai/params"
 )
 
 // clientHandler is responsible for receiving and processing all incoming server

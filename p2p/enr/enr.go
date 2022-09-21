@@ -40,7 +40,7 @@ import (
 	"io"
 	"sort"
 
-	"github.com/spruce-solutions/go-quai/rlp"
+	"github.com/dominant-strategies/go-quai/rlp"
 )
 
 const SizeLimit = 300 // maximum encoded size of a node record in bytes

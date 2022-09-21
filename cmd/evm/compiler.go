@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"io/ioutil"
 
-	"github.com/spruce-solutions/go-quai/cmd/evm/internal/compiler"
+	"github.com/dominant-strategies/go-quai/cmd/evm/internal/compiler"
 
 	"gopkg.in/urfave/cli.v1"
 )

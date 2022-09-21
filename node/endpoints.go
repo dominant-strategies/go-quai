@@ -21,8 +21,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/log"
-	"github.com/spruce-solutions/go-quai/rpc"
+	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/rpc"
 )
 
 // StartHTTPEndpoint starts the HTTP RPC endpoint.

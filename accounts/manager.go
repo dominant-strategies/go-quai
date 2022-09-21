@@ -21,8 +21,8 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/event"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/event"
 )
 
 // Config contains the settings of the global account manager.

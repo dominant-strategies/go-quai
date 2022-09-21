@@ -22,9 +22,9 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/spruce-solutions/go-quai/internal/debug"
-	"github.com/spruce-solutions/go-quai/p2p/enode"
-	"github.com/spruce-solutions/go-quai/params"
+	"github.com/dominant-strategies/go-quai/internal/debug"
+	"github.com/dominant-strategies/go-quai/p2p/enode"
+	"github.com/dominant-strategies/go-quai/params"
 	"gopkg.in/urfave/cli.v1"
 )
 

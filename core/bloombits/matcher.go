@@ -26,8 +26,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/common/bitutil"
-	"github.com/spruce-solutions/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/common/bitutil"
+	"github.com/dominant-strategies/go-quai/crypto"
 )
 
 // bloomIndexes represents the bit indexes inside the bloom filter that belong

@@ -22,8 +22,8 @@ import (
 	"math/big"
 	"reflect"
 
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/common/math"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/common/math"
 )
 
 // packBytesSlice packs the given bytes as [L, V] as the canonical representation

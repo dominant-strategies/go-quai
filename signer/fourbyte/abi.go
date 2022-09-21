@@ -23,8 +23,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/spruce-solutions/go-quai/accounts/abi"
-	"github.com/spruce-solutions/go-quai/common"
+	"github.com/dominant-strategies/go-quai/accounts/abi"
+	"github.com/dominant-strategies/go-quai/common"
 )
 
 // decodedCallData is an internal type to represent a method call parsed according

@@ -17,8 +17,8 @@
 package core
 
 import (
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/core/types"
 )
 
 // NewTxsEvent is posted when a batch of transactions enter the transaction pool.

@@ -42,7 +42,7 @@ import (
 	"fmt"
 	"hash"
 
-	ethcrypto "github.com/spruce-solutions/go-quai/crypto"
+	ethcrypto "github.com/dominant-strategies/go-quai/crypto"
 )
 
 var (

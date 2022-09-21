@@ -25,7 +25,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/spruce-solutions/go-quai/rpc"
+	"github.com/dominant-strategies/go-quai/rpc"
 	"github.com/stretchr/testify/assert"
 )
 
