@@ -133,7 +133,6 @@ var (
 		utils.GpoIgnoreGasPriceFlag,
 		utils.MinerNotifyFullFlag,
 		configFileFlag,
-		utils.CatalystFlag,
 		utils.RegionFlag,
 		utils.ZoneFlag,
 		utils.DomUrl,
