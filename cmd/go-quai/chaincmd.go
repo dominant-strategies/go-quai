@@ -275,9 +275,6 @@ func importChain(ctx *cli.Context) error {
 	chain.Stop()
 	fmt.Printf("Import done in %v.\n\n", time.Since(start))
 
-	// Output pre-compaction stats mostly to see the import trashing
-	showLeveldbStats(db)
-
 	// Print the memory statistics used by the importing
 	mem := new(runtime.MemStats)
 	runtime.ReadMemStats(mem)
@@ -299,7 +296,6 @@ func importChain(ctx *cli.Context) error {
 	}
 	fmt.Printf("Compaction done in %v.\n\n", time.Since(start))
 
-	showLeveldbStats(db)
 	return importErr
 }
 
