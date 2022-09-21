@@ -25,8 +25,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/p2p/enode"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/p2p/enode"
 )
 
 const jsonIndent = "    "

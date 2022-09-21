@@ -26,12 +26,12 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/spruce-solutions/go-quai/common/mclock"
-	"github.com/spruce-solutions/go-quai/crypto"
-	"github.com/spruce-solutions/go-quai/internal/testlog"
-	"github.com/spruce-solutions/go-quai/log"
-	"github.com/spruce-solutions/go-quai/p2p/enode"
-	"github.com/spruce-solutions/go-quai/p2p/enr"
+	"github.com/dominant-strategies/go-quai/common/mclock"
+	"github.com/dominant-strategies/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/internal/testlog"
+	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/p2p/enode"
+	"github.com/dominant-strategies/go-quai/p2p/enr"
 )
 
 const (

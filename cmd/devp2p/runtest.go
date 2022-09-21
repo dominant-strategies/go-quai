@@ -19,9 +19,9 @@ package main
 import (
 	"os"
 
-	"github.com/spruce-solutions/go-quai/cmd/devp2p/internal/v4test"
-	"github.com/spruce-solutions/go-quai/internal/utesting"
-	"github.com/spruce-solutions/go-quai/log"
+	"github.com/dominant-strategies/go-quai/cmd/devp2p/internal/v4test"
+	"github.com/dominant-strategies/go-quai/internal/utesting"
+	"github.com/dominant-strategies/go-quai/log"
 	"gopkg.in/urfave/cli.v1"
 )
 

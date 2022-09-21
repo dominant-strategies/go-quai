@@ -21,8 +21,8 @@ package geth
 import (
 	"math/big"
 
-	"github.com/spruce-solutions/go-quai/core/types"
-	"github.com/spruce-solutions/go-quai/ethclient"
+	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/ethclient"
 )
 
 // EthereumClient provides access to the Ethereum APIs.

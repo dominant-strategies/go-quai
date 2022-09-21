@@ -24,11 +24,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/ethdb"
-	"github.com/spruce-solutions/go-quai/ethdb/leveldb"
-	"github.com/spruce-solutions/go-quai/ethdb/memorydb"
-	"github.com/spruce-solutions/go-quai/log"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/ethdb"
+	"github.com/dominant-strategies/go-quai/ethdb/leveldb"
+	"github.com/dominant-strategies/go-quai/ethdb/memorydb"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/olekukonko/tablewriter"
 )
 

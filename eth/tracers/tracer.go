@@ -25,12 +25,12 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/common/hexutil"
-	"github.com/spruce-solutions/go-quai/core"
-	"github.com/spruce-solutions/go-quai/core/vm"
-	"github.com/spruce-solutions/go-quai/crypto"
-	"github.com/spruce-solutions/go-quai/log"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/common/hexutil"
+	"github.com/dominant-strategies/go-quai/core"
+	"github.com/dominant-strategies/go-quai/core/vm"
+	"github.com/dominant-strategies/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/log"
 	"gopkg.in/olebedev/go-duktape.v3"
 )
 

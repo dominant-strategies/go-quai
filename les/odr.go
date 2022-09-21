@@ -22,10 +22,10 @@ import (
 	"sort"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/common/mclock"
-	"github.com/spruce-solutions/go-quai/core"
-	"github.com/spruce-solutions/go-quai/ethdb"
-	"github.com/spruce-solutions/go-quai/light"
+	"github.com/dominant-strategies/go-quai/common/mclock"
+	"github.com/dominant-strategies/go-quai/core"
+	"github.com/dominant-strategies/go-quai/ethdb"
+	"github.com/dominant-strategies/go-quai/light"
 )
 
 // LesOdr implements light.OdrBackend

@@ -20,7 +20,7 @@ import (
 	"net"
 	"strings"
 
-	"github.com/spruce-solutions/go-quai/log"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 // StartIPCEndpoint starts an IPC endpoint.

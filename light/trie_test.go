@@ -24,13 +24,13 @@ import (
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/spruce-solutions/go-quai/consensus/blake3pow"
-	"github.com/spruce-solutions/go-quai/core"
-	"github.com/spruce-solutions/go-quai/core/rawdb"
-	"github.com/spruce-solutions/go-quai/core/state"
-	"github.com/spruce-solutions/go-quai/core/vm"
-	"github.com/spruce-solutions/go-quai/params"
-	"github.com/spruce-solutions/go-quai/trie"
+	"github.com/dominant-strategies/go-quai/consensus/blake3pow"
+	"github.com/dominant-strategies/go-quai/core"
+	"github.com/dominant-strategies/go-quai/core/rawdb"
+	"github.com/dominant-strategies/go-quai/core/state"
+	"github.com/dominant-strategies/go-quai/core/vm"
+	"github.com/dominant-strategies/go-quai/params"
+	"github.com/dominant-strategies/go-quai/trie"
 )
 
 func TestNodeIterator(t *testing.T) {

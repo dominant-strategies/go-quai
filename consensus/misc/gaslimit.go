@@ -20,7 +20,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/spruce-solutions/go-quai/params"
+	"github.com/dominant-strategies/go-quai/params"
 )
 
 // VerifyGaslimit verifies the header gas limit according increase/decrease

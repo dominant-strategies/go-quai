@@ -20,7 +20,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/spruce-solutions/go-quai/p2p/enode"
+	"github.com/dominant-strategies/go-quai/p2p/enode"
 )
 
 var (

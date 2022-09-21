@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/spruce-solutions/go-quai/common"
+	"github.com/dominant-strategies/go-quai/common"
 )
 
 // MarshalJSON marshals as JSON.

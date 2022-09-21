@@ -22,12 +22,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/cmd/devp2p/internal/v4test"
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/crypto"
-	"github.com/spruce-solutions/go-quai/p2p/discover"
-	"github.com/spruce-solutions/go-quai/p2p/enode"
-	"github.com/spruce-solutions/go-quai/params"
+	"github.com/dominant-strategies/go-quai/cmd/devp2p/internal/v4test"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/p2p/discover"
+	"github.com/dominant-strategies/go-quai/p2p/enode"
+	"github.com/dominant-strategies/go-quai/params"
 	"gopkg.in/urfave/cli.v1"
 )
 

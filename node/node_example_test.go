@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/spruce-solutions/go-quai/node"
+	"github.com/dominant-strategies/go-quai/node"
 )
 
 // SampleLifecycle is a trivial network service that can be attached to a node for

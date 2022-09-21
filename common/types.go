@@ -29,7 +29,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/spruce-solutions/go-quai/common/hexutil"
+	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"golang.org/x/crypto/sha3"
 )
 

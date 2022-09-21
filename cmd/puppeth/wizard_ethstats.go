@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/spruce-solutions/go-quai/log"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 // deployEthstats queries the user for various input on deploying an ethstats

@@ -19,7 +19,7 @@ package state
 import (
 	"math/big"
 
-	"github.com/spruce-solutions/go-quai/common"
+	"github.com/dominant-strategies/go-quai/common"
 )
 
 // journalEntry is a modification entry in the state change journal that can be

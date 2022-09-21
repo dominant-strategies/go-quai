@@ -17,9 +17,9 @@
 package core
 
 import (
-	"github.com/spruce-solutions/go-quai/core/state"
-	"github.com/spruce-solutions/go-quai/core/types"
-	"github.com/spruce-solutions/go-quai/core/vm"
+	"github.com/dominant-strategies/go-quai/core/state"
+	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/core/vm"
 )
 
 // Validator is an interface which defines the standard for block validation. It

@@ -25,7 +25,7 @@ import (
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/spruce-solutions/go-quai/core"
+	"github.com/dominant-strategies/go-quai/core"
 )
 
 // Tests the go-ethereum to Aleth chainspec conversion for the Stureby testnet.

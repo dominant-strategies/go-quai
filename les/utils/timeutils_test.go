@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/common/mclock"
+	"github.com/dominant-strategies/go-quai/common/mclock"
 )
 
 func TestUpdateTimer(t *testing.T) {

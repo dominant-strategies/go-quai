@@ -19,7 +19,7 @@ package keystore
 import (
 	"os"
 
-	"github.com/spruce-solutions/go-quai/accounts/keystore"
+	"github.com/dominant-strategies/go-quai/accounts/keystore"
 )
 
 func Fuzz(input []byte) int {

@@ -17,7 +17,7 @@
 package rawdb
 
 import (
-	"github.com/spruce-solutions/go-quai/ethdb"
+	"github.com/dominant-strategies/go-quai/ethdb"
 )
 
 // table is a wrapper around a database that prefixes each key access with a pre-

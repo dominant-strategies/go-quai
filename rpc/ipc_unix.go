@@ -25,7 +25,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/spruce-solutions/go-quai/log"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 // ipcListen will create a Unix socket on the given endpoint.

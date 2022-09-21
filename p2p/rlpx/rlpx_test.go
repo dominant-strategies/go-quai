@@ -29,10 +29,10 @@ import (
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/spruce-solutions/go-quai/crypto"
-	"github.com/spruce-solutions/go-quai/crypto/ecies"
-	"github.com/spruce-solutions/go-quai/p2p/simulations/pipes"
-	"github.com/spruce-solutions/go-quai/rlp"
+	"github.com/dominant-strategies/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/crypto/ecies"
+	"github.com/dominant-strategies/go-quai/p2p/simulations/pipes"
+	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/stretchr/testify/assert"
 )
 

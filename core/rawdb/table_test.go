@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/spruce-solutions/go-quai/ethdb"
+	"github.com/dominant-strategies/go-quai/ethdb"
 )
 
 func TestTableDatabase(t *testing.T)            { testTableDatabase(t, "prefix") }

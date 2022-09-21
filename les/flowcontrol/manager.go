@@ -22,8 +22,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/common/mclock"
-	"github.com/spruce-solutions/go-quai/common/prque"
+	"github.com/dominant-strategies/go-quai/common/mclock"
+	"github.com/dominant-strategies/go-quai/common/prque"
 )
 
 // cmNodeFields are ClientNode fields used by the client manager

@@ -26,8 +26,8 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/log"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 // nodeDockerfile is the Dockerfile required to run an Ethereum node.

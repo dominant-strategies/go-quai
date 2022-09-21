@@ -26,9 +26,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/log"
-	"github.com/spruce-solutions/go-quai/p2p/enr"
-	"github.com/spruce-solutions/go-quai/p2p/netutil"
+	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/p2p/enr"
+	"github.com/dominant-strategies/go-quai/p2p/netutil"
 )
 
 const (

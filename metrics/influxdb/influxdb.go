@@ -5,8 +5,8 @@ import (
 	uurl "net/url"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/log"
-	"github.com/spruce-solutions/go-quai/metrics"
+	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/metrics"
 	"github.com/influxdata/influxdb/client"
 )
 

@@ -24,17 +24,17 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/spruce-solutions/go-quai/core"
-	"github.com/spruce-solutions/go-quai/eth/downloader"
-	"github.com/spruce-solutions/go-quai/eth/ethconfig"
-	"github.com/spruce-solutions/go-quai/ethclient"
-	"github.com/spruce-solutions/go-quai/ethstats"
-	"github.com/spruce-solutions/go-quai/internal/debug"
-	"github.com/spruce-solutions/go-quai/les"
-	"github.com/spruce-solutions/go-quai/node"
-	"github.com/spruce-solutions/go-quai/p2p"
-	"github.com/spruce-solutions/go-quai/p2p/nat"
-	"github.com/spruce-solutions/go-quai/params"
+	"github.com/dominant-strategies/go-quai/core"
+	"github.com/dominant-strategies/go-quai/eth/downloader"
+	"github.com/dominant-strategies/go-quai/eth/ethconfig"
+	"github.com/dominant-strategies/go-quai/ethclient"
+	"github.com/dominant-strategies/go-quai/ethstats"
+	"github.com/dominant-strategies/go-quai/internal/debug"
+	"github.com/dominant-strategies/go-quai/les"
+	"github.com/dominant-strategies/go-quai/node"
+	"github.com/dominant-strategies/go-quai/p2p"
+	"github.com/dominant-strategies/go-quai/p2p/nat"
+	"github.com/dominant-strategies/go-quai/params"
 )
 
 // NodeConfig represents the collection of configuration values to fine tune the Geth

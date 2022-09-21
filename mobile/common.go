@@ -24,8 +24,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/common/hexutil"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/common/hexutil"
 )
 
 // Hash represents the 32 byte Keccak256 hash of arbitrary data.

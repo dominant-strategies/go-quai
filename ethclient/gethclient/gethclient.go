@@ -23,12 +23,12 @@ import (
 	"runtime"
 	"runtime/debug"
 
-	"github.com/spruce-solutions/go-quai"
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/common/hexutil"
-	"github.com/spruce-solutions/go-quai/core/types"
-	"github.com/spruce-solutions/go-quai/p2p"
-	"github.com/spruce-solutions/go-quai/rpc"
+	"github.com/dominant-strategies/go-quai"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/common/hexutil"
+	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/p2p"
+	"github.com/dominant-strategies/go-quai/rpc"
 )
 
 // Client is a wrapper around rpc.Client that implements geth-specific functionality.

@@ -27,7 +27,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/spruce-solutions/go-quai/common/math"
+	"github.com/dominant-strategies/go-quai/common/math"
 )
 
 func TestStreamKind(t *testing.T) {

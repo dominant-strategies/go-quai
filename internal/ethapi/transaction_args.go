@@ -23,12 +23,12 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/common/hexutil"
-	"github.com/spruce-solutions/go-quai/common/math"
-	"github.com/spruce-solutions/go-quai/core/types"
-	"github.com/spruce-solutions/go-quai/log"
-	"github.com/spruce-solutions/go-quai/rpc"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/common/hexutil"
+	"github.com/dominant-strategies/go-quai/common/math"
+	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/rpc"
 )
 
 // TransactionArgs represents the arguments to construct a new transaction

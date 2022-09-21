@@ -23,7 +23,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/spruce-solutions/go-quai/p2p/simulations/pipes"
+	"github.com/dominant-strategies/go-quai/p2p/simulations/pipes"
 )
 
 func TestTCPPipe(t *testing.T) {

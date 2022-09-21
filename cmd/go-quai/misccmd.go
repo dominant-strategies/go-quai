@@ -22,8 +22,8 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/spruce-solutions/go-quai/cmd/utils"
-	"github.com/spruce-solutions/go-quai/params"
+	"github.com/dominant-strategies/go-quai/cmd/utils"
+	"github.com/dominant-strategies/go-quai/params"
 	"gopkg.in/urfave/cli.v1"
 )
 

@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/spruce-solutions/go-quai/params"
+	"github.com/dominant-strategies/go-quai/params"
 	"github.com/holiman/uint256"
 )
 

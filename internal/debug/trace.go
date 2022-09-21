@@ -23,7 +23,7 @@ import (
 	"os"
 	"runtime/trace"
 
-	"github.com/spruce-solutions/go-quai/log"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 // StartGoTrace turns on tracing, writing to the given file.

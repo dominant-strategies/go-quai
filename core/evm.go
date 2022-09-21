@@ -19,10 +19,10 @@ package core
 import (
 	"math/big"
 
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/consensus"
-	"github.com/spruce-solutions/go-quai/core/types"
-	"github.com/spruce-solutions/go-quai/core/vm"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/consensus"
+	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/core/vm"
 )
 
 // ChainContext supports retrieving headers and consensus parameters from the

@@ -24,14 +24,14 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/common/mclock"
-	"github.com/spruce-solutions/go-quai/ethdb/memorydb"
-	"github.com/spruce-solutions/go-quai/les/vflux"
-	vfs "github.com/spruce-solutions/go-quai/les/vflux/server"
-	"github.com/spruce-solutions/go-quai/log"
-	"github.com/spruce-solutions/go-quai/p2p/enode"
-	"github.com/spruce-solutions/go-quai/p2p/enr"
-	"github.com/spruce-solutions/go-quai/rlp"
+	"github.com/dominant-strategies/go-quai/common/mclock"
+	"github.com/dominant-strategies/go-quai/ethdb/memorydb"
+	"github.com/dominant-strategies/go-quai/les/vflux"
+	vfs "github.com/dominant-strategies/go-quai/les/vflux/server"
+	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/p2p/enode"
+	"github.com/dominant-strategies/go-quai/p2p/enr"
+	"github.com/dominant-strategies/go-quai/rlp"
 )
 
 var (

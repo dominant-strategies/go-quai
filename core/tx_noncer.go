@@ -19,8 +19,8 @@ package core
 import (
 	"sync"
 
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/core/state"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/core/state"
 )
 
 // txNoncer is a tiny virtual state database to manage the executable nonces of

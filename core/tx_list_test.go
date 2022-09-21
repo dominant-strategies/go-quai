@@ -21,8 +21,8 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/spruce-solutions/go-quai/core/types"
-	"github.com/spruce-solutions/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/crypto"
 )
 
 // Tests that transactions can be added to strict lists and list contents and

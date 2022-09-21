@@ -25,7 +25,7 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/spruce-solutions/go-quai/log"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 type storedCredential struct {

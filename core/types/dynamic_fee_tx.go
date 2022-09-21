@@ -19,7 +19,7 @@ package types
 import (
 	"math/big"
 
-	"github.com/spruce-solutions/go-quai/common"
+	"github.com/dominant-strategies/go-quai/common"
 )
 
 type DynamicFeeTx struct {

@@ -24,13 +24,13 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/core/types"
-	"github.com/spruce-solutions/go-quai/crypto"
-	"github.com/spruce-solutions/go-quai/eth/protocols/eth"
-	"github.com/spruce-solutions/go-quai/internal/utesting"
-	"github.com/spruce-solutions/go-quai/p2p"
-	"github.com/spruce-solutions/go-quai/p2p/rlpx"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/eth/protocols/eth"
+	"github.com/dominant-strategies/go-quai/internal/utesting"
+	"github.com/dominant-strategies/go-quai/p2p"
+	"github.com/dominant-strategies/go-quai/p2p/rlpx"
 )
 
 var (

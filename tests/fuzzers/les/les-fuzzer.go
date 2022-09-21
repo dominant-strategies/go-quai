@@ -22,17 +22,17 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/consensus/blake3pow"
-	"github.com/spruce-solutions/go-quai/core"
-	"github.com/spruce-solutions/go-quai/core/rawdb"
-	"github.com/spruce-solutions/go-quai/core/types"
-	"github.com/spruce-solutions/go-quai/core/vm"
-	"github.com/spruce-solutions/go-quai/crypto"
-	l "github.com/spruce-solutions/go-quai/les"
-	"github.com/spruce-solutions/go-quai/params"
-	"github.com/spruce-solutions/go-quai/rlp"
-	"github.com/spruce-solutions/go-quai/trie"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/consensus/blake3pow"
+	"github.com/dominant-strategies/go-quai/core"
+	"github.com/dominant-strategies/go-quai/core/rawdb"
+	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/core/vm"
+	"github.com/dominant-strategies/go-quai/crypto"
+	l "github.com/dominant-strategies/go-quai/les"
+	"github.com/dominant-strategies/go-quai/params"
+	"github.com/dominant-strategies/go-quai/rlp"
+	"github.com/dominant-strategies/go-quai/trie"
 )
 
 var (

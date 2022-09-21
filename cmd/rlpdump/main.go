@@ -26,7 +26,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/spruce-solutions/go-quai/rlp"
+	"github.com/dominant-strategies/go-quai/rlp"
 )
 
 var (

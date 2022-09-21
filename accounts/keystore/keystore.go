@@ -32,11 +32,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/accounts"
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/core/types"
-	"github.com/spruce-solutions/go-quai/crypto"
-	"github.com/spruce-solutions/go-quai/event"
+	"github.com/dominant-strategies/go-quai/accounts"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/event"
 )
 
 var (

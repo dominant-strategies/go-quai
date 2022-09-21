@@ -19,9 +19,9 @@ package core
 import (
 	"context"
 
-	"github.com/spruce-solutions/go-quai/internal/ethapi"
-	"github.com/spruce-solutions/go-quai/log"
-	"github.com/spruce-solutions/go-quai/rpc"
+	"github.com/dominant-strategies/go-quai/internal/ethapi"
+	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/rpc"
 )
 
 type StdIOUI struct {

@@ -23,8 +23,8 @@ import (
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/spruce-solutions/go-quai/crypto"
-	"github.com/spruce-solutions/go-quai/p2p/simulations/pipes"
+	"github.com/dominant-strategies/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/p2p/simulations/pipes"
 )
 
 func TestProtocolHandshake(t *testing.T) {

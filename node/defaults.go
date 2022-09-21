@@ -22,9 +22,9 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/spruce-solutions/go-quai/p2p"
-	"github.com/spruce-solutions/go-quai/p2p/nat"
-	"github.com/spruce-solutions/go-quai/rpc"
+	"github.com/dominant-strategies/go-quai/p2p"
+	"github.com/dominant-strategies/go-quai/p2p/nat"
+	"github.com/dominant-strategies/go-quai/rpc"
 )
 
 const (

@@ -21,10 +21,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/eth/downloader"
-	"github.com/spruce-solutions/go-quai/eth/protocols/eth"
-	"github.com/spruce-solutions/go-quai/p2p"
-	"github.com/spruce-solutions/go-quai/p2p/enode"
+	"github.com/dominant-strategies/go-quai/eth/downloader"
+	"github.com/dominant-strategies/go-quai/eth/protocols/eth"
+	"github.com/dominant-strategies/go-quai/p2p"
+	"github.com/dominant-strategies/go-quai/p2p/enode"
 )
 
 // Tests that fast sync is disabled after a successful sync cycle.

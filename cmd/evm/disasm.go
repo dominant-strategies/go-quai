@@ -22,7 +22,7 @@ import (
 	"io/ioutil"
 	"strings"
 
-	"github.com/spruce-solutions/go-quai/core/asm"
+	"github.com/dominant-strategies/go-quai/core/asm"
 	"gopkg.in/urfave/cli.v1"
 )
 

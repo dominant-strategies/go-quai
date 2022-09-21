@@ -20,11 +20,11 @@ import (
 	"crypto/ecdsa"
 	"net"
 
-	"github.com/spruce-solutions/go-quai/common/mclock"
-	"github.com/spruce-solutions/go-quai/log"
-	"github.com/spruce-solutions/go-quai/p2p/enode"
-	"github.com/spruce-solutions/go-quai/p2p/enr"
-	"github.com/spruce-solutions/go-quai/p2p/netutil"
+	"github.com/dominant-strategies/go-quai/common/mclock"
+	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/p2p/enode"
+	"github.com/dominant-strategies/go-quai/p2p/enr"
+	"github.com/dominant-strategies/go-quai/p2p/netutil"
 )
 
 // UDPConn is a network connection on which discovery can operate.

@@ -19,7 +19,7 @@ package snapshot
 import (
 	"bytes"
 
-	"github.com/spruce-solutions/go-quai/common"
+	"github.com/dominant-strategies/go-quai/common"
 )
 
 // binaryIterator is a simplistic iterator to step over the accounts or storage

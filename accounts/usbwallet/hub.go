@@ -23,9 +23,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/accounts"
-	"github.com/spruce-solutions/go-quai/event"
-	"github.com/spruce-solutions/go-quai/log"
+	"github.com/dominant-strategies/go-quai/accounts"
+	"github.com/dominant-strategies/go-quai/event"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/karalabe/usb"
 )
 

@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/log"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 // deployExplorer creates a new block explorer based on some user input.

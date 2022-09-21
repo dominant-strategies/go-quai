@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/metrics"
+	"github.com/dominant-strategies/go-quai/metrics"
 )
 
 // a regexp for extracting the unit from time.Duration.String

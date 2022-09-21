@@ -21,8 +21,8 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/spruce-solutions/go-quai/common/mclock"
-	"github.com/spruce-solutions/go-quai/common/prque"
+	"github.com/dominant-strategies/go-quai/common/mclock"
+	"github.com/dominant-strategies/go-quai/common/prque"
 )
 
 // servingQueue allows running tasks in a limited number of threads and puts the

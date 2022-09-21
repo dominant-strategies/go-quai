@@ -28,9 +28,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/spruce-solutions/go-quai/p2p/enode"
-	"github.com/spruce-solutions/go-quai/p2p/enr"
-	"github.com/spruce-solutions/go-quai/rlp"
+	"github.com/dominant-strategies/go-quai/p2p/enode"
+	"github.com/dominant-strategies/go-quai/p2p/enr"
+	"github.com/dominant-strategies/go-quai/rlp"
 	"gopkg.in/urfave/cli.v1"
 )
 

@@ -27,12 +27,12 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/spruce-solutions/go-quai/accounts"
-	"github.com/spruce-solutions/go-quai/accounts/usbwallet/trezor"
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/common/hexutil"
-	"github.com/spruce-solutions/go-quai/core/types"
-	"github.com/spruce-solutions/go-quai/log"
+	"github.com/dominant-strategies/go-quai/accounts"
+	"github.com/dominant-strategies/go-quai/accounts/usbwallet/trezor"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/common/hexutil"
+	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/golang/protobuf/proto"
 )
 

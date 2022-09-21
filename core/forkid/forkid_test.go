@@ -21,9 +21,9 @@ import (
 	"math"
 	"testing"
 
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/params"
-	"github.com/spruce-solutions/go-quai/rlp"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/params"
+	"github.com/dominant-strategies/go-quai/rlp"
 )
 
 // TestCreation tests that different genesis and fork rule combinations result in

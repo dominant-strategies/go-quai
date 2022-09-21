@@ -19,7 +19,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/spruce-solutions/go-quai/log"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 // ensureVirtualHost checks whether a reverse-proxy is running on the specified

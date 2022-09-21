@@ -24,14 +24,14 @@ import (
 	"sync"
 	"time"
 
-	ethereum "github.com/spruce-solutions/go-quai"
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/core"
-	"github.com/spruce-solutions/go-quai/core/rawdb"
-	"github.com/spruce-solutions/go-quai/core/types"
-	"github.com/spruce-solutions/go-quai/event"
-	"github.com/spruce-solutions/go-quai/log"
-	"github.com/spruce-solutions/go-quai/rpc"
+	ethereum "github.com/dominant-strategies/go-quai"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/core"
+	"github.com/dominant-strategies/go-quai/core/rawdb"
+	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/event"
+	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/rpc"
 )
 
 // Type determines the kind of filter and is used to put the filter in to

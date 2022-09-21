@@ -19,8 +19,8 @@ package leveldb
 import (
 	"testing"
 
-	"github.com/spruce-solutions/go-quai/ethdb"
-	"github.com/spruce-solutions/go-quai/ethdb/dbtest"
+	"github.com/dominant-strategies/go-quai/ethdb"
+	"github.com/dominant-strategies/go-quai/ethdb/dbtest"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/storage"
 )

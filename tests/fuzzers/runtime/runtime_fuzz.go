@@ -17,7 +17,7 @@
 package runtime
 
 import (
-	"github.com/spruce-solutions/go-quai/core/vm/runtime"
+	"github.com/dominant-strategies/go-quai/core/vm/runtime"
 )
 
 // Fuzz is the basic entry point for the go-fuzz tool

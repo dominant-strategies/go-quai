@@ -25,7 +25,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/spruce-solutions/go-quai/log"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/jedisct1/go-minisign"
 	"gopkg.in/urfave/cli.v1"
 )

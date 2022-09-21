@@ -21,13 +21,13 @@ import (
 	"encoding/binary"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/common/mclock"
-	"github.com/spruce-solutions/go-quai/ethdb"
-	"github.com/spruce-solutions/go-quai/les/utils"
-	"github.com/spruce-solutions/go-quai/log"
-	"github.com/spruce-solutions/go-quai/p2p/enode"
-	"github.com/spruce-solutions/go-quai/rlp"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/common/mclock"
+	"github.com/dominant-strategies/go-quai/ethdb"
+	"github.com/dominant-strategies/go-quai/les/utils"
+	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/p2p/enode"
+	"github.com/dominant-strategies/go-quai/rlp"
 	lru "github.com/hashicorp/golang-lru"
 )
 

@@ -34,8 +34,8 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/spruce-solutions/go-quai/core"
-	"github.com/spruce-solutions/go-quai/rlp"
+	"github.com/dominant-strategies/go-quai/core"
+	"github.com/dominant-strategies/go-quai/rlp"
 )
 
 type allocItem struct{ Addr, Balance *big.Int }

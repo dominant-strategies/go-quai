@@ -20,9 +20,9 @@ import (
 	"crypto/rand"
 	"math/big"
 
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/common/hexutil"
-	"github.com/spruce-solutions/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/common/hexutil"
+	"github.com/dominant-strategies/go-quai/core/types"
 )
 
 // largeNumber returns a very large big.Int.

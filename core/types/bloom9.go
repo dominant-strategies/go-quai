@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/spruce-solutions/go-quai/common/hexutil"
-	"github.com/spruce-solutions/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/common/hexutil"
+	"github.com/dominant-strategies/go-quai/crypto"
 )
 
 type bytesBacked interface {

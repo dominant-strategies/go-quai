@@ -30,7 +30,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/spruce-solutions/go-quai/params"
+	"github.com/dominant-strategies/go-quai/params"
 )
 
 var (

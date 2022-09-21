@@ -22,10 +22,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/internal/utesting"
-	"github.com/spruce-solutions/go-quai/p2p/discover/v5wire"
-	"github.com/spruce-solutions/go-quai/p2p/enode"
-	"github.com/spruce-solutions/go-quai/p2p/netutil"
+	"github.com/dominant-strategies/go-quai/internal/utesting"
+	"github.com/dominant-strategies/go-quai/p2p/discover/v5wire"
+	"github.com/dominant-strategies/go-quai/p2p/enode"
+	"github.com/dominant-strategies/go-quai/p2p/netutil"
 )
 
 // Suite is the discv5 test suite.

@@ -23,8 +23,8 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/spruce-solutions/go-quai/consensus/blake3pow"
-	"github.com/spruce-solutions/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/consensus/blake3pow"
+	"github.com/dominant-strategies/go-quai/core/types"
 )
 
 type fuzzer struct {

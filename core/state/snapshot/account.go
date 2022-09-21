@@ -20,8 +20,8 @@ import (
 	"bytes"
 	"math/big"
 
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/rlp"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/rlp"
 )
 
 // Account is a modified version of a state.Account, where the root is replaced

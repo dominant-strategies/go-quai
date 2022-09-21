@@ -4,7 +4,7 @@ import (
 	"log"
 	"math/big"
 
-	"github.com/spruce-solutions/go-quai/common"
+	"github.com/dominant-strategies/go-quai/common"
 )
 
 // CalculateReward calculates the coinbase rewards depending on the type of the block
