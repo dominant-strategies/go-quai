@@ -28,7 +28,6 @@ import (
 	"gopkg.in/urfave/cli.v1"
 
 	"github.com/dominant-strategies/go-quai/cmd/utils"
-	"github.com/dominant-strategies/go-quai/eth/catalyst"
 	"github.com/dominant-strategies/go-quai/eth/ethconfig"
 	"github.com/dominant-strategies/go-quai/internal/ethapi"
 	"github.com/dominant-strategies/go-quai/log"
@@ -151,17 +150,7 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 	if ctx.GlobalIsSet(utils.OverrideLondonFlag.Name) {
 		cfg.Eth.OverrideLondon = new(big.Int).SetUint64(ctx.GlobalUint64(utils.OverrideLondonFlag.Name))
 	}
-	backend, eth := utils.RegisterEthService(stack, &cfg.Eth)
-
-	// Configure catalyst.
-	if ctx.GlobalBool(utils.CatalystFlag.Name) {
-		if eth == nil {
-			utils.Fatalf("Catalyst does not work in light client mode.")
-		}
-		if err := catalyst.Register(stack, eth); err != nil {
-			utils.Fatalf("%v", err)
-		}
-	}
+	backend, _ := utils.RegisterEthService(stack, &cfg.Eth)
 
 	// Add the Ethereum Stats daemon if requested.
 	if cfg.Ethstats.URL != "" {

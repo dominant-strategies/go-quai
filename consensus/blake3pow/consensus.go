@@ -476,10 +476,6 @@ func (blake3pow *Blake3pow) SealHash(header *types.Header) (hash common.Hash) {
 // reward. The total reward consists of the static block reward and rewards for
 // included uncles. The coinbase of each uncle block is also rewarded.
 func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
-	// Skip block reward in catalyst mode
-	if config.IsCatalyst(header.Number()) {
-		return
-	}
 	// Select the correct block reward based on chain progression
 	blockReward := misc.CalculateReward()
 
