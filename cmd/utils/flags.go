@@ -657,11 +657,6 @@ var (
 		Value: metrics.DefaultConfig.InfluxDBTags,
 	}
 
-	CatalystFlag = cli.BoolFlag{
-		Name:  "catalyst",
-		Usage: "Catalyst mode (eth2 integration testing)",
-	}
-
 	RegionFlag = cli.IntFlag{
 		Name:  "region",
 		Usage: "Quai Region flag",
@@ -1099,7 +1094,7 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 		cfg.NetRestrict = list
 	}
 
-	if ctx.GlobalBool(DeveloperFlag.Name) || ctx.GlobalBool(CatalystFlag.Name) {
+	if ctx.GlobalBool(DeveloperFlag.Name) {
 		// --dev mode can't use p2p networking.
 		cfg.MaxPeers = 0
 		cfg.ListenAddr = ""
