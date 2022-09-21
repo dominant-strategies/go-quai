@@ -16,7 +16,6 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
-	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/core/types"
 )
 
@@ -31,22 +30,21 @@ var (
 )
 
 // Seal implements consensus.Engine, attempting to find a nonce that satisfies
-// the block's difficulty requirements.
-func (blake3pow *Blake3pow) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
+// the header's difficulty requirements.
+func (blake3pow *Blake3pow) Seal(header *types.Header, results chan<- *types.Header, stop <-chan struct{}) error {
 	// If we're running a fake PoW, simply return a 0 nonce immediately
 	if blake3pow.config.PowMode == ModeFake || blake3pow.config.PowMode == ModeFullFake {
-		header := block.Header()
 		header.SetNonce(types.BlockNonce{})
 		select {
-		case results <- block.WithSeal(header):
+		case results <- header:
 		default:
-			blake3pow.config.Log.Warn("Sealing result is not read by miner", "mode", "fake", "sealhash", blake3pow.SealHash(block.Header()))
+			blake3pow.config.Log.Warn("Sealing result is not read by miner", "mode", "fake", "sealhash", blake3pow.SealHash(header))
 		}
 		return nil
 	}
 	// If we're running a shared PoW, delegate sealing to it
 	if blake3pow.shared != nil {
-		return blake3pow.shared.Seal(chain, block, results, stop)
+		return blake3pow.shared.Seal(header, results, stop)
 	}
 	// Create a runner and the multiple search threads it directs
 	abort := make(chan struct{})
@@ -70,22 +68,22 @@ func (blake3pow *Blake3pow) Seal(chain consensus.ChainHeaderReader, block *types
 	}
 	// Push new work to remote sealer
 	if blake3pow.remote != nil {
-		blake3pow.remote.workCh <- &sealTask{block: block, results: results}
+		blake3pow.remote.workCh <- &sealTask{header: header, results: results}
 	}
 	var (
 		pend   sync.WaitGroup
-		locals = make(chan *types.Block)
+		locals = make(chan *types.Header)
 	)
 	for i := 0; i < threads; i++ {
 		pend.Add(1)
 		go func(id int, nonce uint64) {
 			defer pend.Done()
-			blake3pow.mine(block, id, nonce, abort, locals)
+			blake3pow.mine(header, id, nonce, abort, locals)
 		}(i, uint64(blake3pow.rand.Int63()))
 	}
 	// Wait until sealing is terminated or a nonce is found
 	go func() {
-		var result *types.Block
+		var result *types.Header
 		select {
 		case <-stop:
 			// Outside abort, stop all miner threads
@@ -95,13 +93,13 @@ func (blake3pow *Blake3pow) Seal(chain consensus.ChainHeaderReader, block *types
 			select {
 			case results <- result:
 			default:
-				blake3pow.config.Log.Warn("Sealing result is not read by miner", "mode", "local", "sealhash", blake3pow.SealHash(block.Header()))
+				blake3pow.config.Log.Warn("Sealing result is not read by miner", "mode", "local", "sealhash", blake3pow.SealHash(header))
 			}
 			close(abort)
 		case <-blake3pow.update:
 			// Thread count was changed on user request, restart
 			close(abort)
-			if err := blake3pow.Seal(chain, block, results, stop); err != nil {
+			if err := blake3pow.Seal(header, results, stop); err != nil {
 				blake3pow.config.Log.Error("Failed to restart sealing after update", "err", err)
 			}
 		}
@@ -112,11 +110,10 @@ func (blake3pow *Blake3pow) Seal(chain consensus.ChainHeaderReader, block *types
 }
 
 // mine is the actual proof-of-work miner that searches for a nonce starting from
-// seed that results in correct final block difficulty.
-func (blake3pow *Blake3pow) mine(block *types.Block, id int, seed uint64, abort chan struct{}, found chan *types.Block) {
+// seed that results in correct final header difficulty.
+func (blake3pow *Blake3pow) mine(header *types.Header, id int, seed uint64, abort chan struct{}, found chan *types.Header) {
 	// Extract some data from the header
 	var (
-		header = block.Header()
 		target = new(big.Int).Div(big2e256, header.Difficulty(common.ZONE_CTX))
 	)
 	// Start generating random nonces until we abort or find a good one
@@ -152,7 +149,7 @@ search:
 
 				// Seal and return a block (if still needed)
 				select {
-				case found <- block.WithSeal(header):
+				case found <- header:
 					logger.Trace("Blake3pow nonce found and reported", "attempts", nonce-seed, "nonce", nonce)
 				case <-abort:
 					logger.Trace("Blake3pow nonce found but discarded", "attempts", nonce-seed, "nonce", nonce)
@@ -168,18 +165,18 @@ search:
 const remoteSealerTimeout = 1 * time.Second
 
 type remoteSealer struct {
-	works        map[common.Hash]*types.Block
-	rates        map[common.Hash]hashrate
-	currentBlock *types.Block
-	currentWork  [4]string
-	notifyCtx    context.Context
-	cancelNotify context.CancelFunc // cancels all notification requests
-	reqWG        sync.WaitGroup     // tracks notification request goroutines
+	works         map[common.Hash]*types.Header
+	rates         map[common.Hash]hashrate
+	currentHeader *types.Header
+	currentWork   [4]string
+	notifyCtx     context.Context
+	cancelNotify  context.CancelFunc // cancels all notification requests
+	reqWG         sync.WaitGroup     // tracks notification request goroutines
 
 	blake3pow    *Blake3pow
 	noverify     bool
 	notifyURLs   []string
-	results      chan<- *types.Block
+	results      chan<- *types.Header
 	workCh       chan *sealTask   // Notification channel to push new work and relative result channel to remote sealer
 	fetchWorkCh  chan *sealWork   // Channel used for remote sealer to fetch mining work
 	submitWorkCh chan *mineResult // Channel used for remote sealer to submit their mining result
@@ -189,10 +186,10 @@ type remoteSealer struct {
 	exitCh       chan struct{}
 }
 
-// sealTask wraps a seal block with relative result channel for remote sealer thread.
+// sealTask wraps a seal header with relative result channel for remote sealer thread.
 type sealTask struct {
-	block   *types.Block
-	results chan<- *types.Block
+	header  *types.Header
+	results chan<- *types.Header
 }
 
 // mineResult wraps the pow solution parameters for the specified block.
@@ -226,7 +223,7 @@ func startRemoteSealer(blake3pow *Blake3pow, urls []string, noverify bool) *remo
 		notifyURLs:   urls,
 		notifyCtx:    ctx,
 		cancelNotify: cancel,
-		works:        make(map[common.Hash]*types.Block),
+		works:        make(map[common.Hash]*types.Header),
 		rates:        make(map[common.Hash]hashrate),
 		workCh:       make(chan *sealTask),
 		fetchWorkCh:  make(chan *sealWork),
@@ -254,15 +251,15 @@ func (s *remoteSealer) loop() {
 	for {
 		select {
 		case work := <-s.workCh:
-			// Update current work with new received block.
+			// Update current work with new received header.
 			// Note same work can be past twice, happens when changing CPU threads.
 			s.results = work.results
-			s.makeWork(work.block)
+			s.makeWork(work.header)
 			s.notifyWork()
 
 		case work := <-s.fetchWorkCh:
 			// Return current mining work to remote miner.
-			if s.currentBlock == nil {
+			if s.currentHeader == nil {
 				work.errc <- errNoMiningWork
 			} else {
 				work.res <- s.currentWork
@@ -298,9 +295,9 @@ func (s *remoteSealer) loop() {
 				}
 			}
 			// Clear stale pending blocks
-			if s.currentBlock != nil {
-				for hash, block := range s.works {
-					if block.NumberU64()+staleThreshold <= s.currentBlock.NumberU64() {
+			if s.currentHeader != nil {
+				for hash, header := range s.works {
+					if header.NumberU64()+staleThreshold <= s.currentHeader.NumberU64() {
 						delete(s.works, hash)
 					}
 				}
@@ -315,19 +312,19 @@ func (s *remoteSealer) loop() {
 // makeWork creates a work package for external miner.
 //
 // The work package consists of 3 strings:
-//   result[0], 32 bytes hex encoded current block header pow-hash
+//   result[0], 32 bytes hex encoded current header pow-hash
 //   result[1], 32 bytes hex encoded seed hash used for DAG
 //   result[2], 32 bytes hex encoded boundary condition ("target"), 2^256/difficulty
-//   result[3], hex encoded block number
-func (s *remoteSealer) makeWork(block *types.Block) {
-	hash := s.blake3pow.SealHash(block.Header())
+//   result[3], hex encoded header number
+func (s *remoteSealer) makeWork(header *types.Header) {
+	hash := s.blake3pow.SealHash(header)
 	s.currentWork[0] = hash.Hex()
-	s.currentWork[1] = hexutil.EncodeBig(block.Number())
-	s.currentWork[2] = common.BytesToHash(new(big.Int).Div(big2e256, block.Difficulty()).Bytes()).Hex()
+	s.currentWork[1] = hexutil.EncodeBig(header.Number())
+	s.currentWork[2] = common.BytesToHash(new(big.Int).Div(big2e256, header.Difficulty()).Bytes()).Hex()
 
 	// Trace the seal work fetched by remote sealer.
-	s.currentBlock = block
-	s.works[hash] = block
+	s.currentHeader = header
+	s.works[hash] = header
 }
 
 // notifyWork notifies all the specified mining endpoints of the availability of
@@ -339,7 +336,7 @@ func (s *remoteSealer) notifyWork() {
 	// this is the complete block header, otherwise it is a JSON array.
 	var blob []byte
 	if s.blake3pow.config.NotifyFull {
-		blob, _ = json.Marshal(s.currentBlock.Header())
+		blob, _ = json.Marshal(s.currentHeader)
 	} else {
 		blob, _ = json.Marshal(work)
 	}
@@ -376,18 +373,17 @@ func (s *remoteSealer) sendNotification(ctx context.Context, url string, json []
 // whether the solution was accepted or not (not can be both a bad pow as well as
 // any other error, like no pending work or stale mining result).
 func (s *remoteSealer) submitWork(nonce types.BlockNonce, sealhash common.Hash) bool {
-	if s.currentBlock == nil {
+	if s.currentHeader == nil {
 		s.blake3pow.config.Log.Error("Pending work without block", "sealhash", sealhash)
 		return false
 	}
 	// Make sure the work submitted is present
-	block := s.works[sealhash]
-	if block == nil {
-		s.blake3pow.config.Log.Warn("Work submitted but none pending", "sealhash", sealhash, "curnumber", s.currentBlock.NumberU64())
+	header := s.works[sealhash]
+	if header == nil {
+		s.blake3pow.config.Log.Warn("Work submitted but none pending", "sealhash", sealhash, "curnumber", s.currentHeader.NumberU64())
 		return false
 	}
 	// Verify the correctness of submitted result.
-	header := block.Header()
 	header.SetNonce(nonce)
 
 	start := time.Now()
@@ -405,10 +401,10 @@ func (s *remoteSealer) submitWork(nonce types.BlockNonce, sealhash common.Hash) 
 	s.blake3pow.config.Log.Trace("Verified correct proof-of-work", "sealhash", sealhash, "elapsed", common.PrettyDuration(time.Since(start)))
 
 	// Solutions seems to be valid, return to the miner and notify acceptance.
-	solution := block.WithSeal(header)
+	solution := header
 
 	// The submitted solution is within the scope of acceptance.
-	if solution.NumberU64()+staleThreshold > s.currentBlock.NumberU64() {
+	if solution.NumberU64()+staleThreshold > s.currentHeader.NumberU64() {
 		select {
 		case s.results <- solution:
 			s.blake3pow.config.Log.Debug("Work submitted is acceptable", "number", solution.NumberU64(), "sealhash", sealhash, "hash", solution.Hash())
