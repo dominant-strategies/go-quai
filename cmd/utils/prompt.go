@@ -19,8 +19,6 @@ package utils
 
 import (
 	"fmt"
-
-	"github.com/dominant-strategies/go-quai/console/prompt"
 )
 
 // GetPassPhrase displays the given text(prompt) to the user and requests some textual
@@ -30,12 +28,12 @@ func GetPassPhrase(text string, confirmation bool) string {
 	if text != "" {
 		fmt.Println(text)
 	}
-	password, err := prompt.Stdin.PromptPassword("Password: ")
+	password, err := Stdin.PromptPassword("Password: ")
 	if err != nil {
 		Fatalf("Failed to read password: %v", err)
 	}
 	if confirmation {
-		confirm, err := prompt.Stdin.PromptPassword("Repeat password: ")
+		confirm, err := Stdin.PromptPassword("Repeat password: ")
 		if err != nil {
 			Fatalf("Failed to read password confirmation: %v", err)
 		}

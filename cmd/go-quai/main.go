@@ -29,7 +29,6 @@ import (
 	"github.com/dominant-strategies/go-quai/accounts/keystore"
 	"github.com/dominant-strategies/go-quai/cmd/utils"
 	"github.com/dominant-strategies/go-quai/common"
-	"github.com/dominant-strategies/go-quai/console/prompt"
 	"github.com/dominant-strategies/go-quai/eth"
 	"github.com/dominant-strategies/go-quai/eth/downloader"
 	"github.com/dominant-strategies/go-quai/ethclient"
@@ -193,24 +192,17 @@ func init() {
 		exportCommand,
 		importPreimagesCommand,
 		exportPreimagesCommand,
-		removedbCommand,
 		dumpCommand,
 		dumpGenesisCommand,
 		// See accountcmd.go:
 		accountCommand,
 		walletCommand,
-		// See consolecmd.go:
-		consoleCommand,
-		attachCommand,
-		javascriptCommand,
 		// See misccmd.go:
 		versionCommand,
 		versionCheckCommand,
 		licenseCommand,
 		// See config.go
 		dumpConfigCommand,
-		// see dbcmd.go
-		dbCommand,
 		// See cmd/utils/flags_legacy.go
 		utils.ShowDeprecated,
 		// See snapshot.go
@@ -220,7 +212,6 @@ func init() {
 
 	app.Flags = append(app.Flags, nodeFlags...)
 	app.Flags = append(app.Flags, rpcFlags...)
-	app.Flags = append(app.Flags, consoleFlags...)
 	app.Flags = append(app.Flags, debug.Flags...)
 	app.Flags = append(app.Flags, metricsFlags...)
 
@@ -229,7 +220,6 @@ func init() {
 	}
 	app.After = func(ctx *cli.Context) error {
 		debug.Exit()
-		prompt.Stdin.Close() // Resets terminal mode.
 		return nil
 	}
 }
