@@ -1,5 +1,4 @@
-name: Build and Deploy Pre-Release
-
+name: Lint, Build and Test
 on:
   push:
     branches: [ main, dev ]
