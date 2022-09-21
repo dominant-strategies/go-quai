@@ -29,7 +29,6 @@ import (
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rpc"
-	"github.com/dominant-strategies/go-quai/signer/core/apitypes"
 )
 
 type ExternalBackend struct {
@@ -192,6 +191,30 @@ type signTransactionResult struct {
 	Tx  *types.Transaction `json:"tx"`
 }
 
+// SendTxArgs represents the arguments to submit a transaction
+// This struct is identical to ethapi.TransactionArgs, except for the usage of
+// common.MixedcaseAddress in From and To
+type sendTxArgs struct {
+	From                 common.MixedcaseAddress  `json:"from"`
+	To                   *common.MixedcaseAddress `json:"to"`
+	Gas                  hexutil.Uint64           `json:"gas"`
+	GasPrice             *hexutil.Big             `json:"gasPrice"`
+	MaxFeePerGas         *hexutil.Big             `json:"maxFeePerGas"`
+	MaxPriorityFeePerGas *hexutil.Big             `json:"maxPriorityFeePerGas"`
+	Value                hexutil.Big              `json:"value"`
+	Nonce                hexutil.Uint64           `json:"nonce"`
+
+	// We accept "data" and "input" for backwards-compatibility reasons.
+	// "input" is the newer name and should be preferred by clients.
+	// Issue detail: https://github.com/ethereum/go-ethereum/issues/15628
+	Data  *hexutil.Bytes `json:"data"`
+	Input *hexutil.Bytes `json:"input,omitempty"`
+
+	// For non-legacy transactions
+	AccessList *types.AccessList `json:"accessList,omitempty"`
+	ChainID    *hexutil.Big      `json:"chainId,omitempty"`
+}
+
 func (api *ExternalSigner) SignTx(account accounts.Account, tx *types.Transaction, chainID *big.Int) (*types.Transaction, error) {
 	data := hexutil.Bytes(tx.Data())
 	var to *common.MixedcaseAddress
@@ -199,7 +222,7 @@ func (api *ExternalSigner) SignTx(account accounts.Account, tx *types.Transactio
 		t := common.NewMixedcaseAddress(*tx.To())
 		to = &t
 	}
-	args := &apitypes.SendTxArgs{
+	args := &sendTxArgs{
 		Data:  &data,
 		Nonce: hexutil.Uint64(tx.Nonce()),
 		Value: hexutil.Big(*tx.Value()),
