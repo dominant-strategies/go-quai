@@ -22,7 +22,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 )
 
-type DynamicFeeTx struct {
+type InternalTx struct {
 	ChainID    *big.Int
 	Nonce      uint64
 	GasTipCap  *big.Int
@@ -40,8 +40,8 @@ type DynamicFeeTx struct {
 }
 
 // copy creates a deep copy of the transaction data and initializes all fields.
-func (tx *DynamicFeeTx) copy() TxData {
-	cpy := &DynamicFeeTx{
+func (tx *InternalTx) copy() TxData {
+	cpy := &InternalTx{
 		Nonce: tx.Nonce,
 		To:    tx.To, // TODO: copy pointed-to address
 		Data:  common.CopyBytes(tx.Data),
@@ -82,24 +82,24 @@ func (tx *DynamicFeeTx) copy() TxData {
 }
 
 // accessors for innerTx.
-func (tx *DynamicFeeTx) txType() byte           { return DynamicFeeTxType }
-func (tx *DynamicFeeTx) chainID() *big.Int      { return tx.ChainID }
-func (tx *DynamicFeeTx) protected() bool        { return true }
-func (tx *DynamicFeeTx) accessList() AccessList { return tx.AccessList }
-func (tx *DynamicFeeTx) data() []byte           { return tx.Data }
-func (tx *DynamicFeeTx) gas() uint64            { return tx.Gas }
-func (tx *DynamicFeeTx) gasFeeCap() *big.Int    { return tx.GasFeeCap }
-func (tx *DynamicFeeTx) gasTipCap() *big.Int    { return tx.GasTipCap }
-func (tx *DynamicFeeTx) gasPrice() *big.Int     { return tx.GasFeeCap }
-func (tx *DynamicFeeTx) value() *big.Int        { return tx.Value }
-func (tx *DynamicFeeTx) nonce() uint64          { return tx.Nonce }
-func (tx *DynamicFeeTx) to() *common.Address    { return tx.To }
+func (tx *InternalTx) txType() byte           { return InternalTxType }
+func (tx *InternalTx) chainID() *big.Int      { return tx.ChainID }
+func (tx *InternalTx) protected() bool        { return true }
+func (tx *InternalTx) accessList() AccessList { return tx.AccessList }
+func (tx *InternalTx) data() []byte           { return tx.Data }
+func (tx *InternalTx) gas() uint64            { return tx.Gas }
+func (tx *InternalTx) gasFeeCap() *big.Int    { return tx.GasFeeCap }
+func (tx *InternalTx) gasTipCap() *big.Int    { return tx.GasTipCap }
+func (tx *InternalTx) gasPrice() *big.Int     { return tx.GasFeeCap }
+func (tx *InternalTx) value() *big.Int        { return tx.Value }
+func (tx *InternalTx) nonce() uint64          { return tx.Nonce }
+func (tx *InternalTx) to() *common.Address    { return tx.To }
 
-func (tx *DynamicFeeTx) rawSignatureValues() (v, r, s *big.Int) {
+func (tx *InternalTx) rawSignatureValues() (v, r, s *big.Int) {
 	return tx.V, tx.R, tx.S
 }
 
-func (tx *DynamicFeeTx) setSignatureValues(chainID, v, r, s *big.Int) {
+func (tx *InternalTx) setSignatureValues(chainID, v, r, s *big.Int) {
 	tx.ChainID, tx.V, tx.R, tx.S = chainID, v, r, s
 }
 

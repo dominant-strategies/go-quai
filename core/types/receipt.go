@@ -122,7 +122,7 @@ type v3StoredReceiptRLP struct {
 // Deprecated: create receipts using a struct literal instead.
 func NewReceipt(root []byte, failed bool, cumulativeGasUsed uint64) *Receipt {
 	r := &Receipt{
-		Type:              LegacyTxType,
+		Type:              InternalTxType,
 		PostState:         common.CopyBytes(root),
 		CumulativeGasUsed: cumulativeGasUsed,
 	}
@@ -138,9 +138,6 @@ func NewReceipt(root []byte, failed bool, cumulativeGasUsed uint64) *Receipt {
 // into an RLP stream. If no post state is present, byzantium fork is assumed.
 func (r *Receipt) EncodeRLP(w io.Writer) error {
 	data := &receiptRLP{r.statusEncoding(), r.CumulativeGasUsed, r.Bloom, r.Logs}
-	if r.Type == LegacyTxType {
-		return rlp.Encode(w, data)
-	}
 	buf := encodeBufferPool.Get().(*bytes.Buffer)
 	defer encodeBufferPool.Put(buf)
 	buf.Reset()
@@ -158,14 +155,6 @@ func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 	switch {
 	case err != nil:
 		return err
-	case kind == rlp.List:
-		// It's a legacy receipt.
-		var dec receiptRLP
-		if err := s.Decode(&dec); err != nil {
-			return err
-		}
-		r.Type = LegacyTxType
-		return r.setFromRLP(dec)
 	case kind == rlp.String:
 		// It's an EIP-2718 typed tx receipt.
 		b, err := s.Bytes()
@@ -176,7 +165,7 @@ func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 			return errEmptyTypedReceipt
 		}
 		r.Type = b[0]
-		if r.Type == AccessListTxType || r.Type == DynamicFeeTxType {
+		if r.Type == InternalTxType {
 			var dec receiptRLP
 			if err := rlp.DecodeBytes(b[1:], &dec); err != nil {
 				return err
@@ -337,13 +326,8 @@ func (rs Receipts) EncodeIndex(i int, w *bytes.Buffer) {
 	r := rs[i]
 	data := &receiptRLP{r.statusEncoding(), r.CumulativeGasUsed, r.Bloom, r.Logs}
 	switch r.Type {
-	case LegacyTxType:
-		rlp.Encode(w, data)
-	case AccessListTxType:
-		w.WriteByte(AccessListTxType)
-		rlp.Encode(w, data)
-	case DynamicFeeTxType:
-		w.WriteByte(DynamicFeeTxType)
+	case InternalTxType:
+		w.WriteByte(InternalTxType)
 		rlp.Encode(w, data)
 	default:
 		// For unsupported types, write nothing. Since this is for
