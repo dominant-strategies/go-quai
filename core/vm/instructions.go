@@ -18,6 +18,7 @@ package vm
 
 import (
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/holiman/uint256"
@@ -259,11 +260,11 @@ func opAddress(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 func opBalance(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	slot := scope.Stack.peek()
 	address := common.Address(slot.Bytes20())
-	// Check if address is in proper context
-	if !common.IsAddressInContext(address) {
-		return nil, ErrExecutionReverted
+	balance, err := interpreter.evm.StateDB.GetBalance(address)
+	if err != nil {
+		return nil, err
 	}
-	slot.SetFromBig(interpreter.evm.StateDB.GetBalance(address))
+	slot.SetFromBig(balance)
 	return nil, nil
 }
 
@@ -345,12 +346,11 @@ func opReturnDataCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeConte
 
 func opExtCodeSize(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	slot := scope.Stack.peek()
-	address := common.Address(slot.Bytes20())
-	// Check if address is in proper context
-	if !common.IsAddressInContext(address) {
-		return nil, ErrExecutionReverted
+	size, err := interpreter.evm.StateDB.GetCodeSize(slot.Bytes20())
+	if err != nil {
+		return nil, err
 	}
-	slot.SetUint64(uint64(interpreter.evm.StateDB.GetCodeSize(slot.Bytes20())))
+	slot.SetUint64(uint64(size))
 	return nil, nil
 }
 
@@ -390,11 +390,11 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 		uint64CodeOffset = 0xffffffffffffffff
 	}
 	addr := common.Address(a.Bytes20())
-	// Check if address is in proper context
-	if !common.IsAddressInContext(addr) {
-		return nil, ErrExecutionReverted
+	code, err := interpreter.evm.StateDB.GetCode(addr)
+	if err != nil {
+		return nil, err
 	}
-	codeCopy := getData(interpreter.evm.StateDB.GetCode(addr), uint64CodeOffset, length.Uint64())
+	codeCopy := getData(code, uint64CodeOffset, length.Uint64())
 	scope.Memory.Set(memOffset.Uint64(), length.Uint64(), codeCopy)
 
 	return nil, nil
@@ -429,14 +429,16 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 func opExtCodeHash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	slot := scope.Stack.peek()
 	address := common.Address(slot.Bytes20())
-	// Check if address is in proper context
-	if !common.IsAddressInContext(address) {
-		return nil, ErrExecutionReverted
+	empty, err := interpreter.evm.StateDB.Empty(address)
+	if err != nil {
+		return nil, err
 	}
-	if interpreter.evm.StateDB.Empty(address) {
+	if empty {
 		slot.Clear()
 	} else {
-		slot.SetBytes(interpreter.evm.StateDB.GetCodeHash(address).Bytes())
+		if codeHash, err := interpreter.evm.StateDB.GetCodeHash(address); err != nil {
+			slot.SetBytes(codeHash.Bytes())
+		}
 	}
 	return nil, nil
 }
@@ -525,7 +527,10 @@ func opMstore8(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 func opSload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	loc := scope.Stack.peek()
 	hash := common.Hash(loc.Bytes32())
-	val := interpreter.evm.StateDB.GetState(scope.Contract.Address(), hash)
+	val, err := interpreter.evm.StateDB.GetState(scope.Contract.Address(), hash)
+	if err != nil {
+		return nil, err
+	}
 	loc.SetBytes(val.Bytes())
 	return nil, nil
 }
@@ -665,10 +670,6 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 	// Pop other call parameters.
 	addr, value, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
-	// Check if address is in proper context
-	if !common.IsAddressInContext(toAddr) {
-		return nil, ErrExecutionReverted
-	}
 	// Get the arguments from the memory.
 	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
 
@@ -707,8 +708,8 @@ func opCallCode(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 	addr, value, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
 	// Check if address is in proper context
-	if !common.IsAddressInContext(toAddr) {
-		return nil, ErrExecutionReverted
+	if !common.IsAddressInContext(toAddr) { // checked here because the error returned from CallCode is not returned from this function
+		return nil, state.ErrInvalidContext
 	}
 	// Get arguments from the memory.
 	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
@@ -746,7 +747,7 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 	toAddr := common.Address(addr.Bytes20())
 	// Check if address is in proper context
 	if !common.IsAddressInContext(toAddr) {
-		return nil, ErrExecutionReverted
+		return nil, state.ErrInvalidContext
 	}
 	// Get arguments from the memory.
 	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
@@ -777,7 +778,7 @@ func opStaticCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) 
 	toAddr := common.Address(addr.Bytes20())
 	// Check if address is in proper context
 	if !common.IsAddressInContext(toAddr) {
-		return nil, ErrExecutionReverted
+		return nil, state.ErrInvalidContext
 	}
 	// Get arguments from the memory.
 	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
@@ -817,7 +818,10 @@ func opStop(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 
 func opSuicide(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	beneficiary := scope.Stack.pop()
-	balance := interpreter.evm.StateDB.GetBalance(scope.Contract.Address())
+	balance, err := interpreter.evm.StateDB.GetBalance(scope.Contract.Address())
+	if err != nil {
+		return nil, err
+	}
 	interpreter.evm.StateDB.AddBalance(beneficiary.Bytes20(), balance)
 	interpreter.evm.StateDB.Suicide(scope.Contract.Address())
 	return nil, nil

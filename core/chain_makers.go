@@ -117,7 +117,11 @@ func (b *BlockGen) AddTxWithChain(hc *HeaderChain, tx *types.Transaction) {
 
 // GetBalance returns the balance of the given address at the generated block.
 func (b *BlockGen) GetBalance(addr common.Address) *big.Int {
-	return b.statedb.GetBalance(addr)
+	balance, err := b.statedb.GetBalance(addr)
+	if err != nil {
+		return nil
+	}
+	return balance
 }
 
 // AddUncheckedTx forcefully adds a transaction to the block without any
@@ -151,10 +155,18 @@ func (b *BlockGen) AddUncheckedReceipt(receipt *types.Receipt) {
 // TxNonce returns the next valid transaction nonce for the
 // account at addr. It panics if the account does not exist.
 func (b *BlockGen) TxNonce(addr common.Address) uint64 {
-	if !b.statedb.Exist(addr) {
+	exist, err := b.statedb.Exist(addr)
+	if err != nil {
+		return 0 // could also panic here
+	}
+	if !exist {
 		panic("account does not exist")
 	}
-	return b.statedb.GetNonce(addr)
+	nonce, err := b.statedb.GetNonce(addr)
+	if err != nil {
+		return 0
+	}
+	return nonce
 }
 
 // AddUncle adds an uncle header to the generated block.

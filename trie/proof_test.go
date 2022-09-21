@@ -26,6 +26,8 @@ import (
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/common/hexutil"
+	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/ethdb/memorydb"
 )
@@ -76,6 +78,91 @@ func TestProof(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestTrimAndProof(t *testing.T) {
+	trie := new(Trie)
+
+	tx1 := types.NewTransaction(0, common.HexToAddress("0x0aF215993029C51E4eef7b2424cf3509D15158d6"), common.Big0, 21000, common.Big1, []byte{})
+	tx2 := types.NewTransaction(0, common.HexToAddress("0x0aF215993029C51E4eef7b2424cf3509D15158d6"), common.Big1, 21000, common.Big1, []byte{})
+	tx3 := types.NewTransaction(0, common.HexToAddress("0x0aF215993029C51E4eef7b2424cf3509D15158d6"), common.Big2, 21000, common.Big1, []byte{})
+
+	tx4 := types.NewTransaction(0, common.HexToAddress("0x00114A47a5D39eA2022dd4d864cB62cfD16879fC"), common.Big0, 21000, common.Big1, []byte{})
+	tx5 := types.NewTransaction(0, common.HexToAddress("0x00114A47a5D39eA2022dd4d864cB62cfD16879fC"), common.Big1, 21000, common.Big1, []byte{})
+
+	blake3hash1, _ := tx1.Blake3HashWithLocation() //error should be handled
+	blake3hash2, _ := tx2.Blake3HashWithLocation()
+	blake3hash3, _ := tx3.Blake3HashWithLocation()
+
+	blake3hash4, _ := tx4.Blake3HashWithLocation()
+	blake3hash5, _ := tx5.Blake3HashWithLocation()
+
+	buf := new(bytes.Buffer)
+	tx1.EncodeRLP(buf)
+
+	trie.Update(blake3hash1.Bytes(), buf.Bytes())
+	buf.Reset()
+
+	tx2.EncodeRLP(buf)
+
+	trie.Update(blake3hash2.Bytes(), buf.Bytes())
+	buf.Reset()
+
+	tx3.EncodeRLP(buf)
+
+	trie.Update(blake3hash3.Bytes(), buf.Bytes())
+	buf.Reset()
+
+	tx4.EncodeRLP(buf)
+
+	trie.Update(blake3hash4.Bytes(), buf.Bytes())
+	buf.Reset()
+
+	tx5.EncodeRLP(buf)
+
+	trie.Update(blake3hash5.Bytes(), buf.Bytes())
+	buf.Reset()
+
+	// Verification without trimming
+	root := trie.Hash() // Constant, do not modify
+	proof := memorydb.New()
+
+	if err := trie.Prove(blake3hash5.Bytes(), 0, proof); err != nil {
+		t.Error(err.Error())
+	}
+
+	value, err := VerifyProof(root, blake3hash5.Bytes(), proof)
+	if err != nil {
+		t.Error(err.Error())
+	}
+
+	t.Log(blake3hash1.String())
+
+	t.Log(hexutil.Encode(value))
+
+	// Trimming
+
+	trimmedTrie := new(Trie)
+	tx4.EncodeRLP(buf)
+
+	trimmedTrie.Update(blake3hash4.Bytes(), buf.Bytes())
+	buf.Reset()
+
+	tx5.EncodeRLP(buf)
+
+	trimmedTrie.Update(blake3hash5.Bytes(), buf.Bytes())
+	buf.Reset()
+
+	rootNode := trie.root.(*shortNode)
+
+	rootBranchNode := rootNode.Val.(*fullNode)
+
+	branchHash1, _ := rootBranchNode.Children[0].cache()
+	t.Log(branchHash1.String())
+
+	hasher := newHasher(false)
+	defer returnHasherToPool(hasher)
+
 }
 
 func TestOneElementProof(t *testing.T) {

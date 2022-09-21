@@ -25,39 +25,39 @@ import (
 
 // StateDB is an EVM database for full state querying.
 type StateDB interface {
-	CreateAccount(common.Address)
+	CreateAccount(common.Address) error
 
-	SubBalance(common.Address, *big.Int)
-	AddBalance(common.Address, *big.Int)
-	GetBalance(common.Address) *big.Int
+	SubBalance(common.Address, *big.Int) error
+	AddBalance(common.Address, *big.Int) error
+	GetBalance(common.Address) (*big.Int, error)
 
-	GetNonce(common.Address) uint64
-	SetNonce(common.Address, uint64)
+	GetNonce(common.Address) (uint64, error)
+	SetNonce(common.Address, uint64) error
 
-	GetCodeHash(common.Address) common.Hash
-	GetCode(common.Address) []byte
-	SetCode(common.Address, []byte)
-	GetCodeSize(common.Address) int
+	GetCodeHash(common.Address) (common.Hash, error)
+	GetCode(common.Address) ([]byte, error)
+	SetCode(common.Address, []byte) error
+	GetCodeSize(common.Address) (int, error)
 
 	AddRefund(uint64)
 	SubRefund(uint64)
 	GetRefund() uint64
 
-	GetCommittedState(common.Address, common.Hash) common.Hash
-	GetState(common.Address, common.Hash) common.Hash
-	SetState(common.Address, common.Hash, common.Hash)
+	GetCommittedState(common.Address, common.Hash) (common.Hash, error)
+	GetState(common.Address, common.Hash) (common.Hash, error)
+	SetState(common.Address, common.Hash, common.Hash) error
 
-	Suicide(common.Address) bool
-	HasSuicided(common.Address) bool
+	Suicide(common.Address) (bool, error)
+	HasSuicided(common.Address) (bool, error)
 
 	// Exist reports whether the given account exists in state.
 	// Notably this should also return true for suicided accounts.
-	Exist(common.Address) bool
+	Exist(common.Address) (bool, error)
 	// Empty returns whether the given account is empty. Empty
 	// is defined according to EIP161 (balance = nonce = code = 0).
-	Empty(common.Address) bool
+	Empty(common.Address) (bool, error)
 
-	PrepareAccessList(sender common.Address, dest *common.Address, precompiles []common.Address, txAccesses types.AccessList)
+	PrepareAccessList(sender common.Address, dest *common.Address, precompiles []common.Address, txAccesses types.AccessList) error
 	AddressInAccessList(addr common.Address) bool
 	SlotInAccessList(addr common.Address, slot common.Hash) (addressOk bool, slotOk bool)
 	// AddAddressToAccessList adds the given address to the access list. This operation is safe to perform
