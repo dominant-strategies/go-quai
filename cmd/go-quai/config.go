@@ -27,7 +27,6 @@ import (
 
 	"gopkg.in/urfave/cli.v1"
 
-	"github.com/naoina/toml"
 	"github.com/dominant-strategies/go-quai/cmd/utils"
 	"github.com/dominant-strategies/go-quai/eth/catalyst"
 	"github.com/dominant-strategies/go-quai/eth/ethconfig"
@@ -36,6 +35,7 @@ import (
 	"github.com/dominant-strategies/go-quai/metrics"
 	"github.com/dominant-strategies/go-quai/node"
 	"github.com/dominant-strategies/go-quai/params"
+	"github.com/naoina/toml"
 )
 
 var (
@@ -163,10 +163,6 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 		}
 	}
 
-	// Configure GraphQL if requested
-	if ctx.GlobalIsSet(utils.GraphQLEnabledFlag.Name) {
-		utils.RegisterGraphQLService(stack, backend, cfg.Node)
-	}
 	// Add the Ethereum Stats daemon if requested.
 	if cfg.Ethstats.URL != "" {
 		utils.RegisterEthStatsService(stack, backend, cfg.Ethstats.URL)
