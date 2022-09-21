@@ -31,13 +31,13 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/eth"
 	"github.com/dominant-strategies/go-quai/eth/downloader"
-	"github.com/dominant-strategies/go-quai/ethclient"
 	"github.com/dominant-strategies/go-quai/internal/debug"
 	"github.com/dominant-strategies/go-quai/internal/ethapi"
 	"github.com/dominant-strategies/go-quai/internal/flags"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/metrics"
 	"github.com/dominant-strategies/go-quai/node"
+	"github.com/dominant-strategies/go-quai/quaiclient/ethclient"
 	"gopkg.in/urfave/cli.v1"
 )
 
