@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/spruce-solutions/go-quai/params"
 	"github.com/holiman/uint256"
+	"github.com/spruce-solutions/go-quai/params"
 )
 
 var activators = map[int]func(*JumpTable){
@@ -79,7 +79,11 @@ func enable1884(jt *JumpTable) {
 }
 
 func opSelfBalance(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	balance, _ := uint256.FromBig(interpreter.evm.StateDB.GetBalance(scope.Contract.Address()))
+	bal, err := interpreter.evm.StateDB.GetBalance(scope.Contract.Address())
+	if err != nil {
+		return nil, err
+	}
+	balance, _ := uint256.FromBig(bal)
 	scope.Stack.push(balance)
 	return nil, nil
 }

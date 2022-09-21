@@ -510,7 +510,7 @@ func logDiff(original *SignTxRequest, new *SignTxResponse) bool {
 			log.Info("Data changed by UI", "was", d0s, "is", d1s)
 		}
 	}
-	if n0, n1 := original.Transaction.Nonce(), new.Transaction.Nonce; n0 != n1 {
+	if n0, n1 := original.Transaction.Nonce, new.Transaction.Nonce; n0 != n1 {
 		modified = true
 		log.Info("Nonce changed by UI", "was", n0, "is", n1)
 	}

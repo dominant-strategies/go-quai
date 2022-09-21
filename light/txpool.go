@@ -120,7 +120,10 @@ func (pool *TxPool) currentState(ctx context.Context) *state.StateDB {
 // client using the same key sent a transaction.
 func (pool *TxPool) GetNonce(ctx context.Context, addr common.Address) (uint64, error) {
 	state := pool.currentState(ctx)
-	nonce := state.GetNonce(addr)
+	nonce, err := state.GetNonce(addr)
+	if err != nil {
+		return 0, err
+	}
 	if state.Error() != nil {
 		return 0, state.Error()
 	}
@@ -357,7 +360,11 @@ func (pool *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error
 	}
 	// Last but not least check for nonce errors
 	currentState := pool.currentState(ctx)
-	if n := currentState.GetNonce(from); n > tx.Nonce() {
+	n, err := currentState.GetNonce(from)
+	if err != nil {
+		return err
+	}
+	if n > tx.Nonce() {
 		return core.ErrNonceTooLow
 	}
 
@@ -377,7 +384,11 @@ func (pool *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error
 
 	// Transactor should have enough funds to cover the costs
 	// cost == V + GP * GL
-	if b := currentState.GetBalance(from); b.Cmp(tx.Cost()) < 0 {
+	b, err := currentState.GetBalance(from)
+	if err != nil {
+		return err
+	}
+	if b.Cmp(tx.Cost()) < 0 {
 		return core.ErrInsufficientFunds
 	}
 

@@ -197,22 +197,32 @@ func (dw *dbWrapper) pushObject(vm *duktape.Context) {
 
 	// Push the wrapper for statedb.GetBalance
 	vm.PushGoFunction(func(ctx *duktape.Context) int {
-		pushBigInt(dw.db.GetBalance(common.BytesToAddress(popSlice(ctx))), ctx)
+		balance, err := dw.db.GetBalance(common.BytesToAddress(popSlice(ctx)))
+		if err != nil {
+			return 0
+		}
+		pushBigInt(balance, ctx)
 		return 1
 	})
 	vm.PutPropString(obj, "getBalance")
 
 	// Push the wrapper for statedb.GetNonce
 	vm.PushGoFunction(func(ctx *duktape.Context) int {
-		ctx.PushInt(int(dw.db.GetNonce(common.BytesToAddress(popSlice(ctx)))))
+		nonce, err := dw.db.GetNonce(common.BytesToAddress(popSlice(ctx)))
+		if err != nil {
+			return 0
+		}
+		ctx.PushInt(int(nonce))
 		return 1
 	})
 	vm.PutPropString(obj, "getNonce")
 
 	// Push the wrapper for statedb.GetCode
 	vm.PushGoFunction(func(ctx *duktape.Context) int {
-		code := dw.db.GetCode(common.BytesToAddress(popSlice(ctx)))
-
+		code, err := dw.db.GetCode(common.BytesToAddress(popSlice(ctx)))
+		if err != nil {
+			return 0
+		}
 		ptr := ctx.PushFixedBuffer(len(code))
 		copy(makeSlice(ptr, uint(len(code))), code)
 		return 1
@@ -224,7 +234,10 @@ func (dw *dbWrapper) pushObject(vm *duktape.Context) {
 		hash := popSlice(ctx)
 		addr := popSlice(ctx)
 
-		state := dw.db.GetState(common.BytesToAddress(addr), common.BytesToHash(hash))
+		state, err := dw.db.GetState(common.BytesToAddress(addr), common.BytesToHash(hash))
+		if err != nil {
+			return 0
+		}
 
 		ptr := ctx.PushFixedBuffer(len(state))
 		copy(makeSlice(ptr, uint(len(state))), state[:])
@@ -234,7 +247,11 @@ func (dw *dbWrapper) pushObject(vm *duktape.Context) {
 
 	// Push the wrapper for statedb.Exists
 	vm.PushGoFunction(func(ctx *duktape.Context) int {
-		ctx.PushBoolean(dw.db.Exist(common.BytesToAddress(popSlice(ctx))))
+		exist, err := dw.db.Exist(common.BytesToAddress(popSlice(ctx)))
+		if err != nil {
+			return 0
+		}
+		ctx.PushBoolean(exist)
 		return 1
 	})
 	vm.PutPropString(obj, "exists")

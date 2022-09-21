@@ -119,7 +119,7 @@ func VerifyProof(rootHash common.Hash, key []byte, proofDb ethdb.KeyValueReader)
 		switch cld := cld.(type) {
 		case nil:
 			// The trie doesn't contain the key.
-			return nil, nil
+			return nil, fmt.Errorf("Trie doesn't contain key") // Why did this not previously return an error?
 		case hashNode:
 			key = keyrest
 			copy(wantHash[:], cld)

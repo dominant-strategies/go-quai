@@ -29,6 +29,7 @@ import (
 	"github.com/spruce-solutions/go-quai/common/math"
 	"github.com/spruce-solutions/go-quai/crypto"
 	"github.com/spruce-solutions/go-quai/rlp"
+	"lukechampine.com/blake3"
 )
 
 var (
@@ -378,6 +379,22 @@ func (tx *Transaction) Hash() common.Hash {
 	}
 	tx.hash.Store(h)
 	return h
+}
+
+func (tx *Transaction) Blake3HashWithLocation() (common.Hash, error) {
+	hasher := blake3.New(30, nil)
+	hasher.Reset()
+	destLoc, err := tx.inner.to().Location()
+	if err != nil {
+		return common.Hash{}, err
+	}
+	b := make([]byte, 2)
+	b[0] = byte(destLoc.Region())
+	b[1] = byte(destLoc.Zone())
+	rlp.Encode(hasher, tx.inner)
+	h := hasher.Sum(b)
+	hash := common.BytesToHash(h)
+	return hash, nil
 }
 
 // Size returns the true RLP encoded storage size of the transaction, either by
