@@ -45,12 +45,12 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/spruce-solutions/go-quai/crypto"
-	"github.com/spruce-solutions/go-quai/p2p"
-	"github.com/spruce-solutions/go-quai/p2p/enode"
-	"github.com/spruce-solutions/go-quai/p2p/simulations"
-	"github.com/spruce-solutions/go-quai/p2p/simulations/adapters"
-	"github.com/spruce-solutions/go-quai/rpc"
+	"github.com/dominant-strategies/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/p2p"
+	"github.com/dominant-strategies/go-quai/p2p/enode"
+	"github.com/dominant-strategies/go-quai/p2p/simulations"
+	"github.com/dominant-strategies/go-quai/p2p/simulations/adapters"
+	"github.com/dominant-strategies/go-quai/rpc"
 	"gopkg.in/urfave/cli.v1"
 )
 

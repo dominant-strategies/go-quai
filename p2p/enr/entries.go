@@ -21,7 +21,7 @@ import (
 	"io"
 	"net"
 
-	"github.com/spruce-solutions/go-quai/rlp"
+	"github.com/dominant-strategies/go-quai/rlp"
 )
 
 // Entry is implemented by known node record entry types.

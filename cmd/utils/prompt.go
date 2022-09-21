@@ -20,7 +20,7 @@ package utils
 import (
 	"fmt"
 
-	"github.com/spruce-solutions/go-quai/console/prompt"
+	"github.com/dominant-strategies/go-quai/console/prompt"
 )
 
 // GetPassPhrase displays the given text(prompt) to the user and requests some textual

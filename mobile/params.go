@@ -21,9 +21,9 @@ package geth
 import (
 	"encoding/json"
 
-	"github.com/spruce-solutions/go-quai/core"
-	"github.com/spruce-solutions/go-quai/p2p/enode"
-	"github.com/spruce-solutions/go-quai/params"
+	"github.com/dominant-strategies/go-quai/core"
+	"github.com/dominant-strategies/go-quai/p2p/enode"
+	"github.com/dominant-strategies/go-quai/params"
 )
 
 // MainnetGenesis returns the JSON spec to use for the main Ethereum network. It

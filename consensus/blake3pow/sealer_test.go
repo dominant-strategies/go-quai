@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/core/types"
-	"github.com/spruce-solutions/go-quai/internal/testlog"
-	"github.com/spruce-solutions/go-quai/log"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/internal/testlog"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 // Tests whether remote HTTP servers are correctly notified of new work.

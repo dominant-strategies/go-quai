@@ -20,7 +20,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/spruce-solutions/go-quai/les/utils"
+	"github.com/dominant-strategies/go-quai/les/utils"
 )
 
 func checkU64(t *testing.T, name string, value, exp uint64) {

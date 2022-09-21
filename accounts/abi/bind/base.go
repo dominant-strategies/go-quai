@@ -24,12 +24,12 @@ import (
 	"strings"
 	"sync"
 
-	ethereum "github.com/spruce-solutions/go-quai"
-	"github.com/spruce-solutions/go-quai/accounts/abi"
-	"github.com/spruce-solutions/go-quai/common"
-	"github.com/spruce-solutions/go-quai/core/types"
-	"github.com/spruce-solutions/go-quai/crypto"
-	"github.com/spruce-solutions/go-quai/event"
+	ethereum "github.com/dominant-strategies/go-quai"
+	"github.com/dominant-strategies/go-quai/accounts/abi"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/event"
 )
 
 // SignerFn is a signer function callback when a contract requires a method to

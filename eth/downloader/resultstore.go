@@ -21,7 +21,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/spruce-solutions/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/core/types"
 )
 
 // resultStore implements a structure for maintaining fetchResults, tracking their

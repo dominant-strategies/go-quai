@@ -4,7 +4,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/spruce-solutions/go-quai/common"
+	"github.com/dominant-strategies/go-quai/common"
 )
 
 func TestPairingExpected(t *testing.T) {

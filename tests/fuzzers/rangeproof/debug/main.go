@@ -21,7 +21,7 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/spruce-solutions/go-quai/tests/fuzzers/rangeproof"
+	"github.com/dominant-strategies/go-quai/tests/fuzzers/rangeproof"
 )
 
 func main() {

@@ -14,7 +14,7 @@
 package secp256k1
 
 import (
-	_ "github.com/spruce-solutions/go-quai/crypto/secp256k1/libsecp256k1/include"
-	_ "github.com/spruce-solutions/go-quai/crypto/secp256k1/libsecp256k1/src"
-	_ "github.com/spruce-solutions/go-quai/crypto/secp256k1/libsecp256k1/src/modules/recovery"
+	_ "github.com/dominant-strategies/go-quai/crypto/secp256k1/libsecp256k1/include"
+	_ "github.com/dominant-strategies/go-quai/crypto/secp256k1/libsecp256k1/src"
+	_ "github.com/dominant-strategies/go-quai/crypto/secp256k1/libsecp256k1/src/modules/recovery"
 )

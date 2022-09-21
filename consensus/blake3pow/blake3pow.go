@@ -5,10 +5,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/consensus"
-	"github.com/spruce-solutions/go-quai/log"
-	"github.com/spruce-solutions/go-quai/metrics"
-	"github.com/spruce-solutions/go-quai/rpc"
+	"github.com/dominant-strategies/go-quai/consensus"
+	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/metrics"
+	"github.com/dominant-strategies/go-quai/rpc"
 )
 
 var (

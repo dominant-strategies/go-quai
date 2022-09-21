@@ -24,8 +24,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/spruce-solutions/go-quai/crypto"
-	"github.com/spruce-solutions/go-quai/p2p/enr"
+	"github.com/dominant-strategies/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/p2p/enr"
 )
 
 func init() {

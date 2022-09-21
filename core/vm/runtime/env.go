@@ -17,8 +17,8 @@
 package runtime
 
 import (
-	"github.com/spruce-solutions/go-quai/core"
-	"github.com/spruce-solutions/go-quai/core/vm"
+	"github.com/dominant-strategies/go-quai/core"
+	"github.com/dominant-strategies/go-quai/core/vm"
 )
 
 func NewEnv(cfg *Config) *vm.EVM {

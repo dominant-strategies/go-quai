@@ -22,9 +22,9 @@ import (
 	"math/big"
 	"os"
 
-	"github.com/spruce-solutions/go-quai/cmd/evm/internal/t8ntool"
-	"github.com/spruce-solutions/go-quai/cmd/utils"
-	"github.com/spruce-solutions/go-quai/internal/flags"
+	"github.com/dominant-strategies/go-quai/cmd/evm/internal/t8ntool"
+	"github.com/dominant-strategies/go-quai/cmd/utils"
+	"github.com/dominant-strategies/go-quai/internal/flags"
 	"gopkg.in/urfave/cli.v1"
 )
 

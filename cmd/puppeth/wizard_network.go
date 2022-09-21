@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/spruce-solutions/go-quai/log"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 // manageServers displays a list of servers the user can disconnect from, and an

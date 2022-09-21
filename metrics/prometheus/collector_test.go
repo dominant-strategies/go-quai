@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/metrics"
+	"github.com/dominant-strategies/go-quai/metrics"
 )
 
 func TestMain(m *testing.M) {

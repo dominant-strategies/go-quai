@@ -24,10 +24,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/spruce-solutions/go-quai/common/hexutil"
-	"github.com/spruce-solutions/go-quai/console/prompt"
-	"github.com/spruce-solutions/go-quai/internal/ethapi"
-	"github.com/spruce-solutions/go-quai/log"
+	"github.com/dominant-strategies/go-quai/common/hexutil"
+	"github.com/dominant-strategies/go-quai/console/prompt"
+	"github.com/dominant-strategies/go-quai/internal/ethapi"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 type CommandlineUI struct {

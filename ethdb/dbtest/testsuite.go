@@ -22,7 +22,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/spruce-solutions/go-quai/ethdb"
+	"github.com/dominant-strategies/go-quai/ethdb"
 )
 
 // TestDatabaseSuite runs a suite of tests against a KeyValueStore database

@@ -17,7 +17,7 @@
 package snap
 
 import (
-	"github.com/spruce-solutions/go-quai/rlp"
+	"github.com/dominant-strategies/go-quai/rlp"
 )
 
 // enrEntry is the ENR entry which advertises `snap` protocol on the discovery.

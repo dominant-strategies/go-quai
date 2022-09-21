@@ -16,7 +16,7 @@
 
 package core
 
-import "github.com/spruce-solutions/go-quai/common"
+import "github.com/dominant-strategies/go-quai/common"
 
 // BadHashes represent a set of manually tracked bad hashes (usually hard forks)
 var BadHashes = map[common.Hash]bool{

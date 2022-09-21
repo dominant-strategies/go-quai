@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/spruce-solutions/go-quai/rlp"
+	"github.com/dominant-strategies/go-quai/rlp"
 )
 
 func newTestFullNode(v []byte) []interface{} {

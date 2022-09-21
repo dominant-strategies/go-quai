@@ -26,7 +26,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/spruce-solutions/go-quai/log"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 // makeWizard creates and returns a new puppeth wizard.

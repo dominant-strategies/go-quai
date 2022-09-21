@@ -20,7 +20,7 @@ import (
 	"testing"
 
 	"github.com/dop251/goja"
-	"github.com/spruce-solutions/go-quai/internal/jsre"
+	"github.com/dominant-strategies/go-quai/internal/jsre"
 )
 
 // TestUndefinedAsParam ensures that personal functions can receive

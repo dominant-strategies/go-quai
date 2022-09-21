@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/p2p/enr"
+	"github.com/dominant-strategies/go-quai/p2p/enr"
 )
 
 func TestReadNodes(t *testing.T) {

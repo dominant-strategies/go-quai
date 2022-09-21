@@ -25,12 +25,12 @@ import (
 	"time"
 
 	"github.com/dop251/goja"
-	"github.com/spruce-solutions/go-quai/accounts/scwallet"
-	"github.com/spruce-solutions/go-quai/accounts/usbwallet"
-	"github.com/spruce-solutions/go-quai/common/hexutil"
-	"github.com/spruce-solutions/go-quai/console/prompt"
-	"github.com/spruce-solutions/go-quai/internal/jsre"
-	"github.com/spruce-solutions/go-quai/rpc"
+	"github.com/dominant-strategies/go-quai/accounts/scwallet"
+	"github.com/dominant-strategies/go-quai/accounts/usbwallet"
+	"github.com/dominant-strategies/go-quai/common/hexutil"
+	"github.com/dominant-strategies/go-quai/console/prompt"
+	"github.com/dominant-strategies/go-quai/internal/jsre"
+	"github.com/dominant-strategies/go-quai/rpc"
 )
 
 // bridge is a collection of JavaScript utility methods to bride the .js runtime

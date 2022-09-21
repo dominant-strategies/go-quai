@@ -19,7 +19,7 @@ package ethapi
 import (
 	"sync"
 
-	"github.com/spruce-solutions/go-quai/common"
+	"github.com/dominant-strategies/go-quai/common"
 )
 
 type AddrLocker struct {

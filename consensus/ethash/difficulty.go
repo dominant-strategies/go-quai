@@ -19,7 +19,7 @@ package ethash
 import (
 	"math/big"
 
-	"github.com/spruce-solutions/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/holiman/uint256"
 )
 

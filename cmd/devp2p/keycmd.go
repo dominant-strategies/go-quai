@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/spruce-solutions/go-quai/crypto"
-	"github.com/spruce-solutions/go-quai/p2p/enode"
+	"github.com/dominant-strategies/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/p2p/enode"
 	"gopkg.in/urfave/cli.v1"
 )
 

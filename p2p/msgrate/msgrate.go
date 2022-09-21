@@ -24,7 +24,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/log"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 // measurementImpact is the impact a single measurement has on a peer's final

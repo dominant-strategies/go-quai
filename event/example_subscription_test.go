@@ -19,7 +19,7 @@ package event_test
 import (
 	"fmt"
 
-	"github.com/spruce-solutions/go-quai/event"
+	"github.com/dominant-strategies/go-quai/event"
 )
 
 func ExampleNewSubscription() {

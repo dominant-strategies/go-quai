@@ -5,7 +5,7 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/spruce-solutions/go-quai/tests/fuzzers/stacktrie"
+	"github.com/dominant-strategies/go-quai/tests/fuzzers/stacktrie"
 )
 
 func main() {

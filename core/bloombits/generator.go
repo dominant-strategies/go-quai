@@ -19,7 +19,7 @@ package bloombits
 import (
 	"errors"
 
-	"github.com/spruce-solutions/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/core/types"
 )
 
 var (

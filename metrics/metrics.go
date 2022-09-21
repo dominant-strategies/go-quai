@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/log"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 // Enabled is checked by the constructor functions for all of the

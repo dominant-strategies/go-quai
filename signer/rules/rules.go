@@ -23,11 +23,11 @@ import (
 	"strings"
 
 	"github.com/dop251/goja"
-	"github.com/spruce-solutions/go-quai/internal/ethapi"
-	"github.com/spruce-solutions/go-quai/log"
-	"github.com/spruce-solutions/go-quai/signer/core"
-	"github.com/spruce-solutions/go-quai/signer/rules/deps"
-	"github.com/spruce-solutions/go-quai/signer/storage"
+	"github.com/dominant-strategies/go-quai/internal/ethapi"
+	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/signer/core"
+	"github.com/dominant-strategies/go-quai/signer/rules/deps"
+	"github.com/dominant-strategies/go-quai/signer/storage"
 )
 
 var (

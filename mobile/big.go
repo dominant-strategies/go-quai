@@ -22,7 +22,7 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/spruce-solutions/go-quai/common"
+	"github.com/dominant-strategies/go-quai/common"
 )
 
 // A BigInt represents a signed multi-precision integer.

@@ -20,12 +20,12 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/spruce-solutions/go-quai/cmd/devp2p/internal/ethtest"
-	"github.com/spruce-solutions/go-quai/crypto"
-	"github.com/spruce-solutions/go-quai/internal/utesting"
-	"github.com/spruce-solutions/go-quai/p2p"
-	"github.com/spruce-solutions/go-quai/p2p/rlpx"
-	"github.com/spruce-solutions/go-quai/rlp"
+	"github.com/dominant-strategies/go-quai/cmd/devp2p/internal/ethtest"
+	"github.com/dominant-strategies/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/internal/utesting"
+	"github.com/dominant-strategies/go-quai/p2p"
+	"github.com/dominant-strategies/go-quai/p2p/rlpx"
+	"github.com/dominant-strategies/go-quai/rlp"
 	"gopkg.in/urfave/cli.v1"
 )
 

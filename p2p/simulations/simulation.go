@@ -20,7 +20,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/p2p/enode"
+	"github.com/dominant-strategies/go-quai/p2p/enode"
 )
 
 // Simulation provides a framework for running actions in a simulated network

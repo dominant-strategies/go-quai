@@ -21,10 +21,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/spruce-solutions/go-quai/common/hexutil"
-	"github.com/spruce-solutions/go-quai/common/mclock"
-	vfs "github.com/spruce-solutions/go-quai/les/vflux/server"
-	"github.com/spruce-solutions/go-quai/p2p/enode"
+	"github.com/dominant-strategies/go-quai/common/hexutil"
+	"github.com/dominant-strategies/go-quai/common/mclock"
+	vfs "github.com/dominant-strategies/go-quai/les/vflux/server"
+	"github.com/dominant-strategies/go-quai/p2p/enode"
 )
 
 var (

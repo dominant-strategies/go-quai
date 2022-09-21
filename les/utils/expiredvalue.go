@@ -20,7 +20,7 @@ import (
 	"math"
 	"sync"
 
-	"github.com/spruce-solutions/go-quai/common/mclock"
+	"github.com/dominant-strategies/go-quai/common/mclock"
 )
 
 // ExpiredValue is a scalar value that is continuously expired (decreased

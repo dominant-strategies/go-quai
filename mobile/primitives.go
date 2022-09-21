@@ -22,7 +22,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/spruce-solutions/go-quai/common"
+	"github.com/dominant-strategies/go-quai/common"
 )
 
 // Strings represents s slice of strs.

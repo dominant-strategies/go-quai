@@ -22,7 +22,7 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/spruce-solutions/go-quai/common"
+	"github.com/dominant-strategies/go-quai/common"
 )
 
 // Interface represents a wrapped version of Go's interface{}, with the capacity
