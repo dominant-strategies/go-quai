@@ -132,6 +132,13 @@ func EmptyHeader() *Header {
 	h.gasLimit = make([]uint64, common.HierarchyDepth)
 	h.gasUsed = make([]uint64, common.HierarchyDepth)
 	h.baseFee = make([]*big.Int, common.HierarchyDepth)
+
+	for i := 0; i < common.HierarchyDepth; i++ {
+		h.root[i] = EmptyRootHash
+		h.txHash[i] = EmptyRootHash
+		h.receiptHash[i] = EmptyRootHash
+		h.uncleHash[i] = EmptyUncleHash
+	}
 	return h
 }
 
@@ -273,7 +280,7 @@ func (h *Header) BaseFee(args ...int) *big.Int {
 	if len(args) > 0 {
 		nodeCtx = args[0]
 	}
-	return h.difficulty[nodeCtx]
+	return h.baseFee[nodeCtx]
 }
 func (h *Header) Location() common.Location { return h.location }
 func (h *Header) Time() uint64              { return h.time }
@@ -335,14 +342,14 @@ func (h *Header) SetDifficulty(val *big.Int, args ...int) {
 	if len(args) > 0 {
 		nodeCtx = args[0]
 	}
-	h.difficulty[nodeCtx] = new(big.Int).Set(val)
+	h.difficulty[nodeCtx] = val
 }
 func (h *Header) SetNumber(val *big.Int, args ...int) {
 	nodeCtx := common.NodeLocation.Context()
 	if len(args) > 0 {
 		nodeCtx = args[0]
 	}
-	h.number[nodeCtx] = new(big.Int).Set(val)
+	h.number[nodeCtx] = val
 }
 func (h *Header) SetGasLimit(val uint64, args ...int) {
 	nodeCtx := common.NodeLocation.Context()
@@ -363,7 +370,7 @@ func (h *Header) SetBaseFee(val *big.Int, args ...int) {
 	if len(args) > 0 {
 		nodeCtx = args[0]
 	}
-	h.baseFee[nodeCtx] = new(big.Int).Set(val)
+	h.baseFee[nodeCtx] = val
 }
 func (h *Header) SetLocation(val common.Location) { h.location = val }
 func (h *Header) SetTime(val uint64)              { h.time = val }
@@ -387,7 +394,7 @@ func (h *Header) DifficultyArray() []*big.Int     { return h.difficulty }
 func (h *Header) NumberArray() []*big.Int         { return h.number }
 func (h *Header) GasLimitArray() []uint64         { return h.gasLimit }
 func (h *Header) GasUsedArray() []uint64          { return h.gasUsed }
-func (h *Header) BaseFeeArray() []*big.Int        { return h.difficulty }
+func (h *Header) BaseFeeArray() []*big.Int        { return h.baseFee }
 
 // Hash returns the block hash of the header, which is simply the keccak256 hash of its
 // RLP encoding.
@@ -488,28 +495,22 @@ func (h *Header) SanityCheck() error {
 // EmptyBody returns true if there is no additional 'body' to complete the header
 // that is: no transactions and no uncles.
 func (h *Header) EmptyBody() bool {
-	return h.EmptyTxs() && h.EmptyReceipts() && h.EmptyUncles()
+	return h.TxHash() == EmptyRootHash && h.UncleHash() == EmptyUncleHash
 }
 
 // EmptyTxs returns true if there are no txs for this header/block.
 func (h *Header) EmptyTxs() bool {
-	return h.txHash[common.PRIME_CTX] == EmptyRootHash &&
-		h.txHash[common.REGION_CTX] == EmptyRootHash &&
-		h.txHash[common.ZONE_CTX] == EmptyRootHash
+	return h.TxHash() == EmptyRootHash
 }
 
 // EmptyUncles returns true if there are no uncles for this header/block.
 func (h *Header) EmptyUncles() bool {
-	return h.uncleHash[common.PRIME_CTX] == EmptyRootHash &&
-		h.uncleHash[common.REGION_CTX] == EmptyRootHash &&
-		h.uncleHash[common.ZONE_CTX] == EmptyRootHash
+	return h.UncleHash() == EmptyRootHash
 }
 
 // EmptyReceipts returns true if there are no receipts for this header/block.
 func (h *Header) EmptyReceipts() bool {
-	return h.receiptHash[common.PRIME_CTX] == EmptyRootHash &&
-		h.receiptHash[common.REGION_CTX] == EmptyRootHash &&
-		h.receiptHash[common.ZONE_CTX] == EmptyRootHash
+	return h.ReceiptHash() == EmptyRootHash
 }
 
 // Body is a simple (mutable, non-safe) data container for storing and moving
@@ -593,9 +594,9 @@ func CopyHeader(h *Header) *Header {
 	cpy.number = make([]*big.Int, common.HierarchyDepth)
 	cpy.baseFee = make([]*big.Int, common.HierarchyDepth)
 	for i := 0; i < common.HierarchyDepth; i++ {
-		cpy.difficulty[i] = new(big.Int).Set(h.Difficulty(i))
-		cpy.number[i] = new(big.Int).Set(h.Number(i))
-		cpy.baseFee[i] = new(big.Int).Set(h.BaseFee(i))
+		cpy.difficulty[i] = h.Difficulty(i)
+		cpy.number[i] = h.Number(i)
+		cpy.baseFee[i] = h.BaseFee(i)
 	}
 	if len(h.extra) > 0 {
 		cpy.extra = make([]byte, len(h.extra))
