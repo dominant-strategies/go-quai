@@ -37,12 +37,17 @@ type txJSON struct {
 	Gas                  *hexutil.Uint64 `json:"gas"`
 	Value                *hexutil.Big    `json:"value"`
 	Data                 *hexutil.Bytes  `json:"input"`
-	V                    *hexutil.Big    `json:"v"`
-	R                    *hexutil.Big    `json:"r"`
-	S                    *hexutil.Big    `json:"s"`
 	To                   *common.Address `json:"to"`
-	ChainID              *hexutil.Big    `json:"chainId"`
 	AccessList           *AccessList     `json:"accessList"`
+
+	// Optional fields only present for internal transactions
+	ChainID *hexutil.Big `json:"chainId,omitempty"`
+	V       *hexutil.Big `json:"v,omitempty"`
+	R       *hexutil.Big `json:"r,omitempty"`
+	S       *hexutil.Big `json:"s,omitempty"`
+
+	// Optional fields only present for external transactions
+	Sender *common.Address `json:"sender,omitempty"`
 
 	// Only used for encoding:
 	Hash common.Hash `json:"hash"`
@@ -70,6 +75,16 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.V = (*hexutil.Big)(tx.V)
 		enc.R = (*hexutil.Big)(tx.R)
 		enc.S = (*hexutil.Big)(tx.S)
+	case *ExternalTx:
+		enc.AccessList = &tx.AccessList
+		enc.Nonce = (*hexutil.Uint64)(&tx.Nonce)
+		enc.Gas = (*hexutil.Uint64)(&tx.Gas)
+		enc.MaxFeePerGas = (*hexutil.Big)(tx.GasFeeCap)
+		enc.MaxPriorityFeePerGas = (*hexutil.Big)(tx.GasTipCap)
+		enc.Value = (*hexutil.Big)(tx.Value)
+		enc.Data = (*hexutil.Bytes)(&tx.Data)
+		enc.To = t.To()
+		enc.Sender = &tx.Sender
 	}
 	return json.Marshal(&enc)
 }
@@ -81,61 +96,57 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 		return err
 	}
 
-	if dec.Type != InternalTxType {
-		return ErrTxTypeNotSupported
-	}
-
 	// Decode / verify fields according to transaction type.
 	var inner TxData
 	switch dec.Type {
 	case InternalTxType:
 		var itx InternalTx
 		inner = &itx
-		// Access list is optional for now.
-		if dec.AccessList != nil {
-			itx.AccessList = *dec.AccessList
+		if dec.AccessList == nil {
+			return errors.New("missing required field 'accessList' in internal transaction")
 		}
+		itx.AccessList = *dec.AccessList
 		if dec.ChainID == nil {
-			return errors.New("missing required field 'chainId' in transaction")
+			return errors.New("missing required field 'chainId' in internal transaction")
 		}
 		itx.ChainID = (*big.Int)(dec.ChainID)
 		if dec.To != nil {
 			itx.To = dec.To
 		}
 		if dec.Nonce == nil {
-			return errors.New("missing required field 'nonce' in transaction")
+			return errors.New("missing required field 'nonce' in internal transaction")
 		}
 		itx.Nonce = uint64(*dec.Nonce)
 		if dec.MaxPriorityFeePerGas == nil {
-			return errors.New("missing required field 'maxPriorityFeePerGas' for txdata")
+			return errors.New("missing required field 'maxPriorityFeePerGas' in internal transaction")
 		}
 		itx.GasTipCap = (*big.Int)(dec.MaxPriorityFeePerGas)
 		if dec.MaxFeePerGas == nil {
-			return errors.New("missing required field 'maxFeePerGas' for txdata")
+			return errors.New("missing required field 'maxFeePerGas' in internal transaction")
 		}
 		itx.GasFeeCap = (*big.Int)(dec.MaxFeePerGas)
 		if dec.Gas == nil {
-			return errors.New("missing required field 'gas' for txdata")
+			return errors.New("missing required field 'gas' in internal transaction")
 		}
 		itx.Gas = uint64(*dec.Gas)
 		if dec.Value == nil {
-			return errors.New("missing required field 'value' in transaction")
+			return errors.New("missing required field 'value' in internal transaction")
 		}
 		itx.Value = (*big.Int)(dec.Value)
 		if dec.Data == nil {
-			return errors.New("missing required field 'input' in transaction")
+			return errors.New("missing required field 'input' in internal transaction")
 		}
 		itx.Data = *dec.Data
 		if dec.V == nil {
-			return errors.New("missing required field 'v' in transaction")
+			return errors.New("missing required field 'v' in internal transaction")
 		}
 		itx.V = (*big.Int)(dec.V)
 		if dec.R == nil {
-			return errors.New("missing required field 'r' in transaction")
+			return errors.New("missing required field 'r' in internal transaction")
 		}
 		itx.R = (*big.Int)(dec.R)
 		if dec.S == nil {
-			return errors.New("missing required field 's' in transaction")
+			return errors.New("missing required field 's' in internal transaction")
 		}
 		itx.S = (*big.Int)(dec.S)
 		withSignature := itx.V.Sign() != 0 || itx.R.Sign() != 0 || itx.S.Sign() != 0
@@ -144,6 +155,45 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 				return err
 			}
 		}
+
+	case ExternalTxType:
+		var etx ExternalTx
+		inner = &etx
+		if dec.AccessList == nil {
+			return errors.New("missing required field 'accessList' in external transaction")
+		}
+		etx.AccessList = *dec.AccessList
+		if dec.To != nil {
+			etx.To = dec.To
+		}
+		if dec.Nonce == nil {
+			return errors.New("missing required field 'nonce' in external transaction")
+		}
+		etx.Nonce = uint64(*dec.Nonce)
+		if dec.MaxPriorityFeePerGas == nil {
+			return errors.New("missing required field 'maxPriorityFeePerGas' in external transaction")
+		}
+		etx.GasTipCap = (*big.Int)(dec.MaxPriorityFeePerGas)
+		if dec.MaxFeePerGas == nil {
+			return errors.New("missing required field 'maxFeePerGas' in external transaction")
+		}
+		etx.GasFeeCap = (*big.Int)(dec.MaxFeePerGas)
+		if dec.Gas == nil {
+			return errors.New("missing required field 'gas' in external transaction")
+		}
+		etx.Gas = uint64(*dec.Gas)
+		if dec.Value == nil {
+			return errors.New("missing required field 'value' in external transaction")
+		}
+		etx.Value = (*big.Int)(dec.Value)
+		if dec.Data == nil {
+			return errors.New("missing required field 'input' in external transaction")
+		}
+		etx.Data = *dec.Data
+		if dec.Sender == nil {
+			return errors.New("missing required field 'sender' in external transaction")
+		}
+		etx.Sender = *dec.Sender
 
 	default:
 		return ErrTxTypeNotSupported
