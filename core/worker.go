@@ -408,7 +408,7 @@ func (w *worker) GeneratePendingHeader(block *types.Block) (*types.Header, error
 
 	// Fill pending transactions from the txpool
 	w.adjustGasLimit(nil, work, block)
-	w.fillTransactions(interrupt, work)
+	w.fillTransactions(interrupt, work, block)
 
 	env := work.copy()
 	interval := w.fullTaskHook
@@ -844,10 +844,14 @@ func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*en
 // fillTransactions retrieves the pending transactions from the txpool and fills them
 // into the given sealing block. The transaction selection and ordering strategy can
 // be customized with the plugin in the future.
-func (w *worker) fillTransactions(interrupt *int32, env *environment) {
+func (w *worker) fillTransactions(interrupt *int32, env *environment, block *types.Block) {
 	// Split the pending transactions into locals and remotes
 	// Fill the block with all available pending transactions.
-	pending, err := w.txPool.TxPoolPending(true)
+	etxSet := rawdb.ReadEtxSet(w.hc.bc.db, block.Hash(), block.NumberU64())
+	if etxSet == nil {
+		return
+	}
+	pending, err := w.txPool.TxPoolPending(true, etxSet)
 	if err != nil {
 		return
 	}

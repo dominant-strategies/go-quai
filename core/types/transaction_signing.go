@@ -103,6 +103,9 @@ func MustSignNewTx(prv *ecdsa.PrivateKey, s Signer, txdata TxData) *Transaction 
 // signing method. The cache is invalidated if the cached signer does
 // not match the signer used in the current call.
 func Sender(signer Signer, tx *Transaction) (common.Address, error) {
+	if tx.Type() == ExternalTxType { // External TX does not have a signature
+		return tx.inner.(*ExternalTx).Sender, nil
+	}
 	if sc := tx.from.Load(); sc != nil {
 		sigCache := sc.(sigCache)
 		// If the signer used to derive from in a previous
@@ -159,6 +162,9 @@ func NewSigner(chainId *big.Int) Signer {
 }
 
 func (s SignerV1) Sender(tx *Transaction) (common.Address, error) {
+	if tx.Type() == ExternalTxType { // External TX does not have a signature
+		return tx.inner.(*ExternalTx).Sender, nil
+	}
 	V, R, S := tx.RawSignatureValues()
 	// DynamicFee txs are defined to use 0 and 1 as their recovery
 	// id, add 27 to become equivalent to unprotected Homestead signatures.
