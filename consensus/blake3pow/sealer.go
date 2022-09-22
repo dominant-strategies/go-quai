@@ -117,7 +117,7 @@ func (blake3pow *Blake3pow) mine(block *types.Block, id int, seed uint64, abort 
 	// Extract some data from the header
 	var (
 		header = block.Header()
-		target = new(big.Int).Div(big2e256, header.Difficulty())
+		target = new(big.Int).Div(big2e256, header.Difficulty(common.ZONE_CTX))
 	)
 	// Start generating random nonces until we abort or find a good one
 	var (
