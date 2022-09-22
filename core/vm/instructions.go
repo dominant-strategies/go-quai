@@ -18,9 +18,9 @@ package vm
 
 import (
 	"github.com/dominant-strategies/go-quai/common"
-	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/params"
+	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
 )
@@ -707,10 +707,7 @@ func opCallCode(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 	// Pop other call parameters.
 	addr, value, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
-	// Check if address is in proper context
-	if !common.IsAddressInContext(toAddr) { // checked here because the error returned from CallCode is not returned from this function
-		return nil, state.ErrInvalidContext
-	}
+
 	// Get arguments from the memory.
 	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
 
@@ -745,10 +742,7 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 	// Pop other call parameters.
 	addr, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
-	// Check if address is in proper context
-	if !common.IsAddressInContext(toAddr) {
-		return nil, state.ErrInvalidContext
-	}
+
 	// Get arguments from the memory.
 	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
 
@@ -776,10 +770,7 @@ func opStaticCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) 
 	// Pop other call parameters.
 	addr, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
-	// Check if address is in proper context
-	if !common.IsAddressInContext(toAddr) {
-		return nil, state.ErrInvalidContext
-	}
+
 	// Get arguments from the memory.
 	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
 
@@ -824,6 +815,57 @@ func opSuicide(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 	}
 	interpreter.evm.StateDB.AddBalance(beneficiary.Bytes20(), balance)
 	interpreter.evm.StateDB.Suicide(scope.Contract.Address())
+	return nil, nil
+}
+
+// opETX creates an external transaction that calls a function on a contract or sends a value to an address on a different chain
+// External transactions are added to the current context's cache
+// opETX is intended to be called in a contract.
+func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	// Pop gas. The actual gas is in interpreter.evm.callGasTemp.
+	stack := scope.Stack
+	// We use it as a temporary value
+	temp := stack.pop() // following opCall protocol
+	gas := interpreter.evm.callGasTemp
+	// Pop other call parameters.
+	addr, value, gasTipCap, gasFeeCap, nonce, inOffset, inSize, accessListOffset, accessListSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
+	toAddr := common.Address(addr.Bytes20())
+	// Verify address is not in context
+	if common.IsAddressInContext(toAddr) {
+		temp.Clear()
+		stack.push(&temp)
+		return nil, nil // following opCall protocol
+	}
+	// Get the arguments from the memory.
+	data := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
+	accessList := types.AccessList{}
+	// Get access list from memory
+	accessListBytes := scope.Memory.GetPtr(int64(accessListOffset.Uint64()), int64(accessListSize.Uint64()))
+	err := rlp.DecodeBytes(accessListBytes, &accessList)
+	if err != nil {
+		temp.Clear()
+		stack.push(&temp)
+		return nil, nil // following opCall protocol
+	}
+
+	sender := scope.Contract.self.Address()
+
+	etx := types.ExternalTransaction{Value: value.ToBig(), To: &toAddr, Sender: &sender, GasTipCap: gasTipCap.ToBig(), GasFeeCap: gasFeeCap.ToBig(), Gas: gas, Data: data, AccessList: accessList, Nonce: nonce.Uint64()}
+
+	interpreter.evm.ETXCacheLock.Lock() // may not be necessary
+	interpreter.evm.ETXCache = append(interpreter.evm.ETXCache, &etx)
+	interpreter.evm.ETXCacheLock.Unlock()
+
+	// Increment the nonce for the next transaction
+	/*accountNonce, err := interpreter.evm.StateDB.GetNonce(scope.Contract.CallerAddress) // TODO: If the caller is not an account, find out who the caller is to increment his nonce
+	if err != nil {
+		return nil, err
+	}
+	interpreter.evm.StateDB.SetNonce(scope.Contract.CallerAddress, accountNonce+1)*/
+
+	temp.SetOne() // following opCall protocol
+	stack.push(&temp)
+
 	return nil, nil
 }
 

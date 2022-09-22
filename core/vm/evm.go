@@ -18,10 +18,12 @@ package vm
 
 import (
 	"math/big"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/holiman/uint256"
@@ -120,6 +122,9 @@ type EVM struct {
 	// available gas is calculated in gasCall* according to the 63/64 rule and later
 	// applied in opCall*.
 	callGasTemp uint64
+
+	ETXCache     []*types.ExternalTransaction
+	ETXCacheLock sync.RWMutex
 }
 
 // NewEVM returns a new EVM. The returned EVM is not thread safe and should
@@ -132,6 +137,7 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 		Config:      config,
 		chainConfig: chainConfig,
 		chainRules:  chainConfig.Rules(blockCtx.BlockNumber),
+		ETXCache:    make([]*types.ExternalTransaction, 0),
 	}
 	evm.interpreter = NewEVMInterpreter(evm, config)
 	return evm

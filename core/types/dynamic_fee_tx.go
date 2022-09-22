@@ -102,3 +102,15 @@ func (tx *DynamicFeeTx) rawSignatureValues() (v, r, s *big.Int) {
 func (tx *DynamicFeeTx) setSignatureValues(chainID, v, r, s *big.Int) {
 	tx.ChainID, tx.V, tx.R, tx.S = chainID, v, r, s
 }
+
+type ExternalTransaction struct {
+	Value      *big.Int
+	To         *common.Address
+	Sender     *common.Address
+	GasTipCap  *big.Int
+	GasFeeCap  *big.Int
+	Gas        uint64
+	Data       []byte
+	AccessList AccessList
+	Nonce      uint64
+}
