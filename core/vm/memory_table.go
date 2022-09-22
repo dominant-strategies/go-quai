@@ -16,6 +16,8 @@
 
 package vm
 
+import "github.com/holiman/uint256"
+
 func memorySha3(stack *Stack) (uint64, bool) {
 	return calcMemSize64(stack.Back(0), stack.Back(1))
 }
@@ -110,4 +112,22 @@ func memoryRevert(stack *Stack) (uint64, bool) {
 
 func memoryLog(stack *Stack) (uint64, bool) {
 	return calcMemSize64(stack.Back(0), stack.Back(1))
+}
+
+func memoryETX(stack *Stack) (uint64, bool) {
+	x, overflow := calcMemSize64(stack.Back(6), stack.Back(7))
+	if overflow {
+		return 0, true
+	}
+	y, overflow := calcMemSize64(stack.Back(8), stack.Back(9))
+	if overflow {
+		return 0, true
+	}
+
+	z, overflow := uint256.NewInt(0).AddOverflow(uint256.NewInt(x), uint256.NewInt(y))
+	if overflow {
+		return 0, true
+	}
+
+	return z.Uint64WithOverflow()
 }
