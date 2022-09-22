@@ -462,6 +462,7 @@ var (
 	testnetBytePrefixList  = make([][]int, 20000)
 	locationToAddressRange = make(map[Location][]int)
 	addressToLocation      = make(map[[2]int]Location)
+	locationToChainID      = make(map[Location]int)
 )
 
 func init() {
@@ -506,6 +507,7 @@ func init() {
 	locationToAddressRange[Location{intToByte(3), intToByte(1)}] = []int{100, 109}
 	locationToAddressRange[Location{intToByte(3), intToByte(2)}] = []int{110, 119}
 	locationToAddressRange[Location{intToByte(3), intToByte(3)}] = []int{120, 129}
+	locationToChainID[Location{intToByte(0), intToByte(0)}] = 9000
 
 }
 
@@ -570,8 +572,12 @@ func intToByte(num int) *byte {
 	return ptr
 }
 
+func ChainIDRange(location Location) []int {
+	return mainnetBytePrefixList[locationToChainID[location]]
+}
+
 func IsAddressInContext(address Address) bool {
-	idRange := locationToAddressRange[NodeLocation]
+	idRange := ChainIDRange(NodeLocation)
 	if int(address.Bytes()[0]) < idRange[0] || int(address.Bytes()[0]) > idRange[1] {
 		return false
 	} else {

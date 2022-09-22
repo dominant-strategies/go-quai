@@ -53,7 +53,11 @@ func TestHeaderVerification(t *testing.T) {
 				engine := blake3pow.NewFaker()
 				_, results = engine.VerifyHeaders(chain, []*types.Header{headers[i]}, []bool{true})
 			} else {
+<<<<<<< HEAD
 				engine := blake3pow.NewFakeFailer(headers[i].Number().Uint64())
+=======
+				engine := ethash.NewFakeFailer(headers[i].Number().Uint64())
+>>>>>>> c5f31e0d6cef1ea138b8c186304d34ca57b0fa41
 				_, results = engine.VerifyHeaders(chain, []*types.Header{headers[i]}, []bool{true})
 			}
 			// Wait for the verification result

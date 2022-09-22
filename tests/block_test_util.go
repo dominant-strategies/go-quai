@@ -260,11 +260,11 @@ func validateHeader(h *btHeader, h2 *types.Header) error {
 	if h.Difficulty().Cmp(h2.Difficulty()) != 0 {
 		return fmt.Errorf("difficulty: want: %v have: %v", h.Difficulty(), h2.Difficulty())
 	}
-	if h.GasLimit() != h2.GasLimit() {
-		return fmt.Errorf("gasLimit: want: %d have: %d", h.GasLimit(), h2.GasLimit())
+	if h.Difficulty.Cmp(h2.Difficulty) != 0 {
+		return fmt.Errorf("difficulty: want: %v have: %v", h.Difficulty, h2.Difficulty)
 	}
-	if h.GasUsed() != h2.GasUsed() {
-		return fmt.Errorf("gasUsed: want: %d have: %d", h.GasUsed(), h2.GasUsed())
+	if h.GasLimit != h2.GasLimit {
+		return fmt.Errorf("gasLimit: want: %d have: %d", h.GasLimit, h2.GasLimit)
 	}
 	if h.Timestamp != h2.Time() {
 		return fmt.Errorf("timestamp: want: %v have: %v", h.Timestamp, h2.Time())

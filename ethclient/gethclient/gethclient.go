@@ -55,7 +55,7 @@ func (ec *Client) CreateAccessList(ctx context.Context, msg ethereum.CallMsg) (*
 	if err := ec.c.CallContext(ctx, &result, "eth_createAccessList", toCallArg(msg)); err != nil {
 		return nil, 0, "", err
 	}
-	return result.Accesslist, uint64(result.GasUsed), result.Error, nil
+	return result.Accesslist, uint64(result.GasUsed()), result.Error, nil
 }
 
 // AccountResult is the result of a GetProof operation.
@@ -111,7 +111,7 @@ func (ec *Client) GetProof(ctx context.Context, account common.Address, keys []s
 		Address:      res.Address,
 		AccountProof: res.AccountProof,
 		Balance:      res.Balance.ToInt(),
-		Nonce:        uint64(res.Nonce),
+		Nonce:        uint64(res.Nonce()),
 		CodeHash:     res.CodeHash,
 		StorageHash:  res.StorageHash,
 	}
@@ -224,7 +224,7 @@ func toOverrideMap(overrides *map[common.Address]OverrideAccount) interface{} {
 	result := make(map[common.Address]overrideAccount)
 	for addr, override := range *overrides {
 		result[addr] = overrideAccount{
-			Nonce:     hexutil.Uint64(override.Nonce),
+			Nonce:     hexutil.Uint64(override.Nonce()),
 			Code:      override.Code,
 			Balance:   (*hexutil.Big)(override.Balance),
 			State:     override.State,

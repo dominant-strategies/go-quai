@@ -1155,7 +1155,11 @@ func TestReorgSideEvent(t *testing.T) {
 		t.Fatalf("failed to insert chain: %v", err)
 	}
 
+<<<<<<< HEAD
 	replacementBlocks, _ := GenerateChain(gspec.Config, genesis, blake3pow.NewFaker(), db, 4, func(i int, gen *BlockGen) {
+=======
+	replacementBlocks, _ := GenerateChain(gspec.Config, genesis, ethash.NewFaker(), db, 4, func(i int, gen *BlockGen) {
+>>>>>>> c5f31e0d6cef1ea138b8c186304d34ca57b0fa41
 		tx, err := types.SignTx(types.NewContractCreation(gen.TxNonce(addr1), new(big.Int), 1000000, gen.header.BaseFee(), nil), signer, key1)
 		if i == 2 {
 			gen.OffsetTime(-9)
@@ -2094,7 +2098,11 @@ func TestTransactionIndices(t *testing.T) {
 		signer  = types.LatestSigner(gspec.Config)
 	)
 	height := uint64(128)
+<<<<<<< HEAD
 	blocks, receipts := GenerateChain(gspec.Config, genesis, blake3pow.NewFaker(), gendb, int(height), func(i int, block *BlockGen) {
+=======
+	blocks, receipts := GenerateChain(gspec.Config, genesis, ethash.NewFaker(), gendb, int(height), func(i int, block *BlockGen) {
+>>>>>>> c5f31e0d6cef1ea138b8c186304d34ca57b0fa41
 		tx, err := types.SignTx(types.NewTransaction(block.TxNonce(address), common.Address{0x00}, big.NewInt(1000), params.TxGas, block.header.BaseFee(), nil), signer, key)
 		if err != nil {
 			panic(err)
@@ -2221,7 +2229,11 @@ func TestSkipStaleTxIndicesInFastSync(t *testing.T) {
 		signer  = types.LatestSigner(gspec.Config)
 	)
 	height := uint64(128)
+<<<<<<< HEAD
 	blocks, receipts := GenerateChain(gspec.Config, genesis, blake3pow.NewFaker(), gendb, int(height), func(i int, block *BlockGen) {
+=======
+	blocks, receipts := GenerateChain(gspec.Config, genesis, ethash.NewFaker(), gendb, int(height), func(i int, block *BlockGen) {
+>>>>>>> c5f31e0d6cef1ea138b8c186304d34ca57b0fa41
 		tx, err := types.SignTx(types.NewTransaction(block.TxNonce(address), common.Address{0x00}, big.NewInt(1000), params.TxGas, block.header.BaseFee(), nil), signer, key)
 		if err != nil {
 			panic(err)
