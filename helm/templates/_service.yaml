@@ -5,7 +5,7 @@ metadata:
   name: prime-{{- include "go-quai.name" $ }}
   namespace: {{ .Values.goQuai.env }}
   annotations:
-    cloud.google.com/backend-config: {{ printf "{\"default\":\"prime-%s\"}" (include "go-quai.name" $) | toRawJson }}
+    cloud.google.com/backend-config: {{ printf "{\"ports\":{\"ws\":\"prime-%s\"}}" (include "go-quai.name" $) | toRawJson }}
 spec:
   ports:
   - name: ws

@@ -10,4 +10,7 @@ spec:
     port: <HTTP>
     requestPath: /
     type: HTTP
+  connectionDraining:
+    drainingTimeoutSec: 1800
+  timeoutSec: 1800
 {{- end }}
