@@ -1,0 +1,35 @@
+name: Lint, Build and Test
+on:
+  push:
+    branches: [ main, dev, geth-fork/dev ]
+  pull_request:
+    branches: [ main, dev, geth-fork/dev ]
+    types: [ opened, reopened ]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        ref: ${{ github.ref }}
+        ssh-key: ${{ secrets.GH_PAT }}
+
+    - name: Set up Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.19
+
+    - name: Install dependencies
+      run: sudo apt-get install make build-essential
+
+    - name: create network.env
+      run: cat ./network.env.dist | sed "s/WS_API=eth,net,web3,quai/WS_API=eth,net,web3,quai,txpool/g" | sed "s/HTTP_API=eth,net,web3/HTTP_API=eth,net,web3,quai,txpool/g" | sed "s/CORS=false/CORS=true/g" > ./network.env
+
+    - name: Lint go-quai
+      run: make lint
+
+    - name: Build go-quai
+      run: make go-quai
+
+    - name: Test go-quai
+      run: make test
