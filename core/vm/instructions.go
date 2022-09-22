@@ -17,9 +17,13 @@
 package vm
 
 import (
+	"fmt"
+
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/params"
+	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
 )
@@ -259,7 +263,11 @@ func opAddress(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 func opBalance(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	slot := scope.Stack.peek()
 	address := common.Address(slot.Bytes20())
-	slot.SetFromBig(interpreter.evm.StateDB.GetBalance(address))
+	balance, err := interpreter.evm.StateDB.GetBalance(address)
+	if err != nil { // if an ErrInvalidScope error is returned, the caller (usually interpreter.go/Run) will return the error to Call which will eventually set ReceiptStatusFailed in the tx receipt (state_processor.go/applyTransaction)
+		return nil, err
+	}
+	slot.SetFromBig(balance)
 	return nil, nil
 }
 
@@ -268,7 +276,12 @@ func opOrigin(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 	return nil, nil
 }
 func opCaller(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.push(new(uint256.Int).SetBytes(scope.Contract.Caller().Bytes()))
+	if interpreter.evm.TxType == types.ExternalTxType {
+		scope.Stack.push(new(uint256.Int).SetBytes(interpreter.evm.ETXSender.Bytes()))
+	} else {
+		scope.Stack.push(new(uint256.Int).SetBytes(scope.Contract.Caller().Bytes()))
+	}
+
 	return nil, nil
 }
 
@@ -341,7 +354,11 @@ func opReturnDataCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeConte
 
 func opExtCodeSize(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	slot := scope.Stack.peek()
-	slot.SetUint64(uint64(interpreter.evm.StateDB.GetCodeSize(slot.Bytes20())))
+	size, err := interpreter.evm.StateDB.GetCodeSize(slot.Bytes20())
+	if err != nil {
+		return nil, err
+	}
+	slot.SetUint64(uint64(size))
 	return nil, nil
 }
 
@@ -381,7 +398,11 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 		uint64CodeOffset = 0xffffffffffffffff
 	}
 	addr := common.Address(a.Bytes20())
-	codeCopy := getData(interpreter.evm.StateDB.GetCode(addr), uint64CodeOffset, length.Uint64())
+	code, err := interpreter.evm.StateDB.GetCode(addr)
+	if err != nil {
+		return nil, err
+	}
+	codeCopy := getData(code, uint64CodeOffset, length.Uint64())
 	scope.Memory.Set(memOffset.Uint64(), length.Uint64(), codeCopy)
 
 	return nil, nil
@@ -416,10 +437,16 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 func opExtCodeHash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	slot := scope.Stack.peek()
 	address := common.Address(slot.Bytes20())
-	if interpreter.evm.StateDB.Empty(address) {
+	empty, err := interpreter.evm.StateDB.Empty(address)
+	if err != nil {
+		return nil, err
+	}
+	if empty {
 		slot.Clear()
 	} else {
-		slot.SetBytes(interpreter.evm.StateDB.GetCodeHash(address).Bytes())
+		if codeHash, err := interpreter.evm.StateDB.GetCodeHash(address); err != nil {
+			slot.SetBytes(codeHash.Bytes())
+		}
 	}
 	return nil, nil
 }
@@ -508,7 +535,10 @@ func opMstore8(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 func opSload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	loc := scope.Stack.peek()
 	hash := common.Hash(loc.Bytes32())
-	val := interpreter.evm.StateDB.GetState(scope.Contract.Address(), hash)
+	val, err := interpreter.evm.StateDB.GetState(scope.Contract.Address(), hash)
+	if err != nil {
+		return nil, err
+	}
 	loc.SetBytes(val.Bytes())
 	return nil, nil
 }
@@ -516,8 +546,9 @@ func opSload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 func opSstore(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	loc := scope.Stack.pop()
 	val := scope.Stack.pop()
-	interpreter.evm.StateDB.SetState(scope.Contract.Address(),
-		loc.Bytes32(), val.Bytes32())
+	if err := interpreter.evm.StateDB.SetState(scope.Contract.Address(), loc.Bytes32(), val.Bytes32()); err != nil {
+		return nil, err
+	}
 	return nil, nil
 }
 
@@ -650,7 +681,9 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 	toAddr := common.Address(addr.Bytes20())
 	// Get the arguments from the memory.
 	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
-
+	if !toAddr.IsInChainScope() { // checked here because the error returned from Call is not returned from this function
+		return nil, state.ErrInvalidScope
+	}
 	var bigVal = big0
 	//TODO: use uint256.Int instead of converting with toBig()
 	// By using big0 here, we save an alloc for the most common case (non-ether-transferring contract calls),
@@ -685,6 +718,10 @@ func opCallCode(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 	// Pop other call parameters.
 	addr, value, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
+	// Check if address is in proper context
+	if !toAddr.IsInChainScope() { // checked here because the error returned from CallCode is not returned from this function
+		return nil, state.ErrInvalidScope
+	}
 	// Get arguments from the memory.
 	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
 
@@ -719,6 +756,10 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 	// Pop other call parameters.
 	addr, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
+	// Check if address is in proper context
+	if !toAddr.IsInChainScope() {
+		return nil, state.ErrInvalidScope
+	}
 	// Get arguments from the memory.
 	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
 
@@ -746,6 +787,10 @@ func opStaticCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) 
 	// Pop other call parameters.
 	addr, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
+	// Check if address is in proper context
+	if !toAddr.IsInChainScope() {
+		return nil, state.ErrInvalidScope
+	}
 	// Get arguments from the memory.
 	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
 
@@ -784,9 +829,108 @@ func opStop(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 
 func opSuicide(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	beneficiary := scope.Stack.pop()
-	balance := interpreter.evm.StateDB.GetBalance(scope.Contract.Address())
-	interpreter.evm.StateDB.AddBalance(beneficiary.Bytes20(), balance)
-	interpreter.evm.StateDB.Suicide(scope.Contract.Address())
+	balance, err := interpreter.evm.StateDB.GetBalance(scope.Contract.Address())
+	if err != nil {
+		return nil, err
+	}
+	if err := interpreter.evm.StateDB.AddBalance(beneficiary.Bytes20(), balance); err != nil {
+		return nil, err
+	}
+	if _, err := interpreter.evm.StateDB.Suicide(scope.Contract.Address()); err != nil {
+		return nil, err
+	}
+	return nil, nil
+}
+
+// opETX creates an external transaction that calls a function on a contract or sends a value to an address on a different chain
+// External transactions are added to the current context's cache
+// opETX is intended to be called in a contract.
+func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	// Pop gas. The actual gas is in interpreter.evm.callGasTemp.
+	stack := scope.Stack
+	// We use it as a temporary value
+	temp := stack.pop() // following opCall protocol
+	// Pop other call parameters.
+	addr, value, etxGasLimit, gasTipCap, gasFeeCap, inOffset, inSize, accessListOffset, accessListSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
+	toAddr := common.Address(addr.Bytes20())
+	// Verify address is not in context
+	if toAddr.IsInChainScope() {
+		temp.Clear()
+		stack.push(&temp)
+		fmt.Printf("%x is in chain scope, but opETX was called\n", toAddr)
+		return nil, nil // following opCall protocol
+	}
+	fee := uint256.NewInt(0)
+	fee.Add(&gasTipCap, &gasFeeCap)
+	fee.Mul(fee, &etxGasLimit)
+	total := uint256.NewInt(0)
+	total.Add(&value, fee)
+	// Fail if we're trying to transfer more than the available balance
+	if total.Sign() == 0 || !interpreter.evm.Context.CanTransfer(interpreter.evm.StateDB, scope.Contract.self.Address(), total.ToBig()) {
+		temp.Clear()
+		stack.push(&temp)
+		fmt.Printf("%x cannot transfer %d\n", scope.Contract.self.Address(), total.Uint64())
+		return nil, nil
+	}
+	if err := interpreter.evm.StateDB.SubBalance(scope.Contract.self.Address(), total.ToBig()); err != nil {
+		temp.Clear()
+		stack.push(&temp)
+		fmt.Printf("%x opETX error: %s\n", scope.Contract.self.Address(), err.Error())
+		return nil, nil
+	}
+
+	// Get the arguments from the memory.
+	data := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
+	accessList := types.AccessList{}
+	// Get access list from memory
+	accessListBytes := scope.Memory.GetPtr(int64(accessListOffset.Uint64()), int64(accessListSize.Uint64()))
+	err := rlp.DecodeBytes(accessListBytes, &accessList)
+	if err != nil && accessListSize.Sign() != 0 {
+		temp.Clear()
+		stack.push(&temp)
+		fmt.Printf("%x opETX error: %s\n", scope.Contract.self.Address(), err.Error())
+		return nil, nil // following opCall protocol
+	}
+
+	sender := scope.Contract.self.Address()
+	globalNonce, err := interpreter.evm.StateDB.GetNonce(common.ZeroAddr)
+	if err != nil {
+		temp.Clear()
+		stack.push(&temp)
+		fmt.Printf("%x opETX error: %s\n", scope.Contract.self.Address(), err.Error())
+		return nil, nil // following opCall protocol
+	}
+
+	// create external transaction
+	etxInner := types.ExternalTx{Value: value.ToBig(), To: &toAddr, Sender: sender, GasTipCap: gasTipCap.ToBig(), GasFeeCap: gasFeeCap.ToBig(), Gas: etxGasLimit.Uint64(), Data: data, AccessList: accessList, Nonce: globalNonce}
+	etx := types.NewTx(&etxInner)
+
+	interpreter.evm.ETXCacheLock.Lock()
+	interpreter.evm.ETXCache = append(interpreter.evm.ETXCache, etx)
+	interpreter.evm.ETXCacheLock.Unlock()
+
+	if err := interpreter.evm.StateDB.SetNonce(common.ZeroAddr, globalNonce+1); err != nil {
+		temp.Clear()
+		stack.push(&temp)
+		fmt.Printf("%x opETX error: %s\n", scope.Contract.self.Address(), err.Error())
+		return nil, nil // following opCall protocol
+	}
+
+	temp.SetOne() // following opCall protocol
+	stack.push(&temp)
+
+	return nil, nil
+}
+
+// opIsAddressInternal is used to determine if an address is internal or external based on the current chain context
+func opIsAddressInternal(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	addr := scope.Stack.peek()
+	commonAddr := common.Address(addr.Bytes20())
+	if commonAddr.IsInChainScope() {
+		addr.SetOne()
+	} else {
+		addr.Clear()
+	}
 	return nil, nil
 }
 

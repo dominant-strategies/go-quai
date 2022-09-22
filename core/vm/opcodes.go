@@ -214,6 +214,8 @@ const (
 	RETURN
 	DELEGATECALL
 	CREATE2
+	ETX
+	ISADDRINTERNAL
 	STATICCALL   OpCode = 0xfa
 	REVERT       OpCode = 0xfd
 	SELFDESTRUCT OpCode = 0xff
@@ -373,15 +375,17 @@ var opCodeToString = map[OpCode]string{
 	LOG4:   "LOG4",
 
 	// 0xf0 range.
-	CREATE:       "CREATE",
-	CALL:         "CALL",
-	RETURN:       "RETURN",
-	CALLCODE:     "CALLCODE",
-	DELEGATECALL: "DELEGATECALL",
-	CREATE2:      "CREATE2",
-	STATICCALL:   "STATICCALL",
-	REVERT:       "REVERT",
-	SELFDESTRUCT: "SELFDESTRUCT",
+	CREATE:         "CREATE",
+	CALL:           "CALL",
+	RETURN:         "RETURN",
+	CALLCODE:       "CALLCODE",
+	DELEGATECALL:   "DELEGATECALL",
+	CREATE2:        "CREATE2",
+	ETX:            "ETX",
+	ISADDRINTERNAL: "ISADDRINTERNAL",
+	STATICCALL:     "STATICCALL",
+	REVERT:         "REVERT",
+	SELFDESTRUCT:   "SELFDESTRUCT",
 
 	PUSH: "PUSH",
 	DUP:  "DUP",
@@ -540,6 +544,8 @@ var stringToOp = map[string]OpCode{
 	"CALLCODE":       CALLCODE,
 	"REVERT":         REVERT,
 	"SELFDESTRUCT":   SELFDESTRUCT,
+	"ETX":            ETX,
+	"ISADDRINTERNAL": ISADDRINTERNAL,
 }
 
 // StringToOp finds the opcode whose name is stored in `str`.
