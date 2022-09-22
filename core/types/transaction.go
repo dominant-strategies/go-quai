@@ -43,6 +43,7 @@ var (
 // Transaction types.
 const (
 	InternalTxType = iota
+	ExternalTxType
 )
 
 // Transaction is an Ethereum transaction.
@@ -154,6 +155,10 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 	switch b[0] {
 	case InternalTxType:
 		var inner InternalTx
+		err := rlp.DecodeBytes(b[1:], &inner)
+		return &inner, err
+	case ExternalTxType:
+		var inner ExternalTx
 		err := rlp.DecodeBytes(b[1:], &inner)
 		return &inner, err
 	default:

@@ -174,6 +174,11 @@ func (s SignerV1) Equal(s2 Signer) bool {
 }
 
 func (s SignerV1) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int, err error) {
+	if tx.Type() == ExternalTxType {
+		// ETXs do not have signatures, so there is no data to report. This is
+		// not an error though, so no error is returned.
+		return nil, nil, nil, nil
+	}
 	txdata, ok := tx.inner.(*InternalTx)
 	if !ok {
 		return nil, nil, nil, ErrUnsupportedTxType
