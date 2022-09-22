@@ -28,6 +28,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/common/math"
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/holiman/uint256"
 )
@@ -183,9 +184,13 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost ui
 		// capture SLOAD opcodes and record the read entry in the local storage
 		if op == SLOAD && stack.len() >= 1 {
 			var (
-				address = common.Hash(stack.data[stack.len()-1].Bytes32())
-				value   = env.StateDB.GetState(contract.Address(), address)
+				address    = common.Hash(stack.data[stack.len()-1].Bytes32())
+				value, err = env.StateDB.GetState(contract.Address(), address)
 			)
+			if err != nil {
+				log.Error("Error in CaptureState: " + err.Error())
+				return
+			}
 			l.storage[contract.Address()][address] = value
 			storage = l.storage[contract.Address()].Copy()
 		} else if op == SSTORE && stack.len() >= 2 {

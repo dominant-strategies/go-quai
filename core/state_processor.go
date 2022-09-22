@@ -205,9 +205,25 @@ func (p *StateProcessor) Process(block *types.Block) (types.Receipts, []*types.L
 			return nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
 		statedb.Prepare(tx.Hash(), i)
-		receipt, err := applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv)
-		if err != nil {
-			return nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+		var receipt *types.Receipt
+		if tx.Type() == types.ExternalTxType {
+			prevZeroBal := prepareApplyETX(statedb, tx)
+			receipt, err = applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv)
+			if err == nil {
+				statedb.AddBalance(common.ZeroAddr, prevZeroBal) // Add previous zero address balance to residual zero address balance, even if the transaction was unsuccessful (e.g. failed)
+			}
+
+			if err != nil {
+				statedb.SetBalance(common.ZeroAddr, prevZeroBal) // In the case of an error, reset the balance to what it previously was
+				return nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+			}
+		} else if tx.Type() == types.InternalTxType {
+			receipt, err = applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv)
+			if err != nil {
+				return nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+			}
+		} else {
+			return nil, nil, nil, 0, ErrTxTypeNotSupported
 		}
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
@@ -215,7 +231,9 @@ func (p *StateProcessor) Process(block *types.Block) (types.Receipts, []*types.L
 	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
-	p.engine.Finalize(p.hc, header, statedb, block.Transactions(), block.Uncles())
+	if err := p.engine.Finalize(p.hc, header, statedb, block.Transactions(), block.Uncles()); err != nil {
+		return nil, nil, nil, 0, err
+	}
 
 	return receipts, allLogs, statedb, *usedGas, nil
 }
@@ -234,9 +252,15 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	// Update the state with pending changes.
 	var root []byte
 	if config.IsByzantium(blockNumber) {
-		statedb.Finalise(true)
+		if err := statedb.Finalise(true); err != nil {
+			return nil, err
+		}
 	} else {
-		root = statedb.IntermediateRoot(config.IsEIP158(blockNumber)).Bytes()
+		intermediateRoot, err := statedb.IntermediateRoot(config.IsEIP158(blockNumber))
+		if err != nil {
+			return nil, err
+		}
+		root = intermediateRoot.Bytes()
 	}
 	*usedGas += result.UsedGas
 
@@ -245,6 +269,7 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	receipt := &types.Receipt{Type: tx.Type(), PostState: root, CumulativeGasUsed: *usedGas}
 	if result.Failed() {
 		receipt.Status = types.ReceiptStatusFailed
+		log.Debug(result.Err.Error())
 	} else {
 		receipt.Status = types.ReceiptStatusSuccessful
 	}
@@ -253,7 +278,7 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 
 	// If the transaction created a contract, store the creation address in the receipt.
 	if msg.To() == nil {
-		receipt.ContractAddress = crypto.CreateAddress(evm.TxContext.Origin, tx.Nonce())
+		receipt.ContractAddress = crypto.CreateAddress(evm.TxContext.Origin, tx.Nonce(), tx.Data())
 	}
 
 	// Set the receipt logs and create the bloom filter.
@@ -342,7 +367,6 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block) ([]*types.
 			}
 		}
 	}
-
 	return logs, nil
 }
 
@@ -358,6 +382,16 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	// Create a new context to be used in the EVM environment
 	blockContext := NewEVMBlockContext(header, bc, author)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, cfg)
+	if tx.Type() == types.ExternalTxType {
+		prevZeroBal := prepareApplyETX(statedb, tx)
+		receipt, err := applyTransaction(msg, config, bc, author, gp, statedb, header.Number(), header.Hash(), tx, usedGas, vmenv)
+		if err == nil && receipt.Status == types.ReceiptStatusSuccessful {
+			statedb.AddBalance(common.ZeroAddr, prevZeroBal) // Add previous zero address balance to residual zero address balance
+		} else {
+			statedb.SetBalance(common.ZeroAddr, prevZeroBal) // In the case of an error, reset the balance to what it previously was (TODO: if not all gas is used, it may be considered residual and should be added here. Currently a failed external transaction removes all the sent coins from the supply.)
+		}
+		return receipt, err
+	}
 	return applyTransaction(msg, config, bc, author, gp, statedb, header.Number(), header.Hash(), tx, usedGas, vmenv)
 }
 
@@ -609,7 +643,18 @@ func (p *StateProcessor) StateAtTransaction(block *types.Block, txIndex int, ree
 		}
 		// Ensure any modifications are committed to the state
 		// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
-		statedb.Finalise(vmenv.ChainConfig().IsEIP158(block.Number()))
+		if err := statedb.Finalise(vmenv.ChainConfig().IsEIP158(block.Number())); err != nil {
+			return nil, vm.BlockContext{}, nil, err
+		}
 	}
 	return nil, vm.BlockContext{}, nil, fmt.Errorf("transaction index %d out of range for block %#x", txIndex, block.Hash())
+}
+
+func prepareApplyETX(statedb *state.StateDB, tx *types.Transaction) *big.Int {
+	prevZeroBal, _ := statedb.GetBalance(common.ZeroAddr)    // Get current zero address balance
+	fee := big.NewInt(0).Add(tx.GasFeeCap(), tx.GasTipCap()) // Add gas price cap to miner tip cap
+	fee.Mul(fee, big.NewInt(int64(tx.Gas())))                // Multiply gas price by gas limit (may need to check for int64 overflow)
+	total := big.NewInt(0).Add(fee, tx.Value())              // Add gas fee to value
+	statedb.SetBalance(common.ZeroAddr, total)               // Use zero address at temp placeholder and set it to gas fee plus value
+	return prevZeroBal
 }
