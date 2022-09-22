@@ -29,7 +29,7 @@ import (
 	"github.com/dominant-strategies/go-quai/accounts"
 	"github.com/dominant-strategies/go-quai/accounts/external"
 	"github.com/dominant-strategies/go-quai/accounts/keystore"
-	"github.com/dominant-strategies/go-quai/accounts/scwallet"
+
 	"github.com/dominant-strategies/go-quai/accounts/usbwallet"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/crypto"
@@ -97,9 +97,6 @@ type Config struct {
 
 	// USB enables hardware wallet monitoring and connectivity.
 	USB bool `toml:",omitempty"`
-
-	// SmartCardDaemonPath is the path to the smartcard daemon's socket
-	SmartCardDaemonPath string `toml:",omitempty"`
 
 	// IPCPath is the requested location to place the IPC endpoint. If the path is
 	// a simple file name, it is placed inside the data directory (or on the root
@@ -492,14 +489,6 @@ func makeAccountManager(conf *Config) (*accounts.Manager, string, error) {
 				log.Warn(fmt.Sprintf("Failed to start WebUSB Trezor hub, disabling: %v", err))
 			} else {
 				backends = append(backends, trezorhub)
-			}
-		}
-		if len(conf.SmartCardDaemonPath) > 0 {
-			// Start a smart card hub
-			if schub, err := scwallet.NewHub(conf.SmartCardDaemonPath, scwallet.Scheme, keydir); err != nil {
-				log.Warn(fmt.Sprintf("Failed to start smart card hub, disabling: %v", err))
-			} else {
-				backends = append(backends, schub)
 			}
 		}
 	}

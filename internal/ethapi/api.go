@@ -28,7 +28,6 @@ import (
 	"github.com/dominant-strategies/go-quai/accounts"
 	"github.com/dominant-strategies/go-quai/accounts/abi"
 	"github.com/dominant-strategies/go-quai/accounts/keystore"
-	"github.com/dominant-strategies/go-quai/accounts/scwallet"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/common/math"
@@ -43,7 +42,6 @@ import (
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/dominant-strategies/go-quai/rpc"
-	"github.com/tyler-smith/go-bip39"
 )
 
 // PublicEthereumAPI provides an API to access Ethereum related information.
@@ -543,54 +541,6 @@ func (s *PrivateAccountAPI) EcRecover(ctx context.Context, data, sig hexutil.Byt
 		return common.Address{}, err
 	}
 	return crypto.PubkeyToAddress(*rpk), nil
-}
-
-// SignAndSendTransaction was renamed to SendTransaction. This method is deprecated
-// and will be removed in the future. It primary goal is to give clients time to update.
-func (s *PrivateAccountAPI) SignAndSendTransaction(ctx context.Context, args TransactionArgs, passwd string) (common.Hash, error) {
-	return s.SendTransaction(ctx, args, passwd)
-}
-
-// InitializeWallet initializes a new wallet at the provided URL, by generating and returning a new private key.
-func (s *PrivateAccountAPI) InitializeWallet(ctx context.Context, url string) (string, error) {
-	wallet, err := s.am.Wallet(url)
-	if err != nil {
-		return "", err
-	}
-
-	entropy, err := bip39.NewEntropy(256)
-	if err != nil {
-		return "", err
-	}
-
-	mnemonic, err := bip39.NewMnemonic(entropy)
-	if err != nil {
-		return "", err
-	}
-
-	seed := bip39.NewSeed(mnemonic, "")
-
-	switch wallet := wallet.(type) {
-	case *scwallet.Wallet:
-		return mnemonic, wallet.Initialize(seed)
-	default:
-		return "", fmt.Errorf("specified wallet does not support initialization")
-	}
-}
-
-// Unpair deletes a pairing between wallet and geth.
-func (s *PrivateAccountAPI) Unpair(ctx context.Context, url string, pin string) error {
-	wallet, err := s.am.Wallet(url)
-	if err != nil {
-		return err
-	}
-
-	switch wallet := wallet.(type) {
-	case *scwallet.Wallet:
-		return wallet.Unpair([]byte(pin))
-	default:
-		return fmt.Errorf("specified wallet does not support pairing")
-	}
 }
 
 // PublicBlockChainAPI provides an API to access the Ethereum blockchain.
