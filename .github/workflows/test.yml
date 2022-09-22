@@ -1,9 +1,9 @@
 name: Lint, Build and Test
 on:
   push:
-    branches: [ main, dev ]
+    branches: [ main, dev, get-fork/dev ]
   pull_request:
-    branches: [ main, dev ]
+    branches: [ main, dev, geth-fork/dev ]
     types: [ opened, reopened ]
 jobs:
   test:
