@@ -1081,7 +1081,7 @@ func (s *StateDB) PrepareAccessList(sender common.Address, dst *common.Address, 
 
 // AddAddressToAccessList adds the given address to the access list
 func (s *StateDB) AddAddressToAccessList(addr common.Address) {
-	if addr.IsInContext() && s.accessList.AddAddress(addr) {
+	if s.accessList.AddAddress(addr) {
 		s.journal.append(accessListAddAccountChange{&addr})
 	}
 }
