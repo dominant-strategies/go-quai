@@ -73,13 +73,17 @@ func VerifyDAOHeaderExtraData(config *params.ChainConfig, header *types.Header) 
 // contract.
 func ApplyDAOHardFork(statedb *state.StateDB) {
 	// Retrieve the contract to refund balances into
-	if !statedb.Exist(params.DAORefundContract) {
+	if exist, err := statedb.Exist(params.DAORefundContract); !exist && err == nil {
 		statedb.CreateAccount(params.DAORefundContract)
 	}
 
 	// Move every DAO account and extra-balance account funds into the refund contract
 	for _, addr := range params.DAODrainList() {
-		statedb.AddBalance(params.DAORefundContract, statedb.GetBalance(addr))
+		balance, err := statedb.GetBalance(addr)
+		if err != nil {
+			return
+		}
+		statedb.AddBalance(params.DAORefundContract, balance)
 		statedb.SetBalance(addr, new(big.Int))
 	}
 }

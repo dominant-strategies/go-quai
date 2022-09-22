@@ -117,7 +117,11 @@ func (b *BlockGen) AddTxWithChain(hc *HeaderChain, tx *types.Transaction) {
 
 // GetBalance returns the balance of the given address at the generated block.
 func (b *BlockGen) GetBalance(addr common.Address) *big.Int {
-	return b.statedb.GetBalance(addr)
+	balance, err := b.statedb.GetBalance(addr)
+	if err != nil {
+		return nil
+	}
+	return balance
 }
 
 // AddUncheckedTx forcefully adds a transaction to the block without any
@@ -151,10 +155,18 @@ func (b *BlockGen) AddUncheckedReceipt(receipt *types.Receipt) {
 // TxNonce returns the next valid transaction nonce for the
 // account at addr. It panics if the account does not exist.
 func (b *BlockGen) TxNonce(addr common.Address) uint64 {
-	if !b.statedb.Exist(addr) {
+	exist, err := b.statedb.Exist(addr)
+	if err != nil {
+		panic(err.Error())
+	}
+	if !exist {
 		panic("account does not exist")
 	}
-	return b.statedb.GetNonce(addr)
+	nonce, err := b.statedb.GetNonce(addr)
+	if err != nil {
+		return 0
+	}
+	return nonce
 }
 
 // AddUncle adds an uncle header to the generated block.
@@ -227,7 +239,10 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		}
 		if b.engine != nil {
 			// Finalize and seal the block
-			block, _ := b.engine.FinalizeAndAssemble(chainreader, b.header, statedb, b.txs, b.uncles, b.etxs, b.subManifest, b.receipts)
+			block, err := b.engine.FinalizeAndAssemble(chainreader, b.header, statedb, b.txs, b.uncles, b.etxs, b.subManifest, b.receipts)
+			if err != nil {
+				panic(err.Error())
+			}
 
 			// Write state changes to db
 			root, err := statedb.Commit(config.IsEIP158(b.header.Number()))
@@ -271,7 +286,11 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 
 	// Make new header
 	header := types.EmptyHeader()
-	header.SetRoot(state.IntermediateRoot(chain.Config().IsEIP158(parent.Number())))
+	intermediateRoot, err := state.IntermediateRoot(chain.Config().IsEIP158(parent.Number()))
+	if err != nil {
+		panic(err.Error())
+	}
+	header.SetRoot(intermediateRoot)
 	header.SetParentHash(parent.Hash())
 	header.SetCoinbase(parent.Coinbase())
 	header.SetDifficulty(engine.CalcDifficulty(chain, diffheader))
