@@ -79,7 +79,7 @@ type Engine interface {
 
 	// Prepare initializes the consensus fields of a block header according to the
 	// rules of a particular engine. The changes are executed inline.
-	Prepare(chain ChainHeaderReader, header *types.Header) error
+	Prepare(chain ChainHeaderReader, header *types.Header, parent *types.Header) error
 
 	// Finalize runs any post-transaction state modifications (e.g. block rewards)
 	// but does not assemble the block.
@@ -109,7 +109,7 @@ type Engine interface {
 
 	// CalcDifficulty is the difficulty adjustment algorithm. It returns the difficulty
 	// that a new block should have.
-	CalcDifficulty(chain ChainHeaderReader, time uint64, parent *types.Header) *big.Int
+	CalcDifficulty(chain ChainHeaderReader, parent *types.Header) *big.Int
 
 	// IsCoincident returns true if this block satisfies the difficulty order
 	// of a dominant chain. If this node does not have a dominant chain (i.e.
