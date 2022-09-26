@@ -21,6 +21,7 @@ import (
 	"log"
 	"math/big"
 	"sync"
+	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
@@ -184,7 +185,7 @@ func (b *BlockGen) OffsetTime(seconds int64) {
 		panic("block time out of range")
 	}
 	chainreader := &fakeChainReader{config: b.config}
-	b.header.SetDifficulty(b.engine.CalcDifficulty(chainreader, b.header.Time(), b.parent.Header()))
+	b.header.SetDifficulty(b.engine.CalcDifficulty(chainreader, b.parent.Header()))
 }
 
 // GenerateChain creates a chain of n blocks. The first block's
@@ -274,7 +275,7 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 	header.SetRoot(state.IntermediateRoot(chain.Config().IsEIP158(parent.Number())))
 	header.SetParentHash(parent.Hash())
 	header.SetCoinbase(parent.Coinbase())
-	header.SetDifficulty(engine.CalcDifficulty(chain, time, diffheader))
+	header.SetDifficulty(engine.CalcDifficulty(chain, diffheader))
 	header.SetGasLimit(parent.GasLimit())
 	header.SetNumber(new(big.Int).Add(parent.Number(), common.Big1))
 	header.SetTime(time)
@@ -344,9 +345,9 @@ func GenerateKnot(config *params.ChainConfig, parent *types.Block, engine consen
 		}
 	}
 
-	genblock := func(i int, parent *types.Block, genesis *types.Header, primedb *state.StateDB, regiondb *state.StateDB, zonedb *state.StateDB, location common.Location, resultCh chan *types.Header, stopCh chan struct{}) {
+	genblock := func(i int, parent *types.Block, parentOfParent *types.Header, genesis *types.Header, primedb *state.StateDB, regiondb *state.StateDB, zonedb *state.StateDB, location common.Location, resultCh chan *types.Header, stopCh chan struct{}) {
 		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: primedb, config: config, engine: engine}
-		b.header = makeKnotHeader(chainreader, parent, genesis, primedb, b.engine, location, i)
+		b.header = makeKnotHeader(chainreader, parent, parentOfParent, genesis, primedb, b.engine, location, i)
 
 		// Execute any user modifications to the block
 		if gen != nil {
@@ -429,7 +430,11 @@ func GenerateKnot(config *params.ChainConfig, parent *types.Block, engine consen
 		var wg sync.WaitGroup
 		wg.Add(1)
 		go resultLoop(i, knot, resultCh, exitCh, &wg)
-		genblock(i, parent, genesis, primedb, regiondb, zonedb, locations[i], resultCh, exitCh)
+		if i != 0 {
+			genblock(i, parent, blocks[i-1].Header(), genesis, primedb, regiondb, zonedb, locations[i], resultCh, exitCh)
+		} else {
+			genblock(i, parent, types.EmptyHeader(), genesis, primedb, regiondb, zonedb, locations[i], resultCh, exitCh)
+		}
 		wg.Wait()
 		blocks[i] = knot.block
 		parent = knot.block
@@ -437,12 +442,12 @@ func GenerateKnot(config *params.ChainConfig, parent *types.Block, engine consen
 	return blocks, receipts
 }
 
-func makeKnotHeader(chain consensus.ChainReader, parent *types.Block, genesis *types.Header, state *state.StateDB, engine consensus.Engine, location common.Location, i int) *types.Header {
-	var time uint64
+func makeKnotHeader(chain consensus.ChainReader, parent *types.Block, parentOfParent *types.Header, genesis *types.Header, state *state.StateDB, engine consensus.Engine, location common.Location, i int) *types.Header {
+	var timestamp uint64
 	if parent.Time() == 0 {
-		time = 10
+		timestamp = uint64(time.Now().Unix())
 	} else {
-		time = parent.Time() + 10 // block time is fixed at 10 seconds
+		timestamp = parent.Time() + 10 // block time is fixed at 10 seconds
 	}
 
 	baseFee := misc.CalcBaseFee(chain.Config(), parent.Header())
@@ -460,19 +465,25 @@ func makeKnotHeader(chain consensus.ChainReader, parent *types.Block, genesis *t
 	}
 
 	header.SetLocation(location)
-	header.SetTime(time)
+	header.SetTime(timestamp)
 
 	parentHeader := parent.Header()
 
 	header.SetParentHash(parent.Hash())
 	header.SetCoinbase(parent.Coinbase())
-	header.SetDifficulty(engine.CalcDifficultyAtIndex(chain, time, parentHeader, common.NodeLocation.Context()))
+
+	// PRIME difficulty
+	header.SetDifficulty(engine.CalcDifficultyAtIndex(chain, genesis.Hash(), parentHeader, parentOfParent, common.NodeLocation.Context()))
+	// REGION difficulty
 	if i%common.HierarchyDepth == 0 {
-		header.SetDifficulty(engine.CalcDifficultyAtIndex(chain, time, genesis, common.NodeLocation.Context()+1), common.NodeLocation.Context()+1)
+		header.SetDifficulty(engine.CalcDifficultyAtIndex(chain, genesis.Hash(), genesis, parentHeader, common.NodeLocation.Context()+1), common.NodeLocation.Context()+1)
+	} else if i%common.HierarchyDepth == 1 {
+		header.SetDifficulty(engine.CalcDifficultyAtIndex(chain, genesis.Hash(), parentHeader, genesis, common.NodeLocation.Context()+1), common.NodeLocation.Context()+1)
 	} else {
-		header.SetDifficulty(engine.CalcDifficultyAtIndex(chain, time, parentHeader, common.NodeLocation.Context()+1), common.NodeLocation.Context()+1)
+		header.SetDifficulty(engine.CalcDifficultyAtIndex(chain, genesis.Hash(), parentHeader, parentOfParent, common.NodeLocation.Context()+1), common.NodeLocation.Context()+1)
 	}
-	header.SetDifficulty(engine.CalcDifficultyAtIndex(chain, time, genesis, common.NodeLocation.Context()+2), common.NodeLocation.Context()+2)
+	// ZONE difficulty
+	header.SetDifficulty(engine.CalcDifficultyAtIndex(chain, genesis.Hash(), genesis, parentOfParent, common.NodeLocation.Context()+2), common.NodeLocation.Context()+2)
 
 	header.SetNumber(new(big.Int).Add(parent.Number(), common.Big1))
 
