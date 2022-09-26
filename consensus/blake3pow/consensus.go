@@ -238,11 +238,13 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 			return consensus.ErrFutureBlock
 		}
 	}
-	if header.Time() <= parent.Time() {
+
+	if header.Time() < parent.Time() {
 		return errOlderBlockTime
 	}
+
 	// Verify the block's difficulty based on its timestamp and parent's difficulty
-	expected := blake3pow.CalcDifficulty(chain, header.Time(), parent)
+	expected := blake3pow.CalcDifficulty(chain, parent)
 
 	if expected.Cmp(header.Difficulty()) != 0 {
 		return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty(), expected)
@@ -284,31 +286,26 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 // CalcDifficulty is the difficulty adjustment algorithm. It returns
 // the difficulty that a new block should have when created at time
 // given the parent block's time and difficulty.
-func (blake3pow *Blake3pow) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, parent *types.Header) *big.Int {
-	return CalcDifficulty(chain.Config(), time, parent)
-}
-
-// CalcDifficultyAtIndex is the difficulty adjustment algorithm. It returns
-// the difficulty that a new block should have when created at time
-// given the parent block's time and difficulty at a given context.
-func (blake3pow *Blake3pow) CalcDifficultyAtIndex(chain consensus.ChainHeaderReader, time uint64, parent *types.Header, context int) *big.Int {
-	return CalcDifficultyAtIndex(chain.Config(), time, parent, context)
-}
-
-// CalcDifficulty is the difficulty adjustment algorithm. It returns
-// the difficulty that a new block should have when created at time
-// given the parent block's time and difficulty.
 // NOTE: This is essentially the Ethereum DAA, without a 'difficulty bomb'
-func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Header) *big.Int {
+func (blake3pow *Blake3pow) CalcDifficulty(chain consensus.ChainHeaderReader, parent *types.Header) *big.Int {
 	nodeCtx := common.NodeLocation.Context()
+
 	// https://github.com/ethereum/EIPs/issues/100.
 	// algorithm:
 	// diff = (parent_diff +
 	//         (parent_diff / 2048 * max((2 if len(parent.uncles) else 1) - ((timestamp - parent.timestamp) // 9), -99))
 	//        ) + 2^(periodCount - 2)
 
+	time := parent.Time()
+
+	if parent.Hash() == chain.Config().GenesisHash {
+		return parent.Difficulty()
+	}
+
+	parentOfParent := chain.GetHeaderByHash(parent.ParentHash())
+
 	bigTime := new(big.Int).SetUint64(time)
-	bigParentTime := new(big.Int).SetUint64(parent.Time())
+	bigParentTime := new(big.Int).SetUint64(parentOfParent.Time())
 
 	// holds intermediate values to make the algo easier to read & audit
 	x := new(big.Int)
@@ -341,17 +338,30 @@ func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Heade
 
 // CalcDifficultyAtIndex is the difficulty adjustment algorithm. It returns
 // the difficulty that a new block should have when created at time
+// given the parent block's time and difficulty at a given context.
+func (blake3pow *Blake3pow) CalcDifficultyAtIndex(chain consensus.ChainHeaderReader, genesis common.Hash, parent, parentOfParent *types.Header, context int) *big.Int {
+	return CalcDifficultyAtIndex(chain.Config(), genesis, parent, parentOfParent, context)
+}
+
+// CalcDifficultyAtIndex is the difficulty adjustment algorithm. It returns
+// the difficulty that a new block should have when created at time
 // given the parent block's time and difficulty.
 // NOTE: This is essentially the Ethereum DAA, without a 'difficulty bomb'
-func CalcDifficultyAtIndex(config *params.ChainConfig, time uint64, parent *types.Header, context int) *big.Int {
+func CalcDifficultyAtIndex(config *params.ChainConfig, genesis common.Hash, parent *types.Header, parentOfParent *types.Header, context int) *big.Int {
 	// https://github.com/ethereum/EIPs/issues/100.
 	// algorithm:
 	// diff = (parent_diff +
 	//         (parent_diff / 2048 * max((2 if len(parent.uncles) else 1) - ((timestamp - parent.timestamp) // 9), -99))
 	//        ) + 2^(periodCount - 2)
 
+	// time is set to the parent time and taking the difference between the parent and its parent time
+	time := parent.Time()
+	if parent.Hash() == genesis {
+		return parent.Difficulty(context)
+	}
+
 	bigTime := new(big.Int).SetUint64(time)
-	bigParentTime := new(big.Int).SetUint64(parent.Time())
+	bigParentTime := new(big.Int).SetUint64(parentOfParent.Time())
 
 	// holds intermediate values to make the algo easier to read & audit
 	x := new(big.Int)
@@ -426,12 +436,8 @@ func (blake3pow *Blake3pow) verifySeal(chain consensus.ChainHeaderReader, header
 
 // Prepare implements consensus.Engine, initializing the difficulty field of a
 // header to conform to the blake3pow protocol. The changes are done inline.
-func (blake3pow *Blake3pow) Prepare(chain consensus.ChainHeaderReader, header *types.Header) error {
-	parent := chain.GetHeader(header.ParentHash(), header.Number().Uint64()-1)
-	if parent == nil {
-		return consensus.ErrUnknownAncestor
-	}
-	header.SetDifficulty(blake3pow.CalcDifficulty(chain, header.Time(), parent))
+func (blake3pow *Blake3pow) Prepare(chain consensus.ChainHeaderReader, header *types.Header, parent *types.Header) error {
+	header.SetDifficulty(blake3pow.CalcDifficulty(chain, parent))
 	return nil
 }
 
