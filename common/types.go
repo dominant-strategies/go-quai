@@ -199,6 +199,38 @@ func (h UnprefixedHash) MarshalText() ([]byte, error) {
 
 /////////// Address
 
+type addrPrefixRange struct {
+	lo uint8
+	hi uint8
+}
+
+func NewRange(l, h uint8) addrPrefixRange {
+	return addrPrefixRange{
+		lo: l,
+		hi: h,
+	}
+}
+
+var (
+	locationToPrefixRange = make(map[string]addrPrefixRange)
+)
+
+func init() {
+	locationToPrefixRange["prime"] = NewRange(0, 9)
+	locationToPrefixRange["region-0"] = NewRange(10, 19)
+	locationToPrefixRange["zone-0-0"] = NewRange(20, 29)
+	locationToPrefixRange["zone-0-1"] = NewRange(30, 39)
+	locationToPrefixRange["zone-0-2"] = NewRange(40, 49)
+	locationToPrefixRange["region-1"] = NewRange(50, 59)
+	locationToPrefixRange["zone-1-0"] = NewRange(60, 69)
+	locationToPrefixRange["zone-1-1"] = NewRange(70, 79)
+	locationToPrefixRange["zone-1-2"] = NewRange(80, 89)
+	locationToPrefixRange["region-2"] = NewRange(90, 99)
+	locationToPrefixRange["zone-2-0"] = NewRange(100, 109)
+	locationToPrefixRange["zone-2-1"] = NewRange(110, 119)
+	locationToPrefixRange["zone-2-2"] = NewRange(120, 129)
+}
+
 // Address represents the 20 byte address of an Ethereum account.
 type Address [AddressLength]byte
 
@@ -339,6 +371,11 @@ func (a *Address) Scan(src interface{}) error {
 // Value implements valuer for database/sql.
 func (a Address) Value() (driver.Value, error) {
 	return a[:], nil
+}
+
+// Checks if an address is a valid account in our node's sharded address space
+func (a Address) IsInChainScope() bool {
+	return NodeLocation.ContainsAddress(a)
 }
 
 // UnprefixedAddress allows marshaling an Address without 0x prefix.
@@ -556,4 +593,14 @@ func (loc Location) CommonDom(cmp Location) Location {
 		}
 	}
 	return common
+}
+
+func (l Location) ContainsAddress(a Address) bool {
+	prefix := a[0]
+	prefixRange, ok := locationToPrefixRange[l.Name()]
+	if !ok {
+		log.Fatal("unable to get address prefix range for location")
+	}
+	// Ranges are fully inclusive
+	return prefix >= prefixRange.lo && prefix <= prefixRange.hi
 }
