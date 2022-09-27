@@ -27,6 +27,7 @@ import (
 	"math/big"
 	"math/rand"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/dominant-strategies/go-quai/common/hexutil"
@@ -198,6 +199,38 @@ func (h UnprefixedHash) MarshalText() ([]byte, error) {
 
 /////////// Address
 
+type addrPrefixRange struct {
+	lo uint8
+	hi uint8
+}
+
+func NewRange(l, h uint8) addrPrefixRange {
+	return addrPrefixRange{
+		lo: l,
+		hi: h,
+	}
+}
+
+var (
+	locationToPrefixRange = make(map[string]addrPrefixRange)
+)
+
+func init() {
+	locationToPrefixRange["prime"] = NewRange(0, 9)
+	locationToPrefixRange["region-0"] = NewRange(10, 19)
+	locationToPrefixRange["zone-0-0"] = NewRange(20, 29)
+	locationToPrefixRange["zone-0-1"] = NewRange(30, 39)
+	locationToPrefixRange["zone-0-2"] = NewRange(40, 49)
+	locationToPrefixRange["region-1"] = NewRange(50, 59)
+	locationToPrefixRange["zone-1-0"] = NewRange(60, 69)
+	locationToPrefixRange["zone-1-1"] = NewRange(70, 79)
+	locationToPrefixRange["zone-1-2"] = NewRange(80, 89)
+	locationToPrefixRange["region-2"] = NewRange(90, 99)
+	locationToPrefixRange["zone-2-0"] = NewRange(100, 109)
+	locationToPrefixRange["zone-2-1"] = NewRange(110, 119)
+	locationToPrefixRange["zone-2-2"] = NewRange(120, 129)
+}
+
 // Address represents the 20 byte address of an Ethereum account.
 type Address [AddressLength]byte
 
@@ -340,6 +373,11 @@ func (a Address) Value() (driver.Value, error) {
 	return a[:], nil
 }
 
+// Checks if an address is a valid account in our node's sharded address space
+func (a Address) IsInChainScope() bool {
+	return NodeLocation.ContainsAddress(a)
+}
+
 // UnprefixedAddress allows marshaling an Address without 0x prefix.
 type UnprefixedAddress Address
 
@@ -477,4 +515,30 @@ func (l Location) SubLocation() int {
 	default:
 		return -1
 	}
+}
+
+func (l Location) Name() string {
+	regionNum := strconv.Itoa(l.Region())
+	zoneNum := strconv.Itoa(l.Zone())
+	switch l.Context() {
+	case PRIME_CTX:
+		return "prime"
+	case REGION_CTX:
+		return "region-" + regionNum
+	case ZONE_CTX:
+		return "zone-" + regionNum + "-" + zoneNum
+	default:
+		log.Println("cannot name invalid location")
+		return "invalid-location"
+	}
+}
+
+func (l Location) ContainsAddress(a Address) bool {
+	prefix := a[0]
+	prefixRange, ok := locationToPrefixRange[l.Name()]
+	if !ok {
+		log.Fatal("unable to get address prefix range for location")
+	}
+	// Ranges are fully inclusive
+	return prefix >= prefixRange.lo && prefix <= prefixRange.hi
 }
