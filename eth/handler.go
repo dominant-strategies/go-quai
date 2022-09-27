@@ -261,10 +261,10 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 
 // removePeer requests disconnection of a peer.
 func (h *handler) removePeer(id string) {
-	peer := h.peers.peer(id)
-	if peer != nil {
-		peer.Peer.Disconnect(p2p.DiscUselessPeer)
-	}
+	// peer := h.peers.peer(id)
+	// if peer != nil {
+	// 	peer.Peer.Disconnect(p2p.DiscUselessPeer)
+	// }
 }
 
 // unregisterPeer removes a peer from the downloader, fetchers and main peer set.
