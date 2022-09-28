@@ -524,6 +524,10 @@ func (s *Service) report(conn *connWrapper) error {
 	return nil
 }
 
+type latencyReport struct {
+	Latency int `json:"latency"`
+}
+
 // reportLatency sends a ping request to the server, measures the RTT time and
 // finally sends a latency update.
 func (s *Service) reportLatency(conn *connWrapper) error {
@@ -547,18 +551,24 @@ func (s *Service) reportLatency(conn *connWrapper) error {
 		// Ping timeout, abort
 		return errors.New("ping timed out")
 	}
-	latency := strconv.Itoa(int((time.Since(start) / time.Duration(2)).Nanoseconds() / 1000000))
+
+	latency := int((time.Since(start) / time.Duration(2)).Nanoseconds() / 1000000)
 
 	// Send back the measured latency
-	log.Trace("Sending measured latency to ethstats", "latency", latency)
+	log.Trace("Sending measured latency to ethstats", "latency", strconv.Itoa(latency))
 
-	stats := map[string][]interface{}{
-		"emit": {"latency", map[string]string{
-			"id":      s.node,
-			"latency": latency,
-		}},
+	latencyReport := map[string]interface{}{
+		"id": s.node,
+		"latency": &latencyReport{
+			Latency: latency,
+		},
 	}
-	return conn.WriteJSON(stats)
+
+	report := map[string][]interface{}{
+		"emit": {"latency", latencyReport},
+	}
+
+	return conn.WriteJSON(report)
 }
 
 // blockStats is the information to report about individual blocks.
