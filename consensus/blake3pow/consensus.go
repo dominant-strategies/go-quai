@@ -333,7 +333,7 @@ func (blake3pow *Blake3pow) CalcDifficulty(chain consensus.ChainHeaderReader, pa
 		x.Set(params.MinimumDifficulty[nodeCtx])
 	}
 
-	return x
+	return parent.Difficulty()
 }
 
 // CalcDifficultyAtIndex is the difficulty adjustment algorithm. It returns
@@ -389,7 +389,7 @@ func CalcDifficultyAtIndex(config *params.ChainConfig, genesis common.Hash, pare
 		x.Set(params.MinimumDifficulty[context])
 	}
 
-	return x
+	return parent.Difficulty(context)
 }
 
 func (blake3pow *Blake3pow) HasCoincidentDifficulty(header *types.Header) bool {

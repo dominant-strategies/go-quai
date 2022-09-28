@@ -16,8 +16,8 @@ import (
 func main() {
 	var (
 		testdb  = rawdb.NewMemoryDatabase()
-		genesis = core.DefaultGenesisBlock().MustCommit(testdb)
-		fn      = "mainnet_knot.rlp"
+		genesis = core.DefaultRopstenGenesisBlock().MustCommit(testdb)
+		fn      = "ropsten_knot.rlp"
 	)
 
 	blake3Config := blake3pow.Config{
