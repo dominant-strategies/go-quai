@@ -21,6 +21,7 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/trie"
+	lru "github.com/hashicorp/golang-lru"
 )
 
 const (
@@ -46,6 +47,9 @@ const (
 
 	// staleThreshold is the maximum depth of the acceptable stale block.
 	staleThreshold = 7
+
+	// pendingBlockBodyLimit is maximum number of pending block bodies to be kept in cache.
+	pendingBlockBodyLimit = 1024
 )
 
 // environment is the worker's current environment and holds all
@@ -194,6 +198,8 @@ type worker struct {
 	pendingMu    sync.RWMutex
 	pendingTasks map[common.Hash]*task
 
+	pendingBlockBody *lru.Cache
+
 	snapshotMu       sync.RWMutex // The lock used to protect the snapshots below
 	snapshotBlock    *types.Block
 	snapshotReceipts types.Receipts
@@ -240,6 +246,10 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 		resubmitIntervalCh: make(chan time.Duration),
 		resubmitAdjustCh:   make(chan *intervalAdjust, resubmitAdjustChanSize),
 	}
+
+	phBodyCache, _ := lru.New(pendingBlockBodyLimit)
+	worker.pendingBlockBody = phBodyCache
+
 	// Subscribe NewTxsEvent for tx pool
 	worker.txsSub = txPool.SubscribeNewTxsEvent(worker.txsCh)
 	// Subscribe events for blockchain
@@ -925,8 +935,9 @@ func (w *worker) FinalizeAssembleAndBroadcast(chain consensus.ChainHeaderReader,
 	if chain.CurrentHeader().Hash() == block.ParentHash() {
 		w.headerRootsFeed.Send(types.HeaderRoots{StateRoot: block.Root(), TxsRoot: block.TxHash(), ReceiptsRoot: block.ReceiptHash()})
 	}
-	// store the pending block body details for the given stateroot
-	rawdb.WritePendingBlockBody(w.workerDb, block.Root(), block.Body())
+
+	w.AddPendingBlockBody(block.Root(), block.Body())
+
 	return block, nil
 }
 
@@ -962,6 +973,22 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 	if update {
 		w.updateSnapshot(env)
 	}
+	return nil
+}
+
+// AddPendingBlockBody adds an entry in the lru cache for the given block root
+// maps it to body.
+func (w *worker) AddPendingBlockBody(root common.Hash, body *types.Body) {
+	w.pendingBlockBody.ContainsOrAdd(root, body)
+}
+
+// GetPendingBlockBody gets the block body associated with the given root hash.
+func (w *worker) GetPendingBlockBody(root common.Hash) *types.Body {
+	body, ok := w.pendingBlockBody.Get(root)
+	if ok {
+		return body.(*types.Body)
+	}
+	log.Warn("pending block body not found for root hash: ", root)
 	return nil
 }
 

@@ -662,15 +662,15 @@ func (sl *Slice) init(genesis *Genesis) error {
 			if block != nil {
 				location := block.Header().Location()
 				if nodeCtx == common.PRIME_CTX {
-					rawdb.WritePendingBlockBody(sl.sliceDb, block.Root(), block.Body())
+					rawdb.WriteBody(sl.sliceDb, block.Hash(), block.NumberU64(), block.Body())
 					_, err := sl.Append(block.Header(), types.EmptyHeader(), genesisHash, block.Difficulty(), false, false, nil)
 					if err != nil {
 						log.Warn("Failed to append block", "hash:", block.Hash(), "Number:", block.Number(), "Location:", block.Header().Location(), "error:", err)
 					}
 				} else if location.Region() == common.NodeLocation.Region() && len(common.NodeLocation) == common.REGION_CTX {
-					rawdb.WritePendingBlockBody(sl.sliceDb, block.Root(), block.Body())
+					rawdb.WriteBody(sl.sliceDb, block.Hash(), block.NumberU64(), block.Body())
 				} else if bytes.Equal(location, common.NodeLocation) {
-					rawdb.WritePendingBlockBody(sl.sliceDb, block.Root(), block.Body())
+					rawdb.WriteBody(sl.sliceDb, block.Hash(), block.NumberU64(), block.Body())
 				}
 			}
 		}
@@ -703,29 +703,85 @@ func (sl *Slice) ConstructLocalBlock(header *types.Header) (*types.Block, error)
 		// in the subordinate manifest.
 		return types.NewBlockWithHeader(header), nil
 	}
-	pendingBlockBody := sl.PendingBlockBody(header.Root())
-	if pendingBlockBody == nil {
-		return nil, ErrBodyNotFound
+	var block *types.Block
+	// check if the header has empty uncle and tx root
+	if header.EmptyBody() {
+		// construct block with empty transactions and uncles
+		block = types.NewBlockWithHeader(header)
+	} else {
+		pendingBlockBody := rawdb.ReadBody(sl.sliceDb, header.Hash(), header.NumberU64())
+		if pendingBlockBody != nil {
+			// Load uncles because they are not included in the block response.
+			txs := make([]*types.Transaction, len(pendingBlockBody.Transactions))
+			for i, tx := range pendingBlockBody.Transactions {
+				txs[i] = tx
+			}
+
+			uncles := make([]*types.Header, len(pendingBlockBody.Uncles))
+			for i, uncle := range pendingBlockBody.Uncles {
+				uncles[i] = uncle
+				log.Debug("Pending Block uncle", "hash: ", uncle.Hash())
+			}
+
+			etxs := make([]*types.Transaction, len(pendingBlockBody.ExtTransactions))
+			for i, etx := range pendingBlockBody.ExtTransactions {
+				etxs[i] = etx
+			}
+
+			subBlockHashes := make(types.BlockManifest, len(pendingBlockBody.SubManifest))
+			for i, blockHash := range pendingBlockBody.SubManifest {
+				subBlockHashes[i] = blockHash
+			}
+
+			block = types.NewBlockWithHeader(header).WithBody(txs, uncles, etxs, subBlockHashes)
+		} else {
+			return nil, ErrBodyNotFound
+		}
 	}
-	// Load uncles because they are not included in the block response.
-	txs := make([]*types.Transaction, len(pendingBlockBody.Transactions))
-	for i, tx := range pendingBlockBody.Transactions {
-		txs[i] = tx
+	if err := sl.validator.ValidateBody(block); err != nil {
+		return block, err
+	} else {
+		return block, nil
 	}
-	uncles := make([]*types.Header, len(pendingBlockBody.Uncles))
-	for i, uncle := range pendingBlockBody.Uncles {
-		uncles[i] = uncle
-		log.Debug("Pending Block uncle", "hash: ", uncle.Hash())
+}
+
+// constructLocalMinedBlock takes a header and construct the Block locally
+func (sl *Slice) ConstructLocalMinedBlock(header *types.Header) (*types.Block, error) {
+	var block *types.Block
+	// check if the header has empty uncle and tx root
+	if header.EmptyBody() {
+		// construct block with empty transactions and uncles
+		block = types.NewBlockWithHeader(header)
+	} else {
+		pendingBlockBody := sl.GetPendingBlockBody(header.Root())
+		if pendingBlockBody != nil {
+			// Load uncles because they are not included in the block response.
+			txs := make([]*types.Transaction, len(pendingBlockBody.Transactions))
+			for i, tx := range pendingBlockBody.Transactions {
+				txs[i] = tx
+			}
+
+			uncles := make([]*types.Header, len(pendingBlockBody.Uncles))
+			for i, uncle := range pendingBlockBody.Uncles {
+				uncles[i] = uncle
+				log.Debug("Pending Block uncle", "hash: ", uncle.Hash())
+			}
+
+			etxs := make([]*types.Transaction, len(pendingBlockBody.ExtTransactions))
+			for i, etx := range pendingBlockBody.ExtTransactions {
+				etxs[i] = etx
+			}
+
+			subBlockHashes := make(types.BlockManifest, len(pendingBlockBody.SubManifest))
+			for i, blockHash := range pendingBlockBody.SubManifest {
+				subBlockHashes[i] = blockHash
+			}
+
+			block = types.NewBlockWithHeader(header).WithBody(txs, uncles, etxs, subBlockHashes)
+		} else {
+			return nil, ErrBodyNotFound
+		}
 	}
-	etxs := make([]*types.Transaction, len(pendingBlockBody.ExtTransactions))
-	for i, etx := range pendingBlockBody.ExtTransactions {
-		etxs[i] = etx
-	}
-	subManifest := make(types.BlockManifest, len(pendingBlockBody.SubManifest))
-	for i, blockHash := range pendingBlockBody.SubManifest {
-		subManifest[i] = blockHash
-	}
-	block := types.NewBlockWithHeader(header).WithBody(txs, uncles, etxs, subManifest)
 	if err := sl.validator.ValidateBody(block); err != nil {
 		return block, err
 	} else {
@@ -756,6 +812,14 @@ func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *typ
 	combinedPendingHeader.SetBloom(header.Bloom(index), index)
 
 	return combinedPendingHeader
+}
+
+func (sl *Slice) AddPendingBlockBody(root common.Hash, body *types.Body) {
+	sl.miner.worker.AddPendingBlockBody(root, body)
+}
+
+func (sl *Slice) GetPendingBlockBody(root common.Hash) *types.Body {
+	return sl.miner.worker.GetPendingBlockBody(root)
 }
 
 // MakeDomClient creates the quaiclient for the given domurl
@@ -833,8 +897,4 @@ func (sl *Slice) Miner() *Miner { return sl.miner }
 
 func (sl *Slice) SubscribeDownloaderWait(ch chan<- bool) event.Subscription {
 	return sl.scope.Track(sl.downloaderWaitFeed.Subscribe(ch))
-}
-
-func (sl *Slice) PendingBlockBody(hash common.Hash) *types.Body {
-	return rawdb.ReadPendingBlockBody(sl.sliceDb, hash)
 }

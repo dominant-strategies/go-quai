@@ -358,8 +358,8 @@ func (b *QuaiAPIBackend) Append(header *types.Header, domPendingHeader *types.He
 	return b.eth.core.Append(header, domPendingHeader, domTerminus, td, domOrigin, reorg, newInboundEtxs)
 }
 
-func (b *QuaiAPIBackend) ConstructLocalBlock(header *types.Header) (*types.Block, error) {
-	return b.eth.core.ConstructLocalBlock(header)
+func (b *QuaiAPIBackend) ConstructLocalMinedBlock(header *types.Header) (*types.Block, error) {
+	return b.eth.core.ConstructLocalMinedBlock(header)
 }
 
 func (b *QuaiAPIBackend) InsertBlock(ctx context.Context, block *types.Block) (int, error) {
@@ -368,10 +368,6 @@ func (b *QuaiAPIBackend) InsertBlock(ctx context.Context, block *types.Block) (i
 
 func (b *QuaiAPIBackend) PendingBlock() *types.Block {
 	return b.eth.core.PendingBlock()
-}
-
-func (b *QuaiAPIBackend) PendingBlockBody(hash common.Hash) *types.Body {
-	return b.eth.core.PendingBlockBody(hash)
 }
 
 func (b *QuaiAPIBackend) SubRelayPendingHeader(pendingHeader types.PendingHeader, reorg bool, location common.Location) {

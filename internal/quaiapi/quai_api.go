@@ -590,7 +590,7 @@ func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw js
 	if err := json.Unmarshal(raw, &header); err != nil {
 		return err
 	}
-	block, err := s.b.ConstructLocalBlock(header)
+	block, err := s.b.ConstructLocalMinedBlock(header)
 	if err == core.ErrBadSubManifest && nodeCtx < common.ZONE_CTX {
 		log.Info("filling sub manifest")
 		// If we just mined this block, and we have a subordinate chain, its possible
