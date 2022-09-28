@@ -60,15 +60,15 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 	domWait := false
 	for i, block := range blocks {
 		isCoincident := c.sl.engine.IsDomCoincident(block.Header())
-
-		// Write the block body to the db.
-		rawdb.WritePendingBlockBody(c.sl.sliceDb, block.Header().Root(), block.Body())
+		// Write the block body to the CandidateBody database.
+		rawdb.WriteCandidateBody(c.sl.sliceDb, block.Hash(), block.Body())
 
 		if !isCoincident && !domWait {
 			newPendingEtxs, err := c.sl.Append(block.Header(), types.EmptyHeader(), common.Hash{}, big.NewInt(0), false, true, nil)
 			if err != nil {
 				if err == consensus.ErrFutureBlock ||
 					err.Error() == ErrBodyNotFound.Error() ||
+					err.Error() == consensus.ErrPrunedAncestor.Error() ||
 					err.Error() == consensus.ErrUnknownAncestor.Error() ||
 					err.Error() == ErrSubNotSyncedToDom.Error() ||
 					err.Error() == ErrDomClientNotUp.Error() {
@@ -205,8 +205,8 @@ func (c *Core) Append(header *types.Header, domPendingHeader *types.Header, domT
 }
 
 // ConstructLocalBlock takes a header and construct the Block locally
-func (c *Core) ConstructLocalBlock(header *types.Header) (*types.Block, error) {
-	return c.sl.ConstructLocalBlock(header)
+func (c *Core) ConstructLocalMinedBlock(header *types.Header) (*types.Block, error) {
+	return c.sl.ConstructLocalMinedBlock(header)
 }
 
 func (c *Core) SubRelayPendingHeader(slPendingHeader types.PendingHeader, reorg bool, location common.Location) {
@@ -500,10 +500,6 @@ func (c *Core) Pending() (*types.Block, *state.StateDB) {
 // change between multiple method calls
 func (c *Core) PendingBlock() *types.Block {
 	return c.sl.miner.PendingBlock()
-}
-
-func (c *Core) PendingBlockBody(hash common.Hash) *types.Body {
-	return c.sl.PendingBlockBody(hash)
 }
 
 // PendingBlockAndReceipts returns the currently pending block and corresponding receipts.
