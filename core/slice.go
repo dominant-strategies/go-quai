@@ -27,6 +27,10 @@ const (
 	maxTimeFutureHeaders    = 30
 	pendingHeaderCacheLimit = 500
 	pendingHeaderGCTime     = 5
+
+	// Termini Index reference to the index of Termini struct that has the
+	// previous coincident block hash
+	terminiIndex = 3
 )
 
 type Slice struct {
@@ -312,14 +316,14 @@ func (sl *Slice) pcrc(batch ethdb.Batch, header *types.Header, domTerminus commo
 
 	// Set the terminus
 	if nodeCtx == common.PRIME_CTX || isCoincident {
-		newTermini[3] = header.Hash()
+		newTermini[terminiIndex] = header.Hash()
 	} else {
-		newTermini[3] = termini[3]
+		newTermini[terminiIndex] = termini[terminiIndex]
 	}
 
 	// Check for a graph twist
 	if isCoincident {
-		if termini[3] != domTerminus {
+		if termini[terminiIndex] != domTerminus {
 			return common.Hash{}, []common.Hash{}, errors.New("termini do not match, block rejected due to a twist")
 		}
 	}
@@ -395,13 +399,13 @@ func (sl *Slice) updatePhCache(externPendingHeader types.PendingHeader) {
 	nodeCtx := common.NodeLocation.Context()
 
 	var localPendingHeader types.PendingHeader
-	hash := externPendingHeader.Termini[3]
+	hash := externPendingHeader.Termini[terminiIndex]
 	localPendingHeader, exists := sl.phCache[hash]
 
 	if !exists {
 		parentTermini := sl.hc.GetTerminiByHash(hash)
-		if len(parentTermini) == 4 && parentTermini[3] != sl.config.GenesisHash { // TODO: Do we need the length check??
-			cachedPendingHeader, exists := sl.phCache[parentTermini[3]]
+		if len(parentTermini) == 4 && parentTermini[terminiIndex] != sl.config.GenesisHash { // TODO: Do we need the length check??
+			cachedPendingHeader, exists := sl.phCache[parentTermini[terminiIndex]]
 			if !exists {
 				sl.phCache[hash] = externPendingHeader
 				return
@@ -496,7 +500,7 @@ func (sl *Slice) setCurrentPendingHeader(externPendingHeader types.PendingHeader
 	currentTd := sl.hc.GetTdByHash(sl.phCache[sl.pendingHeader].Header.ParentHash())
 	log.Debug("setCurrentPendingHeader:", "currentParent:", sl.phCache[sl.pendingHeader].Header.ParentHash(), "currentTd:", currentTd, "externParent:", externPendingHeader.Header.ParentHash(), "externTd:", externTd)
 	if currentTd.Cmp(externTd) < 0 {
-		sl.pendingHeader = externPendingHeader.Termini[3]
+		sl.pendingHeader = externPendingHeader.Termini[terminiIndex]
 	}
 }
 
