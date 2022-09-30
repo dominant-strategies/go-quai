@@ -653,12 +653,18 @@ func (w *worker) updateSnapshot(env *environment) {
 func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*types.Log, error) {
 	if tx != nil {
 		snap := env.state.Snapshot()
+		// retrieve the gas used int and pass in the reference to the ApplyTransaction
 		gasUsed := env.header.GasUsed()
 		receipt, err := ApplyTransaction(w.chainConfig, w.hc, &env.coinbase, env.gasPool, env.state, env.header, tx, &gasUsed, *w.hc.bc.processor.GetVMConfig())
 		if err != nil {
 			env.state.RevertToSnapshot(snap)
 			return nil, err
 		}
+		// once the gasUsed pointer is updated in the ApplyTransaction it has to be set back to the env.Header.GasUsed
+		// This extra step is needed because previously the GasUsed was a public method and direct update of the value
+		// was possible.
+		env.header.SetGasUsed(gasUsed)
+
 		env.txs = append(env.txs, tx)
 		env.receipts = append(env.receipts, receipt)
 
