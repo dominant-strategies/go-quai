@@ -24,24 +24,10 @@ var (
 	maxUncles                     = 2         // Maximum number of uncles allowed in a single block
 	allowedFutureBlockTimeSeconds = int64(15) // Max seconds from current time allowed for blocks, before they're considered future blocks
 
-	ContextTimeFactor = big10
+	ContextTimeFactor = common.Big10
 	ZoneBlockReward   = big.NewInt(5e+18)
-	RegionBlockReward = new(big.Int).Mul(ZoneBlockReward, big3)
-	PrimeBlockReward  = new(big.Int).Mul(RegionBlockReward, big3)
-)
-
-// Some useful constants to avoid constant memory allocs for them.
-var (
-	expDiffPeriod = big.NewInt(100000)
-	big1          = big.NewInt(1)
-	big2          = big.NewInt(2)
-	big3          = big.NewInt(3)
-	big8          = big.NewInt(8)
-	big9          = big.NewInt(9)
-	big10         = big.NewInt(10)
-	big32         = big.NewInt(32)
-	bigMinus99    = big.NewInt(-99)
-	big2e256      = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0)) // 2^256
+	RegionBlockReward = new(big.Int).Mul(ZoneBlockReward, common.Big3)
+	PrimeBlockReward  = new(big.Int).Mul(RegionBlockReward, common.Big3)
 )
 
 // Various error messages to mark blocks invalid. These should be private to
@@ -322,13 +308,13 @@ func (blake3pow *Blake3pow) CalcDifficulty(chain consensus.ChainHeaderReader, pa
 	x.Sub(bigTime, bigParentTime)
 	x.Div(x, params.DurationLimit[nodeCtx])
 	if parent.UncleHash() == types.EmptyUncleHash {
-		x.Sub(big1, x)
+		x.Sub(common.Big1, x)
 	} else {
-		x.Sub(big2, x)
+		x.Sub(common.Big2, x)
 	}
 	// max((2 if len(parent_uncles) else 1) - (block_timestamp - parent_timestamp) // 9, -99)
-	if x.Cmp(bigMinus99) < 0 {
-		x.Set(bigMinus99)
+	if x.Cmp(common.BigMinus99) < 0 {
+		x.Set(common.BigMinus99)
 	}
 	// parent_diff + (parent_diff / 2048 * max((2 if len(parent.uncles) else 1) - ((timestamp - parent.timestamp) // 9), -99))
 	y.Div(parent.Difficulty(), params.DifficultyBoundDivisor)
@@ -349,7 +335,7 @@ func (blake3pow *Blake3pow) HasCoincidentDifficulty(header *types.Header) bool {
 	// Since the Prime chain is the highest order, it cannot have coincident blocks
 	if nodeCtx > common.PRIME_CTX {
 		domCtx := nodeCtx - 1
-		domTarget := new(big.Int).Div(big2e256, header.Difficulty(domCtx))
+		domTarget := new(big.Int).Div(common.Big2e256, header.Difficulty(domCtx))
 		if new(big.Int).SetBytes(blake3pow.SealHash(header).Bytes()).Cmp(domTarget) <= 0 {
 			return true
 		}
@@ -378,7 +364,7 @@ func (blake3pow *Blake3pow) verifySeal(chain consensus.ChainHeaderReader, header
 		return errInvalidDifficulty
 	}
 	// Check that SealHash meets the difficulty target
-	target := new(big.Int).Div(big2e256, header.Difficulty())
+	target := new(big.Int).Div(common.Big2e256, header.Difficulty())
 	if new(big.Int).SetBytes(blake3pow.SealHash(header).Bytes()).Cmp(target) > 0 {
 		return errInvalidPoW
 	}
@@ -483,13 +469,13 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	reward := new(big.Int).Set(blockReward)
 	r := new(big.Int)
 	for _, uncle := range uncles {
-		r.Add(uncle.Number(), big8)
+		r.Add(uncle.Number(), common.Big8)
 		r.Sub(r, header.Number())
 		r.Mul(r, blockReward)
-		r.Div(r, big8)
+		r.Div(r, common.Big8)
 		state.AddBalance(uncle.Coinbase(), r)
 
-		r.Div(blockReward, big32)
+		r.Div(blockReward, common.Big32)
 		reward.Add(reward, r)
 	}
 	state.AddBalance(header.Coinbase(), reward)

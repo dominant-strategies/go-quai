@@ -230,24 +230,6 @@ type bigModExp struct {
 	eip2565 bool
 }
 
-var (
-	big0      = big.NewInt(0)
-	big1      = big.NewInt(1)
-	big3      = big.NewInt(3)
-	big4      = big.NewInt(4)
-	big7      = big.NewInt(7)
-	big8      = big.NewInt(8)
-	big16     = big.NewInt(16)
-	big20     = big.NewInt(20)
-	big32     = big.NewInt(32)
-	big64     = big.NewInt(64)
-	big96     = big.NewInt(96)
-	big480    = big.NewInt(480)
-	big1024   = big.NewInt(1024)
-	big3072   = big.NewInt(3072)
-	big199680 = big.NewInt(199680)
-)
-
 // modexpMultComplexity implements bigModexp multComplexity formula, as defined in EIP-198
 //
 // def mult_complexity(x):
@@ -258,19 +240,19 @@ var (
 // where is x is max(length_of_MODULUS, length_of_BASE)
 func modexpMultComplexity(x *big.Int) *big.Int {
 	switch {
-	case x.Cmp(big64) <= 0:
+	case x.Cmp(common.Big64) <= 0:
 		x.Mul(x, x) // x ** 2
-	case x.Cmp(big1024) <= 0:
+	case x.Cmp(common.Big1024) <= 0:
 		// (x ** 2 // 4 ) + ( 96 * x - 3072)
 		x = new(big.Int).Add(
-			new(big.Int).Div(new(big.Int).Mul(x, x), big4),
-			new(big.Int).Sub(new(big.Int).Mul(big96, x), big3072),
+			new(big.Int).Div(new(big.Int).Mul(x, x), common.Big4),
+			new(big.Int).Sub(new(big.Int).Mul(common.Big96, x), common.Big3072),
 		)
 	default:
 		// (x ** 2 // 16) + (480 * x - 199680)
 		x = new(big.Int).Add(
-			new(big.Int).Div(new(big.Int).Mul(x, x), big16),
-			new(big.Int).Sub(new(big.Int).Mul(big480, x), big199680),
+			new(big.Int).Div(new(big.Int).Mul(x, x), common.Big16),
+			new(big.Int).Sub(new(big.Int).Mul(common.Big480, x), common.Big199680),
 		)
 	}
 	return x
@@ -293,7 +275,7 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 	if big.NewInt(int64(len(input))).Cmp(baseLen) <= 0 {
 		expHead = new(big.Int)
 	} else {
-		if expLen.Cmp(big32) > 0 {
+		if expLen.Cmp(common.Big32) > 0 {
 			expHead = new(big.Int).SetBytes(getData(input, baseLen.Uint64(), 32))
 		} else {
 			expHead = new(big.Int).SetBytes(getData(input, baseLen.Uint64(), expLen.Uint64()))
@@ -305,9 +287,9 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 		msb = bitlen - 1
 	}
 	adjExpLen := new(big.Int)
-	if expLen.Cmp(big32) > 0 {
-		adjExpLen.Sub(expLen, big32)
-		adjExpLen.Mul(big8, adjExpLen)
+	if expLen.Cmp(common.Big32) > 0 {
+		adjExpLen.Sub(expLen, common.Big32)
+		adjExpLen.Mul(common.Big8, adjExpLen)
 	}
 	adjExpLen.Add(adjExpLen, big.NewInt(int64(msb)))
 	// Calculate the gas cost of the operation
@@ -321,13 +303,13 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 		//    ceiling(x/8)^2
 		//
 		//where is x is max(length_of_MODULUS, length_of_BASE)
-		gas = gas.Add(gas, big7)
-		gas = gas.Div(gas, big8)
+		gas = gas.Add(gas, common.Big7)
+		gas = gas.Div(gas, common.Big8)
 		gas.Mul(gas, gas)
 
-		gas.Mul(gas, math.BigMax(adjExpLen, big1))
+		gas.Mul(gas, math.BigMax(adjExpLen, common.Big1))
 		// 2. Different divisor (`GQUADDIVISOR`) (3)
-		gas.Div(gas, big3)
+		gas.Div(gas, common.Big3)
 		if gas.BitLen() > 64 {
 			return math.MaxUint64
 		}
@@ -338,8 +320,8 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 		return gas.Uint64()
 	}
 	gas = modexpMultComplexity(gas)
-	gas.Mul(gas, math.BigMax(adjExpLen, big1))
-	gas.Div(gas, big20)
+	gas.Mul(gas, math.BigMax(adjExpLen, common.Big1))
+	gas.Div(gas, common.Big20)
 
 	if gas.BitLen() > 64 {
 		return math.MaxUint64
