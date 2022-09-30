@@ -26,7 +26,6 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/dominant-strategies/go-quai/accounts"
-	"github.com/dominant-strategies/go-quai/accounts/abi"
 	"github.com/dominant-strategies/go-quai/accounts/keystore"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
@@ -37,6 +36,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/eth/abi"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p"
 	"github.com/dominant-strategies/go-quai/params"
