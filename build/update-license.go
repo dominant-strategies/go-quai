@@ -71,7 +71,6 @@ var (
 		"consensus/blake3pow/xor.go",
 		"crypto/bn256/",
 		"crypto/ecies/",
-		"internal/jsre/deps",
 		"log/",
 		"metrics/",
 		"signer/rules/deps",
