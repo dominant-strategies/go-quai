@@ -96,12 +96,6 @@ type Config struct {
 	// USB enables hardware wallet monitoring and connectivity.
 	USB bool `toml:",omitempty"`
 
-	// IPCPath is the requested location to place the IPC endpoint. If the path is
-	// a simple file name, it is placed inside the data directory (or on the root
-	// pipe path on Windows), whereas if it's a resolvable path name (absolute or
-	// relative), then that specific path is enforced. An empty path disables IPC.
-	IPCPath string
-
 	// HTTPHost is the host interface on which to start the HTTP RPC server. If this
 	// field is empty, no HTTP API endpoint will be started.
 	HTTPHost string
@@ -177,49 +171,12 @@ type Config struct {
 	AllowUnprotectedTxs bool `toml:",omitempty"`
 }
 
-// IPCEndpoint resolves an IPC endpoint based on a configured value, taking into
-// account the set data folders as well as the designated platform we're currently
-// running on.
-func (c *Config) IPCEndpoint() string {
-	// Short circuit if IPC has not been enabled
-	if c.IPCPath == "" {
-		return ""
-	}
-	// On windows we can only use plain top-level pipes
-	if runtime.GOOS == "windows" {
-		if strings.HasPrefix(c.IPCPath, `\\.\pipe\`) {
-			return c.IPCPath
-		}
-		return `\\.\pipe\` + c.IPCPath
-	}
-	// Resolve names into the data directory full paths otherwise
-	if filepath.Base(c.IPCPath) == c.IPCPath {
-		if c.DataDir == "" {
-			return filepath.Join(os.TempDir(), c.IPCPath)
-		}
-		return filepath.Join(c.DataDir, c.IPCPath)
-	}
-	return c.IPCPath
-}
-
 // NodeDB returns the path to the discovery node database.
 func (c *Config) NodeDB() string {
 	if c.DataDir == "" {
 		return "" // ephemeral
 	}
 	return c.ResolvePath(datadirNodeDatabase)
-}
-
-// DefaultIPCEndpoint returns the IPC path used by default.
-func DefaultIPCEndpoint(clientIdentifier string) string {
-	if clientIdentifier == "" {
-		clientIdentifier = strings.TrimSuffix(filepath.Base(os.Args[0]), ".exe")
-		if clientIdentifier == "" {
-			panic("empty executable name")
-		}
-	}
-	config := &Config{DataDir: DefaultDataDir(), IPCPath: clientIdentifier + ".ipc"}
-	return config.IPCEndpoint()
 }
 
 // HTTPEndpoint resolves an HTTP endpoint based on the configured host interface

@@ -104,8 +104,6 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 	{
 		Name: "API AND CONSOLE",
 		Flags: []cli.Flag{
-			utils.IPCDisabledFlag,
-			utils.IPCPathFlag,
 			utils.HTTPEnabledFlag,
 			utils.HTTPListenAddrFlag,
 			utils.HTTPPortFlag,

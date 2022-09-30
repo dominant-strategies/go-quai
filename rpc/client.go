@@ -153,7 +153,7 @@ func (op *requestOp) wait(ctx context.Context, c *Client) (*jsonrpcMessage, erro
 // The currently supported URL schemes are "http", "https", "ws" and "wss". If rawurl is a
 // file name with no URL scheme, a local socket connection is established using UNIX
 // domain sockets on supported platforms and named pipes on Windows. If you want to
-// configure transport options, use DialHTTP, DialWebsocket or DialIPC instead.
+// configure transport options, use DialHTTP, DialWebsocket.
 //
 // For websocket connections, the origin is set to the local host name.
 //
@@ -178,8 +178,6 @@ func DialContext(ctx context.Context, rawurl string) (*Client, error) {
 		return DialWebsocket(ctx, rawurl, "")
 	case "stdio":
 		return DialStdIO(ctx)
-	case "":
-		return DialIPC(ctx, rawurl)
 	default:
 		return nil, fmt.Errorf("no known transport for URL scheme %q", u.Scheme)
 	}
