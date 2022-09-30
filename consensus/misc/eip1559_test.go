@@ -31,8 +31,6 @@ func copyConfig(original *params.ChainConfig) *params.ChainConfig {
 	return &params.ChainConfig{
 		ChainID:             original.ChainID,
 		HomesteadBlock:      original.HomesteadBlock,
-		DAOForkBlock:        original.DAOForkBlock,
-		DAOForkSupport:      original.DAOForkSupport,
 		EIP150Block:         original.EIP150Block,
 		EIP150Hash:          original.EIP150Hash,
 		EIP155Block:         original.EIP155Block,
