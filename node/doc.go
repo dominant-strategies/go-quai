@@ -71,7 +71,7 @@ devp2p network has a unique identifier, the node key. The Node instance persists
 across restarts. Node also loads static and trusted node lists and ensures that knowledge
 about other hosts is persisted.
 
-JSON-RPC servers which run HTTP, WebSocket or IPC can be started on a Node. RPC modules
+JSON-RPC servers which run HTTP, WebSocket can be started on a Node. RPC modules
 offered by registered services will be offered on those endpoints. Users can restrict any
 endpoint to a subset of RPC modules. Node itself offers the "debug", "admin" and "web3"
 modules.
@@ -114,14 +114,12 @@ directory. Node instance A opens the database "db", node instance B opens the da
             nodekey            -- devp2p node key of instance A
             nodes/             -- devp2p discovery knowledge database of instance A
             db/                -- LevelDB content for "db"
-        A.ipc                  -- JSON-RPC UNIX domain socket endpoint of instance A
         B/
             nodekey            -- devp2p node key of node B
             nodes/             -- devp2p discovery knowledge database of instance B
             static-nodes.json  -- devp2p static node list of instance B
             db/                -- LevelDB content for "db"
             db-2/              -- LevelDB content for "db-2"
-        B.ipc                  -- JSON-RPC UNIX domain socket endpoint of instance B
         keystore/              -- account key store, used by both instances
 */
 package node
