@@ -46,7 +46,6 @@ import (
 	"github.com/dominant-strategies/go-quai/eth/downloader"
 	"github.com/dominant-strategies/go-quai/eth/ethconfig"
 	"github.com/dominant-strategies/go-quai/eth/gasprice"
-	"github.com/dominant-strategies/go-quai/eth/tracers"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/ethstats"
 	"github.com/dominant-strategies/go-quai/internal/ethapi"
@@ -1559,7 +1558,6 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend
 	if err != nil {
 		Fatalf("Failed to register the Ethereum service: %v", err)
 	}
-	stack.RegisterAPIs(tracers.APIs(backend.APIBackend))
 	return backend.APIBackend, backend
 }
 
