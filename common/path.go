@@ -17,18 +17,11 @@
 package common
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
-	"path/filepath"
-	"runtime"
 )
-
-// MakeName creates a node name that follows the ethereum convention
-// for such names. It adds the operation system name and Go runtime version
-// the name.
-func MakeName(name, version string) string {
-	return fmt.Sprintf("%s/v%s/%s/%s", name, version, runtime.GOOS, runtime.Version())
-}
 
 // FileExist checks if a file exists at filePath.
 func FileExist(filePath string) bool {
@@ -40,10 +33,32 @@ func FileExist(filePath string) bool {
 	return true
 }
 
-// AbsolutePath returns datadir + filename, or filename if it is absolute.
-func AbsolutePath(datadir string, filename string) string {
-	if filepath.IsAbs(filename) {
-		return filename
+// LoadJSON reads the given file and unmarshals its content.
+func LoadJSON(file string, val interface{}) error {
+	content, err := ioutil.ReadFile(file)
+	if err != nil {
+		return err
 	}
-	return filepath.Join(datadir, filename)
+	if err := json.Unmarshal(content, val); err != nil {
+		if syntaxerr, ok := err.(*json.SyntaxError); ok {
+			line := findLine(content, syntaxerr.Offset)
+			return fmt.Errorf("JSON syntax error at %v:%v: %v", file, line, err)
+		}
+		return fmt.Errorf("JSON unmarshal error in %v: %v", file, err)
+	}
+	return nil
+}
+
+// findLine returns the line number for the given offset into data.
+func findLine(data []byte, offset int64) (line int) {
+	line = 1
+	for i, r := range string(data) {
+		if int64(i) >= offset {
+			return
+		}
+		if r == '\n' {
+			line++
+		}
+	}
+	return
 }

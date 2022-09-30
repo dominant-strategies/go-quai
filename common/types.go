@@ -51,6 +51,29 @@ const (
 	HierarchyDepth    = 3
 )
 
+// Common big integers often used
+var (
+	BigMinus99 = big.NewInt(-99)
+	Big0       = big.NewInt(0)
+	Big1       = big.NewInt(1)
+	Big2       = big.NewInt(2)
+	Big3       = big.NewInt(3)
+	Big4       = big.NewInt(4)
+	Big7       = big.NewInt(7)
+	Big8       = big.NewInt(8)
+	Big10      = big.NewInt(10)
+	Big16      = big.NewInt(16)
+	Big20      = big.NewInt(20)
+	Big32      = big.NewInt(32)
+	Big64      = big.NewInt(64)
+	Big96      = big.NewInt(96)
+	Big480     = big.NewInt(480)
+	Big1024    = big.NewInt(1024)
+	Big3072    = big.NewInt(3072)
+	Big199680  = big.NewInt(199680)
+	Big2e256   = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0)) // 2^256
+)
+
 var (
 	// Default to prime node, but changed at startup by config.
 	NodeLocation = Location{}
