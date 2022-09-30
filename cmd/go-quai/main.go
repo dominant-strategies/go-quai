@@ -157,8 +157,6 @@ var (
 		utils.WSApiFlag,
 		utils.WSAllowedOriginsFlag,
 		utils.WSPathPrefixFlag,
-		utils.IPCDisabledFlag,
-		utils.IPCPathFlag,
 		utils.InsecureUnlockAllowedFlag,
 		utils.RPCGlobalGasCapFlag,
 		utils.RPCGlobalTxFeeCapFlag,
@@ -293,7 +291,7 @@ func quai(ctx *cli.Context) error {
 }
 
 // startNode boots up the system node and all registered protocols, after which
-// it unlocks any requested accounts, and starts the RPC/IPC interfaces and the
+// it unlocks any requested accounts, and starts the RPC interfaces and the
 // miner.
 func startNode(ctx *cli.Context, stack *node.Node, backend ethapi.Backend) {
 	debug.Memsize.Add("node", stack)

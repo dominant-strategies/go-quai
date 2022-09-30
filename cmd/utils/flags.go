@@ -427,14 +427,6 @@ var (
 		Usage: "Disables db compaction after import",
 	}
 	// RPC settings
-	IPCDisabledFlag = cli.BoolFlag{
-		Name:  "ipcdisable",
-		Usage: "Disable the IPC-RPC server",
-	}
-	IPCPathFlag = DirectoryFlag{
-		Name:  "ipcpath",
-		Usage: "Filename for IPC socket/pipe within the datadir (explicit paths escape it)",
-	}
 	HTTPEnabledFlag = cli.BoolFlag{
 		Name:  "http",
 		Usage: "Enable the HTTP-RPC server",
@@ -959,18 +951,6 @@ func makeSubUrls(ctx *cli.Context) []string {
 	return strings.Split(ctx.GlobalString(SubUrls.Name), ",")
 }
 
-// setIPC creates an IPC path configuration from the set command line flags,
-// returning an empty string if IPC was explicitly disabled, or the set path.
-func setIPC(ctx *cli.Context, cfg *node.Config) {
-	CheckExclusive(ctx, IPCDisabledFlag, IPCPathFlag)
-	switch {
-	case ctx.GlobalBool(IPCDisabledFlag.Name):
-		cfg.IPCPath = ""
-	case ctx.GlobalIsSet(IPCPathFlag.Name):
-		cfg.IPCPath = ctx.GlobalString(IPCPathFlag.Name)
-	}
-}
-
 // MakeDatabaseHandles raises out the number of allowed file handles per process
 // for Geth and returns half of the allowance to assign to the database.
 func MakeDatabaseHandles() int {
@@ -1099,7 +1079,6 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 // SetNodeConfig applies node-related command line flags to the config.
 func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	SetP2PConfig(ctx, &cfg.P2P)
-	setIPC(ctx, cfg)
 	setHTTP(ctx, cfg)
 	setWS(ctx, cfg)
 	setNodeUserIdent(ctx, cfg)
