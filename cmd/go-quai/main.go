@@ -187,10 +187,6 @@ func init() {
 		exportPreimagesCommand,
 		dumpCommand,
 		dumpGenesisCommand,
-		// See misccmd.go:
-		versionCommand,
-		versionCheckCommand,
-		licenseCommand,
 		// See config.go
 		dumpConfigCommand,
 		// See cmd/utils/flags_legacy.go
