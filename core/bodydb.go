@@ -75,7 +75,6 @@ func (bc *BodyDb) Append(batch ethdb.Batch, block *types.Block) ([]*types.Log, e
 
 	if block.Hash() != block.Header().Hash() {
 		log.Info("BodyDb Append, Roots Mismatch:", "block.Hash:", block.Hash(), "block.Header.Hash", block.Header().Hash(), "parentHeader.Number:", block.NumberU64())
-		bc.chainSideFeed.Send(ChainSideEvent{Block: block})
 		return nil, errors.New("state roots do not match header, append fail")
 	}
 	rawdb.WriteBlock(batch, block)
