@@ -24,7 +24,6 @@ import (
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/params"
-	"github.com/dominant-strategies/go-quai/rpc"
 )
 
 // ChainHeaderReader defines a small collection of methods needed to access the local
@@ -118,9 +117,6 @@ type Engine interface {
 	// Importantly, this check does NOT mean the block is canonical in the
 	// dominant chain, or even that the claimed dominant difficulty is valid.
 	HasCoincidentDifficulty(header *types.Header) bool
-
-	// APIs returns the RPC APIs this consensus engine provides.
-	APIs(chain ChainHeaderReader) []rpc.API
 
 	// Close terminates any background threads maintained by the consensus engine.
 	Close() error

@@ -257,9 +257,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 func (s *Ethereum) APIs() []rpc.API {
 	apis := quaiapi.GetAPIs(s.APIBackend)
 
-	// Append any APIs exposed explicitly by the consensus engine
-	apis = append(apis, s.engine.APIs(s.Core())...)
-
 	// Append all the local APIs and return
 	return append(apis, []rpc.API{
 		{
