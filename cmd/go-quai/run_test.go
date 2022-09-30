@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/docker/docker/pkg/reexec"
-	"github.com/dominant-strategies/go-quai/internal/cmdtest"
 	"github.com/dominant-strategies/go-quai/rpc"
 )
 
@@ -38,7 +37,7 @@ func tmpdir(t *testing.T) string {
 }
 
 type testquai struct {
-	*cmdtest.TestCmd
+	*TestCmd
 
 	// template variables for expect
 	Datadir   string
@@ -68,7 +67,7 @@ func TestMain(m *testing.M) {
 // child g gets a temporary data directory.
 func runQuai(t *testing.T, args ...string) *testquai {
 	tt := &testquai{}
-	tt.TestCmd = cmdtest.NewTestCmd(t, tt)
+	tt.TestCmd = NewTestCmd(t, tt)
 	for i, arg := range args {
 		switch arg {
 		case "--datadir":
