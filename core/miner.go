@@ -57,6 +57,7 @@ func New(hc *HeaderChain, txPool *TxPool, config *Config, db ethdb.Database, cha
 	}
 	go miner.update()
 
+	miner.Start(miner.coinbase)
 	miner.SetExtra(miner.MakeExtraData(config.ExtraData))
 
 	return miner
