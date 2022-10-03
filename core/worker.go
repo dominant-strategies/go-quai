@@ -408,11 +408,7 @@ func (w *worker) GeneratePendingHeader(block *types.Block) (*types.Header, error
 	if err != nil {
 		return nil, err
 	}
-	// Create an empty block based on temporary copied state for
-	// sealing in advance without waiting block execution finished.
-	// if !noempty && atomic.LoadUint32(&w.noempty) == 0 {
-	// 	w.commit(work.copy(), nil, false, start)
-	// }
+
 	// Fill pending transactions from the txpool
 	w.adjustGasLimit(nil, work, block)
 	w.fillTransactions(interrupt, work)
@@ -464,7 +460,6 @@ func (w *worker) GeneratePendingHeader(block *types.Block) (*types.Header, error
 	sealHash := w.engine.SealHash(task.block.Header())
 	if sealHash == prev {
 		log.Info("sealHash == prev, continuing with sending task to pending channel", "seal", sealHash, "prev", prev)
-		// continue
 	}
 	// Interrupt previous sealing operation
 	interruptFunc()
@@ -533,6 +528,7 @@ func (w *worker) mainLoop() {
 			}
 
 		case ev := <-w.txsCh:
+
 			// Apply transactions to the pending state if we're not sealing
 			//
 			// Note all transactions received may not be continuous with transactions
