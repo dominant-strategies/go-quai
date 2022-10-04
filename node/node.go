@@ -26,7 +26,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/dominant-strategies/go-quai/accounts"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
@@ -40,9 +39,7 @@ import (
 type Node struct {
 	eventmux      *event.TypeMux
 	config        *Config
-	accman        *accounts.Manager
 	log           log.Logger
-	ephemKeystore string            // if non-empty, the key directory that will be removed by Stop
 	dirLock       fileutil.Releaser // prevents concurrent use of instance directory
 	stop          chan struct{}     // Channel to wait for termination notifications
 	server        *p2p.Server       // Currently running P2P networking layer
@@ -108,14 +105,6 @@ func New(conf *Config) (*Node, error) {
 	if err := node.openDataDir(); err != nil {
 		return nil, err
 	}
-	// Ensure that the AccountManager method works before the node has started. We rely on
-	// this in cmd/geth.
-	am, ephemeralKeystore, err := makeAccountManager(conf)
-	if err != nil {
-		return nil, err
-	}
-	node.accman = am
-	node.ephemKeystore = ephemeralKeystore
 
 	// Initialize the p2p server. This creates the node key and discovery databases.
 	node.server.Config.PrivateKey = node.config.NodeKey()
@@ -224,15 +213,6 @@ func (n *Node) doClose(errs []error) error {
 	n.state = closedState
 	errs = append(errs, n.closeDatabases()...)
 	n.lock.Unlock()
-
-	if err := n.accman.Close(); err != nil {
-		errs = append(errs, err)
-	}
-	if n.ephemKeystore != "" {
-		if err := os.RemoveAll(n.ephemKeystore); err != nil {
-			errs = append(errs, err)
-		}
-	}
 
 	// Release instance directory lock.
 	n.closeDataDir()
@@ -499,11 +479,6 @@ func (n *Node) DataDir() string {
 // InstanceDir retrieves the instance directory used by the protocol stack.
 func (n *Node) InstanceDir() string {
 	return n.config.instanceDir()
-}
-
-// AccountManager retrieves the account manager used by the protocol stack.
-func (n *Node) AccountManager() *accounts.Manager {
-	return n.accman
 }
 
 // HTTPEndpoint returns the URL of the HTTP server. Note that this URL does not
