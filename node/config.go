@@ -19,16 +19,12 @@ package node
 import (
 	"crypto/ecdsa"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
 
-	"github.com/dominant-strategies/go-quai/accounts"
-	"github.com/dominant-strategies/go-quai/accounts/external"
-	"github.com/dominant-strategies/go-quai/accounts/keystore"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/log"
@@ -365,70 +361,6 @@ func (c *Config) parsePersistentNodes(w *bool, path string) []*enode.Node {
 		nodes = append(nodes, node)
 	}
 	return nodes
-}
-
-// AccountConfig determines the settings for scrypt and keydirectory
-func (c *Config) AccountConfig() (int, int, string, error) {
-	scryptN := keystore.StandardScryptN
-	scryptP := keystore.StandardScryptP
-	if c.UseLightweightKDF {
-		scryptN = keystore.LightScryptN
-		scryptP = keystore.LightScryptP
-	}
-
-	var (
-		keydir string
-		err    error
-	)
-	switch {
-	case filepath.IsAbs(c.KeyStoreDir):
-		keydir = c.KeyStoreDir
-	case c.DataDir != "":
-		if c.KeyStoreDir == "" {
-			keydir = filepath.Join(c.DataDir, datadirDefaultKeyStore)
-		} else {
-			keydir, err = filepath.Abs(c.KeyStoreDir)
-		}
-	case c.KeyStoreDir != "":
-		keydir, err = filepath.Abs(c.KeyStoreDir)
-	}
-	return scryptN, scryptP, keydir, err
-}
-
-func makeAccountManager(conf *Config) (*accounts.Manager, string, error) {
-	scryptN, scryptP, keydir, err := conf.AccountConfig()
-	var ephemeral string
-	if keydir == "" {
-		// There is no datadir.
-		keydir, err = ioutil.TempDir("", "go-ethereum-keystore")
-		ephemeral = keydir
-	}
-
-	if err != nil {
-		return nil, "", err
-	}
-	if err := os.MkdirAll(keydir, 0700); err != nil {
-		return nil, "", err
-	}
-	// Assemble the account manager and supported backends
-	var backends []accounts.Backend
-	if len(conf.ExternalSigner) > 0 {
-		log.Info("Using external signer", "url", conf.ExternalSigner)
-		if extapi, err := external.NewExternalBackend(conf.ExternalSigner); err == nil {
-			backends = append(backends, extapi)
-		} else {
-			return nil, "", fmt.Errorf("error connecting to external signer: %v", err)
-		}
-	}
-	if len(backends) == 0 {
-		// For now, we're using EITHER external signer OR local signers.
-		// If/when we implement some form of lockfile for USB and keystore wallets,
-		// we can have both, but it's very confusing for the user to see the same
-		// accounts in both externally and locally, plus very racey.
-		backends = append(backends, keystore.NewKeyStore(keydir, scryptN, scryptP))
-	}
-
-	return accounts.NewManager(&accounts.Config{InsecureUnlockAllowed: conf.InsecureUnlockAllowed}, backends...), ephemeral, nil
 }
 
 var warnLock sync.Mutex

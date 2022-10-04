@@ -22,7 +22,7 @@ import (
 	"math/big"
 
 	quai "github.com/dominant-strategies/go-quai"
-	"github.com/dominant-strategies/go-quai/accounts"
+
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/core"
@@ -297,10 +297,6 @@ func (b *EthAPIBackend) ChainDb() ethdb.Database {
 
 func (b *EthAPIBackend) EventMux() *event.TypeMux {
 	return b.eth.EventMux()
-}
-
-func (b *EthAPIBackend) AccountManager() *accounts.Manager {
-	return b.eth.AccountManager()
 }
 
 func (b *EthAPIBackend) ExtRPCEnabled() bool {
