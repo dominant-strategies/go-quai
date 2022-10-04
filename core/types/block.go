@@ -342,14 +342,14 @@ func (h *Header) SetDifficulty(val *big.Int, args ...int) {
 	if len(args) > 0 {
 		nodeCtx = args[0]
 	}
-	h.difficulty[nodeCtx] = val
+	h.difficulty[nodeCtx] = new(big.Int).Set(val)
 }
 func (h *Header) SetNumber(val *big.Int, args ...int) {
 	nodeCtx := common.NodeLocation.Context()
 	if len(args) > 0 {
 		nodeCtx = args[0]
 	}
-	h.number[nodeCtx] = val
+	h.number[nodeCtx] = new(big.Int).Set(val)
 }
 func (h *Header) SetGasLimit(val uint64, args ...int) {
 	nodeCtx := common.NodeLocation.Context()
@@ -370,7 +370,7 @@ func (h *Header) SetBaseFee(val *big.Int, args ...int) {
 	if len(args) > 0 {
 		nodeCtx = args[0]
 	}
-	h.baseFee[nodeCtx] = val
+	h.baseFee[nodeCtx] = new(big.Int).Set(val)
 }
 func (h *Header) SetLocation(val common.Location) { h.location = val }
 func (h *Header) SetTime(val uint64)              { h.time = val }
