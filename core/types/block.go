@@ -594,9 +594,9 @@ func CopyHeader(h *Header) *Header {
 	cpy.number = make([]*big.Int, common.HierarchyDepth)
 	cpy.baseFee = make([]*big.Int, common.HierarchyDepth)
 	for i := 0; i < common.HierarchyDepth; i++ {
-		cpy.difficulty[i] = h.Difficulty(i)
-		cpy.number[i] = h.Number(i)
-		cpy.baseFee[i] = h.BaseFee(i)
+		cpy.SetDifficulty(h.Difficulty(i), i)
+		cpy.SetNumber(h.Number(i), i)
+		cpy.SetBaseFee(h.BaseFee(i), i)
 	}
 	if len(h.extra) > 0 {
 		cpy.extra = make([]byte, len(h.extra))
