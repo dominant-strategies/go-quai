@@ -171,7 +171,6 @@ type worker struct {
 	// Channels
 	taskCh             chan *task
 	resultCh           chan *types.Block
-	startCh            chan struct{}
 	exitCh             chan struct{}
 	resubmitIntervalCh chan time.Duration
 	resubmitAdjustCh   chan *intervalAdjust
@@ -234,7 +233,6 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 		taskCh:             make(chan *task),
 		resultCh:           make(chan *types.Block, resultQueueSize),
 		exitCh:             make(chan struct{}),
-		startCh:            make(chan struct{}, 1),
 		resubmitIntervalCh: make(chan time.Duration),
 		resubmitAdjustCh:   make(chan *intervalAdjust, resubmitAdjustChanSize),
 	}
@@ -253,10 +251,6 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 	worker.wg.Add(1)
 	go worker.mainLoop()
 
-	// Submit first work to initialize pending state.
-	if init {
-		worker.startCh <- struct{}{}
-	}
 	return worker
 }
 
@@ -328,7 +322,6 @@ func (w *worker) pendingBlockAndReceipts() (*types.Block, types.Receipts) {
 // start sets the running status as 1 and triggers new work submitting.
 func (w *worker) start() {
 	atomic.StoreInt32(&w.running, 1)
-	w.startCh <- struct{}{}
 }
 
 // stop sets the running status as 0.
