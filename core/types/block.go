@@ -138,6 +138,9 @@ func EmptyHeader() *Header {
 		h.txHash[i] = EmptyRootHash
 		h.receiptHash[i] = EmptyRootHash
 		h.uncleHash[i] = EmptyUncleHash
+		h.difficulty[i] = big.NewInt(0)
+		h.number[i] = big.NewInt(0)
+		h.baseFee[i] = big.NewInt(0)
 	}
 	return h
 }
