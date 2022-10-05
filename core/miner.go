@@ -40,7 +40,6 @@ type Miner struct {
 	coinbase common.Address
 	hc       *HeaderChain
 	engine   consensus.Engine
-	exitCh   chan struct{}
 	startCh  chan common.Address
 	stopCh   chan struct{}
 }
@@ -49,7 +48,6 @@ func New(hc *HeaderChain, txPool *TxPool, config *Config, db ethdb.Database, cha
 	miner := &Miner{
 		hc:       hc,
 		engine:   engine,
-		exitCh:   make(chan struct{}),
 		startCh:  make(chan common.Address),
 		stopCh:   make(chan struct{}),
 		worker:   newWorker(config, chainConfig, db, engine, hc, txPool, isLocalBlock, true),
@@ -78,7 +76,6 @@ func (miner *Miner) update() {
 			}
 		case <-miner.stopCh:
 			miner.worker.stop()
-		case <-miner.exitCh:
 			miner.worker.close()
 			return
 		}
@@ -91,10 +88,6 @@ func (miner *Miner) Start(coinbase common.Address) {
 
 func (miner *Miner) Stop() {
 	miner.stopCh <- struct{}{}
-}
-
-func (miner *Miner) Close() {
-	close(miner.exitCh)
 }
 
 func (miner *Miner) Mining() bool {
