@@ -166,10 +166,19 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		h.SetEtxHash(dec.EtxHash[i], i)
 		h.SetManifestHash(dec.ManifestHash[i], i)
 		h.SetBloom(dec.Bloom[i], i)
+		if dec.Difficulty[i] == nil {
+			return errors.New("missing required field 'difficulty' for Header")
+		}
 		h.SetDifficulty((*big.Int)(dec.Difficulty[i]), i)
+		if dec.Number[i] == nil {
+			return errors.New("missing required field 'number' for Header")
+		}
 		h.SetNumber((*big.Int)(dec.Number[i]), i)
 		h.SetGasLimit(uint64(dec.GasLimit[i]), i)
 		h.SetGasUsed(uint64(dec.GasUsed[i]), i)
+		if dec.BaseFee[i] == nil {
+			return errors.New("missing required field 'baseFeePerGas' for Header")
+		}
 		h.SetBaseFee((*big.Int)(dec.BaseFee[i]), i)
 	}
 	h.SetLocation(dec.Location)
