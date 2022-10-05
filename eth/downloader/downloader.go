@@ -886,16 +886,11 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 						return fmt.Errorf("%w: next pivot confirmer number %d != requested %d", errInvalidChain, have, want)
 					}
 					log.Warn("Pivot seemingly stale, moving", "old", pivot, "new", headers[0].Number())
-					pivot = headers[0].Number().Uint64()
 
 					d.pivotLock.Lock()
 					d.pivotHeader = headers[0]
 					d.pivotLock.Unlock()
 
-					// Write out the pivot into the database so a rollback beyond
-					// it will reenable fast sync and update the state root that
-					// the state syncer will be downloading.
-					rawdb.WriteLastPivotNumber(d.stateDB, pivot)
 				}
 				pivoting = false
 				getHeaders(from)

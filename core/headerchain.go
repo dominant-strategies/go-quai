@@ -376,16 +376,6 @@ func (hc *HeaderChain) GetHeaderByHash(hash common.Hash) *types.Header {
 	return hc.GetHeader(hash, *number)
 }
 
-// HasHeader checks if a block header is present in the database or not.
-// In theory, if header is present in the database, all relative components
-// like td and hash->number should be present too.
-func (hc *HeaderChain) HasHeader(hash common.Hash, number uint64) bool {
-	if hc.numberCache.Contains(hash) || hc.headerCache.Contains(hash) {
-		return true
-	}
-	return rawdb.HasHeader(hc.headerDb, hash, number)
-}
-
 // GetHeaderByNumber retrieves a block header from the database by number,
 // caching it (associated with its hash) if found.
 func (hc *HeaderChain) GetHeaderByNumber(number uint64) *types.Header {

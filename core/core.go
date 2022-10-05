@@ -201,12 +201,6 @@ func (c *Core) GetHeaderByHash(hash common.Hash) *types.Header {
 	return c.sl.hc.GetHeaderByHash(hash)
 }
 
-// HasHeader checks if a block header is present in the database or not, caching
-// it if present.
-func (c *Core) HasHeader(hash common.Hash, number uint64) bool {
-	return c.sl.hc.HasHeader(hash, number)
-}
-
 // GetCanonicalHash returns the canonical hash for a given block number
 func (c *Core) GetCanonicalHash(number uint64) common.Hash {
 	return c.sl.hc.GetCanonicalHash(number)

@@ -19,7 +19,6 @@ package rawdb
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"math/big"
 	"sort"
 
@@ -71,39 +70,6 @@ func ReadAllHashes(db ethdb.Iteratee, number uint64) []common.Hash {
 		}
 	}
 	return hashes
-}
-
-// ReadAllCanonicalHashes retrieves all canonical number and hash mappings at the
-// certain chain range. If the accumulated entries reaches the given threshold,
-// abort the iteration and return the semi-finish result.
-func ReadAllCanonicalHashes(db ethdb.Iteratee, from uint64, to uint64, limit int) ([]uint64, []common.Hash) {
-	// Short circuit if the limit is 0.
-	if limit == 0 {
-		return nil, nil
-	}
-	var (
-		numbers []uint64
-		hashes  []common.Hash
-	)
-	// Construct the key prefix of start point.
-	start, end := headerHashKey(from), headerHashKey(to)
-	it := db.NewIterator(nil, start)
-	defer it.Release()
-
-	for it.Next() {
-		if bytes.Compare(it.Key(), end) >= 0 {
-			break
-		}
-		if key := it.Key(); len(key) == len(headerPrefix)+8+1 && bytes.Equal(key[len(key)-1:], headerHashSuffix) {
-			numbers = append(numbers, binary.BigEndian.Uint64(key[len(headerPrefix):len(headerPrefix)+8]))
-			hashes = append(hashes, common.BytesToHash(it.Value()))
-			// If the accumulated entries reaches the limit threshold, return.
-			if len(numbers) >= limit {
-				break
-			}
-		}
-	}
-	return numbers, hashes
 }
 
 // ReadHeaderNumber returns the header number assigned to a hash.
@@ -164,32 +130,6 @@ func WriteHeadBlockHash(db ethdb.KeyValueWriter, hash common.Hash) {
 	}
 }
 
-// ReadLastPivotNumber retrieves the number of the last pivot block. If the node
-// full synced, the last pivot will always be nil.
-func ReadLastPivotNumber(db ethdb.KeyValueReader) *uint64 {
-	data, _ := db.Get(lastPivotKey)
-	if len(data) == 0 {
-		return nil
-	}
-	var pivot uint64
-	if err := rlp.DecodeBytes(data, &pivot); err != nil {
-		log.Error("Invalid pivot block number in database", "err", err)
-		return nil
-	}
-	return &pivot
-}
-
-// WriteLastPivotNumber stores the number of the last pivot block.
-func WriteLastPivotNumber(db ethdb.KeyValueWriter, pivot uint64) {
-	enc, err := rlp.EncodeToBytes(pivot)
-	if err != nil {
-		log.Crit("Failed to encode pivot block number", "err", err)
-	}
-	if err := db.Put(lastPivotKey, enc); err != nil {
-		log.Crit("Failed to store pivot block number", "err", err)
-	}
-}
-
 // ReadFastTrieProgress retrieves the number of tries nodes fast synced to allow
 // reporting correct numbers across restarts.
 func ReadFastTrieProgress(db ethdb.KeyValueReader) uint64 {
@@ -228,23 +168,6 @@ func WriteTxIndexTail(db ethdb.KeyValueWriter, number uint64) {
 	}
 }
 
-// ReadFastTxLookupLimit retrieves the tx lookup limit used in fast sync.
-func ReadFastTxLookupLimit(db ethdb.KeyValueReader) *uint64 {
-	data, _ := db.Get(fastTxLookupLimitKey)
-	if len(data) != 8 {
-		return nil
-	}
-	number := binary.BigEndian.Uint64(data)
-	return &number
-}
-
-// WriteFastTxLookupLimit stores the txlookup limit used in fast sync into database.
-func WriteFastTxLookupLimit(db ethdb.KeyValueWriter, number uint64) {
-	if err := db.Put(fastTxLookupLimitKey, encodeBlockNumber(number)); err != nil {
-		log.Crit("Failed to store transaction lookup limit for fast sync", "err", err)
-	}
-}
-
 // ReadHeaderRLP retrieves a block header in its raw RLP database encoding.
 func ReadHeaderRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 	// First try to look up the data in ancient database. Extra hash
@@ -268,17 +191,6 @@ func ReadHeaderRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValu
 		return data
 	}
 	return nil // Can't find the data anywhere.
-}
-
-// HasHeader verifies the existence of a block header corresponding to the hash.
-func HasHeader(db ethdb.Reader, hash common.Hash, number uint64) bool {
-	if has, err := db.Ancient(freezerHashTable, number); err == nil && common.BytesToHash(has) == hash {
-		return true
-	}
-	if has, err := db.Has(headerKey(number, hash)); !has || err != nil {
-		return false
-	}
-	return true
 }
 
 // ReadHeader retrieves the block header corresponding to the hash.
@@ -754,18 +666,6 @@ func DeleteTd(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	}
 }
 
-// HasReceipts verifies the existence of all the transaction receipts belonging
-// to a block.
-func HasReceipts(db ethdb.Reader, hash common.Hash, number uint64) bool {
-	if has, err := db.Ancient(freezerHashTable, number); err == nil && common.BytesToHash(has) == hash {
-		return true
-	}
-	if has, err := db.Has(blockReceiptsKey(number, hash)); !has || err != nil {
-		return false
-	}
-	return true
-}
-
 // ReadReceiptsRLP retrieves all the transaction receipts belonging to a block in RLP encoding.
 func ReadReceiptsRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 	// First try to look up the data in ancient database. Extra hash
@@ -866,86 +766,6 @@ func DeleteReceipts(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	if err := db.Delete(blockReceiptsKey(number, hash)); err != nil {
 		log.Crit("Failed to delete block receipts", "err", err)
 	}
-}
-
-// storedReceiptRLP is the storage encoding of a receipt.
-// Re-definition in core/types/receipt.go.
-type storedReceiptRLP struct {
-	PostStateOrStatus []byte
-	CumulativeGasUsed uint64
-	Logs              []*types.LogForStorage
-}
-
-// ReceiptLogs is a barebone version of ReceiptForStorage which only keeps
-// the list of logs. When decoding a stored receipt into this object we
-// avoid creating the bloom filter.
-type receiptLogs struct {
-	Logs []*types.Log
-}
-
-// DecodeRLP implements rlp.Decoder.
-func (r *receiptLogs) DecodeRLP(s *rlp.Stream) error {
-	var stored storedReceiptRLP
-	if err := s.Decode(&stored); err != nil {
-		return err
-	}
-	r.Logs = make([]*types.Log, len(stored.Logs))
-	for i, log := range stored.Logs {
-		r.Logs[i] = (*types.Log)(log)
-	}
-	return nil
-}
-
-// DeriveLogFields fills the logs in receiptLogs with information such as block number, txhash, etc.
-func deriveLogFields(receipts []*receiptLogs, hash common.Hash, number uint64, txs types.Transactions) error {
-	logIndex := uint(0)
-	if len(txs) != len(receipts) {
-		return errors.New("transaction and receipt count mismatch")
-	}
-	for i := 0; i < len(receipts); i++ {
-		txHash := txs[i].Hash()
-		// The derived log fields can simply be set from the block and transaction
-		for j := 0; j < len(receipts[i].Logs); j++ {
-			receipts[i].Logs[j].BlockNumber = number
-			receipts[i].Logs[j].BlockHash = hash
-			receipts[i].Logs[j].TxHash = txHash
-			receipts[i].Logs[j].TxIndex = uint(i)
-			receipts[i].Logs[j].Index = logIndex
-			logIndex++
-		}
-	}
-	return nil
-}
-
-// ReadLogs retrieves the logs for all transactions in a block. The log fields
-// are populated with metadata. In case the receipts or the block body
-// are not found, a nil is returned.
-func ReadLogs(db ethdb.Reader, hash common.Hash, number uint64) [][]*types.Log {
-	// Retrieve the flattened receipt slice
-	data := ReadReceiptsRLP(db, hash, number)
-	if len(data) == 0 {
-		return nil
-	}
-	receipts := []*receiptLogs{}
-	if err := rlp.DecodeBytes(data, &receipts); err != nil {
-		log.Error("Invalid receipt array RLP", "hash", hash, "err", err)
-		return nil
-	}
-
-	body := ReadBody(db, hash, number)
-	if body == nil {
-		log.Error("Missing body but have receipt", "hash", hash, "number", number)
-		return nil
-	}
-	if err := deriveLogFields(receipts, hash, number, body.Transactions); err != nil {
-		log.Error("Failed to derive block receipts fields", "hash", hash, "number", number, "err", err)
-		return nil
-	}
-	logs := make([][]*types.Log, len(receipts))
-	for i, receipt := range receipts {
-		logs[i] = receipt.Logs
-	}
-	return logs
 }
 
 // ReadBlock retrieves an entire block corresponding to the hash, assembling it
