@@ -12,6 +12,12 @@ https://camo.githubusercontent.com/915b7be44ada53c290eb157634330494ebe3e30a/6874
 Automated builds are available for stable releases and the unstable master branch. Binary
 archives are published at https://geth.ethereum.org/downloads/.
 
+## Running the linter
+
+Before every commit  the linter has to be run for code sanity purposes along with other reasons.
+Run the command below to download and run the `golangci-lint`.
+```make lint```
+
 ## Building the source
 
 For prerequisites and detailed build instructions please read the [Installation Instructions](https://geth.ethereum.org/docs/install-and-build/installing-geth).
