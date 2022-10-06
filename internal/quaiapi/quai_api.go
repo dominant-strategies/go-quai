@@ -50,7 +50,7 @@ func (s *PublicQuaiAPI) GasPrice(ctx context.Context) (*hexutil.Big, error) {
 	if err != nil {
 		return nil, err
 	}
-	if head := s.b.CurrentHeader(); head.BaseFee != nil {
+	if head := s.b.CurrentHeader(); head.BaseFee() != nil {
 		tipcap.Add(tipcap, head.BaseFee())
 	}
 	return (*hexutil.Big)(tipcap), err
@@ -223,10 +223,10 @@ func (s *PublicBlockChainQuaiAPI) GetHeaderByHash(ctx context.Context, hash comm
 }
 
 // GetBlockByNumber returns the requested canonical block.
-// * When blockNr is -1 the chain head is returned.
-// * When blockNr is -2 the pending chain head is returned.
-// * When fullTx is true all transactions in the block are returned, otherwise
-//   only the transaction hash is returned.
+//   - When blockNr is -1 the chain head is returned.
+//   - When blockNr is -2 the pending chain head is returned.
+//   - When fullTx is true all transactions in the block are returned, otherwise
+//     only the transaction hash is returned.
 func (s *PublicBlockChainQuaiAPI) GetBlockByNumber(ctx context.Context, number rpc.BlockNumber, fullTx bool) (map[string]interface{}, error) {
 	block, err := s.b.BlockByNumber(ctx, number)
 	if block != nil && err == nil {
