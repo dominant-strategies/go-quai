@@ -338,7 +338,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		st.evm.ETXCacheLock.Lock()
 		etxCache := st.evm.ETXCache
 		_ = etxCache // do something with the list of ETXs from this transaction
-		st.evm.ETXCache = make([]*types.ExternalTransaction, 0)
+		st.evm.ETXCache = make([]*types.ExternalTx, 0)
 		st.evm.ETXCacheLock.Unlock()
 	}
 
