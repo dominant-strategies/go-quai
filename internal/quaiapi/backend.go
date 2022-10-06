@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package ethapi implements the general Ethereum API functions.
-package ethapi
+// package quaiapi implements the general Quai API functions.
+package quaiapi
 
 import (
 	"context"
@@ -43,7 +43,7 @@ type Backend interface {
 	SyncProgress() quai.SyncProgress
 	EventMux() *event.TypeMux
 
-	// General Ethereum API
+	// General Quai API
 	Downloader() *downloader.Downloader
 	SuggestGasTipCap(ctx context.Context) (*big.Int, error)
 	FeeHistory(ctx context.Context, blockCount int, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*big.Int, [][]*big.Int, []*big.Int, []float64, error)

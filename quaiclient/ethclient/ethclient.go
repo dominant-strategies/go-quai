@@ -28,7 +28,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/core/types"
-	"github.com/dominant-strategies/go-quai/internal/ethapi"
+	"github.com/dominant-strategies/go-quai/internal/quaiapi"
 	"github.com/dominant-strategies/go-quai/rpc"
 )
 
@@ -474,7 +474,7 @@ func (ec *Client) GetPendingHeader(ctx context.Context) (*types.Header, error) {
 
 // ReceiveMinedHeader sends a mined block back to the node
 func (ec *Client) ReceiveMinedHeader(ctx context.Context, header *types.Header) error {
-	data := ethapi.RPCMarshalHeader(header)
+	data := quaiapi.RPCMarshalHeader(header)
 	return ec.c.CallContext(ctx, nil, "quai_receiveMinedHeader", data)
 }
 

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package ethapi
+package quaiapi
 
 import (
 	"context"
@@ -1363,7 +1363,7 @@ func (s *PublicTransactionPoolAPI) SendRawTransaction(ctx context.Context, input
 	return SubmitTransaction(ctx, s.b, tx)
 }
 
-// PublicDebugAPI is the collection of Ethereum APIs exposed over the public
+// PublicDebugAPI is the collection of Quai APIs exposed over the public
 // debugging endpoint.
 type PublicDebugAPI struct {
 	b Backend
@@ -1406,7 +1406,7 @@ func (api *PublicDebugAPI) SeedHash(ctx context.Context, number uint64) (string,
 	return "", fmt.Errorf("blake3pow does not have seedhash")
 }
 
-// PrivateDebugAPI is the collection of Ethereum APIs exposed over the private
+// PrivateDebugAPI is the collection of Quai APIs exposed over the private
 // debugging endpoint.
 type PrivateDebugAPI struct {
 	b Backend
