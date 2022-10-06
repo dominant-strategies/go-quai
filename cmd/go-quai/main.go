@@ -29,8 +29,8 @@ import (
 	"github.com/dominant-strategies/go-quai/eth"
 	"github.com/dominant-strategies/go-quai/eth/downloader"
 	"github.com/dominant-strategies/go-quai/internal/debug"
-	"github.com/dominant-strategies/go-quai/internal/ethapi"
 	"github.com/dominant-strategies/go-quai/internal/flags"
+	"github.com/dominant-strategies/go-quai/internal/quaiapi"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/metrics"
 	"github.com/dominant-strategies/go-quai/node"
@@ -286,7 +286,7 @@ func quai(ctx *cli.Context) error {
 // startNode boots up the system node and all registered protocols, after which
 // it unlocks any requested accounts, and starts the RPC interfaces and the
 // miner.
-func startNode(ctx *cli.Context, stack *node.Node, backend ethapi.Backend) {
+func startNode(ctx *cli.Context, stack *node.Node, backend quaiapi.Backend) {
 	debug.Memsize.Add("node", stack)
 
 	// Start up the node itself
@@ -320,7 +320,7 @@ func startNode(ctx *cli.Context, stack *node.Node, backend ethapi.Backend) {
 	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) || ctx.GlobalBool(utils.DeveloperFlag.Name) {
 
 		var err error
-		ethBackend, ok := backend.(*eth.EthAPIBackend)
+		ethBackend, ok := backend.(*eth.QuaiAPIBackend)
 		if !ok {
 			utils.Fatalf("Ethereum service not running: %v", err)
 		}

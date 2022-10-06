@@ -47,8 +47,8 @@ import (
 	"github.com/dominant-strategies/go-quai/eth/gasprice"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/ethstats"
-	"github.com/dominant-strategies/go-quai/internal/ethapi"
 	"github.com/dominant-strategies/go-quai/internal/flags"
+	"github.com/dominant-strategies/go-quai/internal/quaiapi"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/metrics"
 	"github.com/dominant-strategies/go-quai/metrics/exp"
@@ -1480,7 +1480,7 @@ func SetDNSDiscoveryDefaults(cfg *ethconfig.Config, genesis common.Hash) {
 // RegisterEthService adds an Ethereum client to the stack.
 // The second return value is the full node instance, which may be nil if the
 // node is running as a light client.
-func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend, *eth.Ethereum) {
+func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (quaiapi.Backend, *eth.Ethereum) {
 	backend, err := eth.New(stack, cfg)
 	if err != nil {
 		Fatalf("Failed to register the Ethereum service: %v", err)
@@ -1490,7 +1490,7 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend
 
 // RegisterEthStatsService configures the Ethereum Stats daemon and adds it to
 // the given node.
-func RegisterEthStatsService(stack *node.Node, backend ethapi.Backend, url string) {
+func RegisterEthStatsService(stack *node.Node, backend quaiapi.Backend, url string) {
 	if err := ethstats.New(stack, backend, backend.Engine(), url); err != nil {
 		Fatalf("Failed to register the Ethereum Stats service: %v", err)
 	}
