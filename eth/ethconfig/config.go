@@ -19,8 +19,6 @@ package ethconfig
 
 import (
 	"math/big"
-	"os"
-	"os/user"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -79,15 +77,6 @@ var Defaults = Config{
 	RPCTxFeeCap: 1, // 1 ether
 	DomUrl:      "ws://127.0.0.1:8546",
 	SubUrls:     []string{"ws://127.0.0.1:8546", "ws://127.0.0.1:8546", "ws://127.0.0.1:8546"},
-}
-
-func init() {
-	home := os.Getenv("HOME")
-	if home == "" {
-		if user, err := user.Current(); err == nil {
-			home = user.HomeDir
-		}
-	}
 }
 
 //go:generate gencodec -type Config -formats toml -out gen_config.go
