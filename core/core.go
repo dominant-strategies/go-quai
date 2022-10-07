@@ -107,8 +107,8 @@ func (c *Core) ConstructLocalBlock(header *types.Header) *types.Block {
 	return c.sl.ConstructLocalBlock(header)
 }
 
-func (c *Core) SubRelayPendingHeader(slPendingHeader types.PendingHeader, location common.Location, reorg bool) error {
-	return c.sl.SubRelayPendingHeader(slPendingHeader, location, reorg)
+func (c *Core) SubRelayPendingHeader(slPendingHeader types.PendingHeader, reorg bool) error {
+	return c.sl.SubRelayPendingHeader(slPendingHeader, reorg)
 }
 
 func (c *Core) GetPendingHeader() (*types.Header, error) {
