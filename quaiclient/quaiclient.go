@@ -162,10 +162,9 @@ func (ec *Client) Append(ctx context.Context, header *types.Header, domTerminus 
 	return types.PendingHeader{Header: head, Termini: termini.Termini}, nil
 }
 
-func (ec *Client) SubRelayPendingHeader(ctx context.Context, pendingHeader types.PendingHeader, location common.Location, reorg bool) error {
+func (ec *Client) SubRelayPendingHeader(ctx context.Context, pendingHeader types.PendingHeader, reorg bool) error {
 	data := map[string]interface{}{"Header": RPCMarshalHeader(pendingHeader.Header)}
 	data["Termini"] = pendingHeader.Termini
-	data["Location"] = location
 	data["Reorg"] = reorg
 
 	err := ec.c.CallContext(ctx, nil, "quai_subRelayPendingHeader", data)
