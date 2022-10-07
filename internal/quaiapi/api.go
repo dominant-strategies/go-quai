@@ -1070,7 +1070,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	if args.To != nil {
 		to = *args.To
 	} else {
-		to = crypto.CreateAddress(args.from(), uint64(*args.Nonce))
+		to = crypto.CreateAddress(args.from(), uint64(*args.Nonce), *args.Data)
 	}
 	// Retrieve the precompiles since they don't need to be added to the access list
 	precompiles := vm.ActivePrecompiles(b.ChainConfig().Rules(header.Number()))
@@ -1324,7 +1324,7 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 	}
 
 	if tx.To() == nil {
-		addr := crypto.CreateAddress(from, tx.Nonce())
+		addr := crypto.CreateAddress(from, tx.Nonce(), tx.Data())
 		log.Info("Submitted contract creation", "hash", tx.Hash().Hex(), "from", from, "nonce", tx.Nonce(), "contract", addr.Hex(), "value", tx.Value())
 	} else {
 		log.Info("Submitted transaction", "hash", tx.Hash().Hex(), "from", from, "nonce", tx.Nonce(), "recipient", tx.To(), "value", tx.Value())
