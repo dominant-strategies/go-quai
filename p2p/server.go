@@ -180,6 +180,7 @@ type Server struct {
 
 	nodedb    *enode.DB
 	localnode *enode.LocalNode
+	ntab      *discover.UDPv4
 	DiscV5    *discover.UDPv5
 	discmix   *enode.FairMix
 	dialsched *dialScheduler
@@ -569,7 +570,29 @@ func (srv *Server) setupDiscovery() error {
 	}
 	srv.localnode.SetFallbackUDP(realaddr.Port)
 
+	// Discovery V4
+	var unhandled chan discover.ReadPacket
 	var sconn *sharedUDPConn
+	if !srv.NoDiscovery {
+		if srv.DiscoveryV5 {
+			unhandled = make(chan discover.ReadPacket, 100)
+			sconn = &sharedUDPConn{conn, unhandled}
+		}
+		cfg := discover.Config{
+			PrivateKey:  srv.PrivateKey,
+			NetRestrict: srv.NetRestrict,
+			Bootnodes:   srv.BootstrapNodes,
+			Unhandled:   unhandled,
+			Log:         srv.log,
+		}
+		ntab, err := discover.ListenV4(conn, srv.localnode, cfg)
+		if err != nil {
+			return err
+		}
+		srv.ntab = ntab
+		srv.discmix.AddSource(ntab.RandomNodes())
+	}
+
 	// Discovery V5
 	if srv.DiscoveryV5 {
 		cfg := discover.Config{
@@ -601,7 +624,9 @@ func (srv *Server) setupDialScheduler() {
 		dialer:         srv.Dialer,
 		clock:          srv.clock,
 	}
-
+	if srv.ntab != nil {
+		config.resolver = srv.ntab
+	}
 	if config.dialer == nil {
 		config.dialer = tcpDialer{&net.Dialer{Timeout: defaultDialTimeout}}
 	}
@@ -754,6 +779,10 @@ running:
 
 	srv.log.Trace("P2P networking is spinning down")
 
+	// Terminate discovery. If there is a running lookup it will terminate soon.
+	if srv.ntab != nil {
+		srv.ntab.Close()
+	}
 	if srv.DiscV5 != nil {
 		srv.DiscV5.Close()
 	}

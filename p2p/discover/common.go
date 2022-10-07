@@ -62,6 +62,11 @@ func (cfg Config) withDefaults() Config {
 	return cfg
 }
 
+// ListenUDP starts listening for discovery packets on the given UDP socket.
+func ListenUDP(c UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv4, error) {
+	return ListenV4(c, ln, cfg)
+}
+
 // ReadPacket is a packet that couldn't be handled. Those packets are sent to the unhandled
 // channel if configured.
 type ReadPacket struct {
