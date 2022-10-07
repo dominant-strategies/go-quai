@@ -36,66 +36,6 @@ import (
 	"github.com/dominant-strategies/go-quai/rlp"
 )
 
-// This is the test network for the Lookup test.
-// The nodes were obtained by running lookupTestnet.mine with a random NodeID as target.
-var lookupTestnet = &preminedTestnet{
-	target: hexEncPubkey("5d485bdcbe9bc89314a10ae9231e429d33853e3a8fa2af39f5f827370a2e4185e344ace5d16237491dad41f278f1d3785210d29ace76cd627b9147ee340b1125"),
-	dists: [257][]*ecdsa.PrivateKey{
-		251: {
-			hexEncPrivkey("29738ba0c1a4397d6a65f292eee07f02df8e58d41594ba2be3cf84ce0fc58169"),
-			hexEncPrivkey("511b1686e4e58a917f7f848e9bf5539d206a68f5ad6b54b552c2399fe7d174ae"),
-			hexEncPrivkey("d09e5eaeec0fd596236faed210e55ef45112409a5aa7f3276d26646080dcfaeb"),
-			hexEncPrivkey("c1e20dbbf0d530e50573bd0a260b32ec15eb9190032b4633d44834afc8afe578"),
-			hexEncPrivkey("ed5f38f5702d92d306143e5d9154fb21819777da39af325ea359f453d179e80b"),
-		},
-		252: {
-			hexEncPrivkey("1c9b1cafbec00848d2c174b858219914b42a7d5c9359b1ca03fd650e8239ae94"),
-			hexEncPrivkey("e0e1e8db4a6f13c1ffdd3e96b72fa7012293ced187c9dcdcb9ba2af37a46fa10"),
-			hexEncPrivkey("3d53823e0a0295cb09f3e11d16c1b44d07dd37cec6f739b8df3a590189fe9fb9"),
-		},
-		253: {
-			hexEncPrivkey("2d0511ae9bf590166597eeab86b6f27b1ab761761eaea8965487b162f8703847"),
-			hexEncPrivkey("6cfbd7b8503073fc3dbdb746a7c672571648d3bd15197ccf7f7fef3d904f53a2"),
-			hexEncPrivkey("a30599b12827b69120633f15b98a7f6bc9fc2e9a0fd6ae2ebb767c0e64d743ab"),
-			hexEncPrivkey("14a98db9b46a831d67eff29f3b85b1b485bb12ae9796aea98d91be3dc78d8a91"),
-			hexEncPrivkey("2369ff1fc1ff8ca7d20b17e2673adc3365c3674377f21c5d9dafaff21fe12e24"),
-			hexEncPrivkey("9ae91101d6b5048607f41ec0f690ef5d09507928aded2410aabd9237aa2727d7"),
-			hexEncPrivkey("05e3c59090a3fd1ae697c09c574a36fcf9bedd0afa8fe3946f21117319ca4973"),
-			hexEncPrivkey("06f31c5ea632658f718a91a1b1b9ae4b7549d7b3bc61cbc2be5f4a439039f3ad"),
-		},
-		254: {
-			hexEncPrivkey("dec742079ec00ff4ec1284d7905bc3de2366f67a0769431fd16f80fd68c58a7c"),
-			hexEncPrivkey("ff02c8861fa12fbd129d2a95ea663492ef9c1e51de19dcfbbfe1c59894a28d2b"),
-			hexEncPrivkey("4dded9e4eefcbce4262be4fd9e8a773670ab0b5f448f286ec97dfc8cf681444a"),
-			hexEncPrivkey("750d931e2a8baa2c9268cb46b7cd851f4198018bed22f4dceb09dd334a2395f6"),
-			hexEncPrivkey("ce1435a956a98ffec484cd11489c4f165cf1606819ab6b521cee440f0c677e9e"),
-			hexEncPrivkey("996e7f8d1638be92d7328b4770f47e5420fc4bafecb4324fd33b1f5d9f403a75"),
-			hexEncPrivkey("ebdc44e77a6cc0eb622e58cf3bb903c3da4c91ca75b447b0168505d8fc308b9c"),
-			hexEncPrivkey("46bd1eddcf6431bea66fc19ebc45df191c1c7d6ed552dcdc7392885009c322f0"),
-		},
-		255: {
-			hexEncPrivkey("da8645f90826e57228d9ea72aff84500060ad111a5d62e4af831ed8e4b5acfb8"),
-			hexEncPrivkey("3c944c5d9af51d4c1d43f5d0f3a1a7ef65d5e82744d669b58b5fed242941a566"),
-			hexEncPrivkey("5ebcde76f1d579eebf6e43b0ffe9157e65ffaa391175d5b9aa988f47df3e33da"),
-			hexEncPrivkey("97f78253a7d1d796e4eaabce721febcc4550dd68fb11cc818378ba807a2cb7de"),
-			hexEncPrivkey("a38cd7dc9b4079d1c0406afd0fdb1165c285f2c44f946eca96fc67772c988c7d"),
-			hexEncPrivkey("d64cbb3ffdf712c372b7a22a176308ef8f91861398d5dbaf326fd89c6eaeef1c"),
-			hexEncPrivkey("d269609743ef29d6446e3355ec647e38d919c82a4eb5837e442efd7f4218944f"),
-			hexEncPrivkey("d8f7bcc4a530efde1d143717007179e0d9ace405ddaaf151c4d863753b7fd64c"),
-		},
-		256: {
-			hexEncPrivkey("8c5b422155d33ea8e9d46f71d1ad3e7b24cb40051413ffa1a81cff613d243ba9"),
-			hexEncPrivkey("937b1af801def4e8f5a3a8bd225a8bcff1db764e41d3e177f2e9376e8dd87233"),
-			hexEncPrivkey("120260dce739b6f71f171da6f65bc361b5fad51db74cf02d3e973347819a6518"),
-			hexEncPrivkey("1fa56cf25d4b46c2bf94e82355aa631717b63190785ac6bae545a88aadc304a9"),
-			hexEncPrivkey("3c38c503c0376f9b4adcbe935d5f4b890391741c764f61b03cd4d0d42deae002"),
-			hexEncPrivkey("3a54af3e9fa162bc8623cdf3e5d9b70bf30ade1d54cc3abea8659aba6cff471f"),
-			hexEncPrivkey("6799a02ea1999aefdcbcc4d3ff9544478be7365a328d0d0f37c26bd95ade0cda"),
-			hexEncPrivkey("e24a7bc9051058f918646b0f6e3d16884b2a55a15553b89bab910d55ebc36116"),
-		},
-	},
-}
-
 // Real sockets, real crypto: this test checks end-to-end connectivity for UDPv5.
 func TestUDPv5_lookupE2E(t *testing.T) {
 	t.Parallel()
