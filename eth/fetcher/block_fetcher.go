@@ -640,7 +640,7 @@ func (f *BlockFetcher) loop() {
 							continue
 						}
 						if manifestHash == (common.Hash{}) {
-							manifestHash = types.DeriveSha(task.subManifest[i], trie.NewStackTrie(nil))
+							manifestHash = task.subManifest[i].Hash()
 						}
 						if manifestHash != announce.header.ManifestHash() {
 							continue
