@@ -92,14 +92,47 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *par
 	return hc, nil
 }
 
+func (hc *HeaderChain) ManifestForHeader(h *types.Header) (types.BlockManifest, error) {
+	manifest := types.BlockManifest{}
+	if h.NumberU64() == 0 {
+		return manifest, nil
+	}
+	for {
+		ancestor := hc.GetHeader(h.ParentHash(), h.NumberU64()-1)
+		if ancestor == nil {
+			return types.BlockManifest{}, errors.New("ancestor not found")
+		}
+		ancHash := ancestor.Hash()
+		manifest = append(manifest, &ancHash)
+		if hc.engine.HasCoincidentDifficulty(h) || h.NumberU64() == 0 {
+			// No more ancestors to include in the manifest
+			return manifest, nil
+		}
+		h = ancestor // Iterate to next ancestor
+	}
+}
+
 // Append
-func (hc *HeaderChain) Append(batch ethdb.Batch, block *types.Block) error {
+func (hc *HeaderChain) Append(batch ethdb.Batch, block *types.Block, manifestHash common.Hash) error {
+	h := block.Header()
+	log.Debug("HeaderChain Append:", "Block information: Hash:", block.Hash(), "block header hash:", h.Hash(), "Number:", block.NumberU64(), "Location:", h.Location, "Parent:", block.ParentHash())
 
-	log.Debug("HeaderChain Append:", "Block information: Hash:", block.Hash(), "block header hash:", block.Header().Hash(), "Number:", block.NumberU64(), "Location:", block.Header().Location, "Parent:", block.ParentHash())
-
-	err := hc.engine.VerifyHeader(hc, block.Header(), true)
+	err := hc.engine.VerifyHeader(hc, h, true)
 	if err != nil {
 		return err
+	}
+
+	// Load the manifest for this block
+	manifest, err := hc.ManifestForHeader(h)
+	if err != nil {
+		return err
+	}
+
+	// If this is a coincident block, verify the manifest matches expected
+	if hc.engine.HasCoincidentDifficulty(h) {
+		if manifestHash != manifest.Hash() {
+			return errors.New("manifest does not match hash")
+		}
 	}
 
 	// Append header to the headerchain
