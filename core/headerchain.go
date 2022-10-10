@@ -92,14 +92,54 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *par
 	return hc, nil
 }
 
+func (hc *HeaderChain) CollectBlockManifest(h *types.Header) (types.BlockManifest, error) {
+	manifest := types.BlockManifest{}
+	// Terminate the search if we reached genesis
+	if h.NumberU64() == 0 {
+		if h.Hash() != hc.config.GenesisHash {
+			return nil, fmt.Errorf("manifest builds on incorrect genesis", "block0 hash: ", h.Hash())
+		} else {
+			return manifest, nil
+		}
+	}
+	// Terminate the search on coincidence
+	if hc.engine.HasCoincidentDifficulty(h) {
+		return manifest, nil
+	}
+	// Recursively get the ancestor manifest, until a coincident ancestor is found
+	ancestor := hc.GetHeader(h.ParentHash(), h.NumberU64()-1)
+	if ancestor == nil {
+		return types.BlockManifest{}, errors.New("ancestor not found")
+	}
+	ancManifest, err := hc.CollectBlockManifest(ancestor)
+	if err != nil {
+		return nil, errors.New("unable to get manifest for ancestor")
+	}
+	manifest = append(ancManifest, manifest...)
+	return manifest, nil
+}
+
 // Append
-func (hc *HeaderChain) Append(batch ethdb.Batch, block *types.Block) error {
+func (hc *HeaderChain) Append(batch ethdb.Batch, block *types.Block, manifestHash common.Hash) error {
+	h := block.Header()
+	log.Debug("HeaderChain Append:", "Block information: Hash:", block.Hash(), "block header hash:", h.Hash(), "Number:", block.NumberU64(), "Location:", h.Location, "Parent:", block.ParentHash())
 
-	log.Debug("HeaderChain Append:", "Block information: Hash:", block.Hash(), "block header hash:", block.Header().Hash(), "Number:", block.NumberU64(), "Location:", block.Header().Location, "Parent:", block.ParentHash())
-
-	err := hc.engine.VerifyHeader(hc, block.Header(), true)
+	err := hc.engine.VerifyHeader(hc, h, true)
 	if err != nil {
 		return err
+	}
+
+	// Load the manifest for this block
+	manifest, err := hc.CollectBlockManifest(h)
+	if err != nil {
+		return err
+	}
+
+	// If this is a coincident block, verify the manifest matches expected
+	if hc.engine.HasCoincidentDifficulty(h) {
+		if manifestHash != manifest.Hash() {
+			return errors.New("manifest does not match hash")
+		}
 	}
 
 	// Append header to the headerchain
