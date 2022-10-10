@@ -114,7 +114,7 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 
 // Append takes a proposed header and constructs a local block and attempts to hierarchically append it to the block graph.
 // If this is called from a dominant context a domTerminus must be provided else a common.Hash{} should be used and domOrigin should be set to true.
-func (sl *Slice) Append(header *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) (types.PendingHeader, error) {
+func (sl *Slice) Append(header *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, manifestHash common.Hash) (types.PendingHeader, error) {
 	nodeCtx := common.NodeLocation.Context()
 	location := header.Location()
 
@@ -137,7 +137,7 @@ func (sl *Slice) Append(header *types.Header, domTerminus common.Hash, td *big.I
 	}
 
 	// Append the new block
-	err = sl.hc.Append(batch, block)
+	err = sl.hc.Append(batch, block, manifestHash)
 	if err != nil {
 		return sl.nilPendingHeader, err
 	}
@@ -155,7 +155,7 @@ func (sl *Slice) Append(header *types.Header, domTerminus common.Hash, td *big.I
 	// Call my sub to append the block
 	var subPendingHeader types.PendingHeader
 	if nodeCtx != common.ZONE_CTX {
-		subPendingHeader, err = sl.subClients[location.SubLocation()].Append(context.Background(), block.Header(), domTerminus, td, true, reorg)
+		subPendingHeader, err = sl.subClients[location.SubLocation()].Append(context.Background(), block.Header(), domTerminus, td, true, reorg, block.ManifestHash())
 		if err != nil {
 			return sl.nilPendingHeader, err
 		}
@@ -482,7 +482,7 @@ func (sl *Slice) genesisInit(genesis *Genesis) error {
 				location := block.Header().Location()
 				if nodeCtx == common.PRIME_CTX {
 					rawdb.WritePendingBlockBody(sl.sliceDb, block.Root(), block.Body())
-					_, err := sl.Append(block.Header(), genesisHash, block.Difficulty(), false, false)
+					_, err := sl.Append(block.Header(), genesisHash, block.Difficulty(), false, false, block.ManifestHash())
 					if err != nil {
 						log.Warn("Failed to append block", "hash:", block.Hash(), "Number:", block.Number(), "Location:", block.Header().Location(), "error:", err)
 					}
@@ -584,7 +584,7 @@ func (sl *Slice) procfutureHeaders() {
 
 		for i := range headers {
 			var nilHash common.Hash
-			sl.Append(headers[i], nilHash, big.NewInt(0), false, false)
+			sl.Append(headers[i], nilHash, big.NewInt(0), false, false, headers[i].ManifestHash())
 		}
 	}
 }
