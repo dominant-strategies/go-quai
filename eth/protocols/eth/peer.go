@@ -212,7 +212,7 @@ func (p *Peer) AsyncSendTransactions(hashes []common.Hash) {
 			p.knownTxs.Add(hash)
 		}
 	case <-p.term:
-		p.Log().Debug("Dropping transaction propagation", "count", len(hashes))
+		p.Peer.Log().Debug("Dropping transaction propagation", "count", len(hashes))
 	}
 }
 
@@ -247,7 +247,7 @@ func (p *Peer) AsyncSendPooledTransactionHashes(hashes []common.Hash) {
 			p.knownTxs.Add(hash)
 		}
 	case <-p.term:
-		p.Log().Debug("Dropping transaction announcement", "count", len(hashes))
+		p.Peer.Log().Debug("Dropping transaction announcement", "count", len(hashes))
 	}
 }
 
@@ -313,7 +313,7 @@ func (p *Peer) AsyncSendNewBlockHash(block *types.Block) {
 		}
 		p.knownBlocks.Add(block.Hash())
 	default:
-		p.Log().Debug("Dropping block announcement", "number", block.NumberU64(), "hash", block.Hash())
+		p.Peer.Log().Debug("Dropping block announcement", "number", block.NumberU64(), "hash", block.Hash())
 	}
 }
 
@@ -340,7 +340,7 @@ func (p *Peer) AsyncSendNewBlock(block *types.Block) {
 		}
 		p.knownBlocks.Add(block.Hash())
 	default:
-		p.Log().Debug("Dropping block propagation", "number", block.NumberU64(), "hash", block.Hash())
+		p.Peer.Log().Debug("Dropping block propagation", "number", block.NumberU64(), "hash", block.Hash())
 	}
 }
 
@@ -403,7 +403,7 @@ func (p *Peer) ReplyReceiptsRLP(id uint64, receipts []rlp.RawValue) error {
 // RequestOneHeader is a wrapper around the header query functions to fetch a
 // single header. It is used solely by the fetcher.
 func (p *Peer) RequestOneHeader(hash common.Hash) error {
-	p.Log().Debug("Fetching single header", "hash", hash)
+	p.Peer.Log().Debug("Fetching single header", "hash", hash)
 	query := GetBlockHeadersPacket{
 		Origin:  HashOrNumber{Hash: hash},
 		Amount:  uint64(1),
@@ -425,7 +425,7 @@ func (p *Peer) RequestOneHeader(hash common.Hash) error {
 // RequestHeadersByHash fetches a batch of blocks' headers corresponding to the
 // specified header query, based on the hash of an origin block.
 func (p *Peer) RequestHeadersByHash(origin common.Hash, amount int, skip int, reverse bool) error {
-	p.Log().Debug("Fetching batch of headers", "count", amount, "fromhash", origin, "skip", skip, "reverse", reverse)
+	p.Peer.Log().Debug("Fetching batch of headers", "count", amount, "fromhash", origin, "skip", skip, "reverse", reverse)
 	query := GetBlockHeadersPacket{
 		Origin:  HashOrNumber{Hash: origin},
 		Amount:  uint64(amount),
@@ -447,7 +447,7 @@ func (p *Peer) RequestHeadersByHash(origin common.Hash, amount int, skip int, re
 // RequestHeadersByNumber fetches a batch of blocks' headers corresponding to the
 // specified header query, based on the number of an origin block.
 func (p *Peer) RequestHeadersByNumber(origin uint64, amount int, skip int, reverse bool) error {
-	p.Log().Debug("Fetching batch of headers", "count", amount, "fromnum", origin, "skip", skip, "reverse", reverse)
+	p.Peer.Log().Debug("Fetching batch of headers", "count", amount, "fromnum", origin, "skip", skip, "reverse", reverse)
 	query := GetBlockHeadersPacket{
 		Origin:  HashOrNumber{Number: origin},
 		Amount:  uint64(amount),
@@ -481,7 +481,7 @@ func (p *Peer) ExpectRequestHeadersByNumber(origin uint64, amount int, skip int,
 // RequestBodies fetches a batch of blocks' bodies corresponding to the hashes
 // specified.
 func (p *Peer) RequestBodies(hashes []common.Hash) error {
-	p.Log().Debug("Fetching batch of block bodies", "count", len(hashes))
+	p.Peer.Log().Debug("Fetching batch of block bodies", "count", len(hashes))
 	if p.Version() >= ETH66 {
 		id := rand.Uint64()
 
@@ -497,7 +497,7 @@ func (p *Peer) RequestBodies(hashes []common.Hash) error {
 // RequestNodeData fetches a batch of arbitrary data from a node's known state
 // data, corresponding to the specified hashes.
 func (p *Peer) RequestNodeData(hashes []common.Hash) error {
-	p.Log().Debug("Fetching batch of state data", "count", len(hashes))
+	p.Peer.Log().Debug("Fetching batch of state data", "count", len(hashes))
 	if p.Version() >= ETH66 {
 		id := rand.Uint64()
 
@@ -512,7 +512,7 @@ func (p *Peer) RequestNodeData(hashes []common.Hash) error {
 
 // RequestReceipts fetches a batch of transaction receipts from a remote node.
 func (p *Peer) RequestReceipts(hashes []common.Hash) error {
-	p.Log().Debug("Fetching batch of receipts", "count", len(hashes))
+	p.Peer.Log().Debug("Fetching batch of receipts", "count", len(hashes))
 	if p.Version() >= ETH66 {
 		id := rand.Uint64()
 
@@ -527,7 +527,7 @@ func (p *Peer) RequestReceipts(hashes []common.Hash) error {
 
 // RequestTxs fetches a batch of transactions from a remote node.
 func (p *Peer) RequestTxs(hashes []common.Hash) error {
-	p.Log().Debug("Fetching batch of transactions", "count", len(hashes))
+	p.Peer.Log().Debug("Fetching batch of transactions", "count", len(hashes))
 	if p.Version() >= ETH66 {
 		id := rand.Uint64()
 

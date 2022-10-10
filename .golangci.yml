@@ -230,10 +230,13 @@ linters:
     - govet
     - ineffassign
     - misspell
-    - staticcheck
     - unconvert
     - unused
-    - typecheck
+    - staticcheck
+    - bidichk
+    - durationcheck
+    - exportloopref
+    - whitespace
 
 linters-settings:
   gofmt:

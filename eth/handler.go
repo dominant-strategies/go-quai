@@ -179,7 +179,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		if p == nil {
 			return errors.New("unknown peer")
 		}
-		return p.RequestTxs(hashes)
+		return p.Peer.RequestTxs(hashes)
 	}
 	h.txFetcher = fetcher.NewTxFetcher(h.txpool.Has, h.txpool.AddRemotes, fetchTx)
 	h.chainSync = newChainSyncer(h)
@@ -352,7 +352,7 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 		// Send the block to a subset of our peers
 		transfer := peers[:int(math.Sqrt(float64(len(peers))))]
 		for _, peer := range transfer {
-			peer.AsyncSendNewBlock(block)
+			peer.Peer.AsyncSendNewBlock(block)
 		}
 		log.Trace("Propagated block", "hash", hash, "recipients", len(transfer), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
 		return
@@ -360,7 +360,7 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 	// Otherwise if the block is indeed in out own chain, announce it
 	if h.core.HasBlock(hash, block.NumberU64()) {
 		for _, peer := range peers {
-			peer.AsyncSendNewBlockHash(block)
+			peer.Peer.AsyncSendNewBlockHash(block)
 		}
 		log.Trace("Announced block", "hash", hash, "recipients", len(peers), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
 	}
@@ -397,12 +397,12 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 	for peer, hashes := range txset {
 		directPeers++
 		directCount += len(hashes)
-		peer.AsyncSendTransactions(hashes)
+		peer.Peer.AsyncSendTransactions(hashes)
 	}
 	for peer, hashes := range annos {
 		annoPeers++
 		annoCount += len(hashes)
-		peer.AsyncSendPooledTransactionHashes(hashes)
+		peer.Peer.AsyncSendPooledTransactionHashes(hashes)
 	}
 	log.Debug("Transaction broadcast", "txs", len(txs),
 		"announce packs", annoPeers, "announced hashes", annoCount,

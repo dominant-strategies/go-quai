@@ -43,13 +43,13 @@ func (p *Peer) broadcastBlocks() {
 			if err := p.SendNewBlock(prop.block); err != nil {
 				return
 			}
-			p.Log().Trace("Propagated block", "number", prop.block.Number(), "hash", prop.block.Hash(), "number", prop.block.NumberU64())
+			p.Peer.Log().Trace("Propagated block", "number", prop.block.Number(), "hash", prop.block.Hash(), "number", prop.block.NumberU64())
 
 		case block := <-p.queuedBlockAnns:
 			if err := p.SendNewBlockHashes([]common.Hash{block.Hash()}, []uint64{block.NumberU64()}); err != nil {
 				return
 			}
-			p.Log().Trace("Announced block", "number", block.Number(), "hash", block.Hash())
+			p.Peer.Log().Trace("Announced block", "number", block.Number(), "hash", block.Hash())
 
 		case <-p.term:
 			return
@@ -94,7 +94,7 @@ func (p *Peer) broadcastTransactions() {
 						return
 					}
 					close(done)
-					p.Log().Trace("Sent transactions", "count", len(txs))
+					p.Peer.Log().Trace("Sent transactions", "count", len(txs))
 				}()
 			}
 		}
@@ -161,7 +161,7 @@ func (p *Peer) announceTransactions() {
 						return
 					}
 					close(done)
-					p.Log().Trace("Sent transaction announcements", "count", len(pending))
+					p.Peer.Log().Trace("Sent transaction announcements", "count", len(pending))
 				}()
 			}
 		}

@@ -140,7 +140,6 @@ func (api *PublicBlockChainQuaiAPI) ChainId() (*hexutil.Big, error) {
 func (s *PublicBlockChainQuaiAPI) BlockNumber() hexutil.Uint64 {
 	header, _ := s.b.HeaderByNumber(context.Background(), rpc.LatestBlockNumber) // latest header should always be available
 	return hexutil.Uint64(header.NumberU64())
-
 }
 
 // GetBalance returns the amount of wei for the given address in the state of the

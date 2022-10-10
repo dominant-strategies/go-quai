@@ -108,7 +108,7 @@ func (ps *peerSet) peersWithoutBlock(hash common.Hash) []*ethPeer {
 
 	list := make([]*ethPeer, 0, len(ps.peers))
 	for _, p := range ps.peers {
-		if !p.KnownBlock(hash) {
+		if !p.Peer.KnownBlock(hash) {
 			list = append(list, p)
 		}
 	}
@@ -123,7 +123,7 @@ func (ps *peerSet) peersWithoutTransaction(hash common.Hash) []*ethPeer {
 
 	list := make([]*ethPeer, 0, len(ps.peers))
 	for _, p := range ps.peers {
-		if !p.KnownTransaction(hash) {
+		if !p.Peer.KnownTransaction(hash) {
 			list = append(list, p)
 		}
 	}
@@ -150,7 +150,7 @@ func (ps *peerSet) peerWithHighestNumber() *eth.Peer {
 		bestNumber uint64
 	)
 	for _, p := range ps.peers {
-		if _, number := p.Head(); bestPeer == nil || number > bestNumber {
+		if _, number := p.Peer.Head(); bestPeer == nil || number > bestNumber {
 			bestPeer, bestNumber = p.Peer, number
 		}
 	}
@@ -163,7 +163,7 @@ func (ps *peerSet) close() {
 	defer ps.lock.Unlock()
 
 	for _, p := range ps.peers {
-		p.Disconnect(p2p.DiscQuitting)
+		p.Peer.Disconnect(p2p.DiscQuitting)
 	}
 	ps.closed = true
 }
