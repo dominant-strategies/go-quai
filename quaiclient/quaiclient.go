@@ -125,13 +125,14 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 }
 
 // RPCMarshalTdHeader converts the header and order as input to PCRC.
-func RPCMarshalTdHeader(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) (map[string]interface{}, error) {
+func RPCMarshalTdHeader(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, manifestHash common.Hash) (map[string]interface{}, error) {
 	fields := map[string]interface{}{"header": RPCMarshalHeader(header)}
 	fields["domPendingHeader"] = RPCMarshalHeader(domPendingHeader)
 	fields["td"] = td
 	fields["domTerminus"] = domTerminus
 	fields["domOrigin"] = domOrigin
 	fields["reorg"] = reorg
+	fields["manifestHash"] = manifestHash
 	return fields, nil
 }
 
@@ -139,8 +140,8 @@ type Termini struct {
 	Termini []common.Hash `json:"termini"`
 }
 
-func (ec *Client) Append(ctx context.Context, header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) error {
-	data, err := RPCMarshalTdHeader(header, domPendingHeader, domTerminus, td, domOrigin, reorg)
+func (ec *Client) Append(ctx context.Context, header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, manifestHash common.Hash) error {
+	data, err := RPCMarshalTdHeader(header, domPendingHeader, domTerminus, td, domOrigin, reorg, manifestHash)
 	if err != nil {
 		return err
 	}

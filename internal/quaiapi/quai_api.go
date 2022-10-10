@@ -546,6 +546,7 @@ type tdBlock struct {
 	DomTerminus      common.Hash   `json:"domTerminus"`
 	DomOrigin        bool          `json:"domOrigin"`
 	Reorg            bool          `json:"reorg"`
+	ManifestHash     common.Hash   `json:"manifestHash"`
 }
 
 func (s *PublicBlockChainQuaiAPI) Append(ctx context.Context, raw json.RawMessage) error {
@@ -556,7 +557,7 @@ func (s *PublicBlockChainQuaiAPI) Append(ctx context.Context, raw json.RawMessag
 		return err
 	}
 
-	err := s.b.Append(body.Header, body.DomPendingHeader, body.DomTerminus, body.Td, body.DomOrigin, body.Reorg)
+	err := s.b.Append(body.Header, body.DomPendingHeader, body.DomTerminus, body.Td, body.DomOrigin, body.Reorg, body.ManifestHash)
 	if err != nil {
 		return err
 	}
