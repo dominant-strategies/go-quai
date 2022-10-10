@@ -540,10 +540,11 @@ func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw js
 }
 
 type tdBlock struct {
-	Td          *big.Int    `json:"td"`
-	DomTerminus common.Hash `json:"domTerminus"`
-	DomOrigin   bool        `json:"domOrigin"`
-	Reorg       bool        `json:"reorg"`
+	Td           *big.Int    `json:"td"`
+	DomTerminus  common.Hash `json:"domTerminus"`
+	DomOrigin    bool        `json:"domOrigin"`
+	Reorg        bool        `json:"reorg"`
+	ManifestHash common.Hash `json:"manifestHash"`
 }
 
 func (s *PublicBlockChainQuaiAPI) Append(ctx context.Context, raw json.RawMessage) (map[string]interface{}, error) {
@@ -557,7 +558,7 @@ func (s *PublicBlockChainQuaiAPI) Append(ctx context.Context, raw json.RawMessag
 		return nil, err
 	}
 
-	pendingHeader, err := s.b.Append(head, body.DomTerminus, body.Td, body.DomOrigin, body.Reorg)
+	pendingHeader, err := s.b.Append(head, body.DomTerminus, body.Td, body.DomOrigin, body.Reorg, body.ManifestHash)
 	if err != nil {
 		return nil, err
 	}
