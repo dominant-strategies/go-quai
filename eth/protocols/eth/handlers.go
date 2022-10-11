@@ -174,55 +174,6 @@ func answerGetBlockBodiesQuery(backend Backend, query GetBlockBodiesPacket, peer
 	return bodies
 }
 
-func handleGetNodeData(backend Backend, msg Decoder, peer *Peer) error {
-	// Decode the trie node data retrieval message
-	var query GetNodeDataPacket
-	if err := msg.Decode(&query); err != nil {
-		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
-	}
-	response := answerGetNodeDataQuery(backend, query, peer)
-	return peer.SendNodeData(response)
-}
-
-func handleGetNodeData66(backend Backend, msg Decoder, peer *Peer) error {
-	// Decode the trie node data retrieval message
-	var query GetNodeDataPacket66
-	if err := msg.Decode(&query); err != nil {
-		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
-	}
-	response := answerGetNodeDataQuery(backend, query.GetNodeDataPacket, peer)
-	return peer.ReplyNodeData(query.RequestId, response)
-}
-
-func answerGetNodeDataQuery(backend Backend, query GetNodeDataPacket, peer *Peer) [][]byte {
-	// Gather state data until the fetch or network limits is reached
-	var (
-		bytes int
-		nodes [][]byte
-	)
-	for lookups, hash := range query {
-		if bytes >= softResponseLimit || len(nodes) >= maxNodeDataServe ||
-			lookups >= 2*maxNodeDataServe {
-			break
-		}
-		// Retrieve the requested state entry
-		if bloom := backend.StateBloom(); bloom != nil && !bloom.Contains(hash[:]) {
-			// Only lookup the trie node if there's chance that we actually have it
-			continue
-		}
-		entry, err := backend.Core().TrieNode(hash)
-		if len(entry) == 0 || err != nil {
-			// Read the contract code with prefix only to save unnecessary lookups.
-			entry, err = backend.Core().ContractCodeWithPrefix(hash)
-		}
-		if err == nil && len(entry) > 0 {
-			nodes = append(nodes, entry)
-			bytes += len(entry)
-		}
-	}
-	return nodes
-}
-
 func handleGetReceipts(backend Backend, msg Decoder, peer *Peer) error {
 	// Decode the block receipts retrieval message
 	var query GetReceiptsPacket

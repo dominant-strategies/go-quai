@@ -35,7 +35,6 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p"
 	"github.com/dominant-strategies/go-quai/params"
-	"github.com/dominant-strategies/go-quai/trie"
 )
 
 const (
@@ -100,7 +99,6 @@ type handler struct {
 	maxPeers int
 
 	downloader   *downloader.Downloader
-	stateBloom   *trie.SyncBloom
 	blockFetcher *fetcher.BlockFetcher
 	txFetcher    *fetcher.TxFetcher
 	peers        *peerSet
@@ -146,7 +144,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		h.checkpointHash = config.Checkpoint.SectionHead
 	}
 
-	h.downloader = downloader.New(h.checkpointNumber, config.Database, h.stateBloom, h.eventMux, h.core, h.removePeer)
+	h.downloader = downloader.New(h.checkpointNumber, config.Database, h.eventMux, h.core, h.removePeer)
 
 	// Construct the fetcher (short sync)
 	validator := func(header *types.Header) error {

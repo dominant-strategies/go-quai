@@ -79,7 +79,6 @@ type Peer interface {
 	LightPeer
 	RequestBodies([]common.Hash) error
 	RequestReceipts([]common.Hash) error
-	RequestNodeData([]common.Hash) error
 }
 
 // newPeerConnection creates a new downloader peer.
@@ -156,19 +155,6 @@ func (p *peerConnection) FetchReceipts(request *fetchRequest) error {
 		}
 		p.peer.RequestReceipts(hashes)
 	}()
-
-	return nil
-}
-
-// FetchNodeData sends a node state data retrieval request to the remote peer.
-func (p *peerConnection) FetchNodeData(hashes []common.Hash) error {
-	// Short circuit if the peer is already fetching
-	if !atomic.CompareAndSwapInt32(&p.stateIdle, 0, 1) {
-		return errAlreadyFetching
-	}
-	p.stateStarted = time.Now()
-
-	go p.peer.RequestNodeData(hashes)
 
 	return nil
 }

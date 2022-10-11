@@ -29,7 +29,6 @@ import (
 	"github.com/dominant-strategies/go-quai/p2p/enode"
 	"github.com/dominant-strategies/go-quai/p2p/enr"
 	"github.com/dominant-strategies/go-quai/params"
-	"github.com/dominant-strategies/go-quai/trie"
 )
 
 const (
@@ -68,9 +67,6 @@ type Handler func(peer *Peer) error
 type Backend interface {
 	// Core retrieves the blockchain object to serve data.
 	Core() *core.Core
-
-	// StateBloom retrieves the bloom filter - if any - for state trie nodes.
-	StateBloom() *trie.SyncBloom
 
 	// TxPool retrieves the transaction pool object to serve data.
 	TxPool() TxPool
@@ -176,7 +172,6 @@ var eth65 = map[uint64]msgHandler{
 	BlockHeadersMsg:               handleBlockHeaders,
 	GetBlockBodiesMsg:             handleGetBlockBodies,
 	BlockBodiesMsg:                handleBlockBodies,
-	GetNodeDataMsg:                handleGetNodeData,
 	NodeDataMsg:                   handleNodeData,
 	GetReceiptsMsg:                handleGetReceipts,
 	ReceiptsMsg:                   handleReceipts,
@@ -198,7 +193,6 @@ var eth66 = map[uint64]msgHandler{
 	BlockHeadersMsg:          handleBlockHeaders66,
 	GetBlockBodiesMsg:        handleGetBlockBodies66,
 	BlockBodiesMsg:           handleBlockBodies66,
-	GetNodeDataMsg:           handleGetNodeData66,
 	NodeDataMsg:              handleNodeData66,
 	GetReceiptsMsg:           handleGetReceipts66,
 	ReceiptsMsg:              handleReceipts66,
