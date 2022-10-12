@@ -816,6 +816,7 @@ func (b *Block) WithBody(transactions []*Transaction, uncles []*Header, extTrans
 		subManifest:     make([]*common.Hash, len(subManifest)),
 	}
 	copy(block.transactions, transactions)
+	copy(block.subManifest, subManifest)
 	for i := range uncles {
 		block.uncles[i] = CopyHeader(uncles[i])
 	}
