@@ -28,6 +28,10 @@ const (
 	pendingHeaderCacheLimit = 500
 	pendingHeaderGCTime     = 5
 
+	// pendingSubManifestLimit is the maximum number of manifests which may be
+	// stored in cache
+	pendingSubManifestLimit = 100
+
 	// Termini Index reference to the index of Termini struct that has the
 	// previous coincident block hash
 	terminiIndex = 3
@@ -58,6 +62,8 @@ type Slice struct {
 
 	pendingHeader common.Hash
 	phCache       map[common.Hash]types.PendingHeader
+
+	pendingSubManifests *lru.Cache
 }
 
 func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocalBlock func(block *types.Header) bool, chainConfig *params.ChainConfig, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis) (*Slice, error) {
@@ -72,6 +78,8 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 
 	futureHeaders, _ := lru.New(maxFutureHeaders)
 	sl.futureHeaders = futureHeaders
+	pendingSubManifests, _ := lru.New(pendingSubManifestLimit)
+	sl.pendingSubManifests = pendingSubManifests
 
 	var err error
 	sl.hc, err = NewHeaderChain(db, engine, chainConfig, cacheConfig, vmConfig)
@@ -235,6 +243,15 @@ func (sl *Slice) ConstructLocalBlock(header *types.Header) *types.Block {
 			for i, blockHash := range pendingBlockBody.SubManifest {
 				subBlockHashes[i] = blockHash
 			}
+			if subBlockHashes.Hash() != header.ManifestHash() {
+				subManifest := sl.getPendingSubManifest(header.ManifestHash())
+				if subManifest != nil {
+					subBlockHashes = subManifest
+				} else {
+					log.Error("unable to find manifest for block", "hash: ", header.Hash())
+					return nil
+				}
+			}
 
 			block = types.NewBlockWithHeader(header).WithBody(txs, uncles, etxs, subBlockHashes)
 			block = block.WithSeal(header)
@@ -262,7 +279,8 @@ func (sl *Slice) updateCacheAndRelay(pendingHeader types.PendingHeader, location
 			return
 		}
 		for i := range sl.subClients {
-			sl.subClients[i].SubRelayPendingHeader(context.Background(), sl.phCache[sl.pendingHeader], reorg)
+			subPendingManifest, _ := sl.subClients[i].SubRelayPendingHeader(context.Background(), sl.phCache[sl.pendingHeader], reorg)
+			sl.addPendingSubManifest(subPendingManifest)
 		}
 	}
 }
@@ -375,30 +393,39 @@ func (sl *Slice) GetPendingHeader() (*types.Header, error) {
 	return sl.phCache[sl.pendingHeader].Header, nil
 }
 
-// SubRelayPendingHeader takes a pending header from the sender (ie dominant), updates the phCache with a composited header and relays result to subordinates
-func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader, reorg bool) error {
+// SubRelayPendingHeader takes a pending header from the sender (ie dominant), updates the phCache with a composited header, relays result to subordinates, and returns the pending manifest for this block
+func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader, reorg bool) (types.BlockManifest, error) {
 	nodeCtx := common.NodeLocation.Context()
 
 	sl.phCachemu.Lock()
 	defer sl.phCachemu.Unlock()
 
-	if nodeCtx == common.REGION_CTX {
+	switch nodeCtx {
+	case common.ZONE_CTX:
+		sl.updatePhCacheFromDom(pendingHeader, common.NodeLocation.Zone(), []int{common.PRIME_CTX, common.REGION_CTX}, reorg)
+		sl.phCache[pendingHeader.Termini[common.NodeLocation.Zone()]].Header.SetLocation(common.NodeLocation)
+		if bestPh, exists := sl.phCache[sl.pendingHeader]; exists {
+			sl.miner.worker.pendingHeaderFeed.Send(bestPh.Header)
+		}
+	case common.REGION_CTX:
 		sl.updatePhCacheFromDom(pendingHeader, common.NodeLocation.Region(), []int{common.PRIME_CTX}, reorg)
 		for i := range sl.subClients {
-			err := sl.subClients[i].SubRelayPendingHeader(context.Background(), sl.phCache[pendingHeader.Termini[common.NodeLocation.Region()]], reorg)
+			subPendingManifest, err := sl.subClients[i].SubRelayPendingHeader(context.Background(), sl.phCache[pendingHeader.Termini[common.NodeLocation.Region()]], reorg)
 			if err != nil {
 				log.Warn("SubRelayPendingHeader", "err:", err)
 			}
+			sl.addPendingSubManifest(subPendingManifest)
 		}
-	} else {
-		sl.updatePhCacheFromDom(pendingHeader, common.NodeLocation.Zone(), []int{common.PRIME_CTX, common.REGION_CTX}, reorg)
-		sl.phCache[pendingHeader.Termini[common.NodeLocation.Zone()]].Header.SetLocation(common.NodeLocation)
-		bestPh, exists := sl.phCache[sl.pendingHeader]
-		if exists {
-			sl.miner.worker.pendingHeaderFeed.Send(bestPh.Header)
-		}
+	case common.PRIME_CTX:
+		log.Crit("prime node does not have a dom. sub-relay shouldn't be called.")
 	}
-	return nil
+
+	// Calculate the manifest for this pending header, and return it so that the dom
+	manifest, err := sl.hc.ManifestForHeader(pendingHeader.Header)
+	if err != nil {
+		return nil, err
+	}
+	return manifest, nil
 }
 
 // updatePhCache takes in an externPendingHeader and updates the pending header on the same terminus if the number is greater
@@ -634,6 +661,21 @@ func (sl *Slice) loadLastState() error {
 	sl.phCache = rawdb.ReadPhCache(sl.sliceDb)
 	sl.pendingHeader = rawdb.ReadCurrentPendingHeaderHash(sl.sliceDb)
 	return nil
+}
+
+// addPendingSubManifest adds a pending subordinate block manifest to the cache
+func (sl *Slice) addPendingSubManifest(manifest types.BlockManifest) {
+	sl.pendingSubManifests.ContainsOrAdd(manifest.Hash(), manifest)
+}
+
+// getPendingSubManifest gets a pending subordinate block manifest associated with the given manifest hash
+func (sl *Slice) getPendingSubManifest(manifestHash common.Hash) types.BlockManifest {
+	if manifest, ok := sl.pendingSubManifests.Get(manifestHash); ok {
+		return manifest.(types.BlockManifest)
+	} else {
+		log.Warn("pending manifest not found: ", "hash: ", manifestHash)
+		return nil
+	}
 }
 
 // Stop stores the phCache and the sl.pendingHeader hash value to the db.
