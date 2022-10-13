@@ -576,10 +576,10 @@ type SubRelay struct {
 	Reorg    bool
 }
 
-func (s *PublicBlockChainQuaiAPI) SubRelayPendingHeader(ctx context.Context, raw json.RawMessage) error {
+func (s *PublicBlockChainQuaiAPI) SubRelayPendingHeader(ctx context.Context, raw json.RawMessage) (types.BlockManifest, error) {
 	var subRelay SubRelay
 	if err := json.Unmarshal(raw, &subRelay); err != nil {
-		return err
+		return nil, err
 	}
 	pendingHeader := types.PendingHeader{Header: subRelay.Header, Termini: subRelay.Termini}
 	return s.b.SubRelayPendingHeader(pendingHeader, subRelay.Reorg)
