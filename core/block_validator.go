@@ -105,6 +105,8 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	if root := statedb.IntermediateRoot(v.config.IsEIP158(header.Number())); header.Root() != root {
 		return fmt.Errorf("invalid merkle root (remote: %x local: %x)", header.Root(), root)
 	}
+	// TODO: Verify that the ETXs in the block match the ETXs in the receipts generated from applying the transactions
+
 	return nil
 }
 

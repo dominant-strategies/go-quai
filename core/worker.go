@@ -660,7 +660,11 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*
 
 		env.txs = append(env.txs, tx)
 		env.receipts = append(env.receipts, receipt)
-
+		if receipt.Status == types.ReceiptStatusSuccessful {
+			for _, etx := range receipt.Etxs {
+				env.etxs = append(env.etxs, types.NewTx(etx))
+			}
+		}
 		return receipt.Logs, nil
 	}
 	return nil, errors.New("error finding transaction")
