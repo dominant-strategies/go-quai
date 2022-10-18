@@ -205,7 +205,7 @@ endif
 	@nohup $(MINING_BASE_COMMAND) --miner.etherbase $(ZONE_2_2_COINBASE) --http.addr $(HTTP_ADDR) --http.api $(HTTP_API) --ws.addr $(WS_ADDR) --ws.api $(WS_API)  --port $(ZONE_2_2_PORT_TCP) --http.port $(ZONE_2_2_PORT_HTTP) --ws.port $(ZONE_2_2_PORT_WS) --dom.url $(ZONE_2_2_DOM_URL):$(REGION_2_PORT_WS) --region 2 --zone 2 >> nodelogs/zone-2-2.log 2>&1 &
 
 stop:
-ifeq ($(shell uname -s),Darwin)
+ifeq ($(shell uname -s), $(filter $(shell uname -s), Darwin Linux))
 	@if pgrep quai; then pkill -f ./build/bin/go-quai; fi
 	@while pgrep quai >/dev/null; do \
 		echo "Stopping all Quai Network nodes, please wait until terminated."; \
