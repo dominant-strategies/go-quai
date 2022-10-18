@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package ethstats implements the network stats reporting service.
-package ethstats
+// Package quaistats implements the network stats reporting service.
+package quaistats
 
 import (
 	"context"
@@ -57,7 +57,7 @@ const (
 	chainHeadChanSize = 10
 )
 
-// backend encompasses the bare-minimum functionality needed for ethstats reporting
+// backend encompasses the bare-minimum functionality needed for quaistats reporting
 type backend interface {
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 	SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription
@@ -69,7 +69,7 @@ type backend interface {
 }
 
 // fullNodeBackend encompasses the functionality necessary for a full node
-// reporting to ethstats
+// reporting to quaistats
 type fullNodeBackend interface {
 	backend
 	Miner() *core.Miner
@@ -172,7 +172,7 @@ func New(node *node.Node, backend backend, engine consensus.Engine, url string) 
 	if err != nil {
 		return err
 	}
-	ethstats := &Service{
+	quaistats := &Service{
 		backend: backend,
 		engine:  engine,
 		server:  node.Server(),
@@ -183,7 +183,7 @@ func New(node *node.Node, backend backend, engine consensus.Engine, url string) 
 		histCh:  make(chan []uint64, 1),
 	}
 
-	node.RegisterLifecycle(ethstats)
+	node.RegisterLifecycle(quaistats)
 	return nil
 }
 
@@ -521,10 +521,14 @@ func (s *Service) report(conn *connWrapper) error {
 	return nil
 }
 
+type latencyReport struct {
+	Latency int `json:"latency"`
+}
+
 // reportLatency sends a ping request to the server, measures the RTT time and
 // finally sends a latency update.
 func (s *Service) reportLatency(conn *connWrapper) error {
-	// Send the current time to the ethstats server
+	// Send the current time to the quaistats server
 	start := time.Now()
 
 	ping := map[string][]interface{}{
@@ -544,18 +548,24 @@ func (s *Service) reportLatency(conn *connWrapper) error {
 		// Ping timeout, abort
 		return errors.New("ping timed out")
 	}
-	latency := strconv.Itoa(int((time.Since(start) / time.Duration(2)).Nanoseconds() / 1000000))
+
+	latency := int((time.Since(start) / time.Duration(2)).Nanoseconds() / 1000000)
 
 	// Send back the measured latency
-	log.Trace("Sending measured latency to ethstats", "latency", latency)
+	log.Trace("Sending measured latency to ethstats", "latency", strconv.Itoa(latency))
 
-	stats := map[string][]interface{}{
-		"emit": {"latency", map[string]string{
-			"id":      s.node,
-			"latency": latency,
-		}},
+	latencyReport := map[string]interface{}{
+		"id": s.node,
+		"latency": &latencyReport{
+			Latency: latency,
+		},
 	}
-	return conn.WriteJSON(stats)
+
+	report := map[string][]interface{}{
+		"emit": {"latency", latencyReport},
+	}
+
+	return conn.WriteJSON(report)
 }
 
 // blockStats is the information to report about individual blocks.
@@ -597,7 +607,7 @@ func (s *Service) reportBlock(conn *connWrapper, block *types.Block) error {
 	details := s.assembleBlockStats(block)
 
 	// Assemble the block report and send it to the server
-	log.Trace("Sending new block to ethstats", "number", details.Number, "hash", details.Hash)
+	log.Trace("Sending new block to quaistats", "number", details.Number, "hash", details.Hash)
 
 	stats := map[string]interface{}{
 		"id":    s.node,
@@ -708,7 +718,7 @@ func (s *Service) reportHistory(conn *connWrapper, list []uint64) error {
 	}
 	// Assemble the history report and send it to the server
 	if len(history) > 0 {
-		log.Trace("Sending historical blocks to ethstats", "first", history[0].Number, "last", history[len(history)-1].Number)
+		log.Trace("Sending historical blocks to quaistats", "first", history[0].Number, "last", history[len(history)-1].Number)
 	} else {
 		log.Trace("No history to send to stats server")
 	}
@@ -733,7 +743,7 @@ func (s *Service) reportPending(conn *connWrapper) error {
 	// Retrieve the pending count from the local blockchain
 	pending, _ := s.backend.Stats()
 	// Assemble the transaction stats and send it to the server
-	log.Trace("Sending pending transactions to ethstats", "count", pending)
+	log.Trace("Sending pending transactions to quaistats", "count", pending)
 
 	stats := map[string]interface{}{
 		"id": s.node,
@@ -787,7 +797,7 @@ func (s *Service) reportStats(conn *connWrapper) error {
 		syncing = s.backend.CurrentHeader().Number().Uint64() >= sync.HighestBlock
 	}
 	// Assemble the node stats and send it to the server
-	log.Trace("Sending node details to ethstats")
+	log.Trace("Sending node details to quaistats")
 
 	stats := map[string]interface{}{
 		"id": s.node,
