@@ -26,7 +26,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dominant-strategies/go-quai"
+	ethereum "github.com/dominant-strategies/go-quai"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus/blake3pow"
 	"github.com/dominant-strategies/go-quai/core"
