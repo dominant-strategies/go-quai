@@ -76,14 +76,14 @@ var tomlSettings = toml.Config{
 	},
 }
 
-type ethstatsConfig struct {
+type quaistatsConfig struct {
 	URL string `toml:",omitempty"`
 }
 
 type quaiConfig struct {
 	Eth      ethconfig.Config
 	Node     node.Config
-	Ethstats ethstatsConfig
+	Ethstats quaistatsConfig
 	Metrics  metrics.Config
 }
 
@@ -135,8 +135,8 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, quaiConfig) {
 		utils.Fatalf("Failed to create the protocol stack: %v", err)
 	}
 	utils.SetEthConfig(ctx, stack, &cfg.Eth)
-	if ctx.GlobalIsSet(utils.EthStatsURLFlag.Name) {
-		cfg.Ethstats.URL = ctx.GlobalString(utils.EthStatsURLFlag.Name)
+	if ctx.GlobalIsSet(utils.QuaiStatsURLFlag.Name) {
+		cfg.Ethstats.URL = ctx.GlobalString(utils.QuaiStatsURLFlag.Name)
 	}
 	applyMetricConfig(ctx, &cfg)
 
@@ -153,7 +153,7 @@ func makeFullNode(ctx *cli.Context) (*node.Node, quaiapi.Backend) {
 
 	// Add the Ethereum Stats daemon if requested.
 	if cfg.Ethstats.URL != "" {
-		utils.RegisterEthStatsService(stack, backend, cfg.Ethstats.URL)
+		utils.RegisterQuaiStatsService(stack, backend, cfg.Ethstats.URL)
 	}
 	return stack, backend
 }

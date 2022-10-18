@@ -96,7 +96,7 @@ run:
     - core/state_processor_test.go
     - core/bench_test.go
     - core/chain_makers_test.go
-    - ethstats/ethstats_test.go
+    - quaistats/quaistats_test.go
     - tests/transaction_test.go
     - tests/init_test.go
     - tests/block_test.go

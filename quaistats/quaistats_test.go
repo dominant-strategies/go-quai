@@ -1,4 +1,4 @@
-package ethstats
+package quaistats
 
 import (
 	"strconv"
