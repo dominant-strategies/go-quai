@@ -22,7 +22,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"math/rand"
 	"net"
 	"reflect"
 	"strings"
@@ -31,7 +30,6 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/crypto/ecies"
-	"github.com/dominant-strategies/go-quai/p2p/simulations/pipes"
 	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/stretchr/testify/assert"
 )
@@ -378,59 +376,6 @@ func BenchmarkHandshakeRead(b *testing.B) {
 		)
 		if _, err := h.readMsg(msg, keyB, r); err != nil {
 			b.Fatal(err)
-		}
-	}
-}
-
-func BenchmarkThroughput(b *testing.B) {
-	pipe1, pipe2, err := pipes.TCPPipe()
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	var (
-		conn1, conn2  = NewConn(pipe1, nil), NewConn(pipe2, &keyA.PublicKey)
-		handshakeDone = make(chan error, 1)
-		msgdata       = make([]byte, 1024)
-		rand          = rand.New(rand.NewSource(1337))
-	)
-	rand.Read(msgdata)
-
-	// Server side.
-	go func() {
-		defer conn1.Close()
-		// Perform handshake.
-		_, err := conn1.Handshake(keyA)
-		handshakeDone <- err
-		if err != nil {
-			return
-		}
-		conn1.SetSnappy(true)
-		// Keep sending messages until connection closed.
-		for {
-			if _, err := conn1.Write(0, msgdata); err != nil {
-				return
-			}
-		}
-	}()
-
-	// Set up client side.
-	defer conn2.Close()
-	if _, err := conn2.Handshake(keyB); err != nil {
-		b.Fatal("client handshake error:", err)
-	}
-	conn2.SetSnappy(true)
-	if err := <-handshakeDone; err != nil {
-		b.Fatal("server hanshake error:", err)
-	}
-
-	// Read N messages.
-	b.SetBytes(int64(len(msgdata)))
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		_, _, _, err := conn2.Read()
-		if err != nil {
-			b.Fatal("read error:", err)
 		}
 	}
 }
