@@ -19,6 +19,7 @@ package quaiclient
 
 import (
 	"context"
+	"encoding/json"
 	"math/big"
 	"time"
 
@@ -137,18 +138,28 @@ type Termini struct {
 	Termini []common.Hash `json:"termini"`
 }
 
-func (ec *Client) Append(ctx context.Context, header *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) error {
+func (ec *Client) Append(ctx context.Context, header *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) (types.PendingHeader, error) {
 	data, err := RPCMarshalTdHeader(header, domTerminus, td, domOrigin, reorg)
 	if err != nil {
-		return err
+		return types.PendingHeader{}, err
 	}
 
-	err = ec.c.CallContext(ctx, nil, "quai_append", data)
+	var raw json.RawMessage
+	err = ec.c.CallContext(ctx, &raw, "quai_append", data)
 	if err != nil {
-		return err
+		return types.PendingHeader{}, err
 	}
 
-	return nil
+	// Decode header and transactions.
+	var head *types.Header
+	var termini Termini
+	if err := json.Unmarshal(raw, &head); err != nil {
+		return types.PendingHeader{}, err
+	}
+	if err := json.Unmarshal(raw, &termini); err != nil {
+		return types.PendingHeader{}, err
+	}
+	return types.PendingHeader{Header: head, Termini: termini.Termini}, nil
 }
 
 func (ec *Client) SubRelayPendingHeader(ctx context.Context, pendingHeader types.PendingHeader, reorg bool) error {
