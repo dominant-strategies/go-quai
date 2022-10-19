@@ -46,7 +46,7 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 		// if the order of the block is less than the context
 		// add the rest of the blocks in the queue to the future blocks.
 		if !isCoincident && !domWait {
-			err := c.sl.Append(block.Header(), common.Hash{}, common.Big0, false, true)
+			_, err := c.sl.Append(block.Header(), common.Hash{}, big.NewInt(0), false, true)
 			if err != nil {
 				if err == consensus.ErrFutureBlock {
 					c.sl.addfutureHeader(block.Header())
@@ -98,7 +98,7 @@ func (c *Core) Stop() {
 // Slice methods //
 //---------------//
 
-func (c *Core) Append(header *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) error {
+func (c *Core) Append(header *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) (types.PendingHeader, error) {
 	return c.sl.Append(header, domTerminus, td, domOrigin, reorg)
 }
 

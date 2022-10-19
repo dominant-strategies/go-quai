@@ -530,22 +530,26 @@ type tdBlock struct {
 	Reorg       bool        `json:"reorg"`
 }
 
-func (s *PublicBlockChainQuaiAPI) Append(ctx context.Context, raw json.RawMessage) error {
+func (s *PublicBlockChainQuaiAPI) Append(ctx context.Context, raw json.RawMessage) (map[string]interface{}, error) {
 	// Decode header and transactions.
 	var head *types.Header
 	var body tdBlock
 	if err := json.Unmarshal(raw, &head); err != nil {
-		return err
+		return nil, err
 	}
 	if err := json.Unmarshal(raw, &body); err != nil {
-		return err
+		return nil, err
 	}
 
-	err := s.b.Append(head, body.DomTerminus, body.Td, body.DomOrigin, body.Reorg)
+	pendingHeader, err := s.b.Append(head, body.DomTerminus, body.Td, body.DomOrigin, body.Reorg)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	// Marshal the output for decoding
+	fields := RPCMarshalHeader(pendingHeader.Header)
+	fields["termini"] = pendingHeader.Termini
+
+	return fields, nil
 }
 
 type SubRelay struct {

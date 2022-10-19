@@ -114,7 +114,7 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 
 // Append takes a proposed header and constructs a local block and attempts to hierarchically append it to the block graph.
 // If this is called from a dominant context a domTerminus must be provided else a common.Hash{} should be used and domOrigin should be set to true.
-func (sl *Slice) Append(header *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) error {
+func (sl *Slice) Append(header *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) (types.PendingHeader, error) {
 	nodeCtx := common.NodeLocation.Context()
 	location := header.Location()
 
@@ -123,7 +123,7 @@ func (sl *Slice) Append(header *types.Header, domTerminus common.Hash, td *big.I
 	if block == nil {
 		// add the block to the future header cache
 		sl.addfutureHeader(header)
-		return errors.New("could not find the tx and uncle data to match the header root hash")
+		return sl.nilPendingHeader, errors.New("could not find the tx and uncle data to match the header root hash")
 	}
 
 	log.Info("Starting slice append", "hash", block.Hash(), "number", block.Number(), "location", block.Header().Location())
@@ -133,29 +133,31 @@ func (sl *Slice) Append(header *types.Header, domTerminus common.Hash, td *big.I
 	// Run Previous Coincident Reference Check (PCRC)
 	domTerminus, newTermini, err := sl.pcrc(batch, block.Header(), domTerminus)
 	if err != nil {
-		return err
+		return sl.nilPendingHeader, err
 	}
 
 	// Append the new block
 	err = sl.hc.Append(batch, block)
 	if err != nil {
-		return err
+		return sl.nilPendingHeader, err
 	}
 
 	if !domOrigin {
 		// CalcTd on the new block
 		td, err = sl.calcTd(block.Header())
 		if err != nil {
-			return err
+			return sl.nilPendingHeader, err
 		}
 		// HLCR
 		reorg = sl.hlcr(td)
 	}
 
+	// Call my sub to append the block
+	var subPendingHeader types.PendingHeader
 	if nodeCtx != common.ZONE_CTX {
-		err = sl.subClients[location.SubLocation()].Append(context.Background(), block.Header(), domTerminus, td, true, reorg)
+		subPendingHeader, err = sl.subClients[location.SubLocation()].Append(context.Background(), block.Header(), domTerminus, td, true, reorg)
 		if err != nil {
-			return err
+			return sl.nilPendingHeader, err
 		}
 	}
 
@@ -164,20 +166,29 @@ func (sl *Slice) Append(header *types.Header, domTerminus common.Hash, td *big.I
 
 	//Append has succeeded write the batch
 	if err := batch.Write(); err != nil {
-		return err
+		return types.PendingHeader{}, err
 	}
 
 	// Set my header chain head and generate new pending header
 	localPendingHeader, err := sl.setHeaderChainHead(batch, block, reorg)
 	if err != nil {
-		return err
+		return sl.nilPendingHeader, err
 	}
 
-	pendingHeader := types.PendingHeader{Header: localPendingHeader, Termini: newTermini}
+	// Combine subordinates pending header with local pending header
+	var pendingHeader types.PendingHeader
+	if nodeCtx != common.ZONE_CTX {
+		tempPendingHeader := subPendingHeader.Header
+		tempPendingHeader = sl.combinePendingHeader(localPendingHeader, tempPendingHeader, nodeCtx)
+		tempPendingHeader.SetLocation(subPendingHeader.Header.Location())
+		pendingHeader = types.PendingHeader{Header: tempPendingHeader, Termini: newTermini}
+	} else {
+		pendingHeader = types.PendingHeader{Header: localPendingHeader, Termini: newTermini}
+	}
 
 	isCoincident := sl.engine.HasCoincidentDifficulty(header)
 	// Relay the new pendingHeader
-	sl.updateCacheAndRelay(pendingHeader, reorg, isCoincident)
+	sl.updateCacheAndRelay(pendingHeader, block.Header().Location(), reorg, isCoincident)
 
 	// Remove the header from the future headers cache
 	sl.futureHeaders.Remove(block.Hash())
@@ -190,7 +201,7 @@ func (sl *Slice) Append(header *types.Header, domTerminus common.Hash, td *big.I
 		"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
 		"root", block.Root())
 
-	return nil
+	return pendingHeader, nil
 }
 
 // constructLocalBlock takes a header and construct the Block locally
@@ -223,7 +234,7 @@ func (sl *Slice) ConstructLocalBlock(header *types.Header) *types.Block {
 }
 
 // updateCacheAndRelay updates the pending headers cache and sends pending headers to subordinates
-func (sl *Slice) updateCacheAndRelay(pendingHeader types.PendingHeader, reorg bool, isCoincident bool) {
+func (sl *Slice) updateCacheAndRelay(pendingHeader types.PendingHeader, location common.Location, reorg bool, isCoincident bool) {
 	nodeCtx := common.NodeLocation.Context()
 
 	sl.phCachemu.Lock()
@@ -231,11 +242,15 @@ func (sl *Slice) updateCacheAndRelay(pendingHeader types.PendingHeader, reorg bo
 
 	sl.updatePhCache(pendingHeader)
 	if !isCoincident {
-		if nodeCtx == common.ZONE_CTX {
+		switch nodeCtx {
+		case common.PRIME_CTX:
+			sl.updatePhCacheFromDom(pendingHeader, 3, []int{common.REGION_CTX, common.ZONE_CTX}, reorg)
+		case common.REGION_CTX:
+			sl.updatePhCacheFromDom(pendingHeader, 3, []int{common.ZONE_CTX}, reorg)
+		case common.ZONE_CTX:
 			sl.miner.worker.pendingHeaderFeed.Send(sl.phCache[sl.pendingHeader].Header)
 			return
 		}
-		sl.updatePhCacheFromDom(pendingHeader, terminiIndex, []int{}, reorg)
 		for i := range sl.subClients {
 			sl.subClients[i].SubRelayPendingHeader(context.Background(), sl.phCache[sl.pendingHeader], reorg)
 		}
@@ -260,6 +275,9 @@ func (sl *Slice) setHeaderChainHead(batch ethdb.Batch, block *types.Block, reorg
 	if err != nil {
 		return sl.nilHeader, err
 	}
+
+	// Set the Location and time for the pending header
+	pendingHeader.SetLocation(common.NodeLocation)
 
 	return pendingHeader, nil
 }
@@ -454,7 +472,7 @@ func (sl *Slice) genesisInit(genesis *Genesis) error {
 				location := block.Header().Location()
 				if nodeCtx == common.PRIME_CTX {
 					rawdb.WritePendingBlockBody(sl.sliceDb, block.Root(), block.Body())
-					err := sl.Append(block.Header(), genesisHash, block.Difficulty(), false, false)
+					_, err := sl.Append(block.Header(), genesisHash, block.Difficulty(), false, false)
 					if err != nil {
 						log.Warn("Failed to append block", "hash:", block.Hash(), "Number:", block.Number(), "Location:", block.Header().Location(), "error:", err)
 					}
