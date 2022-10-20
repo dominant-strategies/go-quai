@@ -824,10 +824,11 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 	sender := scope.Contract.self.Address()
 
 	// create external transaction
-	etx := types.ExternalTx{Value: value.ToBig(), To: &toAddr, Sender: sender, GasTipCap: gasTipCap.ToBig(), GasFeeCap: gasFeeCap.ToBig(), Gas: gas, Data: data, AccessList: accessList, Nonce: nonce.Uint64()}
+	etxInner := types.ExternalTx{Value: value.ToBig(), To: &toAddr, Sender: sender, GasTipCap: gasTipCap.ToBig(), GasFeeCap: gasFeeCap.ToBig(), Gas: gas, Data: data, AccessList: accessList, Nonce: nonce.Uint64()}
+	etx := types.NewTx(&etxInner)
 
 	interpreter.evm.ETXCacheLock.Lock()
-	interpreter.evm.ETXCache = append(interpreter.evm.ETXCache, &etx)
+	interpreter.evm.ETXCache = append(interpreter.evm.ETXCache, etx)
 	interpreter.evm.ETXCacheLock.Unlock()
 
 	temp.SetOne() // following opCall protocol

@@ -62,7 +62,7 @@ func NewBodyDb(db ethdb.Database, engine consensus.Engine, hc *HeaderChain, chai
 	return bc, nil
 }
 
-// Append
+// Append appends a block and returns all logs and ETXs emitted from the block's transactions
 func (bc *BodyDb) Append(batch ethdb.Batch, block *types.Block) ([]*types.Log, error) {
 	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()

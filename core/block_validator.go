@@ -105,6 +105,18 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	if root := statedb.IntermediateRoot(v.config.IsEIP158(header.Number())); header.Root() != root {
 		return fmt.Errorf("invalid merkle root (remote: %x local: %x)", header.Root(), root)
 	}
+	// Collect ETXs emitted from each successful transaction, and compare against ETX hash
+	var emittedEtxs types.Transactions
+	for _, receipt := range receipts {
+		if receipt.Status == types.ReceiptStatusSuccessful {
+			for _, etx := range receipt.Etxs {
+				emittedEtxs = append(emittedEtxs, etx)
+			}
+		}
+	}
+	if etxHash := types.DeriveSha(emittedEtxs, trie.NewStackTrie(nil)); etxHash != header.EtxHash() {
+		return fmt.Errorf("invalid etxhash (remote: %x local: %x)", header.EtxHash(), etxHash)
+	}
 	return nil
 }
 

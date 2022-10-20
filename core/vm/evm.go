@@ -123,7 +123,7 @@ type EVM struct {
 	// applied in opCall*.
 	callGasTemp uint64
 
-	ETXCache     []*types.ExternalTx
+	ETXCache     []*types.Transaction
 	ETXCacheLock sync.RWMutex
 }
 
@@ -137,7 +137,7 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 		Config:      config,
 		chainConfig: chainConfig,
 		chainRules:  chainConfig.Rules(blockCtx.BlockNumber),
-		ETXCache:    make([]*types.ExternalTx, 0),
+		ETXCache:    make([]*types.Transaction, 0),
 	}
 	evm.interpreter = NewEVMInterpreter(evm, config)
 	return evm
