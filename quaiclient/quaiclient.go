@@ -125,13 +125,14 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 }
 
 // RPCMarshalTdHeader converts the header and order as input to PCRC.
-func RPCMarshalTdHeader(header *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, manifestHash common.Hash) (map[string]interface{}, error) {
+func RPCMarshalTdHeader(header *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, manifestHash common.Hash, rollupEtxs types.Transactions) (map[string]interface{}, error) {
 	fields := RPCMarshalHeader(header)
 	fields["td"] = td
 	fields["domTerminus"] = domTerminus
 	fields["domOrigin"] = domOrigin
 	fields["reorg"] = reorg
 	fields["manifestHash"] = manifestHash
+	fields["rollupEtxs"] = rollupEtxs
 	return fields, nil
 }
 
@@ -139,8 +140,8 @@ type Termini struct {
 	Termini []common.Hash `json:"termini"`
 }
 
-func (ec *Client) Append(ctx context.Context, header *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, manifestHash common.Hash) (types.PendingHeader, error) {
-	data, err := RPCMarshalTdHeader(header, domTerminus, td, domOrigin, reorg, manifestHash)
+func (ec *Client) Append(ctx context.Context, header *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, manifestHash common.Hash, rollupEtxs types.Transactions) (types.PendingHeader, error) {
+	data, err := RPCMarshalTdHeader(header, domTerminus, td, domOrigin, reorg, manifestHash, rollupEtxs)
 	if err != nil {
 		return types.PendingHeader{}, err
 	}

@@ -21,6 +21,7 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rlp"
+	"github.com/dominant-strategies/go-quai/trie"
 	lru "github.com/hashicorp/golang-lru"
 )
 
@@ -112,8 +113,37 @@ func (hc *HeaderChain) ManifestForHeader(h *types.Header) (types.BlockManifest, 
 	}
 }
 
+// EtxRollupForHeader gathers the set of all ETXs since the last coincident
+// block, which must enter your dom's etx tree to propagate through your dom's
+// dom. In a 3x3 system, this can only occur for a external transaction leaving
+// a zone chain, and destined for a chain outside of that zone's region.
+func (hc *HeaderChain) EtxRollupForHeader(h *types.Header) (types.Transactions, error) {
+	etxRollup := make([]*types.Transaction, 0)
+	if h.NumberU64() == 0 {
+		return etxRollup, nil
+	}
+	for {
+		ancestor := hc.GetBlock(h.ParentHash(), h.NumberU64()-1)
+		if ancestor == nil {
+			return nil, errors.New("ancestor not found")
+		}
+		for _, etx := range ancestor.ExtTransactions() {
+			// Collect any ETXs that need to be rolled up ETXs whose destination does not
+			// share the same dom as us, need to be rolled up.
+			if !common.NodeLocation.DomLocation().Equal(etx.To().Location().DomLocation()) {
+				etxRollup = append(etxRollup, etx)
+			}
+		}
+		if hc.engine.HasCoincidentDifficulty(h) || h.NumberU64() == 0 {
+			// No more ancestors to include in the manifest
+			return etxRollup, nil
+		}
+		h = ancestor.Header() // Iterate to next ancestor
+	}
+}
+
 // Append
-func (hc *HeaderChain) Append(batch ethdb.Batch, block *types.Block, manifestHash common.Hash) error {
+func (hc *HeaderChain) Append(batch ethdb.Batch, block *types.Block, domManifestHash common.Hash, rollupEtxs types.Transactions) error {
 	h := block.Header()
 	log.Debug("HeaderChain Append:", "Block information: Hash:", block.Hash(), "block header hash:", h.Hash(), "Number:", block.NumberU64(), "Location:", h.Location, "Parent:", block.ParentHash())
 
@@ -122,16 +152,26 @@ func (hc *HeaderChain) Append(batch ethdb.Batch, block *types.Block, manifestHas
 		return err
 	}
 
-	// Load the manifest for this block
-	manifest, err := hc.ManifestForHeader(h)
-	if err != nil {
-		return err
-	}
-
-	// If this is a coincident block, verify the manifest matches expected
+	// If this is a coincident block, we need to perform some extra checks for
+	// cross-chain transactions
 	if hc.engine.HasCoincidentDifficulty(h) {
-		if manifestHash != manifest.Hash() {
-			return errors.New("manifest does not match hash")
+		// Check the dom's manifest hash matches the actual manifest
+		manifest, err := hc.ManifestForHeader(h)
+		if err != nil {
+			return err
+		}
+		if domManifestHash != manifest.Hash() {
+			return errors.New("domManifestHash does not match expected")
+		}
+		// Check the dom's etx hash matches the actual rollup of ETXs
+		actualRollupEtxs, err := hc.EtxRollupForHeader(h)
+		if err != nil {
+			return err
+		}
+		expectedRollupHash := types.DeriveSha(actualRollupEtxs, trie.NewStackTrie(nil))
+		domRollupHash := types.DeriveSha(rollupEtxs, trie.NewStackTrie(nil))
+		if expectedRollupHash != domRollupHash {
+			return errors.New("dom provided incorrect list of rollup ETXs")
 		}
 	}
 
