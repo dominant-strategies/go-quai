@@ -373,9 +373,50 @@ func (a Address) Value() (driver.Value, error) {
 	return a[:], nil
 }
 
-// Checks if an address is a valid account in our node's sharded address space
+// IsInChainScope checks if an address is a valid account in our node's sharded address space
 func (a Address) IsInChainScope() bool {
 	return NodeLocation.ContainsAddress(a)
+}
+
+// Location looks up the chain location which contains this address
+func (a Address) Location() *Location {
+	R, Z, D := 0, 0, HierarchyDepth
+	if NodeLocation.HasRegion() {
+		R = NodeLocation.Region()
+	}
+	if NodeLocation.HasZone() {
+		Z = NodeLocation.Zone()
+	}
+
+	// Search zone->region->prime address spaces in-slice first, and then search
+	// zone->region out-of-slice address spaces next. This minimizes expected
+	// search time under the following assumptions:
+	// * a node is more likely to encounter a TX from its slice than from another
+	// * we expect `>= Z` `zone` TXs for every `region` TX
+	// * we expect `>= R` `region` TXs for every `prime` TX
+	// * (and by extension) we expect `>= R*Z` `zone` TXs for every `prime` TX
+	primeChecked := false
+	for r := 0; r < NumRegionsInPrime; r++ {
+		for z := 0; z < NumZonesInRegion; z++ {
+			l := Location{byte((r+R)%D), byte((z+Z)%D)}
+			if l.ContainsAddress(a) {
+				return &l
+			}
+		}
+		l := Location{byte((r+R)%D)}
+		if l.ContainsAddress(a) {
+			return &l
+		}
+		// Check prime on first pass through slice, but not again
+		if !primeChecked {
+			primeChecked = true
+			l := Location{}
+			if l.ContainsAddress(a) {
+				return &l
+			}
+		}
+	}
+	return nil
 }
 
 // UnprefixedAddress allows marshaling an Address without 0x prefix.
