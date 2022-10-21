@@ -194,10 +194,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 
 	// Permit the downloader to use the trie cache allowance during fast sync
 	cacheLimit := cacheConfig.TrieCleanLimit + cacheConfig.TrieDirtyLimit + cacheConfig.SnapshotLimit
-	checkpoint := config.Checkpoint
-	if checkpoint == nil {
-		checkpoint = params.TrustedCheckpoints[genesisHash]
-	}
 	if eth.handler, err = newHandler(&handlerConfig{
 		Database:   chainDb,
 		Core:       eth.core,
@@ -206,7 +202,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		Sync:       config.SyncMode,
 		BloomCache: uint64(cacheLimit),
 		EventMux:   eth.eventMux,
-		Checkpoint: checkpoint,
 		Whitelist:  config.Whitelist,
 	}); err != nil {
 		return nil, err
