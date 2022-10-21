@@ -224,7 +224,7 @@ endif
 
 stop:
 ifeq ($(shell uname -s), $(filter $(shell uname -s), Darwin Linux))
-	@if pgrep quai; then pkill -f ./build/bin/go-quai; fi
+	@-pkill -f ./build/bin/go-quai;
 	@while pgrep quai >/dev/null; do \
 		echo "Stopping all Quai Network nodes, please wait until terminated."; \
 		sleep 3; \
