@@ -34,17 +34,12 @@ import (
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p"
-	"github.com/dominant-strategies/go-quai/params"
 )
 
 const (
 	// txChanSize is the size of channel listening to NewTxsEvent.
 	// The number is referenced from the size of tx pool.
 	txChanSize = 4096
-)
-
-var (
-	syncChallengeTimeout = 15 * time.Second // Time allowance for a node to reply to the sync progress challenge
 )
 
 // txPool defines the methods needed from a transaction pool implementation to
@@ -73,15 +68,14 @@ type txPool interface {
 // handlerConfig is the collection of initialization parameters to create a full
 // node network handler.
 type handlerConfig struct {
-	Database   ethdb.Database            // Database for direct sync insertions
-	Core       *core.Core                // Core to serve data from
-	TxPool     txPool                    // Transaction pool to propagate from
-	Network    uint64                    // Network identifier to adfvertise
-	Sync       downloader.SyncMode       // Whether to fast or full sync
-	BloomCache uint64                    // Megabytes to alloc for fast sync bloom
-	EventMux   *event.TypeMux            // Legacy event mux, deprecate for `feed`
-	Checkpoint *params.TrustedCheckpoint // Hard coded checkpoint for sync challenges
-	Whitelist  map[uint64]common.Hash    // Hard coded whitelist for sync challenged
+	Database   ethdb.Database         // Database for direct sync insertions
+	Core       *core.Core             // Core to serve data from
+	TxPool     txPool                 // Transaction pool to propagate from
+	Network    uint64                 // Network identifier to adfvertise
+	Sync       downloader.SyncMode    // Whether to fast or full sync
+	BloomCache uint64                 // Megabytes to alloc for fast sync bloom
+	EventMux   *event.TypeMux         // Legacy event mux, deprecate for `feed`
+	Whitelist  map[uint64]common.Hash // Hard coded whitelist for sync challenged
 }
 
 type handler struct {
@@ -89,9 +83,6 @@ type handler struct {
 	forkFilter forkid.Filter // Fork ID filter, constant across the lifetime of the node
 
 	acceptTxs uint32 // Flag whether we're considered synchronised (enables transaction processing)
-
-	checkpointNumber uint64      // Block number for the sync progress validator to cross reference
-	checkpointHash   common.Hash // Block hash for the sync progress validator to cross reference
 
 	database ethdb.Database
 	txpool   txPool
@@ -138,13 +129,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		quitSync:   make(chan struct{}),
 	}
 
-	// If we have trusted checkpoints, enforce them on the chain
-	if config.Checkpoint != nil {
-		h.checkpointNumber = (config.Checkpoint.SectionIndex+1)*params.CHTFrequency - 1
-		h.checkpointHash = config.Checkpoint.SectionHead
-	}
-
-	h.downloader = downloader.New(h.checkpointNumber, config.Database, h.eventMux, h.core, h.removePeer)
+	h.downloader = downloader.New(config.Database, h.eventMux, h.core, h.removePeer)
 
 	// Construct the fetcher (short sync)
 	validator := func(header *types.Header) error {
@@ -154,16 +139,6 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		return h.core.CurrentBlock().NumberU64()
 	}
 	inserter := func(blocks types.Blocks) (int, error) {
-		// If sync hasn't reached the checkpoint yet, deny importing weird blocks.
-		//
-		// Ideally we would also compare the head block's timestamp and similarly reject
-		// the propagated block if the head is too old. Unfortunately there is a corner
-		// case when starting new networks, where the genesis might be ancient (0 unix)
-		// which would prevent full nodes from accepting it.
-		if h.core.CurrentBlock().NumberU64() < h.checkpointNumber {
-			log.Warn("Unsynced yet, discarded propagated block", "number", blocks[0].Number(), "hash", blocks[0].Hash())
-			return 0, nil
-		}
 		n, err := h.core.InsertChain(blocks)
 		if err == nil {
 			atomic.StoreUint32(&h.acceptTxs, 1) // Mark initial sync done on any fetcher import
@@ -238,25 +213,6 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	// after this will be sent via broadcasts.
 	h.syncTransactions(peer)
 
-	// If we have a trusted CHT, reject all peers below that (avoid fast sync eclipse)
-	if h.checkpointHash != (common.Hash{}) {
-		// Request the peer's checkpoint header for chain height/weight validation
-		if err := peer.RequestHeadersByNumber(h.checkpointNumber, 1, 0, false); err != nil {
-			return err
-		}
-		// Start a timer to disconnect if the peer doesn't reply in time
-		p.syncDrop = time.AfterFunc(syncChallengeTimeout, func() {
-			peer.Log().Warn("Checkpoint challenge timed out, dropping", "addr", peer.RemoteAddr(), "type", peer.Name())
-			h.removePeer(peer.ID())
-		})
-		// Make sure it's cleaned up if the peer dies off
-		defer func() {
-			if p.syncDrop != nil {
-				p.syncDrop.Stop()
-				p.syncDrop = nil
-			}
-		}()
-	}
 	// If we have any explicit whitelist block hashes, request them
 	for number := range h.whitelist {
 		if err := peer.RequestHeadersByNumber(number, 1, 0, false); err != nil {

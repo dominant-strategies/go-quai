@@ -86,10 +86,8 @@ type Downloader struct {
 	mode uint32         // Synchronisation mode defining the strategy used (per sync cycle), use d.getMode() to get the SyncMode
 	mux  *event.TypeMux // Event multiplexer to announce sync operation events
 
-	checkpoint uint64   // Checkpoint block number to enforce head against (e.g. fast sync)
-	genesis    uint64   // Genesis block number to limit sync to (e.g. light client CHT)
-	queue      *queue   // Scheduler for selecting the hashes to download
-	peers      *peerSet // Set of active peers from which download can proceed
+	queue *queue   // Scheduler for selecting the hashes to download
+	peers *peerSet // Set of active peers from which download can proceed
 
 	stateDB ethdb.Database // Database to state sync into (and deduplicate via)
 
@@ -157,11 +155,10 @@ type Core interface {
 }
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
-func New(checkpoint uint64, stateDb ethdb.Database, mux *event.TypeMux, core Core, dropPeer peerDropFn) *Downloader {
+func New(stateDb ethdb.Database, mux *event.TypeMux, core Core, dropPeer peerDropFn) *Downloader {
 	dl := &Downloader{
 		stateDB:       stateDb,
 		mux:           mux,
-		checkpoint:    checkpoint,
 		queue:         newQueue(blockCacheMaxItems, blockCacheInitialItems),
 		peers:         newPeerSet(),
 		core:          core,

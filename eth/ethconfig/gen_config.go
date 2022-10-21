@@ -11,7 +11,6 @@ import (
 	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/eth/downloader"
 	"github.com/dominant-strategies/go-quai/eth/gasprice"
-	"github.com/dominant-strategies/go-quai/params"
 )
 
 // MarshalTOML marshals as TOML.
@@ -45,8 +44,6 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		DocRoot                 string `toml:"-"`
 		RPCGasCap               uint64
 		RPCTxFeeCap             float64
-		Checkpoint              *params.TrustedCheckpoint      `toml:",omitempty"`
-		CheckpointOracle        *params.CheckpointOracleConfig `toml:",omitempty"`
 		OverrideLondon          *big.Int                       `toml:",omitempty"`
 	}
 	var enc Config
@@ -78,8 +75,6 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.DocRoot = c.DocRoot
 	enc.RPCGasCap = c.RPCGasCap
 	enc.RPCTxFeeCap = c.RPCTxFeeCap
-	enc.Checkpoint = c.Checkpoint
-	enc.CheckpointOracle = c.CheckpointOracle
 	enc.OverrideLondon = c.OverrideLondon
 	return &enc, nil
 }
@@ -102,7 +97,6 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		LightPeers              *int                   `toml:",omitempty"`
 		LightNoPrune            *bool                  `toml:",omitempty"`
 		LightNoSyncServe        *bool                  `toml:",omitempty"`
-		SyncFromCheckpoint      *bool                  `toml:",omitempty"`
 		UltraLightServers       []string               `toml:",omitempty"`
 		UltraLightFraction      *int                   `toml:",omitempty"`
 		UltraLightOnlyAnnounce  *bool                  `toml:",omitempty"`
@@ -125,8 +119,6 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		DocRoot                 *string `toml:"-"`
 		RPCGasCap               *uint64
 		RPCTxFeeCap             *float64
-		Checkpoint              *params.TrustedCheckpoint      `toml:",omitempty"`
-		CheckpointOracle        *params.CheckpointOracleConfig `toml:",omitempty"`
 		OverrideLondon          *big.Int                       `toml:",omitempty"`
 	}
 	var dec Config
@@ -216,12 +208,6 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.RPCTxFeeCap != nil {
 		c.RPCTxFeeCap = *dec.RPCTxFeeCap
-	}
-	if dec.Checkpoint != nil {
-		c.Checkpoint = dec.Checkpoint
-	}
-	if dec.CheckpointOracle != nil {
-		c.CheckpointOracle = dec.CheckpointOracle
 	}
 	if dec.OverrideLondon != nil {
 		c.OverrideLondon = dec.OverrideLondon
