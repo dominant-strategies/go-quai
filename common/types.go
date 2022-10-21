@@ -373,9 +373,35 @@ func (a Address) Value() (driver.Value, error) {
 	return a[:], nil
 }
 
-// Checks if an address is a valid account in our node's sharded address space
+// IsInChainScope checks if an address is a valid account in our node's sharded address space
 func (a Address) IsInChainScope() bool {
 	return NodeLocation.ContainsAddress(a)
+}
+
+// Location looks up the chain location which contains this address
+func (a Address) Location() *Location {
+	// Search zone chain address space
+	for r := 0; r < NumRegionsInPrime; r++ {
+		for z := 0; z < NumZonesInRegion; z++ {
+			l := Location{byte(r), byte(z)}
+			if l.ContainsAddress(a) {
+				return &l
+			}
+		}
+	}
+	// Search region chain address space
+	for r := 0; r < NumRegionsInPrime; r++ {
+		l := Location{byte(r)}
+		if l.ContainsAddress(a) {
+			return &l
+		}
+	}
+	// Is this address in Prime?
+	l := Location{}
+	if l.ContainsAddress(a) {
+		return &l
+	}
+	return nil
 }
 
 // UnprefixedAddress allows marshaling an Address without 0x prefix.
