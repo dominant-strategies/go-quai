@@ -45,7 +45,7 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 		// block body is incorrect. If so, ask our sub for the correct manifest,
 		// update and rewrite the correct body.
 		if block.ManifestHash() != block.SubManifest().Hash() {
-			if subIdx := block.Location().SubLocation(); subIdx >= 0 {
+			if subIdx := block.Location().SubIndex(); subIdx >= 0 {
 				newSubManifest, err := c.sl.subClients[subIdx].GetSubManifest(context.Background(), block.Hash())
 				if err != nil {
 					return i, err
