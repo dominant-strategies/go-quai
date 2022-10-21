@@ -16,6 +16,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/ethdb"
+	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/quaiclient"
@@ -49,22 +50,30 @@ type Slice struct {
 	domUrl     string
 	subClients []*quaiclient.Client
 
+	scope              event.SubscriptionScope
+	downloaderWaitFeed event.Feed
+
 	futureHeaders *lru.Cache
 
 	phCachemu sync.RWMutex
 
 	pendingHeaderHeadHash common.Hash
 	phCache               map[common.Hash]types.PendingHeader
+
+	startUp     bool
+	knotHeaders []*types.Header
 }
 
 func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocalBlock func(block *types.Header) bool, chainConfig *params.ChainConfig, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis) (*Slice, error) {
 	nodeCtx := common.NodeLocation.Context()
 	sl := &Slice{
-		config:  chainConfig,
-		engine:  engine,
-		sliceDb: db,
-		domUrl:  domClientUrl,
-		quit:    make(chan struct{}),
+		config:      chainConfig,
+		engine:      engine,
+		sliceDb:     db,
+		domUrl:      domClientUrl,
+		quit:        make(chan struct{}),
+		startUp:     false,
+		knotHeaders: make([]*types.Header, 0),
 	}
 
 	futureHeaders, _ := lru.New(maxFutureHeaders)
@@ -98,6 +107,8 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 		return nil, err
 	}
 
+	go sl.KnotAppended()
+
 	go sl.updateFutureHeaders()
 	go sl.updatePendingHeadersCache()
 
@@ -120,9 +131,13 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		return nil
 	}
 
+	// Pause the downloader at the start of append
+	sl.downloaderWaitFeed.Send(true)
+
 	// Construct the block locally
 	block := sl.ConstructLocalBlock(header)
 	if block == nil {
+		// TODO: add the block to the future header cache?
 		return errors.New("could not find the tx and uncle data to match the header root hash")
 	}
 
@@ -133,6 +148,21 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	// Run Previous Coincident Reference Check (PCRC)
 	domTerminus, newTermini, err := sl.pcrc(batch, block.Header(), domTerminus)
 	if err != nil {
+		if err.Error() == "sub not synced to dom" {
+			if domOrigin {
+				// This means we are not in sync with dom, so get more blocks from
+				// the downloader.
+				sl.downloaderWaitFeed.Send(false)
+				// If dom tries to append the block and sub is not in sync.
+				// proc the future header cache.
+				go sl.procfutureHeaders()
+			} else {
+				// If we are not synced and we get a future block add it to the future
+				// header cache.
+				sl.addfutureHeader(block.Header())
+				return err
+			}
+		}
 		return err
 	}
 
@@ -169,6 +199,17 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	if nodeCtx != common.ZONE_CTX {
 		err := sl.subClients[location.SubIndex()].Append(context.Background(), block.Header(), pendingHeaderWithTermini.Header, domTerminus, td, true, reorg)
 		if err != nil {
+			// Since the error is coming from the sub client we cannot compare pointers
+			// we have to compare the string value of the error until the error codes
+			// are in place
+			if err.Error() == "sub not synced to dom" {
+				// check if the block is not dom origin before adding it to the future header cache.
+				if !domOrigin {
+					sl.addfutureHeader(block.Header())
+				} else if !domOrigin && nodeCtx == common.PRIME_CTX {
+					sl.downloaderWaitFeed.Send(true)
+				}
+			}
 			return err
 		}
 	}
@@ -203,6 +244,9 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	log.Info("Appended new block", "number", block.Header().Number(), "hash", block.Hash(),
 		"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
 		"root", block.Root())
+
+	// If we have reached here, the append was successful, so we can resume the downloader.
+	sl.downloaderWaitFeed.Send(false)
 
 	return nil
 }
@@ -251,7 +295,7 @@ func (sl *Slice) pcrc(batch ethdb.Batch, header *types.Header, domTerminus commo
 	termini := sl.hc.GetTerminiByHash(header.ParentHash())
 
 	if len(termini) != 4 {
-		return common.Hash{}, []common.Hash{}, errors.New("length of termini not equal to 4")
+		return common.Hash{}, []common.Hash{}, ErrSubNotSyncedToDom
 	}
 
 	newTermini := make([]common.Hash, len(termini))
@@ -456,19 +500,47 @@ func (sl *Slice) init(genesis *Genesis) error {
 					if err != nil {
 						log.Warn("Failed to append block", "hash:", block.Hash(), "Number:", block.Number(), "Location:", block.Header().Location(), "error:", err)
 					}
+					// append knot headers
+					sl.knotHeaders = append(sl.knotHeaders, block.Header())
 				} else if location.Region() == common.NodeLocation.Region() && len(common.NodeLocation) == common.REGION_CTX {
 					rawdb.WritePendingBlockBody(sl.sliceDb, block.Root(), block.Body())
+					// append knot headers
+					sl.knotHeaders = append(sl.knotHeaders, block.Header())
 				} else if bytes.Equal(location, common.NodeLocation) {
 					rawdb.WritePendingBlockBody(sl.sliceDb, block.Root(), block.Body())
+					// append knot headers
+					sl.knotHeaders = append(sl.knotHeaders, block.Header())
 				}
 			}
 		}
+
 	} else { // load the phCache and slice current pending header hash
 		if err := sl.loadLastState(); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// knotAppended returns true if the knot is appended.
+func (sl *Slice) KnotAppended() {
+
+	isKnotAppended := func() bool {
+		count := 0
+		for _, header := range sl.knotHeaders {
+			if sl.hc.HasHeader(header.Hash(), header.NumberU64()) {
+				count++
+			}
+		}
+		return count == len(sl.knotHeaders)
+	}
+
+	appended := false
+	for !appended {
+		appended = isKnotAppended()
+	}
+
+	sl.startUp = true
 }
 
 // gcPendingHeader goes through the phCache and deletes entries older than the pendingHeaderCacheLimit
@@ -641,6 +713,7 @@ func (sl *Slice) Stop() {
 	// Write the ph cache to the dd.
 	rawdb.WritePhCache(sl.sliceDb, sl.phCache)
 
+	sl.scope.Close()
 	close(sl.quit)
 
 	sl.hc.Stop()
@@ -657,6 +730,10 @@ func (sl *Slice) HeaderChain() *HeaderChain { return sl.hc }
 func (sl *Slice) TxPool() *TxPool { return sl.txPool }
 
 func (sl *Slice) Miner() *Miner { return sl.miner }
+
+func (sl *Slice) SubscribeDownloaderWait(ch chan<- bool) event.Subscription {
+	return sl.scope.Track(sl.downloaderWaitFeed.Subscribe(ch))
+}
 
 func (sl *Slice) PendingBlockBody(hash common.Hash) *types.Body {
 	return rawdb.ReadPendingBlockBody(sl.sliceDb, hash)

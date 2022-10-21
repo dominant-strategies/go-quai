@@ -235,6 +235,10 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 		return nil // Sync already running.
 	}
 
+	if !cs.handler.core.StartUp() {
+		return nil
+	}
+
 	// Ensure we're at minimum peer count.
 	minPeers := defaultMinSyncPeers
 	if cs.forced {

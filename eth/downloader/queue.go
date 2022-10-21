@@ -55,6 +55,7 @@ var (
 type fetchRequest struct {
 	Peer    *peerConnection // Peer to which the request was sent
 	From    uint64          // [eth/62] Requested chain element index (used for skeleton fills only)
+	To      uint64          // Expected stopping number for the request (used for skeleton fills only)
 	Headers []*types.Header // [eth/62] Requested headers, sorted by request order
 	Time    time.Time       // Time when the request was made
 }
@@ -110,8 +111,9 @@ type queue struct {
 	mode SyncMode // Synchronisation mode to decide on the block parts to schedule for fetching
 
 	// Headers are "special", they download in batches, supported by a skeleton chain
-	headerHead      common.Hash                    // Hash of the last queued header to verify order
-	headerTaskPool  map[uint64]*types.Header       // Pending header retrieval tasks, mapping starting indexes to skeleton headers
+	headerHead      common.Hash              // Hash of the last queued header to verify order
+	headerTaskPool  map[uint64]*types.Header // Pending header retrieval tasks, mapping starting indexes to skeleton headers
+	headerToPool    map[uint64]uint64
 	headerTaskQueue *prque.Prque                   // Priority queue of the skeleton indexes to fetch the filling headers for
 	headerPeerMiss  map[string]map[uint64]struct{} // Set of per-peer header batches known to be unavailable
 	headerPendPool  map[string]*fetchRequest       // Currently pending header retrieval operations
@@ -257,20 +259,24 @@ func (q *queue) ScheduleSkeleton(from uint64, skeleton []*types.Header) {
 	if q.headerResults != nil {
 		panic("skeleton assembly already in progress")
 	}
+
 	// Schedule all the header retrieval tasks for the skeleton assembly
 	q.headerTaskPool = make(map[uint64]*types.Header)
+	q.headerToPool = make(map[uint64]uint64)
 	q.headerTaskQueue = prque.New(nil)
 	q.headerPeerMiss = make(map[string]map[uint64]struct{}) // Reset availability to correct invalid chains
-	q.headerResults = make([]*types.Header, len(skeleton)*MaxHeaderFetch)
+	q.headerResults = make([]*types.Header, skeleton[0].NumberU64()-skeleton[len(skeleton)-1].NumberU64())
 	q.headerProced = 0
-	q.headerOffset = from
+	q.headerOffset = skeleton[len(skeleton)-1].NumberU64() - 1
 	q.headerContCh = make(chan bool, 1)
 
 	for i, header := range skeleton {
-		index := from + uint64(i*MaxHeaderFetch)
-
-		q.headerTaskPool[index] = header
-		q.headerTaskQueue.Push(index, -int64(index))
+		if i < len(skeleton)-1 {
+			index := skeleton[i].NumberU64()
+			q.headerTaskPool[index] = header
+			q.headerToPool[index] = skeleton[i+1].NumberU64()
+			q.headerTaskQueue.Push(index, -int64(index))
+		}
 	}
 }
 
@@ -280,6 +286,7 @@ func (q *queue) RetrieveHeaders() ([]*types.Header, int) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
+	// since we go backwards, the last header in the skeleton is not useful
 	headers, proced := q.headerResults, q.headerProced
 	q.headerResults, q.headerProced = nil, 0
 
@@ -288,7 +295,7 @@ func (q *queue) RetrieveHeaders() ([]*types.Header, int) {
 
 // Schedule adds a set of headers for the download queue for scheduling, returning
 // the new headers encountered.
-func (q *queue) Schedule(headers []*types.Header, from uint64) []*types.Header {
+func (q *queue) Schedule(headers []*types.Header) []*types.Header {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
@@ -297,12 +304,11 @@ func (q *queue) Schedule(headers []*types.Header, from uint64) []*types.Header {
 	for _, header := range headers {
 		// Make sure chain order is honoured and preserved throughout
 		hash := header.Hash()
-		if header.Number() == nil || header.Number().Uint64() != from {
-			log.Warn("Header broke chain ordering", "number", header.Number(), "hash", hash, "expected", from)
+		if header == nil {
 			break
 		}
-		if q.headerHead != (common.Hash{}) && q.headerHead != header.ParentHash() {
-			log.Warn("Header broke chain ancestry", "number", header.Number(), "hash", hash)
+		if header.Number() == nil {
+			log.Warn("Header broke chain ordering", "number is nil")
 			break
 		}
 		// Make sure no duplicate requests are executed
@@ -316,7 +322,6 @@ func (q *queue) Schedule(headers []*types.Header, from uint64) []*types.Header {
 		}
 		inserts = append(inserts, header)
 		q.headerHead = hash
-		from++
 	}
 	return inserts
 }
@@ -350,7 +355,9 @@ func (q *queue) Results(block bool) []*fetchResult {
 		q.lock.Unlock()
 	}
 	// Regardless if closed or not, we can still deliver whatever we have
-	results := q.resultCache.GetCompleted(maxResultsProcess)
+	// We should only take one block out of the resultcache at a time.
+	// Append of the current block will trigger the pop of the next block.
+	results := q.resultCache.GetCompleted(1)
 	for _, result := range results {
 		// Recalculate the result item weights to prevent memory exhaustion
 		size := result.Header.Size()
@@ -429,7 +436,7 @@ func (q *queue) ReserveHeaders(p *peerConnection, count int) *fetchRequest {
 	}
 	request := &fetchRequest{
 		Peer: p,
-		From: send,
+		From: send - 1,
 		Time: time.Now(),
 	}
 	q.headerPendPool[p.id] = request
@@ -465,9 +472,10 @@ func (q *queue) ReserveReceipts(p *peerConnection, count int) (*fetchRequest, bo
 // to access the queue, so they already need a lock anyway.
 //
 // Returns:
-//   item     - the fetchRequest
-//   progress - whether any progress was made
-//   throttle - if the caller should throttle for a while
+//
+//	item     - the fetchRequest
+//	progress - whether any progress was made
+//	throttle - if the caller should throttle for a while
 func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common.Hash]*types.Header, taskQueue *prque.Prque,
 	pendPool map[string]*fetchRequest, kind uint) (*fetchRequest, bool, bool) {
 	// Short circuit if the pool has been depleted, or if the peer's already
@@ -483,6 +491,7 @@ func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common
 	skip := make([]*types.Header, 0)
 	progress := false
 	throttled := false
+
 	for proc := 0; len(send) < count && !taskQueue.Empty(); proc++ {
 		// the task queue will pop items in order, so the highest prio block
 		// is also the lowest block number.
@@ -694,23 +703,30 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, headerProcCh 
 	delete(q.headerPendPool, id)
 
 	// Ensure headers can be mapped onto the skeleton chain
-	target := q.headerTaskPool[request.From].Hash()
+	targetTo := q.headerToPool[request.From+1]
+	requiredHeaderFetch := request.From - targetTo + 1
+	accepted := len(headers) == int(requiredHeaderFetch)
 
-	accepted := len(headers) == MaxHeaderFetch
+	// reverse the array
+	for i, j := 0, len(headers)-1; i < j; i, j = i+1, j-1 {
+		headers[i], headers[j] = headers[j], headers[i]
+	}
+
 	if accepted {
-		if headers[0].Number().Uint64() != request.From {
-			logger.Trace("First header broke chain ordering", "number", headers[0].Number(), "hash", headers[0].Hash(), "expected", request.From)
+		if headers[len(headers)-1].Number().Uint64() != request.From {
+			logger.Info("First header broke chain ordering", "number", headers[0].Number(), "hash", headers[0].Hash(), "expected", request.From)
 			accepted = false
-		} else if headers[len(headers)-1].Hash() != target {
-			logger.Trace("Last header broke skeleton structure ", "number", headers[len(headers)-1].Number(), "hash", headers[len(headers)-1].Hash(), "expected", target)
+		} else if headers[0].NumberU64() != targetTo {
+			logger.Info("Last header broke skeleton structure ", "number", headers[0].Number(), "expected", targetTo)
 			accepted = false
 		}
 	}
+
 	if accepted {
 		parentHash := headers[0].Hash()
 		for i, header := range headers[1:] {
 			hash := header.Hash()
-			if want := request.From + 1 + uint64(i); header.Number().Uint64() != want {
+			if want := targetTo + 1 + uint64(i); header.Number().Uint64() != want {
 				logger.Warn("Header broke chain ordering", "number", header.Number(), "hash", hash, "expected", want)
 				accepted = false
 				break
@@ -733,23 +749,24 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, headerProcCh 
 			q.headerPeerMiss[id] = make(map[uint64]struct{})
 			miss = q.headerPeerMiss[id]
 		}
-		miss[request.From] = struct{}{}
+		miss[request.From+1] = struct{}{}
 
-		q.headerTaskQueue.Push(request.From, -int64(request.From))
+		q.headerTaskQueue.Push(request.From+1, -int64(request.From+1))
 		return 0, errors.New("delivery not accepted")
 	}
-	// Clean up a successful fetch and try to deliver any sub-results
-	copy(q.headerResults[request.From-q.headerOffset:], headers)
-	delete(q.headerTaskPool, request.From)
 
-	ready := 0
-	for q.headerProced+ready < len(q.headerResults) && q.headerResults[q.headerProced+ready] != nil {
-		ready += MaxHeaderFetch
-	}
+	copy(q.headerResults[targetTo-q.headerOffset:], headers)
+
+	// Clean up a successful fetch and try to deliver any sub-results
+	delete(q.headerTaskPool, request.From+1)
+	delete(q.headerToPool, request.From+1)
+
+	ready := int(requiredHeaderFetch)
+
 	if ready > 0 {
 		// Headers are ready for delivery, gather them and push forward (non blocking)
 		process := make([]*types.Header, ready)
-		copy(process, q.headerResults[q.headerProced:q.headerProced+ready])
+		copy(process, headers)
 
 		select {
 		case headerProcCh <- process:

@@ -17,7 +17,6 @@
 package eth
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -82,56 +81,42 @@ func answerGetBlockHeadersQuery(backend Backend, query *GetBlockHeadersPacket, p
 		if origin == nil {
 			break
 		}
-		headers = append(headers, origin)
+
+		// If dom is true only append header to results array if it is a dominant header
+		if query.Dom {
+			if backend.Core().Engine().HasCoincidentDifficulty(origin) {
+				headers = append(headers, origin)
+			}
+		} else {
+			headers = append(headers, origin)
+			// If dom is false always append header to results array and break when dominant header is found
+			if backend.Core().Engine().HasCoincidentDifficulty(origin) {
+				break
+			}
+		}
+
+		// If the to number is reached stop the search
+		// By default the To is 0 and if its value is specified we need to stop
+		if query.To >= query.Origin.Number && query.Reverse {
+			break
+		}
+
 		bytes += estHeaderSize
 
 		// Advance to the next header of the query
 		switch {
 		case hashMode && query.Reverse:
-			// Hash based traversal towards the genesis block
-			ancestor := query.Skip + 1
-			if ancestor == 0 {
-				unknown = true
-			} else {
-				query.Origin.Hash, query.Origin.Number = backend.Core().GetAncestor(query.Origin.Hash, query.Origin.Number, ancestor, &maxNonCanonical)
-				unknown = (query.Origin.Hash == common.Hash{})
-			}
+			query.Origin.Hash, query.Origin.Number = backend.Core().GetAncestor(query.Origin.Hash, query.Origin.Number, query.Skip, &maxNonCanonical)
+			unknown = (query.Origin.Hash == common.Hash{})
 		case hashMode && !query.Reverse:
-			// Hash based traversal towards the leaf block
-			var (
-				current = origin.Number().Uint64()
-				next    = current + query.Skip + 1
-			)
-			if next <= current {
-				infos, _ := json.MarshalIndent(peer.Peer.Info(), "", "  ")
-				peer.Log().Warn("GetBlockHeaders skip overflow attack", "current", current, "skip", query.Skip, "next", next, "attacker", infos)
-				unknown = true
-			} else {
-				if header := backend.Core().GetHeaderByNumber(next); header != nil {
-					nextHash := header.Hash()
-					expOldHash, _ := backend.Core().GetAncestor(nextHash, next, query.Skip+1, &maxNonCanonical)
-					if expOldHash == query.Origin.Hash {
-						query.Origin.Hash, query.Origin.Number = nextHash, next
-					} else {
-						unknown = true
-					}
-				} else {
-					unknown = true
-				}
-			}
+			unknown = true
 		case query.Reverse:
-			// Number based traversal towards the genesis block
-			if query.Origin.Number >= query.Skip+1 {
-				query.Origin.Number -= query.Skip + 1
-			} else {
-				unknown = true
-			}
-
+			query.Origin.Number -= query.Skip
 		case !query.Reverse:
-			// Number based traversal towards the leaf block
-			query.Origin.Number += query.Skip + 1
+			query.Origin.Number += query.Skip
 		}
 	}
+
 	return headers
 }
 
