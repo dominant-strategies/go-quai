@@ -88,9 +88,6 @@ type ChainIndexer struct {
 	knownSections  uint64 // Number of sections known to be complete (block wise)
 	cascadedHead   uint64 // Block number of the last completed section cascaded to subindexers
 
-	checkpointSections uint64      // Number of sections covered by the checkpoint
-	checkpointHead     common.Hash // Section head belonging to the checkpoint
-
 	throttling time.Duration // Disk throttling to prevent a heavy upgrade from hogging resources
 
 	log  log.Logger
@@ -119,27 +116,6 @@ func NewChainIndexer(chainDb ethdb.Database, indexDb ethdb.Database, backend Cha
 	go c.updateLoop()
 
 	return c
-}
-
-// AddCheckpoint adds a checkpoint. Sections are never processed and the chain
-// is not expected to be available before this point. The indexer assumes that
-// the backend has sufficient information available to process subsequent sections.
-//
-// Note: knownSections == 0 and storedSections == checkpointSections until
-// syncing reaches the checkpoint
-func (c *ChainIndexer) AddCheckpoint(section uint64, shead common.Hash) {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
-	// Short circuit if the given checkpoint is below than local's.
-	if c.checkpointSections >= section+1 || section < c.storedSections {
-		return
-	}
-	c.checkpointSections = section + 1
-	c.checkpointHead = shead
-
-	c.setSectionHead(section, shead)
-	c.setValidSections(section + 1)
 }
 
 // Start creates a goroutine to feed chain head events into the indexer for
@@ -249,12 +225,6 @@ func (c *ChainIndexer) newHead(head uint64, reorg bool) {
 		// Revert the known section number to the reorg point
 		known := (head + 1) / c.sectionSize
 		stored := known
-		if known < c.checkpointSections {
-			known = 0
-		}
-		if stored < c.checkpointSections {
-			stored = c.checkpointSections
-		}
 		if known < c.knownSections {
 			c.knownSections = known
 		}
@@ -277,18 +247,8 @@ func (c *ChainIndexer) newHead(head uint64, reorg bool) {
 	var sections uint64
 	if head >= c.confirmsReq {
 		sections = (head + 1 - c.confirmsReq) / c.sectionSize
-		if sections < c.checkpointSections {
-			sections = 0
-		}
+
 		if sections > c.knownSections {
-			if c.knownSections < c.checkpointSections {
-				// syncing reached the checkpoint, verify section head
-				syncedHead := rawdb.ReadCanonicalHash(c.chainDb, c.checkpointSections*c.sectionSize-1)
-				if syncedHead != c.checkpointHead {
-					c.log.Error("Synced chain does not match checkpoint", "number", c.checkpointSections*c.sectionSize-1, "expected", c.checkpointHead, "synced", syncedHead)
-					return
-				}
-			}
 			c.knownSections = sections
 
 			select {
@@ -327,7 +287,6 @@ func (c *ChainIndexer) updateLoop() {
 					updated = time.Now()
 				}
 				// Cache the current section count and head to allow unlocking the mutex
-				c.verifyLastHead()
 				section := c.storedSections
 				var oldHead common.Hash
 				if section > 0 {
@@ -363,7 +322,6 @@ func (c *ChainIndexer) updateLoop() {
 				} else {
 					// If processing failed, don't retry until further notification
 					c.log.Debug("Chain index processing failed", "section", section, "err", err)
-					c.verifyLastHead()
 					c.knownSections = c.storedSections
 				}
 			}
@@ -416,18 +374,6 @@ func (c *ChainIndexer) processSection(section uint64, lastHead common.Hash) (com
 	return lastHead, nil
 }
 
-// verifyLastHead compares last stored section head with the corresponding block hash in the
-// actual canonical chain and rolls back reorged sections if necessary to ensure that stored
-// sections are all valid
-func (c *ChainIndexer) verifyLastHead() {
-	for c.storedSections > 0 && c.storedSections > c.checkpointSections {
-		if c.SectionHead(c.storedSections-1) == rawdb.ReadCanonicalHash(c.chainDb, c.storedSections*c.sectionSize-1) {
-			return
-		}
-		c.setValidSections(c.storedSections - 1)
-	}
-}
-
 // Sections returns the number of processed sections maintained by the indexer
 // and also the information about the last header indexed for potential canonical
 // verifications.
@@ -435,7 +381,6 @@ func (c *ChainIndexer) Sections() (uint64, uint64, common.Hash) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	c.verifyLastHead()
 	return c.storedSections, c.storedSections*c.sectionSize - 1, c.SectionHead(c.storedSections - 1)
 }
 
@@ -452,8 +397,6 @@ func (c *ChainIndexer) AddChildIndexer(indexer *ChainIndexer) {
 	// Cascade any pending updates to new children too
 	sections := c.storedSections
 	if c.knownSections < sections {
-		// if a section is "stored" but not "known" then it is a checkpoint without
-		// available chain data so we should not cascade it yet
 		sections = c.knownSections
 	}
 	if sections > 0 {
