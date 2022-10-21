@@ -45,13 +45,14 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 		// Write the block body to the db.
 		rawdb.WritePendingBlockBody(c.sl.sliceDb, block.Header().Root(), block.Body())
 
-		// if the order of the block is less than the context
-		// add the rest of the blocks in the queue to the future blocks.
 		if !isCoincident && !domWait {
 			newPendingEtxs, err := c.sl.Append(block.Header(), types.EmptyHeader(), common.Hash{}, big.NewInt(0), false, true, nil)
 			if err != nil {
 				if err == consensus.ErrFutureBlock || err.Error() == "unknown ancestor" {
 					c.sl.addfutureHeader(block.Header())
+				}
+				if err.Error() == "sub not synced to dom" {
+					return i, err
 				}
 				log.Info("InsertChain", "err in Append core: ", err)
 				return i, err
@@ -139,6 +140,10 @@ func (c *Core) AddPendingEtxs(pEtxs types.PendingEtxs) error {
 
 func (c *Core) SendPendingEtxsToDom(pEtxs types.PendingEtxs) error {
 	return c.sl.SendPendingEtxsToDom(pEtxs)
+}
+
+func (c *Core) SubscribeDownloaderWait(ch chan<- bool) event.Subscription {
+	return c.sl.SubscribeDownloaderWait(ch)
 }
 
 //---------------------//
