@@ -407,7 +407,7 @@ func (p *Peer) RequestOneHeader(hash common.Hash) error {
 	query := GetBlockHeadersPacket{
 		Origin:  HashOrNumber{Hash: hash},
 		Amount:  uint64(1),
-		Skip:    uint64(0),
+		Dom:     false,
 		Reverse: false,
 	}
 	if p.Version() >= ETH66 {
@@ -424,12 +424,13 @@ func (p *Peer) RequestOneHeader(hash common.Hash) error {
 
 // RequestHeadersByHash fetches a batch of blocks' headers corresponding to the
 // specified header query, based on the hash of an origin block.
-func (p *Peer) RequestHeadersByHash(origin common.Hash, amount int, skip int, reverse bool) error {
-	p.Log().Debug("Fetching batch of headers", "count", amount, "fromhash", origin, "skip", skip, "reverse", reverse)
+func (p *Peer) RequestHeadersByHash(origin common.Hash, amount int, skip uint64, dom bool, reverse bool) error {
+	p.Log().Debug("Fetching batch of headers", "count", amount, "skip", skip, "dom", dom, "fromhash", origin, "reverse", reverse)
 	query := GetBlockHeadersPacket{
 		Origin:  HashOrNumber{Hash: origin},
 		Amount:  uint64(amount),
-		Skip:    uint64(skip),
+		Skip:    skip,
+		Dom:     dom,
 		Reverse: reverse,
 	}
 	if p.Version() >= ETH66 {
@@ -446,12 +447,14 @@ func (p *Peer) RequestHeadersByHash(origin common.Hash, amount int, skip int, re
 
 // RequestHeadersByNumber fetches a batch of blocks' headers corresponding to the
 // specified header query, based on the number of an origin block.
-func (p *Peer) RequestHeadersByNumber(origin uint64, amount int, skip int, reverse bool) error {
-	p.Log().Debug("Fetching batch of headers", "count", amount, "fromnum", origin, "skip", skip, "reverse", reverse)
+func (p *Peer) RequestHeadersByNumber(origin uint64, amount int, skip uint64, to uint64, dom bool, reverse bool) error {
+	p.Log().Debug("Fetching batch of headers", "count", amount, "skip", skip, "from num", origin, "to", to, "dom", dom, "reverse", reverse)
 	query := GetBlockHeadersPacket{
 		Origin:  HashOrNumber{Number: origin},
 		Amount:  uint64(amount),
-		Skip:    uint64(skip),
+		Skip:    skip,
+		To:      to,
+		Dom:     dom,
 		Reverse: reverse,
 	}
 	if p.Version() >= ETH66 {
@@ -468,11 +471,11 @@ func (p *Peer) RequestHeadersByNumber(origin uint64, amount int, skip int, rever
 
 // ExpectRequestHeadersByNumber is a testing method to mirror the recipient side
 // of the RequestHeadersByNumber operation.
-func (p *Peer) ExpectRequestHeadersByNumber(origin uint64, amount int, skip int, reverse bool) error {
+func (p *Peer) ExpectRequestHeadersByNumber(origin uint64, amount int, dom bool, reverse bool) error {
 	req := &GetBlockHeadersPacket{
 		Origin:  HashOrNumber{Number: origin},
 		Amount:  uint64(amount),
-		Skip:    uint64(skip),
+		Dom:     dom,
 		Reverse: reverse,
 	}
 	return p2p.ExpectMsg(p.rw, GetBlockHeadersMsg, req)
