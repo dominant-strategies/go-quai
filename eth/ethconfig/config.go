@@ -143,12 +143,6 @@ type Config struct {
 	// send-transction variants. The unit is ether.
 	RPCTxFeeCap float64
 
-	// Checkpoint is a hardcoded checkpoint which can be nil.
-	Checkpoint *params.TrustedCheckpoint `toml:",omitempty"`
-
-	// CheckpointOracle is the configuration for checkpoint oracle.
-	CheckpointOracle *params.CheckpointOracleConfig `toml:",omitempty"`
-
 	// Berlin block override (TODO: remove after the fork)
 	OverrideLondon *big.Int `toml:",omitempty"`
 
