@@ -31,6 +31,9 @@ var (
 
 	// ErrNoGenesis is returned when there is no Genesis Block.
 	ErrNoGenesis = errors.New("genesis not found in chain")
+
+	// ErrSubNotSyncedToDom is returned when the subordinate cannot find the parent of the block which is being appended by the dom.
+	ErrSubNotSyncedToDom = errors.New("sub not synced to dom")
 )
 
 // List of evm-call-message pre-checking errors. All state transition messages will

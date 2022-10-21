@@ -16,6 +16,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/ethdb"
+	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/quaiclient"
@@ -50,6 +51,9 @@ type Slice struct {
 	domClient  *quaiclient.Client
 	domUrl     string
 	subClients []*quaiclient.Client
+
+	scope              event.SubscriptionScope
+	downloaderWaitFeed event.Feed
 
 	futureHeaders *lru.Cache
 	pendingEtxs   *lru.Cache
@@ -146,7 +150,9 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	if !isDomCoincident {
 		newInboundEtxs, subRollup, err = sl.CollectNewlyConfirmedEtxs(block, block.Location())
 		if err != nil {
-			return nil, err
+			sl.addfutureHeader(header)
+			log.Warn("Error collecting newly confirmed etxs: ", "err", err)
+			return nil, ErrSubNotSyncedToDom
 		}
 	}
 
@@ -381,7 +387,7 @@ func (sl *Slice) pcrc(batch ethdb.Batch, header *types.Header, domTerminus commo
 	termini := sl.hc.GetTerminiByHash(header.ParentHash())
 
 	if len(termini) != 4 {
-		return common.Hash{}, []common.Hash{}, errors.New("length of termini not equal to 4")
+		return common.Hash{}, []common.Hash{}, ErrSubNotSyncedToDom
 	}
 
 	newTermini := make([]common.Hash, len(termini))
@@ -645,6 +651,7 @@ func (sl *Slice) init(genesis *Genesis) error {
 				}
 			}
 		}
+
 	} else { // load the phCache and slice current pending header hash
 		if err := sl.loadLastState(); err != nil {
 			return err
@@ -834,6 +841,7 @@ func (sl *Slice) Stop() {
 	// Write the ph cache to the dd.
 	rawdb.WritePhCache(sl.sliceDb, sl.phCache)
 
+	sl.scope.Close()
 	close(sl.quit)
 
 	sl.hc.Stop()
@@ -850,6 +858,10 @@ func (sl *Slice) HeaderChain() *HeaderChain { return sl.hc }
 func (sl *Slice) TxPool() *TxPool { return sl.txPool }
 
 func (sl *Slice) Miner() *Miner { return sl.miner }
+
+func (sl *Slice) SubscribeDownloaderWait(ch chan<- bool) event.Subscription {
+	return sl.scope.Track(sl.downloaderWaitFeed.Subscribe(ch))
+}
 
 func (sl *Slice) PendingBlockBody(hash common.Hash) *types.Body {
 	return rawdb.ReadPendingBlockBody(sl.sliceDb, hash)
