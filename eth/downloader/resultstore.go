@@ -71,10 +71,11 @@ func (r *resultStore) SetThrottleThreshold(threshold uint64) uint64 {
 // wants to reserve headers for fetching.
 //
 // It returns the following:
-//   stale     - if true, this item is already passed, and should not be requested again
-//   throttled - if true, the store is at capacity, this particular header is not prio now
-//   item      - the result to store data into
-//   err       - any error that occurred
+//
+//	stale     - if true, this item is already passed, and should not be requested again
+//	throttled - if true, the store is at capacity, this particular header is not prio now
+//	item      - the result to store data into
+//	err       - any error that occurred
 func (r *resultStore) AddFetch(header *types.Header) (stale, throttled bool, item *fetchResult, err error) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
@@ -84,6 +85,8 @@ func (r *resultStore) AddFetch(header *types.Header) (stale, throttled bool, ite
 	if err != nil || stale || throttled {
 		return stale, throttled, item, err
 	}
+	// If item is nil, it means that there was no entry for the given header number in the
+	// result store.
 	if item == nil {
 		item = newFetchResult(header)
 		r.items[index] = item
@@ -107,6 +110,7 @@ func (r *resultStore) GetDeliverySlot(headerNumber uint64) (*fetchResult, bool, 
 // the index where the result is stored.
 func (r *resultStore) getFetchResult(headerNumber uint64) (item *fetchResult, index int, stale, throttle bool, err error) {
 	index = int(int64(headerNumber) - int64(r.resultOffset))
+
 	throttle = index >= int(r.throttleThreshold)
 	stale = index < 0
 
