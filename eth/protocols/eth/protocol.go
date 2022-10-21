@@ -123,8 +123,10 @@ type TransactionsPacket []*types.Transaction
 type GetBlockHeadersPacket struct {
 	Origin  HashOrNumber // Block from which to retrieve headers
 	Amount  uint64       // Maximum number of headers to retrieve
-	Skip    uint64       // Blocks to skip between consecutive headers
+	Dom     bool         // true: Return only dom blocks upto amount, False : Return only non-dom blocks upto amount or dom block
 	Reverse bool         // Query direction (false = rising towards latest, true = falling towards genesis)
+	To      uint64       // Stop the fetch when To number is reached
+	Skip    uint64       // The number of headers to skip between fetching the header from local database.
 }
 
 // GetBlockHeadersPacket represents a block header query over eth/66

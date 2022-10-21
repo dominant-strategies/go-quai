@@ -70,8 +70,8 @@ type peerConnection struct {
 // LightPeer encapsulates the methods required to synchronise with a remote light peer.
 type LightPeer interface {
 	Head() (common.Hash, uint64)
-	RequestHeadersByHash(common.Hash, int, int, bool) error
-	RequestHeadersByNumber(uint64, int, int, bool) error
+	RequestHeadersByHash(common.Hash, int, uint64, bool, bool) error
+	RequestHeadersByNumber(uint64, int, uint64, uint64, bool, bool) error
 }
 
 // Peer encapsulates the methods required to synchronise with a remote full peer.
@@ -113,8 +113,15 @@ func (p *peerConnection) FetchHeaders(from uint64, count int) error {
 	}
 	p.headerStarted = time.Now()
 
-	// Issue the header retrieval request (absolute upwards without gaps)
-	go p.peer.RequestHeadersByNumber(from, count, 0, false)
+	// In the case of prime the required amount is the PrimeSKeletonDist which is the
+	// distance between the skeleton headers.
+	if common.NodeLocation.Context() == common.PRIME_CTX {
+		// Issue the header retrieval request (absolute upwards without gaps)
+		go p.peer.RequestHeadersByNumber(from, PrimeSkeletonDist, 1, 0, false, true)
+	} else {
+		// Issue the header retrieval request (absolute upwards without gaps)
+		go p.peer.RequestHeadersByNumber(from, count, 1, 0, false, true)
+	}
 
 	return nil
 }
