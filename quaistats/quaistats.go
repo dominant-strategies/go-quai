@@ -743,11 +743,11 @@ func (s *Service) reportPending(conn *connWrapper) error {
 	// Retrieve the pending count from the local blockchain
 	pending, _ := s.backend.Stats()
 	// Assemble the transaction stats and send it to the server
-	log.Trace("Sending pending transactions to quaistats", "count", pending)
+	log.Trace("Sending pending transactions to quaistats", "count", strconv.Itoa(pending))
 
 	stats := map[string]interface{}{
 		"id": s.node,
-		"stats": &pendStats{
+		"pending": &pendStats{
 			Pending: pending,
 		},
 	}
