@@ -92,24 +92,23 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *par
 	return hc, nil
 }
 
-func (hc *HeaderChain) ManifestForHeader(h *types.Header) (types.BlockManifest, error) {
+func (hc *HeaderChain) CollectBlockManifest(h *types.Header) (types.BlockManifest, error) {
 	manifest := types.BlockManifest{}
-	if h.NumberU64() == 0 {
+	// Terminate the search on coincidence or genesis
+	if hc.engine.HasCoincidentDifficulty(h) || h.NumberU64() == 0 {
 		return manifest, nil
 	}
-	for {
-		ancestor := hc.GetHeader(h.ParentHash(), h.NumberU64()-1)
-		if ancestor == nil {
-			return types.BlockManifest{}, errors.New("ancestor not found")
-		}
-		ancHash := ancestor.Hash()
-		manifest = append(manifest, &ancHash)
-		if hc.engine.HasCoincidentDifficulty(h) || h.NumberU64() == 0 {
-			// No more ancestors to include in the manifest
-			return manifest, nil
-		}
-		h = ancestor // Iterate to next ancestor
+	// Recursively get the ancestor manifest, until a coincident ancestor is found
+	ancestor := hc.GetHeader(h.ParentHash(), h.NumberU64()-1)
+	if ancestor == nil {
+		return types.BlockManifest{}, errors.New("ancestor not found")
 	}
+	ancManifest, err := hc.CollectBlockManifest(ancestor)
+	if err != nil {
+		return nil, errors.New("unable to get manifest for ancestor")
+	}
+	manifest = append(ancManifest, manifest...)
+	return manifest, nil
 }
 
 // Append
@@ -123,7 +122,7 @@ func (hc *HeaderChain) Append(batch ethdb.Batch, block *types.Block, manifestHas
 	}
 
 	// Load the manifest for this block
-	manifest, err := hc.ManifestForHeader(h)
+	manifest, err := hc.CollectBlockManifest(h)
 	if err != nil {
 		return err
 	}
