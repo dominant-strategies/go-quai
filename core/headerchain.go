@@ -119,6 +119,34 @@ func (hc *HeaderChain) CollectBlockManifest(h *types.Header) (types.BlockManifes
 	return manifest, nil
 }
 
+func (hc *HeaderChain) CollectEtxRollup(b *types.Block) (types.Transactions, error) {
+	// Initialize the rollup with ETXs emitted by this block
+	newEtxs := b.ExtTransactions()
+	// Terminate the search if we reached genesis
+	if b.NumberU64() == 0 {
+		if b.Hash() != hc.config.GenesisHash {
+			return nil, fmt.Errorf("manifest builds on incorrect genesis", "block0 hash: ", b.Hash())
+		} else {
+			return newEtxs, nil
+		}
+	}
+	// Terminate the search on coincidence
+	if hc.engine.HasCoincidentDifficulty(b.Header()) {
+		return newEtxs, nil
+	}
+	// Recursively get the ancestor rollup, until a coincident ancestor is found
+	ancestor := hc.GetBlock(b.ParentHash(), b.NumberU64()-1)
+	if ancestor == nil {
+		return nil, errors.New("ancestor not found")
+	}
+	etxRollup, err := hc.CollectEtxRollup(ancestor)
+	if err != nil {
+		return nil, errors.New("unable to get rollup for ancestor")
+	}
+	etxRollup = append(etxRollup, newEtxs...)
+	return etxRollup, nil
+}
+
 // Append
 func (hc *HeaderChain) Append(batch ethdb.Batch, block *types.Block, manifestHash common.Hash) error {
 	h := block.Header()

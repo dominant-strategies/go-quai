@@ -108,6 +108,31 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 		}
 		return fmt.Errorf("invalid merkle root (remote: %x local: %x)", header.Root(), root)
 	}
+	// Collect ETXs emitted from each successful transaction
+	var emittedEtxs types.Transactions
+	for _, receipt := range receipts {
+		if receipt.Status == types.ReceiptStatusSuccessful {
+			for _, etx := range receipt.Etxs {
+				emittedEtxs = append(emittedEtxs, etx)
+			}
+		}
+	}
+	// Confirm the ETXs emitted by the transactions in this block exactly match the
+	// ETXs given in the block body
+	emittedHash := types.DeriveSha(emittedEtxs, trie.NewStackTrie(nil))
+	givenHash := types.DeriveSha(block.ExtTransactions(), trie.NewStackTrie(nil))
+	if emittedHash != givenHash {
+		return fmt.Errorf("invalid etx body (remote: %x local: %x)", givenHash, emittedHash)
+	}
+	// Collect the ETX rollup tree with new ETXs from this block
+	etxRollup, err := v.hc.CollectEtxRollup(block)
+	if err != nil {
+		return fmt.Errorf("unable to get ETX rollup")
+	}
+	// Check ETX rollup tree hash matches
+	if etxHash := types.DeriveSha(etxRollup, trie.NewStackTrie(nil)); etxHash != header.EtxHash() {
+		return fmt.Errorf("invalid etxhash (remote: %x local: %x)", header.EtxHash(), etxHash)
+	}
 	return nil
 }
 
