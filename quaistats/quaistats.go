@@ -583,6 +583,7 @@ type blockStats struct {
 	TxHash     common.Hash    `json:"transactionsRoot"`
 	Root       common.Hash    `json:"stateRoot"`
 	Uncles     uncleStats     `json:"uncles"`
+	Chain      []int          `json:"chain"`
 }
 
 // txStats is the information to report about individual transactions.
@@ -672,6 +673,7 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		TxHash:     header.TxHash(),
 		Root:       header.Root(),
 		Uncles:     uncles,
+		Chain:      IntArrayLocation(common.NodeLocation),
 	}
 }
 
