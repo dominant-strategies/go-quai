@@ -537,6 +537,7 @@ type Message struct {
 	data       []byte
 	accessList AccessList
 	checkNonce bool
+	txType     byte
 }
 
 func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice, gasFeeCap, gasTipCap *big.Int, data []byte, accessList AccessList, checkNonce bool) Message {
@@ -568,13 +569,19 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 		data:       tx.Data(),
 		accessList: tx.AccessList(),
 		checkNonce: true,
+		txType:     tx.inner.txType(),
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
 		msg.gasPrice = math.BigMin(msg.gasPrice.Add(msg.gasTipCap, baseFee), msg.gasFeeCap)
 	}
 	var err error
-	msg.from, err = Sender(s, tx)
+	if tx.Type() != ExternalTxType {
+		msg.from, err = Sender(s, tx)
+	} else {
+		msg.from = tx.inner.(*ExternalTx).Sender
+	}
+
 	return msg, err
 }
 
@@ -589,6 +596,7 @@ func (m Message) Nonce() uint64          { return m.nonce }
 func (m Message) Data() []byte           { return m.data }
 func (m Message) AccessList() AccessList { return m.accessList }
 func (m Message) CheckNonce() bool       { return m.checkNonce }
+func (m Message) Type() byte             { return m.txType }
 
 // AccessList is an EIP-2930 access list.
 type AccessList []AccessTuple

@@ -105,6 +105,16 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	if root := statedb.IntermediateRoot(v.config.IsEIP158(header.Number())); header.Root() != root {
 		return fmt.Errorf("invalid merkle root (remote: %x local: %x)", header.Root(), root)
 	}
+
+	v.hc.bc.processor.etxSetLock.RLock()
+	for _, tx := range block.Transactions() {
+		if tx.Type() == types.ExternalTxType {
+			if _, exists := v.hc.bc.processor.etxSet[tx.Hash()]; !exists {
+				return fmt.Errorf("invalid external transaction: etx %x not found in unspent etx set", tx.Hash())
+			}
+		}
+	}
+	v.hc.bc.processor.etxSetLock.RUnlock()
 	return nil
 }
 

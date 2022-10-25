@@ -134,8 +134,10 @@ type StateProcessor struct {
 	scope event.SubscriptionScope
 	wg    sync.WaitGroup // chain processing wait group for shutting down
 
-	triegc *prque.Prque  // Priority queue mapping block numbers to tries to gc
-	gcproc time.Duration // Accumulates canonical block processing for trie dumping
+	triegc     *prque.Prque  // Priority queue mapping block numbers to tries to gc
+	gcproc     time.Duration // Accumulates canonical block processing for trie dumping
+	etxSet     map[common.Hash]uint
+	etxSetLock sync.RWMutex
 }
 
 // NewStateProcessor initialises a new StateProcessor.
@@ -161,6 +163,7 @@ func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine conse
 		}),
 		engine: engine,
 		triegc: prque.New(nil),
+		etxSet: make(map[common.Hash]uint),
 	}
 	sp.validator = NewBlockValidator(config, hc, engine)
 	return sp
@@ -342,6 +345,14 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block) ([]*types.
 			}
 		}
 	}
+
+	p.etxSetLock.Lock()
+	for _, tx := range block.Transactions() {
+		if tx.Type() == types.ExternalTxType {
+			delete(p.etxSet, tx.Hash())
+		}
+	}
+	p.etxSetLock.Unlock()
 
 	return logs, nil
 }
