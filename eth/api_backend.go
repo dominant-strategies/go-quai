@@ -382,6 +382,10 @@ func (b *QuaiAPIBackend) GetPendingHeader() (*types.Header, error) {
 	return b.eth.core.GetPendingHeader()
 }
 
+func (b *QuaiAPIBackend) GetSubManifest(blockHash common.Hash) (types.BlockManifest, error) {
+	return b.eth.core.GetSubManifest(blockHash)
+}
+
 func (b *QuaiAPIBackend) SubscribeHeaderRootsEvent(ch chan<- types.HeaderRoots) event.Subscription {
 	return b.eth.core.SubscribeHeaderRoots(ch)
 }
