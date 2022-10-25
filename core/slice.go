@@ -377,7 +377,7 @@ func (sl *Slice) GetPendingHeader() (*types.Header, error) {
 func (sl *Slice) GetSubManifest(blockHash common.Hash) (types.BlockManifest, error) {
 	header := sl.hc.GetHeaderByHash(blockHash)
 	if header == nil {
-		return nil, fmt.Errorf("block not found")
+		return nil, errors.New("block not found")
 	}
 	return sl.hc.CollectBlockManifest(header)
 }
