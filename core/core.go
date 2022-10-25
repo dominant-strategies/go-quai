@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"io"
 	"math/big"
 	"time"
@@ -40,6 +41,21 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 	domWait := false
 	for i, block := range blocks {
 		isCoincident := c.sl.engine.HasCoincidentDifficulty(block.Header())
+		// If we just mined this block, its possible the subordinate manifest in our
+		// block body is incorrect. If so, ask our sub for the correct manifest,
+		// update and rewrite the correct body.
+		if block.ManifestHash() != block.SubManifest().Hash() {
+			if subIdx := block.Location().SubLocation(); subIdx >= 0 {
+				newSubManifest, err := c.sl.subClients[subIdx].GetSubManifest(context.Background(), block.Hash())
+				if err != nil {
+					return i, err
+				}
+				// Reconstruct the block, replacing the manifest with the new manifest
+				// received from our subClient
+				oldBody := block.Body()
+				block = block.WithBody(oldBody.Transactions, oldBody.Uncles, oldBody.ExtTransactions, newSubManifest)
+			}
+		}
 		// Write the block body to the db.
 		rawdb.WritePendingBlockBody(c.sl.sliceDb, block.Header().Root(), block.Body())
 
