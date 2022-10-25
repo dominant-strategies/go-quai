@@ -1488,11 +1488,11 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (quaiapi.Backen
 	return backend.APIBackend, backend
 }
 
-// RegisterQuaiStatsService configures the Ethereum Stats daemon and adds it to
+// RegisterQuaiStatsService configures the Quai Stats daemon and adds it to
 // the given node.
 func RegisterQuaiStatsService(stack *node.Node, backend quaiapi.Backend, url string) {
 	if err := quaistats.New(stack, backend, backend.Engine(), url); err != nil {
-		Fatalf("Failed to register the Ethereum Stats service: %v", err)
+		Fatalf("Failed to register the Quai Stats service: %v", err)
 	}
 }
 
