@@ -163,19 +163,14 @@ func (ec *Client) Append(ctx context.Context, header *types.Header, domTerminus 
 	return types.PendingHeader{Header: head, Termini: termini.Termini}, nil
 }
 
-func (ec *Client) SubRelayPendingHeader(ctx context.Context, pendingHeader types.PendingHeader, reorg bool) (types.BlockManifest, error) {
+func (ec *Client) SubRelayPendingHeader(ctx context.Context, pendingHeader types.PendingHeader, reorg bool) error {
 	data := map[string]interface{}{"Header": RPCMarshalHeader(pendingHeader.Header)}
 	data["Termini"] = pendingHeader.Termini
 	data["Reorg"] = reorg
 
-	var raw json.RawMessage
-	err := ec.c.CallContext(ctx, &raw, "quai_subRelayPendingHeader", data)
+	err := ec.c.CallContext(ctx, nil, "quai_subRelayPendingHeader", data)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	var subPendingManifest types.BlockManifest
-	if err := json.Unmarshal(raw, &subPendingManifest); err != nil {
-		return nil, err
-	}
-	return subPendingManifest, nil
+	return nil
 }
