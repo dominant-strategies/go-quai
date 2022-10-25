@@ -94,8 +94,16 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *par
 
 func (hc *HeaderChain) CollectBlockManifest(h *types.Header) (types.BlockManifest, error) {
 	manifest := types.BlockManifest{}
-	// Terminate the search on coincidence or genesis
-	if hc.engine.HasCoincidentDifficulty(h) || h.NumberU64() == 0 {
+	// Terminate the search if we reached genesis
+	if h.NumberU64() == 0 {
+		if h.Hash() != hc.config.GenesisHash {
+			return nil, fmt.Errorf("manifest builds on incorrect genesis", "block0 hash: ", h.Hash())
+		} else {
+			return manifest, nil
+		}
+	}
+	// Terminate the search on coincidence
+	if hc.engine.HasCoincidentDifficulty(h) {
 		return manifest, nil
 	}
 	// Recursively get the ancestor manifest, until a coincident ancestor is found
