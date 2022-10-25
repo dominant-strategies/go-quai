@@ -328,6 +328,14 @@ func (sl *Slice) GetPendingHeader() (*types.Header, error) {
 	}
 }
 
+func (sl *Slice) GetSubManifest(blockHash common.Hash) (types.BlockManifest, error) {
+	header := sl.hc.GetHeaderByHash(blockHash)
+	if header == nil {
+		return nil, errors.New("block not found")
+	}
+	return sl.hc.CollectBlockManifest(header)
+}
+
 // SubRelayPendingHeader takes a pending header from the sender (ie dominant), updates the phCache with a composited header and relays result to subordinates
 func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader, reorg bool, location common.Location) {
 	sl.phCachemu.Lock()
