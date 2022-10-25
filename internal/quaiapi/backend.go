@@ -79,6 +79,7 @@ type Backend interface {
 	PendingBlockBody(hash common.Hash) *types.Body
 	SubRelayPendingHeader(pendingHeader types.PendingHeader, reorg bool, location common.Location)
 	GetPendingHeader() (*types.Header, error)
+	GetSubManifest(blockHash common.Hash) (types.BlockManifest, error)
 	PendingBlockAndReceipts() (*types.Block, types.Receipts)
 
 	// Transaction pool API
