@@ -115,6 +115,10 @@ func (c *Core) GetPendingHeader() (*types.Header, error) {
 	return c.sl.GetPendingHeader()
 }
 
+func (c *Core) GetSubManifest(blockHash common.Hash) (types.BlockManifest, error) {
+	return c.sl.GetSubManifest(blockHash)
+}
+
 //---------------------//
 // HeaderChain methods //
 //---------------------//
