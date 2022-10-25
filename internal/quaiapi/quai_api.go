@@ -634,3 +634,27 @@ func (s *PublicBlockChainQuaiAPI) GetSubManifest(ctx context.Context, raw json.R
 	}
 	return manifest, nil
 }
+
+type RoutExtBlockArgs struct {
+	BlockHash    common.Hash
+	IsCoincident bool
+	Etxs         types.Transactions
+}
+
+func (s *PublicBlockChainQuaiAPI) RouteEtxs(ctx context.Context, raw json.RawMessage) error {
+	nodeCtx := common.NodeLocation.Context()
+	subCtx := nodeCtx + 1
+	var args RoutExtBlockArgs
+	if err := json.Unmarshal(raw, &args); err != nil {
+		return err
+	}
+	// Broadcast the block and announce chain insertion event
+	if args.Etxs != nil {
+		s.b.EventMux().Post(core.NewEtxsEvent{BlockHash: args.BlockHash, OriginContext: subCtx, Etxs: args.Etxs})
+		if args.IsCoincident {
+			s.b.RouteEtxs(args.BlockHash, args.IsCoincident, args.Etxs)
+		}
+	}
+	log.Info("Relayed subordinate ETXs", "BlockHash: ", args.BlockHash, "OriginCtx: ", subCtx, "IsCoincident", args.IsCoincident)
+	return nil
+}

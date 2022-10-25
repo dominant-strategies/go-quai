@@ -89,6 +89,9 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 	case *eth.NewBlockPacket:
 		return h.handleBlockBroadcast(peer, packet.Block)
 
+	case *eth.NewEtxsPacket:
+		return h.handleNewEtxs(peer, packet.BlockHash, packet.OriginCtx, packet.Etxs)
+
 	case *eth.NewPooledTransactionHashesPacket:
 		return h.txFetcher.Notify(peer.ID(), *packet)
 
@@ -200,4 +203,10 @@ func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block) er
 		h.chainSync.handlePeerEvent(peer)
 	}
 	return nil
+}
+
+// handleNewEtxs is invoked from a peer's message handler when it transmits a
+// ETX broadcast for the local node to process.
+func (h *ethHandler) handleNewEtxs(peer *eth.Peer, blockHash common.Hash, originCtx int, etxs []*types.Transaction) error {
+	return h.core.AddPendingInboundEtxs(blockHash, originCtx, etxs)
 }

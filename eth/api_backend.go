@@ -382,6 +382,10 @@ func (b *QuaiAPIBackend) GetPendingHeader() (*types.Header, error) {
 	return b.eth.core.GetPendingHeader()
 }
 
+func (b *QuaiAPIBackend) RouteEtxs(blockHash common.Hash, isCoincident bool, etxs []*types.Transaction) error {
+	return b.eth.core.RouteEtxs(blockHash, isCoincident, etxs)
+}
+
 func (b *QuaiAPIBackend) GetSubManifest(blockHash common.Hash) (types.BlockManifest, error) {
 	return b.eth.core.GetSubManifest(blockHash)
 }

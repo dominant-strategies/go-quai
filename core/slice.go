@@ -374,12 +374,22 @@ func (sl *Slice) GetPendingHeader() (*types.Header, error) {
 	return sl.phCache[sl.pendingHeader].Header, nil
 }
 
+// RouteEtxs gives etxs from a block to the dom to be routed to other chains
+func (sl *Slice) RouteEtxs(blockHash common.Hash, isCoincident bool, etxs []*types.Transaction) error {
+	return sl.domClient.RouteEtxs(context.Background(), blockHash, isCoincident, etxs)
+}
+
 func (sl *Slice) GetSubManifest(blockHash common.Hash) (types.BlockManifest, error) {
 	header := sl.hc.GetHeaderByHash(blockHash)
 	if header == nil {
 		return nil, errors.New("block not found")
 	}
 	return sl.hc.CollectBlockManifest(header)
+}
+
+func (sl *Slice) AddPendingInboundEtxs(blockHash common.Hash, originCtx int, etxs []*types.Transaction) error {
+	log.Info("received pending ETXs", "blockHash: ", blockHash)
+	return nil
 }
 
 // SubRelayPendingHeader takes a pending header from the sender (ie dominant), updates the phCache with a composited header and relays result to subordinates

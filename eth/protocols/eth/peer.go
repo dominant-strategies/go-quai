@@ -329,6 +329,15 @@ func (p *Peer) SendNewBlock(block *types.Block) error {
 	})
 }
 
+// SendNewEtxs propagates a set of external transactions to a remote peer.
+func (p *Peer) SendNewEtxs(blockHash common.Hash, originCtx int, etxs []*types.Transaction) error {
+	return p2p.Send(p.rw, NewEtxsMsg, &NewEtxsPacket{
+		BlockHash: blockHash,
+		OriginCtx: originCtx,
+		Etxs:      etxs,
+	})
+}
+
 // AsyncSendNewBlock queues an entire block for propagation to a remote peer. If
 // the peer's broadcast queue is full, the event is silently dropped.
 func (p *Peer) AsyncSendNewBlock(block *types.Block) {

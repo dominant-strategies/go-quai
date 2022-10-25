@@ -62,6 +62,7 @@ const (
 	NodeDataMsg        = 0x0e
 	GetReceiptsMsg     = 0x0f
 	ReceiptsMsg        = 0x10
+	NewEtxsMsg         = 0x11
 
 	// Protocol messages overloaded in eth/65
 	NewPooledTransactionHashesMsg = 0x08
@@ -181,6 +182,13 @@ type BlockHeadersPacket66 struct {
 // NewBlockPacket is the network packet for the block propagation message.
 type NewBlockPacket struct {
 	Block *types.Block
+}
+
+// NewEtxsPacket is the network packet for the etx propagation message.
+type NewEtxsPacket struct {
+	BlockHash common.Hash
+	OriginCtx int
+	Etxs      []*types.Transaction
 }
 
 // sanityCheck verifies that the values are reasonable, as a DoS protection
@@ -339,6 +347,9 @@ func (*BlockBodiesPacket) Kind() byte   { return BlockBodiesMsg }
 
 func (*NewBlockPacket) Name() string { return "NewBlock" }
 func (*NewBlockPacket) Kind() byte   { return NewBlockMsg }
+
+func (*NewEtxsPacket) Name() string { return "NewEtxs" }
+func (*NewEtxsPacket) Kind() byte   { return NewEtxsMsg }
 
 func (*GetNodeDataPacket) Name() string { return "GetNodeData" }
 func (*GetNodeDataPacket) Kind() byte   { return GetNodeDataMsg }

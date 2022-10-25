@@ -187,3 +187,16 @@ func (ec *Client) GetSubManifest(ctx context.Context, blockHash common.Hash) (ty
 	}
 	return manifest, nil
 }
+
+func (ec *Client) RouteEtxs(ctx context.Context, blockHash common.Hash, isCoincident bool, etxs []*types.Transaction) error {
+	data := make(map[string]interface{})
+	data["BlockHash"] = blockHash
+	data["IsCoincident"] = isCoincident
+	data["Etxs"] = etxs
+	var raw json.RawMessage
+	err := ec.c.CallContext(ctx, &raw, "quai_routeExtBlock", data)
+	if err != nil {
+		return err
+	}
+	return nil
+}

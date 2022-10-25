@@ -24,6 +24,13 @@ import (
 // NewTxsEvent is posted when a batch of transactions enter the transaction pool.
 type NewTxsEvent struct{ Txs []*types.Transaction }
 
+// NewEtxsEvent is posted when block emits a batch of etxs
+type NewEtxsEvent struct {
+	BlockHash     common.Hash
+	OriginContext int // Which context originated these ETXs
+	Etxs          []*types.Transaction
+}
+
 // NewMinedBlockEvent is posted when a block has been imported.
 type NewMinedBlockEvent struct{ Block *types.Block }
 

@@ -80,6 +80,7 @@ type Backend interface {
 	SubRelayPendingHeader(pendingHeader types.PendingHeader, reorg bool) error
 	GetPendingHeader() (*types.Header, error)
 	GetSubManifest(blockHash common.Hash) (types.BlockManifest, error)
+	RouteEtxs(blockHash common.Hash, isCoincident bool, etxs []*types.Transaction) error
 	PendingBlockAndReceipts() (*types.Block, types.Receipts)
 
 	// Transaction pool API

@@ -42,6 +42,10 @@ const (
 	// txChanSize is the size of channel listening to NewTxsEvent.
 	// The number is referenced from the size of tx pool.
 	txChanSize = 4096
+
+	// etxChanSize is the size of channel listening to NewEtxsEvent.
+	// The number is referenced from the size of tx pool.
+	etxChanSize = 4096
 )
 
 var (
@@ -108,6 +112,8 @@ type handler struct {
 	eventMux      *event.TypeMux
 	txsCh         chan core.NewTxsEvent
 	txsSub        event.Subscription
+	etxsCh        chan core.NewEtxsEvent
+	etxsSub       *event.TypeMuxSubscription
 	minedBlockSub *event.TypeMuxSubscription
 
 	whitelist map[uint64]common.Hash
@@ -311,6 +317,12 @@ func (h *handler) Start(maxPeers int) {
 	h.txsSub = h.txpool.SubscribeNewTxsEvent(h.txsCh)
 	go h.txBroadcastLoop()
 
+	// broadcast external transactions
+	h.wg.Add(1)
+	h.etxsCh = make(chan core.NewEtxsEvent, etxChanSize)
+	h.etxsSub = h.eventMux.Subscribe(core.NewEtxsEvent{})
+	go h.etxBroadcastLoop()
+
 	// broadcast mined blocks
 	h.wg.Add(1)
 	h.minedBlockSub = h.eventMux.Subscribe(core.NewMinedBlockEvent{})
@@ -364,6 +376,22 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 		}
 		log.Trace("Announced block", "hash", hash, "recipients", len(peers), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
 	}
+}
+
+// BroadcastEtxs will either propagate a set of ETXs to a subset of its peers
+func (h *handler) BroadcastEtxs(blockHash common.Hash, originCtx int, etxs []*types.Transaction) {
+	peerMap := h.peers.peers
+	peers := make([]*ethPeer, 0, len(peerMap))
+	for _, peer := range peerMap {
+		peers = append(peers, peer)
+	}
+
+	// Send the block to a subset of our peers
+	transfer := peers[:int(math.Sqrt(float64(len(peers))))]
+	for _, peer := range transfer {
+		peer.SendNewEtxs(blockHash, originCtx, etxs)
+	}
+	log.Trace("Propagated etxs", "hash", blockHash, "recipients", len(transfer), "etxs", len(etxs))
 }
 
 // BroadcastTransactions will propagate a batch of transactions
@@ -430,6 +458,17 @@ func (h *handler) txBroadcastLoop() {
 			h.BroadcastTransactions(event.Txs)
 		case <-h.txsSub.Err():
 			return
+		}
+	}
+}
+
+// txBroadcastLoop announces new transactions to connected peers.
+func (h *handler) etxBroadcastLoop() {
+	defer h.wg.Done()
+
+	for obj := range h.etxsSub.Chan() {
+		if ev, ok := obj.Data.(core.NewEtxsEvent); ok {
+			h.BroadcastEtxs(ev.BlockHash, ev.OriginContext, ev.Etxs)
 		}
 	}
 }

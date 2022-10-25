@@ -56,6 +56,10 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 				block = block.WithBody(oldBody.Transactions, oldBody.Uncles, oldBody.ExtTransactions, newSubManifest)
 			}
 		}
+		// Route ETXs to the network
+		if err := c.sl.RouteEtxs(block.Hash(), isCoincident, block.ExtTransactions()); err != nil {
+			log.Error("etx router failed", "block hash: ", block.Hash(), "err", err)
+		}
 		// Write the block body to the db.
 		rawdb.WritePendingBlockBody(c.sl.sliceDb, block.Header().Root(), block.Body())
 
@@ -131,8 +135,16 @@ func (c *Core) GetPendingHeader() (*types.Header, error) {
 	return c.sl.GetPendingHeader()
 }
 
+func (c *Core) RouteEtxs(blockHash common.Hash, isCoincident bool, etxs []*types.Transaction) error {
+	return c.sl.RouteEtxs(blockHash, isCoincident, etxs)
+}
+
 func (c *Core) GetSubManifest(blockHash common.Hash) (types.BlockManifest, error) {
 	return c.sl.GetSubManifest(blockHash)
+}
+
+func (c *Core) AddPendingInboundEtxs(blockHash common.Hash, originCtx int, etxs []*types.Transaction) error {
+	return c.sl.AddPendingInboundEtxs(blockHash, originCtx, etxs)
 }
 
 //---------------------//
