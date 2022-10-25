@@ -237,7 +237,6 @@ func (sl *Slice) ConstructLocalBlock(header *types.Header) *types.Block {
 			}
 
 			block = types.NewBlockWithHeader(header).WithBody(txs, uncles, etxs, subBlockHashes)
-			block = block.WithSeal(header)
 		}
 	}
 	return block
