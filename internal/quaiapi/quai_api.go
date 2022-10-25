@@ -587,3 +587,15 @@ func (s *PublicBlockChainQuaiAPI) GetPendingHeader(ctx context.Context) (map[str
 	marshaledPh := RPCMarshalHeader(pendingHeader)
 	return marshaledPh, nil
 }
+
+func (s *PublicBlockChainQuaiAPI) GetSubManifest(ctx context.Context, raw json.RawMessage) (types.BlockManifest, error) {
+	var blockHash common.Hash
+	if err := json.Unmarshal(raw, &blockHash); err != nil {
+		return nil, err
+	}
+	manifest, err := s.b.GetSubManifest(blockHash)
+	if err != nil {
+		return nil, err
+	}
+	return manifest, nil
+}

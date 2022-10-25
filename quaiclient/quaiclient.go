@@ -165,3 +165,16 @@ func (ec *Client) SubRelayPendingHeader(ctx context.Context, pendingHeader types
 	ec.c.CallContext(ctx, nil, "quai_subRelayPendingHeader", data)
 
 }
+
+func (ec *Client) GetSubManifest(ctx context.Context, blockHash common.Hash) (types.BlockManifest, error) {
+	var raw json.RawMessage
+	err := ec.c.CallContext(ctx, &raw, "quai_getSubManifest", blockHash)
+	if err != nil {
+		return nil, err
+	}
+	var manifest types.BlockManifest
+	if err := json.Unmarshal(raw, &manifest); err != nil {
+		return nil, err
+	}
+	return manifest, nil
+}
