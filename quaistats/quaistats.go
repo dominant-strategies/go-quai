@@ -675,6 +675,17 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 	}
 }
 
+func IntArrayLocation(l common.Location) []int {
+	switch l.Context() {
+	case common.REGION_CTX:
+		return []int{l.Region()}
+	case common.ZONE_CTX:
+		return []int{l.Region(), l.Zone()}
+	default:
+		return []int{}
+	}
+}
+
 // reportHistory retrieves the most recent batch of blocks and reports it to the
 // stats server.
 func (s *Service) reportHistory(conn *connWrapper, list []uint64) error {
