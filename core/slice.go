@@ -337,6 +337,15 @@ func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader, reorg 
 	defer sl.phCachemu.Unlock()
 	nodeCtx := common.NodeLocation.Context()
 
+	// Collect our manifest, so that the dom header can commit to it
+	if nodeCtx > common.PRIME_CTX {
+		manifest, err := sl.hc.CollectBlockManifest(pendingHeader.Header)
+		if err != nil {
+			log.Warn("Failed to get manifest for pending header", "parentHash: ", pendingHeader.Header.ParentHash(), "err: ", err)
+		}
+		pendingHeader.Header.SetManifestHash(manifest.Hash(), nodeCtx-1)
+	}
+
 	if nodeCtx == common.REGION_CTX {
 		// Adding a guard on the region that was already updated in the synchronous path.
 		if location.Region() != common.NodeLocation.Region() {
