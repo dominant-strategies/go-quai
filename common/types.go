@@ -60,6 +60,8 @@ var (
 var (
 	hashT    = reflect.TypeOf(Hash{})
 	addressT = reflect.TypeOf(Address{})
+	// The zero address (0x0)
+	ZeroAddr = BytesToAddress([]byte{0})
 )
 
 // Hash represents the 32 byte Keccak256 hash of arbitrary data.
@@ -375,6 +377,9 @@ func (a Address) Value() (driver.Value, error) {
 
 // IsInChainScope checks if an address is a valid account in our node's sharded address space
 func (a Address) IsInChainScope() bool {
+	if a == ZeroAddr {
+		return true
+	}
 	return NodeLocation.ContainsAddress(a)
 }
 
