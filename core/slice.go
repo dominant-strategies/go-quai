@@ -24,6 +24,7 @@ import (
 
 const (
 	maxFutureHeaders        = 256
+	maxPendingEtxBlocks     = 256
 	maxTimeFutureHeaders    = 30
 	pendingHeaderCacheLimit = 500
 	pendingHeaderGCTime     = 5
@@ -50,6 +51,7 @@ type Slice struct {
 	subClients []*quaiclient.Client
 
 	futureHeaders *lru.Cache
+	pendingEtxs   *lru.Cache
 
 	phCachemu sync.RWMutex
 
@@ -72,6 +74,8 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 
 	futureHeaders, _ := lru.New(maxFutureHeaders)
 	sl.futureHeaders = futureHeaders
+	pendingEtxs, _ := lru.New(maxPendingEtxBlocks)
+	sl.pendingEtxs = pendingEtxs
 
 	var err error
 	sl.hc, err = NewHeaderChain(db, engine, chainConfig, cacheConfig, vmConfig)
@@ -114,16 +118,17 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 
 // Append takes a proposed header and constructs a local block and attempts to hierarchically append it to the block graph.
 // If this is called from a dominant context a domTerminus must be provided else a common.Hash{} should be used and domOrigin should be set to true.
-func (sl *Slice) Append(header *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, manifestHash common.Hash) (types.PendingHeader, error) {
+func (sl *Slice) Append(header *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, manifestHash common.Hash) (types.PendingHeader, []types.Transactions, error) {
 	nodeCtx := common.NodeLocation.Context()
 	location := header.Location()
+	isCoincident := sl.engine.HasCoincidentDifficulty(header)
 
 	// Construct the block locally
 	block := sl.ConstructLocalBlock(header)
 	if block == nil {
 		// add the block to the future header cache
 		sl.addfutureHeader(header)
-		return sl.nilPendingHeader, errors.New("could not find the tx and uncle data to match the header root hash")
+		return sl.nilPendingHeader, nil, errors.New("could not find the tx and uncle data to match the header root hash")
 	}
 
 	log.Info("Starting slice append", "hash", block.Hash(), "number", block.Number(), "location", block.Header().Location())
@@ -133,20 +138,20 @@ func (sl *Slice) Append(header *types.Header, domTerminus common.Hash, td *big.I
 	// Run Previous Coincident Reference Check (PCRC)
 	domTerminus, newTermini, err := sl.pcrc(batch, block.Header(), domTerminus)
 	if err != nil {
-		return sl.nilPendingHeader, err
+		return sl.nilPendingHeader, nil, err
 	}
 
 	// Append the new block
 	err = sl.hc.Append(batch, block, manifestHash)
 	if err != nil {
-		return sl.nilPendingHeader, err
+		return sl.nilPendingHeader, nil, err
 	}
 
 	if !domOrigin {
 		// CalcTd on the new block
 		td, err = sl.calcTd(block.Header())
 		if err != nil {
-			return sl.nilPendingHeader, err
+			return sl.nilPendingHeader, nil, err
 		}
 		// HLCR
 		reorg = sl.hlcr(td)
@@ -154,11 +159,28 @@ func (sl *Slice) Append(header *types.Header, domTerminus common.Hash, td *big.I
 
 	// Call my sub to append the block
 	var subPendingHeader types.PendingHeader
+	var newPendingEtxs []types.Transactions
 	if nodeCtx != common.ZONE_CTX {
-		subPendingHeader, err = sl.subClients[location.SubLocation()].Append(context.Background(), block.Header(), domTerminus, td, true, reorg, block.ManifestHash())
+		subPendingHeader, newPendingEtxs, err = sl.subClients[location.SubLocation()].Append(context.Background(), block.Header(), domTerminus, td, true, reorg, block.ManifestHash())
 		if err != nil {
-			return sl.nilPendingHeader, err
+			return sl.nilPendingHeader, nil, err
 		}
+	} else {
+		// If we are a zone, initialize newPendingEtxs
+		newPendingEtxs = []types.Transactions{types.Transactions{}, types.Transactions{}, types.Transactions{}}
+	}
+
+	// Add our new ETXs to the newPendingEtxs collection
+	// If this is a coincident block, we need to add the full rollup of ETXs.
+	// Otherwise just send the new ETXs emitted in this block.
+	if isCoincident {
+		etxRollup, err := sl.hc.CollectEtxRollup(block)
+		if err != nil {
+			return types.PendingHeader{}, nil, fmt.Errorf("unable to get ETX rollup")
+		}
+		newPendingEtxs[nodeCtx] = etxRollup
+	} else {
+		newPendingEtxs[nodeCtx] = block.ExtTransactions()
 	}
 
 	// WriteTd
@@ -166,13 +188,13 @@ func (sl *Slice) Append(header *types.Header, domTerminus common.Hash, td *big.I
 
 	//Append has succeeded write the batch
 	if err := batch.Write(); err != nil {
-		return types.PendingHeader{}, err
+		return types.PendingHeader{}, nil, err
 	}
 
 	// Set my header chain head and generate new pending header
 	localPendingHeader, err := sl.setHeaderChainHead(batch, block, reorg)
 	if err != nil {
-		return sl.nilPendingHeader, err
+		return sl.nilPendingHeader, nil, err
 	}
 
 	// Combine subordinates pending header with local pending header
@@ -186,7 +208,6 @@ func (sl *Slice) Append(header *types.Header, domTerminus common.Hash, td *big.I
 		pendingHeader = types.PendingHeader{Header: localPendingHeader, Termini: newTermini}
 	}
 
-	isCoincident := sl.engine.HasCoincidentDifficulty(header)
 	// Relay the new pendingHeader
 	sl.updateCacheAndRelay(pendingHeader, block.Header().Location(), reorg, isCoincident)
 
@@ -201,7 +222,7 @@ func (sl *Slice) Append(header *types.Header, domTerminus common.Hash, td *big.I
 		"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
 		"root", block.Root())
 
-	return pendingHeader, nil
+	return pendingHeader, newPendingEtxs, nil
 }
 
 // constructLocalBlock takes a header and construct the Block locally
@@ -374,12 +395,25 @@ func (sl *Slice) GetPendingHeader() (*types.Header, error) {
 	return sl.phCache[sl.pendingHeader].Header, nil
 }
 
+// SendPendingEtxsToDom shares a set of pending ETXs with your dom, so he can reference them when a coincident block is found
+func (sl *Slice) SendPendingEtxsToDom(header *types.Header, etxs []types.Transactions) error {
+	return sl.domClient.SendPendingEtxsToDom(context.Background(), header, etxs)
+}
+
 func (sl *Slice) GetSubManifest(blockHash common.Hash) (types.BlockManifest, error) {
 	header := sl.hc.GetHeaderByHash(blockHash)
 	if header == nil {
 		return nil, errors.New("block not found")
 	}
 	return sl.hc.CollectBlockManifest(header)
+}
+
+func (sl *Slice) AddPendingEtxs(header *types.Header, etxs []types.Transactions) error {
+	log.Info("Received pending ETXs", "block: ", header.Hash())
+	if ok, _ := sl.pendingEtxs.ContainsOrAdd(header.Hash(), etxs); !ok {
+		return fmt.Errorf("failed to add pending etxs for block", "hash: ", header.Hash())
+	}
+	return nil
 }
 
 // SubRelayPendingHeader takes a pending header from the sender (ie dominant), updates the phCache with a composited header and relays result to subordinates
@@ -498,7 +532,7 @@ func (sl *Slice) genesisInit(genesis *Genesis) error {
 				location := block.Header().Location()
 				if nodeCtx == common.PRIME_CTX {
 					rawdb.WritePendingBlockBody(sl.sliceDb, block.Root(), block.Body())
-					_, err := sl.Append(block.Header(), genesisHash, block.Difficulty(), false, false, block.ManifestHash())
+					_, _, err := sl.Append(block.Header(), genesisHash, block.Difficulty(), false, false, block.ManifestHash())
 					if err != nil {
 						log.Warn("Failed to append block", "hash:", block.Hash(), "Number:", block.Number(), "Location:", block.Header().Location(), "error:", err)
 					}
