@@ -56,19 +56,24 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 				block = block.WithBody(oldBody.Transactions, oldBody.Uncles, oldBody.ExtTransactions, newSubManifest)
 			}
 		}
+
 		// Write the block body to the db.
 		rawdb.WritePendingBlockBody(c.sl.sliceDb, block.Header().Root(), block.Body())
 
 		// if the order of the block is less than the context
 		// add the rest of the blocks in the queue to the future blocks.
 		if !isCoincident && !domWait {
-			err := c.sl.Append(block.Header(), types.EmptyHeader(), common.Hash{}, big.NewInt(0), false, true, block.ManifestHash())
+			newPendingEtxs, err := c.sl.Append(block.Header(), types.EmptyHeader(), common.Hash{}, big.NewInt(0), false, true, block.ManifestHash())
 			if err != nil {
 				if err == consensus.ErrFutureBlock || err.Error() == "unknown ancestor" {
 					c.sl.addfutureHeader(block.Header())
 				}
 				log.Info("InsertChain", "err in Append core: ", err)
 				return i, err
+			}
+			// Let our dom know about the new ETXs we have pending
+			if err := c.sl.SendPendingEtxsToDom(block.Header(), newPendingEtxs); err != nil {
+				log.Error("failed to send ETXs to domclient", "block: ", block.Hash(), "err", err)
 			}
 		} else {
 			domWait = true
@@ -113,7 +118,7 @@ func (c *Core) Stop() {
 // Slice methods //
 //---------------//
 
-func (c *Core) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, manifestHash common.Hash) error {
+func (c *Core) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, manifestHash common.Hash) ([]types.Transactions, error) {
 	return c.sl.Append(header, domPendingHeader, domTerminus, td, domOrigin, reorg, manifestHash)
 }
 
@@ -130,8 +135,16 @@ func (c *Core) GetPendingHeader() (*types.Header, error) {
 	return c.sl.GetPendingHeader()
 }
 
+func (c *Core) SendPendingEtxsToDom(header *types.Header, etxs []types.Transactions) error {
+	return c.sl.SendPendingEtxsToDom(header, etxs)
+}
+
 func (c *Core) GetSubManifest(blockHash common.Hash) (types.BlockManifest, error) {
 	return c.sl.GetSubManifest(blockHash)
+}
+
+func (c *Core) AddPendingEtxs(header *types.Header, etxs []types.Transactions) error {
+	return c.sl.AddPendingEtxs(header, etxs)
 }
 
 //---------------------//

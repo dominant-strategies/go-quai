@@ -140,18 +140,24 @@ type Termini struct {
 	Termini []common.Hash `json:"termini"`
 }
 
-func (ec *Client) Append(ctx context.Context, header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, manifestHash common.Hash) error {
+func (ec *Client) Append(ctx context.Context, header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, manifestHash common.Hash) ([]types.Transactions, error) {
 	data, err := RPCMarshalTdHeader(header, domPendingHeader, domTerminus, td, domOrigin, reorg, manifestHash)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var raw json.RawMessage
 	err = ec.c.CallContext(ctx, &raw, "quai_append", data)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+
+	// Decode header and transactions.
+	var pendingEtxs []types.Transactions
+	if err := json.Unmarshal(raw, &pendingEtxs); err != nil {
+		return nil, err
+	}
+	return pendingEtxs, nil
 }
 
 func (ec *Client) SubRelayPendingHeader(ctx context.Context, pendingHeader types.PendingHeader, reorg bool, location common.Location) {
@@ -175,4 +181,16 @@ func (ec *Client) GetSubManifest(ctx context.Context, blockHash common.Hash) (ty
 		return nil, err
 	}
 	return manifest, nil
+}
+
+func (ec *Client) SendPendingEtxsToDom(ctx context.Context, header *types.Header, etxs []types.Transactions) error {
+	data := make(map[string]interface{})
+	data["Header"] = header
+	data["Etxs"] = etxs
+	var raw json.RawMessage
+	err := ec.c.CallContext(ctx, &raw, "quai_domRelayEtxs", data)
+	if err != nil {
+		return err
+	}
+	return nil
 }

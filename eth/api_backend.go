@@ -354,7 +354,7 @@ func (b *QuaiAPIBackend) SyncProgress() quai.SyncProgress {
 	return b.eth.Downloader().Progress()
 }
 
-func (b *QuaiAPIBackend) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, manifestHash common.Hash) error {
+func (b *QuaiAPIBackend) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, manifestHash common.Hash) ([]types.Transactions, error) {
 	return b.eth.core.Append(header, domPendingHeader, domTerminus, td, domOrigin, reorg, manifestHash)
 }
 
@@ -382,8 +382,16 @@ func (b *QuaiAPIBackend) GetPendingHeader() (*types.Header, error) {
 	return b.eth.core.GetPendingHeader()
 }
 
+func (b *QuaiAPIBackend) SendPendingEtxsToDom(header *types.Header, etxs []types.Transactions) error {
+	return b.eth.core.SendPendingEtxsToDom(header, etxs)
+}
+
 func (b *QuaiAPIBackend) GetSubManifest(blockHash common.Hash) (types.BlockManifest, error) {
 	return b.eth.core.GetSubManifest(blockHash)
+}
+
+func (b *QuaiAPIBackend) AddPendingEtxs(header *types.Header, etxs []types.Transactions) error {
+	return b.eth.core.AddPendingEtxs(header, etxs)
 }
 
 func (b *QuaiAPIBackend) SubscribeHeaderRootsEvent(ch chan<- types.HeaderRoots) event.Subscription {
