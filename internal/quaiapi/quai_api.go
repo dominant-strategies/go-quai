@@ -616,19 +616,24 @@ type tdBlock struct {
 	Reorg            bool          `json:"reorg"`
 }
 
-func (s *PublicBlockChainQuaiAPI) Append(ctx context.Context, raw json.RawMessage) error {
+func (s *PublicBlockChainQuaiAPI) Append(ctx context.Context, raw json.RawMessage) (map[string]interface{}, error) {
 	// Decode header and transactions.
 	var body tdBlock
 
 	if err := json.Unmarshal(raw, &body); err != nil {
-		return err
+		return nil, err
 	}
 
-	err := s.b.Append(body.Header, body.DomPendingHeader, body.DomTerminus, body.Td, body.DomOrigin, body.Reorg)
+	pendingEtxs, err := s.b.Append(body.Header, body.DomPendingHeader, body.DomTerminus, body.Td, body.DomOrigin, body.Reorg)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	// Marshal the output for decoding
+	fields := map[string]interface{}{
+		"pendingEtxs": pendingEtxs,
+	}
+
+	return fields, nil
 
 }
 
@@ -670,4 +675,17 @@ func (s *PublicBlockChainQuaiAPI) GetManifest(ctx context.Context, raw json.RawM
 		return nil, err
 	}
 	return manifest, nil
+}
+
+type SendPendingEtxsToDomArgs struct {
+	Header         types.Header         `json:"header"`
+	NewPendingEtxs []types.Transactions `json:"newPendingEtxs"`
+}
+
+func (s *PublicBlockChainQuaiAPI) SendPendingEtxsToDom(ctx context.Context, raw json.RawMessage) error {
+	var pEtxs types.PendingEtxs
+	if err := json.Unmarshal(raw, &pEtxs); err != nil {
+		return err
+	}
+	return s.b.AddPendingEtxs(pEtxs)
 }

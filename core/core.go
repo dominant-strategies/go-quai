@@ -37,6 +37,7 @@ func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.H
 }
 
 func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
+	nodeCtx := common.NodeLocation.Context()
 	domWait := false
 	for i, block := range blocks {
 		isCoincident := c.sl.engine.IsDomCoincident(block.Header())
@@ -47,13 +48,22 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 		// if the order of the block is less than the context
 		// add the rest of the blocks in the queue to the future blocks.
 		if !isCoincident && !domWait {
-			err := c.sl.Append(block.Header(), types.EmptyHeader(), common.Hash{}, big.NewInt(0), false, true)
+			newPendingEtxs, err := c.sl.Append(block.Header(), types.EmptyHeader(), common.Hash{}, big.NewInt(0), false, true)
 			if err != nil {
 				if err == consensus.ErrFutureBlock || err.Error() == "unknown ancestor" {
 					c.sl.addfutureHeader(block.Header())
 				}
 				log.Info("InsertChain", "err in Append core: ", err)
 				return i, err
+			}
+			// If we have a dom, send the dom any pending ETXs which will become
+			// referencable by this block. When this block is referenced in the dom's
+			// subordinate block manifest, then ETXs produced by this block and the rollup
+			// of ETXs produced by subordinate chain(s) will become referencable.
+			if nodeCtx > common.PRIME_CTX {
+				if err := c.SendPendingEtxsToDom(types.PendingEtxs{block.Header(), newPendingEtxs}); err != nil {
+					log.Error("failed to send ETXs to domclient", "block: ", block.Hash(), "err", err)
+				}
 			}
 		} else {
 			domWait = true
@@ -98,7 +108,7 @@ func (c *Core) Stop() {
 // Slice methods //
 //---------------//
 
-func (c *Core) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) error {
+func (c *Core) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) ([]types.Transactions, error) {
 	return c.sl.Append(header, domPendingHeader, domTerminus, td, domOrigin, reorg)
 }
 
@@ -121,6 +131,14 @@ func (c *Core) GetManifest(blockHash common.Hash) (types.BlockManifest, error) {
 
 func (c *Core) GetSubManifest(slice common.Location, blockHash common.Hash) (types.BlockManifest, error) {
 	return c.sl.GetSubManifest(slice, blockHash)
+}
+
+func (c *Core) AddPendingEtxs(pEtxs types.PendingEtxs) error {
+	return c.sl.AddPendingEtxs(pEtxs)
+}
+
+func (c *Core) SendPendingEtxsToDom(pEtxs types.PendingEtxs) error {
+	return c.sl.SendPendingEtxsToDom(pEtxs)
 }
 
 //---------------------//

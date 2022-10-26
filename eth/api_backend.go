@@ -354,7 +354,7 @@ func (b *QuaiAPIBackend) SyncProgress() quai.SyncProgress {
 	return b.eth.Downloader().Progress()
 }
 
-func (b *QuaiAPIBackend) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) error {
+func (b *QuaiAPIBackend) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) ([]types.Transactions, error) {
 	return b.eth.core.Append(header, domPendingHeader, domTerminus, td, domOrigin, reorg)
 }
 
@@ -388,6 +388,10 @@ func (b *QuaiAPIBackend) GetManifest(blockHash common.Hash) (types.BlockManifest
 
 func (b *QuaiAPIBackend) GetSubManifest(slice common.Location, blockHash common.Hash) (types.BlockManifest, error) {
 	return b.eth.core.GetSubManifest(slice, blockHash)
+}
+
+func (b *QuaiAPIBackend) AddPendingEtxs(pEtxs types.PendingEtxs) error {
+	return b.eth.core.AddPendingEtxs(pEtxs)
 }
 
 func (b *QuaiAPIBackend) SubscribeHeaderRootsEvent(ch chan<- types.HeaderRoots) event.Subscription {
