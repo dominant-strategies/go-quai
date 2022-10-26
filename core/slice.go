@@ -548,6 +548,8 @@ func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *typ
 	slPendingHeader.SetGasLimit(header.GasLimit(index), index)
 	slPendingHeader.SetGasUsed(header.GasUsed(index), index)
 	slPendingHeader.SetTxHash(header.TxHash(index), index)
+	slPendingHeader.SetEtxHash(header.EtxHash(index), index)
+	slPendingHeader.SetManifestHash(header.ManifestHash(index), index)
 	slPendingHeader.SetReceiptHash(header.ReceiptHash(index), index)
 	slPendingHeader.SetRoot(header.Root(index), index)
 	slPendingHeader.SetDifficulty(header.Difficulty(index), index)
