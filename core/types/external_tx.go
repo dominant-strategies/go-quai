@@ -26,6 +26,16 @@ type ExternalTx struct {
 	// the origin chain indeed confirmed emission of that ETX.
 }
 
+// PendingEtxs are ETXs which have been emitted from a block, but are not yet
+// referencable through the block manifest. Once a coincident block is found,
+// the dominant nodes will collect all pending ETXs from each block listed in
+// the manifest, and mark them referencable so they may be included at the
+// destination chain.
+type PendingEtxs struct {
+	Header *Header        `json:"header" gencodec:"required"`
+	Etxs   []Transactions `json:"etxs"   gencodec:"required"`
+}
+
 // copy creates a deep copy of the transaction data and initializes all fields.
 func (tx *ExternalTx) copy() TxData {
 	cpy := &ExternalTx{

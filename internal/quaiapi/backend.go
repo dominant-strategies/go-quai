@@ -72,7 +72,7 @@ type Backend interface {
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 	SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription
 
-	Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) error
+	Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) ([]types.Transactions, error)
 	ConstructLocalBlock(header *types.Header) *types.Block
 	InsertBlock(ctx context.Context, block *types.Block) (int, error)
 	PendingBlock() *types.Block
@@ -81,6 +81,7 @@ type Backend interface {
 	GetPendingHeader() (*types.Header, error)
 	GetManifest(blockHash common.Hash) (types.BlockManifest, error)
 	GetSubManifest(slice common.Location, blockHash common.Hash) (types.BlockManifest, error)
+	AddPendingEtxs(pEtxs types.PendingEtxs) error
 	PendingBlockAndReceipts() (*types.Block, types.Receipts)
 
 	// Transaction pool API
