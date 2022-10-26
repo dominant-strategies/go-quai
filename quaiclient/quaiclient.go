@@ -142,18 +142,32 @@ type Termini struct {
 	Termini []common.Hash `json:"termini"`
 }
 
-func (ec *Client) Append(ctx context.Context, header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) error {
-	data, err := RPCMarshalTdHeader(header, domPendingHeader, domTerminus, td, domOrigin, reorg)
-	if err != nil {
-		return err
+type pendingEtxs struct {
+	Etxs []types.Transactions `json:"pendingEtxs"`
+}
+
+func (ec *Client) Append(ctx context.Context, header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) ([]types.Transactions, error) {
+	fields := map[string]interface{}{
+		"header":           RPCMarshalHeader(header),
+		"domPendingHeader": RPCMarshalHeader(domPendingHeader),
+		"td":               td,
+		"domTerminus":      domTerminus,
+		"domOrigin":        domOrigin,
+		"reorg":            reorg,
 	}
 
 	var raw json.RawMessage
-	err = ec.c.CallContext(ctx, &raw, "quai_append", data)
+	err := ec.c.CallContext(ctx, &raw, "quai_append", fields)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+
+	// Decode header and transactions.
+	var pEtxs pendingEtxs
+	if err := json.Unmarshal(raw, &pEtxs); err != nil {
+		return nil, err
+	}
+	return pEtxs.Etxs, nil
 }
 
 func (ec *Client) SubRelayPendingHeader(ctx context.Context, pendingHeader types.PendingHeader, reorg bool, location common.Location) {
@@ -178,4 +192,16 @@ func (ec *Client) GetManifest(ctx context.Context, blockHash common.Hash) (types
 		return nil, err
 	}
 	return manifest, nil
+}
+
+func (ec *Client) SendPendingEtxsToDom(ctx context.Context, pEtxs types.PendingEtxs) error {
+	fields := make(map[string]interface{})
+	fields["header"] = RPCMarshalHeader(pEtxs.Header)
+	fields["etxs"] = pEtxs.Etxs
+	var raw json.RawMessage
+	err := ec.c.CallContext(ctx, &raw, "quai_sendPendingEtxsToDom", fields)
+	if err != nil {
+		return err
+	}
+	return nil
 }
