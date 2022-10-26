@@ -206,9 +206,27 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 			return nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
 		statedb.Prepare(tx.Hash(), i)
-		receipt, err := applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv)
-		if err != nil {
-			return nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+		var receipt *types.Receipt
+		if tx.Type() == types.ExternalTxType {
+			prevZeroBal, _ := statedb.GetBalance(common.ZeroAddr) // Get current zero address balance
+			statedb.SetBalance(common.ZeroAddr, tx.Value())       // Use zero address at temp placeholder and set it to tx value
+			receipt, err = applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv)
+			if receipt.Status == types.ReceiptStatusSuccessful && err == nil {
+				statedb.AddBalance(common.ZeroAddr, prevZeroBal) // Add previous zero address balance to residual zero address balance
+			} else {
+				statedb.SetBalance(common.ZeroAddr, prevZeroBal) // In the case of an error, reset the balance to what it previously was (TODO: if not all gas is used, it may be considered residual and should be added here. Currently a failed external transaction removes all the sent coins from the supply.)
+			}
+
+			if err != nil {
+				return nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+			}
+		} else if tx.Type() == types.ExternalTxType {
+			receipt, err = applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv)
+			if err != nil {
+				return nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+			}
+		} else {
+			return nil, nil, nil, 0, ErrTxTypeNotSupported
 		}
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
@@ -380,6 +398,18 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	// Create a new context to be used in the EVM environment
 	blockContext := NewEVMBlockContext(header, bc, author)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, cfg)
+	if tx.Type() == types.ExternalTxType {
+		prevZeroBal, _ := statedb.GetBalance(common.ZeroAddr) // Get current zero address balance
+		statedb.SetBalance(common.ZeroAddr, tx.Value())       // Use zero address at temp placeholder and set it to tx value
+		receipt, err := applyTransaction(msg, config, bc, author, gp, statedb, header.Number(), header.Hash(), tx, usedGas, vmenv)
+		currZeroBal, _ := statedb.GetBalance(common.ZeroAddr) // Get residual zero address balance
+		if receipt.Status == types.ReceiptStatusSuccessful && err == nil {
+			statedb.SetBalance(common.ZeroAddr, prevZeroBal.Add(prevZeroBal, currZeroBal)) // Add residual zero address balance to previous zero address balance
+		} else {
+			statedb.SetBalance(common.ZeroAddr, prevZeroBal) // In the case of an error, reset the balance to what it previously was (TODO: if not all gas is used, it may be considered residual and should be added here. Currently a failed external transaction removes all the sent coins from the supply.)
+		}
+		return receipt, err
+	}
 	return applyTransaction(msg, config, bc, author, gp, statedb, header.Number(), header.Hash(), tx, usedGas, vmenv)
 }
 
