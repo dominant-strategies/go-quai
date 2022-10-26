@@ -586,13 +586,14 @@ func (s *PublicBlockChainQuaiAPI) Append(ctx context.Context, raw json.RawMessag
 		return nil, err
 	}
 
-	pendingHeader, err := s.b.Append(head, body.DomTerminus, body.Td, body.DomOrigin, body.Reorg, body.ManifestHash)
+	pendingHeader, pendingEtxs, err := s.b.Append(head, body.DomTerminus, body.Td, body.DomOrigin, body.Reorg, body.ManifestHash)
 	if err != nil {
 		return nil, err
 	}
 	// Marshal the output for decoding
 	fields := RPCMarshalHeader(pendingHeader.Header)
 	fields["termini"] = pendingHeader.Termini
+	fields["pendingEtxs"] = pendingEtxs
 
 	return fields, nil
 }
@@ -633,4 +634,18 @@ func (s *PublicBlockChainQuaiAPI) GetSubManifest(ctx context.Context, raw json.R
 		return nil, err
 	}
 	return manifest, nil
+}
+
+type SendPendingEtxsToDomArgs struct {
+	Header types.Header
+	Etxs   []types.Transactions // Collection of ETXs from each subordinate context
+}
+
+func (s *PublicBlockChainQuaiAPI) SendPendingEtxsToDom(ctx context.Context, raw json.RawMessage) error {
+	var args SendPendingEtxsToDomArgs
+	if err := json.Unmarshal(raw, &args); err != nil {
+		return err
+	}
+	log.Info("Received subordinate ETXs", "BlockHash: ", args.Header.Hash())
+	return s.b.AddPendingEtxs(&args.Header, args.Etxs)
 }

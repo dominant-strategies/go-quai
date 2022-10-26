@@ -139,28 +139,32 @@ type Termini struct {
 	Termini []common.Hash `json:"termini"`
 }
 
-func (ec *Client) Append(ctx context.Context, header *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, manifestHash common.Hash) (types.PendingHeader, error) {
+func (ec *Client) Append(ctx context.Context, header *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, manifestHash common.Hash) (types.PendingHeader, []types.Transactions, error) {
 	data, err := RPCMarshalTdHeader(header, domTerminus, td, domOrigin, reorg, manifestHash)
 	if err != nil {
-		return types.PendingHeader{}, err
+		return types.PendingHeader{}, nil, err
 	}
 
 	var raw json.RawMessage
 	err = ec.c.CallContext(ctx, &raw, "quai_append", data)
 	if err != nil {
-		return types.PendingHeader{}, err
+		return types.PendingHeader{}, nil, err
 	}
 
 	// Decode header and transactions.
 	var head *types.Header
 	var termini Termini
+	var pendingEtxs []types.Transactions
 	if err := json.Unmarshal(raw, &head); err != nil {
-		return types.PendingHeader{}, err
+		return types.PendingHeader{}, nil, err
 	}
 	if err := json.Unmarshal(raw, &termini); err != nil {
-		return types.PendingHeader{}, err
+		return types.PendingHeader{}, nil, err
 	}
-	return types.PendingHeader{Header: head, Termini: termini.Termini}, nil
+	if err := json.Unmarshal(raw, &pendingEtxs); err != nil {
+		return types.PendingHeader{}, nil, err
+	}
+	return types.PendingHeader{Header: head, Termini: termini.Termini}, pendingEtxs, nil
 }
 
 func (ec *Client) SubRelayPendingHeader(ctx context.Context, pendingHeader types.PendingHeader, reorg bool) error {
@@ -186,4 +190,16 @@ func (ec *Client) GetSubManifest(ctx context.Context, blockHash common.Hash) (ty
 		return nil, err
 	}
 	return manifest, nil
+}
+
+func (ec *Client) SendPendingEtxsToDom(ctx context.Context, header *types.Header, etxs []types.Transactions) error {
+	data := make(map[string]interface{})
+	data["Header"] = header
+	data["Etxs"] = etxs
+	var raw json.RawMessage
+	err := ec.c.CallContext(ctx, &raw, "quai_domRelayEtxs", data)
+	if err != nil {
+		return err
+	}
+	return nil
 }
