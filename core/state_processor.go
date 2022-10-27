@@ -57,9 +57,10 @@ var (
 )
 
 const (
-	receiptsCacheLimit = 32
-	txLookupCacheLimit = 1024
-	TriesInMemory      = 128
+	receiptsCacheLimit      = 32
+	txLookupCacheLimit      = 1024
+	TriesInMemory           = 128
+	inboundEtxExpirationAge = 8640 // With 10s blocks, ETX expire after ~24hrs
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	//
@@ -173,7 +174,7 @@ func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine conse
 // Process returns the receipts and logs accumulated during the process and
 // returns the amount of gas that was used in the process. If any of the
 // transactions failed to execute due to insufficient gas it will return an error.
-func (p *StateProcessor) Process(block *types.Block) (types.Receipts, []*types.Log, *state.StateDB, uint64, error) {
+func (p *StateProcessor) Process(block *types.Block, etxSet *types.EtxSet) (types.Receipts, []*types.Log, *state.StateDB, uint64, error) {
 	var (
 		receipts    types.Receipts
 		usedGas     = new(uint64)
@@ -277,8 +278,21 @@ var lastWrite uint64
 
 // Apply State
 func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInboundEtxs types.Transactions) ([]*types.Log, error) {
+	// Update the set of inbound ETXs which may be mined. This adds new inbound
+	// ETXs to the set and removes expired ETXs so they are no longer available
+	var etxSet *types.EtxSet
+	if block.NumberU64() == 0 {
+		// By definition, first block may not have any ETXs available to spend
+		newEtxSet := make(types.EtxSet)
+		etxSet = &newEtxSet
+	} else {
+		etxSet = rawdb.ReadEtxSet(p.hc.bc.db, block.ParentHash(), block.NumberU64()-1)
+	}
+	etxSet.Update(newInboundEtxs, block.NumberU64())
+	rawdb.WriteEtxSet(batch, block.Hash(), block.NumberU64(), etxSet)
+
 	// Process our block and retrieve external blocks.
-	receipts, logs, statedb, usedGas, err := p.Process(block)
+	receipts, logs, statedb, usedGas, err := p.Process(block, etxSet)
 	if err != nil {
 		return nil, err
 	}
@@ -478,6 +492,7 @@ func (p *StateProcessor) ContractCodeWithPrefix(hash common.Hash) ([]byte, error
 func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *state.StateDB, checkLive bool) (statedb *state.StateDB, err error) {
 	var (
 		current  *types.Block
+		etxSet   *types.EtxSet
 		database state.Database
 		report   = true
 		origin   = block.NumberU64()
@@ -489,6 +504,7 @@ func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *s
 			return statedb, nil
 		}
 	}
+	etxSet = rawdb.ReadEtxSet(p.hc.bc.db, block.Hash(), block.NumberU64())
 	if base != nil {
 		// The optional base statedb is given, mark the start point as parent block
 		statedb, database, report = base, base.Database(), false
@@ -552,7 +568,7 @@ func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *s
 		if current = p.hc.GetBlockByNumber(next); current == nil {
 			return nil, fmt.Errorf("block #%d not found", next)
 		}
-		_, _, _, _, err := p.Process(current)
+		_, _, _, _, err := p.Process(current, etxSet)
 		if err != nil {
 			return nil, fmt.Errorf("processing block %d failed: %v", current.NumberU64(), err)
 		}
