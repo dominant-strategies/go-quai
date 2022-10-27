@@ -111,10 +111,10 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 
 // Append takes a proposed header and constructs a local block and attempts to hierarchically append it to the block graph.
 // If this is called from a dominant context a domTerminus must be provided else a common.Hash{} should be used and domOrigin should be set to true.
-func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) ([]types.Transactions, error) {
+func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, newInboundEtxs types.Transactions) ([]types.Transactions, error) {
 	nodeCtx := common.NodeLocation.Context()
 	location := header.Location()
-	isCoincident := sl.engine.IsDomCoincident(header)
+	isDomCoincident := sl.engine.IsDomCoincident(header)
 
 	// Don't append the block which already exists in the database.
 	if sl.hc.HasHeader(header.Hash(), header.NumberU64()) {
@@ -141,8 +141,18 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		return nil, err
 	}
 
+	// If this was a coincident block, our dom will be passing us a set of newly confirmed ETXs
+	// If this is not a coincident block, we need to build up the list of confirmed ETXs using the subordinate manifest
+	subRollup := types.Transactions{}
+	if !isDomCoincident {
+		newInboundEtxs, subRollup, err = sl.CollectNewlyConfirmedEtxs(block, block.Location())
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	// Append the new block
-	err = sl.hc.Append(batch, block)
+	err = sl.hc.Append(batch, block, newInboundEtxs.FilterToLocation(common.NodeLocation))
 	if err != nil {
 		return nil, err
 	}
@@ -170,30 +180,32 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	// Combine subordinates pending header with local pending header
 	pendingHeaderWithTermini := sl.computePendingHeader(types.PendingHeader{Header: localPendingHeader, Termini: newTermini}, domPendingHeader, domOrigin)
 
-	// Call my sub to append the block
-	var newPendingEtxs []types.Transactions
+	// Call my sub to append the block, and collect the rolled up ETXs from that sub
+	localPendingEtxs := []types.Transactions{types.Transactions{}, types.Transactions{}, types.Transactions{}}
+	subPendingEtxs := []types.Transactions{types.Transactions{}, types.Transactions{}, types.Transactions{}}
 	if nodeCtx != common.ZONE_CTX {
-		newPendingEtxs, err = sl.subClients[location.SubIndex()].Append(context.Background(), block.Header(), pendingHeaderWithTermini.Header, domTerminus, td, true, reorg)
+		subPendingEtxs, err = sl.subClients[location.SubIndex()].Append(context.Background(), block.Header(), pendingHeaderWithTermini.Header, domTerminus, td, true, reorg, newInboundEtxs)
 		if err != nil {
 			return nil, err
 		}
-	} else {
-		// If we are a zone, initialize newPendingEtxs
-		newPendingEtxs = []types.Transactions{types.Transactions{}, types.Transactions{}, types.Transactions{}}
+
+		// Cache the subordinate's pending ETXs
+		sl.AddPendingEtxs(types.PendingEtxs{block.Header(), subPendingEtxs})
 	}
 
-	// Add our new ETXs to the newPendingEtxs collection
-	// If this is a coincident block, we need to add the full rollup of ETXs.
-	// Otherwise just send the new ETXs emitted in this block.
-	if isCoincident {
-		etxRollup, err := sl.hc.CollectEtxRollup(block)
-		if err != nil {
-			return nil, fmt.Errorf("unable to get ETX rollup")
-		}
-		newPendingEtxs[nodeCtx] = etxRollup
-	} else {
-		newPendingEtxs[nodeCtx] = block.ExtTransactions()
+	// Combine sub's pending ETXs, sub rollup, and our local ETXs into localPendingEtxs
+	// e.g. localPendingEtxs[ctx]:
+	// * for 'ctx' is dom: empty
+	// * for 'ctx' is local: ETXs emitted in this block
+	// * for 'ctx' is direct sub: replace sub pending ETXs with sub rollup ETXs
+	// * for 'ctx' is indirect sub: copy sub pending ETXs (sub's sub has already been rolled up)
+	for ctx := nodeCtx + 2; ctx < common.HierarchyDepth; ctx++ {
+		copy(localPendingEtxs[ctx], subPendingEtxs[ctx]) // copy pending for each indirect sub
 	}
+	if nodeCtx < common.ZONE_CTX {
+		localPendingEtxs[nodeCtx+1] = subRollup // overwrite direct sub with sub rollup
+	}
+	localPendingEtxs[nodeCtx] = block.ExtTransactions() // Assing our new ETXs without rolling up
 
 	// WriteTd
 	rawdb.WriteTd(batch, block.Header().Hash(), block.NumberU64(), td)
@@ -226,7 +238,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
 		"root", block.Root())
 
-	return newPendingEtxs, nil
+	return localPendingEtxs, nil
 }
 
 // relayPh sends pendingHeaderWithTermini to subordinates
@@ -270,6 +282,71 @@ func (sl *Slice) CollectSubRollups(b *types.Block) ([]types.Transactions, error)
 		}
 	}
 	return subRollups, nil
+}
+
+// CollectNewlyConfirmedEtxs collects all newly confirmed ETXs since the last coincident with the given location
+func (sl *Slice) CollectNewlyConfirmedEtxs(block *types.Block, location common.Location) (types.Transactions, types.Transactions, error) {
+	nodeCtx := common.NodeLocation.Context()
+	// Collect rollup of ETXs from the subordinate node's manifest
+	if nodeCtx == common.PRIME_CTX {
+		fmt.Printf("collecting pending ETXs @ block %s\n", block.Hash())
+	}
+	referencableEtxs := types.Transactions{}
+	subRollup := types.Transactions{}
+	if nodeCtx < common.ZONE_CTX {
+		subRollups, err := sl.CollectSubRollups(block)
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, etxs := range subRollups {
+			referencableEtxs = append(referencableEtxs, etxs...)
+		}
+		referencableEtxs = append(referencableEtxs, block.ExtTransactions()...) // Include ETXs emitted in this block
+		subRollup = subRollups[nodeCtx+1]
+	}
+
+	// Filter for ETXs destined to this slice
+	newInboundEtxs := referencableEtxs.FilterToSlice(location, nodeCtx)
+
+	// Filter this list to exclude any ETX for which we are not the crossing
+	// context node. Such ETXs cannot be used by our subordinate for one of the
+	// following reasons:
+	// * if we are prime, but common dom was a region node, than the given ETX has
+	//   already been confirmed and passed down from the region node
+	// * if we are region, but the common dom is prime, then the destination is
+	//   not in one of our sub chains
+	//
+	// Note: here "common dom" refers to the highes context chain which exists in
+	// both the origin & destination. See the definition of the `CommonDom()`
+	// method for more explanation.
+	newlyConfirmedEtxs := newInboundEtxs.FilterConfirmationCtx(nodeCtx)
+
+	// Terminate the search if we reached genesis
+	if block.NumberU64() == 0 {
+		if block.Hash() != sl.config.GenesisHash {
+			return nil, nil, fmt.Errorf("terminated search on bad genesis, block0 hash: %s", block.Hash().String())
+		} else {
+			return newlyConfirmedEtxs, subRollup, nil
+		}
+	}
+	ancHash := block.ParentHash()
+	ancNum := block.NumberU64() - 1
+	ancestor := sl.hc.GetBlock(ancHash, ancNum)
+	if ancestor == nil {
+		return nil, nil, fmt.Errorf("unable to find ancestor, hash: %s", ancHash.String())
+	}
+	// Terminate the search when we find a block produced by the given location
+	if ancestor.Location().Equal(location) {
+		return newlyConfirmedEtxs, subRollup, nil
+	}
+
+	// Otherwise recursively process the ancestor and collect its newly confirmed ETXs too
+	ancEtxs, _, err := sl.CollectNewlyConfirmedEtxs(ancestor, location)
+	if err != nil {
+		return nil, nil, err
+	}
+	newlyConfirmedEtxs = append(ancEtxs, newlyConfirmedEtxs...)
+	return newlyConfirmedEtxs, subRollup, nil
 }
 
 // setHeaderChainHead updates the current chain head and returns a new pending header
@@ -546,7 +623,7 @@ func (sl *Slice) init(genesis *Genesis) error {
 				location := block.Header().Location()
 				if nodeCtx == common.PRIME_CTX {
 					rawdb.WritePendingBlockBody(sl.sliceDb, block.Root(), block.Body())
-					_, err := sl.Append(block.Header(), types.EmptyHeader(), genesisHash, block.Difficulty(), false, false)
+					_, err := sl.Append(block.Header(), types.EmptyHeader(), genesisHash, block.Difficulty(), false, false, nil)
 					if err != nil {
 						log.Warn("Failed to append block", "hash:", block.Hash(), "Number:", block.Number(), "Location:", block.Header().Location(), "error:", err)
 					}
@@ -682,7 +759,7 @@ func (sl *Slice) procfutureHeaders() {
 
 		for _, head := range headers {
 			var nilHash common.Hash
-			_, err := sl.Append(head, types.EmptyHeader(), nilHash, big.NewInt(0), false, false)
+			_, err := sl.Append(head, types.EmptyHeader(), nilHash, big.NewInt(0), false, false, nil)
 			if err != nil {
 				if err.Error() != "sub not synced to dom" {
 					// Remove the header from the future headers cache
