@@ -52,9 +52,12 @@ type Transaction struct {
 	time  time.Time // Time first seen locally (spam avoidance)
 
 	// caches
-	hash atomic.Value
-	size atomic.Value
-	from atomic.Value
+	hash       atomic.Value
+	size       atomic.Value
+	from       atomic.Value
+	toChain    atomic.Value
+	fromChain  atomic.Value
+	confirmCtx atomic.Value // Context at which the ETX may be confirmed
 }
 
 // NewTx creates a new transaction.
@@ -81,6 +84,8 @@ type TxData interface {
 	value() *big.Int
 	nonce() uint64
 	to() *common.Address
+	toChain() *common.Location
+	fromChain() *common.Location
 
 	rawSignatureValues() (v, r, s *big.Int)
 	setSignatureValues(chainID, v, r, s *big.Int)
@@ -339,6 +344,40 @@ func (tx *Transaction) Hash() common.Hash {
 	h = prefixedRlpHash(tx.Type(), tx.inner)
 	tx.hash.Store(h)
 	return h
+}
+
+// ToChain returns the chain location this transaction is destined for
+func (tx *Transaction) ToChain() common.Location {
+	if loc := tx.toChain.Load(); loc != nil {
+		return loc.(common.Location)
+	}
+
+	loc := *tx.inner.toChain()
+	tx.toChain.Store(loc)
+	return loc
+}
+
+// FromChain returns the chain location this transaction originated from
+func (tx *Transaction) FromChain() common.Location {
+	if loc := tx.fromChain.Load(); loc != nil {
+		return loc.(common.Location)
+	}
+
+	loc := *tx.inner.fromChain()
+	tx.fromChain.Store(loc)
+	return loc
+}
+
+// ConfirmationCtx indicates the chain context at which this ETX becomes
+// confirmed and referencable to the destination chain
+func (tx *Transaction) ConfirmationCtx() int {
+	if ctx := tx.confirmCtx.Load(); ctx != nil {
+		return ctx.(int)
+	}
+
+	ctx := tx.ToChain().CommonDom(tx.FromChain()).Context()
+	tx.confirmCtx.Store(ctx)
+	return ctx
 }
 
 // Size returns the true RLP encoded storage size of the transaction, either by

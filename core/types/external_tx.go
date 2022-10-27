@@ -55,18 +55,20 @@ func (tx *ExternalTx) copy() TxData {
 }
 
 // accessors for innerTx.
-func (tx *ExternalTx) txType() byte           { return ExternalTxType }
-func (tx *ExternalTx) chainID() *big.Int      { return nil }
-func (tx *ExternalTx) protected() bool        { return true }
-func (tx *ExternalTx) accessList() AccessList { return tx.AccessList }
-func (tx *ExternalTx) data() []byte           { return tx.Data }
-func (tx *ExternalTx) gas() uint64            { return tx.Gas }
-func (tx *ExternalTx) gasFeeCap() *big.Int    { return tx.GasFeeCap }
-func (tx *ExternalTx) gasTipCap() *big.Int    { return tx.GasTipCap }
-func (tx *ExternalTx) gasPrice() *big.Int     { return tx.GasFeeCap }
-func (tx *ExternalTx) value() *big.Int        { return tx.Value }
-func (tx *ExternalTx) nonce() uint64          { return tx.Nonce }
-func (tx *ExternalTx) to() *common.Address    { return tx.To }
+func (tx *ExternalTx) txType() byte                { return ExternalTxType }
+func (tx *ExternalTx) chainID() *big.Int           { return nil }
+func (tx *ExternalTx) protected() bool             { return true }
+func (tx *ExternalTx) accessList() AccessList      { return tx.AccessList }
+func (tx *ExternalTx) data() []byte                { return tx.Data }
+func (tx *ExternalTx) gas() uint64                 { return tx.Gas }
+func (tx *ExternalTx) gasFeeCap() *big.Int         { return tx.GasFeeCap }
+func (tx *ExternalTx) gasTipCap() *big.Int         { return tx.GasTipCap }
+func (tx *ExternalTx) gasPrice() *big.Int          { return tx.GasFeeCap }
+func (tx *ExternalTx) value() *big.Int             { return tx.Value }
+func (tx *ExternalTx) nonce() uint64               { return tx.Nonce }
+func (tx *ExternalTx) to() *common.Address         { return tx.To }
+func (tx *ExternalTx) toChain() *common.Location   { return tx.To.Location() }
+func (tx *ExternalTx) fromChain() *common.Location { return tx.Sender.Location() }
 
 func (tx *ExternalTx) rawSignatureValues() (v, r, s *big.Int) {
 	// Signature values are ignored for external transactions
