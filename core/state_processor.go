@@ -276,7 +276,7 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 var lastWrite uint64
 
 // Apply State
-func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block) ([]*types.Log, error) {
+func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInboundEtxs types.Transactions) ([]*types.Log, error) {
 	// Process our block and retrieve external blocks.
 	receipts, logs, statedb, usedGas, err := p.Process(block)
 	if err != nil {
