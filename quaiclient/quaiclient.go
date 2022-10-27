@@ -124,29 +124,21 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 	return result
 }
 
-// RPCMarshalTdHeader converts the header and order as input to PCRC.
-func RPCMarshalTdHeader(header *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, manifestHash common.Hash) (map[string]interface{}, error) {
+type Termini struct {
+	Termini []common.Hash `json:"termini"`
+}
+
+func (ec *Client) Append(ctx context.Context, header *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, manifestHash common.Hash, newInboundEtxs types.Transactions) (types.PendingHeader, []types.Transactions, error) {
 	fields := RPCMarshalHeader(header)
 	fields["td"] = td
 	fields["domTerminus"] = domTerminus
 	fields["domOrigin"] = domOrigin
 	fields["reorg"] = reorg
 	fields["manifestHash"] = manifestHash
-	return fields, nil
-}
-
-type Termini struct {
-	Termini []common.Hash `json:"termini"`
-}
-
-func (ec *Client) Append(ctx context.Context, header *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, manifestHash common.Hash) (types.PendingHeader, []types.Transactions, error) {
-	data, err := RPCMarshalTdHeader(header, domTerminus, td, domOrigin, reorg, manifestHash)
-	if err != nil {
-		return types.PendingHeader{}, nil, err
-	}
+	fields["newInboundEtxs"] = newInboundEtxs
 
 	var raw json.RawMessage
-	err = ec.c.CallContext(ctx, &raw, "quai_append", data)
+	err := ec.c.CallContext(ctx, &raw, "quai_append", fields)
 	if err != nil {
 		return types.PendingHeader{}, nil, err
 	}
