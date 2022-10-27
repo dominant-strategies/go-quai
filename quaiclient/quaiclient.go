@@ -127,17 +127,6 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 	return result
 }
 
-// RPCMarshalTdHeader converts the header and order as input to PCRC.
-func RPCMarshalTdHeader(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) (map[string]interface{}, error) {
-	fields := map[string]interface{}{"header": RPCMarshalHeader(header)}
-	fields["domPendingHeader"] = RPCMarshalHeader(domPendingHeader)
-	fields["td"] = td
-	fields["domTerminus"] = domTerminus
-	fields["domOrigin"] = domOrigin
-	fields["reorg"] = reorg
-	return fields, nil
-}
-
 type Termini struct {
 	Termini []common.Hash `json:"termini"`
 }
@@ -146,7 +135,7 @@ type pendingEtxs struct {
 	Etxs []types.Transactions `json:"pendingEtxs"`
 }
 
-func (ec *Client) Append(ctx context.Context, header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) ([]types.Transactions, error) {
+func (ec *Client) Append(ctx context.Context, header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, newInboundEtxs types.Transactions) ([]types.Transactions, error) {
 	fields := map[string]interface{}{
 		"header":           RPCMarshalHeader(header),
 		"domPendingHeader": RPCMarshalHeader(domPendingHeader),
@@ -154,6 +143,7 @@ func (ec *Client) Append(ctx context.Context, header *types.Header, domPendingHe
 		"domTerminus":      domTerminus,
 		"domOrigin":        domOrigin,
 		"reorg":            reorg,
+		"newInboundEtxs":   newInboundEtxs,
 	}
 
 	var raw json.RawMessage

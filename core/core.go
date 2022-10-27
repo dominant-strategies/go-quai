@@ -48,7 +48,7 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 		// if the order of the block is less than the context
 		// add the rest of the blocks in the queue to the future blocks.
 		if !isCoincident && !domWait {
-			newPendingEtxs, err := c.sl.Append(block.Header(), types.EmptyHeader(), common.Hash{}, big.NewInt(0), false, true)
+			newPendingEtxs, err := c.sl.Append(block.Header(), types.EmptyHeader(), common.Hash{}, big.NewInt(0), false, true, nil)
 			if err != nil {
 				if err == consensus.ErrFutureBlock || err.Error() == "unknown ancestor" {
 					c.sl.addfutureHeader(block.Header())
@@ -108,8 +108,8 @@ func (c *Core) Stop() {
 // Slice methods //
 //---------------//
 
-func (c *Core) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) ([]types.Transactions, error) {
-	return c.sl.Append(header, domPendingHeader, domTerminus, td, domOrigin, reorg)
+func (c *Core) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, newInboundEtxs types.Transactions) ([]types.Transactions, error) {
+	return c.sl.Append(header, domPendingHeader, domTerminus, td, domOrigin, reorg, newInboundEtxs)
 }
 
 // ConstructLocalBlock takes a header and construct the Block locally
