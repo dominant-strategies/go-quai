@@ -404,6 +404,44 @@ func (s Transactions) EncodeIndex(i int, w *bytes.Buffer) {
 	tx.encodeTyped(w)
 }
 
+// FilterByLocation returns the subset of transactions with a 'to' address which
+// belongs the given chain location
+func (s Transactions) FilterToLocation(l common.Location) Transactions {
+	filteredList := Transactions{}
+	for _, tx := range s {
+		toChain := *tx.To().Location()
+		if l.Equal(toChain) {
+			filteredList = append(filteredList, tx)
+		}
+	}
+	return filteredList
+}
+
+// FilterToSlice returns the subset of transactions with a 'to' address which
+// belongs to the given slice location, at or above the given minimum context
+func (s Transactions) FilterToSlice(slice common.Location, minCtx int) Transactions {
+	filteredList := Transactions{}
+	for _, tx := range s {
+		toChain := tx.To().Location()
+		if toChain.InSameSliceAs(slice) {
+			filteredList = append(filteredList, tx)
+		}
+	}
+	return filteredList
+}
+
+// FilterConfirmationCtx returns the subset of transactions who can be confirmed
+// at the given context
+func (s Transactions) FilterConfirmationCtx(ctx int) Transactions {
+	filteredList := Transactions{}
+	for _, tx := range s {
+		if tx.ConfirmationCtx() == ctx {
+			filteredList = append(filteredList, tx)
+		}
+	}
+	return filteredList
+}
+
 // TxDifference returns a new set which is the difference between a and b.
 func TxDifference(a, b Transactions) Transactions {
 	keep := make(Transactions, 0, len(a))
