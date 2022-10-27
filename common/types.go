@@ -532,6 +532,7 @@ func (l Location) Context() int {
 	}
 }
 
+// DomLocation returns the location of your dominant chain
 func (l Location) DomLocation() Location {
 	if len(l) < 1 {
 		return nil
@@ -540,7 +541,8 @@ func (l Location) DomLocation() Location {
 	}
 }
 
-func (l Location) SubLocation() int {
+// SubIndex returns the index of the subordinate chain for a given location
+func (l Location) SubIndex() int {
 	switch NodeLocation.Context() {
 	case PRIME_CTX:
 		return l.Region()
@@ -549,6 +551,35 @@ func (l Location) SubLocation() int {
 	default:
 		return -1
 	}
+}
+
+// SubInSlice returns the location of the subordinate chain within the specified
+// slice. For example:
+// * if prime calls SubInSlice(Location{0,0}) the result will be Location{0},
+//   i.e. region-0's location, because Prime's subordinate in that slice is
+//   region-0
+// * if region-0 calls SubInSlice(Location{0,0}) the result will be
+//   Location{0,0}, i.e. zone-0-0's location, because region-0's subordinate in
+//   that slice is zone-0-0
+func (l Location) SubInSlice(slice Location) Location {
+	if len(slice) <= len(l) {
+		log.Println("cannot determine sub location, because slice location is not deeper than self")
+		return nil
+	}
+	subLoc := append(l, slice[len(l)])
+	return subLoc
+}
+
+func (l Location) InSameSliceAs(cmp Location) bool {
+	// Figure out which location is shorter
+	shorter := l
+	longer := cmp
+	if len(l) > len(cmp) {
+		longer = l
+		shorter = cmp
+	}
+	// Compare bytes up to the shorter depth
+	return shorter.Equal(longer[:len(shorter)])
 }
 
 func (l Location) Name() string {
@@ -579,4 +610,23 @@ func (l Location) ContainsAddress(a Address) bool {
 
 func (l Location) Equal(cmp Location) bool {
 	return bytes.Equal(l, cmp)
+}
+
+// CommonDom identifies the highest context chain which exists in both locations
+// * zone-0-0 & zone-0-1 would share region-0 as their highest context common dom
+// * zone-0-0 & zone-1-0 would share Prime as their highest context common dom
+func (l Location) CommonDom(cmp Location) Location {
+	common := Location{}
+	shorterLen := len(l)
+	if len(l) > len(cmp) {
+		shorterLen = len(cmp)
+	}
+	for i := 0; i < shorterLen; i++ {
+		if l[i] == cmp[i] {
+			common = append(common, l[i])
+		} else {
+			break
+		}
+	}
+	return common
 }
