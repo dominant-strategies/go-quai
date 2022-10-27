@@ -307,7 +307,6 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 		etxSet = rawdb.ReadEtxSet(p.hc.bc.db, block.ParentHash(), block.NumberU64()-1)
 	}
 	etxSet.Update(newInboundEtxs, block.NumberU64())
-	rawdb.WriteEtxSet(batch, block.Hash(), block.NumberU64(), etxSet)
 
 	// Process our block and retrieve external blocks.
 	receipts, logs, statedb, usedGas, err := p.Process(block, etxSet)
@@ -315,7 +314,7 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 		return nil, err
 	}
 
-	err = p.validator.ValidateState(block, statedb, receipts, usedGas)
+	err = p.validator.ValidateState(block, statedb, receipts, usedGas, etxSet)
 	if err != nil {
 		return nil, err
 	}
@@ -382,7 +381,13 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 			}
 		}
 	}
-
+	// Remove ETXs spent in this block from the etx cache
+	for _, tx := range block.Transactions() {
+		if tx.Type() == types.ExternalTxType {
+			delete(etxSet, tx.Hash())
+		}
+	}
+	rawdb.WriteEtxSet(batch, block.Hash(), block.NumberU64(), etxSet)
 	return logs, nil
 }
 
