@@ -843,9 +843,8 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 	stack := scope.Stack
 	// We use it as a temporary value
 	temp := stack.pop() // following opCall protocol
-	gas := interpreter.evm.callGasTemp
 	// Pop other call parameters.
-	addr, value, gasTipCap, gasFeeCap, nonce, inOffset, inSize, accessListOffset, accessListSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
+	addr, value, etxGas, gasTipCap, gasFeeCap, nonce, inOffset, inSize, accessListOffset, accessListSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop() // likely have to add gas here and subtract it from value
 	toAddr := common.Address(addr.Bytes20())
 	// Verify address is not in context
 	if toAddr.IsInChainScope() {
@@ -853,6 +852,21 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 		stack.push(&temp)
 		return nil, nil // following opCall protocol
 	}
+	fee := gasTipCap.Add(&gasTipCap, &gasFeeCap)
+	fee.Mul(fee, &etxGas)
+	total := value.Add(&value, fee)
+	// Fail if we're trying to transfer more than the available balance
+	if total.Sign() == 0 || !interpreter.evm.Context.CanTransfer(interpreter.evm.StateDB, scope.Contract.self.Address(), total.ToBig()) {
+		temp.Clear()
+		stack.push(&temp)
+		return nil, nil
+	}
+	if err := interpreter.evm.StateDB.SubBalance(scope.Contract.self.Address(), total.ToBig()); err != nil {
+		temp.Clear()
+		stack.push(&temp)
+		return nil, nil
+	}
+
 	// Get the arguments from the memory.
 	data := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
 	accessList := types.AccessList{}
