@@ -199,7 +199,7 @@ func (f *freezer) AncientSize(kind string) (uint64, error) {
 // Notably, this function is lock free but kind of thread-safe. All out-of-order
 // injection will be rejected. But if two injections with same number happen at
 // the same time, we can get into the trouble.
-func (f *freezer) AppendAncient(number uint64, hash, header, body, receipts, td []byte) (err error) {
+func (f *freezer) AppendAncient(number uint64, hash, header, body, receipts, td, etxSet []byte) (err error) {
 	if f.readonly {
 		return errReadOnly
 	}
@@ -237,6 +237,10 @@ func (f *freezer) AppendAncient(number uint64, hash, header, body, receipts, td 
 	}
 	if err := f.tables[freezerDifficultyTable].Append(f.frozen, td); err != nil {
 		log.Error("Failed to append ancient difficulty", "number", f.frozen, "hash", hash, "err", err)
+		return err
+	}
+	if err := f.tables[freezerEtxSetsTable].Append(f.frozen, etxSet); err != nil {
+		log.Error("Failed to append ancient etx set", "number", f.frozen, "hash", hash, "err", err)
 		return err
 	}
 	atomic.AddUint64(&f.frozen, 1) // Only modify atomically
@@ -377,9 +381,14 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 				log.Error("Total difficulty missing, can't freeze", "number", f.frozen, "hash", hash)
 				break
 			}
+			etxSet := ReadEtxSetRLP(nfdb, hash, f.frozen)
+			if len(td) == 0 {
+				log.Error("Total difficulty missing, can't freeze", "number", f.frozen, "hash", hash)
+				break
+			}
 			log.Trace("Deep froze ancient block", "number", f.frozen, "hash", hash)
 			// Inject all the components into the relevant data tables
-			if err := f.AppendAncient(f.frozen, hash[:], header, body, receipts, td); err != nil {
+			if err := f.AppendAncient(f.frozen, hash[:], header, body, receipts, td, etxSet); err != nil {
 				break
 			}
 			ancients = append(ancients, hash)

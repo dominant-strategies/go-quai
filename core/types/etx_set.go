@@ -2,7 +2,6 @@ package types
 
 import (
 	"github.com/dominant-strategies/go-quai/common"
-	"github.com/dominant-strategies/go-quai/log"
 )
 
 const (
@@ -31,7 +30,7 @@ func (set EtxSet) Update(newInboundEtxs Transactions, currentHeight uint64) {
 		if etx.To().Location().Equal(common.NodeLocation) {
 			set[etx.Hash()] = &EtxSetEntry{currentHeight, etx}
 		} else {
-			log.Error("skipping ETX belonging to other destination", "etxHash: ", etx.Hash(), "etxToChain: ", etx.To().Location())
+			panic("cannot add ETX destined to other chain to our ETX set")
 		}
 	}
 
