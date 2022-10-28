@@ -94,6 +94,7 @@ var (
 
 	blockBodyPrefix     = []byte("b") // blockBodyPrefix + num (uint64 big endian) + hash -> block body
 	blockReceiptsPrefix = []byte("r") // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
+	etxSetPrefix        = []byte("e") // etxSetPrefix + num (uint64 big endian) + hash -> EtxSet at block
 
 	txLookupPrefix        = []byte("l") // txLookupPrefix + hash -> transaction/receipt lookup metadata
 	bloomBitsPrefix       = []byte("B") // bloomBitsPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash -> bloom bits
@@ -126,6 +127,9 @@ const (
 
 	// freezerDifficultyTable indicates the name of the freezer total difficulty table.
 	freezerDifficultyTable = "diffs"
+
+	// freezerEtxSetsTable indicates the name of the etx set table.
+	freezerEtxSetsTable = "etxSets"
 )
 
 // FreezerNoSnappy configures whether compression is disabled for the ancient-tables.
@@ -136,6 +140,7 @@ var FreezerNoSnappy = map[string]bool{
 	freezerBodiesTable:     false,
 	freezerReceiptTable:    false,
 	freezerDifficultyTable: true,
+	freezerEtxSetsTable:    false,
 }
 
 // LegacyTxLookupEntry is the legacy TxLookupEntry definition with some unnecessary
@@ -260,4 +265,9 @@ func IsCodeKey(key []byte) (bool, []byte) {
 // configKey = configPrefix + hash
 func configKey(hash common.Hash) []byte {
 	return append(configPrefix, hash.Bytes()...)
+}
+
+// etxSetKey = etxSetPrefix + num (uint64 big endian) + hash
+func etxSetKey(number uint64, hash common.Hash) []byte {
+	return append(append(etxSetPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
 }
