@@ -1137,3 +1137,94 @@ func ReadHeadBlock(db ethdb.Reader) *types.Block {
 	}
 	return ReadBlock(db, headBlockHash, *headBlockNumber)
 }
+
+// ReadEtxSetRLP retrieves the EtxSet corresponding to a given block, in RLP encoding.
+func ReadEtxSetRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
+	// First try to look up the data in ancient database. Extra hash
+	// comparison is necessary since ancient database only maintains
+	// the canonical data.
+	data, _ := db.Ancient(freezerEtxSetsTable, number)
+	if len(data) > 0 {
+		h, _ := db.Ancient(freezerHashTable, number)
+		if common.BytesToHash(h) == hash {
+			return data
+		}
+	}
+	// Then try to look up the data in leveldb.
+	data, _ = db.Get(etxSetKey(number, hash))
+	if len(data) > 0 {
+		return data
+	}
+	// In the background freezer is moving data from leveldb to flatten files.
+	// So during the first check for ancient db, the data is not yet in there,
+	// but when we reach into leveldb, the data was already moved. That would
+	// result in a not found error.
+	data, _ = db.Ancient(freezerEtxSetsTable, number)
+	if len(data) > 0 {
+		h, _ := db.Ancient(freezerHashTable, number)
+		if common.BytesToHash(h) == hash {
+			return data
+		}
+	}
+	return nil // Can't find the data anywhere.
+}
+
+// WriteEtxSetRLP stores the EtxSet corresponding to a given block, in RLP encoding.
+func WriteEtxSetRLP(db ethdb.KeyValueWriter, hash common.Hash, number uint64, rlp rlp.RawValue) {
+	if err := db.Put(etxSetKey(number, hash), rlp); err != nil {
+		log.Crit("Failed to store etx set", "err", err)
+	}
+}
+
+type EtxSetEntry struct {
+	EtxHash   common.Hash
+	EtxHeight uint64
+	Etx       types.Transaction
+}
+
+// ReadEtxSet retreives the EtxSet corresponding to a given block
+func ReadEtxSet(db ethdb.Reader, hash common.Hash, number uint64) types.EtxSet {
+	if number == 0 {
+		// If this is a request for the genesis ETX set, check that the genesis hash
+		// matches, and return an empty ETX set, because there can be no ETXs in the
+		// genesis block
+		if numberByHash := ReadHeaderNumber(db, hash); numberByHash != nil && *numberByHash == number {
+			return types.NewEtxSet()
+		}
+	}
+	data := ReadEtxSetRLP(db, hash, number)
+	if len(data) == 0 {
+		return nil
+	}
+	var entries []EtxSetEntry
+	if err := rlp.Decode(bytes.NewReader(data), &entries); err != nil {
+		log.Error("Invalid etx set RLP", "hash", hash, "err", err)
+		return nil
+	}
+	etxSet := make(types.EtxSet)
+	for _, entry := range entries {
+		etxSet[entry.EtxHash] = &types.EtxSetEntry{Height: entry.EtxHeight, ETX: &entry.Etx}
+	}
+	return etxSet
+}
+
+// WriteEtxSet stores the EtxSet corresponding to a given block
+func WriteEtxSet(db ethdb.KeyValueWriter, hash common.Hash, number uint64, etxSet types.EtxSet) {
+	var entries []EtxSetEntry
+	for etxHash, entry := range etxSet {
+		entry := EtxSetEntry{EtxHash: etxHash, EtxHeight: entry.Height, Etx: *entry.ETX}
+		entries = append(entries, entry)
+	}
+	data, err := rlp.EncodeToBytes(entries)
+	if err != nil {
+		log.Crit("Failed to RLP encode etx set", "err", err)
+	}
+	WriteEtxSetRLP(db, hash, number, data)
+}
+
+// DeleteEtxSet removes all EtxSet data associated with a block.
+func DeleteEtxSet(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
+	if err := db.Delete(etxSetKey(number, hash)); err != nil {
+		log.Crit("Failed to delete etx set", "err", err)
+	}
+}
