@@ -245,11 +245,12 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 	if cs.handler.peers.len() < minPeers {
 		return nil
 	}
-	// We have enough peers, check TD
+
 	peer := cs.handler.peers.peerWithHighestNumber()
 	if peer == nil {
 		return nil
 	}
+
 	mode, ourNumber := cs.modeAndLocalHead()
 	op := peerToSyncOp(mode, peer)
 	if op.number <= ourNumber {

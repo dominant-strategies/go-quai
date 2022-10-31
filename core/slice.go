@@ -24,7 +24,7 @@ import (
 )
 
 const (
-	maxFutureHeaders        = 256
+	maxFutureHeaders        = 1800
 	maxPendingEtxBlocks     = 256
 	maxTimeFutureHeaders    = 30
 	pendingHeaderCacheLimit = 500
