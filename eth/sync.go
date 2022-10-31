@@ -245,14 +245,14 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 	if cs.handler.peers.len() < minPeers {
 		return nil
 	}
-	// We have enough peers, check TD
+
 	peer := cs.handler.peers.peerWithHighestNumber()
 	if peer == nil {
 		return nil
 	}
-	mode, ourNumber := cs.modeAndLocalHead()
-	op := peerToSyncOp(mode, peer)
-	if op.number <= ourNumber {
+
+	op := peerToSyncOp(downloader.FullSync, peer)
+	if op.number <= cs.handler.core.GetHorizon() {
 		return nil // We're in sync.
 	}
 	return op
@@ -261,12 +261,6 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 func peerToSyncOp(mode downloader.SyncMode, p *eth.Peer) *chainSyncOp {
 	peerHead, peerNumber := p.Head()
 	return &chainSyncOp{mode: mode, peer: p, number: peerNumber, head: peerHead}
-}
-
-func (cs *chainSyncer) modeAndLocalHead() (downloader.SyncMode, uint64) {
-	// Nope, we're really full syncing
-	head := cs.handler.core.CurrentBlock()
-	return downloader.FullSync, head.NumberU64()
 }
 
 // startSync launches doSync in a new goroutine.
