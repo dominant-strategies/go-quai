@@ -26,8 +26,9 @@ import (
 )
 
 const (
-	headerCacheLimit = 512
-	numberCacheLimit = 2048
+	headerCacheLimit      = 512
+	numberCacheLimit      = 2048
+	primeHorizonThreshold = 20
 )
 
 type HeaderChain struct {
@@ -428,6 +429,25 @@ func (hc *HeaderChain) GetAncestor(hash common.Hash, number, ancestor uint64, ma
 		number--
 	}
 	return hash, number
+}
+
+// GetHorizon returns the N-20 prime header number.
+func (hc *HeaderChain) GetHorizon() uint64 {
+	header := hc.CurrentHeader()
+	var primeCount int
+	for {
+		if hc.engine.IsPrime(header) {
+			primeCount++
+		}
+		if primeCount == primeHorizonThreshold {
+			break
+		}
+		if header.Hash() == hc.Config().GenesisHash {
+			break
+		}
+		header = hc.GetHeader(header.ParentHash(), header.NumberU64()-1)
+	}
+	return header.NumberU64()
 }
 
 // GetTd retrieves a block's total difficulty in the canonical chain from the
