@@ -9,7 +9,12 @@ compile() {
 
 run_stats() {
   echo -e '\nRunning stats...\n'
-  rm -rf ~/.quai
+  if [[ "$OSTYPE" == "darwin"* ]];
+  then
+    rm -rf ~/Library/quai
+  else
+    rm -rf ~/.quai
+  fi
   rm -rf nodelogs
   make stop
   make run-stats
