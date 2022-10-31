@@ -119,6 +119,10 @@ type Engine interface {
 	// dominant chain, or even that the claimed dominant difficulty is valid.
 	HasCoincidentDifficulty(header *types.Header) bool
 
+	// IsPrime returns true if the given header has a higher difficulty than the
+	// prime target and false otherwise.
+	IsPrime(header *types.Header) bool
+
 	// APIs returns the RPC APIs this consensus engine provides.
 	APIs(chain ChainHeaderReader) []rpc.API
 

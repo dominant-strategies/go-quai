@@ -357,6 +357,14 @@ func (blake3pow *Blake3pow) HasCoincidentDifficulty(header *types.Header) bool {
 	return false
 }
 
+func (blake3pow *Blake3pow) IsPrime(header *types.Header) bool {
+	blockhash := blake3pow.SealHash(header)
+
+	// Just compare the prime difficulty.
+	target := new(big.Int).Div(big2e256, header.Difficulty(common.PRIME_CTX))
+	return new(big.Int).SetBytes(blockhash.Bytes()).Cmp(target) <= 0
+}
+
 // verifySeal checks whether a block satisfies the PoW difficulty requirements,
 // either using the usual blake3pow cache for it, or alternatively using a full DAG
 // to make remote mining fast.

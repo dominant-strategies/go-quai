@@ -333,6 +333,26 @@ func (hc *HeaderChain) GetAncestor(hash common.Hash, number, ancestor uint64, ma
 	return hash, number
 }
 
+// GetHorizon returns the N-3 prime header number.
+func (hc *HeaderChain) GetHorizon() uint64 {
+	header := hc.CurrentHeader()
+	primeHorizonThreshold := 3
+	var primeCount int
+	for {
+		if hc.engine.IsPrime(header) {
+			primeCount++
+		}
+		if primeCount == primeHorizonThreshold {
+			break
+		}
+		if header.Hash() == hc.Config().GenesisHash {
+			break
+		}
+		header = hc.GetHeader(header.ParentHash(), header.NumberU64()-1)
+	}
+	return header.NumberU64()
+}
+
 // GetTd retrieves a block's total difficulty in the canonical chain from the
 // database by hash and number, caching it if found.
 func (hc *HeaderChain) GetTd(hash common.Hash, number uint64) *big.Int {

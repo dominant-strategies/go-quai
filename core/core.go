@@ -248,6 +248,10 @@ func (c *Core) GetBodyRLP(hash common.Hash) rlp.RawValue {
 	return c.sl.hc.GetBodyRLP(hash)
 }
 
+func (c *Core) GetHorizon() uint64 {
+	return c.sl.hc.GetHorizon()
+}
+
 //--------------------//
 // BlockChain methods //
 //--------------------//
