@@ -40,6 +40,11 @@ const (
 	// txChanSize is the size of channel listening to NewTxsEvent.
 	// The number is referenced from the size of tx pool.
 	txChanSize = 4096
+
+	// minPeerSend is the threshold for sending the block updates. If
+	// sqrt of len(peers) is less than 5 we make the block announcement
+	// to as much as minPeerSend peers otherwise send it to sqrt of len(peers).
+	minPeerSend = 5
 )
 
 // txPool defines the methods needed from a transaction pool implementation to
@@ -304,7 +309,14 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 	// If propagation is requested, send to a subset of the peer
 	if propagate {
 		// Send the block to a subset of our peers
-		transfer := peers[:int(math.Sqrt(float64(len(peers))))]
+		var peerThreshold int
+		sqrtNumPeers := int(math.Sqrt(float64(len(peers))))
+		if sqrtNumPeers < minPeerSend {
+			peerThreshold = len(peers)
+		} else {
+			peerThreshold = sqrtNumPeers
+		}
+		transfer := peers[:peerThreshold]
 		for _, peer := range transfer {
 			peer.AsyncSendNewBlock(block)
 		}
