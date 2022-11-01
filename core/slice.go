@@ -155,7 +155,7 @@ func (sl *Slice) Append(header *types.Header, domTerminus common.Hash, td *big.I
 	// Call my sub to append the block
 	var subPendingHeader types.PendingHeader
 	if nodeCtx != common.ZONE_CTX {
-		subPendingHeader, err = sl.subClients[location.SubLocation()].Append(context.Background(), block.Header(), domTerminus, td, true, reorg)
+		subPendingHeader, err = sl.subClients[location.SubIndex()].Append(context.Background(), block.Header(), domTerminus, td, true, reorg)
 		if err != nil {
 			return sl.nilPendingHeader, err
 		}
@@ -308,7 +308,7 @@ func (sl *Slice) pcrc(batch ethdb.Batch, header *types.Header, domTerminus commo
 
 	// Set the subtermini
 	if nodeCtx != common.ZONE_CTX {
-		newTermini[location.SubLocation()] = header.Hash()
+		newTermini[location.SubIndex()] = header.Hash()
 	}
 
 	// Set the terminus
@@ -332,7 +332,7 @@ func (sl *Slice) pcrc(batch ethdb.Batch, header *types.Header, domTerminus commo
 		return common.Hash{}, newTermini, nil
 	}
 
-	return termini[location.SubLocation()], newTermini, nil
+	return termini[location.SubIndex()], newTermini, nil
 }
 
 // HLCR Hierarchical Longest Chain Rule compares externTd to the currentHead Td and returns true if externTd is greater

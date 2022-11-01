@@ -27,6 +27,7 @@ import (
 	"math/big"
 	"math/rand"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/dominant-strategies/go-quai/common/hexutil"
@@ -421,60 +422,138 @@ func (ma *MixedcaseAddress) Original() string {
 // zone[1,2] = [1, 2]
 type Location []byte
 
-func (l Location) Region() int {
-	if len(l) >= 1 {
-		return int(l[REGION_CTX-1])
+func (loc Location) Region() int {
+	if len(loc) >= 1 {
+		return int(loc[REGION_CTX-1])
 	} else {
 		return -1
 	}
 }
 
-func (l Location) HasRegion() bool {
-	return l.Region() >= 0
+func (loc Location) HasRegion() bool {
+	return loc.Region() >= 0
 }
 
-func (l Location) Zone() int {
-	if len(l) >= 2 {
-		return int(l[ZONE_CTX-1])
+func (loc Location) Zone() int {
+	if len(loc) >= 2 {
+		return int(loc[ZONE_CTX-1])
 	} else {
 		return -1
 	}
 }
 
-func (l Location) HasZone() bool {
-	return l.Zone() >= 0
+func (loc Location) HasZone() bool {
+	return loc.Zone() >= 0
 }
 
-func (l Location) AssertValid() {
-	if !l.HasRegion() && l.HasZone() {
+func (loc Location) AssertValid() {
+	if !loc.HasRegion() && loc.HasZone() {
 		log.Fatal("cannot specify zone without also specifying region.")
 	}
-	if l.Region() >= NumRegionsInPrime {
+	if loc.Region() >= NumRegionsInPrime {
 		log.Fatal("region index is not valid.")
 	}
-	if l.Zone() >= NumZonesInRegion {
+	if loc.Zone() >= NumZonesInRegion {
 		log.Fatal("zone index is not valid.")
 	}
 }
 
-func (l Location) Context() int {
-	l.AssertValid()
-	if l.Zone() >= 0 {
+func (loc Location) Context() int {
+	loc.AssertValid()
+	if loc.Zone() >= 0 {
 		return ZONE_CTX
-	} else if l.Region() >= 0 {
+	} else if loc.Region() >= 0 {
 		return REGION_CTX
 	} else {
 		return PRIME_CTX
 	}
 }
 
-func (l Location) SubLocation() int {
+// DomLocation returns the location of your dominant chain
+func (loc Location) DomLocation() Location {
+	if len(loc) < 1 {
+		return nil
+	} else {
+		return loc[:len(loc)-1]
+	}
+}
+
+// SubIndex returns the index of the subordinate chain for a given location
+func (loc Location) SubIndex() int {
 	switch NodeLocation.Context() {
 	case PRIME_CTX:
-		return l.Region()
+		return loc.Region()
 	case REGION_CTX:
-		return l.Zone()
+		return loc.Zone()
 	default:
 		return -1
 	}
+}
+
+// SubInSlice returns the location of the subordinate chain within the specified
+// slice. For example:
+// * if prime calls SubInSlice(Location{0,0}) the result will be Location{0},
+//   i.e. region-0's location, because Prime's subordinate in that slice is
+//   region-0
+// * if region-0 calls SubInSlice(Location{0,0}) the result will be
+//   Location{0,0}, i.e. zone-0-0's location, because region-0's subordinate in
+//   that slice is zone-0-0
+func (loc Location) SubInSlice(slice Location) Location {
+	if len(slice) <= len(loc) {
+		log.Println("cannot determine sub location, because slice location is not deeper than self")
+		return nil
+	}
+	subLoc := append(loc, slice[len(loc)])
+	return subLoc
+}
+
+func (loc Location) InSameSliceAs(cmp Location) bool {
+	// Figure out which location is shorter
+	shorter := loc
+	longer := cmp
+	if len(loc) > len(cmp) {
+		longer = loc
+		shorter = cmp
+	}
+	// Compare bytes up to the shorter depth
+	return shorter.Equal(longer[:len(shorter)])
+}
+
+func (loc Location) Name() string {
+	regionNum := strconv.Itoa(loc.Region())
+	zoneNum := strconv.Itoa(loc.Zone())
+	switch loc.Context() {
+	case PRIME_CTX:
+		return "prime"
+	case REGION_CTX:
+		return "region-" + regionNum
+	case ZONE_CTX:
+		return "zone-" + regionNum + "-" + zoneNum
+	default:
+		log.Println("cannot name invalid location")
+		return "invalid-location"
+	}
+}
+
+func (loc Location) Equal(cmp Location) bool {
+	return bytes.Equal(loc, cmp)
+}
+
+// CommonDom identifies the highest context chain which exists in both locations
+// * zone-0-0 & zone-0-1 would share region-0 as their highest context common dom
+// * zone-0-0 & zone-1-0 would share Prime as their highest context common dom
+func (loc Location) CommonDom(cmp Location) Location {
+	common := Location{}
+	shorterLen := len(loc)
+	if len(loc) > len(cmp) {
+		shorterLen = len(cmp)
+	}
+	for i := 0; i < shorterLen; i++ {
+		if loc[i] == cmp[i] {
+			common = append(common, loc[i])
+		} else {
+			break
+		}
+	}
+	return common
 }
