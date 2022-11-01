@@ -174,7 +174,7 @@ func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine conse
 // Process returns the receipts and logs accumulated during the process and
 // returns the amount of gas that was used in the process. If any of the
 // transactions failed to execute due to insufficient gas it will return an error.
-func (p *StateProcessor) Process(block *types.Block, etxSet *types.EtxSet) (types.Receipts, []*types.Log, *state.StateDB, uint64, error) {
+func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types.Receipts, []*types.Log, *state.StateDB, uint64, error) {
 	var (
 		receipts    types.Receipts
 		usedGas     = new(uint64)
@@ -280,11 +280,11 @@ var lastWrite uint64
 func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInboundEtxs types.Transactions) ([]*types.Log, error) {
 	// Update the set of inbound ETXs which may be mined. This adds new inbound
 	// ETXs to the set and removes expired ETXs so they are no longer available
-	var etxSet *types.EtxSet
+	var etxSet types.EtxSet
 	if block.NumberU64() == 0 {
 		// By definition, first block may not have any ETXs available to spend
 		newEtxSet := make(types.EtxSet)
-		etxSet = &newEtxSet
+		etxSet = newEtxSet
 	} else {
 		etxSet = rawdb.ReadEtxSet(p.hc.bc.db, block.ParentHash(), block.NumberU64()-1)
 	}
@@ -492,7 +492,7 @@ func (p *StateProcessor) ContractCodeWithPrefix(hash common.Hash) ([]byte, error
 func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *state.StateDB, checkLive bool) (statedb *state.StateDB, err error) {
 	var (
 		current  *types.Block
-		etxSet   *types.EtxSet
+		etxSet   types.EtxSet
 		database state.Database
 		report   = true
 		origin   = block.NumberU64()
