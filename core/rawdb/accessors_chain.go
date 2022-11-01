@@ -1177,12 +1177,12 @@ func WriteEtxSetRLP(db ethdb.KeyValueWriter, hash common.Hash, number uint64, rl
 }
 
 // ReadEtxSet retreives the EtxSet corresponding to a given block
-func ReadEtxSet(db ethdb.Reader, hash common.Hash, number uint64) *types.EtxSet {
+func ReadEtxSet(db ethdb.Reader, hash common.Hash, number uint64) types.EtxSet {
 	data := ReadEtxSetRLP(db, hash, number)
 	if len(data) == 0 {
 		return nil
 	}
-	etxSet := new(types.EtxSet)
+	etxSet := types.EtxSet{}
 	if err := rlp.Decode(bytes.NewReader(data), etxSet); err != nil {
 		log.Error("Invalid etx set RLP", "hash", hash, "err", err)
 		return nil
@@ -1191,7 +1191,7 @@ func ReadEtxSet(db ethdb.Reader, hash common.Hash, number uint64) *types.EtxSet 
 }
 
 // WriteEtxSet retreives the EtxSet corresponding to a given block
-func WriteEtxSet(db ethdb.KeyValueWriter, hash common.Hash, number uint64, etxSet *types.EtxSet) {
+func WriteEtxSet(db ethdb.KeyValueWriter, hash common.Hash, number uint64, etxSet types.EtxSet) {
 	data, err := rlp.EncodeToBytes(etxSet)
 	if err != nil {
 		log.Crit("Failed to RLP encode etx set", "err", err)
