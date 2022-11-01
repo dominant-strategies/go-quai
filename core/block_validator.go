@@ -133,7 +133,7 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	if etxHash := types.DeriveSha(etxRollup, trie.NewStackTrie(nil)); etxHash != header.EtxHash() {
 		return fmt.Errorf("invalid etxhash (remote: %x local: %x)", header.EtxHash(), etxHash)
 	}
-	// Verify that any ETXs in the block body
+	// Verify that any ETXs in the block body exist in the set
 	for _, tx := range block.Transactions() {
 		if tx.Type() == types.ExternalTxType {
 			if _, exists := etxSet[tx.Hash()]; !exists {
