@@ -17,6 +17,8 @@
 package vm
 
 import (
+	"fmt"
+
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
@@ -844,12 +846,13 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 	// We use it as a temporary value
 	temp := stack.pop() // following opCall protocol
 	// Pop other call parameters.
-	addr, value, etxGas, gasTipCap, gasFeeCap, nonce, inOffset, inSize, accessListOffset, accessListSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop() // likely have to add gas here and subtract it from value
+	addr, value, etxGas, gasTipCap, gasFeeCap, inOffset, inSize, accessListOffset, accessListSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
 	// Verify address is not in context
 	if toAddr.IsInChainScope() {
 		temp.Clear()
 		stack.push(&temp)
+		fmt.Printf("%x is in chain scope, but opETX was called\n", toAddr)
 		return nil, nil // following opCall protocol
 	}
 	fee := gasTipCap.Add(&gasTipCap, &gasFeeCap)
@@ -859,11 +862,13 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 	if total.Sign() == 0 || !interpreter.evm.Context.CanTransfer(interpreter.evm.StateDB, scope.Contract.self.Address(), total.ToBig()) {
 		temp.Clear()
 		stack.push(&temp)
+		fmt.Printf("%x cannot transfer %d\n", scope.Contract.self.Address(), total.Uint64())
 		return nil, nil
 	}
 	if err := interpreter.evm.StateDB.SubBalance(scope.Contract.self.Address(), total.ToBig()); err != nil {
 		temp.Clear()
 		stack.push(&temp)
+		fmt.Printf("%x opETX error: %s\n", scope.Contract.self.Address(), err.Error())
 		return nil, nil
 	}
 
@@ -876,18 +881,33 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 	if err != nil {
 		temp.Clear()
 		stack.push(&temp)
+		fmt.Printf("%x opETX error: %s\n", scope.Contract.self.Address(), err.Error())
 		return nil, nil // following opCall protocol
 	}
 
 	sender := scope.Contract.self.Address()
+	globalNonce, err := interpreter.evm.StateDB.GetNonce(common.ZeroAddr)
+	if err != nil {
+		temp.Clear()
+		stack.push(&temp)
+		fmt.Printf("%x opETX error: %s\n", scope.Contract.self.Address(), err.Error())
+		return nil, nil // following opCall protocol
+	}
 
 	// create external transaction
-	etxInner := types.ExternalTx{Value: value.ToBig(), To: &toAddr, Sender: sender, GasTipCap: gasTipCap.ToBig(), GasFeeCap: gasFeeCap.ToBig(), Gas: gas, Data: data, AccessList: accessList, Nonce: nonce.Uint64()}
+	etxInner := types.ExternalTx{Value: value.ToBig(), To: &toAddr, Sender: sender, GasTipCap: gasTipCap.ToBig(), GasFeeCap: gasFeeCap.ToBig(), Gas: etxGas.Uint64(), Data: data, AccessList: accessList, Nonce: globalNonce}
 	etx := types.NewTx(&etxInner)
 
 	interpreter.evm.ETXCacheLock.Lock()
 	interpreter.evm.ETXCache = append(interpreter.evm.ETXCache, etx)
 	interpreter.evm.ETXCacheLock.Unlock()
+
+	if err := interpreter.evm.StateDB.SetNonce(common.ZeroAddr, globalNonce+1); err != nil {
+		temp.Clear()
+		stack.push(&temp)
+		fmt.Printf("%x opETX error: %s\n", scope.Contract.self.Address(), err.Error())
+		return nil, nil // following opCall protocol
+	}
 
 	temp.SetOne() // following opCall protocol
 	stack.push(&temp)
