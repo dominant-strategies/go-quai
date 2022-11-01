@@ -485,47 +485,47 @@ func (ma *MixedcaseAddress) Original() string {
 // zone[1,2] = [1, 2]
 type Location []byte
 
-func (l Location) Region() int {
-	if len(l) >= 1 {
-		return int(l[REGION_CTX-1])
+func (loc Location) Region() int {
+	if len(loc) >= 1 {
+		return int(loc[REGION_CTX-1])
 	} else {
 		return -1
 	}
 }
 
-func (l Location) HasRegion() bool {
-	return l.Region() >= 0
+func (loc Location) HasRegion() bool {
+	return loc.Region() >= 0
 }
 
-func (l Location) Zone() int {
-	if len(l) >= 2 {
-		return int(l[ZONE_CTX-1])
+func (loc Location) Zone() int {
+	if len(loc) >= 2 {
+		return int(loc[ZONE_CTX-1])
 	} else {
 		return -1
 	}
 }
 
-func (l Location) HasZone() bool {
-	return l.Zone() >= 0
+func (loc Location) HasZone() bool {
+	return loc.Zone() >= 0
 }
 
-func (l Location) AssertValid() {
-	if !l.HasRegion() && l.HasZone() {
+func (loc Location) AssertValid() {
+	if !loc.HasRegion() && loc.HasZone() {
 		log.Fatal("cannot specify zone without also specifying region.")
 	}
-	if l.Region() >= NumRegionsInPrime {
+	if loc.Region() >= NumRegionsInPrime {
 		log.Fatal("region index is not valid.")
 	}
-	if l.Zone() >= NumZonesInRegion {
+	if loc.Zone() >= NumZonesInRegion {
 		log.Fatal("zone index is not valid.")
 	}
 }
 
-func (l Location) Context() int {
-	l.AssertValid()
-	if l.Zone() >= 0 {
+func (loc Location) Context() int {
+	loc.AssertValid()
+	if loc.Zone() >= 0 {
 		return ZONE_CTX
-	} else if l.Region() >= 0 {
+	} else if loc.Region() >= 0 {
 		return REGION_CTX
 	} else {
 		return PRIME_CTX
@@ -533,21 +533,21 @@ func (l Location) Context() int {
 }
 
 // DomLocation returns the location of your dominant chain
-func (l Location) DomLocation() Location {
-	if len(l) < 1 {
+func (loc Location) DomLocation() Location {
+	if len(loc) < 1 {
 		return nil
 	} else {
-		return l[:len(l)-1]
+		return loc[:len(loc)-1]
 	}
 }
 
 // SubIndex returns the index of the subordinate chain for a given location
-func (l Location) SubIndex() int {
+func (loc Location) SubIndex() int {
 	switch NodeLocation.Context() {
 	case PRIME_CTX:
-		return l.Region()
+		return loc.Region()
 	case REGION_CTX:
-		return l.Zone()
+		return loc.Zone()
 	default:
 		return -1
 	}
@@ -561,31 +561,31 @@ func (l Location) SubIndex() int {
 // * if region-0 calls SubInSlice(Location{0,0}) the result will be
 //   Location{0,0}, i.e. zone-0-0's location, because region-0's subordinate in
 //   that slice is zone-0-0
-func (l Location) SubInSlice(slice Location) Location {
-	if len(slice) <= len(l) {
+func (loc Location) SubInSlice(slice Location) Location {
+	if len(slice) <= len(loc) {
 		log.Println("cannot determine sub location, because slice location is not deeper than self")
 		return nil
 	}
-	subLoc := append(l, slice[len(l)])
+	subLoc := append(loc, slice[len(loc)])
 	return subLoc
 }
 
-func (l Location) InSameSliceAs(cmp Location) bool {
+func (loc Location) InSameSliceAs(cmp Location) bool {
 	// Figure out which location is shorter
-	shorter := l
+	shorter := loc
 	longer := cmp
-	if len(l) > len(cmp) {
-		longer = l
+	if len(loc) > len(cmp) {
+		longer = loc
 		shorter = cmp
 	}
 	// Compare bytes up to the shorter depth
 	return shorter.Equal(longer[:len(shorter)])
 }
 
-func (l Location) Name() string {
-	regionNum := strconv.Itoa(l.Region())
-	zoneNum := strconv.Itoa(l.Zone())
-	switch l.Context() {
+func (loc Location) Name() string {
+	regionNum := strconv.Itoa(loc.Region())
+	zoneNum := strconv.Itoa(loc.Zone())
+	switch loc.Context() {
 	case PRIME_CTX:
 		return "prime"
 	case REGION_CTX:
@@ -598,9 +598,9 @@ func (l Location) Name() string {
 	}
 }
 
-func (l Location) ContainsAddress(a Address) bool {
+func (loc Location) ContainsAddress(a Address) bool {
 	prefix := a[0]
-	prefixRange, ok := locationToPrefixRange[l.Name()]
+	prefixRange, ok := locationToPrefixRange[loc.Name()]
 	if !ok {
 		log.Fatal("unable to get address prefix range for location")
 	}
@@ -608,22 +608,22 @@ func (l Location) ContainsAddress(a Address) bool {
 	return prefix >= prefixRange.lo && prefix <= prefixRange.hi
 }
 
-func (l Location) Equal(cmp Location) bool {
-	return bytes.Equal(l, cmp)
+func (loc Location) Equal(cmp Location) bool {
+	return bytes.Equal(loc, cmp)
 }
 
 // CommonDom identifies the highest context chain which exists in both locations
 // * zone-0-0 & zone-0-1 would share region-0 as their highest context common dom
 // * zone-0-0 & zone-1-0 would share Prime as their highest context common dom
-func (l Location) CommonDom(cmp Location) Location {
+func (loc Location) CommonDom(cmp Location) Location {
 	common := Location{}
-	shorterLen := len(l)
-	if len(l) > len(cmp) {
+	shorterLen := len(loc)
+	if len(loc) > len(cmp) {
 		shorterLen = len(cmp)
 	}
 	for i := 0; i < shorterLen; i++ {
-		if l[i] == cmp[i] {
-			common = append(common, l[i])
+		if loc[i] == cmp[i] {
+			common = append(common, loc[i])
 		} else {
 			break
 		}
