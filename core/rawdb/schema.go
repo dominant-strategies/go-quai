@@ -92,9 +92,10 @@ var (
 	pendingBlockBodyPrefix = []byte("pb") // pendingBodyPrefix + hash -> Body
 	terminiPrefix          = []byte("tk") //terminiPrefix + hash -> []common.Hash
 
-	blockBodyPrefix     = []byte("b") // blockBodyPrefix + num (uint64 big endian) + hash -> block body
-	blockReceiptsPrefix = []byte("r") // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
-	etxSetPrefix        = []byte("e") // etxSetPrefix + num (uint64 big endian) + hash -> EtxSet at block
+	blockBodyPrefix     = []byte("b")  // blockBodyPrefix + num (uint64 big endian) + hash -> block body
+	blockReceiptsPrefix = []byte("r")  // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
+	etxSetPrefix        = []byte("e")  // etxSetPrefix + num (uint64 big endian) + hash -> EtxSet at block
+	pendingEtxsPrefix   = []byte("pe") // pendingEtxsPrefix + hash -> PendingEtxs at block
 
 	txLookupPrefix        = []byte("l") // txLookupPrefix + hash -> transaction/receipt lookup metadata
 	bloomBitsPrefix       = []byte("B") // bloomBitsPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash -> bloom bits
@@ -270,4 +271,9 @@ func configKey(hash common.Hash) []byte {
 // etxSetKey = etxSetPrefix + num (uint64 big endian) + hash
 func etxSetKey(number uint64, hash common.Hash) []byte {
 	return append(append(etxSetPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
+}
+
+// pendingEtxsKey = pendingEtxsPrefix + hash
+func pendingEtxsKey(hash common.Hash) []byte {
+	return append(pendingEtxsPrefix, hash.Bytes()...)
 }

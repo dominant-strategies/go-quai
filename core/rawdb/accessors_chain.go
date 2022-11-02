@@ -1230,3 +1230,50 @@ func DeleteEtxSet(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 		log.Crit("Failed to delete etx set", "err", err)
 	}
 }
+
+// ReadPendingEtxsRLP retrieves the set of pending ETXs for the given block, in RLP encoding
+func ReadPendingEtxsRLP(db ethdb.Reader, hash common.Hash) rlp.RawValue {
+	// Try to look up the data in leveldb.
+	data, _ := db.Get(pendingEtxsKey(hash))
+	if len(data) > 0 {
+		return data
+	}
+	return nil // Can't find the data anywhere.
+}
+
+// WritePendingEtxsRLP stores the pending ETXs corresponding to a given block, in RLP encoding.
+func WritePendingEtxsRLP(db ethdb.KeyValueWriter, hash common.Hash, rlp rlp.RawValue) {
+	if err := db.Put(pendingEtxsKey(hash), rlp); err != nil {
+		log.Crit("Failed to store pending etxs", "err", err)
+	}
+}
+
+// ReadPendingEtxs retreives the pending ETXs corresponding to a given block
+func ReadPendingEtxs(db ethdb.Reader, hash common.Hash) []types.Transactions {
+	data := ReadPendingEtxsRLP(db, hash)
+	if len(data) == 0 {
+		return nil
+	}
+	pendingEtxs := []types.Transactions{types.Transactions{}, types.Transactions{}, types.Transactions{}}
+	if err := rlp.Decode(bytes.NewReader(data), pendingEtxs); err != nil {
+		log.Error("Invalid pending etxs RLP", "hash", hash, "err", err)
+		return nil
+	}
+	return pendingEtxs
+}
+
+// WritePendingEtxs stores the pending ETXs corresponding to a given block
+func WritePendingEtxs(db ethdb.KeyValueWriter, hash common.Hash, pendingEtxs []types.Transactions) {
+	data, err := rlp.EncodeToBytes(pendingEtxs)
+	if err != nil {
+		log.Crit("Failed to RLP encode pending etxs", "err", err)
+	}
+	WritePendingEtxsRLP(db, hash, data)
+}
+
+// DeletePendingEtxs removes all pending ETX data associated with a block.
+func DeletePendingEtxs(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
+	if err := db.Delete(pendingEtxsKey(hash)); err != nil {
+		log.Crit("Failed to delete pending etxs", "err", err)
+	}
+}
