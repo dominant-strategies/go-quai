@@ -467,7 +467,7 @@ func (ec *Client) GetPendingHeader(ctx context.Context) (*types.Header, error) {
 	var pendingHeader *types.Header
 	err := ec.c.CallContext(ctx, &pendingHeader, "quai_getPendingHeader")
 	if err != nil {
-		return nil, nil
+		return nil, err
 	}
 	return pendingHeader, nil
 }
