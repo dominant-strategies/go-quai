@@ -300,11 +300,15 @@ func (sl *Slice) updateCacheAndRelay(pendingHeader types.PendingHeader, location
 func (sl *Slice) CollectEtxsForManifest(manifest types.BlockManifest) (types.Transactions, error) {
 	etxs := types.Transactions{}
 	for _, hash := range manifest {
-		res, ok := sl.pendingEtxs.Get(hash)
-		if !ok || res == nil {
+		var pendingEtxs []types.Transactions
+		// Look for pending ETXs first in pending ETX cache, then in database
+		if res, ok := sl.pendingEtxs.Get(hash); ok && res != nil {
+			pendingEtxs = res.([]types.Transactions)
+		} else if res := rawdb.ReadPendingEtxs(sl.sliceDb, *hash); res != nil {
+			pendingEtxs = res
+		} else {
 			return nil, fmt.Errorf("unable to find pending etxs for hash in manifest", "hash: ", hash)
 		}
-		pendingEtxs := res.([]types.Transactions)
 		etxs = append(etxs, pendingEtxs[common.PRIME_CTX]...)
 		etxs = append(etxs, pendingEtxs[common.REGION_CTX]...)
 		etxs = append(etxs, pendingEtxs[common.ZONE_CTX]...)
@@ -490,6 +494,11 @@ func (sl *Slice) GetSubManifest(blockHash common.Hash) (types.BlockManifest, err
 
 func (sl *Slice) AddPendingEtxs(header *types.Header, etxs []types.Transactions) error {
 	log.Info("Received pending ETXs", "block: ", header.Hash())
+	// Only write the pending ETXs to the db if we have not seen them before
+	if !sl.pendingEtxs.Contains(header.Hash()) {
+		rawdb.WritePendingEtxs(sl.sliceDb, header.Hash(), etxs)
+	}
+	// Also write the pending ETXs to cache for faster access
 	if ok, _ := sl.pendingEtxs.ContainsOrAdd(header.Hash(), etxs); !ok {
 		return fmt.Errorf("failed to add pending etxs for block", "hash: ", header.Hash())
 	}
