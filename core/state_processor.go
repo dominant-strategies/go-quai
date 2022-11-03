@@ -298,13 +298,9 @@ var lastWrite uint64
 func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInboundEtxs types.Transactions) ([]*types.Log, error) {
 	// Update the set of inbound ETXs which may be mined. This adds new inbound
 	// ETXs to the set and removes expired ETXs so they are no longer available
-	var etxSet types.EtxSet
-	if block.NumberU64() == 0 {
-		// By definition, first block may not have any ETXs available to spend
-		newEtxSet := make(types.EtxSet)
-		etxSet = newEtxSet
-	} else {
-		etxSet = rawdb.ReadEtxSet(p.hc.bc.db, block.ParentHash(), block.NumberU64()-1)
+	etxSet := rawdb.ReadEtxSet(p.hc.bc.db, block.ParentHash(), block.NumberU64()-1)
+	if etxSet == nil {
+		return nil, errors.New("failed to load etx set")
 	}
 	etxSet.Update(newInboundEtxs, block.NumberU64())
 
