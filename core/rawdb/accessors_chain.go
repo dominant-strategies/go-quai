@@ -1178,6 +1178,14 @@ func WriteEtxSetRLP(db ethdb.KeyValueWriter, hash common.Hash, number uint64, rl
 
 // ReadEtxSet retreives the EtxSet corresponding to a given block
 func ReadEtxSet(db ethdb.Reader, hash common.Hash, number uint64) types.EtxSet {
+	if number == 0 {
+		// If this is a request for the genesis ETX set, check that the genesis hash
+		// matches, and return an empty ETX set, because there can be no ETXs in the
+		// genesis block
+		if numberByHash := ReadHeaderNumber(db, hash); numberByHash != nil && *numberByHash == number {
+			return types.NewEtxSet()
+		}
+	}
 	data := ReadEtxSetRLP(db, hash, number)
 	if len(data) == 0 {
 		return nil
