@@ -35,8 +35,9 @@ import (
 )
 
 const (
-	bodyType    = uint(0)
-	receiptType = uint(1)
+	bodyType        = uint(0)
+	receiptType     = uint(1)
+	pendingEtxsType = uint(2)
 )
 
 var (
@@ -71,6 +72,7 @@ type fetchResult struct {
 	ExtTransactions types.Transactions
 	SubManifest     types.BlockManifest
 	Receipts        types.Receipts
+	PendingEtxs     types.PendingEtxs
 }
 
 func newFetchResult(header *types.Header) *fetchResult {
@@ -99,6 +101,13 @@ func (f *fetchResult) AllDone() bool {
 func (f *fetchResult) SetReceiptsDone() {
 	if v := atomic.LoadInt32(&f.pending); (v & (1 << receiptType)) != 0 {
 		atomic.AddInt32(&f.pending, -2)
+	}
+}
+
+// SetPendingEtxsDone flags the pending etxs as finished.
+func (f *fetchResult) SetPendingEtxsDone() {
+	if v := atomic.LoadInt32(&f.pending); (v & (1 << pendingEtxsType)) != 0 {
+		atomic.AddInt32(&f.pending, -3)
 	}
 }
 
@@ -133,6 +142,10 @@ type queue struct {
 	receiptTaskQueue *prque.Prque                  // Priority queue of the headers to fetch the receipts for
 	receiptPendPool  map[string]*fetchRequest      // Currently pending receipt retrieval operations
 
+	pendingEtxsTaskPool  map[common.Hash]*types.Header // Pending "pending etx" retrieval tasks, mapping hashes to headers
+	pendingEtxsTaskQueue *prque.Prque                  //Priority queue of the headers to fetch the pending etxs for
+	pendingEtxsPendPool  map[string]*fetchRequest      // Currently pending etx retrieval operations
+
 	resultCache *resultStore       // Downloaded but not yet delivered fetch results
 	resultSize  common.StorageSize // Approximate size of a block (exponential moving average)
 
@@ -147,11 +160,12 @@ type queue struct {
 func newQueue(blockCacheLimit int, thresholdInitialSize int) *queue {
 	lock := new(sync.RWMutex)
 	q := &queue{
-		headerContCh:     make(chan bool),
-		blockTaskQueue:   prque.New(nil),
-		receiptTaskQueue: prque.New(nil),
-		active:           sync.NewCond(lock),
-		lock:             lock,
+		headerContCh:         make(chan bool),
+		blockTaskQueue:       prque.New(nil),
+		receiptTaskQueue:     prque.New(nil),
+		pendingEtxsTaskQueue: prque.New(nil),
+		active:               sync.NewCond(lock),
+		lock:                 lock,
 	}
 	q.Reset(blockCacheLimit, thresholdInitialSize)
 	return q
@@ -175,6 +189,10 @@ func (q *queue) Reset(blockCacheLimit int, thresholdInitialSize int) {
 	q.receiptTaskPool = make(map[common.Hash]*types.Header)
 	q.receiptTaskQueue.Reset()
 	q.receiptPendPool = make(map[string]*fetchRequest)
+
+	q.pendingEtxsTaskPool = make(map[common.Hash]*types.Header)
+	q.pendingEtxsTaskQueue.Reset()
+	q.pendingEtxsPendPool = make(map[string]*fetchRequest)
 
 	q.resultCache = newResultStore(blockCacheLimit)
 	q.resultCache.SetThrottleThreshold(uint64(thresholdInitialSize))
@@ -213,6 +231,22 @@ func (q *queue) PendingReceipts() int {
 	return q.receiptTaskQueue.Size()
 }
 
+// PendingPendingEtxs retrieves the number of pending etxs pending for retrieval.
+func (q *queue) PendingPendingEtxs() int {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+
+	return q.pendingEtxsTaskQueue.Size()
+}
+
+// PendingEtxs retrieves the number of block pending etxs pending for retrieval.
+func (q *queue) PendingEtxs() int {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+
+	return q.pendingEtxsTaskQueue.Size()
+}
+
 // InFlightHeaders retrieves whether there are header fetch requests currently
 // in flight.
 func (q *queue) InFlightHeaders() bool {
@@ -238,6 +272,15 @@ func (q *queue) InFlightReceipts() bool {
 	defer q.lock.Unlock()
 
 	return len(q.receiptPendPool) > 0
+}
+
+// InFlightPendingEtxs retrieves whether there are pending etxs fetch requests currently
+// in flight.
+func (q *queue) InFlightPendingEtxs() bool {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+
+	return len(q.pendingEtxsPendPool) > 0
 }
 
 // Idle returns if the queue is fully idle or has some data still inside.
@@ -468,6 +511,16 @@ func (q *queue) ReserveReceipts(p *peerConnection, count int) (*fetchRequest, bo
 	return q.reserveHeaders(p, count, q.receiptTaskPool, q.receiptTaskQueue, q.receiptPendPool, receiptType)
 }
 
+// ReservePendingEtxs reserves a set of pending etx fetches for the given peer, skipping
+// any previously faield downloads. Beside the next batch of needed fetches, it
+// also returns a flag whether empty pending etxs were queued requiring importing.
+func (q *queue) ReservePendingEtxs(p *peerConnection, count int) (*fetchRequest, bool, bool) {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+
+	return q.reserveHeaders(p, count, q.pendingEtxsTaskPool, q.pendingEtxsTaskQueue, q.pendingEtxsPendPool, pendingEtxsType)
+}
+
 // reserveHeaders reserves a set of data download operations for a given peer,
 // skipping any previously failed ones. This method is a generic version used
 // by the individual special reservation functions.
@@ -591,6 +644,14 @@ func (q *queue) CancelReceipts(request *fetchRequest) {
 	q.cancel(request, q.receiptTaskQueue, q.receiptPendPool)
 }
 
+// CancelPendingEtxs aborts a pending etx fetch request, returning all pending headers to
+// the task queue.
+func (q *queue) CancelPendingEtxs(request *fetchRequest) {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+	q.cancel(request, q.pendingEtxsTaskQueue, q.pendingEtxsPendPool)
+}
+
 // Cancel aborts a fetch request, returning all pending hashes to the task queue.
 func (q *queue) cancel(request *fetchRequest, taskQueue *prque.Prque, pendPool map[string]*fetchRequest) {
 	if request.From > 0 {
@@ -648,6 +709,15 @@ func (q *queue) ExpireReceipts(timeout time.Duration) map[string]int {
 	defer q.lock.Unlock()
 
 	return q.expire(timeout, q.receiptPendPool, q.receiptTaskQueue, receiptTimeoutMeter)
+}
+
+// ExpirePendingEtxs checks for in flight pending etxs requests that exceeded a timeout
+// allowance, canceling them and returning the responsible peers for penalisation.
+func (q *queue) ExpirePendingEtxs(timeout time.Duration) map[string]int {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+
+	return q.expire(timeout, q.pendingEtxsPendPool, q.pendingEtxsTaskQueue, pendingEtxsTimeoutMeter)
 }
 
 // expire is the generic check that move expired tasks from a pending pool back
@@ -843,6 +913,30 @@ func (q *queue) DeliverReceipts(id string, receiptList [][]*types.Receipt) (int,
 	}
 	return q.deliver(id, q.receiptTaskPool, q.receiptTaskQueue, q.receiptPendPool,
 		receiptReqTimer, len(receiptList), validate, reconstruct)
+}
+
+// DeliverPendingEtxs injects a pendingEtxs retrieval response into the results queue.
+// The method returns the number of pending etxs accepted from the delivery
+// and also wakes any threads waiting for data delivery.
+func (q *queue) DeliverPendingEtxs(id string, pendingEtxs []types.PendingEtxs) (int, error) {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+	trieHasher := trie.NewStackTrie(nil)
+	validate := func(index int, header *types.Header) error {
+		// validate all the contexts
+		for i := 0; i < common.HierarchyDepth; i++ {
+			if types.DeriveSha(pendingEtxs[index].Etxs[i], trieHasher) != pendingEtxs[index].Header.EtxHash(i) {
+				return errInvalidPendingEtxs
+			}
+		}
+		return nil
+	}
+	reconstruct := func(index int, result *fetchResult) {
+		result.PendingEtxs = pendingEtxs[index]
+		result.SetPendingEtxsDone()
+	}
+	return q.deliver(id, q.pendingEtxsTaskPool, q.pendingEtxsTaskQueue, q.pendingEtxsPendPool,
+		pendingEtxsReqTimer, len(pendingEtxs), validate, reconstruct)
 }
 
 // deliver injects a data retrieval response into the results queue.

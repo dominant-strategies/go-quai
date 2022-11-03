@@ -38,6 +38,11 @@ var (
 	receiptDropMeter    = metrics.NewRegisteredMeter("eth/downloader/receipts/drop", nil)
 	receiptTimeoutMeter = metrics.NewRegisteredMeter("eth/downloader/receipts/timeout", nil)
 
+	pendingEtxsInMeter      = metrics.NewRegisteredMeter("eth/downloader/pendingEtxs/in", nil)
+	pendingEtxsReqTimer     = metrics.NewRegisteredTimer("eth/downloader/pendingEtxs/req", nil)
+	pendingEtxsDropMeter    = metrics.NewRegisteredMeter("eth/downloader/pendingEtxs/drop", nil)
+	pendingEtxsTimeoutMeter = metrics.NewRegisteredMeter("eth/downloader/pendingEtxs/timeout", nil)
+
 	stateInMeter   = metrics.NewRegisteredMeter("eth/downloader/states/in", nil)
 	stateDropMeter = metrics.NewRegisteredMeter("eth/downloader/states/drop", nil)
 
