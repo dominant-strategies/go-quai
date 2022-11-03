@@ -400,6 +400,20 @@ func (p *Peer) ReplyReceiptsRLP(id uint64, receipts []rlp.RawValue) error {
 	})
 }
 
+// SendPendingEtxsRLP sends a batch of pending etxs, corresponding to the
+// ones requested from an already RLP encoded format.
+func (p *Peer) SendPendingEtxsRLP(pendingEtxs []rlp.RawValue) error {
+	return p2p.Send(p.rw, PendingEtxsMsg, pendingEtxs) // Not packed into ReceiptsPacket to avoid RLP decoding
+}
+
+// ReplyPendingEtxsRLP is the eth/66 response to GetPendingEtxs.
+func (p *Peer) ReplyPendingEtxsRLP(id uint64, pendingEtxs []rlp.RawValue) error {
+	return p2p.Send(p.rw, PendingEtxsMsg, PendingEtxsRLPPacket66{
+		RequestId:            id,
+		PendingEtxsRLPPacket: pendingEtxs,
+	})
+}
+
 // RequestOneHeader is a wrapper around the header query functions to fetch a
 // single header. It is used solely by the fetcher.
 func (p *Peer) RequestOneHeader(hash common.Hash) error {
@@ -544,4 +558,19 @@ func (p *Peer) RequestTxs(hashes []common.Hash) error {
 		})
 	}
 	return p2p.Send(p.rw, GetPooledTransactionsMsg, GetPooledTransactionsPacket(hashes))
+}
+
+// RequestPendingEtxs fetches a batch of pendingEtxs from a remote node.
+func (p *Peer) RequestPendingEtxs(hashes []common.Hash) error {
+	p.Log().Debug("Fetching batch of pending etxs", "count", len(hashes))
+	if p.Version() >= ETH66 {
+		id := rand.Uint64()
+
+		requestTracker.Track(p.id, p.version, GetPendingEtxsMsg, PendingEtxsMsg, id)
+		return p2p.Send(p.rw, GetPendingEtxsMsg, &GetPendingEtxsPacket66{
+			RequestId:            id,
+			GetPendingEtxsPacket: hashes,
+		})
+	}
+	return p2p.Send(p.rw, GetPendingEtxsMsg, GetPendingEtxsPacket(hashes))
 }

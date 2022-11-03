@@ -240,6 +240,46 @@ func handleGetBlock66(backend Backend, msg Decoder, peer *Peer) error {
 	return nil
 }
 
+func handleGetPendingEtxs(backend Backend, msg Decoder, peer *Peer) error {
+	// Decode the block pending etxs retrieval message
+	var query GetPendingEtxsPacket
+	if err := msg.Decode(&query); err != nil {
+		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+	}
+	response := answerGetPendingEtxsQuery(backend, query, peer)
+	return peer.SendPendingEtxsRLP(response)
+}
+
+func handleGetPendingEtxs66(backend Backend, msg Decoder, peer *Peer) error {
+	// Decode the block pending etxs retrieval message
+	var query GetPendingEtxsPacket66
+	if err := msg.Decode(&query); err != nil {
+		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+	}
+	response := answerGetPendingEtxsQuery(backend, query.GetPendingEtxsPacket, peer)
+	return peer.ReplyPendingEtxsRLP(query.RequestId, response)
+}
+
+func answerGetPendingEtxsQuery(backend Backend, query GetPendingEtxsPacket, peer *Peer) []rlp.RawValue {
+	// Gather state data until the fetch or network limits is reached
+	var (
+		bytes       int
+		pendingEtxs []rlp.RawValue
+	)
+	for lookups, hash := range query {
+		if bytes >= softResponseLimit || len(pendingEtxs) >= maxPendingEtxsServe ||
+			lookups >= 2*maxPendingEtxsServe {
+			break
+		}
+		// Retrieve the requested block's pendingEtxs
+		if data := backend.Core().GetPendingEtxsRLP(hash); len(data) != 0 {
+			pendingEtxs = append(pendingEtxs, data)
+			bytes += len(data)
+		}
+	}
+	return pendingEtxs
+}
+
 func handleNewBlockhashes(backend Backend, msg Decoder, peer *Peer) error {
 	// A batch of new block announcements just arrived
 	ann := new(NewBlockHashesPacket)
@@ -497,4 +537,21 @@ func handlePooledTransactions66(backend Backend, msg Decoder, peer *Peer) error 
 	requestTracker.Fulfil(peer.id, peer.version, PooledTransactionsMsg, txs.RequestId)
 
 	return backend.Handle(peer, &txs.PooledTransactionsPacket)
+}
+
+func handlePendingEtxs(backend Backend, msg Decoder, peer *Peer) error {
+	var pendingEtx PendingEtxsPacket
+	if err := msg.Decode(&pendingEtx); err != nil {
+		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+	}
+	return backend.Handle(peer, &pendingEtx)
+}
+
+func handlePendingEtxs66(backend Backend, msg Decoder, peer *Peer) error {
+	var pendingEtx PendingEtxsPacket66
+	if err := msg.Decode(&pendingEtx); err != nil {
+		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+	}
+	requestTracker.Fulfil(peer.id, peer.version, PendingEtxsMsg, pendingEtx.RequestId)
+	return backend.Handle(peer, &pendingEtx)
 }

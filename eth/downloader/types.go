@@ -79,3 +79,13 @@ type statePack struct {
 func (p *statePack) PeerId() string { return p.peerID }
 func (p *statePack) Items() int     { return len(p.states) }
 func (p *statePack) Stats() string  { return fmt.Sprintf("%d", len(p.states)) }
+
+// pendingEtxPack is a batch of pending etxs returned by a peer.
+type pendingEtxsPack struct {
+	peerID     string
+	pendingEtx []types.PendingEtxs
+}
+
+func (p *pendingEtxsPack) PeerId() string { return p.peerID }
+func (p *pendingEtxsPack) Items() int     { return len(p.pendingEtx) }
+func (p *pendingEtxsPack) Stats() string  { return fmt.Sprintf("%d", len(p.pendingEtx)) }

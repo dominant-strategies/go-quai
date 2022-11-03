@@ -163,6 +163,10 @@ func (c *Core) AddPendingEtxs(pEtxs types.PendingEtxs) error {
 	return c.sl.AddPendingEtxs(pEtxs)
 }
 
+func (c *Core) GetPendingEtxsRLP(hash common.Hash) rlp.RawValue {
+	return rawdb.ReadPendingEtxsRLP(c.sl.sliceDb, hash)
+}
+
 func (c *Core) SubscribeDownloaderWait(ch chan<- bool) event.Subscription {
 	return c.sl.SubscribeDownloaderWait(ch)
 }

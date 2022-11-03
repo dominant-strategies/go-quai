@@ -37,12 +37,13 @@ import (
 )
 
 var (
-	MaxBlockFetch     = 128  // Amount of blocks to be fetched per retrieval request
-	MaxHeaderFetch    = 192  // Amount of block headers to be fetched per retrieval request
-	MaxSkeletonWindow = 1024 // Amount of blocks to be fetched for a skeleton assembly.
-	MaxSkeletonSize   = 1024 // Number of header fetches to need for a skeleton assembly
-	MaxReceiptFetch   = 256  // Amount of transaction receipts to allow fetching per request
-	MaxStateFetch     = 384  // Amount of node state values to allow fetching per request
+	MaxBlockFetch       = 128  // Amount of blocks to be fetched per retrieval request
+	MaxHeaderFetch      = 192  // Amount of block headers to be fetched per retrieval request
+	MaxSkeletonWindow   = 1024 // Amount of blocks to be fetched for a skeleton assembly.
+	MaxSkeletonSize     = 1024 // Number of header fetches to need for a skeleton assembly
+	MaxReceiptFetch     = 256  // Amount of transaction receipts to allow fetching per request
+	MaxPendingEtxsFetch = 256  // Amount of pendingEtxs to allow fetching per request
+	MaxStateFetch       = 384  // Amount of node state values to allow fetching per request
 
 	PrimeSkeletonDist = 16
 	PrimeFetchDepth   = 30
@@ -70,6 +71,8 @@ var (
 	errInvalidChain            = errors.New("retrieved hash chain is invalid")
 	errInvalidBody             = errors.New("retrieved block body is invalid")
 	errInvalidReceipt          = errors.New("retrieved receipt is invalid")
+	errInvalidPendingEtxs      = errors.New("retrieved pending etx is invalid")
+	errCancelStateFetch        = errors.New("state data download canceled (requested)")
 	errCancelContentProcessing = errors.New("content processing canceled (requested)")
 	errCanceled                = errors.New("syncing canceled (requested)")
 	errNoSyncActive            = errors.New("no sync active")
@@ -82,8 +85,6 @@ type Downloader struct {
 
 	queue *queue   // Scheduler for selecting the hashes to download
 	peers *peerSet // Set of active peers from which download can proceed
-
-	stateDB ethdb.Database // Database to state sync into (and deduplicate via)
 
 	// Statistics
 	syncStatsChainOrigin uint64       // Origin block number where syncing started at
@@ -104,12 +105,14 @@ type Downloader struct {
 	waitingOnAppend bool
 
 	// Channels
-	headerCh      chan dataPack        // Channel receiving inbound block headers
-	bodyCh        chan dataPack        // Channel receiving inbound block bodies
-	receiptCh     chan dataPack        // Channel receiving inbound receipts
-	bodyWakeCh    chan bool            // Channel to signal the block body fetcher of new tasks
-	receiptWakeCh chan bool            // Channel to signal the receipt fetcher of new tasks
-	headerProcCh  chan []*types.Header // Channel to feed the header processor new tasks
+	headerCh          chan dataPack        // Channel receiving inbound block headers
+	bodyCh            chan dataPack        // Channel receiving inbound block bodies
+	receiptCh         chan dataPack        // Channel receiving inbound receipts
+	pendingEtxsCh     chan dataPack        // Channel receiving inbound pending etxs
+	bodyWakeCh        chan bool            // Channel to signal the block body fetcher of new tasks
+	receiptWakeCh     chan bool            // Channel to signal the receipt fetcher of new tasks
+	pendingEtxsWakeCh chan bool            // Channel to signal the pending etxs fetcher of new tasks
+	headerProcCh      chan []*types.Header // Channel to feed the header processor new tasks
 
 	// Cancellation and termination
 	cancelPeer string         // Identifier of the peer currently being used as the master (cancel on drop)
@@ -138,6 +141,9 @@ type Core interface {
 	// CurrentBlock retrieves the head of local chain.
 	CurrentBlock() *types.Block
 
+	// AddPendingEtxs adds the pendingEtxs to the database.
+	AddPendingEtxs(pEtxs types.PendingEtxs) error
+
 	// InsertChain inserts a batch of blocks into the local chain.
 	InsertChain(types.Blocks) (int, error)
 
@@ -153,20 +159,21 @@ type Core interface {
 // New creates a new downloader to fetch hashes and blocks from remote peers.
 func New(stateDb ethdb.Database, mux *event.TypeMux, core Core, dropPeer peerDropFn) *Downloader {
 	dl := &Downloader{
-		stateDB:         stateDb,
-		mux:             mux,
-		queue:           newQueue(blockCacheMaxItems, blockCacheInitialItems),
-		peers:           newPeerSet(),
-		core:            core,
-		dropPeer:        dropPeer,
-		waitingOnAppend: false,
-		headerCh:        make(chan dataPack, 1),
-		bodyCh:          make(chan dataPack, 1),
-		receiptCh:       make(chan dataPack, 1),
-		bodyWakeCh:      make(chan bool, 1),
-		receiptWakeCh:   make(chan bool, 1),
-		headerProcCh:    make(chan []*types.Header, 10),
-		quitCh:          make(chan struct{}),
+		mux:               mux,
+		queue:             newQueue(blockCacheMaxItems, blockCacheInitialItems),
+		peers:             newPeerSet(),
+		core:              core,
+		dropPeer:          dropPeer,
+		waitingOnAppend:   false,
+		headerCh:          make(chan dataPack, 1),
+		bodyCh:            make(chan dataPack, 1),
+		receiptCh:         make(chan dataPack, 1),
+		pendingEtxsCh:     make(chan dataPack, 1),
+		bodyWakeCh:        make(chan bool, 1),
+		receiptWakeCh:     make(chan bool, 1),
+		pendingEtxsWakeCh: make(chan bool, 1),
+		headerProcCh:      make(chan []*types.Header, 1),
+		quitCh:            make(chan struct{}),
 	}
 
 	go dl.AppendWaitLoop()
@@ -294,13 +301,13 @@ func (d *Downloader) synchronise(id string, hash common.Hash, number uint64, mod
 	d.queue.Reset(blockCacheMaxItems, blockCacheInitialItems)
 	d.peers.Reset()
 
-	for _, ch := range []chan bool{d.bodyWakeCh, d.receiptWakeCh} {
+	for _, ch := range []chan bool{d.bodyWakeCh, d.receiptWakeCh, d.pendingEtxsWakeCh} {
 		select {
 		case <-ch:
 		default:
 		}
 	}
-	for _, ch := range []chan dataPack{d.headerCh, d.bodyCh, d.receiptCh} {
+	for _, ch := range []chan dataPack{d.headerCh, d.bodyCh, d.receiptCh, d.pendingEtxsCh} {
 		for empty := false; !empty; {
 			select {
 			case <-ch:
@@ -507,6 +514,7 @@ func (d *Downloader) fetchHead(p *peerConnection) (head *types.Header, err error
 
 		case <-d.bodyCh:
 		case <-d.receiptCh:
+		case <-d.pendingEtxsCh:
 			// Out of bounds delivery, ignore
 		}
 	}
@@ -712,7 +720,7 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 			d.dropPeer(p.id)
 
 			// Finish the sync gracefully instead of dumping the gathered data though
-			for _, ch := range []chan bool{d.bodyWakeCh, d.receiptWakeCh} {
+			for _, ch := range []chan bool{d.bodyWakeCh, d.receiptWakeCh, d.pendingEtxsWakeCh} {
 				select {
 				case ch <- false:
 				case <-d.cancelCh:
@@ -814,6 +822,32 @@ func (d *Downloader) fetchReceipts(from uint64) error {
 		d.receiptFetchHook, fetch, d.queue.CancelReceipts, capacity, d.peers.ReceiptIdlePeers, setIdle, "receipts")
 
 	log.Debug("Transaction receipt download terminated", "err", err)
+	return err
+}
+
+// fetchPendingEtxs iteratively downloads the scheduled block pending etxs, taking any
+// available peers, reserving a chunk of pending etxs for each, waiting for delivery
+// and also periodically checking for timeouts.
+func (d *Downloader) fetchPendingEtxs(from uint64) error {
+	log.Debug("Downloading pending etxs", "origin", from)
+
+	var (
+		deliver = func(packet dataPack) (int, error) {
+			pack := packet.(*pendingEtxsPack)
+			return d.queue.DeliverPendingEtxs(pack.peerID, pack.pendingEtx)
+		}
+		expire   = func() map[string]int { return d.queue.ExpirePendingEtxs(d.peers.rates.TargetTimeout()) }
+		fetch    = func(p *peerConnection, req *fetchRequest) error { return p.FetchPendingEtxs(req) }
+		capacity = func(p *peerConnection) int { return p.PendingEtxsCapacity(d.peers.rates.TargetRoundTrip()) }
+		setIdle  = func(p *peerConnection, accepted int, deliveryTime time.Time) {
+			p.SetPendingEtxsIdle(accepted, deliveryTime)
+		}
+	)
+	err := d.fetchParts(d.pendingEtxsCh, deliver, d.pendingEtxsWakeCh, expire,
+		d.queue.PendingPendingEtxs, d.queue.InFlightPendingEtxs, d.queue.ReservePendingEtxs,
+		nil, fetch, d.queue.CancelPendingEtxs, capacity, d.peers.ReceiptIdlePeers, setIdle, "pendingEtxs")
+
+	log.Debug("Pending Etxs download terminated", "err", err)
 	return err
 }
 
@@ -1046,7 +1080,7 @@ func (d *Downloader) processHeaders(origin uint64, number uint64) error {
 			// Terminate header processing if we synced up
 			if len(headers) == 0 {
 				// Notify everyone that headers are fully processed
-				for _, ch := range []chan bool{d.bodyWakeCh, d.receiptWakeCh} {
+				for _, ch := range []chan bool{d.bodyWakeCh, d.receiptWakeCh, d.pendingEtxsWakeCh} {
 					select {
 					case ch <- false:
 					case <-d.cancelCh:
@@ -1113,7 +1147,7 @@ func (d *Downloader) processHeaders(origin uint64, number uint64) error {
 			d.syncStatsLock.Unlock()
 
 			// Signal the content downloaders of the availablility of new tasks
-			for _, ch := range []chan bool{d.bodyWakeCh, d.receiptWakeCh} {
+			for _, ch := range []chan bool{d.bodyWakeCh, d.receiptWakeCh, d.pendingEtxsWakeCh} {
 				select {
 				case ch <- true:
 				default:
@@ -1189,6 +1223,9 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 	)
 	blocks := make([]*types.Block, len(results))
 	for i, result := range results {
+		// Store each of the pendingEtxs in the database
+		d.core.AddPendingEtxs(result.PendingEtxs)
+
 		blocks[i] = types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles, result.ExtTransactions, result.SubManifest)
 	}
 	if index, err := d.core.InsertChain(blocks); err != nil {
@@ -1220,6 +1257,11 @@ func (d *Downloader) DeliverBodies(id string, transactions [][]*types.Transactio
 // DeliverReceipts injects a new batch of receipts received from a remote node.
 func (d *Downloader) DeliverReceipts(id string, receipts [][]*types.Receipt) error {
 	return d.deliver(d.receiptCh, &receiptPack{id, receipts}, receiptInMeter, receiptDropMeter)
+}
+
+// DeliverPendingEtxs injects a new batch of pending etxs received from a remote node.
+func (d *Downloader) DeliverPendingEtxs(id string, pendingEtxs []types.PendingEtxs) error {
+	return d.deliver(d.pendingEtxsCh, &pendingEtxsPack{id, pendingEtxs}, pendingEtxsInMeter, pendingEtxsDropMeter)
 }
 
 // deliver injects a new batch of data received from a remote node.

@@ -94,6 +94,12 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 	case *eth.PooledTransactionsPacket:
 		return h.txFetcher.Enqueue(peer.ID(), *packet, true)
 
+	case *eth.PendingEtxsPacket:
+		if err := h.downloader.DeliverPendingEtxs(peer.ID(), packet.PendingEtxs); err != nil {
+			log.Debug("Failed to deliver pending etxs", "err", err)
+		}
+		return nil
+
 	default:
 		return fmt.Errorf("unexpected eth packet type: %T", packet)
 	}
@@ -192,5 +198,9 @@ func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block) er
 		peer.SetHead(block.ParentHash(), number)
 		h.chainSync.handlePeerEvent(peer)
 	}
+	return nil
+}
+
+func (h *ethHandler) handlePendingEtxs(peer *eth.Peer, header *types.Header, etxs [][]*types.Transaction) error {
 	return nil
 }
