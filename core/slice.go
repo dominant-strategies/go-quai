@@ -494,13 +494,12 @@ func (sl *Slice) GetSubManifest(blockHash common.Hash) (types.BlockManifest, err
 
 func (sl *Slice) AddPendingEtxs(header *types.Header, etxs []types.Transactions) error {
 	log.Info("Received pending ETXs", "block: ", header.Hash())
-	// Only write the pending ETXs to the db if we have not seen them before
+	// Only write the pending ETXs if we have not seen them before
 	if !sl.pendingEtxs.Contains(header.Hash()) {
+		// Write to pending ETX database
 		rawdb.WritePendingEtxs(sl.sliceDb, header.Hash(), etxs)
-	}
-	// Also write the pending ETXs to cache for faster access
-	if ok, _ := sl.pendingEtxs.ContainsOrAdd(header.Hash(), etxs); !ok {
-		return fmt.Errorf("failed to add pending etxs for block", "hash: ", header.Hash())
+		// Also write to cache for faster access
+		sl.pendingEtxs.Add(header.Hash(), etxs)
 	}
 	return nil
 }
