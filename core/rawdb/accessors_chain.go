@@ -1176,6 +1176,11 @@ func WriteEtxSetRLP(db ethdb.KeyValueWriter, hash common.Hash, number uint64, rl
 	}
 }
 
+type etxSetEntry struct {
+	etxHash   common.Hash
+	etxHeight uint64
+}
+
 // ReadEtxSet retreives the EtxSet corresponding to a given block
 func ReadEtxSet(db ethdb.Reader, hash common.Hash, number uint64) types.EtxSet {
 	if number == 0 {
@@ -1190,17 +1195,26 @@ func ReadEtxSet(db ethdb.Reader, hash common.Hash, number uint64) types.EtxSet {
 	if len(data) == 0 {
 		return nil
 	}
-	etxSet := types.EtxSet{}
-	if err := rlp.Decode(bytes.NewReader(data), etxSet); err != nil {
+	var entries []etxSetEntry
+	if err := rlp.Decode(bytes.NewReader(data), &entries); err != nil {
 		log.Error("Invalid etx set RLP", "hash", hash, "err", err)
 		return nil
+	}
+	etxSet := make(types.EtxSet)
+	for _, entry := range entries {
+		etxSet[entry.etxHash] = entry.etxHeight
 	}
 	return etxSet
 }
 
 // WriteEtxSet stores the EtxSet corresponding to a given block
 func WriteEtxSet(db ethdb.KeyValueWriter, hash common.Hash, number uint64, etxSet types.EtxSet) {
-	data, err := rlp.EncodeToBytes(etxSet)
+	var entries []etxSetEntry
+	for etxHash, etxHeight := range etxSet {
+		entry := etxSetEntry{etxHash: etxHash, etxHeight: etxHeight}
+		entries = append(entries, entry)
+	}
+	data, err := rlp.EncodeToBytes(entries)
 	if err != nil {
 		log.Crit("Failed to RLP encode etx set", "err", err)
 	}
