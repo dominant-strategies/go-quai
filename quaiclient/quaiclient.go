@@ -130,13 +130,12 @@ type Termini struct {
 	Termini []common.Hash `json:"termini"`
 }
 
-func (ec *Client) Append(ctx context.Context, header *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, manifestHash common.Hash, newInboundEtxs types.Transactions) (types.PendingHeader, []types.Transactions, error) {
+func (ec *Client) Append(ctx context.Context, header *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, newInboundEtxs types.Transactions) (types.PendingHeader, []types.Transactions, error) {
 	fields := RPCMarshalHeader(header)
 	fields["td"] = td
 	fields["domTerminus"] = domTerminus
 	fields["domOrigin"] = domOrigin
 	fields["reorg"] = reorg
-	fields["manifestHash"] = manifestHash
 	fields["newInboundEtxs"] = newInboundEtxs
 
 	var raw json.RawMessage
