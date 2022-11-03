@@ -605,10 +605,22 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 // otherwise loads the last stored state of the chain.
 func (sl *Slice) genesisInit(genesis *Genesis) error {
 	nodeCtx := common.NodeLocation.Context()
+	// Even though the genesis block cannot have any ETXs, we still need an empty
+	// pending ETX entry for that block hash, so that the state processor can build
+	// on it
+	genesisHash := sl.Config().GenesisHash
+	genesisHeader := sl.hc.GetHeader(genesisHash, 0)
+	if genesisHeader == nil {
+		return errors.New("failed to get genesis header")
+	}
+	emptyPendingEtxs := []types.Transactions{types.Transactions{}, types.Transactions{}, types.Transactions{}}
+	err := sl.AddPendingEtxs(genesisHeader, emptyPendingEtxs)
+	if err != nil {
+		return err
+	}
 	// If the headerchain is empty start from genesis
 	if sl.hc.Empty() {
 		// Initialize slice state for genesis knot
-		genesisHash := sl.Config().GenesisHash
 		genesisTermini := []common.Hash{genesisHash, genesisHash, genesisHash, genesisHash}
 		sl.pendingHeader = genesisHash
 		rawdb.WriteTermini(sl.sliceDb, genesisHash, genesisTermini)
