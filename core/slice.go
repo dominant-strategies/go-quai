@@ -110,7 +110,7 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 
 // Append takes a proposed header and constructs a local block and attempts to hierarchically append it to the block graph.
 // If this is called from a dominant context a domTerminus must be provided else a common.Hash{} should be used and domOrigin should be set to true.
-func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, manifestHash common.Hash, newInboundEtxs types.Transactions) ([]types.Transactions, error) {
+func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, newInboundEtxs types.Transactions) ([]types.Transactions, error) {
 	nodeCtx := common.NodeLocation.Context()
 	location := header.Location()
 	isCoincident := sl.engine.HasCoincidentDifficulty(header)
@@ -150,7 +150,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	}
 
 	// Append the new block
-	err = sl.hc.Append(batch, block, manifestHash, newInboundEtxs.FilterToLocation(common.NodeLocation))
+	err = sl.hc.Append(batch, block, newInboundEtxs.FilterToLocation(common.NodeLocation))
 	if err != nil {
 		return nil, err
 	}
@@ -181,7 +181,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	// Call my sub to append the block
 	var newPendingEtxs []types.Transactions
 	if nodeCtx != common.ZONE_CTX {
-		newPendingEtxs, err = sl.subClients[location.SubIndex()].Append(context.Background(), block.Header(), pendingHeaderWithTermini.Header, domTerminus, td, true, reorg, block.ManifestHash(), newInboundEtxs)
+		newPendingEtxs, err = sl.subClients[location.SubIndex()].Append(context.Background(), block.Header(), pendingHeaderWithTermini.Header, domTerminus, td, true, reorg, newInboundEtxs)
 		if err != nil {
 			return nil, err
 		}
@@ -603,7 +603,7 @@ func (sl *Slice) init(genesis *Genesis) error {
 				location := block.Header().Location()
 				if nodeCtx == common.PRIME_CTX {
 					rawdb.WritePendingBlockBody(sl.sliceDb, block.Root(), block.Body())
-					_, err := sl.Append(block.Header(), types.EmptyHeader(), genesisHash, block.Difficulty(), false, false, block.ManifestHash(), nil)
+					_, err := sl.Append(block.Header(), types.EmptyHeader(), genesisHash, block.Difficulty(), false, false, nil)
 					if err != nil {
 						log.Warn("Failed to append block", "hash:", block.Hash(), "Number:", block.Number(), "Location:", block.Header().Location(), "error:", err)
 					}
@@ -738,7 +738,7 @@ func (sl *Slice) procfutureHeaders() {
 
 		for _, head := range headers {
 			var nilHash common.Hash
-			_, err := sl.Append(head, types.EmptyHeader(), nilHash, big.NewInt(0), false, false, head.ManifestHash(), nil)
+			_, err := sl.Append(head, types.EmptyHeader(), nilHash, big.NewInt(0), false, false, nil)
 			if err != nil {
 				if err.Error() != "sub not synced to dom" {
 					// Remove the header from the future headers cache
