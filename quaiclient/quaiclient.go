@@ -130,6 +130,10 @@ type Termini struct {
 	Termini []common.Hash `json:"termini"`
 }
 
+type pendingEtxs struct {
+	PendingEtxs []types.Transactions `json:"pendingEtxs"`
+}
+
 func (ec *Client) Append(ctx context.Context, header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, newInboundEtxs types.Transactions) ([]types.Transactions, error) {
 	fields := map[string]interface{}{
 		"header":           RPCMarshalHeader(header),
@@ -148,11 +152,11 @@ func (ec *Client) Append(ctx context.Context, header *types.Header, domPendingHe
 	}
 
 	// Decode header and transactions.
-	var pendingEtxs []types.Transactions
-	if err := json.Unmarshal(raw, &pendingEtxs); err != nil {
+	var pEtxs pendingEtxs
+	if err := json.Unmarshal(raw, &pEtxs); err != nil {
 		return nil, err
 	}
-	return pendingEtxs, nil
+	return pEtxs.PendingEtxs, nil
 }
 
 func (ec *Client) SubRelayPendingHeader(ctx context.Context, pendingHeader types.PendingHeader, reorg bool, location common.Location) {
