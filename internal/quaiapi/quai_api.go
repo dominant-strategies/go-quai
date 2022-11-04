@@ -591,9 +591,16 @@ func (s *PublicBlockChainQuaiAPI) Append(ctx context.Context, raw json.RawMessag
 		return nil, err
 	}
 	// Marshal the output for decoding
+	marshalledEtxs := make([][]interface{}, common.HierarchyDepth)
+	for ctx, etxs := range pendingEtxs {
+		marshalledEtxs[ctx] = make([]interface{}, 0)
+		for i, etx := range etxs {
+			marshalledEtxs[ctx][i] = append(marshalledEtxs[ctx], newRPCTransaction(etx, common.Hash{}, 0, 0, nil))
+		}
+	}
 	fields := RPCMarshalHeader(pendingHeader.Header)
 	fields["termini"] = pendingHeader.Termini
-	fields["pendingEtxs"] = pendingEtxs
+	fields["pendingEtxs"] = marshalledEtxs
 
 	return fields, nil
 }
