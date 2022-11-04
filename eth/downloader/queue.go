@@ -781,7 +781,7 @@ func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, uncleLi
 		if types.DeriveSha(types.Transactions(etxLists[index]), trieHasher) != header.EtxHash() {
 			return errInvalidBody
 		}
-		if manifests[index].Hash() != header.ManifestHash() {
+		if types.DeriveSha(manifests[index], trieHasher) != header.ManifestHash() {
 			return errInvalidBody
 		}
 		if types.CalcUncleHash(uncleLists[index]) != header.UncleHash() {

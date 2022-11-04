@@ -655,7 +655,7 @@ func NewBlock(header *Header, txs []*Transaction, uncles []*Header, etxs []*Tran
 	if len(subManifest) == 0 {
 		b.header.SetManifestHash(EmptyRootHash)
 	} else {
-		b.header.SetManifestHash(subManifest.Hash())
+		b.header.SetManifestHash(DeriveSha(subManifest, hasher))
 		b.subManifest = make([]*common.Hash, len(subManifest))
 		copy(b.subManifest, subManifest)
 	}
@@ -858,8 +858,4 @@ func (m BlockManifest) Len() int { return len(m) }
 // EncodeIndex encodes the i'th blockhash to w.
 func (m BlockManifest) EncodeIndex(i int, w *bytes.Buffer) {
 	rlp.Encode(w, m[i])
-}
-
-func (m BlockManifest) Hash() common.Hash {
-	return rlpHash(m)
 }
