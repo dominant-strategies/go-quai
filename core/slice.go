@@ -19,6 +19,7 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/quaiclient"
+	"github.com/dominant-strategies/go-quai/trie"
 	lru "github.com/hashicorp/golang-lru"
 )
 
@@ -517,7 +518,7 @@ func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader, reorg 
 		if err != nil {
 			log.Warn("Failed to get manifest for pending header", "parentHash: ", pendingHeader.Header.ParentHash(), "err: ", err)
 		}
-		pendingHeader.Header.SetManifestHash(manifest.Hash(), nodeCtx-1)
+		pendingHeader.Header.SetManifestHash(types.DeriveSha(manifest, trie.NewStackTrie(nil)), nodeCtx-1)
 	}
 
 	if nodeCtx == common.REGION_CTX {

@@ -68,7 +68,7 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	if hash := types.DeriveSha(block.ExtTransactions(), trie.NewStackTrie(nil)); hash != header.EtxHash() {
 		return fmt.Errorf("external transaction root hash mismatch: have %x, want %x", hash, header.EtxHash())
 	}
-	if hash := block.SubManifest().Hash(); hash != header.ManifestHash() {
+	if hash := types.DeriveSha(block.SubManifest(), trie.NewStackTrie(nil)); hash != header.ManifestHash() {
 		return fmt.Errorf("subordinate block manifest hash mismatch: have %x, want %x", hash, header.ManifestHash())
 	}
 	if !v.hc.bc.processor.HasBlockAndState(block.ParentHash(), block.NumberU64()-1) {

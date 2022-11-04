@@ -21,6 +21,7 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rlp"
+	"github.com/dominant-strategies/go-quai/trie"
 	lru "github.com/hashicorp/golang-lru"
 )
 
@@ -167,7 +168,7 @@ func (hc *HeaderChain) Append(batch ethdb.Batch, block *types.Block, newInboundE
 
 	// If this is a coincident block, verify the manifest matches expected
 	if hc.engine.HasCoincidentDifficulty(h) {
-		if block.ManifestHash(nodeCtx-1) != manifest.Hash() {
+		if block.ManifestHash(nodeCtx-1) != types.DeriveSha(manifest, trie.NewStackTrie(nil)) {
 			return errors.New("manifest does not match hash")
 		}
 	}
