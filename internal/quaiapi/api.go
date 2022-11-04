@@ -962,56 +962,37 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 	var signer types.Signer
 	signer = types.LatestSignerForChainID(tx.ChainId())
 	from, _ := types.Sender(signer, tx)
-	v, r, s := tx.RawSignatureValues()
 	result := &RPCTransaction{
-		Type:     hexutil.Uint64(tx.Type()),
-		From:     from,
-		Gas:      hexutil.Uint64(tx.Gas()),
-		GasPrice: (*hexutil.Big)(tx.GasPrice()),
-		Hash:     tx.Hash(),
-		Input:    hexutil.Bytes(tx.Data()),
-		Nonce:    hexutil.Uint64(tx.Nonce()),
-		To:       tx.To(),
-		Value:    (*hexutil.Big)(tx.Value()),
-		V:        (*hexutil.Big)(v),
-		R:        (*hexutil.Big)(r),
-		S:        (*hexutil.Big)(s),
+		Type:      hexutil.Uint64(tx.Type()),
+		From:      from,
+		Gas:       hexutil.Uint64(tx.Gas()),
+		Hash:      tx.Hash(),
+		Input:     hexutil.Bytes(tx.Data()),
+		Nonce:     hexutil.Uint64(tx.Nonce()),
+		To:        tx.To(),
+		Value:     (*hexutil.Big)(tx.Value()),
+		ChainID:   (*hexutil.Big)(tx.ChainId()),
+		GasFeeCap: (*hexutil.Big)(tx.GasFeeCap()),
+		GasTipCap: (*hexutil.Big)(tx.GasTipCap()),
 	}
 	if blockHash != (common.Hash{}) {
 		result.BlockHash = &blockHash
 		result.BlockNumber = (*hexutil.Big)(new(big.Int).SetUint64(blockNumber))
 		result.TransactionIndex = (*hexutil.Uint64)(&index)
 	}
-	switch tx.Type() {
-	case types.InternalTxType:
-		al := tx.AccessList()
-		result.Accesses = &al
-		result.ChainID = (*hexutil.Big)(tx.ChainId())
-		result.GasFeeCap = (*hexutil.Big)(tx.GasFeeCap())
-		result.GasTipCap = (*hexutil.Big)(tx.GasTipCap())
-		// if the transaction has been mined, compute the effective gas price
+	if tx.Type() != types.ExternalTxType {
+		v, r, s := tx.RawSignatureValues()
+		result.V = (*hexutil.Big)(v)
+		result.R = (*hexutil.Big)(r)
+		result.S = (*hexutil.Big)(s)
 		if baseFee != nil && blockHash != (common.Hash{}) {
 			// price = min(tip, gasFeeCap - baseFee) + baseFee
 			price := math.BigMin(new(big.Int).Add(tx.GasTipCap(), baseFee), tx.GasFeeCap())
 			result.GasPrice = (*hexutil.Big)(price)
-		} else {
-			result.GasPrice = (*hexutil.Big)(tx.GasFeeCap())
-		}
-	case types.ExternalTxType:
-		al := tx.AccessList()
-		result.Accesses = &al
-		result.ChainID = (*hexutil.Big)(tx.ChainId())
-		result.GasFeeCap = (*hexutil.Big)(tx.GasFeeCap())
-		result.GasTipCap = (*hexutil.Big)(tx.GasTipCap())
-		// if the transaction has been mined, compute the effective gas price
-		if baseFee != nil && blockHash != (common.Hash{}) {
-			// price = min(tip, gasFeeCap - baseFee) + baseFee
-			price := math.BigMin(new(big.Int).Add(tx.GasTipCap(), baseFee), tx.GasFeeCap())
-			result.GasPrice = (*hexutil.Big)(price)
-		} else {
-			result.GasPrice = (*hexutil.Big)(tx.GasFeeCap())
 		}
 	}
+	al := tx.AccessList()
+	result.Accesses = &al
 	return result
 }
 
