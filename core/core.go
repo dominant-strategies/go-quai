@@ -18,6 +18,7 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rlp"
+	"github.com/dominant-strategies/go-quai/trie"
 )
 
 type Core struct {
@@ -44,7 +45,7 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 		// If we just mined this block, its possible the subordinate manifest in our
 		// block body is incorrect. If so, ask our sub for the correct manifest,
 		// update and rewrite the correct body.
-		if block.ManifestHash() != block.SubManifest().Hash() {
+		if block.ManifestHash() != types.DeriveSha(block.SubManifest(), trie.NewStackTrie(nil)) {
 			if subIdx := block.Location().SubIndex(); subIdx >= 0 {
 				newSubManifest, err := c.sl.subClients[subIdx].GetSubManifest(context.Background(), block.Hash())
 				if err != nil {
