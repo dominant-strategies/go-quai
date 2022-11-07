@@ -452,6 +452,7 @@ func (s *Service) readLoop(conn *connWrapper) {
 // on the monitoring page.
 type nodeInfo struct {
 	Name     string `json:"name"`
+	Chain    []int  `json:"chain"`
 	Node     string `json:"node"`
 	Port     int    `json:"port"`
 	Network  string `json:"net"`
@@ -487,6 +488,7 @@ func (s *Service) login(conn *connWrapper) error {
 		ID: s.node,
 		Info: nodeInfo{
 			Name:     s.node,
+			Chain:    IntArrayLocation(common.NodeLocation),
 			Node:     infos.Name,
 			Port:     infos.Ports.Listener,
 			Network:  network,
