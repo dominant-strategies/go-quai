@@ -115,6 +115,17 @@ type connWrapper struct {
 	wlock sync.Mutex
 }
 
+func IntArrayLocation(l common.Location) []int {
+	switch l.Context() {
+	case common.REGION_CTX:
+		return []int{l.Region()}
+	case common.ZONE_CTX:
+		return []int{l.Region(), l.Zone()}
+	default:
+		return []int{}
+	}
+}
+
 func newConnectionWrapper(conn *websocket.Conn) *connWrapper {
 	return &connWrapper{conn: conn}
 }
@@ -674,17 +685,6 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		Root:       header.Root(),
 		Uncles:     uncles,
 		Chain:      IntArrayLocation(common.NodeLocation),
-	}
-}
-
-func IntArrayLocation(l common.Location) []int {
-	switch l.Context() {
-	case common.REGION_CTX:
-		return []int{l.Region()}
-	case common.ZONE_CTX:
-		return []int{l.Region(), l.Zone()}
-	default:
-		return []int{}
 	}
 }
 
