@@ -749,7 +749,8 @@ func (s *Service) reportHistory(conn *connWrapper, list []uint64) error {
 
 // pendStats is the information to report about pending transactions.
 type pendStats struct {
-	Pending int `json:"pending"`
+	Pending int   `json:"pending"`
+	Chain   []int `json:"chain"`
 }
 
 // reportPending retrieves the current number of pending transactions and reports
@@ -764,6 +765,7 @@ func (s *Service) reportPending(conn *connWrapper) error {
 		"id": s.node,
 		"pending": &pendStats{
 			Pending: pending,
+			Chain:   IntArrayLocation(common.NodeLocation),
 		},
 	}
 	report := map[string][]interface{}{
