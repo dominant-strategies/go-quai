@@ -776,13 +776,14 @@ func (s *Service) reportPending(conn *connWrapper) error {
 
 // nodeStats is the information to report about the local node.
 type nodeStats struct {
-	Active   bool `json:"active"`
-	Syncing  bool `json:"syncing"`
-	Mining   bool `json:"mining"`
-	Hashrate int  `json:"hashrate"`
-	Peers    int  `json:"peers"`
-	GasPrice int  `json:"gasPrice"`
-	Uptime   int  `json:"uptime"`
+	Active   bool  `json:"active"`
+	Chain    []int `json:"chain"`
+	Syncing  bool  `json:"syncing"`
+	Mining   bool  `json:"mining"`
+	Hashrate int   `json:"hashrate"`
+	Peers    int   `json:"peers"`
+	GasPrice int   `json:"gasPrice"`
+	Uptime   int   `json:"uptime"`
 }
 
 // reportStats retrieves various stats about the node at the networking and
@@ -820,6 +821,7 @@ func (s *Service) reportStats(conn *connWrapper) error {
 		"id": s.node,
 		"stats": &nodeStats{
 			Active:   true,
+			Chain:    IntArrayLocation(common.NodeLocation),
 			Mining:   mining,
 			Hashrate: hashrate,
 			Peers:    s.server.PeerCount(),
