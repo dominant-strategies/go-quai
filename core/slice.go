@@ -513,12 +513,21 @@ func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader, reorg 
 	defer sl.phCachemu.Unlock()
 
 	// Collect our manifest, so that the dom header can commit to it
-	if nodeCtx > common.PRIME_CTX {
-		manifest, err := sl.hc.CollectBlockManifest(pendingHeader.Header)
-		if err != nil {
-			log.Warn("Failed to get manifest for pending header", "parentHash: ", pendingHeader.Header.ParentHash(), "err: ", err)
+	if nodeCtx > common.PRIME_CTX && pendingHeader.Header.NumberU64() > 0 {
+		// Look up the parent header. If the parent is not found, then this pending
+		// header is for a coordinate chain, and we should not be recalculating the
+		// manifest.
+		parentHash := pendingHeader.Header.ParentHash()
+		parentNumber := pendingHeader.Header.NumberU64() - 1
+		parent := sl.hc.GetHeader(parentHash, parentNumber)
+		// Get block manifest up and including to our parent
+		if parent != nil {
+			manifest, err := sl.hc.CollectBlockManifest(parent)
+			if err != nil {
+				log.Warn("Failed to get manifest for pending header", "parentHash: ", pendingHeader.Header.ParentHash(), "err: ", err)
+			}
+			pendingHeader.Header.SetManifestHash(types.DeriveSha(manifest, trie.NewStackTrie(nil)), nodeCtx-1)
 		}
-		pendingHeader.Header.SetManifestHash(types.DeriveSha(manifest, trie.NewStackTrie(nil)), nodeCtx-1)
 	}
 
 	if nodeCtx == common.REGION_CTX {
