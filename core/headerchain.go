@@ -93,6 +93,8 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *par
 	return hc, nil
 }
 
+// CollectBlockManifest gathers the manifest of block hashes including this
+// block, back until the last coincident block.
 func (hc *HeaderChain) CollectBlockManifest(h *types.Header) (types.BlockManifest, error) {
 	manifest := types.BlockManifest{}
 	// Terminate the search if we reached genesis
