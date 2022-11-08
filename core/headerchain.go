@@ -162,14 +162,17 @@ func (hc *HeaderChain) Append(batch ethdb.Batch, block *types.Block, newInboundE
 		return err
 	}
 
-	// Load the manifest for this block
-	manifest, err := hc.CollectBlockManifest(h)
-	if err != nil {
-		return err
-	}
-
 	// If this is a coincident block, verify the manifest matches expected
 	if hc.engine.HasCoincidentDifficulty(h) {
+		// Load the manifest of blocks preceding this block
+		parentHash := h.ParentHash()
+		parentNumber := h.NumberU64() - 1
+		parent := hc.GetHeader(parentHash, parentNumber)
+		manifest, err := hc.CollectBlockManifest(parent)
+		if err != nil {
+			return err
+		}
+		// Compare the dom's manifest hash to the manifest we collected
 		if block.ManifestHash(nodeCtx-1) != types.DeriveSha(manifest, trie.NewStackTrie(nil)) {
 			return errors.New("manifest does not match hash")
 		}
