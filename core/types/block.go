@@ -656,7 +656,7 @@ func NewBlock(header *Header, txs []*Transaction, uncles []*Header, etxs []*Tran
 		b.header.SetManifestHash(EmptyRootHash)
 	} else {
 		b.header.SetManifestHash(DeriveSha(subManifest, hasher))
-		b.subManifest = make([]*common.Hash, len(subManifest))
+		b.subManifest = make(BlockManifest, len(subManifest))
 		copy(b.subManifest, subManifest)
 	}
 
@@ -813,7 +813,7 @@ func (b *Block) WithBody(transactions []*Transaction, uncles []*Header, extTrans
 		transactions:    make([]*Transaction, len(transactions)),
 		uncles:          make([]*Header, len(uncles)),
 		extTransactions: make([]*Transaction, len(extTransactions)),
-		subManifest:     make([]*common.Hash, len(subManifest)),
+		subManifest:     make(BlockManifest, len(subManifest)),
 	}
 	copy(block.transactions, transactions)
 	copy(block.extTransactions, extTransactions)
@@ -850,7 +850,7 @@ type HeaderRoots struct {
 }
 
 // BlockManifest is a list of block hashes, which implements DerivableList
-type BlockManifest []*common.Hash
+type BlockManifest []common.Hash
 
 // Len returns the length of s.
 func (m BlockManifest) Len() int { return len(m) }

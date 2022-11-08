@@ -305,7 +305,7 @@ func (sl *Slice) CollectEtxsForManifest(manifest types.BlockManifest) (types.Tra
 		// Look for pending ETXs first in pending ETX cache, then in database
 		if res, ok := sl.pendingEtxs.Get(hash); ok && res != nil {
 			pendingEtxs = res.([]types.Transactions)
-		} else if res := rawdb.ReadPendingEtxs(sl.sliceDb, *hash); res != nil {
+		} else if res := rawdb.ReadPendingEtxs(sl.sliceDb, hash); res != nil {
 			pendingEtxs = res
 		} else {
 			return nil, fmt.Errorf("unable to find pending etxs for hash in manifest", "hash: ", hash)
