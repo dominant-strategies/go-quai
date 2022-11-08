@@ -644,8 +644,8 @@ func (s *PublicBlockChainQuaiAPI) GetSubManifest(ctx context.Context, raw json.R
 }
 
 type SendPendingEtxsToDomArgs struct {
-	Header types.Header
-	Etxs   []types.Transactions // Collection of ETXs from each subordinate context
+	Header         types.Header         `json:"header"`
+	NewPendingEtxs []types.Transactions `json:"newPendingEtxs"`
 }
 
 func (s *PublicBlockChainQuaiAPI) SendPendingEtxsToDom(ctx context.Context, raw json.RawMessage) error {
@@ -654,5 +654,5 @@ func (s *PublicBlockChainQuaiAPI) SendPendingEtxsToDom(ctx context.Context, raw 
 		return err
 	}
 	log.Info("Received subordinate ETXs", "BlockHash: ", args.Header.Hash())
-	return s.b.AddPendingEtxs(&args.Header, args.Etxs)
+	return s.b.AddPendingEtxs(&args.Header, args.NewPendingEtxs)
 }

@@ -183,11 +183,10 @@ func (ec *Client) GetSubManifest(ctx context.Context, blockHash common.Hash) (ty
 }
 
 func (ec *Client) SendPendingEtxsToDom(ctx context.Context, header *types.Header, etxs []types.Transactions) error {
-	data := make(map[string]interface{})
-	data["Header"] = header
-	data["Etxs"] = etxs
+	fields := RPCMarshalHeader(header)
+	fields["newPendingEtxs"] = etxs
 	var raw json.RawMessage
-	err := ec.c.CallContext(ctx, &raw, "quai_domRelayEtxs", data)
+	err := ec.c.CallContext(ctx, &raw, "quai_sendPendingEtxsToDom", fields)
 	if err != nil {
 		return err
 	}
