@@ -39,6 +39,7 @@ func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.H
 }
 
 func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
+	nodeCtx := common.NodeLocation.Context()
 	domWait := false
 	for i, block := range blocks {
 		isCoincident := c.sl.engine.HasCoincidentDifficulty(block.Header())
@@ -73,8 +74,10 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 				return i, err
 			}
 			// Let our dom know about the new ETXs we have pending
-			if err := c.sl.SendPendingEtxsToDom(block.Header(), newPendingEtxs); err != nil {
-				log.Error("failed to send ETXs to domclient", "block: ", block.Hash(), "err", err)
+			if nodeCtx > common.PRIME_CTX {
+				if err := c.sl.SendPendingEtxsToDom(block.Header(), newPendingEtxs); err != nil {
+					log.Error("failed to send ETXs to domclient", "block: ", block.Hash(), "err", err)
+				}
 			}
 		} else {
 			domWait = true
