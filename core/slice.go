@@ -238,6 +238,32 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	return newPendingEtxs, nil
 }
 
+// setDomManifestHash updates our dom's manifest hash to commit to our chain's
+// manifest for this block. This is necessary in pending header construction, so
+// that the manifest hash in each context is committing to the latest manifest
+// of the corresponding subordinate chain.
+func (sl *Slice) setDomManifestHash(h *types.Header) {
+	nodeCtx := common.NodeLocation.Context()
+
+	// If we don't have a dom, there's nothing to do
+	if nodeCtx > common.PRIME_CTX && h.NumberU64() > 0 {
+		// Look up the parent header. If the parent is not found, then this pending
+		// header is for a coordinate chain, and we should not be recalculating the
+		// manifest.
+		parentHash := h.ParentHash()
+		parentNumber := h.NumberU64() - 1
+		parent := sl.hc.GetHeader(parentHash, parentNumber)
+		// Get block manifest up and including to our parent
+		if parent != nil {
+			manifest, err := sl.hc.CollectBlockManifest(parent)
+			if err != nil {
+				log.Warn("Failed to get manifest for pending header", "parentHash: ", h.ParentHash(), "err: ", err)
+			}
+			h.SetManifestHash(types.DeriveSha(manifest, trie.NewStackTrie(nil)), nodeCtx-1)
+		}
+	}
+}
+
 // relayPh sends pendingHeaderWithTermini to subordinates
 func (sl *Slice) relayPh(pendingHeaderWithTermini types.PendingHeader, updateMiner bool, reorg bool, domOrigin bool, location common.Location) {
 	nodeCtx := common.NodeLocation.Context()
@@ -462,24 +488,6 @@ func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader, reorg 
 	sl.phCachemu.Lock()
 	defer sl.phCachemu.Unlock()
 	nodeCtx := common.NodeLocation.Context()
-
-	// Collect our manifest, so that the dom header can commit to it
-	if nodeCtx > common.PRIME_CTX && pendingHeader.Header.NumberU64() > 0 {
-		// Look up the parent header. If the parent is not found, then this pending
-		// header is for a coordinate chain, and we should not be recalculating the
-		// manifest.
-		parentHash := pendingHeader.Header.ParentHash()
-		parentNumber := pendingHeader.Header.NumberU64() - 1
-		parent := sl.hc.GetHeader(parentHash, parentNumber)
-		// Get block manifest up and including to our parent
-		if parent != nil {
-			manifest, err := sl.hc.CollectBlockManifest(parent)
-			if err != nil {
-				log.Warn("Failed to get manifest for pending header", "parentHash: ", pendingHeader.Header.ParentHash(), "err: ", err)
-			}
-			pendingHeader.Header.SetManifestHash(types.DeriveSha(manifest, trie.NewStackTrie(nil)), nodeCtx-1)
-		}
-	}
 
 	if nodeCtx == common.REGION_CTX {
 		// Adding a guard on the region that was already updated in the synchronous path.
