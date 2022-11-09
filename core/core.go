@@ -48,7 +48,7 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 		// update and rewrite the correct body.
 		if block.ManifestHash() != types.DeriveSha(block.SubManifest(), trie.NewStackTrie(nil)) {
 			if subIdx := block.Location().SubIndex(); subIdx >= 0 {
-				newSubManifest, err := c.sl.subClients[subIdx].GetSubManifest(context.Background(), block.Hash())
+				newSubManifest, err := c.sl.subClients[subIdx].GetSubManifest(context.Background(), block.Header())
 				if err != nil {
 					return i, err
 				}

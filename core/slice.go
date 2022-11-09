@@ -485,8 +485,10 @@ func (sl *Slice) SendPendingEtxsToDom(header *types.Header, etxs []types.Transac
 	return sl.domClient.SendPendingEtxsToDom(context.Background(), header, etxs)
 }
 
-func (sl *Slice) GetSubManifest(blockHash common.Hash) (types.BlockManifest, error) {
-	header := sl.hc.GetHeaderByHash(blockHash)
+// GetSubManifest gets the subordinate block manifest for all blocks since the
+// sub's prior coincident, up to and including the given parent hash.
+func (sl *Slice) GetSubManifest(parentHash common.Hash) (types.BlockManifest, error) {
+	header := sl.hc.GetHeaderByHash(parentHash)
 	if header == nil {
 		return nil, errors.New("block not found")
 	}
