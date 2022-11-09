@@ -176,9 +176,11 @@ func (ec *Client) SubRelayPendingHeader(ctx context.Context, pendingHeader types
 	return nil
 }
 
-func (ec *Client) GetSubManifest(ctx context.Context, blockHash common.Hash) (types.BlockManifest, error) {
+// GetSubManifest will get the subordinate block manifest ending with the subordinate parent hash
+func (ec *Client) GetSubManifest(ctx context.Context, header *types.Header) (types.BlockManifest, error) {
+	nodeCtx := common.NodeLocation.Context()
 	var raw json.RawMessage
-	err := ec.c.CallContext(ctx, &raw, "quai_getSubManifest", blockHash)
+	err := ec.c.CallContext(ctx, &raw, "quai_getSubManifest", header.ParentHash(nodeCtx+1))
 	if err != nil {
 		return nil, err
 	}
