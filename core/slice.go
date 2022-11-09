@@ -273,6 +273,32 @@ func (sl *Slice) ConstructLocalBlock(header *types.Header) *types.Block {
 	return block
 }
 
+// setDomManifestHash updates our dom's manifest hash to commit to our chain's
+// manifest for this block. This is necessary in pending header construction, so
+// that the manifest hash in each context is committing to the latest manifest
+// of the corresponding subordinate chain.
+func (sl *Slice) setDomManifestHash(h *types.Header) {
+	nodeCtx := common.NodeLocation.Context()
+
+	// If we don't have a dom, there's nothing to do
+	if nodeCtx > common.PRIME_CTX && h.NumberU64() > 0 {
+		// Look up the parent header. If the parent is not found, then this pending
+		// header is for a coordinate chain, and we should not be recalculating the
+		// manifest.
+		parentHash := h.ParentHash()
+		parentNumber := h.NumberU64() - 1
+		parent := sl.hc.GetHeader(parentHash, parentNumber)
+		// Get block manifest up and including to our parent
+		if parent != nil {
+			manifest, err := sl.hc.CollectBlockManifest(parent)
+			if err != nil {
+				log.Warn("Failed to get manifest for pending header", "parentHash: ", h.ParentHash(), "err: ", err)
+			}
+			h.SetManifestHash(types.DeriveSha(manifest, trie.NewStackTrie(nil)), nodeCtx-1)
+		}
+	}
+}
+
 // updateCacheAndRelay updates the pending headers cache and sends pending headers to subordinates
 func (sl *Slice) updateCacheAndRelay(pendingHeader types.PendingHeader, location common.Location, reorg bool, isCoincident bool) {
 	nodeCtx := common.NodeLocation.Context()
@@ -292,6 +318,7 @@ func (sl *Slice) updateCacheAndRelay(pendingHeader types.PendingHeader, location
 			return
 		}
 		for i := range sl.subClients {
+
 			sl.subClients[i].SubRelayPendingHeader(context.Background(), sl.phCache[sl.pendingHeader], reorg)
 		}
 	}
@@ -514,24 +541,6 @@ func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader, reorg 
 	sl.phCachemu.Lock()
 	defer sl.phCachemu.Unlock()
 
-	// Collect our manifest, so that the dom header can commit to it
-	if nodeCtx > common.PRIME_CTX && pendingHeader.Header.NumberU64() > 0 {
-		// Look up the parent header. If the parent is not found, then this pending
-		// header is for a coordinate chain, and we should not be recalculating the
-		// manifest.
-		parentHash := pendingHeader.Header.ParentHash()
-		parentNumber := pendingHeader.Header.NumberU64() - 1
-		parent := sl.hc.GetHeader(parentHash, parentNumber)
-		// Get block manifest up and including to our parent
-		if parent != nil {
-			manifest, err := sl.hc.CollectBlockManifest(parent)
-			if err != nil {
-				log.Warn("Failed to get manifest for pending header", "parentHash: ", pendingHeader.Header.ParentHash(), "err: ", err)
-			}
-			pendingHeader.Header.SetManifestHash(types.DeriveSha(manifest, trie.NewStackTrie(nil)), nodeCtx-1)
-		}
-	}
-
 	if nodeCtx == common.REGION_CTX {
 		sl.updatePhCacheFromDom(pendingHeader, common.NodeLocation.Region(), []int{common.PRIME_CTX}, reorg)
 		for i := range sl.subClients {
@@ -564,15 +573,18 @@ func (sl *Slice) updatePhCache(externPendingHeader types.PendingHeader) {
 		if len(parentTermini) == 4 && parentTermini[terminiIndex] != sl.config.GenesisHash { // TODO: Do we need the length check??
 			cachedPendingHeader, exists := sl.phCache[parentTermini[terminiIndex]]
 			if !exists {
+				sl.setDomManifestHash(externPendingHeader.Header)
 				sl.phCache[hash] = externPendingHeader
 				return
 			} else {
 				cachedPendingHeader.Header = sl.combinePendingHeader(externPendingHeader.Header, cachedPendingHeader.Header, nodeCtx)
 				cachedPendingHeader.Termini = externPendingHeader.Termini
+				sl.setDomManifestHash(cachedPendingHeader.Header)
 				sl.phCache[hash] = cachedPendingHeader
 				return
 			}
 		} else { //GENESIS ESCAPE
+			sl.setDomManifestHash(externPendingHeader.Header)
 			sl.phCache[hash] = externPendingHeader
 			sl.pendingHeader = hash
 			return
@@ -584,6 +596,7 @@ func (sl *Slice) updatePhCache(externPendingHeader types.PendingHeader) {
 		localPendingHeader.Termini = externPendingHeader.Termini
 
 		sl.setCurrentPendingHeader(localPendingHeader)
+		sl.setDomManifestHash(localPendingHeader.Header)
 		sl.phCache[hash] = localPendingHeader
 	}
 }
@@ -595,6 +608,7 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 	localPendingHeader, exists := sl.phCache[hash]
 
 	if !exists { //GENESIS ESCAPE
+		sl.setDomManifestHash(pendingHeader.Header)
 		sl.phCache[hash] = pendingHeader
 		sl.pendingHeader = hash
 		return
@@ -603,6 +617,7 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 			localPendingHeader.Header = sl.combinePendingHeader(pendingHeader.Header, localPendingHeader.Header, i)
 		}
 		localPendingHeader.Header.SetLocation(pendingHeader.Header.Location())
+		sl.setDomManifestHash(localPendingHeader.Header)
 		sl.phCache[hash] = localPendingHeader
 	}
 
