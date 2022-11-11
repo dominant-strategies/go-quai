@@ -469,11 +469,6 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool) (map[string]i
 			}
 		}
 		fields["extTransactions"] = extTransactions
-		manifest := block.SubManifest()
-		subBlockHashes := make([]interface{}, len(manifest))
-		for i, blockHash := range manifest {
-			subBlockHashes[i] = blockHash
-		}
 	}
 
 	fields["uncles"] = block.Uncles()
