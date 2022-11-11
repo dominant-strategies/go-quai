@@ -46,16 +46,18 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 		// If we just mined this block, its possible the subordinate manifest in our
 		// block body is incorrect. If so, ask our sub for the correct manifest,
 		// update and rewrite the correct body.
-		if block.ManifestHash() != types.DeriveSha(block.SubManifest(), trie.NewStackTrie(nil)) {
-			if subIdx := block.Location().SubIndex(); subIdx >= 0 {
-				newSubManifest, err := c.sl.subClients[subIdx].GetSubManifest(context.Background(), block.Header())
-				if err != nil {
-					return i, err
+		if nodeCtx < common.ZONE_CTX {
+			if block.ManifestHash(nodeCtx+1) != types.DeriveSha(block.SubManifest(), trie.NewStackTrie(nil)) {
+				if subIdx := block.Location().SubIndex(); subIdx >= 0 {
+					newSubManifest, err := c.sl.subClients[subIdx].GetSubManifest(context.Background(), block.Header())
+					if err != nil {
+						return i, err
+					}
+					// Reconstruct the block, replacing the manifest with the new manifest
+					// received from our subClient
+					oldBody := block.Body()
+					block = block.WithBody(oldBody.Transactions, oldBody.Uncles, oldBody.ExtTransactions, newSubManifest)
 				}
-				// Reconstruct the block, replacing the manifest with the new manifest
-				// received from our subClient
-				oldBody := block.Body()
-				block = block.WithBody(oldBody.Transactions, oldBody.Uncles, oldBody.ExtTransactions, newSubManifest)
 			}
 		}
 

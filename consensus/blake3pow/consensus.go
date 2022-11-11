@@ -407,14 +407,14 @@ func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, header *
 
 // FinalizeAndAssemble implements consensus.Engine, accumulating the block and
 // uncle rewards, setting the final state and assembling the block.
-func (blake3pow *Blake3pow) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, etxs []*types.Transaction, manifest types.BlockManifest, receipts []*types.Receipt) (*types.Block, error) {
+func (blake3pow *Blake3pow) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, etxs []*types.Transaction, subManifest types.BlockManifest, receipts []*types.Receipt) (*types.Block, error) {
 	// Finalize block
 	if err := blake3pow.Finalize(chain, header, state, txs, uncles); err != nil {
 		return nil, err
 	}
 
 	// Header seems complete, assemble into a block and return
-	return types.NewBlock(header, txs, uncles, etxs, manifest, receipts, trie.NewStackTrie(nil)), nil
+	return types.NewBlock(header, txs, uncles, etxs, subManifest, receipts, trie.NewStackTrie(nil)), nil
 }
 
 // headerData comprises all data fields of the header, excluding the nonce, so
