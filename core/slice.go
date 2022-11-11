@@ -238,15 +238,10 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	return newPendingEtxs, nil
 }
 
-// setDomManifestHash updates our dom's manifest hash to commit to our chain's
-// manifest for this block. This is necessary in pending header construction, so
-// that the manifest hash in each context is committing to the latest manifest
-// of the corresponding subordinate chain.
-func (sl *Slice) setDomManifestHash(h *types.Header) {
-	nodeCtx := common.NodeLocation.Context()
-
-	// If we don't have a dom, there's nothing to do
-	if nodeCtx > common.PRIME_CTX && h.NumberU64() > 0 {
+// updateManifestHash updates the manifest hash to commit to our chain's manifest
+// for this block.
+func (sl *Slice) updateManifestHash(h *types.Header) {
+	if h.NumberU64() > 0 {
 		// Look up the parent header. If the parent is not found, then this pending
 		// header is for a coordinate chain, and we should not be recalculating the
 		// manifest.
@@ -259,7 +254,7 @@ func (sl *Slice) setDomManifestHash(h *types.Header) {
 			if err != nil {
 				log.Warn("Failed to get manifest for pending header", "parentHash: ", h.ParentHash(), "err: ", err)
 			}
-			h.SetManifestHash(types.DeriveSha(manifest, trie.NewStackTrie(nil)), nodeCtx-1)
+			h.SetManifestHash(types.DeriveSha(manifest, trie.NewStackTrie(nil)))
 		}
 	}
 }

@@ -29,6 +29,7 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rlp"
 )
 
@@ -616,6 +617,7 @@ type extblock struct {
 }
 
 func NewBlock(header *Header, txs []*Transaction, uncles []*Header, etxs []*Transaction, subManifest BlockManifest, receipts []*Receipt, hasher TrieHasher) *Block {
+	nodeCtx := common.NodeLocation.Context()
 	b := &Block{header: CopyHeader(header), td: new(big.Int)}
 
 	// TODO: panic if len(txs) != len(receipts)
@@ -644,7 +646,7 @@ func NewBlock(header *Header, txs []*Transaction, uncles []*Header, etxs []*Tran
 		}
 	}
 
-	if len(etxs) == 0 {
+	if len(etxs) != 0 {
 		b.header.SetEtxHash(EmptyRootHash)
 	} else {
 		b.header.SetEtxHash(DeriveSha(Transactions(etxs), hasher))
@@ -652,12 +654,18 @@ func NewBlock(header *Header, txs []*Transaction, uncles []*Header, etxs []*Tran
 		copy(b.extTransactions, etxs)
 	}
 
-	if len(subManifest) == 0 {
-		b.header.SetManifestHash(EmptyRootHash)
-	} else {
-		b.header.SetManifestHash(DeriveSha(subManifest, hasher))
+	// Since the subordinate's manifest lives in our body, we still need to check
+	// that the manifest matches the subordinate's manifest hash, but we do not set
+	// the subordinate's manifest hash.
+	subManifestHash := EmptyRootHash
+	if len(subManifest) != 0 {
+		subManifestHash = DeriveSha(subManifest, hasher)
 		b.subManifest = make(BlockManifest, len(subManifest))
 		copy(b.subManifest, subManifest)
+	}
+	if nodeCtx < common.ZONE_CTX && subManifestHash != b.Header().ManifestHash(nodeCtx+1) {
+		log.Error("attempted to build block with invalid subordinate manifest")
+		return nil
 	}
 
 	return b

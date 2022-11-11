@@ -238,6 +238,7 @@ func handleNewBlockhashes(backend Backend, msg Decoder, peer *Peer) error {
 }
 
 func handleNewBlock(backend Backend, msg Decoder, peer *Peer) error {
+	nodeCtx := common.NodeLocation.Context()
 	// Retrieve and decode the propagated block
 	ann := new(NewBlockPacket)
 	if err := msg.Decode(ann); err != nil {
@@ -258,9 +259,12 @@ func handleNewBlock(backend Backend, msg Decoder, peer *Peer) error {
 		log.Warn("Propagated block has invalid body", "have", hash, "exp", ann.Block.EtxHash())
 		return nil // TODO(karalabe): return error eventually, but wait a few releases
 	}
-	if hash := types.DeriveSha(ann.Block.SubManifest(), trie.NewStackTrie(nil)); hash != ann.Block.ManifestHash() {
-		log.Warn("Propagated block has invalid body", "have", hash, "exp", ann.Block.ManifestHash())
-		return nil // TODO(karalabe): return error eventually, but wait a few releases
+	// Dom nodes need to validate the subordinate manifest against the subordinate's manifesthash
+	if nodeCtx < common.ZONE_CTX {
+		if hash := types.DeriveSha(ann.Block.SubManifest(), trie.NewStackTrie(nil)); hash != ann.Block.ManifestHash(nodeCtx+1) {
+			log.Warn("Propagated block has invalid body", "have", hash, "exp", ann.Block.ManifestHash())
+			return nil // TODO(karalabe): return error eventually, but wait a few releases
+		}
 	}
 	ann.Block.ReceivedAt = msg.Time()
 	ann.Block.ReceivedFrom = peer

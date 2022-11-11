@@ -163,9 +163,12 @@ func (hc *HeaderChain) Append(batch ethdb.Batch, block *types.Block, newInboundE
 		return err
 	}
 
-	// If this is a coincident block, verify the manifest matches expected
-	if hc.engine.HasCoincidentDifficulty(h) {
-		// Load the manifest of blocks preceding this block
+	// Verify the manifest matches expected
+	// Load the manifest of blocks preceding this block
+	// note: prime manifest is non-existent, because a prime block cannot be
+	// coincident with a higher order chain. So, this check is skipped for prime
+	// nodes.
+	if nodeCtx > common.PRIME_CTX {
 		parentHash := h.ParentHash()
 		parentNumber := h.NumberU64() - 1
 		parent := hc.GetHeader(parentHash, parentNumber)
@@ -173,8 +176,7 @@ func (hc *HeaderChain) Append(batch ethdb.Batch, block *types.Block, newInboundE
 		if err != nil {
 			return err
 		}
-		// Compare the dom's manifest hash to the manifest we collected
-		if block.ManifestHash(nodeCtx-1) != types.DeriveSha(manifest, trie.NewStackTrie(nil)) {
+		if block.ManifestHash(nodeCtx) != types.DeriveSha(manifest, trie.NewStackTrie(nil)) {
 			return errors.New("manifest does not match hash")
 		}
 	}
