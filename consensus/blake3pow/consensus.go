@@ -343,7 +343,7 @@ func (blake3pow *Blake3pow) CalcDifficulty(chain consensus.ChainHeaderReader, pa
 	return x
 }
 
-func (blake3pow *Blake3pow) HasCoincidentDifficulty(header *types.Header) bool {
+func (blake3pow *Blake3pow) IsDomCoincident(header *types.Header) bool {
 	nodeCtx := common.NodeLocation.Context()
 
 	// Since the Prime chain is the highest order, it cannot have coincident blocks
