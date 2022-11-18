@@ -21,8 +21,8 @@ import "github.com/dominant-strategies/go-quai/common"
 // MainnetBootnodes are the enode URLs of the P2P bootstrap nodes running on
 // the main Ethereum network.
 var MainnetBootnodes = []string{
-	"enode://0b077f7a86fa84d08c4f9e539ee53f7f39ccc85fdeabe1c34db7bb0e198e2305437d9928706ebc6b80a1df8e06a4f99f8b95e04ba05fd77a9d614ae008a9eb23@34.135.197.187",
-	"enode://4d706b8b389d623a54607e81a0c7a292603b253b9044afd5d546905f18a937623626acbb4078a2da74c78b8b5bb5050c6be13a3176daedf8b43514ce14cddd83@35.232.135.155",
+	"enode://0b077f7a86fa84d08c4f9e539ee53f7f39ccc85fdeabe1c34db7bb0e198e2305437d9928706ebc6b80a1df8e06a4f99f8b95e04ba05fd77a9d614ae008a9eb23@34.83.166.178",
+	"enode://4d706b8b389d623a54607e81a0c7a292603b253b9044afd5d546905f18a937623626acbb4078a2da74c78b8b5bb5050c6be13a3176daedf8b43514ce14cddd83@34.174.10.80",
 	"enode://84a1545d709e862e8ee45a87558e833b8fb1ba057a093fb7c974beb51e403b2c1d6f8a89404632804cf4ba1b47e3db9fcd629feb9fa90226fd2cf2b8ce83b0c9@104.198.48.112",
 }
 
