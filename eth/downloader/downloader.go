@@ -142,7 +142,7 @@ type Core interface {
 	CurrentBlock() *types.Block
 
 	// AddPendingEtxs adds the pendingEtxs to the database.
-	AddPendingEtxs(pEtxs types.PendingEtxs) error
+	AddPendingEtxs(pendingEtxs types.PendingEtxs) error
 
 	// InsertChain inserts a batch of blocks into the local chain.
 	InsertChain(types.Blocks) (int, error)
@@ -1221,7 +1221,7 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 	blocks := make([]*types.Block, len(results))
 	for i, result := range results {
 		// Store each of the pendingEtxs in the database
-		d.core.AddPendingEtxs(result.PendingEtxs)
+		d.core.AddPendingEtxs(types.PendingEtxs{Header: result.PendingEtxs.Header, Etxs: result.PendingEtxs.Etxs})
 
 		blocks[i] = types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles, result.ExtTransactions, result.SubManifest)
 	}

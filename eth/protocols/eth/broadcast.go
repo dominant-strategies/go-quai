@@ -190,3 +190,31 @@ func (p *Peer) announceTransactions() {
 		}
 	}
 }
+
+type pendingEtxPropagation struct {
+	pendingEtxs types.PendingEtxs
+}
+
+// broadcastPendingEtxs is a write loop that multiplexes pendingEtxs and pendingEtxs accouncements
+// to the remote peer. The goal is to have an async writer that does not lock up
+// node internals and at the same time rate limits queued data.
+func (p *Peer) broadcastPendingEtxs() {
+	for {
+		select {
+		case prop := <-p.pendingEtxsBroadcast:
+			if err := p.SendNewPendingEtxs(prop.pendingEtxs); err != nil {
+				return
+			}
+			p.Log().Trace("Propagated pending Etxs", "number", prop.pendingEtxs.Header.Number(), "hash", prop.pendingEtxs.Header.Hash(), "number", prop.pendingEtxs.Header.NumberU64())
+
+		case pendingEtxs := <-p.pendingEtxsAnnounce:
+			if err := p.SendNewPendingEtxsHashes([]common.Hash{pendingEtxs.Header.Hash()}, []uint64{pendingEtxs.Header.NumberU64()}); err != nil {
+				return
+			}
+			p.Log().Trace("Announced pending Etxs", "number", pendingEtxs.Header.Number(), "hash", pendingEtxs.Header.Hash())
+
+		case <-p.term:
+			return
+		}
+	}
+}

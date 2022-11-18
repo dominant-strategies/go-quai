@@ -36,6 +36,10 @@ const (
 	// before starting to randomly evict them.
 	maxKnownBlocks = 1024
 
+	// maxKnownPendingEtxs is the maximum pendingEtxs block hashes to keep in the known list
+	// before starting to randomly evict them.
+	maxKnownPendingEtxs = 1024
+
 	// maxQueuedTxs is the maximum number of transactions to queue up before dropping
 	// older broadcasts.
 	maxQueuedTxs = 4096
@@ -43,6 +47,14 @@ const (
 	// maxQueuedTxAnns is the maximum number of transaction announcements to queue up
 	// before dropping older announcements.
 	maxQueuedTxAnns = 4096
+
+	// maxQueuedPendingTxs is the maximum number of pendingEtxs to queue up before dropping
+	// older broadcasts.
+	maxQueuedPendingETxs = 4096
+
+	// maxQueuedTxAnns is the maximum number of pendingEtxs announcements to queue up
+	// before dropping older announcements.
+	maxQueuedPendingETxAnns = 4096
 
 	// maxQueuedBlocks is the maximum number of block propagations to queue up before
 	// dropping broadcasts. There's not much point in queueing stale blocks, so a few
@@ -83,6 +95,10 @@ type Peer struct {
 	txBroadcast chan []common.Hash // Channel used to queue transaction propagation requests
 	txAnnounce  chan []common.Hash // Channel used to queue transaction announcement requests
 
+	knownPendingEtxs     mapset.Set                  // Set of pending etxs hashes known to be known by this peer
+	pendingEtxsBroadcast chan *pendingEtxPropagation // Queue of pending etxs to broadcast to the peer
+	pendingEtxsAnnounce  chan types.PendingEtxs      // Queue of pendingEtxs to announce to the peer
+
 	term chan struct{} // Termination channel to stop the broadcasters
 	lock sync.RWMutex  // Mutex protecting the internal fields
 }
@@ -91,22 +107,25 @@ type Peer struct {
 // version.
 func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter, txpool TxPool) *Peer {
 	peer := &Peer{
-		id:              p.ID().String(),
-		Peer:            p,
-		rw:              rw,
-		version:         version,
-		knownTxs:        mapset.NewSet(),
-		knownBlocks:     mapset.NewSet(),
-		queuedBlocks:    make(chan *blockPropagation, maxQueuedBlocks),
-		queuedBlockAnns: make(chan *types.Block, maxQueuedBlockAnns),
-		txBroadcast:     make(chan []common.Hash),
-		txAnnounce:      make(chan []common.Hash),
-		txpool:          txpool,
-		term:            make(chan struct{}),
+		id:                   p.ID().String(),
+		Peer:                 p,
+		rw:                   rw,
+		version:              version,
+		knownTxs:             mapset.NewSet(),
+		knownBlocks:          mapset.NewSet(),
+		knownPendingEtxs:     mapset.NewSet(),
+		queuedBlocks:         make(chan *blockPropagation, maxQueuedBlocks),
+		queuedBlockAnns:      make(chan *types.Block, maxQueuedBlockAnns),
+		txBroadcast:          make(chan []common.Hash),
+		txAnnounce:           make(chan []common.Hash),
+		pendingEtxsBroadcast: make(chan *pendingEtxPropagation, maxQueuedPendingETxs),
+		txpool:               txpool,
+		term:                 make(chan struct{}),
 	}
 	// Start up all the broadcasters
 	go peer.broadcastBlocks()
 	go peer.broadcastTransactions()
+	go peer.broadcastPendingEtxs()
 	if version >= ETH65 {
 		go peer.announceTransactions()
 	}
@@ -153,6 +172,11 @@ func (p *Peer) KnownBlock(hash common.Hash) bool {
 	return p.knownBlocks.Contains(hash)
 }
 
+// KnownPendingTxs returns whether peer is known to already have a pendingEtxs.
+func (p *Peer) KnownPendingEtxs(hash common.Hash) bool {
+	return p.knownPendingEtxs.Contains(hash)
+}
+
 // KnownTransaction returns whether peer is known to already have a transaction.
 func (p *Peer) KnownTransaction(hash common.Hash) bool {
 	return p.knownTxs.Contains(hash)
@@ -176,6 +200,16 @@ func (p *Peer) markTransaction(hash common.Hash) {
 		p.knownTxs.Pop()
 	}
 	p.knownTxs.Add(hash)
+}
+
+// markPendingEtxs marks a pendingEtxs header as known for the peer, ensuring that the block will
+// never be propagated to this particular peer.
+func (p *Peer) markPendingEtxs(hash common.Hash) {
+	// If we reached the memory allowance, drop a previously known block hash
+	for p.knownPendingEtxs.Cardinality() >= maxKnownPendingEtxs {
+		p.knownPendingEtxs.Pop()
+	}
+	p.knownPendingEtxs.Add(hash)
 }
 
 // SendTransactions sends transactions to the peer and includes the hashes
@@ -341,6 +375,76 @@ func (p *Peer) AsyncSendNewBlock(block *types.Block) {
 		p.knownBlocks.Add(block.Hash())
 	default:
 		p.Log().Debug("Dropping block propagation", "number", block.NumberU64(), "hash", block.Hash())
+	}
+}
+
+// SendNewPendingEtxs propagates an entire block to a remote peer.
+func (p *Peer) SendNewPendingEtxs(pendingEtxs types.PendingEtxs) error {
+	// Mark all the block hash as known, but ensure we don't overflow our limits
+	for p.knownPendingEtxs.Cardinality() >= maxKnownPendingEtxs {
+		p.knownPendingEtxs.Pop()
+	}
+	p.knownPendingEtxs.Add(pendingEtxs.Header.Hash())
+	return p2p.Send(p.rw, NewPendingEtxsMsg, &NewPendingEtxsPacket{
+		Header:      pendingEtxs.Header,
+		PendingEtxs: pendingEtxs.Etxs,
+	})
+}
+
+// SendOnePendingEtxs propagates an entire block to a remote peer.
+func (p *Peer) SendOnePendingEtxs(pendingEtxs *types.PendingEtxs) error {
+	return p2p.Send(p.rw, NewPendingEtxsMsg, &NewPendingEtxsPacket{
+		Header:      pendingEtxs.Header,
+		PendingEtxs: pendingEtxs.Etxs,
+	})
+}
+
+// AsyncSendNewPendingEtxs queues an entire pendingEtxs for propagation to a remote peer. If
+// the peer's broadcast queue is full, the event is silently dropped.
+func (p *Peer) AsyncSendNewPendingEtxs(pendingEtxs types.PendingEtxs) {
+	select {
+	case p.pendingEtxsBroadcast <- &pendingEtxPropagation{pendingEtxs: pendingEtxs}:
+		// Mark all the block hash as known, but ensure we don't overflow our limits
+		for p.knownPendingEtxs.Cardinality() >= maxKnownPendingEtxs {
+			p.knownPendingEtxs.Pop()
+		}
+		p.knownPendingEtxs.Add(pendingEtxs.Header.Hash())
+	default:
+		p.Log().Debug("Dropping pending etxs propagation", "number", pendingEtxs.Header.NumberU64(), "hash", pendingEtxs.Header.Hash())
+	}
+}
+
+// SendNewPendingEtxsHeaderHashes announces the availability of a number of blocks through
+// a hash notification.
+func (p *Peer) SendNewPendingEtxsHashes(hashes []common.Hash, numbers []uint64) error {
+	// Mark all the block hashes as known, but ensure we don't overflow our limits
+	for p.knownPendingEtxs.Cardinality() > max(0, maxKnownPendingEtxs-len(hashes)) {
+		p.knownPendingEtxs.Pop()
+	}
+	for _, hash := range hashes {
+		p.knownPendingEtxs.Add(hash)
+	}
+	request := make(NewBlockHashesPacket, len(hashes))
+	for i := 0; i < len(hashes); i++ {
+		request[i].Hash = hashes[i]
+		request[i].Number = numbers[i]
+	}
+	return p2p.Send(p.rw, NewPendingEtxsHashesMsg, request)
+}
+
+// AsyncSendNewPendingEtxsHash queues the availability of a pendingEtxs for propagation to a
+// remote peer. If the peer's broadcast queue is full, the event is silently
+// dropped.
+func (p *Peer) AsyncSendNewPendingEtxsHash(pendingEtxs types.PendingEtxs) {
+	select {
+	case p.pendingEtxsAnnounce <- pendingEtxs:
+		// Mark all the block hash as known, but ensure we don't overflow our limits
+		for p.knownPendingEtxs.Cardinality() >= maxKnownPendingEtxs {
+			p.knownPendingEtxs.Pop()
+		}
+		p.knownPendingEtxs.Add(pendingEtxs.Header.Hash())
+	default:
+		p.Log().Debug("Dropping pendingEtxsHash announcement", "number", pendingEtxs.Header.NumberU64(), "hash", pendingEtxs.Header.Hash())
 	}
 }
 
@@ -573,4 +677,19 @@ func (p *Peer) RequestPendingEtxs(hashes []common.Hash) error {
 		})
 	}
 	return p2p.Send(p.rw, GetPendingEtxsMsg, GetPendingEtxsPacket(hashes))
+}
+
+// RequestOnePendingEtx fetches a pendingEtx for a given block hash from a remote node.
+func (p *Peer) RequestOnePendingEtxs(hash common.Hash) error {
+	p.Log().Debug("Fetching a pending etx", "hash", hash)
+	if p.Version() >= ETH66 {
+		id := rand.Uint64()
+
+		requestTracker.Track(p.id, p.version, GetOnePendingEtxsMsg, OnePendingEtxsMsg, id)
+		return p2p.Send(p.rw, GetOnePendingEtxsMsg, &GetOnePendingEtxsPacket66{
+			RequestId:               id,
+			GetOnePendingEtxsPacket: GetOnePendingEtxsPacket{Hash: hash},
+		})
+	}
+	return p2p.Send(p.rw, GetOnePendingEtxsMsg, &GetOnePendingEtxsPacket{Hash: hash})
 }

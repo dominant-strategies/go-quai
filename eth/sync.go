@@ -193,8 +193,10 @@ func (cs *chainSyncer) loop() {
 
 	cs.handler.blockFetcher.Start()
 	cs.handler.txFetcher.Start()
+	cs.handler.pendingEtxsFetcher.Start()
 	defer cs.handler.blockFetcher.Stop()
 	defer cs.handler.txFetcher.Stop()
+	defer cs.handler.pendingEtxsFetcher.Stop()
 	defer cs.handler.downloader.Terminate()
 
 	// The force timer lowers the peer count threshold down to one when it fires.
