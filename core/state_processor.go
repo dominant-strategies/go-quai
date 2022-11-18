@@ -220,7 +220,7 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 			if err != nil {
 				return nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 			}
-		} else if tx.Type() == types.ExternalTxType {
+		} else if tx.Type() == types.InternalTxType {
 			receipt, err = applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv)
 			if err != nil {
 				return nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
