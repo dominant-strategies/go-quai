@@ -28,6 +28,7 @@ import (
 	"github.com/dominant-strategies/go-quai/eth/protocols/eth"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p/enode"
+	"github.com/dominant-strategies/go-quai/trie"
 )
 
 const (
@@ -93,6 +94,10 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 
 	case *eth.PooledTransactionsPacket:
 		return h.txFetcher.Enqueue(peer.ID(), *packet, true)
+
+	case *eth.PendingEtxsPacket:
+		pendingEtxs := packet.Unpack()
+		return h.handlePendingEtxs(pendingEtxs)
 
 	default:
 		return fmt.Errorf("unexpected eth packet type: %T", packet)
@@ -191,6 +196,18 @@ func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block) er
 	if (block.NumberU64() - 1) > number {
 		peer.SetHead(block.ParentHash(), number)
 		h.chainSync.handlePeerEvent(peer)
+	}
+	return nil
+}
+
+func (h *ethHandler) handlePendingEtxs(pendingEtxs types.PendingEtxs) error {
+	if !pendingEtxs.IsValid(trie.NewStackTrie(nil)) {
+		log.Warn("PendingEtxs is not valid", pendingEtxs.Etxs, pendingEtxs.Header.EtxHashArray())
+		return nil
+	}
+	err := h.core.AddPendingEtxs(pendingEtxs)
+	if err != nil {
+		log.Error("Error in handling pendingEtxs broadcast", "err", err)
 	}
 	return nil
 }

@@ -139,6 +139,9 @@ type Core interface {
 	// CurrentBlock retrieves the head of local chain.
 	CurrentBlock() *types.Block
 
+	// AddPendingEtxs adds the pendingEtxs to the database.
+	AddPendingEtxs(pendingEtxs types.PendingEtxs) error
+
 	// InsertChain inserts a batch of blocks into the local chain.
 	InsertChain(types.Blocks) (int, error)
 

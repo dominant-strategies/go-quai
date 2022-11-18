@@ -1249,17 +1249,17 @@ func WritePendingEtxsRLP(db ethdb.KeyValueWriter, hash common.Hash, rlp rlp.RawV
 }
 
 // ReadPendingEtxs retreives the pending ETXs corresponding to a given block
-func ReadPendingEtxs(db ethdb.Reader, hash common.Hash) types.PendingEtxs {
+func ReadPendingEtxs(db ethdb.Reader, hash common.Hash) *types.PendingEtxs {
 	data := ReadPendingEtxsRLP(db, hash)
 	if len(data) == 0 {
-		return types.PendingEtxs{}
+		return nil
 	}
 	pendingEtxs := types.PendingEtxs{}
 	if err := rlp.Decode(bytes.NewReader(data), &pendingEtxs); err != nil {
 		log.Error("Invalid pending etxs RLP", "hash", hash, "err", err)
-		return types.PendingEtxs{}
+		return nil
 	}
-	return pendingEtxs
+	return &pendingEtxs
 }
 
 // WritePendingEtxs stores the pending ETXs corresponding to a given block

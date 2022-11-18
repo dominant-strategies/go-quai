@@ -45,6 +45,9 @@ const (
 	// missingBodyChanSize is the size of channel listening to missingBodyEvent.
 	missingBodyChanSize = 10
 
+	// missingPendingEtxsChanSize is the size of channel listening to the MissingPendingEtxsEvent
+	missingPendingEtxsChanSize = 10
+
 	// minPeerSend is the threshold for sending the block updates. If
 	// sqrt of len(peers) is less than 5 we make the block announcement
 	// to as much as minPeerSend peers otherwise send it to sqrt of len(peers).
@@ -108,12 +111,14 @@ type handler struct {
 	txFetcher    *fetcher.TxFetcher
 	peers        *peerSet
 
-	eventMux       *event.TypeMux
-	txsCh          chan core.NewTxsEvent
-	txsSub         event.Subscription
-	minedBlockSub  *event.TypeMuxSubscription
-	missingBodyCh  chan *types.Header
-	missingBodySub event.Subscription
+	eventMux              *event.TypeMux
+	txsCh                 chan core.NewTxsEvent
+	txsSub                event.Subscription
+	minedBlockSub         *event.TypeMuxSubscription
+	missingBodyCh         chan *types.Header
+	missingBodySub        event.Subscription
+	missingPendingEtxsCh  chan common.Hash
+	missingPendingEtxsSub event.Subscription
 
 	whitelist map[uint64]common.Hash
 
@@ -281,6 +286,12 @@ func (h *handler) Start(maxPeers int) {
 	h.txsSub = h.txpool.SubscribeNewTxsEvent(h.txsCh)
 	go h.txBroadcastLoop()
 
+	// broadcast transactions
+	h.wg.Add(1)
+	h.missingPendingEtxsCh = make(chan common.Hash, missingPendingEtxsChanSize)
+	h.missingPendingEtxsSub = h.core.SubscribeMissingPendingEtxsEvent(h.missingPendingEtxsCh)
+	go h.missingPendingEtxsLoop()
+
 	// broadcast mined blocks
 	h.wg.Add(1)
 	h.minedBlockSub = h.eventMux.Subscribe(core.NewMinedBlockEvent{})
@@ -298,9 +309,10 @@ func (h *handler) Start(maxPeers int) {
 }
 
 func (h *handler) Stop() {
-	h.txsSub.Unsubscribe()         // quits txBroadcastLoop
-	h.minedBlockSub.Unsubscribe()  // quits blockBroadcastLoop
-	h.missingBodySub.Unsubscribe() // quits missingBodyLoop
+	h.txsSub.Unsubscribe()                // quits txBroadcastLoop
+	h.minedBlockSub.Unsubscribe()         // quits blockBroadcastLoop
+	h.missingBodySub.Unsubscribe()        // quits missingBodyLoop
+	h.missingPendingEtxsSub.Unsubscribe() // quits pendingEtxsBroadcastLoop
 
 	// Quit chainSync and txsync64.
 	// After this is done, no new peers will be accepted.
@@ -452,6 +464,46 @@ func (h *handler) missingBodyLoop() {
 			}
 
 		case <-h.missingBodySub.Err():
+			return
+		}
+	}
+}
+
+// pendingEtxsBroadcastLoop announces new pendingEtxs to connected peers.
+func (h *handler) missingPendingEtxsLoop() {
+	defer h.wg.Done()
+	for {
+		select {
+		case hash := <-h.missingPendingEtxsCh:
+			// Get the min(sqrt(len(peers)), minPeerRequest)
+			var peerThreshold int
+			sqrtNumPeers := int(math.Sqrt(float64(len(h.peers.peers))))
+			if sqrtNumPeers < minPeerRequest {
+				if minPeerRequest < len(h.peers.peers) {
+					peerThreshold = minPeerRequest
+				} else {
+					peerThreshold = len(h.peers.peers)
+				}
+			} else {
+				peerThreshold = sqrtNumPeers
+			}
+
+			var allPeers []*ethPeer
+			for _, peer := range h.peers.peers {
+				allPeers = append(allPeers, peer)
+			}
+			// shuffle the filteredPeers
+			rand.Seed(time.Now().UnixNano())
+			rand.Shuffle(len(allPeers), func(i, j int) { allPeers[i], allPeers[j] = allPeers[j], allPeers[i] })
+
+			// Check if any of the peers have the body
+			for _, peer := range allPeers[:peerThreshold] {
+				log.Trace("Fetching the missing pending etxs from", "peer", peer.ID(), "hash", hash)
+				if err := peer.RequestOnePendingEtxs(hash); err != nil {
+					return
+				}
+			}
+		case <-h.missingPendingEtxsSub.Err():
 			return
 		}
 	}
