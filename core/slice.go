@@ -245,7 +245,7 @@ func (sl *Slice) pcrc(batch ethdb.Batch, header *types.Header, domTerminus commo
 	nodeCtx := common.NodeLocation.Context()
 	location := header.Location()
 
-	isCoincident := sl.engine.HasCoincidentDifficulty(header)
+	isDomCoincident := sl.engine.IsDomCoincident(header)
 
 	log.Debug("PCRC:", "Parent Hash:", header.ParentHash(), "Number", header.Number, "Location:", header.Location())
 	termini := sl.hc.GetTerminiByHash(header.ParentHash())
@@ -270,14 +270,14 @@ func (sl *Slice) pcrc(batch ethdb.Batch, header *types.Header, domTerminus commo
 	}
 
 	// Set the terminus
-	if nodeCtx == common.PRIME_CTX || isCoincident {
+	if nodeCtx == common.PRIME_CTX || isDomCoincident {
 		newTermini[terminiIndex] = header.Hash()
 	} else {
 		newTermini[terminiIndex] = termini[terminiIndex]
 	}
 
-	// Check for a graph cyclic reference
-	if isCoincident {
+	// Check for a graph twist
+	if isDomCoincident {
 		if termini[terminiIndex] != domTerminus {
 			log.Warn("Cyclic Block:", "block number", header.NumberArray(), "hash", header.Hash(), "terminus", domTerminus, "termini", termini)
 			return common.Hash{}, []common.Hash{}, errors.New("termini do not match, block rejected due to cyclic reference")
@@ -307,8 +307,8 @@ func (sl *Slice) hlcr(externTd *big.Int) bool {
 // CalcTd calculates the TD of the given header using PCRC.
 func (sl *Slice) calcTd(header *types.Header) (*big.Int, error) {
 	// Stop from
-	isCoincident := sl.engine.HasCoincidentDifficulty(header)
-	if isCoincident {
+	isDomCoincident := sl.engine.IsDomCoincident(header)
+	if isDomCoincident {
 		return nil, errors.New("td on a dom block cannot be calculated by a sub")
 	}
 	priorTd := sl.hc.GetTd(header.ParentHash(), header.NumberU64()-1)

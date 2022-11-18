@@ -39,7 +39,8 @@ func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.H
 func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 	domWait := false
 	for i, block := range blocks {
-		isCoincident := c.sl.engine.HasCoincidentDifficulty(block.Header())
+		isCoincident := c.sl.engine.IsDomCoincident(block.Header())
+
 		// Write the block body to the db.
 		rawdb.WritePendingBlockBody(c.sl.sliceDb, block.Header().Root(), block.Body())
 

@@ -111,13 +111,13 @@ type Engine interface {
 	// that a new block should have.
 	CalcDifficulty(chain ChainHeaderReader, parent *types.Header) *big.Int
 
-	// IsCoincident returns true if this block satisfies the difficulty order
+	// IsDomCoincident returns true if this block satisfies the difficulty order
 	// of a dominant chain. If this node does not have a dominant chain (i.e.
 	// if this is a prime node), then the function will always return false.
 	//
 	// Importantly, this check does NOT mean the block is canonical in the
 	// dominant chain, or even that the claimed dominant difficulty is valid.
-	HasCoincidentDifficulty(header *types.Header) bool
+	IsDomCoincident(header *types.Header) bool
 
 	// APIs returns the RPC APIs this consensus engine provides.
 	APIs(chain ChainHeaderReader) []rpc.API
