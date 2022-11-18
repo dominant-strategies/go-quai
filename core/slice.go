@@ -122,7 +122,7 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 func (sl *Slice) Append(header *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, newInboundEtxs types.Transactions) (types.PendingHeader, []types.Transactions, error) {
 	nodeCtx := common.NodeLocation.Context()
 	location := header.Location()
-	isCoincident := sl.engine.HasCoincidentDifficulty(header)
+	isDomCoincident := sl.engine.IsDomCoincident(header)
 
 	// Construct the block locally
 	block := sl.ConstructLocalBlock(header)
@@ -144,7 +144,7 @@ func (sl *Slice) Append(header *types.Header, domTerminus common.Hash, td *big.I
 
 	// If this was a coincident block, our dom will be passing us a set of newly confirmed ETXs
 	// If this is not a coincident block, we need to build up the list of confirmed ETXs using the subordinate manifest
-	if !isCoincident {
+	if !isDomCoincident {
 		newInboundEtxs, err = sl.CollectNewlyConfirmedEtxs(block, block.Location())
 		if err != nil {
 			return sl.nilPendingHeader, nil, err
@@ -183,7 +183,7 @@ func (sl *Slice) Append(header *types.Header, domTerminus common.Hash, td *big.I
 	// Add our new ETXs to the newPendingEtxs collection
 	// If this is a coincident block, we need to add the full rollup of ETXs.
 	// Otherwise just send the new ETXs emitted in this block.
-	if isCoincident {
+	if isDomCoincident {
 		etxRollup, err := sl.hc.CollectEtxRollup(block)
 		if err != nil {
 			return types.PendingHeader{}, nil, fmt.Errorf("unable to get ETX rollup")
@@ -219,12 +219,12 @@ func (sl *Slice) Append(header *types.Header, domTerminus common.Hash, td *big.I
 	}
 
 	// Relay the new pendingHeader
-	sl.updateCacheAndRelay(pendingHeader, block.Header().Location(), reorg, isCoincident)
+	sl.updateCacheAndRelay(pendingHeader, block.Header().Location(), reorg, isDomCoincident)
 
 	// Remove the header from the future headers cache
 	sl.futureHeaders.Remove(block.Hash())
 
-	if isCoincident {
+	if isDomCoincident {
 		go sl.procfutureHeaders()
 	}
 
@@ -295,14 +295,14 @@ func (sl *Slice) updateManifestHash(h *types.Header) {
 }
 
 // updateCacheAndRelay updates the pending headers cache and sends pending headers to subordinates
-func (sl *Slice) updateCacheAndRelay(pendingHeader types.PendingHeader, location common.Location, reorg bool, isCoincident bool) {
+func (sl *Slice) updateCacheAndRelay(pendingHeader types.PendingHeader, location common.Location, reorg bool, isDomCoincident bool) {
 	nodeCtx := common.NodeLocation.Context()
 
 	sl.phCachemu.Lock()
 	defer sl.phCachemu.Unlock()
 
 	sl.updatePhCache(pendingHeader)
-	if !isCoincident {
+	if !isDomCoincident {
 		switch nodeCtx {
 		case common.PRIME_CTX:
 			sl.updatePhCacheFromDom(pendingHeader, 3, []int{common.REGION_CTX, common.ZONE_CTX}, reorg)
@@ -424,7 +424,7 @@ func (sl *Slice) pcrc(batch ethdb.Batch, header *types.Header, domTerminus commo
 	nodeCtx := common.NodeLocation.Context()
 	location := header.Location()
 
-	isCoincident := sl.engine.HasCoincidentDifficulty(header)
+	isDomCoincident := sl.engine.IsDomCoincident(header)
 
 	log.Debug("PCRC:", "Parent Hash:", header.ParentHash(), "Number", header.Number, "Location:", header.Location())
 	termini := sl.hc.GetTerminiByHash(header.ParentHash())
@@ -449,14 +449,14 @@ func (sl *Slice) pcrc(batch ethdb.Batch, header *types.Header, domTerminus commo
 	}
 
 	// Set the terminus
-	if nodeCtx == common.PRIME_CTX || isCoincident {
+	if nodeCtx == common.PRIME_CTX || isDomCoincident {
 		newTermini[terminiIndex] = header.Hash()
 	} else {
 		newTermini[terminiIndex] = termini[terminiIndex]
 	}
 
 	// Check for a graph twist
-	if isCoincident {
+	if isDomCoincident {
 		if termini[terminiIndex] != domTerminus {
 			return common.Hash{}, []common.Hash{}, errors.New("termini do not match, block rejected due to a twist")
 		}
@@ -485,8 +485,8 @@ func (sl *Slice) hlcr(externTd *big.Int) bool {
 // CalcTd calculates the TD of the given header using PCRC.
 func (sl *Slice) calcTd(header *types.Header) (*big.Int, error) {
 	// Stop from
-	isCoincident := sl.engine.HasCoincidentDifficulty(header)
-	if isCoincident {
+	isDomCoincident := sl.engine.IsDomCoincident(header)
+	if isDomCoincident {
 		return nil, errors.New("td on a dom block cannot be calculated by a sub")
 	}
 	priorTd := sl.hc.GetTd(header.ParentHash(), header.NumberU64()-1)
