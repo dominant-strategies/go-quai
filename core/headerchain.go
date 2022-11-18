@@ -106,8 +106,8 @@ func (hc *HeaderChain) CollectBlockManifest(h *types.Header) (types.BlockManifes
 			return manifest, nil
 		}
 	}
-	// Terminate the search on coincidence
-	if hc.engine.HasCoincidentDifficulty(h) {
+	// Terminate the search on coincidence with dom chain
+	if hc.engine.IsDomCoincident(h) {
 		return manifest, nil
 	}
 	// Recursively get the ancestor manifest, until a coincident ancestor is found
@@ -134,8 +134,8 @@ func (hc *HeaderChain) CollectEtxRollup(b *types.Block) (types.Transactions, err
 			return newEtxs, nil
 		}
 	}
-	// Terminate the search on coincidence
-	if hc.engine.HasCoincidentDifficulty(b.Header()) {
+	// Terminate the search on coincidence with dom chain
+	if hc.engine.IsDomCoincident(b.Header()) {
 		return newEtxs, nil
 	}
 	// Recursively get the ancestor rollup, until a coincident ancestor is found

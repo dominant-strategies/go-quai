@@ -42,7 +42,7 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 	nodeCtx := common.NodeLocation.Context()
 	domWait := false
 	for i, block := range blocks {
-		isCoincident := c.sl.engine.HasCoincidentDifficulty(block.Header())
+		isCoincident := c.sl.engine.IsDomCoincident(block.Header())
 		// If we just mined this block, its possible the subordinate manifest in our
 		// block body is incorrect. If so, ask our sub for the correct manifest,
 		// update and rewrite the correct body.

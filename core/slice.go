@@ -114,7 +114,7 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, newInboundEtxs types.Transactions) ([]types.Transactions, error) {
 	nodeCtx := common.NodeLocation.Context()
 	location := header.Location()
-	isCoincident := sl.engine.HasCoincidentDifficulty(header)
+	isDomCoincident := sl.engine.IsDomCoincident(header)
 
 	// Don't append the block which already exists in the database.
 	if sl.hc.HasHeader(header.Hash(), header.NumberU64()) {
@@ -143,7 +143,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 
 	// If this was a coincident block, our dom will be passing us a set of newly confirmed ETXs
 	// If this is not a coincident block, we need to build up the list of confirmed ETXs using the subordinate manifest
-	if !isCoincident {
+	if !isDomCoincident {
 		newInboundEtxs, err = sl.CollectNewlyConfirmedEtxs(block, block.Location())
 		if err != nil {
 			return nil, err
@@ -194,7 +194,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	// Add our new ETXs to the newPendingEtxs collection
 	// If this is a coincident block, we need to add the full rollup of ETXs.
 	// Otherwise just send the new ETXs emitted in this block.
-	if isCoincident {
+	if isDomCoincident {
 		etxRollup, err := sl.hc.CollectEtxRollup(block)
 		if err != nil {
 			return nil, fmt.Errorf("unable to get ETX rollup")
@@ -222,12 +222,12 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	updateMiner := sl.pickPhCacheHead(reorg, pendingHeaderWithTermini)
 
 	// Relay the new pendingHeader
-	sl.relayPh(pendingHeaderWithTermini, updateMiner, reorg, domOrigin, block.Location())
+	sl.relayPh(pendingHeaderWithTermini, updateMiner, reorg, isDomCoincident, block.Location())
 
 	// Remove the header from the future headers cache
 	sl.futureHeaders.Remove(block.Hash())
 
-	if domOrigin {
+	if isDomCoincident {
 		go sl.procfutureHeaders()
 	}
 
@@ -260,7 +260,7 @@ func (sl *Slice) updateManifestHash(h *types.Header) {
 }
 
 // relayPh sends pendingHeaderWithTermini to subordinates
-func (sl *Slice) relayPh(pendingHeaderWithTermini types.PendingHeader, updateMiner bool, reorg bool, domOrigin bool, location common.Location) {
+func (sl *Slice) relayPh(pendingHeaderWithTermini types.PendingHeader, updateMiner bool, reorg bool, isDomCoincident bool, location common.Location) {
 	nodeCtx := common.NodeLocation.Context()
 
 	if nodeCtx == common.ZONE_CTX {
@@ -269,7 +269,7 @@ func (sl *Slice) relayPh(pendingHeaderWithTermini types.PendingHeader, updateMin
 			sl.miner.worker.pendingHeaderFeed.Send(sl.phCache[sl.pendingHeaderHeadHash].Header)
 			return
 		}
-	} else if !domOrigin {
+	} else if !isDomCoincident {
 		for i := range sl.subClients {
 			sl.subClients[i].SubRelayPendingHeader(context.Background(), pendingHeaderWithTermini, reorg, location)
 		}
@@ -372,7 +372,7 @@ func (sl *Slice) pcrc(batch ethdb.Batch, header *types.Header, domTerminus commo
 	nodeCtx := common.NodeLocation.Context()
 	location := header.Location()
 
-	isCoincident := sl.engine.HasCoincidentDifficulty(header)
+	isDomCoincident := sl.engine.IsDomCoincident(header)
 
 	log.Debug("PCRC:", "Parent Hash:", header.ParentHash(), "Number", header.Number, "Location:", header.Location())
 	termini := sl.hc.GetTerminiByHash(header.ParentHash())
@@ -397,14 +397,14 @@ func (sl *Slice) pcrc(batch ethdb.Batch, header *types.Header, domTerminus commo
 	}
 
 	// Set the terminus
-	if nodeCtx == common.PRIME_CTX || isCoincident {
+	if nodeCtx == common.PRIME_CTX || isDomCoincident {
 		newTermini[terminiIndex] = header.Hash()
 	} else {
 		newTermini[terminiIndex] = termini[terminiIndex]
 	}
 
-	// Check for a graph cyclic reference
-	if isCoincident {
+	// Check for a graph twist
+	if isDomCoincident {
 		if termini[terminiIndex] != domTerminus {
 			log.Warn("Cyclic Block:", "block number", header.NumberArray(), "hash", header.Hash(), "terminus", domTerminus, "termini", termini)
 			return common.Hash{}, []common.Hash{}, errors.New("termini do not match, block rejected due to cyclic reference")
@@ -434,8 +434,8 @@ func (sl *Slice) hlcr(externTd *big.Int) bool {
 // CalcTd calculates the TD of the given header using PCRC.
 func (sl *Slice) calcTd(header *types.Header) (*big.Int, error) {
 	// Stop from
-	isCoincident := sl.engine.HasCoincidentDifficulty(header)
-	if isCoincident {
+	isDomCoincident := sl.engine.IsDomCoincident(header)
+	if isDomCoincident {
 		return nil, errors.New("td on a dom block cannot be calculated by a sub")
 	}
 	priorTd := sl.hc.GetTd(header.ParentHash(), header.NumberU64()-1)
