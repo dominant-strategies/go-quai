@@ -70,8 +70,12 @@ const (
 
 	GetBlockMsg = 0x0b
 
-	GetPendingEtxsMsg = 0x11
-	PendingEtxsMsg    = 0x12
+	GetPendingEtxsMsg       = 0x11
+	PendingEtxsMsg          = 0x12
+	NewPendingEtxsMsg       = 0x13
+	NewPendingEtxsHashesMsg = 0x14
+	GetOnePendingEtxsMsg    = 0x15
+	OnePendingEtxsMsg       = 0x16
 )
 
 var (
@@ -334,6 +338,16 @@ type GetBlockPacket66 struct {
 	GetBlockPacket
 }
 
+// GetOnePendingEtxsPacket represents a pending etx query
+type GetOnePendingEtxsPacket struct {
+	Hash common.Hash
+}
+
+type GetOnePendingEtxsPacket66 struct {
+	RequestId uint64
+	GetOnePendingEtxsPacket
+}
+
 // GetPendingEtxsPacket represents a pending etx query.
 type GetPendingEtxsPacket []common.Hash
 
@@ -358,6 +372,38 @@ type PendingEtxsRLPPacket []rlp.RawValue
 type PendingEtxsRLPPacket66 struct {
 	RequestId uint64
 	PendingEtxsRLPPacket
+}
+
+// NewPendingEtxsPacket is the network packet for the block propagation message.
+type NewPendingEtxsPacket struct {
+	Header      *types.Header
+	PendingEtxs []types.Transactions
+}
+
+// NewPendingEtxsHashesPacket is the network packet for the block announcements.
+type NewPendingEtxsHashesPacket []struct {
+	Hash   common.Hash // Hash of one particular pending etxs header being announced
+	Number uint64      // Number of one particular pending etxs header being announced
+}
+
+// NewPendingEtxsHashesPacket66 the ethh/66 version of the network packet for the block announcements.
+type NewPendingEtxsHashesPacket66 []struct {
+	RequestId uint64
+	NewPendingEtxsHashesPacket
+}
+
+// Unpack retrieves the block hashes and numbers from the announcement packet
+// and returns them in a split flat format that's more consistent with the
+// internal data structures.
+func (p *NewPendingEtxsHashesPacket) Unpack() ([]common.Hash, []uint64) {
+	var (
+		hashes  = make([]common.Hash, len(*p))
+		numbers = make([]uint64, len(*p))
+	)
+	for i, body := range *p {
+		hashes[i], numbers[i] = body.Hash, body.Number
+	}
+	return hashes, numbers
 }
 
 func (*StatusPacket) Name() string { return "Status" }
@@ -411,5 +457,14 @@ func (*GetBlockPacket) Kind() byte   { return GetBlockMsg }
 func (*GetPendingEtxsPacket) Name() string { return "GetPendingEtxs" }
 func (*GetPendingEtxsPacket) Kind() byte   { return GetPendingEtxsMsg }
 
+func (*GetOnePendingEtxsPacket) Name() string { return "GetOnePendingEtxs" }
+func (*GetOnePendingEtxsPacket) Kind() byte   { return GetOnePendingEtxsMsg }
+
 func (*PendingEtxsPacket) Name() string { return "PendingEtxs" }
 func (*PendingEtxsPacket) Kind() byte   { return PendingEtxsMsg }
+
+func (*NewPendingEtxsPacket) Name() string { return "NewPendingEtxs" }
+func (*NewPendingEtxsPacket) Kind() byte   { return NewPendingEtxsMsg }
+
+func (*NewPendingEtxsHashesPacket) Name() string { return "NewPendingEtxsHashes" }
+func (*NewPendingEtxsHashesPacket) Kind() byte   { return NewPendingEtxsHashesMsg }

@@ -94,10 +94,11 @@ type handler struct {
 	core     *core.Core
 	maxPeers int
 
-	downloader   *downloader.Downloader
-	blockFetcher *fetcher.BlockFetcher
-	txFetcher    *fetcher.TxFetcher
-	peers        *peerSet
+	downloader         *downloader.Downloader
+	blockFetcher       *fetcher.BlockFetcher
+	txFetcher          *fetcher.TxFetcher
+	pendingEtxsFetcher *fetcher.PendingEtxsFetcher
+	peers              *peerSet
 
 	eventMux      *event.TypeMux
 	txsCh         chan core.NewTxsEvent
@@ -151,6 +152,15 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		return n, err
 	}
 	h.blockFetcher = fetcher.NewBlockFetcher(false, nil, h.core.GetBlockByHash, validator, h.BroadcastBlock, heighter, nil, inserter, h.removePeer)
+
+	insertPendingEtxs := func(pendingEtxs types.PendingEtxs) error {
+		if err := h.core.AddPendingEtxs(types.PendingEtxs{pendingEtxs.Header, pendingEtxs.Etxs}); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	h.pendingEtxsFetcher = fetcher.NewPendingEtxsFetcher(h.core.GetPendingEtxs, h.BroadcastPendingEtxs, insertPendingEtxs, h.removePeer)
 
 	fetchTx := func(peer string, hashes []common.Hash) error {
 		p := h.peers.peer(peer)
@@ -330,6 +340,29 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 		}
 		log.Trace("Announced block", "hash", hash, "recipients", len(peers), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
 	}
+}
+
+// BroadcastPendingEtxs will either propagate a pendingEtxs to a subset of its peers, or
+// will only announce its availability (depending what's requested).
+func (h *handler) BroadcastPendingEtxs(pendingEtxs types.PendingEtxs, propagate bool) {
+	hash := pendingEtxs.Header.Hash()
+	peers := h.peers.peersWithoutPendingEtxs(hash)
+
+	// If propagation is requested, send to a subset of the peer
+	if propagate {
+		// Send the block to a subset of our peers
+		transfer := peers[:int(math.Sqrt(float64(len(peers))))]
+		for _, peer := range transfer {
+			peer.AsyncSendNewPendingEtxs(pendingEtxs)
+		}
+		log.Trace("Propagated pending etxs", "hash", hash, "recipients", len(transfer))
+		return
+	}
+	// Otherwise announce the availability to all the peers.
+	for _, peer := range peers {
+		peer.AsyncSendNewPendingEtxsHash(pendingEtxs)
+	}
+	log.Trace("Announced block", "hash", hash, "recipients", len(peers))
 }
 
 // BroadcastTransactions will propagate a batch of transactions

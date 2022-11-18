@@ -100,6 +100,14 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 		}
 		return nil
 
+	case *eth.NewPendingEtxsHashesPacket:
+		hashes, numbers := packet.Unpack()
+		return h.handlePendingEtxsAnnounces(peer, hashes, numbers)
+
+	case *eth.NewPendingEtxsPacket:
+		pendingEtxs := types.PendingEtxs{Header: packet.Header, Etxs: packet.PendingEtxs}
+		return h.pendingEtxsFetcher.Enqueue(peer.ID(), pendingEtxs)
+
 	default:
 		return fmt.Errorf("unexpected eth packet type: %T", packet)
 	}
@@ -201,6 +209,20 @@ func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block) er
 	return nil
 }
 
-func (h *ethHandler) handlePendingEtxs(peer *eth.Peer, header *types.Header, etxs [][]*types.Transaction) error {
+func (h *ethHandler) handlePendingEtxsAnnounces(peer *eth.Peer, hashes []common.Hash, numbers []uint64) error {
+	// Schedule all the unknown hashes for retrieval
+	var (
+		unknownHashes  = make([]common.Hash, 0, len(hashes))
+		unknownNumbers = make([]uint64, 0, len(numbers))
+	)
+	for i := 0; i < len(hashes); i++ {
+		if !h.core.HasPendingEtxs(hashes[i]) {
+			unknownHashes = append(unknownHashes, hashes[i])
+			unknownNumbers = append(unknownNumbers, numbers[i])
+		}
+	}
+	for i := 0; i < len(unknownHashes); i++ {
+		h.pendingEtxsFetcher.Notify(peer.ID(), unknownHashes[i], unknownNumbers[i], time.Now(), peer.RequestOnePendingEtxs)
+	}
 	return nil
 }
