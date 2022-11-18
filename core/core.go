@@ -218,6 +218,10 @@ func (c *Core) GetPendingHeader() (*types.Header, error) {
 	return c.sl.GetPendingHeader()
 }
 
+func (c *Core) SubscribeMissingPendingEtxsEvent(ch chan<- common.Hash) event.Subscription {
+	return c.sl.SubscribeMissingPendingEtxsEvent(ch)
+}
+
 func (c *Core) GetManifest(blockHash common.Hash) (types.BlockManifest, error) {
 	return c.sl.GetManifest(blockHash)
 }
@@ -228,6 +232,14 @@ func (c *Core) GetSubManifest(slice common.Location, blockHash common.Hash) (typ
 
 func (c *Core) AddPendingEtxs(pEtxs types.PendingEtxs) error {
 	return c.sl.AddPendingEtxs(pEtxs)
+}
+
+func (c *Core) GetPendingEtxs(hash common.Hash) *types.PendingEtxs {
+	return rawdb.ReadPendingEtxs(c.sl.sliceDb, hash)
+}
+
+func (c *Core) HasPendingEtxs(hash common.Hash) bool {
+	return c.GetPendingEtxs(hash) != nil
 }
 
 func (c *Core) SendPendingEtxsToDom(pEtxs types.PendingEtxs) error {

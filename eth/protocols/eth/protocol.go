@@ -43,7 +43,7 @@ var ProtocolVersions = []uint{ETH66, ETH65}
 
 // protocolLengths are the number of implemented message corresponding to
 // different protocol versions.
-var protocolLengths = map[uint]uint64{ETH66: 17, ETH65: 17}
+var protocolLengths = map[uint]uint64{ETH66: 19, ETH65: 19}
 
 // maxMessageSize is the maximum cap on the size of a protocol message.
 const maxMessageSize = 10 * 1024 * 1024
@@ -69,6 +69,9 @@ const (
 	PooledTransactionsMsg         = 0x0a
 
 	GetBlockMsg = 0x0b
+
+	PendingEtxsMsg       = 0x11
+	GetOnePendingEtxsMsg = 0x12
 )
 
 var (
@@ -333,6 +336,35 @@ type GetBlockPacket66 struct {
 	GetBlockPacket
 }
 
+// GetOnePendingEtxsPacket represents a pending etx query
+type GetOnePendingEtxsPacket struct {
+	Hash common.Hash
+}
+
+type GetOnePendingEtxsPacket66 struct {
+	RequestId uint64
+	GetOnePendingEtxsPacket
+}
+
+type PendingEtxsPacket struct {
+	PendingEtxs types.PendingEtxs
+}
+
+func (p *PendingEtxsPacket) Unpack() types.PendingEtxs {
+	var (
+		etxs = make([]types.Transactions, len(p.PendingEtxs.Etxs))
+	)
+	for i, etx := range p.PendingEtxs.Etxs {
+		etxs[i] = etx
+	}
+	return types.PendingEtxs{Header: p.PendingEtxs.Header, Etxs: etxs}
+}
+
+type PendingEtxsPacket66 struct {
+	RequestId uint64
+	PendingEtxsPacket
+}
+
 func (*StatusPacket) Name() string { return "Status" }
 func (*StatusPacket) Kind() byte   { return StatusMsg }
 
@@ -380,3 +412,9 @@ func (*PooledTransactionsPacket) Kind() byte   { return PooledTransactionsMsg }
 
 func (*GetBlockPacket) Name() string { return "GetBlock" }
 func (*GetBlockPacket) Kind() byte   { return GetBlockMsg }
+
+func (*GetOnePendingEtxsPacket) Name() string { return "GetOnePendingEtxs" }
+func (*GetOnePendingEtxsPacket) Kind() byte   { return GetOnePendingEtxsMsg }
+
+func (*PendingEtxsPacket) Name() string { return "PendingEtxs" }
+func (*PendingEtxsPacket) Kind() byte   { return PendingEtxsMsg }

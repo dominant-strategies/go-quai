@@ -198,6 +198,8 @@ var eth66 = map[uint64]msgHandler{
 	GetReceiptsMsg:           handleGetReceipts66,
 	ReceiptsMsg:              handleReceipts66,
 	GetPooledTransactionsMsg: handleGetPooledTransactions66,
+	PendingEtxsMsg:           handlePendingEtxs,
+	GetOnePendingEtxsMsg:     handleGetOnePendingEtxs66,
 	PooledTransactionsMsg:    handlePooledTransactions66,
 	GetBlockMsg:              handleGetBlock66,
 }
