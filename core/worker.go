@@ -90,6 +90,8 @@ func (env *environment) copy() *environment {
 	// to do the expensive deep copy for them.
 	cpy.txs = make([]*types.Transaction, len(env.txs))
 	copy(cpy.txs, env.txs)
+	cpy.etxs = make([]*types.Transaction, len(env.etxs))
+	copy(cpy.etxs, env.etxs)
 	cpy.uncles = make(map[common.Hash]*types.Header)
 	for hash, uncle := range env.uncles {
 		cpy.uncles[hash] = uncle
