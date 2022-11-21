@@ -588,8 +588,8 @@ func (s *PublicBlockChainQuaiAPI) Append(ctx context.Context, raw json.RawMessag
 	marshalledEtxs := make([][]interface{}, common.HierarchyDepth)
 	for ctx, etxs := range pendingEtxs {
 		marshalledEtxs[ctx] = make([]interface{}, 0)
-		for i, etx := range etxs {
-			marshalledEtxs[ctx][i] = append(marshalledEtxs[ctx], newRPCTransaction(etx, common.Hash{}, 0, 0, nil))
+		for _, etx := range etxs {
+			marshalledEtxs[ctx] = append(marshalledEtxs[ctx], newRPCTransaction(etx, common.Hash{}, 0, 0, nil))
 		}
 	}
 	fields := map[string]interface{}{
