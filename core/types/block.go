@@ -646,7 +646,7 @@ func NewBlock(header *Header, txs []*Transaction, uncles []*Header, etxs []*Tran
 		}
 	}
 
-	if len(etxs) != 0 {
+	if len(etxs) == 0 {
 		b.header.SetEtxHash(EmptyRootHash)
 	} else {
 		b.header.SetEtxHash(DeriveSha(Transactions(etxs), hasher))
