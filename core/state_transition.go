@@ -340,8 +340,8 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}
 
 	// At this point, the execution completed, so the ETX cache can be dumped and reset
-	var etxs []*types.Transaction
 	st.evm.ETXCacheLock.Lock()
+	etxs := make([]*types.Transaction, len(st.evm.ETXCache))
 	copy(etxs, st.evm.ETXCache)
 	st.evm.ETXCache = make([]*types.Transaction, 0)
 	st.evm.ETXCacheLock.Unlock()
