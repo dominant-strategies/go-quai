@@ -1030,12 +1030,12 @@ func newFrontierInstructionSet() JumpTable {
 			writes:     true,
 		},
 		ETX: {
-			execute:    opETX,
-			dynamicGas: gasCallEIP2929, // temporary
-			minStack:   minStack(10, 1),
-			maxStack:   maxStack(10, 1),
-			memorySize: memoryETX,
-			writes:     true,
+			execute:     opETX,
+			constantGas: params.TxGas, // temporary
+			minStack:    minStack(10, 1),
+			maxStack:    maxStack(10, 1),
+			memorySize:  memoryETX,
+			writes:      true,
 		},
 		ISADDRINTERNAL: {
 			execute:     opIsAddressInternal,
