@@ -534,7 +534,7 @@ func (c *Core) AddLocal(tx *types.Transaction) error {
 }
 
 func (c *Core) TxPoolPending(enforceTips bool) (map[common.Address]types.Transactions, error) {
-	return c.sl.txPool.TxPoolPending(enforceTips)
+	return c.sl.txPool.TxPoolPending(enforceTips, nil)
 }
 
 func (c *Core) Get(hash common.Hash) *types.Transaction {
