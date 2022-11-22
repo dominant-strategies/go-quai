@@ -101,18 +101,13 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 		return err
 	}
 
-	if dec.Type != InternalTxType || dec.Type != ExternalTxType {
-		return ErrTxTypeNotSupported
-	}
-
 	// Decode / verify fields according to transaction type.
 	var inner TxData
 	switch dec.Type {
 	case InternalTxType:
 		var itx InternalTx
 		inner = &itx
-		// Access list is optional for now.
-		if dec.AccessList != nil {
+		if dec.AccessList == nil {
 			return errors.New("missing required field 'accessList' in internal transaction")
 		}
 		itx.AccessList = *dec.AccessList
@@ -169,7 +164,7 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 	case ExternalTxType:
 		var etx ExternalTx
 		inner = &etx
-		if dec.AccessList != nil {
+		if dec.AccessList == nil {
 			return errors.New("missing required field 'accessList' in external transaction")
 		}
 		etx.AccessList = *dec.AccessList
@@ -203,6 +198,7 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 		if dec.Sender == nil {
 			return errors.New("missing required field 'sender' in external transaction")
 		}
+		etx.Sender = *dec.Sender
 
 	default:
 		return ErrTxTypeNotSupported
