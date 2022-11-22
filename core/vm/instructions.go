@@ -846,7 +846,7 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 	// We use it as a temporary value
 	temp := stack.pop() // following opCall protocol
 	// Pop other call parameters.
-	addr, value, etxGas, gasTipCap, gasFeeCap, inOffset, inSize, accessListOffset, accessListSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
+	addr, value, etxGasLimit, gasTipCap, gasFeeCap, inOffset, inSize, accessListOffset, accessListSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
 	// Verify address is not in context
 	if toAddr.IsInChainScope() {
@@ -855,9 +855,11 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 		fmt.Printf("%x is in chain scope, but opETX was called\n", toAddr)
 		return nil, nil // following opCall protocol
 	}
-	fee := gasTipCap.Add(&gasTipCap, &gasFeeCap)
-	fee.Mul(fee, &etxGas)
-	total := value.Add(&value, fee)
+	fee := uint256.NewInt(0)
+	fee.Add(&gasTipCap, &gasFeeCap)
+	fee.Mul(fee, &etxGasLimit)
+	total := uint256.NewInt(0)
+	total.Add(&value, fee)
 	// Fail if we're trying to transfer more than the available balance
 	if total.Sign() == 0 || !interpreter.evm.Context.CanTransfer(interpreter.evm.StateDB, scope.Contract.self.Address(), total.ToBig()) {
 		temp.Clear()
@@ -878,7 +880,7 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 	// Get access list from memory
 	accessListBytes := scope.Memory.GetPtr(int64(accessListOffset.Uint64()), int64(accessListSize.Uint64()))
 	err := rlp.DecodeBytes(accessListBytes, &accessList)
-	if err != nil {
+	if err != nil && accessListSize.Sign() != 0 {
 		temp.Clear()
 		stack.push(&temp)
 		fmt.Printf("%x opETX error: %s\n", scope.Contract.self.Address(), err.Error())
@@ -895,7 +897,7 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 	}
 
 	// create external transaction
-	etxInner := types.ExternalTx{Value: value.ToBig(), To: &toAddr, Sender: sender, GasTipCap: gasTipCap.ToBig(), GasFeeCap: gasFeeCap.ToBig(), Gas: etxGas.Uint64(), Data: data, AccessList: accessList, Nonce: globalNonce}
+	etxInner := types.ExternalTx{Value: value.ToBig(), To: &toAddr, Sender: sender, GasTipCap: gasTipCap.ToBig(), GasFeeCap: gasFeeCap.ToBig(), Gas: etxGasLimit.Uint64(), Data: data, AccessList: accessList, Nonce: globalNonce}
 	etx := types.NewTx(&etxInner)
 
 	interpreter.evm.ETXCacheLock.Lock()
