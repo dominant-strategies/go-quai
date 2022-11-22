@@ -595,7 +595,7 @@ func (sl *Slice) procfutureHeaders() {
 func (sl *Slice) addfutureHeader(header *types.Header) error {
 	max := uint64(time.Now().Unix() + maxTimeFutureHeaders)
 	if header.Time() > max {
-		return fmt.Errorf("future block timestamp %v > allowed %v", header.Time, max)
+		return fmt.Errorf("future block timestamp %v > allowed %v", header.Time(), max)
 	}
 	if !sl.futureHeaders.Contains(header.Hash()) {
 		sl.futureHeaders.Add(header.Hash(), header)
