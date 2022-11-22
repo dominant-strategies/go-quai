@@ -330,7 +330,7 @@ func (sl *Slice) CollectEtxsForManifest(manifest types.BlockManifest) (types.Tra
 		} else if res := rawdb.ReadPendingEtxs(sl.sliceDb, hash); res != nil {
 			pendingEtxs = res
 		} else {
-			return nil, fmt.Errorf("unable to find pending etxs for hash in manifest", "hash: ", hash)
+			return nil, fmt.Errorf("unable to find pending etxs for hash in manifest, hash: %s", hash.String())
 		}
 		etxs = append(etxs, pendingEtxs[common.PRIME_CTX]...)
 		etxs = append(etxs, pendingEtxs[common.REGION_CTX]...)
@@ -369,7 +369,7 @@ func (sl *Slice) CollectNewlyConfirmedEtxs(block *types.Block, location common.L
 	// Terminate the search if we reached genesis
 	if block.NumberU64() == 0 {
 		if block.Hash() != sl.config.GenesisHash {
-			return nil, fmt.Errorf("terminated search on bad genesis", "block0 hash: ", block.Hash())
+			return nil, fmt.Errorf("terminated search on bad genesis, block0 hash: %s", block.Hash().String())
 		} else {
 			return newlyConfirmedEtxs, nil
 		}
@@ -378,7 +378,7 @@ func (sl *Slice) CollectNewlyConfirmedEtxs(block *types.Block, location common.L
 	ancNum := block.NumberU64() - 1
 	ancestor := sl.hc.GetBlock(ancHash, ancNum)
 	if ancestor == nil {
-		return nil, fmt.Errorf("unable to find ancestor", "hash: ", ancHash)
+		return nil, fmt.Errorf("unable to find ancestor, hash: %s", ancHash.String())
 	}
 	// Terminate the search when we find a block produced by the given location
 	if ancestor.Location().Equal(location) {
@@ -767,7 +767,7 @@ func (sl *Slice) procfutureHeaders() {
 func (sl *Slice) addfutureHeader(header *types.Header) error {
 	max := uint64(time.Now().Unix() + maxTimeFutureHeaders)
 	if header.Time() > max {
-		return fmt.Errorf("future block timestamp %v > allowed %v", header.Time, max)
+		return fmt.Errorf("future block timestamp %v > allowed %v", header.Time(), max)
 	}
 	if !sl.futureHeaders.Contains(header.Hash()) {
 		sl.futureHeaders.Add(header.Hash(), header)

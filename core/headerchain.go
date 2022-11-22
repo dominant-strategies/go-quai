@@ -101,7 +101,7 @@ func (hc *HeaderChain) CollectBlockManifest(h *types.Header) (types.BlockManifes
 	// Terminate the search if we reached genesis
 	if h.NumberU64() == 0 {
 		if h.Hash() != hc.config.GenesisHash {
-			return nil, fmt.Errorf("manifest builds on incorrect genesis", "block0 hash: ", h.Hash())
+			return nil, fmt.Errorf("manifest builds on incorrect genesis, block0 hash: %s", h.Hash().String())
 		} else {
 			return manifest, nil
 		}
@@ -129,7 +129,7 @@ func (hc *HeaderChain) CollectEtxRollup(b *types.Block) (types.Transactions, err
 	// Terminate the search if we reached genesis
 	if b.NumberU64() == 0 {
 		if b.Hash() != hc.config.GenesisHash {
-			return nil, fmt.Errorf("manifest builds on incorrect genesis", "block0 hash: ", b.Hash())
+			return nil, fmt.Errorf("manifest builds on incorrect genesis, block0 hash: %s", b.Hash().String())
 		} else {
 			return newEtxs, nil
 		}
