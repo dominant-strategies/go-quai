@@ -26,6 +26,11 @@ type ExternalTx struct {
 	// the origin chain indeed confirmed emission of that ETX.
 }
 
+type PendingEtxs struct {
+	Header *Header        `json:"header" gencodec:"required"`
+	Etxs   []Transactions `json:"etxs"   gencodec:"required"`
+}
+
 // copy creates a deep copy of the transaction data and initializes all fields.
 func (tx *ExternalTx) copy() TxData {
 	cpy := &ExternalTx{
