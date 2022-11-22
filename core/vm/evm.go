@@ -84,8 +84,10 @@ type BlockContext struct {
 // All fields can change between transactions.
 type TxContext struct {
 	// Message information
-	Origin   common.Address // Provides information for ORIGIN
-	GasPrice *big.Int       // Provides information for GASPRICE
+	Origin    common.Address // Provides information for ORIGIN
+	GasPrice  *big.Int       // Provides information for GASPRICE
+	ETXSender common.Address // Original sender of the ETX
+	TxType    byte
 }
 
 // EVM is the Ethereum Virtual Machine base object and provides
