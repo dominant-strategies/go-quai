@@ -208,10 +208,9 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 		statedb.Prepare(tx.Hash(), i)
 		var receipt *types.Receipt
 		if tx.Type() == types.ExternalTxType {
-			prevZeroBal, _ := statedb.GetBalance(common.ZeroAddr) // Get current zero address balance
-			statedb.SetBalance(common.ZeroAddr, tx.Value())       // Use zero address at temp placeholder and set it to tx value
+			prevZeroBal := prepareApplyETX(statedb, tx)
 			receipt, err = applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv)
-			if receipt.Status == types.ReceiptStatusSuccessful && err == nil {
+			if err == nil && receipt.Status == types.ReceiptStatusSuccessful {
 				statedb.AddBalance(common.ZeroAddr, prevZeroBal) // Add previous zero address balance to residual zero address balance
 			} else {
 				statedb.SetBalance(common.ZeroAddr, prevZeroBal) // In the case of an error, reset the balance to what it previously was (TODO: if not all gas is used, it may be considered residual and should be added here. Currently a failed external transaction removes all the sent coins from the supply.)
@@ -272,6 +271,7 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	receipt := &types.Receipt{Type: tx.Type(), PostState: root, CumulativeGasUsed: *usedGas, Etxs: result.Etxs}
 	if result.Failed() {
 		receipt.Status = types.ReceiptStatusFailed
+		fmt.Println(result.Err.Error())
 	} else {
 		receipt.Status = types.ReceiptStatusSuccessful
 	}
@@ -400,12 +400,10 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	blockContext := NewEVMBlockContext(header, bc, author)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, cfg)
 	if tx.Type() == types.ExternalTxType {
-		prevZeroBal, _ := statedb.GetBalance(common.ZeroAddr) // Get current zero address balance
-		statedb.SetBalance(common.ZeroAddr, tx.Value())       // Use zero address at temp placeholder and set it to tx value
+		prevZeroBal := prepareApplyETX(statedb, tx)
 		receipt, err := applyTransaction(msg, config, bc, author, gp, statedb, header.Number(), header.Hash(), tx, usedGas, vmenv)
-		currZeroBal, _ := statedb.GetBalance(common.ZeroAddr) // Get residual zero address balance
-		if receipt.Status == types.ReceiptStatusSuccessful && err == nil {
-			statedb.SetBalance(common.ZeroAddr, prevZeroBal.Add(prevZeroBal, currZeroBal)) // Add residual zero address balance to previous zero address balance
+		if err == nil && receipt.Status == types.ReceiptStatusSuccessful {
+			statedb.AddBalance(common.ZeroAddr, prevZeroBal) // Add previous zero address balance to residual zero address balance
 		} else {
 			statedb.SetBalance(common.ZeroAddr, prevZeroBal) // In the case of an error, reset the balance to what it previously was (TODO: if not all gas is used, it may be considered residual and should be added here. Currently a failed external transaction removes all the sent coins from the supply.)
 		}
@@ -669,4 +667,13 @@ func (p *StateProcessor) StateAtTransaction(block *types.Block, txIndex int, ree
 		}
 	}
 	return nil, vm.BlockContext{}, nil, fmt.Errorf("transaction index %d out of range for block %#x", txIndex, block.Hash())
+}
+
+func prepareApplyETX(statedb *state.StateDB, tx *types.Transaction) *big.Int {
+	prevZeroBal, _ := statedb.GetBalance(common.ZeroAddr)    // Get current zero address balance
+	fee := big.NewInt(0).Add(tx.GasFeeCap(), tx.GasTipCap()) // Add gas price cap to miner tip cap
+	fee.Mul(fee, big.NewInt(int64(tx.Gas())))                // Multiply gas price by gas limit (may need to check for int64 overflow)
+	total := big.NewInt(0).Add(fee, tx.Value())              // Add gas fee to value
+	statedb.SetBalance(common.ZeroAddr, total)               // Use zero address at temp placeholder and set it to gas fee plus value
+	return prevZeroBal
 }
