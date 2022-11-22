@@ -271,7 +271,7 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	receipt := &types.Receipt{Type: tx.Type(), PostState: root, CumulativeGasUsed: *usedGas, Etxs: result.Etxs}
 	if result.Failed() {
 		receipt.Status = types.ReceiptStatusFailed
-		fmt.Println(result.Err.Error())
+		log.Debug(result.Err.Error())
 	} else {
 		receipt.Status = types.ReceiptStatusSuccessful
 	}

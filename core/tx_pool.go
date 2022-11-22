@@ -518,7 +518,7 @@ func (pool *TxPool) ContentFrom(addr common.Address) (types.Transactions, types.
 // The enforceTips parameter can be used to do an extra filtering on the pending
 // transactions and only return those whose **effective** tip is large enough in
 // the next pending execution environment.
-func (pool *TxPool) TxPoolPending(enforceTips bool) (map[common.Address]types.Transactions, error) {
+func (pool *TxPool) TxPoolPending(enforceTips bool, etxSet types.EtxSet) (map[common.Address]types.Transactions, error) {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
@@ -537,6 +537,23 @@ func (pool *TxPool) TxPoolPending(enforceTips bool) (map[common.Address]types.Tr
 		}
 		if len(txs) > 0 {
 			pending[addr] = txs
+		}
+	}
+
+	if etxSet != nil {
+		for _, entry := range etxSet {
+			addr := entry.ETX.ETXSender()
+			tx := entry.ETX
+			if tx.ETXSender().Location().Equal(common.NodeLocation) { // Sanity check
+				log.Error("ETX %s sender %s is in our location!", tx.Hash().String(), tx.ETXSender().String())
+				continue // skip this tx
+			}
+			// If the miner requests tip enforcement, cap the lists now
+			if enforceTips && !pool.locals.contains(addr) && tx.EffectiveGasTipIntCmp(pool.gasPrice, pool.priced.urgent.baseFee) < 0 {
+				log.Debug("ETX %s has incorrect or low gas price", tx.Hash().String())
+				continue // skip this tx
+			}
+			pending[addr] = append(pending[addr], tx) // ETXs do not have to be sorted by address but this way all TXs are in the same list
 		}
 	}
 	return pending, nil
