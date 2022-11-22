@@ -644,10 +644,10 @@ type SendPendingEtxsToDomArgs struct {
 }
 
 func (s *PublicBlockChainQuaiAPI) SendPendingEtxsToDom(ctx context.Context, raw json.RawMessage) error {
-	var args SendPendingEtxsToDomArgs
-	if err := json.Unmarshal(raw, &args); err != nil {
+	var pEtxs types.PendingEtxs
+	if err := json.Unmarshal(raw, &pEtxs); err != nil {
 		return err
 	}
-	log.Info("Received subordinate ETXs", "BlockHash: ", args.Header.Hash())
-	return s.b.AddPendingEtxs(&args.Header, args.NewPendingEtxs)
+	log.Info("Received subordinate ETXs", "BlockHash: ", pEtxs.Header.Hash())
+	return s.b.AddPendingEtxs(pEtxs)
 }

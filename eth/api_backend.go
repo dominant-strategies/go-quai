@@ -382,16 +382,16 @@ func (b *QuaiAPIBackend) GetPendingHeader() (*types.Header, error) {
 	return b.eth.core.GetPendingHeader()
 }
 
-func (b *QuaiAPIBackend) SendPendingEtxsToDom(header *types.Header, etxs []types.Transactions) error {
-	return b.eth.core.SendPendingEtxsToDom(header, etxs)
+func (b *QuaiAPIBackend) SendPendingEtxsToDom(pEtxs types.PendingEtxs) error {
+	return b.eth.core.SendPendingEtxsToDom(pEtxs)
 }
 
 func (b *QuaiAPIBackend) GetSubManifest(blockHash common.Hash) (types.BlockManifest, error) {
 	return b.eth.core.GetSubManifest(blockHash)
 }
 
-func (b *QuaiAPIBackend) AddPendingEtxs(header *types.Header, etxs []types.Transactions) error {
-	return b.eth.core.AddPendingEtxs(header, etxs)
+func (b *QuaiAPIBackend) AddPendingEtxs(pEtxs types.PendingEtxs) error {
+	return b.eth.core.AddPendingEtxs(pEtxs)
 }
 
 func (b *QuaiAPIBackend) SubscribeHeaderRootsEvent(ch chan<- types.HeaderRoots) event.Subscription {

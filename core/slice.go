@@ -452,8 +452,8 @@ func (sl *Slice) GetPendingHeader() (*types.Header, error) {
 }
 
 // SendPendingEtxsToDom shares a set of pending ETXs with your dom, so he can reference them when a coincident block is found
-func (sl *Slice) SendPendingEtxsToDom(header *types.Header, etxs []types.Transactions) error {
-	return sl.domClient.SendPendingEtxsToDom(context.Background(), header, etxs)
+func (sl *Slice) SendPendingEtxsToDom(pEtxs types.PendingEtxs) error {
+	return sl.domClient.SendPendingEtxsToDom(context.Background(), pEtxs)
 }
 
 // GetSubManifest gets the subordinate block manifest for all blocks since the
@@ -466,14 +466,14 @@ func (sl *Slice) GetSubManifest(parentHash common.Hash) (types.BlockManifest, er
 	return sl.hc.CollectBlockManifest(header)
 }
 
-func (sl *Slice) AddPendingEtxs(header *types.Header, etxs []types.Transactions) error {
-	log.Info("Received pending ETXs", "block: ", header.Hash())
+func (sl *Slice) AddPendingEtxs(pEtxs types.PendingEtxs) error {
+	log.Info("Received pending ETXs", "block: ", pEtxs.Header.Hash())
 	// Only write the pending ETXs if we have not seen them before
-	if !sl.pendingEtxs.Contains(header.Hash()) {
+	if !sl.pendingEtxs.Contains(pEtxs.Header.Hash()) {
 		// Write to pending ETX database
-		rawdb.WritePendingEtxs(sl.sliceDb, header.Hash(), etxs)
+		rawdb.WritePendingEtxs(sl.sliceDb, pEtxs.Header.Hash(), pEtxs.Etxs)
 		// Also write to cache for faster access
-		sl.pendingEtxs.Add(header.Hash(), etxs)
+		sl.pendingEtxs.Add(pEtxs.Header.Hash(), pEtxs.Etxs)
 	}
 	return nil
 }
@@ -599,7 +599,7 @@ func (sl *Slice) init(genesis *Genesis) error {
 		return errors.New("failed to get genesis header")
 	}
 	emptyPendingEtxs := []types.Transactions{types.Transactions{}, types.Transactions{}, types.Transactions{}}
-	err := sl.AddPendingEtxs(genesisHeader, emptyPendingEtxs)
+	err := sl.AddPendingEtxs(types.PendingEtxs{genesisHeader, emptyPendingEtxs})
 	if err != nil {
 		return err
 	}

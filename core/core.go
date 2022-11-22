@@ -77,7 +77,7 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 			}
 			// Let our dom know about the new ETXs we have pending
 			if nodeCtx > common.PRIME_CTX {
-				if err := c.sl.SendPendingEtxsToDom(block.Header(), newPendingEtxs); err != nil {
+				if err := c.sl.SendPendingEtxsToDom(types.PendingEtxs{block.Header(), newPendingEtxs}); err != nil {
 					log.Error("failed to send ETXs to domclient", "block: ", block.Hash(), "err", err)
 				}
 			}
@@ -141,16 +141,16 @@ func (c *Core) GetPendingHeader() (*types.Header, error) {
 	return c.sl.GetPendingHeader()
 }
 
-func (c *Core) SendPendingEtxsToDom(header *types.Header, etxs []types.Transactions) error {
-	return c.sl.SendPendingEtxsToDom(header, etxs)
+func (c *Core) SendPendingEtxsToDom(pEtxs types.PendingEtxs) error {
+	return c.sl.SendPendingEtxsToDom(pEtxs)
 }
 
 func (c *Core) GetSubManifest(blockHash common.Hash) (types.BlockManifest, error) {
 	return c.sl.GetSubManifest(blockHash)
 }
 
-func (c *Core) AddPendingEtxs(header *types.Header, etxs []types.Transactions) error {
-	return c.sl.AddPendingEtxs(header, etxs)
+func (c *Core) AddPendingEtxs(pEtxs types.PendingEtxs) error {
+	return c.sl.AddPendingEtxs(pEtxs)
 }
 
 //---------------------//
