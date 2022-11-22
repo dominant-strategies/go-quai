@@ -77,6 +77,8 @@ type Message interface {
 	CheckNonce() bool
 	Data() []byte
 	AccessList() types.AccessList
+	ETXSender() common.Address
+	Type() byte
 }
 
 // ExecutionResult includes all output after executing given evm
