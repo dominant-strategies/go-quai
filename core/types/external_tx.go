@@ -87,3 +87,8 @@ func (tx *ExternalTx) rawSignatureValues() (v, r, s *big.Int) {
 func (tx *ExternalTx) setSignatureValues(chainID, v, r, s *big.Int) {
 	// Signature values are ignored for external transactions
 }
+
+type PendingEtxs struct {
+	Header *Header
+	Etxs   []Transactions
+}
