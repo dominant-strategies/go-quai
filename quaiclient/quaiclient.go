@@ -191,9 +191,10 @@ func (ec *Client) GetSubManifest(ctx context.Context, header *types.Header) (typ
 	return manifest, nil
 }
 
-func (ec *Client) SendPendingEtxsToDom(ctx context.Context, header *types.Header, etxs []types.Transactions) error {
-	fields := RPCMarshalHeader(header)
-	fields["newPendingEtxs"] = etxs
+func (ec *Client) SendPendingEtxsToDom(ctx context.Context, pEtxs types.PendingEtxs) error {
+	fields := make(map[string]interface{})
+	fields["header"] = RPCMarshalHeader(pEtxs.Header)
+	fields["etxs"] = pEtxs.Etxs
 	var raw json.RawMessage
 	err := ec.c.CallContext(ctx, &raw, "quai_sendPendingEtxsToDom", fields)
 	if err != nil {
