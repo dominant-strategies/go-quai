@@ -423,11 +423,11 @@ func TestStateProcessorErrors(t *testing.T) {
 		testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	)
 	var makeTx = func(nonce uint64, to common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *types.Transaction {
-		tx, _ := types.SignTx(types.NewTransaction(nonce, to, amount, gasLimit, gasPrice, data), signer, testKey)
+		tx, _ := types.SignTx(types.NewTx(&types.InternalTx{ChainID: big.NewInt(9000), Nonce: nonce, GasTipCap: common.Big0, GasFeeCap: gasPrice, Gas: gasLimit, To: &to, Value: amount, Data: data}), signer, testKey)
 		return tx
 	}
 	var mkDynamicTx = func(nonce uint64, to common.Address, gasLimit uint64, gasTipCap, gasFeeCap *big.Int) *types.Transaction {
-		tx, _ := types.SignTx(types.NewTx(&types.DynamicFeeTx{
+		tx, _ := types.SignTx(types.NewTx(&types.InternalTx{
 			Nonce:     nonce,
 			GasTipCap: gasTipCap,
 			GasFeeCap: gasFeeCap,
@@ -449,8 +449,8 @@ func TestStateProcessorErrors(t *testing.T) {
 					},
 				},
 			}
-			genesis       = gspec.MustCommit(db)
-			blockchain, _ = NewBlockChain(db, nil, gspec.Config, blake3pow.NewFaker(), vm.Config{}, nil, nil)
+			_             = gspec.MustCommit(db)
+			blockchain, _ = NewHeaderChain(db, blake3pow.NewFaker(), gspec.Config, nil, vm.Config{})
 		)
 		defer blockchain.Stop()
 		bigNumber := new(big.Int).SetBytes(common.FromHex("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
@@ -549,8 +549,9 @@ func TestStateProcessorErrors(t *testing.T) {
 				want: "could not apply tx 0 [0xd82a0c2519acfeac9a948258c47e784acd20651d9d80f9a1c67b4137651c3a24]: insufficient funds for gas * price + value: address 0x71562b71999873DB5b286dF957af199Ec94617F7 have 1000000000000000000 want 2431633873983640103894990685182446064918669677978451844828609264166175722438635000",
 			},
 		} {
-			block := GenerateBadBlock(genesis, blake3pow.NewFaker(), tt.txs, gspec.Config)
-			_, err := blockchain.InsertChain(types.Blocks{block})
+			var err error
+			//block := GenerateBadBlock(genesis, blake3pow.NewFaker(), tt.txs, gspec.Config)
+			//_, err := blockchain.InsertChain(types.Blocks{block})
 			if err == nil {
 				t.Fatal("block imported without errors")
 			}
@@ -559,5 +560,4 @@ func TestStateProcessorErrors(t *testing.T) {
 			}
 		}
 	}
-
 }
