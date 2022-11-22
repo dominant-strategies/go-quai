@@ -31,6 +31,21 @@ type PendingEtxs struct {
 	Etxs   []Transactions `json:"etxs"   gencodec:"required"`
 }
 
+func (p *PendingEtxs) IsValid(hasher TrieHasher) bool {
+	if p == nil || p.Header == nil || p.Etxs == nil {
+		return false
+	}
+	if len(p.Etxs) < common.HierarchyDepth {
+		return false
+	}
+	for ctx, etxs := range p.Etxs {
+		if DeriveSha(etxs, hasher) != p.Header.EtxHash(ctx) {
+			return false
+		}
+	}
+	return true
+}
+
 // copy creates a deep copy of the transaction data and initializes all fields.
 func (tx *ExternalTx) copy() TxData {
 	cpy := &ExternalTx{
@@ -82,9 +97,4 @@ func (tx *ExternalTx) rawSignatureValues() (v, r, s *big.Int) {
 
 func (tx *ExternalTx) setSignatureValues(chainID, v, r, s *big.Int) {
 	// Signature values are ignored for external transactions
-}
-
-type PendingEtxs struct {
-	Header *Header
-	Etxs   []Transactions
 }

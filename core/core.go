@@ -78,6 +78,22 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 	return len(blocks), nil
 }
 
+// GetPendingEtxs returns any pending ETXs which were emitted by the specified
+// block. Returns 'nil' if the block was not found
+func (c *Core) GetPendingEtxs(blockHash common.Hash) *types.PendingEtxs {
+	header := c.GetHeaderByHash(blockHash)
+	pendingEtxs := rawdb.ReadPendingEtxs(c.sl.sliceDb, blockHash)
+	if header == nil || pendingEtxs == nil {
+		return nil
+	}
+	return &types.PendingEtxs{Header: header, Etxs: pendingEtxs}
+}
+
+// HasPendingEtxs inserts a set of pending ETXs to the pending ETX database
+func (c *Core) HasPendingEtxs(blockHash common.Hash) bool {
+	return nil != rawdb.ReadPendingEtxsRLP(c.sl.sliceDb, blockHash)
+}
+
 // InsertChainWithoutSealVerification works exactly the same
 // except for seal verification, seal verification is omitted
 func (c *Core) InsertChainWithoutSealVerification(block *types.Block) (int, error) {
