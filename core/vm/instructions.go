@@ -276,7 +276,12 @@ func opOrigin(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 	return nil, nil
 }
 func opCaller(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.push(new(uint256.Int).SetBytes(scope.Contract.Caller().Bytes()))
+	if interpreter.evm.TxType == types.ExternalTxType {
+		scope.Stack.push(new(uint256.Int).SetBytes(interpreter.evm.ETXSender.Bytes()))
+	} else {
+		scope.Stack.push(new(uint256.Int).SetBytes(scope.Contract.Caller().Bytes()))
+	}
+
 	return nil, nil
 }
 
