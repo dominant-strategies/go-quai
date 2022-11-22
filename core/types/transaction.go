@@ -251,6 +251,8 @@ func (tx *Transaction) Value() *big.Int { return new(big.Int).Set(tx.inner.value
 // Nonce returns the sender account nonce of the transaction.
 func (tx *Transaction) Nonce() uint64 { return tx.inner.nonce() }
 
+func (tx *Transaction) ETXSender() common.Address { return tx.inner.(*ExternalTx).Sender }
+
 // To returns the recipient address of the transaction.
 // For contract-creation transactions, To returns nil.
 func (tx *Transaction) To() *common.Address {
@@ -614,6 +616,8 @@ type Message struct {
 	data       []byte
 	accessList AccessList
 	checkNonce bool
+	etxsender  common.Address // only used in ETX
+	txtype     byte
 }
 
 func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice, gasFeeCap, gasTipCap *big.Int, data []byte, accessList AccessList, checkNonce bool) Message {
@@ -645,6 +649,7 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 		data:       tx.Data(),
 		accessList: tx.AccessList(),
 		checkNonce: true,
+		txtype:     tx.Type(),
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
@@ -653,23 +658,27 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 	var err error
 	if tx.Type() == ExternalTxType {
 		msg.from = common.ZeroAddr
+		msg.etxsender, err = Sender(s, tx)
+		msg.checkNonce = false
 	} else {
 		msg.from, err = Sender(s, tx)
 	}
 	return msg, err
 }
 
-func (m Message) From() common.Address   { return m.from }
-func (m Message) To() *common.Address    { return m.to }
-func (m Message) GasPrice() *big.Int     { return m.gasPrice }
-func (m Message) GasFeeCap() *big.Int    { return m.gasFeeCap }
-func (m Message) GasTipCap() *big.Int    { return m.gasTipCap }
-func (m Message) Value() *big.Int        { return m.amount }
-func (m Message) Gas() uint64            { return m.gasLimit }
-func (m Message) Nonce() uint64          { return m.nonce }
-func (m Message) Data() []byte           { return m.data }
-func (m Message) AccessList() AccessList { return m.accessList }
-func (m Message) CheckNonce() bool       { return m.checkNonce }
+func (m Message) From() common.Address      { return m.from }
+func (m Message) To() *common.Address       { return m.to }
+func (m Message) GasPrice() *big.Int        { return m.gasPrice }
+func (m Message) GasFeeCap() *big.Int       { return m.gasFeeCap }
+func (m Message) GasTipCap() *big.Int       { return m.gasTipCap }
+func (m Message) Value() *big.Int           { return m.amount }
+func (m Message) Gas() uint64               { return m.gasLimit }
+func (m Message) Nonce() uint64             { return m.nonce }
+func (m Message) Data() []byte              { return m.data }
+func (m Message) AccessList() AccessList    { return m.accessList }
+func (m Message) CheckNonce() bool          { return m.checkNonce }
+func (m Message) ETXSender() common.Address { return m.etxsender }
+func (m Message) Type() byte                { return m.txtype }
 
 // AccessList is an EIP-2930 access list.
 type AccessList []AccessTuple
@@ -687,4 +696,9 @@ func (al AccessList) StorageKeys() int {
 		sum += len(tuple.StorageKeys)
 	}
 	return sum
+}
+
+// This function must only be used by tests
+func GetInnerForTesting(tx *Transaction) TxData {
+	return tx.inner
 }
