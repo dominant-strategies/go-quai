@@ -126,19 +126,17 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	}
 	// Confirm the ETXs emitted by the transactions in this block exactly match the
 	// ETXs given in the block body
-	emittedHash := types.DeriveSha(emittedEtxs, trie.NewStackTrie(nil))
-	givenHash := types.DeriveSha(block.ExtTransactions(), trie.NewStackTrie(nil))
-	if emittedHash != givenHash {
-		return fmt.Errorf("invalid etx body (remote: %x local: %x)", givenHash, emittedHash)
+	if etxHash := types.DeriveSha(emittedEtxs, trie.NewStackTrie(nil)); etxHash != header.EtxHash() {
+		return fmt.Errorf("invalid etx hash (remote: %x local: %x)", header.EtxHash(), etxHash)
 	}
-	// Collect the ETX rollup tree with new ETXs from this block
+	// Collect the ETX rollup with new ETXs from this block (and all blocks since
+	// the prior coincident block), and check the rollup hash matches.
 	etxRollup, err := v.hc.CollectEtxRollup(block)
 	if err != nil {
 		return fmt.Errorf("unable to get ETX rollup")
 	}
-	// Check ETX rollup tree hash matches
-	if etxHash := types.DeriveSha(etxRollup, trie.NewStackTrie(nil)); etxHash != header.EtxHash() {
-		return fmt.Errorf("invalid etxhash (remote: %x local: %x)", header.EtxHash(), etxHash)
+	if etxRollupHash := types.DeriveSha(etxRollup, trie.NewStackTrie(nil)); etxRollupHash != header.EtxRollupHash() {
+		return fmt.Errorf("invalid etx rollup hash (remote: %x local: %x)", header.EtxRollupHash(), etxRollupHash)
 	}
 
 	return nil

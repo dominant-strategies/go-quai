@@ -700,6 +700,7 @@ func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *typ
 	combinedPendingHeader.SetGasUsed(header.GasUsed(index), index)
 	combinedPendingHeader.SetTxHash(header.TxHash(index), index)
 	combinedPendingHeader.SetEtxHash(header.EtxHash(index), index)
+	combinedPendingHeader.SetEtxRollupHash(header.EtxRollupHash(index), index)
 	combinedPendingHeader.SetManifestHash(header.ManifestHash(index), index)
 	combinedPendingHeader.SetReceiptHash(header.ReceiptHash(index), index)
 	combinedPendingHeader.SetRoot(header.Root(index), index)

@@ -91,6 +91,7 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 		"stateRoot":           head.RootArray(),
 		"manifestHash":        head.ManifestHashArray(),
 		"extTransactionsRoot": head.EtxHashArray(),
+		"extRollupRoot":       head.EtxRollupHashArray(),
 		"miner":               head.CoinbaseArray(),
 		"extraData":           hexutil.Bytes(head.Extra()),
 		"size":                hexutil.Uint64(head.Size()),
