@@ -67,7 +67,7 @@ func (bc *BodyDb) Append(batch ethdb.Batch, block *types.Block, newInboundEtxs t
 	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
 
-	// Process our block and retrieve external blocks.
+	// Process our block
 	logs, err := bc.processor.Apply(batch, block, newInboundEtxs)
 	if err != nil {
 		return nil, err
