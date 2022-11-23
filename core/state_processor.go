@@ -211,19 +211,18 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 			if _, exists := etxSet[tx.Hash()]; !exists { // Verify that the ETX exists in the set
 				return nil, nil, nil, 0, fmt.Errorf("invalid external transaction: etx %x not found in unspent etx set", tx.Hash())
 			}
-			prevZeroBal := prepareApplyETX(statedb, tx)
+			prevZeroBal := prepareApplyETX(statedb, tx) // Prepare the zero address balance to reflect the balance of the ETX
 			receipt, err = applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv)
-			if err == nil && receipt.Status == types.ReceiptStatusSuccessful {
-				statedb.AddBalance(common.ZeroAddr, prevZeroBal) // Add previous zero address balance to residual zero address balance
-			} else {
-				statedb.SetBalance(common.ZeroAddr, prevZeroBal) // In the case of an error, reset the balance to what it previously was (TODO: if not all gas is used, it may be considered residual and should be added here. Currently a failed external transaction removes all the sent coins from the supply.)
+			if err == nil {
+				statedb.AddBalance(common.ZeroAddr, prevZeroBal) // Add previous zero address balance to residual zero address balance, even if the transaction was unsuccessful (e.g. failed)
 			}
 
 			if err != nil {
+				statedb.SetBalance(common.ZeroAddr, prevZeroBal) // In the case of an error, reset the balance to what it previously was
 				return nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 			}
 
-			delete(etxSet, tx.Hash())
+			delete(etxSet, tx.Hash()) // This ETX has been spent so remove it from the unspent set
 
 		} else if tx.Type() == types.InternalTxType {
 			receipt, err = applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv)
