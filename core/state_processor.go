@@ -208,6 +208,9 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 		statedb.Prepare(tx.Hash(), i)
 		var receipt *types.Receipt
 		if tx.Type() == types.ExternalTxType {
+			if _, exists := etxSet[tx.Hash()]; !exists { // Verify that the ETX exists in the set
+				return nil, nil, nil, 0, fmt.Errorf("invalid external transaction: etx %x not found in unspent etx set", tx.Hash())
+			}
 			prevZeroBal := prepareApplyETX(statedb, tx)
 			receipt, err = applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv)
 			if err == nil && receipt.Status == types.ReceiptStatusSuccessful {
@@ -219,6 +222,9 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 			if err != nil {
 				return nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 			}
+
+			delete(etxSet, tx.Hash())
+
 		} else if tx.Type() == types.InternalTxType {
 			receipt, err = applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv)
 			if err != nil {
@@ -304,13 +310,13 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 	}
 	etxSet.Update(newInboundEtxs, block.NumberU64())
 
-	// Process our block and retrieve external blocks.
+	// Process our block
 	receipts, logs, statedb, usedGas, err := p.Process(block, etxSet)
 	if err != nil {
 		return nil, err
 	}
 
-	err = p.validator.ValidateState(block, statedb, receipts, usedGas, etxSet)
+	err = p.validator.ValidateState(block, statedb, receipts, usedGas)
 	if err != nil {
 		return nil, err
 	}
@@ -377,13 +383,9 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 			}
 		}
 	}
-	// Remove ETXs spent in this block from the etx cache
-	for _, tx := range block.Transactions() {
-		if tx.Type() == types.ExternalTxType {
-			delete(etxSet, tx.Hash())
-		}
-	}
+
 	rawdb.WriteEtxSet(batch, block.Hash(), block.NumberU64(), etxSet)
+
 	return logs, nil
 }
 
