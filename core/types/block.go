@@ -69,24 +69,25 @@ func (n *BlockNonce) UnmarshalText(input []byte) error {
 
 // Header represents a block header in the Ethereum blockchain.
 type Header struct {
-	parentHash   []common.Hash    `json:"parentHash"           gencodec:"required"`
-	uncleHash    []common.Hash    `json:"sha3Uncles"           gencodec:"required"`
-	coinbase     []common.Address `json:"miner"                gencodec:"required"`
-	root         []common.Hash    `json:"stateRoot"            gencodec:"required"`
-	txHash       []common.Hash    `json:"transactionsRoot"     gencodec:"required"`
-	etxHash      []common.Hash    `json:"extTransactionsRoot"  gencodec:"required"`
-	manifestHash []common.Hash    `json:"manifestHash"         gencodec:"required"`
-	receiptHash  []common.Hash    `json:"receiptsRoot"         gencodec:"required"`
-	bloom        []Bloom          `json:"logsBloom"            gencodec:"required"`
-	difficulty   []*big.Int       `json:"difficulty"           gencodec:"required"`
-	number       []*big.Int       `json:"number"               gencodec:"required"`
-	gasLimit     []uint64         `json:"gasLimit"             gencodec:"required"`
-	gasUsed      []uint64         `json:"gasUsed"              gencodec:"required"`
-	baseFee      []*big.Int       `json:"baseFeePerGas"        gencodec:"required"`
-	location     common.Location  `json:"location"             gencodec:"required"`
-	time         uint64           `json:"timestamp"            gencodec:"required"`
-	extra        []byte           `json:"extraData"            gencodec:"required"`
-	nonce        BlockNonce       `json:"nonce"`
+	parentHash    []common.Hash    `json:"parentHash"           gencodec:"required"`
+	uncleHash     []common.Hash    `json:"sha3Uncles"           gencodec:"required"`
+	coinbase      []common.Address `json:"miner"                gencodec:"required"`
+	root          []common.Hash    `json:"stateRoot"            gencodec:"required"`
+	txHash        []common.Hash    `json:"transactionsRoot"     gencodec:"required"`
+	etxHash       []common.Hash    `json:"extTransactionsRoot"  gencodec:"required"`
+	etxRollupHash []common.Hash    `json:"extRollupRoot"        gencodec:"required"`
+	manifestHash  []common.Hash    `json:"manifestHash"         gencodec:"required"`
+	receiptHash   []common.Hash    `json:"receiptsRoot"         gencodec:"required"`
+	bloom         []Bloom          `json:"logsBloom"            gencodec:"required"`
+	difficulty    []*big.Int       `json:"difficulty"           gencodec:"required"`
+	number        []*big.Int       `json:"number"               gencodec:"required"`
+	gasLimit      []uint64         `json:"gasLimit"             gencodec:"required"`
+	gasUsed       []uint64         `json:"gasUsed"              gencodec:"required"`
+	baseFee       []*big.Int       `json:"baseFeePerGas"        gencodec:"required"`
+	location      common.Location  `json:"location"             gencodec:"required"`
+	time          uint64           `json:"timestamp"            gencodec:"required"`
+	extra         []byte           `json:"extraData"            gencodec:"required"`
+	nonce         BlockNonce       `json:"nonce"`
 }
 
 // field type overrides for gencodec
@@ -103,24 +104,25 @@ type headerMarshaling struct {
 
 // "external" header encoding. used for eth protocol, etc.
 type extheader struct {
-	ParentHash   []common.Hash
-	UncleHash    []common.Hash
-	Coinbase     []common.Address
-	Root         []common.Hash
-	TxHash       []common.Hash
-	EtxHash      []common.Hash
-	ManifestHash []common.Hash
-	ReceiptHash  []common.Hash
-	Bloom        []Bloom
-	Difficulty   []*big.Int
-	Number       []*big.Int
-	GasLimit     []uint64
-	GasUsed      []uint64
-	BaseFee      []*big.Int
-	Location     common.Location
-	Time         uint64
-	Extra        []byte
-	Nonce        BlockNonce
+	ParentHash    []common.Hash
+	UncleHash     []common.Hash
+	Coinbase      []common.Address
+	Root          []common.Hash
+	TxHash        []common.Hash
+	EtxHash       []common.Hash
+	EtxRollupHash []common.Hash
+	ManifestHash  []common.Hash
+	ReceiptHash   []common.Hash
+	Bloom         []Bloom
+	Difficulty    []*big.Int
+	Number        []*big.Int
+	GasLimit      []uint64
+	GasUsed       []uint64
+	BaseFee       []*big.Int
+	Location      common.Location
+	Time          uint64
+	Extra         []byte
+	Nonce         BlockNonce
 }
 
 // Construct an empty header
@@ -132,6 +134,7 @@ func EmptyHeader() *Header {
 	h.root = make([]common.Hash, common.HierarchyDepth)
 	h.txHash = make([]common.Hash, common.HierarchyDepth)
 	h.etxHash = make([]common.Hash, common.HierarchyDepth)
+	h.etxRollupHash = make([]common.Hash, common.HierarchyDepth)
 	h.manifestHash = make([]common.Hash, common.HierarchyDepth)
 	h.receiptHash = make([]common.Hash, common.HierarchyDepth)
 	h.bloom = make([]Bloom, common.HierarchyDepth)
@@ -146,6 +149,7 @@ func EmptyHeader() *Header {
 		h.txHash[i] = EmptyRootHash
 		h.receiptHash[i] = EmptyRootHash
 		h.etxHash[i] = EmptyRootHash
+		h.etxRollupHash[i] = EmptyRootHash
 		h.manifestHash[i] = EmptyRootHash
 		h.uncleHash[i] = EmptyUncleHash
 		h.difficulty[i] = big.NewInt(0)
@@ -167,6 +171,7 @@ func (h *Header) DecodeRLP(s *rlp.Stream) error {
 	h.root = eh.Root
 	h.txHash = eh.TxHash
 	h.etxHash = eh.EtxHash
+	h.etxRollupHash = eh.EtxRollupHash
 	h.manifestHash = eh.ManifestHash
 	h.receiptHash = eh.ReceiptHash
 	h.bloom = eh.Bloom
@@ -186,24 +191,25 @@ func (h *Header) DecodeRLP(s *rlp.Stream) error {
 // EncodeRLP serializes b into the Ethereum RLP block format.
 func (h *Header) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, extheader{
-		ParentHash:   h.parentHash,
-		UncleHash:    h.uncleHash,
-		Coinbase:     h.coinbase,
-		Root:         h.root,
-		TxHash:       h.txHash,
-		EtxHash:      h.etxHash,
-		ManifestHash: h.manifestHash,
-		ReceiptHash:  h.receiptHash,
-		Bloom:        h.bloom,
-		Difficulty:   h.difficulty,
-		Number:       h.number,
-		GasLimit:     h.gasLimit,
-		GasUsed:      h.gasUsed,
-		BaseFee:      h.baseFee,
-		Location:     h.location,
-		Time:         h.time,
-		Extra:        h.extra,
-		Nonce:        h.nonce,
+		ParentHash:    h.parentHash,
+		UncleHash:     h.uncleHash,
+		Coinbase:      h.coinbase,
+		Root:          h.root,
+		TxHash:        h.txHash,
+		EtxHash:       h.etxHash,
+		EtxRollupHash: h.etxRollupHash,
+		ManifestHash:  h.manifestHash,
+		ReceiptHash:   h.receiptHash,
+		Bloom:         h.bloom,
+		Difficulty:    h.difficulty,
+		Number:        h.number,
+		GasLimit:      h.gasLimit,
+		GasUsed:       h.gasUsed,
+		BaseFee:       h.baseFee,
+		Location:      h.location,
+		Time:          h.time,
+		Extra:         h.extra,
+		Nonce:         h.nonce,
 	})
 }
 
@@ -249,6 +255,13 @@ func (h *Header) EtxHash(args ...int) common.Hash {
 		nodeCtx = args[0]
 	}
 	return h.etxHash[nodeCtx]
+}
+func (h *Header) EtxRollupHash(args ...int) common.Hash {
+	nodeCtx := common.NodeLocation.Context()
+	if len(args) > 0 {
+		nodeCtx = args[0]
+	}
+	return h.etxRollupHash[nodeCtx]
 }
 func (h *Header) ManifestHash(args ...int) common.Hash {
 	nodeCtx := common.NodeLocation.Context()
@@ -361,6 +374,13 @@ func (h *Header) SetEtxHash(val common.Hash, args ...int) {
 	}
 	h.etxHash[nodeCtx] = val
 }
+func (h *Header) SetEtxRollupHash(val common.Hash, args ...int) {
+	nodeCtx := common.NodeLocation.Context()
+	if len(args) > 0 {
+		nodeCtx = args[0]
+	}
+	h.etxRollupHash[nodeCtx] = val
+}
 func (h *Header) SetManifestHash(val common.Hash, args ...int) {
 	nodeCtx := common.NodeLocation.Context()
 	if len(args) > 0 {
@@ -428,20 +448,21 @@ func (h *Header) SetExtra(val []byte) {
 func (h *Header) SetNonce(val BlockNonce) { h.nonce = val }
 
 // Array accessors
-func (h *Header) ParentHashArray() []common.Hash   { return h.parentHash }
-func (h *Header) UncleHashArray() []common.Hash    { return h.uncleHash }
-func (h *Header) CoinbaseArray() []common.Address  { return h.coinbase }
-func (h *Header) RootArray() []common.Hash         { return h.root }
-func (h *Header) TxHashArray() []common.Hash       { return h.txHash }
-func (h *Header) EtxHashArray() []common.Hash      { return h.etxHash }
-func (h *Header) ManifestHashArray() []common.Hash { return h.manifestHash }
-func (h *Header) ReceiptHashArray() []common.Hash  { return h.receiptHash }
-func (h *Header) BloomArray() []Bloom              { return h.bloom }
-func (h *Header) DifficultyArray() []*big.Int      { return h.difficulty }
-func (h *Header) NumberArray() []*big.Int          { return h.number }
-func (h *Header) GasLimitArray() []uint64          { return h.gasLimit }
-func (h *Header) GasUsedArray() []uint64           { return h.gasUsed }
-func (h *Header) BaseFeeArray() []*big.Int         { return h.baseFee }
+func (h *Header) ParentHashArray() []common.Hash    { return h.parentHash }
+func (h *Header) UncleHashArray() []common.Hash     { return h.uncleHash }
+func (h *Header) CoinbaseArray() []common.Address   { return h.coinbase }
+func (h *Header) RootArray() []common.Hash          { return h.root }
+func (h *Header) TxHashArray() []common.Hash        { return h.txHash }
+func (h *Header) EtxHashArray() []common.Hash       { return h.etxHash }
+func (h *Header) EtxRollupHashArray() []common.Hash { return h.etxRollupHash }
+func (h *Header) ManifestHashArray() []common.Hash  { return h.manifestHash }
+func (h *Header) ReceiptHashArray() []common.Hash   { return h.receiptHash }
+func (h *Header) BloomArray() []Bloom               { return h.bloom }
+func (h *Header) DifficultyArray() []*big.Int       { return h.difficulty }
+func (h *Header) NumberArray() []*big.Int           { return h.number }
+func (h *Header) GasLimitArray() []uint64           { return h.gasLimit }
+func (h *Header) GasUsedArray() []uint64            { return h.gasUsed }
+func (h *Header) BaseFeeArray() []*big.Int          { return h.baseFee }
 
 // Hash returns the block hash of the header, which is simply the keccak256 hash of its
 // RLP encoding.
@@ -559,6 +580,11 @@ func (h *Header) EmptyTxs() bool {
 // EmptyEtxs returns true if there are no etxs for this header/block.
 func (h *Header) EmptyEtxs() bool {
 	return h.EtxHash() == EmptyRootHash
+}
+
+// EmptyEtxs returns true if there are no etxs for this header/block.
+func (h *Header) EmptyEtxRollup() bool {
+	return h.EtxRollupHash() == EmptyRootHash
 }
 
 // EmptyTxs returns true if there are no txs for this header/block.
@@ -719,26 +745,27 @@ func (b *Block) EncodeRLP(w io.Writer) error {
 }
 
 // Wrapped header accessors
-func (b *Block) ParentHash(args ...int) common.Hash   { return b.header.ParentHash(args...) }
-func (b *Block) UncleHash(args ...int) common.Hash    { return b.header.UncleHash(args...) }
-func (b *Block) Coinbase(args ...int) common.Address  { return b.header.Coinbase(args...) }
-func (b *Block) Root(args ...int) common.Hash         { return b.header.Root(args...) }
-func (b *Block) TxHash(args ...int) common.Hash       { return b.header.TxHash(args...) }
-func (b *Block) EtxHash(args ...int) common.Hash      { return b.header.EtxHash(args...) }
-func (b *Block) ManifestHash(args ...int) common.Hash { return b.header.ManifestHash(args...) }
-func (b *Block) ReceiptHash(args ...int) common.Hash  { return b.header.ReceiptHash(args...) }
-func (b *Block) Bloom(args ...int) Bloom              { return b.header.Bloom(args...) }
-func (b *Block) Difficulty(args ...int) *big.Int      { return b.header.Difficulty(args...) }
-func (b *Block) Number(args ...int) *big.Int          { return b.header.Number(args...) }
-func (b *Block) NumberU64(args ...int) uint64         { return b.header.NumberU64(args...) }
-func (b *Block) GasLimit(args ...int) uint64          { return b.header.GasLimit(args...) }
-func (b *Block) GasUsed(args ...int) uint64           { return b.header.GasUsed(args...) }
-func (b *Block) BaseFee(args ...int) *big.Int         { return b.header.BaseFee(args...) }
-func (b *Block) Location() common.Location            { return b.header.Location() }
-func (b *Block) Time() uint64                         { return b.header.Time() }
-func (b *Block) Extra() []byte                        { return b.header.Extra() }
-func (b *Block) Nonce() BlockNonce                    { return b.header.Nonce() }
-func (b *Block) NonceU64() uint64                     { return b.header.NonceU64() }
+func (b *Block) ParentHash(args ...int) common.Hash    { return b.header.ParentHash(args...) }
+func (b *Block) UncleHash(args ...int) common.Hash     { return b.header.UncleHash(args...) }
+func (b *Block) Coinbase(args ...int) common.Address   { return b.header.Coinbase(args...) }
+func (b *Block) Root(args ...int) common.Hash          { return b.header.Root(args...) }
+func (b *Block) TxHash(args ...int) common.Hash        { return b.header.TxHash(args...) }
+func (b *Block) EtxHash(args ...int) common.Hash       { return b.header.EtxHash(args...) }
+func (b *Block) EtxRollupHash(args ...int) common.Hash { return b.header.EtxRollupHash(args...) }
+func (b *Block) ManifestHash(args ...int) common.Hash  { return b.header.ManifestHash(args...) }
+func (b *Block) ReceiptHash(args ...int) common.Hash   { return b.header.ReceiptHash(args...) }
+func (b *Block) Bloom(args ...int) Bloom               { return b.header.Bloom(args...) }
+func (b *Block) Difficulty(args ...int) *big.Int       { return b.header.Difficulty(args...) }
+func (b *Block) Number(args ...int) *big.Int           { return b.header.Number(args...) }
+func (b *Block) NumberU64(args ...int) uint64          { return b.header.NumberU64(args...) }
+func (b *Block) GasLimit(args ...int) uint64           { return b.header.GasLimit(args...) }
+func (b *Block) GasUsed(args ...int) uint64            { return b.header.GasUsed(args...) }
+func (b *Block) BaseFee(args ...int) *big.Int          { return b.header.BaseFee(args...) }
+func (b *Block) Location() common.Location             { return b.header.Location() }
+func (b *Block) Time() uint64                          { return b.header.Time() }
+func (b *Block) Extra() []byte                         { return b.header.Extra() }
+func (b *Block) Nonce() BlockNonce                     { return b.header.Nonce() }
+func (b *Block) NonceU64() uint64                      { return b.header.NonceU64() }
 
 // TODO: copies
 

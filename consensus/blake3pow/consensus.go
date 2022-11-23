@@ -420,24 +420,25 @@ func (blake3pow *Blake3pow) FinalizeAndAssemble(chain consensus.ChainHeaderReade
 // headerData comprises all data fields of the header, excluding the nonce, so
 // that the nonce may be independently adjusted in the work algorithm.
 type headerData struct {
-	ParentHash   []common.Hash
-	UncleHash    []common.Hash
-	Coinbase     []common.Address
-	Root         []common.Hash
-	TxHash       []common.Hash
-	EtxHash      []common.Hash
-	ManifestHash []common.Hash
-	ReceiptHash  []common.Hash
-	Bloom        []types.Bloom
-	Difficulty   []*big.Int
-	Number       []*big.Int
-	GasLimit     []uint64
-	GasUsed      []uint64
-	BaseFee      []*big.Int
-	Location     common.Location
-	Time         uint64
-	Extra        []byte
-	Nonce        types.BlockNonce
+	ParentHash    []common.Hash
+	UncleHash     []common.Hash
+	Coinbase      []common.Address
+	Root          []common.Hash
+	TxHash        []common.Hash
+	EtxHash       []common.Hash
+	EtxRollupHash []common.Hash
+	ManifestHash  []common.Hash
+	ReceiptHash   []common.Hash
+	Bloom         []types.Bloom
+	Difficulty    []*big.Int
+	Number        []*big.Int
+	GasLimit      []uint64
+	GasUsed       []uint64
+	BaseFee       []*big.Int
+	Location      common.Location
+	Time          uint64
+	Extra         []byte
+	Nonce         types.BlockNonce
 }
 
 // SealHash returns the hash of a block prior to it being sealed.
@@ -445,23 +446,24 @@ func (blake3pow *Blake3pow) SealHash(header *types.Header) (hash common.Hash) {
 	hasher := blake3.New(32, nil)
 	hasher.Reset()
 	hdata := headerData{
-		ParentHash:   make([]common.Hash, common.HierarchyDepth),
-		UncleHash:    make([]common.Hash, common.HierarchyDepth),
-		Coinbase:     make([]common.Address, common.HierarchyDepth),
-		Root:         make([]common.Hash, common.HierarchyDepth),
-		TxHash:       make([]common.Hash, common.HierarchyDepth),
-		EtxHash:      make([]common.Hash, common.HierarchyDepth),
-		ManifestHash: make([]common.Hash, common.HierarchyDepth),
-		ReceiptHash:  make([]common.Hash, common.HierarchyDepth),
-		Bloom:        make([]types.Bloom, common.HierarchyDepth),
-		Difficulty:   make([]*big.Int, common.HierarchyDepth),
-		Number:       make([]*big.Int, common.HierarchyDepth),
-		GasLimit:     make([]uint64, common.HierarchyDepth),
-		GasUsed:      make([]uint64, common.HierarchyDepth),
-		BaseFee:      make([]*big.Int, common.HierarchyDepth),
-		Location:     header.Location(),
-		Time:         header.Time(),
-		Extra:        header.Extra(),
+		ParentHash:    make([]common.Hash, common.HierarchyDepth),
+		UncleHash:     make([]common.Hash, common.HierarchyDepth),
+		Coinbase:      make([]common.Address, common.HierarchyDepth),
+		Root:          make([]common.Hash, common.HierarchyDepth),
+		TxHash:        make([]common.Hash, common.HierarchyDepth),
+		EtxHash:       make([]common.Hash, common.HierarchyDepth),
+		EtxRollupHash: make([]common.Hash, common.HierarchyDepth),
+		ManifestHash:  make([]common.Hash, common.HierarchyDepth),
+		ReceiptHash:   make([]common.Hash, common.HierarchyDepth),
+		Bloom:         make([]types.Bloom, common.HierarchyDepth),
+		Difficulty:    make([]*big.Int, common.HierarchyDepth),
+		Number:        make([]*big.Int, common.HierarchyDepth),
+		GasLimit:      make([]uint64, common.HierarchyDepth),
+		GasUsed:       make([]uint64, common.HierarchyDepth),
+		BaseFee:       make([]*big.Int, common.HierarchyDepth),
+		Location:      header.Location(),
+		Time:          header.Time(),
+		Extra:         header.Extra(),
 	}
 	for i := 0; i < common.HierarchyDepth; i++ {
 		hdata.ParentHash[i] = header.ParentHash(i)
@@ -470,6 +472,7 @@ func (blake3pow *Blake3pow) SealHash(header *types.Header) (hash common.Hash) {
 		hdata.Root[i] = header.Root(i)
 		hdata.TxHash[i] = header.TxHash(i)
 		hdata.EtxHash[i] = header.EtxHash(i)
+		hdata.EtxRollupHash[i] = header.EtxRollupHash(i)
 		hdata.ManifestHash[i] = header.ManifestHash(i)
 		hdata.ReceiptHash[i] = header.ReceiptHash(i)
 		hdata.Bloom[i] = header.Bloom(i)

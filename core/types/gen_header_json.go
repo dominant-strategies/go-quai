@@ -16,25 +16,26 @@ var _ = (*headerMarshaling)(nil)
 // MarshalJSON marshals as JSON.
 func (h Header) MarshalJSON() ([]byte, error) {
 	var enc struct {
-		ParentHash   []common.Hash    `json:"parentHash"          gencodec:"required"`
-		UncleHash    []common.Hash    `json:"sha3Uncles"          gencodec:"required"`
-		Coinbase     []common.Address `json:"miner"               gencodec:"required"`
-		Root         []common.Hash    `json:"stateRoot"           gencodec:"required"`
-		TxHash       []common.Hash    `json:"transactionsRoot"    gencodec:"required"`
-		EtxHash      []common.Hash    `json:"extTransactionsRoot" gencodec:"required"`
-		ManifestHash []common.Hash    `json:"manifestHash"        gencodec:"required"`
-		ReceiptHash  []common.Hash    `json:"receiptsRoot"        gencodec:"required"`
-		Bloom        []Bloom          `json:"logsBloom"           gencodec:"required"`
-		Difficulty   []*hexutil.Big   `json:"difficulty"          gencodec:"required"`
-		Number       []*hexutil.Big   `json:"number"              gencodec:"required"`
-		GasLimit     []hexutil.Uint64 `json:"gasLimit"            gencodec:"required"`
-		GasUsed      []hexutil.Uint64 `json:"gasUsed"             gencodec:"required"`
-		BaseFee      []*hexutil.Big   `json:"baseFeePerGas"       gencodec:"required"`
-		Location     common.Location  `json:"location"            gencodec:"required"`
-		Time         hexutil.Uint64   `json:"timestamp"           gencodec:"required"`
-		Extra        hexutil.Bytes    `json:"extraData"           gencodec:"required"`
-		Nonce        BlockNonce       `json:"nonce"`
-		Hash         common.Hash      `json:"hash"`
+		ParentHash    []common.Hash    `json:"parentHash"          gencodec:"required"`
+		UncleHash     []common.Hash    `json:"sha3Uncles"          gencodec:"required"`
+		Coinbase      []common.Address `json:"miner"               gencodec:"required"`
+		Root          []common.Hash    `json:"stateRoot"           gencodec:"required"`
+		TxHash        []common.Hash    `json:"transactionsRoot"    gencodec:"required"`
+		EtxHash       []common.Hash    `json:"extTransactionsRoot" gencodec:"required"`
+		EtxRollupHash []common.Hash    `json:"extRollupRoot"       gencodec:"required"`
+		ManifestHash  []common.Hash    `json:"manifestHash"        gencodec:"required"`
+		ReceiptHash   []common.Hash    `json:"receiptsRoot"        gencodec:"required"`
+		Bloom         []Bloom          `json:"logsBloom"           gencodec:"required"`
+		Difficulty    []*hexutil.Big   `json:"difficulty"          gencodec:"required"`
+		Number        []*hexutil.Big   `json:"number"              gencodec:"required"`
+		GasLimit      []hexutil.Uint64 `json:"gasLimit"            gencodec:"required"`
+		GasUsed       []hexutil.Uint64 `json:"gasUsed"             gencodec:"required"`
+		BaseFee       []*hexutil.Big   `json:"baseFeePerGas"       gencodec:"required"`
+		Location      common.Location  `json:"location"            gencodec:"required"`
+		Time          hexutil.Uint64   `json:"timestamp"           gencodec:"required"`
+		Extra         hexutil.Bytes    `json:"extraData"           gencodec:"required"`
+		Nonce         BlockNonce       `json:"nonce"`
+		Hash          common.Hash      `json:"hash"`
 	}
 	// Initialize the enc struct
 	enc.Difficulty = make([]*hexutil.Big, common.HierarchyDepth)
@@ -49,6 +50,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	copy(enc.Root, h.RootArray())
 	copy(enc.TxHash, h.TxHashArray())
 	copy(enc.EtxHash, h.EtxHashArray())
+	copy(enc.EtxRollupHash, h.EtxRollupHashArray())
 	copy(enc.ManifestHash, h.ManifestHashArray())
 	copy(enc.ReceiptHash, h.ReceiptHashArray())
 	copy(enc.Bloom, h.BloomArray())
@@ -70,24 +72,25 @@ func (h Header) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON unmarshals from JSON.
 func (h *Header) UnmarshalJSON(input []byte) error {
 	var dec struct {
-		ParentHash   []common.Hash    `json:"parentHash"       gencodec:"required"`
-		UncleHash    []common.Hash    `json:"sha3Uncles"       gencodec:"required"`
-		Coinbase     []common.Address `json:"miner"            gencodec:"required"`
-		Root         []common.Hash    `json:"stateRoot"        gencodec:"required"`
-		TxHash       []common.Hash    `json:"transactionsRoot" gencodec:"required"`
-		ReceiptHash  []common.Hash    `json:"receiptsRoot"     gencodec:"required"`
-		EtxHash      []common.Hash    `json:"extTransactionsRoot" gencodec:"required"`
-		ManifestHash []common.Hash    `json:"manifestHash"        gencodec:"required"`
-		Bloom        []Bloom          `json:"logsBloom"        gencodec:"required"`
-		Difficulty   []*hexutil.Big    `json:"difficulty"       gencodec:"required"`
-		Number       []*hexutil.Big    `json:"number"           gencodec:"required"`
-		GasLimit     []hexutil.Uint64 `json:"gasLimit"         gencodec:"required"`
-		GasUsed      []hexutil.Uint64 `json:"gasUsed"          gencodec:"required"`
-		BaseFee      []*hexutil.Big    `json:"baseFeePerGas"    gencodec:"required"`
-		Location     common.Location   `json:"location"         gencodec:"required"`
-		Time         hexutil.Uint64   `json:"timestamp"        gencodec:"required"`
-		Extra        hexutil.Bytes    `json:"extraData"        gencodec:"required"`
-		Nonce        BlockNonce       `json:"nonce"`
+		ParentHash    []common.Hash    `json:"parentHash"          gencodec:"required"`
+		UncleHash     []common.Hash    `json:"sha3Uncles"          gencodec:"required"`
+		Coinbase      []common.Address `json:"miner"               gencodec:"required"`
+		Root          []common.Hash    `json:"stateRoot"           gencodec:"required"`
+		TxHash        []common.Hash    `json:"transactionsRoot"    gencodec:"required"`
+		ReceiptHash   []common.Hash    `json:"receiptsRoot"        gencodec:"required"`
+		EtxHash       []common.Hash    `json:"extTransactionsRoot" gencodec:"required"`
+		EtxRollupHash []common.Hash    `json:"extRollupRoot"       gencodec:"required"`
+		ManifestHash  []common.Hash    `json:"manifestHash"        gencodec:"required"`
+		Bloom         []Bloom          `json:"logsBloom"           gencodec:"required"`
+		Difficulty    []*hexutil.Big    `json:"difficulty"         gencodec:"required"`
+		Number        []*hexutil.Big    `json:"number"             gencodec:"required"`
+		GasLimit      []hexutil.Uint64 `json:"gasLimit"            gencodec:"required"`
+		GasUsed       []hexutil.Uint64 `json:"gasUsed"             gencodec:"required"`
+		BaseFee       []*hexutil.Big    `json:"baseFeePerGas"      gencodec:"required"`
+		Location      common.Location   `json:"location"           gencodec:"required"`
+		Time          hexutil.Uint64   `json:"timestamp"           gencodec:"required"`
+		Extra         hexutil.Bytes    `json:"extraData"           gencodec:"required"`
+		Nonce         BlockNonce       `json:"nonce"`
 	}
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
@@ -109,6 +112,9 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	}
 	if dec.EtxHash == nil {
 		return errors.New("missing required field 'extTransactionsRoot' for Header")
+	}
+	if dec.EtxRollupHash == nil {
+		return errors.New("missing required field 'extRollupRoot' for Header")
 	}
 	if dec.ManifestHash == nil {
 		return errors.New("missing required field 'manifestHash' for Header")
@@ -146,9 +152,10 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	h.coinbase = make([]common.Address, common.HierarchyDepth)
 	h.root = make([]common.Hash, common.HierarchyDepth)
 	h.txHash = make([]common.Hash, common.HierarchyDepth)
-	h.receiptHash = make([]common.Hash, common.HierarchyDepth)
 	h.etxHash = make([]common.Hash, common.HierarchyDepth)
+	h.etxRollupHash = make([]common.Hash, common.HierarchyDepth)
 	h.manifestHash = make([]common.Hash, common.HierarchyDepth)
+	h.receiptHash = make([]common.Hash, common.HierarchyDepth)
 	h.bloom= make([]Bloom, common.HierarchyDepth)
 	h.difficulty= make([]*big.Int, common.HierarchyDepth)
 	h.number = make([]*big.Int, common.HierarchyDepth)
@@ -164,6 +171,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		h.SetTxHash(dec.TxHash[i], i)
 		h.SetReceiptHash(dec.ReceiptHash[i], i)
 		h.SetEtxHash(dec.EtxHash[i], i)
+		h.SetEtxRollupHash(dec.EtxRollupHash[i], i)
 		h.SetManifestHash(dec.ManifestHash[i], i)
 		h.SetBloom(dec.Bloom[i], i)
 		if dec.Difficulty[i] == nil {

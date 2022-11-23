@@ -406,6 +406,7 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 		"transactionsRoot":    head.TxHashArray(),
 		"receiptsRoot":        head.ReceiptHashArray(),
 		"extTransactionsRoot": head.EtxHashArray(),
+		"extRollupRoot":       head.EtxRollupHashArray(),
 		"manifestHash":        head.ManifestHashArray(),
 		"location":            head.Location(),
 	}
