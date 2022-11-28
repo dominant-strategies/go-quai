@@ -621,6 +621,8 @@ func (s *PublicBlockChainQuaiAPI) GetPendingHeader(ctx context.Context) (map[str
 	pendingHeader, err := s.b.GetPendingHeader()
 	if err != nil {
 		return nil, err
+	} else if pendingHeader == nil {
+		return nil, errors.New("no pending header found")
 	}
 	// Marshal the response.
 	marshaledPh := RPCMarshalHeader(pendingHeader)
