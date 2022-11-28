@@ -131,8 +131,8 @@ type Termini struct {
 	Termini []common.Hash `json:"termini"`
 }
 
-type pendingEtxs struct {
-	PendingEtxs []types.Transactions `json:"pendingEtxs"`
+type PendingEtxs struct {
+	Etxs []types.Transactions `json:"pendingEtxs"`
 }
 
 func (ec *Client) Append(ctx context.Context, header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, newInboundEtxs types.Transactions) ([]types.Transactions, error) {
@@ -153,11 +153,11 @@ func (ec *Client) Append(ctx context.Context, header *types.Header, domPendingHe
 	}
 
 	// Decode header and transactions.
-	var pEtxs pendingEtxs
+	var pEtxs PendingEtxs
 	if err := json.Unmarshal(raw, &pEtxs); err != nil {
 		return nil, err
 	}
-	return pEtxs.PendingEtxs, nil
+	return pEtxs.Etxs, nil
 }
 
 func (ec *Client) SubRelayPendingHeader(ctx context.Context, pendingHeader types.PendingHeader, reorg bool, location common.Location) {
