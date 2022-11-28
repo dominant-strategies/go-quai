@@ -215,6 +215,9 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 			receipt, err = applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv)
 			if err == nil {
 				statedb.AddBalance(common.ZeroAddr, prevZeroBal) // Add previous zero address balance to residual zero address balance, even if the transaction was unsuccessful (e.g. failed)
+				fmt.Printf("_____INBOUND::::| processed inbound ETX %s\n", tx.Hash())
+			} else {
+				fmt.Printf("_____INBOUND::::| rejected inbound ETX %s\n", tx.Hash())
 			}
 
 			if err != nil {
@@ -228,6 +231,9 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 			receipt, err = applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv)
 			if err != nil {
 				return nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+			}
+			if numEmitted := len(receipt.Etxs); numEmitted > 0 && receipt.Status == types.ReceiptStatusSuccessful {
+				fmt.Printf("_____OUTBOUND:::| emitted %d ETXs in TX %s in block %s\n", numEmitted, tx.Hash(), blockHash)
 			}
 		} else {
 			return nil, nil, nil, 0, ErrTxTypeNotSupported

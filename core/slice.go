@@ -116,6 +116,10 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	location := header.Location()
 	isDomCoincident := sl.engine.IsDomCoincident(header)
 
+	if totalInboundEtxs := len(newInboundEtxs); totalInboundEtxs > 0 {
+		fmt.Printf("_____INBOUND::::| %d new inbound ETXs from dom\n", totalInboundEtxs)
+	}
+
 	// Don't append the block which already exists in the database.
 	if sl.hc.HasHeader(header.Hash(), header.NumberU64()) {
 		// Remove the header from the future headers cache
@@ -191,6 +195,9 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 
 		// Cache the subordinate's pending ETXs
 		sl.AddPendingEtxs(types.PendingEtxs{block.Header(), subPendingEtxs})
+		if totalNewEtxs := len(subPendingEtxs[common.PRIME_CTX]) + len(subPendingEtxs[common.REGION_CTX]) + len(subPendingEtxs[common.ZONE_CTX]); totalNewEtxs > 0 {
+			fmt.Printf("_____OUTBOUND:::| received %d new pending ETXs from sub in block %s\n", totalNewEtxs, block.Hash())
+		}
 	}
 
 	// Combine sub's pending ETXs, sub rollup, and our local ETXs into localPendingEtxs
@@ -305,8 +312,16 @@ func (sl *Slice) CollectNewlyConfirmedEtxs(block *types.Block, location common.L
 		subRollup = subRollups[nodeCtx+1]
 	}
 
+	if count := len(referencableEtxs); count > 0 {
+		fmt.Printf("_____INBOUND::::| %d ETXs referencable in block %s\n", count, block.Hash())
+	}
+
 	// Filter for ETXs destined to this slice
 	newInboundEtxs := referencableEtxs.FilterToSlice(location, nodeCtx)
+
+	if count := len(newInboundEtxs); count > 0 {
+		fmt.Printf("_____INBOUND::::| %d ETXs inbound in block %s\n", count, block.Hash())
+	}
 
 	// Filter this list to exclude any ETX for which we are not the crossing
 	// context node. Such ETXs cannot be used by our subordinate for one of the
@@ -320,6 +335,9 @@ func (sl *Slice) CollectNewlyConfirmedEtxs(block *types.Block, location common.L
 	// both the origin & destination. See the definition of the `CommonDom()`
 	// method for more explanation.
 	newlyConfirmedEtxs := newInboundEtxs.FilterConfirmationCtx(nodeCtx)
+	if count := len(newlyConfirmedEtxs); count > 0 {
+		fmt.Printf("_____INBOUND::::| %d ETXs cleared in block %s\n", count, block.Hash())
+	}
 
 	// Terminate the search if we reached genesis
 	if block.NumberU64() == 0 {

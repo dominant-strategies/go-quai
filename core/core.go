@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"io"
 	"math/big"
 	"time"
@@ -63,6 +64,10 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 			if nodeCtx > common.PRIME_CTX {
 				if err := c.sendPendingEtxsToDom(types.PendingEtxs{block.Header(), newPendingEtxs}); err != nil {
 					log.Error("failed to send ETXs to domclient", "block: ", block.Hash(), "err", err)
+				} else {
+					if totalNewEtxs := len(newPendingEtxs[common.PRIME_CTX]) + len(newPendingEtxs[common.REGION_CTX]) + len(newPendingEtxs[common.ZONE_CTX]); totalNewEtxs > 0 {
+						fmt.Printf("_____OUTBOUND:::| sent %d new pending ETXs to dom, in block %s\n", totalNewEtxs, block.Hash())
+					}
 				}
 			}
 		} else {

@@ -1,6 +1,8 @@
 package types
 
 import (
+	"fmt"
+
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/log"
 )
@@ -26,6 +28,9 @@ func NewEtxSet() EtxSet {
 // a block in this location. This method adds any new ETXs to the set and
 // removes expired ETXs.
 func (set EtxSet) Update(newInboundEtxs Transactions, currentHeight uint64) {
+	if numNewEtxs := len(newInboundEtxs); numNewEtxs > 0 {
+		fmt.Printf("_____INBOUND::::| added %n ETXs to ETX set\n", numNewEtxs)
+	}
 	// Add new ETX entries to the inbound set
 	for _, etx := range newInboundEtxs {
 		if etx.ToChain().Equal(common.NodeLocation) {

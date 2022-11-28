@@ -677,5 +677,8 @@ func (s *PublicBlockChainQuaiAPI) SendPendingEtxsToDom(ctx context.Context, raw 
 		return err
 	}
 	log.Info("Received subordinate ETXs", "BlockHash: ", pEtxs.Header.Hash())
+	if totalNewEtxs := len(pEtxs.Etxs[common.PRIME_CTX]) + len(pEtxs.Etxs[common.REGION_CTX]) + len(pEtxs.Etxs[common.ZONE_CTX]); totalNewEtxs > 0 {
+		fmt.Printf("_____OUTBOUND:::| received %d new pending ETXs from sub in block %s\n", totalNewEtxs, pEtxs.Header.Hash())
+	}
 	return s.b.AddPendingEtxs(pEtxs)
 }
