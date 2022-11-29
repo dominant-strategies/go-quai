@@ -350,7 +350,7 @@ func (blake3pow *Blake3pow) HasCoincidentDifficulty(header *types.Header) bool {
 	if nodeCtx > common.PRIME_CTX {
 		domCtx := nodeCtx - 1
 		domTarget := new(big.Int).Div(big2e256, header.Difficulty(domCtx))
-		if new(big.Int).SetBytes(blake3pow.SealHash(header).Bytes()).Cmp(domTarget) <= 0 {
+		if new(big.Int).SetBytes(header.Hash().Bytes()).Cmp(domTarget) <= 0 {
 			return true
 		}
 	}
@@ -379,7 +379,7 @@ func (blake3pow *Blake3pow) verifySeal(chain consensus.ChainHeaderReader, header
 	}
 	// Check that SealHash meets the difficulty target
 	target := new(big.Int).Div(big2e256, header.Difficulty())
-	if new(big.Int).SetBytes(blake3pow.SealHash(header).Bytes()).Cmp(target) > 0 {
+	if new(big.Int).SetBytes(header.Hash().Bytes()).Cmp(target) > 0 {
 		return errInvalidPoW
 	}
 	return nil
@@ -451,7 +451,6 @@ func (blake3pow *Blake3pow) SealHash(header *types.Header) (hash common.Hash) {
 		Location:    header.Location(),
 		Time:        header.Time(),
 		Extra:       header.Extra(),
-		Nonce:       header.Nonce(),
 	}
 	for i := 0; i < common.HierarchyDepth; i++ {
 		hdata.ParentHash[i] = header.ParentHash(i)

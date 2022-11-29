@@ -143,7 +143,7 @@ search:
 			// Compute the PoW value of this nonce
 			header = types.CopyHeader(header)
 			header.SetNonce(types.EncodeNonce(nonce))
-			hash := blake3pow.SealHash(header).Bytes()
+			hash := header.Hash().Bytes()
 			if powBuffer.SetBytes(hash).Cmp(target) <= 0 {
 				// Correct nonce found, create a new header with it
 
