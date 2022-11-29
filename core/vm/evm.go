@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"fmt"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -187,6 +188,9 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	}
 	snapshot := evm.StateDB.Snapshot()
 	p, isPrecompile := evm.precompile(addr)
+	if !addr.IsInChainScope() && addr != common.ZeroAddr {
+		return evm.CreateETX(addr, caller.Address(), input, gas, value)
+	}
 	exist, err := evm.StateDB.Exist(addr)
 	if err != nil {
 		return nil, gas, err // consume all gas
@@ -532,6 +536,61 @@ func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *
 	codeAndHash := &codeAndHash{code: code}
 	contractAddr = crypto.CreateAddress2(caller.Address(), salt.Bytes32(), codeAndHash.Hash().Bytes())
 	return evm.create(caller, codeAndHash, gas, endowment, contractAddr)
+}
+
+func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
+
+	// Verify address is not in context
+	if toAddr.IsInChainScope() {
+		return []byte{}, 0, fmt.Errorf("%x is in chain scope, but CreateETX was called\n", toAddr)
+	}
+	if gas < params.ETXGas {
+		return []byte{}, 0, fmt.Errorf("CreateETX error: %d is not sufficient gas, required amount: %d", gas, params.ETXGas)
+	}
+	if len(input) < 96 {
+		return []byte{}, 0, fmt.Errorf("CreateETX error: You are trying to send a cross-chain transaction but did not supply sufficient data to construct an external transaction")
+	}
+	// etxGasLimit, gasTipCap, gasFeeCap, data
+	etxGasLimit := big.NewInt(0).SetBytes(input[0:32])
+	gasTipCap := big.NewInt(0).SetBytes(input[32:64])
+	gasFeeCap := big.NewInt(0).SetBytes(input[64:96])
+	var data []byte
+	if len(input) > 96 {
+		data = input[96:]
+	}
+
+	fee := big.NewInt(0)
+	fee.Add(gasTipCap, gasFeeCap)
+	fee.Mul(fee, etxGasLimit)
+	total := big.NewInt(0)
+	total.Add(value, fee)
+	// Fail if we're trying to transfer more than the available balance
+	if total.Sign() == 0 || !evm.Context.CanTransfer(evm.StateDB, fromAddr, total) {
+		return []byte{}, 0, fmt.Errorf("CreateETX: %x cannot transfer %d\n", fromAddr, total.Uint64())
+	}
+	if err := evm.StateDB.SubBalance(fromAddr, total); err != nil {
+		return []byte{}, 0, fmt.Errorf("%x CreateETX error: %s\n", fromAddr, err.Error())
+	}
+
+	globalNonce, err := evm.StateDB.GetNonce(common.ZeroAddr)
+	if err != nil {
+		return []byte{}, 0, fmt.Errorf("%x CreateETX error: %s\n", fromAddr, err.Error())
+	}
+
+	// create external transaction
+	etxInner := types.ExternalTx{Value: value, To: &toAddr, Sender: fromAddr, GasTipCap: gasTipCap, GasFeeCap: gasFeeCap, Gas: etxGasLimit.Uint64(), Data: data, AccessList: types.AccessList{}, Nonce: globalNonce}
+	etx := types.NewTx(&etxInner)
+
+	evm.ETXCacheLock.Lock()
+	evm.ETXCache = append(evm.ETXCache, etx)
+	evm.ETXCacheLock.Unlock()
+
+	if err := evm.StateDB.SetNonce(common.ZeroAddr, globalNonce+1); err != nil {
+
+		return []byte{}, 0, fmt.Errorf("%x CreateETX error: %s\n", fromAddr, err.Error())
+	}
+
+	return []byte{}, gas - params.ETXGas, nil
 }
 
 // ChainConfig returns the environment's chain configuration
