@@ -569,7 +569,7 @@ func (h *Header) SanityCheck() error {
 // EmptyBody returns true if there is no additional 'body' to complete the header
 // that is: no transactions and no uncles.
 func (h *Header) EmptyBody() bool {
-	return h.TxHash() == EmptyRootHash && h.UncleHash() == EmptyUncleHash
+	return h.EmptyTxs() && h.EmptyUncles() && h.EmptyEtxs() && h.EmptyManifest()
 }
 
 // EmptyTxs returns true if there are no txs for this header/block.
