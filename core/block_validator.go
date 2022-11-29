@@ -129,8 +129,8 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	if etxHash := types.DeriveSha(emittedEtxs, trie.NewStackTrie(nil)); etxHash != header.EtxHash() {
 		return fmt.Errorf("invalid etx hash (remote: %x local: %x)", header.EtxHash(), etxHash)
 	}
-	// Collect the ETX rollup with new ETXs from this block (and all blocks since
-	// the prior coincident block), and check the rollup hash matches.
+	// Collect the ETX rollup with emitted ETXs since the last coincident block,
+	// excluding this block.
 	etxRollup, err := v.hc.CollectEtxRollup(block)
 	if err != nil {
 		return fmt.Errorf("unable to get ETX rollup")
