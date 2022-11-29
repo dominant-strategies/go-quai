@@ -616,16 +616,17 @@ func (sl *Slice) init(genesis *Genesis) error {
 		for _, block := range knot {
 			if block != nil {
 				location := block.Header().Location()
+				sealHash := sl.engine.SealHash(block.Header())
 				if nodeCtx == common.PRIME_CTX {
-					rawdb.WritePendingBlockBody(sl.sliceDb, block.Root(), block.Body())
+					rawdb.WritePendingBlockBody(sl.sliceDb, sealHash, block.Body())
 					_, err := sl.Append(block.Header(), types.EmptyHeader(), genesisHash, block.Difficulty(), false, false, nil)
 					if err != nil {
 						log.Warn("Failed to append block", "hash:", block.Hash(), "Number:", block.Number(), "Location:", block.Header().Location(), "error:", err)
 					}
 				} else if location.Region() == common.NodeLocation.Region() && len(common.NodeLocation) == common.REGION_CTX {
-					rawdb.WritePendingBlockBody(sl.sliceDb, block.Root(), block.Body())
+					rawdb.WritePendingBlockBody(sl.sliceDb, sealHash, block.Body())
 				} else if bytes.Equal(location, common.NodeLocation) {
-					rawdb.WritePendingBlockBody(sl.sliceDb, block.Root(), block.Body())
+					rawdb.WritePendingBlockBody(sl.sliceDb, sealHash, block.Body())
 				}
 			}
 		}
@@ -656,7 +657,8 @@ func (sl *Slice) ConstructLocalBlock(header *types.Header) *types.Block {
 		// construct block with empty transactions and uncles
 		block = types.NewBlockWithHeader(header)
 	} else {
-		pendingBlockBody := sl.PendingBlockBody(header.Root())
+		sealHash := sl.engine.SealHash(header)
+		pendingBlockBody := sl.PendingBlockBody(sealHash)
 		if pendingBlockBody != nil {
 			// Load uncles because they are not included in the block response.
 			txs := make([]*types.Transaction, len(pendingBlockBody.Transactions))
@@ -836,6 +838,6 @@ func (sl *Slice) TxPool() *TxPool { return sl.txPool }
 
 func (sl *Slice) Miner() *Miner { return sl.miner }
 
-func (sl *Slice) PendingBlockBody(hash common.Hash) *types.Body {
-	return rawdb.ReadPendingBlockBody(sl.sliceDb, hash)
+func (sl *Slice) PendingBlockBody(sealHash common.Hash) *types.Body {
+	return rawdb.ReadPendingBlockBody(sl.sliceDb, sealHash)
 }

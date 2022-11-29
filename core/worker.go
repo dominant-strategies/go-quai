@@ -912,7 +912,8 @@ func (w *worker) FinalizeAssembleAndBroadcast(chain consensus.ChainHeaderReader,
 		w.headerRootsFeed.Send(types.HeaderRoots{StateRoot: block.Root(), TxsRoot: block.TxHash(), ReceiptsRoot: block.ReceiptHash()})
 	}
 	// store the pending block body details for the given stateroot
-	rawdb.WritePendingBlockBody(w.workerDb, block.Root(), block.Body())
+	sealHash := w.engine.SealHash(block.Header())
+	rawdb.WritePendingBlockBody(w.workerDb, sealHash, block.Body())
 	return block, nil
 }
 

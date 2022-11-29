@@ -431,8 +431,8 @@ func DeleteBody(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 }
 
 // ReadPendingHeaderBody retrieves the pending block body corresponding to the state root hash.
-func ReadPendingBlockBody(db ethdb.Reader, hash common.Hash) *types.Body {
-	key := pendingBlockBodyKey(hash)
+func ReadPendingBlockBody(db ethdb.Reader, sealHash common.Hash) *types.Body {
+	key := pendingBlockBodyKey(sealHash)
 
 	data, _ := db.Get(key)
 	if len(data) == 0 {
@@ -441,15 +441,15 @@ func ReadPendingBlockBody(db ethdb.Reader, hash common.Hash) *types.Body {
 
 	body := new(types.Body)
 	if err := rlp.Decode(bytes.NewReader(data), body); err != nil {
-		log.Error("Invalid block body RLP", "hash", hash, "err", err)
+		log.Error("Invalid block body RLP", "hash", sealHash, "err", err)
 		return nil
 	}
 	return body
 }
 
 // WritePendingHeaderBody stores a block body into the database with associated stateroot as the key.
-func WritePendingBlockBody(db ethdb.KeyValueWriter, hash common.Hash, body *types.Body) {
-	key := pendingBlockBodyKey(hash)
+func WritePendingBlockBody(db ethdb.KeyValueWriter, sealHash common.Hash, body *types.Body) {
+	key := pendingBlockBodyKey(sealHash)
 
 	// Write the encoded pending header
 	data, err := rlp.EncodeToBytes(body)
@@ -463,8 +463,8 @@ func WritePendingBlockBody(db ethdb.KeyValueWriter, hash common.Hash, body *type
 }
 
 // DeletePendingHeaderBody removes all pending block body data associated with a state root hash.
-func DeletePendingBlockBody(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
-	if err := db.Delete(pendingBlockBodyKey(hash)); err != nil {
+func DeletePendingBlockBody(db ethdb.KeyValueWriter, sealHash common.Hash, number uint64) {
+	if err := db.Delete(pendingBlockBodyKey(sealHash)); err != nil {
 		log.Crit("Failed to delete pending block body", "err", err)
 	}
 }
