@@ -123,7 +123,17 @@ func (hc *HeaderChain) CollectBlockManifest(h *types.Header) (types.BlockManifes
 	return manifest, nil
 }
 
+// Collect all emmitted ETXs since the last coincident block, but excluding
+// those emitted in this block
 func (hc *HeaderChain) CollectEtxRollup(b *types.Block) (types.Transactions, error) {
+	parent := hc.GetBlock(b.ParentHash(), b.NonceU64())
+	if parent == nil {
+		return nil, errors.New("parent not found")
+	}
+	return hc.collectEtxRollup(parent)
+}
+
+func (hc *HeaderChain) collectEtxRollup(b *types.Block) (types.Transactions, error) {
 	// Initialize the rollup with ETXs emitted by this block
 	newEtxs := b.ExtTransactions()
 	// Terminate the search if we reached genesis
@@ -143,9 +153,9 @@ func (hc *HeaderChain) CollectEtxRollup(b *types.Block) (types.Transactions, err
 	if ancestor == nil {
 		return nil, errors.New("ancestor not found")
 	}
-	etxRollup, err := hc.CollectEtxRollup(ancestor)
+	etxRollup, err := hc.collectEtxRollup(ancestor)
 	if err != nil {
-		return nil, errors.New("unable to get rollup for ancestor")
+		return nil, err
 	}
 	etxRollup = append(etxRollup, newEtxs...)
 	return etxRollup, nil

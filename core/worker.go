@@ -895,16 +895,11 @@ func (w *worker) FinalizeAssembleAndBroadcast(chain consensus.ChainHeaderReader,
 	if err != nil {
 		return nil, err
 	}
-	// Compute the ETX rollup hash by adding this block's ETXs to the rollup of the parent block
-	parent := w.hc.GetBlock(block.ParentHash(), block.NonceU64())
-	if parent == nil {
-		return nil, errors.New("parent not found")
-	}
-	etxRollup, err := w.hc.CollectEtxRollup(parent)
+	// Compute and set the ETX rollup hash
+	etxRollup, err := w.hc.CollectEtxRollup(block)
 	if err != nil {
 		return nil, err
 	}
-	etxRollup = append(etxRollup, block.ExtTransactions()...)
 	etxRollupHash := types.DeriveSha(etxRollup, trie.NewStackTrie(nil))
 	block.Header().SetEtxRollupHash(etxRollupHash)
 
