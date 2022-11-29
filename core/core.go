@@ -75,9 +75,12 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 				log.Info("InsertChain", "err in Append core: ", err)
 				return i, err
 			}
-			// Let our dom know about the new ETXs we have pending
+			// If we have a dom, send the dom any pending ETXs which will become
+			// referencable by this block. When this block is referenced in the dom's
+			// subordinate block manifest, then ETXs produced by this block and the rollup
+			// of ETXs produced by subordinate chain(s) will become referencable.
 			if nodeCtx > common.PRIME_CTX {
-				if err := c.sl.SendPendingEtxsToDom(types.PendingEtxs{block.Header(), newPendingEtxs}); err != nil {
+				if err := c.sendPendingEtxsToDom(types.PendingEtxs{block.Header(), newPendingEtxs}); err != nil {
 					log.Error("failed to send ETXs to domclient", "block: ", block.Hash(), "err", err)
 				}
 			}
@@ -142,7 +145,7 @@ func (c *Core) GetPendingHeader() (*types.Header, error) {
 	return c.sl.GetPendingHeader()
 }
 
-func (c *Core) SendPendingEtxsToDom(pEtxs types.PendingEtxs) error {
+func (c *Core) sendPendingEtxsToDom(pEtxs types.PendingEtxs) error {
 	return c.sl.SendPendingEtxsToDom(pEtxs)
 }
 
