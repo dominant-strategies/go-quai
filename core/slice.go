@@ -179,30 +179,36 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	// Combine subordinates pending header with local pending header
 	pendingHeaderWithTermini := sl.computePendingHeader(types.PendingHeader{Header: localPendingHeader, Termini: newTermini}, domPendingHeader, domOrigin)
 
-	// Call my sub to append the block
-	var newPendingEtxs []types.Transactions
+	// Call my sub to append the block, and collect the rolled up ETXs from that sub
+	var pendingEtxs []types.Transactions
 	if nodeCtx != common.ZONE_CTX {
-		newPendingEtxs, err = sl.subClients[location.SubIndex()].Append(context.Background(), block.Header(), pendingHeaderWithTermini.Header, domTerminus, td, true, reorg, newInboundEtxs)
+		pendingEtxs, err = sl.subClients[location.SubIndex()].Append(context.Background(), block.Header(), pendingHeaderWithTermini.Header, domTerminus, td, true, reorg, newInboundEtxs)
 		if err != nil {
 			return nil, err
 		}
+
+		// Collect the sub's rollup and confirm it matches the rollup hash
+		var subRollup types.Transactions
+		subRollup, err = sl.CollectEtxsForManifest(block.SubManifest())
+		if err != nil {
+			return nil, err
+		} else if subRollupHash := types.DeriveSha(subRollup, trie.NewStackTrie(nil)); subRollupHash != header.EtxRollupHash(nodeCtx+1) {
+			return nil, errors.New("subordinate rollup does not match rollup hash")
+		}
+
+		// Cache the subordinate's pending ETXs
+		sl.AddPendingEtxs(types.PendingEtxs{block.Header(), pendingEtxs})
+
+		// Add the subordinate's rollup as the pending ETXs for this block
+		pendingEtxs[nodeCtx+1] = subRollup
 	} else {
-		// If we are a zone, initialize newPendingEtxs
-		newPendingEtxs = []types.Transactions{types.Transactions{}, types.Transactions{}, types.Transactions{}}
+		// If we are a zone, initialize a new rollup set
+		pendingEtxs = []types.Transactions{types.Transactions{}, types.Transactions{}, types.Transactions{}}
 	}
 
-	// Add our new ETXs to the newPendingEtxs collection
-	// If this is a coincident block, we need to add the full rollup of ETXs.
-	// Otherwise just send the new ETXs emitted in this block.
-	if isDomCoincident {
-		etxRollup, err := sl.hc.CollectEtxRollup(block)
-		if err != nil {
-			return nil, fmt.Errorf("unable to get ETX rollup")
-		}
-		newPendingEtxs[nodeCtx] = etxRollup
-	} else {
-		newPendingEtxs[nodeCtx] = block.ExtTransactions()
-	}
+	// Add ETXs emitted in this block to the set of pending ETXs to be relayed to
+	// our dom node.
+	pendingEtxs[nodeCtx] = block.ExtTransactions()
 
 	// WriteTd
 	rawdb.WriteTd(batch, block.Header().Hash(), block.NumberU64(), td)
@@ -235,7 +241,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
 		"root", block.Root())
 
-	return newPendingEtxs, nil
+	return pendingEtxs, nil
 }
 
 // updateManifestHash updates the manifest hash to commit to our chain's manifest
@@ -451,7 +457,6 @@ func (sl *Slice) GetPendingHeader() (*types.Header, error) {
 	return sl.phCache[sl.pendingHeaderHeadHash].Header, nil
 }
 
-// SendPendingEtxsToDom shares a set of pending ETXs with your dom, so he can reference them when a coincident block is found
 func (sl *Slice) SendPendingEtxsToDom(pEtxs types.PendingEtxs) error {
 	return sl.domClient.SendPendingEtxsToDom(context.Background(), pEtxs)
 }

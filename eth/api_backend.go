@@ -382,10 +382,6 @@ func (b *QuaiAPIBackend) GetPendingHeader() (*types.Header, error) {
 	return b.eth.core.GetPendingHeader()
 }
 
-func (b *QuaiAPIBackend) SendPendingEtxsToDom(pEtxs types.PendingEtxs) error {
-	return b.eth.core.SendPendingEtxsToDom(pEtxs)
-}
-
 func (b *QuaiAPIBackend) GetSubManifest(blockHash common.Hash) (types.BlockManifest, error) {
 	return b.eth.core.GetSubManifest(blockHash)
 }
