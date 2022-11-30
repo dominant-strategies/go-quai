@@ -324,12 +324,21 @@ func (sl *Slice) GetPendingHeader() (*types.Header, error) {
 	return sl.phCache[sl.pendingHeaderHeadHash].Header, nil
 }
 
-func (sl *Slice) GetSubManifest(blockHash common.Hash) (types.BlockManifest, error) {
+// GetManifest gathers the manifest of ancestor block hashes since the last
+// coincident block.
+func (sl *Slice) GetManifest(blockHash common.Hash) (types.BlockManifest, error) {
 	header := sl.hc.GetHeaderByHash(blockHash)
 	if header == nil {
 		return nil, errors.New("block not found")
 	}
 	return sl.hc.CollectBlockManifest(header)
+}
+
+// GetSubManifest gets the block manifest from the subordinate node which
+// produced this block
+func (sl *Slice) GetSubManifest(slice common.Location, blockHash common.Hash) (types.BlockManifest, error) {
+	subIdx := slice.SubIndex()
+	return sl.subClients[subIdx].GetManifest(context.Background(), blockHash)
 }
 
 // SubRelayPendingHeader takes a pending header from the sender (ie dominant), updates the phCache with a composited header and relays result to subordinates
