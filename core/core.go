@@ -115,8 +115,12 @@ func (c *Core) GetPendingHeader() (*types.Header, error) {
 	return c.sl.GetPendingHeader()
 }
 
-func (c *Core) GetSubManifest(blockHash common.Hash) (types.BlockManifest, error) {
-	return c.sl.GetSubManifest(blockHash)
+func (c *Core) GetManifest(blockHash common.Hash) (types.BlockManifest, error) {
+	return c.sl.GetManifest(blockHash)
+}
+
+func (c *Core) GetSubManifest(slice common.Location, blockHash common.Hash) (types.BlockManifest, error) {
+	return c.sl.GetSubManifest(slice, blockHash)
 }
 
 //---------------------//
