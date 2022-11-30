@@ -94,7 +94,7 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 		}()
 	}
 
-	if err := sl.genesisInit(genesis); err != nil {
+	if err := sl.init(genesis); err != nil {
 		return nil, err
 	}
 
@@ -416,9 +416,9 @@ func (sl *Slice) updateCurrentPendingHeader(externPendingHeader types.PendingHea
 	}
 }
 
-// genesisInit checks if the headerchain is empty and if it's empty appends the Knot
+// init checks if the headerchain is empty and if it's empty appends the Knot
 // otherwise loads the last stored state of the chain.
-func (sl *Slice) genesisInit(genesis *Genesis) error {
+func (sl *Slice) init(genesis *Genesis) error {
 	nodeCtx := common.NodeLocation.Context()
 	// If the headerchain is empty start from genesis
 	if sl.hc.Empty() {
