@@ -77,7 +77,7 @@ type Backend interface {
 	InsertBlock(ctx context.Context, block *types.Block) (int, error)
 	PendingBlock() *types.Block
 	PendingBlockBody(hash common.Hash) *types.Body
-	SubRelayPendingHeader(pendingHeader types.PendingHeader, reorg bool)
+	SubRelayPendingHeader(pendingHeader types.PendingHeader, reorg bool, location common.Location)
 	GetPendingHeader() (*types.Header, error)
 	PendingBlockAndReceipts() (*types.Block, types.Receipts)
 
