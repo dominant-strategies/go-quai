@@ -374,8 +374,8 @@ func (b *QuaiAPIBackend) PendingBlockBody(hash common.Hash) *types.Body {
 	return b.eth.core.PendingBlockBody(hash)
 }
 
-func (b *QuaiAPIBackend) SubRelayPendingHeader(pendingHeader types.PendingHeader, reorg bool) {
-	b.eth.core.SubRelayPendingHeader(pendingHeader, reorg)
+func (b *QuaiAPIBackend) SubRelayPendingHeader(pendingHeader types.PendingHeader, reorg bool, location common.Location) {
+	b.eth.core.SubRelayPendingHeader(pendingHeader, reorg, location)
 }
 
 func (b *QuaiAPIBackend) GetPendingHeader() (*types.Header, error) {
