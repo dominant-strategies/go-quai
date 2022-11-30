@@ -125,8 +125,9 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 }
 
 // RPCMarshalTdHeader converts the header and order as input to PCRC.
-func RPCMarshalTdHeader(header *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) (map[string]interface{}, error) {
-	fields := RPCMarshalHeader(header)
+func RPCMarshalTdHeader(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) (map[string]interface{}, error) {
+	fields := map[string]interface{}{"header": RPCMarshalHeader(header)}
+	fields["domPendingHeader"] = RPCMarshalHeader(domPendingHeader)
 	fields["td"] = td
 	fields["domTerminus"] = domTerminus
 	fields["domOrigin"] = domOrigin
@@ -138,38 +139,25 @@ type Termini struct {
 	Termini []common.Hash `json:"termini"`
 }
 
-func (ec *Client) Append(ctx context.Context, header *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) (types.PendingHeader, error) {
-	data, err := RPCMarshalTdHeader(header, domTerminus, td, domOrigin, reorg)
+func (ec *Client) Append(ctx context.Context, header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) error {
+	data, err := RPCMarshalTdHeader(header, domPendingHeader, domTerminus, td, domOrigin, reorg)
 	if err != nil {
-		return types.PendingHeader{}, err
+		return err
 	}
 
 	var raw json.RawMessage
 	err = ec.c.CallContext(ctx, &raw, "quai_append", data)
 	if err != nil {
-		return types.PendingHeader{}, err
+		return err
 	}
-
-	// Decode header and transactions.
-	var head *types.Header
-	var termini Termini
-	if err := json.Unmarshal(raw, &head); err != nil {
-		return types.PendingHeader{}, err
-	}
-	if err := json.Unmarshal(raw, &termini); err != nil {
-		return types.PendingHeader{}, err
-	}
-	return types.PendingHeader{Header: head, Termini: termini.Termini}, nil
+	return nil
 }
 
-func (ec *Client) SubRelayPendingHeader(ctx context.Context, pendingHeader types.PendingHeader, reorg bool) error {
+func (ec *Client) SubRelayPendingHeader(ctx context.Context, pendingHeader types.PendingHeader, reorg bool) {
 	data := map[string]interface{}{"Header": RPCMarshalHeader(pendingHeader.Header)}
 	data["Termini"] = pendingHeader.Termini
 	data["Reorg"] = reorg
 
-	err := ec.c.CallContext(ctx, nil, "quai_subRelayPendingHeader", data)
-	if err != nil {
-		return err
-	}
-	return nil
+	ec.c.CallContext(ctx, nil, "quai_subRelayPendingHeader", data)
+
 }
