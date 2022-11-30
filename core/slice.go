@@ -316,6 +316,7 @@ func (sl *Slice) updateCacheAndRelay(pendingHeader types.PendingHeader, location
 
 // CollectEtxsForManifest will gather the full list of ETXs that are referencable through a given manifest
 func (sl *Slice) CollectEtxsForManifest(manifest types.BlockManifest) (types.Transactions, error) {
+	nodeCtx := common.NodeLocation.Context()
 	etxs := types.Transactions{}
 	for _, hash := range manifest {
 		var pendingEtxs []types.Transactions
@@ -327,9 +328,9 @@ func (sl *Slice) CollectEtxsForManifest(manifest types.BlockManifest) (types.Tra
 		} else {
 			return nil, fmt.Errorf("unable to find pending etxs for hash in manifest, hash: %s", hash.String())
 		}
-		etxs = append(etxs, pendingEtxs[common.PRIME_CTX]...)
-		etxs = append(etxs, pendingEtxs[common.REGION_CTX]...)
-		etxs = append(etxs, pendingEtxs[common.ZONE_CTX]...)
+		for ctx := nodeCtx + 1; ctx < common.HierarchyDepth; ctx++ {
+			etxs = append(etxs, pendingEtxs[ctx]...)
+		}
 	}
 	return etxs, nil
 }
