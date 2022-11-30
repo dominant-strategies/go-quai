@@ -17,7 +17,6 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rlp"
-	"github.com/dominant-strategies/go-quai/trie"
 )
 
 type Core struct {
@@ -42,23 +41,6 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 	domWait := false
 	for i, block := range blocks {
 		isCoincident := c.sl.engine.IsDomCoincident(block.Header())
-		// If we just mined this block, its possible the subordinate manifest in our
-		// block body is incorrect. If so, ask our sub for the correct manifest,
-		// update and rewrite the correct body.
-		if nodeCtx < common.ZONE_CTX {
-			if block.ManifestHash(nodeCtx+1) != types.DeriveSha(block.SubManifest(), trie.NewStackTrie(nil)) {
-				if subIdx := block.Location().SubIndex(); subIdx >= 0 {
-					newSubManifest, err := c.GetSubManifest(block.Location(), block.Hash())
-					if err != nil {
-						return i, err
-					}
-					// Reconstruct the block, replacing the manifest with the new manifest
-					// received from our subClient
-					oldBody := block.Body()
-					block = block.WithBody(oldBody.Transactions, oldBody.Uncles, oldBody.ExtTransactions, newSubManifest)
-				}
-			}
-		}
 
 		// Write the block body to the db.
 		rawdb.WritePendingBlockBody(c.sl.sliceDb, block.Header().Root(), block.Body())

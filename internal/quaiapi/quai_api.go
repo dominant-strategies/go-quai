@@ -31,6 +31,7 @@ import (
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rpc"
+	"github.com/dominant-strategies/go-quai/trie"
 )
 
 // PublicQuaiAPI provides an API to access Quai related information.
@@ -544,6 +545,8 @@ func (s *PublicBlockChainQuaiAPI) CreateAccessList(ctx context.Context, args Tra
 
 // ReceiveMinedHeader will run checks on the block and add to canonical chain if valid.
 func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw json.RawMessage) error {
+	nodeCtx := common.NodeLocation.Context()
+
 	// Decode header and transactions.
 	var header *types.Header
 	if err := json.Unmarshal(raw, &header); err != nil {
@@ -553,6 +556,35 @@ func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw js
 	if block == nil {
 		return errors.New("could not find the block body in db")
 	}
+
+	// If we just mined this block, and we have a subordinate chain, its possible
+	// the subordinate manifest in our block body is incorrect. If so, ask our sub
+	// for the correct manifest and reconstruct the block.
+	if nodeCtx < common.ZONE_CTX {
+		if manifestHash := types.DeriveSha(block.SubManifest(), trie.NewStackTrie(nil)); manifestHash != block.ManifestHash(nodeCtx+1) {
+			subParentHash := header.ParentHash(nodeCtx + 1)
+			var subManifest types.BlockManifest
+			if subParent, err := s.b.BlockByHash(context.Background(), subParentHash); err == nil && subParent != nil {
+				// If we have the the subordinate parent in our chain, that means that block
+				// was also coincident. In this case, the subordinate manifest resets, and
+				// only consists of the subordinate parent hash.
+				subManifest = types.BlockManifest{subParentHash}
+			} else {
+				// Otherwise we need to reconstruct the sub manifest, by getting the
+				// parent's sub manifest and appending the parent hash.
+				subManifest, err = s.b.GetSubManifest(header.Location(), subParentHash)
+				if err != nil {
+					return err
+				}
+				subManifest = append(subManifest, subParentHash)
+			}
+			if subManifest == nil || block.ManifestHash(nodeCtx+1) != types.DeriveSha(subManifest, trie.NewStackTrie(nil)) {
+				return errors.New("reconstructed sub manifest does not match manifest hash")
+			}
+			block = types.NewBlockWithHeader(header).WithBody(block.Transactions(), block.Uncles(), block.ExtTransactions(), subManifest)
+		}
+	}
+
 	// Broadcast the block and announce chain insertion event
 	if block.Header() != nil {
 		s.b.EventMux().Post(core.NewMinedBlockEvent{Block: block})
