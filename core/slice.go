@@ -144,10 +144,16 @@ func (sl *Slice) Append(header *types.Header, domTerminus common.Hash, td *big.I
 
 	// If this was a coincident block, our dom will be passing us a set of newly confirmed ETXs
 	// If this is not a coincident block, we need to build up the list of confirmed ETXs using the subordinate manifest
+	subRollup := types.Transactions{}
 	if !isDomCoincident {
-		newInboundEtxs, err = sl.CollectNewlyConfirmedEtxs(block, block.Location())
+		newInboundEtxs, subRollup, err = sl.CollectNewlyConfirmedEtxs(block, block.Location())
 		if err != nil {
 			return sl.nilPendingHeader, nil, err
+		}
+	}
+	if nodeCtx < common.ZONE_CTX {
+		if subRollupHash := types.DeriveSha(subRollup, trie.NewStackTrie(nil)); subRollupHash != header.EtxRollupHash(nodeCtx+1) {
+			return types.PendingHeader{}, nil, errors.New("subordinate rollup does not match rollup hash")
 		}
 	}
 
@@ -174,15 +180,6 @@ func (sl *Slice) Append(header *types.Header, domTerminus common.Hash, td *big.I
 		subPendingHeader, pendingEtxs, err = sl.subClients[location.SubIndex()].Append(context.Background(), block.Header(), domTerminus, td, true, reorg, newInboundEtxs)
 		if err != nil {
 			return sl.nilPendingHeader, nil, err
-		}
-
-		// Collect the sub's rollup and confirm it matches the rollup hash
-		var subRollup types.Transactions
-		subRollup, err = sl.CollectEtxsForManifest(block.SubManifest())
-		if err != nil {
-			return types.PendingHeader{}, nil, err
-		} else if subRollupHash := types.DeriveSha(subRollup, trie.NewStackTrie(nil)); subRollupHash != header.EtxRollupHash(nodeCtx+1) {
-			return types.PendingHeader{}, nil, errors.New("subordinate rollup does not match rollup hash")
 		}
 
 		// Cache the subordinate's pending ETXs
@@ -338,15 +335,14 @@ func (sl *Slice) CollectEtxsForManifest(manifest types.BlockManifest) (types.Tra
 }
 
 // CollectNewlyConfirmedEtxs collects all newly confirmed ETXs since the last coincident with the given location
-func (sl *Slice) CollectNewlyConfirmedEtxs(block *types.Block, location common.Location) (types.Transactions, error) {
+func (sl *Slice) CollectNewlyConfirmedEtxs(block *types.Block, location common.Location) (types.Transactions, types.Transactions, error) {
 	nodeCtx := common.NodeLocation.Context()
-	// Collect all ETXs referenced through the manifest. These are now spendable
-	// and should be made available both locally and to our subordinate.
-	referencableEtxs, err := sl.CollectEtxsForManifest(block.SubManifest())
+	// Collect rollup of ETXs from the subordinate node's manifest
+	subRollup, err := sl.CollectEtxsForManifest(block.SubManifest())
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	referencableEtxs = append(referencableEtxs, block.ExtTransactions()...) // Include ETXs emitted in this block
+	referencableEtxs := append(subRollup, block.ExtTransactions()...) // Include ETXs emitted in this block
 
 	// Filter for ETXs destined to this slice
 	newInboundEtxs := referencableEtxs.FilterToSlice(location, nodeCtx)
@@ -367,29 +363,29 @@ func (sl *Slice) CollectNewlyConfirmedEtxs(block *types.Block, location common.L
 	// Terminate the search if we reached genesis
 	if block.NumberU64() == 0 {
 		if block.Hash() != sl.config.GenesisHash {
-			return nil, fmt.Errorf("terminated search on bad genesis, block0 hash: %s", block.Hash().String())
+			return nil, nil, fmt.Errorf("terminated search on bad genesis, block0 hash: %s", block.Hash().String())
 		} else {
-			return newlyConfirmedEtxs, nil
+			return newlyConfirmedEtxs, subRollup, nil
 		}
 	}
 	ancHash := block.ParentHash()
 	ancNum := block.NumberU64() - 1
 	ancestor := sl.hc.GetBlock(ancHash, ancNum)
 	if ancestor == nil {
-		return nil, fmt.Errorf("unable to find ancestor, hash: %s", ancHash.String())
+		return nil, nil, fmt.Errorf("unable to find ancestor, hash: %s", ancHash.String())
 	}
 	// Terminate the search when we find a block produced by the given location
 	if ancestor.Location().Equal(location) {
-		return newlyConfirmedEtxs, nil
+		return newlyConfirmedEtxs, subRollup, nil
 	}
 
 	// Otherwise recursively process the ancestor and collect its newly confirmed ETXs too
-	ancEtxs, err := sl.CollectNewlyConfirmedEtxs(ancestor, location)
+	ancEtxs, _, err := sl.CollectNewlyConfirmedEtxs(ancestor, location)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	newlyConfirmedEtxs = append(ancEtxs, newlyConfirmedEtxs...)
-	return newlyConfirmedEtxs, nil
+	return newlyConfirmedEtxs, subRollup, nil
 }
 
 // setHeaderChainHead updates the current chain head and returns a new pending header
