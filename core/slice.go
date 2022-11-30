@@ -248,20 +248,12 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 // for this block.
 func (sl *Slice) updateManifestHash(h *types.Header) {
 	if h.NumberU64() > 0 {
-		// Look up the parent header. If the parent is not found, then this pending
-		// header is for a coordinate chain, and we should not be recalculating the
-		// manifest.
-		parentHash := h.ParentHash()
-		parentNumber := h.NumberU64() - 1
-		parent := sl.hc.GetHeader(parentHash, parentNumber)
 		// Get block manifest up and including to our parent
-		if parent != nil {
-			manifest, err := sl.hc.CollectBlockManifest(parent)
-			if err != nil {
-				log.Warn("Failed to get manifest for pending header", "parentHash: ", h.ParentHash(), "err: ", err)
-			}
-			h.SetManifestHash(types.DeriveSha(manifest, trie.NewStackTrie(nil)))
+		manifest, err := sl.hc.CollectBlockManifest(h)
+		if err != nil {
+			log.Warn("Failed to get manifest for pending header", "parentHash: ", h.ParentHash(), "err: ", err)
 		}
+		h.SetManifestHash(types.DeriveSha(manifest, trie.NewStackTrie(nil)))
 	}
 }
 
