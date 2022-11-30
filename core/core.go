@@ -62,8 +62,7 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 		}
 
 		// Write the block body to the db.
-		sealHash := c.engine.SealHash(block.Header())
-		rawdb.WritePendingBlockBody(c.sl.sliceDb, sealHash, block.Body())
+		rawdb.WritePendingBlockBody(c.sl.sliceDb, block.Header().Root(), block.Body())
 
 		// if the order of the block is less than the context
 		// add the rest of the blocks in the queue to the future blocks.
@@ -415,8 +414,8 @@ func (c *Core) PendingBlock() *types.Block {
 	return c.sl.miner.PendingBlock()
 }
 
-func (c *Core) PendingBlockBody(sealHash common.Hash) *types.Body {
-	return c.sl.PendingBlockBody(sealHash)
+func (c *Core) PendingBlockBody(hash common.Hash) *types.Body {
+	return c.sl.PendingBlockBody(hash)
 }
 
 // PendingBlockAndReceipts returns the currently pending block and corresponding receipts.
