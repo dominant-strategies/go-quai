@@ -588,12 +588,12 @@ func (s *PublicBlockChainQuaiAPI) GetPendingHeader(ctx context.Context) (map[str
 	return marshaledPh, nil
 }
 
-func (s *PublicBlockChainQuaiAPI) GetSubManifest(ctx context.Context, raw json.RawMessage) (types.BlockManifest, error) {
+func (s *PublicBlockChainQuaiAPI) GetManifest(ctx context.Context, raw json.RawMessage) (types.BlockManifest, error) {
 	var blockHash common.Hash
 	if err := json.Unmarshal(raw, &blockHash); err != nil {
 		return nil, err
 	}
-	manifest, err := s.b.GetSubManifest(blockHash)
+	manifest, err := s.b.GetManifest(blockHash)
 	if err != nil {
 		return nil, err
 	}
