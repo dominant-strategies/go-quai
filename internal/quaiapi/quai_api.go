@@ -561,7 +561,7 @@ func (s *PublicBlockChainQuaiAPI) SubRelayPendingHeader(ctx context.Context, raw
 		return
 	}
 	pendingHeader := types.PendingHeader{Header: subRelay.Header, Termini: subRelay.Termini}
-	s.b.SubRelayPendingHeader(pendingHeader, subRelay.Reorg)
+	s.b.SubRelayPendingHeader(pendingHeader, subRelay.Reorg, subRelay.Location)
 }
 
 func (s *PublicBlockChainQuaiAPI) GetPendingHeader(ctx context.Context) (map[string]interface{}, error) {
