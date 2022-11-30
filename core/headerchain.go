@@ -93,9 +93,18 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *par
 	return hc, nil
 }
 
-// CollectBlockManifest gathers the manifest of block hashes including this
-// block, back until the last coincident block.
+// CollectBlockManifest gathers the manifest of ancestor block hashes since the
+// last coincident block.
 func (hc *HeaderChain) CollectBlockManifest(h *types.Header) (types.BlockManifest, error) {
+	parent := hc.GetHeader(h.ParentHash(), h.NumberU64()-1)
+	if parent == nil {
+		return types.BlockManifest{}, errors.New("ancestor not found")
+	} else {
+		return hc.collectBlockManifest(parent)
+	}
+}
+
+func (hc *HeaderChain) collectBlockManifest(h *types.Header) (types.BlockManifest, error) {
 	// Intialize manifest with this block's hash
 	manifest := types.BlockManifest{h.Hash()}
 	// Terminate the search if we reached genesis
@@ -115,7 +124,7 @@ func (hc *HeaderChain) CollectBlockManifest(h *types.Header) (types.BlockManifes
 	if ancestor == nil {
 		return types.BlockManifest{}, errors.New("ancestor not found")
 	}
-	ancManifest, err := hc.CollectBlockManifest(ancestor)
+	ancManifest, err := hc.collectBlockManifest(ancestor)
 	if err != nil {
 		return nil, errors.New("unable to get manifest for ancestor")
 	}
@@ -179,10 +188,7 @@ func (hc *HeaderChain) Append(batch ethdb.Batch, block *types.Block, newInboundE
 	// coincident with a higher order chain. So, this check is skipped for prime
 	// nodes.
 	if nodeCtx > common.PRIME_CTX {
-		parentHash := h.ParentHash()
-		parentNumber := h.NumberU64() - 1
-		parent := hc.GetHeader(parentHash, parentNumber)
-		manifest, err := hc.CollectBlockManifest(parent)
+		manifest, err := hc.CollectBlockManifest(h)
 		if err != nil {
 			return err
 		}
