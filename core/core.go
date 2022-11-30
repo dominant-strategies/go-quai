@@ -1,7 +1,6 @@
 package core
 
 import (
-	"context"
 	"io"
 	"math/big"
 	"time"
@@ -49,7 +48,7 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 		if nodeCtx < common.ZONE_CTX {
 			if block.ManifestHash(nodeCtx+1) != types.DeriveSha(block.SubManifest(), trie.NewStackTrie(nil)) {
 				if subIdx := block.Location().SubIndex(); subIdx >= 0 {
-					newSubManifest, err := c.sl.subClients[subIdx].GetSubManifest(context.Background(), block.Header())
+					newSubManifest, err := c.GetSubManifest(block.Location(), block.Hash())
 					if err != nil {
 						return i, err
 					}
@@ -148,8 +147,12 @@ func (c *Core) sendPendingEtxsToDom(pEtxs types.PendingEtxs) error {
 	return c.sl.SendPendingEtxsToDom(pEtxs)
 }
 
-func (c *Core) GetSubManifest(blockHash common.Hash) (types.BlockManifest, error) {
-	return c.sl.GetSubManifest(blockHash)
+func (c *Core) GetManifest(blockHash common.Hash) (types.BlockManifest, error) {
+	return c.sl.GetManifest(blockHash)
+}
+
+func (c *Core) GetSubManifest(slice common.Location, blockHash common.Hash) (types.BlockManifest, error) {
+	return c.sl.GetSubManifest(slice, blockHash)
 }
 
 func (c *Core) AddPendingEtxs(pEtxs types.PendingEtxs) error {

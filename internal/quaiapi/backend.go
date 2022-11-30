@@ -79,7 +79,8 @@ type Backend interface {
 	PendingBlockBody(hash common.Hash) *types.Body
 	SubRelayPendingHeader(pendingHeader types.PendingHeader, reorg bool, location common.Location)
 	GetPendingHeader() (*types.Header, error)
-	GetSubManifest(blockHash common.Hash) (types.BlockManifest, error)
+	GetManifest(blockHash common.Hash) (types.BlockManifest, error)
+	GetSubManifest(slice common.Location, blockHash common.Hash) (types.BlockManifest, error)
 	AddPendingEtxs(pEtxs types.PendingEtxs) error
 	PendingBlockAndReceipts() (*types.Block, types.Receipts)
 
