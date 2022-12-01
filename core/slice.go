@@ -331,12 +331,18 @@ func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader, reorg 
 	nodeCtx := common.NodeLocation.Context()
 
 	if nodeCtx == common.REGION_CTX {
-		sl.updatePhCacheFromDom(pendingHeader, common.NodeLocation.Region(), []int{common.PRIME_CTX}, reorg)
+		err := sl.updatePhCacheFromDom(pendingHeader, common.NodeLocation.Region(), []int{common.PRIME_CTX}, reorg)
+		if err != nil {
+			return
+		}
 		for i := range sl.subClients {
 			sl.subClients[i].SubRelayPendingHeader(context.Background(), sl.phCache[pendingHeader.Termini[common.NodeLocation.Region()]], reorg)
 		}
 	} else {
-		sl.updatePhCacheFromDom(pendingHeader, common.NodeLocation.Zone(), []int{common.PRIME_CTX, common.REGION_CTX}, reorg)
+		err := sl.updatePhCacheFromDom(pendingHeader, common.NodeLocation.Zone(), []int{common.PRIME_CTX, common.REGION_CTX}, reorg)
+		if err != nil {
+			return
+		}
 		bestPh, exists := sl.phCache[sl.pendingHeaderHeadHash]
 		if exists {
 			sl.miner.worker.pendingHeaderFeed.Send(bestPh.Header)
@@ -366,7 +372,7 @@ func (sl *Slice) computePendingHeader(localPendingHeaderWithTermini types.Pendin
 }
 
 // updatePhCacheFromDom combines the recieved pending header with the pending header stored locally at a given terminus for specified context
-func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, terminiIndex int, indices []int, reorg bool) {
+func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, terminiIndex int, indices []int, reorg bool) error {
 
 	var localPendingHeader types.PendingHeader
 	hash := pendingHeader.Termini[terminiIndex]
@@ -382,8 +388,10 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 		if reorg {
 			sl.pendingHeaderHeadHash = hash
 		}
+		return nil
 	}
 	log.Warn("no pending header found for", "terminus", hash)
+	return errors.New("no pending header found in cache")
 }
 
 // writePhCache dom writes a given pendingHeaderWithTermini to the cache with the terminus used as the key.
