@@ -650,3 +650,12 @@ func (l Location) ContainsAddress(a Address) bool {
 	// Ranges are fully inclusive
 	return uint8(prefix) >= prefixRange.lo && uint8(prefix) <= prefixRange.hi
 }
+
+func (l Location) RPCMarshal() []hexutil.Uint64 {
+	res := make([]hexutil.Uint64, 0)
+	for _, i := range l {
+		res = append(res, hexutil.Uint64(i))
+	}
+
+	return res
+}
