@@ -150,11 +150,6 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 			return nil, err
 		}
 	}
-	if nodeCtx < common.ZONE_CTX {
-		if subRollupHash := types.DeriveSha(subRollup, trie.NewStackTrie(nil)); subRollupHash != header.EtxRollupHash(nodeCtx+1) {
-			return nil, errors.New("subordinate rollup does not match rollup hash")
-		}
-	}
 
 	// Append the new block
 	err = sl.hc.Append(batch, block, newInboundEtxs.FilterToLocation(common.NodeLocation))
@@ -246,19 +241,6 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	return localPendingEtxs, nil
 }
 
-// updateManifestHash updates the manifest hash to commit to our chain's manifest
-// for this block.
-func (sl *Slice) updateManifestHash(h *types.Header) {
-	if h.NumberU64() > 0 {
-		// Get block manifest up and including to our parent
-		manifest, err := sl.hc.CollectBlockManifest(h)
-		if err != nil {
-			log.Warn("Failed to get manifest for pending header", "parentHash: ", h.ParentHash(), "err: ", err)
-		}
-		h.SetManifestHash(types.DeriveSha(manifest, trie.NewStackTrie(nil)))
-	}
-}
-
 // relayPh sends pendingHeaderWithTermini to subordinates
 func (sl *Slice) relayPh(pendingHeaderWithTermini types.PendingHeader, updateMiner bool, reorg bool, isDomCoincident bool, location common.Location) {
 	nodeCtx := common.NodeLocation.Context()
@@ -277,31 +259,37 @@ func (sl *Slice) relayPh(pendingHeaderWithTermini types.PendingHeader, updateMin
 }
 
 // CollectEtxsForManifest will gather the full list of ETXs that are referencable through a given manifest
-func (sl *Slice) CollectEtxsForManifest(manifest types.BlockManifest) (types.Transactions, error) {
+func (sl *Slice) CollectSubRollup(b *types.Block) (types.Transactions, error) {
 	nodeCtx := common.NodeLocation.Context()
-	etxs := types.Transactions{}
-	for _, hash := range manifest {
-		var pendingEtxs []types.Transactions
-		// Look for pending ETXs first in pending ETX cache, then in database
-		if res, ok := sl.pendingEtxs.Get(hash); ok && res != nil {
-			pendingEtxs = res.([]types.Transactions)
-		} else if res := rawdb.ReadPendingEtxs(sl.sliceDb, hash); res != nil {
-			pendingEtxs = res
-		} else {
-			return nil, fmt.Errorf("unable to find pending etxs for hash in manifest, hash: %s", hash.String())
+	subRollup := types.Transactions{}
+	if nodeCtx < common.ZONE_CTX {
+		for _, hash := range b.SubManifest() {
+			var pendingEtxs []types.Transactions
+			// Look for pending ETXs first in pending ETX cache, then in database
+			if res, ok := sl.pendingEtxs.Get(hash); ok && res != nil {
+				pendingEtxs = res.([]types.Transactions)
+			} else if res := rawdb.ReadPendingEtxs(sl.sliceDb, hash); res != nil {
+				pendingEtxs = res
+			} else {
+				return nil, fmt.Errorf("unable to find pending etxs for hash in manifest, hash: %s", hash.String())
+			}
+			subRollup = append(subRollup, pendingEtxs[nodeCtx+1]...)
+			if totalNewEtxs := len(pendingEtxs[common.PRIME_CTX]) + len(pendingEtxs[common.REGION_CTX]) + len(pendingEtxs[common.ZONE_CTX]); totalNewEtxs > 0 {
+				fmt.Printf("TTTTTTTT collected %d from %s\n", totalNewEtxs, hash)
+			}
 		}
-		for ctx := nodeCtx + 1; ctx < common.HierarchyDepth; ctx++ {
-			etxs = append(etxs, pendingEtxs[ctx]...)
+		if subRollupHash := types.DeriveSha(subRollup, trie.NewStackTrie(nil)); subRollupHash != b.EtxRollupHash(nodeCtx+1) {
+			return nil, errors.New("sub rollup does not match sub rollup hash")
 		}
 	}
-	return etxs, nil
+	return subRollup, nil
 }
 
 // CollectNewlyConfirmedEtxs collects all newly confirmed ETXs since the last coincident with the given location
 func (sl *Slice) CollectNewlyConfirmedEtxs(block *types.Block, location common.Location) (types.Transactions, types.Transactions, error) {
 	nodeCtx := common.NodeLocation.Context()
 	// Collect rollup of ETXs from the subordinate node's manifest
-	subRollup, err := sl.CollectEtxsForManifest(block.SubManifest())
+	subRollup, err := sl.CollectSubRollup(block)
 	if err != nil {
 		return nil, nil, err
 	}
