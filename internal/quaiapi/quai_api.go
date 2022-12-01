@@ -137,6 +137,11 @@ func (api *PublicBlockChainQuaiAPI) ChainId() (*hexutil.Big, error) {
 	return nil, fmt.Errorf("chain not synced beyond EIP-155 replay-protection fork block")
 }
 
+// NodeLocation is the access call to the location of the node.
+func (api *PublicBlockChainQuaiAPI) NodeLocation() []hexutil.Uint64 {
+	return common.NodeLocation.RPCMarshal()
+}
+
 // BlockNumber returns the block number of the chain head.
 func (s *PublicBlockChainQuaiAPI) BlockNumber() hexutil.Uint64 {
 	header, _ := s.b.HeaderByNumber(context.Background(), rpc.LatestBlockNumber) // latest header should always be available
