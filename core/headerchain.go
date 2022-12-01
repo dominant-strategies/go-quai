@@ -139,10 +139,10 @@ func (hc *HeaderChain) CollectEtxRollup(b *types.Block) (types.Transactions, err
 	if parent == nil {
 		return nil, errors.New("parent not found")
 	}
-	return hc.collectEtxRollup(parent)
+	return hc.collectInclusiveEtxRollup(parent)
 }
 
-func (hc *HeaderChain) collectEtxRollup(b *types.Block) (types.Transactions, error) {
+func (hc *HeaderChain) collectInclusiveEtxRollup(b *types.Block) (types.Transactions, error) {
 	// Initialize the rollup with ETXs emitted by this block
 	newEtxs := b.ExtTransactions()
 	// Terminate the search if we reached genesis
@@ -162,7 +162,7 @@ func (hc *HeaderChain) collectEtxRollup(b *types.Block) (types.Transactions, err
 	if ancestor == nil {
 		return nil, errors.New("ancestor not found")
 	}
-	etxRollup, err := hc.collectEtxRollup(ancestor)
+	etxRollup, err := hc.collectInclusiveEtxRollup(ancestor)
 	if err != nil {
 		return nil, err
 	}

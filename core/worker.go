@@ -895,12 +895,18 @@ func (w *worker) FinalizeAssembleAndBroadcast(chain consensus.ChainHeaderReader,
 	if err != nil {
 		return nil, err
 	}
-	// Compute and set the ETX rollup hash
+	// Compute and set the manifest & ETX rollup hashes
+	manifest, err := w.hc.CollectBlockManifest(header)
+	if err != nil {
+		return nil, err
+	}
+	manifestHash := types.DeriveSha(manifest, trie.NewStackTrie(nil))
 	etxRollup, err := w.hc.CollectEtxRollup(block)
 	if err != nil {
 		return nil, err
 	}
 	etxRollupHash := types.DeriveSha(etxRollup, trie.NewStackTrie(nil))
+	block.Header().SetManifestHash(manifestHash)
 	block.Header().SetEtxRollupHash(etxRollupHash)
 
 	if chain.CurrentHeader().Hash() == block.ParentHash() {
