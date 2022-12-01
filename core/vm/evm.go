@@ -547,6 +547,9 @@ func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, input 
 	if gas < params.ETXGas {
 		return []byte{}, 0, fmt.Errorf("CreateETX error: %d is not sufficient gas, required amount: %d", gas, params.ETXGas)
 	}
+	if len(input) < 96 {
+		return []byte{}, 0, fmt.Errorf("CreateETX error: You are trying to send a cross-chain transaction but did not supply sufficient data to construct an external transaction")
+	}
 	// etxGasLimit, gasTipCap, gasFeeCap, data
 	etxGasLimit := big.NewInt(0).SetBytes(input[0:32])
 	gasTipCap := big.NewInt(0).SetBytes(input[32:64])
