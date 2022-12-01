@@ -186,26 +186,31 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	pendingHeaderWithTermini := sl.computePendingHeader(types.PendingHeader{Header: localPendingHeader, Termini: newTermini}, domPendingHeader, domOrigin)
 
 	// Call my sub to append the block, and collect the rolled up ETXs from that sub
-	var pendingEtxs []types.Transactions
+	localPendingEtxs := []types.Transactions{types.Transactions{}, types.Transactions{}, types.Transactions{}}
+	subPendingEtxs := []types.Transactions{types.Transactions{}, types.Transactions{}, types.Transactions{}}
 	if nodeCtx != common.ZONE_CTX {
-		pendingEtxs, err = sl.subClients[location.SubIndex()].Append(context.Background(), block.Header(), pendingHeaderWithTermini.Header, domTerminus, td, true, reorg, newInboundEtxs)
+		subPendingEtxs, err = sl.subClients[location.SubIndex()].Append(context.Background(), block.Header(), pendingHeaderWithTermini.Header, domTerminus, td, true, reorg, newInboundEtxs)
 		if err != nil {
 			return nil, err
 		}
 
 		// Cache the subordinate's pending ETXs
-		sl.AddPendingEtxs(types.PendingEtxs{block.Header(), pendingEtxs})
-
-		// Add the subordinate's rollup as the pending ETXs for this block
-		pendingEtxs[nodeCtx+1] = subRollup
-	} else {
-		// If we are a zone, initialize a new rollup set
-		pendingEtxs = []types.Transactions{types.Transactions{}, types.Transactions{}, types.Transactions{}}
+		sl.AddPendingEtxs(types.PendingEtxs{block.Header(), subPendingEtxs})
 	}
 
-	// Add ETXs emitted in this block to the set of pending ETXs to be relayed to
-	// our dom node.
-	pendingEtxs[nodeCtx] = block.ExtTransactions()
+	// Combine sub's pending ETXs, sub rollup, and our local ETXs into localPendingEtxs
+	// e.g. localPendingEtxs[ctx]:
+	// * for 'ctx' is dom: empty
+	// * for 'ctx' is local: ETXs emitted in this block
+	// * for 'ctx' is direct sub: replace sub pending ETXs with sub rollup ETXs
+	// * for 'ctx' is indirect sub: copy sub pending ETXs (sub's sub has already been rolled up)
+	for ctx := nodeCtx + 2; ctx < common.HierarchyDepth; ctx++ {
+		copy(localPendingEtxs[ctx], subPendingEtxs[ctx]) // copy pending for each indirect sub
+	}
+	if nodeCtx < common.ZONE_CTX {
+		localPendingEtxs[nodeCtx+1] = subRollup // overwrite direct sub with sub rollup
+	}
+	localPendingEtxs[nodeCtx] = block.ExtTransactions() // Assing our new ETXs without rolling up
 
 	// WriteTd
 	rawdb.WriteTd(batch, block.Header().Hash(), block.NumberU64(), td)
@@ -238,7 +243,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
 		"root", block.Root())
 
-	return pendingEtxs, nil
+	return localPendingEtxs, nil
 }
 
 // updateManifestHash updates the manifest hash to commit to our chain's manifest
