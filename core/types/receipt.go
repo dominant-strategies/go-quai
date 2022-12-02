@@ -166,7 +166,7 @@ func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 			return errEmptyTypedReceipt
 		}
 		r.Type = b[0]
-		if r.Type == InternalTxType || r.Type == ExternalTxType {
+		if r.Type == InternalTxType || r.Type == ExternalTxType || r.Type == InternalToExternalTxType {
 			var dec receiptRLP
 			if err := rlp.DecodeBytes(b[1:], &dec); err != nil {
 				return err
@@ -332,6 +332,9 @@ func (rs Receipts) EncodeIndex(i int, w *bytes.Buffer) {
 		rlp.Encode(w, data)
 	case ExternalTxType:
 		w.WriteByte(ExternalTxType)
+		rlp.Encode(w, data)
+	case InternalToExternalTxType:
+		w.WriteByte(InternalToExternalTxType)
 		rlp.Encode(w, data)
 	default:
 		// For unsupported types, write nothing. Since this is for
