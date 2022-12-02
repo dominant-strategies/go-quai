@@ -44,6 +44,7 @@ var (
 const (
 	InternalTxType = iota
 	ExternalTxType
+	InternalToExternalTxType
 )
 
 // Transaction is an Ethereum transaction.
@@ -69,7 +70,7 @@ func NewTx(inner TxData) *Transaction {
 
 // TxData is the underlying data of a transaction.
 //
-// This is implemented by DynamicFeeTx, LegacyTx and AccessListTx.
+// This is implemented by InternalTx, ExternalTx and InternalToExternal.
 type TxData interface {
 	txType() byte // returns the type ID
 	copy() TxData // creates a deep copy and initializes all fields
@@ -166,6 +167,10 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 		var inner ExternalTx
 		err := rlp.DecodeBytes(b[1:], &inner)
 		return &inner, err
+	case InternalToExternalTxType:
+		var inner InternalToExternalTx
+		err := rlp.DecodeBytes(b[1:], &inner)
+		return &inner, err
 	default:
 		return nil, ErrTxTypeNotSupported
 	}
@@ -252,6 +257,11 @@ func (tx *Transaction) Value() *big.Int { return new(big.Int).Set(tx.inner.value
 func (tx *Transaction) Nonce() uint64 { return tx.inner.nonce() }
 
 func (tx *Transaction) ETXSender() common.Address { return tx.inner.(*ExternalTx).Sender }
+
+func (tx *Transaction) IsInternalToExternalTx() (inner *InternalToExternalTx, ok bool) {
+	inner, ok = tx.inner.(*InternalToExternalTx)
+	return
+}
 
 // To returns the recipient address of the transaction.
 // For contract-creation transactions, To returns nil.
@@ -605,19 +615,24 @@ func (t *TransactionsByPriceAndNonce) Pop() {
 //
 // NOTE: In a future PR this will be removed.
 type Message struct {
-	to         *common.Address
-	from       common.Address
-	nonce      uint64
-	amount     *big.Int
-	gasLimit   uint64
-	gasPrice   *big.Int
-	gasFeeCap  *big.Int
-	gasTipCap  *big.Int
-	data       []byte
-	accessList AccessList
-	checkNonce bool
-	etxsender  common.Address // only used in ETX
-	txtype     byte
+	to            *common.Address
+	from          common.Address
+	nonce         uint64
+	amount        *big.Int
+	gasLimit      uint64
+	gasPrice      *big.Int
+	gasFeeCap     *big.Int
+	gasTipCap     *big.Int
+	data          []byte
+	accessList    AccessList
+	checkNonce    bool
+	etxsender     common.Address // only used in ETX
+	txtype        byte
+	etxGasLimit   uint64
+	etxGasPrice   *big.Int
+	etxGasTip     *big.Int
+	etxData       []byte
+	etxAccessList AccessList
 }
 
 func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice, gasFeeCap, gasTipCap *big.Int, data []byte, accessList AccessList, checkNonce bool) Message {
@@ -663,6 +678,13 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 	} else {
 		msg.from, err = Sender(s, tx)
 	}
+	if internalToExternalTx, ok := tx.IsInternalToExternalTx(); ok {
+		msg.etxGasLimit = internalToExternalTx.ETXGasLimit
+		msg.etxGasPrice = internalToExternalTx.ETXGasPrice
+		msg.etxGasTip = internalToExternalTx.ETXGasTip
+		msg.etxData = internalToExternalTx.ETXData
+		msg.etxAccessList = internalToExternalTx.ETXAccessList
+	}
 	return msg, err
 }
 
@@ -679,6 +701,11 @@ func (m Message) AccessList() AccessList    { return m.accessList }
 func (m Message) CheckNonce() bool          { return m.checkNonce }
 func (m Message) ETXSender() common.Address { return m.etxsender }
 func (m Message) Type() byte                { return m.txtype }
+func (m Message) ETXGasLimit() uint64       { return m.etxGasLimit }
+func (m Message) ETXGasPrice() *big.Int     { return m.etxGasPrice }
+func (m Message) ETXGasTip() *big.Int       { return m.etxGasTip }
+func (m Message) ETXData() []byte           { return m.etxData }
+func (m Message) ETXAccessList() AccessList { return m.etxAccessList }
 
 // AccessList is an EIP-2930 access list.
 type AccessList []AccessTuple

@@ -79,6 +79,12 @@ type Message interface {
 	AccessList() types.AccessList
 	ETXSender() common.Address
 	Type() byte
+
+	ETXGasLimit() uint64
+	ETXGasPrice() *big.Int
+	ETXGasTip() *big.Int
+	ETXData() []byte
+	ETXAccessList() types.AccessList
 }
 
 // ExecutionResult includes all output after executing given evm
