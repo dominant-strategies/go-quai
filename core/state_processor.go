@@ -224,7 +224,7 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 
 			delete(etxSet, tx.Hash()) // This ETX has been spent so remove it from the unspent set
 
-		} else if tx.Type() == types.InternalTxType {
+		} else if tx.Type() == types.InternalTxType || tx.Type() == types.InternalToExternalTxType {
 			receipt, err = applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv)
 			if err != nil {
 				return nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
