@@ -372,7 +372,7 @@ func DefaultGenesisBlock() *Genesis {
 		Knot:       ReadKnot("./core/knot/mainnet_knot.rlp"),
 		Nonce:      66,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
-		GasLimit:   []uint64{100000, 100000, 100000},
+		GasLimit:   []uint64{10000000, 10000000, 10000000},
 		Difficulty: []*big.Int{big.NewInt(32048576), big.NewInt(8048576), big.NewInt(2048576)},
 		Alloc:      decodePrealloc(mainnetAllocData),
 	}
@@ -385,7 +385,7 @@ func DefaultRopstenGenesisBlock() *Genesis {
 		Knot:       ReadKnot("./core/knot/ropsten_knot.rlp"),
 		Nonce:      66,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
-		GasLimit:   []uint64{100000, 100000, 100000},
+		GasLimit:   []uint64{10000000, 10000000, 10000000},
 		Difficulty: []*big.Int{big.NewInt(1600000), big.NewInt(800000), big.NewInt(80000)},
 		Alloc:      decodePrealloc(ropstenAllocData),
 	}
