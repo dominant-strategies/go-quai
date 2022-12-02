@@ -186,13 +186,9 @@ func (s SignerV1) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int
 		// not an error though, so no error is returned.
 		return nil, nil, nil, nil
 	}
-	txdata, ok := tx.inner.(*InternalTx)
-	if !ok {
-		return nil, nil, nil, ErrUnsupportedTxType
-	}
 	// Check that chain ID of tx matches the signer. We also accept ID zero here,
 	// because it indicates that the chain ID was not specified in the tx.
-	if txdata.ChainID.Sign() != 0 && txdata.ChainID.Cmp(s.chainId) != 0 {
+	if tx.ChainId().Sign() != 0 && tx.ChainId().Cmp(s.chainId) != 0 {
 		return nil, nil, nil, ErrInvalidChainId
 	}
 	R, S, _ = decodeSignature(sig)
