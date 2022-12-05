@@ -302,9 +302,9 @@ func (sl *Slice) updateCacheAndRelay(pendingHeader types.PendingHeader, location
 }
 
 // CollectEtxsForManifest will gather the full list of ETXs that are referencable through a given manifest
-func (sl *Slice) CollectSubRollup(b *types.Block) (types.Transactions, error) {
+func (sl *Slice) CollectSubRollups(b *types.Block) ([]types.Transactions, error) {
 	nodeCtx := common.NodeLocation.Context()
-	subRollup := types.Transactions{}
+	subRollups := make([]types.Transactions, 3)
 	if nodeCtx < common.ZONE_CTX {
 		for _, hash := range b.SubManifest() {
 			var pendingEtxs []types.Transactions
@@ -316,27 +316,37 @@ func (sl *Slice) CollectSubRollup(b *types.Block) (types.Transactions, error) {
 			} else {
 				return nil, fmt.Errorf("unable to find pending etxs for hash in manifest, hash: %s", hash.String())
 			}
-			subRollup = append(subRollup, pendingEtxs[nodeCtx+1]...)
-			if totalNewEtxs := len(pendingEtxs[common.PRIME_CTX]) + len(pendingEtxs[common.REGION_CTX]) + len(pendingEtxs[common.ZONE_CTX]); totalNewEtxs > 0 {
-				fmt.Printf("TTTTTTTT collected %d from %s\n", totalNewEtxs, hash)
+			for ctx := nodeCtx; ctx < common.HierarchyDepth; ctx++ {
+				subRollups[ctx] = append(subRollups[ctx], pendingEtxs[ctx]...)
 			}
 		}
-		if subRollupHash := types.DeriveSha(subRollup, trie.NewStackTrie(nil)); subRollupHash != b.EtxRollupHash(nodeCtx+1) {
+		if subRollupHash := types.DeriveSha(subRollups[nodeCtx+1], trie.NewStackTrie(nil)); subRollupHash != b.EtxRollupHash(nodeCtx+1) {
 			return nil, errors.New("sub rollup does not match sub rollup hash")
 		}
 	}
-	return subRollup, nil
+	return subRollups, nil
 }
 
 // CollectNewlyConfirmedEtxs collects all newly confirmed ETXs since the last coincident with the given location
 func (sl *Slice) CollectNewlyConfirmedEtxs(block *types.Block, location common.Location) (types.Transactions, types.Transactions, error) {
 	nodeCtx := common.NodeLocation.Context()
 	// Collect rollup of ETXs from the subordinate node's manifest
-	subRollup, err := sl.CollectSubRollup(block)
-	if err != nil {
-		return nil, nil, err
+	if nodeCtx == common.PRIME_CTX {
+		fmt.Printf("collecting pending ETXs @ block %s\n", block.Hash())
 	}
-	referencableEtxs := append(subRollup, block.ExtTransactions()...) // Include ETXs emitted in this block
+	referencableEtxs := types.Transactions{}
+	subRollup := types.Transactions{}
+	if nodeCtx < common.ZONE_CTX {
+		subRollups, err := sl.CollectSubRollups(block)
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, etxs := range subRollups {
+			referencableEtxs = append(referencableEtxs, etxs...)
+		}
+		referencableEtxs = append(referencableEtxs, block.ExtTransactions()...) // Include ETXs emitted in this block
+		subRollup = subRollups[nodeCtx+1]
+	}
 
 	// Filter for ETXs destined to this slice
 	newInboundEtxs := referencableEtxs.FilterToSlice(location, nodeCtx)
