@@ -95,6 +95,11 @@ func (tx *InternalTx) value() *big.Int             { return tx.Value }
 func (tx *InternalTx) nonce() uint64               { return tx.Nonce }
 func (tx *InternalTx) to() *common.Address         { return tx.To }
 func (tx *InternalTx) fromChain() *common.Location { return tx.to().Location() }
+func (tx *InternalTx) etxGasLimit() uint64         { panic("internal TX does not have etxGasLimit") }
+func (tx *InternalTx) etxGasPrice() *big.Int       { panic("internal TX does not have etxGasPrice") }
+func (tx *InternalTx) etxGasTip() *big.Int         { panic("internal TX does not have etxGasTip") }
+func (tx *InternalTx) etxData() []byte	           { panic("internal TX does not have etxData") }
+func (tx *InternalTx) etxAccessList() AccessList   { panic("internal TX does not have etxAccessList") }
 
 func (tx *InternalTx) rawSignatureValues() (v, r, s *big.Int) {
 	return tx.V, tx.R, tx.S
