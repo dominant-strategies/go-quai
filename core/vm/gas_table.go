@@ -320,11 +320,11 @@ func gasExpFrontier(evm *EVM, contract *Contract, stack *Stack, mem *Memory, mem
 	return gas, nil
 }
 
-func gasExpEIP158(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+func gasExp(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	expByteLen := uint64((stack.data[stack.len()-2].BitLen() + 7) / 8)
 
 	var (
-		gas      = expByteLen * params.ExpByteEIP158 // no overflow check required. Max is 256 * ExpByte gas
+		gas      = expByteLen * params.ExpByte // no overflow check required. Max is 256 * ExpByte gas
 		overflow bool
 	)
 	if gas, overflow = math.SafeAdd(gas, params.ExpGas); overflow {
@@ -342,11 +342,7 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 	if err != nil {
 		return 0, err
 	}
-	if evm.chainRules.IsEIP158 {
-		if transfersValue && evm.StateDB.Empty(address) {
-			gas += params.CallNewAccountGas
-		}
-	} else if !evm.StateDB.Exist(address) {
+	if transfersValue && evm.StateDB.Empty(address) {
 		gas += params.CallNewAccountGas
 	}
 	if transfersValue {
@@ -361,7 +357,7 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 		return 0, ErrGasUintOverflow
 	}
 
-	evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas, gas, stack.Back(0))
+	evm.callGasTemp, err = callGas(contract.Gas, gas, stack.Back(0))
 	if err != nil {
 		return 0, err
 	}
@@ -386,7 +382,7 @@ func gasCallCode(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memory
 	if gas, overflow = math.SafeAdd(gas, memoryGas); overflow {
 		return 0, ErrGasUintOverflow
 	}
-	evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas, gas, stack.Back(0))
+	evm.callGasTemp, err = callGas(contract.Gas, gas, stack.Back(0))
 	if err != nil {
 		return 0, err
 	}
@@ -401,7 +397,7 @@ func gasDelegateCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 	if err != nil {
 		return 0, err
 	}
-	evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas, gas, stack.Back(0))
+	evm.callGasTemp, err = callGas(contract.Gas, gas, stack.Back(0))
 	if err != nil {
 		return 0, err
 	}
@@ -417,7 +413,7 @@ func gasStaticCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memo
 	if err != nil {
 		return 0, err
 	}
-	evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas, gas, stack.Back(0))
+	evm.callGasTemp, err = callGas(contract.Gas, gas, stack.Back(0))
 	if err != nil {
 		return 0, err
 	}
@@ -434,22 +430,14 @@ func gasSelfdestruct(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 	if err != nil {
 		return 0, err
 	}
-	// EIP150 homestead gas reprice fork:
-	if evm.chainRules.IsEIP150 {
-		gas = params.SelfdestructGasEIP150
-		address, err := common.Bytes20ToAddress(stack.Back(0).Bytes20()).InternalAddress()
-		if err != nil {
-			return 0, err
-		}
-
-		if evm.chainRules.IsEIP158 {
-			// if empty and transfers value
-			if evm.StateDB.Empty(address) && evm.StateDB.GetBalance(contractAddr).Sign() != 0 {
-				gas += params.CreateBySelfdestructGas
-			}
-		} else if !evm.StateDB.Exist(address) {
-			gas += params.CreateBySelfdestructGas
-		}
+	gas = params.SelfdestructGas
+	address, err := common.Bytes20ToAddress(stack.Back(0).Bytes20()).InternalAddress()
+	if err != nil {
+		return 0, err
+	}
+	// if empty and transfers value
+	if evm.StateDB.Empty(address) && evm.StateDB.GetBalance(contractAddr).Sign() != 0 {
+		gas += params.CreateBySelfdestructGas
 	}
 
 	if !evm.StateDB.HasSuicided(contractAddr) {

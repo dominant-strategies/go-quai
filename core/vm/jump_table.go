@@ -67,17 +67,17 @@ func NewInstructionSet() JumpTable {
 		memorySize:  memoryDelegateCall,
 		returns:     true,
 	}
-	instructionSet[BALANCE].constantGas = params.BalanceGasEIP150
-	instructionSet[EXTCODESIZE].constantGas = params.ExtcodeSizeGasEIP150
-	instructionSet[SLOAD].constantGas = params.SloadGasEIP150
-	instructionSet[EXTCODECOPY].constantGas = params.ExtcodeCopyBaseEIP150
-	instructionSet[CALL].constantGas = params.CallGasEIP150
-	instructionSet[CALLCODE].constantGas = params.CallGasEIP150
-	instructionSet[DELEGATECALL].constantGas = params.CallGasEIP150
-	instructionSet[EXP].dynamicGas = gasExpEIP158
+	instructionSet[BALANCE].constantGas = params.BalanceGas
+	instructionSet[EXTCODESIZE].constantGas = params.ExtcodeSizeGas
+	instructionSet[SLOAD].constantGas = params.SloadGas
+	instructionSet[EXTCODECOPY].constantGas = params.ExtcodeCopyBase
+	instructionSet[CALL].constantGas = params.CallGas
+	instructionSet[CALLCODE].constantGas = params.CallGas
+	instructionSet[DELEGATECALL].constantGas = params.CallGas
+	instructionSet[EXP].dynamicGas = gasExp
 	instructionSet[STATICCALL] = &operation{
 		execute:     opStaticCall,
-		constantGas: params.CallGasEIP150,
+		constantGas: params.CallGas,
 		dynamicGas:  gasStaticCall,
 		minStack:    minStack(6, 1),
 		maxStack:    maxStack(6, 1),

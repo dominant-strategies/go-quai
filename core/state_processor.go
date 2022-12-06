@@ -255,7 +255,7 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	if config.IsByzantium(blockNumber) {
 		statedb.Finalise(true)
 	} else {
-		root = statedb.IntermediateRoot(config.IsEIP158(blockNumber)).Bytes()
+		root = statedb.IntermediateRoot(true).Bytes()
 	}
 	*usedGas += result.UsedGas
 
@@ -598,7 +598,7 @@ func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *s
 			return nil, fmt.Errorf("processing block %d failed: %v", current.NumberU64(), err)
 		}
 		// Finalize the state so any modifications are written to the trie
-		root, err := statedb.Commit(p.hc.Config().IsEIP158(current.Number()))
+		root, err := statedb.Commit(true)
 		if err != nil {
 			return nil, fmt.Errorf("stateAtBlock commit failed, number %d root %v: %w",
 				current.NumberU64(), current.Root().Hex(), err)
@@ -657,8 +657,7 @@ func (p *StateProcessor) StateAtTransaction(block *types.Block, txIndex int, ree
 			return nil, vm.BlockContext{}, nil, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
 		}
 		// Ensure any modifications are committed to the state
-		// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
-		statedb.Finalise(vmenv.ChainConfig().IsEIP158(block.Number()))
+		statedb.Finalise(true)
 	}
 	return nil, vm.BlockContext{}, nil, fmt.Errorf("transaction index %d out of range for block %#x", txIndex, block.Hash())
 }

@@ -91,9 +91,7 @@ func testForkIDSplit(t *testing.T, protocol uint) {
 
 		configNoFork  = &params.ChainConfig{}
 		configProFork = &params.ChainConfig{
-			EIP150Block:    big.NewInt(2),
 			EIP155Block:    big.NewInt(2),
-			EIP158Block:    big.NewInt(2),
 			ByzantiumBlock: big.NewInt(3),
 		}
 		dbNoFork  = rawdb.NewMemoryDatabase()
@@ -166,7 +164,7 @@ func testForkIDSplit(t *testing.T, protocol uint) {
 			t.Fatalf("frontier nofork <-> profork handler timeout")
 		}
 	}
-	// Progress into _. Fork's match, so we don't care what the future holds
+
 	chainNoFork.InsertChain(blocksNoFork[:1])
 	chainProFork.InsertChain(blocksProFork[:1])
 
