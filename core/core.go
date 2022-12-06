@@ -48,7 +48,7 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 		if !isCoincident && !domWait {
 			err := c.sl.Append(block.Header(), types.EmptyHeader(), common.Hash{}, big.NewInt(0), false, true)
 			if err != nil {
-				if err == consensus.ErrFutureBlock {
+				if err == consensus.ErrFutureBlock || err.Error() == "unknown ancestor" {
 					c.sl.addfutureHeader(block.Header())
 				}
 				log.Info("InsertChain", "err in Append core: ", err)
