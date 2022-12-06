@@ -121,8 +121,6 @@ func (sl *Slice) Append(header *types.Header, domTerminus common.Hash, td *big.I
 	// Construct the block locally
 	block := sl.ConstructLocalBlock(header)
 	if block == nil {
-		// add the block to the future header cache
-		sl.addfutureHeader(header)
 		return sl.nilPendingHeader, errors.New("could not find the tx and uncle data to match the header root hash")
 	}
 
