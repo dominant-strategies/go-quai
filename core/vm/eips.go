@@ -143,7 +143,7 @@ func enable2929(jt *JumpTable) {
 
 	// This was previously part of the dynamic cost, but we're using it as a constantGas
 	// factor here
-	jt[SELFDESTRUCT].constantGas = params.SelfdestructGasEIP150
+	jt[SELFDESTRUCT].constantGas = params.SelfdestructGas
 	jt[SELFDESTRUCT].dynamicGas = gasSelfdestructEIP2929
 }
 

@@ -32,8 +32,6 @@ func TestCheckCompatible(t *testing.T) {
 		{stored: AllBlake3powProtocolChanges, new: AllBlake3powProtocolChanges, head: 0, wantErr: nil},
 		{stored: AllBlake3powProtocolChanges, new: AllBlake3powProtocolChanges, head: 100, wantErr: nil},
 		{
-			stored:  &ChainConfig{EIP150Block: big.NewInt(10)},
-			new:     &ChainConfig{EIP150Block: big.NewInt(20)},
 			head:    9,
 			wantErr: nil,
 		},

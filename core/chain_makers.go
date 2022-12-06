@@ -228,7 +228,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			block, _ := b.engine.FinalizeAndAssemble(chainreader, b.header, statedb, b.txs, b.uncles, b.receipts)
 
 			// Write state changes to db
-			root, err := statedb.Commit(config.IsEIP158(b.header.Number()))
+			root, err := statedb.Commit(true)
 			if err != nil {
 				panic(fmt.Sprintf("state write error: %v", err))
 			}
@@ -269,7 +269,7 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 
 	// Make new header
 	header := types.EmptyHeader()
-	header.SetRoot(state.IntermediateRoot(chain.Config().IsEIP158(parent.Number())))
+	header.SetRoot(state.IntermediateRoot(true))
 	header.SetParentHash(parent.Hash())
 	header.SetCoinbase(parent.Coinbase())
 	header.SetDifficulty(engine.CalcDifficulty(chain, diffheader))

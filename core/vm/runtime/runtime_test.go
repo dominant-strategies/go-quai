@@ -179,9 +179,7 @@ func benchmarkEVM_Create(bench *testing.B, code string) {
 			ConstantinopleBlock: new(big.Int),
 			DAOForkBlock:        new(big.Int),
 			DAOForkSupport:      false,
-			EIP150Block:         new(big.Int),
 			EIP155Block:         new(big.Int),
-			EIP158Block:         new(big.Int),
 		},
 		EVMConfig: vm.Config{},
 	}
