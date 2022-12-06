@@ -157,5 +157,5 @@ var (
 	PrimeMinDifficulty     = new(big.Int).Mul(big.NewInt(10), RegionMinDifficulty)
 	MinimumDifficulty      = []*big.Int{PrimeMinDifficulty, RegionMinDifficulty, ZoneMinDifficulty} // The minimum that the difficulty may ever be.
 	GenesisDifficulty      = []*big.Int{PrimeMinDifficulty, RegionMinDifficulty, ZoneMinDifficulty} // Difficulty of the Genesis block.
-	DurationLimit          = []*big.Int{big.NewInt(1000), big.NewInt(100), big.NewInt(10)}          // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
+	DurationLimit          = []*big.Int{big.NewInt(125), big.NewInt(25), big.NewInt(5)}             // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
 )
