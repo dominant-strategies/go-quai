@@ -318,9 +318,6 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 			return err
 		}
 	}
-	if err := misc.VerifyForkHashes(chain.Config(), header, uncle); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -433,7 +430,7 @@ func (blake3pow *Blake3pow) Prepare(chain consensus.ChainHeaderReader, header *t
 func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
 	// Accumulate any block and uncle rewards and commit the final state root
 	accumulateRewards(chain.Config(), state, header, uncles)
-	header.SetRoot(state.IntermediateRoot(chain.Config().IsEIP158(header.Number())))
+	header.SetRoot(state.IntermediateRoot(true))
 }
 
 // FinalizeAndAssemble implements consensus.Engine, accumulating the block and
