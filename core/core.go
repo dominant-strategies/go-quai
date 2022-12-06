@@ -56,7 +56,6 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 			}
 		} else {
 			domWait = true
-			c.sl.addfutureHeader(block.Header())
 		}
 	}
 	return len(blocks), nil
