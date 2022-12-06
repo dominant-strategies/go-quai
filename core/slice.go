@@ -513,21 +513,24 @@ func (sl *Slice) ConstructLocalBlock(header *types.Header) *types.Block {
 
 // combinePendingHeader updates the pending header at the given index with the value from given header.
 func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *types.Header, index int) *types.Header {
-	slPendingHeader.SetParentHash(header.ParentHash(index), index)
-	slPendingHeader.SetUncleHash(header.UncleHash(index), index)
-	slPendingHeader.SetNumber(header.Number(index), index)
-	slPendingHeader.SetExtra(header.Extra())
-	slPendingHeader.SetBaseFee(header.BaseFee(index), index)
-	slPendingHeader.SetGasLimit(header.GasLimit(index), index)
-	slPendingHeader.SetGasUsed(header.GasUsed(index), index)
-	slPendingHeader.SetTxHash(header.TxHash(index), index)
-	slPendingHeader.SetReceiptHash(header.ReceiptHash(index), index)
-	slPendingHeader.SetRoot(header.Root(index), index)
-	slPendingHeader.SetDifficulty(header.Difficulty(index), index)
-	slPendingHeader.SetCoinbase(header.Coinbase(index), index)
-	slPendingHeader.SetBloom(header.Bloom(index), index)
+	// copying the slPendingHeader and updating the copy to remove any shared memory access issues
+	combinedPendingHeader := types.CopyHeader(slPendingHeader)
 
-	return slPendingHeader
+	combinedPendingHeader.SetParentHash(header.ParentHash(index), index)
+	combinedPendingHeader.SetUncleHash(header.UncleHash(index), index)
+	combinedPendingHeader.SetNumber(header.Number(index), index)
+	combinedPendingHeader.SetExtra(header.Extra())
+	combinedPendingHeader.SetBaseFee(header.BaseFee(index), index)
+	combinedPendingHeader.SetGasLimit(header.GasLimit(index), index)
+	combinedPendingHeader.SetGasUsed(header.GasUsed(index), index)
+	combinedPendingHeader.SetTxHash(header.TxHash(index), index)
+	combinedPendingHeader.SetReceiptHash(header.ReceiptHash(index), index)
+	combinedPendingHeader.SetRoot(header.Root(index), index)
+	combinedPendingHeader.SetDifficulty(header.Difficulty(index), index)
+	combinedPendingHeader.SetCoinbase(header.Coinbase(index), index)
+	combinedPendingHeader.SetBloom(header.Bloom(index), index)
+
+	return combinedPendingHeader
 }
 
 // MakeDomClient creates the quaiclient for the given domurl
