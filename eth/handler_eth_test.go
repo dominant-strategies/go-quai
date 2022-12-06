@@ -89,9 +89,8 @@ func testForkIDSplit(t *testing.T, protocol uint) {
 	var (
 		engine = blake3pow.NewFaker()
 
-		configNoFork  = &params.ChainConfig{HomesteadBlock: big.NewInt(1)}
+		configNoFork  = &params.ChainConfig{}
 		configProFork = &params.ChainConfig{
-			HomesteadBlock: big.NewInt(1),
 			EIP150Block:    big.NewInt(2),
 			EIP155Block:    big.NewInt(2),
 			EIP158Block:    big.NewInt(2),
@@ -167,7 +166,7 @@ func testForkIDSplit(t *testing.T, protocol uint) {
 			t.Fatalf("frontier nofork <-> profork handler timeout")
 		}
 	}
-	// Progress into Homestead. Fork's match, so we don't care what the future holds
+	// Progress into _. Fork's match, so we don't care what the future holds
 	chainNoFork.InsertChain(blocksNoFork[:1])
 	chainProFork.InsertChain(blocksProFork[:1])
 
@@ -192,10 +191,10 @@ func testForkIDSplit(t *testing.T, protocol uint) {
 		select {
 		case err := <-errc:
 			if err != nil {
-				t.Fatalf("homestead nofork <-> profork failed: %v", err)
+				t.Fatalf("nofork <-> profork failed: %v", err)
 			}
 		case <-time.After(250 * time.Millisecond):
-			t.Fatalf("homestead nofork <-> profork handler timeout")
+			t.Fatalf("nofork <-> profork handler timeout")
 		}
 	}
 	// Progress into Spurious. Forks mismatch, signalling differing chains, reject
@@ -276,7 +275,7 @@ func testRecvTransactions(t *testing.T, protocol uint) {
 	}
 	// Send the transaction to the sink and verify that it's added to the tx pool
 	tx := types.NewTransaction(0, common.Address{}, big.NewInt(0), 100000, big.NewInt(0), nil)
-	tx, _ = types.SignTx(tx, types.HomesteadSigner{}, testKey)
+	tx, _ = types.SignTx(tx, types.LatestSigner(params.RopstenChainConfig), testKey)
 
 	if err := src.SendTransactions([]*types.Transaction{tx}); err != nil {
 		t.Fatalf("failed to send transaction: %v", err)
@@ -307,7 +306,7 @@ func testSendTransactions(t *testing.T, protocol uint) {
 	insert := make([]*types.Transaction, 100)
 	for nonce := range insert {
 		tx := types.NewTransaction(uint64(nonce), common.Address{}, big.NewInt(0), 100000, big.NewInt(0), make([]byte, txsyncPackSize/10))
-		tx, _ = types.SignTx(tx, types.HomesteadSigner{}, testKey)
+		tx, _ = types.SignTx(tx, types.LatestSigner(params.RopstenChainConfig), testKey)
 
 		insert[nonce] = tx
 	}
@@ -431,7 +430,7 @@ func testTransactionPropagation(t *testing.T, protocol uint) {
 	txs := make([]*types.Transactions, 1024)
 	for nonce := range txs {
 		tx := types.NewTransaction(uint64(nonce), common.Address{}, big.NewInt(0), 100000, big.NewInt(0), nil)
-		tx, _ = types.SignTx(tx, types.HomesteadSigner{}, testKey)
+		tx, _ = types.SignTx(tx, types.LatestSigner(params.RopstenChainConfig), testKey)
 
 		txs[nonce] = tx
 	}

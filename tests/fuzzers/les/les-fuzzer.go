@@ -61,7 +61,7 @@ func makechain() (bc *core.BlockChain, addrHashes, txHashes []common.Hash) {
 		GasLimit: 100000000,
 	}
 	genesis := gspec.MustCommit(db)
-	signer := types.HomesteadSigner{}
+	signer := types.LatestSigner(params.RopstenChainConfig)
 	blocks, _ := core.GenerateChain(gspec.Config, genesis, blake3pow.NewFaker(), db, testChainLen,
 		func(i int, gen *core.BlockGen) {
 			var (
@@ -382,7 +382,7 @@ func Fuzz(input []byte) int {
 
 		case 6:
 			req := &l.SendTxPacket{Txs: make([]*types.Transaction, f.randomInt(l.MaxTxSend+1))}
-			signer := types.HomesteadSigner{}
+			signer := types.LatestSigner(params.RopstenChainConfig)
 			for i := range req.Txs {
 				var nonce uint64
 				if f.randomBool() {

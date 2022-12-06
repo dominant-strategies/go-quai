@@ -131,7 +131,6 @@ func (f *fuzzer) fuzz() int {
 		u256Fn calculator
 	}{
 		{blake3pow.FrontierDifficultyCalulator, blake3pow.CalcDifficultyFrontierU256},
-		{blake3pow.HomesteadDifficultyCalulator, blake3pow.CalcDifficultyHomesteadU256},
 		{blake3pow.DynamicDifficultyCalculator(bombDelay), blake3pow.MakeDifficultyCalculatorU256(bombDelay)},
 	} {
 		want := pair.bigFn(time, header)

@@ -50,7 +50,6 @@ type operation struct {
 
 var (
 	frontierInstructionSet         = newFrontierInstructionSet()
-	homesteadInstructionSet        = newHomesteadInstructionSet()
 	tangerineWhistleInstructionSet = newTangerineWhistleInstructionSet()
 	spuriousDragonInstructionSet   = newSpuriousDragonInstructionSet()
 	byzantiumInstructionSet        = newByzantiumInstructionSet()
@@ -63,7 +62,7 @@ var (
 // JumpTable contains the EVM opcodes supported at a given fork.
 type JumpTable [256]*operation
 
-// newLondonInstructionSet returns the frontier, homestead, byzantium,
+// newLondonInstructionSet returns the frontier, byzantium,
 // contantinople, istanbul, petersburg, berlin and london instructions.
 func newLondonInstructionSet() JumpTable {
 	instructionSet := newBerlinInstructionSet()
@@ -72,7 +71,7 @@ func newLondonInstructionSet() JumpTable {
 	return instructionSet
 }
 
-// newBerlinInstructionSet returns the frontier, homestead, byzantium,
+// newBerlinInstructionSet returns the frontier, byzantium,
 // contantinople, istanbul, petersburg and berlin instructions.
 func newBerlinInstructionSet() JumpTable {
 	instructionSet := newIstanbulInstructionSet()
@@ -80,7 +79,7 @@ func newBerlinInstructionSet() JumpTable {
 	return instructionSet
 }
 
-// newIstanbulInstructionSet returns the frontier, homestead, byzantium,
+// newIstanbulInstructionSet returns the frontier, byzantium,
 // contantinople, istanbul and petersburg instructions.
 func newIstanbulInstructionSet() JumpTable {
 	instructionSet := newConstantinopleInstructionSet()
@@ -92,7 +91,7 @@ func newIstanbulInstructionSet() JumpTable {
 	return instructionSet
 }
 
-// newConstantinopleInstructionSet returns the frontier, homestead,
+// newConstantinopleInstructionSet returns the frontier,
 // byzantium and contantinople instructions.
 func newConstantinopleInstructionSet() JumpTable {
 	instructionSet := newByzantiumInstructionSet()
@@ -133,7 +132,7 @@ func newConstantinopleInstructionSet() JumpTable {
 	return instructionSet
 }
 
-// newByzantiumInstructionSet returns the frontier, homestead and
+// newByzantiumInstructionSet returns the frontier and
 // byzantium instructions.
 func newByzantiumInstructionSet() JumpTable {
 	instructionSet := newSpuriousDragonInstructionSet()

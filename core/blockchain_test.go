@@ -1273,7 +1273,7 @@ func TestEIP155Transition(t *testing.T) {
 		funds      = big.NewInt(1000000000)
 		deleteAddr = common.Address{1}
 		gspec      = &Genesis{
-			Config: &params.ChainConfig{ChainID: big.NewInt(1), EIP150Block: big.NewInt(0), EIP155Block: big.NewInt(2), HomesteadBlock: new(big.Int)},
+			Config: &params.ChainConfig{ChainID: big.NewInt(1), EIP150Block: big.NewInt(0), EIP155Block: big.NewInt(2)},
 			Alloc:  GenesisAlloc{address: {Balance: funds}, deleteAddr: {Balance: new(big.Int)}},
 		}
 		genesis = gspec.MustCommit(db)
@@ -1292,13 +1292,13 @@ func TestEIP155Transition(t *testing.T) {
 		)
 		switch i {
 		case 0:
-			tx, err = basicTx(types.HomesteadSigner{})
+			tx, err = basicTx(types.LatestSigner(params.RopstenChainConfig))
 			if err != nil {
 				t.Fatal(err)
 			}
 			block.AddTx(tx)
 		case 2:
-			tx, err = basicTx(types.HomesteadSigner{})
+			tx, err = basicTx(types.LatestSigner(params.RopstenChainConfig))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1310,7 +1310,7 @@ func TestEIP155Transition(t *testing.T) {
 			}
 			block.AddTx(tx)
 		case 3:
-			tx, err = basicTx(types.HomesteadSigner{})
+			tx, err = basicTx(types.LatestSigner(params.RopstenChainConfig))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1344,7 +1344,7 @@ func TestEIP155Transition(t *testing.T) {
 	}
 
 	// generate an invalid chain id transaction
-	config := &params.ChainConfig{ChainID: big.NewInt(2), EIP150Block: big.NewInt(0), EIP155Block: big.NewInt(2), HomesteadBlock: new(big.Int)}
+	config := &params.ChainConfig{ChainID: big.NewInt(2), EIP150Block: big.NewInt(0), EIP155Block: big.NewInt(2)}
 	blocks, _ = GenerateChain(config, blocks[len(blocks)-1], blake3pow.NewFaker(), db, 4, func(i int, block *BlockGen) {
 		var (
 			tx      *types.Transaction
@@ -1377,11 +1377,10 @@ func TestEIP161AccountRemoval(t *testing.T) {
 		theAddr = common.Address{1}
 		gspec   = &Genesis{
 			Config: &params.ChainConfig{
-				ChainID:        big.NewInt(1),
-				HomesteadBlock: new(big.Int),
-				EIP155Block:    new(big.Int),
-				EIP150Block:    new(big.Int),
-				EIP158Block:    big.NewInt(2),
+				ChainID:     big.NewInt(1),
+				EIP155Block: new(big.Int),
+				EIP150Block: new(big.Int),
+				EIP158Block: big.NewInt(2),
 			},
 			Alloc: GenesisAlloc{address: {Balance: funds}},
 		}
@@ -2298,7 +2297,7 @@ func TestSkipStaleTxIndicesInFastSync(t *testing.T) {
 // Benchmarks large blocks with value transfers to non-existing accounts
 func benchmarkLargeNumberOfValueToNonexisting(b *testing.B, numTxs, numBlocks int, recipientFn func(uint64) common.Address, dataFn func(uint64) []byte) {
 	var (
-		signer          = types.HomesteadSigner{}
+		signer          = types.LatestSigner(params.RopstenChainConfig)
 		testBankKey, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		testBankAddress = crypto.PubkeyToAddress(testBankKey.PublicKey)
 		bankFunds       = big.NewInt(100000000000000000)
@@ -2505,11 +2504,11 @@ func TestDeleteCreateRevert(t *testing.T) {
 		b.SetCoinbase(common.Address{1})
 		// One transaction to AAAA
 		tx, _ := types.SignTx(types.NewTransaction(0, aa,
-			big.NewInt(0), 50000, b.header.BaseFee(), nil), types.HomesteadSigner{}, key)
+			big.NewInt(0), 50000, b.header.BaseFee(), nil), types.LatestSigner(params.RopstenChainConfig), key)
 		b.AddTx(tx)
 		// One transaction to BBBB
 		tx, _ = types.SignTx(types.NewTransaction(1, bb,
-			big.NewInt(0), 100000, b.header.BaseFee(), nil), types.HomesteadSigner{}, key)
+			big.NewInt(0), 100000, b.header.BaseFee(), nil), types.LatestSigner(params.RopstenChainConfig), key)
 		b.AddTx(tx)
 	})
 	// Import the canonical chain
@@ -2617,11 +2616,11 @@ func TestDeleteRecreateSlots(t *testing.T) {
 		b.SetCoinbase(common.Address{1})
 		// One transaction to AA, to kill it
 		tx, _ := types.SignTx(types.NewTransaction(0, aa,
-			big.NewInt(0), 50000, b.header.BaseFee(), nil), types.HomesteadSigner{}, key)
+			big.NewInt(0), 50000, b.header.BaseFee(), nil), types.LatestSigner(params.RopstenChainConfig), key)
 		b.AddTx(tx)
 		// One transaction to BB, to recreate AA
 		tx, _ = types.SignTx(types.NewTransaction(1, bb,
-			big.NewInt(0), 100000, b.header.BaseFee(), nil), types.HomesteadSigner{}, key)
+			big.NewInt(0), 100000, b.header.BaseFee(), nil), types.LatestSigner(params.RopstenChainConfig), key)
 		b.AddTx(tx)
 	})
 	// Import the canonical chain
@@ -2697,11 +2696,11 @@ func TestDeleteRecreateAccount(t *testing.T) {
 		b.SetCoinbase(common.Address{1})
 		// One transaction to AA, to kill it
 		tx, _ := types.SignTx(types.NewTransaction(0, aa,
-			big.NewInt(0), 50000, b.header.BaseFee(), nil), types.HomesteadSigner{}, key)
+			big.NewInt(0), 50000, b.header.BaseFee(), nil), types.LatestSigner(params.RopstenChainConfig), key)
 		b.AddTx(tx)
 		// One transaction to AA, to recreate it (but without storage
 		tx, _ = types.SignTx(types.NewTransaction(1, aa,
-			big.NewInt(1), 100000, b.header.BaseFee(), nil), types.HomesteadSigner{}, key)
+			big.NewInt(1), 100000, b.header.BaseFee(), nil), types.LatestSigner(params.RopstenChainConfig), key)
 		b.AddTx(tx)
 	})
 	// Import the canonical chain
@@ -2831,7 +2830,7 @@ func TestDeleteRecreateSlotsAcrossManyBlocks(t *testing.T) {
 	var expectations []*expectation
 	var newDestruct = func(e *expectation, b *BlockGen) *types.Transaction {
 		tx, _ := types.SignTx(types.NewTransaction(nonce, aa,
-			big.NewInt(0), 50000, b.header.BaseFee(), nil), types.HomesteadSigner{}, key)
+			big.NewInt(0), 50000, b.header.BaseFee(), nil), types.LatestSigner(params.RopstenChainConfig), key)
 		nonce++
 		if e.exist {
 			e.exist = false
@@ -2842,7 +2841,7 @@ func TestDeleteRecreateSlotsAcrossManyBlocks(t *testing.T) {
 	}
 	var newResurrect = func(e *expectation, b *BlockGen) *types.Transaction {
 		tx, _ := types.SignTx(types.NewTransaction(nonce, bb,
-			big.NewInt(0), 100000, b.header.BaseFee(), nil), types.HomesteadSigner{}, key)
+			big.NewInt(0), 100000, b.header.BaseFee(), nil), types.LatestSigner(params.RopstenChainConfig), key)
 		nonce++
 		if !e.exist {
 			e.exist = true
@@ -3006,7 +3005,7 @@ func TestInitThenFailCreateContract(t *testing.T) {
 		b.SetCoinbase(common.Address{1})
 		// One transaction to BB
 		tx, _ := types.SignTx(types.NewTransaction(nonce, bb,
-			big.NewInt(0), 100000, b.header.BaseFee(), nil), types.HomesteadSigner{}, key)
+			big.NewInt(0), 100000, b.header.BaseFee(), nil), types.LatestSigner(params.RopstenChainConfig), key)
 		b.AddTx(tx)
 		nonce++
 	})

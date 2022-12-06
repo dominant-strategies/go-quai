@@ -229,7 +229,6 @@ aware of and agree upon. This consists of a small JSON file (e.g. call it `genes
 {
   "config": {
     "chainId": <arbitrary positive integer>,
-    "homesteadBlock": 0,
     "eip150Block": 0,
     "eip155Block": 0,
     "eip158Block": 0,

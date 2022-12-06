@@ -40,7 +40,6 @@ var daoOldGenesis = `{
 	"parentHash" : "0x0000000000000000000000000000000000000000000000000000000000000000",
 	"timestamp"  : "0x00",
 	"config"     : {
-		"homesteadBlock" : 0
 	}
 }`
 
@@ -56,7 +55,7 @@ var daoNoForkGenesis = `{
 	"parentHash" : "0x0000000000000000000000000000000000000000000000000000000000000000",
 	"timestamp"  : "0x00",
 	"config"     : {
-		"homesteadBlock" : 0,
+
 		"daoForkBlock"   : 314,
 		"daoForkSupport" : false
 	}
@@ -74,7 +73,6 @@ var daoProForkGenesis = `{
 	"parentHash" : "0x0000000000000000000000000000000000000000000000000000000000000000",
 	"timestamp"  : "0x00",
 	"config"     : {
-		"homesteadBlock" : 0,
 		"daoForkBlock"   : 314,
 		"daoForkSupport" : true
 	}
