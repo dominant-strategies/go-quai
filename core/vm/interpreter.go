@@ -72,25 +72,7 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 	// the jump table was initialised. If it was not
 	// we'll set the default jump table.
 	if cfg.JumpTable[STOP] == nil {
-		var jt JumpTable
-		switch {
-		case evm.chainRules.IsLondon:
-			jt = londonInstructionSet
-		case evm.chainRules.IsBerlin:
-			jt = berlinInstructionSet
-		case evm.chainRules.IsIstanbul:
-			jt = istanbulInstructionSet
-		case evm.chainRules.IsConstantinople:
-			jt = constantinopleInstructionSet
-		case evm.chainRules.IsByzantium:
-			jt = byzantiumInstructionSet
-		case evm.chainRules.IsEIP158:
-			jt = spuriousDragonInstructionSet
-		case evm.chainRules.IsEIP150:
-			jt = tangerineWhistleInstructionSet
-		default:
-			jt = frontierInstructionSet
-		}
+		jt := instructionSet
 		for i, eip := range cfg.ExtraEips {
 			if err := EnableEIP(eip, &jt); err != nil {
 				// Disable it, so caller can check if it's activated or not
