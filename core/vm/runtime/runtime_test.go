@@ -175,7 +175,6 @@ func benchmarkEVM_Create(bench *testing.B, code string) {
 		BlockNumber: new(big.Int).SetUint64(1),
 		ChainConfig: &params.ChainConfig{
 			ChainID:             big.NewInt(1),
-			HomesteadBlock:      new(big.Int),
 			ByzantiumBlock:      new(big.Int),
 			ConstantinopleBlock: new(big.Int),
 			DAOForkBlock:        new(big.Int),

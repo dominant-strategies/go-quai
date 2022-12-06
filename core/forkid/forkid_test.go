@@ -45,8 +45,6 @@ func TestCreation(t *testing.T) {
 			[]testcase{
 				{0, ID{Hash: checksumToBytes(0xfc64ec04), Next: 1150000}},         // Unsynced
 				{1149999, ID{Hash: checksumToBytes(0xfc64ec04), Next: 1150000}},   // Last Frontier block
-				{1150000, ID{Hash: checksumToBytes(0x97c2c34c), Next: 1920000}},   // First Homestead block
-				{1919999, ID{Hash: checksumToBytes(0x97c2c34c), Next: 1920000}},   // Last Homestead block
 				{1920000, ID{Hash: checksumToBytes(0x91d1f948), Next: 2463000}},   // First DAO block
 				{2462999, ID{Hash: checksumToBytes(0x91d1f948), Next: 2463000}},   // Last DAO block
 				{2463000, ID{Hash: checksumToBytes(0x7a64da13), Next: 2675000}},   // First Tangerine block
@@ -72,7 +70,6 @@ func TestCreation(t *testing.T) {
 			params.GardenChainConfig,
 			params.GardenGenesisHash,
 			[]testcase{
-				{0, ID{Hash: checksumToBytes(0x30c7ddbc), Next: 10}},              // Unsynced, last Frontier, Homestead and first Tangerine block
 				{9, ID{Hash: checksumToBytes(0x30c7ddbc), Next: 10}},              // Last Tangerine block
 				{10, ID{Hash: checksumToBytes(0x63760190), Next: 1700000}},        // First Spurious block
 				{1699999, ID{Hash: checksumToBytes(0x63760190), Next: 1700000}},   // Last Spurious block

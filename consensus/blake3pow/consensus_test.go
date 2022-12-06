@@ -57,7 +57,7 @@ func TestCalcDifficulty(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	config := &params.ChainConfig{HomesteadBlock: big.NewInt(1150000)}
+	config := &params.ChainConfig{}
 
 	for name, test := range tests {
 		number := new(big.Int).Sub(test.CurrentBlocknumber, big.NewInt(1))
@@ -106,7 +106,6 @@ func TestDifficultyCalculators(t *testing.T) {
 			u256Fn func(time uint64, parent *types.Header) *big.Int
 		}{
 			{FrontierDifficultyCalulator, CalcDifficultyFrontierU256},
-			{HomesteadDifficultyCalulator, CalcDifficultyHomesteadU256},
 			{DynamicDifficultyCalculator(bombDelay), MakeDifficultyCalculatorU256(bombDelay)},
 		} {
 			time := header.Time() + timeDelta
@@ -143,18 +142,6 @@ func BenchmarkDifficultyCalculator(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
 			CalcDifficultyFrontierU256(1000014, h)
-		}
-	})
-	b.Run("big-homestead", func(b *testing.B) {
-		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
-			calcDifficultyHomestead(1000014, h)
-		}
-	})
-	b.Run("u256-homestead", func(b *testing.B) {
-		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
-			CalcDifficultyHomesteadU256(1000014, h)
 		}
 	})
 	b.Run("big-generic", func(b *testing.B) {

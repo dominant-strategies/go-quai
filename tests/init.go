@@ -29,25 +29,18 @@ var Forks = map[string]*params.ChainConfig{
 	"Frontier": {
 		ChainID: big.NewInt(1),
 	},
-	"Homestead": {
-		ChainID:        big.NewInt(1),
-		HomesteadBlock: big.NewInt(0),
-	},
 	"EIP150": {
-		ChainID:        big.NewInt(1),
-		HomesteadBlock: big.NewInt(0),
-		EIP150Block:    big.NewInt(0),
+		ChainID:     big.NewInt(1),
+		EIP150Block: big.NewInt(0),
 	},
 	"EIP158": {
-		ChainID:        big.NewInt(1),
-		HomesteadBlock: big.NewInt(0),
-		EIP150Block:    big.NewInt(0),
-		EIP155Block:    big.NewInt(0),
-		EIP158Block:    big.NewInt(0),
+		ChainID:     big.NewInt(1),
+		EIP150Block: big.NewInt(0),
+		EIP155Block: big.NewInt(0),
+		EIP158Block: big.NewInt(0),
 	},
 	"Byzantium": {
 		ChainID:        big.NewInt(1),
-		HomesteadBlock: big.NewInt(0),
 		EIP150Block:    big.NewInt(0),
 		EIP155Block:    big.NewInt(0),
 		EIP158Block:    big.NewInt(0),
@@ -55,8 +48,8 @@ var Forks = map[string]*params.ChainConfig{
 		ByzantiumBlock: big.NewInt(0),
 	},
 	"Constantinople": {
-		ChainID:             big.NewInt(1),
-		HomesteadBlock:      big.NewInt(0),
+		ChainID: big.NewInt(1),
+
 		EIP150Block:         big.NewInt(0),
 		EIP155Block:         big.NewInt(0),
 		EIP158Block:         big.NewInt(0),
@@ -66,8 +59,8 @@ var Forks = map[string]*params.ChainConfig{
 		PetersburgBlock:     big.NewInt(10000000),
 	},
 	"ConstantinopleFix": {
-		ChainID:             big.NewInt(1),
-		HomesteadBlock:      big.NewInt(0),
+		ChainID: big.NewInt(1),
+
 		EIP150Block:         big.NewInt(0),
 		EIP155Block:         big.NewInt(0),
 		EIP158Block:         big.NewInt(0),
@@ -77,8 +70,8 @@ var Forks = map[string]*params.ChainConfig{
 		PetersburgBlock:     big.NewInt(0),
 	},
 	"Istanbul": {
-		ChainID:             big.NewInt(1),
-		HomesteadBlock:      big.NewInt(0),
+		ChainID: big.NewInt(1),
+
 		EIP150Block:         big.NewInt(0),
 		EIP155Block:         big.NewInt(0),
 		EIP158Block:         big.NewInt(0),
@@ -88,32 +81,16 @@ var Forks = map[string]*params.ChainConfig{
 		PetersburgBlock:     big.NewInt(0),
 		IstanbulBlock:       big.NewInt(0),
 	},
-	"FrontierToHomesteadAt5": {
-		ChainID:        big.NewInt(1),
-		HomesteadBlock: big.NewInt(5),
-	},
-	"HomesteadToEIP150At5": {
-		ChainID:        big.NewInt(1),
-		HomesteadBlock: big.NewInt(0),
-		EIP150Block:    big.NewInt(5),
-	},
-	"HomesteadToDaoAt5": {
-		ChainID:        big.NewInt(1),
-		HomesteadBlock: big.NewInt(0),
-		DAOForkBlock:   big.NewInt(5),
-		DAOForkSupport: true,
-	},
 	"EIP158ToByzantiumAt5": {
 		ChainID:        big.NewInt(1),
-		HomesteadBlock: big.NewInt(0),
 		EIP150Block:    big.NewInt(0),
 		EIP155Block:    big.NewInt(0),
 		EIP158Block:    big.NewInt(0),
 		ByzantiumBlock: big.NewInt(5),
 	},
 	"ByzantiumToConstantinopleAt5": {
-		ChainID:             big.NewInt(1),
-		HomesteadBlock:      big.NewInt(0),
+		ChainID: big.NewInt(1),
+
 		EIP150Block:         big.NewInt(0),
 		EIP155Block:         big.NewInt(0),
 		EIP158Block:         big.NewInt(0),
@@ -121,8 +98,8 @@ var Forks = map[string]*params.ChainConfig{
 		ConstantinopleBlock: big.NewInt(5),
 	},
 	"ByzantiumToConstantinopleFixAt5": {
-		ChainID:             big.NewInt(1),
-		HomesteadBlock:      big.NewInt(0),
+		ChainID: big.NewInt(1),
+
 		EIP150Block:         big.NewInt(0),
 		EIP155Block:         big.NewInt(0),
 		EIP158Block:         big.NewInt(0),
@@ -131,8 +108,8 @@ var Forks = map[string]*params.ChainConfig{
 		PetersburgBlock:     big.NewInt(5),
 	},
 	"ConstantinopleFixToIstanbulAt5": {
-		ChainID:             big.NewInt(1),
-		HomesteadBlock:      big.NewInt(0),
+		ChainID: big.NewInt(1),
+
 		EIP150Block:         big.NewInt(0),
 		EIP155Block:         big.NewInt(0),
 		EIP158Block:         big.NewInt(0),
@@ -142,8 +119,8 @@ var Forks = map[string]*params.ChainConfig{
 		IstanbulBlock:       big.NewInt(5),
 	},
 	"Berlin": {
-		ChainID:             big.NewInt(1),
-		HomesteadBlock:      big.NewInt(0),
+		ChainID: big.NewInt(1),
+
 		EIP150Block:         big.NewInt(0),
 		EIP155Block:         big.NewInt(0),
 		EIP158Block:         big.NewInt(0),
@@ -154,8 +131,8 @@ var Forks = map[string]*params.ChainConfig{
 		BerlinBlock:         big.NewInt(0),
 	},
 	"BerlinToLondonAt5": {
-		ChainID:             big.NewInt(1),
-		HomesteadBlock:      big.NewInt(0),
+		ChainID: big.NewInt(1),
+
 		EIP150Block:         big.NewInt(0),
 		EIP155Block:         big.NewInt(0),
 		EIP158Block:         big.NewInt(0),
@@ -167,8 +144,8 @@ var Forks = map[string]*params.ChainConfig{
 		LondonBlock:         big.NewInt(5),
 	},
 	"London": {
-		ChainID:             big.NewInt(1),
-		HomesteadBlock:      big.NewInt(0),
+		ChainID: big.NewInt(1),
+
 		EIP150Block:         big.NewInt(0),
 		EIP155Block:         big.NewInt(0),
 		EIP158Block:         big.NewInt(0),
@@ -180,8 +157,8 @@ var Forks = map[string]*params.ChainConfig{
 		LondonBlock:         big.NewInt(0),
 	},
 	"Aleut": {
-		ChainID:             big.NewInt(1),
-		HomesteadBlock:      big.NewInt(0),
+		ChainID: big.NewInt(1),
+
 		EIP150Block:         big.NewInt(0),
 		EIP155Block:         big.NewInt(0),
 		EIP158Block:         big.NewInt(0),
