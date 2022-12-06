@@ -78,6 +78,12 @@ func (tx *ExternalTx) value() *big.Int             { return tx.Value }
 func (tx *ExternalTx) nonce() uint64               { return tx.Nonce }
 func (tx *ExternalTx) to() *common.Address         { return tx.To }
 func (tx *ExternalTx) fromChain() *common.Location { return tx.Sender.Location() }
+func (tx *ExternalTx) etxGasLimit() uint64         { panic("external TX does not have etxGasLimit") }
+func (tx *ExternalTx) etxGasPrice() *big.Int       { panic("external TX does not have etxGasPrice") }
+func (tx *ExternalTx) etxGasTip() *big.Int         { panic("external TX does not have etxGasTip") }
+func (tx *ExternalTx) etxData() []byte	           { panic("external TX does not have etxData") }
+func (tx *ExternalTx) etxAccessList() AccessList   { panic("external TX does not have etxAccessList") }
+
 
 func (tx *ExternalTx) rawSignatureValues() (v, r, s *big.Int) {
 	// Signature values are ignored for external transactions
