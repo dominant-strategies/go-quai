@@ -244,6 +244,9 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 	// Accumulate the hash slice stack
 	var hashStack []*types.Header
 	for {
+		if newHeader.Hash() == commonHeader.Hash() {
+			break
+		}
 		hashStack = append(hashStack, newHeader)
 		newHeader = hc.GetHeader(newHeader.ParentHash(), newHeader.NumberU64()-1)
 
@@ -251,22 +254,17 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 		if newHeader.Hash() == hc.config.GenesisHash {
 			break
 		}
-
-		if newHeader.Hash() == commonHeader.Hash() {
-			break
-		}
 	}
 
 	for {
+		if prevHeader.Hash() == commonHeader.Hash() {
+			break
+		}
 		rawdb.DeleteCanonicalHash(hc.headerDb, prevHeader.NumberU64())
 		prevHeader = hc.GetHeader(prevHeader.ParentHash(), prevHeader.NumberU64()-1)
 
 		// genesis check to not delete the genesis block
 		if prevHeader.Hash() == hc.config.GenesisHash {
-			break
-		}
-
-		if prevHeader.Hash() == commonHeader.Hash() {
 			break
 		}
 	}
