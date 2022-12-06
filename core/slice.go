@@ -126,7 +126,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		return errors.New("could not find the tx and uncle data to match the header root hash")
 	}
 
-	log.Info("Starting slice append", "hash", block.Hash(), "number", block.Number(), "location", block.Header().Location())
+	log.Info("Starting slice append", "hash", block.Hash(), "number", block.Header().NumberArray(), "location", block.Header().Location(), "parent hash", block.ParentHash())
 
 	batch := sl.sliceDb.NewBatch()
 
