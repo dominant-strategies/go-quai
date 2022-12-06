@@ -62,7 +62,6 @@ func TestEIP155ChainId(t *testing.T) {
 	}
 
 	tx = NewTransaction(0, addr, new(big.Int), 0, new(big.Int), nil)
-	tx, err = SignTx(tx, HomesteadSigner{}, key)
 	if err != nil {
 		t.Fatal(err)
 	}

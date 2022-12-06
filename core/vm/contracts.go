@@ -255,8 +255,8 @@ func (c *ecrecover) Run(input []byte) ([]byte, error) {
 	s := new(big.Int).SetBytes(input[96:128])
 	v := input[63] - 27
 
-	// tighter sig s values input homestead only apply to tx sigs
-	if !allZero(input[32:63]) || !crypto.ValidateSignatureValues(v, r, s, false) {
+	// tighter sig s values input only apply to tx sigs
+	if !allZero(input[32:63]) || !crypto.ValidateSignatureValues(v, r, s) {
 		return nil, nil
 	}
 	// We must make sure not to modify the 'input', so placing the 'v' along with

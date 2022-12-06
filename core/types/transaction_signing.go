@@ -167,12 +167,12 @@ func (s SignerV1) Sender(tx *Transaction) (common.Address, error) {
 	}
 	V, R, S := tx.RawSignatureValues()
 	// DynamicFee txs are defined to use 0 and 1 as their recovery
-	// id, add 27 to become equivalent to unprotected Homestead signatures.
+	// id, add 27 to become equivalent to unprotected signatures.
 	V = new(big.Int).Add(V, big.NewInt(27))
 	if tx.ChainId().Cmp(s.chainId) != 0 {
 		return common.ZeroAddr, ErrInvalidChainId
 	}
-	return recoverPlain(s.Hash(tx), R, S, V, true)
+	return recoverPlain(s.Hash(tx), R, S, V)
 }
 
 func (s SignerV1) Equal(s2 Signer) bool {
@@ -201,7 +201,7 @@ func (s SignerV1) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int
 func (s SignerV1) Hash(tx *Transaction) common.Hash {
 	txTo := tx.To()
 	var txToBytes []byte
-	if (txTo == nil) {
+	if txTo == nil {
 		txToBytes = []byte{}
 	} else {
 		txToBytes = txTo.Bytes()
@@ -255,13 +255,13 @@ func decodeSignature(sig []byte) (r, s, v *big.Int) {
 	return r, s, v
 }
 
-func recoverPlain(sighash common.Hash, R, S, Vb *big.Int, homestead bool) (common.Address, error) {
+func recoverPlain(sighash common.Hash, R, S, Vb *big.Int) (common.Address, error) {
 	if Vb.BitLen() > 8 {
 		return common.ZeroAddr, ErrInvalidSig
 	}
 	V := byte(Vb.Uint64() - 27)
-	if !crypto.ValidateSignatureValues(V, R, S, homestead) {
-		return common.ZeroAddr, ErrInvalidSig
+	if !crypto.ValidateSignatureValues(V, R, S) {
+		return common.Address{}, ErrInvalidSig
 	}
 	// encode the signature in uncompressed format
 	r, s := R.Bytes(), S.Bytes()

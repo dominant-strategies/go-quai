@@ -3,8 +3,8 @@ package blake3pow
 import (
 	"math/big"
 
-	"github.com/holiman/uint256"
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/holiman/uint256"
 )
 
 const (
@@ -60,60 +60,8 @@ func CalcDifficultyFrontierU256(time uint64, parent *types.Header) *big.Int {
 	return pDiff.ToBig()
 }
 
-// CalcDifficultyHomesteadU256 is the difficulty adjustment algorithm. It returns
-// the difficulty that a new block should have when created at time given the
-// parent block's time and difficulty. The calculation uses the Homestead rules.
-func CalcDifficultyHomesteadU256(time uint64, parent *types.Header) *big.Int {
-	/*
-		https://github.com/ethereum/EIPs/blob/master/EIPS/eip-2.md
-		Algorithm:
-		block_diff = pdiff + pdiff / 2048 * max(1 - (time - ptime) / 10, -99) + 2 ^ int((num / 100000) - 2))
-
-		Our modification, to use unsigned ints:
-		block_diff = pdiff - pdiff / 2048 * max((time - ptime) / 10 - 1, 99) + 2 ^ int((num / 100000) - 2))
-
-		Where:
-		- pdiff  = parent.difficulty
-		- ptime = parent.time
-		- time = block.timestamp
-		- num = block.number
-	*/
-
-	pDiff, _ := uint256.FromBig(parent.Difficulty()) // pDiff: pdiff
-	adjust := pDiff.Clone()
-	adjust.Rsh(adjust, difficultyBoundDivisor) // adjust: pDiff / 2048
-
-	x := (time - parent.Time()) / 10 // (time - ptime) / 10)
-	var neg = true
-	if x == 0 {
-		x = 1
-		neg = false
-	} else if x >= 100 {
-		x = 99
-	} else {
-		x = x - 1
-	}
-	z := new(uint256.Int).SetUint64(x)
-	adjust.Mul(adjust, z) // adjust: (pdiff / 2048) * max((time - ptime) / 10 - 1, 99)
-	if neg {
-		pDiff.Sub(pDiff, adjust) // pdiff - pdiff / 2048 * max((time - ptime) / 10 - 1, 99)
-	} else {
-		pDiff.Add(pDiff, adjust) // pdiff + pdiff / 2048 * max((time - ptime) / 10 - 1, 99)
-	}
-	if pDiff.LtUint64(minimumDifficulty) {
-		pDiff.SetUint64(minimumDifficulty)
-	}
-	// for the exponential factor, a.k.a "the bomb"
-	// diff = diff + 2^(periodCount - 2)
-	if periodCount := (1 + parent.Number().Uint64()) / expDiffPeriodUint; periodCount > 1 {
-		expFactor := adjust.Lsh(adjust.SetOne(), uint(periodCount-2))
-		pDiff.Add(pDiff, expFactor)
-	}
-	return pDiff.ToBig()
-}
-
 // MakeDifficultyCalculatorU256 creates a difficultyCalculator with the given bomb-delay.
-// the difficulty is calculated with Byzantium rules, which differs from Homestead in
+// the difficulty is calculated with Byzantium rules, which differs in
 // how uncles affect the calculation
 func MakeDifficultyCalculatorU256(bombDelay *big.Int) func(time uint64, parent *types.Header) *big.Int {
 	// Note, the calculations below looks at the parent number, which is 1 below

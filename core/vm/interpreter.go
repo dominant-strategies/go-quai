@@ -88,8 +88,6 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 			jt = spuriousDragonInstructionSet
 		case evm.chainRules.IsEIP150:
 			jt = tangerineWhistleInstructionSet
-		case evm.chainRules.IsHomestead:
-			jt = homesteadInstructionSet
 		default:
 			jt = frontierInstructionSet
 		}
