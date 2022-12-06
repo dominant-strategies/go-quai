@@ -111,6 +111,15 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	nodeCtx := common.NodeLocation.Context()
 	location := header.Location()
 
+	// Don't append the block which already exists in the database.
+	if sl.hc.HasHeader(header.Hash(), header.NumberU64()) {
+		// Remove the header from the future headers cache
+		sl.futureHeaders.Remove(header.Hash())
+
+		log.Warn("Block has already been appended: ", "Hash: ", header.Hash())
+		return nil
+	}
+
 	// Construct the block locally
 	block := sl.ConstructLocalBlock(header)
 	if block == nil {
