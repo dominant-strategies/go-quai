@@ -558,7 +558,6 @@ func (loc Location) SubIndex() int {
 	}
 }
 
-<<<<<<< HEAD
 // SubInSlice returns the location of the subordinate chain within the specified
 // slice. For example:
 // * if prime calls SubInSlice(Location{0,0}) the result will be Location{0},
@@ -636,7 +635,6 @@ func (loc Location) CommonDom(cmp Location) Location {
 	}
 	return common
 }
-=======
 func (l Location) RPCMarshal() []hexutil.Uint64 {
 	res := make([]hexutil.Uint64, 0)
 	for _, i := range l {
@@ -645,4 +643,3 @@ func (l Location) RPCMarshal() []hexutil.Uint64 {
 
 	return res
 }
->>>>>>> c0b05165 (quai_api.go: node location return)

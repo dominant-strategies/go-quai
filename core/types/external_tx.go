@@ -74,6 +74,12 @@ func (tx *ExternalTx) nonce() uint64               { return tx.Nonce }
 func (tx *ExternalTx) to() *common.Address         { return tx.To }
 func (tx *ExternalTx) toChain() *common.Location   { return tx.To.Location() }
 func (tx *ExternalTx) fromChain() *common.Location { return tx.Sender.Location() }
+func (tx *ExternalTx) etxGasLimit() uint64         { return 0 }
+func (tx *ExternalTx) etxGasPrice() *big.Int       { return nil }
+func (tx *ExternalTx) etxGasTip() *big.Int         { return nil }
+func (tx *ExternalTx) etxData() []byte	           { return nil }
+func (tx *ExternalTx) etxAccessList() AccessList   { return nil }
+
 
 func (tx *ExternalTx) rawSignatureValues() (v, r, s *big.Int) {
 	// Signature values are ignored for external transactions
