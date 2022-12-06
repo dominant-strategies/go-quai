@@ -114,6 +114,11 @@ func (tx *InternalToExternalTx) nonce() uint64               { return tx.Nonce }
 func (tx *InternalToExternalTx) to() *common.Address         { return tx.To }
 func (tx *InternalToExternalTx) toChain() *common.Location   { return tx.To.Location() }
 func (tx *InternalToExternalTx) fromChain() *common.Location { return tx.toChain() }
+func (tx *InternalToExternalTx) etxGasLimit() uint64         { return tx.ETXGasLimit }
+func (tx *InternalToExternalTx) etxGasPrice() *big.Int       { return tx.ETXGasPrice }
+func (tx *InternalToExternalTx) etxGasTip() *big.Int         { return tx.ETXGasTip }
+func (tx *InternalToExternalTx) etxData() []byte	         { return tx.ETXData }
+func (tx *InternalToExternalTx) etxAccessList() AccessList   { return tx.ETXAccessList }
 
 func (tx *InternalToExternalTx) rawSignatureValues() (v, r, s *big.Int) {
 	return tx.V, tx.R, tx.S

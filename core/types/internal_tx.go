@@ -96,6 +96,11 @@ func (tx *InternalTx) nonce() uint64               { return tx.Nonce }
 func (tx *InternalTx) to() *common.Address         { return tx.To }
 func (tx *InternalTx) toChain() *common.Location   { return tx.To.Location() }
 func (tx *InternalTx) fromChain() *common.Location { return tx.toChain() }
+func (tx *InternalTx) etxGasLimit() uint64         { return 0 }
+func (tx *InternalTx) etxGasPrice() *big.Int       { return nil }
+func (tx *InternalTx) etxGasTip() *big.Int         { return nil }
+func (tx *InternalTx) etxData() []byte	           { return nil }
+func (tx *InternalTx) etxAccessList() AccessList   { return nil }
 
 func (tx *InternalTx) rawSignatureValues() (v, r, s *big.Int) {
 	return tx.V, tx.R, tx.S

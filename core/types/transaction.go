@@ -87,6 +87,11 @@ type TxData interface {
 	to() *common.Address
 	toChain() *common.Location
 	fromChain() *common.Location
+	etxGasLimit() uint64
+	etxGasPrice() *big.Int
+	etxGasTip() *big.Int
+	etxData() []byte
+	etxAccessList() AccessList
 
 	rawSignatureValues() (v, r, s *big.Int)
 	setSignatureValues(chainID, v, r, s *big.Int)
@@ -252,6 +257,21 @@ func (tx *Transaction) GasFeeCap() *big.Int { return new(big.Int).Set(tx.inner.g
 
 // Value returns the ether amount of the transaction.
 func (tx *Transaction) Value() *big.Int { return new(big.Int).Set(tx.inner.value()) }
+
+// ETXGasLimit returns the fee cap per gas of the transaction.
+func (tx *Transaction) ETXGasLimit() uint64{ return tx.inner.etxGasLimit() }
+
+// ETXGasPrice returns the gas price of the external transaction.
+func (tx *Transaction) ETXGasPrice() *big.Int { return new(big.Int).Set(tx.inner.etxGasPrice()) }
+
+// ETXGasTip returns the gasTipCap per gas of the external transaction.
+func (tx *Transaction) ETXGasTip() *big.Int { return new(big.Int).Set(tx.inner.etxGasTip()) }
+
+// ETXData returns the input data of the external transaction.
+func (tx *Transaction) ETXData() []byte { return tx.inner.etxData() }
+
+// ETXAccessList returns the access list of the transaction.
+func (tx *Transaction) ETXAccessList() AccessList { return tx.inner.etxAccessList() }
 
 // Nonce returns the sender account nonce of the transaction.
 func (tx *Transaction) Nonce() uint64 { return tx.inner.nonce() }
