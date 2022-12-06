@@ -310,7 +310,9 @@ func (blake3pow *Blake3pow) CalcDifficulty(chain consensus.ChainHeaderReader, pa
 	}
 
 	parentOfParent := chain.GetHeaderByHash(parent.ParentHash())
-
+	if parentOfParent == nil {
+		return common.Big0
+	}
 	bigTime := new(big.Int).SetUint64(time)
 	bigParentTime := new(big.Int).SetUint64(parentOfParent.Time())
 

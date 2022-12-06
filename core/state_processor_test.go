@@ -44,6 +44,61 @@ func (c MockChainContext) GetHeader(common.Hash, uint64) *types.Header {
 	return c.blocks[1].Header()
 }
 
+func TestInternalToExternalTx(t *testing.T) {
+	// Create a simple chain to verify
+	var statedb *state.StateDB
+	gen := func(i int, b *BlockGen) {
+		statedb = b.statedb
+	}
+	var (
+		testdb = rawdb.NewMemoryDatabase()
+		gspec  = &Genesis{
+			Config: params.TestChainConfig,
+			Alloc: GenesisAlloc{
+				common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): GenesisAccount{
+					Balance: big.NewInt(1000000000000000000), // 1 ether
+					Nonce:   0,
+				},
+			},
+			GasLimit:   []uint64{params.GenesisGasLimit, params.GenesisGasLimit, params.GenesisGasLimit},
+			Difficulty: []*big.Int{common.Big0, common.Big0, common.Big0},
+			ParentHash: []common.Hash{common.HexToHash("0"), common.HexToHash("0"), common.HexToHash("0")},
+			BaseFee:    []*big.Int{common.Big0, common.Big0, common.Big0},
+		}
+		genesis    = gspec.MustCommit(testdb)
+		signer     = types.LatestSigner(params.TestChainConfig)
+		testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		addr       = crypto.PubkeyToAddress(testKey.PublicKey)
+		zero       = uint64(0)
+		gasLimit   = GasPool(params.GenesisGasLimit)
+	)
+	t.Log(addr)
+	common.NodeLocation = *addr.Location()
+	t.Log(common.NodeLocation.Name())
+	toAddr := common.HexToAddress("0x3C97734DfD0376b0b1a57f48e2049A092fD89058")
+	location := toAddr.Location()
+	t.Log(location.Name())
+	params.TestChainConfig.GenesisHash = genesis.Hash()
+	blocks, _ := GenerateChain(params.TestChainConfig, genesis, blake3pow.NewFaker(), testdb, 2, gen)
+	statedb.AddBalance(addr, big.NewInt(params.Ether*2)) // give me 2 eth
+	mockContext := MockChainContext{blocks}
+
+	inner_tx := types.InternalToExternalTx{ChainID: big.NewInt(1), Nonce: 0, GasTipCap: common.Big1, GasFeeCap: common.Big1, Gas: 100000, To: &toAddr, Value: big.NewInt(params.Ether), ETXGasLimit: 21000, ETXGasPrice: common.Big1, ETXGasTip: common.Big1}
+	tx, err := types.SignTx(types.NewTx(&inner_tx), signer, testKey)
+	if err != nil {
+		t.Error(err.Error())
+		t.Fail()
+	}
+	receipt, err := ApplyTransaction(params.TestChainConfig, mockContext, &common.ZeroAddr, &gasLimit, statedb, blocks[1].Header(), tx, &zero, vm.Config{NoBaseFee: true})
+	if err != nil {
+		t.Error(err.Error())
+		t.Fail()
+	}
+	t.Log(types.GetInnerForTesting(receipt.Etxs[0]))
+	t.Log(*receipt)
+	t.Log(receipt.Status)
+}
+
 func TestCreateETX(t *testing.T) {
 	// Create a simple chain to verify
 	var statedb *state.StateDB
