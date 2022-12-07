@@ -385,7 +385,7 @@ func DefaultRopstenGenesisBlock() *Genesis {
 		Knot:       ReadKnot("./core/knot/ropsten_knot.rlp"),
 		Nonce:      66,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
-		GasLimit:   []uint64{100000, 100000, 100000},
+		GasLimit:   []uint64{10000000, 10000000, 10000000},
 		Difficulty: []*big.Int{big.NewInt(1600000), big.NewInt(800000), big.NewInt(80000)},
 		Alloc:      decodePrealloc(ropstenAllocData),
 	}
