@@ -39,8 +39,7 @@ func ReadKnot(chainfile string) []*types.Block {
 		// If we have a subordinate, we need to rebuild the block with the correct
 		// manifest of subordinate blocks
 		if nodeCtx < common.ZONE_CTX {
-			parentHash := h.ParentHash(nodeCtx + 1)
-			subManifest := types.BlockManifest{&parentHash}
+			subManifest := types.BlockManifest{h.ParentHash(nodeCtx + 1)}
 			b = types.NewBlock(h, nil, nil, nil, subManifest, nil, trie.NewStackTrie(nil))
 		}
 		blocks = append(blocks, b)
