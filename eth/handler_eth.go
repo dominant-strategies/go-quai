@@ -30,6 +30,10 @@ import (
 	"github.com/dominant-strategies/go-quai/p2p/enode"
 )
 
+const (
+	MaxBlockFetchDist = 50
+)
+
 // ethHandler implements the eth.Backend interface to handle the various network
 // packets that are sent as replies or broadcasts.
 type ethHandler handler
@@ -173,6 +177,15 @@ func (h *ethHandler) handleBlockAnnounces(peer *eth.Peer, hashes []common.Hash, 
 func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block) error {
 	// Schedule the block for import
 	h.blockFetcher.Enqueue(peer.ID(), block)
+
+	// Get the horizon and if we don't have the parent of the block and it has a greater
+	// number than the horizon we ask for that parent.
+	if !h.core.HasBlock(block.ParentHash(), block.NumberU64()-1) {
+		horizon := h.core.GetHorizon()
+		if block.NumberU64() > horizon && block.NumberU64() < h.core.CurrentBlock().NumberU64()+MaxBlockFetchDist {
+			peer.RequestBlockByHash(block.ParentHash())
+		}
+	}
 
 	_, number := peer.Head()
 	if (block.NumberU64() - 1) > number {

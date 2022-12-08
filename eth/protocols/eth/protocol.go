@@ -67,6 +67,8 @@ const (
 	NewPooledTransactionHashesMsg = 0x08
 	GetPooledTransactionsMsg      = 0x09
 	PooledTransactionsMsg         = 0x0a
+
+	GetBlockMsg = 0x0b
 )
 
 var (
@@ -316,6 +318,17 @@ type PooledTransactionsRLPPacket66 struct {
 	PooledTransactionsRLPPacket
 }
 
+// GetBlockPacket is the network packet for block fetching
+type GetBlockPacket struct {
+	Hash common.Hash
+}
+
+// GetBlockPacket66 is the eth/66 version of the GetBlockPacket.
+type GetBlockPacket66 struct {
+	RequestId uint64
+	GetBlockPacket
+}
+
 func (*StatusPacket) Name() string { return "Status" }
 func (*StatusPacket) Kind() byte   { return StatusMsg }
 
@@ -360,3 +373,6 @@ func (*GetPooledTransactionsPacket) Kind() byte   { return GetPooledTransactions
 
 func (*PooledTransactionsPacket) Name() string { return "PooledTransactions" }
 func (*PooledTransactionsPacket) Kind() byte   { return PooledTransactionsMsg }
+
+func (*GetBlockPacket) Name() string { return "GetBlock" }
+func (*GetBlockPacket) Kind() byte   { return GetBlockMsg }
