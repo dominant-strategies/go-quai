@@ -32,14 +32,12 @@ var Forks = map[string]*params.ChainConfig{
 	"Byzantium": {
 		ChainID:        big.NewInt(1),
 		EIP155Block:    big.NewInt(0),
-		DAOForkBlock:   big.NewInt(0),
 		ByzantiumBlock: big.NewInt(0),
 	},
 	"Constantinople": {
 		ChainID: big.NewInt(1),
 
 		EIP155Block:         big.NewInt(0),
-		DAOForkBlock:        big.NewInt(0),
 		ByzantiumBlock:      big.NewInt(0),
 		ConstantinopleBlock: big.NewInt(0),
 		PetersburgBlock:     big.NewInt(10000000),
@@ -48,7 +46,6 @@ var Forks = map[string]*params.ChainConfig{
 		ChainID: big.NewInt(1),
 
 		EIP155Block:         big.NewInt(0),
-		DAOForkBlock:        big.NewInt(0),
 		ByzantiumBlock:      big.NewInt(0),
 		ConstantinopleBlock: big.NewInt(0),
 		PetersburgBlock:     big.NewInt(0),
@@ -57,7 +54,6 @@ var Forks = map[string]*params.ChainConfig{
 		ChainID: big.NewInt(1),
 
 		EIP155Block:         big.NewInt(0),
-		DAOForkBlock:        big.NewInt(0),
 		ByzantiumBlock:      big.NewInt(0),
 		ConstantinopleBlock: big.NewInt(0),
 		PetersburgBlock:     big.NewInt(0),
