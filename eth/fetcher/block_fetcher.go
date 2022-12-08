@@ -809,12 +809,6 @@ func (f *BlockFetcher) importBlocks(peer string, block *types.Block) {
 	go func() {
 		defer func() { f.done <- hash }()
 
-		// If the parent's unknown, abort insertion
-		parent := f.getBlock(block.ParentHash())
-		if parent == nil {
-			log.Debug("Unknown parent of propagated block", "peer", peer, "number", block.Number(), "hash", hash, "parent", block.ParentHash())
-			return
-		}
 		// Quickly validate the header and propagate the block if it passes
 		switch err := f.verifyHeader(block.Header()); err {
 		case nil:
@@ -824,6 +818,8 @@ func (f *BlockFetcher) importBlocks(peer string, block *types.Block) {
 
 		case consensus.ErrFutureBlock:
 			// Weird future block, don't fail, but neither propagate
+
+		case consensus.ErrUnknownAncestor:
 
 		default:
 			// Something went very wrong, drop the peer

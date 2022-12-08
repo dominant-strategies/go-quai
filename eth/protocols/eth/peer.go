@@ -445,6 +445,25 @@ func (p *Peer) RequestHeadersByHash(origin common.Hash, amount int, skip uint64,
 	return p2p.Send(p.rw, GetBlockHeadersMsg, &query)
 }
 
+// RequestBlockByHash fetches a block corresponding to the
+// specified hash query, based on the hash of an origin block.
+func (p *Peer) RequestBlockByHash(hash common.Hash) error {
+	p.Log().Debug("Fetching a block", "hash", hash)
+	query := GetBlockPacket{
+		Hash: hash,
+	}
+	if p.Version() >= ETH66 {
+		id := rand.Uint64()
+
+		requestTracker.Track(p.id, p.version, GetBlockMsg, NewBlockMsg, id)
+		return p2p.Send(p.rw, GetBlockMsg, &GetBlockPacket66{
+			RequestId:      id,
+			GetBlockPacket: query,
+		})
+	}
+	return p2p.Send(p.rw, GetBlockMsg, &query)
+}
+
 // RequestHeadersByNumber fetches a batch of blocks' headers corresponding to the
 // specified header query, based on the number of an origin block.
 func (p *Peer) RequestHeadersByNumber(origin uint64, amount int, skip uint64, to uint64, dom bool, reverse bool) error {
