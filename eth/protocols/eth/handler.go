@@ -181,6 +181,7 @@ var eth65 = map[uint64]msgHandler{
 	NewPooledTransactionHashesMsg: handleNewPooledTransactionHashes,
 	GetPooledTransactionsMsg:      handleGetPooledTransactions,
 	PooledTransactionsMsg:         handlePooledTransactions,
+	GetBlockMsg:                   handleGetBlock,
 }
 
 var eth66 = map[uint64]msgHandler{
@@ -198,6 +199,7 @@ var eth66 = map[uint64]msgHandler{
 	ReceiptsMsg:              handleReceipts66,
 	GetPooledTransactionsMsg: handleGetPooledTransactions66,
 	PooledTransactionsMsg:    handlePooledTransactions66,
+	GetBlockMsg:              handleGetBlock66,
 }
 
 // handleMessage is invoked whenever an inbound message is received from a remote
