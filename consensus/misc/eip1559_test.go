@@ -30,8 +30,6 @@ import (
 func copyConfig(original *params.ChainConfig) *params.ChainConfig {
 	return &params.ChainConfig{
 		ChainID:             original.ChainID,
-		DAOForkBlock:        original.DAOForkBlock,
-		DAOForkSupport:      original.DAOForkSupport,
 		EIP155Block:         original.EIP155Block,
 		ByzantiumBlock:      original.ByzantiumBlock,
 		ConstantinopleBlock: original.ConstantinopleBlock,
