@@ -208,6 +208,38 @@ func answerGetReceiptsQuery(backend Backend, query GetReceiptsPacket, peer *Peer
 	return receipts
 }
 
+func handleGetBlock(backend Backend, msg Decoder, peer *Peer) error {
+	// Decode the block retrieval message
+	var query GetBlockPacket
+	if err := msg.Decode(&query); err != nil {
+		fmt.Println("Error decoding the message", err)
+		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+	}
+	log.Info("Got a block fetch request eth/65: ", "Hash", query.Hash)
+	// check if we have the requested block in the database.
+	response := backend.Core().GetBlockByHash(query.Hash)
+	if response != nil {
+		return peer.SendNewBlock(response)
+	}
+	return nil
+}
+
+func handleGetBlock66(backend Backend, msg Decoder, peer *Peer) error {
+	// Decode the block retrieval message
+	var query GetBlockPacket66
+	if err := msg.Decode(&query); err != nil {
+		fmt.Println("Error decoding the message", err)
+		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+	}
+	log.Info("Got a block fetch request eth/66: ", "Hash", query.Hash)
+	// check if we have the requested block in the database.
+	response := backend.Core().GetBlockByHash(query.Hash)
+	if response != nil {
+		return peer.SendNewBlock(response)
+	}
+	return nil
+}
+
 func handleNewBlockhashes(backend Backend, msg Decoder, peer *Peer) error {
 	// A batch of new block announcements just arrived
 	ann := new(NewBlockHashesPacket)
