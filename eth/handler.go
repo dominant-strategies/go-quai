@@ -41,6 +41,9 @@ const (
 	// The number is referenced from the size of tx pool.
 	txChanSize = 4096
 
+	// pendingEtxsChanSize is the size of channel listening to the NewPendingEtxsEvent
+	pendingEtxsChanSize = 10
+
 	// minPeerSend is the threshold for sending the block updates. If
 	// sqrt of len(peers) is less than 5 we make the block announcement
 	// to as much as minPeerSend peers otherwise send it to sqrt of len(peers).
@@ -100,10 +103,12 @@ type handler struct {
 	pendingEtxsFetcher *fetcher.PendingEtxsFetcher
 	peers              *peerSet
 
-	eventMux      *event.TypeMux
-	txsCh         chan core.NewTxsEvent
-	txsSub        event.Subscription
-	minedBlockSub *event.TypeMuxSubscription
+	eventMux       *event.TypeMux
+	txsCh          chan core.NewTxsEvent
+	txsSub         event.Subscription
+	pendingEtxsCh  chan types.PendingEtxs
+	pendingEtxsSub event.Subscription
+	minedBlockSub  *event.TypeMuxSubscription
 
 	whitelist map[uint64]common.Hash
 
@@ -280,6 +285,12 @@ func (h *handler) Start(maxPeers int) {
 	h.txsSub = h.txpool.SubscribeNewTxsEvent(h.txsCh)
 	go h.txBroadcastLoop()
 
+	// broadcast transactions
+	h.wg.Add(1)
+	h.pendingEtxsCh = make(chan types.PendingEtxs, pendingEtxsChanSize)
+	h.pendingEtxsSub = h.core.SubscribeNewPendingEtxsEvent(h.pendingEtxsCh)
+	go h.pendingEtxsBroadcastLoop()
+
 	// broadcast mined blocks
 	h.wg.Add(1)
 	h.minedBlockSub = h.eventMux.Subscribe(core.NewMinedBlockEvent{})
@@ -292,8 +303,9 @@ func (h *handler) Start(maxPeers int) {
 }
 
 func (h *handler) Stop() {
-	h.txsSub.Unsubscribe()        // quits txBroadcastLoop
-	h.minedBlockSub.Unsubscribe() // quits blockBroadcastLoop
+	h.txsSub.Unsubscribe()         // quits txBroadcastLoop
+	h.pendingEtxsSub.Unsubscribe() // quits pendingEtxsBroadcastLoop
+	h.minedBlockSub.Unsubscribe()  // quits blockBroadcastLoop
 
 	// Quit chainSync and txsync64.
 	// After this is done, no new peers will be accepted.
@@ -355,14 +367,14 @@ func (h *handler) BroadcastPendingEtxs(pendingEtxs types.PendingEtxs, propagate 
 		for _, peer := range transfer {
 			peer.AsyncSendNewPendingEtxs(pendingEtxs)
 		}
-		log.Trace("Propagated pending etxs", "hash", hash, "recipients", len(transfer))
+		log.Info("Propagated pending etxs", "hash", hash, "recipients", len(transfer))
 		return
 	}
 	// Otherwise announce the availability to all the peers.
 	for _, peer := range peers {
 		peer.AsyncSendNewPendingEtxsHash(pendingEtxs)
 	}
-	log.Trace("Announced block", "hash", hash, "recipients", len(peers))
+	log.Info("Announced block", "hash", hash, "recipients", len(peers))
 }
 
 // BroadcastTransactions will propagate a batch of transactions
@@ -428,6 +440,19 @@ func (h *handler) txBroadcastLoop() {
 		case event := <-h.txsCh:
 			h.BroadcastTransactions(event.Txs)
 		case <-h.txsSub.Err():
+			return
+		}
+	}
+}
+
+// pendingEtxsBroadcastLoop announces new pendingEtxs to connected peers.
+func (h *handler) pendingEtxsBroadcastLoop() {
+	defer h.wg.Done()
+	for {
+		select {
+		case pendingEtxs := <-h.pendingEtxsCh:
+			h.BroadcastPendingEtxs(pendingEtxs, true)
+		case <-h.pendingEtxsSub.Err():
 			return
 		}
 	}
