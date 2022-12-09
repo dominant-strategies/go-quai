@@ -172,8 +172,8 @@ type handshakeAuthTest struct {
 	wantRest    []rlp.RawValue
 }
 
-var eip8HandshakeAuthTests = []handshakeAuthTest{
-	// (Auth₂) EIP-8 encoding
+var HandshakeAuthTests = []handshakeAuthTest{
+	// (Auth₂) encoding
 	{
 		input: `
 			01b304ab7578555167be8154d5cc456f567d5ba302662433674222360f08d5f1534499d3678b513b
@@ -191,7 +191,7 @@ var eip8HandshakeAuthTests = []handshakeAuthTest{
 		wantVersion: 4,
 		wantRest:    []rlp.RawValue{},
 	},
-	// (Auth₃) RLPx v4 EIP-8 encoding with version 56, additional list elements
+	// (Auth₃) RLPx v4 encoding with version 56, additional list elements
 	{
 		input: `
 			01b8044c6c312173685d1edd268aa95e1d495474c6959bcdd10067ba4c9013df9e40ff45f5bfd6f7
@@ -218,8 +218,8 @@ type handshakeAckTest struct {
 	wantRest    []rlp.RawValue
 }
 
-var eip8HandshakeRespTests = []handshakeAckTest{
-	// (Ack₂) EIP-8 encoding
+var HandshakeRespTests = []handshakeAckTest{
+	// (Ack₂) encoding
 	{
 		input: `
 			01ea0451958701280a56482929d3b0757da8f7fbe5286784beead59d95089c217c9b917788989470
@@ -239,7 +239,7 @@ var eip8HandshakeRespTests = []handshakeAckTest{
 		wantVersion: 4,
 		wantRest:    []rlp.RawValue{},
 	},
-	// (Ack₃) EIP-8 encoding with version 57, additional list elements
+	// (Ack₃) encoding with version 57, additional list elements
 	{
 		input: `
 			01f004076e58aae772bb101ab1a8e64e01ee96e64857ce82b1113817c6cdd52c09d26f7b90981cd7
@@ -295,7 +295,7 @@ func TestHandshakeForwardCompatibility(t *testing.T) {
 	}
 
 	// check auth msg parsing
-	for _, test := range eip8HandshakeAuthTests {
+	for _, test := range HandshakeAuthTests {
 		var h handshakeState
 		r := bytes.NewReader(unhex(test.input))
 		msg := new(authMsgV4)
@@ -314,7 +314,7 @@ func TestHandshakeForwardCompatibility(t *testing.T) {
 	}
 
 	// check auth resp parsing
-	for _, test := range eip8HandshakeRespTests {
+	for _, test := range HandshakeRespTests {
 		var h handshakeState
 		input := unhex(test.input)
 		r := bytes.NewReader(input)
@@ -340,9 +340,9 @@ func TestHandshakeForwardCompatibility(t *testing.T) {
 			respNonce:     nonceB,
 			randomPrivKey: ecies.ImportECDSA(ephB),
 		}
-		authCiphertext     = unhex(eip8HandshakeAuthTests[0].input)
-		authRespCiphertext = unhex(eip8HandshakeRespTests[0].input)
-		authMsg            = makeAuth(eip8HandshakeAuthTests[0])
+		authCiphertext     = unhex(HandshakeAuthTests[0].input)
+		authRespCiphertext = unhex(HandshakeRespTests[0].input)
+		authMsg            = makeAuth(HandshakeAuthTests[0])
 		wantAES            = unhex("80e8632c05fed6fc2a13b0f8d31a3cf645366239170ea067065aba8e28bac487")
 		wantMAC            = unhex("2ea74ec5dae199227dff1af715362700e989d889d7a493cb0639691efb8e5f98")
 		wantFooIngressHash = unhex("0c7ec6340062cc46f5e9f1e3cf86f8c8c403c5a0964f5df0ebd34a75ddc86db5")
@@ -368,7 +368,7 @@ func TestHandshakeForwardCompatibility(t *testing.T) {
 }
 
 func BenchmarkHandshakeRead(b *testing.B) {
-	var input = unhex(eip8HandshakeAuthTests[0].input)
+	var input = unhex(HandshakeAuthTests[0].input)
 
 	for i := 0; i < b.N; i++ {
 		var (
