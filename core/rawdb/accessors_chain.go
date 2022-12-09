@@ -1255,7 +1255,7 @@ func ReadPendingEtxs(db ethdb.Reader, hash common.Hash) []types.Transactions {
 		return nil
 	}
 	pendingEtxs := []types.Transactions{types.Transactions{}, types.Transactions{}, types.Transactions{}}
-	if err := rlp.Decode(bytes.NewReader(data), pendingEtxs); err != nil {
+	if err := rlp.Decode(bytes.NewReader(data), &pendingEtxs); err != nil {
 		log.Error("Invalid pending etxs RLP", "hash", hash, "err", err)
 		return nil
 	}
