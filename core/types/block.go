@@ -18,6 +18,7 @@
 package types
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -746,4 +747,15 @@ type HeaderRoots struct {
 	StateRoot    common.Hash
 	TxsRoot      common.Hash
 	ReceiptsRoot common.Hash
+}
+
+// BlockManifest is a list of block hashes, which implements DerivableList
+type BlockManifest []common.Hash
+
+// Len returns the length of s.
+func (m BlockManifest) Len() int { return len(m) }
+
+// EncodeIndex encodes the i'th blockhash to w.
+func (m BlockManifest) EncodeIndex(i int, w *bytes.Buffer) {
+	rlp.Encode(w, m[i])
 }
