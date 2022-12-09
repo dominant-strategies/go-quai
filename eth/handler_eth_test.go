@@ -195,7 +195,7 @@ func testForkIDSplit(t *testing.T, protocol uint) {
 			t.Fatalf("nofork <-> profork handler timeout")
 		}
 	}
-	// Progress into Spurious. Forks mismatch, signalling differing chains, reject
+	// Progress into _. Forks mismatch, signalling differing chains, reject
 	chainNoFork.InsertChain(blocksNoFork[1:2])
 	chainProFork.InsertChain(blocksProFork[1:2])
 
