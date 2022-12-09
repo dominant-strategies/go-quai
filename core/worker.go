@@ -927,6 +927,7 @@ func (w *worker) FinalizeAssembleAndBroadcast(chain consensus.ChainHeaderReader,
 	}
 	// store the pending block body details for the given stateroot
 	rawdb.WritePendingBlockBody(w.workerDb, block.Root(), block.Body())
+	fmt.Println("**::**:: (worker) extension of parent ", block.Header().ParentHash(), " with manifest hash ", block.ManifestHash(), ": ", manifest)
 	return block, nil
 }
 

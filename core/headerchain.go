@@ -198,6 +198,7 @@ func (hc *HeaderChain) Append(batch ethdb.Batch, block *types.Block, newInboundE
 		if err != nil {
 			return err
 		}
+		fmt.Println("**::**:: (append) extension of parent ", block.Header().ParentHash(), " with manifest hash ", block.ManifestHash(), ": ", manifest)
 		if block.ManifestHash(nodeCtx) != types.DeriveSha(manifest, trie.NewStackTrie(nil)) {
 			return errors.New("manifest does not match hash")
 		}
