@@ -68,9 +68,9 @@ func (tt *TransactionTest) Run(config *params.ChainConfig) error {
 		fork       ttFork
 		isIstanbul bool
 	}{
-		{"Byzantium", types.NewEIP155Signer(config.ChainID), tt.Byzantium, true, false},
-		{"Constantinople", types.NewEIP155Signer(config.ChainID), tt.Constantinople, true, false},
-		{"Istanbul", types.NewEIP155Signer(config.ChainID), tt.Istanbul, true, true},
+		{"Byzantium", types.NewReplayProtectedSigner(config.ChainID), tt.Byzantium, true},
+		{"Constantinople", types.NewReplayProtectedSigner(config.ChainID), tt.Constantinople, true},
+		{"Istanbul", types.NewReplayProtectedSigner(config.ChainID), tt.Istanbul, true},
 	} {
 		sender, txhash, err := validateTx(tt.RLP, testcase.signer, testcase.isIstanbul)
 

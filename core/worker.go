@@ -759,7 +759,7 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 		// Error may be ignored here. The error has already been checked
 		// during transaction acceptance is the transaction pool.
 		//
-		// We use the eip155 signer regardless of the current hf.
+		// We use the signer regardless of the current hf.
 		from, _ := types.Sender(env.signer, tx)
 		// Start executing the transaction
 		env.state.Prepare(tx.Hash(), env.tcount)

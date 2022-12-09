@@ -41,10 +41,9 @@ import (
 
 // QuaiAPIBackend implements quaiapi.Backend for full nodes
 type QuaiAPIBackend struct {
-	extRPCEnabled       bool
-	allowUnprotectedTxs bool
-	eth                 *Ethereum
-	gpo                 *gasprice.Oracle
+	extRPCEnabled bool
+	eth           *Ethereum
+	gpo           *gasprice.Oracle
 }
 
 // ChainConfig returns the active chain configuration.
@@ -297,10 +296,6 @@ func (b *QuaiAPIBackend) EventMux() *event.TypeMux {
 
 func (b *QuaiAPIBackend) ExtRPCEnabled() bool {
 	return b.extRPCEnabled
-}
-
-func (b *QuaiAPIBackend) UnprotectedAllowed() bool {
-	return b.allowUnprotectedTxs
 }
 
 func (b *QuaiAPIBackend) RPCGasCap() uint64 {
