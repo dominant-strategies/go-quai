@@ -92,6 +92,48 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *par
 	return hc, nil
 }
 
+// CollectBlockManifest gathers the manifest of ancestor block hashes since the
+// last coincident block.
+func (hc *HeaderChain) CollectBlockManifest(h *types.Header) (types.BlockManifest, error) {
+	if h.NumberU64() == 0 && h.Hash() == hc.config.GenesisHash {
+		return types.BlockManifest{}, nil
+	}
+	parent := hc.GetHeader(h.ParentHash(), h.NumberU64()-1)
+	if parent == nil {
+		return types.BlockManifest{}, errors.New("ancestor not found")
+	} else {
+		return hc.collectBlockManifest(parent)
+	}
+}
+
+func (hc *HeaderChain) collectBlockManifest(h *types.Header) (types.BlockManifest, error) {
+	// Intialize manifest with this block's hash
+	manifest := types.BlockManifest{h.Hash()}
+	// Terminate the search if we reached genesis
+	if h.NumberU64() == 0 {
+		if h.Hash() != hc.config.GenesisHash {
+			return nil, fmt.Errorf("manifest builds on incorrect genesis, block0 hash: %s", h.Hash().String())
+		} else {
+			return manifest, nil
+		}
+	}
+	// Terminate the search on coincidence
+	if hc.engine.IsDomCoincident(h) {
+		return manifest, nil
+	}
+	// Recursively get the ancestor manifest, until a coincident ancestor is found
+	ancestor := hc.GetHeader(h.ParentHash(), h.NumberU64()-1)
+	if ancestor == nil {
+		return types.BlockManifest{}, errors.New("ancestor not found")
+	}
+	ancManifest, err := hc.collectBlockManifest(ancestor)
+	if err != nil {
+		return nil, errors.New("unable to get manifest for ancestor")
+	}
+	manifest = append(ancManifest, manifest...)
+	return manifest, nil
+}
+
 // Append
 func (hc *HeaderChain) Append(batch ethdb.Batch, block *types.Block) error {
 
