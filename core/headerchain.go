@@ -96,6 +96,9 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *par
 // CollectBlockManifest gathers the manifest of ancestor block hashes since the
 // last coincident block.
 func (hc *HeaderChain) CollectBlockManifest(h *types.Header) (types.BlockManifest, error) {
+	if h.NumberU64() == 0 && h.Hash() == hc.config.GenesisHash {
+		return types.BlockManifest{}, nil
+	}
 	parent := hc.GetHeader(h.ParentHash(), h.NumberU64()-1)
 	if parent == nil {
 		return types.BlockManifest{}, errors.New("ancestor not found")
@@ -135,6 +138,9 @@ func (hc *HeaderChain) collectBlockManifest(h *types.Header) (types.BlockManifes
 // Collect all emmitted ETXs since the last coincident block, but excluding
 // those emitted in this block
 func (hc *HeaderChain) CollectEtxRollup(b *types.Block) (types.Transactions, error) {
+	if b.NumberU64() == 0 && b.Hash() == hc.config.GenesisHash {
+		return b.ExtTransactions(), nil
+	}
 	parent := hc.GetBlock(b.ParentHash(), b.NonceU64())
 	if parent == nil {
 		return nil, errors.New("parent not found")
