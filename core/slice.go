@@ -54,6 +54,7 @@ type Slice struct {
 
 	scope              event.SubscriptionScope
 	downloaderWaitFeed event.Feed
+	newPendingEtxsFeed event.Feed
 
 	futureHeaders *lru.Cache
 	pendingEtxs   *lru.Cache
@@ -524,6 +525,8 @@ func (sl *Slice) AddPendingEtxs(pEtxs types.PendingEtxs) error {
 		rawdb.WritePendingEtxs(sl.sliceDb, pEtxs.Header.Hash(), pEtxs.Etxs)
 		// Also write to cache for faster access
 		sl.pendingEtxs.Add(pEtxs.Header.Hash(), pEtxs.Etxs)
+		// Send the pendingEtxs to the feed for broadcast
+		sl.newPendingEtxsFeed.Send(pEtxs)
 	}
 	return nil
 }
@@ -787,6 +790,10 @@ func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *typ
 	combinedPendingHeader.SetBloom(header.Bloom(index), index)
 
 	return combinedPendingHeader
+}
+
+func (sl *Slice) SubscribeNewPendingEtxsEvent(ch chan<- types.PendingEtxs) event.Subscription {
+	return sl.scope.Track(sl.newPendingEtxsFeed.Subscribe(ch))
 }
 
 // MakeDomClient creates the quaiclient for the given domurl

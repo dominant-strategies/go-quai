@@ -151,6 +151,10 @@ func (c *Core) sendPendingEtxsToDom(pEtxs types.PendingEtxs) error {
 	return c.sl.SendPendingEtxsToDom(pEtxs)
 }
 
+func (c *Core) SubscribeNewPendingEtxsEvent(ch chan<- types.PendingEtxs) event.Subscription {
+	return c.sl.SubscribeNewPendingEtxsEvent(ch)
+}
+
 func (c *Core) GetManifest(blockHash common.Hash) (types.BlockManifest, error) {
 	return c.sl.GetManifest(blockHash)
 }
