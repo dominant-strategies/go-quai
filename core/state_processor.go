@@ -383,7 +383,7 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 		}
 	}
 
-	rawdb.WriteEtxSet(batch, block.Hash(), block.NumberU64(), etxSet)
+	rawdb.WriteEtxSet(p.hc.bc.db, block.Hash(), block.NumberU64(), etxSet)
 
 	return logs, nil
 }
