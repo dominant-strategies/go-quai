@@ -44,8 +44,6 @@ func TestCreation(t *testing.T) {
 			params.MainnetGenesisHash,
 			[]testcase{
 				{0, ID{Hash: checksumToBytes(0xfc64ec04), Next: 1150000}},         // Unsynced
-				{2675000, ID{Hash: checksumToBytes(0x3edd5b10), Next: 4370000}},   // First Spurious block
-				{4369999, ID{Hash: checksumToBytes(0x3edd5b10), Next: 4370000}},   // Last Spurious block
 				{4370000, ID{Hash: checksumToBytes(0xa00bc324), Next: 7280000}},   // First Byzantium block
 				{7279999, ID{Hash: checksumToBytes(0xa00bc324), Next: 7280000}},   // Last Byzantium block
 				{7280000, ID{Hash: checksumToBytes(0x668db0af), Next: 9069000}},   // First and last Constantinople, first Petersburg block
@@ -65,8 +63,6 @@ func TestCreation(t *testing.T) {
 			params.RopstenChainConfig,
 			params.RopstenGenesisHash,
 			[]testcase{
-				{10, ID{Hash: checksumToBytes(0x63760190), Next: 1700000}},        // First Spurious block
-				{1699999, ID{Hash: checksumToBytes(0x63760190), Next: 1700000}},   // Last Spurious block
 				{1700000, ID{Hash: checksumToBytes(0x3ea159c7), Next: 4230000}},   // First Byzantium block
 				{4229999, ID{Hash: checksumToBytes(0x3ea159c7), Next: 4230000}},   // Last Byzantium block
 				{4230000, ID{Hash: checksumToBytes(0x97b544f3), Next: 4939394}},   // First Constantinople block
@@ -88,8 +84,6 @@ func TestCreation(t *testing.T) {
 			params.RinkebyChainConfig,
 			params.RinkebyGenesisHash,
 			[]testcase{
-				{3, ID{Hash: checksumToBytes(0xcb3a64bb), Next: 1035301}},       // First Spurious block
-				{1035300, ID{Hash: checksumToBytes(0xcb3a64bb), Next: 1035301}}, // Last Spurious block
 				{1035301, ID{Hash: checksumToBytes(0x8d748b57), Next: 3660663}}, // First Byzantium block
 				{3660662, ID{Hash: checksumToBytes(0x8d748b57), Next: 3660663}}, // Last Byzantium block
 				{3660663, ID{Hash: checksumToBytes(0xe49cab14), Next: 4321234}}, // First Constantinople block
@@ -166,14 +160,14 @@ func TestValidation(t *testing.T) {
 		// is simply out of sync, accept.
 		{7987396, ID{Hash: checksumToBytes(0xa00bc324), Next: 7280000}, nil},
 
-		// Local is mainnet Petersburg, remote announces Spurious + knowledge about Byzantium. Remote
+		// Local is mainnet Petersburg, remote announces _ + knowledge about Byzantium. Remote
 		// is definitely out of sync. It may or may not need the Petersburg update, we don't know yet.
 		{7987396, ID{Hash: checksumToBytes(0x3edd5b10), Next: 4370000}, nil},
 
 		// Local is mainnet Byzantium, remote announces Petersburg. Local is out of sync, accept.
 		{7279999, ID{Hash: checksumToBytes(0x668db0af), Next: 0}, nil},
 
-		// Local is mainnet Spurious, remote announces Byzantium, but is not aware of Petersburg. Local
+		// Local is mainnet _, remote announces Byzantium, but is not aware of Petersburg. Local
 		// out of sync. Local also knows about a future fork, but that is uncertain yet.
 		{4369999, ID{Hash: checksumToBytes(0xa00bc324), Next: 0}, nil},
 
