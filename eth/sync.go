@@ -251,6 +251,24 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 		return nil
 	}
 
+	// do not start synching if the peer height is equal to the knot height
+	nodeCtx := common.NodeLocation.Context()
+	_, number := peer.Head()
+	switch nodeCtx {
+	case common.PRIME_CTX:
+		if number == 9 {
+			return nil
+		}
+	case common.REGION_CTX:
+		if number == 3 {
+			return nil
+		}
+	case common.ZONE_CTX:
+		if number == 1 {
+			return nil
+		}
+	}
+
 	op := peerToSyncOp(downloader.FullSync, peer)
 	if op.number <= cs.handler.core.CurrentHeader().NumberU64() {
 		return nil // We're in sync.
