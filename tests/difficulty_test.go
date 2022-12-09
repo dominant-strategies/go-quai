@@ -49,13 +49,11 @@ func TestDifficulty(t *testing.T) {
 
 	dt.config("Ropsten", *params.RopstenChainConfig)
 	dt.config("Morden", *params.RopstenChainConfig)
-	dt.config("Frontier", params.ChainConfig{})
 
 	dt.config("Byzantium", params.ChainConfig{
 		ByzantiumBlock: big.NewInt(0),
 	})
 
-	dt.config("Frontier", *params.RopstenChainConfig)
 	dt.config("MainNetwork", mainnetChainConfig)
 	dt.config("CustomMainNetwork", mainnetChainConfig)
 	dt.config("Constantinople", params.ChainConfig{

@@ -47,7 +47,7 @@ func MakeSigner(config *params.ChainConfig, blockNumber *big.Int) Signer {
 	case config.IsEIP155(blockNumber):
 		signer = NewEIP155Signer(config.ChainID)
 	default:
-		signer = FrontierSigner{}
+		signer = NewLondonSigner(config.ChainID)
 	}
 	return signer
 }
@@ -71,7 +71,7 @@ func LatestSigner(config *params.ChainConfig) Signer {
 			return NewEIP155Signer(config.ChainID)
 		}
 	}
-	return FrontierSigner{}
+	return NewLondonSigner(config.ChainID)
 }
 
 // LatestSignerForChainID returns the 'most permissive' Signer available. Specifically,
@@ -391,48 +391,6 @@ func (s EIP155Signer) Hash(tx *Transaction) common.Hash {
 		tx.Value(),
 		tx.Data(),
 		s.chainId, uint(0), uint(0),
-	})
-}
-
-type FrontierSigner struct{}
-
-func (s FrontierSigner) ChainID() *big.Int {
-	return nil
-}
-
-func (s FrontierSigner) Equal(s2 Signer) bool {
-	_, ok := s2.(FrontierSigner)
-	return ok
-}
-
-func (fs FrontierSigner) Sender(tx *Transaction) (common.Address, error) {
-	if tx.Type() != LegacyTxType {
-		return common.Address{}, ErrTxTypeNotSupported
-	}
-	v, r, s := tx.RawSignatureValues()
-	return recoverPlain(fs.Hash(tx), r, s, v)
-}
-
-// SignatureValues returns signature values. This signature
-// needs to be in the [R || S || V] format where V is 0 or 1.
-func (fs FrontierSigner) SignatureValues(tx *Transaction, sig []byte) (r, s, v *big.Int, err error) {
-	if tx.Type() != LegacyTxType {
-		return nil, nil, nil, ErrTxTypeNotSupported
-	}
-	r, s, v = decodeSignature(sig)
-	return r, s, v, nil
-}
-
-// Hash returns the hash to be signed by the sender.
-// It does not uniquely identify the transaction.
-func (fs FrontierSigner) Hash(tx *Transaction) common.Hash {
-	return rlpHash([]interface{}{
-		tx.Nonce(),
-		tx.GasPrice(),
-		tx.Gas(),
-		tx.To(),
-		tx.Value(),
-		tx.Data(),
 	})
 }
 
