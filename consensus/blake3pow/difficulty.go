@@ -8,10 +8,6 @@ import (
 )
 
 const (
-	// frontierDurationLimit is for Frontier:
-	// The decision boundary on the blocktime duration used to determine
-	// whether difficulty should go up or down.
-	frontierDurationLimit = 13
 	// minimumDifficulty The minimum that the difficulty may ever be.
 	minimumDifficulty = 131072
 	// expDiffPeriod is the exponential difficulty period
@@ -20,45 +16,6 @@ const (
 	// This constant is the right-shifts to use for the division.
 	difficultyBoundDivisor = 11
 )
-
-// CalcDifficultyFrontierU256 is the difficulty adjustment algorithm. It returns the
-// difficulty that a new block should have when created at time given the parent
-// block's time and difficulty. The calculation uses the Frontier rules.
-func CalcDifficultyFrontierU256(time uint64, parent *types.Header) *big.Int {
-	/*
-		Algorithm
-		block_diff = pdiff + pdiff / 2048 * (1 if time - ptime < 13 else -1) + int(2^((num // 100000) - 2))
-
-		Where:
-		- pdiff  = parent.difficulty
-		- ptime = parent.time
-		- time = block.timestamp
-		- num = block.number
-	*/
-
-	pDiff, _ := uint256.FromBig(parent.Difficulty()) // pDiff: pdiff
-	adjust := pDiff.Clone()
-	adjust.Rsh(adjust, difficultyBoundDivisor) // adjust: pDiff / 2048
-
-	if time-parent.Time() < frontierDurationLimit {
-		pDiff.Add(pDiff, adjust)
-	} else {
-		pDiff.Sub(pDiff, adjust)
-	}
-	if pDiff.LtUint64(minimumDifficulty) {
-		pDiff.SetUint64(minimumDifficulty)
-	}
-	// 'pdiff' now contains:
-	// pdiff + pdiff / 2048 * (1 if time - ptime < 13 else -1)
-
-	if periodCount := (parent.Number().Uint64() + 1) / expDiffPeriodUint; periodCount > 1 {
-		// diff = diff + 2^(periodCount - 2)
-		expDiff := adjust.SetOne()
-		expDiff.Lsh(expDiff, uint(periodCount-2)) // expdiff: 2 ^ (periodCount -2)
-		pDiff.Add(pDiff, expDiff)
-	}
-	return pDiff.ToBig()
-}
 
 // MakeDifficultyCalculatorU256 creates a difficultyCalculator with the given bomb-delay.
 // the difficulty is calculated with Byzantium rules, which differs in
