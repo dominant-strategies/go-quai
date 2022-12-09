@@ -106,6 +106,7 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 
 	case *eth.NewPendingEtxsPacket:
 		pendingEtxs := types.PendingEtxs{Header: packet.Header, Etxs: packet.PendingEtxs}
+		fmt.Println("Received new pendingEtxs", pendingEtxs.Header.Hash(), len(packet.PendingEtxs))
 		return h.pendingEtxsFetcher.Enqueue(peer.ID(), pendingEtxs)
 
 	default:
