@@ -177,7 +177,6 @@ func benchmarkEVM_Create(bench *testing.B, code string) {
 			ChainID:             big.NewInt(1),
 			ByzantiumBlock:      new(big.Int),
 			ConstantinopleBlock: new(big.Int),
-			EIP155Block:         new(big.Int),
 		},
 		EVMConfig: vm.Config{},
 	}

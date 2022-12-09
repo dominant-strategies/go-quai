@@ -119,7 +119,6 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.WSAllowedOriginsFlag,
 			utils.RPCGlobalGasCapFlag,
 			utils.RPCGlobalTxFeeCapFlag,
-			utils.AllowUnprotectedTxs,
 			utils.JSpathFlag,
 			utils.ExecFlag,
 			utils.PreloadJSFlag,

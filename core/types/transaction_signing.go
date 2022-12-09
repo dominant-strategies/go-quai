@@ -44,8 +44,6 @@ func MakeSigner(config *params.ChainConfig, blockNumber *big.Int) Signer {
 		signer = NewLondonSigner(config.ChainID)
 	case config.IsBerlin(blockNumber):
 		signer = NewEIP2930Signer(config.ChainID)
-	case config.IsEIP155(blockNumber):
-		signer = NewEIP155Signer(config.ChainID)
 	default:
 		signer = NewLondonSigner(config.ChainID)
 	}
@@ -53,7 +51,7 @@ func MakeSigner(config *params.ChainConfig, blockNumber *big.Int) Signer {
 }
 
 // LatestSigner returns the 'most permissive' Signer available for the given chain
-// configuration. Specifically, this enables support of EIP-155 replay protection and
+// configuration. Specifically, this enables support of replay protection and
 // EIP-2930 access list transactions when their respective forks are scheduled to occur at
 // any block number in the chain config.
 //
@@ -67,15 +65,12 @@ func LatestSigner(config *params.ChainConfig) Signer {
 		if config.BerlinBlock != nil {
 			return NewEIP2930Signer(config.ChainID)
 		}
-		if config.EIP155Block != nil {
-			return NewEIP155Signer(config.ChainID)
-		}
 	}
 	return NewLondonSigner(config.ChainID)
 }
 
 // LatestSignerForChainID returns the 'most permissive' Signer available. Specifically,
-// this enables support for EIP-155 replay protection and all implemented EIP-2718
+// this enables support for replay protection and all implemented EIP-2718
 // transaction types if chainID is non-nil.
 //
 // Use this in transaction-handling code where the current block number and fork
@@ -170,9 +165,9 @@ type londonSigner struct{ eip2930Signer }
 // NewLondonSigner returns a signer that accepts
 // - EIP-1559 dynamic fee transactions
 // - EIP-2930 access list transactions,
-// - EIP-155 replay protected transactions, and
+// - replay protected transactions, and
 func NewLondonSigner(chainId *big.Int) Signer {
-	return londonSigner{eip2930Signer{NewEIP155Signer(chainId)}}
+	return londonSigner{eip2930Signer{NewReplayProtectedSigner(chainId)}}
 }
 
 func (s londonSigner) Sender(tx *Transaction) (common.Address, error) {
@@ -230,12 +225,12 @@ func (s londonSigner) Hash(tx *Transaction) common.Hash {
 		})
 }
 
-type eip2930Signer struct{ EIP155Signer }
+type eip2930Signer struct{ ReplayProtectedSigner }
 
 // NewEIP2930Signer returns a signer that accepts EIP-2930 access list transactions,
-// EIP-155 replay protected transactions, and legacy transactions.
+// replay protected transactions, and legacy transactions.
 func NewEIP2930Signer(chainId *big.Int) Signer {
-	return eip2930Signer{NewEIP155Signer(chainId)}
+	return eip2930Signer{NewReplayProtectedSigner(chainId)}
 }
 
 func (s eip2930Signer) ChainID() *big.Int {
@@ -272,7 +267,7 @@ func (s eip2930Signer) Sender(tx *Transaction) (common.Address, error) {
 func (s eip2930Signer) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int, err error) {
 	switch txdata := tx.inner.(type) {
 	case *LegacyTx:
-		return s.EIP155Signer.SignatureValues(tx, sig)
+		return s.ReplayProtectedSigner.SignatureValues(tx, sig)
 	case *AccessListTx:
 		// Check that chain ID of tx matches the signer. We also accept ID zero here,
 		// because it indicates that the chain ID was not specified in the tx.
@@ -323,34 +318,34 @@ func (s eip2930Signer) Hash(tx *Transaction) common.Hash {
 	}
 }
 
-// EIP155Signer implements Signer using the EIP-155 rules. This accepts transactions which
-// are replay-protected as well as unprotected transactions.
-type EIP155Signer struct {
+// ReplayProtectedSigner implements Signer using the replay-protected rules. This accepts transactions which
+// are replay-protected.
+type ReplayProtectedSigner struct {
 	chainId, chainIdMul *big.Int
 }
 
-func NewEIP155Signer(chainId *big.Int) EIP155Signer {
+func NewReplayProtectedSigner(chainId *big.Int) ReplayProtectedSigner {
 	if chainId == nil {
 		chainId = new(big.Int)
 	}
-	return EIP155Signer{
+	return ReplayProtectedSigner{
 		chainId:    chainId,
 		chainIdMul: new(big.Int).Mul(chainId, big.NewInt(2)),
 	}
 }
 
-func (s EIP155Signer) ChainID() *big.Int {
+func (s ReplayProtectedSigner) ChainID() *big.Int {
 	return s.chainId
 }
 
-func (s EIP155Signer) Equal(s2 Signer) bool {
-	eip155, ok := s2.(EIP155Signer)
-	return ok && eip155.chainId.Cmp(s.chainId) == 0
+func (s ReplayProtectedSigner) Equal(s2 Signer) bool {
+	signer, ok := s2.(ReplayProtectedSigner)
+	return ok && signer.chainId.Cmp(s.chainId) == 0
 }
 
 var big8 = big.NewInt(8)
 
-func (s EIP155Signer) Sender(tx *Transaction) (common.Address, error) {
+func (s ReplayProtectedSigner) Sender(tx *Transaction) (common.Address, error) {
 	if tx.Type() != LegacyTxType {
 		return common.Address{}, ErrTxTypeNotSupported
 	}
@@ -368,7 +363,7 @@ func (s EIP155Signer) Sender(tx *Transaction) (common.Address, error) {
 
 // SignatureValues returns signature values. This signature
 // needs to be in the [R || S || V] format where V is 0 or 1.
-func (s EIP155Signer) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int, err error) {
+func (s ReplayProtectedSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int, err error) {
 	if tx.Type() != LegacyTxType {
 		return nil, nil, nil, ErrTxTypeNotSupported
 	}
@@ -382,7 +377,7 @@ func (s EIP155Signer) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big
 
 // Hash returns the hash to be signed by the sender.
 // It does not uniquely identify the transaction.
-func (s EIP155Signer) Hash(tx *Transaction) common.Hash {
+func (s ReplayProtectedSigner) Hash(tx *Transaction) common.Hash {
 	return rlpHash([]interface{}{
 		tx.Nonce(),
 		tx.GasPrice(),
