@@ -144,7 +144,7 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation b
 			}
 		}
 		// Make sure we don't exceed uint64 for all data combinations
-		nonZeroGas := params.TxDataNonZeroGasFrontier
+		nonZeroGas := params.TxDataNonZeroGas
 		if isEIP2028 {
 			nonZeroGas = params.TxDataNonZeroGasEIP2028
 		}

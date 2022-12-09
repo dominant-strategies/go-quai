@@ -84,20 +84,16 @@ const (
 	SelfdestructRefundGas uint64 = 24000 // Refunded following a selfdestruct operation.
 	MemoryGas             uint64 = 3     // Times the address of the (highest referenced byte in memory + 1). NOTE: referencing happens on read, write and in instructions such as RETURN and CALL.
 
-	TxDataNonZeroGasFrontier  uint64 = 68   // Per byte of data attached to a transaction that is not equal to zero. NOTE: Not payable on data of calls between transactions.
+	TxDataNonZeroGas          uint64 = 68   // Per byte of data attached to a transaction that is not equal to zero. NOTE: Not payable on data of calls between transactions.
 	TxDataNonZeroGasEIP2028   uint64 = 16   // Per byte of non zero data attached to a transaction after EIP 2028 (part in Istanbul)
 	TxAccessListAddressGas    uint64 = 2400 // Per address specified in EIP 2930 access list
 	TxAccessListStorageKeyGas uint64 = 1900 // Per storage key specified in EIP 2930 access list
 
 	// These have been changed during the course of the chain
-	CallGasFrontier              uint64 = 40  // Once per CALL operation & message call transaction.
 	CallGas                      uint64 = 700 // Static portion of gas for CALL-derivates after EIP 150
-	BalanceGasFrontier           uint64 = 20  // The cost of a BALANCE operation
 	BalanceGas                   uint64 = 400 // The cost of a BALANCE operation after
 	BalanceGasEIP1884            uint64 = 700 // The cost of a BALANCE operation after EIP 1884 (part of Istanbul)
-	ExtcodeSizeGasFrontier       uint64 = 20  // Cost of EXTCODESIZE before EIP 150
 	ExtcodeSizeGas               uint64 = 700 // Cost of EXTCODESIZE after EIP 150
-	SloadGasFrontier             uint64 = 50
 	SloadGas                     uint64 = 200
 	SloadGasEIP1884              uint64 = 800  // Cost of SLOAD after EIP 1884 (part of Istanbul)
 	SloadGasEIP2200              uint64 = 800  // Cost of SLOAD after EIP 2200 (part of Istanbul)
@@ -106,13 +102,11 @@ const (
 	SelfdestructGas              uint64 = 5000 // Cost of SELFDESTRUCT
 
 	// EXP has a dynamic portion depending on the size of the exponent
-	ExpByteFrontier uint64 = 10 // was set to 10 in Frontier
-	ExpByte         uint64 = 50 // was raised to 50
+	ExpByte uint64 = 50 // was raised to 50
 
 	// Extcodecopy has a dynamic AND a static cost. This represents only the
 	// static portion of the gas. It was changed during EIP 150
-	ExtcodeCopyBaseFrontier uint64 = 20
-	ExtcodeCopyBase         uint64 = 700
+	ExtcodeCopyBase uint64 = 700
 
 	// CreateBySelfdestructGas is used when the refunded account is one that does
 	// not exist. This logic is similar to call.

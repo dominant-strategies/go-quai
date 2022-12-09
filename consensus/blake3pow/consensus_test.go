@@ -105,7 +105,6 @@ func TestDifficultyCalculators(t *testing.T) {
 			bigFn  func(time uint64, parent *types.Header) *big.Int
 			u256Fn func(time uint64, parent *types.Header) *big.Int
 		}{
-			{FrontierDifficultyCalulator, CalcDifficultyFrontierU256},
 			{DynamicDifficultyCalculator(bombDelay), MakeDifficultyCalculatorU256(bombDelay)},
 		} {
 			time := header.Time() + timeDelta
@@ -132,18 +131,6 @@ func BenchmarkDifficultyCalculator(b *testing.B) {
 		Number:     big.NewInt(500000),
 		Time:       1000000,
 	}
-	b.Run("big-frontier", func(b *testing.B) {
-		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
-			calcDifficultyFrontier(1000014, h)
-		}
-	})
-	b.Run("u256-frontier", func(b *testing.B) {
-		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
-			CalcDifficultyFrontierU256(1000014, h)
-		}
-	})
 	b.Run("big-generic", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
