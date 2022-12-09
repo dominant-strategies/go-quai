@@ -48,8 +48,6 @@ func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool) {
 		precompiles = PrecompiledContractsBerlin
 	case evm.chainRules.IsIstanbul:
 		precompiles = PrecompiledContractsIstanbul
-	case evm.chainRules.IsByzantium:
-		precompiles = PrecompiledContractsByzantium
 	default:
 		precompiles = PrecompiledContractsBerlin
 	}
@@ -333,9 +331,8 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	var snapshot = evm.StateDB.Snapshot()
 
 	// We do an AddBalance of zero here, just in order to trigger a touch.
-	// This doesn't matter on Mainnet, where all empties are gone at the time of Byzantium,
-	// but is the correct thing to do and matters on other networks, in tests, and potential
-	// future scenarios
+	// This doesn't matter on Mainnet, but is the correct thing to do and matters on other networks,
+	// in tests, and potential future scenarios
 	evm.StateDB.AddBalance(addr, big0)
 
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {

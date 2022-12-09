@@ -122,8 +122,8 @@ type stTransactionMarshaling struct {
 
 // GetChainConfig takes a fork definition and returns a chain config.
 // The fork definition can be
-// - a plain forkname, e.g. `Byzantium`,
-// - a fork basename, and a list of EIPs to enable; e.g. `Byzantium+1884+1283`.
+// - a plain forkname
+// - a fork basename, and a list of EIPs to enable
 func GetChainConfig(forkString string) (baseConfig *params.ChainConfig, eips []int, err error) {
 	var (
 		splitForks            = strings.Split(forkString, "+")
