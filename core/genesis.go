@@ -146,10 +146,10 @@ func (e *GenesisMismatchError) Error() string {
 // SetupGenesisBlock writes or updates the genesis block in db.
 // The block that will be used is:
 //
-//                          genesis == nil       genesis != nil
-//                       +------------------------------------------
-//     db has no genesis |  main-net default  |  genesis
-//     db has genesis    |  from DB           |  genesis (if compatible)
+//	                     genesis == nil       genesis != nil
+//	                  +------------------------------------------
+//	db has no genesis |  main-net default  |  genesis
+//	db has genesis    |  from DB           |  genesis (if compatible)
 //
 // The stored chain configuration will be updated if it is compatible (i.e. does not
 // specify a fork block below the local head block). In case of a conflict, the
@@ -372,7 +372,7 @@ func DefaultGenesisBlock() *Genesis {
 		Knot:       ReadKnot("./core/knot/mainnet_knot.rlp"),
 		Nonce:      66,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
-		GasLimit:   []uint64{100000, 100000, 100000},
+		GasLimit:   []uint64{10000000, 10000000, 10000000},
 		Difficulty: []*big.Int{big.NewInt(32048576), big.NewInt(8048576), big.NewInt(2048576)},
 		Alloc:      decodePrealloc(mainnetAllocData),
 	}
