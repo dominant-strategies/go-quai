@@ -583,7 +583,7 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 	res, addr, returnGas, suberr := interpreter.evm.Create(scope.Contract, input, gas, bigVal)
 	// Push item on the stack based on the returned error. If the ruleset is
 	// _ we must check for CodeStoreOutOfGasError (_ only
-	// rule) and treat as an error, if the ruleset is frontier we must
+	// rule) and treat as an error, if the ruleset is _ we must
 	// ignore this error and pretend the operation was successful.
 	if suberr != nil {
 		stackvalue.Clear()

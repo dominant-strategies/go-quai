@@ -158,10 +158,10 @@ func testForkIDSplit(t *testing.T, protocol uint) {
 		select {
 		case err := <-errc:
 			if err != nil {
-				t.Fatalf("frontier nofork <-> profork failed: %v", err)
+				t.Fatalf(" nofork <-> profork failed: %v", err)
 			}
 		case <-time.After(250 * time.Millisecond):
-			t.Fatalf("frontier nofork <-> profork handler timeout")
+			t.Fatalf(" nofork <-> profork handler timeout")
 		}
 	}
 	// Progress into _. Fork's match, so we don't care what the future holds

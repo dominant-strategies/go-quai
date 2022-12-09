@@ -61,7 +61,7 @@ func NewInstructionSet() JumpTable {
 	instructionSet[DELEGATECALL] = &operation{
 		execute:     opDelegateCall,
 		dynamicGas:  gasDelegateCall,
-		constantGas: params.CallGasFrontier,
+		constantGas: params.CallGas,
 		minStack:    minStack(6, 1),
 		maxStack:    maxStack(6, 1),
 		memorySize:  memoryDelegateCall,
@@ -215,7 +215,7 @@ func newInstructionSet() JumpTable {
 		},
 		EXP: {
 			execute:    opExp,
-			dynamicGas: gasExpFrontier,
+			dynamicGas: gasExp,
 			minStack:   minStack(2, 1),
 			maxStack:   maxStack(2, 1),
 		},
@@ -307,7 +307,7 @@ func newInstructionSet() JumpTable {
 		},
 		BALANCE: {
 			execute:     opBalance,
-			constantGas: params.BalanceGasFrontier,
+			constantGas: params.BalanceGas,
 			minStack:    minStack(1, 1),
 			maxStack:    maxStack(1, 1),
 		},
@@ -371,13 +371,13 @@ func newInstructionSet() JumpTable {
 		},
 		EXTCODESIZE: {
 			execute:     opExtCodeSize,
-			constantGas: params.ExtcodeSizeGasFrontier,
+			constantGas: params.ExtcodeSizeGas,
 			minStack:    minStack(1, 1),
 			maxStack:    maxStack(1, 1),
 		},
 		EXTCODECOPY: {
 			execute:     opExtCodeCopy,
-			constantGas: params.ExtcodeCopyBaseFrontier,
+			constantGas: params.ExtcodeCopyBase,
 			dynamicGas:  gasExtCodeCopy,
 			minStack:    minStack(4, 0),
 			maxStack:    maxStack(4, 0),
@@ -451,7 +451,7 @@ func newInstructionSet() JumpTable {
 		},
 		SLOAD: {
 			execute:     opSload,
-			constantGas: params.SloadGasFrontier,
+			constantGas: params.SloadGas,
 			minStack:    minStack(1, 1),
 			maxStack:    maxStack(1, 1),
 		},
@@ -936,7 +936,7 @@ func newInstructionSet() JumpTable {
 		},
 		CALL: {
 			execute:     opCall,
-			constantGas: params.CallGasFrontier,
+			constantGas: params.CallGas,
 			dynamicGas:  gasCall,
 			minStack:    minStack(7, 1),
 			maxStack:    maxStack(7, 1),
@@ -945,7 +945,7 @@ func newInstructionSet() JumpTable {
 		},
 		CALLCODE: {
 			execute:     opCallCode,
-			constantGas: params.CallGasFrontier,
+			constantGas: params.CallGas,
 			dynamicGas:  gasCallCode,
 			minStack:    minStack(7, 1),
 			maxStack:    maxStack(7, 1),
