@@ -33,7 +33,7 @@ import (
 
 var (
 	ErrInvalidSig           = errors.New("invalid transaction v, r, s values")
-	ErrUnexpectedProtection = errors.New("transaction type does not supported EIP-155 protected signatures")
+	ErrUnexpectedProtection = errors.New("transaction type does not supported protected signatures")
 	ErrInvalidTxType        = errors.New("transaction type not valid in this context")
 	ErrTxTypeNotSupported   = errors.New("transaction type not supported")
 	ErrGasFeeCapTooLow      = errors.New("fee cap less than base fee")
@@ -189,23 +189,13 @@ func (tx *Transaction) setDecoded(inner TxData, size int) {
 }
 
 func sanityCheckSignature(v *big.Int, r *big.Int, s *big.Int, maybeProtected bool) error {
-	if isProtectedV(v) && !maybeProtected {
-		return ErrUnexpectedProtection
-	}
 
 	var plainV byte
 	if isProtectedV(v) {
 		chainID := deriveChainId(v).Uint64()
 		plainV = byte(v.Uint64() - 35 - 2*chainID)
-	} else if maybeProtected {
-		// Only EIP-155 signatures can be optionally protected. Since
-		// we determined this v value is not protected, it must be a
-		// raw 27 or 28.
-		plainV = byte(v.Uint64() - 27)
 	} else {
-		// If the signature is not optionally protected, we assume it
-		// must already be equal to the recovery id.
-		plainV = byte(v.Uint64())
+		return ErrInvalidTxType // Unprotected transactions are not supported
 	}
 	if !crypto.ValidateSignatureValues(plainV, r, s) {
 		return ErrInvalidSig
@@ -228,9 +218,8 @@ func (tx *Transaction) Type() uint8 {
 	return tx.inner.txType()
 }
 
-// ChainId returns the EIP155 chain ID of the transaction. The return value will always be
-// non-nil. For legacy transactions which are not replay-protected, the return value is
-// zero.
+// ChainId returns the chain ID of the transaction. The return value will always be
+// non-nil.
 func (tx *Transaction) ChainId() *big.Int {
 	return tx.inner.chainID()
 }

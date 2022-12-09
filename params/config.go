@@ -36,7 +36,6 @@ var (
 	// ColosseumChainConfig is the chain parameters to run a node on the Colosseum network.
 	ColosseumChainConfig = &ChainConfig{
 		ChainID:             big.NewInt(9000),
-		EIP155Block:         big.NewInt(0),
 		ByzantiumBlock:      big.NewInt(0),
 		ConstantinopleBlock: big.NewInt(0),
 		PetersburgBlock:     big.NewInt(0),
@@ -51,7 +50,6 @@ var (
 	// GardenChainConfig contains the chain parameters to run a node on the Garden test network.
 	GardenChainConfig = &ChainConfig{
 		ChainID:             big.NewInt(12000),
-		EIP155Block:         big.NewInt(0),
 		ByzantiumBlock:      big.NewInt(0),
 		ConstantinopleBlock: big.NewInt(0),
 		PetersburgBlock:     big.NewInt(0),
@@ -66,7 +64,6 @@ var (
 	// OrchardChainConfig contains the chain parameters to run a node on the Orchard test network.
 	OrchardChainConfig = &ChainConfig{
 		ChainID:             big.NewInt(15000),
-		EIP155Block:         big.NewInt(0),
 		ByzantiumBlock:      big.NewInt(0),
 		ConstantinopleBlock: big.NewInt(0),
 		PetersburgBlock:     big.NewInt(0),
@@ -81,7 +78,6 @@ var (
 	// GalenaChainConfig contains the chain parameters to run a node on the Galena test network.
 	GalenaChainConfig = &ChainConfig{
 		ChainID:             big.NewInt(17000),
-		EIP155Block:         big.NewInt(0),
 		ByzantiumBlock:      big.NewInt(0),
 		ConstantinopleBlock: big.NewInt(0),
 		PetersburgBlock:     big.NewInt(0),
@@ -96,7 +92,6 @@ var (
 	// LocalChainConfig contains the chain parameters to run a node on the Local test network.
 	LocalChainConfig = &ChainConfig{
 		ChainID:             big.NewInt(1337),
-		EIP155Block:         big.NewInt(0),
 		ByzantiumBlock:      big.NewInt(0),
 		ConstantinopleBlock: big.NewInt(0),
 		PetersburgBlock:     big.NewInt(0),
@@ -113,9 +108,9 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllBlake3powProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), new(Blake3powConfig), common.Hash{}}
+	AllBlake3powProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), new(Blake3powConfig), common.Hash{}}
 
-	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), new(Blake3powConfig), common.Hash{}}
+	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), new(Blake3powConfig), common.Hash{}}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
@@ -126,8 +121,6 @@ var (
 // set of configuration options.
 type ChainConfig struct {
 	ChainID *big.Int `json:"chainId"` // chainId identifies the current chain and is used for replay protection
-
-	EIP155Block *big.Int `json:"eip155Block,omitempty"` // EIP155 HF block
 
 	ByzantiumBlock      *big.Int `json:"byzantiumBlock,omitempty"`      // Byzantium switch block (nil = no fork, 0 = already on byzantium)
 	ConstantinopleBlock *big.Int `json:"constantinopleBlock,omitempty"` // Constantinople switch block (nil = no fork, 0 = already activated)
@@ -159,9 +152,8 @@ func (c *ChainConfig) String() string {
 	default:
 		engine = "unknown"
 	}
-	return fmt.Sprintf("{ChainID: %v EIP155: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, Berlin: %v, London: %v, Engine: %v}",
+	return fmt.Sprintf("{ChainID: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, Berlin: %v, London: %v, Engine: %v}",
 		c.ChainID,
-		c.EIP155Block,
 		c.ByzantiumBlock,
 		c.ConstantinopleBlock,
 		c.PetersburgBlock,
@@ -171,11 +163,6 @@ func (c *ChainConfig) String() string {
 		c.LondonBlock,
 		engine,
 	)
-}
-
-// IsEIP155 returns whether num is either equal to the EIP155 fork block or greater.
-func (c *ChainConfig) IsEIP155(num *big.Int) bool {
-	return isForked(c.EIP155Block, num)
 }
 
 // IsByzantium returns whether num is either equal to the Byzantium fork block or greater.
@@ -243,7 +230,6 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 	}
 	var lastFork fork
 	for _, cur := range []fork{
-		{name: "eip155Block", block: c.EIP155Block},
 		{name: "byzantiumBlock", block: c.ByzantiumBlock},
 		{name: "constantinopleBlock", block: c.ConstantinopleBlock},
 		{name: "petersburgBlock", block: c.PetersburgBlock},
@@ -274,9 +260,6 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 }
 
 func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, head *big.Int) *ConfigCompatError {
-	if isForkIncompatible(c.EIP155Block, newcfg.EIP155Block, head) {
-		return newCompatError("EIP155 fork block", c.EIP155Block, newcfg.EIP155Block)
-	}
 	if isForkIncompatible(c.ByzantiumBlock, newcfg.ByzantiumBlock, head) {
 		return newCompatError("Byzantium fork block", c.ByzantiumBlock, newcfg.ByzantiumBlock)
 	}
@@ -367,7 +350,6 @@ func (err *ConfigCompatError) Error() string {
 // phases.
 type Rules struct {
 	ChainID                                                 *big.Int
-	IsEIP155                                                bool
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
 	IsBerlin, IsLondon                                      bool
 }
@@ -380,7 +362,6 @@ func (c *ChainConfig) Rules(num *big.Int) Rules {
 	}
 	return Rules{
 		ChainID:          new(big.Int).Set(chainID),
-		IsEIP155:         c.IsEIP155(num),
 		IsByzantium:      c.IsByzantium(num),
 		IsConstantinople: c.IsConstantinople(num),
 		IsPetersburg:     c.IsPetersburg(num),
