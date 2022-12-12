@@ -96,9 +96,11 @@ func (ec *Client) BlockNumber(ctx context.Context) (uint64, error) {
 }
 
 type rpcBlock struct {
-	Hash         common.Hash      `json:"hash"`
-	Transactions []rpcTransaction `json:"transactions"`
-	UncleHashes  []common.Hash    `json:"uncles"`
+	Hash            common.Hash         `json:"hash"`
+	Transactions    []rpcTransaction    `json:"transactions"`
+	UncleHashes     []common.Hash       `json:"uncles"`
+	ExtTransactions []rpcTransaction    `json:"extTransactions"`
+	SubManifest     types.BlockManifest `json:"manifest"`
 }
 
 func (ec *Client) getBlock(ctx context.Context, method string, args ...interface{}) (*types.Block, error) {
@@ -130,6 +132,18 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 	}
 	if head.TxHash() != types.EmptyRootHash && len(body.Transactions) == 0 {
 		return nil, fmt.Errorf("server returned empty transaction list but block header indicates transactions")
+	}
+	if head.EtxHash() == types.EmptyRootHash && len(body.ExtTransactions) > 0 {
+		return nil, fmt.Errorf("server returned non-empty external transaction list but block header indicates no transactions")
+	}
+	if head.EtxHash() != types.EmptyRootHash && len(body.ExtTransactions) == 0 {
+		return nil, fmt.Errorf("server returned empty external transaction list but block header indicates transactions")
+	}
+	if head.ManifestHash() == types.EmptyRootHash && len(body.SubManifest) > 0 {
+		return nil, fmt.Errorf("server returned non-empty subordinate manifest but block header indicates no transactions")
+	}
+	if head.ManifestHash() != types.EmptyRootHash && len(body.SubManifest) == 0 {
+		return nil, fmt.Errorf("server returned empty subordinate manifest but block header indicates transactions")
 	}
 	// Load uncles because they are not included in the block response.
 	var uncles []*types.Header
@@ -163,7 +177,20 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 		}
 		txs[i] = tx.tx
 	}
-	return types.NewBlockWithHeader(head).WithBody(txs, uncles), nil
+	etxs := make([]*types.Transaction, len(body.ExtTransactions))
+	for i, etx := range body.ExtTransactions {
+		etxs[i] = etx.tx
+	}
+	// Fill the sender cache of subordinate block hashes in the block manifest.
+	var manifest types.BlockManifest
+	copy(manifest, body.SubManifest)
+	for i, tx := range body.Transactions {
+		if tx.From != nil {
+			setSenderFromServer(tx.tx, *tx.From, body.Hash)
+		}
+		txs[i] = tx.tx
+	}
+	return types.NewBlockWithHeader(head).WithBody(txs, uncles, etxs, manifest), nil
 }
 
 // HeaderByHash returns the block header with the given hash.

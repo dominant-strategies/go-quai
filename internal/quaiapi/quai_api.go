@@ -365,19 +365,22 @@ func (s *PublicBlockChainQuaiAPI) EstimateGas(ctx context.Context, args Transact
 // RPCMarshalHeader converts the given header to the RPC output .
 func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 	result := map[string]interface{}{
-		"hash":             head.Hash(),
-		"parentHash":       head.ParentHashArray(),
-		"nonce":            head.Nonce(),
-		"sha3Uncles":       head.UncleHashArray(),
-		"logsBloom":        head.BloomArray(),
-		"stateRoot":        head.RootArray(),
-		"miner":            head.CoinbaseArray(),
-		"extraData":        hexutil.Bytes(head.Extra()),
-		"size":             hexutil.Uint64(head.Size()),
-		"timestamp":        hexutil.Uint64(head.Time()),
-		"transactionsRoot": head.TxHashArray(),
-		"receiptsRoot":     head.ReceiptHashArray(),
-		"location":         head.Location(),
+		"hash":                head.Hash(),
+		"parentHash":          head.ParentHashArray(),
+		"nonce":               head.Nonce(),
+		"sha3Uncles":          head.UncleHashArray(),
+		"logsBloom":           head.BloomArray(),
+		"stateRoot":           head.RootArray(),
+		"miner":               head.CoinbaseArray(),
+		"extraData":           hexutil.Bytes(head.Extra()),
+		"size":                hexutil.Uint64(head.Size()),
+		"timestamp":           hexutil.Uint64(head.Time()),
+		"transactionsRoot":    head.TxHashArray(),
+		"receiptsRoot":        head.ReceiptHashArray(),
+		"extTransactionsRoot": head.EtxHashArray(),
+		"extRollupRoot":       head.EtxRollupHashArray(),
+		"manifestHash":        head.ManifestHashArray(),
+		"location":            head.Location(),
 	}
 
 	number := make([]*hexutil.Big, common.HierarchyDepth)
@@ -431,9 +434,18 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool) (map[string]i
 			}
 		}
 		fields["transactions"] = transactions
+		etxs := block.ExtTransactions()
+		extTransactions := make([]interface{}, len(etxs))
+		for i, etx := range etxs {
+			if extTransactions[i], err = formatTx(etx); err != nil {
+				return nil, err
+			}
+		}
+		fields["extTransactions"] = extTransactions
 	}
 
 	fields["uncles"] = block.Uncles()
+	fields["subManifest"] = block.SubManifest()
 
 	return fields, nil
 }
