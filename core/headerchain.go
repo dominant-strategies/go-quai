@@ -21,6 +21,7 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rlp"
+	"github.com/dominant-strategies/go-quai/trie"
 	lru "github.com/hashicorp/golang-lru"
 )
 
@@ -177,12 +178,27 @@ func (hc *HeaderChain) collectInclusiveEtxRollup(b *types.Block) (types.Transact
 
 // Append
 func (hc *HeaderChain) Append(batch ethdb.Batch, block *types.Block) error {
-
+	nodeCtx := common.NodeLocation.Context()
 	log.Debug("HeaderChain Append:", "Block information: Hash:", block.Hash(), "block header hash:", block.Header().Hash(), "Number:", block.NumberU64(), "Location:", block.Header().Location, "Parent:", block.ParentHash())
 
 	err := hc.engine.VerifyHeader(hc, block.Header(), true)
 	if err != nil {
 		return err
+	}
+
+	// Verify the manifest matches expected
+	// Load the manifest of blocks preceding this block
+	// note: prime manifest is non-existent, because a prime block cannot be
+	// coincident with a higher order chain. So, this check is skipped for prime
+	// nodes.
+	if nodeCtx > common.PRIME_CTX {
+		manifest, err := hc.CollectBlockManifest(block.Header())
+		if err != nil {
+			return err
+		}
+		if block.ManifestHash(nodeCtx) != types.DeriveSha(manifest, trie.NewStackTrie(nil)) {
+			return errors.New("manifest does not match hash")
+		}
 	}
 
 	// Append header to the headerchain
