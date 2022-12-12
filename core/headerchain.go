@@ -134,6 +134,47 @@ func (hc *HeaderChain) collectBlockManifest(h *types.Header) (types.BlockManifes
 	return manifest, nil
 }
 
+// Collect all emmitted ETXs since the last coincident block, but excluding
+// those emitted in this block
+func (hc *HeaderChain) CollectEtxRollup(b *types.Block) (types.Transactions, error) {
+	if b.NumberU64() == 0 && b.Hash() == hc.config.GenesisHash {
+		return b.ExtTransactions(), nil
+	}
+	parent := hc.GetBlock(b.ParentHash(), b.NonceU64())
+	if parent == nil {
+		return nil, errors.New("parent not found")
+	}
+	return hc.collectInclusiveEtxRollup(parent)
+}
+
+func (hc *HeaderChain) collectInclusiveEtxRollup(b *types.Block) (types.Transactions, error) {
+	// Initialize the rollup with ETXs emitted by this block
+	newEtxs := b.ExtTransactions()
+	// Terminate the search if we reached genesis
+	if b.NumberU64() == 0 {
+		if b.Hash() != hc.config.GenesisHash {
+			return nil, fmt.Errorf("manifest builds on incorrect genesis, block0 hash: %s", b.Hash().String())
+		} else {
+			return newEtxs, nil
+		}
+	}
+	// Terminate the search on coincidence with dom chain
+	if hc.engine.IsDomCoincident(b.Header()) {
+		return newEtxs, nil
+	}
+	// Recursively get the ancestor rollup, until a coincident ancestor is found
+	ancestor := hc.GetBlock(b.ParentHash(), b.NumberU64()-1)
+	if ancestor == nil {
+		return nil, errors.New("ancestor not found")
+	}
+	etxRollup, err := hc.collectInclusiveEtxRollup(ancestor)
+	if err != nil {
+		return nil, err
+	}
+	etxRollup = append(etxRollup, newEtxs...)
+	return etxRollup, nil
+}
+
 // Append
 func (hc *HeaderChain) Append(batch ethdb.Batch, block *types.Block) error {
 

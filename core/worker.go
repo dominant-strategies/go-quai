@@ -62,6 +62,8 @@ type environment struct {
 
 	header              *types.Header
 	txs                 []*types.Transaction
+	etxs                []*types.Transaction
+	subManifest         types.BlockManifest
 	receipts            []*types.Receipt
 	uncles              map[common.Hash]*types.Header
 	externalGasUsed     uint64
@@ -88,6 +90,8 @@ func (env *environment) copy() *environment {
 	// to do the expensive deep copy for them.
 	cpy.txs = make([]*types.Transaction, len(env.txs))
 	copy(cpy.txs, env.txs)
+	cpy.etxs = make([]*types.Transaction, len(env.etxs))
+	copy(cpy.etxs, env.etxs)
 	cpy.uncles = make(map[common.Hash]*types.Header)
 	for hash, uncle := range env.uncles {
 		cpy.uncles[hash] = uncle
@@ -421,7 +425,7 @@ func (w *worker) GeneratePendingHeader(block *types.Block) (*types.Header, error
 	}
 	// Create a local environment copy, avoid the data race with snapshot state.
 	// https://github.com/ethereum/go-ethereum/issues/24299
-	block, err = w.FinalizeAssembleAndBroadcast(w.hc, env.header, env.state, env.txs, env.unclelist(), env.receipts)
+	block, err = w.FinalizeAssembleAndBroadcast(w.hc, env.header, block, env.state, env.txs, env.unclelist(), env.etxs, env.subManifest, env.receipts)
 	if err != nil {
 		return nil, err
 	}
@@ -632,6 +636,8 @@ func (w *worker) updateSnapshot(env *environment) {
 		env.header,
 		env.txs,
 		env.unclelist(),
+		env.etxs,
+		env.subManifest,
 		env.receipts,
 		trie.NewStackTrie(nil),
 	)
@@ -876,11 +882,37 @@ func (w *worker) adjustGasLimit(interrupt *int32, env *environment, parent *type
 	env.header.SetGasLimit(CalcGasLimit(parent.GasLimit(), gasUsed))
 }
 
-func (w *worker) FinalizeAssembleAndBroadcast(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
-	block, err := w.engine.FinalizeAndAssemble(chain, header, state, txs, uncles, receipts)
+func (w *worker) FinalizeAssembleAndBroadcast(chain consensus.ChainHeaderReader, header *types.Header, parent *types.Block, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, etxs []*types.Transaction, subManifest types.BlockManifest, receipts []*types.Receipt) (*types.Block, error) {
+	block, err := w.engine.FinalizeAndAssemble(chain, header, state, txs, uncles, etxs, subManifest, receipts)
 	if err != nil {
 		return nil, err
 	}
+	// Compute and set the manifest & ETX rollup hashes
+	// Since parent has not been written to the header database yet (pending header
+	// is computed before we know if the parent was accepted), we need to collect
+	// the manifest from the parent first, and manually append the parent hash to
+	// complete the manifest for this pending header.
+	var manifest types.BlockManifest
+	var etxRollup types.Transactions
+	if w.engine.IsDomCoincident(parent.Header()) {
+		manifest = types.BlockManifest{parent.Hash()}
+		etxRollup = parent.ExtTransactions()
+	} else {
+		manifest, err = w.hc.CollectBlockManifest(parent.Header())
+		if err != nil {
+			return nil, err
+		}
+		manifest = append(manifest, header.ParentHash())
+		etxRollup, err = w.hc.CollectEtxRollup(parent)
+		if err != nil {
+			return nil, err
+		}
+		etxRollup = append(etxRollup, parent.ExtTransactions()...)
+	}
+	manifestHash := types.DeriveSha(manifest, trie.NewStackTrie(nil))
+	etxRollupHash := types.DeriveSha(etxRollup, trie.NewStackTrie(nil))
+	block.Header().SetManifestHash(manifestHash)
+	block.Header().SetEtxRollupHash(etxRollupHash)
 
 	if chain.CurrentHeader().Hash() == block.ParentHash() {
 		w.headerRootsFeed.Send(types.HeaderRoots{StateRoot: block.Root(), TxsRoot: block.TxHash(), ReceiptsRoot: block.ReceiptHash()})
@@ -902,7 +934,8 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 		// Create a local environment copy, avoid the data race with snapshot state.
 		// https://github.com/ethereum/go-ethereum/issues/24299
 		env := env.copy()
-		block, err := w.FinalizeAssembleAndBroadcast(w.hc, env.header, env.state, env.txs, env.unclelist(), env.receipts)
+		parent := w.hc.GetBlock(env.header.ParentHash(), env.header.NumberU64()-1)
+		block, err := w.FinalizeAssembleAndBroadcast(w.hc, env.header, parent, env.state, env.txs, env.unclelist(), env.etxs, env.subManifest, env.receipts)
 		if err != nil {
 			return err
 		}
