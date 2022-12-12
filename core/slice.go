@@ -508,8 +508,17 @@ func (sl *Slice) ConstructLocalBlock(header *types.Header) *types.Block {
 				log.Debug("Pending Block uncle", "hash: ", uncle.Hash())
 			}
 
-			block = types.NewBlockWithHeader(header).WithBody(txs, uncles)
-			block = block.WithSeal(header)
+			etxs := make([]*types.Transaction, len(pendingBlockBody.ExtTransactions))
+			for i, etx := range pendingBlockBody.ExtTransactions {
+				etxs[i] = etx
+			}
+
+			subBlockHashes := make(types.BlockManifest, len(pendingBlockBody.SubManifest))
+			for i, blockHash := range pendingBlockBody.SubManifest {
+				subBlockHashes[i] = blockHash
+			}
+
+			block = types.NewBlockWithHeader(header).WithBody(txs, uncles, etxs, subBlockHashes)
 		}
 	}
 	return block
@@ -528,6 +537,9 @@ func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *typ
 	combinedPendingHeader.SetGasLimit(header.GasLimit(index), index)
 	combinedPendingHeader.SetGasUsed(header.GasUsed(index), index)
 	combinedPendingHeader.SetTxHash(header.TxHash(index), index)
+	combinedPendingHeader.SetEtxHash(header.EtxHash(index), index)
+	combinedPendingHeader.SetEtxRollupHash(header.EtxRollupHash(index), index)
+	combinedPendingHeader.SetManifestHash(header.ManifestHash(index), index)
 	combinedPendingHeader.SetReceiptHash(header.ReceiptHash(index), index)
 	combinedPendingHeader.SetRoot(header.Root(index), index)
 	combinedPendingHeader.SetDifficulty(header.Difficulty(index), index)

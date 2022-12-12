@@ -222,21 +222,25 @@ type BlockBodiesRLPPacket66 struct {
 
 // BlockBody represents the data content of a single block.
 type BlockBody struct {
-	Transactions []*types.Transaction // Transactions contained within a block
-	Uncles       []*types.Header      // Uncles contained within a block
+	Transactions    []*types.Transaction // Transactions contained within a block
+	Uncles          []*types.Header      // Uncles contained within a block
+	ExtTransactions []*types.Transaction
+	SubManifest     types.BlockManifest
 }
 
 // Unpack retrieves the transactions and uncles from the range packet and returns
 // them in a split flat format that's more consistent with the internal data structures.
-func (p *BlockBodiesPacket) Unpack() ([][]*types.Transaction, [][]*types.Header) {
+func (p *BlockBodiesPacket) Unpack() ([][]*types.Transaction, [][]*types.Header, [][]*types.Transaction, []types.BlockManifest) {
 	var (
 		txset    = make([][]*types.Transaction, len(*p))
 		uncleset = make([][]*types.Header, len(*p))
+		etxset   = make([][]*types.Transaction, len(*p))
+		manifest = make([]types.BlockManifest, len(*p))
 	)
 	for i, body := range *p {
-		txset[i], uncleset[i] = body.Transactions, body.Uncles
+		txset[i], uncleset[i], etxset[i], manifest[i] = body.Transactions, body.Uncles, body.ExtTransactions, body.SubManifest
 	}
-	return txset, uncleset
+	return txset, uncleset, etxset, manifest
 }
 
 // GetNodeDataPacket represents a trie node data query.
