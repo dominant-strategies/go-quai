@@ -91,7 +91,6 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 	if nodeCtx != common.ZONE_CTX {
 		sl.subClients = makeSubClients(subClientUrls)
 	}
-
 	// only set domClient if the chain is not Prime.
 	if nodeCtx != common.PRIME_CTX {
 		go func() {
@@ -184,11 +183,13 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	localPendingEtxs := []types.Transactions{types.Transactions{}, types.Transactions{}, types.Transactions{}}
 	subPendingEtxs := []types.Transactions{types.Transactions{}, types.Transactions{}, types.Transactions{}}
 	if nodeCtx != common.ZONE_CTX {
-		subPendingEtxs, err = sl.subClients[location.SubIndex()].Append(context.Background(), block.Header(), pendingHeaderWithTermini.Header, domTerminus, td, true, reorg, newInboundEtxs)
-		if err != nil {
-			return nil, err
+		// How to get the sub pending etxs if not running the full node?.
+		if sl.subClients[location.SubIndex()] != nil {
+			subPendingEtxs, err = sl.subClients[location.SubIndex()].Append(context.Background(), block.Header(), pendingHeaderWithTermini.Header, domTerminus, td, true, reorg, newInboundEtxs)
+			if err != nil {
+				return nil, err
+			}
 		}
-
 		// Cache the subordinate's pending ETXs
 		sl.AddPendingEtxs(types.PendingEtxs{block.Header(), subPendingEtxs})
 	}
@@ -258,7 +259,9 @@ func (sl *Slice) relayPh(pendingHeaderWithTermini types.PendingHeader, updateMin
 		}
 	} else if !domOrigin {
 		for i := range sl.subClients {
-			sl.subClients[i].SubRelayPendingHeader(context.Background(), pendingHeaderWithTermini, reorg, location)
+			if sl.subClients[i] != nil {
+				sl.subClients[i].SubRelayPendingHeader(context.Background(), pendingHeaderWithTermini, reorg, location)
+			}
 		}
 	}
 }
@@ -507,7 +510,9 @@ func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader, reorg 
 			}
 		}
 		for i := range sl.subClients {
-			sl.subClients[i].SubRelayPendingHeader(context.Background(), sl.phCache[pendingHeader.Termini[common.NodeLocation.Region()]], reorg, location)
+			if sl.subClients[i] != nil {
+				sl.subClients[i].SubRelayPendingHeader(context.Background(), sl.phCache[pendingHeader.Termini[common.NodeLocation.Region()]], reorg, location)
+			}
 		}
 	} else {
 		// This check prevents a double send to the miner.
