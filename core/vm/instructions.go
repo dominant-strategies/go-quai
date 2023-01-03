@@ -893,7 +893,7 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 	}
 
 	sender := scope.Contract.self.Address()
-	globalNonce, err := interpreter.evm.StateDB.GetNonce(common.ZeroAddr)
+	nonce, err := interpreter.evm.StateDB.GetNonce(sender)
 	if err != nil {
 		temp.Clear()
 		stack.push(&temp)
@@ -902,14 +902,14 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 	}
 
 	// create external transaction
-	etxInner := types.ExternalTx{Value: value.ToBig(), To: &toAddr, Sender: sender, GasTipCap: gasTipCap.ToBig(), GasFeeCap: gasFeeCap.ToBig(), Gas: etxGasLimit.Uint64(), Data: data, AccessList: accessList, Nonce: globalNonce}
+	etxInner := types.ExternalTx{Value: value.ToBig(), To: &toAddr, Sender: sender, GasTipCap: gasTipCap.ToBig(), GasFeeCap: gasFeeCap.ToBig(), Gas: etxGasLimit.Uint64(), Data: data, AccessList: accessList, Nonce: nonce}
 	etx := types.NewTx(&etxInner)
 
 	interpreter.evm.ETXCacheLock.Lock()
 	interpreter.evm.ETXCache = append(interpreter.evm.ETXCache, etx)
 	interpreter.evm.ETXCacheLock.Unlock()
 
-	if err := interpreter.evm.StateDB.SetNonce(common.ZeroAddr, globalNonce+1); err != nil {
+	if err := interpreter.evm.StateDB.SetNonce(sender, nonce+1); err != nil {
 		temp.Clear()
 		stack.push(&temp)
 		fmt.Printf("%x opETX error: %s\n", scope.Contract.self.Address(), err.Error())
