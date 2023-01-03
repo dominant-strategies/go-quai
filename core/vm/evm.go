@@ -566,23 +566,18 @@ func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, etxGas
 		return []byte{}, 0, fmt.Errorf("%x CreateETX error: %s\n", fromAddr, err.Error())
 	}
 
-	globalNonce, err := evm.StateDB.GetNonce(common.ZeroAddr)
+	nonce, err := evm.StateDB.GetNonce(fromAddr)
 	if err != nil {
 		return []byte{}, 0, fmt.Errorf("%x CreateETX error: %s\n", fromAddr, err.Error())
 	}
 
 	// create external transaction
-	etxInner := types.ExternalTx{Value: value, To: &toAddr, Sender: fromAddr, GasTipCap: etxGasTip, GasFeeCap: etxGasPrice, Gas: etxGasLimit, Data: etxData, AccessList: etxAccessList, Nonce: globalNonce}
+	etxInner := types.ExternalTx{Value: value, To: &toAddr, Sender: fromAddr, GasTipCap: etxGasTip, GasFeeCap: etxGasPrice, Gas: etxGasLimit, Data: etxData, AccessList: etxAccessList, Nonce: nonce}
 	etx := types.NewTx(&etxInner)
 
 	evm.ETXCacheLock.Lock()
 	evm.ETXCache = append(evm.ETXCache, etx)
 	evm.ETXCacheLock.Unlock()
-
-	if err := evm.StateDB.SetNonce(common.ZeroAddr, globalNonce+1); err != nil {
-
-		return []byte{}, 0, fmt.Errorf("%x CreateETX error: %s\n", fromAddr, err.Error())
-	}
 
 	return []byte{}, gas - params.ETXGas, nil
 }
