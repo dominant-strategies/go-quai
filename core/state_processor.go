@@ -212,12 +212,9 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 			}
 			prevZeroBal := prepareApplyETX(statedb, tx)
 			receipt, err = applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv)
-			if err == nil {
-				statedb.AddBalance(common.ZeroAddr, prevZeroBal) // Add previous zero address balance to residual zero address balance, even if the transaction was unsuccessful (e.g. failed)
-			}
+			statedb.SetBalance(common.ZeroAddr, prevZeroBal) // Reset the balance to what it previously was. Residual balance will be lost
 
 			if err != nil {
-				statedb.SetBalance(common.ZeroAddr, prevZeroBal) // In the case of an error, reset the balance to what it previously was
 				return nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 			}
 
@@ -401,11 +398,7 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	if tx.Type() == types.ExternalTxType {
 		prevZeroBal := prepareApplyETX(statedb, tx)
 		receipt, err := applyTransaction(msg, config, bc, author, gp, statedb, header.Number(), header.Hash(), tx, usedGas, vmenv)
-		if err == nil && receipt.Status == types.ReceiptStatusSuccessful {
-			statedb.AddBalance(common.ZeroAddr, prevZeroBal) // Add previous zero address balance to residual zero address balance
-		} else {
-			statedb.SetBalance(common.ZeroAddr, prevZeroBal) // In the case of an error, reset the balance to what it previously was (TODO: if not all gas is used, it may be considered residual and should be added here. Currently a failed external transaction removes all the sent coins from the supply.)
-		}
+		statedb.SetBalance(common.ZeroAddr, prevZeroBal) // Reset the balance to what it previously was (currently a failed external transaction removes all the sent coins from the supply and any residual balance is gone as well)
 		return receipt, err
 	}
 	return applyTransaction(msg, config, bc, author, gp, statedb, header.Number(), header.Hash(), tx, usedGas, vmenv)
