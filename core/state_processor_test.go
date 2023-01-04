@@ -94,7 +94,7 @@ func TestCreateETX(t *testing.T) {
 	temp = gasFeeCap.Bytes32()
 	data = append(data, temp[:]...)
 
-	inner_tx := types.InternalTx{ChainID: big.NewInt(1), Nonce: 0, GasTipCap: common.Big1, GasFeeCap: common.Big1, Gas: 100000, To: &toAddr, Value: big.NewInt(params.Ether), Data: data}
+	inner_tx := types.InternalToExternalTx{ChainID: big.NewInt(1), Nonce: 0, GasTipCap: common.Big1, GasFeeCap: common.Big1, Gas: 100000, To: &toAddr, Value: big.NewInt(params.Ether), ETXGasLimit: 21000, ETXGasPrice: common.Big1, ETXGasTip: common.Big1, ETXData: []byte{}, ETXAccessList: nil}
 	tx, err := types.SignTx(types.NewTx(&inner_tx), signer, testKey)
 	if err != nil {
 		t.Error(err.Error())
