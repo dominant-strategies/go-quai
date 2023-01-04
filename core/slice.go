@@ -746,14 +746,13 @@ func makeDomClient(domurl string) *quaiclient.Client {
 func makeSubClients(suburls []string) []*quaiclient.Client {
 	subClients := make([]*quaiclient.Client, 3)
 	for i, suburl := range suburls {
-		if suburl == "" {
-			log.Warn("sub client url is empty")
+		if suburl != "" {
+			subClient, err := quaiclient.Dial(suburl)
+			if err != nil {
+				log.Crit("Error connecting to the subordinate go-quai client for index", "index", i, " err ", err)
+			}
+			subClients[i] = subClient
 		}
-		subClient, err := quaiclient.Dial(suburl)
-		if err != nil {
-			log.Crit("Error connecting to the subordinate go-quai client for index", "index", i, " err ", err)
-		}
-		subClients[i] = subClient
 	}
 	return subClients
 }
