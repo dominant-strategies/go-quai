@@ -153,10 +153,10 @@ func (r *Receipt) EncodeRLP(w io.Writer) error {
 // from an RLP stream.
 func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 	kind, _, err := s.Kind()
-	switch {
-	case err != nil:
+	if err != nil {
 		return err
-	case kind == rlp.String:
+	}
+	if kind == rlp.String {
 		// It's an EIP-2718 typed tx receipt.
 		b, err := s.Bytes()
 		if err != nil {
@@ -166,7 +166,7 @@ func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 			return errEmptyTypedReceipt
 		}
 		r.Type = b[0]
-		if r.Type == InternalTxType || r.Type == ExternalTxType || r.Type == InternalToExternalTxType {
+		if r.Supported() {
 			var dec receiptRLP
 			if err := rlp.DecodeBytes(b[1:], &dec); err != nil {
 				return err
@@ -174,8 +174,8 @@ func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 			return r.setFromRLP(dec)
 		}
 		return ErrTxTypeNotSupported
-	default:
-		return rlp.ErrExpectedList
+	} else {
+		return rlp.ErrExpectedString
 	}
 }
 
@@ -322,25 +322,21 @@ type Receipts []*Receipt
 // Len returns the number of receipts in this list.
 func (rs Receipts) Len() int { return len(rs) }
 
+// Supported returns true if the receipt type is supported
+func (r Receipt) Supported() bool {
+	return r.Type == InternalTxType || r.Type == ExternalTxType || r.Type == InternalToExternalTxType
+}
+
 // EncodeIndex encodes the i'th receipt to w.
 func (rs Receipts) EncodeIndex(i int, w *bytes.Buffer) {
-	r := rs[i]
-	data := &receiptRLP{r.statusEncoding(), r.CumulativeGasUsed, r.Bloom, r.Logs}
-	switch r.Type {
-	case InternalTxType:
-		w.WriteByte(InternalTxType)
+	if r := rs[i]; r.Supported() {
+		data := &receiptRLP{r.statusEncoding(), r.CumulativeGasUsed, r.Bloom, r.Logs}
+		w.WriteByte(r.Type)
 		rlp.Encode(w, data)
-	case ExternalTxType:
-		w.WriteByte(ExternalTxType)
-		rlp.Encode(w, data)
-	case InternalToExternalTxType:
-		w.WriteByte(InternalToExternalTxType)
-		rlp.Encode(w, data)
-	default:
-		// For unsupported types, write nothing. Since this is for
-		// DeriveSha, the error will be caught matching the derived hash
-		// to the block.
 	}
+	// For unsupported types, write nothing. Since this is for
+	// DeriveSha, the error will be caught matching the derived hash
+	// to the block.
 }
 
 // DeriveFields fills the receipts with their computed fields based on consensus
