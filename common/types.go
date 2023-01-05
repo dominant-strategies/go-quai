@@ -385,23 +385,41 @@ func (a Address) IsInChainScope() bool {
 
 // Location looks up the chain location which contains this address
 func (a Address) Location() *Location {
-	// Search zone chain address space
+	R, Z, D := 0, 0, HierarchyDepth
+	if NodeLocation.HasRegion() {
+		R = NodeLocation.Region()
+	}
+	if NodeLocation.HasZone() {
+		Z = NodeLocation.Zone()
+	}
+
+	// Search zone->region->prime address spaces in-slice first, and then search
+	// zone->region out-of-slice address spaces next. This minimizes expected
+	// search time under the following assumptions:
+	// * a node is more likely to encounter a TX from its slice than from another
+	// * we expect `>= Z` `zone` TXs for every `region` TX
+	// * we expect `>= R` `region` TXs for every `prime` TX
+	// * (and by extension) we expect `>= R*Z` `zone` TXs for every `prime` TX
+	primeChecked := false
 	for r := 0; r < NumRegionsInPrime; r++ {
 		for z := 0; z < NumZonesInRegion; z++ {
-			l := Location{byte(r), byte(z)}
+			l := Location{byte((r+R)%D), byte((z+Z)%D)}
 			if l.ContainsAddress(a) {
 				return &l
 			}
 		}
-		l := Location{byte(r)}
+		l := Location{byte((r+R)%D)}
 		if l.ContainsAddress(a) {
 			return &l
 		}
-	}
-	// Is this address in Prime?
-	l := Location{}
-	if l.ContainsAddress(a) {
-		return &l
+		// Check prime on first pass through slice, but not again
+		if !primeChecked {
+			primeChecked = true
+			l := Location{}
+			if l.ContainsAddress(a) {
+				return &l
+			}
+		}
 	}
 	return nil
 }
