@@ -639,7 +639,7 @@ type extblock struct {
 	Txs         []*Transaction
 	Uncles      []*Header
 	Etxs        []*Transaction
-	SubManifest []*common.Hash
+	SubManifest []common.Hash
 }
 
 func NewBlock(header *Header, txs []*Transaction, uncles []*Header, etxs []*Transaction, subManifest BlockManifest, receipts []*Receipt, hasher TrieHasher) *Block {
@@ -730,7 +730,7 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 	if err := s.Decode(&eb); err != nil {
 		return err
 	}
-	b.header, b.uncles, b.transactions = eb.Header, eb.Uncles, eb.Txs
+	b.header, b.uncles, b.transactions, b.extTransactions, b.subManifest = eb.Header, eb.Uncles, eb.Txs, eb.Etxs, eb.SubManifest
 	b.size.Store(common.StorageSize(rlp.ListSize(size)))
 	return nil
 }
@@ -738,9 +738,11 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 // EncodeRLP serializes b into the Ethereum RLP block format.
 func (b *Block) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, extblock{
-		Header: b.header,
-		Txs:    b.transactions,
-		Uncles: b.uncles,
+		Header:      b.header,
+		Txs:         b.transactions,
+		Uncles:      b.uncles,
+		Etxs:        b.extTransactions,
+		SubManifest: b.subManifest,
 	})
 }
 
