@@ -393,9 +393,6 @@ func (a Address) Location() *Location {
 				return &l
 			}
 		}
-	}
-	// Search region chain address space
-	for r := 0; r < NumRegionsInPrime; r++ {
 		l := Location{byte(r)}
 		if l.ContainsAddress(a) {
 			return &l
