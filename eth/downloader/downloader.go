@@ -1221,6 +1221,7 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 	blocks := make([]*types.Block, len(results))
 	for i, result := range results {
 		// Store each of the pendingEtxs in the database
+		fmt.Println("Pending Etxs downloaded: ", result.PendingEtxs.Etxs)
 		d.core.AddPendingEtxs(types.PendingEtxs{Header: result.PendingEtxs.Header, Etxs: result.PendingEtxs.Etxs})
 
 		blocks[i] = types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles, result.ExtTransactions, result.SubManifest)
