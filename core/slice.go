@@ -446,7 +446,11 @@ func (sl *Slice) calcTd(header *types.Header) (*big.Int, error) {
 
 // GetPendingHeader is used by the miner to request the current pending header
 func (sl *Slice) GetPendingHeader() (*types.Header, error) {
-	return sl.phCache[sl.pendingHeaderHeadHash].Header, nil
+	if ph := sl.phCache[sl.pendingHeaderHeadHash].Header; ph != nil {
+		return ph, nil
+	} else {
+		return nil, errors.New("empty pending header")
+	}
 }
 
 // GetManifest gathers the manifest of ancestor block hashes since the last
