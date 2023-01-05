@@ -256,7 +256,7 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 	}
 
 	op := peerToSyncOp(downloader.FullSync, peer)
-	if op.number <= cs.handler.core.GetHorizon() {
+	if op.number <= cs.handler.core.CurrentHeader().NumberU64() {
 		return nil // We're in sync.
 	}
 	return op
