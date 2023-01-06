@@ -81,7 +81,6 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.V = (*hexutil.Big)(tx.V)
 		enc.R = (*hexutil.Big)(tx.R)
 		enc.S = (*hexutil.Big)(tx.S)
-		enc.Sender = nil
 	case *ExternalTx:
 		enc.AccessList = &tx.AccessList
 		enc.Nonce = (*hexutil.Uint64)(&tx.Nonce)
@@ -92,10 +91,6 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.Data = (*hexutil.Bytes)(&tx.Data)
 		enc.To = t.To()
 		enc.Sender = &tx.Sender
-		enc.ChainID = nil
-		enc.V = nil
-		enc.R = nil
-		enc.S = nil
 	case *InternalToExternalTx:
 		enc.ChainID = (*hexutil.Big)(tx.ChainID)
 		enc.AccessList = &tx.AccessList
