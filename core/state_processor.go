@@ -60,7 +60,6 @@ const (
 	receiptsCacheLimit      = 32
 	txLookupCacheLimit      = 1024
 	TriesInMemory           = 128
-	inboundEtxExpirationAge = 8640 // With 10s blocks, ETX expire after ~24hrs
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	//
