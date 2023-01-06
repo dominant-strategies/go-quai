@@ -222,8 +222,10 @@ type BlockBodiesRLPPacket66 struct {
 
 // BlockBody represents the data content of a single block.
 type BlockBody struct {
-	Transactions []*types.Transaction // Transactions contained within a block
-	Uncles       []*types.Header      // Uncles contained within a block
+	Transactions    []*types.Transaction // Transactions contained within a block
+	Uncles          []*types.Header      // Uncles contained within a block
+	ExtTransactions []*types.Transaction
+	SubManifest     types.BlockManifest
 }
 
 // Unpack retrieves the transactions and uncles from the range packet and returns
@@ -236,7 +238,7 @@ func (p *BlockBodiesPacket) Unpack() ([][]*types.Transaction, [][]*types.Header,
 		manifest = make([]types.BlockManifest, len(*p))
 	)
 	for i, body := range *p {
-		txset[i], uncleset[i] = body.Transactions, body.Uncles
+		txset[i], uncleset[i], etxset[i], manifest[i] = body.Transactions, body.Uncles, body.ExtTransactions, body.SubManifest
 	}
 	return txset, uncleset, etxset, manifest
 }
