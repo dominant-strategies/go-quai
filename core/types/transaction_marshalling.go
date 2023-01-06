@@ -104,7 +104,6 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.V = (*hexutil.Big)(tx.V)
 		enc.R = (*hexutil.Big)(tx.R)
 		enc.S = (*hexutil.Big)(tx.S)
-		enc.Sender = nil
 		enc.ETXGasLimit = (*hexutil.Uint64)(&tx.ETXGasLimit)
 		enc.ETXGasPrice = (*hexutil.Big)(tx.ETXGasPrice)
 		enc.ETXGasTip = (*hexutil.Big)(tx.ETXGasTip)
