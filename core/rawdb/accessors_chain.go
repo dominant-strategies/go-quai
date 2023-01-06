@@ -1190,6 +1190,8 @@ func ReadEtxSet(db ethdb.Reader, hash common.Hash, number uint64) types.EtxSet {
 		// genesis block
 		if numberByHash := ReadHeaderNumber(db, hash); numberByHash != nil && *numberByHash == number {
 			return types.NewEtxSet()
+		} else {
+			panic("invalid genesis ETX set")
 		}
 	}
 	data := ReadEtxSetRLP(db, hash, number)
