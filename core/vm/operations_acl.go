@@ -34,9 +34,9 @@ func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 		var (
 			y, x         = stack.Back(1), stack.peek()
 			slot         = common.Hash(x.Bytes32())
-			current, err = evm.StateDB.GetState(contract.Address(), slot)
 			cost         = uint64(0)
 		)
+		current, err := evm.StateDB.GetState(contract.Address(), slot)
 		if err != nil {
 			return 0, err
 		}
