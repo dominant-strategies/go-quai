@@ -543,6 +543,35 @@ func (s *PublicBlockChainQuaiAPI) CreateAccessList(ctx context.Context, args Tra
 	return result, nil
 }
 
+func (s *PublicBlockChainQuaiAPI) fillSubordinateManifest(b *types.Block) (*types.Block, error) {
+	nodeCtx := common.NodeLocation.Context()
+	if manifestHash := types.DeriveSha(b.SubManifest(), trie.NewStackTrie(nil)); manifestHash != b.ManifestHash(nodeCtx+1) {
+		// If the manifest hashes match, nothing to do
+		return b, nil
+	} else {
+		subParentHash := b.ParentHash(nodeCtx + 1)
+		var subManifest types.BlockManifest
+		if subParent, err := s.b.BlockByHash(context.Background(), subParentHash); err == nil && subParent != nil {
+			// If we have the the subordinate parent in our chain, that means that block
+			// was also coincident. In this case, the subordinate manifest resets, and
+			// only consists of the subordinate parent hash.
+			subManifest = types.BlockManifest{subParentHash}
+		} else {
+			// Otherwise we need to reconstruct the sub manifest, by getting the
+			// parent's sub manifest and appending the parent hash.
+			subManifest, err = s.b.GetSubManifest(b.Location(), subParentHash)
+			if err != nil {
+				return nil, err
+			}
+			subManifest = append(subManifest, subParentHash)
+		}
+		if subManifest == nil || b.ManifestHash(nodeCtx+1) != types.DeriveSha(subManifest, trie.NewStackTrie(nil)) {
+			return nil, errors.New("reconstructed sub manifest does not match manifest hash")
+		}
+		return types.NewBlockWithHeader(b.Header()).WithBody(b.Transactions(), b.Uncles(), b.ExtTransactions(), subManifest), nil
+	}
+}
+
 // ReceiveMinedHeader will run checks on the block and add to canonical chain if valid.
 func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw json.RawMessage) error {
 	nodeCtx := common.NodeLocation.Context()
@@ -561,27 +590,10 @@ func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw js
 	// the subordinate manifest in our block body is incorrect. If so, ask our sub
 	// for the correct manifest and reconstruct the block.
 	if nodeCtx < common.ZONE_CTX {
-		if manifestHash := types.DeriveSha(block.SubManifest(), trie.NewStackTrie(nil)); manifestHash != block.ManifestHash(nodeCtx+1) {
-			subParentHash := header.ParentHash(nodeCtx + 1)
-			var subManifest types.BlockManifest
-			if subParent, err := s.b.BlockByHash(context.Background(), subParentHash); err == nil && subParent != nil {
-				// If we have the the subordinate parent in our chain, that means that block
-				// was also coincident. In this case, the subordinate manifest resets, and
-				// only consists of the subordinate parent hash.
-				subManifest = types.BlockManifest{subParentHash}
-			} else {
-				// Otherwise we need to reconstruct the sub manifest, by getting the
-				// parent's sub manifest and appending the parent hash.
-				subManifest, err = s.b.GetSubManifest(header.Location(), subParentHash)
-				if err != nil {
-					return err
-				}
-				subManifest = append(subManifest, subParentHash)
-			}
-			if subManifest == nil || block.ManifestHash(nodeCtx+1) != types.DeriveSha(subManifest, trie.NewStackTrie(nil)) {
-				return errors.New("reconstructed sub manifest does not match manifest hash")
-			}
-			block = types.NewBlockWithHeader(header).WithBody(block.Transactions(), block.Uncles(), block.ExtTransactions(), subManifest)
+		var err error
+		block, err = s.fillSubordinateManifest(block)
+		if err != nil {
+			return err
 		}
 	}
 
