@@ -66,7 +66,7 @@ func (tx *ExternalTx) copy() TxData {
 
 // accessors for innerTx.
 func (tx *ExternalTx) txType() byte                { return ExternalTxType }
-func (tx *ExternalTx) chainID() *big.Int           { return nil }
+func (tx *ExternalTx) chainID() *big.Int           { panic("external TX does not have chain ID") }
 func (tx *ExternalTx) protected() bool             { return true }
 func (tx *ExternalTx) accessList() AccessList      { return tx.AccessList }
 func (tx *ExternalTx) data() []byte                { return tx.Data }
