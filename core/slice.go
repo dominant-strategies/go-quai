@@ -401,7 +401,7 @@ func (sl *Slice) pcrc(batch ethdb.Batch, header *types.Header, domTerminus commo
 		newTermini[terminiIndex] = termini[terminiIndex]
 	}
 
-	// Check for a graph twist
+	// Check for a graph cyclic reference
 	if isDomCoincident {
 		if termini[terminiIndex] != domTerminus {
 			log.Warn("Cyclic Block:", "block number", header.NumberArray(), "hash", header.Hash(), "terminus", domTerminus, "termini", termini)
