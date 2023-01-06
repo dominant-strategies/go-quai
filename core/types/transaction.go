@@ -85,7 +85,6 @@ type TxData interface {
 	value() *big.Int
 	nonce() uint64
 	to() *common.Address
-	toChain() *common.Location
 	fromChain() *common.Location
 
 	rawSignatureValues() (v, r, s *big.Int)
@@ -356,17 +355,6 @@ func (tx *Transaction) Hash() common.Hash {
 	return h
 }
 
-// ToChain returns the chain location this transaction is destined for
-func (tx *Transaction) ToChain() common.Location {
-	if loc := tx.toChain.Load(); loc != nil {
-		return loc.(common.Location)
-	}
-
-	loc := *tx.inner.toChain()
-	tx.toChain.Store(loc)
-	return loc
-}
-
 // FromChain returns the chain location this transaction originated from
 func (tx *Transaction) FromChain() common.Location {
 	if loc := tx.fromChain.Load(); loc != nil {
@@ -385,7 +373,7 @@ func (tx *Transaction) ConfirmationCtx() int {
 		return ctx.(int)
 	}
 
-	ctx := tx.ToChain().CommonDom(tx.FromChain()).Context()
+	ctx := tx.To().Location().CommonDom(tx.FromChain()).Context()
 	tx.confirmCtx.Store(ctx)
 	return ctx
 }
@@ -433,7 +421,7 @@ func (s Transactions) EncodeIndex(i int, w *bytes.Buffer) {
 func (s Transactions) FilterToLocation(l common.Location) Transactions {
 	filteredList := Transactions{}
 	for _, tx := range s {
-		toChain := tx.ToChain()
+		toChain := *tx.To().Location()
 		if l.Equal(toChain) {
 			filteredList = append(filteredList, tx)
 		}
@@ -446,7 +434,7 @@ func (s Transactions) FilterToLocation(l common.Location) Transactions {
 func (s Transactions) FilterToSlice(slice common.Location, minCtx int) Transactions {
 	filteredList := Transactions{}
 	for _, tx := range s {
-		toChain := tx.ToChain()
+		toChain := tx.To().Location()
 		if toChain.InSameSliceAs(slice) {
 			filteredList = append(filteredList, tx)
 		}

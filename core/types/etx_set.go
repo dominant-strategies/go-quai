@@ -28,10 +28,10 @@ func NewEtxSet() EtxSet {
 func (set EtxSet) Update(newInboundEtxs Transactions, currentHeight uint64) {
 	// Add new ETX entries to the inbound set
 	for _, etx := range newInboundEtxs {
-		if etx.ToChain().Equal(common.NodeLocation) {
+		if etx.To().Location().Equal(common.NodeLocation) {
 			set[etx.Hash()] = &EtxSetEntry{currentHeight, etx}
 		} else {
-			log.Error("skipping ETX belonging to other destination", "etxHash: ", etx.Hash(), "etxToChain: ", etx.ToChain())
+			log.Error("skipping ETX belonging to other destination", "etxHash: ", etx.Hash(), "etxToChain: ", etx.To().Location())
 		}
 	}
 

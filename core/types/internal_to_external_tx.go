@@ -112,8 +112,7 @@ func (tx *InternalToExternalTx) gasPrice() *big.Int          { return tx.GasFeeC
 func (tx *InternalToExternalTx) value() *big.Int             { return tx.Value }
 func (tx *InternalToExternalTx) nonce() uint64               { return tx.Nonce }
 func (tx *InternalToExternalTx) to() *common.Address         { return tx.To }
-func (tx *InternalToExternalTx) toChain() *common.Location   { return tx.To.Location() }
-func (tx *InternalToExternalTx) fromChain() *common.Location { return tx.toChain() }
+func (tx *InternalToExternalTx) fromChain() *common.Location { return tx.to().Location() }
 
 func (tx *InternalToExternalTx) rawSignatureValues() (v, r, s *big.Int) {
 	return tx.V, tx.R, tx.S

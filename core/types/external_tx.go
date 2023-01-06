@@ -77,7 +77,6 @@ func (tx *ExternalTx) gasPrice() *big.Int          { return tx.GasFeeCap }
 func (tx *ExternalTx) value() *big.Int             { return tx.Value }
 func (tx *ExternalTx) nonce() uint64               { return tx.Nonce }
 func (tx *ExternalTx) to() *common.Address         { return tx.To }
-func (tx *ExternalTx) toChain() *common.Location   { return tx.To.Location() }
 func (tx *ExternalTx) fromChain() *common.Location { return tx.Sender.Location() }
 
 func (tx *ExternalTx) rawSignatureValues() (v, r, s *big.Int) {
