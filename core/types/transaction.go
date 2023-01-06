@@ -351,9 +351,7 @@ func (tx *Transaction) Hash() common.Hash {
 	if hash := tx.hash.Load(); hash != nil {
 		return hash.(common.Hash)
 	}
-
-	var h common.Hash
-	h = prefixedRlpHash(tx.Type(), tx.inner)
+	h := prefixedRlpHash(tx.Type(), tx.inner)
 	tx.hash.Store(h)
 	return h
 }
