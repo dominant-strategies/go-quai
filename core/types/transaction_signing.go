@@ -176,7 +176,8 @@ func (s SignerV1) Sender(tx *Transaction) (common.Address, error) {
 }
 
 func (s SignerV1) Equal(s2 Signer) bool {
-	return s.chainId.Cmp(s.chainId) == 0
+	x, ok := s2.(SignerV1)
+	return ok && x.chainId.Cmp(s.chainId) == 0
 }
 
 func (s SignerV1) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int, err error) {
