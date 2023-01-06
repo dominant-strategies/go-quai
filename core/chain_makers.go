@@ -286,7 +286,7 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 
 	// Make new header
 	header := types.EmptyHeader()
-	intermediateRoot, err := state.IntermediateRoot(chain.Config().IsEIP158(parent.Number())) // error ignored because this is used for hardcoded testing only
+	intermediateRoot, err := state.IntermediateRoot(chain.Config().IsEIP158(parent.Number()))
 	if err != nil {
 		panic(err.Error())
 	}
