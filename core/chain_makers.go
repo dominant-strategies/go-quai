@@ -117,9 +117,13 @@ func (b *BlockGen) AddTxWithChain(hc *HeaderChain, tx *types.Transaction) {
 
 // GetBalance returns the balance of the given address at the generated block.
 func (b *BlockGen) GetBalance(addr common.Address) *big.Int {
-	balance, err := b.statedb.GetBalance(addr)
+	internal, err := addr.InternalAddress()
 	if err != nil {
-		return nil
+		panic(err.Error())
+	}
+	balance, err := b.statedb.GetBalance(*internal)
+	if err != nil {
+		panic(err.Error())
 	}
 	return balance
 }
@@ -155,14 +159,18 @@ func (b *BlockGen) AddUncheckedReceipt(receipt *types.Receipt) {
 // TxNonce returns the next valid transaction nonce for the
 // account at addr. It panics if the account does not exist.
 func (b *BlockGen) TxNonce(addr common.Address) uint64 {
-	exist, err := b.statedb.Exist(addr)
+	internal, err := addr.InternalAddress()
+	if err != nil {
+		panic(err.Error())
+	}
+	exist, err := b.statedb.Exist(*internal)
 	if err != nil {
 		panic(err.Error())
 	}
 	if !exist {
 		panic("account does not exist")
 	}
-	nonce, err := b.statedb.GetNonce(addr)
+	nonce, err := b.statedb.GetNonce(*internal)
 	if err != nil {
 		return 0
 	}
@@ -320,7 +328,7 @@ func makeHeaderChain(parent *types.Header, n int, engine consensus.Engine, db et
 // makeBlockChain creates a deterministic chain of blocks rooted at parent.
 func makeBlockChain(parent *types.Block, n int, engine consensus.Engine, db ethdb.Database, seed int) []*types.Block {
 	blocks, _ := GenerateChain(params.TestChainConfig, parent, engine, db, n, func(i int, b *BlockGen) {
-		b.SetCoinbase(common.Address{0: byte(seed), 19: byte(i)})
+		b.SetCoinbase(common.BytesToAddress(common.InternalAddress{0: byte(seed), 19: byte(i)}.Bytes()))
 	})
 	return blocks
 }

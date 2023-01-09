@@ -309,11 +309,11 @@ func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 	etherbase := s.etherbase
 	s.lock.RUnlock()
 
-	if etherbase != (common.Address{}) {
+	if !etherbase.Equals(common.ZeroAddr) {
 		return etherbase, nil
 	}
 
-	return common.Address{}, fmt.Errorf("etherbase must be explicitly specified")
+	return common.ZeroAddr, fmt.Errorf("etherbase must be explicitly specified")
 }
 
 // isLocalBlock checks whether the specified block is mined

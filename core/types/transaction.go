@@ -257,7 +257,7 @@ func (tx *Transaction) GasFeeCap() *big.Int { return new(big.Int).Set(tx.inner.g
 func (tx *Transaction) Value() *big.Int { return new(big.Int).Set(tx.inner.value()) }
 
 // ETXGasLimit returns the fee cap per gas of the transaction.
-func (tx *Transaction) ETXGasLimit() uint64{ return tx.inner.etxGasLimit() }
+func (tx *Transaction) ETXGasLimit() uint64 { return tx.inner.etxGasLimit() }
 
 // ETXGasPrice returns the gas price of the external transaction.
 func (tx *Transaction) ETXGasPrice() *big.Int { return new(big.Int).Set(tx.inner.etxGasPrice()) }
@@ -381,19 +381,19 @@ func (tx *Transaction) FromChain() common.Location {
 	}
 	var loc common.Location
 	switch tx.Type() {
-		case ExternalTxType:
-			// External transactions do not have a signature, but instead store the
-			// sender explicitely. Use that sender to get the location.
-			loc = *tx.inner.(*ExternalTx).Sender.Location()
-		default:
-			// All other TX types are signed, and should use the signature to determine
-			// the sender location
-			signer := NewSigner(tx.ChainId())
-			from, err := Sender(signer, tx)
-			if err != nil {
-				panic("failed to get transaction sender!")
-			}
-			loc = *from.Location()
+	case ExternalTxType:
+		// External transactions do not have a signature, but instead store the
+		// sender explicitely. Use that sender to get the location.
+		loc = *tx.inner.(*ExternalTx).Sender.Location()
+	default:
+		// All other TX types are signed, and should use the signature to determine
+		// the sender location
+		signer := NewSigner(tx.ChainId())
+		from, err := Sender(signer, tx)
+		if err != nil {
+			panic("failed to get transaction sender!")
+		}
+		loc = *from.Location()
 	}
 	tx.fromChain.Store(loc)
 	return loc

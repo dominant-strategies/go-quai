@@ -95,8 +95,9 @@ var (
 
 func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	var (
-		y, x         = stack.Back(1), stack.Back(0)
-		current, err = evm.StateDB.GetState(contract.Address(), x.Bytes32())
+		y, x                      = stack.Back(1), stack.Back(0)
+		internalContractAddr, err = contract.Address().InternalAddress()
+		current, _                = evm.StateDB.GetState(*internalContractAddr, x.Bytes32())
 	)
 	if err != nil {
 		return 0, err
@@ -138,7 +139,7 @@ func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySi
 	if current == value { // noop (1)
 		return params.NetSstoreNoopGas, nil
 	}
-	original, err := evm.StateDB.GetCommittedState(contract.Address(), x.Bytes32())
+	original, err := evm.StateDB.GetCommittedState(*internalContractAddr, x.Bytes32())
 	if err != nil {
 		return 0, err
 	}
@@ -188,8 +189,9 @@ func gasSStoreEIP2200(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 	}
 	// Gas sentry honoured, do the actual gas calculation based on the stored value
 	var (
-		y, x         = stack.Back(1), stack.Back(0)
-		current, err = evm.StateDB.GetState(contract.Address(), x.Bytes32())
+		y, x                      = stack.Back(1), stack.Back(0)
+		internalContractAddr, err = contract.Address().InternalAddress()
+		current, _                = evm.StateDB.GetState(*internalContractAddr, x.Bytes32())
 	)
 	if err != nil {
 		return 0, err
@@ -199,7 +201,7 @@ func gasSStoreEIP2200(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 	if current == value { // noop (1)
 		return params.SloadGasEIP2200, nil
 	}
-	original, err := evm.StateDB.GetCommittedState(contract.Address(), x.Bytes32())
+	original, err := evm.StateDB.GetCommittedState(*internalContractAddr, x.Bytes32())
 	if err != nil {
 		return 0, err
 	}
@@ -341,14 +343,14 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 	var (
 		gas            uint64
 		transfersValue = !stack.Back(2).IsZero()
-		address        = common.Address(stack.Back(1).Bytes20())
-		exist, err     = evm.StateDB.Exist(address)
+		address, err   = common.Bytes20ToAddress(stack.Back(1).Bytes20()).InternalAddress()
+		exist, _       = evm.StateDB.Exist(*address)
 	)
 	if err != nil {
 		return 0, err
 	}
 	if evm.chainRules.IsEIP158 {
-		empty, err := evm.StateDB.Empty(address)
+		empty, err := evm.StateDB.Empty(*address)
 		if err != nil {
 			return 0, err
 		}
@@ -439,20 +441,25 @@ func gasStaticCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memo
 
 func gasSelfdestruct(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	var gas uint64
+	contractAddr, err := contract.Address().InternalAddress()
+	if err != nil {
+		return 0, err
+	}
 	// EIP150 homestead gas reprice fork:
 	if evm.chainRules.IsEIP150 {
 		gas = params.SelfdestructGasEIP150
-		var address = common.Address(stack.Back(0).Bytes20())
-		exist, err := evm.StateDB.Exist(address)
+
+		address, err := common.Bytes20ToAddress(stack.Back(0).Bytes20()).InternalAddress()
+		exist, _ := evm.StateDB.Exist(*address)
 		if err != nil {
 			return 0, err
 		}
 		if evm.chainRules.IsEIP158 {
-			empty, err := evm.StateDB.Empty(address)
+			empty, err := evm.StateDB.Empty(*address)
 			if err != nil {
 				return 0, err
 			}
-			balance, err := evm.StateDB.GetBalance(contract.Address())
+			balance, err := evm.StateDB.GetBalance(*contractAddr)
 			if err != nil {
 				return 0, err
 			}
@@ -464,7 +471,7 @@ func gasSelfdestruct(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 			gas += params.CreateBySelfdestructGas
 		}
 	}
-	suicided, err := evm.StateDB.HasSuicided(contract.Address())
+	suicided, err := evm.StateDB.HasSuicided(*contractAddr)
 	if err != nil {
 		return 0, err
 	}

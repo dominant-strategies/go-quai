@@ -270,7 +270,11 @@ func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Add
 	if state == nil || err != nil {
 		return nil, err
 	}
-	balance, err := state.GetBalance(address)
+	internal, err := address.InternalAddress()
+	if err != nil {
+		return nil, err
+	}
+	balance, err := state.GetBalance(*internal)
 	if err != nil {
 		return nil, err
 	}
@@ -300,13 +304,16 @@ func (s *PublicBlockChainAPI) GetProof(ctx context.Context, address common.Addre
 	if state == nil || err != nil {
 		return nil, err
 	}
-
-	storageTrie, err := state.StorageTrie(address)
+	internal, err := address.InternalAddress()
+	if err != nil {
+		return nil, err
+	}
+	storageTrie, err := state.StorageTrie(*internal)
 	if err != nil {
 		return nil, err
 	}
 	storageHash := types.EmptyRootHash
-	codeHash, err := state.GetCodeHash(address)
+	codeHash, err := state.GetCodeHash(*internal)
 	if err != nil {
 		return nil, err
 	}
@@ -323,11 +330,11 @@ func (s *PublicBlockChainAPI) GetProof(ctx context.Context, address common.Addre
 	// create the proof for the storageKeys
 	for i, key := range storageKeys {
 		if storageTrie != nil {
-			proof, storageError := state.GetStorageProof(address, common.HexToHash(key))
+			proof, storageError := state.GetStorageProof(*internal, common.HexToHash(key))
 			if storageError != nil {
 				return nil, storageError
 			}
-			val, err := state.GetState(address, common.HexToHash(key))
+			val, err := state.GetState(*internal, common.HexToHash(key))
 			if err != nil {
 				return nil, err
 			}
@@ -338,16 +345,16 @@ func (s *PublicBlockChainAPI) GetProof(ctx context.Context, address common.Addre
 	}
 
 	// create the accountProof
-	accountProof, proofErr := state.GetProof(address)
+	accountProof, proofErr := state.GetProof(*internal)
 	if proofErr != nil {
 		return nil, proofErr
 	}
 
-	balance, err := state.GetBalance(address)
+	balance, err := state.GetBalance(*internal)
 	if err != nil {
 		return nil, err
 	}
-	nonce, err := state.GetNonce(address)
+	nonce, err := state.GetNonce(*internal)
 	if err != nil {
 		return nil, err
 	}
@@ -475,7 +482,11 @@ func (s *PublicBlockChainAPI) GetCode(ctx context.Context, address common.Addres
 	if state == nil || err != nil {
 		return nil, err
 	}
-	code, err := state.GetCode(address)
+	internal, err := address.InternalAddress()
+	if err != nil {
+		return nil, err
+	}
+	code, err := state.GetCode(*internal)
 	if err != nil {
 		return hexutil.Bytes{}, err
 	}
@@ -490,7 +501,11 @@ func (s *PublicBlockChainAPI) GetStorageAt(ctx context.Context, address common.A
 	if state == nil || err != nil {
 		return nil, err
 	}
-	res, err := state.GetState(address, common.HexToHash(key))
+	internal, err := address.InternalAddress()
+	if err != nil {
+		return nil, err
+	}
+	res, err := state.GetState(*internal, common.HexToHash(key))
 	if err != nil {
 		return hexutil.Bytes{}, err
 	}
@@ -520,29 +535,33 @@ func (diff *StateOverride) Apply(state *state.StateDB) error {
 		return nil
 	}
 	for addr, account := range *diff {
+		internal, err := addr.InternalAddress()
+		if err != nil {
+			return err
+		}
 		// Override account nonce.
 		if account.Nonce != nil {
-			state.SetNonce(addr, uint64(*account.Nonce))
+			state.SetNonce(*internal, uint64(*account.Nonce))
 		}
 		// Override account(contract) code.
 		if account.Code != nil {
-			state.SetCode(addr, *account.Code)
+			state.SetCode(*internal, *account.Code)
 		}
 		// Override account balance.
 		if account.Balance != nil {
-			state.SetBalance(addr, (*big.Int)(*account.Balance))
+			state.SetBalance(*internal, (*big.Int)(*account.Balance))
 		}
 		if account.State != nil && account.StateDiff != nil {
 			return fmt.Errorf("account %s has both 'state' and 'stateDiff'", addr.Hex())
 		}
 		// Replace entire state if caller requires.
 		if account.State != nil {
-			state.SetStorage(addr, *account.State)
+			state.SetStorage(*internal, *account.State)
 		}
 		// Apply state diff into specified accounts.
 		if account.StateDiff != nil {
 			for key, value := range *account.StateDiff {
-				state.SetState(addr, key, value)
+				state.SetState(*internal, key, value)
 			}
 		}
 	}
@@ -694,7 +713,11 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		if err != nil {
 			return 0, err
 		}
-		balance, err := state.GetBalance(*args.From) // from can't be nil
+		internal, err := args.From.InternalAddress()
+		if err != nil {
+			return 0, err
+		}
+		balance, err := state.GetBalance(*internal) // from can't be nil
 		if err != nil {
 			return 0, err
 		}
@@ -1207,7 +1230,11 @@ func (s *PublicTransactionPoolAPI) GetTransactionCount(ctx context.Context, addr
 	if state == nil || err != nil {
 		return nil, err
 	}
-	nonce, err := state.GetNonce(address)
+	internal, err := address.InternalAddress()
+	if err != nil {
+		return nil, err
+	}
+	nonce, err := state.GetNonce(*internal)
 	if err != nil {
 		return nil, err
 	}
@@ -1309,7 +1336,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 		fields["logs"] = [][]*types.Log{}
 	}
 	// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
-	if receipt.ContractAddress != (common.Address{}) {
+	if !receipt.ContractAddress.Equals(common.ZeroAddr) {
 		fields["contractAddress"] = receipt.ContractAddress
 	}
 	return fields, nil

@@ -17,6 +17,7 @@
 package core
 
 import (
+	"bytes"
 	"encoding/hex"
 	"math/big"
 	"testing"
@@ -30,6 +31,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/params"
+	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/holiman/uint256"
 )
 
@@ -98,7 +100,33 @@ func TestPrecompile(t *testing.T) {
 	}
 	t.Log(*receipt)
 	t.Log(receipt.Status)
+}
 
+type OriginalAddress [common.AddressLength]byte
+
+func TestAddressHashMisMatch(t *testing.T) {
+	originalAddress := OriginalAddress{2}
+	copy(originalAddress[:], common.FromHex("0x71562b71999873DB5b286dF957af199Ec94617F7"))
+	currentAddress := common.BytesToAddress(common.FromHex("0x71562b71999873DB5b286dF957af199Ec94617F7"))
+
+	originalHash := types.RlpHash(originalAddress)
+	currentHash := types.RlpHash(currentAddress)
+
+	t.Log("Original: " + originalHash.String())
+	t.Log("Current: " + currentHash.String())
+	t.Log(currentAddress)
+
+	var a common.Address
+	b := bytes.NewBuffer([]byte{})
+	err := rlp.Encode(b, currentAddress)
+	if err != nil {
+		t.Error(err.Error())
+	}
+	err = rlp.Decode(b, &a)
+	if err != nil {
+		t.Error(err.Error())
+	}
+	t.Log(a.Hex())
 }
 
 func TestCreateETX(t *testing.T) {
@@ -107,12 +135,15 @@ func TestCreateETX(t *testing.T) {
 	gen := func(i int, b *BlockGen) {
 		statedb = b.statedb
 	}
+	testKey, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	common.NodeLocation = *crypto.PubkeyToAddress(testKey.PublicKey).Location()
+	addr := crypto.PubkeyToAddress(testKey.PublicKey)
 	var (
 		testdb = rawdb.NewMemoryDatabase()
 		gspec  = &Genesis{
 			Config: params.TestChainConfig,
 			Alloc: GenesisAlloc{
-				common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): GenesisAccount{
+				addr: GenesisAccount{
 					Balance: big.NewInt(1000000000000000000), // 1 ether
 					Nonce:   0,
 				},
@@ -122,36 +153,28 @@ func TestCreateETX(t *testing.T) {
 			ParentHash: []common.Hash{common.HexToHash("0"), common.HexToHash("0"), common.HexToHash("0")},
 			BaseFee:    []*big.Int{common.Big0, common.Big0, common.Big0},
 		}
-		genesis    = gspec.MustCommit(testdb)
-		signer     = types.LatestSigner(params.TestChainConfig)
-		testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-		addr       = crypto.PubkeyToAddress(testKey.PublicKey)
-		zero       = uint64(0)
-		gasLimit   = GasPool(params.GenesisGasLimit)
+		genesis  = gspec.MustCommit(testdb)
+		signer   = types.LatestSigner(params.TestChainConfig)
+		zero     = uint64(0)
+		gasLimit = GasPool(params.GenesisGasLimit)
 	)
 	t.Log(addr)
-	common.NodeLocation = *addr.Location()
+	addr = common.BytesToAddress(addr.Bytes()) // reset address because we changed location
+	internal, err := addr.InternalAddress()
+	if err != nil {
+		t.Error(err.Error())
+		t.Fail()
+	}
 	t.Log(common.NodeLocation.Name())
 	toAddr := common.HexToAddress("0x3C97734DfD0376b0b1a57f48e2049A092fD89058")
 	location := toAddr.Location()
 	t.Log(location.Name())
 	params.TestChainConfig.GenesisHash = genesis.Hash()
 	blocks, _ := GenerateChain(params.TestChainConfig, genesis, blake3pow.NewFaker(), testdb, 2, gen)
-	statedb.AddBalance(addr, big.NewInt(params.Ether*2)) // give me 2 eth
+	statedb.AddBalance(*internal, big.NewInt(params.Ether*2)) // give me 2 eth
 	mockContext := MockChainContext{blocks}
 
-	data := make([]byte, 0, 0)
-	etxGasLimit := uint256.NewInt(21000)
-	gasTipCap := uint256.NewInt(1)
-	gasFeeCap := uint256.NewInt(1)
-	temp := etxGasLimit.Bytes32()
-	data = append(data, temp[:]...)
-	temp = gasTipCap.Bytes32()
-	data = append(data, temp[:]...)
-	temp = gasFeeCap.Bytes32()
-	data = append(data, temp[:]...)
-
-	inner_tx := types.InternalToExternalTx{ChainID: big.NewInt(1), Nonce: 0, GasTipCap: common.Big1, GasFeeCap: common.Big1, Gas: 100000, To: &toAddr, Value: big.NewInt(params.Ether), ETXGasLimit: 21000, ETXGasPrice: common.Big1, ETXGasTip: common.Big1, ETXData: []byte{}, ETXAccessList: nil}
+	inner_tx := types.InternalToExternalTx{ChainID: big.NewInt(1), Nonce: 0, GasTipCap: common.Big1, GasFeeCap: common.Big1, Gas: 100000, To: &toAddr, Value: big.NewInt(params.Ether), ETXGasLimit: 21000, ETXGasPrice: common.Big2, ETXGasTip: common.Big1, ETXData: []byte{}, ETXAccessList: nil}
 	tx, err := types.SignTx(types.NewTx(&inner_tx), signer, testKey)
 	if err != nil {
 		t.Error(err.Error())
@@ -160,6 +183,10 @@ func TestCreateETX(t *testing.T) {
 	receipt, err := ApplyTransaction(params.TestChainConfig, mockContext, &common.ZeroAddr, &gasLimit, statedb, blocks[1].Header(), tx, &zero, vm.Config{NoBaseFee: true})
 	if err != nil {
 		t.Error(err.Error())
+		t.Fail()
+	}
+	if len(receipt.Etxs) == 0 {
+		t.Error("Receipt has no ETXs")
 		t.Fail()
 	}
 	t.Log(types.GetInnerForTesting(receipt.Etxs[0]))
@@ -174,12 +201,15 @@ func TestExternalTokenTransfer(t *testing.T) {
 	gen := func(i int, b *BlockGen) {
 		statedb = b.statedb
 	}
+	testKey, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	common.NodeLocation = *crypto.PubkeyToAddress(testKey.PublicKey).Location()
+	addr := crypto.PubkeyToAddress(testKey.PublicKey)
 	var (
 		testdb = rawdb.NewMemoryDatabase()
 		gspec  = &Genesis{
 			Config: params.TestChainConfig,
 			Alloc: GenesisAlloc{
-				common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): GenesisAccount{
+				addr: GenesisAccount{
 					Balance: big.NewInt(1000000000000000000), // 1 ether
 					Nonce:   0,
 				},
@@ -189,21 +219,24 @@ func TestExternalTokenTransfer(t *testing.T) {
 			ParentHash: []common.Hash{common.HexToHash("0"), common.HexToHash("0"), common.HexToHash("0")},
 			BaseFee:    []*big.Int{common.Big0, common.Big0, common.Big0},
 		}
-		genesis    = gspec.MustCommit(testdb)
-		signer     = types.LatestSigner(params.TestChainConfig)
-		testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-		addr       = crypto.PubkeyToAddress(testKey.PublicKey)
-		zero       = uint64(0)
-		gasLimit   = GasPool(params.GenesisGasLimit)
+		genesis  = gspec.MustCommit(testdb)
+		signer   = types.LatestSigner(params.TestChainConfig)
+		zero     = uint64(0)
+		gasLimit = GasPool(params.GenesisGasLimit)
 	)
 	t.Log(addr)
-	common.NodeLocation = *addr.Location()
+	addr = common.BytesToAddress(addr.Bytes()) // reset address because we changed location
+	internal, err := addr.InternalAddress()
+	if err != nil {
+		t.Error(err.Error())
+		t.Fail()
+	}
 	t.Log(common.NodeLocation.Name())
 	location := common.HexToAddress("0x3C97734DfD0376b0b1a57f48e2049A092fD89058").Location()
 	t.Log(location.Name())
 	params.TestChainConfig.GenesisHash = genesis.Hash()
 	blocks, _ := GenerateChain(params.TestChainConfig, genesis, blake3pow.NewFaker(), testdb, 2, gen)
-	statedb.AddBalance(addr, big.NewInt(params.Ether*2)) // give me 2 eth
+	statedb.AddBalance(*internal, big.NewInt(params.Ether*2)) // give me 2 eth
 	mockContext := MockChainContext{blocks}
 	// Deploy a contract with the proper address that gives me tokens in zone 2-1
 	contract, err := hex.DecodeString(binary)
@@ -237,7 +270,7 @@ func TestExternalTokenTransfer(t *testing.T) {
 	t.Log(*receipt)
 	t.Log(receipt.Status)
 
-	if contractAddr != receipt.ContractAddress {
+	if contractAddr.Hash() != receipt.ContractAddress.Hash() {
 		t.Errorf("Expected: %s received: %s", contractAddr, receipt.ContractAddress)
 		t.Fail()
 	}
@@ -364,13 +397,8 @@ func TestInboundETX(t *testing.T) {
 	var (
 		testdb = rawdb.NewMemoryDatabase()
 		gspec  = &Genesis{
-			Config: params.TestChainConfig,
-			Alloc: GenesisAlloc{
-				common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): GenesisAccount{
-					Balance: big.NewInt(1000000000000000000), // 1 ether
-					Nonce:   0,
-				},
-			},
+			Config:     params.TestChainConfig,
+			Alloc:      GenesisAlloc{},
 			GasLimit:   []uint64{params.GenesisGasLimit, params.GenesisGasLimit, params.GenesisGasLimit},
 			Difficulty: []*big.Int{common.Big0, common.Big0, common.Big0},
 			ParentHash: []common.Hash{common.HexToHash("0"), common.HexToHash("0"), common.HexToHash("0")},
@@ -383,6 +411,12 @@ func TestInboundETX(t *testing.T) {
 		zero     = uint64(0)
 	)
 	common.NodeLocation = *to.Location()
+	to = common.BytesToAddress(to.Bytes()) // reset address because we changed location
+	internal, err := to.InternalAddress()
+	if err != nil {
+		t.Error(err.Error())
+		t.Fail()
+	}
 	params.TestChainConfig.GenesisHash = genesis.Hash()
 	blocks, _ := GenerateChain(params.TestChainConfig, genesis, blake3pow.NewFaker(), testdb, 2, gen)
 	mockContext := MockChainContext{blocks}
@@ -398,11 +432,7 @@ func TestInboundETX(t *testing.T) {
 		t.Error(err.Error())
 		t.Fail()
 	}
-	balance, err := statedb.GetBalance(to)
-	if err != nil {
-		t.Error(err.Error())
-		t.Fail()
-	}
+	balance := statedb.GetBalance(*internal)
 	if balance.Cmp(big.NewInt(500000000000000000)) != 0 {
 		t.Errorf("Have: %d Want: %d", balance.Int64(), 500000000000000000)
 		t.Fail()
@@ -460,12 +490,15 @@ func TestOpETX(t *testing.T) {
 	gen := func(i int, b *BlockGen) {
 		statedb = b.statedb
 	}
+	testKey, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	common.NodeLocation = *crypto.PubkeyToAddress(testKey.PublicKey).Location()
+	addr := crypto.PubkeyToAddress(testKey.PublicKey)
 	var (
 		testdb = rawdb.NewMemoryDatabase()
 		gspec  = &Genesis{
 			Config: params.TestChainConfig,
 			Alloc: GenesisAlloc{
-				common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): GenesisAccount{
+				addr: GenesisAccount{
 					Balance: big.NewInt(1000000000000000000), // 1 ether
 					Nonce:   0,
 				},
@@ -475,18 +508,22 @@ func TestOpETX(t *testing.T) {
 			ParentHash: []common.Hash{common.HexToHash("0"), common.HexToHash("0"), common.HexToHash("0")},
 			BaseFee:    []*big.Int{common.Big0, common.Big0, common.Big0},
 		}
-		genesis    = gspec.MustCommit(testdb)
-		signer     = types.LatestSigner(params.TestChainConfig)
-		testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-		addr       = crypto.PubkeyToAddress(testKey.PublicKey)
-		zero       = uint64(0)
-		gasLimit   = GasPool(params.GenesisGasLimit)
+		genesis  = gspec.MustCommit(testdb)
+		signer   = types.LatestSigner(params.TestChainConfig)
+		zero     = uint64(0)
+		gasLimit = GasPool(params.GenesisGasLimit)
 	)
 	t.Log(addr)
-	common.NodeLocation = *addr.Location()
+
+	addr = common.BytesToAddress(addr.Bytes()) // reset address because we changed location
+	internal, err := addr.InternalAddress()
+	if err != nil {
+		t.Error(err.Error())
+		t.Fail()
+	}
 	params.TestChainConfig.GenesisHash = genesis.Hash()
 	blocks, _ := GenerateChain(params.TestChainConfig, genesis, blake3pow.NewFaker(), testdb, 2, gen)
-	statedb.AddBalance(addr, big.NewInt(params.Ether*2)) // give me 2 eth
+	statedb.AddBalance(*internal, big.NewInt(params.Ether*2)) // give me 2 eth
 	mockContext := MockChainContext{blocks}
 	//contract, err := hex.DecodeString("6080604052600060006000600060016001620186a06706f05b59d3b20000735a457339697cb56e5a9bfa5267ea80d2c6375d986000f660008060393d393df3")
 	contract, err := hex.DecodeString("60806040526000806000806000600180620186a06706f05b59d3b20000735a457339697cb56e5a9bfa5267ea80d2c6375d986000f690505060698060446000396000f3fe6080604052600080fdfea2646970667358221220d51a551dccdf100829b6e928e928be7c4b803430100a5e618686c4ab3d17280964736f6c63782c302e382e31382d646576656c6f702e323032322e31312e372b636f6d6d69742e32636336363130652e6d6f64005d")
@@ -585,32 +622,32 @@ func TestStateProcessorErrors(t *testing.T) {
 		}{
 			{ // ErrNonceTooLow
 				txs: []*types.Transaction{
-					makeTx(0, common.Address{}, big.NewInt(0), params.TxGas, big.NewInt(875000000), nil),
-					makeTx(0, common.Address{}, big.NewInt(0), params.TxGas, big.NewInt(875000000), nil),
+					makeTx(0, common.ZeroAddr, big.NewInt(0), params.TxGas, big.NewInt(875000000), nil),
+					makeTx(0, common.ZeroAddr, big.NewInt(0), params.TxGas, big.NewInt(875000000), nil),
 				},
 				want: "could not apply tx 1 [0x0026256b3939ed97e2c4a6f3fce8ecf83bdcfa6d507c47838c308a1fb0436f62]: nonce too low: address 0x71562b71999873DB5b286dF957af199Ec94617F7, tx: 0 state: 1",
 			},
 			{ // ErrNonceTooHigh
 				txs: []*types.Transaction{
-					makeTx(100, common.Address{}, big.NewInt(0), params.TxGas, big.NewInt(875000000), nil),
+					makeTx(100, common.ZeroAddr, big.NewInt(0), params.TxGas, big.NewInt(875000000), nil),
 				},
 				want: "could not apply tx 0 [0xdebad714ca7f363bd0d8121c4518ad48fa469ca81b0a081be3d10c17460f751b]: nonce too high: address 0x71562b71999873DB5b286dF957af199Ec94617F7, tx: 100 state: 0",
 			},
 			{ // ErrGasLimitReached
 				txs: []*types.Transaction{
-					makeTx(0, common.Address{}, big.NewInt(0), 21000000, big.NewInt(875000000), nil),
+					makeTx(0, common.ZeroAddr, big.NewInt(0), 21000000, big.NewInt(875000000), nil),
 				},
 				want: "could not apply tx 0 [0xbd49d8dadfd47fb846986695f7d4da3f7b2c48c8da82dbc211a26eb124883de9]: gas limit reached",
 			},
 			{ // ErrInsufficientFundsForTransfer
 				txs: []*types.Transaction{
-					makeTx(0, common.Address{}, big.NewInt(1000000000000000000), params.TxGas, big.NewInt(875000000), nil),
+					makeTx(0, common.ZeroAddr, big.NewInt(1000000000000000000), params.TxGas, big.NewInt(875000000), nil),
 				},
 				want: "could not apply tx 0 [0x98c796b470f7fcab40aaef5c965a602b0238e1034cce6fb73823042dd0638d74]: insufficient funds for gas * price + value: address 0x71562b71999873DB5b286dF957af199Ec94617F7 have 1000000000000000000 want 1000018375000000000",
 			},
 			{ // ErrInsufficientFunds
 				txs: []*types.Transaction{
-					makeTx(0, common.Address{}, big.NewInt(0), params.TxGas, big.NewInt(900000000000000000), nil),
+					makeTx(0, common.ZeroAddr, big.NewInt(0), params.TxGas, big.NewInt(900000000000000000), nil),
 				},
 				want: "could not apply tx 0 [0x4a69690c4b0cd85e64d0d9ea06302455b01e10a83db964d60281739752003440]: insufficient funds for gas * price + value: address 0x71562b71999873DB5b286dF957af199Ec94617F7 have 1000000000000000000 want 18900000000000000000000",
 			},
@@ -620,37 +657,37 @@ func TestStateProcessorErrors(t *testing.T) {
 			// multiplication len(data) +gas_per_byte overflows uint64. Not testable at the moment
 			{ // ErrIntrinsicGas
 				txs: []*types.Transaction{
-					makeTx(0, common.Address{}, big.NewInt(0), params.TxGas-1000, big.NewInt(875000000), nil),
+					makeTx(0, common.ZeroAddr, big.NewInt(0), params.TxGas-1000, big.NewInt(875000000), nil),
 				},
 				want: "could not apply tx 0 [0xcf3b049a0b516cb4f9274b3e2a264359e2ba53b2fb64b7bda2c634d5c9d01fca]: intrinsic gas too low: have 20000, want 21000",
 			},
 			{ // ErrGasLimitReached
 				txs: []*types.Transaction{
-					makeTx(0, common.Address{}, big.NewInt(0), params.TxGas*1000, big.NewInt(875000000), nil),
+					makeTx(0, common.ZeroAddr, big.NewInt(0), params.TxGas*1000, big.NewInt(875000000), nil),
 				},
 				want: "could not apply tx 0 [0xbd49d8dadfd47fb846986695f7d4da3f7b2c48c8da82dbc211a26eb124883de9]: gas limit reached",
 			},
 			{ // ErrFeeCapTooLow
 				txs: []*types.Transaction{
-					mkDynamicTx(0, common.Address{}, params.TxGas, big.NewInt(0), big.NewInt(0)),
+					mkDynamicTx(0, common.ZeroAddr, params.TxGas, big.NewInt(0), big.NewInt(0)),
 				},
 				want: "could not apply tx 0 [0xc4ab868fef0c82ae0387b742aee87907f2d0fc528fc6ea0a021459fb0fc4a4a8]: max fee per gas less than block base fee: address 0x71562b71999873DB5b286dF957af199Ec94617F7, maxFeePerGas: 0 baseFee: 875000000",
 			},
 			{ // ErrTipVeryHigh
 				txs: []*types.Transaction{
-					mkDynamicTx(0, common.Address{}, params.TxGas, tooBigNumber, big.NewInt(1)),
+					mkDynamicTx(0, common.ZeroAddr, params.TxGas, tooBigNumber, big.NewInt(1)),
 				},
 				want: "could not apply tx 0 [0x15b8391b9981f266b32f3ab7da564bbeb3d6c21628364ea9b32a21139f89f712]: max priority fee per gas higher than 2^256-1: address 0x71562b71999873DB5b286dF957af199Ec94617F7, maxPriorityFeePerGas bit length: 257",
 			},
 			{ // ErrFeeCapVeryHigh
 				txs: []*types.Transaction{
-					mkDynamicTx(0, common.Address{}, params.TxGas, big.NewInt(1), tooBigNumber),
+					mkDynamicTx(0, common.ZeroAddr, params.TxGas, big.NewInt(1), tooBigNumber),
 				},
 				want: "could not apply tx 0 [0x48bc299b83fdb345c57478f239e89814bb3063eb4e4b49f3b6057a69255c16bd]: max fee per gas higher than 2^256-1: address 0x71562b71999873DB5b286dF957af199Ec94617F7, maxFeePerGas bit length: 257",
 			},
 			{ // ErrTipAboveFeeCap
 				txs: []*types.Transaction{
-					mkDynamicTx(0, common.Address{}, params.TxGas, big.NewInt(2), big.NewInt(1)),
+					mkDynamicTx(0, common.ZeroAddr, params.TxGas, big.NewInt(2), big.NewInt(1)),
 				},
 				want: "could not apply tx 0 [0xf987a31ff0c71895780a7612f965a0c8b056deb54e020bb44fa478092f14c9b4]: max priority fee per gas higher than max fee per gas: address 0x71562b71999873DB5b286dF957af199Ec94617F7, maxPriorityFeePerGas: 2, maxFeePerGas: 1",
 			},
@@ -661,13 +698,13 @@ func TestStateProcessorErrors(t *testing.T) {
 				// This test is designed to have the effective cost be covered by the balance, but
 				// the extended requirement on FeeCap*gas < balance to fail
 				txs: []*types.Transaction{
-					mkDynamicTx(0, common.Address{}, params.TxGas, big.NewInt(1), big.NewInt(50000000000000)),
+					mkDynamicTx(0, common.ZeroAddr, params.TxGas, big.NewInt(1), big.NewInt(50000000000000)),
 				},
 				want: "could not apply tx 0 [0x413603cd096a87f41b1660d3ed3e27d62e1da78eac138961c0a1314ed43bd129]: insufficient funds for gas * price + value: address 0x71562b71999873DB5b286dF957af199Ec94617F7 have 1000000000000000000 want 1050000000000000000",
 			},
 			{ // Another ErrInsufficientFunds, this one to ensure that feecap/tip of max u256 is allowed
 				txs: []*types.Transaction{
-					mkDynamicTx(0, common.Address{}, params.TxGas, bigNumber, bigNumber),
+					mkDynamicTx(0, common.ZeroAddr, params.TxGas, bigNumber, bigNumber),
 				},
 				want: "could not apply tx 0 [0xd82a0c2519acfeac9a948258c47e784acd20651d9d80f9a1c67b4137651c3a24]: insufficient funds for gas * price + value: address 0x71562b71999873DB5b286dF957af199Ec94617F7 have 1000000000000000000 want 2431633873983640103894990685182446064918669677978451844828609264166175722438635000",
 			},

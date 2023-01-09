@@ -31,7 +31,6 @@ import (
 	"strings"
 
 	"github.com/dominant-strategies/go-quai/common/hexutil"
-	"golang.org/x/crypto/sha3"
 )
 
 // Lengths of hashes and addresses in bytes.
@@ -58,10 +57,11 @@ var (
 )
 
 var (
-	hashT    = reflect.TypeOf(Hash{})
-	addressT = reflect.TypeOf(Address{})
+	hashT = reflect.TypeOf(Hash{})
 	// The zero address (0x0)
-	ZeroAddr = BytesToAddress([]byte{0})
+	ZeroInternal    = InternalAddress{0x0000000000000000000000000000000000000000}
+	ZeroAddr        = Address{&ZeroInternal}
+	ErrInvalidScope = errors.New("address is not in scope")
 )
 
 // Hash represents the 32 byte Keccak256 hash of arbitrary data.
@@ -233,199 +233,8 @@ func init() {
 	locationToPrefixRange["hydra3"] = NewRange(120, 129)
 }
 
-// Address represents the 20 byte address of an Ethereum account.
-type Address [AddressLength]byte
-
-// BytesToAddress returns Address with value b.
-// If b is larger than len(h), b will be cropped from the left.
-func BytesToAddress(b []byte) Address {
-	var a Address
-	a.SetBytes(b)
-	return a
-}
-
-// BigToAddress returns Address with byte values of b.
-// If b is larger than len(h), b will be cropped from the left.
-func BigToAddress(b *big.Int) Address { return BytesToAddress(b.Bytes()) }
-
-// HexToAddress returns Address with byte values of s.
-// If s is larger than len(h), s will be cropped from the left.
-func HexToAddress(s string) Address { return BytesToAddress(FromHex(s)) }
-
-// IsHexAddress verifies whether a string can represent a valid hex-encoded
-// Ethereum address or not.
-func IsHexAddress(s string) bool {
-	if has0xPrefix(s) {
-		s = s[2:]
-	}
-	return len(s) == 2*AddressLength && isHex(s)
-}
-
-// Bytes gets the string representation of the underlying address.
-func (a Address) Bytes() []byte { return a[:] }
-
-// Hash converts an address to a hash by left-padding it with zeros.
-func (a Address) Hash() Hash { return BytesToHash(a[:]) }
-
-// Hex returns an EIP55-compliant hex string representation of the address.
-func (a Address) Hex() string {
-	return string(a.checksumHex())
-}
-
-// String implements fmt.Stringer.
-func (a Address) String() string {
-	return a.Hex()
-}
-
-func (a *Address) checksumHex() []byte {
-	buf := a.hex()
-
-	// compute checksum
-	sha := sha3.NewLegacyKeccak256()
-	sha.Write(buf[2:])
-	hash := sha.Sum(nil)
-	for i := 2; i < len(buf); i++ {
-		hashByte := hash[(i-2)/2]
-		if i%2 == 0 {
-			hashByte = hashByte >> 4
-		} else {
-			hashByte &= 0xf
-		}
-		if buf[i] > '9' && hashByte > 7 {
-			buf[i] -= 32
-		}
-	}
-	return buf[:]
-}
-
-func (a Address) hex() []byte {
-	var buf [len(a)*2 + 2]byte
-	copy(buf[:2], "0x")
-	hex.Encode(buf[2:], a[:])
-	return buf[:]
-}
-
-// Format implements fmt.Formatter.
-// Address supports the %v, %s, %v, %x, %X and %d format verbs.
-func (a Address) Format(s fmt.State, c rune) {
-	switch c {
-	case 'v', 's':
-		s.Write(a.checksumHex())
-	case 'q':
-		q := []byte{'"'}
-		s.Write(q)
-		s.Write(a.checksumHex())
-		s.Write(q)
-	case 'x', 'X':
-		// %x disables the checksum.
-		hex := a.hex()
-		if !s.Flag('#') {
-			hex = hex[2:]
-		}
-		if c == 'X' {
-			hex = bytes.ToUpper(hex)
-		}
-		s.Write(hex)
-	case 'd':
-		fmt.Fprint(s, ([len(a)]byte)(a))
-	default:
-		fmt.Fprintf(s, "%%!%c(address=%x)", c, a)
-	}
-}
-
-// SetBytes sets the address to the value of b.
-// If b is larger than len(a), b will be cropped from the left.
-func (a *Address) SetBytes(b []byte) {
-	if len(b) > len(a) {
-		b = b[len(b)-AddressLength:]
-	}
-	copy(a[AddressLength-len(b):], b)
-}
-
-// MarshalText returns the hex representation of a.
-func (a Address) MarshalText() ([]byte, error) {
-	return hexutil.Bytes(a[:]).MarshalText()
-}
-
-// UnmarshalText parses a hash in hex syntax.
-func (a *Address) UnmarshalText(input []byte) error {
-	return hexutil.UnmarshalFixedText("Address", input, a[:])
-}
-
-// UnmarshalJSON parses a hash in hex syntax.
-func (a *Address) UnmarshalJSON(input []byte) error {
-	return hexutil.UnmarshalFixedJSON(addressT, input, a[:])
-}
-
-// Scan implements Scanner for database/sql.
-func (a *Address) Scan(src interface{}) error {
-	srcB, ok := src.([]byte)
-	if !ok {
-		return fmt.Errorf("can't scan %T into Address", src)
-	}
-	if len(srcB) != AddressLength {
-		return fmt.Errorf("can't scan []byte of len %d into Address, want %d", len(srcB), AddressLength)
-	}
-	copy(a[:], srcB)
-	return nil
-}
-
-// Value implements valuer for database/sql.
-func (a Address) Value() (driver.Value, error) {
-	return a[:], nil
-}
-
-// IsInChainScope checks if an address is a valid account in our node's sharded address space
-func (a Address) IsInChainScope() bool {
-	if a == ZeroAddr {
-		return true
-	}
-	return NodeLocation.ContainsAddress(a)
-}
-
-// Location looks up the chain location which contains this address
-func (a Address) Location() *Location {
-	R, Z, D := 0, 0, HierarchyDepth
-	if NodeLocation.HasRegion() {
-		R = NodeLocation.Region()
-	}
-	if NodeLocation.HasZone() {
-		Z = NodeLocation.Zone()
-	}
-
-	// Search zone->region->prime address spaces in-slice first, and then search
-	// zone->region out-of-slice address spaces next. This minimizes expected
-	// search time under the following assumptions:
-	// * a node is more likely to encounter a TX from its slice than from another
-	// * we expect `>= Z` `zone` TXs for every `region` TX
-	// * we expect `>= R` `region` TXs for every `prime` TX
-	// * (and by extension) we expect `>= R*Z` `zone` TXs for every `prime` TX
-	primeChecked := false
-	for r := 0; r < NumRegionsInPrime; r++ {
-		for z := 0; z < NumZonesInRegion; z++ {
-			l := Location{byte((r+R)%D), byte((z+Z)%D)}
-			if l.ContainsAddress(a) {
-				return &l
-			}
-		}
-		l := Location{byte((r+R)%D)}
-		if l.ContainsAddress(a) {
-			return &l
-		}
-		// Check prime on first pass through slice, but not again
-		if !primeChecked {
-			primeChecked = true
-			l := Location{}
-			if l.ContainsAddress(a) {
-				return &l
-			}
-		}
-	}
-	return nil
-}
-
 // UnprefixedAddress allows marshaling an Address without 0x prefix.
-type UnprefixedAddress Address
+type UnprefixedAddress InternalAddress
 
 // UnmarshalText decodes the address from hex. The 0x prefix is optional.
 func (a *UnprefixedAddress) UnmarshalText(input []byte) error {
@@ -446,7 +255,7 @@ type MixedcaseAddress struct {
 
 // NewMixedcaseAddress constructor (mainly for testing)
 func NewMixedcaseAddress(addr Address) MixedcaseAddress {
-	return MixedcaseAddress{addr: addr, original: addr.Hex()}
+	return MixedcaseAddress{addr: addr, original: addr.inner.Hex()}
 }
 
 // NewMixedcaseAddressFromString is mainly meant for unit-testing
@@ -460,7 +269,7 @@ func NewMixedcaseAddressFromString(hexaddr string) (*MixedcaseAddress, error) {
 
 // UnmarshalJSON parses MixedcaseAddress
 func (ma *MixedcaseAddress) UnmarshalJSON(input []byte) error {
-	if err := hexutil.UnmarshalFixedJSON(addressT, input, ma.addr[:]); err != nil {
+	if err := hexutil.UnmarshalFixedJSON(reflect.TypeOf(InternalAddress{}), input, ma.addr.inner.Bytes()[:]); err != nil {
 		return err
 	}
 	return json.Unmarshal(input, &ma.original)
@@ -489,7 +298,7 @@ func (ma *MixedcaseAddress) String() string {
 
 // ValidChecksum returns true if the address has valid checksum
 func (ma *MixedcaseAddress) ValidChecksum() bool {
-	return ma.original == ma.addr.Hex()
+	return ma.original == ma.addr.inner.Hex()
 }
 
 // Original returns the mixed-case input string
@@ -575,12 +384,12 @@ func (loc Location) SubIndex() int {
 
 // SubInSlice returns the location of the subordinate chain within the specified
 // slice. For example:
-// * if prime calls SubInSlice(Location{0,0}) the result will be Location{0},
-//   i.e. region-0's location, because Prime's subordinate in that slice is
-//   region-0
-// * if region-0 calls SubInSlice(Location{0,0}) the result will be
-//   Location{0,0}, i.e. zone-0-0's location, because region-0's subordinate in
-//   that slice is zone-0-0
+//   - if prime calls SubInSlice(Location{0,0}) the result will be Location{0},
+//     i.e. region-0's location, because Prime's subordinate in that slice is
+//     region-0
+//   - if region-0 calls SubInSlice(Location{0,0}) the result will be
+//     Location{0,0}, i.e. zone-0-0's location, because region-0's subordinate in
+//     that slice is zone-0-0
 func (loc Location) SubInSlice(slice Location) Location {
 	if len(slice) <= len(loc) {
 		log.Println("cannot determine sub location, because slice location is not deeper than self")
@@ -614,7 +423,7 @@ func (loc Location) Name() string {
 	default:
 		regionName = "unknownregion"
 	}
-	zoneNum := strconv.Itoa(loc.Zone()+1)
+	zoneNum := strconv.Itoa(loc.Zone() + 1)
 	switch loc.Context() {
 	case PRIME_CTX:
 		return "prime"
@@ -652,7 +461,7 @@ func (loc Location) CommonDom(cmp Location) Location {
 }
 
 func (l Location) ContainsAddress(a Address) bool {
-	prefix := a[0]
+	prefix := a.Bytes()[0]
 	prefixRange, ok := locationToPrefixRange[l.Name()]
 	if !ok {
 		log.Fatal("unable to get address prefix range for location")
@@ -668,4 +477,17 @@ func (l Location) RPCMarshal() []hexutil.Uint64 {
 	}
 
 	return res
+}
+
+func IsInChainScope(b []byte) bool {
+	if BytesToHash(b) == ZeroAddr.Hash() {
+		return true
+	}
+	prefix := b[0]
+	prefixRange, ok := locationToPrefixRange[NodeLocation.Name()]
+	if !ok {
+		log.Fatal("unable to get address prefix range for location")
+	}
+	// Ranges are fully inclusive
+	return uint8(prefix) >= prefixRange.lo && uint8(prefix) <= prefixRange.hi
 }

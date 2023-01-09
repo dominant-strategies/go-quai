@@ -118,12 +118,16 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 		vmenv   = NewEnv(cfg)
 		sender  = vm.AccountRef(cfg.Origin)
 	)
+	internal, err := address.InternalAddress()
+	if err != nil {
+		return []byte{}, nil, err
+	}
 	if rules := cfg.ChainConfig.Rules(vmenv.Context.BlockNumber); rules.IsBerlin {
 		cfg.State.PrepareAccessList(cfg.Origin, &address, vm.ActivePrecompiles(rules), nil)
 	}
-	cfg.State.CreateAccount(address)
+	cfg.State.CreateAccount(*internal)
 	// set the receiver's (the executing contract) code for execution.
-	cfg.State.SetCode(address, code)
+	cfg.State.SetCode(*internal, code)
 	// Call the code with the given configuration.
 	ret, _, err := vmenv.Call(
 		sender,
@@ -172,11 +176,11 @@ func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, er
 	setDefaults(cfg)
 
 	vmenv := NewEnv(cfg)
-
-	sender, err := cfg.State.GetOrNewStateObject(cfg.Origin)
+	addr, err := cfg.Origin.InternalAddress()
 	if err != nil {
-		return nil, 0, err
+		return []byte{}, 0, err
 	}
+
 	statedb := cfg.State
 
 	if rules := cfg.ChainConfig.Rules(vmenv.Context.BlockNumber); rules.IsBerlin {
@@ -184,7 +188,7 @@ func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, er
 	}
 	// Call the code with the given configuration.
 	ret, leftOverGas, err := vmenv.Call(
-		sender,
+		vm.AccountRef(common.NewAddressFromData(addr)),
 		address,
 		input,
 		cfg.GasLimit,
