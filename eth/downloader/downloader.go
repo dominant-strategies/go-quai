@@ -633,6 +633,10 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 				}
 			}
 
+			for _, header := range headers {
+				fmt.Println("header: ", header.NumberArray())
+			}
+
 			// If no more headers are inbound, notify the content fetchers and return
 			if packet.Items() == 0 {
 				// No more headers, terminate the process

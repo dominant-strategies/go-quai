@@ -63,6 +63,9 @@ func answerGetBlockHeadersQuery(backend Backend, query *GetBlockHeadersPacket, p
 	for !unknown && len(headers) < int(query.Amount) && bytes < softResponseLimit &&
 		len(headers) < maxHeadersServe && lookups < 2*maxHeadersServe {
 		lookups++
+
+		fmt.Println("Headers query: ", query.Origin, query.Amount, query.Dom, query.To)
+
 		// Retrieve the next header satisfying the query
 		var origin *types.Header
 		if hashMode {
