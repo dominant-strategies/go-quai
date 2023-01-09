@@ -82,6 +82,10 @@ func answerGetBlockHeadersQuery(backend Backend, query *GetBlockHeadersPacket, p
 			break
 		}
 
+		if query.Origin.Number == 0 && !hashMode {
+			break
+		}
+
 		// If dom is true only append header to results array if it is a dominant header
 		if query.Dom {
 			if backend.Core().Engine().IsDomCoincident(origin) {
