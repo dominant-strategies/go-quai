@@ -474,6 +474,7 @@ func (q *queue) ReserveHeaders(p *peerConnection, count int) *fetchRequest {
 		}
 		send = from.(uint64)
 	}
+	fmt.Println("task queue size", q.headerTaskQueue.Size())
 	// Merge all the skipped batches back
 	for _, from := range skip {
 		q.headerTaskQueue.Push(from, -int64(from))
@@ -487,6 +488,7 @@ func (q *queue) ReserveHeaders(p *peerConnection, count int) *fetchRequest {
 		From: send - 1,
 		Time: time.Now(),
 	}
+	fmt.Println("Reserving headers: ", request.From)
 	q.headerPendPool[p.id] = request
 	return request
 }

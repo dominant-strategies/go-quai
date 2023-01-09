@@ -544,6 +544,7 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 	// peer height
 	peerHeight := from
 	nodeCtx := common.NodeLocation.Context()
+	fmt.Println("peer height: ", peerHeight)
 
 	localHeight := d.core.CurrentBlock().NumberU64()
 
@@ -1047,6 +1048,7 @@ func (d *Downloader) fetchParts(deliveryCh chan dataPack, deliver func(dataPack)
 			// Make sure that we have peers available for fetching. If all peers have been tried
 			// and all failed throw an error
 			if !progressed && !throttled && !running && len(idles) == total && pendCount > 0 {
+				fmt.Println("Pend count: ", pendCount)
 				return errPeersUnavailable
 			}
 		}
