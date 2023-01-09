@@ -397,6 +397,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, number ui
 		func() error { return d.fetchHeaders(p, origin) }, // Headers are always retrieved
 		func() error { return d.fetchBodies(origin) },     // Bodies are retrieved during normal and fast sync
 		func() error { return d.fetchReceipts(origin) },   // Receipts are retrieved during fast sync
+		func() error { return d.fetchPendingEtxs(origin) },
 		func() error { return d.processHeaders(origin, number) },
 		func() error { return d.processFullSyncContent(peerHeight) },
 	}
