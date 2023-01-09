@@ -623,8 +623,12 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if !local && tx.GasTipCapIntCmp(pool.gasPrice) < 0 {
 		return ErrUnderpriced
 	}
+	internal, err := from.InternalAddress()
+	if err != nil {
+		return err
+	}
 	// Ensure the transaction adheres to nonce ordering
-	nonce, err := pool.currentState.GetNonce(from)
+	nonce, err := pool.currentState.GetNonce(*internal)
 	if err != nil {
 		return err
 	}
@@ -633,7 +637,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 	// Transactor should have enough funds to cover the costs
 	// cost == V + GP * GL
-	balance, err := pool.currentState.GetBalance(from)
+	balance, err := pool.currentState.GetBalance(*internal)
 	if err != nil {
 		return err
 	}
@@ -1307,8 +1311,12 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) []*types.Trans
 		if list == nil {
 			continue // Just in case someone calls with a non existing account
 		}
+		internal, err := addr.InternalAddress()
+		if err != nil {
+			return nil
+		}
 		// Drop all transactions that are deemed too old (low nonce)
-		nonce, err := pool.currentState.GetNonce(addr)
+		nonce, err := pool.currentState.GetNonce(*internal)
 		if err != nil {
 			return nil
 		}
@@ -1319,7 +1327,7 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) []*types.Trans
 		}
 		log.Trace("Removed old queued transactions", "count", len(forwards))
 		// Drop all transactions that are too costly (low balance or out of gas)
-		balance, err := pool.currentState.GetBalance(addr)
+		balance, err := pool.currentState.GetBalance(*internal)
 		if err != nil {
 			return nil
 		}
@@ -1510,7 +1518,11 @@ func (pool *TxPool) truncateQueue() {
 func (pool *TxPool) demoteUnexecutables() {
 	// Iterate over all accounts and demote any non-executable transactions
 	for addr, list := range pool.pending {
-		nonce, err := pool.currentState.GetNonce(addr)
+		internal, err := addr.InternalAddress()
+		if err != nil {
+			return
+		}
+		nonce, err := pool.currentState.GetNonce(*internal)
 		if err != nil {
 			return // should we return an error here?
 		}
@@ -1523,7 +1535,7 @@ func (pool *TxPool) demoteUnexecutables() {
 			log.Trace("Removed old pending transaction", "hash", hash)
 		}
 		// Drop all transactions that are too costly (low balance or out of gas), and queue any invalids back for later
-		balance, err := pool.currentState.GetBalance(addr)
+		balance, err := pool.currentState.GetBalance(*internal)
 		if err != nil {
 			return // should we return an error here?
 		}

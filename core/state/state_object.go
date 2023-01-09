@@ -63,7 +63,7 @@ func (s Storage) Copy() Storage {
 // Account values can be accessed and modified through the object.
 // Finally, call CommitTrie to write the modified storage trie into a database.
 type stateObject struct {
-	address  common.Address
+	address  common.InternalAddress
 	addrHash common.Hash // hash of ethereum address of the account
 	data     Account
 	db       *StateDB
@@ -107,7 +107,7 @@ type Account struct {
 }
 
 // newObject creates a state object.
-func newObject(db *StateDB, address common.Address, data Account) *stateObject {
+func newObject(db *StateDB, address common.InternalAddress, data Account) *stateObject {
 	if data.Balance == nil {
 		data.Balance = new(big.Int)
 	}
@@ -148,7 +148,7 @@ func (s *stateObject) touch() {
 	s.db.journal.append(touchChange{
 		account: &s.address,
 	})
-	if s.address == ripemd {
+	if bytes.Equal(s.address.Bytes(), ripemd.Bytes()) {
 		// Explicitly put it in the dirty-cache, which is otherwise generated from
 		// flattened journals.
 		s.db.journal.dirty(s.address)
@@ -470,7 +470,7 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 //
 
 // Returns the address of the contract/account
-func (s *stateObject) Address() common.Address {
+func (s *stateObject) Address() common.InternalAddress {
 	return s.address
 }
 

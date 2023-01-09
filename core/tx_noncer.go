@@ -48,10 +48,13 @@ func (txn *txNoncer) get(addr common.Address) uint64 {
 	// state will mutate db even for read access.
 	txn.lock.Lock()
 	defer txn.lock.Unlock()
-
+	internal, err := addr.InternalAddress()
+	if err != nil {
+		return 0
+	}
 	if _, ok := txn.nonces[addr]; !ok {
 		var err error
-		txn.nonces[addr], err = txn.fallback.GetNonce(addr)
+		txn.nonces[addr], err = txn.fallback.GetNonce(*internal)
 		if err != nil {
 			log.Warn("Error getting account nonce from db: " + err.Error())
 			return 0
@@ -74,10 +77,13 @@ func (txn *txNoncer) set(addr common.Address, nonce uint64) {
 func (txn *txNoncer) setIfLower(addr common.Address, nonce uint64) {
 	txn.lock.Lock()
 	defer txn.lock.Unlock()
-
+	internal, err := addr.InternalAddress()
+	if err != nil {
+		return
+	}
 	if _, ok := txn.nonces[addr]; !ok {
 		var err error
-		txn.nonces[addr], err = txn.fallback.GetNonce(addr)
+		txn.nonces[addr], err = txn.fallback.GetNonce(*internal)
 		if err != nil {
 			log.Warn("Error getting account nonce from db: " + err.Error())
 			return

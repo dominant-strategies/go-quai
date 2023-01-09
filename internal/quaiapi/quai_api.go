@@ -157,7 +157,11 @@ func (s *PublicBlockChainQuaiAPI) GetBalance(ctx context.Context, address common
 	if state == nil || err != nil {
 		return nil, err
 	}
-	balance, err := state.GetBalance(address)
+	internal, err := address.InternalAddress()
+	if err != nil {
+		return nil, err
+	}
+	balance, err := state.GetBalance(*internal)
 	if err != nil {
 		return nil, err
 	}
@@ -170,13 +174,16 @@ func (s *PublicBlockChainQuaiAPI) GetProof(ctx context.Context, address common.A
 	if state == nil || err != nil {
 		return nil, err
 	}
-
-	storageTrie, err := state.StorageTrie(address)
+	internal, err := address.InternalAddress()
+	if err != nil {
+		return nil, err
+	}
+	storageTrie, err := state.StorageTrie(*internal)
 	if err != nil {
 		return nil, err
 	}
 	storageHash := types.EmptyRootHash
-	codeHash, err := state.GetCodeHash(address)
+	codeHash, err := state.GetCodeHash(*internal)
 	if err != nil {
 		return nil, err
 	}
@@ -193,11 +200,11 @@ func (s *PublicBlockChainQuaiAPI) GetProof(ctx context.Context, address common.A
 	// create the proof for the storageKeys
 	for i, key := range storageKeys {
 		if storageTrie != nil {
-			proof, storageError := state.GetStorageProof(address, common.HexToHash(key))
+			proof, storageError := state.GetStorageProof(*internal, common.HexToHash(key))
 			if storageError != nil {
 				return nil, storageError
 			}
-			val, err := state.GetState(address, common.HexToHash(key))
+			val, err := state.GetState(*internal, common.HexToHash(key))
 			if err != nil {
 				return nil, err
 			}
@@ -208,16 +215,16 @@ func (s *PublicBlockChainQuaiAPI) GetProof(ctx context.Context, address common.A
 	}
 
 	// create the accountProof
-	accountProof, proofErr := state.GetProof(address)
+	accountProof, proofErr := state.GetProof(*internal)
 	if proofErr != nil {
 		return nil, proofErr
 	}
 
-	balance, err := state.GetBalance(address)
+	balance, err := state.GetBalance(*internal)
 	if err != nil {
 		return nil, err
 	}
-	nonce, err := state.GetNonce(address)
+	nonce, err := state.GetNonce(*internal)
 	if err != nil {
 		return nil, err
 	}
@@ -364,7 +371,11 @@ func (s *PublicBlockChainQuaiAPI) GetCode(ctx context.Context, address common.Ad
 	if state == nil || err != nil {
 		return nil, err
 	}
-	code, err := state.GetCode(address)
+	internal, err := address.InternalAddress()
+	if err != nil {
+		return nil, err
+	}
+	code, err := state.GetCode(*internal)
 	if err != nil {
 		return hexutil.Bytes{}, err
 	}
@@ -379,7 +390,11 @@ func (s *PublicBlockChainQuaiAPI) GetStorageAt(ctx context.Context, address comm
 	if state == nil || err != nil {
 		return nil, err
 	}
-	res, err := state.GetState(address, common.HexToHash(key))
+	internal, err := address.InternalAddress()
+	if err != nil {
+		return nil, err
+	}
+	res, err := state.GetState(*internal, common.HexToHash(key))
 	if err != nil {
 		return hexutil.Bytes{}, err
 	}

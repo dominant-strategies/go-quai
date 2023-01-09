@@ -48,7 +48,11 @@ func (g Genesis) MarshalJSON() ([]byte, error) {
 	if g.Alloc != nil {
 		enc.Alloc = make(map[common.UnprefixedAddress]GenesisAccount, len(g.Alloc))
 		for k, v := range g.Alloc {
-			enc.Alloc[common.UnprefixedAddress(k)] = v
+			internal, err := k.InternalAddress()
+			if err != nil {
+				return nil, err
+			}
+			enc.Alloc[common.UnprefixedAddress(*internal)] = v
 		}
 	}
 	for i := 0; i < common.HierarchyDepth; i++ {
@@ -104,7 +108,8 @@ func (g *Genesis) UnmarshalJSON(input []byte) error {
 	}
 	g.Alloc = make(GenesisAlloc, len(dec.Alloc))
 	for k, v := range dec.Alloc {
-		g.Alloc[common.Address(k)] = v
+		internal := common.InternalAddress(k)
+		g.Alloc[common.NewAddressFromData(&internal)] = v
 	}
 
 	for i := 0; i < common.HierarchyDepth; i++ {

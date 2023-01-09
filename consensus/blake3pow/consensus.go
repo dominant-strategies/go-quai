@@ -502,18 +502,29 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	// Select the correct block reward based on chain progression
 	blockReward := misc.CalculateReward()
 
+	coinbase, err := header.Coinbase().InternalAddress()
+	if err != nil {
+		fmt.Println("Block has out-of-scope coinbase, skipping block reward: " + header.Hash().String())
+		return
+	}
+
 	// Accumulate the rewards for the miner and any included uncles
 	reward := new(big.Int).Set(blockReward)
 	r := new(big.Int)
 	for _, uncle := range uncles {
+		coinbase, err := uncle.Coinbase().InternalAddress()
+		if err != nil {
+			fmt.Println("Found uncle with out-of-scope coinbase, skipping reward: " + uncle.Hash().String())
+			continue
+		}
 		r.Add(uncle.Number(), big8)
 		r.Sub(r, header.Number())
 		r.Mul(r, blockReward)
 		r.Div(r, big8)
-		state.AddBalance(uncle.Coinbase(), r)
+		state.AddBalance(*coinbase, r)
 
 		r.Div(blockReward, big32)
 		reward.Add(reward, r)
 	}
-	state.AddBalance(header.Coinbase(), reward)
+	state.AddBalance(*coinbase, reward)
 }

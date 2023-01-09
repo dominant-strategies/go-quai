@@ -432,7 +432,11 @@ func (api *PrivateDebugAPI) StorageRangeAt(blockHash common.Hash, txIndex int, c
 	if err != nil {
 		return StorageRangeResult{}, err
 	}
-	st, err := statedb.StorageTrie(contractAddress)
+	internal, err := contractAddress.InternalAddress()
+	if err != nil {
+		return StorageRangeResult{}, err
+	}
+	st, err := statedb.StorageTrie(*internal)
 	if err != nil {
 		return StorageRangeResult{}, err
 	}

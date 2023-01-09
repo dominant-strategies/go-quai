@@ -32,11 +32,15 @@ func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 		}
 		// Gas sentry honoured, do the actual gas calculation based on the stored value
 		var (
-			y, x         = stack.Back(1), stack.peek()
-			slot         = common.Hash(x.Bytes32())
-			cost         = uint64(0)
+			y, x              = stack.Back(1), stack.peek()
+			slot              = common.Hash(x.Bytes32())
+			cost              = uint64(0)
+			internalAddr, err = contract.Address().InternalAddress()
 		)
-		current, err := evm.StateDB.GetState(contract.Address(), slot)
+		if err != nil {
+			return 0, err
+		}
+		current, err := evm.StateDB.GetState(*internalAddr, slot)
 		if err != nil {
 			return 0, err
 		}
@@ -59,7 +63,7 @@ func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 			//		return params.SloadGasEIP2200, nil
 			return cost + params.WarmStorageReadCostEIP2929, nil // SLOAD_GAS
 		}
-		original, err := evm.StateDB.GetCommittedState(contract.Address(), x.Bytes32())
+		original, err := evm.StateDB.GetCommittedState(*internalAddr, x.Bytes32())
 		if err != nil {
 			return 0, err
 		}
@@ -130,7 +134,7 @@ func gasExtCodeCopyEIP2929(evm *EVM, contract *Contract, stack *Stack, mem *Memo
 	if err != nil {
 		return 0, err
 	}
-	addr := common.Address(stack.peek().Bytes20())
+	addr := common.Bytes20ToAddress(stack.peek().Bytes20())
 	// Check slot presence in the access list
 	if !evm.StateDB.AddressInAccessList(addr) {
 		evm.StateDB.AddAddressToAccessList(addr)
@@ -152,7 +156,7 @@ func gasExtCodeCopyEIP2929(evm *EVM, contract *Contract, stack *Stack, mem *Memo
 // - extcodesize,
 // - (ext) balance
 func gasEip2929AccountCheck(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	addr := common.Address(stack.peek().Bytes20())
+	addr := common.Bytes20ToAddress(stack.peek().Bytes20())
 	// Check slot presence in the access list
 	if !evm.StateDB.AddressInAccessList(addr) {
 		// If the caller cannot afford the cost, this change will be rolled back
@@ -165,7 +169,7 @@ func gasEip2929AccountCheck(evm *EVM, contract *Contract, stack *Stack, mem *Mem
 
 func makeCallVariantGasCallEIP2929(oldCalculator gasFunc) gasFunc {
 	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-		addr := common.Address(stack.Back(1).Bytes20())
+		addr := common.Bytes20ToAddress(stack.Back(1).Bytes20())
 		// Check slot presence in the access list
 		warmAccess := evm.StateDB.AddressInAccessList(addr)
 		// The WarmStorageReadCostEIP2929 (100) is already deducted in the form of a constant cost, so
@@ -229,27 +233,35 @@ var (
 func makeSelfdestructGasFn(refundsEnabled bool) gasFunc {
 	gasFunc := func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 		var (
-			gas     uint64
-			address = common.Address(stack.peek().Bytes20())
+			gas                  uint64
+			address              = common.Bytes20ToAddress(stack.peek().Bytes20())
+			internalAddress, err = address.InternalAddress()
 		)
+		if err != nil {
+			return 0, err
+		}
+		contractAddress, err := contract.Address().InternalAddress()
+		if err != nil {
+			return 0, err
+		}
 		if !evm.StateDB.AddressInAccessList(address) {
 			// If the caller cannot afford the cost, this change will be rolled back
 			evm.StateDB.AddAddressToAccessList(address)
 			gas = params.ColdAccountAccessCostEIP2929
 		}
 		// if empty and transfers value
-		empty, err := evm.StateDB.Empty(address)
+		empty, err := evm.StateDB.Empty(*internalAddress)
 		if err != nil {
 			return 0, err
 		}
-		balance, err := evm.StateDB.GetBalance(contract.Address())
+		balance, err := evm.StateDB.GetBalance(*contractAddress)
 		if err != nil {
 			return 0, err
 		}
 		if empty && balance.Sign() != 0 {
 			gas += params.CreateBySelfdestructGas
 		}
-		suicided, err := evm.StateDB.HasSuicided(contract.Address())
+		suicided, err := evm.StateDB.HasSuicided(*contractAddress)
 		if err != nil {
 			return 0, err
 		}

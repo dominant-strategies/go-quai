@@ -77,7 +77,8 @@ func (ga *GenesisAlloc) UnmarshalJSON(data []byte) error {
 	}
 	*ga = make(GenesisAlloc)
 	for addr, a := range m {
-		(*ga)[common.Address(addr)] = a
+		internal := common.InternalAddress(addr)
+		(*ga)[common.NewAddressFromData(&internal)] = a
 	}
 	return nil
 }
@@ -270,11 +271,15 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		panic(err)
 	}
 	for addr, account := range g.Alloc {
-		primeStatedb.AddBalance(addr, account.Balance)
-		primeStatedb.SetCode(addr, account.Code)
-		primeStatedb.SetNonce(addr, account.Nonce)
+		internal, err := addr.InternalAddress()
+		if err != nil {
+			fmt.Println("Provided address in genesis block is out of scope")
+		}
+		primeStatedb.AddBalance(*internal, account.Balance)
+		primeStatedb.SetCode(*internal, account.Code)
+		primeStatedb.SetNonce(*internal, account.Nonce)
 		for key, value := range account.Storage {
-			primeStatedb.SetState(addr, key, value)
+			primeStatedb.SetState(*internal, key, value)
 		}
 	}
 	primeRoot, _ := primeStatedb.IntermediateRoot(false) // error ignored because this is hardcoded and should not return an error
@@ -292,7 +297,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		head.SetGasUsed(0, i)
 		head.SetBaseFee(new(big.Int).SetUint64(params.InitialBaseFee), i)
 		head.SetDifficulty(g.Difficulty[i], i)
-		head.SetCoinbase(common.Address{}, i)
+		head.SetCoinbase(common.ZeroAddr, i)
 		if g.GasLimit[i] == 0 {
 			head.SetGasLimit(params.GenesisGasLimit, i)
 		}
@@ -428,7 +433,7 @@ func DeveloperGenesisBlock(period uint64, faucet common.Address) *Genesis {
 	// Assemble and return the genesis with the precompiles and faucet pre-funded
 	return &Genesis{
 		Config:     &config,
-		ExtraData:  append(append(make([]byte, 32), faucet[:]...), make([]byte, crypto.SignatureLength)...),
+		ExtraData:  append(append(make([]byte, 32), faucet.Bytes()[:]...), make([]byte, crypto.SignatureLength)...),
 		GasLimit:   []uint64{0x47b760, 0x47b760, 0x47b760},
 		BaseFee:    []*big.Int{big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee)},
 		Difficulty: []*big.Int{big.NewInt(1), big.NewInt(1), big.NewInt(1)},

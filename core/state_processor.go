@@ -57,9 +57,9 @@ var (
 )
 
 const (
-	receiptsCacheLimit      = 32
-	txLookupCacheLimit      = 1024
-	TriesInMemory           = 128
+	receiptsCacheLimit = 32
+	txLookupCacheLimit = 1024
+	TriesInMemory      = 128
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	//
@@ -212,7 +212,7 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 			}
 			prevZeroBal := prepareApplyETX(statedb, tx)
 			receipt, err = applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv)
-			statedb.SetBalance(common.ZeroAddr, prevZeroBal) // Reset the balance to what it previously was. Residual balance will be lost
+			statedb.SetBalance(common.ZeroInternal, prevZeroBal) // Reset the balance to what it previously was. Residual balance will be lost
 
 			if err != nil {
 				return nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
@@ -398,7 +398,7 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	if tx.Type() == types.ExternalTxType {
 		prevZeroBal := prepareApplyETX(statedb, tx)
 		receipt, err := applyTransaction(msg, config, bc, author, gp, statedb, header.Number(), header.Hash(), tx, usedGas, vmenv)
-		statedb.SetBalance(common.ZeroAddr, prevZeroBal) // Reset the balance to what it previously was (currently a failed external transaction removes all the sent coins from the supply and any residual balance is gone as well)
+		statedb.SetBalance(common.ZeroInternal, prevZeroBal) // Reset the balance to what it previously was (currently a failed external transaction removes all the sent coins from the supply and any residual balance is gone as well)
 		return receipt, err
 	}
 	return applyTransaction(msg, config, bc, author, gp, statedb, header.Number(), header.Hash(), tx, usedGas, vmenv)
@@ -662,10 +662,10 @@ func (p *StateProcessor) StateAtTransaction(block *types.Block, txIndex int, ree
 }
 
 func prepareApplyETX(statedb *state.StateDB, tx *types.Transaction) *big.Int {
-	prevZeroBal, _ := statedb.GetBalance(common.ZeroAddr)    // Get current zero address balance
-	fee := big.NewInt(0).Add(tx.GasFeeCap(), tx.GasTipCap()) // Add gas price cap to miner tip cap
-	fee.Mul(fee, big.NewInt(int64(tx.Gas())))                // Multiply gas price by gas limit (may need to check for int64 overflow)
-	total := big.NewInt(0).Add(fee, tx.Value())              // Add gas fee to value
-	statedb.SetBalance(common.ZeroAddr, total)               // Use zero address at temp placeholder and set it to gas fee plus value
+	prevZeroBal, _ := statedb.GetBalance(common.ZeroInternal) // Get current zero address balance
+	fee := big.NewInt(0).Add(tx.GasFeeCap(), tx.GasTipCap())  // Add gas price cap to miner tip cap
+	fee.Mul(fee, big.NewInt(int64(tx.Gas())))                 // Multiply gas price by gas limit (may need to check for int64 overflow)
+	total := big.NewInt(0).Add(fee, tx.Value())               // Add gas fee to value
+	statedb.SetBalance(common.ZeroInternal, total)            // Use zero address at temp placeholder and set it to gas fee plus value
 	return prevZeroBal
 }

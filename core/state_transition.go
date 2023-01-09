@@ -193,7 +193,7 @@ func ApplyMessage(evm *vm.EVM, msg Message, gp *GasPool) (*ExecutionResult, erro
 // to returns the recipient of the message.
 func (st *StateTransition) to() common.Address {
 	if st.msg == nil || st.msg.To() == nil /* contract creation */ {
-		return common.Address{}
+		return common.ZeroAddr
 	}
 	return *st.msg.To()
 }
@@ -207,7 +207,11 @@ func (st *StateTransition) buyGas() error {
 		balanceCheck = balanceCheck.Mul(balanceCheck, st.gasFeeCap)
 		balanceCheck.Add(balanceCheck, st.value)
 	}
-	balance, err := st.state.GetBalance(st.msg.From())
+	from, err := st.msg.From().InternalAddress()
+	if err != nil {
+		return err
+	}
+	balance, err := st.state.GetBalance(*from)
 	if err != nil {
 		return err
 	}
@@ -220,16 +224,20 @@ func (st *StateTransition) buyGas() error {
 	st.gas += st.msg.Gas()
 
 	st.initialGas = st.msg.Gas()
-	if err := st.state.SubBalance(st.msg.From(), mgval); err != nil {
+	if err := st.state.SubBalance(*from, mgval); err != nil {
 		return err
 	}
 	return nil
 }
 
 func (st *StateTransition) preCheck() error {
+	from, err := st.msg.From().InternalAddress()
+	if err != nil {
+		return err
+	}
 	// Make sure this transaction's nonce is correct.
 	if st.msg.CheckNonce() {
-		stNonce, err := st.state.GetNonce(st.msg.From())
+		stNonce, err := st.state.GetNonce(*from)
 		if err != nil {
 			return err
 		}
@@ -242,7 +250,7 @@ func (st *StateTransition) preCheck() error {
 		}
 	}
 	// Make sure the sender is an EOA
-	codeHash, err := st.state.GetCodeHash(st.msg.From())
+	codeHash, err := st.state.GetCodeHash(*from)
 	if err != nil {
 		return err
 	}
@@ -339,11 +347,19 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		ret, _, st.gas, vmerr = st.evm.Create(sender, st.data, st.gas, st.value)
 	} else {
 		// Increment the nonce for the next transaction
-		nonce, err := st.state.GetNonce(sender.Address())
+		addr, err := sender.Address().InternalAddress()
 		if err != nil {
 			return nil, err
 		}
-		st.state.SetNonce(msg.From(), nonce+1)
+		nonce, err := st.state.GetNonce(*addr)
+		if err != nil {
+			return nil, err
+		}
+		from, err := msg.From().InternalAddress()
+		if err != nil {
+			return nil, err
+		}
+		st.state.SetNonce(*from, nonce+1)
 		ret, st.gas, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value)
 	}
 
@@ -365,7 +381,11 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	if london {
 		effectiveTip = cmath.BigMin(st.gasTipCap, new(big.Int).Sub(st.gasFeeCap, st.evm.Context.BaseFee))
 	}
-	st.state.AddBalance(st.evm.Context.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip))
+	coinbase, err := st.evm.Context.Coinbase.InternalAddress()
+	if err != nil {
+		return nil, err
+	}
+	st.state.AddBalance(*coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip))
 
 	return &ExecutionResult{
 		UsedGas:    st.gasUsed(),
@@ -385,7 +405,11 @@ func (st *StateTransition) refundGas(refundQuotient uint64) {
 
 	// Return ETH for remaining gas, exchanged at the original rate.
 	remaining := new(big.Int).Mul(new(big.Int).SetUint64(st.gas), st.gasPrice)
-	st.state.AddBalance(st.msg.From(), remaining)
+	from, err := st.msg.From().InternalAddress()
+	if err != nil {
+		return
+	}
+	st.state.AddBalance(*from, remaining)
 
 	// Also return remaining gas to the block gas counter so it is
 	// available for the next transaction.

@@ -25,37 +25,37 @@ import (
 
 // StateDB is an EVM database for full state querying.
 type StateDB interface {
-	CreateAccount(common.Address) error
+	CreateAccount(common.InternalAddress) error
 
-	SubBalance(common.Address, *big.Int) error
-	AddBalance(common.Address, *big.Int) error
-	GetBalance(common.Address) (*big.Int, error)
+	SubBalance(common.InternalAddress, *big.Int) error
+	AddBalance(common.InternalAddress, *big.Int) error
+	GetBalance(common.InternalAddress) (*big.Int, error)
 
-	GetNonce(common.Address) (uint64, error)
-	SetNonce(common.Address, uint64) error
+	GetNonce(common.InternalAddress) (uint64, error)
+	SetNonce(common.InternalAddress, uint64) error
 
-	GetCodeHash(common.Address) (common.Hash, error)
-	GetCode(common.Address) ([]byte, error)
-	SetCode(common.Address, []byte) error
-	GetCodeSize(common.Address) (int, error)
+	GetCodeHash(common.InternalAddress) (common.Hash, error)
+	GetCode(common.InternalAddress) ([]byte, error)
+	SetCode(common.InternalAddress, []byte) error
+	GetCodeSize(common.InternalAddress) (int, error)
 
 	AddRefund(uint64)
 	SubRefund(uint64)
 	GetRefund() uint64
 
-	GetCommittedState(common.Address, common.Hash) (common.Hash, error)
-	GetState(common.Address, common.Hash) (common.Hash, error)
-	SetState(common.Address, common.Hash, common.Hash) error
+	GetCommittedState(common.InternalAddress, common.Hash) (common.Hash, error)
+	GetState(common.InternalAddress, common.Hash) (common.Hash, error)
+	SetState(common.InternalAddress, common.Hash, common.Hash) error
 
-	Suicide(common.Address) (bool, error)
-	HasSuicided(common.Address) (bool, error)
+	Suicide(common.InternalAddress) (bool, error)
+	HasSuicided(common.InternalAddress) (bool, error)
 
 	// Exist reports whether the given account exists in state.
 	// Notably this should also return true for suicided accounts.
-	Exist(common.Address) (bool, error)
+	Exist(common.InternalAddress) (bool, error)
 	// Empty returns whether the given account is empty. Empty
 	// is defined according to EIP161 (balance = nonce = code = 0).
-	Empty(common.Address) (bool, error)
+	Empty(common.InternalAddress) (bool, error)
 
 	PrepareAccessList(sender common.Address, dest *common.Address, precompiles []common.Address, txAccesses types.AccessList)
 	AddressInAccessList(addr common.Address) bool
@@ -73,18 +73,18 @@ type StateDB interface {
 	AddLog(*types.Log)
 	AddPreimage(common.Hash, []byte)
 
-	ForEachStorage(common.Address, func(common.Hash, common.Hash) bool) error
+	ForEachStorage(common.InternalAddress, func(common.Hash, common.Hash) bool) error
 }
 
 // CallContext provides a basic interface for the EVM calling conventions. The EVM
 // depends on this context being implemented for doing subcalls and initialising new EVM contracts.
 type CallContext interface {
 	// Call another contract
-	Call(env *EVM, me ContractRef, addr common.Address, data []byte, gas, value *big.Int) ([]byte, error)
+	Call(env *EVM, me ContractRef, addr common.InternalAddress, data []byte, gas, value *big.Int) ([]byte, error)
 	// Take another's contract code and execute within our own context
-	CallCode(env *EVM, me ContractRef, addr common.Address, data []byte, gas, value *big.Int) ([]byte, error)
+	CallCode(env *EVM, me ContractRef, addr common.InternalAddress, data []byte, gas, value *big.Int) ([]byte, error)
 	// Same as CallCode except sender and value is propagated from parent to child scope
-	DelegateCall(env *EVM, me ContractRef, addr common.Address, data []byte, gas *big.Int) ([]byte, error)
+	DelegateCall(env *EVM, me ContractRef, addr common.InternalAddress, data []byte, gas *big.Int) ([]byte, error)
 	// Create a new contract
-	Create(env *EVM, me ContractRef, data []byte, gas, value *big.Int) ([]byte, common.Address, error)
+	Create(env *EVM, me ContractRef, data []byte, gas, value *big.Int) ([]byte, common.InternalAddress, error)
 }
