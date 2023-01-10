@@ -159,6 +159,7 @@ func answerGetBlockBodiesQuery(backend Backend, query GetBlockBodiesPacket, peer
 			bodies = append(bodies, data)
 			bytes += len(data)
 		}
+		fmt.Println("Got bodies request: ", hash)
 	}
 	return bodies
 }
