@@ -296,9 +296,6 @@ func (sl *Slice) CollectSubRollups(b *types.Block) ([]types.Transactions, error)
 func (sl *Slice) CollectNewlyConfirmedEtxs(block *types.Block, location common.Location) (types.Transactions, types.Transactions, error) {
 	nodeCtx := common.NodeLocation.Context()
 	// Collect rollup of ETXs from the subordinate node's manifest
-	if nodeCtx == common.PRIME_CTX {
-		fmt.Printf("collecting pending ETXs @ block %s\n", block.Hash())
-	}
 	referencableEtxs := types.Transactions{}
 	subRollup := types.Transactions{}
 	if nodeCtx < common.ZONE_CTX {
