@@ -372,6 +372,10 @@ func (q *queue) Results(block bool) []*fetchResult {
 		for _, tx := range result.Transactions {
 			size += tx.Size()
 		}
+		for _, etxs := range result.ExtTransactions {
+			size += etxs.Size()
+		}
+		size += result.SubManifest.Size()
 		q.resultSize = common.StorageSize(blockCacheSizeWeight)*size +
 			(1-common.StorageSize(blockCacheSizeWeight))*q.resultSize
 	}
