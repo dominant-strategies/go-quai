@@ -141,7 +141,7 @@ func (hc *HeaderChain) CollectEtxRollup(b *types.Block) (types.Transactions, err
 	if b.NumberU64() == 0 && b.Hash() == hc.config.GenesisHash {
 		return b.ExtTransactions(), nil
 	}
-	parent := hc.GetBlock(b.ParentHash(), b.NonceU64())
+	parent := hc.GetBlock(b.ParentHash(), b.NumberU64()-1)
 	if parent == nil {
 		return nil, errors.New("parent not found")
 	}
