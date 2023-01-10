@@ -139,11 +139,11 @@ func (h *ethHandler) handleHeaders(peer *eth.Peer, headers []*types.Header) erro
 // of block bodies for the local node to process.
 func (h *ethHandler) handleBodies(peer *eth.Peer, txs [][]*types.Transaction, uncles [][]*types.Header, etxs [][]*types.Transaction, manifest []types.BlockManifest) error {
 	// Filter out any explicitly requested bodies, deliver the rest to the downloader
-	filter := len(txs) > 0 || len(uncles) > 0
+	filter := len(txs) > 0 || len(uncles) > 0 || len(etxs) > 0 || len(manifest) > 0
 	if filter {
-		txs, uncles = h.blockFetcher.FilterBodies(peer.ID(), txs, uncles, time.Now())
+		txs, uncles, etxs, manifest = h.blockFetcher.FilterBodies(peer.ID(), txs, uncles, etxs, manifest, time.Now())
 	}
-	if len(txs) > 0 || len(uncles) > 0 || !filter {
+	if len(txs) > 0 || len(uncles) > 0 || len(etxs) > 0 || len(manifest) > 0 || !filter {
 		err := h.downloader.DeliverBodies(peer.ID(), txs, uncles, etxs, manifest)
 		if err != nil {
 			log.Debug("Failed to deliver bodies", "err", err)
