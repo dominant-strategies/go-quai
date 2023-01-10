@@ -896,3 +896,9 @@ func (m BlockManifest) Len() int { return len(m) }
 func (m BlockManifest) EncodeIndex(i int, w *bytes.Buffer) {
 	rlp.Encode(w, m[i])
 }
+
+// Size returns the approximate memory used by all internal contents. It is used
+// to approximate and limit the memory consumption of various caches.
+func (m BlockManifest) Size() common.StorageSize {
+	return common.StorageSize(m.Len() * common.HashLength)
+}
