@@ -545,7 +545,7 @@ func (s *PublicBlockChainQuaiAPI) CreateAccessList(ctx context.Context, args Tra
 
 func (s *PublicBlockChainQuaiAPI) fillSubordinateManifest(b *types.Block) (*types.Block, error) {
 	nodeCtx := common.NodeLocation.Context()
-	if manifestHash := types.DeriveSha(b.SubManifest(), trie.NewStackTrie(nil)); manifestHash != b.ManifestHash(nodeCtx+1) {
+	if manifestHash := types.DeriveSha(b.SubManifest(), trie.NewStackTrie(nil)); manifestHash == b.ManifestHash(nodeCtx+1) {
 		// If the manifest hashes match, nothing to do
 		return b, nil
 	} else {
