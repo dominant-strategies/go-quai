@@ -131,7 +131,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	// Construct the block locally
 	block := sl.ConstructLocalBlock(header)
 	if block == nil {
-		return nil, errors.New("could not find the tx and uncle data to match the header root hash")
+		return nil, ErrBodyNotFound
 	}
 
 	log.Info("Starting slice append", "hash", block.Hash(), "number", block.Header().NumberArray(), "location", block.Header().Location(), "parent hash", block.ParentHash())

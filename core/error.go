@@ -34,6 +34,9 @@ var (
 
 	// ErrSubNotSyncedToDom is returned when the subordinate cannot find the parent of the block which is being appended by the dom.
 	ErrSubNotSyncedToDom = errors.New("sub not synced to dom")
+
+	// ErrBodyNotFound is returned when body data for a given header hash cannot be found.
+	ErrBodyNotFound = errors.New("could not find the body data to match the header root hash")
 )
 
 // List of evm-call-message pre-checking errors. All state transition messages will
