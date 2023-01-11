@@ -635,10 +635,6 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 				}
 			}
 
-			for _, header := range headers {
-				fmt.Println("header: ", header.NumberArray())
-			}
-
 			// If no more headers are inbound, notify the content fetchers and return
 			if packet.Items() == 0 {
 				// No more headers, terminate the process
@@ -1228,7 +1224,7 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 	blocks := make([]*types.Block, len(results))
 	for i, result := range results {
 		// Store each of the pendingEtxs in the database
-		fmt.Println("Pending Etxs downloaded: ", result.PendingEtxs.Etxs)
+		fmt.Println("Pending Etxs downloaded: ", result.PendingEtxs.Header)
 		d.core.AddPendingEtxs(types.PendingEtxs{Header: result.PendingEtxs.Header, Etxs: result.PendingEtxs.Etxs})
 
 		blocks[i] = types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles, result.ExtTransactions, result.SubManifest)

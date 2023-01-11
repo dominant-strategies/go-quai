@@ -474,7 +474,6 @@ func (q *queue) ReserveHeaders(p *peerConnection, count int) *fetchRequest {
 		}
 		send = from.(uint64)
 	}
-	fmt.Println("task queue size", q.headerTaskQueue.Size())
 	// Merge all the skipped batches back
 	for _, from := range skip {
 		q.headerTaskQueue.Push(from, -int64(from))
@@ -488,7 +487,6 @@ func (q *queue) ReserveHeaders(p *peerConnection, count int) *fetchRequest {
 		From: send - 1,
 		Time: time.Now(),
 	}
-	fmt.Println("Reserving headers: ", request.From)
 	q.headerPendPool[p.id] = request
 	return request
 }
@@ -927,7 +925,7 @@ func (q *queue) DeliverPendingEtxs(id string, pendingEtxs []types.PendingEtxs) (
 	validate := func(index int, header *types.Header) error {
 		// validate all the contexts
 		for i := 0; i < common.HierarchyDepth; i++ {
-			if types.DeriveSha(pendingEtxs[index].Etxs[i], trieHasher) != pendingEtxs[index].Header.EtxHash(i) {
+			if !pendingEtxs[i].IsValid(trieHasher) {
 				return errInvalidPendingEtxs
 			}
 		}
