@@ -119,6 +119,12 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	location := header.Location()
 	isDomCoincident := sl.engine.IsDomCoincident(header)
 
+	if sl.domClient == nil && nodeCtx != common.PRIME_CTX {
+		if header.NumberU64() == 3 && nodeCtx == common.REGION_CTX || header.NumberU64() == 1 && nodeCtx == common.ZONE_CTX {
+			return nil, ErrSubNotSyncedToDom
+		}
+	}
+
 	// Don't append the block which already exists in the database.
 	if sl.hc.HasHeader(header.Hash(), header.NumberU64()) {
 		// Remove the header from the future headers cache
@@ -134,7 +140,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	// Construct the block locally
 	block := sl.ConstructLocalBlock(header)
 	if block == nil {
-		return nil, errors.New("could not find the tx and uncle data to match the header root hash")
+		return nil, ErrSubNotSyncedToDom
 	}
 
 	log.Info("Starting slice append", "hash", block.Hash(), "number", block.Header().NumberArray(), "location", block.Header().Location(), "parent hash", block.ParentHash())
