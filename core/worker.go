@@ -432,7 +432,7 @@ func (w *worker) GeneratePendingHeader(block *types.Block) (*types.Header, error
 
 	task := &task{receipts: env.receipts, state: env.state, block: block, createdAt: time.Now()}
 	log.Info("Commit new sealing work", "number", block.Number(), "sealhash", w.engine.SealHash(block.Header()),
-		"uncles", len(env.uncles), "txs", env.tcount,
+		"uncles", len(env.uncles), "txs", env.tcount, "etxs", len(block.ExtTransactions()),
 		"gas", block.GasUsed(), "fees", totalFees(block, env.receipts),
 		"elapsed", common.PrettyDuration(time.Since(start)))
 
@@ -950,7 +950,7 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 		select {
 		case w.taskCh <- &task{receipts: env.receipts, state: env.state, block: block, createdAt: time.Now()}:
 			log.Info("Commit new sealing work", "number", block.Number(), "sealhash", w.engine.SealHash(block.Header()),
-				"uncles", len(env.uncles), "txs", env.tcount,
+				"uncles", len(env.uncles), "txs", env.tcount, "etxs", len(block.ExtTransactions()),
 				"gas", block.GasUsed(), "fees", totalFees(block, env.receipts),
 				"elapsed", common.PrettyDuration(time.Since(start)))
 
