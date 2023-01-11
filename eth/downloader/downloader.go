@@ -1189,7 +1189,8 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 		blocks[i] = types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles, result.ExtTransactions, result.SubManifest)
 	}
 	if index, err := d.core.InsertChain(blocks); err != nil {
-		if err.Error() == "sub not synced to dom" {
+		if err.Error() == "sub not synced to dom" ||
+			err.Error() == "could not find the body data to match the header root hash" {
 			d.waitingOnAppend = true
 			return nil
 		}
