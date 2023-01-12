@@ -198,7 +198,11 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 			}
 		}
 		// Cache the subordinate's pending ETXs
-		sl.AddPendingEtxs(types.PendingEtxs{block.Header(), subPendingEtxs})
+		pEtxs := types.PendingEtxs{block.Header(), subPendingEtxs}
+		if !pEtxs.IsValid(trie.NewStackTrie(nil)) {
+			return nil, errors.New("sub pending ETXs faild validation")
+		}
+		sl.AddPendingEtxs(pEtxs)
 	}
 
 	// Combine sub's pending ETXs, sub rollup, and our local ETXs into localPendingEtxs
