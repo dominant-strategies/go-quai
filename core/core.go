@@ -1,8 +1,10 @@
 package core
 
 import (
+	"fmt"
 	"io"
 	"math/big"
+	"sort"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -17,11 +19,21 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rlp"
+	lru "github.com/hashicorp/golang-lru"
+)
+
+const (
+	maxFutureHeaders     = 256
+	maxTimeFutureHeaders = 30
 )
 
 type Core struct {
 	sl     *Slice
 	engine consensus.Engine
+
+	futureHeaders *lru.Cache
+
+	quit chan struct{} // core quit channel
 }
 
 func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.Header) bool, txConfig *TxPoolConfig, chainConfig *params.ChainConfig, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis) (*Core, error) {
@@ -30,10 +42,17 @@ func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.H
 		return nil, err
 	}
 
-	return &Core{
+	c := &Core{
 		sl:     slice,
 		engine: engine,
-	}, nil
+		quit:   make(chan struct{}),
+	}
+
+	futureHeaders, _ := lru.New(maxFutureHeaders)
+	c.futureHeaders = futureHeaders
+
+	go c.updateFutureHeaders()
+	return c, nil
 }
 
 func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
@@ -49,14 +68,24 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 			newPendingEtxs, err := c.sl.Append(block.Header(), types.EmptyHeader(), common.Hash{}, big.NewInt(0), false, true, nil)
 			if err != nil {
 				if err == consensus.ErrFutureBlock || err.Error() == "unknown ancestor" {
-					c.sl.addfutureHeader(block.Header())
+					c.addfutureHeader(block.Header())
 				}
 				if err.Error() == "sub not synced to dom" {
+					c.addfutureHeader(block.Header())
 					return i, err
 				}
+				if err == ErrKnownBlock {
+					// Remove the header from the future headers cache
+					c.futureHeaders.Remove(block.Hash())
+					return i, nil
+				}
+
 				log.Info("InsertChain", "err in Append core: ", err)
 				return i, err
 			}
+			// Remove the header from the future headers cache since the block append was succesful
+			c.futureHeaders.Remove(block.Hash())
+
 			// If we have a dom, send the dom any pending ETXs which will become
 			// referencable by this block. When this block is referenced in the dom's
 			// subordinate block manifest, then ETXs produced by this block and the rollup
@@ -71,6 +100,55 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 		}
 	}
 	return len(blocks), nil
+}
+
+// procfutureHeaders sorts the future block cache and attempts to append
+func (c *Core) procfutureHeaders() {
+	headers := make([]*types.Header, 0, c.futureHeaders.Len())
+	for _, hash := range c.futureHeaders.Keys() {
+		if header, exist := c.futureHeaders.Peek(hash); exist {
+			headers = append(headers, header.(*types.Header))
+		}
+	}
+	if len(headers) > 0 {
+		sort.Slice(headers, func(i, j int) bool {
+			return headers[i].NumberU64() < headers[j].NumberU64()
+		})
+
+		for _, head := range headers {
+			block := c.sl.ConstructLocalBlock(head)
+			c.InsertChain([]*types.Block{block})
+		}
+	}
+	if c.futureHeaders.Len() == 0 {
+		c.sl.downloaderWaitFeed.Send(false)
+	}
+}
+
+// addfutureHeader adds a block to the future block cache
+func (c *Core) addfutureHeader(header *types.Header) error {
+	max := uint64(time.Now().Unix() + maxTimeFutureHeaders)
+	if header.Time() > max {
+		return fmt.Errorf("future block timestamp %v > allowed %v", header.Time(), max)
+	}
+	if !c.futureHeaders.Contains(header.Hash()) {
+		c.futureHeaders.Add(header.Hash(), header)
+	}
+	return nil
+}
+
+// updatefutureHeaders is a time to procfutureHeaders
+func (c *Core) updateFutureHeaders() {
+	futureTimer := time.NewTicker(3 * time.Second)
+	defer futureTimer.Stop()
+	for {
+		select {
+		case <-futureTimer.C:
+			c.procfutureHeaders()
+		case <-c.quit:
+			return
+		}
+	}
 }
 
 // InsertChainWithoutSealVerification works exactly the same
@@ -102,6 +180,7 @@ func (c *Core) TxPool() *TxPool {
 }
 
 func (c *Core) Stop() {
+	close(c.quit)
 	c.sl.Stop()
 }
 
@@ -110,7 +189,11 @@ func (c *Core) Stop() {
 //---------------//
 
 func (c *Core) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, newInboundEtxs types.Transactions) ([]types.Transactions, error) {
-	return c.sl.Append(header, domPendingHeader, domTerminus, td, domOrigin, reorg, newInboundEtxs)
+	newPendingEtxs, err := c.sl.Append(header, domPendingHeader, domTerminus, td, domOrigin, reorg, newInboundEtxs)
+	// If dom tries to append the block and sub is not in sync.
+	// proc the future header cache.
+	go c.procfutureHeaders()
+	return newPendingEtxs, err
 }
 
 // ConstructLocalBlock takes a header and construct the Block locally
