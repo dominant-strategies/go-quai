@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"sort"
 	"sync"
 	"time"
 
@@ -25,9 +24,7 @@ import (
 )
 
 const (
-	maxFutureHeaders        = 256
 	maxPendingEtxBlocks     = 256
-	maxTimeFutureHeaders    = 30
 	pendingHeaderCacheLimit = 500
 	pendingHeaderGCTime     = 5
 
@@ -55,8 +52,7 @@ type Slice struct {
 	scope              event.SubscriptionScope
 	downloaderWaitFeed event.Feed
 
-	futureHeaders *lru.Cache
-	pendingEtxs   *lru.Cache
+	pendingEtxs *lru.Cache
 
 	phCachemu sync.RWMutex
 
@@ -74,8 +70,6 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 		quit:    make(chan struct{}),
 	}
 
-	futureHeaders, _ := lru.New(maxFutureHeaders)
-	sl.futureHeaders = futureHeaders
 	pendingEtxs, _ := lru.New(maxPendingEtxBlocks)
 	sl.pendingEtxs = pendingEtxs
 
@@ -106,7 +100,6 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 		return nil, err
 	}
 
-	go sl.updateFutureHeaders()
 	go sl.updatePendingHeadersCache()
 
 	return sl, nil
@@ -127,11 +120,8 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 
 	// Don't append the block which already exists in the database.
 	if sl.hc.HasHeader(header.Hash(), header.NumberU64()) {
-		// Remove the header from the future headers cache
-		sl.futureHeaders.Remove(header.Hash())
-
 		log.Warn("Block has already been appended: ", "Hash: ", header.Hash())
-		return nil, nil
+		return nil, ErrKnownBlock
 	}
 
 	// Pause the downloader at the start of append
@@ -155,14 +145,6 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 				// This means we are not in sync with dom, so get more blocks from
 				// the downloader.
 				sl.downloaderWaitFeed.Send(false)
-				// If dom tries to append the block and sub is not in sync.
-				// proc the future header cache.
-				go sl.procfutureHeaders()
-			} else {
-				// If we are not synced and we get a future block add it to the future
-				// header cache.
-				sl.addfutureHeader(block.Header())
-				return nil, err
 			}
 		}
 		return nil, err
@@ -174,7 +156,6 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	if !isDomCoincident {
 		newInboundEtxs, subRollup, err = sl.CollectNewlyConfirmedEtxs(block, block.Location())
 		if err != nil {
-			sl.addfutureHeader(header)
 			log.Warn("Error collecting newly confirmed etxs: ", "err", err)
 			return nil, ErrSubNotSyncedToDom
 		}
@@ -221,10 +202,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 				// we have to compare the string value of the error until the error codes
 				// are in place
 				if err.Error() == "sub not synced to dom" {
-					// check if the block is not dom origin before adding it to the future header cache.
-					if !domOrigin {
-						sl.addfutureHeader(block.Header())
-					} else if !domOrigin && nodeCtx == common.PRIME_CTX {
+					if !domOrigin && nodeCtx == common.PRIME_CTX {
 						sl.downloaderWaitFeed.Send(true)
 					}
 				}
@@ -273,13 +251,6 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 
 	// Relay the new pendingHeader
 	sl.relayPh(pendingHeaderWithTermini, updateMiner, reorg, domOrigin, block.Location())
-
-	// Remove the header from the future headers cache
-	sl.futureHeaders.Remove(block.Hash())
-
-	if domOrigin {
-		go sl.procfutureHeaders()
-	}
 
 	log.Info("Appended new block", "number", block.Header().Number(), "hash", block.Hash(),
 		"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
@@ -797,58 +768,6 @@ func makeSubClients(suburls []string) []*quaiclient.Client {
 		}
 	}
 	return subClients
-}
-
-// procfutureHeaders sorts the future block cache and attempts to append
-func (sl *Slice) procfutureHeaders() {
-	headers := make([]*types.Header, 0, sl.futureHeaders.Len())
-	for _, hash := range sl.futureHeaders.Keys() {
-		if header, exist := sl.futureHeaders.Peek(hash); exist {
-			headers = append(headers, header.(*types.Header))
-		}
-	}
-	if len(headers) > 0 {
-		sort.Slice(headers, func(i, j int) bool {
-			return headers[i].NumberU64() < headers[j].NumberU64()
-		})
-
-		for _, head := range headers {
-			var nilHash common.Hash
-			_, err := sl.Append(head, types.EmptyHeader(), nilHash, big.NewInt(0), false, false, nil)
-			if err != nil {
-				if err.Error() != "sub not synced to dom" {
-					// Remove the header from the future headers cache
-					sl.futureHeaders.Remove(head.Hash())
-				}
-			}
-		}
-	}
-}
-
-// addfutureHeader adds a block to the future block cache
-func (sl *Slice) addfutureHeader(header *types.Header) error {
-	max := uint64(time.Now().Unix() + maxTimeFutureHeaders)
-	if header.Time() > max {
-		return fmt.Errorf("future block timestamp %v > allowed %v", header.Time(), max)
-	}
-	if !sl.futureHeaders.Contains(header.Hash()) {
-		sl.futureHeaders.Add(header.Hash(), header)
-	}
-	return nil
-}
-
-// updatefutureHeaders is a time to procfutureHeaders
-func (sl *Slice) updateFutureHeaders() {
-	futureTimer := time.NewTicker(3 * time.Second)
-	defer futureTimer.Stop()
-	for {
-		select {
-		case <-futureTimer.C:
-			sl.procfutureHeaders()
-		case <-sl.quit:
-			return
-		}
-	}
 }
 
 // updatePendingheadersCache is a timer to gcPendingHeaders
