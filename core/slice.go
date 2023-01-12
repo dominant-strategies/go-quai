@@ -127,9 +127,6 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		}
 	}
 
-	// Pause the downloader at the start of append
-	sl.downloaderWaitFeed.Send(true)
-
 	// Construct the block locally
 	block := sl.ConstructLocalBlock(header)
 	if block == nil {
@@ -143,13 +140,6 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	// Run Previous Coincident Reference Check (PCRC)
 	domTerminus, newTermini, err := sl.pcrc(batch, block.Header(), domTerminus)
 	if err != nil {
-		if err.Error() == "sub not synced to dom" {
-			if domOrigin {
-				// This means we are not in sync with dom, so get more blocks from
-				// the downloader.
-				sl.downloaderWaitFeed.Send(false)
-			}
-		}
 		return nil, err
 	}
 
@@ -201,14 +191,6 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		if sl.subClients[location.SubIndex()] != nil {
 			subPendingEtxs, err = sl.subClients[location.SubIndex()].Append(context.Background(), block.Header(), pendingHeaderWithTermini.Header, domTerminus, td, true, reorg, newInboundEtxs)
 			if err != nil {
-				// Since the error is coming from the sub client we cannot compare pointers
-				// we have to compare the string value of the error until the error codes
-				// are in place
-				if err.Error() == "sub not synced to dom" {
-					if !domOrigin && nodeCtx == common.PRIME_CTX {
-						sl.downloaderWaitFeed.Send(true)
-					}
-				}
 				return nil, err
 			}
 		}
@@ -258,9 +240,6 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	log.Info("Appended new block", "number", block.Header().Number(), "hash", block.Hash(),
 		"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
 		"root", block.Root())
-
-	// If we have reached here, the append was successful, so we can resume the downloader.
-	sl.downloaderWaitFeed.Send(false)
 
 	return localPendingEtxs, nil
 }

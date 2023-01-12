@@ -1189,6 +1189,10 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 		blocks[i] = types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles, result.ExtTransactions, result.SubManifest)
 	}
 	if index, err := d.core.InsertChain(blocks); err != nil {
+		if err.Error() == "sub not synced to dom" {
+			d.waitingOnAppend = true
+			return nil
+		}
 		if index < len(results) {
 			log.Debug("Downloaded item processing failed", "number", results[index].Header.Number(), "hash", results[index].Header.Hash(), "err", err)
 		} else {

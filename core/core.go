@@ -122,6 +122,7 @@ func (c *Core) procfutureHeaders() {
 				// Remove the header from the future headers cache
 				c.futureHeaders.Remove(head.Hash())
 			}
+			c.sl.downloaderWaitFeed.Send(false)
 		}
 	}
 }
