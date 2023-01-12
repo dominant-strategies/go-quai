@@ -89,6 +89,7 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 	if nodeCtx != common.ZONE_CTX {
 		sl.subClients = makeSubClients(subClientUrls)
 	}
+
 	// only set domClient if the chain is not Prime.
 	if nodeCtx != common.PRIME_CTX {
 		go func() {
@@ -116,6 +117,14 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	if sl.hc.HasHeader(header.Hash(), header.NumberU64()) {
 		log.Warn("Block has already been appended: ", "Hash: ", header.Hash())
 		return nil, ErrKnownBlock
+	}
+
+	// This is to prevent a crash when we try to insert blocks before domClient is on.
+	// Ideally this check should not exist here and should be fixed before we start the slice.
+	if sl.domClient == nil && nodeCtx != common.PRIME_CTX {
+		if header.NumberU64() > 3 && nodeCtx == common.REGION_CTX || header.NumberU64() > 1 && nodeCtx == common.ZONE_CTX {
+			return nil, ErrDomClientNotUp
+		}
 	}
 
 	// Construct the block locally

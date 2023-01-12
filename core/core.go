@@ -70,7 +70,8 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 				if err == consensus.ErrFutureBlock ||
 					err.Error() == "could not find the body data to match the header root hash" ||
 					err.Error() == "unknown ancestor" ||
-					err.Error() == "sub not synced to dom" {
+					err.Error() == "sub not synced to dom" ||
+					err.Error() == "dom client is not online" {
 					c.addfutureHeader(block.Header())
 					return i, err
 				}
