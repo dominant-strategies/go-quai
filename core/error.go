@@ -37,6 +37,9 @@ var (
 
 	// ErrBodyNotFound is returned when body data for a given header hash cannot be found.
 	ErrBodyNotFound = errors.New("could not find the body data to match the header root hash")
+
+	// ErrDomClientNotUp is returned when block is trying to be appended when domClient is not up.
+	ErrDomClientNotUp = errors.New("dom client is not online")
 )
 
 // List of evm-call-message pre-checking errors. All state transition messages will
