@@ -85,7 +85,6 @@ type TxData interface {
 	value() *big.Int
 	nonce() uint64
 	to() *common.Address
-	fromChain() *common.Location
 	etxGasLimit() uint64
 	etxGasPrice() *big.Int
 	etxGasTip() *big.Int
@@ -380,8 +379,22 @@ func (tx *Transaction) FromChain() common.Location {
 	if loc := tx.fromChain.Load(); loc != nil {
 		return loc.(common.Location)
 	}
-
-	loc := *tx.inner.fromChain()
+	var loc common.Location
+	switch tx.Type() {
+		case ExternalTxType:
+			// External transactions do not have a signature, but instead store the
+			// sender explicitely. Use that sender to get the location.
+			loc = *tx.inner.(*ExternalTx).Sender.Location()
+		default:
+			// All other TX types are signed, and should use the signature to determine
+			// the sender location
+			signer := NewSigner(tx.ChainId())
+			from, err := Sender(signer, tx)
+			if err != nil {
+				panic("failed to get transaction sender!")
+			}
+			loc = *from.Location()
+	}
 	tx.fromChain.Store(loc)
 	return loc
 }
