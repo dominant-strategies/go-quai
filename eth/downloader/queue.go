@@ -794,7 +794,6 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, headerProcCh 
 func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, uncleLists [][]*types.Header, etxLists [][]*types.Transaction, manifests []types.BlockManifest) (int, error) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
-	nodeCtx := common.NodeLocation.Context()
 	trieHasher := trie.NewStackTrie(nil)
 	validate := func(index int, header *types.Header) error {
 		if types.DeriveSha(types.Transactions(txLists[index]), trieHasher) != header.TxHash() {
@@ -802,11 +801,6 @@ func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, uncleLi
 		}
 		if types.DeriveSha(types.Transactions(etxLists[index]), trieHasher) != header.EtxHash() {
 			return errInvalidBody
-		}
-		if nodeCtx < common.ZONE_CTX {
-			if types.DeriveSha(manifests[index], trieHasher) != header.ManifestHash(nodeCtx+1) {
-				return errInvalidBody
-			}
 		}
 		if types.CalcUncleHash(uncleLists[index]) != header.UncleHash() {
 			return errInvalidBody
