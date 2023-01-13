@@ -58,6 +58,8 @@ type Slice struct {
 
 	pendingHeaderHeadHash common.Hash
 	phCache               map[common.Hash]types.PendingHeader
+
+	validator     Validator // Block and state validator interface
 }
 
 func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocalBlock func(block *types.Header) bool, chainConfig *params.ChainConfig, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis) (*Slice, error) {
@@ -78,6 +80,7 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 	if err != nil {
 		return nil, err
 	}
+	sl.validator = NewBlockValidator(chainConfig, sl.hc, engine)
 
 	sl.txPool = NewTxPool(*txConfig, chainConfig, sl.hc)
 	sl.miner = New(sl.hc, sl.txPool, config, db, chainConfig, engine, isLocalBlock)
@@ -128,9 +131,9 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	}
 
 	// Construct the block locally
-	block := sl.ConstructLocalBlock(header)
-	if block == nil {
-		return nil, ErrBodyNotFound
+	block, err := sl.ConstructLocalBlock(header)
+	if err != nil {
+		return nil, err
 	}
 
 	log.Info("Starting slice append", "hash", block.Hash(), "number", block.Header().NumberArray(), "location", block.Header().Location(), "parent hash", block.ParentHash())
@@ -663,7 +666,7 @@ func (sl *Slice) gcPendingHeaders() {
 }
 
 // constructLocalBlock takes a header and construct the Block locally
-func (sl *Slice) ConstructLocalBlock(header *types.Header) *types.Block {
+func (sl *Slice) ConstructLocalBlock(header *types.Header) (*types.Block, error) {
 	var block *types.Block
 	// check if the header has empty uncle and tx root
 	if header.EmptyBody() {
@@ -695,9 +698,15 @@ func (sl *Slice) ConstructLocalBlock(header *types.Header) *types.Block {
 			}
 
 			block = types.NewBlockWithHeader(header).WithBody(txs, uncles, etxs, subBlockHashes)
+		} else {
+			return nil, ErrBodyNotFound
 		}
 	}
-	return block
+	if err := sl.validator.ValidateBody(block); err != nil {
+		return block, err
+	} else {
+		return block, nil
+	}
 }
 
 // combinePendingHeader updates the pending header at the given index with the value from given header.
