@@ -155,16 +155,16 @@ func TestExternalTokenTransfer(t *testing.T) {
 		t.Fail()
 	}
 	i := uint8(0)
-	nonce := uint64(0)
+	salt := uint64(0)
 	contract = append(contract, i)
 	var contractAddr common.Address
 	for {
 		contract[len(contract)-1] = i
-		contractAddr = crypto.CreateAddress(addr, nonce, contract)
+		contractAddr = crypto.CreateAddress(addr, salt, contract)
 		if contractAddr.IsInChainScope() {
 			break
 		}
-		i++
+		salt++
 	}
 	inner_tx := types.InternalTx{ChainID: big.NewInt(1), Nonce: 0, GasTipCap: common.Big1, GasFeeCap: common.Big1, Gas: 4000000, To: nil, Value: common.Big0, Data: contract}
 	tx, err := types.SignTx(types.NewTx(&inner_tx), signer, testKey)
@@ -437,16 +437,13 @@ func TestOpETX(t *testing.T) {
 		t.Error(err.Error())
 		t.Fail()
 	}
-	i := uint8(0)
-	nonce := uint64(0)
-	contract = append(contract, i)
+	salt := uint64(0)
 	for {
-		contract[len(contract)-1] = i
-		contractAddr := crypto.CreateAddress(addr, nonce, contract)
+		contractAddr := crypto.CreateAddress(addr, salt, contract)
 		if contractAddr.IsInChainScope() {
 			break
 		}
-		i++
+		salt++
 	}
 	inner_tx := types.InternalTx{ChainID: big.NewInt(1), Nonce: 0, GasTipCap: common.Big1, GasFeeCap: common.Big1, Gas: 100000, To: nil, Value: big.NewInt(params.Ether), Data: contract}
 	tx, err := types.SignTx(types.NewTx(&inner_tx), signer, testKey)

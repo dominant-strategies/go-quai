@@ -28,6 +28,7 @@ type InternalTx struct {
 	GasTipCap  *big.Int
 	GasFeeCap  *big.Int
 	Gas        uint64
+	Salt 	   uint64
 	To         *common.Address `rlp:"nil"` // nil means contract creation
 	Value      *big.Int
 	Data       []byte
@@ -46,6 +47,7 @@ func (tx *InternalTx) copy() TxData {
 		To:    tx.To, // TODO: copy pointed-to address
 		Data:  common.CopyBytes(tx.Data),
 		Gas:   tx.Gas,
+		Salt: tx.Salt,
 		// These are copied below.
 		AccessList: make(AccessList, len(tx.AccessList)),
 		Value:      new(big.Int),
@@ -88,6 +90,7 @@ func (tx *InternalTx) protected() bool             { return true }
 func (tx *InternalTx) accessList() AccessList      { return tx.AccessList }
 func (tx *InternalTx) data() []byte                { return tx.Data }
 func (tx *InternalTx) gas() uint64                 { return tx.Gas }
+func (tx *InternalTx) salt() uint64                { return tx.Salt }
 func (tx *InternalTx) gasFeeCap() *big.Int         { return tx.GasFeeCap }
 func (tx *InternalTx) gasTipCap() *big.Int         { return tx.GasTipCap }
 func (tx *InternalTx) gasPrice() *big.Int          { return tx.GasFeeCap }

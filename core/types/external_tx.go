@@ -70,6 +70,7 @@ func (tx *ExternalTx) chainID() *big.Int           { panic("external TX does not
 func (tx *ExternalTx) protected() bool             { return true }
 func (tx *ExternalTx) accessList() AccessList      { return tx.AccessList }
 func (tx *ExternalTx) data() []byte                { return tx.Data }
+func (tx *ExternalTx) salt() uint64				   { panic("external TX does not have salt") }
 func (tx *ExternalTx) gas() uint64                 { return tx.Gas }
 func (tx *ExternalTx) gasFeeCap() *big.Int         { return tx.GasFeeCap }
 func (tx *ExternalTx) gasTipCap() *big.Int         { return tx.GasTipCap }

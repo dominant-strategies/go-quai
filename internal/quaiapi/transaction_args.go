@@ -42,6 +42,7 @@ type TransactionArgs struct {
 	MaxPriorityFeePerGas *hexutil.Big    `json:"maxPriorityFeePerGas"`
 	Value                *hexutil.Big    `json:"value"`
 	Nonce                *hexutil.Uint64 `json:"nonce"`
+	Salt				 *hexutil.Uint64 `json:"salt"`
 
 	// We accept "data" and "input" for backwards-compatibility reasons.
 	// "input" is the newer name and should be preferred by clients.
@@ -238,7 +239,11 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (t
 	if args.AccessList != nil {
 		accessList = *args.AccessList
 	}
-	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, gasFeeCap, gasTipCap, data, accessList, false)
+	var salt uint64
+	if args.Salt != nil {
+		salt = uint64(*args.Salt)
+	}
+	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, gasFeeCap, gasTipCap, data, salt, accessList, false)
 	return msg, nil
 }
 
@@ -258,6 +263,7 @@ func (args *TransactionArgs) toTransaction() *types.Transaction {
 		GasTipCap:  (*big.Int)(args.MaxPriorityFeePerGas),
 		Value:      (*big.Int)(args.Value),
 		Data:       args.data(),
+		Salt: 		uint64(*args.Salt),
 		AccessList: al,
 	}
 	return types.NewTx(data)

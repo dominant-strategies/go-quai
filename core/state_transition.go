@@ -51,6 +51,7 @@ The state transitioning model does all the necessary work to work out a valid ne
 type StateTransition struct {
 	gp         *GasPool
 	msg        Message
+	salt 	   uint64
 	gas        uint64
 	gasPrice   *big.Int
 	gasFeeCap  *big.Int
@@ -76,6 +77,7 @@ type Message interface {
 	Nonce() uint64
 	CheckNonce() bool
 	Data() []byte
+	Salt() 	uint64
 	AccessList() types.AccessList
 	ETXSender() common.Address
 	Type() byte
@@ -336,7 +338,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		vmerr error // vm errors do not effect consensus and are therefore not assigned to err
 	)
 	if contractCreation {
-		ret, _, st.gas, vmerr = st.evm.Create(sender, st.data, st.gas, st.value)
+		ret, _, st.gas, vmerr = st.evm.Create(sender, st.data, st.gas, st.salt, st.value)
 	} else {
 		// Increment the nonce for the next transaction
 		nonce, err := st.state.GetNonce(sender.Address())

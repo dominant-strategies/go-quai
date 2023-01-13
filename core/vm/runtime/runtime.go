@@ -41,6 +41,7 @@ type Config struct {
 	GasLimit    uint64
 	GasPrice    *big.Int
 	Value       *big.Int
+	Salt		uint64
 	Debug       bool
 	EVMConfig   vm.Config
 	BaseFee     *big.Int
@@ -158,6 +159,7 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 		sender,
 		input,
 		cfg.GasLimit,
+		cfg.Salt,
 		cfg.Value,
 	)
 	return code, address, leftOverGas, err

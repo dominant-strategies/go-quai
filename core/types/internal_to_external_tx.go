@@ -105,6 +105,7 @@ func (tx *InternalToExternalTx) chainID() *big.Int           { return tx.ChainID
 func (tx *InternalToExternalTx) protected() bool             { return true }
 func (tx *InternalToExternalTx) accessList() AccessList      { return tx.AccessList }
 func (tx *InternalToExternalTx) data() []byte                { return tx.Data }
+func (tx *InternalToExternalTx) salt() uint64				 { panic("internal to external TX does not have salt") }
 func (tx *InternalToExternalTx) gas() uint64                 { return tx.Gas }
 func (tx *InternalToExternalTx) gasFeeCap() *big.Int         { return tx.GasFeeCap }
 func (tx *InternalToExternalTx) gasTipCap() *big.Int         { return tx.GasTipCap }

@@ -78,6 +78,7 @@ type TxData interface {
 	chainID() *big.Int
 	accessList() AccessList
 	data() []byte
+	salt() uint64
 	gas() uint64
 	gasPrice() *big.Int
 	gasTipCap() *big.Int
@@ -240,6 +241,9 @@ func (tx *Transaction) Data() []byte { return tx.inner.data() }
 
 // AccessList returns the access list of the transaction.
 func (tx *Transaction) AccessList() AccessList { return tx.inner.accessList() }
+
+// Salt returns the salt of the transaction.
+func (tx *Transaction) Salt() uint64 { return tx.inner.salt() }
 
 // Gas returns the gas limit of the transaction.
 func (tx *Transaction) Gas() uint64 { return tx.inner.gas() }
@@ -643,6 +647,7 @@ type Message struct {
 	gasFeeCap     *big.Int
 	gasTipCap     *big.Int
 	data          []byte
+	salt		  uint64
 	accessList    AccessList
 	checkNonce    bool
 	etxsender     common.Address // only used in ETX
@@ -654,7 +659,7 @@ type Message struct {
 	etxAccessList AccessList
 }
 
-func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice, gasFeeCap, gasTipCap *big.Int, data []byte, accessList AccessList, checkNonce bool) Message {
+func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice, gasFeeCap, gasTipCap *big.Int, data []byte, salt uint64, accessList AccessList, checkNonce bool) Message {
 	return Message{
 		from:       from,
 		to:         to,
@@ -665,6 +670,7 @@ func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *b
 		gasFeeCap:  gasFeeCap,
 		gasTipCap:  gasTipCap,
 		data:       data,
+		salt:		salt,
 		accessList: accessList,
 		checkNonce: checkNonce,
 	}
@@ -697,6 +703,9 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 	} else {
 		msg.from, err = Sender(s, tx)
 	}
+	if tx.Type() == InternalTxType {
+		msg.salt = tx.Salt()
+	}
 	if internalToExternalTx, ok := tx.IsInternalToExternalTx(); ok {
 		msg.etxGasLimit = internalToExternalTx.ETXGasLimit
 		msg.etxGasPrice = internalToExternalTx.ETXGasPrice
@@ -716,6 +725,7 @@ func (m Message) Value() *big.Int           { return m.amount }
 func (m Message) Gas() uint64               { return m.gasLimit }
 func (m Message) Nonce() uint64             { return m.nonce }
 func (m Message) Data() []byte              { return m.data }
+func (m Message) Salt() uint64				{ return m.salt }
 func (m Message) AccessList() AccessList    { return m.accessList }
 func (m Message) CheckNonce() bool          { return m.checkNonce }
 func (m Message) ETXSender() common.Address { return m.etxsender }

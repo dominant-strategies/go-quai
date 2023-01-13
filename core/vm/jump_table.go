@@ -985,16 +985,6 @@ func newFrontierInstructionSet() JumpTable {
 			memorySize: memoryLog,
 			writes:     true,
 		},
-		CREATE: {
-			execute:     opCreate,
-			constantGas: params.CreateGas,
-			dynamicGas:  gasCreate,
-			minStack:    minStack(3, 1),
-			maxStack:    maxStack(3, 1),
-			memorySize:  memoryCreate,
-			writes:      true,
-			returns:     true,
-		},
 		CALL: {
 			execute:     opCall,
 			constantGas: params.CallGasFrontier,

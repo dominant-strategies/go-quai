@@ -1082,7 +1082,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	if args.To != nil {
 		to = *args.To
 	} else {
-		to = crypto.CreateAddress(args.from(), uint64(*args.Nonce), *args.Data)
+		to = crypto.CreateAddress(args.from(), uint64(*args.Salt), *args.Data)
 	}
 	// Retrieve the precompiles since they don't need to be added to the access list
 	precompiles := vm.ActivePrecompiles(b.ChainConfig().Rules(header.Number()))

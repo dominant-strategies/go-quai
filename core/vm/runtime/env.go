@@ -25,6 +25,7 @@ func NewEnv(cfg *Config) *vm.EVM {
 	txContext := vm.TxContext{
 		Origin:   cfg.Origin,
 		GasPrice: cfg.GasPrice,
+		Salt:     cfg.Salt,
 	}
 	blockContext := vm.BlockContext{
 		CanTransfer: core.CanTransfer,

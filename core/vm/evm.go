@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"encoding/hex"
 	"fmt"
 	"math/big"
 	"sync"
@@ -88,6 +89,7 @@ type TxContext struct {
 	Origin        common.Address // Provides information for ORIGIN
 	GasPrice      *big.Int       // Provides information for GASPRICE
 	ETXSender     common.Address // Original sender of the ETX
+	Salt		  uint64
 	TxType        byte
 	ETXGasLimit   uint64
 	ETXGasPrice   *big.Int
@@ -524,12 +526,8 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 }
 
 // Create creates a new contract using code as deployment code.
-func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
-	nonce, err := evm.StateDB.GetNonce(caller.Address())
-	if err != nil {
-		return nil, common.Address{}, 0, err
-	}
-	contractAddr = crypto.CreateAddress(caller.Address(), nonce, code)
+func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, salt uint64, value *big.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
+	contractAddr = crypto.CreateAddress(caller.Address(), salt, code)
 	return evm.create(caller, &codeAndHash{code: code}, gas, value, contractAddr)
 }
 
@@ -539,7 +537,7 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 // instead of the usual sender-and-nonce-hash as the address where the contract is initialized at.
 func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *big.Int, salt *uint256.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
 	codeAndHash := &codeAndHash{code: code}
-	contractAddr = crypto.CreateAddress2(caller.Address(), salt.Bytes32(), codeAndHash.Hash().Bytes())
+	contractAddr = crypto.CreateAddressEVM(caller.Address(), salt.Bytes32(), codeAndHash.Hash().Bytes())
 	return evm.create(caller, codeAndHash, gas, endowment, contractAddr)
 }
 
@@ -574,6 +572,7 @@ func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, etxGas
 	// create external transaction
 	etxInner := types.ExternalTx{Value: value, To: &toAddr, Sender: fromAddr, GasTipCap: etxGasTip, GasFeeCap: etxGasPrice, Gas: etxGasLimit, Data: etxData, AccessList: etxAccessList, Nonce: nonce}
 	etx := types.NewTx(&etxInner)
+	fmt.Println("CreateETX: ", " gas: ", etxGasLimit, " gasPrice: ", etxGasPrice, " gasTip: ", etxGasTip, " value: ", value, " nonce: ", nonce, " data: ", hex.EncodeToString(etxData), " accessList: ", etxAccessList)
 
 	evm.ETXCacheLock.Lock()
 	evm.ETXCache = append(evm.ETXCache, etx)

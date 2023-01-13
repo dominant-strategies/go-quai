@@ -593,47 +593,6 @@ func opGas(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 	return nil, nil
 }
 
-func opCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	var (
-		value        = scope.Stack.pop()
-		offset, size = scope.Stack.pop(), scope.Stack.pop()
-		input        = scope.Memory.GetCopy(int64(offset.Uint64()), int64(size.Uint64()))
-		gas          = scope.Contract.Gas
-	)
-	if interpreter.evm.chainRules.IsEIP150 {
-		gas -= gas / 64
-	}
-	// reuse size int for stackvalue
-	stackvalue := size
-
-	scope.Contract.UseGas(gas)
-	//TODO: use uint256.Int instead of converting with toBig()
-	var bigVal = big0
-	if !value.IsZero() {
-		bigVal = value.ToBig()
-	}
-
-	res, addr, returnGas, suberr := interpreter.evm.Create(scope.Contract, input, gas, bigVal)
-	// Push item on the stack based on the returned error. If the ruleset is
-	// homestead we must check for CodeStoreOutOfGasError (homestead only
-	// rule) and treat as an error, if the ruleset is frontier we must
-	// ignore this error and pretend the operation was successful.
-	if interpreter.evm.chainRules.IsHomestead && suberr == ErrCodeStoreOutOfGas {
-		stackvalue.Clear()
-	} else if suberr != nil && suberr != ErrCodeStoreOutOfGas {
-		stackvalue.Clear()
-	} else {
-		stackvalue.SetBytes(addr.Bytes())
-	}
-	scope.Stack.push(&stackvalue)
-	scope.Contract.Gas += returnGas
-
-	if suberr == ErrExecutionReverted {
-		return res, nil
-	}
-	return nil, nil
-}
-
 func opCreate2(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	var (
 		endowment    = scope.Stack.pop()
