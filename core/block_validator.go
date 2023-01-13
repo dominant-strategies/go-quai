@@ -75,7 +75,7 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	// we have a subordinate (i.e. if we are not a zone)
 	if nodeCtx < common.ZONE_CTX {
 		if hash := types.DeriveSha(block.SubManifest(), trie.NewStackTrie(nil)); hash != header.ManifestHash(nodeCtx+1) {
-			return fmt.Errorf("subordinate block manifest hash mismatch: have %x, want %x", hash, header.ManifestHash())
+			return ErrBadSubManifest
 		}
 	}
 	if !v.hc.bc.processor.HasBlockAndState(block.ParentHash(), block.NumberU64()-1) {

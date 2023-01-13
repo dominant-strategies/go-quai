@@ -117,8 +117,12 @@ func (c *Core) procfutureHeaders() {
 		})
 
 		for _, head := range headers {
-			block := c.sl.ConstructLocalBlock(head)
-			c.InsertChain([]*types.Block{block})
+			block, err := c.sl.ConstructLocalBlock(head)
+			if err != nil {
+				log.Warn("could not construct block from future header", "err:", err)
+			} else {
+				c.InsertChain([]*types.Block{block})
+			}
 		}
 	}
 	if c.futureHeaders.Len() == 0 {
@@ -198,7 +202,7 @@ func (c *Core) Append(header *types.Header, domPendingHeader *types.Header, domT
 }
 
 // ConstructLocalBlock takes a header and construct the Block locally
-func (c *Core) ConstructLocalBlock(header *types.Header) *types.Block {
+func (c *Core) ConstructLocalBlock(header *types.Header) (*types.Block, error) {
 	return c.sl.ConstructLocalBlock(header)
 }
 
