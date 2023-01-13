@@ -358,7 +358,7 @@ func (b *QuaiAPIBackend) Append(header *types.Header, domPendingHeader *types.He
 	return b.eth.core.Append(header, domPendingHeader, domTerminus, td, domOrigin, reorg, newInboundEtxs)
 }
 
-func (b *QuaiAPIBackend) ConstructLocalBlock(header *types.Header) *types.Block {
+func (b *QuaiAPIBackend) ConstructLocalBlock(header *types.Header) (*types.Block, error) {
 	return b.eth.core.ConstructLocalBlock(header)
 }
 
