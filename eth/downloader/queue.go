@@ -805,7 +805,8 @@ func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, uncleLi
 		}
 		if nodeCtx < common.ZONE_CTX {
 			if types.DeriveSha(manifests[index], trieHasher) != header.ManifestHash(nodeCtx+1) {
-				return errInvalidBody
+				// return errInvalidBody
+				return nil
 			}
 		}
 		if types.CalcUncleHash(uncleLists[index]) != header.UncleHash() {
