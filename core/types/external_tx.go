@@ -77,7 +77,6 @@ func (tx *ExternalTx) gasPrice() *big.Int          { return tx.GasFeeCap }
 func (tx *ExternalTx) value() *big.Int             { return tx.Value }
 func (tx *ExternalTx) nonce() uint64               { return tx.Nonce }
 func (tx *ExternalTx) to() *common.Address         { return tx.To }
-func (tx *ExternalTx) fromChain() *common.Location { return tx.Sender.Location() }
 func (tx *ExternalTx) etxGasLimit() uint64         { panic("external TX does not have etxGasLimit") }
 func (tx *ExternalTx) etxGasPrice() *big.Int       { panic("external TX does not have etxGasPrice") }
 func (tx *ExternalTx) etxGasTip() *big.Int         { panic("external TX does not have etxGasTip") }
