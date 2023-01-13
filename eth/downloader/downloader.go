@@ -1190,6 +1190,7 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 	}
 	if index, err := d.core.InsertChain(blocks); err != nil {
 		if err.Error() == "sub not synced to dom" ||
+			err.Error() == "unknown ancestor" ||
 			err.Error() == "could not find the body data to match the header root hash" ||
 			err.Error() == "dom client is not online" {
 			d.waitingOnAppend = true

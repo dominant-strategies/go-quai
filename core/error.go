@@ -40,6 +40,9 @@ var (
 
 	// ErrDomClientNotUp is returned when block is trying to be appended when domClient is not up.
 	ErrDomClientNotUp = errors.New("dom client is not online")
+
+	// ErrBadSubManifest is returned when a block's subordinate manifest does not match the subordinate manifest hash
+	ErrBadSubManifest = errors.New("subordinate manifest is incorrect")
 )
 
 // List of evm-call-message pre-checking errors. All state transition messages will
