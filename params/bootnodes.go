@@ -30,18 +30,6 @@ var ColosseumBootnodes = []string{
 // Garden test network.
 var GardenBootnodes = []string{}
 
-// RinkebyBootnodes are the enode URLs of the P2P bootstrap nodes running on the
-// Rinkeby test network.
-var RinkebyBootnodes = []string{}
-
-// GoerliBootnodes are the enode URLs of the P2P bootstrap nodes running on the
-// Görli test network.
-var GoerliBootnodes = []string{}
-
-// CalaverasBootnodes are the enode URLs of the P2P bootstrap nodes running on the
-// Calaveras ephemeral test network.
-var CalaverasBootnodes = []string{}
-
 var V5Bootnodes = []string{}
 
 const dnsPrefix = "enrtree://AKA3AM6LPBYEUDMVNU3BSVQJ5AD45Y7YPOHJLEF6W26QOE4VTUDPE@"
@@ -56,10 +44,6 @@ func KnownDNSNetwork(genesis common.Hash, protocol string) string {
 		net = "colosseum"
 	case GardenGenesisHash:
 		net = "garden"
-	case RinkebyGenesisHash:
-		net = "rinkeby"
-	case GoerliGenesisHash:
-		net = "goerli"
 	default:
 		return ""
 	}
