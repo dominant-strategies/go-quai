@@ -251,7 +251,7 @@ func (d *Downloader) UnregisterPeer(id string) error {
 func (d *Downloader) Synchronise(id string, head common.Hash, number uint64, mode SyncMode) error {
 	err := d.synchronise(id, head, number, mode)
 	switch err {
-	case nil, errBusy, errCanceled:
+	case nil, errBusy, errCanceled, errNoFetchesPending:
 		return err
 	}
 	if errors.Is(err, errInvalidChain) || errors.Is(err, errBadPeer) || errors.Is(err, errTimeout) ||
@@ -1153,10 +1153,10 @@ func (d *Downloader) processFullSyncContent(peerHeight uint64) error {
 			if err := d.importBlockResults(results); err != nil {
 				return err
 			}
-		}
-
-		if d.core.CurrentBlock().NumberU64() == peerHeight {
-			return nil
+			// If all the blocks are fetched, we exit the sync process
+			if results[0].Header.NumberU64() == peerHeight {
+				return errNoFetchesPending
+			}
 		}
 
 		// Come out of the for loop if the downloader cancel is invoked
