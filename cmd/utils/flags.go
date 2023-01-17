@@ -1384,7 +1384,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1
 		}
-		cfg.Genesis = core.DefaultGenesisBlock()
+		cfg.Genesis = core.DefaultColosseumGenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, params.ColosseumGenesisHash)
 	case ctx.GlobalBool(GardenFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
@@ -1515,7 +1515,7 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 	var genesis *core.Genesis
 	switch {
 	case ctx.GlobalBool(ColosseumFlag.Name):
-		genesis = core.DefaultGenesisBlock()
+		genesis = core.DefaultColosseumGenesisBlock()
 	case ctx.GlobalBool(GardenFlag.Name):
 		genesis = core.DefaultGardenGenesisBlock()
 	case ctx.GlobalBool(DeveloperFlag.Name):
