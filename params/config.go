@@ -25,16 +25,16 @@ import (
 
 // Genesis hashes to enforce below configs on.
 var (
-	MainnetGenesisHash   = common.HexToHash("0x211fe0e77b6aed86a2c8194c63c1998eb95d61a50d109fdb1a336c7b06dafe0d")
-	RopstenGenesisHash   = common.HexToHash("0x9db224e069262d1bc7a7fb97a12889daa0e217af386ba8a403e31162855b0da6")
+	ColosseumGenesisHash = common.HexToHash("0x211fe0e77b6aed86a2c8194c63c1998eb95d61a50d109fdb1a336c7b06dafe0d")
+	GardenGenesisHash    = common.HexToHash("0x9db224e069262d1bc7a7fb97a12889daa0e217af386ba8a403e31162855b0da6")
 	RinkebyGenesisHash   = common.HexToHash("0x6341fd3daf94b748c72ced5a5b26028f2474f5f00d824504e4fa37a75767e177")
 	GoerliGenesisHash    = common.HexToHash("0xbf7e331f7f7c1dd2e05159666b3bf8bc7a8a3a9eb1d518969eab529dd9b88c1a")
 	CalaverasGenesisHash = common.HexToHash("0xeb9233d066c275efcdfed8037f4fc082770176aefdbcb7691c71da412a5670f2")
 )
 
 var (
-	// MainnetChainConfig is the chain parameters to run a node on the main network.
-	MainnetChainConfig = &ChainConfig{
+	// ColosseumChainConfig is the chain parameters to run a node on the Colosseum network.
+	ColosseumChainConfig = &ChainConfig{
 		ChainID:             big.NewInt(9000),
 		HomesteadBlock:      big.NewInt(0),
 		DAOForkBlock:        big.NewInt(0),
@@ -51,12 +51,12 @@ var (
 		BerlinBlock:         big.NewInt(0),
 		LondonBlock:         big.NewInt(0),
 		Blake3pow:           new(Blake3powConfig),
-		GenesisHash:         MainnetGenesisHash,
+		GenesisHash:         ColosseumGenesisHash,
 	}
 
-	// RopstenChainConfig contains the chain parameters to run a node on the Ropsten test network.
-	RopstenChainConfig = &ChainConfig{
-		ChainID:             big.NewInt(3),
+	// GardenChainConfig contains the chain parameters to run a node on the Garden test network.
+	GardenChainConfig = &ChainConfig{
+		ChainID:             big.NewInt(12000),
 		HomesteadBlock:      big.NewInt(0),
 		DAOForkBlock:        nil,
 		DAOForkSupport:      true,
@@ -72,7 +72,7 @@ var (
 		BerlinBlock:         big.NewInt(0),
 		LondonBlock:         big.NewInt(0),
 		Blake3pow:           new(Blake3powConfig),
-		GenesisHash:         RopstenGenesisHash,
+		GenesisHash:         GardenGenesisHash,
 	}
 
 	// RinkebyChainConfig contains the chain parameters to run a node on the Rinkeby test network.

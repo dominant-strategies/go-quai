@@ -127,17 +127,17 @@ func MakeProtocols(backend Backend, network uint64, dnsdisc enode.Iterator) []p2
 	return protocols
 }
 
-// NodeInfo represents a short summary of the `eth` sub-protocol metadata
+// NodeInfo represents a short summary of the `quai` sub-protocol metadata
 // known about the host peer.
 type NodeInfo struct {
-	Network    uint64              `json:"network"`    // Ethereum network ID (1=Frontier, 2=Morden, Ropsten=3, Rinkeby=4)
+	Network    uint64              `json:"network"`    // Quai network ID (1=Colosseum, Garden=2)
 	Difficulty *big.Int            `json:"difficulty"` // Total difficulty of the host's blockchain
 	Genesis    common.Hash         `json:"genesis"`    // SHA3 hash of the host's genesis block
 	Config     *params.ChainConfig `json:"config"`     // Chain configuration for the fork rules
 	Head       common.Hash         `json:"head"`       // Hex hash of the host's best owned block
 }
 
-// nodeInfo retrieves some `eth` protocol metadata about the running host node.
+// nodeInfo retrieves some `quai` protocol metadata about the running host node.
 func nodeInfo(chain *core.Core, network uint64) *NodeInfo {
 	head := chain.CurrentBlock()
 	return &NodeInfo{
