@@ -21,8 +21,8 @@ package core
 // Use mkalloc.go to create/update them.
 
 // nolint: misspell
-const mainnetAllocData = "\xc0"
-const ropstenAllocData = "\xc0"
+const colosseumAllocData = "\xc0"
+const gardenAllocData = "\xc0"
 const rinkebyAllocData = "\xc0"
 const goerliAllocData = "\xc0"
 const calaverasAllocData = "\xc0"
