@@ -359,14 +359,6 @@ func (f *BlockFetcher) loop() {
 			}
 			// If too high up the chain or phase, continue later
 			number := op.number()
-			if number > height+1 {
-				f.queue.Push(op, -int64(number))
-				if f.queueChangeHook != nil {
-					f.queueChangeHook(hash, true)
-				}
-				break
-			}
-
 			// Otherwise if fresh and still unknown, try and import
 			if (number+maxUncleDist < height) || (f.light && f.getHeader(hash) != nil) || (!f.light && f.getBlock(hash) != nil) {
 				f.forgetBlock(hash)
