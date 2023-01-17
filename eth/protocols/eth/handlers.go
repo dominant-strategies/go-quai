@@ -231,7 +231,7 @@ func handleGetBlock66(backend Backend, msg Decoder, peer *Peer) error {
 		fmt.Println("Error decoding the message", err)
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
-	log.Info("Got a block fetch request eth/66: ", "Hash", query.Hash)
+	log.Debug("Got a block fetch request eth/66: ", "Hash", query.Hash)
 	// check if we have the requested block in the database.
 	response := backend.Core().GetBlockByHash(query.Hash)
 	if response != nil {
