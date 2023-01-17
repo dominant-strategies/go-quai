@@ -1,0 +1,207 @@
+services:
+  prime:
+    environment:
+      - TCP_PORT=30303
+      - HTTP_PORT=8547
+      - WS_PORT=8548
+      - NETWORK=garden
+      - SUB=--sub.urls ws://127.0.0.1:8579,ws://127.0.0.1:8581,ws://127.0.0.1:8583
+    build: .
+    ports:
+      - "30303"
+      - "8547"
+      - "8548"
+    volumes:
+      - ~/.quai:/root/.quai
+  cyprus:
+    environment:
+      - TCP_PORT=30304
+      - HTTP_PORT=8578
+      - WS_PORT=8579
+      - NETWORK=garden
+      - REGION=--region 0
+      - DOM=--dom.url ws://127.0.0.1:8547
+      - SUB=--sub.urls ws://127.0.0.1:8611,ws://127.0.0.1:8643,ws://127.0.0.1:8675
+    build: .
+    ports:
+      - "30304"
+      - "8578"
+      - "8579"
+    volumes:
+      - ~/.quai:/root/.quai
+  paxos:
+    environment:
+      - TCP_PORT=30305
+      - HTTP_PORT=8580
+      - WS_PORT=8581
+      - NETWORK=garden
+      - REGION=--region 1
+      - DOM=--dom.url ws://127.0.0.1:8547
+      - SUB=--sub.urls ws://127.0.0.1:8613,ws://127.0.0.1:8645,ws://127.0.0.1:8677
+    build: .
+    ports:
+      - "30305"
+      - "8580"
+      - "8581"
+    volumes:
+      - ~/.quai:/root/.quai
+  hydra:
+    environment:
+      - TCP_PORT=30306
+      - HTTP_PORT=8582
+      - WS_PORT=8583
+      - NETWORK=garden
+      - REGION=--region 2
+      - DOM=--dom.url ws://127.0.0.1:8547
+      - SUB=--sub.urls ws://127.0.0.1:8615,ws://127.0.0.1:8647,ws://127.0.0.1:8679
+    build: .
+    ports:
+      - "30306"
+      - "8582"
+      - "8583"
+    volumes:
+      - ~/.quai:/root/.quai
+  cyprus1:
+    environment:
+      - TCP_PORT=30307
+      - HTTP_PORT=8610
+      - WS_PORT=8611
+      - NETWORK=garden
+      - REGION=--region 0
+      - ZONE=--zone 0
+      - DOM=--dom.url ws://127.0.0.1:8579
+    build: .
+    ports:
+      - "30307"
+      - "8610"
+      - "8611"
+    volumes:
+      - ~/.quai:/root/.quai
+  cyprus2:
+    environment:
+      - TCP_PORT=30308
+      - HTTP_PORT=8542
+      - WS_PORT=8643
+      - NETWORK=garden
+      - REGION=--region 0
+      - ZONE=--zone 1
+      - DOM=--dom.url ws://127.0.0.1:8579
+    build: .
+    ports:
+      - "30308"
+      - "8542"
+      - "8642"
+    volumes:
+      - ~/.quai:/root/.quai
+  cyprus3:
+    environment:
+      - TCP_PORT=30309
+      - HTTP_PORT=8674
+      - WS_PORT=8675
+      - NETWORK=garden
+      - REGION=--region 0
+      - ZONE=--zone 2
+      - DOM=--dom.url ws://127.0.0.1:8579
+    build: .
+    ports:
+      - "30309"
+      - "8674"
+      - "8675"
+    volumes:
+      - ~/.quai:/root/.quai
+  paxos1:
+    environment:
+      - TCP_PORT=30310
+      - HTTP_PORT=8512
+      - WS_PORT=8613
+      - NETWORK=garden
+      - REGION=--region 1
+      - ZONE=--zone 0
+      - DOM=--dom.url ws://127.0.0.1:8581
+    build: .
+    ports:
+      - "30310"
+      - "8512"
+      - "8613"
+    volumes:
+      - ~/.quai:/root/.quai
+  paxos2:
+    environment:
+      - TCP_PORT=30311
+      - HTTP_PORT=8544
+      - WS_PORT=8645
+      - NETWORK=garden
+      - REGION=--region 1
+      - ZONE=--zone 1
+      - DOM=--dom.url ws://127.0.0.1:8581
+    build: .
+    ports:
+      - "30311"
+      - "8544"
+      - "8645"
+    volumes:
+      - ~/.quai:/root/.quai
+  paxos3:
+    environment:
+      - TCP_PORT=30312
+      - HTTP_PORT=8576
+      - WS_PORT=8677
+      - NETWORK=garden
+      - REGION=--region 1
+      - ZONE=--zone 2
+      - DOM=--dom.url ws://127.0.0.1:8581
+    build: .
+    ports:
+      - "30312"
+      - "8576"
+      - "8677"
+    volumes:
+      - ~/.quai:/root/.quai
+  hydra1:
+    environment:
+      - TCP_PORT=30313
+      - HTTP_PORT=8614
+      - WS_PORT=8615
+      - NETWORK=garden
+      - REGION=--region 2
+      - ZONE=--zone 0
+      - DOM=--dom.url ws://127.0.0.1:8583
+    build: .
+    ports:
+      - "30313"
+      - "8614"
+      - "8615"
+    volumes:
+      - ~/.quai:/root/.quai
+  hydra2:
+    environment:
+      - TCP_PORT=30314
+      - HTTP_PORT=8646
+      - WS_PORT=8647
+      - NETWORK=garden
+      - REGION=--region 2
+      - ZONE=--zone 1
+      - DOM=--dom.url ws://127.0.0.1:8583
+    build: .
+    ports:
+      - "30314"
+      - "8646"
+      - "8647"
+    volumes:
+      - ~/.quai:/root/.quai
+  hydra3:
+    environment:
+      - TCP_PORT=30315
+      - HTTP_PORT=8678
+      - WS_PORT=8679
+      - NETWORK=garden
+      - REGION=--region 2
+      - ZONE=--zone 2
+      - DOM=--dom.url ws://127.0.0.1:8583
+    build: .
+    ports:
+      - "30315"
+      - "8678"
+      - "8679"
+    volumes:
+      - ~/.quai:/root/.quai
