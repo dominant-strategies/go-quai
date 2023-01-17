@@ -146,10 +146,10 @@ func (e *GenesisMismatchError) Error() string {
 // SetupGenesisBlock writes or updates the genesis block in db.
 // The block that will be used is:
 //
-//                          genesis == nil       genesis != nil
-//                       +------------------------------------------
-//     db has no genesis |  main-net default  |  genesis
-//     db has genesis    |  from DB           |  genesis (if compatible)
+//	                     genesis == nil       genesis != nil
+//	                  +------------------------------------------
+//	db has no genesis |  main-net default  |  genesis
+//	db has genesis    |  from DB           |  genesis (if compatible)
 //
 // The stored chain configuration will be updated if it is compatible (i.e. does not
 // specify a fork block below the local head block). In case of a conflict, the
@@ -380,7 +380,7 @@ func DefaultGardenGenesisBlock() *Genesis {
 		Nonce:      66,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
 		GasLimit:   []uint64{10000000, 10000000, 10000000},
-		Difficulty: []*big.Int{big.NewInt(1600000), big.NewInt(800000), big.NewInt(80000)},
+		Difficulty: []*big.Int{big.NewInt(32048576), big.NewInt(8048576), big.NewInt(2048576)},
 		Alloc:      decodePrealloc(gardenAllocData),
 	}
 }
