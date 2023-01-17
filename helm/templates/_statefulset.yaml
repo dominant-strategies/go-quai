@@ -1,0 +1,54 @@
+{{- define "go-quai.clusterIP" }}
+- name: prime-http
+  port: <HTTP>
+  protocol: TCP
+  targetPort: <HTTP>
+- name: prime-ws
+  port: <WS>
+  protocol: TCP
+  targetPort: <WS>
+- name: prime-disc
+  port: <DISC>
+  protocol: UDP
+  targetPort: <DISC>
+{{- end }}
+{{- define "go-quai.statefulset" }}
+- image: {{ .Values.goQuai.image.name -}}:{{- .Values.goQuai.image.version }}
+  imagePullPolicy: Always
+  name: prime-go-quai
+  env:
+  - name: COINBASE_ADDR
+    valueFrom:
+      secretKeyRef:
+        name: {{ include "go-quai.name" $ }}
+        key: PRIME_COINBASE_ADDR
+  - name: TCP_PORT
+    value: "<DISC>"
+  - name: HTTP_PORT
+    value: "<HTTP>"
+  - name: WS_PORT
+    value: "<WS>"
+  - name: NETWORK
+    value: {{ .Values.goQuai.network }}
+  - name: REGION
+    value: "<REGION>"
+  - name: ZONE
+    value: "<ZONE>"
+  - name: DOM
+    value: "<DOM>"
+  - name: SUB
+    value: "<SUB>"
+  ports:
+  - containerPort: <HTTP>
+    name: prime-http
+    protocol: TCP
+  - containerPort: <WS>
+    name: prime-ws
+    protocol: TCP
+  - containerPort: <DISC>
+    name: prime-disc
+    protocol: UDP
+  volumeMounts:
+  - mountPath: /root/.quai/
+    name: {{ include "go-quai.name" $ }}
+{{- end }}

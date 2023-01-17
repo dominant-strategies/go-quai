@@ -1,0 +1,51 @@
+{{- $name := include "go-quai.name" . -}}
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+  labels:
+    app: {{ $name }}
+  name: {{ $name }}
+  namespace: {{ .Values.goQuai.env }}
+spec:
+  ports:
+{{- range $chain := .Values.goQuai.chains }}
+{{ include "go-quai.clusterIP" $ | replace "<HTTP>" $chain.ports.http | replace "<WS>" $chain.ports.ws | replace "<DISC>" $chain.ports.disc | replace "prime" $chain.name | indent 2 }}
+{{- end }}
+  selector:
+    app: {{ $name }}
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  annotations:
+  name: {{ $name }}
+  namespace: {{ .Values.goQuai.env }}
+spec:
+  replicas: {{ .Values.goQuai.replicas }}
+  selector:
+    matchLabels:
+      app: {{ $name }}
+  serviceName: {{ $name }}
+  template:
+    metadata:
+      labels:
+        app: {{ $name }}
+    spec:
+      containers:
+{{- range $chain := .Values.goQuai.chains }}
+{{ include "go-quai.statefulset" $ | replace "<REGION>" $chain.region | replace "<ZONE>" $chain.zone | replace "<DOM>" $chain.dom | replace "<SUB>" $chain.sub | replace "<HTTP>" $chain.ports.http | replace "<WS>" $chain.ports.ws | replace "<DISC>" $chain.ports.disc | replace "prime" $chain.name | replace "PRIME" ($chain.name | upper) | indent 6 }}
+{{- end }}
+  volumeClaimTemplates:
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: {{ $name }}
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 2Ti
+      storageClassName: premium-rwo
