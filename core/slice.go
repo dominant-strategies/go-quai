@@ -149,7 +149,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	if !isDomCoincident {
 		newInboundEtxs, subRollup, err = sl.CollectNewlyConfirmedEtxs(block, block.Location())
 		if err != nil {
-			log.Warn("Error collecting newly confirmed etxs: ", "err", err)
+			log.Debug("Error collecting newly confirmed etxs: ", "err", err)
 			return nil, ErrSubNotSyncedToDom
 		}
 	}
@@ -473,7 +473,7 @@ func (sl *Slice) GetSubManifest(slice common.Location, blockHash common.Hash) (t
 }
 
 func (sl *Slice) AddPendingEtxs(pEtxs types.PendingEtxs) error {
-	log.Info("Received pending ETXs", "block: ", pEtxs.Header.Hash())
+	log.Debug("Received pending ETXs", "block: ", pEtxs.Header.Hash())
 	// Only write the pending ETXs if we have not seen them before
 	if !sl.pendingEtxs.Contains(pEtxs.Header.Hash()) {
 		// Write to pending ETX database
