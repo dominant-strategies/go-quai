@@ -359,8 +359,14 @@ func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big
 	return g.MustCommit(db)
 }
 
-// DefaultGenesisBlock returns the Quai Colosseum testnet genesis block.
+// DefaultGenesisBlock returns the Latest default Genesis block.
+// Currently it returns the DefaultColosseumGenesisBlock.
 func DefaultGenesisBlock() *Genesis {
+	return DefaultColosseumGenesisBlock()
+}
+
+// DefaultColosseumGenesisBlock returns the Quai Colosseum testnet genesis block.
+func DefaultColosseumGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.ColosseumChainConfig,
 		Knot:       ReadKnot("./core/knot/colosseum_knot.rlp"),
