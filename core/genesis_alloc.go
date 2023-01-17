@@ -23,6 +23,3 @@ package core
 // nolint: misspell
 const colosseumAllocData = "\xc0"
 const gardenAllocData = "\xc0"
-const rinkebyAllocData = "\xc0"
-const goerliAllocData = "\xc0"
-const calaverasAllocData = "\xc0"

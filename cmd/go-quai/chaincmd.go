@@ -66,9 +66,6 @@ It expects the genesis file as argument.`,
 		Flags: []cli.Flag{
 			utils.ColosseumFlag,
 			utils.GardenFlag,
-			utils.RinkebyFlag,
-			utils.GoerliFlag,
-			utils.CalaverasFlag,
 		},
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
