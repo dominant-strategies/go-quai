@@ -40,8 +40,8 @@ func TestCreation(t *testing.T) {
 	}{
 		// Mainnet test cases
 		{
-			params.MainnetChainConfig,
-			params.MainnetGenesisHash,
+			params.ColosseumChainConfig,
+			params.ColosseumGenesisHash,
 			[]testcase{
 				{0, ID{Hash: checksumToBytes(0xfc64ec04), Next: 1150000}},         // Unsynced
 				{1149999, ID{Hash: checksumToBytes(0xfc64ec04), Next: 1150000}},   // Last Frontier block
@@ -67,10 +67,10 @@ func TestCreation(t *testing.T) {
 				{20000000, ID{Hash: checksumToBytes(0xb715077d), Next: 0}},        // Future London block
 			},
 		},
-		// Ropsten test cases
+		// Garden test cases
 		{
-			params.RopstenChainConfig,
-			params.RopstenGenesisHash,
+			params.GardenChainConfig,
+			params.GardenGenesisHash,
 			[]testcase{
 				{0, ID{Hash: checksumToBytes(0x30c7ddbc), Next: 10}},              // Unsynced, last Frontier, Homestead and first Tangerine block
 				{9, ID{Hash: checksumToBytes(0x30c7ddbc), Next: 10}},              // Last Tangerine block
@@ -208,7 +208,7 @@ func TestValidation(t *testing.T) {
 		// Local is mainnet London, far in the future. Remote announces Gopherium (non existing fork)
 		// at some future block 88888888, for itself, but past block for local. Local is incompatible.
 		//
-		// This case detects non-upgraded nodes with majority hash power (typical Ropsten mess).
+		// This case detects non-upgraded nodes with majority hash power (typical Garden mess).
 		{88888888, ID{Hash: checksumToBytes(0xb715077d), Next: 88888888}, ErrLocalIncompatibleOrStale},
 
 		// Local is mainnet Byzantium. Remote is also in Byzantium, but announces Gopherium (non existing
@@ -216,7 +216,7 @@ func TestValidation(t *testing.T) {
 		{7279999, ID{Hash: checksumToBytes(0xa00bc324), Next: 7279999}, ErrLocalIncompatibleOrStale},
 	}
 	for i, tt := range tests {
-		filter := newFilter(params.MainnetChainConfig, params.MainnetGenesisHash, func() uint64 { return tt.head })
+		filter := newFilter(params.ColosseumChainConfig, params.ColosseumGenesisHash, func() uint64 { return tt.head })
 		if err := filter(tt.id); err != tt.err {
 			t.Errorf("test %d: validation error mismatch: have %v, want %v", i, err, tt.err)
 		}

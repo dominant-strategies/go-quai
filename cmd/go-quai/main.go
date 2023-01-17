@@ -109,10 +109,10 @@ var (
 		utils.NodeKeyFileFlag,
 		utils.NodeKeyHexFlag,
 		utils.DNSDiscoveryFlag,
-		utils.MainnetFlag,
+		utils.ColosseumFlag,
 		utils.DeveloperFlag,
 		utils.DeveloperPeriodFlag,
-		utils.RopstenFlag,
+		utils.GardenFlag,
 		utils.RinkebyFlag,
 		utils.GoerliFlag,
 		utils.CalaverasFlag,
@@ -226,8 +226,8 @@ func main() {
 func prepare(ctx *cli.Context) {
 	// If we're running a known preset, log it for convenience.
 	switch {
-	case ctx.GlobalIsSet(utils.RopstenFlag.Name):
-		log.Info("Starting Quai on Ropsten testnet...")
+	case ctx.GlobalIsSet(utils.GardenFlag.Name):
+		log.Info("Starting Quai on Garden testnet...")
 
 	case ctx.GlobalIsSet(utils.RinkebyFlag.Name):
 		log.Info("Starting Quai on Rinkeby testnet...")
@@ -242,14 +242,14 @@ func prepare(ctx *cli.Context) {
 		log.Info("Starting Quai in ephemeral dev mode...")
 
 	case !ctx.GlobalIsSet(utils.NetworkIdFlag.Name):
-		log.Info("Starting Quai on mainnet...")
+		log.Info("Starting Quai on Colosseum testnet...")
 	}
-	// If we're a full node on mainnet without --cache specified, bump default cache allowance
+	// If we're a full node on colosseum without --cache specified, bump default cache allowance
 	if ctx.GlobalString(utils.SyncModeFlag.Name) != "light" && !ctx.GlobalIsSet(utils.CacheFlag.Name) && !ctx.GlobalIsSet(utils.NetworkIdFlag.Name) {
 		// Make sure we're not on any supported preconfigured testnet either
-		if !ctx.GlobalIsSet(utils.RopstenFlag.Name) && !ctx.GlobalIsSet(utils.RinkebyFlag.Name) && !ctx.GlobalIsSet(utils.GoerliFlag.Name) && !ctx.GlobalIsSet(utils.DeveloperFlag.Name) {
-			// Nope, we're really on mainnet. Bump that cache up!
-			log.Info("Bumping default cache on mainnet", "provided", ctx.GlobalInt(utils.CacheFlag.Name), "updated", 4096)
+		if !ctx.GlobalIsSet(utils.GardenFlag.Name) && !ctx.GlobalIsSet(utils.RinkebyFlag.Name) && !ctx.GlobalIsSet(utils.GoerliFlag.Name) && !ctx.GlobalIsSet(utils.DeveloperFlag.Name) {
+			// Nope, we're really on colosseum. Bump that cache up!
+			log.Info("Bumping default cache on colosseum", "provided", ctx.GlobalInt(utils.CacheFlag.Name), "updated", 4096)
 			ctx.GlobalSet(utils.CacheFlag.Name, strconv.Itoa(4096))
 		}
 	}

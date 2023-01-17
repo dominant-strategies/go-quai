@@ -221,7 +221,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 	// Special case: don't change the existing config of a non-mainnet chain if no new
 	// config is supplied. These chains would get AllProtocolChanges (and a compat error)
 	// if we just continued here.
-	if genesis == nil && stored != params.MainnetGenesisHash {
+	if genesis == nil && stored != params.ColosseumGenesisHash {
 		return storedcfg, stored, nil
 	}
 	// Check config compatibility and write the config. Compatibility errors
@@ -242,10 +242,10 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 	switch {
 	case g != nil:
 		return g.Config
-	case ghash == params.MainnetGenesisHash:
-		return params.MainnetChainConfig
-	case ghash == params.RopstenGenesisHash:
-		return params.RopstenChainConfig
+	case ghash == params.ColosseumGenesisHash:
+		return params.ColosseumChainConfig
+	case ghash == params.GardenGenesisHash:
+		return params.GardenChainConfig
 	case ghash == params.RinkebyGenesisHash:
 		return params.RinkebyChainConfig
 	case ghash == params.GoerliGenesisHash:
@@ -365,29 +365,29 @@ func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big
 	return g.MustCommit(db)
 }
 
-// DefaultGenesisBlock returns the Ethereum main net genesis block.
+// DefaultGenesisBlock returns the Quai Colosseum testnet genesis block.
 func DefaultGenesisBlock() *Genesis {
 	return &Genesis{
-		Config:     params.MainnetChainConfig,
-		Knot:       ReadKnot("./core/knot/mainnet_knot.rlp"),
+		Config:     params.ColosseumChainConfig,
+		Knot:       ReadKnot("./core/knot/colosseum_knot.rlp"),
 		Nonce:      66,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
 		GasLimit:   []uint64{10000000, 10000000, 10000000},
 		Difficulty: []*big.Int{big.NewInt(32048576), big.NewInt(8048576), big.NewInt(2048576)},
-		Alloc:      decodePrealloc(mainnetAllocData),
+		Alloc:      decodePrealloc(colosseumAllocData),
 	}
 }
 
-// DefaultRopstenGenesisBlock returns the Ropsten network genesis block.
-func DefaultRopstenGenesisBlock() *Genesis {
+// DefaultGardenGenesisBlock returns the Garden testnet genesis block.
+func DefaultGardenGenesisBlock() *Genesis {
 	return &Genesis{
-		Config:     params.RopstenChainConfig,
-		Knot:       ReadKnot("./core/knot/ropsten_knot.rlp"),
+		Config:     params.GardenChainConfig,
+		Knot:       ReadKnot("./core/knot/garden_knot.rlp"),
 		Nonce:      66,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
 		GasLimit:   []uint64{10000000, 10000000, 10000000},
 		Difficulty: []*big.Int{big.NewInt(1600000), big.NewInt(800000), big.NewInt(80000)},
-		Alloc:      decodePrealloc(ropstenAllocData),
+		Alloc:      decodePrealloc(gardenAllocData),
 	}
 }
 
