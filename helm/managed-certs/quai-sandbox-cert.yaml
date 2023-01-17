@@ -1,0 +1,21 @@
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  annotations:
+  name: go-quai-prod
+  namespace: quai-prod
+spec:
+  domains:
+  - prime.rpc.quaiscan.io
+  - cyprus.rpc.quaiscan.io
+  - paxos.rpc.quaiscan.io
+  - hydra.rpc.quaiscan.io
+  - cyprus1.rpc.quaiscan.io
+  - cyprus2.rpc.quaiscan.io
+  - cyprus3.rpc.quaiscan.io
+  - paxos1.rpc.quaiscan.io
+  - paxos2.rpc.quaiscan.io
+  - paxos3.rpc.quaiscan.io
+  - hydra1.rpc.quaiscan.io
+  - hydra2.rpc.quaiscan.io
+  - hydra3.rpc.quaiscan.io
