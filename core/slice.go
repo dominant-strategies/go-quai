@@ -263,7 +263,7 @@ func (sl *Slice) relayPh(pendingHeaderWithTermini types.PendingHeader, updateMin
 	}
 }
 
-// CollectEtxsForManifest will gather the full list of ETXs that are referencable through a given manifest
+// CollectEtxsForManifest will gather the full list of ETXs that are referenceable through a given manifest
 func (sl *Slice) CollectSubRollups(b *types.Block) ([]types.Transactions, error) {
 	nodeCtx := common.NodeLocation.Context()
 	subRollups := make([]types.Transactions, 3)
