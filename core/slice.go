@@ -217,12 +217,15 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	// 2) Compute the rollup of my subordinate and assign to ctx = nodeCtx+1
 	// 3) Assign local pending ETXs to ctx = nodeCtx
 	for ctx := nodeCtx + 2; ctx < common.HierarchyDepth; ctx++ {
+		localPendingEtxs[ctx] = make(types.Transactions, len(subPendingEtxs[ctx]))
 		copy(localPendingEtxs[ctx], subPendingEtxs[ctx]) // copy pending for each indirect sub
 	}
 	if nodeCtx < common.ZONE_CTX {
-		localPendingEtxs[nodeCtx+1] = subRollup // overwrite direct sub with sub rollup
+		localPendingEtxs[nodeCtx+1] = make(types.Transactions, len(subRollup))
+		copy(localPendingEtxs[nodeCtx+1], subRollup) // overwrite direct sub with sub rollup
 	}
-	localPendingEtxs[nodeCtx] = block.ExtTransactions() // Assing our new ETXs without rolling up
+	localPendingEtxs[nodeCtx] = make(types.Transactions, len(block.ExtTransactions()))
+	copy(localPendingEtxs[nodeCtx], block.ExtTransactions()) // Assign our new ETXs without rolling up
 
 	// WriteTd
 	rawdb.WriteTd(batch, block.Header().Hash(), block.NumberU64(), td)
