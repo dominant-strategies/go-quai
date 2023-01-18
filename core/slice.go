@@ -597,7 +597,7 @@ func (sl *Slice) pickPhCacheHead(reorg bool, externPendingHeaderWithTermini type
 		return true
 	}
 
-	localPendingHeader, exists := sl.phCache[externPendingHeaderWithTermini.Termini[terminiIndex]]
+	localPendingHeader, exists := sl.phCache[sl.pendingHeaderHeadHash]
 	if exists && (externPendingHeaderWithTermini.Header.NumberU64() > localPendingHeader.Header.NumberU64()) {
 		sl.updateCurrentPendingHeader(externPendingHeaderWithTermini)
 		return true
