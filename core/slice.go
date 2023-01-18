@@ -155,6 +155,12 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 			log.Debug("Error collecting newly confirmed etxs: ", "err", err)
 			return nil, ErrSubNotSyncedToDom
 		}
+	} else if nodeCtx < common.ZONE_CTX {
+		subRollups, err := sl.CollectSubRollups(block)
+		if err != nil {
+			return nil, err
+		}
+		subRollup = subRollups[nodeCtx+1]
 	}
 
 	// Append the new block
