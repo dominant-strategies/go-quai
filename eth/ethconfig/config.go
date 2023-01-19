@@ -171,8 +171,9 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, co
 		log.Warn("Blake3pow used in shared mode")
 	}
 	engine := blake3pow.New(blake3pow.Config{
-		PowMode:    config.PowMode,
-		NotifyFull: config.NotifyFull,
+		PowMode:       config.PowMode,
+		NotifyFull:    config.NotifyFull,
+		DurationLimit: config.DurationLimit,
 	}, notify, noverify)
 	engine.SetThreads(-1) // Disable CPU mining
 	return engine

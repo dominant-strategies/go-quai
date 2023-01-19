@@ -158,4 +158,5 @@ var (
 	MinimumDifficulty      = []*big.Int{PrimeMinDifficulty, RegionMinDifficulty, ZoneMinDifficulty} // The minimum that the difficulty may ever be.
 	GenesisDifficulty      = []*big.Int{PrimeMinDifficulty, RegionMinDifficulty, ZoneMinDifficulty} // Difficulty of the Genesis block.
 	DurationLimit          = []*big.Int{big.NewInt(1000), big.NewInt(100), big.NewInt(10)}          // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
+	GardenDurationLimit    = []*big.Int{big.NewInt(150), big.NewInt(30), big.NewInt(3)}             // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
 )
