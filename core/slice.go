@@ -59,7 +59,7 @@ type Slice struct {
 	pendingHeaderHeadHash common.Hash
 	phCache               map[common.Hash]types.PendingHeader
 
-	validator     Validator // Block and state validator interface
+	validator Validator // Block and state validator interface
 }
 
 func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocalBlock func(block *types.Header) bool, chainConfig *params.ChainConfig, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis) (*Slice, error) {
@@ -712,6 +712,9 @@ func (sl *Slice) ConstructLocalBlock(header *types.Header) (*types.Block, error)
 
 			block = types.NewBlockWithHeader(header).WithBody(txs, uncles, etxs, subBlockHashes)
 		}
+	}
+	if block == nil {
+		return nil, ErrBodyNotFound
 	}
 	if err := sl.validator.ValidateBody(block); err != nil {
 		return block, err
