@@ -1148,6 +1148,18 @@ func setTxPool(ctx *cli.Context, cfg *core.TxPoolConfig) {
 }
 
 func setBlake3pow(ctx *cli.Context, cfg *ethconfig.Config) {
+	// Override any default configs for hard coded networks.
+	switch {
+	case ctx.GlobalBool(ColosseumFlag.Name):
+		cfg.Blake3pow.DurationLimit = params.DurationLimit
+	case ctx.GlobalBool(GardenFlag.Name):
+		cfg.Blake3pow.DurationLimit = params.GardenDurationLimit
+	case ctx.GlobalBool(DeveloperFlag.Name):
+		cfg.Blake3pow.DurationLimit = params.DurationLimit
+	default:
+		cfg.Blake3pow.DurationLimit = params.DurationLimit
+
+	}
 }
 
 func setMiner(ctx *cli.Context, cfg *core.Config) {

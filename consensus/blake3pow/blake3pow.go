@@ -1,6 +1,7 @@
 package blake3pow
 
 import (
+	"math/big"
 	"math/rand"
 	"sync"
 	"time"
@@ -39,6 +40,8 @@ const (
 // Config are the configuration parameters of the blake3pow.
 type Config struct {
 	PowMode Mode
+
+	DurationLimit []*big.Int
 
 	// When set, notifications sent by the remote sealer will
 	// be block header JSON objects instead of work package arrays.
