@@ -138,6 +138,10 @@ var (
 		Name:  "garden",
 		Usage: "Garden network: pre-configured proof-of-work test network",
 	}
+	LocalFlag = cli.BoolFlag{
+		Name:  "local",
+		Usage: "Local network: localhost proof-of-work node, will not attempt to connect to bootnode or any public network",
+	}
 	DeveloperFlag = cli.BoolFlag{
 		Name:  "dev",
 		Usage: "Ephemeral proof-of-authority network with a pre-funded developer account, mining enabled",
@@ -660,6 +664,11 @@ func MakeDataDir(ctx *cli.Context) string {
 			// Garden database in `testnet` instead of `garden`.
 			path = filepath.Join(path, "garden")
 		}
+		if ctx.GlobalBool(LocalFlag.Name) {
+			// Maintain compatibility with older Geth configurations storing the
+			// Local database in `local` instead of `testnet`.
+			path = filepath.Join(path, "local")
+		}
 		// Set specific directory for node location within the hierarchy
 		switch common.NodeLocation.Context() {
 		case common.PRIME_CTX:
@@ -720,6 +729,8 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 		urls = SplitAndTrim(ctx.GlobalString(BootnodesFlag.Name))
 	case ctx.GlobalBool(GardenFlag.Name):
 		urls = params.GardenBootnodes
+	case ctx.GlobalBool(LocalFlag.Name):
+		urls = []string{}
 	case cfg.BootstrapNodes != nil:
 		return // already set, don't apply defaults.
 	}
@@ -1069,6 +1080,8 @@ func setDataDir(ctx *cli.Context, cfg *node.Config) {
 		cfg.DataDir = "" // unless explicitly requested, use memory databases
 	case ctx.GlobalBool(GardenFlag.Name) && cfg.DataDir == node.DefaultDataDir():
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "garden")
+	case ctx.GlobalBool(LocalFlag.Name) && cfg.DataDir == node.DefaultDataDir():
+		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "local")
 	}
 	// Set specific directory for node location within the hierarchy
 	switch common.NodeLocation.Context() {
@@ -1154,6 +1167,8 @@ func setBlake3pow(ctx *cli.Context, cfg *ethconfig.Config) {
 		cfg.Blake3pow.DurationLimit = params.DurationLimit
 	case ctx.GlobalBool(GardenFlag.Name):
 		cfg.Blake3pow.DurationLimit = params.GardenDurationLimit
+	case ctx.GlobalBool(LocalFlag.Name):
+		cfg.Blake3pow.DurationLimit = params.LocalDurationLimit
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		cfg.Blake3pow.DurationLimit = params.DurationLimit
 	default:
@@ -1269,7 +1284,7 @@ func SetGlobalVars(ctx *cli.Context) {
 // SetEthConfig applies eth-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Avoid conflicting network flags
-	CheckExclusive(ctx, ColosseumFlag, DeveloperFlag, GardenFlag)
+	CheckExclusive(ctx, ColosseumFlag, DeveloperFlag, GardenFlag, LocalFlag)
 	CheckExclusive(ctx, DeveloperFlag, ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer
 
 	if ctx.GlobalString(GCModeFlag.Name) == "archive" && ctx.GlobalUint64(TxLookupLimitFlag.Name) != 0 {
@@ -1404,6 +1419,12 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		}
 		cfg.Genesis = core.DefaultGardenGenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, params.GardenGenesisHash)
+	case ctx.GlobalBool(LocalFlag.Name):
+		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
+			cfg.NetworkId = 3
+		}
+		cfg.Genesis = core.DefaultLocalGenesisBlock()
+		SetDNSDiscoveryDefaults(cfg, params.LocalGenesisHash)
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1337
@@ -1530,6 +1551,8 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 		genesis = core.DefaultColosseumGenesisBlock()
 	case ctx.GlobalBool(GardenFlag.Name):
 		genesis = core.DefaultGardenGenesisBlock()
+	case ctx.GlobalBool(LocalFlag.Name):
+		genesis = core.DefaultLocalGenesisBlock()
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		Fatalf("Developer chains are ephemeral")
 	}

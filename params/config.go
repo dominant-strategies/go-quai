@@ -27,6 +27,7 @@ import (
 var (
 	ColosseumGenesisHash = common.HexToHash("0x211fe0e77b6aed86a2c8194c63c1998eb95d61a50d109fdb1a336c7b06dafe0d")
 	GardenGenesisHash    = common.HexToHash("0x8b120f0d746602a7a1e0442b7b84404ac5fda7067561e3a9af61188d6938a4fc")
+	LocalGenesisHash     = common.HexToHash("0xc0bf4351d8d1421816671999c1650dd1e7da3f93c928043683025404309cf3cb")
 )
 
 var (
@@ -70,6 +71,27 @@ var (
 		LondonBlock:         big.NewInt(0),
 		Blake3pow:           new(Blake3powConfig),
 		GenesisHash:         GardenGenesisHash,
+	}
+
+	// LocalChainConfig contains the chain parameters to run a node on the Local test network.
+	LocalChainConfig = &ChainConfig{
+		ChainID:             big.NewInt(1337),
+		HomesteadBlock:      big.NewInt(0),
+		DAOForkBlock:        nil,
+		DAOForkSupport:      true,
+		EIP150Block:         big.NewInt(0),
+		EIP150Hash:          common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
+		MuirGlacierBlock:    big.NewInt(0),
+		BerlinBlock:         big.NewInt(0),
+		LondonBlock:         big.NewInt(0),
+		Blake3pow:           new(Blake3powConfig),
+		GenesisHash:         LocalGenesisHash,
 	}
 
 	// AllBlake3powProtocolChanges contains every protocol change (EIPs) introduced

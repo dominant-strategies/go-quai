@@ -113,6 +113,7 @@ var (
 		utils.DeveloperFlag,
 		utils.DeveloperPeriodFlag,
 		utils.GardenFlag,
+		utils.LocalFlag,
 		utils.VMEnableDebugFlag,
 		utils.NetworkIdFlag,
 		utils.QuaiStatsURLFlag,
@@ -226,6 +227,9 @@ func prepare(ctx *cli.Context) {
 	case ctx.GlobalIsSet(utils.GardenFlag.Name):
 		log.Info("Starting Quai on Garden testnet...")
 
+	case ctx.GlobalIsSet(utils.LocalFlag.Name):
+		log.Info("Starting Quai on Local testnet...")
+
 	case ctx.GlobalIsSet(utils.DeveloperFlag.Name):
 		log.Info("Starting Quai in ephemeral dev mode...")
 
@@ -235,7 +239,7 @@ func prepare(ctx *cli.Context) {
 	// If we're a full node on colosseum without --cache specified, bump default cache allowance
 	if ctx.GlobalString(utils.SyncModeFlag.Name) != "light" && !ctx.GlobalIsSet(utils.CacheFlag.Name) && !ctx.GlobalIsSet(utils.NetworkIdFlag.Name) {
 		// Make sure we're not on any supported preconfigured testnet either
-		if !ctx.GlobalIsSet(utils.GardenFlag.Name) && !ctx.GlobalIsSet(utils.DeveloperFlag.Name) {
+		if !ctx.GlobalIsSet(utils.GardenFlag.Name) && !ctx.GlobalIsSet(utils.LocalFlag.Name) && !ctx.GlobalIsSet(utils.DeveloperFlag.Name) {
 			// Nope, we're really on colosseum. Bump that cache up!
 			log.Info("Bumping default cache on colosseum", "provided", ctx.GlobalInt(utils.CacheFlag.Name), "updated", 4096)
 			ctx.GlobalSet(utils.CacheFlag.Name, strconv.Itoa(4096))
