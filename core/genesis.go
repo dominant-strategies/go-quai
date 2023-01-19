@@ -383,7 +383,7 @@ func DefaultGardenGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.GardenChainConfig,
 		Knot:       ReadKnot("./core/knot/garden_knot.rlp"),
-		Nonce:      66,
+		Nonce:      67,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
 		GasLimit:   []uint64{10000000, 10000000, 10000000},
 		Difficulty: []*big.Int{big.NewInt(32048576), big.NewInt(8048576), big.NewInt(2048576)},
