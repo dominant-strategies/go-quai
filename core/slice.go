@@ -298,6 +298,9 @@ func (sl *Slice) CollectSubRollups(b *types.Block) ([]types.Transactions, error)
 				subRollups[ctx] = append(subRollups[ctx], pendingEtxs[ctx]...)
 			}
 		}
+		if subRollupHash := types.DeriveSha(subRollups[nodeCtx+1], trie.NewStackTrie(nil)); subRollupHash != b.EtxRollupHash(nodeCtx+1) {
+			return nil, errors.New("sub rollup does not match sub rollup hash")
+		}
 	}
 	return subRollups, nil
 }
