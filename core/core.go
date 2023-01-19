@@ -121,7 +121,8 @@ func (c *Core) procfutureHeaders() {
 			if err != nil {
 				log.Debug("could not construct block from future header", "err:", err)
 			} else {
-				c.InsertChain([]*types.Block{block})
+				_, err = c.InsertChain([]*types.Block{block})
+				log.Info("Err from future header proc: ", err)
 			}
 		}
 	}
