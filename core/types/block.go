@@ -639,7 +639,7 @@ type extblock struct {
 	Txs         []*Transaction
 	Uncles      []*Header
 	Etxs        []*Transaction
-	SubManifest []common.Hash
+	SubManifest BlockManifest
 }
 
 func NewBlock(header *Header, txs []*Transaction, uncles []*Header, etxs []*Transaction, subManifest BlockManifest, receipts []*Receipt, hasher TrieHasher) *Block {
