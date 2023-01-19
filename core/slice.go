@@ -59,7 +59,7 @@ type Slice struct {
 	pendingHeaderHeadHash common.Hash
 	phCache               map[common.Hash]types.PendingHeader
 
-	validator     Validator // Block and state validator interface
+	validator Validator // Block and state validator interface
 }
 
 func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocalBlock func(block *types.Header) bool, chainConfig *params.ChainConfig, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis) (*Slice, error) {
@@ -595,7 +595,14 @@ func (sl *Slice) pickPhCacheHead(reorg bool, externPendingHeaderWithTermini type
 	}
 
 	localPendingHeader, exists := sl.phCache[sl.pendingHeaderHeadHash]
-	if exists && (externPendingHeaderWithTermini.Header.NumberU64() > localPendingHeader.Header.NumberU64()) {
+
+	//calc local cache head reorg
+	localCacheReorg := true
+	for i := 0; i < common.NodeLocation.Context(); i++ {
+		localCacheReorg = (externPendingHeaderWithTermini.Header.NumberArray()[i].Cmp(localPendingHeader.Header.NumberArray()[i]) >= 0) && localCacheReorg
+	}
+
+	if exists && localCacheReorg && (externPendingHeaderWithTermini.Header.NumberU64() > localPendingHeader.Header.NumberU64()) {
 		sl.updateCurrentPendingHeader(externPendingHeaderWithTermini)
 		return true
 	}
