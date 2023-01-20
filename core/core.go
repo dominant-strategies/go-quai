@@ -73,7 +73,7 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 					err.Error() == ErrSubNotSyncedToDom.Error() ||
 					err.Error() == ErrDomClientNotUp.Error() {
 					c.addfutureHeader(block.Header())
-					return i, err
+					return i, ErrAddedFutureCache
 				}
 				if err == ErrKnownBlock {
 					// Remove the header from the future headers cache
