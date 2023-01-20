@@ -1190,10 +1190,7 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 		blocks[i] = types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles, result.ExtTransactions, result.SubManifest)
 	}
 	if index, err := d.core.InsertChain(blocks); err != nil {
-		if err.Error() == core.ErrSubNotSyncedToDom.Error() ||
-			err.Error() == consensus.ErrUnknownAncestor.Error() ||
-			err.Error() == core.ErrBodyNotFound.Error() ||
-			err.Error() == core.ErrDomClientNotUp.Error() {
+		if err.Error() == core.ErrAddedFutureCache.Error() {
 			d.waitingOnAppend = true
 			return nil
 		}
