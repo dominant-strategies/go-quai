@@ -112,6 +112,9 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 // Append takes a proposed header and constructs a local block and attempts to hierarchically append it to the block graph.
 // If this is called from a dominant context a domTerminus must be provided else a common.Hash{} should be used and domOrigin should be set to true.
 func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, newInboundEtxs types.Transactions) ([]types.Transactions, error) {
+	if len(newInboundEtxs) != 0 {
+		fmt.Println("////////| ", len(newInboundEtxs), " inbound etxs in block ", header.Hash())
+	}
 	// The compute and write of the phCache is split starting here so we need to get the lock
 	sl.phCachemu.Lock()
 	defer sl.phCachemu.Unlock()
@@ -257,6 +260,9 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "etxs", len(block.ExtTransactions()), "gas", block.GasUsed(),
 		"root", block.Root())
 
+	if numPending := len(localPendingEtxs[common.PRIME_CTX]) + len(localPendingEtxs[common.REGION_CTX]) + len(localPendingEtxs[common.ZONE_CTX]); numPending != 0 {
+		fmt.Println("////////| ", numPending, " pending etxs emitted from block ", header.Hash())
+	}
 	return localPendingEtxs, nil
 }
 
@@ -489,6 +495,9 @@ func (sl *Slice) GetSubManifest(slice common.Location, blockHash common.Hash) (t
 }
 
 func (sl *Slice) AddPendingEtxs(pEtxs types.PendingEtxs) error {
+	if numPending := len(pEtxs.Etxs[common.PRIME_CTX]) + len(pEtxs.Etxs[common.REGION_CTX]) + len(pEtxs.Etxs[common.ZONE_CTX]); numPending != 0 {
+		fmt.Println("////////| ", numPending, " received pending etxs from sub block ", pEtxs.Header.Hash())
+	}
 	log.Debug("Received pending ETXs", "block: ", pEtxs.Header.Hash())
 	// Only write the pending ETXs if we have not seen them before
 	if !sl.pendingEtxs.Contains(pEtxs.Header.Hash()) {
