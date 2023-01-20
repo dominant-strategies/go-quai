@@ -52,7 +52,6 @@ func NewBlockValidator(config *params.ChainConfig, headerChain *HeaderChain, eng
 // validated at this point.
 func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	nodeCtx := common.NodeLocation.Context()
-
 	// Check whether the block's known, and if not, that it's linkable
 	if v.hc.bc.processor.HasBlockAndState(block.Hash(), block.NumberU64()) {
 		return ErrKnownBlock
@@ -74,7 +73,9 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	// Subordinate manifest must match ManifestHash in subordinate context, _iff_
 	// we have a subordinate (i.e. if we are not a zone)
 	if nodeCtx < common.ZONE_CTX {
-		if hash := types.DeriveSha(block.SubManifest(), trie.NewStackTrie(nil)); hash != header.ManifestHash(nodeCtx+1) {
+		subManifestHash := types.DeriveSha(block.SubManifest(), trie.NewStackTrie(nil))
+		if subManifestHash == types.EmptyRootHash || subManifestHash != header.ManifestHash(nodeCtx+1) {
+			// If we have a subordinate chain, it is impossible for the subordinate manifest to be empty
 			return ErrBadSubManifest
 		}
 	}
