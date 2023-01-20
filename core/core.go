@@ -118,9 +118,10 @@ func (c *Core) procfutureHeaders() {
 
 		for _, head := range headers {
 			block, err := c.sl.ConstructLocalBlock(head)
-			if err.Error() == ErrBodyNotFound.Error() {
-				c.addfutureHeader(head)
-			} else if err != nil {
+			if err != nil {
+				if err.Error() == ErrBodyNotFound.Error() {
+					c.addfutureHeader(head)
+				}
 				log.Debug("could not construct block from future header", "err:", err)
 			} else {
 				c.InsertChain([]*types.Block{block})
