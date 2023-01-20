@@ -687,41 +687,36 @@ func (sl *Slice) gcPendingHeaders() {
 
 // constructLocalBlock takes a header and construct the Block locally
 func (sl *Slice) ConstructLocalBlock(header *types.Header) (*types.Block, error) {
-	var block *types.Block
-	// check if the header has empty uncle and tx root
-	if header.EmptyBody() {
-		// construct block with empty transactions and uncles
-		block = types.NewBlockWithHeader(header)
-	} else {
-		pendingBlockBody := sl.PendingBlockBody(header.Root())
-		if pendingBlockBody != nil {
-			// Load uncles because they are not included in the block response.
-			txs := make([]*types.Transaction, len(pendingBlockBody.Transactions))
-			for i, tx := range pendingBlockBody.Transactions {
-				txs[i] = tx
-			}
-
-			uncles := make([]*types.Header, len(pendingBlockBody.Uncles))
-			for i, uncle := range pendingBlockBody.Uncles {
-				uncles[i] = uncle
-				log.Debug("Pending Block uncle", "hash: ", uncle.Hash())
-			}
-
-			etxs := make([]*types.Transaction, len(pendingBlockBody.ExtTransactions))
-			for i, etx := range pendingBlockBody.ExtTransactions {
-				etxs[i] = etx
-			}
-
-			subBlockHashes := make(types.BlockManifest, len(pendingBlockBody.SubManifest))
-			for i, blockHash := range pendingBlockBody.SubManifest {
-				subBlockHashes[i] = blockHash
-			}
-
-			block = types.NewBlockWithHeader(header).WithBody(txs, uncles, etxs, subBlockHashes)
-		} else {
-			return nil, ErrBodyNotFound
-		}
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx == common.ZONE_CTX && header.EmptyBody() {
+		// This shortcut is only available to zone chains. Prime and region chains can
+		// never have an empty body, because they will always have at least one block
+		// in the subordinate manifest.
+		return types.NewBlockWithHeader(header), nil
 	}
+	pendingBlockBody := sl.PendingBlockBody(header.Root())
+	if pendingBlockBody == nil {
+		return nil, ErrBodyNotFound
+	}
+	// Load uncles because they are not included in the block response.
+	txs := make([]*types.Transaction, len(pendingBlockBody.Transactions))
+	for i, tx := range pendingBlockBody.Transactions {
+		txs[i] = tx
+	}
+	uncles := make([]*types.Header, len(pendingBlockBody.Uncles))
+	for i, uncle := range pendingBlockBody.Uncles {
+		uncles[i] = uncle
+		log.Debug("Pending Block uncle", "hash: ", uncle.Hash())
+	}
+	etxs := make([]*types.Transaction, len(pendingBlockBody.ExtTransactions))
+	for i, etx := range pendingBlockBody.ExtTransactions {
+		etxs[i] = etx
+	}
+	subManifest := make(types.BlockManifest, len(pendingBlockBody.SubManifest))
+	for i, blockHash := range pendingBlockBody.SubManifest {
+		subManifest[i] = blockHash
+	}
+	block := types.NewBlockWithHeader(header).WithBody(txs, uncles, etxs, subManifest)
 	if err := sl.validator.ValidateBody(block); err != nil {
 		return block, err
 	} else {
