@@ -27,6 +27,7 @@ import (
 	ethereum "github.com/dominant-strategies/go-quai"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
+	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/core/state/snapshot"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/eth/protocols/eth"
@@ -1189,10 +1190,10 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 		blocks[i] = types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles, result.ExtTransactions, result.SubManifest)
 	}
 	if index, err := d.core.InsertChain(blocks); err != nil {
-		if err.Error() == "sub not synced to dom" ||
-			err.Error() == "unknown ancestor" ||
-			err.Error() == "could not find the body data to match the header root hash" ||
-			err.Error() == "dom client is not online" {
+		if err.Error() == core.ErrSubNotSyncedToDom.Error() ||
+			err.Error() == consensus.ErrUnknownAncestor.Error() ||
+			err.Error() == core.ErrBodyNotFound.Error() ||
+			err.Error() == core.ErrDomClientNotUp.Error() {
 			d.waitingOnAppend = true
 			return nil
 		}

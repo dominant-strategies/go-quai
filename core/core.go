@@ -68,10 +68,10 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 			newPendingEtxs, err := c.sl.Append(block.Header(), types.EmptyHeader(), common.Hash{}, big.NewInt(0), false, true, nil)
 			if err != nil {
 				if err == consensus.ErrFutureBlock ||
-					err.Error() == "could not find the body data to match the header root hash" ||
-					err.Error() == "unknown ancestor" ||
-					err.Error() == "sub not synced to dom" ||
-					err.Error() == "dom client is not online" {
+					err.Error() == ErrBodyNotFound.Error() ||
+					err.Error() == consensus.ErrUnknownAncestor.Error() ||
+					err.Error() == ErrSubNotSyncedToDom.Error() ||
+					err.Error() == ErrDomClientNotUp.Error() {
 					c.addfutureHeader(block.Header())
 					return i, err
 				}
