@@ -550,7 +550,9 @@ func (s *PublicBlockChainQuaiAPI) CreateAccessList(ctx context.Context, args Tra
 
 func (s *PublicBlockChainQuaiAPI) fillSubordinateManifest(b *types.Block) (*types.Block, error) {
 	nodeCtx := common.NodeLocation.Context()
-	if manifestHash := types.DeriveSha(b.SubManifest(), trie.NewStackTrie(nil)); manifestHash == b.ManifestHash(nodeCtx+1) {
+	if len(b.ManifestHash(nodeCtx+1)) == 0 {
+		return nil, errors.New("cannot fill empty subordinate manifest")
+	} else if subManifestHash := types.DeriveSha(b.SubManifest(), trie.NewStackTrie(nil)); subManifestHash == b.ManifestHash(nodeCtx+1) {
 		// If the manifest hashes match, nothing to do
 		return b, nil
 	} else {
@@ -569,6 +571,9 @@ func (s *PublicBlockChainQuaiAPI) fillSubordinateManifest(b *types.Block) (*type
 				return nil, err
 			}
 			subManifest = append(subManifest, subParentHash)
+		}
+		if len(subManifest) == 0 {
+			return nil, errors.New("reconstructed sub manifest is empty")
 		}
 		if subManifest == nil || b.ManifestHash(nodeCtx+1) != types.DeriveSha(subManifest, trie.NewStackTrie(nil)) {
 			return nil, errors.New("reconstructed sub manifest does not match manifest hash")
