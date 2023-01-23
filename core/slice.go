@@ -248,7 +248,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	}
 
 	sl.writeToPhCache(pendingHeaderWithTermini)
-	updateMiner := sl.pickPhCacheHead(reorg, pendingHeaderWithTermini)
+	updateMiner := sl.pickPhCacheHead(reorg, pendingHeaderWithTermini, domOrigin)
 
 	// Relay the new pendingHeader
 	sl.relayPh(pendingHeaderWithTermini, updateMiner, reorg, domOrigin, block.Location())
@@ -591,7 +591,7 @@ func (sl *Slice) writeToPhCache(pendingHeaderWithTermini types.PendingHeader) {
 }
 
 // pickPhCacheHead determines if the provided pendingHeader should be selected and returns true if selected
-func (sl *Slice) pickPhCacheHead(reorg bool, externPendingHeaderWithTermini types.PendingHeader) bool {
+func (sl *Slice) pickPhCacheHead(reorg bool, externPendingHeaderWithTermini types.PendingHeader, domOrigin bool) bool {
 	if reorg {
 		sl.pendingHeaderHeadHash = externPendingHeaderWithTermini.Termini[terminiIndex]
 		return true
@@ -599,27 +599,35 @@ func (sl *Slice) pickPhCacheHead(reorg bool, externPendingHeaderWithTermini type
 
 	localPendingHeader, exists := sl.phCache[sl.pendingHeaderHeadHash]
 
-	//calc local cache head reorg
-	localCacheReorg := true
-	for i := 0; i < common.NodeLocation.Context(); i++ {
-		localCacheReorg = (externPendingHeaderWithTermini.Header.NumberArray()[i].Cmp(localPendingHeader.Header.NumberArray()[i]) >= 0) && localCacheReorg
+	if domOrigin {
+		//calc local cache head reorg
+		localCacheReorg := true
+		for i := 0; i < common.NodeLocation.Context(); i++ {
+			localCacheReorg = (externPendingHeaderWithTermini.Header.NumberArray()[i].Cmp(localPendingHeader.Header.NumberArray()[i]) >= 0) && localCacheReorg
+		}
+
+		if exists && localCacheReorg && (externPendingHeaderWithTermini.Header.NumberU64() > localPendingHeader.Header.NumberU64()) {
+			return sl.updateCurrentPendingHeader(externPendingHeaderWithTermini)
+		}
 	}
 
-	if exists && localCacheReorg && (externPendingHeaderWithTermini.Header.NumberU64() > localPendingHeader.Header.NumberU64()) {
-		sl.updateCurrentPendingHeader(externPendingHeaderWithTermini)
-		return true
-	}
 	return false
 }
 
 // updateCurrentPendingHeader compares the externPh parent td to the sl.pendingHeader parent td and sets sl.pendingHeader to the exterPh if the td is greater
-func (sl *Slice) updateCurrentPendingHeader(externPendingHeader types.PendingHeader) {
+func (sl *Slice) updateCurrentPendingHeader(externPendingHeader types.PendingHeader) bool {
 	externTd := sl.hc.GetTdByHash(externPendingHeader.Header.ParentHash())
 	currentTd := sl.hc.GetTdByHash(sl.phCache[sl.pendingHeaderHeadHash].Header.ParentHash())
 	log.Debug("updateCurrentPendingHeader:", "currentParent:", sl.phCache[sl.pendingHeaderHeadHash].Header.ParentHash(), "currentTd:", currentTd, "externParent:", externPendingHeader.Header.ParentHash(), "externTd:", externTd)
-	if currentTd.Cmp(externTd) < 0 {
-		sl.pendingHeaderHeadHash = externPendingHeader.Termini[terminiIndex]
+	if currentTd != nil && externTd != nil {
+		if currentTd.Cmp(externTd) < 0 {
+			sl.pendingHeaderHeadHash = externPendingHeader.Termini[terminiIndex]
+		}
+	} else {
+		log.Warn("updateCurrentPendingHeader:", "currentParent:", sl.phCache[sl.pendingHeaderHeadHash].Header.ParentHash(), "currentTd:", currentTd, "externParent:", externPendingHeader.Header.ParentHash(), "externTd:", externTd)
+		return false
 	}
+	return true
 }
 
 // init checks if the headerchain is empty and if it's empty appends the Knot
