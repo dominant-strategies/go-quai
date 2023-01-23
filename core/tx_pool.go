@@ -553,7 +553,7 @@ func (pool *TxPool) TxPoolPending(enforceTips bool, etxSet types.EtxSet) (map[co
 				log.Debug("ETX %s has incorrect or low gas price", tx.Hash().String())
 				continue // skip this tx
 			}
-			pending[addr] = append(pending[addr], tx) // ETXs do not have to be sorted by address but this way all TXs are in the same list
+			pending[addr] = append(pending[addr], &tx) // ETXs do not have to be sorted by address but this way all TXs are in the same list
 		}
 	}
 	return pending, nil

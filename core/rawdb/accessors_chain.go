@@ -1205,7 +1205,7 @@ func ReadEtxSet(db ethdb.Reader, hash common.Hash, number uint64) types.EtxSet {
 	}
 	etxSet := make(types.EtxSet)
 	for _, entry := range entries {
-		etxSet[entry.EtxHash] = &types.EtxSetEntry{Height: entry.EtxHeight, ETX: &entry.Etx}
+		etxSet[entry.EtxHash] = types.EtxSetEntry{Height: entry.EtxHeight, ETX: entry.Etx}
 	}
 	return etxSet
 }
@@ -1214,7 +1214,7 @@ func ReadEtxSet(db ethdb.Reader, hash common.Hash, number uint64) types.EtxSet {
 func WriteEtxSet(db ethdb.KeyValueWriter, hash common.Hash, number uint64, etxSet types.EtxSet) {
 	var entries []EtxSetEntry
 	for etxHash, entry := range etxSet {
-		entry := EtxSetEntry{EtxHash: etxHash, EtxHeight: entry.Height, Etx: *entry.ETX}
+		entry := EtxSetEntry{EtxHash: etxHash, EtxHeight: entry.Height, Etx: entry.ETX}
 		entries = append(entries, entry)
 	}
 	data, err := rlp.EncodeToBytes(entries)
