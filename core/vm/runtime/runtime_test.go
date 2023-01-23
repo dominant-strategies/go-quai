@@ -24,7 +24,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dominant-strategies/go-quai/accounts/abi"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/core"
@@ -33,6 +32,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/core/vm"
+	"github.com/dominant-strategies/go-quai/eth/abi"
 	"github.com/dominant-strategies/go-quai/params"
 )
 
