@@ -102,7 +102,7 @@ type Downloader struct {
 	syncStatsState       stateSyncStats
 	syncStatsLock        sync.RWMutex // Lock protecting the sync stats fields
 
-	blockchain BlockChain
+	core Core
 
 	// Callbacks
 	dropPeer peerDropFn // Drops a peer for misbehaving
@@ -146,13 +146,10 @@ type Downloader struct {
 	chainInsertHook  func([]*fetchResult)  // Method to call upon inserting a chain of blocks (possibly in multiple invocations)
 }
 
-// BlockChain encapsulates functions required to sync a (full or fast) blockchain.
-type BlockChain interface {
+// Core encapsulates functions required to sync a full core.
+type Core interface {
 	// HasBlock verifies a block's presence in the local chain.
 	HasBlock(common.Hash, uint64) bool
-
-	// HasFastBlock verifies a fast block's presence in the local chain.
-	HasFastBlock(common.Hash, uint64) bool
 
 	// GetBlockByHash retrieves a block from the local chain.
 	GetBlockByHash(common.Hash) *types.Block
@@ -163,10 +160,7 @@ type BlockChain interface {
 	// InsertChain inserts a batch of blocks into the local chain.
 	InsertChain(types.Blocks) (int, error)
 
-	// InsertReceiptChain inserts a batch of receipts into the local chain.
-	InsertReceiptChain(types.Blocks, []types.Receipts, uint64) (int, error)
-
-	// Snapshots returns the blockchain snapshot tree to paused it during sync.
+	// Snapshots returns the core snapshot tree to paused it during sync.
 	Snapshots() *snapshot.Tree
 
 	// GetTd returns the total difficulty of a local block.
@@ -174,7 +168,7 @@ type BlockChain interface {
 }
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
-func New(checkpoint uint64, stateDb ethdb.Database, stateBloom *trie.SyncBloom, mux *event.TypeMux, blockchain BlockChain, dropPeer peerDropFn) *Downloader {
+func New(checkpoint uint64, stateDb ethdb.Database, stateBloom *trie.SyncBloom, mux *event.TypeMux, core Core, dropPeer peerDropFn) *Downloader {
 	dl := &Downloader{
 		stateDB:        stateDb,
 		stateBloom:     stateBloom,
@@ -182,7 +176,7 @@ func New(checkpoint uint64, stateDb ethdb.Database, stateBloom *trie.SyncBloom, 
 		checkpoint:     checkpoint,
 		queue:          newQueue(blockCacheMaxItems, blockCacheInitialItems),
 		peers:          newPeerSet(),
-		blockchain:     blockchain,
+		core:           core,
 		dropPeer:       dropPeer,
 		headerCh:       make(chan dataPack, 1),
 		bodyCh:         make(chan dataPack, 1),
@@ -217,10 +211,10 @@ func (d *Downloader) Progress() ethereum.SyncProgress {
 	current := uint64(0)
 	mode := d.getMode()
 	switch {
-	case d.blockchain != nil && mode == FullSync:
-		current = d.blockchain.CurrentBlock().NumberU64()
+	case d.core != nil && mode == FullSync:
+		current = d.core.CurrentBlock().NumberU64()
 	default:
-		log.Error("Unknown downloader chain/mode combo", "light", "full", d.blockchain != nil, "mode", mode)
+		log.Error("Unknown downloader chain/mode combo", "light", "full", d.core != nil, "mode", mode)
 	}
 	return ethereum.SyncProgress{
 		StartingBlock: d.syncStatsChainOrigin,
@@ -385,7 +379,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 		if err != nil {
 			d.mux.Post(FailedEvent{err})
 		} else {
-			latest := d.blockchain.CurrentBlock()
+			latest := d.core.CurrentBlock()
 			d.mux.Post(DoneEvent{latest.Header()})
 		}
 	}()
@@ -614,7 +608,7 @@ func calculateRequestSpan(remoteHeight, localHeight uint64) (int64, int, int, ui
 }
 
 // findAncestor tries to locate the common ancestor link of the local chain and
-// a remote peers blockchain. In the general case when our node was in sync and
+// a remote peers core. In the general case when our node was in sync and
 // on the correct chain, checking the top N links should already get us a match.
 // In the rare scenario when we ended up on a long reorganisation (i.e. none of
 // the head links match), we do a binary search to find the common ancestor.
@@ -626,7 +620,7 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 		remoteHeight = remoteHeader.Number().Uint64()
 	)
 	mode := d.getMode()
-	localHeight = d.blockchain.CurrentBlock().NumberU64()
+	localHeight = d.core.CurrentBlock().NumberU64()
 
 	p.log.Debug("Looking for common ancestor", "local", localHeight, "remote", remoteHeight)
 
@@ -705,7 +699,7 @@ func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, re
 				n := headers[i].Number().Uint64()
 
 				var known bool
-				known = d.blockchain.HasBlock(h, n)
+				known = d.core.HasBlock(h, n)
 
 				if known {
 					number, hash = n, h
@@ -778,7 +772,7 @@ func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, 
 				n := headers[0].Number().Uint64()
 
 				var known bool
-				known = d.blockchain.HasBlock(h, n)
+				known = d.core.HasBlock(h, n)
 				if !known {
 					end = check
 					break
@@ -957,7 +951,7 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 				if n := len(headers); n > 0 {
 					// Retrieve the current head we're at
 					var head uint64
-					head = d.blockchain.CurrentBlock().NumberU64()
+					head = d.core.CurrentBlock().NumberU64()
 					// If the head is below the common ancestor, we're actually deduplicating
 					// already existing chain segments, so use the ancestor as the fake head.
 					// Otherwise we might end up delaying header deliveries pointlessly.
@@ -1328,7 +1322,7 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 	)
 	defer func() {
 		if rollback > 0 {
-			curBlock := d.blockchain.CurrentBlock().NumberU64()
+			curBlock := d.core.CurrentBlock().NumberU64()
 			log.Warn("Rolled back chain segment",
 				"block", fmt.Sprintf("%d->%d", curBlock), "reason", rollbackErr)
 		}
@@ -1364,8 +1358,8 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 				// L: Sync begins, and finds common ancestor at 11
 				// L: Request new headers up from 11 (R's TD was higher, it must have something)
 				// R: Nothing to give
-				head := d.blockchain.CurrentBlock()
-				if !gotHeaders && td.Cmp(d.blockchain.GetTd(head.Hash(), head.NumberU64())) > 0 {
+				head := d.core.CurrentBlock()
+				if !gotHeaders && td.Cmp(d.core.GetTd(head.Hash(), head.NumberU64())) > 0 {
 					return errStallingPeer
 				}
 				// Disable any rollback and return
@@ -1464,11 +1458,11 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 	for i, result := range results {
 		blocks[i] = types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles)
 	}
-	if index, err := d.blockchain.InsertChain(blocks); err != nil {
+	if index, err := d.core.InsertChain(blocks); err != nil {
 		if index < len(results) {
 			log.Debug("Downloaded item processing failed", "number", results[index].Header.Number(), "hash", results[index].Header.Hash(), "err", err)
 		} else {
-			// The InsertChain method in blockchain.go will sometimes return an out-of-bounds index,
+			// The InsertChain method in core.go will sometimes return an out-of-bounds index,
 			// when it needs to preprocess blocks to import a sidechain.
 			// The importer will put together a new list of blocks to import, which is a superset
 			// of the blocks delivered from the downloader, and the indexing will be off.

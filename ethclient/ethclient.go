@@ -28,6 +28,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/internal/ethapi"
 	"github.com/dominant-strategies/go-quai/rpc"
 )
 
@@ -323,6 +324,16 @@ func (ec *Client) SubscribeNewHead(ctx context.Context, ch chan<- *types.Header)
 	return ec.c.EthSubscribe(ctx, ch, "newHeads")
 }
 
+// SubscribeHeadersRoot subscribes to notifications about the changes in the header root on the node.
+func (ec *Client) SubscribeHeaderRoots(ctx context.Context, ch chan<- types.HeaderRoots) (ethereum.Subscription, error) {
+	return ec.c.EthSubscribe(ctx, ch, "headerRoots")
+}
+
+// SubscribePendingHeader subscribes to notifications about the current pending block on the node.
+func (ec *Client) SubscribePendingHeader(ctx context.Context, ch chan<- *types.Header) (ethereum.Subscription, error) {
+	return ec.c.EthSubscribe(ctx, ch, "pendingHeader")
+}
+
 // State Access
 
 // NetworkID returns the network ID (also known as the chain ID) for this chain.
@@ -449,6 +460,22 @@ func (ec *Client) PendingTransactionCount(ctx context.Context) (uint, error) {
 	var num hexutil.Uint
 	err := ec.c.CallContext(ctx, &num, "eth_getBlockTransactionCountByNumber", "pending")
 	return uint(num), err
+}
+
+// GetPendingHeader gets the latest pending header from the chain.
+func (ec *Client) GetPendingHeader(ctx context.Context) (*types.Header, error) {
+	var pendingHeader *types.Header
+	err := ec.c.CallContext(ctx, &pendingHeader, "quai_getPendingHeader")
+	if err != nil {
+		return nil, nil
+	}
+	return pendingHeader, nil
+}
+
+// ReceiveMinedHeader sends a mined block back to the node
+func (ec *Client) ReceiveMinedHeader(ctx context.Context, header *types.Header) error {
+	data := ethapi.RPCMarshalHeader(header)
+	return ec.c.CallContext(ctx, nil, "quai_receiveMinedHeader", data)
 }
 
 // Contract Calling

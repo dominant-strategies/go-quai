@@ -25,12 +25,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dominant-strategies/go-quai"
+	ethereum "github.com/dominant-strategies/go-quai"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rpc"
 )
 
@@ -226,7 +227,9 @@ func (api *PublicFilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, er
 		for {
 			select {
 			case h := <-headers:
-				notifier.Notify(rpcSub.ID, h)
+				// Marshal the header data
+				marshalHeader := RPCMarshalHeader(h)
+				notifier.Notify(rpcSub.ID, marshalHeader)
 			case <-rpcSub.Err():
 				headersSub.Unsubscribe()
 				return
@@ -580,4 +583,111 @@ func decodeTopic(s string) (common.Hash, error) {
 		err = fmt.Errorf("hex has invalid length %d after decoding; expected %d for topic", len(b), common.HashLength)
 	}
 	return common.BytesToHash(b), err
+}
+
+// HeaderRoots sends a notification each time a new header root update takes place.
+func (api *PublicFilterAPI) HeaderRoots(ctx context.Context) (*rpc.Subscription, error) {
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+
+	rpcSub := notifier.CreateSubscription()
+
+	go func() {
+		headerRoots := make(chan types.HeaderRoots)
+		headerRootsSub := api.events.SubscribeHeaderRoots(headerRoots)
+
+		for {
+			select {
+			case b := <-headerRoots:
+				log.Debug("HeaderRoots", "Received header roots update: ", b)
+				notifier.Notify(rpcSub.ID, b)
+			case <-rpcSub.Err():
+				headerRootsSub.Unsubscribe()
+				return
+			case <-notifier.Closed():
+				headerRootsSub.Unsubscribe()
+				return
+			}
+		}
+	}()
+
+	return rpcSub, nil
+}
+
+// PendingHeader sends a notification each time a new pending header is created.
+func (api *PublicFilterAPI) PendingHeader(ctx context.Context) (*rpc.Subscription, error) {
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+
+	rpcSub := notifier.CreateSubscription()
+
+	go func() {
+		header := make(chan *types.Header)
+		headerSub := api.events.SubscribePendingHeader(header)
+
+		for {
+			select {
+			case b := <-header:
+				// Marshal the header data
+				marshalHeader := RPCMarshalHeader(b)
+				notifier.Notify(rpcSub.ID, marshalHeader)
+			case <-rpcSub.Err():
+				headerSub.Unsubscribe()
+				return
+			case <-notifier.Closed():
+				headerSub.Unsubscribe()
+				return
+			}
+		}
+	}()
+
+	return rpcSub, nil
+}
+
+// RPCMarshalHeader converts the given header to the RPC output .
+func RPCMarshalHeader(head *types.Header) map[string]interface{} {
+	result := map[string]interface{}{
+		"hash":             head.Hash(),
+		"parentHash":       head.ParentHashArray(),
+		"nonce":            head.Nonce(),
+		"sha3Uncles":       head.UncleHashArray(),
+		"logsBloom":        head.BloomArray(),
+		"stateRoot":        head.RootArray(),
+		"miner":            head.CoinbaseArray(),
+		"extraData":        hexutil.Bytes(head.Extra()),
+		"size":             hexutil.Uint64(head.Size()),
+		"timestamp":        hexutil.Uint64(head.Time()),
+		"transactionsRoot": head.TxHashArray(),
+		"receiptsRoot":     head.ReceiptHashArray(),
+		"location":         head.Location(),
+	}
+
+	number := make([]*hexutil.Big, common.HierarchyDepth)
+	difficulty := make([]*hexutil.Big, common.HierarchyDepth)
+	gasLimit := make([]hexutil.Uint, common.HierarchyDepth)
+	gasUsed := make([]hexutil.Uint, common.HierarchyDepth)
+	for i := 0; i < common.HierarchyDepth; i++ {
+		number[i] = (*hexutil.Big)(head.Number(i))
+		difficulty[i] = (*hexutil.Big)(head.Difficulty(i))
+		gasLimit[i] = hexutil.Uint(head.GasLimit(i))
+		gasUsed[i] = hexutil.Uint(head.GasUsed(i))
+	}
+	result["number"] = number
+	result["difficulty"] = difficulty
+	result["gasLimit"] = gasLimit
+	result["gasUsed"] = gasUsed
+
+	if head.BaseFee() != nil {
+		results := make([]*hexutil.Big, common.HierarchyDepth)
+		for i := 0; i < common.HierarchyDepth; i++ {
+			results[i] = (*hexutil.Big)(head.BaseFee(i))
+		}
+		result["baseFeePerGas"] = results
+	}
+
+	return result
 }
