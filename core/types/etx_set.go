@@ -10,11 +10,11 @@ const (
 
 // The EtxSet maps an ETX hash to the ETX and block number in which it became available.
 // If no entry exists for a given ETX hash, then that ETX is not available.
-type EtxSet map[common.Hash]*EtxSetEntry
+type EtxSet map[common.Hash]EtxSetEntry
 
 type EtxSetEntry struct {
 	Height uint64
-	ETX    *Transaction
+	ETX    Transaction
 }
 
 func NewEtxSet() EtxSet {
@@ -28,7 +28,7 @@ func (set EtxSet) Update(newInboundEtxs Transactions, currentHeight uint64) {
 	// Add new ETX entries to the inbound set
 	for _, etx := range newInboundEtxs {
 		if etx.To().Location().Equal(common.NodeLocation) {
-			set[etx.Hash()] = &EtxSetEntry{currentHeight, etx}
+			set[etx.Hash()] = EtxSetEntry{currentHeight, *etx}
 		} else {
 			panic("cannot add ETX destined to other chain to our ETX set")
 		}
