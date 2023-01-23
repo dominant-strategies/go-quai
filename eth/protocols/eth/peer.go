@@ -494,22 +494,6 @@ func (p *Peer) RequestBodies(hashes []common.Hash) error {
 	return p2p.Send(p.rw, GetBlockBodiesMsg, GetBlockBodiesPacket(hashes))
 }
 
-// RequestNodeData fetches a batch of arbitrary data from a node's known state
-// data, corresponding to the specified hashes.
-func (p *Peer) RequestNodeData(hashes []common.Hash) error {
-	p.Log().Debug("Fetching batch of state data", "count", len(hashes))
-	if p.Version() >= ETH66 {
-		id := rand.Uint64()
-
-		requestTracker.Track(p.id, p.version, GetNodeDataMsg, NodeDataMsg, id)
-		return p2p.Send(p.rw, GetNodeDataMsg, &GetNodeDataPacket66{
-			RequestId:         id,
-			GetNodeDataPacket: hashes,
-		})
-	}
-	return p2p.Send(p.rw, GetNodeDataMsg, GetNodeDataPacket(hashes))
-}
-
 // RequestReceipts fetches a batch of transaction receipts from a remote node.
 func (p *Peer) RequestReceipts(hashes []common.Hash) error {
 	p.Log().Debug("Fetching batch of receipts", "count", len(hashes))
