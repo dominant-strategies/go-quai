@@ -21,6 +21,7 @@ import (
 	"errors"
 	"math/big"
 
+	quai "github.com/dominant-strategies/go-quai"
 	"github.com/dominant-strategies/go-quai/accounts"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
@@ -34,7 +35,6 @@ import (
 	"github.com/dominant-strategies/go-quai/eth/gasprice"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
-	"github.com/dominant-strategies/go-quai/miner"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rpc"
 )
@@ -49,29 +49,33 @@ type EthAPIBackend struct {
 
 // ChainConfig returns the active chain configuration.
 func (b *EthAPIBackend) ChainConfig() *params.ChainConfig {
-	return b.eth.blockchain.Config()
+	return b.eth.core.Config()
+}
+
+func (b *EthAPIBackend) TxPool() *core.TxPool {
+	return b.eth.core.TxPool()
 }
 
 func (b *EthAPIBackend) CurrentBlock() *types.Block {
-	return b.eth.blockchain.CurrentBlock()
+	return b.eth.core.CurrentBlock()
 }
 
 func (b *EthAPIBackend) SetHead(number uint64) {
 	b.eth.handler.downloader.Cancel()
-	b.eth.blockchain.SetHead(number)
+	b.eth.core.SetHead(number)
 }
 
 func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
 	// Pending block is only known by the miner
 	if number == rpc.PendingBlockNumber {
-		block := b.eth.miner.PendingBlock()
+		block := b.eth.core.PendingBlock()
 		return block.Header(), nil
 	}
 	// Otherwise resolve and return the block
 	if number == rpc.LatestBlockNumber {
-		return b.eth.blockchain.CurrentBlock().Header(), nil
+		return b.eth.core.CurrentBlock().Header(), nil
 	}
-	return b.eth.blockchain.GetHeaderByNumber(uint64(number)), nil
+	return b.eth.core.GetHeaderByNumber(uint64(number)), nil
 }
 
 func (b *EthAPIBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Header, error) {
@@ -79,11 +83,11 @@ func (b *EthAPIBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash 
 		return b.HeaderByNumber(ctx, blockNr)
 	}
 	if hash, ok := blockNrOrHash.Hash(); ok {
-		header := b.eth.blockchain.GetHeaderByHash(hash)
+		header := b.eth.core.GetHeaderByHash(hash)
 		if header == nil {
 			return nil, errors.New("header for hash not found")
 		}
-		if blockNrOrHash.RequireCanonical && b.eth.blockchain.GetCanonicalHash(header.Number().Uint64()) != hash {
+		if blockNrOrHash.RequireCanonical && b.eth.core.GetCanonicalHash(header.Number().Uint64()) != hash {
 			return nil, errors.New("hash is not currently canonical")
 		}
 		return header, nil
@@ -92,24 +96,24 @@ func (b *EthAPIBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash 
 }
 
 func (b *EthAPIBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
-	return b.eth.blockchain.GetHeaderByHash(hash), nil
+	return b.eth.core.GetHeaderByHash(hash), nil
 }
 
 func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
 	// Pending block is only known by the miner
 	if number == rpc.PendingBlockNumber {
-		block := b.eth.miner.PendingBlock()
+		block := b.eth.core.PendingBlock()
 		return block, nil
 	}
 	// Otherwise resolve and return the block
 	if number == rpc.LatestBlockNumber {
-		return b.eth.blockchain.CurrentBlock(), nil
+		return b.eth.core.CurrentBlock(), nil
 	}
-	return b.eth.blockchain.GetBlockByNumber(uint64(number)), nil
+	return b.eth.core.GetBlockByNumber(uint64(number)), nil
 }
 
 func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
-	return b.eth.blockchain.GetBlockByHash(hash), nil
+	return b.eth.core.GetBlockByHash(hash), nil
 }
 
 func (b *EthAPIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Block, error) {
@@ -117,14 +121,14 @@ func (b *EthAPIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash r
 		return b.BlockByNumber(ctx, blockNr)
 	}
 	if hash, ok := blockNrOrHash.Hash(); ok {
-		header := b.eth.blockchain.GetHeaderByHash(hash)
+		header := b.eth.core.GetHeaderByHash(hash)
 		if header == nil {
 			return nil, errors.New("header for hash not found")
 		}
-		if blockNrOrHash.RequireCanonical && b.eth.blockchain.GetCanonicalHash(header.Number().Uint64()) != hash {
+		if blockNrOrHash.RequireCanonical && b.eth.core.GetCanonicalHash(header.Number().Uint64()) != hash {
 			return nil, errors.New("hash is not currently canonical")
 		}
-		block := b.eth.blockchain.GetBlock(hash, header.Number().Uint64())
+		block := b.eth.core.GetBlock(hash, header.Number().Uint64())
 		if block == nil {
 			return nil, errors.New("header found, but block body is missing")
 		}
@@ -134,13 +138,13 @@ func (b *EthAPIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash r
 }
 
 func (b *EthAPIBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
-	return b.eth.miner.PendingBlockAndReceipts()
+	return b.eth.core.PendingBlockAndReceipts()
 }
 
 func (b *EthAPIBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.Header, error) {
 	// Pending state is only known by the miner
 	if number == rpc.PendingBlockNumber {
-		block, state := b.eth.miner.Pending()
+		block, state := b.eth.core.Pending()
 		return state, block.Header(), nil
 	}
 	// Otherwise resolve the block number and return its state
@@ -151,7 +155,7 @@ func (b *EthAPIBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.B
 	if header == nil {
 		return nil, nil, errors.New("header not found")
 	}
-	stateDb, err := b.eth.BlockChain().StateAt(header.Root())
+	stateDb, err := b.eth.Core().StateAt(header.Root())
 	return stateDb, header, err
 }
 
@@ -167,21 +171,21 @@ func (b *EthAPIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockN
 		if header == nil {
 			return nil, nil, errors.New("header for hash not found")
 		}
-		if blockNrOrHash.RequireCanonical && b.eth.blockchain.GetCanonicalHash(header.Number().Uint64()) != hash {
+		if blockNrOrHash.RequireCanonical && b.eth.core.GetCanonicalHash(header.Number().Uint64()) != hash {
 			return nil, nil, errors.New("hash is not currently canonical")
 		}
-		stateDb, err := b.eth.BlockChain().StateAt(header.Root())
+		stateDb, err := b.eth.Core().StateAt(header.Root())
 		return stateDb, header, err
 	}
 	return nil, nil, errors.New("invalid arguments; neither block nor hash specified")
 }
 
 func (b *EthAPIBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
-	return b.eth.blockchain.GetReceiptsByHash(hash), nil
+	return b.eth.core.GetReceiptsByHash(hash), nil
 }
 
 func (b *EthAPIBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*types.Log, error) {
-	receipts := b.eth.blockchain.GetReceiptsByHash(hash)
+	receipts := b.eth.core.GetReceiptsByHash(hash)
 	if receipts == nil {
 		return nil, nil
 	}
@@ -193,49 +197,49 @@ func (b *EthAPIBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*typ
 }
 
 func (b *EthAPIBackend) GetTd(ctx context.Context, hash common.Hash) *big.Int {
-	return b.eth.blockchain.GetTdByHash(hash)
+	return b.eth.core.GetTdByHash(hash)
 }
 
 func (b *EthAPIBackend) GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config) (*vm.EVM, func() error, error) {
 	vmError := func() error { return nil }
 	if vmConfig == nil {
-		vmConfig = b.eth.blockchain.GetVMConfig()
+		vmConfig = b.eth.core.GetVMConfig()
 	}
 	txContext := core.NewEVMTxContext(msg)
-	context := core.NewEVMBlockContext(header, b.eth.BlockChain(), nil)
-	return vm.NewEVM(context, txContext, state, b.eth.blockchain.Config(), *vmConfig), vmError, nil
+	context := core.NewEVMBlockContext(header, b.eth.Core(), nil)
+	return vm.NewEVM(context, txContext, state, b.eth.core.Config(), *vmConfig), vmError, nil
 }
 
 func (b *EthAPIBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {
-	return b.eth.BlockChain().SubscribeRemovedLogsEvent(ch)
+	return b.eth.Core().SubscribeRemovedLogsEvent(ch)
 }
 
 func (b *EthAPIBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription {
-	return b.eth.miner.SubscribePendingLogs(ch)
+	return b.eth.core.SubscribePendingLogs(ch)
 }
 
 func (b *EthAPIBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
-	return b.eth.BlockChain().SubscribeChainEvent(ch)
+	return b.eth.Core().SubscribeChainEvent(ch)
 }
 
 func (b *EthAPIBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
-	return b.eth.BlockChain().SubscribeChainHeadEvent(ch)
+	return b.eth.Core().SubscribeChainHeadEvent(ch)
 }
 
 func (b *EthAPIBackend) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription {
-	return b.eth.BlockChain().SubscribeChainSideEvent(ch)
+	return b.eth.Core().SubscribeChainSideEvent(ch)
 }
 
 func (b *EthAPIBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
-	return b.eth.BlockChain().SubscribeLogsEvent(ch)
+	return b.eth.Core().SubscribeLogsEvent(ch)
 }
 
 func (b *EthAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
-	return b.eth.txPool.AddLocal(signedTx)
+	return b.eth.Core().AddLocal(signedTx)
 }
 
 func (b *EthAPIBackend) GetPoolTransactions() (types.Transactions, error) {
-	pending, err := b.eth.txPool.Pending(false)
+	pending, err := b.eth.core.TxPoolPending(false)
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +251,7 @@ func (b *EthAPIBackend) GetPoolTransactions() (types.Transactions, error) {
 }
 
 func (b *EthAPIBackend) GetPoolTransaction(hash common.Hash) *types.Transaction {
-	return b.eth.txPool.Get(hash)
+	return b.eth.core.Get(hash)
 }
 
 func (b *EthAPIBackend) GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
@@ -256,27 +260,23 @@ func (b *EthAPIBackend) GetTransaction(ctx context.Context, txHash common.Hash) 
 }
 
 func (b *EthAPIBackend) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
-	return b.eth.txPool.Nonce(addr), nil
+	return b.eth.core.Nonce(addr), nil
 }
 
 func (b *EthAPIBackend) Stats() (pending int, queued int) {
-	return b.eth.txPool.Stats()
+	return b.eth.core.Stats()
 }
 
 func (b *EthAPIBackend) TxPoolContent() (map[common.Address]types.Transactions, map[common.Address]types.Transactions) {
-	return b.eth.TxPool().Content()
+	return b.eth.core.Content()
 }
 
 func (b *EthAPIBackend) TxPoolContentFrom(addr common.Address) (types.Transactions, types.Transactions) {
-	return b.eth.TxPool().ContentFrom(addr)
-}
-
-func (b *EthAPIBackend) TxPool() *core.TxPool {
-	return b.eth.TxPool()
+	return b.eth.core.ContentFrom(addr)
 }
 
 func (b *EthAPIBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
-	return b.eth.TxPool().SubscribeNewTxsEvent(ch)
+	return b.eth.core.SubscribeNewTxsEvent(ch)
 }
 
 func (b *EthAPIBackend) Downloader() *downloader.Downloader {
@@ -335,11 +335,11 @@ func (b *EthAPIBackend) Engine() consensus.Engine {
 }
 
 func (b *EthAPIBackend) CurrentHeader() *types.Header {
-	return b.eth.blockchain.CurrentHeader()
+	return b.eth.core.CurrentHeader()
 }
 
-func (b *EthAPIBackend) Miner() *miner.Miner {
-	return b.eth.Miner()
+func (b *EthAPIBackend) Miner() *core.Miner {
+	return b.eth.core.Miner()
 }
 
 func (b *EthAPIBackend) StartMining(threads int) error {
@@ -347,9 +347,49 @@ func (b *EthAPIBackend) StartMining(threads int) error {
 }
 
 func (b *EthAPIBackend) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, checkLive bool) (*state.StateDB, error) {
-	return b.eth.stateAtBlock(block, reexec, base, checkLive)
+	return b.eth.core.StateAtBlock(block, reexec, base, checkLive)
 }
 
 func (b *EthAPIBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, error) {
-	return b.eth.stateAtTransaction(block, txIndex, reexec)
+	return b.eth.core.StateAtTransaction(block, txIndex, reexec)
+}
+
+func (b *EthAPIBackend) SyncProgress() quai.SyncProgress {
+	return b.eth.Downloader().Progress()
+}
+
+func (b *EthAPIBackend) Append(header *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool) (types.PendingHeader, error) {
+	return b.eth.core.Append(header, domTerminus, td, domOrigin, reorg)
+}
+
+func (b *EthAPIBackend) ConstructLocalBlock(header *types.Header) *types.Block {
+	return b.eth.core.ConstructLocalBlock(header)
+}
+
+func (b *EthAPIBackend) InsertBlock(ctx context.Context, block *types.Block) (int, error) {
+	return b.eth.core.InsertChain([]*types.Block{block})
+}
+
+func (b *EthAPIBackend) PendingBlock() *types.Block {
+	return b.eth.core.PendingBlock()
+}
+
+func (b *EthAPIBackend) PendingBlockBody(hash common.Hash) *types.Body {
+	return b.eth.core.PendingBlockBody(hash)
+}
+
+func (b *EthAPIBackend) SubRelayPendingHeader(pendingHeader types.PendingHeader, location common.Location, reorg bool) error {
+	return b.eth.core.SubRelayPendingHeader(pendingHeader, location, reorg)
+}
+
+func (b *EthAPIBackend) GetPendingHeader() (*types.Header, error) {
+	return b.eth.core.GetPendingHeader()
+}
+
+func (b *EthAPIBackend) SubscribeHeaderRootsEvent(ch chan<- types.HeaderRoots) event.Subscription {
+	return b.eth.core.SubscribeHeaderRoots(ch)
+}
+
+func (b *EthAPIBackend) SubscribePendingHeaderEvent(ch chan<- *types.Header) event.Subscription {
+	return b.eth.core.SubscribePendingHeader(ch)
 }

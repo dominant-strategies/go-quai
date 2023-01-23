@@ -19,6 +19,7 @@ package rawdb
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"math/big"
 	"sort"
 
@@ -33,17 +34,8 @@ import (
 
 // ReadCanonicalHash retrieves the hash assigned to a canonical block number.
 func ReadCanonicalHash(db ethdb.Reader, number uint64) common.Hash {
-	data, _ := db.Ancient(freezerHashTable, number)
-	if len(data) == 0 {
-		data, _ = db.Get(headerHashKey(number))
-		// In the background freezer is moving data from leveldb to flatten files.
-		// So during the first check for ancient db, the data is not yet in there,
-		// but when we reach into leveldb, the data was already moved. That would
-		// result in a not found error.
-		if len(data) == 0 {
-			data, _ = db.Ancient(freezerHashTable, number)
-		}
-	}
+	data, _ := db.Get(headerHashKey(number))
+
 	if len(data) == 0 {
 		return common.Hash{}
 	}
@@ -295,7 +287,7 @@ func ReadHeader(db ethdb.Reader, hash common.Hash, number uint64) *types.Header 
 	if len(data) == 0 {
 		return nil
 	}
-	header := types.EmptyHeader()
+	header := new(types.Header)
 	if err := rlp.Decode(bytes.NewReader(data), header); err != nil {
 		log.Error("Invalid block header RLP", "hash", hash, "err", err)
 		return nil
@@ -438,6 +430,45 @@ func DeleteBody(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	}
 }
 
+// ReadPendingHeaderBody retrieves the pending block body corresponding to the state root hash.
+func ReadPendingBlockBody(db ethdb.Reader, hash common.Hash) *types.Body {
+	key := pendingBlockBodyKey(hash)
+
+	data, _ := db.Get(key)
+	if len(data) == 0 {
+		return nil
+	}
+
+	body := new(types.Body)
+	if err := rlp.Decode(bytes.NewReader(data), body); err != nil {
+		log.Error("Invalid block body RLP", "hash", hash, "err", err)
+		return nil
+	}
+	return body
+}
+
+// WritePendingHeaderBody stores a block body into the database with associated stateroot as the key.
+func WritePendingBlockBody(db ethdb.KeyValueWriter, hash common.Hash, body *types.Body) {
+	key := pendingBlockBodyKey(hash)
+
+	// Write the encoded pending header
+	data, err := rlp.EncodeToBytes(body)
+	if err != nil {
+		log.Crit("Failed to RLP encode pending block body", "err", err)
+	}
+
+	if err := db.Put(key, data); err != nil {
+		log.Crit("Failed to store pending block body", "err", err)
+	}
+}
+
+// DeletePendingHeaderBody removes all pending block body data associated with a state root hash.
+func DeletePendingBlockBody(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
+	if err := db.Delete(pendingBlockBodyKey(hash)); err != nil {
+		log.Crit("Failed to delete pending block body", "err", err)
+	}
+}
+
 // ReadTdRLP retrieves a block's total difficulty corresponding to the hash in RLP encoding.
 func ReadTdRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 	// First try to look up the data in ancient database. Extra hash
@@ -467,6 +498,228 @@ func ReadTdRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 		}
 	}
 	return nil // Can't find the data anywhere.
+}
+
+// ReadHeadsHashes retreive's the heads hashes of the blockchain.
+func ReadTermini(db ethdb.Reader, hash common.Hash) []common.Hash {
+	key := terminiKey(hash)
+	data, _ := db.Get(key)
+	if len(data) == 0 {
+		return []common.Hash{}
+	}
+	hashes := []common.Hash{}
+	if err := rlp.DecodeBytes(data, &hashes); err != nil {
+		return []common.Hash{}
+	}
+	return hashes
+}
+
+// WriteHeadsHashes writes the heads hashes of the blockchain.
+func WriteTermini(db ethdb.KeyValueWriter, index common.Hash, hashes []common.Hash) {
+	log.Debug("WriteTermini:", "hashes:", hashes, "index:", index)
+	key := terminiKey(index)
+	data, err := rlp.EncodeToBytes(hashes)
+	if err != nil {
+		log.Crit("Failed to RLP encode termini", "err", err)
+	}
+	if err := db.Put(key, data); err != nil {
+		log.Crit("Failed to store last block's termini", "err", err)
+	}
+}
+
+// DeleteHeadsHashes writes the heads hashes of the blockchain.
+func DeleteTermini(db ethdb.KeyValueWriter, hash common.Hash) {
+	key := terminiKey(hash)
+
+	if err := db.Delete(key); err != nil {
+		log.Crit("Failed to delete termini ", "err", err)
+	}
+}
+
+// ReadPendingHeader retreive's the pending header stored in hash.
+func ReadPendingHeader(db ethdb.Reader, hash common.Hash) *types.Header {
+	key := pendingHeaderKey(hash)
+	data, _ := db.Get(key)
+	if len(data) == 0 {
+		return nil
+	}
+
+	header := new(types.Header)
+	if err := rlp.Decode(bytes.NewReader(data), header); err != nil {
+		log.Error("Invalid pendingHeader RLP")
+		return nil
+	}
+	return header
+}
+
+// WritePendingHeader writes the pending header of the terminus hash.
+func WritePendingHeader(db ethdb.KeyValueWriter, hash common.Hash, pendingHeader *types.Header) {
+	key := pendingHeaderKey(hash)
+
+	// Write the encoded pending header
+	data, err := rlp.EncodeToBytes(pendingHeader)
+	if err != nil {
+		log.Crit("Failed to RLP encode pending header", "err", err)
+	}
+
+	if err := db.Put(key, data); err != nil {
+		log.Crit("Failed to store header", "err", err)
+	}
+}
+
+// DeletePendingHeader deletes the pending header stored for the header hash.
+func DeletePendingHeader(db ethdb.KeyValueWriter, hash common.Hash) {
+	key := pendingHeaderKey(hash)
+	if err := db.Delete(key); err != nil {
+		log.Crit("Failed to delete slice pending header ", "err", err)
+	}
+}
+
+// ReadPendingHeader retreive's the pending header stored in hash.
+func ReadPhCacheBody(db ethdb.Reader, hash common.Hash) []common.Hash {
+	key := phBodyKey(hash)
+	data, _ := db.Get(key)
+	if len(data) == 0 {
+		return nil
+	}
+	termini := []common.Hash{}
+	if err := rlp.Decode(bytes.NewReader(data), &termini); err != nil {
+		log.Error("Invalid pendingHeader RLP")
+		return nil
+	}
+	return termini
+}
+
+// WritePendingHeader writes the pending header of the terminus hash.
+func WritePhCacheBody(db ethdb.KeyValueWriter, hash common.Hash, termini []common.Hash) {
+	key := phBodyKey(hash)
+	// Write the encoded pending header
+	data, err := rlp.EncodeToBytes(termini)
+	if err != nil {
+		log.Crit("Failed to RLP encode pending header", "err", err)
+	}
+	if err := db.Put(key, data); err != nil {
+		log.Crit("Failed to store header", "err", err)
+	}
+}
+
+// DeletePendingHeader deletes the pending header stored for the header hash.
+func DeletePhCacheBody(db ethdb.KeyValueWriter, hash common.Hash) {
+	key := phBodyKey(hash)
+	if err := db.Delete(key); err != nil {
+		log.Crit("Failed to delete slice pending header ", "err", err)
+	}
+}
+
+// ReadPhCache retreive's the heads hashes of the blockchain.
+func ReadPhCache(db ethdb.Reader) map[common.Hash]types.PendingHeader {
+	data, _ := db.Get(phCacheKey)
+	// get the ph cache keys.
+	if len(data) == 0 {
+		return make(map[common.Hash]types.PendingHeader)
+	}
+	hashes := []common.Hash{}
+	if err := rlp.DecodeBytes(data, &hashes); err != nil {
+		return make(map[common.Hash]types.PendingHeader)
+	}
+
+	phCache := make(map[common.Hash]types.PendingHeader)
+	// Read the pending header and phBody.
+	for _, hash := range hashes {
+		header := ReadPendingHeader(db, hash)
+		termini := ReadPhCacheBody(db, hash)
+		pendingHeader := types.PendingHeader{Header: header, Termini: termini}
+		phCache[hash] = pendingHeader
+	}
+	return phCache
+}
+
+// WritePhCache writes the heads hashes of the blockchain.
+func WritePhCache(db ethdb.KeyValueWriter, phCache map[common.Hash]types.PendingHeader) {
+	var hashes []common.Hash
+	for hash, pendingHeader := range phCache {
+		hashes = append(hashes, hash)
+		WritePendingHeader(db, hash, pendingHeader.Header)
+		WritePhCacheBody(db, hash, pendingHeader.Termini)
+	}
+
+	data, err := rlp.EncodeToBytes(hashes)
+	if err != nil {
+		log.Crit("Failed to RLP encode block total difficulty", "err", err)
+	}
+	if err := db.Put(phCacheKey, data); err != nil {
+		log.Crit("Failed to store last block's hash", "err", err)
+	}
+}
+
+// DeletePhCache writes the heads hashes of the blockchain.
+func DeletePhCache(db ethdb.KeyValueWriter) {
+	if err := db.Delete(phCacheKey); err != nil {
+		log.Crit("Failed to delete ph cache", "err", err)
+	}
+}
+
+// ReadCurrentPendingHeaderHash retreive's the heads hashes of the blockchain.
+func ReadCurrentPendingHeaderHash(db ethdb.Reader) common.Hash {
+	data, _ := db.Get(phHeadKey)
+	// get the ph cache keys.
+	if len(data) == 0 {
+		return common.Hash{}
+	}
+	hash := common.Hash{}
+	if err := rlp.DecodeBytes(data, &hash); err != nil {
+		return common.Hash{}
+	}
+	return hash
+}
+
+// WriteCurrentPendingHeaderHash writes the heads hashes of the blockchain.
+func WriteCurrentPendingHeaderHash(db ethdb.KeyValueWriter, hash common.Hash) {
+	data, err := rlp.EncodeToBytes(hash)
+	if err != nil {
+		log.Crit("Failed to RLP encode block total difficulty", "err", err)
+	}
+	if err := db.Put(phHeadKey, data); err != nil {
+		log.Crit("Failed to store last block's hash", "err", err)
+	}
+}
+
+// DeleteCurrentPendingHeaderHash writes the heads hashes of the blockchain.
+func DeleteCurrentPendingHeaderHash(db ethdb.KeyValueWriter) {
+	if err := db.Delete(phHeadKey); err != nil {
+		log.Crit("Failed to delete ph head", "err", err)
+	}
+}
+
+// ReadHeadsHashes retreive's the heads hashes of the blockchain.
+func ReadHeadsHashes(db ethdb.Reader) []common.Hash {
+	data, _ := db.Get(headsHashesKey)
+	if len(data) == 0 {
+		return []common.Hash{}
+	}
+	hashes := []common.Hash{}
+	if err := rlp.DecodeBytes(data, &hashes); err != nil {
+		return []common.Hash{}
+	}
+	return hashes
+}
+
+// WriteHeadsHashes writes the heads hashes of the blockchain.
+func WriteHeadsHashes(db ethdb.KeyValueWriter, hashes []common.Hash) {
+	data, err := rlp.EncodeToBytes(hashes)
+	if err != nil {
+		log.Crit("Failed to RLP encode block total difficulty", "err", err)
+	}
+	if err := db.Put(headsHashesKey, data); err != nil {
+		log.Crit("Failed to store last block's hash", "err", err)
+	}
+}
+
+// DeleteHeadsHashes writes the heads hashes of the blockchain.
+func DeleteHeadsHashes(db ethdb.KeyValueWriter, hashes []common.Hash) {
+	if err := db.Delete(headsHashesKey); err != nil {
+		log.Crit("Failed to delete block total difficulty", "err", err)
+	}
 }
 
 // ReadTd retrieves a block's total difficulty corresponding to the hash.
@@ -615,6 +868,86 @@ func DeleteReceipts(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	}
 }
 
+// storedReceiptRLP is the storage encoding of a receipt.
+// Re-definition in core/types/receipt.go.
+type storedReceiptRLP struct {
+	PostStateOrStatus []byte
+	CumulativeGasUsed uint64
+	Logs              []*types.LogForStorage
+}
+
+// ReceiptLogs is a barebone version of ReceiptForStorage which only keeps
+// the list of logs. When decoding a stored receipt into this object we
+// avoid creating the bloom filter.
+type receiptLogs struct {
+	Logs []*types.Log
+}
+
+// DecodeRLP implements rlp.Decoder.
+func (r *receiptLogs) DecodeRLP(s *rlp.Stream) error {
+	var stored storedReceiptRLP
+	if err := s.Decode(&stored); err != nil {
+		return err
+	}
+	r.Logs = make([]*types.Log, len(stored.Logs))
+	for i, log := range stored.Logs {
+		r.Logs[i] = (*types.Log)(log)
+	}
+	return nil
+}
+
+// DeriveLogFields fills the logs in receiptLogs with information such as block number, txhash, etc.
+func deriveLogFields(receipts []*receiptLogs, hash common.Hash, number uint64, txs types.Transactions) error {
+	logIndex := uint(0)
+	if len(txs) != len(receipts) {
+		return errors.New("transaction and receipt count mismatch")
+	}
+	for i := 0; i < len(receipts); i++ {
+		txHash := txs[i].Hash()
+		// The derived log fields can simply be set from the block and transaction
+		for j := 0; j < len(receipts[i].Logs); j++ {
+			receipts[i].Logs[j].BlockNumber = number
+			receipts[i].Logs[j].BlockHash = hash
+			receipts[i].Logs[j].TxHash = txHash
+			receipts[i].Logs[j].TxIndex = uint(i)
+			receipts[i].Logs[j].Index = logIndex
+			logIndex++
+		}
+	}
+	return nil
+}
+
+// ReadLogs retrieves the logs for all transactions in a block. The log fields
+// are populated with metadata. In case the receipts or the block body
+// are not found, a nil is returned.
+func ReadLogs(db ethdb.Reader, hash common.Hash, number uint64) [][]*types.Log {
+	// Retrieve the flattened receipt slice
+	data := ReadReceiptsRLP(db, hash, number)
+	if len(data) == 0 {
+		return nil
+	}
+	receipts := []*receiptLogs{}
+	if err := rlp.DecodeBytes(data, &receipts); err != nil {
+		log.Error("Invalid receipt array RLP", "hash", hash, "err", err)
+		return nil
+	}
+
+	body := ReadBody(db, hash, number)
+	if body == nil {
+		log.Error("Missing body but have receipt", "hash", hash, "number", number)
+		return nil
+	}
+	if err := deriveLogFields(receipts, hash, number, body.Transactions); err != nil {
+		log.Error("Failed to derive block receipts fields", "hash", hash, "number", number, "err", err)
+		return nil
+	}
+	logs := make([][]*types.Log, len(receipts))
+	for i, receipt := range receipts {
+		logs[i] = receipt.Logs
+	}
+	return logs
+}
+
 // ReadBlock retrieves an entire block corresponding to the hash, assembling it
 // back from the stored header and body. If either the header or body could not
 // be retrieved nil is returned.
@@ -637,37 +970,6 @@ func ReadBlock(db ethdb.Reader, hash common.Hash, number uint64) *types.Block {
 func WriteBlock(db ethdb.KeyValueWriter, block *types.Block) {
 	WriteBody(db, block.Hash(), block.NumberU64(), block.Body())
 	WriteHeader(db, block.Header())
-}
-
-// WriteAncientBlock writes entire block data into ancient store and returns the total written size.
-func WriteAncientBlock(db ethdb.AncientWriter, block *types.Block, receipts types.Receipts, td *big.Int) int {
-	// Encode all block components to RLP format.
-	headerBlob, err := rlp.EncodeToBytes(block.Header())
-	if err != nil {
-		log.Crit("Failed to RLP encode block header", "err", err)
-	}
-	bodyBlob, err := rlp.EncodeToBytes(block.Body())
-	if err != nil {
-		log.Crit("Failed to RLP encode body", "err", err)
-	}
-	storageReceipts := make([]*types.ReceiptForStorage, len(receipts))
-	for i, receipt := range receipts {
-		storageReceipts[i] = (*types.ReceiptForStorage)(receipt)
-	}
-	receiptBlob, err := rlp.EncodeToBytes(storageReceipts)
-	if err != nil {
-		log.Crit("Failed to RLP encode block receipts", "err", err)
-	}
-	tdBlob, err := rlp.EncodeToBytes(td)
-	if err != nil {
-		log.Crit("Failed to RLP encode block total difficulty", "err", err)
-	}
-	// Write all blob to flatten files.
-	err = db.AppendAncient(block.NumberU64(), block.Hash().Bytes(), headerBlob, bodyBlob, receiptBlob, tdBlob)
-	if err != nil {
-		log.Crit("Failed to write block data to ancient store", "err", err)
-	}
-	return len(headerBlob) + len(bodyBlob) + len(receiptBlob) + len(tdBlob) + common.HashLength
 }
 
 // DeleteBlock removes all block data associated with a hash.

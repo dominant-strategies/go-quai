@@ -141,7 +141,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		h.SetGasLimit(uint64(*dec.GasLimit[i]), i)
 		h.SetGasUsed(uint64(*dec.GasUsed[i]), i)
 	}
-	h.SetLocation(dec.Location)
+	h.SetLocation(*dec.Location)
 	h.SetTime(uint64(*dec.Time))
 	h.SetExtra(*dec.Extra)
 	h.SetNonce(*dec.Nonce)
