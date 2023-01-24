@@ -43,9 +43,12 @@ var (
 
 	// ErrBadSubManifest is returned when a block's subordinate manifest does not match the subordinate manifest hash
 	ErrBadSubManifest = errors.New("subordinate manifest is incorrect")
-	
+
 	//ErrAddedFutureCache is returned when a block could not be appended yet and has been added to the future cache to retry later
 	ErrAddedFutureCache = errors.New("block was added to future cache")
+
+	//ErrPendingEtxNotFound is returned when pendingEtxs cannot be found for a hash given in the submanifest
+	ErrPendingEtxNotFound = errors.New("pending etx not found")
 )
 
 // List of evm-call-message pre-checking errors. All state transition messages will
