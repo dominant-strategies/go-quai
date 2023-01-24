@@ -68,6 +68,7 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 			if err != nil {
 				if err == consensus.ErrFutureBlock ||
 					err.Error() == ErrBodyNotFound.Error() ||
+					err.Error() == ErrPendingEtxNotFound.Error() ||
 					err.Error() == consensus.ErrPrunedAncestor.Error() ||
 					err.Error() == consensus.ErrUnknownAncestor.Error() ||
 					err.Error() == ErrSubNotSyncedToDom.Error() ||
