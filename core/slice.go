@@ -292,7 +292,8 @@ func (sl *Slice) CollectSubRollups(b *types.Block) ([]types.Transactions, error)
 			} else if res := rawdb.ReadPendingEtxs(sl.sliceDb, hash); res != nil {
 				pendingEtxs = res
 			} else {
-				return nil, fmt.Errorf("unable to find pending etxs for hash in manifest, hash: %s", hash.String())
+				log.Warn("unable to find pending etxs for hash in manifest", "hash:", hash.String())
+				return nil, ErrPendingEtxNotFound
 			}
 			for ctx := nodeCtx; ctx < common.HierarchyDepth; ctx++ {
 				subRollups[ctx] = append(subRollups[ctx], pendingEtxs[ctx]...)
