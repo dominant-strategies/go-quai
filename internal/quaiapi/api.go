@@ -960,8 +960,11 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 	// transactions. For non-protected transactions, the homestead signer signer is used
 	// because the return value of ChainId is zero for those transactions.
 	var signer types.Signer
-	signer = types.LatestSignerForChainID(tx.ChainId())
-	from, _ := types.Sender(signer, tx)
+	var from common.Address
+	if tx.Type() != types.ExternalTxType {
+		signer = types.LatestSignerForChainID(tx.ChainId())
+		from, _ = types.Sender(signer, tx)
+	}
 	result := &RPCTransaction{
 		Type:      hexutil.Uint64(tx.Type()),
 		From:      from,
@@ -971,7 +974,6 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		Nonce:     hexutil.Uint64(tx.Nonce()),
 		To:        tx.To(),
 		Value:     (*hexutil.Big)(tx.Value()),
-		ChainID:   (*hexutil.Big)(tx.ChainId()),
 		GasFeeCap: (*hexutil.Big)(tx.GasFeeCap()),
 		GasTipCap: (*hexutil.Big)(tx.GasTipCap()),
 	}
@@ -990,6 +992,7 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 			price := math.BigMin(new(big.Int).Add(tx.GasTipCap(), baseFee), tx.GasFeeCap())
 			result.GasPrice = (*hexutil.Big)(price)
 		}
+		result.ChainID = (*hexutil.Big)(tx.ChainId())
 	}
 	al := tx.AccessList()
 	result.Accesses = &al
