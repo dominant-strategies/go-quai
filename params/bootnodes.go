@@ -47,5 +47,5 @@ func KnownDNSNetwork(genesis common.Hash, protocol string) string {
 	default:
 		return ""
 	}
-	return dnsPrefix + protocol + "." + net + ".ethdisco.net"
+	return dnsPrefix + protocol + "." + common.NodeLocation.Name() + "." + net + ".quainodes.io"
 }
