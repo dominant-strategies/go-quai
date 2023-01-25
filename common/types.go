@@ -219,18 +219,18 @@ var (
 
 func init() {
 	locationToPrefixRange["prime"] = NewRange(0, 9)
-	locationToPrefixRange["region-0"] = NewRange(10, 19)
-	locationToPrefixRange["zone-0-0"] = NewRange(20, 29)
-	locationToPrefixRange["zone-0-1"] = NewRange(30, 39)
-	locationToPrefixRange["zone-0-2"] = NewRange(40, 49)
-	locationToPrefixRange["region-1"] = NewRange(50, 59)
-	locationToPrefixRange["zone-1-0"] = NewRange(60, 69)
-	locationToPrefixRange["zone-1-1"] = NewRange(70, 79)
-	locationToPrefixRange["zone-1-2"] = NewRange(80, 89)
-	locationToPrefixRange["region-2"] = NewRange(90, 99)
-	locationToPrefixRange["zone-2-0"] = NewRange(100, 109)
-	locationToPrefixRange["zone-2-1"] = NewRange(110, 119)
-	locationToPrefixRange["zone-2-2"] = NewRange(120, 129)
+	locationToPrefixRange["cyprus"] = NewRange(10, 19)
+	locationToPrefixRange["cyprus1"] = NewRange(20, 29)
+	locationToPrefixRange["cyprus2"] = NewRange(30, 39)
+	locationToPrefixRange["cyprus3"] = NewRange(40, 49)
+	locationToPrefixRange["paxos"] = NewRange(50, 59)
+	locationToPrefixRange["paxos1"] = NewRange(60, 69)
+	locationToPrefixRange["paxos2"] = NewRange(70, 79)
+	locationToPrefixRange["paxos3"] = NewRange(80, 89)
+	locationToPrefixRange["hydra"] = NewRange(90, 99)
+	locationToPrefixRange["hydra1"] = NewRange(100, 109)
+	locationToPrefixRange["hydra2"] = NewRange(110, 119)
+	locationToPrefixRange["hydra3"] = NewRange(120, 129)
 }
 
 // Address represents the 20 byte address of an Ethereum account.
