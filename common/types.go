@@ -603,15 +603,25 @@ func (loc Location) InSameSliceAs(cmp Location) bool {
 }
 
 func (loc Location) Name() string {
-	regionNum := strconv.Itoa(loc.Region())
-	zoneNum := strconv.Itoa(loc.Zone())
+	regionName := ""
+	switch loc.Region() {
+	case 0:
+		regionName = "cyprus"
+	case 1:
+		regionName = "paxos"
+	case 2:
+		regionName = "hydra"
+	default:
+		regionName = "unknownregion"
+	}
+	zoneNum := strconv.Itoa(loc.Zone()+1)
 	switch loc.Context() {
 	case PRIME_CTX:
 		return "prime"
 	case REGION_CTX:
-		return "region-" + regionNum
+		return regionName
 	case ZONE_CTX:
-		return "zone-" + regionNum + "-" + zoneNum
+		return regionName + zoneNum
 	default:
 		log.Println("cannot name invalid location")
 		return "invalid-location"
