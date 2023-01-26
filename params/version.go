@@ -17,52 +17,133 @@
 package params
 
 import (
-	"fmt"
+	"bytes"
+	"errors"
+	"io/ioutil"
+	"log"
+	"strconv"
+	"strings"
+	"sync/atomic"
 )
 
-const (
-	VersionMajor = 1        // Major version component of the current release
-	VersionMinor = 10       // Minor version component of the current release
-	VersionPatch = 7        // Patch version component of the current release
-	VersionMeta  = "stable" // Version metadata to append to the version string
-)
+var Version CachedVersion
 
-// Version holds the textual version string.
-var Version = func() string {
-	return fmt.Sprintf("%d.%d.%d", VersionMajor, VersionMinor, VersionPatch)
-}()
+type version struct {
+	major int
+	minor int
+	patch int
+	meta  string
+	full  string
+}
 
-// VersionWithMeta holds the textual version string including the metadata.
-var VersionWithMeta = func() string {
-	v := Version
-	if VersionMeta != "" {
-		v += "-" + VersionMeta
+func readVersionFile() (version, error) {
+	raw, err := ioutil.ReadFile("VERSION")
+	if err != nil {
+		panic(err)
 	}
-	return v
-}()
+	full := strings.Replace(string(raw), "\n", "", -1)
+	// Take a full version string, e.g. 0.0.0-rc.0
+	// and split it into the version number and version metadata (if it has meta).
+	// e.g:
+	//   - vnum  := 0.0.0
+	//   - vmeta := rc.0
+	split := bytes.Split(raw, []byte("-"))
+	vnum := split[0]
+	var vmeta []byte
+	if len(split) > 1 {
+		vmeta = split[0]
+	}
+	vnums := bytes.Split(vnum, []byte("."))
+	if len(vnums) != 3 {
+		return version{}, errors.New("bad version number format")
+	}
+	major, err := strconv.Atoi(string(vnums[0][:]))
+	if err != nil {
+		return version{}, err
+	}
+	minor, err := strconv.Atoi(string(vnums[1][:]))
+	if err != nil {
+		return version{}, err
+	}
+	patch, err := strconv.Atoi(string(vnums[2][:]))
+	if err != nil {
+		return version{}, err
+	}
+	return version{major: major, minor: minor, patch: patch, meta: string(vmeta), full: full}, nil
+}
 
-// ArchiveVersion holds the textual version string used for Geth archives.
-// e.g. "1.8.11-dea1ce05" for stable releases, or
-//
-//	"1.8.13-unstable-21c059b6" for unstable releases
-func ArchiveVersion(gitCommit string) string {
-	vsn := Version
-	if VersionMeta != "stable" {
-		vsn += "-" + VersionMeta
+// Version contains software version data parsed from the VERSION file
+type CachedVersion struct {
+	major atomic.Value // Major version component of the current release
+	minor atomic.Value // Minor version component of the current release
+	patch atomic.Value // Patch version component of the current release
+	meta  atomic.Value // Version metadata (i.e. stable, pre.X, rx.X)
+	full  atomic.Value // Full version string (e.g. 0.0.0-rc.0)
+}
+
+// Load the cached version from the VERSION file
+func (v *CachedVersion) load() {
+	ver, err := readVersionFile()
+	if err != nil {
+		log.Fatal("failed to read version file", err)
 	}
-	if len(gitCommit) >= 8 {
-		vsn += "-" + gitCommit[:8]
+	v.major.Store(ver.major)
+	v.minor.Store(ver.minor)
+	v.patch.Store(ver.patch)
+	v.meta.Store(ver.meta)
+	v.full.Store(ver.full)
+}
+
+// Major loads the cached major version, or reads it from a file
+func (v *CachedVersion) Major() int {
+	if num := v.major.Load(); num != nil {
+		return num.(int)
 	}
-	return vsn
+	v.load()
+	return v.major.Load().(int)
+}
+
+// Minor loads the cached minor version, or reads it from a file
+func (v *CachedVersion) Minor() int {
+	if num := v.minor.Load(); num != nil {
+		return num.(int)
+	}
+	v.load()
+	return v.minor.Load().(int)
+}
+
+// Patch loads the cached patch version, or reads it from a file
+func (v *CachedVersion) Patch() int {
+	if num := v.patch.Load(); num != nil {
+		return num.(int)
+	}
+	v.load()
+	return v.patch.Load().(int)
+}
+
+// Meta loads the cached version metadata, or reads it from a file
+// Metadata may be empty if no metadata was provided
+func (v *CachedVersion) Meta() string {
+	if str := v.meta.Load(); str != nil {
+		return str.(string)
+	}
+	v.load()
+	return v.meta.Load().(string)
+}
+
+// Full loads the cached full version string, or reads it from a file
+func (v *CachedVersion) Full() string {
+	if str := v.full.Load(); str != nil {
+		return str.(string)
+	}
+	v.load()
+	return v.full.Load().(string)
 }
 
 func VersionWithCommit(gitCommit, gitDate string) string {
-	vsn := VersionWithMeta
+	vsn := Version.Full()
 	if len(gitCommit) >= 8 {
 		vsn += "-" + gitCommit[:8]
-	}
-	if (VersionMeta != "stable") && (gitDate != "") {
-		vsn += "-" + gitDate
 	}
 	return vsn
 }

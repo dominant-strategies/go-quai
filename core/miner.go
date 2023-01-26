@@ -125,7 +125,7 @@ func (miner *Miner) MakeExtraData(extra []byte) []byte {
 	if len(extra) == 0 {
 		// create default extradata
 		extra, _ = rlp.EncodeToBytes([]interface{}{
-			uint(params.VersionMajor<<16 | params.VersionMinor<<8 | params.VersionPatch),
+			uint(params.Version.Major()<<16 | params.Version.Minor()<<8 | params.Version.Patch()),
 			"geth",
 			runtime.Version(),
 			runtime.GOOS,
