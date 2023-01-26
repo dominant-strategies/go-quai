@@ -158,7 +158,7 @@ include network.env
 
 # Build the base command
 # WARNING: WS_ADDR is a sensitive interface and should only be exposed to trusted networks
-BASE_CMD = ./build/bin/go-quai --$(NETWORK) --syncmode full --verbosity 3
+BASE_CMD = ./build/bin/go-quai --$(NETWORK) --syncmode full --verbosity 4
 BASE_CMD += --http --http.vhosts=* --http.addr $(HTTP_ADDR) --http.api $(HTTP_API)
 BASE_CMD += --ws --ws.addr $(WS_ADDR) --ws.api $(WS_API)
 ifeq ($(ENABLE_ARCHIVE),true)
