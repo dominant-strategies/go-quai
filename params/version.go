@@ -34,6 +34,7 @@ type version struct {
 	patch int
 	meta  string
 	full  string
+	short string
 }
 
 func readVersionFile() (version, error) {
@@ -69,16 +70,17 @@ func readVersionFile() (version, error) {
 	if err != nil {
 		return version{}, err
 	}
-	return version{major: major, minor: minor, patch: patch, meta: string(vmeta), full: full}, nil
+	return version{major: major, minor: minor, patch: patch, meta: string(vmeta), full: full, short: string(vnum)}, nil
 }
 
 // Version contains software version data parsed from the VERSION file
 type CachedVersion struct {
-	major atomic.Value // Major version component of the current release
-	minor atomic.Value // Minor version component of the current release
-	patch atomic.Value // Patch version component of the current release
-	meta  atomic.Value // Version metadata (i.e. stable, pre.X, rx.X)
-	full  atomic.Value // Full version string (e.g. 0.0.0-rc.0)
+	major atomic.Value  // Major version component of the current release
+	minor atomic.Value  // Minor version component of the current release
+	patch atomic.Value  // Patch version component of the current release
+	meta  atomic.Value  // Version metadata (i.e. stable, pre.X, rx.X)
+	full  atomic.Value  // Full version string (e.g. 0.0.0-rc.0)
+	short  atomic.Value // Short version string (e.g. 0.0.0)
 }
 
 // Load the cached version from the VERSION file
@@ -92,6 +94,7 @@ func (v *CachedVersion) load() {
 	v.patch.Store(ver.patch)
 	v.meta.Store(ver.meta)
 	v.full.Store(ver.full)
+	v.short.Store(ver.short)
 }
 
 // Major loads the cached major version, or reads it from a file
@@ -138,6 +141,15 @@ func (v *CachedVersion) Full() string {
 	}
 	v.load()
 	return v.full.Load().(string)
+}
+
+// Full loads the cached full version string, or reads it from a file
+func (v *CachedVersion) Short() string {
+	if str := v.short.Load(); str != nil {
+		return str.(string)
+	}
+	v.load()
+	return v.short.Load().(string)
 }
 
 func VersionWithCommit(gitCommit, gitDate string) string {
