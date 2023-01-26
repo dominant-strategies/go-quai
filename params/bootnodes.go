@@ -20,14 +20,19 @@ import "github.com/dominant-strategies/go-quai/common"
 
 // ColosseumBootnodes are the enode URLs of the P2P bootstrap nodes running on
 // the Colosseum test network.
-var ColosseumBootnodes = []string{}
+var ColosseumBootnodes = []string{
+	"enode://1edee38aebefea9150213cdf4306a64499e3bca9058971c443d31a4997b9a096e7a26059472529a6ccbca0a04c4f6fdbf0c880ee97545a12c0f8b656f7d4e7da@35.192.126.165",
+	"enode://0f7b74f957d68eb85bbbf8ffe7d0477575406beb647f2353de08ca291a03db1507a70a41f3b4623c3049512342781c8fa9a7f7654cbcc8603e51190430b839a6@34.170.190.144",
+	"enode://66c87db18ab3e6322a149ac4b7b1bde3a31f1e505945a358e4c1ebae9dc8a40402ccd96dfed35438448fbf79a7b8ee093581a05c40ab115adaebe81a6946993b@104.197.16.107",
+}
 
 // GardenBootnodes are the enode URLs of the P2P bootstrap nodes running on the
 // Garden test network.
 var GardenBootnodes = []string{
-	"enode://0b077f7a86fa84d08c4f9e539ee53f7f39ccc85fdeabe1c34db7bb0e198e2305437d9928706ebc6b80a1df8e06a4f99f8b95e04ba05fd77a9d614ae008a9eb23@34.83.166.178",
-	"enode://4d706b8b389d623a54607e81a0c7a292603b253b9044afd5d546905f18a937623626acbb4078a2da74c78b8b5bb5050c6be13a3176daedf8b43514ce14cddd83@34.174.10.80",
-	"enode://84a1545d709e862e8ee45a87558e833b8fb1ba057a093fb7c974beb51e403b2c1d6f8a89404632804cf4ba1b47e3db9fcd629feb9fa90226fd2cf2b8ce83b0c9@104.198.48.112",
+	"enode://75c6cbbb08e45281606fd963c1fbbad763227dc370a9bf36185c7d9e9a66b7f7eebb17572d6932fb108ec37f333e8703656af79a98e651040131174a50124d09@34.64.47.60",   // Asia
+	"enode://273a1c529bdf064acbae6ab29c5c533f8caea2dce0ea4b0d5b7b6da58cc5b0de5924cd30bced5aba231a0aa9e5063d3baddc6d77e924d3999640a9c1304c5ef1@34.175.50.212", // Europe
+	"enode://e5c5470889825d2d32d6f55ee74d50d7d0040407f1339123572e675c818cc64dcbfbb4e202bc63bdff5e80e6c9ebba81370588d9737d127fbb663614ab7ece62@34.95.212.143", // SouthAmerica
+	"enode://b270dad3ea88fd8276d2eb20403c0f34d3eb1765f7dc124c3c41ed862f6adf78789b41ee7a7f0117f9e82a5c0a8ae3d9dae3d7c9200ea62cb82af9af08f36cfb@34.70.251.243", // Central USA
 }
 
 var V5Bootnodes = []string{}
