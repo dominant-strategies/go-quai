@@ -25,9 +25,9 @@ import (
 
 // Genesis hashes to enforce below configs on.
 var (
-	ColosseumGenesisHash = common.HexToHash("0x211fe0e77b6aed86a2c8194c63c1998eb95d61a50d109fdb1a336c7b06dafe0d")
-	GardenGenesisHash    = common.HexToHash("0x8b120f0d746602a7a1e0442b7b84404ac5fda7067561e3a9af61188d6938a4fc")
-	LocalGenesisHash     = common.HexToHash("0xc0bf4351d8d1421816671999c1650dd1e7da3f93c928043683025404309cf3cb")
+	ColosseumGenesisHash = common.HexToHash("0x02bee9c2447c8c78c3d914bd825fc2b0824e3953416722de2323bad589fb5139")
+	GardenGenesisHash    = common.HexToHash("0xeaee3301bebfa8a585f134ac8f9285db6b50cee3127cca8afc898d8f851b7f91")
+	LocalGenesisHash     = common.HexToHash("0xc063ff8f7b7297e8269e6684f5bcb3dabe06ba60e23034bef2341641bd93b9da")
 )
 
 var (
