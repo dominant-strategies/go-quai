@@ -282,7 +282,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 			primeStatedb.SetState(*internal, key, value)
 		}
 	}
-	primeRoot, _ := primeStatedb.IntermediateRoot(false) // error ignored because this is hardcoded and should not return an error
+	primeRoot := primeStatedb.IntermediateRoot(false)
 	head := types.EmptyHeader()
 	head.SetNonce(types.EncodeNonce(g.Nonce))
 	head.SetTime(g.Timestamp)

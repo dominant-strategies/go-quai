@@ -42,8 +42,7 @@ type revision struct {
 
 var (
 	// emptyRoot is the known root hash of an empty trie.
-	emptyRoot       = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
-	ErrInvalidScope = errors.New("address is not in scope")
+	emptyRoot = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
 )
 
 type proofList [][]byte
@@ -242,45 +241,33 @@ func (s *StateDB) SubRefund(gas uint64) {
 
 // Exist reports whether the given account address exists in the state.
 // Notably this also returns true for suicided accounts.
-func (s *StateDB) Exist(addr common.InternalAddress) (bool, error) {
-	if !addr.IsInChainScope() {
-		return false, ErrInvalidScope
-	}
-	return s.getStateObject(addr) != nil, nil
+func (s *StateDB) Exist(addr common.InternalAddress) bool {
+	return s.getStateObject(addr) != nil
 }
 
 // Empty returns whether the state object is either non-existent
 // or empty according to the EIP161 specification (balance = nonce = code = 0)
-func (s *StateDB) Empty(addr common.InternalAddress) (bool, error) {
-	if !addr.IsInChainScope() {
-		return false, ErrInvalidScope
-	}
+func (s *StateDB) Empty(addr common.InternalAddress) bool {
 	so := s.getStateObject(addr)
-	return so == nil || so.empty(), nil
+	return so == nil || so.empty()
 }
 
 // GetBalance retrieves the balance from the given address or 0 if object not found
-func (s *StateDB) GetBalance(addr common.InternalAddress) (*big.Int, error) {
-	if !addr.IsInChainScope() {
-		return nil, ErrInvalidScope
-	}
+func (s *StateDB) GetBalance(addr common.InternalAddress) *big.Int {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		return stateObject.Balance(), nil
+		return stateObject.Balance()
 	}
-	return common.Big0, nil
+	return common.Big0
 }
 
-func (s *StateDB) GetNonce(addr common.InternalAddress) (uint64, error) {
-	if !addr.IsInChainScope() {
-		return 0, ErrInvalidScope
-	}
+func (s *StateDB) GetNonce(addr common.InternalAddress) uint64 {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		return stateObject.Nonce(), nil
+		return stateObject.Nonce()
 	}
 
-	return 0, nil
+	return 0
 }
 
 // TxIndex returns the current transaction index set by Prepare.
@@ -288,56 +275,41 @@ func (s *StateDB) TxIndex() int {
 	return s.txIndex
 }
 
-func (s *StateDB) GetCode(addr common.InternalAddress) ([]byte, error) {
-	if !addr.IsInChainScope() {
-		return nil, ErrInvalidScope
-	}
+func (s *StateDB) GetCode(addr common.InternalAddress) []byte {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		return stateObject.Code(s.db), nil
+		return stateObject.Code(s.db)
 	}
-	return nil, nil
+	return nil
 }
 
-func (s *StateDB) GetCodeSize(addr common.InternalAddress) (int, error) {
-	if !addr.IsInChainScope() {
-		return 0, ErrInvalidScope
-	}
+func (s *StateDB) GetCodeSize(addr common.InternalAddress) int {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		return stateObject.CodeSize(s.db), nil
+		return stateObject.CodeSize(s.db)
 	}
-	return 0, nil
+	return 0
 }
 
-func (s *StateDB) GetCodeHash(addr common.InternalAddress) (common.Hash, error) {
-	if !addr.IsInChainScope() {
-		return common.Hash{}, ErrInvalidScope
-	}
+func (s *StateDB) GetCodeHash(addr common.InternalAddress) common.Hash {
 	stateObject := s.getStateObject(addr)
 	if stateObject == nil {
-		return common.Hash{}, nil
+		return common.Hash{}
 	}
-	return common.BytesToHash(stateObject.CodeHash()), nil
+	return common.BytesToHash(stateObject.CodeHash())
 }
 
 // GetState retrieves a value from the given account's storage trie.
-func (s *StateDB) GetState(addr common.InternalAddress, hash common.Hash) (common.Hash, error) {
-	if !addr.IsInChainScope() {
-		return common.Hash{}, ErrInvalidScope
-	}
+func (s *StateDB) GetState(addr common.InternalAddress, hash common.Hash) common.Hash {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		return stateObject.GetState(s.db, hash), nil
+		return stateObject.GetState(s.db, hash)
 	}
-	return common.Hash{}, nil
+	return common.Hash{}
 }
 
 // GetProof returns the Merkle proof for a given account.
 func (s *StateDB) GetProof(addr common.InternalAddress) ([][]byte, error) {
-	if !addr.IsInChainScope() {
-		return nil, ErrInvalidScope
-	}
 	return s.GetProofByHash(crypto.Keccak256Hash(addr.Bytes()))
 }
 
@@ -351,27 +323,21 @@ func (s *StateDB) GetProofByHash(addrHash common.Hash) ([][]byte, error) {
 // GetStorageProof returns the Merkle proof for given storage slot.
 func (s *StateDB) GetStorageProof(a common.InternalAddress, key common.Hash) ([][]byte, error) {
 	var proof proofList
-	trie, err := s.StorageTrie(a)
-	if err != nil {
-		return nil, err
-	}
+	trie := s.StorageTrie(a)
 	if trie == nil {
 		return proof, errors.New("storage trie for requested address does not exist")
 	}
-	err = trie.Prove(crypto.Keccak256(key.Bytes()), 0, &proof)
+	err := trie.Prove(crypto.Keccak256(key.Bytes()), 0, &proof)
 	return proof, err
 }
 
 // GetCommittedState retrieves a value from the given account's committed storage trie.
-func (s *StateDB) GetCommittedState(addr common.InternalAddress, hash common.Hash) (common.Hash, error) {
-	if !addr.IsInChainScope() {
-		return common.Hash{}, ErrInvalidScope
-	}
+func (s *StateDB) GetCommittedState(addr common.InternalAddress, hash common.Hash) common.Hash {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		return stateObject.GetCommittedState(s.db, hash), nil
+		return stateObject.GetCommittedState(s.db, hash)
 	}
-	return common.Hash{}, nil
+	return common.Hash{}
 }
 
 // Database retrieves the low level database supporting the lower level trie ops.
@@ -381,28 +347,22 @@ func (s *StateDB) Database() Database {
 
 // StorageTrie returns the storage trie of an account.
 // The return value is a copy and is nil for non-existent accounts.
-func (s *StateDB) StorageTrie(addr common.InternalAddress) (Trie, error) {
-	if !addr.IsInChainScope() {
-		return nil, ErrInvalidScope
-	}
+func (s *StateDB) StorageTrie(addr common.InternalAddress) Trie {
 	stateObject := s.getStateObject(addr)
 	if stateObject == nil {
-		return nil, nil
+		return nil
 	}
 	cpy := stateObject.deepCopy(s)
 	cpy.updateTrie(s.db)
-	return cpy.getTrie(s.db), nil
+	return cpy.getTrie(s.db)
 }
 
-func (s *StateDB) HasSuicided(addr common.InternalAddress) (bool, error) {
-	if !addr.IsInChainScope() {
-		return false, ErrInvalidScope
-	}
+func (s *StateDB) HasSuicided(addr common.InternalAddress) bool {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		return stateObject.suicided, nil
+		return stateObject.suicided
 	}
-	return false, nil
+	return false
 }
 
 /*
@@ -410,63 +370,56 @@ func (s *StateDB) HasSuicided(addr common.InternalAddress) (bool, error) {
  */
 
 // AddBalance adds amount to the account associated with addr.
-func (s *StateDB) AddBalance(addr common.InternalAddress, amount *big.Int) error {
-	stateObject, err := s.GetOrNewStateObject(addr)
-	if stateObject != nil && err == nil {
+func (s *StateDB) AddBalance(addr common.InternalAddress, amount *big.Int) {
+	stateObject := s.GetOrNewStateObject(addr)
+	if stateObject != nil {
 		stateObject.AddBalance(amount)
 	}
-	return err
 }
 
 // SubBalance subtracts amount from the account associated with addr.
-func (s *StateDB) SubBalance(addr common.InternalAddress, amount *big.Int) error {
-	stateObject, err := s.GetOrNewStateObject(addr)
-	if stateObject != nil && err == nil {
+func (s *StateDB) SubBalance(addr common.InternalAddress, amount *big.Int) {
+	stateObject := s.GetOrNewStateObject(addr)
+	if stateObject != nil {
 		stateObject.SubBalance(amount)
 	}
-	return err
 }
 
-func (s *StateDB) SetBalance(addr common.InternalAddress, amount *big.Int) error {
-	stateObject, err := s.GetOrNewStateObject(addr)
-	if stateObject != nil && err == nil {
+func (s *StateDB) SetBalance(addr common.InternalAddress, amount *big.Int) {
+	stateObject := s.GetOrNewStateObject(addr)
+	if stateObject != nil {
 		stateObject.SetBalance(amount)
 	}
-	return err
 }
 
-func (s *StateDB) SetNonce(addr common.InternalAddress, nonce uint64) error {
-	stateObject, err := s.GetOrNewStateObject(addr)
-	if stateObject != nil && err == nil {
+func (s *StateDB) SetNonce(addr common.InternalAddress, nonce uint64) {
+	stateObject := s.GetOrNewStateObject(addr)
+	if stateObject != nil {
 		stateObject.SetNonce(nonce)
 	}
-	return err
 }
 
-func (s *StateDB) SetCode(addr common.InternalAddress, code []byte) error {
-	stateObject, err := s.GetOrNewStateObject(addr)
-	if stateObject != nil && err == nil {
+func (s *StateDB) SetCode(addr common.InternalAddress, code []byte) {
+	stateObject := s.GetOrNewStateObject(addr)
+	if stateObject != nil {
 		stateObject.SetCode(crypto.Keccak256Hash(code), code)
 	}
-	return err
 }
 
-func (s *StateDB) SetState(addr common.InternalAddress, key, value common.Hash) error {
-	stateObject, err := s.GetOrNewStateObject(addr)
-	if stateObject != nil && err == nil {
+func (s *StateDB) SetState(addr common.InternalAddress, key, value common.Hash) {
+	stateObject := s.GetOrNewStateObject(addr)
+	if stateObject != nil {
 		stateObject.SetState(s.db, key, value)
 	}
-	return err
 }
 
 // SetStorage replaces the entire storage for the specified account with given
 // storage. This function should only be used for debugging.
-func (s *StateDB) SetStorage(addr common.InternalAddress, storage map[common.Hash]common.Hash) error {
-	stateObject, err := s.GetOrNewStateObject(addr)
-	if stateObject != nil && err == nil {
+func (s *StateDB) SetStorage(addr common.InternalAddress, storage map[common.Hash]common.Hash) {
+	stateObject := s.GetOrNewStateObject(addr)
+	if stateObject != nil {
 		stateObject.SetStorage(storage)
 	}
-	return err
 }
 
 // Suicide marks the given account as suicided.
@@ -474,13 +427,10 @@ func (s *StateDB) SetStorage(addr common.InternalAddress, storage map[common.Has
 //
 // The account's state object is still available until the state is committed,
 // getStateObject will return a non-nil account after Suicide.
-func (s *StateDB) Suicide(addr common.InternalAddress) (bool, error) {
-	if !addr.IsInChainScope() {
-		return false, ErrInvalidScope
-	}
+func (s *StateDB) Suicide(addr common.InternalAddress) bool {
 	stateObject := s.getStateObject(addr)
 	if stateObject == nil {
-		return false, nil
+		return false
 	}
 	s.journal.append(suicideChange{
 		account:     &addr,
@@ -490,7 +440,7 @@ func (s *StateDB) Suicide(addr common.InternalAddress) (bool, error) {
 	stateObject.markSuicided()
 	stateObject.data.Balance = new(big.Int)
 
-	return true, nil
+	return true
 }
 
 //
@@ -499,10 +449,6 @@ func (s *StateDB) Suicide(addr common.InternalAddress) (bool, error) {
 
 // updateStateObject writes the given object to the trie.
 func (s *StateDB) updateStateObject(obj *stateObject) {
-	if !obj.address.IsInChainScope() {
-		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", obj.address[:], ErrInvalidScope))
-		return
-	}
 	// Track the amount of time wasted on updating the account from the trie
 	if metrics.EnabledExpensive {
 		defer func(start time.Time) { s.AccountUpdates += time.Since(start) }(time.Now())
@@ -529,10 +475,6 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 
 // deleteStateObject removes the given object from the state trie.
 func (s *StateDB) deleteStateObject(obj *stateObject) {
-	if !obj.address.IsInChainScope() {
-		s.setError(fmt.Errorf("deleteStateObject (%x) error: %v", obj.address[:], ErrInvalidScope))
-		return
-	}
 	// Track the amount of time wasted on deleting the account from the trie
 	if metrics.EnabledExpensive {
 		defer func(start time.Time) { s.AccountUpdates += time.Since(start) }(time.Now())
@@ -559,10 +501,6 @@ func (s *StateDB) getStateObject(addr common.InternalAddress) *stateObject {
 // flag set. This is needed by the state journal to revert to the correct s-
 // destructed object instead of wiping all knowledge about the state object.
 func (s *StateDB) getDeletedStateObject(addr common.InternalAddress) *stateObject {
-	if !addr.IsInChainScope() {
-		s.setError(fmt.Errorf("getDeleteStateObject (%x) error: %v", addr.Bytes(), ErrInvalidScope))
-		return nil
-	}
 	// Prefer live objects if any is available
 	if obj := s.stateObjects[addr]; obj != nil {
 		return obj
@@ -621,23 +559,16 @@ func (s *StateDB) getDeletedStateObject(addr common.InternalAddress) *stateObjec
 }
 
 func (s *StateDB) setStateObject(object *stateObject) {
-	if !object.address.IsInChainScope() {
-		s.setError(fmt.Errorf("setStateObject (%x) error: %v", object.address[:], ErrInvalidScope))
-		return
-	}
 	s.stateObjects[object.Address()] = object
 }
 
 // GetOrNewStateObject retrieves a state object or create a new state object if nil.
-func (s *StateDB) GetOrNewStateObject(addr common.InternalAddress) (*stateObject, error) {
-	if !addr.IsInChainScope() {
-		return nil, ErrInvalidScope
-	}
+func (s *StateDB) GetOrNewStateObject(addr common.InternalAddress) *stateObject {
 	stateObject := s.getStateObject(addr)
 	if stateObject == nil {
 		stateObject, _ = s.createObject(addr)
 	}
-	return stateObject, nil
+	return stateObject
 }
 
 // createObject creates a new state object. If there is an existing account with
@@ -679,21 +610,14 @@ func (s *StateDB) createObject(addr common.InternalAddress) (newobj, prev *state
 //  2. tx_create(sha(account ++ nonce)) (note that this gets the address of 1)
 //
 // Carrying over the balance ensures that Ether doesn't disappear.
-func (s *StateDB) CreateAccount(addr common.InternalAddress) error {
-	if !addr.IsInChainScope() {
-		return ErrInvalidScope
-	}
+func (s *StateDB) CreateAccount(addr common.InternalAddress) {
 	newObj, prev := s.createObject(addr)
 	if prev != nil {
 		newObj.setBalance(prev.data.Balance)
 	}
-	return nil
 }
 
 func (db *StateDB) ForEachStorage(addr common.InternalAddress, cb func(key, value common.Hash) bool) error {
-	if !addr.IsInChainScope() {
-		return ErrInvalidScope
-	}
 	so := db.getStateObject(addr)
 	if so == nil {
 		return nil
@@ -854,12 +778,9 @@ func (s *StateDB) GetRefund() uint64 {
 // Finalise finalises the state by removing the s destructed objects and clears
 // the journal as well as the refunds. Finalise, however, will not push any updates
 // into the tries just yet. Only IntermediateRoot or Commit will do that.
-func (s *StateDB) Finalise(deleteEmptyObjects bool) error {
+func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 	addressesToPrefetch := make([][]byte, 0, len(s.journal.dirties))
 	for addr := range s.journal.dirties {
-		if !addr.IsInChainScope() {
-			return ErrInvalidScope
-		}
 		obj, exist := s.stateObjects[addr]
 		if !exist {
 			// ripeMD is 'touched' at block 1714175, in tx 0x1237f737031e40bcde4a8b7e717b2d15e3ecadfe49bb1bbc71ee9deb09c6fcf2
@@ -898,18 +819,14 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) error {
 	}
 	// Invalidate journal because reverting across transactions is not allowed.
 	s.clearJournalAndRefund()
-
-	return nil
 }
 
 // IntermediateRoot computes the current root hash of the state trie.
 // It is called in between transactions to get the root hash that
 // goes into transaction receipts.
-func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) (common.Hash, error) {
+func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// Finalise all the dirty storage states and write them into the tries
-	if err := s.Finalise(deleteEmptyObjects); err != nil {
-		return common.Hash{}, err
-	}
+	s.Finalise(deleteEmptyObjects)
 
 	// If there was a trie prefetcher operating, it gets aborted and irrevocably
 	// modified after we start retrieving tries. Remove it from the statedb after
@@ -931,9 +848,6 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) (common.Hash, error)
 	// first, giving the account prefeches just a few more milliseconds of time
 	// to pull useful data from disk.
 	for addr := range s.stateObjectsPending {
-		if !addr.IsInChainScope() {
-			return common.Hash{}, ErrInvalidScope
-		}
 		if obj := s.stateObjects[addr]; !obj.deleted {
 			obj.updateRoot(s.db)
 		}
@@ -965,7 +879,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) (common.Hash, error)
 	if metrics.EnabledExpensive {
 		defer func(start time.Time) { s.AccountHashes += time.Since(start) }(time.Now())
 	}
-	return s.trie.Hash(), nil
+	return s.trie.Hash()
 }
 
 // Prepare sets the current transaction hash and index which are
@@ -990,16 +904,11 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		return common.Hash{}, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
 	}
 	// Finalize any pending changes and merge everything into the tries
-	if _, err := s.IntermediateRoot(deleteEmptyObjects); err != nil {
-		return common.Hash{}, err
-	}
+	s.IntermediateRoot(deleteEmptyObjects)
 
 	// Commit objects to the trie, measuring the elapsed time
 	codeWriter := s.db.TrieDB().DiskDB().NewBatch()
 	for addr := range s.stateObjectsDirty {
-		if !addr.IsInChainScope() {
-			return common.Hash{}, ErrInvalidScope
-		}
 		if obj := s.stateObjects[addr]; !obj.deleted {
 			// Write any contract code associated with the state object
 			if obj.code != nil && obj.dirtyCode {

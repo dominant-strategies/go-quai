@@ -21,7 +21,6 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/state"
-	"github.com/dominant-strategies/go-quai/log"
 )
 
 // txNoncer is a tiny virtual state database to manage the executable nonces of
@@ -53,12 +52,7 @@ func (txn *txNoncer) get(addr common.Address) uint64 {
 		return 0
 	}
 	if _, ok := txn.nonces[addr]; !ok {
-		var err error
-		txn.nonces[addr], err = txn.fallback.GetNonce(*internal)
-		if err != nil {
-			log.Warn("Error getting account nonce from db: " + err.Error())
-			return 0
-		}
+		txn.nonces[addr] = txn.fallback.GetNonce(*internal)
 	}
 	return txn.nonces[addr]
 }
@@ -82,12 +76,7 @@ func (txn *txNoncer) setIfLower(addr common.Address, nonce uint64) {
 		return
 	}
 	if _, ok := txn.nonces[addr]; !ok {
-		var err error
-		txn.nonces[addr], err = txn.fallback.GetNonce(*internal)
-		if err != nil {
-			log.Warn("Error getting account nonce from db: " + err.Error())
-			return
-		}
+		txn.nonces[addr] = txn.fallback.GetNonce(*internal)
 	}
 	if txn.nonces[addr] <= nonce {
 		return

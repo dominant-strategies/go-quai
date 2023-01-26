@@ -234,9 +234,7 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
-	if err := p.engine.Finalize(p.hc, header, statedb, block.Transactions(), block.Uncles()); err != nil {
-		return nil, nil, nil, 0, err
-	}
+	p.engine.Finalize(p.hc, header, statedb, block.Transactions(), block.Uncles())
 
 	return receipts, allLogs, statedb, *usedGas, nil
 }
@@ -255,15 +253,9 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	// Update the state with pending changes.
 	var root []byte
 	if config.IsByzantium(blockNumber) {
-		if err := statedb.Finalise(true); err != nil {
-			return nil, err
-		}
+		statedb.Finalise(true)
 	} else {
-		intermediateRoot, err := statedb.IntermediateRoot(config.IsEIP158(blockNumber))
-		if err != nil {
-			return nil, err
-		}
-		root = intermediateRoot.Bytes()
+		root = statedb.IntermediateRoot(config.IsEIP158(blockNumber)).Bytes()
 	}
 	*usedGas += result.UsedGas
 
@@ -503,13 +495,13 @@ func (p *StateProcessor) ContractCodeWithPrefix(hash common.Hash) ([]byte, error
 // base layer statedb can be passed then it's regarded as the statedb of the
 // parent block.
 // Parameters:
-// - block: The block for which we want the state (== state at the stateRoot of the parent)
-// - reexec: The maximum number of blocks to reprocess trying to obtain the desired state
-// - base: If the caller is tracing multiple blocks, the caller can provide the parent state
-//         continuously from the callsite.
-// - checklive: if true, then the live 'blockchain' state database is used. If the caller want to
-//        perform Commit or other 'save-to-disk' changes, this should be set to false to avoid
-//        storing trash persistently
+//   - block: The block for which we want the state (== state at the stateRoot of the parent)
+//   - reexec: The maximum number of blocks to reprocess trying to obtain the desired state
+//   - base: If the caller is tracing multiple blocks, the caller can provide the parent state
+//     continuously from the callsite.
+//   - checklive: if true, then the live 'blockchain' state database is used. If the caller want to
+//     perform Commit or other 'save-to-disk' changes, this should be set to false to avoid
+//     storing trash persistently
 func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *state.StateDB, checkLive bool) (statedb *state.StateDB, err error) {
 	var (
 		current  *types.Block
@@ -654,18 +646,16 @@ func (p *StateProcessor) StateAtTransaction(block *types.Block, txIndex int, ree
 		}
 		// Ensure any modifications are committed to the state
 		// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
-		if err := statedb.Finalise(vmenv.ChainConfig().IsEIP158(block.Number())); err != nil {
-			return nil, vm.BlockContext{}, nil, err
-		}
+		statedb.Finalise(vmenv.ChainConfig().IsEIP158(block.Number()))
 	}
 	return nil, vm.BlockContext{}, nil, fmt.Errorf("transaction index %d out of range for block %#x", txIndex, block.Hash())
 }
 
 func prepareApplyETX(statedb *state.StateDB, tx *types.Transaction) *big.Int {
-	prevZeroBal, _ := statedb.GetBalance(common.ZeroInternal) // Get current zero address balance
-	fee := big.NewInt(0).Add(tx.GasFeeCap(), tx.GasTipCap())  // Add gas price cap to miner tip cap
-	fee.Mul(fee, big.NewInt(int64(tx.Gas())))                 // Multiply gas price by gas limit (may need to check for int64 overflow)
-	total := big.NewInt(0).Add(fee, tx.Value())               // Add gas fee to value
-	statedb.SetBalance(common.ZeroInternal, total)            // Use zero address at temp placeholder and set it to gas fee plus value
+	prevZeroBal := statedb.GetBalance(common.ZeroInternal)   // Get current zero address balance
+	fee := big.NewInt(0).Add(tx.GasFeeCap(), tx.GasTipCap()) // Add gas price cap to miner tip cap
+	fee.Mul(fee, big.NewInt(int64(tx.Gas())))                // Multiply gas price by gas limit (may need to check for int64 overflow)
+	total := big.NewInt(0).Add(fee, tx.Value())              // Add gas fee to value
+	statedb.SetBalance(common.ZeroInternal, total)           // Use zero address at temp placeholder and set it to gas fee plus value
 	return prevZeroBal
 }

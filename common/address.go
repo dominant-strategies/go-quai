@@ -32,14 +32,6 @@ type AddressData interface {
 	setBytes(b []byte)
 }
 
-// IsInChainScope checks if an address is a valid account in our node's sharded address space
-func (a Address) IsInChainScope() bool {
-	if a.inner == nil || a.inner.Hash() == ZeroAddr.Hash() {
-		return true
-	}
-	return NodeLocation.ContainsAddress(a)
-}
-
 func (a Address) InternalAddress() (*InternalAddress, error) {
 	if a.inner == nil {
 		return &InternalAddress{}, nil

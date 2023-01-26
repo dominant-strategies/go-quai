@@ -121,11 +121,7 @@ func (b *BlockGen) GetBalance(addr common.Address) *big.Int {
 	if err != nil {
 		panic(err.Error())
 	}
-	balance, err := b.statedb.GetBalance(*internal)
-	if err != nil {
-		panic(err.Error())
-	}
-	return balance
+	return b.statedb.GetBalance(*internal)
 }
 
 // AddUncheckedTx forcefully adds a transaction to the block without any
@@ -163,18 +159,10 @@ func (b *BlockGen) TxNonce(addr common.Address) uint64 {
 	if err != nil {
 		panic(err.Error())
 	}
-	exist, err := b.statedb.Exist(*internal)
-	if err != nil {
-		panic(err.Error())
-	}
-	if !exist {
+	if !b.statedb.Exist(*internal) {
 		panic("account does not exist")
 	}
-	nonce, err := b.statedb.GetNonce(*internal)
-	if err != nil {
-		return 0
-	}
-	return nonce
+	return b.statedb.GetNonce(*internal)
 }
 
 // AddUncle adds an uncle header to the generated block.
@@ -244,10 +232,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		}
 		if b.engine != nil {
 			// Finalize and seal the block
-			block, err := b.engine.FinalizeAndAssemble(chainreader, b.header, statedb, b.txs, b.uncles, b.etxs, b.subManifest, b.receipts)
-			if err != nil {
-				panic(err.Error())
-			}
+			block, _ := b.engine.FinalizeAndAssemble(chainreader, b.header, statedb, b.txs, b.uncles, b.etxs, b.subManifest, b.receipts)
 
 			// Write state changes to db
 			root, err := statedb.Commit(config.IsEIP158(b.header.Number()))
@@ -291,11 +276,7 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 
 	// Make new header
 	header := types.EmptyHeader()
-	intermediateRoot, err := state.IntermediateRoot(chain.Config().IsEIP158(parent.Number()))
-	if err != nil {
-		panic(err.Error())
-	}
-	header.SetRoot(intermediateRoot)
+	header.SetRoot(state.IntermediateRoot(chain.Config().IsEIP158(parent.Number())))
 	header.SetParentHash(parent.Hash())
 	header.SetCoinbase(parent.Coinbase())
 	header.SetDifficulty(engine.CalcDifficulty(chain, diffheader))

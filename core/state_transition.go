@@ -42,8 +42,10 @@ The state transitioning model does all the necessary work to work out a valid ne
 3) Create a new state object if the recipient is \0*32
 4) Value transfer
 == If contract creation ==
-  4a) Attempt to run transaction data
-  4b) If valid, use result as code for the new state object
+
+	4a) Attempt to run transaction data
+	4b) If valid, use result as code for the new state object
+
 == end ==
 5) Run Script section
 6) Derive new state root
@@ -211,11 +213,7 @@ func (st *StateTransition) buyGas() error {
 	if err != nil {
 		return err
 	}
-	balance, err := st.state.GetBalance(*from)
-	if err != nil {
-		return err
-	}
-	if have, want := balance, balanceCheck; have.Cmp(want) < 0 {
+	if have, want := st.state.GetBalance(*from), balanceCheck; have.Cmp(want) < 0 {
 		return fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFunds, st.msg.From().Hex(), have, want)
 	}
 	if err := st.gp.SubGas(st.msg.Gas()); err != nil {
@@ -224,9 +222,7 @@ func (st *StateTransition) buyGas() error {
 	st.gas += st.msg.Gas()
 
 	st.initialGas = st.msg.Gas()
-	if err := st.state.SubBalance(*from, mgval); err != nil {
-		return err
-	}
+	st.state.SubBalance(*from, mgval)
 	return nil
 }
 
@@ -237,10 +233,7 @@ func (st *StateTransition) preCheck() error {
 	}
 	// Make sure this transaction's nonce is correct.
 	if st.msg.CheckNonce() {
-		stNonce, err := st.state.GetNonce(*from)
-		if err != nil {
-			return err
-		}
+		stNonce := st.state.GetNonce(*from)
 		if msgNonce := st.msg.Nonce(); stNonce < msgNonce {
 			return fmt.Errorf("%w: address %v, tx: %d state: %d", ErrNonceTooHigh,
 				st.msg.From().Hex(), msgNonce, stNonce)
@@ -250,11 +243,7 @@ func (st *StateTransition) preCheck() error {
 		}
 	}
 	// Make sure the sender is an EOA
-	codeHash, err := st.state.GetCodeHash(*from)
-	if err != nil {
-		return err
-	}
-	if codeHash != emptyCodeHash && codeHash != (common.Hash{}) {
+	if codeHash := st.state.GetCodeHash(*from); codeHash != emptyCodeHash && codeHash != (common.Hash{}) {
 		return fmt.Errorf("%w: address %v, codehash: %s", ErrSenderNoEOA,
 			st.msg.From().Hex(), codeHash)
 	}
@@ -288,13 +277,13 @@ func (st *StateTransition) preCheck() error {
 // TransitionDb will transition the state by applying the current message and
 // returning the evm execution result with following fields.
 //
-// - used gas:
-//      total gas used (including gas being refunded)
-// - returndata:
-//      the returned data from evm
-// - concrete execution error:
-//      various **EVM** error which aborts the execution,
-//      e.g. ErrOutOfGas, ErrExecutionReverted
+//   - used gas:
+//     total gas used (including gas being refunded)
+//   - returndata:
+//     the returned data from evm
+//   - concrete execution error:
+//     various **EVM** error which aborts the execution,
+//     e.g. ErrOutOfGas, ErrExecutionReverted
 //
 // However if any consensus issue encountered, return the error directly with
 // nil evm execution result.
@@ -351,15 +340,11 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		if err != nil {
 			return nil, err
 		}
-		nonce, err := st.state.GetNonce(*addr)
-		if err != nil {
-			return nil, err
-		}
 		from, err := msg.From().InternalAddress()
 		if err != nil {
 			return nil, err
 		}
-		st.state.SetNonce(*from, nonce+1)
+		st.state.SetNonce(*from, st.state.GetNonce(*addr)+1)
 		ret, st.gas, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value)
 	}
 

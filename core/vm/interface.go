@@ -25,37 +25,37 @@ import (
 
 // StateDB is an EVM database for full state querying.
 type StateDB interface {
-	CreateAccount(common.InternalAddress) error
+	CreateAccount(common.InternalAddress)
 
-	SubBalance(common.InternalAddress, *big.Int) error
-	AddBalance(common.InternalAddress, *big.Int) error
-	GetBalance(common.InternalAddress) (*big.Int, error)
+	SubBalance(common.InternalAddress, *big.Int)
+	AddBalance(common.InternalAddress, *big.Int)
+	GetBalance(common.InternalAddress) *big.Int
 
-	GetNonce(common.InternalAddress) (uint64, error)
-	SetNonce(common.InternalAddress, uint64) error
+	GetNonce(common.InternalAddress) uint64
+	SetNonce(common.InternalAddress, uint64)
 
-	GetCodeHash(common.InternalAddress) (common.Hash, error)
-	GetCode(common.InternalAddress) ([]byte, error)
-	SetCode(common.InternalAddress, []byte) error
-	GetCodeSize(common.InternalAddress) (int, error)
+	GetCodeHash(common.InternalAddress) common.Hash
+	GetCode(common.InternalAddress) []byte
+	SetCode(common.InternalAddress, []byte)
+	GetCodeSize(common.InternalAddress) int
 
 	AddRefund(uint64)
 	SubRefund(uint64)
 	GetRefund() uint64
 
-	GetCommittedState(common.InternalAddress, common.Hash) (common.Hash, error)
-	GetState(common.InternalAddress, common.Hash) (common.Hash, error)
-	SetState(common.InternalAddress, common.Hash, common.Hash) error
+	GetCommittedState(common.InternalAddress, common.Hash) common.Hash
+	GetState(common.InternalAddress, common.Hash) common.Hash
+	SetState(common.InternalAddress, common.Hash, common.Hash)
 
-	Suicide(common.InternalAddress) (bool, error)
-	HasSuicided(common.InternalAddress) (bool, error)
+	Suicide(common.InternalAddress) bool
+	HasSuicided(common.InternalAddress) bool
 
 	// Exist reports whether the given account exists in state.
 	// Notably this should also return true for suicided accounts.
-	Exist(common.InternalAddress) (bool, error)
+	Exist(common.InternalAddress) bool
 	// Empty returns whether the given account is empty. Empty
 	// is defined according to EIP161 (balance = nonce = code = 0).
-	Empty(common.InternalAddress) (bool, error)
+	Empty(common.InternalAddress) bool
 
 	PrepareAccessList(sender common.Address, dest *common.Address, precompiles []common.Address, txAccesses types.AccessList)
 	AddressInAccessList(addr common.Address) bool
