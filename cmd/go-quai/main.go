@@ -34,6 +34,7 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/metrics"
 	"github.com/dominant-strategies/go-quai/node"
+	"github.com/dominant-strategies/go-quai/params"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -223,19 +224,19 @@ func main() {
 // This function should be called before launching devp2p stack.
 func prepare(ctx *cli.Context) {
 	// If we're running a known preset, log it for convenience.
+	var netname string
 	switch {
 	case ctx.GlobalIsSet(utils.GardenFlag.Name):
-		log.Info("Starting Quai on Garden testnet...")
-
+		netname = utils.GardenFlag.Name + " testnet"
 	case ctx.GlobalIsSet(utils.LocalFlag.Name):
-		log.Info("Starting Quai on Local testnet...")
-
+		netname = utils.LocalFlag.Name + " testnet"
 	case ctx.GlobalIsSet(utils.DeveloperFlag.Name):
-		log.Info("Starting Quai in ephemeral dev mode...")
-
+		netname = utils.DeveloperFlag.Name + " ephemeral dev network"
 	case !ctx.GlobalIsSet(utils.NetworkIdFlag.Name):
-		log.Info("Starting Quai on Colosseum testnet...")
+		netname = "Colosseum testnet"
 	}
+	welcome := fmt.Sprintf("Starting Quai %s on %s", params.Version.Full(), netname)
+	log.Info(welcome)
 	// If we're a full node on colosseum without --cache specified, bump default cache allowance
 	if ctx.GlobalString(utils.SyncModeFlag.Name) != "light" && !ctx.GlobalIsSet(utils.CacheFlag.Name) && !ctx.GlobalIsSet(utils.NetworkIdFlag.Name) {
 		// Make sure we're not on any supported preconfigured testnet either
