@@ -40,10 +40,7 @@ func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 		if err != nil {
 			return 0, err
 		}
-		current, err := evm.StateDB.GetState(*internalAddr, slot)
-		if err != nil {
-			return 0, err
-		}
+		current := evm.StateDB.GetState(*internalAddr, slot)
 		// Check slot presence in the access list
 		if addrPresent, slotPresent := evm.StateDB.SlotInAccessList(contract.Address(), slot); !slotPresent {
 			cost = params.ColdSloadCostEIP2929
@@ -63,10 +60,7 @@ func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 			//		return params.SloadGasEIP2200, nil
 			return cost + params.WarmStorageReadCostEIP2929, nil // SLOAD_GAS
 		}
-		original, err := evm.StateDB.GetCommittedState(*internalAddr, x.Bytes32())
-		if err != nil {
-			return 0, err
-		}
+		original := evm.StateDB.GetCommittedState(*internalAddr, x.Bytes32())
 		if original == current {
 			if original == (common.Hash{}) { // create slot (2.1.1)
 				return cost + params.SstoreSetGasEIP2200, nil
@@ -250,22 +244,10 @@ func makeSelfdestructGasFn(refundsEnabled bool) gasFunc {
 			gas = params.ColdAccountAccessCostEIP2929
 		}
 		// if empty and transfers value
-		empty, err := evm.StateDB.Empty(*internalAddress)
-		if err != nil {
-			return 0, err
-		}
-		balance, err := evm.StateDB.GetBalance(*contractAddress)
-		if err != nil {
-			return 0, err
-		}
-		if empty && balance.Sign() != 0 {
+		if evm.StateDB.Empty(*internalAddress) && evm.StateDB.GetBalance(*contractAddress).Sign() != 0 {
 			gas += params.CreateBySelfdestructGas
 		}
-		suicided, err := evm.StateDB.HasSuicided(*contractAddress)
-		if err != nil {
-			return 0, err
-		}
-		if refundsEnabled && !suicided {
+		if refundsEnabled && !evm.StateDB.HasSuicided(*contractAddress) {
 			evm.StateDB.AddRefund(params.SelfdestructRefundGas)
 		}
 		return gas, nil

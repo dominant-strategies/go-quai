@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
-	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/params"
@@ -220,10 +219,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	} else {
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
-		code, err := evm.StateDB.GetCode(*internalAddr)
-		if err != nil {
-			return nil, gas, err
-		}
+		code := evm.StateDB.GetCode(*internalAddr)
 		if len(code) == 0 {
 			ret, err = nil, nil // gas is unchanged
 		} else {
@@ -231,11 +227,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			// If the account has no code, we can abort here
 			// The depth-check is already done, and precompiles handled above
 			contract := NewContract(caller, AccountRef(addrCopy), value, gas)
-			codeHash, err := evm.StateDB.GetCodeHash(*internalAddr)
-			if err != nil {
-				return nil, gas, err
-			}
-			contract.SetCallCode(&addrCopy, codeHash, code)
+			contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(*internalAddr), code)
 			ret, err = evm.interpreter.Run(contract, input, false)
 			gas = contract.Gas
 		}
@@ -245,7 +237,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	// when we're in homestead this also counts for code storage gas errors.
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
-		if err != ErrExecutionReverted && err != state.ErrInvalidScope {
+		if err != ErrExecutionReverted {
 			gas = 0
 		}
 		// TODO: consider clearing up unused snapshots:
@@ -291,21 +283,13 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
 		contract := NewContract(caller, AccountRef(caller.Address()), value, gas)
-		codeHash, err := evm.StateDB.GetCodeHash(*internalAddr)
-		if err != nil {
-			return nil, gas, err
-		}
-		code, err := evm.StateDB.GetCode(*internalAddr)
-		if err != nil {
-			return nil, gas, err
-		}
-		contract.SetCallCode(&addrCopy, codeHash, code)
+		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(*internalAddr), evm.StateDB.GetCode(*internalAddr))
 		ret, err = evm.interpreter.Run(contract, input, false)
 		gas = contract.Gas
 	}
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
-		if err != ErrExecutionReverted && err != state.ErrInvalidScope {
+		if err != ErrExecutionReverted {
 			gas = 0
 		}
 	}
@@ -338,21 +322,13 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 		}
 		// Initialise a new contract and make initialise the delegate values
 		contract := NewContract(caller, AccountRef(caller.Address()), nil, gas).AsDelegate()
-		codeHash, err := evm.StateDB.GetCodeHash(*internalAddr)
-		if err != nil {
-			return nil, gas, err
-		}
-		code, err := evm.StateDB.GetCode(*internalAddr)
-		if err != nil {
-			return nil, gas, err
-		}
-		contract.SetCallCode(&addrCopy, codeHash, code)
+		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(*internalAddr), evm.StateDB.GetCode(*internalAddr))
 		ret, err = evm.interpreter.Run(contract, input, false)
 		gas = contract.Gas
 	}
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
-		if err != ErrExecutionReverted && err != state.ErrInvalidScope {
+		if err != ErrExecutionReverted {
 			gas = 0
 		}
 	}
@@ -393,15 +369,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
 		contract := NewContract(caller, AccountRef(addrCopy), new(big.Int), gas)
-		codeHash, err := evm.StateDB.GetCodeHash(*internalAddr) // unlikely that using addrCopy is necessary here as the pointer is dereferenced
-		if err != nil {
-			return nil, gas, err
-		}
-		code, err := evm.StateDB.GetCode(*internalAddr)
-		if err != nil {
-			return nil, gas, err
-		}
-		contract.SetCallCode(&addrCopy, codeHash, code)
+		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(*internalAddr), evm.StateDB.GetCode(*internalAddr)) // unlikely that using addrCopy is necessary here as the pointer is dereferenced
 		// When an error was returned by the EVM or when setting the creation code
 		// above we revert to the snapshot and consume any gas remaining. Additionally
 		// when we're in Homestead this also counts for code storage gas errors.
@@ -410,7 +378,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	}
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
-		if err != ErrExecutionReverted && err != state.ErrInvalidScope {
+		if err != ErrExecutionReverted {
 			gas = 0
 		}
 	}
@@ -447,10 +415,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if err != nil {
 		return nil, common.ZeroAddr, 0, err
 	}
-	nonce, err := evm.StateDB.GetNonce(*internalCallerAddr)
-	if err != nil {
-		return nil, common.Address{}, 0, err
-	}
+	nonce := evm.StateDB.GetNonce(*internalCallerAddr)
 	evm.StateDB.SetNonce(*internalCallerAddr, nonce+1)
 	// We add this to the access list _before_ taking a snapshot. Even if the creation fails,
 	// the access-list change should not be rolled back
@@ -514,7 +479,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	// when we're in homestead this also counts for code storage gas errors.
 	if err != nil && (evm.chainRules.IsHomestead || err != ErrCodeStoreOutOfGas) {
 		evm.StateDB.RevertToSnapshot(snapshot)
-		if err != ErrExecutionReverted && err != state.ErrInvalidScope {
+		if err != ErrExecutionReverted {
 			contract.UseGas(contract.Gas)
 		}
 	}
@@ -531,11 +496,7 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 	if err != nil {
 		return nil, common.ZeroAddr, 0, err
 	}
-	nonce, err := evm.StateDB.GetNonce(*internalAddr)
-	if err != nil {
-		return nil, common.Address{}, 0, err
-	}
-	contractAddr = crypto.CreateAddress(caller.Address(), nonce, code)
+	contractAddr = crypto.CreateAddress(caller.Address(), evm.StateDB.GetNonce(*internalAddr), code)
 	return evm.create(caller, &codeAndHash{code: code}, gas, value, contractAddr)
 }
 
@@ -552,7 +513,7 @@ func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *
 func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, etxGasLimit uint64, etxGasPrice *big.Int, etxGasTip *big.Int, etxData []byte, etxAccessList types.AccessList, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
 
 	// Verify address is not in context
-	if toAddr.IsInChainScope() {
+	if common.IsInChainScope(toAddr.Bytes()) {
 		return []byte{}, 0, fmt.Errorf("%x is in chain scope, but CreateETX was called\n", toAddr)
 	}
 	if gas < params.ETXGas {
@@ -576,14 +537,10 @@ func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, etxGas
 	if total.Sign() == 0 || !evm.Context.CanTransfer(evm.StateDB, fromAddr, total) {
 		return []byte{}, 0, fmt.Errorf("CreateETX: %x cannot transfer %d\n", fromAddr, total.Uint64())
 	}
-	if err := evm.StateDB.SubBalance(*fromInternal, total); err != nil {
-		return []byte{}, 0, fmt.Errorf("%x CreateETX error: %s\n", fromAddr, err.Error())
-	}
 
-	nonce, err := evm.StateDB.GetNonce(*fromInternal)
-	if err != nil {
-		return []byte{}, 0, fmt.Errorf("%x CreateETX error: %s\n", fromAddr, err.Error())
-	}
+	evm.StateDB.SubBalance(*fromInternal, total)
+
+	nonce := evm.StateDB.GetNonce(*fromInternal)
 
 	// create external transaction
 	etxInner := types.ExternalTx{Value: value, To: &toAddr, Sender: fromAddr, GasTipCap: etxGasTip, GasFeeCap: etxGasPrice, Gas: etxGasLimit, Data: etxData, AccessList: etxAccessList, Nonce: nonce, ChainID: evm.chainConfig.ChainID}

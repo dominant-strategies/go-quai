@@ -84,7 +84,8 @@ func TestPrecompile(t *testing.T) {
 	t.Log(location.Name())
 	params.TestChainConfig.GenesisHash = genesis.Hash()
 	blocks, _ := GenerateChain(params.TestChainConfig, genesis, blake3pow.NewFaker(), testdb, 2, gen)
-	statedb.AddBalance(addr, big.NewInt(params.Ether*2)) // give me 2 eth
+	internal, _ := addr.InternalAddress()
+	statedb.AddBalance(*internal, big.NewInt(params.Ether*2)) // give me 2 eth
 	mockContext := MockChainContext{blocks}
 
 	inner_tx := types.InternalTx{ChainID: big.NewInt(1), Nonce: 0, GasTipCap: common.Big1, GasFeeCap: common.Big1, Gas: 100000, To: &toAddr, Value: big.NewInt(params.Ether)}
@@ -251,7 +252,7 @@ func TestExternalTokenTransfer(t *testing.T) {
 	for {
 		contract[len(contract)-1] = i
 		contractAddr = crypto.CreateAddress(addr, nonce, contract)
-		if contractAddr.IsInChainScope() {
+		if common.IsInChainScope(contractAddr.Bytes()) {
 			break
 		}
 		i++
@@ -537,7 +538,7 @@ func TestOpETX(t *testing.T) {
 	for {
 		contract[len(contract)-1] = i
 		contractAddr := crypto.CreateAddress(addr, nonce, contract)
-		if contractAddr.IsInChainScope() {
+		if common.IsInChainScope(contractAddr.Bytes()) {
 			break
 		}
 		i++

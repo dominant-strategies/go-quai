@@ -185,12 +185,12 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost ui
 			var (
 				address                   = common.Hash(stack.data[stack.len()-1].Bytes32())
 				internalContractAddr, err = contract.Address().InternalAddress()
-				value, _                  = env.StateDB.GetState(*internalContractAddr, address)
 			)
 			if err != nil {
 				fmt.Println("Error in CaptureState: " + err.Error())
 				return
 			}
+			value := env.StateDB.GetState(*internalContractAddr, address)
 			l.storage[contract.Address()][address] = value
 			storage = l.storage[contract.Address()].Copy()
 		} else if op == SSTORE && stack.len() >= 2 {

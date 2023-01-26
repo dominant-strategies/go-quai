@@ -383,7 +383,7 @@ func (tx *Transaction) FromChain() common.Location {
 	switch tx.Type() {
 	case ExternalTxType:
 		// External transactions do not have a signature, but instead store the
-		// sender explicitely. Use that sender to get the location.
+		// sender explicitly. Use that sender to get the location.
 		loc = *tx.inner.(*ExternalTx).Sender.Location()
 	default:
 		// All other TX types are signed, and should use the signature to determine

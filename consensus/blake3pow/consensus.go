@@ -398,24 +398,17 @@ func (blake3pow *Blake3pow) Prepare(chain consensus.ChainHeaderReader, header *t
 
 // Finalize implements consensus.Engine, accumulating the block and uncle rewards,
 // setting the final state on the header
-func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) error {
+func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
 	// Accumulate any block and uncle rewards and commit the final state root
 	accumulateRewards(chain.Config(), state, header, uncles)
-	hash, err := state.IntermediateRoot(chain.Config().IsEIP158(header.Number()))
-	if err != nil {
-		return err
-	}
-	header.SetRoot(hash)
-	return nil
+	header.SetRoot(state.IntermediateRoot(chain.Config().IsEIP158(header.Number())))
 }
 
 // FinalizeAndAssemble implements consensus.Engine, accumulating the block and
 // uncle rewards, setting the final state and assembling the block.
 func (blake3pow *Blake3pow) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, etxs []*types.Transaction, subManifest types.BlockManifest, receipts []*types.Receipt) (*types.Block, error) {
 	// Finalize block
-	if err := blake3pow.Finalize(chain, header, state, txs, uncles); err != nil {
-		return nil, err
-	}
+	blake3pow.Finalize(chain, header, state, txs, uncles)
 
 	// Header seems complete, assemble into a block and return
 	return types.NewBlock(header, txs, uncles, etxs, subManifest, receipts, trie.NewStackTrie(nil)), nil

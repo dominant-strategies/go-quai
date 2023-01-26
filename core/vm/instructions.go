@@ -20,7 +20,6 @@ import (
 	"fmt"
 
 	"github.com/dominant-strategies/go-quai/common"
-	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rlp"
@@ -266,11 +265,7 @@ func opBalance(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 	if err != nil { // if an ErrInvalidScope error is returned, the caller (usually interpreter.go/Run) will return the error to Call which will eventually set ReceiptStatusFailed in the tx receipt (state_processor.go/applyTransaction)
 		return nil, err
 	}
-	balance, err := interpreter.evm.StateDB.GetBalance(*address)
-	if err != nil {
-		return nil, err
-	}
-	slot.SetFromBig(balance)
+	slot.SetFromBig(interpreter.evm.StateDB.GetBalance(*address))
 	return nil, nil
 }
 
@@ -357,11 +352,7 @@ func opReturnDataCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeConte
 
 func opExtCodeSize(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	slot := scope.Stack.peek()
-	size, err := interpreter.evm.StateDB.GetCodeSize(slot.Bytes20())
-	if err != nil {
-		return nil, err
-	}
-	slot.SetUint64(uint64(size))
+	slot.SetUint64(uint64(interpreter.evm.StateDB.GetCodeSize(slot.Bytes20())))
 	return nil, nil
 }
 
@@ -404,11 +395,7 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 	if err != nil {
 		return nil, err
 	}
-	code, err := interpreter.evm.StateDB.GetCode(*addr)
-	if err != nil {
-		return nil, err
-	}
-	codeCopy := getData(code, uint64CodeOffset, length.Uint64())
+	codeCopy := getData(interpreter.evm.StateDB.GetCode(*addr), uint64CodeOffset, length.Uint64())
 	scope.Memory.Set(memOffset.Uint64(), length.Uint64(), codeCopy)
 
 	return nil, nil
@@ -417,16 +404,21 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 // opExtCodeHash returns the code hash of a specified account.
 // There are several cases when the function is called, while we can relay everything
 // to `state.GetCodeHash` function to ensure the correctness.
-//   (1) Caller tries to get the code hash of a normal contract account, state
+//
+//	(1) Caller tries to get the code hash of a normal contract account, state
+//
 // should return the relative code hash and set it as the result.
 //
-//   (2) Caller tries to get the code hash of a non-existent account, state should
+//	(2) Caller tries to get the code hash of a non-existent account, state should
+//
 // return common.Hash{} and zero will be set as the result.
 //
-//   (3) Caller tries to get the code hash for an account without contract code,
+//	(3) Caller tries to get the code hash for an account without contract code,
+//
 // state should return emptyCodeHash(0xc5d246...) as the result.
 //
-//   (4) Caller tries to get the code hash of a precompiled account, the result
+//	(4) Caller tries to get the code hash of a precompiled account, the result
+//
 // should be zero or emptyCodeHash.
 //
 // It is worth noting that in order to avoid unnecessary create and clean,
@@ -435,10 +427,12 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 // If the precompile account is not transferred any amount on a private or
 // customized chain, the return value will be zero.
 //
-//   (5) Caller tries to get the code hash for an account which is marked as suicided
+//	(5) Caller tries to get the code hash for an account which is marked as suicided
+//
 // in the current transaction, the code hash of this account should be returned.
 //
-//   (6) Caller tries to get the code hash for an account which is marked as deleted,
+//	(6) Caller tries to get the code hash for an account which is marked as deleted,
+//
 // this account should be regarded as a non-existent account and zero should be returned.
 func opExtCodeHash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	slot := scope.Stack.peek()
@@ -446,16 +440,10 @@ func opExtCodeHash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 	if err != nil {
 		return nil, err
 	}
-	empty, err := interpreter.evm.StateDB.Empty(*address)
-	if err != nil {
-		return nil, err
-	}
-	if empty {
+	if interpreter.evm.StateDB.Empty(*address) {
 		slot.Clear()
 	} else {
-		if codeHash, err := interpreter.evm.StateDB.GetCodeHash(*address); err != nil {
-			slot.SetBytes(codeHash.Bytes())
-		}
+		slot.SetBytes(interpreter.evm.StateDB.GetCodeHash(*address).Bytes())
 	}
 	return nil, nil
 }
@@ -548,10 +536,7 @@ func opSload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 	if err != nil {
 		return nil, err
 	}
-	val, err := interpreter.evm.StateDB.GetState(*addr, hash)
-	if err != nil {
-		return nil, err
-	}
+	val := interpreter.evm.StateDB.GetState(*addr, hash)
 	loc.SetBytes(val.Bytes())
 	return nil, nil
 }
@@ -563,9 +548,8 @@ func opSstore(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 	if err != nil {
 		return nil, err
 	}
-	if err := interpreter.evm.StateDB.SetState(*addr, loc.Bytes32(), val.Bytes32()); err != nil {
-		return nil, err
-	}
+	interpreter.evm.StateDB.SetState(*addr,
+		loc.Bytes32(), val.Bytes32())
 	return nil, nil
 }
 
@@ -698,9 +682,7 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 	toAddr := common.Bytes20ToAddress(addr.Bytes20())
 	// Get the arguments from the memory.
 	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
-	if !toAddr.IsInChainScope() { // checked here because the error returned from Call is not returned from this function
-		return nil, state.ErrInvalidScope
-	}
+
 	var bigVal = big0
 	//TODO: use uint256.Int instead of converting with toBig()
 	// By using big0 here, we save an alloc for the most common case (non-ether-transferring contract calls),
@@ -736,8 +718,8 @@ func opCallCode(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 	addr, value, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Bytes20ToAddress(addr.Bytes20())
 	// Check if address is in proper context
-	if !toAddr.IsInChainScope() { // checked here because the error returned from CallCode is not returned from this function
-		return nil, state.ErrInvalidScope
+	if !common.IsInChainScope(toAddr.Bytes()) { // checked here because the error returned from CallCode is not returned from this function
+		return nil, common.ErrInvalidScope
 	}
 	// Get arguments from the memory.
 	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
@@ -774,8 +756,8 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 	addr, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Bytes20ToAddress(addr.Bytes20())
 	// Check if address is in proper context
-	if !toAddr.IsInChainScope() {
-		return nil, state.ErrInvalidScope
+	if !common.IsInChainScope(toAddr.Bytes()) {
+		return nil, common.ErrInvalidScope
 	}
 	// Get arguments from the memory.
 	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
@@ -805,8 +787,8 @@ func opStaticCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) 
 	addr, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Bytes20ToAddress(addr.Bytes20())
 	// Check if address is in proper context
-	if !toAddr.IsInChainScope() {
-		return nil, state.ErrInvalidScope
+	if !common.IsInChainScope(toAddr.Bytes()) {
+		return nil, common.ErrInvalidScope
 	}
 	// Get arguments from the memory.
 	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
@@ -850,20 +832,13 @@ func opSuicide(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 	if err != nil {
 		return nil, err
 	}
-	balance, err := interpreter.evm.StateDB.GetBalance(*addr)
-	if err != nil {
-		return nil, err
-	}
 	beneficiaryAddr, err := common.Bytes20ToAddress(beneficiary.Bytes20()).InternalAddress()
 	if err != nil {
 		return nil, err
 	}
-	if err := interpreter.evm.StateDB.AddBalance(*beneficiaryAddr, balance); err != nil {
-		return nil, err
-	}
-	if _, err := interpreter.evm.StateDB.Suicide(*addr); err != nil {
-		return nil, err
-	}
+	balance := interpreter.evm.StateDB.GetBalance(*addr)
+	interpreter.evm.StateDB.AddBalance(*beneficiaryAddr, balance)
+	interpreter.evm.StateDB.Suicide(*addr)
 	return nil, nil
 }
 
@@ -879,7 +854,7 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 	addr, value, etxGasLimit, gasTipCap, gasFeeCap, inOffset, inSize, accessListOffset, accessListSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Bytes20ToAddress(addr.Bytes20())
 	// Verify address is not in context
-	if toAddr.IsInChainScope() {
+	if common.IsInChainScope(toAddr.Bytes()) {
 		temp.Clear()
 		stack.push(&temp)
 		fmt.Printf("%x is in chain scope, but opETX was called\n", toAddr)
@@ -903,12 +878,8 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 		fmt.Printf("%x cannot transfer %d\n", scope.Contract.self.Address(), total.Uint64())
 		return nil, nil
 	}
-	if err := interpreter.evm.StateDB.SubBalance(*internalSender, total.ToBig()); err != nil {
-		temp.Clear()
-		stack.push(&temp)
-		fmt.Printf("%x opETX error: %s\n", scope.Contract.self.Address(), err.Error())
-		return nil, nil
-	}
+
+	interpreter.evm.StateDB.SubBalance(*internalSender, total.ToBig())
 
 	// Get the arguments from the memory.
 	data := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
@@ -923,13 +894,7 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 		return nil, nil // following opCall protocol
 	}
 
-	nonce, err := interpreter.evm.StateDB.GetNonce(*internalSender)
-	if err != nil {
-		temp.Clear()
-		stack.push(&temp)
-		fmt.Printf("%x opETX error: %s\n", scope.Contract.self.Address(), err.Error())
-		return nil, nil // following opCall protocol
-	}
+	nonce := interpreter.evm.StateDB.GetNonce(*internalSender)
 
 	// create external transaction
 	etxInner := types.ExternalTx{Value: value.ToBig(), To: &toAddr, Sender: sender, GasTipCap: gasTipCap.ToBig(), GasFeeCap: gasFeeCap.ToBig(), Gas: etxGasLimit.Uint64(), Data: data, AccessList: accessList, Nonce: nonce, ChainID: interpreter.evm.chainConfig.ChainID}
@@ -939,12 +904,7 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 	interpreter.evm.ETXCache = append(interpreter.evm.ETXCache, etx)
 	interpreter.evm.ETXCacheLock.Unlock()
 
-	if err := interpreter.evm.StateDB.SetNonce(*internalSender, nonce+1); err != nil {
-		temp.Clear()
-		stack.push(&temp)
-		fmt.Printf("%x opETX error: %s\n", scope.Contract.self.Address(), err.Error())
-		return nil, nil // following opCall protocol
-	}
+	interpreter.evm.StateDB.SetNonce(*internalSender, nonce+1)
 
 	temp.SetOne() // following opCall protocol
 	stack.push(&temp)
@@ -956,7 +916,7 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 func opIsAddressInternal(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	addr := scope.Stack.peek()
 	commonAddr := common.Bytes20ToAddress(addr.Bytes20())
-	if commonAddr.IsInChainScope() {
+	if common.IsInChainScope(commonAddr.Bytes()) {
 		addr.SetOne()
 	} else {
 		addr.Clear()
