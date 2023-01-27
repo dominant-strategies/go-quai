@@ -545,12 +545,12 @@ func (pool *TxPool) TxPoolPending(enforceTips bool, etxSet types.EtxSet) (map[co
 			addr := entry.ETX.ETXSender()
 			tx := entry.ETX
 			if tx.ETXSender().Location().Equal(common.NodeLocation) { // Sanity check
-				log.Error("ETX %s sender %s is in our location!", tx.Hash().String(), tx.ETXSender().String())
+				log.Error("ETX sender is in our location!", "tx", tx.Hash().String(), "sender", tx.ETXSender().String())
 				continue // skip this tx
 			}
 			// If the miner requests tip enforcement, cap the lists now
 			if enforceTips && !pool.locals.contains(addr) && tx.EffectiveGasTipIntCmp(pool.gasPrice, pool.priced.urgent.baseFee) < 0 {
-				log.Debug("ETX %s has incorrect or low gas price", tx.Hash().String())
+				log.Debug("ETX has incorrect or low gas price", "tx", tx.Hash().String())
 				continue // skip this tx
 			}
 			pending[addr] = append(pending[addr], &tx) // ETXs do not have to be sorted by address but this way all TXs are in the same list
