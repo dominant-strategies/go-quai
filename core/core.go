@@ -238,6 +238,10 @@ func (c *Core) SubscribeDownloaderWait(ch chan<- bool) event.Subscription {
 	return c.sl.SubscribeDownloaderWait(ch)
 }
 
+func (c *Core) SubscribeMissingBody(ch chan<- *types.Header) event.Subscription {
+	return c.sl.SubscribeMissingBody(ch)
+}
+
 //---------------------//
 // HeaderChain methods //
 //---------------------//
