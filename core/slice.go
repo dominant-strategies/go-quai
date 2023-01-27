@@ -51,6 +51,7 @@ type Slice struct {
 
 	scope              event.SubscriptionScope
 	downloaderWaitFeed event.Feed
+	missingBodyFeed    event.Feed
 
 	pendingEtxs *lru.Cache
 
@@ -137,6 +138,10 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	// Construct the block locally
 	block, err := sl.ConstructLocalBlock(header)
 	if err != nil {
+		// If body is not found
+		if err.Error() == ErrBodyNotFound.Error() {
+			sl.missingBodyFeed.Send(header)
+		}
 		return nil, err
 	}
 
@@ -884,4 +889,8 @@ func (sl *Slice) Miner() *Miner { return sl.miner }
 
 func (sl *Slice) SubscribeDownloaderWait(ch chan<- bool) event.Subscription {
 	return sl.scope.Track(sl.downloaderWaitFeed.Subscribe(ch))
+}
+
+func (sl *Slice) SubscribeMissingBody(ch chan<- *types.Header) event.Subscription {
+	return sl.scope.Track(sl.missingBodyFeed.Subscribe(ch))
 }
