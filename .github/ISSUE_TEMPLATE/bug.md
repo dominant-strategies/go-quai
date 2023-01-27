@@ -1,14 +1,15 @@
 ---
 name: Report a bug
-about: Something with go-ethereum is not working as expected
+about: Something with go-quai is not working as expected
 title: ''
 labels: 'type:bug'
 assignees: ''
+
 ---
 
 #### System information
 
-Geth version: `geth version`
+Geth version: `go-quai version tag`
 OS & Version: Windows/Linux/OSX
 Commit hash : (if `develop`)
 
