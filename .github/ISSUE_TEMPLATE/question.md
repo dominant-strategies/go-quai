@@ -1,7 +1,7 @@
 ---
 name: Ask a question
 about: Something is unclear
-title: ''
+title: 'type:docs'
 labels: ''
 assignees: ''
 
