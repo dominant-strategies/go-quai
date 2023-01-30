@@ -42,6 +42,7 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.NetworkIdFlag,
 			utils.ColosseumFlag,
 			utils.GardenFlag,
+			utils.OrchardFlag,
 			utils.LocalFlag,
 			utils.SyncModeFlag,
 			utils.ExitWhenSyncedFlag,

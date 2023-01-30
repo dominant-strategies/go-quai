@@ -35,6 +35,14 @@ var GardenBootnodes = []string{
 	"enode://b270dad3ea88fd8276d2eb20403c0f34d3eb1765f7dc124c3c41ed862f6adf78789b41ee7a7f0117f9e82a5c0a8ae3d9dae3d7c9200ea62cb82af9af08f36cfb@34.70.251.243", // Central USA
 }
 
+// OrchardBootnodes are the enode URLs of the P2P bootstrap nodes running on the
+// Orchard test network
+var OrchardBootnodes = []string{
+	"enode://5f03bfac8b38f18e7384d72e48bb6f9a4970ce75b3a36b45041cc1bfde61e2b760b46d9d73e2a40806ccb07f1fb32e9c38d350829c03ed9ba16369c9c24c3664@34.64.202.127",
+	"enode://e52f659870791a0358e81db559d5fd257c753a5c6bf483e62922980b50d289f54b1efb6f49e1e20ea4d635ed76681163849fae0a2bd16d2f40ed72332487946a@34.175.158.49",
+	"enode://44facffd8d3376d93ac839d9762f830f27ef1d400bf1d7106e7997b1bd2c476bf439c14bcd125e263163e571ddb803b01ef25689aa0d43d50496f4136bcd4710@34.95.228.160",
+}
+
 var V5Bootnodes = []string{}
 
 const dnsPrefix = "enrtree://ALE24Z2TEZV2XK46RXVB6IIN5HB5WTI4F4SMAVLYCAQIUPU53RSUU@"
@@ -49,6 +57,8 @@ func KnownDNSNetwork(genesis common.Hash, protocol string) string {
 		net = "colosseum"
 	case GardenGenesisHash:
 		net = "garden"
+	case OrchardGenesisHash:
+		net = "orchard"
 	default:
 		return ""
 	}
