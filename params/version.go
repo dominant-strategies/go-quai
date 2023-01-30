@@ -42,6 +42,9 @@ func readVersionFile() (version, error) {
 	if err != nil {
 		panic(err)
 	}
+	if raw[0] != 'v' {
+		return version{}, errors.New("version number must start with 'v'")
+	}
 	full := strings.Replace(string(raw), "\n", "", -1)
 	// Take a full version string, e.g. 0.0.0-rc.0
 	// and split it into the version number and version metadata (if it has meta).
@@ -58,7 +61,7 @@ func readVersionFile() (version, error) {
 	if len(vnums) != 3 {
 		return version{}, errors.New("bad version number format")
 	}
-	major, err := strconv.Atoi(string(vnums[0][:]))
+	major, err := strconv.Atoi(string(vnums[1][:])) // First byte is 'v'
 	if err != nil {
 		return version{}, err
 	}
