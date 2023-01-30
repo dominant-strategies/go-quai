@@ -294,8 +294,8 @@ func (sl *Slice) CollectSubRollups(b *types.Block) ([]types.Transactions, error)
 			// Look for pending ETXs first in pending ETX cache, then in database
 			if res, ok := sl.pendingEtxs.Get(hash); ok && res != nil {
 				pendingEtxs = res.([]types.Transactions)
-			} else if res := rawdb.ReadPendingEtxs(sl.sliceDb, hash); res != nil {
-				pendingEtxs = res
+			} else if res := rawdb.ReadPendingEtxs(sl.sliceDb, hash); res.Header != nil {
+				pendingEtxs = res.Etxs
 			} else {
 				log.Warn("unable to find pending etxs for hash in manifest", "hash:", hash.String())
 				return nil, ErrPendingEtxNotFound
@@ -499,7 +499,7 @@ func (sl *Slice) AddPendingEtxs(pEtxs types.PendingEtxs) error {
 	// Only write the pending ETXs if we have not seen them before
 	if !sl.pendingEtxs.Contains(pEtxs.Header.Hash()) {
 		// Write to pending ETX database
-		rawdb.WritePendingEtxs(sl.sliceDb, pEtxs.Header.Hash(), pEtxs.Etxs)
+		rawdb.WritePendingEtxs(sl.sliceDb, pEtxs)
 		// Also write to cache for faster access
 		sl.pendingEtxs.Add(pEtxs.Header.Hash(), pEtxs.Etxs)
 	}
