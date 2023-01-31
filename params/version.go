@@ -55,7 +55,7 @@ func readVersionFile() (version, error) {
 	vnum := split[0]
 	var vmeta []byte
 	if len(split) > 1 {
-		vmeta = split[0]
+		vmeta = split[1]
 	}
 	vnums := bytes.Split(vnum, []byte("."))
 	if len(vnums) != 3 {
@@ -78,12 +78,12 @@ func readVersionFile() (version, error) {
 
 // Version contains software version data parsed from the VERSION file
 type CachedVersion struct {
-	major atomic.Value  // Major version component of the current release
-	minor atomic.Value  // Minor version component of the current release
-	patch atomic.Value  // Patch version component of the current release
-	meta  atomic.Value  // Version metadata (i.e. stable, pre.X, rx.X)
-	full  atomic.Value  // Full version string (e.g. 0.0.0-rc.0)
-	short  atomic.Value // Short version string (e.g. 0.0.0)
+	major atomic.Value // Major version component of the current release
+	minor atomic.Value // Minor version component of the current release
+	patch atomic.Value // Patch version component of the current release
+	meta  atomic.Value // Version metadata (i.e. stable, pre.X, rx.X)
+	full  atomic.Value // Full version string (e.g. 0.0.0-rc.0)
+	short atomic.Value // Short version string (e.g. 0.0.0)
 }
 
 // Load the cached version from the VERSION file
