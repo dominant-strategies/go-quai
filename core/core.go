@@ -19,19 +19,19 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rlp"
-	lru "github.com/hashicorp/golang-lru"
 )
 
 const (
 	maxFutureHeaders     = 1800
 	maxTimeFutureHeaders = 30
+	futureHeaderTtl      = 30
 )
 
 type Core struct {
 	sl     *Slice
 	engine consensus.Engine
 
-	futureHeaders *lru.Cache
+	futureHeaders *types.TimedCache
 
 	quit chan struct{} // core quit channel
 }
@@ -48,7 +48,7 @@ func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.H
 		quit:   make(chan struct{}),
 	}
 
-	futureHeaders, _ := lru.New(maxFutureHeaders)
+	futureHeaders, _ := types.NewTimedCache(maxFutureHeaders, futureHeaderTtl)
 	c.futureHeaders = futureHeaders
 
 	go c.updateFutureHeaders()
