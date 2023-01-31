@@ -25,6 +25,7 @@ import (
 const (
 	maxFutureHeaders     = 1800
 	maxTimeFutureHeaders = 30
+	futureHeaderTimeout  = 30
 )
 
 type Core struct {
@@ -109,7 +110,13 @@ func (c *Core) procfutureHeaders() {
 	headers := make([]*types.Header, 0, c.futureHeaders.Len())
 	for _, hash := range c.futureHeaders.Keys() {
 		if header, exist := c.futureHeaders.Peek(hash); exist {
-			headers = append(headers, header.(*types.Header))
+			// Remove from the futureHeader cache if the block is more than 30 secs old
+			// If it is remove from the futureHeader cache
+			if uint64(time.Now().Unix()) > header.(*types.Header).Time()+futureHeaderTimeout {
+				headers = append(headers, header.(*types.Header))
+			} else {
+				c.futureHeaders.Remove(hash)
+			}
 		}
 	}
 	if len(headers) > 0 {
