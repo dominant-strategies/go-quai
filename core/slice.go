@@ -207,13 +207,13 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 			if err != nil {
 				return nil, err
 			}
+			// Cache the subordinate's pending ETXs
+			pEtxs := types.PendingEtxs{block.Header(), subPendingEtxs}
+			if !pEtxs.IsValid(trie.NewStackTrie(nil)) {
+				return nil, errors.New("sub pending ETXs faild validation")
+			}
+			sl.AddPendingEtxs(pEtxs)
 		}
-		// Cache the subordinate's pending ETXs
-		pEtxs := types.PendingEtxs{block.Header(), subPendingEtxs}
-		if !pEtxs.IsValid(trie.NewStackTrie(nil)) {
-			return nil, errors.New("sub pending ETXs faild validation")
-		}
-		sl.AddPendingEtxs(pEtxs)
 	}
 
 	// Combine sub's pending ETXs, sub rollup, and our local ETXs into localPendingEtxs
