@@ -36,8 +36,8 @@ var encodeBufferPool = sync.Pool{
 	New: func() interface{} { return new(bytes.Buffer) },
 }
 
-// rlpHash encodes x and hashes the encoded bytes.
-func rlpHash(x interface{}) (h common.Hash) {
+// RlpHash encodes x and hashes the encoded bytes.
+func RlpHash(x interface{}) (h common.Hash) {
 	sha := hasherPool.Get().(crypto.KeccakState)
 	defer hasherPool.Put(sha)
 	sha.Reset()
