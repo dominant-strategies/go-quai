@@ -1,5 +1,5 @@
 {{- define "go-quai.ingress" }}
-- host: {{ include "go-quai.envPrefix" . -}}prime.rpc.quaiscan.io
+- host: rpc.prime.{{ include "go-quai.envPrefix" . -}}quaiscan.io
   http:
     paths:
     - path: /
