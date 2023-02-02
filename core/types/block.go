@@ -35,7 +35,7 @@ import (
 
 var (
 	EmptyRootHash  = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
-	EmptyUncleHash = rlpHash([]*Header(nil))
+	EmptyUncleHash = RlpHash([]*Header(nil))
 )
 
 // A BlockNonce is a 64-bit hash which proves (combined with the
@@ -467,7 +467,7 @@ func (h *Header) BaseFeeArray() []*big.Int          { return h.baseFee }
 // Hash returns the block hash of the header, which is simply the keccak256 hash of its
 // RLP encoding.
 func (h *Header) Hash() common.Hash {
-	return rlpHash(h)
+	return RlpHash(h)
 }
 
 // totalBitLen returns the cumulative BitLen for each element in a big.Int slice.
@@ -828,7 +828,7 @@ func CalcUncleHash(uncles []*Header) common.Hash {
 	if len(uncles) == 0 {
 		return EmptyUncleHash
 	}
-	return rlpHash(uncles)
+	return RlpHash(uncles)
 }
 
 // WithSeal returns a new block with the data from b but the header replaced with

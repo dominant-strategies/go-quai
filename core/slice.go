@@ -751,7 +751,7 @@ func (sl *Slice) ConstructLocalMinedBlock(header *types.Header) (*types.Block, e
 		// in the subordinate manifest.
 		return types.NewBlockWithHeader(header), nil
 	}
-	pendingBlockBody := sl.GetPendingBlockBody(header.Root())
+	pendingBlockBody := sl.GetPendingBlockBody(header)
 	if pendingBlockBody == nil {
 		return nil, ErrBodyNotFound
 	}
@@ -806,12 +806,8 @@ func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *typ
 	return combinedPendingHeader
 }
 
-func (sl *Slice) AddPendingBlockBody(root common.Hash, body *types.Body) {
-	sl.miner.worker.AddPendingBlockBody(root, body)
-}
-
-func (sl *Slice) GetPendingBlockBody(root common.Hash) *types.Body {
-	return sl.miner.worker.GetPendingBlockBody(root)
+func (sl *Slice) GetPendingBlockBody(header *types.Header) *types.Body {
+	return sl.miner.worker.GetPendingBlockBody(header)
 }
 
 // MakeDomClient creates the quaiclient for the given domurl

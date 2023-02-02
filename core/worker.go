@@ -931,7 +931,7 @@ func (w *worker) FinalizeAssembleAndBroadcast(chain consensus.ChainHeaderReader,
 	block.Header().SetManifestHash(manifestHash)
 	block.Header().SetEtxRollupHash(etxRollupHash)
 
-	w.AddPendingBlockBody(block.Root(), block.Body())
+	w.AddPendingBlockBody(header, block.Body())
 
 	return block, nil
 }
@@ -971,19 +971,30 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 	return nil
 }
 
-// AddPendingBlockBody adds an entry in the lru cache for the given block root
-// maps it to body.
-func (w *worker) AddPendingBlockBody(root common.Hash, body *types.Body) {
-	w.pendingBlockBody.ContainsOrAdd(root, body)
+// GetPendingBlockBodyKey takes a header and hashes all the Roots together
+// and returns the key to be used for the pendingBlockBodyCache.
+func (w *worker) getPendingBlockBodyKey(header *types.Header) common.Hash {
+	return types.RlpHash([]interface{}{
+		header.UncleHash(),
+		header.TxHash(),
+		header.EtxHash(),
+	})
 }
 
-// GetPendingBlockBody gets the block body associated with the given root hash.
-func (w *worker) GetPendingBlockBody(root common.Hash) *types.Body {
-	body, ok := w.pendingBlockBody.Get(root)
+// AddPendingBlockBody adds an entry in the lru cache for the given pendingBodyKey
+// maps it to body.
+func (w *worker) AddPendingBlockBody(header *types.Header, body *types.Body) {
+	w.pendingBlockBody.ContainsOrAdd(w.getPendingBlockBodyKey(header), body)
+}
+
+// GetPendingBlockBody gets the block body associated with the given header.
+func (w *worker) GetPendingBlockBody(header *types.Header) *types.Body {
+	key := w.getPendingBlockBodyKey(header)
+	body, ok := w.pendingBlockBody.Get(key)
 	if ok {
 		return body.(*types.Body)
 	}
-	log.Warn("pending block body not found for root hash: ", root)
+	log.Warn("pending block body not found for header: ", key)
 	return nil
 }
 
