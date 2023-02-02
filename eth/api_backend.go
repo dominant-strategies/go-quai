@@ -390,10 +390,6 @@ func (b *QuaiAPIBackend) AddPendingEtxs(pEtxs types.PendingEtxs) error {
 	return b.eth.core.AddPendingEtxs(pEtxs)
 }
 
-func (b *QuaiAPIBackend) SubscribeHeaderRootsEvent(ch chan<- types.HeaderRoots) event.Subscription {
-	return b.eth.core.SubscribeHeaderRoots(ch)
-}
-
 func (b *QuaiAPIBackend) SubscribePendingHeaderEvent(ch chan<- *types.Header) event.Subscription {
 	return b.eth.core.SubscribePendingHeader(ch)
 }

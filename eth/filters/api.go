@@ -31,7 +31,6 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
-	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rpc"
 )
 
@@ -583,37 +582,6 @@ func decodeTopic(s string) (common.Hash, error) {
 		err = fmt.Errorf("hex has invalid length %d after decoding; expected %d for topic", len(b), common.HashLength)
 	}
 	return common.BytesToHash(b), err
-}
-
-// HeaderRoots sends a notification each time a new header root update takes place.
-func (api *PublicFilterAPI) HeaderRoots(ctx context.Context) (*rpc.Subscription, error) {
-	notifier, supported := rpc.NotifierFromContext(ctx)
-	if !supported {
-		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
-	}
-
-	rpcSub := notifier.CreateSubscription()
-
-	go func() {
-		headerRoots := make(chan types.HeaderRoots)
-		headerRootsSub := api.events.SubscribeHeaderRoots(headerRoots)
-
-		for {
-			select {
-			case b := <-headerRoots:
-				log.Debug("HeaderRoots", "Received header roots update: ", b)
-				notifier.Notify(rpcSub.ID, b)
-			case <-rpcSub.Err():
-				headerRootsSub.Unsubscribe()
-				return
-			case <-notifier.Closed():
-				headerRootsSub.Unsubscribe()
-				return
-			}
-		}
-	}()
-
-	return rpcSub, nil
 }
 
 // PendingHeader sends a notification each time a new pending header is created.

@@ -538,11 +538,6 @@ func (c *Core) SubscribePendingHeader(ch chan<- *types.Header) event.Subscriptio
 	return c.sl.miner.SubscribePendingHeader(ch)
 }
 
-// SubscribeHeaderRoots starts delivering the header roots update to the given channel.
-func (c *Core) SubscribeHeaderRoots(ch chan<- types.HeaderRoots) event.Subscription {
-	return c.sl.miner.SubscribeHeaderRoots(ch)
-}
-
 func (c *Core) IsMining() bool { return c.sl.miner.Mining() }
 
 //-------------------------//

@@ -351,11 +351,6 @@ func (ec *Client) SubscribeNewHead(ctx context.Context, ch chan<- *types.Header)
 	return ec.c.EthSubscribe(ctx, ch, "newHeads")
 }
 
-// SubscribeHeadersRoot subscribes to notifications about the changes in the header root on the node.
-func (ec *Client) SubscribeHeaderRoots(ctx context.Context, ch chan<- types.HeaderRoots) (ethereum.Subscription, error) {
-	return ec.c.EthSubscribe(ctx, ch, "headerRoots")
-}
-
 // SubscribePendingHeader subscribes to notifications about the current pending block on the node.
 func (ec *Client) SubscribePendingHeader(ctx context.Context, ch chan<- *types.Header) (ethereum.Subscription, error) {
 	return ec.c.EthSubscribe(ctx, ch, "pendingHeader")
