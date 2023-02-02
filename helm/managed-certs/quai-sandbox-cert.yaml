@@ -6,16 +6,16 @@ metadata:
   namespace: quai-prod
 spec:
   domains:
-  - prime.rpc.quaiscan.io
-  - cyprus.rpc.quaiscan.io
-  - paxos.rpc.quaiscan.io
-  - hydra.rpc.quaiscan.io
-  - cyprus1.rpc.quaiscan.io
-  - cyprus2.rpc.quaiscan.io
-  - cyprus3.rpc.quaiscan.io
-  - paxos1.rpc.quaiscan.io
-  - paxos2.rpc.quaiscan.io
-  - paxos3.rpc.quaiscan.io
-  - hydra1.rpc.quaiscan.io
-  - hydra2.rpc.quaiscan.io
-  - hydra3.rpc.quaiscan.io
+  - rpc.prime.colosseum.quaiscan.io
+  - rpc.cyprus.colosseum.quaiscan.io
+  - rpc.paxos.colosseum.quaiscan.io
+  - rpc.hydra.colosseum.quaiscan.io
+  - rpc.cyprus1.colosseum.quaiscan.io
+  - rpc.cyprus2.colosseum.quaiscan.io
+  - rpc.cyprus3.colosseum.quaiscan.io
+  - rpc.paxos1.colosseum.quaiscan.io
+  - rpc.paxos2.colosseum.quaiscan.io
+  - rpc.paxos3.colosseum.quaiscan.io
+  - rpc.hydra1.colosseum.quaiscan.io
+  - rpc.hydra2.colosseum.quaiscan.io
+  - rpc.hydra3.colosseum.quaiscan.io

@@ -6,16 +6,16 @@ metadata:
   namespace: quai-dev
 spec:
   domains:
-  - dev.prime.rpc.quaiscan.io
-  - dev.cyprus.rpc.quaiscan.io
-  - dev.paxos.rpc.quaiscan.io
-  - dev.hydra.rpc.quaiscan.io
-  - dev.cyprus1.rpc.quaiscan.io
-  - dev.cyprus2.rpc.quaiscan.io
-  - dev.cyprus3.rpc.quaiscan.io
-  - dev.paxos1.rpc.quaiscan.io
-  - dev.paxos2.rpc.quaiscan.io
-  - dev.paxos3.rpc.quaiscan.io
-  - dev.hydra1.rpc.quaiscan.io
-  - dev.hydra2.rpc.quaiscan.io
-  - dev.hydra3.rpc.quaiscan.io
+  - rpc.prime.garden.quaiscan.io
+  - rpc.cyprus.garden.quaiscan.io
+  - rpc.paxos.garden.quaiscan.io
+  - rpc.hydra.garden.quaiscan.io
+  - rpc.cyprus1.garden.quaiscan.io
+  - rpc.cyprus2.garden.quaiscan.io
+  - rpc.cyprus3.garden.quaiscan.io
+  - rpc.paxos1.garden.quaiscan.io
+  - rpc.paxos2.garden.quaiscan.io
+  - rpc.paxos3.garden.quaiscan.io
+  - rpc.hydra1.garden.quaiscan.io
+  - rpc.hydra2.garden.quaiscan.io
+  - rpc.hydra3.garden.quaiscan.io
