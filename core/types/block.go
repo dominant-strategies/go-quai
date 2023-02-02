@@ -880,12 +880,6 @@ type PendingHeader struct {
 	Termini []common.Hash
 }
 
-type HeaderRoots struct {
-	StateRoot    common.Hash
-	TxsRoot      common.Hash
-	ReceiptsRoot common.Hash
-}
-
 // BlockManifest is a list of block hashes, which implements DerivableList
 type BlockManifest []common.Hash
 

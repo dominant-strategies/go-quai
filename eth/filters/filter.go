@@ -42,7 +42,6 @@ type Backend interface {
 	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
 	SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription
 	SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription
-	SubscribeHeaderRootsEvent(ch chan<- types.HeaderRoots) event.Subscription
 	SubscribePendingHeaderEvent(ch chan<- *types.Header) event.Subscription
 
 	BloomStatus() (uint64, uint64)

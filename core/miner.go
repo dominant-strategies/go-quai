@@ -201,11 +201,6 @@ func (miner *Miner) SubscribePendingHeader(ch chan<- *types.Header) event.Subscr
 	return miner.worker.pendingHeaderFeed.Subscribe(ch)
 }
 
-// SubscribeHeaderRoots starts delivering the headerRootUpdates to the given channel.
-func (miner *Miner) SubscribeHeaderRoots(ch chan<- types.HeaderRoots) event.Subscription {
-	return miner.worker.headerRootsFeed.Subscribe(ch)
-}
-
 // Method to retrieve uncles from the worker in case not found in normal DB.
 func (miner *Miner) GetUncle(hash common.Hash) *types.Block {
 	if uncle, exist := miner.worker.localUncles[hash]; exist {

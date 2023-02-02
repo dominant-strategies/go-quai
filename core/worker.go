@@ -167,7 +167,6 @@ type worker struct {
 	// Feeds
 	pendingLogsFeed   event.Feed
 	pendingHeaderFeed event.Feed
-	headerRootsFeed   event.Feed
 
 	// Subscriptions
 	txsCh        chan NewTxsEvent
@@ -931,10 +930,6 @@ func (w *worker) FinalizeAssembleAndBroadcast(chain consensus.ChainHeaderReader,
 	etxRollupHash := types.DeriveSha(etxRollup, trie.NewStackTrie(nil))
 	block.Header().SetManifestHash(manifestHash)
 	block.Header().SetEtxRollupHash(etxRollupHash)
-
-	if chain.CurrentHeader().Hash() == block.ParentHash() {
-		w.headerRootsFeed.Send(types.HeaderRoots{StateRoot: block.Root(), TxsRoot: block.TxHash(), ReceiptsRoot: block.ReceiptHash()})
-	}
 
 	w.AddPendingBlockBody(block.Root(), block.Body())
 
