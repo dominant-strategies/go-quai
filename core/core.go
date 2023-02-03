@@ -22,9 +22,10 @@ import (
 )
 
 const (
-	maxFutureHeaders     = 1800
-	maxTimeFutureHeaders = 30
-	futureHeaderTtl      = 30
+	maxFutureHeaders        = 1800 // Maximum number of future headers we can store in cache
+	maxFutureTime           = 30   // Max time into the future (in seconds) we will accept a block
+	futureHeaderTtl         = 30   // Time (in seconds) a header is allowed to live in the futureHeader cache
+	futureHeaderRetryPeriod = 3    // Time (in seconds) before retrying to append future headers
 )
 
 type Core struct {
@@ -136,7 +137,7 @@ func (c *Core) procfutureHeaders() {
 
 // addfutureHeader adds a block to the future block cache
 func (c *Core) addfutureHeader(header *types.Header) error {
-	max := uint64(time.Now().Unix() + maxTimeFutureHeaders)
+	max := uint64(time.Now().Unix() + maxFutureTime)
 	if header.Time() > max {
 		return fmt.Errorf("future block timestamp %v > allowed %v", header.Time(), max)
 	}
@@ -148,7 +149,7 @@ func (c *Core) addfutureHeader(header *types.Header) error {
 
 // updatefutureHeaders is a time to procfutureHeaders
 func (c *Core) updateFutureHeaders() {
-	futureTimer := time.NewTicker(3 * time.Second)
+	futureTimer := time.NewTicker(futureHeaderRetryPeriod * time.Second)
 	defer futureTimer.Stop()
 	for {
 		select {
