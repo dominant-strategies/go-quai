@@ -266,6 +266,18 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	return localPendingEtxs, nil
 }
 
+// backfillPETXs collects any missing PendingETX objects needed to process the
+// given header. This is done by informing the fetcher of any pending ETXs we do
+// not have, so that they can be fetched from our peers.
+func (sl *Slice) backfillPETXs(header *types.Header, subManifest types.BlockManifest) {
+	for _, hash := range subManifest {
+		if petxs := rawdb.ReadPendingEtxs(sl.sliceDb, hash); petxs == nil {
+			// Send the pendingEtxs to the feed for broadcast
+			sl.missingPendingEtxsFeed.Send(hash)
+		}
+	}
+}
+
 // relayPh sends pendingHeaderWithTermini to subordinates
 func (sl *Slice) relayPh(pendingHeaderWithTermini types.PendingHeader, updateMiner bool, reorg bool, domOrigin bool, location common.Location) {
 	nodeCtx := common.NodeLocation.Context()
@@ -299,8 +311,8 @@ func (sl *Slice) CollectSubRollups(b *types.Block) ([]types.Transactions, error)
 				pendingEtxs = res.Etxs
 			} else {
 				log.Warn("unable to find pending etxs for hash in manifest", "hash:", hash.String())
-				// Send the pendingEtxs to the feed for broadcast
-				sl.missingPendingEtxsFeed.Send(hash)
+				// Start backfilling the missing pending ETXs needed to process this block
+				go sl.backfillPETXs(b.Header(), b.SubManifest())
 				return nil, ErrPendingEtxNotFound
 			}
 			for ctx := nodeCtx; ctx < common.HierarchyDepth; ctx++ {
