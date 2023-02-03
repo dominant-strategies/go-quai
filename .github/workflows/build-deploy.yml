@@ -78,6 +78,7 @@ jobs:
         gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
         passphrase: ${{ secrets.GPG_PASSPHRASE }}
         git_user_signingkey: true
+        git_tag_gpgsign: true
         git_commit_gpgsign: true
 
       # Install 'yq' for editing YAML files
@@ -114,7 +115,7 @@ jobs:
 
       # Tag the Git repository with the current version
     - name: git tag
-      run: git tag -s ${{ env.VERSION }} && git push origin tag ${{ env.VERSION }}
+      run: git tag -s ${{ env.VERSION }} -m ${{ env.VERSION }} && git push origin tag ${{ env.VERSION }}
 
       # Set up Google Cloud Platform with the correct service account key and project id
     - uses: google-github-actions/setup-gcloud@94337306dda8180d967a56932ceb4ddcf01edae7
