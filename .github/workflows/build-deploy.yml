@@ -160,5 +160,5 @@ jobs:
         branch: ${{ inputs.branch }}
         commit_message: Rev'd 'VERSION' file to {{ env.VERSION }}
         commit_options: -S
-        commit_username: ci@dominant-strategies.io
+        commit_user_name: ci@dominant-strategies.io
         commit_user_email: ci-dominantstrategies
