@@ -601,12 +601,26 @@ func (sl *Slice) writeToPhCache(pendingHeaderWithTermini types.PendingHeader) {
 
 // pickPhCacheHead determines if the provided pendingHeader should be selected and returns true if selected
 func (sl *Slice) pickPhCacheHead(reorg bool, externPendingHeaderWithTermini types.PendingHeader, domOrigin bool) bool {
-	if reorg {
-		sl.pendingHeaderHeadHash = externPendingHeaderWithTermini.Termini[terminiIndex]
-		return true
-	}
-
 	localPendingHeader, exists := sl.phCache[sl.pendingHeaderHeadHash]
+
+	if reorg {
+		// Knot exscape
+		if !exists {
+			sl.pendingHeaderHeadHash = externPendingHeaderWithTermini.Termini[terminiIndex]
+			return true
+		}
+
+		//calc local cache head reorg
+		localCacheReorg := true
+		for i := 0; i < common.NodeLocation.Context(); i++ {
+			localCacheReorg = (externPendingHeaderWithTermini.Header.NumberArray()[i].Cmp(localPendingHeader.Header.NumberArray()[i]) >= 0) && localCacheReorg
+		}
+		if localCacheReorg {
+			sl.pendingHeaderHeadHash = externPendingHeaderWithTermini.Termini[terminiIndex]
+			return true
+		}
+		return false
+	}
 
 	if domOrigin {
 		//calc local cache head reorg
