@@ -49,3 +49,4 @@ profile.cov
 **/yarn-error.log
 network.env
 nodelogs
+bootnode.key
