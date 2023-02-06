@@ -667,6 +667,7 @@ func (sl *Slice) init(genesis *Genesis) error {
 
 		knot := genesis.Knot[:]
 		for _, block := range knot {
+			sl.AddPendingEtxs(types.PendingEtxs{block.Header(), emptyPendingEtxs})
 			if block != nil {
 				location := block.Header().Location()
 				if nodeCtx == common.PRIME_CTX {
