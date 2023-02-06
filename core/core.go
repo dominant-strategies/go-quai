@@ -24,7 +24,7 @@ import (
 const (
 	maxFutureHeaders        = 1800 // Maximum number of future headers we can store in cache
 	maxFutureTime           = 30   // Max time into the future (in seconds) we will accept a block
-	futureHeaderTtl         = 30   // Time (in seconds) a header is allowed to live in the futureHeader cache
+	futureHeaderTtl         = 60   // Time (in seconds) a header is allowed to live in the futureHeader cache
 	futureHeaderRetryPeriod = 3    // Time (in seconds) before retrying to append future headers
 )
 
