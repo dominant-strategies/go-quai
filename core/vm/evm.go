@@ -553,6 +553,10 @@ func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, etxGas
 		return []byte{}, 0, fmt.Errorf("CreateETX error: %d is not sufficient gas, required amount: %d", gas, params.ETXGas)
 	}
 
+	if err := evm.ValidateETXGasPriceAndTip(fromAddr, etxGasPrice, etxGasTip); err != nil {
+		return []byte{}, 0, err
+	}
+
 	fee := big.NewInt(0)
 	fee.Add(etxGasTip, etxGasPrice)
 	fee.Mul(fee, big.NewInt(int64(etxGasLimit)))
@@ -580,6 +584,30 @@ func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, etxGas
 	evm.ETXCacheLock.Unlock()
 
 	return []byte{}, gas - params.ETXGas, nil
+}
+
+// Validate ETX gas price and tip
+func (evm *EVM) ValidateETXGasPriceAndTip(fromAddr common.Address, etxGasPrice *big.Int, etxGasTip *big.Int) error {
+	if l := etxGasPrice.BitLen(); l > 256 {
+		return fmt.Errorf("max fee per gas higher than 2^256-1: address %v, etxGasPrice bit length: %d",
+			fromAddr, l)
+	}
+	if l := etxGasTip.BitLen(); l > 256 {
+		return fmt.Errorf("max priority fee per gas higher than 2^256-1: address %v, etxGasTip bit length: %d",
+			fromAddr, l)
+	}
+	if etxGasPrice.Cmp(etxGasTip) < 0 {
+		return fmt.Errorf("max priority fee per gas higher than max fee per gas: address %v, maxPriorityFeePerGas: %s, maxFeePerGas: %s",
+			fromAddr, etxGasTip, etxGasPrice)
+	}
+	// This will panic if baseFee is nil, but basefee presence is verified
+	// as part of header validation.
+	mulBaseFee := new(big.Int).Mul(evm.Context.BaseFee, big.NewInt(int64(params.ETXBaseFeeMultiplier)))
+	if etxGasPrice.Cmp(mulBaseFee) < 0 {
+		return fmt.Errorf("max fee per gas less than block base fee: address %v, maxFeePerGas: %s baseFee: %s",
+			fromAddr, etxGasPrice, evm.Context.BaseFee)
+	}
+	return nil
 }
 
 // ChainConfig returns the environment's chain configuration
