@@ -159,6 +159,9 @@ func (s *PublicBlockChainQuaiAPI) GetBalance(ctx context.Context, address common
 	}
 	balance, err := state.GetBalance(address)
 	if err != nil {
+		if err.Error() == "address is not in scope" {
+			return (*hexutil.Big)(big.NewInt(0)), nil
+		}
 		return nil, err
 	}
 	return (*hexutil.Big)(balance), state.Error()
