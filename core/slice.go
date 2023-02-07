@@ -585,9 +585,8 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 		localPendingHeader.Header.SetLocation(common.NodeLocation)
 		sl.phCache[hash] = localPendingHeader
 
-		if reorg {
-			sl.pendingHeaderHeadHash = hash
-		}
+		sl.updateCurrentPendingHeader(localPendingHeader)
+
 		return nil
 	}
 	log.Warn("no pending header found for", "terminus", hash)
@@ -604,7 +603,7 @@ func (sl *Slice) pickPhCacheHead(reorg bool, externPendingHeaderWithTermini type
 	localPendingHeader, exists := sl.phCache[sl.pendingHeaderHeadHash]
 
 	if reorg {
-		// Knot exscape
+		// Knot escape
 		if !exists {
 			sl.pendingHeaderHeadHash = externPendingHeaderWithTermini.Termini[terminiIndex]
 			return true
