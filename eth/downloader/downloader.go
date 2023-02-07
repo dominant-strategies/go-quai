@@ -102,14 +102,13 @@ type Downloader struct {
 	notified        int32
 	committed       int32
 
-	waitingOnAppend bool
-
 	// Channels
 	headerCh      chan dataPack        // Channel receiving inbound block headers
 	bodyCh        chan dataPack        // Channel receiving inbound block bodies
 	receiptCh     chan dataPack        // Channel receiving inbound receipts
 	bodyWakeCh    chan bool            // Channel to signal the block body fetcher of new tasks
 	receiptWakeCh chan bool            // Channel to signal the receipt fetcher of new tasks
+	pauseCh       chan bool            // Channel to signal the downloader to pause
 	headerProcCh  chan []*types.Header // Channel to feed the header processor new tasks
 
 	// Cancellation and termination
@@ -163,17 +162,15 @@ func New(stateDb ethdb.Database, mux *event.TypeMux, core Core, dropPeer peerDro
 		peers:           newPeerSet(),
 		core:            core,
 		dropPeer:        dropPeer,
-		waitingOnAppend: false,
 		headerCh:        make(chan dataPack, 1),
 		bodyCh:          make(chan dataPack, 1),
 		receiptCh:       make(chan dataPack, 1),
 		bodyWakeCh:      make(chan bool, 1),
 		receiptWakeCh:   make(chan bool, 1),
+		pauseCh:         make(chan bool, 1),
 		headerProcCh:    make(chan []*types.Header, 10),
 		quitCh:          make(chan struct{}),
 	}
-
-	go dl.AppendWaitLoop()
 
 	return dl
 }
@@ -1124,29 +1121,25 @@ func (d *Downloader) processHeaders(origin uint64, number uint64) error {
 	}
 }
 
-// AppendWaitLoop listens to the waitEvent in slice and assigns the value
-// to the d.waitingOnAppend.
-func (d *Downloader) AppendWaitLoop() {
-	waitEvent := make(chan bool, 1)
-	waitEventSub := d.core.SubscribeDownloaderWait(waitEvent)
-	defer waitEventSub.Unsubscribe()
-
-	for {
-		select {
-		case wait := <-waitEvent:
-			d.waitingOnAppend = wait
-		case <-d.cancelCh:
-			return
-		}
-	}
-}
-
 // processFullSyncContent takes fetch results from the queue and imports them into the chain.
 func (d *Downloader) processFullSyncContent(peerHeight uint64) error {
+	waitEventSub := d.core.SubscribeDownloaderWait(d.pauseCh)
+	defer waitEventSub.Unsubscribe()
 	for {
-		// Only append when the appending in slice is paused because the sub is not synced
-		// or there is a future block proc currently in progress.
-		if !d.waitingOnAppend {
+		select {
+		case pause := <-d.pauseCh:
+			// If we get a true wait event, wait until we get a false wait event
+			for pause {
+				select {
+				case p := <-d.pauseCh:
+					pause = p
+				case <-d.cancelCh:
+					return nil
+				}
+			}
+		case <-d.cancelCh:
+			return nil
+		default:
 			results := d.queue.Results(true)
 			if len(results) == 0 {
 				return nil
@@ -1161,13 +1154,6 @@ func (d *Downloader) processFullSyncContent(peerHeight uint64) error {
 			if results[0].Header.NumberU64() == peerHeight {
 				return errNoFetchesPending
 			}
-		}
-
-		// Come out of the for loop if the downloader cancel is invoked
-		select {
-		case <-d.cancelCh:
-			return nil
-		default:
 		}
 	}
 }
@@ -1194,7 +1180,7 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 	}
 	if index, err := d.core.InsertChain(blocks); err != nil {
 		if err.Error() == core.ErrAddedFutureCache.Error() {
-			d.waitingOnAppend = true
+			d.pauseCh<-true // Pause the downloader
 			return nil
 		}
 		if index < len(results) {

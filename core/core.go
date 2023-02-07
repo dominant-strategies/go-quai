@@ -86,8 +86,12 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 				log.Info("InsertChain", "err in Append core: ", err)
 				return i, err
 			}
+
 			// Remove the header from the future headers cache since the block append was succesful
 			c.futureHeaders.Remove(block.Hash())
+
+			// Resume the downloader if paused
+			c.sl.downloaderWaitFeed.Send(false) 
 
 			// If we have a dom, send the dom any pending ETXs which will become
 			// referencable by this block. When this block is referenced in the dom's
@@ -129,9 +133,6 @@ func (c *Core) procfutureHeaders() {
 				c.InsertChain([]*types.Block{block})
 			}
 		}
-	}
-	if c.futureHeaders.Len() == 0 {
-		c.sl.downloaderWaitFeed.Send(false)
 	}
 }
 
