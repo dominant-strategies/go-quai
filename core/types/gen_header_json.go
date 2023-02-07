@@ -140,9 +140,6 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	if dec.BaseFee == nil {
 		return errors.New("missing required field 'baseFee' for Header")
 	}
-	if dec.Time == 0 {
-		return errors.New("missing required field 'timestamp' for Header")
-	}
 	if dec.Extra == nil {
 		return errors.New("missing required field 'extraData' for Header")
 	}
