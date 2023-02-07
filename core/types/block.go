@@ -708,10 +708,28 @@ func NewBlockWithHeader(header *Header) *Block {
 // modifying a header variable.
 func CopyHeader(h *Header) *Header {
 	cpy := *h
+	cpy.parentHash = make([]common.Hash, common.HierarchyDepth)
+	cpy.uncleHash = make([]common.Hash, common.HierarchyDepth)
+	cpy.coinbase = make([]common.Address, common.HierarchyDepth)
+	cpy.root = make([]common.Hash, common.HierarchyDepth)
+	cpy.txHash = make([]common.Hash, common.HierarchyDepth)
+	cpy.etxHash = make([]common.Hash, common.HierarchyDepth)
+	cpy.etxRollupHash = make([]common.Hash, common.HierarchyDepth)
+	cpy.manifestHash = make([]common.Hash, common.HierarchyDepth)
+	cpy.receiptHash = make([]common.Hash, common.HierarchyDepth)
 	cpy.difficulty = make([]*big.Int, common.HierarchyDepth)
 	cpy.number = make([]*big.Int, common.HierarchyDepth)
 	cpy.baseFee = make([]*big.Int, common.HierarchyDepth)
 	for i := 0; i < common.HierarchyDepth; i++ {
+		cpy.SetParentHash(h.ParentHash(i), i)
+		cpy.SetUncleHash(h.UncleHash(i), i)
+		cpy.SetCoinbase(h.Coinbase(i), i)
+		cpy.SetRoot(h.Root(i), i)
+		cpy.SetTxHash(h.TxHash(i), i)
+		cpy.SetEtxHash(h.EtxHash(i), i)
+		cpy.SetEtxRollupHash(h.EtxRollupHash(i), i)
+		cpy.SetManifestHash(h.ManifestHash(i), i)
+		cpy.SetReceiptHash(h.ReceiptHash(i), i)
 		cpy.SetDifficulty(h.Difficulty(i), i)
 		cpy.SetNumber(h.Number(i), i)
 		cpy.SetBaseFee(h.BaseFee(i), i)
