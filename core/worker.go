@@ -438,6 +438,7 @@ func (w *worker) GeneratePendingHeader(block *types.Block) (*types.Header, error
 	if err != nil {
 		return nil, err
 	}
+	env.header = block.Header()
 
 	task := &task{receipts: env.receipts, state: env.state, block: block, createdAt: time.Now()}
 	log.Info("Commit new sealing work", "number", block.Number(), "sealhash", w.engine.SealHash(block.Header()),
@@ -953,6 +954,7 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 		if err != nil {
 			return err
 		}
+		env.header = block.Header()
 		select {
 		case w.taskCh <- &task{receipts: env.receipts, state: env.state, block: block, createdAt: time.Now()}:
 			log.Info("Commit new sealing work", "number", block.Number(), "sealhash", w.engine.SealHash(block.Header()),
