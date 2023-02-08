@@ -810,7 +810,7 @@ func (b *Block) ExtTransaction(hash common.Hash) *Transaction {
 }
 func (b *Block) SubManifest() BlockManifest { return b.subManifest }
 
-func (b *Block) Header() *Header { return CopyHeader(b.header) }
+func (b *Block) Header() *Header { return b.header }
 
 // Body returns the non-header content of the block.
 func (b *Block) Body() *Body {
