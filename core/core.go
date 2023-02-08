@@ -67,7 +67,7 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 		if !isCoincident && !domWait {
 			newPendingEtxs, err := c.sl.Append(block.Header(), types.EmptyHeader(), common.Hash{}, big.NewInt(0), false, true, nil)
 			if err != nil {
-				if err == consensus.ErrFutureBlock ||
+				if err.Error() == consensus.ErrFutureBlock.Error() ||
 					err.Error() == ErrBodyNotFound.Error() ||
 					err.Error() == ErrPendingEtxNotFound.Error() ||
 					err.Error() == consensus.ErrPrunedAncestor.Error() ||
