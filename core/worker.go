@@ -932,7 +932,7 @@ func (w *worker) FinalizeAssembleAndBroadcast(chain consensus.ChainHeaderReader,
 	block.Header().SetManifestHash(manifestHash)
 	block.Header().SetEtxRollupHash(etxRollupHash)
 
-	w.AddPendingBlockBody(header, block.Body())
+	w.AddPendingBlockBody(block.Header(), block.Body())
 
 	return block, nil
 }
