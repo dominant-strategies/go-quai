@@ -9,7 +9,7 @@ assignees: ''
 
 #### System information
 
-Geth version: `go-quai version tag`
+Go-quai version: `go-quai version tag`
 OS & Version: Windows/Linux/OSX
 Commit hash : (if `develop`)
 
