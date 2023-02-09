@@ -717,8 +717,11 @@ func CopyHeader(h *Header) *Header {
 	cpy.etxRollupHash = make([]common.Hash, common.HierarchyDepth)
 	cpy.manifestHash = make([]common.Hash, common.HierarchyDepth)
 	cpy.receiptHash = make([]common.Hash, common.HierarchyDepth)
+	cpy.bloom = make([]Bloom, common.HierarchyDepth)
 	cpy.difficulty = make([]*big.Int, common.HierarchyDepth)
 	cpy.number = make([]*big.Int, common.HierarchyDepth)
+	cpy.gasLimit = make([]uint64, common.HierarchyDepth)
+	cpy.gasUsed = make([]uint64, common.HierarchyDepth)
 	cpy.baseFee = make([]*big.Int, common.HierarchyDepth)
 	for i := 0; i < common.HierarchyDepth; i++ {
 		cpy.SetParentHash(h.ParentHash(i), i)
@@ -730,14 +733,20 @@ func CopyHeader(h *Header) *Header {
 		cpy.SetEtxRollupHash(h.EtxRollupHash(i), i)
 		cpy.SetManifestHash(h.ManifestHash(i), i)
 		cpy.SetReceiptHash(h.ReceiptHash(i), i)
+		cpy.SetBloom(h.Bloom(i), i)
 		cpy.SetDifficulty(h.Difficulty(i), i)
 		cpy.SetNumber(h.Number(i), i)
+		cpy.SetGasLimit(h.GasLimit(i), i)
+		cpy.SetGasUsed(h.GasUsed(i), i)
 		cpy.SetBaseFee(h.BaseFee(i), i)
 	}
 	if len(h.extra) > 0 {
 		cpy.extra = make([]byte, len(h.extra))
 		copy(cpy.extra, h.extra)
 	}
+	cpy.SetLocation(h.location)
+	cpy.SetTime(h.time)
+	cpy.SetNonce(h.nonce)
 	return &cpy
 }
 
