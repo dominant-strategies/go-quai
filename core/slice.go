@@ -183,7 +183,12 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	}
 	if !domOrigin {
 		// HLCR
-		reorg = sl.hlcr(td)
+		currTermini := sl.hc.GetTerminiByHash(sl.hc.CurrentHeader().Hash())
+		if(currTermini[nodeCtx] != newTermini[nodeCtx]) && nodeCtx != common.PRIME_CTX {
+			reorg = sl.hlcr(currTermini[nodeCtx], newTermini[nodeCtx])
+		} else {
+			reorg = sl.reorg(td)
+		}
 	}
 
 	// Upate the local pending header
@@ -456,9 +461,20 @@ func (sl *Slice) pcrc(batch ethdb.Batch, header *types.Header, domTerminus commo
 	return termini[location.SubIndex()], newTermini, nil
 }
 
-// HLCR Hierarchical Longest Chain Rule compares externTd to the currentHead Td and returns true if externTd is greater
-func (sl *Slice) hlcr(externTd *big.Int) bool {
+// Reorg externTd to the currentHead Td and returns true if externTd is greater
+func (sl *Slice) reorg(externTd *big.Int) bool {
 	currentTd := sl.hc.GetTdByHash(sl.hc.CurrentHeader().Hash())
+	log.Debug("Local reorg:", "Header hash:", sl.hc.CurrentHeader().Hash(), "currentTd:", currentTd, "externTd:", externTd)
+	reorg := currentTd.Cmp(externTd) < 0
+	//TODO need to handle the equal td case
+	// https://github.com/dominant-strategies/go-quai/issues/430
+	return reorg
+}
+
+// HLCR Hierarchical Longest Chain Rule compares externTd to the currentHead Td and returns true if externTd is greater
+func (sl *Slice) hlcr(currTermini common.Hash, newTermini common.Hash) bool {
+	currentTd := sl.hc.GetTdByHash(currTermini)
+	externTd := sl.hc.GetTdByHash(newTermini)
 	log.Debug("HLCR:", "Header hash:", sl.hc.CurrentHeader().Hash(), "currentTd:", currentTd, "externTd:", externTd)
 	reorg := currentTd.Cmp(externTd) < 0
 	//TODO need to handle the equal td case
