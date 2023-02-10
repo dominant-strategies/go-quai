@@ -174,8 +174,8 @@ func DialContext(ctx context.Context, rawurl string) (*Client, error) {
 		return nil, err
 	}
 	switch u.Scheme {
-	case "tcp":
-		return DialTCP(ctx, rawurl)
+	// case "tcp":
+	// 	return DialTCP(ctx, rawurl)
 	case "http", "https":
 		return DialHTTP(rawurl)
 	case "ws", "wss":
@@ -205,14 +205,6 @@ func newClient(initctx context.Context, connect reconnectFunc) (*Client, error) 
 	c.reconnectFunc = connect
 	// c.isMiner = *initctx.Value(MinerCtxKeyType("isMiner")).(*bool)
 	return c, nil
-}
-
-func NewMinerConn(endpoint string) (*net.Conn, error){
-	c, err := net.Dial("tcp", endpoint)
-	if err != nil {
-		return nil, err
-	}
-	return &c, nil
 }
 
 func initClient(conn ServerCodec, idgen func() ID, services *serviceRegistry) *Client {
