@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"net"
 	"reflect"
 	"strconv"
 	"sync/atomic"
@@ -76,6 +77,7 @@ type BatchElem struct {
 type Client struct {
 	idgen    func() ID // for subscriptions
 	isHTTP   bool
+	isMiner	 bool
 	services *serviceRegistry
 
 	idCounter uint32
@@ -172,6 +174,8 @@ func DialContext(ctx context.Context, rawurl string) (*Client, error) {
 		return nil, err
 	}
 	switch u.Scheme {
+	case "tcp":
+		return DialTCP(ctx, rawurl)
 	case "http", "https":
 		return DialHTTP(rawurl)
 	case "ws", "wss":
@@ -190,6 +194,8 @@ func ClientFromContext(ctx context.Context) (*Client, bool) {
 	return client, ok
 }
 
+type MinerCtxKeyType string
+
 func newClient(initctx context.Context, connect reconnectFunc) (*Client, error) {
 	conn, err := connect(initctx)
 	if err != nil {
@@ -197,7 +203,16 @@ func newClient(initctx context.Context, connect reconnectFunc) (*Client, error) 
 	}
 	c := initClient(conn, randomIDGenerator(), new(serviceRegistry))
 	c.reconnectFunc = connect
+	// c.isMiner = *initctx.Value(MinerCtxKeyType("isMiner")).(*bool)
 	return c, nil
+}
+
+func NewMinerConn(endpoint string) (*net.Conn, error){
+	c, err := net.Dial("tcp", endpoint)
+	if err != nil {
+		return nil, err
+	}
+	return &c, nil
 }
 
 func initClient(conn ServerCodec, idgen func() ID, services *serviceRegistry) *Client {

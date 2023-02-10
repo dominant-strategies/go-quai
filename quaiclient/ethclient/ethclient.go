@@ -42,6 +42,12 @@ func Dial(rawurl string) (*Client, error) {
 	return DialContext(context.Background(), rawurl)
 }
 
+// Dial connects a client to the given URL.
+func DialMiner(rawurl string) (*Client, error) {
+	isMiner := new(bool)
+	return DialContext(context.WithValue(context.Background(), rpc.MinerCtxKeyType("isMiner"), &isMiner), rawurl)
+}
+
 func DialContext(ctx context.Context, rawurl string) (*Client, error) {
 	c, err := rpc.DialContext(ctx, rawurl)
 	if err != nil {
