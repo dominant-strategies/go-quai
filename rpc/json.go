@@ -57,6 +57,15 @@ type jsonrpcMessage struct {
 	Result  json.RawMessage `json:"result,omitempty"`
 }
 
+func ConstructJSON(version string, ID json.RawMessage, method string, params json.RawMessage) *jsonrpcMessage {
+	return &jsonrpcMessage{
+		Version: version,
+		ID: ID,
+		Method: method,
+		Params: params,
+	}
+}
+
 func (msg *jsonrpcMessage) isNotification() bool {
 	return msg.ID == nil && msg.Method != ""
 }

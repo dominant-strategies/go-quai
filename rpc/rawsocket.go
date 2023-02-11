@@ -1,34 +1,36 @@
 package rpc
 
 import (
+	"bufio"
 	"encoding/json"
+	"io"
 	"log"
 	"net"
 	"strconv"
 	"sync"
-	"bufio"
 	"time"
-	"io"
+
+	"github.com/dominant-strategies/go-quai/core/types"
 )
 
 type MinerSession struct {
-	proto 		string
-	ip   		string
-	port 		string
-	conn 		*net.TCPConn
-	enc			*json.Encoder
+	proto string
+	ip    string
+	port  string
+	conn  *net.TCPConn
+	enc   *json.Encoder
 
 	// Stratum
 	sync.Mutex
-	latestId	uint64
-	timeout		time.Duration
+	latestId uint64
+	timeout  time.Duration
 }
 
 const (
 	MAX_REQ_SIZE = 1024
 )
 
-func NewMinerConn(endpoint string) *MinerSession {
+func NewMinerConn(endpoint string) (*MinerSession, error) {
 	addr, err := net.ResolveTCPAddr("tcp", endpoint)
 	if err != nil {
 		log.Fatalf("Error: %v", err)
@@ -44,12 +46,13 @@ func NewMinerConn(endpoint string) *MinerSession {
 	conn, err := server.AcceptTCP()
 	if err != nil {
 		log.Fatalf("Error: %v", err)
+		return nil, err
 	}
 	conn.SetKeepAlive(true)
 
 	ip, port, _ := net.SplitHostPort(conn.RemoteAddr().String())
 
-	return &MinerSession{proto: "tcp", ip: ip, port: port, conn: conn}
+	return &MinerSession{proto: "tcp", ip: ip, port: port, conn: conn, latestId: 0}, nil
 }
 
 func (miner *MinerSession) ListenTCP() {
@@ -95,7 +98,7 @@ func (miner *MinerSession) handleTCPClient(ms *MinerSession) error {
 				return err
 			}
 			// s.setDeadline(cs.conn)
-			err = ms.handleTCPMessage(s, &req)
+			err = ms.handleTCPMessage(&req)
 			if err != nil {
 				return err
 			}
@@ -121,18 +124,20 @@ func (ms *MinerSession) sendTCPResult(result json.RawMessage) error {
 	return nil
 }
 
-func (ms *MinerSession) sendTCPRequest(msg jsonrpcMessage) error {
+func (ms *MinerSession) SendTCPRequest(msg jsonrpcMessage, resultCh chan *types.Header) error {
 
 	ms.Lock()
 	defer ms.Unlock()
 
-	ms.latestId += 1
+	// ms.latestId += 1
 	message, err := json.Marshal(msg)
 	if err != nil {
 		return err
 	}
 
 	ms.conn.Write(message)
+	// header, _ := ms.conn.Read()
+	resultCh <- header
 	return nil
 }
 
@@ -147,6 +152,9 @@ func (ms *MinerSession) handleTCPMessage(req *StratumReq) error {
 	// 	}
 	// 	return cs.sendTCPResult(req.Id, &reply)
 	// }
+	// Println(req.Message)
+
+	return nil
 }
 
 // type tcpConn struct {

@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"net"
 	"reflect"
 	"strconv"
 	"sync/atomic"
