@@ -1,5 +1,4 @@
-// Package types contains data types related to Ethereum consensus.
-package types
+package timedcache
 
 import (
 	"time"
@@ -31,7 +30,7 @@ type TimedCache struct {
 
 // New creates a new cache with a given size and ttl. TTL defines the time in
 // seconds an entry shall live, before being expired.
-func NewTimedCache(size int, ttl int) (*TimedCache, error) {
+func New(size int, ttl int) (*TimedCache, error) {
 	cache, err := lru.New(size)
 	if err != nil {
 		return &TimedCache{}, err

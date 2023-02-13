@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/common/timedcache"
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/state"
@@ -32,7 +33,7 @@ type Core struct {
 	sl     *Slice
 	engine consensus.Engine
 
-	futureHeaders *types.TimedCache
+	futureHeaders *timedcache.TimedCache
 
 	quit chan struct{} // core quit channel
 }
@@ -49,7 +50,7 @@ func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.H
 		quit:   make(chan struct{}),
 	}
 
-	futureHeaders, _ := types.NewTimedCache(maxFutureHeaders, futureHeaderTtl)
+	futureHeaders, _ := timedcache.New(maxFutureHeaders, futureHeaderTtl)
 	c.futureHeaders = futureHeaders
 
 	go c.updateFutureHeaders()
