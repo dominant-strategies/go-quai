@@ -25,19 +25,49 @@ func (te *timedEntry) expired() bool {
 // to expire at exactly the ttl time. The expiration mechanism is 'lazy', and
 // will only remove expired objects at next access.
 type TimedCache struct {
-	ttl   int64     // Time (in seconds) each entry is allowed to live for
-	cache lru.Cache // Underlying size-limited LRU cache
+	ttl   int64        // Time to live in seconds
+	cache *lru.Cache   // Underlying size-limited LRU cache
 	lock  sync.RWMutex
+
+	evictedKeys, evictedVals []interface{}
+	onEvictedCB              func(k, v interface{})
 }
 
 // New creates a new cache with a given size and ttl. TTL defines the time in
 // seconds an entry shall live, before being expired.
 func New(size int, ttl int) (*TimedCache, error) {
-	cache, err := lru.New(size)
-	if err != nil {
-		return &TimedCache{}, err
+	return NewWithEvict(size, ttl, nil)
+}
+
+// NewWithEvict constructs a fixed size cache with the given ttl & eviction
+// callback.
+func NewWithEvict(size int, ttl int, onEvicted func(key, value interface{})) (*TimedCache, error) {
+	tc := &TimedCache{
+		ttl:         int64(ttl),
+		onEvictedCB: onEvicted,
 	}
-	return &TimedCache{ttl: int64(ttl), cache: *cache}, nil
+	if onEvicted != nil {
+		tc.initEvictBuffers()
+		onEvicted = tc.onEvictedCB
+	}
+	cache, err := lru.NewWithEvict(size, onEvicted)
+	if err != nil {
+		return nil, err
+	}
+	tc.cache = cache
+	return tc, nil
+}
+
+func (tc *TimedCache) initEvictBuffers() {
+	tc.evictedKeys = make([]interface{}, 0, lru.DefaultEvictedBufferSize)
+	tc.evictedVals = make([]interface{}, 0, lru.DefaultEvictedBufferSize)
+}
+
+// onEvicted save evicted key/val and sent in externally registered callback
+// outside of critical section
+func (tc *TimedCache) onEvicted(k, v interface{}) {
+	tc.evictedKeys = append(tc.evictedKeys, k)
+	tc.evictedVals = append(tc.evictedVals, v)
 }
 
 // calcExpireTime calculates the expiration time given a TTL relative to now.
@@ -59,20 +89,37 @@ func (tc *TimedCache) removeExpired() {
 
 // Purge is used to completely clear the cache.
 func (tc *TimedCache) Purge() {
+	var ks, vs []interface{}
 	tc.lock.Lock()
-	defer tc.lock.Unlock()
 	tc.cache.Purge()
+	if tc.onEvictedCB != nil && len(tc.evictedKeys) > 0 {
+		ks, vs = tc.evictedKeys, tc.evictedVals
+		tc.initEvictBuffers()
+	}
+	tc.lock.Unlock()
+	// invoke callback outside of critical section
+	if tc.onEvictedCB != nil {
+		for i := 0; i < len(ks); i++ {
+			tc.onEvictedCB(ks[i], vs[i])
+		}
+	}
 }
 
 // Add adds a value to the cache. Returns true if an eviction occurred.
 func (tc *TimedCache) Add(key, value interface{}) (evicted bool) {
+	var k, v interface{}
 	tc.lock.Lock()
-	defer tc.lock.Unlock()
 	// First remove expired entries, so that LRU cache doesn't evict more than
 	// necessary, if there is not enough room to add this entry.
 	tc.removeExpired()
 	// Wrap the entry and add it to the cache
-	return tc.cache.Add(key, timedEntry{expiresAt: calcExpireTime(tc.ttl), value: value})
+	evicted = tc.cache.Add(key, timedEntry{expiresAt: calcExpireTime(tc.ttl), value: value})
+	tc.lock.Unlock()
+	// invoke callback outside of critical section
+	if tc.onEvictedCB != nil {
+		tc.onEvictedCB(k, v)
+	}
+	return
 }
 
 // Get looks up a key's value from the cache, removing it if it has expired.
@@ -123,54 +170,83 @@ func (tc *TimedCache) Peek(key interface{}) (value interface{}, ok bool) {
 // recent-ness, ttl, or deleting it for being stale, and if not, adds the value.
 // Returns whether found and whether an eviction occurred.
 func (tc *TimedCache) ContainsOrAdd(key, value interface{}) (ok, evicted bool) {
+	var k, v interface{}
 	tc.lock.Lock()
-	defer tc.lock.Unlock()
 	// First remove expired entries, so that LRU cache doesn't evict more than
 	// necessary, if there is not enough room to add this entry.
 	tc.removeExpired()
 	// Wrap the entry and add it to the cache
-	return tc.cache.ContainsOrAdd(key, timedEntry{expiresAt: calcExpireTime(tc.ttl), value: value})
+	ok, evicted = tc.cache.ContainsOrAdd(key, timedEntry{expiresAt: calcExpireTime(tc.ttl), value: value})
+	tc.lock.Unlock()
+	// invoke callback outside of critical section
+	if tc.onEvictedCB != nil {
+		tc.onEvictedCB(k, v)
+	}
+	return
 }
 
 // PeekOrAdd checks if a key is in the cache without updating the
 // recent-ness, ttl, or deleting it for being stale, and if not, adds the value.
 // Returns whether found and whether an eviction occurred.
 func (tc *TimedCache) PeekOrAdd(key, value interface{}) (previous interface{}, ok, evicted bool) {
+	var k, v interface{}
 	tc.lock.Lock()
-	defer tc.lock.Unlock()
 	// First remove expired entries, so that LRU cache doesn't evict more than
 	// necessary, if there is not enough room to add this entry.
 	tc.removeExpired()
 	// Wrap the entry and add it to the cache
-	return tc.cache.PeekOrAdd(key, timedEntry{expiresAt: calcExpireTime(tc.ttl), value: value})
+	previous, ok, evicted = tc.cache.PeekOrAdd(key, timedEntry{expiresAt: calcExpireTime(tc.ttl), value: value})
+	tc.lock.Unlock()
+	// invoke callback outside of critical section
+	if tc.onEvictedCB != nil {
+		tc.onEvictedCB(k, v)
+	}
+	return
 }
 
 // Remove removes the provided key from the cache.
 func (tc *TimedCache) Remove(key interface{}) (present bool) {
+	var k, v interface{}
 	tc.lock.Lock()
-	defer tc.lock.Unlock()
 	tc.removeExpired()
-	return tc.cache.Remove(key)
+	present = tc.cache.Remove(key)
+	tc.lock.Unlock()
+	// invoke callback outside of critical section
+	if tc.onEvictedCB != nil {
+		tc.onEvictedCB(k, v)
+	}
+	return
 }
 
 // Resize changes the cache size.
 func (tc *TimedCache) Resize(size int) (evicted int) {
+	var k, v interface{}
 	tc.lock.Lock()
-	defer tc.lock.Unlock()
 	tc.removeExpired()
-	return tc.cache.Resize(size)
+	evicted = tc.cache.Resize(size)
+	tc.lock.Unlock()
+	// invoke callback outside of critical section
+	if tc.onEvictedCB != nil {
+		tc.onEvictedCB(k, v)
+	}
+	return
 }
 
 // RemoveOldest removes the oldest item from the cache.
 func (tc *TimedCache) RemoveOldest() (key, value interface{}, ok bool) {
+	var k, v interface{}
 	tc.lock.Lock()
-	defer tc.lock.Unlock()
 	tc.removeExpired()
-	k, v, ok := tc.cache.RemoveOldest()
+	key, value, ok = tc.cache.RemoveOldest()
 	if ok {
-		v = v.(timedEntry).value
+		value = value.(timedEntry).value
 	}
-	return k, v, ok
+	tc.lock.Unlock()
+	// invoke callback outside of critical section
+	if tc.onEvictedCB != nil {
+		tc.onEvictedCB(k, v)
+	}
+	return
 }
 
 // GetOldest returns the oldest entry
@@ -178,11 +254,11 @@ func (tc *TimedCache) GetOldest() (key, value interface{}, ok bool) {
 	tc.lock.Lock()
 	defer tc.lock.Unlock()
 	tc.removeExpired()
-	k, v, ok := tc.cache.GetOldest()
+	key, value, ok = tc.cache.GetOldest()
 	if ok {
-		v = v.(timedEntry).value
+		value = value.(timedEntry).value
 	}
-	return k, v, ok
+	return
 }
 
 // Keys returns a slice of the keys in the cache, from oldest to newest.
