@@ -160,13 +160,13 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		return h.core.CurrentBlock().NumberU64()
 	}
 	inserter := func(blocks types.Blocks) (int, error) {
-		n, err := h.core.InsertChain(blocks)
+		n, err := h.core.InsertChain(blocks, true)
 		if err == nil {
 			atomic.StoreUint32(&h.acceptTxs, 1) // Mark initial sync done on any fetcher import
 		}
 		// If the error is related to synchronization of sub, we can still accept the transactions
 		// This is a good approximation on reaching the fray
-		if err != nil && err.Error() == core.ErrAddedFutureCache.Error() {
+		if err != nil && err.Error() == core.ErrPendingBlock.Error() {
 			atomic.StoreUint32(&h.acceptTxs, 1) // Mark initial sync done on any fetcher import
 			return n, nil
 		}

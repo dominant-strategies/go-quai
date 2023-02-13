@@ -24,6 +24,7 @@ import (
 
 const (
 	maxFutureHeaders        = 1800 // Maximum number of future headers we can store in cache
+	futureHeaderFillLevel   = 25   // Level at which to resume downloading blocks
 	maxFutureTime           = 30   // Max time into the future (in seconds) we will accept a block
 	futureHeaderRetryPeriod = 3    // Time (in seconds) before retrying to append future headers
 )
@@ -62,54 +63,48 @@ func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.H
 	return c, nil
 }
 
-func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
+// InsertChain attempts to append a list of blocks to the slice, optionally
+// caching any pending blocks which cannot yet be appended. InsertChain return
+// the number of blocks which were successfully consumed (either appended, or
+// cached), and an error.
+func (c *Core) InsertChain(blocks types.Blocks, cachePending bool) (int, error) {
 	nodeCtx := common.NodeLocation.Context()
-	domWait := false
-	for i, block := range blocks {
-		isCoincident := c.sl.engine.IsDomCoincident(block.Header())
+	for idx, block := range blocks {
 		// Write the block body to the CandidateBody database.
 		rawdb.WriteCandidateBody(c.sl.sliceDb, block.Hash(), block.Body())
-
-		if !isCoincident && !domWait {
+		// Only attempt to append a block, if it is not coincident with our dominant
+		// chain. If it is dom coincident, then the dom chain node in our slice needs
+		// to initiate the append.
+		if !c.sl.engine.IsDomCoincident(block.Header()) {
 			newPendingEtxs, err := c.sl.Append(block.Header(), types.EmptyHeader(), common.Hash{}, big.NewInt(0), false, true, nil)
-			if err != nil {
-				if err.Error() == consensus.ErrFutureBlock.Error() ||
-					err.Error() == ErrBodyNotFound.Error() ||
-					err.Error() == ErrPendingEtxNotFound.Error() ||
-					err.Error() == consensus.ErrPrunedAncestor.Error() ||
-					err.Error() == consensus.ErrUnknownAncestor.Error() ||
-					err.Error() == ErrSubNotSyncedToDom.Error() ||
-					err.Error() == ErrDomClientNotUp.Error() {
+			if err == nil {
+				// If we have a dom, send the dom any pending ETXs which will become
+				// referencable by this block. When this block is referenced in the dom's
+				// subordinate block manifest, then ETXs produced by this block and the rollup
+				// of ETXs produced by subordinate chain(s) will become referencable.
+				if nodeCtx > common.PRIME_CTX {
+					if err := c.SendPendingEtxsToDom(types.PendingEtxs{block.Header(), newPendingEtxs}); err != nil {
+						log.Error("failed to send ETXs to domclient", "block: ", block.Hash(), "err", err)
+					}
+				}
+				c.removeFutureHeader(block.Header())
+			} else if err.Error() == consensus.ErrFutureBlock.Error() ||
+				err.Error() == ErrBodyNotFound.Error() ||
+				err.Error() == ErrPendingEtxNotFound.Error() ||
+				err.Error() == consensus.ErrPrunedAncestor.Error() ||
+				err.Error() == consensus.ErrUnknownAncestor.Error() ||
+				err.Error() == ErrSubNotSyncedToDom.Error() ||
+				err.Error() == ErrDomClientNotUp.Error() {
+				log.Info("Cannot append yet.", "hash", block.Hash())
+				if cachePending {
 					c.addfutureHeader(block.Header())
-					return i, ErrAddedFutureCache
+				} else {
+					return idx, ErrPendingBlock
 				}
-				if err == ErrKnownBlock {
-					// Remove the header from the future headers cache
-					c.futureHeaders.Remove(block.Hash())
-					return i, nil
-				}
-
-				log.Info("InsertChain", "err in Append core: ", err)
-				return i, err
+			} else if err.Error() != ErrKnownBlock.Error() {
+				log.Info("Append failed.", "hash", block.Hash(), "err", err)
 			}
-
-			// Remove the header from the future headers cache since the block append was succesful
-			c.futureHeaders.Remove(block.Hash())
-
-			// Resume the downloader if paused
-			c.sl.downloaderWaitFeed.Send(false) 
-
-			// If we have a dom, send the dom any pending ETXs which will become
-			// referencable by this block. When this block is referenced in the dom's
-			// subordinate block manifest, then ETXs produced by this block and the rollup
-			// of ETXs produced by subordinate chain(s) will become referencable.
-			if nodeCtx > common.PRIME_CTX {
-				if err := c.SendPendingEtxsToDom(types.PendingEtxs{block.Header(), newPendingEtxs}); err != nil {
-					log.Error("failed to send ETXs to domclient", "block: ", block.Hash(), "err", err)
-				}
-			}
-		} else {
-			domWait = true
+			c.removeFutureHeader(block.Header())
 		}
 	}
 	return len(blocks), nil
@@ -117,41 +112,42 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 
 // procfutureHeaders sorts the future block cache and attempts to append
 func (c *Core) procfutureHeaders() {
-	headers := make([]*types.Header, 0, c.futureHeaders.Len())
+	// Reconstruct future headers into future blocks list to append
+	blocks := make([]*types.Block, 0, c.futureHeaders.Len())
 	for _, hash := range c.futureHeaders.Keys() {
 		if header, exist := c.futureHeaders.Peek(hash); exist {
-			headers = append(headers, header.(*types.Header))
-		}
-	}
-	if len(headers) > 0 {
-		sort.Slice(headers, func(i, j int) bool {
-			return headers[i].NumberU64() < headers[j].NumberU64()
-		})
-
-		for _, head := range headers {
-			block, err := c.sl.ConstructLocalBlock(head)
-			if err != nil {
-				if err.Error() == ErrBodyNotFound.Error() {
-					c.addfutureHeader(head)
-				}
-				log.Debug("could not construct block from future header", "err:", err)
+			header := header.(*types.Header)
+			if block, err := c.sl.ConstructLocalBlock(header); err == nil {
+				blocks = append(blocks, block)
+			} else if err.Error() != ErrBodyNotFound.Error() &&
+				err.Error() != consensus.ErrUnknownAncestor.Error() { // Don't remove the header if we are still waiting for body
+				log.Debug("could not construct block from future header", "err", err)
+				c.removeFutureHeader(header)
 			} else {
-				c.InsertChain([]*types.Block{block})
+				log.Debug("still waiting for body of future header", "hash", hash)
 			}
 		}
 	}
+	// Sort the blocks by number and attempt to insert them
+	sort.Slice(blocks, func(i, j int) bool {
+		return blocks[i].NumberU64() < blocks[j].NumberU64()
+	})
+	c.InsertChain(blocks, true)
 }
 
-// addfutureHeader adds a block to the future block cache
+// addfutureHeader adds a header to the future header cache
 func (c *Core) addfutureHeader(header *types.Header) error {
 	max := uint64(time.Now().Unix() + maxFutureTime)
 	if header.Time() > max {
 		return fmt.Errorf("future block timestamp %v > allowed %v", header.Time(), max)
 	}
-	if !c.futureHeaders.Contains(header.Hash()) {
-		c.futureHeaders.Add(header.Hash(), header)
-	}
+	c.futureHeaders.ContainsOrAdd(header.Hash(), header)
 	return nil
+}
+
+// removeFutureHeader removes a header from the future header cache
+func (c *Core) removeFutureHeader(header *types.Header) {
+	c.futureHeaders.Remove(header.Hash())
 }
 
 // updatefutureHeaders is a time to procfutureHeaders
@@ -254,8 +250,12 @@ func (c *Core) SendPendingEtxsToDom(pEtxs types.PendingEtxs) error {
 	return c.sl.SendPendingEtxsToDom(pEtxs)
 }
 
-func (c *Core) SubscribeDownloaderWait(ch chan<- bool) event.Subscription {
-	return c.sl.SubscribeDownloaderWait(ch)
+func (c *Core) SubscribeAppend(ch chan<- common.Hash) event.Subscription {
+	return c.sl.SubscribeAppend(ch)
+}
+
+func (c *Core) SubscribeSubAppend(ch chan<- common.Hash) event.Subscription {
+	return c.sl.SubscribeSubAppend(ch)
 }
 
 func (c *Core) SubscribeMissingBody(ch chan<- *types.Header) event.Subscription {

@@ -363,7 +363,7 @@ func (b *QuaiAPIBackend) ConstructLocalMinedBlock(header *types.Header) (*types.
 }
 
 func (b *QuaiAPIBackend) InsertBlock(ctx context.Context, block *types.Block) (int, error) {
-	return b.eth.core.InsertChain([]*types.Block{block})
+	return b.eth.core.InsertChain([]*types.Block{block}, true)
 }
 
 func (b *QuaiAPIBackend) PendingBlock() *types.Block {

@@ -47,7 +47,8 @@ type Slice struct {
 	subClients []*quaiclient.Client
 
 	scope                  event.SubscriptionScope
-	downloaderWaitFeed     event.Feed
+	appendFeed             event.Feed
+	subAppendFeed          event.Feed
 	missingBodyFeed        event.Feed
 	missingPendingEtxsFeed event.Feed
 
@@ -257,6 +258,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	log.Info("Appended new block", "number", block.Header().Number(), "hash", block.Hash(),
 		"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "etxs", len(block.ExtTransactions()), "gas", block.GasUsed(),
 		"root", block.Root())
+	sl.appendFeed.Send(block.Hash())
 
 	return localPendingEtxs, nil
 }
@@ -518,6 +520,7 @@ func (sl *Slice) AddPendingEtxs(pEtxs types.PendingEtxs) error {
 		// Also write to cache for faster access
 		sl.pendingEtxs.Add(pEtxs.Header.Hash(), pEtxs.Etxs)
 	}
+	sl.subAppendFeed.Send(pEtxs.Header.Hash())
 	return nil
 }
 
@@ -875,8 +878,12 @@ func (sl *Slice) TxPool() *TxPool { return sl.txPool }
 
 func (sl *Slice) Miner() *Miner { return sl.miner }
 
-func (sl *Slice) SubscribeDownloaderWait(ch chan<- bool) event.Subscription {
-	return sl.scope.Track(sl.downloaderWaitFeed.Subscribe(ch))
+func (sl *Slice) SubscribeAppend(ch chan<- common.Hash) event.Subscription {
+	return sl.scope.Track(sl.appendFeed.Subscribe(ch))
+}
+
+func (sl *Slice) SubscribeSubAppend(ch chan<- common.Hash) event.Subscription {
+	return sl.scope.Track(sl.subAppendFeed.Subscribe(ch))
 }
 
 func (sl *Slice) SubscribeMissingBody(ch chan<- *types.Header) event.Subscription {

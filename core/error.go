@@ -44,8 +44,8 @@ var (
 	// ErrBadSubManifest is returned when a block's subordinate manifest does not match the subordinate manifest hash
 	ErrBadSubManifest = errors.New("subordinate manifest is incorrect")
 
-	//ErrAddedFutureCache is returned when a block could not be appended yet and has been added to the future cache to retry later
-	ErrAddedFutureCache = errors.New("block was added to future cache")
+	//ErrPendingBlock indicates the block couldn't yet be processed. This is likely due to missing information (ancestor, body, pendingEtxs, etc)
+	ErrPendingBlock = errors.New("block cannot be appended yet")
 
 	//ErrPendingEtxNotFound is returned when pendingEtxs cannot be found for a hash given in the submanifest
 	ErrPendingEtxNotFound = errors.New("pending etx not found")
