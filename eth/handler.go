@@ -164,6 +164,12 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		if err == nil {
 			atomic.StoreUint32(&h.acceptTxs, 1) // Mark initial sync done on any fetcher import
 		}
+		// If the error is related to synchronization of sub, we can still accept the transactions
+		// This is a good approximation on reaching the fray
+		if err != nil && err.Error() == core.ErrAddedFutureCache.Error() {
+			atomic.StoreUint32(&h.acceptTxs, 1) // Mark initial sync done on any fetcher import
+			return n, nil
+		}
 		return n, err
 	}
 	h.blockFetcher = fetcher.NewBlockFetcher(false, nil, h.core.GetBlockByHash, validator, h.BroadcastBlock, heighter, nil, inserter, h.removePeer)
