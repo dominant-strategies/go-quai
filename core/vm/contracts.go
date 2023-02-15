@@ -41,90 +41,185 @@ type PrecompiledContract interface {
 	Run(input []byte) ([]byte, error) // Run runs the precompiled contract
 }
 
-// PrecompiledContractsHomestead contains the default set of pre-compiled Ethereum
-// contracts used in the Frontier and Homestead releases.
-var PrecompiledContractsHomestead = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{1}): &ecrecover{},
-	common.BytesToAddress([]byte{2}): &sha256hash{},
-	common.BytesToAddress([]byte{3}): &ripemd160hash{},
-	common.BytesToAddress([]byte{4}): &dataCopy{},
-}
-
-// PrecompiledContractsByzantium contains the default set of pre-compiled Ethereum
-// contracts used in the Byzantium release.
-var PrecompiledContractsByzantium = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{1}): &ecrecover{},
-	common.BytesToAddress([]byte{2}): &sha256hash{},
-	common.BytesToAddress([]byte{3}): &ripemd160hash{},
-	common.BytesToAddress([]byte{4}): &dataCopy{},
-	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: false},
-	common.BytesToAddress([]byte{6}): &bn256AddByzantium{},
-	common.BytesToAddress([]byte{7}): &bn256ScalarMulByzantium{},
-	common.BytesToAddress([]byte{8}): &bn256PairingByzantium{},
-}
-
-// PrecompiledContractsIstanbul contains the default set of pre-compiled Ethereum
-// contracts used in the Istanbul release.
-var PrecompiledContractsIstanbul = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{1}): &ecrecover{},
-	common.BytesToAddress([]byte{2}): &sha256hash{},
-	common.BytesToAddress([]byte{3}): &ripemd160hash{},
-	common.BytesToAddress([]byte{4}): &dataCopy{},
-	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: false},
-	common.BytesToAddress([]byte{6}): &bn256AddIstanbul{},
-	common.BytesToAddress([]byte{7}): &bn256ScalarMulIstanbul{},
-	common.BytesToAddress([]byte{8}): &bn256PairingIstanbul{},
-	common.BytesToAddress([]byte{9}): &blake2F{},
-}
-
-// PrecompiledContractsBerlin contains the default set of pre-compiled Ethereum
-// contracts used in the Berlin release.
-var PrecompiledContractsBerlin = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{1}): &ecrecover{},
-	common.BytesToAddress([]byte{2}): &sha256hash{},
-	common.BytesToAddress([]byte{3}): &ripemd160hash{},
-	common.BytesToAddress([]byte{4}): &dataCopy{},
-	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: true},
-	common.BytesToAddress([]byte{6}): &bn256AddIstanbul{},
-	common.BytesToAddress([]byte{7}): &bn256ScalarMulIstanbul{},
-	common.BytesToAddress([]byte{8}): &bn256PairingIstanbul{},
-	common.BytesToAddress([]byte{9}): &blake2F{},
+var TranslatedAddresses = map[common.Address]int{
+	common.BytesToAddress([]byte{1}): 0,
+	common.BytesToAddress([]byte{2}): 1,
+	common.BytesToAddress([]byte{3}): 2,
+	common.BytesToAddress([]byte{4}): 3,
+	common.BytesToAddress([]byte{5}): 4,
+	common.BytesToAddress([]byte{6}): 5,
+	common.BytesToAddress([]byte{7}): 6,
+	common.BytesToAddress([]byte{8}): 7,
+	common.BytesToAddress([]byte{9}): 8,
 }
 
 var (
-	PrecompiledAddressesBerlin    []common.Address
-	PrecompiledAddressesIstanbul  []common.Address
-	PrecompiledAddressesByzantium []common.Address
-	PrecompiledAddressesHomestead []common.Address
+	PrecompiledContracts map[common.Address]PrecompiledContract = make(map[common.Address]PrecompiledContract)
+	PrecompiledAddresses map[string][]common.Address            = make(map[string][]common.Address)
 )
 
+func InitializePrecompiles() {
+	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][0]] = &ecrecover{}
+	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][1]] = &sha256hash{}
+	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][2]] = &ripemd160hash{}
+	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][3]] = &dataCopy{}
+	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][4]] = &bigModExp{eip2565: true}
+	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][5]] = &bn256AddIstanbul{}
+	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][6]] = &bn256ScalarMulIstanbul{}
+	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][7]] = &bn256PairingIstanbul{}
+	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][8]] = &blake2F{}
+}
+
 func init() {
-	for k := range PrecompiledContractsHomestead {
-		PrecompiledAddressesHomestead = append(PrecompiledAddressesHomestead, k)
+
+	PrecompiledAddresses["prime"] = []common.Address{
+		common.BytesToAddress([]byte{1}),
+		common.BytesToAddress([]byte{2}),
+		common.BytesToAddress([]byte{3}),
+		common.BytesToAddress([]byte{4}),
+		common.BytesToAddress([]byte{5}),
+		common.BytesToAddress([]byte{6}),
+		common.BytesToAddress([]byte{7}),
+		common.BytesToAddress([]byte{8}),
+		common.BytesToAddress([]byte{9}),
 	}
-	for k := range PrecompiledContractsByzantium {
-		PrecompiledAddressesByzantium = append(PrecompiledAddressesByzantium, k)
+	PrecompiledAddresses["cyprus"] = []common.Address{
+		common.HexToAddress("0x0A00000000000000000000000000000000000001"),
+		common.HexToAddress("0x0A00000000000000000000000000000000000002"),
+		common.HexToAddress("0x0A00000000000000000000000000000000000003"),
+		common.HexToAddress("0x0A00000000000000000000000000000000000004"),
+		common.HexToAddress("0x0A00000000000000000000000000000000000005"),
+		common.HexToAddress("0x0A00000000000000000000000000000000000006"),
+		common.HexToAddress("0x0A00000000000000000000000000000000000007"),
+		common.HexToAddress("0x0A00000000000000000000000000000000000008"),
+		common.HexToAddress("0x0A00000000000000000000000000000000000009"),
 	}
-	for k := range PrecompiledContractsIstanbul {
-		PrecompiledAddressesIstanbul = append(PrecompiledAddressesIstanbul, k)
+	PrecompiledAddresses["cyprus1"] = []common.Address{
+		common.HexToAddress("0x1400000000000000000000000000000000000001"),
+		common.HexToAddress("0x1400000000000000000000000000000000000002"),
+		common.HexToAddress("0x1400000000000000000000000000000000000003"),
+		common.HexToAddress("0x1400000000000000000000000000000000000004"),
+		common.HexToAddress("0x1400000000000000000000000000000000000005"),
+		common.HexToAddress("0x1400000000000000000000000000000000000006"),
+		common.HexToAddress("0x1400000000000000000000000000000000000007"),
+		common.HexToAddress("0x1400000000000000000000000000000000000008"),
+		common.HexToAddress("0x1400000000000000000000000000000000000009"),
 	}
-	for k := range PrecompiledContractsBerlin {
-		PrecompiledAddressesBerlin = append(PrecompiledAddressesBerlin, k)
+	PrecompiledAddresses["cyprus2"] = []common.Address{
+		common.HexToAddress("0x1E00000000000000000000000000000000000001"),
+		common.HexToAddress("0x1E00000000000000000000000000000000000002"),
+		common.HexToAddress("0x1E00000000000000000000000000000000000003"),
+		common.HexToAddress("0x1E00000000000000000000000000000000000004"),
+		common.HexToAddress("0x1E00000000000000000000000000000000000005"),
+		common.HexToAddress("0x1E00000000000000000000000000000000000006"),
+		common.HexToAddress("0x1E00000000000000000000000000000000000007"),
+		common.HexToAddress("0x1E00000000000000000000000000000000000008"),
+		common.HexToAddress("0x1E00000000000000000000000000000000000009"),
+	}
+	PrecompiledAddresses["cyprus3"] = []common.Address{
+		common.HexToAddress("0x2800000000000000000000000000000000000001"),
+		common.HexToAddress("0x2800000000000000000000000000000000000002"),
+		common.HexToAddress("0x2800000000000000000000000000000000000003"),
+		common.HexToAddress("0x2800000000000000000000000000000000000004"),
+		common.HexToAddress("0x2800000000000000000000000000000000000005"),
+		common.HexToAddress("0x2800000000000000000000000000000000000006"),
+		common.HexToAddress("0x2800000000000000000000000000000000000007"),
+		common.HexToAddress("0x2800000000000000000000000000000000000008"),
+		common.HexToAddress("0x2800000000000000000000000000000000000009"),
+	}
+	PrecompiledAddresses["paxos"] = []common.Address{
+		common.HexToAddress("0x3200000000000000000000000000000000000001"),
+		common.HexToAddress("0x3200000000000000000000000000000000000002"),
+		common.HexToAddress("0x3200000000000000000000000000000000000003"),
+		common.HexToAddress("0x3200000000000000000000000000000000000004"),
+		common.HexToAddress("0x3200000000000000000000000000000000000005"),
+		common.HexToAddress("0x3200000000000000000000000000000000000006"),
+		common.HexToAddress("0x3200000000000000000000000000000000000007"),
+		common.HexToAddress("0x3200000000000000000000000000000000000008"),
+		common.HexToAddress("0x3200000000000000000000000000000000000009"),
+	}
+	PrecompiledAddresses["paxos1"] = []common.Address{
+		common.HexToAddress("0x3C00000000000000000000000000000000000001"),
+		common.HexToAddress("0x3C00000000000000000000000000000000000002"),
+		common.HexToAddress("0x3C00000000000000000000000000000000000003"),
+		common.HexToAddress("0x3C00000000000000000000000000000000000004"),
+		common.HexToAddress("0x3C00000000000000000000000000000000000005"),
+		common.HexToAddress("0x3C00000000000000000000000000000000000006"),
+		common.HexToAddress("0x3C00000000000000000000000000000000000007"),
+		common.HexToAddress("0x3C00000000000000000000000000000000000008"),
+		common.HexToAddress("0x3C00000000000000000000000000000000000009"),
+	}
+	PrecompiledAddresses["paxos2"] = []common.Address{
+		common.HexToAddress("0x4600000000000000000000000000000000000001"),
+		common.HexToAddress("0x4600000000000000000000000000000000000002"),
+		common.HexToAddress("0x4600000000000000000000000000000000000003"),
+		common.HexToAddress("0x4600000000000000000000000000000000000004"),
+		common.HexToAddress("0x4600000000000000000000000000000000000005"),
+		common.HexToAddress("0x4600000000000000000000000000000000000006"),
+		common.HexToAddress("0x4600000000000000000000000000000000000007"),
+		common.HexToAddress("0x4600000000000000000000000000000000000008"),
+		common.HexToAddress("0x4600000000000000000000000000000000000009"),
+	}
+	PrecompiledAddresses["paxos3"] = []common.Address{
+		common.HexToAddress("0x5000000000000000000000000000000000000001"),
+		common.HexToAddress("0x5000000000000000000000000000000000000002"),
+		common.HexToAddress("0x5000000000000000000000000000000000000003"),
+		common.HexToAddress("0x5000000000000000000000000000000000000004"),
+		common.HexToAddress("0x5000000000000000000000000000000000000005"),
+		common.HexToAddress("0x5000000000000000000000000000000000000006"),
+		common.HexToAddress("0x5000000000000000000000000000000000000007"),
+		common.HexToAddress("0x5000000000000000000000000000000000000008"),
+		common.HexToAddress("0x5000000000000000000000000000000000000009"),
+	}
+	PrecompiledAddresses["hydra"] = []common.Address{
+		common.HexToAddress("0x5A00000000000000000000000000000000000001"),
+		common.HexToAddress("0x5A00000000000000000000000000000000000002"),
+		common.HexToAddress("0x5A00000000000000000000000000000000000003"),
+		common.HexToAddress("0x5A00000000000000000000000000000000000004"),
+		common.HexToAddress("0x5A00000000000000000000000000000000000005"),
+		common.HexToAddress("0x5A00000000000000000000000000000000000006"),
+		common.HexToAddress("0x5A00000000000000000000000000000000000007"),
+		common.HexToAddress("0x5A00000000000000000000000000000000000008"),
+		common.HexToAddress("0x5A00000000000000000000000000000000000009"),
+	}
+	PrecompiledAddresses["hydra1"] = []common.Address{
+		common.HexToAddress("0x6400000000000000000000000000000000000001"),
+		common.HexToAddress("0x6400000000000000000000000000000000000002"),
+		common.HexToAddress("0x6400000000000000000000000000000000000003"),
+		common.HexToAddress("0x6400000000000000000000000000000000000004"),
+		common.HexToAddress("0x6400000000000000000000000000000000000005"),
+		common.HexToAddress("0x6400000000000000000000000000000000000006"),
+		common.HexToAddress("0x6400000000000000000000000000000000000007"),
+		common.HexToAddress("0x6400000000000000000000000000000000000008"),
+		common.HexToAddress("0x6400000000000000000000000000000000000009"),
+	}
+	PrecompiledAddresses["hydra2"] = []common.Address{
+		common.HexToAddress("0x6E00000000000000000000000000000000000001"),
+		common.HexToAddress("0x6E00000000000000000000000000000000000002"),
+		common.HexToAddress("0x6E00000000000000000000000000000000000003"),
+		common.HexToAddress("0x6E00000000000000000000000000000000000004"),
+		common.HexToAddress("0x6E00000000000000000000000000000000000005"),
+		common.HexToAddress("0x6E00000000000000000000000000000000000006"),
+		common.HexToAddress("0x6E00000000000000000000000000000000000007"),
+		common.HexToAddress("0x6E00000000000000000000000000000000000008"),
+		common.HexToAddress("0x6E00000000000000000000000000000000000009"),
+	}
+	PrecompiledAddresses["hydra3"] = []common.Address{
+		common.HexToAddress("0x7800000000000000000000000000000000000001"),
+		common.HexToAddress("0x7800000000000000000000000000000000000002"),
+		common.HexToAddress("0x7800000000000000000000000000000000000003"),
+		common.HexToAddress("0x7800000000000000000000000000000000000004"),
+		common.HexToAddress("0x7800000000000000000000000000000000000005"),
+		common.HexToAddress("0x7800000000000000000000000000000000000006"),
+		common.HexToAddress("0x7800000000000000000000000000000000000007"),
+		common.HexToAddress("0x7800000000000000000000000000000000000008"),
+		common.HexToAddress("0x7800000000000000000000000000000000000009"),
 	}
 }
 
 // ActivePrecompiles returns the precompiles enabled with the current configuration.
 func ActivePrecompiles(rules params.Rules) []common.Address {
-	switch {
-	case rules.IsBerlin:
-		return PrecompiledAddressesBerlin
-	case rules.IsIstanbul:
-		return PrecompiledAddressesIstanbul
-	case rules.IsByzantium:
-		return PrecompiledAddressesByzantium
-	default:
-		return PrecompiledAddressesHomestead
-	}
+	return PrecompiledAddresses[common.NodeLocation.Name()]
 }
 
 // RunPrecompiledContract runs and evaluates the output of a precompiled contract.
@@ -251,9 +346,10 @@ var (
 // modexpMultComplexity implements bigModexp multComplexity formula, as defined in EIP-198
 //
 // def mult_complexity(x):
-//    if x <= 64: return x ** 2
-//    elif x <= 1024: return x ** 2 // 4 + 96 * x - 3072
-//    else: return x ** 2 // 16 + 480 * x - 199680
+//
+//	if x <= 64: return x ** 2
+//	elif x <= 1024: return x ** 2 // 4 + 96 * x - 3072
+//	else: return x ** 2 // 16 + 480 * x - 199680
 //
 // where is x is max(length_of_MODULUS, length_of_BASE)
 func modexpMultComplexity(x *big.Int) *big.Int {
