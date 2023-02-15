@@ -751,7 +751,7 @@ func (d *Downloader) fillHeaderSkeleton(from uint64, skeleton []*types.Header) (
 			return d.queue.ReserveHeaders(p, count), false, false
 		}
 		fetch = func(p *peerConnection, req *fetchRequest) error {
-			return p.FetchHeaders(req.From, MaxHeaderFetch)
+			return p.FetchHeaders(req.From, int(req.From-req.To))
 		}
 		capacity = func(p *peerConnection) int { return p.HeaderCapacity(d.peers.rates.TargetRoundTrip()) }
 		setIdle  = func(p *peerConnection, accepted int, deliveryTime time.Time) {
