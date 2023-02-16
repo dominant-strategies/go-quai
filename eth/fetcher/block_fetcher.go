@@ -803,18 +803,16 @@ func (f *BlockFetcher) importBlocks(peer string, block *types.Block) {
 		defer func() { f.done <- hash }()
 
 		// Quickly validate the header and propagate the block if it passes
-		switch err := f.verifyHeader(block.Header()); err {
-		case nil:
+		err := f.verifyHeader(block.Header())
+		if err == nil {
 			// All ok, quickly propagate to our peers
 			blockBroadcastOutTimer.UpdateSince(block.ReceivedAt)
 			go f.broadcastBlock(block, true)
-
-		case consensus.ErrFutureBlock:
+		} else if err.Error() == consensus.ErrFutureBlock.Error() {
 			// Weird future block, don't fail, but neither propagate
-
-		case consensus.ErrUnknownAncestor:
-
-		default:
+		} else if err.Error() == consensus.ErrUnknownAncestor.Error() {
+			// Weird unknown parent, don't fail, but neither propagate
+		} else {
 			// Something went very wrong, drop the peer
 			log.Debug("Propagated block verification failed", "peer", peer, "number", block.Number(), "hash", hash, "err", err)
 			f.dropPeer(peer)
