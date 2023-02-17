@@ -21,9 +21,9 @@ import "github.com/dominant-strategies/go-quai/common"
 // ColosseumBootnodes are the enode URLs of the P2P bootstrap nodes running on
 // the Colosseum test network.
 var ColosseumBootnodes = []string{
-	"enode://1edee38aebefea9150213cdf4306a64499e3bca9058971c443d31a4997b9a096e7a26059472529a6ccbca0a04c4f6fdbf0c880ee97545a12c0f8b656f7d4e7da@35.192.126.165",
-	"enode://0f7b74f957d68eb85bbbf8ffe7d0477575406beb647f2353de08ca291a03db1507a70a41f3b4623c3049512342781c8fa9a7f7654cbcc8603e51190430b839a6@34.170.190.144",
-	"enode://66c87db18ab3e6322a149ac4b7b1bde3a31f1e505945a358e4c1ebae9dc8a40402ccd96dfed35438448fbf79a7b8ee093581a05c40ab115adaebe81a6946993b@104.197.16.107",
+	"enode://a0353563c3d5e3db1cf729fe77fad8e98360e13f00bf2147b566bf91f99782932d6aafc30a21855017451d415da295c7b3e18d0c4d80c3709265134c3f21bb90@35.202.3.128",
+	"enode://d2d4ec50580e60d95e1b2234a106065ffe3b9620e3b3e96d4959e7ffb3e71d6ffc6d452f8d94d451179677a07c2213b6a3af1be24cbea8f7eb4c2e393cee053c@35.224.101.46",
+	"enode://9450c09f59e45779f8c84aa2d279ee2a705ef560b8c3aa6128c9fe2d272e63f1d940f8efa775ab3644caac6d8bcbfe2bb2647215c91cd06faeabc08b23888a3b@35.184.84.143",
 }
 
 // GardenBootnodes are the enode URLs of the P2P bootstrap nodes running on the
