@@ -25,8 +25,12 @@ import (
 const (
 	maxFutureHeaders        = 1800 // Maximum number of future headers we can store in cache
 	maxFutureTime           = 30   // Max time into the future (in seconds) we will accept a block
-	futureHeaderTtl         = 300  // Time (in seconds) a header is allowed to live in the futureHeader cache
 	futureHeaderRetryPeriod = 3    // Time (in seconds) before retrying to append future headers
+)
+
+var (
+	// Time (in seconds) that a future header is allowed to live in cache, for each context.
+	futureHeaderTtls = [common.HierarchyDepth]int{15000, 1500, 150}
 )
 
 type Core struct {
@@ -39,6 +43,7 @@ type Core struct {
 }
 
 func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.Header) bool, txConfig *TxPoolConfig, chainConfig *params.ChainConfig, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis) (*Core, error) {
+	nodeCtx := common.NodeLocation.Context()
 	slice, err := NewSlice(db, config, txConfig, isLocalBlock, chainConfig, domClientUrl, subClientUrls, engine, cacheConfig, vmConfig, genesis)
 	if err != nil {
 		return nil, err
@@ -50,7 +55,7 @@ func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.H
 		quit:   make(chan struct{}),
 	}
 
-	futureHeaders, _ := timedcache.New(maxFutureHeaders, futureHeaderTtl)
+	futureHeaders, _ := timedcache.New(maxFutureHeaders, futureHeaderTtls[nodeCtx])
 	c.futureHeaders = futureHeaders
 
 	go c.updateFutureHeaders()
