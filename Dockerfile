@@ -36,4 +36,4 @@ COPY --from=builder /go-quai/VERSION ./VERSION
 
 WORKDIR ./
 
-CMD ./build/bin/go-quai --$NETWORK --syncmode full --http --http.vhosts="*" --ws --mine --miner.threads 1 --miner.etherbase $COINBASE_ADDR --http.addr 0.0.0.0 --http.api eth,net,web3,quai,txpool,debug --ws.addr 0.0.0.0 --ws.api eth,net,web3,quai,txpool,debug --port $TCP_PORT --http.port $HTTP_PORT --ws.port $WS_PORT --ws.origins="*" --http.corsdomain="*" $REGION $ZONE $BOOTNODE $SUB $DOM
+CMD ./build/bin/go-quai --$NETWORK --syncmode full --http --http.vhosts="*" --ws --mine --miner.threads 1 --miner.etherbase $COINBASE_ADDR --http.addr 0.0.0.0 --http.api eth,net,web3,quai,txpool,debug --ws.addr 0.0.0.0 --ws.api eth,net,web3,quai,txpool,debug --port $TCP_PORT --http.port $HTTP_PORT --ws.port $WS_PORT --ws.origins="*" --http.corsdomain="*" --gcmode archive $REGION $ZONE $BOOTNODE $SUB $DOM
