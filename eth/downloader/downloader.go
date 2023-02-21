@@ -380,6 +380,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, number ui
 	// Height of the peer
 	peerHeight := latest.Number().Uint64()
 	origin := peerHeight
+	fmt.Println("TraceCh: Synching to Peer height: ", peerHeight)
 
 	// TODO: display the correct sync stats
 	d.syncStatsLock.Lock()

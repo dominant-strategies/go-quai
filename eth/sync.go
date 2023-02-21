@@ -17,6 +17,7 @@
 package eth
 
 import (
+	"fmt"
 	"math/rand"
 	"time"
 
@@ -208,6 +209,7 @@ func (cs *chainSyncer) loop() {
 		}
 		select {
 		case <-cs.peerEventCh:
+			fmt.Println("TraceCh: Peer information changed, See if its possible to download")
 			// Peer information changed, recheck.
 		case <-cs.doneCh:
 			cs.doneCh = nil
@@ -232,6 +234,7 @@ func (cs *chainSyncer) loop() {
 // nextSyncOp determines whether sync is required at this time.
 func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 	if cs.doneCh != nil {
+		fmt.Println("TraceCh: Returning because Sync is already running")
 		return nil // Sync already running.
 	}
 
@@ -243,19 +246,23 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 		minPeers = cs.handler.maxPeers
 	}
 	if cs.handler.peers.len() < minPeers {
+		fmt.Println("TraceCh: Returning because len of peers less than minPeers: ", cs.handler.peers.len(), "<", "cs.forced", cs.forced)
 		return nil
 	}
 
 	peer := cs.handler.peers.peerWithHighestNumber()
 	if peer == nil {
+		fmt.Println("TraceCh: Returning Peer with height Number", peer.ID())
 		return nil
 	}
 
 	mode, ourNumber := cs.modeAndLocalHead()
 	op := peerToSyncOp(mode, peer)
 	if op.number <= ourNumber {
+		fmt.Println("TraceCh: Returning because Peer number is less than our number: ", op.number, "<", ourNumber)
 		return nil // We're in sync.
 	}
+	fmt.Println("TraceCh: All good initiate sync")
 	return op
 }
 
@@ -273,13 +280,20 @@ func (cs *chainSyncer) modeAndLocalHead() (downloader.SyncMode, uint64) {
 // startSync launches doSync in a new goroutine.
 func (cs *chainSyncer) startSync(op *chainSyncOp) {
 	cs.doneCh = make(chan error, 1)
-	go func() { cs.doneCh <- cs.handler.doSync(op) }()
+	go func() {
+		select {
+		case cs.doneCh <- cs.handler.doSync(op):
+		default:
+			fmt.Println("TraceCh: Sync is done, but cannot signal that sync is done because cs.doneCh is full", len(cs.doneCh))
+		}
+	}()
 }
 
 // doSync synchronizes the local blockchain with a remote peer.
 func (h *handler) doSync(op *chainSyncOp) error {
 	// Run the sync cycle, and disable fast sync if we're past the pivot block
 	err := h.downloader.Synchronise(op.peer.ID(), op.head, op.number, op.mode)
+	fmt.Println("TraceCh: Synching done: ", "err: ", err)
 	if err != nil {
 		return err
 	}

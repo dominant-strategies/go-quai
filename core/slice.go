@@ -267,6 +267,7 @@ func (sl *Slice) backfillPETXs(header *types.Header, subManifest types.BlockMani
 	for _, hash := range subManifest {
 		if petxs := rawdb.ReadPendingEtxs(sl.sliceDb, hash); petxs == nil {
 			// Send the pendingEtxs to the feed for broadcast
+			fmt.Println("TraceCh: Putting the request for the missing pendingEtxs: ", hash)
 			sl.missingPendingEtxsFeed.Send(hash)
 		}
 	}

@@ -457,7 +457,6 @@ func (h *handler) missingBodyLoop() {
 				log.Debug("Fetching the missing body from", "peer", peer.ID(), "hash", header.Hash(), "number", header.NumberU64())
 				h.blockFetcher.Notify(peer.ID(), header.Hash(), header.NumberU64(), time.Now(), peer.RequestOneHeader, peer.RequestBodies)
 			}
-
 		case <-h.missingBodySub.Err():
 			return
 		}
