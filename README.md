@@ -61,6 +61,12 @@ Garden test network is based on the Blake3 proof-of-work consensus algorithm. As
 it has certain extra overhead and is more susceptible to reorganization attacks due to the
 network's low difficulty/security.
 
+### Viewing logs
+Logs are stored in the `go-quai/nodelogs` directory by default. You can view them by using tail or another utility, like so:
+```shell
+$ tail -f nodelogs/zone-0-0.log
+```
+
 Modify the `network.env` configuration file to reflect:
 `NETWORK=garden`. You should also set `ENABLE_ARCHIVE=true` to make sure to save the trie-nodes after you stop your node. Then build and run with the same commands as mainnet.
 
