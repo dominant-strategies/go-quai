@@ -503,6 +503,9 @@ func (sl *Slice) GetManifest(blockHash common.Hash) (types.BlockManifest, error)
 // produced this block
 func (sl *Slice) GetSubManifest(slice common.Location, blockHash common.Hash) (types.BlockManifest, error) {
 	subIdx := slice.SubIndex()
+	if sl.subClients[subIdx] == nil {
+		return nil, errors.New("missing requested subordinate node")
+	}
 	return sl.subClients[subIdx].GetManifest(context.Background(), blockHash)
 }
 
