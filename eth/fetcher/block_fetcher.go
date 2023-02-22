@@ -19,6 +19,7 @@ package fetcher
 
 import (
 	"errors"
+	"fmt"
 	"math/rand"
 	"time"
 
@@ -812,6 +813,7 @@ func (f *BlockFetcher) importBlocks(peer string, block *types.Block) {
 		if err == nil || err.Error() == consensus.ErrUnknownAncestor.Error() {
 			// All ok, quickly propagate to our peers
 			blockBroadcastOutTimer.UpdateSince(block.ReceivedAt)
+			fmt.Println("Block_Fetcher: Verified Header and err is nil so broadcast", block.Header().NumberArray())
 			go f.broadcastBlock(block, true)
 		} else if err.Error() == consensus.ErrFutureBlock.Error() {
 			// Weird future block, don't fail, but neither propagate
@@ -829,6 +831,7 @@ func (f *BlockFetcher) importBlocks(peer string, block *types.Block) {
 		}
 		// If import succeeded, broadcast the block
 		blockAnnounceOutTimer.UpdateSince(block.ReceivedAt)
+		fmt.Println("Block_Fetcher: Tried Inserting the Block: So broadcast now")
 		go f.broadcastBlock(block, false)
 
 		// Invoke the testing hook if needed

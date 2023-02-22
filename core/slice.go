@@ -479,7 +479,7 @@ func (sl *Slice) calcTd(header *types.Header, domTd *big.Int, domOrigin bool) (*
 		return domTd, nil
 	}
 
-	fmt.Println("TD: total difficulty: ", Td, "parent td: ", priorTd, "header diff: ", header.Difficulty())
+	fmt.Println("TD: total difficulty: ", Td, "header diff: ", header.Difficulty())
 
 	return Td, nil
 }
