@@ -281,6 +281,7 @@ func (sl *Slice) relayPh(pendingHeaderWithTermini types.PendingHeader, reorg boo
 		bestPh, exists := sl.phCache[sl.bestPhKey]
 		if exists {
 			bestPh.Header.SetLocation(common.NodeLocation)
+			fmt.Println("Updating the Miner from relayPh: ", bestPh.Header.NumberArray())
 			sl.miner.worker.pendingHeaderFeed.Send(bestPh.Header)
 			return
 		}
@@ -474,8 +475,11 @@ func (sl *Slice) calcTd(header *types.Header, domTd *big.Int, domOrigin bool) (*
 	if domOrigin {
 		// If its a dom block we don't compute the td, instead just return the
 		// td given by dom
+		fmt.Println("TD: domTd", domTd)
 		return domTd, nil
 	}
+
+	fmt.Println("TD: total difficulty: ", Td, "parent td: ", priorTd, "header diff: ", header.Difficulty())
 
 	return Td, nil
 }
@@ -558,6 +562,7 @@ func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader, reorg 
 			bestPh, exists := sl.phCache[sl.bestPhKey]
 			if exists {
 				bestPh.Header.SetLocation(common.NodeLocation)
+				fmt.Println("Updating the Miner from subrelay: ", bestPh.Header.NumberArray())
 				sl.miner.worker.pendingHeaderFeed.Send(bestPh.Header)
 			}
 		}
@@ -613,6 +618,7 @@ func (sl *Slice) writeToPhCacheAndPickPhHead(reorg bool, pendingHeaderWithTermin
 	if reorg {
 		sl.phCache[pendingHeaderWithTermini.Termini[terminiIndex]] = deepCopyPendingHeaderWithTermini
 		sl.bestPhKey = pendingHeaderWithTermini.Termini[terminiIndex]
+		fmt.Println("PickPh: ", sl.bestPhKey, deepCopyPendingHeaderWithTermini.Header.NumberArray())
 	}
 
 	_, exist := sl.phCache[pendingHeaderWithTermini.Termini[terminiIndex]]
