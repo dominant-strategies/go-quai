@@ -257,6 +257,9 @@ func (f *BlockFetcher) Notify(peer string, hash common.Hash, number uint64, time
 		return nil
 	case <-f.quit:
 		return errTerminated
+	default:
+		fmt.Println("TraceCh: b_fetcher notify channel is overflowing", len(f.notify))
+		return nil
 	}
 }
 
@@ -271,6 +274,9 @@ func (f *BlockFetcher) Enqueue(peer string, block *types.Block) error {
 		return nil
 	case <-f.quit:
 		return errTerminated
+	default:
+		fmt.Println("TraceCh: b_fetcher inject channel is overflowing", len(f.inject))
+		return nil
 	}
 }
 
@@ -285,6 +291,9 @@ func (f *BlockFetcher) FilterHeaders(peer string, headers []*types.Header, time 
 	select {
 	case f.headerFilter <- filter:
 	case <-f.quit:
+		return nil
+	default:
+		fmt.Println("TraceCh: b_fetcher headerFilter channel is overflowing", len(f.headerFilter))
 		return nil
 	}
 	// Request the filtering of the header list
@@ -313,6 +322,9 @@ func (f *BlockFetcher) FilterBodies(peer string, transactions [][]*types.Transac
 	select {
 	case f.bodyFilter <- filter:
 	case <-f.quit:
+		return nil, nil, nil, nil
+	default:
+		fmt.Println("TraceCh: b_fetcher bodyFilter channel is overflowing", len(f.bodyFilter))
 		return nil, nil, nil, nil
 	}
 	// Request the filtering of the body list
