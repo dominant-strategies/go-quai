@@ -23,4 +23,4 @@ import (
 )
 
 // requestTracker is a singleton tracker for eth/66 and newer request times.
-var requestTracker = tracker.New(ProtocolName, 5*time.Minute)
+var requestTracker = tracker.New(c_ProtocolName, 5*time.Minute)

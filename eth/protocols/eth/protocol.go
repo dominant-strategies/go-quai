@@ -33,9 +33,9 @@ const (
 	ETH66 = 66
 )
 
-// ProtocolName is the official short name of the `eth` protocol used during
+// ProtocolName is the official short name of the `quai` protocol used during
 // devp2p capability negotiation.
-const ProtocolName = "eth"
+const c_ProtocolName = "quai"
 
 // ProtocolVersions are the supported versions of the `eth` protocol (first
 // is primary).
