@@ -24,6 +24,8 @@ import (
 	"net"
 	"sort"
 	"strings"
+
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 var lan4, lan6, special4, special6 Netlist
@@ -185,6 +187,7 @@ func CheckRelayIP(sender, addr net.IP) error {
 		return errSpecial
 	}
 	if addr.IsLoopback() && !sender.IsLoopback() {
+		log.Debug("Address Is Loopback", "Address:", addr)
 		return errLoopback
 	}
 	if IsLAN(addr) && !IsLAN(sender) {

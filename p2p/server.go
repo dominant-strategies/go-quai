@@ -909,6 +909,7 @@ func (srv *Server) checkInboundConn(remoteIP net.IP) error {
 	now := srv.clock.Now()
 	srv.inboundHistory.expire(now, nil)
 	if !netutil.IsLAN(remoteIP) && srv.inboundHistory.contains(remoteIP.String()) {
+		log.Debug("checkInboundConn", "remoteIP", remoteIP, "string:", remoteIP.String())
 		return fmt.Errorf("too many attempts")
 	}
 	srv.inboundHistory.add(remoteIP.String(), now.Add(inboundThrottleTime))
