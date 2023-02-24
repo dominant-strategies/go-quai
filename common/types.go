@@ -59,7 +59,7 @@ var (
 var (
 	hashT = reflect.TypeOf(Hash{})
 	// The zero address (0x0)
-	ZeroInternal    = InternalAddress{0x0000000000000000000000000000000000000000}
+	ZeroInternal    = InternalAddress{}
 	ZeroAddr        = Address{&ZeroInternal}
 	ErrInvalidScope = errors.New("address is not in scope")
 )
