@@ -804,20 +804,24 @@ func (f *BlockFetcher) importBlocks(peer string, block *types.Block) {
 
 		// Quickly validate the header and propagate the block if it passes
 		err := f.verifyHeader(block.Header())
-		if err == nil {
+
+		// Including the ErrUnknownAncestor as well because a filter has already
+		// been applied for all the blocks that come until here. Since there
+		// exists a timedCache where the blocks expire, it is okay to let this
+		// block through and broadcast the block.
+		if err == nil || err.Error() == consensus.ErrUnknownAncestor.Error() {
 			// All ok, quickly propagate to our peers
 			blockBroadcastOutTimer.UpdateSince(block.ReceivedAt)
 			go f.broadcastBlock(block, true)
 		} else if err.Error() == consensus.ErrFutureBlock.Error() {
 			// Weird future block, don't fail, but neither propagate
-		} else if err.Error() == consensus.ErrUnknownAncestor.Error() {
-			// Weird unknown parent, don't fail, but neither propagate
 		} else {
 			// Something went very wrong, drop the peer
 			log.Debug("Propagated block verification failed", "peer", peer, "number", block.Number(), "hash", hash, "err", err)
 			f.dropPeer(peer)
 			return
 		}
+
 		// Run the actual import and log any issues
 		if _, err := f.insertChain(types.Blocks{block}); err != nil {
 			log.Debug("Propagated block import failed", "peer", peer, "number", block.Number(), "hash", hash, "err", err)
