@@ -8,6 +8,7 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/dominant-strategies/go-quai/trie"
 )
@@ -17,12 +18,14 @@ func ReadKnot(chainfile string) []*types.Block {
 	// Load chain.rlp.
 	fh, err := os.Open(chainfile)
 	if err != nil {
+		log.Error("Error in ReadKnot", "Err", err)
 		return nil
 	}
 	defer fh.Close()
 	var reader io.Reader = fh
 	if strings.HasSuffix(chainfile, ".gz") {
 		if reader, err = gzip.NewReader(reader); err != nil {
+			log.Error("Error in ReadKnot", "Err", err)
 			return nil
 		}
 	}
@@ -33,6 +36,7 @@ func ReadKnot(chainfile string) []*types.Block {
 		if err := stream.Decode(b); err == io.EOF {
 			break
 		} else if err != nil {
+			log.Error("Error in ReadKnot", "Err", err)
 			return nil
 		}
 		h := b.Header()
