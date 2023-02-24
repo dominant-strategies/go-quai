@@ -48,7 +48,10 @@ ifeq ($(ENABLE_UNLOCK),true)
 	BASE_CMD += --allow-insecure-unlock
 endif
 ifeq ($(BOOTNODE),true)
-	BASE_CMD += --nodekey bootnode.key --ws.origins=$(WS_ORIG) --http.corsdomain=$(HTTP_CORSDOMAIN)
+ifndef EXT_IP
+$(error Please set EXT_IP variable to your external ip in network.env and rerun the makefile)
+endif
+	BASE_CMD += --nodekey bootnode.key --ws.origins=$(WS_ORIG) --http.corsdomain=$(HTTP_CORSDOMAIN) --nat extip:$(EXT_IP)
 endif
 ifeq ($(CORS),true)
 	BASE_CMD += --ws.origins=$(WS_ORIG) --http.corsdomain=$(HTTP_CORSDOMAIN)
