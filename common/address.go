@@ -2,6 +2,7 @@ package common
 
 import (
 	"database/sql/driver"
+	"encoding/json"
 	"fmt"
 	"reflect"
 
@@ -135,7 +136,7 @@ func (a Address) Format(s fmt.State, c rune) {
 // MarshalText returns the hex representation of a.
 func (a Address) MarshalText() ([]byte, error) {
 	if a.inner == nil {
-		return []byte{}, nil
+		return hexutil.Bytes(ZeroInternal[:]).MarshalText()
 	}
 	return a.inner.MarshalText()
 }
@@ -150,10 +151,22 @@ func (a *Address) UnmarshalText(input []byte) error {
 	return nil
 }
 
+// MarshalJSON marshals a subscription as its ID.
+func (a *Address) MarshalJSON() ([]byte, error) {
+	if a.inner == nil {
+		return json.Marshal(ZeroAddr)
+	}
+	return json.Marshal(a.inner)
+}
+
 // UnmarshalJSON parses a hash in hex syntax.
 func (a *Address) UnmarshalJSON(input []byte) error {
 	var temp [AddressLength]byte
 	if err := hexutil.UnmarshalFixedJSON(reflect.TypeOf(InternalAddress{}), input, temp[:]); err != nil {
+		if len(input) == 0 {
+			a.inner = Bytes20ToAddress(ZeroInternal).inner
+			return nil
+		}
 		return err
 	}
 	a.inner = Bytes20ToAddress(temp).inner
