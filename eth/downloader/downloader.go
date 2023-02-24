@@ -486,10 +486,17 @@ func (d *Downloader) fetchHead(p *peerConnection) (head *types.Header, err error
 
 	ttl := d.peers.rates.TargetTimeout()
 	timeout := time.After(ttl)
+
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case <-d.cancelCh:
 			return nil, errCanceled
+
+		case <-ticker.C:
+			go p.peer.RequestHeadersByHash(latest, fetch, uint64(1), false, true)
 
 		case packet := <-d.headerCh:
 			// Discard anything not from the origin peer
