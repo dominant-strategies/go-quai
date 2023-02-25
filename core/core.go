@@ -119,12 +119,13 @@ func (c *Core) procfutureHeaders() {
 			header := header.(*types.Header)
 			if block, err := c.sl.ConstructLocalBlock(header); err == nil {
 				blocks = append(blocks, block)
-			} else if err.Error() != ErrBodyNotFound.Error() &&
-				err.Error() != consensus.ErrUnknownAncestor.Error() { // Don't remove the header if we are still waiting for body
+			} else if err.Error() == ErrBodyNotFound.Error() {
+				c.sl.missingBodyFeed.Send(header.Hash())
+			} else if err.Error() == consensus.ErrUnknownAncestor.Error() {
+				c.sl.missingParentFeed.Send(header.ParentHash())
+			} else {
 				log.Debug("could not construct block from future header", "err", err)
 				c.removeFutureHeader(header)
-			} else {
-				log.Debug("still waiting for body of future header", "hash", hash)
 			}
 		}
 	}
@@ -162,6 +163,10 @@ func (c *Core) updateFutureHeaders() {
 			return
 		}
 	}
+}
+
+func (c *Core) SubscribeMissingParentEvent(ch chan<- common.Hash) event.Subscription {
+	return c.sl.SubscribeMissingParentEvent(ch)
 }
 
 // InsertChainWithoutSealVerification works exactly the same
@@ -203,6 +208,14 @@ func (c *Core) Stop() {
 
 func (c *Core) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, newInboundEtxs types.Transactions) ([]types.Transactions, error) {
 	newPendingEtxs, err := c.sl.Append(header, domPendingHeader, domTerminus, td, domOrigin, reorg, newInboundEtxs)
+	if err != nil {
+		if err.Error() == ErrBodyNotFound.Error() {
+			c.sl.missingBodyFeed.Send(header)
+		}
+		if err.Error() == consensus.ErrUnknownAncestor.Error() {
+			c.sl.missingParentFeed.Send(header.ParentHash())
+		}
+	}
 	// If dom tries to append the block and sub is not in sync.
 	// proc the future header cache.
 	go c.procfutureHeaders()
