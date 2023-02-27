@@ -290,6 +290,11 @@ func (c *Core) GetBlockByHash(hash common.Hash) *types.Block {
 	return c.sl.hc.GetBlockByHash(hash)
 }
 
+// GetBlockOrCandidateByHash retrieves a block from the database by hash, caching it if found.
+func (c *Core) GetBlockOrCandidateByHash(hash common.Hash) *types.Block {
+	return c.sl.hc.GetBlockOrCandidateByHash(hash)
+}
+
 // GetHeaderByNumber retrieves a block header from the database by number,
 // caching it (associated with its hash) if found.
 func (c *Core) GetHeaderByNumber(number uint64) *types.Header {
@@ -359,6 +364,18 @@ func (c *Core) GetHeader(hash common.Hash, number uint64) *types.Header {
 // found.
 func (c *Core) GetHeaderByHash(hash common.Hash) *types.Header {
 	return c.sl.hc.GetHeaderByHash(hash)
+}
+
+// GetHeaderOrCandidate retrieves a block header from the database by hash and number,
+// caching it if found.
+func (c *Core) GetHeaderOrCandidate(hash common.Hash, number uint64) *types.Header {
+	return c.sl.hc.GetHeaderOrCandidate(hash, number)
+}
+
+// GetHeaderOrCandidateByHash retrieves a block header from the database by hash, caching it if
+// found.
+func (c *Core) GetHeaderOrCandidateByHash(hash common.Hash) *types.Header {
+	return c.sl.hc.GetHeaderOrCandidateByHash(hash)
 }
 
 // HasHeader checks if a block header is present in the database or not, caching

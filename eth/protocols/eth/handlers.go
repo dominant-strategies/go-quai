@@ -68,12 +68,12 @@ func answerGetBlockHeadersQuery(backend Backend, query *GetBlockHeadersPacket, p
 		if hashMode {
 			if first {
 				first = false
-				origin = backend.Core().GetHeaderByHash(query.Origin.Hash)
+				origin = backend.Core().GetHeaderOrCandidateByHash(query.Origin.Hash)
 				if origin != nil {
 					query.Origin.Number = origin.NumberU64()
 				}
 			} else {
-				origin = backend.Core().GetHeader(query.Origin.Hash, query.Origin.Number)
+				origin = backend.Core().GetHeaderOrCandidate(query.Origin.Hash, query.Origin.Number)
 			}
 		} else {
 			origin = backend.Core().GetHeaderByNumber(query.Origin.Number)
@@ -217,7 +217,7 @@ func handleGetBlock(backend Backend, msg Decoder, peer *Peer) error {
 	}
 	log.Info("Got a block fetch request eth/65: ", "Hash", query.Hash)
 	// check if we have the requested block in the database.
-	response := backend.Core().GetBlockByHash(query.Hash)
+	response := backend.Core().GetBlockOrCandidateByHash(query.Hash)
 	if response != nil {
 		return peer.SendNewBlock(response)
 	}
@@ -233,7 +233,7 @@ func handleGetBlock66(backend Backend, msg Decoder, peer *Peer) error {
 	}
 	log.Debug("Got a block fetch request eth/66: ", "Hash", query.Hash)
 	// check if we have the requested block in the database.
-	response := backend.Core().GetBlockByHash(query.Hash)
+	response := backend.Core().GetBlockOrCandidateByHash(query.Hash)
 	if response != nil {
 		return peer.SendNewBlock(response)
 	}

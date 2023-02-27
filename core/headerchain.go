@@ -470,6 +470,10 @@ func (hc *HeaderChain) GetTdByHash(hash common.Hash) *big.Int {
 // GetHeader retrieves a block header from the database by hash and number,
 // caching it if found.
 func (hc *HeaderChain) GetHeader(hash common.Hash, number uint64) *types.Header {
+	td := hc.GetTdByHash(hash)
+	if td == nil {
+		return nil
+	}
 	// Short circuit if the header's already in the cache, retrieve otherwise
 	if header, ok := hc.headerCache.Get(hash); ok {
 		return header.(*types.Header)
@@ -486,11 +490,43 @@ func (hc *HeaderChain) GetHeader(hash common.Hash, number uint64) *types.Header 
 // GetHeaderByHash retrieves a block header from the database by hash, caching it if
 // found.
 func (hc *HeaderChain) GetHeaderByHash(hash common.Hash) *types.Header {
+	td := hc.GetTdByHash(hash)
+	if td == nil {
+		return nil
+	}
 	number := hc.GetBlockNumber(hash)
 	if number == nil {
 		return nil
 	}
+
 	return hc.GetHeader(hash, *number)
+}
+
+// GetHeaderOrCandidate retrieves a block header from the database by hash and number,
+// caching it if found.
+func (hc *HeaderChain) GetHeaderOrCandidate(hash common.Hash, number uint64) *types.Header {
+	// Short circuit if the header's already in the cache, retrieve otherwise
+	if header, ok := hc.headerCache.Get(hash); ok {
+		return header.(*types.Header)
+	}
+	header := rawdb.ReadHeader(hc.headerDb, hash, number)
+	if header == nil {
+		return nil
+	}
+	// Cache the found header for next time and return
+	hc.headerCache.Add(hash, header)
+	return header
+}
+
+// GetHeaderOrCandidateByHash retrieves a block header from the database by hash, caching it if
+// found.
+func (hc *HeaderChain) GetHeaderOrCandidateByHash(hash common.Hash) *types.Header {
+	number := hc.GetBlockNumber(hash)
+	if number == nil {
+		return nil
+	}
+
+	return hc.GetHeaderOrCandidate(hash, *number)
 }
 
 // HasHeader checks if a block header is present in the database or not.
@@ -634,6 +670,15 @@ func (hc *HeaderChain) GetBlockByHash(hash common.Hash) *types.Block {
 		return nil
 	}
 	return hc.GetBlock(hash, *number)
+}
+
+// GetBlockOrCandidateByHash retrieves any block from the database by hash, caching it if found.
+func (hc *HeaderChain) GetBlockOrCandidateByHash(hash common.Hash) *types.Block {
+	number := hc.GetBlockNumber(hash)
+	if number == nil {
+		return nil
+	}
+	return hc.bc.GetBlockOrCandidate(hash, *number)
 }
 
 // GetBlockByNumber retrieves a block from the database by number, caching it
