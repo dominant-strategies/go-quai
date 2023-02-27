@@ -182,6 +182,10 @@ func (h *ethHandler) handleBlockAnnounces(peer *eth.Peer, hashes []common.Hash, 
 func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block) error {
 	// Schedule the block for import
 	h.blockFetcher.Enqueue(peer.ID(), block)
+
+	// TODO: verify the Headers work to be in a certain threshold window
+	// Store every Block that we receive as part of the block broadcast that meets certain difficulty window
+	h.core.WriteBlock(block)
 	fmt.Println("Received a block braodcast: ", block.Header().NumberArray())
 
 	// Get the horizon and if we don't have the parent of the block and it has a greater

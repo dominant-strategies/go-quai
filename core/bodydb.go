@@ -83,6 +83,11 @@ func (bc *BodyDb) Append(batch ethdb.Batch, block *types.Block, newInboundEtxs t
 	return logs, nil
 }
 
+// WriteBlock write the block to the bodydb database
+func (bc *BodyDb) WriteBlock(block *types.Block) {
+	rawdb.WriteBlock(bc.db, block)
+}
+
 // HasBlock checks if a block is fully present in the database or not.
 func (bc *BodyDb) HasBlock(hash common.Hash, number uint64) bool {
 	if bc.blockCache.Contains(hash) {

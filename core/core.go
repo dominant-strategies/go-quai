@@ -417,6 +417,11 @@ func (c *Core) GetHorizon() uint64 {
 // BlockChain methods //
 //--------------------//
 
+// WriteBlock write the block to the bodydb database
+func (c *Core) WriteBlock(block *types.Block) {
+	c.sl.hc.bc.WriteBlock(block)
+}
+
 // HasBlock checks if a block is fully present in the database or not.
 func (c *Core) HasBlock(hash common.Hash, number uint64) bool {
 	return c.sl.hc.bc.HasBlock(hash, number)
