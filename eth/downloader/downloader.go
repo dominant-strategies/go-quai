@@ -18,7 +18,6 @@
 package downloader
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"sync"
@@ -28,7 +27,6 @@ import (
 	ethereum "github.com/dominant-strategies/go-quai"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
-	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/core/state/snapshot"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/eth/protocols/eth"
@@ -160,6 +158,9 @@ type Core interface {
 
 	// Engine
 	Engine() consensus.Engine
+
+	// Write block to the database
+	WriteBlock(block *types.Block)
 }
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
@@ -1160,15 +1161,6 @@ func (d *Downloader) processFullSyncContent(peerHeight uint64) error {
 }
 
 func (d *Downloader) importBlockResults(results []*fetchResult) error {
-	nodeCtx := common.NodeLocation.Context()
-	insertWaitTimer := time.NewTicker(insertWaitRetryPeriod)
-	defer insertWaitTimer.Stop()
-	appendCh := make(chan common.Hash, 30)
-	appendEventSub := d.core.SubscribeAppend(appendCh)
-	defer appendEventSub.Unsubscribe()
-	subAppendCh := make(chan common.Hash, 30)
-	subAppendEventSub := d.core.SubscribeSubAppend(subAppendCh)
-	defer subAppendEventSub.Unsubscribe()
 	// Check for any early termination requests
 	if len(results) == 0 {
 		return nil
@@ -1186,79 +1178,12 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 		"firstnum", first.Number(), "firsthash", first.Hash(),
 		"lastnum", last.Number(), "lasthash", last.Hash(),
 	)
-	blocks := make([]*types.Block, len(results))
-	for i, result := range results {
-		blocks[i] = types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles, result.ExtTransactions, result.SubManifest)
+
+	for _, result := range results {
+		block := types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles, result.ExtTransactions, result.SubManifest)
+		d.core.WriteBlock(block)
 	}
-	// Loop until all blocks have been inserted, or the process has been cancelled
-	count := 0
-	waitAppend := common.Hash{}
-	waitSubAppend := common.Hash{}
-	for {
-		select {
-		case <-d.quitCh:
-			return errCancelContentProcessing
-		case <-d.cancelCh:
-			return errCancelContentProcessing
-		default:
-			// Pause if we are waiting on a sub append
-			for !bytes.Equal(waitAppend.Bytes(), common.Hash{}.Bytes()) ||
-				!bytes.Equal(waitSubAppend.Bytes(), common.Hash{}.Bytes()) {
-				select {
-				case <-d.quitCh:
-					return errCancelContentProcessing
-				case hash := <-appendCh:
-					if bytes.Equal(waitAppend.Bytes(), hash.Bytes()) {
-						// Clear the wait states
-						waitAppend = common.Hash{}
-						waitSubAppend = common.Hash{}
-					}
-				case subHash := <-subAppendCh:
-					if bytes.Equal(waitSubAppend.Bytes(), subHash.Bytes()) {
-						// Clear the wait states
-						waitAppend = common.Hash{}
-						waitSubAppend = common.Hash{}
-					}
-				case <-insertWaitTimer.C:
-					waitAppend = common.Hash{}
-					waitSubAppend = common.Hash{} // Clear the wait state
-				}
-			}
-			index, err := d.core.InsertChain(blocks[count:], false)
-			count += index
-			if err != nil {
-				if err.Error() == core.ErrPendingBlock.Error() {
-					// We are waiting on a pending block. This most likely means we are waiting
-					// on a sub or dom append. Wait for either:
-					// 1) our sub to append the give sub parent
-					// 2) our chain to append our parent
-					// 3) the retry timer tick
-					if nodeCtx < common.ZONE_CTX {
-						// Indicate which sub block we are waiting on (possibly)
-						waitSubAppend = blocks[index].ParentHash(nodeCtx + 1)
-					} else {
-						// Otherwise just set it to an impossible value and wait for the timer to try again
-						waitAppend = blocks[index].ParentHash()
-					}
-				} else {
-					if index < len(results) {
-						log.Debug("Downloaded item processing failed", "number", results[index].Header.Number(), "hash", results[index].Header.Hash(), "err", err)
-					} else {
-						// The InsertChain method in core.go will sometimes return an out-of-bounds index,
-						// when it needs to preprocess blocks to import a sidechain.
-						// The importer will put together a new list of blocks to import, which is a superset
-						// of the blocks delivered from the downloader, and the indexing will be off.
-						log.Debug("Downloaded item processing failed on sidechain import", "index", index, "err", err)
-					}
-					return fmt.Errorf("%w: %v", errInvalidChain, err)
-				}
-			}
-			if count >= len(blocks) {
-				// Nothing more to insert
-				return nil
-			}
-		}
-	}
+	return nil
 }
 
 // DeliverHeaders injects a new batch of block headers received from a remote

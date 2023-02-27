@@ -359,7 +359,7 @@ func (q *queue) Results(block bool) []*fetchResult {
 	// Regardless if closed or not, we can still deliver whatever we have
 	// We should only take one block out of the resultcache at a time.
 	// Append of the current block will trigger the pop of the next block.
-	results := q.resultCache.GetCompleted(1)
+	results := q.resultCache.GetCompleted(maxHeadersProcess)
 	for _, result := range results {
 		// Recalculate the result item weights to prevent memory exhaustion
 		size := result.Header.Size()
