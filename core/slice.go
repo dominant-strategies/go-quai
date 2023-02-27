@@ -882,3 +882,7 @@ func (sl *Slice) SubscribeDownloaderWait(ch chan<- bool) event.Subscription {
 func (sl *Slice) SubscribeMissingBody(ch chan<- *types.Header) event.Subscription {
 	return sl.scope.Track(sl.missingBodyFeed.Subscribe(ch))
 }
+
+func (sl *Slice) WriteBlock(block *types.Block) {
+	sl.hc.WriteBlock(block)
+}

@@ -92,7 +92,7 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 			c.futureHeaders.Remove(block.Hash())
 
 			// Resume the downloader if paused
-			c.sl.downloaderWaitFeed.Send(false) 
+			c.sl.downloaderWaitFeed.Send(false)
 
 			// If we have a dom, send the dom any pending ETXs which will become
 			// referencable by this block. When this block is referenced in the dom's
@@ -199,6 +199,11 @@ func (c *Core) Stop() {
 //---------------//
 // Slice methods //
 //---------------//
+
+// WriteBlock write the block to the bodydb database
+func (c *Core) WriteBlock(block *types.Block) {
+	c.sl.WriteBlock(block)
+}
 
 func (c *Core) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, newInboundEtxs types.Transactions) ([]types.Transactions, error) {
 	newPendingEtxs, err := c.sl.Append(header, domPendingHeader, domTerminus, td, domOrigin, reorg, newInboundEtxs)

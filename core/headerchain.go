@@ -450,6 +450,10 @@ func (hc *HeaderChain) GetHorizon() uint64 {
 	return header.NumberU64()
 }
 
+func (hc *HeaderChain) WriteBlock(block *types.Block) {
+	hc.bc.WriteBlock(block)
+}
+
 // GetTd retrieves a block's total difficulty in the canonical chain from the
 // database by hash and number, caching it if found.
 func (hc *HeaderChain) GetTd(hash common.Hash, number uint64) *big.Int {
