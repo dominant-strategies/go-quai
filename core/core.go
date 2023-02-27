@@ -67,7 +67,7 @@ func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.H
 // caching any pending blocks which cannot yet be appended. InsertChain return
 // the number of blocks which were successfully consumed (either appended, or
 // cached), and an error.
-func (c *Core) InsertChain(blocks types.Blocks, cachePending bool) (int, error) {
+func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 	nodeCtx := common.NodeLocation.Context()
 	for idx, block := range blocks {
 		// Write the block body to the CandidateBody database.
@@ -96,11 +96,9 @@ func (c *Core) InsertChain(blocks types.Blocks, cachePending bool) (int, error) 
 				err.Error() == ErrSubNotSyncedToDom.Error() ||
 				err.Error() == ErrDomClientNotUp.Error() {
 				log.Info("Cannot append yet.", "hash", block.Hash())
-				if cachePending {
-					c.addfutureHeader(block.Header())
-				} else {
-					return idx, ErrPendingBlock
-				}
+
+				return idx, ErrPendingBlock
+
 			} else if err.Error() != ErrKnownBlock.Error() {
 				log.Info("Append failed.", "hash", block.Hash(), "err", err)
 			}
@@ -110,13 +108,32 @@ func (c *Core) InsertChain(blocks types.Blocks, cachePending bool) (int, error) 
 	return len(blocks), nil
 }
 
-// procfutureHeaders sorts the future block cache and attempts to append
-func (c *Core) procfutureHeaders() {
+// procCandidateBlocks sorts the future block cache and attempts to append
+func (c *Core) procCandidateBlocks(block *types.Block) {
+	// If a specific proc comes in handle it first
+	if block != nil {
+		parentBlock := c.GetBlockOrCandidateByHash(block.ParentHash())
+		if parentBlock != nil {
+			c.InsertChain([]*types.Block{block})
+		} else {
+			c.sl.missingParentFeed.Send(block.ParentHash())
+		}
+		return
+	}
 	// Reconstruct future headers into future blocks list to append
 	blocks := make([]*types.Block, 0, c.futureHeaders.Len())
-	for _, hash := range c.futureHeaders.Keys() {
-		if header, exist := c.futureHeaders.Peek(hash); exist {
+	for _, hash := range c.sl.hc.recentHeadersCache.Keys() {
+		if header, exist := c.sl.hc.recentHeadersCache.Peek(hash); exist {
 			header := header.(*types.Header)
+
+			// Check if attached, if not find parent
+
+			// If attached, find child
+
+			block := c.GetBlockOrCandidateByHash(header.Hash())
+			if block != nil {
+
+			}
 			if block, err := c.sl.ConstructLocalBlock(header); err == nil {
 				blocks = append(blocks, block)
 			} else if err.Error() == ErrBodyNotFound.Error() {
