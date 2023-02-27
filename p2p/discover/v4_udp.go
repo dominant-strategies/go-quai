@@ -45,6 +45,7 @@ var (
 	errClockWarp        = errors.New("reply deadline too far in the future")
 	errClosed           = errors.New("socket closed")
 	errLowPort          = errors.New("low port")
+	errWrongVersion     = errors.New("wrong version")
 )
 
 const (
@@ -248,7 +249,7 @@ func (t *UDPv4) sendPing(toid enode.ID, toaddr *net.UDPAddr, callback func()) *r
 
 func (t *UDPv4) makePing(toaddr *net.UDPAddr) *v4wire.Ping {
 	return &v4wire.Ping{
-		Version:    4,
+		Version:    18,
 		From:       t.ourEndpoint(),
 		To:         v4wire.NewEndpoint(toaddr, 0),
 		Expiration: uint64(time.Now().Add(expiration).Unix()),
@@ -642,7 +643,9 @@ type packetHandlerV4 struct {
 
 func (t *UDPv4) verifyPing(h *packetHandlerV4, from *net.UDPAddr, fromID enode.ID, fromKey v4wire.Pubkey) error {
 	req := h.Packet.(*v4wire.Ping)
-
+	if req.Version != 18 {
+		return errWrongVersion
+	}
 	senderKey, err := v4wire.DecodePubkey(crypto.S256(), fromKey)
 	if err != nil {
 		return err
