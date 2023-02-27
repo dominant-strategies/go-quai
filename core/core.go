@@ -87,6 +87,7 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 					}
 				}
 				c.removeFutureBlock(block)
+				c.procFutureBlocks(nil)
 			} else if err.Error() == consensus.ErrFutureBlock.Error() ||
 				err.Error() == ErrBodyNotFound.Error() ||
 				err.Error() == ErrPendingEtxNotFound.Error() ||
@@ -100,7 +101,7 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 			} else if err.Error() != ErrKnownBlock.Error() {
 				log.Info("Append failed.", "hash", block.Hash(), "err", err)
 			}
-			c.removeFutureBlock(block)
+			//TODO: there maybe an optimization by adding removeFutureBlock but could cause brittleness if all errors above aren't accounted for
 		}
 	}
 	return len(blocks), nil
@@ -112,13 +113,13 @@ func (c *Core) procFutureBlocks(block *types.Block) {
 	if block != nil {
 		c.serviceFutureBlock(block)
 	} else {
+		// Sort the blocks by number and attempt to insert them
 		blocks := make([]*types.Block, c.futureBlocks.Len())
 		for i, hash := range c.futureBlocks.Keys() {
 			if value, exist := c.futureBlocks.Peek(hash); exist {
 				blocks[i] = value.(*types.Block)
 			}
 		}
-		// Sort the blocks by number and attempt to insert them
 		sort.Slice(blocks, func(i, j int) bool {
 			return blocks[i].NumberU64() < blocks[j].NumberU64()
 		})
@@ -443,6 +444,7 @@ func (c *Core) GetHorizon() uint64 {
 // WriteBlock write the block to the bodydb database
 func (c *Core) WriteBlock(block *types.Block) {
 	c.sl.hc.bc.WriteBlock(block)
+	c.procFutureBlocks(block)
 }
 
 // HasBlock checks if a block is fully present in the database or not.
