@@ -71,7 +71,7 @@ type Backend interface {
 	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 	SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription
-
+	WriteBlock(block *types.Block)
 	Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, newInboundEtxs types.Transactions) ([]types.Transactions, error)
 	ConstructLocalMinedBlock(header *types.Header) (*types.Block, error)
 	InsertBlock(ctx context.Context, block *types.Block) (int, error)
