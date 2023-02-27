@@ -23,8 +23,7 @@ import (
 )
 
 const (
-	maxFutureHeaders        = 1800 // Maximum number of future headers we can store in cache
-	futureHeaderFillLevel   = 25   // Level at which to resume downloading blocks
+	c_maxFutureBlocks       = 1800 // Maximum number of future headers we can store in cache
 	maxFutureTime           = 30   // Max time into the future (in seconds) we will accept a block
 	futureHeaderRetryPeriod = 3    // Time (in seconds) before retrying to append future headers
 )
@@ -38,7 +37,7 @@ type Core struct {
 	sl     *Slice
 	engine consensus.Engine
 
-	futureHeaders *timedcache.TimedCache
+	futureBlocks *timedcache.TimedCache
 
 	quit chan struct{} // core quit channel
 }
@@ -56,10 +55,10 @@ func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.H
 		quit:   make(chan struct{}),
 	}
 
-	futureHeaders, _ := timedcache.New(maxFutureHeaders, futureHeaderTtls[nodeCtx])
-	c.futureHeaders = futureHeaders
+	futureBlocks, _ := timedcache.New(c_maxFutureBlocks, futureHeaderTtls[nodeCtx])
+	c.futureBlocks = futureBlocks
 
-	go c.updateFutureHeaders()
+	go c.updateFutureBlocks()
 	return c, nil
 }
 
@@ -87,7 +86,7 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 						log.Error("failed to send ETXs to domclient", "block: ", block.Hash(), "err", err)
 					}
 				}
-				c.removeFutureHeader(block.Header())
+				c.removeFutureBlock(block)
 			} else if err.Error() == consensus.ErrFutureBlock.Error() ||
 				err.Error() == ErrBodyNotFound.Error() ||
 				err.Error() == ErrPendingEtxNotFound.Error() ||
@@ -96,86 +95,76 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 				err.Error() == ErrSubNotSyncedToDom.Error() ||
 				err.Error() == ErrDomClientNotUp.Error() {
 				log.Info("Cannot append yet.", "hash", block.Hash())
-
+				c.addFutureBlock(block)
 				return idx, ErrPendingBlock
-
 			} else if err.Error() != ErrKnownBlock.Error() {
 				log.Info("Append failed.", "hash", block.Hash(), "err", err)
 			}
-			c.removeFutureHeader(block.Header())
+			c.removeFutureBlock(block)
 		}
 	}
 	return len(blocks), nil
 }
 
-// procCandidateBlocks sorts the future block cache and attempts to append
-func (c *Core) procCandidateBlocks(block *types.Block) {
+// procFutureBlocks sorts the future block cache and attempts to append
+func (c *Core) procFutureBlocks(block *types.Block) {
 	// If a specific proc comes in handle it first
 	if block != nil {
-		parentBlock := c.GetBlockOrCandidateByHash(block.ParentHash())
-		if parentBlock != nil {
-			c.InsertChain([]*types.Block{block})
-		} else {
-			c.sl.missingParentFeed.Send(block.ParentHash())
-		}
-		return
-	}
-	// Reconstruct future headers into future blocks list to append
-	blocks := make([]*types.Block, 0, c.futureHeaders.Len())
-	for _, hash := range c.sl.hc.recentHeadersCache.Keys() {
-		if header, exist := c.sl.hc.recentHeadersCache.Peek(hash); exist {
-			header := header.(*types.Header)
-
-			// Check if attached, if not find parent
-
-			// If attached, find child
-
-			block := c.GetBlockOrCandidateByHash(header.Hash())
-			if block != nil {
-
-			}
-			if block, err := c.sl.ConstructLocalBlock(header); err == nil {
-				blocks = append(blocks, block)
-			} else if err.Error() == ErrBodyNotFound.Error() {
-				c.sl.missingBodyFeed.Send(header.Hash())
-			} else if err.Error() == consensus.ErrUnknownAncestor.Error() {
-				c.sl.missingParentFeed.Send(header.ParentHash())
-			} else {
-				log.Debug("could not construct block from future header", "err", err)
-				c.removeFutureHeader(header)
+		c.serviceFutureBlock(block)
+	} else {
+		blocks := make([]*types.Block, c.futureBlocks.Len())
+		for i, hash := range c.futureBlocks.Keys() {
+			if value, exist := c.futureBlocks.Peek(hash); exist {
+				blocks[i] = value.(*types.Block)
 			}
 		}
+		// Sort the blocks by number and attempt to insert them
+		sort.Slice(blocks, func(i, j int) bool {
+			return blocks[i].NumberU64() < blocks[j].NumberU64()
+		})
+
+		// Attempt to service the sorted list
+		for _, block := range blocks {
+			c.serviceFutureBlock(block)
+		}
 	}
-	// Sort the blocks by number and attempt to insert them
-	sort.Slice(blocks, func(i, j int) bool {
-		return blocks[i].NumberU64() < blocks[j].NumberU64()
-	})
-	c.InsertChain(blocks, true)
 }
 
-// addfutureHeader adds a header to the future header cache
-func (c *Core) addfutureHeader(header *types.Header) error {
-	max := uint64(time.Now().Unix() + maxFutureTime)
-	if header.Time() > max {
-		return fmt.Errorf("future block timestamp %v > allowed %v", header.Time(), max)
+func (c *Core) serviceFutureBlock(block *types.Block) {
+	parentBlock := c.GetBlockByHash(block.ParentHash())
+	if parentBlock != nil {
+		c.InsertChain([]*types.Block{block})
+	} else {
+		if !c.HasHeader(block.ParentHash(), block.NumberU64()-1) {
+			c.sl.missingParentFeed.Send(block.ParentHash())
+		}
+		c.futureBlocks.ContainsOrAdd(block.Hash(), block.Header())
 	}
-	c.futureHeaders.ContainsOrAdd(header.Hash(), header)
+}
+
+// addFutureblock adds a block to the future block cache
+func (c *Core) addFutureBlock(block *types.Block) error {
+	max := uint64(time.Now().Unix() + maxFutureTime)
+	if block.Time() > max {
+		return fmt.Errorf("future block timestamp %v > allowed %v", block.Time(), max)
+	}
+	c.futureBlocks.ContainsOrAdd(block.Hash(), block)
 	return nil
 }
 
-// removeFutureHeader removes a header from the future header cache
-func (c *Core) removeFutureHeader(header *types.Header) {
-	c.futureHeaders.Remove(header.Hash())
+// removeFutureBlock removes a block from the future block cache
+func (c *Core) removeFutureBlock(block *types.Block) {
+	c.futureBlocks.Remove(block.Hash())
 }
 
-// updatefutureHeaders is a time to procfutureHeaders
-func (c *Core) updateFutureHeaders() {
+// updateFutureBlocks is a time to procfutureBlocks
+func (c *Core) updateFutureBlocks() {
 	futureTimer := time.NewTicker(futureHeaderRetryPeriod * time.Second)
 	defer futureTimer.Stop()
 	for {
 		select {
 		case <-futureTimer.C:
-			c.procfutureHeaders()
+			c.procFutureBlocks(nil)
 		case <-c.quit:
 			return
 		}
@@ -235,7 +224,7 @@ func (c *Core) Append(header *types.Header, domPendingHeader *types.Header, domT
 	}
 	// If dom tries to append the block and sub is not in sync.
 	// proc the future header cache.
-	go c.procfutureHeaders()
+	go c.procFutureBlocks(nil)
 	return newPendingEtxs, err
 }
 

@@ -143,7 +143,7 @@ type Core interface {
 
 	// InsertChain inserts a batch of blocks into the local chain, optionally
 	// caching any pending blocks.
-	InsertChain(types.Blocks, bool) (int, error)
+	InsertChain(types.Blocks) (int, error)
 
 	// Snapshots returns the core snapshot tree to paused it during sync.
 	Snapshots() *snapshot.Tree
