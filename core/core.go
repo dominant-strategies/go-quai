@@ -119,9 +119,9 @@ func (c *Core) procFutureBlocks(block *types.Block) {
 	} else {
 		// Sort the blocks by number and attempt to insert them
 		blocks := make([]*types.Block, c.futureBlocks.Len())
-		for i, hash := range c.futureBlocks.Keys() {
+		for _, hash := range c.futureBlocks.Keys() {
 			if value, exist := c.futureBlocks.Peek(hash); exist {
-				blocks[i] = value.(*types.Block)
+				blocks = append(blocks, value.(*types.Block))
 			}
 		}
 		sort.Slice(blocks, func(i, j int) bool {
