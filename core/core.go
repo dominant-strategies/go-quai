@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -69,6 +70,9 @@ func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.H
 func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 	nodeCtx := common.NodeLocation.Context()
 	for idx, block := range blocks {
+		if block == nil {
+			return idx, errors.New("block in insertChain is nil")
+		}
 		// Write the block body to the CandidateBody database.
 		rawdb.WriteCandidateBody(c.sl.sliceDb, block.Hash(), block.Body())
 		// Only attempt to append a block, if it is not coincident with our dominant
