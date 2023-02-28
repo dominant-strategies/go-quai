@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
-	"github.com/dominant-strategies/go-quai/common/timedcache"
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/state"
@@ -21,30 +20,25 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rlp"
+	lru "github.com/hashicorp/golang-lru"
 )
 
 const (
-	c_maxFutureBlocks       = 1800 // Maximum number of future headers we can store in cache
-	maxFutureTime           = 30   // Max time into the future (in seconds) we will accept a block
-	futureHeaderRetryPeriod = 3    // Time (in seconds) before retrying to append future headers
-)
-
-var (
-	// Time (in seconds) that a future header is allowed to live in cache, for each context.
-	futureHeaderTtls = [common.HierarchyDepth]int{15000, 1500, 150}
+	c_maxAppendQueue        = 1000000 // Maximum number of future headers we can store in cache
+	maxFutureTime           = 30      // Max time into the future (in seconds) we will accept a block
+	futureHeaderRetryPeriod = 3       // Time (in seconds) before retrying to append future headers
 )
 
 type Core struct {
 	sl     *Slice
 	engine consensus.Engine
 
-	futureBlocks *timedcache.TimedCache
+	appendQueue *lru.Cache
 
 	quit chan struct{} // core quit channel
 }
 
 func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.Header) bool, txConfig *TxPoolConfig, chainConfig *params.ChainConfig, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis) (*Core, error) {
-	nodeCtx := common.NodeLocation.Context()
 	slice, err := NewSlice(db, config, txConfig, isLocalBlock, chainConfig, domClientUrl, subClientUrls, engine, cacheConfig, vmConfig, genesis)
 	if err != nil {
 		return nil, err
@@ -56,8 +50,8 @@ func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.H
 		quit:   make(chan struct{}),
 	}
 
-	futureBlocks, _ := timedcache.New(c_maxFutureBlocks, futureHeaderTtls[nodeCtx])
-	c.futureBlocks = futureBlocks
+	appendQueue, _ := lru.New(c_maxAppendQueue)
+	c.appendQueue = appendQueue
 
 	go c.updateFutureBlocks()
 	return c, nil
@@ -90,8 +84,8 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 						log.Error("failed to send ETXs to domclient", "block: ", block.Hash(), "err", err)
 					}
 				}
-				c.removeFutureBlock(block)
-				c.procFutureBlocks(nil)
+				c.removeFromAppendQueue(block)
+				c.procAppendQueue(nil)
 			} else if err.Error() == consensus.ErrFutureBlock.Error() ||
 				err.Error() == ErrBodyNotFound.Error() ||
 				err.Error() == ErrPendingEtxNotFound.Error() ||
@@ -100,7 +94,7 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 				err.Error() == ErrSubNotSyncedToDom.Error() ||
 				err.Error() == ErrDomClientNotUp.Error() {
 				log.Info("Cannot append yet.", "hash", block.Hash())
-				c.addFutureBlock(block)
+				c.addToAppendQueue(block)
 				return idx, ErrPendingBlock
 			} else if err.Error() != ErrKnownBlock.Error() {
 				log.Info("Append failed.", "hash", block.Hash(), "err", err)
@@ -111,26 +105,32 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 	return len(blocks), nil
 }
 
-// procFutureBlocks sorts the future block cache and attempts to append
-func (c *Core) procFutureBlocks(block *types.Block) {
+// procAppendQueue sorts the append queue and attempts to append
+func (c *Core) procAppendQueue(block *types.Block) {
 	// If a specific proc comes in handle it first
 	if block != nil {
 		c.serviceFutureBlock(block)
 	} else {
 		// Sort the blocks by number and attempt to insert them
-		var blocks []*types.Block
-		for _, hash := range c.futureBlocks.Keys() {
-			if value, exist := c.futureBlocks.Peek(hash); exist {
-				blocks = append(blocks, value.(*types.Block))
+		var hashNumberList []types.HashAndNumber
+		for _, hash := range c.appendQueue.Keys() {
+			if value, exist := c.appendQueue.Peek(hash); exist {
+				hashNumber := types.HashAndNumber{Hash: hash.(common.Hash), Number: value.(uint64)}
+				hashNumberList = append(hashNumberList, hashNumber)
 			}
 		}
-		sort.Slice(blocks, func(i, j int) bool {
-			return blocks[i].NumberU64() < blocks[j].NumberU64()
+		sort.Slice(hashNumberList, func(i, j int) bool {
+			return hashNumberList[i].Number < hashNumberList[j].Number
 		})
 
 		// Attempt to service the sorted list
-		for _, block := range blocks {
-			c.serviceFutureBlock(block)
+		for _, hashAndNumber := range hashNumberList {
+			block := c.GetBlockOrCandidateByHash(hashAndNumber.Hash)
+			if block != nil {
+				c.serviceFutureBlock(block)
+			} else {
+				log.Warn("Entry in the FH cache without being in the db: ", hashAndNumber.Hash)
+			}
 		}
 	}
 }
@@ -143,32 +143,23 @@ func (c *Core) serviceFutureBlock(block *types.Block) {
 		if !c.HasHeader(block.ParentHash(), block.NumberU64()-1) {
 			c.sl.missingParentFeed.Send(block.ParentHash())
 		}
-		if block != nil {
-			c.futureBlocks.ContainsOrAdd(block.Hash(), block)
-		} else {
-			log.Warn("addFutureBlock attempt to add nil block to futureBlocks")
-		}
+		c.appendQueue.ContainsOrAdd(block.Hash(), block.NumberU64())
 	}
 }
 
-// addFutureblock adds a block to the future block cache
-func (c *Core) addFutureBlock(block *types.Block) error {
+// addToAppendQueue adds a block to the append queue
+func (c *Core) addToAppendQueue(block *types.Block) error {
 	max := uint64(time.Now().Unix() + maxFutureTime)
 	if block.Time() > max {
 		return fmt.Errorf("future block timestamp %v > allowed %v", block.Time(), max)
 	}
-	if block != nil {
-		c.futureBlocks.ContainsOrAdd(block.Hash(), block)
-	} else {
-		log.Warn("addFutureBlock attempt to add nil block to futureBlocks")
-	}
-
+	c.appendQueue.ContainsOrAdd(block.Hash(), block.NumberU64())
 	return nil
 }
 
-// removeFutureBlock removes a block from the future block cache
-func (c *Core) removeFutureBlock(block *types.Block) {
-	c.futureBlocks.Remove(block.Hash())
+// removeFromAppendQueue removes a block from the append queue
+func (c *Core) removeFromAppendQueue(block *types.Block) {
+	c.appendQueue.Remove(block.Hash())
 }
 
 // updateFutureBlocks is a time to procfutureBlocks
@@ -178,7 +169,7 @@ func (c *Core) updateFutureBlocks() {
 	for {
 		select {
 		case <-futureTimer.C:
-			c.procFutureBlocks(nil)
+			c.procAppendQueue(nil)
 		case <-c.quit:
 			return
 		}
@@ -238,7 +229,7 @@ func (c *Core) Append(header *types.Header, domPendingHeader *types.Header, domT
 	}
 	// If dom tries to append the block and sub is not in sync.
 	// proc the future header cache.
-	go c.procFutureBlocks(nil)
+	go c.procAppendQueue(nil)
 	return newPendingEtxs, err
 }
 
@@ -457,7 +448,7 @@ func (c *Core) GetHorizon() uint64 {
 // WriteBlock write the block to the bodydb database
 func (c *Core) WriteBlock(block *types.Block) {
 	c.sl.hc.bc.WriteBlock(block)
-	c.procFutureBlocks(block)
+	c.procAppendQueue(block)
 }
 
 // HasBlock checks if a block is fully present in the database or not.

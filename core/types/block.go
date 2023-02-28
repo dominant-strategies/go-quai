@@ -923,3 +923,8 @@ func (m BlockManifest) EncodeIndex(i int, w *bytes.Buffer) {
 func (m BlockManifest) Size() common.StorageSize {
 	return common.StorageSize(m.Len() * common.HashLength)
 }
+
+type HashAndNumber struct {
+	Hash   common.Hash
+	Number uint64
+}
