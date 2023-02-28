@@ -366,7 +366,7 @@ func (b *QuaiAPIBackend) InsertBlock(ctx context.Context, block *types.Block) (i
 	return b.eth.core.InsertChain([]*types.Block{block})
 }
 
-func (b *QuaiAPIBackend) WriteBlock(ctx context.Context, block *types.Block) {
+func (b *QuaiAPIBackend) WriteBlock(block *types.Block) {
 	b.eth.core.WriteBlock(block)
 }
 
