@@ -143,7 +143,11 @@ func (c *Core) serviceFutureBlock(block *types.Block) {
 		if !c.HasHeader(block.ParentHash(), block.NumberU64()-1) {
 			c.sl.missingParentFeed.Send(block.ParentHash())
 		}
-		c.futureBlocks.ContainsOrAdd(block.Hash(), block)
+		if block != nil {
+			c.futureBlocks.ContainsOrAdd(block.Hash(), block)
+		} else {
+			log.Warn("addFutureBlock attempt to add nil block to futureBlocks")
+		}
 	}
 }
 
@@ -153,7 +157,12 @@ func (c *Core) addFutureBlock(block *types.Block) error {
 	if block.Time() > max {
 		return fmt.Errorf("future block timestamp %v > allowed %v", block.Time(), max)
 	}
-	c.futureBlocks.ContainsOrAdd(block.Hash(), block)
+	if block != nil {
+		c.futureBlocks.ContainsOrAdd(block.Hash(), block)
+	} else {
+		log.Warn("addFutureBlock attempt to add nil block to futureBlocks")
+	}
+
 	return nil
 }
 
