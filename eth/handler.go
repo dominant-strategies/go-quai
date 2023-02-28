@@ -179,7 +179,11 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		}
 		return n, err
 	}
-	h.blockFetcher = fetcher.NewBlockFetcher(false, nil, h.core.GetBlockByHash, validator, h.BroadcastBlock, heighter, nil, inserter, h.removePeer)
+	// writeBlock writes the block to the DB
+	writeBlock := func(block *types.Block) {
+		h.core.WriteBlock(block)
+	}
+	h.blockFetcher = fetcher.NewBlockFetcher(h.core.GetBlockByHash, writeBlock, validator, h.BroadcastBlock, heighter, inserter, h.removePeer)
 
 	fetchTx := func(peer string, hashes []common.Hash) error {
 		p := h.peers.peer(peer)
