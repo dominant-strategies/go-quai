@@ -49,13 +49,14 @@ var (
 // codebase, inherently breaking if the engine is swapped out. Please put common
 // error types into the consensus package.
 var (
-	errOlderBlockTime    = errors.New("timestamp older than parent")
-	errTooManyUncles     = errors.New("too many uncles")
-	errDuplicateUncle    = errors.New("duplicate uncle")
-	errUncleIsAncestor   = errors.New("uncle is ancestor")
-	errDanglingUncle     = errors.New("uncle's parent is not ancestor")
-	errInvalidDifficulty = errors.New("non-positive difficulty")
-	errInvalidPoW        = errors.New("invalid proof-of-work")
+	errOlderBlockTime      = errors.New("timestamp older than parent")
+	errTooManyUncles       = errors.New("too many uncles")
+	errDuplicateUncle      = errors.New("duplicate uncle")
+	errUncleIsAncestor     = errors.New("uncle is ancestor")
+	errDanglingUncle       = errors.New("uncle's parent is not ancestor")
+	errInvalidDifficulty   = errors.New("non-positive difficulty")
+	errDifficultyCrossover = errors.New("sub's difficulty exceeds dom's")
+	errInvalidPoW          = errors.New("invalid proof-of-work")
 )
 
 // Author implements consensus.Engine, returning the header's coinbase as the
@@ -228,6 +229,7 @@ func (blake3pow *Blake3pow) VerifyUncles(chain consensus.ChainReader, block *typ
 
 // verifyHeader checks whether a header conforms to the consensus rules
 func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, header, parent *types.Header, uncle bool, seal bool, unixNow int64) error {
+	nodeCtx := common.NodeLocation.Context()
 	// Ensure that the header's extra-data section is of a reasonable size
 	if uint64(len(header.Extra())) > params.MaximumExtraDataSize {
 		return fmt.Errorf("extra-data too long: %d > %d", len(header.Extra()), params.MaximumExtraDataSize)
@@ -238,14 +240,15 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 			return consensus.ErrFutureBlock
 		}
 	}
-
 	if header.Time() < parent.Time() {
 		return errOlderBlockTime
 	}
-
+	// Make sure subordinate difficulty does not exceed local difficulty
+	if nodeCtx < common.HierarchyDepth-1 && header.Difficulty().Cmp(header.Difficulty(nodeCtx+1)) < 0 {
+		return errDifficultyCrossover
+	}
 	// Verify the block's difficulty based on its timestamp and parent's difficulty
 	expected := blake3pow.CalcDifficulty(chain, parent)
-
 	if expected.Cmp(header.Difficulty()) != 0 {
 		return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty(), expected)
 	}
