@@ -21,7 +21,6 @@ import (
 	"math"
 	"math/rand"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -164,20 +163,11 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	heighter := func() uint64 {
 		return h.core.CurrentBlock().NumberU64()
 	}
-	inserter := func(blocks types.Blocks) (int, error) {
-		n, err := h.core.InsertChain(blocks)
-		if err == nil {
-			atomic.StoreUint32(&h.acceptTxs, 1) // Mark initial sync done on any fetcher import
-		}
-		// If the error is related to synchronization of sub, we can still accept the transactions
-		// This is a good approximation on reaching the fray
-		if err != nil && err.Error() == core.ErrPendingBlock.Error() {
-			atomic.StoreUint32(&h.acceptTxs, 1) // Mark initial sync done on any fetcher import
-			return n, nil
-		}
-		return n, err
+	// writeBlock writes the block to the DB
+	writeBlock := func(block *types.Block) {
+		h.core.WriteBlock(block)
 	}
-	h.blockFetcher = fetcher.NewBlockFetcher(false, nil, h.core.GetBlockByHash, validator, h.BroadcastBlock, heighter, nil, inserter, h.removePeer)
+	h.blockFetcher = fetcher.NewBlockFetcher(h.core.GetBlockByHash, writeBlock, validator, h.BroadcastBlock, heighter, h.removePeer)
 
 	fetchTx := func(peer string, hashes []common.Hash) error {
 		p := h.peers.peer(peer)
