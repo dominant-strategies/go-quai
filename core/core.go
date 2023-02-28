@@ -139,7 +139,7 @@ func (c *Core) serviceFutureBlock(block *types.Block) {
 		if !c.HasHeader(block.ParentHash(), block.NumberU64()-1) {
 			c.sl.missingParentFeed.Send(block.ParentHash())
 		}
-		c.futureBlocks.ContainsOrAdd(block.Hash(), block.Header())
+		c.futureBlocks.ContainsOrAdd(block.Hash(), block)
 	}
 }
 
