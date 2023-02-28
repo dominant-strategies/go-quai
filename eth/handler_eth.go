@@ -80,8 +80,8 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 		return nil
 
 	case *eth.NewBlockHashesPacket:
-		hashes, numbers := packet.Unpack()
-		return h.handleBlockAnnounces(peer, hashes, numbers)
+		hashes, numbers, chainHead := packet.Unpack()
+		return h.handleBlockAnnounces(peer, hashes, numbers, chainHead)
 
 	case *eth.NewBlockPacket:
 		return h.handleBlockBroadcast(peer, packet.Block)
@@ -159,13 +159,23 @@ func (h *ethHandler) handleBodies(peer *eth.Peer, txs [][]*types.Transaction, un
 
 // handleBlockAnnounces is invoked from a peer's message handler when it transmits a
 // batch of block announcements for the local node to process.
-func (h *ethHandler) handleBlockAnnounces(peer *eth.Peer, hashes []common.Hash, numbers []uint64) error {
+func (h *ethHandler) handleBlockAnnounces(peer *eth.Peer, hashes []common.Hash, numbers []uint64, chainHead []bool) error {
 	// Schedule all the unknown hashes for retrieval
 	var (
 		unknownHashes  = make([]common.Hash, 0, len(hashes))
 		unknownNumbers = make([]uint64, 0, len(numbers))
 	)
 	for i := 0; i < len(hashes); i++ {
+		// Using the hash announcements after the append to start the downlaoder
+		// instead of the forward propagated blocks
+		if chainHead[i] {
+			_, number := peer.Head()
+			if (numbers[i] - 1) > number {
+				peer.SetHead(hashes[i], numbers[i])
+				fmt.Println("TraceCh: updating the Peer Head: ", "Peer: ", peer.ID(), "Number", numbers[i])
+				h.chainSync.handlePeerEvent(peer)
+			}
+		}
 		if !h.core.HasBlock(hashes[i], numbers[i]) {
 			unknownHashes = append(unknownHashes, hashes[i])
 			unknownNumbers = append(unknownNumbers, numbers[i])
@@ -195,13 +205,6 @@ func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block) er
 		if block.NumberU64() > horizon && block.NumberU64() < h.core.CurrentBlock().NumberU64()+MaxBlockFetchDist {
 			peer.RequestBlockByHash(block.ParentHash())
 		}
-	}
-
-	_, number := peer.Head()
-	if (block.NumberU64() - 1) > number {
-		peer.SetHead(block.ParentHash(), block.NumberU64()-1)
-		fmt.Println("TraceCh: updating the Peer Head: ", "Peer: ", peer.ID(), "Number", block.NumberU64()-1)
-		h.chainSync.handlePeerEvent(peer)
 	}
 	return nil
 }

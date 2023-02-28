@@ -258,8 +258,8 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 
 	mode, ourNumber := cs.modeAndLocalHead()
 	op := peerToSyncOp(mode, peer)
-	// Until the node is within
-	if op.number <= (ourNumber + 3) {
+	// Only start syncing if more than one blocks behind
+	if op.number <= (ourNumber + 1) {
 		fmt.Println("TraceCh: Returning because Peer number is less than our number: ", op.number, "<", ourNumber)
 		return nil // We're in sync.
 	}

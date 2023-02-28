@@ -45,11 +45,11 @@ func (p *Peer) broadcastBlocks() {
 			}
 			p.Log().Trace("Propagated block", "number", prop.block.Number(), "hash", prop.block.Hash(), "number", prop.block.NumberU64())
 
-		case block := <-p.queuedBlockAnns:
-			if err := p.SendNewBlockHashes([]common.Hash{block.Hash()}, []uint64{block.NumberU64()}); err != nil {
+		case hashAnnounce := <-p.queuedBlockAnns:
+			if err := p.SendNewBlockHashes([]common.Hash{hashAnnounce.block.Hash()}, []uint64{hashAnnounce.block.NumberU64()}, []bool{hashAnnounce.chainHead}); err != nil {
 				return
 			}
-			p.Log().Trace("Announced block", "number", block.Number(), "hash", block.Hash())
+			p.Log().Trace("Announced block", "number", hashAnnounce.block.Number(), "hash", hashAnnounce.block.Hash())
 
 		case <-p.term:
 			return

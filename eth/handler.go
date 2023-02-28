@@ -124,6 +124,8 @@ type handler struct {
 	missingPendingEtxsSub event.Subscription
 	missingParentCh       chan common.Hash
 	missingParentSub      event.Subscription
+	chainHeadFeedCh       chan core.ChainHeadEvent
+	chainHeadFeedSub      event.Subscription
 
 	whitelist map[uint64]common.Hash
 
@@ -308,6 +310,11 @@ func (h *handler) Start(maxPeers int) {
 	h.missingParentSub = h.core.SubscribeMissingParentEvent(h.missingParentCh)
 	go h.missingParentLoop()
 
+	h.wg.Add(1)
+	h.chainHeadFeedCh = make(chan core.ChainHeadEvent, missingParentChanSize)
+	h.chainHeadFeedSub = h.core.SubscribeChainHeadEvent(h.chainHeadFeedCh)
+	go h.chainHeadFeedLoop()
+
 	// broadcast mined blocks
 	h.wg.Add(1)
 	h.minedBlockSub = h.eventMux.Subscribe(core.NewMinedBlockEvent{})
@@ -327,6 +334,7 @@ func (h *handler) Start(maxPeers int) {
 func (h *handler) Stop() {
 	h.txsSub.Unsubscribe()                // quits txBroadcastLoop
 	h.minedBlockSub.Unsubscribe()         // quits blockBroadcastLoop
+	h.chainHeadFeedSub.Unsubscribe()      // quits chainHeadFeedLoop
 	h.missingBodySub.Unsubscribe()        // quits missingBodyLoop
 	h.missingPendingEtxsSub.Unsubscribe() // quits pendingEtxsBroadcastLoop
 	h.missingParentSub.Unsubscribe()      // quits missingParentLoop
@@ -372,7 +380,7 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 	// Otherwise if the block is indeed in out own chain, announce it
 	if h.core.HasBlock(hash, block.NumberU64()) {
 		for _, peer := range peers {
-			peer.AsyncSendNewBlockHash(block)
+			peer.AsyncSendNewBlockHash(block, false)
 		}
 		log.Trace("Announced block", "hash", hash, "recipients", len(peers), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
 	}
@@ -496,6 +504,23 @@ func (h *handler) missingParentLoop() {
 				}
 			}
 		case <-h.missingParentSub.Err():
+			return
+		}
+	}
+}
+
+// chainHeadFeedLoop announces new block hashes to connected peers.
+func (h *handler) chainHeadFeedLoop() {
+	defer h.wg.Done()
+	for {
+		select {
+		case chainHead := <-h.chainHeadFeedCh:
+			// Check if any of the peers have the body
+			for _, peer := range h.peers.peers {
+				log.Trace("Announcing the chain head event to", "peer", peer.ID(), "hash", chainHead.Block.Hash())
+				peer.AsyncSendNewBlockHash(chainHead.Block, true)
+			}
+		case <-h.chainHeadFeedSub.Err():
 			return
 		}
 	}

@@ -68,6 +68,11 @@ func max(a, b int) int {
 	return b
 }
 
+type blockHashAnnounce struct {
+	block     *types.Block
+	chainHead bool
+}
+
 // Peer is a collection of relevant information we have about a `eth` peer.
 type Peer struct {
 	id string // Unique ID for the peer, cached
@@ -79,9 +84,9 @@ type Peer struct {
 	head   common.Hash // Latest advertised head block hash
 	number uint64      // Latest advertised head block number
 
-	knownBlocks     mapset.Set             // Set of block hashes known to be known by this peer
-	queuedBlocks    chan *blockPropagation // Queue of blocks to broadcast to the peer
-	queuedBlockAnns chan *types.Block      // Queue of blocks to announce to the peer
+	knownBlocks     mapset.Set              // Set of block hashes known to be known by this peer
+	queuedBlocks    chan *blockPropagation  // Queue of blocks to broadcast to the peer
+	queuedBlockAnns chan *blockHashAnnounce // Queue of blocks to announce to the peer
 
 	knownPendingEtxs mapset.Set // Set of pending etxs hashes known to be known by this peer
 
@@ -106,7 +111,7 @@ func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter, txpool TxPool) *Pe
 		knownBlocks:      mapset.NewSet(),
 		knownPendingEtxs: mapset.NewSet(),
 		queuedBlocks:     make(chan *blockPropagation, maxQueuedBlocks),
-		queuedBlockAnns:  make(chan *types.Block, maxQueuedBlockAnns),
+		queuedBlockAnns:  make(chan *blockHashAnnounce, maxQueuedBlockAnns),
 		txBroadcast:      make(chan []common.Hash),
 		txAnnounce:       make(chan []common.Hash),
 		txpool:           txpool,
@@ -303,7 +308,7 @@ func (p *Peer) ReplyPooledTransactionsRLP(id uint64, hashes []common.Hash, txs [
 
 // SendNewBlockHashes announces the availability of a number of blocks through
 // a hash notification.
-func (p *Peer) SendNewBlockHashes(hashes []common.Hash, numbers []uint64) error {
+func (p *Peer) SendNewBlockHashes(hashes []common.Hash, numbers []uint64, chainHead []bool) error {
 	// Mark all the block hashes as known, but ensure we don't overflow our limits
 	for p.knownBlocks.Cardinality() > max(0, maxKnownBlocks-len(hashes)) {
 		p.knownBlocks.Pop()
@@ -315,6 +320,7 @@ func (p *Peer) SendNewBlockHashes(hashes []common.Hash, numbers []uint64) error 
 	for i := 0; i < len(hashes); i++ {
 		request[i].Hash = hashes[i]
 		request[i].Number = numbers[i]
+		request[i].ChainHead = chainHead[i]
 	}
 	return p2p.Send(p.rw, NewBlockHashesMsg, request)
 }
@@ -322,9 +328,9 @@ func (p *Peer) SendNewBlockHashes(hashes []common.Hash, numbers []uint64) error 
 // AsyncSendNewBlockHash queues the availability of a block for propagation to a
 // remote peer. If the peer's broadcast queue is full, the event is silently
 // dropped.
-func (p *Peer) AsyncSendNewBlockHash(block *types.Block) {
+func (p *Peer) AsyncSendNewBlockHash(block *types.Block, chainHead bool) {
 	select {
-	case p.queuedBlockAnns <- block:
+	case p.queuedBlockAnns <- &blockHashAnnounce{block: block, chainHead: chainHead}:
 		// Mark all the block hash as known, but ensure we don't overflow our limits
 		for p.knownBlocks.Cardinality() >= maxKnownBlocks {
 			p.knownBlocks.Pop()
