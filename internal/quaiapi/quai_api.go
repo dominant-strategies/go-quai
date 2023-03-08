@@ -616,7 +616,6 @@ func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw js
 		s.b.EventMux().Post(core.NewMinedBlockEvent{Block: block})
 	}
 	log.Info("Retrieved mined block", "number", header.Number(), "location", header.Location())
-	s.b.InsertBlock(ctx, block)
 
 	return nil
 }
