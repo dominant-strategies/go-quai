@@ -649,17 +649,17 @@ func (sl *Slice) init(genesis *Genesis) error {
 				location := block.Header().Location()
 				if nodeCtx == common.PRIME_CTX {
 					sl.bestPhKey = block.Hash()
-					rawdb.WriteCandidateBody(sl.sliceDb, block.Hash(), block.Body())
+					rawdb.WriteBody(sl.sliceDb, block.Hash(), block.NumberU64(), block.Body())
 					_, err := sl.Append(block.Header(), types.EmptyHeader(), genesisHash, block.Difficulty(), false, false, nil)
 					if err != nil {
 						log.Warn("Failed to append block", "hash:", block.Hash(), "Number:", block.Number(), "Location:", block.Header().Location(), "error:", err)
 					}
 				} else if location.Region() == common.NodeLocation.Region() && len(common.NodeLocation) == common.REGION_CTX {
 					sl.bestPhKey = block.Hash()
-					rawdb.WriteCandidateBody(sl.sliceDb, block.Hash(), block.Body())
+					rawdb.WriteBody(sl.sliceDb, block.Hash(), block.NumberU64(), block.Body())
 				} else if bytes.Equal(location, common.NodeLocation) {
 					sl.bestPhKey = block.Hash()
-					rawdb.WriteCandidateBody(sl.sliceDb, block.Hash(), block.Body())
+					rawdb.WriteBody(sl.sliceDb, block.Hash(), block.NumberU64(), block.Body())
 				}
 			}
 		}
@@ -694,7 +694,7 @@ func (sl *Slice) ConstructLocalBlock(header *types.Header) (*types.Block, error)
 		// in the subordinate manifest.
 		return types.NewBlockWithHeader(header), nil
 	}
-	pendingBlockBody := rawdb.ReadCandidateBody(sl.sliceDb, header.Hash())
+	pendingBlockBody := rawdb.ReadBody(sl.sliceDb, header.Hash(), header.NumberU64())
 	if pendingBlockBody == nil {
 		return nil, ErrBodyNotFound
 	}

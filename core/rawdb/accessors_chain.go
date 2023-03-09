@@ -430,45 +430,6 @@ func DeleteBody(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	}
 }
 
-// ReadCandidateBody retrieves the pending block body corresponding to the header hash.
-func ReadCandidateBody(db ethdb.Reader, hash common.Hash) *types.Body {
-	key := candidateBodyKey(hash)
-
-	data, _ := db.Get(key)
-	if len(data) == 0 {
-		return nil
-	}
-
-	body := new(types.Body)
-	if err := rlp.Decode(bytes.NewReader(data), body); err != nil {
-		log.Error("Invalid candidate body RLP", "hash", hash, "err", err)
-		return nil
-	}
-	return body
-}
-
-// WriteCandidateBody stores a block body into the database with associated header hash as the key.
-func WriteCandidateBody(db ethdb.KeyValueWriter, hash common.Hash, body *types.Body) {
-	key := candidateBodyKey(hash)
-
-	// Write the encoded pending header
-	data, err := rlp.EncodeToBytes(body)
-	if err != nil {
-		log.Crit("Failed to RLP encode candidate body", "err", err)
-	}
-
-	if err := db.Put(key, data); err != nil {
-		log.Crit("Failed to store candidate body", "err", err)
-	}
-}
-
-// DeleteCandidateBody removes all candidate body data associated with a header hash.
-func DeleteCandidateBody(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
-	if err := db.Delete(candidateBodyKey(hash)); err != nil {
-		log.Crit("Failed to delete candidate body", "err", err)
-	}
-}
-
 // ReadTdRLP retrieves a block's total difficulty corresponding to the hash in RLP encoding.
 func ReadTdRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 	// First try to look up the data in ancient database. Extra hash

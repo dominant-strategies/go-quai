@@ -63,8 +63,6 @@ func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.H
 func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 	nodeCtx := common.NodeLocation.Context()
 	for idx, block := range blocks {
-		// Write the block body to the CandidateBody database.
-		rawdb.WriteCandidateBody(c.sl.sliceDb, block.Hash(), block.Body())
 		// Only attempt to append a block, if it is not coincident with our dominant
 		// chain. If it is dom coincident, then the dom chain node in our slice needs
 		// to initiate the append.
