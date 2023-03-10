@@ -92,6 +92,8 @@ type Downloader struct {
 
 	core Core
 
+	headNumber uint64
+
 	// Callbacks
 	dropPeer peerDropFn // Drops a peer for misbehaving
 
@@ -160,6 +162,7 @@ func New(stateDb ethdb.Database, mux *event.TypeMux, core Core, dropPeer peerDro
 		queue:         newQueue(blockCacheMaxItems, blockCacheInitialItems),
 		peers:         newPeerSet(),
 		core:          core,
+		headNumber:    core.CurrentBlock().NumberU64(),
 		dropPeer:      dropPeer,
 		headerCh:      make(chan dataPack, 1),
 		bodyCh:        make(chan dataPack, 1),
@@ -330,6 +333,11 @@ func (d *Downloader) synchronise(id string, hash common.Hash, number uint64, mod
 	p := d.peers.Peer(id)
 	if p == nil {
 		return errUnknownPeer
+	}
+
+	// If the peer height is already seen
+	if d.headNumber >= number {
+		return nil
 	}
 	return d.syncWithPeer(p, hash, number)
 }
@@ -535,7 +543,7 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 	peerHeight := from
 	nodeCtx := common.NodeLocation.Context()
 
-	localHeight := d.core.CurrentBlock().NumberU64()
+	localHeight := d.headNumber
 
 	// getFetchPoint returns the next fetch point given the number of headers processed
 	// after the previous point.
@@ -1133,8 +1141,9 @@ func (d *Downloader) processFullSyncContent(peerHeight uint64) error {
 			if err := d.importBlockResults(results); err != nil {
 				return err
 			}
+			d.headNumber = results[len(results)-1].Header.NumberU64()
 			// If all the blocks are fetched, we exit the sync process
-			if results[len(results)-1].Header.NumberU64() == peerHeight {
+			if d.headNumber == peerHeight {
 				return errNoFetchesPending
 			}
 		}
