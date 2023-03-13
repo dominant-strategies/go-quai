@@ -20,6 +20,7 @@ package downloader
 import (
 	"errors"
 	"fmt"
+	"math/big"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -27,7 +28,6 @@ import (
 	ethereum "github.com/dominant-strategies/go-quai"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
-	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/core/state/snapshot"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/eth/protocols/eth"
@@ -52,7 +52,6 @@ var (
 
 	maxQueuedHeaders  = 32 * 1024 // [eth/62] Maximum number of headers to queue for import (DOS protection)
 	maxHeadersProcess = 2048      // Number of header download results to import at once into the chain
-	maxResultsProcess = 2048      // Number of content download results to import at once into the chain
 
 	fsHeaderContCheck = 3 * time.Second // Time interval to check for header continuations during state download
 )
@@ -108,7 +107,6 @@ type Downloader struct {
 	receiptCh     chan dataPack        // Channel receiving inbound receipts
 	bodyWakeCh    chan bool            // Channel to signal the block body fetcher of new tasks
 	receiptWakeCh chan bool            // Channel to signal the receipt fetcher of new tasks
-	pauseCh       chan bool            // Channel to signal the downloader to pause
 	headerProcCh  chan []*types.Header // Channel to feed the header processor new tasks
 
 	// Cancellation and termination
@@ -132,6 +130,9 @@ type Core interface {
 	// HasBlock verifies a block's presence in the local chain.
 	HasBlock(common.Hash, uint64) bool
 
+	// GetTd returns the total difficulty of the given block
+	GetTd(common.Hash, uint64) *big.Int
+
 	// GetBlockByHash retrieves a block from the local chain.
 	GetBlockByHash(common.Hash) *types.Block
 
@@ -141,35 +142,32 @@ type Core interface {
 	// AddPendingEtxs adds the pendingEtxs to the database.
 	AddPendingEtxs(pendingEtxs types.PendingEtxs) error
 
-	// InsertChain inserts a batch of blocks into the local chain.
-	InsertChain(types.Blocks) (int, error)
-
 	// Snapshots returns the core snapshot tree to paused it during sync.
 	Snapshots() *snapshot.Tree
 
-	SubscribeDownloaderWait(ch chan<- bool) event.Subscription
-
 	// Engine
 	Engine() consensus.Engine
+
+	// Write block to the database
+	WriteBlock(block *types.Block)
 }
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
 func New(stateDb ethdb.Database, mux *event.TypeMux, core Core, dropPeer peerDropFn) *Downloader {
 	dl := &Downloader{
-		stateDB:         stateDb,
-		mux:             mux,
-		queue:           newQueue(blockCacheMaxItems, blockCacheInitialItems),
-		peers:           newPeerSet(),
-		core:            core,
-		dropPeer:        dropPeer,
-		headerCh:        make(chan dataPack, 1),
-		bodyCh:          make(chan dataPack, 1),
-		receiptCh:       make(chan dataPack, 1),
-		bodyWakeCh:      make(chan bool, 1),
-		receiptWakeCh:   make(chan bool, 1),
-		pauseCh:         make(chan bool, 1),
-		headerProcCh:    make(chan []*types.Header, 10),
-		quitCh:          make(chan struct{}),
+		stateDB:       stateDb,
+		mux:           mux,
+		queue:         newQueue(blockCacheMaxItems, blockCacheInitialItems),
+		peers:         newPeerSet(),
+		core:          core,
+		dropPeer:      dropPeer,
+		headerCh:      make(chan dataPack, 1),
+		bodyCh:        make(chan dataPack, 1),
+		receiptCh:     make(chan dataPack, 1),
+		bodyWakeCh:    make(chan bool, 1),
+		receiptWakeCh: make(chan bool, 1),
+		headerProcCh:  make(chan []*types.Header, 10),
+		quitCh:        make(chan struct{}),
 	}
 
 	return dl
@@ -619,7 +617,7 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 				// Only fill the skeleton between the headers we don't know about.
 				for i := 0; i < len(headers); i++ {
 					skeletonHeaders = append(skeletonHeaders, headers[i])
-					commonAncestor := d.core.HasBlock(headers[i].Hash(), headers[i].NumberU64())
+					commonAncestor := d.core.HasBlock(headers[i].Hash(), headers[i].NumberU64()) && (d.core.GetTd(headers[i].Hash(), headers[i].NumberU64()) != nil)
 					if commonAncestor {
 						break
 					}
@@ -1123,20 +1121,8 @@ func (d *Downloader) processHeaders(origin uint64, number uint64) error {
 
 // processFullSyncContent takes fetch results from the queue and imports them into the chain.
 func (d *Downloader) processFullSyncContent(peerHeight uint64) error {
-	waitEventSub := d.core.SubscribeDownloaderWait(d.pauseCh)
-	defer waitEventSub.Unsubscribe()
 	for {
 		select {
-		case pause := <-d.pauseCh:
-			// If we get a true wait event, wait until we get a false wait event
-			for pause {
-				select {
-				case p := <-d.pauseCh:
-					pause = p
-				case <-d.cancelCh:
-					return nil
-				}
-			}
 		case <-d.cancelCh:
 			return nil
 		default:
@@ -1144,14 +1130,11 @@ func (d *Downloader) processFullSyncContent(peerHeight uint64) error {
 			if len(results) == 0 {
 				return nil
 			}
-			if d.chainInsertHook != nil {
-				d.chainInsertHook(results)
-			}
 			if err := d.importBlockResults(results); err != nil {
 				return err
 			}
 			// If all the blocks are fetched, we exit the sync process
-			if results[0].Header.NumberU64() == peerHeight {
+			if results[len(results)-1].Header.NumberU64() == peerHeight {
 				return errNoFetchesPending
 			}
 		}
@@ -1166,6 +1149,8 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 	select {
 	case <-d.quitCh:
 		return errCancelContentProcessing
+	case <-d.cancelCh:
+		return errCancelContentProcessing
 	default:
 	}
 	// Retrieve the a batch of results to import
@@ -1174,25 +1159,10 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 		"firstnum", first.Number(), "firsthash", first.Hash(),
 		"lastnum", last.Number(), "lasthash", last.Hash(),
 	)
-	blocks := make([]*types.Block, len(results))
-	for i, result := range results {
-		blocks[i] = types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles, result.ExtTransactions, result.SubManifest)
-	}
-	if index, err := d.core.InsertChain(blocks); err != nil {
-		if err.Error() == core.ErrAddedFutureCache.Error() {
-			d.pauseCh<-true // Pause the downloader
-			return nil
-		}
-		if index < len(results) {
-			log.Debug("Downloaded item processing failed", "number", results[index].Header.Number(), "hash", results[index].Header.Hash(), "err", err)
-		} else {
-			// The InsertChain method in core.go will sometimes return an out-of-bounds index,
-			// when it needs to preprocess blocks to import a sidechain.
-			// The importer will put together a new list of blocks to import, which is a superset
-			// of the blocks delivered from the downloader, and the indexing will be off.
-			log.Debug("Downloaded item processing failed on sidechain import", "index", index, "err", err)
-		}
-		return fmt.Errorf("%w: %v", errInvalidChain, err)
+
+	for _, result := range results {
+		block := types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles, result.ExtTransactions, result.SubManifest)
+		d.core.WriteBlock(block)
 	}
 	return nil
 }

@@ -47,7 +47,6 @@ type Slice struct {
 	subClients []*quaiclient.Client
 
 	scope                  event.SubscriptionScope
-	downloaderWaitFeed     event.Feed
 	missingBodyFeed        event.Feed
 	missingPendingEtxsFeed event.Feed
 
@@ -874,10 +873,6 @@ func (sl *Slice) HeaderChain() *HeaderChain { return sl.hc }
 func (sl *Slice) TxPool() *TxPool { return sl.txPool }
 
 func (sl *Slice) Miner() *Miner { return sl.miner }
-
-func (sl *Slice) SubscribeDownloaderWait(ch chan<- bool) event.Subscription {
-	return sl.scope.Track(sl.downloaderWaitFeed.Subscribe(ch))
-}
 
 func (sl *Slice) SubscribeMissingBody(ch chan<- *types.Header) event.Subscription {
 	return sl.scope.Track(sl.missingBodyFeed.Subscribe(ch))

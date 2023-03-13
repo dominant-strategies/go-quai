@@ -166,7 +166,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		}
 		// If the error is related to synchronization of sub, we can still accept the transactions
 		// This is a good approximation on reaching the fray
-		if err != nil && err.Error() == core.ErrAddedFutureCache.Error() {
+		if err != nil && err.Error() == core.ErrPendingBlock.Error() {
 			atomic.StoreUint32(&h.acceptTxs, 1) // Mark initial sync done on any fetcher import
 			return n, nil
 		}
