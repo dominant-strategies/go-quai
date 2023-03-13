@@ -28,6 +28,7 @@ const (
 	pendingHeaderCacheLimit = 500
 	pendingHeaderGCTime     = 5
 	TerminusIndex           = 3
+	c_startingPrintLimit    = 10
 )
 
 type Slice struct {
@@ -115,7 +116,12 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	sl.phCachemu.Lock()
 	defer sl.phCachemu.Unlock()
 
-	log.Info("Starting slice append", "hash", header.Hash(), "number", header.NumberArray(), "location", header.Location(), "parent hash", header.ParentHash())
+	// Only print in Info level if block is c_startingPrintLimit behind or less
+	if sl.CurrentInfo(header) {
+		log.Info("Starting slice append", "hash", header.Hash(), "number", header.NumberArray(), "location", header.Location(), "parent hash", header.ParentHash())
+	} else {
+		log.Debug("Starting slice append", "hash", header.Hash(), "number", header.NumberArray(), "location", header.Location(), "parent hash", header.ParentHash())
+	}
 
 	nodeCtx := common.NodeLocation.Context()
 	location := header.Location()
@@ -877,6 +883,10 @@ func (sl *Slice) Miner() *Miner { return sl.miner }
 
 func (sl *Slice) SubscribeMissingBody(ch chan<- *types.Header) event.Subscription {
 	return sl.scope.Track(sl.missingBodyFeed.Subscribe(ch))
+}
+
+func (sl *Slice) CurrentInfo(header *types.Header) bool {
+	return sl.miner.worker.CurrentInfo(header)
 }
 
 func (sl *Slice) WriteBlock(block *types.Block) {
