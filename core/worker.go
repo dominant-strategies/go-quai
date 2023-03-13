@@ -441,10 +441,17 @@ func (w *worker) GeneratePendingHeader(block *types.Block) (*types.Header, error
 	env.header = block.Header()
 
 	task := &task{receipts: env.receipts, state: env.state, block: block, createdAt: time.Now()}
-	log.Info("Commit new sealing work", "number", block.Number(), "sealhash", w.engine.SealHash(block.Header()),
-		"uncles", len(env.uncles), "txs", env.tcount, "etxs", len(block.ExtTransactions()),
-		"gas", block.GasUsed(), "fees", totalFees(block, env.receipts),
-		"elapsed", common.PrettyDuration(time.Since(start)))
+	if w.CurrentInfo(block.Header()) {
+		log.Info("Commit new sealing work", "number", block.Number(), "sealhash", w.engine.SealHash(block.Header()),
+			"uncles", len(env.uncles), "txs", env.tcount, "etxs", len(block.ExtTransactions()),
+			"gas", block.GasUsed(), "fees", totalFees(block, env.receipts),
+			"elapsed", common.PrettyDuration(time.Since(start)))
+	} else {
+		log.Debug("Commit new sealing work", "number", block.Number(), "sealhash", w.engine.SealHash(block.Header()),
+			"uncles", len(env.uncles), "txs", env.tcount, "etxs", len(block.ExtTransactions()),
+			"gas", block.GasUsed(), "fees", totalFees(block, env.receipts),
+			"elapsed", common.PrettyDuration(time.Since(start)))
+	}
 
 	w.updateSnapshot(env)
 
@@ -1018,4 +1025,8 @@ func totalFees(block *types.Block, receipts []*types.Receipt) *big.Float {
 		feesWei.Add(feesWei, new(big.Int).Mul(new(big.Int).SetUint64(receipts[i].GasUsed), minerFee))
 	}
 	return new(big.Float).Quo(new(big.Float).SetInt(feesWei), new(big.Float).SetInt(big.NewInt(params.Ether)))
+}
+
+func (w *worker) CurrentInfo(header *types.Header) bool {
+	return header.NumberU64()+c_startingPrintLimit > w.hc.CurrentHeader().NumberU64()
 }

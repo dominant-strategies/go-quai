@@ -86,7 +86,11 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 				err.Error() == consensus.ErrUnknownAncestor.Error() ||
 				err.Error() == ErrSubNotSyncedToDom.Error() ||
 				err.Error() == ErrDomClientNotUp.Error() {
-				log.Info("Cannot append yet.", "hash", block.Hash())
+				if c.sl.CurrentInfo(block.Header()) {
+					log.Info("Cannot append yet.", "hash", block.Hash())
+				} else {
+					log.Debug("Cannot append yet.", "hash", block.Hash())
+				}
 				return idx, ErrPendingBlock
 			} else if err.Error() != ErrKnownBlock.Error() {
 				log.Info("Append failed.", "hash", block.Hash(), "err", err)
