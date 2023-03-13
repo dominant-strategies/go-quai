@@ -38,8 +38,8 @@ jobs:
         branch: ${{ env.BRANCH }}
         create_branch: true
         commit_options: -S
-        commit_username: ci@dominant-strategies.io
-        commit_user_email: ci-dominantstrategies
+        commit_user_email: ci@dominant-strategies.io
+        commit_user_name: ci-dominantstrategies
 
 
     - uses: actions/checkout@v3
