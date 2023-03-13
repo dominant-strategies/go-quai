@@ -48,6 +48,9 @@ const (
 	// missingPendingEtxsChanSize is the size of channel listening to the MissingPendingEtxsEvent
 	missingPendingEtxsChanSize = 10
 
+	// missingParentChanSize is the size of channel listening to the MissingParentEvent
+	missingParentChanSize = 10
+
 	// minPeerSend is the threshold for sending the block updates. If
 	// sqrt of len(peers) is less than 5 we make the block announcement
 	// to as much as minPeerSend peers otherwise send it to sqrt of len(peers).
@@ -119,6 +122,8 @@ type handler struct {
 	missingBodySub        event.Subscription
 	missingPendingEtxsCh  chan common.Hash
 	missingPendingEtxsSub event.Subscription
+	missingParentCh       chan common.Hash
+	missingParentSub      event.Subscription
 
 	whitelist map[uint64]common.Hash
 
@@ -298,6 +303,11 @@ func (h *handler) Start(maxPeers int) {
 	h.missingPendingEtxsSub = h.core.SubscribeMissingPendingEtxsEvent(h.missingPendingEtxsCh)
 	go h.missingPendingEtxsLoop()
 
+	h.wg.Add(1)
+	h.missingParentCh = make(chan common.Hash, missingParentChanSize)
+	h.missingParentSub = h.core.SubscribeMissingParentEvent(h.missingParentCh)
+	go h.missingParentLoop()
+
 	// broadcast mined blocks
 	h.wg.Add(1)
 	h.minedBlockSub = h.eventMux.Subscribe(core.NewMinedBlockEvent{})
@@ -319,6 +329,7 @@ func (h *handler) Stop() {
 	h.minedBlockSub.Unsubscribe()         // quits blockBroadcastLoop
 	h.missingBodySub.Unsubscribe()        // quits missingBodyLoop
 	h.missingPendingEtxsSub.Unsubscribe() // quits pendingEtxsBroadcastLoop
+	h.missingParentSub.Unsubscribe()      // quits missingParentLoop
 
 	// Quit chainSync and txsync64.
 	// After this is done, no new peers will be accepted.
@@ -441,30 +452,8 @@ func (h *handler) missingBodyLoop() {
 	for {
 		select {
 		case header := <-h.missingBodyCh:
-
-			// Get the min(sqrt(len(peers)), minPeerRequest)
-			var peerThreshold int
-			sqrtNumPeers := int(math.Sqrt(float64(len(h.peers.peers))))
-			if sqrtNumPeers < minPeerRequest {
-				if minPeerRequest < len(h.peers.peers) {
-					peerThreshold = minPeerRequest
-				} else {
-					peerThreshold = len(h.peers.peers)
-				}
-			} else {
-				peerThreshold = sqrtNumPeers
-			}
-
-			var allPeers []*ethPeer
-			for _, peer := range h.peers.peers {
-				allPeers = append(allPeers, peer)
-			}
-			// shuffle the filteredPeers
-			rand.Seed(time.Now().UnixNano())
-			rand.Shuffle(len(allPeers), func(i, j int) { allPeers[i], allPeers[j] = allPeers[j], allPeers[i] })
-
 			// Check if any of the peers have the body
-			for _, peer := range allPeers[:peerThreshold] {
+			for _, peer := range h.selectSomePeers() {
 				log.Debug("Fetching the missing body from", "peer", peer.ID(), "hash", header.Hash(), "number", header.NumberU64())
 				h.blockFetcher.Notify(peer.ID(), header.Hash(), header.NumberU64(), time.Now(), peer.RequestOneHeader, peer.RequestBodies)
 			}
@@ -481,29 +470,8 @@ func (h *handler) missingPendingEtxsLoop() {
 	for {
 		select {
 		case hash := <-h.missingPendingEtxsCh:
-			// Get the min(sqrt(len(peers)), minPeerRequest)
-			var peerThreshold int
-			sqrtNumPeers := int(math.Sqrt(float64(len(h.peers.peers))))
-			if sqrtNumPeers < minPeerRequest {
-				if minPeerRequest < len(h.peers.peers) {
-					peerThreshold = minPeerRequest
-				} else {
-					peerThreshold = len(h.peers.peers)
-				}
-			} else {
-				peerThreshold = sqrtNumPeers
-			}
-
-			var allPeers []*ethPeer
-			for _, peer := range h.peers.peers {
-				allPeers = append(allPeers, peer)
-			}
-			// shuffle the filteredPeers
-			rand.Seed(time.Now().UnixNano())
-			rand.Shuffle(len(allPeers), func(i, j int) { allPeers[i], allPeers[j] = allPeers[j], allPeers[i] })
-
 			// Check if any of the peers have the body
-			for _, peer := range allPeers[:peerThreshold] {
+			for _, peer := range h.selectSomePeers() {
 				log.Trace("Fetching the missing pending etxs from", "peer", peer.ID(), "hash", hash)
 				if err := peer.RequestOnePendingEtxs(hash); err != nil {
 					return
@@ -513,4 +481,42 @@ func (h *handler) missingPendingEtxsLoop() {
 			return
 		}
 	}
+}
+
+// missingParentLoop announces new pendingEtxs to connected peers.
+func (h *handler) missingParentLoop() {
+	defer h.wg.Done()
+	for {
+		select {
+		case hash := <-h.missingParentCh:
+			// Check if any of the peers have the body
+			for _, peer := range h.selectSomePeers() {
+				log.Trace("Fetching the missing parent from", "peer", peer.ID(), "hash", hash)
+				if err := peer.RequestBlockByHash(hash); err != nil {
+					return
+				}
+			}
+		case <-h.missingParentSub.Err():
+			return
+		}
+	}
+}
+
+func (h *handler) selectSomePeers() []*ethPeer {
+	// Get the min(sqrt(len(peers)), minPeerRequest)
+	count := int(math.Sqrt(float64(len(h.peers.peers))))
+	if count < minPeerRequest {
+		count = minPeerRequest
+	}
+	if count > len(h.peers.peers) {
+		count = len(h.peers.peers)
+	}
+	var allPeers []*ethPeer
+	for _, peer := range h.peers.peers {
+		allPeers = append(allPeers, peer)
+	}
+	// shuffle the filteredPeers
+	rand.Seed(time.Now().UnixNano())
+	rand.Shuffle(len(allPeers), func(i, j int) { allPeers[i], allPeers[j] = allPeers[j], allPeers[i] })
+	return allPeers[:count]
 }
