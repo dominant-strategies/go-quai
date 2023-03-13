@@ -38,7 +38,7 @@ jobs:
         branch: ${{ env.BRANCH }}
         create_branch: true
         commit_options: -S
-        commit_user_email: ci@dominant-strategies.io
+        commit_user_email: ci@dominantstrategies.io
         commit_user_name: ci-dominantstrategies
 
 
@@ -64,7 +64,7 @@ jobs:
         commit_message: Rev'd 'VERSION' file to {{ env.VERSION }}
         branch: main
         commit_options: -S
-        commit_user_email: ci@dominant-strategies.io
+        commit_user_email: ci@dominantstrategies.io
         commit_user_name: ci-dominantstrategies
   deployReleaseCandidate:
     uses: ./.github/workflows/build-deploy.yml
