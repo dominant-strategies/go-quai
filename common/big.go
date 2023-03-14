@@ -28,3 +28,18 @@ var (
 	Big256 = big.NewInt(256)
 	Big257 = big.NewInt(257)
 )
+
+func BigBitsToBits(original *big.Int) *big.Int {
+	e2e64 := big.NewInt(0).Exp(big.NewInt(2), big.NewInt(64), nil)
+	return big.NewInt(0).Div(original, e2e64)
+}
+
+func BigBitsArrayToBitsArray(original []*big.Int) []*big.Int {
+	e2e64 := big.NewInt(0).Exp(big.NewInt(2), big.NewInt(64), nil)
+	bitsArray := make([]*big.Int, len(original))
+	for i, bits := range original {
+		bitsArray[i] = big.NewInt(0).Div(bits, e2e64)
+	}
+
+	return bitsArray
+}

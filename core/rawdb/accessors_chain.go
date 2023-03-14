@@ -647,6 +647,31 @@ func DeletePhCacheTermini(db ethdb.KeyValueWriter, hash common.Hash) {
 	}
 }
 
+// ReadPhCacheEntropy retrieves a ph cache total entropy corresponding to the hash.
+func ReadPhCacheEntropy(db ethdb.Reader, hash common.Hash) *big.Int {
+	data, _ := db.Get(phCacheEntropyKey(hash))
+	if len(data) == 0 {
+		return nil
+	}
+	s := new(big.Int)
+	if err := rlp.Decode(bytes.NewReader(data), s); err != nil {
+		log.Error("Invalid ph cache entropy RLP", "hash", hash, "err", err)
+		return nil
+	}
+	return s
+}
+
+// WritePhCacheEntropy stores the total entropy of a ph cache key into the database.
+func WritePhCacheEntropy(db ethdb.KeyValueWriter, hash common.Hash, s *big.Int) {
+	data, err := rlp.EncodeToBytes(s)
+	if err != nil {
+		log.Crit("Failed to RLP encode ph cache entropy", "err", err)
+	}
+	if err := db.Put(phCacheEntropyKey(hash), data); err != nil {
+		log.Crit("Failed to store ph cache entropy", "err", err)
+	}
+}
+
 // ReadPhCache retreive's the heads hashes of the blockchain.
 func ReadPhCache(db ethdb.Reader) map[common.Hash]types.PendingHeader {
 	data, _ := db.Get(phCacheKey)
@@ -664,7 +689,8 @@ func ReadPhCache(db ethdb.Reader) map[common.Hash]types.PendingHeader {
 	for _, hash := range hashes {
 		header := ReadPendingHeader(db, hash)
 		termini := ReadPhCacheTermini(db, hash)
-		pendingHeader := types.PendingHeader{Header: header, Termini: termini}
+		entropy := ReadPhCacheEntropy(db, hash)
+		pendingHeader := types.PendingHeader{Header: header, Termini: termini, Entropy: entropy}
 		phCache[hash] = pendingHeader
 	}
 	return phCache
@@ -677,6 +703,7 @@ func WritePhCache(db ethdb.KeyValueWriter, phCache map[common.Hash]types.Pending
 		hashes = append(hashes, hash)
 		WritePendingHeader(db, hash, pendingHeader.Header)
 		WritePhCacheTermini(db, hash, pendingHeader.Termini)
+		WritePhCacheEntropy(db, hash, pendingHeader.Entropy)
 	}
 
 	data, err := rlp.EncodeToBytes(hashes)
@@ -695,33 +722,33 @@ func DeletePhCache(db ethdb.KeyValueWriter) {
 	}
 }
 
-// ReadCurrentPendingHeaderHash retreive's the heads hashes of the blockchain.
-func ReadCurrentPendingHeaderHash(db ethdb.Reader) common.Hash {
+// ReadBestPhKeyObject retreive's the bestPhKeyObject of the blockchain
+func ReadBestPhKeyObject(db ethdb.Reader) types.BestPhKeyObject {
 	data, _ := db.Get(phHeadKey)
 	// get the ph cache keys.
 	if len(data) == 0 {
-		return common.Hash{}
+		return types.BestPhKeyObject{}
 	}
-	hash := common.Hash{}
-	if err := rlp.DecodeBytes(data, &hash); err != nil {
-		return common.Hash{}
+	bestPhKey := new(types.BestPhKeyObject)
+	if err := rlp.DecodeBytes(data, bestPhKey); err != nil {
+		return types.BestPhKeyObject{}
 	}
-	return hash
+	return *bestPhKey
 }
 
-// WriteCurrentPendingHeaderHash writes the heads hashes of the blockchain.
-func WriteCurrentPendingHeaderHash(db ethdb.KeyValueWriter, hash common.Hash) {
-	data, err := rlp.EncodeToBytes(hash)
+// ReadBestPhKeyObject writes the bestPhKey of the blockchain
+func WriteBestPhKeyObject(db ethdb.KeyValueWriter, bestPhKey types.BestPhKeyObject) {
+	data, err := rlp.EncodeToBytes(&bestPhKey)
 	if err != nil {
-		log.Crit("Failed to RLP encode block total difficulty", "err", err)
+		log.Crit("Failed to RLP encode write best ph key", "err", err)
 	}
 	if err := db.Put(phHeadKey, data); err != nil {
 		log.Crit("Failed to store last block's hash", "err", err)
 	}
 }
 
-// DeleteCurrentPendingHeaderHash writes the heads hashes of the blockchain.
-func DeleteCurrentPendingHeaderHash(db ethdb.KeyValueWriter) {
+// ReadBestPhKeyObject delete the bestPhKey of the blockchain
+func DeleteBestPhKeyObject(db ethdb.KeyValueWriter) {
 	if err := db.Delete(phHeadKey); err != nil {
 		log.Crit("Failed to delete ph head", "err", err)
 	}

@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/big"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -629,10 +628,8 @@ func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw js
 type tdBlock struct {
 	Header           *types.Header      `json:"header"`
 	DomPendingHeader *types.Header      `json:"domPendingHeader"`
-	Td               *big.Int           `json:"td"`
 	DomTerminus      common.Hash        `json:"domTerminus"`
 	DomOrigin        bool               `json:"domOrigin"`
-	Reorg            bool               `json:"reorg"`
 	NewInboundEtxs   types.Transactions `json:"newInboundEtxs"`
 }
 
@@ -644,7 +641,7 @@ func (s *PublicBlockChainQuaiAPI) Append(ctx context.Context, raw json.RawMessag
 		return nil, err
 	}
 
-	pendingEtxs, err := s.b.Append(body.Header, body.DomPendingHeader, body.DomTerminus, body.Td, body.DomOrigin, body.Reorg, body.NewInboundEtxs)
+	pendingEtxs, err := s.b.Append(body.Header, body.DomPendingHeader, body.DomTerminus, body.DomOrigin, body.NewInboundEtxs)
 	if err != nil {
 		return nil, err
 	}
@@ -661,7 +658,6 @@ type SubRelay struct {
 	Header   *types.Header
 	Termini  []common.Hash
 	Location common.Location
-	Reorg    bool
 }
 
 func (s *PublicBlockChainQuaiAPI) SubRelayPendingHeader(ctx context.Context, raw json.RawMessage) {
@@ -670,7 +666,7 @@ func (s *PublicBlockChainQuaiAPI) SubRelayPendingHeader(ctx context.Context, raw
 		return
 	}
 	pendingHeader := types.PendingHeader{Header: subRelay.Header, Termini: subRelay.Termini}
-	s.b.SubRelayPendingHeader(pendingHeader, subRelay.Reorg, subRelay.Location)
+	s.b.SubRelayPendingHeader(pendingHeader, subRelay.Location)
 }
 
 func (s *PublicBlockChainQuaiAPI) NewGenesisPendingHeader(ctx context.Context, raw json.RawMessage) {
