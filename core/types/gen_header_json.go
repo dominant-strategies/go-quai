@@ -195,12 +195,12 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 			return errors.New("missing required field 'parentEntropy' for Header")
 		}
 		h.SetParentEntropy((*big.Int)(dec.ParentEntropy[i]), i)
-		if dec.ParentEntropy[i] == nil {
-			return errors.New("missing required field 'parentEntropy' for Header")
-		}
-		h.SetParentDeltaS((*big.Int)(dec.ParentDeltaS[i]), i)
 		if dec.ParentDeltaS[i] == nil {
 			return errors.New("missing required field 'parentDeltaS' for Header")
+		}
+		h.SetParentDeltaS((*big.Int)(dec.ParentDeltaS[i]), i)
+		if dec.Number[i] == nil {
+			return errors.New("missing required field 'number' for Header")
 		}
 		h.SetNumber((*big.Int)(dec.Number[i]), i)
 		h.SetGasLimit(uint64(dec.GasLimit[i]), i)

@@ -354,8 +354,8 @@ func (b *QuaiAPIBackend) SyncProgress() quai.SyncProgress {
 	return b.eth.Downloader().Progress()
 }
 
-func (b *QuaiAPIBackend) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, newInboundEtxs types.Transactions) ([]types.Transactions, error) {
-	return b.eth.core.Append(header, domPendingHeader, domTerminus, td, domOrigin, reorg, newInboundEtxs)
+func (b *QuaiAPIBackend) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) ([]types.Transactions, error) {
+	return b.eth.core.Append(header, domPendingHeader, domTerminus, domOrigin, newInboundEtxs)
 }
 
 func (b *QuaiAPIBackend) ConstructLocalMinedBlock(header *types.Header) (*types.Block, error) {
@@ -374,8 +374,8 @@ func (b *QuaiAPIBackend) PendingBlock() *types.Block {
 	return b.eth.core.PendingBlock()
 }
 
-func (b *QuaiAPIBackend) SubRelayPendingHeader(pendingHeader types.PendingHeader, reorg bool, location common.Location) {
-	b.eth.core.SubRelayPendingHeader(pendingHeader, reorg, location)
+func (b *QuaiAPIBackend) SubRelayPendingHeader(pendingHeader types.PendingHeader, location common.Location) {
+	b.eth.core.SubRelayPendingHeader(pendingHeader, location)
 }
 
 func (b *QuaiAPIBackend) GetPendingHeader() (*types.Header, error) {

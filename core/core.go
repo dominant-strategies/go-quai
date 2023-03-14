@@ -66,8 +66,8 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 		// Only attempt to append a block, if it is not coincident with our dominant
 		// chain. If it is dom coincident, then the dom chain node in our slice needs
 		// to initiate the append.
-		if !c.sl.engine.IsDomCoincident(block.Header()) {
-			newPendingEtxs, err := c.sl.Append(block.Header(), types.EmptyHeader(), common.Hash{}, big.NewInt(0), false, true, nil)
+		if block.Header().CalcOrder() == nodeCtx {
+			newPendingEtxs, err := c.sl.Append(block.Header(), types.EmptyHeader(), common.Hash{}, false, nil)
 			if err == nil {
 				// If we have a dom, send the dom any pending ETXs which will become
 				// referencable by this block. When this block is referenced in the dom's
@@ -210,17 +210,16 @@ func (c *Core) Stop() {
 // WriteBlock write the block to the bodydb database
 func (c *Core) WriteBlock(block *types.Block) {
 	if c.GetBlockByHash(block.Hash()) == nil {
-		isDomCoincident := c.sl.engine.IsDomCoincident(block.Header())
 		// Only add non dom blocks to the append queue
-		if !isDomCoincident {
+		if block.Header().CalcOrder() == common.NodeLocation.Context() {
 			c.addToAppendQueue(block)
 		}
 		c.sl.WriteBlock(block)
 	}
 }
 
-func (c *Core) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, newInboundEtxs types.Transactions) ([]types.Transactions, error) {
-	newPendingEtxs, err := c.sl.Append(header, domPendingHeader, domTerminus, td, domOrigin, reorg, newInboundEtxs)
+func (c *Core) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) ([]types.Transactions, error) {
+	newPendingEtxs, err := c.sl.Append(header, domPendingHeader, domTerminus, domOrigin, newInboundEtxs)
 	if err != nil {
 		if err.Error() == ErrBodyNotFound.Error() {
 			c.sl.missingBodyFeed.Send(header)
@@ -237,8 +236,8 @@ func (c *Core) ConstructLocalMinedBlock(header *types.Header) (*types.Block, err
 	return c.sl.ConstructLocalMinedBlock(header)
 }
 
-func (c *Core) SubRelayPendingHeader(slPendingHeader types.PendingHeader, reorg bool, location common.Location) {
-	c.sl.SubRelayPendingHeader(slPendingHeader, reorg, location)
+func (c *Core) SubRelayPendingHeader(slPendingHeader types.PendingHeader, location common.Location) {
+	c.sl.SubRelayPendingHeader(slPendingHeader, location)
 }
 
 func (c *Core) GetPendingHeader() (*types.Header, error) {
@@ -426,10 +425,6 @@ func (c *Core) GetBody(hash common.Hash) *types.Body {
 // caching it if found.
 func (c *Core) GetBodyRLP(hash common.Hash) rlp.RawValue {
 	return c.sl.hc.GetBodyRLP(hash)
-}
-
-func (c *Core) GetHorizon() uint64 {
-	return c.sl.hc.GetHorizon()
 }
 
 //--------------------//

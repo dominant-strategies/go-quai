@@ -226,7 +226,10 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 	defer hc.headermu.Unlock()
 
 	prevHeader := hc.CurrentHeader()
-
+	// if trying to set the same header, escape
+	if prevHeader.Hash() == head.Hash() {
+		return nil
+	}
 	//Find a common header
 	commonHeader := hc.findCommonAncestor(head)
 	newHeader := head
@@ -429,25 +432,6 @@ func (hc *HeaderChain) GetAncestor(hash common.Hash, number, ancestor uint64, ma
 		number--
 	}
 	return hash, number
-}
-
-// GetHorizon returns the N-20 prime header number.
-func (hc *HeaderChain) GetHorizon() uint64 {
-	header := hc.CurrentHeader()
-	var primeCount int
-	for {
-		if hc.engine.IsPrime(header) {
-			primeCount++
-		}
-		if primeCount == primeHorizonThreshold {
-			break
-		}
-		if header.Hash() == hc.Config().GenesisHash {
-			break
-		}
-		header = hc.GetHeader(header.ParentHash(), header.NumberU64()-1)
-	}
-	return header.NumberU64()
 }
 
 func (hc *HeaderChain) WriteBlock(block *types.Block) {

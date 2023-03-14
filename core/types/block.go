@@ -30,13 +30,20 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rlp"
+	mathutil "modernc.org/mathutil"
 )
 
 var (
 	EmptyRootHash  = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
 	EmptyUncleHash = RlpHash([]*Header(nil))
 	EmptyBodyHash  = common.HexToHash("51e1b9c1426a03bf73da3d98d9f384a49ded6a4d705dcdf25433915c3306826c")
+	big2e256       = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil) // 2^256
+)
+
+const (
+	C_mantBits = 64
 )
 
 // A BlockNonce is a 64-bit hash which proves (combined with the
@@ -576,6 +583,12 @@ func (h *Header) SanityCheck() error {
 	if h.number == nil || len(h.number) != common.HierarchyDepth {
 		return fmt.Errorf("field cannot be `nil`: number")
 	}
+	if h.parentEntropy == nil || len(h.parentEntropy) != common.HierarchyDepth {
+		return fmt.Errorf("field cannot be `nil`: number")
+	}
+	if h.parentDeltaS == nil || len(h.parentDeltaS) != common.HierarchyDepth {
+		return fmt.Errorf("field cannot be `nil`: number")
+	}
 	if h.gasLimit == nil || len(h.gasLimit) != common.HierarchyDepth {
 		return fmt.Errorf("field cannot be `nil`: gasLimit")
 	}
@@ -649,6 +662,115 @@ func (h *Header) EmptyUncles() bool {
 // EmptyReceipts returns true if there are no receipts for this header/block.
 func (h *Header) EmptyReceipts() bool {
 	return h.ReceiptHash() == EmptyRootHash
+}
+
+func (h *Header) CalcS() *big.Int {
+	order := h.CalcOrder()
+	intrinsicS := h.CalcIntrinsicS()
+	switch order {
+	case common.PRIME_CTX:
+		totalS := new(big.Int).Add(h.ParentEntropy(common.PRIME_CTX), h.ParentDeltaS(common.REGION_CTX))
+		totalS.Add(totalS, h.ParentDeltaS(common.ZONE_CTX))
+		totalS.Add(totalS, intrinsicS)
+		return totalS
+	case common.REGION_CTX:
+		totalS := new(big.Int).Add(h.ParentEntropy(common.REGION_CTX), h.ParentDeltaS(common.ZONE_CTX))
+		totalS.Add(totalS, intrinsicS)
+		return totalS
+	case common.ZONE_CTX:
+		totalS := new(big.Int).Add(h.ParentEntropy(common.ZONE_CTX), intrinsicS)
+		return totalS
+	}
+	return big.NewInt(0)
+}
+
+func (h *Header) CalcPhS() *big.Int {
+	switch common.NodeLocation.Context() {
+	case common.PRIME_CTX:
+		totalS := h.ParentEntropy(common.PRIME_CTX)
+		return totalS
+	case common.REGION_CTX:
+		totalS := new(big.Int).Add(h.ParentEntropy(common.PRIME_CTX), h.ParentDeltaS(common.REGION_CTX))
+		return totalS
+	case common.ZONE_CTX:
+		totalS := new(big.Int).Add(h.ParentEntropy(common.PRIME_CTX), h.ParentDeltaS(common.REGION_CTX))
+		totalS.Add(totalS, h.ParentDeltaS(common.ZONE_CTX))
+		return totalS
+	}
+	return big.NewInt(0)
+}
+
+func (h *Header) CalcDeltaS() *big.Int {
+	order := h.CalcOrder()
+	intrinsicS := h.CalcIntrinsicS()
+	switch order {
+	case common.PRIME_CTX:
+		return big.NewInt(0)
+	case common.REGION_CTX:
+		totalDeltaS := new(big.Int).Add(h.ParentDeltaS(common.REGION_CTX), h.ParentDeltaS(common.ZONE_CTX))
+		totalDeltaS = new(big.Int).Add(totalDeltaS, intrinsicS)
+		return totalDeltaS
+	case common.ZONE_CTX:
+		totalDeltaS := new(big.Int).Add(h.ParentDeltaS(common.ZONE_CTX), intrinsicS)
+		return totalDeltaS
+	}
+	return big.NewInt(0)
+}
+
+func (h *Header) CalcOrder() int {
+	intrinsicS := h.CalcIntrinsicS()
+
+	// This is the updated the threshold calculation based on the zone difficulty threshold
+	zoneThresholdS := h.CalcIntrinsicS(common.BytesToHash(new(big.Int).Div(big2e256, h.Difficulty()).Bytes()))
+	timeFactorHierarchyDepthMultiple := new(big.Int).Mul(params.TimeFactor, big.NewInt(common.HierarchyDepth))
+
+	// Prime case
+	primeEntropyThreshold := new(big.Int).Mul(timeFactorHierarchyDepthMultiple, timeFactorHierarchyDepthMultiple)
+	primeEntropyThreshold = new(big.Int).Mul(primeEntropyThreshold, zoneThresholdS)
+	primeBlockThreshold := new(big.Int).Quo(primeEntropyThreshold, big.NewInt(10))
+	primeEntropyThreshold = new(big.Int).Sub(primeEntropyThreshold, primeBlockThreshold)
+
+	primeBlockEntropyThresholdAdder, _ := mathutil.BinaryLog(primeBlockThreshold, 8)
+	primeBlockEntropyThreshold := new(big.Int).Add(zoneThresholdS, big.NewInt(int64(primeBlockEntropyThresholdAdder)))
+
+	totalDeltaS := new(big.Int).Add(h.ParentDeltaS(common.REGION_CTX), h.ParentDeltaS(common.ZONE_CTX))
+	totalDeltaS.Add(totalDeltaS, intrinsicS)
+	if intrinsicS.Cmp(primeBlockEntropyThreshold) > 0 && totalDeltaS.Cmp(primeEntropyThreshold) > 0 {
+		return common.PRIME_CTX
+	}
+
+	// Region case
+	regionEntropyThreshold := new(big.Int).Mul(timeFactorHierarchyDepthMultiple, zoneThresholdS)
+	regionBlockThreshold := new(big.Int).Quo(regionEntropyThreshold, big.NewInt(10))
+	regionEntropyThreshold = new(big.Int).Sub(regionEntropyThreshold, regionBlockThreshold)
+
+	regionBlockEntropyThresholdAdder, _ := mathutil.BinaryLog(regionBlockThreshold, 8)
+	regionBlockEntropyThreshold := new(big.Int).Add(zoneThresholdS, big.NewInt(int64(regionBlockEntropyThresholdAdder)))
+
+	totalDeltaS = new(big.Int).Add(h.ParentDeltaS(common.ZONE_CTX), intrinsicS)
+	if intrinsicS.Cmp(regionBlockEntropyThreshold) > 0 && totalDeltaS.Cmp(regionEntropyThreshold) > 0 {
+		return common.REGION_CTX
+	}
+
+	// Zone case
+	if intrinsicS.Cmp(zoneThresholdS) > 0 {
+		return common.ZONE_CTX
+	}
+	return -1
+}
+
+// calcIntrinsicS
+func (h *Header) CalcIntrinsicS(args ...common.Hash) *big.Int {
+	hash := h.Hash()
+	if len(args) > 0 {
+		hash = args[0]
+	}
+	x := new(big.Int).SetBytes(hash.Bytes())
+	d := new(big.Int).Div(big2e256, x)
+	c, m := mathutil.BinaryLog(d, C_mantBits)
+	bigBits := new(big.Int).Mul(big.NewInt(int64(c)), new(big.Int).Exp(big.NewInt(2), big.NewInt(C_mantBits), nil))
+	bigBits = new(big.Int).Add(bigBits, m)
+	return bigBits
 }
 
 // Body is a simple (mutable, non-safe) data container for storing and moving
@@ -960,6 +1082,7 @@ type Blocks []*Block
 type PendingHeader struct {
 	Header  *Header
 	Termini []common.Hash
+	Entropy *big.Int
 }
 
 // BlockManifest is a list of block hashes, which implements DerivableList
@@ -982,4 +1105,67 @@ func (m BlockManifest) Size() common.StorageSize {
 type HashAndNumber struct {
 	Hash   common.Hash
 	Number uint64
+}
+
+type BestPhKey struct {
+	key       common.Hash
+	entropy   *big.Int
+	blockHash common.Hash
+}
+
+func NewBestPhKey(key common.Hash, entropy *big.Int, blockHash common.Hash) BestPhKey {
+	newBestPhKey := BestPhKey{}
+	newBestPhKey.SetKey(key)
+	newBestPhKey.SetEntropy(entropy)
+	newBestPhKey.SetBlockHash(blockHash)
+	return newBestPhKey
+}
+
+func (b *BestPhKey) SetKey(key common.Hash) {
+	b.key = key
+}
+
+func (h *BestPhKey) SetEntropy(val *big.Int) {
+	h.entropy = val
+}
+
+func (b *BestPhKey) SetBlockHash(blockHash common.Hash) {
+	b.blockHash = blockHash
+}
+
+func (b *BestPhKey) Key() common.Hash {
+	return b.key
+}
+
+func (b *BestPhKey) Entropy() *big.Int {
+	return b.entropy
+}
+
+func (b *BestPhKey) BlockHash() common.Hash {
+	return b.blockHash
+}
+
+type extBestPhKey struct {
+	Key       common.Hash
+	Entropy   *big.Int
+	BlockHash common.Hash
+}
+
+// DecodeRLP decodes the Ethereum
+func (b *BestPhKey) DecodeRLP(s *rlp.Stream) error {
+	var eb extBestPhKey
+	if err := s.Decode(&eb); err != nil {
+		return err
+	}
+	b.key, b.entropy, b.blockHash = eb.Key, eb.Entropy, eb.BlockHash
+	return nil
+}
+
+// EncodeRLP serializes b into the Ethereum RLP block format.
+func (b *BestPhKey) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, extBestPhKey{
+		Key:       b.key,
+		Entropy:   b.entropy,
+		BlockHash: b.blockHash,
+	})
 }
