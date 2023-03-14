@@ -715,6 +715,106 @@ func DeleteTd(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	}
 }
 
+// ReadS retrieves a block's total entropy corresponding to the hash.
+func ReadS(db ethdb.Reader, hash common.Hash, number uint64) *big.Float {
+	data, _ := db.Get(headerSKey(number, hash))
+	if len(data) == 0 {
+		return nil
+	}
+	s := new(big.Float)
+	if err := s.GobDecode(data); err != nil {
+		log.Error("Invalid block total entropy RLP", "hash", hash, "err", err)
+		return nil
+	}
+	return s
+}
+
+// WriteS stores the total entropy of a block into the database.
+func WriteS(db ethdb.KeyValueWriter, hash common.Hash, number uint64, S *big.Float) {
+	data, err := S.GobEncode()
+	if err != nil {
+		log.Crit("Failed to RLP encode block total entropy", "err", err)
+	}
+	if err := db.Put(headerSKey(number, hash), data); err != nil {
+		log.Crit("Failed to store block total entropy", "err", err)
+	}
+}
+
+// DeleteS removes all block total entropy data associated with a hash.
+func DeleteS(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
+	if err := db.Delete(headerSKey(number, hash)); err != nil {
+		log.Crit("Failed to delete block total entropy", "err", err)
+	}
+}
+
+// EncodeBigFloatArray takes a bigFloat array and converts it into a 2d byte slice
+func EncodeBigFloatArray(array []*big.Float) ([][]byte, error) {
+	byteArray := make([][]byte, 0)
+	for _, val := range array {
+		valFloat, err := val.GobEncode()
+		if err != nil {
+			return nil, err
+		}
+		byteArray = append(byteArray, valFloat)
+	}
+	return byteArray, nil
+}
+
+// DecodeToBigFloatArray tales a 2d byte slice and returns a bigFloat array
+func DecodeToBigFloatArray(byte2dArray [][]byte) ([]*big.Float, error) {
+	bigFloatArray := make([]*big.Float, 0)
+	for _, val := range byte2dArray {
+		varFloat := big.NewFloat(0)
+		err := varFloat.GobDecode(val)
+		if err != nil {
+			return nil, err
+		}
+		bigFloatArray = append(bigFloatArray, varFloat)
+	}
+	return bigFloatArray, nil
+}
+
+// ReadDeltaS retrieves a block's change in entropy corresponding to the hash.
+func ReadDeltaS(db ethdb.Reader, hash common.Hash, number uint64) []*big.Float {
+	data, _ := db.Get(headerDeltaSKey(number, hash))
+	if len(data) == 0 {
+		return nil
+	}
+	deltaS := new([][]byte)
+	if err := rlp.Decode(bytes.NewReader(data), deltaS); err != nil {
+		log.Error("Invalid block deltaS RLP", "hash", hash, "err", err)
+		return nil
+	}
+	deltaSArray, err := DecodeToBigFloatArray(*deltaS)
+	if err != nil {
+		log.Error("Invalid DecodeToBigFloatArray", "err", err)
+		return nil
+	}
+	return deltaSArray
+}
+
+// WriteDeltaS stores the change in entropy of a block into the database.
+func WriteDeltaS(db ethdb.KeyValueWriter, hash common.Hash, number uint64, deltaS []*big.Float) {
+	data, err := EncodeBigFloatArray(deltaS)
+	if err != nil {
+		log.Crit("Failed to RLP encode block total entropy", "err", err)
+	}
+	encodedData, err := rlp.EncodeToBytes(data)
+	if err != nil {
+		log.Error("Error encoding the entropy array RLP")
+	}
+	if err := db.Put(headerDeltaSKey(number, hash), encodedData); err != nil {
+		log.Crit("Failed to store block total entropy", "err", err)
+	}
+}
+
+// DeleteSubDeltaS removes all block change in entropy data associated with a hash.
+func DeleteDeltaS(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
+	if err := db.Delete(headerDeltaSKey(number, hash)); err != nil {
+		log.Crit("Failed to delete block delta entropy", "err", err)
+	}
+}
+
 // HasReceipts verifies the existence of all the transaction receipts belonging
 // to a block.
 func HasReceipts(db ethdb.Reader, hash common.Hash, number uint64) bool {

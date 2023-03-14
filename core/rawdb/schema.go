@@ -82,10 +82,12 @@ var (
 	uncleanShutdownKey = []byte("unclean-shutdown") // config prefix for the db
 
 	// Data item prefixes (use single byte to avoid mixing data types, avoid `i`, used for indexes).
-	headerPrefix       = []byte("h") // headerPrefix + num (uint64 big endian) + hash -> header
-	headerTDSuffix     = []byte("t") // headerPrefix + num (uint64 big endian) + hash + headerTDSuffix -> td
-	headerHashSuffix   = []byte("n") // headerPrefix + num (uint64 big endian) + headerHashSuffix -> hash
-	headerNumberPrefix = []byte("H") // headerNumberPrefix + hash -> num (uint64 big endian)
+	headerPrefix       = []byte("h")  // headerPrefix + num (uint64 big endian) + hash -> header
+	headerTDSuffix     = []byte("t")  // headerPrefix + num (uint64 big endian) + hash + headerTDSuffix -> td
+	headerSSuffix      = []byte("s")  // headerPrefix + num (uint64 big endian) + hash + headerSSuffix -> S
+	headerDeltaSSuffix = []byte("ds") // headerPrefix + num (uint64 big endian) + hash + headerDeltaSSuffix -> DeltaS
+	headerHashSuffix   = []byte("n")  // headerPrefix + num (uint64 big endian) + headerHashSuffix -> hash
+	headerNumberPrefix = []byte("H")  // headerNumberPrefix + hash -> num (uint64 big endian)
 
 	pendingHeaderPrefix = []byte("ph") // pendingHeaderPrefix + hash -> header
 	phBodyPrefix        = []byte("pc") // phBodyPrefix + hash -> []common.Hash + Td
@@ -187,6 +189,16 @@ func phBodyKey(hash common.Hash) []byte {
 // headerTDKey = headerPrefix + num (uint64 big endian) + hash + headerTDSuffix
 func headerTDKey(number uint64, hash common.Hash) []byte {
 	return append(headerKey(number, hash), headerTDSuffix...)
+}
+
+// headerSKey = headerPrefix + num (uint64 big endian) + hash + headerSSuffix
+func headerSKey(number uint64, hash common.Hash) []byte {
+	return append(headerKey(number, hash), headerSSuffix...)
+}
+
+// headerDeltaSKey = headerPrefix + num (uint64 big endian) + hash + headerDeltaSSuffix
+func headerDeltaSKey(number uint64, hash common.Hash) []byte {
+	return append(headerKey(number, hash), headerDeltaSSuffix...)
 }
 
 // headerHashKey = headerPrefix + num (uint64 big endian) + headerHashSuffix

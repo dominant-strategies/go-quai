@@ -67,7 +67,7 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 		// chain. If it is dom coincident, then the dom chain node in our slice needs
 		// to initiate the append.
 		if !c.sl.engine.IsDomCoincident(block.Header()) {
-			newPendingEtxs, err := c.sl.Append(block.Header(), types.EmptyHeader(), common.Hash{}, big.NewInt(0), false, true, nil)
+			newPendingEtxs, _, _, _, err := c.sl.Append(block.Header(), types.EmptyHeader(), common.Hash{}, nil, false, true, nil)
 			if err == nil {
 				// If we have a dom, send the dom any pending ETXs which will become
 				// referencable by this block. When this block is referenced in the dom's
@@ -217,8 +217,8 @@ func (c *Core) WriteBlock(block *types.Block) {
 	c.sl.WriteBlock(block)
 }
 
-func (c *Core) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, newInboundEtxs types.Transactions) ([]types.Transactions, error) {
-	newPendingEtxs, err := c.sl.Append(header, domPendingHeader, domTerminus, td, domOrigin, reorg, newInboundEtxs)
+func (c *Core) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, domS *big.Float, domOrigin bool, reorg bool, newInboundEtxs types.Transactions) ([]types.Transactions, *big.Float, *big.Float, bool, error) {
+	newPendingEtxs, s, subDeltaS, reorg, err := c.sl.Append(header, domPendingHeader, domTerminus, domS, domOrigin, reorg, newInboundEtxs)
 	if err != nil {
 		if err.Error() == ErrBodyNotFound.Error() {
 			c.sl.missingBodyFeed.Send(header)
@@ -227,7 +227,7 @@ func (c *Core) Append(header *types.Header, domPendingHeader *types.Header, domT
 			c.sl.missingParentFeed.Send(header.ParentHash())
 		}
 	}
-	return newPendingEtxs, err
+	return newPendingEtxs, s, subDeltaS, reorg, err
 }
 
 // ConstructLocalBlock takes a header and construct the Block locally
@@ -235,8 +235,8 @@ func (c *Core) ConstructLocalMinedBlock(header *types.Header) (*types.Block, err
 	return c.sl.ConstructLocalMinedBlock(header)
 }
 
-func (c *Core) SubRelayPendingHeader(slPendingHeader types.PendingHeader, reorg bool, location common.Location) {
-	c.sl.SubRelayPendingHeader(slPendingHeader, reorg, location)
+func (c *Core) SubRelayPendingHeader(slPendingHeader types.PendingHeader, s *big.Float, location common.Location) {
+	c.sl.SubRelayPendingHeader(slPendingHeader, s, location)
 }
 
 func (c *Core) GetPendingHeader() (*types.Header, error) {

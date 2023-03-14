@@ -135,11 +135,23 @@ type pendingEtxs struct {
 	Etxs []types.Transactions `json:"pendingEtxs"`
 }
 
-func (ec *Client) Append(ctx context.Context, header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, newInboundEtxs types.Transactions) ([]types.Transactions, error) {
+type entropyStruct struct {
+	Entropy *big.Float `json:"entropy"`
+}
+
+type subSStruct struct {
+	SubS *big.Float `json:"subS"`
+}
+
+type reorgStruct struct {
+	Reorg bool `json:"reorg"`
+}
+
+func (ec *Client) Append(ctx context.Context, header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, domS *big.Float, domOrigin bool, reorg bool, newInboundEtxs types.Transactions) ([]types.Transactions, *big.Float, *big.Float, bool, error) {
 	fields := map[string]interface{}{
 		"header":           RPCMarshalHeader(header),
 		"domPendingHeader": RPCMarshalHeader(domPendingHeader),
-		"td":               td,
+		"domS":             domS,
 		"domTerminus":      domTerminus,
 		"domOrigin":        domOrigin,
 		"reorg":            reorg,
@@ -149,21 +161,36 @@ func (ec *Client) Append(ctx context.Context, header *types.Header, domPendingHe
 	var raw json.RawMessage
 	err := ec.c.CallContext(ctx, &raw, "quai_append", fields)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, false, err
 	}
 
 	// Decode header and transactions.
 	var pEtxs pendingEtxs
 	if err := json.Unmarshal(raw, &pEtxs); err != nil {
-		return nil, err
+		return nil, nil, nil, false, err
 	}
-	return pEtxs.Etxs, nil
+	// Decode domS
+	var ds entropyStruct
+	if err := json.Unmarshal(raw, &ds); err != nil {
+		return nil, nil, nil, false, err
+	}
+	// Decode subS
+	var ss subSStruct
+	if err := json.Unmarshal(raw, &ss); err != nil {
+		return nil, nil, nil, false, err
+	}
+	// Decode reorg
+	var re reorgStruct
+	if err := json.Unmarshal(raw, &re); err != nil {
+		return nil, nil, nil, false, err
+	}
+	return pEtxs.Etxs, ds.Entropy, ss.SubS, re.Reorg, nil
 }
 
-func (ec *Client) SubRelayPendingHeader(ctx context.Context, pendingHeader types.PendingHeader, reorg bool, location common.Location) {
+func (ec *Client) SubRelayPendingHeader(ctx context.Context, pendingHeader types.PendingHeader, s *big.Float, location common.Location) {
 	data := map[string]interface{}{"Header": RPCMarshalHeader(pendingHeader.Header)}
 	data["Termini"] = pendingHeader.Termini
-	data["Reorg"] = reorg
+	data["S"] = s
 	data["Location"] = location
 
 	ec.c.CallContext(ctx, nil, "quai_subRelayPendingHeader", data)

@@ -623,7 +623,7 @@ func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw js
 type tdBlock struct {
 	Header           *types.Header      `json:"header"`
 	DomPendingHeader *types.Header      `json:"domPendingHeader"`
-	Td               *big.Int           `json:"td"`
+	DomS             *big.Float         `json:"domS"`
 	DomTerminus      common.Hash        `json:"domTerminus"`
 	DomOrigin        bool               `json:"domOrigin"`
 	Reorg            bool               `json:"reorg"`
@@ -638,13 +638,16 @@ func (s *PublicBlockChainQuaiAPI) Append(ctx context.Context, raw json.RawMessag
 		return nil, err
 	}
 
-	pendingEtxs, err := s.b.Append(body.Header, body.DomPendingHeader, body.DomTerminus, body.Td, body.DomOrigin, body.Reorg, body.NewInboundEtxs)
+	pendingEtxs, entropy, subS, reorg, err := s.b.Append(body.Header, body.DomPendingHeader, body.DomTerminus, body.DomS, body.DomOrigin, body.Reorg, body.NewInboundEtxs)
 	if err != nil {
 		return nil, err
 	}
 	// Marshal the output for decoding
 	fields := map[string]interface{}{
 		"pendingEtxs": pendingEtxs,
+		"entropy":     entropy,
+		"subS":        subS,
+		"reorg":       reorg,
 	}
 
 	return fields, nil
@@ -655,7 +658,7 @@ type SubRelay struct {
 	Header   *types.Header
 	Termini  []common.Hash
 	Location common.Location
-	Reorg    bool
+	S        *big.Float
 }
 
 func (s *PublicBlockChainQuaiAPI) SubRelayPendingHeader(ctx context.Context, raw json.RawMessage) {
@@ -664,7 +667,7 @@ func (s *PublicBlockChainQuaiAPI) SubRelayPendingHeader(ctx context.Context, raw
 		return
 	}
 	pendingHeader := types.PendingHeader{Header: subRelay.Header, Termini: subRelay.Termini}
-	s.b.SubRelayPendingHeader(pendingHeader, subRelay.Reorg, subRelay.Location)
+	s.b.SubRelayPendingHeader(pendingHeader, subRelay.S, subRelay.Location)
 }
 
 func (s *PublicBlockChainQuaiAPI) GetPendingHeader(ctx context.Context) (map[string]interface{}, error) {
