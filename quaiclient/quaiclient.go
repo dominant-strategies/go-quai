@@ -20,7 +20,6 @@ package quaiclient
 import (
 	"context"
 	"encoding/json"
-	"math/big"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -141,14 +140,12 @@ type pendingEtxs struct {
 	Etxs []types.Transactions `json:"pendingEtxs"`
 }
 
-func (ec *Client) Append(ctx context.Context, header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, newInboundEtxs types.Transactions) ([]types.Transactions, error) {
+func (ec *Client) Append(ctx context.Context, header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) ([]types.Transactions, error) {
 	fields := map[string]interface{}{
 		"header":           RPCMarshalHeader(header),
 		"domPendingHeader": RPCMarshalHeader(domPendingHeader),
-		"td":               td,
 		"domTerminus":      domTerminus,
 		"domOrigin":        domOrigin,
-		"reorg":            reorg,
 		"newInboundEtxs":   newInboundEtxs,
 	}
 
@@ -163,17 +160,16 @@ func (ec *Client) Append(ctx context.Context, header *types.Header, domPendingHe
 	if err := json.Unmarshal(raw, &pEtxs); err != nil {
 		return nil, err
 	}
+
 	return pEtxs.Etxs, nil
 }
 
-func (ec *Client) SubRelayPendingHeader(ctx context.Context, pendingHeader types.PendingHeader, reorg bool, location common.Location) {
+func (ec *Client) SubRelayPendingHeader(ctx context.Context, pendingHeader types.PendingHeader, location common.Location) {
 	data := map[string]interface{}{"Header": RPCMarshalHeader(pendingHeader.Header)}
 	data["Termini"] = pendingHeader.Termini
-	data["Reorg"] = reorg
 	data["Location"] = location
 
 	ec.c.CallContext(ctx, nil, "quai_subRelayPendingHeader", data)
-
 }
 
 func (ec *Client) NewGenesisPendingHeader(ctx context.Context, header *types.Header) {

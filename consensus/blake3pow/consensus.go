@@ -57,6 +57,7 @@ var (
 	errInvalidDifficulty   = errors.New("non-positive difficulty")
 	errDifficultyCrossover = errors.New("sub's difficulty exceeds dom's")
 	errInvalidPoW          = errors.New("invalid proof-of-work")
+	errInvalidOrder        = errors.New("invalid order")
 )
 
 // Author implements consensus.Engine, returning the header's coinbase as the
@@ -252,6 +253,37 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 	if expected.Cmp(header.Difficulty()) != 0 {
 		return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty(), expected)
 	}
+
+	order, err := header.CalcOrder()
+	if err != nil {
+		return err
+	}
+	if order > nodeCtx {
+		return fmt.Errorf("order of the block is greater than the context")
+	}
+
+	// Verify that the parent entropy is calculated correctly on the header
+	parentEntropy := parent.CalcS()
+	if parentEntropy.Cmp(header.ParentEntropy()) != 0 {
+		return fmt.Errorf("invalid parent entropy: have %v, want %v", header.ParentEntropy(), parentEntropy)
+	}
+
+	// If not prime, verify the parentDeltaS field as well
+	if nodeCtx > common.PRIME_CTX {
+		parentOrder, _ := parent.CalcOrder()
+		// If parent was dom, deltaS is zero and otherwise should be the calc delta s on the parent
+		if parentOrder < nodeCtx {
+			if common.Big0.Cmp(header.ParentDeltaS()) != 0 {
+				return fmt.Errorf("invalid parent delta s: have %v, want %v", header.ParentDeltaS(), common.Big0)
+			}
+		} else {
+			parentDeltaS := parent.CalcDeltaS()
+			if parentDeltaS.Cmp(header.ParentDeltaS()) != 0 {
+				return fmt.Errorf("invalid parent delta s: have %v, want %v", header.ParentDeltaS(), parentDeltaS)
+			}
+		}
+	}
+
 	// Verify that the gas limit is <= 2^63-1
 	cap := uint64(0x7fffffffffffffff)
 	if header.GasLimit() > cap {
@@ -343,25 +375,11 @@ func (blake3pow *Blake3pow) CalcDifficulty(chain consensus.ChainHeaderReader, pa
 }
 
 func (blake3pow *Blake3pow) IsDomCoincident(header *types.Header) bool {
-	nodeCtx := common.NodeLocation.Context()
-
-	// Since the Prime chain is the highest order, it cannot have coincident blocks
-	if nodeCtx > common.PRIME_CTX {
-		domCtx := nodeCtx - 1
-		domTarget := new(big.Int).Div(big2e256, header.Difficulty(domCtx))
-		if new(big.Int).SetBytes(header.Hash().Bytes()).Cmp(domTarget) <= 0 {
-			return true
-		}
+	order, err := header.CalcOrder()
+	if err != nil {
+		return false
 	}
-	return false
-}
-
-func (blake3pow *Blake3pow) IsPrime(header *types.Header) bool {
-	blockhash := blake3pow.SealHash(header)
-
-	// Just compare the prime difficulty.
-	target := new(big.Int).Div(big2e256, header.Difficulty(common.PRIME_CTX))
-	return new(big.Int).SetBytes(blockhash.Bytes()).Cmp(target) <= 0
+	return order < common.NodeLocation.Context()
 }
 
 // verifySeal checks whether a block satisfies the PoW difficulty requirements,
@@ -381,14 +399,19 @@ func (blake3pow *Blake3pow) verifySeal(chain consensus.ChainHeaderReader, header
 		return blake3pow.shared.verifySeal(chain, header, fulldag)
 	}
 	// Ensure that we have a valid difficulty for the block
-	if header.Difficulty().Sign() <= 0 {
+	if header.Difficulty(common.ZONE_CTX).Sign() <= 0 {
 		return errInvalidDifficulty
 	}
-	// Check that SealHash meets the difficulty target
-	target := new(big.Int).Div(big2e256, header.Difficulty())
-	if new(big.Int).SetBytes(header.Hash().Bytes()).Cmp(target) > 0 {
-		return errInvalidPoW
+	// Check for valid zone share and order matches context
+	order, err := header.CalcOrder()
+	if err != nil {
+		return err
+	} else {
+		if order > common.NodeLocation.Context() {
+			return errInvalidOrder
+		}
 	}
+
 	return nil
 }
 

@@ -851,6 +851,7 @@ func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*en
 	header.SetExtra(w.extra)
 	header.SetBaseFee(misc.CalcBaseFee(w.chainConfig, parent.Header()))
 	header.SetTime(timestamp)
+	header.SetParentEntropy(block.Header().ParentEntropy())
 
 	if w.isRunning() {
 		if w.coinbase.Equals(common.ZeroAddr) {
