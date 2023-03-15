@@ -738,7 +738,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 		localGauge.Inc(1)
 	}
 	pool.journalTx(from, tx)
-
+	pool.queueTxEvent(tx)
 	log.Trace("Pooled new future transaction", "hash", hash, "from", from, "to", tx.To())
 	return replaced, nil
 }
