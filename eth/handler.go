@@ -21,6 +21,7 @@ import (
 	"math"
 	"math/rand"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -59,6 +60,9 @@ const (
 	// sqrt of len(peers) is less than minPeerRequest we make the body request
 	// to as much as minPeerSend peers otherwise send it to sqrt of len(peers).
 	minPeerRequest = 3
+
+	// minPeerSendTx is the minimum number of peers that will receive a new transaction.
+	minPeerSendTx = 2
 )
 
 // txPool defines the methods needed from a transaction pool implementation to
@@ -165,6 +169,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	}
 	// writeBlock writes the block to the DB
 	writeBlock := func(block *types.Block) {
+		atomic.StoreUint32(&h.acceptTxs, 1)
 		h.core.WriteBlock(block)
 	}
 	h.blockFetcher = fetcher.NewBlockFetcher(h.core.GetBlockByHash, writeBlock, validator, h.BroadcastBlock, heighter, h.removePeer)
@@ -388,7 +393,12 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 		peers := h.peers.peersWithoutTransaction(tx.Hash())
 		// Send the tx unconditionally to a subset of our peers
 		numDirect := int(math.Sqrt(float64(len(peers))))
-		for _, peer := range peers[:numDirect] {
+		subset := peers[:numDirect]
+		if len(subset) < minPeerSendTx {
+			// If our subset is less than the minimum, send to the minimum
+			subset = peers[:minPeerSendTx+1] // The high bound is exclusive
+		}
+		for _, peer := range subset {
 			txset[peer] = append(txset[peer], tx.Hash())
 		}
 		// For the remaining peers, send announcement only
