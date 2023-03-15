@@ -41,6 +41,7 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/node"
 	"github.com/dominant-strategies/go-quai/p2p"
+	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rpc"
 	"github.com/gorilla/websocket"
 )
@@ -55,6 +56,9 @@ const (
 	txChanSize = 4096
 	// chainHeadChanSize is the size of channel listening to ChainHeadEvent.
 	chainHeadChanSize = 10
+
+	// reportInterval is the time interval between two reports.
+	reportInterval = 15
 )
 
 // backend encompasses the bare-minimum functionality needed for quaistats reporting
@@ -66,6 +70,7 @@ type backend interface {
 	GetTd(ctx context.Context, hash common.Hash) *big.Int
 	Stats() (pending int, queued int)
 	Downloader() *downloader.Downloader
+	ChainConfig() *params.ChainConfig
 }
 
 // fullNodeBackend encompasses the functionality necessary for a full node
@@ -94,6 +99,8 @@ type Service struct {
 
 	headSub event.Subscription
 	txSub   event.Subscription
+
+	chainID *big.Int
 }
 
 // connWrapper is a wrapper to prevent concurrent-write or concurrent-read on the
@@ -181,6 +188,7 @@ func New(node *node.Node, backend backend, engine consensus.Engine, url string) 
 		host:    parts[2],
 		pongCh:  make(chan struct{}),
 		histCh:  make(chan []uint64, 1),
+		chainID: backend.ChainConfig().ChainID,
 	}
 
 	node.RegisterLifecycle(quaistats)
@@ -307,7 +315,7 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, txEventCh chan core
 				continue
 			}
 			// Keep sending status updates until the connection breaks
-			fullReport := time.NewTicker(15 * time.Second)
+			fullReport := time.NewTicker(reportInterval * time.Second)
 
 			for err == nil {
 				select {
@@ -450,6 +458,8 @@ type nodeInfo struct {
 	OsVer    string `json:"os_v"`
 	Client   string `json:"client"`
 	History  bool   `json:"canUpdateHistory"`
+	Chain	 string `json:"chain"`
+	ChainID  uint64 `json:"chainId"`
 }
 
 // authMsg is the authentication infos needed to login to a monitoring server.
@@ -485,6 +495,8 @@ func (s *Service) login(conn *connWrapper) error {
 			OsVer:    runtime.GOARCH,
 			Client:   "0.1.1",
 			History:  true,
+			Chain: common.NodeLocation.Name(),
+			ChainID: s.chainID.Uint64(),
 		},
 		Secret: s.pass,
 	}
@@ -516,6 +528,9 @@ func (s *Service) report(conn *connWrapper) error {
 		return err
 	}
 	if err := s.reportStats(conn); err != nil {
+		return err
+	}
+	if err := s.reportPeers(conn); err != nil {
 		return err
 	}
 	return nil
@@ -586,7 +601,8 @@ type blockStats struct {
 	ManifestHash  common.Hash    `json:"manifestHash"`
 	Root          common.Hash    `json:"stateRoot"`
 	Uncles        uncleStats     `json:"uncles"`
-	Chain         []int          `json:"chain"`
+	Chain		  string 		 `json:"chain"`
+	ChainID		  uint64 		 `json:"chainId"`
 }
 
 // txStats is the information to report about individual transactions.
@@ -679,18 +695,8 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		ManifestHash:  header.ManifestHash(),
 		Root:          header.Root(),
 		Uncles:        uncles,
-		Chain:         IntArrayLocation(common.NodeLocation),
-	}
-}
-
-func IntArrayLocation(l common.Location) []int {
-	switch l.Context() {
-	case common.REGION_CTX:
-		return []int{l.Region()}
-	case common.ZONE_CTX:
-		return []int{l.Region(), l.Zone()}
-	default:
-		return []int{}
+		Chain:         common.NodeLocation.Name(),
+		ChainID: 		s.chainID.Uint64(),
 	}
 }
 
@@ -785,6 +791,8 @@ type nodeStats struct {
 	Peers    int  `json:"peers"`
 	GasPrice int  `json:"gasPrice"`
 	Uptime   int  `json:"uptime"`
+	Chain	 string `json:"chain"`
+	ChainID  uint64 `json:"chainId"`
 }
 
 // reportStats retrieves various stats about the node at the networking and
@@ -828,10 +836,85 @@ func (s *Service) reportStats(conn *connWrapper) error {
 			GasPrice: gasprice,
 			Syncing:  syncing,
 			Uptime:   100,
+			Chain: common.NodeLocation.Name(),
+			ChainID: s.chainID.Uint64(),
 		},
 	}
 	report := map[string][]interface{}{
 		"emit": {"stats", stats},
+	}
+	return conn.WriteJSON(report)
+}
+
+
+// peerStats is the information to report about peers.
+type peerStats struct {
+	Chain 		string 		`json:"chain"`
+	ChainID		uint64 		`json:"chainId"`
+	Count 		int 		`json:"count"`
+	PeerData 	[]*peerData `json:"peerData"`
+}
+
+// peerStat is the information to report about peers.
+type peerData struct {
+	Chain 					string `json:"chain"`
+	Enode      				string `json:"enode"` // Unique node identifier (enode URL)
+	SoftwareName    		string `json:"softwareName"` // Node software version
+	LocalAddress  			string `json:"localAddress"`
+	RemoteAddress 			string `json:"remoteAddress"`
+	RTT 					string `json:"rtt"`
+	LatestHeight			uint64 `json:"latestHeight"`
+	LatestHash				string `json:"latestHash"`
+	RecvLastBlockTime 		time.Time `json:"recvLastBlockTime"`
+	ConnectedTime			time.Duration `json:"uptime"`
+	PeerUptime				string `json:"peerUptime"` // TODO: add peer uptime
+}
+
+// reportPeers retrieves various stats about the peers for a node.
+func (s *Service) reportPeers(conn *connWrapper) error {
+	// Assemble the node stats and send it to the server
+	log.Trace("Sending peer details to quaistats")
+
+	peerInfo := s.backend.Downloader().PeerSet()
+
+	allPeerData := make([]*peerData, 0)
+
+	srvPeers := s.server.Peers()
+
+	for _, peer := range srvPeers {
+		peerStat := &peerData{
+			Enode:   peer.ID().String(),
+			SoftwareName: peer.Fullname(),
+			LocalAddress: peer.LocalAddr().String(),
+			RemoteAddress: peer.RemoteAddr().String(),
+			Chain: common.NodeLocation.Name(),
+			ConnectedTime: peer.ConnectedTime(),
+		}
+
+		downloaderPeer := peerInfo.Peer(peer.ID().String())
+		if downloaderPeer != nil {
+			hash, num, receivedAt := downloaderPeer.Peer().Head()
+			peerStat.RTT = downloaderPeer.Tracker().Roundtrip().String()
+			peerStat.LatestHeight = num
+			peerStat.LatestHash = hash.String()
+			if receivedAt != *new(time.Time) {
+				peerStat.RecvLastBlockTime = receivedAt.UTC()
+			}
+		}
+		allPeerData = append(allPeerData, peerStat)
+	}
+
+	peers := map[string]interface{}{
+		"id": s.node,
+		"peers": &peerStats{
+			Chain: common.NodeLocation.Name(),
+			ChainID: s.chainID.Uint64(),
+			Count: len(srvPeers),
+			PeerData: allPeerData,
+		},
+	}
+	report := map[string][]interface{}{
+		"emit": {"peers", peers},
 	}
 	return conn.WriteJSON(report)
 }

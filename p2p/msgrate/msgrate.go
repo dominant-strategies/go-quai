@@ -175,6 +175,13 @@ func (t *Tracker) Capacity(kind uint64, targetRTT time.Duration) int {
 	return roundCapacity(1 + capacityOverestimation*throughput)
 }
 
+// Roundtrip returns the estimated roundtrip time of the peer.
+func (t *Tracker) Roundtrip() time.Duration {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+	return t.roundtrip
+}
+
 // roundCapacity gives the integer value of a capacity.
 // The result fits int32, and is guaranteed to be positive.
 func roundCapacity(cap float64) int {

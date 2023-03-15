@@ -273,6 +273,11 @@ func (d *Downloader) Synchronise(id string, head common.Hash, number uint64, mod
 	return err
 }
 
+// PeerSet retrieves the current peer set of the downloader.
+func (d *Downloader) PeerSet() *peerSet {
+	return d.peers
+}
+
 // synchronise will select the peer and use it for synchronising. If an empty string is given
 // it will use the best peer possible and synchronize if its number is higher than our own. If any of the
 // checks fail an error will be returned. This method is synchronous
@@ -477,7 +482,7 @@ func (d *Downloader) fetchHead(p *peerConnection) (head *types.Header, err error
 	p.log.Debug("Retrieving remote chain head")
 
 	// Request the advertised remote head block and wait for the response
-	latest, _ := p.peer.Head()
+	latest, _, _ := p.peer.Head()
 	fetch := 1
 	go p.peer.RequestHeadersByHash(latest, fetch, uint64(1), false, true)
 

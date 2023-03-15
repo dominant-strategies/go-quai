@@ -150,7 +150,7 @@ func (ps *peerSet) peerWithHighestNumber() *eth.Peer {
 		bestNumber uint64
 	)
 	for _, p := range ps.peers {
-		if _, number := p.Head(); bestPeer == nil || number > bestNumber {
+		if _, number, _ := p.Head(); bestPeer == nil || number > bestNumber {
 			bestPeer, bestNumber = p.Peer, number
 		}
 	}

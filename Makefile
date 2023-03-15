@@ -59,6 +59,9 @@ endif
 ifeq ($(QUAI_MINING),true)
 	BASE_CMD += --mine --miner.threads $(THREADS)
 endif
+ifeq ($(QUAI_STATS),true)
+	BASE_CMD += --quaistats ${STATS_NAME}:${STATS_PASS}@${STATS_HOST}
+endif
 
 # Build suburl strings for slice specific subclient groups
 # WARNING: Only connect to dom/sub clients over a trusted network.

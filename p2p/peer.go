@@ -192,6 +192,10 @@ func (p *Peer) LocalAddr() net.Addr {
 	return p.rw.fd.LocalAddr()
 }
 
+func (p *Peer) ConnectedTime() time.Duration {
+	return time.Duration(mclock.Now() - p.created)
+}
+
 // Disconnect terminates the peer connection with the given reason.
 // It returns immediately and does not wait until the connection is closed.
 func (p *Peer) Disconnect(reason DiscReason) {

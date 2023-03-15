@@ -69,7 +69,7 @@ type peerConnection struct {
 
 // LightPeer encapsulates the methods required to synchronise with a remote light peer.
 type LightPeer interface {
-	Head() (common.Hash, uint64)
+	Head() (common.Hash, uint64, time.Time)
 	RequestHeadersByHash(common.Hash, int, uint64, bool, bool) error
 	RequestHeadersByNumber(uint64, int, uint64, uint64, bool, bool) error
 }
@@ -103,6 +103,21 @@ func (p *peerConnection) Reset() {
 	atomic.StoreInt32(&p.stateIdle, 0)
 
 	p.lacking = make(map[common.Hash]struct{})
+}
+
+// PeerConnection ID returns the unique identifier of the peer.
+func (p *peerConnection) ID() string {
+	return p.id
+}
+
+// Tracker returns the message rate trackers of the peer.
+func (p *peerConnection) Tracker() *msgrate.Tracker {
+	return p.rates
+}
+
+// Peer returns the underlying peer entity.
+func (p *peerConnection) Peer() Peer {
+	return p.peer
 }
 
 // FetchHeaders sends a header retrieval request to the remote peer.

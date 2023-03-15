@@ -20,6 +20,7 @@ import (
 	"errors"
 	"math/rand"
 	"sync"
+	"time"
 
 	mapset "github.com/deckarep/golang-set"
 	"github.com/dominant-strategies/go-quai/common"
@@ -78,6 +79,7 @@ type Peer struct {
 
 	head   common.Hash // Latest advertised head block hash
 	number uint64      // Latest advertised head block number
+	receivedHeadAt time.Time // Time when the head was received
 
 	knownBlocks     mapset.Set             // Set of block hashes known to be known by this peer
 	queuedBlocks    chan *blockPropagation // Queue of blocks to broadcast to the peer
@@ -139,21 +141,22 @@ func (p *Peer) Version() uint {
 }
 
 // Head retrieves the current head hash and head number of the peer.
-func (p *Peer) Head() (hash common.Hash, number uint64) {
+func (p *Peer) Head() (hash common.Hash, number uint64, receivedAt time.Time) {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
 	copy(hash[:], p.head[:])
-	return hash, p.number
+	return hash, p.number, p.receivedHeadAt
 }
 
 // SetHead updates the head hash and head number of the peer.
-func (p *Peer) SetHead(hash common.Hash, number uint64) {
+func (p *Peer) SetHead(hash common.Hash, number uint64, receivedAt time.Time) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
 	copy(p.head[:], hash[:])
 	p.number = number
+	p.receivedHeadAt = receivedAt
 }
 
 // KnownBlock returns whether peer is known to already have a block.
