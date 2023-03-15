@@ -28,7 +28,7 @@ type InternalTx struct {
 	GasTipCap  *big.Int
 	GasFeeCap  *big.Int
 	Gas        uint64
-	To         *common.Address `rlp:"nil"` // nil means contract creation
+	To         *common.Address `rlp:"nilString"` // nil means contract creation
 	Value      *big.Int
 	Data       []byte
 	AccessList AccessList
