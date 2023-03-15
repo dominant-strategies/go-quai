@@ -12,7 +12,7 @@ type ExternalTx struct {
 	GasTipCap  *big.Int
 	GasFeeCap  *big.Int
 	Gas        uint64
-	To         *common.Address `rlp:"nil"` // nil means contract creation
+	To         *common.Address `rlp:"nilString"` // nil means contract creation
 	Value      *big.Int
 	Data       []byte
 	AccessList AccessList
@@ -36,12 +36,12 @@ type ExternalTx struct {
 // ETXs are valid against a block header which came from a subordinate chain.
 // For this reason, we indlude a header from the subordinate chain.
 type PendingEtxs struct {
-	Header *Header        `json:"header" gencodec:"required"`
+	Header *Header `json:"header" gencodec:"required"`
 	// Etxs array contains ETXs from the chain which produced this block, and a
 	// subordinate rollup of ETXs for that chain's subordinate (if it has one).
 	// Etxs[originCtx] = external transactions in origin CTX
 	// (optional) Etxs[originCtx+1] = rollup of ETXs emitted by originCtx+1
-	Etxs   []Transactions `json:"etxs"   gencodec:"required"`
+	Etxs []Transactions `json:"etxs"   gencodec:"required"`
 }
 
 func (p *PendingEtxs) IsValid(hasher TrieHasher) bool {
@@ -99,24 +99,23 @@ func (tx *ExternalTx) copy() TxData {
 }
 
 // accessors for innerTx.
-func (tx *ExternalTx) txType() byte                { return ExternalTxType }
-func (tx *ExternalTx) chainID() *big.Int           { return tx.ChainID }
-func (tx *ExternalTx) protected() bool             { return true }
-func (tx *ExternalTx) accessList() AccessList      { return tx.AccessList }
-func (tx *ExternalTx) data() []byte                { return tx.Data }
-func (tx *ExternalTx) gas() uint64                 { return tx.Gas }
-func (tx *ExternalTx) gasFeeCap() *big.Int         { return tx.GasFeeCap }
-func (tx *ExternalTx) gasTipCap() *big.Int         { return tx.GasTipCap }
-func (tx *ExternalTx) gasPrice() *big.Int          { return tx.GasFeeCap }
-func (tx *ExternalTx) value() *big.Int             { return tx.Value }
-func (tx *ExternalTx) nonce() uint64               { return tx.Nonce }
-func (tx *ExternalTx) to() *common.Address         { return tx.To }
-func (tx *ExternalTx) etxGasLimit() uint64         { panic("external TX does not have etxGasLimit") }
-func (tx *ExternalTx) etxGasPrice() *big.Int       { panic("external TX does not have etxGasPrice") }
-func (tx *ExternalTx) etxGasTip() *big.Int         { panic("external TX does not have etxGasTip") }
-func (tx *ExternalTx) etxData() []byte	           { panic("external TX does not have etxData") }
-func (tx *ExternalTx) etxAccessList() AccessList   { panic("external TX does not have etxAccessList") }
-
+func (tx *ExternalTx) txType() byte              { return ExternalTxType }
+func (tx *ExternalTx) chainID() *big.Int         { return tx.ChainID }
+func (tx *ExternalTx) protected() bool           { return true }
+func (tx *ExternalTx) accessList() AccessList    { return tx.AccessList }
+func (tx *ExternalTx) data() []byte              { return tx.Data }
+func (tx *ExternalTx) gas() uint64               { return tx.Gas }
+func (tx *ExternalTx) gasFeeCap() *big.Int       { return tx.GasFeeCap }
+func (tx *ExternalTx) gasTipCap() *big.Int       { return tx.GasTipCap }
+func (tx *ExternalTx) gasPrice() *big.Int        { return tx.GasFeeCap }
+func (tx *ExternalTx) value() *big.Int           { return tx.Value }
+func (tx *ExternalTx) nonce() uint64             { return tx.Nonce }
+func (tx *ExternalTx) to() *common.Address       { return tx.To }
+func (tx *ExternalTx) etxGasLimit() uint64       { panic("external TX does not have etxGasLimit") }
+func (tx *ExternalTx) etxGasPrice() *big.Int     { panic("external TX does not have etxGasPrice") }
+func (tx *ExternalTx) etxGasTip() *big.Int       { panic("external TX does not have etxGasTip") }
+func (tx *ExternalTx) etxData() []byte           { panic("external TX does not have etxData") }
+func (tx *ExternalTx) etxAccessList() AccessList { panic("external TX does not have etxAccessList") }
 
 func (tx *ExternalTx) rawSignatureValues() (v, r, s *big.Int) {
 	// Signature values are ignored for external transactions
