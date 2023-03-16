@@ -774,63 +774,27 @@ func DeleteS(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	}
 }
 
-// EncodeBigFloatArray takes a bigFloat array and converts it into a 2d byte slice
-func EncodeBigFloatArray(array []*big.Float) ([][]byte, error) {
-	byteArray := make([][]byte, 0)
-	for _, val := range array {
-		valFloat, err := val.GobEncode()
-		if err != nil {
-			return nil, err
-		}
-		byteArray = append(byteArray, valFloat)
-	}
-	return byteArray, nil
-}
-
-// DecodeToBigFloatArray tales a 2d byte slice and returns a bigFloat array
-func DecodeToBigFloatArray(byte2dArray [][]byte) ([]*big.Float, error) {
-	bigFloatArray := make([]*big.Float, 0)
-	for _, val := range byte2dArray {
-		varFloat := big.NewFloat(0)
-		err := varFloat.GobDecode(val)
-		if err != nil {
-			return nil, err
-		}
-		bigFloatArray = append(bigFloatArray, varFloat)
-	}
-	return bigFloatArray, nil
-}
-
 // ReadDeltaS retrieves a block's change in entropy corresponding to the hash.
-func ReadDeltaS(db ethdb.Reader, hash common.Hash, number uint64) []*big.Float {
+func ReadDeltaS(db ethdb.Reader, hash common.Hash, number uint64) *big.Float {
 	data, _ := db.Get(headerDeltaSKey(number, hash))
 	if len(data) == 0 {
 		return nil
 	}
-	deltaS := new([][]byte)
-	if err := rlp.Decode(bytes.NewReader(data), deltaS); err != nil {
-		log.Error("Invalid block deltaS RLP", "hash", hash, "err", err)
+	deltaS := new(big.Float)
+	if err := deltaS.GobDecode(data); err != nil {
+		log.Error("Invalid block total entropy RLP", "hash", hash, "err", err)
 		return nil
 	}
-	deltaSArray, err := DecodeToBigFloatArray(*deltaS)
-	if err != nil {
-		log.Error("Invalid DecodeToBigFloatArray", "err", err)
-		return nil
-	}
-	return deltaSArray
+	return deltaS
 }
 
 // WriteDeltaS stores the change in entropy of a block into the database.
-func WriteDeltaS(db ethdb.KeyValueWriter, hash common.Hash, number uint64, deltaS []*big.Float) {
-	data, err := EncodeBigFloatArray(deltaS)
+func WriteDeltaS(db ethdb.KeyValueWriter, hash common.Hash, number uint64, deltaS *big.Float) {
+	data, err := deltaS.GobEncode()
 	if err != nil {
 		log.Crit("Failed to RLP encode block total entropy", "err", err)
 	}
-	encodedData, err := rlp.EncodeToBytes(data)
-	if err != nil {
-		log.Error("Error encoding the entropy array RLP")
-	}
-	if err := db.Put(headerDeltaSKey(number, hash), encodedData); err != nil {
+	if err := db.Put(headerDeltaSKey(number, hash), data); err != nil {
 		log.Crit("Failed to store block total entropy", "err", err)
 	}
 }

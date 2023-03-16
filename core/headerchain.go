@@ -470,7 +470,7 @@ func (hc *HeaderChain) GetS(hash common.Hash, number uint64) *big.Float {
 
 // GetDeltaS retrieves a block's change in entropy since the last dom in the canonical chain from the
 // database by hash and number, caching it if found.
-func (hc *HeaderChain) GetDeltaS(hash common.Hash, number uint64) []*big.Float {
+func (hc *HeaderChain) GetDeltaS(hash common.Hash, number uint64) *big.Float {
 	deltaS := rawdb.ReadDeltaS(hc.headerDb, hash, number)
 	return deltaS
 }

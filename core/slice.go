@@ -118,7 +118,7 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 
 // Append takes a proposed header and constructs a local block and attempts to hierarchically append it to the block graph.
 // If this is called from a dominant context a domTerminus must be provided else a common.Hash{} should be used and domOrigin should be set to true.
-func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, domDeltaS *big.Float, domOrigin bool, reorg bool, newInboundEtxs types.Transactions) ([]types.Transactions, *big.Float, *big.Float, bool, error) {
+func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, domParentS *big.Float, domOrigin bool, reorg bool, newInboundEtxs types.Transactions) ([]types.Transactions, *big.Float, *big.Float, bool, error) {
 	// The compute and write of the phCache is split starting here so we need to get the lock
 	sl.phCachemu.Lock()
 	defer sl.phCachemu.Unlock()
@@ -193,23 +193,14 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	// Combine subordinates pending header with local pending header
 	pendingHeaderWithTermini := sl.computePendingHeader(types.PendingHeader{Header: localPendingHeader, Termini: newTermini}, domPendingHeader, domOrigin)
 
-	// Find parent subentropy
+	parentS := sl.hc.GetS(header.ParentHash(), header.NumberU64()-1)
 	parentDeltaS := sl.hc.GetDeltaS(header.ParentHash(), header.NumberU64()-1)
 
-	var subDeltaS *big.Float
-	// Make new deltaS array
-	newDeltaS := make([]*big.Float, 4)
-	for i, deltaS := range parentDeltaS {
-		newDeltaS[i] = deltaS
-	}
-	var s *big.Float
-	parentS := sl.hc.GetS(header.ParentHash(), header.NumberU64()-1)
-	if nodeCtx != common.ZONE_CTX {
-		if domDeltaS != nil && nodeCtx == common.REGION_CTX {
-			for i := 0; i < 3; i++ {
-				parentDeltaS[i] = big.NewFloat(0).Add(parentDeltaS[i], domDeltaS)
-			}
-		}
+	var s, totalEntropy, subDeltaS *big.Float
+	if domOrigin {
+		totalEntropy = big.NewFloat(0).Add(parentDeltaS, domParentS)
+	} else {
+		totalEntropy = parentS
 	}
 
 	// Call my sub to append the block, and collect the rolled up ETXs from that sub
@@ -219,7 +210,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 
 		// How to get the sub pending etxs if not running the full node?.
 		if sl.subClients[location.SubIndex()] != nil {
-			subPendingEtxs, s, subDeltaS, reorg, err = sl.subClients[location.SubIndex()].Append(context.Background(), block.Header(), pendingHeaderWithTermini.Header, domTerminus, parentDeltaS[header.Location().SubIndex()], true, reorg, newInboundEtxs)
+			subPendingEtxs, s, subDeltaS, reorg, err = sl.subClients[location.SubIndex()].Append(context.Background(), block.Header(), pendingHeaderWithTermini.Header, domTerminus, totalEntropy, true, reorg, newInboundEtxs)
 			if err != nil {
 				return nil, nil, nil, false, err
 			}
@@ -229,45 +220,29 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 				return nil, nil, nil, false, errors.New("sub pending ETXs faild validation")
 			}
 			sl.AddPendingEtxs(pEtxs)
-
-			//Add the subDeltaS into my deltaS array
-			for i := 0; i < 3; i++ {
-				if i != header.Location().SubIndex() {
-					newDeltaS[i] = big.NewFloat(0).Add(parentDeltaS[i], subDeltaS)
-				} else {
-					newDeltaS[i] = big.NewFloat(0)
-				}
-			}
 		}
 	}
 
+	var deltaS *big.Float
+	if nodeCtx == common.REGION_CTX {
+		deltaS = big.NewFloat(0).Add(parentDeltaS, subDeltaS)
+	} else if nodeCtx == common.ZONE_CTX {
+		deltaS = big.NewFloat(0).Add(parentDeltaS, sl.calcIntrinsicS(header.Hash()))
+	}
+
+	if domOrigin {
+		rawdb.WriteDeltaS(batch, header.Hash(), header.NumberU64(), big.NewFloat(0))
+	} else {
+		rawdb.WriteDeltaS(batch, header.Hash(), header.NumberU64(), deltaS)
+	}
 	// calc S
 	if nodeCtx == common.ZONE_CTX {
-		if domOrigin {
-			s = big.NewFloat(0).Add(parentS, sl.calcIntrinsicS(header.Hash()))
-			s = big.NewFloat(0).Add(s, domDeltaS)
-			parentDeltaS[3] = big.NewFloat(0).Add(parentDeltaS[3], sl.calcIntrinsicS(header.Hash()))
-			newDeltaS[3] = big.NewFloat(0)
-		} else {
-			s = big.NewFloat(0).Add(parentS, sl.calcIntrinsicS(header.Hash()))
-			parentDeltaS[3] = big.NewFloat(0).Add(parentDeltaS[3], sl.calcIntrinsicS(header.Hash()))
-			newDeltaS[3] = parentDeltaS[3]
-		}
+		s = big.NewFloat(0).Add(totalEntropy, sl.calcIntrinsicS(header.Hash()))
 		reorg = sl.poem(s, sl.hc.GetSByHash(sl.hc.CurrentHeader().Hash()))
 	}
-	if nodeCtx == common.REGION_CTX {
-		parentDeltaS[3] = big.NewFloat(0).Add(parentDeltaS[3], subDeltaS)
-		if domOrigin {
-			newDeltaS[3] = big.NewFloat(0)
-		} else {
-			newDeltaS[3] = parentDeltaS[3]
-		}
 
-	}
+	log.Debug("Entropy Calculations", "S:", s, "DeltaS:", deltaS, "parentS:", parentS, "intrinsict:", sl.calcIntrinsicS(header.Hash()))
 
-	log.Info("Entropy Calculations", "S:", s, "parentS:", parentS, "deltaS:", newDeltaS, "parentDeltaS:", parentDeltaS, "domDeltaS:", domDeltaS, "subDeltaS:", subDeltaS, "intrinsict:", sl.calcIntrinsicS(header.Hash()))
-
-	rawdb.WriteDeltaS(batch, header.Hash(), header.NumberU64(), newDeltaS)
 	rawdb.WriteS(batch, header.Hash(), header.NumberU64(), s)
 
 	// Combine sub's pending ETXs, sub rollup, and our local ETXs into localPendingEtxs
@@ -315,7 +290,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "etxs", len(block.ExtTransactions()), "gas", block.GasUsed(),
 		"root", block.Root())
 
-	return localPendingEtxs, s, parentDeltaS[3], reorg, nil
+	return localPendingEtxs, s, deltaS, reorg, nil
 }
 
 // backfillPETXs collects any missing PendingETX objects needed to process the
@@ -714,7 +689,7 @@ func (sl *Slice) init(genesis *Genesis) error {
 		genesisTermini := []common.Hash{genesisHash, genesisHash, genesisHash, genesisHash}
 		rawdb.WriteTermini(sl.sliceDb, genesisHash, genesisTermini)
 		rawdb.WriteS(sl.sliceDb, genesisHash, 0, big.NewFloat(0))
-		rawdb.WriteDeltaS(sl.sliceDb, genesisHash, 0, []*big.Float{big.NewFloat(0), big.NewFloat(0), big.NewFloat(0), big.NewFloat(0)})
+		rawdb.WriteDeltaS(sl.sliceDb, genesisHash, 0, big.NewFloat(0))
 
 		// Append each of the knot blocks
 		sl.bestPhKey = bestPhKeyStruct{key: genesisHash, coordS: big.NewFloat(0), blockS: big.NewFloat(0), blockHash: genesisHash}
