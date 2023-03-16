@@ -33,9 +33,10 @@ const (
 )
 
 type bestPhKeyStruct struct {
-	key    common.Hash
-	coordS *big.Float
-	blockS *big.Float
+	key       common.Hash
+	coordS    *big.Float
+	blockS    *big.Float
+	blockHash common.Hash
 }
 type Slice struct {
 	hc *HeaderChain
@@ -660,16 +661,24 @@ func (sl *Slice) writeToPhCacheAndPickPhHead(inSlice bool, reorg bool, s *big.Fl
 	if inSlice {
 		if reorg {
 			sl.phCache[pendingHeaderWithTermini.Termini[terminiIndex]] = deepCopyPendingHeaderWithTermini
-			oldCoordS := sl.bestPhKey.coordS
-			sl.bestPhKey = bestPhKeyStruct{key: pendingHeaderWithTermini.Termini[terminiIndex], coordS: oldCoordS, blockS: s}
+			oldPhKey := sl.bestPhKey
+			sl.bestPhKey = bestPhKeyStruct{key: pendingHeaderWithTermini.Termini[terminiIndex], coordS: oldPhKey.coordS, blockS: s, blockHash: pendingHeaderWithTermini.Header.ParentHash()}
 			log.Debug("Choosing new pending header from slice", "Ph Number:", pendingHeaderWithTermini.Header.NumberArray())
 		}
 	} else {
+
 		if sl.poem(s, sl.bestPhKey.coordS) {
 			sl.phCache[pendingHeaderWithTermini.Termini[terminiIndex]] = deepCopyPendingHeaderWithTermini
-			oldBlockS := sl.bestPhKey.blockS
-			sl.bestPhKey = bestPhKeyStruct{key: pendingHeaderWithTermini.Termini[terminiIndex], coordS: s, blockS: oldBlockS}
-			log.Debug("Choosing new pending header from coord update", "Ph Number:", pendingHeaderWithTermini.Header.NumberArray())
+			if sl.bestPhKey.blockS.Cmp(s) < 0 {
+				//Reset the current head to align with the coord
+				header := sl.hc.GetHeaderByHash(pendingHeaderWithTermini.Header.ParentHash())
+				priorBlockS := sl.hc.GetS(header.Hash(), header.NumberU64())
+				sl.bestPhKey = bestPhKeyStruct{key: pendingHeaderWithTermini.Termini[terminiIndex], coordS: s, blockS: priorBlockS, blockHash: header.Hash()}
+				fmt.Println("writetoPhCache update current header before:", sl.hc.CurrentHeader().Hash(), "new hash:", header.Hash())
+				sl.hc.SetCurrentHeader(header)
+				fmt.Println("writetoPhCache update current header after:", sl.hc.CurrentHeader().Hash())
+				log.Debug("Choosing new pending header from coord update", "Ph Number:", pendingHeaderWithTermini.Header.NumberArray())
+			}
 		}
 	}
 	_, exist := sl.phCache[pendingHeaderWithTermini.Termini[terminiIndex]]
@@ -705,7 +714,7 @@ func (sl *Slice) init(genesis *Genesis) error {
 		rawdb.WriteDeltaS(sl.sliceDb, genesisHash, 0, []*big.Float{big.NewFloat(0), big.NewFloat(0), big.NewFloat(0), big.NewFloat(0)})
 
 		// Append each of the knot blocks
-		sl.bestPhKey = bestPhKeyStruct{key: genesisHash, coordS: big.NewFloat(0), blockS: big.NewFloat(0)}
+		sl.bestPhKey = bestPhKeyStruct{key: genesisHash, coordS: big.NewFloat(0), blockS: big.NewFloat(0), blockHash: genesisHash}
 		knot := genesis.Knot[:]
 		for _, block := range knot {
 			sl.AddPendingEtxs(types.PendingEtxs{block.Header(), emptyPendingEtxs})
@@ -911,6 +920,7 @@ func (sl *Slice) loadLastState() error {
 	sl.bestPhKey.key = rawdb.ReadCurrentPendingHeaderHash(sl.sliceDb)
 	sl.bestPhKey.coordS = big.NewFloat(0)
 	sl.bestPhKey.blockS = big.NewFloat(0)
+	sl.bestPhKey.blockHash = sl.config.GenesisHash
 	return nil
 }
 
