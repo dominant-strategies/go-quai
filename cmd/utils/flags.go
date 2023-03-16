@@ -1175,7 +1175,7 @@ func setBlake3pow(ctx *cli.Context, cfg *ethconfig.Config) {
 	// Override any default configs for hard coded networks.
 	switch {
 	case ctx.GlobalBool(ColosseumFlag.Name):
-		cfg.Blake3pow.DurationLimit = params.DurationLimit
+		cfg.Blake3pow.DurationLimit = params.ColosseumDurationLimit
 	case ctx.GlobalBool(GardenFlag.Name):
 		cfg.Blake3pow.DurationLimit = params.GardenDurationLimit
 	case ctx.GlobalBool(OrchardFlag.Name):
