@@ -655,7 +655,8 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 
 // writePhCache dom writes a given pendingHeaderWithTermini to the cache with the terminus used as the key.
 func (sl *Slice) writeToPhCacheAndPickPhHead(inSlice bool, reorg bool, s *big.Float, pendingHeaderWithTermini types.PendingHeader, local bool, terminiIndex int) {
-	deepCopyPendingHeaderWithTermini := types.PendingHeader{Header: types.CopyHeader(pendingHeaderWithTermini.Header), Termini: pendingHeaderWithTermini.Termini}
+	deepCopyPendingHeaderWithTermini := types.PendingHeader{Header: types.CopyHeader(pendingHeaderWithTermini.Header), Termini: pendingHeaderWithTermini.Termini, Entropy: s}
+	oldPh, exist := sl.phCache[pendingHeaderWithTermini.Termini[terminiIndex]]
 	//Only write iff our context is better than current ie > td
 	log.Debug("Updating PhCache and Pick Head", "S:", s, "bestPhKey.coordS", sl.bestPhKey.coordS, "bestPhKey.blockS:", sl.bestPhKey.blockS)
 	if inSlice {
@@ -666,22 +667,24 @@ func (sl *Slice) writeToPhCacheAndPickPhHead(inSlice bool, reorg bool, s *big.Fl
 			log.Debug("Choosing new pending header from slice", "Ph Number:", pendingHeaderWithTermini.Header.NumberArray())
 		}
 	} else {
-
-		if sl.poem(s, sl.bestPhKey.coordS) {
-			sl.phCache[pendingHeaderWithTermini.Termini[terminiIndex]] = deepCopyPendingHeaderWithTermini
-			if sl.bestPhKey.blockS.Cmp(s) < 0 {
-				//Reset the current head to align with the coord
-				header := sl.hc.GetHeaderByHash(pendingHeaderWithTermini.Header.ParentHash())
-				priorBlockS := sl.hc.GetS(header.Hash(), header.NumberU64())
-				sl.bestPhKey = bestPhKeyStruct{key: pendingHeaderWithTermini.Termini[terminiIndex], coordS: s, blockS: priorBlockS, blockHash: header.Hash()}
-				fmt.Println("writetoPhCache update current header before:", sl.hc.CurrentHeader().Hash(), "new hash:", header.Hash())
-				sl.hc.SetCurrentHeader(header)
-				fmt.Println("writetoPhCache update current header after:", sl.hc.CurrentHeader().Hash())
-				log.Debug("Choosing new pending header from coord update", "Ph Number:", pendingHeaderWithTermini.Header.NumberArray())
+		if exist {
+			if sl.poem(s, oldPh.Entropy) {
+				sl.phCache[pendingHeaderWithTermini.Termini[terminiIndex]] = deepCopyPendingHeaderWithTermini
 			}
 		}
+
+		if sl.bestPhKey.blockS.Cmp(s) < 0 {
+			//Reset the current head to align with the coord
+			header := sl.hc.GetHeaderByHash(pendingHeaderWithTermini.Header.ParentHash())
+			priorBlockS := sl.hc.GetS(header.Hash(), header.NumberU64())
+			sl.bestPhKey = bestPhKeyStruct{key: pendingHeaderWithTermini.Termini[terminiIndex], coordS: s, blockS: priorBlockS, blockHash: header.Hash()}
+			fmt.Println("writetoPhCache update current header before:", sl.hc.CurrentHeader().Hash(), "new hash:", header.Hash())
+			sl.hc.SetCurrentHeader(header)
+			fmt.Println("writetoPhCache update current header after:", sl.hc.CurrentHeader().Hash())
+			log.Debug("Choosing new pending header from coord update", "Ph Number:", pendingHeaderWithTermini.Header.NumberArray())
+		}
 	}
-	_, exist := sl.phCache[pendingHeaderWithTermini.Termini[terminiIndex]]
+
 	if !exist {
 		sl.phCache[pendingHeaderWithTermini.Termini[terminiIndex]] = deepCopyPendingHeaderWithTermini
 	}
