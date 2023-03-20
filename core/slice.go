@@ -265,7 +265,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 
 	}
 
-	log.Debug("Entropy Calculations", "S:", s, "parentS:", parentS, "deltaS:", newDeltaS, "parentDeltaS:", parentDeltaS, "domDeltaS:", domDeltaS, "subDeltaS:", subDeltaS, "intrinsict:", sl.calcIntrinsicS(header.Hash()))
+	log.Info("Entropy Calculations", "S:", s, "parentS:", parentS, "deltaS:", newDeltaS, "parentDeltaS:", parentDeltaS, "domDeltaS:", domDeltaS, "subDeltaS:", subDeltaS, "intrinsict:", sl.calcIntrinsicS(header.Hash()))
 
 	rawdb.WriteDeltaS(batch, header.Hash(), header.NumberU64(), newDeltaS)
 	rawdb.WriteS(batch, header.Hash(), header.NumberU64(), s)
