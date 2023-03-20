@@ -91,6 +91,7 @@ var (
 
 	pendingHeaderPrefix = []byte("ph") // pendingHeaderPrefix + hash -> header
 	phBodyPrefix        = []byte("pc") // phBodyPrefix + hash -> []common.Hash + Td
+	phEntropyPrefix     = []byte("pe") // phEntropyPrefix + hash -> *big.Float
 	candidateBodyPrefix = []byte("cb") // candidateBodyPrefix + hash -> Body
 	terminiPrefix       = []byte("tk") //terminiPrefix + hash -> []common.Hash
 
@@ -194,6 +195,11 @@ func headerTDKey(number uint64, hash common.Hash) []byte {
 // headerSKey = headerPrefix + num (uint64 big endian) + hash + headerSSuffix
 func headerSKey(number uint64, hash common.Hash) []byte {
 	return append(headerKey(number, hash), headerSSuffix...)
+}
+
+// phCacheEntropyKey = phEntropyPrefix + hash
+func phCacheEntropyKey(hash common.Hash) []byte {
+	return append(phEntropyPrefix, hash.Bytes()...)
 }
 
 // headerDeltaSKey = headerPrefix + num (uint64 big endian) + hash + headerDeltaSSuffix
