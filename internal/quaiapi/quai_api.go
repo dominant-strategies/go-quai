@@ -425,16 +425,25 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 
 	number := make([]*hexutil.Big, common.HierarchyDepth)
 	difficulty := make([]*hexutil.Big, common.HierarchyDepth)
+	entropyThreshold := make([]*hexutil.Big, common.HierarchyDepth)
+	parentEntropy := make([]*hexutil.Big, common.HierarchyDepth)
+	parentDeltaS := make([]*hexutil.Big, common.HierarchyDepth)
 	gasLimit := make([]hexutil.Uint, common.HierarchyDepth)
 	gasUsed := make([]hexutil.Uint, common.HierarchyDepth)
 	for i := 0; i < common.HierarchyDepth; i++ {
 		number[i] = (*hexutil.Big)(head.Number(i))
 		difficulty[i] = (*hexutil.Big)(head.Difficulty(i))
+		entropyThreshold[i] = (*hexutil.Big)(head.EntropyThreshold(i))
+		parentEntropy[i] = (*hexutil.Big)(head.ParentEntropy(i))
+		parentDeltaS[i] = (*hexutil.Big)(head.ParentDeltaS(i))
 		gasLimit[i] = hexutil.Uint(head.GasLimit(i))
 		gasUsed[i] = hexutil.Uint(head.GasUsed(i))
 	}
 	result["number"] = number
 	result["difficulty"] = difficulty
+	result["entropyThreshold"] = entropyThreshold
+	result["parentEntropy"] = parentEntropy
+	result["parentDeltaS"] = parentDeltaS
 	result["gasLimit"] = gasLimit
 	result["gasUsed"] = gasUsed
 
