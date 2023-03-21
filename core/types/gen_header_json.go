@@ -27,6 +27,8 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		ReceiptHash   []common.Hash    `json:"receiptsRoot"        gencodec:"required"`
 		Bloom         []Bloom          `json:"logsBloom"           gencodec:"required"`
 		Difficulty    []*hexutil.Big   `json:"difficulty"          gencodec:"required"`
+		ParentEntropy []*hexutil.Big   `json:"parentEntropy"		gencodec:"required"`
+		ParentDeltaS  []*hexutil.Big   `json:"parentDeltaS"		gencodec:"required"`
 		Number        []*hexutil.Big   `json:"number"              gencodec:"required"`
 		GasLimit      []hexutil.Uint64 `json:"gasLimit"            gencodec:"required"`
 		GasUsed       []hexutil.Uint64 `json:"gasUsed"             gencodec:"required"`
@@ -39,10 +41,12 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	}
 	// Initialize the enc struct
 	enc.Difficulty = make([]*hexutil.Big, common.HierarchyDepth)
+	enc.ParentEntropy = make([]*hexutil.Big, common.HierarchyDepth)
+	enc.ParentDeltaS = make([]*hexutil.Big, common.HierarchyDepth)
 	enc.Number = make([]*hexutil.Big, common.HierarchyDepth)
-	enc.GasLimit= make([]hexutil.Uint64, common.HierarchyDepth)
-	enc.GasUsed= make([]hexutil.Uint64, common.HierarchyDepth)
-	enc.BaseFee= make([]*hexutil.Big, common.HierarchyDepth)
+	enc.GasLimit = make([]hexutil.Uint64, common.HierarchyDepth)
+	enc.GasUsed = make([]hexutil.Uint64, common.HierarchyDepth)
+	enc.BaseFee = make([]*hexutil.Big, common.HierarchyDepth)
 
 	copy(enc.ParentHash, h.ParentHashArray())
 	copy(enc.UncleHash, h.UncleHashArray())
@@ -56,6 +60,8 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	copy(enc.Bloom, h.BloomArray())
 	for i := 0; i < common.HierarchyDepth; i++ {
 		enc.Difficulty[i] = (*hexutil.Big)(h.Difficulty(i))
+		enc.ParentEntropy[i] = (*hexutil.Big)(h.ParentEntropy(i))
+		enc.ParentDeltaS[i] = (*hexutil.Big)(h.ParentDeltaS(i))
 		enc.Number[i] = (*hexutil.Big)(h.Number(i))
 		enc.GasLimit[i] = hexutil.Uint64(h.GasLimit(i))
 		enc.GasUsed[i] = hexutil.Uint64(h.GasUsed(i))
@@ -82,12 +88,14 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		EtxRollupHash []common.Hash    `json:"extRollupRoot"       gencodec:"required"`
 		ManifestHash  []common.Hash    `json:"manifestHash"        gencodec:"required"`
 		Bloom         []Bloom          `json:"logsBloom"           gencodec:"required"`
-		Difficulty    []*hexutil.Big    `json:"difficulty"         gencodec:"required"`
-		Number        []*hexutil.Big    `json:"number"             gencodec:"required"`
+		Difficulty    []*hexutil.Big   `json:"difficulty"         	gencodec:"required"`
+		ParentEntropy []*hexutil.Big   `json:"parentEntropy"	   	gencodec:"required"`
+		ParentDeltaS  []*hexutil.Big   `json:"parentDeltaS"	   	gencodec:"required"`
+		Number        []*hexutil.Big   `json:"number"             	gencodec:"required"`
 		GasLimit      []hexutil.Uint64 `json:"gasLimit"            gencodec:"required"`
 		GasUsed       []hexutil.Uint64 `json:"gasUsed"             gencodec:"required"`
-		BaseFee       []*hexutil.Big    `json:"baseFeePerGas"      gencodec:"required"`
-		Location      common.Location   `json:"location"           gencodec:"required"`
+		BaseFee       []*hexutil.Big   `json:"baseFeePerGas"      	gencodec:"required"`
+		Location      common.Location  `json:"location"           	gencodec:"required"`
 		Time          hexutil.Uint64   `json:"timestamp"           gencodec:"required"`
 		Extra         hexutil.Bytes    `json:"extraData"           gencodec:"required"`
 		Nonce         BlockNonce       `json:"nonce"`
@@ -128,6 +136,12 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	if dec.Difficulty == nil {
 		return errors.New("missing required field 'difficulty' for Header")
 	}
+	if dec.ParentEntropy == nil {
+		return errors.New("missing required field 'parentEntropy' for Header")
+	}
+	if dec.ParentDeltaS == nil {
+		return errors.New("missing required field 'parentDeltaS' for Header")
+	}
 	if dec.Number == nil {
 		return errors.New("missing required field 'number' for Header")
 	}
@@ -145,7 +159,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	}
 	// Initialize the header
 	h.parentHash = make([]common.Hash, common.HierarchyDepth)
-	h.uncleHash= make([]common.Hash, common.HierarchyDepth)
+	h.uncleHash = make([]common.Hash, common.HierarchyDepth)
 	h.coinbase = make([]common.Address, common.HierarchyDepth)
 	h.root = make([]common.Hash, common.HierarchyDepth)
 	h.txHash = make([]common.Hash, common.HierarchyDepth)
@@ -153,8 +167,10 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	h.etxRollupHash = make([]common.Hash, common.HierarchyDepth)
 	h.manifestHash = make([]common.Hash, common.HierarchyDepth)
 	h.receiptHash = make([]common.Hash, common.HierarchyDepth)
-	h.bloom= make([]Bloom, common.HierarchyDepth)
-	h.difficulty= make([]*big.Int, common.HierarchyDepth)
+	h.bloom = make([]Bloom, common.HierarchyDepth)
+	h.difficulty = make([]*big.Int, common.HierarchyDepth)
+	h.parentEntropy = make([]*big.Int, common.HierarchyDepth)
+	h.parentDeltaS = make([]*big.Int, common.HierarchyDepth)
 	h.number = make([]*big.Int, common.HierarchyDepth)
 	h.gasLimit = make([]uint64, common.HierarchyDepth)
 	h.gasUsed = make([]uint64, common.HierarchyDepth)
@@ -175,8 +191,16 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 			return errors.New("missing required field 'difficulty' for Header")
 		}
 		h.SetDifficulty((*big.Int)(dec.Difficulty[i]), i)
-		if dec.Number[i] == nil {
-			return errors.New("missing required field 'number' for Header")
+		if dec.ParentEntropy[i] == nil {
+			return errors.New("missing required field 'parentEntropy' for Header")
+		}
+		h.SetParentEntropy((*big.Int)(dec.ParentEntropy[i]), i)
+		if dec.ParentEntropy[i] == nil {
+			return errors.New("missing required field 'parentEntropy' for Header")
+		}
+		h.SetParentDeltaS((*big.Int)(dec.ParentDeltaS[i]), i)
+		if dec.ParentDeltaS[i] == nil {
+			return errors.New("missing required field 'parentDeltaS' for Header")
 		}
 		h.SetNumber((*big.Int)(dec.Number[i]), i)
 		h.SetGasLimit(uint64(dec.GasLimit[i]), i)

@@ -81,6 +81,8 @@ type Header struct {
 	receiptHash   []common.Hash    `json:"receiptsRoot"         gencodec:"required"`
 	bloom         []Bloom          `json:"logsBloom"            gencodec:"required"`
 	difficulty    []*big.Int       `json:"difficulty"           gencodec:"required"`
+	parentEntropy []*big.Int       `json:"parentEntropy"		gencodec:"required"`
+	parentDeltaS  []*big.Int       `json:"parentDeltaS"			gencodec:"required"`
 	number        []*big.Int       `json:"number"               gencodec:"required"`
 	gasLimit      []uint64         `json:"gasLimit"             gencodec:"required"`
 	gasUsed       []uint64         `json:"gasUsed"              gencodec:"required"`
@@ -93,14 +95,16 @@ type Header struct {
 
 // field type overrides for gencodec
 type headerMarshaling struct {
-	Difficulty []*hexutil.Big
-	Number     []*hexutil.Big
-	GasLimit   []hexutil.Uint64
-	GasUsed    []hexutil.Uint64
-	BaseFee    []*hexutil.Big
-	Time       hexutil.Uint64
-	Extra      hexutil.Bytes
-	Hash       common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
+	Difficulty    []*hexutil.Big
+	Number        []*hexutil.Big
+	GasLimit      []hexutil.Uint64
+	GasUsed       []hexutil.Uint64
+	BaseFee       []*hexutil.Big
+	ParentEntropy []*hexutil.Big
+	ParentDeltaS  []*hexutil.Big
+	Time          hexutil.Uint64
+	Extra         hexutil.Bytes
+	Hash          common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
 }
 
 // "external" header encoding. used for eth protocol, etc.
@@ -116,6 +120,8 @@ type extheader struct {
 	ReceiptHash   []common.Hash
 	Bloom         []Bloom
 	Difficulty    []*big.Int
+	ParentEntropy []*big.Int
+	ParentDeltaS  []*big.Int
 	Number        []*big.Int
 	GasLimit      []uint64
 	GasUsed       []uint64
@@ -140,6 +146,8 @@ func EmptyHeader() *Header {
 	h.receiptHash = make([]common.Hash, common.HierarchyDepth)
 	h.bloom = make([]Bloom, common.HierarchyDepth)
 	h.difficulty = make([]*big.Int, common.HierarchyDepth)
+	h.parentEntropy = make([]*big.Int, common.HierarchyDepth)
+	h.parentDeltaS = make([]*big.Int, common.HierarchyDepth)
 	h.number = make([]*big.Int, common.HierarchyDepth)
 	h.gasLimit = make([]uint64, common.HierarchyDepth)
 	h.gasUsed = make([]uint64, common.HierarchyDepth)
@@ -154,6 +162,8 @@ func EmptyHeader() *Header {
 		h.manifestHash[i] = EmptyRootHash
 		h.uncleHash[i] = EmptyUncleHash
 		h.difficulty[i] = big.NewInt(0)
+		h.parentEntropy[i] = big.NewInt(0)
+		h.parentDeltaS[i] = big.NewInt(0)
 		h.number[i] = big.NewInt(0)
 		h.baseFee[i] = big.NewInt(0)
 	}
@@ -177,6 +187,8 @@ func (h *Header) DecodeRLP(s *rlp.Stream) error {
 	h.receiptHash = eh.ReceiptHash
 	h.bloom = eh.Bloom
 	h.difficulty = eh.Difficulty
+	h.parentEntropy = eh.ParentEntropy
+	h.parentDeltaS = eh.ParentDeltaS
 	h.number = eh.Number
 	h.gasLimit = eh.GasLimit
 	h.gasUsed = eh.GasUsed
@@ -203,6 +215,8 @@ func (h *Header) EncodeRLP(w io.Writer) error {
 		ReceiptHash:   h.receiptHash,
 		Bloom:         h.bloom,
 		Difficulty:    h.difficulty,
+		ParentEntropy: h.parentEntropy,
+		ParentDeltaS:  h.parentDeltaS,
 		Number:        h.number,
 		GasLimit:      h.gasLimit,
 		GasUsed:       h.gasUsed,
@@ -264,6 +278,23 @@ func (h *Header) EtxRollupHash(args ...int) common.Hash {
 	}
 	return h.etxRollupHash[nodeCtx]
 }
+
+func (h *Header) ParentEntropy(args ...int) *big.Int {
+	nodeCtx := common.NodeLocation.Context()
+	if len(args) > 0 {
+		nodeCtx = args[0]
+	}
+	return h.parentEntropy[nodeCtx]
+}
+
+func (h *Header) ParentDeltaS(args ...int) *big.Int {
+	nodeCtx := common.NodeLocation.Context()
+	if len(args) > 0 {
+		nodeCtx = args[0]
+	}
+	return h.parentDeltaS[nodeCtx]
+}
+
 func (h *Header) ManifestHash(args ...int) common.Hash {
 	nodeCtx := common.NodeLocation.Context()
 	if len(args) > 0 {
@@ -382,6 +413,23 @@ func (h *Header) SetEtxRollupHash(val common.Hash, args ...int) {
 	}
 	h.etxRollupHash[nodeCtx] = val
 }
+
+func (h *Header) SetParentEntropy(val *big.Int, args ...int) {
+	nodeCtx := common.NodeLocation.Context()
+	if len(args) > 0 {
+		nodeCtx = args[0]
+	}
+	h.parentEntropy[nodeCtx] = val
+}
+
+func (h *Header) SetParentDeltaS(val *big.Int, args ...int) {
+	nodeCtx := common.NodeLocation.Context()
+	if len(args) > 0 {
+		nodeCtx = args[0]
+	}
+	h.parentDeltaS[nodeCtx] = val
+}
+
 func (h *Header) SetManifestHash(val common.Hash, args ...int) {
 	nodeCtx := common.NodeLocation.Context()
 	if len(args) > 0 {
@@ -720,6 +768,8 @@ func CopyHeader(h *Header) *Header {
 	cpy.receiptHash = make([]common.Hash, common.HierarchyDepth)
 	cpy.bloom = make([]Bloom, common.HierarchyDepth)
 	cpy.difficulty = make([]*big.Int, common.HierarchyDepth)
+	cpy.parentEntropy = make([]*big.Int, common.HierarchyDepth)
+	cpy.parentDeltaS = make([]*big.Int, common.HierarchyDepth)
 	cpy.number = make([]*big.Int, common.HierarchyDepth)
 	cpy.gasLimit = make([]uint64, common.HierarchyDepth)
 	cpy.gasUsed = make([]uint64, common.HierarchyDepth)
@@ -736,6 +786,8 @@ func CopyHeader(h *Header) *Header {
 		cpy.SetReceiptHash(h.ReceiptHash(i), i)
 		cpy.SetBloom(h.Bloom(i), i)
 		cpy.SetDifficulty(h.Difficulty(i), i)
+		cpy.SetParentEntropy(h.ParentEntropy(i), i)
+		cpy.SetParentDeltaS(h.ParentDeltaS(i), i)
 		cpy.SetNumber(h.Number(i), i)
 		cpy.SetGasLimit(h.GasLimit(i), i)
 		cpy.SetGasUsed(h.GasUsed(i), i)
@@ -786,6 +838,8 @@ func (b *Block) ManifestHash(args ...int) common.Hash  { return b.header.Manifes
 func (b *Block) ReceiptHash(args ...int) common.Hash   { return b.header.ReceiptHash(args...) }
 func (b *Block) Bloom(args ...int) Bloom               { return b.header.Bloom(args...) }
 func (b *Block) Difficulty(args ...int) *big.Int       { return b.header.Difficulty(args...) }
+func (b *Block) ParentEntropy(args ...int) *big.Int    { return b.header.ParentEntropy(args...) }
+func (b *Block) ParentDeltaS(args ...int) *big.Int     { return b.header.ParentDeltaS(args...) }
 func (b *Block) Number(args ...int) *big.Int           { return b.header.Number(args...) }
 func (b *Block) NumberU64(args ...int) uint64          { return b.header.NumberU64(args...) }
 func (b *Block) GasLimit(args ...int) uint64           { return b.header.GasLimit(args...) }
