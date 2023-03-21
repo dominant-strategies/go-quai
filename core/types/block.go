@@ -905,7 +905,7 @@ type Blocks []*Block
 type PendingHeader struct {
 	Header  *Header
 	Termini []common.Hash
-	Entropy *big.Float
+	Entropy *big.Int
 }
 
 // BlockManifest is a list of block hashes, which implements DerivableList

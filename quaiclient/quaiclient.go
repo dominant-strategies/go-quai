@@ -136,18 +136,18 @@ type pendingEtxs struct {
 }
 
 type entropyStruct struct {
-	Entropy *big.Float `json:"entropy"`
+	Entropy *big.Int `json:"entropy"`
 }
 
 type subSStruct struct {
-	SubS *big.Float `json:"subS"`
+	SubS *big.Int `json:"subS"`
 }
 
 type reorgStruct struct {
 	Reorg bool `json:"reorg"`
 }
 
-func (ec *Client) Append(ctx context.Context, header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, domS *big.Float, domOrigin bool, reorg bool, newInboundEtxs types.Transactions) ([]types.Transactions, *big.Float, *big.Float, bool, error) {
+func (ec *Client) Append(ctx context.Context, header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, domS *big.Int, domOrigin bool, reorg bool, newInboundEtxs types.Transactions) ([]types.Transactions, *big.Int, *big.Int, bool, error) {
 	fields := map[string]interface{}{
 		"header":           RPCMarshalHeader(header),
 		"domPendingHeader": RPCMarshalHeader(domPendingHeader),
@@ -187,7 +187,7 @@ func (ec *Client) Append(ctx context.Context, header *types.Header, domPendingHe
 	return pEtxs.Etxs, ds.Entropy, ss.SubS, re.Reorg, nil
 }
 
-func (ec *Client) SubRelayPendingHeader(ctx context.Context, pendingHeader types.PendingHeader, s *big.Float, location common.Location) {
+func (ec *Client) SubRelayPendingHeader(ctx context.Context, pendingHeader types.PendingHeader, s *big.Int, location common.Location) {
 	data := map[string]interface{}{"Header": RPCMarshalHeader(pendingHeader.Header)}
 	data["Termini"] = pendingHeader.Termini
 	data["S"] = s

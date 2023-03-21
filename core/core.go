@@ -217,7 +217,7 @@ func (c *Core) WriteBlock(block *types.Block) {
 	c.sl.WriteBlock(block)
 }
 
-func (c *Core) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, domS *big.Float, domOrigin bool, reorg bool, newInboundEtxs types.Transactions) ([]types.Transactions, *big.Float, *big.Float, bool, error) {
+func (c *Core) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, domS *big.Int, domOrigin bool, reorg bool, newInboundEtxs types.Transactions) ([]types.Transactions, *big.Int, *big.Int, bool, error) {
 	newPendingEtxs, s, subDeltaS, reorg, err := c.sl.Append(header, domPendingHeader, domTerminus, domS, domOrigin, reorg, newInboundEtxs)
 	if err != nil {
 		if err.Error() == ErrBodyNotFound.Error() {
@@ -235,7 +235,7 @@ func (c *Core) ConstructLocalMinedBlock(header *types.Header) (*types.Block, err
 	return c.sl.ConstructLocalMinedBlock(header)
 }
 
-func (c *Core) SubRelayPendingHeader(slPendingHeader types.PendingHeader, s *big.Float, location common.Location) {
+func (c *Core) SubRelayPendingHeader(slPendingHeader types.PendingHeader, s *big.Int, location common.Location) {
 	c.sl.SubRelayPendingHeader(slPendingHeader, s, location)
 }
 

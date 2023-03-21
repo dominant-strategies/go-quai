@@ -91,7 +91,7 @@ var (
 
 	pendingHeaderPrefix = []byte("ph") // pendingHeaderPrefix + hash -> header
 	phBodyPrefix        = []byte("pc") // phBodyPrefix + hash -> []common.Hash + Td
-	phEntropyPrefix     = []byte("pe") // phEntropyPrefix + hash -> *big.Float
+	phEntropyPrefix     = []byte("pe") // phEntropyPrefix + hash -> *big.Int
 	candidateBodyPrefix = []byte("cb") // candidateBodyPrefix + hash -> Body
 	terminiPrefix       = []byte("tk") //terminiPrefix + hash -> []common.Hash
 

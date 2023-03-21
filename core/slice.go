@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"sync"
 	"time"
@@ -34,8 +35,8 @@ const (
 
 type bestPhKeyStruct struct {
 	key       common.Hash
-	coordS    *big.Float
-	blockS    *big.Float
+	coordS    *big.Int
+	blockS    *big.Int
 	blockHash common.Hash
 }
 type Slice struct {
@@ -118,7 +119,7 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 
 // Append takes a proposed header and constructs a local block and attempts to hierarchically append it to the block graph.
 // If this is called from a dominant context a domTerminus must be provided else a common.Hash{} should be used and domOrigin should be set to true.
-func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, domParentS *big.Float, domOrigin bool, reorg bool, newInboundEtxs types.Transactions) ([]types.Transactions, *big.Float, *big.Float, bool, error) {
+func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, domParentS *big.Int, domOrigin bool, reorg bool, newInboundEtxs types.Transactions) ([]types.Transactions, *big.Int, *big.Int, bool, error) {
 	// The compute and write of the phCache is split starting here so we need to get the lock
 	sl.phCachemu.Lock()
 	defer sl.phCachemu.Unlock()
@@ -196,9 +197,9 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	parentS := sl.hc.GetS(header.ParentHash(), header.NumberU64()-1)
 	parentDeltaS := sl.hc.GetDeltaS(header.ParentHash(), header.NumberU64()-1)
 
-	var s, totalEntropy, subDeltaS *big.Float
+	var s, totalEntropy, subDeltaS *big.Int
 	if domOrigin {
-		totalEntropy = big.NewFloat(0).Add(parentDeltaS, domParentS)
+		totalEntropy = big.NewInt(0).Add(parentDeltaS, domParentS)
 	} else {
 		totalEntropy = parentS
 	}
@@ -223,26 +224,29 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		}
 	}
 
-	var deltaS *big.Float
+	var deltaS *big.Int
 	if nodeCtx == common.REGION_CTX {
-		deltaS = big.NewFloat(0).Add(parentDeltaS, subDeltaS)
+		deltaS = big.NewInt(0).Add(parentDeltaS, subDeltaS)
 	} else if nodeCtx == common.ZONE_CTX {
-		deltaS = big.NewFloat(0).Add(parentDeltaS, sl.calcIntrinsicS(header.Hash()))
+		deltaS = big.NewInt(0).Add(parentDeltaS, sl.calcIntrinsicS(header.Hash()))
 	}
 
 	if domOrigin {
-		rawdb.WriteDeltaS(batch, header.Hash(), header.NumberU64(), big.NewFloat(0))
+		rawdb.WriteDeltaS(batch, header.Hash(), header.NumberU64(), big.NewInt(0))
 	} else {
 		rawdb.WriteDeltaS(batch, header.Hash(), header.NumberU64(), deltaS)
 	}
 	// calc S
 	if nodeCtx == common.ZONE_CTX {
-		s = big.NewFloat(0).Add(totalEntropy, sl.calcIntrinsicS(header.Hash()))
+		s = big.NewInt(0).Add(totalEntropy, sl.calcIntrinsicS(header.Hash()))
 		reorg = sl.poem(s, sl.hc.GetSByHash(sl.hc.CurrentHeader().Hash()))
 	}
+	intrinsic := sl.calcIntrinsicS(header.Hash())
+	log.Info("Entropy Calculations", "S:", big.NewInt(0).Div(s, big.NewInt(int64(math.Pow(2, 56)))))
+	if nodeCtx != common.PRIME_CTX {
 
-	log.Debug("Entropy Calculations", "S:", s, "DeltaS:", deltaS, "parentS:", parentS, "intrinsict:", sl.calcIntrinsicS(header.Hash()))
-
+		log.Info("!PRIME Entropy Calculations", "DeltaS:", big.NewInt(0).Div(deltaS, big.NewInt(int64(math.Pow(2, 56)))), "parentS:", big.NewInt(0).Div(parentS, big.NewInt(int64(math.Pow(2, 56)))), "intrinsict:", big.NewInt(0).Div(intrinsic, big.NewInt(int64(math.Pow(2, 56)))))
+	}
 	rawdb.WriteS(batch, header.Hash(), header.NumberU64(), s)
 
 	// Combine sub's pending ETXs, sub rollup, and our local ETXs into localPendingEtxs
@@ -306,7 +310,7 @@ func (sl *Slice) backfillPETXs(header *types.Header, subManifest types.BlockMani
 }
 
 // relayPh sends pendingHeaderWithTermini to subordinates
-func (sl *Slice) relayPh(pendingHeaderWithTermini types.PendingHeader, s *big.Float, domOrigin bool, location common.Location) {
+func (sl *Slice) relayPh(pendingHeaderWithTermini types.PendingHeader, s *big.Int, domOrigin bool, location common.Location) {
 	nodeCtx := common.NodeLocation.Context()
 
 	if nodeCtx == common.ZONE_CTX {
@@ -485,21 +489,27 @@ func (sl *Slice) pcrc(batch ethdb.Batch, header *types.Header, domTerminus commo
 }
 
 // POEM compares externS to the currentHead S and returns true if externS is greater
-func (sl *Slice) poem(externS *big.Float, currentS *big.Float) bool {
+func (sl *Slice) poem(externS *big.Int, currentS *big.Int) bool {
 	log.Debug("POEM:", "Header hash:", sl.hc.CurrentHeader().Hash(), "currentTd:", currentS, "externTd:", externS)
 	reorg := currentS.Cmp(externS) < 0
 	return reorg
 }
 
 // calcIntrinsicS
-func (sl *Slice) calcIntrinsicS(hash common.Hash) *big.Float {
+func (sl *Slice) calcIntrinsicS(hash common.Hash) *big.Int {
 	const mantBits = 257
+	bitLength := 128
+
 	x := new(big.Int).SetBytes(hash.Bytes())
 	c, m := logmath.BinaryLog(x, mantBits)
 	f := big.NewFloat(0).SetPrec(mantBits).SetInt(m)
 	f = f.SetMantExp(f, -mantBits)
 	f.Add(f, big.NewFloat(float64(c)))
-	return big.NewFloat(0).Sub(big.NewFloat(256), f)
+	f.Sub(big.NewFloat(256), f)
+	f.Mul(f, big.NewFloat(math.Pow(2, 56)))
+	i, _ := f.Uint64()
+
+	return new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(bitLength)), nil).SetUint64(i)
 }
 
 // GetPendingHeader is used by the miner to request the current pending header
@@ -549,12 +559,11 @@ func (sl *Slice) SendPendingEtxsToDom(pEtxs types.PendingEtxs) error {
 }
 
 // SubRelayPendingHeader takes a pending header from the sender (ie dominant), updates the phCache with a composited header and relays result to subordinates
-func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader, s *big.Float, location common.Location) {
+func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader, s *big.Int, location common.Location) {
 	sl.phCachemu.Lock()
 	defer sl.phCachemu.Unlock()
 	nodeCtx := common.NodeLocation.Context()
 
-	fmt.Println("subrelaypendingHeader S:", s)
 	if nodeCtx == common.REGION_CTX {
 		// Adding a guard on the region that was already updated in the synchronous path.
 		if location.Region() != common.NodeLocation.Region() {
@@ -608,7 +617,7 @@ func (sl *Slice) computePendingHeader(localPendingHeaderWithTermini types.Pendin
 }
 
 // updatePhCacheFromDom combines the recieved pending header with the pending header stored locally at a given terminus for specified context
-func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, terminiIndex int, indices []int, s *big.Float) error {
+func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, terminiIndex int, indices []int, s *big.Int) error {
 
 	hash := pendingHeader.Termini[terminiIndex]
 	localPendingHeader, exists := sl.phCache[hash]
@@ -629,7 +638,7 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 }
 
 // writePhCache dom writes a given pendingHeaderWithTermini to the cache with the terminus used as the key.
-func (sl *Slice) writeToPhCacheAndPickPhHead(inSlice bool, reorg bool, s *big.Float, pendingHeaderWithTermini types.PendingHeader, local bool, terminiIndex int) {
+func (sl *Slice) writeToPhCacheAndPickPhHead(inSlice bool, reorg bool, s *big.Int, pendingHeaderWithTermini types.PendingHeader, local bool, terminiIndex int) {
 	deepCopyPendingHeaderWithTermini := types.PendingHeader{Header: types.CopyHeader(pendingHeaderWithTermini.Header), Termini: pendingHeaderWithTermini.Termini, Entropy: s}
 	oldPh, exist := sl.phCache[pendingHeaderWithTermini.Termini[terminiIndex]]
 	//Only write iff our context is better than current ie > td
@@ -653,9 +662,7 @@ func (sl *Slice) writeToPhCacheAndPickPhHead(inSlice bool, reorg bool, s *big.Fl
 			header := sl.hc.GetHeaderByHash(pendingHeaderWithTermini.Header.ParentHash())
 			priorBlockS := sl.hc.GetS(header.Hash(), header.NumberU64())
 			sl.bestPhKey = bestPhKeyStruct{key: pendingHeaderWithTermini.Termini[terminiIndex], coordS: s, blockS: priorBlockS, blockHash: header.Hash()}
-			fmt.Println("writetoPhCache update current header before:", sl.hc.CurrentHeader().Hash(), "new hash:", header.Hash())
 			sl.hc.SetCurrentHeader(header)
-			fmt.Println("writetoPhCache update current header after:", sl.hc.CurrentHeader().Hash())
 			log.Debug("Choosing new pending header from coord update", "Ph Number:", pendingHeaderWithTermini.Header.NumberArray())
 		}
 	}
@@ -688,11 +695,11 @@ func (sl *Slice) init(genesis *Genesis) error {
 		// Initialize slice state for genesis knot
 		genesisTermini := []common.Hash{genesisHash, genesisHash, genesisHash, genesisHash}
 		rawdb.WriteTermini(sl.sliceDb, genesisHash, genesisTermini)
-		rawdb.WriteS(sl.sliceDb, genesisHash, 0, big.NewFloat(0))
-		rawdb.WriteDeltaS(sl.sliceDb, genesisHash, 0, big.NewFloat(0))
+		rawdb.WriteS(sl.sliceDb, genesisHash, 0, big.NewInt(0))
+		rawdb.WriteDeltaS(sl.sliceDb, genesisHash, 0, big.NewInt(0))
 
 		// Append each of the knot blocks
-		sl.bestPhKey = bestPhKeyStruct{key: genesisHash, coordS: big.NewFloat(0), blockS: big.NewFloat(0), blockHash: genesisHash}
+		sl.bestPhKey = bestPhKeyStruct{key: genesisHash, coordS: big.NewInt(0), blockS: big.NewInt(0), blockHash: genesisHash}
 		knot := genesis.Knot[:]
 		for _, block := range knot {
 			sl.AddPendingEtxs(types.PendingEtxs{block.Header(), emptyPendingEtxs})
@@ -896,8 +903,8 @@ func (sl *Slice) updatePendingHeadersCache() {
 func (sl *Slice) loadLastState() error {
 	sl.phCache = rawdb.ReadPhCache(sl.sliceDb)
 	sl.bestPhKey.key = rawdb.ReadCurrentPendingHeaderHash(sl.sliceDb)
-	sl.bestPhKey.coordS = big.NewFloat(0)
-	sl.bestPhKey.blockS = big.NewFloat(0)
+	sl.bestPhKey.coordS = big.NewInt(0)
+	sl.bestPhKey.blockS = big.NewInt(0)
 	sl.bestPhKey.blockHash = sl.config.GenesisHash
 	return nil
 }

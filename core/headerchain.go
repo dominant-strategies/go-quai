@@ -463,14 +463,14 @@ func (hc *HeaderChain) GetTd(hash common.Hash, number uint64) *big.Int {
 
 // GetS retrieves a block's total entropy in the canonical chain from the
 // database by hash and number, caching it if found.
-func (hc *HeaderChain) GetS(hash common.Hash, number uint64) *big.Float {
+func (hc *HeaderChain) GetS(hash common.Hash, number uint64) *big.Int {
 	s := rawdb.ReadS(hc.headerDb, hash, number)
 	return s
 }
 
 // GetDeltaS retrieves a block's change in entropy since the last dom in the canonical chain from the
 // database by hash and number, caching it if found.
-func (hc *HeaderChain) GetDeltaS(hash common.Hash, number uint64) *big.Float {
+func (hc *HeaderChain) GetDeltaS(hash common.Hash, number uint64) *big.Int {
 	deltaS := rawdb.ReadDeltaS(hc.headerDb, hash, number)
 	return deltaS
 }
@@ -487,7 +487,7 @@ func (hc *HeaderChain) GetTdByHash(hash common.Hash) *big.Int {
 
 // GetSHash retrieves a block's total entropy in the canonical chain from the
 // database by hash, caching it if found.
-func (hc *HeaderChain) GetSByHash(hash common.Hash) *big.Float {
+func (hc *HeaderChain) GetSByHash(hash common.Hash) *big.Int {
 	number := hc.GetBlockNumber(hash)
 	if number == nil {
 		return nil

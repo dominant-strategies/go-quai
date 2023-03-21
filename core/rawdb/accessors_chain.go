@@ -573,13 +573,13 @@ func DeletePhCacheBody(db ethdb.KeyValueWriter, hash common.Hash) {
 }
 
 // ReadPhCacheEntropy retrieves a ph cache total entropy corresponding to the hash.
-func ReadPhCacheEntropy(db ethdb.Reader, hash common.Hash) *big.Float {
+func ReadPhCacheEntropy(db ethdb.Reader, hash common.Hash) *big.Int {
 	data, _ := db.Get(phCacheEntropyKey(hash))
 	if len(data) == 0 {
 		return nil
 	}
-	s := new(big.Float)
-	if err := s.GobDecode(data); err != nil {
+	s := new(big.Int)
+	if err := rlp.Decode(bytes.NewReader(data), s); err != nil {
 		log.Error("Invalid ph cache entropy RLP", "hash", hash, "err", err)
 		return nil
 	}
@@ -587,8 +587,8 @@ func ReadPhCacheEntropy(db ethdb.Reader, hash common.Hash) *big.Float {
 }
 
 // WritePhCacheEntropy stores the total entropy of a ph cache key into the database.
-func WritePhCacheEntropy(db ethdb.KeyValueWriter, hash common.Hash, S *big.Float) {
-	data, err := S.GobEncode()
+func WritePhCacheEntropy(db ethdb.KeyValueWriter, hash common.Hash, s *big.Int) {
+	data, err := rlp.EncodeToBytes(s)
 	if err != nil {
 		log.Crit("Failed to RLP encode ph cache entropy", "err", err)
 	}
@@ -743,13 +743,13 @@ func DeleteTd(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 }
 
 // ReadS retrieves a block's total entropy corresponding to the hash.
-func ReadS(db ethdb.Reader, hash common.Hash, number uint64) *big.Float {
+func ReadS(db ethdb.Reader, hash common.Hash, number uint64) *big.Int {
 	data, _ := db.Get(headerSKey(number, hash))
 	if len(data) == 0 {
 		return nil
 	}
-	s := new(big.Float)
-	if err := s.GobDecode(data); err != nil {
+	s := new(big.Int)
+	if err := rlp.Decode(bytes.NewReader(data), s); err != nil {
 		log.Error("Invalid block total entropy RLP", "hash", hash, "err", err)
 		return nil
 	}
@@ -757,8 +757,8 @@ func ReadS(db ethdb.Reader, hash common.Hash, number uint64) *big.Float {
 }
 
 // WriteS stores the total entropy of a block into the database.
-func WriteS(db ethdb.KeyValueWriter, hash common.Hash, number uint64, S *big.Float) {
-	data, err := S.GobEncode()
+func WriteS(db ethdb.KeyValueWriter, hash common.Hash, number uint64, s *big.Int) {
+	data, err := rlp.EncodeToBytes(s)
 	if err != nil {
 		log.Crit("Failed to RLP encode block total entropy", "err", err)
 	}
@@ -775,22 +775,22 @@ func DeleteS(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 }
 
 // ReadDeltaS retrieves a block's change in entropy corresponding to the hash.
-func ReadDeltaS(db ethdb.Reader, hash common.Hash, number uint64) *big.Float {
+func ReadDeltaS(db ethdb.Reader, hash common.Hash, number uint64) *big.Int {
 	data, _ := db.Get(headerDeltaSKey(number, hash))
 	if len(data) == 0 {
 		return nil
 	}
-	deltaS := new(big.Float)
-	if err := deltaS.GobDecode(data); err != nil {
-		log.Error("Invalid block total entropy RLP", "hash", hash, "err", err)
+	deltaS := new(big.Int)
+	if err := rlp.Decode(bytes.NewReader(data), deltaS); err != nil {
+		log.Error("Invalid block delta entropy RLP", "hash", hash, "err", err)
 		return nil
 	}
 	return deltaS
 }
 
 // WriteDeltaS stores the change in entropy of a block into the database.
-func WriteDeltaS(db ethdb.KeyValueWriter, hash common.Hash, number uint64, deltaS *big.Float) {
-	data, err := deltaS.GobEncode()
+func WriteDeltaS(db ethdb.KeyValueWriter, hash common.Hash, number uint64, deltaS *big.Int) {
+	data, err := rlp.EncodeToBytes(deltaS)
 	if err != nil {
 		log.Crit("Failed to RLP encode block total entropy", "err", err)
 	}

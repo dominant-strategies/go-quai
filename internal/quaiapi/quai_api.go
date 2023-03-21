@@ -623,7 +623,7 @@ func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw js
 type tdBlock struct {
 	Header           *types.Header      `json:"header"`
 	DomPendingHeader *types.Header      `json:"domPendingHeader"`
-	DomS             *big.Float         `json:"domS"`
+	DomS             *big.Int           `json:"domS"`
 	DomTerminus      common.Hash        `json:"domTerminus"`
 	DomOrigin        bool               `json:"domOrigin"`
 	Reorg            bool               `json:"reorg"`
@@ -658,7 +658,7 @@ type SubRelay struct {
 	Header   *types.Header
 	Termini  []common.Hash
 	Location common.Location
-	S        *big.Float
+	S        *big.Int
 }
 
 func (s *PublicBlockChainQuaiAPI) SubRelayPendingHeader(ctx context.Context, raw json.RawMessage) {

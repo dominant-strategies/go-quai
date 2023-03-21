@@ -354,7 +354,7 @@ func (b *QuaiAPIBackend) SyncProgress() quai.SyncProgress {
 	return b.eth.Downloader().Progress()
 }
 
-func (b *QuaiAPIBackend) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, domS *big.Float, domOrigin bool, reorg bool, newInboundEtxs types.Transactions) ([]types.Transactions, *big.Float, *big.Float, bool, error) {
+func (b *QuaiAPIBackend) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, domS *big.Int, domOrigin bool, reorg bool, newInboundEtxs types.Transactions) ([]types.Transactions, *big.Int, *big.Int, bool, error) {
 	return b.eth.core.Append(header, domPendingHeader, domTerminus, domS, domOrigin, reorg, newInboundEtxs)
 }
 
@@ -374,7 +374,7 @@ func (b *QuaiAPIBackend) PendingBlock() *types.Block {
 	return b.eth.core.PendingBlock()
 }
 
-func (b *QuaiAPIBackend) SubRelayPendingHeader(pendingHeader types.PendingHeader, s *big.Float, location common.Location) {
+func (b *QuaiAPIBackend) SubRelayPendingHeader(pendingHeader types.PendingHeader, s *big.Int, location common.Location) {
 	b.eth.core.SubRelayPendingHeader(pendingHeader, s, location)
 }
 
