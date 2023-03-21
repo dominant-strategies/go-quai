@@ -103,9 +103,6 @@ type Engine interface {
 	// than one result may also be returned depending on the consensus algorithm.
 	Seal(header *types.Header, results chan<- *types.Header, stop <-chan struct{}) error
 
-	// SealHash returns the hash of a block prior to it being sealed.
-	SealHash(header *types.Header) common.Hash
-
 	// CalcDifficulty is the difficulty adjustment algorithm. It returns the difficulty
 	// that a new block should have.
 	CalcDifficulty(chain ChainHeaderReader, parent *types.Header) *big.Int

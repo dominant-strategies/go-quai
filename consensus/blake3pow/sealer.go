@@ -38,7 +38,7 @@ func (blake3pow *Blake3pow) Seal(header *types.Header, results chan<- *types.Hea
 		select {
 		case results <- header:
 		default:
-			blake3pow.config.Log.Warn("Sealing result is not read by miner", "mode", "fake", "sealhash", blake3pow.SealHash(header))
+			blake3pow.config.Log.Warn("Sealing result is not read by miner", "mode", "fake", "sealhash", header.SealHash())
 		}
 		return nil
 	}
@@ -93,7 +93,7 @@ func (blake3pow *Blake3pow) Seal(header *types.Header, results chan<- *types.Hea
 			select {
 			case results <- result:
 			default:
-				blake3pow.config.Log.Warn("Sealing result is not read by miner", "mode", "local", "sealhash", blake3pow.SealHash(header))
+				blake3pow.config.Log.Warn("Sealing result is not read by miner", "mode", "local", "sealhash", header.SealHash())
 			}
 			close(abort)
 		case <-blake3pow.update:
@@ -318,7 +318,7 @@ func (s *remoteSealer) loop() {
 //	result[2], 32 bytes hex encoded boundary condition ("target"), 2^256/difficulty
 //	result[3], hex encoded header number
 func (s *remoteSealer) makeWork(header *types.Header) {
-	hash := s.blake3pow.SealHash(header)
+	hash := header.SealHash()
 	s.currentWork[0] = hash.Hex()
 	s.currentWork[1] = hexutil.EncodeBig(header.Number())
 	s.currentWork[2] = common.BytesToHash(new(big.Int).Div(big2e256, header.Difficulty()).Bytes()).Hex()
