@@ -652,18 +652,20 @@ func (sl *Slice) writeToPhCacheAndPickPhHead(inSlice bool, reorg bool, s *big.In
 		}
 	} else {
 		if exist {
+			fmt.Println("writeToPhCacheAndPickPhHead 655 S:", s, "oldPh.Entropy:", oldPh.Entropy)
 			if sl.poem(s, oldPh.Entropy) {
 				sl.phCache[pendingHeaderWithTermini.Termini[terminiIndex]] = deepCopyPendingHeaderWithTermini
+				fmt.Println("Updating pending header from coord update Ph Number:", pendingHeaderWithTermini.Header.NumberArray())
 			}
 		}
-
+		fmt.Println("writeToPhCacheAndPickPhHead 660 S:", s, "bestPhKey:", sl.bestPhKey.blockS)
 		if sl.bestPhKey.blockS.Cmp(s) < 0 {
 			//Reset the current head to align with the coord
 			header := sl.hc.GetHeaderByHash(pendingHeaderWithTermini.Header.ParentHash())
 			priorBlockS := sl.hc.GetS(header.Hash(), header.NumberU64())
 			sl.bestPhKey = bestPhKeyStruct{key: pendingHeaderWithTermini.Termini[terminiIndex], coordS: s, blockS: priorBlockS, blockHash: header.Hash()}
 			sl.hc.SetCurrentHeader(header)
-			log.Debug("Choosing new pending header from coord update", "Ph Number:", pendingHeaderWithTermini.Header.NumberArray())
+			fmt.Println("Choosing new pending header from coord update Ph Number:", pendingHeaderWithTermini.Header.NumberArray())
 		}
 	}
 
