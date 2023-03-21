@@ -32,6 +32,7 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rlp"
+	"lukechampine.com/blake3"
 	mathutil "modernc.org/mathutil"
 )
 
@@ -510,10 +511,86 @@ func (h *Header) GasLimitArray() []uint64           { return h.gasLimit }
 func (h *Header) GasUsedArray() []uint64            { return h.gasUsed }
 func (h *Header) BaseFeeArray() []*big.Int          { return h.baseFee }
 
-// Hash returns the block hash of the header, which is simply the keccak256 hash of its
-// RLP encoding.
-func (h *Header) Hash() common.Hash {
-	return RlpHash(h)
+// headerData comprises all data fields of the header, excluding the nonce, so
+// that the nonce may be independently adjusted in the work algorithm.
+type sealData struct {
+	ParentHash    []common.Hash
+	UncleHash     []common.Hash
+	Coinbase      []common.Address
+	Root          []common.Hash
+	TxHash        []common.Hash
+	EtxHash       []common.Hash
+	EtxRollupHash []common.Hash
+	ManifestHash  []common.Hash
+	ReceiptHash   []common.Hash
+	Bloom         []Bloom
+	Number        []*big.Int
+	GasLimit      []uint64
+	GasUsed       []uint64
+	BaseFee       []*big.Int
+	Difficulty    *big.Int
+	Location      common.Location
+	Time          uint64
+	Extra         []byte
+	Nonce         BlockNonce
+}
+
+// SealHash returns the hash of a block prior to it being sealed.
+func (h *Header) SealHash() (hash common.Hash) {
+	hasher := blake3.New(32, nil)
+	hasher.Reset()
+	hdata := sealData{
+		ParentHash:    make([]common.Hash, common.HierarchyDepth),
+		UncleHash:     make([]common.Hash, common.HierarchyDepth),
+		Coinbase:      make([]common.Address, common.HierarchyDepth),
+		Root:          make([]common.Hash, common.HierarchyDepth),
+		TxHash:        make([]common.Hash, common.HierarchyDepth),
+		EtxHash:       make([]common.Hash, common.HierarchyDepth),
+		EtxRollupHash: make([]common.Hash, common.HierarchyDepth),
+		ManifestHash:  make([]common.Hash, common.HierarchyDepth),
+		ReceiptHash:   make([]common.Hash, common.HierarchyDepth),
+		Bloom:         make([]Bloom, common.HierarchyDepth),
+		Number:        make([]*big.Int, common.HierarchyDepth),
+		GasLimit:      make([]uint64, common.HierarchyDepth),
+		GasUsed:       make([]uint64, common.HierarchyDepth),
+		BaseFee:       make([]*big.Int, common.HierarchyDepth),
+		Difficulty:    h.Difficulty(),
+		Location:      h.Location(),
+		Time:          h.Time(),
+		Extra:         h.Extra(),
+	}
+	for i := 0; i < common.HierarchyDepth; i++ {
+		hdata.ParentHash[i] = h.ParentHash(i)
+		hdata.UncleHash[i] = h.UncleHash(i)
+		hdata.Coinbase[i] = h.Coinbase(i)
+		hdata.Root[i] = h.Root(i)
+		hdata.TxHash[i] = h.TxHash(i)
+		hdata.EtxHash[i] = h.EtxHash(i)
+		hdata.EtxRollupHash[i] = h.EtxRollupHash(i)
+		hdata.ManifestHash[i] = h.ManifestHash(i)
+		hdata.ReceiptHash[i] = h.ReceiptHash(i)
+		hdata.Bloom[i] = h.Bloom(i)
+		hdata.Number[i] = h.Number(i)
+		hdata.GasLimit[i] = h.GasLimit(i)
+		hdata.GasUsed[i] = h.GasUsed(i)
+		hdata.BaseFee[i] = h.BaseFee(i)
+	}
+	rlp.Encode(hasher, hdata)
+	hash.SetBytes(hasher.Sum(hash[:0]))
+	return hash
+}
+
+// Hash returns the nonce'd hash of the header. This is just the Blake3 hash of
+// SealHash suffixed with a nonce.
+func (h *Header) Hash() (hash common.Hash) {
+	hasher := blake3.New(32, nil)
+	hasher.Reset()
+	var hData [40]byte
+	binary.BigEndian.PutUint64(hData[:], h.NonceU64())
+	copy(hData[len(h.nonce):], h.SealHash().Bytes())
+	sum := blake3.Sum256(hData[:])
+	hash.SetBytes(sum[:])
+	return hash
 }
 
 // totalBitLen returns the cumulative BitLen for each element in a big.Int slice.

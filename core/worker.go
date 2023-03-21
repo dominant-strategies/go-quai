@@ -471,12 +471,12 @@ func (w *worker) GeneratePendingHeader(block *types.Block) (*types.Header, error
 
 	task := &task{receipts: env.receipts, state: env.state, block: block, createdAt: time.Now()}
 	if w.CurrentInfo(block.Header()) {
-		log.Info("Commit new sealing work", "number", block.Number(), "sealhash", w.engine.SealHash(block.Header()),
+		log.Info("Commit new sealing work", "number", block.Number(), "sealhash", block.Header().SealHash(),
 			"uncles", len(env.uncles), "txs", env.tcount, "etxs", len(block.ExtTransactions()),
 			"gas", block.GasUsed(), "fees", totalFees(block, env.receipts),
 			"elapsed", common.PrettyDuration(time.Since(start)))
 	} else {
-		log.Debug("Commit new sealing work", "number", block.Number(), "sealhash", w.engine.SealHash(block.Header()),
+		log.Debug("Commit new sealing work", "number", block.Number(), "sealhash", block.Header().SealHash(),
 			"uncles", len(env.uncles), "txs", env.tcount, "etxs", len(block.ExtTransactions()),
 			"gas", block.GasUsed(), "fees", totalFees(block, env.receipts),
 			"elapsed", common.PrettyDuration(time.Since(start)))
@@ -500,7 +500,7 @@ func (w *worker) GeneratePendingHeader(block *types.Block) (*types.Header, error
 		w.newTaskHook(task)
 	}
 	// Reject duplicate sealing work due to resubmitting.
-	sealHash := w.engine.SealHash(task.block.Header())
+	sealHash := task.block.Header().SealHash()
 	if sealHash == prev {
 		log.Info("sealHash == prev, continuing with sending task to pending channel", "seal", sealHash, "prev", prev)
 	}
@@ -1003,7 +1003,7 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 		env.header = block.Header()
 		select {
 		case w.taskCh <- &task{receipts: env.receipts, state: env.state, block: block, createdAt: time.Now()}:
-			log.Info("Commit new sealing work", "number", block.Number(), "sealhash", w.engine.SealHash(block.Header()),
+			log.Info("Commit new sealing work", "number", block.Number(), "sealhash", block.Header().SealHash(),
 				"uncles", len(env.uncles), "txs", env.tcount, "etxs", len(block.ExtTransactions()),
 				"gas", block.GasUsed(), "fees", totalFees(block, env.receipts),
 				"elapsed", common.PrettyDuration(time.Since(start)))
