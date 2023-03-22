@@ -22,7 +22,6 @@ import (
 	"github.com/dominant-strategies/go-quai/quaiclient"
 	"github.com/dominant-strategies/go-quai/trie"
 	lru "github.com/hashicorp/golang-lru"
-	logmath "modernc.org/mathutil"
 )
 
 const (
@@ -135,7 +134,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	location := header.Location()
 
 	// Don't append the block which already exists in the database.
-	if sl.hc.HasHeader(header.Hash(), header.NumberU64()) && (sl.hc.GetS(header.Hash(), header.NumberU64()) != nil) {
+	if sl.hc.HasHeader(header.Hash(), header.NumberU64()) && (sl.hc.GetTd(header.Hash(), header.NumberU64()) != nil) {
 		log.Warn("Block has already been appended: ", "Hash: ", header.Hash())
 		return nil, nil, nil, false, ErrKnownBlock
 	}
@@ -194,14 +193,11 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	// Combine subordinates pending header with local pending header
 	pendingHeaderWithTermini := sl.computePendingHeader(types.PendingHeader{Header: localPendingHeader, Termini: newTermini}, domPendingHeader, domOrigin)
 
-	parentS := sl.hc.GetS(header.ParentHash(), header.NumberU64()-1)
-	parentDeltaS := sl.hc.GetDeltaS(header.ParentHash(), header.NumberU64()-1)
-
-	var s, totalEntropy, subDeltaS *big.Int
+	// Set the parent delta S prior to sending to sub
 	if domOrigin {
-		totalEntropy = big.NewInt(0).Add(parentDeltaS, domParentS)
+		pendingHeaderWithTermini.Header.SetParentDeltaS(big.NewInt(0))
 	} else {
-		totalEntropy = parentS
+		pendingHeaderWithTermini.Header.SetParentDeltaS(header.CalcDeltaS())
 	}
 
 	// Call my sub to append the block, and collect the rolled up ETXs from that sub
@@ -211,7 +207,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 
 		// How to get the sub pending etxs if not running the full node?.
 		if sl.subClients[location.SubIndex()] != nil {
-			subPendingEtxs, s, subDeltaS, reorg, err = sl.subClients[location.SubIndex()].Append(context.Background(), block.Header(), pendingHeaderWithTermini.Header, domTerminus, totalEntropy, true, reorg, newInboundEtxs)
+			subPendingEtxs, _, _, reorg, err = sl.subClients[location.SubIndex()].Append(context.Background(), block.Header(), pendingHeaderWithTermini.Header, domTerminus, nil, true, reorg, newInboundEtxs)
 			if err != nil {
 				return nil, nil, nil, false, err
 			}
@@ -224,30 +220,19 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		}
 	}
 
-	var deltaS *big.Int
-	if nodeCtx == common.REGION_CTX {
-		deltaS = big.NewInt(0).Add(parentDeltaS, subDeltaS)
-	} else if nodeCtx == common.ZONE_CTX {
-		deltaS = big.NewInt(0).Add(parentDeltaS, sl.calcIntrinsicS(header.Hash()))
-	}
-
-	if domOrigin {
-		rawdb.WriteDeltaS(batch, header.Hash(), header.NumberU64(), big.NewInt(0))
-	} else {
-		rawdb.WriteDeltaS(batch, header.Hash(), header.NumberU64(), deltaS)
-	}
 	// calc S
 	if nodeCtx == common.ZONE_CTX {
-		s = big.NewInt(0).Add(totalEntropy, sl.calcIntrinsicS(header.Hash()))
-		reorg = sl.poem(s, sl.hc.GetSByHash(sl.hc.CurrentHeader().Hash()))
+		reorg = sl.poem(header.CalcS(), sl.hc.GetSByHash(sl.hc.CurrentHeader().Hash()))
 	}
-	intrinsic := sl.calcIntrinsicS(header.Hash())
+
+	s := header.CalcS()
 	log.Info("Entropy Calculations", "S:", big.NewInt(0).Div(s, big.NewInt(int64(math.Pow(2, 56)))))
 	if nodeCtx != common.PRIME_CTX {
 
-		log.Info("!PRIME Entropy Calculations", "DeltaS:", big.NewInt(0).Div(deltaS, big.NewInt(int64(math.Pow(2, 56)))), "parentS:", big.NewInt(0).Div(parentS, big.NewInt(int64(math.Pow(2, 56)))), "intrinsict:", big.NewInt(0).Div(intrinsic, big.NewInt(int64(math.Pow(2, 56)))))
+		log.Info("!PRIME Entropy Calculations", "DeltaS:", big.NewInt(0).Div(header.CalcDeltaS(), big.NewInt(int64(math.Pow(2, 56)))), "parentS:", big.NewInt(0).Div(header.ParentEntropy(), big.NewInt(int64(math.Pow(2, 56)))), "intrinsict:", big.NewInt(0).Div(header.CalcIntrinsicS(), big.NewInt(int64(math.Pow(2, 56)))))
 	}
-	rawdb.WriteS(batch, header.Hash(), header.NumberU64(), s)
+
+	pendingHeaderWithTermini.Header.SetParentEntropy(s)
 
 	// Combine sub's pending ETXs, sub rollup, and our local ETXs into localPendingEtxs
 	// e.g. localPendingEtxs[ctx]:
@@ -294,7 +279,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "etxs", len(block.ExtTransactions()), "gas", block.GasUsed(),
 		"root", block.Root())
 
-	return localPendingEtxs, s, deltaS, reorg, nil
+	return localPendingEtxs, nil, nil, reorg, nil
 }
 
 // backfillPETXs collects any missing PendingETX objects needed to process the
@@ -495,23 +480,6 @@ func (sl *Slice) poem(externS *big.Int, currentS *big.Int) bool {
 	return reorg
 }
 
-// calcIntrinsicS
-func (sl *Slice) calcIntrinsicS(hash common.Hash) *big.Int {
-	const mantBits = 257
-	bitLength := 128
-
-	x := new(big.Int).SetBytes(hash.Bytes())
-	c, m := logmath.BinaryLog(x, mantBits)
-	f := big.NewFloat(0).SetPrec(mantBits).SetInt(m)
-	f = f.SetMantExp(f, -mantBits)
-	f.Add(f, big.NewFloat(float64(c)))
-	f.Sub(big.NewFloat(256), f)
-	f.Mul(f, big.NewFloat(math.Pow(2, 56)))
-	i, _ := f.Uint64()
-
-	return new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(bitLength)), nil).SetUint64(i)
-}
-
 // GetPendingHeader is used by the miner to request the current pending header
 func (sl *Slice) GetPendingHeader() (*types.Header, error) {
 	if ph := sl.phCache[sl.bestPhKey.key].Header; ph != nil {
@@ -662,8 +630,7 @@ func (sl *Slice) writeToPhCacheAndPickPhHead(inSlice bool, reorg bool, s *big.In
 		if sl.bestPhKey.blockS.Cmp(s) < 0 {
 			//Reset the current head to align with the coord
 			header := sl.hc.GetHeaderByHash(pendingHeaderWithTermini.Header.ParentHash())
-			priorBlockS := sl.hc.GetS(header.Hash(), header.NumberU64())
-			sl.bestPhKey = bestPhKeyStruct{key: pendingHeaderWithTermini.Termini[terminiIndex], coordS: s, blockS: priorBlockS, blockHash: header.Hash()}
+			sl.bestPhKey = bestPhKeyStruct{key: pendingHeaderWithTermini.Termini[terminiIndex], coordS: s, blockS: pendingHeaderWithTermini.Header.ParentEntropy(), blockHash: pendingHeaderWithTermini.Header.ParentHash()}
 			sl.hc.SetCurrentHeader(header)
 			fmt.Println("Choosing new pending header from coord update Ph Number:", pendingHeaderWithTermini.Header.NumberArray())
 		}
@@ -697,8 +664,6 @@ func (sl *Slice) init(genesis *Genesis) error {
 		// Initialize slice state for genesis knot
 		genesisTermini := []common.Hash{genesisHash, genesisHash, genesisHash, genesisHash}
 		rawdb.WriteTermini(sl.sliceDb, genesisHash, genesisTermini)
-		rawdb.WriteS(sl.sliceDb, genesisHash, 0, big.NewInt(0))
-		rawdb.WriteDeltaS(sl.sliceDb, genesisHash, 0, big.NewInt(0))
 
 		// Append each of the knot blocks
 		sl.bestPhKey = bestPhKeyStruct{key: genesisHash, coordS: big.NewInt(0), blockS: big.NewInt(0), blockHash: genesisHash}

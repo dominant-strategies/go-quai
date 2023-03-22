@@ -22,6 +22,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"math"
 	"math/big"
 	"reflect"
 	"sync/atomic"
@@ -31,6 +32,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rlp"
+	mathutil "modernc.org/mathutil"
 )
 
 var (
@@ -668,6 +670,77 @@ func (h *Header) EmptyUncles() bool {
 // EmptyReceipts returns true if there are no receipts for this header/block.
 func (h *Header) EmptyReceipts() bool {
 	return h.ReceiptHash() == EmptyRootHash
+}
+
+func (h *Header) CalcS() *big.Int {
+	order := h.CalcOrder()
+	intrinsicS := h.CalcIntrinsicS()
+	switch order {
+	case common.PRIME_CTX:
+		totalS := big.NewInt(0).Add(h.ParentEntropy(common.PRIME_CTX), h.ParentDeltaS(0))
+		totalS.Add(totalS, h.ParentDeltaS(1))
+		totalS.Add(totalS, intrinsicS)
+		return totalS
+	case common.REGION_CTX:
+		totalS := big.NewInt(0).Add(h.ParentEntropy(common.REGION_CTX), h.ParentDeltaS(1))
+		totalS.Add(totalS, intrinsicS)
+		return totalS
+	case common.ZONE_CTX:
+		return big.NewInt(0).Add(h.ParentEntropy(common.ZONE_CTX), intrinsicS)
+	}
+	return nil
+}
+
+func (h *Header) CalcDeltaS() *big.Int {
+	order := h.CalcOrder()
+	intrinsicS := h.CalcIntrinsicS()
+	switch order {
+	case common.PRIME_CTX:
+		return nil
+	case common.REGION_CTX:
+		totalDeltaS := big.NewInt(0).Add(h.ParentDeltaS(0), h.ParentDeltaS(1))
+		return totalDeltaS.Add(totalDeltaS, intrinsicS)
+	case common.ZONE_CTX:
+		return big.NewInt(0).Add(h.ParentDeltaS(1), intrinsicS)
+	}
+	return nil
+}
+
+func (h *Header) CalcOrder() int {
+	intrinsicS := h.CalcIntrinsicS()
+	// PRIME case
+	totalDeltaS := big.NewInt(0).Add(h.ParentDeltaS(0), h.ParentDeltaS(1))
+	totalDeltaS.Add(totalDeltaS, intrinsicS)
+	if totalDeltaS.Cmp(h.EntropyThreshold(common.PRIME_CTX)) > 0 {
+		return common.PRIME_CTX
+	}
+	// Region case
+	totalDeltaS = big.NewInt(0).Add(h.ParentDeltaS(1), intrinsicS)
+	if totalDeltaS.Cmp(h.EntropyThreshold(common.REGION_CTX)) > 0 {
+		return common.REGION_CTX
+	}
+	// Zone case
+	if intrinsicS.Cmp(h.EntropyThreshold(common.ZONE_CTX)) > 0 {
+		return common.ZONE_CTX
+	}
+	return -1
+}
+
+// calcIntrinsicS
+func (h *Header) CalcIntrinsicS() *big.Int {
+	const mantBits = 257
+	bitLength := 128
+
+	x := new(big.Int).SetBytes(h.Hash().Bytes())
+	c, m := mathutil.BinaryLog(x, mantBits)
+	f := big.NewFloat(0).SetPrec(mantBits).SetInt(m)
+	f = f.SetMantExp(f, -mantBits)
+	f.Add(f, big.NewFloat(float64(c)))
+	f.Sub(big.NewFloat(256), f)
+	f.Mul(f, big.NewFloat(math.Pow(2, 56)))
+	i, _ := f.Uint64()
+
+	return new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(bitLength)), nil).SetUint64(i)
 }
 
 // Body is a simple (mutable, non-safe) data container for storing and moving
