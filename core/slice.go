@@ -223,7 +223,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 
 	// calc S
 	if nodeCtx == common.ZONE_CTX {
-		reorg = sl.poem(header.CalcS(), sl.hc.GetSByHash(sl.hc.CurrentHeader().Hash()))
+		reorg = sl.poem(header.CalcS(), sl.hc.CurrentHeader().CalcS())
 	}
 
 	s := header.CalcS()
@@ -666,7 +666,10 @@ func (sl *Slice) init(genesis *Genesis) error {
 
 		// Append each of the knot blocks
 		sl.bestPhKey = bestPhKeyStruct{key: genesisHash, coordS: big.NewInt(0), blockS: big.NewInt(0), blockHash: genesisHash}
-
+		sl.hc.SetCurrentHeader(genesisHeader)
+		manifest := types.BlockManifest{genesisHash}
+		manifestHash := types.DeriveSha(manifest, trie.NewStackTrie(nil))
+		sl.AddPendingEtxs(types.PendingEtxs{Header: genesisHeader, Etxs: []types.Transactions{}})
 		pendingHeader := types.EmptyHeader()
 		for index := 0; index < common.HierarchyDepth; index++ {
 			statedb, err := state.New(genesisHeader.Root(), state.NewDatabase(sl.sliceDb), nil)
@@ -683,14 +686,16 @@ func (sl *Slice) init(genesis *Genesis) error {
 			pendingHeader.SetGasLimit(params.MinGasLimit, index)
 			pendingHeader.SetGasUsed(uint64(0), index)
 			pendingHeader.SetRoot(root, index)
-			pendingHeader.SetDifficulty(sl.hc.genesisHeader.Difficulty(), index)
+			pendingHeader.SetDifficulty(sl.hc.genesisHeader.Difficulty(index), index)
 			pendingHeader.SetCoinbase(sl.miner.coinbase, index)
+			pendingHeader.SetManifestHash(manifestHash, index)
 		}
 		big2e64 := big.NewInt(0).Exp(big.NewInt(2), big.NewInt(64), nil)
-		pendingHeader.SetEntropyThreshold(big.NewInt(0).Mul(big2e64, big.NewInt(20)), 1)
-		pendingHeader.SetEntropyThreshold(big.NewInt(0).Mul(big2e64, big.NewInt(400)), 0)
+		pendingHeader.SetEntropyThreshold(big.NewInt(0).Mul(big2e64, big.NewInt(400)), 1)
+		pendingHeader.SetEntropyThreshold(big.NewInt(0).Mul(big2e64, big.NewInt(8000)), 0)
 		pendingHeader.SetExtra([]byte{})
 		pendingHeader.SetLocation(common.NodeLocation)
+
 		sl.miner.worker.AddPendingBlockBody(pendingHeader, &types.Body{})
 		sl.phCache[genesisHash] = types.PendingHeader{Header: pendingHeader, Termini: genesisTermini, Entropy: big.NewInt(0)}
 	} else { // load the phCache and slice current pending header hash

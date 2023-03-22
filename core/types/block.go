@@ -716,15 +716,18 @@ func (h *Header) CalcOrder() int {
 	// PRIME case
 	totalDeltaS := big.NewInt(0).Add(h.ParentDeltaS(0), h.ParentDeltaS(1))
 	totalDeltaS.Add(totalDeltaS, intrinsicS)
+	fmt.Println("CalcOrder ParentDeltaS(0):", h.ParentDeltaS(0), "parentDeltaS(1):", h.ParentDeltaS(1), "intrinsicS:", intrinsicS, "totalDeltaS:", totalDeltaS, "h.EntropyThreshold(PRIME):", h.EntropyThreshold(common.PRIME_CTX))
 	if totalDeltaS.Cmp(h.EntropyThreshold(common.PRIME_CTX)) > 0 {
 		return common.PRIME_CTX
 	}
 	// Region case
 	totalDeltaS = big.NewInt(0).Add(h.ParentDeltaS(1), intrinsicS)
+	fmt.Println("CalcOrder parentDeltaS(1):", h.ParentDeltaS(1), "intrinsicS:", intrinsicS, "totalDeltaS:", totalDeltaS, "h.EntropyThreshold(REGION):", h.EntropyThreshold(common.REGION_CTX))
 	if totalDeltaS.Cmp(h.EntropyThreshold(common.REGION_CTX)) > 0 {
 		return common.REGION_CTX
 	}
 	// Zone case
+	fmt.Println("CalcOrder intrinsicS:", intrinsicS, "totalDeltaS:", totalDeltaS, "h.Difficulty(ZONE):", h.Difficulty(common.ZONE_CTX), "diff bigbits:", h.CalcIntrinsicS(common.BytesToHash(new(big.Int).Div(big2e256, h.Difficulty(common.ZONE_CTX)).Bytes())))
 	if intrinsicS.Cmp(h.CalcIntrinsicS(common.BytesToHash(new(big.Int).Div(big2e256, h.Difficulty(common.ZONE_CTX)).Bytes()))) > 0 {
 		return common.ZONE_CTX
 	}
@@ -739,10 +742,24 @@ func (h *Header) CalcIntrinsicS(args ...common.Hash) *big.Int {
 	}
 
 	x := new(big.Int).SetBytes(hash.Bytes())
-	c, m := mathutil.BinaryLog(x, C_mantBits)
+	d := big.NewInt(0).Sub(big2e256, x)
+	c, m := mathutil.BinaryLog(d, C_mantBits)
 	bigBits := big.NewInt(0).Mul(big.NewInt(int64(c)), big.NewInt(0).Exp(big.NewInt(2), big.NewInt(C_mantBits), nil))
+	bigBits = bigBits.Add(bigBits, m)
+	return bigBits
+	// const mantBits = 257
+	// bitLength := 128
 
-	return bigBits.Add(bigBits, m)
+	// x := new(big.Int).SetBytes(h.Hash().Bytes())
+	// c, m := mathutil.BinaryLog(x, mantBits)
+	// f := big.NewFloat(0).SetPrec(mantBits).SetInt(m)
+	// f = f.SetMantExp(f, -mantBits)
+	// f.Add(f, big.NewFloat(float64(c)))
+	// f.Sub(big.NewFloat(256), f)
+	// f.Mul(f, big.NewFloat(math.Pow(2, 56)))
+	// i, _ := f.Uint64()
+
+	// return new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(bitLength)), nil).SetUint64(i)
 }
 
 // Body is a simple (mutable, non-safe) data container for storing and moving

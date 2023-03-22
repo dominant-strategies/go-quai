@@ -57,6 +57,7 @@ var (
 	errInvalidDifficulty   = errors.New("non-positive difficulty")
 	errDifficultyCrossover = errors.New("sub's difficulty exceeds dom's")
 	errInvalidPoW          = errors.New("invalid proof-of-work")
+	errInvalidOrder        = errors.New("block order does not match context")
 )
 
 // Author implements consensus.Engine, returning the header's coinbase as the
@@ -382,14 +383,19 @@ func (blake3pow *Blake3pow) verifySeal(chain consensus.ChainHeaderReader, header
 		return blake3pow.shared.verifySeal(chain, header, fulldag)
 	}
 	// Ensure that we have a valid difficulty for the block
-	if header.Difficulty().Sign() <= 0 {
+	if header.Difficulty(common.ZONE_CTX).Sign() <= 0 {
 		return errInvalidDifficulty
 	}
-	// Check that SealHash meets the difficulty target
-	target := new(big.Int).Div(big2e256, header.Difficulty())
-	if new(big.Int).SetBytes(header.Hash().Bytes()).Cmp(target) > 0 {
+	// Check for valid zone share and order matches context
+	order := header.CalcOrder()
+	if order == -1 {
 		return errInvalidPoW
+	} else {
+		if order != common.NodeLocation.Context() {
+			return errInvalidOrder
+		}
 	}
+
 	return nil
 }
 
