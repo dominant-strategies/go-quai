@@ -202,6 +202,18 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 			pendingHeaderWithTermini.Header.SetParentDeltaS(header.CalcDeltaS(), nodeCtx-1)
 		}
 	}
+	s := header.CalcS()
+	// calc S
+	if nodeCtx == common.ZONE_CTX {
+		reorg = sl.poem(s, sl.hc.CurrentHeader().CalcS())
+	}
+
+	log.Info("Entropy Calculations", "S:", s)
+	if nodeCtx != common.PRIME_CTX {
+		log.Info("!PRIME Entropy Calculations", "DeltaS:", big.NewInt(0).Div(header.CalcDeltaS(), big.NewInt(int64(math.Pow(2, types.C_mantBits)))), "parentS:", big.NewInt(0).Div(header.ParentEntropy(), big.NewInt(int64(math.Pow(2, types.C_mantBits)))), "intrinsict:", big.NewInt(0).Div(header.CalcIntrinsicS(), big.NewInt(int64(math.Pow(2, types.C_mantBits)))))
+	}
+
+	pendingHeaderWithTermini.Header.SetParentEntropy(s)
 
 	// Call my sub to append the block, and collect the rolled up ETXs from that sub
 	localPendingEtxs := []types.Transactions{types.Transactions{}, types.Transactions{}, types.Transactions{}}
@@ -222,19 +234,6 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 			sl.AddPendingEtxs(pEtxs)
 		}
 	}
-
-	// calc S
-	if nodeCtx == common.ZONE_CTX {
-		reorg = sl.poem(header.CalcS(), sl.hc.CurrentHeader().CalcS())
-	}
-
-	s := header.CalcS()
-	log.Info("Entropy Calculations", "S:", big.NewInt(0).Div(s, big.NewInt(int64(math.Pow(2, 64)))))
-	if nodeCtx != common.PRIME_CTX {
-		log.Info("!PRIME Entropy Calculations", "DeltaS:", big.NewInt(0).Div(header.CalcDeltaS(), big.NewInt(int64(math.Pow(2, types.C_mantBits)))), "parentS:", big.NewInt(0).Div(header.ParentEntropy(), big.NewInt(int64(math.Pow(2, types.C_mantBits)))), "intrinsict:", big.NewInt(0).Div(header.CalcIntrinsicS(), big.NewInt(int64(math.Pow(2, types.C_mantBits)))))
-	}
-
-	pendingHeaderWithTermini.Header.SetParentEntropy(s)
 
 	// Combine sub's pending ETXs, sub rollup, and our local ETXs into localPendingEtxs
 	// e.g. localPendingEtxs[ctx]:
@@ -441,9 +440,9 @@ func (sl *Slice) pcrc(batch ethdb.Batch, header *types.Header, domTerminus commo
 	}
 
 	// Genesis escape for the domTerminus
-	if header.ParentHash(common.PRIME_CTX) == sl.config.GenesisHash {
-		domTerminus = sl.config.GenesisHash
-	}
+	// if header.ParentHash(common.PRIME_CTX) == sl.config.GenesisHash {
+	// 	domTerminus = sl.config.GenesisHash
+	// }
 
 	// Set the subtermini
 	if nodeCtx != common.ZONE_CTX {
@@ -477,7 +476,7 @@ func (sl *Slice) pcrc(batch ethdb.Batch, header *types.Header, domTerminus commo
 
 // POEM compares externS to the currentHead S and returns true if externS is greater
 func (sl *Slice) poem(externS *big.Int, currentS *big.Int) bool {
-	log.Debug("POEM:", "Header hash:", sl.hc.CurrentHeader().Hash(), "currentTd:", currentS, "externTd:", externS)
+	log.Info("POEM:", "Header hash:", sl.hc.CurrentHeader().Hash(), "currentTd:", currentS, "externTd:", externS)
 	reorg := currentS.Cmp(externS) < 0
 	return reorg
 }
@@ -612,13 +611,13 @@ func (sl *Slice) writeToPhCacheAndPickPhHead(inSlice bool, reorg bool, s *big.In
 	deepCopyPendingHeaderWithTermini := types.PendingHeader{Header: types.CopyHeader(pendingHeaderWithTermini.Header), Termini: pendingHeaderWithTermini.Termini, Entropy: s}
 	oldPh, exist := sl.phCache[pendingHeaderWithTermini.Termini[terminiIndex]]
 	//Only write iff our context is better than current ie > td
-	log.Debug("Updating PhCache and Pick Head", "S:", s, "bestPhKey.coordS", sl.bestPhKey.coordS, "bestPhKey.blockS:", sl.bestPhKey.blockS)
+	log.Info("Updating PhCache and Pick Head", "S:", s, "bestPhKey.coordS", sl.bestPhKey.coordS, "bestPhKey.blockS:", sl.bestPhKey.blockS)
 	if inSlice {
 		if reorg {
 			sl.phCache[pendingHeaderWithTermini.Termini[terminiIndex]] = deepCopyPendingHeaderWithTermini
 			oldPhKey := sl.bestPhKey
 			sl.bestPhKey = bestPhKeyStruct{key: pendingHeaderWithTermini.Termini[terminiIndex], coordS: oldPhKey.coordS, blockS: s, blockHash: pendingHeaderWithTermini.Header.ParentHash()}
-			log.Debug("Choosing new pending header from slice", "Ph Number:", pendingHeaderWithTermini.Header.NumberArray())
+			log.Info("Choosing new pending header from slice", "Ph Number:", pendingHeaderWithTermini.Header.NumberArray())
 		}
 	} else {
 		if exist {
@@ -714,6 +713,7 @@ func (sl *Slice) init(genesis *Genesis) error {
 		pendingHeader.SetEntropyThreshold(big.NewInt(0).Mul(big2e64, big.NewInt(8000)), 0)
 		pendingHeader.SetExtra([]byte{})
 		pendingHeader.SetLocation(common.NodeLocation)
+		pendingHeader.SetTime(uint64(time.Now().Unix()))
 
 		genesisRoot := sl.hc.genesisHeader.Root()
 		zonedb, err := state.New(genesisRoot, state.NewDatabase(sl.sliceDb), nil)
