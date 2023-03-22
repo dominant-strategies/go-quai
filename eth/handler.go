@@ -395,8 +395,13 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 		numDirect := int(math.Sqrt(float64(len(peers))))
 		subset := peers[:numDirect]
 		if len(subset) < minPeerSendTx {
-			// If our subset is less than the minimum, send to the minimum
-			subset = peers[:minPeerSendTx+1] // The high bound is exclusive
+			// If we have less peers than the minimum, send to all peers
+			if len(peers) < minPeerSendTx {
+				subset = peers
+			} else {
+				// If our subset is less than the minimum, send to the minimum
+				subset = peers[:minPeerSendTx] // The high bound is exclusive
+			}
 		}
 		for _, peer := range subset {
 			txset[peer] = append(txset[peer], tx.Hash())
