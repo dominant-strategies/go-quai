@@ -421,6 +421,7 @@ func (blake3pow *Blake3pow) FinalizeAtIndex(chain consensus.ChainHeaderReader, h
 	// Accumulate any block and uncle rewards and commit the final state root
 	accumulateRewardsAtIndex(chain.Config(), state, header, uncles, index)
 	root := state.IntermediateRoot(chain.Config().IsEIP158(header.Number(index)))
+	fmt.Println("State root", root)
 	header.SetRoot(root, index)
 }
 

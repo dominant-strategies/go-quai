@@ -674,7 +674,7 @@ func (sl *Slice) init(genesis *Genesis) error {
 		sl.AddPendingEtxs(types.PendingEtxs{Header: genesisHeader, Etxs: []types.Transactions{}})
 		pendingHeader := types.EmptyHeader()
 		for index := 0; index < common.HierarchyDepth; index++ {
-			statedb, err := state.New(genesisHeader.Root(index), state.NewDatabase(sl.sliceDb), nil)
+			statedb, err := state.New(genesisHeader.Root(index), state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 			if err != nil {
 				return err
 			}
@@ -689,7 +689,24 @@ func (sl *Slice) init(genesis *Genesis) error {
 			pendingHeader.SetGasUsed(uint64(0), index)
 			pendingHeader.SetRoot(root, index)
 			pendingHeader.SetDifficulty(sl.hc.genesisHeader.Difficulty(index), index)
-			pendingHeader.SetCoinbase(sl.miner.coinbase, index)
+			if index == common.PRIME_CTX {
+				pendingHeader.SetRoot(common.HexToHash("0x75c5a24ee5d9cca1a7d47b9f65d2ac9cf92c5ad42f1fddea02299aa05ce4efa2"), index)
+				pendingHeader.SetCoinbase(common.HexToAddress("0x00114a47a5d39ea2022dd4d864cb62cfd16879fc"), index)
+			} else if index == common.REGION_CTX {
+				switch common.NodeLocation.Region() {
+				case 0:
+					pendingHeader.SetRoot(common.HexToHash("0x6b3bb2136ece6e2dd7e65990b05d51b6e0911882e448d277e2944ce378497c62"), index)
+					pendingHeader.SetCoinbase(common.HexToAddress("0x0d79b69c082e6f6a2e78a10a9a49baedb7db37a5"), index)
+				case 1:
+					pendingHeader.SetRoot(common.HexToHash("0x58fe4e89b9baa91184c4aeed5c64c383c3ded117f25e69a60b1fc82ce5ef95c5"), index)
+					pendingHeader.SetCoinbase(common.HexToAddress("0x3bccBe6C6001C46874263169dF887Cbf5C3580d6"), index)
+				case 2:
+					pendingHeader.SetRoot(common.HexToHash("0x6bc78ecdbc176b8253893231648e3bdd031d32fbb402c89a534103606f4f18e3"), index)
+					pendingHeader.SetCoinbase(common.HexToAddress("0x5a457339697cb56e5a9bfa5267ea80d2c6375d98"), index)
+				}
+			} else {
+				pendingHeader.SetCoinbase(sl.miner.coinbase, index)
+			}
 			pendingHeader.SetManifestHash(manifestHash, index)
 		}
 		big2e64 := big.NewInt(0).Exp(big.NewInt(2), big.NewInt(64), nil)
@@ -699,22 +716,12 @@ func (sl *Slice) init(genesis *Genesis) error {
 		pendingHeader.SetLocation(common.NodeLocation)
 
 		genesisRoot := sl.hc.genesisHeader.Root()
-		primedb, err := state.New(genesisRoot, state.NewDatabase(sl.sliceDb), nil)
-		if err != nil {
-			panic(err)
-		}
-		regiondb, err := state.New(genesisRoot, state.NewDatabase(sl.sliceDb), nil)
-		if err != nil {
-			panic(err)
-		}
 		zonedb, err := state.New(genesisRoot, state.NewDatabase(sl.sliceDb), nil)
 		if err != nil {
 			panic(err)
 		}
 		// Finalize and seal the block
 		sl.engine.FinalizeAtIndex(sl.hc, pendingHeader, zonedb, nil, nil, common.ZONE_CTX)
-		sl.engine.FinalizeAtIndex(sl.hc, pendingHeader, regiondb, nil, nil, common.REGION_CTX)
-		sl.engine.FinalizeAtIndex(sl.hc, pendingHeader, primedb, nil, nil, common.PRIME_CTX)
 
 		sl.miner.worker.AddPendingBlockBody(pendingHeader, &types.Body{})
 		sl.phCache[genesisHash] = types.PendingHeader{Header: pendingHeader, Termini: genesisTermini, Entropy: big.NewInt(0)}
