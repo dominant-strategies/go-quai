@@ -42,3 +42,38 @@ func CalculateReward() *big.Int {
 		return nil
 	}
 }
+
+func CalculateRewardWithIndex(index int) *big.Int {
+
+	reward := big.NewInt(5e18)
+
+	timeFactor := big.NewInt(10)
+
+	regions := big.NewInt(3)
+	zones := big.NewInt(3)
+
+	finalReward := new(big.Int)
+
+	switch index {
+	case common.PRIME_CTX:
+		primeReward := big.NewInt(3)
+		primeReward.Div(reward, primeReward)
+		finalReward = primeReward
+	case common.REGION_CTX:
+		regionReward := big.NewInt(3)
+		regionReward.Mul(regionReward, regions)
+		regionReward.Mul(regionReward, timeFactor)
+		regionReward.Div(reward, regionReward)
+		finalReward = regionReward
+	case common.ZONE_CTX:
+		zoneReward := big.NewInt(3)
+		zoneReward.Mul(zoneReward, regions)
+		zoneReward.Mul(zoneReward, zones)
+		zoneReward.Mul(zoneReward, timeFactor)
+		zoneReward.Mul(zoneReward, timeFactor)
+		zoneReward.Div(reward, zoneReward)
+		finalReward = zoneReward
+	}
+
+	return finalReward
+}

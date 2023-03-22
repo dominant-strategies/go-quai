@@ -2,6 +2,7 @@ package core
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -67,11 +68,15 @@ func (bc *BodyDb) Append(batch ethdb.Batch, block *types.Block, newInboundEtxs t
 	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
 
+	fmt.Println("Block Hash before the state processing: ", block.Header().Hash())
+	fmt.Println(block.Root())
 	// Process our block
 	logs, err := bc.processor.Apply(batch, block, newInboundEtxs)
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("Block Hash after the state processing: ", block.Header().Hash())
+	fmt.Println(block.Root())
 
 	if block.Hash() != block.Header().Hash() {
 		log.Info("BodyDb Append, Roots Mismatch:", "block.Hash:", block.Hash(), "block.Header.Hash", block.Header().Hash(), "parentHeader.Number:", block.NumberU64())

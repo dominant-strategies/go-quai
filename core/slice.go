@@ -672,7 +672,7 @@ func (sl *Slice) init(genesis *Genesis) error {
 		sl.AddPendingEtxs(types.PendingEtxs{Header: genesisHeader, Etxs: []types.Transactions{}})
 		pendingHeader := types.EmptyHeader()
 		for index := 0; index < common.HierarchyDepth; index++ {
-			statedb, err := state.New(genesisHeader.Root(), state.NewDatabase(sl.sliceDb), nil)
+			statedb, err := state.New(genesisHeader.Root(index), state.NewDatabase(sl.sliceDb), nil)
 			if err != nil {
 				return err
 			}
@@ -695,6 +695,24 @@ func (sl *Slice) init(genesis *Genesis) error {
 		pendingHeader.SetEntropyThreshold(big.NewInt(0).Mul(big2e64, big.NewInt(8000)), 0)
 		pendingHeader.SetExtra([]byte{})
 		pendingHeader.SetLocation(common.NodeLocation)
+
+		genesisRoot := sl.hc.genesisHeader.Root()
+		primedb, err := state.New(genesisRoot, state.NewDatabase(sl.sliceDb), nil)
+		if err != nil {
+			panic(err)
+		}
+		regiondb, err := state.New(genesisRoot, state.NewDatabase(sl.sliceDb), nil)
+		if err != nil {
+			panic(err)
+		}
+		zonedb, err := state.New(genesisRoot, state.NewDatabase(sl.sliceDb), nil)
+		if err != nil {
+			panic(err)
+		}
+		// Finalize and seal the block
+		sl.engine.FinalizeAtIndex(sl.hc, pendingHeader, zonedb, nil, nil, common.ZONE_CTX)
+		sl.engine.FinalizeAtIndex(sl.hc, pendingHeader, regiondb, nil, nil, common.REGION_CTX)
+		sl.engine.FinalizeAtIndex(sl.hc, pendingHeader, primedb, nil, nil, common.PRIME_CTX)
 
 		sl.miner.worker.AddPendingBlockBody(pendingHeader, &types.Body{})
 		sl.phCache[genesisHash] = types.PendingHeader{Header: pendingHeader, Termini: genesisTermini, Entropy: big.NewInt(0)}
