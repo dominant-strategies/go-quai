@@ -613,6 +613,13 @@ func (sl *Slice) writeToPhCacheAndPickPhHead(inSlice bool, reorg bool, s *big.In
 	//Only write iff our context is better than current ie > td
 	log.Info("Updating PhCache and Pick Head", "S:", s, "bestPhKey.coordS", sl.bestPhKey.coordS, "bestPhKey.blockS:", sl.bestPhKey.blockS)
 	if inSlice {
+		if exist {
+			if sl.poem(s, oldPh.Entropy) {
+				sl.phCache[pendingHeaderWithTermini.Termini[terminiIndex]] = deepCopyPendingHeaderWithTermini
+			}
+		} else {
+			sl.phCache[pendingHeaderWithTermini.Termini[terminiIndex]] = deepCopyPendingHeaderWithTermini
+		}
 		if reorg {
 			sl.phCache[pendingHeaderWithTermini.Termini[terminiIndex]] = deepCopyPendingHeaderWithTermini
 			oldPhKey := sl.bestPhKey
@@ -636,11 +643,6 @@ func (sl *Slice) writeToPhCacheAndPickPhHead(inSlice bool, reorg bool, s *big.In
 			fmt.Println("Choosing new pending header from coord update Ph Number:", pendingHeaderWithTermini.Header.NumberArray())
 		}
 	}
-
-	if !exist {
-		sl.phCache[pendingHeaderWithTermini.Termini[terminiIndex]] = deepCopyPendingHeaderWithTermini
-	}
-
 }
 
 // init checks if the headerchain is empty and if it's empty appends the Knot
@@ -710,7 +712,7 @@ func (sl *Slice) init(genesis *Genesis) error {
 		}
 		big2e64 := big.NewInt(0).Exp(big.NewInt(2), big.NewInt(64), nil)
 		pendingHeader.SetEntropyThreshold(big.NewInt(0).Mul(big2e64, big.NewInt(400)), 1)
-		pendingHeader.SetEntropyThreshold(big.NewInt(0).Mul(big2e64, big.NewInt(8000)), 0)
+		pendingHeader.SetEntropyThreshold(big.NewInt(0).Mul(big2e64, big.NewInt(1000)), 0)
 		pendingHeader.SetExtra([]byte{})
 		pendingHeader.SetLocation(common.NodeLocation)
 		pendingHeader.SetTime(uint64(time.Now().Unix()))

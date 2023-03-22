@@ -707,7 +707,7 @@ func (h *Header) CalcDeltaS() *big.Int {
 	intrinsicS := h.CalcIntrinsicS()
 	switch order {
 	case common.PRIME_CTX:
-		return nil
+		return big.NewInt(0)
 	case common.REGION_CTX:
 		totalDeltaS := big.NewInt(0).Add(h.ParentDeltaS(0), h.ParentDeltaS(1))
 		totalDeltaS = big.NewInt(0).Add(totalDeltaS, intrinsicS)
