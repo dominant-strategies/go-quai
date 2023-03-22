@@ -226,10 +226,9 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	}
 
 	s := header.CalcS()
-	log.Info("Entropy Calculations", "S:", big.NewInt(0).Div(s, big.NewInt(int64(math.Pow(2, 56)))))
+	log.Info("Entropy Calculations", "S:", big.NewInt(0).Div(s, big.NewInt(int64(math.Pow(2, 64)))))
 	if nodeCtx != common.PRIME_CTX {
-
-		log.Info("!PRIME Entropy Calculations", "DeltaS:", big.NewInt(0).Div(header.CalcDeltaS(), big.NewInt(int64(math.Pow(2, 56)))), "parentS:", big.NewInt(0).Div(header.ParentEntropy(), big.NewInt(int64(math.Pow(2, 56)))), "intrinsict:", big.NewInt(0).Div(header.CalcIntrinsicS(), big.NewInt(int64(math.Pow(2, 56)))))
+		log.Info("!PRIME Entropy Calculations", "DeltaS:", big.NewInt(0).Div(header.CalcDeltaS(), big.NewInt(int64(math.Pow(2, 64)))), "parentS:", big.NewInt(0).Div(header.ParentEntropy(), big.NewInt(int64(math.Pow(2, 64)))), "intrinsict:", big.NewInt(0).Div(header.CalcIntrinsicS(), big.NewInt(int64(math.Pow(2, 64)))))
 	}
 
 	pendingHeaderWithTermini.Header.SetParentEntropy(s)

@@ -22,7 +22,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"math"
 	"math/big"
 	"reflect"
 	"sync/atomic"
@@ -38,6 +37,7 @@ import (
 var (
 	EmptyRootHash  = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
 	EmptyUncleHash = RlpHash([]*Header(nil))
+	big2e256       = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0)) // 2^256
 )
 
 // A BlockNonce is a 64-bit hash which proves (combined with the
@@ -720,27 +720,26 @@ func (h *Header) CalcOrder() int {
 		return common.REGION_CTX
 	}
 	// Zone case
-	if intrinsicS.Cmp(h.EntropyThreshold(common.ZONE_CTX)) > 0 {
+	if intrinsicS.Cmp(h.CalcIntrinsicS(common.BytesToHash(new(big.Int).Div(big2e256, h.Difficulty(common.ZONE_CTX)).Bytes()))) > 0 {
 		return common.ZONE_CTX
 	}
 	return -1
 }
 
 // calcIntrinsicS
-func (h *Header) CalcIntrinsicS() *big.Int {
-	const mantBits = 257
-	bitLength := 128
+func (h *Header) CalcIntrinsicS(args ...common.Hash) *big.Int {
+	const mantBits = 64
 
-	x := new(big.Int).SetBytes(h.Hash().Bytes())
+	hash := h.Hash()
+	if len(args) > 0 {
+		hash = args[0]
+	}
+
+	x := new(big.Int).SetBytes(hash.Bytes())
 	c, m := mathutil.BinaryLog(x, mantBits)
-	f := big.NewFloat(0).SetPrec(mantBits).SetInt(m)
-	f = f.SetMantExp(f, -mantBits)
-	f.Add(f, big.NewFloat(float64(c)))
-	f.Sub(big.NewFloat(256), f)
-	f.Mul(f, big.NewFloat(math.Pow(2, 56)))
-	i, _ := f.Uint64()
+	bigBits := big.NewInt(0).Mul(big.NewInt(int64(c)), big.NewInt(0).Exp(big.NewInt(2), big.NewInt(mantBits), nil))
 
-	return new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(bitLength)), nil).SetUint64(i)
+	return bigBits.Add(bigBits, m)
 }
 
 // Body is a simple (mutable, non-safe) data container for storing and moving
