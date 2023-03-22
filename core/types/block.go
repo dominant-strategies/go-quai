@@ -40,6 +40,8 @@ var (
 	big2e256       = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0)) // 2^256
 )
 
+const C_mantBits = 64
+
 // A BlockNonce is a 64-bit hash which proves (combined with the
 // mix-hash) that a sufficient amount of computation has been carried
 // out on a block.
@@ -167,6 +169,9 @@ func EmptyHeader() *Header {
 		h.manifestHash[i] = EmptyRootHash
 		h.uncleHash[i] = EmptyUncleHash
 		h.difficulty[i] = big.NewInt(0)
+		h.entropyThreshold[i] = big.NewInt(0)
+		h.parentEntropy[i] = big.NewInt(0)
+		h.parentDeltaS[i] = big.NewInt(0)
 		h.number[i] = big.NewInt(0)
 		h.baseFee[i] = big.NewInt(0)
 	}
@@ -728,16 +733,14 @@ func (h *Header) CalcOrder() int {
 
 // calcIntrinsicS
 func (h *Header) CalcIntrinsicS(args ...common.Hash) *big.Int {
-	const mantBits = 64
-
 	hash := h.Hash()
 	if len(args) > 0 {
 		hash = args[0]
 	}
 
 	x := new(big.Int).SetBytes(hash.Bytes())
-	c, m := mathutil.BinaryLog(x, mantBits)
-	bigBits := big.NewInt(0).Mul(big.NewInt(int64(c)), big.NewInt(0).Exp(big.NewInt(2), big.NewInt(mantBits), nil))
+	c, m := mathutil.BinaryLog(x, C_mantBits)
+	bigBits := big.NewInt(0).Mul(big.NewInt(int64(c)), big.NewInt(0).Exp(big.NewInt(2), big.NewInt(C_mantBits), nil))
 
 	return bigBits.Add(bigBits, m)
 }

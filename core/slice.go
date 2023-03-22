@@ -1,7 +1,6 @@
 package core
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -12,7 +11,9 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
+	"github.com/dominant-strategies/go-quai/consensus/misc"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
+	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/ethdb"
@@ -228,7 +229,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	s := header.CalcS()
 	log.Info("Entropy Calculations", "S:", big.NewInt(0).Div(s, big.NewInt(int64(math.Pow(2, 64)))))
 	if nodeCtx != common.PRIME_CTX {
-		log.Info("!PRIME Entropy Calculations", "DeltaS:", big.NewInt(0).Div(header.CalcDeltaS(), big.NewInt(int64(math.Pow(2, 64)))), "parentS:", big.NewInt(0).Div(header.ParentEntropy(), big.NewInt(int64(math.Pow(2, 64)))), "intrinsict:", big.NewInt(0).Div(header.CalcIntrinsicS(), big.NewInt(int64(math.Pow(2, 64)))))
+		log.Info("!PRIME Entropy Calculations", "DeltaS:", big.NewInt(0).Div(header.CalcDeltaS(), big.NewInt(int64(math.Pow(2, types.C_mantBits)))), "parentS:", big.NewInt(0).Div(header.ParentEntropy(), big.NewInt(int64(math.Pow(2, types.C_mantBits)))), "intrinsict:", big.NewInt(0).Div(header.CalcIntrinsicS(), big.NewInt(int64(math.Pow(2, types.C_mantBits)))))
 	}
 
 	pendingHeaderWithTermini.Header.SetParentEntropy(s)
@@ -644,7 +645,6 @@ func (sl *Slice) writeToPhCacheAndPickPhHead(inSlice bool, reorg bool, s *big.In
 // init checks if the headerchain is empty and if it's empty appends the Knot
 // otherwise loads the last stored state of the chain.
 func (sl *Slice) init(genesis *Genesis) error {
-	nodeCtx := common.NodeLocation.Context()
 	// Even though the genesis block cannot have any ETXs, we still need an empty
 	// pending ETX entry for that block hash, so that the state processor can build
 	// on it
@@ -666,26 +666,33 @@ func (sl *Slice) init(genesis *Genesis) error {
 
 		// Append each of the knot blocks
 		sl.bestPhKey = bestPhKeyStruct{key: genesisHash, coordS: big.NewInt(0), blockS: big.NewInt(0), blockHash: genesisHash}
-		knot := genesis.Knot[:]
-		for _, block := range knot {
-			sl.AddPendingEtxs(types.PendingEtxs{block.Header(), emptyPendingEtxs})
-			if block != nil {
-				location := block.Header().Location()
-				if nodeCtx == common.PRIME_CTX {
-					rawdb.WriteBody(sl.sliceDb, block.Hash(), block.NumberU64(), block.Body())
-					_, _, _, _, err = sl.Append(block.Header(), types.EmptyHeader(), genesisHash, nil, false, false, nil)
-					if err != nil {
-						log.Warn("Failed to append block", "hash:", block.Hash(), "Number:", block.Number(), "Location:", block.Header().Location(), "error:", err)
-					}
-				} else if location.Region() == common.NodeLocation.Region() && len(common.NodeLocation) == common.REGION_CTX {
-					rawdb.WriteBody(sl.sliceDb, block.Hash(), block.NumberU64(), block.Body())
-				} else if bytes.Equal(location, common.NodeLocation) {
-					rawdb.WriteBody(sl.sliceDb, block.Hash(), block.NumberU64(), block.Body())
-				}
 
+		pendingHeader := types.EmptyHeader()
+		for index := 0; index < common.HierarchyDepth; index++ {
+			statedb, err := state.New(genesisHeader.Root(), state.NewDatabase(sl.sliceDb), nil)
+			if err != nil {
+				return err
 			}
+			root, err := statedb.Commit(sl.config.IsEIP158(big.NewInt(1)))
+			if err != nil {
+				panic(fmt.Sprintf("state write error: %v", err))
+			}
+			pendingHeader.SetParentHash(genesisHash, index)
+			pendingHeader.SetNumber(big.NewInt(1), index)
+			pendingHeader.SetBaseFee(misc.CalcBaseFee(sl.config, genesisHeader), index)
+			pendingHeader.SetGasLimit(params.MinGasLimit, index)
+			pendingHeader.SetGasUsed(uint64(0), index)
+			pendingHeader.SetRoot(root, index)
+			pendingHeader.SetDifficulty(sl.hc.genesisHeader.Difficulty(), index)
+			pendingHeader.SetCoinbase(sl.miner.coinbase, index)
 		}
-
+		big2e64 := big.NewInt(0).Exp(big.NewInt(2), big.NewInt(64), nil)
+		pendingHeader.SetEntropyThreshold(big.NewInt(0).Mul(big2e64, big.NewInt(20)), 1)
+		pendingHeader.SetEntropyThreshold(big.NewInt(0).Mul(big2e64, big.NewInt(400)), 0)
+		pendingHeader.SetExtra([]byte{})
+		pendingHeader.SetLocation(common.NodeLocation)
+		sl.miner.worker.AddPendingBlockBody(pendingHeader, &types.Body{})
+		sl.phCache[genesisHash] = types.PendingHeader{Header: pendingHeader, Termini: genesisTermini, Entropy: big.NewInt(0)}
 	} else { // load the phCache and slice current pending header hash
 		if err := sl.loadLastState(); err != nil {
 			return err
@@ -806,6 +813,9 @@ func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *typ
 	combinedPendingHeader.SetReceiptHash(header.ReceiptHash(index), index)
 	combinedPendingHeader.SetRoot(header.Root(index), index)
 	combinedPendingHeader.SetDifficulty(header.Difficulty(index), index)
+	combinedPendingHeader.SetEntropyThreshold(header.EntropyThreshold(index), index)
+	combinedPendingHeader.SetParentEntropy(header.ParentEntropy(index), index)
+	combinedPendingHeader.SetParentDeltaS(header.ParentDeltaS(index), index)
 	combinedPendingHeader.SetCoinbase(header.Coinbase(index), index)
 	combinedPendingHeader.SetBloom(header.Bloom(index), index)
 

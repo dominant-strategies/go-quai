@@ -248,6 +248,7 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 		return errDifficultyCrossover
 	}
 	// Verify the block's difficulty based on its timestamp and parent's difficulty
+	fmt.Println("parent:", parent.Hash(), "genesis:", params.LocalGenesisHash, "difficulty:", parent.Difficulty())
 	expected := blake3pow.CalcDifficulty(chain, parent)
 	if expected.Cmp(header.Difficulty()) != 0 {
 		return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty(), expected)
@@ -339,7 +340,7 @@ func (blake3pow *Blake3pow) CalcDifficulty(chain consensus.ChainHeaderReader, pa
 		x.Set(params.MinimumDifficulty[nodeCtx])
 	}
 
-	return x
+	return parent.Difficulty()
 }
 
 func (blake3pow *Blake3pow) IsDomCoincident(header *types.Header) bool {
