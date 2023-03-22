@@ -392,7 +392,7 @@ func (blake3pow *Blake3pow) verifySeal(chain consensus.ChainHeaderReader, header
 	if order == -1 {
 		return errInvalidPoW
 	} else {
-		if order != common.NodeLocation.Context() {
+		if order > common.NodeLocation.Context() {
 			return errInvalidOrder
 		}
 	}

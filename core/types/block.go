@@ -30,6 +30,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rlp"
 	mathutil "modernc.org/mathutil"
 )
@@ -37,7 +38,7 @@ import (
 var (
 	EmptyRootHash  = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
 	EmptyUncleHash = RlpHash([]*Header(nil))
-	big2e256       = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0)) // 2^256
+	big2e256       = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil) // 2^256
 )
 
 const C_mantBits = 64
@@ -693,7 +694,12 @@ func (h *Header) CalcS() *big.Int {
 	case common.ZONE_CTX:
 		return big.NewInt(0).Add(h.ParentEntropy(common.ZONE_CTX), intrinsicS)
 	}
-	return nil
+	if h.Hash() == params.LocalGenesisHash {
+		return big.NewInt(0)
+	} else {
+		return nil
+	}
+
 }
 
 func (h *Header) CalcDeltaS() *big.Int {
@@ -704,9 +710,13 @@ func (h *Header) CalcDeltaS() *big.Int {
 		return nil
 	case common.REGION_CTX:
 		totalDeltaS := big.NewInt(0).Add(h.ParentDeltaS(0), h.ParentDeltaS(1))
-		return totalDeltaS.Add(totalDeltaS, intrinsicS)
+		totalDeltaS = totalDeltaS.Add(totalDeltaS, intrinsicS)
+		fmt.Println("region CalcDeltaS:", totalDeltaS)
+		return totalDeltaS
 	case common.ZONE_CTX:
-		return big.NewInt(0).Add(h.ParentDeltaS(1), intrinsicS)
+		totalDeltaS := big.NewInt(0).Add(h.ParentDeltaS(1), intrinsicS)
+		fmt.Println("zone CalcDeltaS:", totalDeltaS)
+		return totalDeltaS
 	}
 	return nil
 }
@@ -740,12 +750,17 @@ func (h *Header) CalcIntrinsicS(args ...common.Hash) *big.Int {
 	if len(args) > 0 {
 		hash = args[0]
 	}
-
+	fmt.Println("CalcIntrinsicS Hash:", hash)
 	x := new(big.Int).SetBytes(hash.Bytes())
-	d := big.NewInt(0).Sub(big2e256, x)
+	fmt.Println("x:", x, "big2e256:", big2e256)
+	d := big.NewInt(0).Div(big2e256, x)
+	fmt.Println("d:", d)
 	c, m := mathutil.BinaryLog(d, C_mantBits)
+	fmt.Println("c:", c, "m:", m)
 	bigBits := big.NewInt(0).Mul(big.NewInt(int64(c)), big.NewInt(0).Exp(big.NewInt(2), big.NewInt(C_mantBits), nil))
-	bigBits = bigBits.Add(bigBits, m)
+	fmt.Println("bigBits1:", bigBits)
+	bigBits = big.NewInt(0).Add(bigBits, m)
+	fmt.Println("bigBits2:", bigBits)
 	return bigBits
 	// const mantBits = 257
 	// bitLength := 128

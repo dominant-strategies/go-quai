@@ -195,10 +195,12 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	pendingHeaderWithTermini := sl.computePendingHeader(types.PendingHeader{Header: localPendingHeader, Termini: newTermini}, domPendingHeader, domOrigin)
 
 	// Set the parent delta S prior to sending to sub
-	if domOrigin {
-		pendingHeaderWithTermini.Header.SetParentDeltaS(big.NewInt(0))
-	} else {
-		pendingHeaderWithTermini.Header.SetParentDeltaS(header.CalcDeltaS())
+	if nodeCtx != common.PRIME_CTX {
+		if domOrigin {
+			pendingHeaderWithTermini.Header.SetParentDeltaS(big.NewInt(0), nodeCtx-1)
+		} else {
+			pendingHeaderWithTermini.Header.SetParentDeltaS(header.CalcDeltaS(), nodeCtx-1)
+		}
 	}
 
 	// Call my sub to append the block, and collect the rolled up ETXs from that sub
