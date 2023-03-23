@@ -17,6 +17,7 @@
 package eth
 
 import (
+	"math/big"
 	"sync"
 	"time"
 
@@ -26,9 +27,9 @@ import (
 // ethPeerInfo represents a short summary of the `eth` sub-protocol metadata known
 // about a connected peer.
 type ethPeerInfo struct {
-	Version uint   `json:"version"` // Ethereum protocol version negotiated
-	Number  uint64 `json:"number"`  // Head Number of the peer's blockchain
-	Head    string `json:"head"`    // Hex hash of the peer's best owned block
+	Version uint     `json:"version"` // Ethereum protocol version negotiated
+	Entropy *big.Int `json:"entropy"` // Head Entropy of the peer's blockchain
+	Head    string   `json:"head"`    // Hex hash of the peer's best owned block
 }
 
 // ethPeer is a wrapper around eth.Peer to maintain a few extra metadata.
@@ -41,11 +42,11 @@ type ethPeer struct {
 
 // info gathers and returns some `eth` protocol metadata known about a peer.
 func (p *ethPeer) info() *ethPeerInfo {
-	hash, number, _ := p.Head()
+	hash, entropy, _ := p.Head()
 
 	return &ethPeerInfo{
 		Version: p.Version(),
-		Number:  number,
+		Entropy: entropy,
 		Head:    hash.Hex(),
 	}
 }

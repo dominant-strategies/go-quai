@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/forkid"
@@ -95,7 +96,7 @@ type Packet interface {
 type StatusPacket struct {
 	ProtocolVersion uint32
 	NetworkID       uint64
-	Number          uint64
+	Entropy         *big.Int
 	Head            common.Hash
 	Genesis         common.Hash
 	ForkID          forkid.ID

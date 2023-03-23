@@ -92,7 +92,8 @@ type Downloader struct {
 
 	core Core
 
-	headNumber uint64
+	headEntropy *big.Int
+	headNumber  uint64
 
 	// Callbacks
 	dropPeer peerDropFn // Drops a peer for misbehaving
@@ -163,6 +164,7 @@ func New(stateDb ethdb.Database, mux *event.TypeMux, core Core, dropPeer peerDro
 		peers:         newPeerSet(),
 		core:          core,
 		headNumber:    core.CurrentBlock().NumberU64(),
+		headEntropy:   core.CurrentBlock().Header().CalcS(),
 		dropPeer:      dropPeer,
 		headerCh:      make(chan dataPack, 1),
 		bodyCh:        make(chan dataPack, 1),
@@ -250,8 +252,8 @@ func (d *Downloader) UnregisterPeer(id string) error {
 
 // Synchronise tries to sync up our local block chain with a remote peer, both
 // adding various sanity checks as well as wrapping it with various log entries.
-func (d *Downloader) Synchronise(id string, head common.Hash, number uint64, mode SyncMode) error {
-	err := d.synchronise(id, head, number, mode)
+func (d *Downloader) Synchronise(id string, head common.Hash, entropy *big.Int, mode SyncMode) error {
+	err := d.synchronise(id, head, entropy, mode)
 	switch err {
 	case nil, errBusy, errCanceled, errNoFetchesPending:
 		return err
@@ -281,7 +283,7 @@ func (d *Downloader) PeerSet() *peerSet {
 // synchronise will select the peer and use it for synchronising. If an empty string is given
 // it will use the best peer possible and synchronize if its number is higher than our own. If any of the
 // checks fail an error will be returned. This method is synchronous
-func (d *Downloader) synchronise(id string, hash common.Hash, number uint64, mode SyncMode) error {
+func (d *Downloader) synchronise(id string, hash common.Hash, entropy *big.Int, mode SyncMode) error {
 	// Mock out the synchronisation if testing
 	if d.synchroniseMock != nil {
 		return d.synchroniseMock(id, hash)
@@ -340,11 +342,11 @@ func (d *Downloader) synchronise(id string, hash common.Hash, number uint64, mod
 		return errUnknownPeer
 	}
 
-	// If the peer height is already seen
-	if d.headNumber >= number {
+	// If the peer entropy is lower than the downloader head entropy
+	if d.headEntropy.Cmp(entropy) >= 0 {
 		return nil
 	}
-	return d.syncWithPeer(p, hash, number)
+	return d.syncWithPeer(p, hash, entropy)
 }
 
 func (d *Downloader) getMode() SyncMode {
@@ -353,7 +355,7 @@ func (d *Downloader) getMode() SyncMode {
 
 // syncWithPeer starts a block synchronization based on the hash chain from the
 // specified peer and head hash.
-func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, number uint64) (err error) {
+func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, entropy *big.Int) (err error) {
 	d.mux.Post(StartEvent{})
 	defer func() {
 		// reset on error
@@ -369,7 +371,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, number ui
 	}
 	mode := d.getMode()
 
-	log.Debug("Synchronising with the network", "peer", p.id, "eth", p.version, "head", hash, "number", number, "mode", mode)
+	log.Debug("Synchronising with the network", "peer", p.id, "eth", p.version, "head", hash, "entropy", entropy, "mode", mode)
 	defer func(start time.Time) {
 		log.Debug("Synchronisation terminated", "elapsed", common.PrettyDuration(time.Since(start)))
 	}(time.Now())
@@ -402,7 +404,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, number ui
 		func() error { return d.fetchHeaders(p, origin) }, // Headers are always retrieved
 		func() error { return d.fetchBodies(origin) },     // Bodies are retrieved during normal and fast sync
 		func() error { return d.fetchReceipts(origin) },   // Receipts are retrieved during fast sync
-		func() error { return d.processHeaders(origin, number) },
+		func() error { return d.processHeaders(origin) },
 		func() error { return d.processFullSyncContent(peerHeight) },
 	}
 	return d.spawnSync(fetchers)
@@ -1029,7 +1031,7 @@ func (d *Downloader) fetchParts(deliveryCh chan dataPack, deliver func(dataPack)
 // processHeaders takes batches of retrieved headers from an input channel and
 // keeps processing and scheduling them into the header chain and downloader's
 // queue until the stream ends or a failure occurs.
-func (d *Downloader) processHeaders(origin uint64, number uint64) error {
+func (d *Downloader) processHeaders(origin uint64) error {
 	// Keep a count of uncertain headers to roll back
 	var (
 		rollback    uint64 // Zero means no rollback (fine as you can't unroll the genesis)
@@ -1147,6 +1149,7 @@ func (d *Downloader) processFullSyncContent(peerHeight uint64) error {
 				return err
 			}
 			d.headNumber = results[len(results)-1].Header.NumberU64()
+			d.headEntropy = results[len(results)-1].Header.CalcS()
 			// If all the blocks are fetched, we exit the sync process
 			if d.headNumber == peerHeight {
 				return errNoFetchesPending
