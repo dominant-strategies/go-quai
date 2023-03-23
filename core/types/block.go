@@ -685,16 +685,16 @@ func (h *Header) CalcS() *big.Int {
 	switch order {
 	case common.PRIME_CTX:
 
-		totalS := big.NewInt(0).Add(h.ParentEntropy(common.PRIME_CTX), h.ParentDeltaS(0))
-		totalS.Add(totalS, h.ParentDeltaS(1))
+		totalS := big.NewInt(0).Add(h.ParentEntropy(common.PRIME_CTX), h.ParentDeltaS(1))
+		totalS.Add(totalS, h.ParentDeltaS(2))
 		totalS.Add(totalS, intrinsicS)
-		fmt.Println("totalS:", totalS, "parentEntropy:", h.ParentEntropy(common.PRIME_CTX), "parentDeltaS(0):", h.ParentDeltaS(0), "parentDeltaS(1):", h.ParentDeltaS(1), "intrinsicS:", intrinsicS)
+		fmt.Println("totalS:", totalS, "parentEntropy:", h.ParentEntropy(common.PRIME_CTX), "parentDeltaS(1):", h.ParentDeltaS(1), "parentDeltaS(2):", h.ParentDeltaS(2), "intrinsicS:", intrinsicS)
 		return totalS
 	case common.REGION_CTX:
 
-		totalS := big.NewInt(0).Add(h.ParentEntropy(common.REGION_CTX), h.ParentDeltaS(1))
+		totalS := big.NewInt(0).Add(h.ParentEntropy(common.REGION_CTX), h.ParentDeltaS(2))
 		totalS.Add(totalS, intrinsicS)
-		fmt.Println("totalS:", totalS, "parentEntropy:", h.ParentEntropy(common.REGION_CTX), "parentDeltaS(1):", h.ParentDeltaS(1), "intrinsicS:", intrinsicS)
+		fmt.Println("totalS:", totalS, "parentEntropy:", h.ParentEntropy(common.REGION_CTX), "parentDeltaS(2):", h.ParentDeltaS(2), "intrinsicS:", intrinsicS)
 		return totalS
 	case common.ZONE_CTX:
 		totalS := big.NewInt(0).Add(h.ParentEntropy(common.ZONE_CTX), intrinsicS)
@@ -703,10 +703,8 @@ func (h *Header) CalcS() *big.Int {
 	}
 	if h.Hash() == params.LocalGenesisHash {
 		return big.NewInt(0)
-	} else {
-		return nil
 	}
-
+	return nil
 }
 
 func (h *Header) CalcDeltaS() *big.Int {
@@ -716,11 +714,11 @@ func (h *Header) CalcDeltaS() *big.Int {
 	case common.PRIME_CTX:
 		return big.NewInt(0)
 	case common.REGION_CTX:
-		totalDeltaS := big.NewInt(0).Add(h.ParentDeltaS(0), h.ParentDeltaS(1))
+		totalDeltaS := big.NewInt(0).Add(h.ParentDeltaS(1), h.ParentDeltaS(2))
 		totalDeltaS = big.NewInt(0).Add(totalDeltaS, intrinsicS)
 		return totalDeltaS
 	case common.ZONE_CTX:
-		totalDeltaS := big.NewInt(0).Add(h.ParentDeltaS(1), intrinsicS)
+		totalDeltaS := big.NewInt(0).Add(h.ParentDeltaS(2), intrinsicS)
 		return totalDeltaS
 	}
 	return nil
@@ -729,13 +727,13 @@ func (h *Header) CalcDeltaS() *big.Int {
 func (h *Header) CalcOrder() int {
 	intrinsicS := h.CalcIntrinsicS()
 	// PRIME case
-	totalDeltaS := big.NewInt(0).Add(h.ParentDeltaS(0), h.ParentDeltaS(1))
+	totalDeltaS := big.NewInt(0).Add(h.ParentDeltaS(1), h.ParentDeltaS(2))
 	totalDeltaS.Add(totalDeltaS, intrinsicS)
 	if totalDeltaS.Cmp(h.EntropyThreshold(common.PRIME_CTX)) > 0 {
 		return common.PRIME_CTX
 	}
 	// Region case
-	totalDeltaS = big.NewInt(0).Add(h.ParentDeltaS(1), intrinsicS)
+	totalDeltaS = big.NewInt(0).Add(h.ParentDeltaS(2), intrinsicS)
 	if totalDeltaS.Cmp(h.EntropyThreshold(common.REGION_CTX)) > 0 {
 		return common.REGION_CTX
 	}
