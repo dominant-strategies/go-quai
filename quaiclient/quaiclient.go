@@ -196,11 +196,12 @@ func (ec *Client) Append(ctx context.Context, header *types.Header, domPendingHe
 	return pEtxs.Etxs, ds.Entropy, ss.SubS, re.Reorg, nil
 }
 
-func (ec *Client) SubRelayPendingHeader(ctx context.Context, pendingHeader types.PendingHeader, s *big.Int, location common.Location) {
+func (ec *Client) SubRelayPendingHeader(ctx context.Context, pendingHeader types.PendingHeader, s *big.Int, location common.Location, originCtx int) {
 	data := map[string]interface{}{"Header": RPCMarshalHeader(pendingHeader.Header)}
 	data["Termini"] = pendingHeader.Termini
 	data["S"] = s
 	data["Location"] = location
+	data["OriginCtx"] = originCtx
 
 	ec.c.CallContext(ctx, nil, "quai_subRelayPendingHeader", data)
 

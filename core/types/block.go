@@ -681,18 +681,25 @@ func (h *Header) EmptyReceipts() bool {
 func (h *Header) CalcS() *big.Int {
 	order := h.CalcOrder()
 	intrinsicS := h.CalcIntrinsicS()
+	fmt.Println("CalcS order:", order)
 	switch order {
 	case common.PRIME_CTX:
+
 		totalS := big.NewInt(0).Add(h.ParentEntropy(common.PRIME_CTX), h.ParentDeltaS(0))
-		totalS = big.NewInt(0).Add(totalS, h.ParentDeltaS(1))
-		totalS = big.NewInt(0).Add(totalS, intrinsicS)
+		totalS.Add(totalS, h.ParentDeltaS(1))
+		totalS.Add(totalS, intrinsicS)
+		fmt.Println("totalS:", totalS, "parentEntropy:", h.ParentEntropy(common.PRIME_CTX), "parentDeltaS(0):", h.ParentDeltaS(0), "parentDeltaS(1):", h.ParentDeltaS(1), "intrinsicS:", intrinsicS)
 		return totalS
 	case common.REGION_CTX:
+
 		totalS := big.NewInt(0).Add(h.ParentEntropy(common.REGION_CTX), h.ParentDeltaS(1))
-		totalS = big.NewInt(0).Add(totalS, intrinsicS)
+		totalS.Add(totalS, intrinsicS)
+		fmt.Println("totalS:", totalS, "parentEntropy:", h.ParentEntropy(common.REGION_CTX), "parentDeltaS(1):", h.ParentDeltaS(1), "intrinsicS:", intrinsicS)
 		return totalS
 	case common.ZONE_CTX:
-		return big.NewInt(0).Add(h.ParentEntropy(common.ZONE_CTX), intrinsicS)
+		totalS := big.NewInt(0).Add(h.ParentEntropy(common.ZONE_CTX), intrinsicS)
+		fmt.Println("totalS:", totalS, "parentEntropy:", h.ParentEntropy(common.ZONE_CTX), "intrinsicS:", intrinsicS)
+		return totalS
 	}
 	if h.Hash() == params.LocalGenesisHash {
 		return big.NewInt(0)

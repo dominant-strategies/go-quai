@@ -76,7 +76,7 @@ type Backend interface {
 	ConstructLocalMinedBlock(header *types.Header) (*types.Block, error)
 	InsertBlock(ctx context.Context, block *types.Block) (int, error)
 	PendingBlock() *types.Block
-	SubRelayPendingHeader(pendingHeader types.PendingHeader, s *big.Int, location common.Location)
+	SubRelayPendingHeader(pendingHeader types.PendingHeader, s *big.Int, location common.Location, originCtx int)
 	GetPendingHeader() (*types.Header, error)
 	GetManifest(blockHash common.Hash) (types.BlockManifest, error)
 	GetSubManifest(slice common.Location, blockHash common.Hash) (types.BlockManifest, error)
