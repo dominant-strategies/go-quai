@@ -98,6 +98,10 @@ func answerGetBlockHeadersQuery(backend Backend, query *GetBlockHeadersPacket, p
 		// If the to number is reached stop the search
 		// By default the To is 0 and if its value is specified we need to stop
 		if query.To >= query.Origin.Number && query.Reverse {
+			if query.Origin.Number == 0 {
+				genesis := backend.Core().GetHeaderByNumber(0)
+				headers = append(headers, genesis)
+			}
 			break
 		}
 

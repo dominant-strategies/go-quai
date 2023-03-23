@@ -458,7 +458,7 @@ type nodeInfo struct {
 	OsVer    string `json:"os_v"`
 	Client   string `json:"client"`
 	History  bool   `json:"canUpdateHistory"`
-	Chain	 string `json:"chain"`
+	Chain    string `json:"chain"`
 	ChainID  uint64 `json:"chainId"`
 }
 
@@ -495,8 +495,8 @@ func (s *Service) login(conn *connWrapper) error {
 			OsVer:    runtime.GOARCH,
 			Client:   "0.1.1",
 			History:  true,
-			Chain: common.NodeLocation.Name(),
-			ChainID: s.chainID.Uint64(),
+			Chain:    common.NodeLocation.Name(),
+			ChainID:  s.chainID.Uint64(),
 		},
 		Secret: s.pass,
 	}
@@ -601,8 +601,8 @@ type blockStats struct {
 	ManifestHash  common.Hash    `json:"manifestHash"`
 	Root          common.Hash    `json:"stateRoot"`
 	Uncles        uncleStats     `json:"uncles"`
-	Chain		  string 		 `json:"chain"`
-	ChainID		  uint64 		 `json:"chainId"`
+	Chain         string         `json:"chain"`
+	ChainID       uint64         `json:"chainId"`
 }
 
 // txStats is the information to report about individual transactions.
@@ -696,7 +696,7 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		Root:          header.Root(),
 		Uncles:        uncles,
 		Chain:         common.NodeLocation.Name(),
-		ChainID: 		s.chainID.Uint64(),
+		ChainID:       s.chainID.Uint64(),
 	}
 }
 
@@ -784,14 +784,14 @@ func (s *Service) reportPending(conn *connWrapper) error {
 
 // nodeStats is the information to report about the local node.
 type nodeStats struct {
-	Active   bool `json:"active"`
-	Syncing  bool `json:"syncing"`
-	Mining   bool `json:"mining"`
-	Hashrate int  `json:"hashrate"`
-	Peers    int  `json:"peers"`
-	GasPrice int  `json:"gasPrice"`
-	Uptime   int  `json:"uptime"`
-	Chain	 string `json:"chain"`
+	Active   bool   `json:"active"`
+	Syncing  bool   `json:"syncing"`
+	Mining   bool   `json:"mining"`
+	Hashrate int    `json:"hashrate"`
+	Peers    int    `json:"peers"`
+	GasPrice int    `json:"gasPrice"`
+	Uptime   int    `json:"uptime"`
+	Chain    string `json:"chain"`
 	ChainID  uint64 `json:"chainId"`
 }
 
@@ -836,8 +836,8 @@ func (s *Service) reportStats(conn *connWrapper) error {
 			GasPrice: gasprice,
 			Syncing:  syncing,
 			Uptime:   100,
-			Chain: common.NodeLocation.Name(),
-			ChainID: s.chainID.Uint64(),
+			Chain:    common.NodeLocation.Name(),
+			ChainID:  s.chainID.Uint64(),
 		},
 	}
 	report := map[string][]interface{}{
@@ -846,28 +846,28 @@ func (s *Service) reportStats(conn *connWrapper) error {
 	return conn.WriteJSON(report)
 }
 
-
 // peerStats is the information to report about peers.
 type peerStats struct {
-	Chain 		string 		`json:"chain"`
-	ChainID		uint64 		`json:"chainId"`
-	Count 		int 		`json:"count"`
-	PeerData 	[]*peerData `json:"peerData"`
+	Chain    string      `json:"chain"`
+	ChainID  uint64      `json:"chainId"`
+	Count    int         `json:"count"`
+	PeerData []*peerData `json:"peerData"`
 }
 
 // peerStat is the information to report about peers.
 type peerData struct {
-	Chain 					string `json:"chain"`
-	Enode      				string `json:"enode"` // Unique node identifier (enode URL)
-	SoftwareName    		string `json:"softwareName"` // Node software version
-	LocalAddress  			string `json:"localAddress"`
-	RemoteAddress 			string `json:"remoteAddress"`
-	RTT 					string `json:"rtt"`
-	LatestHeight			uint64 `json:"latestHeight"`
-	LatestHash				string `json:"latestHash"`
-	RecvLastBlockTime 		time.Time `json:"recvLastBlockTime"`
-	ConnectedTime			time.Duration `json:"uptime"`
-	PeerUptime				string `json:"peerUptime"` // TODO: add peer uptime
+	Chain             string        `json:"chain"`
+	Enode             string        `json:"enode"`        // Unique node identifier (enode URL)
+	SoftwareName      string        `json:"softwareName"` // Node software version
+	LocalAddress      string        `json:"localAddress"`
+	RemoteAddress     string        `json:"remoteAddress"`
+	RTT               string        `json:"rtt"`
+	LatestHeight      string        `json:"latestHeight"`
+	LatestEntropy     string        `json:"latestEntropy"`
+	LatestHash        string        `json:"latestHash"`
+	RecvLastBlockTime time.Time     `json:"recvLastBlockTime"`
+	ConnectedTime     time.Duration `json:"uptime"`
+	PeerUptime        string        `json:"peerUptime"` // TODO: add peer uptime
 }
 
 // reportPeers retrieves various stats about the peers for a node.
@@ -883,19 +883,20 @@ func (s *Service) reportPeers(conn *connWrapper) error {
 
 	for _, peer := range srvPeers {
 		peerStat := &peerData{
-			Enode:   peer.ID().String(),
-			SoftwareName: peer.Fullname(),
-			LocalAddress: peer.LocalAddr().String(),
+			Enode:         peer.ID().String(),
+			SoftwareName:  peer.Fullname(),
+			LocalAddress:  peer.LocalAddr().String(),
 			RemoteAddress: peer.RemoteAddr().String(),
-			Chain: common.NodeLocation.Name(),
+			Chain:         common.NodeLocation.Name(),
 			ConnectedTime: peer.ConnectedTime(),
 		}
 
 		downloaderPeer := peerInfo.Peer(peer.ID().String())
 		if downloaderPeer != nil {
-			hash, num, receivedAt := downloaderPeer.Peer().Head()
+			hash, number, entropy, receivedAt := downloaderPeer.Peer().Head()
 			peerStat.RTT = downloaderPeer.Tracker().Roundtrip().String()
-			peerStat.LatestHeight = num
+			peerStat.LatestHeight = number.String()
+			peerStat.LatestEntropy = entropy.String()
 			peerStat.LatestHash = hash.String()
 			if receivedAt != *new(time.Time) {
 				peerStat.RecvLastBlockTime = receivedAt.UTC()
@@ -907,9 +908,9 @@ func (s *Service) reportPeers(conn *connWrapper) error {
 	peers := map[string]interface{}{
 		"id": s.node,
 		"peers": &peerStats{
-			Chain: common.NodeLocation.Name(),
-			ChainID: s.chainID.Uint64(),
-			Count: len(srvPeers),
+			Chain:    common.NodeLocation.Name(),
+			ChainID:  s.chainID.Uint64(),
+			Count:    len(srvPeers),
 			PeerData: allPeerData,
 		},
 	}

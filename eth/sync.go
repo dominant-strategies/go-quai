@@ -17,6 +17,7 @@
 package eth
 
 import (
+	"math/big"
 	"math/rand"
 	"time"
 
@@ -161,10 +162,10 @@ type chainSyncer struct {
 
 // chainSyncOp is a scheduled sync operation.
 type chainSyncOp struct {
-	mode   downloader.SyncMode
-	peer   *eth.Peer
-	number uint64
-	head   common.Hash
+	mode    downloader.SyncMode
+	peer    *eth.Peer
+	entropy *big.Int
+	head    common.Hash
 }
 
 // newChainSyncer creates a chainSyncer.
@@ -246,28 +247,26 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 		return nil
 	}
 
-	peer := cs.handler.peers.peerWithHighestNumber()
+	peer := cs.handler.peers.peerWithHighestEntropy()
 	if peer == nil {
 		return nil
 	}
 
-	mode, ourNumber := cs.modeAndLocalHead()
+	mode, ourEntropy := cs.modeAndLocalHead()
 	op := peerToSyncOp(mode, peer)
-	if op.number <= ourNumber {
+	if op.entropy.Cmp(ourEntropy) <= 0 {
 		return nil // We're in sync.
 	}
 	return op
 }
 
 func peerToSyncOp(mode downloader.SyncMode, p *eth.Peer) *chainSyncOp {
-	peerHead, peerNumber, _ := p.Head()
-	return &chainSyncOp{mode: mode, peer: p, number: peerNumber, head: peerHead}
+	peerHead, _, peerEntropy, _ := p.Head()
+	return &chainSyncOp{mode: mode, peer: p, entropy: peerEntropy, head: peerHead}
 }
 
-func (cs *chainSyncer) modeAndLocalHead() (downloader.SyncMode, uint64) {
-	// Nope, we're really full syncing
-	head := cs.handler.core.CurrentBlock()
-	return downloader.FullSync, head.NumberU64()
+func (cs *chainSyncer) modeAndLocalHead() (downloader.SyncMode, *big.Int) {
+	return downloader.FullSync, cs.handler.downloader.HeadEntropy()
 }
 
 // startSync launches doSync in a new goroutine.
@@ -279,7 +278,7 @@ func (cs *chainSyncer) startSync(op *chainSyncOp) {
 // doSync synchronizes the local blockchain with a remote peer.
 func (h *handler) doSync(op *chainSyncOp) error {
 	// Run the sync cycle, and disable fast sync if we're past the pivot block
-	err := h.downloader.Synchronise(op.peer.ID(), op.head, op.number, op.mode)
+	err := h.downloader.Synchronise(op.peer.ID(), op.head, op.entropy, op.mode)
 	if err != nil {
 		return err
 	}

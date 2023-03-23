@@ -18,6 +18,7 @@ package eth
 
 import (
 	"errors"
+	"math/big"
 	"math/rand"
 	"sync"
 	"time"
@@ -77,9 +78,10 @@ type Peer struct {
 	rw        p2p.MsgReadWriter // Input/output streams for snap
 	version   uint              // Protocol version negotiated
 
-	head   common.Hash // Latest advertised head block hash
-	number uint64      // Latest advertised head block number
-	receivedHeadAt time.Time // Time when the head was received
+	head           common.Hash // Latest advertised head block hash
+	number         *big.Int    // Latest advertised head block number
+	entropy        *big.Int    // Latest advertised head block entropy
+	receivedHeadAt time.Time   // Time when the head was received
 
 	knownBlocks     mapset.Set             // Set of block hashes known to be known by this peer
 	queuedBlocks    chan *blockPropagation // Queue of blocks to broadcast to the peer
@@ -141,22 +143,23 @@ func (p *Peer) Version() uint {
 }
 
 // Head retrieves the current head hash and head number of the peer.
-func (p *Peer) Head() (hash common.Hash, number uint64, receivedAt time.Time) {
+func (p *Peer) Head() (hash common.Hash, number *big.Int, entropy *big.Int, receivedAt time.Time) {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
 	copy(hash[:], p.head[:])
-	return hash, p.number, p.receivedHeadAt
+	return hash, p.number, p.entropy, p.receivedHeadAt
 }
 
 // SetHead updates the head hash and head number of the peer.
-func (p *Peer) SetHead(hash common.Hash, number uint64, receivedAt time.Time) {
+func (p *Peer) SetHead(hash common.Hash, number *big.Int, entropy *big.Int, receivedAt time.Time) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
 	copy(p.head[:], hash[:])
-	p.number = number
 	p.receivedHeadAt = receivedAt
+	p.number = new(big.Int).Set(number)
+	p.entropy = entropy
 }
 
 // KnownBlock returns whether peer is known to already have a block.
