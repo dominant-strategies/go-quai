@@ -1152,6 +1152,7 @@ func (d *Downloader) processFullSyncContent(peerHeight uint64) error {
 			d.headEntropy = results[len(results)-1].Header.CalcS()
 			// If all the blocks are fetched, we exit the sync process
 			if d.headNumber == peerHeight {
+				log.Info("Block synchronisation completed")
 				return errNoFetchesPending
 			}
 		}

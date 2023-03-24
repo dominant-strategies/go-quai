@@ -256,6 +256,7 @@ func (q *queue) Idle() bool {
 func (q *queue) ScheduleSkeleton(from uint64, skeleton []*types.Header) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
+	nodeCtx := common.NodeLocation.Context()
 
 	// No skeleton retrieval can be in progress, fail hard if so (huge implementation bug)
 	if q.headerResults != nil {
@@ -269,14 +270,18 @@ func (q *queue) ScheduleSkeleton(from uint64, skeleton []*types.Header) {
 	q.headerPeerMiss = make(map[string]map[uint64]struct{}) // Reset availability to correct invalid chains
 	q.headerResults = make([]*types.Header, skeleton[0].NumberU64()-skeleton[len(skeleton)-1].NumberU64())
 	q.headerProced = 0
-	q.headerOffset = skeleton[len(skeleton)-1].NumberU64() - 1
+	q.headerOffset = skeleton[len(skeleton)-1].NumberU64()
 	q.headerContCh = make(chan bool, 1)
 
 	for i, header := range skeleton {
 		if i < len(skeleton)-1 {
 			index := skeleton[i].NumberU64()
 			q.headerTaskPool[index] = header
-			q.headerToPool[index] = skeleton[i+1].NumberU64()
+			if skeleton[i+1].NumberU64() == 0 && nodeCtx != common.PRIME_CTX {
+				q.headerToPool[index] = skeleton[i+1].NumberU64() + 1
+			} else {
+				q.headerToPool[index] = skeleton[i+1].NumberU64()
+			}
 			q.headerTaskQueue.Push(index, -int64(index))
 		}
 	}
@@ -748,7 +753,7 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, headerProcCh 
 	}
 	// If the batch of headers wasn't accepted, mark as unavailable
 	if !accepted {
-		logger.Trace("Skeleton filling not accepted", "from", request.From)
+		logger.Trace("Skeleton filling not accepted", "from", request.From, "required", requiredHeaderFetch, "got", len(headers))
 
 		miss := q.headerPeerMiss[id]
 		if miss == nil {
