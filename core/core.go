@@ -209,12 +209,14 @@ func (c *Core) Stop() {
 
 // WriteBlock write the block to the bodydb database
 func (c *Core) WriteBlock(block *types.Block) {
-	isDomCoincident := c.sl.engine.IsDomCoincident(block.Header())
-	// Only add non dom blocks to the append queue
-	if !isDomCoincident {
-		c.addToAppendQueue(block)
+	if c.GetBlockByHash(block.Hash()) == nil {
+		isDomCoincident := c.sl.engine.IsDomCoincident(block.Header())
+		// Only add non dom blocks to the append queue
+		if !isDomCoincident {
+			c.addToAppendQueue(block)
+		}
+		c.sl.WriteBlock(block)
 	}
-	c.sl.WriteBlock(block)
 }
 
 func (c *Core) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, td *big.Int, domOrigin bool, reorg bool, newInboundEtxs types.Transactions) ([]types.Transactions, error) {
