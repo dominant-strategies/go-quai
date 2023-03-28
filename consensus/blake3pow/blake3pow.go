@@ -41,7 +41,7 @@ const (
 type Config struct {
 	PowMode Mode
 
-	DurationLimit []*big.Int
+	DurationLimit *big.Int
 
 	// When set, notifications sent by the remote sealer will
 	// be block header JSON objects instead of work package arrays.
