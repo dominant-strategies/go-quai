@@ -26,7 +26,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		ManifestHash  		[]common.Hash    	`json:"manifestHash"        gencodec:"required"`
 		ReceiptHash   		[]common.Hash    	`json:"receiptsRoot"        gencodec:"required"`
 		Bloom         		[]Bloom          	`json:"logsBloom"           gencodec:"required"`
-		Difficulty    		[]*hexutil.Big   	`json:"difficulty"          gencodec:"required"`
+		Difficulty    		*hexutil.Big   	    `json:"difficulty"          gencodec:"required"`
 		ParentEntropy    	[]*hexutil.Big 		`json:"parentEntropy"		gencodec:"required"`
 		ParentDeltaS     	[]*hexutil.Big 		`json:"parentDeltaS"		gencodec:"required"`
 		Number        		[]*hexutil.Big   	`json:"number"              gencodec:"required"`
@@ -40,7 +40,6 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		Hash          		common.Hash      	`json:"hash"`
 	}
 	// Initialize the enc struct
-	enc.Difficulty = make([]*hexutil.Big, common.HierarchyDepth)
 	enc.ParentEntropy = make([]*hexutil.Big, common.HierarchyDepth)
 	enc.ParentDeltaS = make([]*hexutil.Big, common.HierarchyDepth)
 	enc.Number = make([]*hexutil.Big, common.HierarchyDepth)
@@ -59,7 +58,6 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	copy(enc.ReceiptHash, h.ReceiptHashArray())
 	copy(enc.Bloom, h.BloomArray())
 	for i := 0; i < common.HierarchyDepth; i++ {
-		enc.Difficulty[i] = (*hexutil.Big)(h.Difficulty(i))
 		enc.ParentEntropy[i] = (*hexutil.Big)(h.ParentEntropy(i))
 		enc.ParentDeltaS[i] = (*hexutil.Big)(h.ParentDeltaS(i))
 		enc.Number[i] = (*hexutil.Big)(h.Number(i))
@@ -67,6 +65,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		enc.GasUsed[i] = hexutil.Uint64(h.GasUsed(i))
 		enc.BaseFee[i] = (*hexutil.Big)(h.BaseFee(i))
 	}
+	enc.Difficulty = (*hexutil.Big)(h.Difficulty())
 	enc.Location = h.Location()
 	enc.Time = hexutil.Uint64(h.Time())
 	enc.Extra = hexutil.Bytes(h.Extra())
@@ -88,7 +87,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		EtxRollupHash 		[]common.Hash    	`json:"extRollupRoot"       gencodec:"required"`
 		ManifestHash  		[]common.Hash    	`json:"manifestHash"        gencodec:"required"`
 		Bloom         		[]Bloom          	`json:"logsBloom"           gencodec:"required"`
-		Difficulty    		[]*hexutil.Big    	`json:"difficulty"         	gencodec:"required"`
+		Difficulty    		*hexutil.Big    	`json:"difficulty"         	gencodec:"required"`
 		ParentEntropy    	[]*hexutil.Big 		`json:"parentEntropy"	   	gencodec:"required"`
 		ParentDeltaS     	[]*hexutil.Big 		`json:"parentDeltaS"	   	gencodec:"required"`
 		Number        		[]*hexutil.Big    	`json:"number"             	gencodec:"required"`
@@ -168,7 +167,6 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	h.manifestHash = make([]common.Hash, common.HierarchyDepth)
 	h.receiptHash = make([]common.Hash, common.HierarchyDepth)
 	h.bloom = make([]Bloom, common.HierarchyDepth)
-	h.difficulty = make([]*big.Int, common.HierarchyDepth)
 	h.parentEntropy = make([]*big.Int, common.HierarchyDepth)
 	h.parentDeltaS = make([]*big.Int, common.HierarchyDepth)
 	h.number = make([]*big.Int, common.HierarchyDepth)
@@ -187,10 +185,6 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		h.SetEtxRollupHash(dec.EtxRollupHash[i], i)
 		h.SetManifestHash(dec.ManifestHash[i], i)
 		h.SetBloom(dec.Bloom[i], i)
-		if dec.Difficulty[i] == nil {
-			return errors.New("missing required field 'difficulty' for Header")
-		}
-		h.SetDifficulty((*big.Int)(dec.Difficulty[i]), i)
 		if dec.ParentEntropy[i] == nil {
 			return errors.New("missing required field 'parentEntropy' for Header")
 		}
@@ -210,6 +204,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		}
 		h.SetBaseFee((*big.Int)(dec.BaseFee[i]), i)
 	}
+	h.SetDifficulty((*big.Int)(dec.Difficulty))
 	h.SetLocation(dec.Location)
 	h.SetTime(uint64(dec.Time))
 	h.SetExtra(dec.Extra)

@@ -13,6 +13,7 @@ import (
 	"github.com/dominant-strategies/go-quai/consensus/misc"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/dominant-strategies/go-quai/trie"
@@ -244,14 +245,13 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 	if header.Time() < parent.Time() {
 		return errOlderBlockTime
 	}
-	// Make sure subordinate difficulty does not exceed local difficulty
-	if nodeCtx < common.HierarchyDepth-1 && header.Difficulty().Cmp(header.Difficulty(nodeCtx+1)) < 0 {
-		return errDifficultyCrossover
-	}
 	// Verify the block's difficulty based on its timestamp and parent's difficulty
-	expected := blake3pow.CalcDifficulty(chain, parent)
-	if expected.Cmp(header.Difficulty()) != 0 {
-		return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty(), expected)
+	// difficulty adjustment can only be checked in zone
+	if nodeCtx == common.ZONE_CTX {
+		expected := blake3pow.CalcDifficulty(chain, parent)
+		if expected.Cmp(header.Difficulty()) != 0 {
+			return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty(), expected)
+		}
 	}
 
 	if header.CalcOrder() > nodeCtx {
@@ -302,6 +302,10 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 func (blake3pow *Blake3pow) CalcDifficulty(chain consensus.ChainHeaderReader, parent *types.Header) *big.Int {
 	nodeCtx := common.NodeLocation.Context()
 
+	if nodeCtx != common.ZONE_CTX {
+		log.Error("Cannot CalcDifficulty for", "context", nodeCtx)
+		return nil
+	}
 	// https://github.com/ethereum/EIPs/issues/100.
 	// algorithm:
 	// diff = (parent_diff +
@@ -341,8 +345,8 @@ func (blake3pow *Blake3pow) CalcDifficulty(chain consensus.ChainHeaderReader, pa
 	x.Add(parent.Difficulty(), x)
 
 	// minimum difficulty can ever be (before exponential factor)
-	if x.Cmp(params.MinimumDifficulty[nodeCtx]) < 0 {
-		x.Set(params.MinimumDifficulty[nodeCtx])
+	if x.Cmp(params.MinimumDifficulty) < 0 {
+		x.Set(params.MinimumDifficulty)
 	}
 
 	return x
@@ -369,7 +373,7 @@ func (blake3pow *Blake3pow) verifySeal(chain consensus.ChainHeaderReader, header
 		return blake3pow.shared.verifySeal(chain, header, fulldag)
 	}
 	// Ensure that we have a valid difficulty for the block
-	if header.Difficulty(common.ZONE_CTX).Sign() <= 0 {
+	if header.Difficulty().Sign() <= 0 {
 		return errInvalidDifficulty
 	}
 	// Check for valid zone share and order matches context
@@ -423,7 +427,7 @@ type headerData struct {
 	ManifestHash  []common.Hash
 	ReceiptHash   []common.Hash
 	Bloom         []types.Bloom
-	Difficulty    []*big.Int
+	Difficulty    *big.Int
 	Number        []*big.Int
 	GasLimit      []uint64
 	GasUsed       []uint64
@@ -449,7 +453,7 @@ func (blake3pow *Blake3pow) SealHash(header *types.Header) (hash common.Hash) {
 		ManifestHash:  make([]common.Hash, common.HierarchyDepth),
 		ReceiptHash:   make([]common.Hash, common.HierarchyDepth),
 		Bloom:         make([]types.Bloom, common.HierarchyDepth),
-		Difficulty:    make([]*big.Int, common.HierarchyDepth),
+		Difficulty:    header.Difficulty(),
 		Number:        make([]*big.Int, common.HierarchyDepth),
 		GasLimit:      make([]uint64, common.HierarchyDepth),
 		GasUsed:       make([]uint64, common.HierarchyDepth),
@@ -469,7 +473,6 @@ func (blake3pow *Blake3pow) SealHash(header *types.Header) (hash common.Hash) {
 		hdata.ManifestHash[i] = header.ManifestHash(i)
 		hdata.ReceiptHash[i] = header.ReceiptHash(i)
 		hdata.Bloom[i] = header.Bloom(i)
-		hdata.Difficulty[i] = header.Difficulty(i)
 		hdata.Number[i] = header.Number(i)
 		hdata.GasLimit[i] = header.GasLimit(i)
 		hdata.GasUsed[i] = header.GasUsed(i)

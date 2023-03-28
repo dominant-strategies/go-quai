@@ -114,7 +114,7 @@ func (blake3pow *Blake3pow) Seal(header *types.Header, results chan<- *types.Hea
 func (blake3pow *Blake3pow) mine(header *types.Header, id int, seed uint64, abort chan struct{}, found chan *types.Header) {
 	// Extract some data from the header
 	var (
-		target = new(big.Int).Div(big2e256, header.Difficulty(common.ZONE_CTX))
+		target = new(big.Int).Div(big2e256, header.Difficulty())
 	)
 	// Start generating random nonces until we abort or find a good one
 	var (

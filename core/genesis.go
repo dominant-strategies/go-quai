@@ -52,7 +52,7 @@ type Genesis struct {
 	Timestamp  uint64              `json:"timestamp"`
 	ExtraData  []byte              `json:"extraData"`
 	GasLimit   []uint64            `json:"gasLimit"   gencodec:"required"`
-	Difficulty []*big.Int          `json:"difficulty" gencodec:"required"`
+	Difficulty *big.Int            `json:"difficulty" gencodec:"required"`
 	Mixhash    common.Hash         `json:"mixHash"`
 	Coinbase   []common.Address    `json:"coinbase"`
 	Alloc      GenesisAlloc        `json:"alloc"      gencodec:"required"`
@@ -288,19 +288,16 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	head.SetRoot(primeRoot, common.PRIME_CTX)
 	head.SetRoot(types.EmptyRootHash, common.REGION_CTX) // Not genesis allocs allowed
 	head.SetRoot(types.EmptyRootHash, common.ZONE_CTX)   // Not genesis allocs allowed
+	head.SetDifficulty(g.Difficulty)
 	for i := 0; i < common.HierarchyDepth; i++ {
 		head.SetNumber(big.NewInt(0), i)
 		head.SetParentHash(common.Hash{}, i)
 		head.SetGasLimit(g.GasLimit[i], i)
 		head.SetGasUsed(0, i)
 		head.SetBaseFee(new(big.Int).SetUint64(params.InitialBaseFee), i)
-		head.SetDifficulty(g.Difficulty[i], i)
 		head.SetCoinbase(common.ZeroAddr, i)
 		if g.GasLimit[i] == 0 {
 			head.SetGasLimit(params.GenesisGasLimit, i)
-		}
-		if g.Difficulty[i] == nil {
-			head.SetDifficulty(params.GenesisDifficulty[i], i)
 		}
 	}
 
@@ -325,7 +322,6 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 // Commit writes the block and state of a genesis specification to the database.
 // The block is committed as the canonical head block.
 func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
-	nodeCtx := common.NodeLocation.Context()
 	block := g.ToBlock(db)
 	if block.Number().Sign() != 0 {
 		return nil, fmt.Errorf("can't commit genesis block with number > 0")
@@ -337,7 +333,7 @@ func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
 	if err := config.CheckConfigForkOrder(); err != nil {
 		return nil, err
 	}
-	rawdb.WriteTd(db, block.Hash(), block.NumberU64(), g.Difficulty[nodeCtx])
+	rawdb.WriteTd(db, block.Hash(), block.NumberU64(), g.Difficulty)
 	rawdb.WriteBlock(db, block)
 	rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), nil)
 	rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())
@@ -379,7 +375,7 @@ func DefaultColosseumGenesisBlock() *Genesis {
 		Nonce:      66,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
 		GasLimit:   []uint64{1000000, 1000000, 1000000},
-		Difficulty: []*big.Int{big.NewInt(32048576), big.NewInt(8048576), big.NewInt(2048576)},
+		Difficulty: big.NewInt(2048576),
 		Alloc:      decodePrealloc(colosseumAllocData),
 	}
 }
@@ -391,7 +387,7 @@ func DefaultGardenGenesisBlock() *Genesis {
 		Nonce:      67,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
 		GasLimit:   []uint64{1000000, 1000000, 1000000},
-		Difficulty: []*big.Int{big.NewInt(32048576), big.NewInt(8048576), big.NewInt(441092)},
+		Difficulty: big.NewInt(441092),
 		Alloc:      decodePrealloc(gardenAllocData),
 	}
 }
@@ -403,7 +399,7 @@ func DefaultOrchardGenesisBlock() *Genesis {
 		Nonce:      68,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
 		GasLimit:   []uint64{1000000, 1000000, 1000000},
-		Difficulty: []*big.Int{big.NewInt(32048576), big.NewInt(8048576), big.NewInt(2048576)},
+		Difficulty: big.NewInt(2048576),
 		Alloc:      decodePrealloc(orchardAllocData),
 	}
 }
@@ -415,7 +411,7 @@ func DefaultLocalGenesisBlock() *Genesis {
 		Nonce:      67,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
 		GasLimit:   []uint64{1000000, 1000000, 1000000},
-		Difficulty: []*big.Int{big.NewInt(1600000), big.NewInt(800000), big.NewInt(300000)},
+		Difficulty: big.NewInt(300000),
 		Alloc:      decodePrealloc(localAllocData),
 	}
 }
@@ -430,7 +426,7 @@ func DeveloperGenesisBlock(period uint64, faucet common.Address) *Genesis {
 		ExtraData:  append(append(make([]byte, 32), faucet.Bytes()[:]...), make([]byte, crypto.SignatureLength)...),
 		GasLimit:   []uint64{0x47b760, 0x47b760, 0x47b760},
 		BaseFee:    []*big.Int{big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee)},
-		Difficulty: []*big.Int{big.NewInt(1), big.NewInt(1), big.NewInt(1)},
+		Difficulty: big.NewInt(1),
 		Alloc: map[common.Address]GenesisAccount{
 			common.BytesToAddress([]byte{1}): {Balance: big.NewInt(1)}, // ECRecover
 			common.BytesToAddress([]byte{2}): {Balance: big.NewInt(1)}, // SHA256

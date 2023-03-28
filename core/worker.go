@@ -861,10 +861,14 @@ func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*en
 		header.SetCoinbase(w.coinbase)
 	}
 
-	// Run the consensus preparation with the default or customized consensus engine.
-	if err := w.engine.Prepare(w.hc, header, block.Header()); err != nil {
-		log.Error("Failed to prepare header for sealing", "err", err)
-		return nil, err
+	// Only zone should calculate the difficulty
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx == common.ZONE_CTX {
+		// Run the consensus preparation with the default or customized consensus engine.
+		if err := w.engine.Prepare(w.hc, header, block.Header()); err != nil {
+			log.Error("Failed to prepare header for sealing", "err", err)
+			return nil, err
+		}
 	}
 
 	env, err := w.makeEnv(parent, header, w.coinbase)

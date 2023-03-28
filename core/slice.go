@@ -565,6 +565,7 @@ func (sl *Slice) computePendingHeader(localPendingHeaderWithTermini types.Pendin
 // updatePhCacheFromDom combines the recieved pending header with the pending header stored locally at a given terminus for specified context
 func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, terminiIndex int, indices []int) error {
 
+	nodeCtx := common.NodeLocation.Context()
 	hash := pendingHeader.Termini[terminiIndex]
 	localPendingHeader, exists := sl.phCache[hash]
 
@@ -573,7 +574,10 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 		for _, i := range indices {
 			combinedPendingHeader = sl.combinePendingHeader(pendingHeader.Header, combinedPendingHeader, i)
 		}
-		combinedPendingHeader.SetLocation(common.NodeLocation)
+		if nodeCtx == common.ZONE_CTX {
+			combinedPendingHeader.SetDifficulty(localPendingHeader.Header.Difficulty())
+			combinedPendingHeader.SetLocation(common.NodeLocation)
+		}
 
 		sl.writeToPhCacheAndPickPhHead(types.PendingHeader{Header: combinedPendingHeader, Termini: localPendingHeader.Termini})
 
@@ -745,11 +749,11 @@ func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *typ
 	combinedPendingHeader.SetManifestHash(header.ManifestHash(index), index)
 	combinedPendingHeader.SetReceiptHash(header.ReceiptHash(index), index)
 	combinedPendingHeader.SetRoot(header.Root(index), index)
-	combinedPendingHeader.SetDifficulty(header.Difficulty(index), index)
 	combinedPendingHeader.SetParentEntropy(header.ParentEntropy(index), index)
 	combinedPendingHeader.SetParentDeltaS(header.ParentDeltaS(index), index)
 	combinedPendingHeader.SetCoinbase(header.Coinbase(index), index)
 	combinedPendingHeader.SetBloom(header.Bloom(index), index)
+	combinedPendingHeader.SetDifficulty(header.Difficulty())
 
 	return combinedPendingHeader
 }
