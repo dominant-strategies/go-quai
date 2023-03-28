@@ -22,15 +22,15 @@ func (g Genesis) MarshalJSON() ([]byte, error) {
 		Nonce      math.HexOrDecimal64                         `json:"nonce"`
 		Timestamp  math.HexOrDecimal64                         `json:"timestamp"`
 		ExtraData  hexutil.Bytes                               `json:"extraData"`
-		GasLimit   []math.HexOrDecimal64                         `json:"gasLimit"   gencodec:"required"`
-		Difficulty []*math.HexOrDecimal256                       `json:"difficulty" gencodec:"required"`
+		GasLimit   []math.HexOrDecimal64                       `json:"gasLimit"   gencodec:"required"`
+		Difficulty *math.HexOrDecimal256                       `json:"difficulty" gencodec:"required"`
 		Mixhash    common.Hash                                 `json:"mixHash"`
-		Coinbase   []common.Address                              `json:"coinbase"`
+		Coinbase   []common.Address                            `json:"coinbase"`
 		Alloc      map[common.UnprefixedAddress]GenesisAccount `json:"alloc"      gencodec:"required"`
-		Number     []math.HexOrDecimal64                         `json:"number"`
-		GasUsed    []math.HexOrDecimal64                         `json:"gasUsed"`
-		ParentHash []common.Hash                                 `json:"parentHash"`
-		BaseFee    []*math.HexOrDecimal256                       `json:"baseFeePerGas"`
+		Number     []math.HexOrDecimal64                       `json:"number"`
+		GasUsed    []math.HexOrDecimal64                       `json:"gasUsed"`
+		ParentHash []common.Hash                               `json:"parentHash"`
+		BaseFee    []*math.HexOrDecimal256                     `json:"baseFeePerGas"`
 	}
 	var enc Genesis
 	enc.Config = g.Config
@@ -39,7 +39,6 @@ func (g Genesis) MarshalJSON() ([]byte, error) {
 	enc.ExtraData = g.ExtraData
 	enc.Mixhash = g.Mixhash
 	enc.GasLimit = make([]math.HexOrDecimal64, common.HierarchyDepth)
-	enc.Difficulty = make([]*math.HexOrDecimal256, common.HierarchyDepth)
 	enc.Coinbase = make([]common.Address, common.HierarchyDepth)
 	enc.Number = make([]math.HexOrDecimal64, common.HierarchyDepth)
 	enc.GasUsed = make([]math.HexOrDecimal64, common.HierarchyDepth)
@@ -57,13 +56,13 @@ func (g Genesis) MarshalJSON() ([]byte, error) {
 	}
 	for i := 0; i < common.HierarchyDepth; i++ {
 		enc.GasLimit[i] = math.HexOrDecimal64(g.GasLimit[i])
-		enc.Difficulty[i] = (*math.HexOrDecimal256)(g.Difficulty[i])
 		enc.Coinbase[i] = g.Coinbase[i]
 		enc.Number[i] = math.HexOrDecimal64(g.Number[i])
 		enc.GasUsed[i] = math.HexOrDecimal64(g.GasUsed[i])
 		enc.ParentHash[i] = g.ParentHash[i]
 		enc.BaseFee[i] = (*math.HexOrDecimal256)(g.BaseFee[i])
 	}
+		enc.Difficulty = (*math.HexOrDecimal256)(g.Difficulty)
 	return json.Marshal(&enc)
 }
 
@@ -75,7 +74,7 @@ func (g *Genesis) UnmarshalJSON(input []byte) error {
 		Timestamp  *math.HexOrDecimal64                        `json:"timestamp"`
 		ExtraData  *hexutil.Bytes                              `json:"extraData"`
 		GasLimit   []*math.HexOrDecimal64                        `json:"gasLimit"   gencodec:"required"`
-		Difficulty []*math.HexOrDecimal256                       `json:"difficulty" gencodec:"required"`
+		Difficulty *math.HexOrDecimal256                       `json:"difficulty" gencodec:"required"`
 		Mixhash    *common.Hash                                `json:"mixHash"`
 		Coinbase   []*common.Address                             `json:"coinbase"`
 		Alloc      map[common.UnprefixedAddress]GenesisAccount `json:"alloc"      gencodec:"required"`
@@ -117,10 +116,10 @@ func (g *Genesis) UnmarshalJSON(input []byte) error {
 		return errors.New("missing required field 'gasLimit' for Genesis")
 	}
 	g.GasLimit[i] = uint64(*dec.GasLimit[i])
-	if dec.Difficulty[i] == nil {
+	if dec.Difficulty == nil {
 		return errors.New("missing required field 'difficulty' for Genesis")
 	}
-	g.Difficulty[i] = (*big.Int)(dec.Difficulty[i])
+	g.Difficulty = (*big.Int)(dec.Difficulty)
 	if dec.Coinbase[i] != nil {
 		g.Coinbase[i] = *dec.Coinbase[i]
 	}

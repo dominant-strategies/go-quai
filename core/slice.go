@@ -569,6 +569,7 @@ func (sl *Slice) computePendingHeader(localPendingHeaderWithTermini types.Pendin
 // updatePhCacheFromDom combines the recieved pending header with the pending header stored locally at a given terminus for specified context
 func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, terminiIndex int, indices []int) error {
 
+	nodeCtx := common.NodeLocation.Context()
 	hash := pendingHeader.Termini[terminiIndex]
 	localPendingHeader, exists := sl.phCache[hash]
 
@@ -577,7 +578,10 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 		for _, i := range indices {
 			combinedPendingHeader = sl.combinePendingHeader(pendingHeader.Header, combinedPendingHeader, i)
 		}
-		combinedPendingHeader.SetLocation(common.NodeLocation)
+		if nodeCtx == common.ZONE_CTX {
+			combinedPendingHeader.SetDifficulty(localPendingHeader.Header.Difficulty())
+			combinedPendingHeader.SetLocation(common.NodeLocation)
+		}
 
 		sl.writeToPhCacheAndPickPhHead(types.PendingHeader{Header: combinedPendingHeader, Termini: localPendingHeader.Termini})
 
@@ -647,7 +651,6 @@ func (sl *Slice) init(genesis *Genesis) error {
 			pendingHeader.SetBaseFee(misc.CalcBaseFee(sl.config, genesisHeader), index)
 			pendingHeader.SetGasLimit(params.MinGasLimit, index)
 			pendingHeader.SetGasUsed(uint64(0), index)
-			pendingHeader.SetDifficulty(sl.hc.genesisHeader.Difficulty(index), index)
 			if index == common.PRIME_CTX {
 				pendingHeader.SetRoot(common.HexToHash("0x75c5a24ee5d9cca1a7d47b9f65d2ac9cf92c5ad42f1fddea02299aa05ce4efa2"), index)
 				pendingHeader.SetCoinbase(common.HexToAddress("0x00114a47a5d39ea2022dd4d864cb62cfd16879fc"), index)
@@ -668,6 +671,7 @@ func (sl *Slice) init(genesis *Genesis) error {
 			}
 			pendingHeader.SetManifestHash(manifestHash, index)
 		}
+		pendingHeader.SetDifficulty(sl.hc.genesisHeader.Difficulty())
 		pendingHeader.SetExtra([]byte{})
 		pendingHeader.SetLocation(common.NodeLocation)
 		pendingHeader.SetTime(uint64(time.Now().Unix()))
@@ -812,11 +816,11 @@ func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *typ
 	combinedPendingHeader.SetManifestHash(header.ManifestHash(index), index)
 	combinedPendingHeader.SetReceiptHash(header.ReceiptHash(index), index)
 	combinedPendingHeader.SetRoot(header.Root(index), index)
-	combinedPendingHeader.SetDifficulty(header.Difficulty(index), index)
 	combinedPendingHeader.SetParentEntropy(header.ParentEntropy(index), index)
 	combinedPendingHeader.SetParentDeltaS(header.ParentDeltaS(index), index)
 	combinedPendingHeader.SetCoinbase(header.Coinbase(index), index)
 	combinedPendingHeader.SetBloom(header.Bloom(index), index)
+	combinedPendingHeader.SetDifficulty(header.Difficulty())
 
 	return combinedPendingHeader
 }
