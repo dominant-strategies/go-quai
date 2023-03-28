@@ -329,7 +329,7 @@ func (blake3pow *Blake3pow) CalcDifficulty(chain consensus.ChainHeaderReader, pa
 
 	// (2 if len(parent_uncles) else 1) - (block_timestamp - parent_timestamp) // duration_limit
 	x.Sub(bigTime, bigParentTime)
-	x.Div(x, blake3pow.config.DurationLimit[nodeCtx])
+	x.Div(x, blake3pow.config.DurationLimit)
 	if parent.UncleHash() == types.EmptyUncleHash {
 		x.Sub(big1, x)
 	} else {
