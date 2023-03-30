@@ -430,6 +430,81 @@ func DeleteBody(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	}
 }
 
+// ReadPbCacheBody retrieves the block body corresponding to the hash.
+func ReadPbCacheBody(db ethdb.Reader, hash common.Hash) *types.Body {
+	data, err := db.Get(pbBodyKey(hash))
+	if err != nil {
+		log.Error("Failed to read block body", "hash", hash, "err", err)
+		return nil
+	}
+	if len(data) == 0 {
+		return nil
+	}
+	body := new(types.Body)
+	if err := rlp.Decode(bytes.NewReader(data), body); err != nil {
+		log.Error("Invalid pending block body RLP", "hash", hash, "err", err)
+		return nil
+	}
+	return body
+}
+
+// WritePbCacheBody stores a block body into the database.
+func WritePbCacheBody(db ethdb.KeyValueWriter, hash common.Hash, body *types.Body) {
+	data, err := rlp.EncodeToBytes(body)
+	if err != nil {
+		log.Crit("Failed to RLP encode body", "err", err)
+	}
+	if err := db.Put(pbBodyKey(hash), data); err != nil {
+		log.Crit("Failed to write pbBodyKey", "err", err)
+	}
+}
+
+// DeletePbCacheBody removes all block body data associated with a hash.
+func DeletePbCacheBody(db ethdb.KeyValueWriter, hash common.Hash) {
+	if err := db.Delete(pbBodyKey(hash)); err != nil {
+		log.Crit("Failed to delete pb cache body", "err", err)
+	}
+}
+
+// ReadPbBodyKeys retreive's the phBodyKeys of the worker
+func ReadPbBodyKeys(db ethdb.Reader) []common.Hash {
+	key := pbBodyHashKey()
+	data, err := db.Get(key)
+	if err != nil {
+		log.Error("Error in Reading pbBodyKeys", "err", err)
+		return nil
+	}
+	if len(data) == 0 {
+		return []common.Hash{}
+	}
+	keys := []common.Hash{}
+	if err := rlp.DecodeBytes(data, &keys); err != nil {
+		return []common.Hash{}
+	}
+	return keys
+}
+
+// WritePbBodyKeys writes the workers pendingHeaderBody keys to the db
+func WritePbBodyKeys(db ethdb.KeyValueWriter, hashes []common.Hash) {
+	key := pbBodyHashKey()
+	data, err := rlp.EncodeToBytes(hashes)
+	if err != nil {
+		log.Crit("Failed to RLP encode pending block body keys", "err", err)
+	}
+	if err := db.Put(key, data); err != nil {
+		log.Crit("Failed to store pending block body keys", "err", err)
+	}
+}
+
+// DeletePbBodyKeys delete the pendingHeaderBody keys to the db
+func DeletePbBodyKeys(db ethdb.KeyValueWriter, hash common.Hash) {
+	key := pbBodyHashKey()
+
+	if err := db.Delete(key); err != nil {
+		log.Crit("Failed to delete pending block body keys", "err", err)
+	}
+}
+
 // ReadTdRLP retrieves a block's total difficulty corresponding to the hash in RLP encoding.
 func ReadTdRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 	// First try to look up the data in ancient database. Extra hash
@@ -536,9 +611,9 @@ func DeletePendingHeader(db ethdb.KeyValueWriter, hash common.Hash) {
 	}
 }
 
-// ReadPendingHeader retreive's the pending header stored in hash.
-func ReadPhCacheBody(db ethdb.Reader, hash common.Hash) []common.Hash {
-	key := phBodyKey(hash)
+// ReadPhCacheTermini retreive's the pending header termini stored in hash.
+func ReadPhCacheTermini(db ethdb.Reader, hash common.Hash) []common.Hash {
+	key := phBodyTerminiKey(hash)
 	data, _ := db.Get(key)
 	if len(data) == 0 {
 		return nil
@@ -551,9 +626,9 @@ func ReadPhCacheBody(db ethdb.Reader, hash common.Hash) []common.Hash {
 	return termini
 }
 
-// WritePendingHeader writes the pending header of the terminus hash.
-func WritePhCacheBody(db ethdb.KeyValueWriter, hash common.Hash, termini []common.Hash) {
-	key := phBodyKey(hash)
+// WritePhCacheTermini writes the pending header termini of the terminus hash.
+func WritePhCacheTermini(db ethdb.KeyValueWriter, hash common.Hash, termini []common.Hash) {
+	key := phBodyTerminiKey(hash)
 	// Write the encoded pending header
 	data, err := rlp.EncodeToBytes(termini)
 	if err != nil {
@@ -564,9 +639,9 @@ func WritePhCacheBody(db ethdb.KeyValueWriter, hash common.Hash, termini []commo
 	}
 }
 
-// DeletePendingHeader deletes the pending header stored for the header hash.
-func DeletePhCacheBody(db ethdb.KeyValueWriter, hash common.Hash) {
-	key := phBodyKey(hash)
+// DeletePhCacheTermini deletes the pending header termini stored for the header hash.
+func DeletePhCacheTermini(db ethdb.KeyValueWriter, hash common.Hash) {
+	key := phBodyTerminiKey(hash)
 	if err := db.Delete(key); err != nil {
 		log.Crit("Failed to delete slice pending header ", "err", err)
 	}
@@ -588,7 +663,7 @@ func ReadPhCache(db ethdb.Reader) map[common.Hash]types.PendingHeader {
 	// Read the pending header and phBody.
 	for _, hash := range hashes {
 		header := ReadPendingHeader(db, hash)
-		termini := ReadPhCacheBody(db, hash)
+		termini := ReadPhCacheTermini(db, hash)
 		pendingHeader := types.PendingHeader{Header: header, Termini: termini}
 		phCache[hash] = pendingHeader
 	}
@@ -601,7 +676,7 @@ func WritePhCache(db ethdb.KeyValueWriter, phCache map[common.Hash]types.Pending
 	for hash, pendingHeader := range phCache {
 		hashes = append(hashes, hash)
 		WritePendingHeader(db, hash, pendingHeader.Header)
-		WritePhCacheBody(db, hash, pendingHeader.Termini)
+		WritePhCacheTermini(db, hash, pendingHeader.Termini)
 	}
 
 	data, err := rlp.EncodeToBytes(hashes)

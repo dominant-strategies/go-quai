@@ -87,10 +87,14 @@ var (
 	headerHashSuffix   = []byte("n") // headerPrefix + num (uint64 big endian) + headerHashSuffix -> hash
 	headerNumberPrefix = []byte("H") // headerNumberPrefix + hash -> num (uint64 big endian)
 
-	pendingHeaderPrefix = []byte("ph") // pendingHeaderPrefix + hash -> header
-	phBodyPrefix        = []byte("pc") // phBodyPrefix + hash -> []common.Hash + Td
-	candidateBodyPrefix = []byte("cb") // candidateBodyPrefix + hash -> Body
-	terminiPrefix       = []byte("tk") //terminiPrefix + hash -> []common.Hash
+	pendingHeaderPrefix = []byte("ph")    // pendingHeaderPrefix + hash -> header
+	phBodyPrefix        = []byte("pc")    // phBodyPrefix + hash -> []common.Hash + Td
+	candidateBodyPrefix = []byte("cb")    // candidateBodyPrefix + hash -> Body
+	terminiPrefix       = []byte("tk")    //terminiPrefix + hash -> []common.Hash
+	pbBodyPrefix        = []byte("pb")    // pbBodyPrefix + hash -> *types.Body
+	pbBodyHashPrefix    = []byte("pbKey") // pbBodyPrefix -> []common.Hash
+	phTerminiPrefix     = []byte("pht")   // phTerminiPrefix + hash -> []common.Hash
+	phEntropyPrefix     = []byte("pt")    // phEntropyPrefix + hash -> *big.Int
 
 	blockBodyPrefix     = []byte("b")  // blockBodyPrefix + num (uint64 big endian) + hash -> block body
 	blockReceiptsPrefix = []byte("r")  // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
@@ -179,9 +183,19 @@ func pendingHeaderKey(hash common.Hash) []byte {
 	return append(pendingHeaderPrefix, hash.Bytes()...)
 }
 
-// phBodyKey = phPrefix + hash
-func phBodyKey(hash common.Hash) []byte {
-	return append(phBodyPrefix, hash.Bytes()...)
+// pbBodyKey = pbBodyPrefix + hash
+func pbBodyKey(hash common.Hash) []byte {
+	return append(pbBodyPrefix, hash.Bytes()...)
+}
+
+// pbBodyHashKey = pbBodyPrefix
+func pbBodyHashKey() []byte {
+	return pbBodyHashPrefix
+}
+
+// phBodyTerminiKey = phTerminiPrefix + hash
+func phBodyTerminiKey(hash common.Hash) []byte {
+	return append(phTerminiPrefix, hash.Bytes()...)
 }
 
 // headerTDKey = headerPrefix + num (uint64 big endian) + hash + headerTDSuffix

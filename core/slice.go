@@ -853,6 +853,7 @@ func (sl *Slice) updatePendingHeadersCache() {
 func (sl *Slice) loadLastState() error {
 	sl.phCache = rawdb.ReadPhCache(sl.sliceDb)
 	sl.bestPhKey = rawdb.ReadCurrentPendingHeaderHash(sl.sliceDb)
+	sl.miner.worker.LoadPendingBlockBody()
 	return nil
 }
 
@@ -862,6 +863,8 @@ func (sl *Slice) Stop() {
 	rawdb.WriteCurrentPendingHeaderHash(sl.sliceDb, sl.bestPhKey)
 	// Write the ph cache to the dd.
 	rawdb.WritePhCache(sl.sliceDb, sl.phCache)
+
+	sl.miner.worker.StorePendingBlockBody()
 
 	sl.scope.Close()
 	close(sl.quit)

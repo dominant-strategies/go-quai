@@ -355,6 +355,35 @@ func (w *worker) close() {
 	w.wg.Wait()
 }
 
+func (w *worker) LoadPendingBlockBody() {
+	pendingBlockBodykeys := rawdb.ReadPbBodyKeys(w.workerDb)
+	for _, key := range pendingBlockBodykeys {
+		if key == types.EmptyBodyHash {
+			w.pendingBlockBody.Add(key, &types.Body{})
+		} else {
+			w.pendingBlockBody.Add(key, rawdb.ReadPbCacheBody(w.workerDb, key))
+		}
+		// Remove the entry from the database so that body is not accumulated over multiple stops
+		rawdb.DeletePbCacheBody(w.workerDb, key)
+	}
+}
+
+// StorePendingBlockBody stores the pending block body cache into the db
+func (w *worker) StorePendingBlockBody() {
+	// store the pendingBodyCache body
+	var pendingBlockBodyKeys []common.Hash
+	pendingBlockBody := w.pendingBlockBody
+	for _, key := range pendingBlockBody.Keys() {
+		if value, exist := pendingBlockBody.Peek(key); exist {
+			pendingBlockBodyKeys = append(pendingBlockBodyKeys, key.(common.Hash))
+			if key.(common.Hash) != types.EmptyBodyHash {
+				rawdb.WritePbCacheBody(w.workerDb, key.(common.Hash), value.(*types.Body))
+			}
+		}
+	}
+	rawdb.WritePbBodyKeys(w.workerDb, pendingBlockBodyKeys)
+}
+
 // GeneratePendingBlock generates pending block given a commited block.
 func (w *worker) GeneratePendingHeader(block *types.Block) (*types.Header, error) {
 
