@@ -132,7 +132,7 @@ type logger struct {
 
 func (l *logger) write(msg string, lvl Lvl, ctx []interface{}, skip int) {
 	l.h.Log(&Record{
-		Time: time.Now(),
+		Time: time.Now().UTC(),
 		Lvl:  lvl,
 		Msg:  msg,
 		Ctx:  newContext(l.ctx, ctx),
