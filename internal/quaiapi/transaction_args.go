@@ -241,30 +241,3 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (t
 	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, gasFeeCap, gasTipCap, data, accessList, false)
 	return msg, nil
 }
-
-// toTransaction converts the arguments to a transaction.
-// This assumes that setDefaults has been called.
-func (args *TransactionArgs) toTransaction() *types.Transaction {
-	al := types.AccessList{}
-	if args.AccessList != nil {
-		al = *args.AccessList
-	}
-	data := &types.InternalTx{
-		To:         args.To,
-		ChainID:    (*big.Int)(args.ChainID),
-		Nonce:      uint64(*args.Nonce),
-		Gas:        uint64(*args.Gas),
-		GasFeeCap:  (*big.Int)(args.MaxFeePerGas),
-		GasTipCap:  (*big.Int)(args.MaxPriorityFeePerGas),
-		Value:      (*big.Int)(args.Value),
-		Data:       args.data(),
-		AccessList: al,
-	}
-	return types.NewTx(data)
-}
-
-// ToTransaction converts the arguments to a transaction.
-// This assumes that setDefaults has been called.
-func (args *TransactionArgs) ToTransaction() *types.Transaction {
-	return args.toTransaction()
-}
