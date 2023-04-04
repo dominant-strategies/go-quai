@@ -241,6 +241,10 @@ func (c *Core) SubRelayPendingHeader(slPendingHeader types.PendingHeader, reorg 
 	c.sl.SubRelayPendingHeader(slPendingHeader, reorg, location)
 }
 
+func (c *Core) NewGenesisPendigHeader(pendingHeader *types.Header) {
+	c.sl.NewGenesisPendingHeader(pendingHeader)
+}
+
 func (c *Core) GetPendingHeader() (*types.Header, error) {
 	return c.sl.GetPendingHeader()
 }

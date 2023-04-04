@@ -673,6 +673,14 @@ func (s *PublicBlockChainQuaiAPI) SubRelayPendingHeader(ctx context.Context, raw
 	s.b.SubRelayPendingHeader(pendingHeader, subRelay.Reorg, subRelay.Location)
 }
 
+func (s *PublicBlockChainQuaiAPI) NewGenesisPendingHeader(ctx context.Context, raw json.RawMessage) {
+	var pendingHeader *types.Header
+	if err := json.Unmarshal(raw, &pendingHeader); err != nil {
+		return
+	}
+	s.b.NewGenesisPendingHeader(pendingHeader)
+}
+
 func (s *PublicBlockChainQuaiAPI) GetPendingHeader(ctx context.Context) (map[string]interface{}, error) {
 	pendingHeader, err := s.b.GetPendingHeader()
 	if err != nil {

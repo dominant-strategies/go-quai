@@ -176,6 +176,10 @@ func (ec *Client) SubRelayPendingHeader(ctx context.Context, pendingHeader types
 
 }
 
+func (ec *Client) NewGenesisPendingHeader(ctx context.Context, header *types.Header) {
+	ec.c.CallContext(ctx, nil, "quai_newGenesisPendingHeader", RPCMarshalHeader(header))
+}
+
 // GetManifest will get the block manifest ending with the parent hash
 func (ec *Client) GetManifest(ctx context.Context, blockHash common.Hash) (types.BlockManifest, error) {
 	var raw json.RawMessage
