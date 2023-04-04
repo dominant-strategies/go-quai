@@ -378,6 +378,10 @@ func (b *QuaiAPIBackend) SubRelayPendingHeader(pendingHeader types.PendingHeader
 	b.eth.core.SubRelayPendingHeader(pendingHeader, reorg, location)
 }
 
+func (b *QuaiAPIBackend) NewGenesisPendingHeader(pendingHeader *types.Header) {
+	b.eth.core.NewGenesisPendigHeader(pendingHeader)
+}
+
 func (b *QuaiAPIBackend) GetPendingHeader() (*types.Header, error) {
 	return b.eth.core.GetPendingHeader()
 }

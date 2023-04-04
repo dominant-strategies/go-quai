@@ -63,8 +63,6 @@ type Genesis struct {
 	GasUsed    []uint64      `json:"gasUsed"`
 	ParentHash []common.Hash `json:"parentHash"`
 	BaseFee    []*big.Int    `json:"baseFeePerGas"`
-
-	Knot []*types.Block `json:"knot"`
 }
 
 // GenesisAlloc specifies the initial state that is part of the genesis block.
@@ -378,7 +376,6 @@ func DefaultGenesisBlock() *Genesis {
 func DefaultColosseumGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.ColosseumChainConfig,
-		Knot:       ReadKnot("./core/knot/colosseum_knot.rlp"),
 		Nonce:      66,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
 		GasLimit:   []uint64{1000000, 1000000, 1000000},
@@ -391,7 +388,6 @@ func DefaultColosseumGenesisBlock() *Genesis {
 func DefaultGardenGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.GardenChainConfig,
-		Knot:       ReadKnot("./core/knot/garden_knot.rlp"),
 		Nonce:      67,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
 		GasLimit:   []uint64{1000000, 1000000, 1000000},
@@ -404,7 +400,6 @@ func DefaultGardenGenesisBlock() *Genesis {
 func DefaultOrchardGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.OrchardChainConfig,
-		Knot:       ReadKnot("./core/knot/orchard_knot.rlp"),
 		Nonce:      68,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
 		GasLimit:   []uint64{1000000, 1000000, 1000000},
@@ -417,7 +412,6 @@ func DefaultOrchardGenesisBlock() *Genesis {
 func DefaultLocalGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.LocalChainConfig,
-		Knot:       ReadKnot("./core/knot/local_knot.rlp"),
 		Nonce:      67,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
 		GasLimit:   []uint64{1000000, 1000000, 1000000},

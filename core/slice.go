@@ -1,7 +1,6 @@
 package core
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -626,7 +625,6 @@ func (sl *Slice) writeToPhCacheAndPickPhHead(reorg bool, pendingHeaderWithTermin
 // init checks if the headerchain is empty and if it's empty appends the Knot
 // otherwise loads the last stored state of the chain.
 func (sl *Slice) init(genesis *Genesis) error {
-	nodeCtx := common.NodeLocation.Context()
 	// Even though the genesis block cannot have any ETXs, we still need an empty
 	// pending ETX entry for that block hash, so that the state processor can build
 	// on it
@@ -647,29 +645,14 @@ func (sl *Slice) init(genesis *Genesis) error {
 		rawdb.WriteTermini(sl.sliceDb, genesisHash, genesisTermini)
 
 		// Append each of the knot blocks
+		sl.bestPhKey = genesisHash
 
-		knot := genesis.Knot[:]
-		for _, block := range knot {
-			sl.AddPendingEtxs(types.PendingEtxs{block.Header(), emptyPendingEtxs})
-			if block != nil {
-				location := block.Header().Location()
-				if nodeCtx == common.PRIME_CTX {
-					sl.bestPhKey = block.Hash()
-					rawdb.WriteBody(sl.sliceDb, block.Hash(), block.NumberU64(), block.Body())
-					_, err := sl.Append(block.Header(), types.EmptyHeader(), genesisHash, block.Difficulty(), false, false, nil)
-					if err != nil {
-						log.Warn("Failed to append block", "hash:", block.Hash(), "Number:", block.Number(), "Location:", block.Header().Location(), "error:", err)
-					}
-				} else if location.Region() == common.NodeLocation.Region() && len(common.NodeLocation) == common.REGION_CTX {
-					sl.bestPhKey = block.Hash()
-					rawdb.WriteBody(sl.sliceDb, block.Hash(), block.NumberU64(), block.Body())
-				} else if bytes.Equal(location, common.NodeLocation) {
-					sl.bestPhKey = block.Hash()
-					rawdb.WriteBody(sl.sliceDb, block.Hash(), block.NumberU64(), block.Body())
-				}
-			}
+		sl.hc.SetCurrentHeader(genesisHeader)
+		sl.AddPendingEtxs(types.PendingEtxs{Header: genesisHeader, Etxs: []types.Transactions{}})
+
+		if common.NodeLocation.Context() == common.PRIME_CTX {
+			go sl.NewGenesisPendingHeader(nil)
 		}
-
 	} else { // load the phCache and slice current pending header hash
 		if err := sl.loadLastState(); err != nil {
 			return err
@@ -790,10 +773,41 @@ func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *typ
 	combinedPendingHeader.SetReceiptHash(header.ReceiptHash(index), index)
 	combinedPendingHeader.SetRoot(header.Root(index), index)
 	combinedPendingHeader.SetDifficulty(header.Difficulty(index), index)
+	combinedPendingHeader.SetParentEntropy(header.ParentEntropy(index), index)
+	combinedPendingHeader.SetParentDeltaS(header.ParentDeltaS(index), index)
 	combinedPendingHeader.SetCoinbase(header.Coinbase(index), index)
 	combinedPendingHeader.SetBloom(header.Bloom(index), index)
 
 	return combinedPendingHeader
+}
+
+// NewGenesisPendingHeader creates a pending header on the genesis block
+func (sl *Slice) NewGenesisPendingHeader(domPendingHeader *types.Header) {
+	nodeCtx := common.NodeLocation.Context()
+	genesisHash := sl.config.GenesisHash
+	// Upate the local pending header
+	localPendingHeader, err := sl.miner.worker.GeneratePendingHeader(sl.hc.GetBlockByHash(genesisHash))
+	if err != nil {
+		return
+	}
+
+	if nodeCtx == common.PRIME_CTX {
+		domPendingHeader = types.CopyHeader(localPendingHeader)
+	} else {
+		domPendingHeader = sl.combinePendingHeader(localPendingHeader, domPendingHeader, nodeCtx)
+		domPendingHeader.SetLocation(common.NodeLocation)
+	}
+
+	if nodeCtx != common.ZONE_CTX {
+		for _, client := range sl.subClients {
+			client.NewGenesisPendingHeader(context.Background(), domPendingHeader)
+			if err != nil {
+				return
+			}
+		}
+	}
+	genesisTermini := []common.Hash{genesisHash, genesisHash, genesisHash, genesisHash}
+	sl.phCache[sl.config.GenesisHash] = types.PendingHeader{Header: domPendingHeader, Termini: genesisTermini}
 }
 
 func (sl *Slice) GetPendingBlockBody(header *types.Header) *types.Body {
