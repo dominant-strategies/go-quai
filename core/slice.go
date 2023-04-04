@@ -1,7 +1,6 @@
 package core
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -11,7 +10,9 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
+	"github.com/dominant-strategies/go-quai/consensus/misc"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
+	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/ethdb"
@@ -626,7 +627,6 @@ func (sl *Slice) writeToPhCacheAndPickPhHead(reorg bool, pendingHeaderWithTermin
 // init checks if the headerchain is empty and if it's empty appends the Knot
 // otherwise loads the last stored state of the chain.
 func (sl *Slice) init(genesis *Genesis) error {
-	nodeCtx := common.NodeLocation.Context()
 	// Even though the genesis block cannot have any ETXs, we still need an empty
 	// pending ETX entry for that block hash, so that the state processor can build
 	// on it
@@ -647,29 +647,55 @@ func (sl *Slice) init(genesis *Genesis) error {
 		rawdb.WriteTermini(sl.sliceDb, genesisHash, genesisTermini)
 
 		// Append each of the knot blocks
+		sl.bestPhKey = genesisHash
 
-		knot := genesis.Knot[:]
-		for _, block := range knot {
-			sl.AddPendingEtxs(types.PendingEtxs{block.Header(), emptyPendingEtxs})
-			if block != nil {
-				location := block.Header().Location()
-				if nodeCtx == common.PRIME_CTX {
-					sl.bestPhKey = block.Hash()
-					rawdb.WriteBody(sl.sliceDb, block.Hash(), block.NumberU64(), block.Body())
-					_, err := sl.Append(block.Header(), types.EmptyHeader(), genesisHash, block.Difficulty(), false, false, nil)
-					if err != nil {
-						log.Warn("Failed to append block", "hash:", block.Hash(), "Number:", block.Number(), "Location:", block.Header().Location(), "error:", err)
-					}
-				} else if location.Region() == common.NodeLocation.Region() && len(common.NodeLocation) == common.REGION_CTX {
-					sl.bestPhKey = block.Hash()
-					rawdb.WriteBody(sl.sliceDb, block.Hash(), block.NumberU64(), block.Body())
-				} else if bytes.Equal(location, common.NodeLocation) {
-					sl.bestPhKey = block.Hash()
-					rawdb.WriteBody(sl.sliceDb, block.Hash(), block.NumberU64(), block.Body())
+		sl.hc.SetCurrentHeader(genesisHeader)
+		manifest := types.BlockManifest{genesisHash}
+		manifestHash := types.DeriveSha(manifest, trie.NewStackTrie(nil))
+		sl.AddPendingEtxs(types.PendingEtxs{Header: genesisHeader, Etxs: []types.Transactions{}})
+
+		pendingHeader := types.EmptyHeader()
+		for index := 0; index < common.HierarchyDepth; index++ {
+			pendingHeader.SetParentHash(genesisHash, index)
+			pendingHeader.SetNumber(big.NewInt(1), index)
+			pendingHeader.SetBaseFee(misc.CalcBaseFee(sl.config, genesisHeader), index)
+			pendingHeader.SetGasLimit(params.MinGasLimit, index)
+			pendingHeader.SetGasUsed(uint64(0), index)
+			pendingHeader.SetDifficulty(sl.hc.genesisHeader.Difficulty(index), index)
+			if index == common.PRIME_CTX {
+				pendingHeader.SetRoot(common.HexToHash("0x75c5a24ee5d9cca1a7d47b9f65d2ac9cf92c5ad42f1fddea02299aa05ce4efa2"), index)
+				pendingHeader.SetCoinbase(common.HexToAddress("0x00114a47a5d39ea2022dd4d864cb62cfd16879fc"), index)
+			} else if index == common.REGION_CTX {
+				switch common.NodeLocation.Region() {
+				case 0:
+					pendingHeader.SetRoot(common.HexToHash("0x6b3bb2136ece6e2dd7e65990b05d51b6e0911882e448d277e2944ce378497c62"), index)
+					pendingHeader.SetCoinbase(common.HexToAddress("0x0d79b69c082e6f6a2e78a10a9a49baedb7db37a5"), index)
+				case 1:
+					pendingHeader.SetRoot(common.HexToHash("0x58fe4e89b9baa91184c4aeed5c64c383c3ded117f25e69a60b1fc82ce5ef95c5"), index)
+					pendingHeader.SetCoinbase(common.HexToAddress("0x3bccBe6C6001C46874263169dF887Cbf5C3580d6"), index)
+				case 2:
+					pendingHeader.SetRoot(common.HexToHash("0x6bc78ecdbc176b8253893231648e3bdd031d32fbb402c89a534103606f4f18e3"), index)
+					pendingHeader.SetCoinbase(common.HexToAddress("0x5a457339697cb56e5a9bfa5267ea80d2c6375d98"), index)
 				}
+			} else {
+				pendingHeader.SetCoinbase(sl.miner.coinbase, index)
 			}
+			pendingHeader.SetManifestHash(manifestHash, index)
 		}
+		pendingHeader.SetExtra([]byte{})
+		pendingHeader.SetLocation(common.NodeLocation)
+		pendingHeader.SetTime(uint64(time.Now().Unix()))
 
+		genesisRoot := sl.hc.genesisHeader.Root()
+		zonedb, err := state.New(genesisRoot, state.NewDatabase(sl.sliceDb), nil)
+		if err != nil {
+			panic(err)
+		}
+		// Finalize and seal the block
+		sl.engine.FinalizeAtContext(sl.hc, pendingHeader, zonedb, nil, nil, common.ZONE_CTX)
+
+		sl.miner.worker.AddPendingBlockBody(pendingHeader, &types.Body{})
+		sl.phCache[genesisHash] = types.PendingHeader{Header: pendingHeader, Termini: genesisTermini}
 	} else { // load the phCache and slice current pending header hash
 		if err := sl.loadLastState(); err != nil {
 			return err
@@ -790,6 +816,8 @@ func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *typ
 	combinedPendingHeader.SetReceiptHash(header.ReceiptHash(index), index)
 	combinedPendingHeader.SetRoot(header.Root(index), index)
 	combinedPendingHeader.SetDifficulty(header.Difficulty(index), index)
+	combinedPendingHeader.SetParentEntropy(header.ParentEntropy(index), index)
+	combinedPendingHeader.SetParentDeltaS(header.ParentDeltaS(index), index)
 	combinedPendingHeader.SetCoinbase(header.Coinbase(index), index)
 	combinedPendingHeader.SetBloom(header.Bloom(index), index)
 

@@ -399,19 +399,21 @@ func (blake3pow *Blake3pow) Prepare(chain consensus.ChainHeaderReader, header *t
 	return nil
 }
 
-// Finalize implements consensus.Engine, accumulating the block and uncle rewards,
-// setting the final state on the header
-func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
+// FinalizeAtContext implements consensus.Engine, accumulating the block and uncle rewards,
+// setting the final state on the header at an context.
+func (blake3pow *Blake3pow) FinalizeAtContext(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, ctx int) {
 	// Accumulate any block and uncle rewards and commit the final state root
-	accumulateRewards(chain.Config(), state, header, uncles)
-	header.SetRoot(state.IntermediateRoot(chain.Config().IsEIP158(header.Number())))
+	accumulateRewardsAtContext(chain.Config(), state, header, uncles, ctx)
+	root := state.IntermediateRoot(chain.Config().IsEIP158(header.Number(ctx)))
+	header.SetRoot(root, ctx)
 }
 
 // FinalizeAndAssemble implements consensus.Engine, accumulating the block and
 // uncle rewards, setting the final state and assembling the block.
 func (blake3pow *Blake3pow) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, etxs []*types.Transaction, subManifest types.BlockManifest, receipts []*types.Receipt) (*types.Block, error) {
+	nodeCtx := common.NodeLocation.Context()
 	// Finalize block
-	blake3pow.Finalize(chain, header, state, txs, uncles)
+	blake3pow.FinalizeAtContext(chain, header, state, txs, uncles, nodeCtx)
 
 	// Header seems complete, assemble into a block and return
 	return types.NewBlock(header, txs, uncles, etxs, subManifest, receipts, trie.NewStackTrie(nil)), nil
@@ -487,33 +489,31 @@ func (blake3pow *Blake3pow) SealHash(header *types.Header) (hash common.Hash) {
 	return hash
 }
 
-// AccumulateRewards credits the coinbase of the given block with the mining
+// accumulateRewardsAtContext credits the coinbase of the given block with the mining
 // reward. The total reward consists of the static block reward and rewards for
 // included uncles. The coinbase of each uncle block is also rewarded.
-func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
+func accumulateRewardsAtContext(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header, ctx int) {
+
 	// Select the correct block reward based on chain progression
-	blockReward := misc.CalculateReward()
-
-	coinbase, err := header.Coinbase().InternalAddress()
-	if err != nil {
-		fmt.Println("Block has out-of-scope coinbase, skipping block reward: " + header.Hash().String())
-		return
-	}
-
+	blockReward := misc.CalculateRewardAtContext(ctx)
 	// Accumulate the rewards for the miner and any included uncles
 	reward := new(big.Int).Set(blockReward)
+	coinbase, err := header.Coinbase(ctx).InternalAddress()
+	if err != nil {
+		fmt.Println("Block has out-of-scope coinbase, skipping block reward: " + header.Hash().String())
+	}
 	r := new(big.Int)
 	for _, uncle := range uncles {
-		coinbase, err := uncle.Coinbase().InternalAddress()
+		uncleAddr, err := uncle.Coinbase().InternalAddress()
 		if err != nil {
 			fmt.Println("Found uncle with out-of-scope coinbase, skipping reward: " + uncle.Hash().String())
 			continue
 		}
-		r.Add(uncle.Number(), big8)
-		r.Sub(r, header.Number())
+		r.Add(uncle.Number(ctx), big8)
+		r.Sub(r, header.Number(ctx))
 		r.Mul(r, blockReward)
 		r.Div(r, big8)
-		state.AddBalance(*coinbase, r)
+		state.AddBalance(*uncleAddr, r)
 
 		r.Div(blockReward, big32)
 		reward.Add(reward, r)

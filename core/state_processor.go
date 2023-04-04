@@ -238,7 +238,7 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
-	p.engine.Finalize(p.hc, header, statedb, block.Transactions(), block.Uncles())
+	p.engine.FinalizeAtContext(p.hc, header, statedb, block.Transactions(), block.Uncles(), common.NodeLocation.Context())
 
 	return receipts, allLogs, statedb, *usedGas, nil
 }
