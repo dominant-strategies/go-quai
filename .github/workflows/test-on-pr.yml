@@ -1,0 +1,22 @@
+name: Test on PR
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - uses: actions/setup-go@v4
+      with:
+        go-version: '1.19'
+
+    - name: test 
+      run: go test ./...
