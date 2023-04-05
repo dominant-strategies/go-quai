@@ -46,9 +46,9 @@ var (
 	MaxStateFetch     = 384  // Amount of node state values to allow fetching per request
 
 	PrimeSkeletonDist = 8
-	PrimeFetchDepth   = 30
-	RegionFetchDepth  = 90
-	ZoneFetchDepth    = 270
+	PrimeFetchDepth   = 1000
+	RegionFetchDepth  = 7000
+	ZoneFetchDepth    = 21000
 
 	maxQueuedHeaders  = 32 * 1024 // [eth/62] Maximum number of headers to queue for import (DOS protection)
 	maxHeadersProcess = 2048      // Number of header download results to import at once into the chain

@@ -58,11 +58,9 @@ func answerGetBlockHeadersQuery(backend Backend, query *GetBlockHeadersPacket, p
 		bytes   common.StorageSize
 		headers []*types.Header
 		unknown bool
-		lookups int
 	)
 	for !unknown && len(headers) < int(query.Amount) && bytes < softResponseLimit &&
-		len(headers) < maxHeadersServe && lookups < 2*maxHeadersServe {
-		lookups++
+		len(headers) < maxHeadersServe {
 		// Retrieve the next header satisfying the query
 		var origin *types.Header
 		if hashMode {
@@ -86,9 +84,11 @@ func answerGetBlockHeadersQuery(backend Backend, query *GetBlockHeadersPacket, p
 		if query.Dom {
 			if backend.Core().Engine().IsDomCoincident(origin) {
 				headers = append(headers, origin)
+				bytes += estHeaderSize
 			}
 		} else {
 			headers = append(headers, origin)
+			bytes += estHeaderSize
 			// If dom is false always append header to results array and break when dominant header is found
 			if backend.Core().Engine().IsDomCoincident(origin) {
 				break
@@ -104,8 +104,6 @@ func answerGetBlockHeadersQuery(backend Backend, query *GetBlockHeadersPacket, p
 			}
 			break
 		}
-
-		bytes += estHeaderSize
 
 		// Advance to the next header of the query
 		switch {
@@ -150,9 +148,8 @@ func answerGetBlockBodiesQuery(backend Backend, query GetBlockBodiesPacket, peer
 		bytes  int
 		bodies []rlp.RawValue
 	)
-	for lookups, hash := range query {
-		if bytes >= softResponseLimit || len(bodies) >= maxBodiesServe ||
-			lookups >= 2*maxBodiesServe {
+	for _, hash := range query {
+		if bytes >= softResponseLimit || len(bodies) >= maxBodiesServe {
 			break
 		}
 		if data := backend.Core().GetBodyRLP(hash); len(data) != 0 {
@@ -189,9 +186,8 @@ func answerGetReceiptsQuery(backend Backend, query GetReceiptsPacket, peer *Peer
 		bytes    int
 		receipts []rlp.RawValue
 	)
-	for lookups, hash := range query {
-		if bytes >= softResponseLimit || len(receipts) >= maxReceiptsServe ||
-			lookups >= 2*maxReceiptsServe {
+	for _, hash := range query {
+		if bytes >= softResponseLimit || len(receipts) >= maxReceiptsServe {
 			break
 		}
 		// Retrieve the requested block's receipts
