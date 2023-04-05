@@ -491,3 +491,16 @@ func IsInChainScope(b []byte) bool {
 	// Ranges are fully inclusive
 	return uint8(prefix) >= prefixRange.lo && uint8(prefix) <= prefixRange.hi
 }
+
+func OrderToString(order int) string {
+	switch order {
+	case PRIME_CTX:
+		return "Prime"
+	case REGION_CTX:
+		return "Region"
+	case ZONE_CTX:
+		return "Zone"		
+	default:
+		return "Invalid"
+	}
+}
