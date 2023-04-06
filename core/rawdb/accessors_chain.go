@@ -1263,7 +1263,7 @@ func ReadEtxSet(db ethdb.Reader, hash common.Hash, number uint64) types.EtxSet {
 			return nil
 		}
 		var etx types.Transaction
-		if err := rlp.Decode(bytes.NewReader(etxRlp), etx); err != nil {
+		if err := rlp.Decode(bytes.NewReader(etxRlp), &etx); err != nil {
 			log.Error("Invalid ETX RLP", "hash=", entry.EtxHash, "err", err)
 			return nil
 		}
@@ -1276,7 +1276,7 @@ func ReadEtxSet(db ethdb.Reader, hash common.Hash, number uint64) types.EtxSet {
 func WriteEtxSet(db ethdb.KeyValueWriter, hash common.Hash, number uint64, etxSet types.EtxSet) {
 	var entries []EtxSetEntry
 	for etxHash, entry := range etxSet {
-		etxRlp, err := rlp.EncodeToBytes(entry)
+		etxRlp, err := rlp.EncodeToBytes(&entry.ETX)
 		if err != nil {
 			log.Error("Failed to RLP encode ETX", "hash=", etxHash, "err", err)
 			return
