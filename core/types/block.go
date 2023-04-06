@@ -59,6 +59,10 @@ func EncodeNonce(i uint64) BlockNonce {
 	return n
 }
 
+func (n BlockNonce) Bytes() []byte {
+	return n[:]
+}
+
 // Uint64 returns the integer value of a block nonce.
 func (n BlockNonce) Uint64() uint64 {
 	return binary.BigEndian.Uint64(n[:])
@@ -586,7 +590,7 @@ func (h *Header) Hash() (hash common.Hash) {
 	hasher := blake3.New(32, nil)
 	hasher.Reset()
 	var hData [40]byte
-	binary.BigEndian.PutUint64(hData[:], h.NonceU64())
+	copy(hData[:], h.Nonce().Bytes())
 	copy(hData[len(h.nonce):], h.SealHash().Bytes())
 	sum := blake3.Sum256(hData[:])
 	hash.SetBytes(sum[:])
