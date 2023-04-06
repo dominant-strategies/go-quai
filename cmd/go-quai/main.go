@@ -115,6 +115,7 @@ var (
 		utils.DeveloperPeriodFlag,
 		utils.GardenFlag,
 		utils.OrchardFlag,
+		utils.GalenaFlag,
 		utils.LocalFlag,
 		utils.VMEnableDebugFlag,
 		utils.NetworkIdFlag,
@@ -233,6 +234,8 @@ func prepare(ctx *cli.Context) {
 		netname = utils.OrchardFlag.Name + " testnet"
 	case ctx.GlobalIsSet(utils.LocalFlag.Name):
 		netname = utils.LocalFlag.Name + " testnet"
+	case ctx.GlobalIsSet(utils.GalenaFlag.Name):
+		netname = utils.GalenaFlag.Name + " testnet"
 	case ctx.GlobalIsSet(utils.DeveloperFlag.Name):
 		netname = utils.DeveloperFlag.Name + " ephemeral dev network"
 	case !ctx.GlobalIsSet(utils.NetworkIdFlag.Name):

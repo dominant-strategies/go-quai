@@ -43,6 +43,14 @@ var OrchardBootnodes = []string{
 	"enode://a63fab2ffb3cd91a3842cb70c7c24018c66d3ba2b5e47b5344d9c8bd8fb034b85f297f07fd97e7f85fca2d2dfd26166677f0aa4d498af8abe5b7c5c251bd60e1@34.22.69.17",   // asia-northeast3-a
 }
 
+// GalenaBootnodes are the enode URLs of the P2P bootstrap nodes running on the
+// Galena test network
+var GalenaBootnodes = []string{
+	"enode://12fa0822887c7c8829c1d30e7aaf430587cc71827f5ab2028ee39acf02c113eb01a4c130258074d3c7868f68280f854036a8a51beb4df96af314f94c7f45966e@34.175.138.4",  // europe-southwest1-a
+	"enode://1dab5f7739dfd6fb037a676607fc86ecc76eff3906abaa8f8662e236eb01937b27db1309c89e0c3af807a64b491f401f52ff75daca49689c99cfe949c359623c@35.199.83.89",  // southamerica-east1-b
+	"enode://402a7cc416700f8717ff35416dfcb3c286921bc4261a9e8cc9948cfac9e3589c8db25fffcf7d6877ec0e7ad93c83e6bde93d4918923dfb9c24c1635a57c5aba2@34.64.122.86",  // asia-northeast3-a
+}
+
 var V5Bootnodes = []string{}
 
 const dnsPrefix = "enrtree://ALE24Z2TEZV2XK46RXVB6IIN5HB5WTI4F4SMAVLYCAQIUPU53RSUU@"
@@ -59,6 +67,8 @@ func KnownDNSNetwork(genesis common.Hash, protocol string) string {
 		net = "garden"
 	case OrchardGenesisHash:
 		net = "orchard"
+	case GalenaGenesisHash:
+		net = "galena"
 	default:
 		return ""
 	}
