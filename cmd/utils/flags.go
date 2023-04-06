@@ -142,6 +142,10 @@ var (
 		Name:  "orchard",
 		Usage: "Orchard network: pre-configured proof-of-work test network",
 	}
+	GalenaFlag = cli.BoolFlag{
+		Name:  "galena",
+		Usage: "Galena network: pre-configured proof-of-work test network",
+	}
 	LocalFlag = cli.BoolFlag{
 		Name:  "local",
 		Usage: "Local network: localhost proof-of-work node, will not attempt to connect to bootnode or any public network",
@@ -738,6 +742,8 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 		urls = params.GardenBootnodes
 	case ctx.GlobalBool(OrchardFlag.Name):
 		urls = params.OrchardBootnodes
+	case ctx.GlobalBool(GalenaFlag.Name):
+		urls = params.GalenaBootnodes
 	case ctx.GlobalBool(LocalFlag.Name):
 		urls = []string{}
 	case cfg.BootstrapNodes != nil:
@@ -1180,6 +1186,8 @@ func setBlake3pow(ctx *cli.Context, cfg *ethconfig.Config) {
 		cfg.Blake3pow.DurationLimit = params.GardenDurationLimit
 	case ctx.GlobalBool(OrchardFlag.Name):
 		cfg.Blake3pow.DurationLimit = params.OrchardDurationLimit
+	case ctx.GlobalBool(GalenaFlag.Name):
+		cfg.Blake3pow.DurationLimit = params.GalenaDurationLimit
 	case ctx.GlobalBool(LocalFlag.Name):
 		cfg.Blake3pow.DurationLimit = params.LocalDurationLimit
 	case ctx.GlobalBool(DeveloperFlag.Name):
@@ -1572,6 +1580,8 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 		genesis = core.DefaultGardenGenesisBlock()
 	case ctx.GlobalBool(OrchardFlag.Name):
 		genesis = core.DefaultOrchardGenesisBlock()
+	case ctx.GlobalBool(GalenaFlag.Name):
+		genesis = core.DefaultGalenaGenesisBlock()
 	case ctx.GlobalBool(LocalFlag.Name):
 		genesis = core.DefaultLocalGenesisBlock()
 	case ctx.GlobalBool(DeveloperFlag.Name):

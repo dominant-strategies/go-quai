@@ -28,6 +28,7 @@ var (
 	ColosseumGenesisHash = common.HexToHash("0xa5951ca01396546d238c8c900c86bd10894905a04c3f6902142345aabbff7947")
 	GardenGenesisHash    = common.HexToHash("0x3651b09b23cd8f76630d32ae2391d46dbd4d56f5d7b46e2787bf8aba47a2f74a")
 	OrchardGenesisHash   = common.HexToHash("0xb49b67aa6d88002118176c6d4d779346d7aee59786829939ee6ac61cc6fb78eb")
+	GalenaGenesisHash	 = common.HexToHash("0xa5951ca01396546d238c8c900c86bd10894905a04c3f6902142345aabbff7947")
 	LocalGenesisHash     = common.HexToHash("0x4c4c6a48351375caa0009b9c36154a4c4b1a79c400464b98a7368dfd825b6b3e")
 )
 
@@ -94,6 +95,28 @@ var (
 		Blake3pow:           new(Blake3powConfig),
 		GenesisHash:         OrchardGenesisHash,
 	}
+
+	// GalenaChainConfig contains the chain parameters to run a node on the Orchard test network.
+	GalenaChainConfig = &ChainConfig{
+		ChainID:             big.NewInt(17000),
+		HomesteadBlock:      big.NewInt(0),
+		DAOForkBlock:        nil,
+		DAOForkSupport:      true,
+		EIP150Block:         big.NewInt(0),
+		EIP150Hash:          common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
+		MuirGlacierBlock:    big.NewInt(0),
+		BerlinBlock:         big.NewInt(0),
+		LondonBlock:         big.NewInt(0),
+		Blake3pow:           new(Blake3powConfig),
+		GenesisHash:         GalenaGenesisHash,
+	}
+	
 
 	// LocalChainConfig contains the chain parameters to run a node on the Local test network.
 	LocalChainConfig = &ChainConfig{

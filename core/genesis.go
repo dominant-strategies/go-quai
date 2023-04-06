@@ -247,6 +247,8 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 		return params.GardenChainConfig
 	case ghash == params.OrchardGenesisHash:
 		return params.OrchardChainConfig
+	case ghash == params.GalenaGenesisHash:
+		return params.GalenaChainConfig
 	case ghash == params.LocalGenesisHash:
 		return params.LocalChainConfig
 	default:
@@ -401,6 +403,18 @@ func DefaultOrchardGenesisBlock() *Genesis {
 		GasLimit:   []uint64{1000000, 1000000, 1000000},
 		Difficulty: big.NewInt(2048576),
 		Alloc:      decodePrealloc(orchardAllocData),
+	}
+}
+
+// DefaultOrchardGenesisBlock returns the Orchard testnet genesis block.
+func DefaultGalenaGenesisBlock() *Genesis {
+	return &Genesis{
+		Config:     params.OrchardChainConfig,
+		Nonce:      68,
+		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
+		GasLimit:   []uint64{1000000, 1000000, 1000000},
+		Difficulty: big.NewInt(8800000000),
+		Alloc:      decodePrealloc(galenaAllocData),
 	}
 }
 
