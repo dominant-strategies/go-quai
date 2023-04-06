@@ -126,22 +126,22 @@ func MakeProtocols(backend Backend, network uint64, dnsdisc enode.Iterator) []p2
 // NodeInfo represents a short summary of the `quai` sub-protocol metadata
 // known about the host peer.
 type NodeInfo struct {
-	Network    uint64              `json:"network"`    // Quai network ID (1=Colosseum, Garden=2, Orchard=3, Galena=4)
-	Difficulty *big.Int            `json:"difficulty"` // Total difficulty of the host's blockchain
-	Genesis    common.Hash         `json:"genesis"`    // SHA3 hash of the host's genesis block
-	Config     *params.ChainConfig `json:"config"`     // Chain configuration for the fork rules
-	Head       common.Hash         `json:"head"`       // Hex hash of the host's best owned block
+	Network uint64              `json:"network"` // Quai network ID (1=Colosseum, Garden=2, Orchard=3, Galena=4)
+	Entropy *big.Int            `json:"entropy"` // Total entropy of the host's blockchain
+	Genesis common.Hash         `json:"genesis"` // SHA3 hash of the host's genesis block
+	Config  *params.ChainConfig `json:"config"`  // Chain configuration for the fork rules
+	Head    common.Hash         `json:"head"`    // Hex hash of the host's best owned block
 }
 
 // nodeInfo retrieves some `quai` protocol metadata about the running host node.
 func nodeInfo(chain *core.Core, network uint64) *NodeInfo {
 	head := chain.CurrentBlock()
 	return &NodeInfo{
-		Network:    network,
-		Difficulty: chain.GetTd(head.Hash(), head.NumberU64()),
-		Genesis:    chain.Genesis().Hash(),
-		Config:     chain.Config(),
-		Head:       head.Hash(),
+		Network: network,
+		Entropy: chain.CurrentHeader().CalcS(),
+		Genesis: chain.Genesis().Hash(),
+		Config:  chain.Config(),
+		Head:    head.Hash(),
 	}
 }
 

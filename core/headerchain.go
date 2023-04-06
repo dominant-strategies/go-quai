@@ -435,28 +435,11 @@ func (hc *HeaderChain) WriteBlock(block *types.Block) {
 	hc.bc.WriteBlock(block)
 }
 
-// GetTd retrieves a block's total difficulty in the canonical chain from the
-// database by hash and number, caching it if found.
-func (hc *HeaderChain) GetTd(hash common.Hash, number uint64) *big.Int {
-	td := rawdb.ReadTd(hc.headerDb, hash, number)
-	return td
-}
-
-// GetTdByHash retrieves a block's total difficulty in the canonical chain from the
-// database by hash, caching it if found.
-func (hc *HeaderChain) GetTdByHash(hash common.Hash) *big.Int {
-	number := hc.GetBlockNumber(hash)
-	if number == nil {
-		return nil
-	}
-	return hc.GetTd(hash, *number)
-}
-
 // GetHeader retrieves a block header from the database by hash and number,
 // caching it if found.
 func (hc *HeaderChain) GetHeader(hash common.Hash, number uint64) *types.Header {
-	td := hc.GetTdByHash(hash)
-	if td == nil {
+	termini := hc.GetTerminiByHash(hash)
+	if termini == nil {
 		return nil
 	}
 	// Short circuit if the header's already in the cache, retrieve otherwise
@@ -475,8 +458,8 @@ func (hc *HeaderChain) GetHeader(hash common.Hash, number uint64) *types.Header 
 // GetHeaderByHash retrieves a block header from the database by hash, caching it if
 // found.
 func (hc *HeaderChain) GetHeaderByHash(hash common.Hash) *types.Header {
-	td := hc.GetTdByHash(hash)
-	if td == nil {
+	termini := hc.GetTerminiByHash(hash)
+	if termini == nil {
 		return nil
 	}
 	number := hc.GetBlockNumber(hash)

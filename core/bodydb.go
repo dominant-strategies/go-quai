@@ -104,8 +104,8 @@ func (bc *BodyDb) Engine() consensus.Engine {
 // GetBlock retrieves a block from the database by hash and number,
 // caching it if found.
 func (bc *BodyDb) GetBlock(hash common.Hash, number uint64) *types.Block {
-	td := rawdb.ReadTd(bc.db, hash, number)
-	if td == nil {
+	termini := rawdb.ReadTermini(bc.db, hash)
+	if termini == nil {
 		return nil
 	}
 	// Short circuit if the block's already in the cache, retrieve otherwise

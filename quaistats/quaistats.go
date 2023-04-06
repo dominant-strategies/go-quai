@@ -67,7 +67,6 @@ type backend interface {
 	SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription
 	CurrentHeader() *types.Header
 	HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error)
-	GetTd(ctx context.Context, hash common.Hash) *big.Int
 	Stats() (pending int, queued int)
 	Downloader() *downloader.Downloader
 	ChainConfig() *params.ChainConfig
@@ -593,7 +592,7 @@ type blockStats struct {
 	GasUsed       uint64         `json:"gasUsed"`
 	GasLimit      uint64         `json:"gasLimit"`
 	Diff          string         `json:"difficulty"`
-	TotalDiff     string         `json:"totalDifficulty"`
+	Entropy       string         `json:"entropy"`
 	Txs           []txStats      `json:"transactions"`
 	TxHash        common.Hash    `json:"transactionsRoot"`
 	EtxHash       common.Hash    `json:"extTransactionsRoot"`
@@ -644,10 +643,10 @@ func (s *Service) reportBlock(conn *connWrapper, block *types.Block) error {
 func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 	// Gather the block infos from the local blockchain
 	var (
-		header *types.Header
-		td     *big.Int
-		txs    []txStats
-		uncles []*types.Header
+		header  *types.Header
+		entropy *big.Int
+		txs     []txStats
+		uncles  []*types.Header
 	)
 
 	// check if backend is a full node
@@ -657,7 +656,7 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 			block = fullBackend.CurrentBlock()
 		}
 		header = block.Header()
-		td = fullBackend.GetTd(context.Background(), header.Hash())
+		entropy = header.CalcS()
 
 		txs = make([]txStats, len(block.Transactions()))
 		for i, tx := range block.Transactions() {
@@ -671,7 +670,7 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		} else {
 			header = s.backend.CurrentHeader()
 		}
-		td = s.backend.GetTd(context.Background(), header.Hash())
+		entropy = header.CalcS()
 		txs = []txStats{}
 	}
 
@@ -687,7 +686,7 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		GasUsed:       header.GasUsed(),
 		GasLimit:      header.GasLimit(),
 		Diff:          header.Difficulty().String(),
-		TotalDiff:     td.String(),
+		Entropy:       entropy.String(),
 		Txs:           txs,
 		TxHash:        header.TxHash(),
 		EtxHash:       header.EtxHash(),

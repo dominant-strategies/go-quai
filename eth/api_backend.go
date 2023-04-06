@@ -196,10 +196,6 @@ func (b *QuaiAPIBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*ty
 	return logs, nil
 }
 
-func (b *QuaiAPIBackend) GetTd(ctx context.Context, hash common.Hash) *big.Int {
-	return b.eth.core.GetTdByHash(hash)
-}
-
 func (b *QuaiAPIBackend) GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config) (*vm.EVM, func() error, error) {
 	vmError := func() error { return nil }
 	if vmConfig == nil {

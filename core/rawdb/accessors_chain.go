@@ -505,47 +505,16 @@ func DeletePbBodyKeys(db ethdb.KeyValueWriter, hash common.Hash) {
 	}
 }
 
-// ReadTdRLP retrieves a block's total difficulty corresponding to the hash in RLP encoding.
-func ReadTdRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
-	// First try to look up the data in ancient database. Extra hash
-	// comparison is necessary since ancient database only maintains
-	// the canonical data.
-	data, _ := db.Ancient(freezerDifficultyTable, number)
-	if len(data) > 0 {
-		h, _ := db.Ancient(freezerHashTable, number)
-		if common.BytesToHash(h) == hash {
-			return data
-		}
-	}
-	// Then try to look up the data in leveldb.
-	data, _ = db.Get(headerTDKey(number, hash))
-	if len(data) > 0 {
-		return data
-	}
-	// In the background freezer is moving data from leveldb to flatten files.
-	// So during the first check for ancient db, the data is not yet in there,
-	// but when we reach into leveldb, the data was already moved. That would
-	// result in a not found error.
-	data, _ = db.Ancient(freezerDifficultyTable, number)
-	if len(data) > 0 {
-		h, _ := db.Ancient(freezerHashTable, number)
-		if common.BytesToHash(h) == hash {
-			return data
-		}
-	}
-	return nil // Can't find the data anywhere.
-}
-
 // ReadHeadsHashes retreive's the heads hashes of the blockchain.
 func ReadTermini(db ethdb.Reader, hash common.Hash) []common.Hash {
 	key := terminiKey(hash)
 	data, _ := db.Get(key)
 	if len(data) == 0 {
-		return []common.Hash{}
+		return nil
 	}
 	hashes := []common.Hash{}
 	if err := rlp.DecodeBytes(data, &hashes); err != nil {
-		return []common.Hash{}
+		return nil
 	}
 	return hashes
 }
@@ -785,38 +754,6 @@ func DeleteHeadsHashes(db ethdb.KeyValueWriter, hashes []common.Hash) {
 	}
 }
 
-// ReadTd retrieves a block's total difficulty corresponding to the hash.
-func ReadTd(db ethdb.Reader, hash common.Hash, number uint64) *big.Int {
-	data := ReadTdRLP(db, hash, number)
-	if len(data) == 0 {
-		return nil
-	}
-	td := new(big.Int)
-	if err := rlp.Decode(bytes.NewReader(data), td); err != nil {
-		log.Error("Invalid block total difficulty RLP", "hash", hash, "err", err)
-		return nil
-	}
-	return td
-}
-
-// WriteTd stores the total difficulty of a block into the database.
-func WriteTd(db ethdb.KeyValueWriter, hash common.Hash, number uint64, td *big.Int) {
-	data, err := rlp.EncodeToBytes(td)
-	if err != nil {
-		log.Crit("Failed to RLP encode block total difficulty", "err", err)
-	}
-	if err := db.Put(headerTDKey(number, hash), data); err != nil {
-		log.Crit("Failed to store block total difficulty", "err", err)
-	}
-}
-
-// DeleteTd removes all block total difficulty data associated with a hash.
-func DeleteTd(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
-	if err := db.Delete(headerTDKey(number, hash)); err != nil {
-		log.Crit("Failed to delete block total difficulty", "err", err)
-	}
-}
-
 // HasReceipts verifies the existence of all the transaction receipts belonging
 // to a block.
 func HasReceipts(db ethdb.Reader, hash common.Hash, number uint64) bool {
@@ -1040,7 +977,6 @@ func DeleteBlock(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	DeleteReceipts(db, hash, number)
 	DeleteHeader(db, hash, number)
 	DeleteBody(db, hash, number)
-	DeleteTd(db, hash, number)
 }
 
 // DeleteBlockWithoutNumber removes all block data associated with a hash, except
@@ -1049,7 +985,6 @@ func DeleteBlockWithoutNumber(db ethdb.KeyValueWriter, hash common.Hash, number 
 	DeleteReceipts(db, hash, number)
 	deleteHeaderWithoutNumber(db, hash, number)
 	DeleteBody(db, hash, number)
-	DeleteTd(db, hash, number)
 }
 
 const badBlockToKeep = 10

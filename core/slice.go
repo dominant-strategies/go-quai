@@ -132,7 +132,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		return nil, err
 	}
 	// Don't append the block which already exists in the database.
-	if sl.hc.HasHeader(header.Hash(), header.NumberU64()) && (sl.hc.GetTd(header.Hash(), header.NumberU64()) != nil) {
+	if sl.hc.HasHeader(header.Hash(), header.NumberU64()) && (sl.hc.GetTerminiByHash(header.Hash()) != nil) {
 		log.Warn("Block has already been appended: ", "Hash: ", header.Hash())
 		return nil, ErrKnownBlock
 	}
@@ -245,9 +245,6 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	}
 	localPendingEtxs[nodeCtx] = make(types.Transactions, len(block.ExtTransactions()))
 	copy(localPendingEtxs[nodeCtx], block.ExtTransactions()) // Assign our new ETXs without rolling up
-
-	// WriteTd
-	rawdb.WriteTd(batch, block.Header().Hash(), block.NumberU64(), big.NewInt(0))
 
 	//Append has succeeded write the batch
 	if err := batch.Write(); err != nil {

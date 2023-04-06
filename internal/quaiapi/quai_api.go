@@ -471,7 +471,7 @@ func RPCMarshalHash(hash common.Hash) (map[string]interface{}, error) {
 // a `PublicBlockchainQuaiAPI`.
 func (s *PublicBlockChainQuaiAPI) rpcMarshalHeader(ctx context.Context, header *types.Header) map[string]interface{} {
 	fields := header.RPCMarshalHeader()
-	fields["totalDifficulty"] = (*hexutil.Big)(s.b.GetTd(ctx, header.Hash()))
+	fields["totalEntropy"] = (*hexutil.Big)(header.CalcS())
 	return fields
 }
 
@@ -483,7 +483,7 @@ func (s *PublicBlockChainQuaiAPI) rpcMarshalBlock(ctx context.Context, b *types.
 		return nil, err
 	}
 	if inclTx {
-		fields["totalDifficulty"] = (*hexutil.Big)(s.b.GetTd(ctx, b.Hash()))
+		fields["totalEntropy"] = (*hexutil.Big)(b.Header().CalcS())
 	}
 	return fields, err
 }

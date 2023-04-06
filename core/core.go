@@ -357,18 +357,6 @@ func (c *Core) CurrentHeader() *types.Header {
 	return c.sl.hc.CurrentHeader()
 }
 
-// GetTd retrieves a block's total difficulty in the canonical chain from the
-// database by hash and number, caching it if found.
-func (c *Core) GetTd(hash common.Hash, number uint64) *big.Int {
-	return c.sl.hc.GetTd(hash, number)
-}
-
-// GetTdByHash retrieves a block's total difficulty in the canonical chain from the
-// database by hash, caching it if found.
-func (c *Core) GetTdByHash(hash common.Hash) *big.Int {
-	return c.sl.hc.GetTdByHash(hash)
-}
-
 // GetHeader retrieves a block header from the database by hash and number,
 // caching it if found.
 func (c *Core) GetHeader(hash common.Hash, number uint64) *types.Header {
@@ -439,6 +427,11 @@ func (c *Core) GetBody(hash common.Hash) *types.Body {
 // caching it if found.
 func (c *Core) GetBodyRLP(hash common.Hash) rlp.RawValue {
 	return c.sl.hc.GetBodyRLP(hash)
+}
+
+// GetTerminiByHash retrieves the termini stored for a given header hash
+func (c *Core) GetTerminiByHash(hash common.Hash) []common.Hash {
+	return c.sl.hc.GetTerminiByHash(hash)
 }
 
 //--------------------//

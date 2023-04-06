@@ -66,10 +66,10 @@ const (
 // freezer is an memory mapped append-only database to store immutable chain data
 // into flat files:
 //
-// - The append only nature ensures that disk writes are minimized.
-// - The memory mapping ensures we can max out system memory for caching without
-//   reserving it for go-ethereum. This would also reduce the memory requirements
-//   of Geth, and thus also GC overhead.
+//   - The append only nature ensures that disk writes are minimized.
+//   - The memory mapping ensures we can max out system memory for caching without
+//     reserving it for go-ethereum. This would also reduce the memory requirements
+//     of Geth, and thus also GC overhead.
 type freezer struct {
 	// WARNING: The `frozen` field is accessed atomically. On 32 bit platforms, only
 	// 64-bit aligned fields can be atomic. The struct is guaranteed to be so aligned,
@@ -199,7 +199,7 @@ func (f *freezer) AncientSize(kind string) (uint64, error) {
 // Notably, this function is lock free but kind of thread-safe. All out-of-order
 // injection will be rejected. But if two injections with same number happen at
 // the same time, we can get into the trouble.
-func (f *freezer) AppendAncient(number uint64, hash, header, body, receipts, td, etxSet []byte) (err error) {
+func (f *freezer) AppendAncient(number uint64, hash, header, body, receipts, etxSet []byte) (err error) {
 	if f.readonly {
 		return errReadOnly
 	}
@@ -233,10 +233,6 @@ func (f *freezer) AppendAncient(number uint64, hash, header, body, receipts, td,
 	}
 	if err := f.tables[freezerReceiptTable].Append(f.frozen, receipts); err != nil {
 		log.Error("Failed to append ancient receipts", "number", f.frozen, "hash", hash, "err", err)
-		return err
-	}
-	if err := f.tables[freezerDifficultyTable].Append(f.frozen, td); err != nil {
-		log.Error("Failed to append ancient difficulty", "number", f.frozen, "hash", hash, "err", err)
 		return err
 	}
 	if err := f.tables[freezerEtxSetsTable].Append(f.frozen, etxSet); err != nil {
@@ -376,19 +372,14 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 				log.Error("Block receipts missing, can't freeze", "number", f.frozen, "hash", hash)
 				break
 			}
-			td := ReadTdRLP(nfdb, hash, f.frozen)
-			if len(td) == 0 {
-				log.Error("Total difficulty missing, can't freeze", "number", f.frozen, "hash", hash)
-				break
-			}
 			etxSet := ReadEtxSetRLP(nfdb, hash, f.frozen)
-			if len(td) == 0 {
-				log.Error("Total difficulty missing, can't freeze", "number", f.frozen, "hash", hash)
+			if len(etxSet) == 0 {
+				log.Error("Total etxset missing, can't freeze", "number", f.frozen, "hash", hash)
 				break
 			}
 			log.Trace("Deep froze ancient block", "number", f.frozen, "hash", hash)
 			// Inject all the components into the relevant data tables
-			if err := f.AppendAncient(f.frozen, hash[:], header, body, receipts, td, etxSet); err != nil {
+			if err := f.AppendAncient(f.frozen, hash[:], header, body, receipts, etxSet); err != nil {
 				break
 			}
 			ancients = append(ancients, hash)

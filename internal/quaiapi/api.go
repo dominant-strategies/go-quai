@@ -904,7 +904,7 @@ func RPCMarshalETHBlock(block *types.Block, inclTx bool, fullTx bool) (map[strin
 // a `PublicBlockchainAPI`.
 func (s *PublicBlockChainAPI) rpcMarshalHeader(ctx context.Context, header *types.Header) map[string]interface{} {
 	fields := RPCMarshalETHHeader(header)
-	fields["totalDifficulty"] = (*hexutil.Big)(s.b.GetTd(ctx, header.Hash()))
+	fields["totalEntropy"] = (*hexutil.Big)(header.CalcS())
 	return fields
 }
 
@@ -916,7 +916,7 @@ func (s *PublicBlockChainAPI) rpcMarshalBlock(ctx context.Context, b *types.Bloc
 		return nil, err
 	}
 	if inclTx {
-		fields["totalDifficulty"] = (*hexutil.Big)(s.b.GetTd(ctx, b.Hash()))
+		fields["totalEntropy"] = (*hexutil.Big)(b.Header().CalcS())
 	}
 	return fields, err
 }

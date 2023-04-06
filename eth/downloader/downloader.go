@@ -133,9 +133,6 @@ type Core interface {
 	// HasBlock verifies a block's presence in the local chain.
 	HasBlock(common.Hash, uint64) bool
 
-	// GetTd returns the total difficulty of the given block
-	GetTd(common.Hash, uint64) *big.Int
-
 	// GetBlockByHash retrieves a block from the local chain.
 	GetBlockByHash(common.Hash) *types.Block
 
@@ -153,6 +150,9 @@ type Core interface {
 
 	// Write block to the database
 	WriteBlock(block *types.Block)
+
+	// GetTerminiByHash returns the termini of a given block
+	GetTerminiByHash(hash common.Hash) []common.Hash
 }
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
@@ -637,7 +637,7 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 				// Only fill the skeleton between the headers we don't know about.
 				for i := 0; i < len(headers); i++ {
 					skeletonHeaders = append(skeletonHeaders, headers[i])
-					commonAncestor := d.core.HasBlock(headers[i].Hash(), headers[i].NumberU64()) && (d.core.GetTd(headers[i].Hash(), headers[i].NumberU64()) != nil)
+					commonAncestor := d.core.HasBlock(headers[i].Hash(), headers[i].NumberU64()) && (d.core.GetTerminiByHash(headers[i].Hash()) != nil)
 					if commonAncestor {
 						break
 					}
