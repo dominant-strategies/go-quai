@@ -59,6 +59,12 @@ func EncodeNonce(i uint64) BlockNonce {
 	return n
 }
 
+func ByteNonce(b []byte) BlockNonce {
+	var n BlockNonce
+	copy(n[:], b)
+	return n
+}
+
 func (n BlockNonce) Bytes() []byte {
 	return n[:]
 }
