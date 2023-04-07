@@ -21,7 +21,6 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/state"
-	"github.com/dominant-strategies/go-quai/log"
 )
 
 // txNoncer is a tiny virtual state database to manage the executable nonces of
@@ -43,50 +42,35 @@ func newTxNoncer(statedb *state.StateDB) *txNoncer {
 
 // get returns the current nonce of an account, falling back to a real state
 // database if the account is unknown.
-func (txn *txNoncer) get(addr common.Address) uint64 {
+func (txn *txNoncer) get(addr common.InternalAddress) uint64 {
 	// We use mutex for get operation is the underlying
 	// state will mutate db even for read access.
 	txn.lock.Lock()
 	defer txn.lock.Unlock()
-	internal, err := addr.InternalAddress()
-	if err != nil {
-		log.Debug("Failed to get nonce", "err", err)
-		return 0
+	if _, ok := txn.nonces[addr]; !ok {
+		txn.nonces[addr] = txn.fallback.GetNonce(addr)
 	}
-	if _, ok := txn.nonces[*internal]; !ok {
-		txn.nonces[*internal] = txn.fallback.GetNonce(*internal)
-	}
-	return txn.nonces[*internal]
+	return txn.nonces[addr]
 }
 
 // set inserts a new virtual nonce into the virtual state database to be returned
 // whenever the pool requests it instead of reaching into the real state database.
-func (txn *txNoncer) set(addr common.Address, nonce uint64) {
+func (txn *txNoncer) set(addr common.InternalAddress, nonce uint64) {
 	txn.lock.Lock()
 	defer txn.lock.Unlock()
-	internal, err := addr.InternalAddress()
-	if err != nil {
-		log.Debug("Failed to set nonce", "err", err)
-		return
-	}
-	txn.nonces[*internal] = nonce
+	txn.nonces[addr] = nonce
 }
 
 // setIfLower updates a new virtual nonce into the virtual state database if the
 // the new one is lower.
-func (txn *txNoncer) setIfLower(addr common.Address, nonce uint64) {
+func (txn *txNoncer) setIfLower(addr common.InternalAddress, nonce uint64) {
 	txn.lock.Lock()
 	defer txn.lock.Unlock()
-	internal, err := addr.InternalAddress()
-	if err != nil {
-		log.Debug("Failed to set nonce", "err", err)
+	if _, ok := txn.nonces[addr]; !ok {
+		txn.nonces[addr] = txn.fallback.GetNonce(addr)
+	}
+	if txn.nonces[addr] <= nonce {
 		return
 	}
-	if _, ok := txn.nonces[*internal]; !ok {
-		txn.nonces[*internal] = txn.fallback.GetNonce(*internal)
-	}
-	if txn.nonces[*internal] <= nonce {
-		return
-	}
-	txn.nonces[*internal] = nonce
+	txn.nonces[addr] = nonce
 }

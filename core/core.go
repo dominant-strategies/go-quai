@@ -678,7 +678,7 @@ func (c *Core) AddLocal(tx *types.Transaction) error {
 	return c.sl.txPool.AddLocal(tx)
 }
 
-func (c *Core) TxPoolPending(enforceTips bool) (map[common.Address]types.Transactions, error) {
+func (c *Core) TxPoolPending(enforceTips bool) (map[common.AddressBytes]types.Transactions, error) {
 	return c.sl.txPool.TxPoolPending(enforceTips, nil)
 }
 
@@ -687,17 +687,25 @@ func (c *Core) Get(hash common.Hash) *types.Transaction {
 }
 
 func (c *Core) Nonce(addr common.Address) uint64 {
-	return c.sl.txPool.Nonce(addr)
+	internal, err := addr.InternalAddress()
+	if err != nil {
+		return 0
+	}
+	return c.sl.txPool.Nonce(*internal)
 }
 
 func (c *Core) Stats() (int, int) {
 	return c.sl.txPool.Stats()
 }
 
-func (c *Core) Content() (map[common.Address]types.Transactions, map[common.Address]types.Transactions) {
+func (c *Core) Content() (map[common.InternalAddress]types.Transactions, map[common.InternalAddress]types.Transactions) {
 	return c.sl.txPool.Content()
 }
 
 func (c *Core) ContentFrom(addr common.Address) (types.Transactions, types.Transactions) {
-	return c.sl.txPool.ContentFrom(addr)
+	internal, err := addr.InternalAddress()
+	if err != nil {
+		return nil, nil
+	}
+	return c.sl.txPool.ContentFrom(*internal)
 }

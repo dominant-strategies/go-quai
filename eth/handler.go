@@ -81,7 +81,7 @@ type txPool interface {
 
 	// Pending should return pending transactions.
 	// The slice should be modifiable by the caller.
-	TxPoolPending(enforceTips bool, etxSet types.EtxSet) (map[common.Address]types.Transactions, error)
+	TxPoolPending(enforceTips bool, etxSet types.EtxSet) (map[common.AddressBytes]types.Transactions, error)
 
 	// SubscribeNewTxsEvent should return an event subscription of
 	// NewTxsEvent and send events to the given channel.

@@ -309,7 +309,7 @@ func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 	etherbase := s.etherbase
 	s.lock.RUnlock()
 
-	if !etherbase.Equals(common.ZeroAddr) {
+	if !etherbase.Equal(common.ZeroAddr) {
 		return etherbase, nil
 	}
 
@@ -331,13 +331,17 @@ func (s *Ethereum) isLocalBlock(header *types.Header) bool {
 	s.lock.RLock()
 	etherbase := s.etherbase
 	s.lock.RUnlock()
-	if author == etherbase {
+	if author.Equal(etherbase) {
 		return true
+	}
+	internal, err := author.InternalAddress()
+	if err != nil {
+		log.Error("Failed to retrieve author internal address", "err", err)
 	}
 	// Check whether the given address is specified by `txpool.local`
 	// CLI flag.
 	for _, account := range s.config.TxPool.Locals {
-		if account == author {
+		if account == *internal {
 			return true
 		}
 	}

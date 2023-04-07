@@ -17,6 +17,8 @@ type Address struct {
 	inner AddressData
 }
 
+type AddressBytes [20]byte
+
 type AddressData interface {
 	Bytes() []byte
 	Hash() Hash
@@ -44,7 +46,7 @@ func (a Address) InternalAddress() (*InternalAddress, error) {
 	return internal, nil
 }
 
-func (a Address) Equals(b Address) bool {
+func (a Address) Equal(b Address) bool {
 	if a.inner == nil && b.inner == nil {
 		return true
 	} else if a.inner == nil || b.inner == nil {
@@ -99,6 +101,15 @@ func (a Address) Bytes() []byte {
 		return []byte{}
 	}
 	return a.inner.Bytes()
+}
+
+// Bytes20 gets the bytes20 representation of the underlying address.
+func (a Address) Bytes20() (addr AddressBytes) {
+	if a.inner == nil {
+		return AddressBytes{}
+	}
+	copy(addr[:], a.Bytes()[:]) // this is not very performant
+	return addr
 }
 
 // Hash converts an address to a hash by left-padding it with zeros.

@@ -430,7 +430,7 @@ func (w *worker) GeneratePendingHeader(block *types.Block) (*types.Header, error
 	start := time.Now()
 	// Set the coinbase if the worker is running or it's required
 	var coinbase common.Address
-	if w.coinbase.Equals(common.ZeroAddr) {
+	if w.coinbase.Equal(common.ZeroAddr) {
 		log.Error("Refusing to mine without etherbase")
 		return nil, errors.New("etherbase not found")
 	}
@@ -582,10 +582,10 @@ func (w *worker) mainLoop() {
 				if gp := w.current.gasPool; gp != nil && gp.Gas() < params.TxGas {
 					continue
 				}
-				txs := make(map[common.Address]types.Transactions)
+				txs := make(map[common.AddressBytes]types.Transactions)
 				for _, tx := range ev.Txs {
 					acc, _ := types.Sender(w.current.signer, tx)
-					txs[acc] = append(txs[acc], tx)
+					txs[acc.Bytes20()] = append(txs[acc.Bytes20()], tx)
 				}
 				txset := types.NewTransactionsByPriceAndNonce(w.current.signer, txs, w.current.header.BaseFee())
 				tcount := w.current.tcount
@@ -854,7 +854,7 @@ func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*en
 	header.SetParentEntropy(block.Header().ParentEntropy())
 
 	if w.isRunning() {
-		if w.coinbase.Equals(common.ZeroAddr) {
+		if w.coinbase.Equal(common.ZeroAddr) {
 			log.Error("Refusing to mine without etherbase")
 			return nil, errors.New("refusing to mine without etherbase")
 		}
@@ -910,11 +910,11 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, block *typ
 	if err != nil {
 		return
 	}
-	localTxs, remoteTxs := make(map[common.Address]types.Transactions), pending
+	localTxs, remoteTxs := make(map[common.AddressBytes]types.Transactions), pending
 	for _, account := range w.txPool.Locals() {
-		if txs := remoteTxs[account]; len(txs) > 0 {
-			delete(remoteTxs, account)
-			localTxs[account] = txs
+		if txs := remoteTxs[account.Bytes20()]; len(txs) > 0 {
+			delete(remoteTxs, account.Bytes20())
+			localTxs[account.Bytes20()] = txs
 		}
 	}
 	if len(localTxs) > 0 {

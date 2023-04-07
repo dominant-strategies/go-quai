@@ -267,7 +267,7 @@ func (b *QuaiAPIBackend) Stats() (pending int, queued int) {
 	return b.eth.core.Stats()
 }
 
-func (b *QuaiAPIBackend) TxPoolContent() (map[common.Address]types.Transactions, map[common.Address]types.Transactions) {
+func (b *QuaiAPIBackend) TxPoolContent() (map[common.InternalAddress]types.Transactions, map[common.InternalAddress]types.Transactions) {
 	return b.eth.core.Content()
 }
 

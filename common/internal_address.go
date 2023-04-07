@@ -13,8 +13,11 @@ import (
 
 type InternalAddress [AddressLength]byte
 
-// Bytes gets the string representation of the underlying address.
+// Bytes gets the bytes representation of the underlying address.
 func (a InternalAddress) Bytes() []byte { return a[:] }
+
+// Bytes20 gets the bytes20 representation of the underlying address.
+func (a InternalAddress) Bytes20() (addr AddressBytes) { copy(addr[:], a[:]); return addr } // this is not very performant
 
 // Hash converts an address to a hash by left-padding it with zeros.
 func (a InternalAddress) Hash() Hash { return BytesToHash(a[:]) }
