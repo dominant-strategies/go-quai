@@ -399,6 +399,13 @@ func (c *codeAndHash) Hash() common.Hash {
 
 // create creates a new contract using code as deployment code.
 func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *big.Int, address common.Address) ([]byte, common.Address, uint64, error) {
+	internalCallerAddr, err := caller.Address().InternalAddress()
+	if err != nil {
+		return nil, common.ZeroAddr, 0, err
+	}
+	nonce := evm.StateDB.GetNonce(*internalCallerAddr)
+	evm.StateDB.SetNonce(*internalCallerAddr, nonce+1)
+
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
 	if evm.depth > int(params.CallCreateDepth) {
@@ -407,16 +414,12 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
 		return nil, common.ZeroAddr, gas, ErrInsufficientBalance
 	}
-	internalCallerAddr, err := caller.Address().InternalAddress()
-	if err != nil {
-		return nil, common.ZeroAddr, 0, err
-	}
+
 	internalContractAddr, err := address.InternalAddress()
 	if err != nil {
 		return nil, common.ZeroAddr, 0, err
 	}
-	nonce := evm.StateDB.GetNonce(*internalCallerAddr)
-	evm.StateDB.SetNonce(*internalCallerAddr, nonce+1)
+
 	// We add this to the access list _before_ taking a snapshot. Even if the creation fails,
 	// the access-list change should not be rolled back
 	if evm.chainRules.IsBerlin {
