@@ -710,7 +710,11 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, headerProcCh 
 
 	// Ensure headers can be mapped onto the skeleton chain
 	targetTo := q.headerToPool[request.From+1]
-	requiredHeaderFetch := request.From - targetTo + 1
+
+	requiredHeaderFetch := request.From - targetTo
+	if targetTo != 0 {
+		requiredHeaderFetch += 1
+	}
 	accepted := len(headers) == int(requiredHeaderFetch)
 
 	// reverse the array
@@ -723,8 +727,10 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, headerProcCh 
 			logger.Info("First header broke chain ordering", "number", headers[0].Number(), "hash", headers[0].Hash(), "expected", request.From)
 			accepted = false
 		} else if headers[0].NumberU64() != targetTo {
-			logger.Info("Last header broke skeleton structure ", "number", headers[0].Number(), "expected", targetTo)
-			accepted = false
+			if targetTo != 0 {
+				logger.Info("Last header broke skeleton structure ", "number", headers[0].Number(), "expected", targetTo)
+				accepted = false
+			}
 		}
 	}
 
@@ -732,7 +738,13 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, headerProcCh 
 		parentHash := headers[0].Hash()
 		for i, header := range headers[1:] {
 			hash := header.Hash()
-			if want := targetTo + 1 + uint64(i); header.Number().Uint64() != want {
+			var want uint64
+			if targetTo != 0 {
+				want = targetTo + 1 + uint64(i)
+			} else {
+				want = targetTo + 2 + uint64(i)
+			}
+			if header.Number().Uint64() != want {
 				logger.Warn("Header broke chain ordering", "number", header.Number(), "hash", hash, "expected", want)
 				accepted = false
 				break

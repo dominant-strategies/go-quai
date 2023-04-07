@@ -21,6 +21,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
 )
 
@@ -109,7 +110,12 @@ func (r *resultStore) GetDeliverySlot(headerNumber uint64) (*fetchResult, bool, 
 // getFetchResult returns the fetchResult corresponding to the given item, and
 // the index where the result is stored.
 func (r *resultStore) getFetchResult(headerNumber uint64) (item *fetchResult, index int, stale, throttle bool, err error) {
-	index = int(int64(headerNumber) - int64(r.resultOffset))
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx != common.PRIME_CTX {
+		index = int(int64(headerNumber)-int64(r.resultOffset)) - 1
+	} else {
+		index = int(int64(headerNumber) - int64(r.resultOffset))
+	}
 
 	throttle = index >= int(r.throttleThreshold)
 	stale = index < 0

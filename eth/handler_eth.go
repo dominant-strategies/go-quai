@@ -185,7 +185,7 @@ func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block) er
 
 	blockS := block.Header().CalcS()
 	_, _, peerEntropy, _ := peer.Head()
-	if blockS != nil || peerEntropy != nil {
+	if blockS != nil && peerEntropy != nil {
 		if peerEntropy.Cmp(blockS) < 0 {
 			peer.SetHead(block.Hash(), block.Number(), blockS, block.ReceivedAt)
 			h.chainSync.handlePeerEvent(peer)

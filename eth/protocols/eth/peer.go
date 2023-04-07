@@ -159,7 +159,7 @@ func (p *Peer) SetHead(hash common.Hash, number *big.Int, entropy *big.Int, rece
 	copy(p.head[:], hash[:])
 	p.receivedHeadAt = receivedAt
 	p.number = new(big.Int).Set(number)
-	p.entropy = entropy
+	p.entropy = new(big.Int).Set(entropy)
 }
 
 // KnownBlock returns whether peer is known to already have a block.
