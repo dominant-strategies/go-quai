@@ -18,11 +18,13 @@ package core
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/trie"
 )
@@ -93,27 +95,33 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 // itself. ValidateState returns a database batch if the validation was a success
 // otherwise nil and an error is returned.
 func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateDB, receipts types.Receipts, usedGas uint64) error {
+	start := time.Now()
 	nodeCtx := common.NodeLocation.Context()
 	header := block.Header()
+	time1 := common.PrettyDuration(time.Since(start))
 	if block.GasUsed() != usedGas {
 		return fmt.Errorf("invalid gas used (remote: %d local: %d)", block.GasUsed(), usedGas)
 	}
+	time2 := common.PrettyDuration(time.Since(start))
 	// Validate the received block's bloom with the one derived from the generated receipts.
 	// For valid blocks this should always validate to true.
 	rbloom := types.CreateBloom(receipts)
 	if rbloom != header.Bloom() {
 		return fmt.Errorf("invalid bloom (remote: %x  local: %x)", header.Bloom(), rbloom)
 	}
+	time3 := common.PrettyDuration(time.Since(start))
 	// Tre receipt Trie's root (R = (Tr [[H1, R1], ... [Hn, Rn]]))
 	receiptSha := types.DeriveSha(receipts, trie.NewStackTrie(nil))
 	if receiptSha != header.ReceiptHash() {
 		return fmt.Errorf("invalid receipt root hash (remote: %x local: %x)", header.ReceiptHash(), receiptSha)
 	}
+	time4 := common.PrettyDuration(time.Since(start))
 	// Validate the state root against the received state root and throw
 	// an error if they don't match.
 	if root := statedb.IntermediateRoot(v.config.IsEIP158(header.Number())); header.Root() != root {
 		return fmt.Errorf("invalid merkle root (remote: %x local: %x)", header.Root(), root)
 	}
+	time5 := common.PrettyDuration(time.Since(start))
 	// Collect ETXs emitted from each successful transaction
 	var emittedEtxs types.Transactions
 	for _, receipt := range receipts {
@@ -123,11 +131,14 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 			}
 		}
 	}
+	time6 := common.PrettyDuration(time.Since(start))
 	// Confirm the ETXs emitted by the transactions in this block exactly match the
 	// ETXs given in the block body
 	if etxHash := types.DeriveSha(emittedEtxs, trie.NewStackTrie(nil)); etxHash != header.EtxHash() {
 		return fmt.Errorf("invalid etx hash (remote: %x local: %x)", header.EtxHash(), etxHash)
 	}
+	time7 := common.PrettyDuration(time.Since(start))
+	var time7_1 common.PrettyDuration
 	if nodeCtx > common.PRIME_CTX {
 		// Collect the ETX rollup with emitted ETXs since the last coincident block,
 		// excluding this block.
@@ -135,10 +146,14 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 		if err != nil {
 			return fmt.Errorf("unable to get ETX rollup")
 		}
+		time7_1 = common.PrettyDuration(time.Since(start))
 		if etxRollupHash := types.DeriveSha(etxRollup, trie.NewStackTrie(nil)); etxRollupHash != header.EtxRollupHash() {
 			return fmt.Errorf("invalid etx rollup hash (remote: %x local: %x)", header.EtxRollupHash(), etxRollupHash)
 		}
 	}
+	time8 := common.PrettyDuration(time.Since(start))
+	log.Info("times during validate state:", "t1:", time1, "t2:", time2, "t3:", time3, "t4:", time4, "t5:", time5, "t6:", time6, "t7:", time7, "t7_1:", time7_1, "t8:", time8)
+
 	return nil
 }
 

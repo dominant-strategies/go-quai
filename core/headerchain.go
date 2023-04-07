@@ -187,6 +187,7 @@ func (hc *HeaderChain) Append(batch ethdb.Batch, block *types.Block, newInboundE
 		return err
 	}
 
+	collectBlockManifest := time.Now()
 	// Verify the manifest matches expected
 	// Load the manifest of blocks preceding this block
 	// note: prime manifest is non-existent, because a prime block cannot be
@@ -201,15 +202,18 @@ func (hc *HeaderChain) Append(batch ethdb.Batch, block *types.Block, newInboundE
 			return errors.New("manifest does not match hash")
 		}
 	}
+	elapsedCollectBlockManifest := common.PrettyDuration(time.Since(collectBlockManifest))
 
 	// Append header to the headerchain
 	rawdb.WriteHeader(batch, block.Header())
 
+	blockappend := time.Now()
 	// Append block else revert header append
 	logs, err := hc.bc.Append(batch, block, newInboundEtxs)
 	if err != nil {
 		return err
 	}
+	log.Info("Time taken to", "collectBlockManifest", elapsedCollectBlockManifest, "Append in bc", common.PrettyDuration(time.Since(blockappend)))
 
 	hc.bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
 	if len(logs) > 0 {
