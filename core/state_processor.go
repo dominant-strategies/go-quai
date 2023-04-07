@@ -291,43 +291,51 @@ var lastWrite uint64
 func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInboundEtxs types.Transactions) ([]*types.Log, error) {
 	// Update the set of inbound ETXs which may be mined. This adds new inbound
 	// ETXs to the set and removes expired ETXs so they are no longer available
+	start := time.Now()
 	etxSet := rawdb.ReadEtxSet(p.hc.bc.db, block.ParentHash(), block.NumberU64()-1)
+	time1 := common.PrettyDuration(time.Since(start))
 	if etxSet == nil {
 		return nil, errors.New("failed to load etx set")
 	}
 	etxSet.Update(newInboundEtxs, block.NumberU64())
-
+	time2 := common.PrettyDuration(time.Since(start))
 	// Process our block
 	receipts, logs, statedb, usedGas, err := p.Process(block, etxSet)
 	if err != nil {
 		return nil, err
 	}
-
+	time3 := common.PrettyDuration(time.Since(start))
 	err = p.validator.ValidateState(block, statedb, receipts, usedGas)
 	if err != nil {
 		return nil, err
 	}
-
+	time4 := common.PrettyDuration(time.Since(start))
 	rawdb.WriteReceipts(batch, block.Hash(), block.NumberU64(), receipts)
+	time5 := common.PrettyDuration(time.Since(start))
 	rawdb.WritePreimages(batch, statedb.Preimages())
-
+	time6 := common.PrettyDuration(time.Since(start))
 	// Commit all cached state changes into underlying memory database.
 	root, err := statedb.Commit(true)
 	if err != nil {
 		return nil, err
 	}
 	triedb := p.stateCache.TrieDB()
-
+	time7 := common.PrettyDuration(time.Since(start))
+	var time8 common.PrettyDuration
+	var time9 common.PrettyDuration
+	var time10 common.PrettyDuration
+	var time11 common.PrettyDuration
 	// If we're running an archive node, always flush
 	if p.cacheConfig.TrieDirtyDisabled {
 		if err := triedb.Commit(root, false, nil); err != nil {
 			return nil, err
 		}
+		time8 = common.PrettyDuration(time.Since(start))
 	} else {
 		// Full but not archive node, do proper garbage collection
 		triedb.Reference(root, common.Hash{}) // metadata reference to keep trie alive
 		p.triegc.Push(root, -int64(block.NumberU64()))
-
+		time8 = common.PrettyDuration(time.Since(start))
 		if current := block.NumberU64(); current > TriesInMemory {
 			// If we exceeded our memory allowance, flush matured singleton nodes to disk
 			var (
@@ -339,7 +347,7 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 			}
 			// Find the next state trie we need to commit
 			chosen := current - TriesInMemory
-
+			time9 = common.PrettyDuration(time.Since(start))
 			// If we exceeded out time allowance, flush an entire trie to disk
 			if p.gcproc > p.cacheConfig.TrieTimeLimit {
 				// If the header is missing (canonical chain behind), we're reorging a low
@@ -359,6 +367,7 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 					p.gcproc = 0
 				}
 			}
+			time10 = common.PrettyDuration(time.Since(start))
 			// Garbage collect anything below our required write retention
 			for !p.triegc.Empty() {
 				root, number := p.triegc.Pop()
@@ -368,10 +377,13 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 				}
 				triedb.Dereference(root.(common.Hash))
 			}
+			time11 = common.PrettyDuration(time.Since(start))
 		}
 	}
 	rawdb.WriteEtxSet(p.hc.bc.db, block.Hash(), block.NumberU64(), etxSet)
+	time12 := common.PrettyDuration(time.Since(start))
 
+	log.Info("times during state processor apply:", "t1:", time1, "t2:", time2, "t3:", time3, "t4:", time4, "t5:", time5, "t6:", time6, "t7:", time7, "t8:", time8, "t9:", time9, "t10:", time10, "t11:", time11, "t12:", time12)
 	return logs, nil
 }
 

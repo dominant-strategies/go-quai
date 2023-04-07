@@ -293,21 +293,21 @@ func handleNewBlock(backend Backend, msg Decoder, peer *Peer) error {
 		return err
 	}
 	if hash := types.CalcUncleHash(ann.Block.Uncles()); hash != ann.Block.UncleHash() {
-		log.Warn("Propagated block has invalid uncles", "have", hash, "exp", ann.Block.UncleHash())
+		log.Warn("Propagated block has invalid uncles", "peer", peer.id, "block hash", ann.Block.Hash(), "have", hash, "exp", ann.Block.UncleHash())
 		return nil // TODO(karalabe): return error eventually, but wait a few releases
 	}
 	if hash := types.DeriveSha(ann.Block.Transactions(), trie.NewStackTrie(nil)); hash != ann.Block.TxHash() {
-		log.Warn("Propagated block has invalid transaction", "have", hash, "exp", ann.Block.TxHash())
+		log.Warn("Propagated block has invalid transaction", "peer", peer.id, "block hash", ann.Block.Hash(), "have", hash, "exp", ann.Block.TxHash())
 		return nil // TODO(karalabe): return error eventually, but wait a few releases
 	}
 	if hash := types.DeriveSha(ann.Block.ExtTransactions(), trie.NewStackTrie(nil)); hash != ann.Block.EtxHash() {
-		log.Warn("Propagated block has invalid external transaction", "have", hash, "exp", ann.Block.EtxHash())
+		log.Warn("Propagated block has invalid external transaction", "peer", peer.id, "block hash", ann.Block.Hash(), "have", hash, "exp", ann.Block.EtxHash())
 		return nil // TODO(karalabe): return error eventually, but wait a few releases
 	}
 	// Dom nodes need to validate the subordinate manifest against the subordinate's manifesthash
 	if nodeCtx < common.ZONE_CTX {
 		if hash := types.DeriveSha(ann.Block.SubManifest(), trie.NewStackTrie(nil)); hash != ann.Block.ManifestHash(nodeCtx+1) {
-			log.Warn("Propagated block has invalid subordinate manifest", "have", hash, "exp", ann.Block.ManifestHash())
+			log.Warn("Propagated block has invalid subordinate manifest", "peer", peer.id, "block hash", ann.Block.Hash(), "have", hash, "exp", ann.Block.ManifestHash())
 			return nil
 		}
 	}

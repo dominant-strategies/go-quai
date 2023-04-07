@@ -3,6 +3,7 @@ package core
 import (
 	"errors"
 	"sync"
+	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
@@ -67,11 +68,13 @@ func (bc *BodyDb) Append(batch ethdb.Batch, block *types.Block, newInboundEtxs t
 	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
 
+	stateApply := time.Now()
 	// Process our block
 	logs, err := bc.processor.Apply(batch, block, newInboundEtxs)
 	if err != nil {
 		return nil, err
 	}
+	log.Info("Time taken to", "apply state:", common.PrettyDuration(time.Since(stateApply)))
 
 	if block.Hash() != block.Header().Hash() {
 		log.Info("BodyDb Append, Roots Mismatch:", "block.Hash:", block.Hash(), "block.Header.Hash", block.Header().Hash(), "parentHeader.Number:", block.NumberU64())
