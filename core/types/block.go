@@ -596,6 +596,7 @@ func (h *Header) Hash() (hash common.Hash) {
 	hasher := blake3.New(32, nil)
 	hasher.Reset()
 	var hData [40]byte
+	// fmt.Printf("About to hash nonce: %x\n", h.Nonce())
 	copy(hData[:], h.Nonce().Bytes())
 	copy(hData[len(h.nonce):], h.SealHash().Bytes())
 	sum := blake3.Sum256(hData[:])
