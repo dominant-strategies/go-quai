@@ -40,7 +40,7 @@ const (
 	dialHistoryExpiration = inboundThrottleTime + 5*time.Second
 
 	// Config for the "Looking for peers" message.
-	dialStatsLogInterval = 10 * time.Second // printed at most this often
+	dialStatsLogInterval = 60 * time.Second // printed at most this often
 	dialStatsPeerLimit   = 3                // but not if more than this many dialed peers
 
 	// Endpoint resolution is throttled with bounded backoff.
@@ -84,13 +84,12 @@ var (
 // dialer creates outbound connections and submits them into Server.
 // Two types of peer connections can be created:
 //
-//  - static dials are pre-configured connections. The dialer attempts
-//    keep these nodes connected at all times.
+//   - static dials are pre-configured connections. The dialer attempts
+//     keep these nodes connected at all times.
 //
-//  - dynamic dials are created from node discovery results. The dialer
-//    continuously reads candidate nodes from its input iterator and attempts
-//    to create peer connections to nodes arriving through the iterator.
-//
+//   - dynamic dials are created from node discovery results. The dialer
+//     continuously reads candidate nodes from its input iterator and attempts
+//     to create peer connections to nodes arriving through the iterator.
 type dialScheduler struct {
 	dialConfig
 	setupFunc   dialSetupFunc
