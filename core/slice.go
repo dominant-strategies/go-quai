@@ -257,7 +257,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	sl.writeToPhCacheAndPickPhHead(pendingHeaderWithTermini)
 
 	// Relay the new pendingHeader
-	sl.relayPh(pendingHeaderWithTermini, domOrigin, block.Location())
+	go sl.relayPh(pendingHeaderWithTermini, domOrigin, block.Location())
 
 	log.Info("Appended new block", "number", block.Header().Number(), "hash", block.Hash(),
 		"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "etxs", len(block.ExtTransactions()), "gas", block.GasUsed(),
