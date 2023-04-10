@@ -93,6 +93,7 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 // itself. ValidateState returns a database batch if the validation was a success
 // otherwise nil and an error is returned.
 func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateDB, receipts types.Receipts, usedGas uint64) error {
+	nodeCtx := common.NodeLocation.Context()
 	header := block.Header()
 	if block.GasUsed() != usedGas {
 		return fmt.Errorf("invalid gas used (remote: %d local: %d)", block.GasUsed(), usedGas)
@@ -127,14 +128,16 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	if etxHash := types.DeriveSha(emittedEtxs, trie.NewStackTrie(nil)); etxHash != header.EtxHash() {
 		return fmt.Errorf("invalid etx hash (remote: %x local: %x)", header.EtxHash(), etxHash)
 	}
-	// Collect the ETX rollup with emitted ETXs since the last coincident block,
-	// excluding this block.
-	etxRollup, err := v.hc.CollectEtxRollup(block)
-	if err != nil {
-		return fmt.Errorf("unable to get ETX rollup")
-	}
-	if etxRollupHash := types.DeriveSha(etxRollup, trie.NewStackTrie(nil)); etxRollupHash != header.EtxRollupHash() {
-		return fmt.Errorf("invalid etx rollup hash (remote: %x local: %x)", header.EtxRollupHash(), etxRollupHash)
+	if nodeCtx > common.PRIME_CTX {
+		// Collect the ETX rollup with emitted ETXs since the last coincident block,
+		// excluding this block.
+		etxRollup, err := v.hc.CollectEtxRollup(block)
+		if err != nil {
+			return fmt.Errorf("unable to get ETX rollup")
+		}
+		if etxRollupHash := types.DeriveSha(etxRollup, trie.NewStackTrie(nil)); etxRollupHash != header.EtxRollupHash() {
+			return fmt.Errorf("invalid etx rollup hash (remote: %x local: %x)", header.EtxRollupHash(), etxRollupHash)
+		}
 	}
 	return nil
 }
