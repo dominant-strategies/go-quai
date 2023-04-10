@@ -59,7 +59,6 @@ var (
 const (
 	receiptsCacheLimit = 32
 	txLookupCacheLimit = 1024
-	etxSetCacheLimit   = 100
 	TriesInMemory      = 128
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
@@ -128,7 +127,6 @@ type StateProcessor struct {
 	stateCache    state.Database // State database to reuse between imports (contains state cache)
 	receiptsCache *lru.Cache     // Cache for the most recent receipts per block
 	txLookupCache *lru.Cache
-	etxSetCache   *lru.Cache
 	validator     Validator // Block and state validator interface
 	prefetcher    Prefetcher
 	vmConfig      vm.Config
@@ -144,7 +142,6 @@ type StateProcessor struct {
 func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine consensus.Engine, vmConfig vm.Config, cacheConfig *CacheConfig) *StateProcessor {
 	receiptsCache, _ := lru.New(receiptsCacheLimit)
 	txLookupCache, _ := lru.New(txLookupCacheLimit)
-	etxSetCache, _ := lru.New(etxSetCacheLimit)
 
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
@@ -155,7 +152,6 @@ func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine conse
 		hc:            hc,
 		receiptsCache: receiptsCache,
 		txLookupCache: txLookupCache,
-		etxSetCache:   etxSetCache,
 		vmConfig:      vmConfig,
 		cacheConfig:   cacheConfig,
 		stateCache: state.NewDatabaseWithConfig(hc.headerDb, &trie.Config{
@@ -291,26 +287,11 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 
 var lastWrite uint64
 
-func (p *StateProcessor) storeEtxSet(hash common.Hash, number uint64, etxSet types.EtxSet) {
-	p.etxSetCache.Add(hash, etxSet)
-	rawdb.WriteEtxSet(p.hc.bc.db, hash, number, etxSet)
-}
-
-func (p *StateProcessor) loadEtxSet(hash common.Hash, number uint64) types.EtxSet {
-	if etxSet, exists := p.etxSetCache.Get(hash); exists == true {
-		// First check the cache
-		return etxSet.(types.EtxSet)
-	}
-	// If not in cache, read EtxSet from db
-	etxSet := rawdb.ReadEtxSet(p.hc.bc.db, hash, number)
-	return etxSet
-}
-
 // Apply State
 func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInboundEtxs types.Transactions) ([]*types.Log, error) {
 	// Update the set of inbound ETXs which may be mined. This adds new inbound
 	// ETXs to the set and removes expired ETXs so they are no longer available
-	etxSet := p.loadEtxSet(block.ParentHash(), block.NumberU64()-1)
+	etxSet := rawdb.ReadEtxSet(p.hc.bc.db, block.ParentHash(), block.NumberU64()-1)
 	if etxSet == nil {
 		return nil, errors.New("failed to load etx set")
 	}
@@ -389,7 +370,7 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 			}
 		}
 	}
-	p.storeEtxSet(block.Hash(), block.NumberU64(), etxSet)
+	rawdb.WriteEtxSet(p.hc.bc.db, block.Hash(), block.NumberU64(), etxSet)
 
 	return logs, nil
 }

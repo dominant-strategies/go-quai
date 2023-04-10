@@ -1136,22 +1136,6 @@ func ReadHeadBlock(db ethdb.Reader) *types.Block {
 	return ReadBlock(db, headBlockHash, *headBlockNumber)
 }
 
-// ReadEtxRLP retrieves the specified ETX hash
-func ReadEtxRLP(db ethdb.Reader, hash common.Hash) rlp.RawValue {
-	data, _ := db.Get(hash.Bytes())
-	if len(data) > 0 {
-		return data
-	}
-	return nil
-}
-
-// WriteEtxRLP stores the given ETX by its hash
-func WriteEtxRLP(db ethdb.KeyValueWriter, hash common.Hash, rlp rlp.RawValue) {
-	if err := db.Put(hash.Bytes(), rlp); err != nil {
-		log.Crit("Failed to store etx set", "err", err)
-	}
-}
-
 // ReadEtxSetRLP retrieves the EtxSet corresponding to a given block, in RLP encoding.
 func ReadEtxSetRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 	// First try to look up the data in ancient database. Extra hash
@@ -1219,17 +1203,7 @@ func ReadEtxSet(db ethdb.Reader, hash common.Hash, number uint64) types.EtxSet {
 	}
 	etxSet := make(types.EtxSet)
 	for _, entry := range entries {
-		etxRlp := ReadEtxRLP(db, entry.EtxHash)
-		if etxRlp == nil {
-			log.Error("Error looking up RLP transaction", "hash=", entry.EtxHash)
-			return nil
-		}
-		var etx types.Transaction
-		if err := rlp.Decode(bytes.NewReader(etxRlp), &etx); err != nil {
-			log.Error("Invalid ETX RLP", "hash=", entry.EtxHash, "err", err)
-			return nil
-		}
-		etxSet[entry.EtxHash] = types.EtxSetEntry{Height: entry.EtxHeight, ETX: etx}
+		etxSet[entry.EtxHash] = types.EtxSetEntry{Height: entry.EtxHeight, ETX: entry.Etx}
 	}
 	return etxSet
 }
@@ -1238,12 +1212,6 @@ func ReadEtxSet(db ethdb.Reader, hash common.Hash, number uint64) types.EtxSet {
 func WriteEtxSet(db ethdb.KeyValueWriter, hash common.Hash, number uint64, etxSet types.EtxSet) {
 	var entries []EtxSetEntry
 	for etxHash, entry := range etxSet {
-		etxRlp, err := rlp.EncodeToBytes(&entry.ETX)
-		if err != nil {
-			log.Error("Failed to RLP encode ETX", "hash=", etxHash, "err", err)
-			return
-		}
-		WriteEtxRLP(db, etxHash, etxRlp)
 		entry := EtxSetEntry{EtxHash: etxHash, EtxHeight: entry.Height, Etx: entry.ETX}
 		entries = append(entries, entry)
 	}
