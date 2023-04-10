@@ -227,7 +227,7 @@ func (api *PublicFilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, er
 			select {
 			case h := <-headers:
 				// Marshal the header data
-				marshalHeader := RPCMarshalHeader(h)
+				marshalHeader := h.RPCMarshalHeader()
 				notifier.Notify(rpcSub.ID, marshalHeader)
 			case <-rpcSub.Err():
 				headersSub.Unsubscribe()
@@ -601,7 +601,7 @@ func (api *PublicFilterAPI) PendingHeader(ctx context.Context) (*rpc.Subscriptio
 			select {
 			case b := <-header:
 				// Marshal the header data
-				marshalHeader := RPCMarshalHeader(b)
+				marshalHeader := b.RPCMarshalHeader()
 				notifier.Notify(rpcSub.ID, marshalHeader)
 			case <-rpcSub.Err():
 				headerSub.Unsubscribe()
@@ -614,55 +614,4 @@ func (api *PublicFilterAPI) PendingHeader(ctx context.Context) (*rpc.Subscriptio
 	}()
 
 	return rpcSub, nil
-}
-
-// RPCMarshalHeader converts the given header to the RPC output .
-func RPCMarshalHeader(head *types.Header) map[string]interface{} {
-	result := map[string]interface{}{
-		"hash":                head.Hash(),
-		"parentHash":          head.ParentHashArray(),
-		"nonce":               head.Nonce(),
-		"sha3Uncles":          head.UncleHashArray(),
-		"logsBloom":           head.BloomArray(),
-		"stateRoot":           head.RootArray(),
-		"difficulty":          (*hexutil.Big)(head.Difficulty()),
-		"miner":               head.CoinbaseArray(),
-		"extraData":           hexutil.Bytes(head.Extra()),
-		"size":                hexutil.Uint64(head.Size()),
-		"timestamp":           hexutil.Uint64(head.Time()),
-		"transactionsRoot":    head.TxHashArray(),
-		"receiptsRoot":        head.ReceiptHashArray(),
-		"extTransactionsRoot": head.EtxHashArray(),
-		"extRollupRoot":       head.EtxRollupHashArray(),
-		"manifestHash":        head.ManifestHashArray(),
-		"location":            head.Location(),
-	}
-
-	number := make([]*hexutil.Big, common.HierarchyDepth)
-	parentEntropy := make([]*hexutil.Big, common.HierarchyDepth)
-	parentDeltaS := make([]*hexutil.Big, common.HierarchyDepth)
-	gasLimit := make([]hexutil.Uint, common.HierarchyDepth)
-	gasUsed := make([]hexutil.Uint, common.HierarchyDepth)
-	for i := 0; i < common.HierarchyDepth; i++ {
-		number[i] = (*hexutil.Big)(head.Number(i))
-		parentEntropy[i] = (*hexutil.Big)(head.ParentEntropy(i))
-		parentDeltaS[i] = (*hexutil.Big)(head.ParentDeltaS(i))
-		gasLimit[i] = hexutil.Uint(head.GasLimit(i))
-		gasUsed[i] = hexutil.Uint(head.GasUsed(i))
-	}
-	result["number"] = number
-	result["parentEntropy"] = parentEntropy
-	result["parentDeltaS"] = parentDeltaS
-	result["gasLimit"] = gasLimit
-	result["gasUsed"] = gasUsed
-
-	if head.BaseFee() != nil {
-		results := make([]*hexutil.Big, common.HierarchyDepth)
-		for i := 0; i < common.HierarchyDepth; i++ {
-			results[i] = (*hexutil.Big)(head.BaseFee(i))
-		}
-		result["baseFeePerGas"] = results
-	}
-
-	return result
 }

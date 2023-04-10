@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
-	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rpc"
@@ -79,57 +78,6 @@ func (ec *Client) Close() {
 	ec.c.Close()
 }
 
-// RPCMarshalHeader converts the given header to the RPC output .
-func RPCMarshalHeader(head *types.Header) map[string]interface{} {
-	result := map[string]interface{}{
-		"hash":                head.Hash(),
-		"parentHash":          head.ParentHashArray(),
-		"nonce":               head.Nonce(),
-		"sha3Uncles":          head.UncleHashArray(),
-		"logsBloom":           head.BloomArray(),
-		"stateRoot":           head.RootArray(),
-		"difficulty":          (*hexutil.Big)(head.Difficulty()),
-		"manifestHash":        head.ManifestHashArray(),
-		"extTransactionsRoot": head.EtxHashArray(),
-		"extRollupRoot":       head.EtxRollupHashArray(),
-		"miner":               head.CoinbaseArray(),
-		"extraData":           hexutil.Bytes(head.Extra()),
-		"size":                hexutil.Uint64(head.Size()),
-		"timestamp":           hexutil.Uint64(head.Time()),
-		"transactionsRoot":    head.TxHashArray(),
-		"receiptsRoot":        head.ReceiptHashArray(),
-		"location":            head.Location(),
-	}
-
-	number := make([]*hexutil.Big, common.HierarchyDepth)
-	parentEntropy := make([]*hexutil.Big, common.HierarchyDepth)
-	parentDeltaS := make([]*hexutil.Big, common.HierarchyDepth)
-	gasLimit := make([]hexutil.Uint, common.HierarchyDepth)
-	gasUsed := make([]hexutil.Uint, common.HierarchyDepth)
-	for i := 0; i < common.HierarchyDepth; i++ {
-		number[i] = (*hexutil.Big)(head.Number(i))
-		parentEntropy[i] = (*hexutil.Big)(head.ParentEntropy(i))
-		parentDeltaS[i] = (*hexutil.Big)(head.ParentDeltaS(i))
-		gasLimit[i] = hexutil.Uint(head.GasLimit(i))
-		gasUsed[i] = hexutil.Uint(head.GasUsed(i))
-	}
-	result["number"] = number
-	result["parentEntropy"] = parentEntropy
-	result["parentDeltaS"] = parentDeltaS
-	result["gasLimit"] = gasLimit
-	result["gasUsed"] = gasUsed
-
-	if head.BaseFee() != nil {
-		results := make([]*hexutil.Big, common.HierarchyDepth)
-		for i := 0; i < common.HierarchyDepth; i++ {
-			results[i] = (*hexutil.Big)(head.BaseFee(i))
-		}
-		result["baseFeePerGas"] = results
-	}
-
-	return result
-}
-
 type Termini struct {
 	Termini []common.Hash `json:"termini"`
 }
@@ -140,8 +88,8 @@ type pendingEtxs struct {
 
 func (ec *Client) Append(ctx context.Context, header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) ([]types.Transactions, error) {
 	fields := map[string]interface{}{
-		"header":           RPCMarshalHeader(header),
-		"domPendingHeader": RPCMarshalHeader(domPendingHeader),
+		"header":           header.RPCMarshalHeader(),
+		"domPendingHeader": domPendingHeader.RPCMarshalHeader(),
 		"domTerminus":      domTerminus,
 		"domOrigin":        domOrigin,
 		"newInboundEtxs":   newInboundEtxs,
@@ -163,7 +111,7 @@ func (ec *Client) Append(ctx context.Context, header *types.Header, domPendingHe
 }
 
 func (ec *Client) SubRelayPendingHeader(ctx context.Context, pendingHeader types.PendingHeader, location common.Location) {
-	data := map[string]interface{}{"Header": RPCMarshalHeader(pendingHeader.Header)}
+	data := map[string]interface{}{"Header": pendingHeader.Header.RPCMarshalHeader()}
 	data["Termini"] = pendingHeader.Termini
 	data["Location"] = location
 
@@ -171,7 +119,7 @@ func (ec *Client) SubRelayPendingHeader(ctx context.Context, pendingHeader types
 }
 
 func (ec *Client) NewGenesisPendingHeader(ctx context.Context, header *types.Header) {
-	ec.c.CallContext(ctx, nil, "quai_newGenesisPendingHeader", RPCMarshalHeader(header))
+	ec.c.CallContext(ctx, nil, "quai_newGenesisPendingHeader", header.RPCMarshalHeader())
 }
 
 // GetManifest will get the block manifest ending with the parent hash
@@ -190,7 +138,7 @@ func (ec *Client) GetManifest(ctx context.Context, blockHash common.Hash) (types
 
 func (ec *Client) SendPendingEtxsToDom(ctx context.Context, pEtxs types.PendingEtxs) error {
 	fields := make(map[string]interface{})
-	fields["header"] = RPCMarshalHeader(pEtxs.Header)
+	fields["header"] = pEtxs.Header.RPCMarshalHeader()
 	fields["etxs"] = pEtxs.Etxs
 	var raw json.RawMessage
 	err := ec.c.CallContext(ctx, &raw, "quai_sendPendingEtxsToDom", fields)

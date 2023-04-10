@@ -235,6 +235,57 @@ func (h *Header) EncodeRLP(w io.Writer) error {
 	})
 }
 
+// RPCMarshalHeader converts the given header to the RPC output .
+func (h *Header) RPCMarshalHeader() map[string]interface{} {
+	result := map[string]interface{}{
+		"hash":                h.Hash(),
+		"parentHash":          h.ParentHashArray(),
+		"difficulty":          (*hexutil.Big)(h.Difficulty()),
+		"nonce":               h.Nonce(),
+		"sha3Uncles":          h.UncleHashArray(),
+		"logsBloom":           h.BloomArray(),
+		"stateRoot":           h.RootArray(),
+		"miner":               h.CoinbaseArray(),
+		"extraData":           hexutil.Bytes(h.Extra()),
+		"size":                hexutil.Uint64(h.Size()),
+		"timestamp":           hexutil.Uint64(h.Time()),
+		"transactionsRoot":    h.TxHashArray(),
+		"receiptsRoot":        h.ReceiptHashArray(),
+		"extTransactionsRoot": h.EtxHashArray(),
+		"extRollupRoot":       h.EtxRollupHashArray(),
+		"manifestHash":        h.ManifestHashArray(),
+		"location":            h.Location(),
+	}
+
+	number := make([]*hexutil.Big, common.HierarchyDepth)
+	parentEntropy := make([]*hexutil.Big, common.HierarchyDepth)
+	parentDeltaS := make([]*hexutil.Big, common.HierarchyDepth)
+	gasLimit := make([]hexutil.Uint, common.HierarchyDepth)
+	gasUsed := make([]hexutil.Uint, common.HierarchyDepth)
+	for i := 0; i < common.HierarchyDepth; i++ {
+		number[i] = (*hexutil.Big)(h.Number(i))
+		parentEntropy[i] = (*hexutil.Big)(h.ParentEntropy(i))
+		parentDeltaS[i] = (*hexutil.Big)(h.ParentDeltaS(i))
+		gasLimit[i] = hexutil.Uint(h.GasLimit(i))
+		gasUsed[i] = hexutil.Uint(h.GasUsed(i))
+	}
+	result["number"] = number
+	result["parentEntropy"] = parentEntropy
+	result["parentDeltaS"] = parentDeltaS
+	result["gasLimit"] = gasLimit
+	result["gasUsed"] = gasUsed
+
+	if h.BaseFee() != nil {
+		results := make([]*hexutil.Big, common.HierarchyDepth)
+		for i := 0; i < common.HierarchyDepth; i++ {
+			results[i] = (*hexutil.Big)(h.BaseFee(i))
+		}
+		result["baseFeePerGas"] = results
+	}
+
+	return result
+}
+
 // Localized accessors
 func (h *Header) ParentHash(args ...int) common.Hash {
 	nodeCtx := common.NodeLocation.Context()

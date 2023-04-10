@@ -223,7 +223,7 @@ func (s *PublicBlockChainQuaiAPI) GetProof(ctx context.Context, address common.A
 func (s *PublicBlockChainQuaiAPI) GetHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (map[string]interface{}, error) {
 	header, err := s.b.HeaderByNumber(ctx, number)
 	if header != nil && err == nil {
-		response := s.rpcMarshalHeader(ctx, header)
+		response := header.RPCMarshalHeader()
 		if number == rpc.PendingBlockNumber {
 			// Pending header need to nil out a few fields
 			for _, field := range []string{"hash", "nonce", "miner"} {
@@ -248,7 +248,7 @@ func (s *PublicBlockChainQuaiAPI) GetHeaderHashByNumber(ctx context.Context, num
 func (s *PublicBlockChainQuaiAPI) GetHeaderByHash(ctx context.Context, hash common.Hash) map[string]interface{} {
 	header, _ := s.b.HeaderByHash(ctx, hash)
 	if header != nil {
-		return s.rpcMarshalHeader(ctx, header)
+		return header.RPCMarshalHeader()
 	}
 	return nil
 }
@@ -401,62 +401,11 @@ func (s *PublicBlockChainQuaiAPI) EstimateGas(ctx context.Context, args Transact
 	return DoEstimateGas(ctx, s.b, args, bNrOrHash, s.b.RPCGasCap())
 }
 
-// RPCMarshalHeader converts the given header to the RPC output .
-func RPCMarshalHeader(head *types.Header) map[string]interface{} {
-	result := map[string]interface{}{
-		"hash":                head.Hash(),
-		"parentHash":          head.ParentHashArray(),
-		"difficulty":          (*hexutil.Big)(head.Difficulty()),
-		"nonce":               head.Nonce(),
-		"sha3Uncles":          head.UncleHashArray(),
-		"logsBloom":           head.BloomArray(),
-		"stateRoot":           head.RootArray(),
-		"miner":               head.CoinbaseArray(),
-		"extraData":           hexutil.Bytes(head.Extra()),
-		"size":                hexutil.Uint64(head.Size()),
-		"timestamp":           hexutil.Uint64(head.Time()),
-		"transactionsRoot":    head.TxHashArray(),
-		"receiptsRoot":        head.ReceiptHashArray(),
-		"extTransactionsRoot": head.EtxHashArray(),
-		"extRollupRoot":       head.EtxRollupHashArray(),
-		"manifestHash":        head.ManifestHashArray(),
-		"location":            head.Location(),
-	}
-
-	number := make([]*hexutil.Big, common.HierarchyDepth)
-	parentEntropy := make([]*hexutil.Big, common.HierarchyDepth)
-	parentDeltaS := make([]*hexutil.Big, common.HierarchyDepth)
-	gasLimit := make([]hexutil.Uint, common.HierarchyDepth)
-	gasUsed := make([]hexutil.Uint, common.HierarchyDepth)
-	for i := 0; i < common.HierarchyDepth; i++ {
-		number[i] = (*hexutil.Big)(head.Number(i))
-		parentEntropy[i] = (*hexutil.Big)(head.ParentEntropy(i))
-		parentDeltaS[i] = (*hexutil.Big)(head.ParentDeltaS(i))
-		gasLimit[i] = hexutil.Uint(head.GasLimit(i))
-		gasUsed[i] = hexutil.Uint(head.GasUsed(i))
-	}
-	result["number"] = number
-	result["parentEntropy"] = parentEntropy
-	result["parentDeltaS"] = parentDeltaS
-	result["gasLimit"] = gasLimit
-	result["gasUsed"] = gasUsed
-
-	if head.BaseFee() != nil {
-		results := make([]*hexutil.Big, common.HierarchyDepth)
-		for i := 0; i < common.HierarchyDepth; i++ {
-			results[i] = (*hexutil.Big)(head.BaseFee(i))
-		}
-		result["baseFeePerGas"] = results
-	}
-
-	return result
-}
-
 // RPCMarshalBlock converts the given block to the RPC output which depends on fullTx. If inclTx is true transactions are
 // returned. When fullTx is true the returned block contains full transaction details, otherwise it will only contain
 // transaction hashes.
 func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool) (map[string]interface{}, error) {
-	fields := RPCMarshalHeader(block.Header())
+	fields := block.Header().RPCMarshalHeader()
 	fields["size"] = hexutil.Uint64(block.Size())
 
 	if inclTx {
@@ -495,16 +444,16 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool) (map[string]i
 
 // rpcMarshalReOrgData converts the reOrgData obtained to the right header format
 func RPCMarshalReOrgData(header *types.Header, newHeaders []*types.Header, oldHeaders []*types.Header) (map[string]interface{}, error) {
-	fields := map[string]interface{}{"header": RPCMarshalHeader(header)}
+	fields := map[string]interface{}{"header": header.RPCMarshalHeader()}
 
 	fieldNewHeaders := make([]interface{}, len(newHeaders))
 	for i, newHeader := range newHeaders {
-		fieldNewHeaders[i] = RPCMarshalHeader(newHeader)
+		fieldNewHeaders[i] = newHeader.RPCMarshalHeader()
 	}
 
 	fieldOldHeaders := make([]interface{}, len(oldHeaders))
 	for i, oldHeader := range oldHeaders {
-		fieldOldHeaders[i] = RPCMarshalHeader(oldHeader)
+		fieldOldHeaders[i] = oldHeader.RPCMarshalHeader()
 	}
 
 	fields["newHeaders"] = fieldNewHeaders
@@ -521,7 +470,7 @@ func RPCMarshalHash(hash common.Hash) (map[string]interface{}, error) {
 // rpcMarshalHeader uses the generalized output filler, then adds the total difficulty field, which requires
 // a `PublicBlockchainQuaiAPI`.
 func (s *PublicBlockChainQuaiAPI) rpcMarshalHeader(ctx context.Context, header *types.Header) map[string]interface{} {
-	fields := RPCMarshalHeader(header)
+	fields := header.RPCMarshalHeader()
 	fields["totalDifficulty"] = (*hexutil.Big)(s.b.GetTd(ctx, header.Hash()))
 	return fields
 }
@@ -683,7 +632,7 @@ func (s *PublicBlockChainQuaiAPI) GetPendingHeader(ctx context.Context) (map[str
 		return nil, errors.New("no pending header found")
 	}
 	// Marshal the response.
-	marshaledPh := RPCMarshalHeader(pendingHeader)
+	marshaledPh := pendingHeader.RPCMarshalHeader()
 	return marshaledPh, nil
 }
 
