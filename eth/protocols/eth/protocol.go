@@ -354,12 +354,8 @@ type PendingEtxsPacket struct {
 }
 
 func (p *PendingEtxsPacket) Unpack() types.PendingEtxs {
-	var (
-		etxs = make([]types.Transactions, len(p.PendingEtxs.Etxs))
-	)
-	for i, etx := range p.PendingEtxs.Etxs {
-		etxs[i] = etx
-	}
+	etxs := make([]types.Transactions, len(p.PendingEtxs.Etxs))
+	copy(etxs, p.PendingEtxs.Etxs)
 	return types.PendingEtxs{Header: p.PendingEtxs.Header, Etxs: etxs}
 }
 

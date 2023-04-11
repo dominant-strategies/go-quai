@@ -401,9 +401,7 @@ func (sl *Slice) pcrc(batch ethdb.Batch, header *types.Header, domTerminus commo
 	}
 
 	newTermini := make([]common.Hash, len(termini))
-	for i, terminus := range termini {
-		newTermini[i] = terminus
-	}
+	copy(newTermini, termini)
 
 	// Set the subtermini
 	if nodeCtx != common.ZONE_CTX {
@@ -660,22 +658,16 @@ func (sl *Slice) ConstructLocalBlock(header *types.Header) (*types.Block, error)
 	}
 	// Load uncles because they are not included in the block response.
 	txs := make([]*types.Transaction, len(pendingBlockBody.Transactions))
-	for i, tx := range pendingBlockBody.Transactions {
-		txs[i] = tx
-	}
+	copy(txs, pendingBlockBody.Transactions)
 	uncles := make([]*types.Header, len(pendingBlockBody.Uncles))
 	for i, uncle := range pendingBlockBody.Uncles {
 		uncles[i] = uncle
 		log.Debug("Pending Block uncle", "hash: ", uncle.Hash())
 	}
 	etxs := make([]*types.Transaction, len(pendingBlockBody.ExtTransactions))
-	for i, etx := range pendingBlockBody.ExtTransactions {
-		etxs[i] = etx
-	}
+	copy(etxs, pendingBlockBody.ExtTransactions)
 	subManifest := make(types.BlockManifest, len(pendingBlockBody.SubManifest))
-	for i, blockHash := range pendingBlockBody.SubManifest {
-		subManifest[i] = blockHash
-	}
+	copy(subManifest, pendingBlockBody.SubManifest)
 	block := types.NewBlockWithHeader(header).WithBody(txs, uncles, etxs, subManifest)
 	if err := sl.validator.ValidateBody(block); err != nil {
 		return block, err
@@ -701,22 +693,16 @@ func (sl *Slice) ConstructLocalMinedBlock(header *types.Header) (*types.Block, e
 	}
 	// Load uncles because they are not included in the block response.
 	txs := make([]*types.Transaction, len(pendingBlockBody.Transactions))
-	for i, tx := range pendingBlockBody.Transactions {
-		txs[i] = tx
-	}
+	copy(txs, pendingBlockBody.Transactions)
 	uncles := make([]*types.Header, len(pendingBlockBody.Uncles))
 	for i, uncle := range pendingBlockBody.Uncles {
 		uncles[i] = uncle
 		log.Debug("Pending Block uncle", "hash: ", uncle.Hash())
 	}
 	etxs := make([]*types.Transaction, len(pendingBlockBody.ExtTransactions))
-	for i, etx := range pendingBlockBody.ExtTransactions {
-		etxs[i] = etx
-	}
+	copy(etxs, pendingBlockBody.ExtTransactions)
 	subManifest := make(types.BlockManifest, len(pendingBlockBody.SubManifest))
-	for i, blockHash := range pendingBlockBody.SubManifest {
-		subManifest[i] = blockHash
-	}
+	copy(subManifest, pendingBlockBody.SubManifest)
 	block := types.NewBlockWithHeader(header).WithBody(txs, uncles, etxs, subManifest)
 	if err := sl.validator.ValidateBody(block); err != nil {
 		return block, err

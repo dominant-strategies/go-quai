@@ -950,8 +950,7 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 	// signer, because we assume that signers are backwards-compatible with old
 	// transactions. For non-protected transactions, the homestead signer signer is used
 	// because the return value of ChainId is zero for those transactions.
-	var signer types.Signer
-	signer = types.LatestSignerForChainID(tx.ChainId())
+	signer := types.LatestSignerForChainID(tx.ChainId())
 	from, _ := types.Sender(signer, tx)
 	result := &RPCTransaction{
 		Type:      hexutil.Uint64(tx.Type()),

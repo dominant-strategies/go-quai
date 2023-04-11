@@ -541,6 +541,7 @@ func (pool *TxPool) TxPoolPending(enforceTips bool, etxSet types.EtxSet) (map[co
 		}
 	}
 
+	//nolint
 	if etxSet != nil {
 		for _, entry := range etxSet {
 			addr := entry.ETX.ETXSender()
