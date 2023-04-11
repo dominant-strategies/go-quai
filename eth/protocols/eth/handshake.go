@@ -44,6 +44,7 @@ func (p *Peer) Handshake(network uint64, entropy *big.Int, head common.Hash, gen
 		errc <- p2p.Send(p.rw, StatusMsg, &StatusPacket{
 			ProtocolVersion: uint32(p.version),
 			NetworkID:       network,
+			Location:        common.NodeLocation.Name(),
 			Entropy:         entropy,
 			Head:            head,
 			Genesis:         genesis,
@@ -91,6 +92,9 @@ func (p *Peer) readStatus(network uint64, status *StatusPacket, genesis common.H
 	}
 	if uint(status.ProtocolVersion) != p.version {
 		return fmt.Errorf("%w: %d (!= %d)", errProtocolVersionMismatch, status.ProtocolVersion, p.version)
+	}
+	if status.Location != common.NodeLocation.Name() {
+		return fmt.Errorf("%w: %s (!= %s)", errLocationMismatch, status.Location, common.NodeLocation.Name())
 	}
 	if status.Genesis != genesis {
 		return fmt.Errorf("%w: %x (!= %x)", errGenesisMismatch, status.Genesis, genesis)
