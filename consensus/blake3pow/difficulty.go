@@ -3,8 +3,8 @@ package blake3pow
 import (
 	"math/big"
 
-	"github.com/holiman/uint256"
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/holiman/uint256"
 )
 
 const (

@@ -25,8 +25,8 @@ func (te *timedEntry) expired() bool {
 // to expire at exactly the ttl time. The expiration mechanism is 'lazy', and
 // will only remove expired objects at next access.
 type TimedCache struct {
-	ttl   int64        // Time to live in seconds
-	cache *lru.Cache   // Underlying size-limited LRU cache
+	ttl   int64      // Time to live in seconds
+	cache *lru.Cache // Underlying size-limited LRU cache
 	lock  sync.RWMutex
 
 	evictedKeys, evictedVals []interface{}

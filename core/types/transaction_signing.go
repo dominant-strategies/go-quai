@@ -201,7 +201,7 @@ func (s SignerV1) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int
 func (s SignerV1) Hash(tx *Transaction) common.Hash {
 	txTo := tx.To()
 	var txToBytes []byte
-	if (txTo == nil) {
+	if txTo == nil {
 		txToBytes = []byte{}
 	} else {
 		txToBytes = txTo.Bytes()

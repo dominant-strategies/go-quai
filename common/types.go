@@ -499,7 +499,7 @@ func OrderToString(order int) string {
 	case REGION_CTX:
 		return "Region"
 	case ZONE_CTX:
-		return "Zone"		
+		return "Zone"
 	default:
 		return "Invalid"
 	}

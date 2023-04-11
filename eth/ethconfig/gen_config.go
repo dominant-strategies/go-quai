@@ -37,14 +37,14 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		SnapshotCache           int
 		Preimages               bool
 		Miner                   core.Config
-		Blake3pow                  blake3pow.Config
+		Blake3pow               blake3pow.Config
 		TxPool                  core.TxPoolConfig
 		GPO                     gasprice.Config
 		EnablePreimageRecording bool
 		DocRoot                 string `toml:"-"`
 		RPCGasCap               uint64
 		RPCTxFeeCap             float64
-		OverrideLondon          *big.Int                       `toml:",omitempty"`
+		OverrideLondon          *big.Int `toml:",omitempty"`
 	}
 	var enc Config
 	enc.Genesis = c.Genesis
@@ -112,14 +112,14 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		SnapshotCache           *int
 		Preimages               *bool
 		Miner                   *core.Config
-		Blake3pow                  *blake3pow.Config
+		Blake3pow               *blake3pow.Config
 		TxPool                  *core.TxPoolConfig
 		GPO                     *gasprice.Config
 		EnablePreimageRecording *bool
 		DocRoot                 *string `toml:"-"`
 		RPCGasCap               *uint64
 		RPCTxFeeCap             *float64
-		OverrideLondon          *big.Int                       `toml:",omitempty"`
+		OverrideLondon          *big.Int `toml:",omitempty"`
 	}
 	var dec Config
 	if err := unmarshal(&dec); err != nil {

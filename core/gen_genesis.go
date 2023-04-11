@@ -62,7 +62,7 @@ func (g Genesis) MarshalJSON() ([]byte, error) {
 		enc.ParentHash[i] = g.ParentHash[i]
 		enc.BaseFee[i] = (*math.HexOrDecimal256)(g.BaseFee[i])
 	}
-		enc.Difficulty = (*math.HexOrDecimal256)(g.Difficulty)
+	enc.Difficulty = (*math.HexOrDecimal256)(g.Difficulty)
 	return json.Marshal(&enc)
 }
 
@@ -73,15 +73,15 @@ func (g *Genesis) UnmarshalJSON(input []byte) error {
 		Nonce      *math.HexOrDecimal64                        `json:"nonce"`
 		Timestamp  *math.HexOrDecimal64                        `json:"timestamp"`
 		ExtraData  *hexutil.Bytes                              `json:"extraData"`
-		GasLimit   []*math.HexOrDecimal64                        `json:"gasLimit"   gencodec:"required"`
+		GasLimit   []*math.HexOrDecimal64                      `json:"gasLimit"   gencodec:"required"`
 		Difficulty *math.HexOrDecimal256                       `json:"difficulty" gencodec:"required"`
 		Mixhash    *common.Hash                                `json:"mixHash"`
-		Coinbase   []*common.Address                             `json:"coinbase"`
+		Coinbase   []*common.Address                           `json:"coinbase"`
 		Alloc      map[common.UnprefixedAddress]GenesisAccount `json:"alloc"      gencodec:"required"`
-		Number     []*math.HexOrDecimal64                        `json:"number"`
-		GasUsed    []*math.HexOrDecimal64                        `json:"gasUsed"`
-		ParentHash []*common.Hash                                `json:"parentHash"`
-		BaseFee    []*math.HexOrDecimal256                       `json:"baseFeePerGas"`
+		Number     []*math.HexOrDecimal64                      `json:"number"`
+		GasUsed    []*math.HexOrDecimal64                      `json:"gasUsed"`
+		ParentHash []*common.Hash                              `json:"parentHash"`
+		BaseFee    []*math.HexOrDecimal256                     `json:"baseFeePerGas"`
 	}
 	var dec Genesis
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -112,29 +112,29 @@ func (g *Genesis) UnmarshalJSON(input []byte) error {
 	}
 
 	for i := 0; i < common.HierarchyDepth; i++ {
-	if dec.GasLimit[i] == nil {
-		return errors.New("missing required field 'gasLimit' for Genesis")
+		if dec.GasLimit[i] == nil {
+			return errors.New("missing required field 'gasLimit' for Genesis")
+		}
+		g.GasLimit[i] = uint64(*dec.GasLimit[i])
+		if dec.Difficulty == nil {
+			return errors.New("missing required field 'difficulty' for Genesis")
+		}
+		g.Difficulty = (*big.Int)(dec.Difficulty)
+		if dec.Coinbase[i] != nil {
+			g.Coinbase[i] = *dec.Coinbase[i]
+		}
+		if dec.Number[i] != nil {
+			g.Number[i] = uint64(*dec.Number[i])
+		}
+		if dec.GasUsed[i] != nil {
+			g.GasUsed[i] = uint64(*dec.GasUsed[i])
+		}
+		if dec.ParentHash[i] != nil {
+			g.ParentHash[i] = *dec.ParentHash[i]
+		}
+		if dec.BaseFee[i] != nil {
+			g.BaseFee[i] = (*big.Int)(dec.BaseFee[i])
+		}
 	}
-	g.GasLimit[i] = uint64(*dec.GasLimit[i])
-	if dec.Difficulty == nil {
-		return errors.New("missing required field 'difficulty' for Genesis")
-	}
-	g.Difficulty = (*big.Int)(dec.Difficulty)
-	if dec.Coinbase[i] != nil {
-		g.Coinbase[i] = *dec.Coinbase[i]
-	}
-	if dec.Number[i] != nil {
-		g.Number[i] = uint64(*dec.Number[i])
-	}
-	if dec.GasUsed[i] != nil {
-		g.GasUsed[i] = uint64(*dec.GasUsed[i])
-	}
-	if dec.ParentHash[i] != nil {
-		g.ParentHash[i] = *dec.ParentHash[i]
-	}
-	if dec.BaseFee[i] != nil {
-		g.BaseFee[i] = (*big.Int)(dec.BaseFee[i])
-	}
-}
 	return nil
 }

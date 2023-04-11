@@ -20,7 +20,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/dominant-strategies/go-quai"
+	ethereum "github.com/dominant-strategies/go-quai"
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/rpc"
 )
