@@ -84,27 +84,27 @@ func (n *BlockNonce) UnmarshalText(input []byte) error {
 
 // Header represents a block header in the Ethereum blockchain.
 type Header struct {
-	parentHash    []common.Hash    `json:"parentHash"           gencodec:"required"`
-	uncleHash     []common.Hash    `json:"sha3Uncles"           gencodec:"required"`
-	coinbase      []common.Address `json:"miner"                gencodec:"required"`
-	root          []common.Hash    `json:"stateRoot"            gencodec:"required"`
-	txHash        []common.Hash    `json:"transactionsRoot"     gencodec:"required"`
-	etxHash       []common.Hash    `json:"extTransactionsRoot"  gencodec:"required"`
-	etxRollupHash []common.Hash    `json:"extRollupRoot"        gencodec:"required"`
-	manifestHash  []common.Hash    `json:"manifestHash"         gencodec:"required"`
-	receiptHash   []common.Hash    `json:"receiptsRoot"         gencodec:"required"`
-	bloom         []Bloom          `json:"logsBloom"            gencodec:"required"`
-	difficulty    *big.Int         `json:"difficulty"           gencodec:"required"`
-	parentEntropy []*big.Int       `json:"parentEntropy"		gencodec:"required"`
-	parentDeltaS  []*big.Int       `json:"parentDeltaS"			gencodec:"required"`
-	number        []*big.Int       `json:"number"               gencodec:"required"`
-	gasLimit      []uint64         `json:"gasLimit"             gencodec:"required"`
-	gasUsed       []uint64         `json:"gasUsed"              gencodec:"required"`
-	baseFee       []*big.Int       `json:"baseFeePerGas"        gencodec:"required"`
-	location      common.Location  `json:"location"             gencodec:"required"`
-	time          uint64           `json:"timestamp"            gencodec:"required"`
-	extra         []byte           `json:"extraData"            gencodec:"required"`
-	nonce         BlockNonce       `json:"nonce"`
+	parentHash    []common.Hash
+	uncleHash     []common.Hash
+	coinbase      []common.Address
+	root          []common.Hash
+	txHash        []common.Hash
+	etxHash       []common.Hash
+	etxRollupHash []common.Hash
+	manifestHash  []common.Hash
+	receiptHash   []common.Hash
+	bloom         []Bloom
+	difficulty    *big.Int
+	parentEntropy []*big.Int
+	parentDeltaS  []*big.Int
+	number        []*big.Int
+	gasLimit      []uint64
+	gasUsed       []uint64
+	baseFee       []*big.Int
+	location      common.Location
+	time          uint64
+	extra         []byte
+	nonce         BlockNonce
 }
 
 // field type overrides for gencodec

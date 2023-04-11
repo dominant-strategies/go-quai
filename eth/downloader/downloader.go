@@ -1051,7 +1051,7 @@ func (d *Downloader) processHeaders(origin uint64) error {
 		if rollback > 0 {
 			curBlock := d.core.CurrentBlock().NumberU64()
 			log.Warn("Rolled back chain segment",
-				"block", fmt.Sprintf("%d->%d", curBlock), "reason", rollbackErr)
+				"block", fmt.Sprintf("%d->%d", curBlock, rollbackErr), "reason")
 		}
 	}()
 	// Wait for batches of headers to process

@@ -215,7 +215,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 				return nil, err
 			}
 			// Cache the subordinate's pending ETXs
-			pEtxs := types.PendingEtxs{block.Header(), subPendingEtxs}
+			pEtxs := types.PendingEtxs{Header: block.Header(), Etxs: subPendingEtxs}
 			if !pEtxs.IsValid(trie.NewStackTrie(nil)) {
 				return nil, errors.New("sub pending ETXs faild validation")
 			}
@@ -617,7 +617,7 @@ func (sl *Slice) init(genesis *Genesis) error {
 		return errors.New("failed to get genesis header")
 	}
 	emptyPendingEtxs := []types.Transactions{types.Transactions{}, types.Transactions{}, types.Transactions{}}
-	err := sl.AddPendingEtxs(types.PendingEtxs{genesisHeader, emptyPendingEtxs})
+	err := sl.AddPendingEtxs(types.PendingEtxs{Header: genesisHeader, Etxs: emptyPendingEtxs})
 	if err != nil {
 		return err
 	}
