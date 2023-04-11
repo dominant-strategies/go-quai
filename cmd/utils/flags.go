@@ -1145,7 +1145,7 @@ func setTxPool(ctx *cli.Context, cfg *core.TxPoolConfig) {
 				if err != nil {
 					Fatalf("Invalid account in --txpool.locals: %s", account)
 				}
-				cfg.Locals = append(cfg.Locals, *internal)
+				cfg.Locals = append(cfg.Locals, internal)
 			}
 		}
 	}

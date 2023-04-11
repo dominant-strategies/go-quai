@@ -265,7 +265,7 @@ func opBalance(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 	if err != nil { // if an ErrInvalidScope error is returned, the caller (usually interpreter.go/Run) will return the error to Call which will eventually set ReceiptStatusFailed in the tx receipt (state_processor.go/applyTransaction)
 		return nil, err
 	}
-	slot.SetFromBig(interpreter.evm.StateDB.GetBalance(*address))
+	slot.SetFromBig(interpreter.evm.StateDB.GetBalance(address))
 	return nil, nil
 }
 
@@ -395,7 +395,7 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 	if err != nil {
 		return nil, err
 	}
-	codeCopy := getData(interpreter.evm.StateDB.GetCode(*addr), uint64CodeOffset, length.Uint64())
+	codeCopy := getData(interpreter.evm.StateDB.GetCode(addr), uint64CodeOffset, length.Uint64())
 	scope.Memory.Set(memOffset.Uint64(), length.Uint64(), codeCopy)
 
 	return nil, nil
@@ -440,10 +440,10 @@ func opExtCodeHash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 	if err != nil {
 		return nil, err
 	}
-	if interpreter.evm.StateDB.Empty(*address) {
+	if interpreter.evm.StateDB.Empty(address) {
 		slot.Clear()
 	} else {
-		slot.SetBytes(interpreter.evm.StateDB.GetCodeHash(*address).Bytes())
+		slot.SetBytes(interpreter.evm.StateDB.GetCodeHash(address).Bytes())
 	}
 	return nil, nil
 }
@@ -536,7 +536,7 @@ func opSload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 	if err != nil {
 		return nil, err
 	}
-	val := interpreter.evm.StateDB.GetState(*addr, hash)
+	val := interpreter.evm.StateDB.GetState(addr, hash)
 	loc.SetBytes(val.Bytes())
 	return nil, nil
 }
@@ -548,7 +548,7 @@ func opSstore(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 	if err != nil {
 		return nil, err
 	}
-	interpreter.evm.StateDB.SetState(*addr,
+	interpreter.evm.StateDB.SetState(addr,
 		loc.Bytes32(), val.Bytes32())
 	return nil, nil
 }
@@ -836,9 +836,9 @@ func opSuicide(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 	if err != nil {
 		return nil, err
 	}
-	balance := interpreter.evm.StateDB.GetBalance(*addr)
-	interpreter.evm.StateDB.AddBalance(*beneficiaryAddr, balance)
-	interpreter.evm.StateDB.Suicide(*addr)
+	balance := interpreter.evm.StateDB.GetBalance(addr)
+	interpreter.evm.StateDB.AddBalance(beneficiaryAddr, balance)
+	interpreter.evm.StateDB.Suicide(addr)
 	return nil, nil
 }
 
@@ -879,7 +879,7 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 		return nil, nil
 	}
 
-	interpreter.evm.StateDB.SubBalance(*internalSender, total.ToBig())
+	interpreter.evm.StateDB.SubBalance(internalSender, total.ToBig())
 
 	// Get the arguments from the memory.
 	data := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
@@ -894,7 +894,7 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 		return nil, nil // following opCall protocol
 	}
 
-	nonce := interpreter.evm.StateDB.GetNonce(*internalSender)
+	nonce := interpreter.evm.StateDB.GetNonce(internalSender)
 
 	// create external transaction
 	etxInner := types.ExternalTx{Value: value.ToBig(), To: &toAddr, Sender: sender, GasTipCap: gasTipCap.ToBig(), GasFeeCap: gasFeeCap.ToBig(), Gas: etxGasLimit.Uint64(), Data: data, AccessList: accessList, Nonce: nonce, ChainID: interpreter.evm.chainConfig.ChainID}
@@ -904,7 +904,7 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 	interpreter.evm.ETXCache = append(interpreter.evm.ETXCache, etx)
 	interpreter.evm.ETXCacheLock.Unlock()
 
-	interpreter.evm.StateDB.SetNonce(*internalSender, nonce+1)
+	interpreter.evm.StateDB.SetNonce(internalSender, nonce+1)
 
 	temp.SetOne() // following opCall protocol
 	stack.push(&temp)

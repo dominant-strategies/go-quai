@@ -83,7 +83,7 @@ func opSelfBalance(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 	if err != nil {
 		return nil, err
 	}
-	balance, _ := uint256.FromBig(interpreter.evm.StateDB.GetBalance(*internalAddr))
+	balance, _ := uint256.FromBig(interpreter.evm.StateDB.GetBalance(internalAddr))
 	scope.Stack.push(balance)
 	return nil, nil
 }

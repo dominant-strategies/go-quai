@@ -35,15 +35,15 @@ type AddressData interface {
 	setBytes(b []byte)
 }
 
-func (a Address) InternalAddress() (*InternalAddress, error) {
+func (a Address) InternalAddress() (InternalAddress, error) {
 	if a.inner == nil {
-		return &InternalAddress{}, nil
+		return InternalAddress{}, nil
 	}
 	internal, ok := a.inner.(*InternalAddress)
 	if !ok {
-		return nil, ErrInvalidScope
+		return InternalAddress{}, ErrInvalidScope
 	}
-	return internal, nil
+	return *internal, nil
 }
 
 func (a Address) Equal(b Address) bool {

@@ -120,7 +120,7 @@ func CanTransfer(db vm.StateDB, addr common.Address, amount *big.Int) bool {
 	if err != nil {
 		return false
 	}
-	return db.GetBalance(*internalAddr).Cmp(amount) >= 0
+	return db.GetBalance(internalAddr).Cmp(amount) >= 0
 }
 
 // Transfer subtracts amount from sender and adds amount to recipient using the given Db
@@ -130,6 +130,6 @@ func Transfer(db vm.StateDB, sender, recipient common.Address, amount *big.Int) 
 	if err != nil {
 		return
 	}
-	db.SubBalance(*internalSender, amount)
-	db.AddBalance(*internalRecipient, amount)
+	db.SubBalance(internalSender, amount)
+	db.AddBalance(internalRecipient, amount)
 }

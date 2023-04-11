@@ -121,7 +121,7 @@ func (b *BlockGen) GetBalance(addr common.Address) *big.Int {
 	if err != nil {
 		panic(err.Error())
 	}
-	return b.statedb.GetBalance(*internal)
+	return b.statedb.GetBalance(internal)
 }
 
 // AddUncheckedTx forcefully adds a transaction to the block without any
@@ -159,10 +159,10 @@ func (b *BlockGen) TxNonce(addr common.Address) uint64 {
 	if err != nil {
 		panic(err.Error())
 	}
-	if !b.statedb.Exist(*internal) {
+	if !b.statedb.Exist(internal) {
 		panic("account does not exist")
 	}
-	return b.statedb.GetNonce(*internal)
+	return b.statedb.GetNonce(internal)
 }
 
 // AddUncle adds an uncle header to the generated block.

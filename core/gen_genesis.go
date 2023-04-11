@@ -51,7 +51,7 @@ func (g Genesis) MarshalJSON() ([]byte, error) {
 			if err != nil {
 				return nil, err
 			}
-			enc.Alloc[common.UnprefixedAddress(*internal)] = v
+			enc.Alloc[common.UnprefixedAddress(internal)] = v
 		}
 	}
 	for i := 0; i < common.HierarchyDepth; i++ {

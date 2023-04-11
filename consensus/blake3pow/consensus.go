@@ -472,12 +472,12 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		r.Sub(r, header.Number())
 		r.Mul(r, blockReward)
 		r.Div(r, big8)
-		state.AddBalance(*coinbase, r)
+		state.AddBalance(coinbase, r)
 
 		r.Div(blockReward, big32)
 		reward.Add(reward, r)
 	}
-	state.AddBalance(*coinbase, reward)
+	state.AddBalance(coinbase, reward)
 }
 
 func TargetToDifficulty(target *big.Int) *big.Int {

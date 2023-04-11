@@ -275,11 +275,11 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		if err != nil {
 			fmt.Println("Provided address in genesis block is out of scope")
 		}
-		primeStatedb.AddBalance(*internal, account.Balance)
-		primeStatedb.SetCode(*internal, account.Code)
-		primeStatedb.SetNonce(*internal, account.Nonce)
+		primeStatedb.AddBalance(internal, account.Balance)
+		primeStatedb.SetCode(internal, account.Code)
+		primeStatedb.SetNonce(internal, account.Nonce)
 		for key, value := range account.Storage {
-			primeStatedb.SetState(*internal, key, value)
+			primeStatedb.SetState(internal, key, value)
 		}
 	}
 	primeRoot := primeStatedb.IntermediateRoot(false)

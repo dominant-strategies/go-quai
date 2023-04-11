@@ -160,7 +160,7 @@ func (s *PublicBlockChainQuaiAPI) GetBalance(ctx context.Context, address common
 	if err != nil {
 		return nil, err
 	}
-	return (*hexutil.Big)(state.GetBalance(*internal)), state.Error()
+	return (*hexutil.Big)(state.GetBalance(internal)), state.Error()
 }
 
 // GetProof returns the Merkle-proof for a given account and optionally some storage keys.
@@ -174,9 +174,9 @@ func (s *PublicBlockChainQuaiAPI) GetProof(ctx context.Context, address common.A
 		return nil, err
 	}
 
-	storageTrie := state.StorageTrie(*internal)
+	storageTrie := state.StorageTrie(internal)
 	storageHash := types.EmptyRootHash
-	codeHash := state.GetCodeHash(*internal)
+	codeHash := state.GetCodeHash(internal)
 	storageProof := make([]StorageResult, len(storageKeys))
 
 	// if we have a storageTrie, (which means the account exists), we can update the storagehash
@@ -190,18 +190,18 @@ func (s *PublicBlockChainQuaiAPI) GetProof(ctx context.Context, address common.A
 	// create the proof for the storageKeys
 	for i, key := range storageKeys {
 		if storageTrie != nil {
-			proof, storageError := state.GetStorageProof(*internal, common.HexToHash(key))
+			proof, storageError := state.GetStorageProof(internal, common.HexToHash(key))
 			if storageError != nil {
 				return nil, storageError
 			}
-			storageProof[i] = StorageResult{key, (*hexutil.Big)(state.GetState(*internal, common.HexToHash(key)).Big()), toHexSlice(proof)}
+			storageProof[i] = StorageResult{key, (*hexutil.Big)(state.GetState(internal, common.HexToHash(key)).Big()), toHexSlice(proof)}
 		} else {
 			storageProof[i] = StorageResult{key, &hexutil.Big{}, []string{}}
 		}
 	}
 
 	// create the accountProof
-	accountProof, proofErr := state.GetProof(*internal)
+	accountProof, proofErr := state.GetProof(internal)
 	if proofErr != nil {
 		return nil, proofErr
 	}
@@ -209,9 +209,9 @@ func (s *PublicBlockChainQuaiAPI) GetProof(ctx context.Context, address common.A
 	return &AccountResult{
 		Address:      address,
 		AccountProof: toHexSlice(accountProof),
-		Balance:      (*hexutil.Big)(state.GetBalance(*internal)),
+		Balance:      (*hexutil.Big)(state.GetBalance(internal)),
 		CodeHash:     codeHash,
-		Nonce:        hexutil.Uint64(state.GetNonce(*internal)),
+		Nonce:        hexutil.Uint64(state.GetNonce(internal)),
 		StorageHash:  storageHash,
 		StorageProof: storageProof,
 	}, state.Error()
@@ -353,7 +353,7 @@ func (s *PublicBlockChainQuaiAPI) GetCode(ctx context.Context, address common.Ad
 	if err != nil {
 		return nil, err
 	}
-	code := state.GetCode(*internal)
+	code := state.GetCode(internal)
 	return code, state.Error()
 }
 
@@ -369,7 +369,7 @@ func (s *PublicBlockChainQuaiAPI) GetStorageAt(ctx context.Context, address comm
 	if err != nil {
 		return nil, err
 	}
-	res := state.GetState(*internal, common.HexToHash(key))
+	res := state.GetState(internal, common.HexToHash(key))
 	return res[:], state.Error()
 }
 

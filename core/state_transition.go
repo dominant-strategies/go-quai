@@ -213,7 +213,7 @@ func (st *StateTransition) buyGas() error {
 	if err != nil {
 		return err
 	}
-	if have, want := st.state.GetBalance(*from), balanceCheck; have.Cmp(want) < 0 {
+	if have, want := st.state.GetBalance(from), balanceCheck; have.Cmp(want) < 0 {
 		return fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFunds, st.msg.From().Hex(), have, want)
 	}
 	if err := st.gp.SubGas(st.msg.Gas()); err != nil {
@@ -222,7 +222,7 @@ func (st *StateTransition) buyGas() error {
 	st.gas += st.msg.Gas()
 
 	st.initialGas = st.msg.Gas()
-	st.state.SubBalance(*from, mgval)
+	st.state.SubBalance(from, mgval)
 	return nil
 }
 
@@ -233,7 +233,7 @@ func (st *StateTransition) preCheck() error {
 	}
 	// Make sure this transaction's nonce is correct.
 	if st.msg.CheckNonce() {
-		stNonce := st.state.GetNonce(*from)
+		stNonce := st.state.GetNonce(from)
 		if msgNonce := st.msg.Nonce(); stNonce < msgNonce {
 			return fmt.Errorf("%w: address %v, tx: %d state: %d", ErrNonceTooHigh,
 				st.msg.From().Hex(), msgNonce, stNonce)
@@ -243,7 +243,7 @@ func (st *StateTransition) preCheck() error {
 		}
 	}
 	// Make sure the sender is an EOA
-	if codeHash := st.state.GetCodeHash(*from); codeHash != emptyCodeHash && codeHash != (common.Hash{}) {
+	if codeHash := st.state.GetCodeHash(from); codeHash != emptyCodeHash && codeHash != (common.Hash{}) {
 		return fmt.Errorf("%w: address %v, codehash: %s", ErrSenderNoEOA,
 			st.msg.From().Hex(), codeHash)
 	}
@@ -344,7 +344,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		if err != nil {
 			return nil, err
 		}
-		st.state.SetNonce(*from, st.state.GetNonce(*addr)+1)
+		st.state.SetNonce(from, st.state.GetNonce(addr)+1)
 		ret, st.gas, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value)
 	}
 
@@ -370,7 +370,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	st.state.AddBalance(*coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip))
+	st.state.AddBalance(coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip))
 
 	return &ExecutionResult{
 		UsedGas:    st.gasUsed(),
@@ -394,7 +394,7 @@ func (st *StateTransition) refundGas(refundQuotient uint64) {
 	if err != nil {
 		return
 	}
-	st.state.AddBalance(*from, remaining)
+	st.state.AddBalance(from, remaining)
 
 	// Also return remaining gas to the block gas counter so it is
 	// available for the next transaction.

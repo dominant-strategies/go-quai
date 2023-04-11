@@ -341,7 +341,7 @@ func (s *Ethereum) isLocalBlock(header *types.Header) bool {
 	// Check whether the given address is specified by `txpool.local`
 	// CLI flag.
 	for _, account := range s.config.TxPool.Locals {
-		if account == *internal {
+		if account == internal {
 			return true
 		}
 	}

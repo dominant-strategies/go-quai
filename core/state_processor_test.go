@@ -85,7 +85,7 @@ func TestPrecompile(t *testing.T) {
 	params.TestChainConfig.GenesisHash = genesis.Hash()
 	blocks, _ := GenerateChain(params.TestChainConfig, genesis, blake3pow.NewFaker(), testdb, 2, gen)
 	internal, _ := addr.InternalAddress()
-	statedb.AddBalance(*internal, big.NewInt(params.Ether*2)) // give me 2 eth
+	statedb.AddBalance(internal, big.NewInt(params.Ether*2)) // give me 2 eth
 	mockContext := MockChainContext{blocks}
 
 	inner_tx := types.InternalTx{ChainID: big.NewInt(1), Nonce: 0, GasTipCap: common.Big1, GasFeeCap: common.Big1, Gas: 100000, To: &toAddr, Value: big.NewInt(params.Ether)}
@@ -172,7 +172,7 @@ func TestCreateETX(t *testing.T) {
 	t.Log(location.Name())
 	params.TestChainConfig.GenesisHash = genesis.Hash()
 	blocks, _ := GenerateChain(params.TestChainConfig, genesis, blake3pow.NewFaker(), testdb, 2, gen)
-	statedb.AddBalance(*internal, big.NewInt(params.Ether*2)) // give me 2 eth
+	statedb.AddBalance(internal, big.NewInt(params.Ether*2)) // give me 2 eth
 	mockContext := MockChainContext{blocks}
 
 	inner_tx := types.InternalToExternalTx{ChainID: big.NewInt(1), Nonce: 0, GasTipCap: common.Big1, GasFeeCap: common.Big1, Gas: 100000, To: &toAddr, Value: big.NewInt(params.Ether), ETXGasLimit: 21000, ETXGasPrice: common.Big2, ETXGasTip: common.Big1, ETXData: []byte{}, ETXAccessList: nil}
@@ -237,7 +237,7 @@ func TestExternalTokenTransfer(t *testing.T) {
 	t.Log(location.Name())
 	params.TestChainConfig.GenesisHash = genesis.Hash()
 	blocks, _ := GenerateChain(params.TestChainConfig, genesis, blake3pow.NewFaker(), testdb, 2, gen)
-	statedb.AddBalance(*internal, big.NewInt(params.Ether*2)) // give me 2 eth
+	statedb.AddBalance(internal, big.NewInt(params.Ether*2)) // give me 2 eth
 	mockContext := MockChainContext{blocks}
 	// Deploy a contract with the proper address that gives me tokens in zone 2-1
 	contract, err := hex.DecodeString(binary)
@@ -433,7 +433,7 @@ func TestInboundETX(t *testing.T) {
 		t.Error(err.Error())
 		t.Fail()
 	}
-	balance := statedb.GetBalance(*internal)
+	balance := statedb.GetBalance(internal)
 	if balance.Cmp(big.NewInt(500000000000000000)) != 0 {
 		t.Errorf("Have: %d Want: %d", balance.Int64(), 500000000000000000)
 		t.Fail()
@@ -524,7 +524,7 @@ func TestOpETX(t *testing.T) {
 	}
 	params.TestChainConfig.GenesisHash = genesis.Hash()
 	blocks, _ := GenerateChain(params.TestChainConfig, genesis, blake3pow.NewFaker(), testdb, 2, gen)
-	statedb.AddBalance(*internal, big.NewInt(params.Ether*2)) // give me 2 eth
+	statedb.AddBalance(internal, big.NewInt(params.Ether*2)) // give me 2 eth
 	mockContext := MockChainContext{blocks}
 	//contract, err := hex.DecodeString("6080604052600060006000600060016001620186a06706f05b59d3b20000735a457339697cb56e5a9bfa5267ea80d2c6375d986000f660008060393d393df3")
 	contract, err := hex.DecodeString("60806040526000806000806000600180620186a06706f05b59d3b20000735a457339697cb56e5a9bfa5267ea80d2c6375d986000f690505060698060446000396000f3fe6080604052600080fdfea2646970667358221220d51a551dccdf100829b6e928e928be7c4b803430100a5e618686c4ab3d17280964736f6c63782c302e382e31382d646576656c6f702e323032322e31312e372b636f6d6d69742e32636336363130652e6d6f64005d")

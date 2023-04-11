@@ -684,7 +684,7 @@ func (c *Core) Nonce(addr common.Address) uint64 {
 	if err != nil {
 		return 0
 	}
-	return c.sl.txPool.Nonce(*internal)
+	return c.sl.txPool.Nonce(internal)
 }
 
 func (c *Core) Stats() (int, int) {
@@ -700,5 +700,5 @@ func (c *Core) ContentFrom(addr common.Address) (types.Transactions, types.Trans
 	if err != nil {
 		return nil, nil
 	}
-	return c.sl.txPool.ContentFrom(*internal)
+	return c.sl.txPool.ContentFrom(internal)
 }

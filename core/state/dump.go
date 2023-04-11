@@ -165,7 +165,7 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 		if err != nil {
 			continue
 		}
-		obj := newObject(s, *internal, data)
+		obj := newObject(s, internal, data)
 		if !conf.SkipCode {
 			account.Code = obj.Code(s.db)
 		}
@@ -181,7 +181,7 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 				account.Storage[common.BytesToHash(s.trie.GetKey(storageIt.Key))] = common.Bytes2Hex(content)
 			}
 		}
-		c.OnAccount(*internal, account)
+		c.OnAccount(internal, account)
 		accounts++
 		if time.Since(logged) > 8*time.Second {
 			log.Info("Trie dumping in progress", "at", it.Key, "accounts", accounts,

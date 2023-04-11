@@ -629,12 +629,12 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return err
 	}
 	// Ensure the transaction adheres to nonce ordering
-	if pool.currentState.GetNonce(*internal) > tx.Nonce() {
+	if pool.currentState.GetNonce(internal) > tx.Nonce() {
 		return ErrNonceTooLow
 	}
 	// Transactor should have enough funds to cover the costs
 	// cost == V + GP * GL
-	if pool.currentState.GetBalance(*internal).Cmp(tx.Cost()) < 0 {
+	if pool.currentState.GetBalance(internal).Cmp(tx.Cost()) < 0 {
 		return ErrInsufficientFunds
 	}
 	// Ensure the transaction has more gas than the basic tx fee.
@@ -705,7 +705,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 	if err != nil {
 		return false, err
 	}
-	if list := pool.pending[*internal]; list != nil && list.Overlaps(tx) {
+	if list := pool.pending[internal]; list != nil && list.Overlaps(tx) {
 		// Nonce already pending, check if required price bump is met
 		inserted, old := list.Add(tx, pool.config.PriceBump)
 		if !inserted {
@@ -720,12 +720,12 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 		}
 		pool.all.Add(tx, isLocal)
 		pool.priced.Put(tx, isLocal)
-		pool.journalTx(*internal, tx)
+		pool.journalTx(internal, tx)
 		pool.queueTxEvent(tx)
 		log.Trace("Pooled new executable transaction", "hash", hash, "from", from, "to", tx.To())
 
 		// Successful promotion, bump the heartbeat
-		pool.beats[*internal] = time.Now()
+		pool.beats[internal] = time.Now()
 		return old != nil, nil
 	}
 	// New transaction isn't replacing a pending one, push into queue
@@ -734,15 +734,15 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 		return false, err
 	}
 	// Mark local addresses and journal local transactions
-	if local && !pool.locals.contains(*internal) {
+	if local && !pool.locals.contains(internal) {
 		log.Info("Setting new local account", "address", from)
-		pool.locals.add(*internal)
+		pool.locals.add(internal)
 		pool.priced.Removed(pool.all.RemoteToLocals(pool.locals)) // Migrate the remotes if it's marked as local first time.
 	}
 	if isLocal {
 		localGauge.Inc(1)
 	}
-	pool.journalTx(*internal, tx)
+	pool.journalTx(internal, tx)
 	pool.queueTxEvent(tx)
 	log.Trace("Pooled new future transaction", "hash", hash, "from", from, "to", tx.To())
 	return replaced, nil
@@ -758,10 +758,10 @@ func (pool *TxPool) enqueueTx(hash common.Hash, tx *types.Transaction, local boo
 	if err != nil {
 		return false, err
 	}
-	if pool.queue[*internal] == nil {
-		pool.queue[*internal] = newTxList(false)
+	if pool.queue[internal] == nil {
+		pool.queue[internal] = newTxList(false)
 	}
-	inserted, old := pool.queue[*internal].Add(tx, pool.config.PriceBump)
+	inserted, old := pool.queue[internal].Add(tx, pool.config.PriceBump)
 	if !inserted {
 		// An older transaction was better, discard this
 		queuedDiscardMeter.Mark(1)
@@ -786,8 +786,8 @@ func (pool *TxPool) enqueueTx(hash common.Hash, tx *types.Transaction, local boo
 		pool.priced.Put(tx, local)
 	}
 	// If we never record the heartbeat, do it right now.
-	if _, exist := pool.beats[*internal]; !exist {
-		pool.beats[*internal] = time.Now()
+	if _, exist := pool.beats[internal]; !exist {
+		pool.beats[internal] = time.Now()
 	}
 	return old != nil, nil
 }
@@ -967,9 +967,9 @@ func (pool *TxPool) Status(hashes []common.Hash) []TxStatus {
 			continue
 		}
 		pool.mu.RLock()
-		if txList := pool.pending[*internal]; txList != nil && txList.txs.items[tx.Nonce()] != nil {
+		if txList := pool.pending[internal]; txList != nil && txList.txs.items[tx.Nonce()] != nil {
 			status[i] = TxStatusPending
-		} else if txList := pool.queue[*internal]; txList != nil && txList.txs.items[tx.Nonce()] != nil {
+		} else if txList := pool.queue[internal]; txList != nil && txList.txs.items[tx.Nonce()] != nil {
 			status[i] = TxStatusQueued
 		}
 		// implicit else: the tx may have been included into a block between
@@ -1008,15 +1008,15 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 	if outofbound {
 		pool.priced.Removed(1)
 	}
-	if pool.locals.contains(*internal) {
+	if pool.locals.contains(internal) {
 		localGauge.Dec(1)
 	}
 	// Remove the transaction from the pending lists and reset the account nonce
-	if pending := pool.pending[*internal]; pending != nil {
+	if pending := pool.pending[internal]; pending != nil {
 		if removed, invalids := pending.Remove(tx); removed {
 			// If no more pending transactions are left, remove the list
 			if pending.Empty() {
-				delete(pool.pending, *internal)
+				delete(pool.pending, internal)
 			}
 			// Postpone any invalidated transactions
 			for _, tx := range invalids {
@@ -1024,21 +1024,21 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 				pool.enqueueTx(tx.Hash(), tx, false, false)
 			}
 			// Update the account nonce if needed
-			pool.pendingNonces.setIfLower(*internal, tx.Nonce())
+			pool.pendingNonces.setIfLower(internal, tx.Nonce())
 			// Reduce the pending counter
 			pendingGauge.Dec(int64(1 + len(invalids)))
 			return
 		}
 	}
 	// Transaction is in the future queue
-	if future := pool.queue[*internal]; future != nil {
+	if future := pool.queue[internal]; future != nil {
 		if removed, _ := future.Remove(tx); removed {
 			// Reduce the queued counter
 			queuedGauge.Dec(1)
 		}
 		if future.Empty() {
-			delete(pool.queue, *internal)
-			delete(pool.beats, *internal)
+			delete(pool.queue, internal)
+			delete(pool.beats, internal)
 		}
 	}
 }
@@ -1131,10 +1131,10 @@ func (pool *TxPool) scheduleReorgLoop() {
 				log.Debug("Failed to queue transaction", "err", err)
 				continue
 			}
-			if _, ok := queuedEvents[*internal]; !ok {
-				queuedEvents[*internal] = newTxSortedMap()
+			if _, ok := queuedEvents[internal]; !ok {
+				queuedEvents[internal] = newTxSortedMap()
 			}
-			queuedEvents[*internal].Put(tx)
+			queuedEvents[internal].Put(tx)
 
 		case <-curDone:
 			curDone = nil
@@ -1211,10 +1211,10 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 			log.Debug("Failed to add transaction event", "err", err)
 			continue
 		}
-		if _, ok := events[*internal]; !ok {
-			events[(*internal)] = newTxSortedMap()
+		if _, ok := events[internal]; !ok {
+			events[(internal)] = newTxSortedMap()
 		}
-		events[*internal].Put(tx)
+		events[internal].Put(tx)
 	}
 	if len(events) > 0 {
 		var txs []*types.Transaction
@@ -1623,7 +1623,7 @@ func (as *accountSet) containsTx(tx *types.Transaction) bool {
 		if err != nil {
 			return false
 		}
-		return as.contains(*internal)
+		return as.contains(internal)
 	}
 	return false
 }
@@ -1642,7 +1642,7 @@ func (as *accountSet) addTx(tx *types.Transaction) {
 			log.Debug("Failed to add tx to account set", "err", err)
 			return
 		}
-		as.add(*internal)
+		as.add(internal)
 	}
 }
 
