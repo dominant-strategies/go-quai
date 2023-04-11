@@ -102,7 +102,6 @@ func (tx *InternalToExternalTx) copy() TxData {
 // accessors for innerTx.
 func (tx *InternalToExternalTx) txType() byte              { return InternalToExternalTxType }
 func (tx *InternalToExternalTx) chainID() *big.Int         { return tx.ChainID }
-func (tx *InternalToExternalTx) protected() bool           { return true }
 func (tx *InternalToExternalTx) accessList() AccessList    { return tx.AccessList }
 func (tx *InternalToExternalTx) data() []byte              { return tx.Data }
 func (tx *InternalToExternalTx) gas() uint64               { return tx.Gas }

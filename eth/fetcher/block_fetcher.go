@@ -51,9 +51,8 @@ var (
 	blockAnnounceDropMeter = metrics.NewRegisteredMeter("eth/fetcher/block/announces/drop", nil)
 	blockAnnounceDOSMeter  = metrics.NewRegisteredMeter("eth/fetcher/block/announces/dos", nil)
 
-	blockBroadcastInMeter   = metrics.NewRegisteredMeter("eth/fetcher/block/broadcasts/in", nil)
-	blockBroadcastOutTimer  = metrics.NewRegisteredTimer("eth/fetcher/block/broadcasts/out", nil)
-	blockBroadcastDropMeter = metrics.NewRegisteredMeter("eth/fetcher/block/broadcasts/drop", nil)
+	blockBroadcastInMeter  = metrics.NewRegisteredMeter("eth/fetcher/block/broadcasts/in", nil)
+	blockBroadcastOutTimer = metrics.NewRegisteredTimer("eth/fetcher/block/broadcasts/out", nil)
 
 	headerFetchMeter = metrics.NewRegisteredMeter("eth/fetcher/block/headers", nil)
 	bodyFetchMeter   = metrics.NewRegisteredMeter("eth/fetcher/block/bodies", nil)
@@ -128,14 +127,6 @@ type blockOrHeaderInject struct {
 
 	header *types.Header // Used for light mode fetcher which only cares about header.
 	block  *types.Block  // Used for normal mode fetcher which imports full block.
-}
-
-// number returns the block number of the injected object.
-func (inject *blockOrHeaderInject) number() uint64 {
-	if inject.header != nil {
-		return inject.header.Number().Uint64()
-	}
-	return inject.block.NumberU64()
 }
 
 // number returns the block hash of the injected object.

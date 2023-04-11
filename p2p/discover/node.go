@@ -18,14 +18,10 @@ package discover
 
 import (
 	"crypto/ecdsa"
-	"crypto/elliptic"
-	"errors"
-	"math/big"
 	"net"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common/math"
-	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/p2p/enode"
 )
 
@@ -44,24 +40,6 @@ func encodePubkey(key *ecdsa.PublicKey) encPubkey {
 	math.ReadBits(key.X, e[:len(e)/2])
 	math.ReadBits(key.Y, e[len(e)/2:])
 	return e
-}
-
-func decodePubkey(curve elliptic.Curve, e []byte) (*ecdsa.PublicKey, error) {
-	if len(e) != len(encPubkey{}) {
-		return nil, errors.New("wrong size public key data")
-	}
-	p := &ecdsa.PublicKey{Curve: curve, X: new(big.Int), Y: new(big.Int)}
-	half := len(e) / 2
-	p.X.SetBytes(e[:half])
-	p.Y.SetBytes(e[half:])
-	if !p.Curve.IsOnCurve(p.X, p.Y) {
-		return nil, errors.New("invalid curve point")
-	}
-	return p, nil
-}
-
-func (e encPubkey) id() enode.ID {
-	return enode.ID(crypto.Keccak256Hash(e[:]))
 }
 
 func wrapNode(n *enode.Node) *node {

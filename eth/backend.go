@@ -58,10 +58,9 @@ type Ethereum struct {
 	config *ethconfig.Config
 
 	// Handlers
-	core               *core.Core
-	handler            *handler
-	ethDialCandidates  enode.Iterator
-	snapDialCandidates enode.Iterator
+	core              *core.Core
+	handler           *handler
+	ethDialCandidates enode.Iterator
 
 	// DB interfaces
 	chainDb ethdb.Database // Block chain database
@@ -346,13 +345,6 @@ func (s *Ethereum) isLocalBlock(header *types.Header) bool {
 		}
 	}
 	return false
-}
-
-// shouldPreserve checks whether we should preserve the given block
-// during the chain reorg depending on whether the author of block
-// is a local account.
-func (s *Ethereum) shouldPreserve(block *types.Block) bool {
-	return s.isLocalBlock(block.Header())
 }
 
 // StartMining starts the miner with the given number of CPU threads. If mining

@@ -56,7 +56,6 @@ type Transaction struct {
 	hash       atomic.Value
 	size       atomic.Value
 	from       atomic.Value
-	toChain    atomic.Value
 	fromChain  atomic.Value
 	confirmCtx atomic.Value // Context at which the ETX may be confirmed
 }

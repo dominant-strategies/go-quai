@@ -253,11 +253,6 @@ func IndexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan
 	indexTransactions(db, from, to, interrupt, nil)
 }
 
-// indexTransactionsForTesting is the internal debug version with an additional hook.
-func indexTransactionsForTesting(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}, hook func(uint64) bool) {
-	indexTransactions(db, from, to, interrupt, hook)
-}
-
 // unindexTransactions removes txlookup indices of the specified block range.
 //
 // There is a passed channel, the whole procedure will be interrupted if any
@@ -338,9 +333,4 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 // signal received.
 func UnindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}) {
 	unindexTransactions(db, from, to, interrupt, nil)
-}
-
-// unindexTransactionsForTesting is the internal debug version with an additional hook.
-func unindexTransactionsForTesting(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}, hook func(uint64) bool) {
-	unindexTransactions(db, from, to, interrupt, hook)
 }

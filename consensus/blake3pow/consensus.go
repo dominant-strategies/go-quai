@@ -31,16 +31,14 @@ var (
 
 // Some useful constants to avoid constant memory allocs for them.
 var (
-	expDiffPeriod = big.NewInt(100000)
-	big1          = big.NewInt(1)
-	big2          = big.NewInt(2)
-	big3          = big.NewInt(3)
-	big8          = big.NewInt(8)
-	big9          = big.NewInt(9)
-	big10         = big.NewInt(10)
-	big32         = big.NewInt(32)
-	bigMinus99    = big.NewInt(-99)
-	big2e256      = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0)) // 2^256
+	big1       = big.NewInt(1)
+	big2       = big.NewInt(2)
+	big3       = big.NewInt(3)
+	big8       = big.NewInt(8)
+	big10      = big.NewInt(10)
+	big32      = big.NewInt(32)
+	bigMinus99 = big.NewInt(-99)
+	big2e256   = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0)) // 2^256
 )
 
 // Various error messages to mark blocks invalid. These should be private to
@@ -48,15 +46,14 @@ var (
 // codebase, inherently breaking if the engine is swapped out. Please put common
 // error types into the consensus package.
 var (
-	errOlderBlockTime      = errors.New("timestamp older than parent")
-	errTooManyUncles       = errors.New("too many uncles")
-	errDuplicateUncle      = errors.New("duplicate uncle")
-	errUncleIsAncestor     = errors.New("uncle is ancestor")
-	errDanglingUncle       = errors.New("uncle's parent is not ancestor")
-	errInvalidDifficulty   = errors.New("non-positive difficulty")
-	errDifficultyCrossover = errors.New("sub's difficulty exceeds dom's")
-	errInvalidPoW          = errors.New("invalid proof-of-work")
-	errInvalidOrder        = errors.New("invalid order")
+	errOlderBlockTime    = errors.New("timestamp older than parent")
+	errTooManyUncles     = errors.New("too many uncles")
+	errDuplicateUncle    = errors.New("duplicate uncle")
+	errUncleIsAncestor   = errors.New("uncle is ancestor")
+	errDanglingUncle     = errors.New("uncle's parent is not ancestor")
+	errInvalidDifficulty = errors.New("non-positive difficulty")
+	errInvalidPoW        = errors.New("invalid proof-of-work")
+	errInvalidOrder      = errors.New("invalid order")
 )
 
 // Author implements consensus.Engine, returning the header's coinbase as the

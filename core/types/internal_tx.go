@@ -84,7 +84,6 @@ func (tx *InternalTx) copy() TxData {
 // accessors for innerTx.
 func (tx *InternalTx) txType() byte              { return InternalTxType }
 func (tx *InternalTx) chainID() *big.Int         { return tx.ChainID }
-func (tx *InternalTx) protected() bool           { return true }
 func (tx *InternalTx) accessList() AccessList    { return tx.AccessList }
 func (tx *InternalTx) data() []byte              { return tx.Data }
 func (tx *InternalTx) gas() uint64               { return tx.Gas }

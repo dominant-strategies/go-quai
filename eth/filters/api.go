@@ -30,7 +30,6 @@ import (
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/ethdb"
-	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/rpc"
 )
 
@@ -49,8 +48,6 @@ type filter struct {
 // information related to the Ethereum protocol such als blocks, transactions and logs.
 type PublicFilterAPI struct {
 	backend   Backend
-	mux       *event.TypeMux
-	quit      chan struct{}
 	chainDb   ethdb.Database
 	events    *EventSystem
 	filtersMu sync.Mutex

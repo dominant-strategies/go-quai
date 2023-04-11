@@ -29,6 +29,9 @@ const (
 	headerCacheLimit      = 512
 	numberCacheLimit      = 2048
 	primeHorizonThreshold = 20
+	// statsReportLimit is the time limit during import and export after which we
+	// always print out progress. This avoids the user wondering what's going on.
+	statsReportLimit = 8 * time.Second
 )
 
 type HeaderChain struct {
@@ -49,9 +52,8 @@ type HeaderChain struct {
 	headerCache *lru.Cache // Cache for the most recent block headers
 	numberCache *lru.Cache // Cache for the most recent block numbers
 
-	wg            sync.WaitGroup // chain processing wait group for shutting down
-	running       int32          // 0 if chain is running, 1 when stopped
-	procInterrupt int32          // interrupt signaler for block processing
+	wg      sync.WaitGroup // chain processing wait group for shutting down
+	running int32          // 0 if chain is running, 1 when stopped
 
 	headermu sync.RWMutex
 	heads    []*types.Header

@@ -18,7 +18,6 @@ package eth
 
 import (
 	"math/big"
-	"sync"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/eth/protocols/eth"
@@ -36,8 +35,7 @@ type ethPeerInfo struct {
 type ethPeer struct {
 	*eth.Peer
 
-	syncDrop *time.Timer  // Connection dropper if `eth` sync progress isn't validated in time
-	lock     sync.RWMutex // Mutex protecting the internal fields
+	syncDrop *time.Timer // Connection dropper if `eth` sync progress isn't validated in time
 }
 
 // info gathers and returns some `eth` protocol metadata known about a peer.

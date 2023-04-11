@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"sync"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -32,28 +31,10 @@ import (
 	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/ethdb"
-	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/dominant-strategies/go-quai/metrics"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/trie"
 	lru "github.com/hashicorp/golang-lru"
-)
-
-var (
-	accountReadTimer   = metrics.NewRegisteredTimer("chain/account/reads", nil)
-	accountHashTimer   = metrics.NewRegisteredTimer("chain/account/hashes", nil)
-	accountUpdateTimer = metrics.NewRegisteredTimer("chain/account/updates", nil)
-	accountCommitTimer = metrics.NewRegisteredTimer("chain/account/commits", nil)
-
-	storageReadTimer   = metrics.NewRegisteredTimer("chain/storage/reads", nil)
-	storageHashTimer   = metrics.NewRegisteredTimer("chain/storage/hashes", nil)
-	storageUpdateTimer = metrics.NewRegisteredTimer("chain/storage/updates", nil)
-	storageCommitTimer = metrics.NewRegisteredTimer("chain/storage/commits", nil)
-
-	snapshotAccountReadTimer = metrics.NewRegisteredTimer("chain/snapshot/account/reads", nil)
-	snapshotStorageReadTimer = metrics.NewRegisteredTimer("chain/snapshot/storage/reads", nil)
-	snapshotCommitTimer      = metrics.NewRegisteredTimer("chain/snapshot/commits", nil)
 )
 
 const (
@@ -121,18 +102,12 @@ type StateProcessor struct {
 	config        *params.ChainConfig // Chain configuration options
 	hc            *HeaderChain        // Canonical block chain
 	engine        consensus.Engine    // Consensus engine used for block rewards
-	logsFeed      event.Feed
-	rmLogsFeed    event.Feed
-	cacheConfig   *CacheConfig   // CacheConfig for StateProcessor
-	stateCache    state.Database // State database to reuse between imports (contains state cache)
-	receiptsCache *lru.Cache     // Cache for the most recent receipts per block
+	cacheConfig   *CacheConfig        // CacheConfig for StateProcessor
+	stateCache    state.Database      // State database to reuse between imports (contains state cache)
+	receiptsCache *lru.Cache          // Cache for the most recent receipts per block
 	txLookupCache *lru.Cache
 	validator     Validator // Block and state validator interface
-	prefetcher    Prefetcher
 	vmConfig      vm.Config
-
-	scope event.SubscriptionScope
-	wg    sync.WaitGroup // chain processing wait group for shutting down
 
 	triegc *prque.Prque  // Priority queue mapping block numbers to tries to gc
 	gcproc time.Duration // Accumulates canonical block processing for trie dumping

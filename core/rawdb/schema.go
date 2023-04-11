@@ -88,12 +88,10 @@ var (
 	headerNumberPrefix = []byte("H") // headerNumberPrefix + hash -> num (uint64 big endian)
 
 	pendingHeaderPrefix = []byte("ph")    // pendingHeaderPrefix + hash -> header
-	candidateBodyPrefix = []byte("cb")    // candidateBodyPrefix + hash -> Body
 	pbBodyPrefix        = []byte("pb")    // pbBodyPrefix + hash -> *types.Body
 	pbBodyHashPrefix    = []byte("pbKey") // pbBodyPrefix -> []common.Hash
 	phTerminiPrefix     = []byte("pht")   // phTerminiPrefix + hash -> []common.Hash
 	phEntropyPrefix     = []byte("pt")    // phEntropyPrefix + hash -> *big.Int
-	phBodyPrefix        = []byte("pc")    // phBodyPrefix + hash -> []common.Hash + Td
 	terminiPrefix       = []byte("tk")    //terminiPrefix + hash -> []common.Hash
 
 	blockBodyPrefix     = []byte("b")  // blockBodyPrefix + num (uint64 big endian) + hash -> block body

@@ -65,10 +65,10 @@ func (tc *TimedCache) initEvictBuffers() {
 
 // onEvicted save evicted key/val and sent in externally registered callback
 // outside critical section
-func (tc *TimedCache) onEvicted(k, v interface{}) {
-	tc.evictedKeys = append(tc.evictedKeys, k)
-	tc.evictedVals = append(tc.evictedVals, v)
-}
+//func (tc *TimedCache) onEvicted(k, v interface{}) {
+//	tc.evictedKeys = append(tc.evictedKeys, k)
+//	tc.evictedVals = append(tc.evictedVals, v)
+//}
 
 // calcExpireTime calculates the expiration time given a TTL relative to now.
 func calcExpireTime(ttl int64) int64 {
@@ -97,7 +97,7 @@ func (tc *TimedCache) Purge() {
 		tc.initEvictBuffers()
 	}
 	tc.lock.Unlock()
-	// invoke callback outside of critical section
+	// invoke callback outside critical section
 	if tc.onEvictedCB != nil {
 		for i := 0; i < len(ks); i++ {
 			tc.onEvictedCB(ks[i], vs[i])
@@ -115,7 +115,7 @@ func (tc *TimedCache) Add(key, value interface{}) (evicted bool) {
 	// Wrap the entry and add it to the cache
 	evicted = tc.cache.Add(key, timedEntry{expiresAt: calcExpireTime(tc.ttl), value: value})
 	tc.lock.Unlock()
-	// invoke callback outside of critical section
+	// invoke callback outside critical section
 	if tc.onEvictedCB != nil {
 		tc.onEvictedCB(k, v)
 	}
@@ -178,7 +178,7 @@ func (tc *TimedCache) ContainsOrAdd(key, value interface{}) (ok, evicted bool) {
 	// Wrap the entry and add it to the cache
 	ok, evicted = tc.cache.ContainsOrAdd(key, timedEntry{expiresAt: calcExpireTime(tc.ttl), value: value})
 	tc.lock.Unlock()
-	// invoke callback outside of critical section
+	// invoke callback outside critical section
 	if tc.onEvictedCB != nil {
 		tc.onEvictedCB(k, v)
 	}
@@ -197,7 +197,7 @@ func (tc *TimedCache) PeekOrAdd(key, value interface{}) (previous interface{}, o
 	// Wrap the entry and add it to the cache
 	previous, ok, evicted = tc.cache.PeekOrAdd(key, timedEntry{expiresAt: calcExpireTime(tc.ttl), value: value})
 	tc.lock.Unlock()
-	// invoke callback outside of critical section
+	// invoke callback outside critical section
 	if tc.onEvictedCB != nil {
 		tc.onEvictedCB(k, v)
 	}
@@ -211,7 +211,7 @@ func (tc *TimedCache) Remove(key interface{}) (present bool) {
 	tc.removeExpired()
 	present = tc.cache.Remove(key)
 	tc.lock.Unlock()
-	// invoke callback outside of critical section
+	// invoke callback outside critical section
 	if tc.onEvictedCB != nil {
 		tc.onEvictedCB(k, v)
 	}
@@ -225,7 +225,7 @@ func (tc *TimedCache) Resize(size int) (evicted int) {
 	tc.removeExpired()
 	evicted = tc.cache.Resize(size)
 	tc.lock.Unlock()
-	// invoke callback outside of critical section
+	// invoke callback outside critical section
 	if tc.onEvictedCB != nil {
 		tc.onEvictedCB(k, v)
 	}
@@ -242,7 +242,7 @@ func (tc *TimedCache) RemoveOldest() (key, value interface{}, ok bool) {
 		value = value.(timedEntry).value
 	}
 	tc.lock.Unlock()
-	// invoke callback outside of critical section
+	// invoke callback outside critical section
 	if tc.onEvictedCB != nil {
 		tc.onEvictedCB(k, v)
 	}
