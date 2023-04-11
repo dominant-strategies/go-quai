@@ -31,7 +31,6 @@ EXPOSE 8646 8647 30314 30314/udp
 EXPOSE 8678 8679 30315 30315/udp
 
 COPY --from=builder /go-quai/build/bin ./build/bin
-COPY --from=builder /go-quai/core/knot ./core/knot
 COPY --from=builder /go-quai/VERSION ./VERSION
 
 WORKDIR ./
