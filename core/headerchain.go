@@ -109,7 +109,7 @@ func (hc *HeaderChain) CollectBlockManifest(h *types.Header) (types.BlockManifes
 }
 
 func (hc *HeaderChain) collectBlockManifest(h *types.Header) (types.BlockManifest, error) {
-	// Intialize manifest with this block's hash
+	// Initialize manifest with this block's hash
 	manifest := types.BlockManifest{h.Hash()}
 	// Terminate the search if we reached genesis
 	if h.NumberU64() == 0 {
@@ -136,7 +136,7 @@ func (hc *HeaderChain) collectBlockManifest(h *types.Header) (types.BlockManifes
 	return manifest, nil
 }
 
-// Collect all emmitted ETXs since the last coincident block, but excluding
+// CollectEtxRollup Collect all emitted ETXs since the last coincident block, but excluding
 // those emitted in this block
 func (hc *HeaderChain) CollectEtxRollup(b *types.Block) (types.Transactions, error) {
 	if b.NumberU64() == 0 && b.Hash() == hc.config.GenesisHash {

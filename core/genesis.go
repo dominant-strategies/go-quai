@@ -304,7 +304,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	}
 
 	// If we are a prime node, commit the Prime state. If not, create a new
-	// empty state to be commited.
+	// empty state to be committed.
 	var statedb state.StateDB
 	if common.PRIME_CTX == nodeCtx {
 		statedb = *primeStatedb

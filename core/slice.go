@@ -546,7 +546,7 @@ func (sl *Slice) computePendingHeader(localPendingHeaderWithTermini types.Pendin
 	}
 }
 
-// updatePhCacheFromDom combines the recieved pending header with the pending header stored locally at a given terminus for specified context
+// updatePhCacheFromDom combines the received pending header with the pending header stored locally at a given terminus for specified context
 func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, terminiIndex int, indices []int) error {
 
 	nodeCtx := common.NodeLocation.Context()

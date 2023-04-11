@@ -64,7 +64,7 @@ func (tc *TimedCache) initEvictBuffers() {
 }
 
 // onEvicted save evicted key/val and sent in externally registered callback
-// outside of critical section
+// outside critical section
 func (tc *TimedCache) onEvicted(k, v interface{}) {
 	tc.evictedKeys = append(tc.evictedKeys, k)
 	tc.evictedVals = append(tc.evictedVals, v)

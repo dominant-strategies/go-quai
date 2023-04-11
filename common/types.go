@@ -467,7 +467,7 @@ func (l Location) ContainsAddress(a Address) bool {
 		log.Fatal("unable to get address prefix range for location")
 	}
 	// Ranges are fully inclusive
-	return uint8(prefix) >= prefixRange.lo && uint8(prefix) <= prefixRange.hi
+	return (prefix) >= prefixRange.lo && (prefix) <= prefixRange.hi
 }
 
 func (l Location) RPCMarshal() []hexutil.Uint64 {
@@ -489,7 +489,7 @@ func IsInChainScope(b []byte) bool {
 		log.Fatal("unable to get address prefix range for location")
 	}
 	// Ranges are fully inclusive
-	return uint8(prefix) >= prefixRange.lo && uint8(prefix) <= prefixRange.hi
+	return prefix >= prefixRange.lo && prefix <= prefixRange.hi
 }
 
 func OrderToString(order int) string {

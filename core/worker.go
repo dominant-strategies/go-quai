@@ -384,7 +384,7 @@ func (w *worker) StorePendingBlockBody() {
 	rawdb.WritePbBodyKeys(w.workerDb, pendingBlockBodyKeys)
 }
 
-// GeneratePendingBlock generates pending block given a commited block.
+// GeneratePendingHeader GeneratePendingBlock generates pending block given a committed block.
 func (w *worker) GeneratePendingHeader(block *types.Block) (*types.Header, error) {
 
 	// Sanitize recommit interval if the user-specified one is too short.
