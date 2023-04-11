@@ -260,6 +260,10 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 		return fmt.Errorf("order of the block is greater than the context")
 	}
 
+	if !common.NodeLocation.InSameSliceAs(header.Location()) {
+		return fmt.Errorf("block location is not in the same slice as the node location")
+	}
+
 	// Verify that the parent entropy is calculated correctly on the header
 	parentEntropy := parent.CalcS()
 	if parentEntropy.Cmp(header.ParentEntropy()) != 0 {
