@@ -196,11 +196,6 @@ func phBodyTerminiKey(hash common.Hash) []byte {
 	return append(phTerminiPrefix, hash.Bytes()...)
 }
 
-// headerTDKey = headerPrefix + num (uint64 big endian) + hash + headerTDSuffix
-func headerTDKey(number uint64, hash common.Hash) []byte {
-	return append(headerKey(number, hash), headerTDSuffix...)
-}
-
 // phCacheEntropyKey = phEntropyPrefix + hash
 func phCacheEntropyKey(hash common.Hash) []byte {
 	return append(phEntropyPrefix, hash.Bytes()...)

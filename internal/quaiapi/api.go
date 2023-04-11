@@ -900,14 +900,6 @@ func RPCMarshalETHBlock(block *types.Block, inclTx bool, fullTx bool) (map[strin
 	return fields, nil
 }
 
-// rpcMarshalHeader uses the generalized output filler, then adds the total difficulty field, which requires
-// a `PublicBlockchainAPI`.
-func (s *PublicBlockChainAPI) rpcMarshalHeader(ctx context.Context, header *types.Header) map[string]interface{} {
-	fields := RPCMarshalETHHeader(header)
-	fields["totalEntropy"] = (*hexutil.Big)(header.CalcS())
-	return fields
-}
-
 // rpcMarshalBlock uses the generalized output filler, then adds the total difficulty field, which requires
 // a `PublicBlockchainAPI`.
 func (s *PublicBlockChainAPI) rpcMarshalBlock(ctx context.Context, b *types.Block, inclTx bool, fullTx bool) (map[string]interface{}, error) {

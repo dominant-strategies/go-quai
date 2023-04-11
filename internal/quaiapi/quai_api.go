@@ -467,14 +467,6 @@ func RPCMarshalHash(hash common.Hash) (map[string]interface{}, error) {
 	return fields, nil
 }
 
-// rpcMarshalHeader uses the generalized output filler, then adds the total difficulty field, which requires
-// a `PublicBlockchainQuaiAPI`.
-func (s *PublicBlockChainQuaiAPI) rpcMarshalHeader(ctx context.Context, header *types.Header) map[string]interface{} {
-	fields := header.RPCMarshalHeader()
-	fields["totalEntropy"] = (*hexutil.Big)(header.CalcS())
-	return fields
-}
-
 // rpcMarshalBlock uses the generalized output filler, then adds the total difficulty field, which requires
 // a `PublicBlockchainAPI`.
 func (s *PublicBlockChainQuaiAPI) rpcMarshalBlock(ctx context.Context, b *types.Block, inclTx bool, fullTx bool) (map[string]interface{}, error) {
