@@ -287,9 +287,6 @@ func (hc *HeaderChain) findCommonAncestor(header *types.Header) *types.Header {
 			return nil
 		}
 		canonicalHash := rawdb.ReadCanonicalHash(hc.headerDb, header.NumberU64())
-		if canonicalHash == hc.config.GenesisHash {
-			return nil
-		}
 		if canonicalHash == header.Hash() {
 			return hc.GetHeaderByHash(canonicalHash)
 		}
