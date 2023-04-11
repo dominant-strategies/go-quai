@@ -20,10 +20,11 @@ import (
 	"fmt"
 	"os"
 	"runtime"
-	"strings"
 
 	"github.com/dominant-strategies/go-quai/cmd/utils"
 	"github.com/dominant-strategies/go-quai/params"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -75,7 +76,8 @@ and displays information about any security vulnerabilities that affect the curr
 )
 
 func version(ctx *cli.Context) error {
-	fmt.Println(strings.Title(clientIdentifier))
+	caser := cases.Title(language.English)
+	fmt.Println(caser.String(clientIdentifier))
 	fmt.Println("Version:", params.Version.Full())
 	if gitCommit != "" {
 		fmt.Println("Git Commit:", gitCommit)

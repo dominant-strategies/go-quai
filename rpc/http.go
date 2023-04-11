@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"mime"
 	"net/http"
 	"net/url"
@@ -34,6 +33,17 @@ import (
 const (
 	maxRequestContentLength = 1024 * 1024 * 5
 	contentType             = "application/json"
+)
+
+type contextKey string
+
+const (
+	remoteKey      contextKey = "remote"
+	schemeKey      contextKey = "scheme"
+	localKey       contextKey = "local"
+	userAgentKey   contextKey = "User-Agent"
+	originKey      contextKey = "Origin"
+	contentTypeKey contextKey = "Content-Type"
 )
 
 // https://www.jsonrpc.org/historical/json-rpc-over-http.html#id13
@@ -169,7 +179,7 @@ func (hc *httpConn) doRequest(ctx context.Context, msg interface{}) (io.ReadClos
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequestWithContext(ctx, "POST", hc.url, ioutil.NopCloser(bytes.NewReader(body)))
+	req, err := http.NewRequestWithContext(ctx, "POST", hc.url, io.NopCloser(bytes.NewReader(body)))
 	if err != nil {
 		return nil, err
 	}
@@ -240,17 +250,17 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// until EOF, writes the response to w, and orders the server to process a
 	// single request.
 	ctx := r.Context()
-	ctx = context.WithValue(ctx, "remote", r.RemoteAddr)
-	ctx = context.WithValue(ctx, "scheme", r.Proto)
-	ctx = context.WithValue(ctx, "local", r.Host)
-	if ua := r.Header.Get("User-Agent"); ua != "" {
-		ctx = context.WithValue(ctx, "User-Agent", ua)
+	ctx = context.WithValue(ctx, remoteKey, r.RemoteAddr)
+	ctx = context.WithValue(ctx, schemeKey, r.Proto)
+	ctx = context.WithValue(ctx, localKey, r.Host)
+	if ua := r.Header.Get(string(userAgentKey)); ua != "" {
+		ctx = context.WithValue(ctx, userAgentKey, ua)
 	}
-	if origin := r.Header.Get("Origin"); origin != "" {
-		ctx = context.WithValue(ctx, "Origin", origin)
+	if origin := r.Header.Get(string(originKey)); origin != "" {
+		ctx = context.WithValue(ctx, originKey, origin)
 	}
 
-	w.Header().Set("content-type", contentType)
+	w.Header().Set(string(contentTypeKey), contentType)
 	codec := newHTTPServerConn(r, w)
 	defer codec.close()
 	s.serveSingleRequest(ctx, codec)

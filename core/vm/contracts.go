@@ -29,7 +29,7 @@ import (
 	"github.com/dominant-strategies/go-quai/crypto/bn256"
 	"github.com/dominant-strategies/go-quai/params"
 
-	//lint:ignore SA1019 Needed for precompile
+	//nolint SA1019 Needed for precompile
 	"golang.org/x/crypto/ripemd160"
 )
 

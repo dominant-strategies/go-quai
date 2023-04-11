@@ -19,8 +19,8 @@ package params
 import (
 	"bytes"
 	"errors"
-	"io/ioutil"
 	"log"
+	"os"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -38,7 +38,7 @@ type version struct {
 }
 
 func readVersionFile() (version, error) {
-	raw, err := ioutil.ReadFile("VERSION")
+	raw, err := os.ReadFile("VERSION")
 	if err != nil {
 		panic(err)
 	}
