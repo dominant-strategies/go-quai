@@ -205,7 +205,6 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 		}
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
-		i++
 	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)

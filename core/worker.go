@@ -255,7 +255,6 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 	recommit := worker.config.Recommit
 	if recommit < minRecommitInterval {
 		log.Warn("Sanitizing miner recommit interval", "provided", recommit, "updated", minRecommitInterval)
-		recommit = minRecommitInterval
 	}
 
 	worker.wg.Add(1)
@@ -503,7 +502,6 @@ func (w *worker) GeneratePendingHeader(block *types.Block) (*types.Header, error
 	}
 	// Interrupt previous sealing operation
 	interruptFunc()
-	stopCh, prev = make(chan struct{}), sealHash
 
 	w.pendingMu.Lock()
 	w.pendingTasks[sealHash] = task
