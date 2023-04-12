@@ -571,8 +571,12 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 	getHeaders := func(from uint64, to uint64) {
 		request = time.Now()
 
-		ttl = d.peers.rates.TargetTimeout()
-		timeout.Reset(ttl)
+		if skeleton {
+			timeout.Reset(1 * time.Minute)
+		} else {
+			ttl = d.peers.rates.TargetTimeout()
+			timeout.Reset(ttl)
+		}
 
 		if skeleton {
 			// Reset the skeleton headers each time we try to fetch the skeleton.
