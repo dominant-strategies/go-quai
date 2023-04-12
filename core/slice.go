@@ -328,7 +328,7 @@ func (sl *Slice) CollectSubRollups(b *types.Block) ([]types.Transactions, error)
 				subRollups[ctx] = append(subRollups[ctx], pendingEtxs[ctx]...)
 			}
 		}
-		if subRollupHash := types.DeriveSha(subRollups[nodeCtx+1], trie.NewStackTrie(nil)); subRollupHash != b.EtxRollupHash(nodeCtx+1) {
+		if subRollupHash := types.DeriveSha(subRollups[nodeCtx+1], trie.NewStackTrie(nil)); subRollupHash != b.EtxRollupHash() {
 			return nil, errors.New("sub rollup does not match sub rollup hash")
 		}
 	}
@@ -740,23 +740,23 @@ func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *typ
 	combinedPendingHeader := types.CopyHeader(slPendingHeader)
 
 	combinedPendingHeader.SetParentHash(header.ParentHash(index), index)
-	combinedPendingHeader.SetUncleHash(header.UncleHash(index), index)
 	combinedPendingHeader.SetNumber(header.Number(index), index)
 	combinedPendingHeader.SetExtra(header.Extra())
-	combinedPendingHeader.SetBaseFee(header.BaseFee(index), index)
-	combinedPendingHeader.SetGasLimit(header.GasLimit(index), index)
-	combinedPendingHeader.SetGasUsed(header.GasUsed(index), index)
-	combinedPendingHeader.SetTxHash(header.TxHash(index), index)
-	combinedPendingHeader.SetEtxHash(header.EtxHash(index), index)
-	combinedPendingHeader.SetEtxRollupHash(header.EtxRollupHash(index), index)
 	combinedPendingHeader.SetManifestHash(header.ManifestHash(index), index)
-	combinedPendingHeader.SetReceiptHash(header.ReceiptHash(index), index)
-	combinedPendingHeader.SetRoot(header.Root(index), index)
 	combinedPendingHeader.SetParentEntropy(header.ParentEntropy(index), index)
 	combinedPendingHeader.SetParentDeltaS(header.ParentDeltaS(index), index)
-	combinedPendingHeader.SetCoinbase(header.Coinbase(index), index)
-	combinedPendingHeader.SetBloom(header.Bloom(index), index)
+	combinedPendingHeader.SetEtxRollupHash(header.EtxRollupHash(index), index)
 	combinedPendingHeader.SetDifficulty(header.Difficulty())
+	combinedPendingHeader.SetUncleHash(header.UncleHash())
+	combinedPendingHeader.SetTxHash(header.TxHash())
+	combinedPendingHeader.SetEtxHash(header.EtxHash())
+	combinedPendingHeader.SetReceiptHash(header.ReceiptHash())
+	combinedPendingHeader.SetRoot(header.Root())
+	combinedPendingHeader.SetCoinbase(header.Coinbase())
+	combinedPendingHeader.SetBloom(header.Bloom())
+	combinedPendingHeader.SetBaseFee(header.BaseFee())
+	combinedPendingHeader.SetGasLimit(header.GasLimit())
+	combinedPendingHeader.SetGasUsed(header.GasUsed())
 
 	return combinedPendingHeader
 }

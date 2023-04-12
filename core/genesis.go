@@ -51,7 +51,7 @@ type Genesis struct {
 	Nonce      uint64              `json:"nonce"`
 	Timestamp  uint64              `json:"timestamp"`
 	ExtraData  []byte              `json:"extraData"`
-	GasLimit   []uint64            `json:"gasLimit"   gencodec:"required"`
+	GasLimit   uint64              `json:"gasLimit"   gencodec:"required"`
 	Difficulty *big.Int            `json:"difficulty" gencodec:"required"`
 	Mixhash    common.Hash         `json:"mixHash"`
 	Coinbase   []common.Address    `json:"coinbase"`
@@ -60,9 +60,9 @@ type Genesis struct {
 	// These fields are used for consensus tests. Please don't use them
 	// in actual genesis blocks.
 	Number     []uint64      `json:"number"`
-	GasUsed    []uint64      `json:"gasUsed"`
+	GasUsed    uint64        `json:"gasUsed"`
 	ParentHash []common.Hash `json:"parentHash"`
-	BaseFee    []*big.Int    `json:"baseFeePerGas"`
+	BaseFee    *big.Int      `json:"baseFeePerGas"`
 }
 
 // GenesisAlloc specifies the initial state that is part of the genesis block.
@@ -282,25 +282,22 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 			primeStatedb.SetState(internal, key, value)
 		}
 	}
-	primeRoot := primeStatedb.IntermediateRoot(false)
 	head := types.EmptyHeader()
 	head.SetNonce(types.EncodeNonce(g.Nonce))
 	head.SetTime(g.Timestamp)
 	head.SetExtra(g.ExtraData)
-	head.SetRoot(primeRoot, common.PRIME_CTX)
-	head.SetRoot(types.EmptyRootHash, common.REGION_CTX) // Not genesis allocs allowed
-	head.SetRoot(types.EmptyRootHash, common.ZONE_CTX)   // Not genesis allocs allowed
+	head.SetRoot(types.EmptyRootHash) // Not genesis allocs allowed
 	head.SetDifficulty(g.Difficulty)
+	head.SetCoinbase(common.ZeroAddr)
+	head.SetGasLimit(g.GasLimit)
+	head.SetGasUsed(0)
+	head.SetBaseFee(new(big.Int).SetUint64(params.InitialBaseFee))
+	if g.GasLimit == 0 {
+		head.SetGasLimit(params.GenesisGasLimit)
+	}
 	for i := 0; i < common.HierarchyDepth; i++ {
 		head.SetNumber(big.NewInt(0), i)
 		head.SetParentHash(common.Hash{}, i)
-		head.SetGasLimit(g.GasLimit[i], i)
-		head.SetGasUsed(0, i)
-		head.SetBaseFee(new(big.Int).SetUint64(params.InitialBaseFee), i)
-		head.SetCoinbase(common.ZeroAddr, i)
-		if g.GasLimit[i] == 0 {
-			head.SetGasLimit(params.GenesisGasLimit, i)
-		}
 	}
 
 	// If we are a prime node, commit the Prime state. If not, create a new
@@ -359,7 +356,7 @@ func (g *Genesis) MustCommit(db ethdb.Database) *types.Block {
 func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big.Int) *types.Block {
 	g := Genesis{
 		Alloc:   GenesisAlloc{addr: {Balance: balance}},
-		BaseFee: []*big.Int{big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee)},
+		BaseFee: big.NewInt(params.InitialBaseFee),
 	}
 	return g.MustCommit(db)
 }
@@ -376,7 +373,7 @@ func DefaultColosseumGenesisBlock() *Genesis {
 		Config:     params.ColosseumChainConfig,
 		Nonce:      66,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
-		GasLimit:   []uint64{160000000, 160000000, 160000000},
+		GasLimit:   160000000,
 		Difficulty: big.NewInt(2048576),
 		Alloc:      decodePrealloc(colosseumAllocData),
 	}
@@ -388,7 +385,7 @@ func DefaultGardenGenesisBlock() *Genesis {
 		Config:     params.GardenChainConfig,
 		Nonce:      67,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
-		GasLimit:   []uint64{160000000, 160000000, 160000000},
+		GasLimit:   160000000,
 		Difficulty: big.NewInt(441092),
 		Alloc:      decodePrealloc(gardenAllocData),
 	}
@@ -400,7 +397,7 @@ func DefaultOrchardGenesisBlock() *Genesis {
 		Config:     params.OrchardChainConfig,
 		Nonce:      68,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
-		GasLimit:   []uint64{160000000, 160000000, 160000000},
+		GasLimit:   160000000,
 		Difficulty: big.NewInt(2500000),
 		Alloc:      decodePrealloc(orchardAllocData),
 	}
@@ -412,7 +409,7 @@ func DefaultGalenaGenesisBlock() *Genesis {
 		Config:     params.GalenaChainConfig,
 		Nonce:      68,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
-		GasLimit:   []uint64{160000000, 160000000, 160000000},
+		GasLimit:   160000000,
 		Difficulty: big.NewInt(8800000000),
 		Alloc:      decodePrealloc(galenaAllocData),
 	}
@@ -424,7 +421,7 @@ func DefaultLocalGenesisBlock() *Genesis {
 		Config:     params.LocalChainConfig,
 		Nonce:      67,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
-		GasLimit:   []uint64{160000000, 160000000, 160000000},
+		GasLimit:   160000000,
 		Difficulty: big.NewInt(300000),
 		Alloc:      decodePrealloc(localAllocData),
 	}
@@ -438,8 +435,8 @@ func DeveloperGenesisBlock(period uint64, faucet common.Address) *Genesis {
 	return &Genesis{
 		Config:     &config,
 		ExtraData:  append(append(make([]byte, 32), faucet.Bytes()[:]...), make([]byte, crypto.SignatureLength)...),
-		GasLimit:   []uint64{0x47b760, 0x47b760, 0x47b760},
-		BaseFee:    []*big.Int{big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee)},
+		GasLimit:   0x47b760,
+		BaseFee:    big.NewInt(params.InitialBaseFee),
 		Difficulty: big.NewInt(1),
 		Alloc: map[common.Address]GenesisAccount{
 			common.BytesToAddress([]byte{1}): {Balance: big.NewInt(1)}, // ECRecover
