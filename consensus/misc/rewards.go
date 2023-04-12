@@ -15,6 +15,7 @@ import (
 // For each zone = Reward/(3*regions*zones*time-factor^2)
 func CalculateReward() *big.Int {
 	reward := big.NewInt(5e18)
+	reward.Mul(reward, big.NewInt(1000))
 	timeFactor := big.NewInt(10)
 	regions := big.NewInt(3)
 	zones := big.NewInt(3)
