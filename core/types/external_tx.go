@@ -56,11 +56,11 @@ func (p *PendingEtxs) IsValid(hasher TrieHasher) bool {
 	singletonCtx := nodeCtx + 1
 	rollupCtx := singletonCtx + 1
 	// singletonCtx must exist and must match hash
-	if singletonCtx >= len(p.Etxs) || DeriveSha(p.Etxs[singletonCtx], hasher) != p.Header.EtxHash(singletonCtx) {
+	if singletonCtx >= len(p.Etxs) || DeriveSha(p.Etxs[singletonCtx], hasher) != p.Header.EtxHash() {
 		return false
 	}
 	// rollupCtx may not exist (i.e. if we are a region node), but if it is, the rollup hash must match
-	if rollupCtx < len(p.Etxs) && DeriveSha(p.Etxs[rollupCtx], hasher) != p.Header.EtxRollupHash(rollupCtx) {
+	if rollupCtx < len(p.Etxs) && DeriveSha(p.Etxs[rollupCtx], hasher) != p.Header.EtxRollupHash() {
 		return false
 	}
 	return true

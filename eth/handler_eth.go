@@ -196,7 +196,7 @@ func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block) er
 
 func (h *ethHandler) handlePendingEtxs(pendingEtxs types.PendingEtxs) error {
 	if !pendingEtxs.IsValid(trie.NewStackTrie(nil)) {
-		log.Warn("PendingEtxs is not valid", pendingEtxs.Etxs, pendingEtxs.Header.EtxHashArray())
+		log.Warn("PendingEtxs is not valid", pendingEtxs.Etxs, pendingEtxs.Header.EtxHash())
 		return nil
 	}
 	err := h.core.AddPendingEtxs(pendingEtxs)
