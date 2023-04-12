@@ -603,7 +603,7 @@ type blockStats struct {
 	Txs           []txStats      `json:"transactions"`
 	TxHash        common.Hash    `json:"transactionsRoot"`
 	EtxHash       common.Hash    `json:"extTransactionsRoot"`
-	EtxRollupHash common.Hash    `json:"extRollupRoot"`
+	EtxRollupHash []common.Hash  `json:"extRollupRoot"`
 	ManifestHash  common.Hash    `json:"manifestHash"`
 	Root          common.Hash    `json:"stateRoot"`
 	Uncles        uncleStats     `json:"uncles"`
@@ -697,7 +697,7 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		Txs:           txs,
 		TxHash:        header.TxHash(),
 		EtxHash:       header.EtxHash(),
-		EtxRollupHash: header.EtxRollupHash(),
+		EtxRollupHash: header.EtxRollupHashArray(),
 		ManifestHash:  header.ManifestHash(),
 		Root:          header.Root(),
 		Uncles:        uncles,
