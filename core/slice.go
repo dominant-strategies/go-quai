@@ -771,9 +771,11 @@ func (sl *Slice) NewGenesisPendingHeader(domPendingHeader *types.Header) {
 
 	if nodeCtx != common.ZONE_CTX {
 		for _, client := range sl.subClients {
-			client.NewGenesisPendingHeader(context.Background(), domPendingHeader)
-			if err != nil {
-				return
+			if client != nil {
+				client.NewGenesisPendingHeader(context.Background(), domPendingHeader)
+				if err != nil {
+					return
+				}
 			}
 		}
 	}
