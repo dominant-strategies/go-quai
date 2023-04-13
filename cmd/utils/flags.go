@@ -1322,7 +1322,10 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		log.Warn("Disable transaction unindexing for archive node")
 	}
 
-	setEtherbase(ctx, cfg)
+	// only set etherbase if its a zone chain
+	if ctx.GlobalIsSet(RegionFlag.Name) && ctx.GlobalIsSet(ZoneFlag.Name) {
+		setEtherbase(ctx, cfg)
+	}
 	setGPO(ctx, &cfg.GPO, ctx.GlobalString(SyncModeFlag.Name) == "light")
 	setTxPool(ctx, &cfg.TxPool)
 	setBlake3pow(ctx, cfg)

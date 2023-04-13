@@ -809,19 +809,23 @@ func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, uncleLi
 	nodeCtx := common.NodeLocation.Context()
 	trieHasher := trie.NewStackTrie(nil)
 	validate := func(index int, header *types.Header) error {
-		if types.DeriveSha(types.Transactions(txLists[index]), trieHasher) != header.TxHash() {
-			return errInvalidBody
-		}
-		if types.DeriveSha(types.Transactions(etxLists[index]), trieHasher) != header.EtxHash() {
-			return errInvalidBody
-		}
-		if nodeCtx < common.ZONE_CTX {
+		if nodeCtx != common.ZONE_CTX {
+			if len(types.Transactions(txLists[index])) != 0 || len(types.Transactions(etxLists[index])) != 0 || len(uncleLists[index]) != 0 {
+				return errInvalidBody
+			}
 			if types.DeriveSha(manifests[index], trieHasher) != header.ManifestHash(nodeCtx+1) {
 				return errInvalidBody
 			}
-		}
-		if types.CalcUncleHash(uncleLists[index]) != header.UncleHash() {
-			return errInvalidBody
+		} else {
+			if types.DeriveSha(types.Transactions(txLists[index]), trieHasher) != header.TxHash() {
+				return errInvalidBody
+			}
+			if types.DeriveSha(types.Transactions(etxLists[index]), trieHasher) != header.EtxHash() {
+				return errInvalidBody
+			}
+			if types.CalcUncleHash(uncleLists[index]) != header.UncleHash() {
+				return errInvalidBody
+			}
 		}
 		return nil
 	}

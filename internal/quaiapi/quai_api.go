@@ -152,6 +152,10 @@ func (s *PublicBlockChainQuaiAPI) BlockNumber() hexutil.Uint64 {
 // given block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta
 // block numbers are also allowed.
 func (s *PublicBlockChainQuaiAPI) GetBalance(ctx context.Context, address common.Address, blockNrOrHash rpc.BlockNumberOrHash) (*hexutil.Big, error) {
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx != common.ZONE_CTX {
+		return nil, errors.New("getBalance call can only be made in zone chain")
+	}
 	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
 		return nil, err
@@ -165,6 +169,10 @@ func (s *PublicBlockChainQuaiAPI) GetBalance(ctx context.Context, address common
 
 // GetProof returns the Merkle-proof for a given account and optionally some storage keys.
 func (s *PublicBlockChainQuaiAPI) GetProof(ctx context.Context, address common.Address, storageKeys []string, blockNrOrHash rpc.BlockNumberOrHash) (*AccountResult, error) {
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx != common.ZONE_CTX {
+		return nil, errors.New("getProof call can only be made in zone chain")
+	}
 	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
 		return nil, err
@@ -345,6 +353,10 @@ func (s *PublicBlockChainQuaiAPI) GetUncleCountByBlockHash(ctx context.Context, 
 
 // GetCode returns the code stored at the given address in the state for the given block number.
 func (s *PublicBlockChainQuaiAPI) GetCode(ctx context.Context, address common.Address, blockNrOrHash rpc.BlockNumberOrHash) (hexutil.Bytes, error) {
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx != common.ZONE_CTX {
+		return nil, errors.New("getCode can only called in a zone chain")
+	}
 	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
 		return nil, err
@@ -361,6 +373,10 @@ func (s *PublicBlockChainQuaiAPI) GetCode(ctx context.Context, address common.Ad
 // block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta block
 // numbers are also allowed.
 func (s *PublicBlockChainQuaiAPI) GetStorageAt(ctx context.Context, address common.Address, key string, blockNrOrHash rpc.BlockNumberOrHash) (hexutil.Bytes, error) {
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx != common.ZONE_CTX {
+		return nil, errors.New("getStorageAt can only called in a zone chain")
+	}
 	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
 		return nil, err
@@ -394,6 +410,10 @@ func (s *PublicBlockChainQuaiAPI) Call(ctx context.Context, args TransactionArgs
 // EstimateGas returns an estimate of the amount of gas needed to execute the
 // given transaction against the current pending block.
 func (s *PublicBlockChainQuaiAPI) EstimateGas(ctx context.Context, args TransactionArgs, blockNrOrHash *rpc.BlockNumberOrHash) (hexutil.Uint64, error) {
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx != common.ZONE_CTX {
+		return 0, errors.New("estimateGas can only called in a zone chain")
+	}
 	bNrOrHash := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
 	if blockNrOrHash != nil {
 		bNrOrHash = *blockNrOrHash
@@ -497,6 +517,10 @@ func (s *PublicBlockChainQuaiAPI) rpcMarshalBlock(ctx context.Context, b *types.
 // CreateAccessList creates a EIP-2930 type AccessList for the given transaction.
 // Reexec and BlockNrOrHash can be specified to create the accessList on top of a certain state.
 func (s *PublicBlockChainQuaiAPI) CreateAccessList(ctx context.Context, args TransactionArgs, blockNrOrHash *rpc.BlockNumberOrHash) (*accessListResult, error) {
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx != common.ZONE_CTX {
+		return nil, errors.New("createAccessList can only be called in zone chain")
+	}
 	bNrOrHash := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
 	if blockNrOrHash != nil {
 		bNrOrHash = *blockNrOrHash
@@ -631,6 +655,10 @@ func (s *PublicBlockChainQuaiAPI) NewGenesisPendingHeader(ctx context.Context, r
 }
 
 func (s *PublicBlockChainQuaiAPI) GetPendingHeader(ctx context.Context) (map[string]interface{}, error) {
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx != common.ZONE_CTX {
+		return nil, errors.New("getPendingHeader can only be called in zone chain")
+	}
 	pendingHeader, err := s.b.GetPendingHeader()
 	if err != nil {
 		return nil, err

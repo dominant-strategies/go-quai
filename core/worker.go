@@ -76,31 +76,36 @@ type environment struct {
 
 // copy creates a deep copy of environment.
 func (env *environment) copy() *environment {
-	cpy := &environment{
-		signer:    env.signer,
-		state:     env.state.Copy(),
-		ancestors: env.ancestors.Clone(),
-		family:    env.family.Clone(),
-		tcount:    env.tcount,
-		coinbase:  env.coinbase,
-		header:    types.CopyHeader(env.header),
-		receipts:  copyReceipts(env.receipts),
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx == common.ZONE_CTX {
+		cpy := &environment{
+			signer:    env.signer,
+			state:     env.state.Copy(),
+			ancestors: env.ancestors.Clone(),
+			family:    env.family.Clone(),
+			tcount:    env.tcount,
+			coinbase:  env.coinbase,
+			header:    types.CopyHeader(env.header),
+			receipts:  copyReceipts(env.receipts),
+		}
+		if env.gasPool != nil {
+			gasPool := *env.gasPool
+			cpy.gasPool = &gasPool
+		}
+		// The content of txs and uncles are immutable, unnecessary
+		// to do the expensive deep copy for them.
+		cpy.txs = make([]*types.Transaction, len(env.txs))
+		copy(cpy.txs, env.txs)
+		cpy.etxs = make([]*types.Transaction, len(env.etxs))
+		copy(cpy.etxs, env.etxs)
+		cpy.uncles = make(map[common.Hash]*types.Header)
+		for hash, uncle := range env.uncles {
+			cpy.uncles[hash] = uncle
+		}
+		return cpy
+	} else {
+		return &environment{header: types.CopyHeader(env.header)}
 	}
-	if env.gasPool != nil {
-		gasPool := *env.gasPool
-		cpy.gasPool = &gasPool
-	}
-	// The content of txs and uncles are immutable, unnecessary
-	// to do the expensive deep copy for them.
-	cpy.txs = make([]*types.Transaction, len(env.txs))
-	copy(cpy.txs, env.txs)
-	cpy.etxs = make([]*types.Transaction, len(env.etxs))
-	copy(cpy.etxs, env.etxs)
-	cpy.uncles = make(map[common.Hash]*types.Header)
-	for hash, uncle := range env.uncles {
-		cpy.uncles[hash] = uncle
-	}
-	return cpy
 }
 
 // unclelist returns the contained uncles as the list format.
@@ -245,14 +250,17 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 		resubmitIntervalCh: make(chan time.Duration),
 		resubmitAdjustCh:   make(chan *intervalAdjust, resubmitAdjustChanSize),
 	}
+	nodeCtx := common.NodeLocation.Context()
 
 	phBodyCache, _ := lru.New(pendingBlockBodyLimit)
 	worker.pendingBlockBody = phBodyCache
 
-	// Subscribe NewTxsEvent for tx pool
-	worker.txsSub = txPool.SubscribeNewTxsEvent(worker.txsCh)
-	// Subscribe events for blockchain
-	worker.chainSideSub = headerchain.bc.SubscribeChainSideEvent(worker.chainSideCh)
+	if nodeCtx == common.ZONE_CTX {
+		// Subscribe NewTxsEvent for tx pool
+		worker.txsSub = txPool.SubscribeNewTxsEvent(worker.txsCh)
+		// Subscribe events for blockchain
+		worker.chainSideSub = headerchain.bc.SubscribeChainSideEvent(worker.chainSideCh)
+	}
 
 	// Sanitize recommit interval if the user-specified one is too short.
 	recommit := worker.config.Recommit
@@ -386,7 +394,7 @@ func (w *worker) StorePendingBlockBody() {
 
 // GeneratePendingBlock generates pending block given a commited block.
 func (w *worker) GeneratePendingHeader(block *types.Block) (*types.Header, error) {
-
+	nodeCtx := common.NodeLocation.Context()
 	// Sanitize recommit interval if the user-specified one is too short.
 	recommit := w.config.Recommit
 	if recommit < minRecommitInterval {
@@ -444,9 +452,11 @@ func (w *worker) GeneratePendingHeader(block *types.Block) (*types.Header, error
 		return nil, err
 	}
 
-	// Fill pending transactions from the txpool
-	w.adjustGasLimit(nil, work, block)
-	w.fillTransactions(interrupt, work, block)
+	if nodeCtx == common.ZONE_CTX {
+		// Fill pending transactions from the txpool
+		w.adjustGasLimit(nil, work, block)
+		w.fillTransactions(interrupt, work, block)
+	}
 
 	env := work.copy()
 	interval := w.fullTaskHook
@@ -519,9 +529,12 @@ func (w *worker) GeneratePendingHeader(block *types.Block) (*types.Header, error
 // the received event. It can support two modes: automatically generate task and
 // submit it or return task according to given parameters for various proposes.
 func (w *worker) mainLoop() {
+	nodeCtx := common.NodeLocation.Context()
 	defer w.wg.Done()
-	defer w.txsSub.Unsubscribe()
-	defer w.chainSideSub.Unsubscribe()
+	if nodeCtx == common.ZONE_CTX {
+		defer w.txsSub.Unsubscribe()
+		defer w.chainSideSub.Unsubscribe()
+	}
 	defer func() {
 		if w.current != nil {
 			w.current.discard()
@@ -531,29 +544,37 @@ func (w *worker) mainLoop() {
 	cleanTicker := time.NewTicker(time.Second * 10)
 	defer cleanTicker.Stop()
 
+	if nodeCtx == common.ZONE_CTX {
+		go w.eventExitLoop()
+	}
+
 	for {
 		select {
 		case ev := <-w.chainSideCh:
-			// Short circuit for duplicate side blocks
-			if _, exist := w.localUncles[ev.Block.Hash()]; exist {
-				continue
-			}
-			if _, exist := w.remoteUncles[ev.Block.Hash()]; exist {
-				continue
-			}
-			// Add side block to possible uncle block set depending on the author.
-			if w.isLocalBlock != nil && w.isLocalBlock(ev.Block.Header()) {
-				w.localUncles[ev.Block.Hash()] = ev.Block
-			} else {
-				w.remoteUncles[ev.Block.Hash()] = ev.Block
-			}
-			// If our sealing block contains less than 2 uncle blocks,
-			// add the new uncle block if valid and regenerate a new
-			// sealing block for higher profit.
-			if w.isRunning() && w.current != nil && len(w.current.uncles) < 2 {
-				start := time.Now()
-				if err := w.commitUncle(w.current, ev.Block.Header()); err == nil {
-					w.commit(w.current.copy(), nil, true, start)
+			// uncle processing is only done for zone
+			nodeCtx := common.NodeLocation.Context()
+			if nodeCtx == common.ZONE_CTX {
+				// Short circuit for duplicate side blocks
+				if _, exist := w.localUncles[ev.Block.Hash()]; exist {
+					continue
+				}
+				if _, exist := w.remoteUncles[ev.Block.Hash()]; exist {
+					continue
+				}
+				// Add side block to possible uncle block set depending on the author.
+				if w.isLocalBlock != nil && w.isLocalBlock(ev.Block.Header()) {
+					w.localUncles[ev.Block.Hash()] = ev.Block
+				} else {
+					w.remoteUncles[ev.Block.Hash()] = ev.Block
+				}
+				// If our sealing block contains less than 2 uncle blocks,
+				// add the new uncle block if valid and regenerate a new
+				// sealing block for higher profit.
+				if w.isRunning() && w.current != nil && len(w.current.uncles) < 2 {
+					start := time.Now()
+					if err := w.commitUncle(w.current, ev.Block.Header()); err == nil {
+						w.commit(w.current.copy(), nil, true, start)
+					}
 				}
 			}
 
@@ -599,7 +620,13 @@ func (w *worker) mainLoop() {
 			}
 			atomic.AddInt32(&w.newTxs, int32(len(ev.Txs)))
 
-		// System stopped
+		}
+	}
+}
+
+func (w *worker) eventExitLoop() {
+	for {
+		select {
 		case <-w.exitCh:
 			return
 		case <-w.txsSub.Err():
@@ -677,6 +704,7 @@ func (w *worker) commitUncle(env *environment, uncle *types.Header) error {
 func (w *worker) updateSnapshot(env *environment) {
 	w.snapshotMu.Lock()
 	defer w.snapshotMu.Unlock()
+	nodeCtx := common.NodeLocation.Context()
 
 	w.snapshotBlock = types.NewBlock(
 		env.header,
@@ -687,8 +715,10 @@ func (w *worker) updateSnapshot(env *environment) {
 		env.receipts,
 		trie.NewStackTrie(nil),
 	)
-	w.snapshotReceipts = copyReceipts(env.receipts)
-	w.snapshotState = env.state.Copy()
+	if nodeCtx == common.ZONE_CTX {
+		w.snapshotReceipts = copyReceipts(env.receipts)
+		w.snapshotState = env.state.Copy()
+	}
 }
 
 func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*types.Log, error) {
@@ -848,52 +878,53 @@ func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*en
 	header := types.EmptyHeader()
 	header.SetParentHash(block.Header().Hash())
 	header.SetNumber(big.NewInt(int64(num.Uint64()) + 1))
-	header.SetExtra(w.extra)
-	header.SetBaseFee(misc.CalcBaseFee(w.chainConfig, parent.Header()))
 	header.SetTime(timestamp)
 	header.SetParentEntropy(block.Header().ParentEntropy())
 
-	if w.isRunning() {
-		if w.coinbase.Equal(common.ZeroAddr) {
-			log.Error("Refusing to mine without etherbase")
-			return nil, errors.New("refusing to mine without etherbase")
-		}
-		header.SetCoinbase(w.coinbase)
-	}
-
-	// Only zone should calculate the difficulty
+	// Only zone should calculate state
 	nodeCtx := common.NodeLocation.Context()
 	if nodeCtx == common.ZONE_CTX {
+		header.SetExtra(w.extra)
+		header.SetBaseFee(misc.CalcBaseFee(w.chainConfig, parent.Header()))
+		if w.isRunning() {
+			if w.coinbase.Equal(common.ZeroAddr) {
+				log.Error("Refusing to mine without etherbase")
+				return nil, errors.New("refusing to mine without etherbase")
+			}
+			header.SetCoinbase(w.coinbase)
+		}
+
 		// Run the consensus preparation with the default or customized consensus engine.
 		if err := w.engine.Prepare(w.hc, header, block.Header()); err != nil {
 			log.Error("Failed to prepare header for sealing", "err", err)
 			return nil, err
 		}
-	}
-
-	env, err := w.makeEnv(parent, header, w.coinbase)
-	if err != nil {
-		log.Error("Failed to create sealing context", "err", err)
-		return nil, err
-	}
-	// Accumulate the uncles for the sealing work.
-	commitUncles := func(blocks map[common.Hash]*types.Block) {
-		for hash, uncle := range blocks {
-			if len(env.uncles) == 2 {
-				break
-			}
-			if err := w.commitUncle(env, uncle.Header()); err != nil {
-				log.Trace("Possible uncle rejected", "hash", hash, "reason", err)
-			} else {
-				log.Debug("Committing new uncle to block", "hash", hash)
+		env, err := w.makeEnv(parent, header, w.coinbase)
+		if err != nil {
+			log.Error("Failed to create sealing context", "err", err)
+			return nil, err
+		}
+		// Accumulate the uncles for the sealing work.
+		commitUncles := func(blocks map[common.Hash]*types.Block) {
+			for hash, uncle := range blocks {
+				if len(env.uncles) == 2 {
+					break
+				}
+				if err := w.commitUncle(env, uncle.Header()); err != nil {
+					log.Trace("Possible uncle rejected", "hash", hash, "reason", err)
+				} else {
+					log.Debug("Committing new uncle to block", "hash", hash)
+				}
 			}
 		}
+		// Prefer to locally generated uncle
+		commitUncles(w.localUncles)
+		commitUncles(w.remoteUncles)
+		return env, nil
+	} else {
+		return &environment{header: header}, nil
 	}
-	// Prefer to locally generated uncle
-	commitUncles(w.localUncles)
-	commitUncles(w.remoteUncles)
 
-	return env, nil
 }
 
 // fillTransactions retrieves the pending transactions from the txpool and fills them

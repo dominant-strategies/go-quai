@@ -44,7 +44,7 @@ type BodyDb struct {
 }
 
 func NewBodyDb(db ethdb.Database, engine consensus.Engine, hc *HeaderChain, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, vmConfig vm.Config) (*BodyDb, error) {
-
+	nodeCtx := common.NodeLocation.Context()
 	blockCache, _ := lru.New(blockCacheLimit)
 	bodyCache, _ := lru.New(bodyCacheLimit)
 	bodyRLPCache, _ := lru.New(bodyCacheLimit)
@@ -58,7 +58,10 @@ func NewBodyDb(db ethdb.Database, engine consensus.Engine, hc *HeaderChain, chai
 		bodyRLPCache: bodyRLPCache,
 	}
 
-	bc.processor = NewStateProcessor(chainConfig, hc, engine, vmConfig, cacheConfig)
+	// only start the state processor in zone
+	if nodeCtx == common.ZONE_CTX {
+		bc.processor = NewStateProcessor(chainConfig, hc, engine, vmConfig, cacheConfig)
+	}
 
 	return bc, nil
 }
@@ -69,10 +72,16 @@ func (bc *BodyDb) Append(batch ethdb.Batch, block *types.Block, newInboundEtxs t
 	defer bc.chainmu.Unlock()
 
 	stateApply := time.Now()
-	// Process our block
-	logs, err := bc.processor.Apply(batch, block, newInboundEtxs)
-	if err != nil {
-		return nil, err
+	nodeCtx := common.NodeLocation.Context()
+	var logs []*types.Log
+	var err error
+	if nodeCtx == common.ZONE_CTX {
+		// Process our block
+		logs, err = bc.processor.Apply(batch, block, newInboundEtxs)
+		if err != nil {
+			return nil, err
+		}
+		rawdb.WriteTxLookupEntriesByBlock(batch, block)
 	}
 	log.Info("Time taken to", "apply state:", common.PrettyDuration(time.Since(stateApply)))
 
@@ -81,8 +90,6 @@ func (bc *BodyDb) Append(batch ethdb.Batch, block *types.Block, newInboundEtxs t
 		return nil, errors.New("state roots do not match header, append fail")
 	}
 	rawdb.WriteBlock(batch, block)
-	rawdb.WriteTxLookupEntriesByBlock(batch, block)
-
 	return logs, nil
 }
 
