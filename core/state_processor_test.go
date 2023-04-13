@@ -63,7 +63,6 @@ func TestPrecompile(t *testing.T) {
 				},
 			},
 			GasLimit:   []uint64{params.GenesisGasLimit, params.GenesisGasLimit, params.GenesisGasLimit},
-			Difficulty: []*big.Int{common.Big0, common.Big0, common.Big0},
 			ParentHash: []common.Hash{common.HexToHash("0"), common.HexToHash("0"), common.HexToHash("0")},
 			BaseFee:    []*big.Int{common.Big0, common.Big0, common.Big0},
 		}
@@ -150,7 +149,6 @@ func TestCreateETX(t *testing.T) {
 				},
 			},
 			GasLimit:   []uint64{params.GenesisGasLimit, params.GenesisGasLimit, params.GenesisGasLimit},
-			Difficulty: []*big.Int{common.Big0, common.Big0, common.Big0},
 			ParentHash: []common.Hash{common.HexToHash("0"), common.HexToHash("0"), common.HexToHash("0")},
 			BaseFee:    []*big.Int{common.Big0, common.Big0, common.Big0},
 		}
@@ -216,7 +214,6 @@ func TestExternalTokenTransfer(t *testing.T) {
 				},
 			},
 			GasLimit:   []uint64{params.GenesisGasLimit, params.GenesisGasLimit, params.GenesisGasLimit},
-			Difficulty: []*big.Int{common.Big0, common.Big0, common.Big0},
 			ParentHash: []common.Hash{common.HexToHash("0"), common.HexToHash("0"), common.HexToHash("0")},
 			BaseFee:    []*big.Int{common.Big0, common.Big0, common.Big0},
 		}
@@ -401,7 +398,6 @@ func TestInboundETX(t *testing.T) {
 			Config:     params.TestChainConfig,
 			Alloc:      GenesisAlloc{},
 			GasLimit:   []uint64{params.GenesisGasLimit, params.GenesisGasLimit, params.GenesisGasLimit},
-			Difficulty: []*big.Int{common.Big0, common.Big0, common.Big0},
 			ParentHash: []common.Hash{common.HexToHash("0"), common.HexToHash("0"), common.HexToHash("0")},
 			BaseFee:    []*big.Int{common.Big0, common.Big0, common.Big0},
 		}
@@ -443,6 +439,11 @@ func TestInboundETX(t *testing.T) {
 	t.Log(balance.Int64())
 }
 
+func TestEffectiveGasTipCmp(t *testing.T) {
+	internal_tx := types.InternalToExternalTx{ChainID: params.LocalChainConfig.ChainID, Nonce: 0, GasTipCap: big.NewInt(1), GasFeeCap: big.NewInt(params.GWei), ETXGasPrice: big.NewInt(2 * params.GWei), ETXGasLimit: 21000, ETXGasTip: big.NewInt(1), Gas: 21000 * 2, To: &common.ZeroAddr, Value: big.NewInt(1), Data: nil, AccessList: types.AccessList{}}
+	t.Log(types.NewTx(&internal_tx).EffectiveGasTipIntCmp(big.NewInt(params.GWei), big.NewInt(params.GWei)))
+}
+
 func TestInvalidInboundETX(t *testing.T) {
 	// Create a simple chain to verify
 	var statedb *state.StateDB
@@ -460,7 +461,6 @@ func TestInvalidInboundETX(t *testing.T) {
 				},
 			},
 			GasLimit:   []uint64{params.GenesisGasLimit, params.GenesisGasLimit, params.GenesisGasLimit},
-			Difficulty: []*big.Int{common.Big0, common.Big0, common.Big0},
 			ParentHash: []common.Hash{common.HexToHash("0"), common.HexToHash("0"), common.HexToHash("0")},
 			BaseFee:    []*big.Int{common.Big0, common.Big0, common.Big0},
 		}
@@ -505,7 +505,6 @@ func TestOpETX(t *testing.T) {
 				},
 			},
 			GasLimit:   []uint64{params.GenesisGasLimit, params.GenesisGasLimit, params.GenesisGasLimit},
-			Difficulty: []*big.Int{common.Big0, common.Big0, common.Big0},
 			ParentHash: []common.Hash{common.HexToHash("0"), common.HexToHash("0"), common.HexToHash("0")},
 			BaseFee:    []*big.Int{common.Big0, common.Big0, common.Big0},
 		}

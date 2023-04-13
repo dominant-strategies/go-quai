@@ -551,7 +551,7 @@ func (pool *TxPool) TxPoolPending(enforceTips bool, etxSet types.EtxSet) (map[co
 			}
 			// If the miner requests tip enforcement, cap the lists now
 			if enforceTips && tx.EffectiveGasTipIntCmp(pool.gasPrice, pool.priced.urgent.baseFee) < 0 {
-				log.Debug("ETX has incorrect or low gas price", "tx", tx.Hash().String(), "gasPrice", tx.GasPrice().String(), "poolGasPrice", pool.gasPrice.String(), "baseFee", pool.priced.urgent.baseFee.String())
+				log.Debug("ETX has incorrect or low miner tip", "tx", tx.Hash().String(), "gasTipCap", tx.GasTipCap().String(), "poolGasPrice", pool.gasPrice.String(), "baseFee", pool.priced.urgent.baseFee.String())
 				continue // skip this tx
 			}
 			pending[addr.Bytes20()] = append(pending[addr.Bytes20()], &tx) // ETXs do not have to be sorted by address but this way all TXs are in the same list
