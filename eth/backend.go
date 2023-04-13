@@ -89,7 +89,7 @@ type Ethereum struct {
 // New creates a new Ethereum object (including the
 // initialisation of the common Ethereum object)
 func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
-
+	nodeCtx := common.NodeLocation.Context()
 	// Ensure configuration values are compatible and sane
 	if !config.SyncMode.IsValid() {
 		return nil, fmt.Errorf("invalid sync mode %d", config.SyncMode)
@@ -211,11 +211,14 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if eth.APIBackend.allowUnprotectedTxs {
 		log.Info("Unprotected transactions allowed")
 	}
-	gpoParams := config.GPO
-	if gpoParams.Default == nil {
-		gpoParams.Default = config.Miner.GasPrice
+	// Gasprice oracle is only initiated in zone chains
+	if nodeCtx == common.ZONE_CTX {
+		gpoParams := config.GPO
+		if gpoParams.Default == nil {
+			gpoParams.Default = config.Miner.GasPrice
+		}
+		eth.APIBackend.gpo = gasprice.NewOracle(eth.APIBackend, gpoParams)
 	}
-	eth.APIBackend.gpo = gasprice.NewOracle(eth.APIBackend, gpoParams)
 
 	// Setup DNS discovery iterators.
 	dnsclient := dnsdisc.NewClient(dnsdisc.Config{})

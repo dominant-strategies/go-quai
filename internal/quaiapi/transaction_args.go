@@ -175,6 +175,10 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 // core evm. This method is used in calls and traces that do not require a real
 // live transaction.
 func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (types.Message, error) {
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx != common.ZONE_CTX {
+		return types.Message{}, errors.New("toMessage can only called in zone chain")
+	}
 	// Reject invalid combinations of pre- and post-1559 fee styles
 	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
 		return types.Message{}, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")

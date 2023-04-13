@@ -189,6 +189,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 // runEthPeer registers an eth peer into the joint eth peerset, adds it to
 // various subsistems and starts handling messages.
 func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
+	nodeCtx := common.NodeLocation.Context()
 	// TODO(karalabe): Not sure why this is needed
 	if !h.chainSync.handlePeerEvent(peer) {
 		return p2p.DiscQuitting
@@ -236,9 +237,11 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 
 	h.chainSync.handlePeerEvent(peer)
 
-	// Propagate existing transactions. new transactions appearing
-	// after this will be sent via broadcasts.
-	h.syncTransactions(peer)
+	if nodeCtx == common.ZONE_CTX {
+		// Propagate existing transactions. new transactions appearing
+		// after this will be sent via broadcasts.
+		h.syncTransactions(peer)
+	}
 
 	// If we have any explicit whitelist block hashes, request them
 	for number := range h.whitelist {
@@ -286,11 +289,14 @@ func (h *handler) unregisterPeer(id string) {
 func (h *handler) Start(maxPeers int) {
 	h.maxPeers = maxPeers
 
-	// broadcast transactions
-	h.wg.Add(1)
-	h.txsCh = make(chan core.NewTxsEvent, txChanSize)
-	h.txsSub = h.txpool.SubscribeNewTxsEvent(h.txsCh)
-	go h.txBroadcastLoop()
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx == common.ZONE_CTX {
+		// broadcast transactions
+		h.wg.Add(1)
+		h.txsCh = make(chan core.NewTxsEvent, txChanSize)
+		h.txsSub = h.txpool.SubscribeNewTxsEvent(h.txsCh)
+		go h.txBroadcastLoop()
+	}
 
 	// broadcast transactions
 	h.wg.Add(1)
@@ -309,9 +315,12 @@ func (h *handler) Start(maxPeers int) {
 	go h.minedBroadcastLoop()
 
 	// start sync handlers
-	h.wg.Add(2)
+	h.wg.Add(1)
 	go h.chainSync.loop()
-	go h.txsyncLoop64() // TODO(karalabe): Legacy initial tx echange, drop with eth/64.
+	if nodeCtx == common.ZONE_CTX {
+		h.wg.Add(1)
+		go h.txsyncLoop64() // TODO(karalabe): Legacy initial tx echange, drop with eth/64.
+	}
 
 	h.wg.Add(1)
 	h.missingBodyCh = make(chan *types.Header, missingBodyChanSize)
@@ -320,7 +329,10 @@ func (h *handler) Start(maxPeers int) {
 }
 
 func (h *handler) Stop() {
-	h.txsSub.Unsubscribe()                // quits txBroadcastLoop
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx == common.ZONE_CTX {
+		h.txsSub.Unsubscribe() // quits txBroadcastLoop
+	}
 	h.minedBlockSub.Unsubscribe()         // quits blockBroadcastLoop
 	h.missingBodySub.Unsubscribe()        // quits missingBodyLoop
 	h.missingPendingEtxsSub.Unsubscribe() // quits pendingEtxsBroadcastLoop

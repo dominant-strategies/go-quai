@@ -110,8 +110,9 @@ type Backend interface {
 }
 
 func GetAPIs(apiBackend Backend) []rpc.API {
+	nodeCtx := common.NodeLocation.Context()
 	nonceLock := new(AddrLocker)
-	return []rpc.API{
+	apis := []rpc.API{
 		{
 			Namespace: "eth",
 			Version:   "1.0",
@@ -133,21 +134,6 @@ func GetAPIs(apiBackend Backend) []rpc.API {
 			Service:   NewPublicBlockChainQuaiAPI(apiBackend),
 			Public:    true,
 		}, {
-			Namespace: "eth",
-			Version:   "1.0",
-			Service:   NewPublicTransactionPoolAPI(apiBackend, nonceLock),
-			Public:    true,
-		}, {
-			Namespace: "quai",
-			Version:   "1.0",
-			Service:   NewPublicTransactionPoolAPI(apiBackend, nonceLock),
-			Public:    true,
-		}, {
-			Namespace: "txpool",
-			Version:   "1.0",
-			Service:   NewPublicTxPoolAPI(apiBackend),
-			Public:    true,
-		}, {
 			Namespace: "debug",
 			Version:   "1.0",
 			Service:   NewPublicDebugAPI(apiBackend),
@@ -158,4 +144,26 @@ func GetAPIs(apiBackend Backend) []rpc.API {
 			Service:   NewPrivateDebugAPI(apiBackend),
 		},
 	}
+	if nodeCtx == common.ZONE_CTX {
+		apis = append(apis, rpc.API{
+			Namespace: "eth",
+			Version:   "1.0",
+			Service:   NewPublicTransactionPoolAPI(apiBackend, nonceLock),
+			Public:    true,
+		})
+		apis = append(apis, rpc.API{
+			Namespace: "quai",
+			Version:   "1.0",
+			Service:   NewPublicTransactionPoolAPI(apiBackend, nonceLock),
+			Public:    true,
+		})
+		apis = append(apis, rpc.API{
+			Namespace: "txpool",
+			Version:   "1.0",
+			Service:   NewPublicTxPoolAPI(apiBackend),
+			Public:    true,
+		})
+	}
+
+	return apis
 }

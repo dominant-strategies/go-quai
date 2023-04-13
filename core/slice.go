@@ -96,7 +96,10 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 	}
 	sl.validator = NewBlockValidator(chainConfig, sl.hc, engine)
 
-	sl.txPool = NewTxPool(*txConfig, chainConfig, sl.hc)
+	// tx pool is only used in zone
+	if nodeCtx == common.ZONE_CTX {
+		sl.txPool = NewTxPool(*txConfig, chainConfig, sl.hc)
+	}
 	sl.miner = New(sl.hc, sl.txPool, config, db, chainConfig, engine, isLocalBlock)
 
 	sl.phCache = make(map[common.Hash]types.PendingHeader)
@@ -616,6 +619,16 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 			combinedPendingHeader = sl.combinePendingHeader(pendingHeader.Header, combinedPendingHeader, i)
 		}
 		if nodeCtx == common.ZONE_CTX {
+			combinedPendingHeader.SetUncleHash(localPendingHeader.Header.UncleHash())
+			combinedPendingHeader.SetTxHash(localPendingHeader.Header.TxHash())
+			combinedPendingHeader.SetEtxHash(localPendingHeader.Header.EtxHash())
+			combinedPendingHeader.SetReceiptHash(localPendingHeader.Header.ReceiptHash())
+			combinedPendingHeader.SetRoot(localPendingHeader.Header.Root())
+			combinedPendingHeader.SetCoinbase(localPendingHeader.Header.Coinbase())
+			combinedPendingHeader.SetBloom(localPendingHeader.Header.Bloom())
+			combinedPendingHeader.SetBaseFee(localPendingHeader.Header.BaseFee())
+			combinedPendingHeader.SetGasLimit(localPendingHeader.Header.GasLimit())
+			combinedPendingHeader.SetGasUsed(localPendingHeader.Header.GasUsed())
 			combinedPendingHeader.SetDifficulty(localPendingHeader.Header.Difficulty())
 			combinedPendingHeader.SetLocation(common.NodeLocation)
 		}
@@ -892,6 +905,7 @@ func (sl *Slice) loadLastState() error {
 
 // Stop stores the phCache and the sl.pendingHeader hash value to the db.
 func (sl *Slice) Stop() {
+	nodeCtx := common.NodeLocation.Context()
 	// write the ph head hash to the db.
 	rawdb.WriteBestPhKey(sl.sliceDb, sl.bestPhKey)
 	// Write the ph cache to the dd.
@@ -903,7 +917,9 @@ func (sl *Slice) Stop() {
 	close(sl.quit)
 
 	sl.hc.Stop()
-	sl.txPool.Stop()
+	if nodeCtx == common.ZONE_CTX {
+		sl.txPool.Stop()
+	}
 	sl.miner.Stop()
 }
 
