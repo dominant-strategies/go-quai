@@ -482,6 +482,12 @@ func (s *PublicBlockChainQuaiAPI) rpcMarshalBlock(ctx context.Context, b *types.
 	if err != nil {
 		return nil, err
 	}
+	// return order of the block in the api
+	order, err := b.Header().CalcOrder()
+	if err != nil {
+		return nil, err
+	}
+	fields["order"] = order
 	if inclTx {
 		fields["totalEntropy"] = (*hexutil.Big)(b.Header().CalcS())
 	}
