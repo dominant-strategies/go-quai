@@ -55,37 +55,50 @@ func NewBlockValidator(config *params.ChainConfig, headerChain *HeaderChain, eng
 func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	nodeCtx := common.NodeLocation.Context()
 	// Check whether the block's known, and if not, that it's linkable
-	if v.hc.bc.processor.HasBlockAndState(block.Hash(), block.NumberU64()) {
-		return ErrKnownBlock
-	}
-	// Header validity is known at this point, check the uncles and transactions
-	header := block.Header()
-	if err := v.engine.VerifyUncles(v.hc, block); err != nil {
-		return err
-	}
-	if hash := types.CalcUncleHash(block.Uncles()); hash != header.UncleHash() {
-		return fmt.Errorf("uncle root hash mismatch: have %x, want %x", hash, header.UncleHash())
-	}
-	if hash := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil)); hash != header.TxHash() {
-		return fmt.Errorf("transaction root hash mismatch: have %x, want %x", hash, header.TxHash())
-	}
-	if hash := types.DeriveSha(block.ExtTransactions(), trie.NewStackTrie(nil)); hash != header.EtxHash() {
-		return fmt.Errorf("external transaction root hash mismatch: have %x, want %x", hash, header.EtxHash())
+	if nodeCtx == common.ZONE_CTX {
+		if v.hc.bc.processor.HasBlockAndState(block.Hash(), block.NumberU64()) {
+			return ErrKnownBlock
+		}
 	}
 	// Subordinate manifest must match ManifestHash in subordinate context, _iff_
 	// we have a subordinate (i.e. if we are not a zone)
-	if nodeCtx < common.ZONE_CTX {
+	if nodeCtx != common.ZONE_CTX {
+		// Region nodes should have body with zero length txs and etxs
+		if len(block.Transactions()) != 0 {
+			return fmt.Errorf("region body has non zero transactions")
+		}
+		if len(block.ExtTransactions()) != 0 {
+			return fmt.Errorf("region body has non zero etx transactions")
+		}
+		if len(block.Uncles()) != 0 {
+			return fmt.Errorf("region body has non zero uncles")
+		}
 		subManifestHash := types.DeriveSha(block.SubManifest(), trie.NewStackTrie(nil))
 		if subManifestHash == types.EmptyRootHash || subManifestHash != header.ManifestHash(nodeCtx+1) {
 			// If we have a subordinate chain, it is impossible for the subordinate manifest to be empty
 			return ErrBadSubManifest
 		}
-	}
-	if !v.hc.bc.processor.HasBlockAndState(block.ParentHash(), block.NumberU64()-1) {
-		if !v.hc.bc.HasBlock(block.ParentHash(), block.NumberU64()-1) {
-			return consensus.ErrUnknownAncestor
+	} else {
+		// Header validity is known at this point, check the uncles and transactions
+		header := block.Header()
+		if err := v.engine.VerifyUncles(v.hc, block); err != nil {
+			return err
 		}
-		return consensus.ErrPrunedAncestor
+		if hash := types.CalcUncleHash(block.Uncles()); hash != header.UncleHash() {
+			return fmt.Errorf("uncle root hash mismatch: have %x, want %x", hash, header.UncleHash())
+		}
+		if hash := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil)); hash != header.TxHash() {
+			return fmt.Errorf("transaction root hash mismatch: have %x, want %x", hash, header.TxHash())
+		}
+		if hash := types.DeriveSha(block.ExtTransactions(), trie.NewStackTrie(nil)); hash != header.EtxHash() {
+			return fmt.Errorf("external transaction root hash mismatch: have %x, want %x", hash, header.EtxHash())
+		}
+		if !v.hc.bc.processor.HasBlockAndState(block.ParentHash(), block.NumberU64()-1) {
+			if !v.hc.bc.HasBlock(block.ParentHash(), block.NumberU64()-1) {
+				return consensus.ErrUnknownAncestor
+			}
+			return consensus.ErrPrunedAncestor
+		}
 	}
 	return nil
 }

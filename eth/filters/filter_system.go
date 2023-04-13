@@ -129,17 +129,26 @@ func NewEventSystem(backend Backend, lightMode bool) *EventSystem {
 		pendingHeaderCh: make(chan *types.Header),
 	}
 
+	nodeCtx := common.NodeLocation.Context()
 	// Subscribe events
-	m.txsSub = m.backend.SubscribeNewTxsEvent(m.txsCh)
-	m.logsSub = m.backend.SubscribeLogsEvent(m.logsCh)
-	m.rmLogsSub = m.backend.SubscribeRemovedLogsEvent(m.rmLogsCh)
+	if nodeCtx == common.ZONE_CTX {
+		m.txsSub = m.backend.SubscribeNewTxsEvent(m.txsCh)
+		m.logsSub = m.backend.SubscribeLogsEvent(m.logsCh)
+		m.rmLogsSub = m.backend.SubscribeRemovedLogsEvent(m.rmLogsCh)
+		m.pendingLogsSub = m.backend.SubscribePendingLogsEvent(m.pendingLogsCh)
+	}
 	m.chainSub = m.backend.SubscribeChainEvent(m.chainCh)
-	m.pendingLogsSub = m.backend.SubscribePendingLogsEvent(m.pendingLogsCh)
 	m.pendingHeaderSub = m.backend.SubscribePendingHeaderEvent(m.pendingHeaderCh)
 
 	// Make sure none of the subscriptions are empty
-	if m.txsSub == nil || m.logsSub == nil || m.rmLogsSub == nil || m.chainSub == nil || m.pendingLogsSub == nil {
-		log.Crit("Subscribe for event system failed")
+	if nodeCtx == common.ZONE_CTX {
+		if m.txsSub == nil || m.logsSub == nil || m.rmLogsSub == nil || m.chainSub == nil || m.pendingLogsSub == nil || m.pendingHeaderSub == nil {
+			log.Crit("Subscribe for event system failed")
+		}
+	} else {
+		if m.chainSub == nil {
+			log.Crit("Subscribe for event system failed")
+		}
 	}
 
 	go m.eventLoop()
@@ -470,12 +479,15 @@ func (es *EventSystem) handlePendingHeader(filters filterIndex, ev *types.Header
 
 // eventLoop (un)installs filters and processes mux events.
 func (es *EventSystem) eventLoop() {
+	nodeCtx := common.NodeLocation.Context()
 	// Ensure all subscriptions get cleaned up
 	defer func() {
-		es.txsSub.Unsubscribe()
-		es.logsSub.Unsubscribe()
-		es.rmLogsSub.Unsubscribe()
-		es.pendingLogsSub.Unsubscribe()
+		if nodeCtx == common.ZONE_CTX {
+			es.txsSub.Unsubscribe()
+			es.logsSub.Unsubscribe()
+			es.rmLogsSub.Unsubscribe()
+			es.pendingLogsSub.Unsubscribe()
+		}
 		es.chainSub.Unsubscribe()
 		es.pendingHeaderSub.Unsubscribe()
 	}()
@@ -485,6 +497,38 @@ func (es *EventSystem) eventLoop() {
 		index[i] = make(map[rpc.ID]*subscription)
 	}
 
+	if nodeCtx == common.ZONE_CTX {
+		go es.handleZoneEventLoop(index)
+	}
+
+	for {
+		select {
+		case ev := <-es.chainCh:
+			es.handleChainEvent(index, ev)
+		case ev := <-es.pendingHeaderCh:
+			es.handlePendingHeader(index, ev)
+
+		case f := <-es.install:
+			if f.typ != MinedAndPendingLogsSubscription {
+				index[f.typ][f.id] = f
+			}
+			close(f.installed)
+
+		case f := <-es.uninstall:
+			if f.typ != MinedAndPendingLogsSubscription {
+				delete(index[f.typ], f.id)
+			}
+			close(f.err)
+
+		case <-es.chainSub.Err():
+			return
+		case <-es.pendingHeaderSub.Err():
+			return
+		}
+	}
+}
+
+func (es *EventSystem) handleZoneEventLoop(index filterIndex) {
 	for {
 		select {
 		case ev := <-es.txsCh:
@@ -495,11 +539,6 @@ func (es *EventSystem) eventLoop() {
 			es.handleRemovedLogs(index, ev)
 		case ev := <-es.pendingLogsCh:
 			es.handlePendingLogs(index, ev)
-		case ev := <-es.chainCh:
-			es.handleChainEvent(index, ev)
-		case ev := <-es.pendingHeaderCh:
-			es.handlePendingHeader(index, ev)
-
 		case f := <-es.install:
 			if f.typ == MinedAndPendingLogsSubscription {
 				// the type are logs and pending logs subscriptions
@@ -519,17 +558,12 @@ func (es *EventSystem) eventLoop() {
 				delete(index[f.typ], f.id)
 			}
 			close(f.err)
-
 		// System stopped
 		case <-es.txsSub.Err():
 			return
 		case <-es.logsSub.Err():
 			return
 		case <-es.rmLogsSub.Err():
-			return
-		case <-es.chainSub.Err():
-			return
-		case <-es.pendingHeaderSub.Err():
 			return
 		}
 	}

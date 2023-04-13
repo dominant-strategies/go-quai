@@ -52,6 +52,10 @@ func (b *QuaiAPIBackend) ChainConfig() *params.ChainConfig {
 }
 
 func (b *QuaiAPIBackend) TxPool() *core.TxPool {
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx != common.ZONE_CTX {
+		return nil
+	}
 	return b.eth.core.TxPool()
 }
 
@@ -141,6 +145,10 @@ func (b *QuaiAPIBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts
 }
 
 func (b *QuaiAPIBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.Header, error) {
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx != common.ZONE_CTX {
+		return nil, nil, errors.New("stateAndHeaderByNumber can only be called in zone chain")
+	}
 	// Pending state is only known by the miner
 	if number == rpc.PendingBlockNumber {
 		block, state := b.eth.core.Pending()
@@ -159,6 +167,10 @@ func (b *QuaiAPIBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.
 }
 
 func (b *QuaiAPIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error) {
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx != common.ZONE_CTX {
+		return nil, nil, errors.New("stateAndHeaderByNumberOrHash can only be called in zone chain")
+	}
 	if blockNr, ok := blockNrOrHash.Number(); ok {
 		return b.StateAndHeaderByNumber(ctx, blockNr)
 	}
@@ -180,10 +192,18 @@ func (b *QuaiAPIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, block
 }
 
 func (b *QuaiAPIBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx != common.ZONE_CTX {
+		return nil, errors.New("getReceipts can only be called in zone chain")
+	}
 	return b.eth.core.GetReceiptsByHash(hash), nil
 }
 
 func (b *QuaiAPIBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*types.Log, error) {
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx != common.ZONE_CTX {
+		return nil, errors.New("getLogs can only be called in zone chain")
+	}
 	receipts := b.eth.core.GetReceiptsByHash(hash)
 	if receipts == nil {
 		return nil, nil
@@ -197,6 +217,10 @@ func (b *QuaiAPIBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*ty
 
 func (b *QuaiAPIBackend) GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config) (*vm.EVM, func() error, error) {
 	vmError := func() error { return nil }
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx != common.ZONE_CTX {
+		return nil, vmError, errors.New("getEvm can only be called in zone chain")
+	}
 	if vmConfig == nil {
 		vmConfig = b.eth.core.GetVMConfig()
 	}
@@ -206,10 +230,18 @@ func (b *QuaiAPIBackend) GetEVM(ctx context.Context, msg core.Message, state *st
 }
 
 func (b *QuaiAPIBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx != common.ZONE_CTX {
+		return nil
+	}
 	return b.eth.Core().SubscribeRemovedLogsEvent(ch)
 }
 
 func (b *QuaiAPIBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription {
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx != common.ZONE_CTX {
+		return nil
+	}
 	return b.eth.core.SubscribePendingLogs(ch)
 }
 
@@ -226,14 +258,26 @@ func (b *QuaiAPIBackend) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) 
 }
 
 func (b *QuaiAPIBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx != common.ZONE_CTX {
+		return nil
+	}
 	return b.eth.Core().SubscribeLogsEvent(ch)
 }
 
 func (b *QuaiAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx != common.ZONE_CTX {
+		return errors.New("sendTx can only be called in zone chain")
+	}
 	return b.eth.Core().AddLocal(signedTx)
 }
 
 func (b *QuaiAPIBackend) GetPoolTransactions() (types.Transactions, error) {
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx != common.ZONE_CTX {
+		return nil, errors.New("getPoolTransactions can only be called in zone chain")
+	}
 	pending, err := b.eth.core.TxPoolPending(false)
 	if err != nil {
 		return nil, err
@@ -246,15 +290,27 @@ func (b *QuaiAPIBackend) GetPoolTransactions() (types.Transactions, error) {
 }
 
 func (b *QuaiAPIBackend) GetPoolTransaction(hash common.Hash) *types.Transaction {
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx != common.ZONE_CTX {
+		return nil
+	}
 	return b.eth.core.Get(hash)
 }
 
 func (b *QuaiAPIBackend) GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx != common.ZONE_CTX {
+		return nil, common.Hash{}, 0, 0, errors.New("getTransaction can only be called in zone chain")
+	}
 	tx, blockHash, blockNumber, index := rawdb.ReadTransaction(b.eth.ChainDb(), txHash)
 	return tx, blockHash, blockNumber, index, nil
 }
 
 func (b *QuaiAPIBackend) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx != common.ZONE_CTX {
+		return 0, errors.New("getPoolNonce can only be called in zone chain")
+	}
 	return b.eth.core.Nonce(addr), nil
 }
 
@@ -263,14 +319,26 @@ func (b *QuaiAPIBackend) Stats() (pending int, queued int) {
 }
 
 func (b *QuaiAPIBackend) TxPoolContent() (map[common.InternalAddress]types.Transactions, map[common.InternalAddress]types.Transactions) {
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx != common.ZONE_CTX {
+		return nil, nil
+	}
 	return b.eth.core.Content()
 }
 
 func (b *QuaiAPIBackend) TxPoolContentFrom(addr common.Address) (types.Transactions, types.Transactions) {
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx != common.ZONE_CTX {
+		return nil, nil
+	}
 	return b.eth.core.ContentFrom(addr)
 }
 
 func (b *QuaiAPIBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx != common.ZONE_CTX {
+		return nil
+	}
 	return b.eth.core.SubscribeNewTxsEvent(ch)
 }
 
@@ -279,6 +347,10 @@ func (b *QuaiAPIBackend) Downloader() *downloader.Downloader {
 }
 
 func (b *QuaiAPIBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx != common.ZONE_CTX {
+		return nil, errors.New("suggestTipCap can only be called in zone chain")
+	}
 	return b.gpo.SuggestTipCap(ctx)
 }
 
@@ -299,10 +371,18 @@ func (b *QuaiAPIBackend) ExtRPCEnabled() bool {
 }
 
 func (b *QuaiAPIBackend) RPCGasCap() uint64 {
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx != common.ZONE_CTX {
+		return 0
+	}
 	return b.eth.config.RPCGasCap
 }
 
 func (b *QuaiAPIBackend) RPCTxFeeCap() float64 {
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx != common.ZONE_CTX {
+		return 0
+	}
 	return b.eth.config.RPCTxFeeCap
 }
 
@@ -334,10 +414,18 @@ func (b *QuaiAPIBackend) StartMining(threads int) error {
 }
 
 func (b *QuaiAPIBackend) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, checkLive bool) (*state.StateDB, error) {
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx != common.ZONE_CTX {
+		return nil, errors.New("stateAtBlock can only be called in zone chain")
+	}
 	return b.eth.core.StateAtBlock(block, reexec, base, checkLive)
 }
 
 func (b *QuaiAPIBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, error) {
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx != common.ZONE_CTX {
+		return nil, vm.BlockContext{}, nil, errors.New("stateAtTransaction can only be called in zone chain")
+	}
 	return b.eth.core.StateAtTransaction(block, txIndex, reexec)
 }
 

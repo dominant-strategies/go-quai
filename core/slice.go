@@ -85,7 +85,10 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 	}
 	sl.validator = NewBlockValidator(chainConfig, sl.hc, engine)
 
-	sl.txPool = NewTxPool(*txConfig, chainConfig, sl.hc)
+	// tx pool is only used in zone
+	if nodeCtx == common.ZONE_CTX {
+		sl.txPool = NewTxPool(*txConfig, chainConfig, sl.hc)
+	}
 	sl.miner = New(sl.hc, sl.txPool, config, db, chainConfig, engine, isLocalBlock)
 
 	sl.phCache = make(map[common.Hash]types.PendingHeader)
@@ -544,11 +547,11 @@ func (sl *Slice) computePendingHeader(localPendingHeaderWithTermini types.Pendin
 	var newPh *types.Header
 
 	if exists {
-		newPh = sl.combinePendingHeader(localPendingHeaderWithTermini.Header, cachedPendingHeaderWithTermini.Header, nodeCtx)
+		newPh = sl.combinePendingHeader(localPendingHeaderWithTermini.Header, cachedPendingHeaderWithTermini.Header, nodeCtx, true)
 		return types.PendingHeader{Header: newPh, Termini: localPendingHeaderWithTermini.Termini}
 	} else {
 		if domOrigin {
-			newPh = sl.combinePendingHeader(localPendingHeaderWithTermini.Header, domPendingHeader, nodeCtx)
+			newPh = sl.combinePendingHeader(localPendingHeaderWithTermini.Header, domPendingHeader, nodeCtx, true)
 			return types.PendingHeader{Header: newPh, Termini: localPendingHeaderWithTermini.Termini}
 		}
 		return localPendingHeaderWithTermini
@@ -557,21 +560,14 @@ func (sl *Slice) computePendingHeader(localPendingHeaderWithTermini types.Pendin
 
 // updatePhCacheFromDom combines the recieved pending header with the pending header stored locally at a given terminus for specified context
 func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, terminiIndex int, indices []int) error {
-
-	nodeCtx := common.NodeLocation.Context()
 	hash := pendingHeader.Termini[terminiIndex]
 	localPendingHeader, exists := sl.phCache[hash]
 
 	if exists {
 		combinedPendingHeader := types.CopyHeader(localPendingHeader.Header)
 		for _, i := range indices {
-			combinedPendingHeader = sl.combinePendingHeader(pendingHeader.Header, combinedPendingHeader, i)
+			combinedPendingHeader = sl.combinePendingHeader(pendingHeader.Header, combinedPendingHeader, i, false)
 		}
-		if nodeCtx == common.ZONE_CTX {
-			combinedPendingHeader.SetDifficulty(localPendingHeader.Header.Difficulty())
-			combinedPendingHeader.SetLocation(common.NodeLocation)
-		}
-
 		sl.writeToPhCacheAndPickPhHead(types.PendingHeader{Header: combinedPendingHeader, Termini: localPendingHeader.Termini})
 
 		return nil
@@ -594,6 +590,7 @@ func (sl *Slice) writeToPhCacheAndPickPhHead(pendingHeaderWithTermini types.Pend
 	var deepCopyPendingHeaderWithTermini types.PendingHeader
 	newPhEntropy := pendingHeaderWithTermini.Header.CalcPhS()
 	deepCopyPendingHeaderWithTermini = types.PendingHeader{Header: types.CopyHeader(pendingHeaderWithTermini.Header), Termini: pendingHeaderWithTermini.Termini, Entropy: newPhEntropy}
+	deepCopyPendingHeaderWithTermini.Header.SetLocation(common.NodeLocation)
 	deepCopyPendingHeaderWithTermini.Header.SetTime(uint64(time.Now().Unix()))
 	if exist {
 		if sl.poem(newPhEntropy, oldPh.Entropy) {
@@ -736,7 +733,7 @@ func (sl *Slice) ConstructLocalMinedBlock(header *types.Header) (*types.Block, e
 }
 
 // combinePendingHeader updates the pending header at the given index with the value from given header.
-func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *types.Header, index int) *types.Header {
+func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *types.Header, index int, inSlice bool) *types.Header {
 	// copying the slPendingHeader and updating the copy to remove any shared memory access issues
 	combinedPendingHeader := types.CopyHeader(slPendingHeader)
 
@@ -746,18 +743,21 @@ func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *typ
 	combinedPendingHeader.SetManifestHash(header.ManifestHash(index), index)
 	combinedPendingHeader.SetParentEntropy(header.ParentEntropy(index), index)
 	combinedPendingHeader.SetParentDeltaS(header.ParentDeltaS(index), index)
-	combinedPendingHeader.SetEtxRollupHash(header.EtxRollupHash())
-	combinedPendingHeader.SetDifficulty(header.Difficulty())
-	combinedPendingHeader.SetUncleHash(header.UncleHash())
-	combinedPendingHeader.SetTxHash(header.TxHash())
-	combinedPendingHeader.SetEtxHash(header.EtxHash())
-	combinedPendingHeader.SetReceiptHash(header.ReceiptHash())
-	combinedPendingHeader.SetRoot(header.Root())
-	combinedPendingHeader.SetCoinbase(header.Coinbase())
-	combinedPendingHeader.SetBloom(header.Bloom())
-	combinedPendingHeader.SetBaseFee(header.BaseFee())
-	combinedPendingHeader.SetGasLimit(header.GasLimit())
-	combinedPendingHeader.SetGasUsed(header.GasUsed())
+
+	if inSlice {
+		combinedPendingHeader.SetEtxRollupHash(header.EtxRollupHash())
+		combinedPendingHeader.SetDifficulty(header.Difficulty())
+		combinedPendingHeader.SetUncleHash(header.UncleHash())
+		combinedPendingHeader.SetTxHash(header.TxHash())
+		combinedPendingHeader.SetEtxHash(header.EtxHash())
+		combinedPendingHeader.SetReceiptHash(header.ReceiptHash())
+		combinedPendingHeader.SetRoot(header.Root())
+		combinedPendingHeader.SetCoinbase(header.Coinbase())
+		combinedPendingHeader.SetBloom(header.Bloom())
+		combinedPendingHeader.SetBaseFee(header.BaseFee())
+		combinedPendingHeader.SetGasLimit(header.GasLimit())
+		combinedPendingHeader.SetGasUsed(header.GasUsed())
+	}
 
 	return combinedPendingHeader
 }
@@ -775,7 +775,7 @@ func (sl *Slice) NewGenesisPendingHeader(domPendingHeader *types.Header) {
 	if nodeCtx == common.PRIME_CTX {
 		domPendingHeader = types.CopyHeader(localPendingHeader)
 	} else {
-		domPendingHeader = sl.combinePendingHeader(localPendingHeader, domPendingHeader, nodeCtx)
+		domPendingHeader = sl.combinePendingHeader(localPendingHeader, domPendingHeader, nodeCtx, true)
 		domPendingHeader.SetLocation(common.NodeLocation)
 	}
 
@@ -844,6 +844,7 @@ func (sl *Slice) loadLastState() error {
 
 // Stop stores the phCache and the sl.pendingHeader hash value to the db.
 func (sl *Slice) Stop() {
+	nodeCtx := common.NodeLocation.Context()
 	// write the ph head hash to the db.
 	rawdb.WriteBestPhKey(sl.sliceDb, sl.bestPhKey)
 	// Write the ph cache to the dd.
@@ -855,7 +856,9 @@ func (sl *Slice) Stop() {
 	close(sl.quit)
 
 	sl.hc.Stop()
-	sl.txPool.Stop()
+	if nodeCtx == common.ZONE_CTX {
+		sl.txPool.Stop()
+	}
 	sl.miner.Stop()
 }
 

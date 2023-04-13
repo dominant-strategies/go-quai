@@ -17,6 +17,7 @@
 package eth
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -292,20 +293,31 @@ func handleNewBlock(backend Backend, msg Decoder, peer *Peer) error {
 	if err := ann.sanityCheck(); err != nil {
 		return err
 	}
-	if hash := types.CalcUncleHash(ann.Block.Uncles()); hash != ann.Block.UncleHash() {
-		log.Warn("Propagated block has invalid uncles", "peer", peer.id, "block hash", ann.Block.Hash(), "have", hash, "exp", ann.Block.UncleHash())
-		return nil // TODO(karalabe): return error eventually, but wait a few releases
-	}
-	if hash := types.DeriveSha(ann.Block.Transactions(), trie.NewStackTrie(nil)); hash != ann.Block.TxHash() {
-		log.Warn("Propagated block has invalid transaction", "peer", peer.id, "block hash", ann.Block.Hash(), "have", hash, "exp", ann.Block.TxHash())
-		return nil // TODO(karalabe): return error eventually, but wait a few releases
-	}
-	if hash := types.DeriveSha(ann.Block.ExtTransactions(), trie.NewStackTrie(nil)); hash != ann.Block.EtxHash() {
-		log.Warn("Propagated block has invalid external transaction", "peer", peer.id, "block hash", ann.Block.Hash(), "have", hash, "exp", ann.Block.EtxHash())
-		return nil // TODO(karalabe): return error eventually, but wait a few releases
-	}
-	// Dom nodes need to validate the subordinate manifest against the subordinate's manifesthash
-	if nodeCtx < common.ZONE_CTX {
+	// Making sure that the region and prime chains have zero txs and etxs in them
+	if nodeCtx == common.ZONE_CTX {
+		if hash := types.CalcUncleHash(ann.Block.Uncles()); hash != ann.Block.UncleHash() {
+			log.Warn("Propagated block has invalid uncles", "have", hash, "exp", ann.Block.UncleHash())
+			return nil // TODO(karalabe): return error eventually, but wait a few releases
+		}
+		if hash := types.DeriveSha(ann.Block.Transactions(), trie.NewStackTrie(nil)); hash != ann.Block.TxHash() {
+			log.Warn("Propagated block has invalid transaction", "have", hash, "exp", ann.Block.TxHash())
+			return nil // TODO(karalabe): return error eventually, but wait a few releases
+		}
+		if hash := types.DeriveSha(ann.Block.ExtTransactions(), trie.NewStackTrie(nil)); hash != ann.Block.EtxHash() {
+			log.Warn("Propagated block has invalid external transaction", "have", hash, "exp", ann.Block.EtxHash())
+			return nil // TODO(karalabe): return error eventually, but wait a few releases
+		}
+	} else {
+		if len(ann.Block.Transactions()) != 0 {
+			log.Warn("Propagated block has transactions in the body", "len", len(ann.Block.Transactions()))
+		}
+		if len(ann.Block.ExtTransactions()) != 0 {
+			log.Warn("Propagated block has ext transactions in the body", "len", len(ann.Block.ExtTransactions()))
+		}
+		if len(ann.Block.Uncles()) != 0 {
+			log.Warn("Propagated block has uncles in the body", "len", len(ann.Block.Uncles()))
+		}
+		// Dom nodes need to validate the subordinate manifest against the subordinate's manifesthash
 		if hash := types.DeriveSha(ann.Block.SubManifest(), trie.NewStackTrie(nil)); hash != ann.Block.ManifestHash(nodeCtx+1) {
 			log.Warn("Propagated block has invalid subordinate manifest", "peer", peer.id, "block hash", ann.Block.Hash(), "have", hash, "exp", ann.Block.ManifestHash())
 			return nil
@@ -401,6 +413,10 @@ func handleReceipts66(backend Backend, msg Decoder, peer *Peer) error {
 }
 
 func handleNewPooledTransactionHashes(backend Backend, msg Decoder, peer *Peer) error {
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx != common.ZONE_CTX {
+		return errors.New("transactions are only handled in zone")
+	}
 	// New transaction announcement arrived, make sure we have
 	// a valid and fresh chain to handle them
 	if !backend.AcceptTxs() {
@@ -418,6 +434,10 @@ func handleNewPooledTransactionHashes(backend Backend, msg Decoder, peer *Peer) 
 }
 
 func handleGetPooledTransactions(backend Backend, msg Decoder, peer *Peer) error {
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx != common.ZONE_CTX {
+		return errors.New("transactions are only handled in zone")
+	}
 	// Decode the pooled transactions retrieval message
 	var query GetPooledTransactionsPacket
 	if err := msg.Decode(&query); err != nil {
@@ -466,6 +486,10 @@ func answerGetPooledTransactions(backend Backend, query GetPooledTransactionsPac
 }
 
 func handleTransactions(backend Backend, msg Decoder, peer *Peer) error {
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx != common.ZONE_CTX {
+		return errors.New("transactions are only handled in zone")
+	}
 	// Transactions arrived, make sure we have a valid and fresh chain to handle them
 	if !backend.AcceptTxs() {
 		return nil
@@ -486,6 +510,10 @@ func handleTransactions(backend Backend, msg Decoder, peer *Peer) error {
 }
 
 func handlePooledTransactions(backend Backend, msg Decoder, peer *Peer) error {
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx != common.ZONE_CTX {
+		return errors.New("transactions are only handled in zone")
+	}
 	// Transactions arrived, make sure we have a valid and fresh chain to handle them
 	if !backend.AcceptTxs() {
 		return nil
@@ -506,6 +534,10 @@ func handlePooledTransactions(backend Backend, msg Decoder, peer *Peer) error {
 }
 
 func handlePooledTransactions66(backend Backend, msg Decoder, peer *Peer) error {
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx != common.ZONE_CTX {
+		return errors.New("transactions are only handled in zone")
+	}
 	// Transactions arrived, make sure we have a valid and fresh chain to handle them
 	if !backend.AcceptTxs() {
 		return nil

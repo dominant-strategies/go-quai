@@ -190,12 +190,15 @@ func (cs *chainSyncer) handlePeerEvent(peer *eth.Peer) bool {
 
 // loop runs in its own goroutine and launches the sync when necessary.
 func (cs *chainSyncer) loop() {
+	nodeCtx := common.NodeLocation.Context()
 	defer cs.handler.wg.Done()
 
-	cs.handler.blockFetcher.Start()
-	cs.handler.txFetcher.Start()
+	if nodeCtx == common.ZONE_CTX {
+		cs.handler.blockFetcher.Start()
+		cs.handler.txFetcher.Start()
+		defer cs.handler.txFetcher.Stop()
+	}
 	defer cs.handler.blockFetcher.Stop()
-	defer cs.handler.txFetcher.Stop()
 	defer cs.handler.downloader.Terminate()
 
 	// The force timer lowers the peer count threshold down to one when it fires.
