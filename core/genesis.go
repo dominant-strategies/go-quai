@@ -376,7 +376,7 @@ func DefaultColosseumGenesisBlock() *Genesis {
 		Config:     params.ColosseumChainConfig,
 		Nonce:      66,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
-		GasLimit:   []uint64{1000000, 1000000, 1000000},
+		GasLimit:   []uint64{160000000, 160000000, 160000000},
 		Difficulty: big.NewInt(2048576),
 		Alloc:      decodePrealloc(colosseumAllocData),
 	}
@@ -388,7 +388,7 @@ func DefaultGardenGenesisBlock() *Genesis {
 		Config:     params.GardenChainConfig,
 		Nonce:      67,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
-		GasLimit:   []uint64{1000000, 1000000, 1000000},
+		GasLimit:   []uint64{160000000, 160000000, 160000000},
 		Difficulty: big.NewInt(441092),
 		Alloc:      decodePrealloc(gardenAllocData),
 	}
@@ -400,8 +400,8 @@ func DefaultOrchardGenesisBlock() *Genesis {
 		Config:     params.OrchardChainConfig,
 		Nonce:      68,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
-		GasLimit:   []uint64{1000000, 1000000, 1000000},
-		Difficulty: big.NewInt(2048576),
+		GasLimit:   []uint64{160000000, 160000000, 160000000},
+		Difficulty: big.NewInt(2500000),
 		Alloc:      decodePrealloc(orchardAllocData),
 	}
 }
@@ -412,7 +412,7 @@ func DefaultGalenaGenesisBlock() *Genesis {
 		Config:     params.GalenaChainConfig,
 		Nonce:      68,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
-		GasLimit:   []uint64{1000000, 1000000, 1000000},
+		GasLimit:   []uint64{160000000, 160000000, 160000000},
 		Difficulty: big.NewInt(8800000000),
 		Alloc:      decodePrealloc(galenaAllocData),
 	}
@@ -424,7 +424,7 @@ func DefaultLocalGenesisBlock() *Genesis {
 		Config:     params.LocalChainConfig,
 		Nonce:      67,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
-		GasLimit:   []uint64{1000000, 1000000, 1000000},
+		GasLimit:   []uint64{160000000, 160000000, 160000000},
 		Difficulty: big.NewInt(300000),
 		Alloc:      decodePrealloc(localAllocData),
 	}
