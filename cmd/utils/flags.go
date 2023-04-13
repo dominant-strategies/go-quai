@@ -680,6 +680,9 @@ func MakeDataDir(ctx *cli.Context) string {
 			// Local database in `local` instead of `testnet`.
 			path = filepath.Join(path, "local")
 		}
+		if ctx.GlobalBool(GalenaFlag.Name) {
+			path = filepath.Join(path, "galena")
+		}
 		// Set specific directory for node location within the hierarchy
 		switch common.NodeLocation.Context() {
 		case common.PRIME_CTX:
@@ -1097,6 +1100,8 @@ func setDataDir(ctx *cli.Context, cfg *node.Config) {
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "garden")
 	case ctx.GlobalBool(OrchardFlag.Name) && cfg.DataDir == node.DefaultDataDir():
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "orchard")
+	case ctx.GlobalBool(GalenaFlag.Name) && cfg.DataDir == node.DefaultDataDir():
+		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "galena")
 	case ctx.GlobalBool(LocalFlag.Name) && cfg.DataDir == node.DefaultDataDir():
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "local")
 	}
@@ -1309,7 +1314,7 @@ func SetGlobalVars(ctx *cli.Context) {
 // SetEthConfig applies eth-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Avoid conflicting network flags
-	CheckExclusive(ctx, ColosseumFlag, DeveloperFlag, GardenFlag, OrchardFlag, LocalFlag)
+	CheckExclusive(ctx, ColosseumFlag, DeveloperFlag, GardenFlag, OrchardFlag, LocalFlag, GalenaFlag)
 	CheckExclusive(ctx, DeveloperFlag, ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer
 
 	if ctx.GlobalString(GCModeFlag.Name) == "archive" && ctx.GlobalUint64(TxLookupLimitFlag.Name) != 0 {
@@ -1456,6 +1461,12 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		}
 		cfg.Genesis = core.DefaultLocalGenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, params.LocalGenesisHash)
+	case ctx.GlobalBool(GalenaFlag.Name):
+		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
+			cfg.NetworkId = 5
+		}
+		cfg.Genesis = core.DefaultGalenaGenesisBlock()
+		SetDNSDiscoveryDefaults(cfg, params.GalenaGenesisHash)
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1337

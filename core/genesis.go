@@ -406,10 +406,10 @@ func DefaultOrchardGenesisBlock() *Genesis {
 	}
 }
 
-// DefaultGalenaGenesisBlock returns the Orchard testnet genesis block.
+// DefaultGalenaGenesisBlock returns the Galena testnet genesis block.
 func DefaultGalenaGenesisBlock() *Genesis {
 	return &Genesis{
-		Config:     params.OrchardChainConfig,
+		Config:     params.GalenaChainConfig,
 		Nonce:      68,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
 		GasLimit:   []uint64{1000000, 1000000, 1000000},

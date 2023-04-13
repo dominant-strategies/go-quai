@@ -29,7 +29,7 @@ var (
 	GardenGenesisHash    = common.HexToHash("0x779f1d7a78675498ba77bc5b47d54fd76033d6e8e89729216ecf365a71c8736c")
 	OrchardGenesisHash   = common.HexToHash("0xdc2c8f2c92e18ab8673b8b6291bc02350191f14161c4d881b741d3fb081996f7")
 	LocalGenesisHash     = common.HexToHash("0xe0858f853c8965341f99c1baf54aa3404f5e5480226e895c7489dfc77cb69deb")
-	GalenaGenesisHash	 = common.HexToHash("0xa5951ca01396546d238c8c900c86bd10894905a04c3f6902142345aabbff7947")
+	GalenaGenesisHash    = common.HexToHash("0xcd0fcd7930a0b2d597548641e5ca2600183b07ae45f7852bf5ec270769903a75")
 )
 
 var (
@@ -96,7 +96,7 @@ var (
 		GenesisHash:         OrchardGenesisHash,
 	}
 
-	// GalenaChainConfig contains the chain parameters to run a node on the Orchard test network.
+	// GalenaChainConfig contains the chain parameters to run a node on the Galena test network.
 	GalenaChainConfig = &ChainConfig{
 		ChainID:             big.NewInt(17000),
 		HomesteadBlock:      big.NewInt(0),
@@ -116,7 +116,6 @@ var (
 		Blake3pow:           new(Blake3powConfig),
 		GenesisHash:         GalenaGenesisHash,
 	}
-	
 
 	// LocalChainConfig contains the chain parameters to run a node on the Local test network.
 	LocalChainConfig = &ChainConfig{
