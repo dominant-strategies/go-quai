@@ -855,7 +855,7 @@ func (h *Header) CalcOrder() (int, error) {
 	// Prime case
 	primeEntropyThreshold := new(big.Int).Mul(timeFactorHierarchyDepthMultiple, timeFactorHierarchyDepthMultiple)
 	primeEntropyThreshold = new(big.Int).Mul(primeEntropyThreshold, zoneThresholdS)
-	primeBlockThreshold := new(big.Int).Quo(primeEntropyThreshold, big.NewInt(10))
+	primeBlockThreshold := new(big.Int).Quo(primeEntropyThreshold, big.NewInt(2))
 	primeEntropyThreshold = new(big.Int).Sub(primeEntropyThreshold, primeBlockThreshold)
 
 	primeBlockEntropyThresholdAdder, _ := mathutil.BinaryLog(primeBlockThreshold, 8)
@@ -869,7 +869,7 @@ func (h *Header) CalcOrder() (int, error) {
 
 	// Region case
 	regionEntropyThreshold := new(big.Int).Mul(timeFactorHierarchyDepthMultiple, zoneThresholdS)
-	regionBlockThreshold := new(big.Int).Quo(regionEntropyThreshold, big.NewInt(10))
+	regionBlockThreshold := new(big.Int).Quo(regionEntropyThreshold, big.NewInt(2))
 	regionEntropyThreshold = new(big.Int).Sub(regionEntropyThreshold, regionBlockThreshold)
 
 	regionBlockEntropyThresholdAdder, _ := mathutil.BinaryLog(regionBlockThreshold, 8)
