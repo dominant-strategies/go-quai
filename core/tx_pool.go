@@ -89,7 +89,7 @@ var (
 
 var (
 	evictionInterval    = time.Minute     // Time interval to check for evictable transactions
-	statsReportInterval = 8 * time.Second // Time interval to report transaction pool stats
+	statsReportInterval = 1 * time.Minute // Time interval to report transaction pool stats
 )
 
 var (
@@ -326,7 +326,6 @@ func (pool *TxPool) loop() {
 	defer pool.wg.Done()
 
 	var (
-		prevPending, prevQueued, prevStales int
 		// Start the stats reporting and transaction eviction tickers
 		report  = time.NewTicker(statsReportInterval)
 		evict   = time.NewTicker(evictionInterval)
@@ -359,11 +358,7 @@ func (pool *TxPool) loop() {
 			stales := pool.priced.stales
 			pool.mu.RUnlock()
 
-			if pending != prevPending || queued != prevQueued || stales != prevStales {
-				log.Debug("Transaction pool status report", "executable", pending, "queued", queued, "stales", stales)
-				prevPending, prevQueued, prevStales = pending, queued, stales
-			}
-
+			log.Info("Transaction pool status report", "executable", pending, "queued", queued, "stales", stales)
 		// Handle inactive account transaction eviction
 		case <-evict.C:
 			pool.mu.Lock()
