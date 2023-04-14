@@ -74,6 +74,7 @@ func NewEVMTxContext(msg Message) vm.TxContext {
 		ETXGasLimit:   msg.ETXGasLimit(),
 		ETXGasPrice:   msg.ETXGasPrice(),
 		ETXGasTip:     msg.ETXGasTip(),
+		TXGasTip:      msg.GasTipCap(),
 		ETXData:       msg.ETXData(),
 		ETXAccessList: msg.ETXAccessList(),
 	}

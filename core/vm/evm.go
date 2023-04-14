@@ -83,6 +83,7 @@ type TxContext struct {
 	ETXGasLimit   uint64
 	ETXGasPrice   *big.Int
 	ETXGasTip     *big.Int
+	TXGasTip      *big.Int
 	ETXData       []byte
 	ETXAccessList types.AccessList
 }
@@ -517,7 +518,7 @@ func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, etxGas
 
 	// Verify address is not in context
 	if common.IsInChainScope(toAddr.Bytes()) {
-		return []byte{}, 0, fmt.Errorf("%x is in chain scope, but CreateETX was called\n", toAddr)
+		return []byte{}, 0, fmt.Errorf("%x is in chain scope, but CreateETX was called", toAddr)
 	}
 	if gas < params.ETXGas {
 		return []byte{}, 0, fmt.Errorf("CreateETX error: %d is not sufficient gas, required amount: %d", gas, params.ETXGas)
@@ -538,7 +539,7 @@ func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, etxGas
 	total.Add(value, fee)
 	// Fail if we're trying to transfer more than the available balance
 	if total.Sign() == 0 || !evm.Context.CanTransfer(evm.StateDB, fromAddr, total) {
-		return []byte{}, 0, fmt.Errorf("CreateETX: %x cannot transfer %d\n", fromAddr, total.Uint64())
+		return []byte{}, 0, fmt.Errorf("CreateETX: %x cannot transfer %d", fromAddr, total.Uint64())
 	}
 
 	evm.StateDB.SubBalance(fromInternal, total)
@@ -574,8 +575,13 @@ func (evm *EVM) ValidateETXGasPriceAndTip(fromAddr common.Address, etxGasPrice *
 	// as part of header validation.
 	mulBaseFee := new(big.Int).Mul(evm.Context.BaseFee, big.NewInt(int64(params.ETXBaseFeeMultiplier)))
 	if etxGasPrice.Cmp(mulBaseFee) < 0 {
-		return fmt.Errorf("max fee per gas less than block base fee: address %v, maxFeePerGas: %s baseFee: %s",
-			fromAddr, etxGasPrice, evm.Context.BaseFee)
+		return fmt.Errorf("etx max fee per gas less than %dx block base fee: address %v, maxFeePerGas: %s baseFee: %s",
+			params.ETXBaseFeeMultiplier, fromAddr, etxGasPrice, evm.Context.BaseFee)
+	}
+	mulTip := new(big.Int).Mul(evm.TXGasTip, big.NewInt(int64(params.ETXBaseFeeMultiplier)))
+	if etxGasTip.Cmp(mulTip) < 0 {
+		return fmt.Errorf("etx miner tip cap less than %dx tx miner tip cap: address %v, etxGasTip: %s txGasTip: %s",
+			params.ETXBaseFeeMultiplier, fromAddr, etxGasTip, evm.TXGasTip)
 	}
 	return nil
 }
