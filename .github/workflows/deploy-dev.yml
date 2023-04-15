@@ -1,8 +1,5 @@
 name: Build and Deploy to Dev
-on:
-  pull_request:
-    types: [closed]
-    branches: [ "main" ]
+on: workflow_dispatch
 jobs:
   buildDeployDev:
     if: github.event.pull_request.merged == true
