@@ -59,7 +59,7 @@ var (
 const (
 	receiptsCacheLimit = 32
 	txLookupCacheLimit = 1024
-	etxSetCacheLimit   = 100
+	etxSetCacheLimit   = 0
 	TriesInMemory      = 128
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
@@ -292,15 +292,15 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 var lastWrite uint64
 
 func (p *StateProcessor) storeEtxSet(batch ethdb.Batch, hash common.Hash, number uint64, etxSet types.EtxSet) {
-	p.etxSetCache.Add(hash, etxSet)
+//	p.etxSetCache.Add(hash, etxSet)
 	rawdb.WriteEtxSet(batch, hash, number, etxSet)
 }
 
 func (p *StateProcessor) loadEtxSet(hash common.Hash, number uint64) types.EtxSet {
-	if etxSet, exists := p.etxSetCache.Get(hash); exists == true {
-		// First check the cache
-		return etxSet.(types.EtxSet)
-	}
+//	if etxSet, exists := p.etxSetCache.Get(hash); exists == true {
+//		// First check the cache
+//		return etxSet.(types.EtxSet)
+//	}
 	// If not in cache, read EtxSet from db
 	etxSet := rawdb.ReadEtxSet(p.hc.bc.db, hash, number)
 	return etxSet
