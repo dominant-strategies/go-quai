@@ -218,19 +218,15 @@ var (
 )
 
 func init() {
-	locationToPrefixRange["prime"] = NewRange(0, 9)
-	locationToPrefixRange["cyprus"] = NewRange(10, 19)
-	locationToPrefixRange["cyprus1"] = NewRange(20, 29)
-	locationToPrefixRange["cyprus2"] = NewRange(30, 39)
-	locationToPrefixRange["cyprus3"] = NewRange(40, 49)
-	locationToPrefixRange["paxos"] = NewRange(50, 59)
-	locationToPrefixRange["paxos1"] = NewRange(60, 69)
-	locationToPrefixRange["paxos2"] = NewRange(70, 79)
-	locationToPrefixRange["paxos3"] = NewRange(80, 89)
-	locationToPrefixRange["hydra"] = NewRange(90, 99)
-	locationToPrefixRange["hydra1"] = NewRange(100, 109)
-	locationToPrefixRange["hydra2"] = NewRange(110, 119)
-	locationToPrefixRange["hydra3"] = NewRange(120, 129)
+	locationToPrefixRange["cyprus1"] = NewRange(0, 29)
+	locationToPrefixRange["cyprus2"] = NewRange(30, 58)
+	locationToPrefixRange["cyprus3"] = NewRange(59, 87)
+	locationToPrefixRange["paxos1"] = NewRange(88, 115)
+	locationToPrefixRange["paxos2"] = NewRange(116, 143)
+	locationToPrefixRange["paxos3"] = NewRange(144, 171)
+	locationToPrefixRange["hydra1"] = NewRange(172, 199)
+	locationToPrefixRange["hydra2"] = NewRange(200, 227)
+	locationToPrefixRange["hydra3"] = NewRange(228, 255)
 }
 
 // UnprefixedAddress allows marshaling an Address without 0x prefix.
@@ -461,6 +457,10 @@ func (loc Location) CommonDom(cmp Location) Location {
 }
 
 func (l Location) ContainsAddress(a Address) bool {
+	// ContainAddress can only be called for a zone chain
+	if l.Context() != ZONE_CTX {
+		return false
+	}
 	prefix := a.Bytes()[0]
 	prefixRange, ok := locationToPrefixRange[l.Name()]
 	if !ok {
@@ -480,6 +480,11 @@ func (l Location) RPCMarshal() []hexutil.Uint64 {
 }
 
 func IsInChainScope(b []byte) bool {
+	nodeCtx := NodeLocation.Context()
+	// IsInChainScope only be called for a zone chain
+	if nodeCtx != ZONE_CTX {
+		return false
+	}
 	if BytesToHash(b) == ZeroAddr.Hash() {
 		return true
 	}
@@ -499,7 +504,7 @@ func OrderToString(order int) string {
 	case REGION_CTX:
 		return "Region"
 	case ZONE_CTX:
-		return "Zone"		
+		return "Zone"
 	default:
 		return "Invalid"
 	}
