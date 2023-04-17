@@ -5,7 +5,7 @@ import (
 )
 
 const (
-	EtxExpirationAge = 8640 // With 10s blocks, ETX expire after ~24hrs
+	EtxExpirationAge = 100 // With 10s blocks, ETX expire after ~24hrs
 )
 
 // The EtxSet maps an ETX hash to the ETX and block number in which it became available.
