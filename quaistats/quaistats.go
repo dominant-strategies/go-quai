@@ -783,15 +783,17 @@ func (s *Service) reportPending(conn *connWrapper) error {
 
 // nodeStats is the information to report about the local node.
 type nodeStats struct {
-	Active   bool   `json:"active"`
-	Syncing  bool   `json:"syncing"`
-	Mining   bool   `json:"mining"`
-	Hashrate int    `json:"hashrate"`
-	Peers    int    `json:"peers"`
-	GasPrice int    `json:"gasPrice"`
-	Uptime   int    `json:"uptime"`
-	Chain    string `json:"chain"`
-	ChainID  uint64 `json:"chainId"`
+	Active   		bool   `json:"active"`
+	Syncing  		bool   `json:"syncing"`
+	Mining   		bool   `json:"mining"`
+	Hashrate 		int    `json:"hashrate"`
+	Peers    		int    `json:"peers"`
+	GasPrice 		int    `json:"gasPrice"`
+	Uptime   		int    `json:"uptime"`
+	Chain    		string `json:"chain"`
+	ChainID  	    uint64 `json:"chainId"`
+	LatestHeight    uint64 `json:"height"`
+	LatestHash      string `json:"hash"`
 }
 
 // reportStats retrieves various stats about the node at the networking and
@@ -806,6 +808,7 @@ func (s *Service) reportStats(conn *connWrapper) error {
 	)
 	// check if backend is a full node
 	fullBackend, ok := s.backend.(fullNodeBackend)
+	header := s.backend.CurrentHeader()
 	if ok {
 		mining = fullBackend.Miner().Mining()
 		hashrate = int(fullBackend.Miner().Hashrate())
@@ -820,7 +823,7 @@ func (s *Service) reportStats(conn *connWrapper) error {
 		}
 	} else {
 		sync := s.backend.Downloader().Progress()
-		syncing = s.backend.CurrentHeader().Number().Uint64() >= sync.HighestBlock
+		syncing = header.Number().Uint64() >= sync.HighestBlock
 	}
 	// Assemble the node stats and send it to the server
 	log.Trace("Sending node details to quaistats")
@@ -837,6 +840,8 @@ func (s *Service) reportStats(conn *connWrapper) error {
 			Uptime:   100,
 			Chain:    common.NodeLocation.Name(),
 			ChainID:  s.chainID.Uint64(),
+			LatestHeight: header.Number().Uint64(),
+			LatestHash:   header.Hash().String(),
 		},
 	}
 	report := map[string][]interface{}{
