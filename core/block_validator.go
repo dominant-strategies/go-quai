@@ -60,6 +60,7 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 			return ErrKnownBlock
 		}
 	}
+	header := block.Header()
 	// Subordinate manifest must match ManifestHash in subordinate context, _iff_
 	// we have a subordinate (i.e. if we are not a zone)
 	if nodeCtx != common.ZONE_CTX {
@@ -80,7 +81,6 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 		}
 	} else {
 		// Header validity is known at this point, check the uncles and transactions
-		header := block.Header()
 		if err := v.engine.VerifyUncles(v.hc, block); err != nil {
 			return err
 		}
