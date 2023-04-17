@@ -517,9 +517,6 @@ func (s *Service) login(conn *connWrapper) error {
 // This should only be used on reconnects or rarely to avoid overloading the
 // server. Use the individual methods for reporting subscribed events.
 func (s *Service) report(conn *connWrapper) error {
-	if err := s.reportLatency(conn); err != nil {
-		return err
-	}
 	if err := s.reportBlock(conn, nil); err != nil {
 		return err
 	}
