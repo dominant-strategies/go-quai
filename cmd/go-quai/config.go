@@ -28,6 +28,7 @@ import (
 	"gopkg.in/urfave/cli.v1"
 
 	"github.com/dominant-strategies/go-quai/cmd/utils"
+	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/eth/ethconfig"
 	"github.com/dominant-strategies/go-quai/internal/quaiapi"
@@ -114,6 +115,7 @@ func defaultNodeConfig() node.Config {
 
 // makeConfigNode loads quai configuration and creates a blank node instance.
 func makeConfigNode(ctx *cli.Context) (*node.Node, quaiConfig) {
+	nodeCtx := common.NodeLocation.Context()
 	// Load defaults.
 	cfg := quaiConfig{
 		Eth:     ethconfig.Defaults,
@@ -140,7 +142,10 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, quaiConfig) {
 		cfg.Ethstats.URL = ctx.GlobalString(utils.QuaiStatsURLFlag.Name)
 	}
 	applyMetricConfig(ctx, &cfg)
-	vm.InitializePrecompiles()
+	// Onlt initialize the precompile for the zone chain
+	if nodeCtx == common.ZONE_CTX {
+		vm.InitializePrecompiles()
+	}
 	return stack, cfg
 }
 

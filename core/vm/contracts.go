@@ -72,28 +72,6 @@ func InitializePrecompiles() {
 
 func init() {
 
-	PrecompiledAddresses["prime"] = []common.Address{
-		common.BytesToAddress([]byte{1}),
-		common.BytesToAddress([]byte{2}),
-		common.BytesToAddress([]byte{3}),
-		common.BytesToAddress([]byte{4}),
-		common.BytesToAddress([]byte{5}),
-		common.BytesToAddress([]byte{6}),
-		common.BytesToAddress([]byte{7}),
-		common.BytesToAddress([]byte{8}),
-		common.BytesToAddress([]byte{9}),
-	}
-	PrecompiledAddresses["cyprus"] = []common.Address{
-		common.HexToAddress("0x0A00000000000000000000000000000000000001"),
-		common.HexToAddress("0x0A00000000000000000000000000000000000002"),
-		common.HexToAddress("0x0A00000000000000000000000000000000000003"),
-		common.HexToAddress("0x0A00000000000000000000000000000000000004"),
-		common.HexToAddress("0x0A00000000000000000000000000000000000005"),
-		common.HexToAddress("0x0A00000000000000000000000000000000000006"),
-		common.HexToAddress("0x0A00000000000000000000000000000000000007"),
-		common.HexToAddress("0x0A00000000000000000000000000000000000008"),
-		common.HexToAddress("0x0A00000000000000000000000000000000000009"),
-	}
 	PrecompiledAddresses["cyprus1"] = []common.Address{
 		common.HexToAddress("0x1400000000000000000000000000000000000001"),
 		common.HexToAddress("0x1400000000000000000000000000000000000002"),
@@ -127,17 +105,6 @@ func init() {
 		common.HexToAddress("0x2800000000000000000000000000000000000008"),
 		common.HexToAddress("0x2800000000000000000000000000000000000009"),
 	}
-	PrecompiledAddresses["paxos"] = []common.Address{
-		common.HexToAddress("0x3200000000000000000000000000000000000001"),
-		common.HexToAddress("0x3200000000000000000000000000000000000002"),
-		common.HexToAddress("0x3200000000000000000000000000000000000003"),
-		common.HexToAddress("0x3200000000000000000000000000000000000004"),
-		common.HexToAddress("0x3200000000000000000000000000000000000005"),
-		common.HexToAddress("0x3200000000000000000000000000000000000006"),
-		common.HexToAddress("0x3200000000000000000000000000000000000007"),
-		common.HexToAddress("0x3200000000000000000000000000000000000008"),
-		common.HexToAddress("0x3200000000000000000000000000000000000009"),
-	}
 	PrecompiledAddresses["paxos1"] = []common.Address{
 		common.HexToAddress("0x3C00000000000000000000000000000000000001"),
 		common.HexToAddress("0x3C00000000000000000000000000000000000002"),
@@ -170,17 +137,6 @@ func init() {
 		common.HexToAddress("0x5000000000000000000000000000000000000007"),
 		common.HexToAddress("0x5000000000000000000000000000000000000008"),
 		common.HexToAddress("0x5000000000000000000000000000000000000009"),
-	}
-	PrecompiledAddresses["hydra"] = []common.Address{
-		common.HexToAddress("0x5A00000000000000000000000000000000000001"),
-		common.HexToAddress("0x5A00000000000000000000000000000000000002"),
-		common.HexToAddress("0x5A00000000000000000000000000000000000003"),
-		common.HexToAddress("0x5A00000000000000000000000000000000000004"),
-		common.HexToAddress("0x5A00000000000000000000000000000000000005"),
-		common.HexToAddress("0x5A00000000000000000000000000000000000006"),
-		common.HexToAddress("0x5A00000000000000000000000000000000000007"),
-		common.HexToAddress("0x5A00000000000000000000000000000000000008"),
-		common.HexToAddress("0x5A00000000000000000000000000000000000009"),
 	}
 	PrecompiledAddresses["hydra1"] = []common.Address{
 		common.HexToAddress("0x6400000000000000000000000000000000000001"),

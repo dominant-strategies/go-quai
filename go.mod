@@ -40,6 +40,7 @@ require (
 	golang.org/x/time v0.0.0-20201208040808-7e3f01d25324
 	gopkg.in/urfave/cli.v1 v1.20.0
 	lukechampine.com/blake3 v1.1.7
+	modernc.org/mathutil v1.5.0
 )
 
 require (
@@ -64,5 +65,4 @@ require (
 	golang.org/x/text v0.3.6 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c // indirect
 	gotest.tools v2.2.0+incompatible // indirect
-	modernc.org/mathutil v1.5.0 // indirect
 )
