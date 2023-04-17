@@ -2,7 +2,6 @@ name: Build and Deploy to Dev
 on: workflow_dispatch
 jobs:
   buildDeployDev:
-    if: github.event.pull_request.merged == true
     uses: ./.github/workflows/build-deploy.yml
     secrets:
       DOCKER: ${{ secrets.DOCKER }}
