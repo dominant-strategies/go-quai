@@ -861,7 +861,7 @@ type peerData struct {
 	LocalAddress      string        `json:"localAddress"`
 	RemoteAddress     string        `json:"remoteAddress"`
 	RTT               string        `json:"rtt"`
-	LatestHeight      string        `json:"latestHeight"`
+	LatestHeight      uint64        `json:"latestHeight"`
 	LatestEntropy     string        `json:"latestEntropy"`
 	LatestHash        string        `json:"latestHash"`
 	RecvLastBlockTime time.Time     `json:"recvLastBlockTime"`
@@ -894,7 +894,7 @@ func (s *Service) reportPeers(conn *connWrapper) error {
 		if downloaderPeer != nil {
 			hash, number, entropy, receivedAt := downloaderPeer.Peer().Head()
 			peerStat.RTT = downloaderPeer.Tracker().Roundtrip().String()
-			peerStat.LatestHeight = number.String()
+			peerStat.LatestHeight = number.Uint64()
 			peerStat.LatestEntropy = entropy.String()
 			peerStat.LatestHash = hash.String()
 			if receivedAt != *new(time.Time) {
