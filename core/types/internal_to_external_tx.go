@@ -23,19 +23,19 @@ import (
 )
 
 type InternalToExternalTx struct {
-	ChainID    *big.Int
-	Nonce      uint64
-	GasTipCap  *big.Int
-	GasFeeCap  *big.Int
-	Gas        uint64
+	ChainID    *big.Int        `json:"chainId" gencodec:"required"`
+	Nonce      uint64          `json:"nonce" gencodec:"required"`
+	GasTipCap  *big.Int        `json:"gasTipCap" gencodec:"required"`
+	GasFeeCap  *big.Int        `json:"gasFeeCap" gencodec:"required"`
+	Gas        uint64          `json:"gas" gencodec:"required"`
 	To         *common.Address `rlp:"nilString"` // nil means contract creation
-	Value      *big.Int
-	Data       []byte     // this probably is not applicable
-	AccessList AccessList // this probably is not applicable
+	Value      *big.Int        `json:"value" gencodec:"required"`
+	Data       []byte
+	AccessList AccessList
 
-	ETXGasLimit   uint64
-	ETXGasPrice   *big.Int
-	ETXGasTip     *big.Int
+	ETXGasLimit   uint64   `json:"etxGasLimit" gencodec:"required"`
+	ETXGasPrice   *big.Int `json:"etxGasPrice" gencodec:"required"`
+	ETXGasTip     *big.Int `json:"etxGasTip" gencodec:"required"`
 	ETXData       []byte
 	ETXAccessList AccessList
 
