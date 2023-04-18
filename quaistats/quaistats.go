@@ -895,6 +895,9 @@ func (s *Service) reportPeers(conn *connWrapper) error {
 		downloaderPeer := peerInfo.Peer(peer.ID().String())
 		if downloaderPeer != nil {
 			hash, number, entropy, receivedAt := downloaderPeer.Peer().Head()
+			if number == nil {
+				number = big.NewInt(0)
+			}
 			peerStat.RTT = downloaderPeer.Tracker().Roundtrip().String()
 			peerStat.LatestHeight = number.Uint64()
 			peerStat.LatestEntropy = entropy.String()
