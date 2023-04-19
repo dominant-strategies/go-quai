@@ -398,7 +398,7 @@ func DefaultGardenGenesisBlock() *Genesis {
 func DefaultOrchardGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.OrchardChainConfig,
-		Nonce:      68,
+		Nonce:      72,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
 		GasLimit:   []uint64{160000000, 160000000, 160000000},
 		Difficulty: big.NewInt(2500000),
