@@ -353,16 +353,6 @@ type PendingEtxsPacket struct {
 	PendingEtxs types.PendingEtxs
 }
 
-func (p *PendingEtxsPacket) Unpack() types.PendingEtxs {
-	var (
-		etxs = make([]types.Transactions, len(p.PendingEtxs.Etxs))
-	)
-	for i, etx := range p.PendingEtxs.Etxs {
-		etxs[i] = etx
-	}
-	return types.PendingEtxs{Header: p.PendingEtxs.Header, Etxs: etxs}
-}
-
 type PendingEtxsPacket66 struct {
 	RequestId uint64
 	PendingEtxsPacket

@@ -49,6 +49,9 @@ type HeaderChain struct {
 	headerCache *lru.Cache // Cache for the most recent block headers
 	numberCache *lru.Cache // Cache for the most recent block numbers
 
+	pendingEtxs            *lru.Cache
+	missingPendingEtxsFeed event.Feed
+
 	wg            sync.WaitGroup // chain processing wait group for shutting down
 	running       int32          // 0 if chain is running, 1 when stopped
 	procInterrupt int32          // interrupt signaler for block processing
@@ -70,6 +73,9 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *par
 		numberCache: numberCache,
 		engine:      engine,
 	}
+
+	pendingEtxs, _ := lru.New(maxPendingEtxBlocks)
+	hc.pendingEtxs = pendingEtxs
 
 	var err error
 	hc.bc, err = NewBodyDb(db, engine, hc, chainConfig, cacheConfig, vmConfig)
@@ -134,6 +140,49 @@ func (hc *HeaderChain) collectBlockManifest(h *types.Header) (types.BlockManifes
 	}
 	manifest = append(ancManifest, manifest...)
 	return manifest, nil
+}
+
+// CollectSubRollup collects the rollup of ETXs emitted from the subordinate
+// chain in the slice which emitted the given block.
+func (hc *HeaderChain) CollectSubRollup(b *types.Block) (types.Transactions, error) {
+	nodeCtx := common.NodeLocation.Context()
+	subRollup := types.Transactions{}
+	if nodeCtx < common.ZONE_CTX {
+		for _, hash := range b.SubManifest() {
+			var pendingEtxs types.Transactions
+			// Look for pending ETXs first in pending ETX cache, then in database
+			if res, ok := hc.pendingEtxs.Get(hash); ok && res != nil {
+				pendingEtxs = res.(types.Transactions)
+			} else if res := rawdb.ReadPendingEtxs(hc.headerDb, hash); res != nil {
+				pendingEtxs = res.Etxs
+			} else {
+				log.Warn("unable to find pending etxs for hash in manifest", "hash:", hash.String())
+				// Start backfilling the missing pending ETXs needed to process this block
+				go hc.backfillPETXs(b.Header(), b.SubManifest())
+				return nil, ErrPendingEtxNotFound
+			}
+			subRollup = append(subRollup, pendingEtxs...)
+		}
+		// Rolluphash is specifically for zone rollup, which can only be validated by region
+		if nodeCtx == common.REGION_CTX {
+			if subRollupHash := types.DeriveSha(subRollup, trie.NewStackTrie(nil)); subRollupHash != b.EtxRollupHash() {
+				return nil, errors.New("sub rollup does not match sub rollup hash")
+			}
+		}
+	}
+	return subRollup, nil
+}
+
+// backfillPETXs collects any missing PendingETX objects needed to process the
+// given header. This is done by informing the fetcher of any pending ETXs we do
+// not have, so that they can be fetched from our peers.
+func (hc *HeaderChain) backfillPETXs(header *types.Header, subManifest types.BlockManifest) {
+	for _, hash := range subManifest {
+		if petxs := rawdb.ReadPendingEtxs(hc.headerDb, hash); petxs == nil {
+			// Send the pendingEtxs to the feed for broadcast
+			hc.missingPendingEtxsFeed.Send(hash)
+		}
+	}
 }
 
 // Collect all emmitted ETXs since the last coincident block, but excluding
@@ -297,6 +346,18 @@ func (hc *HeaderChain) findCommonAncestor(header *types.Header) *types.Header {
 		header = hc.GetHeader(header.ParentHash(), header.NumberU64()-1)
 	}
 
+}
+
+func (hc *HeaderChain) AddPendingEtxs(pEtxs types.PendingEtxs) error {
+	log.Debug("Received pending ETXs", "block: ", pEtxs.Header.Hash())
+	// Only write the pending ETXs if we have not seen them before
+	if !hc.pendingEtxs.Contains(pEtxs.Header.Hash()) {
+		// Write to pending ETX database
+		rawdb.WritePendingEtxs(hc.headerDb, pEtxs)
+		// Also write to cache for faster access
+		hc.pendingEtxs.Add(pEtxs.Header.Hash(), pEtxs.Etxs)
+	}
+	return nil
 }
 
 // loadLastState loads the last known chain state from the database. This method
@@ -736,6 +797,10 @@ func (hc *HeaderChain) SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.S
 // SubscribeChainSideEvent registers a subscription of ChainSideEvent.
 func (hc *HeaderChain) SubscribeChainSideEvent(ch chan<- ChainSideEvent) event.Subscription {
 	return hc.scope.Track(hc.chainSideFeed.Subscribe(ch))
+}
+
+func (hc *HeaderChain) SubscribeMissingPendingEtxsEvent(ch chan<- common.Hash) event.Subscription {
+	return hc.scope.Track(hc.missingPendingEtxsFeed.Subscribe(ch))
 }
 
 func (hc *HeaderChain) StateAt(root common.Hash) (*state.StateDB, error) {
