@@ -31,6 +31,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/eth/abi"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
@@ -264,7 +265,12 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	receipt := &types.Receipt{Type: tx.Type(), PostState: root, CumulativeGasUsed: *usedGas, Etxs: result.Etxs}
 	if result.Failed() {
 		receipt.Status = types.ReceiptStatusFailed
-		log.Debug(result.Err.Error())
+		reason, errUnpack := abi.UnpackRevert(result.Revert())
+		if errUnpack == nil {
+			log.Debug("Transaction failed", "error", result.Err.Error(), "reason", reason)
+		} else {
+			log.Debug("Transaction failed, error unpacking revert reason", "error", result.Err.Error(), "error unpacking revert reason", errUnpack.Error())
+		}
 	} else {
 		receipt.Status = types.ReceiptStatusSuccessful
 	}
