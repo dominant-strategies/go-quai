@@ -978,35 +978,58 @@ func (w *worker) FinalizeAssembleAndBroadcast(chain consensus.ChainHeaderReader,
 	if err != nil {
 		return nil, err
 	}
-	// Compute and set the manifest & ETX rollup hashes
-	// Since parent has not been written to the header database yet (pending header
-	// is computed before we know if the parent was accepted), we need to collect
-	// the manifest from the parent first, and manually append the parent hash to
-	// complete the manifest for this pending header.
-	var manifest types.BlockManifest
-	var etxRollup types.Transactions
+
+	// Compute and set manifest hash
+	manifest := types.BlockManifest{}
 	if nodeCtx == common.PRIME_CTX {
 		// Nothing to do for prime chain
 		manifest = types.BlockManifest{}
-		etxRollup = types.Transactions{}
 	} else if w.engine.IsDomCoincident(parent.Header()) {
 		manifest = types.BlockManifest{parent.Hash()}
-		etxRollup = parent.ExtTransactions()
 	} else {
 		manifest, err = w.hc.CollectBlockManifest(parent.Header())
 		if err != nil {
 			return nil, err
 		}
 		manifest = append(manifest, header.ParentHash())
-		etxRollup, err = w.hc.CollectEtxRollup(parent)
-		if err != nil {
-			return nil, err
-		}
-		etxRollup = append(etxRollup, parent.ExtTransactions()...)
 	}
 	manifestHash := types.DeriveSha(manifest, trie.NewStackTrie(nil))
-	etxRollupHash := types.DeriveSha(etxRollup, trie.NewStackTrie(nil))
 	block.Header().SetManifestHash(manifestHash)
+
+	// Compute and set etx rollup hash
+	etxRollup := types.Transactions{}
+	if nodeCtx == common.PRIME_CTX {
+		// Nothing to do for prime chain
+		etxRollup = types.Transactions{}
+	} else if w.engine.IsDomCoincident(parent.Header()) {
+		if nodeCtx == common.REGION_CTX {
+			etxRollup, err = w.hc.CollectSubRollup(parent)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			etxRollup = parent.ExtTransactions()
+		}
+	} else {
+		if nodeCtx == common.REGION_CTX {
+			etxRollup, err = w.hc.CollectEtxSubRollup(parent)
+			if err != nil {
+				return nil, err
+			}
+			parentSubRollup, err := w.hc.CollectSubRollup(parent)
+			if err != nil {
+				return nil, err
+			}
+			etxRollup = append(etxRollup, parentSubRollup...)
+		} else {
+			etxRollup, err = w.hc.CollectEtxRollup(parent)
+			if err != nil {
+				return nil, err
+			}
+			etxRollup = append(etxRollup, parent.ExtTransactions()...)
+		}
+	}
+	etxRollupHash := types.DeriveSha(etxRollup, trie.NewStackTrie(nil))
 	block.Header().SetEtxRollupHash(etxRollupHash)
 
 	w.AddPendingBlockBody(block.Header(), block.Body())
