@@ -83,14 +83,14 @@ type Termini struct {
 }
 
 type pendingEtxs struct {
-	Etxs []types.Transactions `json:"pendingEtxs"`
+	Etxs types.Transactions `json:"pendingEtxs"`
 }
 
 type tpsStruct struct {
 	Tps uint32 `json:"tps"`
 }
 
-func (ec *Client) Append(ctx context.Context, header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) ([]types.Transactions, uint32, error) {
+func (ec *Client) Append(ctx context.Context, header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, uint32, error) {
 	fields := map[string]interface{}{
 		"header":           header.RPCMarshalHeader(),
 		"domPendingHeader": domPendingHeader.RPCMarshalHeader(),

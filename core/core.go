@@ -228,7 +228,7 @@ func (c *Core) WriteBlock(block *types.Block) {
 	}
 }
 
-func (c *Core) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) ([]types.Transactions, uint32, error) {
+func (c *Core) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, uint32, error) {
 	newPendingEtxs, tps, err := c.sl.Append(header, domPendingHeader, domTerminus, domOrigin, newInboundEtxs)
 	if err != nil {
 		if err.Error() == ErrBodyNotFound.Error() {
@@ -258,20 +258,12 @@ func (c *Core) GetPendingHeader() (*types.Header, error) {
 	return c.sl.GetPendingHeader()
 }
 
-func (c *Core) SubscribeMissingPendingEtxsEvent(ch chan<- common.Hash) event.Subscription {
-	return c.sl.SubscribeMissingPendingEtxsEvent(ch)
-}
-
 func (c *Core) GetManifest(blockHash common.Hash) (types.BlockManifest, error) {
 	return c.sl.GetManifest(blockHash)
 }
 
 func (c *Core) GetSubManifest(slice common.Location, blockHash common.Hash) (types.BlockManifest, error) {
 	return c.sl.GetSubManifest(slice, blockHash)
-}
-
-func (c *Core) AddPendingEtxs(pEtxs types.PendingEtxs) error {
-	return c.sl.AddPendingEtxs(pEtxs)
 }
 
 func (c *Core) GetPendingEtxs(hash common.Hash) *types.PendingEtxs {
@@ -440,6 +432,14 @@ func (c *Core) GetBodyRLP(hash common.Hash) rlp.RawValue {
 // GetTerminiByHash retrieves the termini stored for a given header hash
 func (c *Core) GetTerminiByHash(hash common.Hash) []common.Hash {
 	return c.sl.hc.GetTerminiByHash(hash)
+}
+
+func (c *Core) SubscribeMissingPendingEtxsEvent(ch chan<- common.Hash) event.Subscription {
+	return c.sl.hc.SubscribeMissingPendingEtxsEvent(ch)
+}
+
+func (c *Core) AddPendingEtxs(pEtxs types.PendingEtxs) error {
+	return c.sl.hc.AddPendingEtxs(pEtxs)
 }
 
 //--------------------//

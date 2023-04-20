@@ -90,7 +90,7 @@ type Header struct {
 	root          common.Hash     `json:"stateRoot"            gencodec:"required"`
 	txHash        common.Hash     `json:"transactionsRoot"     gencodec:"required"`
 	etxHash       common.Hash     `json:"extTransactionsRoot"  gencodec:"required"`
-	etxRollupHash []common.Hash   `json:"extRollupRoot"        gencodec:"required"`
+	etxRollupHash common.Hash     `json:"extRollupRoot"        gencodec:"required"`
 	manifestHash  []common.Hash   `json:"manifestHash"         gencodec:"required"`
 	receiptHash   common.Hash     `json:"receiptsRoot"         gencodec:"required"`
 	bloom         Bloom           `json:"logsBloom"            gencodec:"required"`
@@ -129,7 +129,7 @@ type extheader struct {
 	Root          common.Hash
 	TxHash        common.Hash
 	EtxHash       common.Hash
-	EtxRollupHash []common.Hash
+	EtxRollupHash common.Hash
 	ManifestHash  []common.Hash
 	ReceiptHash   common.Hash
 	Bloom         Bloom
@@ -158,7 +158,7 @@ func EmptyHeader() *Header {
 	h.root = EmptyRootHash
 	h.txHash = EmptyRootHash
 	h.etxHash = EmptyRootHash
-	h.etxRollupHash = make([]common.Hash, common.HierarchyDepth)
+	h.etxRollupHash = EmptyRootHash
 	h.uncleHash = EmptyUncleHash
 	h.baseFee = big.NewInt(0)
 
@@ -167,7 +167,6 @@ func EmptyHeader() *Header {
 		h.parentEntropy[i] = big.NewInt(0)
 		h.parentDeltaS[i] = big.NewInt(0)
 		h.number[i] = big.NewInt(0)
-		h.etxRollupHash[i] = EmptyRootHash
 	}
 	return h
 }
@@ -247,7 +246,7 @@ func (h *Header) RPCMarshalHeader() map[string]interface{} {
 		"transactionsRoot":    h.TxHash(),
 		"receiptsRoot":        h.ReceiptHash(),
 		"extTransactionsRoot": h.EtxHash(),
-		"extRollupRoot":       h.EtxRollupHashArray(),
+		"extRollupRoot":       h.EtxRollupHash(),
 		"manifestHash":        h.ManifestHashArray(),
 		"gasLimit":            hexutil.Uint(h.GasLimit()),
 		"gasUsed":             hexutil.Uint(h.GasUsed()),
@@ -296,12 +295,8 @@ func (h *Header) TxHash() common.Hash {
 func (h *Header) EtxHash() common.Hash {
 	return h.etxHash
 }
-func (h *Header) EtxRollupHash(args ...int) common.Hash {
-	nodeCtx := common.NodeLocation.Context()
-	if len(args) > 0 {
-		nodeCtx = args[0]
-	}
-	return h.etxRollupHash[nodeCtx]
+func (h *Header) EtxRollupHash() common.Hash {
+	return h.etxRollupHash
 }
 
 func (h *Header) ParentEntropy(args ...int) *big.Int {
@@ -387,12 +382,8 @@ func (h *Header) SetTxHash(val common.Hash) {
 func (h *Header) SetEtxHash(val common.Hash) {
 	h.etxHash = val
 }
-func (h *Header) SetEtxRollupHash(val common.Hash, args ...int) {
-	nodeCtx := common.NodeLocation.Context()
-	if len(args) > 0 {
-		nodeCtx = args[0]
-	}
-	h.etxRollupHash[nodeCtx] = val
+func (h *Header) SetEtxRollupHash(val common.Hash) {
+	h.etxRollupHash = val
 }
 
 func (h *Header) SetParentEntropy(val *big.Int, args ...int) {
@@ -454,10 +445,9 @@ func (h *Header) SetExtra(val []byte) {
 func (h *Header) SetNonce(val BlockNonce) { h.nonce = val }
 
 // Array accessors
-func (h *Header) ParentHashArray() []common.Hash    { return h.parentHash }
-func (h *Header) ManifestHashArray() []common.Hash  { return h.manifestHash }
-func (h *Header) EtxRollupHashArray() []common.Hash { return h.etxRollupHash }
-func (h *Header) NumberArray() []*big.Int           { return h.number }
+func (h *Header) ParentHashArray() []common.Hash   { return h.parentHash }
+func (h *Header) ManifestHashArray() []common.Hash { return h.manifestHash }
+func (h *Header) NumberArray() []*big.Int          { return h.number }
 
 // headerData comprises all data fields of the header, excluding the nonce, so
 // that the nonce may be independently adjusted in the work algorithm.
@@ -468,7 +458,7 @@ type sealData struct {
 	Root          common.Hash
 	TxHash        common.Hash
 	EtxHash       common.Hash
-	EtxRollupHash []common.Hash
+	EtxRollupHash common.Hash
 	ManifestHash  []common.Hash
 	ReceiptHash   common.Hash
 	Bloom         Bloom
@@ -494,7 +484,7 @@ func (h *Header) SealHash() (hash common.Hash) {
 		Root:          h.Root(),
 		TxHash:        h.TxHash(),
 		EtxHash:       h.EtxHash(),
-		EtxRollupHash: make([]common.Hash, common.HierarchyDepth),
+		EtxRollupHash: h.EtxRollupHash(),
 		ManifestHash:  make([]common.Hash, common.HierarchyDepth),
 		ReceiptHash:   h.ReceiptHash(),
 		Bloom:         h.Bloom(),
@@ -510,7 +500,6 @@ func (h *Header) SealHash() (hash common.Hash) {
 	for i := 0; i < common.HierarchyDepth; i++ {
 		hdata.ParentHash[i] = h.ParentHash(i)
 		hdata.ManifestHash[i] = h.ManifestHash(i)
-		hdata.EtxRollupHash[i] = h.EtxRollupHash(i)
 		hdata.Number[i] = h.Number(i)
 	}
 	rlp.Encode(hasher, hdata)
@@ -851,14 +840,12 @@ func CopyHeader(h *Header) *Header {
 	cpy := *h
 	cpy.parentHash = make([]common.Hash, common.HierarchyDepth)
 	cpy.manifestHash = make([]common.Hash, common.HierarchyDepth)
-	cpy.etxRollupHash = make([]common.Hash, common.HierarchyDepth)
 	cpy.parentEntropy = make([]*big.Int, common.HierarchyDepth)
 	cpy.parentDeltaS = make([]*big.Int, common.HierarchyDepth)
 	cpy.number = make([]*big.Int, common.HierarchyDepth)
 	for i := 0; i < common.HierarchyDepth; i++ {
 		cpy.SetParentHash(h.ParentHash(i), i)
 		cpy.SetManifestHash(h.ManifestHash(i), i)
-		cpy.SetEtxRollupHash(h.EtxRollupHash(i), i)
 		cpy.SetParentEntropy(h.ParentEntropy(i), i)
 		cpy.SetParentDeltaS(h.ParentDeltaS(i), i)
 		cpy.SetNumber(h.Number(i), i)
@@ -868,6 +855,7 @@ func CopyHeader(h *Header) *Header {
 	cpy.SetRoot(h.Root())
 	cpy.SetTxHash(h.TxHash())
 	cpy.SetEtxHash(h.EtxHash())
+	cpy.SetEtxRollupHash(h.EtxRollupHash())
 	cpy.SetReceiptHash(h.ReceiptHash())
 	cpy.SetBloom(h.Bloom())
 	if len(h.extra) > 0 {
@@ -908,29 +896,29 @@ func (b *Block) EncodeRLP(w io.Writer) error {
 }
 
 // Wrapped header accessors
-func (b *Block) ParentHash(args ...int) common.Hash    { return b.header.ParentHash(args...) }
-func (b *Block) UncleHash() common.Hash                { return b.header.UncleHash() }
-func (b *Block) Coinbase() common.Address              { return b.header.Coinbase() }
-func (b *Block) Root() common.Hash                     { return b.header.Root() }
-func (b *Block) TxHash() common.Hash                   { return b.header.TxHash() }
-func (b *Block) EtxHash() common.Hash                  { return b.header.EtxHash() }
-func (b *Block) EtxRollupHash(args ...int) common.Hash { return b.header.EtxRollupHash(args...) }
-func (b *Block) ManifestHash(args ...int) common.Hash  { return b.header.ManifestHash(args...) }
-func (b *Block) ReceiptHash() common.Hash              { return b.header.ReceiptHash() }
-func (b *Block) Bloom() Bloom                          { return b.header.Bloom() }
-func (b *Block) Difficulty(args ...int) *big.Int       { return b.header.Difficulty() }
-func (b *Block) ParentEntropy(args ...int) *big.Int    { return b.header.ParentEntropy(args...) }
-func (b *Block) ParentDeltaS(args ...int) *big.Int     { return b.header.ParentDeltaS(args...) }
-func (b *Block) Number(args ...int) *big.Int           { return b.header.Number(args...) }
-func (b *Block) NumberU64(args ...int) uint64          { return b.header.NumberU64(args...) }
-func (b *Block) GasLimit() uint64                      { return b.header.GasLimit() }
-func (b *Block) GasUsed() uint64                       { return b.header.GasUsed() }
-func (b *Block) BaseFee() *big.Int                     { return b.header.BaseFee() }
-func (b *Block) Location() common.Location             { return b.header.Location() }
-func (b *Block) Time() uint64                          { return b.header.Time() }
-func (b *Block) Extra() []byte                         { return b.header.Extra() }
-func (b *Block) Nonce() BlockNonce                     { return b.header.Nonce() }
-func (b *Block) NonceU64() uint64                      { return b.header.NonceU64() }
+func (b *Block) ParentHash(args ...int) common.Hash   { return b.header.ParentHash(args...) }
+func (b *Block) UncleHash() common.Hash               { return b.header.UncleHash() }
+func (b *Block) Coinbase() common.Address             { return b.header.Coinbase() }
+func (b *Block) Root() common.Hash                    { return b.header.Root() }
+func (b *Block) TxHash() common.Hash                  { return b.header.TxHash() }
+func (b *Block) EtxHash() common.Hash                 { return b.header.EtxHash() }
+func (b *Block) EtxRollupHash() common.Hash           { return b.header.EtxRollupHash() }
+func (b *Block) ManifestHash(args ...int) common.Hash { return b.header.ManifestHash(args...) }
+func (b *Block) ReceiptHash() common.Hash             { return b.header.ReceiptHash() }
+func (b *Block) Bloom() Bloom                         { return b.header.Bloom() }
+func (b *Block) Difficulty(args ...int) *big.Int      { return b.header.Difficulty() }
+func (b *Block) ParentEntropy(args ...int) *big.Int   { return b.header.ParentEntropy(args...) }
+func (b *Block) ParentDeltaS(args ...int) *big.Int    { return b.header.ParentDeltaS(args...) }
+func (b *Block) Number(args ...int) *big.Int          { return b.header.Number(args...) }
+func (b *Block) NumberU64(args ...int) uint64         { return b.header.NumberU64(args...) }
+func (b *Block) GasLimit() uint64                     { return b.header.GasLimit() }
+func (b *Block) GasUsed() uint64                      { return b.header.GasUsed() }
+func (b *Block) BaseFee() *big.Int                    { return b.header.BaseFee() }
+func (b *Block) Location() common.Location            { return b.header.Location() }
+func (b *Block) Time() uint64                         { return b.header.Time() }
+func (b *Block) Extra() []byte                        { return b.header.Extra() }
+func (b *Block) Nonce() BlockNonce                    { return b.header.Nonce() }
+func (b *Block) NonceU64() uint64                     { return b.header.NonceU64() }
 
 // TODO: copies
 
