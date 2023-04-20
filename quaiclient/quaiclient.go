@@ -83,10 +83,10 @@ type Termini struct {
 }
 
 type pendingEtxs struct {
-	Etxs []types.Transactions `json:"pendingEtxs"`
+	Etxs types.Transactions `json:"pendingEtxs"`
 }
 
-func (ec *Client) Append(ctx context.Context, header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) ([]types.Transactions, error) {
+func (ec *Client) Append(ctx context.Context, header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, error) {
 	fields := map[string]interface{}{
 		"header":           header.RPCMarshalHeader(),
 		"domPendingHeader": domPendingHeader.RPCMarshalHeader(),

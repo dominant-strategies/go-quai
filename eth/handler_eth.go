@@ -96,8 +96,7 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 		return h.txFetcher.Enqueue(peer.ID(), *packet, true)
 
 	case *eth.PendingEtxsPacket:
-		pendingEtxs := packet.Unpack()
-		return h.handlePendingEtxs(pendingEtxs)
+		return h.handlePendingEtxs(*&packet.PendingEtxs)
 
 	default:
 		return fmt.Errorf("unexpected eth packet type: %T", packet)
@@ -196,7 +195,7 @@ func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block) er
 
 func (h *ethHandler) handlePendingEtxs(pendingEtxs types.PendingEtxs) error {
 	if !pendingEtxs.IsValid(trie.NewStackTrie(nil)) {
-		log.Warn("PendingEtxs is not valid", pendingEtxs.Etxs, pendingEtxs.Header.EtxHash())
+		log.Warn("PendingEtxs is not valid", "Len", len(pendingEtxs.Etxs), "Hash", pendingEtxs.Header.EtxHash())
 		return nil
 	}
 	err := h.core.AddPendingEtxs(pendingEtxs)
