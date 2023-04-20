@@ -166,7 +166,7 @@ func (hc *HeaderChain) CollectSubRollup(b *types.Block) (types.Transactions, err
 			} else {
 				log.Warn("unable to find pending etxs for hash in manifest", "hash:", hash.String())
 				// Start backfilling the missing pending ETXs needed to process this block
-				go hc.backfillPETXs(b.Header(), manifests)
+				go hc.backfillPETXs(b.Header(), b.SubManifest())
 				return nil, ErrPendingEtxNotFound
 			}
 			subRollup = append(subRollup, pendingEtxs...)
