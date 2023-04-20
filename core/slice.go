@@ -294,7 +294,6 @@ func (sl *Slice) relayPh(pendingHeaderWithTermini types.PendingHeader, domOrigin
 		bestPh, exists := sl.phCache[sl.bestPhKey]
 		if exists {
 			bestPh.Header.SetLocation(common.NodeLocation)
-			bestPh.Header.SetTime(uint64(time.Now().Unix()))
 			sl.miner.worker.pendingHeaderFeed.Send(bestPh.Header)
 			return
 		}
@@ -455,7 +454,6 @@ func (sl *Slice) poem(externS *big.Int, currentS *big.Int) bool {
 // GetPendingHeader is used by the miner to request the current pending header
 func (sl *Slice) GetPendingHeader() (*types.Header, error) {
 	if ph := sl.phCache[sl.bestPhKey].Header; ph != nil {
-		ph.SetTime(uint64(time.Now().Unix()))
 		return ph, nil
 	} else {
 		return nil, errors.New("empty pending header")
@@ -530,7 +528,6 @@ func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader, locati
 			bestPh, exists := sl.phCache[sl.bestPhKey]
 			if exists {
 				bestPh.Header.SetLocation(common.NodeLocation)
-				bestPh.Header.SetTime(uint64(time.Now().Unix()))
 				sl.miner.worker.pendingHeaderFeed.Send(bestPh.Header)
 			}
 		}
@@ -597,6 +594,7 @@ func (sl *Slice) writeToPhCacheAndPickPhHead(pendingHeaderWithTermini types.Pend
 	var deepCopyPendingHeaderWithTermini types.PendingHeader
 	newPhEntropy := pendingHeaderWithTermini.Header.CalcPhS()
 	deepCopyPendingHeaderWithTermini = types.PendingHeader{Header: types.CopyHeader(pendingHeaderWithTermini.Header), Termini: pendingHeaderWithTermini.Termini, Entropy: newPhEntropy}
+	deepCopyPendingHeaderWithTermini.Header.SetTime(uint64(time.Now().Unix()))
 	if exist {
 		if sl.poem(newPhEntropy, oldPh.Entropy) {
 			sl.phCache[pendingHeaderWithTermini.Termini[c_terminusIndex]] = deepCopyPendingHeaderWithTermini
