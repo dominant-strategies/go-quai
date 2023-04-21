@@ -31,7 +31,6 @@ import (
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
-	"github.com/dominant-strategies/go-quai/common/mclock"
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/core/types"
@@ -51,9 +50,6 @@ const (
 	// history request.
 	historyUpdateRange = 50
 
-	// txChanSize is the size of channel listening to NewTxsEvent.
-	// The number is referenced from the size of tx pool.
-	txChanSize = 4096
 	// chainHeadChanSize is the size of channel listening to ChainHeadEvent.
 	chainHeadChanSize = 10
 
@@ -97,7 +93,6 @@ type Service struct {
 	histCh chan []uint64 // History request block numbers are fed into this channel
 
 	headSub event.Subscription
-	txSub   event.Subscription
 
 	chainID *big.Int
 }
@@ -199,9 +194,7 @@ func (s *Service) Start() error {
 	// Subscribe to chain events to execute updates on
 	chainHeadCh := make(chan core.ChainHeadEvent, chainHeadChanSize)
 	s.headSub = s.backend.SubscribeChainHeadEvent(chainHeadCh)
-	txEventCh := make(chan core.NewTxsEvent, txChanSize)
-	s.txSub = s.backend.SubscribeNewTxsEvent(txEventCh)
-	go s.loop(chainHeadCh, txEventCh)
+	go s.loop(chainHeadCh)
 
 	log.Info("Stats daemon started")
 	return nil
@@ -210,23 +203,20 @@ func (s *Service) Start() error {
 // Stop implements node.Lifecycle, terminating the monitoring and reporting daemon.
 func (s *Service) Stop() error {
 	s.headSub.Unsubscribe()
-	s.txSub.Unsubscribe()
 	log.Info("Stats daemon stopped")
 	return nil
 }
 
 // loop keeps trying to connect to the netstats server, reporting chain events
 // until termination.
-func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, txEventCh chan core.NewTxsEvent) {
+func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent) {
+	nodeCtx := common.NodeLocation.Context()
 	// Start a goroutine that exhausts the subscriptions to avoid events piling up
 	var (
 		quitCh = make(chan struct{})
 		headCh = make(chan *types.Block, 1)
-		txCh   = make(chan struct{}, 1)
 	)
 	go func() {
-		var lastTx mclock.AbsTime
-
 	HandleLoop:
 		for {
 			select {
@@ -236,22 +226,6 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, txEventCh chan core
 				case headCh <- head.Block:
 				default:
 				}
-
-			// Notify of new transaction events, but drop if too frequent
-			case <-txEventCh:
-				if time.Duration(mclock.Now()-lastTx) < time.Second {
-					continue
-				}
-				lastTx = mclock.Now()
-
-				select {
-				case txCh <- struct{}{}:
-				default:
-				}
-
-			// node stopped
-			case <-s.txSub.Err():
-				break HandleLoop
 			case <-s.headSub.Err():
 				break HandleLoop
 			}
@@ -336,17 +310,14 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, txEventCh chan core
 					if err = s.reportBlock(conn, head); err != nil {
 						log.Warn("Block stats report failed", "err", err)
 					}
-					if err = s.reportPending(conn); err != nil {
-						log.Warn("Post-block transaction stats report failed", "err", err)
-					}
-				case <-txCh:
-					if err = s.reportPending(conn); err != nil {
-						log.Warn("Transaction stats report failed", "err", err)
+					if nodeCtx == common.ZONE_CTX {
+						if err = s.reportPending(conn); err != nil {
+							log.Warn("Post-block transaction stats report failed", "err", err)
+						}
 					}
 				}
 			}
 			fullReport.Stop()
-
 			// Close the current connection and establish a new one
 			conn.Close()
 			errTimer.Reset(0)
@@ -517,11 +488,14 @@ func (s *Service) login(conn *connWrapper) error {
 // This should only be used on reconnects or rarely to avoid overloading the
 // server. Use the individual methods for reporting subscribed events.
 func (s *Service) report(conn *connWrapper) error {
+	nodeCtx := common.NodeLocation.Context()
 	if err := s.reportBlock(conn, nil); err != nil {
 		return err
 	}
-	if err := s.reportPending(conn); err != nil {
-		return err
+	if nodeCtx == common.ZONE_CTX {
+		if err := s.reportPending(conn); err != nil {
+			return err
+		}
 	}
 	if err := s.reportStats(conn); err != nil {
 		return err
@@ -796,6 +770,7 @@ type nodeStats struct {
 // reportStats retrieves various stats about the node at the networking and
 // mining layer and reports it to the stats server.
 func (s *Service) reportStats(conn *connWrapper) error {
+	nodeCtx := common.NodeLocation.Context()
 	// Gather the syncing and mining infos from the local miner instance
 	var (
 		mining   bool
@@ -813,10 +788,12 @@ func (s *Service) reportStats(conn *connWrapper) error {
 		sync := fullBackend.Downloader().Progress()
 		syncing = fullBackend.CurrentHeader().Number().Uint64() >= sync.HighestBlock
 
-		price, _ := fullBackend.SuggestGasTipCap(context.Background())
-		gasprice = int(price.Uint64())
-		if basefee := fullBackend.CurrentHeader().BaseFee(); basefee != nil {
-			gasprice += int(basefee.Uint64())
+		if nodeCtx == common.ZONE_CTX {
+			price, _ := fullBackend.SuggestGasTipCap(context.Background())
+			gasprice = int(price.Uint64())
+			if basefee := fullBackend.CurrentHeader().BaseFee(); basefee != nil {
+				gasprice += int(basefee.Uint64())
+			}
 		}
 	} else {
 		sync := s.backend.Downloader().Progress()
