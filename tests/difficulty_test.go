@@ -50,9 +50,6 @@ func TestDifficulty(t *testing.T) {
 
 	dt.config("MainNetwork", mainnetChainConfig)
 	dt.config("CustomMainNetwork", mainnetChainConfig)
-	dt.config("Constantinople", params.ChainConfig{
-		ConstantinopleBlock: big.NewInt(0),
-	})
 	dt.config("EIP2384", params.ChainConfig{
 		MuirGlacierBlock: big.NewInt(0),
 	})

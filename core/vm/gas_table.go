@@ -102,68 +102,21 @@ func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySi
 		return 0, err
 	}
 	current := evm.StateDB.GetState(internalContractAddr, x.Bytes32())
-	// The legacy gas metering only takes into consideration the current state
-	// Legacy rules should be applied if we are in Petersburg (removal of EIP-1283)
-	// OR Constantinople is not active
-	if evm.chainRules.IsPetersburg || !evm.chainRules.IsConstantinople {
-		// This checks for 3 scenario's and calculates gas accordingly:
-		//
-		// 1. From a zero-value address to a non-zero value         (NEW VALUE)
-		// 2. From a non-zero value address to a zero-value address (DELETE)
-		// 3. From a non-zero to a non-zero                         (CHANGE)
-		switch {
-		case current == (common.Hash{}) && y.Sign() != 0: // 0 => non 0
-			return params.SstoreSetGas, nil
-		case current != (common.Hash{}) && y.Sign() == 0: // non 0 => 0
-			evm.StateDB.AddRefund(params.SstoreRefundGas)
-			return params.SstoreClearGas, nil
-		default: // non 0 => non 0 (or 0 => 0)
-			return params.SstoreResetGas, nil
-		}
-	}
-	// The new gas metering is based on net gas costs (EIP-1283):
+
+	// This checks for 3 scenario's and calculates gas accordingly:
 	//
-	// 1. If current value equals new value (this is a no-op), 200 gas is deducted.
-	// 2. If current value does not equal new value
-	//   2.1. If original value equals current value (this storage slot has not been changed by the current execution context)
-	//     2.1.1. If original value is 0, 20000 gas is deducted.
-	// 	   2.1.2. Otherwise, 5000 gas is deducted. If new value is 0, add 15000 gas to refund counter.
-	// 	2.2. If original value does not equal current value (this storage slot is dirty), 200 gas is deducted. Apply both of the following clauses.
-	// 	  2.2.1. If original value is not 0
-	//       2.2.1.1. If current value is 0 (also means that new value is not 0), remove 15000 gas from refund counter. We can prove that refund counter will never go below 0.
-	//       2.2.1.2. If new value is 0 (also means that current value is not 0), add 15000 gas to refund counter.
-	// 	  2.2.2. If original value equals new value (this storage slot is reset)
-	//       2.2.2.1. If original value is 0, add 19800 gas to refund counter.
-	// 	     2.2.2.2. Otherwise, add 4800 gas to refund counter.
-	value := common.Hash(y.Bytes32())
-	if current == value { // noop (1)
-		return params.NetSstoreNoopGas, nil
+	// 1. From a zero-value address to a non-zero value         (NEW VALUE)
+	// 2. From a non-zero value address to a zero-value address (DELETE)
+	// 3. From a non-zero to a non-zero                         (CHANGE)
+	switch {
+	case current == (common.Hash{}) && y.Sign() != 0: // 0 => non 0
+		return params.SstoreSetGas, nil
+	case current != (common.Hash{}) && y.Sign() == 0: // non 0 => 0
+		evm.StateDB.AddRefund(params.SstoreRefundGas)
+		return params.SstoreClearGas, nil
+	default: // non 0 => non 0 (or 0 => 0)
+		return params.SstoreResetGas, nil
 	}
-	original := evm.StateDB.GetCommittedState(internalContractAddr, x.Bytes32())
-	if original == current {
-		if original == (common.Hash{}) { // create slot (2.1.1)
-			return params.NetSstoreInitGas, nil
-		}
-		if value == (common.Hash{}) { // delete slot (2.1.2b)
-			evm.StateDB.AddRefund(params.NetSstoreClearRefund)
-		}
-		return params.NetSstoreCleanGas, nil // write existing slot (2.1.2)
-	}
-	if original != (common.Hash{}) {
-		if current == (common.Hash{}) { // recreate slot (2.2.1.1)
-			evm.StateDB.SubRefund(params.NetSstoreClearRefund)
-		} else if value == (common.Hash{}) { // delete slot (2.2.1.2)
-			evm.StateDB.AddRefund(params.NetSstoreClearRefund)
-		}
-	}
-	if original == value {
-		if original == (common.Hash{}) { // reset to original inexistent slot (2.2.2.1)
-			evm.StateDB.AddRefund(params.NetSstoreResetClearRefund)
-		} else { // reset to original existing slot (2.2.2.2)
-			evm.StateDB.AddRefund(params.NetSstoreResetRefund)
-		}
-	}
-	return params.NetSstoreDirtyGas, nil
 }
 
 //  0. If *gasleft* is less than or equal to 2300, fail the current call.

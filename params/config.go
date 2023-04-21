@@ -35,67 +35,57 @@ var (
 var (
 	// ColosseumChainConfig is the chain parameters to run a node on the Colosseum network.
 	ColosseumChainConfig = &ChainConfig{
-		ChainID:             big.NewInt(9000),
-		ConstantinopleBlock: big.NewInt(0),
-		PetersburgBlock:     big.NewInt(0),
-		IstanbulBlock:       big.NewInt(0),
-		MuirGlacierBlock:    big.NewInt(0),
-		BerlinBlock:         big.NewInt(0),
-		LondonBlock:         big.NewInt(0),
-		Blake3pow:           new(Blake3powConfig),
-		GenesisHash:         ColosseumGenesisHash,
+		ChainID:          big.NewInt(9000),
+		IstanbulBlock:    big.NewInt(0),
+		MuirGlacierBlock: big.NewInt(0),
+		BerlinBlock:      big.NewInt(0),
+		LondonBlock:      big.NewInt(0),
+		Blake3pow:        new(Blake3powConfig),
+		GenesisHash:      ColosseumGenesisHash,
 	}
 
 	// GardenChainConfig contains the chain parameters to run a node on the Garden test network.
 	GardenChainConfig = &ChainConfig{
-		ChainID:             big.NewInt(12000),
-		ConstantinopleBlock: big.NewInt(0),
-		PetersburgBlock:     big.NewInt(0),
-		IstanbulBlock:       big.NewInt(0),
-		MuirGlacierBlock:    big.NewInt(0),
-		BerlinBlock:         big.NewInt(0),
-		LondonBlock:         big.NewInt(0),
-		Blake3pow:           new(Blake3powConfig),
-		GenesisHash:         GardenGenesisHash,
+		ChainID:          big.NewInt(12000),
+		IstanbulBlock:    big.NewInt(0),
+		MuirGlacierBlock: big.NewInt(0),
+		BerlinBlock:      big.NewInt(0),
+		LondonBlock:      big.NewInt(0),
+		Blake3pow:        new(Blake3powConfig),
+		GenesisHash:      GardenGenesisHash,
 	}
 
 	// OrchardChainConfig contains the chain parameters to run a node on the Orchard test network.
 	OrchardChainConfig = &ChainConfig{
-		ChainID:             big.NewInt(15000),
-		ConstantinopleBlock: big.NewInt(0),
-		PetersburgBlock:     big.NewInt(0),
-		IstanbulBlock:       big.NewInt(0),
-		MuirGlacierBlock:    big.NewInt(0),
-		BerlinBlock:         big.NewInt(0),
-		LondonBlock:         big.NewInt(0),
-		Blake3pow:           new(Blake3powConfig),
-		GenesisHash:         OrchardGenesisHash,
+		ChainID:          big.NewInt(15000),
+		IstanbulBlock:    big.NewInt(0),
+		MuirGlacierBlock: big.NewInt(0),
+		BerlinBlock:      big.NewInt(0),
+		LondonBlock:      big.NewInt(0),
+		Blake3pow:        new(Blake3powConfig),
+		GenesisHash:      OrchardGenesisHash,
 	}
 
 	// GalenaChainConfig contains the chain parameters to run a node on the Galena test network.
 	GalenaChainConfig = &ChainConfig{
-		ChainID:             big.NewInt(17000),
-		ConstantinopleBlock: big.NewInt(0),
-		PetersburgBlock:     big.NewInt(0),
-		IstanbulBlock:       big.NewInt(0),
-		MuirGlacierBlock:    big.NewInt(0),
-		BerlinBlock:         big.NewInt(0),
-		LondonBlock:         big.NewInt(0),
-		Blake3pow:           new(Blake3powConfig),
-		GenesisHash:         GalenaGenesisHash,
+		ChainID:          big.NewInt(17000),
+		IstanbulBlock:    big.NewInt(0),
+		MuirGlacierBlock: big.NewInt(0),
+		BerlinBlock:      big.NewInt(0),
+		LondonBlock:      big.NewInt(0),
+		Blake3pow:        new(Blake3powConfig),
+		GenesisHash:      GalenaGenesisHash,
 	}
 
 	// LocalChainConfig contains the chain parameters to run a node on the Local test network.
 	LocalChainConfig = &ChainConfig{
-		ChainID:             big.NewInt(1337),
-		ConstantinopleBlock: big.NewInt(0),
-		PetersburgBlock:     big.NewInt(0),
-		IstanbulBlock:       big.NewInt(0),
-		MuirGlacierBlock:    big.NewInt(0),
-		BerlinBlock:         big.NewInt(0),
-		LondonBlock:         big.NewInt(0),
-		Blake3pow:           new(Blake3powConfig),
-		GenesisHash:         LocalGenesisHash,
+		ChainID:          big.NewInt(1337),
+		IstanbulBlock:    big.NewInt(0),
+		MuirGlacierBlock: big.NewInt(0),
+		BerlinBlock:      big.NewInt(0),
+		LondonBlock:      big.NewInt(0),
+		Blake3pow:        new(Blake3powConfig),
+		GenesisHash:      LocalGenesisHash,
 	}
 
 	// AllBlake3powProtocolChanges contains every protocol change (EIPs) introduced
@@ -103,9 +93,9 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllBlake3powProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), new(Blake3powConfig), common.Hash{}}
+	AllBlake3powProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), new(Blake3powConfig), common.Hash{}}
 
-	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), new(Blake3powConfig), common.Hash{}}
+	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), new(Blake3powConfig), common.Hash{}}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
@@ -117,12 +107,10 @@ var (
 type ChainConfig struct {
 	ChainID *big.Int `json:"chainId"` // chainId identifies the current chain and is used for replay protection
 
-	ConstantinopleBlock *big.Int `json:"constantinopleBlock,omitempty"` // Constantinople switch block (nil = no fork, 0 = already activated)
-	PetersburgBlock     *big.Int `json:"petersburgBlock,omitempty"`     // Petersburg switch block (nil = same as Constantinople)
-	IstanbulBlock       *big.Int `json:"istanbulBlock,omitempty"`       // Istanbul switch block (nil = no fork, 0 = already on istanbul)
-	MuirGlacierBlock    *big.Int `json:"muirGlacierBlock,omitempty"`    // Eip-2384 (bomb delay) switch block (nil = no fork, 0 = already activated)
-	BerlinBlock         *big.Int `json:"berlinBlock,omitempty"`         // Berlin switch block (nil = no fork, 0 = already on berlin)
-	LondonBlock         *big.Int `json:"londonBlock,omitempty"`         // London switch block (nil = no fork, 0 = already on london)
+	IstanbulBlock    *big.Int `json:"istanbulBlock,omitempty"`    // Istanbul switch block (nil = no fork, 0 = already on istanbul)
+	MuirGlacierBlock *big.Int `json:"muirGlacierBlock,omitempty"` // Eip-2384 (bomb delay) switch block (nil = no fork, 0 = already activated)
+	BerlinBlock      *big.Int `json:"berlinBlock,omitempty"`      // Berlin switch block (nil = no fork, 0 = already on berlin)
+	LondonBlock      *big.Int `json:"londonBlock,omitempty"`      // London switch block (nil = no fork, 0 = already on london)
 
 	// Various consensus engines
 	Blake3pow   *Blake3powConfig `json:"blake3pow,omitempty"`
@@ -146,10 +134,8 @@ func (c *ChainConfig) String() string {
 	default:
 		engine = "unknown"
 	}
-	return fmt.Sprintf("{ChainID: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, Berlin: %v, London: %v, Engine: %v}",
+	return fmt.Sprintf("{ChainID: %v %v Istanbul: %v, Muir Glacier: %v, Berlin: %v, London: %v, Engine: %v}",
 		c.ChainID,
-		c.ConstantinopleBlock,
-		c.PetersburgBlock,
 		c.IstanbulBlock,
 		c.MuirGlacierBlock,
 		c.BerlinBlock,
@@ -158,21 +144,9 @@ func (c *ChainConfig) String() string {
 	)
 }
 
-// IsConstantinople returns whether num is either equal to the Constantinople fork block or greater.
-func (c *ChainConfig) IsConstantinople(num *big.Int) bool {
-	return isForked(c.ConstantinopleBlock, num)
-}
-
 // IsMuirGlacier returns whether num is either equal to the Muir Glacier (EIP-2384) fork block or greater.
 func (c *ChainConfig) IsMuirGlacier(num *big.Int) bool {
 	return isForked(c.MuirGlacierBlock, num)
-}
-
-// IsPetersburg returns whether num is either
-// - equal to or greater than the PetersburgBlock fork block,
-// - OR is nil, and Constantinople is active
-func (c *ChainConfig) IsPetersburg(num *big.Int) bool {
-	return isForked(c.PetersburgBlock, num) || c.PetersburgBlock == nil && isForked(c.ConstantinopleBlock, num)
 }
 
 // IsIstanbul returns whether num is either equal to the Istanbul fork block or greater.
@@ -218,8 +192,6 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 	}
 	var lastFork fork
 	for _, cur := range []fork{
-		{name: "constantinopleBlock", block: c.ConstantinopleBlock},
-		{name: "petersburgBlock", block: c.PetersburgBlock},
 		{name: "istanbulBlock", block: c.IstanbulBlock},
 		{name: "muirGlacierBlock", block: c.MuirGlacierBlock, optional: true},
 		{name: "berlinBlock", block: c.BerlinBlock},
@@ -247,16 +219,6 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 }
 
 func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, head *big.Int) *ConfigCompatError {
-	if isForkIncompatible(c.ConstantinopleBlock, newcfg.ConstantinopleBlock, head) {
-		return newCompatError("Constantinople fork block", c.ConstantinopleBlock, newcfg.ConstantinopleBlock)
-	}
-	if isForkIncompatible(c.PetersburgBlock, newcfg.PetersburgBlock, head) {
-		// the only case where we allow Petersburg to be set in the past is if it is equal to Constantinople
-		// mainly to satisfy fork ordering requirements which state that Petersburg fork be set if Constantinople fork is set
-		if isForkIncompatible(c.ConstantinopleBlock, newcfg.PetersburgBlock, head) {
-			return newCompatError("Petersburg fork block", c.PetersburgBlock, newcfg.PetersburgBlock)
-		}
-	}
 	if isForkIncompatible(c.IstanbulBlock, newcfg.IstanbulBlock, head) {
 		return newCompatError("Istanbul fork block", c.IstanbulBlock, newcfg.IstanbulBlock)
 	}
@@ -333,9 +295,9 @@ func (err *ConfigCompatError) Error() string {
 // Rules is a one time interface meaning that it shouldn't be used in between transition
 // phases.
 type Rules struct {
-	ChainID                                    *big.Int
-	IsConstantinople, IsPetersburg, IsIstanbul bool
-	IsBerlin, IsLondon                         bool
+	ChainID            *big.Int
+	IsIstanbul         bool
+	IsBerlin, IsLondon bool
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -345,11 +307,9 @@ func (c *ChainConfig) Rules(num *big.Int) Rules {
 		chainID = new(big.Int)
 	}
 	return Rules{
-		ChainID:          new(big.Int).Set(chainID),
-		IsConstantinople: c.IsConstantinople(num),
-		IsPetersburg:     c.IsPetersburg(num),
-		IsIstanbul:       c.IsIstanbul(num),
-		IsBerlin:         c.IsBerlin(num),
-		IsLondon:         c.IsLondon(num),
+		ChainID:    new(big.Int).Set(chainID),
+		IsIstanbul: c.IsIstanbul(num),
+		IsBerlin:   c.IsBerlin(num),
+		IsLondon:   c.IsLondon(num),
 	}
 }

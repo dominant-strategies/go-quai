@@ -53,13 +53,11 @@ type Config struct {
 func setDefaults(cfg *Config) {
 	if cfg.ChainConfig == nil {
 		cfg.ChainConfig = &params.ChainConfig{
-			ChainID:             big.NewInt(1),
-			ConstantinopleBlock: new(big.Int),
-			PetersburgBlock:     new(big.Int),
-			IstanbulBlock:       new(big.Int),
-			MuirGlacierBlock:    new(big.Int),
-			BerlinBlock:         new(big.Int),
-			LondonBlock:         new(big.Int),
+			ChainID:          big.NewInt(1),
+			IstanbulBlock:    new(big.Int),
+			MuirGlacierBlock: new(big.Int),
+			BerlinBlock:      new(big.Int),
+			LondonBlock:      new(big.Int),
 		}
 	}
 

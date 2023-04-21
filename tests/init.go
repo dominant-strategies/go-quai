@@ -26,66 +26,32 @@ import (
 
 // Forks table defines supported forks and their chain config.
 var Forks = map[string]*params.ChainConfig{
-	"Constantinople": {
-		ChainID: big.NewInt(1),
-
-		ConstantinopleBlock: big.NewInt(0),
-		PetersburgBlock:     big.NewInt(10000000),
-	},
-	"ConstantinopleFix": {
-		ChainID: big.NewInt(1),
-
-		ConstantinopleBlock: big.NewInt(0),
-		PetersburgBlock:     big.NewInt(0),
-	},
 	"Istanbul": {
-		ChainID: big.NewInt(1),
-
-		ConstantinopleBlock: big.NewInt(0),
-		PetersburgBlock:     big.NewInt(0),
-		IstanbulBlock:       big.NewInt(0),
-	},
-	"ConstantinopleFixToIstanbulAt5": {
-		ChainID: big.NewInt(1),
-
-		ConstantinopleBlock: big.NewInt(0),
-		PetersburgBlock:     big.NewInt(0),
-		IstanbulBlock:       big.NewInt(5),
+		ChainID:       big.NewInt(1),
+		IstanbulBlock: big.NewInt(0),
 	},
 	"Berlin": {
-		ChainID: big.NewInt(1),
-
-		ConstantinopleBlock: big.NewInt(0),
-		PetersburgBlock:     big.NewInt(0),
-		IstanbulBlock:       big.NewInt(0),
-		BerlinBlock:         big.NewInt(0),
+		ChainID:       big.NewInt(1),
+		IstanbulBlock: big.NewInt(0),
+		BerlinBlock:   big.NewInt(0),
 	},
 	"BerlinToLondonAt5": {
-		ChainID: big.NewInt(1),
-
-		ConstantinopleBlock: big.NewInt(0),
-		PetersburgBlock:     big.NewInt(0),
-		IstanbulBlock:       big.NewInt(0),
-		BerlinBlock:         big.NewInt(0),
-		LondonBlock:         big.NewInt(5),
+		ChainID:       big.NewInt(1),
+		IstanbulBlock: big.NewInt(0),
+		BerlinBlock:   big.NewInt(0),
+		LondonBlock:   big.NewInt(5),
 	},
 	"London": {
-		ChainID: big.NewInt(1),
-
-		ConstantinopleBlock: big.NewInt(0),
-		PetersburgBlock:     big.NewInt(0),
-		IstanbulBlock:       big.NewInt(0),
-		BerlinBlock:         big.NewInt(0),
-		LondonBlock:         big.NewInt(0),
+		ChainID:       big.NewInt(1),
+		IstanbulBlock: big.NewInt(0),
+		BerlinBlock:   big.NewInt(0),
+		LondonBlock:   big.NewInt(0),
 	},
 	"Aleut": {
-		ChainID: big.NewInt(1),
-
-		ConstantinopleBlock: big.NewInt(0),
-		PetersburgBlock:     big.NewInt(0),
-		IstanbulBlock:       big.NewInt(0),
-		BerlinBlock:         big.NewInt(0),
-		LondonBlock:         big.NewInt(0),
+		ChainID:       big.NewInt(1),
+		IstanbulBlock: big.NewInt(0),
+		BerlinBlock:   big.NewInt(0),
+		LondonBlock:   big.NewInt(0),
 	},
 }
 

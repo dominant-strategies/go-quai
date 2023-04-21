@@ -299,7 +299,7 @@ var (
 	big199680 = big.NewInt(199680)
 )
 
-// modexpMultComplexity implements bigModexp multComplexity formula, as defined in EIP-198
+// modexpMultComplexity implements bigModexp multComplexity formula
 //
 // def mult_complexity(x):
 //

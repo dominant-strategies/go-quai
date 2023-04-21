@@ -90,16 +90,16 @@ const (
 	TxAccessListStorageKeyGas uint64 = 1900 // Per storage key specified in EIP 2930 access list
 
 	// These have been changed during the course of the chain
-	CallGas                      uint64 = 700 // Static portion of gas for CALL-derivates
-	BalanceGas                   uint64 = 400 // The cost of a BALANCE operation
-	BalanceGasEIP1884            uint64 = 700 // The cost of a BALANCE operation after EIP 1884 (part of Istanbul)
-	ExtcodeSizeGas               uint64 = 700 // Cost of EXTCODESIZE
-	SloadGas                     uint64 = 200
-	SloadGasEIP1884              uint64 = 800  // Cost of SLOAD after EIP 1884 (part of Istanbul)
-	SloadGasEIP2200              uint64 = 800  // Cost of SLOAD after EIP 2200 (part of Istanbul)
-	ExtcodeHashGasConstantinople uint64 = 400  // Cost of EXTCODEHASH (introduced in Constantinople)
-	ExtcodeHashGasEIP1884        uint64 = 700  // Cost of EXTCODEHASH after EIP 1884 (part in Istanbul)
-	SelfdestructGas              uint64 = 5000 // Cost of SELFDESTRUCT
+	CallGas               uint64 = 700 // Static portion of gas for CALL-derivates
+	BalanceGas            uint64 = 400 // The cost of a BALANCE operation
+	BalanceGasEIP1884     uint64 = 700 // The cost of a BALANCE operation after EIP 1884 (part of Istanbul)
+	ExtcodeSizeGas        uint64 = 700 // Cost of EXTCODESIZE
+	SloadGas              uint64 = 200
+	SloadGasEIP1884       uint64 = 800  // Cost of SLOAD after EIP 1884 (part of Istanbul)
+	SloadGasEIP2200       uint64 = 800  // Cost of SLOAD after EIP 2200 (part of Istanbul)
+	ExtcodeHashGas        uint64 = 400  // Cost of EXTCODEHASH
+	ExtcodeHashGasEIP1884 uint64 = 700  // Cost of EXTCODEHASH after EIP 1884 (part in Istanbul)
+	SelfdestructGas       uint64 = 5000 // Cost of SELFDESTRUCT
 
 	// EXP has a dynamic portion depending on the size of the exponent
 	ExpByte uint64 = 50 // was raised to 50

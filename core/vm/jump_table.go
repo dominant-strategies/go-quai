@@ -127,7 +127,7 @@ func NewInstructionSet() JumpTable {
 	}
 	instructionSet[EXTCODEHASH] = &operation{
 		execute:     opExtCodeHash,
-		constantGas: params.ExtcodeHashGasConstantinople,
+		constantGas: params.ExtcodeHashGas,
 		minStack:    minStack(1, 1),
 		maxStack:    maxStack(1, 1),
 	}
