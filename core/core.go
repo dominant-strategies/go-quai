@@ -290,6 +290,10 @@ func (c *Core) SubscribeMissingBody(ch chan<- *types.Header) event.Subscription 
 	return c.sl.SubscribeMissingBody(ch)
 }
 
+func (c *Core) LatestTps() uint32 {
+	return c.sl.LatestTps()
+}
+
 //---------------------//
 // HeaderChain methods //
 //---------------------//

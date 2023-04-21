@@ -70,6 +70,7 @@ type backend interface {
 	Stats() (pending int, queued int)
 	Downloader() *downloader.Downloader
 	ChainConfig() *params.ChainConfig
+	LatestTps() uint32
 }
 
 // fullNodeBackend encompasses the functionality necessary for a full node
@@ -780,17 +781,18 @@ func (s *Service) reportPending(conn *connWrapper) error {
 
 // nodeStats is the information to report about the local node.
 type nodeStats struct {
-	Active   		bool   `json:"active"`
-	Syncing  		bool   `json:"syncing"`
-	Mining   		bool   `json:"mining"`
-	Hashrate 		int    `json:"hashrate"`
-	Peers    		int    `json:"peers"`
-	GasPrice 		int    `json:"gasPrice"`
-	Uptime   		int    `json:"uptime"`
-	Chain    		string `json:"chain"`
-	ChainID  	    uint64 `json:"chainId"`
-	LatestHeight    uint64 `json:"height"`
-	LatestHash      string `json:"hash"`
+	Active       bool   `json:"active"`
+	Syncing      bool   `json:"syncing"`
+	Mining       bool   `json:"mining"`
+	Hashrate     int    `json:"hashrate"`
+	Peers        int    `json:"peers"`
+	GasPrice     int    `json:"gasPrice"`
+	Uptime       int    `json:"uptime"`
+	Chain        string `json:"chain"`
+	ChainID      uint64 `json:"chainId"`
+	LatestHeight uint64 `json:"height"`
+	LatestHash   string `json:"hash"`
+	LatestTps    uint32 `json:"tps"`
 }
 
 // reportStats retrieves various stats about the node at the networking and
@@ -806,6 +808,7 @@ func (s *Service) reportStats(conn *connWrapper) error {
 	// check if backend is a full node
 	fullBackend, ok := s.backend.(fullNodeBackend)
 	header := s.backend.CurrentHeader()
+	tps := s.backend.LatestTps()
 	if ok {
 		mining = fullBackend.Miner().Mining()
 		hashrate = int(fullBackend.Miner().Hashrate())
@@ -828,17 +831,18 @@ func (s *Service) reportStats(conn *connWrapper) error {
 	stats := map[string]interface{}{
 		"id": s.node,
 		"stats": &nodeStats{
-			Active:   true,
-			Mining:   mining,
-			Hashrate: hashrate,
-			Peers:    s.server.PeerCount(),
-			GasPrice: gasprice,
-			Syncing:  syncing,
-			Uptime:   100,
-			Chain:    common.NodeLocation.Name(),
-			ChainID:  s.chainID.Uint64(),
+			Active:       true,
+			Mining:       mining,
+			Hashrate:     hashrate,
+			Peers:        s.server.PeerCount(),
+			GasPrice:     gasprice,
+			Syncing:      syncing,
+			Uptime:       100,
+			Chain:        common.NodeLocation.Name(),
+			ChainID:      s.chainID.Uint64(),
 			LatestHeight: header.Number().Uint64(),
 			LatestHash:   header.Hash().String(),
+			LatestTps:    tps,
 		},
 	}
 	report := map[string][]interface{}{

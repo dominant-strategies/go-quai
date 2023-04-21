@@ -392,3 +392,7 @@ func (b *QuaiAPIBackend) AddPendingEtxs(pEtxs types.PendingEtxs) error {
 func (b *QuaiAPIBackend) SubscribePendingHeaderEvent(ch chan<- *types.Header) event.Subscription {
 	return b.eth.core.SubscribePendingHeader(ch)
 }
+
+func (b *QuaiAPIBackend) LatestTps() uint32 {
+	return b.eth.core.LatestTps()
+}
