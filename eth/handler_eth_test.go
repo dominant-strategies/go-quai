@@ -90,11 +90,9 @@ func testForkIDSplit(t *testing.T, protocol uint) {
 		engine = blake3pow.NewFaker()
 
 		configNoFork  = &params.ChainConfig{}
-		configProFork = &params.ChainConfig{
-			ByzantiumBlock: big.NewInt(3),
-		}
-		dbNoFork  = rawdb.NewMemoryDatabase()
-		dbProFork = rawdb.NewMemoryDatabase()
+		configProFork = &params.ChainConfig{}
+		dbNoFork      = rawdb.NewMemoryDatabase()
+		dbProFork     = rawdb.NewMemoryDatabase()
 
 		gspecNoFork  = &core.Genesis{Config: configNoFork}
 		gspecProFork = &core.Genesis{Config: configProFork}

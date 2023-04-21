@@ -491,8 +491,7 @@ func newTwistPoint(blob []byte) (*bn256.G2, error) {
 	return p, nil
 }
 
-// runBn256Add implements the Bn256Add precompile, referenced by both
-// Byzantium and Istanbul operations.
+// runBn256Add implements the Bn256Add precompile
 func runBn256Add(input []byte) ([]byte, error) {
 	x, err := newCurvePoint(getData(input, 0, 64))
 	if err != nil {
@@ -520,21 +519,7 @@ func (c *bn256AddIstanbul) Run(input []byte) ([]byte, error) {
 	return runBn256Add(input)
 }
 
-// bn256AddByzantium implements a native elliptic curve point addition
-// conforming to Byzantium consensus rules.
-type bn256AddByzantium struct{}
-
-// RequiredGas returns the gas required to execute the pre-compiled contract.
-func (c *bn256AddByzantium) RequiredGas(input []byte) uint64 {
-	return params.Bn256AddGasByzantium
-}
-
-func (c *bn256AddByzantium) Run(input []byte) ([]byte, error) {
-	return runBn256Add(input)
-}
-
-// runBn256ScalarMul implements the Bn256ScalarMul precompile, referenced by
-// both Byzantium and Istanbul operations.
+// runBn256ScalarMul implements the Bn256ScalarMul precompile
 func runBn256ScalarMul(input []byte) ([]byte, error) {
 	p, err := newCurvePoint(getData(input, 0, 64))
 	if err != nil {
@@ -558,19 +543,6 @@ func (c *bn256ScalarMulIstanbul) Run(input []byte) ([]byte, error) {
 	return runBn256ScalarMul(input)
 }
 
-// bn256ScalarMulByzantium implements a native elliptic curve scalar
-// multiplication conforming to Byzantium consensus rules.
-type bn256ScalarMulByzantium struct{}
-
-// RequiredGas returns the gas required to execute the pre-compiled contract.
-func (c *bn256ScalarMulByzantium) RequiredGas(input []byte) uint64 {
-	return params.Bn256ScalarMulGasByzantium
-}
-
-func (c *bn256ScalarMulByzantium) Run(input []byte) ([]byte, error) {
-	return runBn256ScalarMul(input)
-}
-
 var (
 	// true32Byte is returned if the bn256 pairing check succeeds.
 	true32Byte = []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}
@@ -582,8 +554,7 @@ var (
 	errBadPairingInput = errors.New("bad elliptic curve pairing size")
 )
 
-// runBn256Pairing implements the Bn256Pairing precompile, referenced by both
-// Byzantium and Istanbul operations.
+// runBn256Pairing implements the Bn256Pairing precompile
 func runBn256Pairing(input []byte) ([]byte, error) {
 	// Handle some corner cases cheaply
 	if len(input)%192 > 0 {
@@ -623,19 +594,6 @@ func (c *bn256PairingIstanbul) RequiredGas(input []byte) uint64 {
 }
 
 func (c *bn256PairingIstanbul) Run(input []byte) ([]byte, error) {
-	return runBn256Pairing(input)
-}
-
-// bn256PairingByzantium implements a pairing pre-compile for the bn256 curve
-// conforming to Byzantium consensus rules.
-type bn256PairingByzantium struct{}
-
-// RequiredGas returns the gas required to execute the pre-compiled contract.
-func (c *bn256PairingByzantium) RequiredGas(input []byte) uint64 {
-	return params.Bn256PairingBaseGasByzantium + uint64(len(input)/192)*params.Bn256PairingPerPointGasByzantium
-}
-
-func (c *bn256PairingByzantium) Run(input []byte) ([]byte, error) {
 	return runBn256Pairing(input)
 }
 

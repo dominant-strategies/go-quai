@@ -136,7 +136,7 @@ func NewReceipt(root []byte, failed bool, cumulativeGasUsed uint64) *Receipt {
 }
 
 // EncodeRLP implements rlp.Encoder, and flattens the consensus fields of a receipt
-// into an RLP stream. If no post state is present, byzantium fork is assumed.
+// into an RLP stream.
 func (r *Receipt) EncodeRLP(w io.Writer) error {
 	data := &receiptRLP{r.statusEncoding(), r.CumulativeGasUsed, r.Bloom, r.Logs}
 	buf := encodeBufferPool.Get().(*bytes.Buffer)

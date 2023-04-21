@@ -667,7 +667,7 @@ func (s *StateDB) Copy() *StateDB {
 	for addr := range s.journal.dirties {
 		// As documented [here](https://github.com/ethereum/go-ethereum/pull/16485#issuecomment-380438527),
 		// and in the Finalise-method, there is a case where an object is in the journal but not
-		// in the stateObjects: OOG after touch on ripeMD prior to Byzantium. Thus, we need to check for
+		// in the stateObjects: OOG after touch on ripeMD. Thus, we need to check for
 		// nil
 		if object, exist := s.stateObjects[addr]; exist {
 			// Even though the original object is dirty, we are not copying the journal,
@@ -831,10 +831,6 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// If there was a trie prefetcher operating, it gets aborted and irrevocably
 	// modified after we start retrieving tries. Remove it from the statedb after
 	// this round of use.
-	//
-	// This is weird pre-byzantium since the first tx runs with a prefetcher and
-	// the remainder without, but pre-byzantium even the initial prefetcher is
-	// useless, so no sleep lost.
 	prefetcher := s.prefetcher
 	if s.prefetcher != nil {
 		defer func() {

@@ -34,7 +34,6 @@ import (
 var (
 	ErrInvalidSig         = errors.New("invalid transaction v, r, s values")
 	ErrExpectedProtection = errors.New("transaction signature is not protected")
-	ErrInvalidTxType      = errors.New("transaction type not valid in this context")
 	ErrTxTypeNotSupported = errors.New("transaction type not supported")
 	ErrGasFeeCapTooLow    = errors.New("fee cap less than base fee")
 	errEmptyTypedTx       = errors.New("empty typed transaction bytes")
