@@ -610,24 +610,24 @@ type tdBlock struct {
 	NewInboundEtxs   types.Transactions `json:"newInboundEtxs"`
 }
 
-func (s *PublicBlockChainQuaiAPI) Append(ctx context.Context, raw json.RawMessage) (map[string]interface{}, error) {
+func (s *PublicBlockChainQuaiAPI) Append(ctx context.Context, raw json.RawMessage) (map[string]interface{}, uint32, error) {
 	// Decode header and transactions.
 	var body tdBlock
 
 	if err := json.Unmarshal(raw, &body); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	pendingEtxs, err := s.b.Append(body.Header, body.DomPendingHeader, body.DomTerminus, body.DomOrigin, body.NewInboundEtxs)
+	pendingEtxs, tps, err := s.b.Append(body.Header, body.DomPendingHeader, body.DomTerminus, body.DomOrigin, body.NewInboundEtxs)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	// Marshal the output for decoding
 	fields := map[string]interface{}{
 		"pendingEtxs": pendingEtxs,
 	}
 
-	return fields, nil
+	return fields, tps, nil
 
 }
 
