@@ -70,6 +70,7 @@ type backend interface {
 	Stats() (pending int, queued int)
 	Downloader() *downloader.Downloader
 	ChainConfig() *params.ChainConfig
+	LatestTps() uint32
 }
 
 // fullNodeBackend encompasses the functionality necessary for a full node
@@ -816,6 +817,7 @@ type nodeStats struct {
 	ChainID      uint64 `json:"chainId"`
 	LatestHeight uint64 `json:"height"`
 	LatestHash   string `json:"hash"`
+	LatestTps    uint32 `json:"tps"`
 }
 
 // reportStats retrieves various stats about the node at the networking and
@@ -832,6 +834,7 @@ func (s *Service) reportStats(conn *connWrapper) error {
 	// check if backend is a full node
 	fullBackend, ok := s.backend.(fullNodeBackend)
 	header := s.backend.CurrentHeader()
+	tps := s.backend.LatestTps()
 	if ok {
 		mining = fullBackend.Miner().Mining()
 		hashrate = int(fullBackend.Miner().Hashrate())
@@ -867,6 +870,7 @@ func (s *Service) reportStats(conn *connWrapper) error {
 			ChainID:      s.chainID.Uint64(),
 			LatestHeight: header.Number().Uint64(),
 			LatestHash:   header.Hash().String(),
+			LatestTps:    tps,
 		},
 	}
 	report := map[string][]interface{}{

@@ -62,6 +62,7 @@ type Slice struct {
 	validator  Validator // Block and state validator interface
 	tpsHistory *lru.Cache
 	subTps     []uint32
+	latestTps  uint32
 }
 
 func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocalBlock func(block *types.Header) bool, chainConfig *params.ChainConfig, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis) (*Slice, error) {
@@ -75,6 +76,7 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 		quit:       make(chan struct{}),
 		tpsHistory: tpsLru,
 		subTps:     make([]uint32, 3),
+		latestTps:  0,
 	}
 
 	var err error
@@ -304,6 +306,7 @@ func (sl *Slice) computeTps(block *types.Block) uint32 {
 			}
 		}
 	}
+	sl.latestTps = tps
 	return tps
 }
 
@@ -868,4 +871,8 @@ func (sl *Slice) CurrentInfo(header *types.Header) bool {
 
 func (sl *Slice) WriteBlock(block *types.Block) {
 	sl.hc.WriteBlock(block)
+}
+
+func (sl *Slice) LatestTps() uint32 {
+	return sl.latestTps
 }
