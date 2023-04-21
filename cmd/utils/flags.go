@@ -150,6 +150,10 @@ var (
 		Name:  "local",
 		Usage: "Local network: localhost proof-of-work node, will not attempt to connect to bootnode or any public network",
 	}
+	GenesisNonceFlag = cli.Uint64Flag{
+		Name:  "nonce",
+		Usage: "Genesis block nonce (integer)",
+	}
 	DeveloperFlag = cli.BoolFlag{
 		Name:  "dev",
 		Usage: "Ephemeral proof-of-authority network with a pre-funded developer account, mining enabled",
@@ -1485,6 +1489,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		if cfg.NetworkId == 1 {
 			SetDNSDiscoveryDefaults(cfg, params.ColosseumGenesisHash)
 		}
+	}
+	if !ctx.GlobalBool(ColosseumFlag.Name) {
+		cfg.Genesis.Nonce = ctx.GlobalUint64(GenesisNonceFlag.Name)
 	}
 }
 

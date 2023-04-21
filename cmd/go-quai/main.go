@@ -117,6 +117,7 @@ var (
 		utils.OrchardFlag,
 		utils.GalenaFlag,
 		utils.LocalFlag,
+		utils.GenesisNonceFlag,
 		utils.VMEnableDebugFlag,
 		utils.NetworkIdFlag,
 		utils.QuaiStatsURLFlag,

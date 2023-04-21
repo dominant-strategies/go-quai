@@ -374,7 +374,7 @@ func DefaultColosseumGenesisBlock() *Genesis {
 func DefaultGardenGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.GardenChainConfig,
-		Nonce:      67,
+		Nonce:      0,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
 		GasLimit:   160000000,
 		Difficulty: big.NewInt(441092),
@@ -386,7 +386,7 @@ func DefaultGardenGenesisBlock() *Genesis {
 func DefaultOrchardGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.OrchardChainConfig,
-		Nonce:      68,
+		Nonce:      0,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
 		GasLimit:   80000000,
 		Difficulty: big.NewInt(4000000),
@@ -398,7 +398,7 @@ func DefaultOrchardGenesisBlock() *Genesis {
 func DefaultGalenaGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.GalenaChainConfig,
-		Nonce:      68,
+		Nonce:      0,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
 		GasLimit:   160000000,
 		Difficulty: big.NewInt(8800000000),
@@ -410,7 +410,7 @@ func DefaultGalenaGenesisBlock() *Genesis {
 func DefaultLocalGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.LocalChainConfig,
-		Nonce:      67,
+		Nonce:      0,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
 		GasLimit:   160000000,
 		Difficulty: big.NewInt(300000),
