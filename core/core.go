@@ -26,6 +26,7 @@ const (
 	c_maxAppendQueue         = 1000000 // Maximum number of future headers we can store in cache
 	c_maxFutureTime          = 30      // Max time into the future (in seconds) we will accept a block
 	c_appendQueueRetryPeriod = 1       // Time (in seconds) before retrying to append from AppendQueue
+	c_appendQueueThreshold   = 30      // Number of blocks to load from the disk to ram on every proc of append queue
 )
 
 type Core struct {
@@ -119,8 +120,17 @@ func (c *Core) procAppendQueue() {
 		return hashNumberList[i].Number < hashNumberList[j].Number
 	})
 
+	// Only take c_appendQueueThreshold latest blocks out of the database because we know that the
+	// append will be interrupted once we reach the dom block, so no need to get
+	// all the blocks in the appendQueue and load it to the RAM
+	var threshold int
+	if len(hashNumberList) > c_appendQueueThreshold {
+		threshold = c_appendQueueThreshold
+	} else {
+		threshold = len(hashNumberList)
+	}
 	// Attempt to service the sorted list
-	for _, hashAndNumber := range hashNumberList {
+	for _, hashAndNumber := range hashNumberList[:threshold] {
 		block := c.GetBlockOrCandidateByHash(hashAndNumber.Hash)
 		if block != nil {
 			c.serviceFutureBlock(block)
