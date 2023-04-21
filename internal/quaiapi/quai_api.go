@@ -589,13 +589,14 @@ func (s *PublicBlockChainQuaiAPI) Append(ctx context.Context, raw json.RawMessag
 		return nil, err
 	}
 
-	pendingEtxs, err := s.b.Append(body.Header, body.DomPendingHeader, body.DomTerminus, body.DomOrigin, body.NewInboundEtxs)
+	pendingEtxs, tps, err := s.b.Append(body.Header, body.DomPendingHeader, body.DomTerminus, body.DomOrigin, body.NewInboundEtxs)
 	if err != nil {
 		return nil, err
 	}
 	// Marshal the output for decoding
 	fields := map[string]interface{}{
 		"pendingEtxs": pendingEtxs,
+		"tps":         tps,
 	}
 
 	return fields, nil
