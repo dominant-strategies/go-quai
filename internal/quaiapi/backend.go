@@ -82,6 +82,7 @@ type Backend interface {
 	GetSubManifest(slice common.Location, blockHash common.Hash) (types.BlockManifest, error)
 	AddPendingEtxs(pEtxs types.PendingEtxs) error
 	PendingBlockAndReceipts() (*types.Block, types.Receipts)
+	LatestTps() uint32
 
 	// Transaction pool API
 	SendTx(ctx context.Context, signedTx *types.Transaction) error
