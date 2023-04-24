@@ -296,6 +296,10 @@ func (c *Core) LatestTps() uint32 {
 	return c.sl.LatestTps()
 }
 
+func (c *Core) AverageAppendTime() int64 {
+	return c.sl.AverageAppendTime()
+}
+
 //---------------------//
 // HeaderChain methods //
 //---------------------//
