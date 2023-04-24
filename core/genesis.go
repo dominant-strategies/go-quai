@@ -259,34 +259,10 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 // ToBlock creates the genesis block and writes state of a genesis specification
 // to the given database (or discards it if nil).
 func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
-	nodeCtx := common.NodeLocation.Context()
-	if db == nil {
-		db = rawdb.NewMemoryDatabase()
-	}
-	// We only allow genesis allocations in zone chain. We need to calculate
-	// the zone genesis state root
-	zoneStatedb, err := state.New(common.Hash{}, state.NewDatabase(db), nil)
-	if err != nil {
-		panic(err)
-	}
-	for addr, account := range g.Alloc {
-		internal, err := addr.InternalAddress()
-		if err != nil {
-			fmt.Println("Provided address in genesis block is out of scope")
-		}
-		zoneStatedb.AddBalance(internal, account.Balance)
-		zoneStatedb.SetCode(internal, account.Code)
-		zoneStatedb.SetNonce(internal, account.Nonce)
-		for key, value := range account.Storage {
-			zoneStatedb.SetState(internal, key, value)
-		}
-	}
-	zoneRoot := zoneStatedb.IntermediateRoot(false)
 	head := types.EmptyHeader()
 	head.SetNonce(types.EncodeNonce(g.Nonce))
 	head.SetTime(g.Timestamp)
 	head.SetExtra(g.ExtraData)
-	head.SetRoot(zoneRoot) // Not genesis allocs allowed
 	head.SetDifficulty(g.Difficulty)
 	head.SetCoinbase(common.ZeroAddr)
 	head.SetGasLimit(g.GasLimit)
@@ -298,12 +274,6 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	for i := 0; i < common.HierarchyDepth; i++ {
 		head.SetNumber(big.NewInt(0), i)
 		head.SetParentHash(common.Hash{}, i)
-	}
-
-	if nodeCtx == common.ZONE_CTX {
-		statedb := *zoneStatedb
-		statedb.Commit(false)
-		statedb.Database().TrieDB().Commit(head.Root(), true, nil)
 	}
 
 	return types.NewBlock(head, nil, nil, nil, nil, nil, trie.NewStackTrie(nil))
@@ -414,7 +384,6 @@ func DefaultLocalGenesisBlock() *Genesis {
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
 		GasLimit:   160000000,
 		Difficulty: big.NewInt(300000),
-		Alloc:      decodePrealloc(localAllocData),
 	}
 }
 
@@ -454,4 +423,8 @@ func decodePrealloc(data string) GenesisAlloc {
 		ga[common.BigToAddress(account.Addr)] = GenesisAccount{Balance: account.Balance}
 	}
 	return ga
+}
+
+func DecodePrealloc(data string) GenesisAlloc {
+	return decodePrealloc(data)
 }
