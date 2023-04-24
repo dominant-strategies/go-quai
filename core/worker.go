@@ -994,6 +994,9 @@ func (w *worker) adjustGasLimit(interrupt *int32, env *environment, parent *type
 
 func (w *worker) FinalizeAssembleAndBroadcast(chain consensus.ChainHeaderReader, header *types.Header, parent *types.Block, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, etxs []*types.Transaction, subManifest types.BlockManifest, receipts []*types.Receipt) (*types.Block, error) {
 	nodeCtx := common.NodeLocation.Context()
+
+
+
 	block, err := w.engine.FinalizeAndAssemble(chain, header, state, txs, uncles, etxs, subManifest, receipts)
 	if err != nil {
 		return nil, err

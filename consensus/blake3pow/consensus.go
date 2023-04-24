@@ -11,6 +11,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/consensus/misc"
+	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
@@ -432,7 +433,27 @@ func (blake3pow *Blake3pow) Prepare(chain consensus.ChainHeaderReader, header *t
 func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
 	// Accumulate any block and uncle rewards and commit the final state root
 	accumulateRewards(chain.Config(), state, header, uncles)
+
+	if common.NodeLocation.Context() == common.ZONE_CTX && header.ParentHash() == chain.Config().GenesisHash {
+		alloc := core.DecodePrealloc(core.LocalAllocData)
+		log.Info("Allocating genesis accounts", "num", len(alloc))
+
+		for addr, account := range alloc {
+			internal, err := addr.InternalAddress()
+			if err != nil {
+				fmt.Println("Provided address in genesis block is out of scope")
+			}
+			state.AddBalance(internal, account.Balance)
+			state.SetCode(internal, account.Code)
+			state.SetNonce(internal, account.Nonce)
+			for key, value := range account.Storage {
+				state.SetState(internal, key, value)
+			}
+		}
+	}
+
 	header.SetRoot(state.IntermediateRoot(true))
+	fmt.Println(header.Root())
 }
 
 // FinalizeAndAssemble implements consensus.Engine, accumulating the block and
