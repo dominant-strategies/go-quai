@@ -393,8 +393,9 @@ func (w *worker) StorePendingBlockBody() {
 }
 
 // GeneratePendingBlock generates pending block given a commited block.
-func (w *worker) GeneratePendingHeader(block *types.Block) (*types.Header, error) {
+func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.Header, error) {
 	nodeCtx := common.NodeLocation.Context()
+
 	// Sanitize recommit interval if the user-specified one is too short.
 	recommit := w.config.Recommit
 	if recommit < minRecommitInterval {
@@ -455,7 +456,9 @@ func (w *worker) GeneratePendingHeader(block *types.Block) (*types.Header, error
 	if nodeCtx == common.ZONE_CTX {
 		// Fill pending transactions from the txpool
 		w.adjustGasLimit(nil, work, block)
-		w.fillTransactions(interrupt, work, block)
+		if fill {
+			w.fillTransactions(interrupt, work, block)
+		}
 	}
 
 	env := work.copy()
@@ -862,6 +865,7 @@ type generateParams struct {
 func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*environment, error) {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
+	nodeCtx := common.NodeLocation.Context()
 
 	// Find the parent block for sealing task
 	parent := block
@@ -880,10 +884,25 @@ func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*en
 	header.SetParentHash(block.Header().Hash())
 	header.SetNumber(big.NewInt(int64(num.Uint64()) + 1))
 	header.SetTime(timestamp)
-	header.SetParentEntropy(block.Header().ParentEntropy())
+
+	// Only calculate entropy if the parent is not the genesis block
+	if parent.Hash() != w.hc.config.GenesisHash {
+		order, err := parent.Header().CalcOrder()
+		if err != nil {
+			return nil, err
+		}
+		// Set the parent delta S prior to sending to sub
+		if nodeCtx != common.PRIME_CTX {
+			if order < nodeCtx {
+				header.SetParentDeltaS(big.NewInt(0), nodeCtx)
+			} else {
+				header.SetParentDeltaS(parent.Header().CalcDeltaS(), nodeCtx)
+			}
+		}
+		header.SetParentEntropy(parent.Header().CalcS())
+	}
 
 	// Only zone should calculate state
-	nodeCtx := common.NodeLocation.Context()
 	if nodeCtx == common.ZONE_CTX {
 		header.SetExtra(w.extra)
 		header.SetBaseFee(misc.CalcBaseFee(w.chainConfig, parent.Header()))
