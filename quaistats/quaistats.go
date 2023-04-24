@@ -22,8 +22,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/shirou/gopsutil/cpu"
+	"github.com/shirou/gopsutil/mem"
+	"io/fs"
 	"math/big"
 	"net/http"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -101,6 +105,8 @@ type Service struct {
 	txSub   event.Subscription
 
 	chainID *big.Int
+
+	instanceDir string // Path to the node's instance directory
 }
 
 // connWrapper is a wrapper to prevent concurrent-write or concurrent-read on the
@@ -180,15 +186,16 @@ func New(node *node.Node, backend backend, engine consensus.Engine, url string) 
 		return err
 	}
 	quaistats := &Service{
-		backend: backend,
-		engine:  engine,
-		server:  node.Server(),
-		node:    parts[0],
-		pass:    parts[1],
-		host:    parts[2],
-		pongCh:  make(chan struct{}),
-		histCh:  make(chan []uint64, 1),
-		chainID: backend.ChainConfig().ChainID,
+		backend:     backend,
+		engine:      engine,
+		server:      node.Server(),
+		node:        parts[0],
+		pass:        parts[1],
+		host:        parts[2],
+		pongCh:      make(chan struct{}),
+		histCh:      make(chan []uint64, 1),
+		chainID:     backend.ChainConfig().ChainID,
+		instanceDir: node.InstanceDir(),
 	}
 
 	node.RegisterLifecycle(quaistats)
@@ -781,17 +788,22 @@ func (s *Service) reportPending(conn *connWrapper) error {
 
 // nodeStats is the information to report about the local node.
 type nodeStats struct {
-	Active       bool   `json:"active"`
-	Syncing      bool   `json:"syncing"`
-	Mining       bool   `json:"mining"`
-	Hashrate     int    `json:"hashrate"`
-	Peers        int    `json:"peers"`
-	GasPrice     int    `json:"gasPrice"`
-	Uptime       int    `json:"uptime"`
-	Chain        string `json:"chain"`
-	ChainID      uint64 `json:"chainId"`
-	LatestHeight uint64 `json:"height"`
-	LatestHash   string `json:"hash"`
+	Name         string  `json:"name"`
+	Active       bool    `json:"active"`
+	Syncing      bool    `json:"syncing"`
+	Mining       bool    `json:"mining"`
+	Hashrate     int     `json:"hashrate"`
+	Peers        int     `json:"peers"`
+	GasPrice     int     `json:"gasPrice"`
+	Uptime       int     `json:"uptime"`
+	Chain        string  `json:"chain"`
+	ChainID      uint64  `json:"chainId"`
+	LatestHeight uint64  `json:"height"`
+	LatestHash   string  `json:"hash"`
+	CPUUsage     float32 `json:"cpuUsage"`
+	RAMUsage     float32 `json:"ramUsage"`
+	SwapUsage    float32 `json:"swapUsage"`
+	DiskUsage    float32 `json:"diskUsage"`
 	LatestTps    uint32 `json:"tps"`
 }
 
@@ -825,12 +837,37 @@ func (s *Service) reportStats(conn *connWrapper) error {
 		sync := s.backend.Downloader().Progress()
 		syncing = header.Number().Uint64() >= sync.HighestBlock
 	}
+
+	cpuPercent, err := cpu.Percent(0, false)
+	if err != nil {
+		log.Warn("Error getting CPU usage:", err)
+	}
+
+	// Get RAM usage
+	vmStat, err := mem.VirtualMemory()
+	if err != nil {
+		log.Warn("Error getting RAM usage:", err)
+	}
+
+	// Get swap usage
+	swapStat, err := mem.SwapMemory()
+	if err != nil {
+		log.Warn("Error getting swap usage:", err)
+	}
+
+	// Get disk usage
+	diskUsage, err := dirSize(s.instanceDir)
+	if err != nil {
+		log.Warn("Error calculating directory sizes:", err)
+	}
+
 	// Assemble the node stats and send it to the server
 	log.Trace("Sending node details to quaistats")
 
 	stats := map[string]interface{}{
 		"id": s.node,
 		"stats": &nodeStats{
+			Name:         s.node,
 			Active:       true,
 			Mining:       mining,
 			Hashrate:     hashrate,
@@ -843,6 +880,10 @@ func (s *Service) reportStats(conn *connWrapper) error {
 			LatestHeight: header.Number().Uint64(),
 			LatestHash:   header.Hash().String(),
 			LatestTps:    tps,
+			CPUUsage:     float32(cpuPercent[0]),
+			RAMUsage:     float32(vmStat.UsedPercent),
+			SwapUsage:    float32(swapStat.UsedPercent),
+			DiskUsage:    diskUsage, // in MB
 		},
 	}
 	report := map[string][]interface{}{
@@ -926,4 +967,22 @@ func (s *Service) reportPeers(conn *connWrapper) error {
 		"emit": {"peers", peers},
 	}
 	return conn.WriteJSON(report)
+}
+
+func dirSize(path string) (float32, error) {
+	var size int64
+	err := filepath.WalkDir(path, func(_ string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() {
+			fileInfo, err := d.Info()
+			if err != nil {
+				return err
+			}
+			size += fileInfo.Size()
+		}
+		return nil
+	})
+	return float32(size) / 1024 / 1024, err // convert to MB
 }
