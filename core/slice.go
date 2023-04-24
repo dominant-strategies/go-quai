@@ -5,10 +5,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	lru "github.com/hashicorp/golang-lru"
 	"math/big"
 	"sync"
 	"time"
+
+	lru "github.com/hashicorp/golang-lru"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
@@ -62,24 +63,27 @@ type Slice struct {
 	bestPhKey common.Hash
 	phCache   map[common.Hash]types.PendingHeader
 
-	validator  Validator // Block and state validator interface
-	tpsHistory *lru.Cache
-	subTps     []uint32
-	latestTps  uint32
+	validator     Validator // Block and state validator interface
+	tpsHistory    *lru.Cache
+	subTps        []uint32
+	latestTps     uint32
+	appendHistory *lru.Cache
 }
 
 func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocalBlock func(block *types.Header) bool, chainConfig *params.ChainConfig, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis) (*Slice, error) {
 	nodeCtx := common.NodeLocation.Context()
 	tpsLru, _ := lru.New(10)
+	appendTimeCache, _ := lru.New(10)
 	sl := &Slice{
-		config:     chainConfig,
-		engine:     engine,
-		sliceDb:    db,
-		domUrl:     domClientUrl,
-		quit:       make(chan struct{}),
-		tpsHistory: tpsLru,
-		subTps:     make([]uint32, 3),
-		latestTps:  0,
+		config:        chainConfig,
+		engine:        engine,
+		sliceDb:       db,
+		domUrl:        domClientUrl,
+		quit:          make(chan struct{}),
+		tpsHistory:    tpsLru,
+		subTps:        make([]uint32, 3),
+		latestTps:     0,
+		appendHistory: appendTimeCache,
 	}
 
 	pendingEtxs, _ := lru.New(maxPendingEtxBlocks)
@@ -268,6 +272,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	time12 := common.PrettyDuration(time.Since(start))
 	sl.writeToPhCacheAndPickPhHead(pendingHeaderWithTermini)
 	tps := sl.computeTps(block)
+	sl.appendHistory.Add(block.Hash(), time.Since(start))
 
 	// Relay the new pendingHeader
 	go sl.relayPh(pendingHeaderWithTermini, domOrigin, block.Location())
@@ -926,4 +931,21 @@ func (sl *Slice) WriteBlock(block *types.Block) {
 
 func (sl *Slice) LatestTps() uint32 {
 	return sl.latestTps
+}
+
+func (sl *Slice) AverageAppendTime() int64 {
+	var totalDuration int64
+	for _, key := range sl.appendHistory.Keys() {
+		value, found := sl.appendHistory.Get(key)
+		if found {
+			duration := value.(time.Duration)
+			totalDuration += duration.Milliseconds()
+		}
+	}
+
+	if sl.appendHistory.Len() == 0 {
+		return 0
+	}
+	averageDuration := totalDuration / int64(sl.appendHistory.Len())
+	return averageDuration
 }

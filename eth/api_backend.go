@@ -401,3 +401,7 @@ func (b *QuaiAPIBackend) SubscribePendingHeaderEvent(ch chan<- *types.Header) ev
 func (b *QuaiAPIBackend) LatestTps() uint32 {
 	return b.eth.core.LatestTps()
 }
+
+func (b *QuaiAPIBackend) AverageAppendTime() int64 {
+	return b.eth.core.AverageAppendTime()
+}

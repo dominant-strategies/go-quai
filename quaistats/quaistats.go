@@ -22,8 +22,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/shirou/gopsutil/cpu"
-	"github.com/shirou/gopsutil/mem"
 	"io/fs"
 	"math/big"
 	"net/http"
@@ -33,6 +31,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/shirou/gopsutil/cpu"
+	"github.com/shirou/gopsutil/mem"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/mclock"
@@ -75,6 +76,7 @@ type backend interface {
 	Downloader() *downloader.Downloader
 	ChainConfig() *params.ChainConfig
 	LatestTps() uint32
+	AverageAppendTime() int64
 }
 
 // fullNodeBackend encompasses the functionality necessary for a full node
@@ -788,23 +790,24 @@ func (s *Service) reportPending(conn *connWrapper) error {
 
 // nodeStats is the information to report about the local node.
 type nodeStats struct {
-	Name         string  `json:"name"`
-	Active       bool    `json:"active"`
-	Syncing      bool    `json:"syncing"`
-	Mining       bool    `json:"mining"`
-	Hashrate     int     `json:"hashrate"`
-	Peers        int     `json:"peers"`
-	GasPrice     int     `json:"gasPrice"`
-	Uptime       int     `json:"uptime"`
-	Chain        string  `json:"chain"`
-	ChainID      uint64  `json:"chainId"`
-	LatestHeight uint64  `json:"height"`
-	LatestHash   string  `json:"hash"`
-	CPUUsage     float32 `json:"cpuUsage"`
-	RAMUsage     float32 `json:"ramUsage"`
-	SwapUsage    float32 `json:"swapUsage"`
-	DiskUsage    float32 `json:"diskUsage"`
-	LatestTps    uint32 `json:"tps"`
+	Name          string  `json:"name"`
+	Active        bool    `json:"active"`
+	Syncing       bool    `json:"syncing"`
+	Mining        bool    `json:"mining"`
+	Hashrate      int     `json:"hashrate"`
+	Peers         int     `json:"peers"`
+	GasPrice      int     `json:"gasPrice"`
+	Uptime        int     `json:"uptime"`
+	Chain         string  `json:"chain"`
+	ChainID       uint64  `json:"chainId"`
+	LatestHeight  uint64  `json:"height"`
+	LatestHash    string  `json:"hash"`
+	CPUUsage      float32 `json:"cpuUsage"`
+	RAMUsage      float32 `json:"ramUsage"`
+	SwapUsage     float32 `json:"swapUsage"`
+	DiskUsage     float32 `json:"diskUsage"`
+	LatestTps     uint32  `json:"tps"`
+	AvgAppendTime int64   `json:"avgAppendTime"`
 }
 
 // reportStats retrieves various stats about the node at the networking and
@@ -821,6 +824,7 @@ func (s *Service) reportStats(conn *connWrapper) error {
 	fullBackend, ok := s.backend.(fullNodeBackend)
 	header := s.backend.CurrentHeader()
 	tps := s.backend.LatestTps()
+	avgAppendTime := s.backend.AverageAppendTime()
 	if ok {
 		mining = fullBackend.Miner().Mining()
 		hashrate = int(fullBackend.Miner().Hashrate())
@@ -867,23 +871,24 @@ func (s *Service) reportStats(conn *connWrapper) error {
 	stats := map[string]interface{}{
 		"id": s.node,
 		"stats": &nodeStats{
-			Name:         s.node,
-			Active:       true,
-			Mining:       mining,
-			Hashrate:     hashrate,
-			Peers:        s.server.PeerCount(),
-			GasPrice:     gasprice,
-			Syncing:      syncing,
-			Uptime:       100,
-			Chain:        common.NodeLocation.Name(),
-			ChainID:      s.chainID.Uint64(),
-			LatestHeight: header.Number().Uint64(),
-			LatestHash:   header.Hash().String(),
-			LatestTps:    tps,
-			CPUUsage:     float32(cpuPercent[0]),
-			RAMUsage:     float32(vmStat.UsedPercent),
-			SwapUsage:    float32(swapStat.UsedPercent),
-			DiskUsage:    diskUsage, // in MB
+			Name:          s.node,
+			Active:        true,
+			Mining:        mining,
+			Hashrate:      hashrate,
+			Peers:         s.server.PeerCount(),
+			GasPrice:      gasprice,
+			Syncing:       syncing,
+			Uptime:        100,
+			Chain:         common.NodeLocation.Name(),
+			ChainID:       s.chainID.Uint64(),
+			LatestHeight:  header.Number().Uint64(),
+			LatestHash:    header.Hash().String(),
+			LatestTps:     tps,
+			CPUUsage:      float32(cpuPercent[0]),
+			RAMUsage:      float32(vmStat.UsedPercent),
+			SwapUsage:     float32(swapStat.UsedPercent),
+			DiskUsage:     diskUsage, // in MB
+			AvgAppendTime: avgAppendTime,
 		},
 	}
 	report := map[string][]interface{}{
