@@ -36,7 +36,6 @@ import (
 	"github.com/shirou/gopsutil/mem"
 
 	"github.com/dominant-strategies/go-quai/common"
-	"github.com/dominant-strategies/go-quai/common/mclock"
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/core/types"
@@ -56,9 +55,6 @@ const (
 	// history request.
 	historyUpdateRange = 50
 
-	// txChanSize is the size of channel listening to NewTxsEvent.
-	// The number is referenced from the size of tx pool.
-	txChanSize = 4096
 	// chainHeadChanSize is the size of channel listening to ChainHeadEvent.
 	chainHeadChanSize = 10
 
@@ -206,16 +202,10 @@ func New(node *node.Node, backend backend, engine consensus.Engine, url string) 
 
 // Start implements node.Lifecycle, starting up the monitoring and reporting daemon.
 func (s *Service) Start() error {
-	nodeCtx := common.NodeLocation.Context()
 	// Subscribe to chain events to execute updates on
 	chainHeadCh := make(chan core.ChainHeadEvent, chainHeadChanSize)
 	s.headSub = s.backend.SubscribeChainHeadEvent(chainHeadCh)
-	var txEventCh chan core.NewTxsEvent
-	if nodeCtx == common.ZONE_CTX {
-		txEventCh = make(chan core.NewTxsEvent, txChanSize)
-		s.txSub = s.backend.SubscribeNewTxsEvent(txEventCh)
-	}
-	go s.loop(chainHeadCh, txEventCh)
+	go s.loop(chainHeadCh)
 
 	log.Info("Stats daemon started")
 	return nil
@@ -234,17 +224,14 @@ func (s *Service) Stop() error {
 
 // loop keeps trying to connect to the netstats server, reporting chain events
 // until termination.
-func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, txEventCh chan core.NewTxsEvent) {
+func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent) {
 	nodeCtx := common.NodeLocation.Context()
 	// Start a goroutine that exhausts the subscriptions to avoid events piling up
 	var (
 		quitCh = make(chan struct{})
 		headCh = make(chan *types.Block, 1)
-		txCh   = make(chan struct{}, 1)
 	)
 	go func() {
-		var lastTx mclock.AbsTime
-
 	HandleLoop:
 		for {
 			select {
@@ -256,28 +243,6 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, txEventCh chan core
 				}
 			case <-s.headSub.Err():
 				break HandleLoop
-			}
-		}
-		if nodeCtx == common.ZONE_CTX {
-		HandleLoopZone:
-			for {
-				select {
-				// Notify of new transaction events, but drop if too frequent
-				case <-txEventCh:
-					if time.Duration(mclock.Now()-lastTx) < time.Second {
-						continue
-					}
-					lastTx = mclock.Now()
-
-					select {
-					case txCh <- struct{}{}:
-					default:
-					}
-
-				// node stopped
-				case <-s.txSub.Err():
-					break HandleLoopZone
-				}
 			}
 		}
 		close(quitCh)
@@ -367,18 +332,7 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, txEventCh chan core
 					}
 				}
 			}
-
-			for err == nil {
-				select {
-				case <-txCh:
-					if err = s.reportPending(conn); err != nil {
-						log.Warn("Transaction stats report failed", "err", err)
-					}
-				}
-
-			}
 			fullReport.Stop()
-
 			// Close the current connection and establish a new one
 			conn.Close()
 			errTimer.Reset(0)
