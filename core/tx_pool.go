@@ -526,6 +526,7 @@ func (pool *TxPool) TxPoolPending(enforceTips bool, etxSet types.EtxSet) (map[co
 		if enforceTips && !pool.locals.contains(addr) {
 			for i, tx := range txs {
 				if tx.EffectiveGasTipIntCmp(pool.gasPrice, pool.priced.urgent.baseFee) < 0 {
+					log.Debug("TX has incorrect or low miner tip", "tx", tx.Hash().String(), "gasTipCap", tx.GasTipCap().String(), "poolGasPrice", pool.gasPrice.String(), "baseFee", pool.priced.urgent.baseFee.String())
 					txs = txs[:i]
 					break
 				}
@@ -1330,14 +1331,14 @@ func (pool *TxPool) promoteExecutables(accounts []common.InternalAddress) []*typ
 			hash := tx.Hash()
 			pool.all.Remove(hash)
 		}
-		log.Trace("Removed old queued transactions", "count", len(forwards))
+		log.Debug("Removed old queued transactions", "count", len(forwards))
 		// Drop all transactions that are too costly (low balance or out of gas)
 		drops, _ := list.Filter(pool.currentState.GetBalance(addr), pool.currentMaxGas)
 		for _, tx := range drops {
 			hash := tx.Hash()
 			pool.all.Remove(hash)
 		}
-		log.Trace("Removed unpayable queued transactions", "count", len(drops))
+		log.Debug("Removed unpayable queued transactions", "count", len(drops))
 		queuedNofundsMeter.Mark(int64(len(drops)))
 
 		// Gather all executable transactions and promote them

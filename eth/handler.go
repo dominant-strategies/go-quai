@@ -170,7 +170,11 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	}
 	// writeBlock writes the block to the DB
 	writeBlock := func(block *types.Block) {
-		atomic.StoreUint32(&h.acceptTxs, 1)
+		if nodeCtx == common.ZONE_CTX && block.NumberU64()-1 == h.core.CurrentHeader().NumberU64() {
+			if atomic.LoadUint32(&h.acceptTxs) != 1 {
+				atomic.StoreUint32(&h.acceptTxs, 1)
+			}
+		}
 		h.core.WriteBlock(block)
 	}
 	h.blockFetcher = fetcher.NewBlockFetcher(h.core.GetBlockByHash, writeBlock, validator, h.BroadcastBlock, heighter, h.removePeer)

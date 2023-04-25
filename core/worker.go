@@ -728,6 +728,7 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*
 		gasUsed := env.header.GasUsed()
 		receipt, err := ApplyTransaction(w.chainConfig, w.hc, &env.coinbase, env.gasPool, env.state, env.header, tx, &gasUsed, *w.hc.bc.processor.GetVMConfig())
 		if err != nil {
+			log.Debug("Error playing transaction in worker", "err", err, "tx", tx.Hash().Hex(), "block", env.header.Number, "gasUsed", gasUsed)
 			env.state.RevertToSnapshot(snap)
 			return nil, err
 		}

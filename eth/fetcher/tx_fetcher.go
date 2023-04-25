@@ -35,7 +35,7 @@ import (
 const (
 	// maxTxAnnounces is the maximum number of unique transaction a peer
 	// can announce in a short time.
-	maxTxAnnounces = 4096
+	maxTxAnnounces = 16384
 
 	// maxTxRetrievals is the maximum transaction number can be fetched in one
 	// request. The rationale to pick 256 is:
@@ -45,7 +45,7 @@ const (
 	//   - However the maximum size of a single transaction is raised to 128KB,
 	//     so pick a middle value here to ensure we can maximize the efficiency
 	//     of the retrieval and response size overflow won't happen in most cases.
-	maxTxRetrievals = 256
+	maxTxRetrievals = 2048
 
 	// maxTxUnderpricedSetSize is the size of the underpriced transaction set that
 	// is used to track recent transactions that have been dropped so we don't
@@ -278,6 +278,7 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 	errs := f.addTxs(txs)
 	for i, err := range errs {
 		if err != nil {
+			log.Error("Failed to add transaction", "hash", txs[i].Hash().String(), "err", err)
 			// Track the transaction hash if the price is too low for us.
 			// Avoid re-request this transaction when we receive another
 			// announcement.
