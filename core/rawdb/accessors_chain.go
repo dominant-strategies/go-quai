@@ -1275,3 +1275,36 @@ func DeletePendingEtxs(db ethdb.KeyValueWriter, hash common.Hash, number uint64)
 		log.Crit("Failed to delete pending etxs", "err", err)
 	}
 }
+
+// ReadPendingEtxsRollup retreives the pending ETXs rollup corresponding to a given block
+func ReadPendingEtxsRollup(db ethdb.Reader, hash common.Hash) *types.PendingEtxsRollup {
+	// Try to look up the data in leveldb.
+	data, _ := db.Get(pendingEtxsRollupKey(hash))
+	if len(data) == 0 {
+		return nil
+	}
+	pendingEtxsRollup := types.PendingEtxsRollup{}
+	if err := rlp.Decode(bytes.NewReader(data), &pendingEtxsRollup); err != nil {
+		log.Error("Invalid pending etxs rollup rlp", "hash", hash, "err", err)
+		return nil
+	}
+	return &pendingEtxsRollup
+}
+
+// WritePendingEtxsRollup stores the pending ETXs rollup corresponding to a given block
+func WritePendingEtxsRollup(db ethdb.KeyValueWriter, pendingEtxsRollup types.PendingEtxsRollup) {
+	data, err := rlp.EncodeToBytes(pendingEtxsRollup)
+	if err != nil {
+		log.Crit("Failed to RLP encode pending etxs rollup", "err", err)
+	}
+	if err := db.Put(pendingEtxsRollupKey(pendingEtxsRollup.Header.Hash()), data); err != nil {
+		log.Crit("Failed to store pending etxs rollup", "err", err)
+	}
+}
+
+// DeletePendingEtxsRollup removes all pending ETX rollup data associated with a block.
+func DeletePendingEtxsRollup(db ethdb.KeyValueWriter, hash common.Hash) {
+	if err := db.Delete(pendingEtxsRollupKey(hash)); err != nil {
+		log.Crit("Failed to delete pending etxs rollup", "err", err)
+	}
+}

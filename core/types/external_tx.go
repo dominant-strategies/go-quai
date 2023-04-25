@@ -27,6 +27,20 @@ type ExternalTx struct {
 	// the origin chain indeed confirmed emission of that ETX.
 }
 
+// PendingEtxsRollup is Header and manifest Hash of that header that should
+// be forward propagated
+type PendingEtxsRollup struct {
+	Header   *Header       `json:"header" gencodec:"required"`
+	Manifest BlockManifest `json:"manifest" gencodec:"required"`
+}
+
+func (p *PendingEtxsRollup) IsValid(hasher TrieHasher) bool {
+	if p == nil || p.Header == nil || p.Manifest == nil {
+		return false
+	}
+	return DeriveSha(p.Manifest, hasher) == p.Header.ManifestHash(common.ZONE_CTX)
+}
+
 // PendingEtxs are ETXs which have been emitted from the zone which produced
 // the given block. Specifically, it contains the collection of ETXs emitted
 // since our prior coincident with our sub in that slice. In Prime context, our
@@ -41,24 +55,10 @@ type PendingEtxs struct {
 }
 
 func (p *PendingEtxs) IsValid(hasher TrieHasher) bool {
-	nodeCtx := common.NodeLocation.Context()
 	if p == nil || p.Header == nil || p.Etxs == nil {
 		return false
 	}
-	switch nodeCtx {
-	case common.PRIME_CTX:
-		// In prime context, the pending etx object contains the rollup of ETXs
-		// emitted in each zone block since the zone's prior coincidence with the
-		// region.
-		return DeriveSha(p.Etxs, hasher) == p.Header.EtxRollupHash()
-	case common.REGION_CTX:
-		// In region context, the pending etx object contains the singleton of ETXs
-		// emitted by the zone.
-		return DeriveSha(p.Etxs, hasher) == p.Header.EtxHash()
-	default:
-		// PendingEtxs cannot exist in zone context
-		return false
-	}
+	return DeriveSha(p.Etxs, hasher) == p.Header.EtxHash()
 }
 
 // copy creates a deep copy of the transaction data and initializes all fields.

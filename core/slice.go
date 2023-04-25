@@ -23,7 +23,8 @@ import (
 )
 
 const (
-	maxPendingEtxBlocks               = 256
+	c_maxPendingEtxBatches            = 256
+	c_maxPendingEtxsRollup            = 256
 	c_pendingHeaderCacheLimit         = 100
 	c_pendingHeaderChacheBufferFactor = 2
 	pendingHeaderGCTime               = 5
@@ -49,9 +50,11 @@ type Slice struct {
 	domUrl     string
 	subClients []*quaiclient.Client
 
-	scope             event.SubscriptionScope
-	missingBodyFeed   event.Feed
-	missingParentFeed event.Feed
+	scope                 event.SubscriptionScope
+	missingBodyFeed       event.Feed
+	pendingEtxsFeed       event.Feed
+	pendingEtxsRollupFeed event.Feed
+	missingParentFeed     event.Feed
 
 	phCachemu sync.RWMutex
 
@@ -158,17 +161,11 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	// confirmed ETXs If this is not a coincident block, we need to build up the
 	// list of confirmed ETXs using the subordinate manifest In either case, if
 	// we are a dominant node, we need to collect the ETX rollup from our sub.
-	subRollup := types.Transactions{}
 	if !domOrigin && nodeCtx != common.ZONE_CTX {
-		newInboundEtxs, subRollup, err = sl.CollectNewlyConfirmedEtxs(block, block.Location())
+		newInboundEtxs, _, err = sl.CollectNewlyConfirmedEtxs(block, block.Location())
 		if err != nil {
 			log.Error("Error collecting newly confirmed etxs: ", "err", err)
 			return nil, ErrSubNotSyncedToDom
-		}
-	} else if nodeCtx == common.REGION_CTX {
-		subRollup, err = sl.hc.CollectSubRollup(block)
-		if err != nil {
-			return nil, err
 		}
 	}
 	time5 := common.PrettyDuration(time.Since(start))
@@ -201,6 +198,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	}
 	time9 := common.PrettyDuration(time.Since(start))
 	pendingHeaderWithTermini.Header.SetParentEntropy(s)
+	var subPendingEtxs types.Transactions
 	var time9_1 common.PrettyDuration
 	var time9_2 common.PrettyDuration
 	var time9_3 common.PrettyDuration
@@ -208,19 +206,22 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	if nodeCtx != common.ZONE_CTX {
 		// How to get the sub pending etxs if not running the full node?.
 		if sl.subClients[location.SubIndex()] != nil {
-			subPendingEtxs, err := sl.subClients[location.SubIndex()].Append(context.Background(), block.Header(), pendingHeaderWithTermini.Header, domTerminus, true, newInboundEtxs)
+			subPendingEtxs, err = sl.subClients[location.SubIndex()].Append(context.Background(), block.Header(), pendingHeaderWithTermini.Header, domTerminus, true, newInboundEtxs)
 			if err != nil {
 				return nil, err
 			}
 			time9_1 = common.PrettyDuration(time.Since(start))
 			// Cache the subordinate's pending ETXs
 			pEtxs := types.PendingEtxs{block.Header(), subPendingEtxs}
-			if !pEtxs.IsValid(trie.NewStackTrie(nil)) {
-				return nil, errors.New("sub pending ETXs faild validation")
-			}
 			time9_2 = common.PrettyDuration(time.Since(start))
 			// Add the pending etx given by the sub in the rollup
-			sl.hc.AddPendingEtxs(pEtxs)
+			sl.AddPendingEtxs(pEtxs)
+			// Only region has the rollup hashes for pendingEtxs
+			if nodeCtx == common.REGION_CTX {
+				// We also need to store the pendingEtxRollup to the dom
+				pEtxRollup := types.PendingEtxsRollup{block.Header(), block.SubManifest()}
+				sl.AddPendingEtxsRollup(pEtxRollup)
+			}
 			time9_3 = common.PrettyDuration(time.Since(start))
 		}
 	}
@@ -251,7 +252,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	if nodeCtx == common.ZONE_CTX {
 		return block.ExtTransactions(), nil
 	} else {
-		return subRollup, nil
+		return subPendingEtxs, nil
 	}
 }
 
@@ -560,6 +561,10 @@ func (sl *Slice) init(genesis *Genesis) error {
 		if err != nil {
 			return err
 		}
+		err = sl.AddPendingEtxsRollup(types.PendingEtxsRollup{genesisHeader, []common.Hash{}})
+		if err != nil {
+			return err
+		}
 
 		if common.NodeLocation.Context() == common.PRIME_CTX {
 			go sl.NewGenesisPendingHeader(nil)
@@ -799,10 +804,64 @@ func (sl *Slice) SubscribeMissingBody(ch chan<- *types.Header) event.Subscriptio
 	return sl.scope.Track(sl.missingBodyFeed.Subscribe(ch))
 }
 
+func (sl *Slice) SubscribePendingEtxs(ch chan<- types.PendingEtxs) event.Subscription {
+	return sl.scope.Track(sl.pendingEtxsFeed.Subscribe(ch))
+}
+
+func (sl *Slice) SubscribePendingEtxsRollup(ch chan<- types.PendingEtxsRollup) event.Subscription {
+	return sl.scope.Track(sl.pendingEtxsRollupFeed.Subscribe(ch))
+}
+
 func (sl *Slice) CurrentInfo(header *types.Header) bool {
 	return sl.miner.worker.CurrentInfo(header)
 }
 
 func (sl *Slice) WriteBlock(block *types.Block) {
 	sl.hc.WriteBlock(block)
+}
+
+func (sl *Slice) AddPendingEtxs(pEtxs types.PendingEtxs) error {
+	nodeCtx := common.NodeLocation.Context()
+	if err := sl.hc.AddPendingEtxs(pEtxs); err == nil || err.Error() != ErrPendingEtxAlreadyKnown.Error() {
+		// Only in the region case we have to send the pendingEtxs to dom from the AddPendingEtxs
+		if nodeCtx == common.REGION_CTX {
+			// Also the first time when adding the pending etx broadcast it to the peers
+			sl.pendingEtxsFeed.Send(pEtxs)
+			if sl.domClient != nil {
+				sl.domClient.SendPendingEtxsToDom(context.Background(), pEtxs)
+			}
+		}
+	} else if err.Error() == ErrPendingEtxAlreadyKnown.Error() {
+		return nil
+	} else {
+		return err
+	}
+	return nil
+}
+
+func (sl *Slice) AddPendingEtxsRollup(pEtxsRollup types.PendingEtxsRollup) error {
+	if !pEtxsRollup.IsValid(trie.NewStackTrie(nil)) {
+		return ErrPendingEtxRollupNotValid
+	}
+	nodeCtx := common.NodeLocation.Context()
+	log.Debug("Received pending ETXs Rollup", "header: ", pEtxsRollup.Header.Hash(), "Len of Rollup", len(pEtxsRollup.Manifest))
+	// Only write the pending ETXs if we have not seen them before
+	if !sl.hc.pendingEtxsRollup.Contains(pEtxsRollup.Header.Hash()) {
+		// Also write to cache for faster access
+		sl.hc.pendingEtxsRollup.Add(pEtxsRollup.Header.Hash(), pEtxsRollup.Manifest)
+		// Write to pending ETX rollup database
+		rawdb.WritePendingEtxsRollup(sl.sliceDb, pEtxsRollup)
+
+		// Only Prime broadcasts the pendingEtxRollups
+		if nodeCtx == common.PRIME_CTX {
+			// Also the first time when adding the pending etx rollup broadcast it to the peers
+			sl.pendingEtxsRollupFeed.Send(pEtxsRollup)
+			// Only in the region case, send the pending etx rollup to the dom
+		} else if nodeCtx == common.REGION_CTX {
+			if sl.domClient != nil {
+				sl.domClient.SendPendingEtxsRollupToDom(context.Background(), pEtxsRollup)
+			}
+		}
+	}
+	return nil
 }

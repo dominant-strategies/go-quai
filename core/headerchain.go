@@ -49,8 +49,10 @@ type HeaderChain struct {
 	headerCache *lru.Cache // Cache for the most recent block headers
 	numberCache *lru.Cache // Cache for the most recent block numbers
 
-	pendingEtxs            *lru.Cache
-	missingPendingEtxsFeed event.Feed
+	pendingEtxsRollup            *lru.Cache
+	pendingEtxs                  *lru.Cache
+	missingPendingEtxsFeed       event.Feed
+	missingPendingEtxsRollupFeed event.Feed
 
 	wg            sync.WaitGroup // chain processing wait group for shutting down
 	running       int32          // 0 if chain is running, 1 when stopped
@@ -74,7 +76,10 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *par
 		engine:      engine,
 	}
 
-	pendingEtxs, _ := lru.New(maxPendingEtxBlocks)
+	pendingEtxsRollup, _ := lru.New(c_maxPendingEtxsRollup)
+	hc.pendingEtxsRollup = pendingEtxsRollup
+
+	pendingEtxs, _ := lru.New(c_maxPendingEtxBatches)
 	hc.pendingEtxs = pendingEtxs
 
 	var err error
@@ -151,20 +156,38 @@ func (hc *HeaderChain) CollectSubRollup(b *types.Block) (types.Transactions, err
 	nodeCtx := common.NodeLocation.Context()
 	subRollup := types.Transactions{}
 	if nodeCtx < common.ZONE_CTX {
+		// Since in prime the pending etxs are stored in 2 parts, pendingEtxsRollup
+		// consists of region header and its sub manifests
+		// Prime independently stores the pending etxs for each of the hashes in
+		// the sub manifests, so it needs the pendingEtxsRollup to do so.
 		for _, hash := range b.SubManifest() {
-			var pendingEtxs types.Transactions
-			// Look for pending ETXs first in pending ETX cache, then in database
-			if res, ok := hc.pendingEtxs.Get(hash); ok && res != nil {
-				pendingEtxs = res.(types.Transactions)
-			} else if res := rawdb.ReadPendingEtxs(hc.headerDb, hash); res != nil {
-				pendingEtxs = res.Etxs
-			} else {
-				log.Warn("unable to find pending etxs for hash in manifest", "hash:", hash.String())
-				// Start backfilling the missing pending ETXs needed to process this block
-				go hc.backfillPETXs(b.Header(), b.SubManifest())
-				return nil, ErrPendingEtxNotFound
+			if nodeCtx == common.PRIME_CTX {
+				rollup, err := hc.GetPendingEtxsRollup(hash)
+				if err == nil {
+					for _, pEtxHash := range rollup {
+						pendingEtxs, err := hc.GetPendingEtxs(pEtxHash)
+						if err != nil {
+							// Start backfilling the missing pending ETXs needed to process this block
+							go hc.backfillPETXs(b.Header(), b.SubManifest())
+							return nil, ErrPendingEtxNotFound
+						}
+						subRollup = append(subRollup, pendingEtxs...)
+					}
+				} else {
+					// Start backfilling the missing pending ETXs needed to process this block
+					go hc.backfillPETXs(b.Header(), b.SubManifest())
+					return nil, ErrPendingEtxNotFound
+				}
+				// Region works normally as before collecting pendingEtxs for each hash in the manifest
+			} else if nodeCtx == common.REGION_CTX {
+				pendingEtxs, err := hc.GetPendingEtxs(hash)
+				if err != nil {
+					// Start backfilling the missing pending ETXs needed to process this block
+					go hc.backfillPETXs(b.Header(), b.SubManifest())
+					return nil, ErrPendingEtxNotFound
+				}
+				subRollup = append(subRollup, pendingEtxs...)
 			}
-			subRollup = append(subRollup, pendingEtxs...)
 		}
 		// Rolluphash is specifically for zone rollup, which can only be validated by region
 		if nodeCtx == common.REGION_CTX {
@@ -176,14 +199,59 @@ func (hc *HeaderChain) CollectSubRollup(b *types.Block) (types.Transactions, err
 	return subRollup, nil
 }
 
+// GetPendingEtxs gets the pendingEtxs form the
+func (hc *HeaderChain) GetPendingEtxs(hash common.Hash) (types.Transactions, error) {
+	var pendingEtxs types.Transactions
+	// Look for pending ETXs first in pending ETX cache, then in database
+	if res, ok := hc.pendingEtxs.Get(hash); ok && res != nil {
+		pendingEtxs = res.(types.Transactions)
+	} else if res := rawdb.ReadPendingEtxs(hc.headerDb, hash); res != nil {
+		pendingEtxs = res.Etxs
+	} else {
+		log.Trace("unable to find pending etxs for hash in manifest", "hash:", hash.String())
+		return nil, ErrPendingEtxNotFound
+	}
+	return pendingEtxs, nil
+}
+
+func (hc *HeaderChain) GetPendingEtxsRollup(hash common.Hash) (types.BlockManifest, error) {
+	var rollups types.BlockManifest
+	// Look for pending ETXs first in pending ETX cache, then in database
+	if res, ok := hc.pendingEtxsRollup.Get(hash); ok && res != nil {
+		rollups = res.(types.BlockManifest)
+	} else if res := rawdb.ReadPendingEtxsRollup(hc.headerDb, hash); res != nil {
+		rollups = res.Manifest
+	} else {
+		log.Trace("unable to find pending etxs rollups for hash in manifest", "hash:", hash.String())
+		return nil, ErrPendingEtxNotFound
+	}
+	return rollups, nil
+}
+
 // backfillPETXs collects any missing PendingETX objects needed to process the
 // given header. This is done by informing the fetcher of any pending ETXs we do
 // not have, so that they can be fetched from our peers.
 func (hc *HeaderChain) backfillPETXs(header *types.Header, subManifest types.BlockManifest) {
+	nodeCtx := common.NodeLocation.Context()
 	for _, hash := range subManifest {
-		if petxs := rawdb.ReadPendingEtxs(hc.headerDb, hash); petxs == nil {
-			// Send the pendingEtxs to the feed for broadcast
-			hc.missingPendingEtxsFeed.Send(hash)
+		if nodeCtx == common.PRIME_CTX {
+			// In the case of prime, get the pendingEtxsRollup for each region block
+			// and then fetch the pending etx for each of the rollup hashes
+			if manifest, err := hc.GetPendingEtxsRollup(hash); err == nil {
+				for _, pEtxHash := range manifest {
+					if _, err := hc.GetPendingEtxs(pEtxHash); err != nil {
+						// Send the pendingEtxs to the feed for broadcast
+						hc.missingPendingEtxsFeed.Send(pEtxHash)
+					}
+				}
+			} else {
+				hc.missingPendingEtxsRollupFeed.Send(hash)
+			}
+		} else if nodeCtx == common.REGION_CTX {
+			if _, err := hc.GetPendingEtxs(hash); err != nil {
+				// Send the pendingEtxs to the feed for broadcast
+				hc.missingPendingEtxsFeed.Send(hash)
+			}
 		}
 	}
 }
@@ -352,6 +420,9 @@ func (hc *HeaderChain) findCommonAncestor(header *types.Header) *types.Header {
 }
 
 func (hc *HeaderChain) AddPendingEtxs(pEtxs types.PendingEtxs) error {
+	if !pEtxs.IsValid(trie.NewStackTrie(nil)) {
+		return ErrPendingEtxNotValid
+	}
 	log.Debug("Received pending ETXs", "block: ", pEtxs.Header.Hash())
 	// Only write the pending ETXs if we have not seen them before
 	if !hc.pendingEtxs.Contains(pEtxs.Header.Hash()) {
@@ -359,6 +430,8 @@ func (hc *HeaderChain) AddPendingEtxs(pEtxs types.PendingEtxs) error {
 		rawdb.WritePendingEtxs(hc.headerDb, pEtxs)
 		// Also write to cache for faster access
 		hc.pendingEtxs.Add(pEtxs.Header.Hash(), pEtxs.Etxs)
+	} else {
+		return ErrPendingEtxAlreadyKnown
 	}
 	return nil
 }
@@ -804,6 +877,10 @@ func (hc *HeaderChain) SubscribeChainSideEvent(ch chan<- ChainSideEvent) event.S
 
 func (hc *HeaderChain) SubscribeMissingPendingEtxsEvent(ch chan<- common.Hash) event.Subscription {
 	return hc.scope.Track(hc.missingPendingEtxsFeed.Subscribe(ch))
+}
+
+func (hc *HeaderChain) SubscribeMissingPendingEtxsRollupEvent(ch chan<- common.Hash) event.Subscription {
+	return hc.scope.Track(hc.missingPendingEtxsRollupFeed.Subscribe(ch))
 }
 
 func (hc *HeaderChain) StateAt(root common.Hash) (*state.StateDB, error) {

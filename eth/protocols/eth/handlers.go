@@ -253,6 +253,15 @@ func handlePendingEtxs(backend Backend, msg Decoder, peer *Peer) error {
 	return backend.Handle(peer, ann)
 }
 
+func handlePendingEtxsRollup(backend Backend, msg Decoder, peer *Peer) error {
+	// Decode the block pending etxs rollup retrieval message
+	ann := new(PendingEtxsRollupPacket)
+	if err := msg.Decode(&ann); err != nil {
+		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+	}
+	return backend.Handle(peer, ann)
+}
+
 func handleGetOnePendingEtxs66(backend Backend, msg Decoder, peer *Peer) error {
 	// Decode the block pending etxs retrieval message
 	var query GetOnePendingEtxsPacket66
@@ -267,6 +276,22 @@ func handleGetOnePendingEtxs66(backend Backend, msg Decoder, peer *Peer) error {
 	}
 	log.Trace("Completing  a pendingEtxs request for", "Hash", pendingEtxs.Header.Hash())
 	return peer.SendPendingEtxs(*pendingEtxs)
+}
+
+func handleGetOnePendingEtxsRollup66(backend Backend, msg Decoder, peer *Peer) error {
+	// Decode the block pending etxs rollup retrieval message
+	var query GetOnePendingEtxsRollupPacket66
+	if err := msg.Decode(&query); err != nil {
+		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+	}
+	requestTracker.Fulfil(peer.id, peer.version, GetOnePendingEtxsRollupMsg, query.RequestId)
+	pendingEtxs := backend.Core().GetPendingEtxsRollup(query.Hash)
+	if pendingEtxs == nil {
+		log.Debug("Couldn't complete a pendingEtxs request for", "Hash", query.Hash)
+		return nil
+	}
+	log.Trace("Completing  a pendingEtxs request for", "Hash", pendingEtxs.Header.Hash())
+	return peer.SendPendingEtxsRollup(*pendingEtxs)
 }
 
 func handleNewBlockhashes(backend Backend, msg Decoder, peer *Peer) error {

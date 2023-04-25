@@ -172,6 +172,11 @@ func (p *Peer) KnownTransaction(hash common.Hash) bool {
 	return p.knownTxs.Contains(hash)
 }
 
+// KnownPendingEtxs returns whether peer is known to already have the pending etx.
+func (p *Peer) KnownPendingEtxs(hash common.Hash) bool {
+	return p.knownPendingEtxs.Contains(hash)
+}
+
 // markBlock marks a block as known for the peer, ensuring that the block will
 // never be propagated to this particular peer.
 func (p *Peer) markBlock(hash common.Hash) {
@@ -582,12 +587,27 @@ func (p *Peer) RequestOnePendingEtxs(hash common.Hash) error {
 			GetOnePendingEtxsPacket: GetOnePendingEtxsPacket{Hash: hash},
 		})
 	}
-	return errors.New("eth65 not supported for this call")
+	return errors.New("eth65 not supported for RequestOnePendingEtxs call")
 }
 
-// SendNewPendingEtxs propagates an entire block to a remote peer.
+// RequestOnePendingEtxsRollup fetches a pendingEtxRollup for a given block hash from a remote node.
+func (p *Peer) RequestOnePendingEtxsRollup(hash common.Hash) error {
+	p.Log().Debug("Fetching a pending etx rollup", "hash", hash)
+	if p.Version() >= ETH66 {
+		id := rand.Uint64()
+
+		requestTracker.Track(p.id, p.version, GetOnePendingEtxsRollupMsg, PendingEtxsRollupMsg, id)
+		return p2p.Send(p.rw, GetOnePendingEtxsRollupMsg, &GetOnePendingEtxsPacket66{
+			RequestId:               id,
+			GetOnePendingEtxsPacket: GetOnePendingEtxsPacket{Hash: hash},
+		})
+	}
+	return errors.New("eth65 not supported for RequestOnePendingEtxsRollup call")
+}
+
+// SendNewPendingEtxs propagates an entire pendingEtxs to a remote peer.
 func (p *Peer) SendPendingEtxs(pendingEtxs types.PendingEtxs) error {
-	// Mark all the block hash as known, but ensure we don't overflow our limits
+	// Mark all the pendingEtxs hash as known, but ensure we don't overflow our limits
 	for p.knownPendingEtxs.Cardinality() >= maxKnownPendingEtxs {
 		p.knownPendingEtxs.Pop()
 	}
@@ -595,4 +615,24 @@ func (p *Peer) SendPendingEtxs(pendingEtxs types.PendingEtxs) error {
 	return p2p.Send(p.rw, PendingEtxsMsg, &PendingEtxsPacket{
 		PendingEtxs: pendingEtxs,
 	})
+}
+
+// SendNewPendingEtxsRollup propagates an entire pending etx Rollup to a remote peer.
+func (p *Peer) SendPendingEtxsRollup(pEtxsRollup types.PendingEtxsRollup) error {
+	p.Log().Debug("Fetching a pending etx", "hash", pEtxsRollup.Header.Hash())
+	if p.Version() >= ETH66 {
+		id := rand.Uint64()
+
+		// TODO: what to put in the GetOnePendingEtxsMsg
+		requestTracker.Track(p.id, p.version, GetOnePendingEtxsMsg, PendingEtxsRollupMsg, id)
+		// Mark all the pendingEtxs hash as known, but ensure we don't overflow our limits
+		for p.knownPendingEtxs.Cardinality() >= maxKnownPendingEtxs {
+			p.knownPendingEtxs.Pop()
+		}
+		p.knownPendingEtxs.Add(pEtxsRollup.Header.Hash())
+		return p2p.Send(p.rw, PendingEtxsRollupMsg, &PendingEtxsRollupPacket{
+			PendingEtxsRollup: pEtxsRollup,
+		})
+	}
+	return errors.New("eth65 not supported for sendPendingEtxsManifest call")
 }

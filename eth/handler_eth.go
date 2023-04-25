@@ -28,7 +28,6 @@ import (
 	"github.com/dominant-strategies/go-quai/eth/protocols/eth"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p/enode"
-	"github.com/dominant-strategies/go-quai/trie"
 )
 
 const (
@@ -97,6 +96,9 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 
 	case *eth.PendingEtxsPacket:
 		return h.handlePendingEtxs(*&packet.PendingEtxs)
+
+	case *eth.PendingEtxsRollupPacket:
+		return h.handlePendingEtxsRollup(peer, *&packet.PendingEtxsRollup)
 
 	default:
 		return fmt.Errorf("unexpected eth packet type: %T", packet)
@@ -194,13 +196,23 @@ func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block) er
 }
 
 func (h *ethHandler) handlePendingEtxs(pendingEtxs types.PendingEtxs) error {
-	if !pendingEtxs.IsValid(trie.NewStackTrie(nil)) {
-		log.Warn("PendingEtxs is not valid", "Len", len(pendingEtxs.Etxs), "Hash", pendingEtxs.Header.EtxHash())
-		return nil
-	}
 	err := h.core.AddPendingEtxs(pendingEtxs)
 	if err != nil {
 		log.Error("Error in handling pendingEtxs broadcast", "err", err)
+		return err
+	}
+	return nil
+}
+
+func (h *ethHandler) handlePendingEtxsRollup(peer *eth.Peer, pEtxsRollup types.PendingEtxsRollup) error {
+	err := h.core.AddPendingEtxsRollup(pEtxsRollup)
+	if err != nil {
+		log.Error("Error in handling pendingEtxs rollup broadcast", "err", err)
+		return err
+	}
+	// For each hash in manifest request for the pendingEtxs
+	for _, hash := range pEtxsRollup.Manifest {
+		peer.RequestOnePendingEtxs(hash)
 	}
 	return nil
 }

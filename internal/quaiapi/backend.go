@@ -80,6 +80,7 @@ type Backend interface {
 	GetManifest(blockHash common.Hash) (types.BlockManifest, error)
 	GetSubManifest(slice common.Location, blockHash common.Hash) (types.BlockManifest, error)
 	AddPendingEtxs(pEtxs types.PendingEtxs) error
+	AddPendingEtxsRollup(pEtxsRollup types.PendingEtxsRollup) error
 	PendingBlockAndReceipts() (*types.Block, types.Receipts)
 
 	// Transaction pool API

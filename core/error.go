@@ -35,6 +35,9 @@ var (
 	// ErrSubNotSyncedToDom is returned when the subordinate cannot find the parent of the block which is being appended by the dom.
 	ErrSubNotSyncedToDom = errors.New("sub not synced to dom")
 
+	// ErrPendingEtxAlreadyKnown is returned received pending etx already in the cache/db
+	ErrPendingEtxAlreadyKnown = errors.New("pending etx already known")
+
 	// ErrBodyNotFound is returned when body data for a given header hash cannot be found.
 	ErrBodyNotFound = errors.New("could not find the body data to match the header root hash")
 
@@ -49,6 +52,15 @@ var (
 
 	//ErrPendingEtxNotFound is returned when pendingEtxs cannot be found for a hash given in the submanifest
 	ErrPendingEtxNotFound = errors.New("pending etx not found")
+
+	//ErrPendingEtxRollupNotFound is returned when pendingEtxsRollup cannot be found for a hash given in the submanifest
+	ErrPendingEtxRollupNotFound = errors.New("pending etx rollup not found")
+
+	//ErrPendingEtxNotValid is returned when pendingEtxs is not valid
+	ErrPendingEtxNotValid = errors.New("pending etx not valid")
+
+	//ErrPendingEtxRollupNotValid is returned when pendingEtxsRollup is not valid
+	ErrPendingEtxRollupNotValid = errors.New("pending etx rollup not valid")
 )
 
 // List of evm-call-message pre-checking errors. All state transition messages will

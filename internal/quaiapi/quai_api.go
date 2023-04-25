@@ -689,3 +689,16 @@ func (s *PublicBlockChainQuaiAPI) SendPendingEtxsToDom(ctx context.Context, raw 
 	}
 	return s.b.AddPendingEtxs(pEtxs)
 }
+
+type SendPendingEtxsRollupToDomArgs struct {
+	Header   *types.Header       `json:"header"`
+	Manifest types.BlockManifest `json:"manifest"`
+}
+
+func (s *PublicBlockChainQuaiAPI) SendPendingEtxsRollupToDom(ctx context.Context, raw json.RawMessage) error {
+	var pEtxsRollup SendPendingEtxsRollupToDomArgs
+	if err := json.Unmarshal(raw, &pEtxsRollup); err != nil {
+		return err
+	}
+	return s.b.AddPendingEtxsRollup(types.PendingEtxsRollup{Header: pEtxsRollup.Header, Manifest: pEtxsRollup.Manifest})
+}

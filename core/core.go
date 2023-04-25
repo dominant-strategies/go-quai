@@ -19,6 +19,7 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rlp"
+	"github.com/dominant-strategies/go-quai/trie"
 	lru "github.com/hashicorp/golang-lru"
 )
 
@@ -79,8 +80,12 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 				// subordinate block manifest, then ETXs produced by this block and the rollup
 				// of ETXs produced by subordinate chain(s) will become referencable.
 				if nodeCtx > common.PRIME_CTX {
-					if err := c.SendPendingEtxsToDom(types.PendingEtxs{block.Header(), newPendingEtxs}); err != nil {
-						log.Error("failed to send ETXs to domclient", "block: ", block.Hash(), "err", err)
+					pendingEtx := types.PendingEtxs{block.Header(), newPendingEtxs}
+					// Only send the pending Etxs to dom if valid, because in the case of running a slice, for the zones that the node doesn't run, it cannot have the etxs generated
+					if pendingEtx.IsValid(trie.NewStackTrie(nil)) {
+						if err := c.SendPendingEtxsToDom(pendingEtx); err != nil {
+							log.Error("failed to send ETXs to domclient", "block: ", block.Hash(), "err", err)
+						}
 					}
 				}
 				c.removeFromAppendQueue(block)
@@ -280,6 +285,10 @@ func (c *Core) GetPendingEtxs(hash common.Hash) *types.PendingEtxs {
 	return rawdb.ReadPendingEtxs(c.sl.sliceDb, hash)
 }
 
+func (c *Core) GetPendingEtxsRollup(hash common.Hash) *types.PendingEtxsRollup {
+	return rawdb.ReadPendingEtxsRollup(c.sl.sliceDb, hash)
+}
+
 func (c *Core) HasPendingEtxs(hash common.Hash) bool {
 	return c.GetPendingEtxs(hash) != nil
 }
@@ -290,6 +299,22 @@ func (c *Core) SendPendingEtxsToDom(pEtxs types.PendingEtxs) error {
 
 func (c *Core) SubscribeMissingBody(ch chan<- *types.Header) event.Subscription {
 	return c.sl.SubscribeMissingBody(ch)
+}
+
+func (c *Core) SubscribePendingEtxs(ch chan<- types.PendingEtxs) event.Subscription {
+	return c.sl.SubscribePendingEtxs(ch)
+}
+
+func (c *Core) AddPendingEtxs(pEtxs types.PendingEtxs) error {
+	return c.sl.AddPendingEtxs(pEtxs)
+}
+
+func (c *Core) AddPendingEtxsRollup(pEtxsRollup types.PendingEtxsRollup) error {
+	return c.sl.AddPendingEtxsRollup(pEtxsRollup)
+}
+
+func (c *Core) SubscribePendingEtxsRollup(ch chan<- types.PendingEtxsRollup) event.Subscription {
+	return c.sl.SubscribePendingEtxsRollup(ch)
 }
 
 //---------------------//
@@ -440,8 +465,8 @@ func (c *Core) SubscribeMissingPendingEtxsEvent(ch chan<- common.Hash) event.Sub
 	return c.sl.hc.SubscribeMissingPendingEtxsEvent(ch)
 }
 
-func (c *Core) AddPendingEtxs(pEtxs types.PendingEtxs) error {
-	return c.sl.hc.AddPendingEtxs(pEtxs)
+func (c *Core) SubscribeMissingPendingEtxsRollupEvent(ch chan<- common.Hash) event.Subscription {
+	return c.sl.hc.SubscribeMissingPendingEtxsRollupEvent(ch)
 }
 
 //--------------------//

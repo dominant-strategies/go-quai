@@ -477,6 +477,10 @@ func (b *QuaiAPIBackend) AddPendingEtxs(pEtxs types.PendingEtxs) error {
 	return b.eth.core.AddPendingEtxs(pEtxs)
 }
 
+func (b *QuaiAPIBackend) AddPendingEtxsRollup(pEtxsRollup types.PendingEtxsRollup) error {
+	return b.eth.core.AddPendingEtxsRollup(pEtxsRollup)
+}
+
 func (b *QuaiAPIBackend) SubscribePendingHeaderEvent(ch chan<- *types.Header) event.Subscription {
 	return b.eth.core.SubscribePendingHeader(ch)
 }
