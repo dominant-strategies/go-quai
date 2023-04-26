@@ -178,12 +178,15 @@ func MustDecodeBig(input string) *big.Int {
 // EncodeBig encodes bigint as a hex string with 0x prefix.
 // The sign of the integer is ignored.
 func EncodeBig(bigint *big.Int) string {
-	nbits := bigint.BitLen()
-	if nbits == 0 {
-		return "0x0"
+	if sign := bigint.Sign(); sign == 0 {
+	    return "0x0"
+	} else if sign > 0 {
+	    return "0x" + bigint.Text(16)
+	} else {
+	    return "-0x" + bigint.Text(16)[1:]
+	    }
 	}
-	return fmt.Sprintf("%#x", bigint)
-}
+ 
 
 func has0xPrefix(input string) bool {
 	return len(input) >= 2 && input[0] == '0' && (input[1] == 'x' || input[1] == 'X')
