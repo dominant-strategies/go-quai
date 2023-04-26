@@ -32,6 +32,8 @@ import (
 	"os"
 	"sort"
 	"strconv"
+	"io/ioutil"
+	// "encoding/json"
 
 	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/rlp"
@@ -48,9 +50,10 @@ type allocItem struct {
 	Balance *big.Int
 }
 
-func makelist(alloc allocItem) allocList {
+func makelist(alloc core.GenesisAlloc) []allocItem {
 	a := make(allocList, 0, len(alloc))
-	for addr, account := range g.Alloc {
+	// a := [len(alloc)]allocItem{}
+	for addr, account := range alloc {
 		bigAddr := new(big.Int).SetBytes(addr.Bytes())
 		a = append(a, allocItem{bigAddr, account.Balance})
 	}
@@ -58,8 +61,8 @@ func makelist(alloc allocItem) allocList {
 	return a
 }
 
-func makealloc(g *core.Genesis) string {
-	a := makelist(g)
+func makeAlloc(g core.Genesis) string {
+	a := makelist(g.Alloc)
 	data, err := rlp.EncodeToBytes(a)
 	if err != nil {
 		panic(err)
@@ -73,7 +76,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	// g := new(core.Genesis)
+	g := new(core.Genesis)
+	allocMap := map[common.UnprefixedAddress]GenesisAccount
 	// file, err := os.Open(os.Args[1])
 	// if err != nil {
 	// 	panic(err)
@@ -84,26 +88,26 @@ func main() {
 	// }
 	// fmt.Println("const allocData =", makealloc(g))
 
-	data, err := ioutil.ReadFile(inputFile)
+	data, err := ioutil.ReadFile(os.Args[1])
 	if err != nil {
 		fmt.Printf("Error reading file: %v\n", err)
 		os.Exit(1)
 	}
 
-	var inputGenesis Genesis
-	err = json.Unmarshal(data, &inputGenesis)
+	// var inputGenesis core.Genesis
+
+	fmt.Printf("data: ", data)
+
+	err = json.Unmarshal(data, allocMap)
 	if err != nil {
 		fmt.Printf("Error unmarshalling JSON: %v\n", err)
 		os.Exit(1)
 	}
 
-	makeAlloc(inputGenesis.Alloc)
+	g.Alloc = allocMap
 
-	genesis := Genesis{
-		// You can set the other fields here if required
-		Alloc: inputGenesis.Alloc,
-	}
+	allocStr := makeAlloc(g)
 
-	fmt.Printf("Alloc: %+v\n", genesis.Alloc)
+	fmt.Printf("Alloc: %+v\n", allocStr)
 
 }
