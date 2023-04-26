@@ -27,7 +27,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"math/big"
 	"os"
@@ -38,20 +37,20 @@ import (
 	"github.com/dominant-strategies/go-quai/rlp"
 )
 
-type allocItem struct{ Addr, Balance *big.Int }
-
 type allocList []allocItem
 
 func (a allocList) Len() int           { return len(a) }
 func (a allocList) Less(i, j int) bool { return a[i].Addr.Cmp(a[j].Addr) < 0 }
 func (a allocList) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 
-func makelist(g *core.Genesis) allocList {
-	a := make(allocList, 0, len(g.Alloc))
+type allocItem struct {
+	Addr    *big.Int
+	Balance *big.Int
+}
+
+func makelist(alloc allocItem) allocList {
+	a := make(allocList, 0, len(alloc))
 	for addr, account := range g.Alloc {
-		if len(account.Storage) > 0 || len(account.Code) > 0 || account.Nonce() != 0 {
-			panic(fmt.Sprintf("can't encode account %x", addr))
-		}
 		bigAddr := new(big.Int).SetBytes(addr.Bytes())
 		a = append(a, allocItem{bigAddr, account.Balance})
 	}
@@ -74,13 +73,37 @@ func main() {
 		os.Exit(1)
 	}
 
-	g := new(core.Genesis)
-	file, err := os.Open(os.Args[1])
+	// g := new(core.Genesis)
+	// file, err := os.Open(os.Args[1])
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// // if err := json.NewDecoder(file).Decode(g); err != nil {
+	// if err := json.NewDecoder(file).Decode(allocList) {
+	// 	panic(err)
+	// }
+	// fmt.Println("const allocData =", makealloc(g))
+
+	data, err := ioutil.ReadFile(inputFile)
 	if err != nil {
-		panic(err)
+		fmt.Printf("Error reading file: %v\n", err)
+		os.Exit(1)
 	}
-	if err := json.NewDecoder(file).Decode(g); err != nil {
-		panic(err)
+
+	var inputGenesis Genesis
+	err = json.Unmarshal(data, &inputGenesis)
+	if err != nil {
+		fmt.Printf("Error unmarshalling JSON: %v\n", err)
+		os.Exit(1)
 	}
-	fmt.Println("const allocData =", makealloc(g))
+
+	makeAlloc(inputGenesis.Alloc)
+
+	genesis := Genesis{
+		// You can set the other fields here if required
+		Alloc: inputGenesis.Alloc,
+	}
+
+	fmt.Printf("Alloc: %+v\n", genesis.Alloc)
+
 }
