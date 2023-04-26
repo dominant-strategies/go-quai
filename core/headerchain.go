@@ -79,6 +79,7 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *par
 
 	hc.genesisHeader = hc.GetHeaderByNumber(0)
 	log.Info("Genesis", "Hash:", hc.genesisHeader.Hash())
+	fmt.Printf("Genesis", "Hash:", hc.genesisHeader.Hash())
 	if hc.genesisHeader == nil {
 		return nil, ErrNoGenesis
 	}
