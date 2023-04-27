@@ -193,8 +193,8 @@ func (cs *chainSyncer) loop() {
 	nodeCtx := common.NodeLocation.Context()
 	defer cs.handler.wg.Done()
 
+	cs.handler.blockFetcher.Start()
 	if nodeCtx == common.ZONE_CTX {
-		cs.handler.blockFetcher.Start()
 		cs.handler.txFetcher.Start()
 		defer cs.handler.txFetcher.Stop()
 	}
