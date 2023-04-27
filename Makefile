@@ -56,9 +56,6 @@ endif
 ifeq ($(CORS),true)
 	BASE_CMD += --ws.origins=$(WS_ORIG) --http.corsdomain=$(HTTP_CORSDOMAIN)
 endif
-ifeq ($(QUAI_MINING),true)
-	BASE_CMD += --mine --miner.threads $(THREADS)
-endif
 ifeq ($(QUAI_STATS),true)
 	BASE_CMD += --quaistats ${STATS_NAME}:${STATS_PASS}@${STATS_HOST}
 endif

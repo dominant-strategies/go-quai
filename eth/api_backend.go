@@ -405,14 +405,6 @@ func (b *QuaiAPIBackend) CurrentHeader() *types.Header {
 	return b.eth.core.CurrentHeader()
 }
 
-func (b *QuaiAPIBackend) Miner() *core.Miner {
-	return b.eth.core.Miner()
-}
-
-func (b *QuaiAPIBackend) StartMining(threads int) error {
-	return b.eth.StartMining(threads)
-}
-
 func (b *QuaiAPIBackend) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, checkLive bool) (*state.StateDB, error) {
 	nodeCtx := common.NodeLocation.Context()
 	if nodeCtx != common.ZONE_CTX {

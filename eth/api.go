@@ -24,7 +24,6 @@ import (
 	"io"
 	"math/big"
 	"os"
-	"runtime"
 	"strings"
 	"time"
 
@@ -91,24 +90,6 @@ type PrivateMinerAPI struct {
 // NewPrivateMinerAPI create a new RPC service which controls the miner of this node.
 func NewPrivateMinerAPI(e *Ethereum) *PrivateMinerAPI {
 	return &PrivateMinerAPI{e: e}
-}
-
-// Start starts the miner with the given number of threads. If threads is nil,
-// the number of workers started is equal to the number of logical CPUs that are
-// usable by this process. If mining is already running, this method adjust the
-// number of threads allowed to use and updates the minimum price required by the
-// transaction pool.
-func (api *PrivateMinerAPI) Start(threads *int) error {
-	if threads == nil {
-		return api.e.StartMining(runtime.NumCPU())
-	}
-	return api.e.StartMining(*threads)
-}
-
-// Stop terminates the miner, both at the consensus engine level as well as at
-// the block creation level.
-func (api *PrivateMinerAPI) Stop() {
-	api.e.StopMining()
 }
 
 // SetExtra sets the extra data string that is included when this miner mines a block.

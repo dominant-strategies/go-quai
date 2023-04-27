@@ -92,16 +92,8 @@ var (
 		utils.ListenPortFlag,
 		utils.MaxPeersFlag,
 		utils.MaxPendingPeersFlag,
-		utils.MiningEnabledFlag,
-		utils.MinerThreadsFlag,
-		utils.MinerNotifyFlag,
-		utils.LegacyMinerGasTargetFlag,
-		utils.MinerGasLimitFlag,
 		utils.MinerGasPriceFlag,
 		utils.MinerEtherbaseFlag,
-		utils.MinerExtraDataFlag,
-		utils.MinerRecommitIntervalFlag,
-		utils.MinerNoVerfiyFlag,
 		utils.NATFlag,
 		utils.NoDiscoverFlag,
 		utils.DiscoveryV5Flag,
@@ -126,7 +118,6 @@ var (
 		utils.GpoPercentileFlag,
 		utils.GpoMaxGasPriceFlag,
 		utils.GpoIgnoreGasPriceFlag,
-		utils.MinerNotifyFullFlag,
 		configFileFlag,
 		utils.RegionFlag,
 		utils.ZoneFlag,
@@ -193,8 +184,6 @@ func init() {
 		licenseCommand,
 		// See config.go
 		dumpConfigCommand,
-		// See cmd/utils/flags_legacy.go
-		utils.ShowDeprecated,
 		// See snapshot.go
 		snapshotCommand,
 	}
@@ -315,7 +304,7 @@ func startNode(ctx *cli.Context, stack *node.Node, backend quaiapi.Backend) {
 	}
 
 	// Start auxiliary services if enabled
-	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) || ctx.GlobalBool(utils.DeveloperFlag.Name) {
+	if ctx.GlobalBool(utils.DeveloperFlag.Name) {
 
 		var err error
 		ethBackend, ok := backend.(*eth.QuaiAPIBackend)
@@ -327,11 +316,6 @@ func startNode(ctx *cli.Context, stack *node.Node, backend quaiapi.Backend) {
 			// Set the gas price to the limits from the CLI and start mining
 			gasprice := utils.GlobalBig(ctx, utils.MinerGasPriceFlag.Name)
 			ethBackend.TxPool().SetGasPrice(gasprice)
-		}
-		// start mining
-		threads := ctx.GlobalInt(utils.MinerThreadsFlag.Name)
-		if err := ethBackend.StartMining(threads); err != nil {
-			utils.Fatalf("Failed to start mining: %v", err)
 		}
 	}
 }
