@@ -278,7 +278,9 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 	errs := f.addTxs(txs)
 	for i, err := range errs {
 		if err != nil {
-			log.Error("Failed to add transaction", "hash", txs[i].Hash().String(), "err", err)
+			if err.Error() != core.ErrAlreadyKnown.Error() {
+				log.Debug("Failed to add transaction", "hash", txs[i].Hash().String(), "err", err)
+			}
 			// Track the transaction hash if the price is too low for us.
 			// Avoid re-request this transaction when we receive another
 			// announcement.
