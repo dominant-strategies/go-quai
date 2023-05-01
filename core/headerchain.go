@@ -84,6 +84,9 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *par
 	}
 
 	hc.genesisHeader = hc.GetHeaderByNumber(0)
+	if hc.genesisHeader.Hash() != chainConfig.GenesisHash {
+		return nil, fmt.Errorf("genesis block mismatch: have %x, want %x", hc.genesisHeader.Hash(), chainConfig.GenesisHash)
+	}
 	log.Info("Genesis", "Hash:", hc.genesisHeader.Hash())
 	if hc.genesisHeader == nil {
 		return nil, ErrNoGenesis
