@@ -515,8 +515,8 @@ func (pool *TxPool) ContentFrom(addr common.InternalAddress) (types.Transactions
 // transactions and only return those whose **effective** tip is large enough in
 // the next pending execution environment.
 func (pool *TxPool) TxPoolPending(enforceTips bool, etxSet types.EtxSet) (map[common.AddressBytes]types.Transactions, error) {
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
+	pool.mu.RLock()
+	defer pool.mu.RUnlock()
 
 	pending := make(map[common.AddressBytes]types.Transactions)
 	for addr, list := range pool.pending {
@@ -537,21 +537,19 @@ func (pool *TxPool) TxPoolPending(enforceTips bool, etxSet types.EtxSet) (map[co
 		}
 	}
 
-	if etxSet != nil {
-		for _, entry := range etxSet {
-			addr := entry.ETX.ETXSender()
-			tx := entry.ETX
-			if tx.ETXSender().Location().Equal(common.NodeLocation) { // Sanity check
-				log.Error("ETX sender is in our location!", "tx", tx.Hash().String(), "sender", tx.ETXSender().String())
-				continue // skip this tx
-			}
-			// If the miner requests tip enforcement, cap the lists now
-			if enforceTips && tx.EffectiveGasTipIntCmp(pool.gasPrice, pool.priced.urgent.baseFee) < 0 {
-				log.Debug("ETX has incorrect or low miner tip", "tx", tx.Hash().String(), "gasTipCap", tx.GasTipCap().String(), "poolGasPrice", pool.gasPrice.String(), "baseFee", pool.priced.urgent.baseFee.String())
-				continue // skip this tx
-			}
-			pending[addr.Bytes20()] = append(pending[addr.Bytes20()], &tx) // ETXs do not have to be sorted by address but this way all TXs are in the same list
+	for _, entry := range etxSet {
+		addr := entry.ETX.ETXSender()
+		tx := entry.ETX
+		if tx.ETXSender().Location().Equal(common.NodeLocation) { // Sanity check
+			log.Error("ETX sender is in our location!", "tx", tx.Hash().String(), "sender", tx.ETXSender().String())
+			continue // skip this tx
 		}
+		// If the miner requests tip enforcement, cap the lists now
+		if enforceTips && tx.EffectiveGasTipIntCmp(pool.gasPrice, pool.priced.urgent.baseFee) < 0 {
+			log.Debug("ETX has incorrect or low miner tip", "tx", tx.Hash().String(), "gasTipCap", tx.GasTipCap().String(), "poolGasPrice", pool.gasPrice.String(), "baseFee", pool.priced.urgent.baseFee.String())
+			continue // skip this tx
+		}
+		pending[addr.Bytes20()] = append(pending[addr.Bytes20()], &tx) // ETXs do not have to be sorted by address but this way all TXs are in the same list
 	}
 	return pending, nil
 }
