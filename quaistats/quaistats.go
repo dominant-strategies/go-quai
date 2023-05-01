@@ -489,9 +489,6 @@ func (s *Service) login(conn *connWrapper) error {
 // server. Use the individual methods for reporting subscribed events.
 func (s *Service) report(conn *connWrapper) error {
 	nodeCtx := common.NodeLocation.Context()
-	if err := s.reportBlock(conn, nil); err != nil {
-		return err
-	}
 	if nodeCtx == common.ZONE_CTX {
 		if err := s.reportPending(conn); err != nil {
 			return err
@@ -620,30 +617,14 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		uncles  []*types.Header
 	)
 
-	// check if backend is a full node
-	fullBackend, ok := s.backend.(fullNodeBackend)
-	if ok {
-		if block == nil {
-			block = fullBackend.CurrentBlock()
-		}
-		header = block.Header()
-		entropy = header.CalcS()
+	header = block.Header()
+	entropy = header.CalcS()
 
-		txs = make([]txStats, len(block.Transactions()))
-		for i, tx := range block.Transactions() {
-			txs[i].Hash = tx.Hash()
-		}
-		uncles = block.Uncles()
-	} else {
-		// Light nodes would need on-demand lookups for transactions/uncles, skip
-		if block != nil {
-			header = block.Header()
-		} else {
-			header = s.backend.CurrentHeader()
-		}
-		entropy = header.CalcS()
-		txs = []txStats{}
+	txs = make([]txStats, len(block.Transactions()))
+	for i, tx := range block.Transactions() {
+		txs[i].Hash = tx.Hash()
 	}
+	uncles = block.Uncles()
 
 	// Assemble and return the block stats
 	author, _ := s.engine.Author(header)
