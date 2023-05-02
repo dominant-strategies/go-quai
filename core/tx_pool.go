@@ -831,6 +831,9 @@ func (pool *TxPool) promoteTx(addr common.InternalAddress, hash common.Hash, tx 
 
 	// Successful promotion, bump the heartbeat
 	pool.beats[addr] = time.Now()
+	if list.Len()%100 == 0 {
+		log.Info("Another 100 txs added to list", "addr", addr, "len", list.Len())
+	}
 	return true
 }
 

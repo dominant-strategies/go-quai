@@ -33,7 +33,7 @@ import (
 const (
 	// maxKnownTxs is the maximum transactions hashes to keep in the known list
 	// before starting to randomly evict them.
-	maxKnownTxs = 32768
+	maxKnownTxs = 65536
 
 	// maxKnownBlocks is the maximum block hashes to keep in the known list
 	// before starting to randomly evict them.
@@ -45,11 +45,11 @@ const (
 
 	// maxQueuedTxs is the maximum number of transactions to queue up before dropping
 	// older broadcasts.
-	maxQueuedTxs = 4096
+	maxQueuedTxs = 16384
 
 	// maxQueuedTxAnns is the maximum number of transaction announcements to queue up
 	// before dropping older announcements.
-	maxQueuedTxAnns = 4096
+	maxQueuedTxAnns = 16384
 
 	// maxQueuedBlocks is the maximum number of block propagations to queue up before
 	// dropping broadcasts. There's not much point in queueing stale blocks, so a few
