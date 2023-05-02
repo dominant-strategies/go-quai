@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	lru "github.com/hashicorp/golang-lru"
 	"math/big"
 	"net/http"
 	"runtime"
@@ -55,6 +56,10 @@ const (
 
 	// reportInterval is the time interval between two reports.
 	reportInterval = 15
+
+	c_alpha               = 8
+	c_tpsLookupCacheLimit = 100
+	c_uintMaxValue        = ^uint64(0) // this is the maximum value of uint64
 )
 
 // backend encompasses the bare-minimum functionality needed for quaistats reporting
@@ -89,10 +94,11 @@ type Service struct {
 	pass string // Password to authorize access to the monitoring page
 	host string // Remote address of the monitoring service
 
-	pongCh chan struct{} // Pong notifications are fed into this channel
-	histCh chan []uint64 // History request block numbers are fed into this channel
-
+	pongCh  chan struct{} // Pong notifications are fed into this channel
+	histCh  chan []uint64 // History request block numbers are fed into this channel
 	headSub event.Subscription
+
+	tpsLookupCache *lru.Cache
 
 	chainID *big.Int
 }
@@ -173,16 +179,20 @@ func New(node *node.Node, backend backend, engine consensus.Engine, url string) 
 	if err != nil {
 		return err
 	}
+
+	tpsLookupCache, _ := lru.New(c_tpsLookupCacheLimit)
+
 	quaistats := &Service{
-		backend: backend,
-		engine:  engine,
-		server:  node.Server(),
-		node:    parts[0],
-		pass:    parts[1],
-		host:    parts[2],
-		pongCh:  make(chan struct{}),
-		histCh:  make(chan []uint64, 1),
-		chainID: backend.ChainConfig().ChainID,
+		backend:        backend,
+		engine:         engine,
+		server:         node.Server(),
+		node:           parts[0],
+		pass:           parts[1],
+		host:           parts[2],
+		pongCh:         make(chan struct{}),
+		histCh:         make(chan []uint64, 1),
+		chainID:        backend.ChainConfig().ChainID,
+		tpsLookupCache: tpsLookupCache,
 	}
 
 	node.RegisterLifecycle(quaistats)
@@ -570,6 +580,12 @@ type blockStats struct {
 	Uncles        uncleStats     `json:"uncles"`
 	Chain         string         `json:"chain"`
 	ChainID       uint64         `json:"chainId"`
+	Tps           uint64         `json:"tps"`
+}
+
+type blockCacheDto struct {
+	Tps  uint64 `json:"tps"`
+	Time uint64 `json:"time"`
 }
 
 // txStats is the information to report about individual transactions.
@@ -586,6 +602,47 @@ func (s uncleStats) MarshalJSON() ([]byte, error) {
 		return json.Marshal(uncles)
 	}
 	return []byte("[]"), nil
+}
+
+func (s *Service) computeTps(block *types.Block) (uint64, error) {
+	var parentTime, parentTps uint64
+
+	if parentCached, ok := s.tpsLookupCache.Get(block.ParentHash()); ok {
+		parentTime = parentCached.(blockCacheDto).Time
+		parentTps = parentCached.(blockCacheDto).Tps
+	} else {
+		log.Warn(fmt.Sprintf("block %d's parent not found in cache: %s", block.Number(), block.ParentHash().String()))
+		fullBackend, ok := s.backend.(fullNodeBackend)
+		if ok {
+			parent, err := fullBackend.BlockByNumber(context.Background(), rpc.BlockNumber(block.NumberU64()-1))
+			if err != nil {
+				return 0, fmt.Errorf("error getting parent block %s: %s", block.ParentHash().String(), err.Error())
+			}
+			parentTime = parent.Time()
+			parentTps = c_uintMaxValue
+		} else {
+			return 0, errors.New("not running fullnode, cannot get parent block")
+		}
+	}
+
+	instantTps := uint64(len(block.Transactions()))
+	if dt := block.Time() - parentTime; dt != 0 { // this is a hack to avoid dividing by 0
+		instantTps /= dt
+	}
+
+	var blockTps uint64
+	if parentTps == c_uintMaxValue {
+		blockTps = ((c_alpha-1)*parentTps + instantTps) / c_alpha
+	} else {
+		blockTps = instantTps
+	}
+
+	s.tpsLookupCache.Add(block.Hash(), blockCacheDto{
+		Tps:  blockTps,
+		Time: block.Time(),
+	})
+
+	return blockTps, nil
 }
 
 // reportBlock retrieves the current chain head and reports it to the stats server.
@@ -616,7 +673,6 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		txs     []txStats
 		uncles  []*types.Header
 	)
-
 	header = block.Header()
 	entropy = header.CalcS()
 
@@ -629,7 +685,7 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 	// Assemble and return the block stats
 	author, _ := s.engine.Author(header)
 
-	return &blockStats{
+	ret := &blockStats{
 		Number:        header.Number(),
 		Hash:          header.Hash(),
 		ParentHash:    header.ParentHash(),
@@ -649,6 +705,14 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		Chain:         common.NodeLocation.Name(),
 		ChainID:       s.chainID.Uint64(),
 	}
+
+	if tps, err := s.computeTps(block); err != nil {
+		ret.Tps = tps
+	} else {
+		log.Error("error computing tps", "error", err.Error())
+	}
+
+	return ret
 }
 
 // reportHistory retrieves the most recent batch of blocks and reports it to the
