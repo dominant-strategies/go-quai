@@ -702,3 +702,23 @@ func (s *PublicBlockChainQuaiAPI) SendPendingEtxsRollupToDom(ctx context.Context
 	}
 	return s.b.AddPendingEtxsRollup(types.PendingEtxsRollup{Header: pEtxsRollup.Header, Manifest: pEtxsRollup.Manifest})
 }
+
+type GetPendingEtxsFromSubArgs struct {
+	Hash     common.Hash     `json:"hash"`
+	Location common.Location `json:"location"`
+}
+
+func (s *PublicBlockChainQuaiAPI) GetPendingEtxsFromSub(ctx context.Context, raw json.RawMessage) (map[string]interface{}, error) {
+	var pendingEtxsFromSub GetPendingEtxsFromSubArgs
+	if err := json.Unmarshal(raw, &pendingEtxsFromSub); err != nil {
+		return nil, err
+	}
+	pendingEtxs, err := s.b.GetPendingEtxsFromSub(pendingEtxsFromSub.Hash, pendingEtxsFromSub.Location)
+	if err != nil {
+		return nil, err
+	}
+	marshaledPendingEtxs := make(map[string]interface{})
+	marshaledPendingEtxs["header"] = pendingEtxs.Header.RPCMarshalHeader()
+	marshaledPendingEtxs["etxs"] = pendingEtxs.Etxs
+	return marshaledPendingEtxs, nil
+}

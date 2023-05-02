@@ -23,8 +23,8 @@ import (
 )
 
 const (
-	c_maxPendingEtxBatches            = 1024
-	c_maxPendingEtxsRollup            = 256
+	c_maxPendingEtxBatches            = 8192
+	c_maxPendingEtxsRollup            = 1024
 	c_pendingHeaderCacheLimit         = 100
 	c_pendingHeaderChacheBufferFactor = 2
 	pendingHeaderGCTime               = 5
@@ -75,7 +75,7 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, isLocal
 	}
 
 	var err error
-	sl.hc, err = NewHeaderChain(db, engine, chainConfig, cacheConfig, vmConfig)
+	sl.hc, err = NewHeaderChain(db, sl.GetPendingEtxsFromSub, engine, chainConfig, cacheConfig, vmConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -878,7 +878,7 @@ func (sl *Slice) AddPendingEtxsRollup(pEtxsRollup types.PendingEtxsRollup) error
 	// Only write the pending ETXs if we have not seen them before
 	if !sl.hc.pendingEtxsRollup.Contains(pEtxsRollup.Header.Hash()) {
 		// Also write to cache for faster access
-		sl.hc.pendingEtxsRollup.Add(pEtxsRollup.Header.Hash(), pEtxsRollup.Manifest)
+		sl.hc.pendingEtxsRollup.Add(pEtxsRollup.Header.Hash(), pEtxsRollup)
 		// Write to pending ETX rollup database
 		rawdb.WritePendingEtxsRollup(sl.sliceDb, pEtxsRollup)
 
@@ -894,4 +894,24 @@ func (sl *Slice) AddPendingEtxsRollup(pEtxsRollup types.PendingEtxsRollup) error
 		}
 	}
 	return nil
+}
+
+// GetPendingEtxsFromSub returns the pendingEtxs from the sub specified by the location
+func (sl *Slice) GetPendingEtxsFromSub(hash common.Hash, location common.Location) (types.PendingEtxs, error) {
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx != common.ZONE_CTX {
+		if sl.subClients[location.SubIndex()] != nil {
+			return sl.subClients[location.SubIndex()].GetPendingEtxsFromSub(context.Background(), hash, location)
+		} else {
+			return types.PendingEtxs{}, errors.New("subclient unavailable")
+		}
+	} else {
+		block := sl.hc.GetBlockByHash(hash)
+		if block != nil {
+			return types.PendingEtxs{block.Header(), block.ExtTransactions()}, nil
+		} else {
+			return types.PendingEtxs{}, errors.New("unable to find the pendingEtxs")
+		}
+	}
+	return types.PendingEtxs{}, nil
 }

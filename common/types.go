@@ -67,6 +67,12 @@ var (
 // Hash represents the 32 byte Keccak256 hash of arbitrary data.
 type Hash [HashLength]byte
 
+// HashAndLocation represents the hash of the header and the location it was mined in
+type HashAndLocation struct {
+	Hash     Hash
+	Location Location
+}
+
 // BytesToHash sets b to hash.
 // If b is larger than len(h), b will be cropped from the left.
 func BytesToHash(b []byte) Hash {

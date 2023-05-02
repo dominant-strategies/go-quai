@@ -269,7 +269,7 @@ func handleGetOnePendingEtxs66(backend Backend, msg Decoder, peer *Peer) error {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
 	requestTracker.Fulfil(peer.id, peer.version, GetOnePendingEtxsMsg, query.RequestId)
-	pendingEtxs := backend.Core().GetPendingEtxs(query.Hash)
+	pendingEtxs := backend.Core().GetPendingEtxs(query.Hash, query.Location)
 	if pendingEtxs == nil {
 		log.Debug("Couldn't complete a pendingEtxs request for", "Hash", query.Hash)
 		return nil

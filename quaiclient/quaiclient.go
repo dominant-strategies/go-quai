@@ -155,3 +155,15 @@ func (ec *Client) SendPendingEtxsRollupToDom(ctx context.Context, pEtxsRollup ty
 	var raw json.RawMessage
 	return ec.c.CallContext(ctx, &raw, "quai_sendPendingEtxsRollupToDom", fields)
 }
+
+func (ec *Client) GetPendingEtxsFromSub(ctx context.Context, hash common.Hash, location common.Location) (types.PendingEtxs, error) {
+	fields := make(map[string]interface{})
+	fields["hash"] = hash
+	fields["location"] = location
+	var pEtx types.PendingEtxs
+	err := ec.c.CallContext(ctx, &pEtx, "quai_getPendingEtxsFromSub", fields)
+	if err != nil {
+		return types.PendingEtxs{}, err
+	}
+	return pEtx, nil
+}

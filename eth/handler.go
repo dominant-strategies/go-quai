@@ -132,7 +132,7 @@ type handler struct {
 	minedBlockSub         *event.TypeMuxSubscription
 	missingBodyCh         chan *types.Header
 	missingBodySub        event.Subscription
-	missingPendingEtxsCh  chan common.Hash
+	missingPendingEtxsCh  chan common.HashAndLocation
 	missingPendingEtxsSub event.Subscription
 	missingParentCh       chan common.Hash
 	missingParentSub      event.Subscription
@@ -327,7 +327,7 @@ func (h *handler) Start(maxPeers int) {
 
 	// broadcast pending etxs
 	h.wg.Add(1)
-	h.missingPendingEtxsCh = make(chan common.Hash, missingPendingEtxsChanSize)
+	h.missingPendingEtxsCh = make(chan common.HashAndLocation, missingPendingEtxsChanSize)
 	h.missingPendingEtxsSub = h.core.SubscribeMissingPendingEtxsEvent(h.missingPendingEtxsCh)
 	go h.missingPendingEtxsLoop()
 
@@ -552,11 +552,11 @@ func (h *handler) missingPendingEtxsLoop() {
 	defer h.wg.Done()
 	for {
 		select {
-		case hash := <-h.missingPendingEtxsCh:
+		case hashAndLocation := <-h.missingPendingEtxsCh:
 			// Check if any of the peers have the body
 			for _, peer := range h.selectSomePeers() {
-				log.Trace("Fetching the missing pending etxs from", "peer", peer.ID(), "hash", hash)
-				if err := peer.RequestOnePendingEtxs(hash); err != nil {
+				log.Trace("Fetching the missing pending etxs from", "peer", peer.ID(), "hash", hashAndLocation.Hash)
+				if err := peer.RequestOnePendingEtxs(hashAndLocation.Hash, hashAndLocation.Location); err != nil {
 					return
 				}
 			}

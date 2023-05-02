@@ -343,7 +343,8 @@ type GetBlockPacket66 struct {
 
 // GetOnePendingEtxsPacket represents a pending etx query
 type GetOnePendingEtxsPacket struct {
-	Hash common.Hash
+	Hash     common.Hash
+	Location common.Location
 }
 
 type GetOnePendingEtxsPacket66 struct {
@@ -365,18 +366,8 @@ type PendingEtxsPacket struct {
 	PendingEtxs types.PendingEtxs
 }
 
-type PendingEtxsPacket66 struct {
-	RequestId uint64
-	PendingEtxsPacket
-}
-
 type PendingEtxsRollupPacket struct {
 	PendingEtxsRollup types.PendingEtxsRollup
-}
-
-type PendingEtxsRollupPacket66 struct {
-	RequestId uint64
-	PendingEtxsRollupPacket
 }
 
 func (*StatusPacket) Name() string { return "Status" }

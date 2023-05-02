@@ -18,9 +18,9 @@ package eth
 
 import (
 	"errors"
+	sync "github.com/sasha-s/go-deadlock"
 	"math/big"
 	"math/rand"
-	sync "github.com/sasha-s/go-deadlock"
 	"time"
 
 	mapset "github.com/deckarep/golang-set"
@@ -576,7 +576,7 @@ func (p *Peer) RequestTxs(hashes []common.Hash) error {
 }
 
 // RequestOnePendingEtx fetches a pendingEtx for a given block hash from a remote node.
-func (p *Peer) RequestOnePendingEtxs(hash common.Hash) error {
+func (p *Peer) RequestOnePendingEtxs(hash common.Hash, location common.Location) error {
 	p.Log().Debug("Fetching a pending etx", "hash", hash)
 	if p.Version() >= ETH66 {
 		id := rand.Uint64()
@@ -584,7 +584,7 @@ func (p *Peer) RequestOnePendingEtxs(hash common.Hash) error {
 		requestTracker.Track(p.id, p.version, GetOnePendingEtxsMsg, PendingEtxsMsg, id)
 		return p2p.Send(p.rw, GetOnePendingEtxsMsg, &GetOnePendingEtxsPacket66{
 			RequestId:               id,
-			GetOnePendingEtxsPacket: GetOnePendingEtxsPacket{Hash: hash},
+			GetOnePendingEtxsPacket: GetOnePendingEtxsPacket{Hash: hash, Location: location},
 		})
 	}
 	return errors.New("eth65 not supported for RequestOnePendingEtxs call")
@@ -597,9 +597,9 @@ func (p *Peer) RequestOnePendingEtxsRollup(hash common.Hash) error {
 		id := rand.Uint64()
 
 		requestTracker.Track(p.id, p.version, GetOnePendingEtxsRollupMsg, PendingEtxsRollupMsg, id)
-		return p2p.Send(p.rw, GetOnePendingEtxsRollupMsg, &GetOnePendingEtxsPacket66{
-			RequestId:               id,
-			GetOnePendingEtxsPacket: GetOnePendingEtxsPacket{Hash: hash},
+		return p2p.Send(p.rw, GetOnePendingEtxsRollupMsg, &GetOnePendingEtxsRollupPacket66{
+			RequestId:                     id,
+			GetOnePendingEtxsRollupPacket: GetOnePendingEtxsRollupPacket{Hash: hash},
 		})
 	}
 	return errors.New("eth65 not supported for RequestOnePendingEtxsRollup call")

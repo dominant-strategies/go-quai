@@ -465,6 +465,10 @@ func (b *QuaiAPIBackend) GetSubManifest(slice common.Location, blockHash common.
 	return b.eth.core.GetSubManifest(slice, blockHash)
 }
 
+func (b *QuaiAPIBackend) GetPendingEtxsFromSub(hash common.Hash, location common.Location) (types.PendingEtxs, error) {
+	return b.eth.core.GetPendingEtxsFromSub(hash, location)
+}
+
 func (b *QuaiAPIBackend) AddPendingEtxs(pEtxs types.PendingEtxs) error {
 	return b.eth.core.AddPendingEtxs(pEtxs)
 }

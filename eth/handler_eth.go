@@ -212,7 +212,7 @@ func (h *ethHandler) handlePendingEtxsRollup(peer *eth.Peer, pEtxsRollup types.P
 	}
 	// For each hash in manifest request for the pendingEtxs
 	for _, hash := range pEtxsRollup.Manifest {
-		peer.RequestOnePendingEtxs(hash)
+		peer.RequestOnePendingEtxs(hash, pEtxsRollup.Header.Location())
 	}
 	return nil
 }

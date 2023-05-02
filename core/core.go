@@ -281,16 +281,8 @@ func (c *Core) GetSubManifest(slice common.Location, blockHash common.Hash) (typ
 	return c.sl.GetSubManifest(slice, blockHash)
 }
 
-func (c *Core) GetPendingEtxs(hash common.Hash) *types.PendingEtxs {
-	return rawdb.ReadPendingEtxs(c.sl.sliceDb, hash)
-}
-
-func (c *Core) GetPendingEtxsRollup(hash common.Hash) *types.PendingEtxsRollup {
-	return rawdb.ReadPendingEtxsRollup(c.sl.sliceDb, hash)
-}
-
-func (c *Core) HasPendingEtxs(hash common.Hash) bool {
-	return c.GetPendingEtxs(hash) != nil
+func (c *Core) GetPendingEtxsFromSub(hash common.Hash, location common.Location) (types.PendingEtxs, error) {
+	return c.sl.GetPendingEtxsFromSub(hash, location)
 }
 
 func (c *Core) SendPendingEtxsToDom(pEtxs types.PendingEtxs) error {
@@ -461,7 +453,7 @@ func (c *Core) GetTerminiByHash(hash common.Hash) []common.Hash {
 	return c.sl.hc.GetTerminiByHash(hash)
 }
 
-func (c *Core) SubscribeMissingPendingEtxsEvent(ch chan<- common.Hash) event.Subscription {
+func (c *Core) SubscribeMissingPendingEtxsEvent(ch chan<- common.HashAndLocation) event.Subscription {
 	return c.sl.hc.SubscribeMissingPendingEtxsEvent(ch)
 }
 
@@ -472,6 +464,24 @@ func (c *Core) SubscribeMissingPendingEtxsRollupEvent(ch chan<- common.Hash) eve
 // SubscribeChainSideEvent registers a subscription of ChainSideEvent.
 func (c *Core) SubscribeChainSideEvent(ch chan<- ChainSideEvent) event.Subscription {
 	return c.sl.hc.SubscribeChainSideEvent(ch)
+}
+
+func (c *Core) GetPendingEtxs(hash common.Hash, location common.Location) *types.PendingEtxs {
+	pEtx, err := c.sl.hc.GetPendingEtxs(hash, location)
+	if err != nil {
+		return nil
+	} else {
+		return pEtx
+	}
+}
+
+func (c *Core) GetPendingEtxsRollup(hash common.Hash) *types.PendingEtxsRollup {
+	pEtxsRollup, err := c.sl.hc.GetPendingEtxsRollup(hash)
+	if err != nil {
+		return nil
+	} else {
+		return pEtxsRollup
+	}
 }
 
 //--------------------//

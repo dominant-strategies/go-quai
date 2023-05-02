@@ -82,6 +82,7 @@ type Backend interface {
 	AddPendingEtxs(pEtxs types.PendingEtxs) error
 	AddPendingEtxsRollup(pEtxsRollup types.PendingEtxsRollup) error
 	PendingBlockAndReceipts() (*types.Block, types.Receipts)
+	GetPendingEtxsFromSub(hash common.Hash, location common.Location) (types.PendingEtxs, error)
 
 	// Transaction pool API
 	SendTx(ctx context.Context, signedTx *types.Transaction) error
