@@ -87,6 +87,7 @@ var (
 	errGenesisMismatch         = errors.New("genesis mismatch")
 	errForkIDRejected          = errors.New("fork ID rejected")
 	errLocationMismatch        = errors.New("location mismatch")
+	errSlicesRunningRejected   = errors.New("slices running not valid")
 )
 
 // Packet represents a p2p message in the `eth` protocol.
@@ -100,6 +101,7 @@ type StatusPacket struct {
 	ProtocolVersion uint32
 	NetworkID       uint64
 	Location        string
+	SlicesRunning   []common.Location
 	Entropy         *big.Int
 	Head            common.Hash
 	Genesis         common.Hash

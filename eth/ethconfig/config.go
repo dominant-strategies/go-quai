@@ -154,6 +154,9 @@ type Config struct {
 
 	// Sub node websocket urls
 	SubUrls []string
+
+	// Slices running on the node
+	SlicesRunning []common.Location
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.

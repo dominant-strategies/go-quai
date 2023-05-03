@@ -100,19 +100,21 @@ type txPool interface {
 // handlerConfig is the collection of initialization parameters to create a full
 // node network handler.
 type handlerConfig struct {
-	Database   ethdb.Database         // Database for direct sync insertions
-	Core       *core.Core             // Core to serve data from
-	TxPool     txPool                 // Transaction pool to propagate from
-	Network    uint64                 // Network identifier to adfvertise
-	Sync       downloader.SyncMode    // Whether to fast or full sync
-	BloomCache uint64                 // Megabytes to alloc for fast sync bloom
-	EventMux   *event.TypeMux         // Legacy event mux, deprecate for `feed`
-	Whitelist  map[uint64]common.Hash // Hard coded whitelist for sync challenged
+	Database      ethdb.Database         // Database for direct sync insertions
+	Core          *core.Core             // Core to serve data from
+	TxPool        txPool                 // Transaction pool to propagate from
+	Network       uint64                 // Network identifier to adfvertise
+	Sync          downloader.SyncMode    // Whether to fast or full sync
+	BloomCache    uint64                 // Megabytes to alloc for fast sync bloom
+	EventMux      *event.TypeMux         // Legacy event mux, deprecate for `feed`
+	Whitelist     map[uint64]common.Hash // Hard coded whitelist for sync challenged
+	SlicesRunning []common.Location      // Slices run by the node
 }
 
 type handler struct {
-	networkID  uint64
-	forkFilter forkid.Filter // Fork ID filter, constant across the lifetime of the node
+	networkID     uint64
+	forkFilter    forkid.Filter     // Fork ID filter, constant across the lifetime of the node
+	slicesRunning []common.Location // Slices running on the node
 
 	acceptTxs uint32 // Flag whether we're considered synchronised (enables transaction processing)
 
@@ -163,16 +165,17 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		config.EventMux = new(event.TypeMux) // Nicety initialization for tests
 	}
 	h := &handler{
-		networkID:  config.Network,
-		forkFilter: forkid.NewFilter(config.Core),
-		eventMux:   config.EventMux,
-		database:   config.Database,
-		txpool:     config.TxPool,
-		core:       config.Core,
-		peers:      newPeerSet(),
-		whitelist:  config.Whitelist,
-		txsyncCh:   make(chan *txsync),
-		quitSync:   make(chan struct{}),
+		networkID:     config.Network,
+		slicesRunning: config.SlicesRunning,
+		forkFilter:    forkid.NewFilter(config.Core),
+		eventMux:      config.EventMux,
+		database:      config.Database,
+		txpool:        config.TxPool,
+		core:          config.Core,
+		peers:         newPeerSet(),
+		whitelist:     config.Whitelist,
+		txsyncCh:      make(chan *txsync),
+		quitSync:      make(chan struct{}),
 	}
 
 	h.downloader = downloader.New(config.Database, h.eventMux, h.core, h.removePeer)
@@ -229,7 +232,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 		entropy = head.CalcS()
 	)
 	forkID := forkid.NewID(h.core.Config(), h.core.Genesis().Hash(), h.core.CurrentHeader().Number().Uint64())
-	if err := peer.Handshake(h.networkID, entropy, hash, genesis.Hash(), forkID, h.forkFilter); err != nil {
+	if err := peer.Handshake(h.networkID, h.slicesRunning, entropy, hash, genesis.Hash(), forkID, h.forkFilter); err != nil {
 		peer.Log().Debug("Ethereum handshake failed", "err", err)
 		return err
 	}
@@ -553,8 +556,11 @@ func (h *handler) missingPendingEtxsLoop() {
 	for {
 		select {
 		case hashAndLocation := <-h.missingPendingEtxsCh:
+			// Only ask from peers running the slice for the missing pending etxs
+			// In the future, peers not responding before the timeout has to be punished
+			peersRunningSlice := h.peers.peerRunningSlice(hashAndLocation.Location)
 			// Check if any of the peers have the body
-			for _, peer := range h.selectSomePeers() {
+			for _, peer := range peersRunningSlice {
 				log.Trace("Fetching the missing pending etxs from", "peer", peer.ID(), "hash", hashAndLocation.Hash)
 				if err := peer.RequestOnePendingEtxs(hashAndLocation.Hash, hashAndLocation.Location); err != nil {
 					return

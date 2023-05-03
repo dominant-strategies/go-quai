@@ -74,9 +74,10 @@ func max(a, b int) int {
 type Peer struct {
 	id string // Unique ID for the peer, cached
 
-	*p2p.Peer                   // The embedded P2P package peer
-	rw        p2p.MsgReadWriter // Input/output streams for snap
-	version   uint              // Protocol version negotiated
+	*p2p.Peer                       // The embedded P2P package peer
+	rw            p2p.MsgReadWriter // Input/output streams for snap
+	version       uint              // Protocol version negotiated
+	slicesRunning []common.Location // Slices run by the node
 
 	head           common.Hash // Latest advertised head block hash
 	number         *big.Int    // Latest advertised head block number
@@ -160,6 +161,11 @@ func (p *Peer) SetHead(hash common.Hash, number *big.Int, entropy *big.Int, rece
 	p.receivedHeadAt = receivedAt
 	p.number = new(big.Int).Set(number)
 	p.entropy = new(big.Int).Set(entropy)
+}
+
+// SlicesRunning returns the slices that are running by the node
+func (p *Peer) SlicesRunning() []common.Location {
+	return p.slicesRunning
 }
 
 // KnownBlock returns whether peer is known to already have a block.

@@ -101,6 +101,7 @@ var (
 		utils.NodeKeyFileFlag,
 		utils.NodeKeyHexFlag,
 		utils.DNSDiscoveryFlag,
+		utils.SlicesRunningFlag,
 		utils.ColosseumFlag,
 		utils.DeveloperFlag,
 		utils.DeveloperPeriodFlag,

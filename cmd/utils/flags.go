@@ -130,6 +130,10 @@ var (
 		Usage: "Explicitly set network id (integer)(For testnets: use --garden)",
 		Value: ethconfig.Defaults.NetworkId,
 	}
+	SlicesRunningFlag = cli.StringFlag{
+		Name:  "slices",
+		Usage: "All the slices that are available for data fetch request from a peer",
+	}
 	ColosseumFlag = cli.BoolFlag{
 		Name:  "colosseum",
 		Usage: "Quai Colosseum testnet",
@@ -913,6 +917,24 @@ func makeSubUrls(ctx *cli.Context) []string {
 	return strings.Split(ctx.GlobalString(SubUrls.Name), ",")
 }
 
+// setSlicesRunning sets the slices running flag
+func setSlicesRunning(ctx *cli.Context, cfg *ethconfig.Config) {
+	slices := strings.Split(ctx.GlobalString(SlicesRunningFlag.Name), ",")
+
+	// Sanity checks
+	if len(slices) == 0 {
+		Fatalf("no slices are specified")
+	}
+	if len(slices) > common.NumRegionsInPrime*common.NumZonesInRegion {
+		Fatalf("number of slices exceed the current ontology")
+	}
+	slicesRunning := []common.Location{}
+	for _, slice := range slices {
+		slicesRunning = append(slicesRunning, common.Location{slice[1] - 48, slice[3] - 48})
+	}
+	cfg.SlicesRunning = slicesRunning
+}
+
 // MakeDatabaseHandles raises out the number of allowed file handles per process
 // for Geth and returns half of the allowance to assign to the database.
 func MakeDatabaseHandles() int {
@@ -1269,6 +1291,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 
 	// set the subordinate chain websocket urls
 	setSubUrls(ctx, cfg)
+
+	// set the slices that the node is running
+	setSlicesRunning(ctx, cfg)
 
 	// Cap the cache allowance and tune the garbage collector
 	mem, err := gopsutil.VirtualMemory()
