@@ -632,9 +632,9 @@ func (s *Service) computeTps(block *types.Block) (uint64, error) {
 
 	var blockTps uint64
 	if parentTps == c_uintMaxValue {
-		blockTps = ((c_alpha-1)*parentTps + instantTps) / c_alpha
-	} else {
 		blockTps = instantTps
+	} else {
+		blockTps = ((c_alpha-1)*parentTps + instantTps) / c_alpha
 	}
 
 	s.tpsLookupCache.Add(block.Hash(), blockCacheDto{
@@ -706,7 +706,7 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		ChainID:       s.chainID.Uint64(),
 	}
 
-	if tps, err := s.computeTps(block); err != nil {
+	if tps, err := s.computeTps(block); err == nil {
 		ret.Tps = tps
 	} else {
 		log.Error("error computing tps", "error", err.Error())
