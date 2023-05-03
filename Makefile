@@ -41,6 +41,7 @@ include network.env
 BASE_CMD = nice -n -20 ./build/bin/go-quai --$(NETWORK) --syncmode $(SYNCMODE) --verbosity $(VERBOSITY) --nonce $(NONCE)
 BASE_CMD += --http --http.vhosts=* --http.addr $(HTTP_ADDR) --http.api $(HTTP_API)
 BASE_CMD += --ws --ws.addr $(WS_ADDR) --ws.api $(WS_API)
+BASE_CMD += --slices $(SLICES)
 ifeq ($(ENABLE_ARCHIVE),true)
 	BASE_CMD += --gcmode archive
 endif

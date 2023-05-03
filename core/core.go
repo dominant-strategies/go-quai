@@ -461,7 +461,7 @@ func (c *Core) GetTerminiByHash(hash common.Hash) []common.Hash {
 	return c.sl.hc.GetTerminiByHash(hash)
 }
 
-func (c *Core) SubscribeMissingPendingEtxsEvent(ch chan<- common.Hash) event.Subscription {
+func (c *Core) SubscribeMissingPendingEtxsEvent(ch chan<- types.HashAndLocation) event.Subscription {
 	return c.sl.hc.SubscribeMissingPendingEtxsEvent(ch)
 }
 

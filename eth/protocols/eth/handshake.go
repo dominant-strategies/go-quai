@@ -34,7 +34,7 @@ const (
 
 // Handshake executes the eth protocol handshake, negotiating version number,
 // network IDs, difficulties, head and genesis blocks.
-func (p *Peer) Handshake(network uint64, entropy *big.Int, head common.Hash, genesis common.Hash, forkID forkid.ID, forkFilter forkid.Filter) error {
+func (p *Peer) Handshake(network uint64, slices []common.Location, entropy *big.Int, head common.Hash, genesis common.Hash, forkID forkid.ID, forkFilter forkid.Filter) error {
 	// Send out own handshake in a new thread
 	errc := make(chan error, 2)
 
@@ -44,6 +44,7 @@ func (p *Peer) Handshake(network uint64, entropy *big.Int, head common.Hash, gen
 		errc <- p2p.Send(p.rw, StatusMsg, &StatusPacket{
 			ProtocolVersion: uint32(p.version),
 			NetworkID:       network,
+			SlicesRunning:   slices,
 			Location:        common.NodeLocation.Name(),
 			Entropy:         entropy,
 			Head:            head,
@@ -68,6 +69,7 @@ func (p *Peer) Handshake(network uint64, entropy *big.Int, head common.Hash, gen
 	}
 	// Decode the status entropy
 	p.entropy, p.head = status.Entropy, status.Head
+	p.slicesRunning = status.SlicesRunning
 	return nil
 }
 
@@ -101,6 +103,10 @@ func (p *Peer) readStatus(network uint64, status *StatusPacket, genesis common.H
 	}
 	if err := forkFilter(status.ForkID); err != nil {
 		return fmt.Errorf("%w: %v", errForkIDRejected, err)
+	}
+	// sanity check slices running
+	if len(status.SlicesRunning) == 0 || len(status.SlicesRunning) > common.NumRegionsInPrime*common.NumZonesInRegion {
+		return fmt.Errorf("%w: %v", errSlicesRunningRejected, fmt.Errorf("slices running sanity check failed"))
 	}
 	return nil
 }

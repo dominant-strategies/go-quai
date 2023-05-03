@@ -174,6 +174,28 @@ func (ps *peerSet) peerWithHighestEntropy() *eth.Peer {
 	return bestPeer
 }
 
+func (ps *peerSet) peerRunningSlice(location common.Location) []*eth.Peer {
+	ps.lock.RLock()
+	defer ps.lock.RUnlock()
+
+	containsLocation := func(s []common.Location, e common.Location) bool {
+		for _, a := range s {
+			if common.Location.Equal(a, e) {
+				return true
+			}
+		}
+		return false
+	}
+
+	var peersRunningSlice []*eth.Peer
+	for _, p := range ps.peers {
+		if containsLocation(p.Peer.SlicesRunning(), location) {
+			peersRunningSlice = append(peersRunningSlice, p.Peer)
+		}
+	}
+	return peersRunningSlice
+}
+
 // close disconnects all peers.
 func (ps *peerSet) close() {
 	ps.lock.Lock()

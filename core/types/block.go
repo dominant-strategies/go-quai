@@ -1069,3 +1069,8 @@ type HashAndNumber struct {
 	Hash   common.Hash
 	Number uint64
 }
+
+type HashAndLocation struct {
+	Hash     common.Hash
+	Location common.Location
+}

@@ -195,14 +195,15 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	// Permit the downloader to use the trie cache allowance during fast sync
 	cacheLimit := cacheConfig.TrieCleanLimit + cacheConfig.TrieDirtyLimit + cacheConfig.SnapshotLimit
 	if eth.handler, err = newHandler(&handlerConfig{
-		Database:   chainDb,
-		Core:       eth.core,
-		TxPool:     eth.core.TxPool(),
-		Network:    config.NetworkId,
-		Sync:       config.SyncMode,
-		BloomCache: uint64(cacheLimit),
-		EventMux:   eth.eventMux,
-		Whitelist:  config.Whitelist,
+		Database:      chainDb,
+		Core:          eth.core,
+		TxPool:        eth.core.TxPool(),
+		Network:       config.NetworkId,
+		Sync:          config.SyncMode,
+		BloomCache:    uint64(cacheLimit),
+		EventMux:      eth.eventMux,
+		Whitelist:     config.Whitelist,
+		SlicesRunning: config.SlicesRunning,
 	}); err != nil {
 		return nil, err
 	}
