@@ -22,8 +22,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"math/big"
-	"strings"
+	"os"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
@@ -35,7 +36,6 @@ import (
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
-	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/dominant-strategies/go-quai/trie"
 )
 
@@ -55,7 +55,6 @@ type Genesis struct {
 	Difficulty *big.Int            `json:"difficulty" gencodec:"required"`
 	Mixhash    common.Hash         `json:"mixHash"`
 	Coinbase   common.Address      `json:"coinbase"`
-	Alloc      GenesisAlloc        `json:"alloc"      gencodec:"required"`
 
 	// These fields are used for consensus tests. Please don't use them
 	// in actual genesis blocks.
@@ -259,34 +258,10 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 // ToBlock creates the genesis block and writes state of a genesis specification
 // to the given database (or discards it if nil).
 func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
-	nodeCtx := common.NodeLocation.Context()
-	if db == nil {
-		db = rawdb.NewMemoryDatabase()
-	}
-	// We only allow genesis allocations in zone chain. We need to calculate
-	// the zone genesis state root
-	zoneStatedb, err := state.New(common.Hash{}, state.NewDatabase(db), nil)
-	if err != nil {
-		panic(err)
-	}
-	for addr, account := range g.Alloc {
-		internal, err := addr.InternalAddress()
-		if err != nil {
-			fmt.Println("Provided address in genesis block is out of scope")
-		}
-		zoneStatedb.AddBalance(internal, account.Balance)
-		zoneStatedb.SetCode(internal, account.Code)
-		zoneStatedb.SetNonce(internal, account.Nonce)
-		for key, value := range account.Storage {
-			zoneStatedb.SetState(internal, key, value)
-		}
-	}
-	zoneRoot := zoneStatedb.IntermediateRoot(false)
 	head := types.EmptyHeader()
 	head.SetNonce(types.EncodeNonce(g.Nonce))
 	head.SetTime(g.Timestamp)
 	head.SetExtra(g.ExtraData)
-	head.SetRoot(zoneRoot) // Not genesis allocs allowed
 	head.SetDifficulty(g.Difficulty)
 	head.SetCoinbase(common.ZeroAddr)
 	head.SetGasLimit(g.GasLimit)
@@ -298,12 +273,6 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	for i := 0; i < common.HierarchyDepth; i++ {
 		head.SetNumber(big.NewInt(0), i)
 		head.SetParentHash(common.Hash{}, i)
-	}
-
-	if nodeCtx == common.ZONE_CTX {
-		statedb := *zoneStatedb
-		statedb.Commit(false)
-		statedb.Database().TrieDB().Commit(head.Root(), true, nil)
 	}
 
 	return types.NewBlock(head, nil, nil, nil, nil, nil, trie.NewStackTrie(nil))
@@ -346,7 +315,6 @@ func (g *Genesis) MustCommit(db ethdb.Database) *types.Block {
 // GenesisBlockForTesting creates and writes a block in which addr has the given wei balance.
 func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big.Int) *types.Block {
 	g := Genesis{
-		Alloc:   GenesisAlloc{addr: {Balance: balance}},
 		BaseFee: big.NewInt(params.InitialBaseFee),
 	}
 	return g.MustCommit(db)
@@ -366,7 +334,6 @@ func DefaultColosseumGenesisBlock() *Genesis {
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
 		GasLimit:   160000000,
 		Difficulty: big.NewInt(2048576),
-		Alloc:      decodePrealloc(colosseumAllocData),
 	}
 }
 
@@ -378,7 +345,6 @@ func DefaultGardenGenesisBlock() *Genesis {
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
 		GasLimit:   160000000,
 		Difficulty: big.NewInt(441092),
-		Alloc:      decodePrealloc(gardenAllocData),
 	}
 }
 
@@ -390,7 +356,6 @@ func DefaultOrchardGenesisBlock() *Genesis {
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
 		GasLimit:   80000000,
 		Difficulty: big.NewInt(4000000),
-		Alloc:      decodePrealloc(orchardAllocData),
 	}
 }
 
@@ -402,7 +367,6 @@ func DefaultGalenaGenesisBlock() *Genesis {
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
 		GasLimit:   160000000,
 		Difficulty: big.NewInt(8800000000),
-		Alloc:      decodePrealloc(galenaAllocData),
 	}
 }
 
@@ -414,7 +378,6 @@ func DefaultLocalGenesisBlock() *Genesis {
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
 		GasLimit:   160000000,
 		Difficulty: big.NewInt(300000),
-		Alloc:      decodePrealloc(localAllocData),
 	}
 }
 
@@ -429,29 +392,31 @@ func DeveloperGenesisBlock(period uint64, faucet common.Address) *Genesis {
 		GasLimit:   0x47b760,
 		BaseFee:    big.NewInt(params.InitialBaseFee),
 		Difficulty: big.NewInt(1),
-		Alloc: map[common.Address]GenesisAccount{
-			common.BytesToAddress([]byte{1}): {Balance: big.NewInt(1)}, // ECRecover
-			common.BytesToAddress([]byte{2}): {Balance: big.NewInt(1)}, // SHA256
-			common.BytesToAddress([]byte{3}): {Balance: big.NewInt(1)}, // RIPEMD
-			common.BytesToAddress([]byte{4}): {Balance: big.NewInt(1)}, // Identity
-			common.BytesToAddress([]byte{5}): {Balance: big.NewInt(1)}, // ModExp
-			common.BytesToAddress([]byte{6}): {Balance: big.NewInt(1)}, // ECAdd
-			common.BytesToAddress([]byte{7}): {Balance: big.NewInt(1)}, // ECScalarMul
-			common.BytesToAddress([]byte{8}): {Balance: big.NewInt(1)}, // ECPairing
-			common.BytesToAddress([]byte{9}): {Balance: big.NewInt(1)}, // BLAKE2b
-			faucet:                           {Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(9))},
-		},
 	}
 }
 
-func decodePrealloc(data string) GenesisAlloc {
-	var p []struct{ Addr, Balance *big.Int }
-	if err := rlp.NewStream(strings.NewReader(data), 0).Decode(&p); err != nil {
-		panic(err)
+func ReadGenesisAlloc(filename string) map[string]GenesisAccount {
+	jsonFile, err := os.Open(filename)
+	if err != nil {
+		log.Error(err.Error())
+		return nil
 	}
-	ga := make(GenesisAlloc, len(p))
-	for _, account := range p {
-		ga[common.BigToAddress(account.Addr)] = GenesisAccount{Balance: account.Balance}
+	defer jsonFile.Close()
+	// Read the file contents
+	byteValue, err := ioutil.ReadAll(jsonFile)
+	if err != nil {
+		log.Error(err.Error())
+		return nil
 	}
-	return ga
+
+	// Parse the JSON data
+	var data map[string]GenesisAccount
+	err = json.Unmarshal(byteValue, &data)
+	if err != nil {
+		log.Error(err.Error())
+		return nil
+	}
+
+	// Use the parsed data
+	return data
 }
