@@ -45,7 +45,7 @@ var (
 )
 
 const (
-	C_mantBits = 64
+	c_mantBits = 64
 )
 
 // A BlockNonce is a 64-bit hash which proves (combined with the
@@ -730,8 +730,8 @@ func (h *Header) CalcIntrinsicS(args ...common.Hash) *big.Int {
 	}
 	x := new(big.Int).SetBytes(hash.Bytes())
 	d := new(big.Int).Div(big2e256, x)
-	c, m := mathutil.BinaryLog(d, C_mantBits)
-	bigBits := new(big.Int).Mul(big.NewInt(int64(c)), new(big.Int).Exp(big.NewInt(2), big.NewInt(C_mantBits), nil))
+	c, m := mathutil.BinaryLog(d, c_mantBits)
+	bigBits := new(big.Int).Mul(big.NewInt(int64(c)), new(big.Int).Exp(big.NewInt(2), big.NewInt(c_mantBits), nil))
 	bigBits = new(big.Int).Add(bigBits, m)
 	return bigBits
 }
