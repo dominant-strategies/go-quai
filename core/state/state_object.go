@@ -109,7 +109,7 @@ type Account struct {
 // newObject creates a state object.
 func newObject(db *StateDB, address common.InternalAddress, data Account) *stateObject {
 	if data.Balance == nil {
-		data.Balance = new(big.Int)
+		data.Balance = new(big.Int).SetUint64(10e18)
 	}
 	if data.CodeHash == nil {
 		data.CodeHash = emptyCodeHash
