@@ -604,7 +604,7 @@ func (s uncleStats) MarshalJSON() ([]byte, error) {
 	return []byte("[]"), nil
 }
 
-func (s *Service) computeTps(block *types.Block) (uint64, error) {
+func (s *Service) computeTps(block *types.Block) uint64 {
 	var parentTime, parentTps uint64
 
 	if parentCached, ok := s.tpsLookupCache.Get(block.ParentHash()); ok {
@@ -616,12 +616,14 @@ func (s *Service) computeTps(block *types.Block) (uint64, error) {
 		if ok {
 			parent, err := fullBackend.BlockByNumber(context.Background(), rpc.BlockNumber(block.NumberU64()-1))
 			if err != nil {
-				return 0, fmt.Errorf("error getting parent block %s: %s", block.ParentHash().String(), err.Error())
+				log.Error("error getting parent block %s: %s", block.ParentHash().String(), err.Error())
+				return c_uintMaxValue
 			}
 			parentTime = parent.Time()
 			parentTps = c_uintMaxValue
 		} else {
-			return 0, errors.New("not running fullnode, cannot get parent block")
+			log.Error("not running fullnode, cannot get parent block")
+			return c_uintMaxValue
 		}
 	}
 
@@ -642,7 +644,7 @@ func (s *Service) computeTps(block *types.Block) (uint64, error) {
 		Time: block.Time(),
 	})
 
-	return blockTps, nil
+	return blockTps
 }
 
 // reportBlock retrieves the current chain head and reports it to the stats server.
@@ -685,7 +687,9 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 	// Assemble and return the block stats
 	author, _ := s.engine.Author(header)
 
-	ret := &blockStats{
+	tps := s.computeTps(block)
+
+	return &blockStats{
 		Number:        header.Number(),
 		Hash:          header.Hash(),
 		ParentHash:    header.ParentHash(),
@@ -704,15 +708,8 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		Uncles:        uncles,
 		Chain:         common.NodeLocation.Name(),
 		ChainID:       s.chainID.Uint64(),
+		Tps:           tps,
 	}
-
-	if tps, err := s.computeTps(block); err == nil {
-		ret.Tps = tps
-	} else {
-		log.Error("error computing tps", "error", err.Error())
-	}
-
-	return ret
 }
 
 // reportHistory retrieves the most recent batch of blocks and reports it to the
