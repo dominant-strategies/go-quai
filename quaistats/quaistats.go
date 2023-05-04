@@ -581,6 +581,7 @@ type blockStats struct {
 	Chain         string         `json:"chain"`
 	ChainID       uint64         `json:"chainId"`
 	Tps           uint64         `json:"tps"`
+	AppendTime    time.Duration  `json:"appendTime"`
 }
 
 type blockCacheDto struct {
@@ -689,6 +690,8 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 
 	tps := s.computeTps(block)
 
+	appendTime := block.GetAppendTime()
+
 	return &blockStats{
 		Number:        header.Number(),
 		Hash:          header.Hash(),
@@ -709,6 +712,7 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		Chain:         common.NodeLocation.Name(),
 		ChainID:       s.chainID.Uint64(),
 		Tps:           tps,
+		AppendTime:    appendTime,
 	}
 }
 

@@ -228,12 +228,14 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	log.Trace("Entropy Calculations", "header", header.Hash(), "S", common.BigBitsToBits(s), "DeltaS", common.BigBitsToBits(header.CalcDeltaS()), "IntrinsicS", common.BigBitsToBits(header.CalcIntrinsicS()))
 
 	time11 := common.PrettyDuration(time.Since(start))
-	//Append has succeeded write the batch
+
+	// Append has succeeded write the batch
 	if err := batch.Write(); err != nil {
 		return nil, err
 	}
-	time12 := common.PrettyDuration(time.Since(start))
-	sl.writeToPhCacheAndPickPhHead(pendingHeaderWithTermini)
+	appendFinished := time.Since(start)
+	time12 := common.PrettyDuration(appendFinished)
+	sl.writeToPhCacheAndPickPhHead(pendingHeaderWithTermini, &appendFinished)
 
 	// Relay the new pendingHeader
 	go sl.relayPh(pendingHeaderWithTermini, domOrigin, block.Location())
@@ -486,7 +488,7 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 		for _, i := range indices {
 			combinedPendingHeader = sl.combinePendingHeader(pendingHeader.Header, combinedPendingHeader, i, false)
 		}
-		sl.writeToPhCacheAndPickPhHead(types.PendingHeader{Header: combinedPendingHeader, Termini: localPendingHeader.Termini})
+		sl.writeToPhCacheAndPickPhHead(types.PendingHeader{Header: combinedPendingHeader, Termini: localPendingHeader.Termini}, nil)
 
 		return nil
 	}
@@ -495,7 +497,7 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 }
 
 // writePhCache dom writes a given pendingHeaderWithTermini to the cache with the terminus used as the key.
-func (sl *Slice) writeToPhCacheAndPickPhHead(pendingHeaderWithTermini types.PendingHeader) {
+func (sl *Slice) writeToPhCacheAndPickPhHead(pendingHeaderWithTermini types.PendingHeader, appendTime *time.Duration) {
 	bestPh, exist := sl.phCache[sl.bestPhKey]
 	if !exist {
 		log.Error("BestPh Key does not exist for", "key", sl.bestPhKey)
@@ -520,10 +522,13 @@ func (sl *Slice) writeToPhCacheAndPickPhHead(pendingHeaderWithTermini types.Pend
 
 	// Pick a phCache Head
 	block := sl.hc.GetBlockByHash(pendingHeaderWithTermini.Header.ParentHash())
+	block.SetAppendTime(*appendTime)
 	if sl.poem(newPhEntropy, oldBestPhEntropy) {
 		sl.bestPhKey = pendingHeaderWithTermini.Termini[c_terminusIndex]
 		sl.hc.SetCurrentHeader(block.Header())
-		sl.hc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
+		if appendTime != nil { // If appendTime is nil, it means this was called from updatePhCacheFromDom
+			sl.hc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
+		}
 		log.Debug("Choosing new pending header", "Ph Number:", pendingHeaderWithTermini.Header.NumberArray())
 	}
 }

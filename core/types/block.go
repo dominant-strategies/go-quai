@@ -754,8 +754,9 @@ type Block struct {
 	subManifest     BlockManifest
 
 	// caches
-	hash atomic.Value
-	size atomic.Value
+	hash       atomic.Value
+	size       atomic.Value
+	appendTime atomic.Value
 
 	// These fields are used by package eth to track
 	// inter-peer block relay.
@@ -1021,6 +1022,21 @@ func (b *Block) Hash() common.Hash {
 	v := b.header.Hash()
 	b.hash.Store(v)
 	return v
+}
+
+// GetAppendTime returns the appendTime of the block
+// The appendTime is computed on the first call and cached thereafter.
+func (b *Block) GetAppendTime() time.Duration {
+	if appendTime := b.appendTime.Load(); appendTime != nil {
+		if val, ok := appendTime.(time.Duration); ok {
+			return val
+		}
+	}
+	return -1
+}
+
+func (b *Block) SetAppendTime(appendTime time.Duration) {
+	b.appendTime.Store(appendTime)
 }
 
 type Blocks []*Block
