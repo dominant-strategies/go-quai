@@ -435,10 +435,11 @@ func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, header *
 	accumulateRewards(chain.Config(), state, header, uncles)
 
 	if common.NodeLocation.Context() == common.ZONE_CTX && header.ParentHash() == chain.Config().GenesisHash {
-		alloc := core.DecodePrealloc(core.LocalAllocData)
+		alloc := core.ReadGenesisAlloc("genallocs/gen_alloc_" + common.NodeLocation.Name() + ".json")
 		log.Info("Allocating genesis accounts", "num", len(alloc))
 
-		for addr, account := range alloc {
+		for addressString, account := range alloc {
+			addr := common.HexToAddress(addressString)
 			internal, err := addr.InternalAddress()
 			if err != nil {
 				fmt.Println("Provided address in genesis block is out of scope")
