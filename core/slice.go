@@ -199,10 +199,8 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 			// Cache the subordinate's pending ETXs
 			pEtxs := types.PendingEtxs{block.Header(), subPendingEtxs}
 			time8_2 = common.PrettyDuration(time.Since(start))
-			if pEtxs.IsValid(trie.NewStackTrie(nil)) {
-				// Add the pending etx given by the sub in the rollup
-				sl.AddPendingEtxs(pEtxs)
-			}
+			// Add the pending etx given by the sub in the rollup
+			sl.AddPendingEtxs(pEtxs)
 			// Only region has the rollup hashes for pendingEtxs
 			if nodeCtx == common.REGION_CTX {
 				// We also need to store the pendingEtxRollup to the dom
@@ -542,11 +540,11 @@ func (sl *Slice) writeToPhCacheAndPickPhHead(pendingHeaderWithTermini types.Pend
 
 	// Pick a phCache Head
 	block := sl.hc.GetBlockByHash(pendingHeaderWithTermini.Header.ParentHash())
-	block.SetAppendTime(*appendTime)
 	if sl.poem(newPhEntropy, oldBestPhEntropy) {
 		sl.bestPhKey = pendingHeaderWithTermini.Termini[c_terminusIndex]
 		sl.hc.SetCurrentHeader(block.Header())
 		if appendTime != nil { // If appendTime is nil, it means this was called from updatePhCacheFromDom
+			block.SetAppendTime(*appendTime)
 			sl.hc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
 		}
 		log.Debug("Choosing new pending header", "Ph Number:", pendingHeaderWithTermini.Header.NumberArray())
