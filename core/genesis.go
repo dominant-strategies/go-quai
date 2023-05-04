@@ -22,7 +22,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"math/big"
+	"os"
 	"strings"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -427,4 +429,30 @@ func decodePrealloc(data string) GenesisAlloc {
 
 func DecodePrealloc(data string) GenesisAlloc {
 	return decodePrealloc(data)
+}
+
+func ReadGenesisAlloc(filename string) map[string]GenesisAccount {
+	jsonFile, err := os.Open(filename)
+	if err != nil {
+		fmt.Println(err)
+		return nil
+	}
+	defer jsonFile.Close()
+	// Read the file contents
+	byteValue, err := ioutil.ReadAll(jsonFile)
+	if err != nil {
+		fmt.Println("Error reading file:", err)
+		return nil
+	}
+
+	// Parse the JSON data
+	var data map[string]GenesisAccount
+	err = json.Unmarshal(byteValue, &data)
+	if err != nil {
+		fmt.Println("Error unmarshaling JSON:", err)
+		return nil
+	}
+
+	// Use the parsed data
+	return data
 }
