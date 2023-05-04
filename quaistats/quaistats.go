@@ -62,6 +62,7 @@ const (
 
 	c_alpha               = 8
 	c_tpsLookupCacheLimit = 100
+	c_gasLookupCacheLimit = 100
 	c_uintMaxValue        = ^uint64(0) // this is the maximum value of uint64
 )
 
@@ -102,6 +103,7 @@ type Service struct {
 	headSub event.Subscription
 
 	tpsLookupCache *lru.Cache
+	gasLookupCache *lru.Cache
 
 	chainID *big.Int
 
@@ -186,6 +188,7 @@ func New(node *node.Node, backend backend, engine consensus.Engine, url string) 
 	}
 
 	tpsLookupCache, _ := lru.New(c_tpsLookupCacheLimit)
+	gasLookupCache, _ := lru.New(c_gasLookupCacheLimit)
 
 	quaistats := &Service{
 		backend:        backend,
@@ -198,6 +201,7 @@ func New(node *node.Node, backend backend, engine consensus.Engine, url string) 
 		histCh:         make(chan []uint64, 1),
 		chainID:        backend.ChainConfig().ChainID,
 		tpsLookupCache: tpsLookupCache,
+		gasLookupCache: gasLookupCache,
 		instanceDir:    node.InstanceDir(),
 	}
 
@@ -588,11 +592,17 @@ type blockStats struct {
 	ChainID       uint64         `json:"chainId"`
 	Tps           uint64         `json:"tps"`
 	AppendTime    time.Duration  `json:"appendTime"`
+	AvgGasPerSec  uint64         `json:"avgGasPerSec"`
 }
 
-type blockCacheDto struct {
+type blockTpsCacheDto struct {
 	Tps  uint64 `json:"tps"`
 	Time uint64 `json:"time"`
+}
+
+type blockAvgGasPerSecCacheDto struct {
+	AvgGasPerSec uint64 `json:"avgGasPerSec"`
+	Time         uint64 `json:"time"`
 }
 
 // txStats is the information to report about individual transactions.
@@ -611,12 +621,53 @@ func (s uncleStats) MarshalJSON() ([]byte, error) {
 	return []byte("[]"), nil
 }
 
+func (s *Service) computeAvgGasPerSec(block *types.Block) uint64 {
+	var parentTime, parentGasPerSec uint64
+	if parentCached, ok := s.tpsLookupCache.Get(block.ParentHash()); ok {
+		parentTime = parentCached.(blockAvgGasPerSecCacheDto).Time
+		parentGasPerSec = parentCached.(blockAvgGasPerSecCacheDto).AvgGasPerSec
+	} else {
+		log.Warn(fmt.Sprintf("computeGas: block %d's parent not found in cache: %s", block.Number(), block.ParentHash().String()))
+		fullBackend, ok := s.backend.(fullNodeBackend)
+		if ok {
+			parent, err := fullBackend.BlockByNumber(context.Background(), rpc.BlockNumber(block.NumberU64()-1))
+			if err != nil {
+				log.Error("error getting parent block %s: %s", block.ParentHash().String(), err.Error())
+				return c_uintMaxValue
+			}
+			parentTime = parent.Time()
+			parentGasPerSec = c_uintMaxValue
+		} else {
+			log.Error("computeGas: not running fullnode, cannot get parent block")
+			return c_uintMaxValue
+		}
+	}
+	instantGas := block.GasUsed()
+	if dt := block.Time() - parentTime; dt != 0 { // this is a hack to avoid dividing by 0
+		instantGas /= dt
+	}
+
+	var blockGasPerSec uint64
+	if parentGasPerSec == c_uintMaxValue {
+		blockGasPerSec = instantGas
+	} else {
+		blockGasPerSec = ((c_alpha-1)*parentGasPerSec + instantGas) / c_alpha
+	}
+
+	s.tpsLookupCache.Add(block.Hash(), blockAvgGasPerSecCacheDto{
+		AvgGasPerSec: blockGasPerSec,
+		Time:         block.Time(),
+	})
+
+	return blockGasPerSec
+}
+
 func (s *Service) computeTps(block *types.Block) uint64 {
 	var parentTime, parentTps uint64
 
 	if parentCached, ok := s.tpsLookupCache.Get(block.ParentHash()); ok {
-		parentTime = parentCached.(blockCacheDto).Time
-		parentTps = parentCached.(blockCacheDto).Tps
+		parentTime = parentCached.(blockTpsCacheDto).Time
+		parentTps = parentCached.(blockTpsCacheDto).Tps
 	} else {
 		log.Warn(fmt.Sprintf("block %d's parent not found in cache: %s", block.Number(), block.ParentHash().String()))
 		fullBackend, ok := s.backend.(fullNodeBackend)
@@ -646,7 +697,7 @@ func (s *Service) computeTps(block *types.Block) uint64 {
 		blockTps = ((c_alpha-1)*parentTps + instantTps) / c_alpha
 	}
 
-	s.tpsLookupCache.Add(block.Hash(), blockCacheDto{
+	s.tpsLookupCache.Add(block.Hash(), blockTpsCacheDto{
 		Tps:  blockTps,
 		Time: block.Time(),
 	})
@@ -695,6 +746,7 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 	author, _ := s.engine.Author(header)
 
 	tps := s.computeTps(block)
+	avgGasPerSec := s.computeAvgGasPerSec(block)
 
 	appendTime := block.GetAppendTime()
 
@@ -719,6 +771,7 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		ChainID:       s.chainID.Uint64(),
 		Tps:           tps,
 		AppendTime:    appendTime,
+		AvgGasPerSec:  avgGasPerSec,
 	}
 }
 
