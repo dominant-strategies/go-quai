@@ -16,6 +16,7 @@
 - image: {{ .Values.goQuai.image.name -}}:{{- .Values.goQuai.image.version }}
   imagePullPolicy: Always
   name: prime-go-quai
+  command: ["./build/bin/go-quai", --$(NETWORK), "--syncmode", "full", "--http", "--http.vhosts=*", "--ws", "--mine", "--miner.threads", "1", <MINER_ETHERBASE>, "--http.addr", "0.0.0.0", "--http.api", "eth,net,web3,quai,txpool,debug", "--ws.addr", "0.0.0.0", "--ws.api", "eth,net,web3,quai,txpool,debug", "--port", $(TCP_PORT), "--http.port", $(HTTP_PORT), "--ws.port", $(WS_PORT), "--ws.origins=*", "--http.corsdomain=*", "--gcmode", "archive", <REGION>, <ZONE>, <SUB>, <DOM>]
   env:
   - name: COINBASE_ADDR
     valueFrom:
@@ -30,14 +31,6 @@
     value: "<WS>"
   - name: NETWORK
     value: {{ .Values.goQuai.network }}
-  - name: REGION
-    value: "<REGION>"
-  - name: ZONE
-    value: "<ZONE>"
-  - name: DOM
-    value: "<DOM>"
-  - name: SUB
-    value: "<SUB>"
   ports:
   - containerPort: <HTTP>
     name: prime-http
