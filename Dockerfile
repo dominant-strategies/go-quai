@@ -4,7 +4,7 @@ ARG VERSION=""
 ARG BUILDNUM=""
 
 # Build Quai in a stock Go builder container
-FROM golang:1.19-alpine as builder
+FROM golang:1.20-alpine as builder
 RUN apk add --no-cache gcc musl-dev linux-headers git
 
 ADD . /go-quai
@@ -14,7 +14,7 @@ WORKDIR /go-quai
 RUN env GO111MODULE=on go run build/ci.go install ./cmd/go-quai
 
 # Stage 2
-FROM golang:1.19-alpine
+FROM golang:1.20-alpine
 
 EXPOSE 8546 8547 30303 30303/udp
 EXPOSE 8578 8579 30304 30304/udp
@@ -32,7 +32,6 @@ EXPOSE 8678 8679 30315 30315/udp
 
 COPY --from=builder /go-quai/build/bin ./build/bin
 COPY --from=builder /go-quai/VERSION ./VERSION
+COPY --from=builder /go-quai/genallocs ./genallocs
 
 WORKDIR ./
-
-CMD ./build/bin/go-quai --$NETWORK --syncmode full --http --http.vhosts="*" --ws --mine --miner.threads 1 --miner.etherbase $COINBASE_ADDR --http.addr 0.0.0.0 --http.api eth,net,web3,quai,txpool,debug --ws.addr 0.0.0.0 --ws.api eth,net,web3,quai,txpool,debug --port $TCP_PORT --http.port $HTTP_PORT --ws.port $WS_PORT --ws.origins="*" --http.corsdomain="*" --gcmode archive $BOOTNODE $REGION $ZONE $SUB $DOM

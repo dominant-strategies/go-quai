@@ -1,16 +1,13 @@
-networks:
-    go-quai_default:
-        external: true
 services:
   prime:
+    env_file:
+      - network.env
     environment:
       - TCP_PORT=30303
-      - HTTP_PORT=8547
-      - WS_PORT=8548
-      - NETWORK=garden
-      - SUB=--sub.urls ws://cyprus:8579,ws://paxos:8581,ws://hydra:8583
-      - COINBASE_ADDR=0x00114a47a5d39ea2022dd4d864cb62cfd16879fc
+      - HTTP_PORT=8546
+      - WS_PORT=8547
     build: .
+    command: sh -c './build/bin/go-quai --$$NETWORK --slices "$$SLICES" --syncmode full --http --http.vhosts=* --ws --http.addr 0.0.0.0 --http.api eth,net,web3,quai,txpool,debug --ws.addr 0.0.0.0 --ws.api eth,net,web3,quai,txpool,debug --port $$TCP_PORT --http.port $$HTTP_PORT --ws.port $$WS_PORT --ws.origins=* --http.corsdomain=* --gcmode archive --nonce $$NONCE --sub.urls ws://cyprus:8579,ws://paxos:8581,ws://hydra:8583'
     ports:
       - "30303"
       - "8547"
@@ -18,19 +15,15 @@ services:
     volumes:
       - ~/.quai:/root/.quai
 
-    networks:
-      - go-quai_default
   cyprus:
+    env_file:
+      - network.env
     environment:
       - TCP_PORT=30304
       - HTTP_PORT=8578
       - WS_PORT=8579
-      - NETWORK=garden
-      - REGION=--region 0
-      - DOM=--dom.url ws://prime:8548
-      - SUB=--sub.urls ws://cyprus1:8611,ws://cyprus2:8643,ws://cyprus3:8675
-      - COINBASE_ADDR=0x0d79b69c082e6f6a2e78a10a9a49baedb7db37a5
     build: .
+    command: sh -c './build/bin/go-quai --$$NETWORK --slices "$$SLICES" --syncmode full --http --http.vhosts=* --ws --http.addr 0.0.0.0 --http.api eth,net,web3,quai,txpool,debug --ws.addr 0.0.0.0 --ws.api eth,net,web3,quai,txpool,debug --port $$TCP_PORT --http.port $$HTTP_PORT --ws.port $$WS_PORT --ws.origins=* --http.corsdomain=* --gcmode archive --nonce $$NONCE --region 0 --sub.urls ws://cyprus1:8611,ws://cyprus2:8643,ws://cyprus3:8675 --dom.url ws://prime:8547'
     ports:
       - "30304"
       - "8578"
@@ -38,38 +31,31 @@ services:
     volumes:
       - ~/.quai:/root/.quai
 
-    networks:
-      - go-quai_default
   paxos:
+    env_file:
+      - network.env
     environment:
       - TCP_PORT=30305
       - HTTP_PORT=8580
       - WS_PORT=8581
-      - NETWORK=garden
-      - REGION=--region 1
-      - DOM=--dom.url ws://prime:8548
-      - SUB=--sub.urls ws://paxos1:8613,ws://paxos2:8645,ws://paxos3:8677
-      - COINBASE_ADDR=0x5a457339697cb56e5a9bfa5267ea80d2c6375d98
     build: .
+    command: sh -c './build/bin/go-quai --$$NETWORK --slices "$$SLICES" --syncmode full --http --http.vhosts=* --ws --http.addr 0.0.0.0 --http.api eth,net,web3,quai,txpool,debug --ws.addr 0.0.0.0 --ws.api eth,net,web3,quai,txpool,debug --port $$TCP_PORT --http.port $$HTTP_PORT --ws.port $$WS_PORT --ws.origins=* --http.corsdomain=* --gcmode archive --nonce $$NONCE --region 1 --sub.urls ws://paxos1:8613,ws://paxos2:8645,ws://paxos3:8677 --dom.url ws://prime:8547'
     ports:
       - "30305"
       - "8580"
       - "8581"
     volumes:
       - ~/.quai:/root/.quai
-    networks:
-      - go-quai_default
+
   hydra:
+    env_file:
+      - network.env
     environment:
       - TCP_PORT=30306
       - HTTP_PORT=8582
       - WS_PORT=8583
-      - NETWORK=garden
-      - REGION=--region 2
-      - DOM=--dom.url ws://prime:8548
-      - SUB=--sub.urls ws://hydra1:8615,ws://hydra2:8647,ws://hydra3:8679
-      - COINBASE_ADDR=0x3bccbe6c6001c46874263169df887cbf5c3580d6
     build: .
+    command: sh -c './build/bin/go-quai --$$NETWORK --slices "$$SLICES" --syncmode full --http --http.vhosts=* --ws --http.addr 0.0.0.0 --http.api eth,net,web3,quai,txpool,debug --ws.addr 0.0.0.0 --ws.api eth,net,web3,quai,txpool,debug --port $$TCP_PORT --http.port $$HTTP_PORT --ws.port $$WS_PORT --ws.origins=* --http.corsdomain=* --gcmode archive --nonce $$NONCE --region 2 --sub.urls ws://hydra1:8615,ws://hydra2:8647,ws://hydra3:8679 --dom.url ws://prime:8547'
     ports:
       - "30306"
       - "8582"
@@ -78,16 +64,15 @@ services:
       - ~/.quai:/root/.quai
 
   cyprus1:
+    env_file:
+      - network.env
     environment:
       - TCP_PORT=30307
       - HTTP_PORT=8610
       - WS_PORT=8611
-      - NETWORK=garden
-      - REGION=--region 0
-      - ZONE=--zone 0
-      - DOM=--dom.url ws://cyprus:8579
       - COINBASE_ADDR=0x1b00Fbd0eB8116704a1796A008DAecc14eb5a92e
     build: .
+    command: sh -c './build/bin/go-quai --$$NETWORK --slices "$$SLICES" --syncmode full --http --http.vhosts=* --ws --miner.etherbase $$COINBASE_ADDR --http.addr 0.0.0.0 --http.api eth,net,web3,quai,txpool,debug --ws.addr 0.0.0.0 --ws.api eth,net,web3,quai,txpool,debug --port $$TCP_PORT --http.port $$HTTP_PORT --ws.port $$WS_PORT --ws.origins=* --http.corsdomain=* --gcmode archive --nonce $$NONCE --region 0 --zone 0 --dom.url ws://cyprus:8579'
     ports:
       - "30307"
       - "8610"
@@ -95,19 +80,16 @@ services:
     volumes:
       - ~/.quai:/root/.quai
 
-    networks:
-      - go-quai_default
   cyprus2:
+    env_file:
+      - network.env
     environment:
       - TCP_PORT=30308
       - HTTP_PORT=8542
       - WS_PORT=8643
-      - NETWORK=garden
-      - REGION=--region 0
-      - ZONE=--zone 1
-      - DOM=--dom.url ws://cyprus:8579
       - COINBASE_ADDR=0x246ae82bb49e9dda583cb5fd304fd31cc1b69790
     build: .
+    command: sh -c './build/bin/go-quai --$$NETWORK --slices "$$SLICES" --syncmode full --http --http.vhosts=* --ws --miner.etherbase $$COINBASE_ADDR --http.addr 0.0.0.0 --http.api eth,net,web3,quai,txpool,debug --ws.addr 0.0.0.0 --ws.api eth,net,web3,quai,txpool,debug --port $$TCP_PORT --http.port $$HTTP_PORT --ws.port $$WS_PORT --ws.origins=* --http.corsdomain=* --gcmode archive --nonce $$NONCE --region 0 --zone 1 --dom.url ws://cyprus:8579'
     ports:
       - "30308"
       - "8542"
@@ -115,19 +97,16 @@ services:
     volumes:
       - ~/.quai:/root/.quai
 
-    networks:
-      - go-quai_default
   cyprus3:
+    env_file:
+      - network.env
     environment:
       - TCP_PORT=30309
       - HTTP_PORT=8674
       - WS_PORT=8675
-      - NETWORK=garden
-      - REGION=--region 0
-      - ZONE=--zone 2
-      - DOM=--dom.url ws://cyprus:8579
       - COINBASE_ADDR=0x2e82bec9c7e47564b9e89b5ab989c0002373c497
     build: .
+    command: sh -c './build/bin/go-quai --$$NETWORK --slices "$$SLICES" --syncmode full --http --http.vhosts=* --ws --miner.etherbase $$COINBASE_ADDR --http.addr 0.0.0.0 --http.api eth,net,web3,quai,txpool,debug --ws.addr 0.0.0.0 --ws.api eth,net,web3,quai,txpool,debug --port $$TCP_PORT --http.port $$HTTP_PORT --ws.port $$WS_PORT --ws.origins=* --http.corsdomain=* --gcmode archive --nonce $$NONCE --region 0 --zone 2 --dom.url ws://cyprus:8579'
     ports:
       - "30309"
       - "8674"
@@ -135,19 +114,16 @@ services:
     volumes:
       - ~/.quai:/root/.quai
 
-    networks:
-      - go-quai_default
   paxos1:
+    env_file:
+      - network.env
     environment:
       - TCP_PORT=30310
       - HTTP_PORT=8512
       - WS_PORT=8613
-      - NETWORK=garden
-      - REGION=--region 1
-      - ZONE=--zone 0
-      - DOM=--dom.url ws://paxos:8581
       - COINBASE_ADDR=0x421bc7323295c6b7f2f75fc4c854d4fb600e69e7
     build: .
+    command: sh -c './build/bin/go-quai --$$NETWORK --slices "$$SLICES" --syncmode full --http --http.vhosts=* --ws --miner.etherbase $$COINBASE_ADDR --http.addr 0.0.0.0 --http.api eth,net,web3,quai,txpool,debug --ws.addr 0.0.0.0 --ws.api eth,net,web3,quai,txpool,debug --port $$TCP_PORT --http.port $$HTTP_PORT --ws.port $$WS_PORT --ws.origins=* --http.corsdomain=* --gcmode archive --nonce $$NONCE --region 1 --zone 0 --dom.url ws://paxos:8581'
     ports:
       - "30310"
       - "8512"
@@ -155,19 +131,16 @@ services:
     volumes:
       - ~/.quai:/root/.quai
 
-    networks:
-      - go-quai_default
   paxos2:
+    env_file:
+      - network.env
     environment:
       - TCP_PORT=30311
       - HTTP_PORT=8544
       - WS_PORT=8645
-      - NETWORK=garden
-      - REGION=--region 1
-      - ZONE=--zone 1
-      - DOM=--dom.url ws://paxos:8581
       - COINBASE_ADDR=0x4d6605da9271f8bcea42326a07f3c43f7f67a431
     build: .
+    command: sh -c './build/bin/go-quai --$$NETWORK --slices "$$SLICES" --syncmode full --http --http.vhosts=* --ws --miner.etherbase $$COINBASE_ADDR --http.addr 0.0.0.0 --http.api eth,net,web3,quai,txpool,debug --ws.addr 0.0.0.0 --ws.api eth,net,web3,quai,txpool,debug --port $$TCP_PORT --http.port $$HTTP_PORT --ws.port $$WS_PORT --ws.origins=* --http.corsdomain=* --gcmode archive --nonce $$NONCE --region 1 --zone 1 --dom.url ws://paxos:8581'
     ports:
       - "30311"
       - "8544"
@@ -175,19 +148,16 @@ services:
     volumes:
       - ~/.quai:/root/.quai
 
-    networks:
-      - go-quai_default
   paxos3:
+    env_file:
+      - network.env
     environment:
       - TCP_PORT=30312
       - HTTP_PORT=8576
       - WS_PORT=8677
-      - NETWORK=garden
-      - REGION=--region 1
-      - ZONE=--zone 2
-      - DOM=--dom.url ws://paxos:8581
       - COINBASE_ADDR=0x59630c586ede320c8d7759f38373564f5f9faf20
     build: .
+    command: sh -c './build/bin/go-quai --$$NETWORK --slices "$$SLICES" --syncmode full --http --http.vhosts=* --ws --miner.etherbase $$COINBASE_ADDR --http.addr 0.0.0.0 --http.api eth,net,web3,quai,txpool,debug --ws.addr 0.0.0.0 --ws.api eth,net,web3,quai,txpool,debug --port $$TCP_PORT --http.port $$HTTP_PORT --ws.port $$WS_PORT --ws.origins=* --http.corsdomain=* --gcmode archive --nonce $$NONCE --region 1 --zone 2 --dom.url ws://paxos:8581'
     ports:
       - "30312"
       - "8576"
@@ -195,19 +165,16 @@ services:
     volumes:
       - ~/.quai:/root/.quai
 
-    networks:
-      - go-quai_default
   hydra1:
+    env_file:
+      - network.env
     environment:
       - TCP_PORT=30313
       - HTTP_PORT=8614
       - WS_PORT=8615
-      - NETWORK=garden
-      - REGION=--region 2
-      - ZONE=--zone 0
-      - DOM=--dom.url ws://hydra:8583
       - COINBASE_ADDR=0x6b70b802661a87823a9cb16a8a39763bc8e11de4
     build: .
+    command: sh -c './build/bin/go-quai --$$NETWORK --slices "$$SLICES" --syncmode full --http --http.vhosts=* --ws --miner.etherbase $$COINBASE_ADDR --http.addr 0.0.0.0 --http.api eth,net,web3,quai,txpool,debug --ws.addr 0.0.0.0 --ws.api eth,net,web3,quai,txpool,debug --port $$TCP_PORT --http.port $$HTTP_PORT --ws.port $$WS_PORT --ws.origins=* --http.corsdomain=* --gcmode archive --nonce $$NONCE --region 2 --zone 0 --dom.url ws://hydra:8583'
     ports:
       - "30313"
       - "8614"
@@ -215,19 +182,16 @@ services:
     volumes:
       - ~/.quai:/root/.quai
 
-    networks:
-      - go-quai_default
   hydra2:
+    env_file:
+      - network.env
     environment:
       - TCP_PORT=30314
       - HTTP_PORT=8646
       - WS_PORT=8647
-      - NETWORK=garden
-      - REGION=--region 2
-      - ZONE=--zone 1
-      - DOM=--dom.url ws://hydra:8583
       - COINBASE_ADDR=0x70820eb5e384b65caf931e85224601f3203ecd20
     build: .
+    command: sh -c './build/bin/go-quai --$$NETWORK --slices "$$SLICES" --syncmode full --http --http.vhosts=* --ws --miner.etherbase $$COINBASE_ADDR --http.addr 0.0.0.0 --http.api eth,net,web3,quai,txpool,debug --ws.addr 0.0.0.0 --ws.api eth,net,web3,quai,txpool,debug --port $$TCP_PORT --http.port $$HTTP_PORT --ws.port $$WS_PORT --ws.origins=* --http.corsdomain=* --gcmode archive --nonce $$NONCE --region 2 --zone 1 --dom.url ws://hydra:8583'
     ports:
       - "30314"
       - "8646"
@@ -236,16 +200,15 @@ services:
       - ~/.quai:/root/.quai
 
   hydra3:
+    env_file:
+      - network.env
     environment:
       - TCP_PORT=30315
       - HTTP_PORT=8678
       - WS_PORT=8679
-      - NETWORK=garden
-      - REGION=--region 2
-      - ZONE=--zone 2
-      - DOM=--dom.url ws://hydra:8583
       - COINBASE_ADDR=0x7f8a6306426b57d13f1e3975d377574e18d7a7a3
     build: .
+    command: sh -c './build/bin/go-quai --$$NETWORK --slices "$$SLICES" --syncmode full --http --http.vhosts=* --ws --miner.etherbase $$COINBASE_ADDR --http.addr 0.0.0.0 --http.api eth,net,web3,quai,txpool,debug --ws.addr 0.0.0.0 --ws.api eth,net,web3,quai,txpool,debug --port $$TCP_PORT --http.port $$HTTP_PORT --ws.port $$WS_PORT --ws.origins=* --http.corsdomain=* --gcmode archive --nonce $$NONCE --region 2 --zone 2 --dom.url ws://hydra:8583'
     ports:
       - "30315"
       - "8678"
@@ -253,5 +216,3 @@ services:
     volumes:
       - ~/.quai:/root/.quai
 
-    networks:
-      - go-quai_default
