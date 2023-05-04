@@ -23,6 +23,8 @@ import (
 	"errors"
 	"fmt"
 	lru "github.com/hashicorp/golang-lru"
+	"github.com/shirou/gopsutil/cpu"
+	"github.com/shirou/gopsutil/mem"
 	"math/big"
 	"net/http"
 	"runtime"
@@ -44,6 +46,7 @@ import (
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rpc"
 	"github.com/gorilla/websocket"
+	"os/exec"
 )
 
 const (
@@ -101,6 +104,8 @@ type Service struct {
 	tpsLookupCache *lru.Cache
 
 	chainID *big.Int
+
+	instanceDir string // Path to the node's instance directory
 }
 
 // connWrapper is a wrapper to prevent concurrent-write or concurrent-read on the
@@ -193,6 +198,7 @@ func New(node *node.Node, backend backend, engine consensus.Engine, url string) 
 		histCh:         make(chan []uint64, 1),
 		chainID:        backend.ChainConfig().ChainID,
 		tpsLookupCache: tpsLookupCache,
+		instanceDir:    node.InstanceDir(),
 	}
 
 	node.RegisterLifecycle(quaistats)
@@ -800,17 +806,25 @@ func (s *Service) reportPending(conn *connWrapper) error {
 
 // nodeStats is the information to report about the local node.
 type nodeStats struct {
-	Active       bool   `json:"active"`
-	Syncing      bool   `json:"syncing"`
-	Mining       bool   `json:"mining"`
-	Hashrate     int    `json:"hashrate"`
-	Peers        int    `json:"peers"`
-	GasPrice     int    `json:"gasPrice"`
-	Uptime       int    `json:"uptime"`
-	Chain        string `json:"chain"`
-	ChainID      uint64 `json:"chainId"`
-	LatestHeight uint64 `json:"height"`
-	LatestHash   string `json:"hash"`
+	Name             string  `json:"name"`
+	Active           bool    `json:"active"`
+	Syncing          bool    `json:"syncing"`
+	Mining           bool    `json:"mining"`
+	Hashrate         int     `json:"hashrate"`
+	Peers            int     `json:"peers"`
+	GasPrice         int     `json:"gasPrice"`
+	Uptime           int     `json:"uptime"`
+	Chain            string  `json:"chain"`
+	ChainID          uint64  `json:"chainId"`
+	LatestHeight     uint64  `json:"height"`
+	LatestHash       string  `json:"hash"`
+	CPUPercentUsage  float32 `json:"cpuPercentUsage"`
+	CPUUsage         float32 `json:"cpuUsage"`
+	RAMPercentUsage  float32 `json:"ramPercentUsage"`
+	RAMUsage         uint64  `json:"ramUsage"` // in bytes
+	SwapPercentUsage float32 `json:"swapPercentUsage"`
+	SwapUsage        uint64  `json:"swapUsage"`
+	DiskUsage        int64   `json:"diskUsage"` // in bytes
 }
 
 // reportStats retrieves various stats about the node at the networking and
@@ -845,25 +859,67 @@ func (s *Service) reportStats(conn *connWrapper) error {
 		sync := s.backend.Downloader().Progress()
 		syncing = header.Number().Uint64() >= sync.HighestBlock
 	}
+
+	cpuPercent, err := cpu.Percent(0, false)
+	if err != nil {
+		log.Warn("Error getting CPU percent usage:", err)
+		cpuPercent = []float64{-1.0}
+	}
+	cpuStat, err := cpu.Times(false)
+	if err != nil {
+		log.Warn("Error getting CPU times:", err)
+		cpuStat = []cpu.TimesStat{{}}
+	}
+
+	// Get RAM usage
+	vmStat, err := mem.VirtualMemory()
+	if err != nil {
+		log.Warn("Error getting RAM usage:", err)
+		vmStat = &mem.VirtualMemoryStat{UsedPercent: -1.0}
+	}
+
+	// Get swap usage
+	swapStat, err := mem.SwapMemory()
+	if err != nil {
+		log.Warn("Error getting swap usage:", err)
+		swapStat = &mem.SwapMemoryStat{UsedPercent: -1.0}
+	}
+
+	// Get disk usage
+	diskUsage, err := dirSize(s.instanceDir)
+	if err != nil {
+		log.Warn("Error calculating directory sizes:", err)
+		diskUsage = -1
+	}
+
 	// Assemble the node stats and send it to the server
 	log.Trace("Sending node details to quaistats")
 
 	stats := map[string]interface{}{
 		"id": s.node,
 		"stats": &nodeStats{
-			Active:       true,
-			Mining:       mining,
-			Hashrate:     hashrate,
-			Peers:        s.server.PeerCount(),
-			GasPrice:     gasprice,
-			Syncing:      syncing,
-			Uptime:       100,
-			Chain:        common.NodeLocation.Name(),
-			ChainID:      s.chainID.Uint64(),
-			LatestHeight: header.Number().Uint64(),
-			LatestHash:   header.Hash().String(),
+			Name:             s.node,
+			Active:           true,
+			Mining:           mining,
+			Hashrate:         hashrate,
+			Peers:            s.server.PeerCount(),
+			GasPrice:         gasprice,
+			Syncing:          syncing,
+			Uptime:           100,
+			Chain:            common.NodeLocation.Name(),
+			ChainID:          s.chainID.Uint64(),
+			LatestHeight:     header.Number().Uint64(),
+			LatestHash:       header.Hash().String(),
+			CPUPercentUsage:  float32(cpuPercent[0]),
+			CPUUsage:         float32(cpuStat[0].Total()),
+			RAMPercentUsage:  float32(vmStat.UsedPercent),
+			RAMUsage:         vmStat.Used, // in bytes
+			SwapPercentUsage: float32(swapStat.UsedPercent),
+			SwapUsage:        swapStat.Used,
+			DiskUsage:        diskUsage, // in bytes
 		},
 	}
+
 	report := map[string][]interface{}{
 		"emit": {"stats", stats},
 	}
@@ -945,4 +1001,15 @@ func (s *Service) reportPeers(conn *connWrapper) error {
 		"emit": {"peers", peers},
 	}
 	return conn.WriteJSON(report)
+}
+
+// dirSize returns the size of a directory in bytes.
+func dirSize(path string) (int64, error) {
+	cmd := exec.Command("du", "-bs", path)
+	if output, err := cmd.Output(); err != nil {
+		return -1, err
+	} else {
+		size, _ := strconv.ParseInt(strings.Split(string(output), "\t")[0], 10, 64)
+		return size, nil
+	}
 }
