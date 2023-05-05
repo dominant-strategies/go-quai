@@ -551,7 +551,7 @@ func (sl *Slice) writeToPhCacheAndPickPhHead(pendingHeaderWithTermini types.Pend
 		log.Debug("Choosing new pending header", "Ph Number:", pendingHeaderWithTermini.Header.NumberArray())
 		return true
 	} else {
-		if nodeCtx == common.ZONE_CTX {
+		if nodeCtx == common.ZONE_CTX && newPhEntropy.Cmp(oldBestPhEntropy) != 0 {
 			sl.hc.chainSideFeed.Send(ChainSideEvent{Block: block})
 		}
 	}
