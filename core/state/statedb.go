@@ -968,15 +968,12 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	return root, err
 }
 
-// PrepareAccessList handles the preparatory steps for executing a state transition with
-// regards to both EIP-2929 and EIP-2930:
+// PrepareAccessList handles the preparatory steps for executing a state transition
 //
-// - Add sender to access list (2929)
-// - Add destination to access list (2929)
-// - Add precompiles to access list (2929)
-// - Add the contents of the optional tx access list (2930)
-//
-// This method should only be called if 2929+2930 is applicable at the current number.
+// - Add sender to access list
+// - Add destination to access list
+// - Add precompiles to access list
+// - Add the contents of the optional tx access list
 func (s *StateDB) PrepareAccessList(sender common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) {
 	s.AddAddressToAccessList(sender)
 	if dst != nil {

@@ -509,7 +509,7 @@ func (s *PublicBlockChainQuaiAPI) rpcMarshalBlock(ctx context.Context, b *types.
 	return fields, err
 }
 
-// CreateAccessList creates a EIP-2930 type AccessList for the given transaction.
+// CreateAccessList creates an AccessList for the given transaction.
 // Reexec and BlockNrOrHash can be specified to create the accessList on top of a certain state.
 func (s *PublicBlockChainQuaiAPI) CreateAccessList(ctx context.Context, args TransactionArgs, blockNrOrHash *rpc.BlockNumberOrHash) (*accessListResult, error) {
 	nodeCtx := common.NodeLocation.Context()

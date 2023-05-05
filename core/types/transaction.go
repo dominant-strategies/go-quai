@@ -717,7 +717,7 @@ func (m Message) ETXGasTip() *big.Int       { return m.etxGasTip }
 func (m Message) ETXData() []byte           { return m.etxData }
 func (m Message) ETXAccessList() AccessList { return m.etxAccessList }
 
-// AccessList is an EIP-2930 access list.
+// AccessList is an access list.
 type AccessList []AccessTuple
 
 // AccessTuple is the element type of an access list.

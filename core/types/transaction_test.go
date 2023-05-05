@@ -77,13 +77,13 @@ func TestTransactionEncode(t *testing.T) {
 }
 
 // This test checks signature operations on access list transactions.
-func TestEIP2930Signer(t *testing.T) {
+func TestAccessListSigner(t *testing.T) {
 
 	var (
 		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		keyAddr = crypto.PubkeyToAddress(key.PublicKey)
-		signer1 = NewEIP2930Signer(big.NewInt(1))
-		signer2 = NewEIP2930Signer(big.NewInt(2))
+		signer1 = NewSigner(big.NewInt(1))
+		signer2 = NewSigner(big.NewInt(2))
 		tx0     = NewTx(&AccessListTx{Nonce: 1})
 		tx1     = NewTx(&AccessListTx{ChainID: big.NewInt(1), Nonce: 1})
 		tx2, _  = SignNewTx(key, signer2, &AccessListTx{ChainID: big.NewInt(2), Nonce: 1})
@@ -316,7 +316,7 @@ func TestTransactionCoding(t *testing.T) {
 		t.Fatalf("could not generate key: %v", err)
 	}
 	var (
-		signer    = NewEIP2930Signer(common.Big1)
+		signer    = NewSigner(common.Big1)
 		addr      = common.HexToAddress("0x0000000000000000000000000000000000000001")
 		recipient = common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87")
 		accesses  = AccessList{{Address: addr, StorageKeys: []common.Hash{{0}}}}

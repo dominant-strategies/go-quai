@@ -60,25 +60,18 @@ func NewInstructionSet() JumpTable {
 	instructionSet := newInstructionSet()
 	instructionSet[DELEGATECALL] = &operation{
 		execute:     opDelegateCall,
-		dynamicGas:  gasDelegateCall,
-		constantGas: params.CallGas,
+		dynamicGas:  gasDelegateCallVariant,
+		constantGas: params.WarmStorageReadCost,
 		minStack:    minStack(6, 1),
 		maxStack:    maxStack(6, 1),
 		memorySize:  memoryDelegateCall,
 		returns:     true,
 	}
-	instructionSet[BALANCE].constantGas = params.BalanceGas
-	instructionSet[EXTCODESIZE].constantGas = params.ExtcodeSizeGas
-	instructionSet[SLOAD].constantGas = params.SloadGas
-	instructionSet[EXTCODECOPY].constantGas = params.ExtcodeCopyBase
-	instructionSet[CALL].constantGas = params.CallGas
-	instructionSet[CALLCODE].constantGas = params.CallGas
-	instructionSet[DELEGATECALL].constantGas = params.CallGas
 	instructionSet[EXP].dynamicGas = gasExp
 	instructionSet[STATICCALL] = &operation{
 		execute:     opStaticCall,
-		constantGas: params.CallGas,
-		dynamicGas:  gasStaticCall,
+		constantGas: params.WarmStorageReadCost,
+		dynamicGas:  gasStaticCallVariant,
 		minStack:    minStack(6, 1),
 		maxStack:    maxStack(6, 1),
 		memorySize:  memoryStaticCall,
@@ -127,7 +120,8 @@ func NewInstructionSet() JumpTable {
 	}
 	instructionSet[EXTCODEHASH] = &operation{
 		execute:     opExtCodeHash,
-		constantGas: params.ExtcodeHashGas,
+		constantGas: params.WarmStorageReadCost,
+		dynamicGas:  gasAccountCheck,
 		minStack:    minStack(1, 1),
 		maxStack:    maxStack(1, 1),
 	}
@@ -153,7 +147,6 @@ func NewInstructionSet() JumpTable {
 		minStack:    minStack(0, 1),
 		maxStack:    maxStack(0, 1),
 	}
-	enable2929(&instructionSet) // Access lists for trie accesses https://eips.ethereum.org/EIPS/eip-2929
 	enable3529(&instructionSet) // EIP-3529: Reduction in refunds https://eips.ethereum.org/EIPS/eip-3529
 	enable3198(&instructionSet) // Base fee opcode https://eips.ethereum.org/EIPS/eip-3198
 	return instructionSet
@@ -316,7 +309,8 @@ func newInstructionSet() JumpTable {
 		},
 		BALANCE: {
 			execute:     opBalance,
-			constantGas: params.BalanceGas,
+			constantGas: params.WarmStorageReadCost,
+			dynamicGas:  gasAccountCheck,
 			minStack:    minStack(1, 1),
 			maxStack:    maxStack(1, 1),
 		},
@@ -380,13 +374,14 @@ func newInstructionSet() JumpTable {
 		},
 		EXTCODESIZE: {
 			execute:     opExtCodeSize,
-			constantGas: params.ExtcodeSizeGas,
+			constantGas: params.WarmStorageReadCost,
+			dynamicGas:  gasAccountCheck,
 			minStack:    minStack(1, 1),
 			maxStack:    maxStack(1, 1),
 		},
 		EXTCODECOPY: {
 			execute:     opExtCodeCopy,
-			constantGas: params.ExtcodeCopyBase,
+			constantGas: params.WarmStorageReadCost,
 			dynamicGas:  gasExtCodeCopy,
 			minStack:    minStack(4, 0),
 			maxStack:    maxStack(4, 0),
@@ -460,13 +455,14 @@ func newInstructionSet() JumpTable {
 		},
 		SLOAD: {
 			execute:     opSload,
-			constantGas: params.SloadGas,
+			constantGas: 0,
+			dynamicGas:  gasSLoad,
 			minStack:    minStack(1, 1),
 			maxStack:    maxStack(1, 1),
 		},
 		SSTORE: {
 			execute:    opSstore,
-			dynamicGas: gasSStore,
+			dynamicGas: gasSStoreVariant,
 			minStack:   minStack(2, 0),
 			maxStack:   maxStack(2, 0),
 			writes:     true,
@@ -945,8 +941,8 @@ func newInstructionSet() JumpTable {
 		},
 		CALL: {
 			execute:     opCall,
-			constantGas: params.CallGas,
-			dynamicGas:  gasCall,
+			constantGas: params.WarmStorageReadCost,
+			dynamicGas:  gasCallVariant,
 			minStack:    minStack(7, 1),
 			maxStack:    maxStack(7, 1),
 			memorySize:  memoryCall,
@@ -954,8 +950,8 @@ func newInstructionSet() JumpTable {
 		},
 		CALLCODE: {
 			execute:     opCallCode,
-			constantGas: params.CallGas,
-			dynamicGas:  gasCallCode,
+			constantGas: params.WarmStorageReadCost,
+			dynamicGas:  gasCallCodeVariant,
 			minStack:    minStack(7, 1),
 			maxStack:    maxStack(7, 1),
 			memorySize:  memoryCall,
@@ -970,12 +966,13 @@ func newInstructionSet() JumpTable {
 			halts:      true,
 		},
 		SELFDESTRUCT: {
-			execute:    opSuicide,
-			dynamicGas: gasSelfdestruct,
-			minStack:   minStack(1, 0),
-			maxStack:   maxStack(1, 0),
-			halts:      true,
-			writes:     true,
+			execute:     opSuicide,
+			constantGas: params.SelfdestructGas,
+			dynamicGas:  gasSelfdestructVariant,
+			minStack:    minStack(1, 0),
+			maxStack:    maxStack(1, 0),
+			halts:       true,
+			writes:      true,
 		},
 		ETX: {
 			execute:     opETX,

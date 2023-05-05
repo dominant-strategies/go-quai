@@ -56,14 +56,13 @@ const (
 	SstoreResetGas             uint64 = 5000  // Once per SSTORE operation from clean non-zero to something else
 	SstoreClearsScheduleRefund uint64 = 15000 // Once per SSTORE operation for clearing an originally existing storage slot
 
-	ColdAccountAccessCostEIP2929 = uint64(2600) // COLD_ACCOUNT_ACCESS_COST
-	ColdSloadCostEIP2929         = uint64(2100) // COLD_SLOAD_COST
-	WarmStorageReadCostEIP2929   = uint64(100)  // WARM_STORAGE_READ_COST
+	ColdAccountAccessCost = uint64(2600) // COLD_ACCOUNT_ACCESS_COST
+	ColdSloadCost         = uint64(2100) // COLD_SLOAD_COST
+	WarmStorageReadCost   = uint64(100)  // WARM_STORAGE_READ_COST
 
-	// In EIP-2929: SstoreResetGas was changed to '5000 - COLD_SLOAD_COST'.
 	// In EIP-3529: SSTORE_CLEARS_SCHEDULE is defined as SSTORE_RESET_GAS + ACCESS_LIST_STORAGE_KEY_COST
 	// Which becomes: 5000 - 2100 + 1900 = 4800
-	SstoreClearsScheduleRefundEIP3529 uint64 = SstoreResetGas - ColdSloadCostEIP2929 + TxAccessListStorageKeyGas
+	SstoreClearsScheduleRefundEIP3529 uint64 = SstoreResetGas - ColdSloadCost + TxAccessListStorageKeyGas
 
 	JumpdestGas   uint64 = 1     // Once per JUMPDEST operation.
 	EpochDuration uint64 = 30000 // Duration between proof-of-work epochs.
@@ -82,8 +81,8 @@ const (
 	MemoryGas             uint64 = 3     // Times the address of the (highest referenced byte in memory + 1). NOTE: referencing happens on read, write and in instructions such as RETURN and CALL.
 
 	TxDataNonZeroGas          uint64 = 16   // Per byte of data attached to a transaction that is not equal to zero. NOTE: Not payable on data of calls between transactions.
-	TxAccessListAddressGas    uint64 = 2400 // Per address specified in EIP 2930 access list
-	TxAccessListStorageKeyGas uint64 = 1900 // Per storage key specified in EIP 2930 access list
+	TxAccessListAddressGas    uint64 = 2400 // Per address specified in access list
+	TxAccessListStorageKeyGas uint64 = 1900 // Per storage key specified in access list
 
 	// These have been changed during the course of the chain
 	CallGas         uint64 = 700 // Static portion of gas for CALL-derivates

@@ -20,14 +20,12 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/dominant-strategies/go-quai/params"
 	"github.com/holiman/uint256"
 )
 
 var activators = map[int]func(*JumpTable){
 	3529: enable3529,
 	3198: enable3198,
-	2929: enable2929,
 }
 
 // EnableEIP enables the given EIP on the config.
@@ -70,44 +68,6 @@ func opChainID(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 	chainId, _ := uint256.FromBig(interpreter.evm.chainConfig.ChainID)
 	scope.Stack.push(chainId)
 	return nil, nil
-}
-
-// enable2929 enables "EIP-2929: Gas cost increases for state access opcodes"
-// https://eips.ethereum.org/EIPS/eip-2929
-func enable2929(jt *JumpTable) {
-	jt[SSTORE].dynamicGas = gasSStoreEIP2929
-
-	jt[SLOAD].constantGas = 0
-	jt[SLOAD].dynamicGas = gasSLoadEIP2929
-
-	jt[EXTCODECOPY].constantGas = params.WarmStorageReadCostEIP2929
-	jt[EXTCODECOPY].dynamicGas = gasExtCodeCopyEIP2929
-
-	jt[EXTCODESIZE].constantGas = params.WarmStorageReadCostEIP2929
-	jt[EXTCODESIZE].dynamicGas = gasEip2929AccountCheck
-
-	jt[EXTCODEHASH].constantGas = params.WarmStorageReadCostEIP2929
-	jt[EXTCODEHASH].dynamicGas = gasEip2929AccountCheck
-
-	jt[BALANCE].constantGas = params.WarmStorageReadCostEIP2929
-	jt[BALANCE].dynamicGas = gasEip2929AccountCheck
-
-	jt[CALL].constantGas = params.WarmStorageReadCostEIP2929
-	jt[CALL].dynamicGas = gasCallEIP2929
-
-	jt[CALLCODE].constantGas = params.WarmStorageReadCostEIP2929
-	jt[CALLCODE].dynamicGas = gasCallCodeEIP2929
-
-	jt[STATICCALL].constantGas = params.WarmStorageReadCostEIP2929
-	jt[STATICCALL].dynamicGas = gasStaticCallEIP2929
-
-	jt[DELEGATECALL].constantGas = params.WarmStorageReadCostEIP2929
-	jt[DELEGATECALL].dynamicGas = gasDelegateCallEIP2929
-
-	// This was previously part of the dynamic cost, but we're using it as a constantGas
-	// factor here
-	jt[SELFDESTRUCT].constantGas = params.SelfdestructGas
-	jt[SELFDESTRUCT].dynamicGas = gasSelfdestructEIP2929
 }
 
 // enable3529 enabled "EIP-3529: Reduction in refunds":
