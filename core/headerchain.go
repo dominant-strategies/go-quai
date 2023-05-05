@@ -772,6 +772,16 @@ func (hc *HeaderChain) ExportN(w io.Writer, first uint64, last uint64) error {
 	return nil
 }
 
+// GetBlockFromCacheOrDb looks up the body cache first and then checks the db
+func (hc *HeaderChain) GetBlockFromCacheOrDb(hash common.Hash, number uint64) *types.Block {
+	// Short circuit if the block's already in the cache, retrieve otherwise
+	if cached, ok := hc.bc.blockCache.Get(hash); ok {
+		block := cached.(*types.Block)
+		return block
+	}
+	return hc.GetBlock(hash, number)
+}
+
 // GetBlockByHash retrieves a block from the database by hash, caching it if found.
 func (hc *HeaderChain) GetBlockByHash(hash common.Hash) *types.Block {
 	number := hc.GetBlockNumber(hash)

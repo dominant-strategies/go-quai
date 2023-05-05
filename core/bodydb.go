@@ -90,6 +90,8 @@ func (bc *BodyDb) Append(batch ethdb.Batch, block *types.Block, newInboundEtxs t
 
 // WriteBlock write the block to the bodydb database
 func (bc *BodyDb) WriteBlock(block *types.Block) {
+	// add the block to the cache as well
+	bc.blockCache.Add(block.Hash(), block)
 	rawdb.WriteBlock(bc.db, block)
 }
 

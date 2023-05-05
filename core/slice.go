@@ -540,7 +540,7 @@ func (sl *Slice) writeToPhCacheAndPickPhHead(pendingHeaderWithTermini types.Pend
 	}
 
 	// Pick a phCache Head
-	block := sl.hc.GetBlockByHash(pendingHeaderWithTermini.Header.ParentHash())
+	block := sl.hc.GetBlockFromCacheOrDb(pendingHeaderWithTermini.Header.ParentHash(), pendingHeaderWithTermini.Header.NumberU64()-1)
 	if sl.poem(newPhEntropy, oldBestPhEntropy) {
 		sl.bestPhKey = pendingHeaderWithTermini.Termini[c_terminusIndex]
 		sl.hc.SetCurrentHeader(block.Header())
