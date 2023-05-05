@@ -26,23 +26,12 @@ import (
 
 // Forks table defines supported forks and their chain config.
 var Forks = map[string]*params.ChainConfig{
-	"Berlin": {
-		ChainID:     big.NewInt(1),
-		BerlinBlock: big.NewInt(0),
-	},
-	"BerlinToLondonAt5": {
-		ChainID:     big.NewInt(1),
-		BerlinBlock: big.NewInt(0),
-		LondonBlock: big.NewInt(5),
-	},
 	"London": {
 		ChainID:     big.NewInt(1),
-		BerlinBlock: big.NewInt(0),
 		LondonBlock: big.NewInt(0),
 	},
 	"Aleut": {
 		ChainID:     big.NewInt(1),
-		BerlinBlock: big.NewInt(0),
 		LondonBlock: big.NewInt(0),
 	},
 }

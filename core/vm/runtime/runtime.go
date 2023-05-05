@@ -54,7 +54,6 @@ func setDefaults(cfg *Config) {
 	if cfg.ChainConfig == nil {
 		cfg.ChainConfig = &params.ChainConfig{
 			ChainID:     big.NewInt(1),
-			BerlinBlock: new(big.Int),
 			LondonBlock: new(big.Int),
 		}
 	}
@@ -110,9 +109,9 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 	if err != nil {
 		return []byte{}, nil, err
 	}
-	if rules := cfg.ChainConfig.Rules(vmenv.Context.BlockNumber); rules.IsBerlin {
-		cfg.State.PrepareAccessList(cfg.Origin, &address, vm.ActivePrecompiles(rules), nil)
-	}
+	rules := cfg.ChainConfig.Rules(vmenv.Context.BlockNumber)
+	cfg.State.PrepareAccessList(cfg.Origin, &address, vm.ActivePrecompiles(rules), nil)
+
 	cfg.State.CreateAccount(internal)
 	// set the receiver's (the executing contract) code for execution.
 	cfg.State.SetCode(internal, code)
@@ -142,9 +141,9 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 		vmenv  = NewEnv(cfg)
 		sender = vm.AccountRef(cfg.Origin)
 	)
-	if rules := cfg.ChainConfig.Rules(vmenv.Context.BlockNumber); rules.IsBerlin {
-		cfg.State.PrepareAccessList(cfg.Origin, nil, vm.ActivePrecompiles(rules), nil)
-	}
+	rules := cfg.ChainConfig.Rules(vmenv.Context.BlockNumber)
+	cfg.State.PrepareAccessList(cfg.Origin, nil, vm.ActivePrecompiles(rules), nil)
+
 	// Call the code with the given configuration.
 	code, address, leftOverGas, err := vmenv.Create(
 		sender,
@@ -171,9 +170,9 @@ func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, er
 
 	statedb := cfg.State
 
-	if rules := cfg.ChainConfig.Rules(vmenv.Context.BlockNumber); rules.IsBerlin {
-		statedb.PrepareAccessList(cfg.Origin, &address, vm.ActivePrecompiles(rules), nil)
-	}
+	rules := cfg.ChainConfig.Rules(vmenv.Context.BlockNumber)
+	statedb.PrepareAccessList(cfg.Origin, &address, vm.ActivePrecompiles(rules), nil)
+
 	// Call the code with the given configuration.
 	ret, leftOverGas, err := vmenv.Call(
 		vm.AccountRef(cfg.Origin),

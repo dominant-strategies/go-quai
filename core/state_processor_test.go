@@ -566,7 +566,6 @@ func TestStateProcessorErrors(t *testing.T) {
 	var (
 		config = &params.ChainConfig{
 			ChainID:     big.NewInt(1),
-			BerlinBlock: big.NewInt(0),
 			LondonBlock: big.NewInt(0),
 			Blake3pow:   new(params.Blake3powConfig),
 		}

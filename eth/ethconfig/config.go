@@ -143,7 +143,7 @@ type Config struct {
 	// send-transction variants. The unit is ether.
 	RPCTxFeeCap float64
 
-	// Berlin block override (TODO: remove after the fork)
+	// London block override (TODO: remove after the fork)
 	OverrideLondon *big.Int `toml:",omitempty"`
 
 	// Region location options
