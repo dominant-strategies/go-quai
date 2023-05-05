@@ -259,7 +259,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 		// Subscribe NewTxsEvent for tx pool
 		worker.txsSub = txPool.SubscribeNewTxsEvent(worker.txsCh)
 		// Subscribe events for blockchain
-		worker.chainSideSub = headerchain.SubscribeChainSideEvent(worker.chainSideCh)
+		worker.chainSideSub = headerchain.bc.SubscribeChainSideEvent(worker.chainSideCh)
 	}
 
 	// Sanitize recommit interval if the user-specified one is too short.

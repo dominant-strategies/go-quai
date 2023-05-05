@@ -156,6 +156,11 @@ func (bc *BodyDb) SubscribeChainEvent(ch chan<- ChainEvent) event.Subscription {
 	return bc.scope.Track(bc.chainFeed.Subscribe(ch))
 }
 
+// SubscribeChainSideEvent registers a subscription of ChainSideEvent.
+func (bc *BodyDb) SubscribeChainSideEvent(ch chan<- ChainSideEvent) event.Subscription {
+	return bc.scope.Track(bc.chainSideFeed.Subscribe(ch))
+}
+
 // SubscribeRemovedLogsEvent registers a subscription of RemovedLogsEvent.
 func (bc *BodyDb) SubscribeRemovedLogsEvent(ch chan<- RemovedLogsEvent) event.Subscription {
 	return bc.scope.Track(bc.rmLogsFeed.Subscribe(ch))

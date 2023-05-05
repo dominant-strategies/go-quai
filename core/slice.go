@@ -516,7 +516,6 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 
 // writePhCache dom writes a given pendingHeaderWithTermini to the cache with the terminus used as the key.
 func (sl *Slice) writeToPhCacheAndPickPhHead(pendingHeaderWithTermini types.PendingHeader, appendTime *time.Duration) bool {
-	nodeCtx := common.NodeLocation.Context()
 	bestPh, exist := sl.phCache[sl.bestPhKey]
 	if !exist {
 		log.Error("BestPh Key does not exist for", "key", sl.bestPhKey)
@@ -550,10 +549,6 @@ func (sl *Slice) writeToPhCacheAndPickPhHead(pendingHeaderWithTermini types.Pend
 		}
 		log.Debug("Choosing new pending header", "Ph Number:", pendingHeaderWithTermini.Header.NumberArray())
 		return true
-	} else {
-		if nodeCtx == common.ZONE_CTX {
-			sl.hc.chainSideFeed.Send(ChainSideEvent{Block: block})
-		}
 	}
 	return false
 }
