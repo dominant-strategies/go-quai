@@ -50,9 +50,6 @@ func TestDifficulty(t *testing.T) {
 
 	dt.config("MainNetwork", mainnetChainConfig)
 	dt.config("CustomMainNetwork", mainnetChainConfig)
-	dt.config("EIP2384", params.ChainConfig{
-		MuirGlacierBlock: big.NewInt(0),
-	})
 	dt.config("difficulty.json", mainnetChainConfig)
 
 	dt.walk(t, difficultyTestDir, func(t *testing.T, name string, test *DifficultyTest) {

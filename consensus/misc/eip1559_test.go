@@ -29,11 +29,10 @@ import (
 // do not use e.g. SetInt() on the numbers. For testing only
 func copyConfig(original *params.ChainConfig) *params.ChainConfig {
 	return &params.ChainConfig{
-		ChainID:          original.ChainID,
-		MuirGlacierBlock: original.MuirGlacierBlock,
-		BerlinBlock:      original.BerlinBlock,
-		LondonBlock:      original.LondonBlock,
-		Blake3pow:        original.Blake3pow,
+		ChainID:     original.ChainID,
+		BerlinBlock: original.BerlinBlock,
+		LondonBlock: original.LondonBlock,
+		Blake3pow:   original.Blake3pow,
 	}
 }
 
