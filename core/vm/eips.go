@@ -28,9 +28,6 @@ var activators = map[int]func(*JumpTable){
 	3529: enable3529,
 	3198: enable3198,
 	2929: enable2929,
-	2200: enable2200,
-	1884: enable1884,
-	1344: enable1344,
 }
 
 // EnableEIP enables the given EIP on the config.
@@ -58,26 +55,6 @@ func ActivateableEips() []string {
 	return nums
 }
 
-// enable1884 applies EIP-1884 to the given jump table:
-// - Increase cost of BALANCE to 700
-// - Increase cost of EXTCODEHASH to 700
-// - Increase cost of SLOAD to 800
-// - Define SELFBALANCE, with cost GasFastStep (5)
-func enable1884(jt *JumpTable) {
-	// Gas cost changes
-	jt[SLOAD].constantGas = params.SloadGasEIP1884
-	jt[BALANCE].constantGas = params.BalanceGasEIP1884
-	jt[EXTCODEHASH].constantGas = params.ExtcodeHashGasEIP1884
-
-	// New opcode
-	jt[SELFBALANCE] = &operation{
-		execute:     opSelfBalance,
-		constantGas: GasFastStep,
-		minStack:    minStack(0, 1),
-		maxStack:    maxStack(0, 1),
-	}
-}
-
 func opSelfBalance(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	internalAddr, err := scope.Contract.Address().InternalAddress()
 	if err != nil {
@@ -88,29 +65,11 @@ func opSelfBalance(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 	return nil, nil
 }
 
-// enable1344 applies EIP-1344 (ChainID Opcode)
-// - Adds an opcode that returns the current chain’s unique identifier
-func enable1344(jt *JumpTable) {
-	// New opcode
-	jt[CHAINID] = &operation{
-		execute:     opChainID,
-		constantGas: GasQuickStep,
-		minStack:    minStack(0, 1),
-		maxStack:    maxStack(0, 1),
-	}
-}
-
 // opChainID implements CHAINID opcode
 func opChainID(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	chainId, _ := uint256.FromBig(interpreter.evm.chainConfig.ChainID)
 	scope.Stack.push(chainId)
 	return nil, nil
-}
-
-// enable2200 applies EIP-2200 (Rebalance net-metered SSTORE)
-func enable2200(jt *JumpTable) {
-	jt[SLOAD].constantGas = params.SloadGasEIP2200
-	jt[SSTORE].dynamicGas = gasSStoreEIP2200
 }
 
 // enable2929 enables "EIP-2929: Gas cost increases for state access opcodes"

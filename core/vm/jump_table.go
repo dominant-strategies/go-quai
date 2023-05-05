@@ -141,9 +141,18 @@ func NewInstructionSet() JumpTable {
 		writes:      true,
 		returns:     true,
 	}
-	enable1344(&instructionSet) // ChainID opcode - https://eips.ethereum.org/EIPS/eip-1344
-	enable1884(&instructionSet) // Reprice reader opcodes - https://eips.ethereum.org/EIPS/eip-1884
-	enable2200(&instructionSet) // Net metered SSTORE - https://eips.ethereum.org/EIPS/eip-2200
+	instructionSet[CHAINID] = &operation{
+		execute:     opChainID,
+		constantGas: GasQuickStep,
+		minStack:    minStack(0, 1),
+		maxStack:    maxStack(0, 1),
+	}
+	instructionSet[SELFBALANCE] = &operation{
+		execute:     opSelfBalance,
+		constantGas: GasFastStep,
+		minStack:    minStack(0, 1),
+		maxStack:    maxStack(0, 1),
+	}
 	enable2929(&instructionSet) // Access lists for trie accesses https://eips.ethereum.org/EIPS/eip-2929
 	enable3529(&instructionSet) // EIP-3529: Reduction in refunds https://eips.ethereum.org/EIPS/eip-3529
 	enable3198(&instructionSet) // Base fee opcode https://eips.ethereum.org/EIPS/eip-3198

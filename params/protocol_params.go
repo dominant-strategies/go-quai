@@ -39,8 +39,6 @@ const (
 	Sha3Gas     uint64 = 30 // Once per SHA3 operation.
 	Sha3WordGas uint64 = 6  // Once per word of the SHA3 operation's data.
 
-	SstoreSetGas    uint64 = 20000 // Once per SSTORE operation.
-	SstoreResetGas  uint64 = 5000  // Once per SSTORE operation if the zeroness changes from zero.
 	SstoreClearGas  uint64 = 5000  // Once per SSTORE operation if the zeroness doesn't change.
 	SstoreRefundGas uint64 = 15000 // Once per SSTORE operation if the zeroness changes to zero.
 
@@ -53,20 +51,19 @@ const (
 	NetSstoreResetRefund      uint64 = 4800  // Once per SSTORE operation for resetting to the original non-zero value
 	NetSstoreResetClearRefund uint64 = 19800 // Once per SSTORE operation for resetting to the original zero value
 
-	SstoreSentryGasEIP2200            uint64 = 2300  // Minimum gas required to be present for an SSTORE call, not consumed
-	SstoreSetGasEIP2200               uint64 = 20000 // Once per SSTORE operation from clean zero to non-zero
-	SstoreResetGasEIP2200             uint64 = 5000  // Once per SSTORE operation from clean non-zero to something else
-	SstoreClearsScheduleRefundEIP2200 uint64 = 15000 // Once per SSTORE operation for clearing an originally existing storage slot
+	SstoreSentryGas            uint64 = 2300  // Minimum gas required to be present for an SSTORE call, not consumed
+	SstoreSetGas               uint64 = 20000 // Once per SSTORE operation from clean zero to non-zero
+	SstoreResetGas             uint64 = 5000  // Once per SSTORE operation from clean non-zero to something else
+	SstoreClearsScheduleRefund uint64 = 15000 // Once per SSTORE operation for clearing an originally existing storage slot
 
 	ColdAccountAccessCostEIP2929 = uint64(2600) // COLD_ACCOUNT_ACCESS_COST
 	ColdSloadCostEIP2929         = uint64(2100) // COLD_SLOAD_COST
 	WarmStorageReadCostEIP2929   = uint64(100)  // WARM_STORAGE_READ_COST
 
-	// In EIP-2200: SstoreResetGas was 5000.
 	// In EIP-2929: SstoreResetGas was changed to '5000 - COLD_SLOAD_COST'.
 	// In EIP-3529: SSTORE_CLEARS_SCHEDULE is defined as SSTORE_RESET_GAS + ACCESS_LIST_STORAGE_KEY_COST
 	// Which becomes: 5000 - 2100 + 1900 = 4800
-	SstoreClearsScheduleRefundEIP3529 uint64 = SstoreResetGasEIP2200 - ColdSloadCostEIP2929 + TxAccessListStorageKeyGas
+	SstoreClearsScheduleRefundEIP3529 uint64 = SstoreResetGas - ColdSloadCostEIP2929 + TxAccessListStorageKeyGas
 
 	JumpdestGas   uint64 = 1     // Once per JUMPDEST operation.
 	EpochDuration uint64 = 30000 // Duration between proof-of-work epochs.
@@ -89,16 +86,12 @@ const (
 	TxAccessListStorageKeyGas uint64 = 1900 // Per storage key specified in EIP 2930 access list
 
 	// These have been changed during the course of the chain
-	CallGas               uint64 = 700 // Static portion of gas for CALL-derivates
-	BalanceGas            uint64 = 400 // The cost of a BALANCE operation
-	BalanceGasEIP1884     uint64 = 700 // The cost of a BALANCE operation after EIP 1884
-	ExtcodeSizeGas        uint64 = 700 // Cost of EXTCODESIZE
-	SloadGas              uint64 = 200
-	SloadGasEIP1884       uint64 = 800  // Cost of SLOAD after EIP 1884
-	SloadGasEIP2200       uint64 = 800  // Cost of SLOAD after EIP 2200
-	ExtcodeHashGas        uint64 = 400  // Cost of EXTCODEHASH
-	ExtcodeHashGasEIP1884 uint64 = 700  // Cost of EXTCODEHASH after EIP 1884
-	SelfdestructGas       uint64 = 5000 // Cost of SELFDESTRUCT
+	CallGas         uint64 = 700 // Static portion of gas for CALL-derivates
+	BalanceGas      uint64 = 700 // The cost of a BALANCE operation
+	ExtcodeSizeGas  uint64 = 700 // Cost of EXTCODESIZE
+	SloadGas        uint64 = 800
+	ExtcodeHashGas  uint64 = 700  // Cost of EXTCODEHASH
+	SelfdestructGas uint64 = 5000 // Cost of SELFDESTRUCT
 
 	// EXP has a dynamic portion depending on the size of the exponent
 	ExpByte uint64 = 50 // was raised to 50

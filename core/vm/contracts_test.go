@@ -58,7 +58,6 @@ var allPrecompiles = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{9}):    &blake2F{},
 }
 
-// EIP-152 test vectors
 var blake2FMalformedInputTests = []precompiledFailureTest{
 	{
 		Input:         "",
