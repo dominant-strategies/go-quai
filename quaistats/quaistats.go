@@ -623,7 +623,7 @@ func (s uncleStats) MarshalJSON() ([]byte, error) {
 
 func (s *Service) computeAvgGasPerSec(block *types.Block) uint64 {
 	var parentTime, parentGasPerSec uint64
-	if parentCached, ok := s.tpsLookupCache.Get(block.ParentHash()); ok {
+	if parentCached, ok := s.gasLookupCache.Get(block.ParentHash()); ok {
 		parentTime = parentCached.(blockAvgGasPerSecCacheDto).Time
 		parentGasPerSec = parentCached.(blockAvgGasPerSecCacheDto).AvgGasPerSec
 	} else {
@@ -654,7 +654,7 @@ func (s *Service) computeAvgGasPerSec(block *types.Block) uint64 {
 		blockGasPerSec = ((c_alpha-1)*parentGasPerSec + instantGas) / c_alpha
 	}
 
-	s.tpsLookupCache.Add(block.Hash(), blockAvgGasPerSecCacheDto{
+	s.gasLookupCache.Add(block.Hash(), blockAvgGasPerSecCacheDto{
 		AvgGasPerSec: blockGasPerSec,
 		Time:         block.Time(),
 	})
