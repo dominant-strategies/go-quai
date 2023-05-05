@@ -233,7 +233,6 @@ type TxPool struct {
 	signer      types.Signer
 	mu          sync.RWMutex
 
-	eip2718 bool // Fork indicator whether we are using EIP-2718 type transactions.
 	eip1559 bool // Fork indicator whether we are using EIP-1559 type transactions.
 
 	currentState  *state.StateDB // Current state in the blockchain head
@@ -581,10 +580,6 @@ func (pool *TxPool) local() map[common.InternalAddress]types.Transactions {
 // validateTx checks whether a transaction is valid according to the consensus
 // rules and adheres to some heuristic limits of the local node (price and size).
 func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
-	// Accept only legacy transactions until EIP-2718/2930 activates.
-	if !pool.eip2718 {
-		return ErrTxTypeNotSupported
-	}
 	// Reject transactions over defined size to prevent DOS attacks
 	if uint64(tx.Size()) > txMaxSize {
 		return ErrOversizedData
@@ -1308,7 +1303,6 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 
 	// Update all fork indicator by next pending block number.
 	next := new(big.Int).Add(newHead.Number(), big.NewInt(1))
-	pool.eip2718 = true
 	pool.eip1559 = pool.chainconfig.IsLondon(next)
 }
 

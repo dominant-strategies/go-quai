@@ -63,7 +63,7 @@ func InitializePrecompiles() {
 	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][1]] = &sha256hash{}
 	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][2]] = &ripemd160hash{}
 	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][3]] = &dataCopy{}
-	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][4]] = &bigModExp{eip2565: true}
+	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][4]] = &bigModExp{}
 	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][5]] = &bn256Add{}
 	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][6]] = &bn256ScalarMul{}
 	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][7]] = &bn256Pairing{}
@@ -278,7 +278,6 @@ func (c *dataCopy) Run(in []byte) ([]byte, error) {
 
 // bigModExp implements a native big integer exponential modular operation.
 type bigModExp struct {
-	eip2565 bool
 }
 
 var (
@@ -364,37 +363,19 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 	adjExpLen.Add(adjExpLen, big.NewInt(int64(msb)))
 	// Calculate the gas cost of the operation
 	gas := new(big.Int).Set(math.BigMax(modLen, baseLen))
-	if c.eip2565 {
-		// EIP-2565 has three changes
-		// 1. Different multComplexity (inlined here)
-		// in EIP-2565 (https://eips.ethereum.org/EIPS/eip-2565):
-		//
-		// def mult_complexity(x):
-		//    ceiling(x/8)^2
-		//
-		//where is x is max(length_of_MODULUS, length_of_BASE)
-		gas = gas.Add(gas, big7)
-		gas = gas.Div(gas, big8)
-		gas.Mul(gas, gas)
+	gas = gas.Add(gas, big7)
+	gas = gas.Div(gas, big8)
+	gas.Mul(gas, gas)
 
-		gas.Mul(gas, math.BigMax(adjExpLen, big1))
-		// 2. Different divisor (`GQUADDIVISOR`) (3)
-		gas.Div(gas, big3)
-		if gas.BitLen() > 64 {
-			return math.MaxUint64
-		}
-		// 3. Minimum price of 200 gas
-		if gas.Uint64() < 200 {
-			return 200
-		}
-		return gas.Uint64()
-	}
-	gas = modexpMultComplexity(gas)
 	gas.Mul(gas, math.BigMax(adjExpLen, big1))
-	gas.Div(gas, big20)
 
+	gas.Div(gas, big3)
 	if gas.BitLen() > 64 {
 		return math.MaxUint64
+	}
+
+	if gas.Uint64() < 200 {
+		return 200
 	}
 	return gas.Uint64()
 }

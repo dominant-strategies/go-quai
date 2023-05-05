@@ -54,21 +54,6 @@ var (
 	).WithSignature(
 		common.Hex2Bytes("98ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4a8887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a301"),
 	)
-
-	emptyEip2718Tx = NewTx(&AccessListTx{
-		ChainID:  big.NewInt(1),
-		Nonce:    3,
-		To:       &testAddr,
-		Value:    big.NewInt(10),
-		Gas:      25000,
-		GasPrice: big.NewInt(1),
-		Data:     common.FromHex("5544"),
-	})
-
-	signedEip2718Tx, _ = emptyEip2718Tx.WithSignature(
-		NewEIP2930Signer(big.NewInt(1)),
-		common.Hex2Bytes("c9519f4f2b30335884581971573fadf60c6204f59a911df35ee8a540456b266032f1e8e2c5dd761f9e4f88f41c8310aeaba26a8bfcdacfedfa12ec3862d3752101"),
-	)
 )
 
 func TestDecodeEmptyTypedTx(t *testing.T) {
@@ -88,16 +73,6 @@ func TestTransactionEncode(t *testing.T) {
 	should := common.FromHex("f86103018207d094b94f5374fce5edbc8e2a8697c15331677e6ebf0b0a8255441ca098ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4aa08887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a3")
 	if !bytes.Equal(txb, should) {
 		t.Errorf("encoded RLP mismatch, got %x", txb)
-	}
-}
-
-func TestEIP2718TransactionSigHash(t *testing.T) {
-	s := NewEIP2930Signer(big.NewInt(1))
-	if s.Hash(emptyEip2718Tx) != common.HexToHash("49b486f0ec0a60dfbbca2d30cb07c9e8ffb2a2ff41f29a1ab6737475f6ff69f3") {
-		t.Errorf("empty EIP-2718 transaction hash mismatch, got %x", s.Hash(emptyEip2718Tx))
-	}
-	if s.Hash(signedEip2718Tx) != common.HexToHash("49b486f0ec0a60dfbbca2d30cb07c9e8ffb2a2ff41f29a1ab6737475f6ff69f3") {
-		t.Errorf("signed EIP-2718 transaction hash mismatch, got %x", s.Hash(signedEip2718Tx))
 	}
 }
 
@@ -174,31 +149,6 @@ func TestEIP2930Signer(t *testing.T) {
 			if signedTx.Hash() != test.wantHash {
 				t.Errorf("test %d: wrong tx hash after signing: got %x, want %x", i, signedTx.Hash(), test.wantHash)
 			}
-		}
-	}
-}
-
-func TestEIP2718TransactionEncode(t *testing.T) {
-	// RLP representation
-	{
-		have, err := rlp.EncodeToBytes(signedEip2718Tx)
-		if err != nil {
-			t.Fatalf("encode error: %v", err)
-		}
-		want := common.FromHex("b86601f8630103018261a894b94f5374fce5edbc8e2a8697c15331677e6ebf0b0a825544c001a0c9519f4f2b30335884581971573fadf60c6204f59a911df35ee8a540456b2660a032f1e8e2c5dd761f9e4f88f41c8310aeaba26a8bfcdacfedfa12ec3862d37521")
-		if !bytes.Equal(have, want) {
-			t.Errorf("encoded RLP mismatch, got %x", have)
-		}
-	}
-	// Binary representation
-	{
-		have, err := signedEip2718Tx.MarshalBinary()
-		if err != nil {
-			t.Fatalf("encode error: %v", err)
-		}
-		want := common.FromHex("01f8630103018261a894b94f5374fce5edbc8e2a8697c15331677e6ebf0b0a825544c001a0c9519f4f2b30335884581971573fadf60c6204f59a911df35ee8a540456b2660a032f1e8e2c5dd761f9e4f88f41c8310aeaba26a8bfcdacfedfa12ec3862d37521")
-		if !bytes.Equal(have, want) {
-			t.Errorf("encoded RLP mismatch, got %x", have)
 		}
 	}
 }

@@ -157,7 +157,6 @@ func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 		return err
 	}
 	if kind == rlp.String {
-		// It's an EIP-2718 typed tx receipt.
 		b, err := s.Bytes()
 		if err != nil {
 			return err

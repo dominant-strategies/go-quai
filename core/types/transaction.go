@@ -96,7 +96,6 @@ type TxData interface {
 
 // EncodeRLP implements rlp.Encoder
 func (tx *Transaction) EncodeRLP(w io.Writer) error {
-	// It's an EIP-2718 typed TX envelope.
 	buf := encodeBufferPool.Get().(*bytes.Buffer)
 	defer encodeBufferPool.Put(buf)
 	buf.Reset()
@@ -113,8 +112,6 @@ func (tx *Transaction) encodeTyped(w *bytes.Buffer) error {
 }
 
 // MarshalBinary returns the canonical encoding of the transaction.
-// For legacy transactions, it returns the RLP encoding. For EIP-2718 typed
-// transactions, it returns the type and payload.
 func (tx *Transaction) MarshalBinary() ([]byte, error) {
 	var buf bytes.Buffer
 	err := tx.encodeTyped(&buf)
@@ -128,7 +125,6 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 		return err
 	}
 	if kind == rlp.String {
-		// It's an EIP-2718 typed TX envelope.
 		var b []byte
 		if b, err = s.Bytes(); err != nil {
 			return err
@@ -144,9 +140,7 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 }
 
 // UnmarshalBinary decodes the canonical encoding of transactions.
-// It supports legacy RLP transactions and EIP2718 typed transactions.
 func (tx *Transaction) UnmarshalBinary(b []byte) error {
-	// It's an EIP2718 typed transaction envelope.
 	inner, err := tx.decodeTyped(b)
 	if err != nil {
 		return err

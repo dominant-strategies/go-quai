@@ -36,7 +36,7 @@ import (
 var EOL = errors.New("rlp: end of list")
 
 var (
-	ErrExpectedString   = errors.New("rlp: expected String or Byte")
+	ErrExpectedString   = errors.New("rlp: expected String or Byte") // this seems wrong
 	ErrExpectedList     = errors.New("rlp: expected List")
 	ErrCanonInt         = errors.New("rlp: non-canonical integer format")
 	ErrCanonSize        = errors.New("rlp: non-canonical size information")
