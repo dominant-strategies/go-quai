@@ -52,9 +52,9 @@ var allPrecompiles = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{4}):    &dataCopy{},
 	common.BytesToAddress([]byte{5}):    &bigModExp{eip2565: false},
 	common.BytesToAddress([]byte{0xf5}): &bigModExp{eip2565: true},
-	common.BytesToAddress([]byte{6}):    &bn256AddIstanbul{},
-	common.BytesToAddress([]byte{7}):    &bn256ScalarMulIstanbul{},
-	common.BytesToAddress([]byte{8}):    &bn256PairingIstanbul{},
+	common.BytesToAddress([]byte{6}):    &bn256Add{},
+	common.BytesToAddress([]byte{7}):    &bn256ScalarMul{},
+	common.BytesToAddress([]byte{8}):    &bn256Pairing{},
 	common.BytesToAddress([]byte{9}):    &blake2F{},
 }
 

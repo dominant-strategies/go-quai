@@ -84,21 +84,20 @@ const (
 	SelfdestructRefundGas uint64 = 24000 // Refunded following a selfdestruct operation.
 	MemoryGas             uint64 = 3     // Times the address of the (highest referenced byte in memory + 1). NOTE: referencing happens on read, write and in instructions such as RETURN and CALL.
 
-	TxDataNonZeroGas          uint64 = 68   // Per byte of data attached to a transaction that is not equal to zero. NOTE: Not payable on data of calls between transactions.
-	TxDataNonZeroGasEIP2028   uint64 = 16   // Per byte of non zero data attached to a transaction after EIP 2028 (part in Istanbul)
+	TxDataNonZeroGas          uint64 = 16   // Per byte of data attached to a transaction that is not equal to zero. NOTE: Not payable on data of calls between transactions.
 	TxAccessListAddressGas    uint64 = 2400 // Per address specified in EIP 2930 access list
 	TxAccessListStorageKeyGas uint64 = 1900 // Per storage key specified in EIP 2930 access list
 
 	// These have been changed during the course of the chain
 	CallGas               uint64 = 700 // Static portion of gas for CALL-derivates
 	BalanceGas            uint64 = 400 // The cost of a BALANCE operation
-	BalanceGasEIP1884     uint64 = 700 // The cost of a BALANCE operation after EIP 1884 (part of Istanbul)
+	BalanceGasEIP1884     uint64 = 700 // The cost of a BALANCE operation after EIP 1884
 	ExtcodeSizeGas        uint64 = 700 // Cost of EXTCODESIZE
 	SloadGas              uint64 = 200
-	SloadGasEIP1884       uint64 = 800  // Cost of SLOAD after EIP 1884 (part of Istanbul)
-	SloadGasEIP2200       uint64 = 800  // Cost of SLOAD after EIP 2200 (part of Istanbul)
+	SloadGasEIP1884       uint64 = 800  // Cost of SLOAD after EIP 1884
+	SloadGasEIP2200       uint64 = 800  // Cost of SLOAD after EIP 2200
 	ExtcodeHashGas        uint64 = 400  // Cost of EXTCODEHASH
-	ExtcodeHashGasEIP1884 uint64 = 700  // Cost of EXTCODEHASH after EIP 1884 (part in Istanbul)
+	ExtcodeHashGasEIP1884 uint64 = 700  // Cost of EXTCODEHASH after EIP 1884
 	SelfdestructGas       uint64 = 5000 // Cost of SELFDESTRUCT
 
 	// EXP has a dynamic portion depending on the size of the exponent
@@ -129,10 +128,10 @@ const (
 	IdentityBaseGas     uint64 = 15   // Base price for a data copy operation
 	IdentityPerWordGas  uint64 = 3    // Per-work price for a data copy operation
 
-	Bn256AddGasIstanbul             uint64 = 150   // Gas needed for an elliptic curve addition
-	Bn256ScalarMulGasIstanbul       uint64 = 6000  // Gas needed for an elliptic curve scalar multiplication
-	Bn256PairingBaseGasIstanbul     uint64 = 45000 // Base price for an elliptic curve pairing check
-	Bn256PairingPerPointGasIstanbul uint64 = 34000 // Per-point price for an elliptic curve pairing check
+	Bn256AddGas             uint64 = 150   // Gas needed for an elliptic curve addition
+	Bn256ScalarMulGas       uint64 = 6000  // Gas needed for an elliptic curve scalar multiplication
+	Bn256PairingBaseGas     uint64 = 45000 // Base price for an elliptic curve pairing check
+	Bn256PairingPerPointGas uint64 = 34000 // Per-point price for an elliptic curve pairing check
 
 	// The Refund Quotient is the cap on how much of the used gas can be refunded. Before EIP-3529,
 	// up to half the consumed gas could be refunded. Redefined as 1/5th in EIP-3529

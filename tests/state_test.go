@@ -50,7 +50,7 @@ func TestState(t *testing.T) {
 	// Broken tests:
 	// Expected failures:
 
-	// For Istanbul, older tests were moved into LegacyTests
+	// Older tests were moved into LegacyTests
 	for _, dir := range []string{
 		stateTestDir,
 		// legacy state tests are disabled, due to them not being

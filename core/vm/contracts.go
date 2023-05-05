@@ -64,9 +64,9 @@ func InitializePrecompiles() {
 	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][2]] = &ripemd160hash{}
 	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][3]] = &dataCopy{}
 	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][4]] = &bigModExp{eip2565: true}
-	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][5]] = &bn256AddIstanbul{}
-	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][6]] = &bn256ScalarMulIstanbul{}
-	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][7]] = &bn256PairingIstanbul{}
+	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][5]] = &bn256Add{}
+	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][6]] = &bn256ScalarMul{}
+	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][7]] = &bn256Pairing{}
 	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][8]] = &blake2F{}
 }
 
@@ -462,16 +462,15 @@ func runBn256Add(input []byte) ([]byte, error) {
 	return res.Marshal(), nil
 }
 
-// bn256Add implements a native elliptic curve point addition conforming to
-// Istanbul consensus rules.
-type bn256AddIstanbul struct{}
+// bn256Add implements a native elliptic curve point addition conforming to consensus rules.
+type bn256Add struct{}
 
 // RequiredGas returns the gas required to execute the pre-compiled contract.
-func (c *bn256AddIstanbul) RequiredGas(input []byte) uint64 {
-	return params.Bn256AddGasIstanbul
+func (c *bn256Add) RequiredGas(input []byte) uint64 {
+	return params.Bn256AddGas
 }
 
-func (c *bn256AddIstanbul) Run(input []byte) ([]byte, error) {
+func (c *bn256Add) Run(input []byte) ([]byte, error) {
 	return runBn256Add(input)
 }
 
@@ -486,16 +485,16 @@ func runBn256ScalarMul(input []byte) ([]byte, error) {
 	return res.Marshal(), nil
 }
 
-// bn256ScalarMulIstanbul implements a native elliptic curve scalar
-// multiplication conforming to Istanbul consensus rules.
-type bn256ScalarMulIstanbul struct{}
+// bn256ScalarMul implements a native elliptic curve scalar
+// multiplication conforming to  consensus rules.
+type bn256ScalarMul struct{}
 
 // RequiredGas returns the gas required to execute the pre-compiled contract.
-func (c *bn256ScalarMulIstanbul) RequiredGas(input []byte) uint64 {
-	return params.Bn256ScalarMulGasIstanbul
+func (c *bn256ScalarMul) RequiredGas(input []byte) uint64 {
+	return params.Bn256ScalarMulGas
 }
 
-func (c *bn256ScalarMulIstanbul) Run(input []byte) ([]byte, error) {
+func (c *bn256ScalarMul) Run(input []byte) ([]byte, error) {
 	return runBn256ScalarMul(input)
 }
 
@@ -540,16 +539,16 @@ func runBn256Pairing(input []byte) ([]byte, error) {
 	return false32Byte, nil
 }
 
-// bn256PairingIstanbul implements a pairing pre-compile for the bn256 curve
-// conforming to Istanbul consensus rules.
-type bn256PairingIstanbul struct{}
+// bn256Pairing implements a pairing pre-compile for the bn256 curve
+// conforming to  consensus rules.
+type bn256Pairing struct{}
 
 // RequiredGas returns the gas required to execute the pre-compiled contract.
-func (c *bn256PairingIstanbul) RequiredGas(input []byte) uint64 {
-	return params.Bn256PairingBaseGasIstanbul + uint64(len(input)/192)*params.Bn256PairingPerPointGasIstanbul
+func (c *bn256Pairing) RequiredGas(input []byte) uint64 {
+	return params.Bn256PairingBaseGas + uint64(len(input)/192)*params.Bn256PairingPerPointGas
 }
 
-func (c *bn256PairingIstanbul) Run(input []byte) ([]byte, error) {
+func (c *bn256Pairing) Run(input []byte) ([]byte, error) {
 	return runBn256Pairing(input)
 }
 

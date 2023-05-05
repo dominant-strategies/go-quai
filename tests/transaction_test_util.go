@@ -29,8 +29,7 @@ import (
 
 // TransactionTest checks RLP decoding and sender derivation of transactions.
 type TransactionTest struct {
-	RLP      hexutil.Bytes `json:"rlp"`
-	Istanbul ttFork
+	RLP hexutil.Bytes `json:"rlp"`
 }
 
 type ttFork struct {
@@ -39,7 +38,7 @@ type ttFork struct {
 }
 
 func (tt *TransactionTest) Run(config *params.ChainConfig) error {
-	validateTx := func(rlpData hexutil.Bytes, signer types.Signer, isIstanbul bool) (*common.Address, *common.Hash, error) {
+	validateTx := func(rlpData hexutil.Bytes, signer types.Signer) (*common.Address, *common.Hash, error) {
 		tx := new(types.Transaction)
 		if err := rlp.DecodeBytes(rlpData, tx); err != nil {
 			return nil, nil, err
@@ -49,7 +48,7 @@ func (tt *TransactionTest) Run(config *params.ChainConfig) error {
 			return nil, nil, err
 		}
 		// Intrinsic gas
-		requiredGas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, isIstanbul)
+		requiredGas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -61,14 +60,13 @@ func (tt *TransactionTest) Run(config *params.ChainConfig) error {
 	}
 
 	for _, testcase := range []struct {
-		name       string
-		signer     types.Signer
-		fork       ttFork
-		isIstanbul bool
+		name   string
+		signer types.Signer
+		fork   ttFork
 	}{
-		{"Istanbul", types.NewReplayProtectedSigner(config.ChainID), tt.Istanbul, true},
+		{},
 	} {
-		sender, txhash, err := validateTx(tt.RLP, testcase.signer, testcase.isIstanbul)
+		sender, txhash, err := validateTx(tt.RLP, testcase.signer)
 
 		if testcase.fork.Sender == (common.UnprefixedAddress{}) {
 			if err == nil {

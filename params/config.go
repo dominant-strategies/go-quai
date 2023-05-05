@@ -36,7 +36,6 @@ var (
 	// ColosseumChainConfig is the chain parameters to run a node on the Colosseum network.
 	ColosseumChainConfig = &ChainConfig{
 		ChainID:          big.NewInt(9000),
-		IstanbulBlock:    big.NewInt(0),
 		MuirGlacierBlock: big.NewInt(0),
 		BerlinBlock:      big.NewInt(0),
 		LondonBlock:      big.NewInt(0),
@@ -47,7 +46,6 @@ var (
 	// GardenChainConfig contains the chain parameters to run a node on the Garden test network.
 	GardenChainConfig = &ChainConfig{
 		ChainID:          big.NewInt(12000),
-		IstanbulBlock:    big.NewInt(0),
 		MuirGlacierBlock: big.NewInt(0),
 		BerlinBlock:      big.NewInt(0),
 		LondonBlock:      big.NewInt(0),
@@ -58,7 +56,6 @@ var (
 	// OrchardChainConfig contains the chain parameters to run a node on the Orchard test network.
 	OrchardChainConfig = &ChainConfig{
 		ChainID:          big.NewInt(15000),
-		IstanbulBlock:    big.NewInt(0),
 		MuirGlacierBlock: big.NewInt(0),
 		BerlinBlock:      big.NewInt(0),
 		LondonBlock:      big.NewInt(0),
@@ -69,7 +66,6 @@ var (
 	// GalenaChainConfig contains the chain parameters to run a node on the Galena test network.
 	GalenaChainConfig = &ChainConfig{
 		ChainID:          big.NewInt(17000),
-		IstanbulBlock:    big.NewInt(0),
 		MuirGlacierBlock: big.NewInt(0),
 		BerlinBlock:      big.NewInt(0),
 		LondonBlock:      big.NewInt(0),
@@ -80,7 +76,6 @@ var (
 	// LocalChainConfig contains the chain parameters to run a node on the Local test network.
 	LocalChainConfig = &ChainConfig{
 		ChainID:          big.NewInt(1337),
-		IstanbulBlock:    big.NewInt(0),
 		MuirGlacierBlock: big.NewInt(0),
 		BerlinBlock:      big.NewInt(0),
 		LondonBlock:      big.NewInt(0),
@@ -93,9 +88,9 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllBlake3powProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), new(Blake3powConfig), common.Hash{}}
+	AllBlake3powProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), big.NewInt(0), big.NewInt(0), new(Blake3powConfig), common.Hash{}}
 
-	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), new(Blake3powConfig), common.Hash{}}
+	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), big.NewInt(0), big.NewInt(0), new(Blake3powConfig), common.Hash{}}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
@@ -107,7 +102,6 @@ var (
 type ChainConfig struct {
 	ChainID *big.Int `json:"chainId"` // chainId identifies the current chain and is used for replay protection
 
-	IstanbulBlock    *big.Int `json:"istanbulBlock,omitempty"`    // Istanbul switch block (nil = no fork, 0 = already on istanbul)
 	MuirGlacierBlock *big.Int `json:"muirGlacierBlock,omitempty"` // Eip-2384 (bomb delay) switch block (nil = no fork, 0 = already activated)
 	BerlinBlock      *big.Int `json:"berlinBlock,omitempty"`      // Berlin switch block (nil = no fork, 0 = already on berlin)
 	LondonBlock      *big.Int `json:"londonBlock,omitempty"`      // London switch block (nil = no fork, 0 = already on london)
@@ -134,9 +128,8 @@ func (c *ChainConfig) String() string {
 	default:
 		engine = "unknown"
 	}
-	return fmt.Sprintf("{ChainID: %v %v Istanbul: %v, Muir Glacier: %v, Berlin: %v, London: %v, Engine: %v}",
+	return fmt.Sprintf("{ChainID: %v Muir Glacier: %v, Berlin: %v, London: %v, Engine: %v}",
 		c.ChainID,
-		c.IstanbulBlock,
 		c.MuirGlacierBlock,
 		c.BerlinBlock,
 		c.LondonBlock,
@@ -147,11 +140,6 @@ func (c *ChainConfig) String() string {
 // IsMuirGlacier returns whether num is either equal to the Muir Glacier (EIP-2384) fork block or greater.
 func (c *ChainConfig) IsMuirGlacier(num *big.Int) bool {
 	return isForked(c.MuirGlacierBlock, num)
-}
-
-// IsIstanbul returns whether num is either equal to the Istanbul fork block or greater.
-func (c *ChainConfig) IsIstanbul(num *big.Int) bool {
-	return isForked(c.IstanbulBlock, num)
 }
 
 // IsBerlin returns whether num is either equal to the Berlin fork block or greater.
@@ -192,7 +180,6 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 	}
 	var lastFork fork
 	for _, cur := range []fork{
-		{name: "istanbulBlock", block: c.IstanbulBlock},
 		{name: "muirGlacierBlock", block: c.MuirGlacierBlock, optional: true},
 		{name: "berlinBlock", block: c.BerlinBlock},
 		{name: "londonBlock", block: c.LondonBlock},
@@ -219,9 +206,6 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 }
 
 func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, head *big.Int) *ConfigCompatError {
-	if isForkIncompatible(c.IstanbulBlock, newcfg.IstanbulBlock, head) {
-		return newCompatError("Istanbul fork block", c.IstanbulBlock, newcfg.IstanbulBlock)
-	}
 	if isForkIncompatible(c.MuirGlacierBlock, newcfg.MuirGlacierBlock, head) {
 		return newCompatError("Muir Glacier fork block", c.MuirGlacierBlock, newcfg.MuirGlacierBlock)
 	}
@@ -296,7 +280,6 @@ func (err *ConfigCompatError) Error() string {
 // phases.
 type Rules struct {
 	ChainID            *big.Int
-	IsIstanbul         bool
 	IsBerlin, IsLondon bool
 }
 
@@ -307,9 +290,8 @@ func (c *ChainConfig) Rules(num *big.Int) Rules {
 		chainID = new(big.Int)
 	}
 	return Rules{
-		ChainID:    new(big.Int).Set(chainID),
-		IsIstanbul: c.IsIstanbul(num),
-		IsBerlin:   c.IsBerlin(num),
-		IsLondon:   c.IsLondon(num),
+		ChainID:  new(big.Int).Set(chainID),
+		IsBerlin: c.IsBerlin(num),
+		IsLondon: c.IsLondon(num),
 	}
 }
