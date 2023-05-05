@@ -34,6 +34,7 @@ spec:
         app: {{ $name }}
     spec:
       containers:
+{{- $root := . -}}
 {{- range $chain := .Values.goQuai.chains }}
 {{- $minerEtherbase := ternary (printf "\"--miner.etherbase\", %s, " "$(COINBASE_ADDR)") "" (regexMatch "[0-9]$" $chain.name) }}
 {{/*{{- $minerEtherbase := ternary "\"--miner.etherbase\", '${COINBASE_ADDR}', " "" (regexMatch "[0-9]$" $chain.name) }}*/}}
@@ -41,7 +42,8 @@ spec:
 {{- $zone := ternary (printf ", \"--zone\", %s" ($chain.zone | quote)) "" (ne (len (toString $chain.zone)) 0) }}
 {{- $sub := ternary (printf ", \"--sub.urls\", %s" ($chain.sub | quote)) "" (ne (len (toString $chain.sub)) 0) }}
 {{- $dom := ternary (printf ", \"--dom.url\", %s" ($chain.dom | quote)) "" (ne (len (toString $chain.dom)) 0) }}
-{{ include "go-quai.statefulset" $ | replace "<HTTP>" $chain.ports.http | replace "<WS>" $chain.ports.ws | replace "<DISC>" $chain.ports.disc | replace "prime" $chain.name | replace "PRIME" ($chain.name | upper) | replace "<MINER_ETHERBASE>, " $minerEtherbase | replace ", <REGION>" $region | replace ", <ZONE>" $zone | replace ", <SUB>" $sub | replace ", <DOM>" $dom |  indent 6 }}
+{{- $nonce := default "" (toString $root.Values.goQuai.nonce) }}
+{{ include "go-quai.statefulset" $ | replace "<HTTP>" $chain.ports.http | replace "<WS>" $chain.ports.ws | replace "<DISC>" $chain.ports.disc | replace "prime" $chain.name | replace "PRIME" ($chain.name | upper) | replace "<NONCE>" $nonce | replace "<MINER_ETHERBASE>, " $minerEtherbase | replace ", <REGION>" $region | replace ", <ZONE>" $zone | replace ", <SUB>" $sub | replace ", <DOM>" $dom |  indent 6 }}
 {{- end }}
   volumeClaimTemplates:
   - apiVersion: v1

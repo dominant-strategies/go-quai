@@ -1,4 +1,5 @@
 goQuai:
   env: "quai-sandbox"
   network: "colosseum"
+  nonce: 0
 

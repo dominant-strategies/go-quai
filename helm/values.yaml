@@ -5,6 +5,7 @@ goQuai:
   env: quai-dev
   replicas: 1
   network: garden
+  nonce: 67
   chains:
     - name: prime
       ports:
