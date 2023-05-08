@@ -19,7 +19,7 @@ package event
 import (
 	"fmt"
 	"reflect"
-	"sync"
+	sync "github.com/sasha-s/go-deadlock"
 	"testing"
 	"time"
 )

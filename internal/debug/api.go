@@ -31,7 +31,7 @@ import (
 	"runtime/debug"
 	"runtime/pprof"
 	"strings"
-	"sync"
+	sync "github.com/sasha-s/go-deadlock"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/log"

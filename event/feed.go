@@ -19,7 +19,7 @@ package event
 import (
 	"errors"
 	"reflect"
-	"sync"
+	sync "github.com/sasha-s/go-deadlock"
 )
 
 var errBadChannel = errors.New("event: Subscribe argument does not have sendable channel type")

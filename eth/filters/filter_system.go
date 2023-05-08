@@ -21,7 +21,7 @@ package filters
 import (
 	"context"
 	"fmt"
-	"sync"
+	sync "github.com/sasha-s/go-deadlock"
 	"time"
 
 	ethereum "github.com/dominant-strategies/go-quai"

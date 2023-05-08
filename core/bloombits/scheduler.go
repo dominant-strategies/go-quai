@@ -17,7 +17,7 @@
 package bloombits
 
 import (
-	"sync"
+	sync "github.com/sasha-s/go-deadlock"
 )
 
 // request represents a bloom retrieval task to prioritize and pull from the local

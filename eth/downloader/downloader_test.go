@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
-	"sync"
+	sync "github.com/sasha-s/go-deadlock"
 	"sync/atomic"
 	"testing"
 	"time"

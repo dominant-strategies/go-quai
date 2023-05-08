@@ -24,7 +24,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"sync"
+	sync "github.com/sasha-s/go-deadlock"
 	"time"
 
 	mapset "github.com/deckarep/golang-set"

@@ -17,7 +17,7 @@
 package quaiapi
 
 import (
-	"sync"
+	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/dominant-strategies/go-quai/common"
 )

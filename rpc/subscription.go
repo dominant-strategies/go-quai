@@ -27,7 +27,7 @@ import (
 	"math/rand"
 	"reflect"
 	"strings"
-	"sync"
+	sync "github.com/sasha-s/go-deadlock"
 	"time"
 )
 

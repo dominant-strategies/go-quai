@@ -19,7 +19,7 @@ package vm
 import (
 	"fmt"
 	"math/big"
-	"sync"
+	sync "github.com/sasha-s/go-deadlock"
 	"sync/atomic"
 	"time"
 

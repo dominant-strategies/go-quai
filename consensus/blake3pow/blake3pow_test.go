@@ -5,7 +5,7 @@ import (
 	"math/big"
 	"math/rand"
 	"os"
-	"sync"
+	sync "github.com/sasha-s/go-deadlock"
 	"testing"
 	"time"
 

@@ -27,7 +27,7 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
-	"sync"
+	sync "github.com/sasha-s/go-deadlock"
 	"time"
 )
 

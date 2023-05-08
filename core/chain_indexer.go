@@ -20,7 +20,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"sync"
+	sync "github.com/sasha-s/go-deadlock"
 	"sync/atomic"
 	"time"
 

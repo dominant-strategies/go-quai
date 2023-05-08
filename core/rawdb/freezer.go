@@ -22,7 +22,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"sync"
+	sync "github.com/sasha-s/go-deadlock"
 	"sync/atomic"
 	"time"
 

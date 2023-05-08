@@ -26,7 +26,7 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
-	"sync"
+	sync "github.com/sasha-s/go-deadlock"
 	"sync/atomic"
 	"syscall"
 	"testing"

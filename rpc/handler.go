@@ -22,7 +22,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"sync"
+	sync "github.com/sasha-s/go-deadlock"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/log"

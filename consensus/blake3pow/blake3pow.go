@@ -3,7 +3,7 @@ package blake3pow
 import (
 	"math/big"
 	"math/rand"
-	"sync"
+	sync "github.com/sasha-s/go-deadlock"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"

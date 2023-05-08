@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"sync"
+	sync "github.com/sasha-s/go-deadlock"
 	"sync/atomic"
 	"time"
 	"unicode/utf8"

@@ -6,7 +6,7 @@ import (
 	"net"
 	"os"
 	"reflect"
-	"sync"
+	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/go-stack/stack"
 )

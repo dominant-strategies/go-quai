@@ -20,7 +20,7 @@ import (
 	"errors"
 	"math/big"
 	"math/rand"
-	"sync"
+	sync "github.com/sasha-s/go-deadlock"
 	"time"
 
 	mapset "github.com/deckarep/golang-set"

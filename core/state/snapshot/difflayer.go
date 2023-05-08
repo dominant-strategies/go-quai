@@ -22,7 +22,7 @@ import (
 	"math"
 	"math/rand"
 	"sort"
-	"sync"
+	sync "github.com/sasha-s/go-deadlock"
 	"sync/atomic"
 	"time"
 

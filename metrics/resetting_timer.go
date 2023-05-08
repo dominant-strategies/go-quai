@@ -3,7 +3,7 @@ package metrics
 import (
 	"math"
 	"sort"
-	"sync"
+	sync "github.com/sasha-s/go-deadlock"
 	"time"
 )
 

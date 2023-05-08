@@ -23,7 +23,7 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
-	"sync"
+	sync "github.com/sasha-s/go-deadlock"
 	"unicode"
 
 	"github.com/dominant-strategies/go-quai/log"

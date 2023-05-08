@@ -18,7 +18,7 @@ package event_test
 
 import (
 	"fmt"
-	"sync"
+	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/dominant-strategies/go-quai/event"
 )

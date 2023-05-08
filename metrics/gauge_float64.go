@@ -1,6 +1,6 @@
 package metrics
 
-import "sync"
+import sync "github.com/sasha-s/go-deadlock"
 
 // GaugeFloat64s hold a float64 value that can be set arbitrarily.
 type GaugeFloat64 interface {

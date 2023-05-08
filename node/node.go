@@ -24,7 +24,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
-	"sync"
+	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/ethdb"

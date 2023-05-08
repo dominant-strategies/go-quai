@@ -21,7 +21,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"sync"
+	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/crypto"

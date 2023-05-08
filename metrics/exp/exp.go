@@ -6,7 +6,7 @@ import (
 	"expvar"
 	"fmt"
 	"net/http"
-	"sync"
+	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/metrics"
