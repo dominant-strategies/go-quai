@@ -22,7 +22,6 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/math"
-	"github.com/dominant-strategies/go-quai/log"
 )
 
 // Config are the configuration options for the Interpreter
@@ -34,8 +33,6 @@ type Config struct {
 	EnablePreimageRecording bool   // Enables recording of SHA3/keccak preimages
 
 	JumpTable [256]*operation // EVM instruction table, automatically populated if unset
-
-	ExtraEips []int // Additional EIPS that are to be enabled
 }
 
 // ScopeContext contains the things that are per-call, such as stack and memory,
@@ -73,13 +70,6 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 	// we'll set the default jump table.
 	if cfg.JumpTable[STOP] == nil {
 		jt := instructionSet
-		for i, eip := range cfg.ExtraEips {
-			if err := EnableEIP(eip, &jt); err != nil {
-				// Disable it, so caller can check if it's activated or not
-				cfg.ExtraEips = append(cfg.ExtraEips[:i], cfg.ExtraEips[i+1:]...)
-				log.Error("EIP activation failed", "eip", eip, "error", err)
-			}
-		}
 		cfg.JumpTable = jt
 	}
 

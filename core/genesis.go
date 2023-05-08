@@ -204,9 +204,6 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis) (*params
 	}
 	// Get the existing chain configuration.
 	newcfg := genesis.configOrDefault(stored)
-	if err := newcfg.CheckConfigForkOrder(); err != nil {
-		return newcfg, common.Hash{}, err
-	}
 	storedcfg := rawdb.ReadChainConfig(db, stored)
 	if storedcfg == nil {
 		log.Warn("Found genesis block without chain config")
@@ -282,9 +279,6 @@ func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
 	config := g.Config
 	if config == nil {
 		config = params.AllBlake3powProtocolChanges
-	}
-	if err := config.CheckConfigForkOrder(); err != nil {
-		return nil, err
 	}
 	rawdb.WriteTermini(db, block.Hash(), nil)
 	rawdb.WriteBlock(db, block)

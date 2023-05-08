@@ -187,24 +187,12 @@ var (
 	gasDelegateCallVariant = makeCallVariantGasCall(gasDelegateCall)
 	gasStaticCallVariant   = makeCallVariantGasCall(gasStaticCall)
 	gasCallCodeVariant     = makeCallVariantGasCall(gasCallCode)
-	gasSelfdestructVariant = makeSelfdestructGasFn(true)
-	// gasSelfdestructEIP3529 implements the changes in EIP-2539 (no refunds)
-	gasSelfdestructEIP3529 = makeSelfdestructGasFn(false)
+	// gasSelfdestructVariant implements self destruct with no refunds
+	gasSelfdestructVariant = makeSelfdestructGasFn(false)
 
-	// gasSStore implements gas cost for SSTORE
-	//
-	// When calling SSTORE, check if the (address, storage_key) pair is in accessed_storage_keys.
-	// If it is not, charge an additional COLD_SLOAD_COST gas, and add the pair to accessed_storage_keys.
-	// Additionally, modify the parameters as follows:
-	//
-	// Parameter 	Old value 	New value
-	// SLOAD_GAS 	800 	= WARM_STORAGE_READ_COST
-	// SSTORE_RESET_GAS 	5000 	5000 - COLD_SLOAD_COST
-	gasSStoreVariant = makeGasSStoreFunc(params.SstoreClearsScheduleRefund)
-
-	// gasSStoreEIP2539 implements gas cost for SSTORE according to EPI-2539
+	// gasSStoreVariant implements gas cost for SSTORE
 	// Replace `SSTORE_CLEARS_SCHEDULE` with `SSTORE_RESET_GAS + ACCESS_LIST_STORAGE_KEY_COST` (4,800)
-	gasSStoreEIP3529 = makeGasSStoreFunc(params.SstoreClearsScheduleRefundEIP3529)
+	gasSStoreVariant = makeGasSStoreFunc(params.SstoreClearsScheduleRefund)
 )
 
 // makeSelfdestructGasFn can create the selfdestruct dynamic gas function

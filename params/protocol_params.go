@@ -51,18 +51,17 @@ const (
 	NetSstoreResetRefund      uint64 = 4800  // Once per SSTORE operation for resetting to the original non-zero value
 	NetSstoreResetClearRefund uint64 = 19800 // Once per SSTORE operation for resetting to the original zero value
 
-	SstoreSentryGas            uint64 = 2300  // Minimum gas required to be present for an SSTORE call, not consumed
-	SstoreSetGas               uint64 = 20000 // Once per SSTORE operation from clean zero to non-zero
-	SstoreResetGas             uint64 = 5000  // Once per SSTORE operation from clean non-zero to something else
-	SstoreClearsScheduleRefund uint64 = 15000 // Once per SSTORE operation for clearing an originally existing storage slot
+	SstoreSentryGas uint64 = 2300  // Minimum gas required to be present for an SSTORE call, not consumed
+	SstoreSetGas    uint64 = 20000 // Once per SSTORE operation from clean zero to non-zero
+	SstoreResetGas  uint64 = 5000  // Once per SSTORE operation from clean non-zero to something else
 
 	ColdAccountAccessCost = uint64(2600) // COLD_ACCOUNT_ACCESS_COST
 	ColdSloadCost         = uint64(2100) // COLD_SLOAD_COST
 	WarmStorageReadCost   = uint64(100)  // WARM_STORAGE_READ_COST
 
-	// In EIP-3529: SSTORE_CLEARS_SCHEDULE is defined as SSTORE_RESET_GAS + ACCESS_LIST_STORAGE_KEY_COST
+	// SSTORE_CLEARS_SCHEDULE is defined as SSTORE_RESET_GAS + ACCESS_LIST_STORAGE_KEY_COST
 	// Which becomes: 5000 - 2100 + 1900 = 4800
-	SstoreClearsScheduleRefundEIP3529 uint64 = SstoreResetGas - ColdSloadCost + TxAccessListStorageKeyGas
+	SstoreClearsScheduleRefund uint64 = SstoreResetGas - ColdSloadCost + TxAccessListStorageKeyGas // Once per SSTORE operation for clearing an originally existing storage slot
 
 	JumpdestGas   uint64 = 1     // Once per JUMPDEST operation.
 	EpochDuration uint64 = 30000 // Duration between proof-of-work epochs.
@@ -125,10 +124,8 @@ const (
 	Bn256PairingBaseGas     uint64 = 45000 // Base price for an elliptic curve pairing check
 	Bn256PairingPerPointGas uint64 = 34000 // Per-point price for an elliptic curve pairing check
 
-	// The Refund Quotient is the cap on how much of the used gas can be refunded. Before EIP-3529,
-	// up to half the consumed gas could be refunded. Redefined as 1/5th in EIP-3529
-	RefundQuotient        uint64 = 2
-	RefundQuotientEIP3529 uint64 = 5
+	// The Refund Quotient is the cap on how much of the used gas can be refunded
+	RefundQuotient uint64 = 5
 )
 
 var (

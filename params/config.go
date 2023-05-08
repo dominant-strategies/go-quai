@@ -114,51 +114,6 @@ func (c *ChainConfig) String() string {
 	)
 }
 
-// CheckConfigForkOrder checks that we don't "skip" any forks, geth isn't pluggable enough
-// to guarantee that forks can be implemented in a different order than on official networks
-func (c *ChainConfig) CheckConfigForkOrder() error {
-	type fork struct {
-		name     string
-		block    *big.Int
-		optional bool // if true, the fork may be nil and next fork is still allowed
-	}
-	var lastFork fork
-	for _, cur := range []fork{} {
-		if lastFork.name != "" {
-			// Next one must be higher number
-			if lastFork.block == nil && cur.block != nil {
-				return fmt.Errorf("unsupported fork ordering: %v not enabled, but %v enabled at %v",
-					lastFork.name, cur.name, cur.block)
-			}
-			if lastFork.block != nil && cur.block != nil {
-				if lastFork.block.Cmp(cur.block) > 0 {
-					return fmt.Errorf("unsupported fork ordering: %v enabled at %v, but %v enabled at %v",
-						lastFork.name, lastFork.block, cur.name, cur.block)
-				}
-			}
-		}
-		// If it was optional and not set, then ignore it
-		if !cur.optional || cur.block != nil {
-			lastFork = cur
-		}
-	}
-	return nil
-}
-
-// isForkIncompatible returns true if a fork scheduled at s1 cannot be rescheduled to
-// block s2 because head is already past the fork.
-func isForkIncompatible(s1, s2, head *big.Int) bool {
-	return (isForked(s1, head) || isForked(s2, head)) && !configNumEqual(s1, s2)
-}
-
-// isForked returns whether a fork scheduled at block s is active at the given head block.
-func isForked(s, head *big.Int) bool {
-	if s == nil || head == nil {
-		return false
-	}
-	return s.Cmp(head) <= 0
-}
-
 func configNumEqual(x, y *big.Int) bool {
 	if x == nil {
 		return y == nil

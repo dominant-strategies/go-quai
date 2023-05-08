@@ -347,8 +347,8 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	st.evm.ETXCache = make([]*types.Transaction, 0)
 	st.evm.ETXCacheLock.Unlock()
 
-	// After EIP-3529: refunds are capped to gasUsed / 5
-	st.refundGas(params.RefundQuotientEIP3529)
+	// refunds are capped to gasUsed / 5
+	st.refundGas(params.RefundQuotient)
 
 	effectiveTip := cmath.BigMin(st.gasTipCap, new(big.Int).Sub(st.gasFeeCap, st.evm.Context.BaseFee))
 	coinbase, err := st.evm.Context.Coinbase.InternalAddress()

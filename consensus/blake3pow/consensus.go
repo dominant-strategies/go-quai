@@ -299,8 +299,7 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 		}
 		// Verify the block's gas usage and verify the base fee.
 		// Verify that the gas limit remains within allowed bounds
-		parentGasLimit := parent.GasLimit()
-		if err := misc.VerifyGaslimit(parentGasLimit, header.GasLimit()); err != nil {
+		if err := misc.VerifyGaslimit(parent.GasLimit(), header.GasLimit()); err != nil {
 			return err
 		}
 		// Verify the header is not malformed

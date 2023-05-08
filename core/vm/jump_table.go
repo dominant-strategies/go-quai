@@ -147,8 +147,6 @@ func NewInstructionSet() JumpTable {
 		minStack:    minStack(0, 1),
 		maxStack:    maxStack(0, 1),
 	}
-	enable3529(&instructionSet) // EIP-3529: Reduction in refunds https://eips.ethereum.org/EIPS/eip-3529
-	enable3198(&instructionSet) // Base fee opcode https://eips.ethereum.org/EIPS/eip-3198
 	return instructionSet
 }
 
@@ -973,6 +971,12 @@ func newInstructionSet() JumpTable {
 			maxStack:    maxStack(1, 0),
 			halts:       true,
 			writes:      true,
+		},
+		BASEFEE: {
+			execute:     opBaseFee,
+			constantGas: GasQuickStep,
+			minStack:    minStack(0, 1),
+			maxStack:    maxStack(0, 1),
 		},
 		ETX: {
 			execute:     opETX,
