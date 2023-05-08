@@ -56,6 +56,7 @@ const (
 
 	// chainHeadChanSize is the size of channel listening to ChainHeadEvent.
 	chainHeadChanSize = 10
+	chainSideChanSize = 10
 
 	// reportInterval is the time interval between two reports.
 	reportInterval = 15
@@ -69,6 +70,7 @@ const (
 // backend encompasses the bare-minimum functionality needed for quaistats reporting
 type backend interface {
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
+	SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription
 	SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription
 	CurrentHeader() *types.Header
 	HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error)
@@ -100,6 +102,7 @@ type Service struct {
 	pongCh  chan struct{} // Pong notifications are fed into this channel
 	histCh  chan []uint64 // History request block numbers are fed into this channel
 	headSub event.Subscription
+	sideSub event.Subscription
 
 	tpsLookupCache *lru.Cache
 	gasLookupCache *lru.Cache
@@ -212,8 +215,12 @@ func New(node *node.Node, backend backend, engine consensus.Engine, url string) 
 func (s *Service) Start() error {
 	// Subscribe to chain events to execute updates on
 	chainHeadCh := make(chan core.ChainHeadEvent, chainHeadChanSize)
+	chainSideCh := make(chan core.ChainSideEvent, chainSideChanSize)
+
 	s.headSub = s.backend.SubscribeChainHeadEvent(chainHeadCh)
-	go s.loop(chainHeadCh)
+	s.sideSub = s.backend.SubscribeChainSideEvent(chainSideCh)
+
+	go s.loop(chainHeadCh, chainSideCh)
 
 	log.Info("Stats daemon started")
 	return nil
@@ -222,18 +229,20 @@ func (s *Service) Start() error {
 // Stop implements node.Lifecycle, terminating the monitoring and reporting daemon.
 func (s *Service) Stop() error {
 	s.headSub.Unsubscribe()
+	s.sideSub.Unsubscribe()
 	log.Info("Stats daemon stopped")
 	return nil
 }
 
 // loop keeps trying to connect to the netstats server, reporting chain events
 // until termination.
-func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent) {
+func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, chainSideCh chan core.ChainSideEvent) {
 	nodeCtx := common.NodeLocation.Context()
 	// Start a goroutine that exhausts the subscriptions to avoid events piling up
 	var (
 		quitCh = make(chan struct{})
 		headCh = make(chan *types.Block, 1)
+		sideCh = make(chan *types.Block, 1)
 	)
 	go func() {
 	HandleLoop:
@@ -243,6 +252,12 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent) {
 			case head := <-chainHeadCh:
 				select {
 				case headCh <- head.Block:
+				default:
+				}
+			// Notify of chain side events, but drop if too frequent
+			case sideEvent := <-chainSideCh:
+				select {
+				case sideCh <- sideEvent.Block:
 				default:
 				}
 			case <-s.headSub.Err():
@@ -333,6 +348,10 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent) {
 						if err = s.reportPending(conn); err != nil {
 							log.Warn("Post-block transaction stats report failed", "err", err)
 						}
+					}
+				case sideEvent := <-sideCh:
+					if err = s.reportSideBlock(conn, sideEvent); err != nil {
+						log.Warn("Block stats report failed", "err", err)
 					}
 				}
 			}
@@ -702,6 +721,20 @@ func (s *Service) computeTps(block *types.Block) int64 {
 	})
 
 	return blockTps
+}
+
+// reportSideBlock retrieves the current chain side event and reports it to the stats server.
+func (s *Service) reportSideBlock(conn *connWrapper, block *types.Block) error {
+	log.Trace("Sending new side block to quaistats", "number", block.Number(), "hash", block.Hash())
+
+	stats := map[string]interface{}{
+		"id":        s.node,
+		"sideBlock": block,
+	}
+	report := map[string][]interface{}{
+		"emit": {"sideBlock", stats},
+	}
+	return conn.WriteJSON(report)
 }
 
 // reportBlock retrieves the current chain head and reports it to the stats server.

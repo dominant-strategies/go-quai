@@ -469,6 +469,11 @@ func (c *Core) SubscribeMissingPendingEtxsRollupEvent(ch chan<- common.Hash) eve
 	return c.sl.hc.SubscribeMissingPendingEtxsRollupEvent(ch)
 }
 
+// SubscribeChainSideEvent registers a subscription of ChainSideEvent.
+func (c *Core) SubscribeChainSideEvent(ch chan<- ChainSideEvent) event.Subscription {
+	return c.sl.hc.SubscribeChainSideEvent(ch)
+}
+
 //--------------------//
 // BlockChain methods //
 //--------------------//
@@ -481,11 +486,6 @@ func (c *Core) HasBlock(hash common.Hash, number uint64) bool {
 // SubscribeChainEvent registers a subscription of ChainEvent.
 func (c *Core) SubscribeChainEvent(ch chan<- ChainEvent) event.Subscription {
 	return c.sl.hc.bc.SubscribeChainEvent(ch)
-}
-
-// SubscribeChainSideEvent registers a subscription of ChainSideEvent.
-func (c *Core) SubscribeChainSideEvent(ch chan<- ChainSideEvent) event.Subscription {
-	return c.sl.hc.bc.SubscribeChainSideEvent(ch)
 }
 
 // SubscribeChainHeadEvent registers a subscription of ChainHeadEvent.
