@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	c_maxPendingEtxBatches            = 256
+	c_maxPendingEtxBatches            = 1024
 	c_maxPendingEtxsRollup            = 256
 	c_pendingHeaderCacheLimit         = 100
 	c_pendingHeaderChacheBufferFactor = 2
@@ -336,8 +336,9 @@ func (sl *Slice) CollectNewlyConfirmedEtxs(block *types.Block, location common.L
 	if ancestor == nil {
 		return nil, nil, fmt.Errorf("unable to find ancestor, hash: %s", ancHash.String())
 	}
-	// Terminate the search when we find a block produced by the given location
-	if ancestor.Location().Equal(location) {
+
+	// Terminate the search when we find a block produced by the same sub
+	if ancestor.Location().SubIndex() == location.SubIndex() {
 		return newlyConfirmedEtxs, subRollup, nil
 	}
 
