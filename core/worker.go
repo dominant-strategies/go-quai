@@ -69,6 +69,7 @@ type environment struct {
 	etxs                []*types.Transaction
 	subManifest         types.BlockManifest
 	receipts            []*types.Receipt
+	uncleMu             sync.RWMutex
 	uncles              map[common.Hash]*types.Header
 	externalGasUsed     uint64
 	externalBlockLength int
@@ -98,10 +99,13 @@ func (env *environment) copy() *environment {
 		copy(cpy.txs, env.txs)
 		cpy.etxs = make([]*types.Transaction, len(env.etxs))
 		copy(cpy.etxs, env.etxs)
+
+		env.uncleMu.Lock()
 		cpy.uncles = make(map[common.Hash]*types.Header)
 		for hash, uncle := range env.uncles {
 			cpy.uncles[hash] = uncle
 		}
+		env.uncleMu.Unlock()
 		return cpy
 	} else {
 		return &environment{header: types.CopyHeader(env.header)}
@@ -110,6 +114,8 @@ func (env *environment) copy() *environment {
 
 // unclelist returns the contained uncles as the list format.
 func (env *environment) unclelist() []*types.Header {
+	env.uncleMu.RLock()
+	defer env.uncleMu.RUnlock()
 	var uncles []*types.Header
 	for _, uncle := range env.uncles {
 		uncles = append(uncles, uncle)
@@ -192,6 +198,7 @@ type worker struct {
 	current      *environment                 // An environment for current running cycle.
 	localUncles  map[common.Hash]*types.Block // A set of side blocks generated locally as the possible uncle blocks.
 	remoteUncles map[common.Hash]*types.Block // A set of side blocks as the possible uncle blocks.
+	uncleMu      sync.RWMutex
 
 	mu       sync.RWMutex // The lock used to protect the coinbase and extra fields
 	coinbase common.Address
@@ -483,6 +490,7 @@ func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.He
 	env.header = block.Header()
 
 	task := &task{receipts: env.receipts, state: env.state, block: block, createdAt: time.Now()}
+	env.uncleMu.RLock()
 	if w.CurrentInfo(block.Header()) {
 		log.Info("Commit new sealing work", "number", block.Number(), "sealhash", block.Header().SealHash(),
 			"uncles", len(env.uncles), "txs", env.tcount, "etxs", len(block.ExtTransactions()),
@@ -494,6 +502,7 @@ func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.He
 			"gas", block.GasUsed(), "fees", totalFees(block, env.receipts),
 			"elapsed", common.PrettyDuration(time.Since(start)))
 	}
+	env.uncleMu.RUnlock()
 
 	w.updateSnapshot(env)
 
@@ -557,11 +566,14 @@ func (w *worker) mainLoop() {
 			// uncle processing is only done for zone
 			nodeCtx := common.NodeLocation.Context()
 			if nodeCtx == common.ZONE_CTX {
+				w.uncleMu.Lock()
 				// Short circuit for duplicate side blocks
 				if _, exist := w.localUncles[ev.Block.Hash()]; exist {
+					w.uncleMu.Unlock()
 					continue
 				}
 				if _, exist := w.remoteUncles[ev.Block.Hash()]; exist {
+					w.uncleMu.Unlock()
 					continue
 				}
 				// Add side block to possible uncle block set depending on the author.
@@ -579,10 +591,12 @@ func (w *worker) mainLoop() {
 						w.commit(w.current.copy(), nil, true, start)
 					}
 				}
+				w.uncleMu.Unlock()
 			}
 
 		case <-cleanTicker.C:
 			chainHead := w.hc.CurrentBlock()
+			w.uncleMu.RLock()
 			for hash, uncle := range w.localUncles {
 				if uncle.NumberU64()+staleThreshold <= chainHead.NumberU64() {
 					delete(w.localUncles, hash)
@@ -593,6 +607,7 @@ func (w *worker) mainLoop() {
 					delete(w.remoteUncles, hash)
 				}
 			}
+			w.uncleMu.RUnlock()
 
 		case ev := <-w.txsCh:
 
@@ -686,6 +701,8 @@ func (w *worker) makeEnv(parent *types.Block, header *types.Header, coinbase com
 
 // commitUncle adds the given block to uncle block set, returns error if failed to add.
 func (w *worker) commitUncle(env *environment, uncle *types.Header) error {
+	env.uncleMu.Lock()
+	defer env.uncleMu.Unlock()
 	hash := uncle.Hash()
 	if _, exist := env.uncles[hash]; exist {
 		return errors.New("uncle not unique")
@@ -927,9 +944,12 @@ func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*en
 		// Accumulate the uncles for the sealing work.
 		commitUncles := func(blocks map[common.Hash]*types.Block) {
 			for hash, uncle := range blocks {
+				env.uncleMu.RLock()
 				if len(env.uncles) == 2 {
+					env.uncleMu.RUnlock()
 					break
 				}
+				env.uncleMu.RUnlock()
 				if err := w.commitUncle(env, uncle.Header()); err != nil {
 					log.Trace("Possible uncle rejected", "hash", hash, "reason", err)
 				} else {
@@ -937,9 +957,11 @@ func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*en
 				}
 			}
 		}
+		w.uncleMu.RLock()
 		// Prefer to locally generated uncle
 		commitUncles(w.localUncles)
 		commitUncles(w.remoteUncles)
+		w.uncleMu.RUnlock()
 		return env, nil
 	} else {
 		return &environment{header: header}, nil
@@ -1057,11 +1079,12 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 		env.header = block.Header()
 		select {
 		case w.taskCh <- &task{receipts: env.receipts, state: env.state, block: block, createdAt: time.Now()}:
+			env.uncleMu.RLock()
 			log.Info("Commit new sealing work", "number", block.Number(), "sealhash", block.Header().SealHash(),
 				"uncles", len(env.uncles), "txs", env.tcount, "etxs", len(block.ExtTransactions()),
 				"gas", block.GasUsed(), "fees", totalFees(block, env.receipts),
 				"elapsed", common.PrettyDuration(time.Since(start)))
-
+			env.uncleMu.RUnlock()
 		case <-w.exitCh:
 			log.Info("worker has exited")
 		}

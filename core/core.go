@@ -601,17 +601,6 @@ func (c *Core) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
 	return c.sl.miner.PendingBlockAndReceipts()
 }
 
-// Method to retrieve uncles from the worker in case not found in normal DB.
-func (c *Core) GetUncle(hash common.Hash) *types.Block {
-	if uncle, exist := c.sl.miner.worker.localUncles[hash]; exist {
-		return uncle
-	}
-	if uncle, exist := c.sl.miner.worker.remoteUncles[hash]; exist {
-		return uncle
-	}
-	return nil
-}
-
 func (c *Core) SetEtherbase(addr common.Address) {
 	c.sl.miner.SetEtherbase(addr)
 }
