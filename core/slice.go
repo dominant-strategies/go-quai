@@ -246,8 +246,10 @@ func (sl *Slice) relayPh(block *types.Block, appendTime *time.Duration, reorg bo
 	nodeCtx := common.NodeLocation.Context()
 
 	if nodeCtx == common.ZONE_CTX {
+		sl.phCachemu.RLock()
 		// Send an empty header to miner
 		bestPh, exists := sl.phCache[sl.bestPhKey]
+		sl.phCachemu.RUnlock()
 		if exists {
 			bestPh.Header.SetLocation(common.NodeLocation)
 			sl.miner.worker.pendingHeaderFeed.Send(bestPh.Header)
@@ -260,9 +262,13 @@ func (sl *Slice) relayPh(block *types.Block, appendTime *time.Duration, reorg bo
 				return
 			} else {
 				pendingHeaderWithTermini.Header = sl.combinePendingHeader(localPendingHeader, pendingHeaderWithTermini.Header, nodeCtx, true)
+				sl.phCachemu.Lock()
 				sl.writeToPhCacheAndPickPhHead(pendingHeaderWithTermini, appendTime)
+				sl.phCachemu.Unlock()
 			}
+			sl.phCachemu.RLock()
 			bestPh, exists = sl.phCache[sl.bestPhKey]
+			sl.phCachemu.RUnlock()
 			if exists {
 				bestPh.Header.SetLocation(common.NodeLocation)
 				sl.miner.worker.pendingHeaderFeed.Send(bestPh.Header)
@@ -407,6 +413,8 @@ func (sl *Slice) poem(externS *big.Int, currentS *big.Int) bool {
 
 // GetPendingHeader is used by the miner to request the current pending header
 func (sl *Slice) GetPendingHeader() (*types.Header, error) {
+	sl.phCachemu.RLock()
+	defer sl.phCachemu.RUnlock()
 	if ph := sl.phCache[sl.bestPhKey].Header; ph != nil {
 		return ph, nil
 	} else {
