@@ -177,7 +177,7 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (t
 	if nodeCtx != common.ZONE_CTX {
 		return types.Message{}, errors.New("toMessage can only called in zone chain")
 	}
-	// Reject invalid combinations of pre- and post-1559 fee styles
+	// Reject invalid combinations of fee styles
 	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
 		return types.Message{}, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
 	}
@@ -202,20 +202,19 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (t
 		gasTipCap *big.Int
 	)
 	if baseFee == nil {
-		// If there's no basefee, then it must be a non-1559 execution
 		gasPrice = new(big.Int)
 		if args.GasPrice != nil {
 			gasPrice = args.GasPrice.ToInt()
 		}
 		gasFeeCap, gasTipCap = gasPrice, gasPrice
 	} else {
-		// A basefee is provided, necessitating 1559-type execution
+		// A basefee is provided
 		if args.GasPrice != nil {
-			// User specified the legacy gas field, convert to 1559 gas typing
+			// User specified the legacy gas field, convert
 			gasPrice = args.GasPrice.ToInt()
 			gasFeeCap, gasTipCap = gasPrice, gasPrice
 		} else {
-			// User specified 1559 gas feilds (or none), use those
+			// User specified max fee (or none), use those
 			gasFeeCap = new(big.Int)
 			if args.MaxFeePerGas != nil {
 				gasFeeCap = args.MaxFeePerGas.ToInt()

@@ -298,9 +298,20 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 			return fmt.Errorf("invalid gasUsed: have %d, gasLimit %d", header.GasUsed(), header.GasLimit())
 		}
 		// Verify the block's gas usage and verify the base fee.
-		if err := misc.VerifyEip1559Header(chain.Config(), parent, header); err != nil {
-			// Verify the header's EIP-1559 attributes.
+		// Verify that the gas limit remains within allowed bounds
+		parentGasLimit := parent.GasLimit()
+		if err := misc.VerifyGaslimit(parentGasLimit, header.GasLimit()); err != nil {
 			return err
+		}
+		// Verify the header is not malformed
+		if header.BaseFee() == nil {
+			return fmt.Errorf("header is missing baseFee")
+		}
+		// Verify the baseFee is correct based on the parent header.
+		expectedBaseFee := misc.CalcBaseFee(chain.Config(), parent)
+		if header.BaseFee().Cmp(expectedBaseFee) != 0 {
+			return fmt.Errorf("invalid baseFee: have %s, want %s, parentBaseFee %s, parentGasUsed %d",
+				expectedBaseFee, header.BaseFee(), parent.BaseFee(), parent.GasUsed())
 		}
 	}
 	// Verify that the block number is parent's +1

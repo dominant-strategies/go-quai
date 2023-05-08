@@ -233,8 +233,6 @@ type TxPool struct {
 	signer      types.Signer
 	mu          sync.RWMutex
 
-	eip1559 bool // Fork indicator whether we are using EIP-1559 type transactions.
-
 	currentState  *state.StateDB // Current state in the blockchain head
 	pendingNonces *txNoncer      // Pending state tracking virtual nonces
 	currentMaxGas uint64         // Current gas limit for transaction caps
@@ -1300,8 +1298,6 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	log.Debug("Reinjecting stale transactions", "count", len(reinject))
 	senderCacher.recover(pool.signer, reinject)
 	pool.addTxsLocked(reinject, false)
-
-	pool.eip1559 = true
 }
 
 // promoteExecutables moves transactions that have become processable from the

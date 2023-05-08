@@ -169,7 +169,7 @@ func TestTransactionPriceNonceSortLegacy(t *testing.T) {
 	testTransactionPriceNonceSort(t, nil)
 }
 
-func TestTransactionPriceNonceSort1559(t *testing.T) {
+func TestTransactionPriceNonceSort(t *testing.T) {
 	testTransactionPriceNonceSort(t, big.NewInt(0))
 	testTransactionPriceNonceSort(t, big.NewInt(5))
 	testTransactionPriceNonceSort(t, big.NewInt(50))

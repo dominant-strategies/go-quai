@@ -17,7 +17,6 @@
 package misc
 
 import (
-	"fmt"
 	"math/big"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -25,28 +24,6 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/params"
 )
-
-// VerifyEip1559Header verifies some header attributes which were changed in EIP-1559,
-// - gas limit check
-// - basefee check
-func VerifyEip1559Header(config *params.ChainConfig, parent, header *types.Header) error {
-	// Verify that the gas limit remains within allowed bounds
-	parentGasLimit := parent.GasLimit()
-	if err := VerifyGaslimit(parentGasLimit, header.GasLimit()); err != nil {
-		return err
-	}
-	// Verify the header is not malformed
-	if header.BaseFee() == nil {
-		return fmt.Errorf("header is missing baseFee")
-	}
-	// Verify the baseFee is correct based on the parent header.
-	expectedBaseFee := CalcBaseFee(config, parent)
-	if header.BaseFee().Cmp(expectedBaseFee) != 0 {
-		return fmt.Errorf("invalid baseFee: have %s, want %s, parentBaseFee %s, parentGasUsed %d",
-			expectedBaseFee, header.BaseFee(), parent.BaseFee(), parent.GasUsed())
-	}
-	return nil
-}
 
 // CalcBaseFee calculates the basefee of the header taking into account the basefee ceiling
 func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {

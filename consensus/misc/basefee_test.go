@@ -17,6 +17,7 @@
 package misc
 
 import (
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -39,8 +40,7 @@ func config() *params.ChainConfig {
 	return config
 }
 
-// TestBlockGasLimits tests the gasLimit checks for blocks both across
-// the EIP-1559 boundary and post-1559 blocks
+// TestBlockGasLimits tests the gasLimit checks for blocks
 func TestBlockGasLimits(t *testing.T) {
 	initial := new(big.Int).SetUint64(params.InitialBaseFee)
 
@@ -79,7 +79,23 @@ func TestBlockGasLimits(t *testing.T) {
 			BaseFee:  initial,
 			Number:   big.NewInt(tc.pNum + 1),
 		}
-		err := VerifyEip1559Header(config(), parent, header)
+		// Verify that the gas limit remains within allowed bounds
+		parentGasLimit := parent.GasLimit()
+		var err error
+		if err := VerifyGaslimit(parentGasLimit, header.GasLimit()); err != nil {
+			t.Error(err)
+		}
+		// Verify the header is not malformed
+		if header.BaseFee() == nil {
+			err = fmt.Errorf("header is missing baseFee")
+		}
+		// Verify the baseFee is correct based on the parent header.
+		expectedBaseFee := CalcBaseFee(config(), parent)
+		if header.BaseFee().Cmp(expectedBaseFee) != 0 {
+			err = fmt.Errorf("invalid baseFee: have %s, want %s, parentBaseFee %s, parentGasUsed %d",
+				expectedBaseFee, header.BaseFee(), parent.BaseFee(), parent.GasUsed())
+		}
+
 		if tc.ok && err != nil {
 			t.Errorf("test %d: Expected valid header: %s", i, err)
 		}
@@ -89,7 +105,6 @@ func TestBlockGasLimits(t *testing.T) {
 	}
 }
 
-// TestCalcBaseFee assumes all blocks are 1559-blocks
 func TestCalcBaseFee(t *testing.T) {
 	tests := []struct {
 		parentBaseFee   int64

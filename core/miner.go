@@ -167,8 +167,7 @@ func (miner *Miner) SetEtherbase(addr common.Address) {
 	miner.worker.setEtherbase(addr)
 }
 
-// SetGasCeil sets the gaslimit to strive for when mining blocks post 1559.
-// For pre-1559 blocks, it sets the ceiling.
+// SetGasCeil sets the gaslimit to strive for when mining blocks.
 func (miner *Miner) SetGasCeil(ceil uint64) {
 	miner.worker.setGasCeil(ceil)
 }
