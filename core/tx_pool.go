@@ -1343,6 +1343,12 @@ func (pool *TxPool) promoteExecutables(accounts []common.InternalAddress) []*typ
 				promoted = append(promoted, tx)
 			}
 		}
+		if readies.Len() < list.Len() {
+			log.Debug("Failed to promote all queued transactions for account", "dropped", "account nonce", list.Len()-readies.Len(), pool.pendingNonces.get(addr))
+		}
+		if readies.Len() > len(promoted) {
+			log.Debug("Failed to promote all ready queued transactions for account", "dropped", "account nonce", readies.Len()-len(promoted), pool.pendingNonces.get(addr))
+		}
 		log.Debug("Promoted queued transactions", "count", len(promoted))
 		queuedGauge.Dec(int64(len(readies)))
 
