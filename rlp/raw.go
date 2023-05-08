@@ -60,7 +60,7 @@ func SplitString(b []byte) (content, rest []byte, err error) {
 		return nil, b, err
 	}
 	if k == List {
-		return nil, b, ErrExpectedString
+		return nil, b, ErrExpectedStringOrByte
 	}
 	return content, rest, nil
 }

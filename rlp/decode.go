@@ -36,13 +36,14 @@ import (
 var EOL = errors.New("rlp: end of list")
 
 var (
-	ErrExpectedString   = errors.New("rlp: expected String or Byte") // this seems wrong
-	ErrExpectedList     = errors.New("rlp: expected List")
-	ErrCanonInt         = errors.New("rlp: non-canonical integer format")
-	ErrCanonSize        = errors.New("rlp: non-canonical size information")
-	ErrElemTooLarge     = errors.New("rlp: element is larger than containing list")
-	ErrValueTooLarge    = errors.New("rlp: value size exceeds available input length")
-	ErrMoreThanOneValue = errors.New("rlp: input contains more than one value")
+	ErrExpectedStringOrByte = errors.New("rlp: expected String or Byte")
+	ErrExpectedString       = errors.New("rlp: expected String")
+	ErrExpectedList         = errors.New("rlp: expected List")
+	ErrCanonInt             = errors.New("rlp: non-canonical integer format")
+	ErrCanonSize            = errors.New("rlp: non-canonical size information")
+	ErrElemTooLarge         = errors.New("rlp: element is larger than containing list")
+	ErrValueTooLarge        = errors.New("rlp: value size exceeds available input length")
+	ErrMoreThanOneValue     = errors.New("rlp: input contains more than one value")
 
 	// internal errors
 	errNotInList     = errors.New("rlp: call of ListEnd outside of any list")
@@ -126,7 +127,7 @@ func wrapStreamError(err error, typ reflect.Type) error {
 		return &decodeError{msg: "non-canonical size information", typ: typ}
 	case ErrExpectedList:
 		return &decodeError{msg: "expected input list", typ: typ}
-	case ErrExpectedString:
+	case ErrExpectedStringOrByte:
 		return &decodeError{msg: "expected input string or byte", typ: typ}
 	case errUintOverflow:
 		return &decodeError{msg: "input string too long", typ: typ}
@@ -226,7 +227,7 @@ func decodeBigInt(s *Stream, val reflect.Value) error {
 	case err != nil:
 		return wrapStreamError(err, val.Type())
 	case kind == List:
-		return wrapStreamError(ErrExpectedString, val.Type())
+		return wrapStreamError(ErrExpectedStringOrByte, val.Type())
 	case kind == Byte:
 		buffer = s.uintbuf[:1]
 		buffer[0] = s.byteval
@@ -404,7 +405,7 @@ func decodeByteArray(s *Stream, val reflect.Value) error {
 			return wrapStreamError(ErrCanonSize, val.Type())
 		}
 	case List:
-		return wrapStreamError(ErrExpectedString, val.Type())
+		return wrapStreamError(ErrExpectedStringOrByte, val.Type())
 	}
 	return nil
 }
@@ -635,7 +636,7 @@ func NewListStream(r io.Reader, len uint64) *Stream {
 
 // Bytes reads an RLP string and returns its contents as a byte slice.
 // If the input does not contain an RLP string, the returned
-// error will be ErrExpectedString.
+// error will be ErrExpectedStringOrByte.
 func (s *Stream) Bytes() ([]byte, error) {
 	kind, size, err := s.Kind()
 	if err != nil {
@@ -655,7 +656,7 @@ func (s *Stream) Bytes() ([]byte, error) {
 		}
 		return b, nil
 	default:
-		return nil, ErrExpectedString
+		return nil, ErrExpectedStringOrByte
 	}
 }
 
@@ -686,7 +687,7 @@ func (s *Stream) Raw() ([]byte, error) {
 
 // Uint reads an RLP string of up to 8 bytes and returns its contents
 // as an unsigned integer. If the input does not contain an RLP string, the
-// returned error will be ErrExpectedString.
+// returned error will be ErrExpectedStringOrByte.
 func (s *Stream) Uint() (uint64, error) {
 	return s.uint(64)
 }
@@ -720,13 +721,13 @@ func (s *Stream) uint(maxbits int) (uint64, error) {
 			return v, nil
 		}
 	default:
-		return 0, ErrExpectedString
+		return 0, ErrExpectedStringOrByte
 	}
 }
 
 // Bool reads an RLP string of up to 1 byte and returns its contents
 // as a boolean. If the input does not contain an RLP string, the
-// returned error will be ErrExpectedString.
+// returned error will be ErrExpectedStringOrByte.
 func (s *Stream) Bool() (bool, error) {
 	num, err := s.uint(8)
 	if err != nil {
