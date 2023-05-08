@@ -565,9 +565,8 @@ func TestOpETX(t *testing.T) {
 func TestStateProcessorErrors(t *testing.T) {
 	var (
 		config = &params.ChainConfig{
-			ChainID:     big.NewInt(1),
-			LondonBlock: big.NewInt(0),
-			Blake3pow:   new(params.Blake3powConfig),
+			ChainID:   big.NewInt(1),
+			Blake3pow: new(params.Blake3powConfig),
 		}
 		signer     = types.LatestSigner(config)
 		testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")

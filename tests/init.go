@@ -18,23 +18,13 @@ package tests
 
 import (
 	"fmt"
-	"math/big"
 	"sort"
 
 	"github.com/dominant-strategies/go-quai/params"
 )
 
 // Forks table defines supported forks and their chain config.
-var Forks = map[string]*params.ChainConfig{
-	"London": {
-		ChainID:     big.NewInt(1),
-		LondonBlock: big.NewInt(0),
-	},
-	"Aleut": {
-		ChainID:     big.NewInt(1),
-		LondonBlock: big.NewInt(0),
-	},
-}
+var Forks = map[string]*params.ChainConfig{}
 
 // Returns the set of defined fork names
 func AvailableForks() []string {

@@ -90,7 +90,7 @@ func (b *testBackend) ChainConfig() *params.ChainConfig {
 	return b.chain.Config()
 }
 
-func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBackend {
+func newTestBackend(t *testing.T, pending bool) *testBackend {
 	var (
 		key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		addr   = crypto.PubkeyToAddress(key.PublicKey)
@@ -100,12 +100,9 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBacke
 		}
 		signer = types.LatestSigner(gspec.Config)
 	)
-	if londonBlock != nil {
-		gspec.Config.LondonBlock = londonBlock
-		signer = types.LatestSigner(gspec.Config)
-	} else {
-		gspec.Config.LondonBlock = nil
-	}
+
+	signer = types.LatestSigner(gspec.Config)
+
 	engine := blake3pow.NewFaker()
 	db := rawdb.NewMemoryDatabase()
 	genesis, _ := gspec.Commit(db)
@@ -115,28 +112,17 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBacke
 		b.SetCoinbase(common.Address{1})
 
 		var tx *types.Transaction
-		if londonBlock != nil && b.Number().Cmp(londonBlock) >= 0 {
-			txdata := &types.DynamicFeeTx{
-				ChainID:   gspec.Config.ChainID,
-				Nonce:     b.TxNonce(addr),
-				To:        &common.Address{},
-				Gas:       30000,
-				GasFeeCap: big.NewInt(100 * params.GWei),
-				GasTipCap: big.NewInt(int64(i+1) * params.GWei),
-				Data:      []byte{},
-			}
-			tx = types.NewTx(txdata)
-		} else {
-			txdata := &types.LegacyTx{
-				Nonce:    b.TxNonce(addr),
-				To:       &common.Address{},
-				Gas:      21000,
-				GasPrice: big.NewInt(int64(i+1) * params.GWei),
-				Value:    big.NewInt(100),
-				Data:     []byte{},
-			}
-			tx = types.NewTx(txdata)
+
+		txdata := &types.DynamicFeeTx{
+			ChainID:   gspec.Config.ChainID,
+			Nonce:     b.TxNonce(addr),
+			To:        &common.Address{},
+			Gas:       30000,
+			GasFeeCap: big.NewInt(100 * params.GWei),
+			GasTipCap: big.NewInt(int64(i+1) * params.GWei),
+			Data:      []byte{},
 		}
+		tx = types.NewTx(txdata)
 		tx, err := types.SignTx(tx, signer, key)
 		if err != nil {
 			t.Fatalf("failed to create tx: %v", err)
@@ -169,7 +155,7 @@ func TestSuggestTipCap(t *testing.T) {
 		Default:    big.NewInt(params.GWei),
 	}
 	var cases = []struct {
-		fork   *big.Int // London fork number
+		fork   *big.Int
 		expect *big.Int // Expected gasprice suggestion
 	}{
 		{nil, big.NewInt(params.GWei * int64(30))},

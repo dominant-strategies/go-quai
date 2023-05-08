@@ -36,7 +36,6 @@ var (
 	// ColosseumChainConfig is the chain parameters to run a node on the Colosseum network.
 	ColosseumChainConfig = &ChainConfig{
 		ChainID:     big.NewInt(9000),
-		LondonBlock: big.NewInt(0),
 		Blake3pow:   new(Blake3powConfig),
 		GenesisHash: ColosseumGenesisHash,
 	}
@@ -44,7 +43,6 @@ var (
 	// GardenChainConfig contains the chain parameters to run a node on the Garden test network.
 	GardenChainConfig = &ChainConfig{
 		ChainID:     big.NewInt(12000),
-		LondonBlock: big.NewInt(0),
 		Blake3pow:   new(Blake3powConfig),
 		GenesisHash: GardenGenesisHash,
 	}
@@ -52,7 +50,6 @@ var (
 	// OrchardChainConfig contains the chain parameters to run a node on the Orchard test network.
 	OrchardChainConfig = &ChainConfig{
 		ChainID:     big.NewInt(15000),
-		LondonBlock: big.NewInt(0),
 		Blake3pow:   new(Blake3powConfig),
 		GenesisHash: OrchardGenesisHash,
 	}
@@ -60,7 +57,6 @@ var (
 	// GalenaChainConfig contains the chain parameters to run a node on the Galena test network.
 	GalenaChainConfig = &ChainConfig{
 		ChainID:     big.NewInt(17000),
-		LondonBlock: big.NewInt(0),
 		Blake3pow:   new(Blake3powConfig),
 		GenesisHash: GalenaGenesisHash,
 	}
@@ -68,7 +64,6 @@ var (
 	// LocalChainConfig contains the chain parameters to run a node on the Local test network.
 	LocalChainConfig = &ChainConfig{
 		ChainID:     big.NewInt(1337),
-		LondonBlock: big.NewInt(0),
 		Blake3pow:   new(Blake3powConfig),
 		GenesisHash: LocalGenesisHash,
 	}
@@ -78,9 +73,9 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllBlake3powProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), new(Blake3powConfig), common.Hash{}}
+	AllBlake3powProtocolChanges = &ChainConfig{big.NewInt(1337), new(Blake3powConfig), common.Hash{}}
 
-	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), new(Blake3powConfig), common.Hash{}}
+	TestChainConfig = &ChainConfig{big.NewInt(1), new(Blake3powConfig), common.Hash{}}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
@@ -91,9 +86,6 @@ var (
 // set of configuration options.
 type ChainConfig struct {
 	ChainID *big.Int `json:"chainId"` // chainId identifies the current chain and is used for replay protection
-
-	LondonBlock *big.Int `json:"londonBlock,omitempty"` // London switch block (nil = no fork, 0 = already on london)
-
 	// Various consensus engines
 	Blake3pow   *Blake3powConfig `json:"blake3pow,omitempty"`
 	GenesisHash common.Hash
@@ -116,34 +108,10 @@ func (c *ChainConfig) String() string {
 	default:
 		engine = "unknown"
 	}
-	return fmt.Sprintf("{ChainID: %v London: %v, Engine: %v}",
+	return fmt.Sprintf("{ChainID: %v, Engine: %v}",
 		c.ChainID,
-		c.LondonBlock,
 		engine,
 	)
-}
-
-// IsLondon returns whether num is either equal to the London fork block or greater.
-func (c *ChainConfig) IsLondon(num *big.Int) bool {
-	return isForked(c.LondonBlock, num)
-}
-
-// CheckCompatible checks whether scheduled fork transitions have been imported
-// with a mismatching chain configuration.
-func (c *ChainConfig) CheckCompatible(newcfg *ChainConfig, height uint64) *ConfigCompatError {
-	bhead := new(big.Int).SetUint64(height)
-
-	// Iterate checkCompatible to find the lowest conflict.
-	var lasterr *ConfigCompatError
-	for {
-		err := c.checkCompatible(newcfg, bhead)
-		if err == nil || (lasterr != nil && err.RewindTo == lasterr.RewindTo) {
-			break
-		}
-		lasterr = err
-		bhead.SetUint64(err.RewindTo)
-	}
-	return lasterr
 }
 
 // CheckConfigForkOrder checks that we don't "skip" any forks, geth isn't pluggable enough
@@ -155,9 +123,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		optional bool // if true, the fork may be nil and next fork is still allowed
 	}
 	var lastFork fork
-	for _, cur := range []fork{
-		{name: "londonBlock", block: c.LondonBlock},
-	} {
+	for _, cur := range []fork{} {
 		if lastFork.name != "" {
 			// Next one must be higher number
 			if lastFork.block == nil && cur.block != nil {
@@ -175,13 +141,6 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		if !cur.optional || cur.block != nil {
 			lastFork = cur
 		}
-	}
-	return nil
-}
-
-func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, head *big.Int) *ConfigCompatError {
-	if isForkIncompatible(c.LondonBlock, newcfg.LondonBlock, head) {
-		return newCompatError("London fork block", c.LondonBlock, newcfg.LondonBlock)
 	}
 	return nil
 }
@@ -247,8 +206,7 @@ func (err *ConfigCompatError) Error() string {
 // Rules is a one time interface meaning that it shouldn't be used in between transition
 // phases.
 type Rules struct {
-	ChainID  *big.Int
-	IsLondon bool
+	ChainID *big.Int
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -258,7 +216,6 @@ func (c *ChainConfig) Rules(num *big.Int) Rules {
 		chainID = new(big.Int)
 	}
 	return Rules{
-		ChainID:  new(big.Int).Set(chainID),
-		IsLondon: c.IsLondon(num),
+		ChainID: new(big.Int).Set(chainID),
 	}
 }

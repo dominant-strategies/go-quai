@@ -61,7 +61,6 @@ var (
 		utils.ExternalSignerFlag,
 		utils.NoUSBFlag,
 		utils.USBFlag,
-		utils.OverrideLondonFlag,
 		utils.TxPoolLocalsFlag,
 		utils.TxPoolNoLocalsFlag,
 		utils.TxPoolJournalFlag,

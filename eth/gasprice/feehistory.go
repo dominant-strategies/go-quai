@@ -85,11 +85,9 @@ func (oracle *Oracle) processBlock(bf *blockFees, percentiles []float64) {
 	if bf.baseFee = bf.header.BaseFee(); bf.baseFee == nil {
 		bf.baseFee = new(big.Int)
 	}
-	if chainconfig.IsLondon(big.NewInt(int64(bf.blockNumber + 1))) {
-		bf.nextBaseFee = misc.CalcBaseFee(chainconfig, bf.header)
-	} else {
-		bf.nextBaseFee = new(big.Int)
-	}
+
+	bf.nextBaseFee = misc.CalcBaseFee(chainconfig, bf.header)
+
 	bf.gasUsedRatio = float64(bf.header.GasUsed()) / float64(bf.header.GasLimit())
 	if len(percentiles) == 0 {
 		// rewards were not requested, return null

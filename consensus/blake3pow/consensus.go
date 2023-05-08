@@ -297,16 +297,8 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 		if header.GasUsed() > header.GasLimit() {
 			return fmt.Errorf("invalid gasUsed: have %d, gasLimit %d", header.GasUsed(), header.GasLimit())
 		}
-		// Verify the block's gas usage and (if applicable) verify the base fee.
-		if !chain.Config().IsLondon(header.Number()) {
-			// Verify BaseFee not present before EIP-1559 fork.
-			if header.BaseFee() != nil {
-				return fmt.Errorf("invalid baseFee before fork: have %d, expected 'nil'", header.BaseFee())
-			}
-			if err := misc.VerifyGaslimit(parent.GasLimit(), header.GasLimit()); err != nil {
-				return err
-			}
-		} else if err := misc.VerifyEip1559Header(chain.Config(), parent, header); err != nil {
+		// Verify the block's gas usage and verify the base fee.
+		if err := misc.VerifyEip1559Header(chain.Config(), parent, header); err != nil {
 			// Verify the header's EIP-1559 attributes.
 			return err
 		}
@@ -437,7 +429,7 @@ func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, header *
 	if common.NodeLocation.Context() == common.ZONE_CTX && header.ParentHash() == chain.Config().GenesisHash {
 		alloc := core.ReadGenesisAlloc("genallocs/gen_alloc_" + common.NodeLocation.Name() + ".json")
 		log.Info("Allocating genesis accounts", "num", len(alloc))
-		
+
 		for addressString, account := range alloc {
 			addr := common.HexToAddress(addressString)
 			internal, err := addr.InternalAddress()
@@ -450,7 +442,7 @@ func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, header *
 			for key, value := range account.Storage {
 				state.SetState(internal, key, value)
 			}
-		}	
+		}
 	}
 
 	header.SetRoot(state.IntermediateRoot(true))

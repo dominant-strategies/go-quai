@@ -3,7 +3,6 @@
 package ethconfig
 
 import (
-	"math/big"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -44,7 +43,6 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		DocRoot                 string `toml:"-"`
 		RPCGasCap               uint64
 		RPCTxFeeCap             float64
-		OverrideLondon          *big.Int                       `toml:",omitempty"`
 	}
 	var enc Config
 	enc.Genesis = c.Genesis
@@ -75,7 +73,6 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.DocRoot = c.DocRoot
 	enc.RPCGasCap = c.RPCGasCap
 	enc.RPCTxFeeCap = c.RPCTxFeeCap
-	enc.OverrideLondon = c.OverrideLondon
 	return &enc, nil
 }
 
@@ -119,7 +116,6 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		DocRoot                 *string `toml:"-"`
 		RPCGasCap               *uint64
 		RPCTxFeeCap             *float64
-		OverrideLondon          *big.Int                       `toml:",omitempty"`
 	}
 	var dec Config
 	if err := unmarshal(&dec); err != nil {
@@ -208,9 +204,6 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.RPCTxFeeCap != nil {
 		c.RPCTxFeeCap = *dec.RPCTxFeeCap
-	}
-	if dec.OverrideLondon != nil {
-		c.OverrideLondon = dec.OverrideLondon
 	}
 	return nil
 }

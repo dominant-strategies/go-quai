@@ -244,28 +244,26 @@ func (st *StateTransition) preCheck() error {
 		return fmt.Errorf("%w: address %v, codehash: %s", ErrSenderNoEOA,
 			st.msg.From().Hex(), codeHash)
 	}
-	// Make sure that transaction gasFeeCap is greater than the baseFee (post london)
-	if st.evm.ChainConfig().IsLondon(st.evm.Context.BlockNumber) {
-		// Skip the checks if gas fields are zero and baseFee was explicitly disabled (eth_call)
-		if !st.evm.Config.NoBaseFee || st.gasFeeCap.BitLen() > 0 || st.gasTipCap.BitLen() > 0 {
-			if l := st.gasFeeCap.BitLen(); l > 256 {
-				return fmt.Errorf("%w: address %v, maxFeePerGas bit length: %d", ErrFeeCapVeryHigh,
-					st.msg.From().Hex(), l)
-			}
-			if l := st.gasTipCap.BitLen(); l > 256 {
-				return fmt.Errorf("%w: address %v, maxPriorityFeePerGas bit length: %d", ErrTipVeryHigh,
-					st.msg.From().Hex(), l)
-			}
-			if st.gasFeeCap.Cmp(st.gasTipCap) < 0 {
-				return fmt.Errorf("%w: address %v, maxPriorityFeePerGas: %s, maxFeePerGas: %s", ErrTipAboveFeeCap,
-					st.msg.From().Hex(), st.gasTipCap, st.gasFeeCap)
-			}
-			// This will panic if baseFee is nil, but basefee presence is verified
-			// as part of header validation.
-			if st.gasFeeCap.Cmp(st.evm.Context.BaseFee) < 0 {
-				return fmt.Errorf("%w: address %v, maxFeePerGas: %s baseFee: %s", ErrFeeCapTooLow,
-					st.msg.From().Hex(), st.gasFeeCap, st.evm.Context.BaseFee)
-			}
+	// Make sure that transaction gasFeeCap is greater than the baseFee
+	// Skip the checks if gas fields are zero and baseFee was explicitly disabled (eth_call)
+	if !st.evm.Config.NoBaseFee || st.gasFeeCap.BitLen() > 0 || st.gasTipCap.BitLen() > 0 {
+		if l := st.gasFeeCap.BitLen(); l > 256 {
+			return fmt.Errorf("%w: address %v, maxFeePerGas bit length: %d", ErrFeeCapVeryHigh,
+				st.msg.From().Hex(), l)
+		}
+		if l := st.gasTipCap.BitLen(); l > 256 {
+			return fmt.Errorf("%w: address %v, maxPriorityFeePerGas bit length: %d", ErrTipVeryHigh,
+				st.msg.From().Hex(), l)
+		}
+		if st.gasFeeCap.Cmp(st.gasTipCap) < 0 {
+			return fmt.Errorf("%w: address %v, maxPriorityFeePerGas: %s, maxFeePerGas: %s", ErrTipAboveFeeCap,
+				st.msg.From().Hex(), st.gasTipCap, st.gasFeeCap)
+		}
+		// This will panic if baseFee is nil, but basefee presence is verified
+		// as part of header validation.
+		if st.gasFeeCap.Cmp(st.evm.Context.BaseFee) < 0 {
+			return fmt.Errorf("%w: address %v, maxFeePerGas: %s baseFee: %s", ErrFeeCapTooLow,
+				st.msg.From().Hex(), st.gasFeeCap, st.evm.Context.BaseFee)
 		}
 	}
 	return st.buyGas()
@@ -301,7 +299,6 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}
 	msg := st.msg
 	sender := vm.AccountRef(msg.From())
-	london := st.evm.ChainConfig().IsLondon(st.evm.Context.BlockNumber)
 	contractCreation := msg.To() == nil
 
 	// Check clauses 4-5, subtract intrinsic gas if everything is correct
@@ -350,17 +347,10 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	st.evm.ETXCache = make([]*types.Transaction, 0)
 	st.evm.ETXCacheLock.Unlock()
 
-	if !london {
-		// Before EIP-3529: refunds were capped to gasUsed / 2
-		st.refundGas(params.RefundQuotient)
-	} else {
-		// After EIP-3529: refunds are capped to gasUsed / 5
-		st.refundGas(params.RefundQuotientEIP3529)
-	}
-	effectiveTip := st.gasPrice
-	if london {
-		effectiveTip = cmath.BigMin(st.gasTipCap, new(big.Int).Sub(st.gasFeeCap, st.evm.Context.BaseFee))
-	}
+	// After EIP-3529: refunds are capped to gasUsed / 5
+	st.refundGas(params.RefundQuotientEIP3529)
+
+	effectiveTip := cmath.BigMin(st.gasTipCap, new(big.Int).Sub(st.gasFeeCap, st.evm.Context.BaseFee))
 	coinbase, err := st.evm.Context.Coinbase.InternalAddress()
 	if err != nil {
 		return nil, err

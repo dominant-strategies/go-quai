@@ -1321,16 +1321,13 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 		"type":              hexutil.Uint(tx.Type()),
 	}
 	// Assign the effective gas price paid
-	if !s.b.ChainConfig().IsLondon(bigblock) {
-		fields["effectiveGasPrice"] = hexutil.Uint64(tx.GasPrice().Uint64())
-	} else {
-		header, err := s.b.HeaderByHash(ctx, blockHash)
-		if err != nil {
-			return nil, err
-		}
-		gasPrice := new(big.Int).Add(header.BaseFee(), tx.EffectiveGasTipValue(header.BaseFee()))
-		fields["effectiveGasPrice"] = hexutil.Uint64(gasPrice.Uint64())
+	header, err := s.b.HeaderByHash(ctx, blockHash)
+	if err != nil {
+		return nil, err
 	}
+	gasPrice := new(big.Int).Add(header.BaseFee(), tx.EffectiveGasTipValue(header.BaseFee()))
+	fields["effectiveGasPrice"] = hexutil.Uint64(gasPrice.Uint64())
+
 	// Assign receipt status or post state.
 	if len(receipt.PostState) > 0 {
 		fields["root"] = hexutil.Bytes(receipt.PostState)

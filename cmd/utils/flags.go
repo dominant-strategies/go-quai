@@ -234,10 +234,6 @@ var (
 		Usage: "Megabytes of memory allocated to bloom-filter for pruning",
 		Value: 2048,
 	}
-	OverrideLondonFlag = cli.Uint64Flag{
-		Name:  "override.london",
-		Usage: "Manually specify London fork-block, overriding the bundled setting",
-	}
 	// Transaction pool settings
 	TxPoolLocalsFlag = cli.StringFlag{
 		Name:  "txpool.locals",
