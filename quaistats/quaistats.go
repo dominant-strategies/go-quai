@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	lru "github.com/hashicorp/golang-lru"
+	sync "github.com/sasha-s/go-deadlock"
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/mem"
 	"math/big"
@@ -30,7 +31,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	sync "github.com/sasha-s/go-deadlock"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -81,7 +81,6 @@ type backend interface {
 // reporting to quaistats
 type fullNodeBackend interface {
 	backend
-	Miner() *core.Miner
 	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
 	CurrentBlock() *types.Block
 	SuggestGasTipCap(ctx context.Context) (*big.Int, error)
@@ -895,9 +894,6 @@ func (s *Service) reportStats(conn *connWrapper) error {
 	fullBackend, ok := s.backend.(fullNodeBackend)
 	header := s.backend.CurrentHeader()
 	if ok {
-		mining = fullBackend.Miner().Mining()
-		hashrate = int(fullBackend.Miner().Hashrate())
-
 		sync := fullBackend.Downloader().Progress()
 		syncing = fullBackend.CurrentHeader().Number().Uint64() >= sync.HighestBlock
 
