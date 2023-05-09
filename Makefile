@@ -82,12 +82,12 @@ ifeq ($(ZONE),0)
 endif
 
 # Build specific prime, region, and zone commands for run-slice
-PRIME_CMD = $(BASE_CMD) --miner.etherbase $(PRIME_COINBASE) --port $(PRIME_PORT_TCP)
+PRIME_CMD = $(BASE_CMD) --port $(PRIME_PORT_TCP)
 PRIME_CMD += --http.port $(PRIME_PORT_HTTP)
 PRIME_CMD += --ws.port $(PRIME_PORT_WS)
 PRIME_CMD += --sub.urls "$(PRIME_SUBS)"
 PRIME_LOG_FILE = nodelogs/prime.log
-REGION_CMD = $(BASE_CMD) --region $(REGION) --miner.etherbase $(REGION_$(REGION)_COINBASE) --port $(REGION_$(REGION)_PORT_TCP)
+REGION_CMD = $(BASE_CMD) --region $(REGION) --port $(REGION_$(REGION)_PORT_TCP)
 REGION_CMD += --http.port $(REGION_$(REGION)_PORT_HTTP)
 REGION_CMD += --ws.port $(REGION_$(REGION)_PORT_WS)
 REGION_CMD += --dom.url ws://127.0.0.1:$(PRIME_PORT_WS)
