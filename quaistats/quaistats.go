@@ -63,7 +63,7 @@ const (
 	c_alpha               = 8
 	c_tpsLookupCacheLimit = 100
 	c_gasLookupCacheLimit = 100
-	c_uintMaxValue        = ^uint64(0) // this is the maximum value of uint64
+	c_statsErrorValue     = int64(-1)
 )
 
 // backend encompasses the bare-minimum functionality needed for quaistats reporting
@@ -589,19 +589,19 @@ type blockStats struct {
 	Uncles        uncleStats     `json:"uncles"`
 	Chain         string         `json:"chain"`
 	ChainID       uint64         `json:"chainId"`
-	Tps           uint64         `json:"tps"`
+	Tps           int64          `json:"tps"`
 	AppendTime    time.Duration  `json:"appendTime"`
-	AvgGasPerSec  uint64         `json:"avgGasPerSec"`
+	AvgGasPerSec  int64          `json:"avgGasPerSec"`
 }
 
 type blockTpsCacheDto struct {
-	Tps  uint64 `json:"tps"`
-	Time uint64 `json:"time"`
+	Tps  int64 `json:"tps"`
+	Time int64 `json:"time"`
 }
 
 type blockAvgGasPerSecCacheDto struct {
-	AvgGasPerSec uint64 `json:"avgGasPerSec"`
-	Time         uint64 `json:"time"`
+	AvgGasPerSec int64 `json:"avgGasPerSec"`
+	Time         int64 `json:"time"`
 }
 
 // txStats is the information to report about individual transactions.
@@ -620,8 +620,8 @@ func (s uncleStats) MarshalJSON() ([]byte, error) {
 	return []byte("[]"), nil
 }
 
-func (s *Service) computeAvgGasPerSec(block *types.Block) uint64 {
-	var parentTime, parentGasPerSec uint64
+func (s *Service) computeAvgGasPerSec(block *types.Block) int64 {
+	var parentTime, parentGasPerSec int64
 	if parentCached, ok := s.gasLookupCache.Get(block.ParentHash()); ok {
 		parentTime = parentCached.(blockAvgGasPerSecCacheDto).Time
 		parentGasPerSec = parentCached.(blockAvgGasPerSecCacheDto).AvgGasPerSec
@@ -632,22 +632,22 @@ func (s *Service) computeAvgGasPerSec(block *types.Block) uint64 {
 			parent, err := fullBackend.BlockByNumber(context.Background(), rpc.BlockNumber(block.NumberU64()-1))
 			if err != nil {
 				log.Error("error getting parent block %s: %s", block.ParentHash().String(), err.Error())
-				return c_uintMaxValue
+				return c_statsErrorValue
 			}
-			parentTime = parent.Time()
-			parentGasPerSec = c_uintMaxValue
+			parentTime = int64(parent.Time())
+			parentGasPerSec = c_statsErrorValue
 		} else {
 			log.Error("computeGas: not running fullnode, cannot get parent block")
-			return c_uintMaxValue
+			return c_statsErrorValue
 		}
 	}
-	instantGas := block.GasUsed()
-	if dt := block.Time() - parentTime; dt != 0 { // this is a hack to avoid dividing by 0
+	instantGas := int64(block.GasUsed())
+	if dt := int64(block.Time()) - parentTime; dt != 0 { // this is a hack to avoid dividing by 0
 		instantGas /= dt
 	}
 
-	var blockGasPerSec uint64
-	if parentGasPerSec == c_uintMaxValue {
+	var blockGasPerSec int64
+	if parentGasPerSec == c_statsErrorValue {
 		blockGasPerSec = instantGas
 	} else {
 		blockGasPerSec = ((c_alpha-1)*parentGasPerSec + instantGas) / c_alpha
@@ -655,14 +655,14 @@ func (s *Service) computeAvgGasPerSec(block *types.Block) uint64 {
 
 	s.gasLookupCache.Add(block.Hash(), blockAvgGasPerSecCacheDto{
 		AvgGasPerSec: blockGasPerSec,
-		Time:         block.Time(),
+		Time:         int64(block.Time()),
 	})
 
 	return blockGasPerSec
 }
 
-func (s *Service) computeTps(block *types.Block) uint64 {
-	var parentTime, parentTps uint64
+func (s *Service) computeTps(block *types.Block) int64 {
+	var parentTime, parentTps int64
 
 	if parentCached, ok := s.tpsLookupCache.Get(block.ParentHash()); ok {
 		parentTime = parentCached.(blockTpsCacheDto).Time
@@ -674,23 +674,23 @@ func (s *Service) computeTps(block *types.Block) uint64 {
 			parent, err := fullBackend.BlockByNumber(context.Background(), rpc.BlockNumber(block.NumberU64()-1))
 			if err != nil {
 				log.Error("error getting parent block %s: %s", block.ParentHash().String(), err.Error())
-				return c_uintMaxValue
+				return c_statsErrorValue
 			}
-			parentTime = parent.Time()
-			parentTps = c_uintMaxValue
+			parentTime = int64(parent.Time())
+			parentTps = c_statsErrorValue
 		} else {
 			log.Error("not running fullnode, cannot get parent block")
-			return c_uintMaxValue
+			return c_statsErrorValue
 		}
 	}
 
-	instantTps := uint64(len(block.Transactions()))
-	if dt := block.Time() - parentTime; dt != 0 { // this is a hack to avoid dividing by 0
+	instantTps := int64(len(block.Transactions()))
+	if dt := int64(block.Time()) - parentTime; dt != 0 { // this is a hack to avoid dividing by 0
 		instantTps /= dt
 	}
 
-	var blockTps uint64
-	if parentTps == c_uintMaxValue {
+	var blockTps int64
+	if parentTps == c_statsErrorValue {
 		blockTps = instantTps
 	} else {
 		blockTps = ((c_alpha-1)*parentTps + instantTps) / c_alpha
@@ -698,7 +698,7 @@ func (s *Service) computeTps(block *types.Block) uint64 {
 
 	s.tpsLookupCache.Add(block.Hash(), blockTpsCacheDto{
 		Tps:  blockTps,
-		Time: block.Time(),
+		Time: int64(block.Time()),
 	})
 
 	return blockTps
@@ -873,9 +873,9 @@ type nodeStats struct {
 	CPUPercentUsage  float32 `json:"cpuPercentUsage"`
 	CPUUsage         float32 `json:"cpuUsage"`
 	RAMPercentUsage  float32 `json:"ramPercentUsage"`
-	RAMUsage         uint64  `json:"ramUsage"` // in bytes
+	RAMUsage         int64   `json:"ramUsage"` // in bytes
 	SwapPercentUsage float32 `json:"swapPercentUsage"`
-	SwapUsage        uint64  `json:"swapUsage"`
+	SwapUsage        int64   `json:"swapUsage"`
 	DiskUsage        int64   `json:"diskUsage"` // in bytes
 }
 
@@ -909,36 +909,52 @@ func (s *Service) reportStats(conn *connWrapper) error {
 		syncing = header.Number().Uint64() >= sync.HighestBlock
 	}
 
-	cpuPercent, err := cpu.Percent(0, false)
-	if err != nil {
+	var cpuPercentUsed float32
+	if cpuStat, err := cpu.Percent(0, false); err == nil {
+		cpuPercentUsed = float32(cpuStat[0])
+	} else {
 		log.Warn("Error getting CPU percent usage:", err)
-		cpuPercent = []float64{-1.0}
+		cpuPercentUsed = float32(c_statsErrorValue)
 	}
-	cpuStat, err := cpu.Times(false)
-	if err != nil {
+
+	var cpuUsed float32
+	if cpuStat, err := cpu.Times(false); err == nil {
+		cpuUsed = float32(cpuStat[0].Total())
+
+	} else {
 		log.Warn("Error getting CPU times:", err)
-		cpuStat = []cpu.TimesStat{{}}
+		cpuUsed = float32(c_statsErrorValue)
 	}
 
+	var ramUsed int64
+	var ramPercentUsed float32
 	// Get RAM usage
-	vmStat, err := mem.VirtualMemory()
-	if err != nil {
+	if vmStat, err := mem.VirtualMemory(); err == nil {
+		ramUsed = int64(vmStat.Used)
+		ramPercentUsed = float32(vmStat.UsedPercent)
+	} else {
 		log.Warn("Error getting RAM usage:", err)
-		vmStat = &mem.VirtualMemoryStat{UsedPercent: -1.0}
+		ramUsed = c_statsErrorValue
+		ramPercentUsed = float32(c_statsErrorValue)
 	}
 
+	var swapUsed int64
+	var swapPercentUsed float32
 	// Get swap usage
-	swapStat, err := mem.SwapMemory()
-	if err != nil {
+	if swapStat, err := mem.SwapMemory(); err == nil {
+		swapUsed = int64(swapStat.Used)
+		swapPercentUsed = float32(swapStat.UsedPercent)
+	} else {
 		log.Warn("Error getting swap usage:", err)
-		swapStat = &mem.SwapMemoryStat{UsedPercent: -1.0}
+		swapUsed = c_statsErrorValue
+		swapPercentUsed = float32(c_statsErrorValue)
 	}
 
 	// Get disk usage
 	diskUsage, err := dirSize(s.instanceDir)
 	if err != nil {
 		log.Warn("Error calculating directory sizes:", err)
-		diskUsage = -1
+		diskUsage = c_statsErrorValue
 	}
 
 	// Assemble the node stats and send it to the server
@@ -959,12 +975,12 @@ func (s *Service) reportStats(conn *connWrapper) error {
 			ChainID:          s.chainID.Uint64(),
 			LatestHeight:     header.Number().Uint64(),
 			LatestHash:       header.Hash().String(),
-			CPUPercentUsage:  float32(cpuPercent[0]),
-			CPUUsage:         float32(cpuStat[0].Total()),
-			RAMPercentUsage:  float32(vmStat.UsedPercent),
-			RAMUsage:         vmStat.Used, // in bytes
-			SwapPercentUsage: float32(swapStat.UsedPercent),
-			SwapUsage:        swapStat.Used,
+			CPUPercentUsage:  cpuPercentUsed,
+			CPUUsage:         cpuUsed,
+			RAMPercentUsage:  ramPercentUsed,
+			RAMUsage:         ramUsed, // in bytes
+			SwapPercentUsage: swapPercentUsed,
+			SwapUsage:        swapUsed,
 			DiskUsage:        diskUsage, // in bytes
 		},
 	}
