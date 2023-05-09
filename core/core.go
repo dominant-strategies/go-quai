@@ -146,7 +146,7 @@ func (c *Core) procAppendQueue() {
 }
 
 func (c *Core) serviceFutureBlock(block *types.Block) {
-	parentBlock := c.GetBlockByHash(block.ParentHash())
+	parentBlock := c.GetBlock(block.ParentHash(), block.NumberU64()-1)
 	if parentBlock != nil {
 		c.InsertChain([]*types.Block{block})
 	} else {
