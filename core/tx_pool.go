@@ -19,10 +19,10 @@ package core
 import (
 	"errors"
 	"fmt"
+	sync "github.com/sasha-s/go-deadlock"
 	"math"
 	"math/big"
 	"sort"
-	sync "github.com/sasha-s/go-deadlock"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -38,7 +38,7 @@ import (
 
 const (
 	// chainHeadChanSize is the size of channel listening to ChainHeadEvent.
-	chainHeadChanSize = 10
+	chainHeadChanSize = 100
 
 	// txSlotSize is used to calculate how many data slots a single transaction
 	// takes up based on its size. The slots are used as DoS protection, ensuring
@@ -383,6 +383,11 @@ func (pool *TxPool) loop() {
 					log.Warn("Failed to rotate local tx journal", "err", err)
 				}
 				pool.mu.Unlock()
+			}
+
+		default:
+			if len(pool.chainHeadCh) == chainHeadChanSize {
+				log.Warn("Head feed is over flowing in Tx Pool Loop")
 			}
 		}
 	}

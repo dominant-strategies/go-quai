@@ -233,7 +233,7 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent) {
 	// Start a goroutine that exhausts the subscriptions to avoid events piling up
 	var (
 		quitCh = make(chan struct{})
-		headCh = make(chan *types.Block, 1)
+		headCh = make(chan *types.Block, 100)
 	)
 	go func() {
 	HandleLoop:
@@ -244,6 +244,7 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent) {
 				select {
 				case headCh <- head.Block:
 				default:
+					log.Warn("Chain Head Channel is overflowing in quaistats Loop")
 				}
 			case <-s.headSub.Err():
 				break HandleLoop
