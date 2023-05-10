@@ -32,9 +32,6 @@ const (
 	// The number is referenced from the size of tx pool.
 	txChanSize = 4096
 
-	// chainSideChanSize is the size of channel listening to ChainSideEvent.
-	chainSideChanSize = 10
-
 	// resubmitAdjustChanSize is the size of resubmitting interval adjustment channel.
 	resubmitAdjustChanSize = 10
 
@@ -180,11 +177,9 @@ type worker struct {
 	pendingHeaderFeed event.Feed
 
 	// Subscriptions
-	txsCh        chan NewTxsEvent
-	txsSub       event.Subscription
-	chainHeadCh  chan ChainHeadEvent
-	chainSideCh  chan ChainSideEvent
-	chainSideSub event.Subscription
+	txsCh       chan NewTxsEvent
+	txsSub      event.Subscription
+	chainHeadCh chan ChainHeadEvent
 
 	// Channels
 	taskCh             chan *task
@@ -250,7 +245,6 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 		pendingTasks:       make(map[common.Hash]*task),
 		txsCh:              make(chan NewTxsEvent, txChanSize),
 		chainHeadCh:        make(chan ChainHeadEvent, chainHeadChanSize),
-		chainSideCh:        make(chan ChainSideEvent, chainSideChanSize),
 		taskCh:             make(chan *task),
 		resultCh:           make(chan *types.Block, resultQueueSize),
 		exitCh:             make(chan struct{}),
@@ -265,8 +259,6 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 	if nodeCtx == common.ZONE_CTX {
 		// Subscribe NewTxsEvent for tx pool
 		worker.txsSub = txPool.SubscribeNewTxsEvent(worker.txsCh)
-		// Subscribe events for blockchain
-		worker.chainSideSub = headerchain.SubscribeChainSideEvent(worker.chainSideCh)
 	}
 
 	// Sanitize recommit interval if the user-specified one is too short.
@@ -545,7 +537,6 @@ func (w *worker) mainLoop() {
 	defer w.wg.Done()
 	if nodeCtx == common.ZONE_CTX {
 		defer w.txsSub.Unsubscribe()
-		defer w.chainSideSub.Unsubscribe()
 	}
 	defer func() {
 		if w.current != nil {
@@ -562,38 +553,6 @@ func (w *worker) mainLoop() {
 
 	for {
 		select {
-		case ev := <-w.chainSideCh:
-			// uncle processing is only done for zone
-			nodeCtx := common.NodeLocation.Context()
-			if nodeCtx == common.ZONE_CTX {
-				w.uncleMu.Lock()
-				// Short circuit for duplicate side blocks
-				if _, exist := w.localUncles[ev.Block.Hash()]; exist {
-					w.uncleMu.Unlock()
-					continue
-				}
-				if _, exist := w.remoteUncles[ev.Block.Hash()]; exist {
-					w.uncleMu.Unlock()
-					continue
-				}
-				// Add side block to possible uncle block set depending on the author.
-				if w.isLocalBlock != nil && w.isLocalBlock(ev.Block.Header()) {
-					w.localUncles[ev.Block.Hash()] = ev.Block
-				} else {
-					w.remoteUncles[ev.Block.Hash()] = ev.Block
-				}
-				// If our sealing block contains less than 2 uncle blocks,
-				// add the new uncle block if valid and regenerate a new
-				// sealing block for higher profit.
-				if w.isRunning() && w.current != nil && len(w.current.uncles) < 2 {
-					start := time.Now()
-					if err := w.commitUncle(w.current, ev.Block.Header()); err == nil {
-						w.commit(w.current.copy(), nil, true, start)
-					}
-				}
-				w.uncleMu.Unlock()
-			}
-
 		case <-cleanTicker.C:
 			chainHead := w.hc.CurrentBlock()
 			w.uncleMu.RLock()
@@ -648,8 +607,6 @@ func (w *worker) eventExitLoop() {
 		case <-w.exitCh:
 			return
 		case <-w.txsSub.Err():
-			return
-		case <-w.chainSideSub.Err():
 			return
 		}
 	}
