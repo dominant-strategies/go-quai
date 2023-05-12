@@ -73,7 +73,7 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 			return idx, err
 		}
 		if order == nodeCtx {
-			newPendingEtxs, err := c.sl.Append(block.Header(), types.EmptyHeader(), common.Hash{}, false, nil)
+			newPendingEtxs, _, err := c.sl.Append(block.Header(), types.EmptyHeader(), common.Hash{}, false, nil)
 			if err == nil {
 				// If we have a dom, send the dom any pending ETXs which will become
 				// referencable by this block. When this block is referenced in the dom's
@@ -243,8 +243,8 @@ func (c *Core) WriteBlock(block *types.Block) {
 	}
 }
 
-func (c *Core) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, error) {
-	newPendingEtxs, err := c.sl.Append(header, domPendingHeader, domTerminus, domOrigin, newInboundEtxs)
+func (c *Core) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, bool, error) {
+	newPendingEtxs, subReorg, err := c.sl.Append(header, domPendingHeader, domTerminus, domOrigin, newInboundEtxs)
 	if err != nil {
 		if err.Error() == ErrBodyNotFound.Error() {
 			c.sl.missingBodyFeed.Send(header)
@@ -253,7 +253,7 @@ func (c *Core) Append(header *types.Header, domPendingHeader *types.Header, domT
 			c.sl.missingParentFeed.Send(header.ParentHash())
 		}
 	}
-	return newPendingEtxs, err
+	return newPendingEtxs, subReorg, err
 }
 
 // ConstructLocalBlock takes a header and construct the Block locally

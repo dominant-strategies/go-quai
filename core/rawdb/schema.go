@@ -92,7 +92,6 @@ var (
 	pbBodyPrefix        = []byte("pb")    // pbBodyPrefix + hash -> *types.Body
 	pbBodyHashPrefix    = []byte("pbKey") // pbBodyPrefix -> []common.Hash
 	phTerminiPrefix     = []byte("pht")   // phTerminiPrefix + hash -> []common.Hash
-	phEntropyPrefix     = []byte("pt")    // phEntropyPrefix + hash -> *big.Int
 	phBodyPrefix        = []byte("pc")    // phBodyPrefix + hash -> []common.Hash + Td
 	terminiPrefix       = []byte("tk")    //terminiPrefix + hash -> []common.Hash
 
@@ -202,11 +201,6 @@ func phBodyTerminiKey(hash common.Hash) []byte {
 // headerTDKey = headerPrefix + num (uint64 big endian) + hash + headerTDSuffix
 func headerTDKey(number uint64, hash common.Hash) []byte {
 	return append(headerKey(number, hash), headerTDSuffix...)
-}
-
-// phCacheEntropyKey = phEntropyPrefix + hash
-func phCacheEntropyKey(hash common.Hash) []byte {
-	return append(phEntropyPrefix, hash.Bytes()...)
 }
 
 // headerHashKey = headerPrefix + num (uint64 big endian) + headerHashSuffix

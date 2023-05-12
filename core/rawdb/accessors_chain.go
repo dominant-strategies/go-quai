@@ -616,31 +616,6 @@ func DeletePhCacheTermini(db ethdb.KeyValueWriter, hash common.Hash) {
 	}
 }
 
-// ReadPhCacheEntropy retrieves a ph cache total entropy corresponding to the hash.
-func ReadPhCacheEntropy(db ethdb.Reader, hash common.Hash) *big.Int {
-	data, _ := db.Get(phCacheEntropyKey(hash))
-	if len(data) == 0 {
-		return nil
-	}
-	s := new(big.Int)
-	if err := rlp.Decode(bytes.NewReader(data), s); err != nil {
-		log.Error("Invalid ph cache entropy RLP", "hash", hash, "err", err)
-		return nil
-	}
-	return s
-}
-
-// WritePhCacheEntropy stores the total entropy of a ph cache key into the database.
-func WritePhCacheEntropy(db ethdb.KeyValueWriter, hash common.Hash, s *big.Int) {
-	data, err := rlp.EncodeToBytes(s)
-	if err != nil {
-		log.Crit("Failed to RLP encode ph cache entropy", "err", err)
-	}
-	if err := db.Put(phCacheEntropyKey(hash), data); err != nil {
-		log.Crit("Failed to store ph cache entropy", "err", err)
-	}
-}
-
 // ReadPhCache retreive's the heads hashes of the blockchain.
 func ReadPhCache(db ethdb.Reader) map[common.Hash]types.PendingHeader {
 	data, _ := db.Get(phCacheKey)
@@ -658,8 +633,7 @@ func ReadPhCache(db ethdb.Reader) map[common.Hash]types.PendingHeader {
 	for _, hash := range hashes {
 		header := ReadPendingHeader(db, hash)
 		termini := ReadPhCacheTermini(db, hash)
-		entropy := ReadPhCacheEntropy(db, hash)
-		pendingHeader := types.PendingHeader{Header: header, Termini: termini, Entropy: entropy}
+		pendingHeader := types.PendingHeader{Header: header, Termini: termini}
 		phCache[hash] = pendingHeader
 	}
 	return phCache
@@ -672,7 +646,6 @@ func WritePhCache(db ethdb.KeyValueWriter, phCache map[common.Hash]types.Pending
 		hashes = append(hashes, hash)
 		WritePendingHeader(db, hash, pendingHeader.Header)
 		WritePhCacheTermini(db, hash, pendingHeader.Termini)
-		WritePhCacheEntropy(db, hash, pendingHeader.Entropy)
 	}
 
 	data, err := rlp.EncodeToBytes(hashes)
