@@ -82,11 +82,12 @@ type Termini struct {
 	Termini []common.Hash `json:"termini"`
 }
 
-type pendingEtxs struct {
-	Etxs types.Transactions `json:"pendingEtxs"`
+type appendReturns struct {
+	Etxs     types.Transactions `json:"pendingEtxs"`
+	SubReorg bool               `json:"subReorg"`
 }
 
-func (ec *Client) Append(ctx context.Context, header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, error) {
+func (ec *Client) Append(ctx context.Context, header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, bool, error) {
 	fields := map[string]interface{}{
 		"header":           header.RPCMarshalHeader(),
 		"domPendingHeader": domPendingHeader.RPCMarshalHeader(),
@@ -98,16 +99,16 @@ func (ec *Client) Append(ctx context.Context, header *types.Header, domPendingHe
 	var raw json.RawMessage
 	err := ec.c.CallContext(ctx, &raw, "quai_append", fields)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	// Decode header and transactions.
-	var pEtxs pendingEtxs
-	if err := json.Unmarshal(raw, &pEtxs); err != nil {
-		return nil, err
+	var aReturns appendReturns
+	if err := json.Unmarshal(raw, &aReturns); err != nil {
+		return nil, false, err
 	}
 
-	return pEtxs.Etxs, nil
+	return aReturns.Etxs, aReturns.SubReorg, nil
 }
 
 func (ec *Client) SubRelayPendingHeader(ctx context.Context, pendingHeader types.PendingHeader, location common.Location) {

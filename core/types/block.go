@@ -1045,7 +1045,18 @@ type Blocks []*Block
 type PendingHeader struct {
 	Header  *Header
 	Termini []common.Hash
-	Entropy *big.Int
+}
+
+func CopyPendingHeader(ph *PendingHeader) *PendingHeader {
+	cpy := *ph
+	cpy.Header = CopyHeader(ph.Header)
+
+	cpy.Termini = make([]common.Hash, 4)
+	for i, termini := range ph.Termini {
+		cpy.Termini[i] = termini
+	}
+
+	return &cpy
 }
 
 // BlockManifest is a list of block hashes, which implements DerivableList
