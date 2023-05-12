@@ -19,11 +19,12 @@ package core
 import (
 	"errors"
 	"fmt"
-	sync "github.com/sasha-s/go-deadlock"
 	"math"
 	"math/big"
 	"sort"
 	"time"
+
+	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/prque"
@@ -246,6 +247,9 @@ type TxPool struct {
 	all     *txLookup                            // All transactions to allow lookups
 	priced  *txPricedList                        // All transactions sorted by price
 
+	localTxsCount  int // count of txs in last 1 min. Purely for logging purpose
+	remoteTxsCount int // count of txs in last 1 min. Purely for logging purpose
+
 	chainHeadCh     chan ChainHeadEvent
 	chainHeadSub    event.Subscription
 	reqResetCh      chan *txpoolResetRequest
@@ -283,6 +287,8 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		reorgDoneCh:     make(chan chan struct{}),
 		reorgShutdownCh: make(chan struct{}),
 		gasPrice:        new(big.Int).SetUint64(config.PriceLimit),
+		localTxsCount:   0,
+		remoteTxsCount:  0,
 	}
 	pool.locals = newAccountSet(pool.signer)
 	for _, addr := range config.Locals {
@@ -353,6 +359,9 @@ func (pool *TxPool) loop() {
 			pool.mu.RLock()
 			pending, queued := pool.stats()
 			stales := pool.priced.stales
+			log.Info("Added Transactions in last Min", "Local Txs", pool.localTxsCount, "Remote Txs", pool.remoteTxsCount)
+			pool.localTxsCount = 0
+			pool.remoteTxsCount = 0
 			pool.mu.RUnlock()
 
 			log.Info("Transaction pool status report", "executable", pending, "queued", queued, "stales", stales)
@@ -847,6 +856,7 @@ func (pool *TxPool) AddLocals(txs []*types.Transaction) []error {
 // AddLocal enqueues a single local transaction into the pool if it is valid. This is
 // a convenience wrapper aroundd AddLocals.
 func (pool *TxPool) AddLocal(tx *types.Transaction) error {
+	pool.localTxsCount += 1
 	errs := pool.AddLocals([]*types.Transaction{tx})
 	return errs[0]
 }
@@ -857,6 +867,7 @@ func (pool *TxPool) AddLocal(tx *types.Transaction) error {
 // This method is used to add transactions from the p2p network and does not wait for pool
 // reorganization and internal event propagation.
 func (pool *TxPool) AddRemotes(txs []*types.Transaction) []error {
+	pool.remoteTxsCount += len(txs)
 	return pool.addTxs(txs, false, false)
 }
 
