@@ -177,7 +177,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	}
 	time6 := common.PrettyDuration(time.Since(start))
 	// Upate the local pending header
-	pendingHeaderWithTermini, err := sl.generateSlicePendingHeader(block, newTermini, domPendingHeader, domOrigin, false)
+	pendingHeaderWithTermini, err := sl.generateSlicePendingHeader(block, newTermini, domPendingHeader, domOrigin, true)
 	if err != nil {
 		return nil, err
 	}
@@ -253,28 +253,29 @@ func (sl *Slice) relayPh(block *types.Block, appendTime *time.Duration, reorg bo
 		if exists {
 			bestPh.Header.SetLocation(common.NodeLocation)
 			sl.miner.worker.pendingHeaderFeed.Send(bestPh.Header)
+			return
 		}
 
-		// Only if reorg is true invoke the worker to update the state root
-		if reorg {
-			localPendingHeader, err := sl.miner.worker.GeneratePendingHeader(block, true)
-			if err != nil {
-				return
-			} else {
-				pendingHeaderWithTermini.Header = sl.combinePendingHeader(localPendingHeader, pendingHeaderWithTermini.Header, nodeCtx, true)
-				sl.phCachemu.Lock()
-				sl.writeToPhCacheAndPickPhHead(pendingHeaderWithTermini, appendTime)
-				sl.phCachemu.Unlock()
-			}
-			sl.phCachemu.RLock()
-			bestPh, exists = sl.phCache[sl.bestPhKey]
-			sl.phCachemu.RUnlock()
-			if exists {
-				bestPh.Header.SetLocation(common.NodeLocation)
-				sl.miner.worker.pendingHeaderFeed.Send(bestPh.Header)
-				return
-			}
-		}
+		// // Only if reorg is true invoke the worker to update the state root
+		// if reorg {
+		// 	localPendingHeader, err := sl.miner.worker.GeneratePendingHeader(block, true)
+		// 	if err != nil {
+		// 		return
+		// 	} else {
+		// 		pendingHeaderWithTermini.Header = sl.combinePendingHeader(localPendingHeader, pendingHeaderWithTermini.Header, nodeCtx, true)
+		// 		sl.phCachemu.Lock()
+		// 		sl.writeToPhCacheAndPickPhHead(pendingHeaderWithTermini, appendTime)
+		// 		sl.phCachemu.Unlock()
+		// 	}
+		// 	sl.phCachemu.RLock()
+		// 	bestPh, exists = sl.phCache[sl.bestPhKey]
+		// 	sl.phCachemu.RUnlock()
+		// 	if exists {
+		// 		bestPh.Header.SetLocation(common.NodeLocation)
+		// 		sl.miner.worker.pendingHeaderFeed.Send(bestPh.Header)
+		// 		return
+		// 	}
+		// }
 	} else if !domOrigin {
 		for i := range sl.subClients {
 			if sl.subClients[i] != nil {
