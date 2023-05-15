@@ -20,7 +20,6 @@ import (
 	"errors"
 	"math"
 	"math/rand"
-	sync "github.com/sasha-s/go-deadlock"
 	"sync/atomic"
 	"time"
 
@@ -35,6 +34,7 @@ import (
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p"
+	sync "github.com/sasha-s/go-deadlock"
 )
 
 const (
