@@ -21,11 +21,11 @@ import (
 	"errors"
 	"math"
 	"sort"
-	sync "github.com/sasha-s/go-deadlock"
 	"time"
 
-	log "github.com/sirupsen/logrus"
-	// "github.com/dominant-strategies/go-quai/log"
+	sync "github.com/sasha-s/go-deadlock"
+
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 // measurementImpact is the impact a single measurement has on a peer's final
@@ -445,7 +445,7 @@ func (t *Trackers) detune() {
 	if t.confidence < rttMinConfidence {
 		t.confidence = rttMinConfidence
 	}
-	t.log.Debug("Relaxed msgrate QoS values", "rtt", t.roundtrip, "confidence", t.confidence, "ttl", t.targetTimeout())
+	log.Debug("Relaxed msgrate QoS values", "rtt", t.roundtrip, "confidence", t.confidence, "ttl", t.targetTimeout())
 }
 
 // Capacity is a helper function to access a specific tracker without having to

@@ -108,14 +108,12 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 // The customize function allows the caller to modify the leveldb options.
 func NewCustom(file string, namespace string, customize func(options *opt.Options)) (*Database, error) {
 	options := configureOptions(customize)
-	logger := log.Log
 	usedCache := options.GetBlockCacheCapacity() + options.GetWriteBuffer()*2
 	logCtx := []interface{}{"cache", common.StorageSize(usedCache), "handles", options.GetOpenFilesCacheCapacity()}
 	if options.ReadOnly {
 		logCtx = append(logCtx, "readonly", "true")
 	}
-	logger.Info("Allocated cache and file handles")
-	logger.Info(logCtx...)
+	log.Info("Allocated cache and file handles", logCtx...)
 
 	// Open the db and recover any potential corruptions
 	db, err := leveldb.OpenFile(file, options)
@@ -129,7 +127,7 @@ func NewCustom(file string, namespace string, customize func(options *opt.Option
 	ldb := &Database{
 		fn:       file,
 		db:       db,
-		log:      logger,
+		log:      log.Log,
 		quitChan: make(chan chan error),
 	}
 	ldb.compTimeMeter = metrics.NewRegisteredMeter(namespace+"compact/time", nil)

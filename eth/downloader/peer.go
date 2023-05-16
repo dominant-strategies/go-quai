@@ -23,9 +23,10 @@ import (
 	"errors"
 	"math/big"
 	"sort"
-	sync "github.com/sasha-s/go-deadlock"
 	"sync/atomic"
 	"time"
+
+	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/eth/protocols/eth"
@@ -296,7 +297,7 @@ type peerSet struct {
 func newPeerSet() *peerSet {
 	return &peerSet{
 		peers: make(map[string]*peerConnection),
-		rates: msgrate.NewTrackers(log.Log),
+		rates: msgrate.NewTrackers(&log.Log),
 	}
 }
 
