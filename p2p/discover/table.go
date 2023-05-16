@@ -29,8 +29,9 @@ import (
 	mrand "math/rand"
 	"net"
 	"sort"
-	sync "github.com/sasha-s/go-deadlock"
 	"time"
+
+	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/log"
@@ -305,7 +306,8 @@ func (tab *Table) loadSeedNodes() {
 	seeds = append(seeds, tab.nursery...)
 	for i := range seeds {
 		seed := seeds[i]
-		tab.log.Trace("Found seed node in database", "id", seed.ID(), "addr", seed.addr())
+		log.Lazy(func() string { return time.Since(tab.db.LastPongReceived(seed.ID(), seed.IP())).String() }, "trace")
+		log.Trace("Found seed node in database", "id", seed.ID(), "addr", seed.addr())
 		tab.addSeenNode(seed)
 	}
 }

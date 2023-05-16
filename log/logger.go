@@ -106,6 +106,34 @@ func Panic(msg string, args ...interface{}) {
 	Log.Panic(constructLogMessage(msg, args...))
 }
 
+func Lazy(fn func() string, logLevel string) {
+	level, err := logrus.ParseLevel(logLevel)
+	if err == nil && Log.IsLevelEnabled(level) {
+		callCorrectLevel(level, fn())
+	}
+}
+
+func callCorrectLevel(level logrus.Level, msg string, args ...interface{}) {
+	switch level {
+	case logrus.TraceLevel:
+		Trace(msg, args...)
+	case logrus.DebugLevel:
+		Debug(msg, args...)
+	case logrus.InfoLevel:
+		Info(msg, args...)
+	case logrus.WarnLevel:
+		Warn(msg, args...)
+	case logrus.ErrorLevel:
+		Error(msg, args...)
+	case logrus.FatalLevel:
+		Fatal(msg, args...)
+	case logrus.PanicLevel:
+		Panic(msg, args...)
+	default:
+		Error("Unknown log level: %v", level)
+	}
+}
+
 func constructLogMessage(msg string, fields ...interface{}) string {
 	var pairs []string
 

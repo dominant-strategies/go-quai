@@ -18,6 +18,7 @@
 package msgrate
 
 import (
+	"encoding/json"
 	"errors"
 	"math"
 	"sort"
@@ -421,7 +422,11 @@ func (t *Trackers) tune() {
 	t.confidence = t.confidence + (1-t.confidence)/2
 
 	t.tuned = time.Now()
-	t.log.Debug("Recalculated msgrate QoS values", "rtt", t.roundtrip, "confidence", t.confidence, "ttl", t.targetTimeout(), "next", t.tuned.Add(t.roundtrip))
+	log.Debug("Recalculated msgrate QoS values", "rtt", t.roundtrip, "confidence", t.confidence, "ttl", t.targetTimeout(), "next", t.tuned.Add(t.roundtrip))
+	log.Lazy(func() string {
+		b, _ := json.Marshal(t.meanCapacities())
+		return string(b)
+	}, "trace")
 }
 
 // detune reduces the tracker's confidence in order to make fresh measurements
