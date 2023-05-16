@@ -17,6 +17,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 const (
@@ -122,7 +123,7 @@ func (blake3pow *Blake3pow) mine(header *types.Header, id int, seed uint64, abor
 		nonce     = seed
 		powBuffer = new(big.Int)
 	)
-	logger := blake3pow.config.Log.New("miner", id)
+	logger := log.Log
 	logger.Trace("Started blake3pow search for new nonces", "seed", seed)
 search:
 	for {

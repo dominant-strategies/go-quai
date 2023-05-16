@@ -154,7 +154,7 @@ func generateSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache i
 	rawdb.WriteSnapshotRoot(batch, root)
 	journalProgress(batch, genMarker, stats)
 	if err := batch.Write(); err != nil {
-		log.Crit("Failed to write initialized state marker", "err", err)
+		log.Fatal("Failed to write initialized state marker", "err", err)
 	}
 	base := &diskLayer{
 		diskdb:     diskdb,
@@ -394,7 +394,7 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 	if len(origin) > 0 {
 		logCtx = append(logCtx, "origin", hexutil.Encode(origin))
 	}
-	logger := log.New(logCtx...)
+	logger := log.Log
 
 	// The range prover says the range is correct, skip trie iteration
 	if result.valid() {
@@ -612,7 +612,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 			CodeHash []byte
 		}
 		if err := rlp.DecodeBytes(val, &acc); err != nil {
-			log.Crit("Invalid account encountered during snapshot creation", "err", err)
+			log.Fatal("Invalid account encountered during snapshot creation", "err", err)
 		}
 		// If the account is not yet in-progress, write it out
 		if accMarker == nil || !bytes.Equal(accountHash[:], accMarker) {

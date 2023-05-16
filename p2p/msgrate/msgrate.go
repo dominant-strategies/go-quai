@@ -24,7 +24,8 @@ import (
 	sync "github.com/sasha-s/go-deadlock"
 	"time"
 
-	"github.com/dominant-strategies/go-quai/log"
+	log "github.com/sirupsen/logrus"
+	// "github.com/dominant-strategies/go-quai/log"
 )
 
 // measurementImpact is the impact a single measurement has on a peer's final
@@ -245,12 +246,12 @@ type Trackers struct {
 	// purpose is to allow quicker tests. Don't use them in production.
 	OverrideTTLLimit time.Duration
 
-	log  log.Logger
+	log  *log.Logger
 	lock sync.RWMutex
 }
 
 // NewTrackers creates an empty set of trackers to be filled with peers.
-func NewTrackers(log log.Logger) *Trackers {
+func NewTrackers(log *log.Logger) *Trackers {
 	return &Trackers{
 		trackers:         make(map[string]*Tracker),
 		roundtrip:        rttMaxEstimate,
@@ -421,7 +422,6 @@ func (t *Trackers) tune() {
 
 	t.tuned = time.Now()
 	t.log.Debug("Recalculated msgrate QoS values", "rtt", t.roundtrip, "confidence", t.confidence, "ttl", t.targetTimeout(), "next", t.tuned.Add(t.roundtrip))
-	t.log.Trace("Debug dump of mean capacities", "caps", log.Lazy{Fn: t.meanCapacities})
 }
 
 // detune reduces the tracker's confidence in order to make fresh measurements

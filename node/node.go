@@ -76,7 +76,7 @@ func New(conf *Config) (*Node, error) {
 		conf.DataDir = absdatadir
 	}
 	if conf.Logger == nil {
-		conf.Logger = log.New()
+		conf.Logger = log.Log
 	}
 
 	// Ensure that the instance name doesn't cause weird conflicts with

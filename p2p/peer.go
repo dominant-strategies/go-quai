@@ -124,7 +124,7 @@ func NewPeer(id enode.ID, name string, caps []Cap) *Peer {
 	pipe, _ := net.Pipe()
 	node := enode.SignNull(new(enr.Record), id)
 	conn := &conn{fd: pipe, transport: nil, node: node, caps: caps, name: name}
-	peer := newPeer(log.Root(), conn, nil)
+	peer := newPeer(log.Log, conn, nil)
 	close(peer.closed) // ensures Disconnect doesn't block
 	return peer
 }
@@ -229,7 +229,7 @@ func newPeer(log log.Logger, conn *conn, protocols []Protocol) *Peer {
 		disc:     make(chan DiscReason),
 		protoErr: make(chan error, len(protomap)+1), // protocols + pingLoop
 		closed:   make(chan struct{}),
-		log:      log.New("id", conn.node.ID(), "conn", conn.flags),
+		log:      log,
 	}
 	return p
 }

@@ -145,7 +145,7 @@ func (cfg dialConfig) withDefaults() dialConfig {
 		cfg.maxActiveDials = defaultMaxPendingPeers
 	}
 	if cfg.log == nil {
-		cfg.log = log.Root()
+		cfg.log = log.Log
 	}
 	if cfg.clock == nil {
 		cfg.clock = mclock.System{}

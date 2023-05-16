@@ -97,7 +97,7 @@ const (
 // Map adds a port mapping on m and keeps it alive until c is closed.
 // This function is typically invoked in its own goroutine.
 func Map(m Interface, c <-chan struct{}, protocol string, extport, intport int, name string) {
-	log := log.New("proto", protocol, "extport", extport, "intport", intport, "interface", m)
+	log := log.Log
 	refresh := time.NewTimer(mapTimeout)
 	defer func() {
 		refresh.Stop()

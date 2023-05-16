@@ -30,10 +30,10 @@ import (
 	"time"
 
 	"github.com/dominant-strategies/go-quai/crypto"
-	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p/discover/v4wire"
 	"github.com/dominant-strategies/go-quai/p2p/enode"
 	"github.com/dominant-strategies/go-quai/p2p/netutil"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 // Errors
@@ -140,7 +140,7 @@ func ListenV4(c UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv4, error) {
 		addReplyMatcher: make(chan *replyMatcher),
 		closeCtx:        closeCtx,
 		cancelCloseCtx:  cancel,
-		log:             cfg.Log,
+		log:             log.Log,
 	}
 
 	tab, err := newTable(t, ln.Database(), cfg.Bootnodes, t.log)

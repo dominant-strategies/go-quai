@@ -57,7 +57,7 @@ func ReadTxLookupEntry(db ethdb.Reader, hash common.Hash) *uint64 {
 // enabling hash based transaction and receipt lookups.
 func writeTxLookupEntry(db ethdb.KeyValueWriter, hash common.Hash, numberBytes []byte) {
 	if err := db.Put(txLookupKey(hash), numberBytes); err != nil {
-		log.Crit("Failed to store transaction lookup entry", "err", err)
+		log.Fatal("Failed to store transaction lookup entry", "err", err)
 	}
 }
 
@@ -82,7 +82,7 @@ func WriteTxLookupEntriesByBlock(db ethdb.KeyValueWriter, block *types.Block) {
 // DeleteTxLookupEntry removes all transaction data associated with a hash.
 func DeleteTxLookupEntry(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Delete(txLookupKey(hash)); err != nil {
-		log.Crit("Failed to delete transaction lookup entry", "err", err)
+		log.Fatal("Failed to delete transaction lookup entry", "err", err)
 	}
 }
 
@@ -151,7 +151,7 @@ func ReadBloomBits(db ethdb.KeyValueReader, bit uint, section uint64, head commo
 // section and bit index.
 func WriteBloomBits(db ethdb.KeyValueWriter, bit uint, section uint64, head common.Hash, bits []byte) {
 	if err := db.Put(bloomBitsKey(bit, section, head), bits); err != nil {
-		log.Crit("Failed to store bloom bits", "err", err)
+		log.Fatal("Failed to store bloom bits", "err", err)
 	}
 }
 
@@ -172,6 +172,6 @@ func DeleteBloombits(db ethdb.Database, bit uint, from uint64, to uint64) {
 		db.Delete(it.Key())
 	}
 	if it.Error() != nil {
-		log.Crit("Failed to delete bloom bits", "err", it.Error())
+		log.Fatal("Failed to delete bloom bits", "err", it.Error())
 	}
 }

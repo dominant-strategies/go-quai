@@ -143,11 +143,11 @@ func NewEventSystem(backend Backend, lightMode bool) *EventSystem {
 	// Make sure none of the subscriptions are empty
 	if nodeCtx == common.ZONE_CTX {
 		if m.txsSub == nil || m.logsSub == nil || m.rmLogsSub == nil || m.chainSub == nil || m.pendingLogsSub == nil || m.pendingHeaderSub == nil {
-			log.Crit("Subscribe for event system failed")
+			log.Fatal("Subscribe for event system failed")
 		}
 	} else {
 		if m.chainSub == nil {
-			log.Crit("Subscribe for event system failed")
+			log.Fatal("Subscribe for event system failed")
 		}
 	}
 

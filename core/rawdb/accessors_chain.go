@@ -45,14 +45,14 @@ func ReadCanonicalHash(db ethdb.Reader, number uint64) common.Hash {
 // WriteCanonicalHash stores the hash assigned to a canonical block number.
 func WriteCanonicalHash(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	if err := db.Put(headerHashKey(number), hash.Bytes()); err != nil {
-		log.Crit("Failed to store number to hash mapping", "err", err)
+		log.Fatal("Failed to store number to hash mapping", "err", err)
 	}
 }
 
 // DeleteCanonicalHash removes the number to hash canonical mapping.
 func DeleteCanonicalHash(db ethdb.KeyValueWriter, number uint64) {
 	if err := db.Delete(headerHashKey(number)); err != nil {
-		log.Crit("Failed to delete number to hash mapping", "err", err)
+		log.Fatal("Failed to delete number to hash mapping", "err", err)
 	}
 }
 
@@ -121,14 +121,14 @@ func WriteHeaderNumber(db ethdb.KeyValueWriter, hash common.Hash, number uint64)
 	key := headerNumberKey(hash)
 	enc := encodeBlockNumber(number)
 	if err := db.Put(key, enc); err != nil {
-		log.Crit("Failed to store hash to number mapping", "err", err)
+		log.Fatal("Failed to store hash to number mapping", "err", err)
 	}
 }
 
 // DeleteHeaderNumber removes hash->number mapping.
 func DeleteHeaderNumber(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Delete(headerNumberKey(hash)); err != nil {
-		log.Crit("Failed to delete hash to number mapping", "err", err)
+		log.Fatal("Failed to delete hash to number mapping", "err", err)
 	}
 }
 
@@ -144,7 +144,7 @@ func ReadHeadHeaderHash(db ethdb.KeyValueReader) common.Hash {
 // WriteHeadHeaderHash stores the hash of the current canonical head header.
 func WriteHeadHeaderHash(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Put(headHeaderKey, hash.Bytes()); err != nil {
-		log.Crit("Failed to store last header's hash", "err", err)
+		log.Fatal("Failed to store last header's hash", "err", err)
 	}
 }
 
@@ -160,7 +160,7 @@ func ReadHeadBlockHash(db ethdb.KeyValueReader) common.Hash {
 // WriteHeadBlockHash stores the head block's hash.
 func WriteHeadBlockHash(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Put(headBlockKey, hash.Bytes()); err != nil {
-		log.Crit("Failed to store last block's hash", "err", err)
+		log.Fatal("Failed to store last block's hash", "err", err)
 	}
 }
 
@@ -183,10 +183,10 @@ func ReadLastPivotNumber(db ethdb.KeyValueReader) *uint64 {
 func WriteLastPivotNumber(db ethdb.KeyValueWriter, pivot uint64) {
 	enc, err := rlp.EncodeToBytes(pivot)
 	if err != nil {
-		log.Crit("Failed to encode pivot block number", "err", err)
+		log.Fatal("Failed to encode pivot block number", "err", err)
 	}
 	if err := db.Put(lastPivotKey, enc); err != nil {
-		log.Crit("Failed to store pivot block number", "err", err)
+		log.Fatal("Failed to store pivot block number", "err", err)
 	}
 }
 
@@ -204,7 +204,7 @@ func ReadFastTrieProgress(db ethdb.KeyValueReader) uint64 {
 // retrieving it across restarts.
 func WriteFastTrieProgress(db ethdb.KeyValueWriter, count uint64) {
 	if err := db.Put(fastTrieProgressKey, new(big.Int).SetUint64(count).Bytes()); err != nil {
-		log.Crit("Failed to store fast sync trie progress", "err", err)
+		log.Fatal("Failed to store fast sync trie progress", "err", err)
 	}
 }
 
@@ -224,7 +224,7 @@ func ReadTxIndexTail(db ethdb.KeyValueReader) *uint64 {
 // into database.
 func WriteTxIndexTail(db ethdb.KeyValueWriter, number uint64) {
 	if err := db.Put(txIndexTailKey, encodeBlockNumber(number)); err != nil {
-		log.Crit("Failed to store the transaction index tail", "err", err)
+		log.Fatal("Failed to store the transaction index tail", "err", err)
 	}
 }
 
@@ -241,7 +241,7 @@ func ReadFastTxLookupLimit(db ethdb.KeyValueReader) *uint64 {
 // WriteFastTxLookupLimit stores the txlookup limit used in fast sync into database.
 func WriteFastTxLookupLimit(db ethdb.KeyValueWriter, number uint64) {
 	if err := db.Put(fastTxLookupLimitKey, encodeBlockNumber(number)); err != nil {
-		log.Crit("Failed to store transaction lookup limit for fast sync", "err", err)
+		log.Fatal("Failed to store transaction lookup limit for fast sync", "err", err)
 	}
 }
 
@@ -308,11 +308,11 @@ func WriteHeader(db ethdb.KeyValueWriter, header *types.Header) {
 	// Write the encoded header
 	data, err := rlp.EncodeToBytes(header)
 	if err != nil {
-		log.Crit("Failed to RLP encode header", "err", err)
+		log.Fatal("Failed to RLP encode header", "err", err)
 	}
 	key := headerKey(number, hash)
 	if err := db.Put(key, data); err != nil {
-		log.Crit("Failed to store header", "err", err)
+		log.Fatal("Failed to store header", "err", err)
 	}
 }
 
@@ -320,7 +320,7 @@ func WriteHeader(db ethdb.KeyValueWriter, header *types.Header) {
 func DeleteHeader(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	deleteHeaderWithoutNumber(db, hash, number)
 	if err := db.Delete(headerNumberKey(hash)); err != nil {
-		log.Crit("Failed to delete hash to number mapping", "err", err)
+		log.Fatal("Failed to delete hash to number mapping", "err", err)
 	}
 }
 
@@ -328,7 +328,7 @@ func DeleteHeader(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 // the hash to number mapping.
 func deleteHeaderWithoutNumber(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	if err := db.Delete(headerKey(number, hash)); err != nil {
-		log.Crit("Failed to delete header", "err", err)
+		log.Fatal("Failed to delete header", "err", err)
 	}
 }
 
@@ -385,7 +385,7 @@ func ReadCanonicalBodyRLP(db ethdb.Reader, number uint64) rlp.RawValue {
 // WriteBodyRLP stores an RLP encoded block body into the database.
 func WriteBodyRLP(db ethdb.KeyValueWriter, hash common.Hash, number uint64, rlp rlp.RawValue) {
 	if err := db.Put(blockBodyKey(number, hash), rlp); err != nil {
-		log.Crit("Failed to store block body", "err", err)
+		log.Fatal("Failed to store block body", "err", err)
 	}
 }
 
@@ -418,7 +418,7 @@ func ReadBody(db ethdb.Reader, hash common.Hash, number uint64) *types.Body {
 func WriteBody(db ethdb.KeyValueWriter, hash common.Hash, number uint64, body *types.Body) {
 	data, err := rlp.EncodeToBytes(body)
 	if err != nil {
-		log.Crit("Failed to RLP encode body", "err", err)
+		log.Fatal("Failed to RLP encode body", "err", err)
 	}
 	WriteBodyRLP(db, hash, number, data)
 }
@@ -426,7 +426,7 @@ func WriteBody(db ethdb.KeyValueWriter, hash common.Hash, number uint64, body *t
 // DeleteBody removes all block body data associated with a hash.
 func DeleteBody(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	if err := db.Delete(blockBodyKey(number, hash)); err != nil {
-		log.Crit("Failed to delete block body", "err", err)
+		log.Fatal("Failed to delete block body", "err", err)
 	}
 }
 
@@ -452,17 +452,17 @@ func ReadPbCacheBody(db ethdb.Reader, hash common.Hash) *types.Body {
 func WritePbCacheBody(db ethdb.KeyValueWriter, hash common.Hash, body *types.Body) {
 	data, err := rlp.EncodeToBytes(body)
 	if err != nil {
-		log.Crit("Failed to RLP encode body", "err", err)
+		log.Fatal("Failed to RLP encode body", "err", err)
 	}
 	if err := db.Put(pbBodyKey(hash), data); err != nil {
-		log.Crit("Failed to write pbBodyKey", "err", err)
+		log.Fatal("Failed to write pbBodyKey", "err", err)
 	}
 }
 
 // DeletePbCacheBody removes all block body data associated with a hash.
 func DeletePbCacheBody(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Delete(pbBodyKey(hash)); err != nil {
-		log.Crit("Failed to delete pb cache body", "err", err)
+		log.Fatal("Failed to delete pb cache body", "err", err)
 	}
 }
 
@@ -489,10 +489,10 @@ func WritePbBodyKeys(db ethdb.KeyValueWriter, hashes []common.Hash) {
 	key := pbBodyHashKey()
 	data, err := rlp.EncodeToBytes(hashes)
 	if err != nil {
-		log.Crit("Failed to RLP encode pending block body keys", "err", err)
+		log.Fatal("Failed to RLP encode pending block body keys", "err", err)
 	}
 	if err := db.Put(key, data); err != nil {
-		log.Crit("Failed to store pending block body keys", "err", err)
+		log.Fatal("Failed to store pending block body keys", "err", err)
 	}
 }
 
@@ -501,7 +501,7 @@ func DeletePbBodyKeys(db ethdb.KeyValueWriter, hash common.Hash) {
 	key := pbBodyHashKey()
 
 	if err := db.Delete(key); err != nil {
-		log.Crit("Failed to delete pending block body keys", "err", err)
+		log.Fatal("Failed to delete pending block body keys", "err", err)
 	}
 }
 
@@ -525,10 +525,10 @@ func WriteTermini(db ethdb.KeyValueWriter, index common.Hash, hashes []common.Ha
 	key := terminiKey(index)
 	data, err := rlp.EncodeToBytes(hashes)
 	if err != nil {
-		log.Crit("Failed to RLP encode termini", "err", err)
+		log.Fatal("Failed to RLP encode termini", "err", err)
 	}
 	if err := db.Put(key, data); err != nil {
-		log.Crit("Failed to store last block's termini", "err", err)
+		log.Fatal("Failed to store last block's termini", "err", err)
 	}
 }
 
@@ -537,7 +537,7 @@ func DeleteTermini(db ethdb.KeyValueWriter, hash common.Hash) {
 	key := terminiKey(hash)
 
 	if err := db.Delete(key); err != nil {
-		log.Crit("Failed to delete termini ", "err", err)
+		log.Fatal("Failed to delete termini ", "err", err)
 	}
 }
 
@@ -564,11 +564,11 @@ func WritePendingHeader(db ethdb.KeyValueWriter, hash common.Hash, pendingHeader
 	// Write the encoded pending header
 	data, err := rlp.EncodeToBytes(pendingHeader)
 	if err != nil {
-		log.Crit("Failed to RLP encode pending header", "err", err)
+		log.Fatal("Failed to RLP encode pending header", "err", err)
 	}
 
 	if err := db.Put(key, data); err != nil {
-		log.Crit("Failed to store header", "err", err)
+		log.Fatal("Failed to store header", "err", err)
 	}
 }
 
@@ -576,7 +576,7 @@ func WritePendingHeader(db ethdb.KeyValueWriter, hash common.Hash, pendingHeader
 func DeletePendingHeader(db ethdb.KeyValueWriter, hash common.Hash) {
 	key := pendingHeaderKey(hash)
 	if err := db.Delete(key); err != nil {
-		log.Crit("Failed to delete slice pending header ", "err", err)
+		log.Fatal("Failed to delete slice pending header ", "err", err)
 	}
 }
 
@@ -601,10 +601,10 @@ func WritePhCacheTermini(db ethdb.KeyValueWriter, hash common.Hash, termini []co
 	// Write the encoded pending header
 	data, err := rlp.EncodeToBytes(termini)
 	if err != nil {
-		log.Crit("Failed to RLP encode pending header", "err", err)
+		log.Fatal("Failed to RLP encode pending header", "err", err)
 	}
 	if err := db.Put(key, data); err != nil {
-		log.Crit("Failed to store header", "err", err)
+		log.Fatal("Failed to store header", "err", err)
 	}
 }
 
@@ -612,7 +612,7 @@ func WritePhCacheTermini(db ethdb.KeyValueWriter, hash common.Hash, termini []co
 func DeletePhCacheTermini(db ethdb.KeyValueWriter, hash common.Hash) {
 	key := phBodyTerminiKey(hash)
 	if err := db.Delete(key); err != nil {
-		log.Crit("Failed to delete slice pending header ", "err", err)
+		log.Fatal("Failed to delete slice pending header ", "err", err)
 	}
 }
 
@@ -634,10 +634,10 @@ func ReadPhCacheEntropy(db ethdb.Reader, hash common.Hash) *big.Int {
 func WritePhCacheEntropy(db ethdb.KeyValueWriter, hash common.Hash, s *big.Int) {
 	data, err := rlp.EncodeToBytes(s)
 	if err != nil {
-		log.Crit("Failed to RLP encode ph cache entropy", "err", err)
+		log.Fatal("Failed to RLP encode ph cache entropy", "err", err)
 	}
 	if err := db.Put(phCacheEntropyKey(hash), data); err != nil {
-		log.Crit("Failed to store ph cache entropy", "err", err)
+		log.Fatal("Failed to store ph cache entropy", "err", err)
 	}
 }
 
@@ -677,17 +677,17 @@ func WritePhCache(db ethdb.KeyValueWriter, phCache map[common.Hash]types.Pending
 
 	data, err := rlp.EncodeToBytes(hashes)
 	if err != nil {
-		log.Crit("Failed to RLP encode block total difficulty", "err", err)
+		log.Fatal("Failed to RLP encode block total difficulty", "err", err)
 	}
 	if err := db.Put(phCacheKey, data); err != nil {
-		log.Crit("Failed to store last block's hash", "err", err)
+		log.Fatal("Failed to store last block's hash", "err", err)
 	}
 }
 
 // DeletePhCache writes the heads hashes of the blockchain.
 func DeletePhCache(db ethdb.KeyValueWriter) {
 	if err := db.Delete(phCacheKey); err != nil {
-		log.Crit("Failed to delete ph cache", "err", err)
+		log.Fatal("Failed to delete ph cache", "err", err)
 	}
 }
 
@@ -709,17 +709,17 @@ func ReadBestPhKey(db ethdb.Reader) common.Hash {
 func WriteBestPhKey(db ethdb.KeyValueWriter, bestPhKey common.Hash) {
 	data, err := rlp.EncodeToBytes(bestPhKey)
 	if err != nil {
-		log.Crit("Failed to RLP encode write best ph key", "err", err)
+		log.Fatal("Failed to RLP encode write best ph key", "err", err)
 	}
 	if err := db.Put(phHeadKey, data); err != nil {
-		log.Crit("Failed to store last block's hash", "err", err)
+		log.Fatal("Failed to store last block's hash", "err", err)
 	}
 }
 
 // DeleteBestPhKey delete the bestPhKey of the blockchain
 func DeleteBestPhKey(db ethdb.KeyValueWriter) {
 	if err := db.Delete(phHeadKey); err != nil {
-		log.Crit("Failed to delete ph head", "err", err)
+		log.Fatal("Failed to delete ph head", "err", err)
 	}
 }
 
@@ -740,17 +740,17 @@ func ReadHeadsHashes(db ethdb.Reader) []common.Hash {
 func WriteHeadsHashes(db ethdb.KeyValueWriter, hashes []common.Hash) {
 	data, err := rlp.EncodeToBytes(hashes)
 	if err != nil {
-		log.Crit("Failed to RLP encode block total difficulty", "err", err)
+		log.Fatal("Failed to RLP encode block total difficulty", "err", err)
 	}
 	if err := db.Put(headsHashesKey, data); err != nil {
-		log.Crit("Failed to store last block's hash", "err", err)
+		log.Fatal("Failed to store last block's hash", "err", err)
 	}
 }
 
 // DeleteHeadsHashes writes the heads hashes of the blockchain.
 func DeleteHeadsHashes(db ethdb.KeyValueWriter, hashes []common.Hash) {
 	if err := db.Delete(headsHashesKey); err != nil {
-		log.Crit("Failed to delete block total difficulty", "err", err)
+		log.Fatal("Failed to delete block total difficulty", "err", err)
 	}
 }
 
@@ -853,18 +853,18 @@ func WriteReceipts(db ethdb.KeyValueWriter, hash common.Hash, number uint64, rec
 	}
 	bytes, err := rlp.EncodeToBytes(storageReceipts)
 	if err != nil {
-		log.Crit("Failed to encode block receipts", "err", err)
+		log.Fatal("Failed to encode block receipts", "err", err)
 	}
 	// Store the flattened receipt slice
 	if err := db.Put(blockReceiptsKey(number, hash), bytes); err != nil {
-		log.Crit("Failed to store block receipts", "err", err)
+		log.Fatal("Failed to store block receipts", "err", err)
 	}
 }
 
 // DeleteReceipts removes all receipt data associated with a block hash.
 func DeleteReceipts(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	if err := db.Delete(blockReceiptsKey(number, hash)); err != nil {
-		log.Crit("Failed to delete block receipts", "err", err)
+		log.Fatal("Failed to delete block receipts", "err", err)
 	}
 }
 
@@ -1050,7 +1050,7 @@ func WriteBadBlock(db ethdb.KeyValueStore, block *types.Block) {
 	var badBlocks badBlockList
 	if len(blob) > 0 {
 		if err := rlp.DecodeBytes(blob, &badBlocks); err != nil {
-			log.Crit("Failed to decode old bad blocks", "error", err)
+			log.Fatal("Failed to decode old bad blocks", "error", err)
 		}
 	}
 	for _, b := range badBlocks {
@@ -1069,17 +1069,17 @@ func WriteBadBlock(db ethdb.KeyValueStore, block *types.Block) {
 	}
 	data, err := rlp.EncodeToBytes(badBlocks)
 	if err != nil {
-		log.Crit("Failed to encode bad blocks", "err", err)
+		log.Fatal("Failed to encode bad blocks", "err", err)
 	}
 	if err := db.Put(badBlockKey, data); err != nil {
-		log.Crit("Failed to write bad blocks", "err", err)
+		log.Fatal("Failed to write bad blocks", "err", err)
 	}
 }
 
 // DeleteBadBlocks deletes all the bad blocks from the database
 func DeleteBadBlocks(db ethdb.KeyValueWriter) {
 	if err := db.Delete(badBlockKey); err != nil {
-		log.Crit("Failed to delete bad blocks", "err", err)
+		log.Fatal("Failed to delete bad blocks", "err", err)
 	}
 }
 
@@ -1170,7 +1170,7 @@ func ReadEtxSetRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValu
 // WriteEtxSetRLP stores the EtxSet corresponding to a given block, in RLP encoding.
 func WriteEtxSetRLP(db ethdb.KeyValueWriter, hash common.Hash, number uint64, rlp rlp.RawValue) {
 	if err := db.Put(etxSetKey(number, hash), rlp); err != nil {
-		log.Crit("Failed to store etx set", "err", err)
+		log.Fatal("Failed to store etx set", "err", err)
 	}
 }
 
@@ -1217,7 +1217,7 @@ func WriteEtxSet(db ethdb.KeyValueWriter, hash common.Hash, number uint64, etxSe
 	}
 	data, err := rlp.EncodeToBytes(entries)
 	if err != nil {
-		log.Crit("Failed to RLP encode etx set", "err", err)
+		log.Fatal("Failed to RLP encode etx set", "err", err)
 	}
 	WriteEtxSetRLP(db, hash, number, data)
 }
@@ -1225,7 +1225,7 @@ func WriteEtxSet(db ethdb.KeyValueWriter, hash common.Hash, number uint64, etxSe
 // DeleteEtxSet removes all EtxSet data associated with a block.
 func DeleteEtxSet(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	if err := db.Delete(etxSetKey(number, hash)); err != nil {
-		log.Crit("Failed to delete etx set", "err", err)
+		log.Fatal("Failed to delete etx set", "err", err)
 	}
 }
 
@@ -1242,7 +1242,7 @@ func ReadPendingEtxsRLP(db ethdb.Reader, hash common.Hash) rlp.RawValue {
 // WritePendingEtxsRLP stores the pending ETXs corresponding to a given block, in RLP encoding.
 func WritePendingEtxsRLP(db ethdb.KeyValueWriter, hash common.Hash, rlp rlp.RawValue) {
 	if err := db.Put(pendingEtxsKey(hash), rlp); err != nil {
-		log.Crit("Failed to store pending etxs", "err", err)
+		log.Fatal("Failed to store pending etxs", "err", err)
 	}
 }
 
@@ -1264,7 +1264,7 @@ func ReadPendingEtxs(db ethdb.Reader, hash common.Hash) *types.PendingEtxs {
 func WritePendingEtxs(db ethdb.KeyValueWriter, pendingEtxs types.PendingEtxs) {
 	data, err := rlp.EncodeToBytes(pendingEtxs)
 	if err != nil {
-		log.Crit("Failed to RLP encode pending etxs", "err", err)
+		log.Fatal("Failed to RLP encode pending etxs", "err", err)
 	}
 	WritePendingEtxsRLP(db, pendingEtxs.Header.Hash(), data)
 }
@@ -1272,7 +1272,7 @@ func WritePendingEtxs(db ethdb.KeyValueWriter, pendingEtxs types.PendingEtxs) {
 // DeletePendingEtxs removes all pending ETX data associated with a block.
 func DeletePendingEtxs(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	if err := db.Delete(pendingEtxsKey(hash)); err != nil {
-		log.Crit("Failed to delete pending etxs", "err", err)
+		log.Fatal("Failed to delete pending etxs", "err", err)
 	}
 }
 
@@ -1295,16 +1295,16 @@ func ReadPendingEtxsRollup(db ethdb.Reader, hash common.Hash) *types.PendingEtxs
 func WritePendingEtxsRollup(db ethdb.KeyValueWriter, pendingEtxsRollup types.PendingEtxsRollup) {
 	data, err := rlp.EncodeToBytes(pendingEtxsRollup)
 	if err != nil {
-		log.Crit("Failed to RLP encode pending etxs rollup", "err", err)
+		log.Fatal("Failed to RLP encode pending etxs rollup", "err", err)
 	}
 	if err := db.Put(pendingEtxsRollupKey(pendingEtxsRollup.Header.Hash()), data); err != nil {
-		log.Crit("Failed to store pending etxs rollup", "err", err)
+		log.Fatal("Failed to store pending etxs rollup", "err", err)
 	}
 }
 
 // DeletePendingEtxsRollup removes all pending ETX rollup data associated with a block.
 func DeletePendingEtxsRollup(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Delete(pendingEtxsRollupKey(hash)); err != nil {
-		log.Crit("Failed to delete pending etxs rollup", "err", err)
+		log.Fatal("Failed to delete pending etxs rollup", "err", err)
 	}
 }

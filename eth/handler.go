@@ -291,9 +291,9 @@ func (h *handler) unregisterPeer(id string) {
 	var logger log.Logger
 	if len(id) < 16 {
 		// Tests use short IDs, don't choke on them
-		logger = log.New("peer", id)
+		logger = log.Log
 	} else {
-		logger = log.New("peer", id[:8])
+		logger = log.Log
 	}
 	// Abort if the peer does not exist
 	peer := h.peers.peer(id)

@@ -25,6 +25,7 @@ import (
 	"github.com/dominant-strategies/go-quai/p2p/enode"
 	"github.com/dominant-strategies/go-quai/p2p/enr"
 	"github.com/dominant-strategies/go-quai/p2p/netutil"
+	"github.com/sirupsen/logrus"
 )
 
 // UDPConn is a network connection on which discovery can operate.
@@ -44,14 +45,14 @@ type Config struct {
 	NetRestrict  *netutil.Netlist   // list of allowed IP networks
 	Bootnodes    []*enode.Node      // list of bootstrap nodes
 	Unhandled    chan<- ReadPacket  // unhandled packets are sent on this channel
-	Log          log.Logger         // if set, log messages go here
+	Log          *logrus.Logger     // if set, log messages go here
 	ValidSchemes enr.IdentityScheme // allowed identity schemes
 	Clock        mclock.Clock
 }
 
 func (cfg Config) withDefaults() Config {
 	if cfg.Log == nil {
-		cfg.Log = log.Root()
+		cfg.Log = log.Log
 	}
 	if cfg.ValidSchemes == nil {
 		cfg.ValidSchemes = enode.ValidSchemes

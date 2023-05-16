@@ -75,7 +75,7 @@ type Blake3pow struct {
 // packages.
 func New(config Config, notify []string, noverify bool) *Blake3pow {
 	if config.Log == nil {
-		config.Log = log.Root()
+		config.Log = log.Log
 	}
 	blake3pow := &Blake3pow{
 		config:   config,
@@ -102,7 +102,7 @@ func NewFaker() *Blake3pow {
 	return &Blake3pow{
 		config: Config{
 			PowMode: ModeFake,
-			Log:     log.Root(),
+			Log:     log.Log,
 		},
 	}
 }
@@ -114,7 +114,7 @@ func NewFakeFailer(fail uint64) *Blake3pow {
 	return &Blake3pow{
 		config: Config{
 			PowMode: ModeFake,
-			Log:     log.Root(),
+			Log:     log.Log,
 		},
 		fakeFail: fail,
 	}
@@ -127,7 +127,7 @@ func NewFakeDelayer(delay time.Duration) *Blake3pow {
 	return &Blake3pow{
 		config: Config{
 			PowMode: ModeFake,
-			Log:     log.Root(),
+			Log:     log.Log,
 		},
 		fakeDelay: delay,
 	}
@@ -139,7 +139,7 @@ func NewFullFaker() *Blake3pow {
 	return &Blake3pow{
 		config: Config{
 			PowMode: ModeFullFake,
-			Log:     log.Root(),
+			Log:     log.Log,
 		},
 	}
 }

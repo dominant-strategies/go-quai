@@ -922,7 +922,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	}
 	if codeWriter.ValueSize() > 0 {
 		if err := codeWriter.Write(); err != nil {
-			log.Crit("Failed to commit dirty codes", "error", err)
+			log.Fatal("Failed to commit dirty codes", "error", err)
 		}
 	}
 	// Write the account trie changes, measuing the amount of wasted time

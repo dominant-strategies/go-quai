@@ -696,9 +696,9 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, headerProcCh 
 	var logger log.Logger
 	if len(id) < 16 {
 		// Tests use short IDs, don't choke on them
-		logger = log.New("peer", id)
+		logger = log.Log
 	} else {
-		logger = log.New("peer", id[:16])
+		logger = log.Log
 	}
 	// Short circuit if the data was never requested
 	request := q.headerPendPool[id]

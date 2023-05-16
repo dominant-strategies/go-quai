@@ -290,7 +290,7 @@ func (c *Config) NodeKey() *ecdsa.PrivateKey {
 	if c.DataDir == "" {
 		key, err := crypto.GenerateKey()
 		if err != nil {
-			log.Crit(fmt.Sprintf("Failed to generate ephemeral node key: %v", err))
+			log.Fatal(fmt.Sprintf("Failed to generate ephemeral node key: %v", err))
 		}
 		return key
 	}
@@ -302,7 +302,7 @@ func (c *Config) NodeKey() *ecdsa.PrivateKey {
 	// No persistent key found, generate and store a new one.
 	key, err := crypto.GenerateKey()
 	if err != nil {
-		log.Crit(fmt.Sprintf("Failed to generate node key: %v", err))
+		log.Fatal(fmt.Sprintf("Failed to generate node key: %v", err))
 	}
 	instanceDir := filepath.Join(c.DataDir, c.name())
 	if err := os.MkdirAll(instanceDir, 0700); err != nil {
@@ -371,7 +371,7 @@ func (c *Config) warnOnce(w *bool, format string, args ...interface{}) {
 	}
 	l := c.Logger
 	if l == nil {
-		l = log.Root()
+		l = log.Log
 	}
 	l.Warn(fmt.Sprintf(format, args...))
 	*w = true

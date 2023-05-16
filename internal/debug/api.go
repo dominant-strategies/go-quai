@@ -31,8 +31,9 @@ import (
 	"runtime/debug"
 	"runtime/pprof"
 	"strings"
-	sync "github.com/sasha-s/go-deadlock"
 	"time"
+
+	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/dominant-strategies/go-quai/log"
 )
@@ -54,19 +55,7 @@ type HandlerT struct {
 // Verbosity sets the log verbosity ceiling. The verbosity of individual packages
 // and source files can be raised using Vmodule.
 func (*HandlerT) Verbosity(level int) {
-	glogger.Verbosity(log.Lvl(level))
-}
-
-// Vmodule sets the log verbosity pattern. See package log for details on the
-// pattern syntax.
-func (*HandlerT) Vmodule(pattern string) error {
-	return glogger.Vmodule(pattern)
-}
-
-// BacktraceAt sets the log backtrace location. See package log for details on
-// the pattern syntax.
-func (*HandlerT) BacktraceAt(location string) error {
-	return glogger.BacktraceAt(location)
+	log.SetLevelInt(level)
 }
 
 // MemStats returns detailed runtime memory statistics.

@@ -180,7 +180,7 @@ func newCustomTable(path string, name string, readMeter metrics.Meter, writeMete
 		sizeGauge:     sizeGauge,
 		name:          name,
 		path:          path,
-		logger:        log.New("database", path, "table", name),
+		logger:        log.Log,
 		noCompression: noCompression,
 		maxFileSize:   maxFilesize,
 	}

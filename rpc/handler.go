@@ -83,10 +83,10 @@ func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *
 		cancelRoot:     cancelRoot,
 		allowSubscribe: true,
 		serverSubs:     make(map[ID]*Subscription),
-		log:            log.Root(),
+		log:            log.Log,
 	}
 	if conn.remoteAddr() != "" {
-		h.log = h.log.New("conn", conn.remoteAddr())
+		h.log = log.New("conn: " + conn.remoteAddr())
 	}
 	h.unsubscribeCb = newCallback(reflect.Value{}, reflect.ValueOf(h.unsubscribe))
 	return h
@@ -240,7 +240,7 @@ func (h *handler) handleImmediate(msg *jsonrpcMessage) bool {
 		return false
 	case msg.isResponse():
 		h.handleResponse(msg)
-		h.log.Trace("Handled RPC response", "reqid", idForLog{msg.ID}, "t", time.Since(start))
+		log.Trace("Handled RPC response", "reqid", idForLog{msg.ID}, "t", time.Since(start))
 		return true
 	default:
 		return false
@@ -251,7 +251,7 @@ func (h *handler) handleImmediate(msg *jsonrpcMessage) bool {
 func (h *handler) handleSubscriptionResult(msg *jsonrpcMessage) {
 	var result subscriptionResult
 	if err := json.Unmarshal(msg.Params, &result); err != nil {
-		h.log.Debug("Dropping invalid subscription message")
+		log.Debug("Dropping invalid subscription message")
 		return
 	}
 	if h.clientSubs[result.ID] != nil {
@@ -263,7 +263,7 @@ func (h *handler) handleSubscriptionResult(msg *jsonrpcMessage) {
 func (h *handler) handleResponse(msg *jsonrpcMessage) {
 	op := h.respWait[string(msg.ID)]
 	if op == nil {
-		h.log.Debug("Unsolicited RPC response", "reqid", idForLog{msg.ID})
+		log.Debug("Unsolicited RPC response", "reqid", idForLog{msg.ID})
 		return
 	}
 	delete(h.respWait, string(msg.ID))
@@ -292,7 +292,7 @@ func (h *handler) handleCallMsg(ctx *callProc, msg *jsonrpcMessage) *jsonrpcMess
 	switch {
 	case msg.isNotification():
 		h.handleCall(ctx, msg)
-		h.log.Debug("Served "+msg.Method, "t", time.Since(start))
+		log.Debug("Served "+msg.Method, "t", time.Since(start))
 		return nil
 	case msg.isCall():
 		resp := h.handleCall(ctx, msg)
@@ -303,9 +303,9 @@ func (h *handler) handleCallMsg(ctx *callProc, msg *jsonrpcMessage) *jsonrpcMess
 			if resp.Error.Data != nil {
 				ctx = append(ctx, "errdata", resp.Error.Data)
 			}
-			h.log.Warn("Served "+msg.Method, ctx...)
+			log.Warn("Served "+msg.Method, ctx...)
 		} else {
-			h.log.Debug("Served "+msg.Method, ctx...)
+			log.Debug("Served "+msg.Method, ctx...)
 		}
 		return resp
 	case msg.hasValidID():

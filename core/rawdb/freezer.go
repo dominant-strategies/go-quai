@@ -213,7 +213,7 @@ func (f *freezer) AppendAncient(number uint64, hash, header, body, receipts, etx
 		if err != nil {
 			rerr := f.repair()
 			if rerr != nil {
-				log.Crit("Failed to repair freezer", "err", rerr)
+				log.Fatal("Failed to repair freezer", "err", rerr)
 			}
 			log.Info("Append ancient failed", "number", number, "err", err)
 		}
@@ -386,7 +386,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 		}
 		// Batch of blocks have been frozen, flush them before wiping from leveldb
 		if err := f.Sync(); err != nil {
-			log.Crit("Failed to flush frozen tables", "err", err)
+			log.Fatal("Failed to flush frozen tables", "err", err)
 		}
 		// Wipe out all data from the active database
 		batch := db.NewBatch()
@@ -398,7 +398,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 			}
 		}
 		if err := batch.Write(); err != nil {
-			log.Crit("Failed to delete frozen canonical blocks", "err", err)
+			log.Fatal("Failed to delete frozen canonical blocks", "err", err)
 		}
 		batch.Reset()
 
@@ -415,7 +415,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 			}
 		}
 		if err := batch.Write(); err != nil {
-			log.Crit("Failed to delete frozen side blocks", "err", err)
+			log.Fatal("Failed to delete frozen side blocks", "err", err)
 		}
 		batch.Reset()
 
@@ -449,7 +449,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 				tip++
 			}
 			if err := batch.Write(); err != nil {
-				log.Crit("Failed to delete dangling side blocks", "err", err)
+				log.Fatal("Failed to delete dangling side blocks", "err", err)
 			}
 		}
 		// Log something friendly for the user

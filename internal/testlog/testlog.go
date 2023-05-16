@@ -116,7 +116,7 @@ func (l *logger) Crit(msg string, ctx ...interface{}) {
 	l.t.Helper()
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	l.l.Crit(msg, ctx...)
+	l.l.Fatal(msg, ctx...)
 	l.flush()
 }
 

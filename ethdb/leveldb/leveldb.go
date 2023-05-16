@@ -108,13 +108,14 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 // The customize function allows the caller to modify the leveldb options.
 func NewCustom(file string, namespace string, customize func(options *opt.Options)) (*Database, error) {
 	options := configureOptions(customize)
-	logger := log.New("database", file)
+	logger := log.Log
 	usedCache := options.GetBlockCacheCapacity() + options.GetWriteBuffer()*2
 	logCtx := []interface{}{"cache", common.StorageSize(usedCache), "handles", options.GetOpenFilesCacheCapacity()}
 	if options.ReadOnly {
 		logCtx = append(logCtx, "readonly", "true")
 	}
-	logger.Info("Allocated cache and file handles", logCtx...)
+	logger.Info("Allocated cache and file handles")
+	logger.Info(logCtx...)
 
 	// Open the db and recover any potential corruptions
 	db, err := leveldb.OpenFile(file, options)

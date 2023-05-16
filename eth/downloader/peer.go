@@ -296,7 +296,7 @@ type peerSet struct {
 func newPeerSet() *peerSet {
 	return &peerSet{
 		peers: make(map[string]*peerConnection),
-		rates: msgrate.NewTrackers(log.New("proto", "eth")),
+		rates: msgrate.NewTrackers(log.Log),
 	}
 }
 

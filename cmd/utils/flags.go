@@ -719,7 +719,7 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 		if url != "" {
 			node, err := enode.Parse(enode.ValidSchemes, url+cfg.ListenAddr)
 			if err != nil {
-				log.Crit("Bootstrap URL invalid", "enode", url, "err", err)
+				log.Fatal("Bootstrap URL invalid", "enode", url, "err", err)
 				continue
 			}
 			cfg.BootstrapNodes = append(cfg.BootstrapNodes, node)
@@ -1232,7 +1232,7 @@ func CheckExclusive(ctx *cli.Context, args ...interface{}) {
 func SetGlobalVars(ctx *cli.Context) {
 	// Configure global NodeLocation
 	if !ctx.GlobalIsSet(RegionFlag.Name) && ctx.GlobalIsSet(ZoneFlag.Name) {
-		log.Crit("zone idx given, but missing region idx!")
+		log.Fatal("zone idx given, but missing region idx!")
 	}
 	if ctx.GlobalIsSet(RegionFlag.Name) {
 		region := ctx.GlobalInt(RegionFlag.Name)

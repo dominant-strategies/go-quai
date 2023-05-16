@@ -768,11 +768,11 @@ func (sl *Slice) SubscribeMissingParentEvent(ch chan<- common.Hash) event.Subscr
 // MakeDomClient creates the quaiclient for the given domurl
 func makeDomClient(domurl string) *quaiclient.Client {
 	if domurl == "" {
-		log.Crit("dom client url is empty")
+		log.Fatal("dom client url is empty")
 	}
 	domClient, err := quaiclient.Dial(domurl)
 	if err != nil {
-		log.Crit("Error connecting to the dominant go-quai client", "err", err)
+		log.Fatal("Error connecting to the dominant go-quai client", "err", err)
 	}
 	return domClient
 }
@@ -784,7 +784,7 @@ func makeSubClients(suburls []string) []*quaiclient.Client {
 		if suburl != "" {
 			subClient, err := quaiclient.Dial(suburl)
 			if err != nil {
-				log.Crit("Error connecting to the subordinate go-quai client for index", "index", i, " err ", err)
+				log.Fatal("Error connecting to the subordinate go-quai client for index", "index", i, " err ", err)
 			}
 			subClients[i] = subClient
 		}

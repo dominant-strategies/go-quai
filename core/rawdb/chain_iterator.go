@@ -50,7 +50,7 @@ func InitDatabaseFromFreezer(db ethdb.Database) {
 		// freezerdb return N items (e.g up to 1000 items per go)
 		// That would require an API change in Ancients though
 		if h, err := db.Ancient(freezerHashTable, i); err != nil {
-			log.Crit("Failed to init database from freezer", "err", err)
+			log.Fatal("Failed to init database from freezer", "err", err)
 		} else {
 			hash = common.BytesToHash(h)
 		}
@@ -58,7 +58,7 @@ func InitDatabaseFromFreezer(db ethdb.Database) {
 		// If enough data was accumulated in memory or we're at the last block, dump to disk
 		if batch.ValueSize() > ethdb.IdealBatchSize {
 			if err := batch.Write(); err != nil {
-				log.Crit("Failed to write data to db", "err", err)
+				log.Fatal("Failed to write data to db", "err", err)
 			}
 			batch.Reset()
 		}
@@ -69,7 +69,7 @@ func InitDatabaseFromFreezer(db ethdb.Database) {
 		}
 	}
 	if err := batch.Write(); err != nil {
-		log.Crit("Failed to write data to db", "err", err)
+		log.Fatal("Failed to write data to db", "err", err)
 	}
 	batch.Reset()
 
@@ -213,7 +213,7 @@ func indexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan
 			if batch.ValueSize() > ethdb.IdealBatchSize {
 				WriteTxIndexTail(batch, lastNum) // Also write the tail here
 				if err := batch.Write(); err != nil {
-					log.Crit("Failed writing batch to db", "error", err)
+					log.Fatal("Failed writing batch to db", "error", err)
 					return
 				}
 				batch.Reset()
@@ -230,7 +230,7 @@ func indexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan
 	// be flushed anyway.
 	WriteTxIndexTail(batch, lastNum)
 	if err := batch.Write(); err != nil {
-		log.Crit("Failed writing batch to db", "error", err)
+		log.Fatal("Failed writing batch to db", "error", err)
 		return
 	}
 	select {
@@ -304,7 +304,7 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 			if blocks%1000 == 0 {
 				WriteTxIndexTail(batch, nextNum)
 				if err := batch.Write(); err != nil {
-					log.Crit("Failed writing batch to db", "error", err)
+					log.Fatal("Failed writing batch to db", "error", err)
 					return
 				}
 				batch.Reset()
@@ -321,7 +321,7 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 	// be flushed anyway.
 	WriteTxIndexTail(batch, nextNum)
 	if err := batch.Write(); err != nil {
-		log.Crit("Failed writing batch to db", "error", err)
+		log.Fatal("Failed writing batch to db", "error", err)
 		return
 	}
 	select {
