@@ -271,7 +271,7 @@ func handleGetOnePendingEtxs66(backend Backend, msg Decoder, peer *Peer) error {
 	requestTracker.Fulfil(peer.id, peer.version, GetOnePendingEtxsMsg, query.RequestId)
 	pendingEtxs := backend.Core().GetPendingEtxs(query.Hash, query.Location)
 	if pendingEtxs == nil {
-		log.Debug("Couldn't complete a pendingEtxs request for", "Hash", query.Hash)
+		log.Info("Couldn't complete a pendingEtxs request for", "Hash", query.Hash)
 		return nil
 	}
 	log.Trace("Completing  a pendingEtxs request for", "Hash", pendingEtxs.Header.Hash())
@@ -287,7 +287,7 @@ func handleGetOnePendingEtxsRollup66(backend Backend, msg Decoder, peer *Peer) e
 	requestTracker.Fulfil(peer.id, peer.version, GetOnePendingEtxsRollupMsg, query.RequestId)
 	pendingEtxs := backend.Core().GetPendingEtxsRollup(query.Hash)
 	if pendingEtxs == nil {
-		log.Debug("Couldn't complete a pendingEtxs request for", "Hash", query.Hash)
+		log.Info("Couldn't complete a pendingEtxs request for", "Hash", query.Hash)
 		return nil
 	}
 	log.Trace("Completing  a pendingEtxs request for", "Hash", pendingEtxs.Header.Hash())
