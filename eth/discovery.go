@@ -37,7 +37,7 @@ func (e ethEntry) ENRKey() string {
 // startEthEntryUpdate starts the ENR updater loop.
 func (eth *Quai) startEthEntryUpdate(ln *enode.LocalNode) {
 	var newHead = make(chan core.ChainHeadEvent, 10)
-	sub := eth.core.SubscribeChainHeadEvent(newHead)
+	sub := eth.core.SubscribeChainHeadEvent(newHead, true)
 
 	go func() {
 		defer sub.Unsubscribe()

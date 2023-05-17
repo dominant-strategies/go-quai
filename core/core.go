@@ -441,8 +441,8 @@ func (c *Core) Genesis() *types.Block {
 }
 
 // SubscribeChainHeadEvent registers a subscription of ChainHeadEvent.
-func (c *Core) SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription {
-	return c.sl.hc.SubscribeChainHeadEvent(ch)
+func (c *Core) SubscribeChainHeadEvent(ch chan<- ChainHeadEvent, blocking bool) event.Subscription {
+	return c.sl.hc.SubscribeChainHeadEvent(ch, blocking)
 }
 
 // GetBody retrieves a block body (transactions and uncles) from the database by
@@ -489,7 +489,7 @@ func (c *Core) SubscribeChainEvent(ch chan<- ChainEvent) event.Subscription {
 	return c.sl.hc.bc.SubscribeChainEvent(ch)
 }
 
-// SubscribeChainHeadEvent registers a subscription of ChainHeadEvent.
+// SubscribeRemovedLogsEvent registers a subscription of ChainHeadEvent.
 func (c *Core) SubscribeRemovedLogsEvent(ch chan<- RemovedLogsEvent) event.Subscription {
 	return c.sl.hc.bc.SubscribeRemovedLogsEvent(ch)
 }
@@ -608,7 +608,7 @@ func (c *Core) SetEtherbase(addr common.Address) {
 // SubscribePendingLogs starts delivering logs from pending transactions
 // to the given channel.
 func (c *Core) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscription {
-	return c.sl.miner.worker.pendingLogsFeed.Subscribe(ch)
+	return c.sl.miner.worker.pendingLogsFeed.Subscribe(ch, true)
 }
 
 // SubscribePendingBlock starts delivering the pending block to the given channel.

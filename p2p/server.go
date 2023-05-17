@@ -339,7 +339,7 @@ func (srv *Server) RemovePeer(node *enode.Node) {
 		srv.dialsched.removeStatic(node)
 		if peer := peers[node.ID()]; peer != nil {
 			ch = make(chan *PeerEvent, 1)
-			sub = srv.peerFeed.Subscribe(ch)
+			sub = srv.peerFeed.Subscribe(ch, true)
 			peer.Disconnect(DiscRequested)
 		}
 	})
@@ -373,7 +373,7 @@ func (srv *Server) RemoveTrustedPeer(node *enode.Node) {
 
 // SubscribeEvents subscribes the given channel to peer events
 func (srv *Server) SubscribeEvents(ch chan *PeerEvent) event.Subscription {
-	return srv.peerFeed.Subscribe(ch)
+	return srv.peerFeed.Subscribe(ch, true)
 }
 
 // Self returns the local node's endpoint information.

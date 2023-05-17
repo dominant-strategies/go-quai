@@ -36,7 +36,7 @@ func ExampleFeed_acknowledgedEvents() {
 	defer close(done)
 	for i := 0; i < 3; i++ {
 		ch := make(chan ackedEvent, 100)
-		sub := feed.Subscribe(ch)
+		sub := feed.Subscribe(ch, true)
 		go func() {
 			defer sub.Unsubscribe()
 			for {

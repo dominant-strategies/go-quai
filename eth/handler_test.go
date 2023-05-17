@@ -17,9 +17,9 @@
 package eth
 
 import (
+	sync "github.com/sasha-s/go-deadlock"
 	"math/big"
 	"sort"
-	sync "github.com/sasha-s/go-deadlock"
 
 	sync "github.com/sasha-s/go-deadlock"
 
@@ -111,7 +111,7 @@ func (p *testTxPool) Pending(enforceTips bool) (map[common.Address]types.Transac
 // SubscribeNewTxsEvent should return an event subscription of NewTxsEvent and
 // send events to the given channel.
 func (p *testTxPool) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
-	return p.txFeed.Subscribe(ch)
+	return p.txFeed.Subscribe(ch, true)
 }
 
 // testHandler is a live implementation of the Quai protocol handler, just
