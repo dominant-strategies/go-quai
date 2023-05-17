@@ -249,8 +249,8 @@ func (b *QuaiAPIBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Su
 	return b.eth.Core().SubscribeChainEvent(ch)
 }
 
-func (b *QuaiAPIBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
-	return b.eth.Core().SubscribeChainHeadEvent(ch)
+func (b *QuaiAPIBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent, blocking bool) event.Subscription {
+	return b.eth.Core().SubscribeChainHeadEvent(ch, blocking)
 }
 
 func (b *QuaiAPIBackend) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription {

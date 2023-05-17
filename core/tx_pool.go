@@ -139,7 +139,7 @@ type blockChain interface {
 	GetBlockFromCacheOrDb(hash common.Hash, number uint64) *types.Block
 	StateAt(root common.Hash) (*state.StateDB, error)
 
-	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
+	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent, blocking bool) event.Subscription
 }
 
 // TxPoolConfig are the configuration parameters of the transaction pool.
@@ -314,7 +314,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 	}
 
 	// Subscribe events from blockchain and start the main event loop.
-	pool.chainHeadSub = pool.chain.SubscribeChainHeadEvent(pool.chainHeadCh)
+	pool.chainHeadSub = pool.chain.SubscribeChainHeadEvent(pool.chainHeadCh, false)
 	pool.wg.Add(1)
 	go pool.loop()
 
@@ -414,7 +414,7 @@ func (pool *TxPool) Stop() {
 // SubscribeNewTxsEvent registers a subscription of NewTxsEvent and
 // starts sending event to the given channel.
 func (pool *TxPool) SubscribeNewTxsEvent(ch chan<- NewTxsEvent) event.Subscription {
-	return pool.scope.Track(pool.txFeed.Subscribe(ch))
+	return pool.scope.Track(pool.txFeed.Subscribe(ch, true))
 }
 
 // GasPrice returns the current gas price enforced by the transaction pool.

@@ -876,21 +876,21 @@ func (hc *HeaderChain) Engine() consensus.Engine {
 }
 
 // SubscribeChainHeadEvent registers a subscription of ChainHeadEvent.
-func (hc *HeaderChain) SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription {
-	return hc.scope.Track(hc.chainHeadFeed.Subscribe(ch))
+func (hc *HeaderChain) SubscribeChainHeadEvent(ch chan<- ChainHeadEvent, blocking bool) event.Subscription {
+	return hc.scope.Track(hc.chainHeadFeed.Subscribe(ch, blocking))
 }
 
 // SubscribeChainSideEvent registers a subscription of ChainSideEvent.
 func (hc *HeaderChain) SubscribeChainSideEvent(ch chan<- ChainSideEvent) event.Subscription {
-	return hc.scope.Track(hc.chainSideFeed.Subscribe(ch))
+	return hc.scope.Track(hc.chainSideFeed.Subscribe(ch, true))
 }
 
 func (hc *HeaderChain) SubscribeMissingPendingEtxsEvent(ch chan<- types.HashAndLocation) event.Subscription {
-	return hc.scope.Track(hc.missingPendingEtxsFeed.Subscribe(ch))
+	return hc.scope.Track(hc.missingPendingEtxsFeed.Subscribe(ch, true))
 }
 
 func (hc *HeaderChain) SubscribeMissingPendingEtxsRollupEvent(ch chan<- common.Hash) event.Subscription {
-	return hc.scope.Track(hc.missingPendingEtxsRollupFeed.Subscribe(ch))
+	return hc.scope.Track(hc.missingPendingEtxsRollupFeed.Subscribe(ch, true))
 }
 
 func (hc *HeaderChain) StateAt(root common.Hash) (*state.StateDB, error) {

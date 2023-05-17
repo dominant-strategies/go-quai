@@ -18,8 +18,8 @@ package event
 
 import (
 	"errors"
-	"reflect"
 	sync "github.com/sasha-s/go-deadlock"
+	"reflect"
 )
 
 var errBadChannel = errors.New("event: Subscribe argument does not have sendable channel type")
@@ -61,7 +61,7 @@ func (f *Feed) init() {
 	f.removeSub = make(chan interface{})
 	f.sendLock = make(chan struct{}, 1)
 	f.sendLock <- struct{}{}
-	f.sendCases = caseList{{Chan: reflect.ValueOf(f.removeSub), Dir: reflect.SelectRecv}}
+	f.sendCases = caseList{{trySendOnly: false, sendCase: reflect.SelectCase{Chan: reflect.ValueOf(f.removeSub), Dir: reflect.SelectRecv}}}
 }
 
 // Subscribe adds a channel to the feed. Future sends will be delivered on the channel
@@ -69,7 +69,12 @@ func (f *Feed) init() {
 //
 // The channel should have ample buffer space to avoid blocking other subscribers.
 // Slow subscribers are not dropped.
-func (f *Feed) Subscribe(channel interface{}) Subscription {
+//
+// A subscription may optionally be blocking. A non-blocking subscription will
+// not block the sender, at the risk of the subscriber missing the event. A
+// blocking subscription will guarantee the subscriber receives the event, but
+// may block the sender for some time.
+func (f *Feed) Subscribe(channel interface{}, blockSender bool) Subscription {
 	f.once.Do(f.init)
 
 	chanval := reflect.ValueOf(channel)
@@ -86,7 +91,7 @@ func (f *Feed) Subscribe(channel interface{}) Subscription {
 	}
 	// Add the select case to the inbox.
 	// The next Send will add it to f.sendCases.
-	cas := reflect.SelectCase{Dir: reflect.SelectSend, Chan: chanval}
+	cas := caseOption{trySendOnly: !blockSender, sendCase: reflect.SelectCase{Dir: reflect.SelectSend, Chan: chanval}}
 	f.inbox = append(f.inbox, cas)
 	return sub
 }
@@ -145,7 +150,7 @@ func (f *Feed) Send(value interface{}) (nsent int) {
 
 	// Set the sent value on all channels.
 	for i := firstSubSendCase; i < len(f.sendCases); i++ {
-		f.sendCases[i].Send = rvalue
+		f.sendCases[i].sendCase.Send = rvalue
 	}
 
 	// Send until all channels except removeSub have been chosen. 'cases' tracks a prefix
@@ -157,8 +162,11 @@ func (f *Feed) Send(value interface{}) (nsent int) {
 		// This should usually succeed if subscribers are fast enough and have free
 		// buffer space.
 		for i := firstSubSendCase; i < len(cases); i++ {
-			if cases[i].Chan.TrySend(rvalue) {
-				nsent++
+			sent := cases[i].sendCase.Chan.TrySend(rvalue)
+			if sent || cases[i].trySendOnly {
+				if sent {
+					nsent++
+				}
 				cases = cases.deactivate(i)
 				i--
 			}
@@ -167,7 +175,11 @@ func (f *Feed) Send(value interface{}) (nsent int) {
 			break
 		}
 		// Select on all the receivers, waiting for them to unblock.
-		chosen, recv, _ := reflect.Select(cases)
+		var sendCases []reflect.SelectCase
+		for i := firstSubSendCase; i < len(cases); i++ {
+			sendCases = append(sendCases, cases[i].sendCase)
+		}
+		chosen, recv, _ := reflect.Select(sendCases)
 		if chosen == 0 /* <-f.removeSub */ {
 			index := f.sendCases.find(recv.Interface())
 			f.sendCases = f.sendCases.delete(index)
@@ -183,7 +195,7 @@ func (f *Feed) Send(value interface{}) (nsent int) {
 
 	// Forget about the sent value and hand off the send lock.
 	for i := firstSubSendCase; i < len(f.sendCases); i++ {
-		f.sendCases[i].Send = reflect.Value{}
+		f.sendCases[i].sendCase.Send = reflect.Value{}
 	}
 	f.sendLock <- struct{}{}
 	return nsent
@@ -207,12 +219,17 @@ func (sub *feedSub) Err() <-chan error {
 	return sub.err
 }
 
-type caseList []reflect.SelectCase
+type caseOption struct {
+	trySendOnly bool // Only allow TrySend(), otherwise blocking Send() is allowed
+	sendCase    reflect.SelectCase
+}
+
+type caseList []caseOption
 
 // find returns the index of a case containing the given channel.
 func (cs caseList) find(channel interface{}) int {
 	for i, cas := range cs {
-		if cas.Chan.Interface() == channel {
+		if cas.sendCase.Chan.Interface() == channel {
 			return i
 		}
 	}

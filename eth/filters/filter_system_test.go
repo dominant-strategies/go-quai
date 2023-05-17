@@ -107,23 +107,23 @@ func (b *testBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*types
 }
 
 func (b *testBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
-	return b.txFeed.Subscribe(ch)
+	return b.txFeed.Subscribe(ch, true)
 }
 
 func (b *testBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {
-	return b.rmLogsFeed.Subscribe(ch)
+	return b.rmLogsFeed.Subscribe(ch, true)
 }
 
 func (b *testBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
-	return b.logsFeed.Subscribe(ch)
+	return b.logsFeed.Subscribe(ch, true)
 }
 
 func (b *testBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription {
-	return b.pendingLogsFeed.Subscribe(ch)
+	return b.pendingLogsFeed.Subscribe(ch, true)
 }
 
 func (b *testBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
-	return b.chainFeed.Subscribe(ch)
+	return b.chainFeed.Subscribe(ch, true)
 }
 
 func (b *testBackend) BloomStatus() (uint64, uint64) {

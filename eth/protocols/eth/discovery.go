@@ -40,7 +40,7 @@ func (e enrEntry) ENRKey() string {
 // head events and updates the requested node record whenever a fork is passed.
 func StartENRUpdater(chain *core.Core, ln *enode.LocalNode) {
 	var newHead = make(chan core.ChainHeadEvent, 10)
-	sub := chain.SubscribeChainHeadEvent(newHead)
+	sub := chain.SubscribeChainHeadEvent(newHead, true)
 
 	go func() {
 		defer sub.Unsubscribe()
