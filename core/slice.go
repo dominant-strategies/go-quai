@@ -213,10 +213,6 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 
 	time10 := common.PrettyDuration(time.Since(start))
 
-	// Append has succeeded write the batch
-	if err := batch.Write(); err != nil {
-		return nil, false, err
-	}
 	appendFinished := time.Since(start)
 	time11 := common.PrettyDuration(appendFinished)
 	bestPh, exist := sl.readPhCache(sl.bestPhKey)
@@ -240,8 +236,15 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		sl.hc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
 	}
 
-	// Relay the new pendingHeader
-	go sl.relayPh(block, &appendFinished, subReorg, pendingHeaderWithTermini, domOrigin, block.Location())
+	defer func() {
+		// Relay the new pendingHeader
+		sl.relayPh(block, &appendFinished, subReorg, pendingHeaderWithTermini, domOrigin, block.Location())
+		// Append has succeeded write the batch
+		if err := batch.Write(); err != nil {
+			log.Warn("unable to batch write in append")
+		}
+	}()
+
 	time12 := common.PrettyDuration(time.Since(start))
 	log.Info("times during append:", "t1:", time1, "t2:", time2, "t3:", time3, "t4:", time4, "t5:", time5, "t6:", time6, "t7:", time7, "t8:", time8, "t9:", time9, "t10:", time10, "t11:", time11, "t12:", time12)
 	log.Info("times during sub append:", "t9_1:", time8_1, "t9_2:", time8_2, "t9_3:", time8_3)
