@@ -51,6 +51,10 @@ const (
 	// more expensive to propagate; larger transactions also take more resources
 	// to validate whether they fit into the pool or not.
 	txMaxSize = 4 * txSlotSize // 128KB
+
+	// c_reorgCounterThreshold determines the frequency of the timing prints
+	// around important functions in txpool
+	c_reorgCounterThreshold = 200
 )
 
 var (
@@ -249,6 +253,8 @@ type TxPool struct {
 	localTxsCount  int // count of txs in last 1 min. Purely for logging purpose
 	remoteTxsCount int // count of txs in last 1 min. Purely for logging purpose
 
+	reOrgCounter int // keeps track of the number of times the runReorg is called, it is reset every c_reorgCounterThreshold times
+
 	chainHeadCh     chan ChainHeadEvent
 	chainHeadSub    event.Subscription
 	reqResetCh      chan *txpoolResetRequest
@@ -288,6 +294,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		gasPrice:        new(big.Int).SetUint64(config.PriceLimit),
 		localTxsCount:   0,
 		remoteTxsCount:  0,
+		reOrgCounter:    0,
 	}
 	pool.locals = newAccountSet(pool.signer)
 	for _, addr := range config.Locals {
@@ -1153,6 +1160,11 @@ func (pool *TxPool) scheduleReorgLoop() {
 // runReorg runs reset and promoteExecutables on behalf of scheduleReorgLoop.
 func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirtyAccounts *accountSet, events map[common.InternalAddress]*txSortedMap) {
 	defer close(done)
+	pool.reOrgCounter += 1
+	var start time.Time
+	if pool.reOrgCounter == c_reorgCounterThreshold {
+		start = time.Now()
+	}
 
 	var promoteAddrs []common.InternalAddress
 	if dirtyAccounts != nil && reset == nil {
@@ -1223,11 +1235,19 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 		}
 		pool.txFeed.Send(NewTxsEvent{txs})
 	}
+	if pool.reOrgCounter == c_reorgCounterThreshold {
+		log.Info("Time taken to runReorg in txpool", "time", common.PrettyDuration(time.Since(start)))
+		pool.reOrgCounter = 0
+	}
 }
 
 // reset retrieves the current state of the blockchain and ensures the content
 // of the transaction pool is valid with regard to the chain state.
 func (pool *TxPool) reset(oldHead, newHead *types.Header) {
+	var start time.Time
+	if pool.reOrgCounter == c_reorgCounterThreshold {
+		start = time.Now()
+	}
 	// If we're reorging an old state, reinject all dropped transactions
 	var reinject types.Transactions
 
@@ -1308,12 +1328,19 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	log.Debug("Reinjecting stale transactions", "count", len(reinject))
 	senderCacher.recover(pool.signer, reinject)
 	pool.addTxsLocked(reinject, false)
+	if pool.reOrgCounter == c_reorgCounterThreshold {
+		log.Info("Time taken to resetTxPool", "time", common.PrettyDuration(time.Since(start)))
+	}
 }
 
 // promoteExecutables moves transactions that have become processable from the
 // future queue to the set of pending transactions. During this process, all
 // invalidated transactions (low nonce, low balance) are deleted.
 func (pool *TxPool) promoteExecutables(accounts []common.InternalAddress) []*types.Transaction {
+	var start time.Time
+	if pool.reOrgCounter == c_reorgCounterThreshold {
+		start = time.Now()
+	}
 	// Track the promoted transactions to broadcast them at once
 	var promoted []*types.Transaction
 
@@ -1373,6 +1400,9 @@ func (pool *TxPool) promoteExecutables(accounts []common.InternalAddress) []*typ
 			delete(pool.beats, addr)
 		}
 	}
+	if pool.reOrgCounter == c_reorgCounterThreshold {
+		log.Info("Time taken to promoteExecutables", "time", common.PrettyDuration(time.Since(start)))
+	}
 	return promoted
 }
 
@@ -1380,6 +1410,10 @@ func (pool *TxPool) promoteExecutables(accounts []common.InternalAddress) []*typ
 // pending limit. The algorithm tries to reduce transaction counts by an approximately
 // equal number for all for accounts with many pending transactions.
 func (pool *TxPool) truncatePending() {
+	var start time.Time
+	if pool.reOrgCounter == c_reorgCounterThreshold {
+		start = time.Now()
+	}
 	pending := uint64(0)
 	for _, list := range pool.pending {
 		pending += uint64(list.Len())
@@ -1461,10 +1495,17 @@ func (pool *TxPool) truncatePending() {
 		}
 	}
 	pendingRateLimitMeter.Mark(int64(pendingBeforeCap - pending))
+	if pool.reOrgCounter == c_reorgCounterThreshold {
+		log.Info("Time taken to truncatePending", "time", common.PrettyDuration(time.Since(start)))
+	}
 }
 
 // truncateQueue drops the oldes transactions in the queue if the pool is above the global queue limit.
 func (pool *TxPool) truncateQueue() {
+	var start time.Time
+	if pool.reOrgCounter == c_reorgCounterThreshold {
+		start = time.Now()
+	}
 	queued := uint64(0)
 	for _, list := range pool.queue {
 		queued += uint64(list.Len())
@@ -1506,6 +1547,9 @@ func (pool *TxPool) truncateQueue() {
 			queuedRateLimitMeter.Mark(1)
 		}
 	}
+	if pool.reOrgCounter == c_reorgCounterThreshold {
+		log.Info("Time taken to truncateQueue", "time", common.PrettyDuration(time.Since(start)))
+	}
 }
 
 // demoteUnexecutables removes invalid and processed transactions from the pools
@@ -1516,6 +1560,10 @@ func (pool *TxPool) truncateQueue() {
 // is always explicitly triggered by SetBaseFee and it would be unnecessary and wasteful
 // to trigger a re-heap is this function
 func (pool *TxPool) demoteUnexecutables() {
+	var start time.Time
+	if pool.reOrgCounter == c_reorgCounterThreshold {
+		start = time.Now()
+	}
 	// Iterate over all accounts and demote any non-executable transactions
 	for addr, list := range pool.pending {
 		nonce := pool.currentState.GetNonce(addr)
@@ -1563,6 +1611,9 @@ func (pool *TxPool) demoteUnexecutables() {
 		if list.Empty() {
 			delete(pool.pending, addr)
 		}
+	}
+	if pool.reOrgCounter == c_reorgCounterThreshold {
+		log.Info("Time taken to demoteExecutables", "time", common.PrettyDuration(time.Since(start)))
 	}
 }
 
