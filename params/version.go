@@ -166,7 +166,7 @@ func VersionWithCommit(gitCommit, gitDate string) string {
 	return vsn
 }
 
-// ArchiveVersion holds the textual version string used for Geth archives.
+// ArchiveVersion holds the textual version string used for Quai archives.
 // e.g. "1.8.11-dea1ce05" for stable releases, or
 //
 //	"1.8.13-unstable-21c059b6" for unstable releases

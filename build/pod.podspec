@@ -1,5 +1,5 @@
 Pod::Spec.new do |spec|
-  spec.name         = 'Geth'
+  spec.name         = 'Quai'
   spec.version      = '{{.Version}}'
   spec.license      = { :type => 'GNU Lesser General Public License, Version 3.0' }
   spec.homepage     = 'https://github.com/dominant-strategies/go-quai'
@@ -11,12 +11,12 @@ Pod::Spec.new do |spec|
 
 	spec.platform = :ios
   spec.ios.deployment_target  = '9.0'
-	spec.ios.vendored_frameworks = 'Frameworks/Geth.framework'
+	spec.ios.vendored_frameworks = 'Frameworks/Quai.framework'
 
 	spec.prepare_command = <<-CMD
-    curl https://gethstore.blob.core.windows.net/builds/{{.Archive}}.tar.gz | tar -xvz
+    curl https://quaistore.blob.core.windows.net/builds/{{.Archive}}.tar.gz | tar -xvz
     mkdir Frameworks
-    mv {{.Archive}}/Geth.framework Frameworks
+    mv {{.Archive}}/Quai.framework Frameworks
     rm -rf {{.Archive}}
   CMD
 end

@@ -44,7 +44,7 @@ func Fuzz(input []byte) int {
 	resBX, resBY := curveB.Add(x1, y1, x2, y2)
 	if resAX.Cmp(resBX) != 0 || resAY.Cmp(resBY) != 0 {
 		fmt.Printf("%s %s %s %s\n", x1, y1, x2, y2)
-		panic(fmt.Sprintf("Addition failed: geth: %s %s btcd: %s %s", resAX, resAY, resBX, resBY))
+		panic(fmt.Sprintf("Addition failed: quai: %s %s btcd: %s %s", resAX, resAY, resBX, resBY))
 	}
 	return 0
 }

@@ -38,7 +38,7 @@ var DefaultConfig = Config{
 	Port:             6060,
 	EnableInfluxDB:   false,
 	InfluxDBEndpoint: "http://localhost:8086",
-	InfluxDBDatabase: "geth",
+	InfluxDBDatabase: "quai",
 	InfluxDBUsername: "test",
 	InfluxDBPassword: "test",
 	InfluxDBTags:     "host=localhost",

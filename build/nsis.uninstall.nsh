@@ -17,12 +17,12 @@ Section "Uninstall"
   rmDir "$SMPROGRAMS\${APPNAME}"
 
   # Firewall - remove rules if exists
-  SimpleFC::AdvRemoveRule "Geth incoming peers (TCP:30303)"
-  SimpleFC::AdvRemoveRule "Geth outgoing peers (TCP:30303)"
-  SimpleFC::AdvRemoveRule "Geth UDP discovery (UDP:30303)"
+  SimpleFC::AdvRemoveRule "Quai incoming peers (TCP:30303)"
+  SimpleFC::AdvRemoveRule "Quai outgoing peers (TCP:30303)"
+  SimpleFC::AdvRemoveRule "Quai UDP discovery (UDP:30303)"
 
   # Remove IPC endpoint
-  ${un.EnvVarUpdate} $0 "QUAI_SOCKET" "R" "HKLM" "\\.\pipe\geth.ipc"
+  ${un.EnvVarUpdate} $0 "QUAI_SOCKET" "R" "HKLM" "\\.\pipe\quai.ipc"
 
   # Remove install directory from PATH
   Push "$INSTDIR"

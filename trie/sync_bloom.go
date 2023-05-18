@@ -19,9 +19,10 @@ package trie
 import (
 	"encoding/binary"
 	"fmt"
-	sync "github.com/sasha-s/go-deadlock"
 	"sync/atomic"
 	"time"
+
+	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
@@ -175,7 +176,7 @@ func (b *SyncBloom) Add(hash []byte) {
 func (b *SyncBloom) Contains(hash []byte) bool {
 	bloomTestMeter.Mark(1)
 	if atomic.LoadUint32(&b.inited) == 0 {
-		// We didn't load all the trie nodes from the previous run of Geth yet. As
+		// We didn't load all the trie nodes from the previous run of Quai yet. As
 		// such, we can't say for sure if a hash is not present for anything. Until
 		// the init is done, we're faking "possible presence" for everything.
 		return true

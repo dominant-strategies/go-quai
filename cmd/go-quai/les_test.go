@@ -18,7 +18,7 @@ import (
 type quairpc struct {
 	name     string
 	rpc      *rpc.Client
-	quai     *testgeth
+	quai     *testquai
 	nodeInfo *p2p.NodeInfo
 }
 
@@ -33,7 +33,7 @@ func (g *quairpc) callRPC(result interface{}, method string, args ...interface{}
 	}
 }
 
-func (g *quairpc) addPeer(peer *gethrpc) {
+func (g *quairpc) addPeer(peer *quairpc) {
 	g.quai.Logf("%v.addPeer(%v)", g.name, peer.name)
 	enode := peer.getNodeInfo().Enode
 	peerCh := make(chan *p2p.PeerEvent)
