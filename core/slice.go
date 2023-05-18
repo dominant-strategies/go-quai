@@ -278,7 +278,7 @@ func (sl *Slice) relayPh(block *types.Block, appendTime *time.Duration, reorg bo
 				return
 			} else {
 				pendingHeaderWithTermini.Header = sl.combinePendingHeader(localPendingHeader, pendingHeaderWithTermini.Header, nodeCtx, true)
-				sl.updatePhCache(pendingHeaderWithTermini, false)
+				sl.updatePhCache(pendingHeaderWithTermini, true)
 			}
 			bestPh, exists = sl.readPhCache(sl.bestPhKey)
 			if exists {
