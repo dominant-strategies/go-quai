@@ -45,7 +45,6 @@ func TestState(t *testing.T) {
 
 	// Uses 1GB RAM per tested fork
 	st.skipLoad(`^stStaticCall/static_Call1MB`)
-	// Un-skip this when https://github.com/ethereum/tests/issues/908 is closed
 	st.skipLoad(`^stQuadraticComplexityTest/QuadraticComplexitySolidity_CallDataCopy`)
 	// Broken tests:
 	// Expected failures:

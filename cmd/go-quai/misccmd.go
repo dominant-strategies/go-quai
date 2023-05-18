@@ -31,7 +31,7 @@ var (
 	VersionCheckUrlFlag = cli.StringFlag{
 		Name:  "check.url",
 		Usage: "URL to use when checking vulnerabilities",
-		Value: "https://quai.ethereum.org/docs/vulnerabilities/vulnerabilities.json",
+		Value: "",
 	}
 	VersionCheckVersionFlag = cli.StringFlag{
 		Name:  "check.version",
@@ -51,7 +51,7 @@ The output of this command is supposed to be machine-readable.
 `,
 	}
 	versionCheckCommand = cli.Command{
-		Action: utils.MigrateFlags(versionCheck),
+		Action: utils.MigrateFlags(nil),
 		Flags: []cli.Flag{
 			VersionCheckUrlFlag,
 			VersionCheckVersionFlag,
@@ -61,7 +61,7 @@ The output of this command is supposed to be machine-readable.
 		ArgsUsage: "<versionstring (optional)>",
 		Category:  "MISCELLANEOUS COMMANDS",
 		Description: `
-The version-check command fetches vulnerability-information from https://quai.ethereum.org/docs/vulnerabilities/vulnerabilities.json, 
+The version-check command fetches vulnerability-information 
 and displays information about any security vulnerabilities that affect the currently executing version.
 `,
 	}

@@ -30,7 +30,7 @@ type Config struct {
 	InfluxDBTags     string `toml:",omitempty"`
 }
 
-// DefaultConfig is the default config for metrics used in go-ethereum.
+// DefaultConfig is the default config for metrics used in go-quai.
 var DefaultConfig = Config{
 	Enabled:          false,
 	EnabledExpensive: false,

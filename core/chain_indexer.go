@@ -20,9 +20,10 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	sync "github.com/sasha-s/go-deadlock"
 	"sync/atomic"
 	"time"
+
+	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
@@ -200,7 +201,7 @@ func (c *ChainIndexer) eventLoop(currentHeader *types.Header, events chan ChainH
 			header := ev.Block.Header()
 			if header.ParentHash() != prevHash {
 				// Reorg to the common ancestor if needed (might not exist in light sync mode, skip reorg then)
-				// TODO(karalabe, zsfelfoldi): This seems a bit brittle, can we detect this case explicitly?
+				// TODO: This seems a bit brittle, can we detect this case explicitly?
 
 				if rawdb.ReadCanonicalHash(c.chainDb, prevHeader.Number().Uint64()) != prevHash {
 					if h := rawdb.FindCommonAncestor(c.chainDb, prevHeader, header); h != nil {

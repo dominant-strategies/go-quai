@@ -67,7 +67,7 @@ func (blake3pow *Blake3pow) Author(header *types.Header) (common.Address, error)
 }
 
 // VerifyHeader checks whether a header conforms to the consensus rules of the
-// stock Ethereum blake3pow engine.
+// stock Quai blake3pow engine.
 func (blake3pow *Blake3pow) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Header, seal bool) error {
 	// If we're running a full engine faking, accept any input as valid
 	if blake3pow.config.PowMode == ModeFullFake {
@@ -166,7 +166,7 @@ func (blake3pow *Blake3pow) verifyHeaderWorker(chain consensus.ChainHeaderReader
 }
 
 // VerifyUncles verifies that the given block's uncles conform to the consensus
-// rules of the stock Ethereum blake3pow engine.
+// rules of the stock Quai blake3pow engine.
 func (blake3pow *Blake3pow) VerifyUncles(chain consensus.ChainReader, block *types.Block) error {
 	// If we're running a full engine faking, accept any input as valid
 	if blake3pow.config.PowMode == ModeFullFake {
@@ -336,7 +336,6 @@ func (blake3pow *Blake3pow) CalcDifficulty(chain consensus.ChainHeaderReader, pa
 		log.Error("Cannot CalcDifficulty for", "context", nodeCtx)
 		return nil
 	}
-	// https://github.com/ethereum/EIPs/issues/100.
 	// algorithm:
 	// diff = (parent_diff +
 	//         (parent_diff / 2048 * max((2 if len(parent.uncles) else 1) - ((timestamp - parent.timestamp) // 9), -99))

@@ -3,8 +3,9 @@ package blake3pow
 import (
 	"math/big"
 	"math/rand"
-	sync "github.com/sasha-s/go-deadlock"
 	"time"
+
+	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
@@ -96,7 +97,7 @@ func NewTester(notify []string, noverify bool) *Blake3pow {
 }
 
 // NewFaker creates a blake3pow consensus engine with a fake PoW scheme that accepts
-// all blocks' seal as valid, though they still have to conform to the Ethereum
+// all blocks' seal as valid, though they still have to conform to the Quai
 // consensus rules.
 func NewFaker() *Blake3pow {
 	return &Blake3pow{
@@ -109,7 +110,7 @@ func NewFaker() *Blake3pow {
 
 // NewFakeFailer creates a blake3pow consensus engine with a fake PoW scheme that
 // accepts all blocks as valid apart from the single one specified, though they
-// still have to conform to the Ethereum consensus rules.
+// still have to conform to the Quai consensus rules.
 func NewFakeFailer(fail uint64) *Blake3pow {
 	return &Blake3pow{
 		config: Config{
@@ -122,7 +123,7 @@ func NewFakeFailer(fail uint64) *Blake3pow {
 
 // NewFakeDelayer creates a blake3pow consensus engine with a fake PoW scheme that
 // accepts all blocks as valid, but delays verifications by some time, though
-// they still have to conform to the Ethereum consensus rules.
+// they still have to conform to the Quai consensus rules.
 func NewFakeDelayer(delay time.Duration) *Blake3pow {
 	return &Blake3pow{
 		config: Config{

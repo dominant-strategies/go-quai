@@ -21,8 +21,9 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	sync "github.com/sasha-s/go-deadlock"
 	"sync/atomic"
+
+	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
@@ -148,7 +149,7 @@ type snapshot interface {
 	StorageIterator(account common.Hash, seek common.Hash) (StorageIterator, bool)
 }
 
-// Tree is an Ethereum state snapshot tree. It consists of one persistent base
+// Tree is a Quai state snapshot tree. It consists of one persistent base
 // layer backed by a key-value store, on top of which arbitrarily many in-memory
 // diff layers are topped. The memory diffs can form a tree with branching, but
 // the disk layer is singleton and common to all. If a reorg goes deeper than the
@@ -532,7 +533,7 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 
 		it := rawdb.IterateStorageSnapshots(base.diskdb, hash)
 		for it.Next() {
-			if key := it.Key(); len(key) == 65 { // TODO(karalabe): Yuck, we should move this into the iterator
+			if key := it.Key(); len(key) == 65 { // TODO: We should move this into the iterator
 				batch.Delete(key)
 				base.cache.Del(key[1:])
 				snapshotFlushStorageItemMeter.Mark(1)

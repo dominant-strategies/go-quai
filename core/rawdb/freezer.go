@@ -22,9 +22,10 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	sync "github.com/sasha-s/go-deadlock"
 	"sync/atomic"
 	"time"
+
+	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/ethdb"
@@ -68,7 +69,7 @@ const (
 //
 //   - The append only nature ensures that disk writes are minimized.
 //   - The memory mapping ensures we can max out system memory for caching without
-//     reserving it for go-ethereum. This would also reduce the memory requirements
+//     reserving it for go-quai. This would also reduce the memory requirements
 //     of Geth, and thus also GC overhead.
 type freezer struct {
 	// WARNING: The `frozen` field is accessed atomically. On 32 bit platforms, only

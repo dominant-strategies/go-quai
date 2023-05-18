@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package types contains data types related to Ethereum consensus.
+// Package types contains data types related to Quai consensus.
 package types
 
 import (
@@ -82,7 +82,7 @@ func (n *BlockNonce) UnmarshalText(input []byte) error {
 
 //go:generate gencodec -type Header -field-override headerMarshaling -out gen_header_json.go
 
-// Header represents a block header in the Ethereum blockchain.
+// Header represents a block header in the Quai blockchain.
 type Header struct {
 	parentHash    []common.Hash   `json:"parentHash"           gencodec:"required"`
 	uncleHash     common.Hash     `json:"sha3Uncles"           gencodec:"required"`
@@ -171,7 +171,7 @@ func EmptyHeader() *Header {
 	return h
 }
 
-// DecodeRLP decodes the Ethereum
+// DecodeRLP decodes the Quai header format into h.
 func (h *Header) DecodeRLP(s *rlp.Stream) error {
 	var eh extheader
 	if err := s.Decode(&eh); err != nil {
@@ -202,7 +202,7 @@ func (h *Header) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
-// EncodeRLP serializes b into the Ethereum RLP block format.
+// EncodeRLP serializes h into the Quai RLP block format.
 func (h *Header) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, extheader{
 		ParentHash:    h.parentHash,
@@ -745,7 +745,7 @@ type Body struct {
 	SubManifest     BlockManifest
 }
 
-// Block represents an entire block in the Ethereum blockchain.
+// Block represents an entire block in the Quai blockchain.
 type Block struct {
 	header          *Header
 	uncles          []*Header
@@ -873,7 +873,7 @@ func CopyHeader(h *Header) *Header {
 	return &cpy
 }
 
-// DecodeRLP decodes the Ethereum
+// DecodeRLP decodes the Quai RLP encoding into b.
 func (b *Block) DecodeRLP(s *rlp.Stream) error {
 	var eb extblock
 	_, size, _ := s.Kind()
@@ -885,7 +885,7 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
-// EncodeRLP serializes b into the Ethereum RLP block format.
+// EncodeRLP serializes b into the Quai RLP block format.
 func (b *Block) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, extblock{
 		Header:      b.header,

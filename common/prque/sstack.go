@@ -6,8 +6,6 @@
 // toolbox may be used in accordance with the terms and conditions contained
 // in a signed written agreement between you and the author(s).
 
-// This is a duplicated and slightly modified version of "gopkg.in/karalabe/cookiejar.v2/collections/prque".
-
 package prque
 
 // The size of a block of data

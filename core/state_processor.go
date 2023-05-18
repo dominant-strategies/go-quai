@@ -20,8 +20,9 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	sync "github.com/sasha-s/go-deadlock"
 	"time"
+
+	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/prque"
@@ -99,8 +100,6 @@ type CacheConfig struct {
 	TrieTimeLimit       time.Duration // Time limit after which to flush the current in-memory trie to disk
 	SnapshotLimit       int           // Memory allowance (MB) to use for caching snapshot entries in memory
 	Preimages           bool          // Whether to store preimage of trie key to the disk
-
-	SnapshotWait bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
 }
 
 // defaultCacheConfig are the default caching values if none are specified by the
@@ -110,7 +109,6 @@ var defaultCacheConfig = &CacheConfig{
 	TrieDirtyLimit: 256,
 	TrieTimeLimit:  5 * time.Minute,
 	SnapshotLimit:  256,
-	SnapshotWait:   true,
 }
 
 // StateProcessor is a basic Processor, which takes care of transitioning
@@ -166,7 +164,7 @@ func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine conse
 	return sp
 }
 
-// Process processes the state changes according to the Ethereum rules by running
+// Process processes the state changes according to the Quai rules by running
 // the transaction messages using the statedb and applying any rewards to both
 // the processor (coinbase) and any included uncles.
 //

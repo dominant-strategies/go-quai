@@ -18,8 +18,9 @@ package eth
 
 import (
 	"math/big"
-	sync "github.com/sasha-s/go-deadlock"
 	"time"
+
+	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/dominant-strategies/go-quai/eth/protocols/eth"
 )
@@ -27,7 +28,7 @@ import (
 // ethPeerInfo represents a short summary of the `eth` sub-protocol metadata known
 // about a connected peer.
 type ethPeerInfo struct {
-	Version uint     `json:"version"` // Ethereum protocol version negotiated
+	Version uint     `json:"version"` // Quai protocol version negotiated
 	Entropy *big.Int `json:"entropy"` // Head Entropy of the peer's blockchain
 	Head    string   `json:"head"`    // Hex hash of the peer's best owned block
 }

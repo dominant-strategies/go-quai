@@ -22,7 +22,7 @@ import (
 	"github.com/holiman/uint256"
 )
 
-// Memory implements a simple memory model for the ethereum virtual machine.
+// Memory implements a simple memory model for the quai virtual machine.
 type Memory struct {
 	store       []byte
 	lastGasCost uint64

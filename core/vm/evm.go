@@ -19,9 +19,10 @@ package vm
 import (
 	"fmt"
 	"math/big"
-	sync "github.com/sasha-s/go-deadlock"
 	"sync/atomic"
 	"time"
+
+	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
@@ -88,7 +89,7 @@ type TxContext struct {
 	ETXAccessList types.AccessList
 }
 
-// EVM is the Ethereum Virtual Machine base object and provides
+// EVM is the Quai Virtual Machine base object and provides
 // the necessary tools to run a contract on the given state with
 // the provided context. It should be noted that any error
 // generated through any of the calls should be considered a
@@ -113,7 +114,7 @@ type EVM struct {
 	// virtual machine configuration options used to initialise the
 	// evm.
 	Config Config
-	// global (to this context) ethereum virtual machine
+	// global (to this context) quai virtual machine
 	// used throughout the execution of the tx.
 	interpreter *EVMInterpreter
 	// abort is used to abort the EVM calling operations

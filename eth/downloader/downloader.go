@@ -21,11 +21,12 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	sync "github.com/sasha-s/go-deadlock"
 	"sync/atomic"
 	"time"
 
-	ethereum "github.com/dominant-strategies/go-quai"
+	sync "github.com/sasha-s/go-deadlock"
+
+	quai "github.com/dominant-strategies/go-quai"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/core/state/snapshot"
@@ -185,7 +186,7 @@ func New(stateDb ethdb.Database, mux *event.TypeMux, core Core, dropPeer peerDro
 // In addition, during the state download phase of fast synchronisation the number
 // of processed and the total number of known states are also returned. Otherwise
 // these are zero.
-func (d *Downloader) Progress() ethereum.SyncProgress {
+func (d *Downloader) Progress() quai.SyncProgress {
 	// Lock the current stats and return the progress
 	d.syncStatsLock.RLock()
 	defer d.syncStatsLock.RUnlock()
@@ -198,7 +199,7 @@ func (d *Downloader) Progress() ethereum.SyncProgress {
 	default:
 		log.Error("Unknown downloader chain/mode combo", "light", "full", d.core != nil, "mode", mode)
 	}
-	return ethereum.SyncProgress{
+	return quai.SyncProgress{
 		StartingBlock: d.syncStatsChainOrigin,
 		CurrentBlock:  current,
 		HighestBlock:  d.syncStatsChainHeight,

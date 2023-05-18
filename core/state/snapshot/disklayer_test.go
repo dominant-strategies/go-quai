@@ -505,16 +505,6 @@ func TestDiskGeneratorPersistence(t *testing.T) {
 	}
 }
 
-// Tests that merging something into a disk layer persists it into the database
-// and invalidates any previously written and cached values, discarding anything
-// after the in-progress generation marker.
-//
-// This test case is a tiny specialized case of TestDiskPartialMerge, which tests
-// some very specific cornercases that random tests won't ever trigger.
-func TestDiskMidAccountPartialMerge(t *testing.T) {
-	// TODO(@karalabe) ?
-}
-
 // TestDiskSeek tests that seek-operations work on the disk layer
 func TestDiskSeek(t *testing.T) {
 	// Create some accounts in the disk layer

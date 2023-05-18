@@ -480,7 +480,6 @@ func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.He
 	w.current = work
 
 	// Create a local environment copy, avoid the data race with snapshot state.
-	// https://github.com/ethereum/go-ethereum/issues/24299
 	block, err = w.FinalizeAssemble(w.hc, work.header, block, work.state, work.txs, work.unclelist(), work.etxs, work.subManifest, work.receipts)
 	if err != nil {
 		return nil, err
@@ -1009,7 +1008,6 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 			interval()
 		}
 		// Create a local environment copy, avoid the data race with snapshot state.
-		// https://github.com/ethereum/go-ethereum/issues/24299
 		env := env.copy()
 		parent := w.hc.GetBlock(env.header.ParentHash(), env.header.NumberU64()-1)
 		block, err := w.FinalizeAssemble(w.hc, env.header, parent, env.state, env.txs, env.unclelist(), env.etxs, env.subManifest, env.receipts)

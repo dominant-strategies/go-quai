@@ -14,12 +14,12 @@ override_dh_auto_clean:
 
 override_dh_auto_build:
 	# We can't download a fresh Go within Launchpad, so we're shipping and building
-	# one on the fly. However, we can't build it inside the go-ethereum folder as
+	# one on the fly. However, we can't build it inside the go-quai folder as
 	# bootstrapping clashes with go modules, so build in a sibling folder.
 	(mv .go ../ && cd ../.go/src && ./make.bash)
 
 	# We can't download external go modules within Launchpad, so we're shipping the
-	# entire dependency source cache with go-ethereum.
+	# entire dependency source cache with go-quai.
 	mkdir -p $(GOPATH)/pkg
 	mv .mod $(GOPATH)/pkg/mod
 

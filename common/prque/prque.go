@@ -6,8 +6,6 @@
 // toolbox may be used in accordance with the terms and conditions contained
 // in a signed written agreement between you and the author(s).
 
-// This is a duplicated and slightly modified version of "gopkg.in/karalabe/cookiejar.v2/collections/prque".
-
 // Package prque implements a priority queue data structure supporting arbitrary
 // value types and int64 priorities.
 //

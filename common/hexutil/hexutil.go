@@ -16,7 +16,7 @@
 
 /*
 Package hexutil implements hex encoding with 0x prefix.
-This encoding is used by the Ethereum RPC API to transport binary data in JSON payloads.
+This encoding is used by the Quai RPC API to transport binary data in JSON payloads.
 
 # Encoding Rules
 
@@ -179,14 +179,13 @@ func MustDecodeBig(input string) *big.Int {
 // The sign of the integer is ignored.
 func EncodeBig(bigint *big.Int) string {
 	if sign := bigint.Sign(); sign == 0 {
-	    return "0x0"
+		return "0x0"
 	} else if sign > 0 {
-	    return "0x" + bigint.Text(16)
+		return "0x" + bigint.Text(16)
 	} else {
-	    return "-0x" + bigint.Text(16)[1:]
-	    }
+		return "-0x" + bigint.Text(16)[1:]
 	}
- 
+}
 
 func has0xPrefix(input string) bool {
 	return len(input) >= 2 && input[0] == '0' && (input[1] == 'x' || input[1] == 'X')

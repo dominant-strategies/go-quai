@@ -50,7 +50,6 @@ func (f stateBloomHasher) Sum64() uint64                     { return binary.Big
 // state root. So in theory this pruned state shouldn't be visited anymore. Another
 // potential issue is for fast sync. If we do another fast sync upon the pruned
 // database, it's problematic which will stop the expansion during the syncing.
-// TODO address it @rjl493456442 @holiman @karalabe.
 //
 // After the entire state is generated, the bloom filter should be persisted into
 // the disk. It indicates the whole generation procedure is finished.

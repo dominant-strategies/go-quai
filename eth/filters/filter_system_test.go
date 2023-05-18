@@ -26,7 +26,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dominant-strategies/go-quai"
+	quai "github.com/dominant-strategies/go-quai"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus/blake3pow"
 	"github.com/dominant-strategies/go-quai/core"
@@ -507,55 +507,55 @@ func TestPendingLogsSubscription(t *testing.T) {
 		}
 
 		testCases = []struct {
-			crit     ethereum.FilterQuery
+			crit     quai.FilterQuery
 			expected []*types.Log
 			c        chan []*types.Log
 			sub      *Subscription
 		}{
 			// match all
 			{
-				ethereum.FilterQuery{}, flattenLogs(allLogs),
+				quai.FilterQuery{}, flattenLogs(allLogs),
 				nil, nil,
 			},
 			// match none due to no matching addresses
 			{
-				ethereum.FilterQuery{Addresses: []common.Address{{}, notUsedAddress}, Topics: [][]common.Hash{nil}},
+				quai.FilterQuery{Addresses: []common.Address{{}, notUsedAddress}, Topics: [][]common.Hash{nil}},
 				nil,
 				nil, nil,
 			},
 			// match logs based on addresses, ignore topics
 			{
-				ethereum.FilterQuery{Addresses: []common.Address{firstAddr}},
+				quai.FilterQuery{Addresses: []common.Address{firstAddr}},
 				append(flattenLogs(allLogs[:2]), allLogs[5][3]),
 				nil, nil,
 			},
 			// match none due to no matching topics (match with address)
 			{
-				ethereum.FilterQuery{Addresses: []common.Address{secondAddr}, Topics: [][]common.Hash{{notUsedTopic}}},
+				quai.FilterQuery{Addresses: []common.Address{secondAddr}, Topics: [][]common.Hash{{notUsedTopic}}},
 				nil, nil, nil,
 			},
 			// match logs based on addresses and topics
 			{
-				ethereum.FilterQuery{Addresses: []common.Address{thirdAddress}, Topics: [][]common.Hash{{firstTopic, secondTopic}}},
+				quai.FilterQuery{Addresses: []common.Address{thirdAddress}, Topics: [][]common.Hash{{firstTopic, secondTopic}}},
 				append(flattenLogs(allLogs[3:5]), allLogs[5][0]),
 				nil, nil,
 			},
 			// match logs based on multiple addresses and "or" topics
 			{
-				ethereum.FilterQuery{Addresses: []common.Address{secondAddr, thirdAddress}, Topics: [][]common.Hash{{firstTopic, secondTopic}}},
+				quai.FilterQuery{Addresses: []common.Address{secondAddr, thirdAddress}, Topics: [][]common.Hash{{firstTopic, secondTopic}}},
 				append(flattenLogs(allLogs[2:5]), allLogs[5][0]),
 				nil,
 				nil,
 			},
 			// block numbers are ignored for filters created with New***Filter, these return all logs that match the given criteria when the state changes
 			{
-				ethereum.FilterQuery{Addresses: []common.Address{firstAddr}, FromBlock: big.NewInt(2), ToBlock: big.NewInt(3)},
+				quai.FilterQuery{Addresses: []common.Address{firstAddr}, FromBlock: big.NewInt(2), ToBlock: big.NewInt(3)},
 				append(flattenLogs(allLogs[:2]), allLogs[5][3]),
 				nil, nil,
 			},
 			// multiple pending logs, should match only 2 topics from the logs in block 5
 			{
-				ethereum.FilterQuery{Addresses: []common.Address{thirdAddress}, Topics: [][]common.Hash{{firstTopic, fourthTopic}}},
+				quai.FilterQuery{Addresses: []common.Address{thirdAddress}, Topics: [][]common.Hash{{firstTopic, fourthTopic}}},
 				[]*types.Log{allLogs[5][0], allLogs[5][2]},
 				nil, nil,
 			},

@@ -33,7 +33,6 @@ import (
 )
 
 // The values in those tests are from the Transaction Tests
-// at github.com/ethereum/tests.
 var (
 	testAddr = common.HexToAddress("b94f5374fce5edbc8e2a8697c15331677e6ebf0b")
 

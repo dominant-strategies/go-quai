@@ -22,16 +22,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	lru "github.com/hashicorp/golang-lru"
-	sync "github.com/sasha-s/go-deadlock"
-	"github.com/shirou/gopsutil/cpu"
-	"github.com/shirou/gopsutil/mem"
 	"math/big"
 	"net/http"
 	"runtime"
 	"strconv"
 	"strings"
 	"time"
+
+	lru "github.com/hashicorp/golang-lru"
+	sync "github.com/sasha-s/go-deadlock"
+	"github.com/shirou/gopsutil/cpu"
+	"github.com/shirou/gopsutil/mem"
+
+	"os/exec"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
@@ -46,7 +49,6 @@ import (
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rpc"
 	"github.com/gorilla/websocket"
-	"os/exec"
 )
 
 const (
@@ -88,7 +90,7 @@ type fullNodeBackend interface {
 	SuggestGasTipCap(ctx context.Context) (*big.Int, error)
 }
 
-// Service implements an Ethereum netstats reporting daemon that pushes local
+// Service implements an Quai netstats reporting daemon that pushes local
 // chain statistics up to a monitoring server.
 type Service struct {
 	server  *p2p.Server // Peer-to-peer server to retrieve networking infos

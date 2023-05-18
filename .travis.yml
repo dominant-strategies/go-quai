@@ -1,5 +1,5 @@
 language: go
-go_import_path: github.com/ethereum/go-ethereum
+go_import_path: github.com/dominant-strategies/go-quai
 sudo: false
 jobs:
   allow_failures:
@@ -20,7 +20,7 @@ jobs:
       env:
         - lint
       git:
-        submodules: false # avoid cloning ethereum/tests
+        submodules: false
       script:
         - go run build/ci.go lint
 
@@ -37,11 +37,11 @@ jobs:
       services:
         - docker
       git:
-        submodules: false # avoid cloning ethereum/tests
+        submodules: false
       before_install:
         - export DOCKER_CLI_EXPERIMENTAL=enabled
       script:
-        - go run build/ci.go docker -image -manifest amd64,arm64 -upload ethereum/client-go
+        - go run build/ci.go docker -image -manifest amd64,arm64 -upload dominant-strategies/go-quai
 
     - stage: build
       if: type = push
@@ -54,11 +54,11 @@ jobs:
       services:
         - docker
       git:
-        submodules: false # avoid cloning ethereum/tests
+        submodules: false
       before_install:
         - export DOCKER_CLI_EXPERIMENTAL=enabled
       script:
-        - go run build/ci.go docker -image -manifest amd64,arm64 -upload ethereum/client-go
+        - go run build/ci.go docker -image -manifest amd64,arm64 -upload dominant-strategies/go-quai
 
     # This builder does the Ubuntu PPA upload
     - stage: build
@@ -70,7 +70,7 @@ jobs:
         - ubuntu-ppa
         - GO111MODULE=on
       git:
-        submodules: false # avoid cloning ethereum/tests
+        submodules: false
       addons:
         apt:
           packages:
@@ -82,7 +82,7 @@ jobs:
             - python-paramiko
       script:
         - echo '|1|7SiYPr9xl3uctzovOTj4gMwAC1M=|t6ReES75Bo/PxlOPJ6/GsGbTrM0= ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEA0aKz5UTUndYgIGG7dQBV+HaeuEZJ2xPHo2DS2iSKvUL4xNMSAY4UguNW+pX56nAQmZKIZZ8MaEvSj6zMEDiq6HFfn5JcTlM80UwlnyKe8B8p7Nk06PPQLrnmQt5fh0HmEcZx+JU9TZsfCHPnX7MNz4ELfZE6cFsclClrKim3BHUIGq//t93DllB+h4O9LHjEUsQ1Sr63irDLSutkLJD6RXchjROXkNirlcNVHH/jwLWR5RcYilNX7S5bIkK8NlWPjsn/8Ua5O7I9/YoE97PpO6i73DTGLh5H9JN/SITwCKBkgSDWUt61uPK3Y11Gty7o2lWsBjhBUm2Y38CBsoGmBw==' >> ~/.ssh/known_hosts
-        - go run build/ci.go debsrc -upload ethereum/ethereum -sftp-user geth-ci -signer "Go Ethereum Linux Builder <geth-ci@ethereum.org>"
+        - go run build/ci.go debsrc -upload dominant-strategies/quai -sftp-user geth-ci -signer "Go Quai Linux Builder <team@dominantstrategies.io>"
 
     # This builder does the Linux Azure uploads
     - stage: build
@@ -95,7 +95,7 @@ jobs:
         - azure-linux
         - GO111MODULE=on
       git:
-        submodules: false # avoid cloning ethereum/tests
+        submodules: false
       addons:
         apt:
           packages:
@@ -132,7 +132,7 @@ jobs:
         - azure-linux-mips
         - GO111MODULE=on
       git:
-        submodules: false # avoid cloning ethereum/tests
+        submodules: false
       script:
         - go run build/ci.go xgo --alltools -- --targets=linux/mips --ldflags '-extldflags "-static"' -v
         - for bin in build/bin/*-linux-mips; do mv -f "${bin}" "${bin/-linux-mips/}"; done
@@ -164,7 +164,7 @@ jobs:
         - maven-android
         - GO111MODULE=on
       git:
-        submodules: false # avoid cloning ethereum/tests
+        submodules: false
       before_install:
         # Install Android and it's dependencies manually, Travis is stale
         - export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
@@ -184,8 +184,8 @@ jobs:
         - export GOPATH=$HOME/go
       script:
         # Build the Android archive and upload it to Maven Central and Azure
-        - mkdir -p $GOPATH/src/github.com/ethereum
-        - ln -s `pwd` $GOPATH/src/github.com/ethereum/go-ethereum
+        - mkdir -p $GOPATH/src/github.com/dominant-strategies
+        - ln -s `pwd` $GOPATH/src/github.com/dominant-strategies/go-quai
         - go run build/ci.go aar -signer ANDROID_SIGNING_KEY -signify SIGNIFY_KEY  -deploy https://oss.sonatype.org -upload gethstore/builds
 
     # This builder does the OSX Azure, iOS CocoaPods and iOS Azure uploads
@@ -199,7 +199,7 @@ jobs:
         - cocoapods-ios
         - GO111MODULE=on
       git:
-        submodules: false # avoid cloning ethereum/tests
+        submodules: false
       script:
         - go run build/ci.go install -dlgo
         - go run build/ci.go archive -type tar -signer OSX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
@@ -215,7 +215,6 @@ jobs:
         - xctool -version
         - xcrun simctl list
 
-        # Workaround for https://github.com/golang/go/issues/23749
         - export CGO_CFLAGS_ALLOW='-fmodules|-fblocks|-fobjc-arc'
         - go run build/ci.go xcode -signer IOS_SIGNING_KEY -signify SIGNIFY_KEY -deploy trunk -upload gethstore/builds
 
@@ -260,6 +259,6 @@ jobs:
         - azure-purge
         - GO111MODULE=on
       git:
-        submodules: false # avoid cloning ethereum/tests
+        submodules: false
       script:
         - go run build/ci.go purge -store gethstore/builds -days 14

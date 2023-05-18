@@ -77,7 +77,7 @@ func NewAddressFromData(inner AddressData) Address {
 	return Address{inner: inner}
 }
 
-// EncodeRLP serializes b into the Ethereum RLP block format.
+// EncodeRLP serializes b into the Quai RLP block format.
 func (a Address) EncodeRLP(w io.Writer) error {
 	if a.inner == nil {
 		a.inner = &InternalAddress{}
@@ -85,7 +85,7 @@ func (a Address) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, a.inner)
 }
 
-// DecodeRLP decodes the Ethereum
+// DecodeRLP decodes the Quai
 func (a *Address) DecodeRLP(s *rlp.Stream) error {
 	temp := make([]byte, 0, 20)
 	if err := s.Decode(&temp); err != nil {
@@ -224,7 +224,7 @@ func BigToAddress(b *big.Int) Address { return BytesToAddress(b.Bytes()) }
 func HexToAddress(s string) Address { return BytesToAddress(FromHex(s)) }
 
 // IsHexAddress verifies whether a string can represent a valid hex-encoded
-// Ethereum address or not.
+// Quai address or not.
 func IsHexAddress(s string) bool {
 	if has0xPrefix(s) {
 		s = s[2:]

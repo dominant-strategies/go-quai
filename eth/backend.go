@@ -14,17 +14,18 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package eth implements the Ethereum protocol.
+// Package eth implements the Quai protocol.
 package eth
 
 import (
 	"bytes"
 	"fmt"
-	sync "github.com/sasha-s/go-deadlock"
 	"math/big"
 	"net/http"
 	"sync/atomic"
 	"time"
+
+	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
@@ -55,8 +56,8 @@ import (
 // Deprecated: use ethconfig.Config instead.
 type Config = ethconfig.Config
 
-// Ethereum implements the Ethereum full node service.
-type Ethereum struct {
+// Quai implements the Quai full node service.
+type Quai struct {
 	config *ethconfig.Config
 
 	// Handlers
@@ -88,9 +89,9 @@ type Ethereum struct {
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
 }
 
-// New creates a new Ethereum object (including the
-// initialisation of the common Ethereum object)
-func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
+// New creates a new Quai object (including the
+// initialisation of the common Quai object)
+func New(stack *node.Node, config *ethconfig.Config) (*Quai, error) {
 	nodeCtx := common.NodeLocation.Context()
 	// Ensure configuration values are compatible and sane
 	if !config.SyncMode.IsValid() {
@@ -115,7 +116,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	blake3powConfig := config.Blake3pow
 	blake3powConfig.NotifyFull = config.Miner.NotifyFull
 
-	// Assemble the Ethereum object
+	// Assemble the Quai object
 	chainDb, err := stack.OpenDatabaseWithFreezer("chaindata", config.DatabaseCache, config.DatabaseHandles, config.DatabaseFreezer, "eth/db/chaindata/", false)
 	if err != nil {
 		return nil, err
@@ -129,7 +130,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if err := pruner.RecoverPruning(stack.ResolvePath(""), chainDb, stack.ResolvePath(config.TrieCleanCacheJournal)); err != nil {
 		log.Error("Failed to recover state", "error", err)
 	}
-	eth := &Ethereum{
+	eth := &Quai{
 		config:            config,
 		chainDb:           chainDb,
 		eventMux:          stack.EventMux(),
@@ -148,7 +149,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if bcVersion != nil {
 		dbVer = fmt.Sprintf("%d", *bcVersion)
 	}
-	log.Info("Initialising Ethereum protocol", "network", config.NetworkId, "dbversion", dbVer)
+	log.Info("Initialising Quai protocol", "network", config.NetworkId, "dbversion", dbVer)
 
 	if !config.SkipBcVersionCheck {
 		if bcVersion != nil && *bcVersion > core.BlockChainVersion {
@@ -294,9 +295,9 @@ func EnablePprof() {
 	}()
 }
 
-// APIs return the collection of RPC services the ethereum package offers.
+// APIs return the collection of RPC services the go-quai package offers.
 // NOTE, some of these services probably need to be moved to somewhere else.
-func (s *Ethereum) APIs() []rpc.API {
+func (s *Quai) APIs() []rpc.API {
 	apis := quaiapi.GetAPIs(s.APIBackend)
 
 	// Append any APIs exposed explicitly by the consensus engine
@@ -307,7 +308,7 @@ func (s *Ethereum) APIs() []rpc.API {
 		{
 			Namespace: "eth",
 			Version:   "1.0",
-			Service:   NewPublicEthereumAPI(s),
+			Service:   NewPublicQuaiAPI(s),
 			Public:    true,
 		}, {
 			Namespace: "eth",
@@ -351,7 +352,7 @@ func (s *Ethereum) APIs() []rpc.API {
 	}...)
 }
 
-func (s *Ethereum) Etherbase() (eb common.Address, err error) {
+func (s *Quai) Etherbase() (eb common.Address, err error) {
 	s.lock.RLock()
 	etherbase := s.etherbase
 	s.lock.RUnlock()
@@ -368,7 +369,7 @@ func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 //
 // We regard two types of accounts as local miner account: etherbase
 // and accounts specified via `txpool.locals` flag.
-func (s *Ethereum) isLocalBlock(header *types.Header) bool {
+func (s *Quai) isLocalBlock(header *types.Header) bool {
 	author, err := s.engine.Author(header)
 	if err != nil {
 		log.Warn("Failed to retrieve block author", "number", header.NumberU64(), "hash", header.Hash(), "err", err)
@@ -398,30 +399,30 @@ func (s *Ethereum) isLocalBlock(header *types.Header) bool {
 // shouldPreserve checks whether we should preserve the given block
 // during the chain reorg depending on whether the author of block
 // is a local account.
-func (s *Ethereum) shouldPreserve(block *types.Block) bool {
+func (s *Quai) shouldPreserve(block *types.Block) bool {
 	return s.isLocalBlock(block.Header())
 }
 
-func (s *Ethereum) Core() *core.Core                   { return s.core }
-func (s *Ethereum) EventMux() *event.TypeMux           { return s.eventMux }
-func (s *Ethereum) Engine() consensus.Engine           { return s.engine }
-func (s *Ethereum) ChainDb() ethdb.Database            { return s.chainDb }
-func (s *Ethereum) IsListening() bool                  { return true } // Always listening
-func (s *Ethereum) Downloader() *downloader.Downloader { return s.handler.downloader }
-func (s *Ethereum) Synced() bool                       { return atomic.LoadUint32(&s.handler.acceptTxs) == 1 }
-func (s *Ethereum) ArchiveMode() bool                  { return s.config.NoPruning }
-func (s *Ethereum) BloomIndexer() *core.ChainIndexer   { return s.bloomIndexer }
+func (s *Quai) Core() *core.Core                   { return s.core }
+func (s *Quai) EventMux() *event.TypeMux           { return s.eventMux }
+func (s *Quai) Engine() consensus.Engine           { return s.engine }
+func (s *Quai) ChainDb() ethdb.Database            { return s.chainDb }
+func (s *Quai) IsListening() bool                  { return true } // Always listening
+func (s *Quai) Downloader() *downloader.Downloader { return s.handler.downloader }
+func (s *Quai) Synced() bool                       { return atomic.LoadUint32(&s.handler.acceptTxs) == 1 }
+func (s *Quai) ArchiveMode() bool                  { return s.config.NoPruning }
+func (s *Quai) BloomIndexer() *core.ChainIndexer   { return s.bloomIndexer }
 
 // Protocols returns all the currently configured
 // network protocols to start.
-func (s *Ethereum) Protocols() []p2p.Protocol {
+func (s *Quai) Protocols() []p2p.Protocol {
 	protos := eth.MakeProtocols((*ethHandler)(s.handler), s.networkID, s.ethDialCandidates)
 	return protos
 }
 
 // Start implements node.Lifecycle, starting all internal goroutines needed by the
-// Ethereum protocol implementation.
-func (s *Ethereum) Start() error {
+// Quai protocol implementation.
+func (s *Quai) Start() error {
 	eth.StartENRUpdater(s.core, s.p2pServer.LocalNode())
 
 	// Start the bloom bits servicing goroutines
@@ -435,8 +436,8 @@ func (s *Ethereum) Start() error {
 }
 
 // Stop implements node.Lifecycle, terminating all internal goroutines used by the
-// Ethereum protocol.
-func (s *Ethereum) Stop() error {
+// Quai protocol.
+func (s *Quai) Stop() error {
 	// Stop all the peer-related stuff first.
 	s.ethDialCandidates.Close()
 	s.handler.Stop()

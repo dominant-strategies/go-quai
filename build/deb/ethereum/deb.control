@@ -4,9 +4,9 @@ Priority: extra
 Maintainer: {{.Author}}
 Build-Depends: debhelper (>= 8.0.0), {{.GoBootPackage}}
 Standards-Version: 3.9.5
-Homepage: https://ethereum.org
-Vcs-Git: git://github.com/ethereum/go-ethereum.git
-Vcs-Browser: https://github.com/ethereum/go-ethereum
+Homepage: https://qu.ai
+Vcs-Git: git://github.com/dominant-strategies/go-quai.git
+Vcs-Browser: https://github.com/dominant-strategies/go-quai
 
 Package: {{.Name}}
 Architecture: any

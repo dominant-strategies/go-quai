@@ -42,7 +42,7 @@ import (
 // QuaiAPIBackend implements quaiapi.Backend for full nodes
 type QuaiAPIBackend struct {
 	extRPCEnabled bool
-	eth           *Ethereum
+	eth           *Quai
 	gpo           *gasprice.Oracle
 }
 

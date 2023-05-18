@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+//go:build nacl || js || !cgo || gofuzz
 // +build nacl js !cgo gofuzz
 
 package crypto
@@ -68,7 +69,7 @@ func Sign(hash []byte, prv *ecdsa.PrivateKey) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Convert to Ethereum signature format with 'recovery id' v at the end.
+	// Convert to Quai signature format with 'recovery id' v at the end.
 	v := sig[0] - 27
 	copy(sig, sig[1:])
 	sig[64] = v

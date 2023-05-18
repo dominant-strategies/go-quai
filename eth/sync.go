@@ -48,8 +48,7 @@ func (h *handler) syncTransactions(p *eth.Peer) {
 	// peer. Fun fact, this is quite an expensive operation as it needs to sort
 	// the transactions if the sorting is not cached yet. However, with a random
 	// order, insertions could overflow the non-executable queues and get dropped.
-	//
-	// TODO(karalabe): Figure out if we could get away with random order somehow
+
 	var txs types.Transactions
 	pending, _ := h.txpool.TxPoolPending(false, nil)
 	for _, batch := range pending {

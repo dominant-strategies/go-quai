@@ -50,9 +50,10 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	sync "github.com/sasha-s/go-deadlock"
 	"text/template"
 	"time"
+
+	sync "github.com/sasha-s/go-deadlock"
 )
 
 var (
@@ -76,7 +77,7 @@ var (
 		"signer/rules/deps",
 
 		// skip special licenses
-		"crypto/secp256k1", // Relicensed to BSD-3 via https://github.com/ethereum/go-ethereum/pull/17225
+		"crypto/secp256k1", // Relicensed to BSD-3
 	}
 
 	// paths with this prefix are licensed as GPL. all other files are LGPL.
@@ -93,7 +94,7 @@ var (
 // this template generates the license comment.
 // its input is an info structure.
 var licenseT = template.Must(template.New("").Parse(`
-// Copyright {{.Year}} The go-ethereum Authors
+// Copyright {{.Year}} The go-quai Authors
 // This file is part of {{.Whole false}}.
 //
 // {{.Whole true}} is free software: you can redistribute it and/or modify
@@ -132,12 +133,12 @@ func (i info) ShortLicense() string {
 
 func (i info) Whole(startOfSentence bool) string {
 	if i.gpl() {
-		return "go-ethereum"
+		return "go-quai"
 	}
 	if startOfSentence {
-		return "The go-ethereum library"
+		return "The go-quai library"
 	}
-	return "the go-ethereum library"
+	return "the go-quai library"
 }
 
 func (i info) gpl() bool {

@@ -22,8 +22,9 @@ import (
 	"io"
 	"reflect"
 	"runtime"
-	sync "github.com/sasha-s/go-deadlock"
 	"time"
+
+	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/dominant-strategies/go-quai/common"
@@ -305,7 +306,7 @@ func NewDatabaseWithConfig(diskdb ethdb.KeyValueStore, config *Config) *Database
 			children: make(map[common.Hash]uint16),
 		}},
 	}
-	if config == nil || config.Preimages { // TODO(karalabe): Flip to default off in the future
+	if config == nil || config.Preimages {
 		db.preimages = make(map[common.Hash][]byte)
 	}
 	return db

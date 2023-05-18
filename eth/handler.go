@@ -75,7 +75,7 @@ const (
 )
 
 // txPool defines the methods needed from a transaction pool implementation to
-// support all the operations needed by the Ethereum chain protocols.
+// support all the operations needed by the Quai chain protocols.
 type txPool interface {
 	// Has returns an indicator whether txpool has a transaction
 	// cached with the given hash.
@@ -157,7 +157,7 @@ type handler struct {
 	peerWG    sync.WaitGroup
 }
 
-// newHandler returns a handler for all Ethereum chain management protocol.
+// newHandler returns a handler for all Quai chain management protocol.
 func newHandler(config *handlerConfig) (*handler, error) {
 	nodeCtx := common.NodeLocation.Context()
 	// Create the protocol manager with the base fields
@@ -214,17 +214,16 @@ func newHandler(config *handlerConfig) (*handler, error) {
 }
 
 // runEthPeer registers an eth peer into the joint eth peerset, adds it to
-// various subsistems and starts handling messages.
+// various subsystems and starts handling messages.
 func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	nodeCtx := common.NodeLocation.Context()
-	// TODO(karalabe): Not sure why this is needed
 	if !h.chainSync.handlePeerEvent(peer) {
 		return p2p.DiscQuitting
 	}
 	h.peerWG.Add(1)
 	defer h.peerWG.Done()
 
-	// Execute the Ethereum handshake
+	// Execute the Quai handshake
 	var (
 		genesis = h.core.Genesis()
 		head    = h.core.CurrentHeader()
@@ -233,7 +232,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	)
 	forkID := forkid.NewID(h.core.Config(), h.core.Genesis().Hash(), h.core.CurrentHeader().Number().Uint64())
 	if err := peer.Handshake(h.networkID, h.slicesRunning, entropy, hash, genesis.Hash(), forkID, h.forkFilter); err != nil {
-		peer.Log().Debug("Ethereum handshake failed", "err", err)
+		peer.Log().Debug("Quai handshake failed", "err", err)
 		return err
 	}
 	reject := false // reserved peer slots
@@ -243,11 +242,11 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 			return p2p.DiscTooManyPeers
 		}
 	}
-	peer.Log().Debug("Ethereum peer connected", "name", peer.Name())
+	peer.Log().Debug("Quai peer connected", "name", peer.Name())
 
 	// Register the peer locally
 	if err := h.peers.registerPeer(peer); err != nil {
-		peer.Log().Error("Ethereum peer registration failed", "err", err)
+		peer.Log().Error("Quai peer registration failed", "err", err)
 		return err
 	}
 	defer h.unregisterPeer(peer.ID())
@@ -301,7 +300,7 @@ func (h *handler) unregisterPeer(id string) {
 	// Abort if the peer does not exist
 	peer := h.peers.peer(id)
 	if peer == nil {
-		logger.Error("Ethereum peer removal failed", "err", errPeerNotRegistered)
+		logger.Error("Quai peer removal failed", "err", errPeerNotRegistered)
 		return
 	}
 
@@ -312,7 +311,7 @@ func (h *handler) unregisterPeer(id string) {
 	}
 
 	if err := h.peers.unregisterPeer(id); err != nil {
-		logger.Error("Ethereum peer removal failed", "err", err)
+		logger.Error("Quai peer removal failed", "err", err)
 	}
 }
 
@@ -349,7 +348,7 @@ func (h *handler) Start(maxPeers int) {
 	go h.chainSync.loop()
 	if nodeCtx == common.ZONE_CTX {
 		h.wg.Add(1)
-		go h.txsyncLoop64() // TODO(karalabe): Legacy initial tx echange, drop with eth/64.
+		go h.txsyncLoop64() //Legacy initial tx echange, drop with eth/64.
 	}
 
 	h.wg.Add(1)
@@ -399,7 +398,7 @@ func (h *handler) Stop() {
 	h.peers.close()
 	h.peerWG.Wait()
 
-	log.Info("Ethereum protocol stopped")
+	log.Info("Quai protocol stopped")
 }
 
 // BroadcastBlock will either propagate a block to a subset of its peers, or

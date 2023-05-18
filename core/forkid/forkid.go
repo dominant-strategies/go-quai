@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package forkid implements EIP-2124 (https://eips.ethereum.org/EIPS/eip-2124).
 package forkid
 
 import (
@@ -65,7 +64,7 @@ type ID struct {
 // Filter is a fork id filter to validate a remotely advertised ID.
 type Filter func(id ID) error
 
-// NewID calculates the Ethereum fork ID from the chain config, genesis hash, and head.
+// NewID calculates the Quai fork ID from the chain config, genesis hash, and head.
 func NewID(config *params.ChainConfig, genesis common.Hash, head uint64) ID {
 	// Calculate the starting checksum from the genesis hash
 	hash := crc32.ChecksumIEEE(genesis[:])
@@ -84,7 +83,7 @@ func NewID(config *params.ChainConfig, genesis common.Hash, head uint64) ID {
 	return ID{Hash: checksumToBytes(hash), Next: next}
 }
 
-// NewIDWithChain calculates the Ethereum fork ID from an existing chain instance.
+// NewIDWithChain calculates the Quai fork ID from an existing chain instance.
 func NewIDWithChain(chain Blockchain) ID {
 	return NewID(
 		chain.Config(),

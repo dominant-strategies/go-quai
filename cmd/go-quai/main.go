@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-// quai is the official command-line client for Ethereum.
+// quai is the official command-line client for Quai.
 package main
 
 import (
@@ -31,11 +31,11 @@ import (
 	"github.com/dominant-strategies/go-quai/internal/debug"
 	"github.com/dominant-strategies/go-quai/internal/flags"
 	"github.com/dominant-strategies/go-quai/internal/quaiapi"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/metrics"
 	"github.com/dominant-strategies/go-quai/node"
 	"github.com/dominant-strategies/go-quai/params"
-	"github.com/dominant-strategies/go-quai/log"
-	
+
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -316,7 +316,7 @@ func startNode(ctx *cli.Context, stack *node.Node, backend quaiapi.Backend) {
 		var err error
 		ethBackend, ok := backend.(*eth.QuaiAPIBackend)
 		if !ok {
-			utils.Fatalf("Ethereum service not running: %v", err)
+			utils.Fatalf("Quai service not running: %v", err)
 		}
 		nodeCtx := common.NodeLocation.Context()
 		if nodeCtx == common.ZONE_CTX {

@@ -69,7 +69,7 @@ var (
 	}
 
 	// AllBlake3powProtocolChanges contains every protocol change (EIPs) introduced
-	// and accepted by the Ethereum core developers into the Blake3pow consensus.
+	// and accepted by the Quai core developers into the Blake3pow consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.

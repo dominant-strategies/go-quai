@@ -148,12 +148,12 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, quaiConfig) {
 	return stack, cfg
 }
 
-// makeFullNode loads quai configuration and creates the Ethereum backend.
+// makeFullNode loads quai configuration and creates the Quai backend.
 func makeFullNode(ctx *cli.Context) (*node.Node, quaiapi.Backend) {
 	stack, cfg := makeConfigNode(ctx)
 	backend, _ := utils.RegisterEthService(stack, &cfg.Eth)
 
-	// Add the Ethereum Stats daemon if requested.
+	// Add the Quai Stats daemon if requested.
 	if cfg.Ethstats.URL != "" {
 		utils.RegisterQuaiStatsService(stack, backend, cfg.Ethstats.URL)
 	}
