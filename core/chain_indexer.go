@@ -57,7 +57,7 @@ type ChainIndexerChain interface {
 	CurrentHeader() *types.Header
 
 	// SubscribeChainHeadEvent subscribes to new head header notifications.
-	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent, blocking bool) event.Subscription
+	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
 }
 
 // ChainIndexer does a post-processing job for equally sized sections of the
@@ -123,7 +123,7 @@ func NewChainIndexer(chainDb ethdb.Database, indexDb ethdb.Database, backend Cha
 // are notified about new events by their parents.
 func (c *ChainIndexer) Start(chain ChainIndexerChain) {
 	events := make(chan ChainHeadEvent, 10)
-	sub := chain.SubscribeChainHeadEvent(events, true)
+	sub := chain.SubscribeChainHeadEvent(events)
 
 	go c.eventLoop(chain.CurrentHeader(), events, sub)
 }

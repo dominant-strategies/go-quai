@@ -69,7 +69,7 @@ const (
 
 // backend encompasses the bare-minimum functionality needed for quaistats reporting
 type backend interface {
-	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent, blocking bool) event.Subscription
+	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 	SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription
 	SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription
 	CurrentHeader() *types.Header
@@ -217,7 +217,7 @@ func (s *Service) Start() error {
 	chainHeadCh := make(chan core.ChainHeadEvent, chainHeadChanSize)
 	chainSideCh := make(chan core.ChainSideEvent, chainSideChanSize)
 
-	s.headSub = s.backend.SubscribeChainHeadEvent(chainHeadCh, true)
+	s.headSub = s.backend.SubscribeChainHeadEvent(chainHeadCh)
 	s.sideSub = s.backend.SubscribeChainSideEvent(chainSideCh)
 
 	go s.loop(chainHeadCh, chainSideCh)

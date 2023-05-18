@@ -798,7 +798,7 @@ func (sl *Slice) GetPendingBlockBody(header *types.Header) *types.Body {
 }
 
 func (sl *Slice) SubscribeMissingParentEvent(ch chan<- common.Hash) event.Subscription {
-	return sl.scope.Track(sl.missingParentFeed.Subscribe(ch, true))
+	return sl.scope.Track(sl.missingParentFeed.Subscribe(ch))
 }
 
 // MakeDomClient creates the quaiclient for the given domurl
@@ -867,15 +867,15 @@ func (sl *Slice) TxPool() *TxPool { return sl.txPool }
 func (sl *Slice) Miner() *Miner { return sl.miner }
 
 func (sl *Slice) SubscribeMissingBody(ch chan<- *types.Header) event.Subscription {
-	return sl.scope.Track(sl.missingBodyFeed.Subscribe(ch, true))
+	return sl.scope.Track(sl.missingBodyFeed.Subscribe(ch))
 }
 
 func (sl *Slice) SubscribePendingEtxs(ch chan<- types.PendingEtxs) event.Subscription {
-	return sl.scope.Track(sl.pendingEtxsFeed.Subscribe(ch, true))
+	return sl.scope.Track(sl.pendingEtxsFeed.Subscribe(ch))
 }
 
 func (sl *Slice) SubscribePendingEtxsRollup(ch chan<- types.PendingEtxsRollup) event.Subscription {
-	return sl.scope.Track(sl.pendingEtxsRollupFeed.Subscribe(ch, true))
+	return sl.scope.Track(sl.pendingEtxsRollupFeed.Subscribe(ch))
 }
 
 func (sl *Slice) CurrentInfo(header *types.Header) bool {

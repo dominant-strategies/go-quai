@@ -303,12 +303,12 @@ func newPeerSet() *peerSet {
 
 // SubscribeNewPeers subscribes to peer arrival events.
 func (ps *peerSet) SubscribeNewPeers(ch chan<- *peerConnection) event.Subscription {
-	return ps.newPeerFeed.Subscribe(ch, true)
+	return ps.newPeerFeed.Subscribe(ch)
 }
 
 // SubscribePeerDrops subscribes to peer departure events.
 func (ps *peerSet) SubscribePeerDrops(ch chan<- *peerConnection) event.Subscription {
-	return ps.peerDropFeed.Subscribe(ch, true)
+	return ps.peerDropFeed.Subscribe(ch)
 }
 
 // Reset iterates over the current peer set, and resets each of the known peers

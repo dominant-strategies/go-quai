@@ -68,9 +68,9 @@ func (s *App) Calc(op byte, a, b int) int {
 func (s *App) SubscribeResults(op byte, ch chan<- int) event.Subscription {
 	switch op {
 	case '/':
-		return s.scope.Track(s.divServer.results.Subscribe(ch, true))
+		return s.scope.Track(s.divServer.results.Subscribe(ch))
 	case '*':
-		return s.scope.Track(s.mulServer.results.Subscribe(ch, true))
+		return s.scope.Track(s.mulServer.results.Subscribe(ch))
 	default:
 		panic("invalid op")
 	}
