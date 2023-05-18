@@ -112,7 +112,11 @@ func (b *QuaiAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumb
 	if number == rpc.LatestBlockNumber {
 		return b.eth.core.CurrentBlock(), nil
 	}
-	return b.eth.core.GetBlockByNumber(uint64(number)), nil
+	block := b.eth.core.GetBlockByNumber(uint64(number))
+	if block != nil {
+		return block, nil
+	}
+	return nil, errors.New("block is nil api backend")
 }
 
 func (b *QuaiAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {

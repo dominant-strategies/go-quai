@@ -236,8 +236,8 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	}
 	if subReorg {
 		block.SetAppendTime(appendFinished)
-		sl.hc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
 		sl.hc.SetCurrentHeader(block.Header())
+		sl.hc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
 	}
 
 	// Relay the new pendingHeader
