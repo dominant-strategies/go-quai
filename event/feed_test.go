@@ -36,7 +36,7 @@ func TestFeedPanics(t *testing.T) {
 	{
 		var f Feed
 		ch := make(chan int)
-		f.Subscribe(ch, true)
+		f.Subscribe(ch)
 		want := feedTypeError{op: "Send", got: reflect.TypeOf(uint64(0)), want: reflect.TypeOf(0)}
 		if err := checkPanic(want, func() { f.Send(uint64(2)) }); err != nil {
 			t.Error(err)
@@ -58,7 +58,7 @@ func TestFeedPanics(t *testing.T) {
 	}
 	{
 		var f Feed
-		if err := checkPanic(errBadChannel, func() { f.Subscribe(0, true) }); err != nil {
+		if err := checkPanic(errBadChannel, func() { f.Subscribe(0) }); err != nil {
 			t.Error(err)
 		}
 	}
@@ -84,7 +84,7 @@ func TestFeed(t *testing.T) {
 		defer done.Done()
 
 		subchan := make(chan int)
-		sub := feed.Subscribe(subchan, true)
+		sub := feed.Subscribe(subchan)
 		timeout := time.NewTimer(2 * time.Second)
 		defer timeout.Stop()
 		subscribed.Done()
@@ -130,9 +130,9 @@ func TestFeedSubscribeSameChannel(t *testing.T) {
 		feed Feed
 		done sync.WaitGroup
 		ch   = make(chan int)
-		sub1 = feed.Subscribe(ch, true)
-		sub2 = feed.Subscribe(ch, true)
-		_    = feed.Subscribe(ch, true)
+		sub1 = feed.Subscribe(ch)
+		sub2 = feed.Subscribe(ch)
+		_    = feed.Subscribe(ch)
 	)
 	expectSends := func(value, n int) {
 		if nsent := feed.Send(value); nsent != n {
@@ -178,7 +178,7 @@ func TestFeedSubscribeBlockedPost(t *testing.T) {
 	)
 	defer wg.Wait()
 
-	feed.Subscribe(ch1, true)
+	feed.Subscribe(ch1)
 	wg.Add(nsends)
 	for i := 0; i < nsends; i++ {
 		go func() {
@@ -187,7 +187,7 @@ func TestFeedSubscribeBlockedPost(t *testing.T) {
 		}()
 	}
 
-	sub2 := feed.Subscribe(ch2, true)
+	sub2 := feed.Subscribe(ch2)
 	defer sub2.Unsubscribe()
 
 	// We're done when ch1 has received N times.
@@ -208,7 +208,7 @@ func TestFeedUnsubscribeBlockedPost(t *testing.T) {
 		chans  = make([]chan int, 2000)
 		subs   = make([]Subscription, len(chans))
 		bchan  = make(chan int)
-		bsub   = feed.Subscribe(bchan, true)
+		bsub   = feed.Subscribe(bchan)
 		wg     sync.WaitGroup
 	)
 	for i := range chans {
@@ -225,7 +225,7 @@ func TestFeedUnsubscribeBlockedPost(t *testing.T) {
 	}
 	// Subscribe the other channels.
 	for i, ch := range chans {
-		subs[i] = feed.Subscribe(ch, true)
+		subs[i] = feed.Subscribe(ch)
 	}
 	// Unsubscribe them again.
 	for _, sub := range subs {
@@ -243,8 +243,8 @@ func TestFeedUnsubscribeSentChan(t *testing.T) {
 		feed Feed
 		ch1  = make(chan int)
 		ch2  = make(chan int)
-		sub1 = feed.Subscribe(ch1, true)
-		sub2 = feed.Subscribe(ch2, true)
+		sub1 = feed.Subscribe(ch1)
+		sub2 = feed.Subscribe(ch2)
 		wg   sync.WaitGroup
 	)
 	defer sub2.Unsubscribe()
@@ -280,9 +280,9 @@ func TestFeedUnsubscribeFromInbox(t *testing.T) {
 		feed Feed
 		ch1  = make(chan int)
 		ch2  = make(chan int)
-		sub1 = feed.Subscribe(ch1, true)
-		sub2 = feed.Subscribe(ch1, true)
-		sub3 = feed.Subscribe(ch2, true)
+		sub1 = feed.Subscribe(ch1)
+		sub2 = feed.Subscribe(ch1)
+		sub3 = feed.Subscribe(ch2)
 	)
 	if len(feed.inbox) != 3 {
 		t.Errorf("inbox length != 3 after subscribe")
@@ -317,7 +317,7 @@ func BenchmarkFeedSend1000(b *testing.B) {
 	done.Add(nsubs)
 	for i := 0; i < nsubs; i++ {
 		ch := make(chan int, 200)
-		feed.Subscribe(ch, true)
+		feed.Subscribe(ch)
 		go subscriber(ch)
 	}
 

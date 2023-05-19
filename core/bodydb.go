@@ -153,23 +153,23 @@ func (bc *BodyDb) Config() *params.ChainConfig { return bc.chainConfig }
 
 // SubscribeChainEvent registers a subscription of ChainEvent.
 func (bc *BodyDb) SubscribeChainEvent(ch chan<- ChainEvent) event.Subscription {
-	return bc.scope.Track(bc.chainFeed.Subscribe(ch, true))
+	return bc.scope.Track(bc.chainFeed.Subscribe(ch))
 }
 
 // SubscribeRemovedLogsEvent registers a subscription of RemovedLogsEvent.
 func (bc *BodyDb) SubscribeRemovedLogsEvent(ch chan<- RemovedLogsEvent) event.Subscription {
-	return bc.scope.Track(bc.rmLogsFeed.Subscribe(ch, true))
+	return bc.scope.Track(bc.rmLogsFeed.Subscribe(ch))
 }
 
 // SubscribeLogsEvent registers a subscription of []*types.Log.
 func (bc *BodyDb) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
-	return bc.scope.Track(bc.logsFeed.Subscribe(ch, true))
+	return bc.scope.Track(bc.logsFeed.Subscribe(ch))
 }
 
 // SubscribeBlockProcessingEvent registers a subscription of bool where true means
 // block processing has started while false means it has stopped.
 func (bc *BodyDb) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscription {
-	return bc.scope.Track(bc.blockProcFeed.Subscribe(ch, true))
+	return bc.scope.Track(bc.blockProcFeed.Subscribe(ch))
 }
 
 func (bc *BodyDb) HasBlockAndState(hash common.Hash, number uint64) bool {

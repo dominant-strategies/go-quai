@@ -335,11 +335,11 @@ func testSendTransactions(t *testing.T, protocol uint) {
 	backend := new(testEthHandler)
 
 	anns := make(chan []common.Hash)
-	annSub := backend.txAnnounces.Subscribe(anns, true)
+	annSub := backend.txAnnounces.Subscribe(anns)
 	defer annSub.Unsubscribe()
 
 	bcasts := make(chan []*types.Transaction)
-	bcastSub := backend.txBroadcasts.Subscribe(bcasts, true)
+	bcastSub := backend.txBroadcasts.Subscribe(bcasts)
 	defer bcastSub.Unsubscribe()
 
 	go eth.Handle(backend, sink)
@@ -702,7 +702,7 @@ func testBroadcastMalformedBlock(t *testing.T, protocol uint) {
 	backend := new(testEthHandler)
 
 	blocks := make(chan *types.Block, 1)
-	sub := backend.blockBroadcasts.Subscribe(blocks, true)
+	sub := backend.blockBroadcasts.Subscribe(blocks)
 	defer sub.Unsubscribe()
 
 	go eth.Handle(backend, sink)
