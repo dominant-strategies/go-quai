@@ -64,7 +64,7 @@ type HeaderChain struct {
 
 // NewHeaderChain creates a new HeaderChain structure. ProcInterrupt points
 // to the parent's interrupt semaphore.
-func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, vmConfig vm.Config) (*HeaderChain, error) {
+func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, txLookupLimit *uint64, vmConfig vm.Config) (*HeaderChain, error) {
 	headerCache, _ := lru.New(headerCacheLimit)
 	numberCache, _ := lru.New(numberCacheLimit)
 
@@ -82,12 +82,6 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *par
 	pendingEtxs, _ := lru.New(c_maxPendingEtxBatches)
 	hc.pendingEtxs = pendingEtxs
 
-	var err error
-	hc.bc, err = NewBodyDb(db, engine, hc, chainConfig, cacheConfig, vmConfig)
-	if err != nil {
-		return nil, err
-	}
-
 	hc.genesisHeader = hc.GetHeaderByNumber(0)
 	if hc.genesisHeader.Hash() != chainConfig.GenesisHash {
 		return nil, fmt.Errorf("genesis block mismatch: have %x, want %x", hc.genesisHeader.Hash(), chainConfig.GenesisHash)
@@ -96,14 +90,20 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *par
 	if hc.genesisHeader == nil {
 		return nil, ErrNoGenesis
 	}
-
-	// Initialize the heads slice
-	heads := make([]*types.Header, 0)
-	hc.heads = heads
 	//Load any state that is in our db
 	if err := hc.loadLastState(); err != nil {
 		return nil, err
 	}
+
+	var err error
+	hc.bc, err = NewBodyDb(db, engine, hc, chainConfig, cacheConfig, txLookupLimit, vmConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	// Initialize the heads slice
+	heads := make([]*types.Header, 0)
+	hc.heads = heads
 
 	return hc, nil
 }
@@ -476,7 +476,7 @@ func (hc *HeaderChain) Stop() {
 	hc.scope.Close()
 	hc.bc.scope.Close()
 	hc.wg.Wait()
-
+	hc.bc.processor.Stop()
 	log.Info("headerchain stopped")
 }
 
