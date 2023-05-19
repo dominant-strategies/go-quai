@@ -105,6 +105,11 @@ var (
 		Usage: "Data directory for the databases and keystore",
 		Value: DirectoryString(node.DefaultDataDir()),
 	}
+	DBEngineFlag = cli.StringFlag{
+		Name:  "db.engine",
+		Usage: "Backing database implementation to use ('pebble' or 'leveldb')",
+		Value: node.DefaultConfig.DBEngine,
+	}
 	AncientFlag = DirectoryFlag{
 		Name:  "datadir.ancient",
 		Usage: "Data directory for ancient chain segments (default = inside chaindata)",
@@ -638,6 +643,31 @@ var (
 	}
 )
 
+var (
+	// TestnetFlags is the flag group of all built-in supported testnets.
+	TestnetFlags = []cli.Flag{
+		ColosseumFlag,
+		GardenFlag,
+		OrchardFlag,
+		GalenaFlag,
+		LocalFlag,
+	}
+	// NetworkFlags is the flag group of all built-in supported networks.
+	NetworkFlags = append([]cli.Flag{ColosseumFlag}, TestnetFlags...)
+
+	// DatabasePathFlags is the flag group of all database path flags.
+	DatabasePathFlags = []cli.Flag{
+		DataDirFlag,
+		AncientFlag,
+	}
+)
+
+func init() {
+	if rawdb.PebbleEnabled {
+		DatabasePathFlags = append(DatabasePathFlags, DBEngineFlag)
+	}
+}
+
 // MakeDataDir retrieves the currently requested data directory, terminating
 // if none (or the empty string) is specified. If the node is starting a testnet,
 // then a subdirectory of the specified datadir will be used.
@@ -1108,6 +1138,15 @@ func setDataDir(ctx *cli.Context, cfg *node.Config) {
 		zoneNum := strconv.Itoa(common.NodeLocation.Zone())
 		cfg.DataDir = filepath.Join(cfg.DataDir, "zone-"+regionNum+"-"+zoneNum)
 	}
+
+	if ctx.IsSet(DBEngineFlag.Name) {
+		dbEngine := ctx.String(DBEngineFlag.Name)
+		if dbEngine != "leveldb" && dbEngine != "pebble" {
+			Fatalf("Invalid choice for db.engine '%s', allowed 'leveldb' or 'pebble'", dbEngine)
+		}
+		log.Info(fmt.Sprintf("Using %s as db engine", dbEngine))
+		cfg.DBEngine = dbEngine
+	}
 }
 
 func setGPO(ctx *cli.Context, cfg *gasprice.Config, light bool) {
@@ -1448,9 +1487,16 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		cfg.SyncMode = downloader.FullSync
 
 		if ctx.GlobalIsSet(DataDirFlag.Name) {
+			// If datadir doesn't exist we need to open db in write-mode
+			// so leveldb can create files.
+			readonly := true
+			fmt.Println("!common.FileExist(stack.ResolvePath(\"chaindata\"))", !common.FileExist(stack.ResolvePath("chaindata")))
+			if !common.FileExist(stack.ResolvePath("chaindata")) {
+				readonly = false
+			}
 			// Check if we have an already initialized chain and fall back to
 			// that if so. Otherwise we need to generate a new genesis spec.
-			chaindb := MakeChainDatabase(ctx, stack, false) // TODO (MariusVanDerWijden) make this read only
+			chaindb := MakeChainDatabase(ctx, stack, readonly)
 			if rawdb.ReadCanonicalHash(chaindb, 0) != (common.Hash{}) {
 				cfg.Genesis = nil // fallback to db content
 			}

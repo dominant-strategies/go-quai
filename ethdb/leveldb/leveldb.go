@@ -113,7 +113,7 @@ func NewCustom(file string, namespace string, customize func(options *opt.Option
 	if options.ReadOnly {
 		logCtx = append(logCtx, "readonly", "true")
 	}
-	log.Info("Allocated cache and file handles", logCtx...)
+	log.Info("Level: Allocated cache and file handles", logCtx...)
 
 	// Open the db and recover any potential corruptions
 	db, err := leveldb.OpenFile(file, options)
