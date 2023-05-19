@@ -273,7 +273,9 @@ func (sl *Slice) relayPh(block *types.Block, appendTime *time.Duration, reorg bo
 
 		// Only if reorg is true invoke the worker to update the state root
 		if reorg {
+			now := time.Now()
 			localPendingHeader, err := sl.miner.worker.GeneratePendingHeader(block, true)
+			log.Info("GeneratePendingHeader", "elapsed", common.PrettyDuration(time.Since(now)))
 			if err != nil {
 				return
 			} else {
