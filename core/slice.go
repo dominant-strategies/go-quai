@@ -217,6 +217,12 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	time11 := common.PrettyDuration(appendFinished)
 
 	defer func() {
+		// Relay the new pendingHeader
+		sl.relayPh(block, &appendFinished, subReorg, pendingHeaderWithTermini, domOrigin, block.Location())
+		// Append has succeeded write the batch
+		if err := batch.Write(); err != nil {
+			log.Warn("unable to batch write in append")
+		}
 	bestPh, exist := sl.readPhCache(sl.bestPhKey)
 	if !exist {
 		sl.bestPhKey = pendingHeaderWithTermini.Termini[c_terminusIndex]
@@ -237,12 +243,6 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		sl.hc.SetCurrentHeader(block.Header())
 		sl.hc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
 	}
-		// Relay the new pendingHeader
-		sl.relayPh(block, &appendFinished, subReorg, pendingHeaderWithTermini, domOrigin, block.Location())
-		// Append has succeeded write the batch
-		if err := batch.Write(); err != nil {
-			log.Warn("unable to batch write in append")
-		}
 	}()
 
 	time12 := common.PrettyDuration(time.Since(start))
