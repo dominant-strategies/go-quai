@@ -31,11 +31,11 @@ import (
 	"github.com/dominant-strategies/go-quai/internal/debug"
 	"github.com/dominant-strategies/go-quai/internal/flags"
 	"github.com/dominant-strategies/go-quai/internal/quaiapi"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/metrics"
 	"github.com/dominant-strategies/go-quai/node"
 	"github.com/dominant-strategies/go-quai/params"
-	"github.com/dominant-strategies/go-quai/log"
-	
+
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -232,6 +232,8 @@ func prepare(ctx *cli.Context) {
 		netname = "Colosseum testnet"
 	}
 
+	// Starting the garbage collector at 20 percent
+	debug.Handler.SetGCPercent(20)
 	welcome := fmt.Sprintf("Starting Quai %s on %s", params.Version.Full(), netname)
 	log.Info(welcome)
 	// If we're a full node on colosseum without --cache specified, bump default cache allowance
