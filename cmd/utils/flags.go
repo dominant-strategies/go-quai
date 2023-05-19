@@ -1476,7 +1476,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			// If datadir doesn't exist we need to open db in write-mode
 			// so leveldb can create files.
 			readonly := true
-			fmt.Println("readonly", readonly)
 			fmt.Println("!common.FileExist(stack.ResolvePath(\"chaindata\"))", !common.FileExist(stack.ResolvePath("chaindata")))
 			if !common.FileExist(stack.ResolvePath("chaindata")) {
 				readonly = false
@@ -1589,7 +1588,6 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly bool) ethdb.
 		chainDb ethdb.Database
 	)
 	name := "chaindata"
-	fmt.Println("MakeChainDatabase", name, cache, handles)
 	chainDb, err = stack.OpenDatabaseWithFreezer(name, cache, handles, ctx.GlobalString(AncientFlag.Name), "", readonly)
 	if err != nil {
 		Fatalf("Could not open database: %v", err)
@@ -1619,7 +1617,6 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 // MakeChain creates a chain manager from set command line flags.
 func MakeChain(ctx *cli.Context, stack *node.Node) (*core.Core, ethdb.Database) {
 	var err error
-	fmt.Println("MakeChain")
 	chainDb := MakeChainDatabase(ctx, stack, false) // TODO(rjl493456442) support read-only database
 	config, _, err := core.SetupGenesisBlock(chainDb, MakeGenesis(ctx))
 	if err != nil {
