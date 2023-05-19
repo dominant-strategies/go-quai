@@ -29,6 +29,7 @@ import (
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/state"
+	"github.com/dominant-strategies/go-quai/core/state/snapshot"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/crypto"
@@ -100,6 +101,8 @@ type CacheConfig struct {
 	TrieTimeLimit       time.Duration // Time limit after which to flush the current in-memory trie to disk
 	SnapshotLimit       int           // Memory allowance (MB) to use for caching snapshot entries in memory
 	Preimages           bool          // Whether to store preimage of trie key to the disk
+
+	SnapshotWait bool
 }
 
 // defaultCacheConfig are the default caching values if none are specified by the
@@ -109,6 +112,7 @@ var defaultCacheConfig = &CacheConfig{
 	TrieDirtyLimit: 256,
 	TrieTimeLimit:  5 * time.Minute,
 	SnapshotLimit:  256,
+	SnapshotWait:   true,
 }
 
 // StateProcessor is a basic Processor, which takes care of transitioning
@@ -129,15 +133,18 @@ type StateProcessor struct {
 	prefetcher    Prefetcher
 	vmConfig      vm.Config
 
-	scope event.SubscriptionScope
-	wg    sync.WaitGroup // chain processing wait group for shutting down
+	scope         event.SubscriptionScope
+	wg            sync.WaitGroup // chain processing wait group for shutting down
+	quit          chan struct{}  // state processor quit channel
+	txLookupLimit uint64
 
+	snaps  *snapshot.Tree
 	triegc *prque.Prque  // Priority queue mapping block numbers to tries to gc
 	gcproc time.Duration // Accumulates canonical block processing for trie dumping
 }
 
 // NewStateProcessor initialises a new StateProcessor.
-func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine consensus.Engine, vmConfig vm.Config, cacheConfig *CacheConfig) *StateProcessor {
+func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine consensus.Engine, vmConfig vm.Config, cacheConfig *CacheConfig, txLookupLimit *uint64) *StateProcessor {
 	receiptsCache, _ := lru.New(receiptsCacheLimit)
 	txLookupCache, _ := lru.New(txLookupCacheLimit)
 
@@ -159,8 +166,32 @@ func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine conse
 		}),
 		engine: engine,
 		triegc: prque.New(nil),
+		quit:   make(chan struct{}),
 	}
 	sp.validator = NewBlockValidator(config, hc, engine)
+
+	// Load any existing snapshot, regenerating it if loading failed
+	if sp.cacheConfig.SnapshotLimit > 0 {
+		// TODO: If the state is not available, enable snapshot recovery
+		head := hc.CurrentHeader()
+		sp.snaps, _ = snapshot.New(hc.headerDb, sp.stateCache.TrieDB(), sp.cacheConfig.SnapshotLimit, head.Root(), !sp.cacheConfig.SnapshotWait, true, false)
+	}
+	if txLookupLimit != nil {
+		sp.txLookupLimit = *txLookupLimit
+	}
+	// If periodic cache journal is required, spin it up.
+	if sp.cacheConfig.TrieCleanRejournal > 0 {
+		if sp.cacheConfig.TrieCleanRejournal < time.Minute {
+			log.Warn("Sanitizing invalid trie cache journal time", "provided", sp.cacheConfig.TrieCleanRejournal, "updated", time.Minute)
+			sp.cacheConfig.TrieCleanRejournal = time.Minute
+		}
+		triedb := sp.stateCache.TrieDB()
+		sp.wg.Add(1)
+		go func() {
+			defer sp.wg.Done()
+			triedb.SaveCachePeriodically(sp.cacheConfig.TrieCleanJournal, sp.cacheConfig.TrieCleanRejournal, sp.quit)
+		}()
+	}
 	return sp
 }
 
@@ -188,7 +219,7 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 	}
 
 	// Initialize a statedb
-	statedb, err := state.New(parent.Header().Root(), p.stateCache, nil)
+	statedb, err := state.New(parent.Header().Root(), p.stateCache, p.snaps)
 	if err != nil {
 		return types.Receipts{}, []*types.Log{}, nil, 0, err
 	}
@@ -415,7 +446,7 @@ func (p *StateProcessor) State() (*state.StateDB, error) {
 
 // StateAt returns a new mutable state based on a particular point in time.
 func (p *StateProcessor) StateAt(root common.Hash) (*state.StateDB, error) {
-	return state.New(root, p.stateCache, nil)
+	return state.New(root, p.stateCache, p.snaps)
 }
 
 // StateCache returns the caching database underpinning the blockchain instance.
@@ -655,6 +686,56 @@ func (p *StateProcessor) StateAtTransaction(block *types.Block, txIndex int, ree
 		statedb.Finalise(true)
 	}
 	return nil, vm.BlockContext{}, nil, fmt.Errorf("transaction index %d out of range for block %#x", txIndex, block.Hash())
+}
+
+func (p *StateProcessor) Stop() {
+	// Ensure that the entirety of the state snapshot is journalled to disk.
+	var snapBase common.Hash
+	if p.snaps != nil {
+		var err error
+		if snapBase, err = p.snaps.Journal(p.hc.CurrentBlock().Root()); err != nil {
+			log.Error("Failed to journal state snapshot", "err", err)
+		}
+	}
+	// Ensure the state of a recent block is also stored to disk before exiting.
+	// We're writing three different states to catch different restart scenarios:
+	//  - HEAD:     So we don't need to reprocess any blocks in the general case
+	//  - HEAD-1:   So we don't do large reorgs if our HEAD becomes an uncle
+	//  - HEAD-127: So we have a hard limit on the number of blocks reexecuted
+	if !p.cacheConfig.TrieDirtyDisabled {
+		triedb := p.stateCache.TrieDB()
+
+		for _, offset := range []uint64{0, 1, TriesInMemory - 1} {
+			if number := p.hc.CurrentBlock().NumberU64(); number > offset {
+				recent := p.hc.GetBlockByNumber(number - offset)
+
+				log.Info("Writing cached state to disk", "block", recent.Number(), "hash", recent.Hash(), "root", recent.Root())
+				if err := triedb.Commit(recent.Root(), true, nil); err != nil {
+					log.Error("Failed to commit recent state trie", "err", err)
+				}
+			}
+		}
+		if snapBase != (common.Hash{}) {
+			log.Info("Writing snapshot state to disk", "root", snapBase)
+			if err := triedb.Commit(snapBase, true, nil); err != nil {
+				log.Error("Failed to commit recent state trie", "err", err)
+			}
+		}
+		for !p.triegc.Empty() {
+			triedb.Dereference(p.triegc.PopItem().(common.Hash))
+		}
+		if size, _ := triedb.Size(); size != 0 {
+			log.Error("Dangling trie nodes after full cleanup")
+		}
+	}
+	// Ensure all live cached entries be saved into disk, so that we can skip
+	// cache warmup when node restarts.
+	if p.cacheConfig.TrieCleanJournal != "" {
+		triedb := p.stateCache.TrieDB()
+		triedb.SaveCache(p.cacheConfig.TrieCleanJournal)
+	}
+	close(p.quit)
+	log.Info("State Processor stopped")
 }
 
 func prepareApplyETX(statedb *state.StateDB, tx *types.Transaction) *big.Int {

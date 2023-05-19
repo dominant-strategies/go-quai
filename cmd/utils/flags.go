@@ -1625,7 +1625,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (*core.Core, ethdb.Database) 
 
 	// TODO(rjl493456442) disable snapshot generation/wiping if the chain is read only.
 	// Disable transaction indexing/unindexing by default.
-	protocol, err := core.NewCore(chainDb, nil, nil, nil, config, ctx.GlobalString(DomUrl.Name), makeSubUrls(ctx), engine, cache, vmcfg, &core.Genesis{})
+	protocol, err := core.NewCore(chainDb, nil, nil, nil, nil, config, ctx.GlobalString(DomUrl.Name), makeSubUrls(ctx), engine, cache, vmcfg, &core.Genesis{})
 	if err != nil {
 		Fatalf("Can't create BlockChain: %v", err)
 	}
