@@ -241,7 +241,11 @@ func (hc *HeaderChain) backfillPETXs(header *types.Header, subManifest types.Blo
 				for _, pEtxHash := range manifest {
 					if pEtx, err := hc.GetPendingEtxs(pEtxHash); err != nil {
 						// Send the pendingEtxs to the feed for broadcast
-						hc.missingPendingEtxsFeed.Send(types.HashAndLocation{Hash: pEtxHash, Location: pEtx.Header.Location()})
+						if pEtx.Header != nil {
+							hc.missingPendingEtxsFeed.Send(types.HashAndLocation{Hash: pEtxHash, Location: pEtx.Header.Location()})
+						} else {
+							log.Warn("Found a pending etx with empty header in the db/cache")
+						}
 					}
 				}
 			} else {
