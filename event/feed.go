@@ -18,8 +18,9 @@ package event
 
 import (
 	"errors"
-	sync "github.com/sasha-s/go-deadlock"
 	"reflect"
+
+	sync "github.com/sasha-s/go-deadlock"
 )
 
 var errBadChannel = errors.New("event: Subscribe argument does not have sendable channel type")
@@ -181,11 +182,13 @@ func (f *Feed) Send(value interface{}) (nsent int) {
 		}
 		chosen, recv, _ := reflect.Select(sendCases)
 		if chosen == 0 /* <-f.removeSub */ {
-			index := f.sendCases.find(recv.Interface())
-			f.sendCases = f.sendCases.delete(index)
-			if index >= 0 && index < len(cases) {
-				// Shrink 'cases' too because the removed case was still active.
-				cases = f.sendCases[:len(cases)-1]
+			if recv.IsValid() {
+				index := f.sendCases.find(recv.Interface())
+				f.sendCases = f.sendCases.delete(index)
+				if index >= 0 && index < len(cases) {
+					// Shrink 'cases' too because the removed case was still active.
+					cases = f.sendCases[:len(cases)-1]
+				}
 			}
 		} else {
 			cases = cases.deactivate(chosen)
