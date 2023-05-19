@@ -42,7 +42,7 @@ type BodyDb struct {
 	processor    *StateProcessor
 }
 
-func NewBodyDb(db ethdb.Database, engine consensus.Engine, hc *HeaderChain, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, vmConfig vm.Config) (*BodyDb, error) {
+func NewBodyDb(db ethdb.Database, engine consensus.Engine, hc *HeaderChain, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, txLookupLimit *uint64, vmConfig vm.Config) (*BodyDb, error) {
 	nodeCtx := common.NodeLocation.Context()
 	blockCache, _ := lru.New(blockCacheLimit)
 	bodyCache, _ := lru.New(bodyCacheLimit)
@@ -59,7 +59,7 @@ func NewBodyDb(db ethdb.Database, engine consensus.Engine, hc *HeaderChain, chai
 
 	// only start the state processor in zone
 	if nodeCtx == common.ZONE_CTX {
-		bc.processor = NewStateProcessor(chainConfig, hc, engine, vmConfig, cacheConfig)
+		bc.processor = NewStateProcessor(chainConfig, hc, engine, vmConfig, cacheConfig, txLookupLimit)
 	}
 
 	return bc, nil
