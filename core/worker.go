@@ -201,9 +201,6 @@ type worker struct {
 
 	workerDb ethdb.Database
 
-	pendingMu    sync.RWMutex
-	pendingTasks map[common.Hash]*task
-
 	pendingBlockBody *lru.Cache
 
 	snapshotMu       sync.RWMutex // The lock used to protect the snapshots below
@@ -242,7 +239,6 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 		workerDb:           db,
 		localUncles:        make(map[common.Hash]*types.Block),
 		remoteUncles:       make(map[common.Hash]*types.Block),
-		pendingTasks:       make(map[common.Hash]*task),
 		txsCh:              make(chan NewTxsEvent, txChanSize),
 		chainHeadCh:        make(chan ChainHeadEvent, chainHeadChanSize),
 		taskCh:             make(chan *task),
@@ -411,20 +407,6 @@ func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.He
 	defer timer.Stop()
 	<-timer.C // discard the initial tick
 
-	// clearPending cleans the stale pending tasks.
-	clearPending := func(number uint64) {
-		w.pendingMu.Lock()
-		for h, t := range w.pendingTasks {
-			if t.block.NumberU64()+staleThreshold <= number {
-				delete(w.pendingTasks, h)
-			}
-		}
-		w.pendingMu.Unlock()
-	}
-
-	// clear the pending block queue.
-	clearPending(block.Header().NumberU64())
-
 	timestamp = time.Now().Unix()
 	if interrupt != nil {
 		atomic.StoreInt32(interrupt, commitInterruptNewHead)
@@ -461,7 +443,6 @@ func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.He
 	}
 
 	env := work.copy()
-	interval := w.fullTaskHook
 
 	// Swap out the old work with the new one, terminating any leftover
 	// prefetcher processes in the mean time and starting a new one.
@@ -470,9 +451,6 @@ func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.He
 	}
 	w.current = work
 
-	if interval != nil {
-		interval()
-	}
 	// Create a local environment copy, avoid the data race with snapshot state.
 	// https://github.com/ethereum/go-ethereum/issues/24299
 	block, err = w.FinalizeAssembleAndBroadcast(w.hc, env.header, block, env.state, env.txs, env.unclelist(), env.etxs, env.subManifest, env.receipts)
@@ -481,7 +459,6 @@ func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.He
 	}
 	env.header = block.Header()
 
-	task := &task{receipts: env.receipts, state: env.state, block: block, createdAt: time.Now()}
 	env.uncleMu.RLock()
 	if w.CurrentInfo(block.Header()) {
 		log.Info("Commit new sealing work", "number", block.Number(), "sealhash", block.Header().SealHash(),
@@ -497,34 +474,6 @@ func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.He
 	env.uncleMu.RUnlock()
 
 	w.updateSnapshot(env)
-
-	var (
-		stopCh chan struct{}
-		prev   common.Hash
-	)
-
-	// interrupt aborts the in-flight sealing task.
-	interruptFunc := func() {
-		if stopCh != nil {
-			close(stopCh)
-			stopCh = nil
-		}
-	}
-	if w.newTaskHook != nil {
-		w.newTaskHook(task)
-	}
-	// Reject duplicate sealing work due to resubmitting.
-	sealHash := task.block.Header().SealHash()
-	if sealHash == prev {
-		log.Info("sealHash == prev, continuing with sending task to pending channel", "seal", sealHash, "prev", prev)
-	}
-	// Interrupt previous sealing operation
-	interruptFunc()
-	stopCh, prev = make(chan struct{}), sealHash
-
-	w.pendingMu.Lock()
-	w.pendingTasks[sealHash] = task
-	w.pendingMu.Unlock()
 
 	return w.snapshotBlock.Header(), nil
 }
