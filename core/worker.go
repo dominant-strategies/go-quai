@@ -194,6 +194,7 @@ type worker struct {
 	localUncles  map[common.Hash]*types.Block // A set of side blocks generated locally as the possible uncle blocks.
 	remoteUncles map[common.Hash]*types.Block // A set of side blocks as the possible uncle blocks.
 	uncleMu      sync.RWMutex
+	generateMu   sync.RWMutex
 
 	mu       sync.RWMutex // The lock used to protect the coinbase and extra fields
 	coinbase common.Address
@@ -444,6 +445,9 @@ func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.He
 	}
 	coinbase = w.coinbase // Use the preset address as the fee recipient
 
+	w.generateMu.Lock()
+	defer w.generateMu.Unlock()
+
 	work, err := w.prepareWork(&generateParams{
 		timestamp: uint64(timestamp),
 		coinbase:  coinbase,
@@ -460,7 +464,6 @@ func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.He
 		}
 	}
 
-	env := work.copy()
 	interval := w.fullTaskHook
 
 	// Swap out the old work with the new one, terminating any leftover
@@ -475,28 +478,28 @@ func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.He
 	}
 	// Create a local environment copy, avoid the data race with snapshot state.
 	// https://github.com/ethereum/go-ethereum/issues/24299
-	block, err = w.FinalizeAssembleAndBroadcast(w.hc, env.header, block, env.state, env.txs, env.unclelist(), env.etxs, env.subManifest, env.receipts)
+	block, err = w.FinalizeAssembleAndBroadcast(w.hc, work.header, block, work.state, work.txs, work.unclelist(), work.etxs, work.subManifest, work.receipts)
 	if err != nil {
 		return nil, err
 	}
-	env.header = block.Header()
+	work.header = block.Header()
 
-	task := &task{receipts: env.receipts, state: env.state, block: block, createdAt: time.Now()}
-	env.uncleMu.RLock()
+	task := &task{receipts: work.receipts, state: work.state, block: block, createdAt: time.Now()}
+	work.uncleMu.RLock()
 	if w.CurrentInfo(block.Header()) {
 		log.Info("Commit new sealing work", "number", block.Number(), "sealhash", block.Header().SealHash(),
-			"uncles", len(env.uncles), "txs", env.tcount, "etxs", len(block.ExtTransactions()),
-			"gas", block.GasUsed(), "fees", totalFees(block, env.receipts),
+			"uncles", len(work.uncles), "txs", work.tcount, "etxs", len(block.ExtTransactions()),
+			"gas", block.GasUsed(), "fees", totalFees(block, work.receipts),
 			"elapsed", common.PrettyDuration(time.Since(start)))
 	} else {
 		log.Debug("Commit new sealing work", "number", block.Number(), "sealhash", block.Header().SealHash(),
-			"uncles", len(env.uncles), "txs", env.tcount, "etxs", len(block.ExtTransactions()),
-			"gas", block.GasUsed(), "fees", totalFees(block, env.receipts),
+			"uncles", len(work.uncles), "txs", work.tcount, "etxs", len(block.ExtTransactions()),
+			"gas", block.GasUsed(), "fees", totalFees(block, work.receipts),
 			"elapsed", common.PrettyDuration(time.Since(start)))
 	}
-	env.uncleMu.RUnlock()
+	work.uncleMu.RUnlock()
 
-	w.updateSnapshot(env)
+	w.updateSnapshot(work)
 
 	var (
 		stopCh chan struct{}
