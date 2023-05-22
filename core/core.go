@@ -582,7 +582,7 @@ func (c *Core) StopMining() {
 }
 
 // Pending returns the currently pending block and associated state.
-func (c *Core) Pending() (*types.Block, *state.StateDB) {
+func (c *Core) Pending() *types.Block {
 	return c.sl.miner.Pending()
 }
 
