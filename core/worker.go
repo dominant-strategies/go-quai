@@ -203,9 +203,8 @@ type worker struct {
 
 	pendingBlockBody *lru.Cache
 
-	snapshotMu       sync.RWMutex // The lock used to protect the snapshots below
-	snapshotBlock    *types.Block
-	snapshotReceipts types.Receipts
+	snapshotMu    sync.RWMutex // The lock used to protect the snapshots below
+	snapshotBlock *types.Block
 
 	// atomic status counters
 	running int32 // The indicator whether the consensus engine is running or not.
@@ -328,7 +327,8 @@ func (w *worker) pendingBlockAndReceipts() (*types.Block, types.Receipts) {
 	// return a snapshot to avoid contention on currentMu mutex
 	w.snapshotMu.RLock()
 	defer w.snapshotMu.RUnlock()
-	return w.snapshotBlock, w.snapshotReceipts
+	// snapshot receipts are not stored in the worker anymore, so pending receipts is nil
+	return w.snapshotBlock, nil
 }
 
 // start sets the running status as 1 and triggers new work submitting.
@@ -626,7 +626,6 @@ func (w *worker) commitUncle(env *environment, uncle *types.Header) error {
 func (w *worker) updateSnapshot(env *environment) {
 	w.snapshotMu.Lock()
 	defer w.snapshotMu.Unlock()
-	nodeCtx := common.NodeLocation.Context()
 
 	w.snapshotBlock = types.NewBlock(
 		env.header,
@@ -637,9 +636,6 @@ func (w *worker) updateSnapshot(env *environment) {
 		env.receipts,
 		trie.NewStackTrie(nil),
 	)
-	if nodeCtx == common.ZONE_CTX {
-		w.snapshotReceipts = copyReceipts(env.receipts)
-	}
 }
 
 func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*types.Log, error) {
