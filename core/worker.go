@@ -206,7 +206,6 @@ type worker struct {
 	snapshotMu       sync.RWMutex // The lock used to protect the snapshots below
 	snapshotBlock    *types.Block
 	snapshotReceipts types.Receipts
-	snapshotState    *state.StateDB
 
 	// atomic status counters
 	running int32 // The indicator whether the consensus engine is running or not.
@@ -309,14 +308,11 @@ func (w *worker) enablePreseal() {
 }
 
 // pending returns the pending state and corresponding block.
-func (w *worker) pending() (*types.Block, *state.StateDB) {
+func (w *worker) pending() *types.Block {
 	// return a snapshot to avoid contention on currentMu mutex
 	w.snapshotMu.RLock()
 	defer w.snapshotMu.RUnlock()
-	if w.snapshotState == nil {
-		return nil, nil
-	}
-	return w.snapshotBlock, w.snapshotState.Copy()
+	return w.snapshotBlock
 }
 
 // pendingBlock returns pending block.
@@ -643,7 +639,6 @@ func (w *worker) updateSnapshot(env *environment) {
 	)
 	if nodeCtx == common.ZONE_CTX {
 		w.snapshotReceipts = copyReceipts(env.receipts)
-		w.snapshotState = env.state.Copy()
 	}
 }
 
