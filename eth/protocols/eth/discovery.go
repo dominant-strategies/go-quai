@@ -18,15 +18,13 @@ package eth
 
 import (
 	"github.com/dominant-strategies/go-quai/core"
-	"github.com/dominant-strategies/go-quai/core/forkid"
+
 	"github.com/dominant-strategies/go-quai/p2p/enode"
 	"github.com/dominant-strategies/go-quai/rlp"
 )
 
 // enrEntry is the ENR entry which advertises `eth` protocol on the discovery.
 type enrEntry struct {
-	ForkID forkid.ID // Fork identifier per
-
 	// Ignore additional fields (for forward compatibility).
 	Rest []rlp.RawValue `rlp:"tail"`
 }
@@ -59,7 +57,5 @@ func StartENRUpdater(chain *core.Core, ln *enode.LocalNode) {
 
 // currentENREntry constructs an `eth` ENR entry based on the current state of the chain.
 func currentENREntry(chain *core.Core) *enrEntry {
-	return &enrEntry{
-		ForkID: forkid.NewID(chain.Config(), chain.Genesis().Hash(), chain.CurrentHeader().Number().Uint64()),
-	}
+	return &enrEntry{}
 }

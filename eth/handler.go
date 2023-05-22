@@ -25,7 +25,6 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core"
-	"github.com/dominant-strategies/go-quai/core/forkid"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/eth/downloader"
 	"github.com/dominant-strategies/go-quai/eth/fetcher"
@@ -113,7 +112,6 @@ type handlerConfig struct {
 
 type handler struct {
 	networkID     uint64
-	forkFilter    forkid.Filter     // Fork ID filter, constant across the lifetime of the node
 	slicesRunning []common.Location // Slices running on the node
 
 	acceptTxs uint32 // Flag whether we're considered synchronised (enables transaction processing)
@@ -167,7 +165,6 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	h := &handler{
 		networkID:     config.Network,
 		slicesRunning: config.SlicesRunning,
-		forkFilter:    forkid.NewFilter(config.Core),
 		eventMux:      config.EventMux,
 		database:      config.Database,
 		txpool:        config.TxPool,
@@ -230,8 +227,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 		hash    = head.Hash()
 		entropy = head.CalcS()
 	)
-	forkID := forkid.NewID(h.core.Config(), h.core.Genesis().Hash(), h.core.CurrentHeader().Number().Uint64())
-	if err := peer.Handshake(h.networkID, h.slicesRunning, entropy, hash, genesis.Hash(), forkID, h.forkFilter); err != nil {
+	if err := peer.Handshake(h.networkID, h.slicesRunning, entropy, hash, genesis.Hash()); err != nil {
 		peer.Log().Debug("Quai handshake failed", "err", err)
 		return err
 	}

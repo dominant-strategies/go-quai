@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
-	"github.com/dominant-strategies/go-quai/core/forkid"
 	"github.com/dominant-strategies/go-quai/p2p"
 )
 
@@ -34,7 +33,7 @@ const (
 
 // Handshake executes the eth protocol handshake, negotiating version number,
 // network IDs, difficulties, head and genesis blocks.
-func (p *Peer) Handshake(network uint64, slices []common.Location, entropy *big.Int, head common.Hash, genesis common.Hash, forkID forkid.ID, forkFilter forkid.Filter) error {
+func (p *Peer) Handshake(network uint64, slices []common.Location, entropy *big.Int, head common.Hash, genesis common.Hash) error {
 	// Send out own handshake in a new thread
 	errc := make(chan error, 2)
 
@@ -49,11 +48,10 @@ func (p *Peer) Handshake(network uint64, slices []common.Location, entropy *big.
 			Entropy:         entropy,
 			Head:            head,
 			Genesis:         genesis,
-			ForkID:          forkID,
 		})
 	}()
 	go func() {
-		errc <- p.readStatus(network, &status, genesis, forkFilter)
+		errc <- p.readStatus(network, &status, genesis)
 	}()
 	timeout := time.NewTimer(handshakeTimeout)
 	defer timeout.Stop()
@@ -74,7 +72,7 @@ func (p *Peer) Handshake(network uint64, slices []common.Location, entropy *big.
 }
 
 // readStatus reads the remote handshake message.
-func (p *Peer) readStatus(network uint64, status *StatusPacket, genesis common.Hash, forkFilter forkid.Filter) error {
+func (p *Peer) readStatus(network uint64, status *StatusPacket, genesis common.Hash) error {
 	msg, err := p.rw.ReadMsg()
 	if err != nil {
 		return err
@@ -100,9 +98,6 @@ func (p *Peer) readStatus(network uint64, status *StatusPacket, genesis common.H
 	}
 	if status.Genesis != genesis {
 		return fmt.Errorf("%w: %x (!= %x)", errGenesisMismatch, status.Genesis, genesis)
-	}
-	if err := forkFilter(status.ForkID); err != nil {
-		return fmt.Errorf("%w: %v", errForkIDRejected, err)
 	}
 	// sanity check slices running
 	if len(status.SlicesRunning) == 0 || len(status.SlicesRunning) > common.NumRegionsInPrime*common.NumZonesInRegion {

@@ -25,12 +25,8 @@ import (
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
-	"github.com/dominant-strategies/go-quai/consensus/blake3pow"
 	"github.com/dominant-strategies/go-quai/core"
-	"github.com/dominant-strategies/go-quai/core/forkid"
-	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/types"
-	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/eth/downloader"
 	"github.com/dominant-strategies/go-quai/eth/protocols/eth"
 	"github.com/dominant-strategies/go-quai/event"
@@ -78,157 +74,6 @@ func (h *testEthHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 	}
 }
 
-// Tests that peers are correctly accepted (or rejected) based on the advertised
-// fork IDs in the protocol handshake.
-func TestForkIDSplit65(t *testing.T) { testForkIDSplit(t, eth.ETH65) }
-func TestForkIDSplit66(t *testing.T) { testForkIDSplit(t, eth.ETH66) }
-
-func testForkIDSplit(t *testing.T, protocol uint) {
-	t.Parallel()
-
-	var (
-		engine = blake3pow.NewFaker()
-
-		configNoFork  = &params.ChainConfig{}
-		configProFork = &params.ChainConfig{}
-		dbNoFork      = rawdb.NewMemoryDatabase()
-		dbProFork     = rawdb.NewMemoryDatabase()
-
-		gspecNoFork  = &core.Genesis{Config: configNoFork}
-		gspecProFork = &core.Genesis{Config: configProFork}
-
-		genesisNoFork  = gspecNoFork.MustCommit(dbNoFork)
-		genesisProFork = gspecProFork.MustCommit(dbProFork)
-
-		chainNoFork, _  = core.NewBlockChain(dbNoFork, nil, configNoFork, engine, vm.Config{}, nil, nil)
-		chainProFork, _ = core.NewBlockChain(dbProFork, nil, configProFork, engine, vm.Config{}, nil, nil)
-
-		blocksNoFork, _  = core.GenerateChain(configNoFork, genesisNoFork, engine, dbNoFork, 2, nil)
-		blocksProFork, _ = core.GenerateChain(configProFork, genesisProFork, engine, dbProFork, 2, nil)
-
-		ethNoFork, _ = newHandler(&handlerConfig{
-			Database:   dbNoFork,
-			Chain:      chainNoFork,
-			TxPool:     newTestTxPool(),
-			Network:    1,
-			Sync:       downloader.FullSync,
-			BloomCache: 1,
-		})
-		ethProFork, _ = newHandler(&handlerConfig{
-			Database:   dbProFork,
-			Chain:      chainProFork,
-			TxPool:     newTestTxPool(),
-			Network:    1,
-			Sync:       downloader.FullSync,
-			BloomCache: 1,
-		})
-	)
-	ethNoFork.Start(1000)
-	ethProFork.Start(1000)
-
-	// Clean up everything after ourselves
-	defer chainNoFork.Stop()
-	defer chainProFork.Stop()
-
-	defer ethNoFork.Stop()
-	defer ethProFork.Stop()
-
-	// Both nodes should allow the other to connect (same genesis, next fork is the same)
-	p2pNoFork, p2pProFork := p2p.MsgPipe()
-	defer p2pNoFork.Close()
-	defer p2pProFork.Close()
-
-	peerNoFork := eth.NewPeer(protocol, p2p.NewPeerPipe(enode.ID{1}, "", nil, p2pNoFork), p2pNoFork, nil)
-	peerProFork := eth.NewPeer(protocol, p2p.NewPeerPipe(enode.ID{2}, "", nil, p2pProFork), p2pProFork, nil)
-	defer peerNoFork.Close()
-	defer peerProFork.Close()
-
-	errc := make(chan error, 2)
-	go func(errc chan error) {
-		errc <- ethNoFork.runEthPeer(peerProFork, func(peer *eth.Peer) error { return nil })
-	}(errc)
-	go func(errc chan error) {
-		errc <- ethProFork.runEthPeer(peerNoFork, func(peer *eth.Peer) error { return nil })
-	}(errc)
-
-	for i := 0; i < 2; i++ {
-		select {
-		case err := <-errc:
-			if err != nil {
-				t.Fatalf(" nofork <-> profork failed: %v", err)
-			}
-		case <-time.After(250 * time.Millisecond):
-			t.Fatalf(" nofork <-> profork handler timeout")
-		}
-	}
-
-	chainNoFork.InsertChain(blocksNoFork[:1])
-	chainProFork.InsertChain(blocksProFork[:1])
-
-	p2pNoFork, p2pProFork = p2p.MsgPipe()
-	defer p2pNoFork.Close()
-	defer p2pProFork.Close()
-
-	peerNoFork = eth.NewPeer(protocol, p2p.NewPeer(enode.ID{1}, "", nil), p2pNoFork, nil)
-	peerProFork = eth.NewPeer(protocol, p2p.NewPeer(enode.ID{2}, "", nil), p2pProFork, nil)
-	defer peerNoFork.Close()
-	defer peerProFork.Close()
-
-	errc = make(chan error, 2)
-	go func(errc chan error) {
-		errc <- ethNoFork.runEthPeer(peerProFork, func(peer *eth.Peer) error { return nil })
-	}(errc)
-	go func(errc chan error) {
-		errc <- ethProFork.runEthPeer(peerNoFork, func(peer *eth.Peer) error { return nil })
-	}(errc)
-
-	for i := 0; i < 2; i++ {
-		select {
-		case err := <-errc:
-			if err != nil {
-				t.Fatalf("nofork <-> profork failed: %v", err)
-			}
-		case <-time.After(250 * time.Millisecond):
-			t.Fatalf("nofork <-> profork handler timeout")
-		}
-	}
-	// Progress into _. Forks mismatch, signalling differing chains, reject
-	chainNoFork.InsertChain(blocksNoFork[1:2])
-	chainProFork.InsertChain(blocksProFork[1:2])
-
-	p2pNoFork, p2pProFork = p2p.MsgPipe()
-	defer p2pNoFork.Close()
-	defer p2pProFork.Close()
-
-	peerNoFork = eth.NewPeer(protocol, p2p.NewPeerPipe(enode.ID{1}, "", nil, p2pNoFork), p2pNoFork, nil)
-	peerProFork = eth.NewPeer(protocol, p2p.NewPeerPipe(enode.ID{2}, "", nil, p2pProFork), p2pProFork, nil)
-	defer peerNoFork.Close()
-	defer peerProFork.Close()
-
-	errc = make(chan error, 2)
-	go func(errc chan error) {
-		errc <- ethNoFork.runEthPeer(peerProFork, func(peer *eth.Peer) error { return nil })
-	}(errc)
-	go func(errc chan error) {
-		errc <- ethProFork.runEthPeer(peerNoFork, func(peer *eth.Peer) error { return nil })
-	}(errc)
-
-	var successes int
-	for i := 0; i < 2; i++ {
-		select {
-		case err := <-errc:
-			if err == nil {
-				successes++
-				if successes == 2 { // Only one side disconnects
-					t.Fatalf("fork ID rejection didn't happen")
-				}
-			}
-		case <-time.After(250 * time.Millisecond):
-			t.Fatalf("split peers not rejected")
-		}
-	}
-}
-
 // Tests that received transactions are added to the local pool.
 func TestRecvTransactions65(t *testing.T) { testRecvTransactions(t, eth.ETH65) }
 func TestRecvTransactions66(t *testing.T) { testRecvTransactions(t, eth.ETH66) }
@@ -265,7 +110,7 @@ func testRecvTransactions(t *testing.T, protocol uint) {
 		head    = handler.chain.CurrentBlock()
 		td      = handler.chain.GetTd(head.Hash(), head.NumberU64())
 	)
-	if err := src.Handshake(1, td, head.Hash(), genesis.Hash(), forkid.NewIDWithChain(handler.chain), forkid.NewFilter(handler.chain)); err != nil {
+	if err := src.Handshake(1, td, head.Hash(), genesis.Hash()); err != nil {
 		t.Fatalf("failed to run protocol handshake")
 	}
 	// Send the transaction to the sink and verify that it's added to the tx pool
@@ -327,7 +172,7 @@ func testSendTransactions(t *testing.T, protocol uint) {
 		head    = handler.chain.CurrentBlock()
 		td      = handler.chain.GetTd(head.Hash(), head.NumberU64())
 	)
-	if err := sink.Handshake(1, td, head.Hash(), genesis.Hash(), forkid.NewIDWithChain(handler.chain), forkid.NewFilter(handler.chain)); err != nil {
+	if err := sink.Handshake(1, td, head.Hash(), genesis.Hash()); err != nil {
 		t.Fatalf("failed to run protocol handshake")
 	}
 	// After the handshake completes, the source handler should stream the sink
@@ -534,7 +379,7 @@ func testCheckpointChallenge(t *testing.T, syncmode downloader.SyncMode, checkpo
 		head    = handler.chain.CurrentBlock()
 		td      = handler.chain.GetTd(head.Hash(), head.NumberU64())
 	)
-	if err := remote.Handshake(1, td, head.Hash(), genesis.Hash(), forkid.NewIDWithChain(handler.chain), forkid.NewFilter(handler.chain)); err != nil {
+	if err := remote.Handshake(1, td, head.Hash(), genesis.Hash()); err != nil {
 		t.Fatalf("failed to run protocol handshake")
 	}
 
@@ -621,7 +466,7 @@ func testBroadcastBlock(t *testing.T, peers, bcasts int) {
 		go source.handler.runEthPeer(sourcePeer, func(peer *eth.Peer) error {
 			return eth.Handle((*ethHandler)(source.handler), peer)
 		})
-		if err := sinkPeer.Handshake(1, td, genesis.Hash(), genesis.Hash(), forkid.NewIDWithChain(source.chain), forkid.NewFilter(source.chain)); err != nil {
+		if err := sinkPeer.Handshake(1, td, genesis.Hash(), genesis.Hash()); err != nil {
 			t.Fatalf("failed to run protocol handshake")
 		}
 		go eth.Handle(sink, sinkPeer)
@@ -694,7 +539,7 @@ func testBroadcastMalformedBlock(t *testing.T, protocol uint) {
 		genesis = source.chain.Genesis()
 		td      = source.chain.GetTd(genesis.Hash(), genesis.NumberU64())
 	)
-	if err := sink.Handshake(1, td, genesis.Hash(), genesis.Hash(), forkid.NewIDWithChain(source.chain), forkid.NewFilter(source.chain)); err != nil {
+	if err := sink.Handshake(1, td, genesis.Hash(), genesis.Hash()); err != nil {
 		t.Fatalf("failed to run protocol handshake")
 	}
 	// After the handshake completes, the source handler should stream the sink
