@@ -177,9 +177,10 @@ type worker struct {
 	pendingHeaderFeed event.Feed
 
 	// Subscriptions
-	txsCh       chan NewTxsEvent
-	txsSub      event.Subscription
-	chainHeadCh chan ChainHeadEvent
+	txsCh        chan NewTxsEvent
+	txsSub       event.Subscription
+	chainHeadCh  chan ChainHeadEvent
+	chainHeadSub event.Subscription
 
 	// Channels
 	taskCh             chan *task
@@ -187,6 +188,10 @@ type worker struct {
 	exitCh             chan struct{}
 	resubmitIntervalCh chan time.Duration
 	resubmitAdjustCh   chan *intervalAdjust
+
+	interrupt   chan struct{}
+	asyncPhFeed event.Feed // asyncPhFeed sends an event after each state root update
+	scope       event.SubscriptionScope
 
 	wg sync.WaitGroup
 
@@ -242,6 +247,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 		taskCh:             make(chan *task),
 		resultCh:           make(chan *types.Block, resultQueueSize),
 		exitCh:             make(chan struct{}),
+		interrupt:          make(chan struct{}),
 		resubmitIntervalCh: make(chan time.Duration),
 		resubmitAdjustCh:   make(chan *intervalAdjust, resubmitAdjustChanSize),
 	}
@@ -250,6 +256,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 	phBodyCache, _ := lru.New(pendingBlockBodyLimit)
 	worker.pendingBlockBody = phBodyCache
 
+	worker.chainHeadSub = worker.hc.SubscribeChainHeadEvent(worker.chainHeadCh)
 	if nodeCtx == common.ZONE_CTX {
 		// Subscribe NewTxsEvent for tx pool
 		worker.txsSub = txPool.SubscribeNewTxsEvent(worker.txsCh)
@@ -264,6 +271,9 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 
 	worker.wg.Add(1)
 	go worker.mainLoop()
+
+	worker.wg.Add(1)
+	go worker.asyncStateLoop()
 
 	return worker
 }
@@ -338,6 +348,7 @@ func (w *worker) start() {
 
 // stop sets the running status as 0.
 func (w *worker) stop() {
+	w.chainHeadSub.Unsubscribe()
 	atomic.StoreInt32(&w.running, 0)
 }
 
@@ -351,6 +362,7 @@ func (w *worker) isRunning() bool {
 func (w *worker) close() {
 	atomic.StoreInt32(&w.running, 0)
 	close(w.exitCh)
+	w.scope.Close()
 	w.wg.Wait()
 }
 
@@ -383,34 +395,56 @@ func (w *worker) StorePendingBlockBody() {
 	rawdb.WritePbBodyKeys(w.workerDb, pendingBlockBodyKeys)
 }
 
+// asyncStateLoop updates the state root for a block and returns the state udpate in a channel
+func (w *worker) asyncStateLoop() {
+	defer w.wg.Done() // decrement the wait group after the close of the loop
+
+	for {
+		select {
+		case head := <-w.chainHeadCh:
+
+			w.interruptAsyncPhGen()
+
+			go func() {
+				select {
+				case <-w.interrupt:
+					w.interrupt = make(chan struct{})
+					return
+				default:
+					block := head.Block
+					header, err := w.GeneratePendingHeader(block, true)
+					if err != nil {
+						log.Error("Error generating pending header with state", "err", err)
+						return
+					}
+					// Send the updated pendingHeader in the asyncPhFeed
+					w.asyncPhFeed.Send(header)
+					return
+				}
+			}()
+		case <-w.exitCh:
+			return
+		case <-w.chainHeadSub.Err():
+			return
+		}
+	}
+}
+
 // GeneratePendingBlock generates pending block given a commited block.
 func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.Header, error) {
 	nodeCtx := common.NodeLocation.Context()
 
-	// Sanitize recommit interval if the user-specified one is too short.
-	recommit := w.config.Recommit
-	if recommit < minRecommitInterval {
-		log.Warn("Sanitizing miner recommit interval", "provided", recommit, "updated", minRecommitInterval)
-		recommit = minRecommitInterval
-	}
+	w.interruptAsyncPhGen()
 
 	var (
 		interrupt *int32
 		timestamp int64 // timestamp for each round of sealing.
 	)
 
-	timer := time.NewTimer(0)
-	defer timer.Stop()
-	<-timer.C // discard the initial tick
-
-	timestamp = time.Now().Unix()
 	if interrupt != nil {
 		atomic.StoreInt32(interrupt, commitInterruptNewHead)
 	}
 	interrupt = new(int32)
-
-	// reset the timer and update the newTx to zero.
-	timer.Reset(recommit)
 	atomic.StoreInt32(&w.newTxs, 0)
 
 	start := time.Now()
@@ -438,8 +472,6 @@ func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.He
 		}
 	}
 
-	env := work.copy()
-
 	// Swap out the old work with the new one, terminating any leftover
 	// prefetcher processes in the mean time and starting a new one.
 	if w.current != nil {
@@ -449,29 +481,40 @@ func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.He
 
 	// Create a local environment copy, avoid the data race with snapshot state.
 	// https://github.com/ethereum/go-ethereum/issues/24299
-	block, err = w.FinalizeAssembleAndBroadcast(w.hc, env.header, block, env.state, env.txs, env.unclelist(), env.etxs, env.subManifest, env.receipts)
+	block, err = w.FinalizeAssemble(w.hc, work.header, block, work.state, work.txs, work.unclelist(), work.etxs, work.subManifest, work.receipts)
 	if err != nil {
 		return nil, err
 	}
-	env.header = block.Header()
+	work.header = block.Header()
+	w.printPendingHeaderInfo(work, block, start)
+	w.updateSnapshot(work)
 
-	env.uncleMu.RLock()
+	return work.header, nil
+}
+
+// printPendingHeaderInfo logs the pending header information
+func (w *worker) printPendingHeaderInfo(work *environment, block *types.Block, start time.Time) {
+	work.uncleMu.RLock()
 	if w.CurrentInfo(block.Header()) {
 		log.Info("Commit new sealing work", "number", block.Number(), "sealhash", block.Header().SealHash(),
-			"uncles", len(env.uncles), "txs", env.tcount, "etxs", len(block.ExtTransactions()),
-			"gas", block.GasUsed(), "fees", totalFees(block, env.receipts),
+			"uncles", len(work.uncles), "txs", work.tcount, "etxs", len(block.ExtTransactions()),
+			"gas", block.GasUsed(), "fees", totalFees(block, work.receipts),
 			"elapsed", common.PrettyDuration(time.Since(start)))
 	} else {
 		log.Debug("Commit new sealing work", "number", block.Number(), "sealhash", block.Header().SealHash(),
-			"uncles", len(env.uncles), "txs", env.tcount, "etxs", len(block.ExtTransactions()),
-			"gas", block.GasUsed(), "fees", totalFees(block, env.receipts),
+			"uncles", len(work.uncles), "txs", work.tcount, "etxs", len(block.ExtTransactions()),
+			"gas", block.GasUsed(), "fees", totalFees(block, work.receipts),
 			"elapsed", common.PrettyDuration(time.Since(start)))
 	}
-	env.uncleMu.RUnlock()
+	work.uncleMu.RUnlock()
+}
 
-	w.updateSnapshot(env)
-
-	return w.snapshotBlock.Header(), nil
+// interruptAsyncPhGen kills any async ph generation running
+func (w *worker) interruptAsyncPhGen() {
+	if w.interrupt != nil {
+		close(w.interrupt)
+		w.interrupt = nil
+	}
 }
 
 // mainLoop is responsible for generating and submitting sealing work based on
@@ -911,7 +954,7 @@ func (w *worker) adjustGasLimit(interrupt *int32, env *environment, parent *type
 	env.header.SetGasLimit(CalcGasLimit(parent.GasLimit(), gasUsed))
 }
 
-func (w *worker) FinalizeAssembleAndBroadcast(chain consensus.ChainHeaderReader, header *types.Header, parent *types.Block, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, etxs []*types.Transaction, subManifest types.BlockManifest, receipts []*types.Receipt) (*types.Block, error) {
+func (w *worker) FinalizeAssemble(chain consensus.ChainHeaderReader, header *types.Header, parent *types.Block, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, etxs []*types.Transaction, subManifest types.BlockManifest, receipts []*types.Receipt) (*types.Block, error) {
 	nodeCtx := common.NodeLocation.Context()
 	block, err := w.engine.FinalizeAndAssemble(chain, header, state, txs, uncles, etxs, subManifest, receipts)
 	if err != nil {
@@ -969,7 +1012,7 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 		// https://github.com/ethereum/go-ethereum/issues/24299
 		env := env.copy()
 		parent := w.hc.GetBlock(env.header.ParentHash(), env.header.NumberU64()-1)
-		block, err := w.FinalizeAssembleAndBroadcast(w.hc, env.header, parent, env.state, env.txs, env.unclelist(), env.etxs, env.subManifest, env.receipts)
+		block, err := w.FinalizeAssemble(w.hc, env.header, parent, env.state, env.txs, env.unclelist(), env.etxs, env.subManifest, env.receipts)
 		if err != nil {
 			return err
 		}
@@ -1018,6 +1061,10 @@ func (w *worker) GetPendingBlockBody(header *types.Header) *types.Body {
 	}
 	log.Warn("pending block body not found for header: ", key)
 	return nil
+}
+
+func (w *worker) SubscribeAsyncPendingHeader(ch chan *types.Header) event.Subscription {
+	return w.scope.Track(w.asyncPhFeed.Subscribe(ch))
 }
 
 // copyReceipts makes a deep copy of the given receipts.
