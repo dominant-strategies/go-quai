@@ -12,7 +12,6 @@ do
 
     # Run the go tool pprof command for each port
     echo "Running pprof for port $port"
-    go tool pprof -svg http://localhost:$port/debug/pprof/goroutine > "$name"_"$port"_gr.svg
-    go tool pprof -svg http://localhost:$port/debug/pprof/heap > "$name"_"$port"_heap.svg
-    go tool pprof -svg http://localhost:$port/debug/pprof/threadcreate > "$name"_"$port"_thread.svg
+    go tool pprof -svg -alloc_space http://localhost:$port/debug/pprof/heap > "$name"_"$port"_heap_alloc.svg
+    go tool pprof -svg -inuse_space http://localhost:$port/debug/pprof/heap > "$name"_"$port"_heap_inuse.svg
 done
