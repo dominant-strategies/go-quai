@@ -201,9 +201,6 @@ type worker struct {
 
 	workerDb ethdb.Database
 
-	pendingMu    sync.RWMutex
-	pendingTasks map[common.Hash]*task
-
 	pendingBlockBody *lru.Cache
 
 	snapshotMu       sync.RWMutex // The lock used to protect the snapshots below
@@ -242,7 +239,6 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 		workerDb:           db,
 		localUncles:        make(map[common.Hash]*types.Block),
 		remoteUncles:       make(map[common.Hash]*types.Block),
-		pendingTasks:       make(map[common.Hash]*task),
 		txsCh:              make(chan NewTxsEvent, txChanSize),
 		chainHeadCh:        make(chan ChainHeadEvent, chainHeadChanSize),
 		taskCh:             make(chan *task),
@@ -411,20 +407,6 @@ func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.He
 	defer timer.Stop()
 	<-timer.C // discard the initial tick
 
-	// clearPending cleans the stale pending tasks.
-	clearPending := func(number uint64) {
-		w.pendingMu.Lock()
-		for h, t := range w.pendingTasks {
-			if t.block.NumberU64()+staleThreshold <= number {
-				delete(w.pendingTasks, h)
-			}
-		}
-		w.pendingMu.Unlock()
-	}
-
-	// clear the pending block queue.
-	clearPending(block.Header().NumberU64())
-
 	timestamp = time.Now().Unix()
 	if interrupt != nil {
 		atomic.StoreInt32(interrupt, commitInterruptNewHead)
@@ -521,10 +503,6 @@ func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.He
 	// Interrupt previous sealing operation
 	interruptFunc()
 	stopCh, prev = make(chan struct{}), sealHash
-
-	w.pendingMu.Lock()
-	w.pendingTasks[sealHash] = task
-	w.pendingMu.Unlock()
 
 	return w.snapshotBlock.Header(), nil
 }
