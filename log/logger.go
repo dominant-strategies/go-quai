@@ -3,6 +3,7 @@ package log
 import (
 	"fmt"
 	"path"
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -33,16 +34,16 @@ func ConfigureLogger(ctx *cli.Context) {
 		Log.SetReportCaller(true)
 	}
 
-	log_filename := "nodelogs/"
+	log_filename := "nodelogs"
 	regionNum := ctx.GlobalString("region")
 
 	if ctx.GlobalIsSet("zone") {
 		zoneNum := ctx.GlobalString("zone")
-		log_filename += "zone-" + regionNum + "-" + zoneNum
+		log_filename = filepath.Join(log_filename, "zone-" + regionNum + "-" + zoneNum)
 	} else if ctx.GlobalIsSet("region") {
-		log_filename += "region-" + regionNum
+		log_filename = filepath.Join(log_filename, "region-" + regionNum)
 	} else {
-		log_filename += "prime"
+		log_filename = filepath.Join(log_filename, "prime")
 	}
 	log_filename += ".log"
 
