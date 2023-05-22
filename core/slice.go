@@ -50,11 +50,15 @@ type Slice struct {
 	domUrl     string
 	subClients []*quaiclient.Client
 
+	wg                    sync.WaitGroup
 	scope                 event.SubscriptionScope
 	missingBodyFeed       event.Feed
 	pendingEtxsFeed       event.Feed
 	pendingEtxsRollupFeed event.Feed
 	missingParentFeed     event.Feed
+
+	asyncPhCh  chan *types.Header
+	asyncPhSub event.Subscription
 
 	phCachemu sync.RWMutex
 
@@ -105,6 +109,9 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLooku
 	if err := sl.init(genesis); err != nil {
 		return nil, err
 	}
+
+	sl.wg.Add(1)
+	go sl.asyncPendingHeaderLoop()
 
 	return sl, nil
 }
@@ -263,36 +270,55 @@ func (sl *Slice) relayPh(block *types.Block, appendTime *time.Duration, reorg bo
 	nodeCtx := common.NodeLocation.Context()
 
 	if nodeCtx == common.ZONE_CTX {
-
 		// Send an empty header to miner
 		bestPh, exists := sl.readPhCache(sl.bestPhKey)
 		if exists {
 			bestPh.Header.SetLocation(common.NodeLocation)
 			sl.miner.worker.pendingHeaderFeed.Send(bestPh.Header)
+			return
 		}
-
-		// Only if reorg is true invoke the worker to update the state root
-		if reorg {
-			localPendingHeader, err := sl.miner.worker.GeneratePendingHeader(block, true)
-			if err != nil {
-				return
-			} else {
-				pendingHeaderWithTermini.Header = sl.combinePendingHeader(localPendingHeader, pendingHeaderWithTermini.Header, nodeCtx, true)
-				sl.updatePhCache(pendingHeaderWithTermini, true)
-			}
-			bestPh, exists = sl.readPhCache(sl.bestPhKey)
-			if exists {
-				bestPh.Header.SetLocation(common.NodeLocation)
-				sl.miner.worker.pendingHeaderFeed.Send(bestPh.Header)
-				return
-			}
-		}
-
 	} else if !domOrigin && reorg {
 		for i := range sl.subClients {
 			if sl.subClients[i] != nil {
 				sl.subClients[i].SubRelayPendingHeader(context.Background(), pendingHeaderWithTermini, location)
 			}
+		}
+	}
+}
+
+// asyncPendingHeaderLoop waits for the pendingheader updates from the worker and updates the phCache
+func (sl *Slice) asyncPendingHeaderLoop() {
+	defer sl.wg.Done()
+
+	nodeCtx := common.NodeLocation.Context()
+
+	// Subscribe to the AsyncPh updates from the worker
+	sl.asyncPhCh = make(chan *types.Header, 10)
+	sl.asyncPhSub = sl.miner.worker.SubscribeAsyncPendingHeader(sl.asyncPhCh)
+
+	for {
+		select {
+		case asyncPh := <-sl.asyncPhCh:
+			// Read the termini for the given header
+			termini := sl.hc.GetTerminiByHash(asyncPh.ParentHash())
+			pendingHeaderWithTermini, exists := sl.readPhCache(termini[c_terminusIndex])
+			if exists {
+				localPendingHeader := asyncPh
+				pendingHeaderWithTermini.Header = sl.combinePendingHeader(localPendingHeader, pendingHeaderWithTermini.Header, nodeCtx, true)
+				sl.updatePhCache(pendingHeaderWithTermini, true)
+
+				bestPh, exists := sl.readPhCache(sl.bestPhKey)
+				if exists {
+					bestPh.Header.SetLocation(common.NodeLocation)
+					sl.miner.worker.pendingHeaderFeed.Send(bestPh.Header)
+				}
+			}
+
+		case <-sl.asyncPhSub.Err():
+			return
+
+		case <-sl.quit:
+			return
 		}
 	}
 }
@@ -318,7 +344,7 @@ func (sl *Slice) writePhCache(hash common.Hash, pendingHeader types.PendingHeade
 // Generate a slice pending header
 func (sl *Slice) generateSlicePendingHeader(block *types.Block, newTermini []common.Hash, domPendingHeader *types.Header, domOrigin bool, fill bool) (types.PendingHeader, error) {
 	// Upate the local pending header
-	localPendingHeader, err := sl.miner.worker.GeneratePendingHeader(block, fill)
+	localPendingHeader, err := sl.miner.worker.GenerateEmptyPendingHeader(block)
 	if err != nil {
 		return types.PendingHeader{}, err
 	}
@@ -765,7 +791,7 @@ func (sl *Slice) NewGenesisPendingHeader(domPendingHeader *types.Header) {
 	nodeCtx := common.NodeLocation.Context()
 	genesisHash := sl.config.GenesisHash
 	// Upate the local pending header
-	localPendingHeader, err := sl.miner.worker.GeneratePendingHeader(sl.hc.GetBlockByHash(genesisHash), true)
+	localPendingHeader, err := sl.miner.worker.GenerateEmptyPendingHeader(sl.hc.GetBlockByHash(genesisHash))
 	if err != nil {
 		return
 	}
@@ -780,6 +806,7 @@ func (sl *Slice) NewGenesisPendingHeader(domPendingHeader *types.Header) {
 	if nodeCtx != common.ZONE_CTX {
 		for _, client := range sl.subClients {
 			if client != nil {
+				fmt.Println("Calling sub the pending header")
 				client.NewGenesisPendingHeader(context.Background(), domPendingHeader)
 				if err != nil {
 					return
@@ -851,6 +878,7 @@ func (sl *Slice) Stop() {
 
 	sl.hc.Stop()
 	if nodeCtx == common.ZONE_CTX {
+		sl.asyncPhSub.Unsubscribe()
 		sl.txPool.Stop()
 	}
 	sl.miner.Stop()
