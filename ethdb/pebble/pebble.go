@@ -125,8 +125,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 	if handles < minHandles {
 		handles = minHandles
 	}
-	logger := log.New(file + "/dblog")
-	logger.Info("Pebble: Allocated cache and file handles", "cache", common.StorageSize(cache*1024*1024), "handles", handles)
+	log.Info("Pebble: Allocated cache and file handles", "cache", common.StorageSize(cache*1024*1024), "handles", handles)
 
 	// The max memtable size is limited by the uint32 offsets stored in
 	// internal/arenaskl.node, DeferredBatchOp, and flushableBatchEntry.
@@ -142,7 +141,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 	}
 	db := &Database{
 		fn:       file,
-		log:      logger,
+		log:      log.Log,
 		quitChan: make(chan chan error),
 	}
 	opt := &pebble.Options{
