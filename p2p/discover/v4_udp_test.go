@@ -27,9 +27,10 @@ import (
 	"math/rand"
 	"net"
 	"reflect"
-	sync "github.com/sasha-s/go-deadlock"
 	"testing"
 	"time"
+
+	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/dominant-strategies/go-quai/internal/testlog"
 	"github.com/dominant-strategies/go-quai/log"
@@ -456,8 +457,8 @@ func TestUDPv4_successfulPing(t *testing.T) {
 	}
 }
 
-// This test checks that EIP-868 requests work.
-func TestUDPv4_EIP868(t *testing.T) {
+// This test checks that requests work.
+func TestUDPv4(t *testing.T) {
 	test := newUDPTest(t)
 	defer test.close()
 

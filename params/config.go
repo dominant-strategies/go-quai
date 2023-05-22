@@ -68,7 +68,7 @@ var (
 		GenesisHash: LocalGenesisHash,
 	}
 
-	// AllBlake3powProtocolChanges contains every protocol change (EIPs) introduced
+	// AllBlake3powProtocolChanges contains every protocol change introduced
 	// and accepted by the Quai core developers into the Blake3pow consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone

@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
-	"strconv"
 	"strings"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -120,27 +119,16 @@ type stTransactionMarshaling struct {
 }
 
 // GetChainConfig takes a fork definition and returns a chain config.
-// The fork definition can be a simple fork name, or a fork name with a list of EIPs.
-func GetChainConfig(forkString string) (baseConfig *params.ChainConfig, eips []int, err error) {
+func GetChainConfig(forkString string) (baseConfig *params.ChainConfig, err error) {
 	var (
-		splitForks            = strings.Split(forkString, "+")
-		ok                    bool
-		baseName, eipsStrings = splitForks[0], splitForks[1:]
+		splitForks  = strings.Split(forkString, "+")
+		ok          bool
+		baseName, _ = splitForks[0], splitForks[1:]
 	)
 	if baseConfig, ok = Forks[baseName]; !ok {
-		return nil, nil, UnsupportedForkError{baseName}
+		return nil, UnsupportedForkError{baseName}
 	}
-	for _, eip := range eipsStrings {
-		if eipNum, err := strconv.Atoi(eip); err != nil {
-			return nil, nil, fmt.Errorf("syntax error, invalid eip number %v", eipNum)
-		} else {
-			if !vm.ValidEip(eipNum) {
-				return nil, nil, fmt.Errorf("syntax error, invalid eip number %v", eipNum)
-			}
-			eips = append(eips, eipNum)
-		}
-	}
-	return baseConfig, eips, nil
+	return baseConfig, nil
 }
 
 // Subtests returns all valid subtests of the test.
@@ -174,11 +162,10 @@ func (t *StateTest) Run(subtest StateSubtest, vmconfig vm.Config, snapshotter bo
 
 // RunNoVerify runs a specific subtest and returns the statedb and post-state root
 func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapshotter bool) (*snapshot.Tree, *state.StateDB, common.Hash, error) {
-	config, eips, err := GetChainConfig(subtest.Fork)
+	config, err := GetChainConfig(subtest.Fork)
 	if err != nil {
 		return nil, nil, common.Hash{}, UnsupportedForkError{subtest.Fork}
 	}
-	vmconfig.ExtraEips = eips
 	block := t.genesis(config).ToBlock(nil)
 	snaps, statedb := MakePreState(rawdb.NewMemoryDatabase(), t.json.Pre, snapshotter)
 

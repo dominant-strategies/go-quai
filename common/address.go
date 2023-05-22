@@ -120,7 +120,7 @@ func (a Address) Hash() Hash {
 	return a.inner.Hash()
 }
 
-// Hex returns an EIP55-compliant hex string representation of the address.
+// Hex returns a hex string representation of the address.
 func (a Address) Hex() string {
 	if a.inner == nil {
 		return string([]byte{})

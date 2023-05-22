@@ -25,7 +25,7 @@ import (
 
 // enrEntry is the ENR entry which advertises `eth` protocol on the discovery.
 type enrEntry struct {
-	ForkID forkid.ID // Fork identifier per EIP-2124
+	ForkID forkid.ID // Fork identifier per
 
 	// Ignore additional fields (for forward compatibility).
 	Rest []rlp.RawValue `rlp:"tail"`

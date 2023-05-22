@@ -22,7 +22,7 @@ func (a InternalAddress) Bytes20() (addr AddressBytes) { copy(addr[:], a[:]); re
 // Hash converts an address to a hash by left-padding it with zeros.
 func (a InternalAddress) Hash() Hash { return BytesToHash(a[:]) }
 
-// Hex returns an EIP55-compliant hex string representation of the address.
+// Hex returns a hex string representation of the address.
 func (a InternalAddress) Hex() string {
 	return string(a.checksumHex())
 }

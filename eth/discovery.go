@@ -26,7 +26,7 @@ import (
 // ethEntry is the "eth" ENR entry which advertises eth protocol
 // on the discovery network.
 type ethEntry struct {
-	ForkID forkid.ID // Fork identifier per EIP-2124
+	ForkID forkid.ID // Fork identifier
 
 	// Ignore additional fields (for forward compatibility).
 	Rest []rlp.RawValue `rlp:"tail"`
