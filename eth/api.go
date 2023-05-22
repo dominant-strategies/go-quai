@@ -255,11 +255,7 @@ func (api *PublicDebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error
 		Max:               AccountRangeMaxResults, // Sanity limit over RPC
 	}
 	if blockNr == rpc.PendingBlockNumber {
-		// If we're dumping the pending state, we need to request
-		// both the pending block as well as the pending state from
-		// the miner and operate on those
-		_, stateDb := api.eth.core.Pending()
-		return stateDb.RawDump(opts), nil
+		return state.Dump{}, nil
 	}
 	var block *types.Block
 	if blockNr == rpc.LatestBlockNumber {
@@ -347,7 +343,7 @@ func (api *PublicDebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, sta
 			// If we're dumping the pending state, we need to request
 			// both the pending block as well as the pending state from
 			// the miner and operate on those
-			_, stateDb = api.eth.core.Pending()
+			stateDb = &state.StateDB{}
 		} else {
 			var block *types.Block
 			if number == rpc.LatestBlockNumber {
