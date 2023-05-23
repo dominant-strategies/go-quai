@@ -135,7 +135,7 @@ type dialConfig struct {
 	netRestrict    *netutil.Netlist // IP netrestrict list, disabled if nil
 	resolver       nodeResolver
 	dialer         NodeDialer
-	log            log.Logger
+	log            *log.Logger
 	clock          mclock.Clock
 	rand           *mrand.Rand
 }
@@ -145,7 +145,7 @@ func (cfg dialConfig) withDefaults() dialConfig {
 		cfg.maxActiveDials = defaultMaxPendingPeers
 	}
 	if cfg.log == nil {
-		cfg.log = log.Log
+		cfg.log = &log.Log
 	}
 	if cfg.clock == nil {
 		cfg.clock = mclock.System{}

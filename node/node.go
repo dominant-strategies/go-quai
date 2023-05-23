@@ -76,7 +76,7 @@ func New(conf *Config) (*Node, error) {
 		conf.DataDir = absdatadir
 	}
 	if conf.Logger == nil {
-		conf.Logger = log.Log
+		conf.Logger = &log.Log
 	}
 
 	// Ensure that the instance name doesn't cause weird conflicts with
@@ -92,7 +92,7 @@ func New(conf *Config) (*Node, error) {
 		config:        conf,
 		inprocHandler: rpc.NewServer(),
 		eventmux:      new(event.TypeMux),
-		log:           conf.Logger,
+		log:           *conf.Logger,
 		stop:          make(chan struct{}),
 		server:        &p2p.Server{Config: conf.P2P},
 		databases:     make(map[*closeTrackingDB]struct{}),
@@ -109,7 +109,7 @@ func New(conf *Config) (*Node, error) {
 	// Initialize the p2p server. This creates the node key and discovery databases.
 	node.server.Config.PrivateKey = node.config.NodeKey()
 	node.server.Config.Name = node.config.NodeName()
-	node.server.Config.Logger = node.log
+	node.server.Config.Logger = &node.log
 	if node.server.Config.StaticNodes == nil {
 		node.server.Config.StaticNodes = node.config.StaticNodes()
 	}

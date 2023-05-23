@@ -157,7 +157,7 @@ type Config struct {
 	WSExposeAll bool `toml:",omitempty"`
 
 	// Logger is a custom logger to use with the p2p.Server.
-	Logger log.Logger `toml:",omitempty"`
+	Logger *log.Logger `toml:",omitempty"`
 
 	staticNodesWarning     bool
 	trustedNodesWarning    bool
@@ -371,7 +371,7 @@ func (c *Config) warnOnce(w *bool, format string, args ...interface{}) {
 	}
 	l := c.Logger
 	if l == nil {
-		l = log.Log
+		l = &log.Log
 	}
 	l.Warn(fmt.Sprintf(format, args...))
 	*w = true

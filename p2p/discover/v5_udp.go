@@ -35,7 +35,6 @@ import (
 	"github.com/dominant-strategies/go-quai/p2p/enode"
 	"github.com/dominant-strategies/go-quai/p2p/enr"
 	"github.com/dominant-strategies/go-quai/p2p/netutil"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -69,7 +68,7 @@ type UDPv5 struct {
 	priv         *ecdsa.PrivateKey
 	localNode    *enode.LocalNode
 	db           *enode.DB
-	log          *logrus.Logger
+	log          *log.Logger
 	clock        mclock.Clock
 	validSchemes enr.IdentityScheme
 
@@ -146,7 +145,7 @@ func newUDPv5(conn UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv5, error) {
 		db:           ln.Database(),
 		netrestrict:  cfg.NetRestrict,
 		priv:         cfg.PrivateKey,
-		log:          log.Log,
+		log:          &log.Log,
 		validSchemes: cfg.ValidSchemes,
 		clock:        cfg.Clock,
 		trhandlers:   make(map[string]TalkRequestHandler),
@@ -165,7 +164,7 @@ func newUDPv5(conn UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv5, error) {
 		closeCtx:       closeCtx,
 		cancelCloseCtx: cancelCloseCtx,
 	}
-	tab, err := newTable(t, t.db, cfg.Bootnodes, cfg.Log)
+	tab, err := newTable(t, t.db, cfg.Bootnodes, *cfg.Log)
 	if err != nil {
 		return nil, err
 	}

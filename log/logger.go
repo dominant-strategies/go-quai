@@ -12,9 +12,11 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-type Logger = *logrus.Logger
+type Logger struct {
+	*logrus.Logger
+}
 
-var Log Logger = logrus.New()
+var Log Logger = Logger{logrus.New()}
 
 func init() {
 
@@ -78,7 +80,7 @@ func New(out_path string) Logger {
 		MaxBackups: 3,
 		MaxAge:     28, //days
 	})
-	return logger
+	return Logger{logger}
 }
 
 func Trace(msg string, args ...interface{}) {

@@ -153,7 +153,7 @@ type Config struct {
 	EnableMsgEvents bool
 
 	// Logger is a custom logger to use with the p2p.Server.
-	Logger log.Logger `toml:",omitempty"`
+	Logger *log.Logger `toml:",omitempty"`
 
 	clock mclock.Clock
 }
@@ -176,7 +176,7 @@ type Server struct {
 	ourHandshake *protoHandshake
 	loopWG       sync.WaitGroup // loop, listenLoop
 	peerFeed     event.Feed
-	log          log.Logger
+	log          *log.Logger
 
 	nodedb    *enode.DB
 	localnode *enode.LocalNode
@@ -442,7 +442,7 @@ func (srv *Server) Start() (err error) {
 	srv.running = true
 	srv.log = srv.Config.Logger
 	if srv.log == nil {
-		srv.log = log.Log
+		srv.log = &log.Log
 	}
 	if srv.clock == nil {
 		srv.clock = mclock.System{}
@@ -1013,7 +1013,7 @@ func (srv *Server) checkpoint(c *conn, stage chan<- *conn) error {
 }
 
 func (srv *Server) launchPeer(c *conn) *Peer {
-	p := newPeer(srv.log, c, srv.Protocols)
+	p := newPeer(*srv.log, c, srv.Protocols)
 	if srv.EnableMsgEvents {
 		// If message events are enabled, pass the peerFeed
 		// to the peer.

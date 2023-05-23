@@ -32,7 +32,6 @@ import (
 	"github.com/dominant-strategies/go-quai/p2p/enode"
 	"github.com/dominant-strategies/go-quai/p2p/enr"
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/singleflight"
 	"golang.org/x/time/rate"
 )
@@ -54,7 +53,7 @@ type Config struct {
 	RateLimit       float64            // maximum DNS requests / second (default 3)
 	ValidSchemes    enr.IdentityScheme // acceptable ENR identity schemes (default enode.ValidSchemes)
 	Resolver        Resolver           // the DNS resolver to use (defaults to system DNS)
-	Logger          *logrus.Logger	   // destination of client log messages (defaults to root logger)
+	Logger          *log.Logger	   // destination of client log messages (defaults to root logger)
 }
 
 // Resolver is a DNS resolver that can query TXT records.
@@ -88,7 +87,7 @@ func (cfg Config) withDefaults() Config {
 		cfg.Resolver = new(net.Resolver)
 	}
 	if cfg.Logger == nil {
-		cfg.Logger = log.Log
+		cfg.Logger = &log.Log
 	}
 	return cfg
 }
