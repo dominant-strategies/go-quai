@@ -175,6 +175,9 @@ type TxFetcher struct {
 	step  chan struct{} // Notification channel when the fetcher loop iterates
 	clock mclock.Clock  // Time wrapper to simulate in tests
 	rand  *mrand.Rand   // Randomizer to use in tests instead of map range loops (soft-random)
+
+	txEnqueueDelta int // Keeps track of number of times the tx fetcher enqueue is called and never returned currently
+	txNotifyDelta  int // Keeps track of number of times the tx fetcher notify is called and never returned currently
 }
 
 // NewTxFetcher creates a transaction fetcher to retrieve transaction
@@ -189,24 +192,26 @@ func NewTxFetcherForTests(
 	hasTx func(common.Hash) bool, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error,
 	clock mclock.Clock, rand *mrand.Rand) *TxFetcher {
 	f := &TxFetcher{
-		notify:      make(chan *txAnnounce),
-		cleanup:     make(chan *txDelivery),
-		drop:        make(chan *txDrop),
-		quit:        make(chan struct{}),
-		waitlist:    make(map[common.Hash]map[string]struct{}),
-		waittime:    make(map[common.Hash]mclock.AbsTime),
-		waitslots:   make(map[string]map[common.Hash]struct{}),
-		announces:   make(map[string]map[common.Hash]struct{}),
-		announced:   make(map[common.Hash]map[string]struct{}),
-		fetching:    make(map[common.Hash]string),
-		requests:    make(map[string]*txRequest),
-		alternates:  make(map[common.Hash]map[string]struct{}),
-		underpriced: mapset.NewSet(),
-		hasTx:       hasTx,
-		addTxs:      addTxs,
-		fetchTxs:    fetchTxs,
-		clock:       clock,
-		rand:        rand,
+		notify:         make(chan *txAnnounce),
+		cleanup:        make(chan *txDelivery),
+		drop:           make(chan *txDrop),
+		quit:           make(chan struct{}),
+		waitlist:       make(map[common.Hash]map[string]struct{}),
+		waittime:       make(map[common.Hash]mclock.AbsTime),
+		waitslots:      make(map[string]map[common.Hash]struct{}),
+		announces:      make(map[string]map[common.Hash]struct{}),
+		announced:      make(map[common.Hash]map[string]struct{}),
+		fetching:       make(map[common.Hash]string),
+		requests:       make(map[string]*txRequest),
+		alternates:     make(map[common.Hash]map[string]struct{}),
+		underpriced:    mapset.NewSet(),
+		hasTx:          hasTx,
+		addTxs:         addTxs,
+		fetchTxs:       fetchTxs,
+		clock:          clock,
+		rand:           rand,
+		txEnqueueDelta: 0,
+		txNotifyDelta:  0,
 	}
 	go f.mapstatloop()
 	return f
@@ -225,6 +230,11 @@ func (f *TxFetcher) mapstatloop() {
 			fmt.Println("instrmnts:::: TxFetcher.fetching: ", len(f.fetching))
 			fmt.Println("instrmnts:::: TxFetcher.requests: ", len(f.requests))
 			fmt.Println("instrmnts:::: TxFetcher.alternates: ", len(f.alternates))
+			if f.txEnqueueDelta != 0 || f.txNotifyDelta != 0 {
+				fmt.Println("instrmnts:::: TxFetcher", "txEnqueueCounterDelta", f.txEnqueueDelta, "txNotifyCounterDeltDelta", f.txNotifyDelta)
+			}
+		case <-f.quit:
+			return
 		}
 	}
 }
@@ -232,6 +242,7 @@ func (f *TxFetcher) mapstatloop() {
 // Notify announces the fetcher of the potential availability of a new batch of
 // transactions in the network.
 func (f *TxFetcher) Notify(peer string, hashes []common.Hash) error {
+	f.txNotifyDelta++
 	// Keep track of all the announced transactions
 	txAnnounceInMeter.Mark(int64(len(hashes)))
 
@@ -261,6 +272,7 @@ func (f *TxFetcher) Notify(peer string, hashes []common.Hash) error {
 
 	// If anything's left to announce, push it into the internal loop
 	if len(unknowns) == 0 {
+		f.txNotifyDelta--
 		return nil
 	}
 	announce := &txAnnounce{
@@ -269,6 +281,7 @@ func (f *TxFetcher) Notify(peer string, hashes []common.Hash) error {
 	}
 	select {
 	case f.notify <- announce:
+		f.txNotifyDelta--
 		return nil
 	case <-f.quit:
 		return errTerminated
@@ -280,6 +293,7 @@ func (f *TxFetcher) Notify(peer string, hashes []common.Hash) error {
 // direct request replies. The differentiation is important so the fetcher can
 // re-shedule missing transactions as soon as possible.
 func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) error {
+	f.txEnqueueDelta++
 	// Keep track of all the propagated transactions
 	if direct {
 		txReplyInMeter.Mark(int64(len(txs)))
@@ -336,6 +350,7 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 	}
 	select {
 	case f.cleanup <- &txDelivery{origin: peer, hashes: added, direct: direct}:
+		f.txEnqueueDelta--
 		return nil
 	case <-f.quit:
 		return errTerminated
