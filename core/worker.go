@@ -46,7 +46,7 @@ const (
 	staleThreshold = 7
 
 	// pendingBlockBodyLimit is maximum number of pending block bodies to be kept in cache.
-	pendingBlockBodyLimit = 1024
+	pendingBlockBodyLimit = 32
 )
 
 // environment is the worker's current environment and holds all
