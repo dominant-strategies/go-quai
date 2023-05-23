@@ -45,6 +45,9 @@ BASE_CMD += --slices $(SLICES)
 ifeq ($(ENABLE_ARCHIVE),true)
 	BASE_CMD += --gcmode archive
 endif
+ifeq ($(ENABLE_PPROF),true)
+	BASE_CMD += --pprof
+endif
 ifeq ($(ENABLE_UNLOCK),true)
 	BASE_CMD += --allow-insecure-unlock
 endif

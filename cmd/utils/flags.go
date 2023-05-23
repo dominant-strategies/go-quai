@@ -134,6 +134,10 @@ var (
 		Name:  "slices",
 		Usage: "All the slices that are running on this node",
 	}
+	PprofFlag = cli.BoolFlag{
+		Name:  "pprof",
+		Usage: "Enable the pprof HTTP server",
+	}
 	ColosseumFlag = cli.BoolFlag{
 		Name:  "colosseum",
 		Usage: "Quai Colosseum testnet",
@@ -1294,6 +1298,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 
 	// set the slices that the node is running
 	setSlicesRunning(ctx, cfg)
+
+	// configure pprof
+	cfg.PprofEnabled = ctx.GlobalBool(PprofFlag.Name)
 
 	// Cap the cache allowance and tune the garbage collector
 	mem, err := gopsutil.VirtualMemory()
