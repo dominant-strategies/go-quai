@@ -19,11 +19,13 @@ package rpc
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
-	sync "github.com/sasha-s/go-deadlock"
 	"time"
+
+	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/dominant-strategies/go-quai/log"
 )
@@ -34,21 +36,20 @@ import (
 //
 // The entry points for incoming messages are:
 //
-//    h.handleMsg(message)
-//    h.handleBatch(message)
+//	h.handleMsg(message)
+//	h.handleBatch(message)
 //
 // Outgoing calls use the requestOp struct. Register the request before sending it
 // on the connection:
 //
-//    op := &requestOp{ids: ...}
-//    h.addRequestOp(op)
+//	op := &requestOp{ids: ...}
+//	h.addRequestOp(op)
 //
 // Now send the request, then wait for the reply to be delivered through handleMsg:
 //
-//    if err := op.wait(...); err != nil {
-//        h.removeRequestOp(op) // timeout, etc.
-//    }
-//
+//	if err := op.wait(...); err != nil {
+//	    h.removeRequestOp(op) // timeout, etc.
+//	}
 type handler struct {
 	reg            *serviceRegistry
 	unsubscribeCb  *callback
@@ -58,7 +59,8 @@ type handler struct {
 	callWG         sync.WaitGroup                 // pending call goroutines
 	rootCtx        context.Context                // canceled by close()
 	cancelRoot     func()                         // cancel function for rootCtx
-	conn           jsonWriter                     // where responses will be sent
+	cancelStatsCh  chan struct{}
+	conn           jsonWriter // where responses will be sent
 	log            log.Logger
 	allowSubscribe bool
 
@@ -71,6 +73,8 @@ type callProc struct {
 	notifiers []*Notifier
 }
 
+var num_instances = 0
+
 func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *serviceRegistry) *handler {
 	rootCtx, cancelRoot := context.WithCancel(connCtx)
 	h := &handler{
@@ -81,6 +85,7 @@ func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *
 		clientSubs:     make(map[string]*ClientSubscription),
 		rootCtx:        rootCtx,
 		cancelRoot:     cancelRoot,
+		cancelStatsCh:  make(chan struct{}),
 		allowSubscribe: true,
 		serverSubs:     make(map[ID]*Subscription),
 		log:            log.Log,
@@ -89,7 +94,23 @@ func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *
 		h.log = log.New("conn: " + conn.remoteAddr())
 	}
 	h.unsubscribeCb = newCallback(reflect.Value{}, reflect.ValueOf(h.unsubscribe))
+	go h.mapstatloop(num_instances, h.cancelStatsCh)
+	num_instances++
 	return h
+}
+
+func (h *handler) mapstatloop(id int, cancel chan struct{}) {
+	ticker := time.NewTicker(10 * time.Second)
+	for {
+		select {
+		case <-ticker.C:
+			fmt.Println("instrmnts:::: handler[", id, "].respWait: ", len(h.respWait))
+			fmt.Println("instrmnts:::: handler[", id, "].clientSubs: ", len(h.clientSubs))
+			fmt.Println("instrmnts:::: handler[", id, "].serverSubs: ", len(h.serverSubs))
+		case <-cancel:
+			return
+		}
+	}
 }
 
 // handleBatch executes all messages in a batch and returns the responses.
@@ -150,6 +171,7 @@ func (h *handler) handleMsg(msg *jsonrpcMessage) {
 // close cancels all requests except for inflightReq and waits for
 // call goroutines to shut down.
 func (h *handler) close(err error, inflightReq *requestOp) {
+	close(h.cancelStatsCh)
 	h.cancelAllRequests(err, inflightReq)
 	h.callWG.Wait()
 	h.cancelRoot()

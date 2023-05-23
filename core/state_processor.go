@@ -442,6 +442,7 @@ func (p *StateProcessor) HasBlockAndState(hash common.Hash, number uint64) bool 
 
 // GetReceiptsByHash retrieves the receipts for all transactions in a given block.
 func (p *StateProcessor) GetReceiptsByHash(hash common.Hash) types.Receipts {
+	fmt.Println("instrmnts:::: stateprocessor.receiptsCache: ", p.receiptsCache.Len())
 	if receipts, ok := p.receiptsCache.Get(hash); ok {
 		return receipts.(types.Receipts)
 	}
@@ -460,6 +461,7 @@ func (p *StateProcessor) GetReceiptsByHash(hash common.Hash) types.Receipts {
 // GetTransactionLookup retrieves the lookup associate with the given transaction
 // hash from the cache or database.
 func (p *StateProcessor) GetTransactionLookup(hash common.Hash) *rawdb.LegacyTxLookupEntry {
+	fmt.Println("instrmnts:::: stateprocessor.txLookupCache: ", p.txLookupCache.Len())
 	// Short circuit if the txlookup already in the cache, retrieve otherwise
 	if lookup, exist := p.txLookupCache.Get(hash); exist {
 		return lookup.(*rawdb.LegacyTxLookupEntry)

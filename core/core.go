@@ -113,6 +113,7 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 
 // procAppendQueue sorts the append queue and attempts to append
 func (c *Core) procAppendQueue() {
+	fmt.Println("instrmnts:::: core.appendQueue: ", c.appendQueue.Len())
 	// Sort the blocks by number and attempt to insert them
 	var hashNumberList []types.HashAndNumber
 	for _, hash := range c.appendQueue.Keys() {

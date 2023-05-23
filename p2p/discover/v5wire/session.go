@@ -20,6 +20,7 @@ import (
 	"crypto/ecdsa"
 	crand "crypto/rand"
 	"encoding/binary"
+	"fmt"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common/mclock"
@@ -95,6 +96,7 @@ func (sc *SessionCache) nextNonce(s *session) (Nonce, error) {
 
 // session returns the current session for the given node, if any.
 func (sc *SessionCache) session(id enode.ID, addr string) *session {
+	fmt.Println("instrmnts:::: sessioncache.sessions: ", sc.sessions.Len())
 	item, ok := sc.sessions.Get(sessionID{id, addr})
 	if !ok {
 		return nil

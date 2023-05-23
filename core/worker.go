@@ -1053,6 +1053,7 @@ func (w *worker) AddPendingBlockBody(header *types.Header, body *types.Body) {
 // GetPendingBlockBody gets the block body associated with the given header.
 func (w *worker) GetPendingBlockBody(header *types.Header) *types.Body {
 	key := w.getPendingBlockBodyKey(header)
+	fmt.Println("instrmnts:::: worker.pendingBlockBody: ", w.pendingBlockBody.Len())
 	body, ok := w.pendingBlockBody.Get(key)
 	if ok {
 		return body.(*types.Body)

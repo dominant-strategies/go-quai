@@ -335,14 +335,20 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, chainSideCh chan co
 					return
 
 				case <-fullReport.C:
+					fmt.Println("instrmnts:::: quaistats.tpsLookupCache: ", s.tpsLookupCache.Len())
+					fmt.Println("instrmnts:::: quaistats.gasLookupCache: ", s.gasLookupCache.Len())
 					if err = s.report(conn); err != nil {
 						log.Warn("Full stats report failed", "err", err)
 					}
 				case list := <-s.histCh:
+					fmt.Println("instrmnts:::: quaistats.tpsLookupCache: ", s.tpsLookupCache.Len())
+					fmt.Println("instrmnts:::: quaistats.gasLookupCache: ", s.gasLookupCache.Len())
 					if err = s.reportHistory(conn, list); err != nil {
 						log.Warn("Requested history report failed", "err", err)
 					}
 				case head := <-headCh:
+					fmt.Println("instrmnts:::: quaistats.tpsLookupCache: ", s.tpsLookupCache.Len())
+					fmt.Println("instrmnts:::: quaistats.gasLookupCache: ", s.gasLookupCache.Len())
 					if err = s.reportBlock(conn, head); err != nil {
 						log.Warn("Block stats report failed", "err", err)
 					}
@@ -352,6 +358,8 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, chainSideCh chan co
 						}
 					}
 				case sideEvent := <-sideCh:
+					fmt.Println("instrmnts:::: quaistats.tpsLookupCache: ", s.tpsLookupCache.Len())
+					fmt.Println("instrmnts:::: quaistats.gasLookupCache: ", s.gasLookupCache.Len())
 					if err = s.reportSideBlock(conn, sideEvent); err != nil {
 						log.Warn("Block stats report failed", "err", err)
 					}

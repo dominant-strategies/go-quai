@@ -23,8 +23,9 @@ import (
 	"math/rand"
 	"net"
 	"strings"
-	sync "github.com/sasha-s/go-deadlock"
 	"time"
+
+	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/dominant-strategies/go-quai/common/mclock"
 	"github.com/dominant-strategies/go-quai/crypto"
@@ -53,7 +54,7 @@ type Config struct {
 	RateLimit       float64            // maximum DNS requests / second (default 3)
 	ValidSchemes    enr.IdentityScheme // acceptable ENR identity schemes (default enode.ValidSchemes)
 	Resolver        Resolver           // the DNS resolver to use (defaults to system DNS)
-	Logger          *log.Logger	   // destination of client log messages (defaults to root logger)
+	Logger          *log.Logger        // destination of client log messages (defaults to root logger)
 }
 
 // Resolver is a DNS resolver that can query TXT records.
@@ -173,6 +174,7 @@ func (c *Client) resolveEntry(ctx context.Context, domain, hash string) (entry, 
 	if err := c.ratelimit.Wait(ctx); err != nil {
 		return nil, err
 	}
+	fmt.Println("instrmnts:::: client.entries: ", c.entries.Len())
 	cacheKey := truncateHash(hash)
 	if e, ok := c.entries.Get(cacheKey); ok {
 		return e.(entry), nil

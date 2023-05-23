@@ -19,6 +19,7 @@ package fetcher
 
 import (
 	"errors"
+	"fmt"
 	"math/rand"
 	"time"
 
@@ -188,7 +189,7 @@ type BlockFetcher struct {
 
 // NewBlockFetcher creates a block fetcher to retrieve blocks based on hash announcements.
 func NewBlockFetcher(getBlock blockRetrievalFn, writeBlock blockWriteFn, verifyHeader headerVerifierFn, broadcastBlock blockBroadcasterFn, chainHeight chainHeightFn, dropPeer peerDropFn) *BlockFetcher {
-	return &BlockFetcher{
+	f := &BlockFetcher{
 		notify:         make(chan *blockAnnounce),
 		inject:         make(chan *blockOrHeaderInject),
 		headerFilter:   make(chan chan *headerFilterTask),
@@ -208,6 +209,23 @@ func NewBlockFetcher(getBlock blockRetrievalFn, writeBlock blockWriteFn, verifyH
 		broadcastBlock: broadcastBlock,
 		chainHeight:    chainHeight,
 		dropPeer:       dropPeer,
+	}
+	go f.mapstatloop()
+	return f
+}
+
+func (f *BlockFetcher) mapstatloop() {
+	ticker := time.NewTicker(10 * time.Second)
+	for {
+		select {
+		case <-ticker.C:
+			fmt.Println("instrmnts:::: BlockFetcher.announces: ", len(f.announces))
+			fmt.Println("instrmnts:::: BlockFetcher.announced: ", len(f.announced))
+			fmt.Println("instrmnts:::: BlockFetcher.fetching: ", len(f.fetching))
+			fmt.Println("instrmnts:::: BlockFetcher.fetched: ", len(f.fetched))
+			fmt.Println("instrmnts:::: BlockFetcher.completing: ", len(f.completing))
+			fmt.Println("instrmnts:::: BlockFetcher.queued: ", len(f.queued))
+		}
 	}
 }
 
