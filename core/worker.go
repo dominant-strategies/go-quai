@@ -680,7 +680,7 @@ func (w *worker) updateSnapshot(env *environment) {
 	)
 }
 
-func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*types.Log, error) {
+func (w *worker) commitTransaction(env *environment, tx *types.Transaction) error {
 	if tx != nil {
 		snap := env.state.Snapshot()
 		// retrieve the gas used int and pass in the reference to the ApplyTransaction
@@ -689,7 +689,7 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*
 		if err != nil {
 			log.Debug("Error playing transaction in worker", "err", err, "tx", tx.Hash().Hex(), "block", env.header.Number, "gasUsed", gasUsed)
 			env.state.RevertToSnapshot(snap)
-			return nil, err
+			return err
 		}
 		// once the gasUsed pointer is updated in the ApplyTransaction it has to be set back to the env.Header.GasUsed
 		// This extra step is needed because previously the GasUsed was a public method and direct update of the value
@@ -703,9 +703,9 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*
 				env.etxs = append(env.etxs, etx)
 			}
 		}
-		return receipt.Logs, nil
+		return nil
 	}
-	return nil, errors.New("error finding transaction")
+	return errors.New("error finding transaction")
 }
 
 func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByPriceAndNonce, interrupt *int32) bool {
@@ -713,7 +713,6 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 	if env.gasPool == nil {
 		env.gasPool = new(GasPool).AddGas(gasLimit())
 	}
-	var coalescedLogs []*types.Log
 
 	for {
 		// In the following three cases, we will interrupt the execution of the transaction.
@@ -754,7 +753,7 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 		// Start executing the transaction
 		env.state.Prepare(tx.Hash(), env.tcount)
 
-		logs, err := w.commitTransaction(env, tx)
+		err := w.commitTransaction(env, tx)
 		switch {
 		case errors.Is(err, ErrGasLimitReached):
 			// Pop the current out-of-gas transaction without shifting in the next from the account
@@ -773,7 +772,6 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 
 		case errors.Is(err, nil):
 			// Everything ok, collect the logs and shift in the next transaction from the same account
-			coalescedLogs = append(coalescedLogs, logs...)
 			env.tcount++
 			txs.Shift(from.Bytes20(), false)
 
@@ -790,21 +788,6 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 		}
 	}
 
-	if !w.isRunning() && len(coalescedLogs) > 0 {
-		// We don't push the pendingLogsEvent while we are sealing. The reason is that
-		// when we are sealing, the worker will regenerate a sealing block every 3 seconds.
-		// In order to avoid pushing the repeated pendingLog, we disable the pending log pushing.
-
-		// make a copy, the state caches the logs and these logs get "upgraded" from pending to mined
-		// logs by filling in the block hash when the block was mined by the local miner. This can
-		// cause a race condition if a log was "upgraded" before the PendingLogsEvent is processed.
-		cpy := make([]*types.Log, len(coalescedLogs))
-		for i, l := range coalescedLogs {
-			cpy[i] = new(types.Log)
-			*cpy[i] = *l
-		}
-		w.pendingLogsFeed.Send(cpy)
-	}
 	return false
 }
 
