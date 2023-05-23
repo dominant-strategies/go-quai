@@ -86,12 +86,21 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 		return h.handleBlockBroadcast(peer, packet.Block)
 
 	case *eth.NewPooledTransactionHashesPacket:
+		if !h.propapagteTxs {
+			return nil
+		}
 		return h.txFetcher.Notify(peer.ID(), *packet)
 
 	case *eth.TransactionsPacket:
+		if !h.propapagteTxs {
+			return nil
+		}
 		return h.txFetcher.Enqueue(peer.ID(), *packet, false)
 
 	case *eth.PooledTransactionsPacket:
+		if !h.propapagteTxs {
+			return nil
+		}
 		return h.txFetcher.Enqueue(peer.ID(), *packet, true)
 
 	case *eth.PendingEtxsPacket:

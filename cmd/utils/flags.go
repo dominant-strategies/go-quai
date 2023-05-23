@@ -138,6 +138,10 @@ var (
 		Name:  "pprof",
 		Usage: "Enable the pprof HTTP server",
 	}
+	PropagateTxsFlag = cli.BoolFlag{
+		Name:  "disable-prop",
+		Usage: "Disable transaction propagation",
+	}
 	ColosseumFlag = cli.BoolFlag{
 		Name:  "colosseum",
 		Usage: "Quai Colosseum testnet",
@@ -1308,6 +1312,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 
 	// configure pprof
 	cfg.PprofEnabled = ctx.GlobalBool(PprofFlag.Name)
+
+	// set transaction propagation
+	cfg.PropagateTxs = !ctx.GlobalBool(PropagateTxsFlag.Name)
 
 	// Cap the cache allowance and tune the garbage collector
 	mem, err := gopsutil.VirtualMemory()

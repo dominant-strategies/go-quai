@@ -158,6 +158,9 @@ type Config struct {
 	// Slices running on the node
 	SlicesRunning []common.Location
 
+	// Flag whether to propagate transactions across the network
+	PropagateTxs bool
+
 	// PPROF enabled
 	PprofEnabled bool
 }

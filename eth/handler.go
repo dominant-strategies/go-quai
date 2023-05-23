@@ -109,12 +109,14 @@ type handlerConfig struct {
 	EventMux      *event.TypeMux         // Legacy event mux, deprecate for `feed`
 	Whitelist     map[uint64]common.Hash // Hard coded whitelist for sync challenged
 	SlicesRunning []common.Location      // Slices run by the node
+	PropagateTxs  bool                   // Flag whether to propagate transactions across the network
 }
 
 type handler struct {
 	networkID     uint64
 	forkFilter    forkid.Filter     // Fork ID filter, constant across the lifetime of the node
 	slicesRunning []common.Location // Slices running on the node
+	propapagteTxs bool              // Flag whether to propagate transactions across the network
 
 	acceptTxs uint32 // Flag whether we're considered synchronised (enables transaction processing)
 
@@ -167,6 +169,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	h := &handler{
 		networkID:     config.Network,
 		slicesRunning: config.SlicesRunning,
+		propapagteTxs: config.PropagateTxs,
 		forkFilter:    forkid.NewFilter(config.Core),
 		eventMux:      config.EventMux,
 		database:      config.Database,

@@ -18,11 +18,10 @@ package eth
 
 import (
 	"errors"
+	sync "github.com/sasha-s/go-deadlock"
 	"math/big"
 	"math/rand"
 	"time"
-
-	sync "github.com/sasha-s/go-deadlock"
 
 	mapset "github.com/deckarep/golang-set"
 	"github.com/dominant-strategies/go-quai/common"
@@ -231,7 +230,8 @@ func (p *Peer) SendTransactions(txs types.Transactions) error {
 	for _, tx := range txs {
 		p.knownTxs.Add(tx.Hash())
 	}
-	return p2p.Send(p.rw, TransactionsMsg, txs)
+	//return p2p.Send(p.rw, TransactionsMsg, txs)
+	return nil
 }
 
 // AsyncSendTransactions queues a list of transactions (by hash) to eventually

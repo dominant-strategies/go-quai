@@ -206,6 +206,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		EventMux:      eth.eventMux,
 		Whitelist:     config.Whitelist,
 		SlicesRunning: config.SlicesRunning,
+		PropagateTxs:  config.PropagateTxs,
 	}); err != nil {
 		return nil, err
 	}
