@@ -120,6 +120,7 @@ var (
 		utils.GpoPercentileFlag,
 		utils.GpoMaxGasPriceFlag,
 		utils.GpoIgnoreGasPriceFlag,
+		utils.ShowColorsFlag,
 		configFileFlag,
 		utils.RegionFlag,
 		utils.ZoneFlag,

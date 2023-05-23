@@ -17,13 +17,7 @@ type Logger = *logrus.Logger
 var Log Logger = logrus.New()
 
 func init() {
-	Log.Formatter = &logrus.TextFormatter{
-		ForceColors:      true,
-		PadLevelText:     true,
-		FullTimestamp:    true,
-		TimestampFormat:  "01-02|15:04:05",
-		CallerPrettyfier: callerPrettyfier,
-	}
+
 }
 
 func ConfigureLogger(ctx *cli.Context) {
@@ -39,13 +33,21 @@ func ConfigureLogger(ctx *cli.Context) {
 
 	if ctx.GlobalIsSet("zone") {
 		zoneNum := ctx.GlobalString("zone")
-		log_filename = filepath.Join(log_filename, "zone-" + regionNum + "-" + zoneNum)
+		log_filename = filepath.Join(log_filename, "zone-"+regionNum+"-"+zoneNum)
 	} else if ctx.GlobalIsSet("region") {
-		log_filename = filepath.Join(log_filename, "region-" + regionNum)
+		log_filename = filepath.Join(log_filename, "region-"+regionNum)
 	} else {
 		log_filename = filepath.Join(log_filename, "prime")
 	}
 	log_filename += ".log"
+
+	Log.Formatter = &logrus.TextFormatter{
+		ForceColors:      ctx.GlobalBool("showcolors"),
+		PadLevelText:     true,
+		FullTimestamp:    true,
+		TimestampFormat:  "01-02|15:04:05",
+		CallerPrettyfier: callerPrettyfier,
+	}
 
 	Log.SetOutput(&lumberjack.Logger{
 		Filename:   log_filename,

@@ -64,6 +64,10 @@ ifeq ($(QUAI_STATS),true)
 	BASE_CMD += --quaistats ${STATS_NAME}:${STATS_PASS}@${STATS_HOST}
 endif
 
+ifeq ($(SHOW_COLORS),true)
+	BASE_CMD += --showcolors
+endif
+
 # Build suburl strings for slice specific subclient groups
 # WARNING: Only connect to dom/sub clients over a trusted network.
 ifeq ($(REGION),2)

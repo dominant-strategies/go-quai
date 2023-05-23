@@ -599,6 +599,13 @@ var (
 		Usage: "Password to authorize access to the database",
 		Value: metrics.DefaultConfig.InfluxDBPassword,
 	}
+
+	// Output flags
+	ShowColorsFlag = cli.BoolFlag{
+		Name:  "showcolors",
+		Usage: "Enable colorized logging",
+	}
+
 	// Tags are part of every measurement sent to InfluxDB. Queries on tags are faster in InfluxDB.
 	// For example `host` tag could be used so that we can group all nodes and average a measurement
 	// across all of them, but also so that we can select a specific node and inspect its measurements.
