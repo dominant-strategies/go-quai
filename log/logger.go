@@ -83,32 +83,55 @@ func New(out_path string) Logger {
 	return Logger{logger}
 }
 
+// Uses of the global logger will use the following static method.
 func Trace(msg string, args ...interface{}) {
 	Log.Trace(constructLogMessage(msg, args...))
+}
+// Individual logging instances will use the following method.
+func (l Logger) Trace(msg string, args ...interface{}) {
+	l.Logger.Trace(constructLogMessage(msg, args...))
 }
 
 func Debug(msg string, args ...interface{}) {
 	Log.Debug(constructLogMessage(msg, args...))
 }
+func (l Logger) Debug(msg string, args ...interface{}) {
+	l.Logger.Debug(constructLogMessage(msg, args...))
+}
 
 func Info(msg string, args ...interface{}) {
 	Log.Info(constructLogMessage(msg, args...))
+}
+func (l Logger) Info(msg string, args ...interface{}) {
+	l.Logger.Info(constructLogMessage(msg, args...))
 }
 
 func Warn(msg string, args ...interface{}) {
 	Log.Warn(constructLogMessage(msg, args...))
 }
+func (l Logger) Warn(msg string, args ...interface{}) {
+	l.Logger.Warn(constructLogMessage(msg, args...))
+}
 
 func Error(msg string, args ...interface{}) {
 	Log.Error(constructLogMessage(msg, args...))
+}
+func (l Logger) Error(msg string, args ...interface{}) {
+	l.Logger.Error(constructLogMessage(msg, args...))
 }
 
 func Fatal(msg string, args ...interface{}) {
 	Log.Fatal(constructLogMessage(msg, args...))
 }
+func (l Logger) Fatal(msg string, args ...interface{}) {
+	l.Logger.Fatal(constructLogMessage(msg, args...))
+}
 
 func Panic(msg string, args ...interface{}) {
 	Log.Panic(constructLogMessage(msg, args...))
+}
+func (l Logger) Panic(msg string, args ...interface{}) {
+	l.Logger.Panic(constructLogMessage(msg, args...))
 }
 
 func Lazy(fn func() string, logLevel string) {
