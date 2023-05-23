@@ -22,16 +22,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	lru "github.com/hashicorp/golang-lru"
-	sync "github.com/sasha-s/go-deadlock"
-	"github.com/shirou/gopsutil/cpu"
-	"github.com/shirou/gopsutil/mem"
 	"math/big"
 	"net/http"
 	"runtime"
 	"strconv"
 	"strings"
 	"time"
+
+	lru "github.com/hashicorp/golang-lru"
+	sync "github.com/sasha-s/go-deadlock"
+	"github.com/shirou/gopsutil/cpu"
+	"github.com/shirou/gopsutil/mem"
+
+	"os/exec"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
@@ -46,7 +49,6 @@ import (
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rpc"
 	"github.com/gorilla/websocket"
-	"os/exec"
 )
 
 const (
@@ -333,14 +335,20 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, chainSideCh chan co
 					return
 
 				case <-fullReport.C:
+					fmt.Println("instrmnts:::: quaistats.tpsLookupCache: ", s.tpsLookupCache.Len())
+					fmt.Println("instrmnts:::: quaistats.gasLookupCache: ", s.gasLookupCache.Len())
 					if err = s.report(conn); err != nil {
 						log.Warn("Full stats report failed", "err", err)
 					}
 				case list := <-s.histCh:
+					fmt.Println("instrmnts:::: quaistats.tpsLookupCache: ", s.tpsLookupCache.Len())
+					fmt.Println("instrmnts:::: quaistats.gasLookupCache: ", s.gasLookupCache.Len())
 					if err = s.reportHistory(conn, list); err != nil {
 						log.Warn("Requested history report failed", "err", err)
 					}
 				case head := <-headCh:
+					fmt.Println("instrmnts:::: quaistats.tpsLookupCache: ", s.tpsLookupCache.Len())
+					fmt.Println("instrmnts:::: quaistats.gasLookupCache: ", s.gasLookupCache.Len())
 					if err = s.reportBlock(conn, head); err != nil {
 						log.Warn("Block stats report failed", "err", err)
 					}
@@ -350,6 +358,8 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, chainSideCh chan co
 						}
 					}
 				case sideEvent := <-sideCh:
+					fmt.Println("instrmnts:::: quaistats.tpsLookupCache: ", s.tpsLookupCache.Len())
+					fmt.Println("instrmnts:::: quaistats.gasLookupCache: ", s.gasLookupCache.Len())
 					if err = s.reportSideBlock(conn, sideEvent); err != nil {
 						log.Warn("Block stats report failed", "err", err)
 					}

@@ -129,6 +129,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	} else {
 		log.Debug("Starting slice append", "hash", header.Hash(), "number", header.NumberArray(), "location", header.Location(), "parent hash", header.ParentHash())
 	}
+	fmt.Println("instrmnts:::: slice.phCache: ", len(sl.phCache))
 
 	nodeCtx := common.NodeLocation.Context()
 	location := header.Location()

@@ -1,8 +1,10 @@
 package core
 
 import (
-	sync "github.com/sasha-s/go-deadlock"
+	"fmt"
 	"time"
+
+	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
@@ -69,6 +71,9 @@ func NewBodyDb(db ethdb.Database, engine consensus.Engine, hc *HeaderChain, chai
 func (bc *BodyDb) Append(batch ethdb.Batch, block *types.Block, newInboundEtxs types.Transactions) ([]*types.Log, error) {
 	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
+	fmt.Println("instrmnts:::: bodydb.blockCache: ", bc.blockCache.Len())
+	fmt.Println("instrmnts:::: bodydb.bodyCache: ", bc.bodyCache.Len())
+	fmt.Println("instrmnts:::: bodydb.bodyRLPCache: ", bc.bodyRLPCache.Len())
 
 	stateApply := time.Now()
 	nodeCtx := common.NodeLocation.Context()

@@ -3,11 +3,12 @@ package core
 import (
 	"errors"
 	"fmt"
-	sync "github.com/sasha-s/go-deadlock"
 	"io"
 	"math/big"
 	"sync/atomic"
 	"time"
+
+	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
@@ -301,6 +302,10 @@ func (hc *HeaderChain) collectInclusiveEtxRollup(b *types.Block) (types.Transact
 func (hc *HeaderChain) Append(batch ethdb.Batch, block *types.Block, newInboundEtxs types.Transactions) error {
 	nodeCtx := common.NodeLocation.Context()
 	log.Debug("HeaderChain Append:", "Block information: Hash:", block.Hash(), "block header hash:", block.Header().Hash(), "Number:", block.NumberU64(), "Location:", block.Header().Location, "Parent:", block.ParentHash())
+	fmt.Println("instrmnts:::: headerChain.headerCache: ", hc.headerCache.Len())
+	fmt.Println("instrmnts:::: headerChain.numberCache: ", hc.numberCache.Len())
+	fmt.Println("instrmnts:::: headerChain.pendingEtxsRollup: ", hc.pendingEtxsRollup.Len())
+	fmt.Println("instrmnts:::: headerChain.pendingEtxs: ", hc.pendingEtxs.Len())
 
 	err := hc.engine.VerifyHeader(hc, block.Header(), true)
 	if err != nil {

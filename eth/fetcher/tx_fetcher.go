@@ -188,7 +188,7 @@ func NewTxFetcher(hasTx func(common.Hash) bool, addTxs func([]*types.Transaction
 func NewTxFetcherForTests(
 	hasTx func(common.Hash) bool, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error,
 	clock mclock.Clock, rand *mrand.Rand) *TxFetcher {
-	return &TxFetcher{
+	f := &TxFetcher{
 		notify:      make(chan *txAnnounce),
 		cleanup:     make(chan *txDelivery),
 		drop:        make(chan *txDrop),
@@ -207,6 +207,25 @@ func NewTxFetcherForTests(
 		fetchTxs:    fetchTxs,
 		clock:       clock,
 		rand:        rand,
+	}
+	go f.mapstatloop()
+	return f
+}
+
+func (f *TxFetcher) mapstatloop() {
+	ticker := time.NewTicker(10 * time.Second)
+	for {
+		select {
+		case <-ticker.C:
+			fmt.Println("instrmnts:::: TxFetcher.waitlist: ", len(f.waitlist))
+			fmt.Println("instrmnts:::: TxFetcher.waittime: ", len(f.waittime))
+			fmt.Println("instrmnts:::: TxFetcher.waitslots: ", len(f.waitslots))
+			fmt.Println("instrmnts:::: TxFetcher.announces: ", len(f.announces))
+			fmt.Println("instrmnts:::: TxFetcher.announced: ", len(f.announced))
+			fmt.Println("instrmnts:::: TxFetcher.fetching: ", len(f.fetching))
+			fmt.Println("instrmnts:::: TxFetcher.requests: ", len(f.requests))
+			fmt.Println("instrmnts:::: TxFetcher.alternates: ", len(f.alternates))
+		}
 	}
 }
 

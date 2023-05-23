@@ -19,11 +19,13 @@ package rpc
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
-	sync "github.com/sasha-s/go-deadlock"
 	"time"
+
+	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/dominant-strategies/go-quai/log"
 )
@@ -34,21 +36,20 @@ import (
 //
 // The entry points for incoming messages are:
 //
-//    h.handleMsg(message)
-//    h.handleBatch(message)
+//	h.handleMsg(message)
+//	h.handleBatch(message)
 //
 // Outgoing calls use the requestOp struct. Register the request before sending it
 // on the connection:
 //
-//    op := &requestOp{ids: ...}
-//    h.addRequestOp(op)
+//	op := &requestOp{ids: ...}
+//	h.addRequestOp(op)
 //
 // Now send the request, then wait for the reply to be delivered through handleMsg:
 //
-//    if err := op.wait(...); err != nil {
-//        h.removeRequestOp(op) // timeout, etc.
-//    }
-//
+//	if err := op.wait(...); err != nil {
+//	    h.removeRequestOp(op) // timeout, etc.
+//	}
 type handler struct {
 	reg            *serviceRegistry
 	unsubscribeCb  *callback
@@ -89,7 +90,20 @@ func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *
 		h.log = log.New("conn: " + conn.remoteAddr())
 	}
 	h.unsubscribeCb = newCallback(reflect.Value{}, reflect.ValueOf(h.unsubscribe))
+	go h.mapstatloop()
 	return h
+}
+
+func (h *handler) mapstatloop() {
+	ticker := time.NewTicker(10 * time.Second)
+	for {
+		select {
+		case <-ticker.C:
+			fmt.Println("instrmnts:::: handler.respWait: ", len(h.respWait))
+			fmt.Println("instrmnts:::: handler.clientSubs: ", len(h.clientSubs))
+			fmt.Println("instrmnts:::: handler.serverSubs: ", len(h.serverSubs))
+		}
+	}
 }
 
 // handleBatch executes all messages in a batch and returns the responses.
