@@ -165,6 +165,10 @@ func callCorrectLevel(level logrus.Level, msg string, args ...interface{}) {
 func constructLogMessage(msg string, fields ...interface{}) string {
 	var pairs []string
 
+	if len(fields)%2 != 0 {
+		fields = append(fields, "MISSING VALUE")
+	}
+
 	for i := 0; i < len(fields); i += 2 {
 		key := fields[i]
 		value := fields[i+1]
