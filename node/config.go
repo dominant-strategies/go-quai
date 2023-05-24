@@ -163,6 +163,9 @@ type Config struct {
 	staticNodesWarning     bool
 	trustedNodesWarning    bool
 	oldQuaiResourceWarning bool
+	oldGethResourceWarning bool
+
+	DBEngine string `toml:",omitempty"`
 }
 
 // NodeDB returns the path to the discovery node database.

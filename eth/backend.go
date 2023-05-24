@@ -114,8 +114,8 @@ func New(stack *node.Node, config *ethconfig.Config) (*Quai, error) {
 	blake3powConfig := config.Blake3pow
 	blake3powConfig.NotifyFull = config.Miner.NotifyFull
 
-	// Assemble the Quai object
-	chainDb, err := stack.OpenDatabaseWithFreezer("chaindata", config.DatabaseCache, config.DatabaseHandles, config.DatabaseFreezer, "eth/db/chaindata/", false)
+	// Assemble the Ethereum object
+	chainDb, err := stack.OpenDatabaseWithFreezer("chaindata", config.DatabaseCache, config.DatabaseHandles, config.DatabaseFreezer, "quai/db/chaindata/", false)
 	if err != nil {
 		return nil, err
 	}
