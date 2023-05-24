@@ -16,6 +16,7 @@ import (
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/metrics"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/quaiclient"
 	"github.com/dominant-strategies/go-quai/trie"
@@ -33,6 +34,12 @@ const (
 	c_regionRelayProc                 = 3
 	c_primeRelayProc                  = 10
 	c_asyncPhUpdateChanSize           = 10
+)
+
+var (
+	headBlockGauge     = metrics.NewRegisteredGauge("chain/head/block", nil)
+	headHeaderGauge    = metrics.NewRegisteredGauge("chain/head/header", nil)
+	headFastBlockGauge = metrics.NewRegisteredGauge("chain/head/receipt", nil)
 )
 
 type Slice struct {
@@ -259,7 +266,6 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		"root", block.Root(),
 		"order", order,
 		"elapsed", common.PrettyDuration(time.Since(start)))
-
 	if nodeCtx == common.ZONE_CTX {
 		return block.ExtTransactions(), subReorg, nil
 	} else {
@@ -280,6 +286,7 @@ func (sl *Slice) relayPh(block *types.Block, appendTime *time.Duration, reorg bo
 			return
 		}
 	} else if !domOrigin && reorg {
+		headBlockGauge.Update(int64(block.NumberU64()))
 		for i := range sl.subClients {
 			if sl.subClients[i] != nil {
 				sl.subClients[i].SubRelayPendingHeader(context.Background(), pendingHeaderWithTermini, location)

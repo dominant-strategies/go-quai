@@ -463,6 +463,7 @@ func (blake3pow *Blake3pow) FinalizeAndAssemble(chain consensus.ChainHeaderReade
 	nodeCtx := common.NodeLocation.Context()
 	if nodeCtx == common.ZONE_CTX {
 		// Finalize block
+		fmt.Println("Finalizing block")
 		blake3pow.Finalize(chain, header, state, txs, uncles)
 	}
 

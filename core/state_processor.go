@@ -304,6 +304,17 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 	if err != nil {
 		return nil, err
 	}
+
+	// Update the metrics touched during block processing and validation
+	accountReadTimer.Update(statedb.AccountReads)                 // Account reads are complete(in processing)
+	storageReadTimer.Update(statedb.StorageReads)                 // Storage reads are complete(in processing)
+	snapshotAccountReadTimer.Update(statedb.SnapshotAccountReads) // Account reads are complete(in processing)
+	snapshotStorageReadTimer.Update(statedb.SnapshotStorageReads) // Storage reads are complete(in processing)
+	accountUpdateTimer.Update(statedb.AccountUpdates)             // Account updates are complete(in validation)
+	storageUpdateTimer.Update(statedb.StorageUpdates)             // Storage updates are complete(in validation)
+	accountHashTimer.Update(statedb.AccountHashes)                // Account hashes are complete(in validation)
+	storageHashTimer.Update(statedb.StorageHashes)                // Storage hashes are complete(in validation)
+
 	time4 := common.PrettyDuration(time.Since(start))
 	rawdb.WriteReceipts(batch, block.Hash(), block.NumberU64(), receipts)
 	time5 := common.PrettyDuration(time.Since(start))
@@ -314,6 +325,12 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 	if err != nil {
 		return nil, err
 	}
+
+	// Update the metrics touched during block commit
+	accountCommitTimer.Update(statedb.AccountCommits)   // Account commits are complete, we can mark them
+	storageCommitTimer.Update(statedb.StorageCommits)   // Storage commits are complete, we can mark them
+	snapshotCommitTimer.Update(statedb.SnapshotCommits) // Snapshot commits are complete, we can mark them
+
 	triedb := p.stateCache.TrieDB()
 	time7 := common.PrettyDuration(time.Since(start))
 	var time8 common.PrettyDuration
