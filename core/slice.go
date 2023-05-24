@@ -941,7 +941,7 @@ func (sl *Slice) AddPendingEtxsRollup(pEtxsRollup types.PendingEtxsRollup) error
 	// Only write the pending ETXs if we have not seen them before
 	if !sl.hc.pendingEtxsRollup.Contains(pEtxsRollup.Header.Hash()) {
 		// Also write to cache for faster access
-		sl.hc.pendingEtxsRollup.Add(pEtxsRollup.Header.Hash(), pEtxsRollup.Manifest)
+		sl.hc.pendingEtxsRollup.Add(pEtxsRollup.Header.Hash(), pEtxsRollup)
 		// Write to pending ETX rollup database
 		rawdb.WritePendingEtxsRollup(sl.sliceDb, pEtxsRollup)
 

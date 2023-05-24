@@ -162,9 +162,9 @@ func (hc *HeaderChain) CollectSubRollup(b *types.Block) (types.Transactions, err
 		// the sub manifests, so it needs the pendingEtxsRollup to do so.
 		for _, hash := range b.SubManifest() {
 			if nodeCtx == common.PRIME_CTX {
-				rollup, err := hc.GetPendingEtxsRollup(hash)
+				pEtxRollup, err := hc.GetPendingEtxsRollup(hash)
 				if err == nil {
-					for _, pEtxHash := range rollup {
+					for _, pEtxHash := range pEtxRollup.Manifest {
 						pendingEtxs, err := hc.GetPendingEtxs(pEtxHash)
 						if err != nil {
 							// Start backfilling the missing pending ETXs needed to process this block
@@ -214,18 +214,18 @@ func (hc *HeaderChain) GetPendingEtxs(hash common.Hash) (*types.PendingEtxs, err
 	return &pendingEtxs, nil
 }
 
-func (hc *HeaderChain) GetPendingEtxsRollup(hash common.Hash) (types.BlockManifest, error) {
-	var rollups types.BlockManifest
+func (hc *HeaderChain) GetPendingEtxsRollup(hash common.Hash) (*types.PendingEtxsRollup, error) {
+	var rollups types.PendingEtxsRollup
 	// Look for pending ETXs first in pending ETX cache, then in database
 	if res, ok := hc.pendingEtxsRollup.Get(hash); ok && res != nil {
-		rollups = res.(types.BlockManifest)
+		rollups = res.(types.PendingEtxsRollup)
 	} else if res := rawdb.ReadPendingEtxsRollup(hc.headerDb, hash); res != nil {
-		rollups = res.Manifest
+		rollups = *res
 	} else {
 		log.Trace("unable to find pending etxs rollups for hash in manifest", "hash:", hash.String())
 		return nil, ErrPendingEtxNotFound
 	}
-	return rollups, nil
+	return &rollups, nil
 }
 
 // backfillPETXs collects any missing PendingETX objects needed to process the
@@ -237,11 +237,11 @@ func (hc *HeaderChain) backfillPETXs(header *types.Header, subManifest types.Blo
 		if nodeCtx == common.PRIME_CTX {
 			// In the case of prime, get the pendingEtxsRollup for each region block
 			// and then fetch the pending etx for each of the rollup hashes
-			if manifest, err := hc.GetPendingEtxsRollup(hash); err == nil {
-				for _, pEtxHash := range manifest {
-					if pEtx, err := hc.GetPendingEtxs(pEtxHash); err != nil {
+			if pEtxRollup, err := hc.GetPendingEtxsRollup(hash); err == nil {
+				for _, pEtxHash := range pEtxRollup.Manifest {
+					if _, err := hc.GetPendingEtxs(pEtxHash); err != nil {
 						// Send the pendingEtxs to the feed for broadcast
-						hc.missingPendingEtxsFeed.Send(types.HashAndLocation{Hash: pEtxHash, Location: pEtx.Header.Location()})
+						hc.missingPendingEtxsFeed.Send(types.HashAndLocation{Hash: pEtxHash, Location: pEtxRollup.Header.Location()})
 					}
 				}
 			} else {
