@@ -164,6 +164,7 @@ func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine conse
 	sp.validator = NewBlockValidator(config, hc, engine)
 
 	// If periodic cache journal is required, spin it up.
+	fmt.Println("sp.cacheConfig.TrieCleanRejournal", sp.cacheConfig.TrieCleanRejournal)
 	if sp.cacheConfig.TrieCleanRejournal > 0 {
 		if sp.cacheConfig.TrieCleanRejournal < time.Minute {
 			log.Warn("Sanitizing invalid trie cache journal time", "provided", sp.cacheConfig.TrieCleanRejournal, "updated", time.Minute)
