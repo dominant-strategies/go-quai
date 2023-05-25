@@ -421,7 +421,7 @@ func (pool *TxPool) Stop() {
 // SubscribeNewTxsEvent registers a subscription of NewTxsEvent and
 // starts sending event to the given channel.
 func (pool *TxPool) SubscribeNewTxsEvent(ch chan<- NewTxsEvent) event.Subscription {
-	return pool.scope.Track(pool.txFeed.Subscribe(ch, true))
+	return pool.scope.Track(pool.txFeed.Subscribe(ch, false))
 }
 
 // GasPrice returns the current gas price enforced by the transaction pool.
