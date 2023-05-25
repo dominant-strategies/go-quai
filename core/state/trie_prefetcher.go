@@ -21,7 +21,7 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/dominant-strategies/go-quai/metrics"
+	"github.com/dominant-strategies/go-quai/metrics_config"
 )
 
 var (
@@ -39,35 +39,14 @@ type triePrefetcher struct {
 	root     common.Hash                 // Root hash of theaccount trie for metrics
 	fetches  map[common.Hash]Trie        // Partially or fully fetcher tries
 	fetchers map[common.Hash]*subfetcher // Subfetchers for each trie
-
-	deliveryMissMeter metrics.Meter
-	accountLoadMeter  metrics.Meter
-	accountDupMeter   metrics.Meter
-	accountSkipMeter  metrics.Meter
-	accountWasteMeter metrics.Meter
-	storageLoadMeter  metrics.Meter
-	storageDupMeter   metrics.Meter
-	storageSkipMeter  metrics.Meter
-	storageWasteMeter metrics.Meter
 }
 
 // newTriePrefetcher
 func newTriePrefetcher(db Database, root common.Hash, namespace string) *triePrefetcher {
-	prefix := triePrefetchMetricsPrefix + namespace
 	p := &triePrefetcher{
 		db:       db,
 		root:     root,
 		fetchers: make(map[common.Hash]*subfetcher), // Active prefetchers use the fetchers map
-
-		deliveryMissMeter: metrics.GetOrRegisterMeter(prefix+"/deliverymiss", nil),
-		accountLoadMeter:  metrics.GetOrRegisterMeter(prefix+"/account/load", nil),
-		accountDupMeter:   metrics.GetOrRegisterMeter(prefix+"/account/dup", nil),
-		accountSkipMeter:  metrics.GetOrRegisterMeter(prefix+"/account/skip", nil),
-		accountWasteMeter: metrics.GetOrRegisterMeter(prefix+"/account/waste", nil),
-		storageLoadMeter:  metrics.GetOrRegisterMeter(prefix+"/storage/load", nil),
-		storageDupMeter:   metrics.GetOrRegisterMeter(prefix+"/storage/dup", nil),
-		storageSkipMeter:  metrics.GetOrRegisterMeter(prefix+"/storage/skip", nil),
-		storageWasteMeter: metrics.GetOrRegisterMeter(prefix+"/storage/waste", nil),
 	}
 	return p
 }
@@ -78,25 +57,15 @@ func (p *triePrefetcher) close() {
 	for _, fetcher := range p.fetchers {
 		fetcher.abort() // safe to do multiple times
 
-		if metrics.Enabled {
+		if metrics_config.MetricsEnabled(){
 			if fetcher.root == p.root {
-				p.accountLoadMeter.Mark(int64(len(fetcher.seen)))
-				p.accountDupMeter.Mark(int64(fetcher.dups))
-				p.accountSkipMeter.Mark(int64(len(fetcher.tasks)))
-
 				for _, key := range fetcher.used {
 					delete(fetcher.seen, string(key))
 				}
-				p.accountWasteMeter.Mark(int64(len(fetcher.seen)))
 			} else {
-				p.storageLoadMeter.Mark(int64(len(fetcher.seen)))
-				p.storageDupMeter.Mark(int64(fetcher.dups))
-				p.storageSkipMeter.Mark(int64(len(fetcher.tasks)))
-
 				for _, key := range fetcher.used {
 					delete(fetcher.seen, string(key))
 				}
-				p.storageWasteMeter.Mark(int64(len(fetcher.seen)))
 			}
 		}
 	}
@@ -113,16 +82,6 @@ func (p *triePrefetcher) copy() *triePrefetcher {
 		db:      p.db,
 		root:    p.root,
 		fetches: make(map[common.Hash]Trie), // Active prefetchers use the fetches map
-
-		deliveryMissMeter: p.deliveryMissMeter,
-		accountLoadMeter:  p.accountLoadMeter,
-		accountDupMeter:   p.accountDupMeter,
-		accountSkipMeter:  p.accountSkipMeter,
-		accountWasteMeter: p.accountWasteMeter,
-		storageLoadMeter:  p.storageLoadMeter,
-		storageDupMeter:   p.storageDupMeter,
-		storageSkipMeter:  p.storageSkipMeter,
-		storageWasteMeter: p.storageWasteMeter,
 	}
 	// If the prefetcher is already a copy, duplicate the data
 	if p.fetches != nil {
@@ -160,7 +119,6 @@ func (p *triePrefetcher) trie(root common.Hash) Trie {
 	if p.fetches != nil {
 		trie := p.fetches[root]
 		if trie == nil {
-			p.deliveryMissMeter.Mark(1)
 			return nil
 		}
 		return p.db.CopyTrie(trie)
@@ -168,7 +126,6 @@ func (p *triePrefetcher) trie(root common.Hash) Trie {
 	// Otherwise the prefetcher is active, bail if no trie was prefetched for this root
 	fetcher := p.fetchers[root]
 	if fetcher == nil {
-		p.deliveryMissMeter.Mark(1)
 		return nil
 	}
 	// Interrupt the prefetcher if it's by any chance still running and return
@@ -177,7 +134,6 @@ func (p *triePrefetcher) trie(root common.Hash) Trie {
 
 	trie := fetcher.peek()
 	if trie == nil {
-		p.deliveryMissMeter.Mark(1)
 		return nil
 	}
 	return trie

@@ -1,4 +1,4 @@
-// Copyright 2015 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,14 +14,11 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//go:build !linux
-// +build !linux
+package metrics_config
 
-package metrics
-
-import "errors"
-
-// ReadDiskStats retrieves the disk IO stats belonging to the current process.
-func ReadDiskStats(stats *DiskStats) error {
-	return errors.New("Not implemented")
+// CPUStats is the system and process CPU stats.
+type CPUStats struct {
+	GlobalTime int64 // Time spent by the CPU working on all processes
+	GlobalWait int64 // Time spent by waiting on disk for all processes
+	LocalTime  int64 // Time spent by the CPU working on this process
 }

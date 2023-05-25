@@ -30,7 +30,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common/prque"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/dominant-strategies/go-quai/metrics"
+
 	"github.com/dominant-strategies/go-quai/trie"
 )
 
@@ -630,7 +630,7 @@ func (q *queue) ExpireHeaders(timeout time.Duration) map[string]int {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
-	return q.expire(timeout, q.headerPendPool, q.headerTaskQueue, headerTimeoutMeter)
+	return q.expire(timeout, q.headerPendPool, q.headerTaskQueue)
 }
 
 // ExpireBodies checks for in flight block body requests that exceeded a timeout
@@ -639,7 +639,7 @@ func (q *queue) ExpireBodies(timeout time.Duration) map[string]int {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
-	return q.expire(timeout, q.blockPendPool, q.blockTaskQueue, bodyTimeoutMeter)
+	return q.expire(timeout, q.blockPendPool, q.blockTaskQueue)
 }
 
 // ExpireReceipts checks for in flight receipt requests that exceeded a timeout
@@ -648,7 +648,7 @@ func (q *queue) ExpireReceipts(timeout time.Duration) map[string]int {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
-	return q.expire(timeout, q.receiptPendPool, q.receiptTaskQueue, receiptTimeoutMeter)
+	return q.expire(timeout, q.receiptPendPool, q.receiptTaskQueue)
 }
 
 // expire is the generic check that move expired tasks from a pending pool back
@@ -657,14 +657,11 @@ func (q *queue) ExpireReceipts(timeout time.Duration) map[string]int {
 // Note, this method expects the queue lock to be already held. The
 // reason the lock is not obtained in here is because the parameters already need
 // to access the queue, so they already need a lock anyway.
-func (q *queue) expire(timeout time.Duration, pendPool map[string]*fetchRequest, taskQueue *prque.Prque, timeoutMeter metrics.Meter) map[string]int {
+func (q *queue) expire(timeout time.Duration, pendPool map[string]*fetchRequest, taskQueue *prque.Prque) map[string]int {
 	// Iterate over the expired requests and return each to the queue
 	expiries := make(map[string]int)
 	for id, request := range pendPool {
 		if time.Since(request.Time) > timeout {
-			// Update the metrics with the timeout
-			timeoutMeter.Mark(1)
-
 			// Return any non satisfied requests to the pool
 			if request.From > 0 {
 				taskQueue.Push(request.From, -int64(request.From))
@@ -705,7 +702,6 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, headerProcCh 
 	if request == nil {
 		return 0, errNoFetchesPending
 	}
-	headerReqTimer.UpdateSince(request.Time)
 	delete(q.headerPendPool, id)
 
 	// Ensure headers can be mapped onto the skeleton chain
@@ -838,7 +834,7 @@ func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, uncleLi
 		result.SetBodyDone()
 	}
 	return q.deliver(id, q.blockTaskPool, q.blockTaskQueue, q.blockPendPool,
-		bodyReqTimer, len(txLists), validate, reconstruct)
+		len(txLists), validate, reconstruct)
 }
 
 // DeliverReceipts injects a receipt retrieval response into the results queue.
@@ -859,7 +855,7 @@ func (q *queue) DeliverReceipts(id string, receiptList [][]*types.Receipt) (int,
 		result.SetReceiptsDone()
 	}
 	return q.deliver(id, q.receiptTaskPool, q.receiptTaskQueue, q.receiptPendPool,
-		receiptReqTimer, len(receiptList), validate, reconstruct)
+		len(receiptList), validate, reconstruct)
 }
 
 // deliver injects a data retrieval response into the results queue.
@@ -868,7 +864,7 @@ func (q *queue) DeliverReceipts(id string, receiptList [][]*types.Receipt) (int,
 // reason this lock is not obtained in here is because the parameters already need
 // to access the queue, so they already need a lock anyway.
 func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
-	taskQueue *prque.Prque, pendPool map[string]*fetchRequest, reqTimer metrics.Timer,
+	taskQueue *prque.Prque, pendPool map[string]*fetchRequest, 
 	results int, validate func(index int, header *types.Header) error,
 	reconstruct func(index int, result *fetchResult)) (int, error) {
 
@@ -877,7 +873,6 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 	if request == nil {
 		return 0, errNoFetchesPending
 	}
-	reqTimer.UpdateSince(request.Time)
 	delete(pendPool, id)
 
 	// If no data items were retrieved, mark them as unavailable for the origin peer

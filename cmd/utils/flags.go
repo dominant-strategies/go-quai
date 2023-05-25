@@ -31,7 +31,6 @@ import (
 	"strings"
 	"text/tabwriter"
 	"text/template"
-	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/fdlimit"
@@ -49,9 +48,8 @@ import (
 	"github.com/dominant-strategies/go-quai/internal/flags"
 	"github.com/dominant-strategies/go-quai/internal/quaiapi"
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/dominant-strategies/go-quai/metrics"
-	"github.com/dominant-strategies/go-quai/metrics/exp"
-	"github.com/dominant-strategies/go-quai/metrics/influxdb"
+	"github.com/dominant-strategies/go-quai/metrics_config"
+
 	"github.com/dominant-strategies/go-quai/node"
 	"github.com/dominant-strategies/go-quai/p2p"
 	"github.com/dominant-strategies/go-quai/p2p/enode"
@@ -568,12 +566,12 @@ var (
 	MetricsHTTPFlag = cli.StringFlag{
 		Name:  "metrics.addr",
 		Usage: "Enable stand-alone metrics HTTP server listening interface",
-		Value: metrics.DefaultConfig.HTTP,
+		Value: metrics_config.DefaultConfig.HTTP,
 	}
 	MetricsPortFlag = cli.IntFlag{
 		Name:  "metrics.port",
 		Usage: "Metrics HTTP server listening port",
-		Value: metrics.DefaultConfig.Port,
+		Value: metrics_config.DefaultConfig.Port,
 	}
 	MetricsEnableInfluxDBFlag = cli.BoolFlag{
 		Name:  "metrics.influxdb",
@@ -582,22 +580,22 @@ var (
 	MetricsInfluxDBEndpointFlag = cli.StringFlag{
 		Name:  "metrics.influxdb.endpoint",
 		Usage: "InfluxDB API endpoint to report metrics to",
-		Value: metrics.DefaultConfig.InfluxDBEndpoint,
+		Value: metrics_config.DefaultConfig.InfluxDBEndpoint,
 	}
 	MetricsInfluxDBDatabaseFlag = cli.StringFlag{
 		Name:  "metrics.influxdb.database",
 		Usage: "InfluxDB database name to push reported metrics to",
-		Value: metrics.DefaultConfig.InfluxDBDatabase,
+		Value: metrics_config.DefaultConfig.InfluxDBDatabase,
 	}
 	MetricsInfluxDBUsernameFlag = cli.StringFlag{
 		Name:  "metrics.influxdb.username",
 		Usage: "Username to authorize access to the database",
-		Value: metrics.DefaultConfig.InfluxDBUsername,
+		Value: metrics_config.DefaultConfig.InfluxDBUsername,
 	}
 	MetricsInfluxDBPasswordFlag = cli.StringFlag{
 		Name:  "metrics.influxdb.password",
 		Usage: "Password to authorize access to the database",
-		Value: metrics.DefaultConfig.InfluxDBPassword,
+		Value: metrics_config.DefaultConfig.InfluxDBPassword,
 	}
 
 	// Output flags
@@ -613,7 +611,7 @@ var (
 	MetricsInfluxDBTagsFlag = cli.StringFlag{
 		Name:  "metrics.influxdb.tags",
 		Usage: "Comma-separated InfluxDB tags (key/values) attached to all measurements",
-		Value: metrics.DefaultConfig.InfluxDBTags,
+		Value: metrics_config.DefaultConfig.InfluxDBTags,
 	}
 
 	RegionFlag = cli.IntFlag{
@@ -1501,33 +1499,43 @@ func RegisterQuaiStatsService(stack *node.Node, backend quaiapi.Backend, url str
 	}
 }
 
-func SetupMetrics(ctx *cli.Context) {
-	if metrics.Enabled {
-		log.Info("Enabling metrics collection")
+// func SetupMetrics(ctx *cli.Context) {
+// 	if metrics_config.Enabled {
+// 		log.Info("Enabling metrics collection")
 
-		var (
-			enableExport = ctx.GlobalBool(MetricsEnableInfluxDBFlag.Name)
-			endpoint     = ctx.GlobalString(MetricsInfluxDBEndpointFlag.Name)
-			database     = ctx.GlobalString(MetricsInfluxDBDatabaseFlag.Name)
-			username     = ctx.GlobalString(MetricsInfluxDBUsernameFlag.Name)
-			password     = ctx.GlobalString(MetricsInfluxDBPasswordFlag.Name)
-		)
+// 		var (
+// 			enableExport = ctx.GlobalBool(MetricsEnableInfluxDBFlag.Name)
+// 			endpoint     = ctx.GlobalString(MetricsInfluxDBEndpointFlag.Name)
+// 			database     = ctx.GlobalString(MetricsInfluxDBDatabaseFlag.Name)
+// 			username     = ctx.GlobalString(MetricsInfluxDBUsernameFlag.Name)
+// 			password     = ctx.GlobalString(MetricsInfluxDBPasswordFlag.Name)
+// 		)
 
-		if enableExport {
-			tagsMap := SplitTagsFlag(ctx.GlobalString(MetricsInfluxDBTagsFlag.Name))
+// 		if enableExport {
+// 			tagsMap := SplitTagsFlag(ctx.GlobalString(MetricsInfluxDBTagsFlag.Name))
 
-			log.Info("Enabling metrics export to InfluxDB")
+// 			log.Info("Enabling metrics export to InfluxDB")
 
-			go influxdb.InfluxDBWithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, database, username, password, "quai.", tagsMap)
-		}
+// 			go influxdb.InfluxDBWithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, database, username, password, "quai.", tagsMap, false)
+// 		}
 
-		if ctx.GlobalIsSet(MetricsHTTPFlag.Name) {
-			address := fmt.Sprintf("%s:%d", ctx.GlobalString(MetricsHTTPFlag.Name), ctx.GlobalInt(MetricsPortFlag.Name))
-			log.Info("Enabling stand-alone metrics HTTP endpoint", "address", address)
-			exp.Setup(address)
-		}
-	}
-}
+// 		if ctx.GlobalIsSet(MetricsHTTPFlag.Name) {
+// 			address := fmt.Sprintf("%s:%d", ctx.GlobalString(MetricsHTTPFlag.Name), ctx.GlobalInt(MetricsPortFlag.Name))
+// 			log.Info("Enabling stand-alone metrics HTTP endpoint", "address", address)
+// 			// exp.Setup(address)
+// 			m := http.NewServeMux()
+// 			// m.Handle("/debug/metrics", exp.ExpHandler(metrics.DefaultRegistry))
+// 			// m.Handle("/debug/metrics/prometheus", prometheus.Handler(metrics.DefaultRegistry))
+// 			m.Handle("/debug/metrics/prometheus", prometheus.Handler())
+// 			log.Info("Starting metrics server", "addr", fmt.Sprintf("http://%s/debug/metrics", address))
+// 			go func() {
+// 				if err := http.ListenAndServe(address, m); err != nil {
+// 					log.Error("Failure in running metrics server", "err", err)
+// 				}
+// 			}()
+// 		}
+// 	}
+// }
 
 func SplitTagsFlag(tagsFlag string) map[string]string {
 	tags := strings.Split(tagsFlag, ",")

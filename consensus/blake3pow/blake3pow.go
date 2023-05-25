@@ -10,7 +10,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/dominant-strategies/go-quai/metrics"
+
 	"github.com/dominant-strategies/go-quai/rpc"
 )
 
@@ -58,7 +58,6 @@ type Blake3pow struct {
 	rand     *rand.Rand    // Properly seeded random source for nonces
 	threads  int           // Number of threads to mine on if mining
 	update   chan struct{} // Notification channel to update mining parameters
-	hashrate metrics.Meter // Meter tracking the average hashrate
 	remote   *remoteSealer
 
 	// The fields below are hooks for testing
@@ -80,7 +79,6 @@ func New(config Config, notify []string, noverify bool) *Blake3pow {
 	blake3pow := &Blake3pow{
 		config:   config,
 		update:   make(chan struct{}),
-		hashrate: metrics.NewMeterForced(),
 	}
 	if config.PowMode == ModeShared {
 		blake3pow.shared = sharedBlake3pow
@@ -201,7 +199,6 @@ func (blake3pow *Blake3pow) SetThreads(threads int) {
 func (blake3pow *Blake3pow) Hashrate() float64 {
 	// Short circuit if we are run the blake3pow in normal/test mode.
 	if blake3pow.config.PowMode != ModeNormal && blake3pow.config.PowMode != ModeTest {
-		return blake3pow.hashrate.Rate1()
 	}
 	var res = make(chan uint64, 1)
 
@@ -209,11 +206,10 @@ func (blake3pow *Blake3pow) Hashrate() float64 {
 	case blake3pow.remote.fetchRateCh <- res:
 	case <-blake3pow.remote.exitCh:
 		// Return local hashrate only if blake3pow is stopped.
-		return blake3pow.hashrate.Rate1()
 	}
 
 	// Gather total submitted hash rate of remote sealers.
-	return blake3pow.hashrate.Rate1() + float64(<-res)
+	return -1
 }
 
 // SubmitHashrate can be used for remote miners to submit their hash rate.

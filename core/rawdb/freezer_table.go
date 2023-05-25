@@ -28,7 +28,6 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/dominant-strategies/go-quai/metrics"
 	"github.com/golang/snappy"
 )
 
@@ -94,10 +93,7 @@ type freezerTable struct {
 	// to count how many historic items have gone missing.
 	itemOffset uint32 // Offset (number of discarded items)
 
-	headBytes  uint32        // Number of bytes written to the head file
-	readMeter  metrics.Meter // Meter for measuring the effective amount of data read
-	writeMeter metrics.Meter // Meter for measuring the effective amount of data written
-	sizeGauge  metrics.Gauge // Gauge for tracking the combined size of all freezer tables
+	headBytes  uint32          // Number of bytes written to the head file
 
 	logger log.Logger   // Logger with database path and table name ambedded
 	lock   sync.RWMutex // Mutex protecting the data file descriptors
@@ -105,12 +101,12 @@ type freezerTable struct {
 
 // NewFreezerTable opens the given path as a freezer table.
 func NewFreezerTable(path, name string, disableSnappy bool) (*freezerTable, error) {
-	return newTable(path, name, metrics.NilMeter{}, metrics.NilMeter{}, metrics.NilGauge{}, disableSnappy)
+	return newTable(path, name, disableSnappy)
 }
 
 // newTable opens a freezer table with default settings - 2G files
-func newTable(path string, name string, readMeter metrics.Meter, writeMeter metrics.Meter, sizeGauge metrics.Gauge, disableSnappy bool) (*freezerTable, error) {
-	return newCustomTable(path, name, readMeter, writeMeter, sizeGauge, 2*1000*1000*1000, disableSnappy)
+func newTable(path string, name string, disableSnappy bool) (*freezerTable, error) {
+	return newCustomTable(path, name, 2*1000*1000*1000, disableSnappy)
 }
 
 // openFreezerFileForAppend opens a freezer table file and seeks to the end
@@ -154,7 +150,7 @@ func truncateFreezerFile(file *os.File, size int64) error {
 // newCustomTable opens a freezer table, creating the data and index files if they are
 // non existent. Both files are truncated to the shortest common length to ensure
 // they don't go out of sync.
-func newCustomTable(path string, name string, readMeter metrics.Meter, writeMeter metrics.Meter, sizeGauge metrics.Gauge, maxFilesize uint32, noCompression bool) (*freezerTable, error) {
+func newCustomTable(path string, name string, maxFilesize uint32, noCompression bool) (*freezerTable, error) {
 	// Ensure the containing directory exists and open the indexEntry file
 	if err := os.MkdirAll(path, 0755); err != nil {
 		return nil, err
@@ -175,9 +171,6 @@ func newCustomTable(path string, name string, readMeter metrics.Meter, writeMete
 	tab := &freezerTable{
 		index:         offsets,
 		files:         make(map[uint32]*os.File),
-		readMeter:     readMeter,
-		writeMeter:    writeMeter,
-		sizeGauge:     sizeGauge,
 		name:          name,
 		path:          path,
 		logger:        log.Log,
@@ -188,13 +181,6 @@ func newCustomTable(path string, name string, readMeter metrics.Meter, writeMete
 		tab.Close()
 		return nil, err
 	}
-	// Initialize the starting size counter
-	size, err := tab.sizeNolock()
-	if err != nil {
-		tab.Close()
-		return nil, err
-	}
-	tab.sizeGauge.Inc(int64(size))
 
 	return tab, nil
 }
@@ -339,11 +325,6 @@ func (t *freezerTable) truncate(items uint64) error {
 	if existing <= items {
 		return nil
 	}
-	// We need to truncate, save the old size for metrics tracking
-	oldSize, err := t.sizeNolock()
-	if err != nil {
-		return err
-	}
 	// Something's out of sync, truncate the table's offset index
 	log := t.logger.Debug
 	if existing > items+1 {
@@ -382,13 +363,6 @@ func (t *freezerTable) truncate(items uint64) error {
 	// All data files truncated, set internal counters and return
 	atomic.StoreUint64(&t.items, items)
 	atomic.StoreUint32(&t.headBytes, expected.offset)
-
-	// Retrieve the new size and update the total size counter
-	newSize, err := t.sizeNolock()
-	if err != nil {
-		return err
-	}
-	t.sizeGauge.Dec(int64(oldSize - newSize))
 
 	return nil
 }
@@ -539,9 +513,6 @@ func (t *freezerTable) append(item uint64, encodedBlob []byte, wlock bool) (bool
 	// Write indexEntry
 	t.index.Write(idx.marshallBinary())
 
-	t.writeMeter.Mark(int64(bLen + indexEntrySize))
-	t.sizeGauge.Inc(int64(bLen + indexEntrySize))
-
 	atomic.AddUint64(&t.items, 1)
 	return false, nil
 }
@@ -622,7 +593,6 @@ func (t *freezerTable) retrieve(item uint64) ([]byte, error) {
 	if _, err := dataFile.ReadAt(blob, int64(startOffset)); err != nil {
 		return nil, err
 	}
-	t.readMeter.Mark(int64(len(blob) + 2*indexEntrySize))
 	return blob, nil
 }
 

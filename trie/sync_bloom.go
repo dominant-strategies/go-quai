@@ -27,17 +27,11 @@ import (
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/dominant-strategies/go-quai/metrics"
+
 	bloomfilter "github.com/holiman/bloomfilter/v2"
 )
 
 var (
-	bloomAddMeter   = metrics.NewRegisteredMeter("trie/bloom/add", nil)
-	bloomLoadMeter  = metrics.NewRegisteredMeter("trie/bloom/load", nil)
-	bloomTestMeter  = metrics.NewRegisteredMeter("trie/bloom/test", nil)
-	bloomMissMeter  = metrics.NewRegisteredMeter("trie/bloom/miss", nil)
-	bloomFaultMeter = metrics.NewRegisteredMeter("trie/bloom/fault", nil)
-	bloomErrorGauge = metrics.NewRegisteredGauge("trie/bloom/error", nil)
 )
 
 // SyncBloom is a bloom filter used during fast sync to quickly decide if a trie
@@ -100,11 +94,9 @@ func (b *SyncBloom) init(database ethdb.Iteratee) {
 		key := it.Key()
 		if len(key) == common.HashLength {
 			b.bloom.AddHash(binary.BigEndian.Uint64(key))
-			bloomLoadMeter.Mark(1)
 		} else if ok, hash := rawdb.IsCodeKey(key); ok {
 			// If the database entry is a contract code, add it to the bloom
 			b.bloom.AddHash(binary.BigEndian.Uint64(hash))
-			bloomLoadMeter.Mark(1)
 		}
 		// If enough time elapsed since the last iterator swap, restart
 		if time.Since(swap) > 8*time.Second {
@@ -133,7 +125,6 @@ func (b *SyncBloom) meter() {
 		select {
 		case <-tick.C:
 			// Report the current error ration. No floats, lame, scale it up.
-			bloomErrorGauge.Update(int64(b.bloom.FalsePosititveProbability() * 100000))
 		case <-b.closeCh:
 			return
 		}
@@ -164,7 +155,6 @@ func (b *SyncBloom) Add(hash []byte) {
 		return
 	}
 	b.bloom.AddHash(binary.BigEndian.Uint64(hash))
-	bloomAddMeter.Mark(1)
 }
 
 // Contains tests if the bloom filter contains the given hash:
@@ -173,7 +163,6 @@ func (b *SyncBloom) Add(hash []byte) {
 //
 // While the bloom is being initialized, any query will return true.
 func (b *SyncBloom) Contains(hash []byte) bool {
-	bloomTestMeter.Mark(1)
 	if atomic.LoadUint32(&b.inited) == 0 {
 		// We didn't load all the trie nodes from the previous run of Quai yet. As
 		// such, we can't say for sure if a hash is not present for anything. Until
@@ -183,7 +172,6 @@ func (b *SyncBloom) Contains(hash []byte) bool {
 	// Bloom initialized, check the real one and report any successful misses
 	maybe := b.bloom.ContainsHash(binary.BigEndian.Uint64(hash))
 	if !maybe {
-		bloomMissMeter.Mark(1)
 	}
 	return maybe
 }

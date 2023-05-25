@@ -28,7 +28,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dominant-strategies/go-quai/metrics"
 )
 
 func init() {
@@ -51,7 +50,7 @@ func TestFreezerBasics(t *testing.T) {
 	// set cutoff at 50 bytes
 	f, err := newCustomTable(os.TempDir(),
 		fmt.Sprintf("unittest-%d", rand.Uint64()),
-		metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge(), 50, true)
+		50, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,11 +93,10 @@ func TestFreezerBasicsClosing(t *testing.T) {
 	// set cutoff at 50 bytes
 	var (
 		fname      = fmt.Sprintf("basics-close-%d", rand.Uint64())
-		rm, wm, sg = metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge()
 		f          *freezerTable
 		err        error
 	)
-	f, err = newCustomTable(os.TempDir(), fname, rm, wm, sg, 50, true)
+	f, err = newCustomTable(os.TempDir(), fname, 50, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +105,7 @@ func TestFreezerBasicsClosing(t *testing.T) {
 		data := getChunk(15, x)
 		f.Append(uint64(x), data)
 		f.Close()
-		f, err = newCustomTable(os.TempDir(), fname, rm, wm, sg, 50, true)
+		f, err = newCustomTable(os.TempDir(), fname, 50, true)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -134,11 +132,10 @@ func TestFreezerBasicsClosing(t *testing.T) {
 // TestFreezerRepairDanglingHead tests that we can recover if index entries are removed
 func TestFreezerRepairDanglingHead(t *testing.T) {
 	t.Parallel()
-	rm, wm, sg := metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge()
 	fname := fmt.Sprintf("dangling_headtest-%d", rand.Uint64())
 
 	{ // Fill table
-		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sg, 50, true)
+		f, err := newCustomTable(os.TempDir(), fname, 50, true)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -167,7 +164,7 @@ func TestFreezerRepairDanglingHead(t *testing.T) {
 	idxFile.Close()
 	// Now open it again
 	{
-		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sg, 50, true)
+		f, err := newCustomTable(os.TempDir(), fname, 50, true)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -185,11 +182,10 @@ func TestFreezerRepairDanglingHead(t *testing.T) {
 // TestFreezerRepairDanglingHeadLarge tests that we can recover if very many index entries are removed
 func TestFreezerRepairDanglingHeadLarge(t *testing.T) {
 	t.Parallel()
-	rm, wm, sg := metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge()
 	fname := fmt.Sprintf("dangling_headtest-%d", rand.Uint64())
 
 	{ // Fill a table and close it
-		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sg, 50, true)
+		f, err := newCustomTable(os.TempDir(), fname, 50, true)
 		if err != nil {
 			t.Fatal(err)
 		}

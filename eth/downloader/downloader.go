@@ -29,7 +29,6 @@ import (
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/dominant-strategies/go-quai/metrics"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -533,7 +532,6 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 	// Create a timeout timer, and the associated header fetcher
 	skeleton := true
 	skeletonHeaders := make([]*types.Header, 0)
-	request := time.Now()       // time of the last skeleton fetch request
 	timeout := time.NewTimer(0) // timer to dump a non-responsive active peer
 	<-timeout.C                 // timeout channel should be initially empty
 	defer timeout.Stop()
@@ -556,7 +554,6 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 
 	var ttl time.Duration
 	getHeaders := func(from uint64, to uint64) {
-		request = time.Now()
 
 		if skeleton {
 			timeout.Reset(1 * time.Minute)
@@ -619,7 +616,6 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 				log.Debug("Received skeleton from incorrect peer", "peer", packet.PeerId())
 				break
 			}
-			headerReqTimer.UpdateSince(request)
 			timeout.Stop()
 
 			headers := packet.(*headerPack).headers
@@ -718,7 +714,6 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 			}
 			// Header retrieval timed out, consider the peer bad and drop
 			p.log.Debug("Header request timed out", "elapsed", ttl)
-			headerTimeoutMeter.Mark(1)
 			d.dropPeer(p.id)
 
 			// Finish the sync gracefully instead of dumping the gathered data though
@@ -991,7 +986,6 @@ func (d *Downloader) fetchParts(deliveryCh chan dataPack, deliver func(dataPack)
 				}
 				if throttle {
 					throttled = true
-					throttleCounter.Inc(1)
 				}
 				if request == nil {
 					continue
@@ -1185,26 +1179,24 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 // DeliverHeaders injects a new batch of block headers received from a remote
 // node into the download schedule.
 func (d *Downloader) DeliverHeaders(id string, headers []*types.Header) error {
-	return d.deliver(d.headerCh, &headerPack{id, headers}, headerInMeter, headerDropMeter)
+	return d.deliver(d.headerCh, &headerPack{id, headers})
 }
 
 // DeliverBodies injects a new batch of block bodies received from a remote node.
 func (d *Downloader) DeliverBodies(id string, transactions [][]*types.Transaction, uncles [][]*types.Header, extTransactions [][]*types.Transaction, manifests []types.BlockManifest) error {
-	return d.deliver(d.bodyCh, &bodyPack{id, transactions, uncles, extTransactions, manifests}, bodyInMeter, bodyDropMeter)
+	return d.deliver(d.bodyCh, &bodyPack{id, transactions, uncles, extTransactions, manifests})
 }
 
 // DeliverReceipts injects a new batch of receipts received from a remote node.
 func (d *Downloader) DeliverReceipts(id string, receipts [][]*types.Receipt) error {
-	return d.deliver(d.receiptCh, &receiptPack{id, receipts}, receiptInMeter, receiptDropMeter)
+	return d.deliver(d.receiptCh, &receiptPack{id, receipts})
 }
 
 // deliver injects a new batch of data received from a remote node.
-func (d *Downloader) deliver(destCh chan dataPack, packet dataPack, inMeter, dropMeter metrics.Meter) (err error) {
+func (d *Downloader) deliver(destCh chan dataPack, packet dataPack) (err error) {
 	// Update the delivery metrics for both good and failed deliveries
-	inMeter.Mark(int64(packet.Items()))
 	defer func() {
 		if err != nil {
-			dropMeter.Mark(int64(packet.Items()))
 		}
 	}()
 	// Deliver or abort if the sync is canceled while queuing

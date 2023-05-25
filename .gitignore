@@ -38,6 +38,7 @@ profile.cov
 .vscode
 
 # dashboard
+/data/
 /dashboard/assets/flow-typed
 /dashboard/assets/node_modules
 /dashboard/assets/stats.json

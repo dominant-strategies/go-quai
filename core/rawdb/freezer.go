@@ -29,7 +29,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/dominant-strategies/go-quai/metrics"
+
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/prometheus/tsdb/fileutil"
 )
@@ -93,9 +93,6 @@ type freezer struct {
 func newFreezer(datadir string, namespace string, readonly bool) (*freezer, error) {
 	// Create the initial freezer object
 	var (
-		readMeter  = metrics.NewRegisteredMeter(namespace+"ancient/read", nil)
-		writeMeter = metrics.NewRegisteredMeter(namespace+"ancient/write", nil)
-		sizeGauge  = metrics.NewRegisteredGauge(namespace+"ancient/size", nil)
 	)
 	// Ensure the datadir is not a symbolic link if it exists.
 	if info, err := os.Lstat(datadir); !os.IsNotExist(err) {
@@ -120,7 +117,7 @@ func newFreezer(datadir string, namespace string, readonly bool) (*freezer, erro
 		quit:         make(chan struct{}),
 	}
 	for name, disableSnappy := range FreezerNoSnappy {
-		table, err := newTable(datadir, name, readMeter, writeMeter, sizeGauge, disableSnappy)
+		table, err := newTable(datadir, name, disableSnappy)
 		if err != nil {
 			for _, table := range freezer.tables {
 				table.Close()

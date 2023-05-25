@@ -23,8 +23,6 @@ import (
 	"runtime"
 
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/dominant-strategies/go-quai/metrics"
-	"github.com/dominant-strategies/go-quai/metrics/exp"
 	"github.com/fjl/memsize/memsizeui"
 	"gopkg.in/urfave/cli.v1"
 )
@@ -205,7 +203,7 @@ func StartPProf(address string, withMetrics bool) {
 	// Hook go-metrics into expvar on any /debug/metrics request, load all vars
 	// from the registry into expvar, and execute regular expvar handler.
 	if withMetrics {
-		exp.Exp(metrics.DefaultRegistry)
+		// exp.Exp(metrics.DefaultRegistry)
 	}
 	http.Handle("/memsize/", http.StripPrefix("/memsize", &Memsize))
 	log.Info("Starting pprof server", "addr", fmt.Sprintf("http://%s/debug/pprof", address))
