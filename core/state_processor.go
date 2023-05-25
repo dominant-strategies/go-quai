@@ -60,7 +60,7 @@ var (
 const (
 	receiptsCacheLimit = 32
 	txLookupCacheLimit = 1024
-	TriesInMemory      = 128
+	TriesInMemory      = 10
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	//
@@ -105,10 +105,10 @@ type CacheConfig struct {
 // defaultCacheConfig are the default caching values if none are specified by the
 // user (also used during testing).
 var defaultCacheConfig = &CacheConfig{
-	TrieCleanLimit: 256,
-	TrieDirtyLimit: 256,
+	TrieCleanLimit: 10,
+	TrieDirtyLimit: 10,
 	TrieTimeLimit:  5 * time.Minute,
-	SnapshotLimit:  256,
+	SnapshotLimit:  10,
 }
 
 // StateProcessor is a basic Processor, which takes care of transitioning
@@ -134,6 +134,7 @@ type StateProcessor struct {
 
 	triegc *prque.Prque  // Priority queue mapping block numbers to tries to gc
 	gcproc time.Duration // Accumulates canonical block processing for trie dumping
+	quit   chan struct{} // blockchain quit channel
 }
 
 // NewStateProcessor initialises a new StateProcessor.
@@ -161,6 +162,20 @@ func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine conse
 		triegc: prque.New(nil),
 	}
 	sp.validator = NewBlockValidator(config, hc, engine)
+
+	// If periodic cache journal is required, spin it up.
+	if sp.cacheConfig.TrieCleanRejournal > 0 {
+		if sp.cacheConfig.TrieCleanRejournal < time.Minute {
+			log.Warn("Sanitizing invalid trie cache journal time", "provided", sp.cacheConfig.TrieCleanRejournal, "updated", time.Minute)
+			sp.cacheConfig.TrieCleanRejournal = time.Minute
+		}
+		triedb := sp.stateCache.TrieDB()
+		sp.wg.Add(1)
+		go func() {
+			defer sp.wg.Done()
+			triedb.SaveCachePeriodically(sp.cacheConfig.TrieCleanJournal, sp.cacheConfig.TrieCleanRejournal, sp.quit)
+		}()
+	}
 	return sp
 }
 
@@ -337,9 +352,12 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 	var time9 common.PrettyDuration
 	var time10 common.PrettyDuration
 	var time11 common.PrettyDuration
+
+	size1, size2 := p.stateCache.TrieDB().Size()
+	fmt.Println("state cache size", size1, size2)
 	// If we're running an archive node, always flush
 	if p.cacheConfig.TrieDirtyDisabled {
-		if err := triedb.Commit(root, false, nil); err != nil {
+		if err := triedb.Commit(root, true, nil); err != nil {
 			return nil, err
 		}
 		time8 = common.PrettyDuration(time.Since(start))
@@ -348,6 +366,8 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 		triedb.Reference(root, common.Hash{}) // metadata reference to keep trie alive
 		p.triegc.Push(root, -int64(block.NumberU64()))
 		time8 = common.PrettyDuration(time.Since(start))
+		fmt.Println("time8", time8)
+		fmt.Println("flushing", block.NumberU64() > TriesInMemory, block.NumberU64())
 		if current := block.NumberU64(); current > TriesInMemory {
 			// If we exceeded our memory allowance, flush matured singleton nodes to disk
 			var (
@@ -387,6 +407,7 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 					p.triegc.Push(root, number)
 					break
 				}
+				fmt.Println("gc", root, number)
 				triedb.Dereference(root.(common.Hash))
 			}
 			time11 = common.PrettyDuration(time.Since(start))

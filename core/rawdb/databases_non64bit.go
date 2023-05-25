@@ -21,7 +21,7 @@ package rawdb
 import (
 	"errors"
 
-	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/dominant-strategies/go-quai/ethdb"
 )
 
 // Pebble is unsuported on 32bit architecture
