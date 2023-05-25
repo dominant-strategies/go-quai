@@ -105,6 +105,9 @@ type Header struct {
 	time          uint64          `json:"timestamp"            gencodec:"required"`
 	extra         []byte          `json:"extraData"            gencodec:"required"`
 	nonce         BlockNonce      `json:"nonce"`
+
+	// caches
+	hash atomic.Value
 }
 
 // field type overrides for gencodec
@@ -510,6 +513,9 @@ func (h *Header) SealHash() (hash common.Hash) {
 // Hash returns the nonce'd hash of the header. This is just the Blake3 hash of
 // SealHash suffixed with a nonce.
 func (h *Header) Hash() (hash common.Hash) {
+	if hash := h.hash.Load(); hash != nil {
+		return hash.(common.Hash)
+	}
 	hasher := blake3.New(32, nil)
 	hasher.Reset()
 	var hData [40]byte
@@ -517,6 +523,7 @@ func (h *Header) Hash() (hash common.Hash) {
 	copy(hData[len(h.nonce):], h.SealHash().Bytes())
 	sum := blake3.Sum256(hData[:])
 	hash.SetBytes(sum[:])
+	h.hash.Store(hash)
 	return hash
 }
 
@@ -754,7 +761,6 @@ type Block struct {
 	subManifest     BlockManifest
 
 	// caches
-	hash       atomic.Value
 	size       atomic.Value
 	appendTime atomic.Value
 
@@ -1016,12 +1022,7 @@ func (b *Block) WithBody(transactions []*Transaction, uncles []*Header, extTrans
 // Hash returns the keccak256 hash of b's header.
 // The hash is computed on the first call and cached thereafter.
 func (b *Block) Hash() common.Hash {
-	if hash := b.hash.Load(); hash != nil {
-		return hash.(common.Hash)
-	}
-	v := b.header.Hash()
-	b.hash.Store(v)
-	return v
+	return b.header.Hash()
 }
 
 // GetAppendTime returns the appendTime of the block
