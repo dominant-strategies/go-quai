@@ -39,7 +39,7 @@ type (
 	// CanTransferFunc is the signature of a transfer guard function
 	CanTransferFunc func(StateDB, common.Address, *big.Int) bool
 	// TransferFunc is the signature of a transfer function
-	TransferFunc func(StateDB, common.Address, common.Address, *big.Int)
+	TransferFunc func(StateDB, common.Address, common.Address, *big.Int) error
 	// GetHashFunc returns the n'th block hash in the blockchain
 	// and is used by the BLOCKHASH EVM op code.
 	GetHashFunc func(uint64) common.Hash
@@ -191,6 +191,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	}
 	internalAddr, err := addr.InternalAddress()
 	if err != nil {
+		// We might want to return zero leftOverGas here, but we're being nice
 		return nil, gas, err
 	}
 	if !evm.StateDB.Exist(internalAddr) {
@@ -204,7 +205,9 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		}
 		evm.StateDB.CreateAccount(internalAddr)
 	}
-	evm.Context.Transfer(evm.StateDB, caller.Address(), addr, value)
+	if err := evm.Context.Transfer(evm.StateDB, caller.Address(), addr, value); err != nil {
+		return nil, gas, err
+	}
 
 	// Capture the tracer start/end events in debug mode
 	if evm.Config.Debug && evm.depth == 0 {
@@ -435,7 +438,9 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 
 	evm.StateDB.SetNonce(internalContractAddr, 1)
 
-	evm.Context.Transfer(evm.StateDB, caller.Address(), address, value)
+	if err := evm.Context.Transfer(evm.StateDB, caller.Address(), address, value); err != nil {
+		return nil, common.ZeroAddr, 0, err
+	}
 
 	// Initialise a new contract and set the code that is to be used by the EVM.
 	// The contract is a scoped environment for this execution context only.
