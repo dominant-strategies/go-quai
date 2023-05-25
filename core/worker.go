@@ -256,7 +256,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 	phBodyCache, _ := lru.New(pendingBlockBodyLimit)
 	worker.pendingBlockBody = phBodyCache
 
-	worker.chainHeadSub = worker.hc.SubscribeChainHeadEvent(worker.chainHeadCh)
+	worker.chainHeadSub = worker.hc.SubscribeChainHeadEvent(worker.chainHeadCh, true)
 	if nodeCtx == common.ZONE_CTX {
 		// Subscribe NewTxsEvent for tx pool
 		worker.txsSub = txPool.SubscribeNewTxsEvent(worker.txsCh)
@@ -1046,7 +1046,7 @@ func (w *worker) GetPendingBlockBody(header *types.Header) *types.Body {
 }
 
 func (w *worker) SubscribeAsyncPendingHeader(ch chan *types.Header) event.Subscription {
-	return w.scope.Track(w.asyncPhFeed.Subscribe(ch))
+	return w.scope.Track(w.asyncPhFeed.Subscribe(ch, true))
 }
 
 // copyReceipts makes a deep copy of the given receipts.
