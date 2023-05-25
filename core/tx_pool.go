@@ -263,6 +263,8 @@ type TxPool struct {
 	reorgDoneCh     chan chan struct{}
 	reorgShutdownCh chan struct{}  // requests shutdown of scheduleReorgLoop
 	wg              sync.WaitGroup // tracks loop, scheduleReorgLoop
+
+	interrupt chan struct{}
 }
 
 type txpoolResetRequest struct {
@@ -295,6 +297,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		localTxsCount:   0,
 		remoteTxsCount:  0,
 		reOrgCounter:    0,
+		interrupt:       make(chan struct{}),
 	}
 	pool.locals = newAccountSet(pool.signer)
 	for _, addr := range config.Locals {
@@ -1098,6 +1101,11 @@ func (pool *TxPool) scheduleReorgLoop() {
 	for {
 		// Launch next background reorg if needed
 		if curDone == nil && launchNextRun {
+			// kill any currently running runReorg and launch the next one
+			if pool.interrupt != nil {
+				close(pool.interrupt)
+				pool.interrupt = nil
+			}
 			// Run the background reorg and announcements
 			go pool.runReorg(nextDone, reset, dirtyAccounts, queuedEvents)
 
@@ -1161,84 +1169,94 @@ func (pool *TxPool) scheduleReorgLoop() {
 // runReorg runs reset and promoteExecutables on behalf of scheduleReorgLoop.
 func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirtyAccounts *accountSet, events map[common.InternalAddress]*txSortedMap) {
 	defer close(done)
-	pool.reOrgCounter += 1
-	var start time.Time
-	if pool.reOrgCounter == c_reorgCounterThreshold {
-		start = time.Now()
-	}
 
-	var promoteAddrs []common.InternalAddress
-	if dirtyAccounts != nil && reset == nil {
-		// Only dirty accounts need to be promoted, unless we're resetting.
-		// For resets, all addresses in the tx queue will be promoted and
-		// the flatten operation can be avoided.
-		promoteAddrs = dirtyAccounts.flatten()
-	}
-	pool.mu.Lock()
-	if reset != nil {
-		// Reset from the old head to the new, rescheduling any reorged transactions
-		pool.reset(reset.oldHead, reset.newHead)
-
-		// Nonces were reset, discard any events that became stale
-		for addr := range events {
-			events[addr].Forward(pool.pendingNonces.get(addr))
-			if events[addr].Len() == 0 {
-				delete(events, addr)
+	for {
+		select {
+		case <-pool.interrupt:
+			pool.interrupt = make(chan struct{})
+			return
+		default:
+			pool.reOrgCounter += 1
+			var start time.Time
+			if pool.reOrgCounter == c_reorgCounterThreshold {
+				start = time.Now()
 			}
-		}
-		// Reset needs promote for all addresses
-		promoteAddrs = make([]common.InternalAddress, 0, len(pool.queue))
-		for addr := range pool.queue {
-			promoteAddrs = append(promoteAddrs, addr)
-		}
-	}
-	// Check for pending transactions for every account that sent new ones
-	promoted := pool.promoteExecutables(promoteAddrs)
 
-	// If a new block appeared, validate the pool of pending transactions. This will
-	// remove any transaction that has been included in the block or was invalidated
-	// because of another transaction (e.g. higher gas price).
-	if reset != nil {
-		pool.demoteUnexecutables()
-		if reset.newHead != nil {
-			pendingBaseFee := misc.CalcBaseFee(pool.chainconfig, reset.newHead)
-			pool.priced.SetBaseFee(pendingBaseFee)
-		}
-	}
-	// Ensure pool.queue and pool.pending sizes stay within the configured limits.
-	pool.truncatePending()
-	pool.truncateQueue()
+			var promoteAddrs []common.InternalAddress
+			if dirtyAccounts != nil && reset == nil {
+				// Only dirty accounts need to be promoted, unless we're resetting.
+				// For resets, all addresses in the tx queue will be promoted and
+				// the flatten operation can be avoided.
+				promoteAddrs = dirtyAccounts.flatten()
+			}
+			pool.mu.Lock()
+			if reset != nil {
+				// Reset from the old head to the new, rescheduling any reorged transactions
+				pool.reset(reset.oldHead, reset.newHead)
 
-	// Update all accounts to the latest known pending nonce
-	for addr, list := range pool.pending {
-		highestPending := list.LastElement()
-		pool.pendingNonces.set(addr, highestPending.Nonce()+1)
-	}
-	pool.mu.Unlock()
+				// Nonces were reset, discard any events that became stale
+				for addr := range events {
+					events[addr].Forward(pool.pendingNonces.get(addr))
+					if events[addr].Len() == 0 {
+						delete(events, addr)
+					}
+				}
+				// Reset needs promote for all addresses
+				promoteAddrs = make([]common.InternalAddress, 0, len(pool.queue))
+				for addr := range pool.queue {
+					promoteAddrs = append(promoteAddrs, addr)
+				}
+			}
+			// Check for pending transactions for every account that sent new ones
+			promoted := pool.promoteExecutables(promoteAddrs)
 
-	// Notify subsystems for newly added transactions
-	for _, tx := range promoted {
-		addr, _ := types.Sender(pool.signer, tx)
-		internal, err := addr.InternalAddress()
-		if err != nil {
-			log.Debug("Failed to add transaction event", "err", err)
-			continue
+			// If a new block appeared, validate the pool of pending transactions. This will
+			// remove any transaction that has been included in the block or was invalidated
+			// because of another transaction (e.g. higher gas price).
+			if reset != nil {
+				pool.demoteUnexecutables()
+				if reset.newHead != nil {
+					pendingBaseFee := misc.CalcBaseFee(pool.chainconfig, reset.newHead)
+					pool.priced.SetBaseFee(pendingBaseFee)
+				}
+			}
+			// Ensure pool.queue and pool.pending sizes stay within the configured limits.
+			pool.truncatePending()
+			pool.truncateQueue()
+
+			// Update all accounts to the latest known pending nonce
+			for addr, list := range pool.pending {
+				highestPending := list.LastElement()
+				pool.pendingNonces.set(addr, highestPending.Nonce()+1)
+			}
+			pool.mu.Unlock()
+
+			// Notify subsystems for newly added transactions
+			for _, tx := range promoted {
+				addr, _ := types.Sender(pool.signer, tx)
+				internal, err := addr.InternalAddress()
+				if err != nil {
+					log.Debug("Failed to add transaction event", "err", err)
+					continue
+				}
+				if _, ok := events[internal]; !ok {
+					events[(internal)] = newTxSortedMap()
+				}
+				events[internal].Put(tx)
+			}
+			if len(events) > 0 {
+				var txs []*types.Transaction
+				for _, set := range events {
+					txs = append(txs, set.Flatten()...)
+				}
+				pool.txFeed.Send(NewTxsEvent{txs})
+			}
+			if pool.reOrgCounter == c_reorgCounterThreshold {
+				log.Info("Time taken to runReorg in txpool", "time", common.PrettyDuration(time.Since(start)))
+				pool.reOrgCounter = 0
+			}
+			return
 		}
-		if _, ok := events[internal]; !ok {
-			events[(internal)] = newTxSortedMap()
-		}
-		events[internal].Put(tx)
-	}
-	if len(events) > 0 {
-		var txs []*types.Transaction
-		for _, set := range events {
-			txs = append(txs, set.Flatten()...)
-		}
-		pool.txFeed.Send(NewTxsEvent{txs})
-	}
-	if pool.reOrgCounter == c_reorgCounterThreshold {
-		log.Info("Time taken to runReorg in txpool", "time", common.PrettyDuration(time.Since(start)))
-		pool.reOrgCounter = 0
 	}
 }
 
