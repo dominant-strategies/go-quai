@@ -1321,6 +1321,8 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 		return
 	}
 	pool.currentState = statedb
+	// set the pool nonce to nil before initializing new noncer
+	pool.pendingNonces = nil
 	pool.pendingNonces = newTxNoncer(statedb)
 	pool.currentMaxGas = newHead.GasLimit()
 
