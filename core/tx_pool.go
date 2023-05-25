@@ -645,6 +645,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return err
 	}
 	if tx.Gas() < intrGas {
+		log.Warn("tx has insufficient gas", "gas supplied", tx.Gas(), "gas needed", intrGas, "tx", tx)
 		return ErrIntrinsicGas
 	}
 	return nil
