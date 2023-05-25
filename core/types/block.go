@@ -42,6 +42,7 @@ var (
 	EmptyUncleHash = RlpHash([]*Header(nil))
 	EmptyBodyHash  = common.HexToHash("51e1b9c1426a03bf73da3d98d9f384a49ded6a4d705dcdf25433915c3306826c")
 	big2e256       = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil) // 2^256
+	hasher         = blake3.New(32, nil)
 )
 
 const (
@@ -478,7 +479,6 @@ type sealData struct {
 
 // SealHash returns the hash of a block prior to it being sealed.
 func (h *Header) SealHash() (hash common.Hash) {
-	hasher := blake3.New(32, nil)
 	hasher.Reset()
 	hdata := sealData{
 		ParentHash:    make([]common.Hash, common.HierarchyDepth),
@@ -516,7 +516,6 @@ func (h *Header) Hash() (hash common.Hash) {
 	if hash := h.hash.Load(); hash != nil {
 		return hash.(common.Hash)
 	}
-	hasher := blake3.New(32, nil)
 	hasher.Reset()
 	var hData [40]byte
 	copy(hData[:], h.Nonce().Bytes())
