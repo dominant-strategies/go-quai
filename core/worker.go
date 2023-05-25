@@ -486,7 +486,6 @@ func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.He
 	}
 	work.header = block.Header()
 	w.printPendingHeaderInfo(work, block, start)
-	w.updateSnapshot(work)
 
 	return work.header, nil
 }
@@ -573,14 +572,8 @@ func (w *worker) mainLoop() {
 					txs[acc.Bytes20()] = append(txs[acc.Bytes20()], tx)
 				}
 				txset := types.NewTransactionsByPriceAndNonce(w.current.signer, txs, w.current.header.BaseFee(), false)
-				tcount := w.current.tcount
 				w.commitTransactions(w.current, txset, nil)
 
-				// Only update the snapshot if any new transactions were added
-				// to the pending block
-				if tcount != w.current.tcount {
-					w.updateSnapshot(w.current)
-				}
 			}
 			atomic.AddInt32(&w.newTxs, int32(len(ev.Txs)))
 
@@ -662,22 +655,6 @@ func (w *worker) commitUncle(env *environment, uncle *types.Header) error {
 	}
 	env.uncles[hash] = uncle
 	return nil
-}
-
-// updateSnapshot updates pending snapshot block, receipts and state.
-func (w *worker) updateSnapshot(env *environment) {
-	w.snapshotMu.Lock()
-	defer w.snapshotMu.Unlock()
-
-	w.snapshotBlock = types.NewBlock(
-		env.header,
-		env.txs,
-		env.unclelist(),
-		env.etxs,
-		env.subManifest,
-		env.receipts,
-		trie.NewStackTrie(nil),
-	)
 }
 
 func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*types.Log, error) {
@@ -1028,9 +1005,7 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 		}
 
 	}
-	if update {
-		w.updateSnapshot(env)
-	}
+
 	return nil
 }
 
