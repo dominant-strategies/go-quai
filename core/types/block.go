@@ -25,6 +25,7 @@ import (
 	"io"
 	"math/big"
 	"reflect"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -43,6 +44,7 @@ var (
 	EmptyBodyHash  = common.HexToHash("51e1b9c1426a03bf73da3d98d9f384a49ded6a4d705dcdf25433915c3306826c")
 	big2e256       = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil) // 2^256
 	hasher         = blake3.New(32, nil)
+	hasherMu       sync.RWMutex
 )
 
 const (
@@ -108,7 +110,8 @@ type Header struct {
 	nonce         BlockNonce      `json:"nonce"`
 
 	// caches
-	hash atomic.Value
+	hash     atomic.Value
+	sealHash atomic.Value
 }
 
 // field type overrides for gencodec
@@ -365,6 +368,8 @@ func (h *Header) Nonce() BlockNonce         { return h.nonce }
 func (h *Header) NonceU64() uint64          { return binary.BigEndian.Uint64(h.nonce[:]) }
 
 func (h *Header) SetParentHash(val common.Hash, args ...int) {
+	h.hash = atomic.Value{}     // clear hash cache
+	h.sealHash = atomic.Value{} // clear sealHash cache
 	nodeCtx := common.NodeLocation.Context()
 	if len(args) > 0 {
 		nodeCtx = args[0]
@@ -372,25 +377,39 @@ func (h *Header) SetParentHash(val common.Hash, args ...int) {
 	h.parentHash[nodeCtx] = val
 }
 func (h *Header) SetUncleHash(val common.Hash) {
+	h.hash = atomic.Value{}     // clear hash cache
+	h.sealHash = atomic.Value{} // clear sealHash cache
 	h.uncleHash = val
 }
 func (h *Header) SetCoinbase(val common.Address) {
+	h.hash = atomic.Value{}     // clear hash cache
+	h.sealHash = atomic.Value{} // clear sealHash cache
 	h.coinbase = val
 }
 func (h *Header) SetRoot(val common.Hash) {
+	h.hash = atomic.Value{}     // clear hash cache
+	h.sealHash = atomic.Value{} // clear sealHash cache
 	h.root = val
 }
 func (h *Header) SetTxHash(val common.Hash) {
+	h.hash = atomic.Value{}     // clear hash cache
+	h.sealHash = atomic.Value{} // clear sealHash cache
 	h.txHash = val
 }
 func (h *Header) SetEtxHash(val common.Hash) {
+	h.hash = atomic.Value{}     // clear hash cache
+	h.sealHash = atomic.Value{} // clear sealHash cache
 	h.etxHash = val
 }
 func (h *Header) SetEtxRollupHash(val common.Hash) {
+	h.hash = atomic.Value{}     // clear hash cache
+	h.sealHash = atomic.Value{} // clear sealHash cache
 	h.etxRollupHash = val
 }
 
 func (h *Header) SetParentEntropy(val *big.Int, args ...int) {
+	h.hash = atomic.Value{}     // clear hash cache
+	h.sealHash = atomic.Value{} // clear sealHash cache
 	nodeCtx := common.NodeLocation.Context()
 	if len(args) > 0 {
 		nodeCtx = args[0]
@@ -399,6 +418,8 @@ func (h *Header) SetParentEntropy(val *big.Int, args ...int) {
 }
 
 func (h *Header) SetParentDeltaS(val *big.Int, args ...int) {
+	h.hash = atomic.Value{}     // clear hash cache
+	h.sealHash = atomic.Value{} // clear sealHash cache
 	nodeCtx := common.NodeLocation.Context()
 	if len(args) > 0 {
 		nodeCtx = args[0]
@@ -407,6 +428,8 @@ func (h *Header) SetParentDeltaS(val *big.Int, args ...int) {
 }
 
 func (h *Header) SetManifestHash(val common.Hash, args ...int) {
+	h.hash = atomic.Value{}     // clear hash cache
+	h.sealHash = atomic.Value{} // clear sealHash cache
 	nodeCtx := common.NodeLocation.Context()
 	if len(args) > 0 {
 		nodeCtx = args[0]
@@ -414,15 +437,23 @@ func (h *Header) SetManifestHash(val common.Hash, args ...int) {
 	h.manifestHash[nodeCtx] = val
 }
 func (h *Header) SetReceiptHash(val common.Hash) {
+	h.hash = atomic.Value{}     // clear hash cache
+	h.sealHash = atomic.Value{} // clear sealHash cache
 	h.receiptHash = val
 }
 func (h *Header) SetBloom(val Bloom) {
+	h.hash = atomic.Value{}     // clear hash cache
+	h.sealHash = atomic.Value{} // clear sealHash cache
 	h.bloom = val
 }
 func (h *Header) SetDifficulty(val *big.Int) {
+	h.hash = atomic.Value{}     // clear hash cache
+	h.sealHash = atomic.Value{} // clear sealHash cache
 	h.difficulty = new(big.Int).Set(val)
 }
 func (h *Header) SetNumber(val *big.Int, args ...int) {
+	h.hash = atomic.Value{}     // clear hash cache
+	h.sealHash = atomic.Value{} // clear sealHash cache
 	nodeCtx := common.NodeLocation.Context()
 	if len(args) > 0 {
 		nodeCtx = args[0]
@@ -430,23 +461,42 @@ func (h *Header) SetNumber(val *big.Int, args ...int) {
 	h.number[nodeCtx] = new(big.Int).Set(val)
 }
 func (h *Header) SetGasLimit(val uint64) {
+	h.hash = atomic.Value{}     // clear hash cache
+	h.sealHash = atomic.Value{} // clear sealHash cache
 	h.gasLimit = val
 }
 func (h *Header) SetGasUsed(val uint64) {
+	h.hash = atomic.Value{}     // clear hash cache
+	h.sealHash = atomic.Value{} // clear sealHash cache
 	h.gasUsed = val
 }
 func (h *Header) SetBaseFee(val *big.Int) {
+	h.hash = atomic.Value{}     // clear hash cache
+	h.sealHash = atomic.Value{} // clear sealHash cache
 	h.baseFee = new(big.Int).Set(val)
 }
-func (h *Header) SetLocation(val common.Location) { h.location = val }
-func (h *Header) SetTime(val uint64)              { h.time = val }
+func (h *Header) SetLocation(val common.Location) {
+	h.hash = atomic.Value{}     // clear hash cache
+	h.sealHash = atomic.Value{} // clear sealHash cache
+	h.location = val
+}
+func (h *Header) SetTime(val uint64) {
+	h.hash = atomic.Value{}     // clear hash cache
+	h.sealHash = atomic.Value{} // clear sealHash cache
+	h.time = val
+}
 func (h *Header) SetExtra(val []byte) {
+	h.hash = atomic.Value{}     // clear hash cache
+	h.sealHash = atomic.Value{} // clear sealHash cache
 	if len(val) > 0 {
 		h.extra = make([]byte, len(val))
 		copy(h.extra, val)
 	}
 }
-func (h *Header) SetNonce(val BlockNonce) { h.nonce = val }
+func (h *Header) SetNonce(val BlockNonce) {
+	h.hash = atomic.Value{} // clear hash cache, but NOT sealHash
+	h.nonce = val
+}
 
 // Array accessors
 func (h *Header) ParentHashArray() []common.Hash   { return h.parentHash }
@@ -479,6 +529,11 @@ type sealData struct {
 
 // SealHash returns the hash of a block prior to it being sealed.
 func (h *Header) SealHash() (hash common.Hash) {
+	if hash := h.sealHash.Load(); hash != nil {
+		return hash.(common.Hash)
+	}
+	hasherMu.Lock()
+	defer hasherMu.Unlock()
 	hasher.Reset()
 	hdata := sealData{
 		ParentHash:    make([]common.Hash, common.HierarchyDepth),
@@ -507,6 +562,7 @@ func (h *Header) SealHash() (hash common.Hash) {
 	}
 	rlp.Encode(hasher, hdata)
 	hash.SetBytes(hasher.Sum(hash[:0]))
+	h.sealHash.Store(hash)
 	return hash
 }
 
@@ -516,10 +572,13 @@ func (h *Header) Hash() (hash common.Hash) {
 	if hash := h.hash.Load(); hash != nil {
 		return hash.(common.Hash)
 	}
+	sealHash := h.SealHash().Bytes()
+	hasherMu.Lock()
+	defer hasherMu.Unlock()
 	hasher.Reset()
 	var hData [40]byte
 	copy(hData[:], h.Nonce().Bytes())
-	copy(hData[len(h.nonce):], h.SealHash().Bytes())
+	copy(hData[len(h.nonce):], sealHash)
 	sum := blake3.Sum256(hData[:])
 	hash.SetBytes(sum[:])
 	h.hash.Store(hash)
