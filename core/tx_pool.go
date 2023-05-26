@@ -331,6 +331,30 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 	return pool
 }
 
+func (pool *TxPool) HardReset() {
+	if pool == nil {
+		return
+	}
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	// Reset the pool state
+	pool.pending = make(map[common.InternalAddress]*txList)
+	pool.queue = make(map[common.InternalAddress]*txList)
+	pool.beats = make(map[common.InternalAddress]time.Time)
+	pool.gasPrice = new(big.Int).SetUint64(pool.config.PriceLimit)
+	pool.localTxsCount = 0
+	pool.remoteTxsCount = 0
+	pool.reOrgCounter = 0
+	pool.locals = newAccountSet(pool.signer)
+	for _, addr := range pool.config.Locals {
+		log.Info("Setting new local account", "address", addr)
+		pool.locals.add(addr)
+	}
+	pool.priced = newTxPricedList(pool.all)
+	pool.reset(nil, pool.chain.CurrentBlock().Header())
+}
+
 // loop is the transaction pool's main event loop, waiting for and reacting to
 // outside blockchain events as well as for various reporting and transaction
 // eviction events.
@@ -1249,7 +1273,7 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 				for _, set := range events {
 					txs = append(txs, set.Flatten()...)
 				}
-				pool.txFeed.Send(NewTxsEvent{txs})
+				//pool.txFeed.Send(NewTxsEvent{txs})
 			}
 			if pool.reOrgCounter == c_reorgCounterThreshold {
 				log.Info("Time taken to runReorg in txpool", "time", common.PrettyDuration(time.Since(start)))

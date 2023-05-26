@@ -270,9 +270,6 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 	}
 
 	worker.wg.Add(1)
-	go worker.mainLoop()
-
-	worker.wg.Add(1)
 	go worker.asyncStateLoop()
 
 	return worker
@@ -512,72 +509,6 @@ func (w *worker) interruptAsyncPhGen() {
 	if w.interrupt != nil {
 		close(w.interrupt)
 		w.interrupt = nil
-	}
-}
-
-// mainLoop is responsible for generating and submitting sealing work based on
-// the received event. It can support two modes: automatically generate task and
-// submit it or return task according to given parameters for various proposes.
-func (w *worker) mainLoop() {
-	nodeCtx := common.NodeLocation.Context()
-	defer w.wg.Done()
-	if nodeCtx == common.ZONE_CTX {
-		defer w.txsSub.Unsubscribe()
-	}
-	defer func() {
-		if w.current != nil {
-			w.current.discard()
-		}
-	}()
-
-	cleanTicker := time.NewTicker(time.Second * 10)
-	defer cleanTicker.Stop()
-
-	if nodeCtx == common.ZONE_CTX {
-		go w.eventExitLoop()
-	}
-
-	for {
-		select {
-		case <-cleanTicker.C:
-			chainHead := w.hc.CurrentBlock()
-			w.uncleMu.RLock()
-			for hash, uncle := range w.localUncles {
-				if uncle.NumberU64()+staleThreshold <= chainHead.NumberU64() {
-					delete(w.localUncles, hash)
-				}
-			}
-			for hash, uncle := range w.remoteUncles {
-				if uncle.NumberU64()+staleThreshold <= chainHead.NumberU64() {
-					delete(w.remoteUncles, hash)
-				}
-			}
-			w.uncleMu.RUnlock()
-
-		case ev := <-w.txsCh:
-
-			// Apply transactions to the pending state if we're not sealing
-			//
-			// Note all transactions received may not be continuous with transactions
-			// already included in the current sealing block. These transactions will
-			// be automatically eliminated.
-			if !w.isRunning() && w.current != nil {
-				// If block is already full, abort
-				if gp := w.current.gasPool; gp != nil && gp.Gas() < params.TxGas {
-					continue
-				}
-				txs := make(map[common.AddressBytes]types.Transactions)
-				for _, tx := range ev.Txs {
-					acc, _ := types.Sender(w.current.signer, tx)
-					txs[acc.Bytes20()] = append(txs[acc.Bytes20()], tx)
-				}
-				txset := types.NewTransactionsByPriceAndNonce(w.current.signer, txs, w.current.header.BaseFee(), false)
-				w.commitTransactions(w.current, txset, nil)
-
-			}
-			atomic.AddInt32(&w.newTxs, int32(len(ev.Txs)))
-
-		}
 	}
 }
 
