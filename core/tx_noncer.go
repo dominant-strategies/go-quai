@@ -17,10 +17,15 @@
 package core
 
 import (
+	lru "github.com/hashicorp/golang-lru"
 	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/state"
+)
+
+const (
+	c_maxNonceCache = 600 //Maximum number of entries that we can hold in the nonces cahce
 )
 
 // txNoncer is a tiny virtual state database to manage the executable nonces of
@@ -28,16 +33,19 @@ import (
 // an account is unknown.
 type txNoncer struct {
 	fallback *state.StateDB
-	nonces   map[common.InternalAddress]uint64
+	nonces   *lru.Cache
 	lock     sync.Mutex
 }
 
 // newTxNoncer creates a new virtual state database to track the pool nonces.
 func newTxNoncer(statedb *state.StateDB) *txNoncer {
-	return &txNoncer{
+	n := &txNoncer{
 		fallback: statedb.Copy(),
-		nonces:   make(map[common.InternalAddress]uint64),
 	}
+	nonces, _ := lru.New(c_maxNonceCache)
+	n.nonces = nonces
+
+	return n
 }
 
 // get returns the current nonce of an account, falling back to a real state
@@ -47,10 +55,11 @@ func (txn *txNoncer) get(addr common.InternalAddress) uint64 {
 	// state will mutate db even for read access.
 	txn.lock.Lock()
 	defer txn.lock.Unlock()
-	if _, ok := txn.nonces[addr]; !ok {
-		txn.nonces[addr] = txn.fallback.GetNonce(addr)
+	if !txn.nonces.Contains(addr) {
+		txn.nonces.Add(addr, txn.fallback.GetNonce(addr))
 	}
-	return txn.nonces[addr]
+	nonce, _ := txn.nonces.Get(addr)
+	return nonce.(uint64)
 }
 
 // set inserts a new virtual nonce into the virtual state database to be returned
@@ -58,7 +67,7 @@ func (txn *txNoncer) get(addr common.InternalAddress) uint64 {
 func (txn *txNoncer) set(addr common.InternalAddress, nonce uint64) {
 	txn.lock.Lock()
 	defer txn.lock.Unlock()
-	txn.nonces[addr] = nonce
+	txn.nonces.Add(addr, nonce)
 }
 
 // setIfLower updates a new virtual nonce into the virtual state database if the
@@ -66,11 +75,12 @@ func (txn *txNoncer) set(addr common.InternalAddress, nonce uint64) {
 func (txn *txNoncer) setIfLower(addr common.InternalAddress, nonce uint64) {
 	txn.lock.Lock()
 	defer txn.lock.Unlock()
-	if _, ok := txn.nonces[addr]; !ok {
-		txn.nonces[addr] = txn.fallback.GetNonce(addr)
+	if !txn.nonces.Contains(addr) {
+		txn.nonces.Add(addr, txn.fallback.GetNonce(addr))
 	}
-	if txn.nonces[addr] <= nonce {
+	currentNonce, _ := txn.nonces.Peek(addr)
+	if currentNonce.(uint64) <= nonce {
 		return
 	}
-	txn.nonces[addr] = nonce
+	txn.nonces.Add(addr, nonce)
 }

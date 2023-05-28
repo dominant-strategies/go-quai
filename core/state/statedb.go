@@ -261,10 +261,12 @@ func (s *StateDB) GetBalance(addr common.InternalAddress) *big.Int {
 	return common.Big0
 }
 
+//go:noinline
 func (s *StateDB) GetNonce(addr common.InternalAddress) uint64 {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		return stateObject.Nonce()
+		nonce := stateObject.Nonce()
+		return nonce
 	}
 
 	return 0
