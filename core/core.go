@@ -703,6 +703,7 @@ func (c *Core) Get(hash common.Hash) *types.Transaction {
 }
 
 func (c *Core) Nonce(addr common.Address) uint64 {
+	fmt.Println("core.go 709")
 	internal, err := addr.InternalAddress()
 	if err != nil {
 		return 0

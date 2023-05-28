@@ -1224,23 +1224,29 @@ func (s *PublicTransactionPoolAPI) GetRawTransactionByBlockHashAndIndex(ctx cont
 
 // GetTransactionCount returns the number of transactions the given address has sent for the given block number
 func (s *PublicTransactionPoolAPI) GetTransactionCount(ctx context.Context, address common.Address, blockNrOrHash rpc.BlockNumberOrHash) (*hexutil.Uint64, error) {
+	fmt.Println("GetTransactionCount")
 	// Ask transaction pool for the nonce which includes pending transactions
 	if blockNr, ok := blockNrOrHash.Number(); ok && blockNr == rpc.PendingBlockNumber {
+		fmt.Println("1230")
 		nonce, err := s.b.GetPoolNonce(ctx, address)
+		fmt.Println("1232")
 		if err != nil {
 			return nil, err
 		}
 		return (*hexutil.Uint64)(&nonce), nil
 	}
 	// Resolve block number and use its state to ask for the nonce
+	fmt.Println("1239")
 	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
 		return nil, err
 	}
+	fmt.Println("1244")
 	internal, err := address.InternalAddress()
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("1249")
 	nonce := state.GetNonce(internal)
 	return (*hexutil.Uint64)(&nonce), state.Error()
 }
