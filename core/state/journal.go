@@ -142,7 +142,7 @@ type (
 
 func (ch createObjectChange) revert(s *StateDB) {
 	s.stateObjects.Remove(*ch.account)
-	delete(s.stateObjectsDirty, *ch.account)
+	s.stateObjectsDirty.Remove(*ch.account)
 }
 
 func (ch createObjectChange) dirtied() *common.InternalAddress {

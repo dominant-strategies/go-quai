@@ -37,7 +37,7 @@ import (
 )
 
 const (
-	c_maxLiveStateObjectsCache = 5000
+	c_maxLiveStateObjectsCache = 350
 )
 
 type revision struct {
@@ -81,8 +81,9 @@ type StateDB struct {
 
 	// This map holds 'live' objects, which will get modified while processing a state transition.
 	stateObjects        *lru.Cache
-	stateObjectsPending map[common.InternalAddress]struct{} // State objects finalized but not yet written to the trie
-	stateObjectsDirty   map[common.InternalAddress]struct{} // State objects modified in the current execution
+	stateObjectsPending *lru.Cache // State objects finalized but not yet written to the trie
+	stateObjectsDirty   *lru.Cache // State objects modified in the current execution
+	stateObjectsCount   uint64
 
 	// DB error.
 	// State objects are used by the consensus core and VM which are
@@ -131,20 +132,23 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		return nil, err
 	}
 	sdb := &StateDB{
-		db:                  db,
-		trie:                tr,
-		originalRoot:        root,
-		snaps:               snaps,
-		stateObjectsPending: make(map[common.InternalAddress]struct{}),
-		stateObjectsDirty:   make(map[common.InternalAddress]struct{}),
-		logs:                make(map[common.Hash][]*types.Log),
-		preimages:           make(map[common.Hash][]byte),
-		journal:             newJournal(),
-		accessList:          newAccessList(),
-		hasher:              crypto.NewKeccakState(),
+		db:                db,
+		trie:              tr,
+		originalRoot:      root,
+		snaps:             snaps,
+		logs:              make(map[common.Hash][]*types.Log),
+		preimages:         make(map[common.Hash][]byte),
+		journal:           newJournal(),
+		accessList:        newAccessList(),
+		hasher:            crypto.NewKeccakState(),
+		stateObjectsCount: 0,
 	}
 	stateObjects, _ := lru.New(c_maxLiveStateObjectsCache)
 	sdb.stateObjects = stateObjects
+	stateObjectsPending, _ := lru.New(c_maxLiveStateObjectsCache)
+	sdb.stateObjectsPending = stateObjectsPending
+	stateObjectsDirty, _ := lru.New(c_maxLiveStateObjectsCache)
+	sdb.stateObjectsDirty = stateObjectsDirty
 
 	if sdb.snaps != nil {
 		if sdb.snap = sdb.snaps.Snapshot(root); sdb.snap != nil {
@@ -660,21 +664,25 @@ func (db *StateDB) ForEachStorage(addr common.InternalAddress, cb func(key, valu
 // Copy creates a deep, independent copy of the state.
 // Snapshots of the copied state cannot be applied to the copy.
 func (s *StateDB) Copy() *StateDB {
+	s.stateObjectsCount++
 	// Copy all the basic fields, initialize the memory ones
 	state := &StateDB{
-		db:                  s.db,
-		trie:                s.db.CopyTrie(s.trie),
-		stateObjectsPending: make(map[common.InternalAddress]struct{}, len(s.stateObjectsPending)),
-		stateObjectsDirty:   make(map[common.InternalAddress]struct{}, len(s.journal.dirties)),
-		refund:              s.refund,
-		logs:                make(map[common.Hash][]*types.Log, len(s.logs)),
-		logSize:             s.logSize,
-		preimages:           make(map[common.Hash][]byte, len(s.preimages)),
-		journal:             newJournal(),
-		hasher:              crypto.NewKeccakState(),
+		db:        s.db,
+		trie:      s.db.CopyTrie(s.trie),
+		refund:    s.refund,
+		logs:      make(map[common.Hash][]*types.Log, len(s.logs)),
+		logSize:   s.logSize,
+		preimages: make(map[common.Hash][]byte, len(s.preimages)),
+		journal:   newJournal(),
+		hasher:    crypto.NewKeccakState(),
 	}
 	stateObjects, _ := lru.New(c_maxLiveStateObjectsCache)
 	state.stateObjects = stateObjects
+	stateObjectsPending, _ := lru.New(c_maxLiveStateObjectsCache)
+	state.stateObjectsPending = stateObjectsPending
+	stateObjectsDirty, _ := lru.New(c_maxLiveStateObjectsCache)
+	state.stateObjectsDirty = stateObjectsDirty
+
 	// Copy the dirty states, logs, and preimages
 	for addr := range s.journal.dirties {
 		// In the Finalise-method, there is a case where an object is in the journal but not
@@ -688,26 +696,26 @@ func (s *StateDB) Copy() *StateDB {
 			// during a commit (or similar op) is already applied to the copy.
 			state.stateObjects.Add(addr, obj.deepCopy(state))
 
-			state.stateObjectsDirty[addr] = struct{}{}   // Mark the copy dirty to force internal (code/state) commits
-			state.stateObjectsPending[addr] = struct{}{} // Mark the copy pending to force external (account) commits
+			state.stateObjectsDirty.Add(addr, struct{}{})   // Mark the copy dirty to force internal (code/state) commits
+			state.stateObjectsPending.Add(addr, struct{}{}) // Mark the copy pending to force external (account) commits
 		}
 	}
 	// Above, we don't copy the actual journal. This means that if the copy is copied, the
 	// loop above will be a no-op, since the copy's journal is empty.
 	// Thus, here we iterate over stateObjects, to enable copies of copies
-	for addr := range s.stateObjectsPending {
+	for addr := range s.stateObjectsPending.Keys() {
 		if objInt, exist := state.stateObjects.Get(addr); !exist {
 			obj := objInt.(stateObject)
 			state.stateObjects.Add(addr, obj.deepCopy(state))
 		}
-		state.stateObjectsPending[addr] = struct{}{}
+		state.stateObjectsPending.Add(addr, struct{}{})
 	}
-	for addr := range s.stateObjectsDirty {
+	for addr := range s.stateObjectsDirty.Keys() {
 		if objInt, exist := state.stateObjects.Get(addr); !exist {
 			obj := objInt.(stateObject)
 			state.stateObjects.Add(addr, obj.deepCopy(state))
 		}
-		state.stateObjectsDirty[addr] = struct{}{}
+		state.stateObjectsDirty.Add(addr, struct{}{})
 	}
 	for hash, logs := range s.logs {
 		cpy := make([]*types.Log, len(logs))
@@ -822,8 +830,8 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 		} else {
 			obj.finalise(true) // Prefetch slots in the background
 		}
-		s.stateObjectsPending[addr] = struct{}{}
-		s.stateObjectsDirty[addr] = struct{}{}
+		s.stateObjectsPending.Add(addr, struct{}{})
+		s.stateObjectsDirty.Add(addr, struct{}{})
 
 		// At this point, also ship the address off to the precacher. The precacher
 		// will start loading tries, and when the change is eventually committed,
@@ -859,7 +867,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// the account prefetcher. Instead, let's process all the storage updates
 	// first, giving the account prefeches just a few more milliseconds of time
 	// to pull useful data from disk.
-	for addr := range s.stateObjectsPending {
+	for _, addr := range s.stateObjectsPending.Keys() {
 		if objInt, ok := s.stateObjects.Get(addr); ok {
 			obj := objInt.(*stateObject)
 			if !obj.deleted {
@@ -875,8 +883,8 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 			s.trie = trie
 		}
 	}
-	usedAddrs := make([][]byte, 0, len(s.stateObjectsPending))
-	for addr := range s.stateObjectsPending {
+	usedAddrs := make([][]byte, 0, s.stateObjectsPending.Len())
+	for _, addr := range s.stateObjectsPending.Keys() {
 		if objInt, ok := s.stateObjects.Get(addr); ok {
 			obj := objInt.(*stateObject)
 			if obj.deleted {
@@ -885,13 +893,18 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 				s.updateStateObject(obj)
 			}
 		}
-		usedAddrs = append(usedAddrs, common.CopyBytes(addr[:])) // Copy needed for closure
+		byteAddr, ok := addr.([]byte)
+		if !ok {
+			continue
+		}
+		usedAddrs = append(usedAddrs, common.CopyBytes(byteAddr)) // Copy needed for closure
 	}
 	if prefetcher != nil {
 		prefetcher.used(s.originalRoot, usedAddrs)
 	}
-	if len(s.stateObjectsPending) > 0 {
-		s.stateObjectsPending = make(map[common.InternalAddress]struct{})
+	if s.stateObjectsPending.Len() > 0 {
+		newStateObjectsPending, _ := lru.New(c_maxLiveStateObjectsCache)
+		s.stateObjectsPending = newStateObjectsPending
 	}
 	// Track the amount of time wasted on hashing the account trie
 	if metrics.EnabledExpensive {
@@ -926,7 +939,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 
 	// Commit objects to the trie, measuring the elapsed time
 	codeWriter := s.db.TrieDB().DiskDB().NewBatch()
-	for addr := range s.stateObjectsDirty {
+	for _, addr := range s.stateObjectsDirty.Keys() {
 		if objInt, ok := s.stateObjects.Get(addr); ok {
 			obj := objInt.(*stateObject)
 			if !obj.deleted {
@@ -942,8 +955,9 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 			}
 		}
 	}
-	if len(s.stateObjectsDirty) > 0 {
-		s.stateObjectsDirty = make(map[common.InternalAddress]struct{})
+	if s.stateObjectsDirty.Len() > 0 {
+		newStateObjectsDirty, _ := lru.New(c_maxLiveStateObjectsCache)
+		s.stateObjectsDirty = newStateObjectsDirty
 	}
 	if codeWriter.ValueSize() > 0 {
 		if err := codeWriter.Write(); err != nil {
