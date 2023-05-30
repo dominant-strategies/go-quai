@@ -207,6 +207,8 @@ func init() {
 }
 
 func main() {
+	// Set the memory limit to 1MiB
+	debug.Handler.SetMemoryLimit(2 ^ 20)
 	if err := app.Run(os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

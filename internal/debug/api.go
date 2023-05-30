@@ -104,6 +104,11 @@ func (h *HandlerT) StartCPUProfile(file string) error {
 	return nil
 }
 
+// SetMemoryLimit sets memory limit
+func (h *HandlerT) SetMemoryLimit(v int64) {
+	debug.SetMemoryLimit(v)
+}
+
 // StopCPUProfile stops an ongoing CPU profile.
 func (h *HandlerT) StopCPUProfile() error {
 	h.mu.Lock()
