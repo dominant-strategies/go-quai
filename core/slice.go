@@ -657,6 +657,7 @@ func (sl *Slice) init(genesis *Genesis) error {
 		if err != nil {
 			return err
 		}
+		rawdb.WriteEtxSet(sl.sliceDb, genesisHash, 0, types.NewEtxSet())
 
 		if common.NodeLocation.Context() == common.PRIME_CTX {
 			go sl.NewGenesisPendingHeader(nil)
