@@ -47,7 +47,7 @@ func ConfigureLogger(ctx *cli.Context) {
 		ForceColors:      ctx.GlobalBool("showcolors"),
 		PadLevelText:     true,
 		FullTimestamp:    true,
-		TimestampFormat:  "01-02|15:04:05",
+		TimestampFormat:  "01-02|15:04:05.999",
 		CallerPrettyfier: callerPrettyfier,
 	}
 
