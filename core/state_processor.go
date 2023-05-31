@@ -283,7 +283,7 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 var lastWrite uint64
 
 // Apply State
-func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInboundEtxs types.Transactions) ([]*types.Log, error) {
+func (p *StateProcessor) Apply(block *types.Block, newInboundEtxs types.Transactions) ([]*types.Log, error) {
 	// Update the set of inbound ETXs which may be mined. This adds new inbound
 	// ETXs to the set and removes expired ETXs so they are no longer available
 	start := time.Now()
@@ -305,9 +305,9 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 		return nil, err
 	}
 	time4 := common.PrettyDuration(time.Since(start))
-	rawdb.WriteReceipts(batch, block.Hash(), block.NumberU64(), receipts)
+	rawdb.WriteReceipts(p.hc.bc.db, block.Hash(), block.NumberU64(), receipts)
 	time5 := common.PrettyDuration(time.Since(start))
-	rawdb.WritePreimages(batch, statedb.Preimages())
+	rawdb.WritePreimages(p.hc.bc.db, statedb.Preimages())
 	time6 := common.PrettyDuration(time.Since(start))
 	// Commit all cached state changes into underlying memory database.
 	root, err := statedb.Commit(true)

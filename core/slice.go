@@ -154,10 +154,9 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		return nil, false, err
 	}
 	time3 := common.PrettyDuration(time.Since(start))
-	batch := sl.sliceDb.NewBatch()
 
 	// Run Previous Coincident Reference Check (PCRC)
-	domTerminus, newTermini, err := sl.pcrc(batch, block.Header(), domTerminus, domOrigin)
+	domTerminus, newTermini, err := sl.pcrc(block.Header(), domTerminus, domOrigin)
 	if err != nil {
 		return nil, false, err
 	}
@@ -177,7 +176,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	time5 := common.PrettyDuration(time.Since(start))
 
 	// Append the new block
-	err = sl.hc.Append(batch, block, newInboundEtxs.FilterToLocation(common.NodeLocation))
+	err = sl.hc.Append(block, newInboundEtxs.FilterToLocation(common.NodeLocation))
 	if err != nil {
 		return nil, false, err
 	}
@@ -222,10 +221,6 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 
 	time10 := common.PrettyDuration(time.Since(start))
 
-	// Append has succeeded write the batch
-	if err := batch.Write(); err != nil {
-		return nil, false, err
-	}
 	appendFinished := time.Since(start)
 	time11 := common.PrettyDuration(appendFinished)
 	bestPh, exist := sl.readPhCache(sl.bestPhKey)
@@ -415,7 +410,7 @@ func (sl *Slice) CollectNewlyConfirmedEtxs(block *types.Block, location common.L
 }
 
 // PCRC previous coincidence reference check makes sure there are not any cyclic references in the graph and calculates new termini and the block terminus
-func (sl *Slice) pcrc(batch ethdb.Batch, header *types.Header, domTerminus common.Hash, domOrigin bool) (common.Hash, []common.Hash, error) {
+func (sl *Slice) pcrc(header *types.Header, domTerminus common.Hash, domOrigin bool) (common.Hash, []common.Hash, error) {
 	nodeCtx := common.NodeLocation.Context()
 	location := header.Location()
 
@@ -452,7 +447,7 @@ func (sl *Slice) pcrc(batch ethdb.Batch, header *types.Header, domTerminus commo
 	}
 
 	//Save the termini
-	rawdb.WriteTermini(batch, header.Hash(), newTermini)
+	rawdb.WriteTermini(sl.sliceDb, header.Hash(), newTermini)
 
 	if nodeCtx == common.ZONE_CTX {
 		return common.Hash{}, newTermini, nil
