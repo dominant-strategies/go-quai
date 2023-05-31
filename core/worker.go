@@ -28,10 +28,6 @@ const (
 	// resultQueueSize is the size of channel listening to sealing result.
 	resultQueueSize = 10
 
-	// txChanSize is the size of channel listening to NewTxsEvent.
-	// The number is referenced from the size of tx pool.
-	txChanSize = 4096
-
 	// resubmitAdjustChanSize is the size of resubmitting interval adjustment channel.
 	resubmitAdjustChanSize = 10
 
@@ -177,8 +173,6 @@ type worker struct {
 	pendingHeaderFeed event.Feed
 
 	// Subscriptions
-	txsCh        chan NewTxsEvent
-	txsSub       event.Subscription
 	chainHeadCh  chan ChainHeadEvent
 	chainHeadSub event.Subscription
 
@@ -242,7 +236,6 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 		workerDb:           db,
 		localUncles:        make(map[common.Hash]*types.Block),
 		remoteUncles:       make(map[common.Hash]*types.Block),
-		txsCh:              make(chan NewTxsEvent, txChanSize),
 		chainHeadCh:        make(chan ChainHeadEvent, chainHeadChanSize),
 		taskCh:             make(chan *task),
 		resultCh:           make(chan *types.Block, resultQueueSize),
@@ -251,16 +244,11 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 		resubmitIntervalCh: make(chan time.Duration),
 		resubmitAdjustCh:   make(chan *intervalAdjust, resubmitAdjustChanSize),
 	}
-	nodeCtx := common.NodeLocation.Context()
 
 	phBodyCache, _ := lru.New(pendingBlockBodyLimit)
 	worker.pendingBlockBody = phBodyCache
 
 	worker.chainHeadSub = worker.hc.SubscribeChainHeadEvent(worker.chainHeadCh)
-	if nodeCtx == common.ZONE_CTX {
-		// Subscribe NewTxsEvent for tx pool
-		worker.txsSub = txPool.SubscribeNewTxsEvent(worker.txsCh)
-	}
 
 	// Sanitize recommit interval if the user-specified one is too short.
 	recommit := worker.config.Recommit
@@ -516,8 +504,6 @@ func (w *worker) eventExitLoop() {
 	for {
 		select {
 		case <-w.exitCh:
-			return
-		case <-w.txsSub.Err():
 			return
 		}
 	}
