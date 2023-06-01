@@ -47,14 +47,14 @@ func ConfigureLogger(ctx *cli.Context) {
 		ForceColors:      ctx.GlobalBool("showcolors"),
 		PadLevelText:     true,
 		FullTimestamp:    true,
-		TimestampFormat:  "01-02|15:04:05.999",
+		TimestampFormat:  "01-02|15:04:05.000",
 		CallerPrettyfier: callerPrettyfier,
 	}
 
 	Log.SetOutput(&lumberjack.Logger{
 		Filename:   log_filename,
-		MaxSize:    5, // megabytes
-		MaxBackups: 3,
+		MaxSize:    500, // megabytes
+		MaxBackups: 5,
 		MaxAge:     28, //days
 	})
 }
