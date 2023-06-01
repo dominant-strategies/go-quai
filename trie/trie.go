@@ -21,11 +21,11 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/log"
+	"sync"
 )
 
 var (

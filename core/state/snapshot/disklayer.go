@@ -18,7 +18,7 @@ package snapshot
 
 import (
 	"bytes"
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/dominant-strategies/go-quai/common"

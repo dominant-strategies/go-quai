@@ -19,7 +19,7 @@ package downloader
 import (
 	"fmt"
 	"math/big"
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus/blake3pow"

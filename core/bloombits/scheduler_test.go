@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"math/big"
 	"math/rand"
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"

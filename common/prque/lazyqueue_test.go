@@ -18,7 +18,7 @@ package prque
 
 import (
 	"math/rand"
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 	"testing"
 	"time"
 

@@ -18,7 +18,7 @@ package core
 
 import (
 	lru "github.com/hashicorp/golang-lru"
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/state"

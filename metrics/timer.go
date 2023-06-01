@@ -1,7 +1,7 @@
 package metrics
 
 import (
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 	"time"
 )
 

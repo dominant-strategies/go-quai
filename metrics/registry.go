@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 )
 
 // DuplicateMetric is the error returned by Registry.Register when a metric

@@ -22,7 +22,7 @@ import (
 	"net"
 	"reflect"
 	"strconv"
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 	"sync/atomic"
 	"time"
 

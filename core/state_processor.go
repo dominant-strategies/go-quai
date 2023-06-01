@@ -20,9 +20,8 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"sync"
 	"time"
-
-	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/prque"

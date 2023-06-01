@@ -24,7 +24,7 @@ import (
 	"io/ioutil"
 	"math/big"
 	"runtime"
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 	"testing"
 
 	"github.com/dominant-strategies/go-quai/common/math"

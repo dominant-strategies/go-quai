@@ -26,13 +26,12 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"testing"
 	"text/template"
 	"time"
-
-	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/docker/docker/pkg/reexec"
 )

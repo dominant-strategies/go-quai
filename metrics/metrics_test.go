@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 	"testing"
 	"time"
 )

@@ -3,9 +3,8 @@ package blake3pow
 import (
 	"math/big"
 	"math/rand"
+	"sync"
 	"time"
-
-	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"

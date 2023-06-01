@@ -18,7 +18,7 @@ package downloader
 
 import (
 	"fmt"
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 	"sync/atomic"
 
 	"github.com/dominant-strategies/go-quai/common"

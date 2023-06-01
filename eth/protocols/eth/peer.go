@@ -20,9 +20,8 @@ import (
 	"errors"
 	"math/big"
 	"math/rand"
+	"sync"
 	"time"
-
-	sync "github.com/sasha-s/go-deadlock"
 
 	mapset "github.com/deckarep/golang-set"
 	"github.com/dominant-strategies/go-quai/common"

@@ -21,9 +21,8 @@ package filters
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
-
-	sync "github.com/sasha-s/go-deadlock"
 
 	quai "github.com/dominant-strategies/go-quai"
 	"github.com/dominant-strategies/go-quai/common"

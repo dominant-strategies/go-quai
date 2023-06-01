@@ -20,7 +20,7 @@ import (
 	"math/big"
 	"reflect"
 	"sort"
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 	"testing"
 
 	"github.com/dominant-strategies/go-quai/common"

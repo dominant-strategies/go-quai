@@ -23,8 +23,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/crypto"

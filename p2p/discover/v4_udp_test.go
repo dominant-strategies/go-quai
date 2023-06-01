@@ -27,10 +27,9 @@ import (
 	"math/rand"
 	"net"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
-
-	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/dominant-strategies/go-quai/internal/testlog"
 	"github.com/dominant-strategies/go-quai/log"

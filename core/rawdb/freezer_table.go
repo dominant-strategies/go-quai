@@ -23,7 +23,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 	"sync/atomic"
 
 	"github.com/dominant-strategies/go-quai/common"

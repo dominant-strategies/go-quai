@@ -4,7 +4,7 @@ import (
 	"math"
 	"math/rand"
 	"sort"
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 	"time"
 )
 

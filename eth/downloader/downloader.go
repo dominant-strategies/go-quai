@@ -20,12 +20,6 @@ package downloader
 import (
 	"errors"
 	"fmt"
-	"math/big"
-	"sync/atomic"
-	"time"
-
-	sync "github.com/sasha-s/go-deadlock"
-
 	quai "github.com/dominant-strategies/go-quai"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
@@ -36,6 +30,10 @@ import (
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/metrics"
+	"math/big"
+	"sync"
+	"sync/atomic"
+	"time"
 )
 
 var (

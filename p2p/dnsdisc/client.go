@@ -23,7 +23,7 @@ import (
 	"math/rand"
 	"net"
 	"strings"
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common/mclock"

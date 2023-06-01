@@ -25,7 +25,7 @@ import (
 	"math/rand"
 	"net"
 	"sort"
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/log"

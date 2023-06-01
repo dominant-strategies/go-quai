@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"sync"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -20,7 +21,6 @@ import (
 	"github.com/dominant-strategies/go-quai/quaiclient"
 	"github.com/dominant-strategies/go-quai/trie"
 	lru "github.com/hashicorp/golang-lru"
-	sync "github.com/sasha-s/go-deadlock"
 )
 
 const (

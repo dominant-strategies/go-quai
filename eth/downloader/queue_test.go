@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"math/big"
 	"math/rand"
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 	"testing"
 	"time"
 

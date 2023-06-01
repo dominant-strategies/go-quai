@@ -29,9 +29,8 @@ import (
 	mrand "math/rand"
 	"net"
 	"sort"
+	"sync"
 	"time"
-
-	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/log"

@@ -3,9 +3,9 @@ package core
 import (
 	"errors"
 	"fmt"
-	sync "github.com/sasha-s/go-deadlock"
 	"io"
 	"math/big"
+	"sync"
 	"sync/atomic"
 	"time"
 

@@ -1,7 +1,7 @@
 package timedcache
 
 import (
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"

@@ -26,7 +26,7 @@ import (
 	"fmt"
 	"io"
 	"net"
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/crypto"

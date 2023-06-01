@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 	"sync/atomic"
 )
 

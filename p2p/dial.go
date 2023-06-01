@@ -24,7 +24,7 @@ import (
 	"fmt"
 	mrand "math/rand"
 	"net"
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common/mclock"

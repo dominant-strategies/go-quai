@@ -21,7 +21,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"strings"
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 	"time"
 )
 

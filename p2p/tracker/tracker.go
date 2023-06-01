@@ -19,7 +19,7 @@ package tracker
 import (
 	"container/list"
 	"fmt"
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/log"

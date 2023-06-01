@@ -19,10 +19,9 @@ package vm
 import (
 	"fmt"
 	"math/big"
+	"sync"
 	"sync/atomic"
 	"time"
-
-	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"

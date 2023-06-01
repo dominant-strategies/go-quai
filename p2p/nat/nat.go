@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/log"

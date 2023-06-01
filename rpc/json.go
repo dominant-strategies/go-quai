@@ -25,7 +25,7 @@ import (
 	"io"
 	"reflect"
 	"strings"
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 	"time"
 )
 

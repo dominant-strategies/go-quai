@@ -19,7 +19,7 @@ package fetcher
 import (
 	"errors"
 	"math/big"
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"

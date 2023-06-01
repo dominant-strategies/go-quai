@@ -18,8 +18,7 @@ package downloader
 
 import (
 	"context"
-
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 
 	interfaces "github.com/dominant-strategies/go-quai"
 	"github.com/dominant-strategies/go-quai/event"

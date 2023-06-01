@@ -12,6 +12,7 @@ require (
 	github.com/docker/docker v1.4.2-0.20180625184442-8e610b2b55bf
 	github.com/dominant-strategies/bn256 v0.0.0-20220930122411-fbf930a7493d
 	github.com/fjl/memsize v0.0.0-20190710130421-bcb5799ab5e5
+	github.com/go-stack/stack v1.8.1
 	github.com/golang/snappy v0.0.3
 	github.com/google/gofuzz v1.1.1-0.20200604201612-c04b05f3adfa
 	github.com/gorilla/websocket v1.4.2
@@ -29,7 +30,6 @@ require (
 	github.com/peterh/liner v1.1.1-0.20190123174540-a2c9a5303de7
 	github.com/prometheus/tsdb v0.7.1
 	github.com/rs/cors v1.7.0
-	github.com/sasha-s/go-deadlock v0.3.1
 	github.com/shirou/gopsutil v3.21.4-0.20210419000835-c7a38de76ee5+incompatible
 	github.com/sirupsen/logrus v1.9.0
 	github.com/stretchr/testify v1.7.0
@@ -55,7 +55,6 @@ require (
 	github.com/mattn/go-ieproxy v0.0.0-20190702010315-6dee0af9227d // indirect
 	github.com/mattn/go-runewidth v0.0.9 // indirect
 	github.com/naoina/go-stringutil v0.1.0 // indirect
-	github.com/petermattis/goid v0.0.0-20180202154549-b0b1615b78e5 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20200410134404-eec4a21b6bb0 // indirect

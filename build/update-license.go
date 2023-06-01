@@ -50,10 +50,9 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"text/template"
 	"time"
-
-	sync "github.com/sasha-s/go-deadlock"
 )
 
 var (

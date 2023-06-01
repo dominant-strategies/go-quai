@@ -24,7 +24,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 	"testing"
 	"time"
 

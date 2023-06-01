@@ -2,7 +2,7 @@ package metrics
 
 import (
 	"math"
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 	"sync/atomic"
 	"time"
 )

@@ -22,6 +22,7 @@ import (
 	"math"
 	"math/big"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -33,7 +34,6 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/metrics"
 	"github.com/dominant-strategies/go-quai/params"
-	sync "github.com/sasha-s/go-deadlock"
 )
 
 const (

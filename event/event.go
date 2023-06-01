@@ -21,7 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 	"time"
 )
 

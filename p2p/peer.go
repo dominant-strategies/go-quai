@@ -22,9 +22,8 @@ import (
 	"io"
 	"net"
 	"sort"
+	"sync"
 	"time"
-
-	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/dominant-strategies/go-quai/common/mclock"
 	"github.com/dominant-strategies/go-quai/event"

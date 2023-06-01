@@ -19,7 +19,7 @@ package trie
 import (
 	"bytes"
 	"runtime"
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 	"testing"
 
 	"github.com/dominant-strategies/go-quai/common"
