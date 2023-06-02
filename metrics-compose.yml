@@ -1,0 +1,30 @@
+version: '3.3'
+services:
+  influxdb:
+    image: influxdb:1.8
+    container_name: influxdb-1.8
+    ports:
+      - 8086:8086
+      - 8088:8088
+    environment:
+      - INFLUXDB_HTTP_AUTH_ENABLED=false
+      - INFLUXDB_HTTP_FLUX_ENABLED=true
+      - INFLUXDB_DB=quai
+      - INFLUXDB_ADMIN_USER=user
+      - INFLUXDB_ADMIN_PASSWORD=password
+    tty: true
+    stdin_open: true
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    ports:
+      - 3000:3000
+    restart: unless-stopped
+    volumes:
+      - ./grafana:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - influxdb
+
