@@ -2,7 +2,6 @@ package log
 
 import (
 	"fmt"
-	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -26,10 +25,6 @@ func ConfigureLogger(ctx *cli.Context) {
 	logLevel := logrus.Level(ctx.GlobalInt("verbosity"))
 	Log.SetLevel(logLevel)
 
-	if logLevel >= logrus.DebugLevel {
-		Log.SetReportCaller(true)
-	}
-
 	log_filename := "nodelogs"
 	regionNum := ctx.GlobalString("region")
 
@@ -44,11 +39,10 @@ func ConfigureLogger(ctx *cli.Context) {
 	log_filename += ".log"
 
 	Log.Formatter = &logrus.TextFormatter{
-		ForceColors:      ctx.GlobalBool("showcolors"),
-		PadLevelText:     true,
-		FullTimestamp:    true,
-		TimestampFormat:  "01-02|15:04:05.000",
-		CallerPrettyfier: callerPrettyfier,
+		ForceColors:     ctx.GlobalBool("showcolors"),
+		PadLevelText:    true,
+		FullTimestamp:   true,
+		TimestampFormat: "01-02|15:04:05.000",
 	}
 
 	Log.SetOutput(&lumberjack.Logger{
@@ -96,7 +90,7 @@ func Debug(msg string, args ...interface{}) {
 	Log.Debug(constructLogMessage(msg, args...))
 }
 func (l Logger) Debug(msg string, args ...interface{}) {
-	l.Logger.Debug(constructLogMessage(msg, args...))
+	l.Logger.Debug(constructLogMessage(msg, args...))	
 }
 
 func Info(msg string, args ...interface{}) {
@@ -141,6 +135,18 @@ func Lazy(fn func() string, logLevel string) {
 	}
 }
 
+func reportLineNumber(skiplevel int) string {
+	if Logger.GetLevel(Log) < logrus.DebugLevel {
+		return ""
+	}
+	_, file, line, ok := runtime.Caller(skiplevel + 1)
+	fileAndDir := filepath.Join(filepath.Base(filepath.Dir(file)), filepath.Base(file))
+	if !ok || fileAndDir == "log/logger.go" {
+		return ""
+	}
+	return fmt.Sprintf("%s:%d", fileAndDir, line)
+}
+
 func callCorrectLevel(level logrus.Level, msg string, args ...interface{}) {
 	switch level {
 	case logrus.TraceLevel:
@@ -165,23 +171,24 @@ func callCorrectLevel(level logrus.Level, msg string, args ...interface{}) {
 func constructLogMessage(msg string, fields ...interface{}) string {
 	var pairs []string
 
-	if len(fields)%2 != 0 {
-		fields = append(fields, "MISSING VALUE")
+	lineInfo := reportLineNumber(2)
+
+	if len(fields) != 1 {
+		// Sometimes we want to log a single string, 
+		if len(fields)%2 != 0 {
+			fields = append(fields, "MISSING VALUE")
+		}
+	
+		for i := 0; i < len(fields); i += 2 {
+			key := fields[i]
+			value := fields[i+1]
+			pairs = append(pairs, fmt.Sprintf("%v=%v", key, value))
+		}
 	}
 
-	for i := 0; i < len(fields); i += 2 {
-		key := fields[i]
-		value := fields[i+1]
-		pairs = append(pairs, fmt.Sprintf("%v=%v", key, value))
+	if lineInfo != ""{
+		return fmt.Sprintf("%-40s %-40s %s", lineInfo, msg, strings.Join(pairs, " "))
+	} else {
+		return fmt.Sprintf("%-40s %s", msg, strings.Join(pairs, " "))
 	}
-
-	return fmt.Sprintf("%-40s %s", msg, strings.Join(pairs, " "))
-}
-
-func callerPrettyfier(f *runtime.Frame) (string, string) {
-	filename := path.Base(f.File)
-	dir := path.Base(path.Dir(f.File))
-
-	filepath := path.Join(dir, filename)
-	return "", fmt.Sprintf("%s:%d", filepath, f.Line)
 }
