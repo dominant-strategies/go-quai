@@ -992,24 +992,26 @@ func (s *StateDB) PrepareAccessList(sender common.Address, dst *common.Address, 
 
 // AddAddressToAccessList adds the given address to the access list
 func (s *StateDB) AddAddressToAccessList(addr common.Address) {
-	if s.accessList.AddAddress(addr) {
-		s.journal.append(accessListAddAccountChange{&addr})
+	addrBytes := addr.Bytes20()
+	if s.accessList.AddAddress(addrBytes) {
+		s.journal.append(accessListAddAccountChange{&addrBytes})
 	}
 }
 
 // AddSlotToAccessList adds the given (address, slot)-tuple to the access list
 func (s *StateDB) AddSlotToAccessList(addr common.Address, slot common.Hash) {
-	addrMod, slotMod := s.accessList.AddSlot(addr, slot)
+	addrBytes := addr.Bytes20()
+	addrMod, slotMod := s.accessList.AddSlot(addrBytes, slot)
 	if addrMod {
 		// In practice, this should not happen, since there is no way to enter the
 		// scope of 'address' without having the 'address' become already added
 		// to the access list (via call-variant, create, etc).
 		// Better safe than sorry, though
-		s.journal.append(accessListAddAccountChange{&addr})
+		s.journal.append(accessListAddAccountChange{&addrBytes})
 	}
 	if slotMod {
 		s.journal.append(accessListAddSlotChange{
-			address: &addr,
+			address: &addrBytes,
 			slot:    &slot,
 		})
 	}
@@ -1017,10 +1019,10 @@ func (s *StateDB) AddSlotToAccessList(addr common.Address, slot common.Hash) {
 
 // AddressInAccessList returns true if the given address is in the access list.
 func (s *StateDB) AddressInAccessList(addr common.Address) bool {
-	return s.accessList.ContainsAddress(addr)
+	return s.accessList.ContainsAddress(addr.Bytes20())
 }
 
 // SlotInAccessList returns true if the given (address, slot)-tuple is in the access list.
 func (s *StateDB) SlotInAccessList(addr common.Address, slot common.Hash) (addressPresent bool, slotPresent bool) {
-	return s.accessList.Contains(addr, slot)
+	return s.accessList.Contains(addr.Bytes20(), slot)
 }

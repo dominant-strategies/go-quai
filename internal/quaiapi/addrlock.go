@@ -24,7 +24,7 @@ import (
 
 type AddrLocker struct {
 	mu    sync.Mutex
-	locks map[common.Address]*sync.Mutex
+	locks map[common.AddressBytes]*sync.Mutex
 }
 
 // lock returns the lock of the given address.
@@ -32,12 +32,12 @@ func (l *AddrLocker) lock(address common.Address) *sync.Mutex {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.locks == nil {
-		l.locks = make(map[common.Address]*sync.Mutex)
+		l.locks = make(map[common.AddressBytes]*sync.Mutex)
 	}
-	if _, ok := l.locks[address]; !ok {
-		l.locks[address] = new(sync.Mutex)
+	if _, ok := l.locks[address.Bytes20()]; !ok {
+		l.locks[address.Bytes20()] = new(sync.Mutex)
 	}
-	return l.locks[address]
+	return l.locks[address.Bytes20()]
 }
 
 // LockAddr locks an account's mutex. This is used to prevent another tx getting the

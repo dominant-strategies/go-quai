@@ -45,10 +45,10 @@ type (
 )
 
 func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool, common.Address) {
-	if index, ok := TranslatedAddresses[addr]; ok {
+	if index, ok := TranslatedAddresses[addr.Bytes20()]; ok {
 		addr = PrecompiledAddresses[common.NodeLocation.Name()][index]
 	}
-	p, ok := PrecompiledContracts[addr]
+	p, ok := PrecompiledContracts[addr.Bytes20()]
 	return p, ok, addr
 }
 

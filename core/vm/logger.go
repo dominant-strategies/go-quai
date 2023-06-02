@@ -118,7 +118,7 @@ type Tracer interface {
 type StructLogger struct {
 	cfg LogConfig
 
-	storage map[common.Address]Storage
+	storage map[common.AddressBytes]Storage
 	logs    []StructLog
 	output  []byte
 	err     error
@@ -127,7 +127,7 @@ type StructLogger struct {
 // NewStructLogger returns a new logger
 func NewStructLogger(cfg *LogConfig) *StructLogger {
 	logger := &StructLogger{
-		storage: make(map[common.Address]Storage),
+		storage: make(map[common.AddressBytes]Storage),
 	}
 	if cfg != nil {
 		logger.cfg = *cfg
@@ -137,7 +137,7 @@ func NewStructLogger(cfg *LogConfig) *StructLogger {
 
 // Reset clears the data held by the logger.
 func (l *StructLogger) Reset() {
-	l.storage = make(map[common.Address]Storage)
+	l.storage = make(map[common.AddressBytes]Storage)
 	l.output = make([]byte, 0)
 	l.logs = l.logs[:0]
 	l.err = nil
@@ -177,8 +177,8 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost ui
 	if !l.cfg.DisableStorage && (op == SLOAD || op == SSTORE) {
 		// initialise new changed values storage container for this contract
 		// if not present.
-		if l.storage[contract.Address()] == nil {
-			l.storage[contract.Address()] = make(Storage)
+		if l.storage[contract.Address().Bytes20()] == nil {
+			l.storage[contract.Address().Bytes20()] = make(Storage)
 		}
 		// capture SLOAD opcodes and record the read entry in the local storage
 		if op == SLOAD && stack.len() >= 1 {
@@ -191,16 +191,16 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost ui
 				return
 			}
 			value := env.StateDB.GetState(internalContractAddr, address)
-			l.storage[contract.Address()][address] = value
-			storage = l.storage[contract.Address()].Copy()
+			l.storage[contract.Address().Bytes20()][address] = value
+			storage = l.storage[contract.Address().Bytes20()].Copy()
 		} else if op == SSTORE && stack.len() >= 2 {
 			// capture SSTORE opcodes and record the written entry in the local storage.
 			var (
 				value   = common.Hash(stack.data[stack.len()-2].Bytes32())
 				address = common.Hash(stack.data[stack.len()-1].Bytes32())
 			)
-			l.storage[contract.Address()][address] = value
-			storage = l.storage[contract.Address()].Copy()
+			l.storage[contract.Address().Bytes20()][address] = value
+			storage = l.storage[contract.Address().Bytes20()].Copy()
 		}
 	}
 	var rdata []byte

@@ -45,16 +45,16 @@ type precompiledFailureTest struct {
 
 // allPrecompiles does not map to the actual set of precompiles, as it also contains
 // repriced versions of precompiles at certain slots
-var allPrecompiles = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{1}): &ecrecover{},
-	common.BytesToAddress([]byte{2}): &sha256hash{},
-	common.BytesToAddress([]byte{3}): &ripemd160hash{},
-	common.BytesToAddress([]byte{4}): &dataCopy{},
-	common.BytesToAddress([]byte{5}): &bigModExp{},
-	common.BytesToAddress([]byte{6}): &bn256Add{},
-	common.BytesToAddress([]byte{7}): &bn256ScalarMul{},
-	common.BytesToAddress([]byte{8}): &bn256Pairing{},
-	common.BytesToAddress([]byte{9}): &blake2F{},
+var allPrecompiles = map[common.AddressBytes]PrecompiledContract{
+	common.AddressBytes([]byte{1}): &ecrecover{},
+	common.AddressBytes([]byte{2}): &sha256hash{},
+	common.AddressBytes([]byte{3}): &ripemd160hash{},
+	common.AddressBytes([]byte{4}): &dataCopy{},
+	common.AddressBytes([]byte{5}): &bigModExp{},
+	common.AddressBytes([]byte{6}): &bn256Add{},
+	common.AddressBytes([]byte{7}): &bn256ScalarMul{},
+	common.AddressBytes([]byte{8}): &bn256Pairing{},
+	common.AddressBytes([]byte{9}): &blake2F{},
 }
 
 var blake2FMalformedInputTests = []precompiledFailureTest{
@@ -81,7 +81,7 @@ var blake2FMalformedInputTests = []precompiledFailureTest{
 }
 
 func testPrecompiled(addr string, test precompiledTest, t *testing.T) {
-	p := allPrecompiles[common.HexToAddress(addr)]
+	p := allPrecompiles[common.HexToAddress(addr).Bytes20()]
 	in := common.Hex2Bytes(test.Input)
 	gas := p.RequiredGas(in)
 	t.Run(fmt.Sprintf("%s-Gas=%d", test.Name, gas), func(t *testing.T) {
@@ -102,7 +102,7 @@ func testPrecompiled(addr string, test precompiledTest, t *testing.T) {
 }
 
 func testPrecompiledOOG(addr string, test precompiledTest, t *testing.T) {
-	p := allPrecompiles[common.HexToAddress(addr)]
+	p := allPrecompiles[common.HexToAddress(addr).Bytes20()]
 	in := common.Hex2Bytes(test.Input)
 	gas := p.RequiredGas(in) - 1
 
@@ -120,7 +120,7 @@ func testPrecompiledOOG(addr string, test precompiledTest, t *testing.T) {
 }
 
 func testPrecompiledFailure(addr string, test precompiledFailureTest, t *testing.T) {
-	p := allPrecompiles[common.HexToAddress(addr)]
+	p := allPrecompiles[common.HexToAddress(addr).Bytes20()]
 	in := common.Hex2Bytes(test.Input)
 	gas := p.RequiredGas(in)
 	t.Run(test.Name, func(t *testing.T) {
@@ -140,7 +140,7 @@ func benchmarkPrecompiled(addr string, test precompiledTest, bench *testing.B) {
 	if test.NoBenchmark {
 		return
 	}
-	p := allPrecompiles[common.HexToAddress(addr)]
+	p := allPrecompiles[common.HexToAddress(addr).Bytes20()]
 	in := common.Hex2Bytes(test.Input)
 	reqGas := p.RequiredGas(in)
 

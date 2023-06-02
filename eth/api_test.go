@@ -69,7 +69,7 @@ func TestAccountRange(t *testing.T) {
 		statedb  = state.NewDatabaseWithConfig(rawdb.NewMemoryDatabase(), nil)
 		state, _ = state.New(common.Hash{}, statedb, nil)
 		addrs    = [AccountRangeMaxResults * 2]common.Address{}
-		m        = map[common.Address]bool{}
+		m        = map[common.AddressBytes]bool{}
 	)
 
 	for i := range addrs {

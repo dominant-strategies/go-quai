@@ -41,33 +41,33 @@ type PrecompiledContract interface {
 	Run(input []byte) ([]byte, error) // Run runs the precompiled contract
 }
 
-var TranslatedAddresses = map[common.Address]int{
-	common.BytesToAddress([]byte{1}): 0,
-	common.BytesToAddress([]byte{2}): 1,
-	common.BytesToAddress([]byte{3}): 2,
-	common.BytesToAddress([]byte{4}): 3,
-	common.BytesToAddress([]byte{5}): 4,
-	common.BytesToAddress([]byte{6}): 5,
-	common.BytesToAddress([]byte{7}): 6,
-	common.BytesToAddress([]byte{8}): 7,
-	common.BytesToAddress([]byte{9}): 8,
+var TranslatedAddresses = map[common.AddressBytes]int{
+	common.AddressBytes([20]byte{1}): 0,
+	common.AddressBytes([20]byte{2}): 1,
+	common.AddressBytes([20]byte{3}): 2,
+	common.AddressBytes([20]byte{4}): 3,
+	common.AddressBytes([20]byte{5}): 4,
+	common.AddressBytes([20]byte{6}): 5,
+	common.AddressBytes([20]byte{7}): 6,
+	common.AddressBytes([20]byte{8}): 7,
+	common.AddressBytes([20]byte{9}): 8,
 }
 
 var (
-	PrecompiledContracts map[common.Address]PrecompiledContract = make(map[common.Address]PrecompiledContract)
-	PrecompiledAddresses map[string][]common.Address            = make(map[string][]common.Address)
+	PrecompiledContracts map[common.AddressBytes]PrecompiledContract = make(map[common.AddressBytes]PrecompiledContract)
+	PrecompiledAddresses map[string][]common.Address                 = make(map[string][]common.Address)
 )
 
 func InitializePrecompiles() {
-	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][0]] = &ecrecover{}
-	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][1]] = &sha256hash{}
-	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][2]] = &ripemd160hash{}
-	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][3]] = &dataCopy{}
-	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][4]] = &bigModExp{}
-	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][5]] = &bn256Add{}
-	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][6]] = &bn256ScalarMul{}
-	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][7]] = &bn256Pairing{}
-	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][8]] = &blake2F{}
+	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][0].Bytes20()] = &ecrecover{}
+	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][1].Bytes20()] = &sha256hash{}
+	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][2].Bytes20()] = &ripemd160hash{}
+	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][3].Bytes20()] = &dataCopy{}
+	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][4].Bytes20()] = &bigModExp{}
+	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][5].Bytes20()] = &bn256Add{}
+	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][6].Bytes20()] = &bn256ScalarMul{}
+	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][7].Bytes20()] = &bn256Pairing{}
+	PrecompiledContracts[PrecompiledAddresses[common.NodeLocation.Name()][8].Bytes20()] = &blake2F{}
 }
 
 func init() {

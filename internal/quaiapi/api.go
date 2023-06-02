@@ -507,7 +507,7 @@ type OverrideAccount struct {
 }
 
 // StateOverride is the collection of overridden accounts.
-type StateOverride map[common.Address]OverrideAccount
+type StateOverride map[common.AddressBytes]OverrideAccount
 
 // Apply overrides the fields of specified accounts into the given state.
 func (diff *StateOverride) Apply(state *state.StateDB) error {
@@ -519,7 +519,7 @@ func (diff *StateOverride) Apply(state *state.StateDB) error {
 		return nil
 	}
 	for addr, account := range *diff {
-		internal, err := addr.InternalAddress()
+		internal, err := common.Bytes20ToAddress(addr).InternalAddress()
 		if err != nil {
 			return err
 		}

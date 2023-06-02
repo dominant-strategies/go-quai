@@ -91,11 +91,11 @@ func (p *testTxPool) AddRemotes(txs []*types.Transaction) []error {
 }
 
 // Pending returns all the transactions known to the pool
-func (p *testTxPool) Pending(enforceTips bool) (map[common.Address]types.Transactions, error) {
+func (p *testTxPool) Pending(enforceTips bool) (map[common.AddressBytes]types.Transactions, error) {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
-	batches := make(map[common.Address]types.Transactions)
+	batches := make(map[common.AddressBytes]types.Transactions)
 	for _, tx := range p.pool {
 		from, _ := types.Sender(types.LatestSigner(params.RopstenChainConfig), tx)
 		batches[from] = append(batches[from], tx)

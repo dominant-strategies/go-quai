@@ -132,10 +132,10 @@ type (
 	}
 	// Changes to the access list
 	accessListAddAccountChange struct {
-		address *common.Address
+		address *common.AddressBytes
 	}
 	accessListAddSlotChange struct {
-		address *common.Address
+		address *common.AddressBytes
 		slot    *common.Hash
 	}
 )

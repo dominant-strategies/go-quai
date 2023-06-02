@@ -26,7 +26,7 @@ import (
 
 // accessList is an accumulator for the set of accounts and storage slots an EVM
 // contract execution touches.
-type accessList map[common.Address]accessListSlots
+type accessList map[common.AddressBytes]accessListSlots
 
 // accessListSlots is an accumulator for the set of storage slots within a single
 // contract that an EVM contract execution touches.
@@ -34,14 +34,14 @@ type accessListSlots map[common.Hash]struct{}
 
 // newAccessList creates a new accessList.
 func newAccessList() accessList {
-	return make(map[common.Address]accessListSlots)
+	return make(map[common.AddressBytes]accessListSlots)
 }
 
 // addAddress adds an address to the accesslist.
 func (al accessList) addAddress(address common.Address) {
 	// Set address if not previously present
-	if _, present := al[address]; !present {
-		al[address] = make(map[common.Hash]struct{})
+	if _, present := al[address.Bytes20()]; !present {
+		al[address.Bytes20()] = make(map[common.Hash]struct{})
 	}
 }
 
@@ -51,7 +51,7 @@ func (al accessList) addSlot(address common.Address, slot common.Hash) {
 	al.addAddress(address)
 
 	// Set the slot on the surely existent storage set
-	al[address][slot] = struct{}{}
+	al[address.Bytes20()][slot] = struct{}{}
 }
 
 // equal checks if the content of the current access list is the same as the
@@ -96,7 +96,7 @@ func (al accessList) equal(other accessList) bool {
 func (al accessList) accessList() types.AccessList {
 	acl := make(types.AccessList, 0, len(al))
 	for addr, slots := range al {
-		tuple := types.AccessTuple{Address: addr, StorageKeys: []common.Hash{}}
+		tuple := types.AccessTuple{Address: common.Bytes20ToAddress(addr), StorageKeys: []common.Hash{}}
 		for slot := range slots {
 			tuple.StorageKeys = append(tuple.StorageKeys, slot)
 		}
@@ -108,23 +108,23 @@ func (al accessList) accessList() types.AccessList {
 // AccessListTracer is a tracer that accumulates touched accounts and storage
 // slots into an internal set.
 type AccessListTracer struct {
-	excl map[common.Address]struct{} // Set of account to exclude from the list
-	list accessList                  // Set of accounts and storage slots touched
+	excl map[common.AddressBytes]struct{} // Set of account to exclude from the list
+	list accessList                       // Set of accounts and storage slots touched
 }
 
 // NewAccessListTracer creates a new tracer that can generate AccessLists.
 // An optional AccessList can be specified to occupy slots and addresses in
 // the resulting accesslist.
 func NewAccessListTracer(acl types.AccessList, from, to common.Address, precompiles []common.Address) *AccessListTracer {
-	excl := map[common.Address]struct{}{
-		from: {}, to: {},
+	excl := map[common.AddressBytes]struct{}{
+		from.Bytes20(): {}, to.Bytes20(): {},
 	}
 	for _, addr := range precompiles {
-		excl[addr] = struct{}{}
+		excl[addr.Bytes20()] = struct{}{}
 	}
 	list := newAccessList()
 	for _, al := range acl {
-		if _, ok := excl[al.Address]; !ok {
+		if _, ok := excl[al.Address.Bytes20()]; !ok {
 			list.addAddress(al.Address)
 		}
 		for _, slot := range al.StorageKeys {
@@ -149,13 +149,13 @@ func (a *AccessListTracer) CaptureState(env *EVM, pc uint64, op OpCode, gas, cos
 	}
 	if (op == EXTCODECOPY || op == EXTCODEHASH || op == EXTCODESIZE || op == BALANCE || op == SELFDESTRUCT) && stack.len() >= 1 {
 		addr := common.Bytes20ToAddress(stack.data[stack.len()-1].Bytes20())
-		if _, ok := a.excl[addr]; !ok {
+		if _, ok := a.excl[addr.Bytes20()]; !ok {
 			a.list.addAddress(addr)
 		}
 	}
 	if (op == DELEGATECALL || op == CALL || op == STATICCALL || op == CALLCODE) && stack.len() >= 5 {
 		addr := common.Bytes20ToAddress(stack.data[stack.len()-2].Bytes20())
-		if _, ok := a.excl[addr]; !ok {
+		if _, ok := a.excl[addr.Bytes20()]; !ok {
 			a.list.addAddress(addr)
 		}
 	}

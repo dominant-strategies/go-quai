@@ -1,6 +1,6 @@
 module github.com/dominant-strategies/go-quai
 
-go 1.19
+go 1.20
 
 require (
 	github.com/Azure/azure-storage-blob-go v0.7.0
@@ -12,7 +12,6 @@ require (
 	github.com/docker/docker v1.4.2-0.20180625184442-8e610b2b55bf
 	github.com/dominant-strategies/bn256 v0.0.0-20220930122411-fbf930a7493d
 	github.com/fjl/memsize v0.0.0-20190710130421-bcb5799ab5e5
-	github.com/go-stack/stack v1.8.1
 	github.com/golang/snappy v0.0.3
 	github.com/google/gofuzz v1.1.1-0.20200604201612-c04b05f3adfa
 	github.com/gorilla/websocket v1.4.2
