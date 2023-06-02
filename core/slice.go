@@ -279,7 +279,7 @@ func (sl *Slice) relayPh(block *types.Block, appendTime *time.Duration, reorg bo
 			sl.miner.worker.pendingHeaderFeed.Send(bestPh.Header)
 			return
 		}
-	} else if !domOrigin && reorg {
+	} else if !domOrigin {
 		for i := range sl.subClients {
 			if sl.subClients[i] != nil {
 				sl.subClients[i].SubRelayPendingHeader(context.Background(), pendingHeaderWithTermini, location)
@@ -596,19 +596,18 @@ func (sl *Slice) updatePhCache(pendingHeaderWithTermini types.PendingHeader, inS
 	deepCopyPendingHeaderWithTermini.Header.SetTime(uint64(time.Now().Unix()))
 	if exist {
 		// If we are inslice we will only update the cache if the entropy is better
-		if !inSlice || newPhEntropy.Cmp(oldPh.Header.CalcPhS()) >= 0 {
+		if (!inSlice && newPhEntropy.Cmp(oldPh.Header.CalcPhS()) >= 0) ||
+			(inSlice && pendingHeaderWithTermini.Header.ParentEntropy().Cmp(oldPh.Header.ParentEntropy()) > 0) {
 			sl.writePhCache(pendingHeaderWithTermini.Termini[c_terminusIndex], deepCopyPendingHeaderWithTermini)
-			log.Debug("PhCache update:", "inSlice:", inSlice, "Ph Number:", deepCopyPendingHeaderWithTermini.Header.NumberArray(), "Termini:", pendingHeaderWithTermini.Termini[c_terminusIndex])
-			// if we are not inslice we are getting a coordinate update from dom which has already been decided by a coord
+			log.Info("PhCache update:", "inSlice:", inSlice, "Ph Number:", deepCopyPendingHeaderWithTermini.Header.NumberArray(), "Termini:", deepCopyPendingHeaderWithTermini.Termini[c_terminusIndex])
 		}
 	} else {
 		if inSlice {
 			sl.writePhCache(pendingHeaderWithTermini.Termini[c_terminusIndex], deepCopyPendingHeaderWithTermini)
-			log.Debug("PhCache new terminus inSlice ", "Ph Number:", deepCopyPendingHeaderWithTermini.Header.NumberArray(), "Termini:", pendingHeaderWithTermini.Termini[c_terminusIndex])
+			log.Info("PhCache new terminus inSlice ", "Ph Number:", deepCopyPendingHeaderWithTermini.Header.NumberArray(), "Termini:", deepCopyPendingHeaderWithTermini.Termini[c_terminusIndex])
 		} else {
 			log.Info("phCache tried to create new entry from coord")
 		}
-
 	}
 }
 
@@ -617,7 +616,7 @@ func (sl *Slice) pickPhHead(pendingHeaderWithTermini types.PendingHeader, oldBes
 	// Pick a phCache Head
 	if sl.poem(newPhEntropy, oldBestPhEntropy) {
 		sl.bestPhKey = pendingHeaderWithTermini.Termini[c_terminusIndex]
-		log.Info("Choosing new pending header", "Ph Number:", pendingHeaderWithTermini.Header.NumberArray())
+		log.Info("Choosing new pending header", "Ph Number:", pendingHeaderWithTermini.Header.NumberArray(), "terminus:", pendingHeaderWithTermini.Termini[c_terminusIndex])
 		return true
 	}
 	return false
