@@ -331,7 +331,7 @@ func DefaultGardenGenesisBlock() *Genesis {
 		Config:     params.GardenChainConfig,
 		Nonce:      0,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
-		GasLimit:   160000000,
+		GasLimit:   17000000,
 		Difficulty: big.NewInt(441092),
 	}
 }
