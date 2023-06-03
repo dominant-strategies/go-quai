@@ -527,7 +527,6 @@ func (w *worker) makeEnv(parent *types.Block, header *types.Header, coinbase com
 	if err != nil {
 		return nil, err
 	}
-	state.StartPrefetcher("miner")
 
 	// Note the passed coinbase may be different with header.Coinbase.
 	env := &environment{
