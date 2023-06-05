@@ -492,7 +492,9 @@ func (hc *HeaderChain) Stop() {
 	hc.scope.Close()
 	hc.bc.scope.Close()
 	hc.wg.Wait()
-	hc.bc.processor.Stop()
+	if common.NodeLocation.Context() == common.ZONE_CTX {
+		hc.bc.processor.Stop()
+	}
 	log.Info("headerchain stopped")
 }
 
