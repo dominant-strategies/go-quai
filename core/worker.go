@@ -862,10 +862,11 @@ func (w *worker) FinalizeAssemble(chain consensus.ChainHeaderReader, header *typ
 	} else if w.engine.IsDomCoincident(parent.Header()) {
 		manifest = types.BlockManifest{parent.Hash()}
 	} else {
-		manifest, err = w.hc.BuildManifestFromParent(parent.Header())
+		manifest, err = w.hc.CollectBlockManifest(parent.Header())
 		if err != nil {
 			return nil, err
 		}
+		manifest = append(manifest, header.ParentHash())
 	}
 	manifestHash := types.DeriveSha(manifest, trie.NewStackTrie(nil))
 	block.Header().SetManifestHash(manifestHash)

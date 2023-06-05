@@ -28,7 +28,6 @@ import (
 const (
 	headerCacheLimit      = 512
 	numberCacheLimit      = 2048
-	manifestCacheLimit    = 100
 	primeHorizonThreshold = 20
 )
 
@@ -47,9 +46,8 @@ type HeaderChain struct {
 
 	currentHeader atomic.Value // Current head of the header chain (may be above the block chain!)
 
-	headerCache   *lru.Cache // Cache for the most recent block headers
-	numberCache   *lru.Cache // Cache for the most recent block numbers
-	manifestCache *lru.Cache // Cache for the most recent block manifests
+	headerCache *lru.Cache // Cache for the most recent block headers
+	numberCache *lru.Cache // Cache for the most recent block numbers
 
 	pendingEtxsRollup            *lru.Cache
 	pendingEtxs                  *lru.Cache
@@ -69,15 +67,13 @@ type HeaderChain struct {
 func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, txLookupLimit *uint64, vmConfig vm.Config) (*HeaderChain, error) {
 	headerCache, _ := lru.New(headerCacheLimit)
 	numberCache, _ := lru.New(numberCacheLimit)
-	manifestCache, _ := lru.New(manifestCacheLimit)
 
 	hc := &HeaderChain{
-		config:        chainConfig,
-		headerDb:      db,
-		headerCache:   headerCache,
-		numberCache:   numberCache,
-		manifestCache: manifestCache,
-		engine:        engine,
+		config:      chainConfig,
+		headerDb:    db,
+		headerCache: headerCache,
+		numberCache: numberCache,
+		engine:      engine,
 	}
 
 	pendingEtxsRollup, _ := lru.New(c_maxPendingEtxsRollup)
@@ -115,55 +111,43 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *par
 // CollectBlockManifest gathers the manifest of ancestor block hashes since the
 // last coincident block.
 func (hc *HeaderChain) CollectBlockManifest(h *types.Header) (types.BlockManifest, error) {
-	if m, ok := hc.manifestCache.Get(h.Hash()); ok {
-		if m, ok := m.(types.BlockManifest); ok {
-			return m, nil
-		}
-	}
 	if h.NumberU64() == 0 && h.Hash() == hc.config.GenesisHash {
 		return types.BlockManifest{}, nil
 	}
 	parent := hc.GetHeader(h.ParentHash(), h.NumberU64()-1)
 	if parent == nil {
-		return types.BlockManifest{}, errors.New("parent not found")
+		return types.BlockManifest{}, errors.New("ancestor not found")
 	} else {
-		m, err := hc.BuildManifestFromParent(parent)
-		if err == nil {
-			hc.manifestCache.ContainsOrAdd(h.Hash(), m)
-		}
-		return m, err
+		return hc.collectBlockManifest(parent)
 	}
 }
 
-// buildManifestFromParent collects the manifest of block hashes since prior
-// coincidence, up to AND INCLUDING the given block
-func (hc *HeaderChain) BuildManifestFromParent(h *types.Header) (types.BlockManifest, error) {
+func (hc *HeaderChain) collectBlockManifest(h *types.Header) (types.BlockManifest, error) {
+	// Intialize manifest with this block's hash
+	manifest := types.BlockManifest{h.Hash()}
 	// Terminate the search if we reached genesis
 	if h.NumberU64() == 0 {
 		if h.Hash() != hc.config.GenesisHash {
 			return nil, fmt.Errorf("manifest builds on incorrect genesis, block0 hash: %s", h.Hash().String())
 		} else {
-			return types.BlockManifest{h.Hash()}, nil
-		}
-	} else if hc.engine.IsDomCoincident(h) {
-		// Terminate the search on coincidence
-		return types.BlockManifest{h.Hash()}, nil
-	} else if m, ok := hc.manifestCache.Get(h.Hash()); ok {
-		// Terminate the search if found in cache
-		return append(m.(types.BlockManifest), h.Hash()), nil
-	} else {
-		// Recursive the search into the ancestor
-		ancestor := hc.GetHeader(h.ParentHash(), h.NumberU64()-1)
-		if ancestor == nil {
-			return nil, errors.New("ancestor not found")
-		}
-		ancManifest, err := hc.BuildManifestFromParent(ancestor)
-		if err != nil {
-			return nil, err
-		} else {
-			return append(ancManifest, h.Hash()), nil
+			return manifest, nil
 		}
 	}
+	// Terminate the search on coincidence
+	if hc.engine.IsDomCoincident(h) {
+		return manifest, nil
+	}
+	// Recursively get the ancestor manifest, until a coincident ancestor is found
+	ancestor := hc.GetHeader(h.ParentHash(), h.NumberU64()-1)
+	if ancestor == nil {
+		return types.BlockManifest{}, errors.New("ancestor not found")
+	}
+	ancManifest, err := hc.collectBlockManifest(ancestor)
+	if err != nil {
+		return nil, errors.New("unable to get manifest for ancestor")
+	}
+	manifest = append(ancManifest, manifest...)
+	return manifest, nil
 }
 
 // CollectSubRollup collects the rollup of ETXs emitted from the subordinate
