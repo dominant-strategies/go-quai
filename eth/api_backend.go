@@ -480,3 +480,7 @@ func (b *QuaiAPIBackend) AddPendingEtxsRollup(pEtxsRollup types.PendingEtxsRollu
 func (b *QuaiAPIBackend) SubscribePendingHeaderEvent(ch chan<- *types.Header) event.Subscription {
 	return b.eth.core.SubscribePendingHeader(ch)
 }
+
+func (b *QuaiAPIBackend) GenerateRecoveryPendingHeader(pendingHeader *types.Header, checkpointHashes []common.Hash) error {
+	return b.eth.core.GenerateRecoveryPendingHeader(pendingHeader, checkpointHashes)
+}

@@ -90,6 +90,9 @@ type chainHeightFn func() uint64
 // peerDropFn is a callback type for dropping a peer detected as malicious.
 type peerDropFn func(id string)
 
+// badHashCheckFn is a callback type for checking if a block given by the peer exists in the badHashes list
+type badHashCheckFn func(hash common.Hash) bool
+
 // blockAnnounce is the hash notification of the availability of a new block in the
 // network.
 type blockAnnounce struct {
@@ -171,12 +174,13 @@ type BlockFetcher struct {
 	queued map[common.Hash]*blockOrHeaderInject // Set of already queued blocks (to dedup imports)
 
 	// Callbacks
-	getBlock       blockRetrievalFn   // Retrieves a block from the local chain
-	writeBlock     blockWriteFn       // Writes the block to the DB
-	verifyHeader   headerVerifierFn   // Checks if a block's headers have a valid proof of work
-	broadcastBlock blockBroadcasterFn // Broadcasts a block to connected peers
-	chainHeight    chainHeightFn      // Retrieves the current chain's height
-	dropPeer       peerDropFn         // Drops a peer for misbehaving
+	getBlock            blockRetrievalFn   // Retrieves a block from the local chain
+	writeBlock          blockWriteFn       // Writes the block to the DB
+	verifyHeader        headerVerifierFn   // Checks if a block's headers have a valid proof of work
+	broadcastBlock      blockBroadcasterFn // Broadcasts a block to connected peers
+	chainHeight         chainHeightFn      // Retrieves the current chain's height
+	dropPeer            peerDropFn         // Drops a peer for misbehaving
+	isBlockHashABadHash badHashCheckFn     // Checks if the block hash exists in the bad hashes list
 
 	// Testing hooks
 	announceChangeHook func(common.Hash, bool)           // Method to call upon adding or deleting a hash from the blockAnnounce list
@@ -187,27 +191,28 @@ type BlockFetcher struct {
 }
 
 // NewBlockFetcher creates a block fetcher to retrieve blocks based on hash announcements.
-func NewBlockFetcher(getBlock blockRetrievalFn, writeBlock blockWriteFn, verifyHeader headerVerifierFn, broadcastBlock blockBroadcasterFn, chainHeight chainHeightFn, dropPeer peerDropFn) *BlockFetcher {
+func NewBlockFetcher(getBlock blockRetrievalFn, writeBlock blockWriteFn, verifyHeader headerVerifierFn, broadcastBlock blockBroadcasterFn, chainHeight chainHeightFn, dropPeer peerDropFn, isBlockHashABadHash badHashCheckFn) *BlockFetcher {
 	return &BlockFetcher{
-		notify:         make(chan *blockAnnounce),
-		inject:         make(chan *blockOrHeaderInject),
-		headerFilter:   make(chan chan *headerFilterTask),
-		bodyFilter:     make(chan chan *bodyFilterTask),
-		done:           make(chan common.Hash),
-		quit:           make(chan struct{}),
-		announces:      make(map[string]int),
-		announced:      make(map[common.Hash][]*blockAnnounce),
-		fetching:       make(map[common.Hash]*blockAnnounce),
-		fetched:        make(map[common.Hash][]*blockAnnounce),
-		completing:     make(map[common.Hash]*blockAnnounce),
-		queue:          prque.New(nil),
-		queued:         make(map[common.Hash]*blockOrHeaderInject),
-		getBlock:       getBlock,
-		writeBlock:     writeBlock,
-		verifyHeader:   verifyHeader,
-		broadcastBlock: broadcastBlock,
-		chainHeight:    chainHeight,
-		dropPeer:       dropPeer,
+		notify:              make(chan *blockAnnounce),
+		inject:              make(chan *blockOrHeaderInject),
+		headerFilter:        make(chan chan *headerFilterTask),
+		bodyFilter:          make(chan chan *bodyFilterTask),
+		done:                make(chan common.Hash),
+		quit:                make(chan struct{}),
+		announces:           make(map[string]int),
+		announced:           make(map[common.Hash][]*blockAnnounce),
+		fetching:            make(map[common.Hash]*blockAnnounce),
+		fetched:             make(map[common.Hash][]*blockAnnounce),
+		completing:          make(map[common.Hash]*blockAnnounce),
+		queue:               prque.New(nil),
+		queued:              make(map[common.Hash]*blockOrHeaderInject),
+		getBlock:            getBlock,
+		writeBlock:          writeBlock,
+		verifyHeader:        verifyHeader,
+		broadcastBlock:      broadcastBlock,
+		chainHeight:         chainHeight,
+		dropPeer:            dropPeer,
+		isBlockHashABadHash: isBlockHashABadHash,
 	}
 }
 
@@ -707,6 +712,11 @@ func (f *BlockFetcher) importBlocks(peer string, block *types.Block) {
 	go func() {
 		defer func() { f.done <- hash }()
 
+		// If Block broadcasted by the peer exists in the bad block list drop the peer
+		if f.isBlockHashABadHash(block.Hash()) {
+			f.dropPeer(peer)
+			return
+		}
 		// Quickly validate the header and propagate the block if it passes
 		err := f.verifyHeader(block.Header())
 

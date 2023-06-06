@@ -161,6 +161,11 @@ func (h *ethHandler) handleBodies(peer *eth.Peer, txs [][]*types.Transaction, un
 // handleBlockAnnounces is invoked from a peer's message handler when it transmits a
 // batch of block announcements for the local node to process.
 func (h *ethHandler) handleBlockAnnounces(peer *eth.Peer, hashes []common.Hash, numbers []uint64) error {
+	// Do not handle any broadcast until we finish resetting from the bad state.
+	// This should be a very small time window
+	if h.Core().BadHashExistsInChain() {
+		return nil
+	}
 	// Schedule all the unknown hashes for retrieval
 	var (
 		unknownHashes  = make([]common.Hash, 0, len(hashes))
@@ -181,6 +186,11 @@ func (h *ethHandler) handleBlockAnnounces(peer *eth.Peer, hashes []common.Hash, 
 // handleBlockBroadcast is invoked from a peer's message handler when it transmits a
 // block broadcast for the local node to process.
 func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block) error {
+	// Do not handle any broadcast until we finish resetting from the bad state.
+	// This should be a very small time window
+	if h.Core().BadHashExistsInChain() {
+		return nil
+	}
 	// Schedule the block for import
 	h.blockFetcher.Enqueue(peer.ID(), block)
 

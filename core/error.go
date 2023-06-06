@@ -61,6 +61,9 @@ var (
 
 	//ErrPendingEtxRollupNotValid is returned when pendingEtxsRollup is not valid
 	ErrPendingEtxRollupNotValid = errors.New("pending etx rollup not valid")
+
+	// ErrBadBlockHash is returned when block being appended is in the badBlockHashes list
+	ErrBadBlockHash = errors.New("block hash exists  in bad block hashes list")
 )
 
 // List of evm-call-message pre-checking errors. All state transition messages will
