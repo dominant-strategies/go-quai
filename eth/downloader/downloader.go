@@ -70,6 +70,7 @@ var (
 	errInvalidBody             = errors.New("retrieved block body is invalid")
 	errInvalidReceipt          = errors.New("retrieved receipt is invalid")
 	errCancelContentProcessing = errors.New("content processing canceled (requested)")
+	errBadBlockFound           = errors.New("peer sent a bad block")
 	errCanceled                = errors.New("syncing canceled (requested)")
 	errNoSyncActive            = errors.New("no sync active")
 	errTooOld                  = errors.New("peer's protocol version too old")
@@ -158,6 +159,12 @@ type Core interface {
 
 	// GetTerminiByHash returns the termini of a given block
 	GetTerminiByHash(hash common.Hash) []common.Hash
+
+	// BadHashExistsInChain returns true if any of the specified bad hashes exists on chain
+	BadHashExistsInChain() bool
+
+	// IsBlockHashABadHash returns true if block hash exists in the bad hashes list
+	IsBlockHashABadHash(hash common.Hash) bool
 }
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
@@ -258,7 +265,7 @@ func (d *Downloader) Synchronise(id string, head common.Hash, entropy *big.Int, 
 	}
 	if errors.Is(err, errInvalidChain) || errors.Is(err, errBadPeer) || errors.Is(err, errTimeout) ||
 		errors.Is(err, errStallingPeer) || errors.Is(err, errUnsyncedPeer) || errors.Is(err, errEmptyHeaderSet) ||
-		errors.Is(err, errPeersUnavailable) || errors.Is(err, errTooOld) || errors.Is(err, errInvalidAncestor) {
+		errors.Is(err, errPeersUnavailable) || errors.Is(err, errTooOld) || errors.Is(err, errInvalidAncestor) || errors.Is(err, errBadBlockFound) {
 		log.Warn("Synchronisation failed, dropping peer", "peer", id, "err", err)
 		if d.dropPeer == nil {
 			// The dropPeer method is nil when `--copydb` is used for a local copy.
@@ -342,6 +349,12 @@ func (d *Downloader) synchronise(id string, hash common.Hash, entropy *big.Int, 
 
 	// If the peer entropy is lower than the downloader head entropy
 	if d.headEntropy.Cmp(entropy) >= 0 {
+		return nil
+	}
+
+	// Only start the downloader after we reset from a forked state
+	if d.core.BadHashExistsInChain() {
+		log.Warn("Bad Hashes still exist on chain, cannot start the downloader yet")
 		return nil
 	}
 	return d.syncWithPeer(p, hash, entropy)
@@ -1183,6 +1196,9 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 
 	for _, result := range results {
 		block := types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles, result.ExtTransactions, result.SubManifest)
+		if d.core.IsBlockHashABadHash(block.Hash()) {
+			return errBadBlockFound
+		}
 		d.core.WriteBlock(block)
 	}
 	return nil

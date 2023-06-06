@@ -156,3 +156,30 @@ func (ec *Client) SendPendingEtxsRollupToDom(ctx context.Context, pEtxsRollup ty
 	var raw json.RawMessage
 	return ec.c.CallContext(ctx, &raw, "quai_sendPendingEtxsRollupToDom", fields)
 }
+
+func (ec *Client) GenerateRecoveryPendingHeader(ctx context.Context, pendingHeader *types.Header, checkpointHashes []common.Hash) error {
+	fields := make(map[string]interface{})
+	fields["pendingHeader"] = pendingHeader.RPCMarshalHeader()
+	fields["checkpointHashes"] = checkpointHashes
+	return ec.c.CallContext(ctx, nil, "quai_generateRecoveryPendingHeader", fields)
+}
+
+func (ec *Client) HeaderByHash(ctx context.Context, hash common.Hash) *types.Header {
+	var raw json.RawMessage
+	ec.c.CallContext(ctx, &raw, "quai_getHeaderByHash", hash)
+	var header *types.Header
+	if err := json.Unmarshal(raw, &header); err != nil {
+		return nil
+	}
+	return header
+}
+
+func (ec *Client) HeaderByNumber(ctx context.Context, number string) *types.Header {
+	var raw json.RawMessage
+	ec.c.CallContext(ctx, &raw, "quai_getHeaderByNumber", number)
+	var header *types.Header
+	if err := json.Unmarshal(raw, &header); err != nil {
+		return nil
+	}
+	return header
+}

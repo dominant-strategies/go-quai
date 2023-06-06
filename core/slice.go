@@ -12,6 +12,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
+	"github.com/dominant-strategies/go-quai/core/state/snapshot"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/ethdb"
@@ -69,16 +70,19 @@ type Slice struct {
 
 	validator Validator // Block and state validator interface
 	phCacheMu sync.RWMutex
+
+	badHashesCache map[common.Hash]bool
 }
 
 func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLookupLimit *uint64, isLocalBlock func(block *types.Header) bool, chainConfig *params.ChainConfig, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis) (*Slice, error) {
 	nodeCtx := common.NodeLocation.Context()
 	sl := &Slice{
-		config:  chainConfig,
-		engine:  engine,
-		sliceDb: db,
-		domUrl:  domClientUrl,
-		quit:    make(chan struct{}),
+		config:         chainConfig,
+		engine:         engine,
+		sliceDb:        db,
+		domUrl:         domClientUrl,
+		quit:           make(chan struct{}),
+		badHashesCache: make(map[common.Hash]bool),
 	}
 
 	var err error
@@ -86,6 +90,7 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLooku
 	if err != nil {
 		return nil, err
 	}
+
 	sl.validator = NewBlockValidator(chainConfig, sl.hc, engine)
 
 	// tx pool is only used in zone
@@ -113,6 +118,8 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLooku
 		return nil, err
 	}
 
+	sl.CheckForBadHashAndRecover()
+
 	if nodeCtx == common.ZONE_CTX {
 		go sl.asyncPendingHeaderLoop()
 	}
@@ -131,6 +138,13 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	} else {
 		log.Debug("Starting slice append", "hash", header.Hash(), "number", header.NumberArray(), "location", header.Location(), "parent hash", header.ParentHash())
 	}
+
+	time0_1 := common.PrettyDuration(time.Since(start))
+	// Check if the header hash exists in the BadHashes list
+	if sl.IsBlockHashABadHash(header.Hash()) {
+		return nil, false, ErrBadBlockHash
+	}
+	time0_2 := common.PrettyDuration(time.Since(start))
 
 	nodeCtx := common.NodeLocation.Context()
 	location := header.Location()
@@ -253,7 +267,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	// Relay the new pendingHeader
 	sl.relayPh(block, &appendFinished, subReorg, pendingHeaderWithTermini, domOrigin, block.Location())
 	time12 := common.PrettyDuration(time.Since(start))
-	log.Info("times during append:", "t1:", time1, "t2:", time2, "t3:", time3, "t4:", time4, "t5:", time5, "t6:", time6, "t7:", time7, "t8:", time8, "t9:", time9, "t10:", time10, "t11:", time11, "t12:", time12)
+	log.Info("times during append:", "t0_1", time0_1, "t0_2", time0_2, "t1:", time1, "t2:", time2, "t3:", time3, "t4:", time4, "t5:", time5, "t6:", time6, "t7:", time7, "t8:", time8, "t9:", time9, "t10:", time10, "t11:", time11, "t12:", time12)
 	log.Info("times during sub append:", "t9_1:", time8_1, "t9_2:", time8_2, "t9_3:", time8_3)
 	log.Info("Appended new block", "number", block.Header().Number(), "hash", block.Hash(),
 		"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "etxs", len(block.ExtTransactions()), "gas", block.GasUsed(),
@@ -640,6 +654,11 @@ func (sl *Slice) init(genesis *Genesis) error {
 	if genesisHeader == nil {
 		return errors.New("failed to get genesis header")
 	}
+
+	// Loading the badHashes from the data base and storing it in the cache
+	badHashes := rawdb.ReadBadHashesList(sl.sliceDb)
+	sl.AddToBadHashesList(badHashes)
+
 	// If the headerchain is empty start from genesis
 	if sl.hc.Empty() {
 		// Initialize slice state for genesis knot
@@ -889,6 +908,11 @@ func (sl *Slice) Stop() {
 	// Write the ph cache to the dd.
 	rawdb.WritePhCache(sl.sliceDb, phCache)
 
+	var badHashes []common.Hash
+	for hash := range sl.badHashesCache {
+		badHashes = append(badHashes, hash)
+	}
+	rawdb.WriteBadHashesList(sl.sliceDb, badHashes)
 	sl.miner.worker.StorePendingBlockBody()
 
 	sl.scope.Close()
@@ -976,4 +1000,188 @@ func (sl *Slice) AddPendingEtxsRollup(pEtxsRollup types.PendingEtxsRollup) error
 		}
 	}
 	return nil
+}
+
+func (sl *Slice) CheckForBadHashAndRecover() {
+	nodeCtx := common.NodeLocation.Context()
+	// Lookup the bad hashes list to see if we have it in the database
+	for _, fork := range BadHashes {
+		var badBlock *types.Block
+		var badHash common.Hash
+		switch nodeCtx {
+		case common.PRIME_CTX:
+			badHash = fork.PrimeContext
+		case common.REGION_CTX:
+			badHash = fork.RegionContext[common.NodeLocation.Region()]
+		case common.ZONE_CTX:
+			badHash = fork.ZoneContext[common.NodeLocation.Region()][common.NodeLocation.Zone()]
+		}
+		badBlock = sl.hc.GetBlockByHash(badHash)
+		// Node has a bad block in the database
+		if badBlock != nil {
+			// Start from the current tip and delete every block from the database until this bad hash block
+			sl.cleanCacheAndDatabaseTillBlock(badBlock.ParentHash())
+			if nodeCtx == common.PRIME_CTX {
+				sl.SetHeadBackToRecoveryState(nil, badBlock.ParentHash())
+			}
+		}
+	}
+}
+
+// SetHeadBackToRecoveryState sets the heads of the whole hierarchy to the recovery state
+func (sl *Slice) SetHeadBackToRecoveryState(pendingHeader *types.Header, hash common.Hash) types.PendingHeader {
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx == common.PRIME_CTX {
+		localPendingHeaderWithTermini := sl.ComputeRecoveryPendingHeader(hash)
+		sl.phCache.Add(hash, localPendingHeaderWithTermini)
+		sl.GenerateRecoveryPendingHeader(localPendingHeaderWithTermini.Header, localPendingHeaderWithTermini.Termini)
+	} else {
+		localPendingHeaderWithTermini := sl.ComputeRecoveryPendingHeader(hash)
+		localPendingHeaderWithTermini.Header = sl.combinePendingHeader(localPendingHeaderWithTermini.Header, pendingHeader, nodeCtx, true)
+		localPendingHeaderWithTermini.Header.SetLocation(common.NodeLocation)
+		sl.phCache.Add(hash, localPendingHeaderWithTermini)
+		return localPendingHeaderWithTermini
+	}
+	return types.PendingHeader{}
+}
+
+// cleanCacheAndDatabaseTillBlock till delete all entries of header and other
+// data structures around slice until the given block hash
+func (sl *Slice) cleanCacheAndDatabaseTillBlock(hash common.Hash) {
+	currentHeader := sl.hc.CurrentHeader()
+	// If the hash is the current header hash, there is nothing to clean from the database
+	if hash == currentHeader.Hash() {
+		return
+	}
+	nodeCtx := common.NodeLocation.Context()
+	// slice caches
+	sl.phCache.Purge()
+	sl.miner.worker.pendingBlockBody.Purge()
+	rawdb.DeletePhCache(sl.sliceDb)
+	rawdb.DeleteBestPhKey(sl.sliceDb)
+	// headerchain caches
+	sl.hc.headerCache.Purge()
+	sl.hc.numberCache.Purge()
+	sl.hc.pendingEtxsRollup.Purge()
+	sl.hc.pendingEtxs.Purge()
+	rawdb.DeleteAllHeadsHashes(sl.sliceDb)
+	// bodydb caches
+	sl.hc.bc.blockCache.Purge()
+	sl.hc.bc.bodyCache.Purge()
+	sl.hc.bc.bodyRLPCache.Purge()
+
+	var badHashes []common.Hash
+	header := currentHeader
+	for {
+		rawdb.DeleteBlock(sl.sliceDb, header.Hash(), header.NumberU64())
+		rawdb.DeleteCanonicalHash(sl.sliceDb, header.NumberU64())
+		rawdb.DeleteHeaderNumber(sl.sliceDb, header.Hash())
+		rawdb.DeleteTermini(sl.sliceDb, header.Hash())
+		rawdb.DeleteEtxSet(sl.sliceDb, header.Hash(), header.NumberU64())
+		if nodeCtx != common.ZONE_CTX {
+			pendingEtxsRollup := rawdb.ReadPendingEtxsRollup(sl.sliceDb, header.Hash())
+			// First hash in the manifest is always a dom block and it needs to be
+			// deleted separately because last hash in the final iteration will be
+			// referenced in the next dom block after the restart
+			for _, manifestHash := range pendingEtxsRollup.Manifest[1:] {
+				rawdb.DeletePendingEtxs(sl.sliceDb, manifestHash)
+			}
+			rawdb.DeletePendingEtxs(sl.sliceDb, header.Hash())
+			rawdb.DeletePendingEtxsRollup(sl.sliceDb, header.Hash())
+		}
+		// delete the trie node for a given root of the header
+		rawdb.DeleteTrieNode(sl.sliceDb, header.Root())
+		badHashes = append(badHashes, header.Hash())
+		parent := sl.hc.GetHeader(header.ParentHash(), header.NumberU64()-1)
+		header = parent
+		if header.Hash() == hash || header.Hash() == sl.config.GenesisHash {
+			break
+		}
+	}
+
+	sl.AddToBadHashesList(badHashes)
+	// Set the current header
+	currentHeader = sl.hc.GetHeaderByHash(hash)
+	sl.hc.currentHeader.Store(currentHeader)
+
+	// Recover the snaps
+	if nodeCtx == common.ZONE_CTX {
+		sl.hc.bc.processor.snaps, _ = snapshot.New(sl.sliceDb, sl.hc.bc.processor.stateCache.TrieDB(), sl.hc.bc.processor.cacheConfig.SnapshotLimit, currentHeader.Root(), true, true)
+	}
+}
+
+func (sl *Slice) GenerateRecoveryPendingHeader(pendingHeader *types.Header, checkPointHashes []common.Hash) error {
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx == common.PRIME_CTX {
+		for i := 0; i < common.NumRegionsInPrime; i++ {
+			if sl.subClients[i] != nil {
+				sl.subClients[i].GenerateRecoveryPendingHeader(context.Background(), pendingHeader, checkPointHashes)
+			}
+		}
+	} else if nodeCtx == common.REGION_CTX {
+		newPendingHeader := sl.SetHeadBackToRecoveryState(pendingHeader, checkPointHashes[common.NodeLocation.Region()])
+		for i := 0; i < common.NumZonesInRegion; i++ {
+			if sl.subClients[i] != nil {
+				sl.subClients[i].GenerateRecoveryPendingHeader(context.Background(), newPendingHeader.Header, newPendingHeader.Termini)
+			}
+		}
+	} else {
+		sl.SetHeadBackToRecoveryState(pendingHeader, checkPointHashes[common.NodeLocation.Zone()])
+	}
+	return nil
+}
+
+// ComputeRecoveryPendingHeader generates the pending header at a given hash
+// and gets the termini from the database and returns the pending header with
+// termini
+func (sl *Slice) ComputeRecoveryPendingHeader(hash common.Hash) types.PendingHeader {
+	block := sl.hc.GetBlockByHash(hash)
+	pendingHeader, err := sl.miner.worker.GeneratePendingHeader(block, false)
+	if err != nil {
+		log.Error("Error generating pending header during the checkpoint recovery process")
+		return types.PendingHeader{}
+	}
+	termini := sl.hc.GetTerminiByHash(hash)
+	sl.bestPhKey = hash
+	return types.PendingHeader{Header: pendingHeader, Termini: termini}
+}
+
+// AddToBadHashesList adds a given set of badHashes to the BadHashesList
+func (sl *Slice) AddToBadHashesList(badHashes []common.Hash) {
+	for _, hash := range badHashes {
+		sl.badHashesCache[hash] = true
+	}
+}
+
+// HashExistsInBadHashesList checks if the given hash exists in the badHashesCache
+func (sl *Slice) HashExistsInBadHashesList(hash common.Hash) bool {
+	// Look for pending ETXs first in pending ETX map, then in database
+	_, ok := sl.badHashesCache[hash]
+	return ok
+}
+
+// IsBlockHashABadHash checks if the given hash exists in BadHashes List
+func (sl *Slice) IsBlockHashABadHash(hash common.Hash) bool {
+	nodeCtx := common.NodeLocation.Context()
+	switch nodeCtx {
+	case common.PRIME_CTX:
+		for _, fork := range BadHashes {
+			if fork.PrimeContext == hash {
+				return true
+			}
+		}
+	case common.REGION_CTX:
+		for _, fork := range BadHashes {
+			if fork.RegionContext[common.NodeLocation.Region()] == hash {
+				return true
+			}
+		}
+	case common.ZONE_CTX:
+		for _, fork := range BadHashes {
+			if fork.ZoneContext[common.NodeLocation.Region()][common.NodeLocation.Zone()] == hash {
+				return true
+			}
+		}
+	}
+	return sl.HashExistsInBadHashesList(hash)
 }
