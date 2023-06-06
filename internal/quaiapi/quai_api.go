@@ -702,3 +702,16 @@ func (s *PublicBlockChainQuaiAPI) SendPendingEtxsRollupToDom(ctx context.Context
 	}
 	return s.b.AddPendingEtxsRollup(types.PendingEtxsRollup{Header: pEtxsRollup.Header, Manifest: pEtxsRollup.Manifest})
 }
+
+type GenerateRecoveryPendingHeaderArgs struct {
+	PendingHeader    *types.Header `json:"pendingHeader"`
+	CheckpointHashes []common.Hash `json:"checkpointHashes"`
+}
+
+func (s *PublicBlockChainQuaiAPI) GenerateRecoveryPendingHeader(ctx context.Context, raw json.RawMessage) error {
+	var pHandcheckPointHashes GenerateRecoveryPendingHeaderArgs
+	if err := json.Unmarshal(raw, &pHandcheckPointHashes); err != nil {
+		return err
+	}
+	return s.b.GenerateRecoveryPendingHeader(pHandcheckPointHashes.PendingHeader, pHandcheckPointHashes.CheckpointHashes)
+}

@@ -94,6 +94,7 @@ var (
 	phTerminiPrefix     = []byte("pht")   // phTerminiPrefix + hash -> []common.Hash
 	phBodyPrefix        = []byte("pc")    // phBodyPrefix + hash -> []common.Hash + Td
 	terminiPrefix       = []byte("tk")    //terminiPrefix + hash -> []common.Hash
+	badHashesListPrefix = []byte("badhashes")
 
 	blockBodyPrefix         = []byte("b")  // blockBodyPrefix + num (uint64 big endian) + hash -> block body
 	blockReceiptsPrefix     = []byte("r")  // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts

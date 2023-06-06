@@ -185,6 +185,28 @@ func (c *Core) updateAppendQueue() {
 	}
 }
 
+func (c *Core) BadHashExistsInChain() bool {
+	nodeCtx := common.NodeLocation.Context()
+	// Lookup the bad hashes list to see if we have it in the database
+	for _, fork := range BadHashes {
+		switch nodeCtx {
+		case common.PRIME_CTX:
+			if c.GetBlockByHash(fork.PrimeContext) != nil {
+				return true
+			}
+		case common.REGION_CTX:
+			if c.GetBlockByHash(fork.RegionContext[common.NodeLocation.Region()]) != nil {
+				return true
+			}
+		case common.ZONE_CTX:
+			if c.GetBlockByHash(fork.ZoneContext[common.NodeLocation.Region()][common.NodeLocation.Zone()]) != nil {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (c *Core) SubscribeMissingParentEvent(ch chan<- common.Hash) event.Subscription {
 	return c.sl.SubscribeMissingParentEvent(ch)
 }
@@ -230,6 +252,9 @@ func (c *Core) Stop() {
 
 // WriteBlock write the block to the bodydb database
 func (c *Core) WriteBlock(block *types.Block) {
+	if c.sl.IsBlockHashABadHash(block.Hash()) {
+		return
+	}
 	if c.GetBlockByHash(block.Hash()) == nil {
 		// Only add non dom blocks to the append queue
 		order, err := block.Header().CalcOrder()
@@ -315,6 +340,14 @@ func (c *Core) AddPendingEtxsRollup(pEtxsRollup types.PendingEtxsRollup) error {
 
 func (c *Core) SubscribePendingEtxsRollup(ch chan<- types.PendingEtxsRollup) event.Subscription {
 	return c.sl.SubscribePendingEtxsRollup(ch)
+}
+
+func (c *Core) GenerateRecoveryPendingHeader(pendingHeader *types.Header, checkpointHashes []common.Hash) error {
+	return c.sl.GenerateRecoveryPendingHeader(pendingHeader, checkpointHashes)
+}
+
+func (c *Core) IsBlockHashABadHash(hash common.Hash) bool {
+	return c.sl.IsBlockHashABadHash(hash)
 }
 
 //---------------------//

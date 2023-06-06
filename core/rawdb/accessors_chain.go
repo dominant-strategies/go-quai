@@ -497,7 +497,7 @@ func WritePbBodyKeys(db ethdb.KeyValueWriter, hashes []common.Hash) {
 }
 
 // DeletePbBodyKeys delete the pendingHeaderBody keys to the db
-func DeletePbBodyKeys(db ethdb.KeyValueWriter, hash common.Hash) {
+func DeletePbBodyKeys(db ethdb.KeyValueWriter) {
 	key := pbBodyHashKey()
 
 	if err := db.Delete(key); err != nil {
@@ -721,7 +721,7 @@ func WriteHeadsHashes(db ethdb.KeyValueWriter, hashes []common.Hash) {
 }
 
 // DeleteHeadsHashes writes the heads hashes of the blockchain.
-func DeleteHeadsHashes(db ethdb.KeyValueWriter, hashes []common.Hash) {
+func DeleteHeadsHashes(db ethdb.KeyValueWriter) {
 	if err := db.Delete(headsHashesKey); err != nil {
 		log.Fatal("Failed to delete block total difficulty", "err", err)
 	}
@@ -1233,7 +1233,7 @@ func WritePendingEtxs(db ethdb.KeyValueWriter, pendingEtxs types.PendingEtxs) {
 }
 
 // DeletePendingEtxs removes all pending ETX data associated with a block.
-func DeletePendingEtxs(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
+func DeletePendingEtxs(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Delete(pendingEtxsKey(hash)); err != nil {
 		log.Fatal("Failed to delete pending etxs", "err", err)
 	}
@@ -1302,5 +1302,38 @@ func WriteManifest(db ethdb.KeyValueWriter, hash common.Hash, manifest types.Blo
 func DeleteManifest(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Delete(manifestKey(hash)); err != nil {
 		log.Fatal("Failed to delete manifest", "err", err)
+	}
+}
+
+// ReadBadHashesList retreives the bad hashes corresponding to the recent fork
+func ReadBadHashesList(db ethdb.Reader) types.BlockManifest {
+	// Try to look up the data in leveldb.
+	data, _ := db.Get(badHashesListPrefix)
+	if len(data) == 0 {
+		return nil
+	}
+	badHashes := []common.Hash{}
+	if err := rlp.Decode(bytes.NewReader(data), &badHashes); err != nil {
+		log.Error("Invalid badHashesList rlp")
+		return nil
+	}
+	return badHashes
+}
+
+// WriteBadHashesList stores the bad hashes corresponding to the recent fork
+func WriteBadHashesList(db ethdb.KeyValueWriter, badHashes []common.Hash) {
+	data, err := rlp.EncodeToBytes(badHashes)
+	if err != nil {
+		log.Fatal("Failed to RLP encode badHashesList", "err", err)
+	}
+	if err := db.Put(badHashesListPrefix, data); err != nil {
+		log.Fatal("Failed to store badHashesList", "err", err)
+	}
+}
+
+// DeleteBadHashesList removes badHashesList from the database
+func DeleteBadHashesList(db ethdb.KeyValueWriter) {
+	if err := db.Delete(badHashesListPrefix); err != nil {
+		log.Fatal("Failed to delete badHashesList", "err", err)
 	}
 }

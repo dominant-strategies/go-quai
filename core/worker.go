@@ -362,6 +362,7 @@ func (w *worker) LoadPendingBlockBody() {
 		// Remove the entry from the database so that body is not accumulated over multiple stops
 		rawdb.DeletePbCacheBody(w.workerDb, key)
 	}
+	rawdb.DeletePbBodyKeys(w.workerDb)
 }
 
 // StorePendingBlockBody stores the pending block body cache into the db
