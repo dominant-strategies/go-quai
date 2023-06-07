@@ -479,7 +479,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 
 	coinbase, err := header.Coinbase().InternalAddress()
 	if err != nil {
-		fmt.Println("Block has out-of-scope coinbase, skipping block reward: " + header.Hash().String())
+		log.Error("Block has out of scope coinbase, skipping block reward", "Address", header.Coinbase().String(), "Hash", header.Hash().String())
 		return
 	}
 
@@ -489,7 +489,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	for _, uncle := range uncles {
 		coinbase, err := uncle.Coinbase().InternalAddress()
 		if err != nil {
-			fmt.Println("Found uncle with out-of-scope coinbase, skipping reward: " + uncle.Hash().String())
+			log.Error("Found uncle with out of scope coinbase, skipping reward", "Address", uncle.Coinbase().String(), "Hash", uncle.Hash().String())
 			continue
 		}
 		r.Add(uncle.Number(), big8)
