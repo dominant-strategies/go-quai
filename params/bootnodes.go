@@ -46,9 +46,10 @@ var OrchardBootnodes = []string{
 // GalenaBootnodes are the enode URLs of the P2P bootstrap nodes running on the
 // Galena test network
 var GalenaBootnodes = []string{
-	"enode://12fa0822887c7c8829c1d30e7aaf430587cc71827f5ab2028ee39acf02c113eb01a4c130258074d3c7868f68280f854036a8a51beb4df96af314f94c7f45966e@34.175.138.4", // europe-southwest1-a
-	"enode://1dab5f7739dfd6fb037a676607fc86ecc76eff3906abaa8f8662e236eb01937b27db1309c89e0c3af807a64b491f401f52ff75daca49689c99cfe949c359623c@35.199.83.89", // southamerica-east1-b
-	"enode://402a7cc416700f8717ff35416dfcb3c286921bc4261a9e8cc9948cfac9e3589c8db25fffcf7d6877ec0e7ad93c83e6bde93d4918923dfb9c24c1635a57c5aba2@34.64.122.86", // asia-northeast3-a
+	"enode://f353567741755a4b35afb4641618b34c7e3c1666b49c9e519e8336c124ba8c2c556f00e9edcd87599994e9674ebdea3503a5ff1948a257c1540fe9f8c0fedf62@34.22.72.242", // asia-northeast3-a
+	"enode://aa3d4daa8ea958c8a4fe3c56a7c5c0509754eec9b2e4eb45ac5fe9eb16bea442da0b50a0ac09e5fdf7711eb6b64df76dcd22e48d69f2f938d19fc60b9a8fd579@34.175.158.49", // asia-northeast3-a
+	"enode://3ecc23f02242be9249ac8b3aa2217514151106c152aa34b92f4287551d85300f9708740cb28d5ee39df3aec08315d624d8311fffc4c5e7ea24bc7422fc801972@35.198.7.119", // asia-northeast3-a
+	"enode://13ed279b8013b61ef41466d4f07679fe17c407af4f6ae09b34042c72635eef314e9020f732a96a739abaa88f51108b76698f6b7335397be99418c371e5c3bcce@34.29.49.205", // asia-northeast3-a
 }
 
 var V5Bootnodes = []string{}
