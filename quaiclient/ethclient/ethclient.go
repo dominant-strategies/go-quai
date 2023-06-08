@@ -602,3 +602,14 @@ func toCallArg(msg quai.CallMsg) interface{} {
 	}
 	return arg
 }
+
+func (ec *Client) PoolStatus(ctx context.Context) (hexutil.Uint64, hexutil.Uint64) {
+	var status map[string]hexutil.Uint
+	err := ec.c.CallContext(ctx, &status, "txpool_status")
+	if err != nil {
+		return 0, 0
+	}
+
+	fmt.Println("poolStatus", status)
+	return hexutil.Uint64(status["pending"]), hexutil.Uint64(status["queued"])
+}
