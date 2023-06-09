@@ -597,7 +597,7 @@ func (sl *Slice) updatePhCache(pendingHeaderWithTermini types.PendingHeader, inS
 	if exist {
 		// If we are inslice we will only update the cache if the entropy is better
 		if (!inSlice && newPhEntropy.Cmp(oldPh.Header.CalcPhS()) >= 0) ||
-			(inSlice && pendingHeaderWithTermini.Header.ParentEntropy().Cmp(oldPh.Header.ParentEntropy()) > 0) {
+			(inSlice && pendingHeaderWithTermini.Header.ParentEntropy().Cmp(oldPh.Header.ParentEntropy()) >= 0) {
 			sl.writePhCache(pendingHeaderWithTermini.Termini[c_terminusIndex], deepCopyPendingHeaderWithTermini)
 			log.Info("PhCache update:", "inSlice:", inSlice, "Ph Number:", deepCopyPendingHeaderWithTermini.Header.NumberArray(), "Termini:", deepCopyPendingHeaderWithTermini.Termini[c_terminusIndex])
 		}
