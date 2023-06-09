@@ -1271,3 +1271,36 @@ func DeletePendingEtxsRollup(db ethdb.KeyValueWriter, hash common.Hash) {
 		log.Fatal("Failed to delete pending etxs rollup", "err", err)
 	}
 }
+
+// ReadManifest retreives the manifest corresponding to a given block
+func ReadManifest(db ethdb.Reader, hash common.Hash) types.BlockManifest {
+	// Try to look up the data in leveldb.
+	data, _ := db.Get(manifestKey(hash))
+	if len(data) == 0 {
+		return nil
+	}
+	manifest := types.BlockManifest{}
+	if err := rlp.Decode(bytes.NewReader(data), &manifest); err != nil {
+		log.Error("Invalid manifest rlp", "hash", hash, "err", err)
+		return nil
+	}
+	return manifest
+}
+
+// WriteManifest stores the manifest corresponding to a given block
+func WriteManifest(db ethdb.KeyValueWriter, hash common.Hash, manifest types.BlockManifest) {
+	data, err := rlp.EncodeToBytes(manifest)
+	if err != nil {
+		log.Fatal("Failed to RLP encode manifest", "err", err)
+	}
+	if err := db.Put(manifestKey(hash), data); err != nil {
+		log.Fatal("Failed to store manifest", "err", err)
+	}
+}
+
+// DeleteManifest removes manifest data associated with a block.
+func DeleteManifest(db ethdb.KeyValueWriter, hash common.Hash) {
+	if err := db.Delete(manifestKey(hash)); err != nil {
+		log.Fatal("Failed to delete manifest", "err", err)
+	}
+}

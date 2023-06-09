@@ -108,48 +108,6 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *par
 	return hc, nil
 }
 
-// CollectBlockManifest gathers the manifest of ancestor block hashes since the
-// last coincident block.
-func (hc *HeaderChain) CollectBlockManifest(h *types.Header) (types.BlockManifest, error) {
-	if h.NumberU64() == 0 && h.Hash() == hc.config.GenesisHash {
-		return types.BlockManifest{}, nil
-	}
-	parent := hc.GetHeader(h.ParentHash(), h.NumberU64()-1)
-	if parent == nil {
-		return types.BlockManifest{}, errors.New("ancestor not found")
-	} else {
-		return hc.collectBlockManifest(parent)
-	}
-}
-
-func (hc *HeaderChain) collectBlockManifest(h *types.Header) (types.BlockManifest, error) {
-	// Intialize manifest with this block's hash
-	manifest := types.BlockManifest{h.Hash()}
-	// Terminate the search if we reached genesis
-	if h.NumberU64() == 0 {
-		if h.Hash() != hc.config.GenesisHash {
-			return nil, fmt.Errorf("manifest builds on incorrect genesis, block0 hash: %s", h.Hash().String())
-		} else {
-			return manifest, nil
-		}
-	}
-	// Terminate the search on coincidence
-	if hc.engine.IsDomCoincident(h) {
-		return manifest, nil
-	}
-	// Recursively get the ancestor manifest, until a coincident ancestor is found
-	ancestor := hc.GetHeader(h.ParentHash(), h.NumberU64()-1)
-	if ancestor == nil {
-		return types.BlockManifest{}, errors.New("ancestor not found")
-	}
-	ancManifest, err := hc.collectBlockManifest(ancestor)
-	if err != nil {
-		return nil, errors.New("unable to get manifest for ancestor")
-	}
-	manifest = append(ancManifest, manifest...)
-	return manifest, nil
-}
-
 // CollectSubRollup collects the rollup of ETXs emitted from the subordinate
 // chain in the slice which emitted the given block.
 func (hc *HeaderChain) CollectSubRollup(b *types.Block) (types.Transactions, error) {
@@ -314,12 +272,14 @@ func (hc *HeaderChain) Append(batch ethdb.Batch, block *types.Block, newInboundE
 	// coincident with a higher order chain. So, this check is skipped for prime
 	// nodes.
 	if nodeCtx > common.PRIME_CTX {
-		manifest, err := hc.CollectBlockManifest(block.Header())
-		if err != nil {
-			return err
-		}
-		if block.ManifestHash(nodeCtx) != types.DeriveSha(manifest, trie.NewStackTrie(nil)) {
-			return errors.New("manifest does not match hash")
+		if block.ParentHash() != hc.config.GenesisHash {
+			manifest := rawdb.ReadManifest(hc.headerDb, block.ParentHash())
+			if manifest == nil {
+				return errors.New("manifest not found for parent")
+			}
+			if block.ManifestHash(nodeCtx) != types.DeriveSha(manifest, trie.NewStackTrie(nil)) {
+				return errors.New("manifest does not match hash")
+			}
 		}
 	}
 	elapsedCollectBlockManifest := common.PrettyDuration(time.Since(collectBlockManifest))

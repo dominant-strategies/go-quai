@@ -553,7 +553,6 @@ func (s *PublicBlockChainQuaiAPI) fillSubordinateManifest(b *types.Block) (*type
 			if err != nil {
 				return nil, err
 			}
-			subManifest = append(subManifest, subParentHash)
 		}
 		if len(subManifest) == 0 {
 			return nil, errors.New("reconstructed sub manifest is empty")

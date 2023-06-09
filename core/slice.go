@@ -477,11 +477,11 @@ func (sl *Slice) GetPendingHeader() (*types.Header, error) {
 // GetManifest gathers the manifest of ancestor block hashes since the last
 // coincident block.
 func (sl *Slice) GetManifest(blockHash common.Hash) (types.BlockManifest, error) {
-	header := sl.hc.GetHeaderByHash(blockHash)
-	if header == nil {
-		return nil, errors.New("block not found")
+	manifest := rawdb.ReadManifest(sl.sliceDb, blockHash)
+	if manifest != nil {
+		return manifest, nil
 	}
-	return sl.hc.CollectBlockManifest(header)
+	return nil, errors.New("manifest not found in the disk")
 }
 
 // GetSubManifest gets the block manifest from the subordinate node which

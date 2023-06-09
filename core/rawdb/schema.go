@@ -100,6 +100,7 @@ var (
 	etxSetPrefix            = []byte("e")  // etxSetPrefix + num (uint64 big endian) + hash -> EtxSet at block
 	pendingEtxsPrefix       = []byte("pe") // pendingEtxsPrefix + hash -> PendingEtxs at block
 	pendingEtxsRollupPrefix = []byte("pr") // pendingEtxsRollupPrefix + hash -> PendingEtxsRollup at block
+	manifestPrefix          = []byte("ma") // manifestPrefix + hash -> Manifest at block
 
 	txLookupPrefix        = []byte("l") // txLookupPrefix + hash -> transaction/receipt lookup metadata
 	bloomBitsPrefix       = []byte("B") // bloomBitsPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash -> bloom bits
@@ -290,4 +291,9 @@ func pendingEtxsKey(hash common.Hash) []byte {
 // pendingEtxsRollupKey = pendingEtxsRollupPrefix + hash
 func pendingEtxsRollupKey(hash common.Hash) []byte {
 	return append(pendingEtxsRollupPrefix, hash.Bytes()...)
+}
+
+// manifestKey = manifestPrefix + hash
+func manifestKey(hash common.Hash) []byte {
+	return append(manifestPrefix, hash.Bytes()...)
 }

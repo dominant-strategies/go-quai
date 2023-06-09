@@ -861,14 +861,14 @@ func (w *worker) FinalizeAssemble(chain consensus.ChainHeaderReader, header *typ
 	} else if w.engine.IsDomCoincident(parent.Header()) {
 		manifest = types.BlockManifest{parent.Hash()}
 	} else {
-		manifest, err = w.hc.CollectBlockManifest(parent.Header())
-		if err != nil {
-			return nil, err
-		}
-		manifest = append(manifest, header.ParentHash())
+		parentManifest := rawdb.ReadManifest(w.workerDb, parent.ParentHash())
+		manifest = append(parentManifest, parent.Hash())
 	}
 	manifestHash := types.DeriveSha(manifest, trie.NewStackTrie(nil))
 	block.Header().SetManifestHash(manifestHash)
+
+	// write the manifest into the disk
+	rawdb.WriteManifest(w.workerDb, parent.Hash(), manifest)
 
 	if nodeCtx == common.ZONE_CTX {
 		// Compute and set etx rollup hash
