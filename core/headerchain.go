@@ -137,7 +137,8 @@ func (hc *HeaderChain) CollectBlockManifest(h *types.Header) (types.BlockManifes
 
 // buildManifestFromParent collects the manifest of block hashes since prior
 // coincidence, up to AND INCLUDING the given block
-func (hc *HeaderChain) BuildManifestFromParent(h *types.Header) (types.BlockManifest, error) {
+func (hc *HeaderChain) BuildManifestFromParent(parent *types.Header) (types.BlockManifest, error) {
+	h := parent
 	// Terminate the search if we reached genesis
 	if h.NumberU64() == 0 {
 		if h.Hash() != hc.config.GenesisHash {
@@ -150,7 +151,8 @@ func (hc *HeaderChain) BuildManifestFromParent(h *types.Header) (types.BlockMani
 		return types.BlockManifest{h.Hash()}, nil
 	} else if m, ok := hc.manifestCache.Get(h.Hash()); ok {
 		// Terminate the search if found in cache
-		return append(m.(types.BlockManifest), h.Hash()), nil
+		cachedManifest := m.(types.BlockManifest)
+		return append(cachedManifest, h.Hash()), nil
 	} else {
 		// Recursive the search into the ancestor
 		ancestor := hc.GetHeader(h.ParentHash(), h.NumberU64()-1)
