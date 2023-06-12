@@ -115,56 +115,50 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *par
 // CollectBlockManifest gathers the manifest of ancestor block hashes since the
 // last coincident block.
 func (hc *HeaderChain) CollectBlockManifest(h *types.Header) (types.BlockManifest, error) {
-	if m, ok := hc.manifestCache.Get(h.Hash()); ok {
+	if m, ok := hc.manifestCache.Get(h.ParentHash()); ok {
 		if m, ok := m.(types.BlockManifest); ok {
 			return m, nil
 		}
 	}
-	if h.NumberU64() == 0 && h.Hash() == hc.config.GenesisHash {
-		return types.BlockManifest{}, nil
-	}
+	// If the manifest does not exist in the cache, look up the parent, and build
+	// the manifest form the parent
 	parent := hc.GetHeader(h.ParentHash(), h.NumberU64()-1)
 	if parent == nil {
 		return types.BlockManifest{}, errors.New("parent not found")
 	} else {
-		m, err := hc.BuildManifestFromParent(parent)
-		if err == nil {
-			hc.manifestCache.ContainsOrAdd(h.Hash(), m)
-		}
-		return m, err
+		return hc.BuildManifestFromParent(parent)
 	}
 }
 
 // buildManifestFromParent collects the manifest of block hashes since prior
 // coincidence, up to AND INCLUDING the given block
 func (hc *HeaderChain) BuildManifestFromParent(parent *types.Header) (types.BlockManifest, error) {
-	h := parent
-	// Terminate the search if we reached genesis
-	if h.NumberU64() == 0 {
-		if h.Hash() != hc.config.GenesisHash {
-			return nil, fmt.Errorf("manifest builds on incorrect genesis, block0 hash: %s", h.Hash().String())
-		} else {
-			return types.BlockManifest{h.Hash()}, nil
-		}
-	} else if hc.engine.IsDomCoincident(h) {
+	if hc.engine.IsDomCoincident(parent) {
 		// Terminate the search on coincidence
-		return types.BlockManifest{h.Hash()}, nil
-	} else if m, ok := hc.manifestCache.Get(h.Hash()); ok {
+		return types.BlockManifest{parent.Hash()}, nil
+	} else if parent.NumberU64() == 0 {
+		// Terminate the search if we reached genesis
+		if parent.Hash() != hc.config.GenesisHash {
+			return nil, fmt.Errorf("manifest builds on incorrect genesis, block0 hash: %s", parent.Hash().String())
+		} else {
+			return types.BlockManifest{parent.Hash()}, nil
+		}
+	} else if m, ok := hc.manifestCache.Get(parent.Hash()); ok {
 		// Terminate the search if found in cache
-		cachedManifest := m.(types.BlockManifest)
-		return append(cachedManifest, h.Hash()), nil
+		return m.(types.BlockManifest), nil
 	} else {
-		// Recursive the search into the ancestor
-		ancestor := hc.GetHeader(h.ParentHash(), h.NumberU64()-1)
+		// Recursively search into the ancestor
+		ancestor := hc.GetHeader(parent.ParentHash(), parent.NumberU64()-1)
 		if ancestor == nil {
 			return nil, errors.New("ancestor not found")
 		}
 		ancManifest, err := hc.BuildManifestFromParent(ancestor)
 		if err != nil {
 			return nil, err
-		} else {
-			return append(ancManifest, h.Hash()), nil
 		}
+		manifest := append(ancManifest, parent.Hash())
+		hc.manifestCache.ContainsOrAdd(parent.Hash(), manifest)
+		return manifest, nil
 	}
 }
 
