@@ -341,7 +341,7 @@ func (sl *Slice) writePhCache(hash common.Hash, pendingHeader types.PendingHeade
 // Generate a slice pending header
 func (sl *Slice) generateSlicePendingHeader(block *types.Block, newTermini []common.Hash, domPendingHeader *types.Header, domOrigin bool, fill bool) (types.PendingHeader, error) {
 	// Upate the local pending header
-	localPendingHeader, err := sl.miner.worker.GeneratePendingHeader(block, true)
+	localPendingHeader, err := sl.miner.worker.GeneratePendingHeader(block, fill)
 	if err != nil {
 		return types.PendingHeader{}, err
 	}
