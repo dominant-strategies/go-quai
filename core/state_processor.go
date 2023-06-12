@@ -208,21 +208,22 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 		allLogs     []*types.Log
 		gp          = new(GasPool).AddGas(block.GasLimit())
 	)
+	start := time.Now()
 
 	parent := p.hc.GetBlock(block.Header().ParentHash(), block.NumberU64()-1)
 	if parent == nil {
 		return types.Receipts{}, []*types.Log{}, nil, 0, errors.New("parent block is nil for the block given to process")
 	}
-
+	time1 := common.PrettyDuration(time.Since(start))
 	// Initialize a statedb
 	statedb, err := state.New(parent.Header().Root(), p.stateCache, p.snaps)
 	if err != nil {
 		return types.Receipts{}, []*types.Log{}, nil, 0, err
 	}
-
+	time2 := common.PrettyDuration(time.Since(start))
 	blockContext := NewEVMBlockContext(header, p.hc, nil)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, p.vmConfig)
-
+	time3 := common.PrettyDuration(time.Since(start))
 	// Iterate over and process the individual transactions.
 	for i, tx := range block.Transactions() {
 		msg, err := tx.AsMessage(types.MakeSigner(p.config, header.Number()), header.BaseFee())
@@ -257,9 +258,12 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 		allLogs = append(allLogs, receipt.Logs...)
 		i++
 	}
-
+	time4 := common.PrettyDuration(time.Since(start))
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.engine.Finalize(p.hc, header, statedb, block.Transactions(), block.Uncles())
+	time5 := common.PrettyDuration(time.Since(start))
+
+	log.Info("times during process:", "t1:", time1, "t2:", time2, "t3:", time3, "t4:", time4, "t5:", time5)
 
 	return receipts, allLogs, statedb, *usedGas, nil
 }
