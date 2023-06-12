@@ -895,12 +895,14 @@ func (s *StateDB) clearJournalAndRefund() {
 
 // Commit writes the state to the underlying in-memory trie database.
 func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
+	start1 := time.Now()
 	if s.dbErr != nil {
 		return common.Hash{}, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
 	}
+	time1 := common.PrettyDuration(time.Since(start1))
 	// Finalize any pending changes and merge everything into the tries
 	s.IntermediateRoot(deleteEmptyObjects)
-
+	time2 := common.PrettyDuration(time.Since(start1))
 	// Commit objects to the trie, measuring the elapsed time
 	codeWriter := s.db.TrieDB().DiskDB().NewBatch()
 	for addr := range s.stateObjectsDirty {
@@ -916,14 +918,17 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 			}
 		}
 	}
+	time3 := common.PrettyDuration(time.Since(start1))
 	if len(s.stateObjectsDirty) > 0 {
 		s.stateObjectsDirty = make(map[common.InternalAddress]struct{})
 	}
+	time4 := common.PrettyDuration(time.Since(start1))
 	if codeWriter.ValueSize() > 0 {
 		if err := codeWriter.Write(); err != nil {
 			log.Fatal("Failed to commit dirty codes", "error", err)
 		}
 	}
+	time5 := common.PrettyDuration(time.Since(start1))
 	// Write the account trie changes, measuing the amount of wasted time
 	var start time.Time
 	if metrics.EnabledExpensive {
@@ -941,9 +946,11 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		}
 		return nil
 	})
+	time6 := common.PrettyDuration(time.Since(start1))
 	if metrics.EnabledExpensive {
 		s.AccountCommits += time.Since(start)
 	}
+	time7 := common.PrettyDuration(time.Since(start1))
 	// If snapshotting is enabled, update the snapshot tree with this new version
 	if s.snap != nil {
 		if metrics.EnabledExpensive {
@@ -964,6 +971,8 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		}
 		s.snap, s.snapDestructs, s.snapAccounts, s.snapStorage = nil, nil, nil, nil
 	}
+	time8 := common.PrettyDuration(time.Since(start1))
+	log.Info("times during Commit:", "t1:", time1, "t2:", time2, "t3:", time3, "t4:", time4, "t5:", time5, "t6:", time6, "t7:", time7, "t8:", time8)
 	return root, err
 }
 
