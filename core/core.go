@@ -27,7 +27,7 @@ const (
 	c_maxAppendQueue         = 1000000 // Maximum number of future headers we can store in cache
 	c_maxFutureTime          = 30      // Max time into the future (in seconds) we will accept a block
 	c_appendQueueRetryPeriod = 1       // Time (in seconds) before retrying to append from AppendQueue
-	c_appendQueueThreshold   = 30      // Number of blocks to load from the disk to ram on every proc of append queue
+	c_appendQueueThreshold   = 1000    // Number of blocks to load from the disk to ram on every proc of append queue
 )
 
 type Core struct {
