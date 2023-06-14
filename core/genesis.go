@@ -160,7 +160,7 @@ func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig
 
 func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis) (*params.ChainConfig, common.Hash, error) {
 	if genesis != nil && genesis.Config == nil {
-		return params.AllBlake3powProtocolChanges, common.Hash{}, errGenesisNoConfig
+		return params.AllProgpowProtocolChanges, common.Hash{}, errGenesisNoConfig
 	}
 	// Just commit the new block if there is no stored genesis block.
 	stored := rawdb.ReadCanonicalHash(db, 0)
@@ -242,7 +242,7 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 	case ghash == params.LocalGenesisHash:
 		return params.LocalChainConfig
 	default:
-		return params.AllBlake3powProtocolChanges
+		return params.AllProgpowProtocolChanges
 	}
 }
 
@@ -278,7 +278,7 @@ func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
 	}
 	config := g.Config
 	if config == nil {
-		config = params.AllBlake3powProtocolChanges
+		config = params.AllProgpowProtocolChanges
 	}
 	rawdb.WriteTermini(db, block.Hash(), nil)
 	rawdb.WriteBlock(db, block)
@@ -321,7 +321,7 @@ func DefaultColosseumGenesisBlock() *Genesis {
 		Nonce:      66,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
 		GasLimit:   50000000,
-		Difficulty: big.NewInt(2048576),
+		Difficulty: big.NewInt(1000),
 	}
 }
 
@@ -332,7 +332,7 @@ func DefaultGardenGenesisBlock() *Genesis {
 		Nonce:      0,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
 		GasLimit:   17000000,
-		Difficulty: big.NewInt(441092),
+		Difficulty: big.NewInt(1000),
 	}
 }
 
@@ -343,7 +343,7 @@ func DefaultOrchardGenesisBlock() *Genesis {
 		Nonce:      0,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
 		GasLimit:   50000000,
-		Difficulty: big.NewInt(4000000),
+		Difficulty: big.NewInt(1000),
 	}
 }
 
@@ -354,7 +354,7 @@ func DefaultGalenaGenesisBlock() *Genesis {
 		Nonce:      0,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
 		GasLimit:   160000000,
-		Difficulty: big.NewInt(88000000000),
+		Difficulty: big.NewInt(1000),
 	}
 }
 
@@ -365,14 +365,14 @@ func DefaultLocalGenesisBlock() *Genesis {
 		Nonce:      0,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
 		GasLimit:   160000000,
-		Difficulty: big.NewInt(300000),
+		Difficulty: big.NewInt(1000),
 	}
 }
 
 // DeveloperGenesisBlock returns the 'quai --dev' genesis block.
 func DeveloperGenesisBlock(period uint64, faucet common.Address) *Genesis {
 	// Override the default period to the user requested one
-	config := *params.AllBlake3powProtocolChanges
+	config := *params.AllProgpowProtocolChanges
 	// Assemble and return the genesis with the precompiles and faucet pre-funded
 	return &Genesis{
 		Config:     &config,

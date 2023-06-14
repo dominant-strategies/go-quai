@@ -736,7 +736,7 @@ func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*en
 
 	// Only calculate entropy if the parent is not the genesis block
 	if parent.Hash() != w.hc.config.GenesisHash {
-		order, err := parent.Header().CalcOrder()
+		_, order, err := w.engine.CalcOrder(parent.Header())
 		if err != nil {
 			return nil, err
 		}
@@ -745,10 +745,10 @@ func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*en
 			if order < nodeCtx {
 				header.SetParentDeltaS(big.NewInt(0), nodeCtx)
 			} else {
-				header.SetParentDeltaS(parent.Header().CalcDeltaS(), nodeCtx)
+				header.SetParentDeltaS(w.engine.DeltaLogS(parent.Header()), nodeCtx)
 			}
 		}
-		header.SetParentEntropy(parent.Header().CalcS())
+		header.SetParentEntropy(w.engine.TotalLogS(parent.Header()))
 	}
 
 	// Only zone should calculate state
@@ -858,7 +858,7 @@ func (w *worker) FinalizeAssemble(chain consensus.ChainHeaderReader, header *typ
 	if nodeCtx == common.PRIME_CTX {
 		// Nothing to do for prime chain
 		manifest = types.BlockManifest{}
-	} else if w.engine.IsDomCoincident(parent.Header()) {
+	} else if w.engine.IsDomCoincident(w.hc, parent.Header()) {
 		manifest = types.BlockManifest{parent.Hash()}
 	} else {
 		parentManifest := rawdb.ReadManifest(w.workerDb, parent.ParentHash())
@@ -873,7 +873,7 @@ func (w *worker) FinalizeAssemble(chain consensus.ChainHeaderReader, header *typ
 	if nodeCtx == common.ZONE_CTX {
 		// Compute and set etx rollup hash
 		etxRollup := types.Transactions{}
-		if w.engine.IsDomCoincident(parent.Header()) {
+		if w.engine.IsDomCoincident(w.hc, parent.Header()) {
 			etxRollup = parent.ExtTransactions()
 		} else {
 			etxRollup, err = w.hc.CollectEtxRollup(parent)

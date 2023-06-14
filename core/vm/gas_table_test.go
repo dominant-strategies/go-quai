@@ -91,7 +91,7 @@ func TestgasSStore(t *testing.T) {
 			CanTransfer: func(StateDB, common.Address, *big.Int) bool { return true },
 			Transfer:    func(StateDB, common.Address, common.Address, *big.Int) {},
 		}
-		vmenv := NewEVM(vmctx, TxContext{}, statedb, params.AllBlake3powProtocolChanges, Config{})
+		vmenv := NewEVM(vmctx, TxContext{}, statedb, params.AllProgpowProtocolChanges, Config{})
 
 		_, gas, err := vmenv.Call(AccountRef(common.Address{}), address, nil, tt.gaspool, new(big.Int))
 		if err != tt.failure {

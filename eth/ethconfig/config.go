@@ -23,7 +23,7 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
-	"github.com/dominant-strategies/go-quai/consensus/blake3pow"
+	"github.com/dominant-strategies/go-quai/consensus/progpow"
 	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/eth/downloader"
 	"github.com/dominant-strategies/go-quai/eth/gasprice"
@@ -56,7 +56,7 @@ var LightClientGPO = gasprice.Config{
 // Defaults contains default settings for use on the Quai main net.
 var Defaults = Config{
 	SyncMode:                downloader.FullSync,
-	Blake3pow:               blake3pow.Config{},
+	Progpow:                 progpow.Config{},
 	NetworkId:               1,
 	TxLookupLimit:           2350000,
 	DatabaseCache:           512,
@@ -121,8 +121,8 @@ type Config struct {
 	// Mining options
 	Miner core.Config
 
-	// Blake3pow options
-	Blake3pow blake3pow.Config
+	// Progpow options
+	Progpow progpow.Config
 
 	// Transaction pool options
 	TxPool core.TxPoolConfig
@@ -163,17 +163,17 @@ type Config struct {
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.
-func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, config *blake3pow.Config, notify []string, noverify bool, db ethdb.Database) consensus.Engine {
+func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, config *progpow.Config, notify []string, noverify bool, db ethdb.Database) consensus.Engine {
 	// Otherwise assume proof-of-work
 	switch config.PowMode {
-	case blake3pow.ModeFake:
-		log.Warn("Blake3pow used in fake mode")
-	case blake3pow.ModeTest:
-		log.Warn("Blake3pow used in test mode")
-	case blake3pow.ModeShared:
-		log.Warn("Blake3pow used in shared mode")
+	case progpow.ModeFake:
+		log.Warn("Progpow used in fake mode")
+	case progpow.ModeTest:
+		log.Warn("Progpow used in test mode")
+	case progpow.ModeShared:
+		log.Warn("Progpow used in shared mode")
 	}
-	engine := blake3pow.New(blake3pow.Config{
+	engine := progpow.New(progpow.Config{
 		PowMode:       config.PowMode,
 		NotifyFull:    config.NotifyFull,
 		DurationLimit: config.DurationLimit,

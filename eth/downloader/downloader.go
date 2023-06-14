@@ -138,6 +138,12 @@ type Core interface {
 	// CurrentBlock retrieves the head of local chain.
 	CurrentBlock() *types.Block
 
+	// CurrentLogEntropy returns the logarithm of the total entropy reduction since genesis for our current head block
+	CurrentLogEntropy() *big.Int
+
+	// TotalLogS() returns the total entropy reduction if the chain since genesis to the given header
+	TotalLogS(header *types.Header) *big.Int
+
 	// AddPendingEtxs adds the pendingEtxs to the database.
 	AddPendingEtxs(pendingEtxs types.PendingEtxs) error
 
@@ -163,7 +169,7 @@ func New(stateDb ethdb.Database, mux *event.TypeMux, core Core, dropPeer peerDro
 		peers:         newPeerSet(),
 		core:          core,
 		headNumber:    core.CurrentBlock().NumberU64(),
-		headEntropy:   core.CurrentBlock().Header().CalcS(),
+		headEntropy:   core.CurrentLogEntropy(),
 		dropPeer:      dropPeer,
 		headerCh:      make(chan dataPack, 1),
 		bodyCh:        make(chan dataPack, 1),
@@ -1147,7 +1153,7 @@ func (d *Downloader) processFullSyncContent(peerHeight uint64) error {
 				return err
 			}
 			d.headNumber = results[len(results)-1].Header.NumberU64()
-			d.headEntropy = results[len(results)-1].Header.CalcS()
+			d.headEntropy = d.core.TotalLogS(results[len(results)-1].Header)
 			// If all the blocks are fetched, we exit the sync process
 			if d.headNumber == peerHeight {
 				return errNoFetchesPending

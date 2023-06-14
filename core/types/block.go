@@ -20,7 +20,6 @@ package types
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -32,10 +31,8 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rlp"
 	"lukechampine.com/blake3"
-	mathutil "modernc.org/mathutil"
 )
 
 var (
@@ -45,10 +42,6 @@ var (
 	big2e256       = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil) // 2^256
 	hasher         = blake3.New(32, nil)
 	hasherMu       sync.RWMutex
-)
-
-const (
-	c_mantBits = 64
 )
 
 // A BlockNonce is a 64-bit hash which proves (combined with the
@@ -97,8 +90,8 @@ type Header struct {
 	manifestHash  []common.Hash   `json:"manifestHash"         gencodec:"required"`
 	receiptHash   common.Hash     `json:"receiptsRoot"         gencodec:"required"`
 	difficulty    *big.Int        `json:"difficulty"           gencodec:"required"`
-	parentEntropy []*big.Int      `json:"parentEntropy"		gencodec:"required"`
-	parentDeltaS  []*big.Int      `json:"parentDeltaS"			gencodec:"required"`
+	parentEntropy []*big.Int      `json:"parentEntropy"        gencodec:"required"`
+	parentDeltaS  []*big.Int      `json:"parentDeltaS"         gencodec:"required"`
 	number        []*big.Int      `json:"number"               gencodec:"required"`
 	gasLimit      uint64          `json:"gasLimit"             gencodec:"required"`
 	gasUsed       uint64          `json:"gasUsed"              gencodec:"required"`
@@ -106,6 +99,7 @@ type Header struct {
 	location      common.Location `json:"location"             gencodec:"required"`
 	time          uint64          `json:"timestamp"            gencodec:"required"`
 	extra         []byte          `json:"extraData"            gencodec:"required"`
+	mixHash       common.Hash     `json:"mixHash"              gencodec:"required"`
 	nonce         BlockNonce      `json:"nonce"`
 
 	// caches
@@ -148,6 +142,7 @@ type extheader struct {
 	Location      common.Location
 	Time          uint64
 	Extra         []byte
+	MixHash       common.Hash
 	Nonce         BlockNonce
 }
 
@@ -201,6 +196,7 @@ func (h *Header) DecodeRLP(s *rlp.Stream) error {
 	h.location = eh.Location
 	h.time = eh.Time
 	h.extra = eh.Extra
+	h.mixHash = eh.MixHash
 	h.nonce = eh.Nonce
 
 	return nil
@@ -228,6 +224,7 @@ func (h *Header) EncodeRLP(w io.Writer) error {
 		Location:      h.location,
 		Time:          h.time,
 		Extra:         h.extra,
+		MixHash:       h.mixHash,
 		Nonce:         h.nonce,
 	})
 }
@@ -253,6 +250,7 @@ func (h *Header) RPCMarshalHeader() map[string]interface{} {
 		"gasLimit":            hexutil.Uint(h.GasLimit()),
 		"gasUsed":             hexutil.Uint(h.GasUsed()),
 		"location":            h.Location(),
+		"mixHash":             h.MixHash(),
 	}
 
 	number := make([]*hexutil.Big, common.HierarchyDepth)
@@ -300,7 +298,6 @@ func (h *Header) EtxHash() common.Hash {
 func (h *Header) EtxRollupHash() common.Hash {
 	return h.etxRollupHash
 }
-
 func (h *Header) ParentEntropy(args ...int) *big.Int {
 	nodeCtx := common.NodeLocation.Context()
 	if len(args) > 0 {
@@ -308,7 +305,6 @@ func (h *Header) ParentEntropy(args ...int) *big.Int {
 	}
 	return h.parentEntropy[nodeCtx]
 }
-
 func (h *Header) ParentDeltaS(args ...int) *big.Int {
 	nodeCtx := common.NodeLocation.Context()
 	if len(args) > 0 {
@@ -316,7 +312,6 @@ func (h *Header) ParentDeltaS(args ...int) *big.Int {
 	}
 	return h.parentDeltaS[nodeCtx]
 }
-
 func (h *Header) ManifestHash(args ...int) common.Hash {
 	nodeCtx := common.NodeLocation.Context()
 	if len(args) > 0 {
@@ -356,6 +351,7 @@ func (h *Header) BaseFee() *big.Int {
 func (h *Header) Location() common.Location { return h.location }
 func (h *Header) Time() uint64              { return h.time }
 func (h *Header) Extra() []byte             { return common.CopyBytes(h.extra) }
+func (h *Header) MixHash() common.Hash      { return h.mixHash }
 func (h *Header) Nonce() BlockNonce         { return h.nonce }
 func (h *Header) NonceU64() uint64          { return binary.BigEndian.Uint64(h.nonce[:]) }
 
@@ -479,6 +475,10 @@ func (h *Header) SetExtra(val []byte) {
 		h.extra = make([]byte, len(val))
 		copy(h.extra, val)
 	}
+}
+func (h *Header) SetMixHash(val *common.Hash) {
+	h.hash = atomic.Value{} // clear hash cache
+	h.mixHash = *val
 }
 func (h *Header) SetNonce(val BlockNonce) {
 	h.hash = atomic.Value{} // clear hash cache, but NOT sealHash
@@ -669,121 +669,6 @@ func (h *Header) EmptyUncles() bool {
 // EmptyReceipts returns true if there are no receipts for this header/block.
 func (h *Header) EmptyReceipts() bool {
 	return h.ReceiptHash() == EmptyRootHash
-}
-
-func (h *Header) CalcS() *big.Int {
-	order, err := h.CalcOrder()
-	if err != nil {
-		return big.NewInt(0)
-	}
-	intrinsicS := h.CalcIntrinsicS()
-	switch order {
-	case common.PRIME_CTX:
-		totalS := new(big.Int).Add(h.ParentEntropy(common.PRIME_CTX), h.ParentDeltaS(common.REGION_CTX))
-		totalS.Add(totalS, h.ParentDeltaS(common.ZONE_CTX))
-		totalS.Add(totalS, intrinsicS)
-		return totalS
-	case common.REGION_CTX:
-		totalS := new(big.Int).Add(h.ParentEntropy(common.REGION_CTX), h.ParentDeltaS(common.ZONE_CTX))
-		totalS.Add(totalS, intrinsicS)
-		return totalS
-	case common.ZONE_CTX:
-		totalS := new(big.Int).Add(h.ParentEntropy(common.ZONE_CTX), intrinsicS)
-		return totalS
-	}
-	return big.NewInt(0)
-}
-
-func (h *Header) CalcPhS() *big.Int {
-	switch common.NodeLocation.Context() {
-	case common.PRIME_CTX:
-		totalS := h.ParentEntropy(common.PRIME_CTX)
-		return totalS
-	case common.REGION_CTX:
-		totalS := new(big.Int).Add(h.ParentEntropy(common.PRIME_CTX), h.ParentDeltaS(common.REGION_CTX))
-		return totalS
-	case common.ZONE_CTX:
-		totalS := new(big.Int).Add(h.ParentEntropy(common.PRIME_CTX), h.ParentDeltaS(common.REGION_CTX))
-		totalS.Add(totalS, h.ParentDeltaS(common.ZONE_CTX))
-		return totalS
-	}
-	return big.NewInt(0)
-}
-
-func (h *Header) CalcDeltaS() *big.Int {
-	order, err := h.CalcOrder()
-	if err != nil {
-		return big.NewInt(0)
-	}
-	intrinsicS := h.CalcIntrinsicS()
-	switch order {
-	case common.PRIME_CTX:
-		return big.NewInt(0)
-	case common.REGION_CTX:
-		totalDeltaS := new(big.Int).Add(h.ParentDeltaS(common.REGION_CTX), h.ParentDeltaS(common.ZONE_CTX))
-		totalDeltaS = new(big.Int).Add(totalDeltaS, intrinsicS)
-		return totalDeltaS
-	case common.ZONE_CTX:
-		totalDeltaS := new(big.Int).Add(h.ParentDeltaS(common.ZONE_CTX), intrinsicS)
-		return totalDeltaS
-	}
-	return big.NewInt(0)
-}
-
-func (h *Header) CalcOrder() (int, error) {
-	intrinsicS := h.CalcIntrinsicS()
-
-	// This is the updated the threshold calculation based on the zone difficulty threshold
-	zoneThresholdS := h.CalcIntrinsicS(common.BytesToHash(new(big.Int).Div(big2e256, h.Difficulty()).Bytes()))
-	timeFactorHierarchyDepthMultiple := new(big.Int).Mul(params.TimeFactor, big.NewInt(common.HierarchyDepth))
-
-	// Prime case
-	primeEntropyThreshold := new(big.Int).Mul(timeFactorHierarchyDepthMultiple, timeFactorHierarchyDepthMultiple)
-	primeEntropyThreshold = new(big.Int).Mul(primeEntropyThreshold, zoneThresholdS)
-	primeBlockThreshold := new(big.Int).Quo(primeEntropyThreshold, big.NewInt(2))
-	primeEntropyThreshold = new(big.Int).Sub(primeEntropyThreshold, primeBlockThreshold)
-
-	primeBlockEntropyThresholdAdder, _ := mathutil.BinaryLog(primeBlockThreshold, 8)
-	primeBlockEntropyThreshold := new(big.Int).Add(zoneThresholdS, big.NewInt(int64(primeBlockEntropyThresholdAdder)))
-
-	totalDeltaS := new(big.Int).Add(h.ParentDeltaS(common.REGION_CTX), h.ParentDeltaS(common.ZONE_CTX))
-	totalDeltaS.Add(totalDeltaS, intrinsicS)
-	if intrinsicS.Cmp(primeBlockEntropyThreshold) > 0 && totalDeltaS.Cmp(primeEntropyThreshold) > 0 {
-		return common.PRIME_CTX, nil
-	}
-
-	// Region case
-	regionEntropyThreshold := new(big.Int).Mul(timeFactorHierarchyDepthMultiple, zoneThresholdS)
-	regionBlockThreshold := new(big.Int).Quo(regionEntropyThreshold, big.NewInt(2))
-	regionEntropyThreshold = new(big.Int).Sub(regionEntropyThreshold, regionBlockThreshold)
-
-	regionBlockEntropyThresholdAdder, _ := mathutil.BinaryLog(regionBlockThreshold, 8)
-	regionBlockEntropyThreshold := new(big.Int).Add(zoneThresholdS, big.NewInt(int64(regionBlockEntropyThresholdAdder)))
-
-	totalDeltaS = new(big.Int).Add(h.ParentDeltaS(common.ZONE_CTX), intrinsicS)
-	if intrinsicS.Cmp(regionBlockEntropyThreshold) > 0 && totalDeltaS.Cmp(regionEntropyThreshold) > 0 {
-		return common.REGION_CTX, nil
-	}
-
-	// Zone case
-	if intrinsicS.Cmp(zoneThresholdS) > 0 {
-		return common.ZONE_CTX, nil
-	}
-	return -1, errors.New("invalid order")
-}
-
-// calcIntrinsicS
-func (h *Header) CalcIntrinsicS(args ...common.Hash) *big.Int {
-	hash := h.Hash()
-	if len(args) > 0 {
-		hash = args[0]
-	}
-	x := new(big.Int).SetBytes(hash.Bytes())
-	d := new(big.Int).Div(big2e256, x)
-	c, m := mathutil.BinaryLog(d, c_mantBits)
-	bigBits := new(big.Int).Mul(big.NewInt(int64(c)), new(big.Int).Exp(big.NewInt(2), big.NewInt(c_mantBits), nil))
-	bigBits = new(big.Int).Add(bigBits, m)
-	return bigBits
 }
 
 // Body is a simple (mutable, non-safe) data container for storing and moving

@@ -23,7 +23,7 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/dominant-strategies/go-quai/consensus/blake3pow"
+	"github.com/dominant-strategies/go-quai/consensus/progpow"
 	"github.com/dominant-strategies/go-quai/core/types"
 )
 
@@ -130,7 +130,7 @@ func (f *fuzzer) fuzz() int {
 		bigFn  calculator
 		u256Fn calculator
 	}{
-		{blake3pow.DynamicDifficultyCalculator(bombDelay), blake3pow.MakeDifficultyCalculatorU256(bombDelay)},
+		{progpow.DynamicDifficultyCalculator(bombDelay), progpow.MakeDifficultyCalculatorU256(bombDelay)},
 	} {
 		want := pair.bigFn(time, header)
 		have := pair.u256Fn(time, header)

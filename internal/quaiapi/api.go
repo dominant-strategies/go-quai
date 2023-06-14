@@ -929,7 +929,7 @@ func RPCMarshalETHBlock(block *types.Block, inclTx bool, fullTx bool) (map[strin
 // a `PublicBlockchainAPI`.
 func (s *PublicBlockChainAPI) rpcMarshalHeader(ctx context.Context, header *types.Header) map[string]interface{} {
 	fields := RPCMarshalETHHeader(header)
-	fields["totalEntropy"] = (*hexutil.Big)(header.CalcS())
+	fields["totalEntropy"] = (*hexutil.Big)(s.b.TotalLogS(header))
 	return fields
 }
 
@@ -940,9 +940,7 @@ func (s *PublicBlockChainAPI) rpcMarshalBlock(ctx context.Context, b *types.Bloc
 	if err != nil {
 		return nil, err
 	}
-	if inclTx {
-		fields["totalEntropy"] = (*hexutil.Big)(b.Header().CalcS())
-	}
+	fields["totalEntropy"] = (*hexutil.Big)(s.b.TotalLogS(b.Header()))
 	return fields, err
 }
 
@@ -1470,7 +1468,7 @@ func (api *PublicDebugAPI) SeedHash(ctx context.Context, number uint64) (string,
 	if block == nil {
 		return "", fmt.Errorf("block #%d not found", number)
 	}
-	return "", fmt.Errorf("blake3pow does not have seedhash")
+	return "", fmt.Errorf("progpow does not have seedhash")
 }
 
 // PrivateDebugAPI is the collection of Quai APIs exposed over the private

@@ -23,7 +23,7 @@ import (
 	"testing"
 
 	"github.com/dominant-strategies/go-quai/common"
-	"github.com/dominant-strategies/go-quai/consensus/blake3pow"
+	"github.com/dominant-strategies/go-quai/consensus/progpow"
 	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/types"
@@ -103,7 +103,7 @@ func newTestBackend(t *testing.T, pending bool) *testBackend {
 
 	signer = types.LatestSigner(gspec.Config)
 
-	engine := blake3pow.NewFaker()
+	engine := progpow.NewFaker()
 	db := rawdb.NewMemoryDatabase()
 	genesis, _ := gspec.Commit(db)
 
