@@ -182,17 +182,9 @@ func (tx *Transaction) setDecoded(inner TxData, size int) {
 }
 
 func sanityCheckSignature(v *big.Int, r *big.Int, s *big.Int) error {
-	var plainV byte
-	if isProtectedV(v) {
-		chainID := deriveChainId(v).Uint64()
-		plainV = byte(v.Uint64() - 35 - 2*chainID)
-	} else {
-		return ErrExpectedProtection // Unprotected transactions are not supported
-	}
-	if !crypto.ValidateSignatureValues(plainV, r, s) {
+	if !crypto.ValidateSignatureValues(byte(v.Uint64()), r, s) {
 		return ErrInvalidSig
 	}
-
 	return nil
 }
 
