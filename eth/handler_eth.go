@@ -184,7 +184,7 @@ func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block) er
 	// Schedule the block for import
 	h.blockFetcher.Enqueue(peer.ID(), block)
 
-	blockS := block.Header().CalcS()
+	blockS := h.core.TotalLogS(block.Header())
 	_, _, peerEntropy, _ := peer.Head()
 	if blockS != nil && peerEntropy != nil {
 		if peerEntropy.Cmp(blockS) < 0 {

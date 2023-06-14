@@ -83,7 +83,7 @@ func answerGetBlockHeadersQuery(backend Backend, query *GetBlockHeadersPacket, p
 
 		// If dom is true only append header to results array if it is a dominant header
 		if query.Dom {
-			if backend.Core().Engine().IsDomCoincident(origin) {
+			if backend.Core().Engine().IsDomCoincident(backend.Core(), origin) {
 				headers = append(headers, origin)
 				bytes += estHeaderSize
 			}
@@ -91,7 +91,7 @@ func answerGetBlockHeadersQuery(backend Backend, query *GetBlockHeadersPacket, p
 			headers = append(headers, origin)
 			bytes += estHeaderSize
 			// If dom is false always append header to results array and break when dominant header is found
-			if backend.Core().Engine().IsDomCoincident(origin) {
+			if backend.Core().Engine().IsDomCoincident(backend.Core(), origin) {
 				break
 			}
 		}

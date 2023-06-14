@@ -36,7 +36,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/fdlimit"
 	"github.com/dominant-strategies/go-quai/consensus"
-	"github.com/dominant-strategies/go-quai/consensus/blake3pow"
+	"github.com/dominant-strategies/go-quai/consensus/progpow"
 	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/vm"
@@ -1177,23 +1177,23 @@ func setTxPool(ctx *cli.Context, cfg *core.TxPoolConfig) {
 	}
 }
 
-func setBlake3pow(ctx *cli.Context, cfg *ethconfig.Config) {
+func setProgpow(ctx *cli.Context, cfg *ethconfig.Config) {
 	// Override any default configs for hard coded networks.
 	switch {
 	case ctx.GlobalBool(ColosseumFlag.Name):
-		cfg.Blake3pow.DurationLimit = params.DurationLimit
+		cfg.Progpow.DurationLimit = params.DurationLimit
 	case ctx.GlobalBool(GardenFlag.Name):
-		cfg.Blake3pow.DurationLimit = params.GardenDurationLimit
+		cfg.Progpow.DurationLimit = params.GardenDurationLimit
 	case ctx.GlobalBool(OrchardFlag.Name):
-		cfg.Blake3pow.DurationLimit = params.OrchardDurationLimit
+		cfg.Progpow.DurationLimit = params.OrchardDurationLimit
 	case ctx.GlobalBool(GalenaFlag.Name):
-		cfg.Blake3pow.DurationLimit = params.GalenaDurationLimit
+		cfg.Progpow.DurationLimit = params.GalenaDurationLimit
 	case ctx.GlobalBool(LocalFlag.Name):
-		cfg.Blake3pow.DurationLimit = params.LocalDurationLimit
+		cfg.Progpow.DurationLimit = params.LocalDurationLimit
 	case ctx.GlobalBool(DeveloperFlag.Name):
-		cfg.Blake3pow.DurationLimit = params.DurationLimit
+		cfg.Progpow.DurationLimit = params.DurationLimit
 	default:
-		cfg.Blake3pow.DurationLimit = params.DurationLimit
+		cfg.Progpow.DurationLimit = params.DurationLimit
 
 	}
 }
@@ -1294,7 +1294,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	}
 	setGPO(ctx, &cfg.GPO, ctx.GlobalString(SyncModeFlag.Name) == "light")
 	setTxPool(ctx, &cfg.TxPool)
-	setBlake3pow(ctx, cfg)
+	setProgpow(ctx, cfg)
 	setWhitelist(ctx, cfg)
 
 	// set the dominant chain websocket url
@@ -1592,9 +1592,9 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (*core.Core, ethdb.Database) 
 	}
 	var engine consensus.Engine
 
-	engine = blake3pow.NewFaker()
+	engine = progpow.NewFaker()
 	if !ctx.GlobalBool(FakePoWFlag.Name) {
-		engine = blake3pow.New(blake3pow.Config{}, nil, false)
+		engine = progpow.New(progpow.Config{}, nil, false)
 	}
 	if gcmode := ctx.GlobalString(GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {
 		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)

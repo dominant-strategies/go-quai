@@ -63,6 +63,21 @@ func (b *QuaiAPIBackend) CurrentBlock() *types.Block {
 	return b.eth.core.CurrentBlock()
 }
 
+// CurrentLogEntropy returns the logarithm of the total entropy reduction since genesis for our current head block
+func (b *QuaiAPIBackend) CurrentLogEntropy() *big.Int {
+	return b.eth.core.CurrentLogEntropy()
+}
+
+// TotalLogS returns the total entropy reduction if the chain since genesis to the given header
+func (b *QuaiAPIBackend) TotalLogS(header *types.Header) *big.Int {
+	return b.eth.core.TotalLogS(header)
+}
+
+// CalcOrder returns the order of the block within the hierarchy of chains
+func (b *QuaiAPIBackend) CalcOrder(header *types.Header) (*big.Int, int, error) {
+	return b.eth.core.CalcOrder(header)
+}
+
 func (b *QuaiAPIBackend) SetHead(number uint64) {
 	b.eth.handler.downloader.Cancel()
 	b.eth.core.SetHead(number)

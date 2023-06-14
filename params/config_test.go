@@ -28,8 +28,8 @@ func TestCheckCompatible(t *testing.T) {
 		wantErr     *ConfigCompatError
 	}
 	tests := []test{
-		{stored: AllBlake3powProtocolChanges, new: AllBlake3powProtocolChanges, head: 0, wantErr: nil},
-		{stored: AllBlake3powProtocolChanges, new: AllBlake3powProtocolChanges, head: 100, wantErr: nil},
+		{stored: AllProgpowProtocolChanges, new: AllProgpowProtocolChanges, head: 0, wantErr: nil},
+		{stored: AllProgpowProtocolChanges, new: AllProgpowProtocolChanges, head: 100, wantErr: nil},
 		{
 			head:    9,
 			wantErr: nil,

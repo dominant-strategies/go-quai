@@ -62,6 +62,21 @@ type Engine interface {
 	// engine is based on signatures.
 	Author(header *types.Header) (common.Address, error)
 
+	// IntrinsicLogS returns the logarithm of the intrinsic entropy reduction of a PoW hash
+	IntrinsicLogS(powHash common.Hash) *big.Int
+
+	// CalcOrder returns the order of the block within the hierarchy of chains
+	CalcOrder(header *types.Header) (*big.Int, int, error)
+
+	// TotalLogS returns the log of the total entropy reduction if the chain since genesis to the given header
+	TotalLogS(header *types.Header) *big.Int
+
+	// TotalLogPhS returns the log of the total entropy reduction if the chain since genesis for a pending header
+	TotalLogPhS(header *types.Header) *big.Int
+
+	// DeltaLogS returns the log of the entropy delta for a chain since its prior coincidence
+	DeltaLogS(header *types.Header) *big.Int
+
 	// VerifyHeader checks whether a header conforms to the consensus rules of a
 	// given engine. Verifying the seal may be done optionally here, or explicitly
 	// via the VerifySeal method.
@@ -113,7 +128,7 @@ type Engine interface {
 	//
 	// Importantly, this check does NOT mean the block is canonical in the
 	// dominant chain, or even that the claimed dominant difficulty is valid.
-	IsDomCoincident(header *types.Header) bool
+	IsDomCoincident(chain ChainHeaderReader, header *types.Header) bool
 
 	// APIs returns the RPC APIs this consensus engine provides.
 	APIs(chain ChainHeaderReader) []rpc.API

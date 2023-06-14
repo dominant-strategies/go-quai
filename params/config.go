@@ -26,9 +26,9 @@ import (
 // Genesis hashes to enforce below configs on.
 var (
 	ColosseumGenesisHash = common.HexToHash("0x6b3c28921a94aa0b17240fe8144e7936c870069143195438f2360521cb73f5a1")
-	GardenGenesisHash    = common.HexToHash("0x511bf6bbaa9400c6ade6e0e4968d85e9ed65af5777513336317b95b89e9c2dbb")
+	GardenGenesisHash    = common.HexToHash("0x28cc21db5e70075202ad83a8f45e03317c4a53740b226da7c6ab10b569de8186")
 	OrchardGenesisHash   = common.HexToHash("0xb998fb9bf1e027f09efef05fdb6276a31156068592e6a989348ffb4c0d4387f7")
-	LocalGenesisHash     = common.HexToHash("0x4c35b1216decc6aa2431fa2d2a1c68f15d70f83a309041ed1bfef5ad6592a3d4")
+	LocalGenesisHash     = common.HexToHash("0x34bf036c04c0f298c149b3d1b53bfd6ccd675372aa78a1b7a1e2c60a3a017499")
 	GalenaGenesisHash    = common.HexToHash("0xce6c6393558ee45d8a38e1f04eb5ad33823ab9ea1122cdba747ce41d87ccdb92")
 )
 
@@ -36,46 +36,46 @@ var (
 	// ColosseumChainConfig is the chain parameters to run a node on the Colosseum network.
 	ColosseumChainConfig = &ChainConfig{
 		ChainID:     big.NewInt(9000),
-		Blake3pow:   new(Blake3powConfig),
+		Progpow:     new(ProgpowConfig),
 		GenesisHash: ColosseumGenesisHash,
 	}
 
 	// GardenChainConfig contains the chain parameters to run a node on the Garden test network.
 	GardenChainConfig = &ChainConfig{
 		ChainID:     big.NewInt(12000),
-		Blake3pow:   new(Blake3powConfig),
+		Progpow:     new(ProgpowConfig),
 		GenesisHash: GardenGenesisHash,
 	}
 
 	// OrchardChainConfig contains the chain parameters to run a node on the Orchard test network.
 	OrchardChainConfig = &ChainConfig{
 		ChainID:     big.NewInt(15000),
-		Blake3pow:   new(Blake3powConfig),
+		Progpow:     new(ProgpowConfig),
 		GenesisHash: OrchardGenesisHash,
 	}
 
 	// GalenaChainConfig contains the chain parameters to run a node on the Galena test network.
 	GalenaChainConfig = &ChainConfig{
 		ChainID:     big.NewInt(17000),
-		Blake3pow:   new(Blake3powConfig),
+		Progpow:     new(ProgpowConfig),
 		GenesisHash: GalenaGenesisHash,
 	}
 
 	// LocalChainConfig contains the chain parameters to run a node on the Local test network.
 	LocalChainConfig = &ChainConfig{
 		ChainID:     big.NewInt(1337),
-		Blake3pow:   new(Blake3powConfig),
+		Progpow:     new(ProgpowConfig),
 		GenesisHash: LocalGenesisHash,
 	}
 
-	// AllBlake3powProtocolChanges contains every protocol change introduced
-	// and accepted by the Quai core developers into the Blake3pow consensus.
+	// AllProgpowProtocolChanges contains every protocol change introduced
+	// and accepted by the Quai core developers into the Progpow consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllBlake3powProtocolChanges = &ChainConfig{big.NewInt(1337), new(Blake3powConfig), common.Hash{}}
+	AllProgpowProtocolChanges = &ChainConfig{big.NewInt(1337), new(ProgpowConfig), common.Hash{}}
 
-	TestChainConfig = &ChainConfig{big.NewInt(1), new(Blake3powConfig), common.Hash{}}
+	TestChainConfig = &ChainConfig{big.NewInt(1), new(ProgpowConfig), common.Hash{}}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
@@ -87,24 +87,24 @@ var (
 type ChainConfig struct {
 	ChainID *big.Int `json:"chainId"` // chainId identifies the current chain and is used for replay protection
 	// Various consensus engines
-	Blake3pow   *Blake3powConfig `json:"blake3pow,omitempty"`
+	Progpow     *ProgpowConfig `json:"progpow,omitempty"`
 	GenesisHash common.Hash
 }
 
-// Blake3powConfig is the consensus engine configs for proof-of-work based sealing.
-type Blake3powConfig struct{}
+// ProgpowConfig is the consensus engine configs for proof-of-work based sealing.
+type ProgpowConfig struct{}
 
 // String implements the stringer interface, returning the consensus engine details.
-func (c *Blake3powConfig) String() string {
-	return "blake3pow"
+func (c *ProgpowConfig) String() string {
+	return "progpow"
 }
 
 // String implements the fmt.Stringer interface.
 func (c *ChainConfig) String() string {
 	var engine interface{}
 	switch {
-	case c.Blake3pow != nil:
-		engine = c.Blake3pow
+	case c.Progpow != nil:
+		engine = c.Progpow
 	default:
 		engine = "unknown"
 	}

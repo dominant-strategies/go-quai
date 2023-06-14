@@ -31,7 +31,7 @@ import (
 func copyConfig(original *params.ChainConfig) *params.ChainConfig {
 	return &params.ChainConfig{
 		ChainID:   original.ChainID,
-		Blake3pow: original.Blake3pow,
+		Progpow: original.Progpow,
 	}
 }
 

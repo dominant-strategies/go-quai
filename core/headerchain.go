@@ -239,7 +239,7 @@ func (hc *HeaderChain) collectInclusiveEtxRollup(b *types.Block) (types.Transact
 		}
 	}
 	// Terminate the search on coincidence with dom chain
-	if hc.engine.IsDomCoincident(b.Header()) {
+	if hc.engine.IsDomCoincident(hc, b.Header()) {
 		return newEtxs, nil
 	}
 	// Recursively get the ancestor rollup, until a coincident ancestor is found

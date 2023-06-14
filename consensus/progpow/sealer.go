@@ -1,4 +1,4 @@
-package blake3pow
+package progpow
 
 import (
 	"bytes"
@@ -17,11 +17,10 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/core/types"
-	"github.com/dominant-strategies/go-quai/log"
 )
 
 const (
-	// staleThreshold is the maximum depth of the acceptable stale but valid blake3pow solution.
+	// staleThreshold is the maximum depth of the acceptable stale but valid progpow solution.
 	staleThreshold = 7
 	mantBits       = 64
 )
@@ -33,35 +32,35 @@ var (
 
 // Seal implements consensus.Engine, attempting to find a nonce that satisfies
 // the header's difficulty requirements.
-func (blake3pow *Blake3pow) Seal(header *types.Header, results chan<- *types.Header, stop <-chan struct{}) error {
+func (progpow *Progpow) Seal(header *types.Header, results chan<- *types.Header, stop <-chan struct{}) error {
 	// If we're running a fake PoW, simply return a 0 nonce immediately
-	if blake3pow.config.PowMode == ModeFake || blake3pow.config.PowMode == ModeFullFake {
+	if progpow.config.PowMode == ModeFake || progpow.config.PowMode == ModeFullFake {
 		header.SetNonce(types.BlockNonce{})
 		select {
 		case results <- header:
 		default:
-			blake3pow.config.Log.Warn("Sealing result is not read by miner", "mode", "fake", "sealhash", header.SealHash())
+			progpow.config.Log.Warn("Sealing result is not read by miner", "mode", "fake", "sealhash", header.SealHash())
 		}
 		return nil
 	}
 	// If we're running a shared PoW, delegate sealing to it
-	if blake3pow.shared != nil {
-		return blake3pow.shared.Seal(header, results, stop)
+	if progpow.shared != nil {
+		return progpow.shared.Seal(header, results, stop)
 	}
 	// Create a runner and the multiple search threads it directs
 	abort := make(chan struct{})
 
-	blake3pow.lock.Lock()
-	threads := blake3pow.threads
-	if blake3pow.rand == nil {
+	progpow.lock.Lock()
+	threads := progpow.threads
+	if progpow.rand == nil {
 		seed, err := crand.Int(crand.Reader, big.NewInt(math.MaxInt64))
 		if err != nil {
-			blake3pow.lock.Unlock()
+			progpow.lock.Unlock()
 			return err
 		}
-		blake3pow.rand = rand.New(rand.NewSource(seed.Int64()))
+		progpow.rand = rand.New(rand.NewSource(seed.Int64()))
 	}
-	blake3pow.lock.Unlock()
+	progpow.lock.Unlock()
 	if threads == 0 {
 		threads = runtime.NumCPU()
 	}
@@ -69,8 +68,8 @@ func (blake3pow *Blake3pow) Seal(header *types.Header, results chan<- *types.Hea
 		threads = 0 // Allows disabling local mining without extra logic around local/remote
 	}
 	// Push new work to remote sealer
-	if blake3pow.remote != nil {
-		blake3pow.remote.workCh <- &sealTask{header: header, results: results}
+	if progpow.remote != nil {
+		progpow.remote.workCh <- &sealTask{header: header, results: results}
 	}
 	var (
 		pend   sync.WaitGroup
@@ -80,8 +79,8 @@ func (blake3pow *Blake3pow) Seal(header *types.Header, results chan<- *types.Hea
 		pend.Add(1)
 		go func(id int, nonce uint64) {
 			defer pend.Done()
-			blake3pow.mine(header, id, nonce, abort, locals)
-		}(i, uint64(blake3pow.rand.Int63()))
+			progpow.mine(header, id, nonce, abort, locals)
+		}(i, uint64(progpow.rand.Int63()))
 	}
 	// Wait until sealing is terminated or a nonce is found
 	go func() {
@@ -95,14 +94,14 @@ func (blake3pow *Blake3pow) Seal(header *types.Header, results chan<- *types.Hea
 			select {
 			case results <- result:
 			default:
-				blake3pow.config.Log.Warn("Sealing result is not read by miner", "mode", "local", "sealhash", header.SealHash())
+				progpow.config.Log.Warn("Sealing result is not read by miner", "mode", "local", "sealhash", header.SealHash())
 			}
 			close(abort)
-		case <-blake3pow.update:
+		case <-progpow.update:
 			// Thread count was changed on user request, restart
 			close(abort)
-			if err := blake3pow.Seal(header, results, stop); err != nil {
-				blake3pow.config.Log.Error("Failed to restart sealing after update", "err", err)
+			if err := progpow.Seal(header, results, stop); err != nil {
+				progpow.config.Log.Error("Failed to restart sealing after update", "err", err)
 			}
 		}
 		// Wait for all miners to terminate and return the block
@@ -112,50 +111,52 @@ func (blake3pow *Blake3pow) Seal(header *types.Header, results chan<- *types.Hea
 }
 
 // mine is the actual proof-of-work miner that searches for a nonce starting from
-// seed that results in correct final header difficulty.
-func (blake3pow *Blake3pow) mine(header *types.Header, id int, seed uint64, abort chan struct{}, found chan *types.Header) {
+// seed that results in correct final block difficulty.
+func (progpow *Progpow) mine(header *types.Header, id int, seed uint64, abort chan struct{}, found chan *types.Header) {
 	// Extract some data from the header
 	var (
 		target = new(big.Int).Div(big2e256, header.Difficulty())
 	)
 	// Start generating random nonces until we abort or find a good one
 	var (
-		attempts  = int64(0)
-		nonce     = seed
-		powBuffer = new(big.Int)
+		attempts = int64(0)
+		nonce    = seed
 	)
-	logger := log.Log
-	logger.Trace("Started blake3pow search for new nonces", "seed", seed)
 search:
 	for {
 		select {
 		case <-abort:
 			// Mining terminated, update stats and abort
-			logger.Trace("Blake3pow nonce search aborted", "attempts", nonce-seed)
-			blake3pow.hashrate.Mark(attempts)
+			progpow.hashrate.Mark(attempts)
 			break search
 
 		default:
 			// We don't have to update hash rate on every nonce, so update after after 2^X nonces
 			attempts++
 			if (attempts % (1 << 15)) == 0 {
-				blake3pow.hashrate.Mark(attempts)
+				progpow.hashrate.Mark(attempts)
 				attempts = 0
 			}
-			// Compute the PoW value of this nonce
-			header = types.CopyHeader(header)
-			header.SetNonce(types.EncodeNonce(nonce))
-			hash := header.Hash().Bytes()
-			if powBuffer.SetBytes(hash).Cmp(target) <= 0 {
-				// Correct nonce found, create a new header with it
-
-				// Seal and return a block (if still needed)
-				select {
-				case found <- header:
-					logger.Trace("Blake3pow nonce found and reported", "attempts", nonce-seed, "nonce", nonce)
-				case <-abort:
-					logger.Trace("Blake3pow nonce found but discarded", "attempts", nonce-seed, "nonce", nonce)
+			powLight := func(size uint64, cache []uint32, hash []byte, nonce uint64, blockNumber uint64) ([]byte, []byte) {
+				ethashCache := progpow.cache(blockNumber)
+				if ethashCache.cDag == nil {
+					cDag := make([]uint32, progpowCacheWords)
+					generateCDag(cDag, ethashCache.cache, blockNumber/epochLength)
+					ethashCache.cDag = cDag
 				}
+				return progpowLight(size, cache, hash, nonce, blockNumber, ethashCache.cDag)
+			}
+			cache := progpow.cache(header.NumberU64())
+			size := datasetSize(header.NumberU64())
+			// Compute the PoW value of this nonce
+			digest, result := powLight(size, cache.cache, header.SealHash().Bytes(), nonce, header.NumberU64(common.ZONE_CTX))
+			if new(big.Int).SetBytes(result).Cmp(target) <= 0 {
+				// Correct nonce found, create a new header with it
+				header = types.CopyHeader(header)
+				header.SetNonce(types.EncodeNonce(nonce))
+				hashBytes := common.BytesToHash(digest)
+				header.SetMixHash(&hashBytes)
+				found <- header
 				break search
 			}
 			nonce++
@@ -175,7 +176,7 @@ type remoteSealer struct {
 	cancelNotify  context.CancelFunc // cancels all notification requests
 	reqWG         sync.WaitGroup     // tracks notification request goroutines
 
-	blake3pow    *Blake3pow
+	progpow      *Progpow
 	noverify     bool
 	notifyURLs   []string
 	results      chan<- *types.Header
@@ -217,10 +218,10 @@ type sealWork struct {
 	res  chan [4]string
 }
 
-func startRemoteSealer(blake3pow *Blake3pow, urls []string, noverify bool) *remoteSealer {
+func startRemoteSealer(progpow *Progpow, urls []string, noverify bool) *remoteSealer {
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &remoteSealer{
-		blake3pow:    blake3pow,
+		progpow:      progpow,
 		noverify:     noverify,
 		notifyURLs:   urls,
 		notifyCtx:    ctx,
@@ -241,7 +242,7 @@ func startRemoteSealer(blake3pow *Blake3pow, urls []string, noverify bool) *remo
 
 func (s *remoteSealer) loop() {
 	defer func() {
-		s.blake3pow.config.Log.Trace("Blake3pow remote sealer is exiting")
+		s.progpow.config.Log.Trace("Progpow remote sealer is exiting")
 		s.cancelNotify()
 		s.reqWG.Wait()
 		close(s.exitCh)
@@ -338,7 +339,7 @@ func (s *remoteSealer) notifyWork() {
 	// Encode the JSON payload of the notification. When NotifyFull is set,
 	// this is the complete block header, otherwise it is a JSON array.
 	var blob []byte
-	if s.blake3pow.config.NotifyFull {
+	if s.progpow.config.NotifyFull {
 		blob, _ = json.Marshal(s.currentHeader)
 	} else {
 		blob, _ = json.Marshal(work)
@@ -355,7 +356,7 @@ func (s *remoteSealer) sendNotification(ctx context.Context, url string, json []
 
 	req, err := http.NewRequest("POST", url, bytes.NewReader(json))
 	if err != nil {
-		s.blake3pow.config.Log.Warn("Can't create remote miner notification", "err", err)
+		s.progpow.config.Log.Warn("Can't create remote miner notification", "err", err)
 		return
 	}
 	ctx, cancel := context.WithTimeout(ctx, remoteSealerTimeout)
@@ -365,9 +366,9 @@ func (s *remoteSealer) sendNotification(ctx context.Context, url string, json []
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		s.blake3pow.config.Log.Warn("Failed to notify remote miner", "err", err)
+		s.progpow.config.Log.Warn("Failed to notify remote miner", "err", err)
 	} else {
-		s.blake3pow.config.Log.Trace("Notified remote miner", "miner", url, "hash", work[0], "target", work[2])
+		s.progpow.config.Log.Trace("Notified remote miner", "miner", url, "hash", work[0], "target", work[2])
 		resp.Body.Close()
 	}
 }
@@ -377,13 +378,13 @@ func (s *remoteSealer) sendNotification(ctx context.Context, url string, json []
 // any other error, like no pending work or stale mining result).
 func (s *remoteSealer) submitWork(nonce types.BlockNonce, sealhash common.Hash) bool {
 	if s.currentHeader == nil {
-		s.blake3pow.config.Log.Error("Pending work without block", "sealhash", sealhash)
+		s.progpow.config.Log.Error("Pending work without block", "sealhash", sealhash)
 		return false
 	}
 	// Make sure the work submitted is present
 	header := s.works[sealhash]
 	if header == nil {
-		s.blake3pow.config.Log.Warn("Work submitted but none pending", "sealhash", sealhash, "curnumber", s.currentHeader.NumberU64())
+		s.progpow.config.Log.Warn("Work submitted but none pending", "sealhash", sealhash, "curnumber", s.currentHeader.NumberU64())
 		return false
 	}
 	// Verify the correctness of submitted result.
@@ -391,17 +392,14 @@ func (s *remoteSealer) submitWork(nonce types.BlockNonce, sealhash common.Hash) 
 
 	start := time.Now()
 	if !s.noverify {
-		if err := s.blake3pow.verifySeal(nil, header, true); err != nil {
-			s.blake3pow.config.Log.Warn("Invalid proof-of-work submitted", "sealhash", sealhash, "elapsed", common.PrettyDuration(time.Since(start)), "err", err)
-			return false
-		}
+		panic("submit work with verification not supported")
 	}
 	// Make sure the result channel is assigned.
 	if s.results == nil {
-		s.blake3pow.config.Log.Warn("Blake3pow result channel is empty, submitted mining result is rejected")
+		s.progpow.config.Log.Warn("Progpow result channel is empty, submitted mining result is rejected")
 		return false
 	}
-	s.blake3pow.config.Log.Trace("Verified correct proof-of-work", "sealhash", sealhash, "elapsed", common.PrettyDuration(time.Since(start)))
+	s.progpow.config.Log.Trace("Verified correct proof-of-work", "sealhash", sealhash, "elapsed", common.PrettyDuration(time.Since(start)))
 
 	// Solutions seems to be valid, return to the miner and notify acceptance.
 	solution := header
@@ -410,14 +408,14 @@ func (s *remoteSealer) submitWork(nonce types.BlockNonce, sealhash common.Hash) 
 	if solution.NumberU64()+staleThreshold > s.currentHeader.NumberU64() {
 		select {
 		case s.results <- solution:
-			s.blake3pow.config.Log.Debug("Work submitted is acceptable", "number", solution.NumberU64(), "sealhash", sealhash, "hash", solution.Hash())
+			s.progpow.config.Log.Debug("Work submitted is acceptable", "number", solution.NumberU64(), "sealhash", sealhash, "hash", solution.Hash())
 			return true
 		default:
-			s.blake3pow.config.Log.Warn("Sealing result is not read by miner", "mode", "remote", "sealhash", sealhash)
+			s.progpow.config.Log.Warn("Sealing result is not read by miner", "mode", "remote", "sealhash", sealhash)
 			return false
 		}
 	}
 	// The submitted block is too old to accept, drop it.
-	s.blake3pow.config.Log.Warn("Work submitted is too old", "number", solution.NumberU64(), "sealhash", sealhash, "hash", solution.Hash())
+	s.progpow.config.Log.Warn("Work submitted is too old", "number", solution.NumberU64(), "sealhash", sealhash, "hash", solution.Hash())
 	return false
 }
