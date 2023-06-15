@@ -272,14 +272,12 @@ func (hc *HeaderChain) Append(batch ethdb.Batch, block *types.Block, newInboundE
 	// coincident with a higher order chain. So, this check is skipped for prime
 	// nodes.
 	if nodeCtx > common.PRIME_CTX {
-		if block.ParentHash() != hc.config.GenesisHash {
-			manifest := rawdb.ReadManifest(hc.headerDb, block.ParentHash())
-			if manifest == nil {
-				return errors.New("manifest not found for parent")
-			}
-			if block.ManifestHash(nodeCtx) != types.DeriveSha(manifest, trie.NewStackTrie(nil)) {
-				return errors.New("manifest does not match hash")
-			}
+		manifest := rawdb.ReadManifest(hc.headerDb, block.ParentHash())
+		if manifest == nil {
+			return errors.New("manifest not found for parent")
+		}
+		if block.ManifestHash(nodeCtx) != types.DeriveSha(manifest, trie.NewStackTrie(nil)) {
+			return errors.New("manifest does not match hash")
 		}
 	}
 	elapsedCollectBlockManifest := common.PrettyDuration(time.Since(collectBlockManifest))
