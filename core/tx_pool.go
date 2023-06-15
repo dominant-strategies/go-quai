@@ -413,7 +413,7 @@ func (pool *TxPool) loop() {
 					for _, tx := range list {
 						pool.removeTx(tx.Hash(), true)
 					}
-					queuedEvictionMeter.Set(float64(len(list)))
+					queuedEvictionMeter.Add(float64(len(list)))
 				}
 			}
 			pool.mu.Unlock()
