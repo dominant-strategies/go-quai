@@ -105,25 +105,24 @@ var (
 	pendingRateLimitMeter = txpoolMetrics.WithLabelValues("pending:rateLimit") // Dropped due to rate limiting
 	pendingNofundsMeter   = txpoolMetrics.WithLabelValues("pending:noFunds")   // Dropped due to out-of-funds
 
-    // Metrics for the queued pool
-    queuedDiscardMeter   = txpoolMetrics.WithLabelValues("queued:discard")
-    queuedReplaceMeter   = txpoolMetrics.WithLabelValues("queued:replace")
-    queuedRateLimitMeter = txpoolMetrics.WithLabelValues("queued:ratelimit") // Dropped due to rate limiting
-    queuedNofundsMeter   = txpoolMetrics.WithLabelValues("queued:nofund")   // Dropped due to out-of-funds
-    queuedEvictionMeter  = txpoolMetrics.WithLabelValues("queued:eviction")  // Dropped due to lifetime
-
+	// Metrics for the queued pool
+	queuedDiscardMeter   = txpoolMetrics.WithLabelValues("queued:discard")
+	queuedReplaceMeter   = txpoolMetrics.WithLabelValues("queued:replace")
+	queuedRateLimitMeter = txpoolMetrics.WithLabelValues("queued:ratelimit") // Dropped due to rate limiting
+	queuedNofundsMeter   = txpoolMetrics.WithLabelValues("queued:nofund")    // Dropped due to out-of-funds
+	queuedEvictionMeter  = txpoolMetrics.WithLabelValues("queued:eviction")  // Dropped due to lifetime
 
 	// General tx metrics
-	knownTxMeter = txpoolMetrics.WithLabelValues("known") // Known transaction
-	validTxMeter = txpoolMetrics.WithLabelValues("valid") // Valid transaction
-	invalidTxMeter = txpoolMetrics.WithLabelValues("invalid") // Invalid transaction
+	knownTxMeter       = txpoolMetrics.WithLabelValues("known")       // Known transaction
+	validTxMeter       = txpoolMetrics.WithLabelValues("valid")       // Valid transaction
+	invalidTxMeter     = txpoolMetrics.WithLabelValues("invalid")     // Invalid transaction
 	underpricedTxMeter = txpoolMetrics.WithLabelValues("underpriced") // Underpriced transaction
-	overflowedTxMeter = txpoolMetrics.WithLabelValues("overflowed") // Overflowed transaction
+	overflowedTxMeter  = txpoolMetrics.WithLabelValues("overflowed")  // Overflowed transaction
 
 	pendingGauge = txpoolMetrics.WithLabelValues("pending")
-	queuedGauge = txpoolMetrics.WithLabelValues("queued")
-	localGauge = txpoolMetrics.WithLabelValues("local")
-	slotsGauge = txpoolMetrics.WithLabelValues("slots")
+	queuedGauge  = txpoolMetrics.WithLabelValues("queued")
+	localGauge   = txpoolMetrics.WithLabelValues("local")
+	slotsGauge   = txpoolMetrics.WithLabelValues("slots")
 
 	reheapTimer = metrics_config.NewTimer("Reheap", "Reheap timer")
 )
@@ -275,6 +274,32 @@ type txpoolResetRequest struct {
 // NewTxPool creates a new transaction pool to gather, sort and filter inbound
 // transactions from the network.
 func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain blockChain) *TxPool {
+
+	// // Pending pool metrics
+	// pendingDiscardMeter.Set(0)
+	// pendingReplaceMeter.Set(0)
+	// pendingRateLimitMeter.Set(0)
+	// pendingNofundsMeter.Set(0)
+
+	// // Metrics for the queued pool
+	// queuedDiscardMeter.Set(0)
+	// queuedReplaceMeter.Set(0)
+	// queuedRateLimitMeter.Set(0)
+	// queuedNofundsMeter.Set(0)
+	// queuedEvictionMeter.Set(0)
+
+	// // General tx metrics
+	// knownTxMeter.Set(0)
+	// validTxMeter.Set(0)
+	// invalidTxMeter.Set(0)
+	// underpricedTxMeter.Set(0)
+	// overflowedTxMeter.Set(0)
+
+	// pendingGauge.Set(0)
+	// queuedGauge.Set(0)
+	// localGauge.Set(0)
+
+
 	// Sanitize the input to ensure no vulnerable gas prices are set
 	config = (&config).sanitize()
 
