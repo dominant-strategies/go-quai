@@ -51,6 +51,7 @@ type HeaderChain struct {
 
 	pendingEtxsRollup            *lru.Cache
 	pendingEtxs                  *lru.Cache
+	blooms                       *lru.Cache
 	missingPendingEtxsFeed       event.Feed
 	missingPendingEtxsRollupFeed event.Feed
 
@@ -81,6 +82,9 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *par
 
 	pendingEtxs, _ := lru.New(c_maxPendingEtxBatches)
 	hc.pendingEtxs = pendingEtxs
+
+	blooms, _ := lru.New(c_maxBloomFilters)
+	hc.blooms = blooms
 
 	hc.genesisHeader = hc.GetHeaderByNumber(0)
 	if hc.genesisHeader.Hash() != chainConfig.GenesisHash {
@@ -184,6 +188,21 @@ func (hc *HeaderChain) GetPendingEtxsRollup(hash common.Hash) (*types.PendingEtx
 		return nil, ErrPendingEtxNotFound
 	}
 	return &rollups, nil
+}
+
+// GetBloom gets the bloom from the cache or database
+func (hc *HeaderChain) GetBloom(hash common.Hash) (*types.Bloom, error) {
+	var bloom types.Bloom
+	// Look for bloom first in bloom cache, then in database
+	if res, ok := hc.blooms.Get(hash); ok && res != nil {
+		bloom = res.(types.Bloom)
+	} else if res := rawdb.ReadBloom(hc.headerDb, hash); res != nil {
+		bloom = *res
+	} else {
+		log.Debug("unable to find bloom for hash in database", "hash:", hash.String())
+		return nil, ErrBloomNotFound
+	}
+	return &bloom, nil
 }
 
 // backfillPETXs collects any missing PendingETX objects needed to process the
@@ -390,6 +409,19 @@ func (hc *HeaderChain) AddPendingEtxs(pEtxs types.PendingEtxs) error {
 		hc.pendingEtxs.Add(pEtxs.Header.Hash(), pEtxs)
 	} else {
 		return ErrPendingEtxAlreadyKnown
+	}
+	return nil
+}
+
+func (hc *HeaderChain) AddBloom(bloom types.Bloom, hash common.Hash) error {
+	// Only write the bloom if we have not seen it before
+	if !hc.blooms.Contains(hash) {
+		// Write to bloom database
+		rawdb.WriteBloom(hc.headerDb, hash, bloom)
+		// Also write to cache for faster access
+		hc.blooms.Add(hash, bloom)
+	} else {
+		return ErrBloomAlreadyKnown
 	}
 	return nil
 }

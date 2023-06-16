@@ -1304,3 +1304,50 @@ func DeleteManifest(db ethdb.KeyValueWriter, hash common.Hash) {
 		log.Fatal("Failed to delete manifest", "err", err)
 	}
 }
+
+// ReadBloomRLP retrieves the bloom for the given block, in RLP encoding
+func ReadBloomRLP(db ethdb.Reader, hash common.Hash) rlp.RawValue {
+	// Try to look up the data in leveldb.
+	data, _ := db.Get(bloomKey(hash))
+	if len(data) > 0 {
+		return data
+	}
+	return nil // Can't find the data anywhere.
+}
+
+// WriteBloomRLP stores the bloom corresponding to a given block, in RLP encoding.
+func WriteBloomRLP(db ethdb.KeyValueWriter, hash common.Hash, rlp rlp.RawValue) {
+	if err := db.Put(bloomKey(hash), rlp); err != nil {
+		log.Fatal("Failed to store block bloom filter", "err", err)
+	}
+}
+
+// ReadBloom retreives the bloom corresponding to a given block
+func ReadBloom(db ethdb.Reader, hash common.Hash) *types.Bloom {
+	data := ReadBloomRLP(db, hash)
+	if len(data) == 0 {
+		return nil
+	}
+	bloom := types.Bloom{}
+	if err := rlp.Decode(bytes.NewReader(data), &bloom); err != nil {
+		log.Error("Invalid bloom RLP", "hash", hash, "err", err)
+		return nil
+	}
+	return &bloom
+}
+
+// WriteBloom stores the bloom corresponding to a given block
+func WriteBloom(db ethdb.KeyValueWriter, hash common.Hash, bloom types.Bloom) {
+	data, err := rlp.EncodeToBytes(bloom)
+	if err != nil {
+		log.Fatal("Failed to RLP encode pending etxs", "err", err)
+	}
+	WriteBloomRLP(db, hash, data)
+}
+
+// DeleteBloom removes all bloom data associated with a block.
+func DeleteBloom(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
+	if err := db.Delete(bloomKey(hash)); err != nil {
+		log.Fatal("Failed to delete bloom", "err", err)
+	}
+}

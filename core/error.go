@@ -38,6 +38,9 @@ var (
 	// ErrPendingEtxAlreadyKnown is returned received pending etx already in the cache/db
 	ErrPendingEtxAlreadyKnown = errors.New("pending etx already known")
 
+	// ErrBloomAlreadyKnown is returned if received bloom is already in the cache/db
+	ErrBloomAlreadyKnown = errors.New("bloom already known")
+
 	// ErrBodyNotFound is returned when body data for a given header hash cannot be found.
 	ErrBodyNotFound = errors.New("could not find the body data to match the header root hash")
 
@@ -52,6 +55,9 @@ var (
 
 	//ErrPendingEtxNotFound is returned when pendingEtxs cannot be found for a hash given in the submanifest
 	ErrPendingEtxNotFound = errors.New("pending etx not found")
+
+	//ErrBloomNotFound is returned when bloom cannot be found for a hash
+	ErrBloomNotFound = errors.New("bloom not found")
 
 	//ErrPendingEtxRollupNotFound is returned when pendingEtxsRollup cannot be found for a hash given in the submanifest
 	ErrPendingEtxRollupNotFound = errors.New("pending etx rollup not found")

@@ -42,7 +42,7 @@ type ChainIndexerBackend interface {
 
 	// Process crunches through the next header in the chain segment. The caller
 	// will ensure a sequential order of headers.
-	Process(ctx context.Context, header *types.Header) error
+	Process(ctx context.Context, header *types.Header, bloom types.Bloom) error
 
 	// Commit finalizes the section metadata and stores it into the database.
 	Commit() error
@@ -55,7 +55,8 @@ type ChainIndexerBackend interface {
 type ChainIndexerChain interface {
 	// CurrentHeader retrieves the latest locally known header.
 	CurrentHeader() *types.Header
-
+	// GetBloom retrieves the bloom for the given block hash.
+	GetBloom(blockhash common.Hash) (*types.Bloom, error)
 	// SubscribeChainHeadEvent subscribes to new head header notifications.
 	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
 }
@@ -70,11 +71,11 @@ type ChainIndexerChain interface {
 // after an entire section has been finished or in case of rollbacks that might
 // affect already finished sections.
 type ChainIndexer struct {
-	chainDb  ethdb.Database      // Chain database to index the data from
-	indexDb  ethdb.Database      // Prefixed table-view of the db to write index metadata into
-	backend  ChainIndexerBackend // Background processor generating the index data content
-	children []*ChainIndexer     // Child indexers to cascade chain updates to
-
+	chainDb   ethdb.Database      // Chain database to index the data from
+	indexDb   ethdb.Database      // Prefixed table-view of the db to write index metadata into
+	backend   ChainIndexerBackend // Background processor generating the index data content
+	children  []*ChainIndexer     // Child indexers to cascade chain updates to
+	GetBloom  func(common.Hash) (*types.Bloom, error)
 	active    uint32          // Flag whether the event loop was started
 	update    chan struct{}   // Notification channel that headers should be processed
 	quit      chan chan error // Quit channel to tear down running goroutines
@@ -124,7 +125,7 @@ func NewChainIndexer(chainDb ethdb.Database, indexDb ethdb.Database, backend Cha
 func (c *ChainIndexer) Start(chain ChainIndexerChain) {
 	events := make(chan ChainHeadEvent, 10)
 	sub := chain.SubscribeChainHeadEvent(events)
-
+	c.GetBloom = chain.GetBloom
 	go c.eventLoop(chain.CurrentHeader(), events, sub)
 }
 
@@ -363,7 +364,11 @@ func (c *ChainIndexer) processSection(section uint64, lastHead common.Hash) (com
 		} else if header.ParentHash() != lastHead {
 			return common.Hash{}, fmt.Errorf("chain reorged during section processing")
 		}
-		if err := c.backend.Process(c.ctx, header); err != nil {
+		bloom, err := c.GetBloom(header.Hash())
+		if err != nil {
+			return common.Hash{}, err
+		}
+		if err := c.backend.Process(c.ctx, header, *bloom); err != nil {
 			return common.Hash{}, err
 		}
 		lastHead = header.Hash()

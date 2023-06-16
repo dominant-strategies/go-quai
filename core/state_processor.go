@@ -333,6 +333,10 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 	}
 	time4 := common.PrettyDuration(time.Since(start))
 	rawdb.WriteReceipts(batch, block.Hash(), block.NumberU64(), receipts)
+	time4_5 := common.PrettyDuration(time.Since(start))
+	// Create bloom filter and write it to cache/db
+	bloom := types.CreateBloom(receipts)
+	p.hc.AddBloom(bloom, block.Hash())
 	time5 := common.PrettyDuration(time.Since(start))
 	rawdb.WritePreimages(batch, statedb.Preimages())
 	time6 := common.PrettyDuration(time.Since(start))
@@ -405,7 +409,7 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 	rawdb.WriteEtxSet(p.hc.bc.db, block.Hash(), block.NumberU64(), etxSet)
 	time12 := common.PrettyDuration(time.Since(start))
 
-	log.Info("times during state processor apply:", "t1:", time1, "t2:", time2, "t3:", time3, "t4:", time4, "t5:", time5, "t6:", time6, "t7:", time7, "t8:", time8, "t9:", time9, "t10:", time10, "t11:", time11, "t12:", time12)
+	log.Info("times during state processor apply:", "t1:", time1, "t2:", time2, "t3:", time3, "t4:", time4, "t4.5:", time4_5, "t5:", time5, "t6:", time6, "t7:", time7, "t8:", time8, "t9:", time9, "t10:", time10, "t11:", time11, "t12:", time12)
 	return logs, nil
 }
 

@@ -26,6 +26,7 @@ import (
 const (
 	c_maxPendingEtxBatches            = 1024
 	c_maxPendingEtxsRollup            = 256
+	c_maxBloomFilters                 = 1024
 	c_pendingHeaderCacheLimit         = 100
 	c_pendingHeaderChacheBufferFactor = 2
 	pendingHeaderGCTime               = 5
@@ -658,6 +659,10 @@ func (sl *Slice) init(genesis *Genesis) error {
 			return err
 		}
 		err = sl.AddPendingEtxsRollup(types.PendingEtxsRollup{genesisHeader, []common.Hash{}})
+		if err != nil {
+			return err
+		}
+		err = sl.hc.AddBloom(types.Bloom{}, genesisHeader.Hash())
 		if err != nil {
 			return err
 		}
