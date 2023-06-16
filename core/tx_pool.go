@@ -1633,9 +1633,10 @@ func (pool *TxPool) demoteUnexecutables() {
 			// Internal shuffle shouldn't touch the lookup set.
 			pool.enqueueTx(hash, tx, false, false)
 		}
-		pendingGauge.Sub(float64(len(olds) + len(drops) + len(invalids)))
+		removedTxs := float64(len(olds) + len(drops) + len(invalids))
+		pendingGauge.Sub(removedTxs)
 		if pool.locals.contains(addr) {
-			localGauge.Sub(float64(len(olds) + len(drops) + len(invalids)))
+			localGauge.Sub(removedTxs)
 		}
 		// If there's a gap in front, alert (should never happen) and postpone all transactions
 		if list.Len() > 0 && list.txs.Get(nonce) == nil {
