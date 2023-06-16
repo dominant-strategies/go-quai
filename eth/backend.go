@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -257,6 +258,8 @@ func New(stack *node.Node, config *ethconfig.Config) (*Quai, error) {
 }
 
 func EnablePprof() {
+	runtime.SetBlockProfileRate(1)
+	runtime.SetMutexProfileFraction(1)
 	var port string
 	myContext := common.NodeLocation
 	switch {

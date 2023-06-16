@@ -57,3 +57,4 @@ bootnode.key
 
 # logs
 *.log
+traces
