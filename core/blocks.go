@@ -25,31 +25,30 @@ type HeirarchyBadHashes struct {
 }
 
 var fork1 = HeirarchyBadHashes{
-	PrimeContext: common.HexToHash("0x00001bba9942d13de6f0cc5d87a0bcc5584908be514990d2c442c43f13847093"),
+	PrimeContext: common.HexToHash("0x000000d089cce1550f0a745b6b4d8d13eebcf0465bfa11c1cde5641c852f03a1"),
 	RegionContext: []common.Hash{
-		common.HexToHash("0x000006863c188f1126aba2a2c51090fca01dd4850f2467c85f821e89d249bb2b"),
-		common.HexToHash("0x000008b13838f662f006fe14a232f1e6193f1930fbce505bf387fabf8d6754c0"),
-		common.HexToHash("0x00000ded81dc992388832a860334bd6ad15fd5cad84a79674577527a886a663f"),
+		common.HexToHash("0x000000f219ffd432599f98d70c8f507abc12639d6b023537353ff35ba9b98365"),
+		common.HexToHash("0x0000033b9fb8d1ae32037e5af8f6a4dc2e774c10164768a56993eeac8a334b74"),
+		common.HexToHash("0x000002798957d932d3ca7330a068349ae45d7e438b6691fb5366694243380b00"),
 	},
 	ZoneContext: [][]common.Hash{
 		[]common.Hash{
-			common.HexToHash("0x0000083ec920ae605204f98324b2ea1087a24f3250f67b3a9a1b1ea8e9bda5d1"),
-			common.HexToHash("0x00000585e8ca5b9ceb1c136c612ab568fca728536afb95533a0c9d421799bd29"),
-			common.HexToHash("0x00001144430b40ae978bc73da8dfeb2609279de481260adbb56a1b55bfa9a3b0"),
+			common.HexToHash("0x000000443ccc0b51204fb6ac127a67aa726366132000646987ce9258cc77e08e"),
+			common.HexToHash("0x0000002f2db68d82ffd3e1f2936cc29e193bba36b580b124158983115d6b7005"),
+			common.HexToHash("0x0000020b95ee752307cd656ee2d85687b7d74aa5c343c54d40f18e91e80724a7"),
 		},
 		[]common.Hash{
-			common.HexToHash("0x000016f4c88831435a64983ff886184b96261d47ea5a54386a365c22b4580c0a"),
-			common.HexToHash("0x000000c42987d30694e13ce7d5f167aea7d3fb53e6cfc69d6ff893a03eca155e"),
-			common.HexToHash("0x0000052ab142f5dc4fb254a4a0a3076692eef3ea055d345c32df472008b6e6fc"),
+			common.HexToHash("0x0000012e5be2e46a259c8ac530ecb5453e2fbc7c5a4e4c21b11591b80b0be50c"),
+			common.HexToHash("0x00000294b3bb77c3147eb85d44b380fc8e90df7671c99d4fde12bfcafbcb3f9f"),
+			common.HexToHash("0x000001e24a0642ff7480b4c45595189abd56a67e1790c4f77a0e9f85fc7c9e10"),
 		},
 		[]common.Hash{
-			common.HexToHash("0x000007aeb7f5a6b66ea2665dae43fa73cc1c35557c4c582e34b9e4f10dcaca31"),
-			common.HexToHash("0x000004fc326b09d88cc3fabe1dec253a303127a13e184e08f5d7ad5bb7560525"),
-			common.HexToHash("0x000008e4a6794b21358929019a43eb5127f311114131bef9ba567adcd98b2b08"),
+			common.HexToHash("0x000000a41dbda7cc89c17b9e2675d94ab3c1ba67b104542ac2f2c49f7b89f1ad"),
+			common.HexToHash("0x0000035bd7386943a57c2e759d04188924f11db05b0db5cbb526f3bef6142f18"),
+			common.HexToHash("0x000002ecec801141f06ce178660fe1251349728bc4180e67e9d08f18273cc9f1"),
 		},
 	},
-}
-
+} 
 var BadHashes = []HeirarchyBadHashes{
 	fork1,
 }
