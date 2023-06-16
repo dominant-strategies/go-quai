@@ -280,7 +280,7 @@ func (f *Filter) checkMatches(ctx context.Context, header *types.Header) (logs [
 
 func includes(addresses []common.Address, a common.Address) bool {
 	for _, addr := range addresses {
-		if addr == a {
+		if addr.Equal(a) {
 			return true
 		}
 	}
