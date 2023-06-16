@@ -8,10 +8,10 @@ metadata:
 spec:
   connectionDraining:
     drainingTimeoutSec: 1800
-  timeoutSec: 1800
   healthCheck:
-    checkIntervalSec: 15
+    checkIntervalSec: 70
     port: <HTTP>
     requestPath: /
     type: HTTP
+    timeoutSec: 30
 {{- end }}
