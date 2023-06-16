@@ -872,7 +872,6 @@ func RPCMarshalETHHeader(head *types.Header) map[string]interface{} {
 		"parentHash":       head.ParentHash,
 		"nonce":            head.Nonce,
 		"sha3Uncles":       head.UncleHash,
-		"logsBloom":        head.Bloom,
 		"stateRoot":        head.Root,
 		"miner":            head.Coinbase,
 		"difficulty":       (*hexutil.Big)(head.Difficulty()),

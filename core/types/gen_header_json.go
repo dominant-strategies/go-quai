@@ -25,7 +25,6 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		EtxRollupHash common.Hash     `json:"extRollupRoot"       gencodec:"required"`
 		ManifestHash  []common.Hash   `json:"manifestHash"        gencodec:"required"`
 		ReceiptHash   common.Hash     `json:"receiptsRoot"        gencodec:"required"`
-		Bloom         Bloom           `json:"logsBloom"           gencodec:"required"`
 		Difficulty    *hexutil.Big    `json:"difficulty"          gencodec:"required"`
 		ParentEntropy []*hexutil.Big  `json:"parentEntropy"		gencodec:"required"`
 		ParentDeltaS  []*hexutil.Big  `json:"parentDeltaS"		gencodec:"required"`
@@ -58,7 +57,6 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	enc.EtxHash = h.EtxHash()
 	enc.EtxRollupHash = h.EtxRollupHash()
 	enc.ReceiptHash = h.ReceiptHash()
-	enc.Bloom = h.Bloom()
 	enc.Difficulty = (*hexutil.Big)(h.Difficulty())
 	enc.GasLimit = hexutil.Uint64(h.GasLimit())
 	enc.GasUsed = hexutil.Uint64(h.GasUsed())
@@ -83,7 +81,6 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		EtxHash       *common.Hash    `json:"extTransactionsRoot" gencodec:"required"`
 		EtxRollupHash *common.Hash    `json:"extRollupRoot"       gencodec:"required"`
 		ManifestHash  []common.Hash   `json:"manifestHash"        gencodec:"required"`
-		Bloom         *Bloom          `json:"logsBloom"           gencodec:"required"`
 		Difficulty    *hexutil.Big    `json:"difficulty"         	gencodec:"required"`
 		ParentEntropy []*hexutil.Big  `json:"parentEntropy"	   	gencodec:"required"`
 		ParentDeltaS  []*hexutil.Big  `json:"parentDeltaS"	   	gencodec:"required"`
@@ -125,9 +122,6 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	}
 	if dec.ReceiptHash == nil {
 		return errors.New("missing required field 'receiptsRoot' for Header")
-	}
-	if dec.Bloom == nil {
-		return errors.New("missing required field 'logsBloom' for Header")
 	}
 	if dec.Difficulty == nil {
 		return errors.New("missing required field 'difficulty' for Header")
@@ -183,7 +177,6 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	h.SetReceiptHash(*dec.ReceiptHash)
 	h.SetEtxHash(*dec.EtxHash)
 	h.SetEtxRollupHash(*dec.EtxRollupHash)
-	h.SetBloom(*dec.Bloom)
 	h.SetDifficulty((*big.Int)(dec.Difficulty))
 	h.SetGasLimit(uint64(*dec.GasLimit))
 	h.SetGasUsed(uint64(*dec.GasUsed))

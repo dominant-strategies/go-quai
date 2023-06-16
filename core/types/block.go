@@ -96,7 +96,6 @@ type Header struct {
 	etxRollupHash common.Hash     `json:"extRollupRoot"        gencodec:"required"`
 	manifestHash  []common.Hash   `json:"manifestHash"         gencodec:"required"`
 	receiptHash   common.Hash     `json:"receiptsRoot"         gencodec:"required"`
-	bloom         Bloom           `json:"logsBloom"            gencodec:"required"`
 	difficulty    *big.Int        `json:"difficulty"           gencodec:"required"`
 	parentEntropy []*big.Int      `json:"parentEntropy"		gencodec:"required"`
 	parentDeltaS  []*big.Int      `json:"parentDeltaS"			gencodec:"required"`
@@ -139,7 +138,6 @@ type extheader struct {
 	EtxRollupHash common.Hash
 	ManifestHash  []common.Hash
 	ReceiptHash   common.Hash
-	Bloom         Bloom
 	Difficulty    *big.Int
 	ParentEntropy []*big.Int
 	ParentDeltaS  []*big.Int
@@ -193,7 +191,6 @@ func (h *Header) DecodeRLP(s *rlp.Stream) error {
 	h.etxRollupHash = eh.EtxRollupHash
 	h.manifestHash = eh.ManifestHash
 	h.receiptHash = eh.ReceiptHash
-	h.bloom = eh.Bloom
 	h.difficulty = eh.Difficulty
 	h.parentEntropy = eh.ParentEntropy
 	h.parentDeltaS = eh.ParentDeltaS
@@ -221,7 +218,6 @@ func (h *Header) EncodeRLP(w io.Writer) error {
 		EtxRollupHash: h.etxRollupHash,
 		ManifestHash:  h.manifestHash,
 		ReceiptHash:   h.receiptHash,
-		Bloom:         h.bloom,
 		Difficulty:    h.difficulty,
 		ParentEntropy: h.parentEntropy,
 		ParentDeltaS:  h.parentDeltaS,
@@ -244,7 +240,6 @@ func (h *Header) RPCMarshalHeader() map[string]interface{} {
 		"difficulty":          (*hexutil.Big)(h.Difficulty()),
 		"nonce":               h.Nonce(),
 		"sha3Uncles":          h.UncleHash(),
-		"logsBloom":           h.Bloom(),
 		"stateRoot":           h.Root(),
 		"miner":               h.Coinbase(),
 		"extraData":           hexutil.Bytes(h.Extra()),
@@ -331,9 +326,6 @@ func (h *Header) ManifestHash(args ...int) common.Hash {
 }
 func (h *Header) ReceiptHash() common.Hash {
 	return h.receiptHash
-}
-func (h *Header) Bloom() Bloom {
-	return h.bloom
 }
 func (h *Header) Difficulty() *big.Int {
 	return h.difficulty
@@ -441,11 +433,6 @@ func (h *Header) SetReceiptHash(val common.Hash) {
 	h.sealHash = atomic.Value{} // clear sealHash cache
 	h.receiptHash = val
 }
-func (h *Header) SetBloom(val Bloom) {
-	h.hash = atomic.Value{}     // clear hash cache
-	h.sealHash = atomic.Value{} // clear sealHash cache
-	h.bloom = val
-}
 func (h *Header) SetDifficulty(val *big.Int) {
 	h.hash = atomic.Value{}     // clear hash cache
 	h.sealHash = atomic.Value{} // clear sealHash cache
@@ -515,7 +502,6 @@ type sealData struct {
 	EtxRollupHash common.Hash
 	ManifestHash  []common.Hash
 	ReceiptHash   common.Hash
-	Bloom         Bloom
 	Number        []*big.Int
 	GasLimit      uint64
 	GasUsed       uint64
@@ -545,7 +531,6 @@ func (h *Header) SealHash() (hash common.Hash) {
 		EtxRollupHash: h.EtxRollupHash(),
 		ManifestHash:  make([]common.Hash, common.HierarchyDepth),
 		ReceiptHash:   h.ReceiptHash(),
-		Bloom:         h.Bloom(),
 		Number:        make([]*big.Int, common.HierarchyDepth),
 		GasLimit:      h.GasLimit(),
 		GasUsed:       h.GasUsed(),
@@ -854,7 +839,6 @@ func NewBlock(header *Header, txs []*Transaction, uncles []*Header, etxs []*Tran
 		b.header.SetReceiptHash(EmptyRootHash)
 	} else {
 		b.header.SetReceiptHash(DeriveSha(Receipts(receipts), hasher))
-		b.header.SetBloom(CreateBloom(receipts))
 	}
 
 	if len(uncles) == 0 {
@@ -922,7 +906,6 @@ func CopyHeader(h *Header) *Header {
 	cpy.SetEtxHash(h.EtxHash())
 	cpy.SetEtxRollupHash(h.EtxRollupHash())
 	cpy.SetReceiptHash(h.ReceiptHash())
-	cpy.SetBloom(h.Bloom())
 	if len(h.extra) > 0 {
 		cpy.extra = make([]byte, len(h.extra))
 		copy(cpy.extra, h.extra)
@@ -970,7 +953,6 @@ func (b *Block) EtxHash() common.Hash                 { return b.header.EtxHash(
 func (b *Block) EtxRollupHash() common.Hash           { return b.header.EtxRollupHash() }
 func (b *Block) ManifestHash(args ...int) common.Hash { return b.header.ManifestHash(args...) }
 func (b *Block) ReceiptHash() common.Hash             { return b.header.ReceiptHash() }
-func (b *Block) Bloom() Bloom                         { return b.header.Bloom() }
 func (b *Block) Difficulty(args ...int) *big.Int      { return b.header.Difficulty() }
 func (b *Block) ParentEntropy(args ...int) *big.Int   { return b.header.ParentEntropy(args...) }
 func (b *Block) ParentDeltaS(args ...int) *big.Int    { return b.header.ParentDeltaS(args...) }

@@ -203,6 +203,15 @@ func (b *QuaiAPIBackend) GetReceipts(ctx context.Context, hash common.Hash) (typ
 	return b.eth.core.GetReceiptsByHash(hash), nil
 }
 
+// GetBloom returns the bloom for the given block hash
+func (b *QuaiAPIBackend) GetBloom(hash common.Hash) (*types.Bloom, error) {
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx != common.ZONE_CTX {
+		return nil, errors.New("getBloom can only be called in zone chain")
+	}
+	return b.eth.core.Slice().HeaderChain().GetBloom(hash)
+}
+
 func (b *QuaiAPIBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*types.Log, error) {
 	nodeCtx := common.NodeLocation.Context()
 	if nodeCtx != common.ZONE_CTX {

@@ -225,9 +225,6 @@ func (t *BlockTest) insertBlocks(blockchain *core.BlockChain) ([]btBlock, error)
 }
 
 func validateHeader(h *btHeader, h2 *types.Header) error {
-	if h.Bloom() != h2.Bloom() {
-		return fmt.Errorf("bloom: want: %x have: %x", h.Bloom(), h2.Bloom())
-	}
 	if h.Coinbase() != h2.Coinbase() {
 		return fmt.Errorf("coinbase: want: %x have: %x", h.Coinbase(), h2.Coinbase())
 	}

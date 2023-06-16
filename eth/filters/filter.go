@@ -36,7 +36,7 @@ type Backend interface {
 	HeaderByHash(ctx context.Context, blockHash common.Hash) (*types.Header, error)
 	GetReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error)
 	GetLogs(ctx context.Context, blockHash common.Hash) ([][]*types.Log, error)
-
+	GetBloom(blockHash common.Hash) (*types.Bloom, error)
 	SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription
 	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
 	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
@@ -232,7 +232,12 @@ func (f *Filter) unindexedLogs(ctx context.Context, end uint64) ([]*types.Log, e
 
 // blockLogs returns the logs matching the filter criteria within a single block.
 func (f *Filter) blockLogs(ctx context.Context, header *types.Header) (logs []*types.Log, err error) {
-	if bloomFilter(header.Bloom(), f.addresses, f.topics) {
+	// Get block bloom from the database
+	bloom, err := f.backend.GetBloom(header.Hash())
+	if err != nil {
+		return logs, err
+	}
+	if bloomFilter(*bloom, f.addresses, f.topics) {
 		found, err := f.checkMatches(ctx, header)
 		if err != nil {
 			return logs, err

@@ -786,7 +786,6 @@ func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *typ
 		combinedPendingHeader.SetReceiptHash(header.ReceiptHash())
 		combinedPendingHeader.SetRoot(header.Root())
 		combinedPendingHeader.SetCoinbase(header.Coinbase())
-		combinedPendingHeader.SetBloom(header.Bloom())
 		combinedPendingHeader.SetBaseFee(header.BaseFee())
 		combinedPendingHeader.SetGasLimit(header.GasLimit())
 		combinedPendingHeader.SetGasUsed(header.GasUsed())
