@@ -18,11 +18,8 @@
 package eth
 
 import (
-	"bytes"
 	"fmt"
 	"math/big"
-	"net/http"
-	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -258,43 +255,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Quai, error) {
 }
 
 func EnablePprof() {
-	runtime.SetBlockProfileRate(1)
-	runtime.SetMutexProfileFraction(1)
-	var port string
-	myContext := common.NodeLocation
-	switch {
-	case bytes.Equal(myContext, []byte{}): // PRIME
-		port = "8081"
-	case bytes.Equal(myContext, []byte{0}): // Region 0
-		port = "8090"
-	case bytes.Equal(myContext, []byte{1}): // Region 1
-		port = "8100"
-	case bytes.Equal(myContext, []byte{2}): // Region 2
-		port = "8110"
-	case bytes.Equal(myContext, []byte{0, 0}): // Zone 0-0
-		port = "8091"
-	case bytes.Equal(myContext, []byte{0, 1}): // Zone 0-1
-		port = "8092"
-	case bytes.Equal(myContext, []byte{0, 2}): // Zone 0-2
-		port = "8093"
-	case bytes.Equal(myContext, []byte{1, 0}): // Zone 1-0
-		port = "8101"
-	case bytes.Equal(myContext, []byte{1, 1}): // Zone 1-1
-		port = "8102"
-	case bytes.Equal(myContext, []byte{1, 2}): // Zone 1-2
-		port = "8103"
-	case bytes.Equal(myContext, []byte{2, 0}): // Zone 2-0
-		port = "8111"
-	case bytes.Equal(myContext, []byte{2, 1}): // Zone 2-1
-		port = "8112"
-	case bytes.Equal(myContext, []byte{2, 2}): // Zone 2-2
-		port = "8113"
-	default:
-		port = "8085"
-	}
-	go func() {
-		_ = http.ListenAndServe("localhost:"+port, nil)
-	}()
 }
 
 // APIs return the collection of RPC services the go-quai package offers.
