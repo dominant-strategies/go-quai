@@ -38,9 +38,7 @@ var GardenBootnodes = []string{
 // OrchardBootnodes are the enode URLs of the P2P bootstrap nodes running on the
 // Orchard test network
 var OrchardBootnodes = []string{
-	"enode://f99403abcfbee37e3232e6bb4d7fda4d70496585a53857ccb4aff5ec32d0f27186b5097430d5806f20f2003f35cfec5d778598a3945d530f212b7072caab9b8a@35.188.17.207", // us-central1-b
-	"enode://142e48e3c36e5fe21aebf2941f2e63eb4720febe67de17dd84baf010e33c76275567ede53674007ab2848eec53022cd0cb94bcbea10960ae93edb5497c8caa2a@104.198.69.162", // us-central1-a
-	"enode://d6d27b273682f8abc7ffff04dc9006bd40f0a079a8ba24da351b714506bb82c1f106ff073fa04983345aef15c876c602209b48b37d8ee10dad581fd1d9db9263@34.23.150.43", // us-east1-c
+	"enode://b81ad68fe38c77eec3b6c4822289d1e5a0e26435ae3ee506c1f1d7de439f01a4fa0770ffe0736dd25c723db0c89ca0b45ea897f009a67488d30bd48630d10241@192.168.4.31", // us-central1-b
 }
 
 // GalenaBootnodes are the enode URLs of the P2P bootstrap nodes running on the
