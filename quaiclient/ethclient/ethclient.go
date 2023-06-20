@@ -610,6 +610,5 @@ func (ec *Client) PoolStatus(ctx context.Context) (hexutil.Uint64, hexutil.Uint6
 		return 0, 0
 	}
 
-	fmt.Println("poolStatus", status)
 	return hexutil.Uint64(status["pending"]), hexutil.Uint64(status["queued"])
 }
