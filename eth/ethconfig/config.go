@@ -157,9 +157,6 @@ type Config struct {
 
 	// Slices running on the node
 	SlicesRunning []common.Location
-
-	// PPROF enabled
-	PprofEnabled bool
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.
