@@ -58,9 +58,9 @@ var (
 )
 
 const (
-	receiptsCacheLimit = 32
+	receiptsCacheLimit = 512
 	txLookupCacheLimit = 1024
-	TriesInMemory      = 128
+	TriesInMemory      = 1024
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	//
@@ -105,8 +105,8 @@ type CacheConfig struct {
 // defaultCacheConfig are the default caching values if none are specified by the
 // user (also used during testing).
 var defaultCacheConfig = &CacheConfig{
-	TrieCleanLimit: 256,
-	TrieDirtyLimit: 256,
+	TrieCleanLimit: 1024,
+	TrieDirtyLimit: 1024,
 	TrieTimeLimit:  5 * time.Minute,
 	SnapshotLimit:  256,
 }
