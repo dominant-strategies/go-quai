@@ -251,7 +251,7 @@ func (h *Header) RPCMarshalHeader() map[string]interface{} {
 		"manifestHash":        h.ManifestHashArray(),
 		"gasLimit":            hexutil.Uint(h.GasLimit()),
 		"gasUsed":             hexutil.Uint(h.GasUsed()),
-		"location":            h.Location(),
+		"location":            hexutil.Bytes(h.Location()),
 		"mixHash":             h.MixHash(),
 	}
 
