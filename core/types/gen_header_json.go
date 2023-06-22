@@ -32,7 +32,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		GasLimit      hexutil.Uint64  `json:"gasLimit"            gencodec:"required"`
 		GasUsed       hexutil.Uint64  `json:"gasUsed"             gencodec:"required"`
 		BaseFee       *hexutil.Big    `json:"baseFeePerGas"       gencodec:"required"`
-		Location      common.Location `json:"location"            gencodec:"required"`
+		Location      hexutil.Bytes `json:"location"            gencodec:"required"`
 		Time          hexutil.Uint64  `json:"timestamp"           gencodec:"required"`
 		Extra         hexutil.Bytes   `json:"extraData"           gencodec:"required"`
 		MixHash       common.Hash     `json:"mixHash"             gencodec:"required"`
@@ -62,7 +62,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	enc.GasLimit = hexutil.Uint64(h.GasLimit())
 	enc.GasUsed = hexutil.Uint64(h.GasUsed())
 	enc.BaseFee = (*hexutil.Big)(h.BaseFee())
-	enc.Location = h.Location()
+	enc.Location = hexutil.Bytes(h.Location())
 	enc.Time = hexutil.Uint64(h.Time())
 	enc.Extra = hexutil.Bytes(h.Extra())
 	enc.MixHash = h.MixHash()
@@ -91,7 +91,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		GasLimit      *hexutil.Uint64 `json:"gasLimit"            gencodec:"required"`
 		GasUsed       *hexutil.Uint64 `json:"gasUsed"             gencodec:"required"`
 		BaseFee       *hexutil.Big    `json:"baseFeePerGas"       gencodec:"required"`
-		Location      common.Location `json:"location"            gencodec:"required"`
+		Location      hexutil.Bytes `json:"location"            gencodec:"required"`
 		Time          hexutil.Uint64  `json:"timestamp"           gencodec:"required"`
 		Extra         hexutil.Bytes   `json:"extraData"           gencodec:"required"`
 		MixHash       *common.Hash    `json:"MixHash"             gencodec:"required"`
@@ -188,7 +188,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	h.SetGasLimit(uint64(*dec.GasLimit))
 	h.SetGasUsed(uint64(*dec.GasUsed))
 	h.SetBaseFee((*big.Int)(dec.BaseFee))
-	h.SetLocation(dec.Location)
+	h.SetLocation(common.Location(dec.Location))
 	h.SetTime(uint64(dec.Time))
 	h.SetExtra(dec.Extra)
 	h.SetMixHash(dec.MixHash)
