@@ -886,7 +886,11 @@ func (sl *Slice) loadLastState() error {
 	phCache := rawdb.ReadPhCache(sl.sliceDb)
 	for key, value := range phCache {
 		sl.phCache.Add(key, value)
+		// Removing the PendingHeaders from the database
+		rawdb.DeletePendingHeader(sl.sliceDb, key)
+		rawdb.DeletePhCacheTermini(sl.sliceDb, key)
 	}
+	rawdb.DeletePhCache(sl.sliceDb)
 	sl.bestPhKey = rawdb.ReadBestPhKey(sl.sliceDb)
 	sl.miner.worker.LoadPendingBlockBody()
 	return nil
