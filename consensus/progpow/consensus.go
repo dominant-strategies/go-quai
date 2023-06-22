@@ -256,11 +256,6 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 		}
 	}
 	// Verify the engine specific seal securing the block
-	if seal {
-		if _, err := progpow.verifySeal(header); err != nil {
-			return err
-		}
-	}
 	_, order, err := progpow.CalcOrder(parent)
 	if err != nil {
 		return err
@@ -409,30 +404,38 @@ func (progpow *Progpow) verifySeal(header *types.Header) (common.Hash, error) {
 		return common.Hash{}, errInvalidDifficulty
 	}
 	// Check progpow
-	powLight := func(size uint64, cache []uint32, hash []byte, nonce uint64, blockNumber uint64) ([]byte, []byte) {
-		ethashCache := progpow.cache(blockNumber)
-		if ethashCache.cDag == nil {
-			cDag := make([]uint32, progpowCacheWords)
-			generateCDag(cDag, ethashCache.cache, blockNumber/epochLength)
-			ethashCache.cDag = cDag
+	powHash := header.PowHash.Load()
+	mixHash := header.PowDigest.Load()
+	if powHash == nil || mixHash == nil {
+		powLight := func(size uint64, cache []uint32, hash []byte, nonce uint64, blockNumber uint64) ([]byte, []byte) {
+			ethashCache := progpow.cache(blockNumber)
+			if ethashCache.cDag == nil {
+				cDag := make([]uint32, progpowCacheWords)
+				generateCDag(cDag, ethashCache.cache, blockNumber/epochLength)
+				ethashCache.cDag = cDag
+			}
+			return progpowLight(size, cache, hash, nonce, blockNumber, ethashCache.cDag)
 		}
-		return progpowLight(size, cache, hash, nonce, blockNumber, ethashCache.cDag)
+		cache := progpow.cache(header.NumberU64())
+		size := datasetSize(header.NumberU64())
+		digest, result := powLight(size, cache.cache, header.SealHash().Bytes(), header.NonceU64(), header.NumberU64(common.ZONE_CTX))
+		mixHash = common.BytesToHash(digest)
+		powHash = common.BytesToHash(result)
+		header.PowDigest.Store(mixHash)
+		header.PowHash.Store(powHash)
+		// Caches are unmapped in a finalizer. Ensure that the cache stays alive
+		// until after the call to hashimotoLight so it's not unmapped while being used.
+		runtime.KeepAlive(cache)
 	}
-	cache := progpow.cache(header.NumberU64())
-	size := datasetSize(header.NumberU64())
-	digest, powHash := powLight(size, cache.cache, header.SealHash().Bytes(), header.NonceU64(), header.NumberU64(common.ZONE_CTX))
-	// Caches are unmapped in a finalizer. Ensure that the cache stays alive
-	// until after the call to hashimotoLight so it's not unmapped while being used.
-	runtime.KeepAlive(cache)
 	// Verify the calculated values against the ones provided in the header
-	if !bytes.Equal(header.MixHash().Bytes(), digest) {
+	if !bytes.Equal(header.MixHash().Bytes(), mixHash.(common.Hash).Bytes()) {
 		return common.Hash{}, errInvalidMixHash
 	}
 	target := new(big.Int).Div(big2e256, header.Difficulty())
-	if new(big.Int).SetBytes(powHash).Cmp(target) > 0 {
+	if new(big.Int).SetBytes(powHash.(common.Hash).Bytes()).Cmp(target) > 0 {
 		return common.Hash{}, errInvalidPoW
 	}
-	return common.BytesToHash(powHash), nil
+	return powHash.(common.Hash), nil
 }
 
 // Prepare implements consensus.Engine, initializing the difficulty field of a

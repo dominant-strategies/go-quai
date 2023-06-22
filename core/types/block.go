@@ -103,8 +103,10 @@ type Header struct {
 	nonce         BlockNonce      `json:"nonce"`
 
 	// caches
-	hash     atomic.Value
-	sealHash atomic.Value
+	hash      atomic.Value
+	sealHash  atomic.Value
+	PowHash   atomic.Value
+	PowDigest atomic.Value
 }
 
 // field type overrides for gencodec
