@@ -609,7 +609,6 @@ var (
 		Usage: "Enable colorized logging",
 	}
 
-	
 	LogToStdOutFlag = cli.BoolFlag{
 		Name:  "logtostdout",
 		Usage: "Write log messages to stdout",
@@ -929,6 +928,27 @@ func setSubUrls(ctx *cli.Context, cfg *ethconfig.Config) {
 			Fatalf("No sub url is specified")
 		}
 		cfg.SubUrls = suburls
+	}
+}
+
+// setGasLimitCeil sets the gas limit ceils based on the network that is
+// running
+func setGasLimitCeil(ctx *cli.Context, cfg *ethconfig.Config) {
+	switch {
+	case ctx.GlobalBool(ColosseumFlag.Name):
+		cfg.Miner.GasCeil = params.ColosseumGasCeil
+	case ctx.GlobalBool(GardenFlag.Name):
+		cfg.Miner.GasCeil = params.GardenGasCeil
+	case ctx.GlobalBool(OrchardFlag.Name):
+		cfg.Miner.GasCeil = params.OrchardGasCeil
+	case ctx.GlobalBool(GalenaFlag.Name):
+		cfg.Miner.GasCeil = params.GalenaGasCeil
+	case ctx.GlobalBool(LocalFlag.Name):
+		cfg.Miner.GasCeil = params.LocalGasCeil
+	case ctx.GlobalBool(DeveloperFlag.Name):
+		cfg.Miner.GasCeil = params.LocalGasCeil
+	default:
+		cfg.Miner.GasCeil = params.ColosseumGasCeil
 	}
 }
 
@@ -1351,6 +1371,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 
 	// set the subordinate chain websocket urls
 	setSubUrls(ctx, cfg)
+
+	// set the gas limit ceil
+	setGasLimitCeil(ctx, cfg)
 
 	// set the slices that the node is running
 	setSlicesRunning(ctx, cfg)

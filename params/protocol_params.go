@@ -19,9 +19,10 @@ package params
 import "math/big"
 
 const (
-	GasLimitBoundDivisor uint64 = 1024      // The bound divisor of the gas limit, used in update calculations.
-	MinGasLimit          uint64 = 17000000  // Minimum the gas limit may ever be.
-	GenesisGasLimit      uint64 = 471238800 // Gas limit of the Genesis block.
+	GasLimitBoundDivisor    uint64 = 1024    // The bound divisor of the gas limit, used in update calculations.
+	PercentGasUsedThreshold uint64 = 95      // Percent Gas used threshold at which the gas limit adjusts
+	MinGasLimit             uint64 = 5000000 // Minimum the gas limit may ever be.
+	GenesisGasLimit         uint64 = 5000000 // Gas limit of the Genesis block.
 
 	MaximumExtraDataSize  uint64 = 32    // Maximum size extra data may be after Genesis.
 	ExpByteGas            uint64 = 10    // Times ceil(log256(exponent)) for the EXP instruction.
@@ -129,14 +130,19 @@ const (
 )
 
 var (
-	DifficultyBoundDivisor = big.NewInt(2048)  // The bound divisor of the difficulty, used in the update calculations.
-	ZoneMinDifficulty      = big.NewInt(1000)  // The minimum difficulty in a zone. Prime & regions should be multiples of this value
-	MinimumDifficulty      = ZoneMinDifficulty // The minimum that the difficulty may ever be.
-	GenesisDifficulty      = ZoneMinDifficulty // Difficulty of the Genesis block.
-	DurationLimit          = big.NewInt(10)    // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
-	GardenDurationLimit    = big.NewInt(3)     // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
-	OrchardDurationLimit   = big.NewInt(12)    // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
-	GalenaDurationLimit    = big.NewInt(12)    // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
-	LocalDurationLimit     = big.NewInt(2)     // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
-	TimeFactor             = big.NewInt(7)
+	ColosseumGasCeil       uint64 = 50000000
+	GardenGasCeil          uint64 = 17000000
+	OrchardGasCeil         uint64 = 50000000
+	GalenaGasCeil          uint64 = 160000000
+	LocalGasCeil           uint64 = 20000000
+	DifficultyBoundDivisor        = big.NewInt(2048)  // The bound divisor of the difficulty, used in the update calculations.
+	ZoneMinDifficulty             = big.NewInt(1000)  // The minimum difficulty in a zone. Prime & regions should be multiples of this value
+	MinimumDifficulty             = ZoneMinDifficulty // The minimum that the difficulty may ever be.
+	GenesisDifficulty             = ZoneMinDifficulty // Difficulty of the Genesis block.
+	DurationLimit                 = big.NewInt(10)    // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
+	GardenDurationLimit           = big.NewInt(3)     // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
+	OrchardDurationLimit          = big.NewInt(12)    // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
+	GalenaDurationLimit           = big.NewInt(12)    // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
+	LocalDurationLimit            = big.NewInt(2)     // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
+	TimeFactor                    = big.NewInt(7)
 )

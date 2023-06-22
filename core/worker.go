@@ -57,15 +57,13 @@ type environment struct {
 	gasPool   *GasPool       // available gas used to pack transactions
 	coinbase  common.Address
 
-	header              *types.Header
-	txs                 []*types.Transaction
-	etxs                []*types.Transaction
-	subManifest         types.BlockManifest
-	receipts            []*types.Receipt
-	uncleMu             sync.RWMutex
-	uncles              map[common.Hash]*types.Header
-	externalGasUsed     uint64
-	externalBlockLength int
+	header      *types.Header
+	txs         []*types.Transaction
+	etxs        []*types.Transaction
+	subManifest types.BlockManifest
+	receipts    []*types.Receipt
+	uncleMu     sync.RWMutex
+	uncles      map[common.Hash]*types.Header
 }
 
 // copy creates a deep copy of environment.
@@ -244,6 +242,8 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 		resubmitIntervalCh: make(chan time.Duration),
 		resubmitAdjustCh:   make(chan *intervalAdjust, resubmitAdjustChanSize),
 	}
+	// Set the GasFloor of the worker to the minGasLimit
+	worker.config.GasFloor = params.MinGasLimit
 
 	phBodyCache, _ := lru.New(pendingBlockBodyLimit)
 	worker.pendingBlockBody = phBodyCache
@@ -531,14 +531,13 @@ func (w *worker) makeEnv(parent *types.Block, header *types.Header, coinbase com
 
 	// Note the passed coinbase may be different with header.Coinbase.
 	env := &environment{
-		signer:          types.MakeSigner(w.chainConfig, header.Number()),
-		state:           state,
-		coinbase:        coinbase,
-		ancestors:       mapset.NewSet(),
-		family:          mapset.NewSet(),
-		header:          header,
-		uncles:          make(map[common.Hash]*types.Header),
-		externalGasUsed: uint64(0),
+		signer:    types.MakeSigner(w.chainConfig, header.Number()),
+		state:     state,
+		coinbase:  coinbase,
+		ancestors: mapset.NewSet(),
+		family:    mapset.NewSet(),
+		header:    header,
+		uncles:    make(map[common.Hash]*types.Header),
 	}
 	// when 08 is processed ancestors contain 07 (quick block)
 	for _, ancestor := range w.hc.GetBlocksFromHash(parent.Hash(), 7) {
@@ -841,10 +840,12 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, block *typ
 // into the given sealing block. The transaction selection and ordering strategy can
 // be customized with the plugin in the future.
 func (w *worker) adjustGasLimit(interrupt *int32, env *environment, parent *types.Block) {
-
-	gasUsed := (parent.GasUsed() + env.externalGasUsed) / uint64(env.externalBlockLength+1)
-
-	env.header.SetGasLimit(CalcGasLimit(parent.GasLimit(), gasUsed))
+	percentGasUsed := parent.GasUsed() * 100 / parent.GasLimit()
+	if percentGasUsed > params.PercentGasUsedThreshold {
+		env.header.SetGasLimit(CalcGasLimit(parent.GasLimit(), w.config.GasCeil))
+	} else {
+		env.header.SetGasLimit(CalcGasLimit(parent.GasLimit(), w.config.GasFloor))
+	}
 }
 
 func (w *worker) FinalizeAssemble(chain consensus.ChainHeaderReader, header *types.Header, parent *types.Block, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, etxs []*types.Transaction, subManifest types.BlockManifest, receipts []*types.Receipt) (*types.Block, error) {
