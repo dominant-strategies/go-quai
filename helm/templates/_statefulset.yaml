@@ -16,7 +16,7 @@
 - image: {{ .Values.goQuai.image.name -}}:{{- .Values.goQuai.image.version }}
   imagePullPolicy: Always
   name: prime-go-quai
-  command: ["./build/bin/go-quai", --$(NETWORK), "--slices", $(SLICES)", "--syncmode", "full", "--http", "--http.vhosts=*", "--ws", <MINER_ETHERBASE>, "--http.addr", "0.0.0.0", "--http.api", "eth,net,web3,quai,txpool,debug", "--ws.addr", "0.0.0.0", "--ws.api", "eth,net,web3,quai,txpool,debug", "--port", $(TCP_PORT), "--http.port", $(HTTP_PORT), "--ws.port", $(WS_PORT), "--ws.origins=*", "--http.corsdomain=*", "--gcmode", "archive", "--nonce", $(NONCE), <REGION>, <ZONE>, <SUB>, <DOM>]
+  command: ["./build/bin/go-quai", --$(NETWORK), "--verbosity", $(VERBOSITY), "--slices", $(SLICES), "--syncmode", "full", "--http", "--http.vhosts=*", "--ws", <MINER_ETHERBASE>, "--http.addr", "0.0.0.0", "--http.api", "eth,net,web3,quai,txpool,debug", "--ws.addr", "0.0.0.0", "--ws.api", "eth,net,web3,quai,txpool,debug", "--port", $(TCP_PORT), "--http.port", $(HTTP_PORT), "--ws.port", $(WS_PORT), "--ws.origins=*", "--http.corsdomain=*", "--gcmode", "archive", "--nonce", $(NONCE), <REGION>, <ZONE>, <SUB>, <DOM>]
   env:
   - name: COINBASE_ADDR
     valueFrom:
@@ -38,6 +38,8 @@
     value: {{ .Values.goQuai.network }}
   - name: SLICES
     value: {{ .Values.goQuai.slices }}
+  - name: VERBOSITY
+    value: {{ quote .Values.goQuai.verbosity }}
   ports:
   - containerPort: <HTTP>
     name: prime-http
