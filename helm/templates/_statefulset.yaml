@@ -37,7 +37,7 @@
   - name: NETWORK
     value: {{ .Values.goQuai.network }}
   - name: SLICES
-    value: {{ .Values.goQuai.slices }}
+    value: {{ squote .Values.goQuai.slices }}
   - name: VERBOSITY
     value: {{ quote .Values.goQuai.verbosity }}
   ports:
