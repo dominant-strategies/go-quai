@@ -2,6 +2,7 @@ package log
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -25,6 +26,8 @@ func ConfigureLogger(ctx *cli.Context) {
 	logLevel := logrus.Level(ctx.GlobalInt("verbosity"))
 	Log.SetLevel(logLevel)
 
+	logToStdOut := ctx.GlobalBool("logtostdout")
+
 	log_filename := "nodelogs"
 	regionNum := ctx.GlobalString("region")
 
@@ -45,12 +48,16 @@ func ConfigureLogger(ctx *cli.Context) {
 		TimestampFormat: "01-02|15:04:05.000",
 	}
 
-	Log.SetOutput(&lumberjack.Logger{
-		Filename:   log_filename,
-		MaxSize:    500, // megabytes
-		MaxBackups: 5,
-		MaxAge:     28, //days
-	})
+	if logToStdOut {
+		Log.SetOutput(os.Stdout)
+	} else {
+		Log.SetOutput(&lumberjack.Logger{
+			Filename:   log_filename,
+			MaxSize:    500, // megabytes
+			MaxBackups: 5,
+			MaxAge:     28, //days
+		})
+	}
 }
 
 func SetLevelInt(level int) {
@@ -81,6 +88,7 @@ func New(out_path string) Logger {
 func Trace(msg string, args ...interface{}) {
 	Log.Trace(constructLogMessage(msg, args...))
 }
+
 // Individual logging instances will use the following method.
 func (l Logger) Trace(msg string, args ...interface{}) {
 	l.Logger.Trace(constructLogMessage(msg, args...))
@@ -90,7 +98,7 @@ func Debug(msg string, args ...interface{}) {
 	Log.Debug(constructLogMessage(msg, args...))
 }
 func (l Logger) Debug(msg string, args ...interface{}) {
-	l.Logger.Debug(constructLogMessage(msg, args...))	
+	l.Logger.Debug(constructLogMessage(msg, args...))
 }
 
 func Info(msg string, args ...interface{}) {
@@ -174,11 +182,11 @@ func constructLogMessage(msg string, fields ...interface{}) string {
 	lineInfo := reportLineNumber(2)
 
 	if len(fields) != 1 {
-		// Sometimes we want to log a single string, 
+		// Sometimes we want to log a single string,
 		if len(fields)%2 != 0 {
 			fields = append(fields, "MISSING VALUE")
 		}
-	
+
 		for i := 0; i < len(fields); i += 2 {
 			key := fields[i]
 			value := fields[i+1]
@@ -186,7 +194,7 @@ func constructLogMessage(msg string, fields ...interface{}) string {
 		}
 	}
 
-	if lineInfo != ""{
+	if lineInfo != "" {
 		return fmt.Sprintf("%-40s %-40s %s", lineInfo, msg, strings.Join(pairs, " "))
 	} else {
 		return fmt.Sprintf("%-40s %s", msg, strings.Join(pairs, " "))
