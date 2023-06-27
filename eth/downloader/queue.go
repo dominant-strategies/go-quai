@@ -714,10 +714,9 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, headerProcCh 
 	var accepted bool
 	requiredHeaderFetch := request.From - targetTo
 	if targetTo != 0 || common.NodeLocation.Context() == common.PRIME_CTX {
-		accepted = len(headers) == int(requiredHeaderFetch)+1
-	} else {
-		accepted = len(headers) == int(requiredHeaderFetch)
+		requiredHeaderFetch += 1
 	}
+	accepted = len(headers) == int(requiredHeaderFetch)
 
 	// reverse the array
 	for i, j := 0, len(headers)-1; i < j; i, j = i+1, j-1 {
