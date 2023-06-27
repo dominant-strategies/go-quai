@@ -711,11 +711,10 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, headerProcCh 
 	// Ensure headers can be mapped onto the skeleton chain
 	targetTo := q.headerToPool[request.From+1]
 
+	var accepted bool
 	requiredHeaderFetch := request.From - targetTo
-	if targetTo != 0 {
-		requiredHeaderFetch += 1
-	}
-	accepted := len(headers) == int(requiredHeaderFetch)
+	requiredHeaderFetch += 1
+	accepted = len(headers) == int(requiredHeaderFetch)
 
 	// reverse the array
 	for i, j := 0, len(headers)-1; i < j; i, j = i+1, j-1 {
@@ -739,11 +738,8 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, headerProcCh 
 		for i, header := range headers[1:] {
 			hash := header.Hash()
 			var want uint64
-			if targetTo != 0 {
-				want = targetTo + 1 + uint64(i)
-			} else {
-				want = targetTo + 2 + uint64(i)
-			}
+			want = targetTo + 1 + uint64(i)
+
 			if header.Number().Uint64() != want {
 				logger.Warn("Header broke chain ordering", "number", header.Number(), "hash", hash, "expected", want)
 				accepted = false
@@ -760,7 +756,7 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, headerProcCh 
 	}
 	// If the batch of headers wasn't accepted, mark as unavailable
 	if !accepted {
-		logger.Trace("Skeleton filling not accepted", "from", request.From)
+		logger.Info("Skeleton filling not accepted", "from", request.From)
 
 		miss := q.headerPeerMiss[id]
 		if miss == nil {
