@@ -17,6 +17,10 @@ spec:
     port: <HTTP>
     protocol: TCP
     targetPort: <HTTP>
+  - name: disc
+    port: <DISC>
+    protocol: TCP
+    targetPort: <DISC>
   selector:
     app: {{ include "go-quai.name" $ }}
   type: NodePort
