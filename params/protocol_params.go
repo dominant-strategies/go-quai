@@ -130,7 +130,7 @@ const (
 
 var (
 	DifficultyBoundDivisor = big.NewInt(2048)  // The bound divisor of the difficulty, used in the update calculations.
-	ZoneMinDifficulty      = big.NewInt(1000)  // The minimum difficulty in a zone. Prime & regions should be multiples of this value
+	ZoneMinDifficulty      = big.NewInt(11000)  // The minimum difficulty in a zone. Prime & regions should be multiples of this value
 	MinimumDifficulty      = ZoneMinDifficulty // The minimum that the difficulty may ever be.
 	GenesisDifficulty      = ZoneMinDifficulty // Difficulty of the Genesis block.
 	DurationLimit          = big.NewInt(10)    // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
