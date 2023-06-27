@@ -609,6 +609,12 @@ var (
 		Usage: "Enable colorized logging",
 	}
 
+	
+	LogToStdOutFlag = cli.BoolFlag{
+		Name:  "logtostdout",
+		Usage: "Write log messages to stdout",
+	}
+
 	// Tags are part of every measurement sent to InfluxDB. Queries on tags are faster in InfluxDB.
 	// For example `host` tag could be used so that we can group all nodes and average a measurement
 	// across all of them, but also so that we can select a specific node and inspect its measurements.
