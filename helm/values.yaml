@@ -1,7 +1,7 @@
 goQuai:
   image:
     name: quainetwork/go-quai
-    version: v0.10.0-rc.8
+    version: v0.10.0-rc.9
   env: quai-dev
   replicas: 1
   network: garden
