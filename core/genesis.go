@@ -354,7 +354,7 @@ func DefaultGalenaGenesisBlock() *Genesis {
 		Nonce:      0,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
 		GasLimit:   50000000,
-		Difficulty: big.NewInt(1000),
+		Difficulty: big.NewInt(11000),
 	}
 }
 
