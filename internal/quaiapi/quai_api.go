@@ -427,9 +427,13 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool) (map[string]i
 		formatTx := func(tx *types.Transaction) (interface{}, error) {
 			return tx.Hash(), nil
 		}
+		formatEtx := formatTx
 		if fullTx {
 			formatTx = func(tx *types.Transaction) (interface{}, error) {
-				return newRPCTransactionFromBlockHash(block, tx.Hash()), nil
+				return newRPCTransactionFromBlockHash(block, tx.Hash(), false), nil
+			}
+			formatEtx = func(tx *types.Transaction) (interface{}, error) {
+				return newRPCTransactionFromBlockHash(block, tx.Hash(), true), nil
 			}
 		}
 		txs := block.Transactions()
@@ -444,7 +448,7 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool) (map[string]i
 		etxs := block.ExtTransactions()
 		extTransactions := make([]interface{}, len(etxs))
 		for i, etx := range etxs {
-			if extTransactions[i], err = formatTx(etx); err != nil {
+			if extTransactions[i], err = formatEtx(etx); err != nil {
 				return nil, err
 			}
 		}

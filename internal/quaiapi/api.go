@@ -902,7 +902,7 @@ func RPCMarshalETHBlock(block *types.Block, inclTx bool, fullTx bool) (map[strin
 		}
 		if fullTx {
 			formatTx = func(tx *types.Transaction) (interface{}, error) {
-				return newRPCTransactionFromBlockHash(block, tx.Hash()), nil
+				return newRPCTransactionFromBlockHash(block, tx.Hash(), false), nil
 			}
 		}
 		txs := block.Transactions()
@@ -1067,8 +1067,13 @@ func newRPCPendingTransaction(tx *types.Transaction, current *types.Header, conf
 }
 
 // newRPCTransactionFromBlockIndex returns a transaction that will serialize to the RPC representation.
-func newRPCTransactionFromBlockIndex(b *types.Block, index uint64) *RPCTransaction {
-	txs := b.Transactions()
+func newRPCTransactionFromBlockIndex(b *types.Block, index uint64, etxs bool) *RPCTransaction {
+	var txs types.Transactions
+	if etxs {
+		txs = b.ExtTransactions()
+	} else {
+		txs = b.Transactions()
+	}
 	if index >= uint64(len(txs)) {
 		return nil
 	}
@@ -1086,10 +1091,17 @@ func newRPCRawTransactionFromBlockIndex(b *types.Block, index uint64) hexutil.By
 }
 
 // newRPCTransactionFromBlockHash returns a transaction that will serialize to the RPC representation.
-func newRPCTransactionFromBlockHash(b *types.Block, hash common.Hash) *RPCTransaction {
+func newRPCTransactionFromBlockHash(b *types.Block, hash common.Hash, etxs bool) *RPCTransaction {
+	if etxs {
+		for idx, tx := range b.ExtTransactions() {
+			if tx.Hash() == hash {
+				return newRPCTransactionFromBlockIndex(b, uint64(idx), true)
+			}
+		}
+	}
 	for idx, tx := range b.Transactions() {
 		if tx.Hash() == hash {
-			return newRPCTransactionFromBlockIndex(b, uint64(idx))
+			return newRPCTransactionFromBlockIndex(b, uint64(idx), false)
 		}
 	}
 	return nil
@@ -1238,7 +1250,7 @@ func (s *PublicTransactionPoolAPI) GetBlockTransactionCountByHash(ctx context.Co
 // GetTransactionByBlockNumberAndIndex returns the transaction for the given block number and index.
 func (s *PublicTransactionPoolAPI) GetTransactionByBlockNumberAndIndex(ctx context.Context, blockNr rpc.BlockNumber, index hexutil.Uint) *RPCTransaction {
 	if block, _ := s.b.BlockByNumber(ctx, blockNr); block != nil {
-		return newRPCTransactionFromBlockIndex(block, uint64(index))
+		return newRPCTransactionFromBlockIndex(block, uint64(index), false)
 	}
 	return nil
 }
@@ -1246,7 +1258,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionByBlockNumberAndIndex(ctx conte
 // GetTransactionByBlockHashAndIndex returns the transaction for the given block hash and index.
 func (s *PublicTransactionPoolAPI) GetTransactionByBlockHashAndIndex(ctx context.Context, blockHash common.Hash, index hexutil.Uint) *RPCTransaction {
 	if block, _ := s.b.BlockByHash(ctx, blockHash); block != nil {
-		return newRPCTransactionFromBlockIndex(block, uint64(index))
+		return newRPCTransactionFromBlockIndex(block, uint64(index), false)
 	}
 	return nil
 }
