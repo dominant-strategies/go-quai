@@ -25,57 +25,57 @@ import (
 
 // Genesis hashes to enforce below configs on.
 var (
-	ColosseumGenesisHash = common.HexToHash("0xff5907242c1dd76d1965e811bb65080788ead1f83863743d07302861ad8645c5")
-	GardenGenesisHash    = common.HexToHash("0xc4bba72ab2bc665b30fff8a2d4a40867b501f861d55ffa84559dd1cf896833c7")
-	OrchardGenesisHash   = common.HexToHash("0xfae78a649e29c4c3fffe9b2a7475e164ac25ccb324063504e8e6d0818d95806f")
-	LocalGenesisHash     = common.HexToHash("0xa39b3d005d2541da2509e032289236a625d0d413cc14824ef31b0beef0c6bb85")
-	GalenaGenesisHash    = common.HexToHash("0xa39b3d005d2541da2509e032289236a625d0d413cc14824ef31b0beef0c6bb85")
+	ColosseumGenesisHash = common.HexToHash("0xf4ccaa291097df67e2d98a1369955d14085f9241a5018d2bef532dc84c0039c6")
+	GardenGenesisHash    = common.HexToHash("0x6210219b7847439325215a2d17182b801d9cc8efc2b0004d9511d37ef623405b")
+	OrchardGenesisHash   = common.HexToHash("0xc0fc30c7860b8f4ec7a8fe1a54dfcbca17167eca5bdcbdc077b6d50addf79763")
+	LocalGenesisHash     = common.HexToHash("0xb1eb552366e4083a11585418c4b193f024985d45b23103f0653416de083a6512")
+	GalenaGenesisHash    = common.HexToHash("0xac2b5abb66351e833123c3364283020cadb33df906252b0f86a081ae11e0fab9")
 )
 
 var (
 	// ColosseumChainConfig is the chain parameters to run a node on the Colosseum network.
 	ColosseumChainConfig = &ChainConfig{
 		ChainID:     big.NewInt(9000),
-		Progpow:     new(ProgpowConfig),
+		Blake3pow:   new(Blake3powConfig),
 		GenesisHash: ColosseumGenesisHash,
 	}
 
 	// GardenChainConfig contains the chain parameters to run a node on the Garden test network.
 	GardenChainConfig = &ChainConfig{
 		ChainID:     big.NewInt(12000),
-		Progpow:     new(ProgpowConfig),
+		Blake3pow:   new(Blake3powConfig),
 		GenesisHash: GardenGenesisHash,
 	}
 
 	// OrchardChainConfig contains the chain parameters to run a node on the Orchard test network.
 	OrchardChainConfig = &ChainConfig{
 		ChainID:     big.NewInt(15000),
-		Progpow:     new(ProgpowConfig),
+		Blake3pow:   new(Blake3powConfig),
 		GenesisHash: OrchardGenesisHash,
 	}
 
 	// GalenaChainConfig contains the chain parameters to run a node on the Galena test network.
 	GalenaChainConfig = &ChainConfig{
 		ChainID:     big.NewInt(17000),
-		Progpow:     new(ProgpowConfig),
+		Blake3pow:   new(Blake3powConfig),
 		GenesisHash: GalenaGenesisHash,
 	}
 
 	// LocalChainConfig contains the chain parameters to run a node on the Local test network.
 	LocalChainConfig = &ChainConfig{
 		ChainID:     big.NewInt(1337),
-		Progpow:     new(ProgpowConfig),
+		Blake3pow:   new(Blake3powConfig),
 		GenesisHash: LocalGenesisHash,
 	}
 
-	// AllProgpowProtocolChanges contains every protocol change introduced
-	// and accepted by the Quai core developers into the Progpow consensus.
+	// AllBlake3powProtocolChanges contains every protocol change introduced
+	// and accepted by the Quai core developers into the Blake3pow consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllProgpowProtocolChanges = &ChainConfig{big.NewInt(1337), new(ProgpowConfig), common.Hash{}}
+	AllBlake3powProtocolChanges = &ChainConfig{big.NewInt(1337), new(Blake3powConfig), common.Hash{}}
 
-	TestChainConfig = &ChainConfig{big.NewInt(1), new(ProgpowConfig), common.Hash{}}
+	TestChainConfig = &ChainConfig{big.NewInt(1), new(Blake3powConfig), common.Hash{}}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
@@ -87,24 +87,24 @@ var (
 type ChainConfig struct {
 	ChainID *big.Int `json:"chainId"` // chainId identifies the current chain and is used for replay protection
 	// Various consensus engines
-	Progpow     *ProgpowConfig `json:"progpow,omitempty"`
+	Blake3pow   *Blake3powConfig `json:"blake3pow,omitempty"`
 	GenesisHash common.Hash
 }
 
-// ProgpowConfig is the consensus engine configs for proof-of-work based sealing.
-type ProgpowConfig struct{}
+// Blake3powConfig is the consensus engine configs for proof-of-work based sealing.
+type Blake3powConfig struct{}
 
 // String implements the stringer interface, returning the consensus engine details.
-func (c *ProgpowConfig) String() string {
-	return "progpow"
+func (c *Blake3powConfig) String() string {
+	return "blake3pow"
 }
 
 // String implements the fmt.Stringer interface.
 func (c *ChainConfig) String() string {
 	var engine interface{}
 	switch {
-	case c.Progpow != nil:
-		engine = c.Progpow
+	case c.Blake3pow != nil:
+		engine = c.Blake3pow
 	default:
 		engine = "unknown"
 	}

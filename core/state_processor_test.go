@@ -24,7 +24,7 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
-	"github.com/dominant-strategies/go-quai/consensus/progpow"
+	"github.com/dominant-strategies/go-quai/consensus/blake3pow"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
@@ -82,7 +82,7 @@ func TestPrecompile(t *testing.T) {
 	location := toAddr.Location()
 	t.Log(location.Name())
 	params.TestChainConfig.GenesisHash = genesis.Hash()
-	blocks, _ := GenerateChain(params.TestChainConfig, genesis, progpow.NewFaker(), testdb, 2, gen)
+	blocks, _ := GenerateChain(params.TestChainConfig, genesis, blake3pow.NewFaker(), testdb, 2, gen)
 	internal, _ := addr.InternalAddress()
 	statedb.AddBalance(internal, big.NewInt(params.Ether*2)) // give me 2 eth
 	mockContext := MockChainContext{blocks}
@@ -169,7 +169,7 @@ func TestCreateETX(t *testing.T) {
 	location := toAddr.Location()
 	t.Log(location.Name())
 	params.TestChainConfig.GenesisHash = genesis.Hash()
-	blocks, _ := GenerateChain(params.TestChainConfig, genesis, progpow.NewFaker(), testdb, 2, gen)
+	blocks, _ := GenerateChain(params.TestChainConfig, genesis, blake3pow.NewFaker(), testdb, 2, gen)
 	statedb.AddBalance(internal, big.NewInt(params.Ether*2)) // give me 2 eth
 	mockContext := MockChainContext{blocks}
 
@@ -233,7 +233,7 @@ func TestExternalTokenTransfer(t *testing.T) {
 	location := common.HexToAddress("0x3C97734DfD0376b0b1a57f48e2049A092fD89058").Location()
 	t.Log(location.Name())
 	params.TestChainConfig.GenesisHash = genesis.Hash()
-	blocks, _ := GenerateChain(params.TestChainConfig, genesis, progpow.NewFaker(), testdb, 2, gen)
+	blocks, _ := GenerateChain(params.TestChainConfig, genesis, blake3pow.NewFaker(), testdb, 2, gen)
 	statedb.AddBalance(internal, big.NewInt(params.Ether*2)) // give me 2 eth
 	mockContext := MockChainContext{blocks}
 	// Deploy a contract with the proper address that gives me tokens in zone 2-1
@@ -415,7 +415,7 @@ func TestInboundETX(t *testing.T) {
 		t.Fail()
 	}
 	params.TestChainConfig.GenesisHash = genesis.Hash()
-	blocks, _ := GenerateChain(params.TestChainConfig, genesis, progpow.NewFaker(), testdb, 2, gen)
+	blocks, _ := GenerateChain(params.TestChainConfig, genesis, blake3pow.NewFaker(), testdb, 2, gen)
 	mockContext := MockChainContext{blocks}
 	lastBlock := blocks[len(blocks)-1]
 	etxSet := make(types.EtxSet)
@@ -472,7 +472,7 @@ func TestInvalidInboundETX(t *testing.T) {
 	)
 	common.NodeLocation = *to.Location()
 	params.TestChainConfig.GenesisHash = genesis.Hash()
-	blocks, _ := GenerateChain(params.TestChainConfig, genesis, progpow.NewFaker(), testdb, 2, gen)
+	blocks, _ := GenerateChain(params.TestChainConfig, genesis, blake3pow.NewFaker(), testdb, 2, gen)
 	mockContext := MockChainContext{blocks}
 	lastBlock := blocks[len(blocks)-1]
 	etx := types.ExternalTx{Nonce: 0, GasTipCap: common.Big1, GasFeeCap: common.Big1, Gas: 100000, To: &to, Value: big.NewInt(500000000000000000), Data: []byte{}, AccessList: nil, Sender: sender}
@@ -522,7 +522,7 @@ func TestOpETX(t *testing.T) {
 		t.Fail()
 	}
 	params.TestChainConfig.GenesisHash = genesis.Hash()
-	blocks, _ := GenerateChain(params.TestChainConfig, genesis, progpow.NewFaker(), testdb, 2, gen)
+	blocks, _ := GenerateChain(params.TestChainConfig, genesis, blake3pow.NewFaker(), testdb, 2, gen)
 	statedb.AddBalance(internal, big.NewInt(params.Ether*2)) // give me 2 eth
 	mockContext := MockChainContext{blocks}
 	//contract, err := hex.DecodeString("6080604052600060006000600060016001620186a06706f05b59d3b20000735a457339697cb56e5a9bfa5267ea80d2c6375d986000f660008060393d393df3")
@@ -566,7 +566,7 @@ func TestStateProcessorErrors(t *testing.T) {
 	var (
 		config = &params.ChainConfig{
 			ChainID:   big.NewInt(1),
-			Progpow: new(params.ProgpowConfig),
+			Blake3pow: new(params.Blake3powConfig),
 		}
 		signer     = types.LatestSigner(config)
 		testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -599,7 +599,7 @@ func TestStateProcessorErrors(t *testing.T) {
 				},
 			}
 			_             = gspec.MustCommit(db)
-			blockchain, _ = NewHeaderChain(db, progpow.NewFaker(), gspec.Config, nil, vm.Config{})
+			blockchain, _ = NewHeaderChain(db, blake3pow.NewFaker(), gspec.Config, nil, vm.Config{})
 		)
 		defer blockchain.Stop()
 		bigNumber := new(big.Int).SetBytes(common.FromHex("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
@@ -699,7 +699,7 @@ func TestStateProcessorErrors(t *testing.T) {
 			},
 		} {
 			var err error
-			//block := GenerateBadBlock(genesis, progpow.NewFaker(), tt.txs, gspec.Config)
+			//block := GenerateBadBlock(genesis, blake3pow.NewFaker(), tt.txs, gspec.Config)
 			//_, err := blockchain.InsertChain(types.Blocks{block})
 			if err == nil {
 				t.Fatal("block imported without errors")

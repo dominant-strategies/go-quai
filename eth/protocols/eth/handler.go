@@ -138,7 +138,7 @@ func nodeInfo(chain *core.Core, network uint64) *NodeInfo {
 	head := chain.CurrentBlock()
 	return &NodeInfo{
 		Network: network,
-		Entropy: chain.CurrentLogEntropy(),
+		Entropy: chain.CurrentHeader().CalcS(),
 		Genesis: chain.Genesis().Hash(),
 		Config:  chain.Config(),
 		Head:    head.Hash(),

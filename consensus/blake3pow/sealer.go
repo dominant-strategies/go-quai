@@ -23,7 +23,6 @@ import (
 const (
 	// staleThreshold is the maximum depth of the acceptable stale but valid blake3pow solution.
 	staleThreshold = 7
-	mantBits       = 64
 )
 
 var (

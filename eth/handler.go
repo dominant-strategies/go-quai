@@ -225,7 +225,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 		genesis = h.core.Genesis()
 		head    = h.core.CurrentHeader()
 		hash    = head.Hash()
-		entropy = h.core.CurrentLogEntropy()
+		entropy = head.CalcS()
 	)
 	if err := peer.Handshake(h.networkID, h.slicesRunning, entropy, hash, genesis.Hash()); err != nil {
 		peer.Log().Debug("Quai handshake failed", "err", err)

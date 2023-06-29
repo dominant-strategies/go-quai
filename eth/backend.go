@@ -109,9 +109,9 @@ func New(stack *node.Node, config *ethconfig.Config) (*Quai, error) {
 	}
 	log.Info("Allocated trie memory caches", "clean", common.StorageSize(config.TrieCleanCache)*1024*1024, "dirty", common.StorageSize(config.TrieDirtyCache)*1024*1024)
 
-	// Transfer mining-related config to the progpow config.
-	progpowConfig := config.Progpow
-	progpowConfig.NotifyFull = config.Miner.NotifyFull
+	// Transfer mining-related config to the blake3pow config.
+	blake3powConfig := config.Blake3pow
+	blake3powConfig.NotifyFull = config.Miner.NotifyFull
 
 	// Assemble the Quai object
 	chainDb, err := stack.OpenDatabaseWithFreezer("chaindata", config.DatabaseCache, config.DatabaseHandles, config.DatabaseFreezer, "eth/db/chaindata/", false)
@@ -131,7 +131,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Quai, error) {
 		config:            config,
 		chainDb:           chainDb,
 		eventMux:          stack.EventMux(),
-		engine:            ethconfig.CreateConsensusEngine(stack, chainConfig, &progpowConfig, config.Miner.Notify, config.Miner.Noverify, chainDb),
+		engine:            ethconfig.CreateConsensusEngine(stack, chainConfig, &blake3powConfig, config.Miner.Notify, config.Miner.Noverify, chainDb),
 		closeBloomHandler: make(chan struct{}),
 		networkID:         config.NetworkId,
 		gasPrice:          config.Miner.GasPrice,

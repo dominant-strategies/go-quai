@@ -148,7 +148,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 
 	nodeCtx := common.NodeLocation.Context()
 	location := header.Location()
-	_, order, err := sl.engine.CalcOrder(header)
+	order, err := header.CalcOrder()
 	if err != nil {
 		return nil, false, err
 	}
@@ -234,6 +234,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		}
 	}
 	time9 := common.PrettyDuration(time.Since(start))
+	log.Trace("Entropy Calculations", "header", header.Hash(), "S", common.BigBitsToBits(header.CalcS()), "DeltaS", common.BigBitsToBits(header.CalcDeltaS()), "IntrinsicS", common.BigBitsToBits(header.CalcIntrinsicS()))
 
 	time10 := common.PrettyDuration(time.Since(start))
 
@@ -251,7 +252,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		log.Error("BestPh Key does not exist for", "key", sl.bestPhKey)
 	}
 
-	oldBestPhEntropy := sl.engine.TotalLogPhS(bestPh.Header)
+	oldBestPhEntropy := new(big.Int).Set(bestPh.Header.CalcPhS())
 
 	sl.updatePhCache(pendingHeaderWithTermini, true, nil)
 
@@ -582,7 +583,7 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 			log.Error("BestPh Key does not exist for", "key", sl.bestPhKey)
 		}
 
-		oldBestPhEntropy := sl.engine.TotalLogPhS(bestPh.Header)
+		oldBestPhEntropy := new(big.Int).Set(bestPh.Header.CalcPhS())
 		sl.updatePhCache(types.PendingHeader{Header: combinedPendingHeader, Termini: localPendingHeader.Termini}, false, nil)
 		sl.pickPhHead(types.PendingHeader{Header: combinedPendingHeader, Termini: localPendingHeader.Termini}, oldBestPhEntropy)
 		return nil
@@ -608,7 +609,7 @@ func (sl *Slice) updatePhCache(pendingHeaderWithTermini types.PendingHeader, inS
 	// Update the pendingHeader Cache
 	oldPh, exist := sl.readPhCache(pendingHeaderWithTermini.Termini[c_terminusIndex])
 	var deepCopyPendingHeaderWithTermini types.PendingHeader
-	newPhEntropy := sl.engine.TotalLogPhS(pendingHeaderWithTermini.Header)
+	newPhEntropy := pendingHeaderWithTermini.Header.CalcPhS()
 	deepCopyPendingHeaderWithTermini = types.PendingHeader{Header: types.CopyHeader(pendingHeaderWithTermini.Header), Termini: pendingHeaderWithTermini.Termini}
 	deepCopyPendingHeaderWithTermini.Header.SetLocation(common.NodeLocation)
 	deepCopyPendingHeaderWithTermini.Header.SetTime(uint64(time.Now().Unix()))
@@ -617,7 +618,7 @@ func (sl *Slice) updatePhCache(pendingHeaderWithTermini types.PendingHeader, inS
 		// If we are inslice we will only update the cache if the entropy is better
 		// Simultaneously we have to allow for the state root update
 		// asynchronously, to do this equal check is added to the inSlice case
-		if (!inSlice && newPhEntropy.Cmp(sl.engine.TotalLogPhS(pendingHeaderWithTermini.Header)) >= 0) ||
+		if (!inSlice && newPhEntropy.Cmp(oldPh.Header.CalcPhS()) >= 0) ||
 			(inSlice && pendingHeaderWithTermini.Header.ParentEntropy().Cmp(oldPh.Header.ParentEntropy()) >= 0) {
 			sl.writePhCache(pendingHeaderWithTermini.Termini[c_terminusIndex], deepCopyPendingHeaderWithTermini)
 			log.Info("PhCache update:", "inSlice:", inSlice, "Ph Number:", deepCopyPendingHeaderWithTermini.Header.NumberArray(), "Termini:", deepCopyPendingHeaderWithTermini.Termini[c_terminusIndex])
@@ -633,7 +634,7 @@ func (sl *Slice) updatePhCache(pendingHeaderWithTermini types.PendingHeader, inS
 }
 
 func (sl *Slice) pickPhHead(pendingHeaderWithTermini types.PendingHeader, oldBestPhEntropy *big.Int) bool {
-	newPhEntropy := sl.engine.TotalLogPhS(pendingHeaderWithTermini.Header)
+	newPhEntropy := pendingHeaderWithTermini.Header.CalcPhS()
 	// Pick a phCache Head
 	if sl.poem(newPhEntropy, oldBestPhEntropy) {
 		sl.bestPhKey = pendingHeaderWithTermini.Termini[c_terminusIndex]

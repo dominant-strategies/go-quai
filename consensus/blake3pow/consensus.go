@@ -253,7 +253,7 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 		}
 	}
 
-	_, order, err := blake3pow.CalcOrder(header)
+	order, err := header.CalcOrder()
 	if err != nil {
 		return err
 	}
@@ -266,21 +266,21 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 	}
 
 	// Verify that the parent entropy is calculated correctly on the header
-	parentEntropy := blake3pow.TotalLogS(parent)
+	parentEntropy := parent.CalcS()
 	if parentEntropy.Cmp(header.ParentEntropy()) != 0 {
 		return fmt.Errorf("invalid parent entropy: have %v, want %v", header.ParentEntropy(), parentEntropy)
 	}
 
 	// If not prime, verify the parentDeltaS field as well
 	if nodeCtx > common.PRIME_CTX {
-		_, parentOrder, _ := blake3pow.CalcOrder(parent)
+		parentOrder, _ := parent.CalcOrder()
 		// If parent was dom, deltaS is zero and otherwise should be the calc delta s on the parent
 		if parentOrder < nodeCtx {
 			if common.Big0.Cmp(header.ParentDeltaS()) != 0 {
 				return fmt.Errorf("invalid parent delta s: have %v, want %v", header.ParentDeltaS(), common.Big0)
 			}
 		} else {
-			parentDeltaS := blake3pow.DeltaLogS(parent)
+			parentDeltaS := parent.CalcDeltaS()
 			if parentDeltaS.Cmp(header.ParentDeltaS()) != 0 {
 				return fmt.Errorf("invalid parent delta s: have %v, want %v", header.ParentDeltaS(), parentDeltaS)
 			}
@@ -319,7 +319,7 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 	}
 	// Verify the engine specific seal securing the block
 	if seal {
-		if err := blake3pow.verifySeal(header, false); err != nil {
+		if err := blake3pow.verifySeal(chain, header, false); err != nil {
 			return err
 		}
 	}
@@ -381,8 +381,8 @@ func (blake3pow *Blake3pow) CalcDifficulty(chain consensus.ChainHeaderReader, pa
 	return x
 }
 
-func (blake3pow *Blake3pow) IsDomCoincident(chain consensus.ChainHeaderReader, header *types.Header) bool {
-	order, err := blake3pow.CalcOrder(header)
+func (blake3pow *Blake3pow) IsDomCoincident(header *types.Header) bool {
+	order, err := header.CalcOrder()
 	if err != nil {
 		return false
 	}
@@ -392,7 +392,7 @@ func (blake3pow *Blake3pow) IsDomCoincident(chain consensus.ChainHeaderReader, h
 // verifySeal checks whether a block satisfies the PoW difficulty requirements,
 // either using the usual blake3pow cache for it, or alternatively using a full DAG
 // to make remote mining fast.
-func (blake3pow *Blake3pow) verifySeal(header *types.Header) error {
+func (blake3pow *Blake3pow) verifySeal(chain consensus.ChainHeaderReader, header *types.Header, fulldag bool) error {
 	// If we're running a fake PoW, accept any seal as valid
 	if blake3pow.config.PowMode == ModeFake || blake3pow.config.PowMode == ModeFullFake {
 		time.Sleep(blake3pow.fakeDelay)
@@ -403,7 +403,7 @@ func (blake3pow *Blake3pow) verifySeal(header *types.Header) error {
 	}
 	// If we're running a shared PoW, delegate verification to it
 	if blake3pow.shared != nil {
-		return blake3pow.shared.verifySeal(chain, header)
+		return blake3pow.shared.verifySeal(chain, header, fulldag)
 	}
 	// Ensure that we have a valid difficulty for the block
 	if header.Difficulty().Sign() <= 0 {

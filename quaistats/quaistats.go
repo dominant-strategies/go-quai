@@ -75,7 +75,6 @@ type backend interface {
 	SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription
 	SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription
 	CurrentHeader() *types.Header
-	TotalLogS(header *types.Header) *big.Int
 	HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error)
 	Stats() (pending int, queued int)
 	Downloader() *downloader.Downloader
@@ -769,7 +768,7 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		uncles  []*types.Header
 	)
 	header = block.Header()
-	entropy = s.backend.TotalLogS(block.Header())
+	entropy = header.CalcS()
 
 	txs = make([]txStats, len(block.Transactions()))
 	for i, tx := range block.Transactions() {

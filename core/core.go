@@ -68,7 +68,7 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 		// Only attempt to append a block, if it is not coincident with our dominant
 		// chain. If it is dom coincident, then the dom chain node in our slice needs
 		// to initiate the append.
-		_, order, err := c.CalcOrder(block.Header())
+		order, err := block.Header().CalcOrder()
 		if err != nil {
 			return idx, err
 		}
@@ -257,7 +257,7 @@ func (c *Core) WriteBlock(block *types.Block) {
 	}
 	if c.GetBlockByHash(block.Hash()) == nil {
 		// Only add non dom blocks to the append queue
-		_, order, err := c.CalcOrder(block.Header())
+		order, err := block.Header().CalcOrder()
 		if err != nil {
 			return
 		}
@@ -415,21 +415,6 @@ func (c *Core) CurrentBlock() *types.Block {
 // header is retrieved from the HeaderChain's internal cache.
 func (c *Core) CurrentHeader() *types.Header {
 	return c.sl.hc.CurrentHeader()
-}
-
-// CurrentLogEntropy returns the logarithm of the total entropy reduction since genesis for our current head block
-func (c *Core) CurrentLogEntropy() *big.Int {
-	return c.engine.TotalLogS(c.sl.hc.CurrentHeader())
-}
-
-// TotalLogS returns the total entropy reduction if the chain since genesis to the given header
-func (c *Core) TotalLogS(header *types.Header) *big.Int {
-	return c.engine.TotalLogS(header)
-}
-
-// CalcOrder returns the order of the block within the hierarchy of chains
-func (c *Core) CalcOrder(header *types.Header) (*big.Int, int, error) {
-	return c.engine.CalcOrder(header)
 }
 
 // GetHeader retrieves a block header from the database by hash and number,

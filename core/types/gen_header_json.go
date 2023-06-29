@@ -26,8 +26,8 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		ManifestHash  []common.Hash   `json:"manifestHash"        gencodec:"required"`
 		ReceiptHash   common.Hash     `json:"receiptsRoot"        gencodec:"required"`
 		Difficulty    *hexutil.Big    `json:"difficulty"          gencodec:"required"`
-		ParentEntropy []*hexutil.Big  `json:"parentEntropy"       gencodec:"required"`
-		ParentDeltaS  []*hexutil.Big  `json:"parentDeltaS"        gencodec:"required"`
+		ParentEntropy []*hexutil.Big  `json:"parentEntropy"		gencodec:"required"`
+		ParentDeltaS  []*hexutil.Big  `json:"parentDeltaS"		gencodec:"required"`
 		Number        []*hexutil.Big  `json:"number"              gencodec:"required"`
 		GasLimit      hexutil.Uint64  `json:"gasLimit"            gencodec:"required"`
 		GasUsed       hexutil.Uint64  `json:"gasUsed"             gencodec:"required"`
@@ -35,7 +35,6 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		Location      hexutil.Bytes   `json:"location"            gencodec:"required"`
 		Time          hexutil.Uint64  `json:"timestamp"           gencodec:"required"`
 		Extra         hexutil.Bytes   `json:"extraData"           gencodec:"required"`
-		MixHash       common.Hash     `json:"mixHash"             gencodec:"required"`
 		Nonce         BlockNonce      `json:"nonce"`
 		Hash          common.Hash     `json:"hash"`
 	}
@@ -65,11 +64,9 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	enc.Location = hexutil.Bytes(h.Location())
 	enc.Time = hexutil.Uint64(h.Time())
 	enc.Extra = hexutil.Bytes(h.Extra())
-	enc.MixHash = h.MixHash()
 	enc.Nonce = h.Nonce()
 	enc.Hash = h.Hash()
-	raw, err := json.Marshal(&enc)
-	return raw, err
+	return json.Marshal(&enc)
 }
 
 // UnmarshalJSON unmarshals from JSON.
@@ -84,17 +81,16 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		EtxHash       *common.Hash    `json:"extTransactionsRoot" gencodec:"required"`
 		EtxRollupHash *common.Hash    `json:"extRollupRoot"       gencodec:"required"`
 		ManifestHash  []common.Hash   `json:"manifestHash"        gencodec:"required"`
-		Difficulty    *hexutil.Big    `json:"difficulty"          gencodec:"required"`
-		ParentEntropy []*hexutil.Big  `json:"parentEntropy"       gencodec:"required"`
-		ParentDeltaS  []*hexutil.Big  `json:"parentDeltaS"        gencodec:"required"`
-		Number        []*hexutil.Big  `json:"number"              gencodec:"required"`
+		Difficulty    *hexutil.Big    `json:"difficulty"         	gencodec:"required"`
+		ParentEntropy []*hexutil.Big  `json:"parentEntropy"	   	gencodec:"required"`
+		ParentDeltaS  []*hexutil.Big  `json:"parentDeltaS"	   	gencodec:"required"`
+		Number        []*hexutil.Big  `json:"number"             	gencodec:"required"`
 		GasLimit      *hexutil.Uint64 `json:"gasLimit"            gencodec:"required"`
 		GasUsed       *hexutil.Uint64 `json:"gasUsed"             gencodec:"required"`
 		BaseFee       *hexutil.Big    `json:"baseFeePerGas"       gencodec:"required"`
 		Location      hexutil.Bytes   `json:"location"            gencodec:"required"`
 		Time          hexutil.Uint64  `json:"timestamp"           gencodec:"required"`
 		Extra         hexutil.Bytes   `json:"extraData"           gencodec:"required"`
-		MixHash       *common.Hash    `json:"MixHash"             gencodec:"required"`
 		Nonce         BlockNonce      `json:"nonce"`
 	}
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -151,9 +147,6 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	if dec.Extra == nil {
 		return errors.New("missing required field 'extraData' for Header")
 	}
-	if dec.MixHash == nil {
-		return errors.New("missing required field 'mixHash' for Header")
-	}
 	// Initialize the header
 	h.parentHash = make([]common.Hash, common.HierarchyDepth)
 	h.manifestHash = make([]common.Hash, common.HierarchyDepth)
@@ -194,7 +187,6 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	}
 	h.SetTime(uint64(dec.Time))
 	h.SetExtra(dec.Extra)
-	h.SetMixHash(dec.MixHash)
 	h.SetNonce(dec.Nonce)
 	return nil
 }
