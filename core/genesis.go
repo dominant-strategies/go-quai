@@ -353,7 +353,7 @@ func DefaultGalenaGenesisBlock() *Genesis {
 		Config:     params.GalenaChainConfig,
 		Nonce:      0,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
-		GasLimit:   160000000,
+		GasLimit:   80000000,
 		Difficulty: big.NewInt(25000),
 	}
 }

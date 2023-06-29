@@ -29,7 +29,7 @@ var (
 	GardenGenesisHash    = common.HexToHash("0xc4bba72ab2bc665b30fff8a2d4a40867b501f861d55ffa84559dd1cf896833c7")
 	OrchardGenesisHash   = common.HexToHash("0xa39b3d005d2541da2509e032289236a625d0d413cc14824ef31b0beef0c6bb85")
 	LocalGenesisHash     = common.HexToHash("0xa39b3d005d2541da2509e032289236a625d0d413cc14824ef31b0beef0c6bb85")
-	GalenaGenesisHash    = common.HexToHash("0x2cf63ce19c5b7901f235763f2a74db8ee800f4e6351c3bc87709c925b70651f7")
+	GalenaGenesisHash    = common.HexToHash("0x0dc993fdf7da3ba8980c032e9b9a530919d03a1f29c3f812b802db509fe65936")
 )
 
 var (
