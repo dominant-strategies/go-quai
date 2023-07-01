@@ -68,6 +68,8 @@ type Slice struct {
 	bestPhKey common.Hash
 	phCache   *lru.Cache
 
+	phCacheSeal *lru.Cache
+
 	validator Validator // Block and state validator interface
 	phCacheMu sync.RWMutex
 
@@ -100,6 +102,7 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLooku
 	sl.miner = New(sl.hc, sl.txPool, config, db, chainConfig, engine, isLocalBlock)
 
 	sl.phCache, _ = lru.New(c_phCacheSize)
+	sl.phCacheSeal, _ = lru.New(c_phCacheSize)
 
 	// only set the subClients if the chain is not Zone
 	sl.subClients = make([]*quaiclient.Client, 3)
@@ -341,7 +344,8 @@ func (sl *Slice) readPhCache(hash common.Hash) (types.PendingHeader, bool) {
 
 // Write the phCache
 func (sl *Slice) writePhCache(hash common.Hash, pendingHeader types.PendingHeader) {
-	sl.phCache.Add(hash, pendingHeader)
+	sl.phCache.Add(hash, *types.CopyPendingHeader(&pendingHeader))
+	sl.phCacheSeal.Add(pendingHeader.Header.SealHash(), *pendingHeader.Header)
 }
 
 // Generate a slice pending header
@@ -478,6 +482,16 @@ func (sl *Slice) GetPendingHeader() (*types.Header, error) {
 	} else {
 		return nil, errors.New("empty pending header")
 	}
+}
+
+// GetPendingHeaderUsingSealHash is used by the miner to request the current pending header
+func (sl *Slice) GetPendingHeaderUsingSealHash(hash common.Hash) (*types.Header, error) {
+	if ph, exists := sl.phCacheSeal.Get(hash); exists {
+		if ph, ok := ph.(types.Header); ok {
+			return types.CopyHeader(&ph), nil
+		}
+	}
+	return nil, errors.New("ph doesnt exist")
 }
 
 // GetManifest gathers the manifest of ancestor block hashes since the last
@@ -843,6 +857,7 @@ func (sl *Slice) NewGenesisPendingHeader(domPendingHeader *types.Header) {
 	genesisTermini := []common.Hash{genesisHash, genesisHash, genesisHash, genesisHash}
 	if sl.hc.Empty() {
 		sl.phCache.Add(sl.config.GenesisHash, types.PendingHeader{Header: domPendingHeader, Termini: genesisTermini})
+		sl.phCacheSeal.Add(domPendingHeader.SealHash(), *domPendingHeader)
 	}
 }
 

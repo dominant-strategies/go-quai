@@ -298,6 +298,10 @@ func (c *Core) GetPendingHeader() (*types.Header, error) {
 	return c.sl.GetPendingHeader()
 }
 
+func (c *Core) GetPendingHeaderUsingSealHash(hash common.Hash) (*types.Header, error) {
+	return c.sl.GetPendingHeaderUsingSealHash(hash)
+}
+
 func (c *Core) GetManifest(blockHash common.Hash) (types.BlockManifest, error) {
 	return c.sl.GetManifest(blockHash)
 }

@@ -485,6 +485,10 @@ func (b *QuaiAPIBackend) GetPendingHeader() (*types.Header, error) {
 	return b.eth.core.GetPendingHeader()
 }
 
+func (b *QuaiAPIBackend) GetPendingHeaderUsingSealHash(hash common.Hash) (*types.Header, error) {
+	return b.eth.core.GetPendingHeaderUsingSealHash(hash)
+}
+
 func (b *QuaiAPIBackend) GetManifest(blockHash common.Hash) (types.BlockManifest, error) {
 	return b.eth.core.GetManifest(blockHash)
 }

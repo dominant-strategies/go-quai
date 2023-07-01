@@ -80,6 +80,7 @@ type Backend interface {
 	SubRelayPendingHeader(pendingHeader types.PendingHeader, location common.Location)
 	NewGenesisPendingHeader(pendingHeader *types.Header)
 	GetPendingHeader() (*types.Header, error)
+	GetPendingHeaderUsingSealHash(common.Hash) (*types.Header, error)
 	GetManifest(blockHash common.Hash) (types.BlockManifest, error)
 	GetSubManifest(slice common.Location, blockHash common.Hash) (types.BlockManifest, error)
 	AddPendingEtxs(pEtxs types.PendingEtxs) error

@@ -491,6 +491,8 @@ func (h *Header) SetNonce(val BlockNonce) {
 func (h *Header) ParentHashArray() []common.Hash   { return h.parentHash }
 func (h *Header) ManifestHashArray() []common.Hash { return h.manifestHash }
 func (h *Header) NumberArray() []*big.Int          { return h.number }
+func (h *Header) ParentEntropyArray() []*big.Int   { return h.parentEntropy }
+func (h *Header) ParentDeltaSArray() []*big.Int    { return h.parentDeltaS }
 
 // headerData comprises all data fields of the header, excluding the nonce, so
 // that the nonce may be independently adjusted in the work algorithm.
