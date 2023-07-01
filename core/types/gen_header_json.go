@@ -16,28 +16,28 @@ var _ = (*headerMarshaling)(nil)
 // MarshalJSON marshals as JSON.
 func (h Header) MarshalJSON() ([]byte, error) {
 	var enc struct {
-		ParentHash    []common.Hash   `json:"parentHash"          gencodec:"required"`
-		UncleHash     common.Hash     `json:"sha3Uncles"          gencodec:"required"`
-		Coinbase      common.Address  `json:"miner"               gencodec:"required"`
-		Root          common.Hash     `json:"stateRoot"           gencodec:"required"`
-		TxHash        common.Hash     `json:"transactionsRoot"    gencodec:"required"`
-		EtxHash       common.Hash     `json:"extTransactionsRoot" gencodec:"required"`
-		EtxRollupHash common.Hash     `json:"extRollupRoot"       gencodec:"required"`
-		ManifestHash  []common.Hash   `json:"manifestHash"        gencodec:"required"`
-		ReceiptHash   common.Hash     `json:"receiptsRoot"        gencodec:"required"`
-		Difficulty    *hexutil.Big    `json:"difficulty"          gencodec:"required"`
-		ParentEntropy []*hexutil.Big  `json:"parentEntropy"       gencodec:"required"`
-		ParentDeltaS  []*hexutil.Big  `json:"parentDeltaS"        gencodec:"required"`
-		Number        []*hexutil.Big  `json:"number"              gencodec:"required"`
-		GasLimit      hexutil.Uint64  `json:"gasLimit"            gencodec:"required"`
-		GasUsed       hexutil.Uint64  `json:"gasUsed"             gencodec:"required"`
-		BaseFee       *hexutil.Big    `json:"baseFeePerGas"       gencodec:"required"`
-		Location      hexutil.Bytes   `json:"location"            gencodec:"required"`
-		Time          hexutil.Uint64  `json:"timestamp"           gencodec:"required"`
-		Extra         hexutil.Bytes   `json:"extraData"           gencodec:"required"`
-		MixHash       common.Hash     `json:"mixHash"             gencodec:"required"`
-		Nonce         BlockNonce      `json:"nonce"`
-		Hash          common.Hash     `json:"hash"`
+		ParentHash    []common.Hash  `json:"parentHash"          gencodec:"required"`
+		UncleHash     common.Hash    `json:"sha3Uncles"          gencodec:"required"`
+		Coinbase      common.Address `json:"miner"               gencodec:"required"`
+		Root          common.Hash    `json:"stateRoot"           gencodec:"required"`
+		TxHash        common.Hash    `json:"transactionsRoot"    gencodec:"required"`
+		EtxHash       common.Hash    `json:"extTransactionsRoot" gencodec:"required"`
+		EtxRollupHash common.Hash    `json:"extRollupRoot"       gencodec:"required"`
+		ManifestHash  []common.Hash  `json:"manifestHash"        gencodec:"required"`
+		ReceiptHash   common.Hash    `json:"receiptsRoot"        gencodec:"required"`
+		Difficulty    *hexutil.Big   `json:"difficulty"          gencodec:"required"`
+		ParentEntropy []*hexutil.Big `json:"parentEntropy"       gencodec:"required"`
+		ParentDeltaS  []*hexutil.Big `json:"parentDeltaS"        gencodec:"required"`
+		Number        []*hexutil.Big `json:"number"              gencodec:"required"`
+		GasLimit      hexutil.Uint64 `json:"gasLimit"            gencodec:"required"`
+		GasUsed       hexutil.Uint64 `json:"gasUsed"             gencodec:"required"`
+		BaseFee       *hexutil.Big   `json:"baseFeePerGas"       gencodec:"required"`
+		Location      hexutil.Bytes  `json:"location"            gencodec:"required"`
+		Time          hexutil.Uint64 `json:"timestamp"           gencodec:"required"`
+		Extra         hexutil.Bytes  `json:"extraData"           gencodec:"required"`
+		MixHash       common.Hash    `json:"mixHash"             gencodec:"required"`
+		Nonce         BlockNonce     `json:"nonce"`
+		Hash          common.Hash    `json:"hash"`
 	}
 	// Initialize the enc struct
 	enc.ParentEntropy = make([]*hexutil.Big, common.HierarchyDepth)
@@ -194,7 +194,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	}
 	h.SetTime(uint64(dec.Time))
 	h.SetExtra(dec.Extra)
-	h.SetMixHash(dec.MixHash)
+	h.SetMixHash(*dec.MixHash)
 	h.SetNonce(dec.Nonce)
 	return nil
 }

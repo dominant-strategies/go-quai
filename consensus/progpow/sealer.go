@@ -155,7 +155,7 @@ search:
 				header = types.CopyHeader(header)
 				header.SetNonce(types.EncodeNonce(nonce))
 				hashBytes := common.BytesToHash(digest)
-				header.SetMixHash(&hashBytes)
+				header.SetMixHash(hashBytes)
 				found <- header
 				break search
 			}

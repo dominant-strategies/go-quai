@@ -77,6 +77,8 @@ type Engine interface {
 	// DeltaLogS returns the log of the entropy delta for a chain since its prior coincidence
 	DeltaLogS(header *types.Header) *big.Int
 
+	ComputePowLight(header *types.Header) (mixHash, powHash common.Hash)
+
 	// VerifyHeader checks whether a header conforms to the consensus rules of a
 	// given engine. Verifying the seal may be done optionally here, or explicitly
 	// via the VerifySeal method.
@@ -135,6 +137,15 @@ type Engine interface {
 
 	// Close terminates any background threads maintained by the consensus engine.
 	Close() error
+}
+
+func TargetToDifficulty(target *big.Int) *big.Int {
+	big2e256 := new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0)) // 2^256
+	return new(big.Int).Div(big2e256, target)
+}
+
+func DifficultyToTarget(difficulty *big.Int) *big.Int {
+	return TargetToDifficulty(difficulty)
 }
 
 // PoW is a consensus engine based on proof-of-work.
