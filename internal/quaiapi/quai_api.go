@@ -24,6 +24,7 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
+	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/crypto"
@@ -565,17 +566,28 @@ func (s *PublicBlockChainQuaiAPI) fillSubordinateManifest(b *types.Block) (*type
 	}
 }
 
-// ReceiveMinedHeader will run checks on the block and add to canonical chain if valid.
-func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw json.RawMessage) error {
-	nodeCtx := common.NodeLocation.Context()
-	// Decode header and transactions.
-	var header *types.Header
-	if err := json.Unmarshal(raw, &header); err != nil {
-		return err
+// GetWork returns a work package for external miner.
+//
+// The work package consists of 3 strings:
+//
+//	result[0] - 32 bytes hex encoded current block header pow-hash
+//	result[1] - 32 bytes hex encoded seed hash used for DAG
+//	result[2] - 32 bytes hex encoded boundary condition ("target"), 2^256/difficulty
+//	result[3] - hex encoded block number
+func (s *PublicBlockChainQuaiAPI) GetWork() ([4]string, error) {
+	pendingHeader, error := s.b.GetPendingHeader()
+	if error != nil {
+		return [4]string{}, error
 	}
+	workPackage, error := consensus.MakeWork(pendingHeader)
+	return *workPackage, error
+}
+
+func (s *PublicBlockChainQuaiAPI) makeAndBroadcastBlock(header *types.Header) error {
+	nodeCtx := common.NodeLocation.Context()
+
 	block, err := s.b.ConstructLocalMinedBlock(header)
 	if err != nil && err.Error() == core.ErrBadSubManifest.Error() && nodeCtx < common.ZONE_CTX {
-		log.Info("filling sub manifest")
 		// If we just mined this block, and we have a subordinate chain, its possible
 		// the subordinate manifest in our block body is incorrect. If so, ask our sub
 		// for the correct manifest and reconstruct the block.
@@ -595,6 +607,37 @@ func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw js
 	log.Info("Retrieved mined block", "number", header.Number(), "location", header.Location())
 
 	return nil
+}
+
+// ReceiveMinedHeader will run checks on the block and add to canonical chain if valid.
+func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw json.RawMessage) error {
+	// Decode header and transactions.
+	var header *types.Header
+	if err := json.Unmarshal(raw, &header); err != nil {
+		return err
+	}
+
+	return s.makeAndBroadcastBlock(header)
+}
+
+// SubmitWork can be used by external miner to submit their POW solution.
+// It returns an indication if the work was accepted.
+// Note either an invalid solution, a stale work a non-existent work will return false.
+func (s *PublicBlockChainQuaiAPI) SubmitWork(ctx context.Context, nonce types.BlockNonce, sealHash, mixHash common.Hash) bool {
+	log.Info("Received mined header", "sealHash", sealHash)
+	header, _ := s.b.GetPendingHeaderUsingSealHash(sealHash)
+	if header == nil {
+		log.Warn("Header nil in submitwork")
+		return false
+	}
+	header.SetNonce(nonce)
+	header.SetMixHash(mixHash)
+
+	if err := s.makeAndBroadcastBlock(header); err != nil {
+		log.Warn("makeAndBroadcastBlock failed", "err", err)
+		return false
+	}
+	return true
 }
 
 type tdBlock struct {

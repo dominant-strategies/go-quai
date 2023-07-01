@@ -31,36 +31,6 @@ type API struct {
 	progpow *Progpow
 }
 
-// GetWork returns a work package for external miner.
-//
-// The work package consists of 3 strings:
-//
-//	result[0] - 32 bytes hex encoded current block header pow-hash
-//	result[1] - 32 bytes hex encoded seed hash used for DAG
-//	result[2] - 32 bytes hex encoded boundary condition ("target"), 2^256/difficulty
-//	result[3] - hex encoded block number
-func (api *API) GetWork() ([4]string, error) {
-	if api.progpow.remote == nil {
-		return [4]string{}, errors.New("not supported")
-	}
-
-	var (
-		workCh = make(chan [4]string, 1)
-		errc   = make(chan error, 1)
-	)
-	select {
-	case api.progpow.remote.fetchWorkCh <- &sealWork{errc: errc, res: workCh}:
-	case <-api.progpow.remote.exitCh:
-		return [4]string{}, errProgpowStopped
-	}
-	select {
-	case work := <-workCh:
-		return work, nil
-	case err := <-errc:
-		return [4]string{}, err
-	}
-}
-
 // SubmitWork can be used by external miner to submit their POW solution.
 // It returns an indication if the work was accepted.
 // Note either an invalid solution, a stale work a non-existent work will return false.

@@ -519,11 +519,3 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	}
 	state.AddBalance(coinbase, reward)
 }
-
-func TargetToDifficulty(target *big.Int) *big.Int {
-	return new(big.Int).Div(big2e256, target)
-}
-
-func DifficultyToTarget(difficulty *big.Int) *big.Int {
-	return TargetToDifficulty(difficulty)
-}

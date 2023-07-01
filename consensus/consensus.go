@@ -21,6 +21,7 @@ import (
 	"math/big"
 
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/params"
@@ -135,6 +136,34 @@ type Engine interface {
 
 	// Close terminates any background threads maintained by the consensus engine.
 	Close() error
+}
+
+// makeWork creates a work package for external miner.
+//
+// The work package consists of 3 strings:
+//
+//	result[0], 32 bytes hex encoded current header pow-hash
+//	result[1], 32 bytes hex encoded seed hash used for DAG
+//	result[2], 32 bytes hex encoded boundary condition ("target"), 2^256/difficulty
+//	result[3], hex encoded header number
+func MakeWork(header *types.Header) (*[4]string, error) {
+	currentWork := new([4]string)
+	hash := header.SealHash()
+	currentWork[0] = hash.Hex()
+	currentWork[1] = hexutil.EncodeBig(header.Number())
+	big2e256 := new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0))
+	currentWork[2] = common.BytesToHash(new(big.Int).Div(big2e256, big.NewInt(10000000)).Bytes()).Hex()
+	currentWork[3] = hexutil.EncodeBig(header.Number())
+	return currentWork, nil
+}
+
+func TargetToDifficulty(target *big.Int) *big.Int {
+	big2e256 := new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0)) // 2^256
+	return new(big.Int).Div(big2e256, target)
+}
+
+func DifficultyToTarget(difficulty *big.Int) *big.Int {
+	return TargetToDifficulty(difficulty)
 }
 
 // PoW is a consensus engine based on proof-of-work.

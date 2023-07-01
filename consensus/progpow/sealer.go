@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
-	"github.com/dominant-strategies/go-quai/common/hexutil"
+	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/core/types"
 )
 
@@ -257,7 +257,7 @@ func (s *remoteSealer) loop() {
 			// Update current work with new received header.
 			// Note same work can be past twice, happens when changing CPU threads.
 			s.results = work.results
-			s.makeWork(work.header)
+			consensus.MakeWork(work.header)
 			s.notifyWork()
 
 		case work := <-s.fetchWorkCh:
@@ -310,25 +310,6 @@ func (s *remoteSealer) loop() {
 			return
 		}
 	}
-}
-
-// makeWork creates a work package for external miner.
-//
-// The work package consists of 3 strings:
-//
-//	result[0], 32 bytes hex encoded current header pow-hash
-//	result[1], 32 bytes hex encoded seed hash used for DAG
-//	result[2], 32 bytes hex encoded boundary condition ("target"), 2^256/difficulty
-//	result[3], hex encoded header number
-func (s *remoteSealer) makeWork(header *types.Header) {
-	hash := header.SealHash()
-	s.currentWork[0] = hash.Hex()
-	s.currentWork[1] = hexutil.EncodeBig(header.Number())
-	s.currentWork[2] = common.BytesToHash(new(big.Int).Div(big2e256, header.Difficulty()).Bytes()).Hex()
-
-	// Trace the seal work fetched by remote sealer.
-	s.currentHeader = header
-	s.works[hash] = header
 }
 
 // notifyWork notifies all the specified mining endpoints of the availability of
