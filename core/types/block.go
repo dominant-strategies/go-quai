@@ -478,9 +478,9 @@ func (h *Header) SetExtra(val []byte) {
 		copy(h.extra, val)
 	}
 }
-func (h *Header) SetMixHash(val *common.Hash) {
+func (h *Header) SetMixHash(val common.Hash) {
 	h.hash = atomic.Value{} // clear hash cache
-	h.mixHash = *val
+	h.mixHash = val
 }
 func (h *Header) SetNonce(val BlockNonce) {
 	h.hash = atomic.Value{} // clear hash cache, but NOT sealHash

@@ -78,6 +78,8 @@ type Engine interface {
 	// DeltaLogS returns the log of the entropy delta for a chain since its prior coincidence
 	DeltaLogS(header *types.Header) *big.Int
 
+	DeriveMixAndPowHash(header *types.Header) (mixHash, powHash common.Hash)
+
 	// VerifyHeader checks whether a header conforms to the consensus rules of a
 	// given engine. Verifying the seal may be done optionally here, or explicitly
 	// via the VerifySeal method.

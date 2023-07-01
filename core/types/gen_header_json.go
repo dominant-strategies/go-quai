@@ -94,7 +94,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		Location      hexutil.Bytes   `json:"location"            gencodec:"required"`
 		Time          hexutil.Uint64  `json:"timestamp"           gencodec:"required"`
 		Extra         hexutil.Bytes   `json:"extraData"           gencodec:"required"`
-		MixHash       *common.Hash    `json:"MixHash"             gencodec:"required"`
+		MixHash       common.Hash    `json:"MixHash"             gencodec:"required"`
 		Nonce         BlockNonce      `json:"nonce"`
 	}
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -150,9 +150,6 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	}
 	if dec.Extra == nil {
 		return errors.New("missing required field 'extraData' for Header")
-	}
-	if dec.MixHash == nil {
-		return errors.New("missing required field 'mixHash' for Header")
 	}
 	// Initialize the header
 	h.parentHash = make([]common.Hash, common.HierarchyDepth)
