@@ -20,7 +20,6 @@ package types
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -731,45 +730,57 @@ func (h *Header) CalcDeltaS() *big.Int {
 }
 
 func (h *Header) CalcOrder() (int, error) {
+	// Get entropy reduction of this header
 	intrinsicS := h.CalcIntrinsicS()
 
 	// This is the updated the threshold calculation based on the zone difficulty threshold
-	zoneThresholdS := h.CalcIntrinsicS(common.BytesToHash(new(big.Int).Div(big2e256, h.Difficulty()).Bytes()))
+	target := new(big.Int).Div(big2e256, h.Difficulty()).Bytes()
+	zoneThresholdS := h.CalcIntrinsicS(common.BytesToHash(target))
 	timeFactorHierarchyDepthMultiple := new(big.Int).Mul(params.TimeFactor, big.NewInt(common.HierarchyDepth))
 
+	// //////////////
 	// Prime case
-	primeEntropyThreshold := new(big.Int).Mul(timeFactorHierarchyDepthMultiple, timeFactorHierarchyDepthMultiple)
-	primeEntropyThreshold = new(big.Int).Mul(primeEntropyThreshold, zoneThresholdS)
-	primeBlockThreshold := new(big.Int).Quo(primeEntropyThreshold, big.NewInt(2))
-	primeEntropyThreshold = new(big.Int).Sub(primeEntropyThreshold, primeBlockThreshold)
+	// /////////////
+	// Compute the prime comulative entropy threshold based on the time factor of the hierarchy.
+	primeEntropyThresholdFactor := new(big.Int).Mul(timeFactorHierarchyDepthMultiple, timeFactorHierarchyDepthMultiple)
+	primeEntropyThreshold := new(big.Int).Mul(primeEntropyThresholdFactor, zoneThresholdS)
 
-	primeBlockEntropyThresholdAdder, _ := mathutil.BinaryLog(primeBlockThreshold, 8)
-	primeBlockEntropyThreshold := new(big.Int).Add(zoneThresholdS, big.NewInt(int64(primeBlockEntropyThresholdAdder)))
+	// Compute the intrinsic threshold for finding a prime block based on the ontolgy
+	primeBlockEntropyThresholdFactor := big.NewInt(common.NumRegionsInPrime * common.NumZonesInRegion)
+	primeBlockEntropyThreshold := h.CalcIntrinsicS(common.BytesToHash(new(big.Int).Div(big2e256, new(big.Int).Mul(primeBlockEntropyThresholdFactor, h.Difficulty())).Bytes()))
 
-	totalDeltaS := new(big.Int).Add(h.ParentDeltaS(common.REGION_CTX), h.ParentDeltaS(common.ZONE_CTX))
-	totalDeltaS.Add(totalDeltaS, intrinsicS)
-	if intrinsicS.Cmp(primeBlockEntropyThreshold) > 0 && totalDeltaS.Cmp(primeEntropyThreshold) > 0 {
+	// Compute the total accumulated entropy since the last prime block
+	totalDeltaSPrime := new(big.Int).Add(h.ParentDeltaS(common.REGION_CTX), h.ParentDeltaS(common.ZONE_CTX))
+	totalDeltaSPrime.Add(totalDeltaSPrime, intrinsicS)
+
+	if intrinsicS.Cmp(primeBlockEntropyThreshold) > 0 && totalDeltaSPrime.Cmp(primeEntropyThreshold) > 0 {
 		return common.PRIME_CTX, nil
 	}
 
+	// ////////////
 	// Region case
+	// ////////////
+	// Compute the region comulative entropy threshold based on the time factor of the hierarchy.
 	regionEntropyThreshold := new(big.Int).Mul(timeFactorHierarchyDepthMultiple, zoneThresholdS)
-	regionBlockThreshold := new(big.Int).Quo(regionEntropyThreshold, big.NewInt(2))
-	regionEntropyThreshold = new(big.Int).Sub(regionEntropyThreshold, regionBlockThreshold)
 
-	regionBlockEntropyThresholdAdder, _ := mathutil.BinaryLog(regionBlockThreshold, 8)
-	regionBlockEntropyThreshold := new(big.Int).Add(zoneThresholdS, big.NewInt(int64(regionBlockEntropyThresholdAdder)))
+	// Compute the intrinsic threshold for finding a region block based on the ontolgy
+	regionBlockEntropyThreshold := h.CalcIntrinsicS(common.BytesToHash(new(big.Int).Div(big2e256, new(big.Int).Mul(big.NewInt(common.NumZonesInRegion), h.Difficulty())).Bytes()))
 
-	totalDeltaS = new(big.Int).Add(h.ParentDeltaS(common.ZONE_CTX), intrinsicS)
-	if intrinsicS.Cmp(regionBlockEntropyThreshold) > 0 && totalDeltaS.Cmp(regionEntropyThreshold) > 0 {
+	// Compute the total accumulated entropy since the last region block
+	totalDeltaSRegion := new(big.Int).Add(h.ParentDeltaS(common.ZONE_CTX), intrinsicS)
+
+	if intrinsicS.Cmp(regionBlockEntropyThreshold) > 0 && totalDeltaSRegion.Cmp(regionEntropyThreshold) > 0 {
 		return common.REGION_CTX, nil
 	}
 
+	// ////////////
 	// Zone case
-	if intrinsicS.Cmp(zoneThresholdS) > 0 {
+	// ///////////
+	if intrinsicS.Cmp(zoneThresholdS) >= 0 {
 		return common.ZONE_CTX, nil
 	}
-	return -1, errors.New("invalid order")
+
+	return -1, nil
 }
 
 // calcIntrinsicS
