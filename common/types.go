@@ -186,6 +186,42 @@ func (h Hash) Value() (driver.Value, error) {
 	return h[:], nil
 }
 
+// GetLastNumBitsFromHash returns the last num bits of the hash as int64
+func (h Hash) GetLastNumBitsFromHash(num int) int64 {
+	if num > 64 {
+		return 0
+	}
+	termHash := h
+	bits := byteSliceToBits(termHash[:])
+	bitSlice, _ := bitSliceToInt64(bits[len(bits)-num:])
+	return bitSlice
+}
+
+func byteSliceToBits(data []byte) []int {
+	var bits []int
+	for _, b := range data {
+		for i := 7; i >= 0; i-- {
+			bit := (b >> i) & 1
+			bits = append(bits, int(bit))
+		}
+	}
+	return bits
+}
+
+func bitSliceToInt64(bits []int) (int64, error) {
+	if len(bits) > 64 {
+		return 0, fmt.Errorf("bitSliceToInt64: too many bits for int64")
+	}
+	var val int64
+	for _, bit := range bits {
+		val <<= 1
+		if bit != 0 {
+			val |= 1
+		}
+	}
+	return val, nil
+}
+
 // UnprefixedHash allows marshaling a Hash without 0x prefix.
 type UnprefixedHash Hash
 
