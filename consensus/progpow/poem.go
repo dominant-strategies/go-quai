@@ -29,34 +29,45 @@ func (progpow *Progpow) CalcOrder(header *types.Header) (*big.Int, int, error) {
 	zoneThresholdS := progpow.IntrinsicLogS(common.BytesToHash(target))
 	timeFactorHierarchyDepthMultiple := new(big.Int).Mul(params.TimeFactor, big.NewInt(common.HierarchyDepth))
 
+	// //////////////
 	// Prime case
-	primeEntropyThreshold := new(big.Int).Mul(timeFactorHierarchyDepthMultiple, timeFactorHierarchyDepthMultiple)
-	primeEntropyThreshold = new(big.Int).Mul(primeEntropyThreshold, zoneThresholdS)
-	primeBlockThreshold := new(big.Int).Quo(primeEntropyThreshold, big.NewInt(2))
-	primeEntropyThreshold = new(big.Int).Sub(primeEntropyThreshold, primeBlockThreshold)
+	// /////////////
+	// Compute the prime comulative entropy threshold based on the time factor of the hierarchy.
 
-	primeBlockEntropyThresholdAdder, _ := mathutil.BinaryLog(primeBlockThreshold, 8)
-	primeBlockEntropyThreshold := new(big.Int).Add(zoneThresholdS, big.NewInt(int64(primeBlockEntropyThresholdAdder)))
+	primeEntropyThresholdFactor := new(big.Int).Mul(timeFactorHierarchyDepthMultiple, timeFactorHierarchyDepthMultiple)
+	primeRandFactor := new(big.Int).Quo(primeEntropyThresholdFactor, big.NewInt(2))
+	primeRandFactorBits, _ := mathutil.BinaryLog(primeRandFactor, mantBits)
+	primeEntropyThresholdFactor = new(big.Int).Sub(primeEntropyThresholdFactor, big.NewInt(header.TerminusHash().GetTrailingBits(primeRandFactorBits)))
+	primeEntropyThreshold := new(big.Int).Mul(primeEntropyThresholdFactor, zoneThresholdS)
 
-	totalDeltaS := new(big.Int).Add(header.ParentDeltaS(common.REGION_CTX), header.ParentDeltaS(common.ZONE_CTX))
-	totalDeltaS.Add(totalDeltaS, intrinsicS)
-	if intrinsicS.Cmp(primeBlockEntropyThreshold) > 0 && totalDeltaS.Cmp(primeEntropyThreshold) > 0 {
+	// Compute the total accumulated entropy since the last prime block
+	totalDeltaSPrime := new(big.Int).Add(header.ParentDeltaS(common.REGION_CTX), header.ParentDeltaS(common.ZONE_CTX))
+	totalDeltaSPrime.Add(totalDeltaSPrime, intrinsicS)
+
+	if totalDeltaSPrime.Cmp(primeEntropyThreshold) > 0 {
 		return intrinsicS, common.PRIME_CTX, nil
 	}
 
+	// ////////////
 	// Region case
-	regionEntropyThreshold := new(big.Int).Mul(timeFactorHierarchyDepthMultiple, zoneThresholdS)
-	regionBlockThreshold := new(big.Int).Quo(regionEntropyThreshold, big.NewInt(2))
-	regionEntropyThreshold = new(big.Int).Sub(regionEntropyThreshold, regionBlockThreshold)
+	// ////////////
+	// Compute the region comulative entropy threshold based on the time factor of the hierarchy.
+	regionEntropyThresholdFactor := timeFactorHierarchyDepthMultiple
+	regionRandFactor := new(big.Int).Quo(regionEntropyThresholdFactor, big.NewInt(2))
+	regionRandFactorBits, _ := mathutil.BinaryLog(regionRandFactor, mantBits)
+	regionEntropyThresholdFactor = new(big.Int).Sub(regionEntropyThresholdFactor, big.NewInt(header.TerminusHash().GetTrailingBits(regionRandFactorBits)))
+	regionEntropyThreshold := new(big.Int).Mul(regionEntropyThresholdFactor, zoneThresholdS)
 
-	regionBlockEntropyThresholdAdder, _ := mathutil.BinaryLog(regionBlockThreshold, 8)
-	regionBlockEntropyThreshold := new(big.Int).Add(zoneThresholdS, big.NewInt(int64(regionBlockEntropyThresholdAdder)))
+	// Compute the total accumulated entropy since the last region block
+	totalDeltaSRegion := new(big.Int).Add(header.ParentDeltaS(common.ZONE_CTX), intrinsicS)
 
-	totalDeltaS = new(big.Int).Add(header.ParentDeltaS(common.ZONE_CTX), intrinsicS)
-	if intrinsicS.Cmp(regionBlockEntropyThreshold) > 0 && totalDeltaS.Cmp(regionEntropyThreshold) > 0 {
+	if totalDeltaSRegion.Cmp(regionEntropyThreshold) > 0 {
 		return intrinsicS, common.REGION_CTX, nil
 	}
 
+	// ////////////
+	// Zone case
+	// ///////////
 	return intrinsicS, common.ZONE_CTX, nil
 }
 

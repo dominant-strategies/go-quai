@@ -186,6 +186,24 @@ func (h Hash) Value() (driver.Value, error) {
 	return h[:], nil
 }
 
+// GetTrailingBits returns the last n bitcs of a hash as a uint64
+func (h Hash) GetTrailingBits(n int) int64 {
+	if n > 63 {
+		log.Panicln("GetTrailinBits can only provide upto 63 bits")
+	}
+
+	bytes := n / 8 // number of whole bytes to keep
+	bits := n % 8  // number of remaining MSBs to keep
+	bits_mask := byte((1 << bits) - 1)
+
+	composite := int64(h[bytes] & bits_mask) // initialize with MSBs
+	for i := bytes - 1; i >= 0; i-- {
+		composite *= 256
+		composite += int64(h[i])
+	}
+	return composite
+}
+
 // UnprefixedHash allows marshaling a Hash without 0x prefix.
 type UnprefixedHash Hash
 

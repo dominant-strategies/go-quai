@@ -38,7 +38,7 @@ import (
 var (
 	EmptyRootHash     = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
 	EmptyUncleHash    = RlpHash([]*Header(nil))
-	EmptyTerminusHash = RlpHash([]*Header(nil))
+	emptyTerminusHash = RlpHash([]*Header(nil))
 	EmptyBodyHash     = common.HexToHash("51e1b9c1426a03bf73da3d98d9f384a49ded6a4d705dcdf25433915c3306826c")
 	big2e256          = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil) // 2^256
 	hasher            = blake3.New(32, nil)
@@ -160,7 +160,7 @@ func EmptyHeader() *Header {
 	h.parentDeltaS = make([]*big.Int, common.HierarchyDepth)
 	h.number = make([]*big.Int, common.HierarchyDepth)
 	h.difficulty = big.NewInt(0)
-	h.terminusHash = EmptyTerminusHash
+	h.terminusHash = emptyTerminusHash
 	h.root = EmptyRootHash
 	h.mixHash = EmptyRootHash
 	h.txHash = EmptyRootHash
