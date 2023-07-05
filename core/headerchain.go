@@ -65,15 +65,17 @@ type HeaderChain struct {
 
 // NewHeaderChain creates a new HeaderChain structure. ProcInterrupt points
 // to the parent's interrupt semaphore.
-func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, txLookupLimit *uint64, vmConfig vm.Config) (*HeaderChain, error) {
+func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, vmConfig vm.Config) (*HeaderChain, error) {
 	headerCache, _ := lru.New(headerCacheLimit)
 	numberCache, _ := lru.New(numberCacheLimit)
+	blooms, _ := lru.New(c_maxBloomFilters)
 
 	hc := &HeaderChain{
 		config:      chainConfig,
 		headerDb:    db,
 		headerCache: headerCache,
 		numberCache: numberCache,
+		blooms:      blooms,
 		engine:      engine,
 	}
 
@@ -83,8 +85,11 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *par
 	pendingEtxs, _ := lru.New(c_maxPendingEtxBatches)
 	hc.pendingEtxs = pendingEtxs
 
-	blooms, _ := lru.New(c_maxBloomFilters)
-	hc.blooms = blooms
+	var err error
+	hc.bc, err = NewBodyDb(db, engine, hc, chainConfig, cacheConfig, vmConfig)
+	if err != nil {
+		return nil, err
+	}
 
 	hc.genesisHeader = hc.GetHeaderByNumber(0)
 	if hc.genesisHeader.Hash() != chainConfig.GenesisHash {
@@ -94,20 +99,14 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *par
 	if hc.genesisHeader == nil {
 		return nil, ErrNoGenesis
 	}
-	//Load any state that is in our db
-	if err := hc.loadLastState(); err != nil {
-		return nil, err
-	}
-
-	var err error
-	hc.bc, err = NewBodyDb(db, engine, hc, chainConfig, cacheConfig, txLookupLimit, vmConfig)
-	if err != nil {
-		return nil, err
-	}
 
 	// Initialize the heads slice
 	heads := make([]*types.Header, 0)
 	hc.heads = heads
+	//Load any state that is in our db
+	if err := hc.loadLastState(); err != nil {
+		return nil, err
+	}
 
 	return hc, nil
 }
@@ -466,9 +465,6 @@ func (hc *HeaderChain) Stop() {
 	hc.scope.Close()
 	hc.bc.scope.Close()
 	hc.wg.Wait()
-	if common.NodeLocation.Context() == common.ZONE_CTX {
-		hc.bc.processor.Stop()
-	}
 	log.Info("headerchain stopped")
 }
 
