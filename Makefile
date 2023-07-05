@@ -42,7 +42,7 @@ BASE_CMD = nice -n -20 ./build/bin/go-quai --$(NETWORK) --syncmode $(SYNCMODE) -
 BASE_CMD += --http --http.vhosts=* --http.addr $(HTTP_ADDR) --http.api $(HTTP_API)
 BASE_CMD += --ws --ws.addr $(WS_ADDR) --ws.api $(WS_API)
 BASE_CMD += --slices $(SLICES)
-BASE_CMD += --db.engine $(DB_ENGINE)
+BASE_CMD += --db.engine "pebble"
 ifeq ($(ENABLE_ARCHIVE),true)
 	BASE_CMD += --gcmode archive
 endif
