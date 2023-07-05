@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	c_maxNonceCache = 600 //Maximum number of entries that we can hold in the nonces cahce
+	c_maxNonceCache = 20000 //Maximum number of entries that we can hold in the nonces cahce
 )
 
 // txNoncer is a tiny virtual state database to manage the executable nonces of
