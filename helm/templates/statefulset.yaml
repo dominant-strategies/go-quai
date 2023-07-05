@@ -33,6 +33,21 @@ spec:
       labels:
         app: {{ $name }}
     spec:
+      tolerations:
+        - effect: NoSchedule
+          key: app
+          operator: Equal
+          value: go-quai
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 99
+              preference:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - go-quai
       containers:
 {{- $root := . -}}
 {{- range $chain := .Values.goQuai.chains }}
