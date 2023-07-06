@@ -283,6 +283,7 @@ type bigModExp struct {
 var (
 	big0      = big.NewInt(0)
 	big1      = big.NewInt(1)
+	big2      = big.NewInt(2)
 	big3      = big.NewInt(3)
 	big4      = big.NewInt(4)
 	big7      = big.NewInt(7)
