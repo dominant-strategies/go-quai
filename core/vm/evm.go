@@ -530,7 +530,7 @@ func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, etxGas
 		return []byte{}, 0, fmt.Errorf("CreateETX error: %s", err.Error())
 	}
 
-	if err := evm.ValidateETXGasPriceAndTip(fromAddr, etxGasPrice, etxGasTip); err != nil {
+	if err := evm.ValidateETXGasPriceAndTip(fromAddr, toAddr, etxGasPrice, etxGasTip); err != nil {
 		return []byte{}, 0, err
 	}
 
@@ -559,8 +559,17 @@ func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, etxGas
 	return []byte{}, gas - params.ETXGas, nil
 }
 
+func calcEtxBaseeFeeMultiplier(fromAddr, toAddr common.Address) *big.Int {
+	confirmationCtx := fromAddr.Location().CommonDom(*toAddr.Location()).Context()
+	multiplier := big.NewInt(common.NumZonesInRegion)
+	if confirmationCtx == common.PRIME_CTX {
+		multiplier = big.NewInt(0).Mul(multiplier, big.NewInt(common.NumRegionsInPrime))
+	}
+	return multiplier
+}
+
 // Validate ETX gas price and tip
-func (evm *EVM) ValidateETXGasPriceAndTip(fromAddr common.Address, etxGasPrice *big.Int, etxGasTip *big.Int) error {
+func (evm *EVM) ValidateETXGasPriceAndTip(fromAddr, toAddr common.Address, etxGasPrice *big.Int, etxGasTip *big.Int) error {
 	if l := etxGasPrice.BitLen(); l > 256 {
 		return fmt.Errorf("max fee per gas higher than 2^256-1: address %v, etxGasPrice bit length: %d",
 			fromAddr, l)
@@ -575,7 +584,7 @@ func (evm *EVM) ValidateETXGasPriceAndTip(fromAddr common.Address, etxGasPrice *
 	}
 	// This will panic if baseFee is nil, but basefee presence is verified
 	// as part of header validation.
-	mulBaseFee := new(big.Int).Mul(evm.Context.BaseFee, big.NewInt(int64(params.ETXBaseFeeMultiplier)))
+	mulBaseFee := new(big.Int).Mul(evm.Context.BaseFee, calcEtxBaseeFeeMultiplier(fromAddr, toAddr))
 	if etxGasPrice.Cmp(mulBaseFee) < 0 {
 		return fmt.Errorf("etx max fee per gas less than %dx block base fee: address %v, maxFeePerGas: %s baseFee: %s",
 			params.ETXBaseFeeMultiplier, fromAddr, etxGasPrice, evm.Context.BaseFee)
