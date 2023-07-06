@@ -739,6 +739,30 @@ func (h *Header) CalcOrder() (int, error) {
 
 	// Prime case
 	primeEntropyThreshold := new(big.Int).Mul(timeFactorHierarchyDepthMultiple, timeFactorHierarchyDepthMultiple)
+
+	input := h.Location()
+
+	switch {
+	case bytes.Equal(input, []byte{0, 0}):
+		primeEntropyThreshold = new(big.Int).Sub(primeEntropyThreshold, big.NewInt(45))
+	case bytes.Equal(input, []byte{1, 0}):
+		primeEntropyThreshold = new(big.Int).Sub(primeEntropyThreshold, big.NewInt(35))
+	case bytes.Equal(input, []byte{2, 0}):
+		primeEntropyThreshold = new(big.Int).Sub(primeEntropyThreshold, big.NewInt(25))
+	case bytes.Equal(input, []byte{0, 1}):
+		primeEntropyThreshold = new(big.Int).Sub(primeEntropyThreshold, big.NewInt(15))
+	case bytes.Equal(input, []byte{1, 1}):
+		primeEntropyThreshold = new(big.Int).Sub(primeEntropyThreshold, big.NewInt(5))
+	case bytes.Equal(input, []byte{2, 1}):
+		primeEntropyThreshold = new(big.Int).Add(primeEntropyThreshold, big.NewInt(5))
+	case bytes.Equal(input, []byte{0, 2}):
+		primeEntropyThreshold = new(big.Int).Add(primeEntropyThreshold, big.NewInt(15))
+	case bytes.Equal(input, []byte{1, 2}):
+		primeEntropyThreshold = new(big.Int).Add(primeEntropyThreshold, big.NewInt(25))
+	case bytes.Equal(input, []byte{2, 2}):
+		primeEntropyThreshold = new(big.Int).Add(primeEntropyThreshold, big.NewInt(35))
+	}
+
 	primeEntropyThreshold = new(big.Int).Mul(primeEntropyThreshold, zoneThresholdS)
 	primeBlockThreshold := new(big.Int).Quo(primeEntropyThreshold, big.NewInt(2))
 	primeEntropyThreshold = new(big.Int).Sub(primeEntropyThreshold, primeBlockThreshold)
@@ -753,7 +777,29 @@ func (h *Header) CalcOrder() (int, error) {
 	}
 
 	// Region case
-	regionEntropyThreshold := new(big.Int).Mul(timeFactorHierarchyDepthMultiple, zoneThresholdS)
+	regionEntropyThresholdMultiple := timeFactorHierarchyDepthMultiple
+	switch {
+	case bytes.Equal(input, []byte{0, 0}):
+		regionEntropyThresholdMultiple = new(big.Int).Sub(regionEntropyThresholdMultiple, big.NewInt(4))
+	case bytes.Equal(input, []byte{1, 0}):
+		regionEntropyThresholdMultiple = new(big.Int).Sub(regionEntropyThresholdMultiple, big.NewInt(3))
+	case bytes.Equal(input, []byte{2, 0}):
+		regionEntropyThresholdMultiple = new(big.Int).Sub(regionEntropyThresholdMultiple, big.NewInt(2))
+	case bytes.Equal(input, []byte{0, 1}):
+		regionEntropyThresholdMultiple = new(big.Int).Sub(regionEntropyThresholdMultiple, big.NewInt(1))
+	case bytes.Equal(input, []byte{1, 1}):
+		regionEntropyThresholdMultiple = new(big.Int).Sub(regionEntropyThresholdMultiple, big.NewInt(0))
+	case bytes.Equal(input, []byte{2, 1}):
+		regionEntropyThresholdMultiple = new(big.Int).Add(regionEntropyThresholdMultiple, big.NewInt(1))
+	case bytes.Equal(input, []byte{0, 2}):
+		regionEntropyThresholdMultiple = new(big.Int).Add(regionEntropyThresholdMultiple, big.NewInt(2))
+	case bytes.Equal(input, []byte{1, 2}):
+		regionEntropyThresholdMultiple = new(big.Int).Add(regionEntropyThresholdMultiple, big.NewInt(3))
+	case bytes.Equal(input, []byte{2, 2}):
+		regionEntropyThresholdMultiple = new(big.Int).Add(regionEntropyThresholdMultiple, big.NewInt(4))
+	}
+
+	regionEntropyThreshold := new(big.Int).Mul(regionEntropyThresholdMultiple, zoneThresholdS)
 	regionBlockThreshold := new(big.Int).Quo(regionEntropyThreshold, big.NewInt(2))
 	regionEntropyThreshold = new(big.Int).Sub(regionEntropyThreshold, regionBlockThreshold)
 
