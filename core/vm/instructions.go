@@ -869,11 +869,8 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 		return nil, nil // following opCall protocol
 	}
 
-	fee := uint256.NewInt(0)
-	fee.Add(&gasTipCap, &gasFeeCap)
-	fee.Mul(fee, &etxGasLimit)
 	total := uint256.NewInt(0)
-	total.Add(&value, fee)
+	total.Add(&value, total)
 	// Fail if we're trying to transfer more than the available balance
 	if total.Sign() == 0 || !interpreter.evm.Context.CanTransfer(interpreter.evm.StateDB, scope.Contract.self.Address(), total.ToBig()) {
 		temp.Clear()

@@ -219,7 +219,6 @@ func (st *StateTransition) buyGas() error {
 	st.gas += st.msg.Gas()
 
 	st.initialGas = st.msg.Gas()
-	st.state.SubBalance(from, mgval)
 	return nil
 }
 

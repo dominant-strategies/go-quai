@@ -538,7 +538,7 @@ func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, etxGas
 	fee.Add(etxGasTip, etxGasPrice)
 	fee.Mul(fee, big.NewInt(int64(etxGasLimit)))
 	total := big.NewInt(0)
-	total.Add(value, fee)
+	total.Add(value, total)
 	// Fail if we're trying to transfer more than the available balance
 	if total.Sign() == 0 || !evm.Context.CanTransfer(evm.StateDB, fromAddr, total) {
 		return []byte{}, 0, fmt.Errorf("CreateETX: %x cannot transfer %d", fromAddr, total.Uint64())
