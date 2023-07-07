@@ -739,10 +739,10 @@ func (p *StateProcessor) Stop() {
 }
 
 func prepareApplyETX(statedb *state.StateDB, tx *types.Transaction) *big.Int {
-	prevZeroBal := statedb.GetBalance(common.ZeroInternal)   // Get current zero address balance
-	fee := big.NewInt(0).Add(tx.GasFeeCap(), tx.GasTipCap()) // Add gas price cap to miner tip cap
-	fee.Mul(fee, big.NewInt(int64(tx.Gas())))                // Multiply gas price by gas limit (may need to check for int64 overflow)
-	total := big.NewInt(0).Add(fee, tx.Value())              // Add gas fee to value
-	statedb.SetBalance(common.ZeroInternal, total)           // Use zero address at temp placeholder and set it to gas fee plus value
+	prevZeroBal := statedb.GetBalance(common.ZeroInternal) // Get current zero address balance
+	fee := big.NewInt(0)
+	fee.Mul(fee, big.NewInt(int64(tx.Gas())))      // Multiply gas price by gas limit (may need to check for int64 overflow)
+	total := big.NewInt(0).Add(fee, tx.Value())    // Add gas fee to value
+	statedb.SetBalance(common.ZeroInternal, total) // Use zero address at temp placeholder and set it to gas fee plus value
 	return prevZeroBal
 }

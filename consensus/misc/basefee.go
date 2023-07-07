@@ -27,12 +27,7 @@ import (
 
 // CalcBaseFee calculates the basefee of the header taking into account the basefee ceiling
 func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
-	calculatedBaseFee := calcBaseFee(config, parent)
-	ceiling := big.NewInt(params.MaxBaseFee)
-	if calculatedBaseFee.Cmp(ceiling) > 0 {
-		return ceiling
-	}
-	return calculatedBaseFee
+	return big.NewInt(0)
 }
 
 // calcBaseFee calculates the basefee of the header.
