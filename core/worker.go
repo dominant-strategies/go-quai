@@ -748,8 +748,16 @@ func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*en
 			} else {
 				header.SetParentDeltaS(parent.Header().CalcDeltaS(), nodeCtx)
 			}
+			// update only on prime block
+			if order == common.PRIME_CTX && nodeCtx == common.ZONE_CTX {
+				header.SetTerminusHash(block.Header().Hash())
+			} else if nodeCtx == common.ZONE_CTX {
+				header.SetTerminusHash(parent.TerminusHash())
+			}
 		}
 		header.SetParentEntropy(parent.Header().CalcS())
+	} else {
+		header.SetTerminusHash(w.hc.config.GenesisHash)
 	}
 
 	// Only zone should calculate state
