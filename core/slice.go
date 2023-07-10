@@ -796,6 +796,7 @@ func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *typ
 	combinedPendingHeader.SetParentDeltaS(header.ParentDeltaS(index), index)
 
 	if inSlice {
+		combinedPendingHeader.SetTerminusHash(header.TerminusHash())
 		combinedPendingHeader.SetEtxRollupHash(header.EtxRollupHash())
 		combinedPendingHeader.SetDifficulty(header.Difficulty())
 		combinedPendingHeader.SetUncleHash(header.UncleHash())
