@@ -205,6 +205,9 @@ func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block) er
 	_, _, peerEntropy, _ := peer.Head()
 	if blockS != nil && peerEntropy != nil {
 		if peerEntropy.Cmp(blockS) < 0 {
+			fmt.Println("Setting peer head", peer.ID(), block.NumberU64(), blockS)
+			fmt.Println("Trying to start the downloader because", peerEntropy, "<", blockS)
+			fmt.Println("Current Header", h.core.CurrentHeader().NumberArray())
 			peer.SetHead(block.Hash(), block.Number(), blockS, block.ReceivedAt)
 			h.chainSync.handlePeerEvent(peer)
 		}

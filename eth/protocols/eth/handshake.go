@@ -77,6 +77,7 @@ func (p *Peer) readStatus(network uint64, status *StatusPacket, genesis common.H
 	if err != nil {
 		return err
 	}
+	fmt.Println("Status Packet during handshake", status)
 	if msg.Code != StatusMsg {
 		return fmt.Errorf("%w: first msg has code %x (!= %x)", errNoStatusMsg, msg.Code, StatusMsg)
 	}
