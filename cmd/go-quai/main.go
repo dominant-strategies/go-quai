@@ -126,6 +126,7 @@ var (
 		utils.ZoneFlag,
 		utils.DomUrl,
 		utils.SubUrls,
+		utils.LogToStdOutFlag,
 	}
 
 	rpcFlags = []cli.Flag{
