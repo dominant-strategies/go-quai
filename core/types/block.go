@@ -36,12 +36,13 @@ import (
 )
 
 var (
-	EmptyRootHash  = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
-	EmptyUncleHash = RlpHash([]*Header(nil))
-	EmptyBodyHash  = common.HexToHash("51e1b9c1426a03bf73da3d98d9f384a49ded6a4d705dcdf25433915c3306826c")
-	big2e256       = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil) // 2^256
-	hasher         = blake3.New(32, nil)
-	hasherMu       sync.RWMutex
+	EmptyRootHash     = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
+	EmptyUncleHash    = RlpHash([]*Header(nil))
+	EmptyTerminusHash = RlpHash([]*Header(nil))
+	EmptyBodyHash     = common.HexToHash("51e1b9c1426a03bf73da3d98d9f384a49ded6a4d705dcdf25433915c3306826c")
+	big2e256          = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil) // 2^256
+	hasher            = blake3.New(32, nil)
+	hasherMu          sync.RWMutex
 )
 
 // A BlockNonce is a 64-bit hash which proves (combined with the
@@ -81,6 +82,7 @@ func (n *BlockNonce) UnmarshalText(input []byte) error {
 // Header represents a block header in the Quai blockchain.
 type Header struct {
 	parentHash    []common.Hash   `json:"parentHash"           gencodec:"required"`
+	terminusHash  common.Hash     `json:"terminusHash"         gencodec:"required"`
 	uncleHash     common.Hash     `json:"sha3Uncles"           gencodec:"required"`
 	coinbase      common.Address  `json:"miner"                gencodec:"required"`
 	root          common.Hash     `json:"stateRoot"            gencodec:"required"`
@@ -126,6 +128,7 @@ type headerMarshaling struct {
 // "external" header encoding. used for eth protocol, etc.
 type extheader struct {
 	ParentHash    []common.Hash
+	TerminusHash  common.Hash
 	UncleHash     common.Hash
 	Coinbase      common.Address
 	Root          common.Hash
@@ -157,6 +160,7 @@ func EmptyHeader() *Header {
 	h.parentDeltaS = make([]*big.Int, common.HierarchyDepth)
 	h.number = make([]*big.Int, common.HierarchyDepth)
 	h.difficulty = big.NewInt(0)
+	h.terminusHash = EmptyTerminusHash
 	h.root = EmptyRootHash
 	h.mixHash = EmptyRootHash
 	h.txHash = EmptyRootHash
@@ -181,6 +185,7 @@ func (h *Header) DecodeRLP(s *rlp.Stream) error {
 		return err
 	}
 	h.parentHash = eh.ParentHash
+	h.terminusHash = eh.TerminusHash
 	h.uncleHash = eh.UncleHash
 	h.coinbase = eh.Coinbase
 	h.root = eh.Root
@@ -209,6 +214,7 @@ func (h *Header) DecodeRLP(s *rlp.Stream) error {
 func (h *Header) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, extheader{
 		ParentHash:    h.parentHash,
+		TerminusHash:  h.terminusHash,
 		UncleHash:     h.uncleHash,
 		Coinbase:      h.coinbase,
 		Root:          h.root,
@@ -237,6 +243,7 @@ func (h *Header) RPCMarshalHeader() map[string]interface{} {
 	result := map[string]interface{}{
 		"hash":                h.Hash(),
 		"parentHash":          h.ParentHashArray(),
+		"terminusHash":        h.TerminusHash(),
 		"difficulty":          (*hexutil.Big)(h.Difficulty()),
 		"nonce":               h.Nonce(),
 		"sha3Uncles":          h.UncleHash(),
@@ -282,6 +289,9 @@ func (h *Header) ParentHash(args ...int) common.Hash {
 		nodeCtx = args[0]
 	}
 	return h.parentHash[nodeCtx]
+}
+func (h *Header) TerminusHash() common.Hash {
+	return h.terminusHash
 }
 func (h *Header) UncleHash() common.Hash {
 	return h.uncleHash
@@ -366,6 +376,11 @@ func (h *Header) SetParentHash(val common.Hash, args ...int) {
 		nodeCtx = args[0]
 	}
 	h.parentHash[nodeCtx] = val
+}
+func (h *Header) SetTerminusHash(val common.Hash) {
+	h.hash = atomic.Value{}     // clear hash cache
+	h.sealHash = atomic.Value{} // clear sealHash cache
+	h.terminusHash = val
 }
 func (h *Header) SetUncleHash(val common.Hash) {
 	h.hash = atomic.Value{}     // clear hash cache
@@ -497,6 +512,7 @@ func (h *Header) NumberArray() []*big.Int          { return h.number }
 // that the nonce may be independently adjusted in the work algorithm.
 type sealData struct {
 	ParentHash    []common.Hash
+	TerminusHash  common.Hash
 	UncleHash     common.Hash
 	Coinbase      common.Address
 	Root          common.Hash
@@ -526,6 +542,7 @@ func (h *Header) SealHash() (hash common.Hash) {
 	hasher.Reset()
 	hdata := sealData{
 		ParentHash:    make([]common.Hash, common.HierarchyDepth),
+		TerminusHash:  h.TerminusHash(),
 		UncleHash:     h.UncleHash(),
 		Coinbase:      h.Coinbase(),
 		Root:          h.Root(),
@@ -787,6 +804,7 @@ func CopyHeader(h *Header) *Header {
 		cpy.SetParentDeltaS(h.ParentDeltaS(i), i)
 		cpy.SetNumber(h.Number(i), i)
 	}
+	cpy.SetTerminusHash(h.TerminusHash())
 	cpy.SetUncleHash(h.UncleHash())
 	cpy.SetCoinbase(h.Coinbase())
 	cpy.SetRoot(h.Root())
@@ -833,6 +851,7 @@ func (b *Block) EncodeRLP(w io.Writer) error {
 
 // Wrapped header accessors
 func (b *Block) ParentHash(args ...int) common.Hash   { return b.header.ParentHash(args...) }
+func (b *Block) TerminusHash() common.Hash            { return b.header.TerminusHash() }
 func (b *Block) UncleHash() common.Hash               { return b.header.UncleHash() }
 func (b *Block) Coinbase() common.Address             { return b.header.Coinbase() }
 func (b *Block) Root() common.Hash                    { return b.header.Root() }
