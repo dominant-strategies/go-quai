@@ -325,58 +325,67 @@ func (hc *HeaderChain) Append(batch ethdb.Batch, block *types.Block, newInboundE
 func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 	hc.headermu.Lock()
 	defer hc.headermu.Unlock()
+	nodeCtx := common.NodeLocation.Context()
 
-	prevHeader := hc.CurrentHeader()
-	// if trying to set the same header, escape
-	if prevHeader.Hash() == head.Hash() {
-		return nil
-	}
-	//Find a common header
-	commonHeader := hc.findCommonAncestor(head)
-	newHeader := head
-
-	// write the head block hash to the db
-	rawdb.WriteHeadBlockHash(hc.headerDb, head.Hash())
-	hc.currentHeader.Store(head)
-
-	// If head is the normal extension of canonical head, we can return by just wiring the canonical hash.
-	if prevHeader.Hash() == head.ParentHash() {
-		rawdb.WriteCanonicalHash(hc.headerDb, head.Hash(), head.NumberU64())
-		return nil
-	}
-
-	// Delete each header and rollback state processor until common header
-	// Accumulate the hash slice stack
-	var hashStack []*types.Header
-	for {
-		if newHeader.Hash() == commonHeader.Hash() {
-			break
+	// If its a region or zone chain current header is set because the zone has
+	// reorged to the current header
+	if nodeCtx != common.ZONE_CTX {
+		// write the head block hash to the db
+		rawdb.WriteHeadBlockHash(hc.headerDb, head.Hash())
+		hc.currentHeader.Store(head)
+	} else {
+		prevHeader := hc.CurrentHeader()
+		// if trying to set the same header, escape
+		if prevHeader.Hash() == head.Hash() {
+			return nil
 		}
-		hashStack = append(hashStack, newHeader)
-		newHeader = hc.GetHeader(newHeader.ParentHash(), newHeader.NumberU64()-1)
+		//Find a common header
+		commonHeader := hc.findCommonAncestor(head)
+		newHeader := head
 
-		// genesis check to not delete the genesis block
-		if newHeader.Hash() == hc.config.GenesisHash {
-			break
+		// write the head block hash to the db
+		rawdb.WriteHeadBlockHash(hc.headerDb, head.Hash())
+		hc.currentHeader.Store(head)
+
+		// If head is the normal extension of canonical head, we can return by just wiring the canonical hash.
+		if prevHeader.Hash() == head.ParentHash() {
+			rawdb.WriteCanonicalHash(hc.headerDb, head.Hash(), head.NumberU64())
+			return nil
 		}
-	}
 
-	for {
-		if prevHeader.Hash() == commonHeader.Hash() {
-			break
+		// Delete each header and rollback state processor until common header
+		// Accumulate the hash slice stack
+		var hashStack []*types.Header
+		for {
+			if newHeader.Hash() == commonHeader.Hash() {
+				break
+			}
+			hashStack = append(hashStack, newHeader)
+			newHeader = hc.GetHeader(newHeader.ParentHash(), newHeader.NumberU64()-1)
+
+			// genesis check to not delete the genesis block
+			if newHeader.Hash() == hc.config.GenesisHash {
+				break
+			}
 		}
-		rawdb.DeleteCanonicalHash(hc.headerDb, prevHeader.NumberU64())
-		prevHeader = hc.GetHeader(prevHeader.ParentHash(), prevHeader.NumberU64()-1)
 
-		// genesis check to not delete the genesis block
-		if prevHeader.Hash() == hc.config.GenesisHash {
-			break
+		for {
+			if prevHeader.Hash() == commonHeader.Hash() {
+				break
+			}
+			rawdb.DeleteCanonicalHash(hc.headerDb, prevHeader.NumberU64())
+			prevHeader = hc.GetHeader(prevHeader.ParentHash(), prevHeader.NumberU64()-1)
+
+			// genesis check to not delete the genesis block
+			if prevHeader.Hash() == hc.config.GenesisHash {
+				break
+			}
 		}
-	}
 
-	// Run through the hash stack to update canonicalHash and forward state processor
-	for i := len(hashStack) - 1; i >= 0; i-- {
-		rawdb.WriteCanonicalHash(hc.headerDb, hashStack[i].Hash(), hashStack[i].NumberU64())
+		// Run through the hash stack to update canonicalHash and forward state processor
+		for i := len(hashStack) - 1; i >= 0; i-- {
+			rawdb.WriteCanonicalHash(hc.headerDb, hashStack[i].Hash(), hashStack[i].NumberU64())
+		}
 	}
 	return nil
 }
