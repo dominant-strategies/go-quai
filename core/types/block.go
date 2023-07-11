@@ -291,6 +291,41 @@ func (h *Header) ParentHash(args ...int) common.Hash {
 func (h *Header) TerminusHash() common.Hash {
 	return h.terminusHash
 }
+func (h *Header) terminusHashRand(num int) int64 {
+	if num > 64 {
+		return 0
+	}
+	termHash := h.TerminusHash()
+	bits := byteSliceToBits(termHash[:])
+	bitSlice, _ := bitSliceToInt64(bits[len(bits)-num:])
+	return bitSlice
+}
+
+func byteSliceToBits(data []byte) []int {
+	var bits []int
+	for _, b := range data {
+		for i := 7; i >= 0; i-- {
+			bit := (b >> i) & 1
+			bits = append(bits, int(bit))
+		}
+	}
+	return bits
+}
+
+func bitSliceToInt64(bits []int) (int64, error) {
+	if len(bits) > 64 {
+		return 0, fmt.Errorf("bitSliceToInt64: too many bits for int64")
+	}
+	var val int64
+	for _, bit := range bits {
+		val <<= 1
+		if bit != 0 {
+			val |= 1
+		}
+	}
+	return val, nil
+}
+
 func (h *Header) UncleHash() common.Hash {
 	return h.uncleHash
 }
@@ -760,17 +795,16 @@ func (h *Header) CalcOrder() (int, error) {
 	// /////////////
 	// Compute the prime comulative entropy threshold based on the time factor of the hierarchy.
 	primeEntropyThresholdFactor := new(big.Int).Mul(timeFactorHierarchyDepthMultiple, timeFactorHierarchyDepthMultiple)
+	primeRandFactor := new(big.Int).Quo(primeEntropyThresholdFactor, big.NewInt(2))
+	primeRandFactorBits, _ := mathutil.BinaryLog(primeRandFactor, c_mantBits)
+	primeEntropyThresholdFactor = new(big.Int).Sub(primeEntropyThresholdFactor, big.NewInt(h.terminusHashRand(primeRandFactorBits)))
 	primeEntropyThreshold := new(big.Int).Mul(primeEntropyThresholdFactor, zoneThresholdS)
-
-	// Compute the intrinsic threshold for finding a prime block based on the ontolgy
-	primeBlockEntropyThresholdFactor := big.NewInt(common.NumRegionsInPrime * common.NumZonesInRegion)
-	primeBlockEntropyThreshold := h.CalcIntrinsicS(common.BytesToHash(new(big.Int).Div(big2e256, new(big.Int).Mul(primeBlockEntropyThresholdFactor, h.Difficulty())).Bytes()))
 
 	// Compute the total accumulated entropy since the last prime block
 	totalDeltaSPrime := new(big.Int).Add(h.ParentDeltaS(common.REGION_CTX), h.ParentDeltaS(common.ZONE_CTX))
 	totalDeltaSPrime.Add(totalDeltaSPrime, intrinsicS)
 
-	if intrinsicS.Cmp(primeBlockEntropyThreshold) > 0 && totalDeltaSPrime.Cmp(primeEntropyThreshold) > 0 {
+	if totalDeltaSPrime.Cmp(primeEntropyThreshold) > 0 {
 		return common.PRIME_CTX, nil
 	}
 
@@ -778,15 +812,16 @@ func (h *Header) CalcOrder() (int, error) {
 	// Region case
 	// ////////////
 	// Compute the region comulative entropy threshold based on the time factor of the hierarchy.
-	regionEntropyThreshold := new(big.Int).Mul(timeFactorHierarchyDepthMultiple, zoneThresholdS)
-
-	// Compute the intrinsic threshold for finding a region block based on the ontolgy
-	regionBlockEntropyThreshold := h.CalcIntrinsicS(common.BytesToHash(new(big.Int).Div(big2e256, new(big.Int).Mul(big.NewInt(common.NumZonesInRegion), h.Difficulty())).Bytes()))
+	regionEntropyThresholdFactor := timeFactorHierarchyDepthMultiple
+	regionRandFactor := new(big.Int).Quo(regionEntropyThresholdFactor, big.NewInt(2))
+	regionRandFactorBits, _ := mathutil.BinaryLog(regionRandFactor, c_mantBits)
+	regionEntropyThresholdFactor = new(big.Int).Sub(regionEntropyThresholdFactor, big.NewInt(h.terminusHashRand(regionRandFactorBits)))
+	regionEntropyThreshold := new(big.Int).Mul(regionEntropyThresholdFactor, zoneThresholdS)
 
 	// Compute the total accumulated entropy since the last region block
 	totalDeltaSRegion := new(big.Int).Add(h.ParentDeltaS(common.ZONE_CTX), intrinsicS)
 
-	if intrinsicS.Cmp(regionBlockEntropyThreshold) > 0 && totalDeltaSRegion.Cmp(regionEntropyThreshold) > 0 {
+	if totalDeltaSRegion.Cmp(regionEntropyThreshold) > 0 {
 		return common.REGION_CTX, nil
 	}
 
