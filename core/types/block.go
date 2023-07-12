@@ -758,6 +758,7 @@ func (h *Header) CalcPhS() *big.Int {
 		totalS.Add(totalS, h.ParentDeltaS(common.ZONE_CTX))
 		return totalS
 	}
+
 	return big.NewInt(0)
 }
 
