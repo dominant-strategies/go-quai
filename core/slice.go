@@ -186,10 +186,14 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	}
 	time3 := common.PrettyDuration(time.Since(start))
 
-	// Upate the local pending header
-	pendingHeaderWithTermini, err := sl.generateSlicePendingHeader(block, newTermini, domPendingHeader, domOrigin, false)
-	if err != nil {
-		return nil, false, err
+	var pendingHeaderWithTermini types.PendingHeader
+	if nodeCtx != common.ZONE_CTX {
+		// Upate the local pending header
+		pendingHeaderWithTermini, err = sl.generateSlicePendingHeader(block, newTermini, domPendingHeader, domOrigin, false)
+		if err != nil {
+			return nil, false, err
+		}
+		sl.updatePhCache(pendingHeaderWithTermini, true, nil)
 	}
 
 	time8 := common.PrettyDuration(time.Since(start))
@@ -251,31 +255,39 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	appendFinished := time.Since(start)
 	time11 := common.PrettyDuration(appendFinished)
 
-	if nodeCtx == common.ZONE_CTX {
+	subReorg = sl.miningStrategy(nodeCtx, block, order, newTermini[c_terminusIndex], subUnavailable)
 
+	if nodeCtx == common.ZONE_CTX {
 		if subReorg {
+
 			err = sl.hc.AppendBlock(batch, block, newInboundEtxs.FilterToLocation(common.NodeLocation))
 			if err != nil {
 				return nil, false, err
 			}
+
 		}
+
+		// Upate the local pending header
+		pendingHeaderWithTermini, err = sl.generateSlicePendingHeader(block, newTermini, domPendingHeader, domOrigin, false)
+		if err != nil {
+			return nil, false, err
+		}
+
+		if subReorg {
+			log.Info("Choosing phHeader Append:", "NumberArray:", pendingHeaderWithTermini.Header.NumberArray(), "Number:", pendingHeaderWithTermini.Header.Number(), "ParentHash:", pendingHeaderWithTermini.Header.ParentHash(), "Terminus:", pendingHeaderWithTermini.Termini[c_terminusIndex])
+			sl.bestPhKey = pendingHeaderWithTermini.Termini[c_terminusIndex]
+			block.SetAppendTime(appendFinished)
+			sl.hc.SetCurrentHeader(block.Header())
+			sl.hc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
+
+		}
+
+		sl.updatePhCache(pendingHeaderWithTermini, true, nil)
 	}
 
 	// Append has succeeded write the batch
 	if err := batch.Write(); err != nil {
 		return nil, false, err
-	}
-
-	sl.updatePhCache(pendingHeaderWithTermini, true, nil)
-
-	subReorg = sl.miningStrategy(nodeCtx, block, order, pendingHeaderWithTermini, subUnavailable)
-
-	if subReorg {
-		log.Info("Choosing phHeader Append:", "NumberArray:", pendingHeaderWithTermini.Header.NumberArray(), "Number:", pendingHeaderWithTermini.Header.Number(), "ParentHash:", pendingHeaderWithTermini.Header.ParentHash(), "Terminus:", pendingHeaderWithTermini.Termini[c_terminusIndex])
-		sl.bestPhKey = pendingHeaderWithTermini.Termini[c_terminusIndex]
-		block.SetAppendTime(appendFinished)
-		sl.hc.SetCurrentHeader(block.Header())
-		sl.hc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
 	}
 
 	// Relay the new pendingHeader
@@ -296,36 +308,31 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		return subPendingEtxs, subReorg, nil
 	}
 }
-func (sl *Slice) miningStrategy(nodeCtx int, block *types.Block, order int, pendingHeaderWithTermini types.PendingHeader, subUnavailable bool) bool {
-	bestPh, exist := sl.readPhCache(sl.bestPhKey)
+
+func (sl *Slice) miningStrategy(nodeCtx int, block *types.Block, order int, terminus common.Hash, subUnavailable bool) bool {
+	bestPh, _ := sl.readPhCache(sl.bestPhKey)
 	var subReorg bool
-	if !exist {
-		sl.bestPhKey = pendingHeaderWithTermini.Termini[c_terminusIndex]
-		sl.writePhCache(block.Hash(), pendingHeaderWithTermini)
-		bestPh = pendingHeaderWithTermini
-		log.Error("BestPh Key does not exist for", "key", sl.bestPhKey)
-	}
 
 	if nodeCtx == common.ZONE_CTX {
 		if order == common.ZONE_CTX {
 			subReorg = sl.poem(block.Header().CalcS(), bestPh.Header.ParentEntropy())
 			log.Info("Subreorg Zone block")
-			log.Info("Subreorg termus equal:", "equal:", pendingHeaderWithTermini.Termini[c_terminusIndex] != bestPh.Termini[c_terminusIndex], "pendingHeaderTermius:", pendingHeaderWithTermini.Termini[c_terminusIndex], "bestPhTerminus:", bestPh.Termini[c_terminusIndex])
-			if block.Header().TerminusHash() == bestPh.Header.TerminusHash() && pendingHeaderWithTermini.Termini[c_terminusIndex] != bestPh.Termini[c_terminusIndex] && bestPh.Termini[c_terminusIndex] != sl.hc.config.GenesisHash {
+			log.Info("Subreorg termus equal:", "equal:", terminus != bestPh.Termini[c_terminusIndex], "pendingHeaderTermius:", terminus, "bestPhTerminus:", bestPh.Termini[c_terminusIndex])
+			if block.Header().TerminusHash() == bestPh.Header.TerminusHash() && terminus != bestPh.Termini[c_terminusIndex] && bestPh.Termini[c_terminusIndex] != sl.hc.config.GenesisHash {
 				domTerminusHeader := sl.hc.GetHeaderByHash(bestPh.Termini[c_terminusIndex])
 				domTerminusOrder, err := domTerminusHeader.CalcOrder()
 				if err != nil {
 					return false
 				}
 				if order > domTerminusOrder {
-					log.Info("Subreorg setting false:", "order:", order, "domTerminusOrder:", domTerminusOrder, "pendingHeaderTerminus:", pendingHeaderWithTermini.Termini[c_terminusIndex], "bestPhTerminus:", bestPh.Termini[c_terminusIndex])
+					log.Info("Subreorg setting false:", "order:", order, "domTerminusOrder:", domTerminusOrder, "pendingHeaderTerminus:", terminus, "bestPhTerminus:", bestPh.Termini[c_terminusIndex])
 					subReorg = false
 				}
 			}
 		} else if order == common.REGION_CTX {
 			subReorg = sl.poem(block.Header().CalcS(), bestPh.Header.ParentEntropy(common.REGION_CTX))
 			log.Info("Subreorg Region block")
-			log.Info("Subreorg termus equal:", "equal:", block.Header().TerminusHash() != bestPh.Header.TerminusHash(), "pendingHeaderTermius:", pendingHeaderWithTermini.Termini[c_terminusIndex], "bestPhTerminus:", bestPh.Header.TerminusHash())
+			log.Info("Subreorg termus equal:", "equal:", block.Header().TerminusHash() != bestPh.Header.TerminusHash(), "pendingHeaderTermius:", terminus, "bestPhTerminus:", bestPh.Header.TerminusHash())
 			if block.Header().TerminusHash() != bestPh.Header.TerminusHash() && bestPh.Header.TerminusHash() != sl.hc.config.GenesisHash {
 				regionTerminusHeader := sl.hc.GetHeaderByHash(bestPh.Header.TerminusHash())
 				regionTerminusOrder, err := regionTerminusHeader.CalcOrder()
@@ -333,7 +340,7 @@ func (sl *Slice) miningStrategy(nodeCtx int, block *types.Block, order int, pend
 					return false
 				}
 				if order > regionTerminusOrder {
-					log.Info("Subreorg setting false:", "order:", order, "domTerminusOrder:", regionTerminusOrder, "pendingHeaderTerminus:", pendingHeaderWithTermini.Termini[c_terminusIndex], "bestPhTerminus:", bestPh.Header.TerminusHash())
+					log.Info("Subreorg setting false:", "order:", order, "domTerminusOrder:", regionTerminusOrder, "pendingHeaderTerminus:", terminus, "bestPhTerminus:", bestPh.Header.TerminusHash())
 					subReorg = false
 				}
 			}
@@ -344,15 +351,15 @@ func (sl *Slice) miningStrategy(nodeCtx int, block *types.Block, order int, pend
 		if order == common.REGION_CTX {
 			subReorg = sl.poem(block.Header().CalcS(), bestPh.Header.ParentEntropy(common.REGION_CTX))
 			log.Info("Subreorg Region block, Region Node")
-			log.Info("Subreorg termus equal:", "equal:", pendingHeaderWithTermini.Termini[c_terminusIndex] != bestPh.Header.TerminusHash(), "pendingHeaderTermius:", pendingHeaderWithTermini.Termini[c_terminusIndex], "bestPhTerminus:", bestPh.Header.TerminusHash())
-			if pendingHeaderWithTermini.Termini[c_terminusIndex] != bestPh.Termini[c_terminusIndex] && bestPh.Termini[c_terminusIndex] != sl.hc.config.GenesisHash {
+			log.Info("Subreorg termus equal:", "equal:", terminus != bestPh.Header.TerminusHash(), "pendingHeaderTermius:", terminus, "bestPhTerminus:", bestPh.Header.TerminusHash())
+			if terminus != bestPh.Termini[c_terminusIndex] && bestPh.Termini[c_terminusIndex] != sl.hc.config.GenesisHash {
 				regionTerminusHeader := sl.hc.GetHeaderByHash(bestPh.Header.TerminusHash())
 				regionTerminusOrder, err := regionTerminusHeader.CalcOrder()
 				if err != nil {
 					return false
 				}
 				if order > regionTerminusOrder {
-					log.Info("Subreorg setting false:", "order:", order, "domTerminusOrder:", regionTerminusOrder, "pendingHeaderTerminus:", pendingHeaderWithTermini.Termini[c_terminusIndex], "bestPhTerminus:", bestPh.Header.TerminusHash())
+					log.Info("Subreorg setting false:", "order:", order, "domTerminusOrder:", regionTerminusOrder, "pendingHeaderTerminus:", terminus, "bestPhTerminus:", bestPh.Header.TerminusHash())
 					subReorg = false
 				}
 			}
@@ -707,6 +714,7 @@ func (sl *Slice) updatePhCache(pendingHeaderWithTermini types.PendingHeader, inS
 		// Simultaneously we have to allow for the state root update
 		// asynchronously, to do this equal check is added to the inSlice case
 		if !inSlice {
+			log.Info("phCache update conditions:", "NumberArray:", pendingHeaderWithTermini.Header.NumberArray(), "NumberU64:", pendingHeaderWithTermini.Header.NumberU64(nodeCtx-1) == oldPh.Header.NumberU64(nodeCtx-1), "ParentEntropy(nodeCtx-1):", pendingHeaderWithTermini.Header.ParentEntropy(nodeCtx-1).Cmp(oldPh.Header.ParentEntropy(nodeCtx-1)) >= 0, "CaclPhs:", newPhEntropy.Cmp(pendingHeaderWithTermini.Header.CalcPhS()) >= 0)
 			if pendingHeaderWithTermini.Header.NumberU64(nodeCtx-1) == oldPh.Header.NumberU64(nodeCtx-1) {
 				if pendingHeaderWithTermini.Header.ParentEntropy(nodeCtx-1).Cmp(oldPh.Header.ParentEntropy(nodeCtx-1)) >= 0 {
 					sl.writePhCache(pendingHeaderWithTermini.Termini[c_terminusIndex], deepCopyPendingHeaderWithTermini)
