@@ -92,6 +92,10 @@ var (
 	// by a transaction is higher than what's left in the block.
 	ErrGasLimitReached = errors.New("gas limit reached")
 
+	// ErrEtxLimitReached is returned when the ETXs emitted by a transaction
+	// would violate the block's ETX limits.
+	ErrEtxLimitReached = errors.New("etx limit reached")
+
 	// ErrInsufficientFundsForTransfer is returned if the transaction sender doesn't
 	// have enough funds for transfer(topmost call only).
 	ErrInsufficientFundsForTransfer = errors.New("insufficient funds for transfer")

@@ -224,6 +224,15 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, p.vmConfig)
 
 	// Iterate over and process the individual transactions.
+	etxRLimit := len(parent.Transactions()) / params.ETXRegionMaxFraction
+	if etxRLimit < params.ETXRLimitMin {
+		etxRLimit = params.ETXRLimitMin
+	}
+	etxPLimit := len(parent.Transactions()) / params.ETXPrimeMaxFraction
+	if etxPLimit < params.ETXPLimitMin {
+		etxPLimit = params.ETXPLimitMin
+	}
+	var emittedEtxs types.Transactions
 	for i, tx := range block.Transactions() {
 		msg, err := tx.AsMessage(types.MakeSigner(p.config, header.Number()), header.BaseFee())
 		if err != nil {
@@ -236,7 +245,7 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 				return nil, nil, nil, 0, fmt.Errorf("invalid external transaction: etx %x not found in unspent etx set", tx.Hash())
 			}
 			prevZeroBal := prepareApplyETX(statedb, tx)
-			receipt, err = applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv)
+			receipt, err = applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv, &etxRLimit, &etxPLimit)
 			statedb.SetBalance(common.ZeroInternal, prevZeroBal) // Reset the balance to what it previously was. Residual balance will be lost
 
 			if err != nil {
@@ -246,10 +255,11 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 			delete(etxSet, tx.Hash()) // This ETX has been spent so remove it from the unspent set
 
 		} else if tx.Type() == types.InternalTxType || tx.Type() == types.InternalToExternalTxType {
-			receipt, err = applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv)
+			receipt, err = applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv, &etxRLimit, &etxPLimit)
 			if err != nil {
 				return nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 			}
+			emittedEtxs = append(emittedEtxs, receipt.Etxs...)
 		} else {
 			return nil, nil, nil, 0, ErrTxTypeNotSupported
 		}
@@ -264,7 +274,7 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 	return receipts, allLogs, statedb, *usedGas, nil
 }
 
-func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (*types.Receipt, error) {
+func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM, etxRLimit, etxPLimit *int) (*types.Receipt, error) {
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(msg)
 	evm.Reset(txContext, statedb)
@@ -274,6 +284,26 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	if err != nil {
 		return nil, err
 	}
+	var ETXRCount int
+	var ETXPCount int
+	for _, tx := range result.Etxs {
+		// Count which ETXs are cross-region
+		if tx.To().Location().CommonDom(common.NodeLocation).Context() == common.REGION_CTX {
+			ETXRCount++
+		}
+		// Count which ETXs are cross-prime
+		if tx.To().Location().CommonDom(common.NodeLocation).Context() == common.PRIME_CTX {
+			ETXPCount++
+		}
+	}
+	if ETXRCount > *etxRLimit {
+		return nil, fmt.Errorf("tx %032x emits too many cross-region ETXs for block. emitted: %d, limit: %d", tx.Hash(), ETXRCount, etxRLimit)
+	}
+	if ETXPCount > *etxPLimit {
+		return nil, fmt.Errorf("tx %032x emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash(), ETXPCount, etxPLimit)
+	}
+	*etxRLimit -= ETXRCount
+	*etxPLimit -= ETXPCount
 
 	// Update the state with pending changes.
 	var root []byte
@@ -417,7 +447,7 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 // and uses the input parameters for its environment. It returns the receipt
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
-func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config) (*types.Receipt, error) {
+func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config, etxRLimit, etxPLimit *int) (*types.Receipt, error) {
 	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number()), header.BaseFee())
 	if err != nil {
 		return nil, err
@@ -427,11 +457,11 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, cfg)
 	if tx.Type() == types.ExternalTxType {
 		prevZeroBal := prepareApplyETX(statedb, tx)
-		receipt, err := applyTransaction(msg, config, bc, author, gp, statedb, header.Number(), header.Hash(), tx, usedGas, vmenv)
+		receipt, err := applyTransaction(msg, config, bc, author, gp, statedb, header.Number(), header.Hash(), tx, usedGas, vmenv, etxRLimit, etxPLimit)
 		statedb.SetBalance(common.ZeroInternal, prevZeroBal) // Reset the balance to what it previously was (currently a failed external transaction removes all the sent coins from the supply and any residual balance is gone as well)
 		return receipt, err
 	}
-	return applyTransaction(msg, config, bc, author, gp, statedb, header.Number(), header.Hash(), tx, usedGas, vmenv)
+	return applyTransaction(msg, config, bc, author, gp, statedb, header.Number(), header.Hash(), tx, usedGas, vmenv, etxRLimit, etxPLimit)
 }
 
 // GetVMConfig returns the block chain VM config.

@@ -56,6 +56,8 @@ type environment struct {
 	tcount    int            // tx count in cycle
 	gasPool   *GasPool       // available gas used to pack transactions
 	coinbase  common.Address
+	etxRLimit int // Remaining number of cross-region ETXs that can be included
+	etxPLimit int // Remaining number of cross-prime ETXs that can be included
 
 	header      *types.Header
 	txs         []*types.Transaction
@@ -77,6 +79,8 @@ func (env *environment) copy() *environment {
 			family:    env.family.Clone(),
 			tcount:    env.tcount,
 			coinbase:  env.coinbase,
+			etxRLimit: env.etxRLimit,
+			etxPLimit: env.etxPLimit,
 			header:    types.CopyHeader(env.header),
 			receipts:  copyReceipts(env.receipts),
 		}
@@ -529,6 +533,14 @@ func (w *worker) makeEnv(parent *types.Block, header *types.Header, coinbase com
 		return nil, err
 	}
 
+	etxRLimit := len(parent.Transactions()) / params.ETXRegionMaxFraction
+	if etxRLimit < params.ETXRLimitMin {
+		etxRLimit = params.ETXRLimitMin
+	}
+	etxPLimit := len(parent.Transactions()) / params.ETXPrimeMaxFraction
+	if etxPLimit < params.ETXPLimitMin {
+		etxPLimit = params.ETXPLimitMin
+	}
 	// Note the passed coinbase may be different with header.Coinbase.
 	env := &environment{
 		signer:    types.MakeSigner(w.chainConfig, header.Number()),
@@ -538,6 +550,8 @@ func (w *worker) makeEnv(parent *types.Block, header *types.Header, coinbase com
 		family:    mapset.NewSet(),
 		header:    header,
 		uncles:    make(map[common.Hash]*types.Header),
+		etxRLimit: etxRLimit,
+		etxPLimit: etxPLimit,
 	}
 	// when 08 is processed ancestors contain 07 (quick block)
 	for _, ancestor := range w.hc.GetBlocksFromHash(parent.Hash(), 7) {
@@ -578,7 +592,7 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*
 		snap := env.state.Snapshot()
 		// retrieve the gas used int and pass in the reference to the ApplyTransaction
 		gasUsed := env.header.GasUsed()
-		receipt, err := ApplyTransaction(w.chainConfig, w.hc, &env.coinbase, env.gasPool, env.state, env.header, tx, &gasUsed, *w.hc.bc.processor.GetVMConfig())
+		receipt, err := ApplyTransaction(w.chainConfig, w.hc, &env.coinbase, env.gasPool, env.state, env.header, tx, &gasUsed, *w.hc.bc.processor.GetVMConfig(), &env.etxRLimit, &env.etxPLimit)
 		if err != nil {
 			log.Debug("Error playing transaction in worker", "err", err, "tx", tx.Hash().Hex(), "block", env.header.Number, "gasUsed", gasUsed)
 			env.state.RevertToSnapshot(snap)
@@ -588,13 +602,10 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*
 		// This extra step is needed because previously the GasUsed was a public method and direct update of the value
 		// was possible.
 		env.header.SetGasUsed(gasUsed)
-
 		env.txs = append(env.txs, tx)
 		env.receipts = append(env.receipts, receipt)
 		if receipt.Status == types.ReceiptStatusSuccessful {
-			for _, etx := range receipt.Etxs {
-				env.etxs = append(env.etxs, etx)
-			}
+			env.etxs = append(env.etxs, receipt.Etxs...)
 		}
 		return receipt.Logs, nil
 	}
@@ -652,6 +663,11 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 		case errors.Is(err, ErrGasLimitReached):
 			// Pop the current out-of-gas transaction without shifting in the next from the account
 			log.Trace("Gas limit exceeded for current block", "sender", from)
+			txs.Pop()
+
+		case errors.Is(err, ErrEtxLimitReached):
+			// Pop the current transaction without shifting in the next from the account
+			log.Trace("Etx limit exceeded for current block", "sender", from)
 			txs.Pop()
 
 		case errors.Is(err, ErrNonceTooLow):
