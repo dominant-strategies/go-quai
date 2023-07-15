@@ -207,6 +207,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	time8 := common.PrettyDuration(time.Since(start))
 	var subPendingEtxs types.Transactions
 	var subReorg bool
+	var subUnavailable bool
 	var time8_1 common.PrettyDuration
 	var time8_2 common.PrettyDuration
 	var time8_3 common.PrettyDuration
@@ -231,6 +232,8 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 				sl.AddPendingEtxsRollup(pEtxRollup)
 			}
 			time8_3 = common.PrettyDuration(time.Since(start))
+		} else {
+			subUnavailable = true
 		}
 	}
 	time9 := common.PrettyDuration(time.Since(start))
@@ -283,6 +286,12 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 					subReorg = false
 				}
 			}
+		}
+	}
+
+	if subUnavailable {
+		if sl.poem(block.Header().CalcS(), bestPh.Header.ParentEntropy()) {
+			sl.hc.SetCurrentHeader(block.Header())
 		}
 	}
 
