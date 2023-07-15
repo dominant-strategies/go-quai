@@ -287,6 +287,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	}
 
 	if subReorg {
+		log.Info("Choosing phHeader Append:", "NumberArray:", pendingHeaderWithTermini.Header.NumberArray(), "Number:", pendingHeaderWithTermini.Header.Number(), "ParentHash:", pendingHeaderWithTermini.Header.ParentHash(), "Terminus:", pendingHeaderWithTermini.Termini[c_terminusIndex])
 		sl.bestPhKey = pendingHeaderWithTermini.Termini[c_terminusIndex]
 		block.SetAppendTime(appendFinished)
 		sl.hc.SetCurrentHeader(block.Header())
@@ -680,6 +681,7 @@ func (sl *Slice) pickPhHead(pendingHeaderWithTermini types.PendingHeader, oldBes
 	newPhEntropy := pendingHeaderWithTermini.Header.CalcPhS()
 	// Pick a phCache Head
 	if sl.poem(newPhEntropy, oldBestPhEntropy) {
+		log.Info("Choosing phHeader pickPhHead:", "NumberArray:", pendingHeaderWithTermini.Header.NumberArray(), "Number:", pendingHeaderWithTermini.Header.Number(), "ParentHash:", pendingHeaderWithTermini.Header.ParentHash(), "Terminus:", pendingHeaderWithTermini.Termini[c_terminusIndex])
 		sl.bestPhKey = pendingHeaderWithTermini.Termini[c_terminusIndex]
 		log.Info("Choosing new pending header", "Ph Number:", pendingHeaderWithTermini.Header.NumberArray(), "terminus:", pendingHeaderWithTermini.Termini[c_terminusIndex])
 		return true
