@@ -18,10 +18,13 @@
 package quaistats
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/dgrijalva/jwt-go"
+	"io/ioutil"
 	"math/big"
 	"net/http"
 	"runtime"
@@ -134,7 +137,7 @@ type connWrapper struct {
 	wlock sync.Mutex
 }
 
-func newConnectionWrapper(conn *websocket.Conn) *connWrapper {
+func newConnectionWrapper(conn *websocket.Conn, jwt *string) *connWrapper {
 	return &connWrapper{conn: conn}
 }
 
@@ -272,6 +275,7 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, chainSideCh chan co
 
 	// Resolve the URL, defaulting to TLS, but falling back to none too
 	path := fmt.Sprintf("%s/api", s.host)
+	authPath := fmt.Sprintf("")
 	urls := []string{path}
 
 	// url.Parse and url.IsAbs is unsuitable (https://github.com/golang/go/issues/19779)
@@ -281,12 +285,23 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, chainSideCh chan co
 
 	errTimer := time.NewTimer(0)
 	defer errTimer.Stop()
+	var authJwt *string
 	// Loop reporting until termination
 	for {
 		select {
 		case <-quitCh:
 			return
 		case <-errTimer.C:
+			// If we don't have a JWT or it's expired, get a new one
+			if authJwt == nil || s.isJwtExpired(authJwt) {
+				var err error
+				authJwt, err = s.login2()
+				if err != nil {
+					log.Warn("Unable to retrieve JWT", "err", err)
+					errTimer.Reset(10 * time.Second)
+					continue
+				}
+			}
 			// Establish a websocket connection to the server on any supported URL
 			var (
 				conn *connWrapper
@@ -299,7 +314,7 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, chainSideCh chan co
 				c, _, e := dialer.Dial(url, header)
 				err = e
 				if err == nil {
-					conn = newConnectionWrapper(c)
+					conn = newConnectionWrapper(c, authJwt)
 					break
 				}
 			}
@@ -475,9 +490,14 @@ type nodeInfo struct {
 
 // authMsg is the authentication infos needed to login to a monitoring server.
 type authMsg struct {
-	ID     string   `json:"id"`
-	Info   nodeInfo `json:"info"`
-	Secret string   `json:"secret"`
+	ID     string      `json:"id"`
+	Info   nodeInfo    `json:"info"`
+	Secret loginSecret `json:"secret"`
+}
+
+type loginSecret struct {
+	name     string `json:"name"`
+	password string `json:"password"`
 }
 
 // login tries to authorize the client at the remote server.
@@ -509,7 +529,10 @@ func (s *Service) login(conn *connWrapper) error {
 			Chain:    common.NodeLocation.Name(),
 			ChainID:  s.chainID.Uint64(),
 		},
-		Secret: s.pass,
+		Secret: loginSecret{
+			name:     "admin",
+			password: s.pass,
+		},
 	}
 	login := map[string][]interface{}{
 		"emit": {"hello", auth},
@@ -523,6 +546,75 @@ func (s *Service) login(conn *connWrapper) error {
 		return errors.New("unauthorized")
 	}
 	return nil
+}
+
+type Credentials struct {
+	Name     string `json:"name"`
+	Password string `json:"password"`
+}
+
+type AuthResponse struct {
+	Success bool   `json:"success"`
+	Token   string `json:"token"`
+}
+
+func (s *Service) login2() (*string, error) {
+	// Substitute with your actual service address and port
+	url := "http://localhost:3000/login"
+
+	creds := &Credentials{
+		Name:     "admin",
+		Password: s.pass,
+	}
+
+	credsJson, err := json.Marshal(creds)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(credsJson))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, _ := ioutil.ReadAll(resp.Body)
+
+	var authResponse AuthResponse
+	err = json.Unmarshal(body, &authResponse)
+	if err != nil {
+		return nil, err
+	}
+
+	if authResponse.Success {
+		return &authResponse.Token, nil
+	}
+
+	return nil, fmt.Errorf("login failed")
+}
+
+// isJwtExpired checks if the JWT token is expired
+func (s *Service) isJwtExpired(authJwt *string) (bool, error) {
+	if authJwt == nil {
+		return false, errors.New("token is nil")
+	}
+
+	parts := strings.Split(*authJwt, ".")
+	if len(parts) != 3 {
+		return false, errors.New("invalid token")
+	}
+
+	claims := jwt.MapClaims{}
+	_, _, err := new(jwt.Parser).ParseUnverified(*authJwt, claims)
+	if err != nil {
+		return false, err
+	}
+
+	if exp, ok := claims["exp"].(float64); ok {
+		return time.Now().Unix() >= int64(exp), nil
+	}
+
+	return false, errors.New("exp claim not found in token")
 }
 
 // report collects all possible data to report and send it to the stats server.
