@@ -273,16 +273,16 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 			return nil, false, err
 		}
 
+		sl.updatePhCache(pendingHeaderWithTermini, true, nil)
+
 		if subReorg {
 			log.Info("Choosing phHeader Append:", "NumberArray:", pendingHeaderWithTermini.Header.NumberArray(), "Number:", pendingHeaderWithTermini.Header.Number(), "ParentHash:", pendingHeaderWithTermini.Header.ParentHash(), "Terminus:", pendingHeaderWithTermini.Termini[c_terminusIndex])
 			sl.bestPhKey = pendingHeaderWithTermini.Termini[c_terminusIndex]
 			block.SetAppendTime(appendFinished)
-			sl.hc.SetCurrentHeader(block.Header())
+			sl.hc.SetCurrentHeader(batch, block.Header())
 			sl.hc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
 
 		}
-
-		sl.updatePhCache(pendingHeaderWithTermini, true, nil)
 	}
 
 	// Append has succeeded write the batch
@@ -775,7 +775,7 @@ func (sl *Slice) init(genesis *Genesis) error {
 
 		// Append each of the knot blocks
 		sl.bestPhKey = genesisHash
-		sl.hc.SetCurrentHeader(genesisHeader)
+		sl.hc.SetCurrentHeader(nil, genesisHeader)
 
 		// Create empty pending ETX entry for genesis block -- genesis may not emit ETXs
 		emptyPendingEtxs := types.Transactions{}
