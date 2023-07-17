@@ -69,9 +69,9 @@ type environment struct {
 }
 
 // copy creates a deep copy of environment.
-func (env *environment) copy() *environment {
+func (env *environment) copy(processingState bool) *environment {
 	nodeCtx := common.NodeLocation.Context()
-	if nodeCtx == common.ZONE_CTX {
+	if nodeCtx == common.ZONE_CTX && processingState {
 		cpy := &environment{
 			signer:    env.signer,
 			state:     env.state.Copy(),
@@ -226,7 +226,7 @@ type worker struct {
 	fullTaskHook func()      // Method to call before pushing the full sealing task.
 }
 
-func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Database, engine consensus.Engine, headerchain *HeaderChain, txPool *TxPool, isLocalBlock func(header *types.Header) bool, init bool) *worker {
+func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Database, engine consensus.Engine, headerchain *HeaderChain, txPool *TxPool, isLocalBlock func(header *types.Header) bool, init bool, processingState bool) *worker {
 	worker := &worker{
 		config:             config,
 		chainConfig:        chainConfig,
@@ -252,7 +252,9 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 	phBodyCache, _ := lru.New(pendingBlockBodyLimit)
 	worker.pendingBlockBody = phBodyCache
 
-	worker.chainHeadSub = worker.hc.SubscribeChainHeadEvent(worker.chainHeadCh)
+	if headerchain.ProcessingState() {
+		worker.chainHeadSub = worker.hc.SubscribeChainHeadEvent(worker.chainHeadCh)
+	}
 
 	// Sanitize recommit interval if the user-specified one is too short.
 	recommit := worker.config.Recommit
@@ -261,8 +263,10 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 		recommit = minRecommitInterval
 	}
 
-	worker.wg.Add(1)
-	go worker.asyncStateLoop()
+	if processingState {
+		worker.wg.Add(1)
+		go worker.asyncStateLoop()
+	}
 
 	return worker
 }
@@ -337,7 +341,9 @@ func (w *worker) start() {
 
 // stop sets the running status as 0.
 func (w *worker) stop() {
-	w.chainHeadSub.Unsubscribe()
+	if w.hc.ProcessingState() {
+		w.chainHeadSub.Unsubscribe()
+	}
 	atomic.StoreInt32(&w.running, 0)
 }
 
@@ -454,7 +460,7 @@ func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.He
 		return nil, err
 	}
 
-	if nodeCtx == common.ZONE_CTX {
+	if nodeCtx == common.ZONE_CTX && w.hc.ProcessingState() {
 		// Fill pending transactions from the txpool
 		w.adjustGasLimit(nil, work, block)
 		if fill {
@@ -800,7 +806,7 @@ func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*en
 		header.SetRegionEntropyThreshold(parent.Header().RegionEntropyThreshold())
 	}
 	// Only zone should calculate state
-	if nodeCtx == common.ZONE_CTX {
+	if nodeCtx == common.ZONE_CTX && w.hc.ProcessingState() {
 		header.SetExtra(w.extra)
 		header.SetBaseFee(misc.CalcBaseFee(w.chainConfig, parent.Header()))
 		if w.isRunning() {
@@ -952,7 +958,7 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 			interval()
 		}
 		// Create a local environment copy, avoid the data race with snapshot state.
-		env := env.copy()
+		env := env.copy(w.hc.ProcessingState())
 		parent := w.hc.GetBlock(env.header.ParentHash(), env.header.NumberU64()-1)
 		block, err := w.FinalizeAssemble(w.hc, env.header, parent, env.state, env.txs, env.unclelist(), env.etxs, env.subManifest, env.receipts)
 		if err != nil {
