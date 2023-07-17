@@ -163,6 +163,21 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	if sl.domClient == nil && nodeCtx != common.PRIME_CTX {
 		return nil, false, ErrDomClientNotUp
 	}
+
+	batch := sl.sliceDb.NewBatch()
+
+	// Run Previous Coincident Reference Check (PCRC)
+	domTerminus, newTermini, err := sl.pcrc(batch, header, domTerminus, domOrigin)
+	if err != nil {
+		return nil, false, err
+	}
+
+	// Append the new block
+	err = sl.hc.AppendHeader(header)
+	if err != nil {
+		return nil, false, err
+	}
+
 	time2 := common.PrettyDuration(time.Since(start))
 	// Construct the block locally
 	block, err := sl.ConstructLocalBlock(header)
@@ -170,12 +185,45 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		return nil, false, err
 	}
 	time3 := common.PrettyDuration(time.Since(start))
-	batch := sl.sliceDb.NewBatch()
 
-	// Run Previous Coincident Reference Check (PCRC)
-	domTerminus, newTermini, err := sl.pcrc(batch, block.Header(), domTerminus, domOrigin)
-	if err != nil {
-		return nil, false, err
+	var pendingHeaderWithTermini types.PendingHeader
+	if nodeCtx != common.ZONE_CTX {
+		// Upate the local pending header
+		pendingHeaderWithTermini, err = sl.generateSlicePendingHeader(block, newTermini, domPendingHeader, domOrigin, false)
+		if err != nil {
+			return nil, false, err
+		}
+		sl.updatePhCache(pendingHeaderWithTermini, true, nil)
+	}
+
+	time8 := common.PrettyDuration(time.Since(start))
+	var subPendingEtxs types.Transactions
+	var subReorg bool
+	var time8_1 common.PrettyDuration
+	var time8_2 common.PrettyDuration
+	var time8_3 common.PrettyDuration
+	// Call my sub to append the block, and collect the rolled up ETXs from that sub
+	if nodeCtx != common.ZONE_CTX {
+		// How to get the sub pending etxs if not running the full node?.
+		if sl.subClients[location.SubIndex()] != nil {
+			subPendingEtxs, subReorg, err = sl.subClients[location.SubIndex()].Append(context.Background(), header, pendingHeaderWithTermini.Header, domTerminus, true, newInboundEtxs)
+			if err != nil {
+				return nil, false, err
+			}
+			time8_1 = common.PrettyDuration(time.Since(start))
+			// Cache the subordinate's pending ETXs
+			pEtxs := types.PendingEtxs{header, subPendingEtxs}
+			time8_2 = common.PrettyDuration(time.Since(start))
+			// Add the pending etx given by the sub in the rollup
+			sl.AddPendingEtxs(pEtxs)
+			// Only region has the rollup hashes for pendingEtxs
+			if nodeCtx == common.REGION_CTX {
+				// We also need to store the pendingEtxRollup to the dom
+				pEtxRollup := types.PendingEtxsRollup{header, block.SubManifest()}
+				sl.AddPendingEtxsRollup(pEtxRollup)
+			}
+			time8_3 = common.PrettyDuration(time.Since(start))
+		}
 	}
 
 	time4 := common.PrettyDuration(time.Since(start))
@@ -192,76 +240,49 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	}
 	time5 := common.PrettyDuration(time.Since(start))
 
-	// Append the new block
-	err = sl.hc.Append(batch, block, newInboundEtxs.FilterToLocation(common.NodeLocation))
-	if err != nil {
-		return nil, false, err
-	}
 	time6 := common.PrettyDuration(time.Since(start))
-	// Upate the local pending header
-	pendingHeaderWithTermini, err := sl.generateSlicePendingHeader(block, newTermini, domPendingHeader, domOrigin, false)
-	if err != nil {
-		return nil, false, err
-	}
+
 	time7 := common.PrettyDuration(time.Since(start))
-	time8 := common.PrettyDuration(time.Since(start))
-	var subPendingEtxs types.Transactions
-	var subReorg bool
-	var time8_1 common.PrettyDuration
-	var time8_2 common.PrettyDuration
-	var time8_3 common.PrettyDuration
-	// Call my sub to append the block, and collect the rolled up ETXs from that sub
-	if nodeCtx != common.ZONE_CTX {
-		// How to get the sub pending etxs if not running the full node?.
-		if sl.subClients[location.SubIndex()] != nil {
-			subPendingEtxs, subReorg, err = sl.subClients[location.SubIndex()].Append(context.Background(), block.Header(), pendingHeaderWithTermini.Header, domTerminus, true, newInboundEtxs)
-			if err != nil {
-				return nil, false, err
-			}
-			time8_1 = common.PrettyDuration(time.Since(start))
-			// Cache the subordinate's pending ETXs
-			pEtxs := types.PendingEtxs{block.Header(), subPendingEtxs}
-			time8_2 = common.PrettyDuration(time.Since(start))
-			// Add the pending etx given by the sub in the rollup
-			sl.AddPendingEtxs(pEtxs)
-			// Only region has the rollup hashes for pendingEtxs
-			if nodeCtx == common.REGION_CTX {
-				// We also need to store the pendingEtxRollup to the dom
-				pEtxRollup := types.PendingEtxsRollup{block.Header(), block.SubManifest()}
-				sl.AddPendingEtxsRollup(pEtxRollup)
-			}
-			time8_3 = common.PrettyDuration(time.Since(start))
-		}
-	}
 	time9 := common.PrettyDuration(time.Since(start))
 
 	time10 := common.PrettyDuration(time.Since(start))
 
+	appendFinished := time.Since(start)
+	time11 := common.PrettyDuration(appendFinished)
+
+	bestPh, _ := sl.readPhCache(sl.bestPhKey)
+	subReorg = sl.poem(sl.engine.TotalLogS(block.Header()), bestPh.Header.ParentEntropy())
+	if nodeCtx == common.ZONE_CTX {
+		if subReorg {
+
+			err = sl.hc.AppendBlock(batch, block, newInboundEtxs.FilterToLocation(common.NodeLocation))
+			if err != nil {
+				return nil, false, err
+			}
+
+		}
+
+		// Upate the local pending header
+		pendingHeaderWithTermini, err = sl.generateSlicePendingHeader(block, newTermini, domPendingHeader, domOrigin, false)
+		if err != nil {
+			return nil, false, err
+		}
+
+		sl.updatePhCache(pendingHeaderWithTermini, true, nil)
+
+		if subReorg {
+			log.Info("Choosing phHeader Append:", "NumberArray:", pendingHeaderWithTermini.Header.NumberArray(), "Number:", pendingHeaderWithTermini.Header.Number(), "ParentHash:", pendingHeaderWithTermini.Header.ParentHash(), "Terminus:", pendingHeaderWithTermini.Termini[c_terminusIndex])
+			sl.bestPhKey = pendingHeaderWithTermini.Termini[c_terminusIndex]
+			block.SetAppendTime(appendFinished)
+			sl.hc.SetCurrentHeader(batch, block.Header())
+			sl.hc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
+
+		}
+	}
+
 	// Append has succeeded write the batch
 	if err := batch.Write(); err != nil {
 		return nil, false, err
-	}
-	appendFinished := time.Since(start)
-	time11 := common.PrettyDuration(appendFinished)
-	bestPh, exist := sl.readPhCache(sl.bestPhKey)
-	if !exist {
-		sl.bestPhKey = pendingHeaderWithTermini.Termini[c_terminusIndex]
-		sl.writePhCache(block.Hash(), pendingHeaderWithTermini)
-		bestPh = pendingHeaderWithTermini
-		log.Error("BestPh Key does not exist for", "key", sl.bestPhKey)
-	}
-
-	oldBestPhEntropy := sl.engine.TotalLogPhS(bestPh.Header)
-
-	sl.updatePhCache(pendingHeaderWithTermini, true, nil)
-
-	if nodeCtx == common.ZONE_CTX {
-		subReorg = sl.pickPhHead(pendingHeaderWithTermini, oldBestPhEntropy)
-	}
-	if subReorg {
-		block.SetAppendTime(appendFinished)
-		sl.hc.SetCurrentHeader(block.Header())
-		sl.hc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
 	}
 
 	// Relay the new pendingHeader
@@ -595,6 +616,7 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 func (sl *Slice) updatePhCache(pendingHeaderWithTermini types.PendingHeader, inSlice bool, localHeader *types.Header) {
 	sl.phCacheMu.Lock()
 	defer sl.phCacheMu.Unlock()
+	nodeCtx := common.NodeLocation.Context()
 
 	var exists bool
 	if localHeader != nil {
@@ -617,8 +639,18 @@ func (sl *Slice) updatePhCache(pendingHeaderWithTermini types.PendingHeader, inS
 		// If we are inslice we will only update the cache if the entropy is better
 		// Simultaneously we have to allow for the state root update
 		// asynchronously, to do this equal check is added to the inSlice case
-		if (!inSlice && newPhEntropy.Cmp(sl.engine.TotalLogPhS(pendingHeaderWithTermini.Header)) >= 0) ||
-			(inSlice && pendingHeaderWithTermini.Header.ParentEntropy().Cmp(oldPh.Header.ParentEntropy()) >= 0) {
+		if !inSlice {
+			log.Info("phCache update conditions:", "NumberArray:", pendingHeaderWithTermini.Header.NumberArray(), "NumberU64:", pendingHeaderWithTermini.Header.NumberU64(nodeCtx-1) == oldPh.Header.NumberU64(nodeCtx-1), "ParentEntropy(nodeCtx-1):", pendingHeaderWithTermini.Header.ParentEntropy(nodeCtx-1).Cmp(oldPh.Header.ParentEntropy(nodeCtx-1)) >= 0, "CaclPhs:", newPhEntropy.Cmp(sl.engine.TotalLogPhS(pendingHeaderWithTermini.Header)) >= 0)
+			if pendingHeaderWithTermini.Header.NumberU64(nodeCtx-1) == oldPh.Header.NumberU64(nodeCtx-1) {
+				if pendingHeaderWithTermini.Header.ParentEntropy(nodeCtx-1).Cmp(oldPh.Header.ParentEntropy(nodeCtx-1)) >= 0 {
+					sl.writePhCache(pendingHeaderWithTermini.Termini[c_terminusIndex], deepCopyPendingHeaderWithTermini)
+					log.Info("PhCache update:", "inSlice:", inSlice, "Ph Number:", deepCopyPendingHeaderWithTermini.Header.NumberArray(), "Termini:", deepCopyPendingHeaderWithTermini.Termini[c_terminusIndex])
+				}
+			} else if newPhEntropy.Cmp(sl.engine.TotalLogPhS(pendingHeaderWithTermini.Header)) >= 0 {
+				sl.writePhCache(pendingHeaderWithTermini.Termini[c_terminusIndex], deepCopyPendingHeaderWithTermini)
+				log.Info("PhCache update:", "inSlice:", inSlice, "Ph Number:", deepCopyPendingHeaderWithTermini.Header.NumberArray(), "Termini:", deepCopyPendingHeaderWithTermini.Termini[c_terminusIndex])
+			}
+		} else if inSlice && (pendingHeaderWithTermini.Header.ParentEntropy().Cmp(oldPh.Header.ParentEntropy()) >= 0) {
 			sl.writePhCache(pendingHeaderWithTermini.Termini[c_terminusIndex], deepCopyPendingHeaderWithTermini)
 			log.Info("PhCache update:", "inSlice:", inSlice, "Ph Number:", deepCopyPendingHeaderWithTermini.Header.NumberArray(), "Termini:", deepCopyPendingHeaderWithTermini.Termini[c_terminusIndex])
 		}
@@ -668,7 +700,7 @@ func (sl *Slice) init(genesis *Genesis) error {
 
 		// Append each of the knot blocks
 		sl.bestPhKey = genesisHash
-		sl.hc.SetCurrentHeader(genesisHeader)
+		sl.hc.SetCurrentHeader(nil, genesisHeader)
 
 		// Create empty pending ETX entry for genesis block -- genesis may not emit ETXs
 		emptyPendingEtxs := types.Transactions{}
