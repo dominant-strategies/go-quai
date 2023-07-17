@@ -70,6 +70,9 @@ var (
 
 	// ErrBadBlockHash is returned when block being appended is in the badBlockHashes list
 	ErrBadBlockHash = errors.New("block hash exists in bad block hashes list")
+
+	// ErrPendingHeaderNotInCache is returned when a coord gives an update but the slice has not yet created the referenced ph
+	ErrPendingHeaderNotInCache = errors.New("no pending header found in cache")
 )
 
 // List of evm-call-message pre-checking errors. All state transition messages will

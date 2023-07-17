@@ -631,6 +631,7 @@ type SubRelay struct {
 	Header   *types.Header `json:"header"`
 	Termini  types.Termini `json:"termini"`
 	Location common.Location
+	SubReorg bool
 }
 
 func (s *PublicBlockChainQuaiAPI) SubRelayPendingHeader(ctx context.Context, raw json.RawMessage) {
@@ -639,7 +640,22 @@ func (s *PublicBlockChainQuaiAPI) SubRelayPendingHeader(ctx context.Context, raw
 		return
 	}
 	pendingHeader := types.NewPendingHeader(subRelay.Header, subRelay.Termini)
-	s.b.SubRelayPendingHeader(pendingHeader, subRelay.Location)
+	s.b.SubRelayPendingHeader(pendingHeader, subRelay.Location, subRelay.SubReorg)
+}
+
+type DomUpdate struct {
+	OldTerminus common.Hash
+	NewTerminus common.Hash
+	Location    common.Location
+}
+
+func (s *PublicBlockChainQuaiAPI) UpdateDom(ctx context.Context, raw json.RawMessage) {
+	var domUpdate DomUpdate
+	if err := json.Unmarshal(raw, &domUpdate); err != nil {
+		return
+	}
+
+	s.b.UpdateDom(domUpdate.OldTerminus, domUpdate.NewTerminus, domUpdate.Location)
 }
 
 func (s *PublicBlockChainQuaiAPI) NewGenesisPendingHeader(ctx context.Context, raw json.RawMessage) {

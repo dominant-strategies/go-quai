@@ -131,7 +131,7 @@ func NewEventSystem(backend Backend, lightMode bool) *EventSystem {
 
 	nodeCtx := common.NodeLocation.Context()
 	// Subscribe events
-	if nodeCtx == common.ZONE_CTX {
+	if nodeCtx == common.ZONE_CTX && backend.ProcessingState() {
 		m.txsSub = m.backend.SubscribeNewTxsEvent(m.txsCh)
 		m.logsSub = m.backend.SubscribeLogsEvent(m.logsCh)
 		m.rmLogsSub = m.backend.SubscribeRemovedLogsEvent(m.rmLogsCh)
@@ -141,7 +141,7 @@ func NewEventSystem(backend Backend, lightMode bool) *EventSystem {
 	m.pendingHeaderSub = m.backend.SubscribePendingHeaderEvent(m.pendingHeaderCh)
 
 	// Make sure none of the subscriptions are empty
-	if nodeCtx == common.ZONE_CTX {
+	if nodeCtx == common.ZONE_CTX && backend.ProcessingState() {
 		if m.txsSub == nil || m.logsSub == nil || m.rmLogsSub == nil || m.chainSub == nil || m.pendingLogsSub == nil || m.pendingHeaderSub == nil {
 			log.Fatal("Subscribe for event system failed")
 		}
@@ -486,7 +486,7 @@ func (es *EventSystem) eventLoop() {
 	nodeCtx := common.NodeLocation.Context()
 	// Ensure all subscriptions get cleaned up
 	defer func() {
-		if nodeCtx == common.ZONE_CTX {
+		if nodeCtx == common.ZONE_CTX && es.backend.ProcessingState() {
 			es.txsSub.Unsubscribe()
 			es.logsSub.Unsubscribe()
 			es.rmLogsSub.Unsubscribe()
@@ -501,7 +501,7 @@ func (es *EventSystem) eventLoop() {
 		index[i] = make(map[rpc.ID]*subscription)
 	}
 
-	if nodeCtx == common.ZONE_CTX {
+	if nodeCtx == common.ZONE_CTX && es.backend.ProcessingState() {
 		go es.handleZoneEventLoop(index)
 	}
 

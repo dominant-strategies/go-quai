@@ -40,25 +40,38 @@ type BodyDb struct {
 	bodyCache    *lru.Cache
 	bodyRLPCache *lru.Cache
 	processor    *StateProcessor
+
+	slicesRunning []common.Location
 }
 
-func NewBodyDb(db ethdb.Database, engine consensus.Engine, hc *HeaderChain, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, txLookupLimit *uint64, vmConfig vm.Config) (*BodyDb, error) {
+func NewBodyDb(db ethdb.Database, engine consensus.Engine, hc *HeaderChain, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, txLookupLimit *uint64, vmConfig vm.Config, slicesRunning []common.Location) (*BodyDb, error) {
 	nodeCtx := common.NodeLocation.Context()
-	blockCache, _ := lru.New(blockCacheLimit)
-	bodyCache, _ := lru.New(bodyCacheLimit)
-	bodyRLPCache, _ := lru.New(bodyCacheLimit)
 
 	bc := &BodyDb{
-		chainConfig:  chainConfig,
-		engine:       engine,
-		db:           db,
-		blockCache:   blockCache,
-		bodyCache:    bodyCache,
-		bodyRLPCache: bodyRLPCache,
+		chainConfig:   chainConfig,
+		engine:        engine,
+		db:            db,
+		slicesRunning: slicesRunning,
+	}
+
+	if bc.ProcessingState() {
+		blockCache, _ := lru.New(blockCacheLimit)
+		bodyCache, _ := lru.New(bodyCacheLimit)
+		bodyRLPCache, _ := lru.New(bodyCacheLimit)
+		bc.blockCache = blockCache
+		bc.bodyCache = bodyCache
+		bc.bodyRLPCache = bodyRLPCache
+	} else {
+		blockCache, _ := lru.New(10)
+		bodyCache, _ := lru.New(10)
+		bodyRLPCache, _ := lru.New(10)
+		bc.blockCache = blockCache
+		bc.bodyCache = bodyCache
+		bc.bodyRLPCache = bodyRLPCache
 	}
 
 	// only start the state processor in zone
-	if nodeCtx == common.ZONE_CTX {
+	if nodeCtx == common.ZONE_CTX && bc.ProcessingState() {
 		bc.processor = NewStateProcessor(chainConfig, hc, engine, vmConfig, cacheConfig, txLookupLimit)
 	}
 
@@ -74,7 +87,7 @@ func (bc *BodyDb) Append(batch ethdb.Batch, block *types.Block, newInboundEtxs t
 	nodeCtx := common.NodeLocation.Context()
 	var logs []*types.Log
 	var err error
-	if nodeCtx == common.ZONE_CTX {
+	if nodeCtx == common.ZONE_CTX && bc.ProcessingState() {
 		// Process our block
 		logs, err = bc.processor.Apply(batch, block, newInboundEtxs)
 		if err != nil {
@@ -84,8 +97,27 @@ func (bc *BodyDb) Append(batch ethdb.Batch, block *types.Block, newInboundEtxs t
 	}
 	log.Info("Time taken to", "apply state:", common.PrettyDuration(time.Since(stateApply)))
 
-	rawdb.WriteBlock(batch, block)
+	rawdb.WriteBlock(bc.db, block)
 	return logs, nil
+}
+
+func (bc *BodyDb) ProcessingState() bool {
+	nodeCtx := common.NodeLocation.Context()
+	for _, slice := range bc.slicesRunning {
+		switch nodeCtx {
+		case common.PRIME_CTX:
+			return true
+		case common.REGION_CTX:
+			if slice.Region() == common.NodeLocation.Region() {
+				return true
+			}
+		case common.ZONE_CTX:
+			if slice.Equal(common.NodeLocation) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // WriteBlock write the block to the bodydb database
