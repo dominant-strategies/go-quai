@@ -59,22 +59,24 @@ type HeaderChain struct {
 	running       int32          // 0 if chain is running, 1 when stopped
 	procInterrupt int32          // interrupt signaler for block processing
 
-	headermu sync.RWMutex
-	heads    []*types.Header
+	headermu      sync.RWMutex
+	heads         []*types.Header
+	slicesRunning []common.Location
 }
 
 // NewHeaderChain creates a new HeaderChain structure. ProcInterrupt points
 // to the parent's interrupt semaphore.
-func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, txLookupLimit *uint64, vmConfig vm.Config) (*HeaderChain, error) {
+func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, txLookupLimit *uint64, vmConfig vm.Config, slicesRunning []common.Location) (*HeaderChain, error) {
 	headerCache, _ := lru.New(headerCacheLimit)
 	numberCache, _ := lru.New(numberCacheLimit)
 
 	hc := &HeaderChain{
-		config:      chainConfig,
-		headerDb:    db,
-		headerCache: headerCache,
-		numberCache: numberCache,
-		engine:      engine,
+		config:        chainConfig,
+		headerDb:      db,
+		headerCache:   headerCache,
+		numberCache:   numberCache,
+		engine:        engine,
+		slicesRunning: slicesRunning,
 	}
 
 	pendingEtxsRollup, _ := lru.New(c_maxPendingEtxsRollup)
@@ -100,7 +102,7 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *par
 	}
 
 	var err error
-	hc.bc, err = NewBodyDb(db, engine, hc, chainConfig, cacheConfig, txLookupLimit, vmConfig)
+	hc.bc, err = NewBodyDb(db, engine, hc, chainConfig, cacheConfig, txLookupLimit, vmConfig, slicesRunning)
 	if err != nil {
 		return nil, err
 	}
@@ -275,42 +277,45 @@ func (hc *HeaderChain) collectInclusiveEtxRollup(b *types.Block) (types.Transact
 }
 
 // Append
-func (hc *HeaderChain) Append(batch ethdb.Batch, block *types.Block, newInboundEtxs types.Transactions) error {
+func (hc *HeaderChain) AppendHeader(header *types.Header) error {
 	nodeCtx := common.NodeLocation.Context()
-	log.Debug("HeaderChain Append:", "Block information: Hash:", block.Hash(), "block header hash:", block.Header().Hash(), "Number:", block.NumberU64(), "Location:", block.Header().Location(), "Parent:", block.ParentHash())
+	log.Debug("HeaderChain Append:", "Header information: Hash:", header.Hash(), "header header hash:", header.Hash(), "Number:", header.NumberU64(), "Location:", header.Location, "Parent:", header.ParentHash())
 
-	err := hc.engine.VerifyHeader(hc, block.Header())
+	err := hc.engine.VerifyHeader(hc, header)
 	if err != nil {
 		return err
 	}
 
-	collectBlockManifest := time.Now()
 	// Verify the manifest matches expected
-	// Load the manifest of blocks preceding this block
-	// note: prime manifest is non-existent, because a prime block cannot be
+	// Load the manifest of headers preceding this header
+	// note: prime manifest is non-existent, because a prime header cannot be
 	// coincident with a higher order chain. So, this check is skipped for prime
 	// nodes.
 	if nodeCtx > common.PRIME_CTX {
-		manifest := rawdb.ReadManifest(hc.headerDb, block.ParentHash())
+		manifest := rawdb.ReadManifest(hc.headerDb, header.ParentHash())
 		if manifest == nil {
 			return errors.New("manifest not found for parent")
 		}
-		if block.ManifestHash(nodeCtx) != types.DeriveSha(manifest, trie.NewStackTrie(nil)) {
+		if header.ManifestHash(nodeCtx) != types.DeriveSha(manifest, trie.NewStackTrie(nil)) {
 			return errors.New("manifest does not match hash")
 		}
 	}
-	elapsedCollectBlockManifest := common.PrettyDuration(time.Since(collectBlockManifest))
 
-	// Append header to the headerchain
-	rawdb.WriteHeader(batch, block.Header())
+	return nil
+}
+func (hc *HeaderChain) ProcessingState() bool {
+	return hc.bc.ProcessingState()
+}
 
+// Append
+func (hc *HeaderChain) AppendBlock(batch ethdb.Batch, block *types.Block, newInboundEtxs types.Transactions) error {
 	blockappend := time.Now()
 	// Append block else revert header append
 	logs, err := hc.bc.Append(batch, block, newInboundEtxs)
 	if err != nil {
 		return err
 	}
-	log.Info("Time taken to", "collectBlockManifest", elapsedCollectBlockManifest, "Append in bc", common.PrettyDuration(time.Since(blockappend)))
+	log.Info("Time taken to", "Append in bc", common.PrettyDuration(time.Since(blockappend)))
 
 	hc.bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
 	if len(logs) > 0 {
@@ -322,7 +327,7 @@ func (hc *HeaderChain) Append(batch ethdb.Batch, block *types.Block, newInboundE
 
 // SetCurrentHeader sets the in-memory head header marker of the canonical chan
 // as the given header.
-func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
+func (hc *HeaderChain) SetCurrentHeader(batch ethdb.Batch, head *types.Header) error {
 	hc.headermu.Lock()
 	defer hc.headermu.Unlock()
 
@@ -378,6 +383,7 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 	for i := len(hashStack) - 1; i >= 0; i-- {
 		rawdb.WriteCanonicalHash(hc.headerDb, hashStack[i].Hash(), hashStack[i].NumberU64())
 	}
+
 	return nil
 }
 

@@ -80,6 +80,7 @@ type backend interface {
 	Stats() (pending int, queued int)
 	Downloader() *downloader.Downloader
 	ChainConfig() *params.ChainConfig
+	ProcessingState() bool
 }
 
 // fullNodeBackend encompasses the functionality necessary for a full node
@@ -347,7 +348,7 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, chainSideCh chan co
 					if err = s.reportBlock(conn, head); err != nil {
 						log.Warn("Block stats report failed", "err", err)
 					}
-					if nodeCtx == common.ZONE_CTX {
+					if nodeCtx == common.ZONE_CTX && s.backend.ProcessingState() {
 						if err = s.reportPending(conn); err != nil {
 							log.Warn("Post-block transaction stats report failed", "err", err)
 						}
@@ -530,7 +531,7 @@ func (s *Service) login(conn *connWrapper) error {
 // server. Use the individual methods for reporting subscribed events.
 func (s *Service) report(conn *connWrapper) error {
 	nodeCtx := common.NodeLocation.Context()
-	if nodeCtx == common.ZONE_CTX {
+	if nodeCtx == common.ZONE_CTX && s.backend.ProcessingState() {
 		if err := s.reportPending(conn); err != nil {
 			return err
 		}
@@ -933,7 +934,7 @@ func (s *Service) reportStats(conn *connWrapper) error {
 		sync := fullBackend.Downloader().Progress()
 		syncing = fullBackend.CurrentHeader().Number().Uint64() >= sync.HighestBlock
 
-		if nodeCtx == common.ZONE_CTX {
+		if nodeCtx == common.ZONE_CTX && s.backend.ProcessingState() {
 			price, _ := fullBackend.SuggestGasTipCap(context.Background())
 			gasprice = int(price.Uint64())
 			if basefee := fullBackend.CurrentHeader().BaseFee(); basefee != nil {

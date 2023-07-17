@@ -473,8 +473,16 @@ func (b *QuaiAPIBackend) PendingBlock() *types.Block {
 	return b.eth.core.PendingBlock()
 }
 
-func (b *QuaiAPIBackend) SubRelayPendingHeader(pendingHeader types.PendingHeader, location common.Location) {
-	b.eth.core.SubRelayPendingHeader(pendingHeader, location)
+func (b *QuaiAPIBackend) SubRelayPendingHeader(pendingHeader types.PendingHeader, location common.Location, subReorg bool) {
+	b.eth.core.SubRelayPendingHeader(pendingHeader, location, subReorg)
+}
+
+func (b *QuaiAPIBackend) UpdateDom(oldTerminus common.Hash, newTerminus common.Hash, location common.Location) {
+	b.eth.core.UpdateDom(oldTerminus, newTerminus, location)
+}
+
+func (b *QuaiAPIBackend) ProcessingState() bool {
+	return b.eth.core.ProcessingState()
 }
 
 func (b *QuaiAPIBackend) NewGenesisPendingHeader(pendingHeader *types.Header) {

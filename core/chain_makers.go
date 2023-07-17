@@ -311,3 +311,4 @@ func (cr *fakeChainReader) GetHeaderByHash(hash common.Hash) *types.Header      
 func (cr *fakeChainReader) GetHeader(hash common.Hash, number uint64) *types.Header { return nil }
 func (cr *fakeChainReader) GetBlock(hash common.Hash, number uint64) *types.Block   { return nil }
 func (cr *fakeChainReader) GetTerminiByHash(hash common.Hash) *types.Termini        { return nil }
+func (cr *fakeChainReader) ProcessingState() bool                                   { return false }
