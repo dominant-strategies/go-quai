@@ -2,7 +2,6 @@ package core
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"math/big"
 	"sort"
@@ -53,8 +52,8 @@ type Core struct {
 	quit chan struct{} // core quit channel
 }
 
-func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.Header) bool, txConfig *TxPoolConfig, txLookupLimit *uint64, chainConfig *params.ChainConfig, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis) (*Core, error) {
-	slice, err := NewSlice(db, config, txConfig, txLookupLimit, isLocalBlock, chainConfig, domClientUrl, subClientUrls, engine, cacheConfig, vmConfig, genesis)
+func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.Header) bool, txConfig *TxPoolConfig, txLookupLimit *uint64, chainConfig *params.ChainConfig, slicesRunning []common.Location, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis) (*Core, error) {
+	slice, err := NewSlice(db, config, txConfig, txLookupLimit, isLocalBlock, chainConfig, slicesRunning, domClientUrl, subClientUrls, engine, cacheConfig, vmConfig, genesis)
 	if err != nil {
 		return nil, err
 	}
@@ -323,7 +322,7 @@ func (c *Core) WriteBlock(block *types.Block) {
 func (c *Core) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, bool, error) {
 	newPendingEtxs, subReorg, err := c.sl.Append(header, domPendingHeader, domTerminus, domOrigin, newInboundEtxs)
 	if err != nil {
-		if err.Error() == ErrBodyNotFound.Error() || err.Error() == consensus.ErrUnknownAncestor.Error() {
+		if err.Error() == ErrBodyNotFound.Error() || err.Error() == consensus.ErrUnknownAncestor.Error() || err.Error() == ErrSubNotSyncedToDom.Error() {
 			c.sl.missingParentFeed.Send(header.ParentHash())
 		}
 	}
@@ -335,8 +334,12 @@ func (c *Core) ConstructLocalMinedBlock(header *types.Header) (*types.Block, err
 	return c.sl.ConstructLocalMinedBlock(header)
 }
 
-func (c *Core) SubRelayPendingHeader(slPendingHeader types.PendingHeader, location common.Location) {
-	c.sl.SubRelayPendingHeader(slPendingHeader, location)
+func (c *Core) SubRelayPendingHeader(slPendingHeader types.PendingHeader, location common.Location, subReorg bool) {
+	c.sl.SubRelayPendingHeader(slPendingHeader, location, subReorg)
+}
+
+func (c *Core) UpdateDom(oldTerminus common.Hash, newTerminus common.Hash, location common.Location) {
+	c.sl.UpdateDom(oldTerminus, newTerminus, location)
 }
 
 func (c *Core) NewGenesisPendigHeader(pendingHeader *types.Header) {
@@ -393,6 +396,10 @@ func (c *Core) GenerateRecoveryPendingHeader(pendingHeader *types.Header, checkp
 
 func (c *Core) IsBlockHashABadHash(hash common.Hash) bool {
 	return c.sl.IsBlockHashABadHash(hash)
+}
+
+func (c *Core) ProcessingState() bool {
+	return c.sl.ProcessingState()
 }
 
 //---------------------//

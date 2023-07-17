@@ -76,7 +76,8 @@ type Backend interface {
 	ConstructLocalMinedBlock(header *types.Header) (*types.Block, error)
 	InsertBlock(ctx context.Context, block *types.Block) (int, error)
 	PendingBlock() *types.Block
-	SubRelayPendingHeader(pendingHeader types.PendingHeader, location common.Location)
+	SubRelayPendingHeader(pendingHeader types.PendingHeader, location common.Location, subReorg bool)
+	UpdateDom(oldTerminus common.Hash, newTerminus common.Hash, location common.Location)
 	NewGenesisPendingHeader(pendingHeader *types.Header)
 	GetPendingHeader() (*types.Header, error)
 	GetManifest(blockHash common.Hash) (types.BlockManifest, error)
@@ -85,6 +86,7 @@ type Backend interface {
 	AddPendingEtxsRollup(pEtxsRollup types.PendingEtxsRollup) error
 	PendingBlockAndReceipts() (*types.Block, types.Receipts)
 	GenerateRecoveryPendingHeader(pendingHeader *types.Header, checkpointHashes types.Termini) error
+	ProcessingState() bool
 
 	// Transaction pool API
 	SendTx(ctx context.Context, signedTx *types.Transaction) error

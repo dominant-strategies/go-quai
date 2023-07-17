@@ -551,7 +551,7 @@ func ReadPendingHeader(db ethdb.Reader, hash common.Hash) *types.PendingHeader {
 
 	pendingHeader := new(types.PendingHeader)
 	if err := rlp.Decode(bytes.NewReader(data), pendingHeader); err != nil {
-		log.Error("Invalid pendingHeader RLP")
+		log.Error("Invalid pendingHeader RLP", "Err", err)
 		return nil
 	}
 	return pendingHeader

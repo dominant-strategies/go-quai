@@ -209,16 +209,19 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 		gp          = new(GasPool).AddGas(block.GasLimit())
 	)
 
+	start := time.Now()
 	parent := p.hc.GetBlock(block.Header().ParentHash(), block.NumberU64()-1)
 	if parent == nil {
 		return types.Receipts{}, []*types.Log{}, nil, 0, errors.New("parent block is nil for the block given to process")
 	}
+	time1 := common.PrettyDuration(time.Since(start))
 
 	// Initialize a statedb
 	statedb, err := state.New(parent.Header().Root(), p.stateCache, p.snaps)
 	if err != nil {
 		return types.Receipts{}, []*types.Log{}, nil, 0, err
 	}
+	time2 := common.PrettyDuration(time.Since(start))
 
 	var timeSenders, timeSign, timePrepare, timeEtx, timeTx time.Duration
 	startTimeSenders := time.Now()
@@ -239,6 +242,7 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 	timeSenders = time.Since(startTimeSenders)
 	blockContext := NewEVMBlockContext(header, p.hc, nil)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, p.vmConfig)
+	time3 := common.PrettyDuration(time.Since(start))
 
 	// Iterate over and process the individual transactions.
 	etxRLimit := len(parent.Transactions()) / params.ETXRegionMaxFraction
@@ -302,8 +306,13 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 		i++
 	}
 
+	time4 := common.PrettyDuration(time.Since(start))
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.engine.Finalize(p.hc, header, statedb, block.Transactions(), block.Uncles())
+	time5 := common.PrettyDuration(time.Since(start))
+
+	log.Info("Total Tx Processing Time", "signing time", common.PrettyDuration(timeSign), "prepare state time", common.PrettyDuration(timePrepare), "etx time", common.PrettyDuration(timeEtx), "tx time", common.PrettyDuration(timeTx))
+	log.Info("Time taken in Process", "time1", time1, "time2", time2, "time3", time3, "time4", time4, "time5", time5)
 
 	log.Info("Total Tx Processing Time", "signing time", common.PrettyDuration(timeSign), "senders cache time", common.PrettyDuration(timeSenders), "percent cached internal txs", fmt.Sprintf("%.2f", float64(len(senders))/float64(numInternalTxs)*100), "prepare state time", common.PrettyDuration(timePrepare), "etx time", common.PrettyDuration(timeEtx), "tx time", common.PrettyDuration(timeTx))
 

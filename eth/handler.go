@@ -177,11 +177,11 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		return h.core.Engine().VerifyHeader(h.core, header)
 	}
 	heighter := func() uint64 {
-		return h.core.CurrentBlock().NumberU64()
+		return h.core.CurrentHeader().NumberU64()
 	}
 	// writeBlock writes the block to the DB
 	writeBlock := func(block *types.Block) {
-		if nodeCtx == common.ZONE_CTX && block.NumberU64()-1 == h.core.CurrentHeader().NumberU64() {
+		if nodeCtx == common.ZONE_CTX && block.NumberU64()-1 == h.core.CurrentHeader().NumberU64() && h.core.ProcessingState() {
 			if atomic.LoadUint32(&h.acceptTxs) != 1 {
 				atomic.StoreUint32(&h.acceptTxs, 1)
 			}
@@ -191,7 +191,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	h.blockFetcher = fetcher.NewBlockFetcher(h.core.GetBlockByHash, writeBlock, validator, h.BroadcastBlock, heighter, h.removePeer, h.core.IsBlockHashABadHash)
 
 	// Only initialize the Tx fetcher in zone
-	if nodeCtx == common.ZONE_CTX {
+	if nodeCtx == common.ZONE_CTX && h.core.ProcessingState() {
 		fetchTx := func(peer string, hashes []common.Hash) error {
 			p := h.peers.peer(peer)
 			if p == nil {
@@ -254,7 +254,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 
 	h.chainSync.handlePeerEvent(peer)
 
-	if nodeCtx == common.ZONE_CTX {
+	if nodeCtx == common.ZONE_CTX && h.core.ProcessingState() {
 		// Propagate existing transactions. new transactions appearing
 		// after this will be sent via broadcasts.
 		h.syncTransactions(peer)
@@ -297,7 +297,7 @@ func (h *handler) unregisterPeer(id string) {
 
 	h.downloader.UnregisterPeer(id)
 	nodeCtx := common.NodeLocation.Context()
-	if nodeCtx == common.ZONE_CTX {
+	if nodeCtx == common.ZONE_CTX && h.core.ProcessingState() {
 		h.txFetcher.Drop(id)
 	}
 
@@ -310,7 +310,7 @@ func (h *handler) Start(maxPeers int) {
 	h.maxPeers = maxPeers
 
 	nodeCtx := common.NodeLocation.Context()
-	if nodeCtx == common.ZONE_CTX {
+	if nodeCtx == common.ZONE_CTX && h.core.ProcessingState() {
 		// broadcast transactions
 		h.wg.Add(1)
 		h.txsCh = make(chan core.NewTxsEvent, txChanSize)
@@ -337,7 +337,7 @@ func (h *handler) Start(maxPeers int) {
 	// start sync handlers
 	h.wg.Add(1)
 	go h.chainSync.loop()
-	if nodeCtx == common.ZONE_CTX {
+	if nodeCtx == common.ZONE_CTX && h.core.ProcessingState() {
 		h.wg.Add(1)
 		go h.txsyncLoop64() //Legacy initial tx echange, drop with eth/64.
 	}
@@ -361,7 +361,7 @@ func (h *handler) Start(maxPeers int) {
 
 func (h *handler) Stop() {
 	nodeCtx := common.NodeLocation.Context()
-	if nodeCtx == common.ZONE_CTX {
+	if nodeCtx == common.ZONE_CTX && h.core.ProcessingState() {
 		h.txsSub.Unsubscribe() // quits txBroadcastLoop
 	}
 	h.minedBlockSub.Unsubscribe()         // quits blockBroadcastLoop

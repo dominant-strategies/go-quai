@@ -297,6 +297,9 @@ func (s *PublicBlockChainAPI) GetProof(ctx context.Context, address common.Addre
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("getProof can only be called in zone chain")
 	}
+	if !s.b.ProcessingState() {
+		return nil, errors.New("getProof call can only be made on chain processing the state")
+	}
 	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
 		return nil, err
@@ -461,6 +464,9 @@ func (s *PublicBlockChainAPI) GetCode(ctx context.Context, address common.Addres
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("getCode can only be called in zone chain")
 	}
+	if !s.b.ProcessingState() {
+		return nil, errors.New("getCode call can only be made on chain processing the state")
+	}
 	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
 		return nil, err
@@ -480,6 +486,9 @@ func (s *PublicBlockChainAPI) GetStorageAt(ctx context.Context, address common.A
 	nodeCtx := common.NodeLocation.Context()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("getStorageAt can only be called in zone chain")
+	}
+	if !s.b.ProcessingState() {
+		return nil, errors.New("getStorageAt call can only be made on chain processing the state")
 	}
 	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
@@ -558,6 +567,9 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	nodeCtx := common.NodeLocation.Context()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("doCall can only be called in zone chain")
+	}
+	if !b.ProcessingState() {
+		return nil, errors.New("doCall call can only be made on chain processing the state")
 	}
 	state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
@@ -651,6 +663,9 @@ func (s *PublicBlockChainAPI) Call(ctx context.Context, args TransactionArgs, bl
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("call can only called in zone chain")
 	}
+	if !s.b.ProcessingState() {
+		return nil, errors.New("evm call can only be made on chain processing the state")
+	}
 	result, err := DoCall(ctx, s.b, args, blockNrOrHash, overrides, 5*time.Second, s.b.RPCGasCap())
 	if err != nil {
 		return nil, err
@@ -666,6 +681,9 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	nodeCtx := common.NodeLocation.Context()
 	if nodeCtx != common.ZONE_CTX {
 		return 0, errors.New("doEstimateGas can only be called in zone chain")
+	}
+	if !b.ProcessingState() {
+		return 0, errors.New("doEstimateGas call can only be made on chain processing the state")
 	}
 	// Binary search the gas requirement, as it may be higher than the amount used
 	var (
@@ -796,6 +814,9 @@ func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args TransactionA
 	nodeCtx := common.NodeLocation.Context()
 	if nodeCtx != common.ZONE_CTX {
 		return 0, errors.New("estimateGas can only be called in zone chain")
+	}
+	if !s.b.ProcessingState() {
+		return 0, errors.New("estimateGas call can only be made on chain processing the state")
 	}
 	bNrOrHash := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
 	if blockNrOrHash != nil {
@@ -1124,6 +1145,9 @@ func (s *PublicBlockChainAPI) CreateAccessList(ctx context.Context, args Transac
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("createAccessList can only be called in zone chain")
 	}
+	if !s.b.ProcessingState() {
+		return nil, errors.New("createAccessList call can only be made on chain processing the state")
+	}
 	bNrOrHash := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
 	if blockNrOrHash != nil {
 		bNrOrHash = *blockNrOrHash
@@ -1146,6 +1170,9 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	nodeCtx := common.NodeLocation.Context()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, 0, nil, errors.New("AccessList can only be called in zone chain")
+	}
+	if !b.ProcessingState() {
+		return nil, 0, nil, errors.New("accessList call can only be made on chain processing the state")
 	}
 	// Retrieve the execution context
 	db, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
@@ -1408,6 +1435,9 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 	if nodeCtx != common.ZONE_CTX {
 		return common.Hash{}, errors.New("submitTransaction can only be called in zone chain")
 	}
+	if !b.ProcessingState() {
+		return common.Hash{}, errors.New("submitTransaction call can only be made on chain processing the state")
+	}
 	// If the transaction fee cap is already specified, ensure the
 	// fee of the given transaction is _reasonable_.
 	if err := checkTxFee(tx.GasPrice(), tx.Gas(), b.RPCTxFeeCap()); err != nil {
@@ -1417,7 +1447,7 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 		return common.Hash{}, err
 	}
 	// Print a log with full tx details for manual investigations and interventions
-	signer := types.MakeSigner(b.ChainConfig(), b.CurrentBlock().Number())
+	signer := types.MakeSigner(b.ChainConfig(), b.CurrentHeader().Number())
 	from, err := types.Sender(signer, tx)
 	if err != nil {
 		return common.Hash{}, err
