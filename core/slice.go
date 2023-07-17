@@ -257,8 +257,8 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	sl.updatePhCache(pendingHeaderWithTermini, true, nil)
 
 	if nodeCtx == common.ZONE_CTX {
-		subReorg = sl.poem(block.Header().CalcS(), bestPh.Header.ParentEntropy())
 		if order == common.ZONE_CTX {
+			subReorg = sl.poem(block.Header().CalcS(), bestPh.Header.ParentEntropy())
 			log.Info("Subreorg Zone block")
 			log.Info("Subreorg termus equal:", "equal:", pendingHeaderWithTermini.Termini[c_terminusIndex] != bestPh.Termini[c_terminusIndex], "pendingHeaderTermius:", pendingHeaderWithTermini.Termini[c_terminusIndex], "bestPhTerminus:", bestPh.Termini[c_terminusIndex])
 			if block.Header().TerminusHash() == bestPh.Header.TerminusHash() && pendingHeaderWithTermini.Termini[c_terminusIndex] != bestPh.Termini[c_terminusIndex] && bestPh.Termini[c_terminusIndex] != sl.hc.config.GenesisHash {
@@ -273,8 +273,9 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 				}
 			}
 		} else if order == common.REGION_CTX {
+			subReorg = sl.poem(block.Header().CalcS(), bestPh.Header.ParentEntropy(common.REGION_CTX))
 			log.Info("Subreorg Region block")
-			log.Info("Subreorg termus equal:", "equal:", pendingHeaderWithTermini.Termini[c_terminusIndex] != bestPh.Header.TerminusHash(), "pendingHeaderTermius:", pendingHeaderWithTermini.Termini[c_terminusIndex], "bestPhTerminus:", bestPh.Header.TerminusHash())
+			log.Info("Subreorg termus equal:", "equal:", block.Header().TerminusHash() != bestPh.Header.TerminusHash(), "pendingHeaderTermius:", pendingHeaderWithTermini.Termini[c_terminusIndex], "bestPhTerminus:", bestPh.Header.TerminusHash())
 			if block.Header().TerminusHash() != bestPh.Header.TerminusHash() && bestPh.Header.TerminusHash() != sl.hc.config.GenesisHash {
 				regionTerminusHeader := sl.hc.GetHeaderByHash(bestPh.Header.TerminusHash())
 				regionTerminusOrder, err := regionTerminusHeader.CalcOrder()
@@ -286,13 +287,31 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 					subReorg = false
 				}
 			}
+		} else if order == common.PRIME_CTX {
+			subReorg = sl.poem(block.Header().CalcS(), bestPh.Header.ParentEntropy(common.PRIME_CTX))
 		}
-	}
+	} else if nodeCtx == common.REGION_CTX && subUnavailable {
+		if order == common.REGION_CTX {
+			subReorg = sl.poem(block.Header().CalcS(), bestPh.Header.ParentEntropy(common.REGION_CTX))
+			log.Info("Subreorg Region block, Region Node")
+			log.Info("Subreorg termus equal:", "equal:", pendingHeaderWithTermini.Termini[c_terminusIndex] != bestPh.Header.TerminusHash(), "pendingHeaderTermius:", pendingHeaderWithTermini.Termini[c_terminusIndex], "bestPhTerminus:", bestPh.Header.TerminusHash())
+			if pendingHeaderWithTermini.Termini[c_terminusIndex] != bestPh.Termini[c_terminusIndex] && bestPh.Termini[c_terminusIndex] != sl.hc.config.GenesisHash {
+				regionTerminusHeader := sl.hc.GetHeaderByHash(bestPh.Header.TerminusHash())
+				regionTerminusOrder, err := regionTerminusHeader.CalcOrder()
+				if err != nil {
+					return nil, false, err
+				}
+				if order > regionTerminusOrder {
+					log.Info("Subreorg setting false:", "order:", order, "domTerminusOrder:", regionTerminusOrder, "pendingHeaderTerminus:", pendingHeaderWithTermini.Termini[c_terminusIndex], "bestPhTerminus:", bestPh.Header.TerminusHash())
+					subReorg = false
+				}
+			}
+		} else if order == common.PRIME_CTX {
+			subReorg = sl.poem(block.Header().CalcS(), bestPh.Header.ParentEntropy(common.PRIME_CTX))
+		}
 
-	if subUnavailable {
-		if sl.poem(block.Header().CalcS(), bestPh.Header.ParentEntropy()) {
-			sl.hc.SetCurrentHeader(block.Header())
-		}
+	} else if nodeCtx == common.PRIME_CTX && subUnavailable {
+		subReorg = sl.poem(block.Header().CalcS(), bestPh.Header.ParentEntropy())
 	}
 
 	if subReorg {
