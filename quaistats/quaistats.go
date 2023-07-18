@@ -137,7 +137,7 @@ type connWrapper struct {
 	wlock sync.Mutex
 }
 
-func newConnectionWrapper(conn *websocket.Conn, jwt *string) *connWrapper {
+func newConnectionWrapper(conn *websocket.Conn) *connWrapper {
 	return &connWrapper{conn: conn}
 }
 
@@ -274,18 +274,36 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, chainSideCh chan co
 	}()
 
 	// Resolve the URL, defaulting to TLS, but falling back to none too
-	path := fmt.Sprintf("%s/api", s.host)
-	authPath := fmt.Sprintf("")
-	urls := []string{path}
+	paths := map[string]string{
+		"block":        fmt.Sprintf("%s/block", s.host),
+		"peerStats":    fmt.Sprintf("%s/peerStats", s.host),
+		"transactions": fmt.Sprintf("%s/transactions", s.host),
+		"nodeStats":    fmt.Sprintf("%s/nodeStats", s.host),
+		"pendStats":    fmt.Sprintf("%s/pendStats", s.host),
+		"login":        fmt.Sprintf("%s/auth", s.host),
+	}
 
-	// url.Parse and url.IsAbs is unsuitable (https://github.com/golang/go/issues/19779)
-	if !strings.Contains(path, "://") {
-		urls = []string{"wss://" + path, "ws://" + path}
+	//	urls := []string{path}
+
+	urlMap := make(map[string][]string)
+
+	for key, path := range paths {
+		// url.Parse and url.IsAbs is unsuitable (https://github.com/golang/go/issues/19779)
+		if !strings.Contains(path, "://") {
+			// Append both secure (wss) and non-secure (ws) URLs
+			if key == "login" {
+				urlMap[key] = []string{"http://" + path}
+			} else {
+				urlMap[key] = []string{"wss://" + path, "ws://" + path}
+			}
+		} else {
+			urlMap[key] = []string{path}
+		}
 	}
 
 	errTimer := time.NewTimer(0)
 	defer errTimer.Stop()
-	var authJwt *string
+	var authJwt = ""
 	// Loop reporting until termination
 	for {
 		select {
@@ -293,89 +311,116 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, chainSideCh chan co
 			return
 		case <-errTimer.C:
 			// If we don't have a JWT or it's expired, get a new one
-			if authJwt == nil || s.isJwtExpired(authJwt) {
+
+			isJwtExpiredResult, jwtIsExpiredErr := s.isJwtExpired(authJwt)
+			if authJwt == "" || isJwtExpiredResult || jwtIsExpiredErr != nil {
 				var err error
-				authJwt, err = s.login2()
+				authJwt, err = s.login2(urlMap["login"][0])
 				if err != nil {
-					log.Warn("Unable to retrieve JWT", "err", err)
+					log.Warn("Stats login failed", "err", err)
 					errTimer.Reset(10 * time.Second)
 					continue
 				}
 			}
 			// Establish a websocket connection to the server on any supported URL
-			var (
-				conn *connWrapper
-				err  error
-			)
 			dialer := websocket.Dialer{HandshakeTimeout: 5 * time.Second}
 			header := make(http.Header)
 			header.Set("origin", "http://localhost")
-			for _, url := range urls {
-				c, _, e := dialer.Dial(url, header)
-				err = e
-				if err == nil {
-					conn = newConnectionWrapper(c, authJwt)
+			header.Set("Authentication", "Bearer "+authJwt)
+
+			conns := make(map[string]*connWrapper)
+			errs := make(map[string]error)
+
+			for key, urls := range urlMap {
+				if key == "login" {
 					break
 				}
+				for _, url := range urls {
+					c, _, e := dialer.Dial(url, header)
+					err := e
+					if err == nil {
+						conns[key] = newConnectionWrapper(c)
+						break
+					}
+					if err != nil {
+						log.Warn(key+" stats server unreachable", "err", err)
+						errs[key] = err
+						errTimer.Reset(10 * time.Second)
+						continue
+					}
+					go s.readLoop(conns[key])
+				}
 			}
-			if err != nil {
-				log.Warn("Stats server unreachable", "err", err)
-				errTimer.Reset(10 * time.Second)
-				continue
-			}
-			// Authenticate the client with the server
-			if err = s.login(conn); err != nil {
-				log.Warn("Stats login failed", "err", err)
-				conn.Close()
-				errTimer.Reset(10 * time.Second)
-				continue
-			}
-			go s.readLoop(conn)
 
-			// Send the initial stats so our node looks decent from the get go
-			if err = s.report(conn); err != nil {
-				log.Warn("Initial stats report failed", "err", err)
-				conn.Close()
-				errTimer.Reset(0)
-				continue
+			// Authenticate the client with the server
+			for key, conn := range conns {
+				if errs[key] = s.report(key, conn); errs[key] != nil {
+					log.Warn("Initial stats report failed", "err", errs[key])
+					conn.Close()
+					errTimer.Reset(0)
+					continue
+				}
+
 			}
+
 			// Keep sending status updates until the connection breaks
 			fullReport := time.NewTicker(reportInterval * time.Second)
 
-			for err == nil {
+			var noErrs = true
+			for noErrs {
+				var err error
 				select {
 				case <-quitCh:
 					fullReport.Stop()
 					// Make sure the connection is closed
-					conn.Close()
+					for _, conn := range conns {
+						conn.Close()
+					}
+
 					return
 
 				case <-fullReport.C:
-					if err = s.report(conn); err != nil {
-						log.Warn("Full stats report failed", "err", err)
+					if err = s.report("nodeStats", conns["nodeStats"]); err != nil {
+						noErrs = false
+						log.Warn("nodeStats full stats report failed", "err", err)
+					}
+					if err = s.report("peerStats", conns["peerStats"]); err != nil {
+						noErrs = false
+						log.Warn("peerStats full stats report failed", "err", err)
+					}
+					if err = s.report("transactions", conns["transactions"]); err != nil {
+						noErrs = false
+						log.Warn("transactions full stats report failed", "err", err)
 					}
 				case list := <-s.histCh:
-					if err = s.reportHistory(conn, list); err != nil {
+					if err = s.reportHistory(conns["blockStats"], list); err != nil {
+						noErrs = false
 						log.Warn("Requested history report failed", "err", err)
 					}
 				case head := <-headCh:
-					if err = s.reportBlock(conn, head); err != nil {
+					if err = s.reportBlock(conns["blockStats"], head); err != nil {
+						noErrs = false
 						log.Warn("Block stats report failed", "err", err)
 					}
 					if nodeCtx == common.ZONE_CTX {
-						if err = s.reportPending(conn); err != nil {
+						if err = s.reportPending(conns["pendStats"]); err != nil {
+							noErrs = false
 							log.Warn("Post-block transaction stats report failed", "err", err)
 						}
 					}
 				case sideEvent := <-sideCh:
-					if err = s.reportSideBlock(conn, sideEvent); err != nil {
+					if err = s.reportSideBlock(conns["blockStats"], sideEvent); err != nil {
+						noErrs = false
 						log.Warn("Block stats report failed", "err", err)
 					}
 				}
 			}
 			fullReport.Stop()
 			// Close the current connection and establish a new one
-			conn.Close()
+			for _, conn := range conns {
+				conn.Close()
+			}
+
 			errTimer.Reset(0)
 		}
 	}
@@ -496,8 +541,8 @@ type authMsg struct {
 }
 
 type loginSecret struct {
-	name     string `json:"name"`
-	password string `json:"password"`
+	Name     string `json:"name"`
+	Password string `json:"password"`
 }
 
 // login tries to authorize the client at the remote server.
@@ -530,8 +575,8 @@ func (s *Service) login(conn *connWrapper) error {
 			ChainID:  s.chainID.Uint64(),
 		},
 		Secret: loginSecret{
-			name:     "admin",
-			password: s.pass,
+			Name:     "admin",
+			Password: s.pass,
 		},
 	}
 	login := map[string][]interface{}{
@@ -558,23 +603,50 @@ type AuthResponse struct {
 	Token   string `json:"token"`
 }
 
-func (s *Service) login2() (*string, error) {
+func (s *Service) login2(url string) (string, error) {
 	// Substitute with your actual service address and port
-	url := "http://localhost:3000/login"
 
-	creds := &Credentials{
-		Name:     "admin",
-		Password: s.pass,
+	infos := s.server.NodeInfo()
+
+	var protocols []string
+	for _, proto := range s.server.Protocols {
+		protocols = append(protocols, fmt.Sprintf("%s/%d", proto.Name, proto.Version))
+	}
+	var network string
+	if info := infos.Protocols["eth"]; info != nil {
+		network = fmt.Sprintf("%d", info.(*ethproto.NodeInfo).Network)
 	}
 
-	credsJson, err := json.Marshal(creds)
-	if err != nil {
-		return nil, err
+	auth := &authMsg{
+		ID: s.node,
+		Info: nodeInfo{
+			Name:     s.node,
+			Node:     infos.Name,
+			Port:     infos.Ports.Listener,
+			Network:  network,
+			Protocol: strings.Join(protocols, ", "),
+			API:      "No",
+			Os:       runtime.GOOS,
+			OsVer:    runtime.GOARCH,
+			Client:   "0.1.1",
+			History:  true,
+			Chain:    common.NodeLocation.Name(),
+			ChainID:  s.chainID.Uint64(),
+		},
+		Secret: loginSecret{
+			Name:     "admin",
+			Password: s.pass,
+		},
 	}
 
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(credsJson))
+	authJson, err := json.Marshal(auth)
 	if err != nil {
-		return nil, err
+		return "", err
+	}
+
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(authJson))
+	if err != nil {
+		return "", err
 	}
 	defer resp.Body.Close()
 
@@ -583,29 +655,29 @@ func (s *Service) login2() (*string, error) {
 	var authResponse AuthResponse
 	err = json.Unmarshal(body, &authResponse)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	if authResponse.Success {
-		return &authResponse.Token, nil
+		return authResponse.Token, nil
 	}
 
-	return nil, fmt.Errorf("login failed")
+	return "", fmt.Errorf("login failed")
 }
 
 // isJwtExpired checks if the JWT token is expired
-func (s *Service) isJwtExpired(authJwt *string) (bool, error) {
-	if authJwt == nil {
+func (s *Service) isJwtExpired(authJwt string) (bool, error) {
+	if authJwt == "" {
 		return false, errors.New("token is nil")
 	}
 
-	parts := strings.Split(*authJwt, ".")
+	parts := strings.Split(authJwt, ".")
 	if len(parts) != 3 {
 		return false, errors.New("invalid token")
 	}
 
 	claims := jwt.MapClaims{}
-	_, _, err := new(jwt.Parser).ParseUnverified(*authJwt, claims)
+	_, _, err := new(jwt.Parser).ParseUnverified(authJwt, claims)
 	if err != nil {
 		return false, err
 	}
@@ -620,18 +692,26 @@ func (s *Service) isJwtExpired(authJwt *string) (bool, error) {
 // report collects all possible data to report and send it to the stats server.
 // This should only be used on reconnects or rarely to avoid overloading the
 // server. Use the individual methods for reporting subscribed events.
-func (s *Service) report(conn *connWrapper) error {
-	nodeCtx := common.NodeLocation.Context()
-	if nodeCtx == common.ZONE_CTX {
-		if err := s.reportPending(conn); err != nil {
+func (s *Service) report(dataType string, conn *connWrapper) error {
+
+	switch dataType {
+	case "nodeStats":
+		if err := s.reportStats(conn); err != nil {
 			return err
 		}
-	}
-	if err := s.reportStats(conn); err != nil {
-		return err
-	}
-	if err := s.reportPeers(conn); err != nil {
-		return err
+	case "peerStats":
+		if err := s.reportPeers(conn); err != nil {
+			return err
+		}
+	case "transactions":
+		nodeCtx := common.NodeLocation.Context()
+		if nodeCtx == common.ZONE_CTX {
+			if err := s.reportPending(conn); err != nil {
+				return err
+			}
+		}
+	default:
+		return nil
 	}
 	return nil
 }
