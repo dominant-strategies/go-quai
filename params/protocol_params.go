@@ -148,9 +148,9 @@ var (
 	MinimumDifficulty             = ZoneMinDifficulty // The minimum that the difficulty may ever be.
 	GenesisDifficulty             = ZoneMinDifficulty // Difficulty of the Genesis block.
 	DurationLimit                 = big.NewInt(10)    // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
-	GardenDurationLimit           = big.NewInt(3)     // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
+	GardenDurationLimit           = big.NewInt(7)     // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
 	OrchardDurationLimit          = big.NewInt(12)    // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
 	GalenaDurationLimit           = big.NewInt(12)    // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
-	LocalDurationLimit            = big.NewInt(2)     // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
+	LocalDurationLimit            = big.NewInt(12)     // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
 	TimeFactor                    = big.NewInt(7)
 )
