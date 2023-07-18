@@ -297,7 +297,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 			log.Info("Subreorg Region block, Region Node")
 			log.Info("Subreorg termus equal:", "equal:", pendingHeaderWithTermini.Termini[c_terminusIndex] != bestPh.Header.TerminusHash(), "pendingHeaderTermius:", pendingHeaderWithTermini.Termini[c_terminusIndex], "bestPhTerminus:", bestPh.Header.TerminusHash(), "numberCheck:", ((bestPh.Header.NumberU64(common.REGION_CTX) + uint64(1)) > block.Header().NumberU64(common.REGION_CTX)))
 			if pendingHeaderWithTermini.Termini[c_terminusIndex] != bestPh.Termini[c_terminusIndex] && bestPh.Termini[c_terminusIndex] != sl.hc.config.GenesisHash && ((bestPh.Header.NumberU64(common.REGION_CTX) + uint64(1)) > block.Header().NumberU64(common.REGION_CTX)) {
-				regionTerminusHeader := sl.hc.GetHeaderByHash(bestPh.Header.TerminusHash())
+				regionTerminusHeader := sl.hc.GetHeaderByHash(bestPh.Termini[c_terminusIndex])
 				regionTerminusOrder, err := regionTerminusHeader.CalcOrder()
 				if err != nil {
 					return nil, false, err
