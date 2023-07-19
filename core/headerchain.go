@@ -59,22 +59,24 @@ type HeaderChain struct {
 	running       int32          // 0 if chain is running, 1 when stopped
 	procInterrupt int32          // interrupt signaler for block processing
 
-	headermu sync.RWMutex
-	heads    []*types.Header
+	headermu      sync.RWMutex
+	heads         []*types.Header
+	slicesRunning []common.Location
 }
 
 // NewHeaderChain creates a new HeaderChain structure. ProcInterrupt points
 // to the parent's interrupt semaphore.
-func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, txLookupLimit *uint64, vmConfig vm.Config) (*HeaderChain, error) {
+func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, txLookupLimit *uint64, vmConfig vm.Config, slicesRunning []common.Location) (*HeaderChain, error) {
 	headerCache, _ := lru.New(headerCacheLimit)
 	numberCache, _ := lru.New(numberCacheLimit)
 
 	hc := &HeaderChain{
-		config:      chainConfig,
-		headerDb:    db,
-		headerCache: headerCache,
-		numberCache: numberCache,
-		engine:      engine,
+		config:        chainConfig,
+		headerDb:      db,
+		headerCache:   headerCache,
+		numberCache:   numberCache,
+		engine:        engine,
+		slicesRunning: slicesRunning,
 	}
 
 	pendingEtxsRollup, _ := lru.New(c_maxPendingEtxsRollup)
@@ -300,6 +302,14 @@ func (hc *HeaderChain) AppendHeader(header *types.Header) error {
 	}
 
 	return nil
+}
+func (hc *HeaderChain) ProcessingState() bool {
+	for _, slice := range hc.slicesRunning {
+		if slice.Equal(common.NodeLocation) {
+			return true
+		}
+	}
+	return false
 }
 
 // Append

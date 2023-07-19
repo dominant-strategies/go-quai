@@ -74,7 +74,7 @@ type Slice struct {
 	badHashesCache map[common.Hash]bool
 }
 
-func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLookupLimit *uint64, isLocalBlock func(block *types.Header) bool, chainConfig *params.ChainConfig, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis) (*Slice, error) {
+func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLookupLimit *uint64, isLocalBlock func(block *types.Header) bool, chainConfig *params.ChainConfig, slicesRunning []common.Location, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis) (*Slice, error) {
 	nodeCtx := common.NodeLocation.Context()
 	sl := &Slice{
 		config:         chainConfig,
@@ -86,7 +86,7 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLooku
 	}
 
 	var err error
-	sl.hc, err = NewHeaderChain(db, engine, chainConfig, cacheConfig, txLookupLimit, vmConfig)
+	sl.hc, err = NewHeaderChain(db, engine, chainConfig, cacheConfig, txLookupLimit, vmConfig, slicesRunning)
 	if err != nil {
 		return nil, err
 	}
@@ -94,10 +94,10 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLooku
 	sl.validator = NewBlockValidator(chainConfig, sl.hc, engine)
 
 	// tx pool is only used in zone
-	if nodeCtx == common.ZONE_CTX {
+	if nodeCtx == common.ZONE_CTX && sl.ProcessingState() {
 		sl.txPool = NewTxPool(*txConfig, chainConfig, sl.hc)
 	}
-	sl.miner = New(sl.hc, sl.txPool, config, db, chainConfig, engine, isLocalBlock)
+	sl.miner = New(sl.hc, sl.txPool, config, db, chainConfig, engine, isLocalBlock, sl.ProcessingState())
 
 	sl.phCache, _ = lru.New(c_phCacheSize)
 
@@ -120,7 +120,7 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLooku
 
 	sl.CheckForBadHashAndRecover()
 
-	if nodeCtx == common.ZONE_CTX {
+	if nodeCtx == common.ZONE_CTX && sl.ProcessingState() {
 		go sl.asyncPendingHeaderLoop()
 	}
 
@@ -245,7 +245,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	bestPh, _ := sl.readPhCache(sl.bestPhKey)
 	subReorg = sl.poem(sl.engine.TotalLogS(block.Header()), bestPh.Header.ParentEntropy())
 	if nodeCtx == common.ZONE_CTX {
-		if subReorg {
+		if subReorg && sl.ProcessingState() {
 
 			err = sl.hc.AppendBlock(batch, block, newInboundEtxs.FilterToLocation(common.NodeLocation))
 			if err != nil {
@@ -296,11 +296,15 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	}
 }
 
+func (sl *Slice) ProcessingState() bool {
+	return sl.hc.ProcessingState()
+}
+
 // relayPh sends pendingHeaderWithTermini to subordinates
 func (sl *Slice) relayPh(block *types.Block, pendingHeaderWithTermini types.PendingHeader, domOrigin bool, location common.Location) {
 	nodeCtx := common.NodeLocation.Context()
 
-	if nodeCtx == common.ZONE_CTX {
+	if nodeCtx == common.ZONE_CTX && sl.ProcessingState() {
 		// Send an empty header to miner
 		bestPh, exists := sl.readPhCache(sl.bestPhKey)
 		if exists {
@@ -955,7 +959,7 @@ func (sl *Slice) Stop() {
 	close(sl.quit)
 
 	sl.hc.Stop()
-	if nodeCtx == common.ZONE_CTX {
+	if nodeCtx == common.ZONE_CTX && sl.ProcessingState() {
 		sl.asyncPhSub.Unsubscribe()
 		sl.txPool.Stop()
 	}
@@ -1141,7 +1145,7 @@ func (sl *Slice) cleanCacheAndDatabaseTillBlock(hash common.Hash) {
 	sl.hc.currentHeader.Store(currentHeader)
 
 	// Recover the snaps
-	if nodeCtx == common.ZONE_CTX {
+	if nodeCtx == common.ZONE_CTX && sl.ProcessingState() {
 		sl.hc.bc.processor.snaps, _ = snapshot.New(sl.sliceDb, sl.hc.bc.processor.stateCache.TrieDB(), sl.hc.bc.processor.cacheConfig.SnapshotLimit, currentHeader.Root(), true, true)
 	}
 }

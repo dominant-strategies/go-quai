@@ -53,6 +53,9 @@ func NewBlockValidator(config *params.ChainConfig, headerChain *HeaderChain, eng
 // header's transaction and uncle roots. The headers are assumed to be already
 // validated at this point.
 func (v *BlockValidator) ValidateBody(block *types.Block) error {
+	if !v.hc.ProcessingState() {
+		return nil
+	}
 	nodeCtx := common.NodeLocation.Context()
 	// Check whether the block's known, and if not, that it's linkable
 	if nodeCtx == common.ZONE_CTX {

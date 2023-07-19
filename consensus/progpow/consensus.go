@@ -484,7 +484,7 @@ func (progpow *Progpow) Finalize(chain consensus.ChainHeaderReader, header *type
 // uncle rewards, setting the final state and assembling the block.
 func (progpow *Progpow) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, etxs []*types.Transaction, subManifest types.BlockManifest, receipts []*types.Receipt) (*types.Block, error) {
 	nodeCtx := common.NodeLocation.Context()
-	if nodeCtx == common.ZONE_CTX {
+	if nodeCtx == common.ZONE_CTX && chain.ProcessingState() {
 		// Finalize block
 		progpow.Finalize(chain, header, state, txs, uncles)
 	}

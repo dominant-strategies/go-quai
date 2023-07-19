@@ -435,7 +435,7 @@ func handleReceipts66(backend Backend, msg Decoder, peer *Peer) error {
 
 func handleNewPooledTransactionHashes(backend Backend, msg Decoder, peer *Peer) error {
 	nodeCtx := common.NodeLocation.Context()
-	if nodeCtx != common.ZONE_CTX {
+	if nodeCtx != common.ZONE_CTX || !backend.Core().Slice().ProcessingState() {
 		return errors.New("transactions are only handled in zone")
 	}
 	// New transaction announcement arrived, make sure we have
@@ -456,7 +456,7 @@ func handleNewPooledTransactionHashes(backend Backend, msg Decoder, peer *Peer) 
 
 func handleGetPooledTransactions(backend Backend, msg Decoder, peer *Peer) error {
 	nodeCtx := common.NodeLocation.Context()
-	if nodeCtx != common.ZONE_CTX {
+	if nodeCtx != common.ZONE_CTX || !backend.Core().Slice().ProcessingState() {
 		return errors.New("transactions are only handled in zone")
 	}
 	// Decode the pooled transactions retrieval message
@@ -508,7 +508,7 @@ func answerGetPooledTransactions(backend Backend, query GetPooledTransactionsPac
 
 func handleTransactions(backend Backend, msg Decoder, peer *Peer) error {
 	nodeCtx := common.NodeLocation.Context()
-	if nodeCtx != common.ZONE_CTX {
+	if nodeCtx != common.ZONE_CTX || !backend.Core().Slice().ProcessingState() {
 		return errors.New("transactions are only handled in zone")
 	}
 	// Transactions arrived, make sure we have a valid and fresh chain to handle them
@@ -532,7 +532,7 @@ func handleTransactions(backend Backend, msg Decoder, peer *Peer) error {
 
 func handlePooledTransactions(backend Backend, msg Decoder, peer *Peer) error {
 	nodeCtx := common.NodeLocation.Context()
-	if nodeCtx != common.ZONE_CTX {
+	if nodeCtx != common.ZONE_CTX || !backend.Core().Slice().ProcessingState() {
 		return errors.New("transactions are only handled in zone")
 	}
 	// Transactions arrived, make sure we have a valid and fresh chain to handle them
@@ -556,7 +556,7 @@ func handlePooledTransactions(backend Backend, msg Decoder, peer *Peer) error {
 
 func handlePooledTransactions66(backend Backend, msg Decoder, peer *Peer) error {
 	nodeCtx := common.NodeLocation.Context()
-	if nodeCtx != common.ZONE_CTX {
+	if nodeCtx != common.ZONE_CTX || !backend.Core().Slice().ProcessingState() {
 		return errors.New("transactions are only handled in zone")
 	}
 	// Transactions arrived, make sure we have a valid and fresh chain to handle them

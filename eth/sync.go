@@ -193,7 +193,7 @@ func (cs *chainSyncer) loop() {
 	defer cs.handler.wg.Done()
 
 	cs.handler.blockFetcher.Start()
-	if nodeCtx == common.ZONE_CTX {
+	if nodeCtx == common.ZONE_CTX && cs.handler.core.ProcessingState() {
 		cs.handler.txFetcher.Start()
 		defer cs.handler.txFetcher.Stop()
 	}

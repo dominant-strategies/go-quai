@@ -192,7 +192,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Quai, error) {
 		config.TxPool.Journal = stack.ResolvePath(config.TxPool.Journal)
 	}
 
-	eth.core, err = core.NewCore(chainDb, &config.Miner, eth.isLocalBlock, &config.TxPool, &config.TxLookupLimit, chainConfig, eth.config.DomUrl, eth.config.SubUrls, eth.engine, cacheConfig, vmConfig, config.Genesis)
+	eth.core, err = core.NewCore(chainDb, &config.Miner, eth.isLocalBlock, &config.TxPool, &config.TxLookupLimit, chainConfig, eth.config.SlicesRunning, eth.config.DomUrl, eth.config.SubUrls, eth.engine, cacheConfig, vmConfig, config.Genesis)
 	if err != nil {
 		return nil, err
 	}
@@ -216,7 +216,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Quai, error) {
 
 	eth.APIBackend = &QuaiAPIBackend{stack.Config().ExtRPCEnabled(), eth, nil}
 	// Gasprice oracle is only initiated in zone chains
-	if nodeCtx == common.ZONE_CTX {
+	if nodeCtx == common.ZONE_CTX && eth.core.ProcessingState() {
 		gpoParams := config.GPO
 		if gpoParams.Default == nil {
 			gpoParams.Default = config.Miner.GasPrice
