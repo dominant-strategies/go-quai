@@ -43,6 +43,7 @@ const (
 	ETXPrimeMaxFraction   int    = common.NumRegionsInPrime * common.NumZonesInRegion       // The maximum fraction of transactions for cross-prime ETXs
 	ETXRLimitMin          int    = 10                                                       // Minimum possible cross-region ETX limit
 	ETXPLimitMin          int    = 10                                                       // Minimum possible cross-prime ETX limit
+	EtxExpirationAge      uint64 = 100                                                      // Number of blocks an ETX may wait for inclusion at the destination
 
 	Sha3Gas     uint64 = 30 // Once per SHA3 operation.
 	Sha3WordGas uint64 = 6  // Once per word of the SHA3 operation's data.

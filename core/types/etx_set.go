@@ -2,10 +2,7 @@ package types
 
 import (
 	"github.com/dominant-strategies/go-quai/common"
-)
-
-const (
-	EtxExpirationAge = 100 // With 10s blocks, ETX expire after ~24hrs
+	"github.com/dominant-strategies/go-quai/params"
 )
 
 // The EtxSet maps an ETX hash to the ETX and block number in which it became available.
@@ -37,7 +34,7 @@ func (set *EtxSet) Update(newInboundEtxs Transactions, currentHeight uint64) {
 	// Remove expired ETXs
 	for txHash, entry := range *set {
 		availableAtBlock := entry.Height
-		etxExpirationHeight := availableAtBlock + EtxExpirationAge
+		etxExpirationHeight := availableAtBlock + params.EtxExpirationAge
 		if currentHeight > etxExpirationHeight {
 			delete(*set, txHash)
 		}
