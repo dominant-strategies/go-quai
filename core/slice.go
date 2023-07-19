@@ -261,8 +261,8 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		if order == common.ZONE_CTX {
 			subReorg = sl.poem(block.Header().CalcS(), bestPh.Header.ParentEntropy())
 			log.Info("Subreorg Zone block")
-			log.Info("Subreorg termus equal:", "equal:", pendingHeaderWithTermini.Termini[c_terminusIndex] != bestPh.Termini[c_terminusIndex], "pendingHeaderTermius:", pendingHeaderWithTermini.Termini[c_terminusIndex], "bestPhTerminus:", bestPh.Termini[c_terminusIndex], "numberCheck:", ((bestPh.Header.NumberU64() + uint64(2)) > block.Header().NumberU64()))
-			if block.Header().TerminusHash() == bestPh.Header.TerminusHash() && pendingHeaderWithTermini.Termini[c_terminusIndex] != bestPh.Termini[c_terminusIndex] && bestPh.Termini[c_terminusIndex] != sl.hc.config.GenesisHash && ((bestPh.Header.NumberU64() + uint64(2)) > block.Header().NumberU64()) {
+			log.Info("Subreorg termus equal:", "equal:", pendingHeaderWithTermini.Termini[c_terminusIndex] != bestPh.Termini[c_terminusIndex], "pendingHeaderTermius:", pendingHeaderWithTermini.Termini[c_terminusIndex], "bestPhTerminus:", bestPh.Termini[c_terminusIndex], "numberCheck:", ((bestPh.Header.NumberU64() + uint64(4)) > block.Header().NumberU64()))
+			if block.Header().TerminusHash() == bestPh.Header.TerminusHash() && pendingHeaderWithTermini.Termini[c_terminusIndex] != bestPh.Termini[c_terminusIndex] && bestPh.Termini[c_terminusIndex] != sl.hc.config.GenesisHash && ((bestPh.Header.NumberU64() + uint64(4)) > block.Header().NumberU64()) {
 				domTerminusHeader := sl.hc.GetHeaderByHash(bestPh.Termini[c_terminusIndex])
 				domTerminusOrder, err := domTerminusHeader.CalcOrder()
 				if err != nil {
@@ -276,8 +276,8 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		} else if order == common.REGION_CTX {
 			subReorg = sl.poem(block.Header().CalcS(), bestPh.Header.ParentEntropy(common.REGION_CTX))
 			log.Info("Subreorg Region block")
-			log.Info("Subreorg termus equal:", "equal:", block.Header().TerminusHash() != bestPh.Header.TerminusHash(), "pendingHeaderTermius:", pendingHeaderWithTermini.Termini[c_terminusIndex], "bestPhTerminus:", bestPh.Header.TerminusHash(), "numberCheck:", ((bestPh.Header.NumberU64(common.REGION_CTX) + uint64(1)) > block.Header().NumberU64(common.REGION_CTX)))
-			if block.Header().TerminusHash() != bestPh.Header.TerminusHash() && bestPh.Header.TerminusHash() != sl.hc.config.GenesisHash && ((bestPh.Header.NumberU64(common.REGION_CTX) + uint64(1)) > block.Header().NumberU64(common.REGION_CTX)) {
+			log.Info("Subreorg termus equal:", "equal:", block.Header().TerminusHash() != bestPh.Header.TerminusHash(), "pendingHeaderTermius:", pendingHeaderWithTermini.Termini[c_terminusIndex], "bestPhTerminus:", bestPh.Header.TerminusHash(), "numberCheck:", ((bestPh.Header.NumberU64(common.REGION_CTX) + uint64(3)) > block.Header().NumberU64(common.REGION_CTX)))
+			if block.Header().TerminusHash() != bestPh.Header.TerminusHash() && bestPh.Header.TerminusHash() != sl.hc.config.GenesisHash && ((bestPh.Header.NumberU64(common.REGION_CTX) + uint64(3)) > block.Header().NumberU64(common.REGION_CTX)) {
 				regionTerminusHeader := sl.hc.GetHeaderByHash(bestPh.Header.TerminusHash())
 				regionTerminusOrder, err := regionTerminusHeader.CalcOrder()
 				if err != nil {
@@ -295,8 +295,8 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		if order == common.REGION_CTX {
 			subReorg = sl.poem(block.Header().CalcS(), bestPh.Header.ParentEntropy(common.REGION_CTX))
 			log.Info("Subreorg Region block, Region Node")
-			log.Info("Subreorg termus equal:", "equal:", pendingHeaderWithTermini.Termini[c_terminusIndex] != bestPh.Header.TerminusHash(), "pendingHeaderTermius:", pendingHeaderWithTermini.Termini[c_terminusIndex], "bestPhTerminus:", bestPh.Header.TerminusHash(), "numberCheck:", ((bestPh.Header.NumberU64(common.REGION_CTX) + uint64(1)) > block.Header().NumberU64(common.REGION_CTX)))
-			if pendingHeaderWithTermini.Termini[c_terminusIndex] != bestPh.Termini[c_terminusIndex] && bestPh.Termini[c_terminusIndex] != sl.hc.config.GenesisHash && ((bestPh.Header.NumberU64(common.REGION_CTX) + uint64(1)) > block.Header().NumberU64(common.REGION_CTX)) {
+			log.Info("Subreorg termus equal:", "equal:", pendingHeaderWithTermini.Termini[c_terminusIndex] != bestPh.Header.TerminusHash(), "pendingHeaderTermius:", pendingHeaderWithTermini.Termini[c_terminusIndex], "bestPhTerminus:", bestPh.Header.TerminusHash(), "numberCheck:", ((bestPh.Header.NumberU64(common.REGION_CTX) + uint64(3)) > block.Header().NumberU64(common.REGION_CTX)))
+			if pendingHeaderWithTermini.Termini[c_terminusIndex] != bestPh.Termini[c_terminusIndex] && bestPh.Termini[c_terminusIndex] != sl.hc.config.GenesisHash && ((bestPh.Header.NumberU64(common.REGION_CTX) + uint64(3)) > block.Header().NumberU64(common.REGION_CTX)) {
 				regionTerminusHeader := sl.hc.GetHeaderByHash(bestPh.Termini[c_terminusIndex])
 				regionTerminusOrder, err := regionTerminusHeader.CalcOrder()
 				if err != nil {
