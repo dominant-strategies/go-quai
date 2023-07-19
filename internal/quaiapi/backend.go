@@ -86,6 +86,7 @@ type Backend interface {
 	AddPendingEtxsRollup(pEtxsRollup types.PendingEtxsRollup) error
 	PendingBlockAndReceipts() (*types.Block, types.Receipts)
 	GenerateRecoveryPendingHeader(pendingHeader *types.Header, checkpointHashes []common.Hash) error
+	ProcessingState() bool
 
 	// Transaction pool API
 	SendTx(ctx context.Context, signedTx *types.Transaction) error
