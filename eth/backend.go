@@ -109,10 +109,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Quai, error) {
 	}
 	log.Info("Allocated trie memory caches", "clean", common.StorageSize(config.TrieCleanCache)*1024*1024, "dirty", common.StorageSize(config.TrieDirtyCache)*1024*1024)
 
-	// Transfer mining-related config to the progpow config.
-	progpowConfig := config.Progpow
-	progpowConfig.NotifyFull = config.Miner.NotifyFull
-
 	// Assemble the Quai object
 	chainDb, err := stack.OpenDatabaseWithFreezer("chaindata", config.DatabaseCache, config.DatabaseHandles, config.DatabaseFreezer, "eth/db/chaindata/", false)
 	if err != nil {
@@ -122,7 +118,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Quai, error) {
 	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
 		return nil, genesisErr
 	}
-	log.Info("Initialised chain configuration", "config", chainConfig)
 
 	if err := pruner.RecoverPruning(stack.ResolvePath(""), chainDb, stack.ResolvePath(config.TrieCleanCacheJournal)); err != nil {
 		log.Error("Failed to recover state", "error", err)
@@ -131,7 +126,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Quai, error) {
 		config:            config,
 		chainDb:           chainDb,
 		eventMux:          stack.EventMux(),
-		engine:            ethconfig.CreateConsensusEngine(stack, chainConfig, &progpowConfig, config.Miner.Notify, config.Miner.Noverify, chainDb),
 		closeBloomHandler: make(chan struct{}),
 		networkID:         config.NetworkId,
 		gasPrice:          config.Miner.GasPrice,
@@ -140,6 +134,18 @@ func New(stack *node.Node, config *ethconfig.Config) (*Quai, error) {
 		bloomIndexer:      core.NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms),
 		p2pServer:         stack.Server(),
 	}
+
+	if config.ConsensusEngine == "blake3" {
+		blake3Config := config.Blake3Pow
+		blake3Config.NotifyFull = config.Miner.NotifyFull
+		eth.engine = ethconfig.CreateBlake3ConsensusEngine(stack, chainConfig, &blake3Config, config.Miner.Notify, config.Miner.Noverify, chainDb)
+	} else {
+		// Transfer mining-related config to the progpow config.
+		progpowConfig := config.Progpow
+		progpowConfig.NotifyFull = config.Miner.NotifyFull
+		eth.engine = ethconfig.CreateProgpowConsensusEngine(stack, chainConfig, &progpowConfig, config.Miner.Notify, config.Miner.Noverify, chainDb)
+	}
+	log.Info("Initialised chain configuration", "config", chainConfig)
 
 	bcVersion := rawdb.ReadDatabaseVersion(chainDb)
 	var dbVer = "<nil>"

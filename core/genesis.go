@@ -213,7 +213,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis) (*params
 	// Special case: don't change the existing config of a non-mainnet chain if no new
 	// config is supplied. These chains would get AllProtocolChanges (and a compat error)
 	// if we just continued here.
-	if genesis == nil && stored != params.ColosseumGenesisHash {
+	if genesis == nil && stored != params.ProgpowColosseumGenesisHash {
 		return storedcfg, stored, nil
 	}
 	// Check config compatibility and write the config. Compatibility errors
@@ -231,16 +231,28 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 	switch {
 	case g != nil:
 		return g.Config
-	case ghash == params.ColosseumGenesisHash:
-		return params.ColosseumChainConfig
-	case ghash == params.GardenGenesisHash:
-		return params.GardenChainConfig
-	case ghash == params.OrchardGenesisHash:
-		return params.OrchardChainConfig
-	case ghash == params.GalenaGenesisHash:
-		return params.GalenaChainConfig
-	case ghash == params.LocalGenesisHash:
-		return params.LocalChainConfig
+	case ghash == params.ProgpowColosseumGenesisHash:
+		return params.ProgpowColosseumChainConfig
+	case ghash == params.ProgpowGardenGenesisHash:
+		return params.ProgpowGardenChainConfig
+	case ghash == params.ProgpowOrchardGenesisHash:
+		return params.ProgpowOrchardChainConfig
+	case ghash == params.ProgpowGalenaGenesisHash:
+		return params.ProgpowGalenaChainConfig
+	case ghash == params.ProgpowLocalGenesisHash:
+		return params.ProgpowLocalChainConfig
+	// Blake3 chain configs
+	case ghash == params.Blake3PowColosseumGenesisHash:
+		return params.Blake3PowColosseumChainConfig
+	case ghash == params.Blake3PowGardenGenesisHash:
+		return params.Blake3PowGardenChainConfig
+	case ghash == params.Blake3PowOrchardGenesisHash:
+		return params.Blake3PowOrchardChainConfig
+	case ghash == params.Blake3PowGalenaGenesisHash:
+		return params.Blake3PowGalenaChainConfig
+	case ghash == params.Blake3PowLocalGenesisHash:
+		return params.Blake3PowLocalChainConfig
+
 	default:
 		return params.AllProgpowProtocolChanges
 	}
@@ -311,13 +323,22 @@ func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big
 // DefaultGenesisBlock returns the Latest default Genesis block.
 // Currently it returns the DefaultColosseumGenesisBlock.
 func DefaultGenesisBlock() *Genesis {
-	return DefaultColosseumGenesisBlock()
+	return DefaultColosseumGenesisBlock("progpow")
 }
 
 // DefaultColosseumGenesisBlock returns the Quai Colosseum testnet genesis block.
-func DefaultColosseumGenesisBlock() *Genesis {
+func DefaultColosseumGenesisBlock(consensusEngine string) *Genesis {
+	if consensusEngine == "blake3" {
+		return &Genesis{
+			Config:     params.Blake3PowColosseumChainConfig,
+			Nonce:      66,
+			ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fb"),
+			GasLimit:   5000000,
+			Difficulty: big.NewInt(2000000),
+		}
+	}
 	return &Genesis{
-		Config:     params.ColosseumChainConfig,
+		Config:     params.ProgpowColosseumChainConfig,
 		Nonce:      66,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fb"),
 		GasLimit:   5000000,
@@ -326,9 +347,18 @@ func DefaultColosseumGenesisBlock() *Genesis {
 }
 
 // DefaultGardenGenesisBlock returns the Garden testnet genesis block.
-func DefaultGardenGenesisBlock() *Genesis {
+func DefaultGardenGenesisBlock(consensusEngine string) *Genesis {
+	if consensusEngine == "blake3" {
+		return &Genesis{
+			Config:     params.Blake3PowGardenChainConfig,
+			Nonce:      66,
+			ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fb"),
+			GasLimit:   5000000,
+			Difficulty: big.NewInt(4000000),
+		}
+	}
 	return &Genesis{
-		Config:     params.GardenChainConfig,
+		Config:     params.ProgpowGardenChainConfig,
 		Nonce:      0,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353539"),
 		GasLimit:   5000000,
@@ -337,9 +367,18 @@ func DefaultGardenGenesisBlock() *Genesis {
 }
 
 // DefaultOrchardGenesisBlock returns the Orchard testnet genesis block.
-func DefaultOrchardGenesisBlock() *Genesis {
+func DefaultOrchardGenesisBlock(consensusEngine string) *Genesis {
+	if consensusEngine == "blake3" {
+		return &Genesis{
+			Config:     params.Blake3PowOrchardChainConfig,
+			Nonce:      66,
+			ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fc"),
+			GasLimit:   5000000,
+			Difficulty: big.NewInt(4000000),
+		}
+	}
 	return &Genesis{
-		Config:     params.OrchardChainConfig,
+		Config:     params.ProgpowOrchardChainConfig,
 		Nonce:      0,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353536"),
 		GasLimit:   5000000,
@@ -348,9 +387,18 @@ func DefaultOrchardGenesisBlock() *Genesis {
 }
 
 // DefaultGalenaGenesisBlock returns the Galena testnet genesis block.
-func DefaultGalenaGenesisBlock() *Genesis {
+func DefaultGalenaGenesisBlock(consensusEngine string) *Genesis {
+	if consensusEngine == "blake3" {
+		return &Genesis{
+			Config:     params.Blake3PowGalenaChainConfig,
+			Nonce:      66,
+			ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fb"),
+			GasLimit:   5000000,
+			Difficulty: big.NewInt(4000000),
+		}
+	}
 	return &Genesis{
-		Config:     params.GalenaChainConfig,
+		Config:     params.ProgpowGalenaChainConfig,
 		Nonce:      0,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353537"),
 		GasLimit:   5000000,
@@ -359,9 +407,18 @@ func DefaultGalenaGenesisBlock() *Genesis {
 }
 
 // DefaultLocalGenesisBlock returns the Local testnet genesis block.
-func DefaultLocalGenesisBlock() *Genesis {
+func DefaultLocalGenesisBlock(consensusEngine string) *Genesis {
+	if consensusEngine == "blake3" {
+		return &Genesis{
+			Config:     params.Blake3PowLocalChainConfig,
+			Nonce:      66,
+			ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fb"),
+			GasLimit:   5000000,
+			Difficulty: big.NewInt(300000),
+		}
+	}
 	return &Genesis{
-		Config:     params.LocalChainConfig,
+		Config:     params.ProgpowLocalChainConfig,
 		Nonce:      0,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
 		GasLimit:   5000000,

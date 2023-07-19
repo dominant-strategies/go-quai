@@ -158,6 +158,7 @@ func EmptyHeader() *Header {
 	h.number = make([]*big.Int, common.HierarchyDepth)
 	h.difficulty = big.NewInt(0)
 	h.root = EmptyRootHash
+	h.mixHash = EmptyRootHash
 	h.txHash = EmptyRootHash
 	h.etxHash = EmptyRootHash
 	h.etxRollupHash = EmptyRootHash

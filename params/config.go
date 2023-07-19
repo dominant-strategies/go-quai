@@ -1,4 +1,4 @@
-// Copyright 2016 The go-ethereum Authors
+// Cojyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -25,47 +25,86 @@ import (
 
 // Genesis hashes to enforce below configs on.
 var (
-	ColosseumGenesisHash = common.HexToHash("0x937e935af7be23cee3a138dcc0e1a0ba1ccf2c9d085d144d4fb2e6fbd54fdd67")
-	GardenGenesisHash    = common.HexToHash("0x8975f8760d317524559986d595058d4d66c05d62e0eda1d740cdee56a25788a5")
-	OrchardGenesisHash   = common.HexToHash("0x5627aca8194b46ed071f92746ecf975542b12ce406905d715b4be8f044749956")
-	LocalGenesisHash     = common.HexToHash("0x9e7149a4f5ff07675e0e7881f004cd0dc1f5a28bb9ba8c4de86794ba6fe80b60")
-	GalenaGenesisHash    = common.HexToHash("0xe0a395a3fcd7ecbb28dd66eeceab2fb40db01a2bfbf9e5fbc5b93269104df19a")
+	// Progpow GenesisHashes
+	ProgpowColosseumGenesisHash = common.HexToHash("0x937e935af7be23cee3a138dcc0e1a0ba1ccf2c9d085d144d4fb2e6fbd54fdd67")
+	ProgpowGardenGenesisHash    = common.HexToHash("0x8975f8760d317524559986d595058d4d66c05d62e0eda1d740cdee56a25788a5")
+	ProgpowOrchardGenesisHash   = common.HexToHash("0x5627aca8194b46ed071f92746ecf975542b12ce406905d715b4be8f044749956")
+	ProgpowLocalGenesisHash     = common.HexToHash("0x9e7149a4f5ff07675e0e7881f004cd0dc1f5a28bb9ba8c4de86794ba6fe80b60")
+	ProgpowGalenaGenesisHash    = common.HexToHash("0xe0a395a3fcd7ecbb28dd66eeceab2fb40db01a2bfbf9e5fbc5b93269104df19a")
+
+	// Blake3GenesisHashes
+	Blake3PowColosseumGenesisHash = common.HexToHash("0x5746089cbee3cde719c3d0599e31504793028c68e5df7acff956e917f72866f5")
+	Blake3PowGardenGenesisHash    = common.HexToHash("0xdee75a7b24237d07f15392d7d5319a9421f838d84b9a6e6a8d1a4d74365ff2de")
+	Blake3PowOrchardGenesisHash   = common.HexToHash("0x418ea8cd5f17277e4bb94cba7170a494fc53df23b915ed42a8fe9f6052a4327b")
+	Blake3PowLocalGenesisHash     = common.HexToHash("0x9b747199047097790a4e376e4682ec682f7575d8fb07021e0e9d95e25dcdc140")
+	Blake3PowGalenaGenesisHash    = common.HexToHash("0xdee75a7b24237d07f15392d7d5319a9421f838d84b9a6e6a8d1a4d74365ff2de")
 )
 
 var (
 	// ColosseumChainConfig is the chain parameters to run a node on the Colosseum network.
-	ColosseumChainConfig = &ChainConfig{
+	ProgpowColosseumChainConfig = &ChainConfig{
 		ChainID:     big.NewInt(9000),
 		Progpow:     new(ProgpowConfig),
-		GenesisHash: ColosseumGenesisHash,
+		GenesisHash: ProgpowColosseumGenesisHash,
+	}
+
+	Blake3PowColosseumChainConfig = &ChainConfig{
+		ChainID:     big.NewInt(9000),
+		Blake3Pow:   new(Blake3powConfig),
+		GenesisHash: Blake3PowColosseumGenesisHash,
 	}
 
 	// GardenChainConfig contains the chain parameters to run a node on the Garden test network.
-	GardenChainConfig = &ChainConfig{
+	ProgpowGardenChainConfig = &ChainConfig{
 		ChainID:     big.NewInt(12000),
 		Progpow:     new(ProgpowConfig),
-		GenesisHash: GardenGenesisHash,
+		GenesisHash: ProgpowGardenGenesisHash,
+	}
+
+	Blake3PowGardenChainConfig = &ChainConfig{
+		ChainID:     big.NewInt(12000),
+		Blake3Pow:   new(Blake3powConfig),
+		GenesisHash: Blake3PowGardenGenesisHash,
 	}
 
 	// OrchardChainConfig contains the chain parameters to run a node on the Orchard test network.
-	OrchardChainConfig = &ChainConfig{
+	ProgpowOrchardChainConfig = &ChainConfig{
 		ChainID:     big.NewInt(15000),
 		Progpow:     new(ProgpowConfig),
-		GenesisHash: OrchardGenesisHash,
+		GenesisHash: ProgpowOrchardGenesisHash,
+	}
+
+	Blake3PowOrchardChainConfig = &ChainConfig{
+		ChainID:     big.NewInt(15000),
+		Blake3Pow:   new(Blake3powConfig),
+		GenesisHash: Blake3PowOrchardGenesisHash,
 	}
 
 	// GalenaChainConfig contains the chain parameters to run a node on the Galena test network.
-	GalenaChainConfig = &ChainConfig{
+	ProgpowGalenaChainConfig = &ChainConfig{
 		ChainID:     big.NewInt(17000),
+		Blake3Pow:   new(Blake3powConfig),
 		Progpow:     new(ProgpowConfig),
-		GenesisHash: GalenaGenesisHash,
+		GenesisHash: ProgpowGalenaGenesisHash,
+	}
+
+	Blake3PowGalenaChainConfig = &ChainConfig{
+		ChainID:     big.NewInt(17000),
+		Blake3Pow:   new(Blake3powConfig),
+		GenesisHash: Blake3PowGalenaGenesisHash,
 	}
 
 	// LocalChainConfig contains the chain parameters to run a node on the Local test network.
-	LocalChainConfig = &ChainConfig{
+	ProgpowLocalChainConfig = &ChainConfig{
 		ChainID:     big.NewInt(1337),
 		Progpow:     new(ProgpowConfig),
-		GenesisHash: LocalGenesisHash,
+		GenesisHash: ProgpowLocalGenesisHash,
+	}
+
+	Blake3PowLocalChainConfig = &ChainConfig{
+		ChainID:     big.NewInt(1337),
+		Blake3Pow:   new(Blake3powConfig),
+		GenesisHash: Blake3PowLocalGenesisHash,
 	}
 
 	// AllProgpowProtocolChanges contains every protocol change introduced
@@ -73,9 +112,9 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllProgpowProtocolChanges = &ChainConfig{big.NewInt(1337), new(ProgpowConfig), common.Hash{}}
+	AllProgpowProtocolChanges = &ChainConfig{big.NewInt(1337), "progpow", new(Blake3powConfig), new(ProgpowConfig), common.Hash{}}
 
-	TestChainConfig = &ChainConfig{big.NewInt(1), new(ProgpowConfig), common.Hash{}}
+	TestChainConfig = &ChainConfig{big.NewInt(1), "progpow", new(Blake3powConfig), new(ProgpowConfig), common.Hash{}}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
@@ -87,8 +126,18 @@ var (
 type ChainConfig struct {
 	ChainID *big.Int `json:"chainId"` // chainId identifies the current chain and is used for replay protection
 	// Various consensus engines
-	Progpow     *ProgpowConfig `json:"progpow,omitempty"`
-	GenesisHash common.Hash
+	ConsensusEngine string
+	Blake3Pow       *Blake3powConfig `json:"blake3pow,omitempty"`
+	Progpow         *ProgpowConfig   `json:"progpow,omitempty"`
+	GenesisHash     common.Hash
+}
+
+// Blake3powConfig is the consensus engine configs for proof-of-work based sealing.
+type Blake3powConfig struct{}
+
+// String implements the stringer interface, returning the consensus engine details.
+func (c *Blake3powConfig) String() string {
+	return "blake3pow"
 }
 
 // ProgpowConfig is the consensus engine configs for proof-of-work based sealing.
@@ -103,6 +152,8 @@ func (c *ProgpowConfig) String() string {
 func (c *ChainConfig) String() string {
 	var engine interface{}
 	switch {
+	case c.Blake3Pow != nil:
+		engine = c.Blake3Pow
 	case c.Progpow != nil:
 		engine = c.Progpow
 	default:

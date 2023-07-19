@@ -39,6 +39,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/fdlimit"
 	"github.com/dominant-strategies/go-quai/consensus"
+	"github.com/dominant-strategies/go-quai/consensus/blake3pow"
 	"github.com/dominant-strategies/go-quai/consensus/progpow"
 	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
@@ -342,6 +343,12 @@ var (
 	CachePreimagesFlag = cli.BoolFlag{
 		Name:  "cache.preimages",
 		Usage: "Enable recording the SHA3/keccak preimages of trie keys",
+	}
+	// Consensus settings
+	ConsensusEngineFlag = cli.StringFlag{
+		Name:  "consensus.engine",
+		Usage: "Consensus engine that the blockchain will run and verify blocks using",
+		Value: "progpow",
 	}
 	// Miner settings
 	MinerGasPriceFlag = BigFlag{
@@ -1206,7 +1213,28 @@ func setTxPool(ctx *cli.Context, cfg *core.TxPoolConfig) {
 	}
 }
 
-func setProgpow(ctx *cli.Context, cfg *ethconfig.Config) {
+func setBlake3DurationLimit(ctx *cli.Context, cfg *ethconfig.Config) {
+	// Override any default configs for hard coded networks.
+	switch {
+	case ctx.GlobalBool(ColosseumFlag.Name):
+		cfg.Blake3Pow.DurationLimit = params.DurationLimit
+	case ctx.GlobalBool(GardenFlag.Name):
+		cfg.Blake3Pow.DurationLimit = params.GardenDurationLimit
+	case ctx.GlobalBool(OrchardFlag.Name):
+		cfg.Blake3Pow.DurationLimit = params.OrchardDurationLimit
+	case ctx.GlobalBool(GalenaFlag.Name):
+		cfg.Blake3Pow.DurationLimit = params.GalenaDurationLimit
+	case ctx.GlobalBool(LocalFlag.Name):
+		cfg.Blake3Pow.DurationLimit = params.LocalDurationLimit
+	case ctx.GlobalBool(DeveloperFlag.Name):
+		cfg.Blake3Pow.DurationLimit = params.DurationLimit
+	default:
+		cfg.Blake3Pow.DurationLimit = params.DurationLimit
+
+	}
+}
+
+func setProgpowDurationLimit(ctx *cli.Context, cfg *ethconfig.Config) {
 	// Override any default configs for hard coded networks.
 	switch {
 	case ctx.GlobalBool(ColosseumFlag.Name):
@@ -1363,7 +1391,16 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	}
 	setGPO(ctx, &cfg.GPO, ctx.GlobalString(SyncModeFlag.Name) == "light")
 	setTxPool(ctx, &cfg.TxPool)
-	setProgpow(ctx, cfg)
+
+	// If blake3 consensus engine is specifically asked use the blake3 engine
+	if ctx.GlobalString(ConsensusEngineFlag.Name) == "blake3" {
+		cfg.ConsensusEngine = "blake3"
+		setBlake3DurationLimit(ctx, cfg)
+	} else {
+		cfg.ConsensusEngine = "progpow"
+		setProgpowDurationLimit(ctx, cfg)
+	}
+
 	setWhitelist(ctx, cfg)
 
 	// set the dominant chain websocket url
@@ -1489,32 +1526,52 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1
 		}
-		cfg.Genesis = core.DefaultColosseumGenesisBlock()
-		SetDNSDiscoveryDefaults(cfg, params.ColosseumGenesisHash)
+		cfg.Genesis = core.DefaultColosseumGenesisBlock(cfg.ConsensusEngine)
+		if cfg.ConsensusEngine == "blake3" {
+			SetDNSDiscoveryDefaults(cfg, params.Blake3PowGardenGenesisHash)
+		} else {
+			SetDNSDiscoveryDefaults(cfg, params.ProgpowGardenGenesisHash)
+		}
 	case ctx.GlobalBool(GardenFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 2
 		}
-		cfg.Genesis = core.DefaultGardenGenesisBlock()
-		SetDNSDiscoveryDefaults(cfg, params.GardenGenesisHash)
+		cfg.Genesis = core.DefaultGardenGenesisBlock(cfg.ConsensusEngine)
+		if cfg.ConsensusEngine == "blake3" {
+			SetDNSDiscoveryDefaults(cfg, params.Blake3PowGardenGenesisHash)
+		} else {
+			SetDNSDiscoveryDefaults(cfg, params.ProgpowGardenGenesisHash)
+		}
 	case ctx.GlobalBool(OrchardFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 3
 		}
-		cfg.Genesis = core.DefaultOrchardGenesisBlock()
-		SetDNSDiscoveryDefaults(cfg, params.OrchardGenesisHash)
+		cfg.Genesis = core.DefaultOrchardGenesisBlock(cfg.ConsensusEngine)
+		if cfg.ConsensusEngine == "blake3" {
+			SetDNSDiscoveryDefaults(cfg, params.Blake3PowOrchardGenesisHash)
+		} else {
+			SetDNSDiscoveryDefaults(cfg, params.ProgpowOrchardGenesisHash)
+		}
 	case ctx.GlobalBool(LocalFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 4
 		}
-		cfg.Genesis = core.DefaultLocalGenesisBlock()
-		SetDNSDiscoveryDefaults(cfg, params.LocalGenesisHash)
+		cfg.Genesis = core.DefaultLocalGenesisBlock(cfg.ConsensusEngine)
+		if cfg.ConsensusEngine == "blake3" {
+			SetDNSDiscoveryDefaults(cfg, params.Blake3PowLocalGenesisHash)
+		} else {
+			SetDNSDiscoveryDefaults(cfg, params.ProgpowLocalGenesisHash)
+		}
 	case ctx.GlobalBool(GalenaFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 5
 		}
-		cfg.Genesis = core.DefaultGalenaGenesisBlock()
-		SetDNSDiscoveryDefaults(cfg, params.GalenaGenesisHash)
+		cfg.Genesis = core.DefaultGalenaGenesisBlock(cfg.ConsensusEngine)
+		if cfg.ConsensusEngine == "blake3" {
+			SetDNSDiscoveryDefaults(cfg, params.Blake3PowGalenaGenesisHash)
+		} else {
+			SetDNSDiscoveryDefaults(cfg, params.ProgpowGalenaGenesisHash)
+		}
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1337
@@ -1535,7 +1592,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		}
 	default:
 		if cfg.NetworkId == 1 {
-			SetDNSDiscoveryDefaults(cfg, params.ColosseumGenesisHash)
+			SetDNSDiscoveryDefaults(cfg, params.ProgpowColosseumGenesisHash)
 		}
 	}
 	if !ctx.GlobalBool(ColosseumFlag.Name) {
@@ -1641,15 +1698,15 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 	var genesis *core.Genesis
 	switch {
 	case ctx.GlobalBool(ColosseumFlag.Name):
-		genesis = core.DefaultColosseumGenesisBlock()
+		genesis = core.DefaultColosseumGenesisBlock(ctx.GlobalString(ConsensusEngineFlag.Name))
 	case ctx.GlobalBool(GardenFlag.Name):
-		genesis = core.DefaultGardenGenesisBlock()
+		genesis = core.DefaultGardenGenesisBlock(ctx.GlobalString(ConsensusEngineFlag.Name))
 	case ctx.GlobalBool(OrchardFlag.Name):
-		genesis = core.DefaultOrchardGenesisBlock()
+		genesis = core.DefaultOrchardGenesisBlock(ctx.GlobalString(ConsensusEngineFlag.Name))
 	case ctx.GlobalBool(GalenaFlag.Name):
-		genesis = core.DefaultGalenaGenesisBlock()
+		genesis = core.DefaultGalenaGenesisBlock(ctx.GlobalString(ConsensusEngineFlag.Name))
 	case ctx.GlobalBool(LocalFlag.Name):
-		genesis = core.DefaultLocalGenesisBlock()
+		genesis = core.DefaultLocalGenesisBlock(ctx.GlobalString(ConsensusEngineFlag.Name))
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		Fatalf("Developer chains are ephemeral")
 	}
@@ -1670,6 +1727,12 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (*core.Core, ethdb.Database) 
 	if !ctx.GlobalBool(FakePoWFlag.Name) {
 		engine = progpow.New(progpow.Config{}, nil, false)
 	}
+
+	// If blake3 consensus engine is selected use the blake3 engine
+	if ctx.GlobalString(ConsensusEngineFlag.Name) == "blake3" {
+		engine = blake3pow.New(blake3pow.Config{}, nil, false)
+	}
+
 	if gcmode := ctx.GlobalString(GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {
 		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)
 	}

@@ -151,6 +151,12 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 		},
 	},
 	{
+		Name: "CONSENSUS",
+		Flags: []cli.Flag{
+			utils.ConsensusEngineFlag,
+		},
+	},
+	{
 		Name: "GAS PRICE ORACLE",
 		Flags: []cli.Flag{
 			utils.GpoBlocksFlag,
