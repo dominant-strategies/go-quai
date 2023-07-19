@@ -68,6 +68,7 @@ var (
 		utils.ConsensusEngineFlag,
 		utils.DNSDiscoveryFlag,
 		utils.DataDirFlag,
+		utils.DBEngineFlag,
 		utils.DeveloperFlag,
 		utils.DeveloperPeriodFlag,
 		utils.DiscoveryV5Flag,
