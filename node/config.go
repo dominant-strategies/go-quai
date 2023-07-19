@@ -162,6 +162,17 @@ type Config struct {
 	staticNodesWarning     bool
 	trustedNodesWarning    bool
 	oldQuaiResourceWarning bool
+
+	// AllowUnprotectedTxs allows non EIP-155 protected transactions to be send over RPC.
+	AllowUnprotectedTxs bool `toml:",omitempty"`
+
+	// JWTSecret is the path to the hex-encoded jwt secret.
+	JWTSecret string `toml:",omitempty"`
+
+	// EnablePersonal enables the deprecated personal namespace.
+	EnablePersonal bool `toml:"-"`
+
+	DBEngine string `toml:",omitempty"`
 }
 
 // NodeDB returns the path to the discovery node database.
