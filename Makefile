@@ -68,6 +68,10 @@ ifeq ($(SHOW_COLORS),true)
 	BASE_CMD += --showcolors
 endif
 
+ifeq ($(RUN_BLAKE3),true)
+	BASE_CMD += --consensus.engine "blake3"
+endif
+
 # Build suburl strings for slice specific subclient groups
 # WARNING: Only connect to dom/sub clients over a trusted network.
 ifeq ($(REGION),2)

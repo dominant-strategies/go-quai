@@ -23,6 +23,7 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
+	"github.com/dominant-strategies/go-quai/consensus/blake3pow"
 	"github.com/dominant-strategies/go-quai/consensus/progpow"
 	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/eth/downloader"
@@ -121,8 +122,14 @@ type Config struct {
 	// Mining options
 	Miner core.Config
 
+	// Consensus Engine
+	ConsensusEngine string
+
 	// Progpow options
 	Progpow progpow.Config
+
+	// Blake3 options
+	Blake3Pow blake3pow.Config
 
 	// Transaction pool options
 	TxPool core.TxPoolConfig
@@ -159,8 +166,8 @@ type Config struct {
 	SlicesRunning []common.Location
 }
 
-// CreateConsensusEngine creates a consensus engine for the given chain configuration.
-func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, config *progpow.Config, notify []string, noverify bool, db ethdb.Database) consensus.Engine {
+// CreateProgpowConsensusEngine creates a progpow consensus engine for the given chain configuration.
+func CreateProgpowConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, config *progpow.Config, notify []string, noverify bool, db ethdb.Database) consensus.Engine {
 	// Otherwise assume proof-of-work
 	switch config.PowMode {
 	case progpow.ModeFake:
@@ -171,6 +178,26 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, co
 		log.Warn("Progpow used in shared mode")
 	}
 	engine := progpow.New(progpow.Config{
+		PowMode:       config.PowMode,
+		NotifyFull:    config.NotifyFull,
+		DurationLimit: config.DurationLimit,
+	}, notify, noverify)
+	engine.SetThreads(-1) // Disable CPU mining
+	return engine
+}
+
+// CreateBlake3ConsensusEngine creates a progpow consensus engine for the given chain configuration.
+func CreateBlake3ConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, config *blake3pow.Config, notify []string, noverify bool, db ethdb.Database) consensus.Engine {
+	// Otherwise assume proof-of-work
+	switch config.PowMode {
+	case blake3pow.ModeFake:
+		log.Warn("Progpow used in fake mode")
+	case blake3pow.ModeTest:
+		log.Warn("Progpow used in test mode")
+	case blake3pow.ModeShared:
+		log.Warn("Progpow used in shared mode")
+	}
+	engine := blake3pow.New(blake3pow.Config{
 		PowMode:       config.PowMode,
 		NotifyFull:    config.NotifyFull,
 		DurationLimit: config.DurationLimit,

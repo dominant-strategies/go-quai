@@ -65,6 +65,7 @@ var (
 		utils.CacheTrieJournalFlag,
 		utils.CacheTrieRejournalFlag,
 		utils.ColosseumFlag,
+		utils.ConsensusEngineFlag,
 		utils.DNSDiscoveryFlag,
 		utils.DataDirFlag,
 		utils.DeveloperFlag,

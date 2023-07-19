@@ -1,7 +1,6 @@
-package progpow
+package blake3pow
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"math/big"
@@ -20,7 +19,7 @@ import (
 	"github.com/dominant-strategies/go-quai/trie"
 )
 
-// Progpow proof-of-work protocol constants.
+// Blake3pow proof-of-work protocol constants.
 var (
 	maxUncles                     = 2         // Maximum number of uncles allowed in a single block
 	allowedFutureBlockTimeSeconds = int64(15) // Max seconds from current time allowed for blocks, before they're considered future blocks
@@ -58,22 +57,21 @@ var (
 	errDanglingUncle       = errors.New("uncle's parent is not ancestor")
 	errInvalidDifficulty   = errors.New("non-positive difficulty")
 	errDifficultyCrossover = errors.New("sub's difficulty exceeds dom's")
-	errInvalidMixHash      = errors.New("invalid mixHash")
 	errInvalidPoW          = errors.New("invalid proof-of-work")
 	errInvalidOrder        = errors.New("invalid order")
 )
 
 // Author implements consensus.Engine, returning the header's coinbase as the
 // proof-of-work verified author of the block.
-func (progpow *Progpow) Author(header *types.Header) (common.Address, error) {
+func (blake3pow *Blake3pow) Author(header *types.Header) (common.Address, error) {
 	return header.Coinbase(), nil
 }
 
 // VerifyHeader checks whether a header conforms to the consensus rules of the
-// stock Quai progpow engine.
-func (progpow *Progpow) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Header) error {
+// stock Quai blake3pow engine.
+func (blake3pow *Blake3pow) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Header) error {
 	// If we're running a full engine faking, accept any input as valid
-	if progpow.config.PowMode == ModeFullFake {
+	if blake3pow.config.PowMode == ModeFullFake {
 		return nil
 	}
 	// Short circuit if the header is known, or its parent not
@@ -86,15 +84,15 @@ func (progpow *Progpow) VerifyHeader(chain consensus.ChainHeaderReader, header *
 		return consensus.ErrUnknownAncestor
 	}
 	// Sanity checks passed, do a proper verification
-	return progpow.verifyHeader(chain, header, parent, false, time.Now().Unix())
+	return blake3pow.verifyHeader(chain, header, parent, false, time.Now().Unix())
 }
 
 // VerifyHeaders is similar to VerifyHeader, but verifies a batch of headers
 // concurrently. The method returns a quit channel to abort the operations and
 // a results channel to retrieve the async verifications.
-func (progpow *Progpow) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header) (chan<- struct{}, <-chan error) {
+func (blake3pow *Blake3pow) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header) (chan<- struct{}, <-chan error) {
 	// If we're running a full engine faking, accept any input as valid
-	if progpow.config.PowMode == ModeFullFake || len(headers) == 0 {
+	if blake3pow.config.PowMode == ModeFullFake || len(headers) == 0 {
 		abort, results := make(chan struct{}), make(chan error, len(headers))
 		for i := 0; i < len(headers); i++ {
 			results <- nil
@@ -119,7 +117,7 @@ func (progpow *Progpow) VerifyHeaders(chain consensus.ChainHeaderReader, headers
 	for i := 0; i < workers; i++ {
 		go func() {
 			for index := range inputs {
-				errors[index] = progpow.verifyHeaderWorker(chain, headers, index, unixNow)
+				errors[index] = blake3pow.verifyHeaderWorker(chain, headers, index, unixNow)
 				done <- index
 			}
 		}()
@@ -155,7 +153,7 @@ func (progpow *Progpow) VerifyHeaders(chain consensus.ChainHeaderReader, headers
 	return abort, errorsOut
 }
 
-func (progpow *Progpow) verifyHeaderWorker(chain consensus.ChainHeaderReader, headers []*types.Header, index int, unixNow int64) error {
+func (blake3pow *Blake3pow) verifyHeaderWorker(chain consensus.ChainHeaderReader, headers []*types.Header, index int, unixNow int64) error {
 	var parent *types.Header
 	if index == 0 {
 		parent = chain.GetHeader(headers[0].ParentHash(), headers[0].NumberU64()-1)
@@ -165,14 +163,14 @@ func (progpow *Progpow) verifyHeaderWorker(chain consensus.ChainHeaderReader, he
 	if parent == nil {
 		return consensus.ErrUnknownAncestor
 	}
-	return progpow.verifyHeader(chain, headers[index], parent, false, unixNow)
+	return blake3pow.verifyHeader(chain, headers[index], parent, false, unixNow)
 }
 
 // VerifyUncles verifies that the given block's uncles conform to the consensus
-// rules of the stock Quai progpow engine.
-func (progpow *Progpow) VerifyUncles(chain consensus.ChainReader, block *types.Block) error {
+// rules of the stock Quai blake3pow engine.
+func (blake3pow *Blake3pow) VerifyUncles(chain consensus.ChainReader, block *types.Block) error {
 	// If we're running a full engine faking, accept any input as valid
-	if progpow.config.PowMode == ModeFullFake {
+	if blake3pow.config.PowMode == ModeFullFake {
 		return nil
 	}
 	// Verify that there are at most 2 uncles included in this block
@@ -224,7 +222,7 @@ func (progpow *Progpow) VerifyUncles(chain consensus.ChainReader, block *types.B
 		if ancestors[uncle.ParentHash()] == nil || uncle.ParentHash() == block.ParentHash() {
 			return errDanglingUncle
 		}
-		if err := progpow.verifyHeader(chain, uncle, ancestors[uncle.ParentHash()], true, time.Now().Unix()); err != nil {
+		if err := blake3pow.verifyHeader(chain, uncle, ancestors[uncle.ParentHash()], true, time.Now().Unix()); err != nil {
 			return err
 		}
 	}
@@ -232,7 +230,7 @@ func (progpow *Progpow) VerifyUncles(chain consensus.ChainReader, block *types.B
 }
 
 // verifyHeader checks whether a header conforms to the consensus rules
-func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, parent *types.Header, uncle bool, unixNow int64) error {
+func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, header, parent *types.Header, uncle bool, unixNow int64) error {
 	nodeCtx := common.NodeLocation.Context()
 	// Ensure that the header's extra-data section is of a reasonable size
 	if uint64(len(header.Extra())) > params.MaximumExtraDataSize {
@@ -250,13 +248,13 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 	// Verify the block's difficulty based on its timestamp and parent's difficulty
 	// difficulty adjustment can only be checked in zone
 	if nodeCtx == common.ZONE_CTX {
-		expected := progpow.CalcDifficulty(chain, parent)
+		expected := blake3pow.CalcDifficulty(chain, parent)
 		if expected.Cmp(header.Difficulty()) != 0 {
 			return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty(), expected)
 		}
 	}
-	// Verify the engine specific seal securing the block
-	_, order, err := progpow.CalcOrder(parent)
+
+	_, order, err := blake3pow.CalcOrder(header)
 	if err != nil {
 		return err
 	}
@@ -267,26 +265,29 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 	if !common.NodeLocation.InSameSliceAs(header.Location()) {
 		return fmt.Errorf("block location is not in the same slice as the node location")
 	}
+
 	// Verify that the parent entropy is calculated correctly on the header
-	parentEntropy := progpow.TotalLogS(parent)
+	parentEntropy := blake3pow.TotalLogS(parent)
 	if parentEntropy.Cmp(header.ParentEntropy()) != 0 {
 		return fmt.Errorf("invalid parent entropy: have %v, want %v", header.ParentEntropy(), parentEntropy)
 	}
+
 	// If not prime, verify the parentDeltaS field as well
 	if nodeCtx > common.PRIME_CTX {
-		_, parentOrder, _ := progpow.CalcOrder(parent)
+		_, parentOrder, _ := blake3pow.CalcOrder(parent)
 		// If parent was dom, deltaS is zero and otherwise should be the calc delta s on the parent
 		if parentOrder < nodeCtx {
 			if common.Big0.Cmp(header.ParentDeltaS()) != 0 {
 				return fmt.Errorf("invalid parent delta s: have %v, want %v", header.ParentDeltaS(), common.Big0)
 			}
 		} else {
-			parentDeltaS := progpow.DeltaLogS(parent)
+			parentDeltaS := blake3pow.DeltaLogS(parent)
 			if parentDeltaS.Cmp(header.ParentDeltaS()) != 0 {
 				return fmt.Errorf("invalid parent delta s: have %v, want %v", header.ParentDeltaS(), parentDeltaS)
 			}
 		}
 	}
+
 	if nodeCtx == common.ZONE_CTX {
 		// Verify that the gas limit is <= 2^63-1
 		cap := uint64(0x7fffffffffffffff)
@@ -323,7 +324,7 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 // CalcDifficulty is the difficulty adjustment algorithm. It returns
 // the difficulty that a new block should have when created at time
 // given the parent block's time and difficulty.
-func (progpow *Progpow) CalcDifficulty(chain consensus.ChainHeaderReader, parent *types.Header) *big.Int {
+func (blake3pow *Blake3pow) CalcDifficulty(chain consensus.ChainHeaderReader, parent *types.Header) *big.Int {
 	nodeCtx := common.NodeLocation.Context()
 
 	if nodeCtx != common.ZONE_CTX {
@@ -352,7 +353,7 @@ func (progpow *Progpow) CalcDifficulty(chain consensus.ChainHeaderReader, parent
 
 	// (2 if len(parent_uncles) else 1) - (block_timestamp - parent_timestamp) // duration_limit
 	x.Sub(bigTime, bigParentTime)
-	x.Div(x, progpow.config.DurationLimit)
+	x.Div(x, blake3pow.config.DurationLimit)
 	if parent.UncleHash() == types.EmptyUncleHash {
 		x.Sub(big1, x)
 	} else {
@@ -375,86 +376,48 @@ func (progpow *Progpow) CalcDifficulty(chain consensus.ChainHeaderReader, parent
 	return x
 }
 
-func (progpow *Progpow) IsDomCoincident(chain consensus.ChainHeaderReader, header *types.Header) bool {
-	_, order, err := progpow.CalcOrder(header)
+func (blake3pow *Blake3pow) IsDomCoincident(chain consensus.ChainHeaderReader, header *types.Header) bool {
+	_, order, err := blake3pow.CalcOrder(header)
 	if err != nil {
 		return false
 	}
 	return order < common.NodeLocation.Context()
 }
 
-func (progpow *Progpow) ComputePowLight(header *types.Header) (mixHash, powHash common.Hash) {
-	powLight := func(size uint64, cache []uint32, hash []byte, nonce uint64, blockNumber uint64) ([]byte, []byte) {
-		ethashCache := progpow.cache(blockNumber)
-		if ethashCache.cDag == nil {
-			cDag := make([]uint32, progpowCacheWords)
-			generateCDag(cDag, ethashCache.cache, blockNumber/epochLength)
-			ethashCache.cDag = cDag
-		}
-		return progpowLight(size, cache, hash, nonce, blockNumber, ethashCache.cDag)
-	}
-	cache := progpow.cache(header.NumberU64())
-	size := datasetSize(header.NumberU64())
-	digest, result := powLight(size, cache.cache, header.SealHash().Bytes(), header.NonceU64(), header.NumberU64(common.ZONE_CTX))
-	mixHash = common.BytesToHash(digest)
-	powHash = common.BytesToHash(result)
-	header.PowDigest.Store(mixHash)
-	header.PowHash.Store(powHash)
-
-	// Caches are unmapped in a finalizer. Ensure that the cache stays alive
-	// until after the call to hashimotoLight so it's not unmapped while being used.
-	runtime.KeepAlive(cache)
-
-	return mixHash, powHash
-}
-
 // verifySeal checks whether a block satisfies the PoW difficulty requirements,
-// either using the usual progpow cache for it, or alternatively using a full DAG
+// either using the usual blake3pow cache for it, or alternatively using a full DAG
 // to make remote mining fast.
-func (progpow *Progpow) verifySeal(header *types.Header) (common.Hash, error) {
+func (blake3pow *Blake3pow) verifySeal(header *types.Header) error {
 	// If we're running a fake PoW, accept any seal as valid
-	if progpow.config.PowMode == ModeFake || progpow.config.PowMode == ModeFullFake {
-		time.Sleep(progpow.fakeDelay)
-		if progpow.fakeFail == header.Number().Uint64() {
-			return common.Hash{}, errInvalidPoW
+	if blake3pow.config.PowMode == ModeFake || blake3pow.config.PowMode == ModeFullFake {
+		time.Sleep(blake3pow.fakeDelay)
+		if blake3pow.fakeFail == header.Number().Uint64() {
+			return errInvalidPoW
 		}
-		return common.Hash{}, nil
-	}
-	// If we're running a shared PoW, delegate verification to it
-	if progpow.shared != nil {
-		return progpow.shared.verifySeal(header)
+		return nil
 	}
 	// Ensure that we have a valid difficulty for the block
 	if header.Difficulty().Sign() <= 0 {
-		return common.Hash{}, errInvalidDifficulty
+		return errInvalidDifficulty
 	}
-	// Check progpow
-	mixHash := header.PowDigest.Load()
-	powHash := header.PowHash.Load()
-	if powHash == nil || mixHash == nil {
-		mixHash, powHash = progpow.ComputePowLight(header)
-	}
-	// Verify the calculated values against the ones provided in the header
-	if !bytes.Equal(header.MixHash().Bytes(), mixHash.(common.Hash).Bytes()) {
-		return common.Hash{}, errInvalidMixHash
-	}
+
 	target := new(big.Int).Div(big2e256, header.Difficulty())
-	if new(big.Int).SetBytes(powHash.(common.Hash).Bytes()).Cmp(target) > 0 {
-		return common.Hash{}, errInvalidPoW
+	if new(big.Int).SetBytes(header.Hash().Bytes()).Cmp(target) > 0 {
+		return errInvalidPoW
 	}
-	return powHash.(common.Hash), nil
+	return nil
 }
 
 // Prepare implements consensus.Engine, initializing the difficulty field of a
-// header to conform to the progpow protocol. The changes are done inline.
-func (progpow *Progpow) Prepare(chain consensus.ChainHeaderReader, header *types.Header, parent *types.Header) error {
-	header.SetDifficulty(progpow.CalcDifficulty(chain, parent))
+// header to conform to the blake3pow protocol. The changes are done inline.
+func (blake3pow *Blake3pow) Prepare(chain consensus.ChainHeaderReader, header *types.Header, parent *types.Header) error {
+	header.SetDifficulty(blake3pow.CalcDifficulty(chain, parent))
 	return nil
 }
 
 // Finalize implements consensus.Engine, accumulating the block and uncle rewards,
 // setting the final state on the header
-func (progpow *Progpow) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
+func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
 	// Accumulate any block and uncle rewards and commit the final state root
 	accumulateRewards(chain.Config(), state, header, uncles)
 
@@ -482,15 +445,19 @@ func (progpow *Progpow) Finalize(chain consensus.ChainHeaderReader, header *type
 
 // FinalizeAndAssemble implements consensus.Engine, accumulating the block and
 // uncle rewards, setting the final state and assembling the block.
-func (progpow *Progpow) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, etxs []*types.Transaction, subManifest types.BlockManifest, receipts []*types.Receipt) (*types.Block, error) {
+func (blake3pow *Blake3pow) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, etxs []*types.Transaction, subManifest types.BlockManifest, receipts []*types.Receipt) (*types.Block, error) {
 	nodeCtx := common.NodeLocation.Context()
 	if nodeCtx == common.ZONE_CTX {
 		// Finalize block
-		progpow.Finalize(chain, header, state, txs, uncles)
+		blake3pow.Finalize(chain, header, state, txs, uncles)
 	}
 
 	// Header seems complete, assemble into a block and return
 	return types.NewBlock(header, txs, uncles, etxs, subManifest, receipts, trie.NewStackTrie(nil)), nil
+}
+
+func (blake3pow *Blake3pow) ComputePowLight(header *types.Header) (common.Hash, common.Hash) {
+	panic("compute pow light doesnt exist for blake3")
 }
 
 // AccumulateRewards credits the coinbase of the given block with the mining
@@ -502,7 +469,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 
 	coinbase, err := header.Coinbase().InternalAddress()
 	if err != nil {
-		fmt.Println("Block has out-of-scope coinbase, skipping block reward: " + header.Hash().String())
+		log.Error("Block has out of scope coinbase, skipping block reward", "Address", header.Coinbase().String(), "Hash", header.Hash().String())
 		return
 	}
 
@@ -512,7 +479,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	for _, uncle := range uncles {
 		coinbase, err := uncle.Coinbase().InternalAddress()
 		if err != nil {
-			fmt.Println("Found uncle with out-of-scope coinbase, skipping reward: " + uncle.Hash().String())
+			log.Error("Found uncle with out of scope coinbase, skipping reward", "Address", uncle.Coinbase().String(), "Hash", uncle.Hash().String())
 			continue
 		}
 		r.Add(uncle.Number(), big8)
