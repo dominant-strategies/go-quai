@@ -899,7 +899,7 @@ func (w *worker) FinalizeAssemble(chain consensus.ChainHeaderReader, header *typ
 	// write the manifest into the disk
 	rawdb.WriteManifest(w.workerDb, parent.Hash(), manifest)
 
-	if nodeCtx == common.ZONE_CTX && w.hc.ProcessingState() {
+	if nodeCtx == common.ZONE_CTX {
 		// Compute and set etx rollup hash
 		etxRollup := types.Transactions{}
 		if w.engine.IsDomCoincident(w.hc, parent.Header()) {
