@@ -242,6 +242,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	}
 	time7 := common.PrettyDuration(time.Since(start))
 
+	rawdb.WriteBlock(sl.sliceDb, block)
 	var time8, time9 common.PrettyDuration
 	bestPh, _ := sl.readPhCache(sl.bestPhKey)
 	if nodeCtx == common.ZONE_CTX {
@@ -255,8 +256,6 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 				return nil, false, err
 			}
 
-		} else {
-			rawdb.WriteBlock(sl.sliceDb, block)
 		}
 
 		// Upate the local pending header
