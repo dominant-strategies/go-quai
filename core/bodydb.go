@@ -74,7 +74,7 @@ func (bc *BodyDb) Append(batch ethdb.Batch, block *types.Block, newInboundEtxs t
 	nodeCtx := common.NodeLocation.Context()
 	var logs []*types.Log
 	var err error
-	if nodeCtx == common.ZONE_CTX {
+	if nodeCtx == common.ZONE_CTX && bc.processor.hc.ProcessingState() {
 		// Process our block
 		logs, err = bc.processor.Apply(batch, block, newInboundEtxs)
 		if err != nil {
