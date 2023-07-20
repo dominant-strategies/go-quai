@@ -242,21 +242,17 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	}
 	time7 := common.PrettyDuration(time.Since(start))
 
-	rawdb.WriteBlock(sl.sliceDb, block)
+	err = sl.hc.AppendBlock(batch, block, newInboundEtxs.FilterToLocation(common.NodeLocation))
+	if err != nil {
+		return nil, false, err
+	}
+
 	var time8, time9 common.PrettyDuration
 	bestPh, _ := sl.readPhCache(sl.bestPhKey)
 	if nodeCtx == common.ZONE_CTX {
 		time8 = common.PrettyDuration(time.Since(start))
 
 		subReorg = sl.miningStrategy(nodeCtx, order, bestPh, newTermini, block, subReorg)
-		if subReorg {
-
-			err = sl.hc.AppendBlock(batch, block, newInboundEtxs.FilterToLocation(common.NodeLocation))
-			if err != nil {
-				return nil, false, err
-			}
-
-		}
 
 		// Upate the local pending header
 		pendingHeaderWithTermini, err = sl.generateSlicePendingHeader(block, newTermini, domPendingHeader, domOrigin, false)
