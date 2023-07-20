@@ -25,6 +25,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/eth/downloader"
 	"github.com/dominant-strategies/go-quai/eth/protocols/eth"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p/enode"
 )
 
@@ -287,6 +288,10 @@ func (h *handler) doSync(op *chainSyncOp) error {
 	// If we've successfully finished a sync cycle and passed any required checkpoint,
 	// enable accepting transactions from the network.
 	head := h.core.CurrentBlock()
+    if head == nil {
+        log.Warn("doSync: head is nil", "hash", h.core.CurrentHeader().Hash(), "number", h.core.CurrentHeader().NumberArray())
+        return nil
+    }
 	if head.NumberU64() > 0 {
 		// We've completed a sync cycle, notify all peers of new state. This path is
 		// essential in star-topology networks where a gateway node needs to notify
