@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -296,12 +297,22 @@ func (sl *Slice) relayPh(block *types.Block, appendTime *time.Duration, reorg bo
 			return
 		}
 	} else if !domOrigin {
-		for i := range sl.subClients {
+		for _, i := range sl.randomRelayArray() {
 			if sl.subClients[i] != nil {
 				sl.subClients[i].SubRelayPendingHeader(context.Background(), pendingHeaderWithTermini, location)
 			}
 		}
 	}
+}
+
+func (sl *Slice) randomRelayArray() [3]int {
+	rand.Seed(time.Now().UnixNano())
+	nums := [3]int{0, 1, 2}
+	for i := len(nums) - 1; i > 0; i-- {
+		j := rand.Intn(i + 1)
+		nums[i], nums[j] = nums[j], nums[i]
+	}
+	return nums
 }
 
 // asyncPendingHeaderLoop waits for the pendingheader updates from the worker and updates the phCache
@@ -514,7 +525,8 @@ func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader, locati
 				return
 			}
 		}
-		for i := range sl.subClients {
+
+		for _, i := range sl.randomRelayArray() {
 			if sl.subClients[i] != nil {
 				if ph, exists := sl.readPhCache(pendingHeader.Termini().SubTerminiAtIndex(common.NodeLocation.Region())); exists {
 					sl.subClients[i].SubRelayPendingHeader(context.Background(), ph, location)
