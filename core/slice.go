@@ -256,7 +256,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 			}
 
 		} else {
-			rawdb.WriteBlock(batch, block)
+			rawdb.WriteBlock(sl.sliceDb, block)
 		}
 
 		// Upate the local pending header
