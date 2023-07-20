@@ -244,8 +244,10 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	var time8, time9 common.PrettyDuration
 	bestPh, _ := sl.readPhCache(sl.bestPhKey)
 	if nodeCtx == common.ZONE_CTX {
-        subReorg = sl.poem(sl.engine.TotalLogS(block.Header()), bestPh.Header.ParentEntropy())
-		if subReorg { 
+		time8 = common.PrettyDuration(time.Since(start))
+
+		subReorg = sl.miningStrategy(nodeCtx, order, bestPh, newTermini, block, subReorg)
+		if subReorg {
 
 			err = sl.hc.AppendBlock(batch, block, newInboundEtxs.FilterToLocation(common.NodeLocation))
 			if err != nil {
@@ -253,23 +255,24 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 			}
 
 		} else {
-            rawdb.WriteBlock(batch, block)
-        }
-		time8 = common.PrettyDuration(time.Since(start))
+			rawdb.WriteBlock(batch, block)
+		}
+
 		// Upate the local pending header
 		pendingHeaderWithTermini, err = sl.generateSlicePendingHeader(block, newTermini, domPendingHeader, domOrigin, false)
 		if err != nil {
 			return nil, false, err
 		}
 		time9 = common.PrettyDuration(time.Since(start))
+
 		sl.updatePhCache(pendingHeaderWithTermini, true, nil)
 
 	}
 
-    // Append has succeeded write the batch
-    if err := batch.Write(); err != nil {
-        return nil, false, err
-    }
+	// Append has succeeded write the batch
+	if err := batch.Write(); err != nil {
+		return nil, false, err
+	}
 
 	if subReorg {
 		log.Info("Choosing phHeader Append:", "NumberArray:", pendingHeaderWithTermini.Header.NumberArray(), "Number:", pendingHeaderWithTermini.Header.Number(), "ParentHash:", pendingHeaderWithTermini.Header.ParentHash(), "Terminus:", pendingHeaderWithTermini.Termini[c_terminusIndex])
@@ -297,6 +300,45 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	} else {
 		return subPendingEtxs, subReorg, nil
 	}
+}
+
+func (sl *Slice) miningStrategy(nodeCtx int, order int, bestPh types.PendingHeader, termini []common.Hash, block *types.Block, subReorg bool) bool {
+	if nodeCtx == common.ZONE_CTX {
+		if order == common.ZONE_CTX {
+			subReorg = sl.poem(sl.engine.TotalLogS(block.Header()), bestPh.Header.ParentEntropy())
+			log.Info("Subreorg Zone block")
+			log.Info("Subreorg termus equal:", "equal:", termini[c_terminusIndex] != bestPh.Termini[c_terminusIndex], "pendingHeaderTermius:", termini[c_terminusIndex], "bestPhTerminus:", bestPh.Termini[c_terminusIndex], "numberCheck:", ((bestPh.Header.NumberU64() + uint64(4)) > block.Header().NumberU64()))
+			if block.Header().TerminusHash() == bestPh.Header.TerminusHash() && termini[c_terminusIndex] != bestPh.Termini[c_terminusIndex] && bestPh.Termini[c_terminusIndex] != sl.hc.config.GenesisHash && ((bestPh.Header.NumberU64() + uint64(4)) > block.Header().NumberU64()) {
+				domTerminusHeader := sl.hc.GetHeaderByHash(bestPh.Termini[c_terminusIndex])
+				_, domTerminusOrder, err := sl.engine.CalcOrder(domTerminusHeader)
+				if err != nil {
+					return false
+				}
+				if order > domTerminusOrder {
+					log.Info("Subreorg setting false:", "order:", order, "domTerminusOrder:", domTerminusOrder, "pendingHeaderTerminus:", termini[c_terminusIndex], "bestPhTerminus:", bestPh.Termini[c_terminusIndex])
+					subReorg = false
+				}
+			}
+		} else if order == common.REGION_CTX {
+			subReorg = sl.poem(sl.engine.TotalLogS(block.Header()), bestPh.Header.ParentEntropy(common.REGION_CTX))
+			log.Info("Subreorg Region block")
+			log.Info("Subreorg termus equal:", "equal:", block.Header().TerminusHash() != bestPh.Header.TerminusHash(), "pendingHeaderTermius:", termini[c_terminusIndex], "bestPhTerminus:", bestPh.Header.TerminusHash(), "numberCheck:", ((bestPh.Header.NumberU64(common.REGION_CTX) + uint64(3)) > block.Header().NumberU64(common.REGION_CTX)))
+			if block.Header().TerminusHash() != bestPh.Header.TerminusHash() && bestPh.Header.TerminusHash() != sl.hc.config.GenesisHash && ((bestPh.Header.NumberU64(common.REGION_CTX) + uint64(3)) > block.Header().NumberU64(common.REGION_CTX)) {
+				regionTerminusHeader := sl.hc.GetHeaderByHash(bestPh.Header.TerminusHash())
+				_, regionTerminusOrder, err := sl.engine.CalcOrder(regionTerminusHeader)
+				if err != nil {
+					return false
+				}
+				if order > regionTerminusOrder {
+					log.Info("Subreorg setting false:", "order:", order, "domTerminusOrder:", regionTerminusOrder, "pendingHeaderTerminus:", termini[c_terminusIndex], "bestPhTerminus:", bestPh.Header.TerminusHash())
+					subReorg = false
+				}
+			}
+		} else if order == common.PRIME_CTX {
+			subReorg = sl.poem(sl.engine.TotalLogS(block.Header()), bestPh.Header.ParentEntropy(common.PRIME_CTX))
+		}
+	}
+	return subReorg
 }
 
 func (sl *Slice) ProcessingState() bool {
