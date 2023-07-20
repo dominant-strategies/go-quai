@@ -245,7 +245,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	bestPh, _ := sl.readPhCache(sl.bestPhKey)
 	subReorg = sl.poem(sl.engine.TotalLogS(block.Header()), bestPh.Header.ParentEntropy())
 	if nodeCtx == common.ZONE_CTX {
-		if subReorg && sl.ProcessingState() {
+		if subReorg {
 
 			err = sl.hc.AppendBlock(batch, block, newInboundEtxs.FilterToLocation(common.NodeLocation))
 			if err != nil {
@@ -262,14 +262,15 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		time9 = common.PrettyDuration(time.Since(start))
 		sl.updatePhCache(pendingHeaderWithTermini, true, nil)
 
-		if subReorg {
-			log.Info("Choosing phHeader Append:", "NumberArray:", pendingHeaderWithTermini.Header.NumberArray(), "Number:", pendingHeaderWithTermini.Header.Number(), "ParentHash:", pendingHeaderWithTermini.Header.ParentHash(), "Terminus:", pendingHeaderWithTermini.Termini[c_terminusIndex])
-			sl.bestPhKey = pendingHeaderWithTermini.Termini[c_terminusIndex]
-			block.SetAppendTime(time.Duration(time9))
-			sl.hc.SetCurrentHeader(batch, block.Header())
-			sl.hc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
+	}
 
-		}
+	if subReorg {
+		log.Info("Choosing phHeader Append:", "NumberArray:", pendingHeaderWithTermini.Header.NumberArray(), "Number:", pendingHeaderWithTermini.Header.Number(), "ParentHash:", pendingHeaderWithTermini.Header.ParentHash(), "Terminus:", pendingHeaderWithTermini.Termini[c_terminusIndex])
+		sl.bestPhKey = pendingHeaderWithTermini.Termini[c_terminusIndex]
+		block.SetAppendTime(time.Duration(time9))
+		sl.hc.SetCurrentHeader(batch, block.Header())
+		sl.hc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
+
 	}
 
 	// Append has succeeded write the batch
