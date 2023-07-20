@@ -196,7 +196,11 @@ func New(stack *node.Node, config *ethconfig.Config) (*Quai, error) {
 	if err != nil {
 		return nil, err
 	}
-	eth.bloomIndexer.Start(eth.Core().Slice().HeaderChain())
+
+	// Only index bloom if processing state
+	if eth.core.ProcessingState() {
+		eth.bloomIndexer.Start(eth.Core().Slice().HeaderChain())
+	}
 
 	// Permit the downloader to use the trie cache allowance during fast sync
 	cacheLimit := cacheConfig.TrieCleanLimit + cacheConfig.TrieDirtyLimit + cacheConfig.SnapshotLimit
