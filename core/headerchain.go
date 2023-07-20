@@ -102,7 +102,7 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *par
 	}
 
 	var err error
-	hc.bc, err = NewBodyDb(db, engine, hc, chainConfig, cacheConfig, txLookupLimit, vmConfig)
+	hc.bc, err = NewBodyDb(db, engine, hc, chainConfig, cacheConfig, txLookupLimit, vmConfig, slicesRunning)
 	if err != nil {
 		return nil, err
 	}
@@ -304,22 +304,7 @@ func (hc *HeaderChain) AppendHeader(header *types.Header) error {
 	return nil
 }
 func (hc *HeaderChain) ProcessingState() bool {
-	nodeCtx := common.NodeLocation.Context()
-	for _, slice := range hc.slicesRunning {
-		switch nodeCtx {
-		case common.PRIME_CTX:
-			return true
-		case common.REGION_CTX:
-			if slice.Region() == common.NodeLocation.Region() {
-				return true
-			}
-		case common.ZONE_CTX:
-			if slice.Equal(common.NodeLocation) {
-				return true
-			}
-		}
-	}
-	return false
+	return hc.bc.ProcessingState()
 }
 
 // Append
