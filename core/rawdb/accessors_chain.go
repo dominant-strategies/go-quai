@@ -1346,3 +1346,29 @@ func DeleteBadHashesList(db ethdb.KeyValueWriter) {
 		log.Fatal("Failed to delete badHashesList", "err", err)
 	}
 }
+
+// WriteInboundEtxs stores the inbound etxs for a given dom block hashes
+func WriteInboundEtxs(db ethdb.KeyValueWriter, hash common.Hash, inboundEtxs types.Transactions) {
+	data, err := rlp.EncodeToBytes(inboundEtxs)
+	if err != nil {
+		log.Fatal("Failed to RLP encode inbound etxs", "err", err)
+	}
+	if err := db.Put(inboundEtxsKey(hash), data); err != nil {
+		log.Fatal("Failed to store badHashesList", "err", err)
+	}
+}
+
+// ReadInboundEtxs reads the inbound etxs from the database
+func ReadInboundEtxs(db ethdb.Reader, hash common.Hash) types.Transactions {
+	// Try to look up the data in leveldb.
+	data, _ := db.Get(inboundEtxsKey(hash))
+	if len(data) == 0 {
+		return nil
+	}
+	inboundEtxs := types.Transactions{}
+	if err := rlp.Decode(bytes.NewReader(data), &inboundEtxs); err != nil {
+		log.Error("Invalid inbound etxs on read", "hash", hash, "err", err)
+		return nil
+	}
+	return inboundEtxs
+}
