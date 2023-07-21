@@ -182,7 +182,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		return h.core.Engine().VerifyHeader(h.core, header, true)
 	}
 	heighter := func() uint64 {
-		return h.core.CurrentBlock().NumberU64()
+		return h.core.CurrentHeader().NumberU64()
 	}
 	// writeBlock writes the block to the DB
 	writeBlock := func(block *types.Block) {
