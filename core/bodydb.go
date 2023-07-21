@@ -46,18 +46,28 @@ type BodyDb struct {
 
 func NewBodyDb(db ethdb.Database, engine consensus.Engine, hc *HeaderChain, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, txLookupLimit *uint64, vmConfig vm.Config, slicesRunning []common.Location) (*BodyDb, error) {
 	nodeCtx := common.NodeLocation.Context()
-	blockCache, _ := lru.New(blockCacheLimit)
-	bodyCache, _ := lru.New(bodyCacheLimit)
-	bodyRLPCache, _ := lru.New(bodyCacheLimit)
 
 	bc := &BodyDb{
 		chainConfig:   chainConfig,
 		engine:        engine,
 		db:            db,
-		blockCache:    blockCache,
-		bodyCache:     bodyCache,
-		bodyRLPCache:  bodyRLPCache,
 		slicesRunning: slicesRunning,
+	}
+
+	if bc.ProcessingState() {
+		blockCache, _ := lru.New(blockCacheLimit)
+		bodyCache, _ := lru.New(bodyCacheLimit)
+		bodyRLPCache, _ := lru.New(bodyCacheLimit)
+		bc.blockCache = blockCache
+		bc.bodyCache = bodyCache
+		bc.bodyRLPCache = bodyRLPCache
+	} else {
+		blockCache, _ := lru.New(10)
+		bodyCache, _ := lru.New(10)
+		bodyRLPCache, _ := lru.New(10)
+		bc.blockCache = blockCache
+		bc.bodyCache = bodyCache
+		bc.bodyRLPCache = bodyRLPCache
 	}
 
 	// only start the state processor in zone
