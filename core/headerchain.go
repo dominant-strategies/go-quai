@@ -385,7 +385,16 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 		if block == nil {
 			return errors.New("Could not find block during reorg")
 		}
-		hc.AppendBlock(block, types.Transactions{})
+		_, order, err := hc.engine.CalcOrder(block.Header())
+		if err != nil {
+			return err
+		}
+		nodeCtx := common.NodeLocation.Context()
+		var inboundEtxs types.Transactions
+		if order < nodeCtx {
+			inboundEtxs = rawdb.ReadInboundEtxs(hc.headerDb, hashStack[i].Hash())
+		}
+		hc.AppendBlock(block, inboundEtxs)
 		rawdb.WriteCanonicalHash(hc.headerDb, hashStack[i].Hash(), hashStack[i].NumberU64())
 	}
 
