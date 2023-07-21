@@ -393,7 +393,7 @@ func DefaultGalenaGenesisBlock(consensusEngine string) *Genesis {
 			Config:     params.Blake3PowGalenaChainConfig,
 			Nonce:      66,
 			ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fb"),
-			GasLimit:   5000000,
+			GasLimit:   40000000,
 			Difficulty: big.NewInt(4000000),
 		}
 	}
