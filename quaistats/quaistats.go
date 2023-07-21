@@ -280,7 +280,7 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, chainSideCh chan co
 		"transactions": fmt.Sprintf("%s/transactions", s.host),
 		"nodeStats":    fmt.Sprintf("%s/nodeStats", s.host),
 		"pendStats":    fmt.Sprintf("%s/pendStats", s.host),
-		"login":        fmt.Sprintf("%s/auth", s.host),
+		"login":        fmt.Sprintf("%s/auth/login", s.host),
 	}
 
 	//	urls := []string{path}
