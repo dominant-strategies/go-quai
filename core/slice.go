@@ -679,6 +679,11 @@ func (sl *Slice) updatePhCache(pendingHeaderWithTermini types.PendingHeader, inS
 	var exists bool
 	if localHeader != nil {
 		termini := sl.hc.GetTerminiByHash(localHeader.ParentHash())
+
+        if len(termini) == 0 {
+            return
+        }
+
 		pendingHeaderWithTermini, exists = sl.readPhCache(termini[c_terminusIndex])
 		if exists {
 			pendingHeaderWithTermini.Header = sl.combinePendingHeader(localHeader, pendingHeaderWithTermini.Header, common.ZONE_CTX, true)
