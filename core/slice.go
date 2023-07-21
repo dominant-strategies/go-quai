@@ -680,9 +680,9 @@ func (sl *Slice) updatePhCache(pendingHeaderWithTermini types.PendingHeader, inS
 	if localHeader != nil {
 		termini := sl.hc.GetTerminiByHash(localHeader.ParentHash())
 
-        if len(termini) == 0 {
-            return
-        }
+		if len(termini) == 0 {
+			return
+		}
 
 		pendingHeaderWithTermini, exists = sl.readPhCache(termini[c_terminusIndex])
 		if exists {
