@@ -265,18 +265,17 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 
 	}
 
-	// Append has succeeded write the batch
-	if err := batch.Write(); err != nil {
-		return nil, false, err
-	}
-
 	if subReorg {
 		log.Info("Choosing phHeader Append:", "NumberArray:", pendingHeaderWithTermini.Header.NumberArray(), "Number:", pendingHeaderWithTermini.Header.Number(), "ParentHash:", pendingHeaderWithTermini.Header.ParentHash(), "Terminus:", pendingHeaderWithTermini.Termini[c_terminusIndex])
 		sl.bestPhKey = pendingHeaderWithTermini.Termini[c_terminusIndex]
 		block.SetAppendTime(time.Duration(time9))
 		sl.hc.SetCurrentHeader(batch, block.Header())
 		sl.hc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
+	}
 
+	// Append has succeeded write the batch
+	if err := batch.Write(); err != nil {
+		return nil, false, err
 	}
 
 	// Relay the new pendingHeader
