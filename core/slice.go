@@ -244,7 +244,13 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 
 	rawdb.WriteBlock(sl.sliceDb, block)
 	var time8, time9 common.PrettyDuration
-	bestPh, _ := sl.readPhCache(sl.bestPhKey)
+	bestPh, exist := sl.readPhCache(sl.bestPhKey)
+	if !exist {
+		sl.bestPhKey = pendingHeaderWithTermini.Termini[c_terminusIndex]
+		sl.writePhCache(block.Hash(), pendingHeaderWithTermini)
+		bestPh = pendingHeaderWithTermini
+		log.Error("BestPh Key does not exist for", "key", sl.bestPhKey)
+	}
 	if nodeCtx == common.ZONE_CTX {
 		time8 = common.PrettyDuration(time.Since(start))
 
