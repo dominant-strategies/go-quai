@@ -346,11 +346,7 @@ func (api *PublicDebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, sta
 			stateDb = &state.StateDB{}
 		} else {
 			var block *types.Block
-			if number == rpc.LatestBlockNumber {
-				block = api.eth.core.CurrentBlock()
-			} else {
-				block = api.eth.core.GetBlockByNumber(uint64(number))
-			}
+			block = api.eth.core.GetBlockByNumber(uint64(number))
 			if block == nil {
 				return state.IteratorDump{}, fmt.Errorf("block #%d not found", number)
 			}

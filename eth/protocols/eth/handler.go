@@ -135,7 +135,7 @@ type NodeInfo struct {
 
 // nodeInfo retrieves some `quai` protocol metadata about the running host node.
 func nodeInfo(chain *core.Core, network uint64) *NodeInfo {
-	head := chain.CurrentBlock()
+	head := chain.CurrentHeader()
 	return &NodeInfo{
 		Network: network,
 		Entropy: chain.CurrentLogEntropy(),
