@@ -260,6 +260,12 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 
 		subReorg = sl.miningStrategy(bestPh, block)
 
+		if order < nodeCtx {
+			// Store the inbound etxs for dom blocks that did not get picked and use
+			// it in the future if dom switch happens
+			rawdb.WriteInboundEtxs(batch, block.Hash(), newInboundEtxs.FilterToLocation(common.NodeLocation))
+		}
+
 		// Upate the local pending header
 		pendingHeaderWithTermini, err = sl.generateSlicePendingHeader(block, newTermini, domPendingHeader, domOrigin, false)
 		if err != nil {

@@ -95,6 +95,7 @@ var (
 	phBodyPrefix        = []byte("pc")    // phBodyPrefix + hash -> []common.Hash + Td
 	terminiPrefix       = []byte("tk")    //terminiPrefix + hash -> []common.Hash
 	badHashesListPrefix = []byte("bh")
+	inboundEtxsPrefix   = []byte("ie") // inboundEtxsPrefix + hash -> types.Transactions
 
 	blockBodyPrefix         = []byte("b")  // blockBodyPrefix + num (uint64 big endian) + hash -> block body
 	blockReceiptsPrefix     = []byte("r")  // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
@@ -302,4 +303,8 @@ func manifestKey(hash common.Hash) []byte {
 
 func bloomKey(hash common.Hash) []byte {
 	return append(bloomPrefix, hash.Bytes()...)
+}
+
+func inboundEtxsKey(hash common.Hash) []byte {
+	return append(inboundEtxsPrefix, hash.Bytes()...)
 }
