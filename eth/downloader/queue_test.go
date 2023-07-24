@@ -42,8 +42,8 @@ var (
 // the returned hash chain is ordered head->parent. In addition, every 3rd block
 // contains a transaction and every 5th an uncle to allow testing correct block
 // reassembly.
-func makeChain(n int, seed byte, parent *types.Block, empty bool) ([]*types.Block, []types.Receipts) {
-	blocks, receipts := core.GenerateChain(params.TestChainConfig, parent, progpow.NewFaker(), testdb, n, func(i int, block *core.BlockGen) {
+func makeChain(n int, seed byte, parent *types.Block, empty bool) []*types.Block {
+	blocks := core.GenerateChain(params.TestChainConfig, parent, progpow.NewFaker(), testdb, n, func(i int, block *core.BlockGen) {
 		block.SetCoinbase(common.Address{seed})
 		// Add one tx to every secondblock
 		if !empty && i%2 == 0 {
@@ -55,7 +55,7 @@ func makeChain(n int, seed byte, parent *types.Block, empty bool) ([]*types.Bloc
 			block.AddTx(tx)
 		}
 	})
-	return blocks, receipts
+	return blocks
 }
 
 type chainData struct {
@@ -69,10 +69,10 @@ var emptyChain *chainData
 func init() {
 	// Create a chain of blocks to import
 	targetBlocks := 128
-	blocks, _ := makeChain(targetBlocks, 0, genesis, false)
+	blocks := makeChain(targetBlocks, 0, genesis, false)
 	chain = &chainData{blocks, 0}
 
-	blocks, _ = makeChain(targetBlocks, 0, genesis, true)
+	blocks = makeChain(targetBlocks, 0, genesis, true)
 	emptyChain = &chainData{blocks, 0}
 }
 
@@ -98,13 +98,11 @@ func dummyPeer(id string) *peerConnection {
 
 func TestBasics(t *testing.T) {
 	numOfBlocks := len(emptyChain.blocks)
-	numOfReceipts := len(emptyChain.blocks) / 2
 
 	q := newQueue(10, 10)
 	if !q.Idle() {
 		t.Errorf("new queue should be idle")
 	}
-	q.Prepare(1, FastSync)
 	if res := q.Results(false); len(res) != 0 {
 		t.Fatal("new queue should have 0 results")
 	}
@@ -116,10 +114,6 @@ func TestBasics(t *testing.T) {
 	}
 	if got, exp := q.PendingBlocks(), chain.Len(); got != exp {
 		t.Errorf("wrong pending block count, got %d, exp %d", got, exp)
-	}
-	// Only non-empty receipts get added to task-queue
-	if got, exp := q.PendingReceipts(), 64; got != exp {
-		t.Errorf("wrong pending receipt count, got %d, exp %d", got, exp)
 	}
 	// Items are now queued for downloading, next step is that we tell the
 	// queue that a certain peer will deliver them for us
@@ -141,9 +135,6 @@ func TestBasics(t *testing.T) {
 	if exp, got := q.blockTaskQueue.Size(), numOfBlocks-10; exp != got {
 		t.Errorf("expected block task queue to be %d, got %d", exp, got)
 	}
-	if exp, got := q.receiptTaskQueue.Size(), numOfReceipts; exp != got {
-		t.Errorf("expected receipt task queue to be %d, got %d", exp, got)
-	}
 	{
 		peer := dummyPeer("peer-2")
 		fetchReq, _, throttle := q.ReserveBodies(peer, 50)
@@ -160,22 +151,9 @@ func TestBasics(t *testing.T) {
 	if exp, got := q.blockTaskQueue.Size(), numOfBlocks-10; exp != got {
 		t.Errorf("expected block task queue to be %d, got %d", exp, got)
 	}
-	if exp, got := q.receiptTaskQueue.Size(), numOfReceipts; exp != got {
-		t.Errorf("expected receipt task queue to be %d, got %d", exp, got)
-	}
 	{
-		// The receipt delivering peer should not be affected
+		// The delivering peer should not be affected
 		// by the throttling of body deliveries
-		peer := dummyPeer("peer-3")
-		fetchReq, _, throttle := q.ReserveReceipts(peer, 50)
-		if !throttle {
-			// queue size is only 10, so throttling should occur
-			t.Fatal("should throttle")
-		}
-		// But we should still get the first things to fetch
-		if got, exp := len(fetchReq.Headers), 5; got != exp {
-			t.Fatalf("expected %d requests, got %d", exp, got)
-		}
 		if got, exp := fetchReq.Headers[0].Number().Uint64(), uint64(1); got != exp {
 			t.Fatalf("expected header %d, got %d", exp, got)
 		}
@@ -183,9 +161,6 @@ func TestBasics(t *testing.T) {
 	}
 	if exp, got := q.blockTaskQueue.Size(), numOfBlocks-10; exp != got {
 		t.Errorf("expected block task queue to be %d, got %d", exp, got)
-	}
-	if exp, got := q.receiptTaskQueue.Size(), numOfReceipts-5; exp != got {
-		t.Errorf("expected receipt task queue to be %d, got %d", exp, got)
 	}
 	if got, exp := q.resultCache.countCompleted(), 0; got != exp {
 		t.Errorf("wrong processable count, got %d, exp %d", got, exp)
@@ -205,9 +180,6 @@ func TestEmptyBlocks(t *testing.T) {
 	}
 	if got, exp := q.PendingBlocks(), len(emptyChain.blocks); got != exp {
 		t.Errorf("wrong pending block count, got %d, exp %d", got, exp)
-	}
-	if got, exp := q.PendingReceipts(), 0; got != exp {
-		t.Errorf("wrong pending receipt count, got %d, exp %d", got, exp)
 	}
 	// They won't be processable, because the fetchresults haven't been
 	// created yet
@@ -232,23 +204,8 @@ func TestEmptyBlocks(t *testing.T) {
 	if q.blockTaskQueue.Size() != numOfBlocks-10 {
 		t.Errorf("expected block task queue to be %d, got %d", numOfBlocks-10, q.blockTaskQueue.Size())
 	}
-	if q.receiptTaskQueue.Size() != 0 {
-		t.Errorf("expected receipt task queue to be %d, got %d", 0, q.receiptTaskQueue.Size())
-	}
-	{
-		peer := dummyPeer("peer-3")
-		fetchReq, _, _ := q.ReserveReceipts(peer, 50)
-
-		// there should be nothing to fetch, blocks are empty
-		if fetchReq != nil {
-			t.Fatal("there should be no body fetch tasks remaining")
-		}
-	}
 	if q.blockTaskQueue.Size() != numOfBlocks-10 {
 		t.Errorf("expected block task queue to be %d, got %d", numOfBlocks-10, q.blockTaskQueue.Size())
-	}
-	if q.receiptTaskQueue.Size() != 0 {
-		t.Errorf("expected receipt task queue to be %d, got %d", 0, q.receiptTaskQueue.Size())
 	}
 	if got, exp := q.resultCache.countCompleted(), 10; got != exp {
 		t.Errorf("wrong processable count, got %d, exp %d", got, exp)
@@ -261,9 +218,8 @@ func TestEmptyBlocks(t *testing.T) {
 // some more advanced scenarios
 func XTestDelivery(t *testing.T) {
 	// the outside network, holding blocks
-	blo, rec := makeChain(128, 0, genesis, false)
+	blo := makeChain(128, 0, genesis, false)
 	world := newNetwork()
-	world.receipts = rec
 	world.chain = blo
 	world.progress(10)
 	if false {
@@ -330,27 +286,6 @@ func XTestDelivery(t *testing.T) {
 			}
 		}
 	}()
-	go func() {
-		defer wg.Done()
-		// reserve receiptfetch
-		peer := dummyPeer("peer-3")
-		for {
-			f, _, _ := q.ReserveReceipts(peer, rand.Intn(50))
-			if f != nil {
-				var rcs [][]*types.Receipt
-				for _, hdr := range f.Headers {
-					rcs = append(rcs, world.getReceipts(hdr.Number().Uint64()))
-				}
-				_, err := q.DeliverReceipts(peer.id, rcs)
-				if err != nil {
-					fmt.Printf("delivered %d receipts %v\n", len(rcs), err)
-				}
-				time.Sleep(100 * time.Millisecond)
-			} else {
-				time.Sleep(200 * time.Millisecond)
-			}
-		}
-	}()
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -388,30 +323,19 @@ func newNetwork() *network {
 
 // represents the network
 type network struct {
-	offset   int
-	chain    []*types.Block
-	receipts []types.Receipts
-	lock     sync.RWMutex
-	cond     *sync.Cond
+	offset int
+	chain  []*types.Block
+	lock   sync.RWMutex
+	cond   *sync.Cond
 }
 
 func (n *network) getTransactions(blocknum uint64) types.Transactions {
 	index := blocknum - uint64(n.offset)
 	return n.chain[index].Transactions()
 }
-func (n *network) getReceipts(blocknum uint64) types.Receipts {
-	index := blocknum - uint64(n.offset)
-	if got := n.chain[index].Header().Number().Uint64(); got != blocknum {
-		fmt.Printf("Err, got %d exp %d\n", got, blocknum)
-		panic("sd")
-	}
-	return n.receipts[index]
-}
-
 func (n *network) forget(blocknum uint64) {
 	index := blocknum - uint64(n.offset)
 	n.chain = n.chain[index:]
-	n.receipts = n.receipts[index:]
 	n.offset = int(blocknum)
 
 }
@@ -422,7 +346,6 @@ func (n *network) progress(numBlocks int) {
 	//fmt.Printf("progressing...\n")
 	newBlocks, newR := makeChain(numBlocks, 0, n.chain[len(n.chain)-1], false)
 	n.chain = append(n.chain, newBlocks...)
-	n.receipts = append(n.receipts, newR...)
 	n.cond.Broadcast()
 
 }

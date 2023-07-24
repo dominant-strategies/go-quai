@@ -157,54 +157,6 @@ func answerGetBlockBodiesQuery(backend Backend, query GetBlockBodiesPacket, peer
 	return bodies
 }
 
-func handleGetReceipts(backend Backend, msg Decoder, peer *Peer) error {
-	// Decode the block receipts retrieval message
-	var query GetReceiptsPacket
-	if err := msg.Decode(&query); err != nil {
-		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
-	}
-	response := answerGetReceiptsQuery(backend, query, peer)
-	return peer.SendReceiptsRLP(response)
-}
-
-func handleGetReceipts66(backend Backend, msg Decoder, peer *Peer) error {
-	// Decode the block receipts retrieval message
-	var query GetReceiptsPacket66
-	if err := msg.Decode(&query); err != nil {
-		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
-	}
-	response := answerGetReceiptsQuery(backend, query.GetReceiptsPacket, peer)
-	return peer.ReplyReceiptsRLP(query.RequestId, response)
-}
-
-func answerGetReceiptsQuery(backend Backend, query GetReceiptsPacket, peer *Peer) []rlp.RawValue {
-	// Gather state data until the fetch or network limits is reached
-	var (
-		bytes    int
-		receipts []rlp.RawValue
-	)
-	for _, hash := range query {
-		if bytes >= softResponseLimit || len(receipts) >= maxReceiptsServe {
-			break
-		}
-		// Retrieve the requested block's receipts
-		results := backend.Core().GetReceiptsByHash(hash)
-		if results == nil {
-			if header := backend.Core().GetHeaderByHash(hash); header == nil || header.ReceiptHash() != types.EmptyRootHash {
-				continue
-			}
-		}
-		// If known, encode and queue for response packet
-		if encoded, err := rlp.EncodeToBytes(results); err != nil {
-			log.Error("Failed to encode receipt", "err", err)
-		} else {
-			receipts = append(receipts, encoded)
-			bytes += len(encoded)
-		}
-	}
-	return receipts
-}
-
 func handleGetBlock(backend Backend, msg Decoder, peer *Peer) error {
 	// Decode the block retrieval message
 	var query GetBlockPacket
@@ -391,46 +343,6 @@ func handleBlockBodies66(backend Backend, msg Decoder, peer *Peer) error {
 	requestTracker.Fulfil(peer.id, peer.version, BlockBodiesMsg, res.RequestId)
 
 	return backend.Handle(peer, &res.BlockBodiesPacket)
-}
-
-func handleNodeData(backend Backend, msg Decoder, peer *Peer) error {
-	// A batch of node state data arrived to one of our previous requests
-	res := new(NodeDataPacket)
-	if err := msg.Decode(res); err != nil {
-		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
-	}
-	return backend.Handle(peer, res)
-}
-
-func handleNodeData66(backend Backend, msg Decoder, peer *Peer) error {
-	// A batch of node state data arrived to one of our previous requests
-	res := new(NodeDataPacket66)
-	if err := msg.Decode(res); err != nil {
-		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
-	}
-	requestTracker.Fulfil(peer.id, peer.version, NodeDataMsg, res.RequestId)
-
-	return backend.Handle(peer, &res.NodeDataPacket)
-}
-
-func handleReceipts(backend Backend, msg Decoder, peer *Peer) error {
-	// A batch of receipts arrived to one of our previous requests
-	res := new(ReceiptsPacket)
-	if err := msg.Decode(res); err != nil {
-		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
-	}
-	return backend.Handle(peer, res)
-}
-
-func handleReceipts66(backend Backend, msg Decoder, peer *Peer) error {
-	// A batch of receipts arrived to one of our previous requests
-	res := new(ReceiptsPacket66)
-	if err := msg.Decode(res); err != nil {
-		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
-	}
-	requestTracker.Fulfil(peer.id, peer.version, ReceiptsMsg, res.RequestId)
-
-	return backend.Handle(peer, &res.ReceiptsPacket)
 }
 
 func handleNewPooledTransactionHashes(backend Backend, msg Decoder, peer *Peer) error {

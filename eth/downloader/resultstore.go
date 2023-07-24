@@ -68,7 +68,7 @@ func (r *resultStore) SetThrottleThreshold(threshold uint64) uint64 {
 	return r.throttleThreshold
 }
 
-// AddFetch adds a header for body/receipt fetching. This is used when the queue
+// AddFetch adds a header for body fetching. This is used when the queue
 // wants to reserve headers for fetching.
 //
 // It returns the following:

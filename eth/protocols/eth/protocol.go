@@ -58,10 +58,6 @@ const (
 	GetBlockBodiesMsg  = 0x05
 	BlockBodiesMsg     = 0x06
 	NewBlockMsg        = 0x07
-	GetNodeDataMsg     = 0x0d
-	NodeDataMsg        = 0x0e
-	GetReceiptsMsg     = 0x0f
-	ReceiptsMsg        = 0x10
 
 	// Protocol messages overloaded in eth/65
 	NewPooledTransactionHashesMsg = 0x08
@@ -254,51 +250,6 @@ func (p *BlockBodiesPacket) Unpack() ([][]*types.Transaction, [][]*types.Header,
 	return txset, uncleset, etxset, manifest
 }
 
-// GetNodeDataPacket represents a trie node data query.
-type GetNodeDataPacket []common.Hash
-
-// GetNodeDataPacket represents a trie node data query over eth/66.
-type GetNodeDataPacket66 struct {
-	RequestId uint64
-	GetNodeDataPacket
-}
-
-// NodeDataPacket is the network packet for trie node data distribution.
-type NodeDataPacket [][]byte
-
-// NodeDataPacket is the network packet for trie node data distribution over eth/66.
-type NodeDataPacket66 struct {
-	RequestId uint64
-	NodeDataPacket
-}
-
-// GetReceiptsPacket represents a block receipts query.
-type GetReceiptsPacket []common.Hash
-
-// GetReceiptsPacket represents a block receipts query over eth/66.
-type GetReceiptsPacket66 struct {
-	RequestId uint64
-	GetReceiptsPacket
-}
-
-// ReceiptsPacket is the network packet for block receipts distribution.
-type ReceiptsPacket [][]*types.Receipt
-
-// ReceiptsPacket is the network packet for block receipts distribution over eth/66.
-type ReceiptsPacket66 struct {
-	RequestId uint64
-	ReceiptsPacket
-}
-
-// ReceiptsRLPPacket is used for receipts, when we already have it encoded
-type ReceiptsRLPPacket []rlp.RawValue
-
-// ReceiptsPacket66 is the eth-66 version of ReceiptsRLPPacket
-type ReceiptsRLPPacket66 struct {
-	RequestId uint64
-	ReceiptsRLPPacket
-}
-
 // NewPooledTransactionHashesPacket represents a transaction announcement packet.
 type NewPooledTransactionHashesPacket []common.Hash
 
@@ -401,18 +352,6 @@ func (*BlockBodiesPacket) Kind() byte   { return BlockBodiesMsg }
 
 func (*NewBlockPacket) Name() string { return "NewBlock" }
 func (*NewBlockPacket) Kind() byte   { return NewBlockMsg }
-
-func (*GetNodeDataPacket) Name() string { return "GetNodeData" }
-func (*GetNodeDataPacket) Kind() byte   { return GetNodeDataMsg }
-
-func (*NodeDataPacket) Name() string { return "NodeData" }
-func (*NodeDataPacket) Kind() byte   { return NodeDataMsg }
-
-func (*GetReceiptsPacket) Name() string { return "GetReceipts" }
-func (*GetReceiptsPacket) Kind() byte   { return GetReceiptsMsg }
-
-func (*ReceiptsPacket) Name() string { return "Receipts" }
-func (*ReceiptsPacket) Kind() byte   { return ReceiptsMsg }
 
 func (*NewPooledTransactionHashesPacket) Name() string { return "NewPooledTransactionHashes" }
 func (*NewPooledTransactionHashesPacket) Kind() byte   { return NewPooledTransactionHashesMsg }

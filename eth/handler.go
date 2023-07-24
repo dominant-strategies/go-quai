@@ -175,7 +175,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		quitSync:      make(chan struct{}),
 	}
 
-	h.downloader = downloader.New(config.Database, h.eventMux, h.core, h.removePeer)
+	h.downloader = downloader.New(h.eventMux, h.core, h.removePeer)
 
 	// Construct the fetcher (short sync)
 	validator := func(header *types.Header) error {

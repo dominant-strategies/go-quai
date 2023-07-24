@@ -55,12 +55,11 @@ func init() {
 }
 
 type testChain struct {
-	genesis  *types.Block
-	chain    []common.Hash
-	headerm  map[common.Hash]*types.Header
-	blockm   map[common.Hash]*types.Block
-	receiptm map[common.Hash][]*types.Receipt
-	tdm      map[common.Hash]*big.Int
+	genesis *types.Block
+	chain   []common.Hash
+	headerm map[common.Hash]*types.Header
+	blockm  map[common.Hash]*types.Block
+	tdm     map[common.Hash]*big.Int
 }
 
 // newTestChain creates a blockchain of the given length.
@@ -93,11 +92,10 @@ func (tc *testChain) shorten(length int) *testChain {
 
 func (tc *testChain) copy(newlen int) *testChain {
 	cpy := &testChain{
-		genesis:  tc.genesis,
-		headerm:  make(map[common.Hash]*types.Header, newlen),
-		blockm:   make(map[common.Hash]*types.Block, newlen),
-		receiptm: make(map[common.Hash][]*types.Receipt, newlen),
-		tdm:      make(map[common.Hash]*big.Int, newlen),
+		genesis: tc.genesis,
+		headerm: make(map[common.Hash]*types.Header, newlen),
+		blockm:  make(map[common.Hash]*types.Block, newlen),
+		tdm:     make(map[common.Hash]*big.Int, newlen),
 	}
 	for i := 0; i < len(tc.chain) && i < newlen; i++ {
 		hash := tc.chain[i]
@@ -105,7 +103,6 @@ func (tc *testChain) copy(newlen int) *testChain {
 		cpy.tdm[hash] = tc.tdm[hash]
 		cpy.blockm[hash] = tc.blockm[hash]
 		cpy.headerm[hash] = tc.headerm[hash]
-		cpy.receiptm[hash] = tc.receiptm[hash]
 	}
 	return cpy
 }
@@ -118,7 +115,7 @@ func (tc *testChain) generate(n int, seed byte, parent *types.Block, heavy bool)
 	// start := time.Now()
 	// defer func() { fmt.Printf("test chain generated in %v\n", time.Since(start)) }()
 
-	blocks, receipts := core.GenerateChain(params.TestChainConfig, parent, progpow.NewFaker(), testDB, n, func(i int, block *core.BlockGen) {
+	blocks, _ := core.GenerateChain(params.TestChainConfig, parent, progpow.NewFaker(), testDB, n, func(i int, block *core.BlockGen) {
 		block.SetCoinbase(common.Address{seed})
 		// If a heavy chain is requested, delay blocks to raise difficulty
 		if heavy {
@@ -150,7 +147,6 @@ func (tc *testChain) generate(n int, seed byte, parent *types.Block, heavy bool)
 		tc.chain = append(tc.chain, hash)
 		tc.blockm[hash] = b
 		tc.headerm[hash] = b.Header()
-		tc.receiptm[hash] = receipts[i]
 		tc.tdm[hash] = new(big.Int).Set(td)
 	}
 }
@@ -194,17 +190,6 @@ func (tc *testChain) headersByNumber(origin uint64, amount int, skip int, revers
 		}
 	}
 	return result
-}
-
-// receipts returns the receipts of the given block hashes.
-func (tc *testChain) receipts(hashes []common.Hash) [][]*types.Receipt {
-	results := make([][]*types.Receipt, 0, len(hashes))
-	for _, hash := range hashes {
-		if receipt, ok := tc.receiptm[hash]; ok {
-			results = append(results, receipt)
-		}
-	}
-	return results
 }
 
 // bodies returns the block bodies of the given block hashes.

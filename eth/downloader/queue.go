@@ -95,13 +95,6 @@ func (f *fetchResult) AllDone() bool {
 	return atomic.LoadInt32(&f.pending) == 0
 }
 
-// SetReceiptsDone flags the receipts as finished.
-func (f *fetchResult) SetReceiptsDone() {
-	if v := atomic.LoadInt32(&f.pending); (v & (1 << receiptType)) != 0 {
-		atomic.AddInt32(&f.pending, -2)
-	}
-}
-
 // Done checks if the given type is done already
 func (f *fetchResult) Done(kind uint) bool {
 	v := atomic.LoadInt32(&f.pending)
@@ -129,10 +122,6 @@ type queue struct {
 	blockTaskQueue *prque.Prque                  // Priority queue of the headers to fetch the blocks (bodies) for
 	blockPendPool  map[string]*fetchRequest      // Currently pending block (body) retrieval operations
 
-	receiptTaskPool  map[common.Hash]*types.Header // Pending receipt retrieval tasks, mapping hashes to headers
-	receiptTaskQueue *prque.Prque                  // Priority queue of the headers to fetch the receipts for
-	receiptPendPool  map[string]*fetchRequest      // Currently pending receipt retrieval operations
-
 	resultCache *resultStore       // Downloaded but not yet delivered fetch results
 	resultSize  common.StorageSize // Approximate size of a block (exponential moving average)
 
@@ -147,11 +136,10 @@ type queue struct {
 func newQueue(blockCacheLimit int, thresholdInitialSize int) *queue {
 	lock := new(sync.RWMutex)
 	q := &queue{
-		headerContCh:     make(chan bool),
-		blockTaskQueue:   prque.New(nil),
-		receiptTaskQueue: prque.New(nil),
-		active:           sync.NewCond(lock),
-		lock:             lock,
+		headerContCh:   make(chan bool),
+		blockTaskQueue: prque.New(nil),
+		active:         sync.NewCond(lock),
+		lock:           lock,
 	}
 	q.Reset(blockCacheLimit, thresholdInitialSize)
 	return q
@@ -171,10 +159,6 @@ func (q *queue) Reset(blockCacheLimit int, thresholdInitialSize int) {
 	q.blockTaskPool = make(map[common.Hash]*types.Header)
 	q.blockTaskQueue.Reset()
 	q.blockPendPool = make(map[string]*fetchRequest)
-
-	q.receiptTaskPool = make(map[common.Hash]*types.Header)
-	q.receiptTaskQueue.Reset()
-	q.receiptPendPool = make(map[string]*fetchRequest)
 
 	q.resultCache = newResultStore(blockCacheLimit)
 	q.resultCache.SetThrottleThreshold(uint64(thresholdInitialSize))
@@ -205,14 +189,6 @@ func (q *queue) PendingBlocks() int {
 	return q.blockTaskQueue.Size()
 }
 
-// PendingReceipts retrieves the number of block receipts pending for retrieval.
-func (q *queue) PendingReceipts() int {
-	q.lock.Lock()
-	defer q.lock.Unlock()
-
-	return q.receiptTaskQueue.Size()
-}
-
 // InFlightHeaders retrieves whether there are header fetch requests currently
 // in flight.
 func (q *queue) InFlightHeaders() bool {
@@ -231,22 +207,13 @@ func (q *queue) InFlightBlocks() bool {
 	return len(q.blockPendPool) > 0
 }
 
-// InFlightReceipts retrieves whether there are receipt fetch requests currently
-// in flight.
-func (q *queue) InFlightReceipts() bool {
-	q.lock.Lock()
-	defer q.lock.Unlock()
-
-	return len(q.receiptPendPool) > 0
-}
-
 // Idle returns if the queue is fully idle or has some data still inside.
 func (q *queue) Idle() bool {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
-	queued := q.blockTaskQueue.Size() + q.receiptTaskQueue.Size()
-	pending := len(q.blockPendPool) + len(q.receiptPendPool)
+	queued := q.blockTaskQueue.Size()
+	pending := len(q.blockPendPool)
 
 	return (queued + pending) == 0
 }
@@ -366,9 +333,6 @@ func (q *queue) Results(block bool) []*fetchResult {
 		for _, uncle := range result.Uncles {
 			size += uncle.Size()
 		}
-		for _, receipt := range result.Receipts {
-			size += receipt.Size()
-		}
 		for _, tx := range result.Transactions {
 			size += tx.Size()
 		}
@@ -403,7 +367,6 @@ func (q *queue) Stats() []interface{} {
 
 func (q *queue) stats() []interface{} {
 	return []interface{}{
-		"receiptTasks", q.receiptTaskQueue.Size(),
 		"blockTasks", q.blockTaskQueue.Size(),
 		"itemSize", q.resultSize,
 	}
@@ -457,16 +420,6 @@ func (q *queue) ReserveBodies(p *peerConnection, count int) (*fetchRequest, bool
 	defer q.lock.Unlock()
 
 	return q.reserveHeaders(p, count, q.blockTaskPool, q.blockTaskQueue, q.blockPendPool, bodyType)
-}
-
-// ReserveReceipts reserves a set of receipt fetches for the given peer, skipping
-// any previously failed downloads. Beside the next batch of needed fetches, it
-// also returns a flag whether empty receipts were queued requiring importing.
-func (q *queue) ReserveReceipts(p *peerConnection, count int) (*fetchRequest, bool, bool) {
-	q.lock.Lock()
-	defer q.lock.Unlock()
-
-	return q.reserveHeaders(p, count, q.receiptTaskPool, q.receiptTaskQueue, q.receiptPendPool, receiptType)
 }
 
 // reserveHeaders reserves a set of data download operations for a given peer,
@@ -584,14 +537,6 @@ func (q *queue) CancelBodies(request *fetchRequest) {
 	q.cancel(request, q.blockTaskQueue, q.blockPendPool)
 }
 
-// CancelReceipts aborts a body fetch request, returning all pending headers to
-// the task queue.
-func (q *queue) CancelReceipts(request *fetchRequest) {
-	q.lock.Lock()
-	defer q.lock.Unlock()
-	q.cancel(request, q.receiptTaskQueue, q.receiptPendPool)
-}
-
 // Cancel aborts a fetch request, returning all pending hashes to the task queue.
 func (q *queue) cancel(request *fetchRequest, taskQueue *prque.Prque, pendPool map[string]*fetchRequest) {
 	if request.From > 0 {
@@ -616,12 +561,6 @@ func (q *queue) Revoke(peerID string) {
 		}
 		delete(q.blockPendPool, peerID)
 	}
-	if request, ok := q.receiptPendPool[peerID]; ok {
-		for _, header := range request.Headers {
-			q.receiptTaskQueue.Push(header, -int64(header.Number().Uint64()))
-		}
-		delete(q.receiptPendPool, peerID)
-	}
 }
 
 // ExpireHeaders checks for in flight requests that exceeded a timeout allowance,
@@ -640,15 +579,6 @@ func (q *queue) ExpireBodies(timeout time.Duration) map[string]int {
 	defer q.lock.Unlock()
 
 	return q.expire(timeout, q.blockPendPool, q.blockTaskQueue, bodyTimeoutMeter)
-}
-
-// ExpireReceipts checks for in flight receipt requests that exceeded a timeout
-// allowance, canceling them and returning the responsible peers for penalisation.
-func (q *queue) ExpireReceipts(timeout time.Duration) map[string]int {
-	q.lock.Lock()
-	defer q.lock.Unlock()
-
-	return q.expire(timeout, q.receiptPendPool, q.receiptTaskQueue, receiptTimeoutMeter)
 }
 
 // expire is the generic check that move expired tasks from a pending pool back
@@ -829,27 +759,6 @@ func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, uncleLi
 	}
 	return q.deliver(id, q.blockTaskPool, q.blockTaskQueue, q.blockPendPool,
 		bodyReqTimer, len(txLists), validate, reconstruct)
-}
-
-// DeliverReceipts injects a receipt retrieval response into the results queue.
-// The method returns the number of transaction receipts accepted from the delivery
-// and also wakes any threads waiting for data delivery.
-func (q *queue) DeliverReceipts(id string, receiptList [][]*types.Receipt) (int, error) {
-	q.lock.Lock()
-	defer q.lock.Unlock()
-	trieHasher := trie.NewStackTrie(nil)
-	validate := func(index int, header *types.Header) error {
-		if types.DeriveSha(types.Receipts(receiptList[index]), trieHasher) != header.ReceiptHash() {
-			return errInvalidReceipt
-		}
-		return nil
-	}
-	reconstruct := func(index int, result *fetchResult) {
-		result.Receipts = receiptList[index]
-		result.SetReceiptsDone()
-	}
-	return q.deliver(id, q.receiptTaskPool, q.receiptTaskQueue, q.receiptPendPool,
-		receiptReqTimer, len(receiptList), validate, reconstruct)
 }
 
 // deliver injects a data retrieval response into the results queue.

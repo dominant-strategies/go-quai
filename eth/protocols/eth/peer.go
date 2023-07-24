@@ -407,34 +407,6 @@ func (p *Peer) ReplyBlockBodiesRLP(id uint64, bodies []rlp.RawValue) error {
 	})
 }
 
-// SendNodeDataRLP sends a batch of arbitrary internal data, corresponding to the
-// hashes requested.
-func (p *Peer) SendNodeData(data [][]byte) error {
-	return p2p.Send(p.rw, NodeDataMsg, NodeDataPacket(data))
-}
-
-// ReplyNodeData is the eth/66 response to GetNodeData.
-func (p *Peer) ReplyNodeData(id uint64, data [][]byte) error {
-	return p2p.Send(p.rw, NodeDataMsg, NodeDataPacket66{
-		RequestId:      id,
-		NodeDataPacket: data,
-	})
-}
-
-// SendReceiptsRLP sends a batch of transaction receipts, corresponding to the
-// ones requested from an already RLP encoded format.
-func (p *Peer) SendReceiptsRLP(receipts []rlp.RawValue) error {
-	return p2p.Send(p.rw, ReceiptsMsg, receipts) // Not packed into ReceiptsPacket to avoid RLP decoding
-}
-
-// ReplyReceiptsRLP is the eth/66 response to GetReceipts.
-func (p *Peer) ReplyReceiptsRLP(id uint64, receipts []rlp.RawValue) error {
-	return p2p.Send(p.rw, ReceiptsMsg, ReceiptsRLPPacket66{
-		RequestId:         id,
-		ReceiptsRLPPacket: receipts,
-	})
-}
-
 // RequestOneHeader is a wrapper around the header query functions to fetch a
 // single header. It is used solely by the fetcher.
 func (p *Peer) RequestOneHeader(hash common.Hash) error {
@@ -549,21 +521,6 @@ func (p *Peer) RequestBodies(hashes []common.Hash) error {
 		})
 	}
 	return p2p.Send(p.rw, GetBlockBodiesMsg, GetBlockBodiesPacket(hashes))
-}
-
-// RequestReceipts fetches a batch of transaction receipts from a remote node.
-func (p *Peer) RequestReceipts(hashes []common.Hash) error {
-	p.Log().Debug("Fetching batch of receipts", "count", len(hashes))
-	if p.Version() >= ETH66 {
-		id := rand.Uint64()
-
-		requestTracker.Track(p.id, p.version, GetReceiptsMsg, ReceiptsMsg, id)
-		return p2p.Send(p.rw, GetReceiptsMsg, &GetReceiptsPacket66{
-			RequestId:         id,
-			GetReceiptsPacket: hashes,
-		})
-	}
-	return p2p.Send(p.rw, GetReceiptsMsg, GetReceiptsPacket(hashes))
 }
 
 // RequestTxs fetches a batch of transactions from a remote node.
