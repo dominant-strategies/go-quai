@@ -70,6 +70,7 @@ type Slice struct {
 
 	validator Validator // Block and state validator interface
 	phCacheMu sync.RWMutex
+	reorgMu   sync.RWMutex
 
 	badHashesCache map[common.Hash]bool
 }
@@ -256,11 +257,18 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 
 		subReorg = sl.miningStrategy(bestPh, block)
 
+		sl.reorgMu.Lock()
+		if subReorg {
+			sl.hc.SetCurrentHeader(block.Header())
+		}
 		// Upate the local pending header
 		pendingHeaderWithTermini, err = sl.generateSlicePendingHeader(block, newTermini, domPendingHeader, domOrigin, false)
 		if err != nil {
+			sl.reorgMu.Unlock()
 			return nil, false, err
 		}
+		sl.reorgMu.Unlock()
+
 		time9 = common.PrettyDuration(time.Since(start))
 
 	}
@@ -284,7 +292,9 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	}
 
 	if subReorg {
-		sl.hc.SetCurrentHeader(batch, block.Header())
+		if nodeCtx != common.ZONE_CTX {
+			sl.hc.SetCurrentHeader(block.Header())
+		}
 		sl.hc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
 	}
 
@@ -766,7 +776,7 @@ func (sl *Slice) init(genesis *Genesis) error {
 
 		// Append each of the knot blocks
 		sl.bestPhKey = genesisHash
-		sl.hc.SetCurrentHeader(nil, genesisHeader)
+		sl.hc.SetCurrentHeader(genesisHeader)
 
 		// Create empty pending ETX entry for genesis block -- genesis may not emit ETXs
 		emptyPendingEtxs := types.Transactions{}

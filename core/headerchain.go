@@ -308,10 +308,10 @@ func (hc *HeaderChain) ProcessingState() bool {
 }
 
 // Append
-func (hc *HeaderChain) AppendBlock(batch ethdb.Batch, block *types.Block, newInboundEtxs types.Transactions) error {
+func (hc *HeaderChain) AppendBlock(block *types.Block, newInboundEtxs types.Transactions) error {
 	blockappend := time.Now()
 	// Append block else revert header append
-	logs, err := hc.bc.Append(batch, block, newInboundEtxs)
+	logs, err := hc.bc.Append(block, newInboundEtxs)
 	if err != nil {
 		return err
 	}
@@ -327,7 +327,7 @@ func (hc *HeaderChain) AppendBlock(batch ethdb.Batch, block *types.Block, newInb
 
 // SetCurrentHeader sets the in-memory head header marker of the canonical chan
 // as the given header.
-func (hc *HeaderChain) SetCurrentHeader(batch ethdb.Batch, head *types.Header) error {
+func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 	hc.headermu.Lock()
 	defer hc.headermu.Unlock()
 
@@ -385,7 +385,7 @@ func (hc *HeaderChain) SetCurrentHeader(batch ethdb.Batch, head *types.Header) e
 		if block == nil {
 			return errors.New("Could not find block during reorg")
 		}
-		hc.AppendBlock(batch, block, types.Transactions{})
+		hc.AppendBlock(block, types.Transactions{})
 		rawdb.WriteCanonicalHash(hc.headerDb, hashStack[i].Hash(), hashStack[i].NumberU64())
 	}
 
