@@ -309,10 +309,10 @@ func (hc *HeaderChain) ProcessingState() bool {
 }
 
 // Append
-func (hc *HeaderChain) AppendBlock(batch ethdb.Batch, block *types.Block, newInboundEtxs types.Transactions) error {
+func (hc *HeaderChain) AppendBlock(block *types.Block, newInboundEtxs types.Transactions) error {
 	blockappend := time.Now()
 	// Append block else revert header append
-	logs, err := hc.bc.Append(batch, block, newInboundEtxs)
+	logs, err := hc.bc.Append(block, newInboundEtxs)
 	if err != nil {
 		return err
 	}
@@ -328,7 +328,7 @@ func (hc *HeaderChain) AppendBlock(batch ethdb.Batch, block *types.Block, newInb
 
 // SetCurrentHeader sets the in-memory head header marker of the canonical chan
 // as the given header.
-func (hc *HeaderChain) SetCurrentHeader(batch ethdb.Batch, head *types.Header) error {
+func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 	hc.headermu.Lock()
 	defer hc.headermu.Unlock()
 
@@ -347,6 +347,7 @@ func (hc *HeaderChain) SetCurrentHeader(batch ethdb.Batch, head *types.Header) e
 
 	// If head is the normal extension of canonical head, we can return by just wiring the canonical hash.
 	if prevHeader.Hash() == head.ParentHash() {
+		hc.ReadInboundEtxsAndAppendBlock(head)
 		rawdb.WriteCanonicalHash(hc.headerDb, head.Hash(), head.NumberU64())
 		return nil
 	}
@@ -382,9 +383,29 @@ func (hc *HeaderChain) SetCurrentHeader(batch ethdb.Batch, head *types.Header) e
 
 	// Run through the hash stack to update canonicalHash and forward state processor
 	for i := len(hashStack) - 1; i >= 0; i-- {
+		hc.ReadInboundEtxsAndAppendBlock(hashStack[i])
 		rawdb.WriteCanonicalHash(hc.headerDb, hashStack[i].Hash(), hashStack[i].NumberU64())
 	}
 
+	return nil
+}
+
+// ReadInboundEtxsAndAppendBlock reads the inbound etxs from database and appends the block
+func (hc *HeaderChain) ReadInboundEtxsAndAppendBlock(header *types.Header) error {
+	block := hc.GetBlockOrCandidate(header.Hash(), header.NumberU64())
+	if block == nil {
+		return errors.New("Could not find block during reorg")
+	}
+	_, order, err := hc.engine.CalcOrder(block.Header())
+	if err != nil {
+		return err
+	}
+	nodeCtx := common.NodeLocation.Context()
+	var inboundEtxs types.Transactions
+	if order < nodeCtx {
+		inboundEtxs = rawdb.ReadInboundEtxs(hc.headerDb, header.Hash())
+	}
+	hc.AppendBlock(block, inboundEtxs)
 	return nil
 }
 
@@ -670,7 +691,7 @@ func (hc *HeaderChain) CurrentHeader() *types.Header {
 
 // CurrentBlock returns the block for the current header.
 func (hc *HeaderChain) CurrentBlock() *types.Block {
-	return hc.GetBlockByHash(hc.CurrentHeader().Hash())
+	return hc.GetBlockOrCandidateByHash(hc.CurrentHeader().Hash())
 }
 
 // SetGenesis sets a new genesis block header for the chain
@@ -788,6 +809,10 @@ func (hc *HeaderChain) GetBlockByHash(hash common.Hash) *types.Block {
 		return nil
 	}
 	return hc.GetBlock(hash, *number)
+}
+
+func (hc *HeaderChain) GetBlockOrCandidate(hash common.Hash, number uint64) *types.Block {
+	return hc.bc.GetBlockOrCandidate(hash, number)
 }
 
 // GetBlockOrCandidateByHash retrieves any block from the database by hash, caching it if found.

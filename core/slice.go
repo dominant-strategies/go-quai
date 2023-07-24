@@ -69,6 +69,7 @@ type Slice struct {
 
 	validator Validator // Block and state validator interface
 	phCacheMu sync.RWMutex
+	reorgMu   sync.RWMutex
 
 	badHashesCache map[common.Hash]bool
 }
@@ -191,7 +192,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	var pendingHeaderWithTermini types.PendingHeader
 	if nodeCtx != common.ZONE_CTX {
 		// Upate the local pending header
-		pendingHeaderWithTermini, err = sl.generateSlicePendingHeader(block, newTermini, domPendingHeader, domOrigin, false)
+		pendingHeaderWithTermini, err = sl.generateSlicePendingHeader(block, newTermini, domPendingHeader, domOrigin, true, false)
 		if err != nil {
 			return nil, false, err
 		}
@@ -242,11 +243,6 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 
 	time7 := common.PrettyDuration(time.Since(start))
 
-	err = sl.hc.AppendBlock(batch, block, newInboundEtxs.FilterToLocation(common.NodeLocation))
-	if err != nil {
-		return nil, false, err
-	}
-
 	var time8, time9 common.PrettyDuration
 	bestPh, exist := sl.readPhCache(sl.bestPhKey)
 	if !exist {
@@ -266,11 +262,15 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 			rawdb.WriteInboundEtxs(batch, block.Hash(), newInboundEtxs.FilterToLocation(common.NodeLocation))
 		}
 
+		if subReorg {
+			sl.hc.SetCurrentHeader(block.Header())
+		}
 		// Upate the local pending header
-		pendingHeaderWithTermini, err = sl.generateSlicePendingHeader(block, newTermini, domPendingHeader, domOrigin, false)
+		pendingHeaderWithTermini, err = sl.generateSlicePendingHeader(block, newTermini, domPendingHeader, domOrigin, subReorg, false)
 		if err != nil {
 			return nil, false, err
 		}
+
 		time9 = common.PrettyDuration(time.Since(start))
 
 	}
@@ -294,7 +294,9 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	}
 
 	if subReorg {
-		sl.hc.SetCurrentHeader(batch, block.Header())
+		if nodeCtx != common.ZONE_CTX {
+			sl.hc.SetCurrentHeader(block.Header())
+		}
 		sl.hc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
 	}
 
@@ -377,7 +379,7 @@ func (sl *Slice) UpdateDom(oldTerminus common.Hash, newTerminus common.Hash, loc
 			block := sl.hc.GetBlockByHash(newTerminus)
 			sl.bestPhKey = newTerminus
 			if block != nil {
-				pendingHeaderWithTermini, err := sl.generateSlicePendingHeader(block, *newDomTermini, types.EmptyHeader(), false, false)
+				pendingHeaderWithTermini, err := sl.generateSlicePendingHeader(block, *newDomTermini, types.EmptyHeader(), false, true, false)
 				if err != nil {
 					return
 				}
@@ -400,7 +402,7 @@ func (sl *Slice) UpdateDom(oldTerminus common.Hash, newTerminus common.Hash, loc
 				block := sl.hc.GetBlockByHash(newTerminus)
 				sl.bestPhKey = newTerminus
 				if block != nil {
-					pendingHeaderWithTermini, err := sl.generateSlicePendingHeader(block, *newDomTermini, types.EmptyHeader(), false, false)
+					pendingHeaderWithTermini, err := sl.generateSlicePendingHeader(block, *newDomTermini, types.EmptyHeader(), false, true, false)
 					if err != nil {
 						return
 					}
@@ -474,11 +476,25 @@ func (sl *Slice) writePhCache(hash common.Hash, pendingHeader types.PendingHeade
 }
 
 // Generate a slice pending header
-func (sl *Slice) generateSlicePendingHeader(block *types.Block, newTermini types.Termini, domPendingHeader *types.Header, domOrigin bool, fill bool) (types.PendingHeader, error) {
-	// Upate the local pending header
-	localPendingHeader, err := sl.miner.worker.GeneratePendingHeader(block, fill)
-	if err != nil {
-		return types.PendingHeader{}, err
+func (sl *Slice) generateSlicePendingHeader(block *types.Block, newTermini types.Termini, domPendingHeader *types.Header, domOrigin bool, subReorg bool, fill bool) (types.PendingHeader, error) {
+	nodeCtx := common.NodeLocation.Context()
+	var localPendingHeader *types.Header
+	var err error
+	if subReorg {
+		// Upate the local pending header
+		localPendingHeader, err = sl.miner.worker.GeneratePendingHeader(block, fill)
+		if err != nil {
+			return types.PendingHeader{}, err
+		}
+	} else {
+		// Just compute the necessary information for the pending Header
+		// i.e ParentHash field, Number and writing manifest to the disk
+		localPendingHeader = types.EmptyHeader()
+		localPendingHeader.SetParentHash(block.Hash(), nodeCtx)
+		localPendingHeader.SetNumber(big.NewInt(int64(block.NumberU64()) + 1))
+
+		manifestHash := sl.miner.worker.ComputeManifestHash(block.Header())
+		localPendingHeader.SetManifestHash(manifestHash)
 	}
 
 	// Combine subordinates pending header with local pending header
@@ -708,13 +724,44 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 			combinedPendingHeader = sl.combinePendingHeader(pendingHeader.Header(), combinedPendingHeader, i, false)
 		}
 
-		sl.updatePhCache(types.NewPendingHeader(combinedPendingHeader, localPendingHeader.Termini()), false, nil, subReorg)
-
+		nodeCtx := common.NodeLocation.Context()
 		// Pick the head
 		if subReorg {
-			log.Info("Choosing phHeader pickPhHead:", "NumberArray:", localPendingHeader.Header().NumberArray(), "Number:", localPendingHeader.Header().Number(), "ParentHash:", localPendingHeader.Header().ParentHash(), "Terminus:", localPendingHeader.Termini().DomTerminus())
-			sl.bestPhKey = localPendingHeader.Termini().DomTerminus()
+			if (localPendingHeader.Header().Root() != types.EmptyRootHash && nodeCtx == common.ZONE_CTX) || nodeCtx == common.REGION_CTX {
+				block := sl.hc.GetBlockOrCandidateByHash(localPendingHeader.Header().ParentHash())
+				if block != nil {
+					sl.hc.SetCurrentHeader(block.Header())
+					log.Info("Choosing phHeader pickPhHead:", "NumberArray:", localPendingHeader.Header().NumberArray(), "Number:", localPendingHeader.Header().Number(), "ParentHash:", localPendingHeader.Header().ParentHash(), "Terminus:", localPendingHeader.Termini().DomTerminus())
+					sl.bestPhKey = localPendingHeader.Termini().DomTerminus()
+					if block.Hash() != sl.hc.CurrentHeader().Hash() {
+						sl.hc.chainHeadFeed.Send(ChainHeadEvent{block})
+					}
+				} else {
+					log.Warn("unable to set the current header after the cord update", "Hash", localPendingHeader.Header().ParentHash())
+				}
+			} else {
+				block := sl.hc.GetBlockOrCandidateByHash(localPendingHeader.Header().ParentHash())
+				if block != nil {
+					sl.hc.SetCurrentHeader(block.Header())
+					newPendingHeader, err := sl.generateSlicePendingHeader(block, localPendingHeader.Termini(), combinedPendingHeader, true, true, false)
+					if err != nil {
+						log.Error("Error generating slice pending header", "err", err)
+						return err
+					}
+					combinedPendingHeader = types.CopyHeader(newPendingHeader.Header())
+					log.Info("Choosing phHeader pickPhHead:", "NumberArray:", combinedPendingHeader.NumberArray(), "ParentHash:", combinedPendingHeader.ParentHash(), "Terminus:", localPendingHeader.Termini().DomTerminus())
+					sl.bestPhKey = localPendingHeader.Termini().DomTerminus()
+					if block.Hash() != sl.hc.CurrentHeader().Hash() {
+						sl.hc.chainHeadFeed.Send(ChainHeadEvent{block})
+					}
+				} else {
+					log.Warn("unable to set the current header after the cord update", "Hash", localPendingHeader.Header().ParentHash())
+				}
+			}
 		}
+
+		sl.updatePhCache(types.NewPendingHeader(combinedPendingHeader, localPendingHeader.Termini()), false, nil, subReorg)
+
 		return nil
 	}
 	log.Warn("no pending header found for", "terminus", hash, "pendingHeaderNumber", pendingHeader.Header().NumberArray(), "Hash", pendingHeader.Header().ParentHash(), "Termini index", terminiIndex, "indices", indices)
@@ -780,7 +827,7 @@ func (sl *Slice) init(genesis *Genesis) error {
 
 		// Append each of the knot blocks
 		sl.bestPhKey = genesisHash
-		sl.hc.SetCurrentHeader(nil, genesisHeader)
+		sl.hc.SetCurrentHeader(genesisHeader)
 
 		// Create empty pending ETX entry for genesis block -- genesis may not emit ETXs
 		emptyPendingEtxs := types.Transactions{}

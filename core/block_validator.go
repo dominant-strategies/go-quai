@@ -93,14 +93,6 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 		if hash := types.DeriveSha(block.ExtTransactions(), trie.NewStackTrie(nil)); hash != header.EtxHash() {
 			return fmt.Errorf("external transaction root hash mismatch: have %x, want %x", hash, header.EtxHash())
 		}
-		if v.hc.ProcessingState() {
-			if !v.hc.bc.processor.HasBlockAndState(block.ParentHash(), block.NumberU64()-1) {
-				if !v.hc.bc.HasBlock(block.ParentHash(), block.NumberU64()-1) {
-					return consensus.ErrUnknownAncestor
-				}
-				return consensus.ErrPrunedAncestor
-			}
-		}
 	}
 	return nil
 }

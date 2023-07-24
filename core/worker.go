@@ -888,6 +888,28 @@ func (w *worker) adjustGasLimit(interrupt *int32, env *environment, parent *type
 	}
 }
 
+// ComputeManifestHash given a header computes the manifest hash for the header
+// and stores it in the database
+func (w *worker) ComputeManifestHash(header *types.Header) common.Hash {
+	nodeCtx := common.NodeLocation.Context()
+	// Compute and set manifest hash
+	manifest := types.BlockManifest{}
+	if nodeCtx == common.PRIME_CTX {
+		// Nothing to do for prime chain
+		manifest = types.BlockManifest{}
+	} else if w.engine.IsDomCoincident(w.hc, header) {
+		manifest = types.BlockManifest{header.Hash()}
+	} else {
+		parentManifest := rawdb.ReadManifest(w.workerDb, header.ParentHash())
+		manifest = append(parentManifest, header.Hash())
+	}
+	// write the manifest into the disk
+	rawdb.WriteManifest(w.workerDb, header.Hash(), manifest)
+	manifestHash := types.DeriveSha(manifest, trie.NewStackTrie(nil))
+
+	return manifestHash
+}
+
 func (w *worker) FinalizeAssemble(chain consensus.ChainHeaderReader, header *types.Header, parent *types.Block, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, etxs []*types.Transaction, subManifest types.BlockManifest, receipts []*types.Receipt) (*types.Block, error) {
 	nodeCtx := common.NodeLocation.Context()
 	block, err := w.engine.FinalizeAndAssemble(chain, header, state, txs, uncles, etxs, subManifest, receipts)
@@ -895,22 +917,8 @@ func (w *worker) FinalizeAssemble(chain consensus.ChainHeaderReader, header *typ
 		return nil, err
 	}
 
-	// Compute and set manifest hash
-	manifest := types.BlockManifest{}
-	if nodeCtx == common.PRIME_CTX {
-		// Nothing to do for prime chain
-		manifest = types.BlockManifest{}
-	} else if w.engine.IsDomCoincident(w.hc, parent.Header()) {
-		manifest = types.BlockManifest{parent.Hash()}
-	} else {
-		parentManifest := rawdb.ReadManifest(w.workerDb, parent.ParentHash())
-		manifest = append(parentManifest, parent.Hash())
-	}
-	manifestHash := types.DeriveSha(manifest, trie.NewStackTrie(nil))
+	manifestHash := w.ComputeManifestHash(parent.Header())
 	block.Header().SetManifestHash(manifestHash)
-
-	// write the manifest into the disk
-	rawdb.WriteManifest(w.workerDb, parent.Hash(), manifest)
 
 	if nodeCtx == common.ZONE_CTX {
 		// Compute and set etx rollup hash

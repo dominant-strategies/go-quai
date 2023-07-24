@@ -120,7 +120,7 @@ func (b *QuaiAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumb
 	}
 	// Otherwise resolve and return the block
 	if number == rpc.LatestBlockNumber {
-		return b.eth.core.CurrentBlock(), nil
+		number = rpc.BlockNumber(b.eth.core.CurrentHeader().NumberU64())
 	}
 	block := b.eth.core.GetBlockByNumber(uint64(number))
 	if block != nil {
