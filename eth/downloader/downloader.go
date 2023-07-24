@@ -105,12 +105,10 @@ type Downloader struct {
 	committed       int32
 
 	// Channels
-	headerCh      chan dataPack        // Channel receiving inbound block headers
-	bodyCh        chan dataPack        // Channel receiving inbound block bodies
-	receiptCh     chan dataPack        // Channel receiving inbound receipts
-	bodyWakeCh    chan bool            // Channel to signal the block body fetcher of new tasks
-	receiptWakeCh chan bool            // Channel to signal the receipt fetcher of new tasks
-	headerProcCh  chan []*types.Header // Channel to feed the header processor new tasks
+	headerCh     chan dataPack        // Channel receiving inbound block headers
+	bodyCh       chan dataPack        // Channel receiving inbound block bodies
+	bodyWakeCh   chan bool            // Channel to signal the block body fetcher of new tasks
+	headerProcCh chan []*types.Header // Channel to feed the header processor new tasks
 
 	// Cancellation and termination
 	cancelPeer string         // Identifier of the peer currently being used as the master (cancel on drop)
@@ -170,21 +168,19 @@ type Core interface {
 // New creates a new downloader to fetch hashes and blocks from remote peers.
 func New(stateDb ethdb.Database, mux *event.TypeMux, core Core, dropPeer peerDropFn) *Downloader {
 	dl := &Downloader{
-		stateDB:       stateDb,
-		mux:           mux,
-		queue:         newQueue(blockCacheMaxItems, blockCacheInitialItems),
-		peers:         newPeerSet(),
-		core:          core,
-		headNumber:    core.CurrentHeader().NumberU64(),
-		headEntropy:   core.CurrentLogEntropy(),
-		dropPeer:      dropPeer,
-		headerCh:      make(chan dataPack, 1),
-		bodyCh:        make(chan dataPack, 1),
-		receiptCh:     make(chan dataPack, 1),
-		bodyWakeCh:    make(chan bool, 1),
-		receiptWakeCh: make(chan bool, 1),
-		headerProcCh:  make(chan []*types.Header, 10),
-		quitCh:        make(chan struct{}),
+		stateDB:      stateDb,
+		mux:          mux,
+		queue:        newQueue(blockCacheMaxItems, blockCacheInitialItems),
+		peers:        newPeerSet(),
+		core:         core,
+		headNumber:   core.CurrentHeader().NumberU64(),
+		headEntropy:  core.CurrentLogEntropy(),
+		dropPeer:     dropPeer,
+		headerCh:     make(chan dataPack, 1),
+		bodyCh:       make(chan dataPack, 1),
+		bodyWakeCh:   make(chan bool, 1),
+		headerProcCh: make(chan []*types.Header, 10),
+		quitCh:       make(chan struct{}),
 	}
 
 	return dl
@@ -308,13 +304,13 @@ func (d *Downloader) synchronise(id string, hash common.Hash, entropy *big.Int, 
 	d.queue.Reset(blockCacheMaxItems, blockCacheInitialItems)
 	d.peers.Reset()
 
-	for _, ch := range []chan bool{d.bodyWakeCh, d.receiptWakeCh} {
+	for _, ch := range []chan bool{d.bodyWakeCh} {
 		select {
 		case <-ch:
 		default:
 		}
 	}
-	for _, ch := range []chan dataPack{d.headerCh, d.bodyCh, d.receiptCh} {
+	for _, ch := range []chan dataPack{d.headerCh, d.bodyCh} {
 		for empty := false; !empty; {
 			select {
 			case <-ch:
@@ -414,7 +410,6 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, entropy *
 	fetchers := []func() error{
 		func() error { return d.fetchHeaders(p, origin) }, // Headers are always retrieved
 		func() error { return d.fetchBodies(origin) },     // Bodies are retrieved during normal and fast sync
-		func() error { return d.fetchReceipts(origin) },   // Receipts are retrieved during fast sync
 		func() error { return d.processHeaders(origin) },
 		func() error { return d.processFullSyncContent(peerHeight) },
 	}
@@ -531,8 +526,6 @@ func (d *Downloader) fetchHead(p *peerConnection) (head *types.Header, err error
 			return nil, errTimeout
 
 		case <-d.bodyCh:
-		case <-d.receiptCh:
-			// Out of bounds delivery, ignore
 		}
 	}
 }
@@ -741,7 +734,7 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 			d.dropPeer(p.id)
 
 			// Finish the sync gracefully instead of dumping the gathered data though
-			for _, ch := range []chan bool{d.bodyWakeCh, d.receiptWakeCh} {
+			for _, ch := range []chan bool{d.bodyWakeCh} {
 				select {
 				case ch <- false:
 				case <-d.cancelCh:
@@ -817,32 +810,6 @@ func (d *Downloader) fetchBodies(from uint64) error {
 		d.bodyFetchHook, fetch, d.queue.CancelBodies, capacity, d.peers.BodyIdlePeers, setIdle, "bodies")
 
 	log.Debug("Block body download terminated", "err", err)
-	return err
-}
-
-// fetchReceipts iteratively downloads the scheduled block receipts, taking any
-// available peers, reserving a chunk of receipts for each, waiting for delivery
-// and also periodically checking for timeouts.
-func (d *Downloader) fetchReceipts(from uint64) error {
-	log.Debug("Downloading transaction receipts", "origin", from)
-
-	var (
-		deliver = func(packet dataPack) (int, error) {
-			pack := packet.(*receiptPack)
-			return d.queue.DeliverReceipts(pack.peerID, pack.receipts)
-		}
-		expire   = func() map[string]int { return d.queue.ExpireReceipts(d.peers.rates.TargetTimeout()) }
-		fetch    = func(p *peerConnection, req *fetchRequest) error { return p.FetchReceipts(req) }
-		capacity = func(p *peerConnection) int { return p.ReceiptCapacity(d.peers.rates.TargetRoundTrip()) }
-		setIdle  = func(p *peerConnection, accepted int, deliveryTime time.Time) {
-			p.SetReceiptsIdle(accepted, deliveryTime)
-		}
-	)
-	err := d.fetchParts(d.receiptCh, deliver, d.receiptWakeCh, expire,
-		d.queue.PendingReceipts, d.queue.InFlightReceipts, d.queue.ReserveReceipts,
-		d.receiptFetchHook, fetch, d.queue.CancelReceipts, capacity, d.peers.ReceiptIdlePeers, setIdle, "receipts")
-
-	log.Debug("Transaction receipt download terminated", "err", err)
 	return err
 }
 
@@ -1074,7 +1041,7 @@ func (d *Downloader) processHeaders(origin uint64) error {
 			// Terminate header processing if we synced up
 			if len(headers) == 0 {
 				// Notify everyone that headers are fully processed
-				for _, ch := range []chan bool{d.bodyWakeCh, d.receiptWakeCh} {
+				for _, ch := range []chan bool{d.bodyWakeCh} {
 					select {
 					case ch <- false:
 					case <-d.cancelCh:
@@ -1115,7 +1082,7 @@ func (d *Downloader) processHeaders(origin uint64) error {
 				// Unless we're doing light chains, schedule the headers for associated content retrieval
 				if mode == FullSync {
 					// If we've reached the allowed number of pending headers, stall a bit
-					for d.queue.PendingBlocks() >= maxQueuedHeaders || d.queue.PendingReceipts() >= maxQueuedHeaders {
+					for d.queue.PendingBlocks() >= maxQueuedHeaders {
 						select {
 						case <-d.cancelCh:
 							rollbackErr = errCanceled
@@ -1141,7 +1108,7 @@ func (d *Downloader) processHeaders(origin uint64) error {
 			d.syncStatsLock.Unlock()
 
 			// Signal the content downloaders of the availablility of new tasks
-			for _, ch := range []chan bool{d.bodyWakeCh, d.receiptWakeCh} {
+			for _, ch := range []chan bool{d.bodyWakeCh} {
 				select {
 				case ch <- true:
 				default:
@@ -1213,11 +1180,6 @@ func (d *Downloader) DeliverHeaders(id string, headers []*types.Header) error {
 // DeliverBodies injects a new batch of block bodies received from a remote node.
 func (d *Downloader) DeliverBodies(id string, transactions [][]*types.Transaction, uncles [][]*types.Header, extTransactions [][]*types.Transaction, manifests []types.BlockManifest) error {
 	return d.deliver(d.bodyCh, &bodyPack{id, transactions, uncles, extTransactions, manifests}, bodyInMeter, bodyDropMeter)
-}
-
-// DeliverReceipts injects a new batch of receipts received from a remote node.
-func (d *Downloader) DeliverReceipts(id string, receipts [][]*types.Receipt) error {
-	return d.deliver(d.receiptCh, &receiptPack{id, receipts}, receiptInMeter, receiptDropMeter)
 }
 
 // deliver injects a new batch of data received from a remote node.

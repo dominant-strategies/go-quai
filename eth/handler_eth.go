@@ -77,12 +77,6 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 		txset, uncleset, etxset, manifestset := packet.Unpack()
 		return h.handleBodies(peer, txset, uncleset, etxset, manifestset)
 
-	case *eth.ReceiptsPacket:
-		if err := h.downloader.DeliverReceipts(peer.ID(), *packet); err != nil {
-			log.Debug("Failed to deliver receipts", "err", err)
-		}
-		return nil
-
 	case *eth.NewBlockHashesPacket:
 		hashes, numbers := packet.Unpack()
 		return h.handleBlockAnnounces(peer, hashes, numbers)
