@@ -242,11 +242,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 
 	time7 := common.PrettyDuration(time.Since(start))
 
-	err = sl.hc.AppendBlock(batch, block, newInboundEtxs.FilterToLocation(common.NodeLocation))
-	if err != nil {
-		return nil, false, err
-	}
-
+	rawdb.WriteBlock(sl.sliceDb, block)
 	var time8, time9 common.PrettyDuration
 	bestPh, exist := sl.readPhCache(sl.bestPhKey)
 	if !exist {
