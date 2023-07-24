@@ -1594,7 +1594,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			SetDNSDiscoveryDefaults(cfg, params.ProgpowColosseumGenesisHash)
 		}
 	}
-	if !ctx.GlobalBool(ColosseumFlag.Name) {
+	if !ctx.GlobalBool(LocalFlag.Name) {
 		cfg.Genesis.Nonce = ctx.GlobalUint64(GenesisNonceFlag.Name)
 	}
 }
