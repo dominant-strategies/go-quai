@@ -381,6 +381,11 @@ func (hc *HeaderChain) SetCurrentHeader(batch ethdb.Batch, head *types.Header) e
 
 	// Run through the hash stack to update canonicalHash and forward state processor
 	for i := len(hashStack) - 1; i >= 0; i-- {
+		block := hc.GetBlockByHash(hashStack[i].Hash())
+		if block == nil {
+			return errors.New("Could not find block during reorg")
+		}
+		hc.AppendBlock(batch, block, types.Transactions{})
 		rawdb.WriteCanonicalHash(hc.headerDb, hashStack[i].Hash(), hashStack[i].NumberU64())
 	}
 
