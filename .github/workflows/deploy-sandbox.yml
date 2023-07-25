@@ -1,9 +1,5 @@
 name: Build and Deploy to Sandbox
-on:
-  pull_request:
-    types: [closed]
-    branches:
-    - 'v?[0-9]+.[0-9]+'
+on: workflow_dispatch
 jobs:
   buildDeploySandbox:
     if: github.event.pull_request.merged == true

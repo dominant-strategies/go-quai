@@ -71,7 +71,7 @@ jobs:
 
     - uses: stefanzweifel/git-auto-commit-action@v4
       with:
-        commit_message: Rev'd 'VERSION' file to ${{ env.VERSION }}
+        commit_message: Cut ${{ env.BRANCH }} release branch and rev'd 'VERSION' file to ${{ env.VERSION }}
         branch: main
         commit_options: -S
         commit_user_email: ci@dominantstrategies.io
