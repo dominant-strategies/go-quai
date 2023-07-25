@@ -765,8 +765,13 @@ func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*en
 			}
 		}
 		header.SetParentEntropy(w.engine.TotalLogS(parent.Header()))
-	}
+	} else {
+		for i := 0; i < common.NumZonesInRegion; i++ {
+			header.SetPrimeEntropyThreshold(parent.Header().PrimeEntropyThreshold(i), i)
+		}
 
+		header.SetRegionEntropyThreshold(parent.Header().RegionEntropyThreshold())
+	}
 	// Only zone should calculate state
 	if nodeCtx == common.ZONE_CTX {
 		header.SetExtra(w.extra)
