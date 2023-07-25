@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -20,7 +21,7 @@ import (
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/dominant-strategies/go-quai/trie"
-	lru "github.com/hashicorp/golang-lru"
+	lru "github.com/hnlq715/golang-lru"
 )
 
 const (
@@ -28,13 +29,15 @@ const (
 	c_maxFutureTime          = 30      // Max time into the future (in seconds) we will accept a block
 	c_appendQueueRetryPeriod = 1       // Time (in seconds) before retrying to append from AppendQueue
 	c_appendQueueThreshold   = 1000    // Number of blocks to load from the disk to ram on every proc of append queue
+	c_processingCache        = 10      // Number of block hashes held to prevent multi simultaneous appends on a single block hash
 )
 
 type Core struct {
 	sl     *Slice
 	engine consensus.Engine
 
-	appendQueue *lru.Cache
+	appendQueue     *lru.Cache
+	processingCache *lru.Cache
 
 	quit chan struct{} // core quit channel
 }
@@ -54,6 +57,9 @@ func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.H
 	appendQueue, _ := lru.New(c_maxAppendQueue)
 	c.appendQueue = appendQueue
 
+	proccesingCache, _ := lru.NewWithExpire(c_processingCache, time.Second*60)
+	c.processingCache = proccesingCache
+
 	go c.updateAppendQueue()
 	return c, nil
 }
@@ -72,8 +78,16 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 		if err != nil {
 			return idx, err
 		}
+
 		if order == nodeCtx {
+			if !c.processingCache.Contains(block.Hash()) {
+				c.processingCache.Add(block.Hash(), 1)
+			} else {
+				log.Info("Already proccessing block:", "Number:", block.Header().NumberArray(), "Hash:", block.Hash())
+				return idx, errors.New("Already in process of appending this block")
+			}
 			newPendingEtxs, _, err := c.sl.Append(block.Header(), types.EmptyHeader(), common.Hash{}, false, nil)
+			c.processingCache.Remove(block.Hash())
 			if err == nil {
 				// If we have a dom, send the dom any pending ETXs which will become
 				// referencable by this block. When this block is referenced in the dom's
