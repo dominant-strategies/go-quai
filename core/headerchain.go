@@ -497,7 +497,7 @@ func (hc *HeaderChain) GetBlockNumber(hash common.Hash) *uint64 {
 	return number
 }
 
-func (hc *HeaderChain) GetTerminiByHash(hash common.Hash) []common.Hash {
+func (hc *HeaderChain) GetTerminiByHash(hash common.Hash) *types.Termini {
 	termini := rawdb.ReadTermini(hc.headerDb, hash)
 	return termini
 }

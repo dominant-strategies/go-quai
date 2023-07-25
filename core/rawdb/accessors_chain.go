@@ -506,22 +506,21 @@ func DeleteAllPbBodyKeys(db ethdb.KeyValueWriter) {
 }
 
 // ReadHeadsHashes retreive's the heads hashes of the blockchain.
-func ReadTermini(db ethdb.Reader, hash common.Hash) []common.Hash {
+func ReadTermini(db ethdb.Reader, hash common.Hash) *types.Termini {
 	key := terminiKey(hash)
 	data, _ := db.Get(key)
 	if len(data) == 0 {
 		return nil
 	}
-	hashes := []common.Hash{}
-	if err := rlp.DecodeBytes(data, &hashes); err != nil {
+	var termini types.Termini
+	if err := rlp.DecodeBytes(data, &termini); err != nil {
 		return nil
 	}
-	return hashes
+	return &termini
 }
 
-// WriteHeadsHashes writes the heads hashes of the blockchain.
-func WriteTermini(db ethdb.KeyValueWriter, index common.Hash, hashes []common.Hash) {
-	log.Debug("WriteTermini:", "hashes:", hashes, "index:", index)
+// WriteTermini writes the heads hashes of the blockchain.
+func WriteTermini(db ethdb.KeyValueWriter, index common.Hash, hashes types.Termini) {
 	key := terminiKey(index)
 	data, err := rlp.EncodeToBytes(hashes)
 	if err != nil {
@@ -542,23 +541,23 @@ func DeleteTermini(db ethdb.KeyValueWriter, hash common.Hash) {
 }
 
 // ReadPendingHeader retreive's the pending header stored in hash.
-func ReadPendingHeader(db ethdb.Reader, hash common.Hash) *types.Header {
+func ReadPendingHeader(db ethdb.Reader, hash common.Hash) *types.PendingHeader {
 	key := pendingHeaderKey(hash)
 	data, _ := db.Get(key)
 	if len(data) == 0 {
 		return nil
 	}
 
-	header := new(types.Header)
-	if err := rlp.Decode(bytes.NewReader(data), header); err != nil {
+	pendingHeader := new(types.PendingHeader)
+	if err := rlp.Decode(bytes.NewReader(data), pendingHeader); err != nil {
 		log.Error("Invalid pendingHeader RLP")
 		return nil
 	}
-	return header
+	return pendingHeader
 }
 
 // WritePendingHeader writes the pending header of the terminus hash.
-func WritePendingHeader(db ethdb.KeyValueWriter, hash common.Hash, pendingHeader *types.Header) {
+func WritePendingHeader(db ethdb.KeyValueWriter, hash common.Hash, pendingHeader types.PendingHeader) {
 	key := pendingHeaderKey(hash)
 
 	// Write the encoded pending header
@@ -580,42 +579,6 @@ func DeletePendingHeader(db ethdb.KeyValueWriter, hash common.Hash) {
 	}
 }
 
-// ReadPhCacheTermini retreive's the pending header termini stored in hash.
-func ReadPhCacheTermini(db ethdb.Reader, hash common.Hash) []common.Hash {
-	key := phBodyTerminiKey(hash)
-	data, _ := db.Get(key)
-	if len(data) == 0 {
-		return nil
-	}
-	termini := []common.Hash{}
-	if err := rlp.Decode(bytes.NewReader(data), &termini); err != nil {
-		log.Error("Invalid pendingHeader RLP")
-		return nil
-	}
-	return termini
-}
-
-// WritePhCacheTermini writes the pending header termini of the terminus hash.
-func WritePhCacheTermini(db ethdb.KeyValueWriter, hash common.Hash, termini []common.Hash) {
-	key := phBodyTerminiKey(hash)
-	// Write the encoded pending header
-	data, err := rlp.EncodeToBytes(termini)
-	if err != nil {
-		log.Fatal("Failed to RLP encode pending header", "err", err)
-	}
-	if err := db.Put(key, data); err != nil {
-		log.Fatal("Failed to store header", "err", err)
-	}
-}
-
-// DeletePhCacheTermini deletes the pending header termini stored for the header hash.
-func DeletePhCacheTermini(db ethdb.KeyValueWriter, hash common.Hash) {
-	key := phBodyTerminiKey(hash)
-	if err := db.Delete(key); err != nil {
-		log.Fatal("Failed to delete slice pending header ", "err", err)
-	}
-}
-
 // ReadPhCache retreive's the heads hashes of the blockchain.
 func ReadPhCache(db ethdb.Reader) map[common.Hash]types.PendingHeader {
 	data, _ := db.Get(phCacheKey)
@@ -631,10 +594,8 @@ func ReadPhCache(db ethdb.Reader) map[common.Hash]types.PendingHeader {
 	phCache := make(map[common.Hash]types.PendingHeader)
 	// Read the pending header and phBody.
 	for _, hash := range hashes {
-		header := ReadPendingHeader(db, hash)
-		termini := ReadPhCacheTermini(db, hash)
-		pendingHeader := types.PendingHeader{Header: header, Termini: termini}
-		phCache[hash] = pendingHeader
+		pendingHeader := ReadPendingHeader(db, hash)
+		phCache[hash] = *pendingHeader
 	}
 	return phCache
 }
@@ -644,8 +605,7 @@ func WritePhCache(db ethdb.KeyValueWriter, phCache map[common.Hash]types.Pending
 	var hashes []common.Hash
 	for hash, pendingHeader := range phCache {
 		hashes = append(hashes, hash)
-		WritePendingHeader(db, hash, pendingHeader.Header)
-		WritePhCacheTermini(db, hash, pendingHeader.Termini)
+		WritePendingHeader(db, hash, pendingHeader)
 	}
 
 	data, err := rlp.EncodeToBytes(hashes)

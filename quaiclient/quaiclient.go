@@ -112,8 +112,8 @@ func (ec *Client) Append(ctx context.Context, header *types.Header, domPendingHe
 }
 
 func (ec *Client) SubRelayPendingHeader(ctx context.Context, pendingHeader types.PendingHeader, location common.Location) {
-	data := map[string]interface{}{"Header": pendingHeader.Header.RPCMarshalHeader()}
-	data["Termini"] = pendingHeader.Termini
+	data := map[string]interface{}{"header": pendingHeader.Header().RPCMarshalHeader()}
+	data["termini"] = pendingHeader.Termini().RPCMarshalTermini()
 	data["Location"] = location
 
 	ec.c.CallContext(ctx, nil, "quai_subRelayPendingHeader", data)
@@ -157,10 +157,10 @@ func (ec *Client) SendPendingEtxsRollupToDom(ctx context.Context, pEtxsRollup ty
 	return ec.c.CallContext(ctx, &raw, "quai_sendPendingEtxsRollupToDom", fields)
 }
 
-func (ec *Client) GenerateRecoveryPendingHeader(ctx context.Context, pendingHeader *types.Header, checkpointHashes []common.Hash) error {
+func (ec *Client) GenerateRecoveryPendingHeader(ctx context.Context, pendingHeader *types.Header, checkpointHashes types.Termini) error {
 	fields := make(map[string]interface{})
 	fields["pendingHeader"] = pendingHeader.RPCMarshalHeader()
-	fields["checkpointHashes"] = checkpointHashes
+	fields["checkpointHashes"] = checkpointHashes.RPCMarshalTermini()
 	return ec.c.CallContext(ctx, nil, "quai_generateRecoveryPendingHeader", fields)
 }
 
