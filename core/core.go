@@ -342,7 +342,7 @@ func (c *Core) SubscribePendingEtxsRollup(ch chan<- types.PendingEtxsRollup) eve
 	return c.sl.SubscribePendingEtxsRollup(ch)
 }
 
-func (c *Core) GenerateRecoveryPendingHeader(pendingHeader *types.Header, checkpointHashes []common.Hash) error {
+func (c *Core) GenerateRecoveryPendingHeader(pendingHeader *types.Header, checkpointHashes types.Termini) error {
 	return c.sl.GenerateRecoveryPendingHeader(pendingHeader, checkpointHashes)
 }
 
@@ -505,7 +505,7 @@ func (c *Core) GetBodyRLP(hash common.Hash) rlp.RawValue {
 }
 
 // GetTerminiByHash retrieves the termini stored for a given header hash
-func (c *Core) GetTerminiByHash(hash common.Hash) []common.Hash {
+func (c *Core) GetTerminiByHash(hash common.Hash) *types.Termini {
 	return c.sl.hc.GetTerminiByHash(hash)
 }
 

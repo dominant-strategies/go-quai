@@ -972,20 +972,165 @@ type Blocks []*Block
 
 // PendingHeader stores the header and termini value associated with the header.
 type PendingHeader struct {
-	Header  *Header
-	Termini []common.Hash
+	header  *Header `json:"header"`
+	termini Termini `json:"termini"`
+}
+
+// accessor methods for pending header
+func (ph PendingHeader) Header() *Header {
+	return ph.header
+}
+func (ph PendingHeader) Termini() Termini {
+	return ph.termini
+}
+
+func (ph *PendingHeader) SetHeader(header *Header) {
+	ph.header = CopyHeader(header)
+}
+
+func (ph *PendingHeader) SetTermini(termini Termini) {
+	ph.termini = CopyTermini(termini)
+}
+
+func emptyPendingHeader() PendingHeader {
+	pendingHeader := PendingHeader{}
+	pendingHeader.SetTermini(EmptyTermini())
+	return pendingHeader
+}
+
+func NewPendingHeader(header *Header, termini Termini) PendingHeader {
+	emptyPh := emptyPendingHeader()
+	emptyPh.SetHeader(header)
+	emptyPh.SetTermini(termini)
+	return emptyPh
 }
 
 func CopyPendingHeader(ph *PendingHeader) *PendingHeader {
 	cpy := *ph
-	cpy.Header = CopyHeader(ph.Header)
-
-	cpy.Termini = make([]common.Hash, 4)
-	for i, termini := range ph.Termini {
-		cpy.Termini[i] = termini
-	}
-
+	cpy.SetHeader(CopyHeader(ph.Header()))
+	cpy.SetTermini(CopyTermini(ph.Termini()))
 	return &cpy
+}
+
+// "external" pending header encoding. used for rlp
+type extPendingHeader struct {
+	Header  *Header
+	Termini Termini
+}
+
+func (t Termini) RPCMarshalTermini() map[string]interface{} {
+	result := map[string]interface{}{
+		"domTerminus": t.DomTerminus(),
+		"subTermini":  t.SubTermini(),
+	}
+	return result
+}
+
+// DecodeRLP decodes the Quai RLP encoding into pending header format.
+func (p *PendingHeader) DecodeRLP(s *rlp.Stream) error {
+	var eb extPendingHeader
+	if err := s.Decode(&eb); err != nil {
+		return err
+	}
+	p.header, p.termini = eb.Header, eb.Termini
+	return nil
+}
+
+// EncodeRLP serializes b into the Quai RLP format.
+func (p *PendingHeader) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, extPendingHeader{
+		Header:  p.header,
+		Termini: p.termini,
+	})
+}
+
+// Termini stores the dom terminus (i.e the previous dom block) and
+// subTermini(i.e the dom blocks that have occured in the subordinate chains)
+type Termini struct {
+	domTerminus common.Hash   `json:"domTerminus"`
+	subTermini  []common.Hash `json:"subTermini"`
+}
+
+func CopyTermini(termini Termini) Termini {
+	newTermini := EmptyTermini()
+	newTermini.domTerminus = termini.domTerminus
+	for i, t := range termini.subTermini {
+		newTermini.subTermini[i] = t
+	}
+	return newTermini
+}
+
+func EmptyTermini() Termini {
+	termini := Termini{}
+	termini.subTermini = make([]common.Hash, common.HierarchyDepth)
+	return termini
+}
+
+func (t Termini) DomTerminus() common.Hash {
+	return t.domTerminus
+}
+
+func (t Termini) SubTermini() []common.Hash {
+	return t.subTermini
+}
+
+func (t Termini) SubTerminiAtIndex(args ...int) common.Hash {
+	if len(args) == 0 {
+		panic("cannot access sub termini at index with the index")
+	}
+	return t.subTermini[args[0]]
+}
+
+func (t *Termini) SetDomTerminus(domTerminus common.Hash) {
+	t.domTerminus = domTerminus
+}
+
+func (t *Termini) SetSubTermini(subTermini []common.Hash) {
+	t.subTermini = make([]common.Hash, len(subTermini))
+	for i := 0; i < len(subTermini); i++ {
+		t.subTermini[i] = subTermini[i]
+	}
+}
+
+func (t *Termini) SetSubTerminiAtIndex(val common.Hash, args ...int) {
+	if len(args) == 0 {
+		panic("index cannot be empty for the sub termini")
+	}
+	t.subTermini[args[0]] = val
+}
+
+func (t *Termini) IsValid() bool {
+	if t == nil {
+		return false
+	}
+	if len(t.subTermini) != common.HierarchyDepth {
+		return false
+	}
+	return true
+}
+
+// "external termini" pending header encoding. used for rlp
+type extTermini struct {
+	DomTerminus common.Hash
+	SubTermini  []common.Hash
+}
+
+// DecodeRLP decodes the Quai RLP encoding into pending header format.
+func (t *Termini) DecodeRLP(s *rlp.Stream) error {
+	var et extTermini
+	if err := s.Decode(&et); err != nil {
+		return err
+	}
+	t.domTerminus, t.subTermini = et.DomTerminus, et.SubTermini
+	return nil
+}
+
+// EncodeRLP serializes b into the Quai RLP format.
+func (t Termini) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, extTermini{
+		DomTerminus: t.domTerminus,
+		SubTermini:  t.subTermini,
+	})
 }
 
 // BlockManifest is a list of block hashes, which implements DerivableList
