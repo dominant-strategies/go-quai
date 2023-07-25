@@ -628,8 +628,8 @@ func (s *PublicBlockChainQuaiAPI) Append(ctx context.Context, raw json.RawMessag
 }
 
 type SubRelay struct {
-	Header   *types.Header
-	Termini  []common.Hash
+	Header   *types.Header `json:"header"`
+	Termini  types.Termini `json:"termini"`
 	Location common.Location
 }
 
@@ -638,7 +638,7 @@ func (s *PublicBlockChainQuaiAPI) SubRelayPendingHeader(ctx context.Context, raw
 	if err := json.Unmarshal(raw, &subRelay); err != nil {
 		return
 	}
-	pendingHeader := types.PendingHeader{Header: subRelay.Header, Termini: subRelay.Termini}
+	pendingHeader := types.NewPendingHeader(subRelay.Header, subRelay.Termini)
 	s.b.SubRelayPendingHeader(pendingHeader, subRelay.Location)
 }
 
@@ -706,7 +706,7 @@ func (s *PublicBlockChainQuaiAPI) SendPendingEtxsRollupToDom(ctx context.Context
 
 type GenerateRecoveryPendingHeaderArgs struct {
 	PendingHeader    *types.Header `json:"pendingHeader"`
-	CheckpointHashes []common.Hash `json:"checkpointHashes"`
+	CheckpointHashes types.Termini `json:"checkpointHashes"`
 }
 
 func (s *PublicBlockChainQuaiAPI) GenerateRecoveryPendingHeader(ctx context.Context, raw json.RawMessage) error {
