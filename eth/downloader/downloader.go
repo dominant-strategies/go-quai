@@ -153,7 +153,7 @@ type Core interface {
 	WriteBlock(block *types.Block)
 
 	// GetTerminiByHash returns the termini of a given block
-	GetTerminiByHash(hash common.Hash) []common.Hash
+	GetTerminiByHash(hash common.Hash) *types.Termini
 
 	// BadHashExistsInChain returns true if any of the specified bad hashes exists on chain
 	BadHashExistsInChain() bool

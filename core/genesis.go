@@ -292,7 +292,7 @@ func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
 	if config == nil {
 		config = params.AllProgpowProtocolChanges
 	}
-	rawdb.WriteTermini(db, block.Hash(), nil)
+	rawdb.WriteTermini(db, block.Hash(), types.EmptyTermini())
 	rawdb.WriteBlock(db, block)
 	rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), nil)
 	rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())

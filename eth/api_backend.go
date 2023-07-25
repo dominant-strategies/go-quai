@@ -500,6 +500,6 @@ func (b *QuaiAPIBackend) SubscribePendingHeaderEvent(ch chan<- *types.Header) ev
 	return b.eth.core.SubscribePendingHeader(ch)
 }
 
-func (b *QuaiAPIBackend) GenerateRecoveryPendingHeader(pendingHeader *types.Header, checkpointHashes []common.Hash) error {
+func (b *QuaiAPIBackend) GenerateRecoveryPendingHeader(pendingHeader *types.Header, checkpointHashes types.Termini) error {
 	return b.eth.core.GenerateRecoveryPendingHeader(pendingHeader, checkpointHashes)
 }
