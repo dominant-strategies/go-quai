@@ -80,27 +80,29 @@ func (n *BlockNonce) UnmarshalText(input []byte) error {
 
 // Header represents a block header in the Quai blockchain.
 type Header struct {
-	parentHash    []common.Hash   `json:"parentHash"           gencodec:"required"`
-	uncleHash     common.Hash     `json:"sha3Uncles"           gencodec:"required"`
-	coinbase      common.Address  `json:"miner"                gencodec:"required"`
-	root          common.Hash     `json:"stateRoot"            gencodec:"required"`
-	txHash        common.Hash     `json:"transactionsRoot"     gencodec:"required"`
-	etxHash       common.Hash     `json:"extTransactionsRoot"  gencodec:"required"`
-	etxRollupHash common.Hash     `json:"extRollupRoot"        gencodec:"required"`
-	manifestHash  []common.Hash   `json:"manifestHash"         gencodec:"required"`
-	receiptHash   common.Hash     `json:"receiptsRoot"         gencodec:"required"`
-	difficulty    *big.Int        `json:"difficulty"           gencodec:"required"`
-	parentEntropy []*big.Int      `json:"parentEntropy"        gencodec:"required"`
-	parentDeltaS  []*big.Int      `json:"parentDeltaS"         gencodec:"required"`
-	number        []*big.Int      `json:"number"               gencodec:"required"`
-	gasLimit      uint64          `json:"gasLimit"             gencodec:"required"`
-	gasUsed       uint64          `json:"gasUsed"              gencodec:"required"`
-	baseFee       *big.Int        `json:"baseFeePerGas"        gencodec:"required"`
-	location      common.Location `json:"location"             gencodec:"required"`
-	time          uint64          `json:"timestamp"            gencodec:"required"`
-	extra         []byte          `json:"extraData"            gencodec:"required"`
-	mixHash       common.Hash     `json:"mixHash"              gencodec:"required"`
-	nonce         BlockNonce      `json:"nonce"`
+	parentHash             []common.Hash   `json:"parentHash"                 gencodec:"required"`
+	uncleHash              common.Hash     `json:"sha3Uncles"                 gencodec:"required"`
+	coinbase               common.Address  `json:"miner"                      gencodec:"required"`
+	root                   common.Hash     `json:"stateRoot"                  gencodec:"required"`
+	txHash                 common.Hash     `json:"transactionsRoot"           gencodec:"required"`
+	etxHash                common.Hash     `json:"extTransactionsRoot"        gencodec:"required"`
+	etxRollupHash          common.Hash     `json:"extRollupRoot"              gencodec:"required"`
+	manifestHash           []common.Hash   `json:"manifestHash"               gencodec:"required"`
+	receiptHash            common.Hash     `json:"receiptsRoot"               gencodec:"required"`
+	difficulty             *big.Int        `json:"difficulty"                 gencodec:"required"`
+	primeEntropyThreshold  []*big.Int      `json:"primeEntropyThreshold"      gencodec:"required"`
+	regionEntropyThreshold *big.Int        `json:"regionEntropyThreshold"     gencodec:"required"`
+	parentEntropy          []*big.Int      `json:"parentEntropy"        			gencodec:"required"`
+	parentDeltaS           []*big.Int      `json:"parentDeltaS"         			gencodec:"required"`
+	number                 []*big.Int      `json:"number"              				gencodec:"required"`
+	gasLimit               uint64          `json:"gasLimit"            				gencodec:"required"`
+	gasUsed                uint64          `json:"gasUsed"             				gencodec:"required"`
+	baseFee                *big.Int        `json:"baseFeePerGas"       				gencodec:"required"`
+	location               common.Location `json:"location"            				gencodec:"required"`
+	time                   uint64          `json:"timestamp"           				gencodec:"required"`
+	extra                  []byte          `json:"extraData"           				gencodec:"required"`
+	mixHash                common.Hash     `json:"mixHash"             				gencodec:"required"`
+	nonce                  BlockNonce      `json:"nonce"`
 
 	// caches
 	hash      atomic.Value
@@ -111,41 +113,45 @@ type Header struct {
 
 // field type overrides for gencodec
 type headerMarshaling struct {
-	Difficulty    *hexutil.Big
-	Number        []*hexutil.Big
-	GasLimit      hexutil.Uint64
-	GasUsed       hexutil.Uint64
-	BaseFee       *hexutil.Big
-	ParentEntropy []*hexutil.Big
-	ParentDeltaS  []*hexutil.Big
-	Time          hexutil.Uint64
-	Extra         hexutil.Bytes
-	Hash          common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
+	Difficulty             *hexutil.Big
+	PrimeEntropyThreshold  []*hexutil.Big
+	RegionEntropyThreshold *hexutil.Big
+	Number                 []*hexutil.Big
+	GasLimit               hexutil.Uint64
+	GasUsed                hexutil.Uint64
+	BaseFee                *hexutil.Big
+	ParentEntropy          []*hexutil.Big
+	ParentDeltaS           []*hexutil.Big
+	Time                   hexutil.Uint64
+	Extra                  hexutil.Bytes
+	Hash                   common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
 }
 
 // "external" header encoding. used for eth protocol, etc.
 type extheader struct {
-	ParentHash    []common.Hash
-	UncleHash     common.Hash
-	Coinbase      common.Address
-	Root          common.Hash
-	TxHash        common.Hash
-	EtxHash       common.Hash
-	EtxRollupHash common.Hash
-	ManifestHash  []common.Hash
-	ReceiptHash   common.Hash
-	Difficulty    *big.Int
-	ParentEntropy []*big.Int
-	ParentDeltaS  []*big.Int
-	Number        []*big.Int
-	GasLimit      uint64
-	GasUsed       uint64
-	BaseFee       *big.Int
-	Location      common.Location
-	Time          uint64
-	Extra         []byte
-	MixHash       common.Hash
-	Nonce         BlockNonce
+	ParentHash             []common.Hash
+	UncleHash              common.Hash
+	Coinbase               common.Address
+	Root                   common.Hash
+	TxHash                 common.Hash
+	EtxHash                common.Hash
+	EtxRollupHash          common.Hash
+	ManifestHash           []common.Hash
+	ReceiptHash            common.Hash
+	Difficulty             *big.Int
+	PrimeEntropyThreshold  []*big.Int
+	RegionEntropyThreshold *big.Int
+	ParentEntropy          []*big.Int
+	ParentDeltaS           []*big.Int
+	Number                 []*big.Int
+	GasLimit               uint64
+	GasUsed                uint64
+	BaseFee                *big.Int
+	Location               common.Location
+	Time                   uint64
+	Extra                  []byte
+	MixHash                common.Hash
+	Nonce                  BlockNonce
 }
 
 // Construct an empty header
@@ -157,6 +163,8 @@ func EmptyHeader() *Header {
 	h.parentDeltaS = make([]*big.Int, common.HierarchyDepth)
 	h.number = make([]*big.Int, common.HierarchyDepth)
 	h.difficulty = big.NewInt(0)
+	h.primeEntropyThreshold = make([]*big.Int, common.NumZonesInRegion)
+	h.regionEntropyThreshold = big.NewInt(0)
 	h.root = EmptyRootHash
 	h.mixHash = EmptyRootHash
 	h.txHash = EmptyRootHash
@@ -170,6 +178,9 @@ func EmptyHeader() *Header {
 		h.parentEntropy[i] = big.NewInt(0)
 		h.parentDeltaS[i] = big.NewInt(0)
 		h.number[i] = big.NewInt(0)
+	}
+	for i := 0; i < common.NumZonesInRegion; i++ {
+		h.primeEntropyThreshold[i] = big.NewInt(0)
 	}
 	return h
 }
@@ -190,6 +201,8 @@ func (h *Header) DecodeRLP(s *rlp.Stream) error {
 	h.manifestHash = eh.ManifestHash
 	h.receiptHash = eh.ReceiptHash
 	h.difficulty = eh.Difficulty
+	h.primeEntropyThreshold = eh.PrimeEntropyThreshold
+	h.regionEntropyThreshold = eh.RegionEntropyThreshold
 	h.parentEntropy = eh.ParentEntropy
 	h.parentDeltaS = eh.ParentDeltaS
 	h.number = eh.Number
@@ -208,63 +221,69 @@ func (h *Header) DecodeRLP(s *rlp.Stream) error {
 // EncodeRLP serializes h into the Quai RLP block format.
 func (h *Header) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, extheader{
-		ParentHash:    h.parentHash,
-		UncleHash:     h.uncleHash,
-		Coinbase:      h.coinbase,
-		Root:          h.root,
-		TxHash:        h.txHash,
-		EtxHash:       h.etxHash,
-		EtxRollupHash: h.etxRollupHash,
-		ManifestHash:  h.manifestHash,
-		ReceiptHash:   h.receiptHash,
-		Difficulty:    h.difficulty,
-		ParentEntropy: h.parentEntropy,
-		ParentDeltaS:  h.parentDeltaS,
-		Number:        h.number,
-		GasLimit:      h.gasLimit,
-		GasUsed:       h.gasUsed,
-		BaseFee:       h.baseFee,
-		Location:      h.location,
-		Time:          h.time,
-		Extra:         h.extra,
-		MixHash:       h.mixHash,
-		Nonce:         h.nonce,
+		ParentHash:             h.parentHash,
+		UncleHash:              h.uncleHash,
+		Coinbase:               h.coinbase,
+		Root:                   h.root,
+		TxHash:                 h.txHash,
+		EtxHash:                h.etxHash,
+		EtxRollupHash:          h.etxRollupHash,
+		ManifestHash:           h.manifestHash,
+		ReceiptHash:            h.receiptHash,
+		Difficulty:             h.difficulty,
+		PrimeEntropyThreshold:  h.primeEntropyThreshold,
+		RegionEntropyThreshold: h.regionEntropyThreshold,
+		ParentEntropy:          h.parentEntropy,
+		ParentDeltaS:           h.parentDeltaS,
+		Number:                 h.number,
+		GasLimit:               h.gasLimit,
+		GasUsed:                h.gasUsed,
+		BaseFee:                h.baseFee,
+		Location:               h.location,
+		Time:                   h.time,
+		Extra:                  h.extra,
+		MixHash:                h.mixHash,
+		Nonce:                  h.nonce,
 	})
 }
 
 // RPCMarshalHeader converts the given header to the RPC output .
 func (h *Header) RPCMarshalHeader() map[string]interface{} {
 	result := map[string]interface{}{
-		"hash":                h.Hash(),
-		"parentHash":          h.ParentHashArray(),
-		"difficulty":          (*hexutil.Big)(h.Difficulty()),
-		"nonce":               h.Nonce(),
-		"sha3Uncles":          h.UncleHash(),
-		"stateRoot":           h.Root(),
-		"miner":               h.Coinbase(),
-		"extraData":           hexutil.Bytes(h.Extra()),
-		"size":                hexutil.Uint64(h.Size()),
-		"timestamp":           hexutil.Uint64(h.Time()),
-		"transactionsRoot":    h.TxHash(),
-		"receiptsRoot":        h.ReceiptHash(),
-		"extTransactionsRoot": h.EtxHash(),
-		"extRollupRoot":       h.EtxRollupHash(),
-		"manifestHash":        h.ManifestHashArray(),
-		"gasLimit":            hexutil.Uint(h.GasLimit()),
-		"gasUsed":             hexutil.Uint(h.GasUsed()),
-		"location":            hexutil.Bytes(h.Location()),
-		"mixHash":             h.MixHash(),
+		"hash":                   h.Hash(),
+		"parentHash":             h.ParentHashArray(),
+		"difficulty":             (*hexutil.Big)(h.Difficulty()),
+		"regionEntropyThreshold": (*hexutil.Big)(h.RegionEntropyThreshold()),
+		"nonce":                  h.Nonce(),
+		"sha3Uncles":             h.UncleHash(),
+		"stateRoot":              h.Root(),
+		"miner":                  h.Coinbase(),
+		"extraData":              hexutil.Bytes(h.Extra()),
+		"size":                   hexutil.Uint64(h.Size()),
+		"timestamp":              hexutil.Uint64(h.Time()),
+		"transactionsRoot":       h.TxHash(),
+		"receiptsRoot":           h.ReceiptHash(),
+		"extTransactionsRoot":    h.EtxHash(),
+		"extRollupRoot":          h.EtxRollupHash(),
+		"manifestHash":           h.ManifestHashArray(),
+		"gasLimit":               hexutil.Uint(h.GasLimit()),
+		"gasUsed":                hexutil.Uint(h.GasUsed()),
+		"location":               hexutil.Bytes(h.Location()),
+		"mixHash":                h.MixHash(),
 	}
 
 	number := make([]*hexutil.Big, common.HierarchyDepth)
 	parentEntropy := make([]*hexutil.Big, common.HierarchyDepth)
 	parentDeltaS := make([]*hexutil.Big, common.HierarchyDepth)
+	primeEntropyThreshold := make([]*hexutil.Big, common.HierarchyDepth)
 	for i := 0; i < common.HierarchyDepth; i++ {
 		number[i] = (*hexutil.Big)(h.Number(i))
 		parentEntropy[i] = (*hexutil.Big)(h.ParentEntropy(i))
 		parentDeltaS[i] = (*hexutil.Big)(h.ParentDeltaS(i))
+		primeEntropyThreshold[i] = (*hexutil.Big)(h.PrimeEntropyThreshold(i))
 	}
 	result["number"] = number
+	result["primeEntropyThreshold"] = primeEntropyThreshold
 	result["parentEntropy"] = parentEntropy
 	result["parentDeltaS"] = parentDeltaS
 
@@ -315,6 +334,16 @@ func (h *Header) ParentDeltaS(args ...int) *big.Int {
 	}
 	return h.parentDeltaS[nodeCtx]
 }
+func (h *Header) PrimeEntropyThreshold(args ...int) *big.Int {
+	nodeCtx := common.NodeLocation.Context()
+	if len(args) > 0 {
+		nodeCtx = args[0]
+	}
+	if args[0] < 0 { //GENESIS ESCAPE
+		nodeCtx = 0
+	}
+	return h.primeEntropyThreshold[nodeCtx]
+}
 func (h *Header) ManifestHash(args ...int) common.Hash {
 	nodeCtx := common.NodeLocation.Context()
 	if len(args) > 0 {
@@ -327,6 +356,9 @@ func (h *Header) ReceiptHash() common.Hash {
 }
 func (h *Header) Difficulty() *big.Int {
 	return h.difficulty
+}
+func (h *Header) RegionEntropyThreshold() *big.Int {
+	return h.regionEntropyThreshold
 }
 func (h *Header) Number(args ...int) *big.Int {
 	nodeCtx := common.NodeLocation.Context()
@@ -437,6 +469,19 @@ func (h *Header) SetDifficulty(val *big.Int) {
 	h.sealHash = atomic.Value{} // clear sealHash cache
 	h.difficulty = new(big.Int).Set(val)
 }
+func (h *Header) SetPrimeEntropyThreshold(val *big.Int, args ...int) {
+	h.hash = atomic.Value{}     // clear hash cache
+	h.sealHash = atomic.Value{} // clear sealHash cache
+	if len(args) == 0 {
+		panic("have to provide index for setting the prime difficulty")
+	}
+	h.primeEntropyThreshold[args[0]] = new(big.Int).Set(val)
+}
+func (h *Header) SetRegionEntropyThreshold(val *big.Int) {
+	h.hash = atomic.Value{}     // clear hash cache
+	h.sealHash = atomic.Value{} // clear sealHash cache
+	h.regionEntropyThreshold = new(big.Int).Set(val)
+}
 func (h *Header) SetNumber(val *big.Int, args ...int) {
 	h.hash = atomic.Value{}     // clear hash cache
 	h.sealHash = atomic.Value{} // clear sealHash cache
@@ -489,9 +534,10 @@ func (h *Header) SetNonce(val BlockNonce) {
 }
 
 // Array accessors
-func (h *Header) ParentHashArray() []common.Hash   { return h.parentHash }
-func (h *Header) ManifestHashArray() []common.Hash { return h.manifestHash }
-func (h *Header) NumberArray() []*big.Int          { return h.number }
+func (h *Header) ParentHashArray() []common.Hash         { return h.parentHash }
+func (h *Header) ManifestHashArray() []common.Hash       { return h.manifestHash }
+func (h *Header) NumberArray() []*big.Int                { return h.number }
+func (h *Header) PrimeEntropyThresholdArray() []*big.Int { return h.primeEntropyThreshold }
 
 // headerData comprises all data fields of the header, excluding the nonce, so
 // that the nonce may be independently adjusted in the work algorithm.
@@ -780,6 +826,7 @@ func CopyHeader(h *Header) *Header {
 	cpy.parentEntropy = make([]*big.Int, common.HierarchyDepth)
 	cpy.parentDeltaS = make([]*big.Int, common.HierarchyDepth)
 	cpy.number = make([]*big.Int, common.HierarchyDepth)
+	cpy.primeEntropyThreshold = make([]*big.Int, common.NumZonesInRegion)
 	for i := 0; i < common.HierarchyDepth; i++ {
 		cpy.SetParentHash(h.ParentHash(i), i)
 		cpy.SetManifestHash(h.ManifestHash(i), i)
@@ -787,6 +834,10 @@ func CopyHeader(h *Header) *Header {
 		cpy.SetParentDeltaS(h.ParentDeltaS(i), i)
 		cpy.SetNumber(h.Number(i), i)
 	}
+	for i := 0; i < common.NumZonesInRegion; i++ {
+		cpy.SetPrimeEntropyThreshold(h.PrimeEntropyThreshold(i), i)
+	}
+	cpy.SetRegionEntropyThreshold(h.RegionEntropyThreshold())
 	cpy.SetUncleHash(h.UncleHash())
 	cpy.SetCoinbase(h.Coinbase())
 	cpy.SetRoot(h.Root())
@@ -1018,14 +1069,6 @@ type extPendingHeader struct {
 	Termini Termini
 }
 
-func (t Termini) RPCMarshalTermini() map[string]interface{} {
-	result := map[string]interface{}{
-		"domTerminus": t.DomTerminus(),
-		"subTermini":  t.SubTermini(),
-	}
-	return result
-}
-
 // DecodeRLP decodes the Quai RLP encoding into pending header format.
 func (p *PendingHeader) DecodeRLP(s *rlp.Stream) error {
 	var eb extPendingHeader
@@ -1047,15 +1090,19 @@ func (p PendingHeader) EncodeRLP(w io.Writer) error {
 // Termini stores the dom terminus (i.e the previous dom block) and
 // subTermini(i.e the dom blocks that have occured in the subordinate chains)
 type Termini struct {
-	domTerminus common.Hash   `json:"domTerminus"`
-	subTermini  []common.Hash `json:"subTermini"`
+	domTerminus  common.Hash   `json:"domTerminus"`
+	subTermini   []common.Hash `json:"subTermini"`
+	primeTermini []common.Hash `json:"primeTermini"`
 }
 
 func CopyTermini(termini Termini) Termini {
 	newTermini := EmptyTermini()
-	newTermini.domTerminus = termini.domTerminus
+	newTermini.SetDomTerminus(termini.domTerminus)
 	for i, t := range termini.subTermini {
-		newTermini.subTermini[i] = t
+		newTermini.SetSubTerminiAtIndex(t, i)
+	}
+	for i, t := range termini.primeTermini {
+		newTermini.SetPrimeTerminiAtIndex(t, i)
 	}
 	return newTermini
 }
@@ -1063,6 +1110,7 @@ func CopyTermini(termini Termini) Termini {
 func EmptyTermini() Termini {
 	termini := Termini{}
 	termini.subTermini = make([]common.Hash, common.HierarchyDepth)
+	termini.primeTermini = make([]common.Hash, common.HierarchyDepth)
 	return termini
 }
 
@@ -1074,11 +1122,22 @@ func (t Termini) SubTermini() []common.Hash {
 	return t.subTermini
 }
 
+func (t Termini) PrimeTermini() []common.Hash {
+	return t.primeTermini
+}
+
 func (t Termini) SubTerminiAtIndex(args ...int) common.Hash {
 	if len(args) == 0 {
 		panic("cannot access sub termini at index with the index")
 	}
 	return t.subTermini[args[0]]
+}
+
+func (t Termini) PrimeTerminiAtIndex(args ...int) common.Hash {
+	if len(args) == 0 {
+		panic("cannot access prime termini at index with the index")
+	}
+	return t.primeTermini[args[0]]
 }
 
 func (t *Termini) SetDomTerminus(domTerminus common.Hash) {
@@ -1092,11 +1151,25 @@ func (t *Termini) SetSubTermini(subTermini []common.Hash) {
 	}
 }
 
+func (t *Termini) SetPrimeTermini(primeTermini []common.Hash) {
+	t.primeTermini = make([]common.Hash, len(primeTermini))
+	for i := 0; i < len(primeTermini); i++ {
+		t.primeTermini[i] = primeTermini[i]
+	}
+}
+
 func (t *Termini) SetSubTerminiAtIndex(val common.Hash, args ...int) {
 	if len(args) == 0 {
 		panic("index cannot be empty for the sub termini")
 	}
 	t.subTermini[args[0]] = val
+}
+
+func (t *Termini) SetPrimeTerminiAtIndex(val common.Hash, args ...int) {
+	if len(args) == 0 {
+		panic("index cannot be empty for the prime termini")
+	}
+	t.primeTermini[args[0]] = val
 }
 
 func (t *Termini) IsValid() bool {
@@ -1106,13 +1179,26 @@ func (t *Termini) IsValid() bool {
 	if len(t.subTermini) != common.HierarchyDepth {
 		return false
 	}
+	if len(t.primeTermini) != common.NumZonesInRegion {
+		return false
+	}
 	return true
 }
 
 // "external termini" pending header encoding. used for rlp
 type extTermini struct {
-	DomTerminus common.Hash
-	SubTermini  []common.Hash
+	DomTerminus  common.Hash
+	SubTermini   []common.Hash
+	PrimeTermini []common.Hash
+}
+
+func (t Termini) RPCMarshalTermini() map[string]interface{} {
+	result := map[string]interface{}{
+		"domTerminus":  t.DomTerminus(),
+		"subTermini":   t.SubTermini(),
+		"primeTermini": t.PrimeTermini(),
+	}
+	return result
 }
 
 // DecodeRLP decodes the Quai RLP encoding into pending header format.
@@ -1121,15 +1207,16 @@ func (t *Termini) DecodeRLP(s *rlp.Stream) error {
 	if err := s.Decode(&et); err != nil {
 		return err
 	}
-	t.domTerminus, t.subTermini = et.DomTerminus, et.SubTermini
+	t.domTerminus, t.subTermini, t.primeTermini = et.DomTerminus, et.SubTermini, et.PrimeTermini
 	return nil
 }
 
 // EncodeRLP serializes b into the Quai RLP format.
 func (t Termini) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, extTermini{
-		DomTerminus: t.domTerminus,
-		SubTermini:  t.subTermini,
+		DomTerminus:  t.domTerminus,
+		SubTermini:   t.subTermini,
+		PrimeTermini: t.primeTermini,
 	})
 }
 

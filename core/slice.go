@@ -203,6 +203,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	if err != nil {
 		return nil, false, err
 	}
+
 	time7 := common.PrettyDuration(time.Since(start))
 	time8 := common.PrettyDuration(time.Since(start))
 	var subPendingEtxs types.Transactions
@@ -796,9 +797,16 @@ func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *typ
 	combinedPendingHeader.SetParentEntropy(header.ParentEntropy(index), index)
 	combinedPendingHeader.SetParentDeltaS(header.ParentDeltaS(index), index)
 
+	if index == common.REGION_CTX {
+		for i := 0; i < common.NumZonesInRegion; i++ {
+			combinedPendingHeader.SetPrimeEntropyThreshold(header.PrimeEntropyThreshold(i), i)
+		}
+	}
+
 	if inSlice {
 		combinedPendingHeader.SetEtxRollupHash(header.EtxRollupHash())
 		combinedPendingHeader.SetDifficulty(header.Difficulty())
+		combinedPendingHeader.SetRegionEntropyThreshold(header.RegionEntropyThreshold())
 		combinedPendingHeader.SetUncleHash(header.UncleHash())
 		combinedPendingHeader.SetTxHash(header.TxHash())
 		combinedPendingHeader.SetEtxHash(header.EtxHash())
@@ -823,7 +831,6 @@ func (sl *Slice) NewGenesisPendingHeader(domPendingHeader *types.Header) {
 	if err != nil {
 		return
 	}
-
 	if nodeCtx == common.PRIME_CTX {
 		domPendingHeader = types.CopyHeader(localPendingHeader)
 	} else {
