@@ -326,7 +326,7 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, chainSideCh chan co
 			dialer := websocket.Dialer{HandshakeTimeout: 5 * time.Second}
 			header := make(http.Header)
 			header.Set("origin", "http://localhost")
-			header.Set("Authentication", "Bearer "+authJwt)
+			header.Set("sec-websocket-protocol", authJwt)
 
 			conns := make(map[string]*connWrapper)
 			errs := make(map[string]error)
