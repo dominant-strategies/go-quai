@@ -771,8 +771,21 @@ func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*en
 			}
 		}
 		header.SetParentEntropy(w.engine.TotalLogS(parent.Header()))
+		if nodeCtx == common.REGION_CTX {
+			for i := 0; i < common.NumZonesInRegion; i++ {
+				header.SetPrimeDifficulty(parent.Difficulty(), i)
+			}
+		}
+
+		if nodeCtx == common.ZONE_CTX {
+			header.SetRegionDifficulty(parent.Difficulty())
+		}
 	} else {
 		header.SetTerminusHash(w.hc.config.GenesisHash)
+		for i := 0; i < common.NumZonesInRegion; i++ {
+			header.SetPrimeDifficulty(parent.Difficulty(), i)
+		}
+		header.SetRegionDifficulty(parent.Difficulty())
 	}
 
 	// Only zone should calculate state

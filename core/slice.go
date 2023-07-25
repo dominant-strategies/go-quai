@@ -796,10 +796,17 @@ func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *typ
 	combinedPendingHeader.SetParentEntropy(header.ParentEntropy(index), index)
 	combinedPendingHeader.SetParentDeltaS(header.ParentDeltaS(index), index)
 
+	if index == common.REGION_CTX {
+		for i := 0; i < common.NumZonesInRegion; i++ {
+			combinedPendingHeader.SetPrimeDifficulty(header.PrimeDifficulty(i), i)
+		}
+	}
+
 	if inSlice {
 		combinedPendingHeader.SetTerminusHash(header.TerminusHash())
 		combinedPendingHeader.SetEtxRollupHash(header.EtxRollupHash())
 		combinedPendingHeader.SetDifficulty(header.Difficulty())
+		combinedPendingHeader.SetRegionDifficulty(header.RegionDifficulty())
 		combinedPendingHeader.SetUncleHash(header.UncleHash())
 		combinedPendingHeader.SetTxHash(header.TxHash())
 		combinedPendingHeader.SetEtxHash(header.EtxHash())
@@ -824,7 +831,6 @@ func (sl *Slice) NewGenesisPendingHeader(domPendingHeader *types.Header) {
 	if err != nil {
 		return
 	}
-
 	if nodeCtx == common.PRIME_CTX {
 		domPendingHeader = types.CopyHeader(localPendingHeader)
 	} else {
@@ -833,6 +839,9 @@ func (sl *Slice) NewGenesisPendingHeader(domPendingHeader *types.Header) {
 	}
 
 	if nodeCtx != common.ZONE_CTX {
+		for i := 0; i < common.NumZonesInRegion; i++ {
+			domPendingHeader.SetPrimeDifficulty(big.NewInt(0), i)
+		}
 		for _, client := range sl.subClients {
 			if client != nil {
 				client.NewGenesisPendingHeader(context.Background(), domPendingHeader)

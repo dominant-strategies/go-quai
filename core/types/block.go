@@ -81,28 +81,30 @@ func (n *BlockNonce) UnmarshalText(input []byte) error {
 
 // Header represents a block header in the Quai blockchain.
 type Header struct {
-	parentHash    []common.Hash   `json:"parentHash"           gencodec:"required"`
-	terminusHash  common.Hash     `json:"terminusHash"         gencodec:"required"`
-	uncleHash     common.Hash     `json:"sha3Uncles"           gencodec:"required"`
-	coinbase      common.Address  `json:"miner"                gencodec:"required"`
-	root          common.Hash     `json:"stateRoot"            gencodec:"required"`
-	txHash        common.Hash     `json:"transactionsRoot"     gencodec:"required"`
-	etxHash       common.Hash     `json:"extTransactionsRoot"  gencodec:"required"`
-	etxRollupHash common.Hash     `json:"extRollupRoot"        gencodec:"required"`
-	manifestHash  []common.Hash   `json:"manifestHash"         gencodec:"required"`
-	receiptHash   common.Hash     `json:"receiptsRoot"         gencodec:"required"`
-	difficulty    *big.Int        `json:"difficulty"           gencodec:"required"`
-	parentEntropy []*big.Int      `json:"parentEntropy"        gencodec:"required"`
-	parentDeltaS  []*big.Int      `json:"parentDeltaS"         gencodec:"required"`
-	number        []*big.Int      `json:"number"               gencodec:"required"`
-	gasLimit      uint64          `json:"gasLimit"             gencodec:"required"`
-	gasUsed       uint64          `json:"gasUsed"              gencodec:"required"`
-	baseFee       *big.Int        `json:"baseFeePerGas"        gencodec:"required"`
-	location      common.Location `json:"location"             gencodec:"required"`
-	time          uint64          `json:"timestamp"            gencodec:"required"`
-	extra         []byte          `json:"extraData"            gencodec:"required"`
-	mixHash       common.Hash     `json:"mixHash"              gencodec:"required"`
-	nonce         BlockNonce      `json:"nonce"`
+	parentHash       []common.Hash   `json:"parentHash"           gencodec:"required"`
+	terminusHash     common.Hash     `json:"terminusHash"         gencodec:"required"`
+	uncleHash        common.Hash     `json:"sha3Uncles"           gencodec:"required"`
+	coinbase         common.Address  `json:"miner"                gencodec:"required"`
+	root             common.Hash     `json:"stateRoot"            gencodec:"required"`
+	txHash           common.Hash     `json:"transactionsRoot"     gencodec:"required"`
+	etxHash          common.Hash     `json:"extTransactionsRoot"  gencodec:"required"`
+	etxRollupHash    common.Hash     `json:"extRollupRoot"        gencodec:"required"`
+	manifestHash     []common.Hash   `json:"manifestHash"         gencodec:"required"`
+	receiptHash      common.Hash     `json:"receiptsRoot"         gencodec:"required"`
+	difficulty       *big.Int        `json:"difficulty"           gencodec:"required"`
+	primeDifficulty  []*big.Int      `json:"primeDifficulty"      gencodec:"required"`
+	regionDifficulty *big.Int        `json:"regionDifficulty"     gencodec:"required"`
+	parentEntropy    []*big.Int      `json:"parentEntropy"        gencodec:"required"`
+	parentDeltaS     []*big.Int      `json:"parentDeltaS"         gencodec:"required"`
+	number           []*big.Int      `json:"number"               gencodec:"required"`
+	gasLimit         uint64          `json:"gasLimit"             gencodec:"required"`
+	gasUsed          uint64          `json:"gasUsed"              gencodec:"required"`
+	baseFee          *big.Int        `json:"baseFeePerGas"        gencodec:"required"`
+	location         common.Location `json:"location"             gencodec:"required"`
+	time             uint64          `json:"timestamp"            gencodec:"required"`
+	extra            []byte          `json:"extraData"            gencodec:"required"`
+	mixHash          common.Hash     `json:"mixHash"              gencodec:"required"`
+	nonce            BlockNonce      `json:"nonce"`
 
 	// caches
 	hash      atomic.Value
@@ -113,42 +115,46 @@ type Header struct {
 
 // field type overrides for gencodec
 type headerMarshaling struct {
-	Difficulty    *hexutil.Big
-	Number        []*hexutil.Big
-	GasLimit      hexutil.Uint64
-	GasUsed       hexutil.Uint64
-	BaseFee       *hexutil.Big
-	ParentEntropy []*hexutil.Big
-	ParentDeltaS  []*hexutil.Big
-	Time          hexutil.Uint64
-	Extra         hexutil.Bytes
-	Hash          common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
+	Difficulty       *hexutil.Big
+	PrimeDifficulty  []*hexutil.Big
+	RegionDifficulty *hexutil.Big
+	Number           []*hexutil.Big
+	GasLimit         hexutil.Uint64
+	GasUsed          hexutil.Uint64
+	BaseFee          *hexutil.Big
+	ParentEntropy    []*hexutil.Big
+	ParentDeltaS     []*hexutil.Big
+	Time             hexutil.Uint64
+	Extra            hexutil.Bytes
+	Hash             common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
 }
 
 // "external" header encoding. used for eth protocol, etc.
 type extheader struct {
-	ParentHash    []common.Hash
-	TerminusHash  common.Hash
-	UncleHash     common.Hash
-	Coinbase      common.Address
-	Root          common.Hash
-	TxHash        common.Hash
-	EtxHash       common.Hash
-	EtxRollupHash common.Hash
-	ManifestHash  []common.Hash
-	ReceiptHash   common.Hash
-	Difficulty    *big.Int
-	ParentEntropy []*big.Int
-	ParentDeltaS  []*big.Int
-	Number        []*big.Int
-	GasLimit      uint64
-	GasUsed       uint64
-	BaseFee       *big.Int
-	Location      common.Location
-	Time          uint64
-	Extra         []byte
-	MixHash       common.Hash
-	Nonce         BlockNonce
+	ParentHash       []common.Hash
+	TerminusHash     common.Hash
+	UncleHash        common.Hash
+	Coinbase         common.Address
+	Root             common.Hash
+	TxHash           common.Hash
+	EtxHash          common.Hash
+	EtxRollupHash    common.Hash
+	ManifestHash     []common.Hash
+	ReceiptHash      common.Hash
+	Difficulty       *big.Int
+	PrimeDifficulty  []*big.Int
+	RegionDifficulty *big.Int
+	ParentEntropy    []*big.Int
+	ParentDeltaS     []*big.Int
+	Number           []*big.Int
+	GasLimit         uint64
+	GasUsed          uint64
+	BaseFee          *big.Int
+	Location         common.Location
+	Time             uint64
+	Extra            []byte
+	MixHash          common.Hash
+	Nonce            BlockNonce
 }
 
 // Construct an empty header
@@ -160,6 +166,8 @@ func EmptyHeader() *Header {
 	h.parentDeltaS = make([]*big.Int, common.HierarchyDepth)
 	h.number = make([]*big.Int, common.HierarchyDepth)
 	h.difficulty = big.NewInt(0)
+	h.primeDifficulty = make([]*big.Int, common.NumZonesInRegion)
+	h.regionDifficulty = big.NewInt(0)
 	h.terminusHash = emptyTerminusHash
 	h.root = EmptyRootHash
 	h.mixHash = EmptyRootHash
@@ -174,6 +182,9 @@ func EmptyHeader() *Header {
 		h.parentEntropy[i] = big.NewInt(0)
 		h.parentDeltaS[i] = big.NewInt(0)
 		h.number[i] = big.NewInt(0)
+	}
+	for i := 0; i < common.NumZonesInRegion; i++ {
+		h.primeDifficulty[i] = big.NewInt(0)
 	}
 	return h
 }
@@ -195,6 +206,8 @@ func (h *Header) DecodeRLP(s *rlp.Stream) error {
 	h.manifestHash = eh.ManifestHash
 	h.receiptHash = eh.ReceiptHash
 	h.difficulty = eh.Difficulty
+	h.primeDifficulty = eh.PrimeDifficulty
+	h.regionDifficulty = eh.RegionDifficulty
 	h.parentEntropy = eh.ParentEntropy
 	h.parentDeltaS = eh.ParentDeltaS
 	h.number = eh.Number
@@ -213,28 +226,30 @@ func (h *Header) DecodeRLP(s *rlp.Stream) error {
 // EncodeRLP serializes h into the Quai RLP block format.
 func (h *Header) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, extheader{
-		ParentHash:    h.parentHash,
-		TerminusHash:  h.terminusHash,
-		UncleHash:     h.uncleHash,
-		Coinbase:      h.coinbase,
-		Root:          h.root,
-		TxHash:        h.txHash,
-		EtxHash:       h.etxHash,
-		EtxRollupHash: h.etxRollupHash,
-		ManifestHash:  h.manifestHash,
-		ReceiptHash:   h.receiptHash,
-		Difficulty:    h.difficulty,
-		ParentEntropy: h.parentEntropy,
-		ParentDeltaS:  h.parentDeltaS,
-		Number:        h.number,
-		GasLimit:      h.gasLimit,
-		GasUsed:       h.gasUsed,
-		BaseFee:       h.baseFee,
-		Location:      h.location,
-		Time:          h.time,
-		Extra:         h.extra,
-		MixHash:       h.mixHash,
-		Nonce:         h.nonce,
+		ParentHash:       h.parentHash,
+		TerminusHash:     h.terminusHash,
+		UncleHash:        h.uncleHash,
+		Coinbase:         h.coinbase,
+		Root:             h.root,
+		TxHash:           h.txHash,
+		EtxHash:          h.etxHash,
+		EtxRollupHash:    h.etxRollupHash,
+		ManifestHash:     h.manifestHash,
+		ReceiptHash:      h.receiptHash,
+		Difficulty:       h.difficulty,
+		PrimeDifficulty:  h.primeDifficulty,
+		RegionDifficulty: h.regionDifficulty,
+		ParentEntropy:    h.parentEntropy,
+		ParentDeltaS:     h.parentDeltaS,
+		Number:           h.number,
+		GasLimit:         h.gasLimit,
+		GasUsed:          h.gasUsed,
+		BaseFee:          h.baseFee,
+		Location:         h.location,
+		Time:             h.time,
+		Extra:            h.extra,
+		MixHash:          h.mixHash,
+		Nonce:            h.nonce,
 	})
 }
 
@@ -245,6 +260,7 @@ func (h *Header) RPCMarshalHeader() map[string]interface{} {
 		"parentHash":          h.ParentHashArray(),
 		"terminusHash":        h.TerminusHash(),
 		"difficulty":          (*hexutil.Big)(h.Difficulty()),
+		"regionDifficulty":    (*hexutil.Big)(h.RegionDifficulty()),
 		"nonce":               h.Nonce(),
 		"sha3Uncles":          h.UncleHash(),
 		"stateRoot":           h.Root(),
@@ -266,12 +282,15 @@ func (h *Header) RPCMarshalHeader() map[string]interface{} {
 	number := make([]*hexutil.Big, common.HierarchyDepth)
 	parentEntropy := make([]*hexutil.Big, common.HierarchyDepth)
 	parentDeltaS := make([]*hexutil.Big, common.HierarchyDepth)
+	primeDifficulty := make([]*hexutil.Big, common.HierarchyDepth)
 	for i := 0; i < common.HierarchyDepth; i++ {
 		number[i] = (*hexutil.Big)(h.Number(i))
 		parentEntropy[i] = (*hexutil.Big)(h.ParentEntropy(i))
 		parentDeltaS[i] = (*hexutil.Big)(h.ParentDeltaS(i))
+		primeDifficulty[i] = (*hexutil.Big)(h.PrimeDifficulty(i))
 	}
 	result["number"] = number
+	result["primeDifficulty"] = primeDifficulty
 	result["parentEntropy"] = parentEntropy
 	result["parentDeltaS"] = parentDeltaS
 
@@ -325,6 +344,13 @@ func (h *Header) ParentDeltaS(args ...int) *big.Int {
 	}
 	return h.parentDeltaS[nodeCtx]
 }
+func (h *Header) PrimeDifficulty(args ...int) *big.Int {
+	nodeCtx := common.NodeLocation.Context()
+	if len(args) > 0 {
+		nodeCtx = args[0]
+	}
+	return h.primeDifficulty[nodeCtx]
+}
 func (h *Header) ManifestHash(args ...int) common.Hash {
 	nodeCtx := common.NodeLocation.Context()
 	if len(args) > 0 {
@@ -337,6 +363,9 @@ func (h *Header) ReceiptHash() common.Hash {
 }
 func (h *Header) Difficulty() *big.Int {
 	return h.difficulty
+}
+func (h *Header) RegionDifficulty() *big.Int {
+	return h.regionDifficulty
 }
 func (h *Header) Number(args ...int) *big.Int {
 	nodeCtx := common.NodeLocation.Context()
@@ -452,6 +481,19 @@ func (h *Header) SetDifficulty(val *big.Int) {
 	h.sealHash = atomic.Value{} // clear sealHash cache
 	h.difficulty = new(big.Int).Set(val)
 }
+func (h *Header) SetPrimeDifficulty(val *big.Int, args ...int) {
+	h.hash = atomic.Value{}     // clear hash cache
+	h.sealHash = atomic.Value{} // clear sealHash cache
+	if len(args) == 0 {
+		panic("have to provide index for setting the prime difficulty")
+	}
+	h.primeDifficulty[args[0]] = new(big.Int).Set(val)
+}
+func (h *Header) SetRegionDifficulty(val *big.Int) {
+	h.hash = atomic.Value{}     // clear hash cache
+	h.sealHash = atomic.Value{} // clear sealHash cache
+	h.regionDifficulty = new(big.Int).Set(val)
+}
 func (h *Header) SetNumber(val *big.Int, args ...int) {
 	h.hash = atomic.Value{}     // clear hash cache
 	h.sealHash = atomic.Value{} // clear sealHash cache
@@ -507,6 +549,7 @@ func (h *Header) SetNonce(val BlockNonce) {
 func (h *Header) ParentHashArray() []common.Hash   { return h.parentHash }
 func (h *Header) ManifestHashArray() []common.Hash { return h.manifestHash }
 func (h *Header) NumberArray() []*big.Int          { return h.number }
+func (h *Header) PrimeDifficultyArray() []*big.Int { return h.primeDifficulty }
 
 // headerData comprises all data fields of the header, excluding the nonce, so
 // that the nonce may be independently adjusted in the work algorithm.
@@ -797,12 +840,16 @@ func CopyHeader(h *Header) *Header {
 	cpy.parentEntropy = make([]*big.Int, common.HierarchyDepth)
 	cpy.parentDeltaS = make([]*big.Int, common.HierarchyDepth)
 	cpy.number = make([]*big.Int, common.HierarchyDepth)
+	cpy.primeDifficulty = make([]*big.Int, common.NumZonesInRegion)
 	for i := 0; i < common.HierarchyDepth; i++ {
 		cpy.SetParentHash(h.ParentHash(i), i)
 		cpy.SetManifestHash(h.ManifestHash(i), i)
 		cpy.SetParentEntropy(h.ParentEntropy(i), i)
 		cpy.SetParentDeltaS(h.ParentDeltaS(i), i)
 		cpy.SetNumber(h.Number(i), i)
+	}
+	for i := 0; i < common.NumZonesInRegion; i++ {
+		cpy.SetPrimeDifficulty(h.PrimeDifficulty(i), i)
 	}
 	cpy.SetTerminusHash(h.TerminusHash())
 	cpy.SetUncleHash(h.UncleHash())
