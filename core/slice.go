@@ -800,13 +800,6 @@ func (sl *Slice) init(genesis *Genesis) error {
 // from the candidate body db. This method is used when peers give the block as a placeholder
 // for the body.
 func (sl *Slice) ConstructLocalBlock(header *types.Header) (*types.Block, error) {
-	nodeCtx := common.NodeLocation.Context()
-	if nodeCtx == common.ZONE_CTX && header.EmptyBody() {
-		// This shortcut is only available to zone chains. Prime and region chains can
-		// never have an empty body, because they will always have at least one block
-		// in the subordinate manifest.
-		return types.NewBlockWithHeader(header), nil
-	}
 	pendingBlockBody := rawdb.ReadBody(sl.sliceDb, header.Hash(), header.NumberU64())
 	if pendingBlockBody == nil {
 		return nil, ErrBodyNotFound
