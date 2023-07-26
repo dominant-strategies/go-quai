@@ -23,41 +23,31 @@ func (blake3pow *Blake3pow) CalcOrder(header *types.Header) (*big.Int, int, erro
 
 	// Get entropy reduction of this header
 	intrinsicS := blake3pow.IntrinsicLogS(header.Hash())
-
-	// This is the updated the threshold calculation based on the zone difficulty threshold
-	target := new(big.Int).Div(big2e256, header.Difficulty()).Bytes()
+	target := new(big.Int).Div(common.Big2e256, header.Difficulty()).Bytes()
 	zoneThresholdS := blake3pow.IntrinsicLogS(common.BytesToHash(target))
-	timeFactorHierarchyDepthMultiple := new(big.Int).Mul(params.TimeFactor, big.NewInt(common.HierarchyDepth))
 
-	// Prime case
-	primeEntropyThreshold := new(big.Int).Mul(timeFactorHierarchyDepthMultiple, timeFactorHierarchyDepthMultiple)
-	primeEntropyThreshold = new(big.Int).Mul(primeEntropyThreshold, zoneThresholdS)
-	primeBlockThreshold := new(big.Int).Quo(primeEntropyThreshold, big.NewInt(2))
-	primeEntropyThreshold = new(big.Int).Sub(primeEntropyThreshold, primeBlockThreshold)
+	// PRIME
+	// Compute the total accumulated entropy since the last prime block
+	totalDeltaSPrime := new(big.Int).Add(header.ParentDeltaS(common.REGION_CTX), header.ParentDeltaS(common.ZONE_CTX))
+	totalDeltaSPrime.Add(totalDeltaSPrime, intrinsicS)
 
-	primeBlockEntropyThresholdAdder, _ := mathutil.BinaryLog(primeBlockThreshold, 8)
-	primeBlockEntropyThreshold := new(big.Int).Add(zoneThresholdS, big.NewInt(int64(primeBlockEntropyThresholdAdder)))
-
-	totalDeltaS := new(big.Int).Add(header.ParentDeltaS(common.REGION_CTX), header.ParentDeltaS(common.ZONE_CTX))
-	totalDeltaS.Add(totalDeltaS, intrinsicS)
-	if intrinsicS.Cmp(primeBlockEntropyThreshold) > 0 && totalDeltaS.Cmp(primeEntropyThreshold) > 0 {
+	// PrimeEntropyThreshold number of zone blocks times the intrinsic logs of
+	// the given header determines the prime block
+	primeEntropyThreshold := new(big.Int).Mul(zoneThresholdS, header.PrimeEntropyThreshold(header.Location().Zone()))
+	if totalDeltaSPrime.Cmp(primeEntropyThreshold) > 0 {
 		return intrinsicS, common.PRIME_CTX, nil
 	}
 
-	// Region case
-	regionEntropyThreshold := new(big.Int).Mul(timeFactorHierarchyDepthMultiple, zoneThresholdS)
-	regionBlockThreshold := new(big.Int).Quo(regionEntropyThreshold, big.NewInt(2))
-	regionEntropyThreshold = new(big.Int).Sub(regionEntropyThreshold, regionBlockThreshold)
-
-	regionBlockEntropyThresholdAdder, _ := mathutil.BinaryLog(regionBlockThreshold, 8)
-	regionBlockEntropyThreshold := new(big.Int).Add(zoneThresholdS, big.NewInt(int64(regionBlockEntropyThresholdAdder)))
-
-	totalDeltaS = new(big.Int).Add(header.ParentDeltaS(common.ZONE_CTX), intrinsicS)
-	if intrinsicS.Cmp(regionBlockEntropyThreshold) > 0 && totalDeltaS.Cmp(regionEntropyThreshold) > 0 {
+	// REGION
+	// Compute the total accumulated entropy since the last region block
+	totalDeltaSRegion := new(big.Int).Add(header.ParentDeltaS(common.ZONE_CTX), intrinsicS)
+	regionEntropyThreshold := new(big.Int).Mul(zoneThresholdS, params.TimeFactor)
+	regionEntropyThreshold = new(big.Int).Mul(regionEntropyThreshold, big.NewInt(common.NumZonesInRegion))
+	if totalDeltaSRegion.Cmp(regionEntropyThreshold) > 0 {
 		return intrinsicS, common.REGION_CTX, nil
 	}
 
-	// Zone case
+	// ZONE
 	return intrinsicS, common.ZONE_CTX, nil
 }
 

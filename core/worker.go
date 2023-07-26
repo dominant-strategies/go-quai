@@ -764,6 +764,20 @@ func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*en
 				header.SetParentDeltaS(w.engine.DeltaLogS(parent.Header()), nodeCtx)
 			}
 		}
+
+		if nodeCtx == common.REGION_CTX {
+			for i := 0; i < common.NumZonesInRegion; i++ {
+				header.SetPrimeEntropyThreshold(parent.Header().PrimeEntropyThreshold(i), i)
+			}
+		}
+
+		if nodeCtx == common.REGION_CTX && order == common.PRIME_CTX {
+			primeEntropyThreshold, err := w.engine.CalcPrimeEntropyThreshold(w.hc, parent.Header())
+			if err != nil {
+				return nil, err
+			}
+			header.SetPrimeEntropyThreshold(primeEntropyThreshold, parent.Header().Location().SubIndex())
+		}
 		header.SetParentEntropy(w.engine.TotalLogS(parent.Header()))
 	} else {
 		for i := 0; i < common.NumZonesInRegion; i++ {
