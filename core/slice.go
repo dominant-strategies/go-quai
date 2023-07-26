@@ -434,7 +434,7 @@ func (sl *Slice) pcrc(batch ethdb.Batch, header *types.Header, domTerminus commo
 	nodeCtx := common.NodeLocation.Context()
 	location := header.Location()
 
-	log.Debug("PCRC:", "Parent Hash:", header.ParentHash(), "Number", header.Number, "Location:", header.Location())
+	log.Debug("PCRC:", "Parent Hash:", header.ParentHash(), "Number", header.Number(), "Location:", header.Location())
 	termini := sl.hc.GetTerminiByHash(header.ParentHash())
 
 	if !termini.IsValid() {
@@ -450,8 +450,11 @@ func (sl *Slice) pcrc(batch ethdb.Batch, header *types.Header, domTerminus commo
 	// Set the terminus
 	if nodeCtx == common.PRIME_CTX || domOrigin {
 		newTermini.SetDomTerminus(header.Hash())
-	} else {
-		newTermini.SetDomTerminus(termini.DomTerminus())
+	}
+
+	// Set the prime termini
+	if nodeCtx == common.REGION_CTX && domOrigin {
+		newTermini.SetPrimeTerminiAtIndex(header.Hash(), location.SubIndex())
 	}
 
 	// Check for a graph cyclic reference
@@ -468,6 +471,8 @@ func (sl *Slice) pcrc(batch ethdb.Batch, header *types.Header, domTerminus commo
 	if nodeCtx == common.ZONE_CTX {
 		return common.Hash{}, newTermini, nil
 	}
+
+	fmt.Println("Prime Termini", "Hash", header.Hash(), "Termini", newTermini.PrimeTermini())
 
 	return termini.SubTerminiAtIndex(location.SubIndex()), newTermini, nil
 }
@@ -558,19 +563,27 @@ func (sl *Slice) computePendingHeader(localPendingHeaderWithTermini types.Pendin
 	var cachedPendingHeaderWithTermini types.PendingHeader
 	hash := localPendingHeaderWithTermini.Termini().DomTerminus()
 	cachedPendingHeaderWithTermini, exists := sl.readPhCache(hash)
-	log.Debug("computePendingHeader:", "hash:", hash, "pendingHeader:", cachedPendingHeaderWithTermini, "termini:", cachedPendingHeaderWithTermini.Termini)
 	var newPh *types.Header
+	log.Info("computePendingHeader:", "primeEntropyThreshold:", localPendingHeaderWithTermini.Header().PrimeEntropyThresholdArray(), "regionEntropyThreshold:", localPendingHeaderWithTermini.Header().RegionEntropyThreshold())
 
 	if exists {
+		log.Info("computePendingHeader:", "primeEntropyThreshold:", cachedPendingHeaderWithTermini.Header().PrimeEntropyThresholdArray(), "regionEntropyThreshold:", cachedPendingHeaderWithTermini.Header().RegionEntropyThreshold())
+
 		newPh = sl.combinePendingHeader(localPendingHeaderWithTermini.Header(), cachedPendingHeaderWithTermini.Header(), nodeCtx, true)
+
+		log.Info("computePendingHeader:", "primeEntropyThreshold:", newPh.PrimeEntropyThresholdArray(), "regionEntropyThreshold:", newPh.RegionEntropyThreshold())
 		return types.NewPendingHeader(newPh, localPendingHeaderWithTermini.Termini())
 	} else {
+		log.Info("computePendingHeader:", "primeEntropyThreshold:", domPendingHeader.PrimeEntropyThresholdArray(), "regionEntropyThreshold:", domPendingHeader.RegionEntropyThreshold())
+
 		if domOrigin {
 			newPh = sl.combinePendingHeader(localPendingHeaderWithTermini.Header(), domPendingHeader, nodeCtx, true)
+			log.Info("computePendingHeader:", "primeEntropyThreshold:", newPh.PrimeEntropyThresholdArray(), "regionEntropyThreshold:", newPh.RegionEntropyThreshold())
 			return types.NewPendingHeader(newPh, localPendingHeaderWithTermini.Termini())
 		}
 		return localPendingHeaderWithTermini
 	}
+
 }
 
 // updatePhCacheFromDom combines the recieved pending header with the pending header stored locally at a given terminus for specified context
@@ -675,6 +688,9 @@ func (sl *Slice) init(genesis *Genesis) error {
 		genesisTermini.SetDomTerminus(genesisHash)
 		for i := 0; i < len(genesisTermini.SubTermini()); i++ {
 			genesisTermini.SetSubTerminiAtIndex(genesisHash, i)
+		}
+		for i := 0; i < len(genesisTermini.PrimeTermini()); i++ {
+			genesisTermini.SetPrimeTerminiAtIndex(genesisHash, i)
 		}
 
 		rawdb.WriteTermini(sl.sliceDb, genesisHash, genesisTermini)
@@ -849,7 +865,6 @@ func (sl *Slice) NewGenesisPendingHeader(domPendingHeader *types.Header) {
 		domPendingHeader = sl.combinePendingHeader(localPendingHeader, domPendingHeader, nodeCtx, true)
 		domPendingHeader.SetLocation(common.NodeLocation)
 	}
-
 	if nodeCtx != common.ZONE_CTX {
 		for _, client := range sl.subClients {
 			if client != nil {
@@ -864,6 +879,9 @@ func (sl *Slice) NewGenesisPendingHeader(domPendingHeader *types.Header) {
 	genesisTermini.SetDomTerminus(genesisHash)
 	for i := 0; i < len(genesisTermini.SubTermini()); i++ {
 		genesisTermini.SetSubTerminiAtIndex(genesisHash, i)
+	}
+	for i := 0; i < len(genesisTermini.PrimeTermini()); i++ {
+		genesisTermini.SetPrimeTerminiAtIndex(genesisHash, i)
 	}
 	if sl.hc.Empty() {
 		sl.phCache.Add(sl.config.GenesisHash, types.NewPendingHeader(domPendingHeader, genesisTermini))

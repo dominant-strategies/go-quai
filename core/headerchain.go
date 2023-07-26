@@ -277,7 +277,7 @@ func (hc *HeaderChain) collectInclusiveEtxRollup(b *types.Block) (types.Transact
 // Append
 func (hc *HeaderChain) Append(batch ethdb.Batch, block *types.Block, newInboundEtxs types.Transactions) error {
 	nodeCtx := common.NodeLocation.Context()
-	log.Debug("HeaderChain Append:", "Block information: Hash:", block.Hash(), "block header hash:", block.Header().Hash(), "Number:", block.NumberU64(), "Location:", block.Header().Location, "Parent:", block.ParentHash())
+	log.Debug("HeaderChain Append:", "Block information: Hash:", block.Hash(), "block header hash:", block.Header().Hash(), "Number:", block.NumberU64(), "Location:", block.Header().Location(), "Parent:", block.ParentHash())
 
 	err := hc.engine.VerifyHeader(hc, block.Header())
 	if err != nil {
