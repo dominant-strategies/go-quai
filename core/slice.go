@@ -203,6 +203,8 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	if err != nil {
 		return nil, false, err
 	}
+	log.Info("prepareWork:", "primeDifficulty:", pendingHeaderWithTermini.Header().PrimeDifficultyArray(), "regionDifficulty:", pendingHeaderWithTermini.Header().RegionDifficulty())
+
 	time7 := common.PrettyDuration(time.Since(start))
 	time8 := common.PrettyDuration(time.Since(start))
 	var subPendingEtxs types.Transactions
@@ -548,19 +550,31 @@ func (sl *Slice) computePendingHeader(localPendingHeaderWithTermini types.Pendin
 	var cachedPendingHeaderWithTermini types.PendingHeader
 	hash := localPendingHeaderWithTermini.Termini().DomTerminus()
 	cachedPendingHeaderWithTermini, exists := sl.readPhCache(hash)
-	log.Debug("computePendingHeader:", "hash:", hash, "pendingHeader:", cachedPendingHeaderWithTermini, "termini:", cachedPendingHeaderWithTermini.Termini)
 	var newPh *types.Header
+	log.Info("computePendingHeader:", "primeDifficulty:", localPendingHeaderWithTermini.Header().PrimeDifficultyArray(), "regionDifficulty:", localPendingHeaderWithTermini.Header().RegionDifficulty())
 
 	if exists {
+		log.Info("computePendingHeader:", "primeDifficulty:", cachedPendingHeaderWithTermini.Header().PrimeDifficultyArray(), "regionDifficulty:", cachedPendingHeaderWithTermini.Header().RegionDifficulty())
+
 		newPh = sl.combinePendingHeader(localPendingHeaderWithTermini.Header(), cachedPendingHeaderWithTermini.Header(), nodeCtx, true)
+
+		// for i := 0; i < common.NumZonesInRegion; i++ {
+		// 	newPh.SetPrimeDifficulty(cachedPendingHeaderWithTermini.Header().PrimeDifficulty(i), i)
+		// }
+
+		log.Info("computePendingHeader:", "primeDifficulty:", newPh.PrimeDifficultyArray(), "regionDifficulty:", newPh.RegionDifficulty())
 		return types.NewPendingHeader(newPh, localPendingHeaderWithTermini.Termini())
 	} else {
+		log.Info("computePendingHeader:", "primeDifficulty:", domPendingHeader.PrimeDifficultyArray(), "regionDifficulty:", domPendingHeader.RegionDifficulty())
+
 		if domOrigin {
 			newPh = sl.combinePendingHeader(localPendingHeaderWithTermini.Header(), domPendingHeader, nodeCtx, true)
+			log.Info("computePendingHeader:", "primeDifficulty:", newPh.PrimeDifficultyArray(), "regionDifficulty:", newPh.RegionDifficulty())
 			return types.NewPendingHeader(newPh, localPendingHeaderWithTermini.Termini())
 		}
 		return localPendingHeaderWithTermini
 	}
+
 }
 
 // updatePhCacheFromDom combines the recieved pending header with the pending header stored locally at a given terminus for specified context
@@ -843,11 +857,7 @@ func (sl *Slice) NewGenesisPendingHeader(domPendingHeader *types.Header) {
 		domPendingHeader = sl.combinePendingHeader(localPendingHeader, domPendingHeader, nodeCtx, true)
 		domPendingHeader.SetLocation(common.NodeLocation)
 	}
-
 	if nodeCtx != common.ZONE_CTX {
-		for i := 0; i < common.NumZonesInRegion; i++ {
-			domPendingHeader.SetPrimeDifficulty(big.NewInt(0), i)
-		}
 		for _, client := range sl.subClients {
 			if client != nil {
 				client.NewGenesisPendingHeader(context.Background(), domPendingHeader)

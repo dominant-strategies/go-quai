@@ -800,15 +800,20 @@ func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*en
 		header.SetParentEntropy(w.engine.TotalLogS(parent.Header()))
 
 		if nodeCtx == common.ZONE_CTX {
-			header.SetRegionDifficulty(parent.Difficulty())
+			header.SetRegionDifficulty(parent.Header().RegionDifficulty())
 		}
 	} else {
 		header.SetTerminusHash(w.hc.config.GenesisHash)
 		initPrimeThreshold := new(big.Int).Mul(params.TimeFactor, big.NewInt(common.NumRegionsInPrime))
 		initPrimeThreshold = new(big.Int).Mul(initPrimeThreshold, big.NewInt(common.NumZonesInRegion))
+		initPrimeThreshold = new(big.Int).Mul(initPrimeThreshold, params.TimeFactor)
+		log.Info("SetTerminusHash", "initPrimeThreshold:", initPrimeThreshold)
 		target := new(big.Int).Div(common.Big2e256, parent.Difficulty()).Bytes()
+		log.Info("SetTerminusHash", "target:", target, "parentdiff:", parent.Difficulty())
 		zoneThresholdS := w.hc.engine.IntrinsicLogS(common.BytesToHash(target))
+		log.Info("SetTerminusHash", "zoneThreshold:", zoneThresholdS)
 		initPrimeThreshold = new(big.Int).Mul(zoneThresholdS, initPrimeThreshold)
+		log.Info("SetTerminusHash", "initPrimeThreshold:", initPrimeThreshold)
 		for i := 0; i < common.NumZonesInRegion; i++ {
 
 			header.SetPrimeDifficulty(initPrimeThreshold, i)
@@ -817,7 +822,7 @@ func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*en
 		initRegionThreshold = new(big.Int).Mul(zoneThresholdS, initRegionThreshold)
 		header.SetRegionDifficulty(initRegionThreshold)
 	}
-
+	log.Info("prepareWork:", "primeDifficulty:", header.PrimeDifficultyArray(), "regionDifficulty:", header.RegionDifficulty())
 	// Only zone should calculate state
 	if nodeCtx == common.ZONE_CTX {
 		header.SetExtra(w.extra)

@@ -1,6 +1,7 @@
 package blake3pow
 
 import (
+	"fmt"
 	"math/big"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -11,6 +12,7 @@ import (
 // CalcOrder returns the order of the block within the hierarchy of chains
 func (blake3pow *Blake3pow) CalcOrder(header *types.Header) (*big.Int, int, error) {
 	if header.NumberU64() == 0 {
+		fmt.Println("Header number is zero, so its a zone block")
 		return common.Big0, common.PRIME_CTX, nil
 	}
 
@@ -29,6 +31,7 @@ func (blake3pow *Blake3pow) CalcOrder(header *types.Header) (*big.Int, int, erro
 	totalDeltaSPrime.Add(totalDeltaSPrime, intrinsicS)
 
 	if totalDeltaSPrime.Cmp(header.PrimeDifficulty(header.Location().Region())) > 0 {
+		fmt.Println("prime block because", common.BigBitsToBits(totalDeltaSPrime), ">", common.BigBitsToBits(header.PrimeDifficulty(header.Location().Region())))
 		return intrinsicS, common.PRIME_CTX, nil
 	}
 
@@ -37,6 +40,7 @@ func (blake3pow *Blake3pow) CalcOrder(header *types.Header) (*big.Int, int, erro
 	totalDeltaSRegion := new(big.Int).Add(header.ParentDeltaS(common.ZONE_CTX), intrinsicS)
 
 	if totalDeltaSRegion.Cmp(header.RegionDifficulty()) > 0 {
+		fmt.Println("region block because", common.BigBitsToBits(totalDeltaSRegion), ">", common.BigBitsToBits(header.RegionDifficulty()))
 		return intrinsicS, common.REGION_CTX, nil
 	}
 

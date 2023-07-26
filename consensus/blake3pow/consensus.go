@@ -394,14 +394,35 @@ func (blake3pow *Blake3pow) CalcPrimeDifficulty(chain consensus.ChainHeaderReade
 		return nil, errors.New("termini not found in CalcPrimeDifficulty")
 	}
 	primeTerminusHeader := chain.GetHeaderByHash(termini.PrimeTerminiAtIndex(parent.Location().SubIndex()))
+	if primeTerminusHeader.Hash() == chain.Config().GenesisHash {
+		initPrimeThreshold := new(big.Int).Mul(params.TimeFactor, big.NewInt(common.NumRegionsInPrime))
+		initPrimeThreshold = new(big.Int).Mul(initPrimeThreshold, big.NewInt(common.NumZonesInRegion))
+		log.Info("SetTerminusHash", "initPrimeThreshold:", initPrimeThreshold)
+		target := new(big.Int).Div(common.Big2e256, parent.Difficulty()).Bytes()
+		log.Info("SetTerminusHash", "target:", target, "parentdiff:", parent.Difficulty())
+		zoneThresholdS := blake3pow.IntrinsicLogS(common.BytesToHash(target))
+		log.Info("SetTerminusHash", "zoneThreshold:", zoneThresholdS)
+		initPrimeThreshold = new(big.Int).Mul(zoneThresholdS, initPrimeThreshold)
+		log.Info("SetTerminusHash", "initPrimeThreshold:", initPrimeThreshold)
+		return initPrimeThreshold, nil
+
+	}
+	log.Info("CalcPrimeDifficulty", "primeTerminusHeader:", primeTerminusHeader.NumberArray())
 	deltaNumber := new(big.Int).Sub(parent.Number(), primeTerminusHeader.Number())
+	log.Info("CalcPrimeDifficulty", "deltaNumber:", deltaNumber)
 	target := new(big.Int).Mul(big.NewInt(common.NumRegionsInPrime), params.TimeFactor)
+	log.Info("CalcPrimeDifficulty", "target:", target)
 
-	// prior - k * (target - deltaNumber)
+	// prior - prior * k * (target - deltaNumber)/target
 	controlError := new(big.Int).Sub(target, deltaNumber)
+	prior := primeTerminusHeader.PrimeDifficulty(parent.Location().SubIndex())
+	controlError = new(big.Int).Mul(controlError, prior)
+	controlError = new(big.Int).Quo(controlError, target)
+	log.Info("CalcPrimeDifficulty", "error:", controlError)
 	adjustment := new(big.Int).Quo(controlError, big10)
-	newDifficulty := new(big.Int).Sub(primeTerminusHeader.PrimeDifficulty(parent.Location().SubIndex()), adjustment)
-
+	log.Info("CalcPrimeDifficulty", "adjustment:", adjustment)
+	newDifficulty := new(big.Int).Sub(prior, adjustment)
+	log.Info("CalcPrimeDifficulty", "newDifficulty:", newDifficulty)
 	return newDifficulty, nil
 }
 
@@ -423,13 +444,30 @@ func (blake3pow *Blake3pow) CalcRegionDifficulty(chain consensus.ChainHeaderRead
 		return nil, errors.New("termini not found in CalcRegionDifficulty")
 	}
 	regionTerminusHeader := chain.GetHeaderByHash(termini.DomTerminus())
+	if regionTerminusHeader.Hash() == chain.Config().GenesisHash {
+		target := new(big.Int).Div(common.Big2e256, parent.Difficulty()).Bytes()
+		log.Info("SetTerminusHash", "target:", target, "parentdiff:", parent.Difficulty())
+		zoneThresholdS := blake3pow.IntrinsicLogS(common.BytesToHash(target))
+		log.Info("SetTerminusHash", "zoneThreshold:", zoneThresholdS)
+
+		initRegionThreshold := new(big.Int).Mul(params.TimeFactor, big.NewInt(common.NumZonesInRegion))
+		initRegionThreshold = new(big.Int).Mul(zoneThresholdS, initRegionThreshold)
+		return initRegionThreshold, nil
+	}
 	deltaNumber := new(big.Int).Sub(parent.Number(), regionTerminusHeader.Number())
 	target := new(big.Int).Mul(big.NewInt(common.NumZonesInRegion), params.TimeFactor)
 
 	// prior - k * (target - deltaNumber)
+	// prior - prior * k * (target - deltaNumber)/target
 	controlError := new(big.Int).Sub(target, deltaNumber)
+	prior := regionTerminusHeader.RegionDifficulty()
+	controlError = new(big.Int).Mul(controlError, prior)
+	controlError = new(big.Int).Quo(controlError, target)
+	log.Info("CalcRegionDifficulty", "error:", controlError)
 	adjustment := new(big.Int).Quo(controlError, big10)
-	newDifficulty := new(big.Int).Sub(regionTerminusHeader.RegionDifficulty(), adjustment)
+	log.Info("CalcRegionDifficulty", "adjustment:", adjustment)
+	newDifficulty := new(big.Int).Sub(prior, adjustment)
+	log.Info("CalcRegionDifficulty", "newDifficulty:", newDifficulty)
 
 	return newDifficulty, nil
 }
