@@ -41,6 +41,7 @@ var (
 	big9          = big.NewInt(9)
 	big10         = big.NewInt(10)
 	big32         = big.NewInt(32)
+	big100        = big.NewInt(100)
 	bigMinus99    = big.NewInt(-99)
 	big2e256      = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0)) // 2^256
 )
@@ -419,9 +420,9 @@ func (blake3pow *Blake3pow) CalcPrimeDifficulty(chain consensus.ChainHeaderReade
 	controlError = new(big.Int).Mul(controlError, prior)
 	controlError = new(big.Int).Quo(controlError, target)
 	log.Info("CalcPrimeDifficulty", "error:", controlError)
-	adjustment := new(big.Int).Quo(controlError, big10)
+	adjustment := new(big.Int).Quo(controlError, big100)
 	log.Info("CalcPrimeDifficulty", "adjustment:", adjustment)
-	newDifficulty := new(big.Int).Sub(prior, adjustment)
+	newDifficulty := new(big.Int).Add(prior, adjustment)
 	log.Info("CalcPrimeDifficulty", "newDifficulty:", newDifficulty)
 	return newDifficulty, nil
 }
@@ -464,9 +465,9 @@ func (blake3pow *Blake3pow) CalcRegionDifficulty(chain consensus.ChainHeaderRead
 	controlError = new(big.Int).Mul(controlError, prior)
 	controlError = new(big.Int).Quo(controlError, target)
 	log.Info("CalcRegionDifficulty", "error:", controlError)
-	adjustment := new(big.Int).Quo(controlError, big10)
+	adjustment := new(big.Int).Quo(controlError, big100)
 	log.Info("CalcRegionDifficulty", "adjustment:", adjustment)
-	newDifficulty := new(big.Int).Sub(prior, adjustment)
+	newDifficulty := new(big.Int).Add(prior, adjustment)
 	log.Info("CalcRegionDifficulty", "newDifficulty:", newDifficulty)
 
 	return newDifficulty, nil
