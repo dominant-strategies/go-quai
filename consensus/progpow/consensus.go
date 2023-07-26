@@ -319,6 +319,63 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 	}
 	return nil
 }
+func (progpow *Progpow) CalcPrimeEntropyThreshold(chain consensus.ChainHeaderReader, parent *types.Header) (*big.Int, error) {
+	nodeCtx := common.NodeLocation.Context()
+
+	if nodeCtx != common.REGION_CTX {
+		log.Error("Cannot CalcPrimeEntropyThreshold for", "context", nodeCtx)
+		return nil, errors.New("cannot CalcPrimeEntropyThreshold for non-region context")
+	}
+
+	if parent.Hash() == chain.Config().GenesisHash {
+		return parent.PrimeEntropyThreshold(parent.Location().SubIndex()), nil
+	}
+
+	// Get the primeTerminus
+	termini := chain.GetTerminiByHash(parent.ParentHash())
+	if termini == nil {
+		return nil, errors.New("termini not found in CalcPrimeEntropyThreshold")
+	}
+	primeTerminusHeader := chain.GetHeaderByHash(termini.PrimeTerminiAtIndex(parent.Location().SubIndex()))
+	deltaNumber := new(big.Int).Sub(parent.Number(), primeTerminusHeader.Number())
+	target := new(big.Int).Mul(big.NewInt(common.NumRegionsInPrime), params.TimeFactor)
+
+	// prior - k * (target - deltaNumber)
+	controlError := new(big.Int).Sub(target, deltaNumber)
+	adjustment := new(big.Int).Quo(controlError, big10)
+	newDifficulty := new(big.Int).Sub(primeTerminusHeader.PrimeEntropyThreshold(parent.Location().SubIndex()), adjustment)
+
+	return newDifficulty, nil
+}
+
+func (progpow *Progpow) CalcRegionEntropyThreshold(chain consensus.ChainHeaderReader, parent *types.Header) (*big.Int, error) {
+	nodeCtx := common.NodeLocation.Context()
+
+	if nodeCtx != common.ZONE_CTX {
+		log.Error("Cannot CalcRegionEntropyThreshold for", "context", nodeCtx)
+		return nil, errors.New("cannot CalcRegionEntropyThreshold for non-zone context")
+	}
+
+	if parent.Hash() == chain.Config().GenesisHash {
+		return parent.RegionEntropyThreshold(), nil
+	}
+
+	// Get the primeTerminus
+	termini := chain.GetTerminiByHash(parent.ParentHash())
+	if termini == nil {
+		return nil, errors.New("termini not found in CalcRegionEntropyThreshold")
+	}
+	regionTerminusHeader := chain.GetHeaderByHash(termini.DomTerminus())
+	deltaNumber := new(big.Int).Sub(parent.Number(), regionTerminusHeader.Number())
+	target := new(big.Int).Mul(big.NewInt(common.NumZonesInRegion), params.TimeFactor)
+
+	// prior - k * (target - deltaNumber)
+	controlError := new(big.Int).Sub(target, deltaNumber)
+	adjustment := new(big.Int).Quo(controlError, big10)
+	newDifficulty := new(big.Int).Sub(regionTerminusHeader.RegionEntropyThreshold(), adjustment)
+
+	return newDifficulty, nil
+}
 
 // CalcDifficulty is the difficulty adjustment algorithm. It returns
 // the difficulty that a new block should have when created at time

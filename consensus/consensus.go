@@ -44,6 +44,9 @@ type ChainHeaderReader interface {
 
 	// GetHeaderByHash retrieves a block header from the database by its hash.
 	GetHeaderByHash(hash common.Hash) *types.Header
+
+	// GetTerminiByHash retrieves the termini for a given header hash
+	GetTerminiByHash(hash common.Hash) *types.Termini
 }
 
 // ChainReader defines a small collection of methods needed to access the local
@@ -127,6 +130,12 @@ type Engine interface {
 	// CalcDifficulty is the difficulty adjustment algorithm. It returns the difficulty
 	// that a new block should have.
 	CalcDifficulty(chain ChainHeaderReader, parent *types.Header) *big.Int
+
+	// CalcRegionEntropyThreshold is the threshold adjustment algorithm for Region blocks per slice
+	CalcRegionEntropyThreshold(chain ChainHeaderReader, parent *types.Header) (*big.Int, error)
+
+	// CalcPrimeEntropyThreshold is the threshold adjustment algorithm for prime blocks per slice
+	CalcPrimeEntropyThreshold(chain ChainHeaderReader, parent *types.Header) (*big.Int, error)
 
 	// IsDomCoincident returns true if this block satisfies the difficulty order
 	// of a dominant chain. If this node does not have a dominant chain (i.e.
