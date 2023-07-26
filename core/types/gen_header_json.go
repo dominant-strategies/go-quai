@@ -251,7 +251,7 @@ func (t *Termini) UnmarshalJSON(input []byte) error {
 	if dec.DomTermius == nil {
 		return errors.New("missing required field 'domTerminus' for Termini")
 	}
-	if dec.SubTermini== nil {
+	if dec.SubTermini == nil {
 		return errors.New("missing required field 'subTermini' for Termini")
 	}
 	if dec.PrimeTermini == nil {

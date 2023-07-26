@@ -376,6 +376,64 @@ func (blake3pow *Blake3pow) CalcDifficulty(chain consensus.ChainHeaderReader, pa
 	return x
 }
 
+func (blake3pow *Blake3pow) CalcPrimeDifficulty(chain consensus.ChainHeaderReader, parent *types.Header) (*big.Int, error) {
+	nodeCtx := common.NodeLocation.Context()
+
+	if nodeCtx != common.REGION_CTX {
+		log.Error("Cannot CalcPrimeDifficulty for", "context", nodeCtx)
+		return nil, errors.New("cannot CalcPrimeDifficulty for non-region context")
+	}
+
+	if parent.Hash() == chain.Config().GenesisHash {
+		return parent.PrimeDifficulty(parent.Location().SubIndex()), nil
+	}
+
+	// Get the primeTerminus
+	termini := chain.GetTerminiByHash(parent.ParentHash())
+	if termini == nil {
+		return nil, errors.New("termini not found in CalcPrimeDifficulty")
+	}
+	primeTerminusHeader := chain.GetHeaderByHash(termini.PrimeTerminiAtIndex(parent.Location().SubIndex()))
+	deltaNumber := new(big.Int).Sub(parent.Number(), primeTerminusHeader.Number())
+	target := new(big.Int).Mul(big.NewInt(common.NumRegionsInPrime), params.TimeFactor)
+
+	// prior - k * (target - deltaNumber)
+	controlError := new(big.Int).Sub(target, deltaNumber)
+	adjustment := new(big.Int).Quo(controlError, big10)
+	newDifficulty := new(big.Int).Sub(primeTerminusHeader.PrimeDifficulty(parent.Location().SubIndex()), adjustment)
+
+	return newDifficulty, nil
+}
+
+func (blake3pow *Blake3pow) CalcRegionDifficulty(chain consensus.ChainHeaderReader, parent *types.Header) (*big.Int, error) {
+	nodeCtx := common.NodeLocation.Context()
+
+	if nodeCtx != common.ZONE_CTX {
+		log.Error("Cannot CalcRegionDifficulty for", "context", nodeCtx)
+		return nil, errors.New("cannot CalcRegionDifficulty for non-zone context")
+	}
+
+	if parent.Hash() == chain.Config().GenesisHash {
+		return parent.RegionDifficulty(), nil
+	}
+
+	// Get the primeTerminus
+	termini := chain.GetTerminiByHash(parent.ParentHash())
+	if termini == nil {
+		return nil, errors.New("termini not found in CalcRegionDifficulty")
+	}
+	regionTerminusHeader := chain.GetHeaderByHash(termini.DomTerminus())
+	deltaNumber := new(big.Int).Sub(parent.Number(), regionTerminusHeader.Number())
+	target := new(big.Int).Mul(big.NewInt(common.NumZonesInRegion), params.TimeFactor)
+
+	// prior - k * (target - deltaNumber)
+	controlError := new(big.Int).Sub(target, deltaNumber)
+	adjustment := new(big.Int).Quo(controlError, big10)
+	newDifficulty := new(big.Int).Sub(regionTerminusHeader.RegionDifficulty(), adjustment)
+
+	return newDifficulty, nil
+}
+
 func (blake3pow *Blake3pow) IsDomCoincident(chain consensus.ChainHeaderReader, header *types.Header) bool {
 	_, order, err := blake3pow.CalcOrder(header)
 	if err != nil {

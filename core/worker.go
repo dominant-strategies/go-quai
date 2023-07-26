@@ -770,22 +770,52 @@ func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*en
 				header.SetTerminusHash(parent.TerminusHash())
 			}
 		}
-		header.SetParentEntropy(w.engine.TotalLogS(parent.Header()))
+
 		if nodeCtx == common.REGION_CTX {
 			for i := 0; i < common.NumZonesInRegion; i++ {
-				header.SetPrimeDifficulty(parent.Difficulty(), i)
+				header.SetPrimeDifficulty(parent.Header().PrimeDifficulty(i), i)
 			}
 		}
+
+		if nodeCtx == common.REGION_CTX && order == common.PRIME_CTX {
+			primeDifficulty, err := w.engine.CalcPrimeDifficulty(w.hc, parent.Header())
+			if err != nil {
+				return nil, err
+			}
+			header.SetPrimeDifficulty(primeDifficulty, parent.Header().Location().SubIndex())
+		}
+
+		if nodeCtx == common.ZONE_CTX {
+			if order < nodeCtx {
+				regionDifficulty, err := w.engine.CalcRegionDifficulty(w.hc, parent.Header())
+				if err != nil {
+					return nil, err
+				}
+				header.SetRegionDifficulty(regionDifficulty)
+			} else {
+				header.SetRegionDifficulty(parent.Header().RegionDifficulty())
+			}
+		}
+
+		header.SetParentEntropy(w.engine.TotalLogS(parent.Header()))
 
 		if nodeCtx == common.ZONE_CTX {
 			header.SetRegionDifficulty(parent.Difficulty())
 		}
 	} else {
 		header.SetTerminusHash(w.hc.config.GenesisHash)
+		initPrimeThreshold := new(big.Int).Mul(params.TimeFactor, big.NewInt(common.NumRegionsInPrime))
+		initPrimeThreshold = new(big.Int).Mul(initPrimeThreshold, big.NewInt(common.NumZonesInRegion))
+		target := new(big.Int).Div(common.Big2e256, parent.Difficulty()).Bytes()
+		zoneThresholdS := w.hc.engine.IntrinsicLogS(common.BytesToHash(target))
+		initPrimeThreshold = new(big.Int).Mul(zoneThresholdS, initPrimeThreshold)
 		for i := 0; i < common.NumZonesInRegion; i++ {
-			header.SetPrimeDifficulty(parent.Difficulty(), i)
+
+			header.SetPrimeDifficulty(initPrimeThreshold, i)
 		}
-		header.SetRegionDifficulty(parent.Difficulty())
+		initRegionThreshold := new(big.Int).Mul(params.TimeFactor, big.NewInt(common.NumZonesInRegion))
+		initRegionThreshold = new(big.Int).Mul(zoneThresholdS, initRegionThreshold)
+		header.SetRegionDifficulty(initRegionThreshold)
 	}
 
 	// Only zone should calculate state
