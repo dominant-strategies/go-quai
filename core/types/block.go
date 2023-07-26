@@ -1104,9 +1104,6 @@ func CopyTermini(termini Termini) Termini {
 	for i, t := range termini.primeTermini {
 		newTermini.SetPrimeTerminiAtIndex(t, i)
 	}
-	for i, t := range termini.primeTermini {
-		newTermini.primeTermini[i] = t
-	}
 	return newTermini
 }
 
