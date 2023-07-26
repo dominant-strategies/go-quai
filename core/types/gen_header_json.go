@@ -230,8 +230,10 @@ func (t Termini) MarshalJSON() ([]byte, error) {
 	var enc struct {
 		DomTermius common.Hash   `json:"domTerminus" gencodec:"required"`
 		SubTermini []common.Hash `json:"subTermini"  gencodec:"required"`
+		PrimeTermini []common.Hash `json:"primeTermini" gencodec:"required"`
 	}
 	copy(enc.SubTermini, t.SubTermini())
+	copy(enc.PrimeTermini, t.PrimeTermini())
 	enc.DomTermius = t.DomTerminus()
 	raw, err := json.Marshal(&enc)
 	return raw, err
@@ -241,6 +243,7 @@ func (t *Termini) UnmarshalJSON(input []byte) error {
 	var dec struct {
 		DomTermius *common.Hash   `json:"domTerminus" gencodec:"required"`
 		SubTermini []common.Hash `json:"subTermini"  gencodec:"required"`
+		PrimeTermini []common.Hash `json:"primeTermini" gencodec:"required"`
 	}
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
@@ -251,7 +254,11 @@ func (t *Termini) UnmarshalJSON(input []byte) error {
 	if dec.SubTermini== nil {
 		return errors.New("missing required field 'subTermini' for Termini")
 	}
+	if dec.PrimeTermini == nil {
+		return errors.New("missing require field 'primeTermini' for Termini")
+	}
 	t.SetDomTerminus(*dec.DomTermius)
 	t.SetSubTermini(dec.SubTermini)
+	t.SetPrimeTermini(dec.PrimeTermini)
 	return nil
 }
