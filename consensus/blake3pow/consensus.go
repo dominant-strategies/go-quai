@@ -281,10 +281,38 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 			if common.Big0.Cmp(header.ParentDeltaS()) != 0 {
 				return fmt.Errorf("invalid parent delta s: have %v, want %v", header.ParentDeltaS(), common.Big0)
 			}
+			// If parent block is dom, validate the region and prime difficulty
+			if nodeCtx == common.ZONE_CTX {
+				regionDifficulty, err := blake3pow.CalcRegionDifficulty(chain, parent)
+				if err != nil {
+					return err
+				}
+				if header.RegionDifficulty().Cmp(regionDifficulty) != 0 {
+					return fmt.Errorf("invalid region difficulty rd: have %v, want %v", header.RegionDifficulty(), regionDifficulty)
+				}
+			}
+			if nodeCtx == common.REGION_CTX {
+				primeDifficulty, err := blake3pow.CalcPrimeDifficulty(chain, parent)
+				if err != nil {
+					return err
+				}
+				if header.PrimeDifficulty(parent.Location().SubIndex()).Cmp(primeDifficulty) != 0 {
+					return fmt.Errorf("invalid prime difficulty pd: have %v, want %v", header.PrimeDifficulty(parent.Location().SubIndex()), primeDifficulty)
+				}
+			}
 		} else {
 			parentDeltaS := blake3pow.DeltaLogS(parent)
 			if parentDeltaS.Cmp(header.ParentDeltaS()) != 0 {
 				return fmt.Errorf("invalid parent delta s: have %v, want %v", header.ParentDeltaS(), parentDeltaS)
+			}
+			// if parent is not a dom block, no adjustment to the prime or region difficulty will be made
+			for i := 0; i < common.NumZonesInRegion; i++ {
+				if header.PrimeDifficulty(i).Cmp(parent.PrimeDifficulty(i)) != 0 {
+					return fmt.Errorf("invalid prime difficulty pd: have %v, want %v at index %v", header.PrimeDifficulty(i), parent.PrimeDifficulty(i), i)
+				}
+			}
+			if header.RegionDifficulty() != parent.RegionDifficulty() {
+				return fmt.Errorf("invalid region difficulty rd: have %v, want %v", header.RegionDifficulty(), parent.PrimeDifficulty())
 			}
 		}
 	}
