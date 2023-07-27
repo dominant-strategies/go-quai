@@ -97,7 +97,7 @@ func (bc *BodyDb) Append(batch ethdb.Batch, block *types.Block, newInboundEtxs t
 	}
 	log.Info("Time taken to", "apply state:", common.PrettyDuration(time.Since(stateApply)))
 
-	rawdb.WriteBlock(batch, block)
+	rawdb.WriteBlock(bc.db, block)
 	return logs, nil
 }
 

@@ -316,6 +316,7 @@ func (sl *Slice) miningStrategy(nodeCtx int, order int, bestPh types.PendingHead
 				domTerminusHeader := sl.hc.GetHeaderByHash(bestPh.Termini[c_terminusIndex])
 				_, domTerminusOrder, err := sl.engine.CalcOrder(domTerminusHeader)
 				if err != nil {
+                    log.Error("Error calculating order for domTerminusHeader nil block zone")
 					return false
 				}
 				if order > domTerminusOrder {
@@ -331,6 +332,7 @@ func (sl *Slice) miningStrategy(nodeCtx int, order int, bestPh types.PendingHead
 				regionTerminusHeader := sl.hc.GetHeaderByHash(bestPh.Header.TerminusHash())
 				_, regionTerminusOrder, err := sl.engine.CalcOrder(regionTerminusHeader)
 				if err != nil {
+                    log.Error("Error calculating order for domTerminusHeader nil block region")
 					return false
 				}
 				if order > regionTerminusOrder {
@@ -835,12 +837,6 @@ func (sl *Slice) ConstructLocalBlock(header *types.Header) (*types.Block, error)
 // header.
 func (sl *Slice) ConstructLocalMinedBlock(header *types.Header) (*types.Block, error) {
 	nodeCtx := common.NodeLocation.Context()
-	if nodeCtx == common.ZONE_CTX && header.EmptyBody() {
-		// This shortcut is only available to zone chains. Prime and region chains can
-		// never have an empty body, because they will always have at least one block
-		// in the subordinate manifest.
-		return types.NewBlockWithHeader(header), nil
-	}
 	var pendingBlockBody *types.Body
 	if nodeCtx == common.ZONE_CTX {
 		pendingBlockBody = sl.GetPendingBlockBody(header)
