@@ -29,7 +29,6 @@ const (
 	c_maxPendingEtxBatches            = 1024
 	c_maxPendingEtxsRollup            = 256
 	c_maxBloomFilters                 = 1024
-	c_pendingHeaderCacheLimit         = 100
 	c_pendingHeaderChacheBufferFactor = 2
 	pendingHeaderGCTime               = 5
 	c_terminusIndex                   = 3
@@ -37,7 +36,7 @@ const (
 	c_regionRelayProc                 = 3
 	c_primeRelayProc                  = 10
 	c_asyncPhUpdateChanSize           = 10
-	c_phCacheSize                     = 50
+	c_phCacheSize                     = 500
 )
 
 type Slice struct {
@@ -316,7 +315,7 @@ func (sl *Slice) miningStrategy(nodeCtx int, order int, bestPh types.PendingHead
 				domTerminusHeader := sl.hc.GetHeaderByHash(bestPh.Termini[c_terminusIndex])
 				_, domTerminusOrder, err := sl.engine.CalcOrder(domTerminusHeader)
 				if err != nil {
-                    log.Error("Error calculating order for domTerminusHeader nil block zone")
+					log.Error("Error calculating order for domTerminusHeader nil block zone")
 					return false
 				}
 				if order > domTerminusOrder {
@@ -332,7 +331,7 @@ func (sl *Slice) miningStrategy(nodeCtx int, order int, bestPh types.PendingHead
 				regionTerminusHeader := sl.hc.GetHeaderByHash(bestPh.Header.TerminusHash())
 				_, regionTerminusOrder, err := sl.engine.CalcOrder(regionTerminusHeader)
 				if err != nil {
-                    log.Error("Error calculating order for domTerminusHeader nil block region")
+					log.Error("Error calculating order for domTerminusHeader nil block region")
 					return false
 				}
 				if order > regionTerminusOrder {
@@ -587,11 +586,21 @@ func (sl *Slice) SendPendingEtxsToDom(pEtxs types.PendingEtxs) error {
 // SubRelayPendingHeader takes a pending header from the sender (ie dominant), updates the phCache with a composited header and relays result to subordinates
 func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader, location common.Location) {
 	nodeCtx := common.NodeLocation.Context()
+	var err error
 
 	if nodeCtx == common.REGION_CTX {
 		// Adding a guard on the region that was already updated in the synchronous path.
 
-		err := sl.updatePhCacheFromDom(pendingHeader, common.NodeLocation.Region(), []int{common.PRIME_CTX}, location.Region() != common.NodeLocation.Region())
+		for i := 0; i < 3; i++ {
+			err = sl.updatePhCacheFromDom(pendingHeader, common.NodeLocation.Region(), []int{common.PRIME_CTX}, location.Region() != common.NodeLocation.Region())
+			if err != nil {
+				if err.Error() == ErrPendingHeaderNotInCache.Error() {
+					time.Sleep(time.Second)
+				}
+			} else {
+				break
+			}
+		}
 		if err != nil {
 			return
 		}
@@ -607,9 +616,16 @@ func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader, locati
 		// This check prevents a double send to the miner.
 		// If the previous block on which the given pendingHeader was built is the same as the NodeLocation
 		// the pendingHeader update has already been sent to the miner for the given location in relayPh.
-		err := sl.updatePhCacheFromDom(pendingHeader, common.NodeLocation.Zone(), []int{common.PRIME_CTX, common.REGION_CTX}, !bytes.Equal(location, common.NodeLocation))
-		if err != nil {
-			return
+
+		for i := 0; i < 3; i++ {
+			err = sl.updatePhCacheFromDom(pendingHeader, common.NodeLocation.Zone(), []int{common.PRIME_CTX, common.REGION_CTX}, !bytes.Equal(location, common.NodeLocation))
+			if err != nil {
+				if err.Error() == ErrPendingHeaderNotInCache.Error() {
+					time.Sleep(time.Second)
+				}
+			} else {
+				break
+			}
 		}
 
 		if !bytes.Equal(location, common.NodeLocation) {
@@ -672,7 +688,7 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 		return nil
 	}
 	log.Warn("no pending header found for", "terminus", hash, "pendingHeaderNumber", pendingHeader.Header.NumberArray(), "Hash", pendingHeader.Header.ParentHash(), "Termini index", terminiIndex, "indices", indices)
-	return errors.New("no pending header found in cache")
+	return ErrPendingHeaderNotInCache
 }
 
 // updatePhCache updates cache given a pendingHeaderWithTermini with the terminus used as the key.
