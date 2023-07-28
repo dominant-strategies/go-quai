@@ -331,13 +331,6 @@ func (hc *HeaderChain) SetCurrentHeader(batch ethdb.Batch, head *types.Header) e
 	hc.headermu.Lock()
 	defer hc.headermu.Unlock()
 
-	if common.NodeLocation.Context() != common.ZONE_CTX {
-		// write the head block hash to the db
-		rawdb.WriteHeadBlockHash(hc.headerDb, head.Hash())
-		hc.currentHeader.Store(head)
-		return nil
-	}
-
 	prevHeader := hc.CurrentHeader()
 	// if trying to set the same header, escape
 	if prevHeader.Hash() == head.Hash() {
