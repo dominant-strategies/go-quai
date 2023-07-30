@@ -194,7 +194,6 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		if err != nil {
 			return nil, false, err
 		}
-		sl.updatePhCache(pendingHeaderWithTermini, true, nil)
 	}
 
 	time5 := common.PrettyDuration(time.Since(start))
@@ -266,9 +265,9 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		}
 		time9 = common.PrettyDuration(time.Since(start))
 
-		sl.updatePhCache(pendingHeaderWithTermini, true, nil)
-
 	}
+
+	sl.updatePhCache(pendingHeaderWithTermini, true, nil, subReorg)
 
 	if subReorg {
 		log.Info("Choosing phHeader Append:", "NumberArray:", pendingHeaderWithTermini.Header.NumberArray(), "Number:", pendingHeaderWithTermini.Header.Number(), "ParentHash:", pendingHeaderWithTermini.Header.ParentHash(), "Terminus:", pendingHeaderWithTermini.Termini[c_terminusIndex])
@@ -391,7 +390,7 @@ func (sl *Slice) asyncPendingHeaderLoop() {
 	for {
 		select {
 		case asyncPh := <-sl.asyncPhCh:
-			sl.updatePhCache(types.PendingHeader{}, true, asyncPh)
+			sl.updatePhCache(types.PendingHeader{}, true, asyncPh, true)
 
 			bestPh, exists := sl.readPhCache(sl.bestPhKey)
 			if exists {
@@ -545,7 +544,7 @@ func (sl *Slice) pcrc(batch ethdb.Batch, header *types.Header, domTerminus commo
 // POEM compares externS to the currentHead S and returns true if externS is greater
 func (sl *Slice) poem(externS *big.Int, currentS *big.Int) bool {
 	log.Info("POEM:", "Header hash:", sl.hc.CurrentHeader().Hash(), "currentS:", common.BigBitsToBits(currentS), "externS:", common.BigBitsToBits(externS))
-	reorg := currentS.Cmp(externS) < 0
+	reorg := currentS.Cmp(externS) <= 0
 	return reorg
 }
 
@@ -681,7 +680,7 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 		oldBestPhEntropy := sl.engine.TotalLogPhS(bestPh.Header)
 
 		if update {
-			sl.updatePhCache(types.PendingHeader{Header: combinedPendingHeader, Termini: localPendingHeader.Termini}, false, nil)
+			sl.updatePhCache(types.PendingHeader{Header: combinedPendingHeader, Termini: localPendingHeader.Termini}, false, nil, false)
 		}
 
 		sl.pickPhHead(types.PendingHeader{Header: combinedPendingHeader, Termini: localPendingHeader.Termini}, oldBestPhEntropy)
@@ -692,7 +691,7 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 }
 
 // updatePhCache updates cache given a pendingHeaderWithTermini with the terminus used as the key.
-func (sl *Slice) updatePhCache(pendingHeaderWithTermini types.PendingHeader, inSlice bool, localHeader *types.Header) {
+func (sl *Slice) updatePhCache(pendingHeaderWithTermini types.PendingHeader, inSlice bool, localHeader *types.Header, subReorg bool) {
 	sl.phCacheMu.Lock()
 	defer sl.phCacheMu.Unlock()
 	nodeCtx := common.NodeLocation.Context()
@@ -734,7 +733,7 @@ func (sl *Slice) updatePhCache(pendingHeaderWithTermini types.PendingHeader, inS
 				sl.writePhCache(pendingHeaderWithTermini.Termini[c_terminusIndex], deepCopyPendingHeaderWithTermini)
 				log.Info("PhCache update:", "inSlice:", inSlice, "Ph Number:", deepCopyPendingHeaderWithTermini.Header.NumberArray(), "Termini:", deepCopyPendingHeaderWithTermini.Termini[c_terminusIndex])
 			}
-		} else if inSlice && (pendingHeaderWithTermini.Header.ParentEntropy().Cmp(oldPh.Header.ParentEntropy()) >= 0) {
+		} else if inSlice && subReorg {
 			sl.writePhCache(pendingHeaderWithTermini.Termini[c_terminusIndex], deepCopyPendingHeaderWithTermini)
 			log.Info("PhCache update:", "inSlice:", inSlice, "Ph Number:", deepCopyPendingHeaderWithTermini.Header.NumberArray(), "Termini:", deepCopyPendingHeaderWithTermini.Termini[c_terminusIndex])
 		}
