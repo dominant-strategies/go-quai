@@ -288,7 +288,7 @@ func (c *Core) Append(header *types.Header, domPendingHeader *types.Header, domT
 		if err.Error() == ErrBodyNotFound.Error() {
 			c.sl.missingBodyFeed.Send(header)
 		}
-		if err.Error() == consensus.ErrUnknownAncestor.Error() || (err.Error() == ErrSubNotSyncedToDom.Error() && !c.sl.ProcessingState()) {
+		if err.Error() == consensus.ErrUnknownAncestor.Error() || err.Error() == ErrSubNotSyncedToDom.Error() {
 			c.sl.missingParentFeed.Send(header.ParentHash())
 		}
 	}
