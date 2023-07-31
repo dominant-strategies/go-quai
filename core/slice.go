@@ -714,11 +714,12 @@ func (sl *Slice) updatePhCache(pendingHeaderWithTermini types.PendingHeader, inS
 	deepCopyPendingHeaderWithTermini.Header.SetLocation(common.NodeLocation)
 	deepCopyPendingHeaderWithTermini.Header.SetTime(uint64(time.Now().Unix()))
 
-	if subReorg {
-		sl.writePhCache(pendingHeaderWithTermini.Termini[c_terminusIndex], deepCopyPendingHeaderWithTermini)
-		log.Info("PhCache update:", "inSlice:", inSlice, "Ph Number:", deepCopyPendingHeaderWithTermini.Header.NumberArray(), "Termini:", deepCopyPendingHeaderWithTermini.Termini[c_terminusIndex])
-	}
+	_, exists = sl.readPhCache(pendingHeaderWithTermini.Termini[c_terminusIndex])
 
+	if subReorg || !exists {
+		sl.writePhCache(pendingHeaderWithTermini.Termini[c_terminusIndex], deepCopyPendingHeaderWithTermini)
+		log.Info("PhCache update:", "new terminus?:", !exists, "inSlice:", inSlice, "Ph Number:", deepCopyPendingHeaderWithTermini.Header.NumberArray(), "Termini:", deepCopyPendingHeaderWithTermini.Termini[c_terminusIndex])
+	}
 }
 
 func (sl *Slice) pickPhHead(pendingHeaderWithTermini types.PendingHeader, oldBestPhEntropy *big.Int) bool {
