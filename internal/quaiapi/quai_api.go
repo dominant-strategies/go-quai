@@ -643,6 +643,21 @@ func (s *PublicBlockChainQuaiAPI) SubRelayPendingHeader(ctx context.Context, raw
 	s.b.SubRelayPendingHeader(pendingHeader, subRelay.Location, subRelay.SubReorg)
 }
 
+type DomUpdate struct {
+	OldTermini common.Hash
+	NewTermini common.Hash
+	Location   common.Location
+}
+
+func (s *PublicBlockChainQuaiAPI) UpdateDom(ctx context.Context, raw json.RawMessage) {
+	var domUpdate DomUpdate
+	if err := json.Unmarshal(raw, &domUpdate); err != nil {
+		return
+	}
+
+	s.b.UpdateDom(domUpdate.OldTermini, domUpdate.NewTermini, domUpdate.Location)
+}
+
 func (s *PublicBlockChainQuaiAPI) NewGenesisPendingHeader(ctx context.Context, raw json.RawMessage) {
 	var pendingHeader *types.Header
 	if err := json.Unmarshal(raw, &pendingHeader); err != nil {

@@ -339,6 +339,10 @@ func (c *Core) SubRelayPendingHeader(slPendingHeader types.PendingHeader, locati
 	c.sl.SubRelayPendingHeader(slPendingHeader, location, subReorg)
 }
 
+func (c *Core) UpdateDom(oldTerminus common.Hash, newTerminus common.Hash, location common.Location) {
+	c.sl.UpdateDom(oldTerminus, newTerminus, location)
+}
+
 func (c *Core) NewGenesisPendigHeader(pendingHeader *types.Header) {
 	c.sl.NewGenesisPendingHeader(pendingHeader)
 }

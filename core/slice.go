@@ -270,7 +270,11 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 
 	sl.updatePhCache(pendingHeaderWithTermini, true, nil, subReorg)
 
+	var updateDom bool
 	if subReorg {
+		if pendingHeaderWithTermini.Termini[c_terminusIndex] != bestPh.Termini[c_terminusIndex] && order == common.ZONE_CTX {
+			updateDom = true
+		}
 		log.Info("Choosing phHeader Append:", "NumberArray:", pendingHeaderWithTermini.Header.NumberArray(), "Number:", pendingHeaderWithTermini.Header.Number(), "ParentHash:", pendingHeaderWithTermini.Header.ParentHash(), "Terminus:", pendingHeaderWithTermini.Termini[c_terminusIndex])
 		sl.bestPhKey = pendingHeaderWithTermini.Termini[c_terminusIndex]
 		block.SetAppendTime(time.Duration(time9))
@@ -299,6 +303,12 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		"elapsed", common.PrettyDuration(time.Since(start)))
 
 	if nodeCtx == common.ZONE_CTX {
+		if updateDom {
+			log.Info("Append updateDom", "oldTermini:", bestPh.Termini[c_terminusIndex], "newTermini:", pendingHeaderWithTermini.Termini[c_terminusIndex], "location:", common.NodeLocation)
+			if sl.domClient != nil {
+				go sl.domClient.UpdateDom(context.Background(), bestPh.Termini[c_terminusIndex], pendingHeaderWithTermini.Termini[c_terminusIndex], common.NodeLocation)
+			}
+		}
 		return block.ExtTransactions(), subReorg, nil
 	} else {
 		return subPendingEtxs, subReorg, nil
@@ -333,6 +343,59 @@ func (sl *Slice) relayPh(block *types.Block, pendingHeaderWithTermini types.Pend
 		for _, i := range sl.randomRelayArray() {
 			if sl.subClients[i] != nil {
 				go sl.subClients[i].SubRelayPendingHeader(context.Background(), pendingHeaderWithTermini, location, subReorg)
+			}
+		}
+	}
+}
+
+func (sl *Slice) UpdateDom(oldTerminus common.Hash, newTerminus common.Hash, location common.Location) {
+	// Find the dom TerminusHash with the newTerminus
+	newDomTermini := sl.hc.GetTerminiByHash(newTerminus)
+	oldDomTermini := sl.hc.GetTerminiByHash(oldTerminus)
+	if len(newDomTermini) != 4 || len(oldDomTermini) != 4 {
+		return
+	}
+	bestPh, exist := sl.readPhCache(sl.bestPhKey)
+	log.Info("UpdateDom:", "oldTerminus:", oldTerminus, "newTerminus:", newTerminus, "oldDomTerminus:", oldDomTermini[c_terminusIndex], "newDomTerminus:", newDomTermini[c_terminusIndex], "bestPhKey:", sl.bestPhKey, "bestPh Hash:", bestPh.Header.Hash(), "bestPh Number:", bestPh.Header.NumberArray())
+	if exist {
+		if newTerminus != bestPh.Header.ParentHash() && bestPh.Termini[c_terminusIndex] == newDomTermini[c_terminusIndex] && oldDomTermini[c_terminusIndex] == newDomTermini[c_terminusIndex] {
+			// Can update
+			block := sl.hc.GetBlockByHash(newTerminus)
+			if block != nil {
+				pendingHeaderWithTermini, err := sl.generateSlicePendingHeader(block, newDomTermini, types.EmptyHeader(), false, false)
+				if err != nil {
+					return
+				}
+				log.Info("pendingHeaderWithTermini:", "parent Hash:", pendingHeaderWithTermini.Header.ParentHash(), "Number", pendingHeaderWithTermini.Header.NumberArray())
+				for _, i := range sl.randomRelayArray() {
+					if sl.subClients[i] != nil {
+						go sl.subClients[i].SubRelayPendingHeader(context.Background(), pendingHeaderWithTermini, location, true)
+					}
+				}
+			}
+			return
+		}
+		if oldDomTermini[c_terminusIndex] != newDomTermini[c_terminusIndex] {
+			// need to update dom
+			log.Info("Append need to updateDom", "oldDomTermini:", oldDomTermini, "newDomTermini:", newDomTermini, "location:", common.NodeLocation)
+			if sl.domClient != nil {
+				go sl.domClient.UpdateDom(context.Background(), oldDomTermini[c_terminusIndex], newDomTermini[c_terminusIndex], location)
+			} else {
+				// Can update
+				block := sl.hc.GetBlockByHash(newTerminus)
+				if block != nil {
+					pendingHeaderWithTermini, err := sl.generateSlicePendingHeader(block, newDomTermini, types.EmptyHeader(), false, false)
+					if err != nil {
+						return
+					}
+					log.Info("pendingHeaderWithTermini:", "parent Hash:", pendingHeaderWithTermini.Header.ParentHash(), "Number", pendingHeaderWithTermini.Header.NumberArray())
+					for _, i := range sl.randomRelayArray() {
+						if sl.subClients[i] != nil {
+							go sl.subClients[i].SubRelayPendingHeader(context.Background(), pendingHeaderWithTermini, location, true)
+						}
+					}
+				}
+				return
 			}
 		}
 	}

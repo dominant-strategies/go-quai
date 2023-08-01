@@ -477,6 +477,10 @@ func (b *QuaiAPIBackend) SubRelayPendingHeader(pendingHeader types.PendingHeader
 	b.eth.core.SubRelayPendingHeader(pendingHeader, location, subReorg)
 }
 
+func (b *QuaiAPIBackend) UpdateDom(oldTerminus common.Hash, newTerminus common.Hash, location common.Location) {
+	b.eth.core.UpdateDom(oldTerminus, newTerminus, location)
+}
+
 func (b *QuaiAPIBackend) ProcessingState() bool {
 	return b.eth.core.ProcessingState()
 }
