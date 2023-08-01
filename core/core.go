@@ -25,12 +25,20 @@ import (
 )
 
 const (
-	c_maxAppendQueue         = 1000000 // Maximum number of future headers we can store in cache
-	c_maxFutureTime          = 30      // Max time into the future (in seconds) we will accept a block
-	c_appendQueueRetryPeriod = 1       // Time (in seconds) before retrying to append from AppendQueue
-	c_appendQueueThreshold   = 1000    // Number of blocks to load from the disk to ram on every proc of append queue
-	c_processingCache        = 10      // Number of block hashes held to prevent multi simultaneous appends on a single block hash
+	c_maxAppendQueue                    = 1000000 // Maximum number of future headers we can store in cache
+	c_maxFutureTime                     = 30      // Max time into the future (in seconds) we will accept a block
+	c_appendQueueRetryPeriod            = 1       // Time (in seconds) before retrying to append from AppendQueue
+	c_appendQueueThreshold              = 1000    // Number of blocks to load from the disk to ram on every proc of append queue
+	c_processingCache                   = 10      // Number of block hashes held to prevent multi simultaneous appends on a single block hash
+	c_retryThreshold                    = 120     // Number of times a block is retry to be appended before eviction from append queue
+	c_maxFutureBlocks                   = 6
+	c_appendQueueRetryPriorityThreshold = 5
 )
+
+type blockNumberAndRetryCounter struct {
+	number uint64
+	retry  uint64
+}
 
 type Core struct {
 	sl     *Slice
@@ -129,43 +137,57 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 func (c *Core) procAppendQueue() {
 	// Sort the blocks by number and attempt to insert them
 	var hashNumberList []types.HashAndNumber
+	var hashNumberPriorityList []types.HashAndNumber
 	for _, hash := range c.appendQueue.Keys() {
 		if value, exist := c.appendQueue.Peek(hash); exist {
-			hashNumber := types.HashAndNumber{Hash: hash.(common.Hash), Number: value.(uint64)}
-			hashNumberList = append(hashNumberList, hashNumber)
+			hashNumber := types.HashAndNumber{Hash: hash.(common.Hash), Number: value.(blockNumberAndRetryCounter).number}
+			if value.(blockNumberAndRetryCounter).retry < c_appendQueueRetryPriorityThreshold {
+				hashNumberPriorityList = append(hashNumberList, hashNumber)
+			} else if hashNumber.Number < c.CurrentHeader().NumberU64()+c_maxFutureBlocks {
+				hashNumberList = append(hashNumberList, hashNumber)
+			}
 		}
 	}
+
+	c.serviceBlocks(hashNumberPriorityList)
+	if len(hashNumberPriorityList) > 0 {
+		log.Info("Size of hashNumberPriorityList", "len", len(hashNumberPriorityList), "first entry", hashNumberPriorityList[0].Number, "last entry", hashNumberPriorityList[len(hashNumberPriorityList)-1].Number)
+	}
+	c.serviceBlocks(hashNumberList)
+	if len(hashNumberList) > 0 {
+		log.Info("Size of hashNumberList", "len", len(hashNumberList), "first entry", hashNumberList[0].Number, "last entry", hashNumberList[len(hashNumberList)-1].Number)
+	}
+}
+
+func (c *Core) serviceBlocks(hashNumberList []types.HashAndNumber) {
 	sort.Slice(hashNumberList, func(i, j int) bool {
 		return hashNumberList[i].Number < hashNumberList[j].Number
 	})
 
-	// Only take c_appendQueueThreshold latest blocks out of the database because we know that the
-	// append will be interrupted once we reach the dom block, so no need to get
-	// all the blocks in the appendQueue and load it to the RAM
-	var threshold int
-	if len(hashNumberList) > c_appendQueueThreshold {
-		threshold = c_appendQueueThreshold
-	} else {
-		threshold = len(hashNumberList)
-	}
 	// Attempt to service the sorted list
-	for _, hashAndNumber := range hashNumberList[:threshold] {
+	for _, hashAndNumber := range hashNumberList {
 		block := c.GetBlockOrCandidateByHash(hashAndNumber.Hash)
 		if block != nil {
-			c.serviceFutureBlock(block)
+			var numberAndRetryCounter blockNumberAndRetryCounter
+			if value, exist := c.appendQueue.Peek(block.Hash()); exist {
+				numberAndRetryCounter = value.(blockNumberAndRetryCounter)
+				numberAndRetryCounter.retry += 1
+				if numberAndRetryCounter.retry > c_retryThreshold {
+					c.appendQueue.Remove(block.Hash())
+				} else {
+					c.appendQueue.Add(block.Hash(), numberAndRetryCounter)
+				}
+			}
+			parentBlock := c.GetBlock(block.ParentHash(), block.NumberU64()-1)
+			if parentBlock != nil {
+				c.InsertChain([]*types.Block{block})
+			} else {
+				if !c.HasHeader(block.ParentHash(), block.NumberU64()-1) {
+					c.sl.missingParentFeed.Send(block.ParentHash())
+				}
+			}
 		} else {
 			log.Warn("Entry in the FH cache without being in the db: ", "Hash: ", hashAndNumber.Hash)
-		}
-	}
-}
-
-func (c *Core) serviceFutureBlock(block *types.Block) {
-	parentBlock := c.GetBlock(block.ParentHash(), block.NumberU64()-1)
-	if parentBlock != nil {
-		c.InsertChain([]*types.Block{block})
-	} else {
-		if !c.HasHeader(block.ParentHash(), block.NumberU64()-1) {
-			c.sl.missingParentFeed.Send(block.ParentHash())
 		}
 	}
 }
@@ -176,7 +198,7 @@ func (c *Core) addToAppendQueue(block *types.Block) error {
 	if block.Time() > max {
 		return fmt.Errorf("future block timestamp %v > allowed %v", block.Time(), max)
 	}
-	c.appendQueue.ContainsOrAdd(block.Hash(), block.NumberU64())
+	c.appendQueue.ContainsOrAdd(block.Hash(), blockNumberAndRetryCounter{block.NumberU64(), 0})
 	return nil
 }
 
