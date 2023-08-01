@@ -118,8 +118,6 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLooku
 		return nil, err
 	}
 
-    time.Sleep(1 * time.Second)
-
 	sl.CheckForBadHashAndRecover()
 
 	if nodeCtx == common.ZONE_CTX && sl.ProcessingState() {
@@ -173,7 +171,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	if err != nil {
 		return nil, false, err
 	}
-    log.Info("PCRC done", "hash", header.Hash(), "number", header.NumberArray(), "termini", newTermini)
+	log.Info("PCRC done", "hash", header.Hash(), "number", header.NumberArray(), "termini", newTermini)
 
 	time2 := common.PrettyDuration(time.Since(start))
 	// Append the new block
@@ -308,6 +306,9 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 }
 
 func (sl *Slice) miningStrategy(bestPh types.PendingHeader, block *types.Block) bool {
+	if bestPh.Header == nil { // This is the case where we try to append the block before we have not initialized the bestPh
+		return true
+	}
 	subReorg := sl.poem(sl.engine.TotalLogS(block.Header()), bestPh.Header.ParentEntropy())
 	return subReorg
 }

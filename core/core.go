@@ -30,8 +30,10 @@ const (
 	c_appendQueueRetryPeriod            = 1       // Time (in seconds) before retrying to append from AppendQueue
 	c_appendQueueThreshold              = 1000    // Number of blocks to load from the disk to ram on every proc of append queue
 	c_processingCache                   = 10      // Number of block hashes held to prevent multi simultaneous appends on a single block hash
-	c_retryThreshold                    = 120     // Number of times a block is retry to be appended before eviction from append queue
-	c_maxFutureBlocks                   = 6
+	c_primeRetryThreshold               = 600     // Number of times a block is retry to be appended before eviction from append queue
+	c_regionRetryThreshold              = 200     // Number of times a block is retry to be appended before eviction from append queue
+	c_zoneRetryThreshold                = 120     // Number of times a block is retry to be appended before eviction from append queue
+	c_maxFutureBlocks                   = 15
 	c_appendQueueRetryPriorityThreshold = 5
 )
 
@@ -143,8 +145,8 @@ func (c *Core) procAppendQueue() {
 			hashNumber := types.HashAndNumber{Hash: hash.(common.Hash), Number: value.(blockNumberAndRetryCounter).number}
 			if value.(blockNumberAndRetryCounter).retry < c_appendQueueRetryPriorityThreshold {
 				hashNumberPriorityList = append(hashNumberPriorityList, hashNumber)
-			} 
-            if hashNumber.Number < c.CurrentHeader().NumberU64()+c_maxFutureBlocks {
+			}
+			if hashNumber.Number < c.CurrentHeader().NumberU64()+c_maxFutureBlocks {
 				hashNumberList = append(hashNumberList, hashNumber)
 			}
 		}
@@ -165,15 +167,25 @@ func (c *Core) serviceBlocks(hashNumberList []types.HashAndNumber) {
 		return hashNumberList[i].Number < hashNumberList[j].Number
 	})
 
+	var retryThreshold uint64
+	switch common.NodeLocation.Context() {
+	case common.PRIME_CTX:
+		retryThreshold = c_primeRetryThreshold
+	case common.REGION_CTX:
+		retryThreshold = c_regionRetryThreshold
+	case common.ZONE_CTX:
+		retryThreshold = c_zoneRetryThreshold
+	}
+
 	// Attempt to service the sorted list
 	for _, hashAndNumber := range hashNumberList {
-		block := c.GetBlockOrCandidateByHash(hashAndNumber.Hash)
+		block := c.GetHeaderOrCandidateByHash(hashAndNumber.Hash)
 		if block != nil {
 			var numberAndRetryCounter blockNumberAndRetryCounter
 			if value, exist := c.appendQueue.Peek(block.Hash()); exist {
 				numberAndRetryCounter = value.(blockNumberAndRetryCounter)
 				numberAndRetryCounter.retry += 1
-				if numberAndRetryCounter.retry > c_retryThreshold {
+				if numberAndRetryCounter.retry > retryThreshold {
 					c.appendQueue.Remove(block.Hash())
 				} else {
 					c.appendQueue.Add(block.Hash(), numberAndRetryCounter)
@@ -181,7 +193,7 @@ func (c *Core) serviceBlocks(hashNumberList []types.HashAndNumber) {
 			}
 			parentBlock := c.GetBlock(block.ParentHash(), block.NumberU64()-1)
 			if parentBlock != nil {
-				c.InsertChain([]*types.Block{block})
+				c.InsertChain([]*types.Block{types.NewBlockWithHeader(block)})
 			} else {
 				if !c.HasHeader(block.ParentHash(), block.NumberU64()-1) {
 					c.sl.missingParentFeed.Send(block.ParentHash())
