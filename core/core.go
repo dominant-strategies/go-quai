@@ -142,8 +142,9 @@ func (c *Core) procAppendQueue() {
 		if value, exist := c.appendQueue.Peek(hash); exist {
 			hashNumber := types.HashAndNumber{Hash: hash.(common.Hash), Number: value.(blockNumberAndRetryCounter).number}
 			if value.(blockNumberAndRetryCounter).retry < c_appendQueueRetryPriorityThreshold {
-				hashNumberPriorityList = append(hashNumberList, hashNumber)
-			} else if hashNumber.Number < c.CurrentHeader().NumberU64()+c_maxFutureBlocks {
+				hashNumberPriorityList = append(hashNumberPriorityList, hashNumber)
+			} 
+            if hashNumber.Number < c.CurrentHeader().NumberU64()+c_maxFutureBlocks {
 				hashNumberList = append(hashNumberList, hashNumber)
 			}
 		}

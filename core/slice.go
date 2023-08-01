@@ -118,6 +118,8 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLooku
 		return nil, err
 	}
 
+    time.Sleep(1 * time.Second)
+
 	sl.CheckForBadHashAndRecover()
 
 	if nodeCtx == common.ZONE_CTX && sl.ProcessingState() {
@@ -171,6 +173,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	if err != nil {
 		return nil, false, err
 	}
+    log.Info("PCRC done", "hash", header.Hash(), "number", header.NumberArray(), "termini", newTermini)
 
 	time2 := common.PrettyDuration(time.Since(start))
 	// Append the new block
@@ -248,7 +251,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	var time8, time9 common.PrettyDuration
 	bestPh, exist := sl.readPhCache(sl.bestPhKey)
 	if !exist {
-		sl.bestPhKey = pendingHeaderWithTermini.Termini[c_terminusIndex]
+		sl.bestPhKey = sl.config.GenesisHash
 		sl.writePhCache(block.Hash(), pendingHeaderWithTermini)
 		bestPh = pendingHeaderWithTermini
 		log.Error("BestPh Key does not exist for", "key", sl.bestPhKey)
