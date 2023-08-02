@@ -567,11 +567,6 @@ func (c *Core) Snapshots() *snapshot.Tree {
 	return nil
 }
 
-// this needs to be implemented, it is being used by a lot of modules
-func (c *Core) SetHead(number uint64) error {
-	return nil
-}
-
 func (c *Core) TxLookupLimit() uint64 {
 	return 0
 }

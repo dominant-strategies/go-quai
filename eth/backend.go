@@ -114,8 +114,8 @@ func New(stack *node.Node, config *ethconfig.Config) (*Quai, error) {
 	if err != nil {
 		return nil, err
 	}
-	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlockWithOverride(chainDb, config.Genesis)
-	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
+	chainConfig, _, genesisErr := core.SetupGenesisBlockWithOverride(chainDb, config.Genesis)
+	if genesisErr != nil {
 		return nil, genesisErr
 	}
 
@@ -180,13 +180,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Quai, error) {
 			Preimages:           config.Preimages,
 		}
 	)
-
-	// Rewind the chain in case of an incompatible config upgrade.
-	if compat, ok := genesisErr.(*params.ConfigCompatError); ok {
-		log.Warn("Rewinding chain to upgrade configuration", "err", compat)
-		eth.core.SetHead(compat.RewindTo)
-		rawdb.WriteChainConfig(chainDb, genesisHash, chainConfig)
-	}
 
 	if config.TxPool.Journal != "" {
 		config.TxPool.Journal = stack.ResolvePath(config.TxPool.Journal)
