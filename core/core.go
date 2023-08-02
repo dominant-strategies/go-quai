@@ -30,9 +30,9 @@ const (
 	c_appendQueueRetryPeriod            = 1       // Time (in seconds) before retrying to append from AppendQueue
 	c_appendQueueThreshold              = 1000    // Number of blocks to load from the disk to ram on every proc of append queue
 	c_processingCache                   = 10      // Number of block hashes held to prevent multi simultaneous appends on a single block hash
-	c_primeRetryThreshold               = 600     // Number of times a block is retry to be appended before eviction from append queue
-	c_regionRetryThreshold              = 200     // Number of times a block is retry to be appended before eviction from append queue
-	c_zoneRetryThreshold                = 120     // Number of times a block is retry to be appended before eviction from append queue
+	c_primeRetryThreshold               = 900     // Number of times a block is retry to be appended before eviction from append queue
+	c_regionRetryThreshold              = 300     // Number of times a block is retry to be appended before eviction from append queue
+	c_zoneRetryThreshold                = 100     // Number of times a block is retry to be appended before eviction from append queue
 	c_maxFutureBlocks                   = 15
 	c_appendQueueRetryPriorityThreshold = 5
 )
@@ -185,7 +185,7 @@ func (c *Core) serviceBlocks(hashNumberList []types.HashAndNumber) {
 			if value, exist := c.appendQueue.Peek(block.Hash()); exist {
 				numberAndRetryCounter = value.(blockNumberAndRetryCounter)
 				numberAndRetryCounter.retry += 1
-				if numberAndRetryCounter.retry > retryThreshold {
+				if numberAndRetryCounter.retry > retryThreshold && numberAndRetryCounter.number < c.CurrentHeader().NumberU64() {
 					c.appendQueue.Remove(block.Hash())
 				} else {
 					c.appendQueue.Add(block.Hash(), numberAndRetryCounter)
