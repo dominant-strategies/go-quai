@@ -78,11 +78,6 @@ func (b *QuaiAPIBackend) CalcOrder(header *types.Header) (*big.Int, int, error) 
 	return b.eth.core.CalcOrder(header)
 }
 
-func (b *QuaiAPIBackend) SetHead(number uint64) {
-	b.eth.handler.downloader.Cancel()
-	b.eth.core.SetHead(number)
-}
-
 func (b *QuaiAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
 	// Pending block is only known by the miner
 	if number == rpc.PendingBlockNumber {
