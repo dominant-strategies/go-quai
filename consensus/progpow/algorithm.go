@@ -130,6 +130,12 @@ func seedHash(block uint64) []byte {
 	return seed
 }
 
+// SeedHash is the seed to use for generating a verification cache and the mining
+// dataset.
+func SeedHash(block uint64) []byte {
+	return seedHash(block)
+}
+
 // generateCache creates a verification cache of a given size for an input seed.
 // The cache production process involves first sequentially filling up 32 MB of
 // memory, then performing two passes of Sergio Demian Lerner's RandMemoHash
