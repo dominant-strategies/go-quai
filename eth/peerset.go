@@ -196,6 +196,17 @@ func (ps *peerSet) peerRunningSlice(location common.Location) []*eth.Peer {
 	return peersRunningSlice
 }
 
+func (ps *peerSet) allPeers() []*eth.Peer {
+	ps.lock.RLock()
+	defer ps.lock.RUnlock()
+
+	var allPeers []*eth.Peer
+	for _, p := range ps.peers {
+		allPeers = append(allPeers, p.Peer)
+	}
+	return allPeers
+}
+
 // close disconnects all peers.
 func (ps *peerSet) close() {
 	ps.lock.Lock()
