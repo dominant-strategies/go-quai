@@ -267,7 +267,8 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		time9 = common.PrettyDuration(time.Since(start))
 
 	}
-
+	sl.phCacheMu.Lock()
+	defer sl.phCacheMu.Unlock()
 	sl.updatePhCache(pendingHeaderWithTermini, true, nil, subReorg)
 
 	var updateDom bool
@@ -291,7 +292,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	}
 
 	// Relay the new pendingHeader
-	go sl.relayPh(block, pendingHeaderWithTermini, domOrigin, block.Location(), subReorg)
+	sl.relayPh(block, pendingHeaderWithTermini, domOrigin, block.Location(), subReorg)
 
 	time10 := common.PrettyDuration(time.Since(start))
 	log.Info("times during append:", "t0_1", time0_1, "t0_2", time0_2, "t1:", time1, "t2:", time2, "t3:", time3, "t4:", time4, "t5:", time5, "t6:", time6, "t7:", time7, "t8:", time8, "t9:", time9, "t10:", time10)
@@ -342,7 +343,7 @@ func (sl *Slice) relayPh(block *types.Block, pendingHeaderWithTermini types.Pend
 	} else if !domOrigin {
 		for _, i := range sl.randomRelayArray() {
 			if sl.subClients[i] != nil {
-				go sl.subClients[i].SubRelayPendingHeader(context.Background(), pendingHeaderWithTermini, location, subReorg)
+				sl.subClients[i].SubRelayPendingHeader(context.Background(), pendingHeaderWithTermini, location, subReorg)
 			}
 		}
 	}
@@ -422,8 +423,9 @@ func (sl *Slice) asyncPendingHeaderLoop() {
 	for {
 		select {
 		case asyncPh := <-sl.asyncPhCh:
+			sl.phCacheMu.Lock()
 			sl.updatePhCache(types.PendingHeader{}, true, asyncPh, true)
-
+			sl.phCacheMu.Unlock()
 			bestPh, exists := sl.readPhCache(sl.bestPhKey)
 			if exists {
 				bestPh.Header.SetLocation(common.NodeLocation)
@@ -622,16 +624,7 @@ func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader, locati
 	if nodeCtx == common.REGION_CTX {
 		// Adding a guard on the region that was already updated in the synchronous path.
 
-		for i := 0; i < 3; i++ {
-			err = sl.updatePhCacheFromDom(pendingHeader, common.NodeLocation.Region(), []int{common.PRIME_CTX}, location.Region() != common.NodeLocation.Region(), subReorg)
-			if err != nil {
-				if err.Error() == ErrPendingHeaderNotInCache.Error() {
-					time.Sleep(time.Second)
-				}
-			} else {
-				break
-			}
-		}
+		err = sl.updatePhCacheFromDom(pendingHeader, common.NodeLocation.Region(), []int{common.PRIME_CTX}, location.Region() != common.NodeLocation.Region(), subReorg)
 		if err != nil {
 			return
 		}
@@ -648,15 +641,9 @@ func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader, locati
 		// If the previous block on which the given pendingHeader was built is the same as the NodeLocation
 		// the pendingHeader update has already been sent to the miner for the given location in relayPh.
 
-		for i := 0; i < 3; i++ {
-			err = sl.updatePhCacheFromDom(pendingHeader, common.NodeLocation.Zone(), []int{common.PRIME_CTX, common.REGION_CTX}, !bytes.Equal(location, common.NodeLocation), subReorg)
-			if err != nil {
-				if err.Error() == ErrPendingHeaderNotInCache.Error() {
-					time.Sleep(time.Second)
-				}
-			} else {
-				break
-			}
+		err = sl.updatePhCacheFromDom(pendingHeader, common.NodeLocation.Zone(), []int{common.PRIME_CTX, common.REGION_CTX}, !bytes.Equal(location, common.NodeLocation), subReorg)
+		if err != nil {
+			return
 		}
 
 		if !bytes.Equal(location, common.NodeLocation) {
@@ -719,8 +706,6 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 
 // updatePhCache updates cache given a pendingHeaderWithTermini with the terminus used as the key.
 func (sl *Slice) updatePhCache(pendingHeaderWithTermini types.PendingHeader, inSlice bool, localHeader *types.Header, subReorg bool) {
-	sl.phCacheMu.Lock()
-	defer sl.phCacheMu.Unlock()
 
 	var exists bool
 	if localHeader != nil {
