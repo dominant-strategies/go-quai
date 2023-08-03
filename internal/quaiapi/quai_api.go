@@ -644,9 +644,9 @@ func (s *PublicBlockChainQuaiAPI) SubRelayPendingHeader(ctx context.Context, raw
 }
 
 type DomUpdate struct {
-	OldTermini common.Hash
-	NewTermini common.Hash
-	Location   common.Location
+	OldTerminus common.Hash
+	NewTerminus common.Hash
+	Location    common.Location
 }
 
 func (s *PublicBlockChainQuaiAPI) UpdateDom(ctx context.Context, raw json.RawMessage) {
@@ -655,7 +655,7 @@ func (s *PublicBlockChainQuaiAPI) UpdateDom(ctx context.Context, raw json.RawMes
 		return
 	}
 
-	s.b.UpdateDom(domUpdate.OldTermini, domUpdate.NewTermini, domUpdate.Location)
+	s.b.UpdateDom(domUpdate.OldTerminus, domUpdate.NewTerminus, domUpdate.Location)
 }
 
 func (s *PublicBlockChainQuaiAPI) NewGenesisPendingHeader(ctx context.Context, raw json.RawMessage) {
