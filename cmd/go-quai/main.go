@@ -256,7 +256,9 @@ func prepare(ctx *cli.Context) {
 	utils.SetupMetrics(ctx)
 
 	// Start system runtime metrics collection
-	go metrics.CollectProcessMetrics(3 * time.Second)
+	if ctx.GlobalBool(utils.MetricsEnabledFlag.Name) {
+		go metrics.CollectProcessMetrics(3 * time.Second)
+	}
 }
 
 // quai is the main entry point into the system if no special subcommand is ran.
