@@ -626,6 +626,7 @@ func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader, locati
 			err = sl.updatePhCacheFromDom(pendingHeader, common.NodeLocation.Region(), []int{common.PRIME_CTX}, location.Region() != common.NodeLocation.Region(), subReorg)
 			if err != nil {
 				if err.Error() == ErrPendingHeaderNotInCache.Error() {
+					log.Info("SubRelayPendingHeader: Retrying after 1 second sleep")
 					time.Sleep(time.Second)
 				}
 			} else {
@@ -652,6 +653,7 @@ func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader, locati
 			err = sl.updatePhCacheFromDom(pendingHeader, common.NodeLocation.Zone(), []int{common.PRIME_CTX, common.REGION_CTX}, !bytes.Equal(location, common.NodeLocation), subReorg)
 			if err != nil {
 				if err.Error() == ErrPendingHeaderNotInCache.Error() {
+					log.Info("SubRelayPendingHeader: Retrying after 1 second sleep")
 					time.Sleep(time.Second)
 				}
 			} else {
@@ -701,16 +703,21 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 		for _, i := range indices {
 			combinedPendingHeader = sl.combinePendingHeader(pendingHeader.Header, combinedPendingHeader, i, false)
 		}
+		bestPh, exist := sl.readPhCache(sl.bestPhKey)
+		if !exist {
+			sl.bestPhKey = localPendingHeader.Termini[c_terminusIndex]
+			sl.writePhCache(localPendingHeader.Termini[c_terminusIndex], types.PendingHeader{Header: combinedPendingHeader, Termini: localPendingHeader.Termini})
+			bestPh = types.PendingHeader{Header: combinedPendingHeader, Termini: localPendingHeader.Termini}
+			log.Error("BestPh Key does not exist for", "key", sl.bestPhKey)
+		}
+
+		oldBestPhEntropy := sl.engine.TotalLogPhS(bestPh.Header)
 
 		if update {
 			sl.updatePhCache(types.PendingHeader{Header: combinedPendingHeader, Termini: localPendingHeader.Termini}, false, nil, subReorg)
 		}
 
-		// Pick the head
-		if subReorg {
-			log.Info("Choosing phHeader pickPhHead:", "NumberArray:", localPendingHeader.Header.NumberArray(), "Number:", localPendingHeader.Header.Number(), "ParentHash:", localPendingHeader.Header.ParentHash(), "Terminus:", localPendingHeader.Termini[c_terminusIndex])
-			sl.bestPhKey = localPendingHeader.Termini[c_terminusIndex]
-		}
+		sl.pickPhHead(types.PendingHeader{Header: combinedPendingHeader, Termini: localPendingHeader.Termini}, oldBestPhEntropy)
 		return nil
 	}
 	log.Warn("no pending header found for", "terminus", hash, "pendingHeaderNumber", pendingHeader.Header.NumberArray(), "Hash", pendingHeader.Header.ParentHash(), "Termini index", terminiIndex, "indices", indices)
@@ -747,6 +754,18 @@ func (sl *Slice) updatePhCache(pendingHeaderWithTermini types.PendingHeader, inS
 		sl.writePhCache(pendingHeaderWithTermini.Termini[c_terminusIndex], deepCopyPendingHeaderWithTermini)
 		log.Info("PhCache update:", "new terminus?:", !exists, "inSlice:", inSlice, "Ph Number:", deepCopyPendingHeaderWithTermini.Header.NumberArray(), "Termini:", deepCopyPendingHeaderWithTermini.Termini[c_terminusIndex])
 	}
+}
+
+func (sl *Slice) pickPhHead(pendingHeaderWithTermini types.PendingHeader, oldBestPhEntropy *big.Int) bool {
+	newPhEntropy := sl.engine.TotalLogPhS(pendingHeaderWithTermini.Header)
+	// Pick a phCache Head
+	if sl.poem(newPhEntropy, oldBestPhEntropy) {
+		log.Info("Choosing phHeader pickPhHead:", "NumberArray:", pendingHeaderWithTermini.Header.NumberArray(), "Number:", pendingHeaderWithTermini.Header.Number(), "ParentHash:", pendingHeaderWithTermini.Header.ParentHash(), "Terminus:", pendingHeaderWithTermini.Termini[c_terminusIndex])
+		sl.bestPhKey = pendingHeaderWithTermini.Termini[c_terminusIndex]
+		log.Info("Choosing new pending header", "Ph Number:", pendingHeaderWithTermini.Header.NumberArray(), "terminus:", pendingHeaderWithTermini.Termini[c_terminusIndex])
+		return true
+	}
+	return false
 }
 
 // init checks if the headerchain is empty and if it's empty appends the Knot
