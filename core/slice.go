@@ -197,37 +197,6 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		}
 	}
 
-	time5 := common.PrettyDuration(time.Since(start))
-	var subPendingEtxs types.Transactions
-	var subReorg bool
-	var time5_1 common.PrettyDuration
-	var time5_2 common.PrettyDuration
-	var time5_3 common.PrettyDuration
-	// Call my sub to append the block, and collect the rolled up ETXs from that sub
-	if nodeCtx != common.ZONE_CTX {
-		// How to get the sub pending etxs if not running the full node?.
-		if sl.subClients[location.SubIndex()] != nil {
-			subPendingEtxs, subReorg, err = sl.subClients[location.SubIndex()].Append(context.Background(), header, pendingHeaderWithTermini.Header, domTerminus, true, newInboundEtxs)
-			if err != nil {
-				return nil, false, err
-			}
-			time5_1 = common.PrettyDuration(time.Since(start))
-			// Cache the subordinate's pending ETXs
-			pEtxs := types.PendingEtxs{header, subPendingEtxs}
-			time5_2 = common.PrettyDuration(time.Since(start))
-			// Add the pending etx given by the sub in the rollup
-			sl.AddPendingEtxs(pEtxs)
-			// Only region has the rollup hashes for pendingEtxs
-			if nodeCtx == common.REGION_CTX {
-				// We also need to store the pendingEtxRollup to the dom
-				pEtxRollup := types.PendingEtxsRollup{header, block.SubManifest()}
-				sl.AddPendingEtxsRollup(pEtxRollup)
-			}
-			time5_3 = common.PrettyDuration(time.Since(start))
-		}
-	}
-
-	time6 := common.PrettyDuration(time.Since(start))
 	// If this was a coincident block, our dom will be passing us a set of newly
 	// confirmed ETXs If this is not a coincident block, we need to build up the
 	// list of confirmed ETXs using the subordinate manifest In either case, if
@@ -239,8 +208,39 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 			return nil, false, ErrSubNotSyncedToDom
 		}
 	}
-	time7 := common.PrettyDuration(time.Since(start))
+	time5 := common.PrettyDuration(time.Since(start))
 
+	time6 := common.PrettyDuration(time.Since(start))
+	var subPendingEtxs types.Transactions
+	var subReorg bool
+	var time6_1 common.PrettyDuration
+	var time6_2 common.PrettyDuration
+	var time6_3 common.PrettyDuration
+	// Call my sub to append the block, and collect the rolled up ETXs from that sub
+	if nodeCtx != common.ZONE_CTX {
+		// How to get the sub pending etxs if not running the full node?.
+		if sl.subClients[location.SubIndex()] != nil {
+			subPendingEtxs, subReorg, err = sl.subClients[location.SubIndex()].Append(context.Background(), header, pendingHeaderWithTermini.Header, domTerminus, true, newInboundEtxs)
+			if err != nil {
+				return nil, false, err
+			}
+			time6_1 = common.PrettyDuration(time.Since(start))
+			// Cache the subordinate's pending ETXs
+			pEtxs := types.PendingEtxs{header, subPendingEtxs}
+			time6_2 = common.PrettyDuration(time.Since(start))
+			// Add the pending etx given by the sub in the rollup
+			sl.AddPendingEtxs(pEtxs)
+			// Only region has the rollup hashes for pendingEtxs
+			if nodeCtx == common.REGION_CTX {
+				// We also need to store the pendingEtxRollup to the dom
+				pEtxRollup := types.PendingEtxsRollup{header, block.SubManifest()}
+				sl.AddPendingEtxsRollup(pEtxRollup)
+			}
+			time6_3 = common.PrettyDuration(time.Since(start))
+		}
+	}
+
+	time7 := common.PrettyDuration(time.Since(start))
 	err = sl.hc.AppendBlock(batch, block, newInboundEtxs.FilterToLocation(common.NodeLocation))
 	if err != nil {
 		return nil, false, err
@@ -296,7 +296,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 
 	time10 := common.PrettyDuration(time.Since(start))
 	log.Info("times during append:", "t0_1", time0_1, "t0_2", time0_2, "t1:", time1, "t2:", time2, "t3:", time3, "t4:", time4, "t5:", time5, "t6:", time6, "t7:", time7, "t8:", time8, "t9:", time9, "t10:", time10)
-	log.Info("times during sub append:", "t5_1:", time5_1, "t5_2:", time5_2, "t5_3:", time5_3)
+	log.Info("times during sub append:", "t6_1:", time6_1, "t6_2:", time6_2, "t6_3:", time6_3)
 	log.Info("Appended new block", "number", block.Header().Number(), "hash", block.Hash(),
 		"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "etxs", len(block.ExtTransactions()), "gas", block.GasUsed(),
 		"root", block.Root(),
