@@ -304,7 +304,7 @@ func (c *Core) WriteBlock(block *types.Block) {
 	if c.sl.IsBlockHashABadHash(block.Hash()) {
 		return
 	}
-	if c.GetBlockByHash(block.Hash()) == nil {
+	if !(c.sl.hc.HasHeader(block.Hash(), block.NumberU64()) && (c.sl.hc.GetTerminiByHash(block.Hash()) != nil)) {
 		// Only add non dom blocks to the append queue
 		_, order, err := c.CalcOrder(block.Header())
 		if err != nil {
@@ -313,6 +313,8 @@ func (c *Core) WriteBlock(block *types.Block) {
 		if order == common.NodeLocation.Context() {
 			c.addToAppendQueue(block)
 		}
+	}
+	if c.GetBlockByHash(block.Hash()) == nil {
 		c.sl.WriteBlock(block)
 	}
 }
