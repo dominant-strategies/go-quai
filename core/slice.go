@@ -537,7 +537,7 @@ func (sl *Slice) pcrc(batch ethdb.Batch, header *types.Header, domTerminus commo
 	termini := sl.hc.GetTerminiByHash(header.ParentHash())
 
 	if !termini.IsValid() {
-		return common.Hash{}, types.EmptyTermini(), errors.New("termini of parent is nil or invalid")
+		return common.Hash{}, types.EmptyTermini(), ErrSubNotSyncedToDom
 	}
 
 	newTermini := types.CopyTermini(*termini)
