@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"errors"
 	"io"
 	"math/big"
@@ -192,6 +193,17 @@ func (c *Core) serviceBlocks(hashNumberList []types.HashAndNumber) {
 			}
 			parentBlock := c.GetBlock(block.ParentHash(), block.NumberU64()-1)
 			if parentBlock != nil {
+				// If parent block is dom, send a signal to dom to request for the block if it doesnt have it
+				_, parentBlockOrder, err := c.sl.engine.CalcOrder(parentBlock.Header())
+				if err != nil {
+					log.Warn("Error calculating the parent block order in serviceBlocks", "Hash", parentBlock.Hash(), "Number", parentBlock.Header().NumberArray())
+				}
+				nodeCtx := common.NodeLocation.Context()
+				if parentBlockOrder < nodeCtx {
+					log.Info("Requesting the dom to get the block if it doesnt have and try to append", "Hash", parentBlock.Hash(), "Order", parentBlockOrder)
+					// send a signal to the required dom to fetch the block if it doesnt have it, or its not in its appendqueue
+					go c.sl.domClient.RequestDomToAppendOrFetch(context.Background(), parentBlock.Hash(), parentBlockOrder)
+				}
 				c.InsertChain([]*types.Block{types.NewBlockWithHeader(block)})
 			} else {
 				if !c.HasHeader(block.ParentHash(), block.NumberU64()-1) {
@@ -202,6 +214,30 @@ func (c *Core) serviceBlocks(hashNumberList []types.HashAndNumber) {
 			log.Warn("Entry in the FH cache without being in the db: ", "Hash: ", hashAndNumber.Hash)
 		}
 	}
+}
+
+func (c *Core) RequestDomToAppendOrFetch(hash common.Hash, order int) {
+	// TODO: optimize to check if the block is in the appendqueue or already
+	// appended to reduce the network bandwidth utilization
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx == common.PRIME_CTX {
+		// If prime all you can do it to ask for the block
+		_, exists := c.appendQueue.Get(hash)
+		if !exists {
+			log.Warn("Block sub asked doesnt exist in append queue, so request the peers for it", "Hash", hash, "Order", order)
+			c.sl.missingParentFeed.Send(hash)
+		}
+	} else if nodeCtx == common.REGION_CTX {
+		if order < nodeCtx { // Prime block
+			go c.sl.domClient.RequestDomToAppendOrFetch(context.Background(), hash, order)
+		}
+		_, exists := c.appendQueue.Get(hash)
+		if !exists {
+			log.Warn("Block sub asked doesnt exist in append queue, so request the peers for it", "Hash", hash, "Order", order)
+			c.sl.missingParentFeed.Send(hash)
+		}
+	}
+
 }
 
 // addToAppendQueue adds a block to the append queue
