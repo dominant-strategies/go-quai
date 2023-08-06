@@ -481,6 +481,10 @@ func (b *QuaiAPIBackend) UpdateDom(oldTerminus common.Hash, newTerminus common.H
 	b.eth.core.UpdateDom(oldTerminus, newTerminus, location)
 }
 
+func (b *QuaiAPIBackend) RequestDomToAppendOrFetch(hash common.Hash, order int) {
+	b.eth.core.RequestDomToAppendOrFetch(hash, order)
+}
+
 func (b *QuaiAPIBackend) ProcessingState() bool {
 	return b.eth.core.ProcessingState()
 }

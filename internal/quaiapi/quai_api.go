@@ -658,6 +658,18 @@ func (s *PublicBlockChainQuaiAPI) UpdateDom(ctx context.Context, raw json.RawMes
 	s.b.UpdateDom(domUpdate.OldTerminus, domUpdate.NewTerminus, domUpdate.Location)
 }
 
+type RequestDomArgs struct {
+	Hash  common.Hash
+	Order int
+}
+
+func (s *PublicBlockChainQuaiAPI) RequestDomToAppendOrFetch(ctx context.Context, raw json.RawMessage) {
+	var requestDom RequestDomArgs
+	if err := json.Unmarshal(raw, &requestDom); err != nil {
+		return
+	}
+	s.b.RequestDomToAppendOrFetch(requestDom.Hash, requestDom.Order)
+}
 func (s *PublicBlockChainQuaiAPI) NewGenesisPendingHeader(ctx context.Context, raw json.RawMessage) {
 	var pendingHeader *types.Header
 	if err := json.Unmarshal(raw, &pendingHeader); err != nil {

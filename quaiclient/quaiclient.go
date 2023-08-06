@@ -128,6 +128,13 @@ func (ec *Client) UpdateDom(ctx context.Context, oldTerminus common.Hash, newTer
 	ec.c.CallContext(ctx, nil, "quai_updateDom", data)
 }
 
+func (ec *Client) RequestDomToAppendOrFetch(ctx context.Context, hash common.Hash, order int) {
+	data := map[string]interface{}{"Hash": hash}
+	data["Order"] = order
+
+	ec.c.CallContext(ctx, nil, "quai_requestDomToAppendOrFetch", data)
+}
+
 func (ec *Client) NewGenesisPendingHeader(ctx context.Context, header *types.Header) {
 	ec.c.CallContext(ctx, nil, "quai_newGenesisPendingHeader", header.RPCMarshalHeader())
 }
