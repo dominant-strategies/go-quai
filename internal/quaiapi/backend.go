@@ -79,6 +79,7 @@ type Backend interface {
 	PendingBlock() *types.Block
 	SubRelayPendingHeader(pendingHeader types.PendingHeader, location common.Location, subReorg bool)
 	UpdateDom(oldTerminus common.Hash, newTerminus common.Hash, location common.Location)
+	RequestDomToAppendOrFetch(hash common.Hash, order int)
 	NewGenesisPendingHeader(pendingHeader *types.Header)
 	GetPendingHeader() (*types.Header, error)
 	GetManifest(blockHash common.Hash) (types.BlockManifest, error)
