@@ -339,6 +339,8 @@ func (sl *Slice) relayPh(block *types.Block, pendingHeaderWithTermini types.Pend
 			bestPh.Header().SetLocation(common.NodeLocation)
 			sl.miner.worker.pendingHeaderFeed.Send(bestPh.Header())
 			return
+		} else {
+			log.Warn("Pending Header for Best ph key does not exist", "best ph key", sl.bestPhKey)
 		}
 	} else if !domOrigin {
 		for _, i := range sl.randomRelayArray() {
