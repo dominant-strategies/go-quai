@@ -2,7 +2,6 @@ package core
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"math/big"
 	"sort"
@@ -154,11 +153,11 @@ func (c *Core) procAppendQueue() {
 
 	c.serviceBlocks(hashNumberPriorityList)
 	if len(hashNumberPriorityList) > 0 {
-		log.Info("Size of hashNumberPriorityList", "len", len(hashNumberPriorityList), "first entry", hashNumberPriorityList[0].Number, "last entry", hashNumberPriorityList[len(hashNumberPriorityList)-1].Number)
+		log.Info("Size of hashNumberPriorityList", "len", len(hashNumberPriorityList), "first entry", hashNumberPriorityList[0].Number, "hash:", hashNumberPriorityList[0].Hash, "last entry", hashNumberPriorityList[len(hashNumberPriorityList)-1].Number, "hash:", hashNumberPriorityList[len(hashNumberPriorityList)-1].Hash)
 	}
 	c.serviceBlocks(hashNumberList)
 	if len(hashNumberList) > 0 {
-		log.Info("Size of hashNumberList", "len", len(hashNumberList), "first entry", hashNumberList[0].Number, "last entry", hashNumberList[len(hashNumberList)-1].Number)
+		log.Info("Size of hashNumberList", "len", len(hashNumberList), "first entry", hashNumberList[0].Number, "hash:", hashNumberList[0].Hash, "last entry", hashNumberList[len(hashNumberList)-1].Number, "hash:", hashNumberList[len(hashNumberList)-1].Hash)
 	}
 }
 
@@ -207,10 +206,10 @@ func (c *Core) serviceBlocks(hashNumberList []types.HashAndNumber) {
 
 // addToAppendQueue adds a block to the append queue
 func (c *Core) addToAppendQueue(block *types.Block) error {
-	max := uint64(time.Now().Unix() + c_maxFutureTime)
-	if block.Time() > max {
-		return fmt.Errorf("future block timestamp %v > allowed %v", block.Time(), max)
-	}
+	// max := uint64(time.Now().Unix() + c_maxFutureTime)
+	// if block.Time() > max {
+	// 	return fmt.Errorf("future block timestamp %v > allowed %v", block.Time(), max)
+	// }
 	c.appendQueue.ContainsOrAdd(block.Hash(), blockNumberAndRetryCounter{block.NumberU64(), 0})
 	return nil
 }
@@ -304,7 +303,7 @@ func (c *Core) WriteBlock(block *types.Block) {
 	if c.sl.IsBlockHashABadHash(block.Hash()) {
 		return
 	}
-	if !(c.sl.hc.HasHeader(block.Hash(), block.NumberU64()) && (c.sl.hc.GetTerminiByHash(block.Hash()) != nil)) {
+	if c.sl.hc.GetHeaderByHash(block.Hash()) == nil { //Hasheader must have termini
 		// Only add non dom blocks to the append queue
 		_, order, err := c.CalcOrder(block.Header())
 		if err != nil {
@@ -314,7 +313,7 @@ func (c *Core) WriteBlock(block *types.Block) {
 			c.addToAppendQueue(block)
 		}
 	}
-	if c.GetBlockByHash(block.Hash()) == nil {
+	if c.sl.hc.GetHeaderOrCandidateByHash(block.Hash()) == nil { //This must have termini need to use getheaderorcandidatebyhash
 		c.sl.WriteBlock(block)
 	}
 }
