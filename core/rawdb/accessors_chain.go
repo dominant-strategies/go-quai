@@ -550,7 +550,7 @@ func ReadPendingHeader(db ethdb.Reader, hash common.Hash) *types.PendingHeader {
 
 	pendingHeader := new(types.PendingHeader)
 	if err := rlp.Decode(bytes.NewReader(data), pendingHeader); err != nil {
-		log.Error("Invalid pendingHeader RLP")
+		log.Error("Invalid pendingHeader RLP", "Err", err)
 		return nil
 	}
 	return pendingHeader
@@ -595,7 +595,9 @@ func ReadPhCache(db ethdb.Reader) map[common.Hash]types.PendingHeader {
 	// Read the pending header and phBody.
 	for _, hash := range hashes {
 		pendingHeader := ReadPendingHeader(db, hash)
-		phCache[hash] = *pendingHeader
+		if pendingHeader != nil {
+			phCache[hash] = *pendingHeader
+		}
 	}
 	return phCache
 }
