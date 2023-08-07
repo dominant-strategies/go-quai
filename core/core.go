@@ -35,6 +35,7 @@ const (
 	c_zoneRetryThreshold                = 100     // Number of times a block is retry to be appended before eviction from append queue
 	c_maxFutureBlocks                   = 15
 	c_appendQueueRetryPriorityThreshold = 5
+	c_appendQueueRemoveThreshold        = 10
 )
 
 type blockNumberAndRetryCounter struct {
@@ -185,7 +186,7 @@ func (c *Core) serviceBlocks(hashNumberList []types.HashAndNumber) {
 			if value, exist := c.appendQueue.Peek(block.Hash()); exist {
 				numberAndRetryCounter = value.(blockNumberAndRetryCounter)
 				numberAndRetryCounter.retry += 1
-				if numberAndRetryCounter.retry > retryThreshold && numberAndRetryCounter.number < c.CurrentHeader().NumberU64() {
+				if numberAndRetryCounter.retry > retryThreshold && numberAndRetryCounter.number+c_appendQueueRemoveThreshold < c.CurrentHeader().NumberU64() {
 					c.appendQueue.Remove(block.Hash())
 				} else {
 					c.appendQueue.Add(block.Hash(), numberAndRetryCounter)
@@ -199,7 +200,7 @@ func (c *Core) serviceBlocks(hashNumberList []types.HashAndNumber) {
 					log.Warn("Error calculating the parent block order in serviceBlocks", "Hash", parentBlock.Hash(), "Number", parentBlock.Header().NumberArray())
 				}
 				nodeCtx := common.NodeLocation.Context()
-				if parentBlockOrder < nodeCtx {
+				if parentBlockOrder < nodeCtx && c.GetHeaderByHash(parentBlock.Hash()) == nil {
 					log.Info("Requesting the dom to get the block if it doesnt have and try to append", "Hash", parentBlock.Hash(), "Order", parentBlockOrder)
 					// send a signal to the required dom to fetch the block if it doesnt have it, or its not in its appendqueue
 					go c.sl.domClient.RequestDomToAppendOrFetch(context.Background(), parentBlock.Hash(), parentBlockOrder)
@@ -345,8 +346,12 @@ func (c *Core) WriteBlock(block *types.Block) {
 		if err != nil {
 			return
 		}
-		if order == common.NodeLocation.Context() {
+		nodeCtx := common.NodeLocation.Context()
+		if order == nodeCtx {
 			c.addToAppendQueue(block)
+			// If a dom block comes in and we havent appended it yet
+		} else if order < nodeCtx && c.GetHeaderByHash(block.Hash()) == nil {
+			go c.sl.domClient.RequestDomToAppendOrFetch(context.Background(), block.Hash(), order)
 		}
 	}
 	if c.sl.hc.GetHeaderOrCandidateByHash(block.Hash()) == nil { //This must have termini need to use getheaderorcandidatebyhash
