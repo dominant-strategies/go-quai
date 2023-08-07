@@ -446,7 +446,11 @@ func (sl *Slice) asyncPendingHeaderLoop() {
 func (sl *Slice) readPhCache(hash common.Hash) (types.PendingHeader, bool) {
 	if ph, exists := sl.phCache.Get(hash); exists {
 		if ph, ok := ph.(types.PendingHeader); ok {
-			return *types.CopyPendingHeader(&ph), exists
+			if ph.Header() != nil {
+				return *types.CopyPendingHeader(&ph), exists
+			} else {
+				return types.PendingHeader{}, false
+			}
 		}
 	}
 	return types.PendingHeader{}, false
