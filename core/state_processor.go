@@ -241,18 +241,19 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 		statedb.Prepare(tx.Hash(), i)
 		var receipt *types.Receipt
 		if tx.Type() == types.ExternalTxType {
-			if _, exists := etxSet[tx.Hash()]; !exists { // Verify that the ETX exists in the set
-				return nil, nil, nil, 0, fmt.Errorf("invalid external transaction: etx %x not found in unspent etx set", tx.Hash())
+			etxEntry, exists := etxSet[tx.Hash()]
+			if !exists { // Verify that the ETX exists in the set
+				return nil, nil, nil, 0, fmt.Errorf("invalid external transaction: etx %x not found in unspent etx set", etxEntry.ETX.Hash())
 			}
-			prevZeroBal := prepareApplyETX(statedb, tx)
-			receipt, err = applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv, &etxRLimit, &etxPLimit)
+			prevZeroBal := prepareApplyETX(statedb, &etxEntry.ETX)
+			receipt, err = applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, &etxEntry.ETX, usedGas, vmenv, &etxRLimit, &etxPLimit)
 			statedb.SetBalance(common.ZeroInternal, prevZeroBal) // Reset the balance to what it previously was. Residual balance will be lost
 
 			if err != nil {
-				return nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+				return nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, etxEntry.ETX.Hash().Hex(), err)
 			}
 
-			delete(etxSet, tx.Hash()) // This ETX has been spent so remove it from the unspent set
+			delete(etxSet, etxEntry.ETX.Hash()) // This ETX has been spent so remove it from the unspent set
 
 		} else if tx.Type() == types.InternalTxType || tx.Type() == types.InternalToExternalTxType {
 			receipt, err = applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv, &etxRLimit, &etxPLimit)
