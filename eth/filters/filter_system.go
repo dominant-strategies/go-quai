@@ -68,6 +68,8 @@ const (
 	logsChanSize = 10
 	// chainEvChanSize is the size of channel listening to ChainEvent.
 	chainEvChanSize = 10
+	// pendingHeaderChSize is the size of channel listening to PendingHeaderEvent.
+	pendingHeaderChSize = 20
 )
 
 type subscription struct {
@@ -126,7 +128,7 @@ func NewEventSystem(backend Backend, lightMode bool) *EventSystem {
 		rmLogsCh:        make(chan core.RemovedLogsEvent, rmLogsChanSize),
 		pendingLogsCh:   make(chan []*types.Log, logsChanSize),
 		chainCh:         make(chan core.ChainEvent, chainEvChanSize),
-		pendingHeaderCh: make(chan *types.Header),
+		pendingHeaderCh: make(chan *types.Header, pendingHeaderChSize),
 	}
 
 	nodeCtx := common.NodeLocation.Context()
