@@ -29,10 +29,9 @@ var ColosseumBootnodes = []string{
 // GardenBootnodes are the enode URLs of the P2P bootstrap nodes running on the
 // Garden test network.
 var GardenBootnodes = []string{
-	"enode://f353567741755a4b35afb4641618b34c7e3c1666b49c9e519e8336c124ba8c2c556f00e9edcd87599994e9674ebdea3503a5ff1948a257c1540fe9f8c0fedf62@34.22.72.242",  // asia-northeast3-a
-	"enode://aa3d4daa8ea958c8a4fe3c56a7c5c0509754eec9b2e4eb45ac5fe9eb16bea442da0b50a0ac09e5fdf7711eb6b64df76dcd22e48d69f2f938d19fc60b9a8fd579@34.175.158.49", // europe-southwest1-a
-	"enode://3ecc23f02242be9249ac8b3aa2217514151106c152aa34b92f4287551d85300f9708740cb28d5ee39df3aec08315d624d8311fffc4c5e7ea24bc7422fc801972@35.198.7.119",  // southamerica-east1-b
-	"enode://13ed279b8013b61ef41466d4f07679fe17c407af4f6ae09b34042c72635eef314e9020f732a96a739abaa88f51108b76698f6b7335397be99418c371e5c3bcce@34.29.49.205",  // us-central1-a
+	"enode://f353567741755a4b35afb4641618b34c7e3c1666b49c9e519e8336c124ba8c2c556f00e9edcd87599994e9674ebdea3503a5ff1948a257c1540fe9f8c0fedf62@35.231.138.241",  // us-east1-b
+	"enode://aa3d4daa8ea958c8a4fe3c56a7c5c0509754eec9b2e4eb45ac5fe9eb16bea442da0b50a0ac09e5fdf7711eb6b64df76dcd22e48d69f2f938d19fc60b9a8fd579@34.118.24.175", // europe-central2-a
+	"enode://13ed279b8013b61ef41466d4f07679fe17c407af4f6ae09b34042c72635eef314e9020f732a96a739abaa88f51108b76698f6b7335397be99418c371e5c3bcce@34.68.104.77",  // us-central1-a
 }
 
 // OrchardBootnodes are the enode URLs of the P2P bootstrap nodes running on the
