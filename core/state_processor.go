@@ -220,10 +220,14 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 		return types.Receipts{}, []*types.Log{}, nil, 0, err
 	}
 
+	var timeSenders, timeSign, timePrepare, timeEtx, timeTx time.Duration
+	startTimeSenders := time.Now()
 	senders := make(map[common.Hash]*common.InternalAddress) // temporary cache for senders of internal txs
+	numInternalTxs := 0
 	p.hc.pool.SendersMutex.RLock()
 	for _, tx := range block.Transactions() { // get all senders of internal txs from cache - easier on the SendersMutex to do it all at once here
 		if tx.Type() == types.InternalTxType || tx.Type() == types.InternalToExternalTxType {
+			numInternalTxs++
 			if sender, ok := p.hc.pool.GetSenderThreadUnsafe(tx.Hash()); ok {
 				senders[tx.Hash()] = &sender // This pointer must never be modified
 			} else {
@@ -232,7 +236,7 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 		}
 	}
 	p.hc.pool.SendersMutex.RUnlock()
-
+	timeSenders = time.Since(startTimeSenders)
 	blockContext := NewEVMBlockContext(header, p.hc, nil)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, p.vmConfig)
 
@@ -245,15 +249,25 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 	if etxPLimit < params.ETXPLimitMin {
 		etxPLimit = params.ETXPLimitMin
 	}
+
 	var emittedEtxs types.Transactions
 	for i, tx := range block.Transactions() {
+		startProcess := time.Now()
 		msg, err := tx.AsMessageWithSender(types.MakeSigner(p.config, header.Number()), header.BaseFee(), senders[tx.Hash()])
 		if err != nil {
 			return nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
+		timeSignDelta := time.Since(startProcess)
+		timeSign += timeSignDelta
+
+		startTimePrepare := time.Now()
 		statedb.Prepare(tx.Hash(), i)
+		timePrepareDelta := time.Since(startTimePrepare)
+		timePrepare += timePrepareDelta
+
 		var receipt *types.Receipt
 		if tx.Type() == types.ExternalTxType {
+			startTimeEtx := time.Now()
 			etxEntry, exists := etxSet[tx.Hash()]
 			if !exists { // Verify that the ETX exists in the set
 				return nil, nil, nil, 0, fmt.Errorf("invalid external transaction: etx %x not found in unspent etx set", etxEntry.ETX.Hash())
@@ -267,13 +281,19 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 			}
 
 			delete(etxSet, etxEntry.ETX.Hash()) // This ETX has been spent so remove it from the unspent set
+			timeEtxDelta := time.Since(startTimeEtx)
+			timeEtx += timeEtxDelta
 
 		} else if tx.Type() == types.InternalTxType || tx.Type() == types.InternalToExternalTxType {
+			startTimeTx := time.Now()
+
 			receipt, err = applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv, &etxRLimit, &etxPLimit)
 			if err != nil {
 				return nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 			}
 			emittedEtxs = append(emittedEtxs, receipt.Etxs...)
+			timeTxDelta := time.Since(startTimeTx)
+			timeTx += timeTxDelta
 		} else {
 			return nil, nil, nil, 0, ErrTxTypeNotSupported
 		}
@@ -284,6 +304,8 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.engine.Finalize(p.hc, header, statedb, block.Transactions(), block.Uncles())
+
+	log.Info("Total Tx Processing Time", "signing time", common.PrettyDuration(timeSign), "senders cache time", common.PrettyDuration(timeSenders), "percent cached internal txs", fmt.Sprintf("%.2f", float64(len(senders))/float64(numInternalTxs)*100), "prepare state time", common.PrettyDuration(timePrepare), "etx time", common.PrettyDuration(timeEtx), "tx time", common.PrettyDuration(timeTx))
 
 	return receipts, allLogs, statedb, *usedGas, nil
 }
