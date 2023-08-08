@@ -220,6 +220,19 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 		return types.Receipts{}, []*types.Log{}, nil, 0, err
 	}
 
+	senders := make(map[common.Hash]*common.InternalAddress) // temporary cache for senders of internal txs
+	p.hc.pool.SendersMutex.RLock()
+	for _, tx := range block.Transactions() { // get all senders of internal txs from cache - easier on the SendersMutex to do it all at once here
+		if tx.Type() == types.InternalTxType || tx.Type() == types.InternalToExternalTxType {
+			if sender, ok := p.hc.pool.GetSenderThreadUnsafe(tx.Hash()); ok {
+				senders[tx.Hash()] = &sender // This pointer must never be modified
+			} else {
+				// TODO: calcuate the sender and add it to the pool senders cache in case of reorg (not necessary for now)
+			}
+		}
+	}
+	p.hc.pool.SendersMutex.RUnlock()
+
 	blockContext := NewEVMBlockContext(header, p.hc, nil)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, p.vmConfig)
 
@@ -234,7 +247,7 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 	}
 	var emittedEtxs types.Transactions
 	for i, tx := range block.Transactions() {
-		msg, err := tx.AsMessage(types.MakeSigner(p.config, header.Number()), header.BaseFee())
+		msg, err := tx.AsMessageWithSender(types.MakeSigner(p.config, header.Number()), header.BaseFee(), senders[tx.Hash()])
 		if err != nil {
 			return nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}

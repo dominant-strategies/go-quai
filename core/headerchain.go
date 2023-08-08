@@ -36,6 +36,7 @@ type HeaderChain struct {
 
 	bc     *BodyDb
 	engine consensus.Engine
+	pool   *TxPool
 
 	chainHeadFeed event.Feed
 	chainSideFeed event.Feed

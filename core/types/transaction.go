@@ -254,6 +254,16 @@ func (tx *Transaction) IsInternalToExternalTx() (inner *InternalToExternalTx, ok
 	return
 }
 
+func (tx *Transaction) From() *common.Address {
+	sc := tx.from.Load()
+	if sc != nil {
+		sigCache := sc.(sigCache)
+		return &sigCache.from
+	} else {
+		return nil
+	}
+}
+
 // To returns the recipient address of the transaction.
 // For contract-creation transactions, To returns nil.
 func (tx *Transaction) To() *common.Address {
@@ -679,6 +689,47 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 		msg.checkNonce = false
 	} else {
 		msg.from, err = Sender(s, tx)
+	}
+	if internalToExternalTx, ok := tx.IsInternalToExternalTx(); ok {
+		msg.etxGasLimit = internalToExternalTx.ETXGasLimit
+		msg.etxGasPrice = internalToExternalTx.ETXGasPrice
+		msg.etxGasTip = internalToExternalTx.ETXGasTip
+		msg.etxData = internalToExternalTx.ETXData
+		msg.etxAccessList = internalToExternalTx.ETXAccessList
+	}
+	return msg, err
+}
+
+// AsMessageWithSender returns the transaction as a core.Message.
+func (tx *Transaction) AsMessageWithSender(s Signer, baseFee *big.Int, sender *common.InternalAddress) (Message, error) {
+	msg := Message{
+		nonce:      tx.Nonce(),
+		gasLimit:   tx.Gas(),
+		gasPrice:   new(big.Int).Set(tx.GasPrice()),
+		gasFeeCap:  new(big.Int).Set(tx.GasFeeCap()),
+		gasTipCap:  new(big.Int).Set(tx.GasTipCap()),
+		to:         tx.To(),
+		amount:     tx.Value(),
+		data:       tx.Data(),
+		accessList: tx.AccessList(),
+		checkNonce: true,
+		txtype:     tx.Type(),
+	}
+	// If baseFee provided, set gasPrice to effectiveGasPrice.
+	if baseFee != nil {
+		msg.gasPrice = math.BigMin(msg.gasPrice.Add(msg.gasTipCap, baseFee), msg.gasFeeCap)
+	}
+	var err error
+	if tx.Type() == ExternalTxType {
+		msg.from = common.ZeroAddr
+		msg.etxsender, err = Sender(s, tx)
+		msg.checkNonce = false
+	} else {
+		if sender != nil {
+			msg.from = common.NewAddressFromData(sender)
+		} else {
+			msg.from, err = Sender(s, tx)
+		}
 	}
 	if internalToExternalTx, ok := tx.IsInternalToExternalTx(); ok {
 		msg.etxGasLimit = internalToExternalTx.ETXGasLimit
