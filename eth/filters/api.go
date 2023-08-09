@@ -34,6 +34,10 @@ import (
 	"github.com/dominant-strategies/go-quai/rpc"
 )
 
+const (
+	c_pendingHeaderChSize = 20
+)
+
 // filter is a helper struct that holds meta information over the filter type
 // and associated subscription in the event system.
 type filter struct {
@@ -594,7 +598,7 @@ func (api *PublicFilterAPI) PendingHeader(ctx context.Context) (*rpc.Subscriptio
 	rpcSub := notifier.CreateSubscription()
 
 	go func() {
-		header := make(chan *types.Header)
+		header := make(chan *types.Header, c_pendingHeaderChSize)
 		headerSub := api.events.SubscribePendingHeader(header)
 
 		for {
