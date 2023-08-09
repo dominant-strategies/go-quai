@@ -18,10 +18,12 @@
 package quaistats
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"math/big"
 	"net/http"
 	"runtime"
@@ -29,6 +31,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/dgrijalva/jwt-go"
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/shirou/gopsutil/cpu"
@@ -272,96 +276,151 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, chainSideCh chan co
 	}()
 
 	// Resolve the URL, defaulting to TLS, but falling back to none too
-	path := fmt.Sprintf("%s/api", s.host)
-	urls := []string{path}
+	paths := map[string]string{
+		"block":        fmt.Sprintf("%s/block", s.host),
+		"peerStats":    fmt.Sprintf("%s/peerStats", s.host),
+		"transactions": fmt.Sprintf("%s/transactions", s.host),
+		"nodeStats":    fmt.Sprintf("%s/nodeStats", s.host),
+		"pendStats":    fmt.Sprintf("%s/pendStats", s.host),
+		"login":        fmt.Sprintf("%s/auth/login", s.host),
+	}
 
-	// url.Parse and url.IsAbs is unsuitable (https://github.com/golang/go/issues/19779)
-	if !strings.Contains(path, "://") {
-		urls = []string{"wss://" + path, "ws://" + path}
+	urlMap := make(map[string][]string)
+
+	for key, path := range paths {
+		// url.Parse and url.IsAbs is unsuitable (https://github.com/golang/go/issues/19779)
+		if !strings.Contains(path, "://") {
+			// Append both secure (wss) and non-secure (ws) URLs
+			if key == "login" {
+				urlMap[key] = []string{"http://" + path}
+			} else {
+				urlMap[key] = []string{"wss://" + path, "ws://" + path}
+			}
+		} else {
+			urlMap[key] = []string{path}
+		}
 	}
 
 	errTimer := time.NewTimer(0)
 	defer errTimer.Stop()
+	var authJwt = ""
 	// Loop reporting until termination
 	for {
 		select {
 		case <-quitCh:
 			return
 		case <-errTimer.C:
+			// If we don't have a JWT or it's expired, get a new one
+
+			isJwtExpiredResult, jwtIsExpiredErr := s.isJwtExpired(authJwt)
+			if authJwt == "" || isJwtExpiredResult || jwtIsExpiredErr != nil {
+				var err error
+				authJwt, err = s.login2(urlMap["login"][0])
+				if err != nil {
+					log.Warn("Stats login failed", "err", err)
+					errTimer.Reset(10 * time.Second)
+					continue
+				}
+			}
 			// Establish a websocket connection to the server on any supported URL
-			var (
-				conn *connWrapper
-				err  error
-			)
 			dialer := websocket.Dialer{HandshakeTimeout: 5 * time.Second}
 			header := make(http.Header)
 			header.Set("origin", "http://localhost")
-			for _, url := range urls {
-				c, _, e := dialer.Dial(url, header)
-				err = e
-				if err == nil {
-					conn = newConnectionWrapper(c)
-					break
+			header.Set("sec-websocket-protocol", authJwt)
+
+			conns := make(map[string]*connWrapper)
+			errs := make(map[string]error)
+
+			for key, urls := range urlMap {
+				if key == "login" {
+					continue
+				}
+				for _, url := range urls {
+					c, _, e := dialer.Dial(url, header)
+					err := e
+					if err == nil {
+						conns[key] = newConnectionWrapper(c)
+						break
+					}
+					if err != nil {
+						log.Warn(key+" stats server unreachable", "err", err)
+						errs[key] = err
+						errTimer.Reset(10 * time.Second)
+						continue
+					}
+					go s.readLoop(conns[key])
 				}
 			}
-			if err != nil {
-				log.Warn("Stats server unreachable", "err", err)
-				errTimer.Reset(10 * time.Second)
-				continue
-			}
-			// Authenticate the client with the server
-			if err = s.login(conn); err != nil {
-				log.Warn("Stats login failed", "err", err)
-				conn.Close()
-				errTimer.Reset(10 * time.Second)
-				continue
-			}
-			go s.readLoop(conn)
 
-			// Send the initial stats so our node looks decent from the get go
-			if err = s.report(conn); err != nil {
-				log.Warn("Initial stats report failed", "err", err)
-				conn.Close()
-				errTimer.Reset(0)
-				continue
+			// Authenticate the client with the server
+			for key, conn := range conns {
+				if errs[key] = s.report(key, conn); errs[key] != nil {
+					log.Warn("Initial stats report failed", "err", errs[key])
+					conn.Close()
+					errTimer.Reset(0)
+					continue
+				}
+
 			}
+
 			// Keep sending status updates until the connection breaks
 			fullReport := time.NewTicker(reportInterval * time.Second)
 
-			for err == nil {
+			var noErrs = true
+			for noErrs {
+				var err error
 				select {
 				case <-quitCh:
 					fullReport.Stop()
 					// Make sure the connection is closed
-					conn.Close()
+					for _, conn := range conns {
+						conn.Close()
+					}
+
 					return
 
 				case <-fullReport.C:
-					if err = s.report(conn); err != nil {
-						log.Warn("Full stats report failed", "err", err)
+					if err = s.report("nodeStats", conns["nodeStats"]); err != nil {
+						noErrs = false
+						log.Warn("nodeStats full stats report failed", "err", err)
+					}
+					if err = s.report("peerStats", conns["peerStats"]); err != nil {
+						noErrs = false
+						log.Warn("peerStats full stats report failed", "err", err)
+					}
+					if err = s.report("transactions", conns["transactions"]); err != nil {
+						noErrs = false
+						log.Warn("transactions full stats report failed", "err", err)
 					}
 				case list := <-s.histCh:
-					if err = s.reportHistory(conn, list); err != nil {
+					if err = s.reportHistory(conns["block"], list); err != nil {
+						noErrs = false
 						log.Warn("Requested history report failed", "err", err)
 					}
 				case head := <-headCh:
-					if err = s.reportBlock(conn, head); err != nil {
+					if err = s.reportBlock(conns["block"], head); err != nil {
+						noErrs = false
 						log.Warn("Block stats report failed", "err", err)
 					}
 					if nodeCtx == common.ZONE_CTX && s.backend.ProcessingState() {
-						if err = s.reportPending(conn); err != nil {
+						if err = s.reportPending(conns["pendStats"]); err != nil {
+							noErrs = false
 							log.Warn("Post-block transaction stats report failed", "err", err)
 						}
 					}
 				case sideEvent := <-sideCh:
-					if err = s.reportSideBlock(conn, sideEvent); err != nil {
+					if err = s.reportSideBlock(conns["block"], sideEvent); err != nil {
+						noErrs = false
 						log.Warn("Block stats report failed", "err", err)
 					}
 				}
 			}
 			fullReport.Stop()
 			// Close the current connection and establish a new one
-			conn.Close()
+			for _, conn := range conns {
+				conn.Close()
+			}
+
 			errTimer.Reset(0)
 		}
 	}
@@ -476,9 +535,14 @@ type nodeInfo struct {
 
 // authMsg is the authentication infos needed to login to a monitoring server.
 type authMsg struct {
-	ID     string   `json:"id"`
-	Info   nodeInfo `json:"info"`
-	Secret string   `json:"secret"`
+	ID     string      `json:"id"`
+	Info   nodeInfo    `json:"info"`
+	Secret loginSecret `json:"secret"`
+}
+
+type loginSecret struct {
+	Name     string `json:"name"`
+	Password string `json:"password"`
 }
 
 // login tries to authorize the client at the remote server.
@@ -510,7 +574,10 @@ func (s *Service) login(conn *connWrapper) error {
 			Chain:    common.NodeLocation.Name(),
 			ChainID:  s.chainID.Uint64(),
 		},
-		Secret: s.pass,
+		Secret: loginSecret{
+			Name:     "admin",
+			Password: s.pass,
+		},
 	}
 	login := map[string][]interface{}{
 		"emit": {"hello", auth},
@@ -526,21 +593,129 @@ func (s *Service) login(conn *connWrapper) error {
 	return nil
 }
 
+type Credentials struct {
+	Name     string `json:"name"`
+	Password string `json:"password"`
+}
+
+type AuthResponse struct {
+	Success bool   `json:"success"`
+	Token   string `json:"token"`
+}
+
+func (s *Service) login2(url string) (string, error) {
+	// Substitute with your actual service address and port
+
+	infos := s.server.NodeInfo()
+
+	var protocols []string
+	for _, proto := range s.server.Protocols {
+		protocols = append(protocols, fmt.Sprintf("%s/%d", proto.Name, proto.Version))
+	}
+	var network string
+	if info := infos.Protocols["eth"]; info != nil {
+		network = fmt.Sprintf("%d", info.(*ethproto.NodeInfo).Network)
+	}
+
+	auth := &authMsg{
+		ID: s.node,
+		Info: nodeInfo{
+			Name:     s.node,
+			Node:     infos.Name,
+			Port:     infos.Ports.Listener,
+			Network:  network,
+			Protocol: strings.Join(protocols, ", "),
+			API:      "No",
+			Os:       runtime.GOOS,
+			OsVer:    runtime.GOARCH,
+			Client:   "0.1.1",
+			History:  true,
+			Chain:    common.NodeLocation.Name(),
+			ChainID:  s.chainID.Uint64(),
+		},
+		Secret: loginSecret{
+			Name:     "admin",
+			Password: s.pass,
+		},
+	}
+
+	authJson, err := json.Marshal(auth)
+	if err != nil {
+		return "", err
+	}
+
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(authJson))
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	body, _ := ioutil.ReadAll(resp.Body)
+
+	var authResponse AuthResponse
+	err = json.Unmarshal(body, &authResponse)
+	if err != nil {
+		return "", err
+	}
+
+	if authResponse.Success {
+		return authResponse.Token, nil
+	}
+
+	return "", fmt.Errorf("login failed")
+}
+
+// isJwtExpired checks if the JWT token is expired
+func (s *Service) isJwtExpired(authJwt string) (bool, error) {
+	if authJwt == "" {
+		return false, errors.New("token is nil")
+	}
+
+	parts := strings.Split(authJwt, ".")
+	if len(parts) != 3 {
+		return false, errors.New("invalid token")
+	}
+
+	claims := jwt.MapClaims{}
+	_, _, err := new(jwt.Parser).ParseUnverified(authJwt, claims)
+	if err != nil {
+		return false, err
+	}
+
+	if exp, ok := claims["exp"].(float64); ok {
+		return time.Now().Unix() >= int64(exp), nil
+	}
+
+	return false, errors.New("exp claim not found in token")
+}
+
 // report collects all possible data to report and send it to the stats server.
 // This should only be used on reconnects or rarely to avoid overloading the
 // server. Use the individual methods for reporting subscribed events.
-func (s *Service) report(conn *connWrapper) error {
-	nodeCtx := common.NodeLocation.Context()
-	if nodeCtx == common.ZONE_CTX && s.backend.ProcessingState() {
-		if err := s.reportPending(conn); err != nil {
+func (s *Service) report(dataType string, conn *connWrapper) error {
+	if conn == nil || conn.conn == nil {
+		log.Warn(dataType + " connection is nil")
+		return errors.New(dataType + " connection is nil")
+	}
+
+	switch dataType {
+	case "nodeStats":
+		if err := s.reportStats(conn); err != nil {
 			return err
 		}
-	}
-	if err := s.reportStats(conn); err != nil {
-		return err
-	}
-	if err := s.reportPeers(conn); err != nil {
-		return err
+	case "peerStats":
+		if err := s.reportPeers(conn); err != nil {
+			return err
+		}
+	case "transactions":
+		nodeCtx := common.NodeLocation.Context()
+		if nodeCtx == common.ZONE_CTX && s.backend.ProcessingState() {
+			if err := s.reportPending(conn); err != nil {
+				return err
+			}
+		}
+	default:
+		return nil
 	}
 	return nil
 }
@@ -594,27 +769,27 @@ func (s *Service) reportLatency(conn *connWrapper) error {
 
 // blockStats is the information to report about individual blocks.
 type blockStats struct {
-	Number        *big.Int       `json:"number"`
-	Hash          common.Hash    `json:"hash"`
-	ParentHash    common.Hash    `json:"parentHash"`
-	Timestamp     *big.Int       `json:"timestamp"`
-	Miner         common.Address `json:"miner"`
-	GasUsed       uint64         `json:"gasUsed"`
-	GasLimit      uint64         `json:"gasLimit"`
-	Diff          string         `json:"difficulty"`
-	Entropy       string         `json:"entropy"`
-	Txs           []txStats      `json:"transactions"`
-	TxHash        common.Hash    `json:"transactionsRoot"`
-	EtxHash       common.Hash    `json:"extTransactionsRoot"`
-	EtxRollupHash common.Hash    `json:"extRollupRoot"`
-	ManifestHash  common.Hash    `json:"manifestHash"`
-	Root          common.Hash    `json:"stateRoot"`
-	Uncles        uncleStats     `json:"uncles"`
-	Chain         string         `json:"chain"`
-	ChainID       uint64         `json:"chainId"`
-	Tps           int64          `json:"tps"`
-	AppendTime    time.Duration  `json:"appendTime"`
-	AvgGasPerSec  int64          `json:"avgGasPerSec"`
+	Number         *big.Int       `json:"number"`
+	Hash           common.Hash    `json:"hash"`
+	ParentHash     common.Hash    `json:"parentHash"`
+	Timestamp      *big.Int       `json:"timestamp"`
+	Miner          common.Address `json:"miner"`
+	GasUsed        uint64         `json:"gasUsed"`
+	GasLimit       uint64         `json:"gasLimit"`
+	Diff           string         `json:"difficulty"`
+	Entropy        string         `json:"entropy"`
+	NoTransactions int            `json:"noTransactions"`
+	TxHash         common.Hash    `json:"transactionsRoot"`
+	EtxHash        common.Hash    `json:"extTransactionsRoot"`
+	EtxRollupHash  common.Hash    `json:"extRollupRoot"`
+	ManifestHash   common.Hash    `json:"manifestHash"`
+	Root           common.Hash    `json:"stateRoot"`
+	Uncles         uncleStats     `json:"uncles"`
+	Chain          string         `json:"chain"`
+	ChainID        uint64         `json:"chainId"`
+	Tps            int64          `json:"tps"`
+	AppendTime     time.Duration  `json:"appendTime"`
+	AvgGasPerSec   int64          `json:"avgGasPerSec"`
 }
 
 type blockTpsCacheDto struct {
@@ -730,6 +905,10 @@ func (s *Service) computeTps(block *types.Block) int64 {
 // reportSideBlock retrieves the current chain side event and reports it to the stats server.
 func (s *Service) reportSideBlock(conn *connWrapper, block *types.Block) error {
 	log.Trace("Sending new side block to quaistats", "number", block.Number(), "hash", block.Hash())
+	if conn == nil || conn.conn == nil {
+		log.Warn("block connection is nil")
+		return errors.New("block connection is nil")
+	}
 
 	stats := map[string]interface{}{
 		"id":        s.node,
@@ -748,6 +927,11 @@ func (s *Service) reportBlock(conn *connWrapper, block *types.Block) error {
 
 	// Assemble the block report and send it to the server
 	log.Trace("Sending new block to quaistats", "number", details.Number, "hash", details.Hash)
+
+	if conn == nil || conn.conn == nil {
+		log.Warn("block connection is nil")
+		return errors.New("block connection is nil")
+	}
 
 	stats := map[string]interface{}{
 		"id":    s.node,
@@ -787,33 +971,38 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 	appendTime := block.GetAppendTime()
 
 	return &blockStats{
-		Number:        header.Number(),
-		Hash:          header.Hash(),
-		ParentHash:    header.ParentHash(),
-		Timestamp:     new(big.Int).SetUint64(header.Time()),
-		Miner:         author,
-		GasUsed:       header.GasUsed(),
-		GasLimit:      header.GasLimit(),
-		Diff:          header.Difficulty().String(),
-		Entropy:       entropy.String(),
-		Txs:           txs,
-		TxHash:        header.TxHash(),
-		EtxHash:       header.EtxHash(),
-		EtxRollupHash: header.EtxRollupHash(),
-		ManifestHash:  header.ManifestHash(),
-		Root:          header.Root(),
-		Uncles:        uncles,
-		Chain:         common.NodeLocation.Name(),
-		ChainID:       s.chainID.Uint64(),
-		Tps:           tps,
-		AppendTime:    appendTime,
-		AvgGasPerSec:  avgGasPerSec,
+		Number:         header.Number(),
+		Hash:           header.Hash(),
+		ParentHash:     header.ParentHash(),
+		Timestamp:      new(big.Int).SetUint64(header.Time()),
+		Miner:          author,
+		GasUsed:        header.GasUsed(),
+		GasLimit:       header.GasLimit(),
+		Diff:           header.Difficulty().String(),
+		Entropy:        entropy.String(),
+		NoTransactions: len(block.Transactions()),
+		TxHash:         header.TxHash(),
+		EtxHash:        header.EtxHash(),
+		EtxRollupHash:  header.EtxRollupHash(),
+		ManifestHash:   header.ManifestHash(),
+		Root:           header.Root(),
+		Uncles:         uncles,
+		Chain:          common.NodeLocation.Name(),
+		ChainID:        s.chainID.Uint64(),
+		Tps:            tps,
+		AppendTime:     appendTime,
+		AvgGasPerSec:   avgGasPerSec,
 	}
 }
 
 // reportHistory retrieves the most recent batch of blocks and reports it to the
 // stats server.
 func (s *Service) reportHistory(conn *connWrapper, list []uint64) error {
+	if conn == nil || conn.conn == nil {
+		log.Warn("history connection is nil")
+		return errors.New("history connection is nil")
+	}
+
 	// Figure out the indexes that need reporting
 	indexes := make([]uint64, 0, historyUpdateRange)
 	if len(list) > 0 {
@@ -880,6 +1069,10 @@ func (s *Service) reportPending(conn *connWrapper) error {
 	pending, _ := s.backend.Stats()
 	// Assemble the transaction stats and send it to the server
 	log.Trace("Sending pending transactions to quaistats", "count", strconv.Itoa(pending))
+	if conn == nil || conn.conn == nil {
+		log.Warn("pending connection is nil")
+		return errors.New("pending connection is nil")
+	}
 
 	stats := map[string]interface{}{
 		"id": s.node,

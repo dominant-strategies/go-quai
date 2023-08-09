@@ -10,6 +10,7 @@ require (
 	github.com/cockroachdb/pebble v0.0.0-20230701135918-609ae80aea41
 	github.com/davecgh/go-spew v1.1.1
 	github.com/deckarep/golang-set v1.8.0
+	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/docker/docker v1.6.2
 	github.com/dominant-strategies/bn256 v0.0.0-20220930122411-fbf930a7493d
 	github.com/edsrzf/mmap-go v1.1.0
