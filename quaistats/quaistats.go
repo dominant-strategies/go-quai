@@ -332,13 +332,15 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, chainSideCh chan co
 			errs := make(map[string]error)
 
 			for key, urls := range urlMap {
+				log.Info("setting connection for " + key)
 				if key == "login" {
-					break
+					continue
 				}
 				for _, url := range urls {
 					c, _, e := dialer.Dial(url, header)
 					err := e
 					if err == nil {
+						log.Info("stats connection set for " + key)
 						conns[key] = newConnectionWrapper(c)
 						break
 					}
@@ -354,6 +356,7 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, chainSideCh chan co
 
 			// Authenticate the client with the server
 			for key, conn := range conns {
+				log.Info(key + " Initial stats reporting...")
 				if errs[key] = s.report(key, conn); errs[key] != nil {
 					log.Warn("Initial stats report failed", "err", errs[key])
 					conn.Close()
@@ -373,6 +376,7 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, chainSideCh chan co
 				case <-quitCh:
 					fullReport.Stop()
 					// Make sure the connection is closed
+					log.Info("quitCh clossing connections...")
 					for _, conn := range conns {
 						conn.Close()
 					}
@@ -380,6 +384,13 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, chainSideCh chan co
 					return
 
 				case <-fullReport.C:
+					log.Info("Full stats reporting...")
+					check := conns != nil
+					log.Info("conns " + strconv.FormatBool(check))
+					for key, conn := range conns {
+						log.Info("available connection key: " + key)
+						log.Info("connection not nil: " + strconv.FormatBool(conn != nil))
+					}
 					if err = s.report("nodeStats", conns["nodeStats"]); err != nil {
 						noErrs = false
 						log.Warn("nodeStats full stats report failed", "err", err)
@@ -393,12 +404,12 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, chainSideCh chan co
 						log.Warn("transactions full stats report failed", "err", err)
 					}
 				case list := <-s.histCh:
-					if err = s.reportHistory(conns["blockStats"], list); err != nil {
+					if err = s.reportHistory(conns["block"], list); err != nil {
 						noErrs = false
 						log.Warn("Requested history report failed", "err", err)
 					}
 				case head := <-headCh:
-					if err = s.reportBlock(conns["blockStats"], head); err != nil {
+					if err = s.reportBlock(conns["block"], head); err != nil {
 						noErrs = false
 						log.Warn("Block stats report failed", "err", err)
 					}
@@ -409,7 +420,7 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, chainSideCh chan co
 						}
 					}
 				case sideEvent := <-sideCh:
-					if err = s.reportSideBlock(conns["blockStats"], sideEvent); err != nil {
+					if err = s.reportSideBlock(conns["block"], sideEvent); err != nil {
 						noErrs = false
 						log.Warn("Block stats report failed", "err", err)
 					}
@@ -417,6 +428,7 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, chainSideCh chan co
 			}
 			fullReport.Stop()
 			// Close the current connection and establish a new one
+			log.Info("Full report stopped. Closing connections and looping")
 			for _, conn := range conns {
 				conn.Close()
 			}
@@ -693,6 +705,11 @@ func (s *Service) isJwtExpired(authJwt string) (bool, error) {
 // This should only be used on reconnects or rarely to avoid overloading the
 // server. Use the individual methods for reporting subscribed events.
 func (s *Service) report(dataType string, conn *connWrapper) error {
+	log.Info("Reporting to " + dataType)
+	if conn == nil || conn.conn == nil {
+		log.Warn(dataType + " connection is nil")
+		return errors.New(dataType + " connection is nil")
+	}
 
 	switch dataType {
 	case "nodeStats":
@@ -765,27 +782,27 @@ func (s *Service) reportLatency(conn *connWrapper) error {
 
 // blockStats is the information to report about individual blocks.
 type blockStats struct {
-	Number        *big.Int       `json:"number"`
-	Hash          common.Hash    `json:"hash"`
-	ParentHash    common.Hash    `json:"parentHash"`
-	Timestamp     *big.Int       `json:"timestamp"`
-	Miner         common.Address `json:"miner"`
-	GasUsed       uint64         `json:"gasUsed"`
-	GasLimit      uint64         `json:"gasLimit"`
-	Diff          string         `json:"difficulty"`
-	Entropy       string         `json:"entropy"`
-	Txs           []txStats      `json:"transactions"`
-	TxHash        common.Hash    `json:"transactionsRoot"`
-	EtxHash       common.Hash    `json:"extTransactionsRoot"`
-	EtxRollupHash common.Hash    `json:"extRollupRoot"`
-	ManifestHash  common.Hash    `json:"manifestHash"`
-	Root          common.Hash    `json:"stateRoot"`
-	Uncles        uncleStats     `json:"uncles"`
-	Chain         string         `json:"chain"`
-	ChainID       uint64         `json:"chainId"`
-	Tps           int64          `json:"tps"`
-	AppendTime    time.Duration  `json:"appendTime"`
-	AvgGasPerSec  int64          `json:"avgGasPerSec"`
+	Number         *big.Int       `json:"number"`
+	Hash           common.Hash    `json:"hash"`
+	ParentHash     common.Hash    `json:"parentHash"`
+	Timestamp      *big.Int       `json:"timestamp"`
+	Miner          common.Address `json:"miner"`
+	GasUsed        uint64         `json:"gasUsed"`
+	GasLimit       uint64         `json:"gasLimit"`
+	Diff           string         `json:"difficulty"`
+	Entropy        string         `json:"entropy"`
+	NoTransactions int            `json:"noTransactions"`
+	TxHash         common.Hash    `json:"transactionsRoot"`
+	EtxHash        common.Hash    `json:"extTransactionsRoot"`
+	EtxRollupHash  common.Hash    `json:"extRollupRoot"`
+	ManifestHash   common.Hash    `json:"manifestHash"`
+	Root           common.Hash    `json:"stateRoot"`
+	Uncles         uncleStats     `json:"uncles"`
+	Chain          string         `json:"chain"`
+	ChainID        uint64         `json:"chainId"`
+	Tps            int64          `json:"tps"`
+	AppendTime     time.Duration  `json:"appendTime"`
+	AvgGasPerSec   int64          `json:"avgGasPerSec"`
 }
 
 type blockTpsCacheDto struct {
@@ -958,27 +975,27 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 	appendTime := block.GetAppendTime()
 
 	return &blockStats{
-		Number:        header.Number(),
-		Hash:          header.Hash(),
-		ParentHash:    header.ParentHash(),
-		Timestamp:     new(big.Int).SetUint64(header.Time()),
-		Miner:         author,
-		GasUsed:       header.GasUsed(),
-		GasLimit:      header.GasLimit(),
-		Diff:          header.Difficulty().String(),
-		Entropy:       entropy.String(),
-		Txs:           txs,
-		TxHash:        header.TxHash(),
-		EtxHash:       header.EtxHash(),
-		EtxRollupHash: header.EtxRollupHash(),
-		ManifestHash:  header.ManifestHash(),
-		Root:          header.Root(),
-		Uncles:        uncles,
-		Chain:         common.NodeLocation.Name(),
-		ChainID:       s.chainID.Uint64(),
-		Tps:           tps,
-		AppendTime:    appendTime,
-		AvgGasPerSec:  avgGasPerSec,
+		Number:         header.Number(),
+		Hash:           header.Hash(),
+		ParentHash:     header.ParentHash(),
+		Timestamp:      new(big.Int).SetUint64(header.Time()),
+		Miner:          author,
+		GasUsed:        header.GasUsed(),
+		GasLimit:       header.GasLimit(),
+		Diff:           header.Difficulty().String(),
+		Entropy:        entropy.String(),
+		NoTransactions: len(block.Transactions()),
+		TxHash:         header.TxHash(),
+		EtxHash:        header.EtxHash(),
+		EtxRollupHash:  header.EtxRollupHash(),
+		ManifestHash:   header.ManifestHash(),
+		Root:           header.Root(),
+		Uncles:         uncles,
+		Chain:          common.NodeLocation.Name(),
+		ChainID:        s.chainID.Uint64(),
+		Tps:            tps,
+		AppendTime:     appendTime,
+		AvgGasPerSec:   avgGasPerSec,
 	}
 }
 
