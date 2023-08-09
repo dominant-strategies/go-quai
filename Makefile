@@ -124,6 +124,7 @@ run-all:
 ifeq (,$(wildcard nodelogs))
 	mkdir nodelogs
 endif
+
 	@nohup $(BASE_CMD) --port $(PRIME_PORT_TCP)    --http.port $(PRIME_PORT_HTTP)    --ws.port $(PRIME_PORT_WS)                                                      --sub.urls $(PRIME_SUB_URLS)                        >> nodelogs/prime.log 2>&1 &
 	@nohup $(BASE_CMD) --port $(REGION_0_PORT_TCP) --http.port $(REGION_0_PORT_HTTP) --ws.port $(REGION_0_PORT_WS) --dom.url $(REGION_0_DOM_URL):$(PRIME_PORT_WS)    --sub.urls $(REGION_0_SUB_URLS) --region 0          >> nodelogs/region-0.log 2>&1 &
 	@nohup $(BASE_CMD) --port $(REGION_1_PORT_TCP) --http.port $(REGION_1_PORT_HTTP) --ws.port $(REGION_1_PORT_WS) --dom.url $(REGION_1_DOM_URL):$(PRIME_PORT_WS)    --sub.urls $(REGION_1_SUB_URLS) --region 1          >> nodelogs/region-1.log 2>&1 &
