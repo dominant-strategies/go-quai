@@ -41,9 +41,6 @@ const (
 	// The number is referenced from the size of tx pool.
 	txChanSize = 4096
 
-	// missingBodyChanSize is the size of channel listening to missingBodyEvent.
-	missingBodyChanSize = 10
-
 	// c_pendingEtxBroadcastChanSize is the size of channel listening to pEtx Event.
 	c_pendingEtxBroadcastChanSize = 10
 
@@ -130,8 +127,6 @@ type handler struct {
 	txsCh                 chan core.NewTxsEvent
 	txsSub                event.Subscription
 	minedBlockSub         *event.TypeMuxSubscription
-	missingBodyCh         chan *types.Header
-	missingBodySub        event.Subscription
 	missingPendingEtxsCh  chan types.HashAndLocation
 	missingPendingEtxsSub event.Subscription
 	missingParentCh       chan common.Hash
@@ -348,11 +343,6 @@ func (h *handler) Start(maxPeers int) {
 	}
 
 	h.wg.Add(1)
-	h.missingBodyCh = make(chan *types.Header, missingBodyChanSize)
-	h.missingBodySub = h.core.SubscribeMissingBody(h.missingBodyCh)
-	go h.missingBodyLoop()
-
-	h.wg.Add(1)
 	h.missingPEtxsRollupCh = make(chan common.Hash, c_pendingEtxBroadcastChanSize)
 	h.missingPEtxsRollupSub = h.core.SubscribeMissingPendingEtxsRollupEvent(h.missingPEtxsRollupCh)
 	go h.missingPEtxsRollupLoop()
@@ -375,7 +365,6 @@ func (h *handler) Stop() {
 		h.txsSub.Unsubscribe() // quits txBroadcastLoop
 	}
 	h.minedBlockSub.Unsubscribe()         // quits blockBroadcastLoop
-	h.missingBodySub.Unsubscribe()        // quits missingBodyLoop
 	h.missingPendingEtxsSub.Unsubscribe() // quits pendingEtxsBroadcastLoop
 	h.missingPEtxsRollupSub.Unsubscribe() // quits missingPEtxsRollupSub
 	h.missingParentSub.Unsubscribe()      // quits missingParentLoop
@@ -502,24 +491,6 @@ func (h *handler) txBroadcastLoop() {
 		case event := <-h.txsCh:
 			h.BroadcastTransactions(event.Txs)
 		case <-h.txsSub.Err():
-			return
-		}
-	}
-}
-
-// missingBodyLoop listens to the MissingBody event in Slice and calls the blockAnnounces.
-func (h *handler) missingBodyLoop() {
-	defer h.wg.Done()
-	for {
-		select {
-		case header := <-h.missingBodyCh:
-			// Check if any of the peers have the body
-			for _, peer := range h.selectSomePeers() {
-				log.Debug("Fetching the missing body from", "peer", peer.ID(), "hash", header.Hash(), "number", header.NumberU64())
-				h.blockFetcher.Notify(peer.ID(), header.Hash(), header.NumberU64(), time.Now(), peer.RequestOneHeader, peer.RequestBodies)
-			}
-
-		case <-h.missingBodySub.Err():
 			return
 		}
 	}

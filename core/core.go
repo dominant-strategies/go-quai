@@ -271,10 +271,7 @@ func (c *Core) WriteBlock(block *types.Block) {
 func (c *Core) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, bool, error) {
 	newPendingEtxs, subReorg, err := c.sl.Append(header, domPendingHeader, domTerminus, domOrigin, newInboundEtxs)
 	if err != nil {
-		if err.Error() == ErrBodyNotFound.Error() {
-			c.sl.missingBodyFeed.Send(header)
-		}
-		if err.Error() == consensus.ErrUnknownAncestor.Error() {
+		if err.Error() == ErrBodyNotFound.Error() || err.Error() == consensus.ErrUnknownAncestor.Error() {
 			c.sl.missingParentFeed.Send(header.ParentHash())
 		}
 	}
@@ -320,10 +317,6 @@ func (c *Core) HasPendingEtxs(hash common.Hash) bool {
 
 func (c *Core) SendPendingEtxsToDom(pEtxs types.PendingEtxs) error {
 	return c.sl.SendPendingEtxsToDom(pEtxs)
-}
-
-func (c *Core) SubscribeMissingBody(ch chan<- *types.Header) event.Subscription {
-	return c.sl.SubscribeMissingBody(ch)
 }
 
 func (c *Core) SubscribePendingEtxs(ch chan<- types.PendingEtxs) event.Subscription {

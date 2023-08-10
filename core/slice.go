@@ -57,7 +57,6 @@ type Slice struct {
 
 	wg                    sync.WaitGroup
 	scope                 event.SubscriptionScope
-	missingBodyFeed       event.Feed
 	pendingEtxsFeed       event.Feed
 	pendingEtxsRollupFeed event.Feed
 	missingParentFeed     event.Feed
@@ -940,10 +939,6 @@ func (sl *Slice) HeaderChain() *HeaderChain { return sl.hc }
 func (sl *Slice) TxPool() *TxPool { return sl.txPool }
 
 func (sl *Slice) Miner() *Miner { return sl.miner }
-
-func (sl *Slice) SubscribeMissingBody(ch chan<- *types.Header) event.Subscription {
-	return sl.scope.Track(sl.missingBodyFeed.Subscribe(ch))
-}
 
 func (sl *Slice) SubscribePendingEtxs(ch chan<- types.PendingEtxs) event.Subscription {
 	return sl.scope.Track(sl.pendingEtxsFeed.Subscribe(ch))
