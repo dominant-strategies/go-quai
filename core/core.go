@@ -369,7 +369,6 @@ func (c *Core) Append(header *types.Header, domPendingHeader *types.Header, domT
 	newPendingEtxs, subReorg, err := c.sl.Append(header, domPendingHeader, domTerminus, domOrigin, newInboundEtxs)
 	if err != nil {
 		if err.Error() == ErrBodyNotFound.Error() {
-			c.sl.missingBodyFeed.Send(header)
 			c.sl.missingParentFeed.Send(header.Hash())
 		}
 		if err.Error() == consensus.ErrUnknownAncestor.Error() || err.Error() == ErrSubNotSyncedToDom.Error() {
