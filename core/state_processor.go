@@ -297,10 +297,10 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 		}
 	}
 	if ETXRCount > *etxRLimit {
-		return nil, fmt.Errorf("tx %032x emits too many cross-region ETXs for block. emitted: %d, limit: %d", tx.Hash(), ETXRCount, etxRLimit)
+		return nil, fmt.Errorf("tx %032x emits too many cross-region ETXs for block. emitted: %d, limit: %d", tx.Hash(), ETXRCount, *etxRLimit)
 	}
 	if ETXPCount > *etxPLimit {
-		return nil, fmt.Errorf("tx %032x emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash(), ETXPCount, etxPLimit)
+		return nil, fmt.Errorf("tx %032x emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash(), ETXPCount, *etxPLimit)
 	}
 	*etxRLimit -= ETXRCount
 	*etxPLimit -= ETXPCount
