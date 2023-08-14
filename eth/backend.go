@@ -131,7 +131,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Quai, error) {
 		gasPrice:          config.Miner.GasPrice,
 		etherbase:         config.Miner.Etherbase,
 		bloomRequests:     make(chan chan *bloombits.Retrieval),
-		bloomIndexer:      core.NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms),
 		p2pServer:         stack.Server(),
 	}
 
@@ -192,6 +191,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Quai, error) {
 
 	// Only index bloom if processing state
 	if eth.core.ProcessingState() {
+		eth.bloomIndexer = core.NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms)	
 		eth.bloomIndexer.Start(eth.Core().Slice().HeaderChain())
 	}
 
