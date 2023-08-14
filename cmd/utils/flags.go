@@ -159,9 +159,9 @@ var (
 		Name:  "orchard",
 		Usage: "Orchard network: pre-configured proof-of-work test network",
 	}
-	GalenaFlag = cli.BoolFlag{
-		Name:  "galena",
-		Usage: "Galena network: pre-configured proof-of-work test network",
+	LighthouseFlag = cli.BoolFlag{
+		Name:  "lighthouse",
+		Usage: "Lighthouse network: pre-configured proof-of-work test network",
 	}
 	LocalFlag = cli.BoolFlag{
 		Name:  "local",
@@ -690,8 +690,8 @@ func MakeDataDir(ctx *cli.Context) string {
 			// Local database in `local` instead of `testnet`.
 			path = filepath.Join(path, "local")
 		}
-		if ctx.GlobalBool(GalenaFlag.Name) {
-			path = filepath.Join(path, "galena")
+		if ctx.GlobalBool(LighthouseFlag.Name) {
+			path = filepath.Join(path, "lighthouse")
 		}
 		// Set specific directory for node location within the hierarchy
 		switch common.NodeLocation.Context() {
@@ -755,8 +755,8 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 		urls = params.GardenBootnodes
 	case ctx.GlobalBool(OrchardFlag.Name):
 		urls = params.OrchardBootnodes
-	case ctx.GlobalBool(GalenaFlag.Name):
-		urls = params.GalenaBootnodes
+	case ctx.GlobalBool(LighthouseFlag.Name):
+		urls = params.LighthouseBootnodes
 	case ctx.GlobalBool(LocalFlag.Name):
 		urls = []string{}
 	case cfg.BootstrapNodes != nil:
@@ -967,8 +967,8 @@ func setGasLimitCeil(ctx *cli.Context, cfg *ethconfig.Config) {
 		cfg.Miner.GasCeil = params.GardenGasCeil
 	case ctx.GlobalBool(OrchardFlag.Name):
 		cfg.Miner.GasCeil = params.OrchardGasCeil
-	case ctx.GlobalBool(GalenaFlag.Name):
-		cfg.Miner.GasCeil = params.GalenaGasCeil
+	case ctx.GlobalBool(LighthouseFlag.Name):
+		cfg.Miner.GasCeil = params.LighthouseGasCeil
 	case ctx.GlobalBool(LocalFlag.Name):
 		cfg.Miner.GasCeil = params.LocalGasCeil
 	case ctx.GlobalBool(DeveloperFlag.Name):
@@ -1154,8 +1154,8 @@ func setDataDir(ctx *cli.Context, cfg *node.Config) {
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "garden")
 	case ctx.GlobalBool(OrchardFlag.Name) && cfg.DataDir == node.DefaultDataDir():
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "orchard")
-	case ctx.GlobalBool(GalenaFlag.Name) && cfg.DataDir == node.DefaultDataDir():
-		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "galena")
+	case ctx.GlobalBool(LighthouseFlag.Name) && cfg.DataDir == node.DefaultDataDir():
+		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "lighthouse")
 	case ctx.GlobalBool(LocalFlag.Name) && cfg.DataDir == node.DefaultDataDir():
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "local")
 	}
@@ -1250,8 +1250,8 @@ func setDurationLimit(ctx *cli.Context, cfg *ethconfig.Config) {
 			cfg.Blake3Pow.DurationLimit = params.GardenDurationLimit
 		case ctx.GlobalBool(OrchardFlag.Name):
 			cfg.Blake3Pow.DurationLimit = params.OrchardDurationLimit
-		case ctx.GlobalBool(GalenaFlag.Name):
-			cfg.Blake3Pow.DurationLimit = params.GalenaDurationLimit
+		case ctx.GlobalBool(LighthouseFlag.Name):
+			cfg.Blake3Pow.DurationLimit = params.LighthouseDurationLimit
 		case ctx.GlobalBool(LocalFlag.Name):
 			cfg.Blake3Pow.DurationLimit = params.LocalDurationLimit
 		case ctx.GlobalBool(DeveloperFlag.Name):
@@ -1269,8 +1269,8 @@ func setDurationLimit(ctx *cli.Context, cfg *ethconfig.Config) {
 			cfg.Progpow.DurationLimit = params.GardenDurationLimit
 		case ctx.GlobalBool(OrchardFlag.Name):
 			cfg.Progpow.DurationLimit = params.OrchardDurationLimit
-		case ctx.GlobalBool(GalenaFlag.Name):
-			cfg.Progpow.DurationLimit = params.GalenaDurationLimit
+		case ctx.GlobalBool(LighthouseFlag.Name):
+			cfg.Progpow.DurationLimit = params.LighthouseDurationLimit
 		case ctx.GlobalBool(LocalFlag.Name):
 			cfg.Progpow.DurationLimit = params.LocalDurationLimit
 		case ctx.GlobalBool(DeveloperFlag.Name):
@@ -1404,7 +1404,7 @@ func EnablePprof() {
 // SetEthConfig applies eth-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Avoid conflicting network flags
-	CheckExclusive(ctx, ColosseumFlag, DeveloperFlag, GardenFlag, OrchardFlag, LocalFlag, GalenaFlag)
+	CheckExclusive(ctx, ColosseumFlag, DeveloperFlag, GardenFlag, OrchardFlag, LocalFlag, LighthouseFlag)
 	CheckExclusive(ctx, DeveloperFlag, ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer
 
 	if ctx.GlobalString(GCModeFlag.Name) == "archive" && ctx.GlobalUint64(TxLookupLimitFlag.Name) != 0 {
@@ -1588,15 +1588,15 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		} else {
 			SetDNSDiscoveryDefaults(cfg, params.ProgpowLocalGenesisHash)
 		}
-	case ctx.GlobalBool(GalenaFlag.Name):
+	case ctx.GlobalBool(LighthouseFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 5
 		}
-		cfg.Genesis = core.DefaultGalenaGenesisBlock(cfg.ConsensusEngine)
+		cfg.Genesis = core.DefaultLighthouseGenesisBlock(cfg.ConsensusEngine)
 		if cfg.ConsensusEngine == "blake3" {
-			SetDNSDiscoveryDefaults(cfg, params.Blake3PowGalenaGenesisHash)
+			SetDNSDiscoveryDefaults(cfg, params.Blake3PowLighthouseGenesisHash)
 		} else {
-			SetDNSDiscoveryDefaults(cfg, params.ProgpowGalenaGenesisHash)
+			SetDNSDiscoveryDefaults(cfg, params.ProgpowLighthouseGenesisHash)
 		}
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
@@ -1729,8 +1729,8 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 		genesis = core.DefaultGardenGenesisBlock(ctx.GlobalString(ConsensusEngineFlag.Name))
 	case ctx.GlobalBool(OrchardFlag.Name):
 		genesis = core.DefaultOrchardGenesisBlock(ctx.GlobalString(ConsensusEngineFlag.Name))
-	case ctx.GlobalBool(GalenaFlag.Name):
-		genesis = core.DefaultGalenaGenesisBlock(ctx.GlobalString(ConsensusEngineFlag.Name))
+	case ctx.GlobalBool(LighthouseFlag.Name):
+		genesis = core.DefaultLighthouseGenesisBlock(ctx.GlobalString(ConsensusEngineFlag.Name))
 	case ctx.GlobalBool(LocalFlag.Name):
 		genesis = core.DefaultLocalGenesisBlock(ctx.GlobalString(ConsensusEngineFlag.Name))
 	case ctx.GlobalBool(DeveloperFlag.Name):

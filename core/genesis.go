@@ -237,8 +237,8 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 		return params.ProgpowGardenChainConfig
 	case ghash == params.ProgpowOrchardGenesisHash:
 		return params.ProgpowOrchardChainConfig
-	case ghash == params.ProgpowGalenaGenesisHash:
-		return params.ProgpowGalenaChainConfig
+	case ghash == params.ProgpowLighthouseGenesisHash:
+		return params.ProgpowLighthouseChainConfig
 	case ghash == params.ProgpowLocalGenesisHash:
 		return params.ProgpowLocalChainConfig
 	// Blake3 chain configs
@@ -248,8 +248,8 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 		return params.Blake3PowGardenChainConfig
 	case ghash == params.Blake3PowOrchardGenesisHash:
 		return params.Blake3PowOrchardChainConfig
-	case ghash == params.Blake3PowGalenaGenesisHash:
-		return params.Blake3PowGalenaChainConfig
+	case ghash == params.Blake3PowLighthouseGenesisHash:
+		return params.Blake3PowLighthouseChainConfig
 	case ghash == params.Blake3PowLocalGenesisHash:
 		return params.Blake3PowLocalChainConfig
 
@@ -386,11 +386,11 @@ func DefaultOrchardGenesisBlock(consensusEngine string) *Genesis {
 	}
 }
 
-// DefaultGalenaGenesisBlock returns the Galena testnet genesis block.
-func DefaultGalenaGenesisBlock(consensusEngine string) *Genesis {
+// DefaultLighthouseGenesisBlock returns the Lighthouse testnet genesis block.
+func DefaultLighthouseGenesisBlock(consensusEngine string) *Genesis {
 	if consensusEngine == "blake3" {
 		return &Genesis{
-			Config:     params.Blake3PowGalenaChainConfig,
+			Config:     params.Blake3PowLighthouseChainConfig,
 			Nonce:      66,
 			ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fb"),
 			GasLimit:   5000000,
@@ -398,7 +398,7 @@ func DefaultGalenaGenesisBlock(consensusEngine string) *Genesis {
 		}
 	}
 	return &Genesis{
-		Config:     params.ProgpowGalenaChainConfig,
+		Config:     params.ProgpowLighthouseChainConfig,
 		Nonce:      0,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353537"),
 		GasLimit:   5000000,

@@ -43,9 +43,9 @@ var OrchardBootnodes = []string{
 	"enode://d6d27b273682f8abc7ffff04dc9006bd40f0a079a8ba24da351b714506bb82c1f106ff073fa04983345aef15c876c602209b48b37d8ee10dad581fd1d9db9263@34.23.150.43",   // us-east1-c
 }
 
-// GalenaBootnodes are the enode URLs of the P2P bootstrap nodes running on the
-// Galena test network
-var GalenaBootnodes = []string{
+// LighthouseBootnodes are the enode URLs of the P2P bootstrap nodes running on the
+// Lighthouse test network
+var LighthouseBootnodes = []string{
 	"enode://ee89c22bff79d040fcf3dbaea3bcbe429e68b0ca9e32671027554e96aea3f132f6abed8cf5be514c50b76cf2cab96c7d9064a93f0bbd0903f26df4be01ce0e6a@35.196.124.28", // europe-southwest1-a
 	"enode://b39cf3080c8c9165bf0b50a7f6c8ff5a3568649b0c57ae786f630a054722fccfec7e3232594eb37a62a04e7c310a4d4e899ea42c0bd5a5043a248510715e2af9@35.187.55.110", // southamerica-east1-b
 	"enode://ce3daf05c462b36bc1a6261b8edb0cd72bf041c1f8fb59100d6a09dc3415d1f136cc8768b12129db73c48085c8e01d7a606be447d3f681f405ab427641599235@34.92.50.205", // asia-northeast3-a
@@ -66,16 +66,16 @@ func KnownDNSNetwork(genesis common.Hash, protocol string) string {
 		net = "garden"
 	case ProgpowOrchardGenesisHash:
 		net = "orchard"
-	case ProgpowGalenaGenesisHash:
-		net = "galena"
+	case ProgpowLighthouseGenesisHash:
+		net = "lighthouse"
 	case Blake3PowColosseumGenesisHash:
 		net = "colosseum"
 	case Blake3PowGardenGenesisHash:
 		net = "garden"
 	case Blake3PowOrchardGenesisHash:
 		net = "orchard"
-	case Blake3PowGalenaGenesisHash:
-		net = "galena"
+	case Blake3PowLighthouseGenesisHash:
+		net = "lighthouse"
 	default:
 		return ""
 	}

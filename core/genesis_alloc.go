@@ -24,5 +24,5 @@ package core
 const colosseumAllocData = "\xc0"
 const gardenAllocData = "\xc0"
 const orchardAllocData = "\xc0"
-const galenaAllocData = "\xc0"
+const lighthouseAllocData = "\xc0"
 const localAllocData = "\xc0"
