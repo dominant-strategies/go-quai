@@ -78,14 +78,14 @@ type TxData interface {
 	accessList() AccessList
 	data() []byte
 	gas() uint64
-	gasPrice() *big.Int
+	// gasPrice() *big.Int //remove 581
 	gasTipCap() *big.Int
 	gasFeeCap() *big.Int
 	value() *big.Int
 	nonce() uint64
 	to() *common.Address
 	etxGasLimit() uint64
-	etxGasPrice() *big.Int
+	// etxGasPrice() *big.Int //remove 581
 	etxGasTip() *big.Int
 	etxData() []byte
 	etxAccessList() AccessList
@@ -218,7 +218,7 @@ func (tx *Transaction) AccessList() AccessList { return tx.inner.accessList() }
 func (tx *Transaction) Gas() uint64 { return tx.inner.gas() }
 
 // GasPrice returns the gas price of the transaction.
-func (tx *Transaction) GasPrice() *big.Int { return new(big.Int).Set(tx.inner.gasPrice()) }
+// func (tx *Transaction) GasPrice() *big.Int { return new(big.Int).Set(tx.inner.gasPrice()) } //remove 581
 
 // GasTipCap returns the gasTipCap per gas of the transaction.
 func (tx *Transaction) GasTipCap() *big.Int { return new(big.Int).Set(tx.inner.gasTipCap()) }
@@ -233,7 +233,7 @@ func (tx *Transaction) Value() *big.Int { return new(big.Int).Set(tx.inner.value
 func (tx *Transaction) ETXGasLimit() uint64 { return tx.inner.etxGasLimit() }
 
 // ETXGasPrice returns the gas price of the external transaction.
-func (tx *Transaction) ETXGasPrice() *big.Int { return new(big.Int).Set(tx.inner.etxGasPrice()) }
+// func (tx *Transaction) ETXGasPrice() *big.Int { return new(big.Int).Set(tx.inner.etxGasPrice()) } //remove 581
 
 // ETXGasTip returns the gasTipCap per gas of the external transaction.
 func (tx *Transaction) ETXGasTip() *big.Int { return new(big.Int).Set(tx.inner.etxGasTip()) }
@@ -254,16 +254,6 @@ func (tx *Transaction) IsInternalToExternalTx() (inner *InternalToExternalTx, ok
 	return
 }
 
-func (tx *Transaction) From() *common.Address {
-	sc := tx.from.Load()
-	if sc != nil {
-		sigCache := sc.(sigCache)
-		return &sigCache.from
-	} else {
-		return nil
-	}
-}
-
 // To returns the recipient address of the transaction.
 // For contract-creation transactions, To returns nil.
 func (tx *Transaction) To() *common.Address {
@@ -278,7 +268,8 @@ func (tx *Transaction) To() *common.Address {
 
 // Cost returns gas * gasPrice + value.
 func (tx *Transaction) Cost() *big.Int {
-	total := new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.Gas()))
+	// total := new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.Gas())) //remove 581
+	total := new(big.Int).SetUint64(0)
 	total.Add(total, tx.Value())
 	return total
 }
@@ -627,34 +618,34 @@ func (t *TransactionsByPriceAndNonce) Pop() {
 //
 // NOTE: In a future PR this will be removed.
 type Message struct {
-	to            *common.Address
-	from          common.Address
-	nonce         uint64
-	amount        *big.Int
-	gasLimit      uint64
-	gasPrice      *big.Int
-	gasFeeCap     *big.Int
-	gasTipCap     *big.Int
-	data          []byte
-	accessList    AccessList
-	checkNonce    bool
-	etxsender     common.Address // only used in ETX
-	txtype        byte
-	etxGasLimit   uint64
-	etxGasPrice   *big.Int
+	to       *common.Address
+	from     common.Address
+	nonce    uint64
+	amount   *big.Int
+	gasLimit uint64
+	// gasPrice      *big.Int //remove 581
+	gasFeeCap   *big.Int
+	gasTipCap   *big.Int
+	data        []byte
+	accessList  AccessList
+	checkNonce  bool
+	etxsender   common.Address // only used in ETX
+	txtype      byte
+	etxGasLimit uint64
+	// etxGasPrice   *big.Int //remove 581
 	etxGasTip     *big.Int
 	etxData       []byte
 	etxAccessList AccessList
 }
 
-func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice, gasFeeCap, gasTipCap *big.Int, data []byte, accessList AccessList, checkNonce bool) Message {
+func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasFeeCap, gasTipCap *big.Int, data []byte, accessList AccessList, checkNonce bool) Message {
 	return Message{
-		from:       from,
-		to:         to,
-		nonce:      nonce,
-		amount:     amount,
-		gasLimit:   gasLimit,
-		gasPrice:   gasPrice,
+		from:     from,
+		to:       to,
+		nonce:    nonce,
+		amount:   amount,
+		gasLimit: gasLimit,
+		// gasPrice:   gasPrice, //remove 581
 		gasFeeCap:  gasFeeCap,
 		gasTipCap:  gasTipCap,
 		data:       data,
@@ -666,9 +657,9 @@ func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *b
 // AsMessage returns the transaction as a core.Message.
 func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 	msg := Message{
-		nonce:      tx.Nonce(),
-		gasLimit:   tx.Gas(),
-		gasPrice:   new(big.Int).Set(tx.GasPrice()),
+		nonce:    tx.Nonce(),
+		gasLimit: tx.Gas(),
+		// gasPrice:   new(big.Int).Set(tx.GasPrice()), //remove 581
 		gasFeeCap:  new(big.Int).Set(tx.GasFeeCap()),
 		gasTipCap:  new(big.Int).Set(tx.GasTipCap()),
 		to:         tx.To(),
@@ -680,7 +671,7 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
-		msg.gasPrice = math.BigMin(msg.gasPrice.Add(msg.gasTipCap, baseFee), msg.gasFeeCap)
+		// msg.gasPrice = math.BigMin(msg.gasPrice.Add(msg.gasTipCap, baseFee), msg.gasFeeCap) //remove 581
 	}
 	var err error
 	if tx.Type() == ExternalTxType {
@@ -692,7 +683,7 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 	}
 	if internalToExternalTx, ok := tx.IsInternalToExternalTx(); ok {
 		msg.etxGasLimit = internalToExternalTx.ETXGasLimit
-		msg.etxGasPrice = internalToExternalTx.ETXGasPrice
+		// msg.etxGasPrice = internalToExternalTx.ETXGasPrice //remove 581
 		msg.etxGasTip = internalToExternalTx.ETXGasTip
 		msg.etxData = internalToExternalTx.ETXData
 		msg.etxAccessList = internalToExternalTx.ETXAccessList
@@ -700,50 +691,10 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 	return msg, err
 }
 
-// AsMessageWithSender returns the transaction as a core.Message.
-func (tx *Transaction) AsMessageWithSender(s Signer, baseFee *big.Int, sender *common.InternalAddress) (Message, error) {
-	msg := Message{
-		nonce:      tx.Nonce(),
-		gasLimit:   tx.Gas(),
-		gasPrice:   new(big.Int).Set(tx.GasPrice()),
-		gasFeeCap:  new(big.Int).Set(tx.GasFeeCap()),
-		gasTipCap:  new(big.Int).Set(tx.GasTipCap()),
-		to:         tx.To(),
-		amount:     tx.Value(),
-		data:       tx.Data(),
-		accessList: tx.AccessList(),
-		checkNonce: true,
-		txtype:     tx.Type(),
-	}
-	// If baseFee provided, set gasPrice to effectiveGasPrice.
-	if baseFee != nil {
-		msg.gasPrice = math.BigMin(msg.gasPrice.Add(msg.gasTipCap, baseFee), msg.gasFeeCap)
-	}
-	var err error
-	if tx.Type() == ExternalTxType {
-		msg.from = common.ZeroAddr
-		msg.etxsender, err = Sender(s, tx)
-		msg.checkNonce = false
-	} else {
-		if sender != nil {
-			msg.from = common.NewAddressFromData(sender)
-		} else {
-			msg.from, err = Sender(s, tx)
-		}
-	}
-	if internalToExternalTx, ok := tx.IsInternalToExternalTx(); ok {
-		msg.etxGasLimit = internalToExternalTx.ETXGasLimit
-		msg.etxGasPrice = internalToExternalTx.ETXGasPrice
-		msg.etxGasTip = internalToExternalTx.ETXGasTip
-		msg.etxData = internalToExternalTx.ETXData
-		msg.etxAccessList = internalToExternalTx.ETXAccessList
-	}
-	return msg, err
-}
+func (m Message) From() common.Address { return m.from }
+func (m Message) To() *common.Address  { return m.to }
 
-func (m Message) From() common.Address      { return m.from }
-func (m Message) To() *common.Address       { return m.to }
-func (m Message) GasPrice() *big.Int        { return m.gasPrice }
+// func (m Message) GasPrice() *big.Int        { return m.gasPrice } //remove 581
 func (m Message) GasFeeCap() *big.Int       { return m.gasFeeCap }
 func (m Message) GasTipCap() *big.Int       { return m.gasTipCap }
 func (m Message) Value() *big.Int           { return m.amount }
@@ -755,7 +706,8 @@ func (m Message) CheckNonce() bool          { return m.checkNonce }
 func (m Message) ETXSender() common.Address { return m.etxsender }
 func (m Message) Type() byte                { return m.txtype }
 func (m Message) ETXGasLimit() uint64       { return m.etxGasLimit }
-func (m Message) ETXGasPrice() *big.Int     { return m.etxGasPrice }
+
+// func (m Message) ETXGasPrice() *big.Int     { return m.etxGasPrice } //remove 581
 func (m Message) ETXGasTip() *big.Int       { return m.etxGasTip }
 func (m Message) ETXData() []byte           { return m.etxData }
 func (m Message) ETXAccessList() AccessList { return m.etxAccessList }

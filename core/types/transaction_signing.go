@@ -220,7 +220,7 @@ func (s SignerV1) Hash(tx *Transaction) common.Hash {
 				tx.Data(),
 				tx.AccessList(),
 				tx.ETXGasLimit(),
-				tx.ETXGasPrice(),
+				// tx.ETXGasPrice(), //remove 581
 				tx.ETXGasTip(),
 				tx.ETXData(),
 				tx.ETXAccessList(),
