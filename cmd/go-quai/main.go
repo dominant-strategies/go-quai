@@ -34,7 +34,6 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/metrics"
 	"github.com/dominant-strategies/go-quai/node"
-	"github.com/dominant-strategies/go-quai/params"
 
 	"gopkg.in/urfave/cli.v1"
 )
@@ -236,7 +235,7 @@ func prepare(ctx *cli.Context) {
 		netname = "Colosseum testnet"
 	}
 
-	welcome := fmt.Sprintf("Starting Quai %s on %s", params.Version.Full(), netname)
+	welcome := fmt.Sprintf("Starting Quai %s on %s", ctx.App.Version, netname)
 	log.Info(welcome)
 	// If we're a full node on colosseum without --cache specified, bump default cache allowance
 	if ctx.GlobalString(utils.SyncModeFlag.Name) != "light" && !ctx.GlobalIsSet(utils.CacheFlag.Name) && !ctx.GlobalIsSet(utils.NetworkIdFlag.Name) {
