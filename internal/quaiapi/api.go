@@ -54,18 +54,6 @@ func NewPublicQuaiAPI_Deprecated(b Backend) *PublicQuaiAPI_Deprecated {
 	return &PublicQuaiAPI_Deprecated{b}
 }
 
-// GasPrice returns a suggestion for a gas price for legacy transactions.
-func (s *PublicQuaiAPI_Deprecated) GasPrice(ctx context.Context) (*hexutil.Big, error) {
-	tipcap, err := s.b.SuggestGasTipCap(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if head := s.b.CurrentHeader(); head.BaseFee() != nil {
-		tipcap.Add(tipcap, head.BaseFee())
-	}
-	return (*hexutil.Big)(tipcap), err
-}
-
 // MaxPriorityFeePerGas returns a suggestion for a gas tip cap for dynamic fee transactions.
 func (s *PublicQuaiAPI_Deprecated) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.Big, error) {
 	tipcap, err := s.b.SuggestGasTipCap(ctx)
@@ -214,9 +202,9 @@ func (s *PublicTxPoolAPI) Inspect() map[string]map[string]map[string]string {
 	// Define a formatter to flatten a transaction into a string
 	var format = func(tx *types.Transaction) string {
 		if to := tx.To(); to != nil {
-			return fmt.Sprintf("%s: %v wei + %v gas × %v wei", tx.To().Hex(), tx.Value(), tx.Gas(), tx.GasPrice())
+			return fmt.Sprintf("%s: %v wei + %v gas × %v wei", tx.To().Hex(), tx.Value(), tx.Gas(), new(big.Int).SetUint64(0))
 		}
-		return fmt.Sprintf("contract creation: %v wei + %v gas × %v wei", tx.Value(), tx.Gas(), tx.GasPrice())
+		return fmt.Sprintf("contract creation: %v wei + %v gas × %v wei", tx.Value(), tx.Gas(), new(big.Int).SetUint64(0))
 	}
 	// Flatten the pending transactions
 	for account, txs := range pending {
@@ -693,10 +681,8 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	}
 	// Normalize the max fee per gas the call is willing to spend.
 	var feeCap *big.Int
-	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
+	if args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil {
 		return 0, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
-	} else if args.GasPrice != nil {
-		feeCap = args.GasPrice.ToInt()
 	} else if args.MaxFeePerGas != nil {
 		feeCap = args.MaxFeePerGas.ToInt()
 	} else {
@@ -968,8 +954,8 @@ type RPCTransaction struct {
 	// Optional fields only present for external transactions
 	Sender *common.Address `json:"sender,omitempty"`
 
-	ETXGasLimit   hexutil.Uint64    `json:"etxGasLimit,omitempty"`
-	ETXGasPrice   *hexutil.Big      `json:"etxGasPrice,omitempty"`
+	ETXGasLimit hexutil.Uint64 `json:"etxGasLimit,omitempty"`
+	// ETXGasPrice   *hexutil.Big      `json:"etxGasPrice,omitempty"` //remove 581
 	ETXGasTip     *hexutil.Big      `json:"etxGasTip,omitempty"`
 	ETXData       *hexutil.Bytes    `json:"etxData,omitempty"`
 	ETXAccessList *types.AccessList `json:"etxAccessList,omitempty"`
@@ -1034,8 +1020,8 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 			GasFeeCap:   (*hexutil.Big)(tx.GasFeeCap()),
 			GasTipCap:   (*hexutil.Big)(tx.GasTipCap()),
 			ETXGasLimit: (hexutil.Uint64)(tx.ETXGasLimit()),
-			ETXGasPrice: (*hexutil.Big)(tx.ETXGasPrice()),
-			ETXGasTip:   (*hexutil.Big)(tx.ETXGasTip()),
+			// ETXGasPrice: (*hexutil.Big)(tx.ETXGasPrice()), //remove 581
+			ETXGasTip: (*hexutil.Big)(tx.ETXGasTip()),
 		}
 		data := tx.ETXData()
 		result.ETXData = (*hexutil.Bytes)(&data)
@@ -1383,7 +1369,8 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 		return nil, err
 	}
 	gasPrice := new(big.Int).Add(header.BaseFee(), tx.EffectiveGasTipValue(header.BaseFee()))
-	fields["effectiveGasPrice"] = hexutil.Uint64(gasPrice.Uint64())
+	// fields["effectiveGasPrice"] = hexutil.Uint64(gasPrice.Uint64())
+	fields["effectiveGasPrice"] = hexutil.Uint64(0)
 
 	// Assign receipt status or post state.
 	if len(receipt.PostState) > 0 {
@@ -1409,7 +1396,7 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 	}
 	// If the transaction fee cap is already specified, ensure the
 	// fee of the given transaction is _reasonable_.
-	if err := checkTxFee(tx.GasPrice(), tx.Gas(), b.RPCTxFeeCap()); err != nil {
+	if err := checkTxFee(new(big.Int).SetUint64(0), tx.Gas(), b.RPCTxFeeCap()); err != nil {
 		return common.Hash{}, err
 	}
 	if err := b.SendTx(ctx, tx); err != nil {

@@ -34,10 +34,10 @@ import (
 // TransactionArgs represents the arguments to construct a new transaction
 // or a message call.
 type TransactionArgs struct {
-	From                 *common.Address `json:"from"`
-	To                   *common.Address `json:"to"`
-	Gas                  *hexutil.Uint64 `json:"gas"`
-	GasPrice             *hexutil.Big    `json:"gasPrice"`
+	From *common.Address `json:"from"`
+	To   *common.Address `json:"to"`
+	Gas  *hexutil.Uint64 `json:"gas"`
+	// GasPrice             *hexutil.Big    `json:"gasPrice"` //581
 	MaxFeePerGas         *hexutil.Big    `json:"maxFeePerGas"`
 	MaxPriorityFeePerGas *hexutil.Big    `json:"maxPriorityFeePerGas"`
 	Value                *hexutil.Big    `json:"value"`
@@ -74,7 +74,8 @@ func (arg *TransactionArgs) data() []byte {
 
 // setDefaults fills in default values for unspecified tx fields.
 func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
-	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
+	// if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
+	if args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil { //modified 581
 		return errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
 	}
 	head := b.CurrentHeader()
@@ -82,41 +83,27 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 	// need to consult the chain for defaults.
 	if args.MaxPriorityFeePerGas == nil || args.MaxFeePerGas == nil {
 		// In this clause, user left some fields unspecified.
-		if args.GasPrice == nil {
-			if args.MaxPriorityFeePerGas == nil {
-				tip, err := b.SuggestGasTipCap(ctx)
-				if err != nil {
-					return err
-				}
-				args.MaxPriorityFeePerGas = (*hexutil.Big)(tip)
-			}
-			if args.MaxFeePerGas == nil {
-				gasFeeCap := new(big.Int).Add(
-					(*big.Int)(args.MaxPriorityFeePerGas),
-					new(big.Int).Mul(head.BaseFee(), big.NewInt(2)),
-				)
-				args.MaxFeePerGas = (*hexutil.Big)(gasFeeCap)
-			}
-			if args.MaxFeePerGas.ToInt().Cmp(args.MaxPriorityFeePerGas.ToInt()) < 0 {
-				return fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", args.MaxFeePerGas, args.MaxPriorityFeePerGas)
-			}
-		} else {
-			if args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil {
-				return errors.New("maxFeePerGas or maxPriorityFeePerGas specified but GasPrice is nil")
-			}
-			if args.GasPrice == nil {
-				price, err := b.SuggestGasTipCap(ctx)
-				if err != nil {
-					return err
-				}
 
-				// The legacy tx gas price suggestion should not add 2x base fee
-				// because all fees are consumed, so it would result in a spiral
-				// upwards.
-				price.Add(price, head.BaseFee())
-				args.GasPrice = (*hexutil.Big)(price)
+		if args.MaxPriorityFeePerGas == nil {
+			tip, err := b.SuggestGasTipCap(ctx)
+			if err != nil {
+				return err
 			}
+			args.MaxPriorityFeePerGas = (*hexutil.Big)(tip)
 		}
+		if args.MaxFeePerGas == nil {
+			gasFeeCap := new(big.Int).Add(
+				(*big.Int)(args.MaxPriorityFeePerGas),
+				new(big.Int).Mul(head.BaseFee(), big.NewInt(2)),
+			)
+			args.MaxFeePerGas = (*hexutil.Big)(gasFeeCap)
+		}
+		if args.MaxFeePerGas.ToInt().Cmp(args.MaxPriorityFeePerGas.ToInt()) < 0 {
+			return fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", args.MaxFeePerGas, args.MaxPriorityFeePerGas)
+		}
+
+		price.Add(price, head.BaseFee())
+
 	} else {
 		// Both maxPriorityfee and maxFee set by caller. Sanity-check their internal relation
 		if args.MaxFeePerGas.ToInt().Cmp(args.MaxPriorityFeePerGas.ToInt()) < 0 {
@@ -144,9 +131,9 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 		// These fields are immutable during the estimation, safe to
 		// pass the pointer directly.
 		callArgs := TransactionArgs{
-			From:                 args.From,
-			To:                   args.To,
-			GasPrice:             args.GasPrice,
+			From: args.From,
+			To:   args.To,
+			// GasPrice:             args.GasPrice, //remove 581
 			MaxFeePerGas:         args.MaxFeePerGas,
 			MaxPriorityFeePerGas: args.MaxPriorityFeePerGas,
 			Value:                args.Value,
@@ -177,7 +164,7 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (t
 		return types.Message{}, errors.New("toMessage can only called in zone chain")
 	}
 	// Reject invalid combinations of fee styles
-	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
+	if args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil {
 		return types.Message{}, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
 	}
 	// Set sender address or use zero address if none specified.
@@ -201,33 +188,30 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (t
 		gasTipCap *big.Int
 	)
 	if baseFee == nil {
-		gasPrice = new(big.Int)
-		if args.GasPrice != nil {
-			gasPrice = args.GasPrice.ToInt()
-		}
+		gasPrice = new(big.Int).SetUint64(0)
 		gasFeeCap, gasTipCap = gasPrice, gasPrice
 	} else {
 		// A basefee is provided
-		if args.GasPrice != nil {
-			// User specified the legacy gas field, convert
-			gasPrice = args.GasPrice.ToInt()
-			gasFeeCap, gasTipCap = gasPrice, gasPrice
-		} else {
-			// User specified max fee (or none), use those
-			gasFeeCap = new(big.Int)
-			if args.MaxFeePerGas != nil {
-				gasFeeCap = args.MaxFeePerGas.ToInt()
-			}
-			gasTipCap = new(big.Int)
-			if args.MaxPriorityFeePerGas != nil {
-				gasTipCap = args.MaxPriorityFeePerGas.ToInt()
-			}
-			// Backfill the legacy gasPrice for EVM execution, unless we're all zeroes
-			gasPrice = new(big.Int)
-			if gasFeeCap.BitLen() > 0 || gasTipCap.BitLen() > 0 {
-				gasPrice = math.BigMin(new(big.Int).Add(gasTipCap, baseFee), gasFeeCap)
-			}
+
+		// User specified the legacy gas field, convert
+
+		gasPrice = new(big.Int).SetUint64(0)
+		gasFeeCap, gasTipCap = gasPrice, gasPrice
+		// User specified max fee (or none), use those
+		gasFeeCap = new(big.Int)
+		if args.MaxFeePerGas != nil {
+			gasFeeCap = args.MaxFeePerGas.ToInt()
 		}
+		gasTipCap = new(big.Int)
+		if args.MaxPriorityFeePerGas != nil {
+			gasTipCap = args.MaxPriorityFeePerGas.ToInt()
+		}
+		// Backfill the legacy gasPrice for EVM execution, unless we're all zeroes
+		gasPrice = new(big.Int)
+		if gasFeeCap.BitLen() > 0 || gasTipCap.BitLen() > 0 {
+			gasPrice = math.BigMin(new(big.Int).Add(gasTipCap, baseFee), gasFeeCap)
+		}
+
 	}
 	value := new(big.Int)
 	if args.Value != nil {
