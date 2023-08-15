@@ -86,7 +86,7 @@ func (b *QuaiAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNum
 	}
 	// Otherwise resolve and return the block
 	if number == rpc.LatestBlockNumber {
-		return b.eth.core.CurrentHeader(), nil
+		return b.eth.core.CurrentBlock().Header(), nil
 	}
 	return b.eth.core.GetHeaderByNumber(uint64(number)), nil
 }
