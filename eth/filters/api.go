@@ -599,7 +599,7 @@ func (api *PublicFilterAPI) PendingHeader(ctx context.Context) (*rpc.Subscriptio
 
 	go func() {
 		header := make(chan *types.Header, c_pendingHeaderChSize)
-		headerSub := api.events.SubscribePendingHeader(header)
+		headerSub := api.backend.SubscribePendingHeaderEvent(header)
 
 		for {
 			select {
