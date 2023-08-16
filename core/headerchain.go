@@ -683,7 +683,7 @@ func (hc *HeaderChain) CurrentHeader() *types.Header {
 
 // CurrentBlock returns the block for the current header.
 func (hc *HeaderChain) CurrentBlock() *types.Block {
-	return hc.GetBlockByHash(hc.CurrentHeader().Hash())
+	return hc.GetBlockOrCandidateByHash(hc.CurrentHeader().Hash())
 }
 
 // SetGenesis sets a new genesis block header for the chain
