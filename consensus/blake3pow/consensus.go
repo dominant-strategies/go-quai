@@ -40,8 +40,8 @@ var (
 	big8          = big.NewInt(8)
 	big9          = big.NewInt(9)
 	big10         = big.NewInt(10)
+	big20         = big.NewInt(20)
 	big32         = big.NewInt(32)
-	big100        = big.NewInt(100)
 	bigMinus99    = big.NewInt(-99)
 	big2e256      = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0)) // 2^256
 )
@@ -439,17 +439,17 @@ func (blake3pow *Blake3pow) CalcPrimeEntropyThreshold(chain consensus.ChainHeade
 	target = new(big.Int).Mul(big.NewInt(common.NumZonesInRegion), target)
 	log.Info("CalcPrimeEntropyThreshold", "target:", target)
 
-	// prior - prior * k * (target - deltaNumber)/target
-	controlError := new(big.Int).Sub(target, deltaNumber)
-	prior := primeTerminusHeader.PrimeEntropyThreshold(parent.Location().SubIndex())
-	controlError = new(big.Int).Mul(controlError, prior)
-	controlError = new(big.Int).Quo(controlError, target)
-	log.Info("CalcPrimeEntropyThreshold", "error:", controlError)
-	adjustment := new(big.Int).Quo(controlError, big100)
-	log.Info("CalcPrimeEntropyThreshold", "adjustment:", adjustment)
-	newDifficulty := new(big.Int).Add(prior, adjustment)
-	log.Info("CalcPrimeEntropyThreshold", "newDifficulty:", newDifficulty)
-	return newDifficulty, nil
+	var newThreshold *big.Int
+	if target.Cmp(deltaNumber) > 0 {
+		newThreshold = new(big.Int).Add(parent.PrimeEntropyThreshold(parent.Location().Zone()), big20)
+	} else {
+		newThreshold = new(big.Int).Sub(parent.PrimeEntropyThreshold(parent.Location().Zone()), big20)
+	}
+	newMinThreshold := new(big.Int).Div(target, big2)
+	newThreshold = new(big.Int).Set(common.MaxBigInt(newThreshold, newMinThreshold))
+	log.Info("CalcPrimeEntropyThreshold", "newThreshold:", newThreshold)
+
+	return newThreshold, nil
 }
 
 func (blake3pow *Blake3pow) CalcRegionEntropyThreshold(chain consensus.ChainHeaderReader, parent *types.Header) (*big.Int, error) {
@@ -474,19 +474,19 @@ func (blake3pow *Blake3pow) CalcRegionEntropyThreshold(chain consensus.ChainHead
 	deltaNumber := new(big.Int).Sub(parent.Number(), regionTerminusHeader.Number())
 	target := new(big.Int).Mul(big.NewInt(common.NumZonesInRegion), params.TimeFactor)
 
-	// prior - k * (target - deltaNumber)
-	// prior - prior * k * (target - deltaNumber)/target
-	controlError := new(big.Int).Sub(target, deltaNumber)
-	prior := regionTerminusHeader.RegionEntropyThreshold()
-	controlError = new(big.Int).Mul(controlError, prior)
-	controlError = new(big.Int).Quo(controlError, target)
-	log.Info("CalcRegionEntropyThreshold", "error:", controlError)
-	adjustment := new(big.Int).Quo(controlError, big100)
-	log.Info("CalcRegionEntropyThreshold", "adjustment:", adjustment)
-	newDifficulty := new(big.Int).Add(prior, adjustment)
-	log.Info("CalcRegionEntropyThreshold", "newDifficulty:", newDifficulty)
+	var newThreshold *big.Int
+	if target.Cmp(deltaNumber) > 0 {
+		newThreshold = new(big.Int).Add(parent.RegionEntropyThreshold(), big2)
+	} else {
+		newThreshold = new(big.Int).Sub(parent.RegionEntropyThreshold(), big2)
+	}
+	log.Info("CalcRegionEntropyThreshold", "newThreshold:", newThreshold)
 
-	return newDifficulty, nil
+	newMinThreshold := new(big.Int).Div(target, big2)
+	newThreshold = new(big.Int).Set(common.MaxBigInt(newThreshold, newMinThreshold))
+	log.Info("CalcRegionEntropyThreshold", "newThreshold:", newThreshold)
+
+	return newThreshold, nil
 }
 
 func (blake3pow *Blake3pow) IsDomCoincident(chain consensus.ChainHeaderReader, header *types.Header) bool {

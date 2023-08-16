@@ -24,23 +24,26 @@ func (blake3pow *Blake3pow) CalcOrder(header *types.Header) (*big.Int, int, erro
 
 	// Get entropy reduction of this header
 	intrinsicS := blake3pow.IntrinsicLogS(header.Hash())
+	target := new(big.Int).Div(common.Big2e256, header.Difficulty()).Bytes()
+	zoneThresholdS := blake3pow.IntrinsicLogS(common.BytesToHash(target))
 
 	// PRIME
 	// Compute the total accumulated entropy since the last prime block
 	totalDeltaSPrime := new(big.Int).Add(header.ParentDeltaS(common.REGION_CTX), header.ParentDeltaS(common.ZONE_CTX))
 	totalDeltaSPrime.Add(totalDeltaSPrime, intrinsicS)
 
-	if totalDeltaSPrime.Cmp(header.PrimeEntropyThreshold(header.Location().Zone())) > 0 {
-		fmt.Println("prime block because", common.BigBitsToBits(totalDeltaSPrime), ">", common.BigBitsToBits(header.PrimeEntropyThreshold(header.Location().Zone())))
+	primeEntropyThreshold := new(big.Int).Mul(zoneThresholdS, header.PrimeEntropyThreshold(header.Location().Zone()))
+	if totalDeltaSPrime.Cmp(primeEntropyThreshold) > 0 {
+		fmt.Println("prime block because", common.BigBitsToBits(totalDeltaSPrime), ">", common.BigBitsToBits(primeEntropyThreshold))
 		return intrinsicS, common.PRIME_CTX, nil
 	}
 
 	// REGION
 	// Compute the total accumulated entropy since the last region block
 	totalDeltaSRegion := new(big.Int).Add(header.ParentDeltaS(common.ZONE_CTX), intrinsicS)
-
-	if totalDeltaSRegion.Cmp(header.RegionEntropyThreshold()) > 0 {
-		fmt.Println("region block because", common.BigBitsToBits(totalDeltaSRegion), ">", common.BigBitsToBits(header.RegionEntropyThreshold()))
+	regionEntropyThreshold := new(big.Int).Mul(zoneThresholdS, header.RegionEntropyThreshold())
+	if totalDeltaSRegion.Cmp(regionEntropyThreshold) > 0 {
+		fmt.Println("region block because", common.BigBitsToBits(totalDeltaSRegion), ">", common.BigBitsToBits(regionEntropyThreshold))
 		return intrinsicS, common.REGION_CTX, nil
 	}
 

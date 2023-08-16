@@ -288,14 +288,10 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	initPrimeThreshold := new(big.Int).Mul(params.TimeFactor, big.NewInt(common.NumRegionsInPrime))
 	initPrimeThreshold = new(big.Int).Mul(initPrimeThreshold, big.NewInt(common.NumZonesInRegion))
 	initPrimeThreshold = new(big.Int).Mul(initPrimeThreshold, params.TimeFactor)
-	target := new(big.Int).Div(common.Big2e256, g.Difficulty).Bytes()
-	zoneThresholdS := g.IntrinsicLogS(common.BytesToHash(target))
-	initPrimeThreshold = new(big.Int).Mul(zoneThresholdS, initPrimeThreshold)
 	for i := 0; i < common.NumZonesInRegion; i++ {
 		head.SetPrimeEntropyThreshold(initPrimeThreshold, i)
 	}
 	initRegionThreshold := new(big.Int).Mul(params.TimeFactor, big.NewInt(common.NumZonesInRegion))
-	initRegionThreshold = new(big.Int).Mul(zoneThresholdS, initRegionThreshold)
 	head.SetRegionEntropyThreshold(initRegionThreshold)
 
 	return types.NewBlock(head, nil, nil, nil, nil, nil, trie.NewStackTrie(nil))
