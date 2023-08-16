@@ -269,17 +269,14 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 			rawdb.WriteInboundEtxs(batch, block.Hash(), newInboundEtxs.FilterToLocation(common.NodeLocation))
 		}
 
-		sl.reorgMu.Lock()
 		if subReorg {
 			sl.hc.SetCurrentHeader(block.Header())
 		}
 		// Upate the local pending header
 		pendingHeaderWithTermini, err = sl.generateSlicePendingHeader(block, newTermini, domPendingHeader, domOrigin, false)
 		if err != nil {
-			sl.reorgMu.Unlock()
 			return nil, false, err
 		}
-		sl.reorgMu.Unlock()
 
 		time9 = common.PrettyDuration(time.Since(start))
 

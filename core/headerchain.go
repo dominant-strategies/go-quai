@@ -381,7 +381,7 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 
 	// Run through the hash stack to update canonicalHash and forward state processor
 	for i := len(hashStack) - 1; i >= 0; i-- {
-		block := hc.GetBlockByHash(hashStack[i].Hash())
+		block := hc.GetBlockOrCandidate(hashStack[i].Hash(), hashStack[i].NumberU64())
 		if block == nil {
 			return errors.New("Could not find block during reorg")
 		}
@@ -801,6 +801,10 @@ func (hc *HeaderChain) GetBlockByHash(hash common.Hash) *types.Block {
 		return nil
 	}
 	return hc.GetBlock(hash, *number)
+}
+
+func (hc *HeaderChain) GetBlockOrCandidate(hash common.Hash, number uint64) *types.Block {
+	return hc.bc.GetBlockOrCandidate(hash, number)
 }
 
 // GetBlockOrCandidateByHash retrieves any block from the database by hash, caching it if found.
