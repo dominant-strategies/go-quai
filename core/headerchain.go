@@ -346,6 +346,7 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 
 	// If head is the normal extension of canonical head, we can return by just wiring the canonical hash.
 	if prevHeader.Hash() == head.ParentHash() {
+		hc.ReadInboundEtxsAndAppendBlock(head)
 		rawdb.WriteCanonicalHash(hc.headerDb, head.Hash(), head.NumberU64())
 		return nil
 	}
@@ -381,23 +382,28 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 
 	// Run through the hash stack to update canonicalHash and forward state processor
 	for i := len(hashStack) - 1; i >= 0; i-- {
-		block := hc.GetBlockOrCandidate(hashStack[i].Hash(), hashStack[i].NumberU64())
-		if block == nil {
-			return errors.New("Could not find block during reorg")
-		}
-		_, order, err := hc.engine.CalcOrder(block.Header())
-		if err != nil {
-			return err
-		}
-		nodeCtx := common.NodeLocation.Context()
-		var inboundEtxs types.Transactions
-		if order < nodeCtx {
-			inboundEtxs = rawdb.ReadInboundEtxs(hc.headerDb, hashStack[i].Hash())
-		}
-		hc.AppendBlock(block, inboundEtxs)
+		hc.ReadInboundEtxsAndAppendBlock(hashStack[i])
 		rawdb.WriteCanonicalHash(hc.headerDb, hashStack[i].Hash(), hashStack[i].NumberU64())
 	}
 
+	return nil
+}
+
+func (hc *HeaderChain) ReadInboundEtxsAndAppendBlock(header *types.Header) error {
+	block := hc.GetBlockOrCandidate(header.Hash(), header.NumberU64())
+	if block == nil {
+		return errors.New("Could not find block during reorg")
+	}
+	_, order, err := hc.engine.CalcOrder(block.Header())
+	if err != nil {
+		return err
+	}
+	nodeCtx := common.NodeLocation.Context()
+	var inboundEtxs types.Transactions
+	if order < nodeCtx {
+		inboundEtxs = rawdb.ReadInboundEtxs(hc.headerDb, header.Hash())
+	}
+	hc.AppendBlock(block, inboundEtxs)
 	return nil
 }
 
