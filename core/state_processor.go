@@ -270,7 +270,7 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 			startTimeEtx := time.Now()
 			etxEntry, exists := etxSet[tx.Hash()]
 			if !exists { // Verify that the ETX exists in the set
-				return nil, nil, nil, 0, fmt.Errorf("invalid external transaction: etx %x not found in unspent etx set", etxEntry.ETX.Hash())
+				return nil, nil, nil, 0, fmt.Errorf("invalid external transaction: etx %x not found in unspent etx set", tx.Hash())
 			}
 			prevZeroBal := prepareApplyETX(statedb, &etxEntry.ETX)
 			receipt, err = applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, &etxEntry.ETX, usedGas, vmenv, &etxRLimit, &etxPLimit)
