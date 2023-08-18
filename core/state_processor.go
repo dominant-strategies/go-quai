@@ -277,7 +277,6 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 	p.engine.Finalize(p.hc, header, statedb, block.Transactions(), block.Uncles())
 	time5 := common.PrettyDuration(time.Since(start))
 
-	log.Info("Total Tx Processing Time", "signing time", common.PrettyDuration(timeSign), "prepare state time", common.PrettyDuration(timePrepare), "etx time", common.PrettyDuration(timeEtx), "tx time", common.PrettyDuration(timeTx))
 	log.Info("Time taken in Process", "time1", time1, "time2", time2, "time3", time3, "time4", time4, "time5", time5)
 
 	return receipts, allLogs, statedb, *usedGas, nil
