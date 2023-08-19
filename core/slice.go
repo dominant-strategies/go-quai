@@ -484,6 +484,22 @@ func (sl *Slice) generateSlicePendingHeader(block *types.Block, newTermini types
 		localPendingHeader = types.EmptyHeader()
 		localPendingHeader.SetParentHash(block.Hash(), nodeCtx)
 		localPendingHeader.SetNumber(big.NewInt(int64(block.NumberU64()) + 1))
+		// Compute and set manifest hash
+		manifest := types.BlockManifest{}
+		if nodeCtx == common.PRIME_CTX {
+			// Nothing to do for prime chain
+			manifest = types.BlockManifest{}
+		} else if sl.engine.IsDomCoincident(sl.hc, block.Header()) {
+			manifest = types.BlockManifest{block.Hash()}
+		} else {
+			parentManifest := rawdb.ReadManifest(sl.sliceDb, block.ParentHash())
+			manifest = append(parentManifest, block.Hash())
+		}
+		manifestHash := types.DeriveSha(manifest, trie.NewStackTrie(nil))
+		localPendingHeader.SetManifestHash(manifestHash)
+
+		// write the manifest into the disk
+		rawdb.WriteManifest(sl.sliceDb, block.Hash(), manifest)
 	}
 
 	// Combine subordinates pending header with local pending header
@@ -713,9 +729,11 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 			combinedPendingHeader = sl.combinePendingHeader(pendingHeader.Header(), combinedPendingHeader, i, false)
 		}
 
+		nodeCtx := common.NodeLocation.Context()
 		// Pick the head
 		if subReorg {
-			if localPendingHeader.Header().Root() != types.EmptyRootHash {
+			if (localPendingHeader.Header().Root() != types.EmptyRootHash && nodeCtx == common.ZONE_CTX) || nodeCtx == common.REGION_CTX {
+				fmt.Println("local root is not emtpty")
 				block := sl.hc.GetBlockOrCandidateByHash(localPendingHeader.Header().ParentHash())
 				if block != nil {
 					sl.hc.SetCurrentHeader(block.Header())
@@ -728,6 +746,7 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 					log.Warn("unable to set the current header after the cord update", "Hash", localPendingHeader.Header().ParentHash())
 				}
 			} else {
+				fmt.Println("local root is emtpty")
 				block := sl.hc.GetBlockOrCandidateByHash(localPendingHeader.Header().ParentHash())
 				if block != nil {
 					sl.hc.SetCurrentHeader(block.Header())
