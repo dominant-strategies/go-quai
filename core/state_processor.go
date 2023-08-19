@@ -255,8 +255,10 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 
 		var receipt *types.Receipt
 		if tx.Type() == types.ExternalTxType {
+			log.Info("Inbound etx", "hash", tx.Hash())
 			startTimeEtx := time.Now()
 			if _, exists := etxSet[tx.Hash()]; !exists { // Verify that the ETX exists in the set
+				panic(fmt.Errorf("invalid external transaction: etx %x not found in unspent etx set", tx.Hash()))
 				return nil, nil, nil, 0, fmt.Errorf("invalid external transaction: etx %x not found in unspent etx set", tx.Hash())
 			}
 			prevZeroBal := prepareApplyETX(statedb, tx)
@@ -267,6 +269,7 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 				return nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 			}
 
+			log.Info("Deleting tx out of etx set", "Hash", tx.Hash())
 			delete(etxSet, tx.Hash()) // This ETX has been spent so remove it from the unspent set
 			timeEtxDelta := time.Since(startTimeEtx)
 			timeEtx += timeEtxDelta
