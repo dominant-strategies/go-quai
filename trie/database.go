@@ -290,6 +290,7 @@ func NewDatabase(diskdb ethdb.KeyValueStore) *Database {
 // before its written out to disk or garbage collected. It also acts as a read cache
 // for nodes loaded from disk.
 func NewDatabaseWithConfig(diskdb ethdb.KeyValueStore, config *Config) *Database {
+
 	var cleans *fastcache.Cache
 	if config != nil && config.Cache > 0 {
 		if config.Journal == "" {
@@ -305,6 +306,7 @@ func NewDatabaseWithConfig(diskdb ethdb.KeyValueStore, config *Config) *Database
 			children: make(map[common.Hash]uint16),
 		}},
 	}
+
 	if config == nil || config.Preimages {
 		db.preimages = make(map[common.Hash][]byte)
 	}

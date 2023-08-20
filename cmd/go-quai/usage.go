@@ -118,8 +118,8 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.WSApiFlag,
 			utils.WSPathPrefixFlag,
 			utils.WSAllowedOriginsFlag,
-			utils.RPCGlobalGasCapFlag,
-			utils.RPCGlobalTxFeeCapFlag,
+			// utils.RPCGlobalGasCapFlag,
+			// utils.RPCGlobalTxFeeCapFlag,
 			utils.JSpathFlag,
 			utils.ExecFlag,
 			utils.PreloadJSFlag,
@@ -146,7 +146,6 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 	{
 		Name: "MINER",
 		Flags: []cli.Flag{
-			utils.MinerGasPriceFlag,
 			utils.MinerEtherbaseFlag,
 		},
 	},
@@ -161,8 +160,6 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 		Flags: []cli.Flag{
 			utils.GpoBlocksFlag,
 			utils.GpoPercentileFlag,
-			utils.GpoMaxGasPriceFlag,
-			utils.GpoIgnoreGasPriceFlag,
 		},
 	},
 	{

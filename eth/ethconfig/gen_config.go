@@ -9,7 +9,6 @@ import (
 	"github.com/dominant-strategies/go-quai/consensus/progpow"
 	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/eth/downloader"
-	"github.com/dominant-strategies/go-quai/eth/gasprice"
 )
 
 // MarshalTOML marshals as TOML.
@@ -38,11 +37,8 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		Miner                   core.Config
 		Progpow                  progpow.Config
 		TxPool                  core.TxPoolConfig
-		GPO                     gasprice.Config
 		EnablePreimageRecording bool
 		DocRoot                 string `toml:"-"`
-		RPCGasCap               uint64
-		RPCTxFeeCap             float64
 	}
 	var enc Config
 	enc.Genesis = c.Genesis
@@ -68,11 +64,8 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.Miner = c.Miner
 	enc.Progpow = c.Progpow
 	enc.TxPool = c.TxPool
-	enc.GPO = c.GPO
 	enc.EnablePreimageRecording = c.EnablePreimageRecording
 	enc.DocRoot = c.DocRoot
-	enc.RPCGasCap = c.RPCGasCap
-	enc.RPCTxFeeCap = c.RPCTxFeeCap
 	return &enc, nil
 }
 
@@ -111,11 +104,8 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		Miner                   *core.Config
 		Progpow                  *progpow.Config
 		TxPool                  *core.TxPoolConfig
-		GPO                     *gasprice.Config
 		EnablePreimageRecording *bool
 		DocRoot                 *string `toml:"-"`
-		RPCGasCap               *uint64
-		RPCTxFeeCap             *float64
 	}
 	var dec Config
 	if err := unmarshal(&dec); err != nil {
@@ -190,20 +180,11 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	if dec.TxPool != nil {
 		c.TxPool = *dec.TxPool
 	}
-	if dec.GPO != nil {
-		c.GPO = *dec.GPO
-	}
 	if dec.EnablePreimageRecording != nil {
 		c.EnablePreimageRecording = *dec.EnablePreimageRecording
 	}
 	if dec.DocRoot != nil {
 		c.DocRoot = *dec.DocRoot
-	}
-	if dec.RPCGasCap != nil {
-		c.RPCGasCap = *dec.RPCGasCap
-	}
-	if dec.RPCTxFeeCap != nil {
-		c.RPCTxFeeCap = *dec.RPCTxFeeCap
-	}
+	}	
 	return nil
 }

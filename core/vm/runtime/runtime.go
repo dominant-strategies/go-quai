@@ -17,7 +17,6 @@
 package runtime
 
 import (
-	"math"
 	"math/big"
 	"time"
 
@@ -38,12 +37,9 @@ type Config struct {
 	Coinbase    common.Address
 	BlockNumber *big.Int
 	Time        *big.Int
-	GasLimit    uint64
-	GasPrice    *big.Int
 	Value       *big.Int
 	Debug       bool
 	EVMConfig   vm.Config
-	BaseFee     *big.Int
 
 	State     *state.StateDB
 	GetHashFn func(n uint64) common.Hash
@@ -62,12 +58,6 @@ func setDefaults(cfg *Config) {
 	}
 	if cfg.Time == nil {
 		cfg.Time = big.NewInt(time.Now().Unix())
-	}
-	if cfg.GasLimit == 0 {
-		cfg.GasLimit = math.MaxUint64
-	}
-	if cfg.GasPrice == nil {
-		cfg.GasPrice = new(big.Int)
 	}
 	if cfg.Value == nil {
 		cfg.Value = new(big.Int)
@@ -119,7 +109,7 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 		sender,
 		common.BytesToAddress([]byte("contract")),
 		input,
-		cfg.GasLimit,
+		// cfg.GasLimit,
 		cfg.Value,
 	)
 
@@ -127,7 +117,9 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 }
 
 // Create executes the code using the EVM create method
-func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
+func Create(input []byte, cfg *Config) ([]byte, common.Address,
+	// uint64,
+	error) {
 	if cfg == nil {
 		cfg = new(Config)
 	}
@@ -144,13 +136,17 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 	cfg.State.PrepareAccessList(cfg.Origin, nil, vm.ActivePrecompiles(rules), nil)
 
 	// Call the code with the given configuration.
-	code, address, leftOverGas, err := vmenv.Create(
+	code, address,
+		// leftOverGas,
+		err := vmenv.Create(
 		sender,
 		input,
-		cfg.GasLimit,
+		// cfg.GasLimit,
 		cfg.Value,
 	)
-	return code, address, leftOverGas, err
+	return code, address,
+		// leftOverGas,
+		err
 }
 
 // Call executes the code given by the contract's address. It will return the
@@ -158,7 +154,9 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 //
 // Call, unlike Execute, requires a config and also requires the State field to
 // be set.
-func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, error) {
+func Call(address common.Address, input []byte, cfg *Config) ([]byte,
+	// uint64,
+	error) {
 	setDefaults(cfg)
 
 	vmenv := NewEnv(cfg)
@@ -173,12 +171,16 @@ func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, er
 	statedb.PrepareAccessList(cfg.Origin, &address, vm.ActivePrecompiles(rules), nil)
 
 	// Call the code with the given configuration.
-	ret, leftOverGas, err := vmenv.Call(
+	ret,
+		// leftOverGas,
+		err := vmenv.Call(
 		vm.AccountRef(cfg.Origin),
 		address,
 		input,
-		cfg.GasLimit,
+		// cfg.GasLimit,
 		cfg.Value,
 	)
-	return ret, leftOverGas, err
+	return ret,
+		// leftOverGas,
+		err
 }

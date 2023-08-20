@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
-	"github.com/dominant-strategies/go-quai/common/math"
 )
 
 type JSONLogger struct {
@@ -41,25 +40,22 @@ func NewJSONLogger(cfg *LogConfig, writer io.Writer) *JSONLogger {
 	return l
 }
 
-func (l *JSONLogger) CaptureStart(env *EVM, from, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (l *JSONLogger) CaptureStart(env *EVM, from, to common.Address, create bool, input []byte, value *big.Int) {
 }
 
 func (l *JSONLogger) CaptureFault(*EVM, uint64, OpCode, uint64, uint64, *ScopeContext, int, error) {}
 
 // CaptureState outputs state information on the logger.
-func (l *JSONLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, rData []byte, depth int, err error) {
+func (l *JSONLogger) CaptureState(env *EVM, pc uint64, op OpCode, cost uint64, scope *ScopeContext, rData []byte, depth int, err error) {
 	memory := scope.Memory
 	stack := scope.Stack
 
 	log := StructLog{
-		Pc:            pc,
-		Op:            op,
-		Gas:           gas,
-		GasCost:       cost,
-		MemorySize:    memory.Len(),
-		Depth:         depth,
-		RefundCounter: env.StateDB.GetRefund(),
-		Err:           err,
+		Pc:         pc,
+		Op:         op,
+		MemorySize: memory.Len(),
+		Depth:      depth,
+		Err:        err,
 	}
 	if !l.cfg.DisableMemory {
 		log.Memory = memory.Data()
@@ -74,16 +70,15 @@ func (l *JSONLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint
 }
 
 // CaptureEnd is triggered at end of execution.
-func (l *JSONLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) {
+func (l *JSONLogger) CaptureEnd(output []byte, t time.Duration, err error) {
 	type endLog struct {
-		Output  string              `json:"output"`
-		GasUsed math.HexOrDecimal64 `json:"gasUsed"`
-		Time    time.Duration       `json:"time"`
-		Err     string              `json:"error,omitempty"`
+		Output string        `json:"output"`
+		Time   time.Duration `json:"time"`
+		Err    string        `json:"error,omitempty"`
 	}
 	var errMsg string
 	if err != nil {
 		errMsg = err.Error()
 	}
-	l.encoder.Encode(endLog{common.Bytes2Hex(output), math.HexOrDecimal64(gasUsed), t, errMsg})
+	l.encoder.Encode(endLog{common.Bytes2Hex(output), t, errMsg})
 }

@@ -39,7 +39,6 @@ type ChainContext interface {
 func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common.Address) vm.BlockContext {
 	var (
 		beneficiary common.Address
-		baseFee     *big.Int
 	)
 
 	// If we don't have an explicit author (i.e. not mining), extract from the header
@@ -48,9 +47,7 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 	} else {
 		beneficiary = *author
 	}
-	if header.BaseFee() != nil {
-		baseFee = new(big.Int).Set(header.BaseFee())
-	}
+
 	return vm.BlockContext{
 		CanTransfer: CanTransfer,
 		Transfer:    Transfer,
@@ -59,8 +56,6 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 		BlockNumber: new(big.Int).Set(header.Number()),
 		Time:        new(big.Int).SetUint64(header.Time()),
 		Difficulty:  new(big.Int).Set(header.Difficulty()),
-		BaseFee:     baseFee,
-		GasLimit:    header.GasLimit(),
 	}
 }
 
@@ -68,13 +63,8 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 func NewEVMTxContext(msg Message) vm.TxContext {
 	return vm.TxContext{
 		Origin:        msg.From(),
-		GasPrice:      new(big.Int).Set(msg.GasPrice()),
 		ETXSender:     msg.ETXSender(),
 		TxType:        msg.Type(),
-		ETXGasLimit:   msg.ETXGasLimit(),
-		ETXGasPrice:   msg.ETXGasPrice(),
-		ETXGasTip:     msg.ETXGasTip(),
-		TXGasTip:      msg.GasTipCap(),
 		ETXData:       msg.ETXData(),
 		ETXAccessList: msg.ETXAccessList(),
 	}

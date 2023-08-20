@@ -113,14 +113,10 @@ type ChainSyncReader interface {
 
 // CallMsg contains parameters for contract calls.
 type CallMsg struct {
-	From      common.Address  // the sender of the 'transaction'
-	To        *common.Address // the destination contract (nil for contract creation)
-	Gas       uint64          // if 0, the call executes with near-infinite gas
-	GasPrice  *big.Int        // wei <-> gas exchange ratio
-	GasFeeCap *big.Int        // fee cap per gas.
-	GasTipCap *big.Int        // tip per gas.
-	Value     *big.Int        // amount of wei sent along with the call
-	Data      []byte          // input data, usually an ABI-encoded contract method invocation
+	From  common.Address  // the sender of the 'transaction'
+	To    *common.Address // the destination contract (nil for contract creation)
+	Value *big.Int        // amount of wei sent along with the call
+	Data  []byte          // input data, usually an ABI-encoded contract method invocation
 
 	AccessList types.AccessList // access list
 }
@@ -176,12 +172,6 @@ type TransactionSender interface {
 	SendTransaction(ctx context.Context, tx *types.Transaction) error
 }
 
-// GasPricer wraps the gas price oracle, which monitors the blockchain to determine the
-// optimal gas price given current fee market conditions.
-type GasPricer interface {
-	SuggestGasPrice(ctx context.Context) (*big.Int, error)
-}
-
 // A PendingStateReader provides access to the pending state, which is the result of all
 // known executable transactions which have not yet been included in the blockchain. It is
 // commonly used to display the result of ’unconfirmed’ actions (e.g. wallet value
@@ -198,14 +188,6 @@ type PendingStateReader interface {
 // PendingContractCaller can be used to perform calls against the pending state.
 type PendingContractCaller interface {
 	PendingCallContract(ctx context.Context, call CallMsg) ([]byte, error)
-}
-
-// GasEstimator wraps EstimateGas, which tries to estimate the gas needed to execute a
-// specific transaction based on the pending state. There is no guarantee that this is the
-// true gas limit requirement as other transactions may be added or removed by miners, but
-// it should provide a basis for setting a reasonable default.
-type GasEstimator interface {
-	EstimateGas(ctx context.Context, call CallMsg) (uint64, error)
 }
 
 // A PendingStateEventer provides access to real time notifications about changes to the

@@ -18,15 +18,12 @@ package core
 
 import (
 	"fmt"
-	"math"
 	"math/big"
 
 	"github.com/dominant-strategies/go-quai/common"
-	cmath "github.com/dominant-strategies/go-quai/common/math"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/crypto"
-	"github.com/dominant-strategies/go-quai/params"
 )
 
 var emptyCodeHash = crypto.Keccak256Hash(nil)
@@ -51,17 +48,11 @@ The state transitioning model does all the necessary work to work out a valid ne
 6) Derive new state root
 */
 type StateTransition struct {
-	gp         *GasPool
-	msg        Message
-	gas        uint64
-	gasPrice   *big.Int
-	gasFeeCap  *big.Int
-	gasTipCap  *big.Int
-	initialGas uint64
-	value      *big.Int
-	data       []byte
-	state      vm.StateDB
-	evm        *vm.EVM
+	msg   Message
+	value *big.Int
+	data  []byte
+	state vm.StateDB
+	evm   *vm.EVM
 }
 
 // Message represents a message sent to a contract.
@@ -69,10 +60,6 @@ type Message interface {
 	From() common.Address
 	To() *common.Address
 
-	GasPrice() *big.Int
-	GasFeeCap() *big.Int
-	GasTipCap() *big.Int
-	Gas() uint64
 	Value() *big.Int
 
 	Nonce() uint64
@@ -82,9 +69,6 @@ type Message interface {
 	ETXSender() common.Address
 	Type() byte
 
-	ETXGasLimit() uint64
-	ETXGasPrice() *big.Int
-	ETXGasTip() *big.Int
 	ETXData() []byte
 	ETXAccessList() types.AccessList
 }
@@ -92,7 +76,6 @@ type Message interface {
 // ExecutionResult includes all output after executing given evm
 // message no matter the execution itself is successful or not.
 type ExecutionResult struct {
-	UsedGas    uint64               // Total used gas but include the refunded gas
 	Err        error                // Any error encountered during the execution(listed in core/vm/errors.go)
 	ReturnData []byte               // Returned data from evm(function result or data supplied with revert opcode)
 	Etxs       []*types.Transaction // External transactions generated from opETX
@@ -125,56 +108,14 @@ func (result *ExecutionResult) Revert() []byte {
 	return common.CopyBytes(result.ReturnData)
 }
 
-// IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
-func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation bool) (uint64, error) {
-	// Set the starting gas for the raw transaction
-	var gas uint64
-	if isContractCreation {
-		gas = params.TxGasContractCreation
-	} else {
-		gas = params.TxGas
-	}
-	// Bump the required gas by the amount of transactional data
-	if len(data) > 0 {
-		// Zero and non-zero bytes are priced differently
-		var nz uint64
-		for _, byt := range data {
-			if byt != 0 {
-				nz++
-			}
-		}
-		// Make sure we don't exceed uint64 for all data combinations
-		nonZeroGas := params.TxDataNonZeroGas
-		if (math.MaxUint64-gas)/nonZeroGas < nz {
-			return 0, ErrGasUintOverflow
-		}
-		gas += nz * nonZeroGas
-
-		z := uint64(len(data)) - nz
-		if (math.MaxUint64-gas)/params.TxDataZeroGas < z {
-			return 0, ErrGasUintOverflow
-		}
-		gas += z * params.TxDataZeroGas
-	}
-	if accessList != nil {
-		gas += uint64(len(accessList)) * params.TxAccessListAddressGas
-		gas += uint64(accessList.StorageKeys()) * params.TxAccessListStorageKeyGas
-	}
-	return gas, nil
-}
-
 // NewStateTransition initialises and returns a new state transition object.
-func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool) *StateTransition {
+func NewStateTransition(evm *vm.EVM, msg Message) *StateTransition {
 	return &StateTransition{
-		gp:        gp,
-		evm:       evm,
-		msg:       msg,
-		gasPrice:  msg.GasPrice(),
-		gasFeeCap: msg.GasFeeCap(),
-		gasTipCap: msg.GasTipCap(),
-		value:     msg.Value(),
-		data:      msg.Data(),
-		state:     evm.StateDB,
+		evm:   evm,
+		msg:   msg,
+		value: msg.Value(),
+		data:  msg.Data(),
+		state: evm.StateDB,
 	}
 }
 
@@ -185,8 +126,8 @@ func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool) *StateTransition 
 // the gas used (which includes gas refunds) and an error if it failed. An error always
 // indicates a core error meaning that the message would always fail for that particular
 // state and would never be accepted within a block.
-func ApplyMessage(evm *vm.EVM, msg Message, gp *GasPool) (*ExecutionResult, error) {
-	return NewStateTransition(evm, msg, gp).TransitionDb()
+func ApplyMessage(evm *vm.EVM, msg Message) (*ExecutionResult, error) {
+	return NewStateTransition(evm, msg).TransitionDb()
 }
 
 // to returns the recipient of the message.
@@ -198,14 +139,8 @@ func (st *StateTransition) to() common.Address {
 }
 
 func (st *StateTransition) buyGas() error {
-	mgval := new(big.Int).SetUint64(st.msg.Gas())
-	mgval = mgval.Mul(mgval, st.gasPrice)
+	mgval := new(big.Int).SetUint64(0)
 	balanceCheck := mgval
-	if st.gasFeeCap != nil {
-		balanceCheck = new(big.Int).SetUint64(st.msg.Gas())
-		balanceCheck = balanceCheck.Mul(balanceCheck, st.gasFeeCap)
-		balanceCheck.Add(balanceCheck, st.value)
-	}
 	from, err := st.msg.From().InternalAddress()
 	if err != nil {
 		return err
@@ -213,12 +148,6 @@ func (st *StateTransition) buyGas() error {
 	if have, want := st.state.GetBalance(from), balanceCheck; have.Cmp(want) < 0 {
 		return fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFunds, st.msg.From().Hex(), have, want)
 	}
-	if err := st.gp.SubGas(st.msg.Gas()); err != nil {
-		return err
-	}
-	st.gas += st.msg.Gas()
-
-	st.initialGas = st.msg.Gas()
 	st.state.SubBalance(from, mgval)
 	return nil
 }
@@ -244,28 +173,7 @@ func (st *StateTransition) preCheck() error {
 		return fmt.Errorf("%w: address %v, codehash: %s", ErrSenderNoEOA,
 			st.msg.From().Hex(), codeHash)
 	}
-	// Make sure that transaction gasFeeCap is greater than the baseFee
-	// Skip the checks if gas fields are zero and baseFee was explicitly disabled (eth_call)
-	if !st.evm.Config.NoBaseFee || st.gasFeeCap.BitLen() > 0 || st.gasTipCap.BitLen() > 0 {
-		if l := st.gasFeeCap.BitLen(); l > 256 {
-			return fmt.Errorf("%w: address %v, maxFeePerGas bit length: %d", ErrFeeCapVeryHigh,
-				st.msg.From().Hex(), l)
-		}
-		if l := st.gasTipCap.BitLen(); l > 256 {
-			return fmt.Errorf("%w: address %v, maxPriorityFeePerGas bit length: %d", ErrTipVeryHigh,
-				st.msg.From().Hex(), l)
-		}
-		if st.gasFeeCap.Cmp(st.gasTipCap) < 0 {
-			return fmt.Errorf("%w: address %v, maxPriorityFeePerGas: %s, maxFeePerGas: %s", ErrTipAboveFeeCap,
-				st.msg.From().Hex(), st.gasTipCap, st.gasFeeCap)
-		}
-		// This will panic if baseFee is nil, but basefee presence is verified
-		// as part of header validation.
-		if st.gasFeeCap.Cmp(st.evm.Context.BaseFee) < 0 {
-			return fmt.Errorf("%w: address %v, maxFeePerGas: %s baseFee: %s", ErrFeeCapTooLow,
-				st.msg.From().Hex(), st.gasFeeCap, st.evm.Context.BaseFee)
-		}
-	}
+
 	return st.buyGas()
 }
 
@@ -301,16 +209,6 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	sender := vm.AccountRef(msg.From())
 	contractCreation := msg.To() == nil
 
-	// Check clauses 4-5, subtract intrinsic gas if everything is correct
-	gas, err := IntrinsicGas(st.data, st.msg.AccessList(), contractCreation)
-	if err != nil {
-		return nil, err
-	}
-	if st.gas < gas {
-		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gas, gas)
-	}
-	st.gas -= gas
-
 	// Check clause 6
 	if msg.Value().Sign() > 0 && !st.evm.Context.CanTransfer(st.state, msg.From(), msg.Value()) {
 		return nil, fmt.Errorf("%w: address %v", ErrInsufficientFundsForTransfer, msg.From().Hex())
@@ -325,7 +223,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		vmerr error // vm errors do not effect consensus and are therefore not assigned to err
 	)
 	if contractCreation {
-		ret, _, st.gas, vmerr = st.evm.Create(sender, st.data, st.gas, st.value)
+		ret, _, vmerr = st.evm.Create(sender, st.data, st.value)
 	} else {
 		// Increment the nonce for the next transaction
 		addr, err := sender.Address().InternalAddress()
@@ -337,7 +235,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 			return nil, err
 		}
 		st.state.SetNonce(from, st.state.GetNonce(addr)+1)
-		ret, st.gas, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value)
+		ret, vmerr = st.evm.Call(sender, st.to(), st.data, st.value)
 	}
 
 	// At this point, the execution completed, so the ETX cache can be dumped and reset
@@ -347,46 +245,15 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	st.evm.ETXCache = make([]*types.Transaction, 0)
 	st.evm.ETXCacheLock.Unlock()
 
-	// refunds are capped to gasUsed / 5
-	st.refundGas(params.RefundQuotient)
-
-	effectiveTip := cmath.BigMin(st.gasTipCap, new(big.Int).Sub(st.gasFeeCap, st.evm.Context.BaseFee))
 	coinbase, err := st.evm.Context.Coinbase.InternalAddress()
 	if err != nil {
 		return nil, err
 	}
-	st.state.AddBalance(coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip))
+	st.state.AddBalance(coinbase, big.NewInt(0))
 
 	return &ExecutionResult{
-		UsedGas:    st.gasUsed(),
 		Err:        vmerr,
 		ReturnData: ret,
 		Etxs:       etxs,
 	}, nil
-}
-
-func (st *StateTransition) refundGas(refundQuotient uint64) {
-	// Apply refund counter, capped to a refund quotient
-	refund := st.gasUsed() / refundQuotient
-	if refund > st.state.GetRefund() {
-		refund = st.state.GetRefund()
-	}
-	st.gas += refund
-
-	// Return ETH for remaining gas, exchanged at the original rate.
-	remaining := new(big.Int).Mul(new(big.Int).SetUint64(st.gas), st.gasPrice)
-	from, err := st.msg.From().InternalAddress()
-	if err != nil {
-		return
-	}
-	st.state.AddBalance(from, remaining)
-
-	// Also return remaining gas to the block gas counter so it is
-	// available for the next transaction.
-	st.gp.AddGas(st.gas)
-}
-
-// gasUsed returns the amount of gas used up by the state transition.
-func (st *StateTransition) gasUsed() uint64 {
-	return st.initialGas - st.gas
 }

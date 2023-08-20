@@ -31,15 +31,14 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/params"
-	"github.com/dominant-strategies/go-quai/trie"
 )
 
 var (
-	testdb       = rawdb.NewMemoryDatabase()
-	testKey, _   = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-	testAddress  = crypto.PubkeyToAddress(testKey.PublicKey)
-	genesis      = core.GenesisBlockForTesting(testdb, testAddress, big.NewInt(1000000000000000))
-	unknownBlock = types.NewBlock(&types.Header{GasLimit: params.GenesisGasLimit, BaseFee: big.NewInt(params.InitialBaseFee)}, nil, nil, nil, trie.NewStackTrie(nil))
+	testdb      = rawdb.NewMemoryDatabase()
+	testKey, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	testAddress = crypto.PubkeyToAddress(testKey.PublicKey)
+	genesis     = core.GenesisBlockForTesting(testdb, testAddress, big.NewInt(1000000000000000))
+	// unknownBlock = types.NewBlock(&types.Header{GasLimit: params.GenesisGasLimit, BaseFee: big.NewInt(params.InitialBaseFee)}, nil, nil, nil, trie.NewStackTrie(nil))
 )
 
 // makeChain creates a chain of n blocks starting at and including parent.
@@ -48,7 +47,7 @@ var (
 // reassembly.
 func makeChain(n int, seed byte, parent *types.Block) ([]common.Hash, map[common.Hash]*types.Block) {
 	blocks, _ := core.GenerateChain(params.TestChainConfig, parent, progpow.NewFaker(), testdb, n, func(i int, block *core.BlockGen) {
-		block.SetCoinbase(common.Address{seed})
+		// block.SetCoinbase(common.Address{seed})
 
 		// If the block number is multiple of 3, send a bonus transaction to the miner
 		if parent == genesis && i%3 == 0 {

@@ -25,9 +25,6 @@ import (
 type InternalTx struct {
 	ChainID    *big.Int
 	Nonce      uint64
-	GasTipCap  *big.Int
-	GasFeeCap  *big.Int
-	Gas        uint64
 	To         *common.Address `rlp:"nilString"` // nil means contract creation
 	Value      *big.Int
 	Data       []byte
@@ -45,13 +42,10 @@ func (tx *InternalTx) copy() TxData {
 		Nonce: tx.Nonce,
 		To:    tx.To, // TODO: copy pointed-to address
 		Data:  common.CopyBytes(tx.Data),
-		Gas:   tx.Gas,
 		// These are copied below.
 		AccessList: make(AccessList, len(tx.AccessList)),
 		Value:      new(big.Int),
 		ChainID:    new(big.Int),
-		GasTipCap:  new(big.Int),
-		GasFeeCap:  new(big.Int),
 		V:          new(big.Int),
 		R:          new(big.Int),
 		S:          new(big.Int),
@@ -62,12 +56,6 @@ func (tx *InternalTx) copy() TxData {
 	}
 	if tx.ChainID != nil {
 		cpy.ChainID.Set(tx.ChainID)
-	}
-	if tx.GasTipCap != nil {
-		cpy.GasTipCap.Set(tx.GasTipCap)
-	}
-	if tx.GasFeeCap != nil {
-		cpy.GasFeeCap.Set(tx.GasFeeCap)
 	}
 	if tx.V != nil {
 		cpy.V.Set(tx.V)
@@ -87,16 +75,9 @@ func (tx *InternalTx) chainID() *big.Int         { return tx.ChainID }
 func (tx *InternalTx) protected() bool           { return true }
 func (tx *InternalTx) accessList() AccessList    { return tx.AccessList }
 func (tx *InternalTx) data() []byte              { return tx.Data }
-func (tx *InternalTx) gas() uint64               { return tx.Gas }
-func (tx *InternalTx) gasFeeCap() *big.Int       { return tx.GasFeeCap }
-func (tx *InternalTx) gasTipCap() *big.Int       { return tx.GasTipCap }
-func (tx *InternalTx) gasPrice() *big.Int        { return tx.GasFeeCap }
 func (tx *InternalTx) value() *big.Int           { return tx.Value }
 func (tx *InternalTx) nonce() uint64             { return tx.Nonce }
 func (tx *InternalTx) to() *common.Address       { return tx.To }
-func (tx *InternalTx) etxGasLimit() uint64       { panic("internal TX does not have etxGasLimit") }
-func (tx *InternalTx) etxGasPrice() *big.Int     { panic("internal TX does not have etxGasPrice") }
-func (tx *InternalTx) etxGasTip() *big.Int       { panic("internal TX does not have etxGasTip") }
 func (tx *InternalTx) etxData() []byte           { panic("internal TX does not have etxData") }
 func (tx *InternalTx) etxAccessList() AccessList { panic("internal TX does not have etxAccessList") }
 

@@ -394,18 +394,6 @@ func (c *Core) GetUnclesInChain(block *types.Block, length int) []*types.Header 
 	return c.sl.hc.GetUnclesInChain(block, length)
 }
 
-// GetGasUsedInChain retrieves all the gas used from a given block backwards until
-// a specific distance is reached.
-func (c *Core) GetGasUsedInChain(block *types.Block, length int) int64 {
-	return c.sl.hc.GetGasUsedInChain(block, length)
-}
-
-// GetGasUsedInChain retrieves all the gas used from a given block backwards until
-// a specific distance is reached.
-func (c *Core) CalculateBaseFee(header *types.Header) *big.Int {
-	return c.sl.hc.CalculateBaseFee(header)
-}
-
 // CurrentBlock returns the block for the current header.
 func (c *Core) CurrentBlock() *types.Block {
 	return c.sl.hc.CurrentBlock()
@@ -596,11 +584,6 @@ func (c *Core) Hashrate() uint64 {
 
 func (c *Core) SetRecommitInterval(interval time.Duration) {
 	c.sl.miner.SetRecommitInterval(interval)
-}
-
-// SetGasCeil sets the gaslimit to strive for when mining blocks.
-func (c *Core) SetGasCeil(ceil uint64) {
-	c.sl.miner.SetGasCeil(ceil)
 }
 
 // EnablePreseal turns on the preseal mining feature. It's enabled by default.

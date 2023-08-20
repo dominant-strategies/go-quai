@@ -65,7 +65,6 @@ const (
 
 	c_alpha               = 8
 	c_tpsLookupCacheLimit = 100
-	c_gasLookupCacheLimit = 100
 	c_statsErrorValue     = int64(-1)
 )
 
@@ -88,7 +87,6 @@ type fullNodeBackend interface {
 	backend
 	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
 	CurrentBlock() *types.Block
-	SuggestGasTipCap(ctx context.Context) (*big.Int, error)
 }
 
 // Service implements an Quai netstats reporting daemon that pushes local
@@ -108,9 +106,7 @@ type Service struct {
 	sideSub event.Subscription
 
 	tpsLookupCache *lru.Cache
-	gasLookupCache *lru.Cache
-
-	chainID *big.Int
+	chainID        *big.Int
 
 	instanceDir string // Path to the node's instance directory
 }
@@ -193,7 +189,6 @@ func New(node *node.Node, backend backend, engine consensus.Engine, url string) 
 	}
 
 	tpsLookupCache, _ := lru.New(c_tpsLookupCacheLimit)
-	gasLookupCache, _ := lru.New(c_gasLookupCacheLimit)
 
 	quaistats := &Service{
 		backend:        backend,
@@ -206,7 +201,6 @@ func New(node *node.Node, backend backend, engine consensus.Engine, url string) 
 		histCh:         make(chan []uint64, 1),
 		chainID:        backend.ChainConfig().ChainID,
 		tpsLookupCache: tpsLookupCache,
-		gasLookupCache: gasLookupCache,
 		instanceDir:    node.InstanceDir(),
 	}
 
@@ -598,8 +592,6 @@ type blockStats struct {
 	ParentHash    common.Hash    `json:"parentHash"`
 	Timestamp     *big.Int       `json:"timestamp"`
 	Miner         common.Address `json:"miner"`
-	GasUsed       uint64         `json:"gasUsed"`
-	GasLimit      uint64         `json:"gasLimit"`
 	Diff          string         `json:"difficulty"`
 	Entropy       string         `json:"entropy"`
 	Txs           []txStats      `json:"transactions"`
@@ -613,17 +605,11 @@ type blockStats struct {
 	ChainID       uint64         `json:"chainId"`
 	Tps           int64          `json:"tps"`
 	AppendTime    time.Duration  `json:"appendTime"`
-	AvgGasPerSec  int64          `json:"avgGasPerSec"`
 }
 
 type blockTpsCacheDto struct {
 	Tps  int64 `json:"tps"`
 	Time int64 `json:"time"`
-}
-
-type blockAvgGasPerSecCacheDto struct {
-	AvgGasPerSec int64 `json:"avgGasPerSec"`
-	Time         int64 `json:"time"`
 }
 
 // txStats is the information to report about individual transactions.
@@ -640,47 +626,6 @@ func (s uncleStats) MarshalJSON() ([]byte, error) {
 		return json.Marshal(uncles)
 	}
 	return []byte("[]"), nil
-}
-
-func (s *Service) computeAvgGasPerSec(block *types.Block) int64 {
-	var parentTime, parentGasPerSec int64
-	if parentCached, ok := s.gasLookupCache.Get(block.ParentHash()); ok {
-		parentTime = parentCached.(blockAvgGasPerSecCacheDto).Time
-		parentGasPerSec = parentCached.(blockAvgGasPerSecCacheDto).AvgGasPerSec
-	} else {
-		log.Warn(fmt.Sprintf("computeGas: block %d's parent not found in cache: %s", block.Number(), block.ParentHash().String()))
-		fullBackend, ok := s.backend.(fullNodeBackend)
-		if ok {
-			parent, err := fullBackend.BlockByNumber(context.Background(), rpc.BlockNumber(block.NumberU64()-1))
-			if err != nil {
-				log.Error("error getting parent block %s: %s", block.ParentHash().String(), err.Error())
-				return c_statsErrorValue
-			}
-			parentTime = int64(parent.Time())
-			parentGasPerSec = c_statsErrorValue
-		} else {
-			log.Error("computeGas: not running fullnode, cannot get parent block")
-			return c_statsErrorValue
-		}
-	}
-	instantGas := int64(block.GasUsed())
-	if dt := int64(block.Time()) - parentTime; dt != 0 { // this is a hack to avoid dividing by 0
-		instantGas /= dt
-	}
-
-	var blockGasPerSec int64
-	if parentGasPerSec == c_statsErrorValue {
-		blockGasPerSec = instantGas
-	} else {
-		blockGasPerSec = ((c_alpha-1)*parentGasPerSec + instantGas) / c_alpha
-	}
-
-	s.gasLookupCache.Add(block.Hash(), blockAvgGasPerSecCacheDto{
-		AvgGasPerSec: blockGasPerSec,
-		Time:         int64(block.Time()),
-	})
-
-	return blockGasPerSec
 }
 
 func (s *Service) computeTps(block *types.Block) int64 {
@@ -781,7 +726,6 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 	author, _ := s.engine.Author(header)
 
 	tps := s.computeTps(block)
-	avgGasPerSec := s.computeAvgGasPerSec(block)
 
 	appendTime := block.GetAppendTime()
 
@@ -791,8 +735,6 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		ParentHash:    header.ParentHash(),
 		Timestamp:     new(big.Int).SetUint64(header.Time()),
 		Miner:         author,
-		GasUsed:       header.GasUsed(),
-		GasLimit:      header.GasLimit(),
 		Diff:          header.Difficulty().String(),
 		Entropy:       entropy.String(),
 		Txs:           txs,
@@ -806,7 +748,6 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		ChainID:       s.chainID.Uint64(),
 		Tps:           tps,
 		AppendTime:    appendTime,
-		AvgGasPerSec:  avgGasPerSec,
 	}
 }
 
@@ -900,7 +841,6 @@ type nodeStats struct {
 	Mining           bool    `json:"mining"`
 	Hashrate         int     `json:"hashrate"`
 	Peers            int     `json:"peers"`
-	GasPrice         int     `json:"gasPrice"`
 	Uptime           int     `json:"uptime"`
 	Chain            string  `json:"chain"`
 	ChainID          uint64  `json:"chainId"`
@@ -924,7 +864,6 @@ func (s *Service) reportStats(conn *connWrapper) error {
 		mining   bool
 		hashrate int
 		syncing  bool
-		gasprice int
 	)
 	// check if backend is a full node
 	fullBackend, ok := s.backend.(fullNodeBackend)
@@ -934,11 +873,6 @@ func (s *Service) reportStats(conn *connWrapper) error {
 		syncing = fullBackend.CurrentHeader().Number().Uint64() >= sync.HighestBlock
 
 		if nodeCtx == common.ZONE_CTX {
-			price, _ := fullBackend.SuggestGasTipCap(context.Background())
-			gasprice = int(price.Uint64())
-			if basefee := fullBackend.CurrentHeader().BaseFee(); basefee != nil {
-				gasprice += int(basefee.Uint64())
-			}
 		}
 	} else {
 		sync := s.backend.Downloader().Progress()
@@ -1004,7 +938,6 @@ func (s *Service) reportStats(conn *connWrapper) error {
 			Mining:           mining,
 			Hashrate:         hashrate,
 			Peers:            s.server.PeerCount(),
-			GasPrice:         gasprice,
 			Syncing:          syncing,
 			Uptime:           100,
 			Chain:            common.NodeLocation.Name(),

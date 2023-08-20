@@ -9,9 +9,6 @@ import (
 type ExternalTx struct {
 	ChainID    *big.Int
 	Nonce      uint64
-	GasTipCap  *big.Int
-	GasFeeCap  *big.Int
-	Gas        uint64
 	To         *common.Address `rlp:"nilString"` // nil means contract creation
 	Value      *big.Int
 	Data       []byte
@@ -67,15 +64,12 @@ func (tx *ExternalTx) copy() TxData {
 		Nonce:  tx.Nonce,
 		To:     tx.To, // TODO: copy pointed-to address
 		Data:   common.CopyBytes(tx.Data),
-		Gas:    tx.Gas,
 		Sender: tx.Sender,
 
 		// These are copied below.
 		AccessList: make(AccessList, len(tx.AccessList)),
 		Value:      new(big.Int),
 		ChainID:    new(big.Int),
-		GasTipCap:  new(big.Int),
-		GasFeeCap:  new(big.Int),
 	}
 	copy(cpy.AccessList, tx.AccessList)
 	if tx.Value != nil {
@@ -83,12 +77,6 @@ func (tx *ExternalTx) copy() TxData {
 	}
 	if tx.ChainID != nil {
 		cpy.ChainID.Set(tx.ChainID)
-	}
-	if tx.GasTipCap != nil {
-		cpy.GasTipCap.Set(tx.GasTipCap)
-	}
-	if tx.GasFeeCap != nil {
-		cpy.GasFeeCap.Set(tx.GasFeeCap)
 	}
 	return cpy
 }
@@ -99,16 +87,9 @@ func (tx *ExternalTx) chainID() *big.Int         { return tx.ChainID }
 func (tx *ExternalTx) protected() bool           { return true }
 func (tx *ExternalTx) accessList() AccessList    { return tx.AccessList }
 func (tx *ExternalTx) data() []byte              { return tx.Data }
-func (tx *ExternalTx) gas() uint64               { return tx.Gas }
-func (tx *ExternalTx) gasFeeCap() *big.Int       { return tx.GasFeeCap }
-func (tx *ExternalTx) gasTipCap() *big.Int       { return tx.GasTipCap }
-func (tx *ExternalTx) gasPrice() *big.Int        { return tx.GasFeeCap }
 func (tx *ExternalTx) value() *big.Int           { return tx.Value }
 func (tx *ExternalTx) nonce() uint64             { return tx.Nonce }
 func (tx *ExternalTx) to() *common.Address       { return tx.To }
-func (tx *ExternalTx) etxGasLimit() uint64       { panic("external TX does not have etxGasLimit") }
-func (tx *ExternalTx) etxGasPrice() *big.Int     { panic("external TX does not have etxGasPrice") }
-func (tx *ExternalTx) etxGasTip() *big.Int       { panic("external TX does not have etxGasTip") }
 func (tx *ExternalTx) etxData() []byte           { panic("external TX does not have etxData") }
 func (tx *ExternalTx) etxAccessList() AccessList { panic("external TX does not have etxAccessList") }
 

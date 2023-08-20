@@ -198,26 +198,24 @@ func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine conse
 // Process returns the receipts and logs accumulated during the process and
 // returns the amount of gas that was used in the process. If any of the
 // transactions failed to execute due to insufficient gas it will return an error.
-func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types.Receipts, []*types.Log, *state.StateDB, uint64, error) {
+func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types.Receipts, []*types.Log, *state.StateDB, error) {
 	var (
 		receipts    types.Receipts
-		usedGas     = new(uint64)
 		header      = block.Header()
 		blockHash   = block.Hash()
 		blockNumber = block.Number()
 		allLogs     []*types.Log
-		gp          = new(GasPool).AddGas(block.GasLimit())
 	)
 
 	parent := p.hc.GetBlock(block.Header().ParentHash(), block.NumberU64()-1)
 	if parent == nil {
-		return types.Receipts{}, []*types.Log{}, nil, 0, errors.New("parent block is nil for the block given to process")
+		return types.Receipts{}, []*types.Log{}, nil, errors.New("parent block is nil for the block given to process")
 	}
 
 	// Initialize a statedb
 	statedb, err := state.New(parent.Header().Root(), p.stateCache, p.snaps)
 	if err != nil {
-		return types.Receipts{}, []*types.Log{}, nil, 0, err
+		return types.Receipts{}, []*types.Log{}, nil, err
 	}
 
 	var timeSenders, timeSign, timePrepare, timeEtx, timeTx time.Duration
@@ -253,9 +251,9 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 	var emittedEtxs types.Transactions
 	for i, tx := range block.Transactions() {
 		startProcess := time.Now()
-		msg, err := tx.AsMessageWithSender(types.MakeSigner(p.config, header.Number()), header.BaseFee(), senders[tx.Hash()])
+		msg, err := tx.AsMessageWithSender(types.MakeSigner(p.config, header.Number()), senders[tx.Hash()])
 		if err != nil {
-			return nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+			return nil, nil, nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
 		timeSignDelta := time.Since(startProcess)
 		timeSign += timeSignDelta
@@ -270,14 +268,14 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 			startTimeEtx := time.Now()
 			etxEntry, exists := etxSet[tx.Hash()]
 			if !exists { // Verify that the ETX exists in the set
-				return nil, nil, nil, 0, fmt.Errorf("invalid external transaction: etx %x not found in unspent etx set", etxEntry.ETX.Hash())
+				return nil, nil, nil, fmt.Errorf("invalid external transaction: etx %x not found in unspent etx set", etxEntry.ETX.Hash())
 			}
 			prevZeroBal := prepareApplyETX(statedb, &etxEntry.ETX)
-			receipt, err = applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, &etxEntry.ETX, usedGas, vmenv, &etxRLimit, &etxPLimit)
+			receipt, err = applyTransaction(msg, p.config, p.hc, nil, statedb, blockNumber, blockHash, &etxEntry.ETX, vmenv, &etxRLimit, &etxPLimit)
 			statedb.SetBalance(common.ZeroInternal, prevZeroBal) // Reset the balance to what it previously was. Residual balance will be lost
 
 			if err != nil {
-				return nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, etxEntry.ETX.Hash().Hex(), err)
+				return nil, nil, nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, etxEntry.ETX.Hash().Hex(), err)
 			}
 
 			delete(etxSet, etxEntry.ETX.Hash()) // This ETX has been spent so remove it from the unspent set
@@ -287,15 +285,15 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 		} else if tx.Type() == types.InternalTxType || tx.Type() == types.InternalToExternalTxType {
 			startTimeTx := time.Now()
 
-			receipt, err = applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv, &etxRLimit, &etxPLimit)
+			receipt, err = applyTransaction(msg, p.config, p.hc, nil, statedb, blockNumber, blockHash, tx, vmenv, &etxRLimit, &etxPLimit)
 			if err != nil {
-				return nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+				return nil, nil, nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 			}
 			emittedEtxs = append(emittedEtxs, receipt.Etxs...)
 			timeTxDelta := time.Since(startTimeTx)
 			timeTx += timeTxDelta
 		} else {
-			return nil, nil, nil, 0, ErrTxTypeNotSupported
+			return nil, nil, nil, ErrTxTypeNotSupported
 		}
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
@@ -307,16 +305,16 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 
 	log.Info("Total Tx Processing Time", "signing time", common.PrettyDuration(timeSign), "senders cache time", common.PrettyDuration(timeSenders), "percent cached internal txs", fmt.Sprintf("%.2f", float64(len(senders))/float64(numInternalTxs)*100), "prepare state time", common.PrettyDuration(timePrepare), "etx time", common.PrettyDuration(timeEtx), "tx time", common.PrettyDuration(timeTx))
 
-	return receipts, allLogs, statedb, *usedGas, nil
+	return receipts, allLogs, statedb, nil
 }
 
-func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM, etxRLimit, etxPLimit *int) (*types.Receipt, error) {
+func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainContext, author *common.Address, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, evm *vm.EVM, etxRLimit, etxPLimit *int) (*types.Receipt, error) {
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(msg)
 	evm.Reset(txContext, statedb)
 
 	// Apply the transaction to the current state (included in the env).
-	result, err := ApplyMessage(evm, msg, gp)
+	result, err := ApplyMessage(evm, msg)
 	if err != nil {
 		return nil, err
 	}
@@ -345,11 +343,9 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	var root []byte
 	statedb.Finalise(true)
 
-	*usedGas += result.UsedGas
-
 	// Create a new receipt for the transaction, storing the intermediate root and gas used
 	// by the tx.
-	receipt := &types.Receipt{Type: tx.Type(), PostState: root, CumulativeGasUsed: *usedGas, Etxs: result.Etxs}
+	receipt := &types.Receipt{Type: tx.Type(), PostState: root, Etxs: result.Etxs}
 	if result.Failed() {
 		receipt.Status = types.ReceiptStatusFailed
 		log.Debug(result.Err.Error())
@@ -357,8 +353,6 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 		receipt.Status = types.ReceiptStatusSuccessful
 	}
 	receipt.TxHash = tx.Hash()
-	receipt.GasUsed = result.UsedGas
-
 	// If the transaction created a contract, store the creation address in the receipt.
 	if msg.To() == nil {
 		receipt.ContractAddress = crypto.CreateAddress(evm.TxContext.Origin, tx.Nonce(), tx.Data())
@@ -388,12 +382,12 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 	etxSet.Update(newInboundEtxs, block.NumberU64())
 	time2 := common.PrettyDuration(time.Since(start))
 	// Process our block
-	receipts, logs, statedb, usedGas, err := p.Process(block, etxSet)
+	receipts, logs, statedb, err := p.Process(block, etxSet)
 	if err != nil {
 		return nil, err
 	}
 	time3 := common.PrettyDuration(time.Since(start))
-	err = p.validator.ValidateState(block, statedb, receipts, usedGas)
+	err = p.validator.ValidateState(block, statedb, receipts)
 	if err != nil {
 		return nil, err
 	}
@@ -483,8 +477,8 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 // and uses the input parameters for its environment. It returns the receipt
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
-func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config, etxRLimit, etxPLimit *int) (*types.Receipt, error) {
-	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number()), header.BaseFee())
+func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *common.Address, statedb *state.StateDB, header *types.Header, tx *types.Transaction, cfg vm.Config, etxRLimit, etxPLimit *int) (*types.Receipt, error) {
+	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number()))
 	if err != nil {
 		return nil, err
 	}
@@ -493,11 +487,11 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, cfg)
 	if tx.Type() == types.ExternalTxType {
 		prevZeroBal := prepareApplyETX(statedb, tx)
-		receipt, err := applyTransaction(msg, config, bc, author, gp, statedb, header.Number(), header.Hash(), tx, usedGas, vmenv, etxRLimit, etxPLimit)
+		receipt, err := applyTransaction(msg, config, bc, author, statedb, header.Number(), header.Hash(), tx, vmenv, etxRLimit, etxPLimit)
 		statedb.SetBalance(common.ZeroInternal, prevZeroBal) // Reset the balance to what it previously was (currently a failed external transaction removes all the sent coins from the supply and any residual balance is gone as well)
 		return receipt, err
 	}
-	return applyTransaction(msg, config, bc, author, gp, statedb, header.Number(), header.Hash(), tx, usedGas, vmenv, etxRLimit, etxPLimit)
+	return applyTransaction(msg, config, bc, author, statedb, header.Number(), header.Hash(), tx, vmenv, etxRLimit, etxPLimit)
 }
 
 // GetVMConfig returns the block chain VM config.
@@ -685,7 +679,7 @@ func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *s
 		if current = p.hc.GetBlockByNumber(next); current == nil {
 			return nil, fmt.Errorf("block #%d not found", next)
 		}
-		_, _, _, _, err := p.Process(current, etxSet)
+		_, _, _, err := p.Process(current, etxSet)
 		if err != nil {
 			return nil, fmt.Errorf("processing block %d failed: %v", current.NumberU64(), err)
 		}
@@ -736,7 +730,7 @@ func (p *StateProcessor) StateAtTransaction(block *types.Block, txIndex int, ree
 	signer := types.MakeSigner(p.hc.Config(), block.Number())
 	for idx, tx := range block.Transactions() {
 		// Assemble the transaction call message and return if the requested offset
-		msg, _ := tx.AsMessage(signer, block.BaseFee())
+		msg, _ := tx.AsMessage(signer)
 		txContext := NewEVMTxContext(msg)
 		context := NewEVMBlockContext(block.Header(), p.hc, nil)
 		if idx == txIndex {
@@ -745,7 +739,7 @@ func (p *StateProcessor) StateAtTransaction(block *types.Block, txIndex int, ree
 		// Not yet the searched for transaction, execute on top of the current state
 		vmenv := vm.NewEVM(context, txContext, statedb, p.hc.Config(), vm.Config{})
 		statedb.Prepare(tx.Hash(), idx)
-		if _, err := ApplyMessage(vmenv, msg, new(GasPool).AddGas(tx.Gas())); err != nil {
+		if _, err := ApplyMessage(vmenv, msg); err != nil {
 			return nil, vm.BlockContext{}, nil, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
 		}
 		// Ensure any modifications are committed to the state
@@ -805,10 +799,8 @@ func (p *StateProcessor) Stop() {
 }
 
 func prepareApplyETX(statedb *state.StateDB, tx *types.Transaction) *big.Int {
-	prevZeroBal := statedb.GetBalance(common.ZeroInternal)   // Get current zero address balance
-	fee := big.NewInt(0).Add(tx.GasFeeCap(), tx.GasTipCap()) // Add gas price cap to miner tip cap
-	fee.Mul(fee, big.NewInt(int64(tx.Gas())))                // Multiply gas price by gas limit (may need to check for int64 overflow)
-	total := big.NewInt(0).Add(fee, tx.Value())              // Add gas fee to value
-	statedb.SetBalance(common.ZeroInternal, total)           // Use zero address at temp placeholder and set it to gas fee plus value
+	prevZeroBal := statedb.GetBalance(common.ZeroInternal) // Get current zero address balance
+	total := big.NewInt(0).Add(big.NewInt(0), tx.Value())  // Add gas fee to value
+	statedb.SetBalance(common.ZeroInternal, total)         // Use zero address at temp placeholder and set it to gas fee plus value
 	return prevZeroBal
 }

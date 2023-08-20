@@ -17,9 +17,7 @@
 package params
 
 import (
-	"bytes"
 	"errors"
-	"io/ioutil"
 	"log"
 	"strconv"
 	"strings"
@@ -38,26 +36,30 @@ type version struct {
 }
 
 func readVersionFile() (version, error) {
-	raw, err := ioutil.ReadFile("VERSION")
-	if err != nil {
-		panic(err)
-	}
-	if raw[0] != 'v' {
-		return version{}, errors.New("version number must start with 'v'")
-	}
+	// raw, err := ioutil.ReadFile("VERSION")
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// if raw[0] != 'v' {
+	// 	return version{}, errors.New("version number must start with 'v'")
+	// }
+	raw := "v0.13.0-pre.1"
 	full := strings.Replace(string(raw), "\n", "", -1)
 	// Take a full version string, e.g. 0.0.0-rc.0
 	// and split it into the version number and version metadata (if it has meta).
 	// e.g:
 	//   - vnum  := 0.0.0
 	//   - vmeta := rc.0
-	split := bytes.Split(raw, []byte("-"))
+	// split := bytes.Split(raw.binary(), []byte("-"))
+	split := strings.Split(raw, string("-"))
 	vnum := split[0]
-	var vmeta []byte
+	// var vmeta []byte
+	var vmeta string
 	if len(split) > 1 {
 		vmeta = split[1]
 	}
-	vnums := bytes.Split(vnum, []byte("."))
+	// vnums := bytes.Split(vnum, []byte("."))
+	vnums := strings.Split(vnum, string("."))
 	if len(vnums) != 3 {
 		return version{}, errors.New("bad version number format")
 	}

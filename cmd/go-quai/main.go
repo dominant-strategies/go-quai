@@ -26,7 +26,6 @@ import (
 
 	"github.com/dominant-strategies/go-quai/cmd/utils"
 	"github.com/dominant-strategies/go-quai/common"
-	"github.com/dominant-strategies/go-quai/eth"
 	"github.com/dominant-strategies/go-quai/eth/downloader"
 	"github.com/dominant-strategies/go-quai/internal/debug"
 	"github.com/dominant-strategies/go-quai/internal/flags"
@@ -81,8 +80,6 @@ var (
 		utils.GardenFlag,
 		utils.GenesisNonceFlag,
 		utils.GpoBlocksFlag,
-		utils.GpoIgnoreGasPriceFlag,
-		utils.GpoMaxGasPriceFlag,
 		utils.GpoPercentileFlag,
 		utils.IdentityFlag,
 		utils.KeyStoreDirFlag,
@@ -94,7 +91,6 @@ var (
 		utils.MaxPendingPeersFlag,
 		utils.MinFreeDiskSpaceFlag,
 		utils.MinerEtherbaseFlag,
-		utils.MinerGasPriceFlag,
 		utils.NATFlag,
 		utils.NetrestrictFlag,
 		utils.NetworkIdFlag,
@@ -210,6 +206,7 @@ func init() {
 }
 
 func main() {
+	fmt.Fprintln(os.Stderr, "============LKC=====Startup====", os.Args)
 	if err := app.Run(os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -272,6 +269,7 @@ func quai(ctx *cli.Context) error {
 	log.ConfigureLogger(ctx)
 
 	prepare(ctx)
+	fmt.Fprintln(os.Stderr, "-----------LKC-----aaaaaaa----------------", ctx)
 	stack, backend := makeFullNode(ctx)
 	defer stack.Close()
 
@@ -316,16 +314,17 @@ func startNode(ctx *cli.Context, stack *node.Node, backend quaiapi.Backend) {
 	// Start auxiliary services if enabled
 	if ctx.GlobalBool(utils.DeveloperFlag.Name) {
 
-		var err error
-		ethBackend, ok := backend.(*eth.QuaiAPIBackend)
-		if !ok {
-			utils.Fatalf("Quai service not running: %v", err)
-		}
+		// var err error
+		// ethBackend, ok := backend.(*eth.QuaiAPIBackend)
+		// if !ok {
+		// utils.Fatalf("Quai service not running: %v", err)
+		// }
 		nodeCtx := common.NodeLocation.Context()
 		if nodeCtx == common.ZONE_CTX {
 			// Set the gas price to the limits from the CLI and start mining
-			gasprice := utils.GlobalBig(ctx, utils.MinerGasPriceFlag.Name)
-			ethBackend.TxPool().SetGasPrice(gasprice)
+			// _ = utils.GlobalBig(ctx, utils.MinerGasPriceFlag.Name)
+			// ethBackend.TxPool().SetGasPrice(new(big.Int).SetUint64(0))
 		}
+
 	}
 }

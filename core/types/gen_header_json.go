@@ -29,9 +29,6 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		ParentEntropy []*hexutil.Big `json:"parentEntropy"       gencodec:"required"`
 		ParentDeltaS  []*hexutil.Big `json:"parentDeltaS"        gencodec:"required"`
 		Number        []*hexutil.Big `json:"number"              gencodec:"required"`
-		GasLimit      hexutil.Uint64 `json:"gasLimit"            gencodec:"required"`
-		GasUsed       hexutil.Uint64 `json:"gasUsed"             gencodec:"required"`
-		BaseFee       *hexutil.Big   `json:"baseFeePerGas"       gencodec:"required"`
 		Location      hexutil.Bytes  `json:"location"            gencodec:"required"`
 		Time          hexutil.Uint64 `json:"timestamp"           gencodec:"required"`
 		Extra         hexutil.Bytes  `json:"extraData"           gencodec:"required"`
@@ -59,9 +56,6 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	enc.EtxRollupHash = h.EtxRollupHash()
 	enc.ReceiptHash = h.ReceiptHash()
 	enc.Difficulty = (*hexutil.Big)(h.Difficulty())
-	enc.GasLimit = hexutil.Uint64(h.GasLimit())
-	enc.GasUsed = hexutil.Uint64(h.GasUsed())
-	enc.BaseFee = (*hexutil.Big)(h.BaseFee())
 	enc.Location = hexutil.Bytes(h.Location())
 	enc.Time = hexutil.Uint64(h.Time())
 	enc.Extra = hexutil.Bytes(h.Extra())
@@ -88,9 +82,6 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		ParentEntropy []*hexutil.Big  `json:"parentEntropy"       gencodec:"required"`
 		ParentDeltaS  []*hexutil.Big  `json:"parentDeltaS"        gencodec:"required"`
 		Number        []*hexutil.Big  `json:"number"              gencodec:"required"`
-		GasLimit      *hexutil.Uint64 `json:"gasLimit"            gencodec:"required"`
-		GasUsed       *hexutil.Uint64 `json:"gasUsed"             gencodec:"required"`
-		BaseFee       *hexutil.Big    `json:"baseFeePerGas"       gencodec:"required"`
 		Location      hexutil.Bytes   `json:"location"            gencodec:"required"`
 		Time          hexutil.Uint64  `json:"timestamp"           gencodec:"required"`
 		Extra         hexutil.Bytes   `json:"extraData"           gencodec:"required"`
@@ -139,15 +130,6 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	if dec.Number == nil {
 		return errors.New("missing required field 'number' for Header")
 	}
-	if dec.GasLimit == nil {
-		return errors.New("missing required field 'gasLimit' for Header")
-	}
-	if dec.GasUsed == nil {
-		return errors.New("missing required field 'gasUsed' for Header")
-	}
-	if dec.BaseFee == nil {
-		return errors.New("missing required field 'baseFee' for Header")
-	}
 	if dec.Extra == nil {
 		return errors.New("missing required field 'extraData' for Header")
 	}
@@ -185,9 +167,6 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	h.SetEtxHash(*dec.EtxHash)
 	h.SetEtxRollupHash(*dec.EtxRollupHash)
 	h.SetDifficulty((*big.Int)(dec.Difficulty))
-	h.SetGasLimit(uint64(*dec.GasLimit))
-	h.SetGasUsed(uint64(*dec.GasUsed))
-	h.SetBaseFee((*big.Int)(dec.BaseFee))
 	if len(dec.Location) > 0 {
 		h.location = make([]byte, len(dec.Location))
 		copy(h.location, dec.Location)

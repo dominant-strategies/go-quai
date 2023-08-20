@@ -196,22 +196,17 @@ func testTransactionPriceNonceSort(t *testing.T, baseFee *big.Int) {
 			gasFeeCap := rand.Intn(50)
 			if baseFee == nil {
 				tx = NewTx(&LegacyTx{
-					Nonce:    uint64(start + i),
-					To:       &common.Address{},
-					Value:    big.NewInt(100),
-					Gas:      100,
-					GasPrice: big.NewInt(int64(gasFeeCap)),
-					Data:     nil,
+					Nonce: uint64(start + i),
+					To:    &common.Address{},
+					Value: big.NewInt(100),
+					Data:  nil,
 				})
 			} else {
 				tx = NewTx(&DynamicFeeTx{
-					Nonce:     uint64(start + i),
-					To:        &common.Address{},
-					Value:     big.NewInt(100),
-					Gas:       100,
-					GasFeeCap: big.NewInt(int64(gasFeeCap)),
-					GasTipCap: big.NewInt(int64(rand.Intn(gasFeeCap + 1))),
-					Data:      nil,
+					Nonce: uint64(start + i),
+					To:    &common.Address{},
+					Value: big.NewInt(100),
+					Data:  nil,
 				})
 				if count == 25 && int64(gasFeeCap) < baseFee.Int64() {
 					count = i
@@ -250,14 +245,6 @@ func testTransactionPriceNonceSort(t *testing.T, baseFee *big.Int) {
 		if i+1 < len(txs) {
 			next := txs[i+1]
 			fromNext, _ := Sender(signer, next)
-			tip, err := txi.EffectiveGasTip(baseFee)
-			nextTip, nextErr := next.EffectiveGasTip(baseFee)
-			if err != nil || nextErr != nil {
-				t.Errorf("error calculating effective tip")
-			}
-			if fromi != fromNext && tip.Cmp(nextTip) < 0 {
-				t.Errorf("invalid gasprice ordering: tx #%d (A=%x P=%v) < tx #%d (A=%x P=%v)", i, fromi[:4], txi.GasPrice(), i+1, fromNext[:4], next.GasPrice())
-			}
 		}
 	}
 }
@@ -296,14 +283,6 @@ func TestTransactionTimeSort(t *testing.T) {
 		if i+1 < len(txs) {
 			next := txs[i+1]
 			fromNext, _ := Sender(signer, next)
-
-			if txi.GasPrice().Cmp(next.GasPrice()) < 0 {
-				t.Errorf("invalid gasprice ordering: tx #%d (A=%x P=%v) < tx #%d (A=%x P=%v)", i, fromi[:4], txi.GasPrice(), i+1, fromNext[:4], next.GasPrice())
-			}
-			// Make sure time order is ascending if the txs have the same gas price
-			if txi.GasPrice().Cmp(next.GasPrice()) == 0 && txi.time.After(next.time) {
-				t.Errorf("invalid received time ordering: tx #%d (A=%x T=%v) > tx #%d (A=%x T=%v)", i, fromi[:4], txi.time, i+1, fromNext[:4], next.time)
-			}
 		}
 	}
 }
@@ -326,19 +305,15 @@ func TestTransactionCoding(t *testing.T) {
 		case 0:
 			// Legacy tx.
 			txdata = &LegacyTx{
-				Nonce:    i,
-				To:       &recipient,
-				Gas:      1,
-				GasPrice: big.NewInt(2),
-				Data:     []byte("abcdef"),
+				Nonce: i,
+				To:    &recipient,
+				Data:  []byte("abcdef"),
 			}
 		case 1:
 			// Legacy tx contract creation.
 			txdata = &LegacyTx{
-				Nonce:    i,
-				Gas:      1,
-				GasPrice: big.NewInt(2),
-				Data:     []byte("abcdef"),
+				Nonce: i,
+				Data:  []byte("abcdef"),
 			}
 		case 2:
 			// Tx with non-zero access list.
@@ -346,28 +321,22 @@ func TestTransactionCoding(t *testing.T) {
 				ChainID:    big.NewInt(1),
 				Nonce:      i,
 				To:         &recipient,
-				Gas:        123457,
-				GasPrice:   big.NewInt(10),
 				AccessList: accesses,
 				Data:       []byte("abcdef"),
 			}
 		case 3:
 			// Tx with empty access list.
 			txdata = &AccessListTx{
-				ChainID:  big.NewInt(1),
-				Nonce:    i,
-				To:       &recipient,
-				Gas:      123457,
-				GasPrice: big.NewInt(10),
-				Data:     []byte("abcdef"),
+				ChainID: big.NewInt(1),
+				Nonce:   i,
+				To:      &recipient,
+				Data:    []byte("abcdef"),
 			}
 		case 4:
 			// Contract creation with access list.
 			txdata = &AccessListTx{
 				ChainID:    big.NewInt(1),
 				Nonce:      i,
-				Gas:        123457,
-				GasPrice:   big.NewInt(10),
 				AccessList: accesses,
 			}
 		}

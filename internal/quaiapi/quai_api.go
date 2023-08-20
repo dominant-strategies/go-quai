@@ -43,54 +43,6 @@ func NewPublicQuaiAPI(b Backend) *PublicQuaiAPI {
 	return &PublicQuaiAPI{b}
 }
 
-// GasPrice returns a suggestion for a gas price for legacy transactions.
-func (s *PublicQuaiAPI) GasPrice(ctx context.Context) (*hexutil.Big, error) {
-	tipcap, err := s.b.SuggestGasTipCap(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if head := s.b.CurrentHeader(); head.BaseFee() != nil {
-		tipcap.Add(tipcap, head.BaseFee())
-	}
-	return (*hexutil.Big)(tipcap), err
-}
-
-// MaxPriorityFeePerGas returns a suggestion for a gas tip cap for dynamic fee transactions.
-func (s *PublicQuaiAPI) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.Big, error) {
-	tipcap, err := s.b.SuggestGasTipCap(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return (*hexutil.Big)(tipcap), err
-}
-
-func (s *PublicQuaiAPI) FeeHistory(ctx context.Context, blockCount rpc.DecimalOrHex, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*feeHistoryResult, error) {
-	oldest, reward, baseFee, gasUsed, err := s.b.FeeHistory(ctx, int(blockCount), lastBlock, rewardPercentiles)
-	if err != nil {
-		return nil, err
-	}
-	results := &feeHistoryResult{
-		OldestBlock:  (*hexutil.Big)(oldest),
-		GasUsedRatio: gasUsed,
-	}
-	if reward != nil {
-		results.Reward = make([][]*hexutil.Big, len(reward))
-		for i, w := range reward {
-			results.Reward[i] = make([]*hexutil.Big, len(w))
-			for j, v := range w {
-				results.Reward[i][j] = (*hexutil.Big)(v)
-			}
-		}
-	}
-	if baseFee != nil {
-		results.BaseFee = make([]*hexutil.Big, len(baseFee))
-		for i, v := range baseFee {
-			results.BaseFee[i] = (*hexutil.Big)(v)
-		}
-	}
-	return results, nil
-}
-
 // Syncing returns false in case the node is currently not syncing with the network. It can be up to date or has not
 // yet received the latest block headers from its pears. In case it is synchronizing:
 // - startingBlock: block number this node started to synchronise from
@@ -391,7 +343,7 @@ func (s *PublicBlockChainQuaiAPI) GetStorageAt(ctx context.Context, address comm
 // Note, this function doesn't make and changes in the state/blockchain and is
 // useful to execute and retrieve values.
 func (s *PublicBlockChainQuaiAPI) Call(ctx context.Context, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride) (hexutil.Bytes, error) {
-	result, err := DoCall(ctx, s.b, args, blockNrOrHash, overrides, 5*time.Second, s.b.RPCGasCap())
+	result, err := DoCall(ctx, s.b, args, blockNrOrHash, overrides, 5*time.Second)
 	if err != nil {
 		return nil, err
 	}
@@ -400,20 +352,6 @@ func (s *PublicBlockChainQuaiAPI) Call(ctx context.Context, args TransactionArgs
 		return nil, newRevertError(result)
 	}
 	return result.Return(), result.Err
-}
-
-// EstimateGas returns an estimate of the amount of gas needed to execute the
-// given transaction against the current pending block.
-func (s *PublicBlockChainQuaiAPI) EstimateGas(ctx context.Context, args TransactionArgs, blockNrOrHash *rpc.BlockNumberOrHash) (hexutil.Uint64, error) {
-	nodeCtx := common.NodeLocation.Context()
-	if nodeCtx != common.ZONE_CTX {
-		return 0, errors.New("estimateGas can only called in a zone chain")
-	}
-	bNrOrHash := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
-	if blockNrOrHash != nil {
-		bNrOrHash = *blockNrOrHash
-	}
-	return DoEstimateGas(ctx, s.b, args, bNrOrHash, s.b.RPCGasCap())
 }
 
 // RPCMarshalBlock converts the given block to the RPC output which depends on fullTx. If inclTx is true transactions are
@@ -521,11 +459,11 @@ func (s *PublicBlockChainQuaiAPI) CreateAccessList(ctx context.Context, args Tra
 	if blockNrOrHash != nil {
 		bNrOrHash = *blockNrOrHash
 	}
-	acl, gasUsed, vmerr, err := AccessList(ctx, s.b, bNrOrHash, args)
+	acl, vmerr, err := AccessList(ctx, s.b, bNrOrHash, args)
 	if err != nil {
 		return nil, err
 	}
-	result := &accessListResult{Accesslist: &acl, GasUsed: hexutil.Uint64(gasUsed)}
+	result := &accessListResult{Accesslist: &acl}
 	if vmerr != nil {
 		result.Error = vmerr.Error()
 	}

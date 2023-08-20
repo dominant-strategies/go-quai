@@ -107,13 +107,11 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 // transition, such as amount of used gas, the receipt roots and the state root
 // itself. ValidateState returns a database batch if the validation was a success
 // otherwise nil and an error is returned.
-func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateDB, receipts types.Receipts, usedGas uint64) error {
+func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateDB, receipts types.Receipts) error {
 	start := time.Now()
 	header := block.Header()
 	time1 := common.PrettyDuration(time.Since(start))
-	if block.GasUsed() != usedGas {
-		return fmt.Errorf("invalid gas used (remote: %d local: %d)", block.GasUsed(), usedGas)
-	}
+
 	time2 := common.PrettyDuration(time.Since(start))
 	time3 := common.PrettyDuration(time.Since(start))
 	// Tre receipt Trie's root (R = (Tr [[H1, R1], ... [Hn, Rn]]))
@@ -145,30 +143,4 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	}
 	log.Info("times during validate state:", "t1:", time1, "t2:", time2, "t3:", time3, "t4:", time4, "t5:", time5, "t6:", time6)
 	return nil
-}
-
-// CalcGasLimit computes the gas limit of the next block after parent. It aims
-// to keep the baseline gas close to the provided target, and increase it towards
-// the target if the baseline gas is lower.
-func CalcGasLimit(parentGasLimit, desiredLimit uint64) uint64 {
-	delta := parentGasLimit/params.GasLimitBoundDivisor - 1
-	limit := parentGasLimit
-	if desiredLimit < params.MinGasLimit {
-		desiredLimit = params.MinGasLimit
-	}
-	// If we're outside our allowed gas range, we try to hone towards them
-	if limit < desiredLimit {
-		limit = parentGasLimit + delta
-		if limit > desiredLimit {
-			limit = desiredLimit
-		}
-		return limit
-	}
-	if limit > desiredLimit {
-		limit = parentGasLimit - delta
-		if limit < desiredLimit {
-			limit = desiredLimit
-		}
-	}
-	return limit
 }

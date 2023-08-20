@@ -171,18 +171,12 @@ contract OpCodes {
      //origin
      assembly { pop(origin()) }
 
-     //gas
-     assembly {  pop(gas())}
-
      //msize
      assembly {  pop(msize())}
 
      //pc
      assembly {  pop(pc())}
-
-     //gasprice
-     assembly {  pop(gasprice())}
-
+     
      //coinbase
      assembly {  pop(coinbase())}
 
@@ -194,9 +188,6 @@ contract OpCodes {
 
      //difficulty
      assembly {  pop(difficulty())}
-
-     //gaslimit
-     assembly {  pop(gaslimit())}
 
      //call
      address contractAddr = address(test1);

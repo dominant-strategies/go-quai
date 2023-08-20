@@ -75,7 +75,7 @@ func TestLegacyReceiptDecoding(t *testing.T) {
 		},
 		TxHash:          tx.Hash(),
 		ContractAddress: common.BytesToAddress([]byte{0x01, 0x11, 0x11}),
-		GasUsed:         111111,
+		// GasUsed:         111111,
 	}
 	receipt.Bloom = CreateBloom(Receipts{receipt})
 
@@ -167,24 +167,18 @@ func TestDeriveFields(t *testing.T) {
 	to3 := common.HexToAddress("0x3")
 	txs := Transactions{
 		NewTx(&LegacyTx{
-			Nonce:    1,
-			Value:    big.NewInt(1),
-			Gas:      1,
-			GasPrice: big.NewInt(1),
+			Nonce: 1,
+			Value: big.NewInt(1),
 		}),
 		NewTx(&LegacyTx{
-			To:       &to2,
-			Nonce:    2,
-			Value:    big.NewInt(2),
-			Gas:      2,
-			GasPrice: big.NewInt(2),
+			To:    &to2,
+			Nonce: 2,
+			Value: big.NewInt(2),
 		}),
 		NewTx(&AccessListTx{
-			To:       &to3,
-			Nonce:    3,
-			Value:    big.NewInt(3),
-			Gas:      3,
-			GasPrice: big.NewInt(3),
+			To:    &to3,
+			Nonce: 3,
+			Value: big.NewInt(3),
 		}),
 	}
 	// Create the corresponding receipts

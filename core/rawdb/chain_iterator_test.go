@@ -41,22 +41,18 @@ func TestChainIterator(t *testing.T) {
 		var tx *types.Transaction
 		if i%2 == 0 {
 			tx = types.NewTx(&types.LegacyTx{
-				Nonce:    i,
-				GasPrice: big.NewInt(11111),
-				Gas:      1111,
-				To:       &to,
-				Value:    big.NewInt(111),
-				Data:     []byte{0x11, 0x11, 0x11},
+				Nonce: i,
+				To:    &to,
+				Value: big.NewInt(111),
+				Data:  []byte{0x11, 0x11, 0x11},
 			})
 		} else {
 			tx = types.NewTx(&types.AccessListTx{
-				ChainID:  big.NewInt(1337),
-				Nonce:    i,
-				GasPrice: big.NewInt(11111),
-				Gas:      1111,
-				To:       &to,
-				Value:    big.NewInt(111),
-				Data:     []byte{0x11, 0x11, 0x11},
+				ChainID: big.NewInt(1337),
+				Nonce:   i,
+				To:      &to,
+				Value:   big.NewInt(111),
+				Data:    []byte{0x11, 0x11, 0x11},
 			})
 		}
 		txs = append(txs, tx)
@@ -119,22 +115,18 @@ func TestIndexTransactions(t *testing.T) {
 		var tx *types.Transaction
 		if i%2 == 0 {
 			tx = types.NewTx(&types.LegacyTx{
-				Nonce:    i,
-				GasPrice: big.NewInt(11111),
-				Gas:      1111,
-				To:       &to,
-				Value:    big.NewInt(111),
-				Data:     []byte{0x11, 0x11, 0x11},
+				Nonce: i,
+				To:    &to,
+				Value: big.NewInt(111),
+				Data:  []byte{0x11, 0x11, 0x11},
 			})
 		} else {
 			tx = types.NewTx(&types.AccessListTx{
-				ChainID:  big.NewInt(1337),
-				Nonce:    i,
-				GasPrice: big.NewInt(11111),
-				Gas:      1111,
-				To:       &to,
-				Value:    big.NewInt(111),
-				Data:     []byte{0x11, 0x11, 0x11},
+				ChainID: big.NewInt(1337),
+				Nonce:   i,
+				To:      &to,
+				Value:   big.NewInt(111),
+				Data:    []byte{0x11, 0x11, 0x11},
 			})
 		}
 		txs = append(txs, tx)

@@ -22,7 +22,6 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
-	"github.com/dominant-strategies/go-quai/consensus/misc"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/core/vm"
@@ -39,7 +38,6 @@ type BlockGen struct {
 	header  *types.Header
 	statedb *state.StateDB
 
-	gasPool     *GasPool
 	txs         []*types.Transaction
 	receipts    []*types.Receipt
 	uncles      []*types.Header
@@ -53,14 +51,12 @@ type BlockGen struct {
 // SetCoinbase sets the coinbase of the generated block.
 // It can be called at most once.
 func (b *BlockGen) SetCoinbase(addr common.Address) {
-	if b.gasPool != nil {
-		if len(b.txs) > 0 {
-			panic("coinbase must be set before adding transactions")
-		}
-		panic("coinbase can only be set once")
+	if len(b.txs) > 0 {
+		panic("coinbase must be set before adding transactions")
 	}
+	panic("coinbase can only be set once")
+
 	b.header.SetCoinbase(addr)
-	b.gasPool = new(GasPool).AddGas(b.header.GasLimit())
 }
 
 // SetExtra sets the extra data field of the generated block.
@@ -101,13 +97,10 @@ func (b *BlockGen) AddTx(tx *types.Transaction, etxRLimit, etxPLimit *int) {
 // added. If contract code relies on the BLOCKHASH instruction,
 // the block in chain will be returned.
 func (b *BlockGen) AddTxWithChain(hc *HeaderChain, tx *types.Transaction, etxRLimit, etxPLimit *int) {
-	if b.gasPool == nil {
-		b.SetCoinbase(common.Address{})
-	}
+	b.SetCoinbase(common.Address{})
 	b.statedb.Prepare(tx.Hash(), len(b.txs))
 	coinbase := b.header.Coinbase()
-	gasUsed := b.header.GasUsed()
-	receipt, err := ApplyTransaction(b.config, hc, &coinbase, b.gasPool, b.statedb, b.header, tx, &gasUsed, vm.Config{}, etxRLimit, etxPLimit)
+	receipt, err := ApplyTransaction(b.config, hc, &coinbase, b.statedb, b.header, tx, vm.Config{}, etxRLimit, etxPLimit)
 	if err != nil {
 		panic(err)
 	}
@@ -136,11 +129,6 @@ func (b *BlockGen) AddUncheckedTx(tx *types.Transaction) {
 // Number returns the block number of the block being generated.
 func (b *BlockGen) Number() *big.Int {
 	return new(big.Int).Set(b.header.Number())
-}
-
-// BaseFee returns the base fee of the block being generated.
-func (b *BlockGen) BaseFee() *big.Int {
-	return new(big.Int).Set(b.header.BaseFee())
 }
 
 // AddUncheckedReceipt forcefully adds a receipts to the block without a
@@ -271,10 +259,8 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 	header.SetParentHash(parent.Hash())
 	header.SetCoinbase(parent.Coinbase())
 	header.SetDifficulty(engine.CalcDifficulty(chain, diffheader))
-	header.SetGasLimit(parent.GasLimit())
-	header.SetNumber(new(big.Int).Add(parent.Number(), common.Big1))
+	// header.SetNumber(new(big.Int).Add(parent.Number(), common.Big1))
 	header.SetTime(time)
-	header.SetBaseFee(misc.CalcBaseFee(chain.Config(), parent.Header()))
 	return header
 }
 

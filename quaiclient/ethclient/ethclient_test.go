@@ -48,7 +48,6 @@ var (
 	_ = quai.ChainSyncReader(&Client{})
 	_ = quai.ContractCaller(&Client{})
 	_ = quai.GasEstimator(&Client{})
-	_ = quai.GasPricer(&Client{})
 	_ = quai.LogFilterer(&Client{})
 	_ = quai.PendingStateReader(&Client{})
 	// _ = quai.PendingStateEventer(&Client{})
@@ -453,22 +452,6 @@ func testStatusFunctions(t *testing.T, client *rpc.Client) {
 	if networkID.Cmp(big.NewInt(0)) != 0 {
 		t.Fatalf("unexpected networkID: %v", networkID)
 	}
-	// SuggestGasPrice (should suggest 1 Gwei)
-	gasPrice, err := ec.SuggestGasPrice(context.Background())
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if gasPrice.Cmp(big.NewInt(1875000000)) != 0 { // 1 gwei tip + 0.875 basefee after a 1 gwei fee empty block
-		t.Fatalf("unexpected gas price: %v", gasPrice)
-	}
-	// SuggestGasTipCap (should suggest 1 Gwei)
-	gasTipCap, err := ec.SuggestGasTipCap(context.Background())
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if gasTipCap.Cmp(big.NewInt(1000000000)) != 0 {
-		t.Fatalf("unexpected gas tip cap: %v", gasTipCap)
-	}
 }
 
 func testCallContract(t *testing.T, client *rpc.Client) {
@@ -476,18 +459,10 @@ func testCallContract(t *testing.T, client *rpc.Client) {
 
 	// EstimateGas
 	msg := quai.CallMsg{
-		From:  testAddr,
-		To:    &common.Address{},
-		Gas:   21000,
-		Value: big.NewInt(1),
+		From: testAddr,
+		To:   &common.Address{},
 	}
-	gas, err := ec.EstimateGas(context.Background(), msg)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if gas != 21000 {
-		t.Fatalf("unexpected gas price: %v", gas)
-	}
+
 	// CallContract
 	if _, err := ec.CallContract(context.Background(), msg, big.NewInt(1)); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -568,7 +543,7 @@ func sendTransaction(ec *Client) error {
 		return err
 	}
 	// Create transaction
-	tx := types.NewTransaction(0, common.Address{1}, big.NewInt(1), 22000, big.NewInt(params.InitialBaseFee), nil)
+	tx := types.NewTransaction(0, common.Address{1}, nil)
 	signer := types.LatestSignerForChainID(chainID)
 	signature, err := crypto.Sign(signer.Hash(tx).Bytes(), testKey)
 	if err != nil {

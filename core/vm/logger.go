@@ -26,7 +26,6 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
-	"github.com/dominant-strategies/go-quai/common/math"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/holiman/uint256"
@@ -61,24 +60,19 @@ type LogConfig struct {
 // StructLog is emitted to the EVM each cycle and lists information about the current internal state
 // prior to the execution of the statement.
 type StructLog struct {
-	Pc            uint64                      `json:"pc"`
-	Op            OpCode                      `json:"op"`
-	Gas           uint64                      `json:"gas"`
-	GasCost       uint64                      `json:"gasCost"`
-	Memory        []byte                      `json:"memory"`
-	MemorySize    int                         `json:"memSize"`
-	Stack         []uint256.Int               `json:"stack"`
-	ReturnData    []byte                      `json:"returnData"`
-	Storage       map[common.Hash]common.Hash `json:"-"`
-	Depth         int                         `json:"depth"`
-	RefundCounter uint64                      `json:"refund"`
-	Err           error                       `json:"-"`
+	Pc         uint64                      `json:"pc"`
+	Op         OpCode                      `json:"op"`
+	Memory     []byte                      `json:"memory"`
+	MemorySize int                         `json:"memSize"`
+	Stack      []uint256.Int               `json:"stack"`
+	ReturnData []byte                      `json:"returnData"`
+	Storage    map[common.Hash]common.Hash `json:"-"`
+	Depth      int                         `json:"depth"`
+	Err        error                       `json:"-"`
 }
 
 // overrides for gencodec
 type structLogMarshaling struct {
-	Gas         math.HexOrDecimal64
-	GasCost     math.HexOrDecimal64
 	Memory      hexutil.Bytes
 	ReturnData  hexutil.Bytes
 	OpName      string `json:"opName"` // adds call to OpName() in MarshalJSON
@@ -104,10 +98,10 @@ func (s *StructLog) ErrorString() string {
 // Note that reference types are actual VM data structures; make copies
 // if you need to retain them beyond the current call.
 type Tracer interface {
-	CaptureStart(env *EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int)
-	CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, rData []byte, depth int, err error)
-	CaptureFault(env *EVM, pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, depth int, err error)
-	CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error)
+	CaptureStart(env *EVM, from common.Address, to common.Address, create bool, input []byte, value *big.Int)
+	CaptureState(env *EVM, pc uint64, op OpCode, cost uint64, scope *ScopeContext, rData []byte, depth int, err error)
+	CaptureFault(env *EVM, pc uint64, op OpCode, cost uint64, scope *ScopeContext, depth int, err error)
+	CaptureEnd(output []byte, t time.Duration, err error)
 }
 
 // StructLogger is an EVM state logger and implements Tracer.
@@ -144,13 +138,13 @@ func (l *StructLogger) Reset() {
 }
 
 // CaptureStart implements the Tracer interface to initialize the tracing operation.
-func (l *StructLogger) CaptureStart(env *EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (l *StructLogger) CaptureStart(env *EVM, from common.Address, to common.Address, create bool, input []byte, value *big.Int) {
 }
 
 // CaptureState logs a new structured log message and pushes it out to the environment
 //
 // CaptureState also tracks SLOAD/SSTORE ops to track storage change.
-func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, rData []byte, depth int, err error) {
+func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, cost uint64, scope *ScopeContext, rData []byte, depth int, err error) {
 	memory := scope.Memory
 	stack := scope.Stack
 	contract := scope.Contract
@@ -209,17 +203,17 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost ui
 		copy(rdata, rData)
 	}
 	// create a new snapshot of the EVM.
-	log := StructLog{pc, op, gas, cost, mem, memory.Len(), stck, rdata, storage, depth, env.StateDB.GetRefund(), err}
+	log := StructLog{pc, op, mem, memory.Len(), stck, rdata, storage, depth, err}
 	l.logs = append(l.logs, log)
 }
 
 // CaptureFault implements the Tracer interface to trace an execution fault
 // while running an opcode.
-func (l *StructLogger) CaptureFault(env *EVM, pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, depth int, err error) {
+func (l *StructLogger) CaptureFault(env *EVM, pc uint64, op OpCode, cost uint64, scope *ScopeContext, depth int, err error) {
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
-func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) {
+func (l *StructLogger) CaptureEnd(output []byte, t time.Duration, err error) {
 	l.output = output
 	l.err = err
 	if l.cfg.Debug {
@@ -242,7 +236,7 @@ func (l *StructLogger) Output() []byte { return l.output }
 // WriteTrace writes a formatted trace to the given writer
 func WriteTrace(writer io.Writer, logs []StructLog) {
 	for _, log := range logs {
-		fmt.Fprintf(writer, "%-16spc=%08d gas=%v cost=%v", log.Op, log.Pc, log.Gas, log.GasCost)
+		fmt.Fprintf(writer, "%-16spc=%08d gas= cost=", log.Op, log.Pc)
 		if log.Err != nil {
 			fmt.Fprintf(writer, " ERROR: %v", log.Err)
 		}
@@ -301,15 +295,15 @@ func NewMarkdownLogger(cfg *LogConfig, writer io.Writer) *mdLogger {
 	return l
 }
 
-func (t *mdLogger) CaptureStart(env *EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (t *mdLogger) CaptureStart(env *EVM, from common.Address, to common.Address, create bool, input []byte, value *big.Int) {
 	if !create {
-		fmt.Fprintf(t.out, "From: `%v`\nTo: `%v`\nData: `0x%x`\nGas: `%d`\nValue `%v` wei\n",
+		fmt.Fprintf(t.out, "From: `%v`\nTo: `%v`\nData: `0x=`\nGas: `%d`\nValue `%v` wei\n",
 			from.String(), to.String(),
-			input, gas, value)
+			input, value)
 	} else {
-		fmt.Fprintf(t.out, "From: `%v`\nCreate at: `%v`\nData: `0x%x`\nGas: `%d`\nValue `%v` wei\n",
+		fmt.Fprintf(t.out, "From: `%v`\nCreate at: `%v`\nData: `0x=`\nGas: `%d`\nValue `%v` wei\n",
 			from.String(), to.String(),
-			input, gas, value)
+			input, value)
 	}
 
 	fmt.Fprintf(t.out, `
@@ -319,7 +313,7 @@ func (t *mdLogger) CaptureStart(env *EVM, from common.Address, to common.Address
 }
 
 // CaptureState also tracks SLOAD/SSTORE ops to track storage change.
-func (t *mdLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, rData []byte, depth int, err error) {
+func (t *mdLogger) CaptureState(env *EVM, pc uint64, op OpCode, cost uint64, scope *ScopeContext, rData []byte, depth int, err error) {
 	stack := scope.Stack
 	fmt.Fprintf(t.out, "| %4d  | %10v  |  %3d |", pc, op, cost)
 
@@ -339,11 +333,11 @@ func (t *mdLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint64
 	}
 }
 
-func (t *mdLogger) CaptureFault(env *EVM, pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, depth int, err error) {
+func (t *mdLogger) CaptureFault(env *EVM, pc uint64, op OpCode, cost uint64, scope *ScopeContext, depth int, err error) {
 	fmt.Fprintf(t.out, "\nError: at pc=%d, op=%v: %v\n", pc, op, err)
 }
 
-func (t *mdLogger) CaptureEnd(output []byte, gasUsed uint64, tm time.Duration, err error) {
-	fmt.Fprintf(t.out, "\nOutput: `0x%x`\nConsumed gas: `%d`\nError: `%v`\n",
-		output, gasUsed, err)
+func (t *mdLogger) CaptureEnd(output []byte, tm time.Duration, err error) {
+	fmt.Fprintf(t.out, "\nOutput: `0x=`\nConsumed gas: `%d`\nError: `%v`\n",
+		output, err)
 }

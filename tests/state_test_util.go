@@ -97,25 +97,17 @@ type stEnvMarshaling struct {
 //go:generate gencodec -type stTransaction -field-override stTransactionMarshaling -out gen_sttransaction.go
 
 type stTransaction struct {
-	GasPrice             *big.Int            `json:"gasPrice"`
-	MaxFeePerGas         *big.Int            `json:"maxFeePerGas"`
-	MaxPriorityFeePerGas *big.Int            `json:"maxPriorityFeePerGas"`
-	Nonce                uint64              `json:"nonce"`
-	To                   string              `json:"to"`
-	Data                 []string            `json:"data"`
-	AccessLists          []*types.AccessList `json:"accessLists,omitempty"`
-	GasLimit             []uint64            `json:"gasLimit"`
-	Value                []string            `json:"value"`
-	PrivateKey           []byte              `json:"secretKey"`
+	Nonce       uint64              `json:"nonce"`
+	To          string              `json:"to"`
+	Data        []string            `json:"data"`
+	AccessLists []*types.AccessList `json:"accessLists,omitempty"`
+	Value       []string            `json:"value"`
+	PrivateKey  []byte              `json:"secretKey"`
 }
 
 type stTransactionMarshaling struct {
-	GasPrice             *math.HexOrDecimal256
-	MaxFeePerGas         *math.HexOrDecimal256
-	MaxPriorityFeePerGas *math.HexOrDecimal256
-	Nonce                math.HexOrDecimal64
-	GasLimit             []math.HexOrDecimal64
-	PrivateKey           hexutil.Bytes
+	Nonce      math.HexOrDecimal64
+	PrivateKey hexutil.Bytes
 }
 
 // GetChainConfig takes a fork definition and returns a chain config.
@@ -200,7 +192,6 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	txContext := core.NewEVMTxContext(msg)
 	context := core.NewEVMBlockContext(block.Header(), nil, &t.json.Env.Coinbase())
 	context.GetHash = vmTestBlockHash
-	context.BaseFee() = baseFee
 	evm := vm.NewEVM(context, txContext, statedb, config, vmconfig)
 
 	// Execute the message.
@@ -310,27 +301,8 @@ func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int) (core.Messa
 	if tx.AccessLists != nil && tx.AccessLists[ps.Indexes.Data] != nil {
 		accessList = *tx.AccessLists[ps.Indexes.Data]
 	}
-	// If baseFee provided, set gasPrice to effectiveGasPrice.
-	gasPrice := tx.GasPrice
-	if baseFee != nil {
-		if tx.MaxFeePerGas == nil {
-			tx.MaxFeePerGas = gasPrice
-		}
-		if tx.MaxFeePerGas == nil {
-			tx.MaxFeePerGas = new(big.Int)
-		}
-		if tx.MaxPriorityFeePerGas == nil {
-			tx.MaxPriorityFeePerGas = tx.MaxFeePerGas
-		}
-		gasPrice = math.BigMin(new(big.Int).Add(tx.MaxPriorityFeePerGas, baseFee),
-			tx.MaxFeePerGas)
-	}
-	if gasPrice == nil {
-		return nil, fmt.Errorf("no gas price provided")
-	}
 
-	msg := types.NewMessage(from, to, tx.Nonce(), value, gasLimit, gasPrice,
-		tx.MaxFeePerGas, tx.MaxPriorityFeePerGas, data, accessList, true)
+	msg := types.NewMessage(from, to, tx.Nonce(), value, data, accessList, true)
 	return msg, nil
 }
 

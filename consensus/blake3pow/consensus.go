@@ -290,29 +290,6 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 
 	if nodeCtx == common.ZONE_CTX {
 		// Verify that the gas limit is <= 2^63-1
-		cap := uint64(0x7fffffffffffffff)
-		if header.GasLimit() > cap {
-			return fmt.Errorf("invalid gasLimit: have %v, max %v", header.GasLimit(), cap)
-		}
-		// Verify that the gasUsed is <= gasLimit
-		if header.GasUsed() > header.GasLimit() {
-			return fmt.Errorf("invalid gasUsed: have %d, gasLimit %d", header.GasUsed(), header.GasLimit())
-		}
-		// Verify the block's gas usage and verify the base fee.
-		// Verify that the gas limit remains within allowed bounds
-		if err := misc.VerifyGaslimit(parent.GasLimit(), header.GasLimit()); err != nil {
-			return err
-		}
-		// Verify the header is not malformed
-		if header.BaseFee() == nil {
-			return fmt.Errorf("header is missing baseFee")
-		}
-		// Verify the baseFee is correct based on the parent header.
-		expectedBaseFee := misc.CalcBaseFee(chain.Config(), parent)
-		if header.BaseFee().Cmp(expectedBaseFee) != 0 {
-			return fmt.Errorf("invalid baseFee: have %s, want %s, parentBaseFee %s, parentGasUsed %d",
-				expectedBaseFee, header.BaseFee(), parent.BaseFee(), parent.GasUsed())
-		}
 	}
 	// Verify that the block number is parent's +1
 	if diff := new(big.Int).Sub(header.Number(), parent.Number()); diff.Cmp(big.NewInt(1)) != 0 {

@@ -93,9 +93,6 @@ type Header struct {
 	parentEntropy []*big.Int      `json:"parentEntropy"        gencodec:"required"`
 	parentDeltaS  []*big.Int      `json:"parentDeltaS"         gencodec:"required"`
 	number        []*big.Int      `json:"number"               gencodec:"required"`
-	gasLimit      uint64          `json:"gasLimit"             gencodec:"required"`
-	gasUsed       uint64          `json:"gasUsed"              gencodec:"required"`
-	baseFee       *big.Int        `json:"baseFeePerGas"        gencodec:"required"`
 	location      common.Location `json:"location"             gencodec:"required"`
 	time          uint64          `json:"timestamp"            gencodec:"required"`
 	extra         []byte          `json:"extraData"            gencodec:"required"`
@@ -113,9 +110,6 @@ type Header struct {
 type headerMarshaling struct {
 	Difficulty    *hexutil.Big
 	Number        []*hexutil.Big
-	GasLimit      hexutil.Uint64
-	GasUsed       hexutil.Uint64
-	BaseFee       *hexutil.Big
 	ParentEntropy []*hexutil.Big
 	ParentDeltaS  []*hexutil.Big
 	Time          hexutil.Uint64
@@ -138,9 +132,6 @@ type extheader struct {
 	ParentEntropy []*big.Int
 	ParentDeltaS  []*big.Int
 	Number        []*big.Int
-	GasLimit      uint64
-	GasUsed       uint64
-	BaseFee       *big.Int
 	Location      common.Location
 	Time          uint64
 	Extra         []byte
@@ -163,7 +154,6 @@ func EmptyHeader() *Header {
 	h.etxHash = EmptyRootHash
 	h.etxRollupHash = EmptyRootHash
 	h.uncleHash = EmptyUncleHash
-	h.baseFee = big.NewInt(0)
 
 	for i := 0; i < common.HierarchyDepth; i++ {
 		h.manifestHash[i] = EmptyRootHash
@@ -193,9 +183,6 @@ func (h *Header) DecodeRLP(s *rlp.Stream) error {
 	h.parentEntropy = eh.ParentEntropy
 	h.parentDeltaS = eh.ParentDeltaS
 	h.number = eh.Number
-	h.gasLimit = eh.GasLimit
-	h.gasUsed = eh.GasUsed
-	h.baseFee = eh.BaseFee
 	h.location = eh.Location
 	h.time = eh.Time
 	h.extra = eh.Extra
@@ -221,9 +208,6 @@ func (h *Header) EncodeRLP(w io.Writer) error {
 		ParentEntropy: h.parentEntropy,
 		ParentDeltaS:  h.parentDeltaS,
 		Number:        h.number,
-		GasLimit:      h.gasLimit,
-		GasUsed:       h.gasUsed,
-		BaseFee:       h.baseFee,
 		Location:      h.location,
 		Time:          h.time,
 		Extra:         h.extra,
@@ -250,8 +234,6 @@ func (h *Header) RPCMarshalHeader() map[string]interface{} {
 		"extTransactionsRoot": h.EtxHash(),
 		"extRollupRoot":       h.EtxRollupHash(),
 		"manifestHash":        h.ManifestHashArray(),
-		"gasLimit":            hexutil.Uint(h.GasLimit()),
-		"gasUsed":             hexutil.Uint(h.GasUsed()),
 		"location":            hexutil.Bytes(h.Location()),
 		"mixHash":             h.MixHash(),
 	}
@@ -267,10 +249,6 @@ func (h *Header) RPCMarshalHeader() map[string]interface{} {
 	result["number"] = number
 	result["parentEntropy"] = parentEntropy
 	result["parentDeltaS"] = parentDeltaS
-
-	if h.BaseFee() != nil {
-		result["baseFeePerGas"] = (*hexutil.Big)(h.BaseFee())
-	}
 
 	return result
 }
@@ -342,15 +320,7 @@ func (h *Header) NumberU64(args ...int) uint64 {
 	}
 	return h.number[nodeCtx].Uint64()
 }
-func (h *Header) GasLimit() uint64 {
-	return h.gasLimit
-}
-func (h *Header) GasUsed() uint64 {
-	return h.gasUsed
-}
-func (h *Header) BaseFee() *big.Int {
-	return h.baseFee
-}
+
 func (h *Header) Location() common.Location { return h.location }
 func (h *Header) Time() uint64              { return h.time }
 func (h *Header) Extra() []byte             { return common.CopyBytes(h.extra) }
@@ -446,21 +416,6 @@ func (h *Header) SetNumber(val *big.Int, args ...int) {
 	}
 	h.number[nodeCtx] = new(big.Int).Set(val)
 }
-func (h *Header) SetGasLimit(val uint64) {
-	h.hash = atomic.Value{}     // clear hash cache
-	h.sealHash = atomic.Value{} // clear sealHash cache
-	h.gasLimit = val
-}
-func (h *Header) SetGasUsed(val uint64) {
-	h.hash = atomic.Value{}     // clear hash cache
-	h.sealHash = atomic.Value{} // clear sealHash cache
-	h.gasUsed = val
-}
-func (h *Header) SetBaseFee(val *big.Int) {
-	h.hash = atomic.Value{}     // clear hash cache
-	h.sealHash = atomic.Value{} // clear sealHash cache
-	h.baseFee = new(big.Int).Set(val)
-}
 func (h *Header) SetLocation(val common.Location) {
 	h.hash = atomic.Value{}     // clear hash cache
 	h.sealHash = atomic.Value{} // clear sealHash cache
@@ -506,9 +461,6 @@ type sealData struct {
 	ManifestHash  []common.Hash
 	ReceiptHash   common.Hash
 	Number        []*big.Int
-	GasLimit      uint64
-	GasUsed       uint64
-	BaseFee       *big.Int
 	Difficulty    *big.Int
 	Location      common.Location
 	Time          uint64
@@ -535,9 +487,6 @@ func (h *Header) SealHash() (hash common.Hash) {
 		ManifestHash:  make([]common.Hash, common.HierarchyDepth),
 		ReceiptHash:   h.ReceiptHash(),
 		Number:        make([]*big.Int, common.HierarchyDepth),
-		GasLimit:      h.GasLimit(),
-		GasUsed:       h.GasUsed(),
-		BaseFee:       h.BaseFee(),
 		Difficulty:    h.Difficulty(),
 		Location:      h.Location(),
 		Time:          h.Time(),
@@ -614,12 +563,6 @@ func (h *Header) SanityCheck() error {
 	}
 	if h.parentDeltaS == nil || len(h.parentDeltaS) != common.HierarchyDepth {
 		return fmt.Errorf("field cannot be `nil`: parentDeltaS")
-	}
-	if h.baseFee == nil {
-		return fmt.Errorf("field cannot be `nil`: baseFee")
-	}
-	if bfLen := h.baseFee.BitLen(); bfLen > 256 {
-		return fmt.Errorf("too large base fee: bitlen %d", bfLen)
 	}
 	for i := 0; i < common.HierarchyDepth; i++ {
 		if h.number == nil {
@@ -799,9 +742,6 @@ func CopyHeader(h *Header) *Header {
 		copy(cpy.extra, h.extra)
 	}
 	cpy.SetDifficulty(h.Difficulty())
-	cpy.SetGasLimit(h.GasLimit())
-	cpy.SetGasUsed(h.GasUsed())
-	cpy.SetBaseFee(h.BaseFee())
 	cpy.SetLocation(h.location)
 	cpy.SetTime(h.time)
 	cpy.SetNonce(h.nonce)
@@ -846,9 +786,6 @@ func (b *Block) ParentEntropy(args ...int) *big.Int   { return b.header.ParentEn
 func (b *Block) ParentDeltaS(args ...int) *big.Int    { return b.header.ParentDeltaS(args...) }
 func (b *Block) Number(args ...int) *big.Int          { return b.header.Number(args...) }
 func (b *Block) NumberU64(args ...int) uint64         { return b.header.NumberU64(args...) }
-func (b *Block) GasLimit() uint64                     { return b.header.GasLimit() }
-func (b *Block) GasUsed() uint64                      { return b.header.GasUsed() }
-func (b *Block) BaseFee() *big.Int                    { return b.header.BaseFee() }
 func (b *Block) Location() common.Location            { return b.header.Location() }
 func (b *Block) Time() uint64                         { return b.header.Time() }
 func (b *Block) Extra() []byte                        { return b.header.Extra() }

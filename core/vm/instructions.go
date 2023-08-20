@@ -21,7 +21,6 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
-	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
@@ -448,12 +447,6 @@ func opExtCodeHash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 	return nil, nil
 }
 
-func opGasprice(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	v, _ := uint256.FromBig(interpreter.evm.GasPrice)
-	scope.Stack.push(v)
-	return nil, nil
-}
-
 func opBlockhash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	num := scope.Stack.peek()
 	num64, overflow := num.Uint64WithOverflow()
@@ -496,11 +489,6 @@ func opNumber(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 func opDifficulty(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	v, _ := uint256.FromBig(interpreter.evm.Context.Difficulty)
 	scope.Stack.push(v)
-	return nil, nil
-}
-
-func opGasLimit(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.push(new(uint256.Int).SetUint64(interpreter.evm.Context.GasLimit))
 	return nil, nil
 }
 
@@ -589,30 +577,21 @@ func opMsize(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 	return nil, nil
 }
 
-func opGas(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.push(new(uint256.Int).SetUint64(scope.Contract.Gas))
-	return nil, nil
-}
-
 func opCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	var (
 		value        = scope.Stack.pop()
 		offset, size = scope.Stack.pop(), scope.Stack.pop()
 		input        = scope.Memory.GetCopy(int64(offset.Uint64()), int64(size.Uint64()))
-		gas          = scope.Contract.Gas
 	)
-	gas -= gas / 64
 	// reuse size int for stackvalue
 	stackvalue := size
-
-	scope.Contract.UseGas(gas)
 	//TODO: use uint256.Int instead of converting with toBig()
 	var bigVal = big0
 	if !value.IsZero() {
 		bigVal = value.ToBig()
 	}
 
-	res, addr, returnGas, suberr := interpreter.evm.Create(scope.Contract, input, gas, bigVal)
+	res, addr, suberr := interpreter.evm.Create(scope.Contract, input, bigVal)
 	// Push item on the stack based on the returned error.
 	if suberr != nil {
 		stackvalue.Clear()
@@ -620,8 +599,6 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 		stackvalue.SetBytes(addr.Bytes())
 	}
 	scope.Stack.push(&stackvalue)
-	scope.Contract.Gas += returnGas
-
 	if suberr == ErrExecutionReverted {
 		return res, nil
 	}
@@ -634,10 +611,7 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 		offset, size = scope.Stack.pop(), scope.Stack.pop()
 		salt         = scope.Stack.pop()
 		input        = scope.Memory.GetCopy(int64(offset.Uint64()), int64(size.Uint64()))
-		gas          = scope.Contract.Gas
 	)
-	gas -= gas / 64
-	scope.Contract.UseGas(gas)
 	// reuse size int for stackvalue
 	stackvalue := size
 	//TODO: use uint256.Int instead of converting with toBig()
@@ -645,7 +619,7 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 	if !endowment.IsZero() {
 		bigEndowment = endowment.ToBig()
 	}
-	res, addr, returnGas, suberr := interpreter.evm.Create2(scope.Contract, input, gas,
+	res, addr, suberr := interpreter.evm.Create2(scope.Contract, input,
 		bigEndowment, &salt)
 	// Push item on the stack based on the returned error.
 	if suberr != nil {
@@ -654,7 +628,6 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 		stackvalue.SetBytes(addr.Bytes())
 	}
 	scope.Stack.push(&stackvalue)
-	scope.Contract.Gas += returnGas
 
 	if suberr == ErrExecutionReverted {
 		return res, nil
@@ -667,7 +640,6 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 	// Pop gas. The actual gas in interpreter.evm.callGasTemp.
 	// We can use this as a temporary value
 	temp := stack.pop()
-	gas := interpreter.evm.callGasTemp
 	// Pop other call parameters.
 	addr, value, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Bytes20ToAddress(addr.Bytes20())
@@ -679,11 +651,10 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 	// By using big0 here, we save an alloc for the most common case (non-ether-transferring contract calls),
 	// but it would make more sense to extend the usage of uint256.Int
 	if !value.IsZero() {
-		gas += params.CallStipend
 		bigVal = value.ToBig()
 	}
 
-	ret, returnGas, err := interpreter.evm.Call(scope.Contract, toAddr, args, gas, bigVal)
+	ret, err := interpreter.evm.Call(scope.Contract, toAddr, args, bigVal)
 
 	if err != nil {
 		temp.Clear()
@@ -695,7 +666,6 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 		ret = common.CopyBytes(ret)
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
-	scope.Contract.Gas += returnGas
 
 	return ret, nil
 }
@@ -705,7 +675,6 @@ func opCallCode(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 	stack := scope.Stack
 	// We use it as a temporary value
 	temp := stack.pop()
-	gas := interpreter.evm.callGasTemp
 	// Pop other call parameters.
 	addr, value, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Bytes20ToAddress(addr.Bytes20())
@@ -719,11 +688,10 @@ func opCallCode(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 	//TODO: use uint256.Int instead of converting with toBig()
 	var bigVal = big0
 	if !value.IsZero() {
-		gas += params.CallStipend
 		bigVal = value.ToBig()
 	}
 
-	ret, returnGas, err := interpreter.evm.CallCode(scope.Contract, toAddr, args, gas, bigVal)
+	ret, err := interpreter.evm.CallCode(scope.Contract, toAddr, args, bigVal)
 	if err != nil {
 		temp.Clear()
 	} else {
@@ -734,7 +702,6 @@ func opCallCode(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 		ret = common.CopyBytes(ret)
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
-	scope.Contract.Gas += returnGas
 
 	return ret, nil
 }
@@ -744,7 +711,6 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 	// Pop gas. The actual gas is in interpreter.evm.callGasTemp.
 	// We use it as a temporary value
 	temp := stack.pop()
-	gas := interpreter.evm.callGasTemp
 	// Pop other call parameters.
 	addr, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Bytes20ToAddress(addr.Bytes20())
@@ -755,7 +721,7 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 	// Get arguments from the memory.
 	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
 
-	ret, returnGas, err := interpreter.evm.DelegateCall(scope.Contract, toAddr, args, gas)
+	ret, err := interpreter.evm.DelegateCall(scope.Contract, toAddr, args)
 	if err != nil {
 		temp.Clear()
 	} else {
@@ -766,7 +732,6 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 		ret = common.CopyBytes(ret)
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
-	scope.Contract.Gas += returnGas
 
 	return ret, nil
 }
@@ -776,7 +741,6 @@ func opStaticCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) 
 	stack := scope.Stack
 	// We use it as a temporary value
 	temp := stack.pop()
-	gas := interpreter.evm.callGasTemp
 	// Pop other call parameters.
 	addr, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Bytes20ToAddress(addr.Bytes20())
@@ -787,7 +751,7 @@ func opStaticCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) 
 	// Get arguments from the memory.
 	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
 
-	ret, returnGas, err := interpreter.evm.StaticCall(scope.Contract, toAddr, args, gas)
+	ret, err := interpreter.evm.StaticCall(scope.Contract, toAddr, args)
 	if err != nil {
 		temp.Clear()
 	} else {
@@ -798,7 +762,6 @@ func opStaticCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) 
 		ret = common.CopyBytes(ret)
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
-	scope.Contract.Gas += returnGas
 
 	return ret, nil
 }
@@ -846,7 +809,7 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 	// We use it as a temporary value
 	temp := stack.pop() // following opCall protocol
 	// Pop other call parameters.
-	addr, value, etxGasLimit, gasTipCap, gasFeeCap, inOffset, inSize, accessListOffset, accessListSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
+	addr, value, inOffset, inSize, accessListOffset, accessListSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Bytes20ToAddress(addr.Bytes20())
 	// Verify address is not in context
 	if common.IsInChainScope(toAddr.Bytes()) {
@@ -861,19 +824,9 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 		fmt.Printf("%x opETX error: %s\n", scope.Contract.self.Address(), err.Error())
 		return nil, nil
 	}
-	// Fail if ETX gas price or tip are not valid
-	if err := interpreter.evm.ValidateETXGasPriceAndTip(scope.Contract.Caller(), toAddr, gasFeeCap.ToBig(), gasTipCap.ToBig()); err != nil {
-		temp.Clear()
-		stack.push(&temp)
-		fmt.Printf("%x opETX error: %s\n", scope.Contract.self.Address(), err.Error())
-		return nil, nil // following opCall protocol
-	}
 
-	fee := uint256.NewInt(0)
-	fee.Add(&gasTipCap, &gasFeeCap)
-	fee.Mul(fee, &etxGasLimit)
 	total := uint256.NewInt(0)
-	total.Add(&value, fee)
+	total.Add(&value, uint256.NewInt(0))
 	// Fail if we're trying to transfer more than the available balance
 	if total.Sign() == 0 || !interpreter.evm.Context.CanTransfer(interpreter.evm.StateDB, scope.Contract.self.Address(), total.ToBig()) {
 		temp.Clear()
@@ -900,7 +853,7 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 	nonce := interpreter.evm.StateDB.GetNonce(internalSender)
 
 	// create external transaction
-	etxInner := types.ExternalTx{Value: value.ToBig(), To: &toAddr, Sender: sender, GasTipCap: gasTipCap.ToBig(), GasFeeCap: gasFeeCap.ToBig(), Gas: etxGasLimit.Uint64(), Data: data, AccessList: accessList, Nonce: nonce, ChainID: interpreter.evm.chainConfig.ChainID}
+	etxInner := types.ExternalTx{Value: value.ToBig(), To: &toAddr, Sender: sender, Data: data, AccessList: accessList, Nonce: nonce, ChainID: interpreter.evm.chainConfig.ChainID}
 	etx := types.NewTx(&etxInner)
 
 	interpreter.evm.ETXCacheLock.Lock()

@@ -26,7 +26,7 @@ import (
 // for invalid opcode.
 func Fuzz(input []byte) int {
 	_, _, err := runtime.Execute(input, input, &runtime.Config{
-		GasLimit: 12000000,
+		// GasLimit: 12000000,
 	})
 	// invalid opcode
 	if err != nil && len(err.Error()) > 6 && err.Error()[:7] == "invalid" {

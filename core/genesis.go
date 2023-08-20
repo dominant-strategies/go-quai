@@ -51,7 +51,6 @@ type Genesis struct {
 	Nonce      uint64              `json:"nonce"`
 	Timestamp  uint64              `json:"timestamp"`
 	ExtraData  []byte              `json:"extraData"`
-	GasLimit   uint64              `json:"gasLimit"   gencodec:"required"`
 	Difficulty *big.Int            `json:"difficulty" gencodec:"required"`
 	Mixhash    common.Hash         `json:"mixHash"`
 	Coinbase   common.Address      `json:"coinbase"`
@@ -59,9 +58,7 @@ type Genesis struct {
 	// These fields are used for consensus tests. Please don't use them
 	// in actual genesis blocks.
 	Number     []uint64      `json:"number"`
-	GasUsed    uint64        `json:"gasUsed"`
 	ParentHash []common.Hash `json:"parentHash"`
-	BaseFee    *big.Int      `json:"baseFeePerGas"`
 }
 
 // GenesisAlloc specifies the initial state that is part of the genesis block.
@@ -94,11 +91,8 @@ type genesisSpecMarshaling struct {
 	Nonce      math.HexOrDecimal64
 	Timestamp  math.HexOrDecimal64
 	ExtraData  hexutil.Bytes
-	GasLimit   math.HexOrDecimal64
-	GasUsed    math.HexOrDecimal64
 	Number     math.HexOrDecimal64
 	Difficulty *math.HexOrDecimal256
-	BaseFee    *math.HexOrDecimal256
 	Alloc      map[common.UnprefixedAddress]GenesisAccount
 }
 
@@ -159,9 +153,11 @@ func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig
 }
 
 func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis) (*params.ChainConfig, common.Hash, error) {
+	fmt.Fprintln(os.Stderr, "======LKCLOG==========core genesis.go======enter 1==================")
 	if genesis != nil && genesis.Config == nil {
 		return params.AllProgpowProtocolChanges, common.Hash{}, errGenesisNoConfig
 	}
+	fmt.Fprintln(os.Stderr, "======LKCLOG==========core genesis.go======enter 2==================")
 	// Just commit the new block if there is no stored genesis block.
 	stored := rawdb.ReadCanonicalHash(db, 0)
 	if (stored == common.Hash{}) {
@@ -177,31 +173,42 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis) (*params
 		}
 		return genesis.Config, block.Hash(), nil
 	}
+	fmt.Fprintln(os.Stderr, "======LKCLOG==========core genesis.go======enter 3==================")
 	// We have the genesis block in database(perhaps in ancient database)
 	// but the corresponding state is missing.
 	header := rawdb.ReadHeader(db, stored, 0)
+	// fmt.Fprintln(os.Stderr, "======LKCLOG==========core genesis.go======enter 3 -1==================", state.NewDatabaseWithConfig(db, nil))
+	// state.NewDatabaseWithConfig(db, nil)
 	if _, err := state.New(header.Root(), state.NewDatabaseWithConfig(db, nil), nil); err != nil {
+		fmt.Fprintln(os.Stderr, "======LKCLOG==========core genesis.go======enter 3-2==================")
 		if genesis == nil {
 			genesis = DefaultGenesisBlock()
 		}
 		// Ensure the stored genesis matches with the given one.
 		hash := genesis.ToBlock(nil).Hash()
 		if hash != stored {
+			fmt.Fprintln(os.Stderr, "======LKCLOG==========core genesis.go======enter ccccc=====")
 			return genesis.Config, hash, &GenesisMismatchError{stored, hash}
 		}
 		block, err := genesis.Commit(db)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, "======LKCLOG==========core genesis.go======enter bbbbbbbb=====")
 			return genesis.Config, hash, err
 		}
+		fmt.Fprintln(os.Stderr, "======LKCLOG==========core genesis.go======enter cccccc=====")
 		return genesis.Config, block.Hash(), nil
 	}
+
+	fmt.Fprintln(os.Stderr, "======LKCLOG==========core genesis.go======enter 4==================")
 	// Check whether the genesis block is already written.
 	if genesis != nil {
 		hash := genesis.ToBlock(nil).Hash()
 		if hash != stored {
+			fmt.Fprintln(os.Stderr, "======LKCLOG==========core genesis.go======return 44- 4==================")
 			return genesis.Config, hash, &GenesisMismatchError{stored, hash}
 		}
 	}
+	fmt.Fprintln(os.Stderr, "======LKCLOG==========core genesis.go======enter 5==================")
 	// Get the existing chain configuration.
 	newcfg := genesis.configOrDefault(stored)
 	storedcfg := rawdb.ReadChainConfig(db, stored)
@@ -222,6 +229,8 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis) (*params
 	if height == nil {
 		return newcfg, stored, fmt.Errorf("missing block number for head header hash")
 	}
+
+	fmt.Fprintln(os.Stderr, "======LKCLOG==========core genesis.go======enter 6==================")
 
 	rawdb.WriteChainConfig(db, stored, newcfg)
 	return newcfg, stored, nil
@@ -267,12 +276,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	head.SetExtra(g.ExtraData)
 	head.SetDifficulty(g.Difficulty)
 	head.SetCoinbase(common.ZeroAddr)
-	head.SetGasLimit(g.GasLimit)
-	head.SetGasUsed(0)
-	head.SetBaseFee(new(big.Int).SetUint64(params.InitialBaseFee))
-	if g.GasLimit == 0 {
-		head.SetGasLimit(params.GenesisGasLimit)
-	}
+
 	for i := 0; i < common.HierarchyDepth; i++ {
 		head.SetNumber(big.NewInt(0), i)
 		head.SetParentHash(common.Hash{}, i)
@@ -314,9 +318,7 @@ func (g *Genesis) MustCommit(db ethdb.Database) *types.Block {
 
 // GenesisBlockForTesting creates and writes a block in which addr has the given wei balance.
 func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big.Int) *types.Block {
-	g := Genesis{
-		BaseFee: big.NewInt(params.InitialBaseFee),
-	}
+	g := Genesis{}
 	return g.MustCommit(db)
 }
 
@@ -333,7 +335,6 @@ func DefaultColosseumGenesisBlock(consensusEngine string) *Genesis {
 			Config:     params.Blake3PowColosseumChainConfig,
 			Nonce:      66,
 			ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fb"),
-			GasLimit:   5000000,
 			Difficulty: big.NewInt(2000000),
 		}
 	}
@@ -341,7 +342,6 @@ func DefaultColosseumGenesisBlock(consensusEngine string) *Genesis {
 		Config:     params.ProgpowColosseumChainConfig,
 		Nonce:      66,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fb"),
-		GasLimit:   5000000,
 		Difficulty: big.NewInt(1000),
 	}
 }
@@ -353,7 +353,6 @@ func DefaultGardenGenesisBlock(consensusEngine string) *Genesis {
 			Config:     params.Blake3PowGardenChainConfig,
 			Nonce:      66,
 			ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fb"),
-			GasLimit:   5000000,
 			Difficulty: big.NewInt(4000000),
 		}
 	}
@@ -361,7 +360,6 @@ func DefaultGardenGenesisBlock(consensusEngine string) *Genesis {
 		Config:     params.ProgpowGardenChainConfig,
 		Nonce:      0,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353539"),
-		GasLimit:   5000000,
 		Difficulty: big.NewInt(1000),
 	}
 }
@@ -373,7 +371,6 @@ func DefaultOrchardGenesisBlock(consensusEngine string) *Genesis {
 			Config:     params.Blake3PowOrchardChainConfig,
 			Nonce:      66,
 			ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fc"),
-			GasLimit:   5000000,
 			Difficulty: big.NewInt(4000000),
 		}
 	}
@@ -381,7 +378,6 @@ func DefaultOrchardGenesisBlock(consensusEngine string) *Genesis {
 		Config:     params.ProgpowOrchardChainConfig,
 		Nonce:      0,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353536"),
-		GasLimit:   5000000,
 		Difficulty: big.NewInt(25000),
 	}
 }
@@ -393,7 +389,6 @@ func DefaultGalenaGenesisBlock(consensusEngine string) *Genesis {
 			Config:     params.Blake3PowGalenaChainConfig,
 			Nonce:      66,
 			ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fb"),
-			GasLimit:   5000000,
 			Difficulty: big.NewInt(4000000),
 		}
 	}
@@ -401,7 +396,6 @@ func DefaultGalenaGenesisBlock(consensusEngine string) *Genesis {
 		Config:     params.ProgpowGalenaChainConfig,
 		Nonce:      0,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353537"),
-		GasLimit:   5000000,
 		Difficulty: big.NewInt(1000),
 	}
 }
@@ -413,7 +407,6 @@ func DefaultLocalGenesisBlock(consensusEngine string) *Genesis {
 			Config:     params.Blake3PowLocalChainConfig,
 			Nonce:      66,
 			ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fb"),
-			GasLimit:   5000000,
 			Difficulty: big.NewInt(300000),
 		}
 	}
@@ -421,7 +414,6 @@ func DefaultLocalGenesisBlock(consensusEngine string) *Genesis {
 		Config:     params.ProgpowLocalChainConfig,
 		Nonce:      0,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
-		GasLimit:   5000000,
 		Difficulty: big.NewInt(1000),
 	}
 }
@@ -434,8 +426,6 @@ func DeveloperGenesisBlock(period uint64, faucet common.Address) *Genesis {
 	return &Genesis{
 		Config:     &config,
 		ExtraData:  append(append(make([]byte, 32), faucet.Bytes()[:]...), make([]byte, crypto.SignatureLength)...),
-		GasLimit:   0x47b760,
-		BaseFee:    big.NewInt(params.InitialBaseFee),
 		Difficulty: big.NewInt(1),
 	}
 }

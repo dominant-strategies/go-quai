@@ -47,12 +47,7 @@ func TestDefaults(t *testing.T) {
 	if cfg.Time == nil {
 		t.Error("expected time to be non nil")
 	}
-	if cfg.GasLimit == 0 {
-		t.Error("didn't expect gaslimit to be zero")
-	}
-	if cfg.GasPrice == nil {
-		t.Error("expected time to be non nil")
-	}
+
 	if cfg.Value == nil {
 		t.Error("expected time to be non nil")
 	}
@@ -74,7 +69,6 @@ func TestEVM(t *testing.T) {
 	Execute([]byte{
 		byte(vm.DIFFICULTY),
 		byte(vm.TIMESTAMP),
-		byte(vm.GASLIMIT),
 		byte(vm.PUSH1),
 		byte(vm.ORIGIN),
 		byte(vm.BLOCKHASH),
@@ -168,7 +162,6 @@ func benchmarkEVM_Create(bench *testing.B, code string) {
 	runtimeConfig := Config{
 		Origin:      sender,
 		State:       statedb,
-		GasLimit:    10000000,
 		Difficulty:  big.NewInt(0x200000),
 		Time:        new(big.Int).SetUint64(0),
 		Coinbase:    common.Address{},
@@ -212,7 +205,6 @@ func fakeHeader(n uint64, parentHash common.Hash) *types.Header {
 		Nonce:      types.BlockNonce{0x1},
 		Extra:      []byte{},
 		Difficulty: big.NewInt(0),
-		GasLimit:   100000,
 	}
 	return &header
 }
@@ -318,15 +310,15 @@ type stepCounter struct {
 	steps int
 }
 
-func (s *stepCounter) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (s *stepCounter) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, value *big.Int) {
 }
 
-func (s *stepCounter) CaptureFault(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {
+func (s *stepCounter) CaptureFault(env *vm.EVM, pc uint64, op vm.OpCode, cost uint64, scope *vm.ScopeContext, depth int, err error) {
 }
 
-func (s *stepCounter) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) {}
+func (s *stepCounter) CaptureEnd(output []byte, t time.Duration, err error) {}
 
-func (s *stepCounter) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
+func (s *stepCounter) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
 	s.steps++
 	// Enable this for more output
 	//s.inner.CaptureState(env, pc, op, gas, cost, memory, stack, rStack, contract, depth, err)
@@ -334,11 +326,10 @@ func (s *stepCounter) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, co
 
 // benchmarkNonModifyingCode benchmarks code, but if the code modifies the
 // state, this should not be used, since it does not reset the state between runs.
-func benchmarkNonModifyingCode(gas uint64, code []byte, name string, b *testing.B) {
+func benchmarkNonModifyingCode(code []byte, name string, b *testing.B) {
 	cfg := new(Config)
 	setDefaults(cfg)
 	cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
-	cfg.GasLimit = gas
 	var (
 		destination = common.BytesToAddress([]byte("contract"))
 		vmenv       = NewEnv(cfg)
@@ -363,12 +354,12 @@ func benchmarkNonModifyingCode(gas uint64, code []byte, name string, b *testing.
 	//cfg.State.CreateAccount(cfg.Origin)
 	// set the receiver's (the executing contract) code for execution.
 	cfg.State.SetCode(destination, code)
-	vmenv.Call(sender, destination, nil, gas, cfg.Value)
+	vmenv.Call(sender, destination, nil, cfg.Value)
 
 	b.Run(name, func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			vmenv.Call(sender, destination, nil, gas, cfg.Value)
+			vmenv.Call(sender, destination, nil, cfg.Value)
 		}
 	})
 }
@@ -385,7 +376,6 @@ func BenchmarkSimpleLoop(b *testing.B) {
 		byte(vm.DUP1),       // out insize
 		byte(vm.DUP1),       // in offset
 		byte(vm.PUSH1), 0x4, // address of identity
-		byte(vm.GAS), // gas
 		byte(vm.STATICCALL),
 		byte(vm.POP),      // pop return value
 		byte(vm.PUSH1), 0, // jumpdestination
@@ -401,7 +391,7 @@ func BenchmarkSimpleLoop(b *testing.B) {
 		byte(vm.DUP1),       // in offset
 		byte(vm.DUP1),       // value
 		byte(vm.PUSH1), 0x4, // address of identity
-		byte(vm.GAS), // gas
+		// byte(vm.GAS), // gas
 		byte(vm.CALL),
 		byte(vm.POP),      // pop return value
 		byte(vm.PUSH1), 0, // jumpdestination
@@ -417,7 +407,7 @@ func BenchmarkSimpleLoop(b *testing.B) {
 		byte(vm.DUP1),        // in offset
 		byte(vm.DUP1),        // value
 		byte(vm.PUSH1), 0xff, // address of existing contract
-		byte(vm.GAS), // gas
+		// byte(vm.GAS), // gas
 		byte(vm.CALL),
 		byte(vm.POP),      // pop return value
 		byte(vm.PUSH1), 0, // jumpdestination
@@ -433,7 +423,7 @@ func BenchmarkSimpleLoop(b *testing.B) {
 		byte(vm.DUP1),        // in offset
 		byte(vm.DUP1),        // value
 		byte(vm.PUSH1), 0xE0, // address of EOA
-		byte(vm.GAS), // gas
+		// byte(vm.GAS), // gas
 		byte(vm.CALL),
 		byte(vm.POP),      // pop return value
 		byte(vm.PUSH1), 0, // jumpdestination
@@ -448,7 +438,7 @@ func BenchmarkSimpleLoop(b *testing.B) {
 		byte(vm.DUP1),       // out insize
 		byte(vm.DUP1),       // in offset
 		byte(vm.PUSH1), 0x4, // address of identity
-		byte(vm.GAS), // gas
+		// byte(vm.GAS), // gas
 
 		byte(vm.POP), byte(vm.POP), byte(vm.POP), byte(vm.POP), byte(vm.POP), byte(vm.POP),
 		byte(vm.PUSH1), 0, // jumpdestination
@@ -464,7 +454,7 @@ func BenchmarkSimpleLoop(b *testing.B) {
 		byte(vm.PUSH1), 0x00, // in offset
 		byte(vm.PUSH1), 0x00, // value
 		byte(vm.PUSH1), 0xEE, // address of reverting contract
-		byte(vm.GAS), // gas
+		// byte(vm.GAS), // gas
 		byte(vm.CALL),
 		byte(vm.POP),      // pop return value
 		byte(vm.PUSH1), 0, // jumpdestination

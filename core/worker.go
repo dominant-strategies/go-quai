@@ -12,7 +12,6 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/consensus"
-	"github.com/dominant-strategies/go-quai/consensus/misc"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
@@ -54,7 +53,6 @@ type environment struct {
 	ancestors mapset.Set     // ancestor set (used for checking uncle parent validity)
 	family    mapset.Set     // family set (used for checking uncle invalidity)
 	tcount    int            // tx count in cycle
-	gasPool   *GasPool       // available gas used to pack transactions
 	coinbase  common.Address
 	etxRLimit int // Remaining number of cross-region ETXs that can be included
 	etxPLimit int // Remaining number of cross-prime ETXs that can be included
@@ -84,10 +82,7 @@ func (env *environment) copy() *environment {
 			header:    types.CopyHeader(env.header),
 			receipts:  copyReceipts(env.receipts),
 		}
-		if env.gasPool != nil {
-			gasPool := *env.gasPool
-			cpy.gasPool = &gasPool
-		}
+
 		// The content of txs and uncles are immutable, unnecessary
 		// to do the expensive deep copy for them.
 		cpy.txs = make([]*types.Transaction, len(env.txs))
@@ -154,9 +149,6 @@ type Config struct {
 	Notify     []string       `toml:",omitempty"` // HTTP URL list to be notified of new work packages (only useful in ethash).
 	NotifyFull bool           `toml:",omitempty"` // Notify with pending block headers instead of work packages
 	ExtraData  hexutil.Bytes  `toml:",omitempty"` // Block extra data set by the miner
-	GasFloor   uint64         // Target gas floor for mined blocks.
-	GasCeil    uint64         // Target gas ceiling for mined blocks.
-	GasPrice   *big.Int       // Minimum gas price for mining a transaction
 	Recommit   time.Duration  // The time interval for miner to re-create mining work.
 	Noverify   bool           // Disable remote mining solution verification(only useful in ethash).
 }
@@ -246,8 +238,6 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 		resubmitIntervalCh: make(chan time.Duration),
 		resubmitAdjustCh:   make(chan *intervalAdjust, resubmitAdjustChanSize),
 	}
-	// Set the GasFloor of the worker to the minGasLimit
-	worker.config.GasFloor = params.MinGasLimit
 
 	phBodyCache, _ := lru.New(pendingBlockBodyLimit)
 	worker.pendingBlockBody = phBodyCache
@@ -272,12 +262,6 @@ func (w *worker) setEtherbase(addr common.Address) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.coinbase = addr
-}
-
-func (w *worker) setGasCeil(ceil uint64) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	w.config.GasCeil = ceil
 }
 
 // setExtra sets the content used to initialize the block extra field.
@@ -456,10 +440,10 @@ func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.He
 
 	if nodeCtx == common.ZONE_CTX {
 		// Fill pending transactions from the txpool
-		w.adjustGasLimit(nil, work, block)
-		if fill {
-			w.fillTransactions(interrupt, work, block)
-		}
+		// w.adjustGasLimit(nil, work, block)
+		// if fill {
+		// w.fillTransactions(interrupt, work, block)
+		// }
 	}
 
 	// Swap out the old work with the new one, terminating any leftover
@@ -486,12 +470,10 @@ func (w *worker) printPendingHeaderInfo(work *environment, block *types.Block, s
 	if w.CurrentInfo(block.Header()) {
 		log.Info("Commit new sealing work", "number", block.Number(), "sealhash", block.Header().SealHash(),
 			"uncles", len(work.uncles), "txs", work.tcount, "etxs", len(block.ExtTransactions()),
-			"gas", block.GasUsed(), "fees", totalFees(block, work.receipts),
 			"elapsed", common.PrettyDuration(time.Since(start)))
 	} else {
 		log.Debug("Commit new sealing work", "number", block.Number(), "sealhash", block.Header().SealHash(),
 			"uncles", len(work.uncles), "txs", work.tcount, "etxs", len(block.ExtTransactions()),
-			"gas", block.GasUsed(), "fees", totalFees(block, work.receipts),
 			"elapsed", common.PrettyDuration(time.Since(start)))
 	}
 	work.uncleMu.RUnlock()
@@ -591,17 +573,15 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*
 	if tx != nil {
 		snap := env.state.Snapshot()
 		// retrieve the gas used int and pass in the reference to the ApplyTransaction
-		gasUsed := env.header.GasUsed()
-		receipt, err := ApplyTransaction(w.chainConfig, w.hc, &env.coinbase, env.gasPool, env.state, env.header, tx, &gasUsed, *w.hc.bc.processor.GetVMConfig(), &env.etxRLimit, &env.etxPLimit)
+		receipt, err := ApplyTransaction(w.chainConfig, w.hc, &env.coinbase, env.state, env.header, tx, *w.hc.bc.processor.GetVMConfig(), &env.etxRLimit, &env.etxPLimit)
 		if err != nil {
-			log.Debug("Error playing transaction in worker", "err", err, "tx", tx.Hash().Hex(), "block", env.header.Number, "gasUsed", gasUsed)
+			log.Debug("Error playing transaction in worker", "err", err, "tx", tx.Hash().Hex(), "block", env.header.Number)
 			env.state.RevertToSnapshot(snap)
 			return nil, err
 		}
 		// once the gasUsed pointer is updated in the ApplyTransaction it has to be set back to the env.Header.GasUsed
 		// This extra step is needed because previously the GasUsed was a public method and direct update of the value
 		// was possible.
-		env.header.SetGasUsed(gasUsed)
 		env.txs = append(env.txs, tx)
 		env.receipts = append(env.receipts, receipt)
 		if receipt.Status == types.ReceiptStatusSuccessful {
@@ -613,10 +593,6 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*
 }
 
 func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByPriceAndNonce, interrupt *int32) bool {
-	gasLimit := env.header.GasLimit
-	if env.gasPool == nil {
-		env.gasPool = new(GasPool).AddGas(gasLimit())
-	}
 	var coalescedLogs []*types.Log
 
 	for {
@@ -629,7 +605,7 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 		if interrupt != nil && atomic.LoadInt32(interrupt) != commitInterruptNone {
 			// Notify resubmit loop to increase resubmitting interval due to too frequent commits.
 			if atomic.LoadInt32(interrupt) == commitInterruptResubmit {
-				ratio := float64(gasLimit()-env.gasPool.Gas()) / float64(gasLimit())
+				ratio := 0.1
 				if ratio < 0.1 {
 					ratio = 0.1
 				}
@@ -641,10 +617,7 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 			return atomic.LoadInt32(interrupt) == commitInterruptNewHead
 		}
 		// If we don't have enough gas for any further transactions then we're done
-		if env.gasPool.Gas() < params.TxGas {
-			log.Trace("Not enough gas for further transactions", "have", env.gasPool, "want", params.TxGas)
-			break
-		}
+
 		// Retrieve the next transaction and abort if all done
 		tx := txs.Peek()
 		if tx == nil {
@@ -770,7 +743,6 @@ func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*en
 	// Only zone should calculate state
 	if nodeCtx == common.ZONE_CTX {
 		header.SetExtra(w.extra)
-		header.SetBaseFee(misc.CalcBaseFee(w.chainConfig, parent.Header()))
 		if w.isRunning() {
 			if w.coinbase.Equal(common.ZeroAddr) {
 				log.Error("Refusing to mine without etherbase")
@@ -840,13 +812,13 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, block *typ
 		}
 	}
 	if len(localTxs) > 0 {
-		txs := types.NewTransactionsByPriceAndNonce(env.signer, localTxs, env.header.BaseFee(), false)
+		txs := types.NewTransactionsByPriceAndNonce(env.signer, localTxs, false)
 		if w.commitTransactions(env, txs, interrupt) {
 			return
 		}
 	}
 	if len(remoteTxs) > 0 {
-		txs := types.NewTransactionsByPriceAndNonce(env.signer, remoteTxs, env.header.BaseFee(), false)
+		txs := types.NewTransactionsByPriceAndNonce(env.signer, remoteTxs, false)
 		if w.commitTransactions(env, txs, interrupt) {
 			return
 		}
@@ -857,12 +829,7 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, block *typ
 // into the given sealing block. The transaction selection and ordering strategy can
 // be customized with the plugin in the future.
 func (w *worker) adjustGasLimit(interrupt *int32, env *environment, parent *types.Block) {
-	percentGasUsed := parent.GasUsed() * 100 / parent.GasLimit()
-	if percentGasUsed > params.PercentGasUsedThreshold {
-		env.header.SetGasLimit(CalcGasLimit(parent.GasLimit(), w.config.GasCeil))
-	} else {
-		env.header.SetGasLimit(CalcGasLimit(parent.GasLimit(), w.config.GasFloor))
-	}
+
 }
 
 func (w *worker) FinalizeAssemble(chain consensus.ChainHeaderReader, header *types.Header, parent *types.Block, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, etxs []*types.Transaction, subManifest types.BlockManifest, receipts []*types.Receipt) (*types.Block, error) {
@@ -932,7 +899,6 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 			env.uncleMu.RLock()
 			log.Info("Commit new sealing work", "number", block.Number(), "sealhash", block.Header().SealHash(),
 				"uncles", len(env.uncles), "txs", env.tcount, "etxs", len(block.ExtTransactions()),
-				"gas", block.GasUsed(), "fees", totalFees(block, env.receipts),
 				"elapsed", common.PrettyDuration(time.Since(start)))
 			env.uncleMu.RUnlock()
 		case <-w.exitCh:
@@ -983,16 +949,6 @@ func copyReceipts(receipts []*types.Receipt) []*types.Receipt {
 		result[i] = &cpy
 	}
 	return result
-}
-
-// totalFees computes total consumed miner fees in ETH. Block transactions and receipts have to have the same order.
-func totalFees(block *types.Block, receipts []*types.Receipt) *big.Float {
-	feesWei := new(big.Int)
-	for i, tx := range block.Transactions() {
-		minerFee, _ := tx.EffectiveGasTip(block.BaseFee())
-		feesWei.Add(feesWei, new(big.Int).Mul(new(big.Int).SetUint64(receipts[i].GasUsed), minerFee))
-	}
-	return new(big.Float).Quo(new(big.Float).SetInt(feesWei), new(big.Float).SetInt(big.NewInt(params.Ether)))
 }
 
 func (w *worker) CurrentInfo(header *types.Header) bool {

@@ -36,9 +36,13 @@ import (
 func ReadCanonicalHash(db ethdb.Reader, number uint64) common.Hash {
 	data, _ := db.Get(headerHashKey(number))
 
+	// fmt.Fprintln(os.Stderr, "======LKCLOG========core accessors_chain.go=========ReadCanonicalHash=====1111=========", data, db, number, headerHashKey(number), common.Hash{})
+
 	if len(data) == 0 {
 		return common.Hash{}
 	}
+
+	// fmt.Fprintln(os.Stderr, "======LKCLOG========core accessors_chain.go=========ReadCanonicalHash=====2222=========", data, db, number, headerHashKey(number), common.BytesToHash(data))
 	return common.BytesToHash(data)
 }
 

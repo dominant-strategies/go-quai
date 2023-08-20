@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/big"
 	"os"
 	"strings"
 	"time"
@@ -98,22 +97,6 @@ func (api *PrivateMinerAPI) SetExtra(extra string) (bool, error) {
 		return false, err
 	}
 	return true, nil
-}
-
-// SetGasPrice sets the minimum accepted gas price for the miner.
-func (api *PrivateMinerAPI) SetGasPrice(gasPrice hexutil.Big) bool {
-	api.e.lock.Lock()
-	api.e.gasPrice = (*big.Int)(&gasPrice)
-	api.e.lock.Unlock()
-
-	api.e.Core().SetGasPrice((*big.Int)(&gasPrice))
-	return true
-}
-
-// SetGasLimit sets the gaslimit to target towards during mining.
-func (api *PrivateMinerAPI) SetGasLimit(gasLimit hexutil.Uint64) bool {
-	api.e.Core().SetGasCeil(uint64(gasLimit))
-	return true
 }
 
 // SetEtherbase sets the etherbase of the miner

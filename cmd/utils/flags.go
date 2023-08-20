@@ -25,8 +25,8 @@ import (
 	"io"
 	"io/ioutil"
 	"math"
-	"math/big"
 	"net/http"
+	"os"
 	"path/filepath"
 	"runtime"
 	godebug "runtime/debug"
@@ -48,7 +48,6 @@ import (
 	"github.com/dominant-strategies/go-quai/eth"
 	"github.com/dominant-strategies/go-quai/eth/downloader"
 	"github.com/dominant-strategies/go-quai/eth/ethconfig"
-	"github.com/dominant-strategies/go-quai/eth/gasprice"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/internal/flags"
 	"github.com/dominant-strategies/go-quai/internal/quaiapi"
@@ -359,8 +358,8 @@ var (
 	MinerGasPriceFlag = BigFlag{
 		Name:  "miner.gasprice",
 		Usage: "Minimum gas price for mining a transaction",
-		Value: ethconfig.Defaults.Miner.GasPrice,
 	}
+
 	MinerEtherbaseFlag = cli.StringFlag{
 		Name:  "miner.etherbase",
 		Usage: "Public address for block mining rewards (default = first account)",
@@ -393,12 +392,12 @@ var (
 	RPCGlobalGasCapFlag = cli.Uint64Flag{
 		Name:  "rpc.gascap",
 		Usage: "Sets a cap on gas that can be used in eth_call/estimateGas (0=infinite)",
-		Value: ethconfig.Defaults.RPCGasCap,
+		// Value: ethconfig.Defaults.RPCGasCap,
 	}
 	RPCGlobalTxFeeCapFlag = cli.Float64Flag{
 		Name:  "rpc.txfeecap",
 		Usage: "Sets a cap on transaction fee (in ether) that can be sent via the RPC APIs (0 = no cap)",
-		Value: ethconfig.Defaults.RPCTxFeeCap,
+		// Value: ethconfig.Defaults.RPCTxFeeCap,
 	}
 	// Logging and debug settings
 	QuaiStatsURLFlag = cli.StringFlag{
@@ -548,24 +547,11 @@ var (
 	GpoBlocksFlag = cli.IntFlag{
 		Name:  "gpo.blocks",
 		Usage: "Number of recent blocks to check for gas prices",
-		Value: ethconfig.Defaults.GPO.Blocks,
 	}
 	GpoPercentileFlag = cli.IntFlag{
 		Name:  "gpo.percentile",
 		Usage: "Suggested gas price is the given percentile of a set of recent transaction gas prices",
-		Value: ethconfig.Defaults.GPO.Percentile,
 	}
-	GpoMaxGasPriceFlag = cli.Int64Flag{
-		Name:  "gpo.maxprice",
-		Usage: "Maximum gas price will be recommended by gpo",
-		Value: ethconfig.Defaults.GPO.MaxPrice.Int64(),
-	}
-	GpoIgnoreGasPriceFlag = cli.Int64Flag{
-		Name:  "gpo.ignoreprice",
-		Usage: "Gas price below which gpo will ignore transactions",
-		Value: ethconfig.Defaults.GPO.IgnorePrice.Int64(),
-	}
-
 	// Metrics flags
 	MetricsEnabledFlag = cli.BoolFlag{
 		Name:  "metrics",
@@ -962,19 +948,12 @@ func setSubUrls(ctx *cli.Context, cfg *ethconfig.Config) {
 func setGasLimitCeil(ctx *cli.Context, cfg *ethconfig.Config) {
 	switch {
 	case ctx.GlobalBool(ColosseumFlag.Name):
-		cfg.Miner.GasCeil = params.ColosseumGasCeil
 	case ctx.GlobalBool(GardenFlag.Name):
-		cfg.Miner.GasCeil = params.GardenGasCeil
 	case ctx.GlobalBool(OrchardFlag.Name):
-		cfg.Miner.GasCeil = params.OrchardGasCeil
 	case ctx.GlobalBool(GalenaFlag.Name):
-		cfg.Miner.GasCeil = params.GalenaGasCeil
 	case ctx.GlobalBool(LocalFlag.Name):
-		cfg.Miner.GasCeil = params.LocalGasCeil
 	case ctx.GlobalBool(DeveloperFlag.Name):
-		cfg.Miner.GasCeil = params.LocalGasCeil
 	default:
-		cfg.Miner.GasCeil = params.ColosseumGasCeil
 	}
 }
 
@@ -996,6 +975,7 @@ func setSlicesRunning(ctx *cli.Context, cfg *ethconfig.Config) {
 	}
 	slicesRunning := []common.Location{}
 	for _, slice := range slices {
+		fmt.Fprintln(os.Stderr, "=================slicesRunning================", slicesRunning)
 		slicesRunning = append(slicesRunning, common.Location{slice[1] - 48, slice[3] - 48})
 	}
 	cfg.SlicesRunning = slicesRunning
@@ -1173,23 +1153,14 @@ func setDataDir(ctx *cli.Context, cfg *node.Config) {
 	}
 }
 
-func setGPO(ctx *cli.Context, cfg *gasprice.Config, light bool) {
+func setGPO(ctx *cli.Context, light bool) {
 	// If we are running the light client, apply another group
 	// settings for gas oracle.
-	if light {
-		*cfg = ethconfig.LightClientGPO
-	}
 	if ctx.GlobalIsSet(GpoBlocksFlag.Name) {
-		cfg.Blocks = ctx.GlobalInt(GpoBlocksFlag.Name)
+		ctx.GlobalInt(GpoBlocksFlag.Name)
 	}
 	if ctx.GlobalIsSet(GpoPercentileFlag.Name) {
-		cfg.Percentile = ctx.GlobalInt(GpoPercentileFlag.Name)
-	}
-	if ctx.GlobalIsSet(GpoMaxGasPriceFlag.Name) {
-		cfg.MaxPrice = big.NewInt(ctx.GlobalInt64(GpoMaxGasPriceFlag.Name))
-	}
-	if ctx.GlobalIsSet(GpoIgnoreGasPriceFlag.Name) {
-		cfg.IgnorePrice = big.NewInt(ctx.GlobalInt64(GpoIgnoreGasPriceFlag.Name))
+		ctx.GlobalInt(GpoPercentileFlag.Name)
 	}
 }
 
@@ -1416,7 +1387,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.GlobalIsSet(RegionFlag.Name) && ctx.GlobalIsSet(ZoneFlag.Name) {
 		setEtherbase(ctx, cfg)
 	}
-	setGPO(ctx, &cfg.GPO, ctx.GlobalString(SyncModeFlag.Name) == "light")
+	setGPO(ctx, ctx.GlobalString(SyncModeFlag.Name) == "light")
 	setTxPool(ctx, &cfg.TxPool)
 
 	// If blake3 consensus engine is specifically asked use the blake3 engine
@@ -1525,17 +1496,16 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		cfg.EnablePreimageRecording = ctx.GlobalBool(VMEnableDebugFlag.Name)
 	}
 
-	if ctx.GlobalIsSet(RPCGlobalGasCapFlag.Name) {
-		cfg.RPCGasCap = ctx.GlobalUint64(RPCGlobalGasCapFlag.Name)
-	}
-	if cfg.RPCGasCap != 0 {
-		log.Info("Set global gas cap", "cap", cfg.RPCGasCap)
-	} else {
-		log.Info("Global gas cap disabled")
-	}
-	if ctx.GlobalIsSet(RPCGlobalTxFeeCapFlag.Name) {
-		cfg.RPCTxFeeCap = ctx.GlobalFloat64(RPCGlobalTxFeeCapFlag.Name)
-	}
+	// if ctx.GlobalIsSet(RPCGlobalGasCapFlag.Name) {
+	// }
+	// if cfg.RPCGasCap != 0 {
+	// 	log.Info("Set global gas cap", "cap", cfg.RPCGasCap)
+	// } else {
+	// 	log.Info("Global gas cap disabled")
+	// }
+	// if ctx.GlobalIsSet(RPCGlobalTxFeeCapFlag.Name) {
+		// cfg.RPCTxFeeCap = ctx.GlobalFloat64(RPCGlobalTxFeeCapFlag.Name)
+	// }
 	if ctx.GlobalIsSet(NoDiscoverFlag.Name) {
 		cfg.EthDiscoveryURLs, cfg.SnapDiscoveryURLs = []string{}, []string{}
 	} else if ctx.GlobalIsSet(DNSDiscoveryFlag.Name) {
@@ -1613,9 +1583,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			}
 			chaindb.Close()
 		}
-		if !ctx.GlobalIsSet(MinerGasPriceFlag.Name) {
-			cfg.Miner.GasPrice = big.NewInt(1)
-		}
 	default:
 		if cfg.NetworkId == 1 {
 			SetDNSDiscoveryDefaults(cfg, params.ProgpowColosseumGenesisHash)
@@ -1643,6 +1610,7 @@ func SetDNSDiscoveryDefaults(cfg *ethconfig.Config, genesis common.Hash) {
 // The second return value is the full node instance, which may be nil if the
 // node is running as a light client.
 func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (quaiapi.Backend, *eth.Quai) {
+	fmt.Fprintln(os.Stderr, "=====LKC=====flags.go----", stack, cfg)
 	backend, err := eth.New(stack, cfg)
 	if err != nil {
 		Fatalf("Failed to register the Quai service: %v", err)

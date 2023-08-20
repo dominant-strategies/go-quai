@@ -4,14 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/big"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
-	"github.com/dominant-strategies/go-quai/consensus/misc"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
@@ -700,11 +698,6 @@ func (hc *HeaderChain) CheckLocationRange(location []byte) error {
 	return nil
 }
 
-// GasLimit returns the gas limit of the current HEAD block.
-func (hc *HeaderChain) GasLimit() uint64 {
-	return hc.CurrentHeader().GasLimit()
-}
-
 // GetUnclesInChain retrieves all the uncles from a given block backwards until
 // a specific distance is reached.
 func (hc *HeaderChain) GetUnclesInChain(block *types.Block, length int) []*types.Header {
@@ -714,23 +707,6 @@ func (hc *HeaderChain) GetUnclesInChain(block *types.Block, length int) []*types
 		block = hc.GetBlock(block.ParentHash(), block.NumberU64()-1)
 	}
 	return uncles
-}
-
-// GetGasUsedInChain retrieves all the gas used from a given block backwards until
-// a specific distance is reached.
-func (hc *HeaderChain) GetGasUsedInChain(block *types.Block, length int) int64 {
-	gasUsed := 0
-	for i := 0; block != nil && i < length; i++ {
-		gasUsed += int(block.GasUsed())
-		block = hc.GetBlock(block.ParentHash(), block.NumberU64()-1)
-	}
-	return int64(gasUsed)
-}
-
-// GetGasUsedInChain retrieves all the gas used from a given block backwards until
-// a specific distance is reached.
-func (hc *HeaderChain) CalculateBaseFee(header *types.Header) *big.Int {
-	return misc.CalcBaseFee(hc.Config(), header)
 }
 
 // Export writes the active chain to the given writer.

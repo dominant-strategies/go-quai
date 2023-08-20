@@ -541,13 +541,16 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient,
 	n.lock.Lock()
 	defer n.lock.Unlock()
 	if n.state == closedState {
+		fmt.Fprintln(os.Stderr, "======LKCLOG==========eth backend.go New====aaa=====11111====2222========================")
 		return nil, ErrNodeStopped
 	}
 	var db ethdb.Database
 	var err error
 	if n.config.DataDir == "" {
+		fmt.Fprintln(os.Stderr, "======LKCLOG==========eth backend.go New====bbb=====11111====2222========================")
 		db = rawdb.NewMemoryDatabase()
 	} else {
+		fmt.Fprintln(os.Stderr, "======LKCLOG==========eth backend.go New====ccc=====11111====2222========================")
 		db, err = rawdb.Open(rawdb.OpenOptions{
 			Type:              n.config.DBEngine,
 			Directory:         n.ResolvePath(name),
@@ -560,6 +563,7 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient,
 	}
 
 	if err == nil {
+		fmt.Fprintln(os.Stderr, "======LKCLOG==========eth backend.go New====aaa=====11111====333========================")
 		db = n.wrapDatabase(db)
 	}
 	return db, err

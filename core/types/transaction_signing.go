@@ -212,16 +212,10 @@ func (s SignerV1) Hash(tx *Transaction) common.Hash {
 			[]interface{}{
 				s.chainId,
 				tx.Nonce(),
-				tx.GasTipCap(),
-				tx.GasFeeCap(),
-				tx.Gas(),
 				txToBytes,
 				tx.Value(),
 				tx.Data(),
 				tx.AccessList(),
-				tx.ETXGasLimit(),
-				tx.ETXGasPrice(),
-				tx.ETXGasTip(),
 				tx.ETXData(),
 				tx.ETXAccessList(),
 			})
@@ -231,9 +225,6 @@ func (s SignerV1) Hash(tx *Transaction) common.Hash {
 		[]interface{}{
 			s.chainId,
 			tx.Nonce(),
-			tx.GasTipCap(),
-			tx.GasFeeCap(),
-			tx.Gas(),
 			txToBytes,
 			tx.Value(),
 			tx.Data(),

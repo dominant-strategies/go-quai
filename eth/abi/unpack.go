@@ -26,10 +26,10 @@ import (
 )
 
 var (
-	// MaxUint256 is the maximum value that can be represented by a uint256.
-	MaxUint256 = new(big.Int).Sub(new(big.Int).Lsh(common.Big1, 256), common.Big1)
-	// MaxInt256 is the maximum value that can be represented by a int256.
-	MaxInt256 = new(big.Int).Sub(new(big.Int).Lsh(common.Big1, 255), common.Big1)
+// MaxUint256 is the maximum value that can be represented by a uint256.
+// MaxUint256 = new(big.Int).Sub(new(big.Int).Lsh(common.Big1, 256), common.Big1)
+// MaxInt256 is the maximum value that can be represented by a int256.
+// MaxInt256 = new(big.Int).Sub(new(big.Int).Lsh(common.Big1, 255), common.Big1)
 )
 
 // ReadInteger reads the integer based on its kind and returns the appropriate value.
@@ -65,8 +65,8 @@ func ReadInteger(typ Type, b []byte) interface{} {
 		// A number is > max int256 if the bit at position 255 is set.
 		ret := new(big.Int).SetBytes(b)
 		if ret.Bit(255) == 1 {
-			ret.Add(MaxUint256, new(big.Int).Neg(ret))
-			ret.Add(ret, common.Big1)
+			// ret.Add(MaxUint256, new(big.Int).Neg(ret))
+			// ret.Add(ret, common.Big1)
 			ret.Neg(ret)
 		}
 		return ret

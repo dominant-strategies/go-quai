@@ -26,13 +26,11 @@ import (
 
 // Config are the configuration options for the Interpreter
 type Config struct {
-	Debug                   bool   // Enables debugging
-	Tracer                  Tracer // Opcode logger
-	NoRecursion             bool   // Disables call, callcode, delegate call and create
-	NoBaseFee               bool   // Forces the baseFee to 0 (needed for 0 price calls)
-	EnablePreimageRecording bool   // Enables recording of SHA3/keccak preimages
-
-	JumpTable [256]*operation // EVM instruction table, automatically populated if unset
+	Debug                   bool            // Enables debugging
+	Tracer                  Tracer          // Opcode logger
+	NoRecursion             bool            // Disables call, callcode, delegate call and create
+	EnablePreimageRecording bool            // Enables recording of SHA3/keccak preimages
+	JumpTable               [256]*operation // EVM instruction table, automatically populated if unset
 }
 
 // ScopeContext contains the things that are per-call, such as stack and memory,
@@ -139,9 +137,9 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		defer func() {
 			if err != nil {
 				if !logged {
-					in.cfg.Tracer.CaptureState(in.evm, pcCopy, op, gasCopy, cost, callContext, in.returnData, in.evm.depth, err)
+					in.cfg.Tracer.CaptureState(in.evm, pcCopy, op, cost, callContext, in.returnData, in.evm.depth, err)
 				} else {
-					in.cfg.Tracer.CaptureFault(in.evm, pcCopy, op, gasCopy, cost, callContext, in.evm.depth, err)
+					in.cfg.Tracer.CaptureFault(in.evm, pcCopy, op, cost, callContext, in.evm.depth, err)
 				}
 			}
 		}()
@@ -158,7 +156,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		}
 		if in.cfg.Debug {
 			// Capture pre-execution values for tracing.
-			logged, pcCopy, gasCopy = false, pc, contract.Gas
+			logged, pcCopy, gasCopy = false, pc, 0
 		}
 
 		// Get the operation from the jump table and validate the stack to ensure there are
@@ -186,10 +184,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			}
 		}
 		// Static portion of gas
-		cost = operation.constantGas // For tracing
-		if !contract.UseGas(operation.constantGas) {
-			return nil, ErrOutOfGas
-		}
+		cost = 0 // For tracing
 
 		var memorySize uint64
 		// calculate the new memory size and expand the memory to fit
@@ -207,23 +202,13 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 				return nil, ErrGasUintOverflow
 			}
 		}
-		// Dynamic portion of gas
-		// consume the gas and return an error if not enough gas is available.
-		// cost is explicitly set so that the capture state defer method can get the proper cost
-		if operation.dynamicGas != nil {
-			var dynamicCost uint64
-			dynamicCost, err = operation.dynamicGas(in.evm, contract, stack, mem, memorySize)
-			cost += dynamicCost // total cost, for debug tracing
-			if err != nil || !contract.UseGas(dynamicCost) {
-				return nil, ErrOutOfGas
-			}
-		}
+
 		if memorySize > 0 {
 			mem.Resize(memorySize)
 		}
 
 		if in.cfg.Debug {
-			in.cfg.Tracer.CaptureState(in.evm, pc, op, gasCopy, cost, callContext, in.returnData, in.evm.depth, err)
+			in.cfg.Tracer.CaptureState(in.evm, pc, op, gasCopy, callContext, in.returnData, in.evm.depth, err)
 			logged = true
 		}
 

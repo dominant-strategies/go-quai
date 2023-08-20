@@ -30,10 +30,10 @@ func (b btHeader) MarshalJSON() ([]byte, error) {
 		UncleHash        common.Hash
 		ExtraData        hexutil.Bytes
 		Difficulty       *math.HexOrDecimal256
-		GasLimit         math.HexOrDecimal64
-		GasUsed          math.HexOrDecimal64
+		// GasLimit         math.HexOrDecimal64
+		// GasUsed          math.HexOrDecimal64
 		Timestamp        math.HexOrDecimal64
-		BaseFeePerGas    *math.HexOrDecimal256
+		// BaseFeePerGas    *math.HexOrDecimal256
 	}
 	var enc btHeader
 	enc.Bloom() = b.Bloom
@@ -49,10 +49,10 @@ func (b btHeader) MarshalJSON() ([]byte, error) {
 	enc.UncleHash() = b.UncleHash
 	enc.ExtraData = b.ExtraData
 	enc.Difficulty() = (*math.HexOrDecimal256)(b.Difficulty())
-	enc.GasLimit() = math.HexOrDecimal64(b.GasLimit())
-	enc.GasUsed() = math.HexOrDecimal64(b.GasUsed())
+	// enc.GasLimit() = math.HexOrDecimal64(b.GasLimit())
+	// enc.GasUsed() = math.HexOrDecimal64(b.GasUsed())
 	enc.Timestamp = math.HexOrDecimal64(b.Timestamp)
-	enc.BaseFeePerGas = (*math.HexOrDecimal256)(b.BaseFeePerGas)
+	// enc.BaseFeePerGas = (*math.HexOrDecimal256)(b.BaseFeePerGas)
 	return json.Marshal(&enc)
 }
 
@@ -72,10 +72,10 @@ func (b *btHeader) UnmarshalJSON(input []byte) error {
 		UncleHash        *common.Hash
 		ExtraData        *hexutil.Bytes
 		Difficulty       *math.HexOrDecimal256
-		GasLimit         *math.HexOrDecimal64
-		GasUsed          *math.HexOrDecimal64
+		// GasLimit         *math.HexOrDecimal64
+		// GasUsed          *math.HexOrDecimal64
 		Timestamp        *math.HexOrDecimal64
-		BaseFeePerGas    *math.HexOrDecimal256
+		// BaseFeePerGas    *math.HexOrDecimal256
 	}
 	var dec btHeader
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -120,17 +120,17 @@ func (b *btHeader) UnmarshalJSON(input []byte) error {
 	if dec.Difficulty() != nil {
 		b.Difficulty() = (*big.Int)(dec.Difficulty())
 	}
-	if dec.GasLimit() != nil {
-		b.GasLimit() = uint64(*dec.GasLimit())
-	}
-	if dec.GasUsed() != nil {
-		b.GasUsed() = uint64(*dec.GasUsed())
-	}
+	// if dec.GasLimit() != nil {
+	// 	b.GasLimit() = uint64(*dec.GasLimit())
+	// }
+	// if dec.GasUsed() != nil {
+	// 	b.GasUsed() = uint64(*dec.GasUsed())
+	// }
 	if dec.Timestamp != nil {
 		b.Timestamp = uint64(*dec.Timestamp)
 	}
-	if dec.BaseFeePerGas != nil {
-		b.BaseFeePerGas = (*big.Int)(dec.BaseFeePerGas)
-	}
+	// if dec.BaseFeePerGas != nil {
+	// 	b.BaseFeePerGas = (*big.Int)(dec.BaseFeePerGas)
+	// }
 	return nil
 }

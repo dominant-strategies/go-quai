@@ -18,7 +18,6 @@
 package ethconfig
 
 import (
-	"math/big"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -27,32 +26,11 @@ import (
 	"github.com/dominant-strategies/go-quai/consensus/progpow"
 	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/eth/downloader"
-	"github.com/dominant-strategies/go-quai/eth/gasprice"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/node"
 	"github.com/dominant-strategies/go-quai/params"
 )
-
-// FullNodeGPO contains default gasprice oracle settings for full node.
-var FullNodeGPO = gasprice.Config{
-	Blocks:           20,
-	Percentile:       60,
-	MaxHeaderHistory: 0,
-	MaxBlockHistory:  0,
-	MaxPrice:         gasprice.DefaultMaxPrice,
-	IgnorePrice:      gasprice.DefaultIgnorePrice,
-}
-
-// LightClientGPO contains default gasprice oracle settings for light client.
-var LightClientGPO = gasprice.Config{
-	Blocks:           2,
-	Percentile:       60,
-	MaxHeaderHistory: 300,
-	MaxBlockHistory:  5,
-	MaxPrice:         gasprice.DefaultMaxPrice,
-	IgnorePrice:      gasprice.DefaultIgnorePrice,
-}
 
 // Defaults contains default settings for use on the Quai main net.
 var Defaults = Config{
@@ -68,16 +46,12 @@ var Defaults = Config{
 	TrieTimeout:             60 * time.Minute,
 	SnapshotCache:           102,
 	Miner: core.Config{
-		GasCeil:  18000000,
-		GasPrice: big.NewInt(params.GWei),
 		Recommit: 3 * time.Second,
 	},
-	TxPool:      core.DefaultTxPoolConfig,
-	RPCGasCap:   50000000,
-	GPO:         FullNodeGPO,
-	RPCTxFeeCap: 1, // 1 ether
-	DomUrl:      "ws://127.0.0.1:8546",
-	SubUrls:     []string{"ws://127.0.0.1:8546", "ws://127.0.0.1:8546", "ws://127.0.0.1:8546"},
+	TxPool: core.DefaultTxPoolConfig,
+	// RPCTxFeeCap: 1, // 1 ether
+	DomUrl:  "ws://127.0.0.1:8546",
+	SubUrls: []string{"ws://127.0.0.1:8546", "ws://127.0.0.1:8546", "ws://127.0.0.1:8546"},
 }
 
 //go:generate gencodec -type Config -formats toml -out gen_config.go
@@ -135,7 +109,7 @@ type Config struct {
 	TxPool core.TxPoolConfig
 
 	// Gas Price Oracle options
-	GPO gasprice.Config
+	// GPO gasprice.Config
 
 	// Enables tracking of SHA3 preimages in the VM
 	EnablePreimageRecording bool
@@ -144,11 +118,11 @@ type Config struct {
 	DocRoot string `toml:"-"`
 
 	// RPCGasCap is the global gas cap for eth-call variants.
-	RPCGasCap uint64
+	// RPCGasCap uint64
 
 	// RPCTxFeeCap is the global transaction fee(price * gaslimit) cap for
 	// send-transction variants. The unit is ether.
-	RPCTxFeeCap float64
+	// RPCTxFeeCap float64
 
 	// Region location options
 	Region int

@@ -27,7 +27,6 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/prque"
-	"github.com/dominant-strategies/go-quai/consensus/misc"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/event"
@@ -236,7 +235,6 @@ type TxPool struct {
 	config      TxPoolConfig
 	chainconfig *params.ChainConfig
 	chain       blockChain
-	gasPrice    *big.Int
 	txFeed      event.Feed
 	scope       event.SubscriptionScope
 	signer      types.Signer
@@ -244,7 +242,7 @@ type TxPool struct {
 
 	currentState  *state.StateDB // Current state in the blockchain head
 	pendingNonces *txNoncer      // Pending state tracking virtual nonces
-	currentMaxGas uint64         // Current gas limit for transaction caps
+	// currentMaxGas uint64         // Current gas limit for transaction caps
 
 	locals  *accountSet // Set of local transaction to exempt from eviction rules
 	journal *txJournal  // Journal of local transaction to back up to disk
@@ -305,7 +303,6 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		queueTxEventCh:  make(chan *types.Transaction),
 		reorgDoneCh:     make(chan chan struct{}),
 		reorgShutdownCh: make(chan struct{}),
-		gasPrice:        new(big.Int).SetUint64(config.PriceLimit),
 		localTxsCount:   0,
 		remoteTxsCount:  0,
 		reOrgCounter:    0,
@@ -438,22 +435,13 @@ func (pool *TxPool) SubscribeNewTxsEvent(ch chan<- NewTxsEvent) event.Subscripti
 	return pool.scope.Track(pool.txFeed.Subscribe(ch))
 }
 
-// GasPrice returns the current gas price enforced by the transaction pool.
-func (pool *TxPool) GasPrice() *big.Int {
-	pool.mu.RLock()
-	defer pool.mu.RUnlock()
-
-	return new(big.Int).Set(pool.gasPrice)
-}
-
 // SetGasPrice updates the minimum price required by the transaction pool for a
 // new transaction, and drops all transactions below this threshold.
 func (pool *TxPool) SetGasPrice(price *big.Int) {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
-	old := pool.gasPrice
-	pool.gasPrice = price
+	old := new(big.Int).SetInt64(0)
 	// if the min miner fee increased, remove transactions below the new threshold
 	if price.Cmp(old) > 0 {
 		// pool.priced is sorted by GasFeeCap, so we have to iterate through pool.all instead
@@ -547,17 +535,6 @@ func (pool *TxPool) TxPoolPending(enforceTips bool, etxSet types.EtxSet) (map[co
 	pending := make(map[common.AddressBytes]types.Transactions)
 	for addr, list := range pool.pending {
 		txs := list.Flatten()
-
-		// If the miner requests tip enforcement, cap the lists now
-		if enforceTips && !pool.locals.contains(addr) {
-			for i, tx := range txs {
-				if tx.EffectiveGasTipIntCmp(pool.gasPrice, pool.priced.urgent.baseFee) < 0 {
-					log.Debug("TX has incorrect or low miner tip", "tx", tx.Hash().String(), "gasTipCap", tx.GasTipCap().String(), "poolGasPrice", pool.gasPrice.String(), "baseFee", pool.priced.urgent.baseFee.String())
-					txs = txs[:i]
-					break
-				}
-			}
-		}
 		if len(txs) > 0 {
 			pending[addr.Bytes20()] = txs
 		}
@@ -568,11 +545,6 @@ func (pool *TxPool) TxPoolPending(enforceTips bool, etxSet types.EtxSet) (map[co
 		tx := entry.ETX
 		if tx.ETXSender().Location().Equal(common.NodeLocation) { // Sanity check
 			log.Error("ETX sender is in our location!", "tx", tx.Hash().String(), "sender", tx.ETXSender().String())
-			continue // skip this tx
-		}
-		// If the miner requests tip enforcement, cap the lists now
-		if enforceTips && tx.EffectiveGasTipIntCmp(pool.gasPrice, pool.priced.urgent.baseFee) < 0 {
-			log.Debug("ETX has incorrect or low miner tip", "tx", tx.Hash().String(), "gasTipCap", tx.GasTipCap().String(), "poolGasPrice", pool.gasPrice.String(), "baseFee", pool.priced.urgent.baseFee.String())
 			continue // skip this tx
 		}
 		pending[addr.Bytes20()] = append(pending[addr.Bytes20()], &tx) // ETXs do not have to be sorted by address but this way all TXs are in the same list
@@ -616,21 +588,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if tx.Value().Sign() < 0 {
 		return ErrNegativeValue
 	}
-	// Ensure the transaction doesn't exceed the current block limit gas.
-	if pool.currentMaxGas < tx.Gas() {
-		return ErrGasLimit(tx.Gas(), pool.currentMaxGas)
-	}
-	// Sanity check for extremely large numbers
-	if tx.GasFeeCap().BitLen() > 256 {
-		return ErrFeeCapVeryHigh
-	}
-	if tx.GasTipCap().BitLen() > 256 {
-		return ErrTipVeryHigh
-	}
-	// Ensure gasFeeCap is greater than or equal to gasTipCap.
-	if tx.GasFeeCapIntCmp(tx.GasTipCap()) < 0 {
-		return ErrTipAboveFeeCap
-	}
+
 	var internal common.InternalAddress
 	addToCache := true
 	if sender := tx.From(); sender != nil { // Check tx cache first
@@ -654,10 +612,6 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		}
 	}
 
-	// Drop non-local transactions under our own minimal accepted gas price or tip
-	if !local && tx.GasTipCapIntCmp(pool.gasPrice) < 0 {
-		return ErrUnderpriced
-	}
 	// Ensure the transaction adheres to nonce ordering
 	if pool.currentState.GetNonce(internal) > tx.Nonce() {
 		return ErrNonceTooLow
@@ -668,14 +622,6 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return ErrInsufficientFunds
 	}
 	// Ensure the transaction has more gas than the basic tx fee.
-	intrGas, err := IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil)
-	if err != nil {
-		return err
-	}
-	if tx.Gas() < intrGas {
-		log.Warn("tx has insufficient gas", "gas supplied", tx.Gas(), "gas needed", intrGas, "tx", tx)
-		return ErrIntrinsicGas
-	}
 	if len(pool.sendersCh) == int(pool.config.SendersChBuffer) {
 		log.Error("sendersCh is full, skipping until there is room")
 	}
@@ -718,8 +664,8 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 	// If the transaction pool is full, discard underpriced transactions
 	if uint64(pool.all.Slots()+numSlots(tx)) > pool.config.GlobalSlots+pool.config.GlobalQueue {
 		// If the new transaction is underpriced, don't accept it
-		if !isLocal && pool.priced.Underpriced(tx) {
-			log.Trace("Discarding underpriced transaction", "hash", hash, "gasTipCap", tx.GasTipCap(), "gasFeeCap", tx.GasFeeCap())
+		if !isLocal {
+			log.Trace("Discarding underpriced transaction", "hash", hash)
 			underpricedTxMeter.Mark(1)
 			return false, ErrUnderpriced
 		}
@@ -736,7 +682,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 		}
 		// Kick out the underpriced remote transactions.
 		for _, tx := range drop {
-			log.Trace("Discarding freshly underpriced transaction", "hash", tx.Hash(), "gasTipCap", tx.GasTipCap(), "gasFeeCap", tx.GasFeeCap())
+			log.Trace("Discarding freshly underpriced transaction", "hash", tx.Hash())
 			underpricedTxMeter.Mark(1)
 			pool.removeTx(tx.Hash(), false)
 		}
@@ -757,7 +703,6 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 		// New transaction is better, replace old one
 		if old != nil {
 			pool.all.Remove(old.Hash())
-			pool.priced.Removed(1)
 			pendingReplaceMeter.Mark(1)
 		}
 		pool.all.Add(tx, isLocal)
@@ -779,7 +724,6 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 	if local && !pool.locals.contains(internal) {
 		log.Info("Setting new local account", "address", from)
 		pool.locals.add(internal)
-		pool.priced.Removed(pool.all.RemoteToLocals(pool.locals)) // Migrate the remotes if it's marked as local first time.
 	}
 	if isLocal {
 		localGauge.Inc(1)
@@ -812,7 +756,6 @@ func (pool *TxPool) enqueueTx(hash common.Hash, tx *types.Transaction, local boo
 	// Discard any previous transaction and mark this
 	if old != nil {
 		pool.all.Remove(old.Hash())
-		pool.priced.Removed(1)
 		queuedReplaceMeter.Mark(1)
 	} else {
 		// Nothing was replaced, bump the queued counter
@@ -861,14 +804,12 @@ func (pool *TxPool) promoteTx(addr common.InternalAddress, hash common.Hash, tx 
 	if !inserted {
 		// An older transaction was better, discard this
 		pool.all.Remove(hash)
-		pool.priced.Removed(1)
 		pendingDiscardMeter.Mark(1)
 		return false
 	}
 	// Otherwise discard any previous transaction and mark this
 	if old != nil {
 		pool.all.Remove(old.Hash())
-		pool.priced.Removed(1)
 		pendingReplaceMeter.Mark(1)
 	} else {
 		// Nothing was replaced, bump the pending counter
@@ -1072,7 +1013,6 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 	// Remove it from the list of known transactions
 	pool.all.Remove(hash)
 	if outofbound {
-		pool.priced.Removed(1)
 	}
 	if pool.locals.contains(internal) {
 		localGauge.Dec(1)
@@ -1269,8 +1209,6 @@ func (pool *TxPool) runReorg(done chan struct{}, cancel chan struct{}, reset *tx
 			if reset != nil {
 				pool.demoteUnexecutables()
 				if reset.newHead != nil {
-					pendingBaseFee := misc.CalcBaseFee(pool.chainconfig, reset.newHead)
-					pool.priced.SetBaseFee(pendingBaseFee)
 				}
 			}
 			// Ensure pool.queue and pool.pending sizes stay within the configured limits.
@@ -1394,7 +1332,6 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	}
 	pool.currentState = statedb
 	pool.pendingNonces = newTxNoncer(statedb)
-	pool.currentMaxGas = newHead.GasLimit()
 
 	// Inject any transactions discarded due to reorgs
 	log.Debug("Reinjecting stale transactions", "count", len(reinject))
@@ -1430,7 +1367,7 @@ func (pool *TxPool) promoteExecutables(accounts []common.InternalAddress) []*typ
 		}
 		log.Debug("Removed old queued transactions", "count", len(forwards))
 		// Drop all transactions that are too costly (low balance or out of gas)
-		drops, _ := list.Filter(pool.currentState.GetBalance(addr), pool.currentMaxGas)
+		drops, _ := list.Filter(pool.currentState.GetBalance(addr))
 		for _, tx := range drops {
 			hash := tx.Hash()
 			pool.all.Remove(hash)
@@ -1461,7 +1398,6 @@ func (pool *TxPool) promoteExecutables(accounts []common.InternalAddress) []*typ
 			queuedRateLimitMeter.Mark(int64(len(caps)))
 		}
 		// Mark all the items dropped as removed
-		pool.priced.Removed(len(forwards) + len(drops) + len(caps))
 		queuedGauge.Dec(int64(len(forwards) + len(drops) + len(caps)))
 		if pool.locals.contains(addr) {
 			localGauge.Dec(int64(len(forwards) + len(drops) + len(caps)))
@@ -1530,7 +1466,6 @@ func (pool *TxPool) truncatePending() {
 						pool.pendingNonces.setIfLower(offenders[i], tx.Nonce())
 						log.Trace("Removed fairness-exceeding pending transaction", "hash", hash)
 					}
-					pool.priced.Removed(len(caps))
 					pendingGauge.Dec(int64(len(caps)))
 					if pool.locals.contains(offenders[i]) {
 						localGauge.Dec(int64(len(caps)))
@@ -1557,7 +1492,6 @@ func (pool *TxPool) truncatePending() {
 					pool.pendingNonces.setIfLower(addr, tx.Nonce())
 					log.Trace("Removed fairness-exceeding pending transaction", "hash", hash)
 				}
-				pool.priced.Removed(len(caps))
 				pendingGauge.Dec(int64(len(caps)))
 				if pool.locals.contains(addr) {
 					localGauge.Dec(int64(len(caps)))
@@ -1648,7 +1582,7 @@ func (pool *TxPool) demoteUnexecutables() {
 			log.Debug("Removed old pending transaction", "hash", hash)
 		}
 		// Drop all transactions that are too costly (low balance or out of gas), and queue any invalids back for later
-		drops, invalids := list.Filter(pool.currentState.GetBalance(addr), pool.currentMaxGas)
+		drops, invalids := list.Filter(pool.currentState.GetBalance(addr))
 		for _, tx := range drops {
 			hash := tx.Hash()
 			log.Trace("Removed unpayable pending transaction", "hash", hash)
@@ -1991,9 +1925,7 @@ func (t *txLookup) RemoteToLocals(locals *accountSet) int {
 func (t *txLookup) RemotesBelowTip(threshold *big.Int) types.Transactions {
 	found := make(types.Transactions, 0, 128)
 	t.Range(func(hash common.Hash, tx *types.Transaction, local bool) bool {
-		if tx.GasTipCapIntCmp(threshold) < 0 {
-			found = append(found, tx)
-		}
+
 		return true
 	}, false, true) // Only iterate remotes
 	return found

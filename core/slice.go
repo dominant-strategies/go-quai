@@ -271,7 +271,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	log.Info("times during append:", "t0_1", time0_1, "t0_2", time0_2, "t1:", time1, "t2:", time2, "t3:", time3, "t4:", time4, "t5:", time5, "t6:", time6, "t7:", time7, "t8:", time8, "t9:", time9, "t10:", time10, "t11:", time11, "t12:", time12)
 	log.Info("times during sub append:", "t9_1:", time8_1, "t9_2:", time8_2, "t9_3:", time8_3)
 	log.Info("Appended new block", "number", block.Header().Number(), "hash", block.Hash(),
-		"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "etxs", len(block.ExtTransactions()), "gas", block.GasUsed(),
+		"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "etxs", len(block.ExtTransactions()),
 		"root", block.Root(),
 		"order", order,
 		"elapsed", common.PrettyDuration(time.Since(start)))
@@ -805,9 +805,6 @@ func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *typ
 		combinedPendingHeader.SetReceiptHash(header.ReceiptHash())
 		combinedPendingHeader.SetRoot(header.Root())
 		combinedPendingHeader.SetCoinbase(header.Coinbase())
-		combinedPendingHeader.SetBaseFee(header.BaseFee())
-		combinedPendingHeader.SetGasLimit(header.GasLimit())
-		combinedPendingHeader.SetGasUsed(header.GasUsed())
 		combinedPendingHeader.SetExtra(header.Extra())
 	}
 

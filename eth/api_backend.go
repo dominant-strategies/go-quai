@@ -32,7 +32,6 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/eth/downloader"
-	"github.com/dominant-strategies/go-quai/eth/gasprice"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/params"
@@ -43,7 +42,6 @@ import (
 type QuaiAPIBackend struct {
 	extRPCEnabled bool
 	eth           *Quai
-	gpo           *gasprice.Oracle
 }
 
 // ChainConfig returns the active chain configuration.
@@ -369,18 +367,6 @@ func (b *QuaiAPIBackend) Downloader() *downloader.Downloader {
 	return b.eth.Downloader()
 }
 
-func (b *QuaiAPIBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
-	nodeCtx := common.NodeLocation.Context()
-	if nodeCtx != common.ZONE_CTX {
-		return nil, errors.New("suggestTipCap can only be called in zone chain")
-	}
-	return b.gpo.SuggestTipCap(ctx)
-}
-
-func (b *QuaiAPIBackend) FeeHistory(ctx context.Context, blockCount int, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (firstBlock *big.Int, reward [][]*big.Int, baseFee []*big.Int, gasUsedRatio []float64, err error) {
-	return b.gpo.FeeHistory(ctx, blockCount, lastBlock, rewardPercentiles)
-}
-
 func (b *QuaiAPIBackend) ChainDb() ethdb.Database {
 	return b.eth.ChainDb()
 }
@@ -391,22 +377,6 @@ func (b *QuaiAPIBackend) EventMux() *event.TypeMux {
 
 func (b *QuaiAPIBackend) ExtRPCEnabled() bool {
 	return b.extRPCEnabled
-}
-
-func (b *QuaiAPIBackend) RPCGasCap() uint64 {
-	nodeCtx := common.NodeLocation.Context()
-	if nodeCtx != common.ZONE_CTX {
-		return 0
-	}
-	return b.eth.config.RPCGasCap
-}
-
-func (b *QuaiAPIBackend) RPCTxFeeCap() float64 {
-	nodeCtx := common.NodeLocation.Context()
-	if nodeCtx != common.ZONE_CTX {
-		return 0
-	}
-	return b.eth.config.RPCTxFeeCap
 }
 
 func (b *QuaiAPIBackend) BloomStatus() (uint64, uint64) {

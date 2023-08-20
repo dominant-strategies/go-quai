@@ -171,8 +171,6 @@ run:
     - eth/filters/bench_test.go
     - eth/filters/filter_system_test.go
     - eth/filters/api_test.go
-    - eth/gasprice/feehistory_test.go
-    - eth/gasprice/gasprice_test.go
     - eth/handler_eth_test.go
     - eth/sync_test.go
     - eth/fetcher/block_fetcher_test.go

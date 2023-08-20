@@ -45,12 +45,8 @@ type Backend interface {
 
 	// General Quai API
 	Downloader() *downloader.Downloader
-	SuggestGasTipCap(ctx context.Context) (*big.Int, error)
-	FeeHistory(ctx context.Context, blockCount int, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*big.Int, [][]*big.Int, []*big.Int, []float64, error)
 	ChainDb() ethdb.Database
 	ExtRPCEnabled() bool
-	RPCGasCap() uint64    // global gas cap for eth_call over rpc: DoS protection
-	RPCTxFeeCap() float64 // global tx fee cap for all transaction related APIs
 
 	// Blockchain API
 	HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error)

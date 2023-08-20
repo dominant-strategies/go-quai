@@ -46,7 +46,6 @@ type vmJSON struct {
 	Env           stEnv                 `json:"env"`
 	Exec          vmExec                `json:"exec"`
 	Logs          common.UnprefixedHash `json:"logs"`
-	GasRemaining  *math.HexOrDecimal64  `json:"gas"`
 	Out           hexutil.Bytes         `json:"out"`
 	Pre           core.GenesisAlloc     `json:"pre"`
 	Post          core.GenesisAlloc     `json:"post"`
@@ -56,25 +55,21 @@ type vmJSON struct {
 //go:generate gencodec -type vmExec -field-override vmExecMarshaling -out gen_vmexec.go
 
 type vmExec struct {
-	Address  common.Address `json:"address"  gencodec:"required"`
-	Caller   common.Address `json:"caller"   gencodec:"required"`
-	Origin   common.Address `json:"origin"   gencodec:"required"`
-	Code     []byte         `json:"code"     gencodec:"required"`
-	Data     []byte         `json:"data"     gencodec:"required"`
-	Value    *big.Int       `json:"value"    gencodec:"required"`
-	GasLimit uint64         `json:"gas"      gencodec:"required"`
-	GasPrice *big.Int       `json:"gasPrice" gencodec:"required"`
+	Address common.Address `json:"address"  gencodec:"required"`
+	Caller  common.Address `json:"caller"   gencodec:"required"`
+	Origin  common.Address `json:"origin"   gencodec:"required"`
+	Code    []byte         `json:"code"     gencodec:"required"`
+	Data    []byte         `json:"data"     gencodec:"required"`
+	Value   *big.Int       `json:"value"    gencodec:"required"`
 }
 
 type vmExecMarshaling struct {
-	Address  common.UnprefixedAddress
-	Caller   common.UnprefixedAddress
-	Origin   common.UnprefixedAddress
-	Code     hexutil.Bytes
-	Data     hexutil.Bytes
-	Value    *math.HexOrDecimal256
-	GasLimit math.HexOrDecimal64
-	GasPrice *math.HexOrDecimal256
+	Address common.UnprefixedAddress
+	Caller  common.UnprefixedAddress
+	Origin  common.UnprefixedAddress
+	Code    hexutil.Bytes
+	Data    hexutil.Bytes
+	Value   *math.HexOrDecimal256
 }
 
 func (t *VMTest) Run(vmconfig vm.Config, snapshotter bool) error {
@@ -87,7 +82,7 @@ func (t *VMTest) Run(vmconfig vm.Config, snapshotter bool) error {
 			}
 		}()
 	}
-	ret, gasRemaining, err := t.exec(statedb, vmconfig)
+	ret, err := t.exec(statedb, vmconfig)
 
 	if t.json.GasRemaining == nil {
 		if err == nil {
@@ -124,7 +119,7 @@ func (t *VMTest) Run(vmconfig vm.Config, snapshotter bool) error {
 func (t *VMTest) exec(statedb *state.StateDB, vmconfig vm.Config) ([]byte, uint64, error) {
 	evm := t.newEVM(statedb, vmconfig)
 	e := t.json.Exec
-	return evm.Call(vm.AccountRef(e.Caller), e.Address, e.Data, e.GasLimit(), e.Value)
+	return evm.Call(vm.AccountRef(e.Caller), e.Address, e.Data, e.Value)
 }
 
 func (t *VMTest) newEVM(statedb *state.StateDB, vmconfig vm.Config) *vm.EVM {
@@ -138,8 +133,7 @@ func (t *VMTest) newEVM(statedb *state.StateDB, vmconfig vm.Config) *vm.EVM {
 	}
 	transfer := func(db vm.StateDB, sender, recipient common.Address, amount *big.Int) {}
 	txContext := vm.TxContext{
-		Origin:   t.json.Exec.Origin,
-		GasPrice: t.json.Exec.GasPrice,
+		Origin: t.json.Exec.Origin,
 	}
 	context := vm.BlockContext{
 		CanTransfer: canTransfer,
@@ -148,7 +142,6 @@ func (t *VMTest) newEVM(statedb *state.StateDB, vmconfig vm.Config) *vm.EVM {
 		Coinbase:    t.json.Env.Coinbase(),
 		BlockNumber: new(big.Int).SetUint64(t.json.Env.Number()),
 		Time:        new(big.Int).SetUint64(t.json.Env.Timestamp),
-		GasLimit:    t.json.Env.GasLimit(),
 		Difficulty:  t.json.Env.Difficulty(),
 	}
 	vmconfig.NoRecursion = true

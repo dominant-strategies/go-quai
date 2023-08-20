@@ -19,7 +19,7 @@ package eth
 
 import (
 	"fmt"
-	"math/big"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -35,7 +35,6 @@ import (
 	"github.com/dominant-strategies/go-quai/eth/downloader"
 	"github.com/dominant-strategies/go-quai/eth/ethconfig"
 	"github.com/dominant-strategies/go-quai/eth/filters"
-	"github.com/dominant-strategies/go-quai/eth/gasprice"
 	"github.com/dominant-strategies/go-quai/eth/protocols/eth"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
@@ -75,7 +74,6 @@ type Quai struct {
 
 	APIBackend *QuaiAPIBackend
 
-	gasPrice  *big.Int
 	etherbase common.Address
 
 	networkID     uint64
@@ -89,14 +87,11 @@ type Quai struct {
 // New creates a new Quai object (including the
 // initialisation of the common Quai object)
 func New(stack *node.Node, config *ethconfig.Config) (*Quai, error) {
+	fmt.Fprintln(os.Stderr, "=====LKCLOG===========eth backend.go New=====================================")
 	nodeCtx := common.NodeLocation.Context()
 	// Ensure configuration values are compatible and sane
 	if !config.SyncMode.IsValid() {
 		return nil, fmt.Errorf("invalid sync mode %d", config.SyncMode)
-	}
-	if config.Miner.GasPrice == nil || config.Miner.GasPrice.Cmp(common.Big0) <= 0 {
-		log.Warn("Sanitizing invalid miner gas price", "provided", config.Miner.GasPrice, "updated", ethconfig.Defaults.Miner.GasPrice)
-		config.Miner.GasPrice = new(big.Int).Set(ethconfig.Defaults.Miner.GasPrice)
 	}
 	if config.NoPruning && config.TrieDirtyCache > 0 {
 		if config.SnapshotCache > 0 {
@@ -109,15 +104,19 @@ func New(stack *node.Node, config *ethconfig.Config) (*Quai, error) {
 	}
 	log.Info("Allocated trie memory caches", "clean", common.StorageSize(config.TrieCleanCache)*1024*1024, "dirty", common.StorageSize(config.TrieDirtyCache)*1024*1024)
 
+	fmt.Fprintln(os.Stderr, "========LKCLOG========eth backend.go New=========11111============================")
 	// Assemble the Quai object
 	chainDb, err := stack.OpenDatabaseWithFreezer("chaindata", config.DatabaseCache, config.DatabaseHandles, config.DatabaseFreezer, "eth/db/chaindata/", false)
 	if err != nil {
+		fmt.Fprintln(os.Stderr, "======LKCLOG==========eth backend.go New=========11111====2222========================")
 		return nil, err
 	}
 	chainConfig, _, genesisErr := core.SetupGenesisBlockWithOverride(chainDb, config.Genesis)
 	if genesisErr != nil {
+		fmt.Fprintln(os.Stderr, "======LKCLOG==========eth backend.go New=========11111=======3333=====================")
 		return nil, genesisErr
 	}
+	fmt.Fprintln(os.Stderr, "========LKCLOG========eth backend.go New============2222=========================")
 
 	if err := pruner.RecoverPruning(stack.ResolvePath(""), chainDb, stack.ResolvePath(config.TrieCleanCacheJournal)); err != nil {
 		log.Error("Failed to recover state", "error", err)
@@ -128,12 +127,13 @@ func New(stack *node.Node, config *ethconfig.Config) (*Quai, error) {
 		eventMux:          stack.EventMux(),
 		closeBloomHandler: make(chan struct{}),
 		networkID:         config.NetworkId,
-		gasPrice:          config.Miner.GasPrice,
 		etherbase:         config.Miner.Etherbase,
 		bloomRequests:     make(chan chan *bloombits.Retrieval),
 		bloomIndexer:      core.NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms),
 		p2pServer:         stack.Server(),
 	}
+
+	fmt.Fprintln(os.Stderr, "================eth backend.go New=================3333====================")
 
 	if config.ConsensusEngine == "blake3" {
 		blake3Config := config.Blake3Pow
@@ -207,14 +207,9 @@ func New(stack *node.Node, config *ethconfig.Config) (*Quai, error) {
 		return nil, err
 	}
 
-	eth.APIBackend = &QuaiAPIBackend{stack.Config().ExtRPCEnabled(), eth, nil}
+	eth.APIBackend = &QuaiAPIBackend{stack.Config().ExtRPCEnabled(), eth}
 	// Gasprice oracle is only initiated in zone chains
 	if nodeCtx == common.ZONE_CTX {
-		gpoParams := config.GPO
-		if gpoParams.Default == nil {
-			gpoParams.Default = config.Miner.GasPrice
-		}
-		eth.APIBackend.gpo = gasprice.NewOracle(eth.APIBackend, gpoParams)
 	}
 
 	// Setup DNS discovery iterators.

@@ -24,8 +24,8 @@ import (
 
 // Memory implements a simple memory model for the quai virtual machine.
 type Memory struct {
-	store       []byte
-	lastGasCost uint64
+	store []byte
+	// lastGasCost uint64
 }
 
 // NewMemory returns a new memory model.

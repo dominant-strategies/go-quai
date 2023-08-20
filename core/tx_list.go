@@ -252,7 +252,6 @@ type txList struct {
 	txs    *txSortedMap // Heap indexed sorted hash map of the transactions
 
 	costcap *big.Int // Price of the highest costing transaction (reset only if exceeds balance)
-	gascap  uint64   // Gas limit of the highest spending transaction (reset only if exceeds block limit)
 }
 
 // newTxList create a new transaction list for maintaining nonce-indexable fast,
@@ -280,34 +279,27 @@ func (l *txList) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Tran
 	// If there's an older better transaction, abort
 	old := l.txs.Get(tx.Nonce())
 	if old != nil {
-		if old.GasFeeCapCmp(tx) >= 0 || old.GasTipCapCmp(tx) >= 0 {
-			return false, nil
-		}
+
 		// thresholdFeeCap = oldFC  * (100 + priceBump) / 100
 		a := big.NewInt(100 + int64(priceBump))
-		aFeeCap := new(big.Int).Mul(a, old.GasFeeCap())
-		aTip := a.Mul(a, old.GasTipCap())
+		aFeeCap := new(big.Int).Mul(a, new(big.Int).SetUint64(0))
+		aTip := a.Mul(a, new(big.Int).SetUint64(0))
 
 		// thresholdTip    = oldTip * (100 + priceBump) / 100
 		b := big.NewInt(100)
-		thresholdFeeCap := aFeeCap.Div(aFeeCap, b)
-		thresholdTip := aTip.Div(aTip, b)
+		_ = aFeeCap.Div(aFeeCap, b)
+		_ = aTip.Div(aTip, b)
 
 		// Have to ensure that either the new fee cap or tip is higher than the
 		// old ones as well as checking the percentage threshold to ensure that
 		// this is accurate for low (Wei-level) gas price replacements
-		if tx.GasFeeCapIntCmp(thresholdFeeCap) < 0 || tx.GasTipCapIntCmp(thresholdTip) < 0 {
-			return false, nil
-		}
 	}
 	// Otherwise overwrite the old transaction with the current one
 	l.txs.Put(tx)
 	if cost := tx.Cost(); l.costcap.Cmp(cost) < 0 {
 		l.costcap = cost
 	}
-	if gas := tx.Gas(); l.gascap < gas {
-		l.gascap = gas
-	}
+
 	return true, old
 }
 
@@ -327,17 +319,16 @@ func (l *txList) Forward(threshold uint64) types.Transactions {
 // a point in calculating all the costs or if the balance covers all. If the threshold
 // is lower than the costgas cap, the caps will be reset to a new high after removing
 // the newly invalidated transactions.
-func (l *txList) Filter(costLimit *big.Int, gasLimit uint64) (types.Transactions, types.Transactions) {
+func (l *txList) Filter(costLimit *big.Int) (types.Transactions, types.Transactions) {
 	// If all transactions are below the threshold, short circuit
-	if l.costcap.Cmp(costLimit) <= 0 && l.gascap <= gasLimit {
+	if l.costcap.Cmp(costLimit) <= 0 {
 		return nil, nil
 	}
 	l.costcap = new(big.Int).Set(costLimit) // Lower the caps to the thresholds
-	l.gascap = gasLimit
 
 	// Filter out all the transactions above the account's funds
 	removed := l.txs.Filter(func(tx *types.Transaction) bool {
-		return tx.Gas() > gasLimit || tx.Cost().Cmp(costLimit) > 0
+		return tx.Cost().Cmp(costLimit) > 0
 	})
 
 	if len(removed) == 0 {
@@ -438,18 +429,7 @@ func (h *priceHeap) Less(i, j int) bool {
 }
 
 func (h *priceHeap) cmp(a, b *types.Transaction) int {
-	if h.baseFee != nil {
-		// Compare effective tips if baseFee is specified
-		if c := a.EffectiveGasTipCmp(b, h.baseFee); c != 0 {
-			return c
-		}
-	}
-	// Compare fee caps if baseFee is not specified or effective tips are equal
-	if c := a.GasFeeCapCmp(b); c != 0 {
-		return c
-	}
-	// Compare tips if effective tips and fee caps are equal
-	return a.GasTipCapCmp(b)
+	return 0
 }
 
 func (h *priceHeap) Push(x interface{}) {
