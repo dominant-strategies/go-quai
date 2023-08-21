@@ -360,6 +360,8 @@ func (sl *Slice) relayPh(block *types.Block, pendingHeaderWithTermini types.Pend
 }
 
 func (sl *Slice) UpdateDom(oldTerminus common.Hash, newTerminus common.Hash, location common.Location) {
+	sl.phCacheMu.Lock()
+	defer sl.phCacheMu.Unlock()
 	log.Info("Updating Dom...", "oldTerminUs:", oldTerminus, "newTerminus:", newTerminus, "location:", location)
 	// Find the dom TerminusHash with the newTerminus
 	newDomTermini := sl.hc.GetTerminiByHash(newTerminus)
@@ -368,11 +370,12 @@ func (sl *Slice) UpdateDom(oldTerminus common.Hash, newTerminus common.Hash, loc
 		return
 	}
 	bestPh, exist := sl.readPhCache(sl.bestPhKey)
-	log.Info("UpdateDom:", "oldTerminus:", oldTerminus, "newTerminus:", newTerminus, "oldDomTerminus:", oldDomTermini.DomTerminus(), "newDomTerminus:", newDomTermini.DomTerminus(), "bestPhKey:", sl.bestPhKey, "bestPh Hash:", bestPh.Header().Hash(), "bestPh Number:", bestPh.Header().NumberArray())
 	if exist {
+		log.Info("UpdateDom:", "oldTerminus:", oldTerminus, "newTerminus:", newTerminus, "oldDomTerminus:", oldDomTermini.DomTerminus(), "newDomTerminus:", newDomTermini.DomTerminus(), "bestPhKey:", sl.bestPhKey, "bestPh Hash:", bestPh.Header().Hash(), "bestPh Number:", bestPh.Header().NumberArray())
 		if newTerminus != bestPh.Header().ParentHash() && bestPh.Termini().DomTerminus() == newDomTermini.DomTerminus() && oldDomTermini.DomTerminus() == newDomTermini.DomTerminus() {
 			// Can update
 			block := sl.hc.GetBlockByHash(newTerminus)
+			sl.bestPhKey = newTerminus
 			if block != nil {
 				pendingHeaderWithTermini, err := sl.generateSlicePendingHeader(block, *newDomTermini, types.EmptyHeader(), false, true, false)
 				if err != nil {
@@ -381,7 +384,7 @@ func (sl *Slice) UpdateDom(oldTerminus common.Hash, newTerminus common.Hash, loc
 				log.Info("pendingHeaderWithTermini:", "parent Hash:", pendingHeaderWithTermini.Header().ParentHash(), "Number", pendingHeaderWithTermini.Header().NumberArray())
 				for _, i := range sl.randomRelayArray() {
 					if sl.subClients[i] != nil {
-						go sl.subClients[i].SubRelayPendingHeader(context.Background(), pendingHeaderWithTermini, location, true)
+						sl.subClients[i].SubRelayPendingHeader(context.Background(), pendingHeaderWithTermini, location, true)
 					}
 				}
 			}
@@ -395,6 +398,7 @@ func (sl *Slice) UpdateDom(oldTerminus common.Hash, newTerminus common.Hash, loc
 			} else {
 				// Can update
 				block := sl.hc.GetBlockByHash(newTerminus)
+				sl.bestPhKey = newTerminus
 				if block != nil {
 					pendingHeaderWithTermini, err := sl.generateSlicePendingHeader(block, *newDomTermini, types.EmptyHeader(), false, true, false)
 					if err != nil {
@@ -403,7 +407,7 @@ func (sl *Slice) UpdateDom(oldTerminus common.Hash, newTerminus common.Hash, loc
 					log.Info("pendingHeaderWithTermini:", "parent Hash:", pendingHeaderWithTermini.Header().ParentHash(), "Number", pendingHeaderWithTermini.Header().NumberArray())
 					for _, i := range sl.randomRelayArray() {
 						if sl.subClients[i] != nil {
-							go sl.subClients[i].SubRelayPendingHeader(context.Background(), pendingHeaderWithTermini, location, true)
+							sl.subClients[i].SubRelayPendingHeader(context.Background(), pendingHeaderWithTermini, location, true)
 						}
 					}
 				}
@@ -663,7 +667,6 @@ func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader, locati
 
 	if nodeCtx == common.REGION_CTX {
 		// Adding a guard on the region that was already updated in the synchronous path.
-
 		if location.Region() != common.NodeLocation.Region() {
 			err = sl.updatePhCacheFromDom(pendingHeader, common.NodeLocation.Region(), []int{common.PRIME_CTX}, subReorg)
 			if err != nil {
@@ -682,7 +685,6 @@ func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader, locati
 		// This check prevents a double send to the miner.
 		// If the previous block on which the given pendingHeader was built is the same as the NodeLocation
 		// the pendingHeader update has already been sent to the miner for the given location in relayPh.
-
 		if !bytes.Equal(location, common.NodeLocation) {
 			err = sl.updatePhCacheFromDom(pendingHeader, common.NodeLocation.Zone(), []int{common.PRIME_CTX, common.REGION_CTX}, subReorg)
 			if err != nil {
