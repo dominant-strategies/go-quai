@@ -664,9 +664,11 @@ func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader, locati
 	if nodeCtx == common.REGION_CTX {
 		// Adding a guard on the region that was already updated in the synchronous path.
 
-		err = sl.updatePhCacheFromDom(pendingHeader, common.NodeLocation.Region(), []int{common.PRIME_CTX}, location.Region() != common.NodeLocation.Region(), subReorg)
-		if err != nil {
-			return
+		if location.Region() != common.NodeLocation.Region() {
+			err = sl.updatePhCacheFromDom(pendingHeader, common.NodeLocation.Region(), []int{common.PRIME_CTX}, subReorg)
+			if err != nil {
+				return
+			}
 		}
 
 		for _, i := range sl.randomRelayArray() {
@@ -681,9 +683,11 @@ func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader, locati
 		// If the previous block on which the given pendingHeader was built is the same as the NodeLocation
 		// the pendingHeader update has already been sent to the miner for the given location in relayPh.
 
-		err = sl.updatePhCacheFromDom(pendingHeader, common.NodeLocation.Zone(), []int{common.PRIME_CTX, common.REGION_CTX}, !bytes.Equal(location, common.NodeLocation), subReorg)
-		if err != nil {
-			return
+		if !bytes.Equal(location, common.NodeLocation) {
+			err = sl.updatePhCacheFromDom(pendingHeader, common.NodeLocation.Zone(), []int{common.PRIME_CTX, common.REGION_CTX}, subReorg)
+			if err != nil {
+				return
+			}
 		}
 
 		if !bytes.Equal(location, common.NodeLocation) {
@@ -719,7 +723,7 @@ func (sl *Slice) computePendingHeader(localPendingHeaderWithTermini types.Pendin
 }
 
 // updatePhCacheFromDom combines the recieved pending header with the pending header stored locally at a given terminus for specified context
-func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, terminiIndex int, indices []int, update bool, subReorg bool) error {
+func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, terminiIndex int, indices []int, subReorg bool) error {
 	hash := pendingHeader.Termini().SubTerminiAtIndex(terminiIndex)
 	localPendingHeader, exists := sl.readPhCache(hash)
 
@@ -767,9 +771,7 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 			}
 		}
 
-		if update {
-			sl.updatePhCache(types.NewPendingHeader(combinedPendingHeader, localPendingHeader.Termini()), false, nil, subReorg)
-		}
+		sl.updatePhCache(types.NewPendingHeader(combinedPendingHeader, localPendingHeader.Termini()), false, nil, subReorg)
 
 		return nil
 	}
