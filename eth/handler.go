@@ -625,21 +625,18 @@ func (h *handler) BroadcastPendingEtxsRollup(pEtxRollup types.PendingEtxsRollup)
 	return
 }
 
-func (h *handler) selectSomePeers() []*ethPeer {
+func (h *handler) selectSomePeers() []*eth.Peer {
 	// Get the min(sqrt(len(peers)), minPeerRequest)
-	count := int(math.Sqrt(float64(len(h.peers.peers))))
+	count := int(math.Sqrt(float64(len(h.peers.allPeers()))))
 	if count < minPeerRequest {
 		count = minPeerRequest
 	}
-	if count > len(h.peers.peers) {
-		count = len(h.peers.peers)
+	if count > len(h.peers.allPeers()) {
+		count = len(h.peers.allPeers())
 	}
-	var allPeers []*ethPeer
-	for _, peer := range h.peers.peers {
-		allPeers = append(allPeers, peer)
-	}
+	allPeers := h.peers.allPeers()
+
 	// shuffle the filteredPeers
-	rand.Seed(time.Now().UnixNano())
 	rand.Shuffle(len(allPeers), func(i, j int) { allPeers[i], allPeers[j] = allPeers[j], allPeers[i] })
 	return allPeers[:count]
 }
