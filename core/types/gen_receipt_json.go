@@ -28,6 +28,7 @@ func (r Receipt) MarshalJSON() ([]byte, error) {
 		BlockHash         common.Hash    `json:"blockHash,omitempty"`
 		BlockNumber       *hexutil.Big   `json:"blockNumber,omitempty"`
 		TransactionIndex  hexutil.Uint   `json:"transactionIndex"`
+		Etxs              []*Transaction `json:"etxs"`
 	}
 	var enc Receipt
 	enc.Type = hexutil.Uint64(r.Type)
@@ -36,6 +37,7 @@ func (r Receipt) MarshalJSON() ([]byte, error) {
 	enc.CumulativeGasUsed = hexutil.Uint64(r.CumulativeGasUsed)
 	enc.Bloom = r.Bloom
 	enc.Logs = r.Logs
+	enc.Etxs = r.Etxs
 	enc.TxHash = r.TxHash
 	enc.ContractAddress = r.ContractAddress
 	enc.GasUsed = hexutil.Uint64(r.GasUsed)
@@ -60,6 +62,7 @@ func (r *Receipt) UnmarshalJSON(input []byte) error {
 		BlockHash         *common.Hash    `json:"blockHash,omitempty"`
 		BlockNumber       *hexutil.Big    `json:"blockNumber,omitempty"`
 		TransactionIndex  *hexutil.Uint   `json:"transactionIndex"`
+		Etxs              []*Transaction  `json:"etxs"`
 	}
 	var dec Receipt
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -106,5 +109,9 @@ func (r *Receipt) UnmarshalJSON(input []byte) error {
 	if dec.TransactionIndex != nil {
 		r.TransactionIndex = uint(*dec.TransactionIndex)
 	}
+	if dec.Etxs == nil {
+		return errors.New("missing required field 'etxs' for Receipt")
+	}
+	r.Etxs = dec.Etxs
 	return nil
 }
