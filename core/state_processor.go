@@ -618,7 +618,6 @@ func (p *StateProcessor) ContractCodeWithPrefix(hash common.Hash) ([]byte, error
 func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *state.StateDB, checkLive bool) (statedb *state.StateDB, err error) {
 	var (
 		current  *types.Block
-		etxSet   types.EtxSet
 		database state.Database
 		report   = true
 		origin   = block.NumberU64()
@@ -630,7 +629,7 @@ func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *s
 			return statedb, nil
 		}
 	}
-	etxSet = rawdb.ReadEtxSet(p.hc.bc.db, block.Hash(), block.NumberU64())
+
 	if base != nil {
 		// The optional base statedb is given, mark the start point as parent block
 		statedb, database, report = base, base.Database(), false
@@ -689,11 +688,17 @@ func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *s
 			log.Info("Regenerating historical state", "block", current.NumberU64()+1, "target", origin, "remaining", origin-current.NumberU64()-1, "elapsed", time.Since(start))
 			logged = time.Now()
 		}
+
 		// Retrieve the next block to regenerate and process it
 		next := current.NumberU64() + 1
 		if current = p.hc.GetBlockByNumber(next); current == nil {
 			return nil, fmt.Errorf("block #%d not found", next)
 		}
+
+		etxSet := rawdb.ReadEtxSet(p.hc.bc.db, current.ParentHash(), current.NumberU64()-1)
+		inboundEtxs := rawdb.ReadInboundEtxs(p.hc.bc.db, current.Hash())
+		etxSet.Update(inboundEtxs, current.NumberU64())
+
 		_, _, _, _, err := p.Process(current, etxSet)
 		if err != nil {
 			return nil, fmt.Errorf("processing block %d failed: %v", current.NumberU64(), err)
