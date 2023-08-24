@@ -20,6 +20,7 @@ package quaiclient
 import (
 	"context"
 	"encoding/json"
+	"math/big"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -111,8 +112,9 @@ func (ec *Client) Append(ctx context.Context, header *types.Header, domPendingHe
 	return aReturns.Etxs, aReturns.SubReorg, nil
 }
 
-func (ec *Client) SubRelayPendingHeader(ctx context.Context, pendingHeader types.PendingHeader, location common.Location, subReorg bool) {
+func (ec *Client) SubRelayPendingHeader(ctx context.Context, pendingHeader types.PendingHeader, newEntropy *big.Int, location common.Location, subReorg bool) {
 	data := map[string]interface{}{"header": pendingHeader.Header().RPCMarshalHeader()}
+	data["NewEntropy"] = newEntropy
 	data["termini"] = pendingHeader.Termini().RPCMarshalTermini()
 	data["Location"] = location
 	data["SubReorg"] = subReorg
@@ -120,10 +122,11 @@ func (ec *Client) SubRelayPendingHeader(ctx context.Context, pendingHeader types
 	ec.c.CallContext(ctx, nil, "quai_subRelayPendingHeader", data)
 }
 
-func (ec *Client) UpdateDom(ctx context.Context, oldTerminus common.Hash, newTerminus common.Hash, location common.Location) {
+func (ec *Client) UpdateDom(ctx context.Context, oldTerminus common.Hash, newTerminus common.Hash, newEntropy *big.Int, location common.Location) {
 	data := map[string]interface{}{"OldTerminus": oldTerminus}
 	data["NewTerminus"] = newTerminus
 	data["Location"] = location
+	data["NewEntropy"] = newEntropy
 
 	ec.c.CallContext(ctx, nil, "quai_updateDom", data)
 }
