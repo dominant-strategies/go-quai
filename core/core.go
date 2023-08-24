@@ -1,7 +1,8 @@
 package core
 
 import (
-	"fmt"
+	"context"
+	"errors"
 	"io"
 	"math/big"
 	"sort"
@@ -20,27 +21,40 @@ import (
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/dominant-strategies/go-quai/trie"
-	lru "github.com/hashicorp/golang-lru"
+	lru "github.com/hnlq715/golang-lru"
 )
 
 const (
-	c_maxAppendQueue         = 1000000 // Maximum number of future headers we can store in cache
-	c_maxFutureTime          = 30      // Max time into the future (in seconds) we will accept a block
-	c_appendQueueRetryPeriod = 1       // Time (in seconds) before retrying to append from AppendQueue
-	c_appendQueueThreshold   = 1000    // Number of blocks to load from the disk to ram on every proc of append queue
+	c_maxAppendQueue                    = 1000000 // Maximum number of future headers we can store in cache
+	c_maxFutureTime                     = 30      // Max time into the future (in seconds) we will accept a block
+	c_appendQueueRetryPeriod            = 1       // Time (in seconds) before retrying to append from AppendQueue
+	c_appendQueueThreshold              = 1000    // Number of blocks to load from the disk to ram on every proc of append queue
+	c_processingCache                   = 10      // Number of block hashes held to prevent multi simultaneous appends on a single block hash
+	c_primeRetryThreshold               = 900     // Number of times a block is retry to be appended before eviction from append queue in Prime
+	c_regionRetryThreshold              = 300     // Number of times a block is retry to be appended before eviction from append queue in Region
+	c_zoneRetryThreshold                = 100     // Number of times a block is retry to be appended before eviction from append queue in Zone
+	c_maxFutureBlocks                   = 15      // Number of blocks ahead of the current block to be put in the hashNumberList
+	c_appendQueueRetryPriorityThreshold = 5       // If retry counter for a block is less than this number,  then its put in the special list that is tried first to be appended
+	c_appendQueueRemoveThreshold        = 10      // Number of blocks behind the block should be from the current header to be eligble for removal from the append queue
 )
+
+type blockNumberAndRetryCounter struct {
+	number uint64
+	retry  uint64
+}
 
 type Core struct {
 	sl     *Slice
 	engine consensus.Engine
 
-	appendQueue *lru.Cache
+	appendQueue     *lru.Cache
+	processingCache *lru.Cache
 
 	quit chan struct{} // core quit channel
 }
 
-func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.Header) bool, txConfig *TxPoolConfig, txLookupLimit *uint64, chainConfig *params.ChainConfig, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis) (*Core, error) {
-	slice, err := NewSlice(db, config, txConfig, txLookupLimit, isLocalBlock, chainConfig, domClientUrl, subClientUrls, engine, cacheConfig, vmConfig, genesis)
+func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.Header) bool, txConfig *TxPoolConfig, txLookupLimit *uint64, chainConfig *params.ChainConfig, slicesRunning []common.Location, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis) (*Core, error) {
+	slice, err := NewSlice(db, config, txConfig, txLookupLimit, isLocalBlock, chainConfig, slicesRunning, domClientUrl, subClientUrls, engine, cacheConfig, vmConfig, genesis)
 	if err != nil {
 		return nil, err
 	}
@@ -53,6 +67,9 @@ func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.H
 
 	appendQueue, _ := lru.New(c_maxAppendQueue)
 	c.appendQueue = appendQueue
+
+	proccesingCache, _ := lru.NewWithExpire(c_processingCache, time.Second*60)
+	c.processingCache = proccesingCache
 
 	go c.updateAppendQueue()
 	return c, nil
@@ -72,8 +89,16 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 		if err != nil {
 			return idx, err
 		}
+
 		if order == nodeCtx {
+			if !c.processingCache.Contains(block.Hash()) {
+				c.processingCache.Add(block.Hash(), 1)
+			} else {
+				log.Info("Already proccessing block:", "Number:", block.Header().NumberArray(), "Hash:", block.Hash())
+				return idx, errors.New("Already in process of appending this block")
+			}
 			newPendingEtxs, _, err := c.sl.Append(block.Header(), types.EmptyHeader(), common.Hash{}, false, nil)
+			c.processingCache.Remove(block.Hash())
 			if err == nil {
 				// If we have a dom, send the dom any pending ETXs which will become
 				// referencable by this block. When this block is referenced in the dom's
@@ -113,56 +138,117 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 
 // procAppendQueue sorts the append queue and attempts to append
 func (c *Core) procAppendQueue() {
-	// Sort the blocks by number and attempt to insert them
+	// Sort the blocks by number and retry attempts and try to insert them
+	// blocks will be aged out of the append queue after the retry threhsold
 	var hashNumberList []types.HashAndNumber
+	var hashNumberPriorityList []types.HashAndNumber
 	for _, hash := range c.appendQueue.Keys() {
 		if value, exist := c.appendQueue.Peek(hash); exist {
-			hashNumber := types.HashAndNumber{Hash: hash.(common.Hash), Number: value.(uint64)}
-			hashNumberList = append(hashNumberList, hashNumber)
+			hashNumber := types.HashAndNumber{Hash: hash.(common.Hash), Number: value.(blockNumberAndRetryCounter).number}
+			if value.(blockNumberAndRetryCounter).retry < c_appendQueueRetryPriorityThreshold {
+				hashNumberPriorityList = append(hashNumberPriorityList, hashNumber)
+			}
+			if hashNumber.Number < c.CurrentHeader().NumberU64()+c_maxFutureBlocks {
+				hashNumberList = append(hashNumberList, hashNumber)
+			}
 		}
 	}
+
+	c.serviceBlocks(hashNumberPriorityList)
+	if len(hashNumberPriorityList) > 0 {
+		log.Info("Size of hashNumberPriorityList", "len", len(hashNumberPriorityList), "first entry", hashNumberPriorityList[0].Number, "last entry", hashNumberPriorityList[len(hashNumberPriorityList)-1].Number)
+	}
+	c.serviceBlocks(hashNumberList)
+	if len(hashNumberList) > 0 {
+		log.Info("Size of hashNumberList", "len", len(hashNumberList), "first entry", hashNumberList[0].Number, "last entry", hashNumberList[len(hashNumberList)-1].Number)
+	}
+}
+
+func (c *Core) serviceBlocks(hashNumberList []types.HashAndNumber) {
 	sort.Slice(hashNumberList, func(i, j int) bool {
 		return hashNumberList[i].Number < hashNumberList[j].Number
 	})
 
-	// Only take c_appendQueueThreshold latest blocks out of the database because we know that the
-	// append will be interrupted once we reach the dom block, so no need to get
-	// all the blocks in the appendQueue and load it to the RAM
-	var threshold int
-	if len(hashNumberList) > c_appendQueueThreshold {
-		threshold = c_appendQueueThreshold
-	} else {
-		threshold = len(hashNumberList)
+	var retryThreshold uint64
+	switch common.NodeLocation.Context() {
+	case common.PRIME_CTX:
+		retryThreshold = c_primeRetryThreshold
+	case common.REGION_CTX:
+		retryThreshold = c_regionRetryThreshold
+	case common.ZONE_CTX:
+		retryThreshold = c_zoneRetryThreshold
 	}
+
 	// Attempt to service the sorted list
-	for _, hashAndNumber := range hashNumberList[:threshold] {
-		block := c.GetBlockOrCandidateByHash(hashAndNumber.Hash)
-		if block != nil {
-			c.serviceFutureBlock(block)
+	for _, hashAndNumber := range hashNumberList {
+		header := c.GetHeaderOrCandidateByHash(hashAndNumber.Hash)
+		if header != nil {
+			var numberAndRetryCounter blockNumberAndRetryCounter
+			if value, exist := c.appendQueue.Peek(header.Hash()); exist {
+				numberAndRetryCounter = value.(blockNumberAndRetryCounter)
+				numberAndRetryCounter.retry += 1
+				if numberAndRetryCounter.retry > retryThreshold && numberAndRetryCounter.number+c_appendQueueRemoveThreshold < c.CurrentHeader().NumberU64() {
+					c.appendQueue.Remove(header.Hash())
+				} else {
+					c.appendQueue.Add(header.Hash(), numberAndRetryCounter)
+				}
+			}
+			parentHeader := c.GetHeader(header.ParentHash(), header.NumberU64()-1)
+			if parentHeader != nil {
+				// If parent header is dom, send a signal to dom to request for the block if it doesnt have it
+				_, parentHeaderOrder, err := c.sl.engine.CalcOrder(parentHeader)
+				if err != nil {
+					log.Warn("Error calculating the parent block order in serviceBlocks", "Hash", parentHeader.Hash(), "Number", parentHeader.NumberArray())
+					continue
+				}
+				nodeCtx := common.NodeLocation.Context()
+				if parentHeaderOrder < nodeCtx && c.GetHeaderByHash(parentHeader.Hash()) == nil {
+					log.Info("Requesting the dom to get the block if it doesnt have and try to append", "Hash", parentHeader.Hash(), "Order", parentHeaderOrder)
+					// send a signal to the required dom to fetch the block if it doesnt have it, or its not in its appendqueue
+					go c.sl.domClient.RequestDomToAppendOrFetch(context.Background(), parentHeader.Hash(), parentHeaderOrder)
+				}
+				// Using a empty block to append here because append only takes in a
+				// header and we read the block inside append again, so to save the
+				// ram, we are using the header
+				c.InsertChain([]*types.Block{types.NewBlockWithHeader(header)})
+			} else {
+				if !c.HasHeader(header.ParentHash(), header.NumberU64()-1) {
+					c.sl.missingParentFeed.Send(header.ParentHash())
+				}
+			}
 		} else {
 			log.Warn("Entry in the FH cache without being in the db: ", "Hash: ", hashAndNumber.Hash)
 		}
 	}
 }
 
-func (c *Core) serviceFutureBlock(block *types.Block) {
-	parentBlock := c.GetBlock(block.ParentHash(), block.NumberU64()-1)
-	if parentBlock != nil {
-		c.InsertChain([]*types.Block{block})
-	} else {
-		if !c.HasHeader(block.ParentHash(), block.NumberU64()-1) {
-			c.sl.missingParentFeed.Send(block.ParentHash())
+func (c *Core) RequestDomToAppendOrFetch(hash common.Hash, order int) {
+	// TODO: optimize to check if the block is in the appendqueue or already
+	// appended to reduce the network bandwidth utilization
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx == common.PRIME_CTX {
+		// If prime all you can do it to ask for the block
+		_, exists := c.appendQueue.Get(hash)
+		if !exists {
+			log.Warn("Block sub asked doesnt exist in append queue, so request the peers for it", "Hash", hash, "Order", order)
+			c.sl.missingParentFeed.Send(hash) // Using the missing parent feed to ask for the block
+		}
+	} else if nodeCtx == common.REGION_CTX {
+		if order < nodeCtx { // Prime block
+			go c.sl.domClient.RequestDomToAppendOrFetch(context.Background(), hash, order)
+		}
+		_, exists := c.appendQueue.Get(hash)
+		if !exists {
+			log.Warn("Block sub asked doesnt exist in append queue, so request the peers for it", "Hash", hash, "Order", order)
+			c.sl.missingParentFeed.Send(hash) // Using the missing parent feed to ask for the block
 		}
 	}
+
 }
 
 // addToAppendQueue adds a block to the append queue
 func (c *Core) addToAppendQueue(block *types.Block) error {
-	max := uint64(time.Now().Unix() + c_maxFutureTime)
-	if block.Time() > max {
-		return fmt.Errorf("future block timestamp %v > allowed %v", block.Time(), max)
-	}
-	c.appendQueue.ContainsOrAdd(block.Hash(), block.NumberU64())
+	c.appendQueue.ContainsOrAdd(block.Hash(), blockNumberAndRetryCounter{block.NumberU64(), 0})
 	return nil
 }
 
@@ -255,15 +341,21 @@ func (c *Core) WriteBlock(block *types.Block) {
 	if c.sl.IsBlockHashABadHash(block.Hash()) {
 		return
 	}
-	if c.GetBlockByHash(block.Hash()) == nil {
+	if c.GetHeaderByHash(block.Hash()) == nil {
 		// Only add non dom blocks to the append queue
 		_, order, err := c.CalcOrder(block.Header())
 		if err != nil {
 			return
 		}
-		if order == common.NodeLocation.Context() {
+		nodeCtx := common.NodeLocation.Context()
+		if order == nodeCtx {
 			c.addToAppendQueue(block)
+			// If a dom block comes in and we havent appended it yet
+		} else if order < nodeCtx && c.GetHeaderByHash(block.Hash()) == nil {
+			go c.sl.domClient.RequestDomToAppendOrFetch(context.Background(), block.Hash(), order)
 		}
+	}
+	if c.GetHeaderOrCandidateByHash(block.Hash()) == nil {
 		c.sl.WriteBlock(block)
 	}
 }
@@ -271,7 +363,7 @@ func (c *Core) WriteBlock(block *types.Block) {
 func (c *Core) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, bool, error) {
 	newPendingEtxs, subReorg, err := c.sl.Append(header, domPendingHeader, domTerminus, domOrigin, newInboundEtxs)
 	if err != nil {
-		if err.Error() == ErrBodyNotFound.Error() || err.Error() == consensus.ErrUnknownAncestor.Error() {
+		if err.Error() == ErrBodyNotFound.Error() || err.Error() == consensus.ErrUnknownAncestor.Error() || err.Error() == ErrSubNotSyncedToDom.Error() {
 			c.sl.missingParentFeed.Send(header.ParentHash())
 		}
 	}
@@ -283,8 +375,12 @@ func (c *Core) ConstructLocalMinedBlock(header *types.Header) (*types.Block, err
 	return c.sl.ConstructLocalMinedBlock(header)
 }
 
-func (c *Core) SubRelayPendingHeader(slPendingHeader types.PendingHeader, location common.Location) {
-	c.sl.SubRelayPendingHeader(slPendingHeader, location)
+func (c *Core) SubRelayPendingHeader(slPendingHeader types.PendingHeader, location common.Location, subReorg bool) {
+	c.sl.SubRelayPendingHeader(slPendingHeader, location, subReorg)
+}
+
+func (c *Core) UpdateDom(oldTerminus common.Hash, newTerminus common.Hash, location common.Location) {
+	c.sl.UpdateDom(oldTerminus, newTerminus, location)
 }
 
 func (c *Core) NewGenesisPendigHeader(pendingHeader *types.Header) {
@@ -341,6 +437,10 @@ func (c *Core) GenerateRecoveryPendingHeader(pendingHeader *types.Header, checkp
 
 func (c *Core) IsBlockHashABadHash(hash common.Hash) bool {
 	return c.sl.IsBlockHashABadHash(hash)
+}
+
+func (c *Core) ProcessingState() bool {
+	return c.sl.ProcessingState()
 }
 
 //---------------------//

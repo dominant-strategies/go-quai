@@ -131,7 +131,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Quai, error) {
 		gasPrice:          config.Miner.GasPrice,
 		etherbase:         config.Miner.Etherbase,
 		bloomRequests:     make(chan chan *bloombits.Retrieval),
-		bloomIndexer:      core.NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms),
 		p2pServer:         stack.Server(),
 	}
 
@@ -185,11 +184,16 @@ func New(stack *node.Node, config *ethconfig.Config) (*Quai, error) {
 		config.TxPool.Journal = stack.ResolvePath(config.TxPool.Journal)
 	}
 
-	eth.core, err = core.NewCore(chainDb, &config.Miner, eth.isLocalBlock, &config.TxPool, &config.TxLookupLimit, chainConfig, eth.config.DomUrl, eth.config.SubUrls, eth.engine, cacheConfig, vmConfig, config.Genesis)
+	eth.core, err = core.NewCore(chainDb, &config.Miner, eth.isLocalBlock, &config.TxPool, &config.TxLookupLimit, chainConfig, eth.config.SlicesRunning, eth.config.DomUrl, eth.config.SubUrls, eth.engine, cacheConfig, vmConfig, config.Genesis)
 	if err != nil {
 		return nil, err
 	}
-	eth.bloomIndexer.Start(eth.Core().Slice().HeaderChain())
+
+	// Only index bloom if processing state
+	if eth.core.ProcessingState() {
+		eth.bloomIndexer = core.NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms)	
+		eth.bloomIndexer.Start(eth.Core().Slice().HeaderChain())
+	}
 
 	// Permit the downloader to use the trie cache allowance during fast sync
 	cacheLimit := cacheConfig.TrieCleanLimit + cacheConfig.TrieDirtyLimit + cacheConfig.SnapshotLimit
@@ -209,7 +213,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Quai, error) {
 
 	eth.APIBackend = &QuaiAPIBackend{stack.Config().ExtRPCEnabled(), eth, nil}
 	// Gasprice oracle is only initiated in zone chains
-	if nodeCtx == common.ZONE_CTX {
+	if nodeCtx == common.ZONE_CTX && eth.core.ProcessingState() {
 		gpoParams := config.GPO
 		if gpoParams.Default == nil {
 			gpoParams.Default = config.Miner.GasPrice

@@ -47,6 +47,9 @@ type ChainHeaderReader interface {
 
 	// GetTerminiByHash retrieves the termini for a given header hash
 	GetTerminiByHash(hash common.Hash) *types.Termini
+
+	// ProcessingState returns true for slices that are running
+	ProcessingState() bool
 }
 
 // ChainReader defines a small collection of methods needed to access the local

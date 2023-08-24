@@ -69,9 +69,9 @@ type environment struct {
 }
 
 // copy creates a deep copy of environment.
-func (env *environment) copy() *environment {
+func (env *environment) copy(processingState bool) *environment {
 	nodeCtx := common.NodeLocation.Context()
-	if nodeCtx == common.ZONE_CTX {
+	if nodeCtx == common.ZONE_CTX && processingState {
 		cpy := &environment{
 			signer:    env.signer,
 			state:     env.state.Copy(),
@@ -226,7 +226,7 @@ type worker struct {
 	fullTaskHook func()      // Method to call before pushing the full sealing task.
 }
 
-func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Database, engine consensus.Engine, headerchain *HeaderChain, txPool *TxPool, isLocalBlock func(header *types.Header) bool, init bool) *worker {
+func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Database, engine consensus.Engine, headerchain *HeaderChain, txPool *TxPool, isLocalBlock func(header *types.Header) bool, init bool, processingState bool) *worker {
 	worker := &worker{
 		config:             config,
 		chainConfig:        chainConfig,
@@ -252,7 +252,9 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 	phBodyCache, _ := lru.New(pendingBlockBodyLimit)
 	worker.pendingBlockBody = phBodyCache
 
-	worker.chainHeadSub = worker.hc.SubscribeChainHeadEvent(worker.chainHeadCh)
+	if headerchain.ProcessingState() {
+		worker.chainHeadSub = worker.hc.SubscribeChainHeadEvent(worker.chainHeadCh)
+	}
 
 	// Sanitize recommit interval if the user-specified one is too short.
 	recommit := worker.config.Recommit
@@ -261,8 +263,10 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 		recommit = minRecommitInterval
 	}
 
-	worker.wg.Add(1)
-	go worker.asyncStateLoop()
+	if processingState {
+		worker.wg.Add(1)
+		go worker.asyncStateLoop()
+	}
 
 	return worker
 }
@@ -337,7 +341,9 @@ func (w *worker) start() {
 
 // stop sets the running status as 0.
 func (w *worker) stop() {
-	w.chainHeadSub.Unsubscribe()
+	if w.hc.ProcessingState() {
+		w.chainHeadSub.Unsubscribe()
+	}
 	atomic.StoreInt32(&w.running, 0)
 }
 
@@ -454,7 +460,7 @@ func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.He
 		return nil, err
 	}
 
-	if nodeCtx == common.ZONE_CTX {
+	if nodeCtx == common.ZONE_CTX && w.hc.ProcessingState() {
 		// Fill pending transactions from the txpool
 		w.adjustGasLimit(nil, work, block)
 		if fill {
@@ -785,7 +791,7 @@ func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*en
 		}
 	}
 	// Only zone should calculate state
-	if nodeCtx == common.ZONE_CTX {
+	if nodeCtx == common.ZONE_CTX && w.hc.ProcessingState() {
 		header.SetExtra(w.extra)
 		header.SetBaseFee(misc.CalcBaseFee(w.chainConfig, parent.Header()))
 		if w.isRunning() {
@@ -882,6 +888,28 @@ func (w *worker) adjustGasLimit(interrupt *int32, env *environment, parent *type
 	}
 }
 
+// ComputeManifestHash given a header computes the manifest hash for the header
+// and stores it in the database
+func (w *worker) ComputeManifestHash(header *types.Header) common.Hash {
+	nodeCtx := common.NodeLocation.Context()
+	// Compute and set manifest hash
+	manifest := types.BlockManifest{}
+	if nodeCtx == common.PRIME_CTX {
+		// Nothing to do for prime chain
+		manifest = types.BlockManifest{}
+	} else if w.engine.IsDomCoincident(w.hc, header) {
+		manifest = types.BlockManifest{header.Hash()}
+	} else {
+		parentManifest := rawdb.ReadManifest(w.workerDb, header.ParentHash())
+		manifest = append(parentManifest, header.Hash())
+	}
+	// write the manifest into the disk
+	rawdb.WriteManifest(w.workerDb, header.Hash(), manifest)
+	manifestHash := types.DeriveSha(manifest, trie.NewStackTrie(nil))
+
+	return manifestHash
+}
+
 func (w *worker) FinalizeAssemble(chain consensus.ChainHeaderReader, header *types.Header, parent *types.Block, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, etxs []*types.Transaction, subManifest types.BlockManifest, receipts []*types.Receipt) (*types.Block, error) {
 	nodeCtx := common.NodeLocation.Context()
 	block, err := w.engine.FinalizeAndAssemble(chain, header, state, txs, uncles, etxs, subManifest, receipts)
@@ -889,22 +917,8 @@ func (w *worker) FinalizeAssemble(chain consensus.ChainHeaderReader, header *typ
 		return nil, err
 	}
 
-	// Compute and set manifest hash
-	manifest := types.BlockManifest{}
-	if nodeCtx == common.PRIME_CTX {
-		// Nothing to do for prime chain
-		manifest = types.BlockManifest{}
-	} else if w.engine.IsDomCoincident(w.hc, parent.Header()) {
-		manifest = types.BlockManifest{parent.Hash()}
-	} else {
-		parentManifest := rawdb.ReadManifest(w.workerDb, parent.ParentHash())
-		manifest = append(parentManifest, parent.Hash())
-	}
-	manifestHash := types.DeriveSha(manifest, trie.NewStackTrie(nil))
+	manifestHash := w.ComputeManifestHash(parent.Header())
 	block.Header().SetManifestHash(manifestHash)
-
-	// write the manifest into the disk
-	rawdb.WriteManifest(w.workerDb, parent.Hash(), manifest)
 
 	if nodeCtx == common.ZONE_CTX {
 		// Compute and set etx rollup hash
@@ -937,7 +951,7 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 			interval()
 		}
 		// Create a local environment copy, avoid the data race with snapshot state.
-		env := env.copy()
+		env := env.copy(w.hc.ProcessingState())
 		parent := w.hc.GetBlock(env.header.ParentHash(), env.header.NumberU64()-1)
 		block, err := w.FinalizeAssemble(w.hc, env.header, parent, env.state, env.txs, env.unclelist(), env.etxs, env.subManifest, env.receipts)
 		if err != nil {

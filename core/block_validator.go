@@ -55,7 +55,7 @@ func NewBlockValidator(config *params.ChainConfig, headerChain *HeaderChain, eng
 func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	nodeCtx := common.NodeLocation.Context()
 	// Check whether the block's known, and if not, that it's linkable
-	if nodeCtx == common.ZONE_CTX {
+	if nodeCtx == common.ZONE_CTX && v.hc.ProcessingState() {
 		if v.hc.bc.processor.HasBlockAndState(block.Hash(), block.NumberU64()) {
 			return ErrKnownBlock
 		}
@@ -92,12 +92,6 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 		}
 		if hash := types.DeriveSha(block.ExtTransactions(), trie.NewStackTrie(nil)); hash != header.EtxHash() {
 			return fmt.Errorf("external transaction root hash mismatch: have %x, want %x", hash, header.EtxHash())
-		}
-		if !v.hc.bc.processor.HasBlockAndState(block.ParentHash(), block.NumberU64()-1) {
-			if !v.hc.bc.HasBlock(block.ParentHash(), block.NumberU64()-1) {
-				return consensus.ErrUnknownAncestor
-			}
-			return consensus.ErrPrunedAncestor
 		}
 	}
 	return nil

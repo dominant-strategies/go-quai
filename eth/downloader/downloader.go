@@ -131,8 +131,8 @@ type Core interface {
 	// GetBlockByHash retrieves a block from the local chain.
 	GetBlockByHash(common.Hash) *types.Block
 
-	// CurrentBlock retrieves the head of local chain.
-	CurrentBlock() *types.Block
+	// CurrentHeader retrieves the head of local chain.
+	CurrentHeader() *types.Header
 
 	// CurrentLogEntropy returns the logarithm of the total entropy reduction since genesis for our current head block
 	CurrentLogEntropy() *big.Int
@@ -169,7 +169,7 @@ func New(mux *event.TypeMux, core Core, dropPeer peerDropFn) *Downloader {
 		queue:        newQueue(blockCacheMaxItems, blockCacheInitialItems),
 		peers:        newPeerSet(),
 		core:         core,
-		headNumber:   core.CurrentBlock().NumberU64(),
+		headNumber:   core.CurrentHeader().NumberU64(),
 		headEntropy:  core.CurrentLogEntropy(),
 		dropPeer:     dropPeer,
 		headerCh:     make(chan dataPack, 1),
@@ -198,7 +198,7 @@ func (d *Downloader) Progress() quai.SyncProgress {
 	mode := d.getMode()
 	switch {
 	case d.core != nil && mode == FullSync:
-		current = d.core.CurrentBlock().NumberU64()
+		current = d.core.CurrentHeader().NumberU64()
 	default:
 		log.Error("Unknown downloader chain/mode combo", "light", "full", d.core != nil, "mode", mode)
 	}
@@ -365,8 +365,8 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, entropy *
 		if err != nil {
 			d.mux.Post(FailedEvent{err})
 		} else {
-			latest := d.core.CurrentBlock()
-			d.mux.Post(DoneEvent{latest.Header()})
+			latest := d.core.CurrentHeader()
+			d.mux.Post(DoneEvent{latest})
 		}
 	}()
 	if p.version < eth.ETH65 {
@@ -374,7 +374,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, entropy *
 	}
 	mode := d.getMode()
 
-	log.Debug("Synchronising with the network", "peer", p.id, "eth", p.version, "head", hash, "entropy", entropy, "mode", mode)
+	log.Info("Synchronising with the network", "peer", p.id, "eth", p.version, "head", hash, "entropy", entropy, "mode", mode)
 	defer func(start time.Time) {
 		log.Debug("Synchronisation terminated", "elapsed", common.PrettyDuration(time.Since(start)))
 	}(time.Now())
@@ -1020,7 +1020,7 @@ func (d *Downloader) processHeaders(origin uint64) error {
 	)
 	defer func() {
 		if rollback > 0 {
-			curBlock := d.core.CurrentBlock().NumberU64()
+			curBlock := d.core.CurrentHeader().NumberU64()
 			log.Warn("Rolled back chain segment",
 				"block", fmt.Sprintf("%d->%d", curBlock), "reason", rollbackErr)
 		}

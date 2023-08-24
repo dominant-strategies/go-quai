@@ -121,41 +121,17 @@ func encodeAsStoredReceiptRLP(want *Receipt) ([]byte, error) {
 	stored := &storedReceiptRLP{
 		PostStateOrStatus: want.statusEncoding(),
 		CumulativeGasUsed: want.CumulativeGasUsed,
-		Logs:              make([]*LogForStorage, len(want.Logs)),
-	}
-	for i, log := range want.Logs {
-		stored.Logs[i] = (*LogForStorage)(log)
-	}
-	return rlp.EncodeToBytes(stored)
-}
-
-func encodeAsV4StoredReceiptRLP(want *Receipt) ([]byte, error) {
-	stored := &v4StoredReceiptRLP{
-		PostStateOrStatus: want.statusEncoding(),
-		CumulativeGasUsed: want.CumulativeGasUsed,
 		TxHash:            want.TxHash,
 		ContractAddress:   want.ContractAddress,
 		Logs:              make([]*LogForStorage, len(want.Logs)),
 		GasUsed:           want.GasUsed,
+		Etxs:              make([]*Transaction, len(want.Etxs)),
 	}
 	for i, log := range want.Logs {
 		stored.Logs[i] = (*LogForStorage)(log)
 	}
-	return rlp.EncodeToBytes(stored)
-}
-
-func encodeAsV3StoredReceiptRLP(want *Receipt) ([]byte, error) {
-	stored := &v3StoredReceiptRLP{
-		PostStateOrStatus: want.statusEncoding(),
-		CumulativeGasUsed: want.CumulativeGasUsed,
-		Bloom:             want.Bloom,
-		TxHash:            want.TxHash,
-		ContractAddress:   want.ContractAddress,
-		Logs:              make([]*LogForStorage, len(want.Logs)),
-		GasUsed:           want.GasUsed,
-	}
-	for i, log := range want.Logs {
-		stored.Logs[i] = (*LogForStorage)(log)
+	for i, etx := range want.Etxs {
+		stored.Etxs[i] = (*Transaction)(etx)
 	}
 	return rlp.EncodeToBytes(stored)
 }

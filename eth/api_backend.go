@@ -120,7 +120,7 @@ func (b *QuaiAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumb
 	}
 	// Otherwise resolve and return the block
 	if number == rpc.LatestBlockNumber {
-		return b.eth.core.CurrentBlock(), nil
+		number = rpc.BlockNumber(b.eth.core.CurrentHeader().NumberU64())
 	}
 	block := b.eth.core.GetBlockByNumber(uint64(number))
 	if block != nil {
@@ -468,8 +468,20 @@ func (b *QuaiAPIBackend) PendingBlock() *types.Block {
 	return b.eth.core.PendingBlock()
 }
 
-func (b *QuaiAPIBackend) SubRelayPendingHeader(pendingHeader types.PendingHeader, location common.Location) {
-	b.eth.core.SubRelayPendingHeader(pendingHeader, location)
+func (b *QuaiAPIBackend) SubRelayPendingHeader(pendingHeader types.PendingHeader, location common.Location, subReorg bool) {
+	b.eth.core.SubRelayPendingHeader(pendingHeader, location, subReorg)
+}
+
+func (b *QuaiAPIBackend) UpdateDom(oldTerminus common.Hash, newTerminus common.Hash, location common.Location) {
+	b.eth.core.UpdateDom(oldTerminus, newTerminus, location)
+}
+
+func (b *QuaiAPIBackend) RequestDomToAppendOrFetch(hash common.Hash, order int) {
+	b.eth.core.RequestDomToAppendOrFetch(hash, order)
+}
+
+func (b *QuaiAPIBackend) ProcessingState() bool {
+	return b.eth.core.ProcessingState()
 }
 
 func (b *QuaiAPIBackend) NewGenesisPendingHeader(pendingHeader *types.Header) {

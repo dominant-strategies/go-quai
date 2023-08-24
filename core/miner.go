@@ -43,13 +43,13 @@ type Miner struct {
 	stopCh   chan struct{}
 }
 
-func New(hc *HeaderChain, txPool *TxPool, config *Config, db ethdb.Database, chainConfig *params.ChainConfig, engine consensus.Engine, isLocalBlock func(block *types.Header) bool) *Miner {
+func New(hc *HeaderChain, txPool *TxPool, config *Config, db ethdb.Database, chainConfig *params.ChainConfig, engine consensus.Engine, isLocalBlock func(block *types.Header) bool, processingState bool) *Miner {
 	miner := &Miner{
 		hc:       hc,
 		engine:   engine,
 		startCh:  make(chan common.Address),
 		stopCh:   make(chan struct{}),
-		worker:   newWorker(config, chainConfig, db, engine, hc, txPool, isLocalBlock, true),
+		worker:   newWorker(config, chainConfig, db, engine, hc, txPool, isLocalBlock, true, processingState),
 		coinbase: config.Etherbase,
 	}
 	go miner.update()

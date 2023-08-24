@@ -151,6 +151,9 @@ func (s *PublicBlockChainQuaiAPI) GetBalance(ctx context.Context, address common
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("getBalance call can only be made in zone chain")
 	}
+	if !s.b.ProcessingState() {
+		return nil, errors.New("getBalance call can only be made on chain processing the state")
+	}
 	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
 		return nil, err
@@ -167,6 +170,9 @@ func (s *PublicBlockChainQuaiAPI) GetProof(ctx context.Context, address common.A
 	nodeCtx := common.NodeLocation.Context()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("getProof call can only be made in zone chain")
+	}
+	if !s.b.ProcessingState() {
+		return nil, errors.New("getProof call can only be made on chain processing the state")
 	}
 	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
@@ -352,6 +358,9 @@ func (s *PublicBlockChainQuaiAPI) GetCode(ctx context.Context, address common.Ad
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("getCode can only called in a zone chain")
 	}
+	if !s.b.ProcessingState() {
+		return nil, errors.New("getCode call can only be made on chain processing the state")
+	}
 	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
 		return nil, err
@@ -371,6 +380,9 @@ func (s *PublicBlockChainQuaiAPI) GetStorageAt(ctx context.Context, address comm
 	nodeCtx := common.NodeLocation.Context()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("getStorageAt can only called in a zone chain")
+	}
+	if !s.b.ProcessingState() {
+		return nil, errors.New("getStorageAt call can only be made on chain processing the state")
 	}
 	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
@@ -408,6 +420,9 @@ func (s *PublicBlockChainQuaiAPI) EstimateGas(ctx context.Context, args Transact
 	nodeCtx := common.NodeLocation.Context()
 	if nodeCtx != common.ZONE_CTX {
 		return 0, errors.New("estimateGas can only called in a zone chain")
+	}
+	if !s.b.ProcessingState() {
+		return 0, errors.New("estimateGas call can only be made on chain processing the state")
 	}
 	bNrOrHash := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
 	if blockNrOrHash != nil {
@@ -516,6 +531,9 @@ func (s *PublicBlockChainQuaiAPI) CreateAccessList(ctx context.Context, args Tra
 	nodeCtx := common.NodeLocation.Context()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("createAccessList can only be called in zone chain")
+	}
+	if !s.b.ProcessingState() {
+		return nil, errors.New("createAccessList call can only be made on chain processing the state")
 	}
 	bNrOrHash := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
 	if blockNrOrHash != nil {
@@ -631,6 +649,7 @@ type SubRelay struct {
 	Header   *types.Header `json:"header"`
 	Termini  types.Termini `json:"termini"`
 	Location common.Location
+	SubReorg bool
 }
 
 func (s *PublicBlockChainQuaiAPI) SubRelayPendingHeader(ctx context.Context, raw json.RawMessage) {
@@ -639,9 +658,37 @@ func (s *PublicBlockChainQuaiAPI) SubRelayPendingHeader(ctx context.Context, raw
 		return
 	}
 	pendingHeader := types.NewPendingHeader(subRelay.Header, subRelay.Termini)
-	s.b.SubRelayPendingHeader(pendingHeader, subRelay.Location)
+	s.b.SubRelayPendingHeader(pendingHeader, subRelay.Location, subRelay.SubReorg)
 }
 
+type DomUpdate struct {
+	OldTerminus common.Hash
+	NewTerminus common.Hash
+	Location    common.Location
+}
+
+func (s *PublicBlockChainQuaiAPI) UpdateDom(ctx context.Context, raw json.RawMessage) {
+	var domUpdate DomUpdate
+	if err := json.Unmarshal(raw, &domUpdate); err != nil {
+		log.Error("Error unmarshaling domUpdate in api", "err", err)
+		return
+	}
+
+	s.b.UpdateDom(domUpdate.OldTerminus, domUpdate.NewTerminus, domUpdate.Location)
+}
+
+type RequestDomToAppendOrFetchArgs struct {
+	Hash  common.Hash
+	Order int
+}
+
+func (s *PublicBlockChainQuaiAPI) RequestDomToAppendOrFetch(ctx context.Context, raw json.RawMessage) {
+	var requestDom RequestDomToAppendOrFetchArgs
+	if err := json.Unmarshal(raw, &requestDom); err != nil {
+		return
+	}
+	s.b.RequestDomToAppendOrFetch(requestDom.Hash, requestDom.Order)
+}
 func (s *PublicBlockChainQuaiAPI) NewGenesisPendingHeader(ctx context.Context, raw json.RawMessage) {
 	var pendingHeader *types.Header
 	if err := json.Unmarshal(raw, &pendingHeader); err != nil {
@@ -654,6 +701,9 @@ func (s *PublicBlockChainQuaiAPI) GetPendingHeader(ctx context.Context) (map[str
 	nodeCtx := common.NodeLocation.Context()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("getPendingHeader can only be called in zone chain")
+	}
+	if !s.b.ProcessingState() {
+		return nil, errors.New("getPendingHeader call can only be made on chain processing the state")
 	}
 	pendingHeader, err := s.b.GetPendingHeader()
 	if err != nil {
