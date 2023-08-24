@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math/big"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -646,10 +647,11 @@ func (s *PublicBlockChainQuaiAPI) Append(ctx context.Context, raw json.RawMessag
 }
 
 type SubRelay struct {
-	Header   *types.Header `json:"header"`
-	Termini  types.Termini `json:"termini"`
-	Location common.Location
-	SubReorg bool
+	Header     *types.Header `json:"header"`
+	Termini    types.Termini `json:"termini"`
+	NewEntropy *big.Int
+	Location   common.Location
+	SubReorg   bool
 }
 
 func (s *PublicBlockChainQuaiAPI) SubRelayPendingHeader(ctx context.Context, raw json.RawMessage) {
@@ -658,13 +660,14 @@ func (s *PublicBlockChainQuaiAPI) SubRelayPendingHeader(ctx context.Context, raw
 		return
 	}
 	pendingHeader := types.NewPendingHeader(subRelay.Header, subRelay.Termini)
-	s.b.SubRelayPendingHeader(pendingHeader, subRelay.Location, subRelay.SubReorg)
+	s.b.SubRelayPendingHeader(pendingHeader, subRelay.NewEntropy, subRelay.Location, subRelay.SubReorg)
 }
 
 type DomUpdate struct {
 	OldTerminus common.Hash
 	NewTerminus common.Hash
 	Location    common.Location
+	NewEntropy  *big.Int
 }
 
 func (s *PublicBlockChainQuaiAPI) UpdateDom(ctx context.Context, raw json.RawMessage) {
@@ -674,7 +677,7 @@ func (s *PublicBlockChainQuaiAPI) UpdateDom(ctx context.Context, raw json.RawMes
 		return
 	}
 
-	s.b.UpdateDom(domUpdate.OldTerminus, domUpdate.NewTerminus, domUpdate.Location)
+	s.b.UpdateDom(domUpdate.OldTerminus, domUpdate.NewTerminus, domUpdate.NewEntropy, domUpdate.Location)
 }
 
 type RequestDomToAppendOrFetchArgs struct {
