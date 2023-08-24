@@ -381,12 +381,12 @@ func (c *Core) ConstructLocalMinedBlock(header *types.Header) (*types.Block, err
 	return c.sl.ConstructLocalMinedBlock(header)
 }
 
-func (c *Core) SubRelayPendingHeader(slPendingHeader types.PendingHeader, location common.Location, subReorg bool) {
-	c.sl.SubRelayPendingHeader(slPendingHeader, location, subReorg)
+func (c *Core) SubRelayPendingHeader(slPendingHeader types.PendingHeader, newEntropy *big.Int, location common.Location, subReorg bool) {
+	c.sl.SubRelayPendingHeader(slPendingHeader, newEntropy, location, subReorg)
 }
 
-func (c *Core) UpdateDom(oldTerminus common.Hash, newTerminus common.Hash, location common.Location) {
-	c.sl.UpdateDom(oldTerminus, newTerminus, location)
+func (c *Core) UpdateDom(oldTerminus common.Hash, newTerminus common.Hash, newEntropy *big.Int, location common.Location) {
+	c.sl.UpdateDom(oldTerminus, newTerminus, newEntropy, location)
 }
 
 func (c *Core) NewGenesisPendigHeader(pendingHeader *types.Header) {
