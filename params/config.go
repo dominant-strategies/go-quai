@@ -26,18 +26,18 @@ import (
 // Genesis hashes to enforce below configs on.
 var (
 	// Progpow GenesisHashes
-	ProgpowColosseumGenesisHash  = common.HexToHash("0x3d2c4cc684a7b2c7764031058b457cdf09b946a62c7f3d6628f64386e7692d24")
-	ProgpowGardenGenesisHash     = common.HexToHash("0x8975f8760d317524559986d595058d4d66c05d62e0eda1d740cdee56a25788a5")
-	ProgpowOrchardGenesisHash    = common.HexToHash("0x5627aca8194b46ed071f92746ecf975542b12ce406905d715b4be8f044749956")
+	ProgpowColosseumGenesisHash  = common.HexToHash("0x6053d0826a42d11d44a2172d309809aa6abb97bf7cdc24a3dd8be81ee6528468")
+	ProgpowGardenGenesisHash     = common.HexToHash("0x3725ae59140167e31e4d4457e9948d716c687ac3a4b278350137356ee73060d1")
+	ProgpowOrchardGenesisHash    = common.HexToHash("0xeb625504882304b641551f8f33706cc4a7009b14325fa52af92274032504c46e")
 	ProgpowLocalGenesisHash      = common.HexToHash("0x7f594e88d6c93a00680840a855b7c9349218751cc344562dacb43a63eec02d93")
-	ProgpowLighthouseGenesisHash = common.HexToHash("0xe0a395a3fcd7ecbb28dd66eeceab2fb40db01a2bfbf9e5fbc5b93269104df19a")
+	ProgpowLighthouseGenesisHash = common.HexToHash("0x2cf2f1ab8901e7bad77fbe9a671c12218229bcc1a725ec1c7cb3342a076d4596")
 
 	// Blake3GenesisHashes
 	Blake3PowColosseumGenesisHash  = common.HexToHash("0xe6e0ff26dafbb1ff849b965fc300ebc9eee2708686943030d958dc4cc4b6c0ea")
-	Blake3PowGardenGenesisHash     = common.HexToHash("0xdee75a7b24237d07f15392d7d5319a9421f838d84b9a6e6a8d1a4d74365ff2de")
+	Blake3PowGardenGenesisHash     = common.HexToHash("0x3fb55aff423ca143fd714e256530be8a34e21bd85f8dc62587f9fb559b739f36")
 	Blake3PowOrchardGenesisHash    = common.HexToHash("0x418ea8cd5f17277e4bb94cba7170a494fc53df23b915ed42a8fe9f6052a4327b")
 	Blake3PowLocalGenesisHash      = common.HexToHash("0x6181f4781316452abf66aaafa44568a4e9f56bb10c276c9d7b3964efea4fbc56")
-	Blake3PowLighthouseGenesisHash = common.HexToHash("0xdee75a7b24237d07f15392d7d5319a9421f838d84b9a6e6a8d1a4d74365ff2de")
+	Blake3PowLighthouseGenesisHash = common.HexToHash("0x8431222ba8848050619fc1bca9447a351b7079684ea57c1cb0ab5d09d4bb4c51")
 )
 
 var (
