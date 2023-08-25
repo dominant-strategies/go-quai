@@ -102,8 +102,8 @@ func TestStreamErrors(t *testing.T) {
 		newStream func([]byte) *Stream // uses bytes.Reader if nil
 		error     error
 	}{
-		{"C0", calls{"Bytes"}, nil, ErrExpectedString},
-		{"C0", calls{"Uint"}, nil, ErrExpectedString},
+		{"C0", calls{"Bytes"}, nil, ErrExpectedStringOrByte},
+		{"C0", calls{"Uint"}, nil, ErrExpectedStringOrByte},
 		{"89000000000000000001", calls{"Uint"}, nil, errUintOverflow},
 		{"00", calls{"List"}, nil, ErrExpectedList},
 		{"80", calls{"List"}, nil, ErrExpectedList},
