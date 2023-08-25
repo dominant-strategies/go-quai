@@ -23,27 +23,25 @@ func (blake3pow *Blake3pow) CalcOrder(header *types.Header) (*big.Int, int, erro
 
 	// Get entropy reduction of this header
 	intrinsicS := blake3pow.IntrinsicLogS(header.Hash())
-	target := new(big.Int).Div(common.Big2e256, header.Difficulty()).Bytes()
-	zoneThresholdS := blake3pow.IntrinsicLogS(common.BytesToHash(target))
+	target := new(big.Int).Div(common.Big2e256, header.Difficulty())
+	zoneThresholdS := blake3pow.IntrinsicLogS(common.BytesToHash(target.Bytes()))
 
 	// PRIME
-	// Compute the total accumulated entropy since the last prime block
-	totalDeltaSPrime := new(big.Int).Add(header.ParentDeltaS(common.REGION_CTX), header.ParentDeltaS(common.ZONE_CTX))
-	totalDeltaSPrime.Add(totalDeltaSPrime, intrinsicS)
-
 	// PrimeEntropyThreshold number of zone blocks times the intrinsic logs of
 	// the given header determines the prime block
-	primeEntropyThreshold := new(big.Int).Mul(zoneThresholdS, header.PrimeEntropyThreshold(header.Location().Zone()))
-	if totalDeltaSPrime.Cmp(primeEntropyThreshold) > 0 {
+	primeEntropyTarget := new(big.Int).Mul(big.NewInt(common.NumRegionsInPrime), big.NewInt(common.NumZonesInRegion))
+	primeEntropyTarget = new(big.Int).Mul(primeEntropyTarget, params.TimeFactor)
+	primeEntropyTarget = new(big.Int).Mul(primeEntropyTarget, params.TimeFactor)
+	primeBlockEntropyThreshold := new(big.Int).Add(zoneThresholdS, common.BitsToBigBits(primeEntropyTarget))
+	if intrinsicS.Cmp(primeBlockEntropyThreshold) > 0 {
 		return intrinsicS, common.PRIME_CTX, nil
 	}
 
 	// REGION
 	// Compute the total accumulated entropy since the last region block
-	totalDeltaSRegion := new(big.Int).Add(header.ParentDeltaS(common.ZONE_CTX), intrinsicS)
-	regionEntropyThreshold := new(big.Int).Mul(zoneThresholdS, params.TimeFactor)
-	regionEntropyThreshold = new(big.Int).Mul(regionEntropyThreshold, big.NewInt(common.NumZonesInRegion))
-	if totalDeltaSRegion.Cmp(regionEntropyThreshold) > 0 {
+	regionEntropyTarget := new(big.Int).Mul(params.TimeFactor, big.NewInt(common.NumZonesInRegion))
+	regionBlockEntropyThreshold := new(big.Int).Add(zoneThresholdS, common.BitsToBigBits(regionEntropyTarget))
+	if intrinsicS.Cmp(regionBlockEntropyThreshold) > 0 {
 		return intrinsicS, common.REGION_CTX, nil
 	}
 
