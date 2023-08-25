@@ -204,8 +204,10 @@ func (c *Core) serviceBlocks(hashNumberList []types.HashAndNumber) {
 				nodeCtx := common.NodeLocation.Context()
 				if parentHeaderOrder < nodeCtx && c.GetHeaderByHash(parentHeader.Hash()) == nil {
 					log.Info("Requesting the dom to get the block if it doesnt have and try to append", "Hash", parentHeader.Hash(), "Order", parentHeaderOrder)
-					// send a signal to the required dom to fetch the block if it doesnt have it, or its not in its appendqueue
-					go c.sl.domClient.RequestDomToAppendOrFetch(context.Background(), parentHeader.Hash(), parentHeaderOrder)
+					if c.sl.domClient != nil {
+						// send a signal to the required dom to fetch the block if it doesnt have it, or its not in its appendqueue
+						go c.sl.domClient.RequestDomToAppendOrFetch(context.Background(), parentHeader.Hash(), parentHeaderOrder)
+					}
 				}
 				// Using a empty block to append here because append only takes in a
 				// header and we read the block inside append again, so to save the
@@ -235,7 +237,9 @@ func (c *Core) RequestDomToAppendOrFetch(hash common.Hash, order int) {
 		}
 	} else if nodeCtx == common.REGION_CTX {
 		if order < nodeCtx { // Prime block
-			go c.sl.domClient.RequestDomToAppendOrFetch(context.Background(), hash, order)
+			if c.sl.domClient != nil {
+				go c.sl.domClient.RequestDomToAppendOrFetch(context.Background(), hash, order)
+			}
 		}
 		_, exists := c.appendQueue.Get(hash)
 		if !exists {
@@ -352,7 +356,9 @@ func (c *Core) WriteBlock(block *types.Block) {
 			c.addToAppendQueue(block)
 			// If a dom block comes in and we havent appended it yet
 		} else if order < nodeCtx && c.GetHeaderByHash(block.Hash()) == nil {
-			go c.sl.domClient.RequestDomToAppendOrFetch(context.Background(), block.Hash(), order)
+			if c.sl.domClient != nil {
+				go c.sl.domClient.RequestDomToAppendOrFetch(context.Background(), block.Hash(), order)
+			}
 		}
 	}
 	if c.GetHeaderOrCandidateByHash(block.Hash()) == nil {
