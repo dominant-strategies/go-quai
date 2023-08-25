@@ -16,7 +16,10 @@
 
 package common
 
-import "math/big"
+import (
+	"math/big"
+	"modernc.org/mathutil"
+)
 
 // Common big integers often used
 var (
@@ -34,6 +37,13 @@ var (
 func BigBitsToBits(original *big.Int) *big.Int {
 	e2e64 := big.NewInt(0).Exp(big.NewInt(2), big.NewInt(64), nil)
 	return big.NewInt(0).Div(original, e2e64)
+}
+
+func BitsToBigBits(original *big.Int) *big.Int {
+	c, m := mathutil.BinaryLog(original, 64)
+	bigBits := new(big.Int).Mul(big.NewInt(int64(c)), new(big.Int).Exp(big.NewInt(2), big.NewInt(64), nil))
+	bigBits = new(big.Int).Add(bigBits, m)
+	return bigBits
 }
 
 func BigBitsArrayToBitsArray(original []*big.Int) []*big.Int {
