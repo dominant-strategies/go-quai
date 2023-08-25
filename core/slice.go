@@ -776,7 +776,9 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 			}
 		}
 
+		sl.phCacheMu.Lock()
 		sl.updatePhCache(types.NewPendingHeader(combinedPendingHeader, localPendingHeader.Termini()), false, nil, subReorg)
+		sl.phCacheMu.Unlock()
 
 		return nil
 	}
@@ -794,6 +796,14 @@ func (sl *Slice) updatePhCache(pendingHeaderWithTermini types.PendingHeader, inS
 		pendingHeaderWithTermini, exists = sl.readPhCache(termini.DomTerminus())
 		if exists {
 			pendingHeaderWithTermini.SetHeader(sl.combinePendingHeader(localHeader, pendingHeaderWithTermini.Header(), common.ZONE_CTX, true))
+		}
+
+		bestPh, exists := sl.readPhCache(sl.bestPhKey)
+		if !exists {
+			return
+		}
+		if !sl.poem(pendingHeaderWithTermini.Header().ParentEntropy(), bestPh.Header().ParentEntropy()) {
+			return
 		}
 	}
 
