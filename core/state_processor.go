@@ -630,10 +630,11 @@ func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *s
 		}
 	}
 
+	var newHeads []*types.Block
 	if base != nil {
 		// The optional base statedb is given, mark the start point as parent block
 		statedb, database, report = base, base.Database(), false
-		current = p.hc.GetBlock(block.ParentHash(), block.NumberU64()-1)
+		current = p.hc.GetBlockOrCandidate(block.ParentHash(), block.NumberU64()-1)
 	} else {
 		// Otherwise try to reexec blocks until we find a state or reach our limit
 		current = block
@@ -651,12 +652,13 @@ func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *s
 				return statedb, nil
 			}
 		}
+		newHeads = append(newHeads, block)
 		// Database does not have the state for the given block, try to regenerate
 		for i := uint64(0); i < reexec; i++ {
 			if current.NumberU64() == 0 {
 				return nil, errors.New("genesis state is missing")
 			}
-			parent := p.hc.GetBlock(current.ParentHash(), current.NumberU64()-1)
+			parent := p.hc.GetBlockOrCandidate(current.ParentHash(), current.NumberU64()-1)
 			if parent == nil {
 				return nil, fmt.Errorf("missing block %v %d", current.ParentHash(), current.NumberU64()-1)
 			}
@@ -666,6 +668,7 @@ func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *s
 			if err == nil {
 				break
 			}
+			newHeads = append(newHeads, current)
 		}
 		if err != nil {
 			switch err.(type) {
@@ -682,17 +685,12 @@ func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *s
 		logged time.Time
 		parent common.Hash
 	)
-	for current.NumberU64() < origin {
+	for i := len(newHeads) - 1; i >= 0; i-- {
+		current := newHeads[i]
 		// Print progress logs if long enough time elapsed
 		if time.Since(logged) > 8*time.Second && report {
 			log.Info("Regenerating historical state", "block", current.NumberU64()+1, "target", origin, "remaining", origin-current.NumberU64()-1, "elapsed", time.Since(start))
 			logged = time.Now()
-		}
-
-		// Retrieve the next block to regenerate and process it
-		next := current.NumberU64() + 1
-		if current = p.hc.GetBlockByNumber(next); current == nil {
-			return nil, fmt.Errorf("block #%d not found", next)
 		}
 
 		etxSet := rawdb.ReadEtxSet(p.hc.bc.db, current.ParentHash(), current.NumberU64()-1)
