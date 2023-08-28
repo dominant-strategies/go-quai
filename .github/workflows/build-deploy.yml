@@ -126,12 +126,6 @@ jobs:
         location: us-central1-c
         credentials: ${{ secrets.GKE_SA_KEY }}
 
-      # Deploy the helm chart
-    - name: Deploy the helm chart
-      uses: WyriHaximus/github-action-helm3@v2
-      with:
-        exec: helm upgrade go-quai ./helm --install --wait --atomic --namespace=${{ inputs.env }} --values=./helm/env/${{ inputs.env }}.values.yaml
-
       # Rev the version
     - name: Update version environment variable
       run: echo "VERSION=$(echo $VERSION | ${{ inputs.awk  }})" >> $GITHUB_ENV
