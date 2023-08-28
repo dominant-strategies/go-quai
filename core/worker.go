@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -43,6 +44,9 @@ const (
 
 	// pendingBlockBodyLimit is maximum number of pending block bodies to be kept in cache.
 	pendingBlockBodyLimit = 320
+
+	// sortedPoolCacheInternval is the interval to update the sorted transaction pool.
+	sortedPoolCacheInterval = 3 * time.Second
 )
 
 // environment is the worker's current environment and holds all
@@ -164,12 +168,16 @@ type Config struct {
 // worker is the main object which takes care of submitting new work to consensus engine
 // and gathering the sealing result.
 type worker struct {
-	config      *Config
-	chainConfig *params.ChainConfig
-	engine      consensus.Engine
-	hc          *HeaderChain
-	txPool      *TxPool
-
+	config               *Config
+	chainConfig          *params.ChainConfig
+	engine               consensus.Engine
+	hc                   *HeaderChain
+	txPool               *TxPool
+	sortedPoolCache      *types.TransactionsByPriceAndNonce // sortedPoolCache is the sorted transaction pool
+	sortedPoolCacheNil   uint                               // number of times the sorted pool cache was nil for stats
+	sortedPoolCacheFull  uint                               // number of times the sorted pool cache was not nil for stats
+	sortedPoolCacheEmpty uint                               // number of times the sorted pool cache was empty for stats
+	sortCacheLock        sync.RWMutex
 	// Feeds
 	pendingLogsFeed   event.Feed
 	pendingHeaderFeed event.Feed
@@ -184,6 +192,7 @@ type worker struct {
 	exitCh             chan struct{}
 	resubmitIntervalCh chan time.Duration
 	resubmitAdjustCh   chan *intervalAdjust
+	reorgCh            chan bool
 
 	interrupt   chan struct{}
 	asyncPhFeed event.Feed // asyncPhFeed sends an event after each state root update
@@ -245,16 +254,13 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 		interrupt:          make(chan struct{}),
 		resubmitIntervalCh: make(chan time.Duration),
 		resubmitAdjustCh:   make(chan *intervalAdjust, resubmitAdjustChanSize),
+		reorgCh:            make(chan bool),
 	}
 	// Set the GasFloor of the worker to the minGasLimit
 	worker.config.GasFloor = params.MinGasLimit
 
 	phBodyCache, _ := lru.New(pendingBlockBodyLimit)
 	worker.pendingBlockBody = phBodyCache
-
-	if headerchain.ProcessingState() {
-		worker.chainHeadSub = worker.hc.SubscribeChainHeadEvent(worker.chainHeadCh)
-	}
 
 	// Sanitize recommit interval if the user-specified one is too short.
 	recommit := worker.config.Recommit
@@ -264,8 +270,14 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 	}
 
 	if processingState {
+		worker.chainHeadSub = worker.hc.SubscribeChainHeadEvent(worker.chainHeadCh)
 		worker.wg.Add(1)
 		go worker.asyncStateLoop()
+	}
+
+	if processingState && common.NodeLocation.Context() == common.ZONE_CTX {
+		ticker := time.NewTicker(sortedPoolCacheInterval)
+		go worker.SortPool(ticker)
 	}
 
 	return worker
@@ -424,6 +436,95 @@ func (w *worker) asyncStateLoop() {
 			return
 		}
 	}
+}
+
+type RollingAverage struct {
+	windowSize int
+	durations  []time.Duration
+	sum        time.Duration
+}
+
+func (ra *RollingAverage) Add(d time.Duration) {
+	if len(ra.durations) == ra.windowSize {
+		// Remove the oldest duration from the sum
+		ra.sum -= ra.durations[0]
+		ra.durations = ra.durations[1:]
+	}
+	ra.durations = append(ra.durations, d)
+	ra.sum += d
+}
+func (ra *RollingAverage) Average() time.Duration {
+	if len(ra.durations) == 0 {
+		return 0
+	}
+	return ra.sum / time.Duration(len(ra.durations))
+}
+
+// SortPool asynchronously sorts the tx pool for the worker.
+func (w *worker) SortPool(tick *time.Ticker) {
+	statsTicker := time.NewTicker(10 * time.Second)
+	timeTaken := time.Duration(0)
+	ra := RollingAverage{windowSize: 100}
+	for {
+		select {
+		case <-tick.C:
+			start := time.Now()
+			currentHead := w.hc.CurrentHeader()
+			expectedBaseFee := misc.CalcBaseFee(w.chainConfig, currentHead) // calc expected next basefee (based on currentHead as parent)
+			if expectedBaseFee == nil {
+				log.Error("Error calculating expected basefee")
+				continue
+			}
+			if w.current == nil {
+				log.Error("Worker current environment is nil")
+				continue
+			}
+			if w.current.signer == nil {
+				log.Error("Worker current signer is nil")
+				continue
+			}
+			etxSet := rawdb.ReadEtxSet(w.hc.bc.db, currentHead.Hash(), currentHead.NumberU64())
+			if etxSet == nil {
+				log.Error("Error reading etx set from db")
+				continue
+			}
+			etxSet.Update(types.Transactions{}, currentHead.NumberU64()+1) // Prune any expired ETXs
+			// Get transactions from pool
+			pending, err := w.txPool.TxPoolPending(true, etxSet)
+			if err != nil {
+				log.Error("Error getting pending transactions from pool", "err", err)
+				continue
+			}
+			if len(pending) > 0 {
+				txs := types.NewTransactionsByPriceAndNonce(w.current.signer, pending, expectedBaseFee, true)
+				w.sortCacheLock.Lock()
+				w.sortedPoolCache = txs
+				timeTaken = time.Since(start)
+				ra.Add(timeTaken)
+				w.sortCacheLock.Unlock()
+			}
+		case <-w.reorgCh:
+			w.sortCacheLock.Lock()
+			w.sortedPoolCache = nil                        // reset the sortedPoolCache in the case of a reorg as it is outdated
+			tick = time.NewTicker(sortedPoolCacheInterval) // reset the timer to give some time for mempool to reorg
+			w.sortCacheLock.Unlock()
+		case <-statsTicker.C:
+			w.sortCacheLock.RLock()
+			if w.sortedPoolCache == nil {
+				w.sortCacheLock.RUnlock()
+				continue
+			}
+			log.Info(fmt.Sprintf("Worker sorted poolcache has %d txs, took %s to sort, average sort time %s. Poolcache was nil %d times, empty %d and not empty %d times, empty %s percent of the time and nil %s percent of the time", w.sortedPoolCache.Len(), common.PrettyDuration(timeTaken), common.PrettyDuration(ra.Average()), w.sortedPoolCacheNil, w.sortedPoolCacheEmpty, w.sortedPoolCacheFull, fmt.Sprintf("%.2f", float64(w.sortedPoolCacheEmpty)/float64(w.sortedPoolCacheNil+w.sortedPoolCacheFull+w.sortedPoolCacheEmpty)*100), fmt.Sprintf("%.2f", float64(w.sortedPoolCacheNil)/float64(w.sortedPoolCacheNil+w.sortedPoolCacheFull+w.sortedPoolCacheEmpty)*100)))
+			w.sortCacheLock.RUnlock()
+		case <-w.exitCh:
+			return
+		}
+	}
+}
+
+// ReorgResetPoolCache resets the sortedPoolCache in the case of a reorg.
+func (w *worker) ReorgResetSortedPoolCache() {
+	w.reorgCh <- true
 }
 
 // GeneratePendingBlock generates pending block given a commited block.
@@ -618,7 +719,7 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*
 	return nil, errors.New("error finding transaction")
 }
 
-func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByPriceAndNonce, interrupt *int32) bool {
+func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByPriceAndNonce, interrupt *int32, updatedETXSet types.EtxSet) bool {
 	gasLimit := env.header.GasLimit
 	if env.gasPool == nil {
 		env.gasPool = new(GasPool).AddGas(gasLimit())
@@ -655,6 +756,15 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 		tx := txs.Peek()
 		if tx == nil {
 			break
+		}
+		if tx.Type() == types.ExternalTxType {
+			// Verify that ETX exists in the set
+			_, exists := updatedETXSet[tx.Hash()]
+			if !exists { // Verify that the ETX exists in the set
+				log.Debug("invalid external transaction: etx not found in unspent etx set", "etx", tx.Hash())
+				txs.Pop()
+				continue
+			}
 		}
 		// Error may be ignored here. The error has already been checked
 		// during transaction acceptance is the transaction pool.
@@ -695,6 +805,11 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 		case errors.Is(err, ErrTxTypeNotSupported):
 			// Pop the unsupported transaction without shifting in the next from the account
 			log.Error("Skipping unsupported transaction type", "sender", from, "type", tx.Type())
+			txs.Pop()
+
+		case strings.Contains(err.Error(), "emits too many cross"): // This is ErrEtxLimitReached with more info
+			// Pop the unsupported transaction without shifting in the next from the account
+			log.Trace("Etx limit exceeded for current block", "sender", from, "err", err)
 			txs.Pop()
 
 		default:
@@ -844,34 +959,38 @@ func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*en
 // into the given sealing block. The transaction selection and ordering strategy can
 // be customized with the plugin in the future.
 func (w *worker) fillTransactions(interrupt *int32, env *environment, block *types.Block) {
-	// Split the pending transactions into locals and remotes
-	// Fill the block with all available pending transactions.
-	etxSet := rawdb.ReadEtxSet(w.hc.bc.db, block.Hash(), block.NumberU64())
-	if etxSet == nil {
-		return
+
+	w.sortCacheLock.Lock()
+	if w.sortedPoolCache == nil {
+		w.sortedPoolCacheNil++
+	} else if w.sortedPoolCache.Len() == 0 {
+		w.sortedPoolCacheEmpty++
+	} else {
+		w.sortedPoolCacheFull++
 	}
-	etxSet.Update(types.Transactions{}, block.NumberU64()+1) // Prune any expired ETXs
-	pending, err := w.txPool.TxPoolPending(true, etxSet)
-	if err != nil {
-		return
-	}
-	localTxs, remoteTxs := make(map[common.AddressBytes]types.Transactions), pending
-	for _, account := range w.txPool.Locals() {
-		if txs := remoteTxs[account.Bytes20()]; len(txs) > 0 {
-			delete(remoteTxs, account.Bytes20())
-			localTxs[account.Bytes20()] = txs
-		}
-	}
-	if len(localTxs) > 0 {
-		txs := types.NewTransactionsByPriceAndNonce(env.signer, localTxs, env.header.BaseFee(), false)
-		if w.commitTransactions(env, txs, interrupt) {
+	if w.sortedPoolCache != nil && w.sortedPoolCache.Len() > 0 {
+		etxSet := rawdb.ReadEtxSet(w.hc.bc.db, block.Hash(), block.NumberU64())
+		etxSet.Update(types.Transactions{}, block.NumberU64()+1) // Prune any expired ETXs
+		w.commitTransactions(env, w.sortedPoolCache, interrupt, etxSet)
+		w.sortCacheLock.Unlock()
+	} else {
+		w.sortCacheLock.Unlock()
+		log.Debug("Worker sortedPoolCache is empty, triggering failsafe")
+		// Split the pending transactions into locals and remotes
+		// Fill the block with all available pending transactions.
+		etxSet := rawdb.ReadEtxSet(w.hc.bc.db, block.Hash(), block.NumberU64())
+		if etxSet == nil {
 			return
 		}
-	}
-	if len(remoteTxs) > 0 {
-		txs := types.NewTransactionsByPriceAndNonce(env.signer, remoteTxs, env.header.BaseFee(), false)
-		if w.commitTransactions(env, txs, interrupt) {
+		etxSet.Update(types.Transactions{}, block.NumberU64()+1) // Prune any expired ETXs
+		pending, err := w.txPool.TxPoolPending(true, etxSet)
+		if err != nil {
 			return
+		}
+
+		if len(pending) > 0 {
+			txs := types.NewTransactionsByPriceAndNonce(env.signer, pending, env.header.BaseFee(), false)
+			w.commitTransactions(env, txs, interrupt, etxSet)
 		}
 	}
 }

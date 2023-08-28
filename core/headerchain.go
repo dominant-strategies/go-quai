@@ -37,6 +37,7 @@ type HeaderChain struct {
 	bc     *BodyDb
 	engine consensus.Engine
 	pool   *TxPool
+	worker *worker
 
 	chainHeadFeed event.Feed
 	chainSideFeed event.Feed
@@ -392,7 +393,10 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 		}
 		rawdb.WriteCanonicalHash(hc.headerDb, hashStack[i].Hash(), hashStack[i].NumberU64())
 	}
-
+	// Async reset the worker sorted pool cache as it is outdated
+	if common.NodeLocation.Context() == common.ZONE_CTX && hc.ProcessingState() {
+		go hc.worker.ReorgResetSortedPoolCache()
+	}
 	return nil
 }
 
