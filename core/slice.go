@@ -259,7 +259,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		if order < nodeCtx {
 			// Store the inbound etxs for dom blocks that did not get picked and use
 			// it in the future if dom switch happens
-			rawdb.WriteInboundEtxs(batch, block.Hash(), newInboundEtxs.FilterToLocation(common.NodeLocation))
+			rawdb.WriteInboundEtxs(sl.sliceDb, block.Hash(), newInboundEtxs.FilterToLocation(common.NodeLocation))
 		}
 
 		if subReorg {
