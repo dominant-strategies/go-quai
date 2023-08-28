@@ -347,7 +347,10 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 
 	// If head is the normal extension of canonical head, we can return by just wiring the canonical hash.
 	if prevHeader.Hash() == head.ParentHash() {
-		hc.ReadInboundEtxsAndAppendBlock(head)
+		err := hc.ReadInboundEtxsAndAppendBlock(head)
+		if err != nil {
+			return err
+		}
 		rawdb.WriteCanonicalHash(hc.headerDb, head.Hash(), head.NumberU64())
 		return nil
 	}
@@ -383,7 +386,10 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 
 	// Run through the hash stack to update canonicalHash and forward state processor
 	for i := len(hashStack) - 1; i >= 0; i-- {
-		hc.ReadInboundEtxsAndAppendBlock(hashStack[i])
+		err := hc.ReadInboundEtxsAndAppendBlock(hashStack[i])
+		if err != nil {
+			return err
+		}
 		rawdb.WriteCanonicalHash(hc.headerDb, hashStack[i].Hash(), hashStack[i].NumberU64())
 	}
 
@@ -405,8 +411,7 @@ func (hc *HeaderChain) ReadInboundEtxsAndAppendBlock(header *types.Header) error
 	if order < nodeCtx {
 		inboundEtxs = rawdb.ReadInboundEtxs(hc.headerDb, header.Hash())
 	}
-	hc.AppendBlock(block, inboundEtxs)
-	return nil
+	return hc.AppendBlock(block, inboundEtxs)
 }
 
 // findCommonAncestor

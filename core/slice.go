@@ -263,7 +263,11 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		}
 
 		if subReorg {
-			sl.hc.SetCurrentHeader(block.Header())
+			err := sl.hc.SetCurrentHeader(block.Header())
+			if err != nil {
+				log.Error("Error setting current header", "err", err, "Hash", block.Hash())
+				return nil, false, err
+			}
 		}
 		// Upate the local pending header
 		pendingHeaderWithTermini, err = sl.generateSlicePendingHeader(block, newTermini, domPendingHeader, domOrigin, subReorg, false)
@@ -295,7 +299,11 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 
 	if subReorg {
 		if nodeCtx != common.ZONE_CTX {
-			sl.hc.SetCurrentHeader(block.Header())
+			err := sl.hc.SetCurrentHeader(block.Header())
+			if err != nil {
+				log.Error("Error setting current header", "err", err, "Hash", block.Hash())
+				return nil, false, err
+			}
 		}
 		sl.hc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
 	}
@@ -730,7 +738,11 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 			if (localPendingHeader.Header().Root() != types.EmptyRootHash && nodeCtx == common.ZONE_CTX) || nodeCtx == common.REGION_CTX {
 				block := sl.hc.GetBlockOrCandidateByHash(localPendingHeader.Header().ParentHash())
 				if block != nil {
-					sl.hc.SetCurrentHeader(block.Header())
+					err := sl.hc.SetCurrentHeader(block.Header())
+					if err != nil {
+						log.Error("Error setting current header", "err", err, "Hash", block.Hash())
+						return err
+					}
 					log.Info("Choosing phHeader pickPhHead:", "NumberArray:", localPendingHeader.Header().NumberArray(), "Number:", localPendingHeader.Header().Number(), "ParentHash:", localPendingHeader.Header().ParentHash(), "Terminus:", localPendingHeader.Termini().DomTerminus())
 					sl.bestPhKey = localPendingHeader.Termini().DomTerminus()
 					if block.Hash() != sl.hc.CurrentHeader().Hash() {
@@ -742,7 +754,11 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 			} else {
 				block := sl.hc.GetBlockOrCandidateByHash(localPendingHeader.Header().ParentHash())
 				if block != nil {
-					sl.hc.SetCurrentHeader(block.Header())
+					err := sl.hc.SetCurrentHeader(block.Header())
+					if err != nil {
+						log.Error("Error setting current header", "err", err, "Hash", block.Hash())
+						return err
+					}
 					newPendingHeader, err := sl.generateSlicePendingHeader(block, localPendingHeader.Termini(), combinedPendingHeader, true, true, false)
 					if err != nil {
 						log.Error("Error generating slice pending header", "err", err)
