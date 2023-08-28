@@ -653,6 +653,10 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, headerProcCh 
 		headers[i], headers[j] = headers[j], headers[i]
 	}
 
+	if len(headers) == 0 && accepted {
+		return 0, nil
+	}
+
 	if accepted {
 		if headers[len(headers)-1].Number().Uint64() != request.From {
 			logger.Info("First header broke chain ordering", "number", headers[0].Number(), "hash", headers[0].Hash(), "expected", request.From)
