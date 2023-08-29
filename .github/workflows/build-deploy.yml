@@ -112,19 +112,6 @@ jobs:
     - name: git tag
       run: git tag -s ${{ env.VERSION }} -m ${{ env.VERSION }} && git push origin tag ${{ env.VERSION }}
 
-      # Set up Google Cloud Platform with the correct service account key and project id
-    - uses: google-github-actions/setup-gcloud@94337306dda8180d967a56932ceb4ddcf01edae7
-      with:
-        service_account_key: ${{ secrets.GKE_SA_KEY }}
-        project_id: ${{ secrets.GKE_PROJECT }}
-
-      # Get credentials for accessing the GKE cluster.
-    - uses: google-github-actions/get-gke-credentials@fb08709ba27618c31c09e014e1d8364b02e5042e
-      with:
-        cluster_name: ${{ inputs.env }}
-        location: us-central1-c
-        credentials: ${{ secrets.GKE_SA_KEY }}
-
       # Rev the version
     - name: Update version environment variable
       run: echo "VERSION=$(echo $VERSION | ${{ inputs.awk  }})" >> $GITHUB_ENV
