@@ -107,7 +107,7 @@ func TestSign(t *testing.T) {
 	}
 	pubKey, _ := UnmarshalPubkey(recoveredPub)
 	recoveredAddr := PubkeyToAddress(*pubKey)
-	if addr != recoveredAddr {
+	if !addr.Equal(recoveredAddr) {
 		t.Errorf("Address mismatch: want: %x have: %x", addr, recoveredAddr)
 	}
 
@@ -117,7 +117,7 @@ func TestSign(t *testing.T) {
 		t.Errorf("ECRecover error: %s", err)
 	}
 	recoveredAddr2 := PubkeyToAddress(*recoveredPub2)
-	if addr != recoveredAddr2 {
+	if !addr.Equal(recoveredAddr2) {
 		t.Errorf("Address mismatch: want: %x have: %x", addr, recoveredAddr2)
 	}
 }
@@ -278,7 +278,7 @@ func checkhash(t *testing.T, name string, f func([]byte) []byte, msg, exp []byte
 }
 
 func checkAddr(t *testing.T, addr0, addr1 common.Address) {
-	if addr0 != addr1 {
+	if !addr0.Equal(addr1) {
 		t.Fatalf("address mismatch: want: %x have: %x", addr0, addr1)
 	}
 }
