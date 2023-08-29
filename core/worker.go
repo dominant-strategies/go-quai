@@ -850,7 +850,7 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, block *typ
 	if etxSet == nil {
 		return
 	}
-	etxSet.Update(types.Transactions{}, block.NumberU64()) // Prune any expired ETXs
+	etxSet.Update(types.Transactions{}, block.NumberU64()+1) // Prune any expired ETXs
 	pending, err := w.txPool.TxPoolPending(true, etxSet)
 	if err != nil {
 		return
