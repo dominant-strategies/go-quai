@@ -258,8 +258,8 @@ func TestValidateSignatureValues(t *testing.T) {
 	check(false, 1, zero, one)
 	check(false, 1, one, zero)
 
-	// correct sig with max r,s
-	check(true, 0, secp256k1nMinus1, secp256k1nMinus1)
+	// correct sig with max r and s above upper limit
+	check(false, 0, secp256k1nMinus1, secp256k1nMinus1)
 	// correct v, combinations of incorrect r,s at upper limit
 	check(false, 0, secp256k1N, secp256k1nMinus1)
 	check(false, 0, secp256k1nMinus1, secp256k1N)
