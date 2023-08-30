@@ -623,13 +623,6 @@ func (t *TransactionsByPriceAndNonce) Pop() {
 	heap.Pop(&t.heads)
 }
 
-func (t *TransactionsByPriceAndNonce) Len() int {
-	if t.heads == nil {
-		return 0
-	}
-	return t.heads.Len()
-}
-
 // Message is a fully derived transaction and implements core.Message
 //
 // NOTE: In a future PR this will be removed.

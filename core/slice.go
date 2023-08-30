@@ -99,7 +99,7 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLooku
 		sl.hc.pool = sl.txPool
 	}
 	sl.miner = New(sl.hc, sl.txPool, config, db, chainConfig, engine, isLocalBlock, sl.ProcessingState())
-	sl.hc.worker = sl.miner.worker
+
 	sl.phCache, _ = lru.New(c_phCacheSize)
 
 	// only set the subClients if the chain is not Zone

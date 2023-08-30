@@ -216,8 +216,6 @@ func (c *Core) serviceBlocks(hashNumberList []types.HashAndNumber) {
 			} else {
 				if !c.HasHeader(header.ParentHash(), header.NumberU64()-1) {
 					c.sl.missingParentFeed.Send(header.ParentHash())
-				} else {
-					log.Error("db has the header, but it's nil", "HasHeader", c.HasHeader(header.ParentHash(), header.NumberU64()-1), "GetHeader", c.GetHeader(header.ParentHash(), header.NumberU64()-1), "ParentHash", header.ParentHash().String(), "Number", header.NumberU64())
 				}
 			}
 		} else {
