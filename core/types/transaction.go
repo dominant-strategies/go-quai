@@ -616,6 +616,15 @@ func (t *TransactionsByPriceAndNonce) Shift(acc common.AddressBytes, sort bool) 
 
 }
 
+// Pop the first transaction without sorting
+func (t *TransactionsByPriceAndNonce) PopNoSort() {
+	if len(t.heads) > 1 {
+		t.heads = t.heads[1:]
+	} else {
+		t.heads = make(TxByPriceAndTime, 0)
+	}
+}
+
 // Pop removes the best transaction, *not* replacing it with the next one from
 // the same account. This should be used when a transaction cannot be executed
 // and hence all subsequent ones should be discarded from the same account.

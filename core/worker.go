@@ -168,16 +168,17 @@ type Config struct {
 // worker is the main object which takes care of submitting new work to consensus engine
 // and gathering the sealing result.
 type worker struct {
-	config               *Config
-	chainConfig          *params.ChainConfig
-	engine               consensus.Engine
-	hc                   *HeaderChain
-	txPool               *TxPool
-	sortedPoolCache      *types.TransactionsByPriceAndNonce // sortedPoolCache is the sorted transaction pool
-	sortedPoolCacheNil   uint                               // number of times the sorted pool cache was nil for stats
-	sortedPoolCacheFull  uint                               // number of times the sorted pool cache was not nil for stats
-	sortedPoolCacheEmpty uint                               // number of times the sorted pool cache was empty for stats
-	sortCacheLock        sync.RWMutex
+	config                         *Config
+	chainConfig                    *params.ChainConfig
+	engine                         consensus.Engine
+	hc                             *HeaderChain
+	txPool                         *TxPool
+	sortedPoolCache                *types.TransactionsByPriceAndNonce // sortedPoolCache is the sorted transaction pool
+	sortedPoolCacheNil             uint                               // number of times the sorted pool cache was nil for stats
+	sortedPoolCacheFull            uint                               // number of times the sorted pool cache was not nil for stats
+	sortedPoolCacheEmpty           uint                               // number of times the sorted pool cache was empty for stats
+	fillTransactionsRollingAverage *RollingAverage
+	sortCacheLock                  sync.RWMutex
 	// Feeds
 	pendingLogsFeed   event.Feed
 	pendingHeaderFeed event.Feed
@@ -237,24 +238,25 @@ type worker struct {
 
 func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Database, engine consensus.Engine, headerchain *HeaderChain, txPool *TxPool, isLocalBlock func(header *types.Header) bool, init bool, processingState bool) *worker {
 	worker := &worker{
-		config:             config,
-		chainConfig:        chainConfig,
-		engine:             engine,
-		hc:                 headerchain,
-		txPool:             txPool,
-		coinbase:           config.Etherbase,
-		isLocalBlock:       isLocalBlock,
-		workerDb:           db,
-		localUncles:        make(map[common.Hash]*types.Block),
-		remoteUncles:       make(map[common.Hash]*types.Block),
-		chainHeadCh:        make(chan ChainHeadEvent, chainHeadChanSize),
-		taskCh:             make(chan *task),
-		resultCh:           make(chan *types.Block, resultQueueSize),
-		exitCh:             make(chan struct{}),
-		interrupt:          make(chan struct{}),
-		resubmitIntervalCh: make(chan time.Duration),
-		resubmitAdjustCh:   make(chan *intervalAdjust, resubmitAdjustChanSize),
-		reorgCh:            make(chan bool),
+		config:                         config,
+		chainConfig:                    chainConfig,
+		engine:                         engine,
+		hc:                             headerchain,
+		txPool:                         txPool,
+		coinbase:                       config.Etherbase,
+		isLocalBlock:                   isLocalBlock,
+		workerDb:                       db,
+		localUncles:                    make(map[common.Hash]*types.Block),
+		remoteUncles:                   make(map[common.Hash]*types.Block),
+		chainHeadCh:                    make(chan ChainHeadEvent, chainHeadChanSize),
+		taskCh:                         make(chan *task),
+		resultCh:                       make(chan *types.Block, resultQueueSize),
+		exitCh:                         make(chan struct{}),
+		interrupt:                      make(chan struct{}),
+		resubmitIntervalCh:             make(chan time.Duration),
+		resubmitAdjustCh:               make(chan *intervalAdjust, resubmitAdjustChanSize),
+		reorgCh:                        make(chan bool),
+		fillTransactionsRollingAverage: &RollingAverage{windowSize: 100},
 	}
 	// Set the GasFloor of the worker to the minGasLimit
 	worker.config.GasFloor = params.MinGasLimit
@@ -505,8 +507,8 @@ func (w *worker) SortPool(tick *time.Ticker) {
 			}
 		case <-w.reorgCh:
 			w.sortCacheLock.Lock()
-			w.sortedPoolCache = nil                        // reset the sortedPoolCache in the case of a reorg as it is outdated
-			tick = time.NewTicker(sortedPoolCacheInterval) // reset the timer to give some time for mempool to reorg
+			w.sortedPoolCache = nil     // reset the sortedPoolCache in the case of a reorg as it is outdated
+			time.Sleep(1 * time.Second) // wait a second for mempool reorg to complete
 			w.sortCacheLock.Unlock()
 		case <-statsTicker.C:
 			w.sortCacheLock.RLock()
@@ -514,7 +516,7 @@ func (w *worker) SortPool(tick *time.Ticker) {
 				w.sortCacheLock.RUnlock()
 				continue
 			}
-			log.Info(fmt.Sprintf("Worker sorted poolcache has %d txs, took %s to sort, average sort time %s. Poolcache was nil %d times, empty %d and not empty %d times, empty %s percent of the time and nil %s percent of the time", w.sortedPoolCache.Len(), common.PrettyDuration(timeTaken), common.PrettyDuration(ra.Average()), w.sortedPoolCacheNil, w.sortedPoolCacheEmpty, w.sortedPoolCacheFull, fmt.Sprintf("%.2f", float64(w.sortedPoolCacheEmpty)/float64(w.sortedPoolCacheNil+w.sortedPoolCacheFull+w.sortedPoolCacheEmpty)*100), fmt.Sprintf("%.2f", float64(w.sortedPoolCacheNil)/float64(w.sortedPoolCacheNil+w.sortedPoolCacheFull+w.sortedPoolCacheEmpty)*100)))
+			log.Info(fmt.Sprintf("Worker sorted poolcache has %d txs, took %s to sort, average sort time %s. Average commitTransactions time is %s. Poolcache was nil %d times, empty %d and not empty %d times, empty %s percent of the time and nil %s percent of the time", w.sortedPoolCache.Len(), common.PrettyDuration(timeTaken), common.PrettyDuration(ra.Average()), common.PrettyDuration(w.fillTransactionsRollingAverage.Average()), w.sortedPoolCacheNil, w.sortedPoolCacheEmpty, w.sortedPoolCacheFull, fmt.Sprintf("%.2f", float64(w.sortedPoolCacheEmpty)/float64(w.sortedPoolCacheNil+w.sortedPoolCacheFull+w.sortedPoolCacheEmpty)*100), fmt.Sprintf("%.2f", float64(w.sortedPoolCacheNil)/float64(w.sortedPoolCacheNil+w.sortedPoolCacheFull+w.sortedPoolCacheEmpty)*100)))
 			w.sortCacheLock.RUnlock()
 		case <-w.exitCh:
 			return
@@ -779,42 +781,44 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 		case errors.Is(err, ErrGasLimitReached):
 			// Pop the current out-of-gas transaction without shifting in the next from the account
 			log.Trace("Gas limit exceeded for current block", "sender", from)
-			txs.Pop()
+			txs.PopNoSort()
 
 		case errors.Is(err, ErrEtxLimitReached):
 			// Pop the current transaction without shifting in the next from the account
 			log.Trace("Etx limit exceeded for current block", "sender", from)
-			txs.Pop()
+			txs.PopNoSort()
 
 		case errors.Is(err, ErrNonceTooLow):
 			// New head notification data race between the transaction pool and miner, shift
+			// This gets the next nonce of the account regardless of fee.
 			log.Trace("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce())
 			txs.Shift(from.Bytes20(), false)
 
 		case errors.Is(err, ErrNonceTooHigh):
 			// Reorg notification data race between the transaction pool and miner, skip account =
 			log.Debug("Skipping account with high nonce", "sender", from, "nonce", tx.Nonce())
-			txs.Pop()
+			txs.PopNoSort()
 
 		case errors.Is(err, nil):
 			// Everything ok, collect the logs and shift in the next transaction from the same account
 			coalescedLogs = append(coalescedLogs, logs...)
 			env.tcount++
-			txs.Shift(from.Bytes20(), false)
+			txs.PopNoSort()
 
 		case errors.Is(err, ErrTxTypeNotSupported):
 			// Pop the unsupported transaction without shifting in the next from the account
 			log.Error("Skipping unsupported transaction type", "sender", from, "type", tx.Type())
-			txs.Pop()
+			txs.PopNoSort()
 
 		case strings.Contains(err.Error(), "emits too many cross"): // This is ErrEtxLimitReached with more info
 			// Pop the unsupported transaction without shifting in the next from the account
 			log.Trace("Etx limit exceeded for current block", "sender", from, "err", err)
-			txs.Pop()
+			txs.PopNoSort()
 
 		default:
 			// Strange error, discard the transaction and get the next in line (note, the
 			// nonce-too-high clause will prevent us from executing in vain).
+			// This gets the next nonce of the account regardless of fee (no sorting) but popping should be considered.
 			log.Debug("Transaction failed, account skipped", "hash", tx.Hash(), "err", err)
 			txs.Shift(from.Bytes20(), false)
 		}
@@ -971,7 +975,9 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, block *typ
 	if w.sortedPoolCache != nil && w.sortedPoolCache.Len() > 0 {
 		etxSet := rawdb.ReadEtxSet(w.hc.bc.db, block.Hash(), block.NumberU64())
 		etxSet.Update(types.Transactions{}, block.NumberU64()+1) // Prune any expired ETXs
+		start := time.Now()
 		w.commitTransactions(env, w.sortedPoolCache, interrupt, etxSet)
+		w.fillTransactionsRollingAverage.Add(time.Since(start))
 		w.sortCacheLock.Unlock()
 	} else {
 		w.sortCacheLock.Unlock()
