@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -179,11 +180,12 @@ type worker struct {
 	chainHeadSub event.Subscription
 
 	// Channels
-	taskCh             chan *task
-	resultCh           chan *types.Block
-	exitCh             chan struct{}
-	resubmitIntervalCh chan time.Duration
-	resubmitAdjustCh   chan *intervalAdjust
+	taskCh                         chan *task
+	resultCh                       chan *types.Block
+	exitCh                         chan struct{}
+	resubmitIntervalCh             chan time.Duration
+	resubmitAdjustCh               chan *intervalAdjust
+	fillTransactionsRollingAverage *RollingAverage
 
 	interrupt   chan struct{}
 	asyncPhFeed event.Feed // asyncPhFeed sends an event after each state root update
@@ -226,25 +228,48 @@ type worker struct {
 	fullTaskHook func()      // Method to call before pushing the full sealing task.
 }
 
+type RollingAverage struct {
+	windowSize int
+	durations  []time.Duration
+	sum        time.Duration
+}
+
+func (ra *RollingAverage) Add(d time.Duration) {
+	if len(ra.durations) == ra.windowSize {
+		// Remove the oldest duration from the sum
+		ra.sum -= ra.durations[0]
+		ra.durations = ra.durations[1:]
+	}
+	ra.durations = append(ra.durations, d)
+	ra.sum += d
+}
+func (ra *RollingAverage) Average() time.Duration {
+	if len(ra.durations) == 0 {
+		return 0
+	}
+	return ra.sum / time.Duration(len(ra.durations))
+}
+
 func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Database, engine consensus.Engine, headerchain *HeaderChain, txPool *TxPool, isLocalBlock func(header *types.Header) bool, init bool, processingState bool) *worker {
 	worker := &worker{
-		config:             config,
-		chainConfig:        chainConfig,
-		engine:             engine,
-		hc:                 headerchain,
-		txPool:             txPool,
-		coinbase:           config.Etherbase,
-		isLocalBlock:       isLocalBlock,
-		workerDb:           db,
-		localUncles:        make(map[common.Hash]*types.Block),
-		remoteUncles:       make(map[common.Hash]*types.Block),
-		chainHeadCh:        make(chan ChainHeadEvent, chainHeadChanSize),
-		taskCh:             make(chan *task),
-		resultCh:           make(chan *types.Block, resultQueueSize),
-		exitCh:             make(chan struct{}),
-		interrupt:          make(chan struct{}),
-		resubmitIntervalCh: make(chan time.Duration),
-		resubmitAdjustCh:   make(chan *intervalAdjust, resubmitAdjustChanSize),
+		config:                         config,
+		chainConfig:                    chainConfig,
+		engine:                         engine,
+		hc:                             headerchain,
+		txPool:                         txPool,
+		coinbase:                       config.Etherbase,
+		isLocalBlock:                   isLocalBlock,
+		workerDb:                       db,
+		localUncles:                    make(map[common.Hash]*types.Block),
+		remoteUncles:                   make(map[common.Hash]*types.Block),
+		chainHeadCh:                    make(chan ChainHeadEvent, chainHeadChanSize),
+		taskCh:                         make(chan *task),
+		resultCh:                       make(chan *types.Block, resultQueueSize),
+		exitCh:                         make(chan struct{}),
+		interrupt:                      make(chan struct{}),
+		resubmitIntervalCh:             make(chan time.Duration),
+		resubmitAdjustCh:               make(chan *intervalAdjust, resubmitAdjustChanSize),
+		fillTransactionsRollingAverage: &RollingAverage{windowSize: 100},
 	}
 	// Set the GasFloor of the worker to the minGasLimit
 	worker.config.GasFloor = params.MinGasLimit
@@ -464,7 +489,10 @@ func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.He
 		// Fill pending transactions from the txpool
 		w.adjustGasLimit(nil, work, block)
 		if fill {
+			start := time.Now()
 			w.fillTransactions(interrupt, work, block)
+			w.fillTransactionsRollingAverage.Add(time.Since(start))
+			log.Info("Filled and sorted pending transactions", "count", len(work.txs), "elapsed", common.PrettyDuration(time.Since(start)), "average", common.PrettyDuration(w.fillTransactionsRollingAverage.Average()))
 		}
 	}
 
@@ -669,12 +697,12 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 		case errors.Is(err, ErrGasLimitReached):
 			// Pop the current out-of-gas transaction without shifting in the next from the account
 			log.Trace("Gas limit exceeded for current block", "sender", from)
-			txs.Pop()
+			txs.PopNoSort()
 
 		case errors.Is(err, ErrEtxLimitReached):
 			// Pop the current transaction without shifting in the next from the account
 			log.Trace("Etx limit exceeded for current block", "sender", from)
-			txs.Pop()
+			txs.PopNoSort()
 
 		case errors.Is(err, ErrNonceTooLow):
 			// New head notification data race between the transaction pool and miner, shift
@@ -684,18 +712,23 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 		case errors.Is(err, ErrNonceTooHigh):
 			// Reorg notification data race between the transaction pool and miner, skip account =
 			log.Debug("Skipping account with high nonce", "sender", from, "nonce", tx.Nonce())
-			txs.Pop()
+			txs.PopNoSort()
 
 		case errors.Is(err, nil):
 			// Everything ok, collect the logs and shift in the next transaction from the same account
 			coalescedLogs = append(coalescedLogs, logs...)
 			env.tcount++
-			txs.Shift(from.Bytes20(), false)
+			txs.PopNoSort()
 
 		case errors.Is(err, ErrTxTypeNotSupported):
 			// Pop the unsupported transaction without shifting in the next from the account
 			log.Error("Skipping unsupported transaction type", "sender", from, "type", tx.Type())
-			txs.Pop()
+			txs.PopNoSort()
+
+		case strings.Contains(err.Error(), "emits too many cross"): // This is ErrEtxLimitReached with more info
+			// Pop the unsupported transaction without shifting in the next from the account
+			log.Trace("Etx limit exceeded for current block", "sender", from, "err", err)
+			txs.PopNoSort()
 
 		default:
 			// Strange error, discard the transaction and get the next in line (note, the
@@ -855,21 +888,8 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, block *typ
 	if err != nil {
 		return
 	}
-	localTxs, remoteTxs := make(map[common.AddressBytes]types.Transactions), pending
-	for _, account := range w.txPool.Locals() {
-		if txs := remoteTxs[account.Bytes20()]; len(txs) > 0 {
-			delete(remoteTxs, account.Bytes20())
-			localTxs[account.Bytes20()] = txs
-		}
-	}
-	if len(localTxs) > 0 {
-		txs := types.NewTransactionsByPriceAndNonce(env.signer, localTxs, env.header.BaseFee(), false)
-		if w.commitTransactions(env, txs, interrupt) {
-			return
-		}
-	}
-	if len(remoteTxs) > 0 {
-		txs := types.NewTransactionsByPriceAndNonce(env.signer, remoteTxs, env.header.BaseFee(), false)
+	if len(pending) > 0 {
+		txs := types.NewTransactionsByPriceAndNonce(env.signer, pending, env.header.BaseFee(), true)
 		if w.commitTransactions(env, txs, interrupt) {
 			return
 		}
