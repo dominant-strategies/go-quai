@@ -970,12 +970,6 @@ func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *typ
 	combinedPendingHeader.SetParentEntropy(header.ParentEntropy(index), index)
 	combinedPendingHeader.SetParentDeltaS(header.ParentDeltaS(index), index)
 
-	if index == common.REGION_CTX {
-		for i := 0; i < common.NumZonesInRegion; i++ {
-			combinedPendingHeader.SetPrimeEntropyThreshold(header.PrimeEntropyThreshold(i), i)
-		}
-	}
-
 	if inSlice {
 		combinedPendingHeader.SetEtxRollupHash(header.EtxRollupHash())
 		combinedPendingHeader.SetDifficulty(header.Difficulty())
@@ -1003,6 +997,7 @@ func (sl *Slice) NewGenesisPendingHeader(domPendingHeader *types.Header) {
 	if err != nil {
 		return
 	}
+
 	if nodeCtx == common.PRIME_CTX {
 		domPendingHeader = types.CopyHeader(localPendingHeader)
 	} else {
