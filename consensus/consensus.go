@@ -134,9 +134,6 @@ type Engine interface {
 	// that a new block should have.
 	CalcDifficulty(chain ChainHeaderReader, parent *types.Header) *big.Int
 
-	// CalcPrimeEntropyThreshold is the threshold adjustment algorithm for prime blocks per slice
-	CalcPrimeEntropyThreshold(chain ChainHeaderReader, parent *types.Header) (*big.Int, error)
-
 	// IsDomCoincident returns true if this block satisfies the difficulty order
 	// of a dominant chain. If this node does not have a dominant chain (i.e.
 	// if this is a prime node), then the function will always return false.

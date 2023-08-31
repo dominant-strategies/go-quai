@@ -37,19 +37,12 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/trie"
-	"modernc.org/mathutil"
 )
 
 //go:generate gencodec -type Genesis -field-override genesisSpecMarshaling -out gen_genesis.go
 //go:generate gencodec -type GenesisAccount -field-override genesisAccountMarshaling -out gen_genesis_account.go
 
-var (
-	errGenesisNoConfig = errors.New("genesis has no chain configuration")
-)
-
-const (
-	mantBits = 64
-)
+var errGenesisNoConfig = errors.New("genesis has no chain configuration")
 
 // Genesis specifies the header fields, state of a genesis block. It also defines hard
 // fork switch-over blocks through the chain configuration.
@@ -285,23 +278,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		head.SetParentHash(common.Hash{}, i)
 	}
 
-	initPrimeThreshold := new(big.Int).Mul(params.TimeFactor, big.NewInt(common.NumRegionsInPrime))
-	initPrimeThreshold = new(big.Int).Mul(initPrimeThreshold, big.NewInt(common.NumZonesInRegion))
-	initPrimeThreshold = new(big.Int).Mul(initPrimeThreshold, params.TimeFactor)
-	for i := 0; i < common.NumZonesInRegion; i++ {
-		head.SetPrimeEntropyThreshold(initPrimeThreshold, i)
-	}
 	return types.NewBlock(head, nil, nil, nil, nil, nil, trie.NewStackTrie(nil))
-}
-
-// IntrinsicLogS returns the logarithm of the intrinsic entropy reduction of a PoW hash
-func (g *Genesis) IntrinsicLogS(powHash common.Hash) *big.Int {
-	x := new(big.Int).SetBytes(powHash.Bytes())
-	d := new(big.Int).Div(common.Big2e256, x)
-	c, m := mathutil.BinaryLog(d, mantBits)
-	bigBits := new(big.Int).Mul(big.NewInt(int64(c)), new(big.Int).Exp(big.NewInt(2), big.NewInt(mantBits), nil))
-	bigBits = new(big.Int).Add(bigBits, m)
-	return bigBits
 }
 
 // Commit writes the block and state of a genesis specification to the database.
