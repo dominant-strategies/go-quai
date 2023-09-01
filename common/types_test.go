@@ -325,11 +325,11 @@ func TestAddress_Scan(t *testing.T) {
 			}
 
 			if !tt.wantErr {
-				for i := range a {
-					if a[i] != tt.args.src.([]byte)[i] {
+				for i := range a.Bytes() {
+					if a.Bytes()[i] != tt.args.src.([]byte)[i] {
 						t.Errorf(
 							"Address.Scan() didn't scan the %d src correctly (have %X, want %X)",
-							i, a[i], tt.args.src.([]byte)[i],
+							i, a.Bytes()[i], tt.args.src.([]byte)[i],
 						)
 					}
 				}
@@ -343,8 +343,7 @@ func TestAddress_Value(t *testing.T) {
 		0xb2, 0x6f, 0x2b, 0x34, 0x2a, 0xab, 0x24, 0xbc, 0xf6, 0x3e,
 		0xa2, 0x18, 0xc6, 0xa9, 0x27, 0x4d, 0x30, 0xab, 0x9a, 0x15,
 	}
-	var usedA Address
-	usedA.SetBytes(b)
+	usedA := BytesToAddress(b);
 	tests := []struct {
 		name    string
 		a       Address
@@ -377,9 +376,8 @@ func TestAddress_Format(t *testing.T) {
 		0xb2, 0x6f, 0x2b, 0x34, 0x2a, 0xab, 0x24, 0xbc, 0xf6, 0x3e,
 		0xa2, 0x18, 0xc6, 0xa9, 0x27, 0x4d, 0x30, 0xab, 0x9a, 0x15,
 	}
-	var addr Address
-	addr.SetBytes(b)
 
+	addr := BytesToAddress(b)
 	tests := []struct {
 		name string
 		out  string
