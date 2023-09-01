@@ -244,14 +244,17 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	time7 := common.PrettyDuration(time.Since(start))
 
 	var time8, time9 common.PrettyDuration
-	bestPh, exist := sl.readPhCache(sl.bestPhKey)
-	if !exist {
-		sl.bestPhKey = sl.config.GenesisHash
-		sl.writePhCache(block.Hash(), pendingHeaderWithTermini)
-		bestPh = pendingHeaderWithTermini
-		log.Error("BestPh Key does not exist for", "key", sl.bestPhKey)
-	}
+	var bestPh types.PendingHeader
+	var exist bool
 	if nodeCtx == common.ZONE_CTX {
+		bestPh, exist = sl.readPhCache(sl.bestPhKey)
+		if !exist {
+			sl.bestPhKey = sl.config.GenesisHash
+			sl.writePhCache(block.Hash(), pendingHeaderWithTermini)
+			bestPh = pendingHeaderWithTermini
+			log.Error("BestPh Key does not exist for", "key", sl.bestPhKey)
+		}
+
 		time8 = common.PrettyDuration(time.Since(start))
 
 		subReorg = sl.miningStrategy(bestPh, block)
@@ -380,10 +383,30 @@ func (sl *Slice) UpdateDom(oldTerminus common.Hash, newTerminus common.Hash, new
 	if !newDomTermini.IsValid() || !oldDomTermini.IsValid() {
 		return
 	}
-	bestPh, exist := sl.readPhCache(sl.bestPhKey)
-	if exist {
-		log.Info("UpdateDom:", "oldTerminus:", oldTerminus, "newTerminus:", newTerminus, "oldDomTerminus:", oldDomTermini.DomTerminus(), "newDomTerminus:", newDomTermini.DomTerminus(), "bestPhKey:", sl.bestPhKey, "bestPh Hash:", bestPh.Header().Hash(), "bestPh Number:", bestPh.Header().NumberArray())
-		if nodeCtx == common.REGION_CTX && oldDomTermini.DomTerminus() == newDomTermini.DomTerminus() {
+	log.Info("UpdateDom:", "oldTerminus:", oldTerminus, "newTerminus:", newTerminus, "oldDomTerminus:", oldDomTermini.DomTerminus(), "newDomTerminus:", newDomTermini.DomTerminus())
+	if nodeCtx == common.REGION_CTX && oldDomTermini.DomTerminus() == newDomTermini.DomTerminus() {
+		// Can update
+		block := sl.hc.GetBlockByHash(newTerminus)
+		sl.bestPhKey = newTerminus
+		if block != nil {
+			pendingHeaderWithTermini, err := sl.generateSlicePendingHeader(block, *newDomTermini, types.EmptyHeader(), false, true, false)
+			if err != nil {
+				return
+			}
+			log.Info("pendingHeaderWithTermini:", "parent Hash:", pendingHeaderWithTermini.Header().ParentHash(), "Number", pendingHeaderWithTermini.Header().NumberArray())
+			for _, i := range sl.randomRelayArray() {
+				if sl.subClients[i] != nil {
+					sl.subClients[i].SubRelayPendingHeader(context.Background(), pendingHeaderWithTermini, newEntropy, common.Location{}, true)
+				}
+			}
+		}
+		return
+	} else {
+		// need to update dom
+		log.Info("Append need to updateDom", "oldDomTermini:", oldDomTermini, "newDomTermini:", newDomTermini, "location:", common.NodeLocation)
+		if sl.domClient != nil {
+			go sl.domClient.UpdateDom(context.Background(), oldDomTermini.DomTerminus(), newDomTermini.DomTerminus(), newEntropy, location)
+		} else {
 			// Can update
 			block := sl.hc.GetBlockByHash(newTerminus)
 			sl.bestPhKey = newTerminus
@@ -400,29 +423,6 @@ func (sl *Slice) UpdateDom(oldTerminus common.Hash, newTerminus common.Hash, new
 				}
 			}
 			return
-		} else {
-			// need to update dom
-			log.Info("Append need to updateDom", "oldDomTermini:", oldDomTermini, "newDomTermini:", newDomTermini, "location:", common.NodeLocation)
-			if sl.domClient != nil {
-				go sl.domClient.UpdateDom(context.Background(), oldDomTermini.DomTerminus(), newDomTermini.DomTerminus(), newEntropy, location)
-			} else {
-				// Can update
-				block := sl.hc.GetBlockByHash(newTerminus)
-				sl.bestPhKey = newTerminus
-				if block != nil {
-					pendingHeaderWithTermini, err := sl.generateSlicePendingHeader(block, *newDomTermini, types.EmptyHeader(), false, true, false)
-					if err != nil {
-						return
-					}
-					log.Info("pendingHeaderWithTermini:", "parent Hash:", pendingHeaderWithTermini.Header().ParentHash(), "Number", pendingHeaderWithTermini.Header().NumberArray())
-					for _, i := range sl.randomRelayArray() {
-						if sl.subClients[i] != nil {
-							sl.subClients[i].SubRelayPendingHeader(context.Background(), pendingHeaderWithTermini, newEntropy, common.Location{}, true)
-						}
-					}
-				}
-				return
-			}
 		}
 	}
 }
@@ -733,12 +733,8 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 		}
 
 		bestPh, exists := sl.readPhCache(sl.bestPhKey)
-		if !exists {
-			return nil
-		}
-
 		nodeCtx := common.NodeLocation.Context()
-		if nodeCtx == common.ZONE_CTX && sl.bestPhKey != localPendingHeader.Termini().DomTerminus() && !sl.poem(newEntropy, bestPh.Header().ParentEntropy()) {
+		if nodeCtx == common.ZONE_CTX && exists && sl.bestPhKey != localPendingHeader.Termini().DomTerminus() && !sl.poem(newEntropy, bestPh.Header().ParentEntropy()) {
 			log.Info("subrelay rejected", "local dom terminus", localPendingHeader.Termini().DomTerminus(), "Number", localPendingHeader.Header().NumberArray(), "best ph key", sl.bestPhKey, "number", bestPh.Header().NumberArray(), "newentropy", newEntropy)
 			sl.phCacheMu.Lock()
 			sl.updatePhCache(types.NewPendingHeader(combinedPendingHeader, localPendingHeader.Termini()), false, nil, sl.poem(newEntropy, localPendingHeader.Header().ParentEntropy()))
