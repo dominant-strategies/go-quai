@@ -26,7 +26,11 @@ func (progpow *Progpow) CalcOrder(header *types.Header) (*big.Int, int, error) {
 	target := new(big.Int).Div(common.Big2e256, header.Difficulty()).Bytes()
 	zoneThresholdS := progpow.IntrinsicLogS(common.BytesToHash(target))
 
-	// Prime case
+	// PRIME
+	// Compute the total accumulated entropy since the last prime block
+	totalDeltaSPrime := new(big.Int).Add(header.ParentDeltaS(common.REGION_CTX), header.ParentDeltaS(common.ZONE_CTX))
+	totalDeltaSPrime.Add(totalDeltaSPrime, intrinsicS)
+
 	// PrimeEntropyThreshold number of zone blocks times the intrinsic logs of the given header determines the prime block
 	primeEntropyThreshold := new(big.Int).Mul(zoneThresholdS, header.PrimeEntropyThreshold(header.Location().Zone()))
 	if totalDeltaSPrime.Cmp(primeEntropyThreshold) > 0 {
@@ -42,6 +46,7 @@ func (progpow *Progpow) CalcOrder(header *types.Header) (*big.Int, int, error) {
 		return intrinsicS, common.REGION_CTX, nil
 	}
 
+	// ZONE
 	return intrinsicS, common.ZONE_CTX, nil
 }
 

@@ -41,7 +41,9 @@ var (
 	big8          = big.NewInt(8)
 	big9          = big.NewInt(9)
 	big10         = big.NewInt(10)
+	big20         = big.NewInt(20)
 	big32         = big.NewInt(32)
+	big100        = big.NewInt(100)
 	bigMinus99    = big.NewInt(-99)
 	big2e256      = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0)) // 2^256
 )
@@ -280,11 +282,36 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 			if common.Big0.Cmp(header.ParentDeltaS()) != 0 {
 				return fmt.Errorf("invalid parent delta s: have %v, want %v", header.ParentDeltaS(), common.Big0)
 			}
+			// If parent block is dom, validate the prime difficulty
+			if nodeCtx == common.REGION_CTX {
+				primeEntropyThreshold, err := progpow.CalcPrimeEntropyThreshold(chain, parent)
+				if err != nil {
+					return err
+				}
+				if header.PrimeEntropyThreshold(parent.Location().SubIndex()).Cmp(primeEntropyThreshold) != 0 {
+					return fmt.Errorf("invalid prime difficulty pd: have %v, want %v", header.PrimeEntropyThreshold(parent.Location().SubIndex()), primeEntropyThreshold)
+				}
+			}
 		} else {
 			parentDeltaS := progpow.DeltaLogS(parent)
 			if parentDeltaS.Cmp(header.ParentDeltaS()) != 0 {
 				return fmt.Errorf("invalid parent delta s: have %v, want %v", header.ParentDeltaS(), parentDeltaS)
 			}
+
+			if nodeCtx == common.REGION_CTX {
+				// if parent is not a dom block, no adjustment to the prime or region difficulty will be made
+				for i := 0; i < common.NumZonesInRegion; i++ {
+					if header.PrimeEntropyThreshold(i).Cmp(parent.PrimeEntropyThreshold(i)) != 0 {
+						return fmt.Errorf("invalid prime difficulty pd: have %v, want %v at index %v", header.PrimeEntropyThreshold(i), parent.PrimeEntropyThreshold(i), i)
+					}
+				}
+			}
+			if nodeCtx == common.ZONE_CTX {
+				if header.PrimeEntropyThreshold(common.NodeLocation.Zone()).Cmp(parent.PrimeEntropyThreshold(common.NodeLocation.Zone())) != 0 {
+					return fmt.Errorf("invalid prime difficulty pd: have %v, want %v at index %v", header.PrimeEntropyThreshold(common.NodeLocation.Zone()), parent.PrimeEntropyThreshold(common.NodeLocation.Zone()), common.NodeLocation.Zone())
+				}
+			}
+
 		}
 	}
 	if nodeCtx == common.ZONE_CTX {
@@ -318,6 +345,57 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 		return consensus.ErrInvalidNumber
 	}
 	return nil
+}
+
+// CalcPrimeDifficultyThreshold calculates the difficulty that a block must meet
+// to become a region block.  This function needs to have a controller so that the
+// liveliness of the slices can balance even if the hash rate of the slice varies.
+// This will also cause the production of the prime blocks to naturally diverge
+// with time reducing the uncle rate.  The controller is built to adjust the
+// number of zone blocks it takes to produce a prime block.  This is done based on
+// the prior number of blocks to reach threshold which is than multiplied by the
+// current difficulty to establish the threshold. The controller adjust the block
+// threshold value and is a simple form of a bang-bang controller which is all
+// that is needed to ensure liveliness of the slices in prime overtime. If the
+// slice is not sufficiently lively 20 zone blocks are subtracted from the
+// threshold.  If it is too lively 20 blocks are added to the threshold.
+func (progpow *Progpow) CalcPrimeEntropyThreshold(chain consensus.ChainHeaderReader, parent *types.Header) (*big.Int, error) {
+	nodeCtx := common.NodeLocation.Context()
+
+	if nodeCtx != common.REGION_CTX {
+		log.Error("Cannot CalcPrimeEntropyThreshold for", "context", nodeCtx)
+		return nil, errors.New("cannot CalcPrimeEntropyThreshold for non-region context")
+	}
+
+	if parent.Hash() == chain.Config().GenesisHash {
+		return parent.PrimeEntropyThreshold(parent.Location().SubIndex()), nil
+	}
+
+	// Get the primeTerminus
+	termini := chain.GetTerminiByHash(parent.ParentHash())
+	if termini == nil {
+		return nil, errors.New("termini not found in CalcPrimeEntropyThreshold")
+	}
+	primeTerminusHeader := chain.GetHeaderByHash(termini.PrimeTerminiAtIndex(parent.Location().SubIndex()))
+
+	log.Info("CalcPrimeEntropyThreshold", "primeTerminusHeader:", primeTerminusHeader.NumberArray(), "Hash", primeTerminusHeader.Hash())
+	deltaNumber := new(big.Int).Sub(parent.Number(), primeTerminusHeader.Number())
+	log.Info("CalcPrimeEntropyThreshold", "deltaNumber:", deltaNumber)
+	target := new(big.Int).Mul(big.NewInt(common.NumRegionsInPrime), params.TimeFactor)
+	target = new(big.Int).Mul(big.NewInt(common.NumZonesInRegion), target)
+	log.Info("CalcPrimeEntropyThreshold", "target:", target)
+
+	var newThreshold *big.Int
+	if target.Cmp(deltaNumber) > 0 {
+		newThreshold = new(big.Int).Add(parent.PrimeEntropyThreshold(parent.Location().Zone()), big20)
+	} else {
+		newThreshold = new(big.Int).Sub(parent.PrimeEntropyThreshold(parent.Location().Zone()), big20)
+	}
+	newMinThreshold := new(big.Int).Div(target, big2)
+	newThreshold = new(big.Int).Set(common.MaxBigInt(newThreshold, newMinThreshold))
+	log.Info("CalcPrimeEntropyThreshold", "newThreshold:", newThreshold)
+
+	return newThreshold, nil
 }
 
 // CalcDifficulty is the difficulty adjustment algorithm. It returns

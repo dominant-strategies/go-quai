@@ -47,7 +47,7 @@ func (blake3pow *Blake3pow) CalcOrder(header *types.Header) (*big.Int, int, erro
 		return intrinsicS, common.REGION_CTX, nil
 	}
 
-	// Zone case
+	// ZONE
 	return intrinsicS, common.ZONE_CTX, nil
 }
 
