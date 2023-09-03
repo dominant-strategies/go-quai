@@ -23,20 +23,22 @@ func (progpow *Progpow) CalcOrder(header *types.Header) (*big.Int, int, error) {
 
 	// Get entropy reduction of this header
 	intrinsicS := progpow.IntrinsicLogS(powHash)
-	target := new(big.Int).Div(common.Big2e256, header.Difficulty())
-	zoneThresholdS := progpow.IntrinsicLogS(common.BytesToHash(target.Bytes()))
+	target := new(big.Int).Div(common.Big2e256, header.Difficulty()).Bytes()
+	zoneThresholdS := progpow.IntrinsicLogS(common.BytesToHash(target))
 
 	// Prime case
 	// PrimeEntropyThreshold number of zone blocks times the intrinsic logs of the given header determines the prime block
-	primeBlockEntropyThreshold := new(big.Int).Add(zoneThresholdS, common.BitsToBigBits(params.PrimeEntropyTarget))
-	if intrinsicS.Cmp(primeBlockEntropyThreshold) > 0 {
+	primeEntropyThreshold := new(big.Int).Mul(zoneThresholdS, header.PrimeEntropyThreshold(header.Location().Zone()))
+	if totalDeltaSPrime.Cmp(primeEntropyThreshold) > 0 {
 		return intrinsicS, common.PRIME_CTX, nil
 	}
 
 	// REGION
 	// Compute the total accumulated entropy since the last region block
-	regionBlockEntropyThreshold := new(big.Int).Add(zoneThresholdS, common.BitsToBigBits(params.RegionEntropyTarget))
-	if intrinsicS.Cmp(regionBlockEntropyThreshold) > 0 {
+	totalDeltaSRegion := new(big.Int).Add(header.ParentDeltaS(common.ZONE_CTX), intrinsicS)
+	regionEntropyThreshold := new(big.Int).Mul(zoneThresholdS, params.TimeFactor)
+	regionEntropyThreshold = new(big.Int).Mul(regionEntropyThreshold, big.NewInt(common.NumZonesInRegion))
+	if totalDeltaSRegion.Cmp(regionEntropyThreshold) > 0 {
 		return intrinsicS, common.REGION_CTX, nil
 	}
 

@@ -153,6 +153,4 @@ var (
 	LighthouseDurationLimit        = big.NewInt(7)     // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
 	LocalDurationLimit             = big.NewInt(2)     // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
 	TimeFactor                     = big.NewInt(7)
-	PrimeEntropyTarget             = big.NewInt(441) // This is TimeFactor*TimeFactor*common.NumZonesInRegion*common.NumRegionsInPrime
-	RegionEntropyTarget            = big.NewInt(21)  // This is TimeFactor*common.NumZonesInRegion
 )
