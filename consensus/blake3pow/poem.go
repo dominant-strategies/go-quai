@@ -23,8 +23,7 @@ func (blake3pow *Blake3pow) CalcOrder(header *types.Header) (*big.Int, int, erro
 
 	// Get entropy reduction of this header
 	intrinsicS := blake3pow.IntrinsicLogS(header.Hash())
-	target := new(big.Int).Div(common.Big2e256, header.Difficulty())
-	zoneThresholdS := blake3pow.IntrinsicLogS(common.BytesToHash(target.Bytes()))
+	zoneThresholdS := header.Difficulty()
 
 	// PRIME
 	// PrimeEntropyThreshold number of zone blocks times the intrinsic logs of
