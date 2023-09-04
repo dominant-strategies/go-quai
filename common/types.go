@@ -265,9 +265,14 @@ func NewMixedcaseAddressFromString(hexaddr string) (*MixedcaseAddress, error) {
 
 // UnmarshalJSON parses MixedcaseAddress
 func (ma *MixedcaseAddress) UnmarshalJSON(input []byte) error {
-	if err := hexutil.UnmarshalFixedJSON(reflect.TypeOf(InternalAddress{}), input, ma.addr.inner.Bytes()[:]); err != nil {
+	var temp [AddressLength]byte
+
+	if err := hexutil.UnmarshalFixedJSON(reflect.TypeOf(InternalAddress{}), input, temp[:]); err != nil {
 		return err
 	}
+
+	ma.addr.inner = Bytes20ToAddress(temp).inner
+
 	return json.Unmarshal(input, &ma.original)
 }
 
