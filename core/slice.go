@@ -257,7 +257,12 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 
 		time8 = common.PrettyDuration(time.Since(start))
 
-		subReorg = sl.miningStrategy(bestPh, block)
+		tempPendingHeader, err := sl.generateSlicePendingHeader(block, newTermini, domPendingHeader, domOrigin, false, false)
+		if err != nil {
+			return nil, false, err
+		}
+
+		subReorg = sl.miningStrategy(bestPh, tempPendingHeader)
 
 		if order < nodeCtx {
 			// Store the inbound etxs for dom blocks that did not get picked and use
@@ -335,11 +340,11 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		return subPendingEtxs, subReorg, nil
 	}
 }
-func (sl *Slice) miningStrategy(bestPh types.PendingHeader, block *types.Block) bool {
+func (sl *Slice) miningStrategy(bestPh types.PendingHeader, pendingHeader types.PendingHeader) bool {
 	if bestPh.Header() == nil { // This is the case where we try to append the block before we have not initialized the bestPh
 		return true
 	}
-	subReorg := sl.poem(sl.engine.TotalLogS(block.Header()), bestPh.Header().ParentEntropy())
+	subReorg := sl.poem(sl.engine.TotalLogPhS(pendingHeader.Header()), sl.engine.TotalLogPhS(bestPh.Header()))
 	return subReorg
 }
 
@@ -500,6 +505,14 @@ func (sl *Slice) generateSlicePendingHeader(block *types.Block, newTermini types
 		localPendingHeader = types.EmptyHeader()
 		localPendingHeader.SetParentHash(block.Hash(), nodeCtx)
 		localPendingHeader.SetNumber(big.NewInt(int64(block.NumberU64()) + 1))
+		localPendingHeader.SetParentEntropy(sl.engine.TotalLogS(block.Header()))
+		if nodeCtx != common.PRIME_CTX {
+			if domOrigin {
+				localPendingHeader.SetParentDeltaS(big.NewInt(0), nodeCtx)
+			} else {
+				localPendingHeader.SetParentDeltaS(sl.engine.DeltaLogS(block.Header()), nodeCtx)
+			}
+		}
 
 		manifestHash := sl.miner.worker.ComputeManifestHash(block.Header())
 		localPendingHeader.SetManifestHash(manifestHash)
