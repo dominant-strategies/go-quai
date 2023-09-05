@@ -69,6 +69,8 @@ jobs:
     - name: Update Chart.yaml version
       run: yq eval -P -i ".appVersion=\"${{ env.VERSION }}\"" ./helm/Chart.yaml
 
+    - name: Update values.yaml version
+      run: yq eval -P -i ".goQuai.image.version=\"${{ env.VERSION }}\"" ./helm/values.yaml
 
     - uses: stefanzweifel/git-auto-commit-action@v4
       with:
