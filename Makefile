@@ -116,6 +116,13 @@ run-slice:
 ifeq (,$(wildcard nodelogs))
 	mkdir nodelogs
 endif
+ifeq ($(filter $(REGION),0 1 2),)
+$(error REGION must be 0, 1, or 2)
+endif
+
+ifeq ($(filter $(ZONE),0 1 2),)
+$(error ZONE must be 0, 1, or 2)
+endif
 	@nohup $(PRIME_CMD) >> $(PRIME_LOG_FILE) 2>&1 &
 	@nohup $(REGION_CMD) >> $(REGION_LOG_FILE) 2>&1 &
 	@nohup $(ZONE_CMD) >> $(ZONE_LOG_FILE) 2>&1 &
