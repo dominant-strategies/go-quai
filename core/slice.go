@@ -423,7 +423,7 @@ func (sl *Slice) UpdateDom(oldTerminus common.Hash, newTerminus common.Hash, new
 				log.Info("pendingHeaderWithTermini:", "parent Hash:", pendingHeaderWithTermini.Header().ParentHash(), "Number", pendingHeaderWithTermini.Header().NumberArray())
 				for _, i := range sl.randomRelayArray() {
 					if sl.subClients[i] != nil {
-						go sl.subClients[i].SubRelayPendingHeader(context.Background(), pendingHeaderWithTermini, newEntropy, location, true)
+						sl.subClients[i].SubRelayPendingHeader(context.Background(), pendingHeaderWithTermini, newEntropy, location, true)
 					}
 				}
 			}
