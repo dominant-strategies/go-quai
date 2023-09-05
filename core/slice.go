@@ -364,7 +364,7 @@ func (sl *Slice) relayPh(block *types.Block, pendingHeaderWithTermini types.Pend
 		} else {
 			log.Warn("Pending Header for Best ph key does not exist", "best ph key", sl.bestPhKey)
 		}
-	} else if !domOrigin {
+	} else if !domOrigin && subReorg {
 		for _, i := range sl.randomRelayArray() {
 			if sl.subClients[i] != nil {
 				sl.subClients[i].SubRelayPendingHeader(context.Background(), pendingHeaderWithTermini, pendingHeaderWithTermini.Header().ParentEntropy(), location, subReorg)
