@@ -52,7 +52,6 @@ type Slice struct {
 	quit chan struct{} // slice quit channel
 
 	domClient  *quaiclient.Client
-	domUrl     string
 	subClients []*quaiclient.Client
 
 	wg                    sync.WaitGroup
@@ -80,7 +79,6 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLooku
 		config:         chainConfig,
 		engine:         engine,
 		sliceDb:        db,
-		domUrl:         domClientUrl,
 		quit:           make(chan struct{}),
 		badHashesCache: make(map[common.Hash]bool),
 	}

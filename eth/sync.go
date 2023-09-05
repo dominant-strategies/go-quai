@@ -30,8 +30,8 @@ import (
 )
 
 const (
-	forceSyncCycle      = 10 * time.Second // Time interval to force syncs, even if few peers are available
-	defaultMinSyncPeers = 1                // Amount of peers desired to start syncing
+	forceSyncCycle      = 60 * time.Second // Time interval to force syncs, even if few peers are available
+	defaultMinSyncPeers = 3                // Amount of peers desired to start syncing
 
 	// This is the target size for the packs of transactions sent by txsyncLoop64.
 	// A pack can get larger than this if a single transactions exceeds this size.
@@ -274,7 +274,7 @@ func (cs *chainSyncer) modeAndLocalHead() (downloader.SyncMode, *big.Int) {
 
 // startSync launches doSync in a new goroutine.
 func (cs *chainSyncer) startSync(op *chainSyncOp) {
-	cs.doneCh = make(chan error, 1)
+	cs.doneCh = make(chan error, 10)
 	go func() { cs.doneCh <- cs.handler.doSync(op) }()
 }
 
@@ -282,16 +282,17 @@ func (cs *chainSyncer) startSync(op *chainSyncOp) {
 func (h *handler) doSync(op *chainSyncOp) error {
 	// Run the sync cycle, and disable fast sync if we're past the pivot block
 	err := h.downloader.Synchronise(op.peer.ID(), op.head, op.entropy, op.mode)
+	log.Info("Downloader exited", "err", err)
 	if err != nil {
 		return err
 	}
 	// If we've successfully finished a sync cycle and passed any required checkpoint,
 	// enable accepting transactions from the network.
 	head := h.core.CurrentBlock()
-    if head == nil {
-        log.Warn("doSync: head is nil", "hash", h.core.CurrentHeader().Hash(), "number", h.core.CurrentHeader().NumberArray())
-        return nil
-    }
+	if head == nil {
+		log.Warn("doSync: head is nil", "hash", h.core.CurrentHeader().Hash(), "number", h.core.CurrentHeader().NumberArray())
+		return nil
+	}
 	if head.NumberU64() > 0 {
 		// We've completed a sync cycle, notify all peers of new state. This path is
 		// essential in star-topology networks where a gateway node needs to notify

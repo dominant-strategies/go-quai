@@ -1128,8 +1128,6 @@ func (d *Downloader) processFullSyncContent(peerHeight uint64) error {
 			if err := d.importBlockResults(results); err != nil {
 				return err
 			}
-			d.headNumber = results[len(results)-1].Header.NumberU64()
-			d.headEntropy = d.core.TotalLogS(results[len(results)-1].Header)
 			// If all the blocks are fetched, we exit the sync process
 			if d.headNumber == peerHeight {
 				return errNoFetchesPending
@@ -1152,7 +1150,7 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 	}
 	// Retrieve the a batch of results to import
 	first, last := results[0].Header, results[len(results)-1].Header
-	log.Debug("Inserting downloaded chain", "items", len(results),
+	log.Info("Inserting downloaded chain", "items", len(results),
 		"firstnum", first.Number(), "firsthash", first.Hash(),
 		"lastnum", last.Number(), "lasthash", last.Hash(),
 	)
@@ -1162,6 +1160,8 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 		if d.core.IsBlockHashABadHash(block.Hash()) {
 			return errBadBlockFound
 		}
+		d.headNumber = block.NumberU64()
+		d.headEntropy = d.core.TotalLogS(block.Header())
 		d.core.WriteBlock(block)
 	}
 	return nil

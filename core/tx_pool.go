@@ -1428,14 +1428,14 @@ func (pool *TxPool) promoteExecutables(accounts []common.InternalAddress) []*typ
 			hash := tx.Hash()
 			pool.all.Remove(hash)
 		}
-		log.Debug("Removed old queued transactions", "count", len(forwards))
+		log.Trace("Removed old queued transactions", "count", len(forwards))
 		// Drop all transactions that are too costly (low balance or out of gas)
 		drops, _ := list.Filter(pool.currentState.GetBalance(addr), pool.currentMaxGas)
 		for _, tx := range drops {
 			hash := tx.Hash()
 			pool.all.Remove(hash)
 		}
-		log.Debug("Removed unpayable queued transactions", "count", len(drops))
+		log.Trace("Removed unpayable queued transactions", "count", len(drops))
 		queuedNofundsMeter.Mark(int64(len(drops)))
 
 		// Gather all executable transactions and promote them
@@ -1446,7 +1446,7 @@ func (pool *TxPool) promoteExecutables(accounts []common.InternalAddress) []*typ
 				promoted = append(promoted, tx)
 			}
 		}
-		log.Debug("Promoted queued transactions", "count", len(promoted))
+		log.Trace("Promoted queued transactions", "count", len(promoted))
 		queuedGauge.Dec(int64(len(readies)))
 
 		// Drop all transactions over the allowed limit

@@ -653,11 +653,7 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, headerProcCh 
 		headers[i], headers[j] = headers[j], headers[i]
 	}
 
-	if len(headers) == 0 && accepted {
-		return 0, nil
-	}
-
-	if accepted {
+	if len(headers) > 0 && accepted {
 		if headers[len(headers)-1].Number().Uint64() != request.From {
 			logger.Info("First header broke chain ordering", "number", headers[0].Number(), "hash", headers[0].Hash(), "expected", request.From)
 			accepted = false
@@ -667,19 +663,19 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, headerProcCh 
 				accepted = false
 			}
 		}
-	}
 
-	if accepted {
-		parentHash := headers[0].Hash()
-		for _, header := range headers[1:] {
-			hash := header.Hash()
-			if parentHash != header.ParentHash() {
-				logger.Warn("Header broke chain ancestry", "number", header.Number(), "hash", hash)
-				accepted = false
-				break
+		if accepted {
+			parentHash := headers[0].Hash()
+			for _, header := range headers[1:] {
+				hash := header.Hash()
+				if parentHash != header.ParentHash() {
+					logger.Warn("Header broke chain ancestry", "number", header.Number(), "hash", hash)
+					accepted = false
+					break
+				}
+				// Set-up parent hash for next round
+				parentHash = hash
 			}
-			// Set-up parent hash for next round
-			parentHash = hash
 		}
 	}
 	// If the batch of headers wasn't accepted, mark as unavailable
@@ -697,7 +693,9 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, headerProcCh 
 		return 0, errors.New("delivery not accepted")
 	}
 
-	copy(q.headerResults[targetTo-q.headerOffset:], headers)
+	if len(headers) > 0 {
+		copy(q.headerResults[targetTo-q.headerOffset:], headers)
+	}
 
 	// Clean up a successful fetch and try to deliver any sub-results
 	delete(q.headerTaskPool, request.From+1)
