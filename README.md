@@ -53,7 +53,7 @@ directory.
 
 Using the makefile will preload configuration values from the `network.env` file.
 ```shell
-$ make run-all
+$ make run
 ```
 
 ### Full node on the Garden test network
