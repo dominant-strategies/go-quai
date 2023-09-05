@@ -9,6 +9,7 @@ jobs:
     - uses: actions/checkout@v3
       with:
         ref: ${{ inputs.branch }}
+        ssh-key: ${{ secrets.GH_PAT }}
 
       # Import the GPG key for signing Git commits and tags
     - name: Import GPG key
@@ -55,6 +56,7 @@ jobs:
     - uses: actions/checkout@v3
       with:
         ref: ${{ inputs.branch }}
+        ssh-key: ${{ secrets.GH_PAT }}
 
     - name: get Version
       run: echo "VERSION=$(cat VERSION)" >> $GITHUB_ENV
