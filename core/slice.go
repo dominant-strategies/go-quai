@@ -1070,7 +1070,9 @@ func (sl *Slice) loadLastState() error {
 	}
 	rawdb.DeletePhCache(sl.sliceDb)
 	sl.bestPhKey = rawdb.ReadBestPhKey(sl.sliceDb)
-	sl.miner.worker.LoadPendingBlockBody()
+	if sl.ProcessingState() {
+		sl.miner.worker.LoadPendingBlockBody()
+	}
 	return nil
 }
 

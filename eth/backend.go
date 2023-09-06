@@ -190,8 +190,8 @@ func New(stack *node.Node, config *ethconfig.Config) (*Quai, error) {
 	}
 
 	// Only index bloom if processing state
-	if eth.core.ProcessingState() {
-		eth.bloomIndexer = core.NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms)	
+	if eth.core.ProcessingState() && nodeCtx == common.ZONE_CTX {
+		eth.bloomIndexer = core.NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms)
 		eth.bloomIndexer.Start(eth.Core().Slice().HeaderChain())
 	}
 
@@ -382,8 +382,10 @@ func (s *Quai) Protocols() []p2p.Protocol {
 func (s *Quai) Start() error {
 	eth.StartENRUpdater(s.core, s.p2pServer.LocalNode())
 
-	// Start the bloom bits servicing goroutines
-	s.startBloomHandlers(params.BloomBitsBlocks)
+	if s.core.ProcessingState() && common.NodeLocation.Context() == common.ZONE_CTX {
+		// Start the bloom bits servicing goroutines
+		s.startBloomHandlers(params.BloomBitsBlocks)
+	}
 
 	// Figure out a max peers count based on the server limits
 	maxPeers := s.p2pServer.MaxPeers
@@ -399,9 +401,11 @@ func (s *Quai) Stop() error {
 	s.ethDialCandidates.Close()
 	s.handler.Stop()
 
-	// Then stop everything else.
-	s.bloomIndexer.Close()
-	close(s.closeBloomHandler)
+	if s.core.ProcessingState() && common.NodeLocation.Context() == common.ZONE_CTX {
+		// Then stop everything else.
+		s.bloomIndexer.Close()
+		close(s.closeBloomHandler)
+	}
 	s.core.Stop()
 	s.engine.Close()
 	rawdb.PopUncleanShutdownMarker(s.chainDb)

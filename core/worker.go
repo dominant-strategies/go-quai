@@ -277,10 +277,6 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 	phBodyCache, _ := lru.New(pendingBlockBodyLimit)
 	worker.pendingBlockBody = phBodyCache
 
-	if headerchain.ProcessingState() {
-		worker.chainHeadSub = worker.hc.SubscribeChainHeadEvent(worker.chainHeadCh)
-	}
-
 	// Sanitize recommit interval if the user-specified one is too short.
 	recommit := worker.config.Recommit
 	if recommit < minRecommitInterval {
@@ -288,7 +284,9 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 		recommit = minRecommitInterval
 	}
 
-	if processingState {
+	nodeCtx := common.NodeLocation.Context()
+	if headerchain.ProcessingState() && nodeCtx == common.ZONE_CTX {
+		worker.chainHeadSub = worker.hc.SubscribeChainHeadEvent(worker.chainHeadCh)
 		worker.wg.Add(1)
 		go worker.asyncStateLoop()
 	}
@@ -366,7 +364,7 @@ func (w *worker) start() {
 
 // stop sets the running status as 0.
 func (w *worker) stop() {
-	if w.hc.ProcessingState() {
+	if w.hc.ProcessingState() && common.NodeLocation.Context() == common.ZONE_CTX {
 		w.chainHeadSub.Unsubscribe()
 	}
 	atomic.StoreInt32(&w.running, 0)
