@@ -532,6 +532,12 @@ func (h *handler) missingPendingEtxsLoop() {
 				log.Trace("Fetching the missing pending etxs from", "peer", peer.ID(), "hash", hashAndLocation.Hash)
 				peer.RequestOnePendingEtxs(hashAndLocation.Hash)
 			}
+			if len(peersRunningSlice) == 0 {
+				for _, peer := range h.selectSomePeers() {
+					log.Trace("Fetching the missing pending etxs from", "peer", peer.ID(), "hash", hashAndLocation.Hash)
+					peer.RequestOnePendingEtxs(hashAndLocation.Hash)
+				}
+			}
 		case <-h.missingPendingEtxsSub.Err():
 			return
 		}
