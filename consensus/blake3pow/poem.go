@@ -29,15 +29,23 @@ func (blake3pow *Blake3pow) CalcOrder(header *types.Header) (*big.Int, int, erro
 	// PRIME
 	// PrimeEntropyThreshold number of zone blocks times the intrinsic logs of
 	// the given header determines the prime block
+	totalDeltaSPrime := new(big.Int).Add(header.ParentDeltaS(common.REGION_CTX), header.ParentDeltaS(common.ZONE_CTX))
+	totalDeltaSPrime.Add(totalDeltaSPrime, intrinsicS)
+	primeDeltaSTarget := new(big.Int).Quo(params.PrimeEntropyTarget, big2)
+	primeDeltaSTarget = new(big.Int).Mul(zoneThresholdS, primeDeltaSTarget)
+
 	primeBlockEntropyThreshold := new(big.Int).Add(zoneThresholdS, common.BitsToBigBits(params.PrimeEntropyTarget))
-	if intrinsicS.Cmp(primeBlockEntropyThreshold) > 0 {
+	if intrinsicS.Cmp(primeBlockEntropyThreshold) > 0 && totalDeltaSPrime.Cmp(primeDeltaSTarget) > 0 {
 		return intrinsicS, common.PRIME_CTX, nil
 	}
 
 	// REGION
 	// Compute the total accumulated entropy since the last region block
+	totalDeltaSRegion := new(big.Int).Add(header.ParentDeltaS(common.ZONE_CTX), intrinsicS)
+	regionDeltaSTarget := new(big.Int).Quo(params.RegionEntropyTarget, big2)
+	regionDeltaSTarget = new(big.Int).Mul(zoneThresholdS, regionDeltaSTarget)
 	regionBlockEntropyThreshold := new(big.Int).Add(zoneThresholdS, common.BitsToBigBits(params.RegionEntropyTarget))
-	if intrinsicS.Cmp(regionBlockEntropyThreshold) > 0 {
+	if intrinsicS.Cmp(regionBlockEntropyThreshold) > 0 && totalDeltaSRegion.Cmp(regionDeltaSTarget) > 0 {
 		return intrinsicS, common.REGION_CTX, nil
 	}
 
