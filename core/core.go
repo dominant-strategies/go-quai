@@ -6,6 +6,7 @@ import (
 	"io"
 	"math/big"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -30,9 +31,9 @@ const (
 	c_appendQueueRetryPeriod            = 1       // Time (in seconds) before retrying to append from AppendQueue
 	c_appendQueueThreshold              = 1000    // Number of blocks to load from the disk to ram on every proc of append queue
 	c_processingCache                   = 10      // Number of block hashes held to prevent multi simultaneous appends on a single block hash
-	c_primeRetryThreshold               = 900     // Number of times a block is retry to be appended before eviction from append queue in Prime
-	c_regionRetryThreshold              = 300     // Number of times a block is retry to be appended before eviction from append queue in Region
-	c_zoneRetryThreshold                = 100     // Number of times a block is retry to be appended before eviction from append queue in Zone
+	c_primeRetryThreshold               = 1800    // Number of times a block is retry to be appended before eviction from append queue in Prime
+	c_regionRetryThreshold              = 1200    // Number of times a block is retry to be appended before eviction from append queue in Region
+	c_zoneRetryThreshold                = 600     // Number of times a block is retry to be appended before eviction from append queue in Zone
 	c_maxFutureBlocks                   = 15      // Number of blocks ahead of the current block to be put in the hashNumberList
 	c_appendQueueRetryPriorityThreshold = 5       // If retry counter for a block is less than this number,  then its put in the special list that is tried first to be appended
 	c_appendQueueRemoveThreshold        = 10      // Number of blocks behind the block should be from the current header to be eligble for removal from the append queue
@@ -130,7 +131,11 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 			} else if err.Error() != ErrKnownBlock.Error() {
 				log.Info("Append failed.", "hash", block.Hash(), "err", err)
 			}
-			c.removeFromAppendQueue(block)
+			if err != nil && strings.Contains(err.Error(), "connection refused") {
+				log.Error("Append failed because of conenction refused error")
+			} else {
+				c.removeFromAppendQueue(block)
+			}
 		}
 	}
 	return len(blocks), nil
@@ -145,11 +150,12 @@ func (c *Core) procAppendQueue() {
 	for _, hash := range c.appendQueue.Keys() {
 		if value, exist := c.appendQueue.Peek(hash); exist {
 			hashNumber := types.HashAndNumber{Hash: hash.(common.Hash), Number: value.(blockNumberAndRetryCounter).number}
-			if value.(blockNumberAndRetryCounter).retry < c_appendQueueRetryPriorityThreshold {
-				hashNumberPriorityList = append(hashNumberPriorityList, hashNumber)
-			}
 			if hashNumber.Number < c.CurrentHeader().NumberU64()+c_maxFutureBlocks {
-				hashNumberList = append(hashNumberList, hashNumber)
+				if value.(blockNumberAndRetryCounter).retry < c_appendQueueRetryPriorityThreshold {
+					hashNumberPriorityList = append(hashNumberPriorityList, hashNumber)
+				} else {
+					hashNumberList = append(hashNumberList, hashNumber)
+				}
 			}
 		}
 	}
@@ -354,6 +360,10 @@ func (c *Core) WriteBlock(block *types.Block) {
 		nodeCtx := common.NodeLocation.Context()
 		if order == nodeCtx {
 			c.addToAppendQueue(block)
+			parentHeader := c.GetHeader(block.ParentHash(), block.NumberU64()-1)
+			if parentHeader != nil {
+				c.InsertChain([]*types.Block{block})
+			}
 			// If a dom block comes in and we havent appended it yet
 		} else if order < nodeCtx && c.GetHeaderByHash(block.Hash()) == nil {
 			if c.sl.domClient != nil {
