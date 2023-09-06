@@ -120,7 +120,7 @@ var (
 	DBEngineFlag = &cli.StringFlag{
 		Name:  "db.engine",
 		Usage: "Backing database implementation to use ('leveldb' or 'pebble')",
-		Value: "pebble",
+		Value: "leveldb",
 	}
 	KeyStoreDirFlag = DirectoryFlag{
 		Name:  "keystore",
