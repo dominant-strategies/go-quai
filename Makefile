@@ -72,6 +72,9 @@ endif
 ifeq ($(RUN_BLAKE3),true)
 	BASE_CMD += --consensus.engine "blake3"
 endif
+ifeq ($(NO_DISCOVER),true)
+	BASE_CMD += --nodiscover
+endif
 
 # Build suburl strings for slice specific subclient groups
 # WARNING: Only connect to dom/sub clients over a trusted network.
