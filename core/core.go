@@ -360,10 +360,6 @@ func (c *Core) WriteBlock(block *types.Block) {
 		nodeCtx := common.NodeLocation.Context()
 		if order == nodeCtx {
 			c.addToAppendQueue(block)
-			parentHeader := c.GetHeader(block.ParentHash(), block.NumberU64()-1)
-			if parentHeader != nil {
-				c.InsertChain([]*types.Block{block})
-			}
 			// If a dom block comes in and we havent appended it yet
 		} else if order < nodeCtx && c.GetHeaderByHash(block.Hash()) == nil {
 			if c.sl.domClient != nil {
