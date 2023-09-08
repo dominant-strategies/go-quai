@@ -23,33 +23,33 @@ import (
 	"github.com/dominant-strategies/go-quai/rlp"
 )
 
-// enrEntry is the ENR entry which advertises `eth` protocol on the discovery.
-type enrEntry struct {
-	ForkID forkid.ID // Fork identifier per
+// ethEntry is the "eth" ENR entry which advertises eth protocol
+// on the discovery network.
+type ethEntry struct {
+	ForkID forkid.ID // Fork identifier
 
 	// Ignore additional fields (for forward compatibility).
 	Rest []rlp.RawValue `rlp:"tail"`
 }
 
 // ENRKey implements enr.Entry.
-func (e enrEntry) ENRKey() string {
+func (e ethEntry) ENRKey() string {
 	return "eth"
 }
 
-// StartENRUpdater starts the `eth` ENR updater loop, which listens for chain
-// head events and updates the requested node record whenever a fork is passed.
-func StartENRUpdater(chain *core.Core, ln *enode.LocalNode) {
+// startEthEntryUpdate starts the ENR updater loop.
+func (eth *Quai) startEthEntryUpdate(ln *enode.LocalNode) {
 	var newHead = make(chan core.ChainHeadEvent, 10)
-	sub := chain.SubscribeChainHeadEvent(newHead)
+	sub := eth.core.SubscribeChainHeadEvent(newHead)
 
 	go func() {
 		defer sub.Unsubscribe()
 		for {
 			select {
 			case <-newHead:
-				ln.Set(currentENREntry(chain))
+				ln.Set(eth.currentEthEntry())
 			case <-sub.Err():
-				// Would be nice to sync with Stop, but there is no
+				// Would be nice to sync with eth.Stop, but there is no
 				// good way to do that.
 				return
 			}
@@ -57,9 +57,7 @@ func StartENRUpdater(chain *core.Core, ln *enode.LocalNode) {
 	}()
 }
 
-// currentENREntry constructs an `eth` ENR entry based on the current state of the chain.
-func currentENREntry(chain *core.Core) *enrEntry {
-	return &enrEntry{
-		ForkID: forkid.NewID(chain.Config(), chain.Genesis().Hash(), chain.CurrentHeader().Number().Uint64()),
-	}
+func (eth *Quai) currentEthEntry() *ethEntry {
+	return &ethEntry{ForkID: forkid.NewID(eth.core.Config(), eth.core.Genesis().Hash(),
+		eth.core.CurrentHeader().Number().Uint64())}
 }

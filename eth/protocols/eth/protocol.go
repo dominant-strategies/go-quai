@@ -23,6 +23,7 @@ import (
 	"math/big"
 
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/core/forkid"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/rlp"
 )
@@ -80,6 +81,7 @@ var (
 	errProtocolVersionMismatch = errors.New("protocol version mismatch")
 	errNetworkIDMismatch       = errors.New("network ID mismatch")
 	errGenesisMismatch         = errors.New("genesis mismatch")
+	errForkIDRejected          = errors.New("fork ID rejected")
 	errLocationMismatch        = errors.New("location mismatch")
 	errSlicesRunningRejected   = errors.New("slices running not valid")
 )
@@ -99,6 +101,7 @@ type StatusPacket struct {
 	Entropy         *big.Int
 	Head            common.Hash
 	Genesis         common.Hash
+	ForkID          forkid.ID
 }
 
 // NewBlockHashesPacket is the network packet for the block announcements.
