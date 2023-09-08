@@ -340,7 +340,7 @@ func DefaultColosseumGenesisBlock(consensusEngine string) *Genesis {
 	return &Genesis{
 		Config:     params.ProgpowColosseumChainConfig,
 		Nonce:      66,
-		ExtraData:  hexutil.MustDecode("0x1111111111111111111111111111111111111111111111111111111111111111"),
+		ExtraData:  hexutil.MustDecode("0x2111111111111111111111111111111111111111111111111111111111111111"),
 		GasLimit:   5000000,
 		Difficulty: big.NewInt(300000000),
 	}
