@@ -300,8 +300,10 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 		}
 		// Verify the block's gas usage and verify the base fee.
 		// Verify that the gas limit remains within allowed bounds
-		if err := misc.VerifyGaslimit(parent.GasLimit(), header.GasLimit()); err != nil {
-			return err
+		expectedGasLimit := core.CalcGasLimit(parent, progpow.config.GasCeil)
+		if expectedGasLimit != header.GasLimit() {
+			return fmt.Errorf("invalid gasLimit: have %d, want %d",
+				header.GasLimit(), expectedGasLimit)
 		}
 		// Verify the header is not malformed
 		if header.BaseFee() == nil {

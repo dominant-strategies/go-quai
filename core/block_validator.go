@@ -144,25 +144,42 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 // CalcGasLimit computes the gas limit of the next block after parent. It aims
 // to keep the baseline gas close to the provided target, and increase it towards
 // the target if the baseline gas is lower.
-func CalcGasLimit(parentGasLimit, desiredLimit uint64) uint64 {
+func CalcGasLimit(parent *types.Header, gasCeil uint64) uint64 {
+
+	parentGasLimit := parent.GasLimit()
+
 	delta := parentGasLimit/params.GasLimitBoundDivisor - 1
 	limit := parentGasLimit
-	if desiredLimit < params.MinGasLimit {
+
+	var desiredLimit uint64
+	percentGasUsed := parent.GasUsed() * 100 / parent.GasLimit()
+	if percentGasUsed > params.PercentGasUsedThreshold {
+		desiredLimit = CalcGasCeil(parent.NumberU64(), gasCeil)
+		if desiredLimit > gasCeil {
+			desiredLimit = gasCeil
+		}
+		if limit+delta > desiredLimit {
+			return desiredLimit
+		} else {
+			return limit + delta
+		}
+	} else {
 		desiredLimit = params.MinGasLimit
-	}
-	// If we're outside our allowed gas range, we try to hone towards them
-	if limit < desiredLimit {
-		limit = parentGasLimit + delta
-		if limit > desiredLimit {
-			limit = desiredLimit
-		}
-		return limit
-	}
-	if limit > desiredLimit {
-		limit = parentGasLimit - delta
-		if limit < desiredLimit {
-			limit = desiredLimit
+		if limit-delta/2 < desiredLimit {
+			return desiredLimit
+		} else {
+			return limit - delta/2
 		}
 	}
-	return limit
+}
+
+func CalcGasCeil(blockNumber uint64, gasCeil uint64) uint64 {
+	if blockNumber < params.GasLimitStepOneBlockThreshold {
+		return gasCeil / 4
+	} else if blockNumber < params.GasLimitStepTwoBlockThreshold {
+		return gasCeil / 2
+	} else if blockNumber < params.GasLimitStepThreeBlockThreshold {
+		return gasCeil * 3 / 4
+	}
+	return gasCeil
 }

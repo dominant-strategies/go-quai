@@ -43,6 +43,8 @@ type Config struct {
 
 	DurationLimit *big.Int
 
+	GasCeil uint64
+
 	// When set, notifications sent by the remote sealer will
 	// be block header JSON objects instead of work package arrays.
 	NotifyFull bool

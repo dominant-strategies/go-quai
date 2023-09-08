@@ -1240,24 +1240,31 @@ func setTxPool(ctx *cli.Context, cfg *core.TxPoolConfig) {
 	}
 }
 
-func setDurationLimit(ctx *cli.Context, cfg *ethconfig.Config) {
+func setConsensusEngineConfig(ctx *cli.Context, cfg *ethconfig.Config) {
 	if cfg.ConsensusEngine == "blake3" {
 		// Override any default configs for hard coded networks.
 		switch {
 		case ctx.GlobalBool(ColosseumFlag.Name):
 			cfg.Blake3Pow.DurationLimit = params.DurationLimit
+			cfg.Blake3Pow.GasCeil = params.ColosseumGasCeil
 		case ctx.GlobalBool(GardenFlag.Name):
 			cfg.Blake3Pow.DurationLimit = params.GardenDurationLimit
+			cfg.Blake3Pow.GasCeil = params.GardenGasCeil
 		case ctx.GlobalBool(OrchardFlag.Name):
 			cfg.Blake3Pow.DurationLimit = params.OrchardDurationLimit
+			cfg.Blake3Pow.GasCeil = params.OrchardGasCeil
 		case ctx.GlobalBool(LighthouseFlag.Name):
 			cfg.Blake3Pow.DurationLimit = params.LighthouseDurationLimit
+			cfg.Blake3Pow.GasCeil = params.LighthouseGasCeil
 		case ctx.GlobalBool(LocalFlag.Name):
 			cfg.Blake3Pow.DurationLimit = params.LocalDurationLimit
+			cfg.Blake3Pow.GasCeil = params.LocalGasCeil
 		case ctx.GlobalBool(DeveloperFlag.Name):
 			cfg.Blake3Pow.DurationLimit = params.DurationLimit
+			cfg.Blake3Pow.GasCeil = params.LocalGasCeil
 		default:
 			cfg.Blake3Pow.DurationLimit = params.DurationLimit
+			cfg.Blake3Pow.GasCeil = params.GasCeil
 
 		}
 	} else {
@@ -1265,18 +1272,25 @@ func setDurationLimit(ctx *cli.Context, cfg *ethconfig.Config) {
 		switch {
 		case ctx.GlobalBool(ColosseumFlag.Name):
 			cfg.Progpow.DurationLimit = params.DurationLimit
+			cfg.Progpow.GasCeil = params.ColosseumGasCeil
 		case ctx.GlobalBool(GardenFlag.Name):
 			cfg.Progpow.DurationLimit = params.GardenDurationLimit
+			cfg.Progpow.GasCeil = params.GardenGasCeil
 		case ctx.GlobalBool(OrchardFlag.Name):
 			cfg.Progpow.DurationLimit = params.OrchardDurationLimit
+			cfg.Progpow.GasCeil = params.OrchardGasCeil
 		case ctx.GlobalBool(LighthouseFlag.Name):
 			cfg.Progpow.DurationLimit = params.LighthouseDurationLimit
+			cfg.Progpow.GasCeil = params.LighthouseGasCeil
 		case ctx.GlobalBool(LocalFlag.Name):
 			cfg.Progpow.DurationLimit = params.LocalDurationLimit
+			cfg.Progpow.GasCeil = params.LocalGasCeil
 		case ctx.GlobalBool(DeveloperFlag.Name):
 			cfg.Progpow.DurationLimit = params.DurationLimit
+			cfg.Progpow.GasCeil = params.LocalGasCeil
 		default:
 			cfg.Progpow.DurationLimit = params.DurationLimit
+			cfg.Progpow.GasCeil = params.GasCeil
 
 		}
 	}
@@ -1425,7 +1439,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	} else {
 		cfg.ConsensusEngine = "progpow"
 	}
-	setDurationLimit(ctx, cfg)
+	setConsensusEngineConfig(ctx, cfg)
 
 	setWhitelist(ctx, cfg)
 

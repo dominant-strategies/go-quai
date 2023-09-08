@@ -881,12 +881,7 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, block *typ
 // into the given sealing block. The transaction selection and ordering strategy can
 // be customized with the plugin in the future.
 func (w *worker) adjustGasLimit(interrupt *int32, env *environment, parent *types.Block) {
-	percentGasUsed := parent.GasUsed() * 100 / parent.GasLimit()
-	if percentGasUsed > params.PercentGasUsedThreshold {
-		env.header.SetGasLimit(CalcGasLimit(parent.GasLimit(), w.config.GasCeil))
-	} else {
-		env.header.SetGasLimit(CalcGasLimit(parent.GasLimit(), w.config.GasFloor))
-	}
+	env.header.SetGasLimit(CalcGasLimit(parent.Header(), w.config.GasCeil))
 }
 
 // ComputeManifestHash given a header computes the manifest hash for the header
