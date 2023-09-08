@@ -883,7 +883,15 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, block *typ
 func (w *worker) adjustGasLimit(interrupt *int32, env *environment, parent *types.Block) {
 	percentGasUsed := parent.GasUsed() * 100 / parent.GasLimit()
 	if percentGasUsed > params.PercentGasUsedThreshold {
-		env.header.SetGasLimit(CalcGasLimit(parent.GasLimit(), w.config.GasCeil))
+		if parent.NumberU64() < params.GasLimitStepOneBlockThreshold {
+			env.header.SetGasLimit(CalcGasLimit(parent.GasLimit(), w.config.GasCeil/4))
+		} else if parent.NumberU64() < params.GasLimitStepTwoBlockThreshold {
+			env.header.SetGasLimit(CalcGasLimit(parent.GasLimit(), w.config.GasCeil/2))
+		} else if parent.NumberU64() < params.GasLimitStepThreeBlockThreshold {
+			env.header.SetGasLimit(CalcGasLimit(parent.GasLimit(), w.config.GasCeil*3/4))
+		} else {
+			env.header.SetGasLimit(CalcGasLimit(parent.GasLimit(), w.config.GasCeil))
+		}
 	} else {
 		env.header.SetGasLimit(CalcGasLimit(parent.GasLimit(), w.config.GasFloor))
 	}
