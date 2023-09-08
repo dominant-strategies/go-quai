@@ -322,7 +322,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	log.Info("times during sub append:", "t6_1:", time6_1, "t6_2:", time6_2, "t6_3:", time6_3)
 	log.Info("Appended new block", "number", block.Header().Number(), "hash", block.Hash(),
 		"difficulty", block.Header().Difficulty(),
-		"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "etxs", len(block.ExtTransactions()), "gas", block.GasUsed(),
+		"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "etxs", len(block.ExtTransactions()), "gas", block.GasUsed(), "gasLimit", block.GasLimit(),
 		"root", block.Root(),
 		"order", order,
 		"location", block.Header().Location(),
