@@ -25,11 +25,11 @@ import (
 const (
 	GasLimitBoundDivisor            uint64 = 1024 // The bound divisor of the gas limit, used in update calculations.
 	PercentGasUsedThreshold         uint64 = 50   // Percent Gas used threshold at which the gas limit adjusts
-	GasLimitStepOneBlockThreshold   uint64 = 150000
-	GasLimitStepTwoBlockThreshold   uint64 = 300000
-	GasLimitStepThreeBlockThreshold uint64 = 450000
-	MinGasLimit                     uint64 = 5000000 // Minimum the gas limit may ever be.
-	GenesisGasLimit                 uint64 = 5000000 // Gas limit of the Genesis block.
+	GasLimitStepOneBlockThreshold   uint64 = 500
+	GasLimitStepTwoBlockThreshold   uint64 = 1000
+	GasLimitStepThreeBlockThreshold uint64 = 1500
+	MinGasLimit                     uint64 = 10000000 // Minimum the gas limit may ever be.
+	GenesisGasLimit                 uint64 = 5000000  // Gas limit of the Genesis block.
 
 	MaximumExtraDataSize  uint64 = 32                                                       // Maximum size extra data may be after Genesis.
 	ExpByteGas            uint64 = 10                                                       // Times ceil(log256(exponent)) for the EXP instruction.
@@ -143,7 +143,7 @@ const (
 var (
 	GasCeil                    uint64 = 20000000
 	ColosseumGasCeil           uint64 = 110000000
-	GardenGasCeil              uint64 = 160000000
+	GardenGasCeil              uint64 = 110000000
 	OrchardGasCeil             uint64 = 50000000
 	LighthouseGasCeil          uint64 = 160000000
 	LocalGasCeil               uint64 = 20000000
