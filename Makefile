@@ -115,7 +115,15 @@ ZONE_CMD += --ws.port $(ZONE_$(REGION)_$(ZONE)_PORT_WS)
 ZONE_CMD += --dom.url ws://127.0.0.1:$(REGION_$(REGION)_PORT_WS)
 ZONE_LOG_FILE = nodelogs/zone-$(REGION)-$(ZONE).log
 
-run:
+run-slice:
+ifeq (,$(wildcard nodelogs))
+	mkdir nodelogs
+endif
+	$(PRIME_CMD) >> $(PRIME_LOG_FILE) 2>&1 &
+	$(REGION_CMD) >> $(REGION_LOG_FILE) 2>&1 &
+	$(ZONE_CMD) >> $(ZONE_LOG_FILE) 2>&1 &
+
+run-all:
 ifeq (,$(wildcard nodelogs))
 	mkdir nodelogs
 endif
