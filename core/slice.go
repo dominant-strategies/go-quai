@@ -325,6 +325,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "etxs", len(block.ExtTransactions()), "gas", block.GasUsed(),
 		"root", block.Root(),
 		"order", order,
+		"location", block.Header().Location(),
 		"elapsed", common.PrettyDuration(time.Since(start)))
 
 	if nodeCtx == common.ZONE_CTX {
