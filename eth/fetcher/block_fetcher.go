@@ -350,7 +350,12 @@ func (f *BlockFetcher) loop() {
 				f.forgetBlock(hash)
 				continue
 			}
-			f.importBlocks(op.origin, op.block)
+
+			// Only import blocks using the Fetcher if its within maxUncleDist
+			// This is done to prevent DDos on the append queue
+			if op != nil && op.block.NumberU64()+maxUncleDist > f.chainHeight() {
+				f.importBlocks(op.origin, op.block)
+			}
 		}
 		// Wait for an outside event to occur
 		select {
