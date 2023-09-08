@@ -17,6 +17,7 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/trie"
+	"modernc.org/mathutil"
 )
 
 // Blake3pow proof-of-work protocol constants.
@@ -331,10 +332,6 @@ func (blake3pow *Blake3pow) CalcDifficulty(chain consensus.ChainHeaderReader, pa
 		log.Error("Cannot CalcDifficulty for", "context", nodeCtx)
 		return nil
 	}
-	// algorithm:
-	// diff = (parent_diff +
-	//         (parent_diff / 2048 * max((2 if len(parent.uncles) else 1) - ((timestamp - parent.timestamp) // 9), -99))
-	//        ) + 2^(periodCount - 2)
 
 	time := parent.Time()
 
@@ -344,35 +341,23 @@ func (blake3pow *Blake3pow) CalcDifficulty(chain consensus.ChainHeaderReader, pa
 
 	parentOfParent := chain.GetHeaderByHash(parent.ParentHash())
 
+	if parentOfParent.Hash() == chain.Config().GenesisHash {
+		return parent.Difficulty()
+	}
 	bigTime := new(big.Int).SetUint64(time)
 	bigParentTime := new(big.Int).SetUint64(parentOfParent.Time())
 
 	// holds intermediate values to make the algo easier to read & audit
 	x := new(big.Int)
-	y := new(big.Int)
-
-	// (2 if len(parent_uncles) else 1) - (block_timestamp - parent_timestamp) // duration_limit
 	x.Sub(bigTime, bigParentTime)
+	x.Sub(blake3pow.config.DurationLimit, x)
+	x.Mul(x, parent.Difficulty())
+	k, _ := mathutil.BinaryLog(new(big.Int).Set(parent.Difficulty()), 64)
+	x.Mul(x, big.NewInt(int64(k)))
 	x.Div(x, blake3pow.config.DurationLimit)
-	if parent.UncleHash() == types.EmptyUncleHash {
-		x.Sub(big1, x)
-	} else {
-		x.Sub(big2, x)
-	}
-	// max((2 if len(parent_uncles) else 1) - (block_timestamp - parent_timestamp) // 9, -99)
-	if x.Cmp(bigMinus99) < 0 {
-		x.Set(bigMinus99)
-	}
-	// parent_diff + (parent_diff / 2048 * max((2 if len(parent.uncles) else 1) - ((timestamp - parent.timestamp) // 9), -99))
-	y.Div(parent.Difficulty(), params.DifficultyBoundDivisor)
-	x.Mul(y, x)
-	x.Add(parent.Difficulty(), x)
-
-	// minimum difficulty can ever be (before exponential factor)
-	if x.Cmp(params.MinimumDifficulty) < 0 {
-		x.Set(params.MinimumDifficulty)
-	}
-
+	x.Div(x, big.NewInt(int64(20)))
+	x.Div(x, params.DifficultyAdjustmentPeriod)
+	x.Add(x, parent.Difficulty())
 	return x
 }
 
