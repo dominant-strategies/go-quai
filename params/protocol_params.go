@@ -114,10 +114,10 @@ const (
 	// not exist. This logic is similar to call.
 	CreateBySelfdestructGas uint64 = 25000
 
-	BaseFeeChangeDenominator = 8        // Bounds the amount the base fee can change between blocks.
-	ElasticityMultiplier     = 2        // Bounds the maximum gas limit a block may have.
-	InitialBaseFee           = 1        // Initial base fee for blocks.
-	MaxBaseFee               = 1 * GWei // Maximum base fee for blocks.
+	BaseFeeChangeDenominator = 8          // Bounds the amount the base fee can change between blocks.
+	ElasticityMultiplier     = 2          // Bounds the maximum gas limit a block may have.
+	InitialBaseFee           = 1 * GWei   // Initial base fee for blocks.
+	MaxBaseFee               = 100 * GWei // Maximum base fee for blocks.
 
 	MaxCodeSize = 24576 // Maximum bytecode to permit for a contract
 

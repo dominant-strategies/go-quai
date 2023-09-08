@@ -19,7 +19,6 @@ package misc
 import (
 	"math/big"
 
-	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/math"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/params"
@@ -51,10 +50,7 @@ func calcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 		gasUsedDelta := new(big.Int).SetUint64(parent.GasUsed() - parentGasTarget)
 		x := new(big.Int).Mul(parent.BaseFee(), gasUsedDelta)
 		y := x.Div(x, parentGasTargetBig)
-		baseFeeDelta := math.BigMax(
-			x.Div(y, baseFeeChangeDenominator),
-			common.Big1,
-		)
+		baseFeeDelta := math.BigMax(x.Div(y, baseFeeChangeDenominator), big.NewInt(params.GWei))
 
 		return x.Add(parent.BaseFee(), baseFeeDelta)
 	} else {
@@ -64,9 +60,6 @@ func calcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 		y := x.Div(x, parentGasTargetBig)
 		baseFeeDelta := x.Div(y, baseFeeChangeDenominator)
 
-		return math.BigMax(
-			x.Sub(parent.BaseFee(), baseFeeDelta),
-			common.Big0,
-		)
+		return math.BigMax(x.Sub(parent.BaseFee(), baseFeeDelta), big.NewInt(params.GWei))
 	}
 }
