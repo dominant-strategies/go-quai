@@ -667,7 +667,7 @@ type DomUpdate struct {
 	OldTerminus common.Hash
 	NewTerminus common.Hash
 	Location    common.Location
-	NewEntropy  *big.Int
+	Header      *types.Header
 }
 
 func (s *PublicBlockChainQuaiAPI) UpdateDom(ctx context.Context, raw json.RawMessage) {
@@ -677,7 +677,7 @@ func (s *PublicBlockChainQuaiAPI) UpdateDom(ctx context.Context, raw json.RawMes
 		return
 	}
 
-	s.b.UpdateDom(domUpdate.OldTerminus, domUpdate.NewTerminus, domUpdate.NewEntropy, domUpdate.Location)
+	s.b.UpdateDom(domUpdate.OldTerminus, domUpdate.NewTerminus, domUpdate.Header, domUpdate.Location)
 }
 
 type RequestDomToAppendOrFetchArgs struct {
