@@ -1,49 +1,31 @@
-# Go Quai
+## Go Quai
 
-The official Golang implementation of the Quai protocol.
+Official Golang implementation of the Quai protocol.
 
 [![API Reference](
 https://camo.githubusercontent.com/915b7be44ada53c290eb157634330494ebe3e30a/68747470733a2f2f676f646f632e6f72672f6769746875622e636f6d2f676f6c616e672f6764646f3f7374617475732e737667
 )](https://pkg.go.dev/github.com/dominant-strategies/go-quai/common)
 [![Go Report Card](https://goreportcard.com/badge/github.com/dominant-strategies/go-quai)](https://goreportcard.com/report/github.com/dominant-strategies/go-quai)
-[![Discord](https://img.shields.io/badge/discord-join%20chat-blue.svg)](https://discord.gg/s8y8asPwNC)
-
-* [Prerequisites](#prerequisites)
-* [Building The Source](#building-the-source)
-* [Executables](#executables)
-  * [go-quai](#go-quai)
-  * [test](#test)
-* [Running go-quai](#running-go-quai)
-  * [Configuration](#configuration)
-  * [Starting and stopping a node](#starting-and-stopping-a-node)
-  * [Viewing logs](#viewing-logs)
-  * [Garden test network](#garden-test-network)
-* [Contribution](#contribution)
-* [License](#license)
-
-## Prerequisites
-
-* Go v1.21.0+
-* Git
-* Make
-
-For details on installing prerequisites, visit the [node installation instructions in the Quai Documentation](https://docs.quai.network/node/node-overview/run-a-node).
+[![Discord](https://img.shields.io/badge/discord-join%20chat-blue.svg)](https://discord.gg/ngw88VXXnV)
 
 ## Building the source
-Once you have the necessary [prerequisites](#prerequisites), clone the `go-quai` repository and navigate to it using:
 
+For prerequisites and detailed build instructions please read the [Installation Instructions](https://docs.quai.network/develop/installation).
+
+First, clone the repository and navigate to it using
 ```shell
 $ git clone https://github.com/dominant-strategies/go-quai.git
 $ cd go-quai
 ```
 
-Next, you will need to copy the boilerplate node configuration file (`network.env.dist`) into a configuration file called `network.env`. You can do this by running: 
+Next, you will need to copy some default environment variables to your machine. You can do this by running 
 
 ```shell
 $ cp network.env.dist network.env
 ```
 
-Building `go-quai` requires both a Go (version 1.21.0+ or later) and a C compiler. You can install them using your favorite package manager. Once these dependencies are installed, run:
+Building `go-quai` requires both a Go (version 1.19 or later) and a C compiler. You can install
+them using your favorite package manager. Once these dependencies are installed, run
 
 ```shell
 $ make go-quai
@@ -60,75 +42,49 @@ $ make all
 The go-quai project comes with several wrappers/executables found in the `cmd`
 directory.
 
-### go-quai
-
-Our main Quai CLI client. go-quai is the entry point into the Quai network (main-, test-, or private net), capable of running as a slice node (single slice), multi-slice node (subset of slices), and a global node (all slices). Each of these types of nodes can be run as full node (default), a light node (retrieving data live), or an archive node (retaining all historical state). 
-
-go-quai can be used by other processes as a gateway into the Quai network via JSON RPC endpoints exposed on top of HTTP, WebSocket and/or IPC transports. 
-
-`go-quai --help` for command line options.
-
-| go-quai Nodes     | Single Slice              | Multiple Slices          | All Slices          |
-| :---------------: | :-----------------------: | :----------------------: | :-----------------: |
-| **Full Node**     | Slice Full Node (Default) | Multi-Slice Full Node    | Global Full Node    |
-| **Light Nodes**   | Slice Light Node          | Multi-Slice Light Node   | Global Light Node   | 
-| **Archive Node**  | Slice Archive Node        | Multi-Slice Archive Node | Global Archive Node |
-
-### test
-
-Runs a battery of tests on the repository to ensure it builds and functions correctly.
+|    Command    | Description |
+| :-----------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|  **`go-quai`**   | Our main Quai CLI client. It is the entry point into the Quai network (main-, test- or private net), capable of running as a full node (default), archive node (retaining all historical state) or a light node (retrieving data live). It can be used by other processes as a gateway into the Quai network via JSON RPC endpoints exposed on top of HTTP, WebSocket and/or IPC transports. `go-quai --help` for command line options.|
+|  **`test`** | Runs a battery of tests on the repository to ensure it builds and functions correctly.|
 
 ## Running `go-quai`
 
-### Configuration
+### Full node on the main Quai network
 
-Configuration is handled in the `network.env` file. You will need to copy or rename the file to `network.env`. The make commands will automatically pull from this file for configuration changes.
-
-The default configuration of the `network.env` file is for a **global full node** on the `main` (`colosseum`) network.
-
-* The `SLICES` parameter determines which slices of the network the node will run (i.e. determines whether the node will be a slice node, a multi-slice node, or a global node).
-
-* The `COINBASE` paratmeter contains the addresses that mining rewards will be paid to. There is one `COINBASE` address for each slice. 
-
-* The `NETWORK` parameter determines the network that the node will run on. Networks include the mainnet (`colosseum`) and [garden](#garden-test-network) networks.
-
-### Starting and stopping a node
-
-The `go-quai` client can be started by using:
-
+Using the makefile will preload configuration values from the `network.env` file.
 ```shell
 $ make run
 ```
 
-Using the makefile will preload configuration values from the `network.env` file.
-
-The `go-quai` client can be stopped by using:
-
-```shell
-$ make stop
-```
+### Full node on the Garden test network
+Garden test network is based on the Blake3 proof-of-work consensus algorithm. As such,
+it has certain extra overhead and is more susceptible to reorganization attacks due to the
+network's low difficulty/security.
 
 ### Viewing logs
-
 Logs are stored in the `go-quai/nodelogs` directory by default. You can view them by using tail or another utility, like so:
-
 ```shell
-$ tail -f nodelogs/zone-X-Y.log
+$ tail -f nodelogs/zone-0-0.log
 ```
 
-X and Y should be replaced with values between 0-2 to define which slice's logs to display.
+Modify the `network.env` configuration file to reflect:
+`NETWORK=garden`. You should also set `ENABLE_ARCHIVE=true` to make sure to save the trie-nodes after you stop your node. Then build and run with the same commands as mainnet.
 
-### Garden test network
+### Configuration
 
-The Garden test network is based on the Blake3 proof-of-work consensus algorithm. As such, it has certain extra overhead and is more susceptible to reorganization attacks due to the network's low difficulty/security.
-
-To run on the Garden test network, modify the `network.env` configuration file to reflect `NETWORK=garden`. You should also set `ENABLE_ARCHIVE=true` to make sure to save the trie-nodes after you stop your node. Then [build](#building-the-source) and [run](#starting-and-stopping-a-node) with the same commands as mainnet.
+Configuration is handled in `network.env.dist` file. You will need to copy or rename the file to `network.env`. The make commands will automatically pull from this file for configuration changes.
 
 ## Contribution
 
-Thank you for considering to help out with the source code! We welcome contributions from anyone on the internet, and are grateful for even the smallest of fixes.
+Thank you for considering to help out with the source code! We welcome contributions
+from anyone on the internet, and are grateful for even the smallest of fixes!
 
-If you'd like to contribute to `go-quai`, please fork, fix, commit and send a pull request for the maintainers to review and merge into the main code base.
+If you'd like to contribute to go-quai, please fork, fix, commit and send a pull request
+for the maintainers to review and merge into the main code base. If you wish to submit
+more complex changes though, please check up with the core devs first on [our Discord Server](https://discord.gg/Nd8JhaENvU)
+to ensure those changes are in line with the general philosophy of the project and/or get
+some early feedback which can make both your efforts much lighter as well as our review
+and merge procedures quick and simple.
 
 Please make sure your contributions adhere to our coding guidelines:
 
@@ -140,7 +96,9 @@ Please make sure your contributions adhere to our coding guidelines:
  * Commit messages should be prefixed with the package(s) they modify.
    * E.g. "rpc: make trace configs optional"
 
-If you wish to submit more complex changes, please check up with the core devs first in the [Quai development Discord Server](https://discord.gg/s8y8asPwNC) to ensure your changes are in line with the general philosophy of the project and/or get some early feedback which can make both your efforts much lighter as well as our review and merge procedures quick and simple.
+Please see the [Developers' Guide](https://docs.quai.network/contributors/contribute)
+for more details on configuring your environment, managing project dependencies, and
+testing procedures.
 
 ## License
 
