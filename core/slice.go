@@ -389,17 +389,13 @@ func (sl *Slice) UpdateDom(oldTerminus common.Hash, newTerminus common.Hash, new
 	log.Info("UpdateDom:", "oldTerminus:", oldTerminus, "newTerminus:", newTerminus, "oldDomTerminus:", oldDomTermini.DomTerminus(), "newDomTerminus:", newDomTermini.DomTerminus())
 	if nodeCtx == common.REGION_CTX && oldDomTermini.DomTerminus() == newDomTermini.DomTerminus() {
 		// Can update
-		block := sl.hc.GetBlockByHash(newTerminus)
-		sl.bestPhKey = newTerminus
-		if block != nil {
-			pendingHeaderWithTermini, err := sl.generateSlicePendingHeader(block, *newDomTermini, types.EmptyHeader(), false, true, false)
-			if err != nil {
-				return
-			}
-			log.Info("pendingHeaderWithTermini:", "parent Hash:", pendingHeaderWithTermini.Header().ParentHash(), "Number", pendingHeaderWithTermini.Header().NumberArray())
+		newPh, exists := sl.readPhCache(newDomTermini.DomTerminus())
+		if exists {
+			sl.bestPhKey = newTerminus
+			log.Info("newPh:", "parent Hash:", newPh.Header().ParentHash(), "Number", newPh.Header().NumberArray())
 			for _, i := range sl.randomRelayArray() {
 				if sl.subClients[i] != nil {
-					sl.subClients[i].SubRelayPendingHeader(context.Background(), pendingHeaderWithTermini, newEntropy, common.Location{}, true)
+					sl.subClients[i].SubRelayPendingHeader(context.Background(), newPh, newEntropy, common.Location{}, true)
 				}
 			}
 		}
@@ -411,17 +407,13 @@ func (sl *Slice) UpdateDom(oldTerminus common.Hash, newTerminus common.Hash, new
 			go sl.domClient.UpdateDom(context.Background(), oldDomTermini.DomTerminus(), newDomTermini.DomTerminus(), newEntropy, location)
 		} else {
 			// Can update
-			block := sl.hc.GetBlockByHash(newTerminus)
-			sl.bestPhKey = newTerminus
-			if block != nil {
-				pendingHeaderWithTermini, err := sl.generateSlicePendingHeader(block, *newDomTermini, types.EmptyHeader(), false, true, false)
-				if err != nil {
-					return
-				}
-				log.Info("pendingHeaderWithTermini:", "parent Hash:", pendingHeaderWithTermini.Header().ParentHash(), "Number", pendingHeaderWithTermini.Header().NumberArray())
+			newPh, exists := sl.readPhCache(newTerminus)
+			if exists {
+				sl.bestPhKey = newTerminus
+				log.Info("newPh:", "parent Hash:", newPh.Header().ParentHash(), "Number", newPh.Header().NumberArray())
 				for _, i := range sl.randomRelayArray() {
 					if sl.subClients[i] != nil {
-						sl.subClients[i].SubRelayPendingHeader(context.Background(), pendingHeaderWithTermini, newEntropy, location, true)
+						sl.subClients[i].SubRelayPendingHeader(context.Background(), newPh, newEntropy, common.Location{}, true)
 					}
 				}
 			}
