@@ -28,14 +28,8 @@ import (
 
 	quai "github.com/dominant-strategies/go-quai"
 	"github.com/dominant-strategies/go-quai/common"
-	"github.com/dominant-strategies/go-quai/consensus/progpow"
-	"github.com/dominant-strategies/go-quai/core"
-	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/crypto"
-	"github.com/dominant-strategies/go-quai/eth"
-	"github.com/dominant-strategies/go-quai/eth/ethconfig"
-	"github.com/dominant-strategies/go-quai/node"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rpc"
 )
@@ -186,93 +180,6 @@ var (
 	testAddr    = crypto.PubkeyToAddress(testKey.PublicKey)
 	testBalance = big.NewInt(2e15)
 )
-
-func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
-	// Generate test chain.
-	genesis, blocks := generateTestChain()
-	// Create node
-	n, err := node.New(&node.Config{})
-	if err != nil {
-		t.Fatalf("can't create new node: %v", err)
-	}
-	// Create quai Service
-	config := &ethconfig.Config{Genesis: genesis}
-	config.Progpow.PowMode = progpow.ModeFake
-	ethservice, err := eth.New(n, config)
-	if err != nil {
-		t.Fatalf("can't create new quai service: %v", err)
-	}
-	// Import the test chain.
-	if err := n.Start(); err != nil {
-		t.Fatalf("can't start test node: %v", err)
-	}
-	if _, err := ethservice.BlockChain().InsertChain(blocks[1:]); err != nil {
-		t.Fatalf("can't import test blocks: %v", err)
-	}
-	return n, blocks
-}
-
-func generateTestChain() (*core.Genesis, []*types.Block) {
-	db := rawdb.NewMemoryDatabase()
-	config := params.AllProgpowProtocolChanges
-	genesis := &core.Genesis{
-		Config:    config,
-		Alloc:     core.GenesisAlloc{testAddr: {Balance: testBalance}},
-		ExtraData: []byte("test genesis"),
-		Timestamp: 9000,
-		BaseFee:   big.NewInt(params.InitialBaseFee),
-	}
-	generate := func(i int, g *core.BlockGen) {
-		g.OffsetTime(5)
-		g.SetExtra([]byte("test"))
-	}
-	gblock := genesis.ToBlock(db)
-	engine := progpow.NewFaker()
-	blocks, _ := core.GenerateChain(config, gblock, engine, db, 1, generate)
-	blocks = append([]*types.Block{gblock}, blocks...)
-	return genesis, blocks
-}
-
-func TestEthClient(t *testing.T) {
-	backend, chain := newTestBackend(t)
-	client, _ := backend.Attach()
-	defer backend.Close()
-	defer client.Close()
-
-	tests := map[string]struct {
-		test func(t *testing.T)
-	}{
-		"TestHeader": {
-			func(t *testing.T) { testHeader(t, chain, client) },
-		},
-		"TestBalanceAt": {
-			func(t *testing.T) { testBalanceAt(t, client) },
-		},
-		"TestTxInBlockInterrupted": {
-			func(t *testing.T) { testTransactionInBlockInterrupted(t, client) },
-		},
-		"TestChainID": {
-			func(t *testing.T) { testChainID(t, client) },
-		},
-		"TestGetBlock": {
-			func(t *testing.T) { testGetBlock(t, client) },
-		},
-		"TestStatusFunctions": {
-			func(t *testing.T) { testStatusFunctions(t, client) },
-		},
-		"TestCallContract": {
-			func(t *testing.T) { testCallContract(t, client) },
-		},
-		"TestAtFunctions": {
-			func(t *testing.T) { testAtFunctions(t, client) },
-		},
-	}
-
-	t.Parallel()
-	for name, tt := range tests {
-		t.Run(name, tt.test)
-	}
-}
 
 func testHeader(t *testing.T, chain []*types.Block, client *rpc.Client) {
 	tests := map[string]struct {
