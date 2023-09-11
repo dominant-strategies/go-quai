@@ -212,7 +212,7 @@ func testHeader(t *testing.T, chain []*types.Block, client *rpc.Client) {
 				t.Fatalf("HeaderByNumber(%v) error = %q, want %q", tt.block, err, tt.wantErr)
 			}
 			if got != nil && got.Number() != nil && got.Number().Sign() == 0 {
-				got.Number() = big.NewInt(0) // hack to make DeepEqual work
+				got.SetNumber(big.NewInt(0)) // hack to make DeepEqual work
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Fatalf("HeaderByNumber(%v)\n   = %v\nwant %v", tt.block, got, tt.want)
@@ -234,7 +234,7 @@ func testBalanceAt(t *testing.T, client *rpc.Client) {
 			want:    testBalance,
 		},
 		"non_existent_account": {
-			account: common.Address{1},
+			account: common.Address{},
 			block:   big.NewInt(1),
 			want:    big.NewInt(0),
 		},
@@ -475,7 +475,7 @@ func sendTransaction(ec *Client) error {
 		return err
 	}
 	// Create transaction
-	tx := types.NewTransaction(0, common.Address{1}, big.NewInt(1), 22000, big.NewInt(params.InitialBaseFee), nil)
+	tx := types.NewTx(&types.ExternalTx{})
 	signer := types.LatestSignerForChainID(chainID)
 	signature, err := crypto.Sign(signer.Hash(tx).Bytes(), testKey)
 	if err != nil {
