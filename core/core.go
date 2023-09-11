@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -50,6 +51,8 @@ type Core struct {
 
 	appendQueue     *lru.Cache
 	processingCache *lru.Cache
+
+	writeBlockLock sync.RWMutex
 
 	quit chan struct{} // core quit channel
 }
@@ -348,6 +351,9 @@ func (c *Core) Stop() {
 
 // WriteBlock write the block to the bodydb database
 func (c *Core) WriteBlock(block *types.Block) {
+	c.writeBlockLock.Lock()
+	defer c.writeBlockLock.Unlock()
+
 	if c.sl.IsBlockHashABadHash(block.Hash()) {
 		return
 	}
