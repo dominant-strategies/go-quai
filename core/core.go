@@ -49,7 +49,6 @@ type Core struct {
 	sl     *Slice
 	engine consensus.Engine
 
-	appendProcMu    sync.RWMutex
 	appendQueue     *lru.Cache
 	processingCache *lru.Cache
 
@@ -278,9 +277,7 @@ func (c *Core) updateAppendQueue() {
 	for {
 		select {
 		case <-futureTimer.C:
-			c.appendProcMu.Lock()
 			c.procAppendQueue()
-			c.appendProcMu.Unlock()
 		case <-c.quit:
 			return
 		}
