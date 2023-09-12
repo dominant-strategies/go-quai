@@ -709,6 +709,10 @@ func (sl *Slice) computePendingHeader(localPendingHeaderWithTermini types.Pendin
 	var newPh *types.Header
 
 	if exists {
+		if domOrigin {
+			newPh = sl.combinePendingHeader(localPendingHeaderWithTermini.Header(), domPendingHeader, nodeCtx, true)
+			return types.NewPendingHeader(types.CopyHeader(newPh), localPendingHeaderWithTermini.Termini())
+		}
 		newPh = sl.combinePendingHeader(localPendingHeaderWithTermini.Header(), cachedPendingHeaderWithTermini.Header(), nodeCtx, true)
 		return types.NewPendingHeader(types.CopyHeader(newPh), localPendingHeaderWithTermini.Termini())
 	} else {
@@ -736,7 +740,7 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 		bestPh, exists := sl.readPhCache(sl.bestPhKey)
 		nodeCtx := common.NodeLocation.Context()
 		if nodeCtx == common.ZONE_CTX && exists && sl.bestPhKey != localPendingHeader.Termini().DomTerminus() && !sl.poem(newEntropy, bestPh.Header().ParentEntropy()) {
-			log.Info("subrelay rejected", "local dom terminus", localPendingHeader.Termini().DomTerminus(), "Number", localPendingHeader.Header().NumberArray(), "best ph key", sl.bestPhKey, "number", bestPh.Header().NumberArray(), "newentropy", newEntropy)
+			log.Info("subrelay rejected", "local dom terminus", localPendingHeader.Termini().DomTerminus(), "Number", combinedPendingHeader.NumberArray(), "best ph key", sl.bestPhKey, "number", bestPh.Header().NumberArray(), "newentropy", newEntropy)
 			sl.updatePhCache(types.NewPendingHeader(combinedPendingHeader, localPendingHeader.Termini()), false, nil, sl.poem(newEntropy, localPendingHeader.Header().ParentEntropy()))
 			go sl.domClient.UpdateDom(context.Background(), localPendingHeader.Termini().DomTerminus(), sl.bestPhKey, bestPh.Header(), common.NodeLocation)
 			return nil
@@ -751,7 +755,7 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 						log.Error("Error setting current header", "err", err, "Hash", block.Hash())
 						return err
 					}
-					log.Info("Choosing phHeader pickPhHead:", "NumberArray:", localPendingHeader.Header().NumberArray(), "Number:", localPendingHeader.Header().Number(), "ParentHash:", localPendingHeader.Header().ParentHash(), "Terminus:", localPendingHeader.Termini().DomTerminus())
+					log.Info("Choosing phHeader pickPhHead:", "NumberArray:", combinedPendingHeader.NumberArray(), "Number:", combinedPendingHeader.Number(), "ParentHash:", combinedPendingHeader.ParentHash(), "Terminus:", localPendingHeader.Termini().DomTerminus())
 					sl.bestPhKey = localPendingHeader.Termini().DomTerminus()
 					if block.Hash() != sl.hc.CurrentHeader().Hash() {
 						sl.hc.chainHeadFeed.Send(ChainHeadEvent{block})
