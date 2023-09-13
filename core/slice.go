@@ -362,6 +362,7 @@ func (sl *Slice) relayPh(block *types.Block, pendingHeaderWithTermini types.Pend
 		bestPh, exists := sl.readPhCache(sl.bestPhKey)
 		if exists {
 			bestPh.Header().SetLocation(common.NodeLocation)
+			bestPh.Header().SetTime(uint64(time.Now().Unix()))
 			sl.miner.worker.pendingHeaderFeed.Send(bestPh.Header())
 			return
 		} else {
@@ -447,6 +448,7 @@ func (sl *Slice) asyncPendingHeaderLoop() {
 			bestPh, exists := sl.readPhCache(sl.bestPhKey)
 			if exists {
 				bestPh.Header().SetLocation(common.NodeLocation)
+				bestPh.Header().SetTime(uint64(time.Now().Unix()))
 				sl.miner.worker.pendingHeaderFeed.Send(bestPh.Header())
 			}
 		case <-sl.asyncPhSub.Err():
@@ -625,6 +627,7 @@ func (sl *Slice) poem(externS *big.Int, currentS *big.Int) bool {
 // GetPendingHeader is used by the miner to request the current pending header
 func (sl *Slice) GetPendingHeader() (*types.Header, error) {
 	if ph, exists := sl.readPhCache(sl.bestPhKey); exists {
+		ph.Header().SetTime(uint64(time.Now().Unix()))
 		return ph.Header(), nil
 	} else {
 		return nil, errors.New("empty pending header")
@@ -692,6 +695,7 @@ func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader, newEnt
 			bestPh, exists := sl.readPhCache(sl.bestPhKey)
 			if exists {
 				bestPh.Header().SetLocation(common.NodeLocation)
+				bestPh.Header().SetTime(uint64(time.Now().Unix()))
 				sl.miner.worker.pendingHeaderFeed.Send(bestPh.Header())
 			}
 		}
