@@ -182,6 +182,7 @@ func CreateProgpowConsensusEngine(stack *node.Node, chainConfig *params.ChainCon
 		NotifyFull:    config.NotifyFull,
 		DurationLimit: config.DurationLimit,
 		GasCeil:       config.GasCeil,
+		MinDifficulty: config.MinDifficulty,
 	}, notify, noverify)
 	engine.SetThreads(-1) // Disable CPU mining
 	return engine
@@ -203,6 +204,7 @@ func CreateBlake3ConsensusEngine(stack *node.Node, chainConfig *params.ChainConf
 		NotifyFull:    config.NotifyFull,
 		DurationLimit: config.DurationLimit,
 		GasCeil:       config.GasCeil,
+		MinDifficulty: config.MinDifficulty,
 	}, notify, noverify)
 	engine.SetThreads(-1) // Disable CPU mining
 	return engine

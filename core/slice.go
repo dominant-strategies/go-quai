@@ -1025,6 +1025,7 @@ func (sl *Slice) NewGenesisPendingHeader(domPendingHeader *types.Header) {
 		genesisTermini.SetSubTerminiAtIndex(genesisHash, i)
 	}
 	if sl.hc.Empty() {
+		domPendingHeader.SetTime(uint64(time.Now().Unix()))
 		sl.phCache.Add(sl.config.GenesisHash, types.NewPendingHeader(domPendingHeader, genesisTermini))
 	}
 }

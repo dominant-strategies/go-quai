@@ -158,6 +158,7 @@ type Config struct {
 	CachesLockMmap bool
 	DurationLimit  *big.Int
 	GasCeil        uint64
+	MinDifficulty  *big.Int
 
 	// When set, notifications sent by the remote sealer will
 	// be block header JSON objects instead of work package arrays.
