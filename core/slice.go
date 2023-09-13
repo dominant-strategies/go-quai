@@ -362,7 +362,6 @@ func (sl *Slice) relayPh(block *types.Block, pendingHeaderWithTermini types.Pend
 		bestPh, exists := sl.readPhCache(sl.bestPhKey)
 		if exists {
 			bestPh.Header().SetLocation(common.NodeLocation)
-			bestPh.Header().SetTime(uint64(time.Now().Unix()))
 			sl.miner.worker.pendingHeaderFeed.Send(bestPh.Header())
 			return
 		} else {
@@ -448,7 +447,6 @@ func (sl *Slice) asyncPendingHeaderLoop() {
 			bestPh, exists := sl.readPhCache(sl.bestPhKey)
 			if exists {
 				bestPh.Header().SetLocation(common.NodeLocation)
-				bestPh.Header().SetTime(uint64(time.Now().Unix()))
 				sl.miner.worker.pendingHeaderFeed.Send(bestPh.Header())
 			}
 		case <-sl.asyncPhSub.Err():
@@ -695,7 +693,6 @@ func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader, newEnt
 			bestPh, exists := sl.readPhCache(sl.bestPhKey)
 			if exists {
 				bestPh.Header().SetLocation(common.NodeLocation)
-				bestPh.Header().SetTime(uint64(time.Now().Unix()))
 				sl.miner.worker.pendingHeaderFeed.Send(bestPh.Header())
 			}
 		}
@@ -1029,6 +1026,7 @@ func (sl *Slice) NewGenesisPendingHeader(domPendingHeader *types.Header) {
 		genesisTermini.SetSubTerminiAtIndex(genesisHash, i)
 	}
 	if sl.hc.Empty() {
+		domPendingHeader.SetTime(uint64(time.Now().Unix()))
 		sl.phCache.Add(sl.config.GenesisHash, types.NewPendingHeader(domPendingHeader, genesisTermini))
 	}
 }

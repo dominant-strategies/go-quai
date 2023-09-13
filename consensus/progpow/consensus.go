@@ -364,8 +364,8 @@ func (progpow *Progpow) CalcDifficulty(chain consensus.ChainHeaderReader, parent
 	x.Add(x, parent.Difficulty())
 
 	// minimum difficulty can ever be (before exponential factor)
-	if x.Cmp(params.MinimumDifficulty) < 0 {
-		x.Set(params.MinimumDifficulty)
+	if x.Cmp(progpow.config.MinDifficulty) < 0 {
+		x.Set(progpow.config.MinDifficulty)
 	}
 	return x
 }

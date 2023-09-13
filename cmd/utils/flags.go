@@ -1247,24 +1247,31 @@ func setConsensusEngineConfig(ctx *cli.Context, cfg *ethconfig.Config) {
 		case ctx.GlobalBool(ColosseumFlag.Name):
 			cfg.Blake3Pow.DurationLimit = params.DurationLimit
 			cfg.Blake3Pow.GasCeil = params.ColosseumGasCeil
+			cfg.Blake3Pow.MinDifficulty = new(big.Int).Div(core.DefaultColosseumGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big2)
 		case ctx.GlobalBool(GardenFlag.Name):
 			cfg.Blake3Pow.DurationLimit = params.GardenDurationLimit
 			cfg.Blake3Pow.GasCeil = params.GardenGasCeil
+			cfg.Blake3Pow.MinDifficulty = new(big.Int).Div(core.DefaultGardenGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big2)
 		case ctx.GlobalBool(OrchardFlag.Name):
 			cfg.Blake3Pow.DurationLimit = params.OrchardDurationLimit
 			cfg.Blake3Pow.GasCeil = params.OrchardGasCeil
+			cfg.Blake3Pow.MinDifficulty = new(big.Int).Div(core.DefaultOrchardGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big2)
 		case ctx.GlobalBool(LighthouseFlag.Name):
 			cfg.Blake3Pow.DurationLimit = params.LighthouseDurationLimit
 			cfg.Blake3Pow.GasCeil = params.LighthouseGasCeil
+			cfg.Blake3Pow.MinDifficulty = new(big.Int).Div(core.DefaultLighthouseGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big2)
 		case ctx.GlobalBool(LocalFlag.Name):
 			cfg.Blake3Pow.DurationLimit = params.LocalDurationLimit
 			cfg.Blake3Pow.GasCeil = params.LocalGasCeil
+			cfg.Blake3Pow.MinDifficulty = new(big.Int).Div(core.DefaultLocalGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big2)
 		case ctx.GlobalBool(DeveloperFlag.Name):
 			cfg.Blake3Pow.DurationLimit = params.DurationLimit
 			cfg.Blake3Pow.GasCeil = params.LocalGasCeil
+			cfg.Blake3Pow.MinDifficulty = new(big.Int).Div(core.DefaultLocalGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big2)
 		default:
 			cfg.Blake3Pow.DurationLimit = params.DurationLimit
 			cfg.Blake3Pow.GasCeil = params.GasCeil
+			cfg.Blake3Pow.MinDifficulty = new(big.Int).Div(core.DefaultColosseumGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big2)
 
 		}
 	} else {
@@ -1273,24 +1280,32 @@ func setConsensusEngineConfig(ctx *cli.Context, cfg *ethconfig.Config) {
 		case ctx.GlobalBool(ColosseumFlag.Name):
 			cfg.Progpow.DurationLimit = params.DurationLimit
 			cfg.Progpow.GasCeil = params.ColosseumGasCeil
+			cfg.Progpow.MinDifficulty = new(big.Int).Div(core.DefaultColosseumGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big2)
 		case ctx.GlobalBool(GardenFlag.Name):
 			cfg.Progpow.DurationLimit = params.GardenDurationLimit
 			cfg.Progpow.GasCeil = params.GardenGasCeil
+			cfg.Progpow.MinDifficulty = new(big.Int).Div(core.DefaultGardenGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big2)
 		case ctx.GlobalBool(OrchardFlag.Name):
 			cfg.Progpow.DurationLimit = params.OrchardDurationLimit
 			cfg.Progpow.GasCeil = params.OrchardGasCeil
+			cfg.Progpow.GasCeil = params.ColosseumGasCeil
+			cfg.Progpow.MinDifficulty = new(big.Int).Div(core.DefaultOrchardGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big2)
 		case ctx.GlobalBool(LighthouseFlag.Name):
 			cfg.Progpow.DurationLimit = params.LighthouseDurationLimit
 			cfg.Progpow.GasCeil = params.LighthouseGasCeil
+			cfg.Progpow.MinDifficulty = new(big.Int).Div(core.DefaultLighthouseGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big2)
 		case ctx.GlobalBool(LocalFlag.Name):
 			cfg.Progpow.DurationLimit = params.LocalDurationLimit
 			cfg.Progpow.GasCeil = params.LocalGasCeil
+			cfg.Progpow.MinDifficulty = new(big.Int).Div(core.DefaultLocalGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big2)
 		case ctx.GlobalBool(DeveloperFlag.Name):
 			cfg.Progpow.DurationLimit = params.DurationLimit
 			cfg.Progpow.GasCeil = params.LocalGasCeil
+			cfg.Progpow.MinDifficulty = new(big.Int).Div(core.DefaultLocalGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big2)
 		default:
 			cfg.Progpow.DurationLimit = params.DurationLimit
 			cfg.Progpow.GasCeil = params.GasCeil
+			cfg.Progpow.MinDifficulty = new(big.Int).Div(core.DefaultColosseumGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big2)
 
 		}
 	}

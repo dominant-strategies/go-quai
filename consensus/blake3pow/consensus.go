@@ -366,8 +366,8 @@ func (blake3pow *Blake3pow) CalcDifficulty(chain consensus.ChainHeaderReader, pa
 	x.Add(x, parent.Difficulty())
 
 	// minimum difficulty can ever be (before exponential factor)
-	if x.Cmp(params.MinimumDifficulty) < 0 {
-		x.Set(params.MinimumDifficulty)
+	if x.Cmp(blake3pow.config.MinDifficulty) < 0 {
+		x.Set(blake3pow.config.MinDifficulty)
 	}
 	return x
 }
