@@ -1020,8 +1020,8 @@ type extPendingHeader struct {
 
 func (t Termini) RPCMarshalTermini() map[string]interface{} {
 	result := map[string]interface{}{
-		"domTerminus": t.DomTerminus(),
-		"subTermini":  t.SubTermini(),
+		"domTermini": t.DomTermini(),
+		"subTermini": t.SubTermini(),
 	}
 	return result
 }
@@ -1047,13 +1047,15 @@ func (p PendingHeader) EncodeRLP(w io.Writer) error {
 // Termini stores the dom terminus (i.e the previous dom block) and
 // subTermini(i.e the dom blocks that have occured in the subordinate chains)
 type Termini struct {
-	domTerminus common.Hash   `json:"domTerminus"`
-	subTermini  []common.Hash `json:"subTermini"`
+	domTermini []common.Hash `json:"domTermini"`
+	subTermini []common.Hash `json:"subTermini"`
 }
 
 func CopyTermini(termini Termini) Termini {
 	newTermini := EmptyTermini()
-	newTermini.SetDomTerminus(termini.domTerminus)
+	for i, t := range termini.domTermini {
+		newTermini.SetDomTerminiAtIndex(t, i)
+	}
 	for i, t := range termini.subTermini {
 		newTermini.SetSubTerminiAtIndex(t, i)
 	}
@@ -1063,26 +1065,32 @@ func CopyTermini(termini Termini) Termini {
 func EmptyTermini() Termini {
 	termini := Termini{}
 	termini.subTermini = make([]common.Hash, common.HierarchyDepth)
+	termini.domTermini = make([]common.Hash, common.HierarchyDepth)
 	return termini
 }
 
 func (t Termini) DomTerminus() common.Hash {
-	return t.domTerminus
+	return t.domTermini[common.NodeLocation.DomIndex()]
+}
+
+func (t Termini) DomTermini() []common.Hash {
+	return t.domTermini
 }
 
 func (t Termini) SubTermini() []common.Hash {
 	return t.subTermini
 }
 
-func (t Termini) SubTerminiAtIndex(args ...int) common.Hash {
-	if len(args) == 0 {
-		panic("cannot access sub termini at index with the index")
-	}
-	return t.subTermini[args[0]]
+func (t Termini) SubTerminiAtIndex(index int) common.Hash {
+	return t.subTermini[index]
 }
 
-func (t *Termini) SetDomTerminus(domTerminus common.Hash) {
-	t.domTerminus = domTerminus
+func (t Termini) DomTerminiAtIndex(index int) common.Hash {
+	return t.domTermini[index]
+}
+
+func (t *Termini) SetDomTerminiAtIndex(val common.Hash, index int) {
+	t.domTermini[index] = val
 }
 
 func (t *Termini) SetSubTermini(subTermini []common.Hash) {
@@ -1092,27 +1100,36 @@ func (t *Termini) SetSubTermini(subTermini []common.Hash) {
 	}
 }
 
-func (t *Termini) SetSubTerminiAtIndex(val common.Hash, args ...int) {
-	if len(args) == 0 {
-		panic("index cannot be empty for the sub termini")
+func (t *Termini) SetDomTermini(domTermini []common.Hash) {
+	t.domTermini = make([]common.Hash, len(domTermini))
+	for i := 0; i < len(domTermini); i++ {
+		t.domTermini[i] = domTermini[i]
 	}
-	t.subTermini[args[0]] = val
+}
+
+func (t *Termini) SetSubTerminiAtIndex(val common.Hash, index int) {
+	t.subTermini[index] = val
 }
 
 func (t *Termini) IsValid() bool {
 	if t == nil {
 		return false
 	}
-	if len(t.subTermini) != common.HierarchyDepth {
+	if len(t.subTermini) != common.NumZonesInRegion {
 		return false
 	}
+
+	if len(t.domTermini) != common.NumZonesInRegion {
+		return false
+	}
+
 	return true
 }
 
 // "external termini" pending header encoding. used for rlp
 type extTermini struct {
-	DomTerminus common.Hash
-	SubTermini  []common.Hash
+	DomTermini []common.Hash
+	SubTermini []common.Hash
 }
 
 // DecodeRLP decodes the Quai RLP encoding into pending header format.
@@ -1121,15 +1138,15 @@ func (t *Termini) DecodeRLP(s *rlp.Stream) error {
 	if err := s.Decode(&et); err != nil {
 		return err
 	}
-	t.domTerminus, t.subTermini = et.DomTerminus, et.SubTermini
+	t.domTermini, t.subTermini = et.DomTermini, et.SubTermini
 	return nil
 }
 
 // EncodeRLP serializes b into the Quai RLP format.
 func (t Termini) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, extTermini{
-		DomTerminus: t.domTerminus,
-		SubTermini:  t.subTermini,
+		DomTermini: t.domTermini,
+		SubTermini: t.subTermini,
 	})
 }
 

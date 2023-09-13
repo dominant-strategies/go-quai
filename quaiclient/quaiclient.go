@@ -112,21 +112,22 @@ func (ec *Client) Append(ctx context.Context, header *types.Header, domPendingHe
 	return aReturns.Etxs, aReturns.SubReorg, nil
 }
 
-func (ec *Client) SubRelayPendingHeader(ctx context.Context, pendingHeader types.PendingHeader, newEntropy *big.Int, location common.Location, subReorg bool) {
+func (ec *Client) SubRelayPendingHeader(ctx context.Context, pendingHeader types.PendingHeader, newEntropy *big.Int, location common.Location, subReorg bool, order int) {
 	data := map[string]interface{}{"header": pendingHeader.Header().RPCMarshalHeader()}
 	data["NewEntropy"] = newEntropy
 	data["termini"] = pendingHeader.Termini().RPCMarshalTermini()
 	data["Location"] = location
 	data["SubReorg"] = subReorg
+	data["Order"] = order
 
 	ec.c.CallContext(ctx, nil, "quai_subRelayPendingHeader", data)
 }
 
-func (ec *Client) UpdateDom(ctx context.Context, oldTerminus common.Hash, newTerminus common.Hash, pendingHeader *types.Header, location common.Location) {
-	data := map[string]interface{}{"OldTerminus": oldTerminus}
-	data["NewTerminus"] = newTerminus
+func (ec *Client) UpdateDom(ctx context.Context, oldTerminus common.Hash, pendingHeader types.PendingHeader, location common.Location) {
+	data := map[string]interface{}{"header": pendingHeader.Header().RPCMarshalHeader()}
+	data["OldTerminus"] = oldTerminus
 	data["Location"] = location
-	data["Header"] = pendingHeader.RPCMarshalHeader()
+	data["termini"] = pendingHeader.Termini().RPCMarshalTermini()
 
 	ec.c.CallContext(ctx, nil, "quai_updateDom", data)
 }

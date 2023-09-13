@@ -652,6 +652,7 @@ type SubRelay struct {
 	NewEntropy *big.Int
 	Location   common.Location
 	SubReorg   bool
+	Order      int
 }
 
 func (s *PublicBlockChainQuaiAPI) SubRelayPendingHeader(ctx context.Context, raw json.RawMessage) {
@@ -660,14 +661,14 @@ func (s *PublicBlockChainQuaiAPI) SubRelayPendingHeader(ctx context.Context, raw
 		return
 	}
 	pendingHeader := types.NewPendingHeader(subRelay.Header, subRelay.Termini)
-	s.b.SubRelayPendingHeader(pendingHeader, subRelay.NewEntropy, subRelay.Location, subRelay.SubReorg)
+	s.b.SubRelayPendingHeader(pendingHeader, subRelay.NewEntropy, subRelay.Location, subRelay.SubReorg, subRelay.Order)
 }
 
 type DomUpdate struct {
 	OldTerminus common.Hash
-	NewTerminus common.Hash
+	Header      *types.Header `json:"header"`
+	Termini     types.Termini `json:"termini"`
 	Location    common.Location
-	Header      *types.Header
 }
 
 func (s *PublicBlockChainQuaiAPI) UpdateDom(ctx context.Context, raw json.RawMessage) {
@@ -677,7 +678,8 @@ func (s *PublicBlockChainQuaiAPI) UpdateDom(ctx context.Context, raw json.RawMes
 		return
 	}
 
-	s.b.UpdateDom(domUpdate.OldTerminus, domUpdate.NewTerminus, domUpdate.Header, domUpdate.Location)
+	pendingHeader := types.NewPendingHeader(domUpdate.Header, domUpdate.Termini)
+	s.b.UpdateDom(domUpdate.OldTerminus, pendingHeader, domUpdate.Location)
 }
 
 type RequestDomToAppendOrFetchArgs struct {

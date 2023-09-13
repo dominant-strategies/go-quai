@@ -363,11 +363,14 @@ func (loc Location) Context() int {
 }
 
 // DomLocation returns the location of your dominant chain
-func (loc Location) DomLocation() Location {
-	if len(loc) < 1 {
-		return nil
-	} else {
-		return loc[:len(loc)-1]
+func (loc Location) DomIndex() int {
+	switch NodeLocation.Context() {
+	case PRIME_CTX:
+		return 0
+	case REGION_CTX:
+		return loc.Region()
+	default:
+		return loc.Zone()
 	}
 }
 
