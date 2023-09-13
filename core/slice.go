@@ -625,7 +625,6 @@ func (sl *Slice) poem(externS *big.Int, currentS *big.Int) bool {
 // GetPendingHeader is used by the miner to request the current pending header
 func (sl *Slice) GetPendingHeader() (*types.Header, error) {
 	if ph, exists := sl.readPhCache(sl.bestPhKey); exists {
-		ph.Header().SetTime(uint64(time.Now().Unix()))
 		return ph.Header(), nil
 	} else {
 		return nil, errors.New("empty pending header")
