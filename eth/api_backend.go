@@ -472,8 +472,8 @@ func (b *QuaiAPIBackend) SubRelayPendingHeader(pendingHeader types.PendingHeader
 	b.eth.core.SubRelayPendingHeader(pendingHeader, newEntropy, location, subReorg)
 }
 
-func (b *QuaiAPIBackend) UpdateDom(oldTerminus common.Hash, newTerminus common.Hash, pendingHeader *types.Header, location common.Location) {
-	b.eth.core.UpdateDom(oldTerminus, newTerminus, pendingHeader, location)
+func (b *QuaiAPIBackend) UpdateDom(oldTerminus common.Hash, pendingHeader types.PendingHeader, location common.Location) {
+	b.eth.core.UpdateDom(oldTerminus, pendingHeader, location)
 }
 
 func (b *QuaiAPIBackend) RequestDomToAppendOrFetch(hash common.Hash, order int) {

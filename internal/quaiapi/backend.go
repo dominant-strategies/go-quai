@@ -77,7 +77,7 @@ type Backend interface {
 	InsertBlock(ctx context.Context, block *types.Block) (int, error)
 	PendingBlock() *types.Block
 	SubRelayPendingHeader(pendingHeader types.PendingHeader, newEntropy *big.Int, location common.Location, subReorg bool)
-	UpdateDom(oldTerminus common.Hash, newTerminus common.Hash, pendingHeader *types.Header, location common.Location)
+	UpdateDom(oldTerminus common.Hash, pendingHeader types.PendingHeader, location common.Location)
 	RequestDomToAppendOrFetch(hash common.Hash, order int)
 	NewGenesisPendingHeader(pendingHeader *types.Header)
 	GetPendingHeader() (*types.Header, error)
