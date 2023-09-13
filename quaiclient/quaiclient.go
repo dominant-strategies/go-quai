@@ -122,11 +122,11 @@ func (ec *Client) SubRelayPendingHeader(ctx context.Context, pendingHeader types
 	ec.c.CallContext(ctx, nil, "quai_subRelayPendingHeader", data)
 }
 
-func (ec *Client) UpdateDom(ctx context.Context, oldTerminus common.Hash, newTerminus common.Hash, pendingHeader *types.Header, location common.Location) {
-	data := map[string]interface{}{"OldTerminus": oldTerminus}
-	data["NewTerminus"] = newTerminus
+func (ec *Client) UpdateDom(ctx context.Context, oldTerminus common.Hash, pendingHeader types.PendingHeader, location common.Location) {
+	data := map[string]interface{}{"header": pendingHeader.Header().RPCMarshalHeader()}
+	data["OldTerminus"] = oldTerminus
 	data["Location"] = location
-	data["Header"] = pendingHeader.RPCMarshalHeader()
+	data["termini"] = pendingHeader.Termini().RPCMarshalTermini()
 
 	ec.c.CallContext(ctx, nil, "quai_updateDom", data)
 }
