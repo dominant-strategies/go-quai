@@ -18,7 +18,6 @@
 package utils
 
 import (
-	"bytes"
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
@@ -26,9 +25,7 @@ import (
 	"io/ioutil"
 	"math"
 	"math/big"
-	"net/http"
 	"path/filepath"
-	"runtime"
 	godebug "runtime/debug"
 	"strconv"
 	"strings"
@@ -142,10 +139,6 @@ var (
 	SlicesRunningFlag = cli.StringFlag{
 		Name:  "slices",
 		Usage: "All the slices that are running on this node",
-	}
-	PprofFlag = cli.BoolFlag{
-		Name:  "pprof",
-		Usage: "Enable the pprof HTTP server",
 	}
 	ColosseumFlag = cli.BoolFlag{
 		Name:  "colosseum",
@@ -1390,46 +1383,6 @@ func SetGlobalVars(ctx *cli.Context) {
 	}
 }
 
-func EnablePprof() {
-	runtime.SetBlockProfileRate(1)
-	runtime.SetMutexProfileFraction(1)
-	var port string
-	myContext := common.NodeLocation
-	switch {
-	case bytes.Equal(myContext, []byte{}): // PRIME
-		port = "8081"
-	case bytes.Equal(myContext, []byte{0}): // Region 0
-		port = "8090"
-	case bytes.Equal(myContext, []byte{1}): // Region 1
-		port = "8100"
-	case bytes.Equal(myContext, []byte{2}): // Region 2
-		port = "8110"
-	case bytes.Equal(myContext, []byte{0, 0}): // Zone 0-0
-		port = "8091"
-	case bytes.Equal(myContext, []byte{0, 1}): // Zone 0-1
-		port = "8092"
-	case bytes.Equal(myContext, []byte{0, 2}): // Zone 0-2
-		port = "8093"
-	case bytes.Equal(myContext, []byte{1, 0}): // Zone 1-0
-		port = "8101"
-	case bytes.Equal(myContext, []byte{1, 1}): // Zone 1-1
-		port = "8102"
-	case bytes.Equal(myContext, []byte{1, 2}): // Zone 1-2
-		port = "8103"
-	case bytes.Equal(myContext, []byte{2, 0}): // Zone 2-0
-		port = "8111"
-	case bytes.Equal(myContext, []byte{2, 1}): // Zone 2-1
-		port = "8112"
-	case bytes.Equal(myContext, []byte{2, 2}): // Zone 2-2
-		port = "8113"
-	default:
-		port = "8085"
-	}
-	go func() {
-		http.ListenAndServe("localhost:"+port, nil)
-	}()
-}
-
 // SetEthConfig applies eth-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Avoid conflicting network flags
@@ -1469,11 +1422,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 
 	// set the slices that the node is running
 	setSlicesRunning(ctx, cfg)
-
-	if ctx.GlobalBool(PprofFlag.Name) {
-		log.Info("Starting pprof server")
-		EnablePprof()
-	}
 
 	// Cap the cache allowance and tune the garbage collector
 	mem, err := gopsutil.VirtualMemory()

@@ -235,7 +235,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Quai, error) {
 	stack.RegisterAPIs(eth.APIs())
 	stack.RegisterProtocols(eth.Protocols())
 	stack.RegisterLifecycle(eth)
-
 	// Check for unclean shutdown
 	if uncleanShutdowns, discards, err := rawdb.PushUncleanShutdownMarker(chainDb); err != nil {
 		log.Error("Could not update unclean-shutdown-marker list", "error", err)
