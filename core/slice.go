@@ -252,7 +252,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		if !exist {
 			sl.bestPhKey = sl.config.GenesisHash
 			sl.writePhCache(block.Hash(), pendingHeaderWithTermini)
-			bestPh = pendingHeaderWithTermini
+			bestPh = types.EmptyPendingHeader()
 			log.Error("BestPh Key does not exist for", "key", sl.bestPhKey)
 		}
 
