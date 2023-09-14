@@ -38,6 +38,7 @@ const (
 	c_maxFutureBlocks                   = 100     // Number of blocks ahead of the current block to be put in the hashNumberList
 	c_appendQueueRetryPriorityThreshold = 5       // If retry counter for a block is less than this number,  then its put in the special list that is tried first to be appended
 	c_appendQueueRemoveThreshold        = 10      // Number of blocks behind the block should be from the current header to be eligble for removal from the append queue
+	c_normalListProcCounter             = 5       // Ratio of Number of times the PriorityList is serviced over the NormalList
 )
 
 type blockNumberAndRetryCounter struct {
@@ -54,6 +55,8 @@ type Core struct {
 
 	writeBlockLock sync.RWMutex
 
+	procCounter int
+
 	quit chan struct{} // core quit channel
 }
 
@@ -64,9 +67,10 @@ func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.H
 	}
 
 	c := &Core{
-		sl:     slice,
-		engine: engine,
-		quit:   make(chan struct{}),
+		sl:          slice,
+		engine:      engine,
+		quit:        make(chan struct{}),
+		procCounter: 0,
 	}
 
 	appendQueue, _ := lru.New(c_maxAppendQueue)
@@ -146,6 +150,12 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 
 // procAppendQueue sorts the append queue and attempts to append
 func (c *Core) procAppendQueue() {
+
+	if c.procCounter > c_normalListProcCounter {
+		c.procCounter = 0
+	} else {
+		c.procCounter++
+	}
 	// Sort the blocks by number and retry attempts and try to insert them
 	// blocks will be aged out of the append queue after the retry threhsold
 	var hashNumberList []types.HashAndNumber
@@ -167,9 +177,11 @@ func (c *Core) procAppendQueue() {
 	if len(hashNumberPriorityList) > 0 {
 		log.Info("Size of hashNumberPriorityList", "len", len(hashNumberPriorityList), "first entry", hashNumberPriorityList[0].Number, "last entry", hashNumberPriorityList[len(hashNumberPriorityList)-1].Number)
 	}
-	c.serviceBlocks(hashNumberList)
-	if len(hashNumberList) > 0 {
-		log.Info("Size of hashNumberList", "len", len(hashNumberList), "first entry", hashNumberList[0].Number, "last entry", hashNumberList[len(hashNumberList)-1].Number)
+	if c.procCounter == c_normalListProcCounter {
+		c.serviceBlocks(hashNumberList)
+		if len(hashNumberList) > 0 {
+			log.Info("Size of hashNumberList", "len", len(hashNumberList), "first entry", hashNumberList[0].Number, "last entry", hashNumberList[len(hashNumberList)-1].Number)
+		}
 	}
 }
 
