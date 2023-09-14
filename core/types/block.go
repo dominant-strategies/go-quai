@@ -992,14 +992,14 @@ func (ph *PendingHeader) SetTermini(termini Termini) {
 	ph.termini = CopyTermini(termini)
 }
 
-func emptyPendingHeader() PendingHeader {
+func EmptyPendingHeader() PendingHeader {
 	pendingHeader := PendingHeader{}
 	pendingHeader.SetTermini(EmptyTermini())
 	return pendingHeader
 }
 
 func NewPendingHeader(header *Header, termini Termini) PendingHeader {
-	emptyPh := emptyPendingHeader()
+	emptyPh := EmptyPendingHeader()
 	emptyPh.SetHeader(header)
 	emptyPh.SetTermini(termini)
 	return emptyPh
