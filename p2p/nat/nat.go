@@ -149,11 +149,10 @@ func Any() Interface {
 		go func() { found <- discoverPMP() }()
 		for i := 0; i < cap(found); i++ {
 			if c := <-found; c != nil {
-				log.Info("Port mapping found on", "Interface", c)
 				return c
 			}
 		}
-		panic("please enable upnp or natpmp on the router to join the network")
+		return nil
 	})
 }
 
