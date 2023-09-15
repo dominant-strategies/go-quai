@@ -341,7 +341,7 @@ func (progpow *Progpow) CalcDifficulty(chain consensus.ChainHeaderReader, parent
 
 	///// Algorithm:
 	///// e = (DurationLimit - (parent.Time() - parentOfParent.Time())) * parent.Difficulty()
-	///// k = Floor(BinaryLog(parent.Difficulty()))/(DurationLimit*2*DifficultyAdjustmentFactor*AdjustmentPeriod)
+	///// k = Floor(BinaryLog(parent.Difficulty()))/(DurationLimit*DifficultyAdjustmentFactor*AdjustmentPeriod)
 	///// Difficulty = Max(parent.Difficulty() + e * k, MinimumDifficulty)
 
 	if parent.Hash() == chain.Config().GenesisHash {
@@ -502,7 +502,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 
 	coinbase, err := header.Coinbase().InternalAddress()
 	if err != nil {
-		fmt.Println("Block has out-of-scope coinbase, skipping block reward: " + header.Hash().String())
+		log.Error("Block has out-of-scope coinbase, skipping block reward: " + header.Hash().String())
 		return
 	}
 
@@ -512,7 +512,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	for _, uncle := range uncles {
 		coinbase, err := uncle.Coinbase().InternalAddress()
 		if err != nil {
-			fmt.Println("Found uncle with out-of-scope coinbase, skipping reward: " + uncle.Hash().String())
+			log.Error("Found uncle with out-of-scope coinbase, skipping reward: " + uncle.Hash().String())
 			continue
 		}
 		r.Add(uncle.Number(), big8)

@@ -254,7 +254,7 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 			return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty(), expected)
 		}
 	}
-
+	// Verify the engine specific seal securing the block
 	_, order, err := blake3pow.CalcOrder(header)
 	if err != nil {
 		return err
