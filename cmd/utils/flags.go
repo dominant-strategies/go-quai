@@ -1601,6 +1601,8 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if !ctx.GlobalBool(LocalFlag.Name) {
 		cfg.Genesis.Nonce = ctx.GlobalUint64(GenesisNonceFlag.Name)
 	}
+
+	cfg.Genesis.Config.SetLocation(common.NodeLocation)
 }
 
 // SetDNSDiscoveryDefaults configures DNS discovery with the given URL if

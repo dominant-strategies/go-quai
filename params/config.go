@@ -112,9 +112,9 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllProgpowProtocolChanges = &ChainConfig{big.NewInt(1337), "progpow", new(Blake3powConfig), new(ProgpowConfig), common.Hash{}}
+	AllProgpowProtocolChanges = &ChainConfig{big.NewInt(1337), "progpow", new(Blake3powConfig), new(ProgpowConfig), common.Hash{}, common.NodeLocation}
 
-	TestChainConfig = &ChainConfig{big.NewInt(1), "progpow", new(Blake3powConfig), new(ProgpowConfig), common.Hash{}}
+	TestChainConfig = &ChainConfig{big.NewInt(1), "progpow", new(Blake3powConfig), new(ProgpowConfig), common.Hash{}, common.NodeLocation}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
@@ -130,6 +130,12 @@ type ChainConfig struct {
 	Blake3Pow       *Blake3powConfig `json:"blake3pow,omitempty"`
 	Progpow         *ProgpowConfig   `json:"progpow,omitempty"`
 	GenesisHash     common.Hash
+	Location        common.Location
+}
+
+// SetLocation sets the location on the chain config
+func (cfg *ChainConfig) SetLocation(location common.Location) {
+	cfg.Location = location
 }
 
 // Blake3powConfig is the consensus engine configs for proof-of-work based sealing.
@@ -159,9 +165,10 @@ func (c *ChainConfig) String() string {
 	default:
 		engine = "unknown"
 	}
-	return fmt.Sprintf("{ChainID: %v, Engine: %v}",
+	return fmt.Sprintf("{ChainID: %v, Engine: %v, Location: %v}",
 		c.ChainID,
 		engine,
+		c.Location,
 	)
 }
 
