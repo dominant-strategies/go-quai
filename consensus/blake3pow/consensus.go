@@ -290,6 +290,11 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 	}
 
 	if nodeCtx == common.ZONE_CTX {
+		// check if the header coinbase is in scope
+		_, err := header.Coinbase().InternalAddress()
+		if err != nil {
+			return fmt.Errorf("out-of-scope coinbase in the header")
+		}
 		// Verify that the gas limit is <= 2^63-1
 		cap := uint64(0x7fffffffffffffff)
 		if header.GasLimit() > cap {
