@@ -859,7 +859,13 @@ func (sl *Slice) updatePhCache(pendingHeaderWithTermini types.PendingHeader, inS
 		}
 	}
 
-	cachedTermini.SetDomTerminiAtIndex(termini.DomTerminiAtIndex(location.DomIndex()), location.DomIndex())
+	if !location.Equal(common.Location{}) {
+		cachedTermini.SetDomTerminiAtIndex(termini.DomTerminiAtIndex(location.DomIndex()), location.DomIndex())
+	} else {
+		for i := 0; i < len(termini.DomTermini()); i++ {
+			cachedTermini.SetDomTerminiAtIndex(termini.DomTerminiAtIndex(i), i)
+		}
+	}
 	cachedTermini.SetSubTermini(termini.SubTermini())
 
 	// Update the pendingHeader Cache
@@ -868,7 +874,7 @@ func (sl *Slice) updatePhCache(pendingHeaderWithTermini types.PendingHeader, inS
 	deepCopyPendingHeaderWithTermini.Header().SetTime(uint64(time.Now().Unix()))
 
 	if subReorg || !exists {
-		sl.writePhCache(pendingHeaderWithTermini.Termini().DomTerminus(), deepCopyPendingHeaderWithTermini)
+		sl.writePhCache(deepCopyPendingHeaderWithTermini.Termini().DomTerminus(), deepCopyPendingHeaderWithTermini)
 		log.Info("PhCache update:", "new terminus?:", !exists, "inSlice:", inSlice, "Ph Number:", deepCopyPendingHeaderWithTermini.Header().NumberArray(), "Termini:", deepCopyPendingHeaderWithTermini.Termini())
 		phT := deepCopyPendingHeaderWithTermini.Termini()
 		for i, _ := range phT.DomTermini() {
