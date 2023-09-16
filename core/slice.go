@@ -383,8 +383,18 @@ func (sl *Slice) UpdateDom(oldTerminus common.Hash, pendingHeader types.PendingH
 	nodeCtx := common.NodeLocation.Context()
 	sl.phCacheMu.Lock()
 	defer sl.phCacheMu.Unlock()
-	newDomTerminus := sl.hc.GetTerminiByHash(pendingHeader.Termini().DomTerminiAtIndex(location.SubIndex())).DomTerminus()
-	oldDomTerminus := sl.hc.GetTerminiByHash(oldTerminus).DomTerminus()
+	newDomTermini := sl.hc.GetTerminiByHash(pendingHeader.Termini().DomTerminiAtIndex(location.SubIndex()))
+	if newDomTermini == nil {
+		log.Warn("New Dom Termini doesn't exists in the database for", "hash", pendingHeader.Termini().DomTerminiAtIndex(location.SubIndex()))
+		return
+	}
+	newDomTerminus := newDomTermini.DomTerminus()
+	oldDomTermini := sl.hc.GetTerminiByHash(oldTerminus)
+	if oldDomTermini == nil {
+		log.Warn("Old Dom Termini doesn't exists in the database for", "hash", oldTerminus)
+		return
+	}
+	oldDomTerminus := oldDomTermini.DomTerminus()
 	log.Info("Updating Dom...", "oldDomTerminus:", oldDomTerminus, "newDomTerminus:", newDomTerminus, "location:", location)
 	// Find the dom TerminusHash with the newTerminus
 	newPh, newDomTerminiExists := sl.readPhCache(newDomTerminus)
