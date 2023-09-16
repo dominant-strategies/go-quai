@@ -468,8 +468,8 @@ func (b *QuaiAPIBackend) PendingBlock() *types.Block {
 	return b.eth.core.PendingBlock()
 }
 
-func (b *QuaiAPIBackend) SubRelayPendingHeader(pendingHeader types.PendingHeader, newEntropy *big.Int, location common.Location, subReorg bool) {
-	b.eth.core.SubRelayPendingHeader(pendingHeader, newEntropy, location, subReorg)
+func (b *QuaiAPIBackend) SubRelayPendingHeader(pendingHeader types.PendingHeader, newEntropy *big.Int, location common.Location, subReorg bool, order int) {
+	b.eth.core.SubRelayPendingHeader(pendingHeader, newEntropy, location, subReorg, order)
 }
 
 func (b *QuaiAPIBackend) UpdateDom(oldTerminus common.Hash, pendingHeader types.PendingHeader, location common.Location) {

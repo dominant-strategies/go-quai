@@ -371,7 +371,7 @@ func (sl *Slice) relayPh(block *types.Block, pendingHeaderWithTermini types.Pend
 	} else if !domOrigin && subReorg {
 		for _, i := range sl.randomRelayArray() {
 			if sl.subClients[i] != nil {
-				sl.subClients[i].SubRelayPendingHeader(context.Background(), pendingHeaderWithTermini, pendingHeaderWithTermini.Header().ParentEntropy(), location, subReorg)
+				sl.subClients[i].SubRelayPendingHeader(context.Background(), pendingHeaderWithTermini, pendingHeaderWithTermini.Header().ParentEntropy(), location, subReorg, nodeCtx)
 			}
 		}
 	}
@@ -411,7 +411,7 @@ func (sl *Slice) UpdateDom(oldTerminus common.Hash, pendingHeader types.PendingH
 			for _, i := range sl.randomRelayArray() {
 				if sl.subClients[i] != nil {
 					log.Info("newPh:", "parent Hash:", newPh.Header().ParentHash(), "Number", newPh.Header().NumberArray(), "newTermini:", newPh.Termini().SubTerminiAtIndex(i))
-					sl.subClients[i].SubRelayPendingHeader(context.Background(), newPh, pendingHeader.Header().ParentEntropy(common.ZONE_CTX), common.Location{}, true)
+					sl.subClients[i].SubRelayPendingHeader(context.Background(), newPh, pendingHeader.Header().ParentEntropy(common.ZONE_CTX), common.Location{}, true, nodeCtx)
 				}
 			}
 		} else {
@@ -431,7 +431,7 @@ func (sl *Slice) UpdateDom(oldTerminus common.Hash, pendingHeader types.PendingH
 				for _, i := range sl.randomRelayArray() {
 					if sl.subClients[i] != nil {
 						log.Info("newPh:", "parent Hash:", newPh.Header().ParentHash(), "Number", newPh.Header().NumberArray(), "newTermini:", newPh.Termini().SubTerminiAtIndex(i))
-						sl.subClients[i].SubRelayPendingHeader(context.Background(), newPh, pendingHeader.Header().ParentEntropy(common.ZONE_CTX), common.Location{}, true)
+						sl.subClients[i].SubRelayPendingHeader(context.Background(), newPh, pendingHeader.Header().ParentEntropy(common.ZONE_CTX), common.Location{}, true, nodeCtx)
 					}
 				}
 			} else {
@@ -678,7 +678,7 @@ func (sl *Slice) SendPendingEtxsToDom(pEtxs types.PendingEtxs) error {
 }
 
 // SubRelayPendingHeader takes a pending header from the sender (ie dominant), updates the phCache with a composited header and relays result to subordinates
-func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader, newEntropy *big.Int, location common.Location, subReorg bool) {
+func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader, newEntropy *big.Int, location common.Location, subReorg bool, order int) {
 	nodeCtx := common.NodeLocation.Context()
 	var err error
 
@@ -694,7 +694,7 @@ func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader, newEnt
 		for _, i := range sl.randomRelayArray() {
 			if sl.subClients[i] != nil {
 				if ph, exists := sl.readPhCache(pendingHeader.Termini().SubTerminiAtIndex(common.NodeLocation.Region())); exists {
-					sl.subClients[i].SubRelayPendingHeader(context.Background(), ph, newEntropy, location, subReorg)
+					sl.subClients[i].SubRelayPendingHeader(context.Background(), ph, newEntropy, location, subReorg, order)
 				}
 			}
 		}
@@ -703,7 +703,11 @@ func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader, newEnt
 		// If the previous block on which the given pendingHeader was built is the same as the NodeLocation
 		// the pendingHeader update has already been sent to the miner for the given location in relayPh.
 		if !bytes.Equal(location, common.NodeLocation) {
-			err = sl.updatePhCacheFromDom(pendingHeader, common.NodeLocation.Zone(), []int{common.PRIME_CTX, common.REGION_CTX}, newEntropy, subReorg, location)
+			updateCtx := []int{common.REGION_CTX}
+			if order == common.PRIME_CTX {
+				updateCtx = append(updateCtx, common.PRIME_CTX)
+			}
+			err = sl.updatePhCacheFromDom(pendingHeader, common.NodeLocation.Zone(), updateCtx, newEntropy, subReorg, location)
 			if err != nil {
 				return
 			}

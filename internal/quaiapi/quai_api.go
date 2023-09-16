@@ -652,6 +652,7 @@ type SubRelay struct {
 	NewEntropy *big.Int
 	Location   common.Location
 	SubReorg   bool
+	Order      int
 }
 
 func (s *PublicBlockChainQuaiAPI) SubRelayPendingHeader(ctx context.Context, raw json.RawMessage) {
@@ -660,7 +661,7 @@ func (s *PublicBlockChainQuaiAPI) SubRelayPendingHeader(ctx context.Context, raw
 		return
 	}
 	pendingHeader := types.NewPendingHeader(subRelay.Header, subRelay.Termini)
-	s.b.SubRelayPendingHeader(pendingHeader, subRelay.NewEntropy, subRelay.Location, subRelay.SubReorg)
+	s.b.SubRelayPendingHeader(pendingHeader, subRelay.NewEntropy, subRelay.Location, subRelay.SubReorg, subRelay.Order)
 }
 
 type DomUpdate struct {
