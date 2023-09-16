@@ -396,15 +396,16 @@ func (sl *Slice) UpdateDom(oldTerminus common.Hash, pendingHeader types.PendingH
 	if nodeCtx == common.REGION_CTX && oldDomTerminus == newPh.Termini().DomTerminus() {
 		// Can update
 		sl.bestPhKey = newDomTerminus
-		for _, i := range sl.randomRelayArray() {
-			if sl.subClients[i] != nil {
-				if (pendingHeader.Termini().DomTerminiAtIndex(i) != common.Hash{}) {
-					newDomTermini := sl.hc.GetTerminiByHash(pendingHeader.Termini().DomTerminiAtIndex(i))
-					newPh := types.NewPendingHeader(pendingHeader.Header(), *newDomTermini)
-					log.Info("newPh:", "parent Hash:", newPh.Header().ParentHash(), "Number", newPh.Header().NumberArray(), "newTermini:", newDomTermini)
+		newPh, exists := sl.readPhCache(newDomTerminus)
+		if exists {
+			for _, i := range sl.randomRelayArray() {
+				if sl.subClients[i] != nil {
+					log.Info("newPh:", "parent Hash:", newPh.Header().ParentHash(), "Number", newPh.Header().NumberArray(), "newTermini:", newPh.Termini().SubTerminiAtIndex(i))
 					sl.subClients[i].SubRelayPendingHeader(context.Background(), newPh, pendingHeader.Header().ParentEntropy(common.ZONE_CTX), common.Location{}, true)
 				}
 			}
+		} else {
+			log.Info("Update Dom:", "phCache at newTerminus does not exist:", newDomTerminus)
 		}
 		return
 	} else {
@@ -415,15 +416,16 @@ func (sl *Slice) UpdateDom(oldTerminus common.Hash, pendingHeader types.PendingH
 		} else {
 			// Can update
 			sl.bestPhKey = newDomTerminus
-			for _, i := range sl.randomRelayArray() {
-				if sl.subClients[i] != nil {
-					if (pendingHeader.Termini().DomTerminiAtIndex(i) != common.Hash{}) {
-						newDomTermini := sl.hc.GetTerminiByHash(pendingHeader.Termini().DomTerminiAtIndex(i))
-						newPh := types.NewPendingHeader(pendingHeader.Header(), *newDomTermini)
-						log.Info("newPh:", "parent Hash:", newPh.Header().ParentHash(), "Number", newPh.Header().NumberArray(), "newTermini:", newDomTermini)
+			newPh, exists := sl.readPhCache(newDomTerminus)
+			if exists {
+				for _, i := range sl.randomRelayArray() {
+					if sl.subClients[i] != nil {
+						log.Info("newPh:", "parent Hash:", newPh.Header().ParentHash(), "Number", newPh.Header().NumberArray(), "newTermini:", newPh.Termini().SubTerminiAtIndex(i))
 						sl.subClients[i].SubRelayPendingHeader(context.Background(), newPh, pendingHeader.Header().ParentEntropy(common.ZONE_CTX), common.Location{}, true)
 					}
 				}
+			} else {
+				log.Info("Update Dom:", "phCache at newTerminus does not exist:", newDomTerminus)
 			}
 			return
 		}
@@ -877,7 +879,7 @@ func (sl *Slice) updatePhCache(pendingHeaderWithTermini types.PendingHeader, inS
 		sl.writePhCache(deepCopyPendingHeaderWithTermini.Termini().DomTerminus(), deepCopyPendingHeaderWithTermini)
 		log.Info("PhCache update:", "new terminus?:", !exists, "inSlice:", inSlice, "Ph Number:", deepCopyPendingHeaderWithTermini.Header().NumberArray(), "Termini:", deepCopyPendingHeaderWithTermini.Termini())
 		phT := deepCopyPendingHeaderWithTermini.Termini()
-		for i, _ := range phT.DomTermini() {
+		for i := range phT.DomTermini() {
 			fmt.Println("dom", i, phT.DomTerminiAtIndex(i))
 			fmt.Println("sub", i, phT.SubTerminiAtIndex(i))
 		}
