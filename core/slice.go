@@ -745,11 +745,21 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 		for _, i := range indices {
 			combinedPendingHeader = sl.combinePendingHeader(pendingHeader.Header(), combinedPendingHeader, i, false)
 		}
-		domIndex := location.DomIndex()
+
 		localTermini := localPendingHeader.Termini()
-		fmt.Println("Before localTermini", "Index", domIndex, localTermini.DomTerminiAtIndex(domIndex))
-		localTermini.SetDomTerminiAtIndex(pendingHeader.Termini().SubTerminiAtIndex(domIndex), domIndex)
-		fmt.Println("After localTermini", "Index", domIndex, localTermini.DomTerminiAtIndex(domIndex))
+		if location.Equal(common.Location{}) {
+			fmt.Println("Setting Dom Termini During Update Dom SubRelay")
+			for i := 0; i < len(localTermini.DomTermini()); i++ {
+				fmt.Println("Before localTermini", "Index", i, localTermini.DomTerminiAtIndex(i))
+				localTermini.SetDomTerminiAtIndex(pendingHeader.Termini().SubTerminiAtIndex(i), i)
+				fmt.Println("After localTermini", "Index", i, localTermini.DomTerminiAtIndex(i))
+			}
+		} else {
+			domIndex := location.DomIndex()
+			fmt.Println("Before localTermini", "Index", domIndex, localTermini.DomTerminiAtIndex(domIndex))
+			localTermini.SetDomTerminiAtIndex(pendingHeader.Termini().SubTerminiAtIndex(domIndex), domIndex)
+			fmt.Println("After localTermini", "Index", domIndex, localTermini.DomTerminiAtIndex(domIndex))
+		}
 
 		bestPh, exists := sl.readPhCache(sl.bestPhKey)
 		nodeCtx := common.NodeLocation.Context()
