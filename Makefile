@@ -46,6 +46,9 @@ BASE_CMD += --db.engine $(DB_ENGINE)
 ifeq ($(ENABLE_ARCHIVE),true)
 	BASE_CMD += --gcmode archive
 endif
+ifeq ($(ENABLE_NAT),true)
+	BASE_CMD += --nat extip:$(EXT_IP)
+endif
 ifeq ($(ENABLE_UNLOCK),true)
 	BASE_CMD += --allow-insecure-unlock
 endif
