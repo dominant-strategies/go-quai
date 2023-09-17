@@ -1051,6 +1051,13 @@ type Termini struct {
 	subTermini []common.Hash `json:"subTermini"`
 }
 
+func (t Termini) String() string {
+	return fmt.Sprintf("{DomTermini: [%v, %v, %v], SubTermini: [%v, %v, %v]}",
+		t.DomTerminiAtIndex(0), t.DomTerminiAtIndex(1), t.DomTerminiAtIndex(2),
+		t.SubTerminiAtIndex(0), t.SubTerminiAtIndex(1), t.SubTerminiAtIndex(2),
+	)
+}
+
 func CopyTermini(termini Termini) Termini {
 	newTermini := EmptyTermini()
 	for i, t := range termini.domTermini {

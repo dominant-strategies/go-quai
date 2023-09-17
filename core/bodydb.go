@@ -99,7 +99,7 @@ func (bc *BodyDb) Append(block *types.Block, newInboundEtxs types.Transactions) 
 		}
 		rawdb.WriteTxLookupEntriesByBlock(batch, block)
 	}
-	log.Info("Time taken to", "apply state:", common.PrettyDuration(time.Since(stateApply)))
+	log.Debug("Time taken to", "apply state:", common.PrettyDuration(time.Since(stateApply)))
 
 	rawdb.WriteBlock(batch, block)
 	if err = batch.Write(); err != nil {

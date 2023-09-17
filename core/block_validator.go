@@ -137,7 +137,7 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	if etxHash := types.DeriveSha(emittedEtxs, trie.NewStackTrie(nil)); etxHash != header.EtxHash() {
 		return fmt.Errorf("invalid etx hash (remote: %x local: %x)", header.EtxHash(), etxHash)
 	}
-	log.Info("times during validate state:", "t1:", time1, "t2:", time2, "t3:", time3, "t4:", time4, "t5:", time5, "t6:", time6)
+	log.Debug("times during validate state:", "t1:", time1, "t2:", time2, "t3:", time3, "t4:", time4, "t5:", time5, "t6:", time6)
 	return nil
 }
 

@@ -316,7 +316,7 @@ func (hc *HeaderChain) AppendBlock(block *types.Block, newInboundEtxs types.Tran
 	if err != nil {
 		return err
 	}
-	log.Info("Time taken to", "Append in bc", common.PrettyDuration(time.Since(blockappend)))
+	log.Debug("Time taken to", "Append in bc", common.PrettyDuration(time.Since(blockappend)))
 
 	hc.bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
 	if len(logs) > 0 {

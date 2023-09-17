@@ -311,10 +311,10 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 	p.engine.Finalize(p.hc, header, statedb, block.Transactions(), block.Uncles())
 	time5 := common.PrettyDuration(time.Since(start))
 
-	log.Info("Total Tx Processing Time", "signing time", common.PrettyDuration(timeSign), "prepare state time", common.PrettyDuration(timePrepare), "etx time", common.PrettyDuration(timeEtx), "tx time", common.PrettyDuration(timeTx))
-	log.Info("Time taken in Process", "time1", time1, "time2", time2, "time3", time3, "time4", time4, "time5", time5)
+	log.Debug("Total Tx Processing Time", "signing time", common.PrettyDuration(timeSign), "prepare state time", common.PrettyDuration(timePrepare), "etx time", common.PrettyDuration(timeEtx), "tx time", common.PrettyDuration(timeTx))
+	log.Debug("Time taken in Process", "time1", time1, "time2", time2, "time3", time3, "time4", time4, "time5", time5)
 
-	log.Info("Total Tx Processing Time", "signing time", common.PrettyDuration(timeSign), "senders cache time", common.PrettyDuration(timeSenders), "percent cached internal txs", fmt.Sprintf("%.2f", float64(len(senders))/float64(numInternalTxs)*100), "prepare state time", common.PrettyDuration(timePrepare), "etx time", common.PrettyDuration(timeEtx), "tx time", common.PrettyDuration(timeTx))
+	log.Debug("Total Tx Processing Time", "signing time", common.PrettyDuration(timeSign), "senders cache time", common.PrettyDuration(timeSenders), "percent cached internal txs", fmt.Sprintf("%.2f", float64(len(senders))/float64(numInternalTxs)*100), "prepare state time", common.PrettyDuration(timePrepare), "etx time", common.PrettyDuration(timeEtx), "tx time", common.PrettyDuration(timeTx))
 
 	return receipts, allLogs, statedb, *usedGas, nil
 }
@@ -484,7 +484,7 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 	rawdb.WriteEtxSet(p.hc.bc.db, block.Hash(), block.NumberU64(), etxSet)
 	time12 := common.PrettyDuration(time.Since(start))
 
-	log.Info("times during state processor apply:", "t1:", time1, "t2:", time2, "t3:", time3, "t4:", time4, "t4.5:", time4_5, "t5:", time5, "t6:", time6, "t7:", time7, "t8:", time8, "t9:", time9, "t10:", time10, "t11:", time11, "t12:", time12)
+	log.Debug("times during state processor apply:", "t1:", time1, "t2:", time2, "t3:", time3, "t4:", time4, "t4.5:", time4_5, "t5:", time5, "t6:", time6, "t7:", time7, "t8:", time8, "t9:", time9, "t10:", time10, "t11:", time11, "t12:", time12)
 	return logs, nil
 }
 

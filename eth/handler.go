@@ -35,6 +35,7 @@ import (
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p"
+	lru "github.com/hashicorp/golang-lru"
 )
 
 const (
@@ -69,6 +70,9 @@ const (
 
 	// minPeerSendTx is the minimum number of peers that will receive a new transaction.
 	minPeerSendTx = 2
+
+	// c_broadcastCacheSize is the Max number of broadcast block hashes to be kept for Logging
+	c_broadcastCacheSize = 10
 )
 
 // txPool defines the methods needed from a transaction pool implementation to
@@ -150,6 +154,8 @@ type handler struct {
 	chainSync *chainSyncer
 	wg        sync.WaitGroup
 	peerWG    sync.WaitGroup
+
+	broadcastCache *lru.Cache
 }
 
 // newHandler returns a handler for all Quai chain management protocol.
@@ -172,6 +178,9 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		txsyncCh:      make(chan *txsync),
 		quitSync:      make(chan struct{}),
 	}
+
+	broadcastCache, _ := lru.New(c_broadcastCacheSize)
+	h.broadcastCache = broadcastCache
 
 	h.downloader = downloader.New(h.eventMux, h.core, h.removePeer)
 
