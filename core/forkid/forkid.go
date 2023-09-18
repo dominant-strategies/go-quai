@@ -66,8 +66,11 @@ type Filter func(id ID) error
 
 // NewID calculates the Quai fork ID from the chain config, genesis hash, and head.
 func NewID(config *params.ChainConfig, genesis common.Hash, head uint64) ID {
-	// Calculate the starting checksum from the genesis hash
-	hash := crc32.ChecksumIEEE(genesis[:])
+	// CheckSum now has to be hash of Genesis and Location because in order to
+	// use the Disco crawler and use the same enr tree for all chains location
+	// serves as a unique identifier for filtering enodes
+	checkSumBytes := append(genesis[:], config.Location...)
+	hash := crc32.ChecksumIEEE(checkSumBytes[:])
 
 	// Calculate the current fork checksum and the next fork block
 	var next uint64
@@ -119,7 +122,11 @@ func newFilter(config *params.ChainConfig, genesis common.Hash, headfn func() ui
 		forks = gatherForks(config)
 		sums  = make([][4]byte, len(forks)+1) // 0th is the genesis
 	)
-	hash := crc32.ChecksumIEEE(genesis[:])
+	// CheckSum now has to be hash of Genesis and Location because in order to
+	// use the Disco crawler and use the same enr tree for all chains location
+	// serves as a unique identifier for filtering enodes
+	checkSumBytes := append(genesis[:], config.Location...)
+	hash := crc32.ChecksumIEEE(checkSumBytes[:])
 	sums[0] = checksumToBytes(hash)
 	for i, fork := range forks {
 		hash = checksumUpdate(hash, fork)
