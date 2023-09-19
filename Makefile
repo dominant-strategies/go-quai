@@ -11,7 +11,7 @@ GORUN = env GO111MODULE=on go run
 go-quai:
 	$(GORUN) build/ci.go install ./cmd/go-quai
 	@echo "Done building."
-	@echo "Run \"$(GOBIN)/quai\" to launch go-quai."
+	@echo "Run \"$(GOBIN)/go-quai\" to launch go-quai."
 
 bootnode:
 	$(GORUN) build/ci.go install ./cmd/bootnode
