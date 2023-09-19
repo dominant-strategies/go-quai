@@ -201,6 +201,9 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	}
 	time4 := common.PrettyDuration(time.Since(start))
 
+	sl.phCacheMu.Lock()
+	defer sl.phCacheMu.Unlock()
+
 	var pendingHeaderWithTermini types.PendingHeader
 	if nodeCtx != common.ZONE_CTX {
 		// Upate the local pending header
@@ -267,9 +270,6 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	}
 
 	time7 := common.PrettyDuration(time.Since(start))
-
-	sl.phCacheMu.Lock()
-	defer sl.phCacheMu.Unlock()
 
 	var time8, time9 common.PrettyDuration
 	var bestPh types.PendingHeader
