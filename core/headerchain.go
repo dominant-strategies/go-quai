@@ -50,11 +50,9 @@ type HeaderChain struct {
 	headerCache *lru.Cache // Cache for the most recent block headers
 	numberCache *lru.Cache // Cache for the most recent block numbers
 
-	pendingEtxsRollup            *lru.Cache
-	pendingEtxs                  *lru.Cache
-	blooms                       *lru.Cache
-	missingPendingEtxsFeed       event.Feed
-	missingPendingEtxsRollupFeed event.Feed
+	pendingEtxsRollup *lru.Cache
+	pendingEtxs       *lru.Cache
+	blooms            *lru.Cache
 
 	wg            sync.WaitGroup // chain processing wait group for shutting down
 	running       int32          // 0 if chain is running, 1 when stopped
@@ -133,14 +131,12 @@ func (hc *HeaderChain) CollectSubRollup(b *types.Block) (types.Transactions, err
 						pendingEtxs, err := hc.GetPendingEtxs(pEtxHash)
 						if err != nil {
 							// Start backfilling the missing pending ETXs needed to process this block
-							go hc.backfillPETXs(b.Header(), b.SubManifest())
 							return nil, ErrPendingEtxNotFound
 						}
 						subRollup = append(subRollup, pendingEtxs.Etxs...)
 					}
 				} else {
 					// Start backfilling the missing pending ETXs needed to process this block
-					go hc.backfillPETXs(b.Header(), b.SubManifest())
 					return nil, ErrPendingEtxNotFound
 				}
 				// Region works normally as before collecting pendingEtxs for each hash in the manifest
@@ -148,7 +144,6 @@ func (hc *HeaderChain) CollectSubRollup(b *types.Block) (types.Transactions, err
 				pendingEtxs, err := hc.GetPendingEtxs(hash)
 				if err != nil {
 					// Start backfilling the missing pending ETXs needed to process this block
-					go hc.backfillPETXs(b.Header(), b.SubManifest())
 					return nil, ErrPendingEtxNotFound
 				}
 				subRollup = append(subRollup, pendingEtxs.Etxs...)
@@ -206,34 +201,6 @@ func (hc *HeaderChain) GetBloom(hash common.Hash) (*types.Bloom, error) {
 		return nil, ErrBloomNotFound
 	}
 	return &bloom, nil
-}
-
-// backfillPETXs collects any missing PendingETX objects needed to process the
-// given header. This is done by informing the fetcher of any pending ETXs we do
-// not have, so that they can be fetched from our peers.
-func (hc *HeaderChain) backfillPETXs(header *types.Header, subManifest types.BlockManifest) {
-	nodeCtx := common.NodeLocation.Context()
-	for _, hash := range subManifest {
-		if nodeCtx == common.PRIME_CTX {
-			// In the case of prime, get the pendingEtxsRollup for each region block
-			// and then fetch the pending etx for each of the rollup hashes
-			if pEtxRollup, err := hc.GetPendingEtxsRollup(hash); err == nil {
-				for _, pEtxHash := range pEtxRollup.Manifest {
-					if _, err := hc.GetPendingEtxs(pEtxHash); err != nil {
-						// Send the pendingEtxs to the feed for broadcast
-						hc.missingPendingEtxsFeed.Send(types.HashAndLocation{Hash: pEtxHash, Location: pEtxRollup.Header.Location()})
-					}
-				}
-			} else {
-				hc.missingPendingEtxsRollupFeed.Send(hash)
-			}
-		} else if nodeCtx == common.REGION_CTX {
-			if _, err := hc.GetPendingEtxs(hash); err != nil {
-				// Send the pendingEtxs to the feed for broadcast
-				hc.missingPendingEtxsFeed.Send(types.HashAndLocation{Hash: hash, Location: header.Location()})
-			}
-		}
-	}
 }
 
 // Collect all emmitted ETXs since the last coincident block, but excluding
@@ -912,14 +879,6 @@ func (hc *HeaderChain) SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.S
 // SubscribeChainSideEvent registers a subscription of ChainSideEvent.
 func (hc *HeaderChain) SubscribeChainSideEvent(ch chan<- ChainSideEvent) event.Subscription {
 	return hc.scope.Track(hc.chainSideFeed.Subscribe(ch))
-}
-
-func (hc *HeaderChain) SubscribeMissingPendingEtxsEvent(ch chan<- types.HashAndLocation) event.Subscription {
-	return hc.scope.Track(hc.missingPendingEtxsFeed.Subscribe(ch))
-}
-
-func (hc *HeaderChain) SubscribeMissingPendingEtxsRollupEvent(ch chan<- common.Hash) event.Subscription {
-	return hc.scope.Track(hc.missingPendingEtxsRollupFeed.Subscribe(ch))
 }
 
 func (hc *HeaderChain) StateAt(root common.Hash) (*state.StateDB, error) {

@@ -484,20 +484,12 @@ func (c *Core) SendPendingEtxsToDom(pEtxs types.PendingEtxs) error {
 	return c.sl.SendPendingEtxsToDom(pEtxs)
 }
 
-func (c *Core) SubscribePendingEtxs(ch chan<- types.PendingEtxs) event.Subscription {
-	return c.sl.SubscribePendingEtxs(ch)
-}
-
 func (c *Core) AddPendingEtxs(pEtxs types.PendingEtxs) error {
 	return c.sl.AddPendingEtxs(pEtxs)
 }
 
 func (c *Core) AddPendingEtxsRollup(pEtxsRollup types.PendingEtxsRollup) error {
 	return c.sl.AddPendingEtxsRollup(pEtxsRollup)
-}
-
-func (c *Core) SubscribePendingEtxsRollup(ch chan<- types.PendingEtxsRollup) event.Subscription {
-	return c.sl.SubscribePendingEtxsRollup(ch)
 }
 
 func (c *Core) GenerateRecoveryPendingHeader(pendingHeader *types.Header, checkpointHashes types.Termini) error {
@@ -669,14 +661,6 @@ func (c *Core) GetBodyRLP(hash common.Hash) rlp.RawValue {
 // GetTerminiByHash retrieves the termini stored for a given header hash
 func (c *Core) GetTerminiByHash(hash common.Hash) *types.Termini {
 	return c.sl.hc.GetTerminiByHash(hash)
-}
-
-func (c *Core) SubscribeMissingPendingEtxsEvent(ch chan<- types.HashAndLocation) event.Subscription {
-	return c.sl.hc.SubscribeMissingPendingEtxsEvent(ch)
-}
-
-func (c *Core) SubscribeMissingPendingEtxsRollupEvent(ch chan<- common.Hash) event.Subscription {
-	return c.sl.hc.SubscribeMissingPendingEtxsRollupEvent(ch)
 }
 
 // SubscribeChainSideEvent registers a subscription of ChainSideEvent.

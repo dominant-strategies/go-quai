@@ -44,7 +44,7 @@ var ProtocolVersions = []uint{ETH66, ETH65}
 
 // protocolLengths are the number of implemented message corresponding to
 // different protocol versions.
-var protocolLengths = map[uint]uint64{ETH66: 21, ETH65: 19}
+var protocolLengths = map[uint]uint64{ETH66: 12, ETH65: 12}
 
 // maxMessageSize is the maximum cap on the size of a protocol message.
 const maxMessageSize = 10 * 1024 * 1024
@@ -66,11 +66,6 @@ const (
 	PooledTransactionsMsg         = 0x0a
 
 	GetBlockMsg = 0x0b
-
-	PendingEtxsMsg             = 0x11
-	GetOnePendingEtxsMsg       = 0x12
-	PendingEtxsRollupMsg       = 0x13
-	GetOnePendingEtxsRollupMsg = 0x14
 )
 
 var (
@@ -294,44 +289,6 @@ type GetBlockPacket66 struct {
 	GetBlockPacket
 }
 
-// GetOnePendingEtxsPacket represents a pending etx query
-type GetOnePendingEtxsPacket struct {
-	Hash common.Hash
-}
-
-type GetOnePendingEtxsPacket66 struct {
-	RequestId uint64
-	GetOnePendingEtxsPacket
-}
-
-// GetOnePendingEtxsRollupPacket represents a pending etx query
-type GetOnePendingEtxsRollupPacket struct {
-	Hash common.Hash
-}
-
-type GetOnePendingEtxsRollupPacket66 struct {
-	RequestId uint64
-	GetOnePendingEtxsRollupPacket
-}
-
-type PendingEtxsPacket struct {
-	PendingEtxs types.PendingEtxs
-}
-
-type PendingEtxsPacket66 struct {
-	RequestId uint64
-	PendingEtxsPacket
-}
-
-type PendingEtxsRollupPacket struct {
-	PendingEtxsRollup types.PendingEtxsRollup
-}
-
-type PendingEtxsRollupPacket66 struct {
-	RequestId uint64
-	PendingEtxsRollupPacket
-}
-
 func (*StatusPacket) Name() string { return "Status" }
 func (*StatusPacket) Kind() byte   { return StatusMsg }
 
@@ -367,12 +324,3 @@ func (*PooledTransactionsPacket) Kind() byte   { return PooledTransactionsMsg }
 
 func (*GetBlockPacket) Name() string { return "GetBlock" }
 func (*GetBlockPacket) Kind() byte   { return GetBlockMsg }
-
-func (*GetOnePendingEtxsPacket) Name() string { return "GetOnePendingEtxs" }
-func (*GetOnePendingEtxsPacket) Kind() byte   { return GetOnePendingEtxsMsg }
-
-func (*PendingEtxsPacket) Name() string { return "PendingEtxs" }
-func (*PendingEtxsPacket) Kind() byte   { return PendingEtxsMsg }
-
-func (*PendingEtxsRollupPacket) Name() string { return "PendingEtxsManifest" }
-func (*PendingEtxsRollupPacket) Kind() byte   { return PendingEtxsRollupMsg }
