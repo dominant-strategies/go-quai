@@ -514,12 +514,12 @@ func (h *handler) missingPEtxsRollupLoop() {
 	defer h.wg.Done()
 	for {
 		select {
-		case hash := <-h.missingPEtxsRollupCh:
+		case _ = <-h.missingPEtxsRollupCh:
 			// Check if any of the peers have the body
-			for _, peer := range h.selectSomePeers() {
-				log.Trace("Fetching the missing pending etxs rollup from", "peer", peer.ID(), "hash", hash)
-				peer.RequestOnePendingEtxsRollup(hash)
-			}
+			// for _, peer := range h.selectSomePeers() {
+			// log.Trace("Fetching the missing pending etxs rollup from", "peer", peer.ID(), "hash", hash)
+			// peer.RequestOnePendingEtxsRollup(hash)
+			// }
 
 		case <-h.missingPEtxsRollupSub.Err():
 			return
@@ -541,15 +541,15 @@ func (h *handler) missingPendingEtxsLoop() {
 				log.Warn("Node doesn't have peers for given Location", "location", hashAndLocation.Location)
 			}
 			// Check if any of the peers have the body
-			for _, peer := range peersRunningSlice {
-				log.Trace("Fetching the missing pending etxs from", "peer", peer.ID(), "hash", hashAndLocation.Hash)
-				peer.RequestOnePendingEtxs(hashAndLocation.Hash)
-			}
+			// for _, peer := range peersRunningSlice {
+			// log.Trace("Fetching the missing pending etxs from", "peer", peer.ID(), "hash", hashAndLocation.Hash)
+			// peer.RequestOnePendingEtxs(hashAndLocation.Hash)
+			// }
 			if len(peersRunningSlice) == 0 {
-				for _, peer := range h.selectSomePeers() {
-					log.Trace("Fetching the missing pending etxs from", "peer", peer.ID(), "hash", hashAndLocation.Hash)
-					peer.RequestOnePendingEtxs(hashAndLocation.Hash)
-				}
+				// for _, peer := range h.selectSomePeers() {
+				// log.Trace("Fetching the missing pending etxs from", "peer", peer.ID(), "hash", hashAndLocation.Hash)
+				// peer.RequestOnePendingEtxs(hashAndLocation.Hash)
+				// }
 			}
 		case <-h.missingPendingEtxsSub.Err():
 			return
@@ -615,9 +615,9 @@ func (h *handler) BroadcastPendingEtxs(pEtx types.PendingEtxs) {
 	}
 	transfer := peers[:peerThreshold]
 	// If in region send the pendingEtxs directly, otherwise send the pendingEtxsManifest
-	for _, peer := range transfer {
-		peer.SendPendingEtxs(pEtx)
-	}
+	// for _, peer := range transfer {
+	// 	peer.SendPendingEtxs(pEtx)
+	// }
 	log.Trace("Propagated pending etxs", "hash", hash, "recipients", len(transfer), "len", len(pEtx.Etxs))
 	return
 }
@@ -637,9 +637,9 @@ func (h *handler) BroadcastPendingEtxsRollup(pEtxRollup types.PendingEtxsRollup)
 	}
 	transfer := peers[:peerThreshold]
 	// If in region send the pendingEtxs directly, otherwise send the pendingEtxsManifest
-	for _, peer := range transfer {
-		peer.SendPendingEtxsRollup(pEtxRollup)
-	}
+	// for _, peer := range transfer {
+	// 	peer.SendPendingEtxsRollup(pEtxRollup)
+	// }
 	log.Trace("Propagated pending etxs rollup", "hash", hash, "recipients", len(transfer), "len", len(pEtxRollup.Manifest))
 	return
 }

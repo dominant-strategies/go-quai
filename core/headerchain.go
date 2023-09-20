@@ -468,6 +468,8 @@ func (hc *HeaderChain) loadLastState() error {
 	if head := rawdb.ReadHeadBlockHash(hc.headerDb); head != (common.Hash{}) {
 		if chead := hc.GetHeaderByHash(head); chead != nil {
 			hc.currentHeader.Store(chead)
+		} else {
+			hc.currentHeader.Store(hc.genesisHeader)
 		}
 	}
 

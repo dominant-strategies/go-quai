@@ -213,23 +213,24 @@ func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block) er
 }
 
 func (h *ethHandler) handlePendingEtxs(pendingEtxs types.PendingEtxs) error {
-	err := h.core.AddPendingEtxs(pendingEtxs)
-	if err != nil {
-		log.Error("Error in handling pendingEtxs broadcast", "err", err)
-		return err
-	}
+	// err := h.core.AddPendingEtxs(pendingEtxs)
+	// if err != nil {
+	// 	log.Error("Error in handling pendingEtxs broadcast", "err", err)
+	// 	return err
+	// }
 	return nil
 }
 
 func (h *ethHandler) handlePendingEtxsRollup(peer *eth.Peer, pEtxsRollup types.PendingEtxsRollup) error {
-	err := h.core.AddPendingEtxsRollup(pEtxsRollup)
-	if err != nil {
-		log.Error("Error in handling pendingEtxs rollup broadcast", "err", err)
-		return err
-	}
-	// For each hash in manifest request for the pendingEtxs
-	for _, hash := range pEtxsRollup.Manifest {
-		peer.RequestOnePendingEtxs(hash)
-	}
+	// err := h.core.AddPendingEtxsRollup(pEtxsRollup)
+	// if err != nil {
+	// 	log.Error("Error in handling pendingEtxs rollup broadcast", "err", err)
+	// 	return err
+	// }
+	// // For each hash in manifest request for the pendingEtxs
+	// for _, hash := range pEtxsRollup.Manifest {
+	// 	peer.RequestOnePendingEtxs(hash)
+	// }
+	// return nil
 	return nil
 }
