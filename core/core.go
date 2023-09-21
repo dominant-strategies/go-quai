@@ -6,11 +6,13 @@ import (
 	"io"
 	"math/big"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/common/math"
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/state"
@@ -39,6 +41,8 @@ const (
 	c_appendQueueRetryPriorityThreshold = 5       // If retry counter for a block is less than this number,  then its put in the special list that is tried first to be appended
 	c_appendQueueRemoveThreshold        = 10      // Number of blocks behind the block should be from the current header to be eligble for removal from the append queue
 	c_normalListProcCounter             = 5       // Ratio of Number of times the PriorityList is serviced over the NormalList
+	c_statsPrintPeriod                  = 60      // Time between stats prints
+	c_appendQueuePrintSize              = 10
 )
 
 type blockNumberAndRetryCounter struct {
@@ -80,6 +84,7 @@ func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.H
 	c.processingCache = proccesingCache
 
 	go c.updateAppendQueue()
+	go c.startStatsTimer()
 	return c, nil
 }
 
@@ -102,7 +107,7 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 			if !c.processingCache.Contains(block.Hash()) {
 				c.processingCache.Add(block.Hash(), 1)
 			} else {
-				log.Info("Already proccessing block:", "Number:", block.Header().NumberArray(), "Hash:", block.Hash())
+				log.Info("Already processing block:", "Number:", block.Header().NumberArray(), "Hash:", block.Hash())
 				return idx, errors.New("Already in process of appending this block")
 			}
 			newPendingEtxs, _, err := c.sl.Append(block.Header(), types.EmptyHeader(), common.Hash{}, false, nil)
@@ -139,7 +144,7 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 				log.Info("Append failed.", "hash", block.Hash(), "err", err)
 			}
 			if err != nil && strings.Contains(err.Error(), "connection refused") {
-				log.Error("Append failed because of conenction refused error")
+				log.Error("Append failed because of connection refused error")
 			} else {
 				c.removeFromAppendQueue(block)
 			}
@@ -294,6 +299,35 @@ func (c *Core) updateAppendQueue() {
 			return
 		}
 	}
+}
+
+func (c *Core) startStatsTimer() {
+	futureTimer := time.NewTicker(c_statsPrintPeriod * time.Second)
+	defer futureTimer.Stop()
+	for {
+		select {
+		case <-futureTimer.C:
+			c.printStats()
+		case <-c.quit:
+			return
+		}
+	}
+}
+
+// printStats displays stats on syncing, latestHeight, etc.
+func (c *Core) printStats() {
+	log.Info("Blocks waiting to be appended", "len(appendQueue)", len(c.appendQueue.Keys()))
+
+	// Print hashes & heights of all queue entries.
+	for _, hash := range c.appendQueue.Keys()[:math.Min(len(c.appendQueue.Keys()), c_appendQueuePrintSize)] {
+		if value, exist := c.appendQueue.Peek(hash); exist {
+			hashNumber := types.HashAndNumber{Hash: hash.(common.Hash), Number: value.(blockNumberAndRetryCounter).number}
+			log.Lazy(func() string {
+				return "AppendQueue entry. Number: " + strconv.FormatUint(hashNumber.Number, 10) + ". Hash: " + hashNumber.Hash.String()
+			}, "debug")
+		}
+	}
+
 }
 
 func (c *Core) BadHashExistsInChain() bool {
