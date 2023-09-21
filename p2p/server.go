@@ -632,7 +632,12 @@ func (srv *Server) setupDialScheduler() {
 	}
 	srv.dialsched = newDialScheduler(config, srv.discmix, srv.SetupConn)
 	for _, n := range srv.StaticNodes {
-		srv.dialsched.addStatic(n)
+		// If our own enode is in the StaticNodes list, skip it
+		if !srv.localnode.Node().Pubkey().Equal(n.Pubkey()) {
+			srv.dialsched.addStatic(n)
+		} else {
+			log.Info("Found the current Node in the static node list", "PubKey", n.Pubkey())
+		}
 	}
 }
 
