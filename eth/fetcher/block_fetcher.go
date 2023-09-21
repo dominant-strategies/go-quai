@@ -39,10 +39,11 @@ const (
 )
 
 const (
-	maxUncleDist = 100 // Maximum allowed backward distance from the chain head
-	maxQueueDist = 32  // Maximum allowed distance from the chain head to queue
-	hashLimit    = 256 // Maximum number of unique blocks or headers a peer may have announced
-	blockLimit   = 64  // Maximum number of unique blocks a peer may have delivered
+	maxUncleDist          = 100  // Maximum allowed backward distance from the chain head
+	maxQueueDist          = 32   // Maximum allowed distance from the chain head to queue
+	hashLimit             = 256  // Maximum number of unique blocks or headers a peer may have announced
+	blockLimit            = 64   // Maximum number of unique blocks a peer may have delivered
+	MaxStaleBroadcastDist = 3500 // Drop peers who broadcast new blocks that are more than 3500 blocks stale
 )
 
 var (
@@ -250,6 +251,14 @@ func (f *BlockFetcher) Notify(peer string, hash common.Hash, number uint64, time
 
 // Enqueue tries to fill gaps the fetcher's future import queue.
 func (f *BlockFetcher) Enqueue(peer string, block *types.Block) error {
+	// If this is a newly mined block from a much lower height, drop the peer. Peers should not mine blocks until they are in sync with the network.
+	currentNum := f.chainHeight()
+	bcastNum := block.NumberU64()
+	if currentNum > MaxStaleBroadcastDist && (currentNum-MaxStaleBroadcastDist) > bcastNum {
+		// The broadcast blocks is stale. Drop the peer.
+		return errors.New("stale broadcast")
+	}
+
 	op := &blockOrHeaderInject{
 		origin: peer,
 		block:  block,
