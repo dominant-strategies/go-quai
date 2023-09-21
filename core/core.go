@@ -41,6 +41,7 @@ const (
 	c_appendQueueRetryPriorityThreshold = 5       // If retry counter for a block is less than this number,  then its put in the special list that is tried first to be appended
 	c_appendQueueRemoveThreshold        = 10      // Number of blocks behind the block should be from the current header to be eligble for removal from the append queue
 	c_normalListProcCounter             = 5       // Ratio of Number of times the PriorityList is serviced over the NormalList
+	c_normalListProcCounterAfterSync    = 1       // Ratio of Number of times the PriorityList is serviced over the NormalList when near the sync
 	c_statsPrintPeriod                  = 60      // Time between stats prints
 	c_appendQueuePrintSize              = 10
 )
@@ -156,7 +157,11 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 // procAppendQueue sorts the append queue and attempts to append
 func (c *Core) procAppendQueue() {
 
-	if c.procCounter > c_normalListProcCounter {
+	normalListProcCounter := c_normalListProcCounter
+	if len(c.appendQueue.Keys()) < c_appendQueueThreshold {
+		normalListProcCounter = c_normalListProcCounterAfterSync
+	}
+	if c.procCounter > normalListProcCounter {
 		c.procCounter = 0
 	} else {
 		c.procCounter++
