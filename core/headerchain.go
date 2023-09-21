@@ -435,6 +435,10 @@ func (hc *HeaderChain) loadLastState() error {
 	if head := rawdb.ReadHeadBlockHash(hc.headerDb); head != (common.Hash{}) {
 		if chead := hc.GetHeaderByHash(head); chead != nil {
 			hc.currentHeader.Store(chead)
+		} else {
+			// This is only done if during the stop, currenthead hash was not stored
+			// properly and it doesn't crash the nodes
+			hc.currentHeader.Store(hc.genesisHeader)
 		}
 	}
 
