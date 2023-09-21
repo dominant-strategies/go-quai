@@ -363,6 +363,8 @@ func (c *Core) Stop() {
 
 // WriteBlock write the block to the bodydb database
 func (c *Core) WriteBlock(block *types.Block) {
+	_, order, _ := c.CalcOrder(block.Header())
+	log.Info("Writing block to the database", "Hash", block.Hash(), "Number", block.Number(), "Order", order)
 	c.writeBlockLock.Lock()
 	defer c.writeBlockLock.Unlock()
 
@@ -476,6 +478,10 @@ func (c *Core) IsBlockHashABadHash(hash common.Hash) bool {
 
 func (c *Core) ProcessingState() bool {
 	return c.sl.ProcessingState()
+}
+
+func (c *Core) SendMissingParentFeed(hash common.Hash) {
+	c.sl.missingParentFeed.Send(hash)
 }
 
 //---------------------//

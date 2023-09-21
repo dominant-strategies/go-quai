@@ -565,7 +565,7 @@ func (h *handler) missingParentLoop() {
 		case hash := <-h.missingParentCh:
 			// Check if any of the peers have the body
 			for _, peer := range h.selectSomePeers() {
-				log.Trace("Fetching the missing parent from", "peer", peer.ID(), "hash", hash)
+				log.Debug("Fetching the missing parent from", "peer", peer.ID(), "hash", hash)
 				peer.RequestBlockByHash(hash)
 			}
 		case <-h.missingParentSub.Err():

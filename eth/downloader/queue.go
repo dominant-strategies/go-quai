@@ -694,6 +694,10 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, headerProcCh 
 	}
 
 	if len(headers) > 0 {
+		if targetTo < q.headerOffset {
+			// integer underflow (intentional?)
+			logger.Error("Header delivery out of order", "from", targetTo, "offset", q.headerOffset, "targetTo-q.headerOffset", targetTo-q.headerOffset, "len(headers)", len(q.headerResults))
+		}
 		copy(q.headerResults[targetTo-q.headerOffset:], headers)
 	}
 

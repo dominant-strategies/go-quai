@@ -20,6 +20,11 @@ package downloader
 import (
 	"errors"
 	"fmt"
+	"math/big"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	quai "github.com/dominant-strategies/go-quai"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
@@ -30,10 +35,6 @@ import (
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/metrics"
-	"math/big"
-	"sync"
-	"sync/atomic"
-	"time"
 )
 
 var (
@@ -103,10 +104,11 @@ type Downloader struct {
 	committed       int32
 
 	// Channels
-	headerCh     chan dataPack        // Channel receiving inbound block headers
-	bodyCh       chan dataPack        // Channel receiving inbound block bodies
-	bodyWakeCh   chan bool            // Channel to signal the block body fetcher of new tasks
-	headerProcCh chan []*types.Header // Channel to feed the header processor new tasks
+	headerCh      chan dataPack        // Channel receiving inbound block headers
+	bodyCh        chan dataPack        // Channel receiving inbound block bodies
+	bodyWakeCh    chan bool            // Channel to signal the block body fetcher of new tasks
+	headerProcCh  chan []*types.Header // Channel to feed the header processor new tasks
+	neededHeaders chan dataPack
 
 	// Cancellation and termination
 	cancelPeer string         // Identifier of the peer currently being used as the master (cancel on drop)
@@ -130,6 +132,13 @@ type Core interface {
 
 	// GetBlockByHash retrieves a block from the local chain.
 	GetBlockByHash(common.Hash) *types.Block
+
+	// GetHeaderByNumber retrieves a header from the local chain.
+	GetHeaderByNumber(number uint64) *types.Header
+
+	SendMissingParentFeed(hash common.Hash)
+
+	CalcOrder(header *types.Header) (*big.Int, int, error)
 
 	// CurrentHeader retrieves the head of local chain.
 	CurrentHeader() *types.Header
@@ -165,21 +174,107 @@ type Core interface {
 // New creates a new downloader to fetch hashes and blocks from remote peers.
 func New(mux *event.TypeMux, core Core, dropPeer peerDropFn) *Downloader {
 	dl := &Downloader{
-		mux:          mux,
-		queue:        newQueue(blockCacheMaxItems, blockCacheInitialItems),
-		peers:        newPeerSet(),
-		core:         core,
-		headNumber:   core.CurrentHeader().NumberU64(),
-		headEntropy:  core.CurrentLogEntropy(),
-		dropPeer:     dropPeer,
-		headerCh:     make(chan dataPack, 1),
-		bodyCh:       make(chan dataPack, 1),
-		bodyWakeCh:   make(chan bool, 1),
-		headerProcCh: make(chan []*types.Header, 10),
-		quitCh:       make(chan struct{}),
+		mux:           mux,
+		queue:         newQueue(blockCacheMaxItems, blockCacheInitialItems),
+		peers:         newPeerSet(),
+		core:          core,
+		headNumber:    core.CurrentHeader().NumberU64(),
+		headEntropy:   core.CurrentLogEntropy(),
+		dropPeer:      dropPeer,
+		headerCh:      make(chan dataPack, 1),
+		neededHeaders: make(chan dataPack, 1),
+		bodyCh:        make(chan dataPack, 1),
+		bodyWakeCh:    make(chan bool, 1),
+		headerProcCh:  make(chan []*types.Header, 10),
+		quitCh:        make(chan struct{}),
 	}
-
+	go dl.StuckBlockChecker(dl.quitCh, dl.neededHeaders)
 	return dl
+}
+
+func (d *Downloader) StuckBlockChecker(quitCh chan struct{}, neededHeaders chan dataPack) {
+	ticker := time.NewTicker(20 * time.Second)
+	currentBlock := d.core.CurrentHeader().NumberU64()
+	askedPeers := make(map[string]bool)
+	needHeaders := false
+	var missingHeader *types.Header // last missing header
+	log.Info("Starting StuckBlockChecker")
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			if d.core.BadHashExistsInChain() {
+				log.Warn("Bad Hashes still exist on chain, cannot start the downloader yet")
+				continue
+			}
+			if d.headNumber < 30 || d.syncStatsChainHeight == 0 {
+				// We are still barely syncing. No need to check
+				continue
+			}
+			if d.core.CurrentHeader().NumberU64() == currentBlock && d.syncStatsChainHeight-10 > currentBlock {
+				// The downloader head is more than 10 blocks ahead of the current head of the chain and the chain is not moving
+				// We are stuck. Ask peers for help
+				log.Warn("Downloader peer head is more than 10 blocks ahead of the current head of the chain and the chain is not appending. Asking peers for help", "peerHead", d.syncStatsChainHeight, "currentHead", currentBlock)
+				nextHeader := d.core.GetHeaderByNumber(currentBlock + 1)
+				if nextHeader == nil {
+					if missingHeader != nil && missingHeader.NumberU64() == currentBlock+1 {
+						log.Debug("Already asked for the next block header. Asking peers for the block again")
+						d.core.SendMissingParentFeed(missingHeader.Hash())
+						continue
+					}
+					found := false
+					d.queue.resultCache.lock.RLock()
+					for _, result := range d.queue.resultCache.items {
+						if result != nil && result.Header != nil && result.Header.Number().Uint64() == currentBlock+1 {
+							go d.core.SendMissingParentFeed(result.Header.Hash()) // we grabbed a lock, so use a goroutine in case it blocks
+							found = true
+							break
+						}
+					}
+					d.queue.resultCache.lock.RUnlock()
+					if found {
+						continue
+					}
+					// We don't have the header. We need to find it first
+					log.Debug("Don't have the next block header. Asking peers for it plus 10 headers")
+					peers := d.peers.AllPeers()
+					for _, peer := range peers {
+						go peer.Peer().RequestHeadersByNumber(currentBlock+10, 10, 1, currentBlock, false, true) // Ask for a bunch of headers in case we are missing more than one
+						askedPeers[peer.ID()] = true
+					}
+					needHeaders = true
+				} else {
+					// We have the header. We can ask peers for the block
+					d.core.SendMissingParentFeed(nextHeader.Hash())
+				}
+			} else if d.core.CurrentHeader().NumberU64() > currentBlock {
+				// The chain is moving. Update the current block
+				currentBlock = d.core.CurrentHeader().NumberU64()
+			} else {
+				log.Debug("Downloader peer head is not more than 10 blocks ahead of the current head", "peerHead", d.syncStatsChainHeight, "currentHead", currentBlock)
+			}
+		case packet := <-neededHeaders:
+			headers, ok := packet.(*headerPack)
+			if !ok || !needHeaders {
+				continue
+			}
+			if _, exists := askedPeers[headers.PeerId()]; exists {
+				log.Debug("The headers we asked for are back. Asking peers for the block", "numHeaders", len(headers.headers))
+				for _, header := range headers.headers {
+					if header.Number().Uint64() == currentBlock+1 { // could also ask for all the blocks in the message
+						// We have the header. We can ask peers for the block
+						d.core.SendMissingParentFeed(header.Hash())
+						missingHeader = header
+						needHeaders = false
+						delete(askedPeers, headers.PeerId())
+						break
+					}
+				}
+			}
+		case <-quitCh:
+			return
+		}
+	}
 }
 
 // Progress retrieves the synchronisation boundaries, specifically the origin
@@ -506,6 +601,10 @@ func (d *Downloader) fetchHead(p *peerConnection) (head *types.Header, err error
 			// Make sure the peer gave us at least one and at most the requested headers
 			headers := packet.(*headerPack).headers
 			if len(headers) == 0 || len(headers) > fetch {
+				if len(headers) == 10 {
+					// Likely from the StuckBlockChecker. Ignore
+					continue
+				}
 				return nil, fmt.Errorf("%w: returned headers %d != requested %d", errBadPeer, len(headers), fetch)
 			}
 			// The first header needs to be the head, validate against the checkpoint
@@ -1187,6 +1286,10 @@ func (d *Downloader) deliver(destCh chan dataPack, packet dataPack, inMeter, dro
 			dropMeter.Mark(int64(packet.Items()))
 		}
 	}()
+	select {
+	case d.neededHeaders <- packet:
+	default:
+	}
 	// Deliver or abort if the sync is canceled while queuing
 	d.cancelLock.RLock()
 	cancel := d.cancelCh
