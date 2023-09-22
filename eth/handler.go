@@ -43,6 +43,18 @@ const (
 	// The number is referenced from the size of tx pool.
 	txChanSize = 4096
 
+	// c_pendingEtxBroadcastChanSize is the size of channel listening to pEtx Event.
+	c_pendingEtxBroadcastChanSize = 10
+
+	// c_missingPendingEtxsRollupChanSize is the size of channel listening to missing pEtxsRollup Event.
+	c_missingPendingEtxsRollupChanSize = 10
+
+	// c_pendingEtxRollupBroadcastChanSize is the size of channel listening to pEtx rollup Event.
+	c_pendingEtxRollupBroadcastChanSize = 10
+
+	// missingPendingEtxsChanSize is the size of channel listening to the MissingPendingEtxsEvent
+	missingPendingEtxsChanSize = 10
+
 	// missingParentChanSize is the size of channel listening to the MissingParentEvent
 	missingParentChanSize = 10
 
@@ -117,12 +129,21 @@ type handler struct {
 	txFetcher    *fetcher.TxFetcher
 	peers        *peerSet
 
-	eventMux         *event.TypeMux
-	txsCh            chan core.NewTxsEvent
-	txsSub           event.Subscription
-	minedBlockSub    *event.TypeMuxSubscription
-	missingParentCh  chan common.Hash
-	missingParentSub event.Subscription
+	eventMux              *event.TypeMux
+	txsCh                 chan core.NewTxsEvent
+	txsSub                event.Subscription
+	minedBlockSub         *event.TypeMuxSubscription
+	missingPendingEtxsCh  chan types.HashAndLocation
+	missingPendingEtxsSub event.Subscription
+	missingParentCh       chan common.Hash
+	missingParentSub      event.Subscription
+
+	pEtxCh                chan types.PendingEtxs
+	pEtxSub               event.Subscription
+	pEtxRollupCh          chan types.PendingEtxsRollup
+	pEtxRollupSub         event.Subscription
+	missingPEtxsRollupCh  chan common.Hash
+	missingPEtxsRollupSub event.Subscription
 
 	whitelist map[uint64]common.Hash
 
@@ -310,6 +331,12 @@ func (h *handler) Start(maxPeers int) {
 		go h.txBroadcastLoop()
 	}
 
+	// broadcast pending etxs
+	h.wg.Add(1)
+	h.missingPendingEtxsCh = make(chan types.HashAndLocation, missingPendingEtxsChanSize)
+	h.missingPendingEtxsSub = h.core.SubscribeMissingPendingEtxsEvent(h.missingPendingEtxsCh)
+	go h.missingPendingEtxsLoop()
+
 	h.wg.Add(1)
 	h.missingParentCh = make(chan common.Hash, missingParentChanSize)
 	h.missingParentSub = h.core.SubscribeMissingParentEvent(h.missingParentCh)
@@ -327,6 +354,22 @@ func (h *handler) Start(maxPeers int) {
 		h.wg.Add(1)
 		go h.txsyncLoop64() //Legacy initial tx echange, drop with eth/64.
 	}
+
+	h.wg.Add(1)
+	h.missingPEtxsRollupCh = make(chan common.Hash, c_pendingEtxBroadcastChanSize)
+	h.missingPEtxsRollupSub = h.core.SubscribeMissingPendingEtxsRollupEvent(h.missingPEtxsRollupCh)
+	go h.missingPEtxsRollupLoop()
+
+	h.wg.Add(1)
+	h.pEtxCh = make(chan types.PendingEtxs, c_pendingEtxBroadcastChanSize)
+	h.pEtxSub = h.core.SubscribePendingEtxs(h.pEtxCh)
+	go h.broadcastPEtxLoop()
+
+	// broadcast pending etxs rollup
+	h.wg.Add(1)
+	h.pEtxRollupCh = make(chan types.PendingEtxsRollup, c_pendingEtxRollupBroadcastChanSize)
+	h.pEtxRollupSub = h.core.SubscribePendingEtxsRollup(h.pEtxRollupCh)
+	go h.broadcastPEtxRollupLoop()
 }
 
 func (h *handler) Stop() {
@@ -334,8 +377,12 @@ func (h *handler) Stop() {
 	if nodeCtx == common.ZONE_CTX && h.core.ProcessingState() {
 		h.txsSub.Unsubscribe() // quits txBroadcastLoop
 	}
-	h.minedBlockSub.Unsubscribe()    // quits blockBroadcastLoop
-	h.missingParentSub.Unsubscribe() // quits missingParentLoop
+	h.minedBlockSub.Unsubscribe()         // quits blockBroadcastLoop
+	h.missingPendingEtxsSub.Unsubscribe() // quits pendingEtxsBroadcastLoop
+	h.missingPEtxsRollupSub.Unsubscribe() // quits missingPEtxsRollupSub
+	h.missingParentSub.Unsubscribe()      // quits missingParentLoop
+	h.pEtxSub.Unsubscribe()               // quits pEtxSub
+	h.pEtxRollupSub.Unsubscribe()         // quits pEtxRollupSub
 
 	// Quit chainSync and txsync64.
 	// After this is done, no new peers will be accepted.
@@ -462,6 +509,54 @@ func (h *handler) txBroadcastLoop() {
 	}
 }
 
+// missingPEtxsRollupLoop listens to the MissingBody event in Slice and calls the blockAnnounces.
+func (h *handler) missingPEtxsRollupLoop() {
+	defer h.wg.Done()
+	for {
+		select {
+		case hash := <-h.missingPEtxsRollupCh:
+			// Check if any of the peers have the body
+			for _, peer := range h.selectSomePeers() {
+				log.Trace("Fetching the missing pending etxs rollup from", "peer", peer.ID(), "hash", hash)
+				peer.RequestOnePendingEtxsRollup(hash)
+			}
+
+		case <-h.missingPEtxsRollupSub.Err():
+			return
+		}
+	}
+}
+
+// pendingEtxsBroadcastLoop announces new pendingEtxs to connected peers.
+func (h *handler) missingPendingEtxsLoop() {
+	defer h.wg.Done()
+	for {
+		select {
+		case hashAndLocation := <-h.missingPendingEtxsCh:
+			// Only ask from peers running the slice for the missing pending etxs
+			// In the future, peers not responding before the timeout has to be punished
+			peersRunningSlice := h.peers.peerRunningSlice(hashAndLocation.Location)
+			// If the node doesn't have any peer running that slice, add a warning
+			if len(peersRunningSlice) == 0 {
+				log.Warn("Node doesn't have peers for given Location", "location", hashAndLocation.Location)
+			}
+			// Check if any of the peers have the body
+			for _, peer := range peersRunningSlice {
+				log.Trace("Fetching the missing pending etxs from", "peer", peer.ID(), "hash", hashAndLocation.Hash)
+				peer.RequestOnePendingEtxs(hashAndLocation.Hash)
+			}
+			if len(peersRunningSlice) == 0 {
+				for _, peer := range h.selectSomePeers() {
+					log.Trace("Fetching the missing pending etxs from", "peer", peer.ID(), "hash", hashAndLocation.Hash)
+					peer.RequestOnePendingEtxs(hashAndLocation.Hash)
+				}
+			}
+		case <-h.missingPendingEtxsSub.Err():
+			return
+		}
+	}
+}
+
 // missingParentLoop announces new pendingEtxs to connected peers.
 func (h *handler) missingParentLoop() {
 	defer h.wg.Done()
@@ -477,6 +572,76 @@ func (h *handler) missingParentLoop() {
 			return
 		}
 	}
+}
+
+// pEtxLoop  listens to the pendingEtxs event in Slice and anounces the pEtx to the peer
+func (h *handler) broadcastPEtxLoop() {
+	defer h.wg.Done()
+	for {
+		select {
+		case pEtx := <-h.pEtxCh:
+			h.BroadcastPendingEtxs(pEtx)
+		case <-h.pEtxSub.Err():
+			return
+		}
+	}
+}
+
+// pEtxRollupLoop  listens to the pendingEtxs event in Slice and anounces the pEtx to the peer
+func (h *handler) broadcastPEtxRollupLoop() {
+	defer h.wg.Done()
+	for {
+		select {
+		case pEtxRollup := <-h.pEtxRollupCh:
+			h.BroadcastPendingEtxsRollup(pEtxRollup)
+		case <-h.pEtxRollupSub.Err():
+			return
+		}
+	}
+}
+
+// BroadcastPendingEtxs will either propagate a pendingEtxs to a subset of its peers
+func (h *handler) BroadcastPendingEtxs(pEtx types.PendingEtxs) {
+	hash := pEtx.Header.Hash()
+	peers := h.peers.peersWithoutPendingEtxs(hash)
+
+	// Send the block to a subset of our peers
+	var peerThreshold int
+	sqrtNumPeers := int(math.Sqrt(float64(len(peers))))
+	if sqrtNumPeers < minPeerSend {
+		peerThreshold = len(peers)
+	} else {
+		peerThreshold = sqrtNumPeers
+	}
+	transfer := peers[:peerThreshold]
+	// If in region send the pendingEtxs directly, otherwise send the pendingEtxsManifest
+	for _, peer := range transfer {
+		peer.SendPendingEtxs(pEtx)
+	}
+	log.Trace("Propagated pending etxs", "hash", hash, "recipients", len(transfer), "len", len(pEtx.Etxs))
+	return
+}
+
+// BroadcastPendingEtxsRollup will either propagate a pending etx rollup to a subset of its peers
+func (h *handler) BroadcastPendingEtxsRollup(pEtxRollup types.PendingEtxsRollup) {
+	hash := pEtxRollup.Header.Hash()
+	peers := h.peers.peersWithoutPendingEtxs(hash)
+
+	// Send the block to a subset of our peers
+	var peerThreshold int
+	sqrtNumPeers := int(math.Sqrt(float64(len(peers))))
+	if sqrtNumPeers < minPeerSend {
+		peerThreshold = len(peers)
+	} else {
+		peerThreshold = sqrtNumPeers
+	}
+	transfer := peers[:peerThreshold]
+	// If in region send the pendingEtxs directly, otherwise send the pendingEtxsManifest
+	for _, peer := range transfer {
+		peer.SendPendingEtxsRollup(pEtxRollup)
+	}
+	log.Trace("Propagated pending etxs rollup", "hash", hash, "recipients", len(transfer), "len", len(pEtxRollup.Manifest))
+	return
 }
 
 func (h *handler) selectSomePeers() []*eth.Peer {

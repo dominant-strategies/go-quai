@@ -17,6 +17,7 @@
 package eth
 
 import (
+	"errors"
 	"math/big"
 	"math/rand"
 	"sync"
@@ -37,6 +38,10 @@ const (
 	// maxKnownBlocks is the maximum block hashes to keep in the known list
 	// before starting to randomly evict them.
 	maxKnownBlocks = 1024
+
+	// maxKnownPendingEtxs is the maximum pendingEtxs Header hashes to keep in the known list
+	// before starting to randomly evict them.
+	maxKnownPendingEtxs = 1024
 
 	// maxQueuedTxs is the maximum number of transactions to queue up before dropping
 	// older broadcasts.
@@ -83,6 +88,8 @@ type Peer struct {
 	queuedBlocks    chan *blockPropagation // Queue of blocks to broadcast to the peer
 	queuedBlockAnns chan *types.Block      // Queue of blocks to announce to the peer
 
+	knownPendingEtxs mapset.Set // Set of pending etxs hashes known to be known by this peer
+
 	txpool      TxPool             // Transaction pool used by the broadcasters for liveness checks
 	knownTxs    mapset.Set         // Set of transaction hashes known to be known by this peer
 	txBroadcast chan []common.Hash // Channel used to queue transaction propagation requests
@@ -96,18 +103,19 @@ type Peer struct {
 // version.
 func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter, txpool TxPool) *Peer {
 	peer := &Peer{
-		id:              p.ID().String(),
-		Peer:            p,
-		rw:              rw,
-		version:         version,
-		knownTxs:        mapset.NewSet(),
-		knownBlocks:     mapset.NewSet(),
-		queuedBlocks:    make(chan *blockPropagation, maxQueuedBlocks),
-		queuedBlockAnns: make(chan *types.Block, maxQueuedBlockAnns),
-		txBroadcast:     make(chan []common.Hash),
-		txAnnounce:      make(chan []common.Hash),
-		txpool:          txpool,
-		term:            make(chan struct{}),
+		id:               p.ID().String(),
+		Peer:             p,
+		rw:               rw,
+		version:          version,
+		knownTxs:         mapset.NewSet(),
+		knownBlocks:      mapset.NewSet(),
+		knownPendingEtxs: mapset.NewSet(),
+		queuedBlocks:     make(chan *blockPropagation, maxQueuedBlocks),
+		queuedBlockAnns:  make(chan *types.Block, maxQueuedBlockAnns),
+		txBroadcast:      make(chan []common.Hash),
+		txAnnounce:       make(chan []common.Hash),
+		txpool:           txpool,
+		term:             make(chan struct{}),
 	}
 	// Start up all the broadcasters
 	go peer.broadcastBlocks()
@@ -170,6 +178,11 @@ func (p *Peer) KnownTransaction(hash common.Hash) bool {
 	return p.knownTxs.Contains(hash)
 }
 
+// KnownPendingEtxs returns whether peer is known to already have the pending etx.
+func (p *Peer) KnownPendingEtxs(hash common.Hash) bool {
+	return p.knownPendingEtxs.Contains(hash)
+}
+
 // markBlock marks a block as known for the peer, ensuring that the block will
 // never be propagated to this particular peer.
 func (p *Peer) markBlock(hash common.Hash) {
@@ -188,6 +201,16 @@ func (p *Peer) markTransaction(hash common.Hash) {
 		p.knownTxs.Pop()
 	}
 	p.knownTxs.Add(hash)
+}
+
+// markPendingEtxs marks a pendingEtxs header as known for the peer, ensuring that the block will
+// never be propagated to this particular peer.
+func (p *Peer) markPendingEtxs(hash common.Hash) {
+	// If we reached the memory allowance, drop a previously known block hash
+	for p.knownPendingEtxs.Cardinality() >= maxKnownPendingEtxs {
+		p.knownPendingEtxs.Pop()
+	}
+	p.knownPendingEtxs.Add(hash)
 }
 
 // SendTransactions sends transactions to the peer and includes the hashes
@@ -513,4 +536,66 @@ func (p *Peer) RequestTxs(hashes []common.Hash) error {
 		})
 	}
 	return p2p.Send(p.rw, GetPooledTransactionsMsg, GetPooledTransactionsPacket(hashes))
+}
+
+// RequestOnePendingEtx fetches a pendingEtx for a given block hash from a remote node.
+func (p *Peer) RequestOnePendingEtxs(hash common.Hash) error {
+	p.Log().Debug("Fetching a pending etx", "hash", hash)
+	if p.Version() >= ETH66 {
+		id := rand.Uint64()
+
+		requestTracker.Track(p.id, p.version, GetOnePendingEtxsMsg, PendingEtxsMsg, id)
+		return p2p.Send(p.rw, GetOnePendingEtxsMsg, &GetOnePendingEtxsPacket66{
+			RequestId:               id,
+			GetOnePendingEtxsPacket: GetOnePendingEtxsPacket{Hash: hash},
+		})
+	}
+	return errors.New("eth65 not supported for RequestOnePendingEtxs call")
+}
+
+// RequestOnePendingEtxsRollup fetches a pendingEtxRollup for a given block hash from a remote node.
+func (p *Peer) RequestOnePendingEtxsRollup(hash common.Hash) error {
+	p.Log().Debug("Fetching a pending etx rollup", "hash", hash)
+	if p.Version() >= ETH66 {
+		id := rand.Uint64()
+
+		requestTracker.Track(p.id, p.version, GetOnePendingEtxsRollupMsg, PendingEtxsRollupMsg, id)
+		return p2p.Send(p.rw, GetOnePendingEtxsRollupMsg, &GetOnePendingEtxsPacket66{
+			RequestId:               id,
+			GetOnePendingEtxsPacket: GetOnePendingEtxsPacket{Hash: hash},
+		})
+	}
+	return errors.New("eth65 not supported for RequestOnePendingEtxsRollup call")
+}
+
+// SendNewPendingEtxs propagates an entire pendingEtxs to a remote peer.
+func (p *Peer) SendPendingEtxs(pendingEtxs types.PendingEtxs) error {
+	// Mark all the pendingEtxs hash as known, but ensure we don't overflow our limits
+	for p.knownPendingEtxs.Cardinality() >= maxKnownPendingEtxs {
+		p.knownPendingEtxs.Pop()
+	}
+	p.knownPendingEtxs.Add(pendingEtxs.Header.Hash())
+	return p2p.Send(p.rw, PendingEtxsMsg, &PendingEtxsPacket{
+		PendingEtxs: pendingEtxs,
+	})
+}
+
+// SendNewPendingEtxsRollup propagates an entire pending etx Rollup to a remote peer.
+func (p *Peer) SendPendingEtxsRollup(pEtxsRollup types.PendingEtxsRollup) error {
+	p.Log().Debug("Fetching a pending etx", "hash", pEtxsRollup.Header.Hash())
+	if p.Version() >= ETH66 {
+		id := rand.Uint64()
+
+		// TODO: what to put in the GetOnePendingEtxsMsg
+		requestTracker.Track(p.id, p.version, GetOnePendingEtxsMsg, PendingEtxsRollupMsg, id)
+		// Mark all the pendingEtxs hash as known, but ensure we don't overflow our limits
+		for p.knownPendingEtxs.Cardinality() >= maxKnownPendingEtxs {
+			p.knownPendingEtxs.Pop()
+		}
+		p.knownPendingEtxs.Add(pEtxsRollup.Header.Hash())
+		return p2p.Send(p.rw, PendingEtxsRollupMsg, &PendingEtxsRollupPacket{
+			PendingEtxsRollup: pEtxsRollup,
+		})
+	}
+	return errors.New("eth65 not supported for sendPendingEtxsManifest call")
 }

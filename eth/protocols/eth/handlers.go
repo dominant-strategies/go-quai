@@ -189,6 +189,59 @@ func handleGetBlock66(backend Backend, msg Decoder, peer *Peer) error {
 	return nil
 }
 
+func handlePendingEtxs(backend Backend, msg Decoder, peer *Peer) error {
+	// Decode the block pending etxs retrieval message
+	ann := new(PendingEtxsPacket)
+	if err := msg.Decode(&ann); err != nil {
+		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+	}
+	// Mark the hashes as present at the remote node
+	peer.markPendingEtxs(ann.PendingEtxs.Header.Hash())
+
+	return backend.Handle(peer, ann)
+}
+
+func handlePendingEtxsRollup(backend Backend, msg Decoder, peer *Peer) error {
+	// Decode the block pending etxs rollup retrieval message
+	ann := new(PendingEtxsRollupPacket)
+	if err := msg.Decode(&ann); err != nil {
+		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+	}
+	return backend.Handle(peer, ann)
+}
+
+func handleGetOnePendingEtxs66(backend Backend, msg Decoder, peer *Peer) error {
+	// Decode the block pending etxs retrieval message
+	var query GetOnePendingEtxsPacket66
+	if err := msg.Decode(&query); err != nil {
+		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+	}
+	requestTracker.Fulfil(peer.id, peer.version, GetOnePendingEtxsMsg, query.RequestId)
+	pendingEtxs := backend.Core().GetPendingEtxs(query.Hash)
+	if pendingEtxs == nil {
+		log.Debug("Couldn't complete a pendingEtxs request for", "Hash", query.Hash)
+		return nil
+	}
+	log.Trace("Completing  a pendingEtxs request for", "Hash", pendingEtxs.Header.Hash())
+	return peer.SendPendingEtxs(*pendingEtxs)
+}
+
+func handleGetOnePendingEtxsRollup66(backend Backend, msg Decoder, peer *Peer) error {
+	// Decode the block pending etxs rollup retrieval message
+	var query GetOnePendingEtxsRollupPacket66
+	if err := msg.Decode(&query); err != nil {
+		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+	}
+	requestTracker.Fulfil(peer.id, peer.version, GetOnePendingEtxsRollupMsg, query.RequestId)
+	pendingEtxs := backend.Core().GetPendingEtxsRollup(query.Hash)
+	if pendingEtxs == nil {
+		log.Debug("Couldn't complete a pendingEtxs request for", "Hash", query.Hash)
+		return nil
+	}
+	log.Trace("Completing  a pendingEtxs request for", "Hash", pendingEtxs.Header.Hash())
+	return peer.SendPendingEtxsRollup(*pendingEtxs)
+}
+
 func handleNewBlockhashes(backend Backend, msg Decoder, peer *Peer) error {
 	// A batch of new block announcements just arrived
 	ann := new(NewBlockHashesPacket)
@@ -295,10 +348,10 @@ func handleBlockBodies66(backend Backend, msg Decoder, peer *Peer) error {
 func handleNewPooledTransactionHashes(backend Backend, msg Decoder, peer *Peer) error {
 	nodeCtx := common.NodeLocation.Context()
 	if nodeCtx != common.ZONE_CTX {
-		return errors.New("transactions are only handled in zone")
-	}
-	if !backend.Core().Slice().ProcessingState() {
-		return nil
+        return errors.New("transactions are only handled in zone")
+    }
+    if !backend.Core().Slice().ProcessingState() {
+        return nil
 	}
 	// New transaction announcement arrived, make sure we have
 	// a valid and fresh chain to handle them
@@ -319,10 +372,10 @@ func handleNewPooledTransactionHashes(backend Backend, msg Decoder, peer *Peer) 
 func handleGetPooledTransactions(backend Backend, msg Decoder, peer *Peer) error {
 	nodeCtx := common.NodeLocation.Context()
 	if nodeCtx != common.ZONE_CTX {
-		return errors.New("transactions are only handled in zone")
-	}
-	if !backend.Core().Slice().ProcessingState() {
-		return nil
+        return errors.New("transactions are only handled in zone")
+    }
+    if !backend.Core().Slice().ProcessingState() {
+        return nil
 	}
 	// Decode the pooled transactions retrieval message
 	var query GetPooledTransactionsPacket
@@ -375,10 +428,10 @@ func handleTransactions(backend Backend, msg Decoder, peer *Peer) error {
 	nodeCtx := common.NodeLocation.Context()
 	// Transactions arrived, make sure we have a valid and fresh chain to handle them
 	if nodeCtx != common.ZONE_CTX {
-		return errors.New("transactions are only handled in zone")
-	}
-	if !backend.Core().Slice().ProcessingState() {
-		return nil
+        return errors.New("transactions are only handled in zone")
+    }
+    if !backend.Core().Slice().ProcessingState() {
+        return nil
 	}
 	if !backend.AcceptTxs() {
 		return nil
@@ -401,10 +454,10 @@ func handleTransactions(backend Backend, msg Decoder, peer *Peer) error {
 func handlePooledTransactions(backend Backend, msg Decoder, peer *Peer) error {
 	nodeCtx := common.NodeLocation.Context()
 	if nodeCtx != common.ZONE_CTX {
-		return errors.New("transactions are only handled in zone")
-	}
-	if !backend.Core().Slice().ProcessingState() {
-		return nil
+        return errors.New("transactions are only handled in zone")
+    }
+    if !backend.Core().Slice().ProcessingState() {
+        return nil
 	}
 	// Transactions arrived, make sure we have a valid and fresh chain to handle them
 	if !backend.AcceptTxs() {
@@ -428,10 +481,10 @@ func handlePooledTransactions(backend Backend, msg Decoder, peer *Peer) error {
 func handlePooledTransactions66(backend Backend, msg Decoder, peer *Peer) error {
 	nodeCtx := common.NodeLocation.Context()
 	if nodeCtx != common.ZONE_CTX {
-		return errors.New("transactions are only handled in zone")
-	}
-	if !backend.Core().Slice().ProcessingState() {
-		return nil
+        return errors.New("transactions are only handled in zone")
+    }
+    if !backend.Core().Slice().ProcessingState() {
+        return nil
 	}
 	// Transactions arrived, make sure we have a valid and fresh chain to handle them
 	if !backend.AcceptTxs() {

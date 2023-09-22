@@ -183,13 +183,17 @@ var eth66 = map[uint64]msgHandler{
 	TransactionsMsg:               handleTransactions,
 	NewPooledTransactionHashesMsg: handleNewPooledTransactionHashes,
 	// eth66 messages with request-id
-	GetBlockHeadersMsg:       handleGetBlockHeaders66,
-	BlockHeadersMsg:          handleBlockHeaders66,
-	GetBlockBodiesMsg:        handleGetBlockBodies66,
-	BlockBodiesMsg:           handleBlockBodies66,
-	GetPooledTransactionsMsg: handleGetPooledTransactions66,
-	PooledTransactionsMsg:    handlePooledTransactions66,
-	GetBlockMsg:              handleGetBlock66,
+	GetBlockHeadersMsg:         handleGetBlockHeaders66,
+	BlockHeadersMsg:            handleBlockHeaders66,
+	GetBlockBodiesMsg:          handleGetBlockBodies66,
+	BlockBodiesMsg:             handleBlockBodies66,
+	GetPooledTransactionsMsg:   handleGetPooledTransactions66,
+	PendingEtxsMsg:             handlePendingEtxs,
+	PendingEtxsRollupMsg:       handlePendingEtxsRollup,
+	GetOnePendingEtxsRollupMsg: handleGetOnePendingEtxsRollup66,
+	GetOnePendingEtxsMsg:       handleGetOnePendingEtxs66,
+	PooledTransactionsMsg:      handlePooledTransactions66,
+	GetBlockMsg:                handleGetBlock66,
 }
 
 // handleMessage is invoked whenever an inbound message is received from a remote
