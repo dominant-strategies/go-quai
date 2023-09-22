@@ -61,7 +61,7 @@ func readVersionFile() (version, error) {
 	if len(vnums) != 3 {
 		return version{}, errors.New("bad version number format")
 	}
-	major, err := strconv.Atoi(string(vnums[1][:])) // First byte is 'v'
+	major, err := strconv.Atoi(string(vnums[0][1:])) // First byte is 'v'
 	if err != nil {
 		return version{}, err
 	}
@@ -69,9 +69,17 @@ func readVersionFile() (version, error) {
 	if err != nil {
 		return version{}, err
 	}
-	patch, err := strconv.Atoi(string(vnums[2][:]))
-	if err != nil {
-		return version{}, err
+	var patch int
+	if len(vmeta) > 0 {
+		patch, err = strconv.Atoi(string(vnums[2][:]))
+		if err != nil {
+			return version{}, err
+		}
+	} else {
+		patch, err = strconv.Atoi(string(vnums[2][:len(vnums[2])-1]))
+		if err != nil {
+			return version{}, err
+		}
 	}
 	return version{major: major, minor: minor, patch: patch, meta: string(vmeta), full: full, short: string(vnum)}, nil
 }
