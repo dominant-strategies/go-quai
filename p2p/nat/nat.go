@@ -155,7 +155,7 @@ func Any() Interface {
 			}
 		}
 		log.Error("This computer is not publicly reachable and cannot join the P2P network.")
-		fmt.Println("\nPlease forward the necessary ports or enable UPnP on your router. See https://docs.quai.network for guidance.")
+		fmt.Println("\nPlease forward the necessary ports or enable UPnP on your router. See https://docs.quai.network/node/node-overview/run-a-node#router-configuration for guidance.")
 		os.Exit(1)
 		return nil
 	})
