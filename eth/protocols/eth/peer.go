@@ -36,7 +36,7 @@ const (
 
 	// maxKnownBlocks is the maximum block hashes to keep in the known list
 	// before starting to randomly evict them.
-	maxKnownBlocks = 1024
+	maxKnownBlocks = 10000
 
 	// maxQueuedTxs is the maximum number of transactions to queue up before dropping
 	// older broadcasts.

@@ -643,16 +643,8 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 				}
 			}
 
-			// If no more headers are inbound, notify the content fetchers and return
-			if packet.Items() == 0 {
-				// No more headers, terminate the process
-				p.log.Debug("No more headers available")
-				select {
-				case d.headerProcCh <- nil:
-					return nil
-				case <-d.cancelCh:
-					return errCanceled
-				}
+			if len(headers) == 0 {
+				continue
 			}
 
 			// Prepare the resultStore to fill the skeleton.

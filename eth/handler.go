@@ -179,7 +179,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		}
 		h.core.WriteBlock(block)
 	}
-	h.blockFetcher = fetcher.NewBlockFetcher(h.core.GetBlockByHash, writeBlock, validator, h.BroadcastBlock, heighter, h.removePeer, h.core.IsBlockHashABadHash)
+	h.blockFetcher = fetcher.NewBlockFetcher(h.core.GetBlockOrCandidateByHash, writeBlock, validator, h.BroadcastBlock, heighter, h.removePeer, h.core.IsBlockHashABadHash)
 
 	// Only initialize the Tx fetcher in zone
 	if nodeCtx == common.ZONE_CTX && h.core.ProcessingState() {

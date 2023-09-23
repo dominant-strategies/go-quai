@@ -237,7 +237,7 @@ func (c *Core) serviceBlocks(hashNumberList []types.HashAndNumber) {
 				// ram, we are using the header
 				c.InsertChain([]*types.Block{types.NewBlockWithHeader(header)})
 			} else {
-				if !c.HasHeader(header.ParentHash(), header.NumberU64()-1) {
+				if c.GetHeaderOrCandidateByHash(header.ParentHash()) == nil {
 					c.sl.missingParentFeed.Send(header.ParentHash())
 				}
 			}
@@ -256,7 +256,9 @@ func (c *Core) RequestDomToAppendOrFetch(hash common.Hash, order int) {
 		_, exists := c.appendQueue.Get(hash)
 		if !exists {
 			log.Warn("Block sub asked doesnt exist in append queue, so request the peers for it", "Hash", hash, "Order", order)
-			c.sl.missingParentFeed.Send(hash) // Using the missing parent feed to ask for the block
+			if c.GetHeaderOrCandidateByHash(hash) == nil {
+				c.sl.missingParentFeed.Send(hash) // Using the missing parent feed to ask for the block
+			}
 		}
 	} else if nodeCtx == common.REGION_CTX {
 		if order < nodeCtx { // Prime block
@@ -267,7 +269,9 @@ func (c *Core) RequestDomToAppendOrFetch(hash common.Hash, order int) {
 		_, exists := c.appendQueue.Get(hash)
 		if !exists {
 			log.Warn("Block sub asked doesnt exist in append queue, so request the peers for it", "Hash", hash, "Order", order)
-			c.sl.missingParentFeed.Send(hash) // Using the missing parent feed to ask for the block
+			if c.GetHeaderOrCandidateByHash(hash) == nil {
+				c.sl.missingParentFeed.Send(hash) // Using the missing parent feed to ask for the block
+			}
 		}
 	}
 
@@ -430,7 +434,9 @@ func (c *Core) Append(header *types.Header, domPendingHeader *types.Header, domT
 	newPendingEtxs, subReorg, err := c.sl.Append(header, domPendingHeader, domTerminus, domOrigin, newInboundEtxs)
 	if err != nil {
 		if err.Error() == ErrBodyNotFound.Error() || err.Error() == consensus.ErrUnknownAncestor.Error() || err.Error() == ErrSubNotSyncedToDom.Error() {
-			c.sl.missingParentFeed.Send(header.ParentHash())
+			if c.GetHeaderOrCandidateByHash(header.ParentHash()) == nil {
+				c.sl.missingParentFeed.Send(header.ParentHash())
+			}
 		}
 	}
 	return newPendingEtxs, subReorg, err
