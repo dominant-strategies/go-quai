@@ -112,7 +112,7 @@ func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter, txpool TxPool) *Pe
 	// Start up all the broadcasters
 	go peer.broadcastBlocks()
 	go peer.broadcastTransactions()
-	if version >= ETH65 {
+	if version >= QUAI1 {
 		go peer.announceTransactions()
 	}
 	return peer
@@ -394,7 +394,7 @@ func (p *Peer) RequestOneHeader(hash common.Hash) error {
 		Dom:     false,
 		Reverse: false,
 	}
-	if p.Version() >= ETH66 {
+	if p.Version() >= QUAI1 {
 		id := rand.Uint64()
 
 		requestTracker.Track(p.id, p.version, GetBlockHeadersMsg, BlockHeadersMsg, id)
@@ -417,7 +417,7 @@ func (p *Peer) RequestHeadersByHash(origin common.Hash, amount int, skip uint64,
 		Dom:     dom,
 		Reverse: reverse,
 	}
-	if p.Version() >= ETH66 {
+	if p.Version() >= QUAI1 {
 		id := rand.Uint64()
 
 		requestTracker.Track(p.id, p.version, GetBlockHeadersMsg, BlockHeadersMsg, id)
@@ -436,7 +436,7 @@ func (p *Peer) RequestBlockByHash(hash common.Hash) error {
 	query := GetBlockPacket{
 		Hash: hash,
 	}
-	if p.Version() >= ETH66 {
+	if p.Version() >= QUAI1 {
 		id := rand.Uint64()
 
 		requestTracker.Track(p.id, p.version, GetBlockMsg, NewBlockMsg, id)
@@ -460,7 +460,7 @@ func (p *Peer) RequestHeadersByNumber(origin uint64, amount int, skip uint64, to
 		Dom:     dom,
 		Reverse: reverse,
 	}
-	if p.Version() >= ETH66 {
+	if p.Version() >= QUAI1 {
 		id := rand.Uint64()
 
 		requestTracker.Track(p.id, p.version, GetBlockHeadersMsg, BlockHeadersMsg, id)
@@ -488,7 +488,7 @@ func (p *Peer) ExpectRequestHeadersByNumber(origin uint64, amount int, dom bool,
 // specified.
 func (p *Peer) RequestBodies(hashes []common.Hash) error {
 	p.Log().Debug("Fetching batch of block bodies", "count", len(hashes))
-	if p.Version() >= ETH66 {
+	if p.Version() >= QUAI1 {
 		id := rand.Uint64()
 
 		requestTracker.Track(p.id, p.version, GetBlockBodiesMsg, BlockBodiesMsg, id)
@@ -503,7 +503,7 @@ func (p *Peer) RequestBodies(hashes []common.Hash) error {
 // RequestTxs fetches a batch of transactions from a remote node.
 func (p *Peer) RequestTxs(hashes []common.Hash) error {
 	p.Log().Debug("Fetching batch of transactions", "count", len(hashes))
-	if p.Version() >= ETH66 {
+	if p.Version() >= QUAI1 {
 		id := rand.Uint64()
 
 		requestTracker.Track(p.id, p.version, GetPooledTransactionsMsg, PooledTransactionsMsg, id)
