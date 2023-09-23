@@ -788,3 +788,45 @@ func (s *PublicBlockChainQuaiAPI) GenerateRecoveryPendingHeader(ctx context.Cont
 	}
 	return s.b.GenerateRecoveryPendingHeader(pHandcheckPointHashes.PendingHeader, pHandcheckPointHashes.CheckpointHashes)
 }
+
+type GetPendingEtxsRollupFuncArgs struct {
+	Hash     common.Hash
+	Location common.Location
+}
+
+func (s *PublicBlockChainQuaiAPI) GetPendingEtxsRollupFromSub(ctx context.Context, raw json.RawMessage) (map[string]interface{}, error) {
+	var getPEtxsRollup GetPendingEtxsFuncArgs
+	if err := json.Unmarshal(raw, &getPEtxsRollup); err != nil {
+		return nil, err
+	}
+	pEtxsRollup, err := s.b.GetPendingEtxsRollupFromSub(getPEtxsRollup.Hash, getPEtxsRollup.Location)
+	if err != nil {
+		return nil, err
+	}
+	fields := make(map[string]interface{})
+	fields["header"] = pEtxsRollup.Header.RPCMarshalHeader()
+	fields["manifest"] = pEtxsRollup.Manifest
+
+	return fields, nil
+}
+
+type GetPendingEtxsFuncArgs struct {
+	Hash     common.Hash
+	Location common.Location
+}
+
+func (s *PublicBlockChainQuaiAPI) GetPendingEtxsFromSub(ctx context.Context, raw json.RawMessage) (map[string]interface{}, error) {
+	var getPEtxs GetPendingEtxsFuncArgs
+	if err := json.Unmarshal(raw, &getPEtxs); err != nil {
+		return nil, err
+	}
+	pEtxs, err := s.b.GetPendingEtxsFromSub(getPEtxs.Hash, getPEtxs.Location)
+	if err != nil {
+		return nil, err
+	}
+	fields := make(map[string]interface{})
+	fields["header"] = pEtxs.Header.RPCMarshalHeader()
+	fields["etxs"] = pEtxs.Etxs
+
+	return fields, nil
+}

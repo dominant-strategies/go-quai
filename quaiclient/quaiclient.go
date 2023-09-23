@@ -169,6 +169,44 @@ func (ec *Client) GetManifest(ctx context.Context, blockHash common.Hash) (types
 	return manifest, nil
 }
 
+// GetPendingEtxsRollupFromSub gets the pendingEtxsRollup from the region
+func (ec *Client) GetPendingEtxsRollupFromSub(ctx context.Context, hash common.Hash, location common.Location) (types.PendingEtxsRollup, error) {
+	fields := make(map[string]interface{})
+	fields["Hash"] = hash
+	fields["Location"] = location
+
+	var raw json.RawMessage
+	err := ec.c.CallContext(ctx, &raw, "quai_getPendingEtxsRollupFromSub", fields)
+	if err != nil {
+		return types.PendingEtxsRollup{}, err
+	}
+
+	var pEtxsRollup types.PendingEtxsRollup
+	if err := json.Unmarshal(raw, &pEtxsRollup); err != nil {
+		return types.PendingEtxsRollup{}, err
+	}
+	return pEtxsRollup, nil
+}
+
+// GetPendingEtxsFromSub gets the pendingEtxsRollup from the region
+func (ec *Client) GetPendingEtxsFromSub(ctx context.Context, hash common.Hash, location common.Location) (types.PendingEtxs, error) {
+	fields := make(map[string]interface{})
+	fields["Hash"] = hash
+	fields["Location"] = location
+
+	var raw json.RawMessage
+	err := ec.c.CallContext(ctx, &raw, "quai_getPendingEtxsFromSub", fields)
+	if err != nil {
+		return types.PendingEtxs{}, err
+	}
+
+	var pEtxs types.PendingEtxs
+	if err := json.Unmarshal(raw, &pEtxs); err != nil {
+		return types.PendingEtxs{}, err
+	}
+	return pEtxs, nil
+}
+
 func (ec *Client) SendPendingEtxsToDom(ctx context.Context, pEtxs types.PendingEtxs) error {
 	fields := make(map[string]interface{})
 	fields["header"] = pEtxs.Header.RPCMarshalHeader()

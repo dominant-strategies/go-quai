@@ -37,7 +37,13 @@ const (
 	c_primeRelayProc                  = 10
 	c_asyncPhUpdateChanSize           = 10
 	c_phCacheSize                     = 500
+	c_pEtxRetryThreshold              = 100 // Number of pEtxNotFound return on a dom block before asking for pEtx/Rollup from sub
 )
+
+type pEtxRetry struct {
+	hash    common.Hash
+	retries uint64
+}
 
 type Slice struct {
 	hc *HeaderChain
@@ -60,8 +66,9 @@ type Slice struct {
 	pendingEtxsRollupFeed event.Feed
 	missingBlockFeed      event.Feed
 
-	asyncPhCh  chan *types.Header
-	asyncPhSub event.Subscription
+	pEtxRetryCache *lru.Cache
+	asyncPhCh      chan *types.Header
+	asyncPhSub     event.Subscription
 
 	bestPhKey common.Hash
 	phCache   *lru.Cache
@@ -84,7 +91,7 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLooku
 	}
 
 	var err error
-	sl.hc, err = NewHeaderChain(db, engine, chainConfig, cacheConfig, txLookupLimit, vmConfig, slicesRunning)
+	sl.hc, err = NewHeaderChain(db, engine, sl.GetPEtxRollupAfterRetryThreshold, sl.GetPEtxAfterRetryThreshold, chainConfig, cacheConfig, txLookupLimit, vmConfig, slicesRunning)
 	if err != nil {
 		return nil, err
 	}
@@ -99,6 +106,8 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLooku
 	sl.miner = New(sl.hc, sl.txPool, config, db, chainConfig, engine, isLocalBlock, sl.ProcessingState())
 
 	sl.phCache, _ = lru.New(c_phCacheSize)
+
+	sl.pEtxRetryCache, _ = lru.New(c_pEtxRetryThreshold)
 
 	// only set the subClients if the chain is not Zone
 	sl.subClients = make([]*quaiclient.Client, 3)
@@ -209,6 +218,18 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		newInboundEtxs, _, err = sl.CollectNewlyConfirmedEtxs(block, block.Location())
 		if err != nil {
 			log.Error("Error collecting newly confirmed etxs: ", "err", err)
+			// Keeping track of the number of times pending etx fails and if it crossed the retry threshold
+			// ask the sub for the pending etx/rollup data
+			val, exist := sl.pEtxRetryCache.Get(block.Hash())
+			var retry uint64
+			if exist {
+				pEtxCurrent, ok := val.(pEtxRetry)
+				if ok {
+					retry = pEtxCurrent.retries + 1
+				}
+			}
+			pEtxNew := pEtxRetry{hash: block.Hash(), retries: retry}
+			sl.pEtxRetryCache.Add(block.Hash(), pEtxNew)
 			return nil, false, false, ErrSubNotSyncedToDom
 		}
 	}
@@ -688,6 +709,65 @@ func (sl *Slice) GetSubManifest(slice common.Location, blockHash common.Hash) (t
 // SendPendingEtxsToDom shares a set of pending ETXs with your dom, so he can reference them when a coincident block is found
 func (sl *Slice) SendPendingEtxsToDom(pEtxs types.PendingEtxs) error {
 	return sl.domClient.SendPendingEtxsToDom(context.Background(), pEtxs)
+}
+
+func (sl *Slice) GetPEtxRollupAfterRetryThreshold(blockHash common.Hash, hash common.Hash, location common.Location) (types.PendingEtxsRollup, error) {
+	pEtx, exists := sl.pEtxRetryCache.Get(blockHash)
+	if !exists || pEtx.(pEtxRetry).retries < c_pEtxRetryThreshold {
+		return types.PendingEtxsRollup{}, ErrPendingEtxNotFound
+	}
+	return sl.GetPendingEtxsRollupFromSub(hash, location)
+}
+
+// GetPendingEtxsRollupFromSub gets the pending etxs rollup from the appropriate prime
+func (sl *Slice) GetPendingEtxsRollupFromSub(hash common.Hash, location common.Location) (types.PendingEtxsRollup, error) {
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx == common.PRIME_CTX {
+		if sl.subClients[location.SubIndex()] != nil {
+			pEtxRollup, err := sl.subClients[location.SubIndex()].GetPendingEtxsRollupFromSub(context.Background(), hash, location)
+			if err != nil {
+				return types.PendingEtxsRollup{}, err
+			} else {
+				sl.AddPendingEtxsRollup(pEtxRollup)
+				return pEtxRollup, nil
+			}
+		}
+	} else if nodeCtx == common.REGION_CTX {
+		block := sl.hc.GetBlockOrCandidateByHash(hash)
+		if block != nil {
+			return types.PendingEtxsRollup{Header: block.Header(), Manifest: block.SubManifest()}, nil
+		}
+	}
+	return types.PendingEtxsRollup{}, ErrPendingEtxNotFound
+}
+
+func (sl *Slice) GetPEtxAfterRetryThreshold(blockHash common.Hash, hash common.Hash, location common.Location) (types.PendingEtxs, error) {
+	pEtx, exists := sl.pEtxRetryCache.Get(blockHash)
+	if !exists || pEtx.(pEtxRetry).retries < c_pEtxRetryThreshold {
+		return types.PendingEtxs{}, ErrPendingEtxNotFound
+	}
+	return sl.GetPendingEtxsFromSub(hash, location)
+}
+
+// GetPendingEtxsFromSub gets the pending etxs from the appropriate prime
+func (sl *Slice) GetPendingEtxsFromSub(hash common.Hash, location common.Location) (types.PendingEtxs, error) {
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx != common.ZONE_CTX {
+		if sl.subClients[location.SubIndex()] != nil {
+			pEtx, err := sl.subClients[location.SubIndex()].GetPendingEtxsFromSub(context.Background(), hash, location)
+			if err != nil {
+				return types.PendingEtxs{}, err
+			} else {
+				sl.AddPendingEtxs(pEtx)
+				return pEtx, nil
+			}
+		}
+	}
+	block := sl.hc.GetBlockOrCandidateByHash(hash)
+	if block != nil {
+		return types.PendingEtxs{Header: block.Header(), Etxs: block.ExtTransactions()}, nil
+	}
+	return types.PendingEtxs{}, ErrPendingEtxNotFound
 }
 
 // SubRelayPendingHeader takes a pending header from the sender (ie dominant), updates the phCache with a composited header and relays result to subordinates

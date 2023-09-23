@@ -519,3 +519,11 @@ func (b *QuaiAPIBackend) SubscribePendingHeaderEvent(ch chan<- *types.Header) ev
 func (b *QuaiAPIBackend) GenerateRecoveryPendingHeader(pendingHeader *types.Header, checkpointHashes types.Termini) error {
 	return b.eth.core.GenerateRecoveryPendingHeader(pendingHeader, checkpointHashes)
 }
+
+func (b *QuaiAPIBackend) GetPendingEtxsRollupFromSub(hash common.Hash, location common.Location) (types.PendingEtxsRollup, error) {
+	return b.eth.core.GetPendingEtxsRollupFromSub(hash, location)
+}
+
+func (b *QuaiAPIBackend) GetPendingEtxsFromSub(hash common.Hash, location common.Location) (types.PendingEtxs, error) {
+	return b.eth.core.GetPendingEtxsFromSub(hash, location)
+}
