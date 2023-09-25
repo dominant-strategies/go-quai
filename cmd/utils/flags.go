@@ -19,6 +19,7 @@ package utils
 
 import (
 	"crypto/ecdsa"
+	"crypto/elliptic"
 	"errors"
 	"fmt"
 	"io"
@@ -718,7 +719,21 @@ func setNodeKey(ctx *cli.Context, cfg *p2p.Config) {
 	case file != "" && hex != "":
 		Fatalf("Options %q and %q are mutually exclusive", NodeKeyFileFlag.Name, NodeKeyHexFlag.Name)
 	case file != "":
+		curve := elliptic.P256()
+		order := curve.Params().P
+		// Load the node private key from the file
 		if key, err = crypto.LoadECDSA(file); err != nil {
+			Fatalf("Option %q: %v", NodeKeyFileFlag.Name, err)
+		}
+		pkey := big.NewInt(0).Mod(key.D, order)
+		// Tweak the private key to be unique for each location
+		locationTweak := big.NewInt(0).SetBytes(crypto.Keccak256([]byte(common.NodeLocation.Name())))
+		locationTweak.Mod(locationTweak, order)
+		tweakedKey := pkey.Mul(pkey, locationTweak)
+		tweakedKey.Mod(tweakedKey, order)
+		bytes := make([]byte, 32)
+		copy(bytes, tweakedKey.Bytes())
+		if key, err = crypto.ToECDSA(bytes); err != nil {
 			Fatalf("Option %q: %v", NodeKeyFileFlag.Name, err)
 		}
 		cfg.PrivateKey = key
