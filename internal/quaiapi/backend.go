@@ -72,13 +72,14 @@ type Backend interface {
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 	SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription
 	WriteBlock(block *types.Block)
-	Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, bool, error)
+	Append(header *types.Header, manifest types.BlockManifest, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, bool, error)
+	DownloadBlocksInManifest(manifest types.BlockManifest, entropy *big.Int)
 	ConstructLocalMinedBlock(header *types.Header) (*types.Block, error)
 	InsertBlock(ctx context.Context, block *types.Block) (int, error)
 	PendingBlock() *types.Block
 	SubRelayPendingHeader(pendingHeader types.PendingHeader, newEntropy *big.Int, location common.Location, subReorg bool, order int)
 	UpdateDom(oldTerminus common.Hash, pendingHeader types.PendingHeader, location common.Location)
-	RequestDomToAppendOrFetch(hash common.Hash, order int)
+	RequestDomToAppendOrFetch(hash common.Hash, entropy *big.Int, order int)
 	NewGenesisPendingHeader(pendingHeader *types.Header)
 	GetPendingHeader() (*types.Header, error)
 	GetManifest(blockHash common.Hash) (types.BlockManifest, error)

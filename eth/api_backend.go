@@ -448,8 +448,12 @@ func (b *QuaiAPIBackend) SyncProgress() quai.SyncProgress {
 	return b.eth.Downloader().Progress()
 }
 
-func (b *QuaiAPIBackend) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, bool, error) {
-	return b.eth.core.Append(header, domPendingHeader, domTerminus, domOrigin, newInboundEtxs)
+func (b *QuaiAPIBackend) Append(header *types.Header, manifest types.BlockManifest, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, bool, error) {
+	return b.eth.core.Append(header, manifest, domPendingHeader, domTerminus, domOrigin, newInboundEtxs)
+}
+
+func (b *QuaiAPIBackend) DownloadBlocksInManifest(manifest types.BlockManifest, entropy *big.Int) {
+	b.eth.core.DownloadBlocksInManifest(manifest, entropy)
 }
 
 func (b *QuaiAPIBackend) ConstructLocalMinedBlock(header *types.Header) (*types.Block, error) {
@@ -476,8 +480,8 @@ func (b *QuaiAPIBackend) UpdateDom(oldTerminus common.Hash, pendingHeader types.
 	b.eth.core.UpdateDom(oldTerminus, pendingHeader, location)
 }
 
-func (b *QuaiAPIBackend) RequestDomToAppendOrFetch(hash common.Hash, order int) {
-	b.eth.core.RequestDomToAppendOrFetch(hash, order)
+func (b *QuaiAPIBackend) RequestDomToAppendOrFetch(hash common.Hash, entropy *big.Int, order int) {
+	b.eth.core.RequestDomToAppendOrFetch(hash, entropy, order)
 }
 
 func (b *QuaiAPIBackend) ProcessingState() bool {

@@ -464,7 +464,6 @@ func (hc *HeaderChain) Stop() {
 	}
 	// Save the heads
 	rawdb.WriteHeadsHashes(hc.headerDb, hashes)
-	rawdb.WriteHeadBlockHash(hc.headerDb, hc.CurrentHeader().Hash())
 
 	// Unsubscribe all subscriptions registered from blockchain
 	hc.scope.Close()

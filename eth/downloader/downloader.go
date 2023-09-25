@@ -131,6 +131,9 @@ type Core interface {
 	// GetBlockByHash retrieves a block from the local chain.
 	GetBlockByHash(common.Hash) *types.Block
 
+	// GetBlockByNumber retrieves a block from the local chain.
+	GetBlockByNumber(uint64) *types.Block
+
 	// CurrentHeader retrieves the head of local chain.
 	CurrentHeader() *types.Header
 
@@ -641,6 +644,11 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 						break
 					}
 				}
+			}
+
+			if len(skeletonHeaders) > 0 && skeletonHeaders[len(skeletonHeaders)-1].NumberU64() < 8 {
+				genesisBlock := d.core.GetBlockByNumber(0)
+				skeletonHeaders = append(skeletonHeaders, genesisBlock.Header())
 			}
 
 			if len(headers) == 0 {

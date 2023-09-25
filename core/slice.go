@@ -58,7 +58,7 @@ type Slice struct {
 	scope                 event.SubscriptionScope
 	pendingEtxsFeed       event.Feed
 	pendingEtxsRollupFeed event.Feed
-	missingParentFeed     event.Feed
+	missingBlockFeed      event.Feed
 
 	asyncPhCh  chan *types.Header
 	asyncPhSub event.Subscription
@@ -130,6 +130,10 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLooku
 // If this is called from a dominant context a domTerminus must be provided else a common.Hash{} should be used and domOrigin should be set to true.
 func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, bool, error) {
 	start := time.Now()
+
+	if header.Hash() == sl.config.GenesisHash {
+		return nil, false, nil
+	}
 
 	// Only print in Info level if block is c_startingPrintLimit behind or less
 	if sl.CurrentInfo(header) {
@@ -219,7 +223,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	if nodeCtx != common.ZONE_CTX {
 		// How to get the sub pending etxs if not running the full node?.
 		if sl.subClients[location.SubIndex()] != nil {
-			subPendingEtxs, subReorg, err = sl.subClients[location.SubIndex()].Append(context.Background(), header, pendingHeaderWithTermini.Header(), domTerminus, true, newInboundEtxs)
+			subPendingEtxs, subReorg, err = sl.subClients[location.SubIndex()].Append(context.Background(), header, block.SubManifest(), pendingHeaderWithTermini.Header(), domTerminus, true, newInboundEtxs)
 			if err != nil {
 				return nil, false, err
 			}
@@ -637,7 +641,7 @@ func (sl *Slice) pcrc(batch ethdb.Batch, header *types.Header, domTerminus commo
 
 // POEM compares externS to the currentHead S and returns true if externS is greater
 func (sl *Slice) poem(externS *big.Int, currentS *big.Int) bool {
-	log.Info("POEM:", "Header hash:", sl.hc.CurrentHeader().Hash(), "currentS:", common.BigBitsToBits(currentS), "externS:", common.BigBitsToBits(externS))
+	log.Debug("POEM:", "Header hash:", sl.hc.CurrentHeader().Hash(), "currentS:", common.BigBitsToBits(currentS), "externS:", common.BigBitsToBits(externS))
 	reorg := currentS.Cmp(externS) <= 0
 	return reorg
 }
@@ -1104,8 +1108,8 @@ func (sl *Slice) GetPendingBlockBody(header *types.Header) *types.Body {
 	return sl.miner.worker.GetPendingBlockBody(header)
 }
 
-func (sl *Slice) SubscribeMissingParentEvent(ch chan<- common.Hash) event.Subscription {
-	return sl.scope.Track(sl.missingParentFeed.Subscribe(ch))
+func (sl *Slice) SubscribeMissingBlockEvent(ch chan<- types.BlockRequest) event.Subscription {
+	return sl.scope.Track(sl.missingBlockFeed.Subscribe(ch))
 }
 
 // MakeDomClient creates the quaiclient for the given domurl

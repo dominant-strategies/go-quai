@@ -200,7 +200,10 @@ func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block) er
 		if peerEntropy.Cmp(blockS) < 0 {
 			log.Info("Starting the downloader: Peer entropy is less than the announced entropy", "peer Entropy", peerEntropy, "announced block entropy", blockS)
 			peer.SetHead(block.Hash(), block.Number(), blockS, block.ReceivedAt)
-			h.chainSync.handlePeerEvent(peer)
+			// Only start the downloader in Prime
+			if common.NodeLocation.Context() == common.PRIME_CTX {
+				h.chainSync.handlePeerEvent(peer)
+			}
 		}
 	}
 	return nil

@@ -37,7 +37,7 @@ const (
 	c_primeRetryThreshold               = 1800    // Number of times a block is retry to be appended before eviction from append queue in Prime
 	c_regionRetryThreshold              = 1200    // Number of times a block is retry to be appended before eviction from append queue in Region
 	c_zoneRetryThreshold                = 600     // Number of times a block is retry to be appended before eviction from append queue in Zone
-	c_maxFutureBlocks                   = 100     // Number of blocks ahead of the current block to be put in the hashNumberList
+	c_maxFutureBlocks                   = 5       // Number of blocks ahead of the current block to be put in the hashNumberList
 	c_appendQueueRetryPriorityThreshold = 5       // If retry counter for a block is less than this number,  then its put in the special list that is tried first to be appended
 	c_appendQueueRemoveThreshold        = 10      // Number of blocks behind the block should be from the current header to be eligble for removal from the append queue
 	c_normalListProcCounter             = 5       // Ratio of Number of times the PriorityList is serviced over the NormalList
@@ -139,6 +139,12 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 				} else {
 					log.Debug("Cannot append yet.", "hash", block.Hash(), "err", err)
 				}
+				if err.Error() == ErrSubNotSyncedToDom.Error() ||
+					err.Error() == ErrPendingEtxNotFound.Error() {
+					if nodeCtx != common.ZONE_CTX && c.sl.subClients[block.Location().SubIndex()] != nil {
+						c.sl.subClients[block.Location().SubIndex()].DownloadBlocksInManifest(context.Background(), block.SubManifest(), block.ParentEntropy())
+					}
+				}
 				return idx, ErrPendingBlock
 			} else if err.Error() != ErrKnownBlock.Error() {
 				log.Info("Append failed.", "hash", block.Hash(), "err", err)
@@ -204,19 +210,19 @@ func (c *Core) serviceBlocks(hashNumberList []types.HashAndNumber) {
 
 	// Attempt to service the sorted list
 	for _, hashAndNumber := range hashNumberList {
-		header := c.GetHeaderOrCandidateByHash(hashAndNumber.Hash)
-		if header != nil {
+		block := c.GetBlockOrCandidateByHash(hashAndNumber.Hash)
+		if block != nil {
 			var numberAndRetryCounter blockNumberAndRetryCounter
-			if value, exist := c.appendQueue.Peek(header.Hash()); exist {
+			if value, exist := c.appendQueue.Peek(block.Hash()); exist {
 				numberAndRetryCounter = value.(blockNumberAndRetryCounter)
 				numberAndRetryCounter.retry += 1
 				if numberAndRetryCounter.retry > retryThreshold && numberAndRetryCounter.number+c_appendQueueRemoveThreshold < c.CurrentHeader().NumberU64() {
-					c.appendQueue.Remove(header.Hash())
+					c.appendQueue.Remove(block.Hash())
 				} else {
-					c.appendQueue.Add(header.Hash(), numberAndRetryCounter)
+					c.appendQueue.Add(block.Hash(), numberAndRetryCounter)
 				}
 			}
-			parentHeader := c.GetHeader(header.ParentHash(), header.NumberU64()-1)
+			parentHeader := c.sl.hc.GetHeaderOrCandidate(block.ParentHash(), block.NumberU64()-1)
 			if parentHeader != nil {
 				// If parent header is dom, send a signal to dom to request for the block if it doesnt have it
 				_, parentHeaderOrder, err := c.sl.engine.CalcOrder(parentHeader)
@@ -229,17 +235,12 @@ func (c *Core) serviceBlocks(hashNumberList []types.HashAndNumber) {
 					log.Info("Requesting the dom to get the block if it doesnt have and try to append", "Hash", parentHeader.Hash(), "Order", parentHeaderOrder)
 					if c.sl.domClient != nil {
 						// send a signal to the required dom to fetch the block if it doesnt have it, or its not in its appendqueue
-						go c.sl.domClient.RequestDomToAppendOrFetch(context.Background(), parentHeader.Hash(), parentHeaderOrder)
+						go c.sl.domClient.RequestDomToAppendOrFetch(context.Background(), parentHeader.Hash(), parentHeader.ParentEntropy(), parentHeaderOrder)
 					}
 				}
-				// Using a empty block to append here because append only takes in a
-				// header and we read the block inside append again, so to save the
-				// ram, we are using the header
-				c.InsertChain([]*types.Block{types.NewBlockWithHeader(header)})
+				c.InsertChain([]*types.Block{block})
 			} else {
-				if c.GetHeaderOrCandidateByHash(header.ParentHash()) == nil {
-					c.sl.missingParentFeed.Send(header.ParentHash())
-				}
+				c.sl.missingBlockFeed.Send(types.BlockRequest{Hash: block.ParentHash(), Entropy: block.ParentEntropy()})
 			}
 		} else {
 			log.Warn("Entry in the FH cache without being in the db: ", "Hash: ", hashAndNumber.Hash)
@@ -247,7 +248,7 @@ func (c *Core) serviceBlocks(hashNumberList []types.HashAndNumber) {
 	}
 }
 
-func (c *Core) RequestDomToAppendOrFetch(hash common.Hash, order int) {
+func (c *Core) RequestDomToAppendOrFetch(hash common.Hash, entropy *big.Int, order int) {
 	// TODO: optimize to check if the block is in the appendqueue or already
 	// appended to reduce the network bandwidth utilization
 	nodeCtx := common.NodeLocation.Context()
@@ -256,30 +257,51 @@ func (c *Core) RequestDomToAppendOrFetch(hash common.Hash, order int) {
 		_, exists := c.appendQueue.Get(hash)
 		if !exists {
 			log.Warn("Block sub asked doesnt exist in append queue, so request the peers for it", "Hash", hash, "Order", order)
-			if c.GetHeaderOrCandidateByHash(hash) == nil {
-				c.sl.missingParentFeed.Send(hash) // Using the missing parent feed to ask for the block
+			block := c.GetBlockOrCandidateByHash(hash)
+			if block == nil {
+				c.sl.missingBlockFeed.Send(types.BlockRequest{Hash: hash, Entropy: entropy}) // Using the missing parent feed to ask for the block
+			} else {
+				c.addToQueueIfNotAppended(block)
 			}
 		}
 	} else if nodeCtx == common.REGION_CTX {
 		if order < nodeCtx { // Prime block
 			if c.sl.domClient != nil {
-				go c.sl.domClient.RequestDomToAppendOrFetch(context.Background(), hash, order)
+				go c.sl.domClient.RequestDomToAppendOrFetch(context.Background(), hash, entropy, order)
 			}
 		}
 		_, exists := c.appendQueue.Get(hash)
 		if !exists {
 			log.Warn("Block sub asked doesnt exist in append queue, so request the peers for it", "Hash", hash, "Order", order)
-			if c.GetHeaderOrCandidateByHash(hash) == nil {
-				c.sl.missingParentFeed.Send(hash) // Using the missing parent feed to ask for the block
+			block := c.GetBlockByHash(hash)
+			if block == nil {
+				c.sl.missingBlockFeed.Send(types.BlockRequest{Hash: hash, Entropy: entropy}) // Using the missing parent feed to ask for the block
+			} else {
+				c.addToQueueIfNotAppended(block)
 			}
 		}
 	}
 
 }
 
+// addToQueueIfNotAppended checks if block is appended and if its not adds the block to appendqueue
+func (c *Core) addToQueueIfNotAppended(block *types.Block) {
+	// Check if the hash is in the blockchain, otherwise add it to the append queue
+	if c.GetHeaderByHash(block.Hash()) == nil {
+		c.addToAppendQueue(block)
+	}
+}
+
 // addToAppendQueue adds a block to the append queue
 func (c *Core) addToAppendQueue(block *types.Block) error {
-	c.appendQueue.ContainsOrAdd(block.Hash(), blockNumberAndRetryCounter{block.NumberU64(), 0})
+	nodeCtx := common.NodeLocation.Context()
+	_, order, err := c.engine.CalcOrder(block.Header())
+	if err != nil {
+		return err
+	}
+	if order == nodeCtx {
+		c.appendQueue.ContainsOrAdd(block.Hash(), blockNumberAndRetryCounter{block.NumberU64(), 0})
+	}
 	return nil
 }
 
@@ -353,8 +375,8 @@ func (c *Core) BadHashExistsInChain() bool {
 	return false
 }
 
-func (c *Core) SubscribeMissingParentEvent(ch chan<- common.Hash) event.Subscription {
-	return c.sl.SubscribeMissingParentEvent(ch)
+func (c *Core) SubscribeMissingBlockEvent(ch chan<- types.BlockRequest) event.Subscription {
+	return c.sl.SubscribeMissingBlockEvent(ch)
 }
 
 // InsertChainWithoutSealVerification works exactly the same
@@ -421,7 +443,7 @@ func (c *Core) WriteBlock(block *types.Block) {
 			// If a dom block comes in and we havent appended it yet
 		} else if order < nodeCtx && c.GetHeaderByHash(block.Hash()) == nil {
 			if c.sl.domClient != nil {
-				go c.sl.domClient.RequestDomToAppendOrFetch(context.Background(), block.Hash(), order)
+				go c.sl.domClient.RequestDomToAppendOrFetch(context.Background(), block.Hash(), block.ParentEntropy(), order)
 			}
 		}
 	}
@@ -430,16 +452,46 @@ func (c *Core) WriteBlock(block *types.Block) {
 	}
 }
 
-func (c *Core) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, bool, error) {
+func (c *Core) Append(header *types.Header, manifest types.BlockManifest, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, bool, error) {
 	newPendingEtxs, subReorg, err := c.sl.Append(header, domPendingHeader, domTerminus, domOrigin, newInboundEtxs)
 	if err != nil {
 		if err.Error() == ErrBodyNotFound.Error() || err.Error() == consensus.ErrUnknownAncestor.Error() || err.Error() == ErrSubNotSyncedToDom.Error() {
-			if c.GetHeaderOrCandidateByHash(header.ParentHash()) == nil {
-				c.sl.missingParentFeed.Send(header.ParentHash())
+			// Fetch the blocks for each hash in the manifest
+			block := c.GetBlockOrCandidateByHash(header.Hash())
+			if block == nil {
+				c.sl.missingBlockFeed.Send(types.BlockRequest{Hash: header.Hash(), Entropy: header.ParentEntropy()})
+			} else {
+				c.addToQueueIfNotAppended(block)
+			}
+			for _, m := range manifest {
+				block := c.GetBlockOrCandidateByHash(m)
+				if block == nil {
+					c.sl.missingBlockFeed.Send(types.BlockRequest{Hash: m, Entropy: header.ParentEntropy()})
+				} else {
+					c.addToQueueIfNotAppended(block)
+				}
+			}
+			block = c.GetBlockOrCandidateByHash(header.ParentHash())
+			if block == nil {
+				c.sl.missingBlockFeed.Send(types.BlockRequest{Hash: header.ParentHash(), Entropy: header.ParentEntropy()})
+			} else {
+				c.addToQueueIfNotAppended(block)
 			}
 		}
 	}
 	return newPendingEtxs, subReorg, err
+}
+
+func (c *Core) DownloadBlocksInManifest(manifest types.BlockManifest, entropy *big.Int) {
+	// Fetch the blocks for each hash in the manifest
+	for _, m := range manifest {
+		block := c.GetBlockOrCandidateByHash(m)
+		if block == nil {
+			c.sl.missingBlockFeed.Send(types.BlockRequest{Hash: m, Entropy: entropy})
+		} else {
+			c.addToQueueIfNotAppended(block)
+		}
+	}
 }
 
 // ConstructLocalBlock takes a header and construct the Block locally
