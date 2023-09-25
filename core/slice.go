@@ -328,7 +328,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	time10 := common.PrettyDuration(time.Since(start))
 	log.Info("Times during append:", "t0_1", time0_1, "t0_2", time0_2, "t1:", time1, "t2:", time2, "t3:", time3, "t4:", time4, "t5:", time5, "t6:", time6, "t7:", time7, "t8:", time8, "t9:", time9, "t10:", time10)
 	log.Debug("Times during sub append:", "t6_1:", time6_1, "t6_2:", time6_2, "t6_3:", time6_3)
-	log.Info("Appended new block", "number", block.Header().Number(), "hash", block.Hash(),
+	log.Info("Appended new block", "number", block.Header().NumberArray(), "hash", block.Hash(),
 		"difficulty", block.Header().Difficulty(),
 		"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "etxs", len(block.ExtTransactions()), "gas", block.GasUsed(), "gasLimit", block.GasLimit(),
 		"root", block.Root(),

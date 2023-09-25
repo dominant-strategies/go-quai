@@ -137,9 +137,9 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 				err.Error() == ErrSubNotSyncedToDom.Error() ||
 				err.Error() == ErrDomClientNotUp.Error() {
 				if c.sl.CurrentInfo(block.Header()) {
-					log.Info("Cannot append yet.", "hash", block.Hash(), "err", err)
+					log.Info("Cannot append yet.", "loc", common.NodeLocation.Name(), "number", block.Header().NumberArray(), "hash", block.Hash(), "err", err)
 				} else {
-					log.Debug("Cannot append yet.", "hash", block.Hash(), "err", err)
+					log.Debug("Cannot append yet.", "loc", common.NodeLocation.Name(), "number", block.Header().NumberArray(), "hash", block.Hash(), "err", err)
 				}
 				if err.Error() == ErrSubNotSyncedToDom.Error() ||
 					err.Error() == ErrPendingEtxNotFound.Error() {
@@ -349,7 +349,7 @@ func (c *Core) startStatsTimer() {
 
 // printStats displays stats on syncing, latestHeight, etc.
 func (c *Core) printStats() {
-	log.Info("Blocks waiting to be appended", "len(appendQueue)", len(c.appendQueue.Keys()))
+	log.Info("Blocks waiting to be appended", "loc", common.NodeLocation.Name(), "len(appendQueue)", len(c.appendQueue.Keys()))
 
 	// Print hashes & heights of all queue entries.
 	for _, hash := range c.appendQueue.Keys()[:math.Min(len(c.appendQueue.Keys()), c_appendQueuePrintSize)] {
