@@ -1183,3 +1183,8 @@ type HashAndLocation struct {
 	Hash     common.Hash
 	Location common.Location
 }
+
+type BlockRequest struct {
+	Hash    common.Hash
+	Entropy *big.Int
+}

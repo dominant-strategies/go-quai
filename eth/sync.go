@@ -280,27 +280,31 @@ func (cs *chainSyncer) startSync(op *chainSyncOp) {
 
 // doSync synchronizes the local blockchain with a remote peer.
 func (h *handler) doSync(op *chainSyncOp) error {
-	// Run the sync cycle, and disable fast sync if we're past the pivot block
-	err := h.downloader.Synchronise(op.peer.ID(), op.head, op.entropy, op.mode)
-	log.Info("Downloader exited", "err", err)
-	if err != nil {
-		return err
-	}
-	// If we've successfully finished a sync cycle and passed any required checkpoint,
-	// enable accepting transactions from the network.
-	head := h.core.CurrentBlock()
-	if head == nil {
-		log.Warn("doSync: head is nil", "hash", h.core.CurrentHeader().Hash(), "number", h.core.CurrentHeader().NumberArray())
-		return nil
-	}
-	if head.NumberU64() > 0 {
-		// We've completed a sync cycle, notify all peers of new state. This path is
-		// essential in star-topology networks where a gateway node needs to notify
-		// all its out-of-date peers of the availability of a new block. This failure
-		// scenario will most often crop up in private and hackathon networks with
-		// degenerate connectivity, but it should be healthy for the mainnet too to
-		// more reliably update peers or the local TD state.
-		h.BroadcastBlock(head, false)
+	// Stopping the downloader here temporarily for Region and Zones
+	nodeCtx := common.NodeLocation.Context()
+	if nodeCtx == common.PRIME_CTX {
+		// Run the sync cycle, and disable fast sync if we're past the pivot block
+		err := h.downloader.Synchronise(op.peer.ID(), op.head, op.entropy, op.mode)
+		log.Info("Downloader exited", "err", err)
+		if err != nil {
+			return err
+		}
+		// If we've successfully finished a sync cycle and passed any required checkpoint,
+		// enable accepting transactions from the network.
+		head := h.core.CurrentBlock()
+		if head == nil {
+			log.Warn("doSync: head is nil", "hash", h.core.CurrentHeader().Hash(), "number", h.core.CurrentHeader().NumberArray())
+			return nil
+		}
+		if head.NumberU64() > 0 {
+			// We've completed a sync cycle, notify all peers of new state. This path is
+			// essential in star-topology networks where a gateway node needs to notify
+			// all its out-of-date peers of the availability of a new block. This failure
+			// scenario will most often crop up in private and hackathon networks with
+			// degenerate connectivity, but it should be healthy for the mainnet too to
+			// more reliably update peers or the local TD state.
+			h.BroadcastBlock(head, false)
+		}
 	}
 	return nil
 }

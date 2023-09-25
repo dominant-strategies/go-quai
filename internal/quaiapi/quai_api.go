@@ -617,11 +617,12 @@ func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw js
 }
 
 type tdBlock struct {
-	Header           *types.Header      `json:"header"`
-	DomPendingHeader *types.Header      `json:"domPendingHeader"`
-	DomTerminus      common.Hash        `json:"domTerminus"`
-	DomOrigin        bool               `json:"domOrigin"`
-	NewInboundEtxs   types.Transactions `json:"newInboundEtxs"`
+	Header           *types.Header       `json:"header"`
+	Manifest         types.BlockManifest `json:"manifest"`
+	DomPendingHeader *types.Header       `json:"domPendingHeader"`
+	DomTerminus      common.Hash         `json:"domTerminus"`
+	DomOrigin        bool                `json:"domOrigin"`
+	NewInboundEtxs   types.Transactions  `json:"newInboundEtxs"`
 }
 
 func (s *PublicBlockChainQuaiAPI) Append(ctx context.Context, raw json.RawMessage) (map[string]interface{}, error) {
@@ -632,7 +633,7 @@ func (s *PublicBlockChainQuaiAPI) Append(ctx context.Context, raw json.RawMessag
 		return nil, err
 	}
 
-	pendingEtxs, subReorg, err := s.b.Append(body.Header, body.DomPendingHeader, body.DomTerminus, body.DomOrigin, body.NewInboundEtxs)
+	pendingEtxs, subReorg, err := s.b.Append(body.Header, body.Manifest, body.DomPendingHeader, body.DomTerminus, body.DomOrigin, body.NewInboundEtxs)
 	if err != nil {
 		return nil, err
 	}
@@ -644,6 +645,19 @@ func (s *PublicBlockChainQuaiAPI) Append(ctx context.Context, raw json.RawMessag
 
 	return fields, nil
 
+}
+
+type DownloadBlocksInManifestArgs struct {
+	Manifest types.BlockManifest `json:"manifest"`
+	Entropy  *big.Int            `json:"entropy"`
+}
+
+func (s *PublicBlockChainQuaiAPI) DownloadBlocksInManifest(ctx context.Context, raw json.RawMessage) {
+	var manifest DownloadBlocksInManifestArgs
+	if err := json.Unmarshal(raw, &manifest); err != nil {
+		return
+	}
+	s.b.DownloadBlocksInManifest(manifest.Manifest, manifest.Entropy)
 }
 
 type SubRelay struct {
@@ -683,8 +697,9 @@ func (s *PublicBlockChainQuaiAPI) UpdateDom(ctx context.Context, raw json.RawMes
 }
 
 type RequestDomToAppendOrFetchArgs struct {
-	Hash  common.Hash
-	Order int
+	Hash    common.Hash
+	Entropy *big.Int
+	Order   int
 }
 
 func (s *PublicBlockChainQuaiAPI) RequestDomToAppendOrFetch(ctx context.Context, raw json.RawMessage) {
@@ -692,7 +707,7 @@ func (s *PublicBlockChainQuaiAPI) RequestDomToAppendOrFetch(ctx context.Context,
 	if err := json.Unmarshal(raw, &requestDom); err != nil {
 		return
 	}
-	s.b.RequestDomToAppendOrFetch(requestDom.Hash, requestDom.Order)
+	s.b.RequestDomToAppendOrFetch(requestDom.Hash, requestDom.Entropy, requestDom.Order)
 }
 func (s *PublicBlockChainQuaiAPI) NewGenesisPendingHeader(ctx context.Context, raw json.RawMessage) {
 	var pendingHeader *types.Header
