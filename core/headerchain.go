@@ -26,9 +26,11 @@ import (
 )
 
 const (
-	headerCacheLimit      = 512
-	numberCacheLimit      = 2048
-	primeHorizonThreshold = 20
+	headerCacheLimit              = 512
+	numberCacheLimit              = 2048
+	primeHorizonThreshold         = 20
+	garbageCollectorBlockLimit    = 100  // Max number of blocks to be deleted in one garbage collection run
+	garbageCollectorBlockDistance = 5000 // Garbage collection starts when hashes slice is this size
 )
 
 type HeaderChain struct {
@@ -60,6 +62,8 @@ type HeaderChain struct {
 
 	headermu      sync.RWMutex
 	heads         []*types.Header
+	hashes        []common.Hash
+	hashesMu      sync.Mutex
 	slicesRunning []common.Location
 }
 
@@ -109,6 +113,8 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, chainConfig *par
 	// Initialize the heads slice
 	heads := make([]*types.Header, 0)
 	hc.heads = heads
+
+	hc.hashes = make([]common.Hash, 0, garbageCollectorBlockDistance)
 
 	return hc, nil
 }
@@ -284,7 +290,7 @@ func (hc *HeaderChain) AppendBlock(block *types.Block, newInboundEtxs types.Tran
 		return err
 	}
 	log.Debug("Time taken to", "Append in bc", common.PrettyDuration(time.Since(blockappend)))
-
+	go hc.AddHash(block.Hash())
 	hc.bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
 	if len(logs) > 0 {
 		hc.bc.logsFeed.Send(logs)
@@ -889,4 +895,48 @@ func (hc *HeaderChain) SubscribeChainSideEvent(ch chan<- ChainSideEvent) event.S
 
 func (hc *HeaderChain) StateAt(root common.Hash) (*state.StateDB, error) {
 	return hc.bc.processor.StateAt(root)
+}
+
+// Adds a new hash to the hashes slice, and garbage collects old uncle blocks
+// Garbage collection only occurs if the hash slice is larger than garbageCollectorBlockDistance
+// The hashes slice is not stored to disk, so it resets on restart
+func (hc *HeaderChain) AddHash(newHash common.Hash) {
+	hc.hashesMu.Lock()
+	defer hc.hashesMu.Unlock()
+	// Possible improvement: check for inclusion, return if already added
+	if len(hc.hashes) > garbageCollectorBlockDistance {
+		log.Debug("Garbage collecting old uncle blocks")
+		// Garbage collect the first 100 blocks (should be ~3400 blocks old)
+		for i := 0; i < garbageCollectorBlockLimit; i++ {
+			hash := hc.hashes[i]
+			if header := hc.GetHeaderByHash(hash); header != nil {
+				if hc.GetCanonicalHash(header.NumberU64()) != hash {
+
+					// Header is not canonical at its declared number, garbage collect
+					rawdb.DeleteBlock(hc.bc.db, header.Hash(), header.NumberU64())
+					rawdb.DeleteHeaderNumber(hc.bc.db, header.Hash())
+					rawdb.DeleteTermini(hc.bc.db, header.Hash())
+					rawdb.DeleteEtxSet(hc.bc.db, header.Hash(), header.NumberU64())
+					rawdb.DeleteBloom(hc.bc.db, header.Hash(), header.NumberU64())
+
+					if common.NodeLocation.Context() != common.ZONE_CTX {
+						rawdb.DeletePendingEtxs(hc.bc.db, header.Hash())
+						rawdb.DeletePendingEtxsRollup(hc.bc.db, header.Hash())
+						rawdb.DeleteManifest(hc.bc.db, header.Hash())
+					}
+
+					// delete the trie node for a given root of the header
+					rawdb.DeleteTrieNode(hc.bc.db, header.Root())
+
+					rawdb.DeleteInboundEtxs(hc.bc.db, header.Hash())
+				}
+			} else {
+				log.Error("Header not found", "hash", hash)
+			}
+		}
+		hc.hashes = hc.hashes[garbageCollectorBlockLimit:] // Remove the first 100 hashes that were just processed
+		hc.hashes = append(hc.hashes, newHash)
+	} else {
+		hc.hashes = append(hc.hashes, newHash)
+	}
 }
