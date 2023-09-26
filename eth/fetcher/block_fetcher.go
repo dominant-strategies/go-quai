@@ -249,28 +249,6 @@ func (f *BlockFetcher) Notify(peer string, hash common.Hash, number uint64, time
 	}
 }
 
-// Enqueue tries to fill gaps the fetcher's future import queue.
-func (f *BlockFetcher) Enqueue(peer string, block *types.Block) error {
-	// If this is a newly mined block from a much lower height, drop the peer. Peers should not mine blocks until they are in sync with the network.
-	currentNum := f.chainHeight()
-	bcastNum := block.NumberU64()
-	if currentNum > MaxStaleBroadcastDist && (currentNum-MaxStaleBroadcastDist) > bcastNum {
-		// The broadcast blocks is stale. Drop the peer.
-		return errors.New("stale broadcast")
-	}
-
-	op := &blockOrHeaderInject{
-		origin: peer,
-		block:  block,
-	}
-	select {
-	case f.inject <- op:
-		return nil
-	case <-f.quit:
-		return errTerminated
-	}
-}
-
 // FilterHeaders extracts all the headers that were explicitly requested by the fetcher,
 // returning those that should be handled differently.
 func (f *BlockFetcher) FilterHeaders(peer string, headers []*types.Header, time time.Time) []*types.Header {
@@ -360,11 +338,7 @@ func (f *BlockFetcher) loop() {
 				continue
 			}
 
-			// Only import blocks using the Fetcher if its within maxUncleDist
-			// This is done to prevent DDos on the append queue
-			if op != nil && op.block.NumberU64()+maxUncleDist > f.chainHeight() {
-				f.importBlocks(op.origin, op.block)
-			}
+			f.ImportBlocks(op.origin, op.block, true)
 		}
 		// Wait for an outside event to occur
 		select {
@@ -718,8 +692,18 @@ func (f *BlockFetcher) enqueue(peer string, header *types.Header, block *types.B
 // importBlocks spawns a new goroutine to run a block insertion into the chain. If the
 // block's number is at the same height as the current import phase, it updates
 // the phase states accordingly.
-func (f *BlockFetcher) importBlocks(peer string, block *types.Block) {
+func (f *BlockFetcher) ImportBlocks(peer string, block *types.Block, relay bool) {
 	hash := block.Hash()
+
+	// If this is a newly mined block from a much lower height, drop the peer. Peers should not mine blocks until they are in sync with the network.
+	currentNum := f.chainHeight()
+	bcastNum := block.NumberU64()
+	if relay && currentNum > MaxStaleBroadcastDist && currentNum > bcastNum+MaxStaleBroadcastDist {
+		// The broadcast blocks is stale. Drop the peer.
+		log.Warn("Peer is mining while not synced, dropping peer", "Id", peer)
+		f.dropPeer(peer)
+		return
+	}
 
 	// Run the import on a new thread
 	log.Debug("Importing propagated block", "peer", peer, "number", block.Number(), "hash", hash)
@@ -741,7 +725,11 @@ func (f *BlockFetcher) importBlocks(peer string, block *types.Block) {
 		if err == nil || err.Error() == consensus.ErrUnknownAncestor.Error() {
 			// All ok, quickly propagate to our peers
 			blockBroadcastOutTimer.UpdateSince(block.ReceivedAt)
-			go f.broadcastBlock(block, true)
+
+			// Only relay the Mined Blocks that meet the depth criteria
+			if relay {
+				go f.broadcastBlock(block, true)
+			}
 		} else if err.Error() == consensus.ErrFutureBlock.Error() {
 			// Weird future block, don't fail, but neither propagate
 		} else {
@@ -754,7 +742,11 @@ func (f *BlockFetcher) importBlocks(peer string, block *types.Block) {
 		f.writeBlock(block)
 		// If import succeeded, broadcast the block
 		blockAnnounceOutTimer.UpdateSince(block.ReceivedAt)
-		go f.broadcastBlock(block, false)
+
+		// Only relay the Mined Blocks that meet the depth criteria
+		if relay {
+			go f.broadcastBlock(block, false)
+		}
 
 		// Invoke the testing hook if needed
 		if f.importedHook != nil {

@@ -184,7 +184,9 @@ type BlockHeadersPacket66 struct {
 
 // NewBlockPacket is the network packet for the block propagation message.
 type NewBlockPacket struct {
-	Block *types.Block
+	Block   *types.Block
+	Entropy *big.Int
+	Relay   bool
 }
 
 // sanityCheck verifies that the values are reasonable, as a DoS protection
