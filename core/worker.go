@@ -506,6 +506,7 @@ func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.He
 	if err != nil {
 		return nil, err
 	}
+
 	work.header = block.Header()
 	w.printPendingHeaderInfo(work, block, start)
 
@@ -914,25 +915,27 @@ func (w *worker) FinalizeAssemble(chain consensus.ChainHeaderReader, header *typ
 	}
 
 	manifestHash := w.ComputeManifestHash(parent.Header())
-	block.Header().SetManifestHash(manifestHash)
 
-	if nodeCtx == common.ZONE_CTX {
-		// Compute and set etx rollup hash
-		etxRollup := types.Transactions{}
-		if w.engine.IsDomCoincident(w.hc, parent.Header()) {
-			etxRollup = parent.ExtTransactions()
-		} else {
-			etxRollup, err = w.hc.CollectEtxRollup(parent)
-			if err != nil {
-				return nil, err
+	if w.hc.ProcessingState() {
+		block.Header().SetManifestHash(manifestHash)
+		if nodeCtx == common.ZONE_CTX {
+			// Compute and set etx rollup hash
+			var etxRollup types.Transactions
+			if w.engine.IsDomCoincident(w.hc, parent.Header()) {
+				etxRollup = parent.ExtTransactions()
+			} else {
+				etxRollup, err = w.hc.CollectEtxRollup(parent)
+				if err != nil {
+					return nil, err
+				}
+				etxRollup = append(etxRollup, parent.ExtTransactions()...)
 			}
-			etxRollup = append(etxRollup, parent.ExtTransactions()...)
+			etxRollupHash := types.DeriveSha(etxRollup, trie.NewStackTrie(nil))
+			block.Header().SetEtxRollupHash(etxRollupHash)
 		}
-		etxRollupHash := types.DeriveSha(etxRollup, trie.NewStackTrie(nil))
-		block.Header().SetEtxRollupHash(etxRollupHash)
-	}
 
-	w.AddPendingBlockBody(block.Header(), block.Body())
+		w.AddPendingBlockBody(block.Header(), block.Body())
+	}
 
 	return block, nil
 }
