@@ -202,7 +202,7 @@ func (in *WASMInterpreter) getExternalBalance(ctx context.Context, module api.Mo
 	if err != nil {
 		log.Panicf("🟥 Memory.Write(%d, %d) out of range", resultOffset, len(internal))
 	}
-	balance := swapEndian(in.StateDB.GetBalance(*internal).Bytes())
+	balance := swapEndian(in.StateDB.GetBalance(internal).Bytes())
 	writeBytes(ctx, module, balance, uint32(resultOffset))
 }
 
@@ -279,7 +279,7 @@ func (in *WASMInterpreter) call(ctx context.Context, module api.Module, gas int6
 
 	// Fail if the account's balance is greater than 128bits as discussed
 	// in https://github.com/ewasm/hera/issues/456
-	if in.StateDB.GetBalance(*internal).Cmp(check128bits) > 0 {
+	if in.StateDB.GetBalance(internal).Cmp(check128bits) > 0 {
 		in.gasAccounting(contract.Gas)
 		return ErrQEICallRevert
 	}
@@ -308,14 +308,14 @@ func (in *WASMInterpreter) call(ctx context.Context, module api.Module, gas int6
 	snapshot := in.StateDB.Snapshot()
 
 	// Check that there is enough balance to transfer the value
-	if in.StateDB.GetBalance(*internal).Cmp(value) < 0 {
+	if in.StateDB.GetBalance(internal).Cmp(value) < 0 {
 		return ErrQEICallFailure
 	}
 
 	// Check that the contract exists
-	if !in.StateDB.Exist(*addr) {
+	if !in.StateDB.Exist(addr) {
 		in.gasAccounting(GasCostNewAccount)
-		in.StateDB.CreateAccount(*addr)
+		in.StateDB.CreateAccount(addr)
 	}
 
 	var calleeGas uint64
@@ -337,12 +337,12 @@ func (in *WASMInterpreter) call(ctx context.Context, module api.Module, gas int6
 
 	// Load the contract code in a new VM structure
 	targetContract := NewContract(contract, AccountRef(addrInterface), value, calleeGas)
-	code := in.StateDB.GetCode(*addr)
+	code := in.StateDB.GetCode(addr)
 	if len(code) == 0 {
 		in.contract.Gas += calleeGas
 		return QEICallSuccess
 	}
-	targetContract.SetCallCode(&addrInterface, in.StateDB.GetCodeHash(*addr), code)
+	targetContract.SetCallCode(&addrInterface, in.StateDB.GetCodeHash(addr), code)
 
 	savedVM := in.vm
 
@@ -409,8 +409,8 @@ func (in *WASMInterpreter) callCode(ctx context.Context, module api.Module, gas 
 	snapshot := in.StateDB.Snapshot()
 
 	// Check that there is enough balance to transfer the value
-	if in.StateDB.GetBalance(*addr).Cmp(value) < 0 {
-		fmt.Printf("Not enough balance: wanted to use %v, got %v\n", value, in.StateDB.GetBalance(*addr))
+	if in.StateDB.GetBalance(addr).Cmp(value) < 0 {
+		fmt.Printf("Not enough balance: wanted to use %v, got %v\n", value, in.StateDB.GetBalance(addr))
 		return ErrQEICallFailure
 	}
 
@@ -419,8 +419,8 @@ func (in *WASMInterpreter) callCode(ctx context.Context, module api.Module, gas 
 
 	// Load the contract code in a new VM structure
 	targetContract := NewContract(contract.caller, AccountRef(contract.Address()), value, uint64(gas))
-	code := in.StateDB.GetCode(*addr)
-	targetContract.SetCallCode(&addrInterface, in.StateDB.GetCodeHash(*addr), code)
+	code := in.StateDB.GetCode(addr)
+	targetContract.SetCallCode(&addrInterface, in.StateDB.GetCodeHash(addr), code)
 
 	return in.callCommon(ctx, contract, targetContract, input, value, snapshot, gas, false)
 }
@@ -456,8 +456,8 @@ func (in *WASMInterpreter) callDelegate(ctx context.Context, module api.Module, 
 	snapshot := in.StateDB.Snapshot()
 
 	// Check that there is enough balance to transfer the value
-	if in.StateDB.GetBalance(*addr).Cmp(value) < 0 {
-		fmt.Printf("Not enough balance: wanted to use %v, got %v\n", value, in.StateDB.GetBalance(*addr))
+	if in.StateDB.GetBalance(addr).Cmp(value) < 0 {
+		fmt.Printf("Not enough balance: wanted to use %v, got %v\n", value, in.StateDB.GetBalance(addr))
 		return ErrQEICallFailure
 	}
 
@@ -466,9 +466,9 @@ func (in *WASMInterpreter) callDelegate(ctx context.Context, module api.Module, 
 
 	// Load the contract code in a new VM structure
 	targetContract := NewContract(AccountRef(contract.Address()), AccountRef(contract.Address()), value, uint64(gas))
-	code := in.StateDB.GetCode(*addr)
+	code := in.StateDB.GetCode(addr)
 	caddr := contract.Address()
-	targetContract.SetCallCode(&caddr, in.StateDB.GetCodeHash(*addr), code)
+	targetContract.SetCallCode(&caddr, in.StateDB.GetCodeHash(addr), code)
 
 	return in.callCommon(ctx, contract, targetContract, input, value, snapshot, gas, false)
 }
@@ -500,9 +500,9 @@ func (in *WASMInterpreter) callStatic(ctx context.Context, module api.Module, ga
 	}
 
 	// Check that the contract exists
-	if !in.StateDB.Exist(*addr) {
+	if !in.StateDB.Exist(addr) {
 		in.gasAccounting(GasCostNewAccount)
-		in.StateDB.CreateAccount(*addr)
+		in.StateDB.CreateAccount(addr)
 	}
 
 	calleeGas := uint64(gas)
@@ -518,12 +518,12 @@ func (in *WASMInterpreter) callStatic(ctx context.Context, module api.Module, ga
 
 	// Load the contract code in a new VM structure
 	targetContract := NewContract(contract, AccountRef(addrInterface), value, calleeGas)
-	code := in.StateDB.GetCode(*addr)
+	code := in.StateDB.GetCode(addr)
 	if len(code) == 0 {
 		in.contract.Gas += calleeGas
 		return QEICallSuccess
 	}
-	targetContract.SetCallCode(&addrInterface, in.StateDB.GetCodeHash(*addr), code)
+	targetContract.SetCallCode(&addrInterface, in.StateDB.GetCodeHash(addr), code)
 
 	savedVM := in.vm
 	saveStatic := in.staticMode
@@ -572,7 +572,7 @@ func (in *WASMInterpreter) storageStore(ctx context.Context, module api.Module, 
 		panic(err)
 	}
 
-	oldValue := in.StateDB.GetState(*addr, loc)
+	oldValue := in.StateDB.GetState(addr, loc)
 	oldNonZeroBytes := 0
 	for _, b := range oldValue.Bytes() {
 		if b != 0 {
@@ -588,7 +588,7 @@ func (in *WASMInterpreter) storageStore(ctx context.Context, module api.Module, 
 		in.gasAccounting(GasCostSReset)
 	}
 
-	in.StateDB.SetState(*addr, loc, val)
+	in.StateDB.SetState(addr, loc, val)
 }
 
 func (in *WASMInterpreter) storageLoad(ctx context.Context, module api.Module, pathOffset uint32, resultOffset int32) {
@@ -598,7 +598,7 @@ func (in *WASMInterpreter) storageLoad(ctx context.Context, module api.Module, p
 	if err != nil {
 		panic(err)
 	}
-	valBytes := in.StateDB.GetState(*addr, loc).Bytes()
+	valBytes := in.StateDB.GetState(addr, loc).Bytes()
 	writeBytes(ctx, module, valBytes, uint32(resultOffset))
 }
 
@@ -629,7 +629,7 @@ func (in *WASMInterpreter) getCodeSize(ctx context.Context, module api.Module) i
 		panic(err)
 	}
 
-	code := in.StateDB.GetCode(*addr)
+	code := in.StateDB.GetCode(addr)
 	return int32(len(code))
 }
 
@@ -734,7 +734,7 @@ func (in *WASMInterpreter) externalCodeCopy(ctx context.Context, module api.Modu
 	if err != nil {
 		panic(err)
 	}
-	code := in.StateDB.GetCode(*addr)
+	code := in.StateDB.GetCode(addr)
 	writeBytes(ctx, module, code[codeOffset:codeOffset+length], uint32(resultOffset))
 }
 
@@ -745,7 +745,7 @@ func (in *WASMInterpreter) getExternalCodeSize(ctx context.Context, module api.M
 	if err != nil {
 		panic(err)
 	}
-	code := in.StateDB.GetCode(*addr)
+	code := in.StateDB.GetCode(addr)
 	return int32(len(code))
 }
 
@@ -879,7 +879,7 @@ func (in *WASMInterpreter) returnDataCopy(ctx context.Context, module api.Module
 // 	}
 // 	in.gasAccounting(totalGas)
 
-// 	in.StateDB.AddBalance(*addr, balance)
+// 	in.StateDB.AddBalance(addr, balance)
 // 	in.StateDB.Suicide(*caAddr)
 
 // 	// Same as for `revert` and `return`, I need to forcefully terminate
