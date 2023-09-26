@@ -267,6 +267,13 @@ func (d *Downloader) StuckBlockChecker(quitCh chan struct{}, neededHeaders chan 
 						missingHeader = header
 						needHeaders = false
 						delete(askedPeers, headers.PeerId())
+						for _, header := range headers.headers {
+							// ask for the rest of the blocks
+							if header.Number().Uint64() != currentBlock+1 {
+								time.Sleep(time.Millisecond * 500) // wait a bit between blocks to be a good peer
+								d.core.SendMissingParentFeed(header.Hash())
+							}
+						}
 						break
 					}
 				}
