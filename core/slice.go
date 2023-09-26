@@ -254,7 +254,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	if nodeCtx == common.ZONE_CTX {
 		bestPh, exist = sl.readPhCache(sl.bestPhKey)
 		if !exist {
-			sl.bestPhKey = sl.config.GenesisHash
+			sl.WriteBestPhKey(sl.config.GenesisHash)
 			sl.writePhCache(block.Hash(), pendingHeaderWithTermini)
 			bestPh = types.EmptyPendingHeader()
 			log.Error("BestPh Key does not exist for", "key", sl.bestPhKey)
@@ -299,7 +299,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 			updateDom = true
 		}
 		log.Info("Choosing phHeader Append:", "NumberArray:", pendingHeaderWithTermini.Header().NumberArray(), "Number:", pendingHeaderWithTermini.Header().Number(), "ParentHash:", pendingHeaderWithTermini.Header().ParentHash(), "Terminus:", pendingHeaderWithTermini.Termini().DomTerminus())
-		sl.bestPhKey = pendingHeaderWithTermini.Termini().DomTerminus()
+		sl.WriteBestPhKey(pendingHeaderWithTermini.Termini().DomTerminus())
 		block.SetAppendTime(time.Duration(time9))
 	}
 
@@ -408,7 +408,7 @@ func (sl *Slice) UpdateDom(oldTerminus common.Hash, pendingHeader types.PendingH
 	log.Debug("UpdateDom:", "NewDomTerminus:", newDomTerminus, "OldDomTerminus:", oldDomTerminus, "NewDomTermini:", pendingHeader.Termini().DomTermini(), "Location")
 	if nodeCtx == common.REGION_CTX && oldDomTerminus == newPh.Termini().DomTerminus() {
 		// Can update
-		sl.bestPhKey = newDomTerminus
+		sl.WriteBestPhKey(newDomTerminus)
 		newPh, exists := sl.readPhCache(newDomTerminus)
 		if exists {
 			for _, i := range sl.randomRelayArray() {
@@ -428,7 +428,7 @@ func (sl *Slice) UpdateDom(oldTerminus common.Hash, pendingHeader types.PendingH
 			go sl.domClient.UpdateDom(context.Background(), oldDomTerminus, types.NewPendingHeader(pendingHeader.Header(), newPh.Termini()), location)
 		} else {
 			// Can update
-			sl.bestPhKey = newDomTerminus
+			sl.WriteBestPhKey(newDomTerminus)
 			newPh, exists := sl.readPhCache(newDomTerminus)
 			if exists {
 				for _, i := range sl.randomRelayArray() {
@@ -499,6 +499,13 @@ func (sl *Slice) readPhCache(hash common.Hash) (types.PendingHeader, bool) {
 // Write the phCache
 func (sl *Slice) writePhCache(hash common.Hash, pendingHeader types.PendingHeader) {
 	sl.phCache.Add(hash, pendingHeader)
+}
+
+// WriteBestPhKey writes the sl.bestPhKey
+func (sl *Slice) WriteBestPhKey(hash common.Hash) {
+	sl.bestPhKey = hash
+	// write the ph head hash to the db.
+	rawdb.WriteBestPhKey(sl.sliceDb, hash)
 }
 
 // Generate a slice pending header
@@ -794,7 +801,7 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 						return err
 					}
 					log.Info("Choosing phHeader pickPhHead:", "NumberArray:", combinedPendingHeader.NumberArray(), "Number:", combinedPendingHeader.Number(), "ParentHash:", combinedPendingHeader.ParentHash(), "Terminus:", localPendingHeader.Termini().DomTerminus())
-					sl.bestPhKey = localPendingHeader.Termini().DomTerminus()
+					sl.WriteBestPhKey(localPendingHeader.Termini().DomTerminus())
 					if block.Hash() != sl.hc.CurrentHeader().Hash() {
 						sl.hc.chainHeadFeed.Send(ChainHeadEvent{block})
 					}
@@ -816,7 +823,7 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 					}
 					combinedPendingHeader = types.CopyHeader(newPendingHeader.Header())
 					log.Info("Choosing phHeader pickPhHead:", "NumberArray:", combinedPendingHeader.NumberArray(), "ParentHash:", combinedPendingHeader.ParentHash(), "Terminus:", localPendingHeader.Termini().DomTerminus())
-					sl.bestPhKey = localPendingHeader.Termini().DomTerminus()
+					sl.WriteBestPhKey(localPendingHeader.Termini().DomTerminus())
 					if block.Hash() != sl.hc.CurrentHeader().Hash() {
 						sl.hc.chainHeadFeed.Send(ChainHeadEvent{block})
 					}
@@ -931,7 +938,7 @@ func (sl *Slice) init(genesis *Genesis) error {
 		rawdb.WriteManifest(sl.sliceDb, genesisHash, types.BlockManifest{genesisHash})
 
 		// Append each of the knot blocks
-		sl.bestPhKey = genesisHash
+		sl.WriteBestPhKey(genesisHash)
 		sl.hc.SetCurrentHeader(genesisHeader)
 
 		// Create empty pending ETX entry for genesis block -- genesis may not emit ETXs
@@ -1158,8 +1165,6 @@ func (sl *Slice) loadLastState() error {
 // Stop stores the phCache and the sl.pendingHeader hash value to the db.
 func (sl *Slice) Stop() {
 	nodeCtx := common.NodeLocation.Context()
-	// write the ph head hash to the db.
-	rawdb.WriteBestPhKey(sl.sliceDb, sl.bestPhKey)
 
 	// Create a map to write the cache directly into the database
 	phCache := make(map[common.Hash]types.PendingHeader)
@@ -1393,7 +1398,7 @@ func (sl *Slice) ComputeRecoveryPendingHeader(hash common.Hash) types.PendingHea
 		return types.PendingHeader{}
 	}
 	termini := sl.hc.GetTerminiByHash(hash)
-	sl.bestPhKey = hash
+	sl.WriteBestPhKey(hash)
 	return types.NewPendingHeader(pendingHeader, *termini)
 }
 
