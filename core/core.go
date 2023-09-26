@@ -256,7 +256,7 @@ func (c *Core) RequestDomToAppendOrFetch(hash common.Hash, entropy *big.Int, ord
 		// If prime all you can do it to ask for the block
 		_, exists := c.appendQueue.Get(hash)
 		if !exists {
-			log.Warn("Block sub asked doesnt exist in append queue, so request the peers for it", "Hash", hash, "Order", order)
+			log.Debug("Block sub asked doesnt exist in append queue, so request the peers for it", "Hash", hash, "Order", order)
 			block := c.GetBlockOrCandidateByHash(hash)
 			if block == nil {
 				c.sl.missingBlockFeed.Send(types.BlockRequest{Hash: hash, Entropy: entropy}) // Using the missing parent feed to ask for the block
@@ -272,7 +272,7 @@ func (c *Core) RequestDomToAppendOrFetch(hash common.Hash, entropy *big.Int, ord
 		}
 		_, exists := c.appendQueue.Get(hash)
 		if !exists {
-			log.Warn("Block sub asked doesnt exist in append queue, so request the peers for it", "Hash", hash, "Order", order)
+			log.Debug("Block sub asked doesnt exist in append queue, so request the peers for it", "Hash", hash, "Order", order)
 			block := c.GetBlockByHash(hash)
 			if block == nil {
 				c.sl.missingBlockFeed.Send(types.BlockRequest{Hash: hash, Entropy: entropy}) // Using the missing parent feed to ask for the block

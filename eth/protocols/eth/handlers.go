@@ -147,7 +147,8 @@ func handleGetBlock66(backend Backend, msg Decoder, peer *Peer) error {
 	// check if we have the requested block in the database.
 	response := backend.Core().GetBlockOrCandidateByHash(query.Hash)
 	if response != nil {
-		return peer.SendNewBlock(response)
+		entropy := backend.Core().Engine().TotalLogS(response.Header())
+		return peer.SendNewBlock(response, entropy, false)
 	}
 	return nil
 }

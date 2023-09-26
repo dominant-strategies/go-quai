@@ -19,6 +19,7 @@ package eth
 import (
 	"errors"
 	"fmt"
+	"math/big"
 	"sync/atomic"
 	"time"
 
@@ -82,7 +83,7 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 		return h.handleBlockAnnounces(peer, hashes, numbers)
 
 	case *eth.NewBlockPacket:
-		return h.handleBlockBroadcast(peer, packet.Block)
+		return h.handleBlockBroadcast(peer, packet.Block, packet.Entropy, packet.Relay)
 
 	case *eth.NewPooledTransactionHashesPacket:
 		return h.txFetcher.Notify(peer.ID(), *packet)
@@ -179,27 +180,25 @@ func (h *ethHandler) handleBlockAnnounces(peer *eth.Peer, hashes []common.Hash, 
 
 // handleBlockBroadcast is invoked from a peer's message handler when it transmits a
 // block broadcast for the local node to process.
-func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block) error {
+func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block, entropy *big.Int, relay bool) error {
 	// Do not handle any broadcast until we finish resetting from the bad state.
 	// This should be a very small time window
 	if h.Core().BadHashExistsInChain() {
 		log.Warn("Bad Hashes still exist on chain, cannot handle block broadcast yet")
 		return nil
 	}
-	// Schedule the block for import
-	h.blockFetcher.Enqueue(peer.ID(), block)
+
+	h.blockFetcher.ImportBlocks(peer.ID(), block, relay)
 
 	if block != nil && !h.broadcastCache.Contains(block.Hash()) {
 		log.Info("Received Block Broadcast", "Hash", block.Hash(), "Number", block.Header().NumberArray())
 		h.broadcastCache.Add(block.Hash(), true)
 	}
 
-	blockS := h.core.TotalLogS(block.Header())
 	_, _, peerEntropy, _ := peer.Head()
-	if blockS != nil && peerEntropy != nil {
-		if peerEntropy.Cmp(blockS) < 0 {
-			log.Info("Starting the downloader: Peer entropy is less than the announced entropy", "peer Entropy", peerEntropy, "announced block entropy", blockS)
-			peer.SetHead(block.Hash(), block.Number(), blockS, block.ReceivedAt)
+	if entropy != nil && peerEntropy != nil {
+		if peerEntropy.Cmp(entropy) < 0 {
+			peer.SetHead(block.Hash(), block.Number(), entropy, block.ReceivedAt)
 			// Only start the downloader in Prime
 			if common.NodeLocation.Context() == common.PRIME_CTX {
 				h.chainSync.handlePeerEvent(peer)
