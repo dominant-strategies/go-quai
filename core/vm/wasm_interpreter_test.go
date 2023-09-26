@@ -12,10 +12,9 @@ import (
 	"github.com/dominant-strategies/go-quai/params"
 )
 
-
 func TestHelloContract(t *testing.T) {
 	var (
-		env            = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{})
+		env             = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{})
 		wasmInterpreter = NewWASMInterpreter(env, env.Config)
 	)
 
@@ -24,10 +23,9 @@ func TestHelloContract(t *testing.T) {
 		fmt.Fprintln(os.Stderr, "Error reading wasm file:", err)
 		os.Exit(1)
 	}
-	
+
 	// Track time taken and memory usage
 	// defer trackTime(time.Now(), "wasm")
-	
 
 	// Initialise a new contract and set the code that is to be used by the EVM.
 	// The contract is a scoped environment for this execution context only.
@@ -44,7 +42,7 @@ func TestHelloContract(t *testing.T) {
 
 func TestUseGasContract(t *testing.T) {
 	var (
-		env            = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{})
+		env             = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{})
 		wasmInterpreter = NewWASMInterpreter(env, env.Config)
 	)
 
@@ -53,10 +51,9 @@ func TestUseGasContract(t *testing.T) {
 		fmt.Fprintln(os.Stderr, "Error reading wasm file:", err)
 		os.Exit(1)
 	}
-	
+
 	// Track time taken and memory usage
 	// defer trackTime(time.Now(), "wasm")
-	
 
 	// Initialise a new contract and set the code that is to be used by the EVM.
 	// The contract is a scoped environment for this execution context only.
@@ -73,7 +70,7 @@ func TestUseGasContract(t *testing.T) {
 
 func TestGetAddressContract(t *testing.T) {
 	var (
-		env            = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{})
+		env             = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{})
 		wasmInterpreter = NewWASMInterpreter(env, env.Config)
 	)
 
@@ -82,10 +79,9 @@ func TestGetAddressContract(t *testing.T) {
 		fmt.Fprintln(os.Stderr, "Error reading wasm file:", err)
 		os.Exit(1)
 	}
-	
+
 	// Track time taken and memory usage
 	// defer trackTime(time.Now(), "wasm")
-	
 
 	// Initialise a new contract and set the code that is to be used by the EVM.
 	// The contract is a scoped environment for this execution context only.
@@ -107,7 +103,7 @@ func TestGetBlockNumber(t *testing.T) {
 	}
 
 	var (
-		env            = NewEVM(context, TxContext{}, nil, params.TestChainConfig, Config{})
+		env             = NewEVM(context, TxContext{}, nil, params.TestChainConfig, Config{})
 		wasmInterpreter = NewWASMInterpreter(env, env.Config)
 	)
 
@@ -116,10 +112,9 @@ func TestGetBlockNumber(t *testing.T) {
 		fmt.Fprintln(os.Stderr, "Error reading wasm file:", err)
 		os.Exit(1)
 	}
-	
+
 	// Track time taken and memory usage
 	// defer trackTime(time.Now(), "wasm")
-	
 
 	// Initialise a new contract and set the code that is to be used by the EVM.
 	// The contract is a scoped environment for this execution context only.
@@ -137,7 +132,7 @@ func TestGetBlockNumber(t *testing.T) {
 
 func TestGetCallerContract(t *testing.T) {
 	var (
-		env            = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{})
+		env             = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{})
 		wasmInterpreter = NewWASMInterpreter(env, env.Config)
 	)
 
@@ -146,10 +141,9 @@ func TestGetCallerContract(t *testing.T) {
 		fmt.Fprintln(os.Stderr, "Error reading wasm file:", err)
 		os.Exit(1)
 	}
-	
+
 	// Track time taken and memory usage
 	// defer trackTime(time.Now(), "wasm")
-	
 
 	// Initialise a new contract and set the code that is to be used by the EVM.
 	// The contract is a scoped environment for this execution context only.
