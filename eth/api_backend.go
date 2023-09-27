@@ -448,7 +448,7 @@ func (b *QuaiAPIBackend) SyncProgress() quai.SyncProgress {
 	return b.eth.Downloader().Progress()
 }
 
-func (b *QuaiAPIBackend) Append(header *types.Header, manifest types.BlockManifest, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, bool, error) {
+func (b *QuaiAPIBackend) Append(header *types.Header, manifest types.BlockManifest, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, bool, bool, error) {
 	return b.eth.core.Append(header, manifest, domPendingHeader, domTerminus, domOrigin, newInboundEtxs)
 }
 

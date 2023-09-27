@@ -112,7 +112,7 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 				log.Info("Already processing block:", "Number:", block.Header().NumberArray(), "Hash:", block.Hash())
 				return idx, errors.New("Already in process of appending this block")
 			}
-			newPendingEtxs, _, err := c.sl.Append(block.Header(), types.EmptyHeader(), common.Hash{}, false, nil)
+			newPendingEtxs, _, _, err := c.sl.Append(block.Header(), types.EmptyHeader(), common.Hash{}, false, nil)
 			c.processingCache.Remove(block.Hash())
 			if err == nil {
 				// If we have a dom, send the dom any pending ETXs which will become
@@ -462,8 +462,8 @@ func (c *Core) WriteBlock(block *types.Block) {
 	}
 }
 
-func (c *Core) Append(header *types.Header, manifest types.BlockManifest, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, bool, error) {
-	newPendingEtxs, subReorg, err := c.sl.Append(header, domPendingHeader, domTerminus, domOrigin, newInboundEtxs)
+func (c *Core) Append(header *types.Header, manifest types.BlockManifest, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, bool, bool, error) {
+	newPendingEtxs, subReorg, setHead, err := c.sl.Append(header, domPendingHeader, domTerminus, domOrigin, newInboundEtxs)
 	if err != nil {
 		if err.Error() == ErrBodyNotFound.Error() || err.Error() == consensus.ErrUnknownAncestor.Error() || err.Error() == ErrSubNotSyncedToDom.Error() {
 			// Fetch the blocks for each hash in the manifest
@@ -489,7 +489,7 @@ func (c *Core) Append(header *types.Header, manifest types.BlockManifest, domPen
 			}
 		}
 	}
-	return newPendingEtxs, subReorg, err
+	return newPendingEtxs, subReorg, setHead, err
 }
 
 func (c *Core) DownloadBlocksInManifest(manifest types.BlockManifest, entropy *big.Int) {

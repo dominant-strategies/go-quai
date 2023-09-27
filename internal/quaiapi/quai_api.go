@@ -633,7 +633,7 @@ func (s *PublicBlockChainQuaiAPI) Append(ctx context.Context, raw json.RawMessag
 		return nil, err
 	}
 
-	pendingEtxs, subReorg, err := s.b.Append(body.Header, body.Manifest, body.DomPendingHeader, body.DomTerminus, body.DomOrigin, body.NewInboundEtxs)
+	pendingEtxs, subReorg, setHead, err := s.b.Append(body.Header, body.Manifest, body.DomPendingHeader, body.DomTerminus, body.DomOrigin, body.NewInboundEtxs)
 	if err != nil {
 		return nil, err
 	}
@@ -641,6 +641,7 @@ func (s *PublicBlockChainQuaiAPI) Append(ctx context.Context, raw json.RawMessag
 	fields := map[string]interface{}{
 		"pendingEtxs": pendingEtxs,
 		"subReorg":    subReorg,
+		"setHead":     setHead,
 	}
 
 	return fields, nil

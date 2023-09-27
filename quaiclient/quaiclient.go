@@ -86,9 +86,10 @@ type Termini struct {
 type appendReturns struct {
 	Etxs     types.Transactions `json:"pendingEtxs"`
 	SubReorg bool               `json:"subReorg"`
+	SetHead  bool               `json:"setHead"`
 }
 
-func (ec *Client) Append(ctx context.Context, header *types.Header, manifest types.BlockManifest, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, bool, error) {
+func (ec *Client) Append(ctx context.Context, header *types.Header, manifest types.BlockManifest, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, bool, bool, error) {
 	fields := map[string]interface{}{
 		"header":           header.RPCMarshalHeader(),
 		"manifest":         manifest,
@@ -101,16 +102,16 @@ func (ec *Client) Append(ctx context.Context, header *types.Header, manifest typ
 	var raw json.RawMessage
 	err := ec.c.CallContext(ctx, &raw, "quai_append", fields)
 	if err != nil {
-		return nil, false, err
+		return nil, false, false, err
 	}
 
 	// Decode header and transactions.
 	var aReturns appendReturns
 	if err := json.Unmarshal(raw, &aReturns); err != nil {
-		return nil, false, err
+		return nil, false, false, err
 	}
 
-	return aReturns.Etxs, aReturns.SubReorg, nil
+	return aReturns.Etxs, aReturns.SubReorg, aReturns.SetHead, nil
 }
 
 func (ec *Client) DownloadBlocksInManifest(ctx context.Context, manifest types.BlockManifest, entropy *big.Int) {
