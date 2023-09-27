@@ -752,24 +752,11 @@ func setNodeUserIdent(ctx *cli.Context, cfg *node.Config) {
 	}
 }
 
-// setBootstrapNodes creates a list of bootstrap nodes from the command line
-// flags, reverting to pre-configured ones if none have been specified.
+// setBootstrapNodes creates a list of bootstrap nodes from the pre-configured
+// ones if none have been specified.
 func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
-	urls := params.ColosseumBootnodes
-	switch {
-	case ctx.GlobalIsSet(BootnodesFlag.Name):
-		urls = SplitAndTrim(ctx.GlobalString(BootnodesFlag.Name))
-	case ctx.GlobalBool(GardenFlag.Name):
-		urls = params.GardenBootnodes
-	case ctx.GlobalBool(OrchardFlag.Name):
-		urls = params.OrchardBootnodes
-	case ctx.GlobalBool(LighthouseFlag.Name):
-		urls = params.LighthouseBootnodes
-	case ctx.GlobalBool(LocalFlag.Name):
-		urls = []string{}
-	case cfg.BootstrapNodes != nil:
-		return // already set, don't apply defaults.
-	}
+	urls := params.ColosseumBootnodes[common.NodeLocation.Name()]
+	//TODO: fix bootnode parsing for other networks
 
 	cfg.BootstrapNodes = make([]*enode.Node, 0, len(urls))
 	for _, url := range urls {
