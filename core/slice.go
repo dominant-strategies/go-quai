@@ -1300,6 +1300,7 @@ func (sl *Slice) AddPendingEtxs(pEtxs types.PendingEtxs) error {
 
 func (sl *Slice) AddPendingEtxsRollup(pEtxsRollup types.PendingEtxsRollup) error {
 	if !pEtxsRollup.IsValid(trie.NewStackTrie(nil)) {
+		log.Info("PendingEtxRollup is invalid")
 		return ErrPendingEtxRollupNotValid
 	}
 	nodeCtx := common.NodeLocation.Context()

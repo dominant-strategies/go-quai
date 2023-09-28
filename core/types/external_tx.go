@@ -4,6 +4,7 @@ import (
 	"math/big"
 
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 type ExternalTx struct {
@@ -36,6 +37,7 @@ type PendingEtxsRollup struct {
 
 func (p *PendingEtxsRollup) IsValid(hasher TrieHasher) bool {
 	if p == nil || p.Header == nil || p.Manifest == nil {
+		log.Info("PendingEtxRollup: p/p.Header/p.Manifest is nil", "p", p)
 		return false
 	}
 	return DeriveSha(p.Manifest, hasher) == p.Header.ManifestHash(common.ZONE_CTX)
@@ -56,6 +58,7 @@ type PendingEtxs struct {
 
 func (p *PendingEtxs) IsValid(hasher TrieHasher) bool {
 	if p == nil || p.Header == nil || p.Etxs == nil {
+		log.Info("PendingEtx: p/p.Header/p.Etxs is nil", "p", p)
 		return false
 	}
 	return DeriveSha(p.Etxs, hasher) == p.Header.EtxHash()

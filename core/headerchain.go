@@ -415,6 +415,7 @@ func (hc *HeaderChain) findCommonAncestor(header *types.Header) *types.Header {
 
 func (hc *HeaderChain) AddPendingEtxs(pEtxs types.PendingEtxs) error {
 	if !pEtxs.IsValid(trie.NewStackTrie(nil)) {
+		log.Info("PendingEtx is not valid")
 		return ErrPendingEtxNotValid
 	}
 	log.Debug("Received pending ETXs", "block: ", pEtxs.Header.Hash())
