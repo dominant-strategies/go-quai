@@ -304,12 +304,10 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 	if prevHeader.Hash() == head.Hash() {
 		return nil
 	}
-	//Find a common header
-	commonHeader := hc.findCommonAncestor(head)
-	newHeader := head
 
 	// write the head block hash to the db
 	rawdb.WriteHeadBlockHash(hc.headerDb, head.Hash())
+	log.Info("Setting the current header", "Hash", head.Hash(), "Number", head.NumberArray())
 	hc.currentHeader.Store(head)
 
 	// If head is the normal extension of canonical head, we can return by just wiring the canonical hash.
@@ -321,6 +319,10 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 		rawdb.WriteCanonicalHash(hc.headerDb, head.Hash(), head.NumberU64())
 		return nil
 	}
+
+	//Find a common header
+	commonHeader := hc.findCommonAncestor(head)
+	newHeader := head
 
 	// Delete each header and rollback state processor until common header
 	// Accumulate the hash slice stack
@@ -383,15 +385,16 @@ func (hc *HeaderChain) ReadInboundEtxsAndAppendBlock(header *types.Header) error
 
 // findCommonAncestor
 func (hc *HeaderChain) findCommonAncestor(header *types.Header) *types.Header {
+	current := types.CopyHeader(header)
 	for {
-		if header == nil {
+		if current == nil {
 			return nil
 		}
-		canonicalHash := rawdb.ReadCanonicalHash(hc.headerDb, header.NumberU64())
-		if canonicalHash == header.Hash() {
+		canonicalHash := rawdb.ReadCanonicalHash(hc.headerDb, current.NumberU64())
+		if canonicalHash == current.Hash() {
 			return hc.GetHeaderByHash(canonicalHash)
 		}
-		header = hc.GetHeader(header.ParentHash(), header.NumberU64()-1)
+		current = hc.GetHeader(current.ParentHash(), current.NumberU64()-1)
 	}
 
 }
@@ -464,7 +467,6 @@ func (hc *HeaderChain) Stop() {
 	}
 	// Save the heads
 	rawdb.WriteHeadsHashes(hc.headerDb, hashes)
-	rawdb.WriteHeadBlockHash(hc.headerDb, hc.CurrentHeader().Hash())
 
 	// Unsubscribe all subscriptions registered from blockchain
 	hc.scope.Close()
