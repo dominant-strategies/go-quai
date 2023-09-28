@@ -24,6 +24,7 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/crypto/sr25519"
 	"github.com/dominant-strategies/go-quai/params"
 )
 
@@ -165,14 +166,36 @@ func (s SignerV1) Sender(tx *Transaction) (common.Address, error) {
 	if tx.Type() == ExternalTxType { // External TX does not have a signature
 		return tx.inner.(*ExternalTx).Sender, nil
 	}
-	V, R, S := tx.RawSignatureValues()
-	// DynamicFee txs are defined to use 0 and 1 as their recovery
-	// id, add 27 to become equivalent to unprotected signatures.
-	V = new(big.Int).Add(V, big.NewInt(27))
-	if tx.ChainId().Cmp(s.chainId) != 0 {
-		return common.ZeroAddr, ErrInvalidChainId
+
+	// switch sigType := tx.SigType(); sigType {
+	switch (tx.FromPubKey() == sr25519.PublicKey{}) {
+	case true:
+		R, S, V, err := s.SignatureValues(tx, tx.RawSignatureValues())
+		if err != nil {
+			return common.ZeroAddr, err
+		}
+
+		// DynamicFee txs are defined to use 0 and 1 as their recovery
+		// id, add 27 to become equivalent to unprotected signatures.
+		V = new(big.Int).Add(V, big.NewInt(27))
+		if tx.ChainId().Cmp(s.chainId) != 0 {
+			return common.ZeroAddr, ErrInvalidChainId
+		}
+		return recoverPlain(s.Hash(tx), R, S, V)
+	case false:
+		from := tx.FromPubKey()
+		fmt.Println(&from)
+		decodedPub := from.Encode()
+		hex := from.Hex()
+		fmt.Println(hex)
+
+		err := sr25519.VerifySignature(decodedPub, tx.RawSignatureValues(), s.Hash(tx).Bytes())
+		if err != nil {
+			return common.ZeroAddr, err
+		}
+		return from.Address(), err
 	}
-	return recoverPlain(s.Hash(tx), R, S, V)
+	return common.ZeroAddr, fmt.Errorf("unknown signature type")
 }
 
 func (s SignerV1) Equal(s2 Signer) bool {

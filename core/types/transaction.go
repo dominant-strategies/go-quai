@@ -27,7 +27,7 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/math"
-	"github.com/dominant-strategies/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/crypto/sr25519"
 	"github.com/dominant-strategies/go-quai/rlp"
 )
 
@@ -84,14 +84,15 @@ type TxData interface {
 	value() *big.Int
 	nonce() uint64
 	to() *common.Address
+	fromPubKey() sr25519.PublicKey
 	etxGasLimit() uint64
 	etxGasPrice() *big.Int
 	etxGasTip() *big.Int
 	etxData() []byte
 	etxAccessList() AccessList
 
-	rawSignatureValues() (v, r, s *big.Int)
-	setSignatureValues(chainID, v, r, s *big.Int)
+	rawSignatureValues() []byte
+	setSignatureValues(chainID *big.Int, sig []byte)
 }
 
 // EncodeRLP implements rlp.Encoder
@@ -181,10 +182,10 @@ func (tx *Transaction) setDecoded(inner TxData, size int) {
 	}
 }
 
-func sanityCheckSignature(v *big.Int, r *big.Int, s *big.Int) error {
-	if !crypto.ValidateSignatureValues(byte(v.Uint64()), r, s) {
-		return ErrInvalidSig
-	}
+func sanityCheckSignature(sig []byte) error {
+	// if !crypto.ValidateSignatureValues(byte(v.Uint64()), r, s) {
+	// 	return ErrInvalidSig
+	// }
 	return nil
 }
 
@@ -276,6 +277,12 @@ func (tx *Transaction) To() *common.Address {
 	return &cpy
 }
 
+// To returns the recipient address of the transaction.
+// For contract-creation transactions, To returns nil.
+func (tx *Transaction) FromPubKey() sr25519.PublicKey {
+	return tx.inner.fromPubKey()
+}
+
 // Cost returns gas * gasPrice + value.
 func (tx *Transaction) Cost() *big.Int {
 	total := new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.Gas()))
@@ -285,7 +292,7 @@ func (tx *Transaction) Cost() *big.Int {
 
 // RawSignatureValues returns the V, R, S signature values of the transaction.
 // The return values should not be modified by the caller.
-func (tx *Transaction) RawSignatureValues() (v, r, s *big.Int) {
+func (tx *Transaction) RawSignatureValues() []byte {
 	return tx.inner.rawSignatureValues()
 }
 
@@ -409,12 +416,12 @@ func (tx *Transaction) Size() common.StorageSize {
 // WithSignature returns a new transaction with the given signature.
 // This signature needs to be in the [R || S || V] format where V is 0 or 1.
 func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, error) {
-	r, s, v, err := signer.SignatureValues(tx, sig)
-	if err != nil {
-		return nil, err
-	}
+	// r, s, v, err := signer.SignatureValues(tx, sig)
+	// if err != nil {
+	// 	return nil, err
+	// }
 	cpy := tx.inner.copy()
-	cpy.setSignatureValues(signer.ChainID(), v, r, s)
+	cpy.setSignatureValues(signer.ChainID(), sig)
 	return &Transaction{inner: cpy, time: tx.time}, nil
 }
 

@@ -4,6 +4,7 @@ import (
 	"math/big"
 
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/crypto/sr25519"
 )
 
 type ExternalTx struct {
@@ -13,6 +14,7 @@ type ExternalTx struct {
 	GasFeeCap  *big.Int
 	Gas        uint64
 	To         *common.Address `rlp:"nilString"` // nil means contract creation
+	FromPubKey sr25519.PublicKey
 	Value      *big.Int
 	Data       []byte
 	AccessList AccessList
@@ -64,11 +66,12 @@ func (p *PendingEtxs) IsValid(hasher TrieHasher) bool {
 // copy creates a deep copy of the transaction data and initializes all fields.
 func (tx *ExternalTx) copy() TxData {
 	cpy := &ExternalTx{
-		Nonce:  tx.Nonce,
-		To:     tx.To, // TODO: copy pointed-to address
-		Data:   common.CopyBytes(tx.Data),
-		Gas:    tx.Gas,
-		Sender: tx.Sender,
+		Nonce:      tx.Nonce,
+		To:         tx.To, // TODO: copy pointed-to address
+		FromPubKey: tx.FromPubKey,
+		Data:       common.CopyBytes(tx.Data),
+		Gas:        tx.Gas,
+		Sender:     tx.Sender,
 
 		// These are copied below.
 		AccessList: make(AccessList, len(tx.AccessList)),
@@ -94,29 +97,30 @@ func (tx *ExternalTx) copy() TxData {
 }
 
 // accessors for innerTx.
-func (tx *ExternalTx) txType() byte              { return ExternalTxType }
-func (tx *ExternalTx) chainID() *big.Int         { return tx.ChainID }
-func (tx *ExternalTx) protected() bool           { return true }
-func (tx *ExternalTx) accessList() AccessList    { return tx.AccessList }
-func (tx *ExternalTx) data() []byte              { return tx.Data }
-func (tx *ExternalTx) gas() uint64               { return tx.Gas }
-func (tx *ExternalTx) gasFeeCap() *big.Int       { return tx.GasFeeCap }
-func (tx *ExternalTx) gasTipCap() *big.Int       { return tx.GasTipCap }
-func (tx *ExternalTx) gasPrice() *big.Int        { return tx.GasFeeCap }
-func (tx *ExternalTx) value() *big.Int           { return tx.Value }
-func (tx *ExternalTx) nonce() uint64             { return tx.Nonce }
-func (tx *ExternalTx) to() *common.Address       { return tx.To }
-func (tx *ExternalTx) etxGasLimit() uint64       { panic("external TX does not have etxGasLimit") }
-func (tx *ExternalTx) etxGasPrice() *big.Int     { panic("external TX does not have etxGasPrice") }
-func (tx *ExternalTx) etxGasTip() *big.Int       { panic("external TX does not have etxGasTip") }
-func (tx *ExternalTx) etxData() []byte           { panic("external TX does not have etxData") }
-func (tx *ExternalTx) etxAccessList() AccessList { panic("external TX does not have etxAccessList") }
+func (tx *ExternalTx) txType() byte                  { return ExternalTxType }
+func (tx *ExternalTx) chainID() *big.Int             { return tx.ChainID }
+func (tx *ExternalTx) protected() bool               { return true }
+func (tx *ExternalTx) accessList() AccessList        { return tx.AccessList }
+func (tx *ExternalTx) data() []byte                  { return tx.Data }
+func (tx *ExternalTx) gas() uint64                   { return tx.Gas }
+func (tx *ExternalTx) gasFeeCap() *big.Int           { return tx.GasFeeCap }
+func (tx *ExternalTx) gasTipCap() *big.Int           { return tx.GasTipCap }
+func (tx *ExternalTx) gasPrice() *big.Int            { return tx.GasFeeCap }
+func (tx *ExternalTx) value() *big.Int               { return tx.Value }
+func (tx *ExternalTx) nonce() uint64                 { return tx.Nonce }
+func (tx *ExternalTx) to() *common.Address           { return tx.To }
+func (tx *ExternalTx) fromPubKey() sr25519.PublicKey { return tx.FromPubKey }
+func (tx *ExternalTx) etxGasLimit() uint64           { panic("external TX does not have etxGasLimit") }
+func (tx *ExternalTx) etxGasPrice() *big.Int         { panic("external TX does not have etxGasPrice") }
+func (tx *ExternalTx) etxGasTip() *big.Int           { panic("external TX does not have etxGasTip") }
+func (tx *ExternalTx) etxData() []byte               { panic("external TX does not have etxData") }
+func (tx *ExternalTx) etxAccessList() AccessList     { panic("external TX does not have etxAccessList") }
 
-func (tx *ExternalTx) rawSignatureValues() (v, r, s *big.Int) {
+func (tx *ExternalTx) rawSignatureValues() []byte {
 	// Signature values are ignored for external transactions
-	return nil, nil, nil
+	return nil
 }
 
-func (tx *ExternalTx) setSignatureValues(chainID, v, r, s *big.Int) {
+func (tx *ExternalTx) setSignatureValues(chainID *big.Int, sig []byte) {
 	// Signature values are ignored for external transactions
 }

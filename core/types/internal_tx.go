@@ -20,6 +20,7 @@ import (
 	"math/big"
 
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/crypto/sr25519"
 )
 
 type InternalTx struct {
@@ -29,32 +30,30 @@ type InternalTx struct {
 	GasFeeCap  *big.Int
 	Gas        uint64
 	To         *common.Address `rlp:"nilString"` // nil means contract creation
+	FromPubKey sr25519.PublicKey
 	Value      *big.Int
 	Data       []byte
 	AccessList AccessList
 
 	// Signature values
-	V *big.Int `json:"v" gencodec:"required"`
-	R *big.Int `json:"r" gencodec:"required"`
-	S *big.Int `json:"s" gencodec:"required"`
+	Signature []byte
 }
 
 // copy creates a deep copy of the transaction data and initializes all fields.
 func (tx *InternalTx) copy() TxData {
 	cpy := &InternalTx{
-		Nonce: tx.Nonce,
-		To:    tx.To, // TODO: copy pointed-to address
-		Data:  common.CopyBytes(tx.Data),
-		Gas:   tx.Gas,
+		Nonce:      tx.Nonce,
+		To:         tx.To, // TODO: copy pointed-to address
+		FromPubKey: tx.FromPubKey,
+		Data:       common.CopyBytes(tx.Data),
+		Gas:        tx.Gas,
 		// These are copied below.
 		AccessList: make(AccessList, len(tx.AccessList)),
 		Value:      new(big.Int),
 		ChainID:    new(big.Int),
 		GasTipCap:  new(big.Int),
 		GasFeeCap:  new(big.Int),
-		V:          new(big.Int),
-		R:          new(big.Int),
-		S:          new(big.Int),
+		Signature:  common.CopyBytes(tx.Signature),
 	}
 	copy(cpy.AccessList, tx.AccessList)
 	if tx.Value != nil {
@@ -69,41 +68,33 @@ func (tx *InternalTx) copy() TxData {
 	if tx.GasFeeCap != nil {
 		cpy.GasFeeCap.Set(tx.GasFeeCap)
 	}
-	if tx.V != nil {
-		cpy.V.Set(tx.V)
-	}
-	if tx.R != nil {
-		cpy.R.Set(tx.R)
-	}
-	if tx.S != nil {
-		cpy.S.Set(tx.S)
-	}
 	return cpy
 }
 
 // accessors for innerTx.
-func (tx *InternalTx) txType() byte              { return InternalTxType }
-func (tx *InternalTx) chainID() *big.Int         { return tx.ChainID }
-func (tx *InternalTx) protected() bool           { return true }
-func (tx *InternalTx) accessList() AccessList    { return tx.AccessList }
-func (tx *InternalTx) data() []byte              { return tx.Data }
-func (tx *InternalTx) gas() uint64               { return tx.Gas }
-func (tx *InternalTx) gasFeeCap() *big.Int       { return tx.GasFeeCap }
-func (tx *InternalTx) gasTipCap() *big.Int       { return tx.GasTipCap }
-func (tx *InternalTx) gasPrice() *big.Int        { return tx.GasFeeCap }
-func (tx *InternalTx) value() *big.Int           { return tx.Value }
-func (tx *InternalTx) nonce() uint64             { return tx.Nonce }
-func (tx *InternalTx) to() *common.Address       { return tx.To }
-func (tx *InternalTx) etxGasLimit() uint64       { panic("internal TX does not have etxGasLimit") }
-func (tx *InternalTx) etxGasPrice() *big.Int     { panic("internal TX does not have etxGasPrice") }
-func (tx *InternalTx) etxGasTip() *big.Int       { panic("internal TX does not have etxGasTip") }
-func (tx *InternalTx) etxData() []byte           { panic("internal TX does not have etxData") }
-func (tx *InternalTx) etxAccessList() AccessList { panic("internal TX does not have etxAccessList") }
+func (tx *InternalTx) txType() byte                  { return InternalTxType }
+func (tx *InternalTx) chainID() *big.Int             { return tx.ChainID }
+func (tx *InternalTx) protected() bool               { return true }
+func (tx *InternalTx) accessList() AccessList        { return tx.AccessList }
+func (tx *InternalTx) data() []byte                  { return tx.Data }
+func (tx *InternalTx) gas() uint64                   { return tx.Gas }
+func (tx *InternalTx) gasFeeCap() *big.Int           { return tx.GasFeeCap }
+func (tx *InternalTx) gasTipCap() *big.Int           { return tx.GasTipCap }
+func (tx *InternalTx) gasPrice() *big.Int            { return tx.GasFeeCap }
+func (tx *InternalTx) value() *big.Int               { return tx.Value }
+func (tx *InternalTx) nonce() uint64                 { return tx.Nonce }
+func (tx *InternalTx) to() *common.Address           { return tx.To }
+func (tx *InternalTx) fromPubKey() sr25519.PublicKey { return tx.FromPubKey }
+func (tx *InternalTx) etxGasLimit() uint64           { panic("internal TX does not have etxGasLimit") }
+func (tx *InternalTx) etxGasPrice() *big.Int         { panic("internal TX does not have etxGasPrice") }
+func (tx *InternalTx) etxGasTip() *big.Int           { panic("internal TX does not have etxGasTip") }
+func (tx *InternalTx) etxData() []byte               { panic("internal TX does not have etxData") }
+func (tx *InternalTx) etxAccessList() AccessList     { panic("internal TX does not have etxAccessList") }
 
-func (tx *InternalTx) rawSignatureValues() (v, r, s *big.Int) {
-	return tx.V, tx.R, tx.S
+func (tx *InternalTx) rawSignatureValues() []byte {
+	return tx.Signature
 }
 
-func (tx *InternalTx) setSignatureValues(chainID, v, r, s *big.Int) {
-	tx.ChainID, tx.V, tx.R, tx.S = chainID, v, r, s
+func (tx *InternalTx) setSignatureValues(chainID *big.Int, sig []byte) {
+	tx.ChainID, tx.Signature = chainID, sig
 }

@@ -20,6 +20,7 @@ import (
 	"math/big"
 
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/crypto/sr25519"
 )
 
 type InternalToExternalTx struct {
@@ -28,7 +29,8 @@ type InternalToExternalTx struct {
 	GasTipCap  *big.Int
 	GasFeeCap  *big.Int
 	Gas        uint64
-	To         *common.Address `rlp:"nilString"` // nil means contract creation
+	To         *common.Address   `rlp:"nilString"` // nil means contract creation
+	FromPubKey sr25519.PublicKey `rlp:"nilString"`
 	Value      *big.Int
 	Data       []byte     // this probably is not applicable
 	AccessList AccessList // this probably is not applicable
@@ -40,18 +42,17 @@ type InternalToExternalTx struct {
 	ETXAccessList AccessList
 
 	// Signature values
-	V *big.Int `json:"v" gencodec:"required"`
-	R *big.Int `json:"r" gencodec:"required"`
-	S *big.Int `json:"s" gencodec:"required"`
+	Signature []byte
 }
 
 // copy creates a deep copy of the transaction data and initializes all fields.
 func (tx *InternalToExternalTx) copy() TxData {
 	cpy := &InternalToExternalTx{
-		Nonce: tx.Nonce,
-		To:    tx.To, // TODO: copy pointed-to address
-		Data:  common.CopyBytes(tx.Data),
-		Gas:   tx.Gas,
+		Nonce:      tx.Nonce,
+		To:         tx.To, // TODO: copy pointed-to address
+		FromPubKey: tx.FromPubKey,
+		Data:       common.CopyBytes(tx.Data),
+		Gas:        tx.Gas,
 		// These are copied below.
 		AccessList:    make(AccessList, len(tx.AccessList)),
 		Value:         new(big.Int),
@@ -63,9 +64,7 @@ func (tx *InternalToExternalTx) copy() TxData {
 		ETXGasTip:     new(big.Int),
 		ETXData:       common.CopyBytes(tx.ETXData),
 		ETXAccessList: make(AccessList, len(tx.ETXAccessList)),
-		V:             new(big.Int),
-		R:             new(big.Int),
-		S:             new(big.Int),
+		Signature:     common.CopyBytes(tx.Signature),
 	}
 	copy(cpy.AccessList, tx.AccessList)
 	copy(cpy.ETXAccessList, tx.ETXAccessList)
@@ -87,41 +86,33 @@ func (tx *InternalToExternalTx) copy() TxData {
 	if tx.ETXGasTip != nil {
 		cpy.ETXGasTip.Set(tx.ETXGasTip)
 	}
-	if tx.V != nil {
-		cpy.V.Set(tx.V)
-	}
-	if tx.R != nil {
-		cpy.R.Set(tx.R)
-	}
-	if tx.S != nil {
-		cpy.S.Set(tx.S)
-	}
 	return cpy
 }
 
 // accessors for innerTx.
-func (tx *InternalToExternalTx) txType() byte              { return InternalToExternalTxType }
-func (tx *InternalToExternalTx) chainID() *big.Int         { return tx.ChainID }
-func (tx *InternalToExternalTx) protected() bool           { return true }
-func (tx *InternalToExternalTx) accessList() AccessList    { return tx.AccessList }
-func (tx *InternalToExternalTx) data() []byte              { return tx.Data }
-func (tx *InternalToExternalTx) gas() uint64               { return tx.Gas }
-func (tx *InternalToExternalTx) gasFeeCap() *big.Int       { return tx.GasFeeCap }
-func (tx *InternalToExternalTx) gasTipCap() *big.Int       { return tx.GasTipCap }
-func (tx *InternalToExternalTx) gasPrice() *big.Int        { return tx.GasFeeCap }
-func (tx *InternalToExternalTx) value() *big.Int           { return tx.Value }
-func (tx *InternalToExternalTx) nonce() uint64             { return tx.Nonce }
-func (tx *InternalToExternalTx) to() *common.Address       { return tx.To }
-func (tx *InternalToExternalTx) etxGasLimit() uint64       { return tx.ETXGasLimit }
-func (tx *InternalToExternalTx) etxGasPrice() *big.Int     { return tx.ETXGasPrice }
-func (tx *InternalToExternalTx) etxGasTip() *big.Int       { return tx.ETXGasTip }
-func (tx *InternalToExternalTx) etxData() []byte           { return tx.ETXData }
-func (tx *InternalToExternalTx) etxAccessList() AccessList { return tx.ETXAccessList }
+func (tx *InternalToExternalTx) txType() byte                  { return InternalToExternalTxType }
+func (tx *InternalToExternalTx) chainID() *big.Int             { return tx.ChainID }
+func (tx *InternalToExternalTx) protected() bool               { return true }
+func (tx *InternalToExternalTx) accessList() AccessList        { return tx.AccessList }
+func (tx *InternalToExternalTx) data() []byte                  { return tx.Data }
+func (tx *InternalToExternalTx) gas() uint64                   { return tx.Gas }
+func (tx *InternalToExternalTx) gasFeeCap() *big.Int           { return tx.GasFeeCap }
+func (tx *InternalToExternalTx) gasTipCap() *big.Int           { return tx.GasTipCap }
+func (tx *InternalToExternalTx) gasPrice() *big.Int            { return tx.GasFeeCap }
+func (tx *InternalToExternalTx) value() *big.Int               { return tx.Value }
+func (tx *InternalToExternalTx) nonce() uint64                 { return tx.Nonce }
+func (tx *InternalToExternalTx) to() *common.Address           { return tx.To }
+func (tx *InternalToExternalTx) fromPubKey() sr25519.PublicKey { return tx.FromPubKey }
+func (tx *InternalToExternalTx) etxGasLimit() uint64           { return tx.ETXGasLimit }
+func (tx *InternalToExternalTx) etxGasPrice() *big.Int         { return tx.ETXGasPrice }
+func (tx *InternalToExternalTx) etxGasTip() *big.Int           { return tx.ETXGasTip }
+func (tx *InternalToExternalTx) etxData() []byte               { return tx.ETXData }
+func (tx *InternalToExternalTx) etxAccessList() AccessList     { return tx.ETXAccessList }
 
-func (tx *InternalToExternalTx) rawSignatureValues() (v, r, s *big.Int) {
-	return tx.V, tx.R, tx.S
+func (tx *InternalToExternalTx) rawSignatureValues() []byte {
+	return tx.Signature
 }
 
-func (tx *InternalToExternalTx) setSignatureValues(chainID, v, r, s *big.Int) {
-	tx.ChainID, tx.V, tx.R, tx.S = chainID, v, r, s
+func (tx *InternalToExternalTx) setSignatureValues(chainID *big.Int, sig []byte) {
+	tx.ChainID, tx.Signature = chainID, sig
 }
