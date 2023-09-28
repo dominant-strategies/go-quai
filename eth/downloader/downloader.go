@@ -131,6 +131,9 @@ type Core interface {
 	// GetBlockByHash retrieves a block from the local chain.
 	GetBlockByHash(common.Hash) *types.Block
 
+	// GetBlockByNumber retrieves a block from the local chain.
+	GetBlockByNumber(uint64) *types.Block
+
 	// CurrentHeader retrieves the head of local chain.
 	CurrentHeader() *types.Header
 
@@ -369,8 +372,8 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, entropy *
 			d.mux.Post(DoneEvent{latest})
 		}
 	}()
-	if p.version < eth.ETH65 {
-		return fmt.Errorf("%w: advertized %d < required %d", errTooOld, p.version, eth.ETH65)
+	if p.version < eth.QUAI1 {
+		return fmt.Errorf("%w: advertized %d < required %d", errTooOld, p.version, eth.QUAI1)
 	}
 	mode := d.getMode()
 
@@ -643,16 +646,13 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 				}
 			}
 
-			// If no more headers are inbound, notify the content fetchers and return
-			if packet.Items() == 0 {
-				// No more headers, terminate the process
-				p.log.Debug("No more headers available")
-				select {
-				case d.headerProcCh <- nil:
-					return nil
-				case <-d.cancelCh:
-					return errCanceled
-				}
+			if len(skeletonHeaders) > 0 && skeletonHeaders[len(skeletonHeaders)-1].NumberU64() < 8 {
+				genesisBlock := d.core.GetBlockByNumber(0)
+				skeletonHeaders = append(skeletonHeaders, genesisBlock.Header())
+			}
+
+			if len(headers) == 0 {
+				continue
 			}
 
 			// Prepare the resultStore to fill the skeleton.
