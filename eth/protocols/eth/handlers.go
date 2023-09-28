@@ -27,17 +27,6 @@ import (
 	"github.com/dominant-strategies/go-quai/trie"
 )
 
-// handleGetBlockHeaders handles Block header query, collect the requested headers and reply
-func handleGetBlockHeaders(backend Backend, msg Decoder, peer *Peer) error {
-	// Decode the complex header query
-	var query GetBlockHeadersPacket
-	if err := msg.Decode(&query); err != nil {
-		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
-	}
-	response := answerGetBlockHeadersQuery(backend, &query, peer)
-	return peer.SendBlockHeaders(response)
-}
-
 // handleGetBlockHeaders66 is the eth/66 version of handleGetBlockHeaders
 func handleGetBlockHeaders66(backend Backend, msg Decoder, peer *Peer) error {
 	// Decode the complex header query
@@ -119,16 +108,6 @@ func answerGetBlockHeadersQuery(backend Backend, query *GetBlockHeadersPacket, p
 	return headers
 }
 
-func handleGetBlockBodies(backend Backend, msg Decoder, peer *Peer) error {
-	// Decode the block body retrieval message
-	var query GetBlockBodiesPacket
-	if err := msg.Decode(&query); err != nil {
-		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
-	}
-	response := answerGetBlockBodiesQuery(backend, query, peer)
-	return peer.SendBlockBodiesRLP(response)
-}
-
 func handleGetBlockBodies66(backend Backend, msg Decoder, peer *Peer) error {
 	// Decode the block body retrieval message
 	var query GetBlockBodiesPacket66
@@ -157,22 +136,6 @@ func answerGetBlockBodiesQuery(backend Backend, query GetBlockBodiesPacket, peer
 	return bodies
 }
 
-func handleGetBlock(backend Backend, msg Decoder, peer *Peer) error {
-	// Decode the block retrieval message
-	var query GetBlockPacket
-	if err := msg.Decode(&query); err != nil {
-		fmt.Println("Error decoding the message", err)
-		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
-	}
-	log.Info("Got a block fetch request eth/65: ", "Hash", query.Hash)
-	// check if we have the requested block in the database.
-	response := backend.Core().GetBlockOrCandidateByHash(query.Hash)
-	if response != nil {
-		return peer.SendNewBlock(response)
-	}
-	return nil
-}
-
 func handleGetBlock66(backend Backend, msg Decoder, peer *Peer) error {
 	// Decode the block retrieval message
 	var query GetBlockPacket66
@@ -184,7 +147,8 @@ func handleGetBlock66(backend Backend, msg Decoder, peer *Peer) error {
 	// check if we have the requested block in the database.
 	response := backend.Core().GetBlockOrCandidateByHash(query.Hash)
 	if response != nil {
-		return peer.SendNewBlock(response)
+		entropy := backend.Core().Engine().TotalLogS(response.Header())
+		return peer.SendNewBlock(response, entropy, false)
 	}
 	return nil
 }
@@ -252,15 +216,6 @@ func handleNewBlock(backend Backend, msg Decoder, peer *Peer) error {
 	return backend.Handle(peer, ann)
 }
 
-func handleBlockHeaders(backend Backend, msg Decoder, peer *Peer) error {
-	// A batch of headers arrived to one of our previous requests
-	res := new(BlockHeadersPacket)
-	if err := msg.Decode(res); err != nil {
-		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
-	}
-	return backend.Handle(peer, res)
-}
-
 func handleBlockHeaders66(backend Backend, msg Decoder, peer *Peer) error {
 	// A batch of headers arrived to one of our previous requests
 	res := new(BlockHeadersPacket66)
@@ -270,15 +225,6 @@ func handleBlockHeaders66(backend Backend, msg Decoder, peer *Peer) error {
 	requestTracker.Fulfil(peer.id, peer.version, BlockHeadersMsg, res.RequestId)
 
 	return backend.Handle(peer, &res.BlockHeadersPacket)
-}
-
-func handleBlockBodies(backend Backend, msg Decoder, peer *Peer) error {
-	// A batch of block bodies arrived to one of our previous requests
-	res := new(BlockBodiesPacket)
-	if err := msg.Decode(res); err != nil {
-		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
-	}
-	return backend.Handle(peer, res)
 }
 
 func handleBlockBodies66(backend Backend, msg Decoder, peer *Peer) error {
@@ -314,23 +260,6 @@ func handleNewPooledTransactionHashes(backend Backend, msg Decoder, peer *Peer) 
 		peer.markTransaction(hash)
 	}
 	return backend.Handle(peer, ann)
-}
-
-func handleGetPooledTransactions(backend Backend, msg Decoder, peer *Peer) error {
-	nodeCtx := common.NodeLocation.Context()
-	if nodeCtx != common.ZONE_CTX {
-		return errors.New("transactions are only handled in zone")
-	}
-	if !backend.Core().Slice().ProcessingState() {
-		return nil
-	}
-	// Decode the pooled transactions retrieval message
-	var query GetPooledTransactionsPacket
-	if err := msg.Decode(&query); err != nil {
-		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
-	}
-	hashes, txs := answerGetPooledTransactions(backend, query, peer)
-	return peer.SendPooledTransactionsRLP(hashes, txs)
 }
 
 func handleGetPooledTransactions66(backend Backend, msg Decoder, peer *Peer) error {
@@ -385,33 +314,6 @@ func handleTransactions(backend Backend, msg Decoder, peer *Peer) error {
 	}
 	// Transactions can be processed, parse all of them and deliver to the pool
 	var txs TransactionsPacket
-	if err := msg.Decode(&txs); err != nil {
-		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
-	}
-	for i, tx := range txs {
-		// Validate and mark the remote transaction
-		if tx == nil {
-			return fmt.Errorf("%w: transaction %d is nil", errDecode, i)
-		}
-		peer.markTransaction(tx.Hash())
-	}
-	return backend.Handle(peer, &txs)
-}
-
-func handlePooledTransactions(backend Backend, msg Decoder, peer *Peer) error {
-	nodeCtx := common.NodeLocation.Context()
-	if nodeCtx != common.ZONE_CTX {
-		return errors.New("transactions are only handled in zone")
-	}
-	if !backend.Core().Slice().ProcessingState() {
-		return nil
-	}
-	// Transactions arrived, make sure we have a valid and fresh chain to handle them
-	if !backend.AcceptTxs() {
-		return nil
-	}
-	// Transactions can be processed, parse all of them and deliver to the pool
-	var txs PooledTransactionsPacket
 	if err := msg.Decode(&txs); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
