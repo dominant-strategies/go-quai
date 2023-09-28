@@ -144,7 +144,7 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 				if err.Error() == ErrSubNotSyncedToDom.Error() ||
 					err.Error() == ErrPendingEtxNotFound.Error() {
 					if nodeCtx != common.ZONE_CTX && c.sl.subClients[block.Location().SubIndex()] != nil {
-						c.sl.subClients[block.Location().SubIndex()].DownloadBlocksInManifest(context.Background(), block.SubManifest(), block.ParentEntropy())
+						c.sl.subClients[block.Location().SubIndex()].DownloadBlocksInManifest(context.Background(), block.Hash(), block.SubManifest(), block.ParentEntropy())
 					}
 				}
 				return idx, ErrPendingBlock
@@ -492,7 +492,7 @@ func (c *Core) Append(header *types.Header, manifest types.BlockManifest, domPen
 	return newPendingEtxs, subReorg, setHead, err
 }
 
-func (c *Core) DownloadBlocksInManifest(manifest types.BlockManifest, entropy *big.Int) {
+func (c *Core) DownloadBlocksInManifest(blockHash common.Hash, manifest types.BlockManifest, entropy *big.Int) {
 	// Fetch the blocks for each hash in the manifest
 	for _, m := range manifest {
 		block := c.GetBlockOrCandidateByHash(m)
@@ -500,6 +500,15 @@ func (c *Core) DownloadBlocksInManifest(manifest types.BlockManifest, entropy *b
 			c.sl.missingBlockFeed.Send(types.BlockRequest{Hash: m, Entropy: entropy})
 		} else {
 			c.addToQueueIfNotAppended(block)
+		}
+	}
+	if common.NodeLocation.Context() == common.REGION_CTX {
+		block := c.GetBlockOrCandidateByHash(blockHash)
+		if block != nil {
+			// If a prime block comes in
+			if c.sl.subClients[block.Location().SubIndex()] != nil {
+				c.sl.subClients[block.Location().SubIndex()].DownloadBlocksInManifest(context.Background(), block.Hash(), block.SubManifest(), block.ParentEntropy())
+			}
 		}
 	}
 }

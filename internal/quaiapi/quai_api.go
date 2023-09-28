@@ -649,6 +649,7 @@ func (s *PublicBlockChainQuaiAPI) Append(ctx context.Context, raw json.RawMessag
 }
 
 type DownloadBlocksInManifestArgs struct {
+	Hash     common.Hash         `json:"hash"`
 	Manifest types.BlockManifest `json:"manifest"`
 	Entropy  *big.Int            `json:"entropy"`
 }
@@ -658,7 +659,7 @@ func (s *PublicBlockChainQuaiAPI) DownloadBlocksInManifest(ctx context.Context, 
 	if err := json.Unmarshal(raw, &manifest); err != nil {
 		return
 	}
-	s.b.DownloadBlocksInManifest(manifest.Manifest, manifest.Entropy)
+	s.b.DownloadBlocksInManifest(manifest.Hash, manifest.Manifest, manifest.Entropy)
 }
 
 type SubRelay struct {

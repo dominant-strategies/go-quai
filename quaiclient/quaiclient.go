@@ -114,8 +114,9 @@ func (ec *Client) Append(ctx context.Context, header *types.Header, manifest typ
 	return aReturns.Etxs, aReturns.SubReorg, aReturns.SetHead, nil
 }
 
-func (ec *Client) DownloadBlocksInManifest(ctx context.Context, manifest types.BlockManifest, entropy *big.Int) {
+func (ec *Client) DownloadBlocksInManifest(ctx context.Context, hash common.Hash, manifest types.BlockManifest, entropy *big.Int) {
 	fields := map[string]interface{}{
+		"hash":     hash,
 		"manifest": manifest,
 		"entropy":  entropy,
 	}

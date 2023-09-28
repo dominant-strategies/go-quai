@@ -73,7 +73,7 @@ type Backend interface {
 	SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription
 	WriteBlock(block *types.Block)
 	Append(header *types.Header, manifest types.BlockManifest, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, bool, bool, error)
-	DownloadBlocksInManifest(manifest types.BlockManifest, entropy *big.Int)
+	DownloadBlocksInManifest(hash common.Hash, manifest types.BlockManifest, entropy *big.Int)
 	ConstructLocalMinedBlock(header *types.Header) (*types.Block, error)
 	InsertBlock(ctx context.Context, block *types.Block) (int, error)
 	PendingBlock() *types.Block

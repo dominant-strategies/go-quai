@@ -452,8 +452,8 @@ func (b *QuaiAPIBackend) Append(header *types.Header, manifest types.BlockManife
 	return b.eth.core.Append(header, manifest, domPendingHeader, domTerminus, domOrigin, newInboundEtxs)
 }
 
-func (b *QuaiAPIBackend) DownloadBlocksInManifest(manifest types.BlockManifest, entropy *big.Int) {
-	b.eth.core.DownloadBlocksInManifest(manifest, entropy)
+func (b *QuaiAPIBackend) DownloadBlocksInManifest(hash common.Hash, manifest types.BlockManifest, entropy *big.Int) {
+	b.eth.core.DownloadBlocksInManifest(hash, manifest, entropy)
 }
 
 func (b *QuaiAPIBackend) ConstructLocalMinedBlock(header *types.Header) (*types.Block, error) {
