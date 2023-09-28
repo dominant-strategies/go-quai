@@ -30,8 +30,7 @@ import (
 
 // Constants to match up protocol versions and messages
 const (
-	ETH65 = 65
-	ETH66 = 66
+	QUAI1 = 100
 )
 
 // ProtocolName is the official short name of the `quai` protocol used during
@@ -40,11 +39,11 @@ const c_ProtocolName = "quai"
 
 // ProtocolVersions are the supported versions of the `eth` protocol (first
 // is primary).
-var ProtocolVersions = []uint{ETH66, ETH65}
+var ProtocolVersions = []uint{QUAI1}
 
 // protocolLengths are the number of implemented message corresponding to
 // different protocol versions.
-var protocolLengths = map[uint]uint64{ETH66: 12, ETH65: 12}
+var protocolLengths = map[uint]uint64{QUAI1: 12}
 
 // maxMessageSize is the maximum cap on the size of a protocol message.
 const maxMessageSize = 10 * 1024 * 1024
@@ -185,7 +184,9 @@ type BlockHeadersPacket66 struct {
 
 // NewBlockPacket is the network packet for the block propagation message.
 type NewBlockPacket struct {
-	Block *types.Block
+	Block   *types.Block
+	Entropy *big.Int
+	Relay   bool
 }
 
 // sanityCheck verifies that the values are reasonable, as a DoS protection
