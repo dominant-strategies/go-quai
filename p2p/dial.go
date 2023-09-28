@@ -27,6 +27,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/mclock"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p/enode"
@@ -336,6 +337,9 @@ func (d *dialScheduler) logStats() {
 	}
 	if d.dialPeers < dialStatsPeerLimit && d.dialPeers < d.maxDialPeers {
 		d.log.Info("Looking for peers", "peercount", len(d.peers), "tried", d.doneSinceLastLog, "static", len(d.static))
+		if common.NodeLocation.Context() == common.PRIME_CTX && len(d.peers) < 3 {
+			d.log.Info("Prime chain needs at least 3 peers to start the sync, it may take up to 30 mins in some cases to meet the requirement")
+		}
 	} else {
 		d.log.Info("Peer info", "peers", len(d.peers), "tried", d.doneSinceLastLog, "static", len(d.static))
 	}
