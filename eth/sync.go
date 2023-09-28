@@ -19,7 +19,6 @@ package eth
 import (
 	"math/big"
 	"math/rand"
-	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
@@ -30,8 +29,7 @@ import (
 )
 
 const (
-	forceSyncCycle      = 60 * time.Second // Time interval to force syncs, even if few peers are available
-	defaultMinSyncPeers = 3                // Amount of peers desired to start syncing
+	defaultMinSyncPeers = 3 // Amount of peers desired to start syncing
 
 	// This is the target size for the packs of transactions sent by txsyncLoop64.
 	// A pack can get larger than this if a single transactions exceeds this size.
@@ -154,8 +152,6 @@ func (h *handler) txsyncLoop64() {
 // chainSyncer coordinates blockchain sync components.
 type chainSyncer struct {
 	handler     *handler
-	force       *time.Timer
-	forced      bool // true when force timer fired
 	peerEventCh chan struct{}
 	doneCh      chan error // non-nil when sync is running
 }
@@ -201,11 +197,6 @@ func (cs *chainSyncer) loop() {
 	defer cs.handler.blockFetcher.Stop()
 	defer cs.handler.downloader.Terminate()
 
-	// The force timer lowers the peer count threshold down to one when it fires.
-	// This ensures we'll always start sync even if there aren't enough peers.
-	cs.force = time.NewTimer(forceSyncCycle)
-	defer cs.force.Stop()
-
 	for {
 		if op := cs.nextSyncOp(); op != nil {
 			cs.startSync(op)
@@ -215,10 +206,6 @@ func (cs *chainSyncer) loop() {
 			// Peer information changed, recheck.
 		case <-cs.doneCh:
 			cs.doneCh = nil
-			cs.force.Reset(forceSyncCycle)
-			cs.forced = false
-		case <-cs.force.C:
-			cs.forced = true
 
 		case <-cs.handler.quitSync:
 			// Disable all insertion on the blockchain. This needs to happen before
@@ -241,9 +228,8 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 
 	// Ensure we're at minimum peer count.
 	minPeers := defaultMinSyncPeers
-	if cs.forced {
-		minPeers = 1
-	} else if minPeers > cs.handler.maxPeers {
+
+	if minPeers > cs.handler.maxPeers {
 		minPeers = cs.handler.maxPeers
 	}
 	if cs.handler.peers.len() < minPeers {
