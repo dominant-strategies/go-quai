@@ -86,11 +86,13 @@ type Termini struct {
 type appendReturns struct {
 	Etxs     types.Transactions `json:"pendingEtxs"`
 	SubReorg bool               `json:"subReorg"`
+	SetHead  bool               `json:"setHead"`
 }
 
-func (ec *Client) Append(ctx context.Context, header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, bool, error) {
+func (ec *Client) Append(ctx context.Context, header *types.Header, manifest types.BlockManifest, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, bool, bool, error) {
 	fields := map[string]interface{}{
 		"header":           header.RPCMarshalHeader(),
+		"manifest":         manifest,
 		"domPendingHeader": domPendingHeader.RPCMarshalHeader(),
 		"domTerminus":      domTerminus,
 		"domOrigin":        domOrigin,
@@ -100,16 +102,24 @@ func (ec *Client) Append(ctx context.Context, header *types.Header, domPendingHe
 	var raw json.RawMessage
 	err := ec.c.CallContext(ctx, &raw, "quai_append", fields)
 	if err != nil {
-		return nil, false, err
+		return nil, false, false, err
 	}
 
 	// Decode header and transactions.
 	var aReturns appendReturns
 	if err := json.Unmarshal(raw, &aReturns); err != nil {
-		return nil, false, err
+		return nil, false, false, err
 	}
 
-	return aReturns.Etxs, aReturns.SubReorg, nil
+	return aReturns.Etxs, aReturns.SubReorg, aReturns.SetHead, nil
+}
+
+func (ec *Client) DownloadBlocksInManifest(ctx context.Context, manifest types.BlockManifest, entropy *big.Int) {
+	fields := map[string]interface{}{
+		"manifest": manifest,
+		"entropy":  entropy,
+	}
+	ec.c.CallContext(ctx, nil, "quai_downloadBlocksInManifest", fields)
 }
 
 func (ec *Client) SubRelayPendingHeader(ctx context.Context, pendingHeader types.PendingHeader, newEntropy *big.Int, location common.Location, subReorg bool, order int) {
@@ -132,8 +142,9 @@ func (ec *Client) UpdateDom(ctx context.Context, oldTerminus common.Hash, pendin
 	ec.c.CallContext(ctx, nil, "quai_updateDom", data)
 }
 
-func (ec *Client) RequestDomToAppendOrFetch(ctx context.Context, hash common.Hash, order int) {
+func (ec *Client) RequestDomToAppendOrFetch(ctx context.Context, hash common.Hash, entropy *big.Int, order int) {
 	data := map[string]interface{}{"Hash": hash}
+	data["Entropy"] = entropy
 	data["Order"] = order
 
 	ec.c.CallContext(ctx, nil, "quai_requestDomToAppendOrFetch", data)
