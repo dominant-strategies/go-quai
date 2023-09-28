@@ -58,7 +58,7 @@ type Slice struct {
 	scope                 event.SubscriptionScope
 	pendingEtxsFeed       event.Feed
 	pendingEtxsRollupFeed event.Feed
-	missingParentFeed     event.Feed
+	missingBlockFeed      event.Feed
 
 	asyncPhCh  chan *types.Header
 	asyncPhSub event.Subscription
@@ -128,8 +128,12 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLooku
 
 // Append takes a proposed header and constructs a local block and attempts to hierarchically append it to the block graph.
 // If this is called from a dominant context a domTerminus must be provided else a common.Hash{} should be used and domOrigin should be set to true.
-func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, bool, error) {
+func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, bool, bool, error) {
 	start := time.Now()
+
+	if header.Hash() == sl.config.GenesisHash {
+		return nil, false, false, nil
+	}
 
 	// Only print in Info level if block is c_startingPrintLimit behind or less
 	if sl.CurrentInfo(header) {
@@ -141,7 +145,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	time0_1 := common.PrettyDuration(time.Since(start))
 	// Check if the header hash exists in the BadHashes list
 	if sl.IsBlockHashABadHash(header.Hash()) {
-		return nil, false, ErrBadBlockHash
+		return nil, false, false, ErrBadBlockHash
 	}
 	time0_2 := common.PrettyDuration(time.Since(start))
 
@@ -149,18 +153,18 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	location := header.Location()
 	_, order, err := sl.engine.CalcOrder(header)
 	if err != nil {
-		return nil, false, err
+		return nil, false, false, err
 	}
 	// Don't append the block which already exists in the database.
 	if sl.hc.HasHeader(header.Hash(), header.NumberU64()) && (sl.hc.GetTerminiByHash(header.Hash()) != nil) {
 		log.Debug("Block has already been appended: ", "Hash: ", header.Hash())
-		return nil, false, ErrKnownBlock
+		return nil, false, false, ErrKnownBlock
 	}
 	time1 := common.PrettyDuration(time.Since(start))
 	// This is to prevent a crash when we try to insert blocks before domClient is on.
 	// Ideally this check should not exist here and should be fixed before we start the slice.
 	if sl.domClient == nil && nodeCtx != common.PRIME_CTX {
-		return nil, false, ErrDomClientNotUp
+		return nil, false, false, ErrDomClientNotUp
 	}
 
 	batch := sl.sliceDb.NewBatch()
@@ -168,7 +172,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	// Run Previous Coincident Reference Check (PCRC)
 	domTerminus, newTermini, err := sl.pcrc(batch, header, domTerminus, domOrigin)
 	if err != nil {
-		return nil, false, err
+		return nil, false, false, err
 	}
 	log.Debug("PCRC done", "hash", header.Hash(), "number", header.NumberArray(), "termini", newTermini)
 
@@ -176,14 +180,14 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	// Append the new block
 	err = sl.hc.AppendHeader(header)
 	if err != nil {
-		return nil, false, err
+		return nil, false, false, err
 	}
 
 	time3 := common.PrettyDuration(time.Since(start))
 	// Construct the block locally
 	block, err := sl.ConstructLocalBlock(header)
 	if err != nil {
-		return nil, false, err
+		return nil, false, false, err
 	}
 	time4 := common.PrettyDuration(time.Since(start))
 
@@ -192,7 +196,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		// Upate the local pending header
 		pendingHeaderWithTermini, err = sl.generateSlicePendingHeader(block, newTermini, domPendingHeader, domOrigin, true, false)
 		if err != nil {
-			return nil, false, err
+			return nil, false, false, err
 		}
 	}
 
@@ -204,7 +208,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		newInboundEtxs, _, err = sl.CollectNewlyConfirmedEtxs(block, block.Location())
 		if err != nil {
 			log.Error("Error collecting newly confirmed etxs: ", "err", err)
-			return nil, false, ErrSubNotSyncedToDom
+			return nil, false, false, ErrSubNotSyncedToDom
 		}
 	}
 	time5 := common.PrettyDuration(time.Since(start))
@@ -212,6 +216,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	time6 := common.PrettyDuration(time.Since(start))
 	var subPendingEtxs types.Transactions
 	var subReorg bool
+	var setHead bool
 	var time6_1 common.PrettyDuration
 	var time6_2 common.PrettyDuration
 	var time6_3 common.PrettyDuration
@@ -219,9 +224,9 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	if nodeCtx != common.ZONE_CTX {
 		// How to get the sub pending etxs if not running the full node?.
 		if sl.subClients[location.SubIndex()] != nil {
-			subPendingEtxs, subReorg, err = sl.subClients[location.SubIndex()].Append(context.Background(), header, pendingHeaderWithTermini.Header(), domTerminus, true, newInboundEtxs)
+			subPendingEtxs, subReorg, setHead, err = sl.subClients[location.SubIndex()].Append(context.Background(), header, block.SubManifest(), pendingHeaderWithTermini.Header(), domTerminus, true, newInboundEtxs)
 			if err != nil {
-				return nil, false, err
+				return nil, false, false, err
 			}
 			time6_1 = common.PrettyDuration(time.Since(start))
 			// Cache the subordinate's pending ETXs
@@ -250,7 +255,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	if nodeCtx == common.ZONE_CTX {
 		bestPh, exist = sl.readPhCache(sl.bestPhKey)
 		if !exist {
-			sl.bestPhKey = sl.config.GenesisHash
+			sl.WriteBestPhKey(sl.config.GenesisHash)
 			sl.writePhCache(block.Hash(), pendingHeaderWithTermini)
 			bestPh = types.EmptyPendingHeader()
 			log.Error("BestPh Key does not exist for", "key", sl.bestPhKey)
@@ -260,7 +265,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 
 		tempPendingHeader, err := sl.generateSlicePendingHeader(block, newTermini, domPendingHeader, domOrigin, false, false)
 		if err != nil {
-			return nil, false, err
+			return nil, false, false, err
 		}
 
 		subReorg = sl.miningStrategy(bestPh, tempPendingHeader)
@@ -271,17 +276,18 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 			rawdb.WriteInboundEtxs(sl.sliceDb, block.Hash(), newInboundEtxs.FilterToLocation(common.NodeLocation))
 		}
 
-		if subReorg {
+		setHead = sl.poem(sl.engine.TotalLogS(block.Header()), sl.engine.TotalLogS(sl.hc.CurrentHeader()))
+		if setHead {
 			err := sl.hc.SetCurrentHeader(block.Header())
 			if err != nil {
 				log.Error("Error setting current header", "err", err, "Hash", block.Hash())
-				return nil, false, err
+				return nil, false, false, err
 			}
 		}
 		// Upate the local pending header
 		pendingHeaderWithTermini, err = sl.generateSlicePendingHeader(block, newTermini, domPendingHeader, domOrigin, subReorg, false)
 		if err != nil {
-			return nil, false, err
+			return nil, false, false, err
 		}
 
 		time9 = common.PrettyDuration(time.Since(start))
@@ -295,21 +301,21 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 			updateDom = true
 		}
 		log.Info("Choosing phHeader Append:", "NumberArray:", pendingHeaderWithTermini.Header().NumberArray(), "Number:", pendingHeaderWithTermini.Header().Number(), "ParentHash:", pendingHeaderWithTermini.Header().ParentHash(), "Terminus:", pendingHeaderWithTermini.Termini().DomTerminus())
-		sl.bestPhKey = pendingHeaderWithTermini.Termini().DomTerminus()
+		sl.WriteBestPhKey(pendingHeaderWithTermini.Termini().DomTerminus())
 		block.SetAppendTime(time.Duration(time9))
 	}
 
 	// Append has succeeded write the batch
 	if err := batch.Write(); err != nil {
-		return nil, false, err
+		return nil, false, false, err
 	}
 
-	if subReorg {
+	if setHead {
 		if nodeCtx != common.ZONE_CTX {
 			err := sl.hc.SetCurrentHeader(block.Header())
 			if err != nil {
 				log.Error("Error setting current header", "err", err, "Hash", block.Hash())
-				return nil, false, err
+				return nil, false, false, err
 			}
 		}
 		sl.hc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
@@ -336,9 +342,9 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 				go sl.domClient.UpdateDom(context.Background(), bestPh.Termini().DomTerminus(), pendingHeaderWithTermini, common.NodeLocation)
 			}
 		}
-		return block.ExtTransactions(), subReorg, nil
+		return block.ExtTransactions(), subReorg, setHead, nil
 	} else {
-		return subPendingEtxs, subReorg, nil
+		return subPendingEtxs, subReorg, setHead, nil
 	}
 }
 
@@ -404,7 +410,7 @@ func (sl *Slice) UpdateDom(oldTerminus common.Hash, pendingHeader types.PendingH
 	log.Debug("UpdateDom:", "NewDomTerminus:", newDomTerminus, "OldDomTerminus:", oldDomTerminus, "NewDomTermini:", pendingHeader.Termini().DomTermini(), "Location")
 	if nodeCtx == common.REGION_CTX && oldDomTerminus == newPh.Termini().DomTerminus() {
 		// Can update
-		sl.bestPhKey = newDomTerminus
+		sl.WriteBestPhKey(newDomTerminus)
 		newPh, exists := sl.readPhCache(newDomTerminus)
 		if exists {
 			for _, i := range sl.randomRelayArray() {
@@ -424,7 +430,7 @@ func (sl *Slice) UpdateDom(oldTerminus common.Hash, pendingHeader types.PendingH
 			go sl.domClient.UpdateDom(context.Background(), oldDomTerminus, types.NewPendingHeader(pendingHeader.Header(), newPh.Termini()), location)
 		} else {
 			// Can update
-			sl.bestPhKey = newDomTerminus
+			sl.WriteBestPhKey(newDomTerminus)
 			newPh, exists := sl.readPhCache(newDomTerminus)
 			if exists {
 				for _, i := range sl.randomRelayArray() {
@@ -495,6 +501,13 @@ func (sl *Slice) readPhCache(hash common.Hash) (types.PendingHeader, bool) {
 // Write the phCache
 func (sl *Slice) writePhCache(hash common.Hash, pendingHeader types.PendingHeader) {
 	sl.phCache.Add(hash, pendingHeader)
+}
+
+// WriteBestPhKey writes the sl.bestPhKey
+func (sl *Slice) WriteBestPhKey(hash common.Hash) {
+	sl.bestPhKey = hash
+	// write the ph head hash to the db.
+	rawdb.WriteBestPhKey(sl.sliceDb, hash)
 }
 
 // Generate a slice pending header
@@ -637,7 +650,7 @@ func (sl *Slice) pcrc(batch ethdb.Batch, header *types.Header, domTerminus commo
 
 // POEM compares externS to the currentHead S and returns true if externS is greater
 func (sl *Slice) poem(externS *big.Int, currentS *big.Int) bool {
-	log.Info("POEM:", "Header hash:", sl.hc.CurrentHeader().Hash(), "currentS:", common.BigBitsToBits(currentS), "externS:", common.BigBitsToBits(externS))
+	log.Debug("POEM:", "currentS:", common.BigBitsToBits(currentS), "externS:", common.BigBitsToBits(externS))
 	reorg := currentS.Cmp(externS) <= 0
 	return reorg
 }
@@ -784,27 +797,14 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 			if (localPendingHeader.Header().Root() != types.EmptyRootHash && nodeCtx == common.ZONE_CTX) || nodeCtx == common.REGION_CTX {
 				block := sl.hc.GetBlockOrCandidateByHash(localPendingHeader.Header().ParentHash())
 				if block != nil {
-					err := sl.hc.SetCurrentHeader(block.Header())
-					if err != nil {
-						log.Error("Error setting current header", "err", err, "Hash", block.Hash())
-						return err
-					}
 					log.Info("Choosing phHeader pickPhHead:", "NumberArray:", combinedPendingHeader.NumberArray(), "Number:", combinedPendingHeader.Number(), "ParentHash:", combinedPendingHeader.ParentHash(), "Terminus:", localPendingHeader.Termini().DomTerminus())
-					sl.bestPhKey = localPendingHeader.Termini().DomTerminus()
-					if block.Hash() != sl.hc.CurrentHeader().Hash() {
-						sl.hc.chainHeadFeed.Send(ChainHeadEvent{block})
-					}
+					sl.WriteBestPhKey(localPendingHeader.Termini().DomTerminus())
 				} else {
 					log.Warn("unable to set the current header after the cord update", "Hash", localPendingHeader.Header().ParentHash())
 				}
 			} else {
 				block := sl.hc.GetBlockOrCandidateByHash(localPendingHeader.Header().ParentHash())
 				if block != nil {
-					err := sl.hc.SetCurrentHeader(block.Header())
-					if err != nil {
-						log.Error("Error setting current header", "err", err, "Hash", block.Hash())
-						return err
-					}
 					newPendingHeader, err := sl.generateSlicePendingHeader(block, localPendingHeader.Termini(), combinedPendingHeader, true, true, false)
 					if err != nil {
 						log.Error("Error generating slice pending header", "err", err)
@@ -812,10 +812,7 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 					}
 					combinedPendingHeader = types.CopyHeader(newPendingHeader.Header())
 					log.Info("Choosing phHeader pickPhHead:", "NumberArray:", combinedPendingHeader.NumberArray(), "ParentHash:", combinedPendingHeader.ParentHash(), "Terminus:", localPendingHeader.Termini().DomTerminus())
-					sl.bestPhKey = localPendingHeader.Termini().DomTerminus()
-					if block.Hash() != sl.hc.CurrentHeader().Hash() {
-						sl.hc.chainHeadFeed.Send(ChainHeadEvent{block})
-					}
+					sl.WriteBestPhKey(localPendingHeader.Termini().DomTerminus())
 				} else {
 					log.Warn("unable to set the current header after the cord update", "Hash", localPendingHeader.Header().ParentHash())
 				}
@@ -927,7 +924,7 @@ func (sl *Slice) init(genesis *Genesis) error {
 		rawdb.WriteManifest(sl.sliceDb, genesisHash, types.BlockManifest{genesisHash})
 
 		// Append each of the knot blocks
-		sl.bestPhKey = genesisHash
+		sl.WriteBestPhKey(genesisHash)
 		sl.hc.SetCurrentHeader(genesisHeader)
 
 		// Create empty pending ETX entry for genesis block -- genesis may not emit ETXs
@@ -1104,8 +1101,8 @@ func (sl *Slice) GetPendingBlockBody(header *types.Header) *types.Body {
 	return sl.miner.worker.GetPendingBlockBody(header)
 }
 
-func (sl *Slice) SubscribeMissingParentEvent(ch chan<- common.Hash) event.Subscription {
-	return sl.scope.Track(sl.missingParentFeed.Subscribe(ch))
+func (sl *Slice) SubscribeMissingBlockEvent(ch chan<- types.BlockRequest) event.Subscription {
+	return sl.scope.Track(sl.missingBlockFeed.Subscribe(ch))
 }
 
 // MakeDomClient creates the quaiclient for the given domurl
@@ -1154,8 +1151,6 @@ func (sl *Slice) loadLastState() error {
 // Stop stores the phCache and the sl.pendingHeader hash value to the db.
 func (sl *Slice) Stop() {
 	nodeCtx := common.NodeLocation.Context()
-	// write the ph head hash to the db.
-	rawdb.WriteBestPhKey(sl.sliceDb, sl.bestPhKey)
 
 	// Create a map to write the cache directly into the database
 	phCache := make(map[common.Hash]types.PendingHeader)
@@ -1389,7 +1384,7 @@ func (sl *Slice) ComputeRecoveryPendingHeader(hash common.Hash) types.PendingHea
 		return types.PendingHeader{}
 	}
 	termini := sl.hc.GetTerminiByHash(hash)
-	sl.bestPhKey = hash
+	sl.WriteBestPhKey(hash)
 	return types.NewPendingHeader(pendingHeader, *termini)
 }
 
