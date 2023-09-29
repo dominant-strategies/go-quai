@@ -168,7 +168,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	// Don't append the block which already exists in the database.
 	if sl.hc.HasHeader(header.Hash(), header.NumberU64()) && (sl.hc.GetTerminiByHash(header.Hash()) != nil) {
 		log.Debug("Block has already been appended: ", "Hash: ", header.Hash())
-		return nil, false, false, ErrKnownBlock
+		return nil, false, false, nil
 	}
 	time1 := common.PrettyDuration(time.Since(start))
 	// This is to prevent a crash when we try to insert blocks before domClient is on.
