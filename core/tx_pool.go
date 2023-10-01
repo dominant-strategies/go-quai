@@ -140,8 +140,7 @@ const (
 // some pre checks in tx pool and event subscribers.
 type blockChain interface {
 	CurrentBlock() *types.Block
-	GetBlock(hash common.Hash, number uint64) *types.Block
-	GetBlockFromCacheOrDb(hash common.Hash, number uint64) *types.Block
+	GetBlockOrCandidate(hash common.Hash, number uint64) *types.Block
 	StateAt(root common.Hash) (*state.StateDB, error)
 
 	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
@@ -1334,8 +1333,8 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 			// Reorg seems shallow enough to pull in all transactions into memory
 			var discarded, included types.Transactions
 			var (
-				rem = pool.chain.GetBlock(oldHead.Hash(), oldHead.Number().Uint64())
-				add = pool.chain.GetBlockFromCacheOrDb(newHead.Hash(), newHead.Number().Uint64())
+				rem = pool.chain.GetBlockOrCandidate(oldHead.Hash(), oldHead.Number().Uint64())
+				add = pool.chain.GetBlockOrCandidate(newHead.Hash(), newHead.Number().Uint64())
 			)
 			if rem == nil {
 				// This can happen if a setHead is performed, where we simply discard the old
@@ -1355,26 +1354,26 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 			} else {
 				for rem.NumberU64() > add.NumberU64() {
 					discarded = append(discarded, rem.Transactions()...)
-					if rem = pool.chain.GetBlock(rem.ParentHash(), rem.NumberU64()-1); rem == nil {
+					if rem = pool.chain.GetBlockOrCandidate(rem.ParentHash(), rem.NumberU64()-1); rem == nil {
 						log.Error("Unrooted old chain seen by tx pool", "block", oldHead.Number(), "hash", oldHead.Hash())
 						return
 					}
 				}
 				for add.NumberU64() > rem.NumberU64() {
 					included = append(included, add.Transactions()...)
-					if add = pool.chain.GetBlock(add.ParentHash(), add.NumberU64()-1); add == nil {
+					if add = pool.chain.GetBlockOrCandidate(add.ParentHash(), add.NumberU64()-1); add == nil {
 						log.Error("Unrooted new chain seen by tx pool", "block", newHead.Number(), "hash", newHead.Hash())
 						return
 					}
 				}
 				for rem.Hash() != add.Hash() {
 					discarded = append(discarded, rem.Transactions()...)
-					if rem = pool.chain.GetBlock(rem.ParentHash(), rem.NumberU64()-1); rem == nil {
+					if rem = pool.chain.GetBlockOrCandidate(rem.ParentHash(), rem.NumberU64()-1); rem == nil {
 						log.Error("Unrooted old chain seen by tx pool", "block", oldHead.Number(), "hash", oldHead.Hash())
 						return
 					}
 					included = append(included, add.Transactions()...)
-					if add = pool.chain.GetBlock(add.ParentHash(), add.NumberU64()-1); add == nil {
+					if add = pool.chain.GetBlockOrCandidate(add.ParentHash(), add.NumberU64()-1); add == nil {
 						log.Error("Unrooted new chain seen by tx pool", "block", newHead.Number(), "hash", newHead.Hash())
 						return
 					}
