@@ -516,6 +516,14 @@ func (sl *Slice) readPhCache(hash common.Hash) (types.PendingHeader, bool) {
 				return types.PendingHeader{}, false
 			}
 		}
+	} else {
+		ph := rawdb.ReadPendingHeader(sl.sliceDb, hash)
+		if ph != nil {
+			sl.phCache.Add(hash, ph)
+			return *types.CopyPendingHeader(ph), exists
+		} else {
+			return types.PendingHeader{}, false
+		}
 	}
 	return types.PendingHeader{}, false
 }
@@ -523,6 +531,7 @@ func (sl *Slice) readPhCache(hash common.Hash) (types.PendingHeader, bool) {
 // Write the phCache
 func (sl *Slice) writePhCache(hash common.Hash, pendingHeader types.PendingHeader) {
 	sl.phCache.Add(hash, pendingHeader)
+	rawdb.WritePendingHeader(sl.sliceDb, hash, pendingHeader)
 }
 
 // WriteBestPhKey writes the sl.bestPhKey
@@ -1234,14 +1243,12 @@ func makeSubClients(suburls []string) []*quaiclient.Client {
 
 // loadLastState loads the phCache and the slice pending header hash from the db.
 func (sl *Slice) loadLastState() error {
-	phCache := rawdb.ReadPhCache(sl.sliceDb)
-	for key, value := range phCache {
-		sl.phCache.Add(key, value)
-		// Removing the PendingHeaders from the database
-		rawdb.DeletePendingHeader(sl.sliceDb, key)
-	}
-	rawdb.DeletePhCache(sl.sliceDb)
 	sl.bestPhKey = rawdb.ReadBestPhKey(sl.sliceDb)
+	bestPh := rawdb.ReadPendingHeader(sl.sliceDb, sl.bestPhKey)
+	if bestPh != nil {
+		sl.writePhCache(sl.bestPhKey, *bestPh)
+	}
+
 	if sl.ProcessingState() {
 		sl.miner.worker.LoadPendingBlockBody()
 	}
@@ -1251,16 +1258,6 @@ func (sl *Slice) loadLastState() error {
 // Stop stores the phCache and the sl.pendingHeader hash value to the db.
 func (sl *Slice) Stop() {
 	nodeCtx := common.NodeLocation.Context()
-
-	// Create a map to write the cache directly into the database
-	phCache := make(map[common.Hash]types.PendingHeader)
-	for _, hash := range sl.phCache.Keys() {
-		if value, exist := sl.phCache.Peek(hash); exist {
-			phCache[hash.(common.Hash)] = value.(types.PendingHeader)
-		}
-	}
-	// Write the ph cache to the dd.
-	rawdb.WritePhCache(sl.sliceDb, phCache)
 
 	var badHashes []common.Hash
 	for hash := range sl.badHashesCache {
@@ -1400,7 +1397,6 @@ func (sl *Slice) cleanCacheAndDatabaseTillBlock(hash common.Hash) {
 	// slice caches
 	sl.phCache.Purge()
 	sl.miner.worker.pendingBlockBody.Purge()
-	rawdb.DeletePhCache(sl.sliceDb)
 	rawdb.DeleteBestPhKey(sl.sliceDb)
 	// headerchain caches
 	sl.hc.headerCache.Purge()
