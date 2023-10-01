@@ -300,7 +300,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 
 		setHead = sl.poem(sl.engine.TotalLogS(block.Header()), sl.engine.TotalLogS(sl.hc.CurrentHeader()))
 		if setHead {
-			err := sl.hc.SetCurrentHeader(block.Header())
+			err := sl.hc.SetCurrentHeader(block.Header(), true)
 			if err != nil {
 				log.Error("Error setting current header", "err", err, "Hash", block.Hash())
 				return nil, false, false, err
@@ -334,7 +334,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 
 	if setHead {
 		if nodeCtx != common.ZONE_CTX {
-			err := sl.hc.SetCurrentHeader(block.Header())
+			err := sl.hc.SetCurrentHeader(block.Header(), true)
 			if err != nil {
 				log.Error("Error setting current header", "err", err, "Hash", block.Hash())
 				return nil, false, false, err
@@ -878,14 +878,27 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 			if (localPendingHeader.Header().Root() != types.EmptyRootHash && nodeCtx == common.ZONE_CTX) || nodeCtx == common.REGION_CTX {
 				block := sl.hc.GetBlockOrCandidateByHash(localPendingHeader.Header().ParentHash())
 				if block != nil {
+					err := sl.hc.SetCurrentHeader(block.Header(), false)
+					if err != nil {
+						log.Error("Error setting current header", "err", err, "Hash", block.Hash())
+						return err
+					}
 					log.Info("Choosing phHeader pickPhHead:", "NumberArray:", combinedPendingHeader.NumberArray(), "Number:", combinedPendingHeader.Number(), "ParentHash:", combinedPendingHeader.ParentHash(), "Terminus:", localPendingHeader.Termini().DomTerminus())
 					sl.WriteBestPhKey(localPendingHeader.Termini().DomTerminus())
+					if block.Hash() != sl.hc.CurrentHeader().Hash() {
+						sl.hc.chainHeadFeed.Send(ChainHeadEvent{block})
+					}
 				} else {
 					log.Warn("unable to set the current header after the cord update", "Hash", localPendingHeader.Header().ParentHash())
 				}
 			} else {
 				block := sl.hc.GetBlockOrCandidateByHash(localPendingHeader.Header().ParentHash())
 				if block != nil {
+					err := sl.hc.SetCurrentHeader(block.Header(), false)
+					if err != nil {
+						log.Error("Error setting current header", "err", err, "Hash", block.Hash())
+						return err
+					}
 					newPendingHeader, err := sl.generateSlicePendingHeader(block, localPendingHeader.Termini(), combinedPendingHeader, true, true, false)
 					if err != nil {
 						log.Error("Error generating slice pending header", "err", err)
@@ -894,6 +907,9 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 					combinedPendingHeader = types.CopyHeader(newPendingHeader.Header())
 					log.Info("Choosing phHeader pickPhHead:", "NumberArray:", combinedPendingHeader.NumberArray(), "ParentHash:", combinedPendingHeader.ParentHash(), "Terminus:", localPendingHeader.Termini().DomTerminus())
 					sl.WriteBestPhKey(localPendingHeader.Termini().DomTerminus())
+					if block.Hash() != sl.hc.CurrentHeader().Hash() {
+						sl.hc.chainHeadFeed.Send(ChainHeadEvent{block})
+					}
 				} else {
 					log.Warn("unable to set the current header after the cord update", "Hash", localPendingHeader.Header().ParentHash())
 				}
@@ -1009,7 +1025,7 @@ func (sl *Slice) init(genesis *Genesis) error {
 
 		// Append each of the knot blocks
 		sl.WriteBestPhKey(genesisHash)
-		sl.hc.SetCurrentHeader(genesisHeader)
+		sl.hc.SetCurrentHeader(genesisHeader, true)
 
 		// Create empty pending ETX entry for genesis block -- genesis may not emit ETXs
 		emptyPendingEtxs := types.Transactions{}

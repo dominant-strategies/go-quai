@@ -309,7 +309,7 @@ func (hc *HeaderChain) AppendBlock(block *types.Block, newInboundEtxs types.Tran
 
 // SetCurrentHeader sets the in-memory head header marker of the canonical chan
 // as the given header.
-func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
+func (hc *HeaderChain) SetCurrentHeader(head *types.Header, inSlice bool) error {
 	hc.headermu.Lock()
 	defer hc.headermu.Unlock()
 
@@ -319,10 +319,12 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 		return nil
 	}
 
-	// write the head block hash to the db
-	rawdb.WriteHeadBlockHash(hc.headerDb, head.Hash())
-	log.Info("Setting the current header", "Hash", head.Hash(), "Number", head.NumberArray())
-	hc.currentHeader.Store(head)
+	if inSlice {
+		// write the head block hash to the db
+		rawdb.WriteHeadBlockHash(hc.headerDb, head.Hash())
+		log.Info("Setting the current header", "Hash", head.Hash(), "Number", head.NumberArray())
+		hc.currentHeader.Store(head)
+	}
 
 	// If head is the normal extension of canonical head, we can return by just wiring the canonical hash.
 	if prevHeader.Hash() == head.ParentHash() {
@@ -330,7 +332,9 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 		if err != nil {
 			return err
 		}
-		rawdb.WriteCanonicalHash(hc.headerDb, head.Hash(), head.NumberU64())
+		if inSlice {
+			rawdb.WriteCanonicalHash(hc.headerDb, head.Hash(), head.NumberU64())
+		}
 		return nil
 	}
 
@@ -358,7 +362,9 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 		if prevHeader.Hash() == commonHeader.Hash() {
 			break
 		}
-		rawdb.DeleteCanonicalHash(hc.headerDb, prevHeader.NumberU64())
+		if inSlice {
+			rawdb.DeleteCanonicalHash(hc.headerDb, prevHeader.NumberU64())
+		}
 		prevHeader = hc.GetHeader(prevHeader.ParentHash(), prevHeader.NumberU64()-1)
 
 		// genesis check to not delete the genesis block
@@ -373,7 +379,9 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 		if err != nil {
 			return err
 		}
-		rawdb.WriteCanonicalHash(hc.headerDb, hashStack[i].Hash(), hashStack[i].NumberU64())
+		if inSlice {
+			rawdb.WriteCanonicalHash(hc.headerDb, hashStack[i].Hash(), hashStack[i].NumberU64())
+		}
 	}
 
 	return nil
