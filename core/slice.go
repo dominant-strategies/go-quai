@@ -299,10 +299,11 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		}
 
 		setHead = sl.poem(sl.engine.TotalLogS(block.Header()), sl.engine.TotalLogS(sl.hc.CurrentHeader()))
-		if setHead {
-			err := sl.hc.SetCurrentHeader(block.Header())
+
+		if subReorg {
+			err := sl.hc.SetCurrentState(block.Header())
 			if err != nil {
-				log.Error("Error setting current header", "err", err, "Hash", block.Hash())
+				log.Error("Error setting current state", "err", err, "Hash", block.Hash())
 				return nil, false, false, err
 			}
 		}
@@ -333,13 +334,10 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	}
 
 	if setHead {
-		if nodeCtx != common.ZONE_CTX {
-			err := sl.hc.SetCurrentHeader(block.Header())
-			if err != nil {
-				log.Error("Error setting current header", "err", err, "Hash", block.Hash())
-				return nil, false, false, err
-			}
-		}
+		sl.hc.SetCurrentHeader(block.Header())
+	}
+
+	if subReorg {
 		sl.hc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
 	}
 
@@ -887,6 +885,9 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 			if (localPendingHeader.Header().Root() != types.EmptyRootHash && nodeCtx == common.ZONE_CTX) || nodeCtx == common.REGION_CTX {
 				block := sl.hc.GetBlockOrCandidateByHash(localPendingHeader.Header().ParentHash())
 				if block != nil {
+					// setting the current state will help speed the process of append
+					// after mining this block since the state will already be computed
+					sl.hc.SetCurrentState(block.Header())
 					log.Info("Choosing phHeader pickPhHead:", "NumberArray:", combinedPendingHeader.NumberArray(), "Number:", combinedPendingHeader.Number(), "ParentHash:", combinedPendingHeader.ParentHash(), "Terminus:", localPendingHeader.Termini().DomTerminus())
 					sl.WriteBestPhKey(localPendingHeader.Termini().DomTerminus())
 				} else {
@@ -895,6 +896,9 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 			} else {
 				block := sl.hc.GetBlockOrCandidateByHash(localPendingHeader.Header().ParentHash())
 				if block != nil {
+					// setting the current state will help speed the process of append
+					// after mining this block since the state will already be computed
+					sl.hc.SetCurrentState(block.Header())
 					newPendingHeader, err := sl.generateSlicePendingHeader(block, localPendingHeader.Termini(), combinedPendingHeader, true, true, false)
 					if err != nil {
 						log.Error("Error generating slice pending header", "err", err)
