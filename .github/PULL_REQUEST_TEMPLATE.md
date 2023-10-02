@@ -1,1 +1,0 @@
-@dominant-strategies/core-dev

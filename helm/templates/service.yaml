@@ -1,4 +1,0 @@
-{{- range $chain := .Values.goQuai.chains }}
-{{ include "go-quai.service" $ | replace "<HTTP>" $chain.ports.http | replace "<WS>" $chain.ports.ws | replace "<DISC>" $chain.ports.disc | replace "prime" $chain.name }}
----
-{{- end }}
