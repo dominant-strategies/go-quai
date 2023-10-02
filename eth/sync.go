@@ -260,7 +260,7 @@ func (cs *chainSyncer) modeAndLocalHead() (downloader.SyncMode, *big.Int) {
 
 // startSync launches doSync in a new goroutine.
 func (cs *chainSyncer) startSync(op *chainSyncOp) {
-	cs.doneCh = make(chan error, 1)
+	cs.doneCh = make(chan error, 3)
 	go func() { cs.doneCh <- cs.handler.doSync(op) }()
 }
 
