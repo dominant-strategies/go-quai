@@ -23,6 +23,7 @@ import (
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/trie"
 	lru "github.com/hashicorp/golang-lru"
+	expireLru "github.com/hnlq715/golang-lru"
 )
 
 const (
@@ -209,6 +210,8 @@ type worker struct {
 	snapshotMu    sync.RWMutex // The lock used to protect the snapshots below
 	snapshotBlock *types.Block
 
+	headerPrints *expireLru.Cache
+
 	// atomic status counters
 	running int32 // The indicator whether the consensus engine is running or not.
 	newTxs  int32 // New arrival transaction count since last sealing work submitting.
@@ -283,6 +286,9 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 		log.Warn("Sanitizing miner recommit interval", "provided", recommit, "updated", minRecommitInterval)
 		recommit = minRecommitInterval
 	}
+
+	headerPrints, _ := expireLru.NewWithExpire(1, 60*time.Second)
+	worker.headerPrints = headerPrints
 
 	nodeCtx := common.NodeLocation.Context()
 	if headerchain.ProcessingState() && nodeCtx == common.ZONE_CTX {
@@ -1029,5 +1035,10 @@ func totalFees(block *types.Block, receipts []*types.Receipt) *big.Float {
 }
 
 func (w *worker) CurrentInfo(header *types.Header) bool {
+	if w.headerPrints.Contains(header) {
+		return false
+	}
+
+	w.headerPrints.Add(header, nil)
 	return header.NumberU64()+c_startingPrintLimit > w.hc.CurrentHeader().NumberU64()
 }
