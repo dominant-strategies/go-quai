@@ -306,10 +306,15 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 				return nil, false, false, err
 			}
 		}
-		// Upate the local pending header
-		pendingHeaderWithTermini, err = sl.generateSlicePendingHeader(block, newTermini, domPendingHeader, domOrigin, subReorg, false)
-		if err != nil {
-			return nil, false, false, err
+
+		if sl.ProcessingState() {
+			// Upate the local pending header
+			pendingHeaderWithTermini, err = sl.generateSlicePendingHeader(block, newTermini, domPendingHeader, domOrigin, subReorg, false)
+			if err != nil {
+				return nil, false, false, err
+			}
+		} else {
+			pendingHeaderWithTermini = tempPendingHeader
 		}
 
 		time9 = common.PrettyDuration(time.Since(start))
@@ -386,7 +391,7 @@ func (sl *Slice) ProcessingState() bool {
 func (sl *Slice) relayPh(block *types.Block, pendingHeaderWithTermini types.PendingHeader, domOrigin bool, location common.Location, subReorg bool) {
 	nodeCtx := common.NodeLocation.Context()
 
-	if nodeCtx == common.ZONE_CTX && sl.ProcessingState() {
+	if nodeCtx == common.ZONE_CTX {
 		// Send an empty header to miner
 		bestPh, exists := sl.readPhCache(sl.bestPhKey)
 		if exists {

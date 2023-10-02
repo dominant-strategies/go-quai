@@ -375,7 +375,10 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header, inSlice bool) error 
 
 	// Run through the hash stack to update canonicalHash and forward state processor
 	for i := len(hashStack) - 1; i >= 0; i-- {
-		err := hc.ReadInboundEtxsAndAppendBlock(hashStack[i])
+		var err error
+		if hc.ProcessingState() {
+			err = hc.ReadInboundEtxsAndAppendBlock(hashStack[i])
+		}
 		if err != nil {
 			return err
 		}
