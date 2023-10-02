@@ -396,6 +396,9 @@ func (hc *HeaderChain) ReadInboundEtxsAndAppendBlock(header *types.Header) error
 	if block == nil {
 		return errors.New("Could not find block during reorg")
 	}
+	if !hc.ProcessingState() {
+		return hc.AppendBlock(block, []*types.Transaction{})
+	}
 	_, order, err := hc.engine.CalcOrder(block.Header())
 	if err != nil {
 		return err

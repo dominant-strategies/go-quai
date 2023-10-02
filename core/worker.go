@@ -916,8 +916,8 @@ func (w *worker) FinalizeAssemble(chain consensus.ChainHeaderReader, header *typ
 
 	manifestHash := w.ComputeManifestHash(parent.Header())
 
+	block.Header().SetManifestHash(manifestHash)
 	if w.hc.ProcessingState() {
-		block.Header().SetManifestHash(manifestHash)
 		if nodeCtx == common.ZONE_CTX {
 			// Compute and set etx rollup hash
 			var etxRollup types.Transactions
