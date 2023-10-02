@@ -888,20 +888,23 @@ func (w *worker) adjustGasLimit(interrupt *int32, env *environment, parent *type
 // ComputeManifestHash given a header computes the manifest hash for the header
 // and stores it in the database
 func (w *worker) ComputeManifestHash(header *types.Header) common.Hash {
-	nodeCtx := common.NodeLocation.Context()
-	// Compute and set manifest hash
-	manifest := types.BlockManifest{}
-	if nodeCtx == common.PRIME_CTX {
-		// Nothing to do for prime chain
+	manifest := rawdb.ReadManifest(w.workerDb, header.Hash())
+	if manifest == nil {
+		nodeCtx := common.NodeLocation.Context()
+		// Compute and set manifest hash
 		manifest = types.BlockManifest{}
-	} else if w.engine.IsDomCoincident(w.hc, header) {
-		manifest = types.BlockManifest{header.Hash()}
-	} else {
-		parentManifest := rawdb.ReadManifest(w.workerDb, header.ParentHash())
-		manifest = append(parentManifest, header.Hash())
+		if nodeCtx == common.PRIME_CTX {
+			// Nothing to do for prime chain
+			manifest = types.BlockManifest{}
+		} else if w.engine.IsDomCoincident(w.hc, header) {
+			manifest = types.BlockManifest{header.Hash()}
+		} else {
+			parentManifest := rawdb.ReadManifest(w.workerDb, header.ParentHash())
+			manifest = append(parentManifest, header.Hash())
+		}
+		// write the manifest into the disk
+		rawdb.WriteManifest(w.workerDb, header.Hash(), manifest)
 	}
-	// write the manifest into the disk
-	rawdb.WriteManifest(w.workerDb, header.Hash(), manifest)
 	manifestHash := types.DeriveSha(manifest, trie.NewStackTrie(nil))
 
 	return manifestHash
