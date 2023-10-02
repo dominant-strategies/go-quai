@@ -1,0 +1,16 @@
+name: Build and Deploy to Sandbox
+on: workflow_dispatch
+jobs:
+  buildDeploySandbox:
+    uses: ./.github/workflows/build-deploy.yml
+    secrets:
+      DOCKER: ${{ secrets.DOCKER }}
+      GH_PAT: ${{ secrets.GH_PAT }}
+      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
+      GKE_PROJECT: ${{ secrets.GKE_PROJECT }}
+      GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+      GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+    with:
+      env: quai-sandbox
+      awk: sed -e "s/pre/rc/g" | awk -F . '{print $1"."$2"."$3"."$4+1}'
+      rails: '[[ ! "$VERSION" =~ "pre" ]]'
