@@ -39,7 +39,7 @@ const (
 	c_zoneRetryThreshold                       = 600     // Number of times a block is retry to be appended before eviction from append queue in Zone
 	c_maxFutureBlocksPrime              uint64 = 3       // Number of blocks ahead of the current block to be put in the hashNumberList
 	c_maxFutureBlocksRegion             uint64 = 200
-	c_maxFutureBlocksZone               uint64 = 100
+	c_maxFutureBlocksZone               uint64 = 1000
 	c_appendQueueRetryPriorityThreshold        = 5  // If retry counter for a block is less than this number,  then its put in the special list that is tried first to be appended
 	c_appendQueueRemoveThreshold               = 10 // Number of blocks behind the block should be from the current header to be eligble for removal from the append queue
 	c_normalListProcCounter                    = 5  // Ratio of Number of times the PriorityList is serviced over the NormalList
