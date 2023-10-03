@@ -232,22 +232,23 @@ func (c *Core) serviceBlocks(hashNumberList []types.HashAndNumber) {
 					c.appendQueue.Add(block.Hash(), numberAndRetryCounter)
 				}
 			}
-			parentHeader := c.sl.hc.GetHeaderOrCandidate(block.ParentHash(), block.NumberU64()-1)
-			if parentHeader != nil {
+			parentBlock := c.sl.hc.GetBlockOrCandidate(block.ParentHash(), block.NumberU64()-1)
+			if parentBlock != nil {
 				// If parent header is dom, send a signal to dom to request for the block if it doesnt have it
-				_, parentHeaderOrder, err := c.sl.engine.CalcOrder(parentHeader)
+				_, parentHeaderOrder, err := c.sl.engine.CalcOrder(parentBlock.Header())
 				if err != nil {
-					log.Warn("Error calculating the parent block order in serviceBlocks", "Hash", parentHeader.Hash(), "Number", parentHeader.NumberArray())
+					log.Warn("Error calculating the parent block order in serviceBlocks", "Hash", parentBlock.Hash(), "Number", parentBlock.Header().NumberArray())
 					continue
 				}
 				nodeCtx := common.NodeLocation.Context()
-				if parentHeaderOrder < nodeCtx && c.GetHeaderByHash(parentHeader.Hash()) == nil {
-					log.Info("Requesting the dom to get the block if it doesnt have and try to append", "Hash", parentHeader.Hash(), "Order", parentHeaderOrder)
+				if parentHeaderOrder < nodeCtx && c.GetHeaderByHash(parentBlock.Hash()) == nil {
+					log.Info("Requesting the dom to get the block if it doesnt have and try to append", "Hash", parentBlock.Hash(), "Order", parentHeaderOrder)
 					if c.sl.domClient != nil {
 						// send a signal to the required dom to fetch the block if it doesnt have it, or its not in its appendqueue
-						go c.sl.domClient.RequestDomToAppendOrFetch(context.Background(), parentHeader.Hash(), parentHeader.ParentEntropy(), parentHeaderOrder)
+						go c.sl.domClient.RequestDomToAppendOrFetch(context.Background(), parentBlock.Hash(), parentBlock.ParentEntropy(), parentHeaderOrder)
 					}
 				}
+				c.addToQueueIfNotAppended(parentBlock)
 				c.InsertChain([]*types.Block{block})
 			} else {
 				c.sl.missingBlockFeed.Send(types.BlockRequest{Hash: block.ParentHash(), Entropy: block.ParentEntropy()})
