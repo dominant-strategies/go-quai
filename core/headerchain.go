@@ -487,6 +487,12 @@ func (hc *HeaderChain) loadLastState() error {
 			// properly and it doesn't crash the nodes
 			hc.currentHeader.Store(hc.genesisHeader)
 		}
+	} else {
+		// Recover the current header
+		log.Warn("Recovering Current Header")
+		recoverdHeader := hc.RecoverCurrentHeader()
+		rawdb.WriteHeadBlockHash(hc.headerDb, recoverdHeader.Hash())
+		hc.currentHeader.Store(recoverdHeader)
 	}
 
 	heads := make([]*types.Header, 0)
@@ -666,6 +672,30 @@ func (hc *HeaderChain) GetHeaderOrCandidate(hash common.Hash, number uint64) *ty
 	}
 	// Cache the found header for next time and return
 	hc.headerCache.Add(hash, header)
+	return header
+}
+
+// RecoverCurrentHeader retrieves the current head header of the canonical chain. The
+// header is retrieved from the HeaderChain's internal cache
+func (hc *HeaderChain) RecoverCurrentHeader() *types.Header {
+	// Start logarithmic ascent to find the upper bound
+	high := uint64(1)
+	for hc.GetHeaderByNumber(high) != nil {
+		high *= 2
+	}
+	// Run binary search to find the max header
+	low := high / 2
+	for low <= high {
+		mid := (low + high) / 2
+		if hc.GetHeaderByNumber(mid) != nil {
+			low = mid + 1
+		} else {
+			high = mid - 1
+		}
+	}
+	header := hc.GetHeaderByNumber(high)
+	log.Info("Header Recovered: ", "hash", header.Hash().String())
+
 	return header
 }
 
