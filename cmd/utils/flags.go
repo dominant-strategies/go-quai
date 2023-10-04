@@ -755,7 +755,7 @@ func setNodeUserIdent(ctx *cli.Context, cfg *node.Config) {
 // setBootstrapNodes creates a list of bootstrap nodes from the pre-configured
 // ones if none have been specified.
 func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
-	urls := params.ColosseumBootnodes[common.NodeLocation.Name()]
+	urls := params.GardenBootnodes[common.NodeLocation.Name()]
 	//TODO: fix bootnode parsing for other networks
 
 	cfg.BootstrapNodes = make([]*enode.Node, 0, len(urls))
