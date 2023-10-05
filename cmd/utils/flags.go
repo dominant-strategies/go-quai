@@ -1533,9 +1533,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		}
 		cfg.Genesis = core.DefaultColosseumGenesisBlock(cfg.ConsensusEngine)
 		if cfg.ConsensusEngine == "blake3" {
-			SetDNSDiscoveryDefaults(cfg, params.Blake3PowGardenGenesisHash)
+			SetDNSDiscoveryDefaults(cfg, params.Blake3PowColosseumGenesisHash)
 		} else {
-			SetDNSDiscoveryDefaults(cfg, params.ProgpowGardenGenesisHash)
+			SetDNSDiscoveryDefaults(cfg, params.ProgpowColosseumGenesisHash)
 		}
 	case ctx.GlobalBool(GardenFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
