@@ -1610,7 +1610,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 // SetDNSDiscoveryDefaults configures DNS discovery with the given URL if
 // no URLs are set.
 func SetDNSDiscoveryDefaults(cfg *ethconfig.Config, genesis common.Hash) {
-	if cfg.EthDiscoveryURLs != nil {
+	if cfg.EthDiscoveryURLs != nil && len(cfg.EthDiscoveryURLs) > 0 {
 		return // already set through flags/config
 	}
 	protocol := "all"
