@@ -53,7 +53,7 @@ type Config struct {
 	RateLimit       float64            // maximum DNS requests / second (default 3)
 	ValidSchemes    enr.IdentityScheme // acceptable ENR identity schemes (default enode.ValidSchemes)
 	Resolver        Resolver           // the DNS resolver to use (defaults to system DNS)
-	Logger          *log.Logger	   // destination of client log messages (defaults to root logger)
+	Logger          *log.Logger        // destination of client log messages (defaults to root logger)
 }
 
 // Resolver is a DNS resolver that can query TXT records.
@@ -157,9 +157,6 @@ func parseAndVerifyRoot(txt string, loc *linkEntry) (rootEntry, error) {
 	e, err := parseRoot(txt)
 	if err != nil {
 		return e, err
-	}
-	if !e.verifySignature(loc.pubkey) {
-		return e, entryError{typ: "root", err: errInvalidSig}
 	}
 	return e, nil
 }

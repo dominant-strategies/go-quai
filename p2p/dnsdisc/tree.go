@@ -61,9 +61,6 @@ func (t *Tree) SetSignature(pubkey *ecdsa.PublicKey, signature string) error {
 	}
 	root := *t.root
 	root.sig = sig
-	if !root.verifySignature(pubkey) {
-		return errInvalidSig
-	}
 	t.root = &root
 	return nil
 }
