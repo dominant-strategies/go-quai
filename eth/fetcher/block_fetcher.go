@@ -711,9 +711,6 @@ func (f *BlockFetcher) ImportBlocks(peer string, block *types.Block, relay bool)
 		maxStaleBroadcastDist = PrimeMaxStaleBroadcastDist
 	}
 	if relay && currentNum > maxStaleBroadcastDist && currentNum > bcastNum+maxStaleBroadcastDist {
-		// The broadcast blocks is stale. Drop the peer.
-		log.Warn("Peer is mining while not synced, dropping peer", "Id", peer)
-		f.dropPeer(peer)
 		return
 	}
 
