@@ -100,8 +100,6 @@ func (bc *BodyDb) Append(block *types.Block, newInboundEtxs types.Transactions) 
 		rawdb.WriteTxLookupEntriesByBlock(batch, block)
 	}
 	log.Debug("Time taken to", "apply state:", common.PrettyDuration(time.Since(stateApply)))
-
-	rawdb.WriteBlock(batch, block)
 	if err = batch.Write(); err != nil {
 		return nil, err
 	}
@@ -170,16 +168,10 @@ func (bc *BodyDb) GetBlock(hash common.Hash, number uint64) *types.Block {
 // GetBlockOrCandidate retrieves any known block from the database by hash and number,
 // caching it if found.
 func (bc *BodyDb) GetBlockOrCandidate(hash common.Hash, number uint64) *types.Block {
-	// Short circuit if the block's already in the cache, retrieve otherwise
-	if block, ok := bc.blockCache.Get(hash); ok {
-		return block.(*types.Block)
-	}
 	block := rawdb.ReadBlock(bc.db, hash, number)
 	if block == nil {
 		return nil
 	}
-	// Cache the found block for next time and return
-	bc.blockCache.Add(block.Hash(), block)
 	return block
 }
 
