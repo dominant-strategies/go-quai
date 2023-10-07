@@ -395,7 +395,7 @@ func (hc *HeaderChain) SetCurrentState(head *types.Header) error {
 		if etxSet != nil {
 			break
 		}
-		current = header
+		current = types.CopyHeader(header)
 	}
 
 	// Run through the hash stack to update canonicalHash and forward state processor
