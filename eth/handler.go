@@ -19,6 +19,7 @@ package eth
 import (
 	"errors"
 	"math"
+	"math/big"
 	"math/rand"
 	"sync"
 	"sync/atomic"
@@ -170,6 +171,12 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	heighter := func() uint64 {
 		return h.core.CurrentHeader().NumberU64()
 	}
+	currentThresholdS := func() *big.Int {
+		return h.core.Engine().IntrinsicLogS(h.core.CurrentHeader().Hash())
+	}
+	currentS := func() *big.Int {
+		return h.core.CurrentHeader().ParentEntropy()
+	}
 	// writeBlock writes the block to the DB
 	writeBlock := func(block *types.Block) {
 		if nodeCtx == common.ZONE_CTX && block.NumberU64()-1 == h.core.CurrentHeader().NumberU64() && h.core.ProcessingState() {
@@ -179,7 +186,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		}
 		h.core.WriteBlock(block)
 	}
-	h.blockFetcher = fetcher.NewBlockFetcher(h.core.GetBlockOrCandidateByHash, writeBlock, validator, h.BroadcastBlock, heighter, h.removePeer, h.core.IsBlockHashABadHash)
+	h.blockFetcher = fetcher.NewBlockFetcher(h.core.GetBlockOrCandidateByHash, writeBlock, validator, h.BroadcastBlock, heighter, currentThresholdS, currentS, h.removePeer, h.core.IsBlockHashABadHash)
 
 	// Only initialize the Tx fetcher in zone
 	if nodeCtx == common.ZONE_CTX && h.core.ProcessingState() {

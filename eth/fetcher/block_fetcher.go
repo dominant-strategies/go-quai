@@ -19,6 +19,7 @@ package fetcher
 
 import (
 	"errors"
+	"math/big"
 	"math/rand"
 	"time"
 
@@ -39,13 +40,11 @@ const (
 )
 
 const (
-	maxUncleDist                = 100  // Maximum allowed backward distance from the chain head
-	maxQueueDist                = 32   // Maximum allowed distance from the chain head to queue
-	hashLimit                   = 256  // Maximum number of unique blocks or headers a peer may have announced
-	blockLimit                  = 64   // Maximum number of unique blocks a peer may have delivered
-	PrimeMaxStaleBroadcastDist  = 63   // Drop peers who broadcast new blocks that are more than 63 blocks stale in Prime
-	RegionMaxStaleBroadcastDist = 500  // Drop peers who broadcast new blocks that are more than 500 blocks stale in Region
-	ZoneMaxStaleBroadcastDist   = 3500 // Drop peers who broadcast new blocks that are more than 3500 blocks stale in Zone
+	maxUncleDist            = 100  // Maximum allowed backward distance from the chain head
+	maxQueueDist            = 32   // Maximum allowed distance from the chain head to queue
+	hashLimit               = 256  // Maximum number of unique blocks or headers a peer may have announced
+	blockLimit              = 64   // Maximum number of unique blocks a peer may have delivered
+	maxAllowableEntropyDist = 3500 // Maximum multiple of zone intrinsic S distance allowed from the current Entropy
 )
 
 var (
@@ -89,6 +88,12 @@ type blockBroadcasterFn func(block *types.Block, propagate bool)
 
 // chainHeightFn is a callback type to retrieve the current chain height.
 type chainHeightFn func() uint64
+
+// currentIntrinsicSFn is a callback type to retrieve the current chain headers intrinsic logS.
+type currentIntrinsicSFn func() *big.Int
+
+// currentSFn is a callback type to retrieve the current chain heads Entropy
+type currentSFn func() *big.Int
 
 // peerDropFn is a callback type for dropping a peer detected as malicious.
 type peerDropFn func(id string)
@@ -177,13 +182,15 @@ type BlockFetcher struct {
 	queued map[common.Hash]*blockOrHeaderInject // Set of already queued blocks (to dedup imports)
 
 	// Callbacks
-	getBlock            blockRetrievalFn   // Retrieves a block from the local chain
-	writeBlock          blockWriteFn       // Writes the block to the DB
-	verifyHeader        headerVerifierFn   // Checks if a block's headers have a valid proof of work
-	broadcastBlock      blockBroadcasterFn // Broadcasts a block to connected peers
-	chainHeight         chainHeightFn      // Retrieves the current chain's height
-	dropPeer            peerDropFn         // Drops a peer for misbehaving
-	isBlockHashABadHash badHashCheckFn     // Checks if the block hash exists in the bad hashes list
+	getBlock            blockRetrievalFn    // Retrieves a block from the local chain
+	writeBlock          blockWriteFn        // Writes the block to the DB
+	verifyHeader        headerVerifierFn    // Checks if a block's headers have a valid proof of work
+	broadcastBlock      blockBroadcasterFn  // Broadcasts a block to connected peers
+	chainHeight         chainHeightFn       // Retrieves the current chain's height
+	currentIntrinsicS   currentIntrinsicSFn // Retrieves the current headers intrinsic logS
+	currentS            currentSFn          // Retrieves the current heads logS
+	dropPeer            peerDropFn          // Drops a peer for misbehaving
+	isBlockHashABadHash badHashCheckFn      // Checks if the block hash exists in the bad hashes list
 
 	// Testing hooks
 	announceChangeHook func(common.Hash, bool)           // Method to call upon adding or deleting a hash from the blockAnnounce list
@@ -194,7 +201,7 @@ type BlockFetcher struct {
 }
 
 // NewBlockFetcher creates a block fetcher to retrieve blocks based on hash announcements.
-func NewBlockFetcher(getBlock blockRetrievalFn, writeBlock blockWriteFn, verifyHeader headerVerifierFn, broadcastBlock blockBroadcasterFn, chainHeight chainHeightFn, dropPeer peerDropFn, isBlockHashABadHash badHashCheckFn) *BlockFetcher {
+func NewBlockFetcher(getBlock blockRetrievalFn, writeBlock blockWriteFn, verifyHeader headerVerifierFn, broadcastBlock blockBroadcasterFn, chainHeight chainHeightFn, currentIntrinsicS currentIntrinsicSFn, currentS currentSFn, dropPeer peerDropFn, isBlockHashABadHash badHashCheckFn) *BlockFetcher {
 	return &BlockFetcher{
 		notify:              make(chan *blockAnnounce),
 		inject:              make(chan *blockOrHeaderInject),
@@ -214,6 +221,8 @@ func NewBlockFetcher(getBlock blockRetrievalFn, writeBlock blockWriteFn, verifyH
 		verifyHeader:        verifyHeader,
 		broadcastBlock:      broadcastBlock,
 		chainHeight:         chainHeight,
+		currentIntrinsicS:   currentIntrinsicS,
+		currentS:            currentS,
 		dropPeer:            dropPeer,
 		isBlockHashABadHash: isBlockHashABadHash,
 	}
@@ -697,20 +706,14 @@ func (f *BlockFetcher) enqueue(peer string, header *types.Header, block *types.B
 func (f *BlockFetcher) ImportBlocks(peer string, block *types.Block, relay bool) {
 	hash := block.Hash()
 
-	// If this is a newly mined block from a much lower height, drop the peer. Peers should not mine blocks until they are in sync with the network.
-	currentNum := f.chainHeight()
-	bcastNum := block.NumberU64()
-	nodeCtx := common.NodeLocation.Context()
-	var maxStaleBroadcastDist uint64
-	switch nodeCtx {
-	case common.ZONE_CTX:
-		maxStaleBroadcastDist = ZoneMaxStaleBroadcastDist
-	case common.REGION_CTX:
-		maxStaleBroadcastDist = RegionMaxStaleBroadcastDist
-	case common.PRIME_CTX:
-		maxStaleBroadcastDist = PrimeMaxStaleBroadcastDist
-	}
-	if relay && currentNum > maxStaleBroadcastDist && currentNum > bcastNum+maxStaleBroadcastDist {
+	// This makes sure that the miner is mining together
+	currentIntrinsicS := f.currentIntrinsicS()
+	maxAllowableEntropyDist := new(big.Int).Mul(currentIntrinsicS, big.NewInt(maxAllowableEntropyDist))
+
+	broadCastEntropy := block.ParentEntropy()
+
+	// If someone is mining not within maxAllowableEntropyDist*currentIntrinsicS
+	if relay && f.currentS().Cmp(new(big.Int).Add(broadCastEntropy, maxAllowableEntropyDist)) > 0 {
 		return
 	}
 
