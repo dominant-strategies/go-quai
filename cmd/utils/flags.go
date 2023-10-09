@@ -939,11 +939,12 @@ func setSubUrls(ctx *cli.Context, cfg *ethconfig.Config) {
 			}
 		}
 		// some sanity checks
-		if subNilCount == common.HierarchyDepth {
+		if subNilCount == common.Width {
 			Fatalf("All the suburls are nil")
 		}
-		if len(suburls) > common.HierarchyDepth {
-			Fatalf("More than 3 sub urls specified")
+		if len(suburls) > common.Width {
+			errorMsg := fmt.Sprintf("More than %d sub urls specified", common.Width)
+			Fatalf(errorMsg)
 		}
 		if len(suburls) == 0 {
 			Fatalf("No sub url is specified")
@@ -986,7 +987,7 @@ func setSlicesRunning(ctx *cli.Context, cfg *ethconfig.Config) {
 	if len(slices) == 0 {
 		Fatalf("no slices are specified")
 	}
-	if len(slices) > common.NumRegionsInPrime*common.NumZonesInRegion {
+	if len(slices) > common.Width*common.Width {
 		Fatalf("number of slices exceed the current ontology")
 	}
 	slicesRunning := []common.Location{}

@@ -565,6 +565,7 @@ func (pool *TxPool) TxPoolPending(enforceTips bool, etxSet types.EtxSet) (map[co
 	for _, entry := range etxSet {
 		addr := entry.ETX.ETXSender()
 		tx := entry.ETX
+		// CHECK LOCATION HERE
 		if tx.ETXSender().Location().Equal(common.NodeLocation) { // Sanity check
 			log.Error("ETX sender is in our location!", "tx", tx.Hash().String(), "sender", tx.ETXSender().String())
 			continue // skip this tx

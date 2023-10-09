@@ -105,7 +105,7 @@ func (p *Peer) readStatus(network uint64, status *StatusPacket, genesis common.H
 		return fmt.Errorf("%w: %v", errForkIDRejected, err)
 	}
 	// sanity check slices running
-	if len(status.SlicesRunning) == 0 || len(status.SlicesRunning) > common.NumRegionsInPrime*common.NumZonesInRegion {
+	if len(status.SlicesRunning) == 0 || len(status.SlicesRunning) > common.Width*common.Width {
 		return fmt.Errorf("%w: %v", errSlicesRunningRejected, fmt.Errorf("slices running sanity check failed"))
 	}
 	return nil

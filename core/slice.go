@@ -110,7 +110,7 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLooku
 	sl.pEtxRetryCache, _ = lru.New(c_pEtxRetryThreshold)
 
 	// only set the subClients if the chain is not Zone
-	sl.subClients = make([]*quaiclient.Client, 3)
+	sl.subClients = make([]*quaiclient.Client, common.Width)
 	if nodeCtx != common.ZONE_CTX {
 		sl.subClients = makeSubClients(subClientUrls)
 	}
@@ -467,13 +467,18 @@ func (sl *Slice) UpdateDom(oldTerminus common.Hash, pendingHeader types.PendingH
 	}
 }
 
-func (sl *Slice) randomRelayArray() [3]int {
+func (sl *Slice) randomRelayArray() []int {
 	rand.Seed(time.Now().UnixNano())
-	nums := [3]int{0, 1, 2}
-	for i := len(nums) - 1; i > 0; i-- {
-		j := rand.Intn(i + 1)
-		nums[i], nums[j] = nums[j], nums[i]
+
+	// Initialize a slice of size common.Width with integers from 0 to common.Width-1
+	nums := make([]int, common.Width)
+	for i := 0; i < common.Width; i++ {
+		nums[i] = i
 	}
+
+	// Shuffle the nums slice using the rand.Shuffle
+	rand.Shuffle(len(nums), func(i, j int) { nums[i], nums[j] = nums[j], nums[i] })
+
 	return nums
 }
 
@@ -1019,7 +1024,6 @@ func (sl *Slice) init(genesis *Genesis) error {
 
 		rawdb.WriteTermini(sl.sliceDb, genesisHash, genesisTermini)
 		rawdb.WriteManifest(sl.sliceDb, genesisHash, types.BlockManifest{genesisHash})
-
 		// Append each of the knot blocks
 		sl.WriteBestPhKey(genesisHash)
 		sl.hc.SetCurrentHeader(genesisHeader)
@@ -1216,7 +1220,7 @@ func makeDomClient(domurl string) *quaiclient.Client {
 
 // MakeSubClients creates the quaiclient for the given suburls
 func makeSubClients(suburls []string) []*quaiclient.Client {
-	subClients := make([]*quaiclient.Client, 3)
+	subClients := make([]*quaiclient.Client, common.Width)
 	for i, suburl := range suburls {
 		if suburl != "" {
 			subClient, err := quaiclient.Dial(suburl)
@@ -1440,14 +1444,14 @@ func (sl *Slice) cleanCacheAndDatabaseTillBlock(hash common.Hash) {
 func (sl *Slice) GenerateRecoveryPendingHeader(pendingHeader *types.Header, checkPointHashes types.Termini) error {
 	nodeCtx := common.NodeLocation.Context()
 	if nodeCtx == common.PRIME_CTX {
-		for i := 0; i < common.NumRegionsInPrime; i++ {
+		for i := 0; i < common.Width; i++ {
 			if sl.subClients[i] != nil {
 				sl.subClients[i].GenerateRecoveryPendingHeader(context.Background(), pendingHeader, checkPointHashes)
 			}
 		}
 	} else if nodeCtx == common.REGION_CTX {
 		newPendingHeader := sl.SetHeadBackToRecoveryState(pendingHeader, checkPointHashes.SubTerminiAtIndex(common.NodeLocation.Region()))
-		for i := 0; i < common.NumZonesInRegion; i++ {
+		for i := 0; i < common.Width; i++ {
 			if sl.subClients[i] != nil {
 				sl.subClients[i].GenerateRecoveryPendingHeader(context.Background(), newPendingHeader.Header(), newPendingHeader.Termini())
 			}

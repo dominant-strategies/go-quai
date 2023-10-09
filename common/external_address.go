@@ -127,43 +127,25 @@ func (a ExternalAddress) Value() (driver.Value, error) {
 	return a[:], nil
 }
 
-// Location looks up the chain location which contains this address
 func (a ExternalAddress) Location() *Location {
-	R, Z, D := 0, 0, HierarchyDepth
-	if NodeLocation.HasRegion() {
-		R = NodeLocation.Region()
-	}
-	if NodeLocation.HasZone() {
-		Z = NodeLocation.Zone()
+	// Assuming AddressLength is at least 1 byte
+	if len(a) < 1 {
+		return nil // or handle error appropriately
 	}
 
-	// Search zone->region->prime address spaces in-slice first, and then search
-	// zone->region out-of-slice address spaces next. This minimizes expected
-	// search time under the following assumptions:
-	// * a node is more likely to encounter a TX from its slice than from another
-	// * we expect `>= Z` `zone` TXs for every `region` TX
-	// * we expect `>= R` `region` TXs for every `prime` TX
-	// * (and by extension) we expect `>= R*Z` `zone` TXs for every `prime` TX
-	primeChecked := false
-	for r := 0; r < NumRegionsInPrime; r++ {
-		for z := 0; z < NumZonesInRegion; z++ {
-			l := Location{byte((r + R) % D), byte((z + Z) % D)}
-			if l.ContainsAddress(Address{&a}) {
-				return &l
-			}
-		}
-		l := Location{byte((r + R) % D)}
-		if l.ContainsAddress(Address{&a}) {
-			return &l
-		}
-		// Check prime on first pass through slice, but not again
-		if !primeChecked {
-			primeChecked = true
-			l := Location{}
-			if l.ContainsAddress(Address{&a}) {
-				return &l
-			}
-		}
+	// Extract the first byte (shard identifier) from the address
+	shardIdentifier := a[0]
+
+	// Extract the region (first 4 bits) and zone (last 4 bits)
+	region := (shardIdentifier & 0xF0) >> 4
+	zone := shardIdentifier & 0x0F
+
+	// If region or zone exceeds the Width, return nil
+	if region >= Width || zone >= Width {
+		return nil
 	}
-	return nil
+
+	// Convert region and zone to byte slice and return
+	loc := Location{byte(region), byte(zone)}
+	return &loc
 }
