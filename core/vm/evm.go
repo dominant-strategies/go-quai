@@ -115,7 +115,7 @@ type EVM struct {
 	Config Config
 	// global (to this context) quai virtual machine
 	// used throughout the execution of the tx.
-	interpreter *EVMInterpreter
+	interpreter *WASMInterpreter
 	// abort is used to abort the EVM calling operations
 	// NOTE: must be set atomically
 	abort int32
@@ -140,7 +140,7 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 		chainRules:  chainConfig.Rules(blockCtx.BlockNumber),
 		ETXCache:    make([]*types.Transaction, 0),
 	}
-	evm.interpreter = NewEVMInterpreter(evm, config)
+	evm.interpreter = NewWASMInterpreter(evm, config)
 	return evm
 }
 
@@ -163,7 +163,7 @@ func (evm *EVM) Cancelled() bool {
 }
 
 // Interpreter returns the current interpreter
-func (evm *EVM) Interpreter() *EVMInterpreter {
+func (evm *EVM) Interpreter() *WASMInterpreter {
 	return evm.interpreter
 }
 

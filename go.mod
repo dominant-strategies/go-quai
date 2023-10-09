@@ -6,6 +6,7 @@ require (
 	github.com/Azure/azure-storage-blob-go v0.7.0
 	github.com/VictoriaMetrics/fastcache v1.6.0
 	github.com/btcsuite/btcd v0.20.1-beta
+	github.com/bytecodealliance/wasmtime-go v1.0.0
 	github.com/cespare/cp v0.1.0
 	github.com/cockroachdb/pebble v0.0.0-20230701135918-609ae80aea41
 	github.com/davecgh/go-spew v1.1.1
