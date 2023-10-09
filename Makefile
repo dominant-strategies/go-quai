@@ -43,6 +43,7 @@ BASE_CMD += --http --http.vhosts=* --http.addr $(HTTP_ADDR) --http.api $(HTTP_AP
 BASE_CMD += --ws --ws.addr $(WS_ADDR) --ws.api $(WS_API)
 BASE_CMD += --slices $(SLICES)
 BASE_CMD += --db.engine $(DB_ENGINE)
+BASE_CMD += --maxpeers $(MAX_PEERS)
 ifeq ($(ENABLE_ARCHIVE),true)
 	BASE_CMD += --gcmode archive
 endif
