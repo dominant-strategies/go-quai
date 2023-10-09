@@ -45,11 +45,10 @@ const (
 	REGION_CTX = 1
 	ZONE_CTX   = 2
 
-	// Depth of the hierarchy of chains
-	NumRegionsInPrime = 3
-	NumZonesInRegion  = 3
-	HierarchyDepth    = 3
-	NumChains         = 1 + NumRegionsInPrime*(1+NumZonesInRegion) // Prime + R regions + RxZ zones
+	// Depth & width of the hierarchy of chains
+	Width          = 5
+	HierarchyDepth = 3
+	NumChains      = 1 + Width*(1+Width) // Prime + R regions + RxZ zones
 )
 
 var (
@@ -202,34 +201,6 @@ func (h UnprefixedHash) MarshalText() ([]byte, error) {
 
 /////////// Address
 
-type addrPrefixRange struct {
-	lo uint8
-	hi uint8
-}
-
-func NewRange(l, h uint8) addrPrefixRange {
-	return addrPrefixRange{
-		lo: l,
-		hi: h,
-	}
-}
-
-var (
-	locationToPrefixRange = make(map[string]addrPrefixRange)
-)
-
-func init() {
-	locationToPrefixRange["cyprus1"] = NewRange(0, 29)
-	locationToPrefixRange["cyprus2"] = NewRange(30, 58)
-	locationToPrefixRange["cyprus3"] = NewRange(59, 87)
-	locationToPrefixRange["paxos1"] = NewRange(88, 115)
-	locationToPrefixRange["paxos2"] = NewRange(116, 143)
-	locationToPrefixRange["paxos3"] = NewRange(144, 171)
-	locationToPrefixRange["hydra1"] = NewRange(172, 199)
-	locationToPrefixRange["hydra2"] = NewRange(200, 227)
-	locationToPrefixRange["hydra3"] = NewRange(228, 255)
-}
-
 // UnprefixedAddress allows marshaling an Address without 0x prefix.
 type UnprefixedAddress InternalAddress
 
@@ -344,10 +315,10 @@ func (loc Location) AssertValid() {
 	if !loc.HasRegion() && loc.HasZone() {
 		log.Fatal("cannot specify zone without also specifying region.")
 	}
-	if loc.Region() >= NumRegionsInPrime {
+	if loc.Region() >= Width {
 		log.Fatal("region index is not valid.")
 	}
-	if loc.Zone() >= NumZonesInRegion {
+	if loc.Zone() >= Width {
 		log.Fatal("zone index is not valid.")
 	}
 }
@@ -425,6 +396,32 @@ func (loc Location) Name() string {
 		regionName = "paxos"
 	case 2:
 		regionName = "hydra"
+	case 3:
+		regionName = "rhodes"
+	case 4:
+		regionName = "troy"
+	case 5:
+		regionName = "malta"
+	case 6:
+		regionName = "crete"
+	case 7:
+		regionName = "sparta"
+	case 8:
+		regionName = "titan"
+	case 9:
+		regionName = "apollo"
+	case 10:
+		regionName = "lipsi"
+	case 11:
+		regionName = "aegina"
+	case 12:
+		regionName = "nikus"
+	case 13:
+		regionName = "kea"
+	case 14:
+		regionName = "chronos"
+	case 15:
+		regionName = "antikytheria"
 	default:
 		regionName = "unknownregion"
 	}
@@ -466,17 +463,34 @@ func (loc Location) CommonDom(cmp Location) Location {
 }
 
 func (l Location) ContainsAddress(a Address) bool {
-	// ContainAddress can only be called for a zone chain
+	// Ensure the Location has content
+	if len(l) < 2 {
+		return false
+	}
+
+	// Check if the Location context is for a zone chain
 	if l.Context() != ZONE_CTX {
 		return false
 	}
-	prefix := a.Bytes()[0]
-	prefixRange, ok := locationToPrefixRange[l.Name()]
-	if !ok {
-		log.Fatal("unable to get address prefix range for location")
+
+	// Extract the first byte (shard identifier) from the address
+	addressBytes := a.Bytes()
+	if len(addressBytes) < 1 {
+		return false
 	}
-	// Ranges are fully inclusive
-	return uint8(prefix) >= prefixRange.lo && uint8(prefix) <= prefixRange.hi
+	shardIdentifier := addressBytes[0]
+
+	// Extract the region (first 4 bits) and zone (last 4 bits) from the address
+	region := (shardIdentifier & 0xF0) >> 4
+	zone := shardIdentifier & 0x0F
+
+	// Check if region or zone exceeds the Width
+	if region >= Width || zone >= Width {
+		return false
+	}
+
+	// Compare the region and zone with the given Location (l)
+	return l[0] == byte(region) && (len(l) == 1 || (len(l) > 1 && l[1] == byte(zone)))
 }
 
 func (l Location) RPCMarshal() []hexutil.Uint64 {
@@ -489,21 +503,31 @@ func (l Location) RPCMarshal() []hexutil.Uint64 {
 }
 
 func IsInChainScope(b []byte) bool {
-	nodeCtx := NodeLocation.Context()
-	// IsInChainScope only be called for a zone chain
-	if nodeCtx != ZONE_CTX {
+	// Ensure the byte slice has content
+	if len(b) < 1 {
 		return false
 	}
-	if BytesToHash(b) == ZeroAddr.Hash() {
-		return true
+
+	// Extract the first byte (shard identifier) from the address
+	shardIdentifier := b[0]
+
+	// Extract the region (first 4 bits) and zone (last 4 bits)
+	region := (shardIdentifier & 0xF0) >> 4
+	zone := shardIdentifier & 0x0F
+
+	// Check if region or zone exceeds the Width
+	if region >= Width || zone >= Width {
+		return false
 	}
-	prefix := b[0]
-	prefixRange, ok := locationToPrefixRange[NodeLocation.Name()]
-	if !ok {
-		log.Fatal("unable to get address prefix range for location")
+
+	// Assuming NodeLocation is also of type Location (a byte slice)
+	// and that it's structured similarly (first byte is region, second is zone)
+	if len(NodeLocation) < 2 {
+		return false
 	}
-	// Ranges are fully inclusive
-	return uint8(prefix) >= prefixRange.lo && uint8(prefix) <= prefixRange.hi
+
+	// Compare the region and zone with the NodeLocation
+	return NodeLocation[0] == byte(region) && NodeLocation[1] == byte(zone)
 }
 
 func OrderToString(order int) string {

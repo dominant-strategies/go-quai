@@ -5,123 +5,195 @@ goQuai:
   env: quai-dev
   replicas: 1
   network: garden
-  slices: '[0 0],[0 1],[0 2],[1 0],[1 1],[1 2],[2 0],[2 1],[2 2]'
+  slices: '[0 0],[0 1],[0 2],[0 3],[1 0],[1 1],[1 2],[1 3],[2 0],[2 1],[2 2],[2 3],[3 0],[3 1],[3 2],[3 3]'
   verbosity: 4
   chains:
     - name: prime
       ports:
-        http: "8546"
-        ws: "8547"
-        disc: "30303"
+        http: "10001"
+        ws: "10002"
+        disc: "10000"
       region: ""
       zone: ""
-      sub: ws://127.0.0.1:8579,ws://127.0.0.1:8581,ws://127.0.0.1:8583
+      sub: ws://127.0.0.1:10005,ws://127.0.0.1:10008,ws://127.0.0.1:10011,ws://127.0.0.1:10014
       dom: ""
     - name: cyprus
       ports:
-        http: "8578"
-        ws: "8579"
-        disc: "30304"
+        http: "10004"
+        ws: "10005"
+        disc: "10003"
       region: 0
       zone: ""
-      sub: ws://127.0.0.1:8611,ws://127.0.0.1:8643,ws://127.0.0.1:8675
-      dom: ws://127.0.0.1:8547
+      sub: ws://127.0.0.1:10053,ws://127.0.0.1:10056,ws://127.0.0.1:10059,ws://127.0.0.1:10062
+      dom: ws://127.0.0.1:10002
     - name: paxos
       ports:
-        http: "8580"
-        ws: "8581"
-        disc: "30305"
+        http: "10007"
+        ws: "10008"
+        disc: "10006"
       region: 1
       zone: ""
-      sub: ws://127.0.0.1:8613,ws://127.0.0.1:8645,ws://127.0.0.1:8677
-      dom: ws://127.0.0.1:8547
+      sub: ws://127.0.0.1:10053,ws://127.0.0.1:10056,ws://127.0.0.1:10059,ws://127.0.0.1:10062
+      dom: ws://127.0.0.1:10002
     - name: hydra
       ports:
-        http: "8582"
-        ws: "8583"
-        disc: "30306"
+        http: "10010"
+        ws: "10011"
+        disc: "10009"
       region: 2
       zone: ""
-      sub: ws://127.0.0.1:8615,ws://127.0.0.1:8647,ws://127.0.0.1:8679
-      dom: ws://127.0.0.1:8547
+      sub: ws://127.0.0.1:10053,ws://127.0.0.1:10056,ws://127.0.0.1:10059,ws://127.0.0.1:10062
+      dom: ws://127.0.0.1:10002
+    - name: rhodes
+      ports:
+        http: "10013"
+        ws: "10014"
+        disc: "10012"
+      region: 3
+      zone: ""
+      sub: ws://127.0.0.1:10053,ws://127.0.0.1:10056,ws://127.0.0.1:10059,ws://127.0.0.1:10062
+      dom: ws://127.0.0.1:10002
     - name: cyprus1
       ports:
-        http: "8610"
-        ws: "8611"
-        disc: "30307"
+        http: "10052"
+        ws: "10053"
+        disc: "10051"
       region: 0
       zone: 0
       sub: ""
-      dom: ws://127.0.0.1:8579
+      dom: ws://127.0.0.1:10014
     - name: cyprus2
       ports:
-        http: "8542"
-        ws: "8643"
-        disc: "30308"
+        http: "10055"
+        ws: "10056"
+        disc: "10054"
       region: 0
       zone: 1
       sub: ""
-      dom: ws://127.0.0.1:8579
+      dom: ws://127.0.0.1:10014
     - name: cyprus3
       ports:
-        http: "8674"
-        ws: "8675"
-        disc: "30309"
+        http: "10058"
+        ws: "10059"
+        disc: "10057"
       region: 0
       zone: 2
       sub: ""
-      dom: ws://127.0.0.1:8579
+      dom: ws://127.0.0.1:10014
+    - name: cyprus4
+      ports:
+        http: "10061"
+        ws: "10062"
+        disc: "10060"
+      region: 0
+      zone: 3
+      sub: ""
+      dom: ws://127.0.0.1:10014
     - name: paxos1
       ports:
-        http: "8512"
-        ws: "8613"
-        disc: "30310"
+        http: "10064"
+        ws: "10065"
+        disc: "10063"
       region: 1
       zone: 0
       sub: ""
-      dom: ws://127.0.0.1:8581
+      dom: ws://127.0.0.1:10017
     - name: paxos2
       ports:
-        http: "8544"
-        ws: "8645"
-        disc: "30311"
+        http: "10067"
+        ws: "10068"
+        disc: "10066"
       region: 1
       zone: 1
       sub: ""
-      dom: ws://127.0.0.1:8581
+      dom: ws://127.0.0.1:10017
     - name: paxos3
       ports:
-        http: "8576"
-        ws: "8677"
-        disc: "30312"
+        http: "10070"
+        ws: "10071"
+        disc: "10069"
       region: 1
       zone: 2
       sub: ""
-      dom: ws://127.0.0.1:8581
+      dom: ws://127.0.0.1:10017
+    - name: paxos4
+      ports:
+        http: "10073"
+        ws: "10074"
+        disc: "10072"
+      region: 1
+      zone: 3
+      sub: ""
+      dom: ws://127.0.0.1:10017
     - name: hydra1
       ports:
-        http: "8614"
-        ws: "8615"
-        disc: "30313"
+        http: "10076"
+        ws: "10077"
+        disc: "10075"
       region: 2
       zone: 0
       sub: ""
-      dom: ws://127.0.0.1:8583
+      dom: ws://127.0.0.1:10020
     - name: hydra2
       ports:
-        http: "8646"
-        ws: "8647"
-        disc: "30314"
+        http: "10079"
+        ws: "10080"
+        disc: "10078"
       region: 2
       zone: 1
       sub: ""
-      dom: ws://127.0.0.1:8583
+      dom: ws://127.0.0.1:10020
     - name: hydra3
       ports:
-        http: "8678"
-        ws: "8679"
-        disc: "30315"
+        http: "10082"
+        ws: "10083"
+        disc: "10081"
       region: 2
       zone: 2
       sub: ""
-      dom: ws://127.0.0.1:8583
+      dom: ws://127.0.0.1:10020
+    - name: hydra4
+      ports:
+        http: "10085"
+        ws: "10086"
+        disc: "10084"
+      region: 2
+      zone: 3
+      sub: ""
+      dom: ws://127.0.0.1:10020
+    - name: rhodes1
+      ports:
+        http: "10088"
+        ws: "10089"
+        disc: "10087"
+      region: 3
+      zone: 0
+      sub: ""
+      dom: ws://127.0.0.1:10023
+    - name: rhodes2
+      ports:
+        http: "10091"
+        ws: "10092"
+        disc: "10090"
+      region: 3
+      zone: 1
+      sub: ""
+      dom: ws://127.0.0.1:10023
+    - name: rhodes3
+      ports:
+        http: "10094"
+        ws: "10095"
+        disc: "10093"
+      region: 3
+      zone: 2
+      sub: ""
+      dom: ws://127.0.0.1:10023
+    - name: rhodes4
+      ports:
+        http: "10097"
+        ws: "10098"
+        disc: "10096"
+      region: 3
+      zone: 3
+      sub: ""
+      dom: ws://127.0.0.1:10023

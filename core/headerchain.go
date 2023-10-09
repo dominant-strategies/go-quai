@@ -740,10 +740,10 @@ func (hc *HeaderChain) CheckContext(context int) error {
 
 // CheckLocationRange checks to make sure the range of r and z are valid
 func (hc *HeaderChain) CheckLocationRange(location []byte) error {
-	if int(location[0]) < 1 || int(location[0]) > common.NumRegionsInPrime {
+	if int(location[0]) < 1 || int(location[0]) > common.Width {
 		return errors.New("the provided location is outside the allowable region range")
 	}
-	if int(location[1]) < 1 || int(location[1]) > common.NumZonesInRegion {
+	if int(location[1]) < 1 || int(location[1]) > common.Width {
 		return errors.New("the provided location is outside the allowable zone range")
 	}
 	return nil

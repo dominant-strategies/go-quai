@@ -1,0 +1,2467 @@
+goQuai:
+  image:
+    name: quainetwork/go-quai
+    version: v0.20.0-pre.0
+  env: quai-dev
+  replicas: 1
+  network: garden
+  slices: '[0 0],[0 1],[0 2],[0 3],[0 4],[0 5],[0 6],[0 7],[0 8],[0 9],[0 10],[0 11],[0 12],[0 13],[0 14],[0 15],[1 0],[1 1],[1 2],[1 3],[1 4],[1 5],[1 6],[1 7],[1 8],[1 9],[1 10],[1 11],[1 12],[1 13],[1 14],[1 15],[2 0],[2 1],[2 2],[2 3],[2 4],[2 5],[2 6],[2 7],[2 8],[2 9],[2 10],[2 11],[2 12],[2 13],[2 14],[2 15],[3 0],[3 1],[3 2],[3 3],[3 4],[3 5],[3 6],[3 7],[3 8],[3 9],[3 10],[3 11],[3 12],[3 13],[3 14],[3 15],[4 0],[4 1],[4 2],[4 3],[4 4],[4 5],[4 6],[4 7],[4 8],[4 9],[4 10],[4 11],[4 12],[4 13],[4 14],[4 15],[5 0],[5 1],[5 2],[5 3],[5 4],[5 5],[5 6],[5 7],[5 8],[5 9],[5 10],[5 11],[5 12],[5 13],[5 14],[5 15],[6 0],[6 1],[6 2],[6 3],[6 4],[6 5],[6 6],[6 7],[6 8],[6 9],[6 10],[6 11],[6 12],[6 13],[6 14],[6 15],[7 0],[7 1],[7 2],[7 3],[7 4],[7 5],[7 6],[7 7],[7 8],[7 9],[7 10],[7 11],[7 12],[7 13],[7 14],[7 15],[8 0],[8 1],[8 2],[8 3],[8 4],[8 5],[8 6],[8 7],[8 8],[8 9],[8 10],[8 11],[8 12],[8 13],[8 14],[8 15],[9 0],[9 1],[9 2],[9 3],[9 4],[9 5],[9 6],[9 7],[9 8],[9 9],[9 10],[9 11],[9 12],[9 13],[9 14],[9 15],[10 0],[10 1],[10 2],[10 3],[10 4],[10 5],[10 6],[10 7],[10 8],[10 9],[10 10],[10 11],[10 12],[10 13],[10 14],[10 15],[11 0],[11 1],[11 2],[11 3],[11 4],[11 5],[11 6],[11 7],[11 8],[11 9],[11 10],[11 11],[11 12],[11 13],[11 14],[11 15],[12 0],[12 1],[12 2],[12 3],[12 4],[12 5],[12 6],[12 7],[12 8],[12 9],[12 10],[12 11],[12 12],[12 13],[12 14],[12 15],[13 0],[13 1],[13 2],[13 3],[13 4],[13 5],[13 6],[13 7],[13 8],[13 9],[13 10],[13 11],[13 12],[13 13],[13 14],[13 15],[14 0],[14 1],[14 2],[14 3],[14 4],[14 5],[14 6],[14 7],[14 8],[14 9],[14 10],[14 11],[14 12],[14 13],[14 14],[14 15],[15 0],[15 1],[15 2],[15 3],[15 4],[15 5],[15 6],[15 7],[15 8],[15 9],[15 10],[15 11],[15 12],[15 13],[15 14],[15 15]'
+  verbosity: 4
+  chains:
+    - name: prime
+      ports:
+        http: "10001"
+        ws: "10002"
+        disc: "10000"
+      region: ""
+      zone: ""
+      sub: ws://127.0.0.1:10005,ws://127.0.0.1:10008,ws://127.0.0.1:10011,ws://127.0.0.1:10014,ws://127.0.0.1:10017,ws://127.0.0.1:10020,ws://127.0.0.1:10023,ws://127.0.0.1:10026,ws://127.0.0.1:10029,ws://127.0.0.1:10032,ws://127.0.0.1:10035,ws://127.0.0.1:10038,ws://127.0.0.1:10041,ws://127.0.0.1:10044,ws://127.0.0.1:10047,ws://127.0.0.1:10050
+      dom: ""
+    - name: cyprus
+      ports:
+        http: "10004"
+        ws: "10005"
+        disc: "10003"
+      region: 0
+      zone: ""
+      sub: ws://127.0.0.1:10053,ws://127.0.0.1:10056,ws://127.0.0.1:10059,ws://127.0.0.1:10062,ws://127.0.0.1:10065,ws://127.0.0.1:10068,ws://127.0.0.1:10071,ws://127.0.0.1:10074,ws://127.0.0.1:10077,ws://127.0.0.1:10080,ws://127.0.0.1:10083,ws://127.0.0.1:10086,ws://127.0.0.1:10089,ws://127.0.0.1:10092,ws://127.0.0.1:10095,ws://127.0.0.1:10098
+      dom: ws://127.0.0.1:10002
+    - name: paxos
+      ports:
+        http: "10007"
+        ws: "10008"
+        disc: "10006"
+      region: 1
+      zone: ""
+      sub: ws://127.0.0.1:10053,ws://127.0.0.1:10056,ws://127.0.0.1:10059,ws://127.0.0.1:10062,ws://127.0.0.1:10065,ws://127.0.0.1:10068,ws://127.0.0.1:10071,ws://127.0.0.1:10074,ws://127.0.0.1:10077,ws://127.0.0.1:10080,ws://127.0.0.1:10083,ws://127.0.0.1:10086,ws://127.0.0.1:10089,ws://127.0.0.1:10092,ws://127.0.0.1:10095,ws://127.0.0.1:10098
+      dom: ws://127.0.0.1:10002
+    - name: hydra
+      ports:
+        http: "10010"
+        ws: "10011"
+        disc: "10009"
+      region: 2
+      zone: ""
+      sub: ws://127.0.0.1:10053,ws://127.0.0.1:10056,ws://127.0.0.1:10059,ws://127.0.0.1:10062,ws://127.0.0.1:10065,ws://127.0.0.1:10068,ws://127.0.0.1:10071,ws://127.0.0.1:10074,ws://127.0.0.1:10077,ws://127.0.0.1:10080,ws://127.0.0.1:10083,ws://127.0.0.1:10086,ws://127.0.0.1:10089,ws://127.0.0.1:10092,ws://127.0.0.1:10095,ws://127.0.0.1:10098
+      dom: ws://127.0.0.1:10002
+    - name: rhodes
+      ports:
+        http: "10013"
+        ws: "10014"
+        disc: "10012"
+      region: 3
+      zone: ""
+      sub: ws://127.0.0.1:10053,ws://127.0.0.1:10056,ws://127.0.0.1:10059,ws://127.0.0.1:10062,ws://127.0.0.1:10065,ws://127.0.0.1:10068,ws://127.0.0.1:10071,ws://127.0.0.1:10074,ws://127.0.0.1:10077,ws://127.0.0.1:10080,ws://127.0.0.1:10083,ws://127.0.0.1:10086,ws://127.0.0.1:10089,ws://127.0.0.1:10092,ws://127.0.0.1:10095,ws://127.0.0.1:10098
+      dom: ws://127.0.0.1:10002
+    - name: troy
+      ports:
+        http: "10016"
+        ws: "10017"
+        disc: "10015"
+      region: 4
+      zone: ""
+      sub: ws://127.0.0.1:10053,ws://127.0.0.1:10056,ws://127.0.0.1:10059,ws://127.0.0.1:10062,ws://127.0.0.1:10065,ws://127.0.0.1:10068,ws://127.0.0.1:10071,ws://127.0.0.1:10074,ws://127.0.0.1:10077,ws://127.0.0.1:10080,ws://127.0.0.1:10083,ws://127.0.0.1:10086,ws://127.0.0.1:10089,ws://127.0.0.1:10092,ws://127.0.0.1:10095,ws://127.0.0.1:10098
+      dom: ws://127.0.0.1:10002
+    - name: malta
+      ports:
+        http: "10019"
+        ws: "10020"
+        disc: "10018"
+      region: 5
+      zone: ""
+      sub: ws://127.0.0.1:10053,ws://127.0.0.1:10056,ws://127.0.0.1:10059,ws://127.0.0.1:10062,ws://127.0.0.1:10065,ws://127.0.0.1:10068,ws://127.0.0.1:10071,ws://127.0.0.1:10074,ws://127.0.0.1:10077,ws://127.0.0.1:10080,ws://127.0.0.1:10083,ws://127.0.0.1:10086,ws://127.0.0.1:10089,ws://127.0.0.1:10092,ws://127.0.0.1:10095,ws://127.0.0.1:10098
+      dom: ws://127.0.0.1:10002
+    - name: crete
+      ports:
+        http: "10022"
+        ws: "10023"
+        disc: "10021"
+      region: 6
+      zone: ""
+      sub: ws://127.0.0.1:10053,ws://127.0.0.1:10056,ws://127.0.0.1:10059,ws://127.0.0.1:10062,ws://127.0.0.1:10065,ws://127.0.0.1:10068,ws://127.0.0.1:10071,ws://127.0.0.1:10074,ws://127.0.0.1:10077,ws://127.0.0.1:10080,ws://127.0.0.1:10083,ws://127.0.0.1:10086,ws://127.0.0.1:10089,ws://127.0.0.1:10092,ws://127.0.0.1:10095,ws://127.0.0.1:10098
+      dom: ws://127.0.0.1:10002
+    - name: sparta
+      ports:
+        http: "10025"
+        ws: "10026"
+        disc: "10024"
+      region: 7
+      zone: ""
+      sub: ws://127.0.0.1:10053,ws://127.0.0.1:10056,ws://127.0.0.1:10059,ws://127.0.0.1:10062,ws://127.0.0.1:10065,ws://127.0.0.1:10068,ws://127.0.0.1:10071,ws://127.0.0.1:10074,ws://127.0.0.1:10077,ws://127.0.0.1:10080,ws://127.0.0.1:10083,ws://127.0.0.1:10086,ws://127.0.0.1:10089,ws://127.0.0.1:10092,ws://127.0.0.1:10095,ws://127.0.0.1:10098
+      dom: ws://127.0.0.1:10002
+    - name: titan
+      ports:
+        http: "10028"
+        ws: "10029"
+        disc: "10027"
+      region: 8
+      zone: ""
+      sub: ws://127.0.0.1:10053,ws://127.0.0.1:10056,ws://127.0.0.1:10059,ws://127.0.0.1:10062,ws://127.0.0.1:10065,ws://127.0.0.1:10068,ws://127.0.0.1:10071,ws://127.0.0.1:10074,ws://127.0.0.1:10077,ws://127.0.0.1:10080,ws://127.0.0.1:10083,ws://127.0.0.1:10086,ws://127.0.0.1:10089,ws://127.0.0.1:10092,ws://127.0.0.1:10095,ws://127.0.0.1:10098
+      dom: ws://127.0.0.1:10002
+    - name: apollo
+      ports:
+        http: "10031"
+        ws: "10032"
+        disc: "10030"
+      region: 9
+      zone: ""
+      sub: ws://127.0.0.1:10053,ws://127.0.0.1:10056,ws://127.0.0.1:10059,ws://127.0.0.1:10062,ws://127.0.0.1:10065,ws://127.0.0.1:10068,ws://127.0.0.1:10071,ws://127.0.0.1:10074,ws://127.0.0.1:10077,ws://127.0.0.1:10080,ws://127.0.0.1:10083,ws://127.0.0.1:10086,ws://127.0.0.1:10089,ws://127.0.0.1:10092,ws://127.0.0.1:10095,ws://127.0.0.1:10098
+      dom: ws://127.0.0.1:10002
+    - name: lipsi
+      ports:
+        http: "10034"
+        ws: "10035"
+        disc: "10033"
+      region: 10
+      zone: ""
+      sub: ws://127.0.0.1:10053,ws://127.0.0.1:10056,ws://127.0.0.1:10059,ws://127.0.0.1:10062,ws://127.0.0.1:10065,ws://127.0.0.1:10068,ws://127.0.0.1:10071,ws://127.0.0.1:10074,ws://127.0.0.1:10077,ws://127.0.0.1:10080,ws://127.0.0.1:10083,ws://127.0.0.1:10086,ws://127.0.0.1:10089,ws://127.0.0.1:10092,ws://127.0.0.1:10095,ws://127.0.0.1:10098
+      dom: ws://127.0.0.1:10002
+    - name: aegina
+      ports:
+        http: "10037"
+        ws: "10038"
+        disc: "10036"
+      region: 11
+      zone: ""
+      sub: ws://127.0.0.1:10053,ws://127.0.0.1:10056,ws://127.0.0.1:10059,ws://127.0.0.1:10062,ws://127.0.0.1:10065,ws://127.0.0.1:10068,ws://127.0.0.1:10071,ws://127.0.0.1:10074,ws://127.0.0.1:10077,ws://127.0.0.1:10080,ws://127.0.0.1:10083,ws://127.0.0.1:10086,ws://127.0.0.1:10089,ws://127.0.0.1:10092,ws://127.0.0.1:10095,ws://127.0.0.1:10098
+      dom: ws://127.0.0.1:10002
+    - name: nikus
+      ports:
+        http: "10040"
+        ws: "10041"
+        disc: "10039"
+      region: 12
+      zone: ""
+      sub: ws://127.0.0.1:10053,ws://127.0.0.1:10056,ws://127.0.0.1:10059,ws://127.0.0.1:10062,ws://127.0.0.1:10065,ws://127.0.0.1:10068,ws://127.0.0.1:10071,ws://127.0.0.1:10074,ws://127.0.0.1:10077,ws://127.0.0.1:10080,ws://127.0.0.1:10083,ws://127.0.0.1:10086,ws://127.0.0.1:10089,ws://127.0.0.1:10092,ws://127.0.0.1:10095,ws://127.0.0.1:10098
+      dom: ws://127.0.0.1:10002
+    - name: kea
+      ports:
+        http: "10043"
+        ws: "10044"
+        disc: "10042"
+      region: 13
+      zone: ""
+      sub: ws://127.0.0.1:10053,ws://127.0.0.1:10056,ws://127.0.0.1:10059,ws://127.0.0.1:10062,ws://127.0.0.1:10065,ws://127.0.0.1:10068,ws://127.0.0.1:10071,ws://127.0.0.1:10074,ws://127.0.0.1:10077,ws://127.0.0.1:10080,ws://127.0.0.1:10083,ws://127.0.0.1:10086,ws://127.0.0.1:10089,ws://127.0.0.1:10092,ws://127.0.0.1:10095,ws://127.0.0.1:10098
+      dom: ws://127.0.0.1:10002
+    - name: chronos
+      ports:
+        http: "10046"
+        ws: "10047"
+        disc: "10045"
+      region: 14
+      zone: ""
+      sub: ws://127.0.0.1:10053,ws://127.0.0.1:10056,ws://127.0.0.1:10059,ws://127.0.0.1:10062,ws://127.0.0.1:10065,ws://127.0.0.1:10068,ws://127.0.0.1:10071,ws://127.0.0.1:10074,ws://127.0.0.1:10077,ws://127.0.0.1:10080,ws://127.0.0.1:10083,ws://127.0.0.1:10086,ws://127.0.0.1:10089,ws://127.0.0.1:10092,ws://127.0.0.1:10095,ws://127.0.0.1:10098
+      dom: ws://127.0.0.1:10002
+    - name: antikytheria
+      ports:
+        http: "10049"
+        ws: "10050"
+        disc: "10048"
+      region: 15
+      zone: ""
+      sub: ws://127.0.0.1:10053,ws://127.0.0.1:10056,ws://127.0.0.1:10059,ws://127.0.0.1:10062,ws://127.0.0.1:10065,ws://127.0.0.1:10068,ws://127.0.0.1:10071,ws://127.0.0.1:10074,ws://127.0.0.1:10077,ws://127.0.0.1:10080,ws://127.0.0.1:10083,ws://127.0.0.1:10086,ws://127.0.0.1:10089,ws://127.0.0.1:10092,ws://127.0.0.1:10095,ws://127.0.0.1:10098
+      dom: ws://127.0.0.1:10002
+    - name: cyprus1
+      ports:
+        http: "10052"
+        ws: "10053"
+        disc: "10051"
+      region: 0
+      zone: 0
+      sub: ""
+      dom: ws://127.0.0.1:10050
+    - name: cyprus2
+      ports:
+        http: "10055"
+        ws: "10056"
+        disc: "10054"
+      region: 0
+      zone: 1
+      sub: ""
+      dom: ws://127.0.0.1:10050
+    - name: cyprus3
+      ports:
+        http: "10058"
+        ws: "10059"
+        disc: "10057"
+      region: 0
+      zone: 2
+      sub: ""
+      dom: ws://127.0.0.1:10050
+    - name: cyprus4
+      ports:
+        http: "10061"
+        ws: "10062"
+        disc: "10060"
+      region: 0
+      zone: 3
+      sub: ""
+      dom: ws://127.0.0.1:10050
+    - name: cyprus5
+      ports:
+        http: "10064"
+        ws: "10065"
+        disc: "10063"
+      region: 0
+      zone: 4
+      sub: ""
+      dom: ws://127.0.0.1:10050
+    - name: cyprus6
+      ports:
+        http: "10067"
+        ws: "10068"
+        disc: "10066"
+      region: 0
+      zone: 5
+      sub: ""
+      dom: ws://127.0.0.1:10050
+    - name: cyprus7
+      ports:
+        http: "10070"
+        ws: "10071"
+        disc: "10069"
+      region: 0
+      zone: 6
+      sub: ""
+      dom: ws://127.0.0.1:10050
+    - name: cyprus8
+      ports:
+        http: "10073"
+        ws: "10074"
+        disc: "10072"
+      region: 0
+      zone: 7
+      sub: ""
+      dom: ws://127.0.0.1:10050
+    - name: cyprus9
+      ports:
+        http: "10076"
+        ws: "10077"
+        disc: "10075"
+      region: 0
+      zone: 8
+      sub: ""
+      dom: ws://127.0.0.1:10050
+    - name: cyprus10
+      ports:
+        http: "10079"
+        ws: "10080"
+        disc: "10078"
+      region: 0
+      zone: 9
+      sub: ""
+      dom: ws://127.0.0.1:10050
+    - name: cyprus11
+      ports:
+        http: "10082"
+        ws: "10083"
+        disc: "10081"
+      region: 0
+      zone: 10
+      sub: ""
+      dom: ws://127.0.0.1:10050
+    - name: cyprus12
+      ports:
+        http: "10085"
+        ws: "10086"
+        disc: "10084"
+      region: 0
+      zone: 11
+      sub: ""
+      dom: ws://127.0.0.1:10050
+    - name: cyprus13
+      ports:
+        http: "10088"
+        ws: "10089"
+        disc: "10087"
+      region: 0
+      zone: 12
+      sub: ""
+      dom: ws://127.0.0.1:10050
+    - name: cyprus14
+      ports:
+        http: "10091"
+        ws: "10092"
+        disc: "10090"
+      region: 0
+      zone: 13
+      sub: ""
+      dom: ws://127.0.0.1:10050
+    - name: cyprus15
+      ports:
+        http: "10094"
+        ws: "10095"
+        disc: "10093"
+      region: 0
+      zone: 14
+      sub: ""
+      dom: ws://127.0.0.1:10050
+    - name: cyprus16
+      ports:
+        http: "10097"
+        ws: "10098"
+        disc: "10096"
+      region: 0
+      zone: 15
+      sub: ""
+      dom: ws://127.0.0.1:10050
+    - name: paxos1
+      ports:
+        http: "10100"
+        ws: "10101"
+        disc: "10099"
+      region: 1
+      zone: 0
+      sub: ""
+      dom: ws://127.0.0.1:10053
+    - name: paxos2
+      ports:
+        http: "10103"
+        ws: "10104"
+        disc: "10102"
+      region: 1
+      zone: 1
+      sub: ""
+      dom: ws://127.0.0.1:10053
+    - name: paxos3
+      ports:
+        http: "10106"
+        ws: "10107"
+        disc: "10105"
+      region: 1
+      zone: 2
+      sub: ""
+      dom: ws://127.0.0.1:10053
+    - name: paxos4
+      ports:
+        http: "10109"
+        ws: "10110"
+        disc: "10108"
+      region: 1
+      zone: 3
+      sub: ""
+      dom: ws://127.0.0.1:10053
+    - name: paxos5
+      ports:
+        http: "10112"
+        ws: "10113"
+        disc: "10111"
+      region: 1
+      zone: 4
+      sub: ""
+      dom: ws://127.0.0.1:10053
+    - name: paxos6
+      ports:
+        http: "10115"
+        ws: "10116"
+        disc: "10114"
+      region: 1
+      zone: 5
+      sub: ""
+      dom: ws://127.0.0.1:10053
+    - name: paxos7
+      ports:
+        http: "10118"
+        ws: "10119"
+        disc: "10117"
+      region: 1
+      zone: 6
+      sub: ""
+      dom: ws://127.0.0.1:10053
+    - name: paxos8
+      ports:
+        http: "10121"
+        ws: "10122"
+        disc: "10120"
+      region: 1
+      zone: 7
+      sub: ""
+      dom: ws://127.0.0.1:10053
+    - name: paxos9
+      ports:
+        http: "10124"
+        ws: "10125"
+        disc: "10123"
+      region: 1
+      zone: 8
+      sub: ""
+      dom: ws://127.0.0.1:10053
+    - name: paxos10
+      ports:
+        http: "10127"
+        ws: "10128"
+        disc: "10126"
+      region: 1
+      zone: 9
+      sub: ""
+      dom: ws://127.0.0.1:10053
+    - name: paxos11
+      ports:
+        http: "10130"
+        ws: "10131"
+        disc: "10129"
+      region: 1
+      zone: 10
+      sub: ""
+      dom: ws://127.0.0.1:10053
+    - name: paxos12
+      ports:
+        http: "10133"
+        ws: "10134"
+        disc: "10132"
+      region: 1
+      zone: 11
+      sub: ""
+      dom: ws://127.0.0.1:10053
+    - name: paxos13
+      ports:
+        http: "10136"
+        ws: "10137"
+        disc: "10135"
+      region: 1
+      zone: 12
+      sub: ""
+      dom: ws://127.0.0.1:10053
+    - name: paxos14
+      ports:
+        http: "10139"
+        ws: "10140"
+        disc: "10138"
+      region: 1
+      zone: 13
+      sub: ""
+      dom: ws://127.0.0.1:10053
+    - name: paxos15
+      ports:
+        http: "10142"
+        ws: "10143"
+        disc: "10141"
+      region: 1
+      zone: 14
+      sub: ""
+      dom: ws://127.0.0.1:10053
+    - name: paxos16
+      ports:
+        http: "10145"
+        ws: "10146"
+        disc: "10144"
+      region: 1
+      zone: 15
+      sub: ""
+      dom: ws://127.0.0.1:10053
+    - name: hydra1
+      ports:
+        http: "10148"
+        ws: "10149"
+        disc: "10147"
+      region: 2
+      zone: 0
+      sub: ""
+      dom: ws://127.0.0.1:10056
+    - name: hydra2
+      ports:
+        http: "10151"
+        ws: "10152"
+        disc: "10150"
+      region: 2
+      zone: 1
+      sub: ""
+      dom: ws://127.0.0.1:10056
+    - name: hydra3
+      ports:
+        http: "10154"
+        ws: "10155"
+        disc: "10153"
+      region: 2
+      zone: 2
+      sub: ""
+      dom: ws://127.0.0.1:10056
+    - name: hydra4
+      ports:
+        http: "10157"
+        ws: "10158"
+        disc: "10156"
+      region: 2
+      zone: 3
+      sub: ""
+      dom: ws://127.0.0.1:10056
+    - name: hydra5
+      ports:
+        http: "10160"
+        ws: "10161"
+        disc: "10159"
+      region: 2
+      zone: 4
+      sub: ""
+      dom: ws://127.0.0.1:10056
+    - name: hydra6
+      ports:
+        http: "10163"
+        ws: "10164"
+        disc: "10162"
+      region: 2
+      zone: 5
+      sub: ""
+      dom: ws://127.0.0.1:10056
+    - name: hydra7
+      ports:
+        http: "10166"
+        ws: "10167"
+        disc: "10165"
+      region: 2
+      zone: 6
+      sub: ""
+      dom: ws://127.0.0.1:10056
+    - name: hydra8
+      ports:
+        http: "10169"
+        ws: "10170"
+        disc: "10168"
+      region: 2
+      zone: 7
+      sub: ""
+      dom: ws://127.0.0.1:10056
+    - name: hydra9
+      ports:
+        http: "10172"
+        ws: "10173"
+        disc: "10171"
+      region: 2
+      zone: 8
+      sub: ""
+      dom: ws://127.0.0.1:10056
+    - name: hydra10
+      ports:
+        http: "10175"
+        ws: "10176"
+        disc: "10174"
+      region: 2
+      zone: 9
+      sub: ""
+      dom: ws://127.0.0.1:10056
+    - name: hydra11
+      ports:
+        http: "10178"
+        ws: "10179"
+        disc: "10177"
+      region: 2
+      zone: 10
+      sub: ""
+      dom: ws://127.0.0.1:10056
+    - name: hydra12
+      ports:
+        http: "10181"
+        ws: "10182"
+        disc: "10180"
+      region: 2
+      zone: 11
+      sub: ""
+      dom: ws://127.0.0.1:10056
+    - name: hydra13
+      ports:
+        http: "10184"
+        ws: "10185"
+        disc: "10183"
+      region: 2
+      zone: 12
+      sub: ""
+      dom: ws://127.0.0.1:10056
+    - name: hydra14
+      ports:
+        http: "10187"
+        ws: "10188"
+        disc: "10186"
+      region: 2
+      zone: 13
+      sub: ""
+      dom: ws://127.0.0.1:10056
+    - name: hydra15
+      ports:
+        http: "10190"
+        ws: "10191"
+        disc: "10189"
+      region: 2
+      zone: 14
+      sub: ""
+      dom: ws://127.0.0.1:10056
+    - name: hydra16
+      ports:
+        http: "10193"
+        ws: "10194"
+        disc: "10192"
+      region: 2
+      zone: 15
+      sub: ""
+      dom: ws://127.0.0.1:10056
+    - name: rhodes1
+      ports:
+        http: "10196"
+        ws: "10197"
+        disc: "10195"
+      region: 3
+      zone: 0
+      sub: ""
+      dom: ws://127.0.0.1:10059
+    - name: rhodes2
+      ports:
+        http: "10199"
+        ws: "10200"
+        disc: "10198"
+      region: 3
+      zone: 1
+      sub: ""
+      dom: ws://127.0.0.1:10059
+    - name: rhodes3
+      ports:
+        http: "10202"
+        ws: "10203"
+        disc: "10201"
+      region: 3
+      zone: 2
+      sub: ""
+      dom: ws://127.0.0.1:10059
+    - name: rhodes4
+      ports:
+        http: "10205"
+        ws: "10206"
+        disc: "10204"
+      region: 3
+      zone: 3
+      sub: ""
+      dom: ws://127.0.0.1:10059
+    - name: rhodes5
+      ports:
+        http: "10208"
+        ws: "10209"
+        disc: "10207"
+      region: 3
+      zone: 4
+      sub: ""
+      dom: ws://127.0.0.1:10059
+    - name: rhodes6
+      ports:
+        http: "10211"
+        ws: "10212"
+        disc: "10210"
+      region: 3
+      zone: 5
+      sub: ""
+      dom: ws://127.0.0.1:10059
+    - name: rhodes7
+      ports:
+        http: "10214"
+        ws: "10215"
+        disc: "10213"
+      region: 3
+      zone: 6
+      sub: ""
+      dom: ws://127.0.0.1:10059
+    - name: rhodes8
+      ports:
+        http: "10217"
+        ws: "10218"
+        disc: "10216"
+      region: 3
+      zone: 7
+      sub: ""
+      dom: ws://127.0.0.1:10059
+    - name: rhodes9
+      ports:
+        http: "10220"
+        ws: "10221"
+        disc: "10219"
+      region: 3
+      zone: 8
+      sub: ""
+      dom: ws://127.0.0.1:10059
+    - name: rhodes10
+      ports:
+        http: "10223"
+        ws: "10224"
+        disc: "10222"
+      region: 3
+      zone: 9
+      sub: ""
+      dom: ws://127.0.0.1:10059
+    - name: rhodes11
+      ports:
+        http: "10226"
+        ws: "10227"
+        disc: "10225"
+      region: 3
+      zone: 10
+      sub: ""
+      dom: ws://127.0.0.1:10059
+    - name: rhodes12
+      ports:
+        http: "10229"
+        ws: "10230"
+        disc: "10228"
+      region: 3
+      zone: 11
+      sub: ""
+      dom: ws://127.0.0.1:10059
+    - name: rhodes13
+      ports:
+        http: "10232"
+        ws: "10233"
+        disc: "10231"
+      region: 3
+      zone: 12
+      sub: ""
+      dom: ws://127.0.0.1:10059
+    - name: rhodes14
+      ports:
+        http: "10235"
+        ws: "10236"
+        disc: "10234"
+      region: 3
+      zone: 13
+      sub: ""
+      dom: ws://127.0.0.1:10059
+    - name: rhodes15
+      ports:
+        http: "10238"
+        ws: "10239"
+        disc: "10237"
+      region: 3
+      zone: 14
+      sub: ""
+      dom: ws://127.0.0.1:10059
+    - name: rhodes16
+      ports:
+        http: "10241"
+        ws: "10242"
+        disc: "10240"
+      region: 3
+      zone: 15
+      sub: ""
+      dom: ws://127.0.0.1:10059
+    - name: troy1
+      ports:
+        http: "10244"
+        ws: "10245"
+        disc: "10243"
+      region: 4
+      zone: 0
+      sub: ""
+      dom: ws://127.0.0.1:10062
+    - name: troy2
+      ports:
+        http: "10247"
+        ws: "10248"
+        disc: "10246"
+      region: 4
+      zone: 1
+      sub: ""
+      dom: ws://127.0.0.1:10062
+    - name: troy3
+      ports:
+        http: "10250"
+        ws: "10251"
+        disc: "10249"
+      region: 4
+      zone: 2
+      sub: ""
+      dom: ws://127.0.0.1:10062
+    - name: troy4
+      ports:
+        http: "10253"
+        ws: "10254"
+        disc: "10252"
+      region: 4
+      zone: 3
+      sub: ""
+      dom: ws://127.0.0.1:10062
+    - name: troy5
+      ports:
+        http: "10256"
+        ws: "10257"
+        disc: "10255"
+      region: 4
+      zone: 4
+      sub: ""
+      dom: ws://127.0.0.1:10062
+    - name: troy6
+      ports:
+        http: "10259"
+        ws: "10260"
+        disc: "10258"
+      region: 4
+      zone: 5
+      sub: ""
+      dom: ws://127.0.0.1:10062
+    - name: troy7
+      ports:
+        http: "10262"
+        ws: "10263"
+        disc: "10261"
+      region: 4
+      zone: 6
+      sub: ""
+      dom: ws://127.0.0.1:10062
+    - name: troy8
+      ports:
+        http: "10265"
+        ws: "10266"
+        disc: "10264"
+      region: 4
+      zone: 7
+      sub: ""
+      dom: ws://127.0.0.1:10062
+    - name: troy9
+      ports:
+        http: "10268"
+        ws: "10269"
+        disc: "10267"
+      region: 4
+      zone: 8
+      sub: ""
+      dom: ws://127.0.0.1:10062
+    - name: troy10
+      ports:
+        http: "10271"
+        ws: "10272"
+        disc: "10270"
+      region: 4
+      zone: 9
+      sub: ""
+      dom: ws://127.0.0.1:10062
+    - name: troy11
+      ports:
+        http: "10274"
+        ws: "10275"
+        disc: "10273"
+      region: 4
+      zone: 10
+      sub: ""
+      dom: ws://127.0.0.1:10062
+    - name: troy12
+      ports:
+        http: "10277"
+        ws: "10278"
+        disc: "10276"
+      region: 4
+      zone: 11
+      sub: ""
+      dom: ws://127.0.0.1:10062
+    - name: troy13
+      ports:
+        http: "10280"
+        ws: "10281"
+        disc: "10279"
+      region: 4
+      zone: 12
+      sub: ""
+      dom: ws://127.0.0.1:10062
+    - name: troy14
+      ports:
+        http: "10283"
+        ws: "10284"
+        disc: "10282"
+      region: 4
+      zone: 13
+      sub: ""
+      dom: ws://127.0.0.1:10062
+    - name: troy15
+      ports:
+        http: "10286"
+        ws: "10287"
+        disc: "10285"
+      region: 4
+      zone: 14
+      sub: ""
+      dom: ws://127.0.0.1:10062
+    - name: troy16
+      ports:
+        http: "10289"
+        ws: "10290"
+        disc: "10288"
+      region: 4
+      zone: 15
+      sub: ""
+      dom: ws://127.0.0.1:10062
+    - name: malta1
+      ports:
+        http: "10292"
+        ws: "10293"
+        disc: "10291"
+      region: 5
+      zone: 0
+      sub: ""
+      dom: ws://127.0.0.1:10065
+    - name: malta2
+      ports:
+        http: "10295"
+        ws: "10296"
+        disc: "10294"
+      region: 5
+      zone: 1
+      sub: ""
+      dom: ws://127.0.0.1:10065
+    - name: malta3
+      ports:
+        http: "10298"
+        ws: "10299"
+        disc: "10297"
+      region: 5
+      zone: 2
+      sub: ""
+      dom: ws://127.0.0.1:10065
+    - name: malta4
+      ports:
+        http: "10301"
+        ws: "10302"
+        disc: "10300"
+      region: 5
+      zone: 3
+      sub: ""
+      dom: ws://127.0.0.1:10065
+    - name: malta5
+      ports:
+        http: "10304"
+        ws: "10305"
+        disc: "10303"
+      region: 5
+      zone: 4
+      sub: ""
+      dom: ws://127.0.0.1:10065
+    - name: malta6
+      ports:
+        http: "10307"
+        ws: "10308"
+        disc: "10306"
+      region: 5
+      zone: 5
+      sub: ""
+      dom: ws://127.0.0.1:10065
+    - name: malta7
+      ports:
+        http: "10310"
+        ws: "10311"
+        disc: "10309"
+      region: 5
+      zone: 6
+      sub: ""
+      dom: ws://127.0.0.1:10065
+    - name: malta8
+      ports:
+        http: "10313"
+        ws: "10314"
+        disc: "10312"
+      region: 5
+      zone: 7
+      sub: ""
+      dom: ws://127.0.0.1:10065
+    - name: malta9
+      ports:
+        http: "10316"
+        ws: "10317"
+        disc: "10315"
+      region: 5
+      zone: 8
+      sub: ""
+      dom: ws://127.0.0.1:10065
+    - name: malta10
+      ports:
+        http: "10319"
+        ws: "10320"
+        disc: "10318"
+      region: 5
+      zone: 9
+      sub: ""
+      dom: ws://127.0.0.1:10065
+    - name: malta11
+      ports:
+        http: "10322"
+        ws: "10323"
+        disc: "10321"
+      region: 5
+      zone: 10
+      sub: ""
+      dom: ws://127.0.0.1:10065
+    - name: malta12
+      ports:
+        http: "10325"
+        ws: "10326"
+        disc: "10324"
+      region: 5
+      zone: 11
+      sub: ""
+      dom: ws://127.0.0.1:10065
+    - name: malta13
+      ports:
+        http: "10328"
+        ws: "10329"
+        disc: "10327"
+      region: 5
+      zone: 12
+      sub: ""
+      dom: ws://127.0.0.1:10065
+    - name: malta14
+      ports:
+        http: "10331"
+        ws: "10332"
+        disc: "10330"
+      region: 5
+      zone: 13
+      sub: ""
+      dom: ws://127.0.0.1:10065
+    - name: malta15
+      ports:
+        http: "10334"
+        ws: "10335"
+        disc: "10333"
+      region: 5
+      zone: 14
+      sub: ""
+      dom: ws://127.0.0.1:10065
+    - name: malta16
+      ports:
+        http: "10337"
+        ws: "10338"
+        disc: "10336"
+      region: 5
+      zone: 15
+      sub: ""
+      dom: ws://127.0.0.1:10065
+    - name: crete1
+      ports:
+        http: "10340"
+        ws: "10341"
+        disc: "10339"
+      region: 6
+      zone: 0
+      sub: ""
+      dom: ws://127.0.0.1:10068
+    - name: crete2
+      ports:
+        http: "10343"
+        ws: "10344"
+        disc: "10342"
+      region: 6
+      zone: 1
+      sub: ""
+      dom: ws://127.0.0.1:10068
+    - name: crete3
+      ports:
+        http: "10346"
+        ws: "10347"
+        disc: "10345"
+      region: 6
+      zone: 2
+      sub: ""
+      dom: ws://127.0.0.1:10068
+    - name: crete4
+      ports:
+        http: "10349"
+        ws: "10350"
+        disc: "10348"
+      region: 6
+      zone: 3
+      sub: ""
+      dom: ws://127.0.0.1:10068
+    - name: crete5
+      ports:
+        http: "10352"
+        ws: "10353"
+        disc: "10351"
+      region: 6
+      zone: 4
+      sub: ""
+      dom: ws://127.0.0.1:10068
+    - name: crete6
+      ports:
+        http: "10355"
+        ws: "10356"
+        disc: "10354"
+      region: 6
+      zone: 5
+      sub: ""
+      dom: ws://127.0.0.1:10068
+    - name: crete7
+      ports:
+        http: "10358"
+        ws: "10359"
+        disc: "10357"
+      region: 6
+      zone: 6
+      sub: ""
+      dom: ws://127.0.0.1:10068
+    - name: crete8
+      ports:
+        http: "10361"
+        ws: "10362"
+        disc: "10360"
+      region: 6
+      zone: 7
+      sub: ""
+      dom: ws://127.0.0.1:10068
+    - name: crete9
+      ports:
+        http: "10364"
+        ws: "10365"
+        disc: "10363"
+      region: 6
+      zone: 8
+      sub: ""
+      dom: ws://127.0.0.1:10068
+    - name: crete10
+      ports:
+        http: "10367"
+        ws: "10368"
+        disc: "10366"
+      region: 6
+      zone: 9
+      sub: ""
+      dom: ws://127.0.0.1:10068
+    - name: crete11
+      ports:
+        http: "10370"
+        ws: "10371"
+        disc: "10369"
+      region: 6
+      zone: 10
+      sub: ""
+      dom: ws://127.0.0.1:10068
+    - name: crete12
+      ports:
+        http: "10373"
+        ws: "10374"
+        disc: "10372"
+      region: 6
+      zone: 11
+      sub: ""
+      dom: ws://127.0.0.1:10068
+    - name: crete13
+      ports:
+        http: "10376"
+        ws: "10377"
+        disc: "10375"
+      region: 6
+      zone: 12
+      sub: ""
+      dom: ws://127.0.0.1:10068
+    - name: crete14
+      ports:
+        http: "10379"
+        ws: "10380"
+        disc: "10378"
+      region: 6
+      zone: 13
+      sub: ""
+      dom: ws://127.0.0.1:10068
+    - name: crete15
+      ports:
+        http: "10382"
+        ws: "10383"
+        disc: "10381"
+      region: 6
+      zone: 14
+      sub: ""
+      dom: ws://127.0.0.1:10068
+    - name: crete16
+      ports:
+        http: "10385"
+        ws: "10386"
+        disc: "10384"
+      region: 6
+      zone: 15
+      sub: ""
+      dom: ws://127.0.0.1:10068
+    - name: sparta1
+      ports:
+        http: "10388"
+        ws: "10389"
+        disc: "10387"
+      region: 7
+      zone: 0
+      sub: ""
+      dom: ws://127.0.0.1:10071
+    - name: sparta2
+      ports:
+        http: "10391"
+        ws: "10392"
+        disc: "10390"
+      region: 7
+      zone: 1
+      sub: ""
+      dom: ws://127.0.0.1:10071
+    - name: sparta3
+      ports:
+        http: "10394"
+        ws: "10395"
+        disc: "10393"
+      region: 7
+      zone: 2
+      sub: ""
+      dom: ws://127.0.0.1:10071
+    - name: sparta4
+      ports:
+        http: "10397"
+        ws: "10398"
+        disc: "10396"
+      region: 7
+      zone: 3
+      sub: ""
+      dom: ws://127.0.0.1:10071
+    - name: sparta5
+      ports:
+        http: "10400"
+        ws: "10401"
+        disc: "10399"
+      region: 7
+      zone: 4
+      sub: ""
+      dom: ws://127.0.0.1:10071
+    - name: sparta6
+      ports:
+        http: "10403"
+        ws: "10404"
+        disc: "10402"
+      region: 7
+      zone: 5
+      sub: ""
+      dom: ws://127.0.0.1:10071
+    - name: sparta7
+      ports:
+        http: "10406"
+        ws: "10407"
+        disc: "10405"
+      region: 7
+      zone: 6
+      sub: ""
+      dom: ws://127.0.0.1:10071
+    - name: sparta8
+      ports:
+        http: "10409"
+        ws: "10410"
+        disc: "10408"
+      region: 7
+      zone: 7
+      sub: ""
+      dom: ws://127.0.0.1:10071
+    - name: sparta9
+      ports:
+        http: "10412"
+        ws: "10413"
+        disc: "10411"
+      region: 7
+      zone: 8
+      sub: ""
+      dom: ws://127.0.0.1:10071
+    - name: sparta10
+      ports:
+        http: "10415"
+        ws: "10416"
+        disc: "10414"
+      region: 7
+      zone: 9
+      sub: ""
+      dom: ws://127.0.0.1:10071
+    - name: sparta11
+      ports:
+        http: "10418"
+        ws: "10419"
+        disc: "10417"
+      region: 7
+      zone: 10
+      sub: ""
+      dom: ws://127.0.0.1:10071
+    - name: sparta12
+      ports:
+        http: "10421"
+        ws: "10422"
+        disc: "10420"
+      region: 7
+      zone: 11
+      sub: ""
+      dom: ws://127.0.0.1:10071
+    - name: sparta13
+      ports:
+        http: "10424"
+        ws: "10425"
+        disc: "10423"
+      region: 7
+      zone: 12
+      sub: ""
+      dom: ws://127.0.0.1:10071
+    - name: sparta14
+      ports:
+        http: "10427"
+        ws: "10428"
+        disc: "10426"
+      region: 7
+      zone: 13
+      sub: ""
+      dom: ws://127.0.0.1:10071
+    - name: sparta15
+      ports:
+        http: "10430"
+        ws: "10431"
+        disc: "10429"
+      region: 7
+      zone: 14
+      sub: ""
+      dom: ws://127.0.0.1:10071
+    - name: sparta16
+      ports:
+        http: "10433"
+        ws: "10434"
+        disc: "10432"
+      region: 7
+      zone: 15
+      sub: ""
+      dom: ws://127.0.0.1:10071
+    - name: titan1
+      ports:
+        http: "10436"
+        ws: "10437"
+        disc: "10435"
+      region: 8
+      zone: 0
+      sub: ""
+      dom: ws://127.0.0.1:10074
+    - name: titan2
+      ports:
+        http: "10439"
+        ws: "10440"
+        disc: "10438"
+      region: 8
+      zone: 1
+      sub: ""
+      dom: ws://127.0.0.1:10074
+    - name: titan3
+      ports:
+        http: "10442"
+        ws: "10443"
+        disc: "10441"
+      region: 8
+      zone: 2
+      sub: ""
+      dom: ws://127.0.0.1:10074
+    - name: titan4
+      ports:
+        http: "10445"
+        ws: "10446"
+        disc: "10444"
+      region: 8
+      zone: 3
+      sub: ""
+      dom: ws://127.0.0.1:10074
+    - name: titan5
+      ports:
+        http: "10448"
+        ws: "10449"
+        disc: "10447"
+      region: 8
+      zone: 4
+      sub: ""
+      dom: ws://127.0.0.1:10074
+    - name: titan6
+      ports:
+        http: "10451"
+        ws: "10452"
+        disc: "10450"
+      region: 8
+      zone: 5
+      sub: ""
+      dom: ws://127.0.0.1:10074
+    - name: titan7
+      ports:
+        http: "10454"
+        ws: "10455"
+        disc: "10453"
+      region: 8
+      zone: 6
+      sub: ""
+      dom: ws://127.0.0.1:10074
+    - name: titan8
+      ports:
+        http: "10457"
+        ws: "10458"
+        disc: "10456"
+      region: 8
+      zone: 7
+      sub: ""
+      dom: ws://127.0.0.1:10074
+    - name: titan9
+      ports:
+        http: "10460"
+        ws: "10461"
+        disc: "10459"
+      region: 8
+      zone: 8
+      sub: ""
+      dom: ws://127.0.0.1:10074
+    - name: titan10
+      ports:
+        http: "10463"
+        ws: "10464"
+        disc: "10462"
+      region: 8
+      zone: 9
+      sub: ""
+      dom: ws://127.0.0.1:10074
+    - name: titan11
+      ports:
+        http: "10466"
+        ws: "10467"
+        disc: "10465"
+      region: 8
+      zone: 10
+      sub: ""
+      dom: ws://127.0.0.1:10074
+    - name: titan12
+      ports:
+        http: "10469"
+        ws: "10470"
+        disc: "10468"
+      region: 8
+      zone: 11
+      sub: ""
+      dom: ws://127.0.0.1:10074
+    - name: titan13
+      ports:
+        http: "10472"
+        ws: "10473"
+        disc: "10471"
+      region: 8
+      zone: 12
+      sub: ""
+      dom: ws://127.0.0.1:10074
+    - name: titan14
+      ports:
+        http: "10475"
+        ws: "10476"
+        disc: "10474"
+      region: 8
+      zone: 13
+      sub: ""
+      dom: ws://127.0.0.1:10074
+    - name: titan15
+      ports:
+        http: "10478"
+        ws: "10479"
+        disc: "10477"
+      region: 8
+      zone: 14
+      sub: ""
+      dom: ws://127.0.0.1:10074
+    - name: titan16
+      ports:
+        http: "10481"
+        ws: "10482"
+        disc: "10480"
+      region: 8
+      zone: 15
+      sub: ""
+      dom: ws://127.0.0.1:10074
+    - name: apollo1
+      ports:
+        http: "10484"
+        ws: "10485"
+        disc: "10483"
+      region: 9
+      zone: 0
+      sub: ""
+      dom: ws://127.0.0.1:10077
+    - name: apollo2
+      ports:
+        http: "10487"
+        ws: "10488"
+        disc: "10486"
+      region: 9
+      zone: 1
+      sub: ""
+      dom: ws://127.0.0.1:10077
+    - name: apollo3
+      ports:
+        http: "10490"
+        ws: "10491"
+        disc: "10489"
+      region: 9
+      zone: 2
+      sub: ""
+      dom: ws://127.0.0.1:10077
+    - name: apollo4
+      ports:
+        http: "10493"
+        ws: "10494"
+        disc: "10492"
+      region: 9
+      zone: 3
+      sub: ""
+      dom: ws://127.0.0.1:10077
+    - name: apollo5
+      ports:
+        http: "10496"
+        ws: "10497"
+        disc: "10495"
+      region: 9
+      zone: 4
+      sub: ""
+      dom: ws://127.0.0.1:10077
+    - name: apollo6
+      ports:
+        http: "10499"
+        ws: "10500"
+        disc: "10498"
+      region: 9
+      zone: 5
+      sub: ""
+      dom: ws://127.0.0.1:10077
+    - name: apollo7
+      ports:
+        http: "10502"
+        ws: "10503"
+        disc: "10501"
+      region: 9
+      zone: 6
+      sub: ""
+      dom: ws://127.0.0.1:10077
+    - name: apollo8
+      ports:
+        http: "10505"
+        ws: "10506"
+        disc: "10504"
+      region: 9
+      zone: 7
+      sub: ""
+      dom: ws://127.0.0.1:10077
+    - name: apollo9
+      ports:
+        http: "10508"
+        ws: "10509"
+        disc: "10507"
+      region: 9
+      zone: 8
+      sub: ""
+      dom: ws://127.0.0.1:10077
+    - name: apollo10
+      ports:
+        http: "10511"
+        ws: "10512"
+        disc: "10510"
+      region: 9
+      zone: 9
+      sub: ""
+      dom: ws://127.0.0.1:10077
+    - name: apollo11
+      ports:
+        http: "10514"
+        ws: "10515"
+        disc: "10513"
+      region: 9
+      zone: 10
+      sub: ""
+      dom: ws://127.0.0.1:10077
+    - name: apollo12
+      ports:
+        http: "10517"
+        ws: "10518"
+        disc: "10516"
+      region: 9
+      zone: 11
+      sub: ""
+      dom: ws://127.0.0.1:10077
+    - name: apollo13
+      ports:
+        http: "10520"
+        ws: "10521"
+        disc: "10519"
+      region: 9
+      zone: 12
+      sub: ""
+      dom: ws://127.0.0.1:10077
+    - name: apollo14
+      ports:
+        http: "10523"
+        ws: "10524"
+        disc: "10522"
+      region: 9
+      zone: 13
+      sub: ""
+      dom: ws://127.0.0.1:10077
+    - name: apollo15
+      ports:
+        http: "10526"
+        ws: "10527"
+        disc: "10525"
+      region: 9
+      zone: 14
+      sub: ""
+      dom: ws://127.0.0.1:10077
+    - name: apollo16
+      ports:
+        http: "10529"
+        ws: "10530"
+        disc: "10528"
+      region: 9
+      zone: 15
+      sub: ""
+      dom: ws://127.0.0.1:10077
+    - name: lipsi1
+      ports:
+        http: "10532"
+        ws: "10533"
+        disc: "10531"
+      region: 10
+      zone: 0
+      sub: ""
+      dom: ws://127.0.0.1:10080
+    - name: lipsi2
+      ports:
+        http: "10535"
+        ws: "10536"
+        disc: "10534"
+      region: 10
+      zone: 1
+      sub: ""
+      dom: ws://127.0.0.1:10080
+    - name: lipsi3
+      ports:
+        http: "10538"
+        ws: "10539"
+        disc: "10537"
+      region: 10
+      zone: 2
+      sub: ""
+      dom: ws://127.0.0.1:10080
+    - name: lipsi4
+      ports:
+        http: "10541"
+        ws: "10542"
+        disc: "10540"
+      region: 10
+      zone: 3
+      sub: ""
+      dom: ws://127.0.0.1:10080
+    - name: lipsi5
+      ports:
+        http: "10544"
+        ws: "10545"
+        disc: "10543"
+      region: 10
+      zone: 4
+      sub: ""
+      dom: ws://127.0.0.1:10080
+    - name: lipsi6
+      ports:
+        http: "10547"
+        ws: "10548"
+        disc: "10546"
+      region: 10
+      zone: 5
+      sub: ""
+      dom: ws://127.0.0.1:10080
+    - name: lipsi7
+      ports:
+        http: "10550"
+        ws: "10551"
+        disc: "10549"
+      region: 10
+      zone: 6
+      sub: ""
+      dom: ws://127.0.0.1:10080
+    - name: lipsi8
+      ports:
+        http: "10553"
+        ws: "10554"
+        disc: "10552"
+      region: 10
+      zone: 7
+      sub: ""
+      dom: ws://127.0.0.1:10080
+    - name: lipsi9
+      ports:
+        http: "10556"
+        ws: "10557"
+        disc: "10555"
+      region: 10
+      zone: 8
+      sub: ""
+      dom: ws://127.0.0.1:10080
+    - name: lipsi10
+      ports:
+        http: "10559"
+        ws: "10560"
+        disc: "10558"
+      region: 10
+      zone: 9
+      sub: ""
+      dom: ws://127.0.0.1:10080
+    - name: lipsi11
+      ports:
+        http: "10562"
+        ws: "10563"
+        disc: "10561"
+      region: 10
+      zone: 10
+      sub: ""
+      dom: ws://127.0.0.1:10080
+    - name: lipsi12
+      ports:
+        http: "10565"
+        ws: "10566"
+        disc: "10564"
+      region: 10
+      zone: 11
+      sub: ""
+      dom: ws://127.0.0.1:10080
+    - name: lipsi13
+      ports:
+        http: "10568"
+        ws: "10569"
+        disc: "10567"
+      region: 10
+      zone: 12
+      sub: ""
+      dom: ws://127.0.0.1:10080
+    - name: lipsi14
+      ports:
+        http: "10571"
+        ws: "10572"
+        disc: "10570"
+      region: 10
+      zone: 13
+      sub: ""
+      dom: ws://127.0.0.1:10080
+    - name: lipsi15
+      ports:
+        http: "10574"
+        ws: "10575"
+        disc: "10573"
+      region: 10
+      zone: 14
+      sub: ""
+      dom: ws://127.0.0.1:10080
+    - name: lipsi16
+      ports:
+        http: "10577"
+        ws: "10578"
+        disc: "10576"
+      region: 10
+      zone: 15
+      sub: ""
+      dom: ws://127.0.0.1:10080
+    - name: aegina1
+      ports:
+        http: "10580"
+        ws: "10581"
+        disc: "10579"
+      region: 11
+      zone: 0
+      sub: ""
+      dom: ws://127.0.0.1:10083
+    - name: aegina2
+      ports:
+        http: "10583"
+        ws: "10584"
+        disc: "10582"
+      region: 11
+      zone: 1
+      sub: ""
+      dom: ws://127.0.0.1:10083
+    - name: aegina3
+      ports:
+        http: "10586"
+        ws: "10587"
+        disc: "10585"
+      region: 11
+      zone: 2
+      sub: ""
+      dom: ws://127.0.0.1:10083
+    - name: aegina4
+      ports:
+        http: "10589"
+        ws: "10590"
+        disc: "10588"
+      region: 11
+      zone: 3
+      sub: ""
+      dom: ws://127.0.0.1:10083
+    - name: aegina5
+      ports:
+        http: "10592"
+        ws: "10593"
+        disc: "10591"
+      region: 11
+      zone: 4
+      sub: ""
+      dom: ws://127.0.0.1:10083
+    - name: aegina6
+      ports:
+        http: "10595"
+        ws: "10596"
+        disc: "10594"
+      region: 11
+      zone: 5
+      sub: ""
+      dom: ws://127.0.0.1:10083
+    - name: aegina7
+      ports:
+        http: "10598"
+        ws: "10599"
+        disc: "10597"
+      region: 11
+      zone: 6
+      sub: ""
+      dom: ws://127.0.0.1:10083
+    - name: aegina8
+      ports:
+        http: "10601"
+        ws: "10602"
+        disc: "10600"
+      region: 11
+      zone: 7
+      sub: ""
+      dom: ws://127.0.0.1:10083
+    - name: aegina9
+      ports:
+        http: "10604"
+        ws: "10605"
+        disc: "10603"
+      region: 11
+      zone: 8
+      sub: ""
+      dom: ws://127.0.0.1:10083
+    - name: aegina10
+      ports:
+        http: "10607"
+        ws: "10608"
+        disc: "10606"
+      region: 11
+      zone: 9
+      sub: ""
+      dom: ws://127.0.0.1:10083
+    - name: aegina11
+      ports:
+        http: "10610"
+        ws: "10611"
+        disc: "10609"
+      region: 11
+      zone: 10
+      sub: ""
+      dom: ws://127.0.0.1:10083
+    - name: aegina12
+      ports:
+        http: "10613"
+        ws: "10614"
+        disc: "10612"
+      region: 11
+      zone: 11
+      sub: ""
+      dom: ws://127.0.0.1:10083
+    - name: aegina13
+      ports:
+        http: "10616"
+        ws: "10617"
+        disc: "10615"
+      region: 11
+      zone: 12
+      sub: ""
+      dom: ws://127.0.0.1:10083
+    - name: aegina14
+      ports:
+        http: "10619"
+        ws: "10620"
+        disc: "10618"
+      region: 11
+      zone: 13
+      sub: ""
+      dom: ws://127.0.0.1:10083
+    - name: aegina15
+      ports:
+        http: "10622"
+        ws: "10623"
+        disc: "10621"
+      region: 11
+      zone: 14
+      sub: ""
+      dom: ws://127.0.0.1:10083
+    - name: aegina16
+      ports:
+        http: "10625"
+        ws: "10626"
+        disc: "10624"
+      region: 11
+      zone: 15
+      sub: ""
+      dom: ws://127.0.0.1:10083
+    - name: nikus1
+      ports:
+        http: "10628"
+        ws: "10629"
+        disc: "10627"
+      region: 12
+      zone: 0
+      sub: ""
+      dom: ws://127.0.0.1:10086
+    - name: nikus2
+      ports:
+        http: "10631"
+        ws: "10632"
+        disc: "10630"
+      region: 12
+      zone: 1
+      sub: ""
+      dom: ws://127.0.0.1:10086
+    - name: nikus3
+      ports:
+        http: "10634"
+        ws: "10635"
+        disc: "10633"
+      region: 12
+      zone: 2
+      sub: ""
+      dom: ws://127.0.0.1:10086
+    - name: nikus4
+      ports:
+        http: "10637"
+        ws: "10638"
+        disc: "10636"
+      region: 12
+      zone: 3
+      sub: ""
+      dom: ws://127.0.0.1:10086
+    - name: nikus5
+      ports:
+        http: "10640"
+        ws: "10641"
+        disc: "10639"
+      region: 12
+      zone: 4
+      sub: ""
+      dom: ws://127.0.0.1:10086
+    - name: nikus6
+      ports:
+        http: "10643"
+        ws: "10644"
+        disc: "10642"
+      region: 12
+      zone: 5
+      sub: ""
+      dom: ws://127.0.0.1:10086
+    - name: nikus7
+      ports:
+        http: "10646"
+        ws: "10647"
+        disc: "10645"
+      region: 12
+      zone: 6
+      sub: ""
+      dom: ws://127.0.0.1:10086
+    - name: nikus8
+      ports:
+        http: "10649"
+        ws: "10650"
+        disc: "10648"
+      region: 12
+      zone: 7
+      sub: ""
+      dom: ws://127.0.0.1:10086
+    - name: nikus9
+      ports:
+        http: "10652"
+        ws: "10653"
+        disc: "10651"
+      region: 12
+      zone: 8
+      sub: ""
+      dom: ws://127.0.0.1:10086
+    - name: nikus10
+      ports:
+        http: "10655"
+        ws: "10656"
+        disc: "10654"
+      region: 12
+      zone: 9
+      sub: ""
+      dom: ws://127.0.0.1:10086
+    - name: nikus11
+      ports:
+        http: "10658"
+        ws: "10659"
+        disc: "10657"
+      region: 12
+      zone: 10
+      sub: ""
+      dom: ws://127.0.0.1:10086
+    - name: nikus12
+      ports:
+        http: "10661"
+        ws: "10662"
+        disc: "10660"
+      region: 12
+      zone: 11
+      sub: ""
+      dom: ws://127.0.0.1:10086
+    - name: nikus13
+      ports:
+        http: "10664"
+        ws: "10665"
+        disc: "10663"
+      region: 12
+      zone: 12
+      sub: ""
+      dom: ws://127.0.0.1:10086
+    - name: nikus14
+      ports:
+        http: "10667"
+        ws: "10668"
+        disc: "10666"
+      region: 12
+      zone: 13
+      sub: ""
+      dom: ws://127.0.0.1:10086
+    - name: nikus15
+      ports:
+        http: "10670"
+        ws: "10671"
+        disc: "10669"
+      region: 12
+      zone: 14
+      sub: ""
+      dom: ws://127.0.0.1:10086
+    - name: nikus16
+      ports:
+        http: "10673"
+        ws: "10674"
+        disc: "10672"
+      region: 12
+      zone: 15
+      sub: ""
+      dom: ws://127.0.0.1:10086
+    - name: kea1
+      ports:
+        http: "10676"
+        ws: "10677"
+        disc: "10675"
+      region: 13
+      zone: 0
+      sub: ""
+      dom: ws://127.0.0.1:10089
+    - name: kea2
+      ports:
+        http: "10679"
+        ws: "10680"
+        disc: "10678"
+      region: 13
+      zone: 1
+      sub: ""
+      dom: ws://127.0.0.1:10089
+    - name: kea3
+      ports:
+        http: "10682"
+        ws: "10683"
+        disc: "10681"
+      region: 13
+      zone: 2
+      sub: ""
+      dom: ws://127.0.0.1:10089
+    - name: kea4
+      ports:
+        http: "10685"
+        ws: "10686"
+        disc: "10684"
+      region: 13
+      zone: 3
+      sub: ""
+      dom: ws://127.0.0.1:10089
+    - name: kea5
+      ports:
+        http: "10688"
+        ws: "10689"
+        disc: "10687"
+      region: 13
+      zone: 4
+      sub: ""
+      dom: ws://127.0.0.1:10089
+    - name: kea6
+      ports:
+        http: "10691"
+        ws: "10692"
+        disc: "10690"
+      region: 13
+      zone: 5
+      sub: ""
+      dom: ws://127.0.0.1:10089
+    - name: kea7
+      ports:
+        http: "10694"
+        ws: "10695"
+        disc: "10693"
+      region: 13
+      zone: 6
+      sub: ""
+      dom: ws://127.0.0.1:10089
+    - name: kea8
+      ports:
+        http: "10697"
+        ws: "10698"
+        disc: "10696"
+      region: 13
+      zone: 7
+      sub: ""
+      dom: ws://127.0.0.1:10089
+    - name: kea9
+      ports:
+        http: "10700"
+        ws: "10701"
+        disc: "10699"
+      region: 13
+      zone: 8
+      sub: ""
+      dom: ws://127.0.0.1:10089
+    - name: kea10
+      ports:
+        http: "10703"
+        ws: "10704"
+        disc: "10702"
+      region: 13
+      zone: 9
+      sub: ""
+      dom: ws://127.0.0.1:10089
+    - name: kea11
+      ports:
+        http: "10706"
+        ws: "10707"
+        disc: "10705"
+      region: 13
+      zone: 10
+      sub: ""
+      dom: ws://127.0.0.1:10089
+    - name: kea12
+      ports:
+        http: "10709"
+        ws: "10710"
+        disc: "10708"
+      region: 13
+      zone: 11
+      sub: ""
+      dom: ws://127.0.0.1:10089
+    - name: kea13
+      ports:
+        http: "10712"
+        ws: "10713"
+        disc: "10711"
+      region: 13
+      zone: 12
+      sub: ""
+      dom: ws://127.0.0.1:10089
+    - name: kea14
+      ports:
+        http: "10715"
+        ws: "10716"
+        disc: "10714"
+      region: 13
+      zone: 13
+      sub: ""
+      dom: ws://127.0.0.1:10089
+    - name: kea15
+      ports:
+        http: "10718"
+        ws: "10719"
+        disc: "10717"
+      region: 13
+      zone: 14
+      sub: ""
+      dom: ws://127.0.0.1:10089
+    - name: kea16
+      ports:
+        http: "10721"
+        ws: "10722"
+        disc: "10720"
+      region: 13
+      zone: 15
+      sub: ""
+      dom: ws://127.0.0.1:10089
+    - name: chronos1
+      ports:
+        http: "10724"
+        ws: "10725"
+        disc: "10723"
+      region: 14
+      zone: 0
+      sub: ""
+      dom: ws://127.0.0.1:10092
+    - name: chronos2
+      ports:
+        http: "10727"
+        ws: "10728"
+        disc: "10726"
+      region: 14
+      zone: 1
+      sub: ""
+      dom: ws://127.0.0.1:10092
+    - name: chronos3
+      ports:
+        http: "10730"
+        ws: "10731"
+        disc: "10729"
+      region: 14
+      zone: 2
+      sub: ""
+      dom: ws://127.0.0.1:10092
+    - name: chronos4
+      ports:
+        http: "10733"
+        ws: "10734"
+        disc: "10732"
+      region: 14
+      zone: 3
+      sub: ""
+      dom: ws://127.0.0.1:10092
+    - name: chronos5
+      ports:
+        http: "10736"
+        ws: "10737"
+        disc: "10735"
+      region: 14
+      zone: 4
+      sub: ""
+      dom: ws://127.0.0.1:10092
+    - name: chronos6
+      ports:
+        http: "10739"
+        ws: "10740"
+        disc: "10738"
+      region: 14
+      zone: 5
+      sub: ""
+      dom: ws://127.0.0.1:10092
+    - name: chronos7
+      ports:
+        http: "10742"
+        ws: "10743"
+        disc: "10741"
+      region: 14
+      zone: 6
+      sub: ""
+      dom: ws://127.0.0.1:10092
+    - name: chronos8
+      ports:
+        http: "10745"
+        ws: "10746"
+        disc: "10744"
+      region: 14
+      zone: 7
+      sub: ""
+      dom: ws://127.0.0.1:10092
+    - name: chronos9
+      ports:
+        http: "10748"
+        ws: "10749"
+        disc: "10747"
+      region: 14
+      zone: 8
+      sub: ""
+      dom: ws://127.0.0.1:10092
+    - name: chronos10
+      ports:
+        http: "10751"
+        ws: "10752"
+        disc: "10750"
+      region: 14
+      zone: 9
+      sub: ""
+      dom: ws://127.0.0.1:10092
+    - name: chronos11
+      ports:
+        http: "10754"
+        ws: "10755"
+        disc: "10753"
+      region: 14
+      zone: 10
+      sub: ""
+      dom: ws://127.0.0.1:10092
+    - name: chronos12
+      ports:
+        http: "10757"
+        ws: "10758"
+        disc: "10756"
+      region: 14
+      zone: 11
+      sub: ""
+      dom: ws://127.0.0.1:10092
+    - name: chronos13
+      ports:
+        http: "10760"
+        ws: "10761"
+        disc: "10759"
+      region: 14
+      zone: 12
+      sub: ""
+      dom: ws://127.0.0.1:10092
+    - name: chronos14
+      ports:
+        http: "10763"
+        ws: "10764"
+        disc: "10762"
+      region: 14
+      zone: 13
+      sub: ""
+      dom: ws://127.0.0.1:10092
+    - name: chronos15
+      ports:
+        http: "10766"
+        ws: "10767"
+        disc: "10765"
+      region: 14
+      zone: 14
+      sub: ""
+      dom: ws://127.0.0.1:10092
+    - name: chronos16
+      ports:
+        http: "10769"
+        ws: "10770"
+        disc: "10768"
+      region: 14
+      zone: 15
+      sub: ""
+      dom: ws://127.0.0.1:10092
+    - name: antikytheria1
+      ports:
+        http: "10772"
+        ws: "10773"
+        disc: "10771"
+      region: 15
+      zone: 0
+      sub: ""
+      dom: ws://127.0.0.1:10095
+    - name: antikytheria2
+      ports:
+        http: "10775"
+        ws: "10776"
+        disc: "10774"
+      region: 15
+      zone: 1
+      sub: ""
+      dom: ws://127.0.0.1:10095
+    - name: antikytheria3
+      ports:
+        http: "10778"
+        ws: "10779"
+        disc: "10777"
+      region: 15
+      zone: 2
+      sub: ""
+      dom: ws://127.0.0.1:10095
+    - name: antikytheria4
+      ports:
+        http: "10781"
+        ws: "10782"
+        disc: "10780"
+      region: 15
+      zone: 3
+      sub: ""
+      dom: ws://127.0.0.1:10095
+    - name: antikytheria5
+      ports:
+        http: "10784"
+        ws: "10785"
+        disc: "10783"
+      region: 15
+      zone: 4
+      sub: ""
+      dom: ws://127.0.0.1:10095
+    - name: antikytheria6
+      ports:
+        http: "10787"
+        ws: "10788"
+        disc: "10786"
+      region: 15
+      zone: 5
+      sub: ""
+      dom: ws://127.0.0.1:10095
+    - name: antikytheria7
+      ports:
+        http: "10790"
+        ws: "10791"
+        disc: "10789"
+      region: 15
+      zone: 6
+      sub: ""
+      dom: ws://127.0.0.1:10095
+    - name: antikytheria8
+      ports:
+        http: "10793"
+        ws: "10794"
+        disc: "10792"
+      region: 15
+      zone: 7
+      sub: ""
+      dom: ws://127.0.0.1:10095
+    - name: antikytheria9
+      ports:
+        http: "10796"
+        ws: "10797"
+        disc: "10795"
+      region: 15
+      zone: 8
+      sub: ""
+      dom: ws://127.0.0.1:10095
+    - name: antikytheria10
+      ports:
+        http: "10799"
+        ws: "10800"
+        disc: "10798"
+      region: 15
+      zone: 9
+      sub: ""
+      dom: ws://127.0.0.1:10095
+    - name: antikytheria11
+      ports:
+        http: "10802"
+        ws: "10803"
+        disc: "10801"
+      region: 15
+      zone: 10
+      sub: ""
+      dom: ws://127.0.0.1:10095
+    - name: antikytheria12
+      ports:
+        http: "10805"
+        ws: "10806"
+        disc: "10804"
+      region: 15
+      zone: 11
+      sub: ""
+      dom: ws://127.0.0.1:10095
+    - name: antikytheria13
+      ports:
+        http: "10808"
+        ws: "10809"
+        disc: "10807"
+      region: 15
+      zone: 12
+      sub: ""
+      dom: ws://127.0.0.1:10095
+    - name: antikytheria14
+      ports:
+        http: "10811"
+        ws: "10812"
+        disc: "10810"
+      region: 15
+      zone: 13
+      sub: ""
+      dom: ws://127.0.0.1:10095
+    - name: antikytheria15
+      ports:
+        http: "10814"
+        ws: "10815"
+        disc: "10813"
+      region: 15
+      zone: 14
+      sub: ""
+      dom: ws://127.0.0.1:10095
+    - name: antikytheria16
+      ports:
+        http: "10817"
+        ws: "10818"
+        disc: "10816"
+      region: 15
+      zone: 15
+      sub: ""
+      dom: ws://127.0.0.1:10095
