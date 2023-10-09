@@ -385,6 +385,11 @@ func (blake3pow *Blake3pow) IsDomCoincident(chain consensus.ChainHeaderReader, h
 	return order < common.NodeLocation.Context()
 }
 
+// VerifySeal returns the PowHash and the verifySeal output
+func (blake3pow *Blake3pow) VerifySeal(header *types.Header) (common.Hash, error) {
+	return header.Hash(), blake3pow.verifySeal(header)
+}
+
 // verifySeal checks whether a block satisfies the PoW difficulty requirements,
 // either using the usual blake3pow cache for it, or alternatively using a full DAG
 // to make remote mining fast.

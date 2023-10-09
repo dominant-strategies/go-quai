@@ -168,6 +168,9 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	validator := func(header *types.Header) error {
 		return h.core.Engine().VerifyHeader(h.core, header)
 	}
+	verifySeal := func(header *types.Header) (common.Hash, error) {
+		return h.core.Engine().VerifySeal(header)
+	}
 	heighter := func() uint64 {
 		return h.core.CurrentHeader().NumberU64()
 	}
@@ -184,6 +187,9 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		// broadcast distance only, ParentEntropy should suffice
 		return h.core.CurrentHeader().ParentEntropy()
 	}
+	currentDifficulty := func() *big.Int {
+		return h.core.CurrentHeader().Difficulty()
+	}
 	// writeBlock writes the block to the DB
 	writeBlock := func(block *types.Block) {
 		if nodeCtx == common.ZONE_CTX && block.NumberU64()-1 == h.core.CurrentHeader().NumberU64() && h.core.ProcessingState() {
@@ -193,7 +199,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		}
 		h.core.WriteBlock(block)
 	}
-	h.blockFetcher = fetcher.NewBlockFetcher(h.core.GetBlockOrCandidateByHash, writeBlock, validator, h.BroadcastBlock, heighter, currentThresholdS, currentS, h.removePeer, h.core.IsBlockHashABadHash)
+	h.blockFetcher = fetcher.NewBlockFetcher(h.core.GetBlockOrCandidateByHash, writeBlock, validator, verifySeal, h.BroadcastBlock, heighter, currentThresholdS, currentS, currentDifficulty, h.removePeer, h.core.IsBlockHashABadHash)
 
 	// Only initialize the Tx fetcher in zone
 	if nodeCtx == common.ZONE_CTX && h.core.ProcessingState() {

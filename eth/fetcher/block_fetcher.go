@@ -83,6 +83,9 @@ type bodyRequesterFn func([]common.Hash) error
 // headerVerifierFn is a callback type to verify a block's header for fast propagation.
 type headerVerifierFn func(header *types.Header) error
 
+// verifySealFn is a callback type to verify seal of a block header and get the PowHash
+type verifySealFn func(header *types.Header) (common.Hash, error)
+
 // blockBroadcasterFn is a callback type for broadcasting a block to connected peers.
 type blockBroadcasterFn func(block *types.Block, propagate bool)
 
@@ -94,6 +97,9 @@ type currentIntrinsicSFn func() *big.Int
 
 // currentSFn is a callback type to retrieve the current chain heads Entropy
 type currentSFn func() *big.Int
+
+// currentDifficultyFn is a callback type to retrieve the current chain heads difficulty
+type currentDifficultyFn func() *big.Int
 
 // peerDropFn is a callback type for dropping a peer detected as malicious.
 type peerDropFn func(id string)
@@ -185,10 +191,12 @@ type BlockFetcher struct {
 	getBlock            blockRetrievalFn    // Retrieves a block from the local chain
 	writeBlock          blockWriteFn        // Writes the block to the DB
 	verifyHeader        headerVerifierFn    // Checks if a block's headers have a valid proof of work
+	verifySeal          verifySealFn        // Checks if blocks PoWHash meets the difficulty requirement
 	broadcastBlock      blockBroadcasterFn  // Broadcasts a block to connected peers
 	chainHeight         chainHeightFn       // Retrieves the current chain's height
 	currentIntrinsicS   currentIntrinsicSFn // Retrieves the current headers intrinsic logS
 	currentS            currentSFn          // Retrieves the current heads logS
+	currentDifficulty   currentDifficultyFn // Retrieves the current difficulty
 	dropPeer            peerDropFn          // Drops a peer for misbehaving
 	isBlockHashABadHash badHashCheckFn      // Checks if the block hash exists in the bad hashes list
 
@@ -201,7 +209,7 @@ type BlockFetcher struct {
 }
 
 // NewBlockFetcher creates a block fetcher to retrieve blocks based on hash announcements.
-func NewBlockFetcher(getBlock blockRetrievalFn, writeBlock blockWriteFn, verifyHeader headerVerifierFn, broadcastBlock blockBroadcasterFn, chainHeight chainHeightFn, currentIntrinsicS currentIntrinsicSFn, currentS currentSFn, dropPeer peerDropFn, isBlockHashABadHash badHashCheckFn) *BlockFetcher {
+func NewBlockFetcher(getBlock blockRetrievalFn, writeBlock blockWriteFn, verifyHeader headerVerifierFn, verifySeal verifySealFn, broadcastBlock blockBroadcasterFn, chainHeight chainHeightFn, currentIntrinsicS currentIntrinsicSFn, currentS currentSFn, currentDifficulty currentDifficultyFn, dropPeer peerDropFn, isBlockHashABadHash badHashCheckFn) *BlockFetcher {
 	return &BlockFetcher{
 		notify:              make(chan *blockAnnounce),
 		inject:              make(chan *blockOrHeaderInject),
@@ -219,9 +227,11 @@ func NewBlockFetcher(getBlock blockRetrievalFn, writeBlock blockWriteFn, verifyH
 		getBlock:            getBlock,
 		writeBlock:          writeBlock,
 		verifyHeader:        verifyHeader,
+		verifySeal:          verifySeal,
 		broadcastBlock:      broadcastBlock,
 		chainHeight:         chainHeight,
 		currentIntrinsicS:   currentIntrinsicS,
+		currentDifficulty:   currentDifficulty,
 		currentS:            currentS,
 		dropPeer:            dropPeer,
 		isBlockHashABadHash: isBlockHashABadHash,
@@ -705,6 +715,18 @@ func (f *BlockFetcher) enqueue(peer string, header *types.Header, block *types.B
 // the phase states accordingly.
 func (f *BlockFetcher) ImportBlocks(peer string, block *types.Block, relay bool) {
 	hash := block.Hash()
+	nodeCtx := common.NodeLocation.Context()
+
+	powhash, err := f.verifySeal(block.Header())
+	if err != nil {
+		return
+	}
+	// Check if the Block is atleast half the current difficulty in Zone Context,
+	// this makes sure that the nodes don't listen to the forks with the PowHash
+	//	with less than 50% of current difficulty
+	if nodeCtx == common.ZONE_CTX && new(big.Int).SetBytes(powhash.Bytes()).Cmp(new(big.Int).Div(f.currentDifficulty(), big.NewInt(2))) < 0 {
+		return
+	}
 
 	currentIntrinsicS := f.currentIntrinsicS()
 	maxAllowableEntropyDist := new(big.Int).Mul(currentIntrinsicS, big.NewInt(maxAllowableEntropyDist))

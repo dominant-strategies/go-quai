@@ -142,6 +142,10 @@ type Engine interface {
 	// dominant chain, or even that the claimed dominant difficulty is valid.
 	IsDomCoincident(chain ChainHeaderReader, header *types.Header) bool
 
+	// VerifySeal computes the PowHash and checks if work meets the difficulty
+	// requirement specified in header
+	VerifySeal(header *types.Header) (common.Hash, error)
+
 	// APIs returns the RPC APIs this consensus engine provides.
 	APIs(chain ChainHeaderReader) []rpc.API
 

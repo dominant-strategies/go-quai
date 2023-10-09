@@ -408,6 +408,11 @@ func (progpow *Progpow) ComputePowLight(header *types.Header) (mixHash, powHash 
 	return mixHash, powHash
 }
 
+// VerifySeal returns the PowHash and the verifySeal output
+func (progpow *Progpow) VerifySeal(header *types.Header) (common.Hash, error) {
+	return progpow.verifySeal(header)
+}
+
 // verifySeal checks whether a block satisfies the PoW difficulty requirements,
 // either using the usual progpow cache for it, or alternatively using a full DAG
 // to make remote mining fast.
