@@ -499,6 +499,9 @@ func (progpow *Progpow) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
 	// Select the correct block reward based on chain progression
 	blockReward := misc.CalculateReward(header)
+	if config.ChainID == params.ProgpowLocalChainConfig.ChainID {
+		blockReward = big.NewInt(1e18) // 1 Quai per block in local
+	}
 
 	coinbase, err := header.Coinbase().InternalAddress()
 	if err != nil {

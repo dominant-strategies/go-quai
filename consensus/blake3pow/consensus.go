@@ -467,6 +467,9 @@ func (blake3pow *Blake3pow) ComputePowLight(header *types.Header) (common.Hash, 
 func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
 	// Select the correct block reward based on chain progression
 	blockReward := misc.CalculateReward(header)
+	if config.ChainID == params.Blake3PowLocalChainConfig.ChainID {
+		blockReward = big.NewInt(1e18)
+	}
 
 	coinbase, err := header.Coinbase().InternalAddress()
 	if err != nil {
