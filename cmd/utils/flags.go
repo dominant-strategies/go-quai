@@ -1246,7 +1246,7 @@ func setConsensusEngineConfig(ctx *cli.Context, cfg *ethconfig.Config) {
 		case ctx.GlobalBool(GardenFlag.Name):
 			cfg.Blake3Pow.DurationLimit = params.GardenDurationLimit
 			cfg.Blake3Pow.GasCeil = params.GardenGasCeil
-			cfg.Blake3Pow.MinDifficulty = new(big.Int).Div(core.DefaultGardenGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big2)
+			cfg.Blake3Pow.MinDifficulty = new(big.Int).Div(core.DefaultGardenGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big4)
 		case ctx.GlobalBool(OrchardFlag.Name):
 			cfg.Blake3Pow.DurationLimit = params.OrchardDurationLimit
 			cfg.Blake3Pow.GasCeil = params.OrchardGasCeil
