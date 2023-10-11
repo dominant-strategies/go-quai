@@ -34,7 +34,7 @@ func (c *P2PClient) StopServer() {
 // handler for the /dhtpeers endpoint
 func (c *P2PClient) dhtPeersHandler(w http.ResponseWriter, r *http.Request) {
 	// get the list of peers from the dht
-	peers := c.dht.RoutingTable().ListPeers()
+	peers := c.node.GetPeers()
 	log.Debugf("peers on dht: %d", len(peers))
 	// write the list of peers to the response
 	for _, peer := range peers {
@@ -70,7 +70,7 @@ func (c *P2PClient) connectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Discover the Mac node's addresses using DHT
-	discoveredAddrs, err := c.dht.FindPeer(c.ctx, addrInfo.ID)
+	discoveredAddrs, err := c.node.FindPeer(c.ctx, addrInfo.ID)
 	if err != nil {
 		log.Errorf("Failed to discover peer: %v, error: %s", addrInfo.ID, err)
 		http.Error(w, "Failed to discover peer: "+err.Error(), http.StatusInternalServerError)
@@ -99,7 +99,7 @@ func (c *P2PClient) discoverHandler(w http.ResponseWriter, r *http.Request) {
 	log.Debugf("Received request to discover Peer ID: %s", peerID.String())
 
 	// Discover the peer's addresses using DHT
-	discoveredAddrsInfo, err := c.dht.FindPeer(c.ctx, peerID)
+	discoveredAddrsInfo, err := c.node.FindPeer(c.ctx, peerID)
 	if err != nil {
 		log.Errorf("Failed to discover peer: %v, error: %s", peerID, err)
 		http.Error(w, "Failed to discover peer: "+err.Error(), http.StatusInternalServerError)

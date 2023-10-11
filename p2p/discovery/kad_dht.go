@@ -1,24 +1,32 @@
-package client
+package discovery
 
 import (
+	"context"
+
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/pkg/errors"
 
 	kadht "github.com/libp2p/go-libp2p-kad-dht"
+	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
-// initDHT initializes the DHT using client's libp2p node
-func (c *P2PClient) InitDHT() error {
-	dht, err := kadht.New(c.ctx, c.node)
+// represents the DHT for the libp2p node
+type KadDHT struct {
+	dht *kadht.IpfsDHT
+}
+
+func (k *KadDHT) Initialize(ctx context.Context, node host.Host, opts ...kadht.Option) error {
+	// Initialization logic
+	dht, err := kadht.New(ctx, node, opts...)
 	if err != nil {
-		log.Fatalf("error creating DHT: %s", err)
+		return errors.Wrap(err, "error creating DHT")
 	}
-	c.dht = dht
+	k.dht = dht
 	return nil
 }
 
-// BootstrapDHT bootstraps the DHT with the given list of bootstrap peers
-func (c *P2PClient) BootstrapDHT(bootstrapPeers ...string) error {
+func (k *KadDHT) Bootstrap(ctx context.Context, node host.Host, bootstrapPeers ...string) error {
 	var bootStrapPeersAddrInfo []peer.AddrInfo
 	if len(bootstrapPeers) == 0 {
 		// if no bootstrap peers are given, bootstrap with the default bootstrap peers
@@ -37,14 +45,22 @@ func (c *P2PClient) BootstrapDHT(bootstrapPeers ...string) error {
 
 	for _, peerInfo := range bootStrapPeersAddrInfo {
 		log.Debugf("adding bootstraping node: %s", peerInfo.ID.Pretty())
-		err := c.node.Connect(c.ctx, peerInfo)
+		err := node.Connect(ctx, peerInfo)
 		if err != nil {
 			log.Errorf("error connecting to bootstrap node: %s", err)
 			continue
 		}
 		log.Debugf("connected to bootstrap node: %s", peerInfo.ID.Pretty())
 	}
-
 	// Bootstrap the DHT
-	return c.dht.Bootstrap(c.ctx)
+	return k.dht.Bootstrap(ctx)
+
+}
+
+func (k *KadDHT) FindPeer(ctx context.Context, peerID peer.ID) (peer.AddrInfo, error) {
+	return k.dht.FindPeer(ctx, peerID)
+}
+
+func (k *KadDHT) GetPeers() []peer.ID {
+	return k.dht.RoutingTable().ListPeers()
 }

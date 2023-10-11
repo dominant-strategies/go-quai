@@ -6,21 +6,18 @@ import (
 	"net/http"
 
 	"github.com/dominant-strategies/go-quai/log"
-
-	dht "github.com/libp2p/go-libp2p-kad-dht"
+	p2pnode "github.com/dominant-strategies/go-quai/p2p/node"
 
 	"github.com/libp2p/go-libp2p/core/event"
-	"github.com/libp2p/go-libp2p/core/host"
 )
 
 type P2PClient struct {
-	node       host.Host
-	dht        *dht.IpfsDHT
+	node       *p2pnode.P2PNode
 	httpServer *http.Server
 	ctx        context.Context
 }
 
-func NewClient(ctx context.Context, node host.Host) *P2PClient {
+func NewClient(ctx context.Context, node *p2pnode.P2PNode) *P2PClient {
 	client := &P2PClient{
 		node: node,
 		ctx:  ctx,
