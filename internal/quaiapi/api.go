@@ -987,8 +987,6 @@ type RPCTransaction struct {
 	R                *hexutil.Big      `json:"r"`
 	S                *hexutil.Big      `json:"s"`
 	// Optional fields only present for external transactions
-	Sender *common.Address `json:"sender,omitempty"`
-
 	ETXGasLimit   hexutil.Uint64    `json:"etxGasLimit,omitempty"`
 	ETXGasPrice   *hexutil.Big      `json:"etxGasPrice,omitempty"`
 	ETXGasTip     *hexutil.Big      `json:"etxGasTip,omitempty"`
@@ -1029,6 +1027,7 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 	case types.ExternalTxType:
 		result = &RPCTransaction{
 			Type:      hexutil.Uint64(tx.Type()),
+			From:      from,
 			Gas:       hexutil.Uint64(tx.Gas()),
 			Hash:      tx.Hash(),
 			Input:     hexutil.Bytes(tx.Data()),
@@ -1039,8 +1038,6 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 			GasFeeCap: (*hexutil.Big)(tx.GasFeeCap()),
 			GasTipCap: (*hexutil.Big)(tx.GasTipCap()),
 		}
-		sender := tx.ETXSender()
-		result.Sender = &sender
 	case types.InternalToExternalTxType:
 		result = &RPCTransaction{
 			Type:        hexutil.Uint64(tx.Type()),
