@@ -627,7 +627,9 @@ func (hc *HeaderChain) GetHeader(hash common.Hash, number uint64) *types.Header 
 	}
 	// Short circuit if the header's already in the cache, retrieve otherwise
 	if header, ok := hc.headerCache.Get(hash); ok {
-		return header.(*types.Header)
+		if h, ok := header.(*types.Header); ok {
+			return h
+		}
 	}
 	header := rawdb.ReadHeader(hc.headerDb, hash, number)
 	if header == nil {
@@ -658,7 +660,9 @@ func (hc *HeaderChain) GetHeaderByHash(hash common.Hash) *types.Header {
 func (hc *HeaderChain) GetHeaderOrCandidate(hash common.Hash, number uint64) *types.Header {
 	// Short circuit if the header's already in the cache, retrieve otherwise
 	if header, ok := hc.headerCache.Get(hash); ok {
-		return header.(*types.Header)
+		if h, ok := header.(*types.Header); ok {
+			return h
+		}
 	}
 	header := rawdb.ReadHeader(hc.headerDb, hash, number)
 	if header == nil {
@@ -708,7 +712,16 @@ func (hc *HeaderChain) GetCanonicalHash(number uint64) common.Hash {
 // CurrentHeader retrieves the current head header of the canonical chain. The
 // header is retrieved from the HeaderChain's internal cache.
 func (hc *HeaderChain) CurrentHeader() *types.Header {
-	return hc.currentHeader.Load().(*types.Header)
+	if current := hc.currentHeader.Load(); current != nil {
+		if header, ok := current.(*types.Header); ok {
+			return header
+		} else {
+			// Data race - try again.
+			// This should not result in infinite recursion unless something is very wrong.
+			return hc.CurrentHeader()
+		}
+	}
+	return nil
 }
 
 // CurrentBlock returns the block for the current header.
@@ -818,8 +831,9 @@ func (hc *HeaderChain) ExportN(w io.Writer, first uint64, last uint64) error {
 func (hc *HeaderChain) GetBlockFromCacheOrDb(hash common.Hash, number uint64) *types.Block {
 	// Short circuit if the block's already in the cache, retrieve otherwise
 	if cached, ok := hc.bc.blockCache.Get(hash); ok {
-		block := cached.(*types.Block)
-		return block
+		if block, ok := cached.(*types.Block); ok {
+			return block
+		}
 	}
 	return hc.GetBlock(hash, number)
 }
@@ -861,8 +875,9 @@ func (hc *HeaderChain) GetBlockByNumber(number uint64) *types.Block {
 func (hc *HeaderChain) GetBody(hash common.Hash) *types.Body {
 	// Short circuit if the body's already in the cache, retrieve otherwise
 	if cached, ok := hc.bc.bodyCache.Get(hash); ok {
-		body := cached.(*types.Body)
-		return body
+		if body, ok := cached.(*types.Body); ok {
+			return body
+		}
 	}
 	number := hc.GetBlockNumber(hash)
 	if number == nil {

@@ -257,7 +257,10 @@ func (tx *Transaction) IsInternalToExternalTx() (inner *InternalToExternalTx, ok
 func (tx *Transaction) From() *common.Address {
 	sc := tx.from.Load()
 	if sc != nil {
-		sigCache := sc.(sigCache)
+		sigCache, ok := sc.(sigCache)
+		if !ok {
+			return nil
+		}
 		return &sigCache.from
 	} else {
 		return nil
@@ -350,7 +353,9 @@ func (tx *Transaction) EffectiveGasTipIntCmp(other *big.Int, baseFee *big.Int) i
 // Hash returns the transaction hash.
 func (tx *Transaction) Hash() common.Hash {
 	if hash := tx.hash.Load(); hash != nil {
-		return hash.(common.Hash)
+		if h, ok := hash.(common.Hash); ok {
+			return h
+		}
 	}
 	h := prefixedRlpHash(tx.Type(), tx.inner)
 	tx.hash.Store(h)

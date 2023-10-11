@@ -519,7 +519,9 @@ type sealData struct {
 // SealHash returns the hash of a block prior to it being sealed.
 func (h *Header) SealHash() (hash common.Hash) {
 	if hash := h.sealHash.Load(); hash != nil {
-		return hash.(common.Hash)
+		if h, ok := hash.(common.Hash); ok {
+			return h
+		}
 	}
 	hasherMu.Lock()
 	defer hasherMu.Unlock()
@@ -558,7 +560,9 @@ func (h *Header) SealHash() (hash common.Hash) {
 // SealHash suffixed with a nonce.
 func (h *Header) Hash() (hash common.Hash) {
 	if hash := h.hash.Load(); hash != nil {
-		return hash.(common.Hash)
+		if h, ok := hash.(common.Hash); ok {
+			return h
+		}
 	}
 	sealHash := h.SealHash().Bytes()
 	hasherMu.Lock()
@@ -889,7 +893,9 @@ func (b *Block) Body() *Body {
 // and returning it, or returning a previsouly cached value.
 func (b *Block) Size() common.StorageSize {
 	if size := b.size.Load(); size != nil {
-		return size.(common.StorageSize)
+		if s, ok := size.(common.StorageSize); ok {
+			return s
+		}
 	}
 	c := writeCounter(0)
 	rlp.Encode(&c, b)
