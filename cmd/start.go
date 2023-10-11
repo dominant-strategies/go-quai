@@ -51,18 +51,36 @@ func runStart(cmd *cobra.Command, args []string) error {
 	ipaddr := "0.0.0.0"
 	p2pPort := viper.GetString("p2p-port")
 	privKeyFile := viper.GetString("privkey")
-	node, err := p2pnode.NewNode(ipaddr, p2pPort, privKeyFile)
+	node, err := p2pnode.NewNode(ctx, ipaddr, p2pPort, privKeyFile)
 	if err != nil {
 		log.Fatalf("error creating node: %s", err)
 	}
-	// log the node's listening addresses
+
+	// log the p2p node's ID
+	log.Infof("node created: %s", node.ID().Pretty())
+	// log the p2p node's listening addresses
 	for _, addr := range node.Addrs() {
 		log.Infof("listening on: %s", addr)
 	}
 
+	// initialize the DHT
+	if err := node.InitializeDHT(); err != nil {
+		log.Fatalf("error initializing DHT: %s", err)
+		os.Exit(1)
+	}
+	// if the node is not a bootstrap server, bootstrap the DHT
+	if !viper.GetBool("server") {
+		log.Infof("bootstrapping DHT...")
+		if err := node.BootstrapDHT(); err != nil {
+			log.Fatalf("error bootstrapping DHT: %s", err)
+			os.Exit(1)
+		}
+	} else {
+		log.Infof("starting node as bootstrap server")
+	}
+
 	client := client.NewClient(ctx, node)
 
-	log.Infof("node created: %s", node.ID().Pretty())
 	// start the http server
 	go func() {
 		httpPort := viper.GetString("http-port")
@@ -71,24 +89,9 @@ func runStart(cmd *cobra.Command, args []string) error {
 			os.Exit(1)
 		}
 	}()
+
 	// Start listening for events
 	go client.ListenForEvents()
-
-	// initialize the DHT
-	if err := client.InitDHT(); err != nil {
-		log.Fatalf("error initializing DHT: %s", err)
-		os.Exit(1)
-	}
-	// if the node is not a bootstrap server, bootstrap the DHT
-	if !viper.GetBool("server") {
-		log.Infof("bootstrapping DHT...")
-		if err := client.BootstrapDHT(); err != nil {
-			log.Fatalf("error bootstrapping DHT: %s", err)
-			os.Exit(1)
-		}
-	} else {
-		log.Infof("starting node as bootstrap server")
-	}
 
 	// wait for a SIGINT or SIGTERM signal
 	ch := make(chan os.Signal, 1)
