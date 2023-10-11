@@ -411,9 +411,17 @@ func (w *worker) StorePendingBlockBody() {
 	pendingBlockBody := w.pendingBlockBody
 	for _, key := range pendingBlockBody.Keys() {
 		if value, exist := pendingBlockBody.Peek(key); exist {
-			pendingBlockBodyKeys = append(pendingBlockBodyKeys, key.(common.Hash))
-			if key.(common.Hash) != types.EmptyBodyHash {
-				rawdb.WritePbCacheBody(w.workerDb, key.(common.Hash), value.(*types.Body))
+			unpackedKey, ok := key.(common.Hash)
+			if !ok {
+				panic("Error type-asserting pending block body key")
+			}
+			body, ok := value.(*types.Body)
+			if !ok {
+				panic("Error type-asserting pending block body value")
+			}
+			pendingBlockBodyKeys = append(pendingBlockBodyKeys, unpackedKey)
+			if unpackedKey != types.EmptyBodyHash {
+				rawdb.WritePbCacheBody(w.workerDb, unpackedKey, body)
 			}
 		}
 	}
@@ -1002,9 +1010,10 @@ func (w *worker) AddPendingBlockBody(header *types.Header, body *types.Body) {
 // GetPendingBlockBody gets the block body associated with the given header.
 func (w *worker) GetPendingBlockBody(header *types.Header) *types.Body {
 	key := w.getPendingBlockBodyKey(header)
-	body, ok := w.pendingBlockBody.Get(key)
-	if ok {
-		return body.(*types.Body)
+	if body, ok := w.pendingBlockBody.Get(key); ok {
+		if b, ok := body.(*types.Body); ok {
+			return b
+		}
 	}
 	log.Warn("pending block body not found for header: ", key)
 	return nil

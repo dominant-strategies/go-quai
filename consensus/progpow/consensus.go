@@ -434,12 +434,20 @@ func (progpow *Progpow) verifySeal(header *types.Header) (common.Hash, error) {
 	if powHash == nil || mixHash == nil {
 		mixHash, powHash = progpow.ComputePowLight(header)
 	}
+	mixhash, ok := mixHash.(common.Hash)
+	if !ok {
+		return common.Hash{}, errInvalidMixHash
+	}
+	powhash, ok := powHash.(common.Hash)
+	if !ok {
+		return common.Hash{}, errInvalidPoW
+	}
 	// Verify the calculated values against the ones provided in the header
-	if !bytes.Equal(header.MixHash().Bytes(), mixHash.(common.Hash).Bytes()) {
+	if !bytes.Equal(header.MixHash().Bytes(), mixhash.Bytes()) {
 		return common.Hash{}, errInvalidMixHash
 	}
 	target := new(big.Int).Div(big2e256, header.Difficulty())
-	if new(big.Int).SetBytes(powHash.(common.Hash).Bytes()).Cmp(target) > 0 {
+	if new(big.Int).SetBytes(powhash.Bytes()).Cmp(target) > 0 {
 		return common.Hash{}, errInvalidPoW
 	}
 	return powHash.(common.Hash), nil
