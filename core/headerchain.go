@@ -625,10 +625,6 @@ func (hc *HeaderChain) GetHeader(hash common.Hash, number uint64) *types.Header 
 	if termini == nil {
 		return nil
 	}
-	// Short circuit if the header's already in the cache, retrieve otherwise
-	if header, ok := hc.headerCache.Get(hash); ok {
-		return header.(*types.Header)
-	}
 	header := rawdb.ReadHeader(hc.headerDb, hash, number)
 	if header == nil {
 		return nil
@@ -656,10 +652,6 @@ func (hc *HeaderChain) GetHeaderByHash(hash common.Hash) *types.Header {
 // GetHeaderOrCandidate retrieves a block header from the database by hash and number,
 // caching it if found.
 func (hc *HeaderChain) GetHeaderOrCandidate(hash common.Hash, number uint64) *types.Header {
-	// Short circuit if the header's already in the cache, retrieve otherwise
-	if header, ok := hc.headerCache.Get(hash); ok {
-		return header.(*types.Header)
-	}
 	header := rawdb.ReadHeader(hc.headerDb, hash, number)
 	if header == nil {
 		return nil
@@ -859,11 +851,6 @@ func (hc *HeaderChain) GetBlockByNumber(number uint64) *types.Block {
 // GetBody retrieves a block body (transactions and uncles) from the database by
 // hash, caching it if found.
 func (hc *HeaderChain) GetBody(hash common.Hash) *types.Body {
-	// Short circuit if the body's already in the cache, retrieve otherwise
-	if cached, ok := hc.bc.bodyCache.Get(hash); ok {
-		body := cached.(*types.Body)
-		return body
-	}
 	number := hc.GetBlockNumber(hash)
 	if number == nil {
 		return nil

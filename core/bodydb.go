@@ -152,10 +152,6 @@ func (bc *BodyDb) GetBlock(hash common.Hash, number uint64) *types.Block {
 	if termini == nil {
 		return nil
 	}
-	// Short circuit if the block's already in the cache, retrieve otherwise
-	if block, ok := bc.blockCache.Get(hash); ok {
-		return block.(*types.Block)
-	}
 	block := rawdb.ReadBlock(bc.db, hash, number)
 	if block == nil {
 		return nil
