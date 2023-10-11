@@ -1035,10 +1035,10 @@ func totalFees(block *types.Block, receipts []*types.Receipt) *big.Float {
 }
 
 func (w *worker) CurrentInfo(header *types.Header) bool {
-	if w.headerPrints.Contains(header) {
+	if w.headerPrints.Contains(header.Hash()) {
 		return false
 	}
 
-	w.headerPrints.Add(header, nil)
+	w.headerPrints.Add(header.Hash(), nil)
 	return header.NumberU64()+c_startingPrintLimit > w.hc.CurrentHeader().NumberU64()
 }
