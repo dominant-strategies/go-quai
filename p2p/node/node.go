@@ -6,6 +6,7 @@ import (
 
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p/discovery"
+	"github.com/dominant-strategies/go-quai/p2p/pubsub"
 
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
@@ -23,6 +24,7 @@ type P2PNode struct {
 	host.Host
 	dht discovery.DHT
 	ctx context.Context
+	ps  *pubsub.PubSubManager
 }
 
 // returns a new libp2p node setup with the given IP address, address and private key
@@ -67,6 +69,15 @@ func NewNode(ctx context.Context, ipaddr string, port string, privKeyFile string
 		Host: node,
 		ctx:  ctx,
 	}
+
+	// Initialize the PubSub manager with default options
+	psMgr, err := pubsub.NewPubSubManager(ctx, node, nil)
+	if err != nil {
+		log.Errorf("error initializing PubSub manager: %s", err)
+		return nil, err
+	}
+	p2pNode.ps = psMgr
+
 	return p2pNode, nil
 }
 
