@@ -43,7 +43,7 @@ BASE_CMD += --http --http.vhosts=* --http.addr $(HTTP_ADDR) --http.api $(HTTP_AP
 BASE_CMD += --ws --ws.addr $(WS_ADDR) --ws.api $(WS_API)
 BASE_CMD += --slices $(SLICES)
 BASE_CMD += --db.engine $(DB_ENGINE)
-BASE_CMD += --maxpeers $(MAX_PEERS)
+BASE_CMD += $(if $(MAX_PEERS),--maxpeers $(MAX_PEERS))
 ifeq ($(ENABLE_ARCHIVE),true)
 	BASE_CMD += --gcmode archive
 endif
@@ -97,24 +97,6 @@ endif
 ifeq ($(ZONE),0)
 	REGION_SUBS =ws://127.0.0.1:$(ZONE_$(REGION)_$(ZONE)_PORT_WS),,
 endif
-
-# Build specific prime, region, and zone commands for run-slice
-PRIME_CMD = $(BASE_CMD) --port $(PRIME_PORT_TCP)
-PRIME_CMD += --http.port $(PRIME_PORT_HTTP)
-PRIME_CMD += --ws.port $(PRIME_PORT_WS)
-PRIME_CMD += --sub.urls "$(PRIME_SUBS)"
-PRIME_LOG_FILE = nodelogs/prime.log
-REGION_CMD = $(BASE_CMD) --region $(REGION) --port $(REGION_$(REGION)_PORT_TCP)
-REGION_CMD += --http.port $(REGION_$(REGION)_PORT_HTTP)
-REGION_CMD += --ws.port $(REGION_$(REGION)_PORT_WS)
-REGION_CMD += --dom.url ws://127.0.0.1:$(PRIME_PORT_WS)
-REGION_CMD += --sub.urls "$(REGION_SUBS)"
-REGION_LOG_FILE = nodelogs/region-$(REGION).log
-ZONE_CMD = $(BASE_CMD) --region $(REGION) --zone $(ZONE) --miner.etherbase $(ZONE_$(REGION)_$(ZONE)_COINBASE) --port $(ZONE_$(REGION)_$(ZONE)_PORT_TCP)
-ZONE_CMD += --http.port $(ZONE_$(REGION)_$(ZONE)_PORT_HTTP)
-ZONE_CMD += --ws.port $(ZONE_$(REGION)_$(ZONE)_PORT_WS)
-ZONE_CMD += --dom.url ws://127.0.0.1:$(REGION_$(REGION)_PORT_WS)
-ZONE_LOG_FILE = nodelogs/zone-$(REGION)-$(ZONE).log
 
 run:
 ifeq (,$(wildcard nodelogs))
