@@ -44,6 +44,10 @@ func init() {
 
 	viper.BindPFlag("keystore", rootCmd.PersistentFlags().Lookup("keystore"))
 
+	// config flag to load node's private key
+	rootCmd.PersistentFlags().StringP("privkey", "k", "private.key", "private key file")
+	viper.BindPFlag("privkey", rootCmd.PersistentFlags().Lookup("privkey"))
+
 }
 
 func runPersistenPreRunE(cmd *cobra.Command, args []string) error {
