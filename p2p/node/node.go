@@ -3,10 +3,14 @@ package node
 import (
 	"context"
 	"fmt"
+	"time"
+
+	"github.com/pkg/errors"
 
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p/discovery"
-	"github.com/dominant-strategies/go-quai/p2p/pubsub"
+	quaips "github.com/dominant-strategies/go-quai/p2p/pubsub"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
@@ -22,9 +26,10 @@ const hostIPFile = "hostip"
 // p2pNode represents a libp2p node
 type P2PNode struct {
 	host.Host
-	dht discovery.DHT
-	ctx context.Context
-	ps  *pubsub.PubSubManager
+	dht  discovery.DHTDiscovery
+	mDNS discovery.MDNSDiscovery
+	ctx  context.Context
+	ps   quaips.PSManager
 }
 
 // returns a new libp2p node setup with the given IP address, address and private key
@@ -71,7 +76,7 @@ func NewNode(ctx context.Context, ipaddr string, port string, privKeyFile string
 	}
 
 	// Initialize the PubSub manager with default options
-	psMgr, err := pubsub.NewPubSubManager(ctx, node, nil)
+	psMgr, err := quaips.NewPubSubManager(ctx, node, nil)
 	if err != nil {
 		log.Errorf("error initializing PubSub manager: %s", err)
 		return nil, err
@@ -80,6 +85,8 @@ func NewNode(ctx context.Context, ipaddr string, port string, privKeyFile string
 
 	return p2pNode, nil
 }
+
+// ******* DHT methods ******* //
 
 // Initialize initializes the DHT for the libp2p node
 func (p *P2PNode) InitializeDHT(opts ...dht.Option) error {
@@ -100,4 +107,80 @@ func (p *P2PNode) FindPeer(ctx context.Context, peerID peer.ID) (peer.AddrInfo, 
 // RoutingTable returns the routing table of the DHT
 func (p *P2PNode) GetPeers() []peer.ID {
 	return p.dht.GetPeers()
+}
+
+// ******* mDNS methods ******* //
+
+// Inialize mDNS discovery service
+func (p *P2PNode) InitializeMDNS() error {
+	p.mDNS = discovery.NewmDNSDiscovery(p.ctx, p.Host)
+	return p.mDNS.Start()
+}
+
+// ******* PubSub methods ******* //
+
+// Join a PubSub topic
+func (p *P2PNode) Join(topic string) (*pubsub.Topic, error) {
+	return p.ps.Join(topic)
+}
+
+// Subscribe to a PubSub topic
+func (p *P2PNode) Subscribe(topic string) (*pubsub.Subscription, error) {
+	return p.ps.Subscribe(topic)
+}
+
+// Publish a message to a PubSub topic
+func (p *P2PNode) Publish(topic string, data []byte) error {
+	return p.ps.Publish(topic, data)
+}
+
+// ListPeers lists the peers we are connected to for a given topic
+func (p *P2PNode) ListPeers(topic string) []peer.ID {
+	return p.ps.ListPeers(topic)
+}
+
+// ******* Shutdown method ******* //
+
+type stopFunc func() error
+
+// Function to gracefully shtudown all running services
+func (p *P2PNode) Shutdown() error {
+	// define a list of functions to stop the services the node is running
+	stopFuncs := []stopFunc{
+		p.mDNS.Stop,
+		p.dht.Stop,
+		p.ps.Stop,
+		p.Host.Close,
+	}
+	// create a channel to collect errors
+	errs := make(chan error, len(stopFuncs))
+	// run each stop function in a goroutine
+	for _, fn := range stopFuncs {
+		go func(fn stopFunc) {
+			errs <- fn()
+		}(fn)
+	}
+
+	var allErrors []error
+	for i := 0; i < len(stopFuncs); i++ {
+		select {
+		case err := <-errs:
+			if err != nil {
+				log.Errorf("error during shutdown: %s", err)
+				// You can either collect all errors or just return the first one.
+				// Here, we're setting finalErr to the last error we received.
+				allErrors = append(allErrors, err)
+			}
+		case <-time.After(5 * time.Second):
+			err := errors.New("timeout during shutdown")
+			log.Warnf("error: %s", err)
+			allErrors = append(allErrors, err)
+		}
+	}
+	close(errs)
+	if len(allErrors) > 0 {
+		return errors.Errorf("errors during shutdown: %v", allErrors)
+	} else {
+		return nil
+	}
 }

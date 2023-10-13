@@ -35,9 +35,7 @@ func init() {
 	// configure flag for http port
 	startCmd.Flags().StringP("http-port", "t", "8080", "http port to listen on")
 	viper.BindPFlag("http-port", startCmd.Flags().Lookup("http-port"))
-	// configure flag for private key file
-	startCmd.Flags().StringP("privkey", "k", "../private.key", "private key file")
-	viper.BindPFlag("privkey", startCmd.Flags().Lookup("privkey"))
+
 	// configure flag to start as a boostrap server
 	startCmd.Flags().BoolP("server", "s", false, "start as a bootstrap server")
 	viper.BindPFlag("server", startCmd.Flags().Lookup("server"))
@@ -68,6 +66,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 		log.Fatalf("error initializing DHT: %s", err)
 		os.Exit(1)
 	}
+
 	// if the node is not a bootstrap server, bootstrap the DHT
 	if !viper.GetBool("server") {
 		log.Infof("bootstrapping DHT...")
@@ -77,6 +76,12 @@ func runStart(cmd *cobra.Command, args []string) error {
 		}
 	} else {
 		log.Infof("starting node as bootstrap server")
+	}
+
+	// initialize mDNS discovery
+	if err := node.InitializeMDNS(); err != nil {
+		log.Fatalf("error initializing mDNS discovery: %s", err)
+		os.Exit(1)
 	}
 
 	client := client.NewClient(ctx, node)
@@ -97,9 +102,9 @@ func runStart(cmd *cobra.Command, args []string) error {
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
 	<-ch
-	log.Warnf("Received 'stop' signal, shutting down...")
+	log.Warnf("Received 'stop' signal, shutting down gracefully...")
 	cancel()
-	if err := node.Close(); err != nil {
+	if err := node.Shutdown(); err != nil {
 		panic(err)
 	}
 	log.Warnf("Node is offline")

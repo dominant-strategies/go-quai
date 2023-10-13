@@ -17,7 +17,9 @@ type KadDHT struct {
 }
 
 func (k *KadDHT) Initialize(ctx context.Context, node host.Host, opts ...kadht.Option) error {
-	// Initialization logic
+	// create a new DHT with the given options
+	serverModeOpt := kadht.Mode(kadht.ModeServer)
+	opts = append(opts, serverModeOpt)
 	dht, err := kadht.New(ctx, node, opts...)
 	if err != nil {
 		return errors.Wrap(err, "error creating DHT")
@@ -63,4 +65,13 @@ func (k *KadDHT) FindPeer(ctx context.Context, peerID peer.ID) (peer.AddrInfo, e
 
 func (k *KadDHT) GetPeers() []peer.ID {
 	return k.dht.RoutingTable().ListPeers()
+}
+
+func (k *KadDHT) Start() error {
+	// TODO: implement
+	return nil
+}
+
+func (k *KadDHT) Stop() error {
+	return k.dht.Close()
 }
