@@ -47,6 +47,7 @@ const (
 	c_appendQueuePrintSize                     = 10
 	c_badSyncTargetsSize                       = 20 // List of bad sync target hashes
 	c_badSyncTargetCheckTime                   = 15 * time.Minute
+	c_normalListBackoffThreshold               = 5 // Max multiple on the c_normalListProcCounter
 )
 
 type blockNumberAndRetryCounter struct {
@@ -70,6 +71,8 @@ type Core struct {
 
 	syncTarget *types.Header // sync target header decided based on Best Prime Block as the target to sync to
 
+	normalListBackoff uint64 // normalListBackoff is the multiple on c_normalListProcCounter which delays the proc on normal list
+
 	quit chan struct{} // core quit channel
 }
 
@@ -80,10 +83,11 @@ func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.H
 	}
 
 	c := &Core{
-		sl:          slice,
-		engine:      engine,
-		quit:        make(chan struct{}),
-		procCounter: 0,
+		sl:                slice,
+		engine:            engine,
+		quit:              make(chan struct{}),
+		procCounter:       0,
+		normalListBackoff: 1,
 	}
 
 	// Initialize the sync target to current header parent entropy
@@ -207,7 +211,8 @@ func (c *Core) procAppendQueue() {
 		log.Info("Size of hashNumberPriorityList", "len", len(hashNumberPriorityList), "first entry", hashNumberPriorityList[0].Number, "last entry", hashNumberPriorityList[len(hashNumberPriorityList)-1].Number)
 	}
 
-	if len(c.appendQueue.Keys()) < c_appendQueueThreshold || c.procCounter%c_normalListProcCounter == 0 {
+	normalListProcCounter := c.normalListBackoff * c_normalListProcCounter
+	if len(c.appendQueue.Keys()) < c_appendQueueThreshold || c.procCounter%int(normalListProcCounter) == 0 {
 		c.procCounter = 0
 		c.serviceBlocks(hashNumberList)
 		if len(hashNumberList) > 0 {
@@ -233,7 +238,7 @@ func (c *Core) serviceBlocks(hashNumberList []types.HashAndNumber) {
 	}
 
 	// Attempt to service the sorted list
-	for _, hashAndNumber := range hashNumberList {
+	for i, hashAndNumber := range hashNumberList {
 		block := c.GetBlockOrCandidateByHash(hashAndNumber.Hash)
 		if block != nil {
 			var numberAndRetryCounter blockNumberAndRetryCounter
@@ -263,7 +268,16 @@ func (c *Core) serviceBlocks(hashNumberList []types.HashAndNumber) {
 					}
 				}
 				c.addToQueueIfNotAppended(parentBlock)
-				c.InsertChain([]*types.Block{block})
+				_, err = c.InsertChain([]*types.Block{block})
+				if err != nil && err.Error() == ErrPendingBlock.Error() {
+					// Best check here would be to check the first hash in each Fork, until we do that
+					// checking the first item in the sorted hashNumberList will do
+					if i == 0 && c.normalListBackoff < c_normalListBackoffThreshold {
+						c.normalListBackoff++
+					}
+				} else {
+					c.normalListBackoff = 1
+				}
 			} else {
 				c.sl.missingBlockFeed.Send(types.BlockRequest{Hash: block.ParentHash(), Entropy: block.ParentEntropy()})
 			}
