@@ -29,16 +29,6 @@ func (c *P2PClient) handleStream(s network.Stream) {
 	if err != nil {
 		log.Errorf("Error sending acknowlegdment: %s", err)
 	}
-
-	// Read the acknowledgment from the sender
-	n, err = s.Read(buf)
-	if err != nil {
-		log.Errorf("Error reading acknowledgment from stream: %s", err)
-		return
-	}
-
-	// Print the received acknowledgment
-	log.Infof("Received acknowledgment: '%s'", string(buf[:n]))
 }
 
 // This function is used by the node to send a message to a peer using a stream

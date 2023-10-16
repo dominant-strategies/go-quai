@@ -3,28 +3,25 @@ package node
 import (
 	"context"
 	"fmt"
-	"time"
-
-	"github.com/pkg/errors"
 
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p/discovery"
 	quaips "github.com/dominant-strategies/go-quai/p2p/pubsub"
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	routedhost "github.com/libp2p/go-libp2p/p2p/host/routed"
 
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
+	kadht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/host"
-	"github.com/libp2p/go-libp2p/core/peer"
 
 	multiaddr "github.com/multiformats/go-multiaddr"
+	"github.com/spf13/viper"
 )
 
-// name of the file that contains the Docker's host IP
+// Name of the file that contains the Docker's host IP
 const hostIPFile = "hostip"
 
-// p2pNode represents a libp2p node
+// P2PNode represents a libp2p node
 type P2PNode struct {
 	host.Host
 	dht  discovery.DHTDiscovery
@@ -33,23 +30,31 @@ type P2PNode struct {
 	ps   quaips.PSManager
 }
 
-// returns a new libp2p node setup with the given IP address, address and private key
-func NewNode(ctx context.Context, ipaddr string, port string, privKeyFile string) (*P2PNode, error) {
+// Returns a new libp2p node.
+// The node is created with the given context and options passed as arguments.
+func NewNode(ctx context.Context) (*P2PNode, error) {
 
+	// get parameters from config, flags or environment variables
+	ipAddr := viper.GetString("ipaddr")
+	port := viper.GetString("port")
+	log.Debugf("Creating node with IP address: %s and port: %s", ipAddr, port)
 	p2pNode := &P2PNode{
 		ctx: ctx,
+	}
+
+	privKeyFile := viper.GetString("privkey")
+	log.Debugf("Loading private key from file: %s", privKeyFile)
+	privateKey, err := getPrivKey(privKeyFile)
+	if err != nil {
+		log.Fatalf("error getting private key: %s", err)
 	}
 
 	// list of options to instantiate the libp2p node
 	nodeOptions := []libp2p.Option{}
 
-	privateKey, err := getPrivKey(privKeyFile)
-	if err != nil {
-		log.Fatalf("error getting private key: %s", err)
-	}
 	nodeOptions = append(nodeOptions, libp2p.Identity(privateKey))
 
-	sourceMultiAddr, _ := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%s", ipaddr, port))
+	sourceMultiAddr, _ := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%s", ipAddr, port))
 	nodeOptions = append(nodeOptions, libp2p.ListenAddrs(sourceMultiAddr))
 
 	// check if there is a host IP we can use to replace Docker's internal IP
@@ -77,7 +82,7 @@ func NewNode(ctx context.Context, ipaddr string, port string, privKeyFile string
 	p2pNode.Host = node
 
 	// Initialize the DHT
-	if err := p2pNode.InitializeDHT(); err != nil {
+	if err := p2pNode.initializeDHT(); err != nil {
 		log.Errorf("error initializing DHT: %s", err)
 		return nil, err
 	}
@@ -87,118 +92,42 @@ func NewNode(ctx context.Context, ipaddr string, port string, privKeyFile string
 	p2pNode.Host = rnode
 	log.Debugf("Routed node created")
 
-	// Initialize mDNS discovery
-	if err := p2pNode.InitializeMDNS(); err != nil {
-		log.Errorf("error initializing mDNS discovery: %s", err)
-		return nil, err
-	}
+	// initialize mDNS discovery
+	p2pNode.initializeMDNS()
 
-	// Initialize the PubSub manager with default options
-	psMgr, err := quaips.NewPubSubManager(ctx, rnode, nil)
-	if err != nil {
-		log.Errorf("error initializing PubSub manager: %s", err)
+	// initialize PubSub
+	if err := p2pNode.initializePubSub(); err != nil {
+		log.Errorf("error initializing PubSub: %s", err)
 		return nil, err
 	}
-	p2pNode.ps = psMgr
 
 	return p2pNode, nil
 }
 
-// ******* DHT methods ******* //
-
-// Initialize initializes the DHT for the libp2p node
-func (p *P2PNode) InitializeDHT(opts ...dht.Option) error {
+// Initializes the DHT for the libp2p node in server mode.
+func (p *P2PNode) initializeDHT(opts ...dht.Option) error {
+	serverModeOpt := kadht.Mode(kadht.ModeServer)
+	opts = append(opts, serverModeOpt)
 	p.dht = &discovery.KadDHT{}
 	return p.dht.Initialize(p.ctx, p.Host, opts...)
 }
 
 // Bootstrap bootstraps the DHT for the libp2p node
-func (p *P2PNode) BootstrapDHT(bootstrapPeers ...string) error {
+func (p *P2PNode) bootstrapDHT(bootstrapPeers ...string) error {
 	return p.dht.Bootstrap(p.ctx, p.Host, bootstrapPeers...)
 }
 
-// FindPeer finds a peer within the DHT using the given peer ID
-func (p *P2PNode) FindPeer(ctx context.Context, peerID peer.ID) (peer.AddrInfo, error) {
-	return p.dht.FindPeer(ctx, peerID)
-}
-
-// RoutingTable returns the routing table of the DHT
-func (p *P2PNode) GetPeers() []peer.ID {
-	return p.dht.GetPeers()
-}
-
-// ******* mDNS methods ******* //
-
 // Inialize mDNS discovery service
-func (p *P2PNode) InitializeMDNS() error {
+func (p *P2PNode) initializeMDNS() {
 	p.mDNS = discovery.NewmDNSDiscovery(p.ctx, p.Host)
-	return p.mDNS.Start()
 }
 
-// ******* PubSub methods ******* //
-
-// Join a PubSub topic
-func (p *P2PNode) Join(topic string) (*pubsub.Topic, error) {
-	return p.ps.Join(topic)
-}
-
-// Subscribe to a PubSub topic
-func (p *P2PNode) Subscribe(topic string) (*pubsub.Subscription, error) {
-	return p.ps.Subscribe(topic)
-}
-
-// Publish a message to a PubSub topic
-func (p *P2PNode) Publish(topic string, data []byte) error {
-	return p.ps.Publish(topic, data)
-}
-
-// ListPeers lists the peers we are connected to for a given topic
-func (p *P2PNode) ListPeers(topic string) []peer.ID {
-	return p.ps.ListPeers(topic)
-}
-
-// ******* Shutdown method ******* //
-
-type stopFunc func() error
-
-// Function to gracefully shtudown all running services
-func (p *P2PNode) Shutdown() error {
-	// define a list of functions to stop the services the node is running
-	stopFuncs := []stopFunc{
-		p.mDNS.Stop,
-		p.dht.Stop,
-		p.ps.Stop,
-		p.Host.Close,
+// Initialize the PubSub manager with default options
+func (p *P2PNode) initializePubSub() error {
+	psMgr, err := quaips.NewPubSubManager(p.ctx, p.Host, nil)
+	if err != nil {
+		return err
 	}
-	// create a channel to collect errors
-	errs := make(chan error, len(stopFuncs))
-	// run each stop function in a goroutine
-	for _, fn := range stopFuncs {
-		go func(fn stopFunc) {
-			errs <- fn()
-		}(fn)
-	}
-
-	var allErrors []error
-	for i := 0; i < len(stopFuncs); i++ {
-		select {
-		case err := <-errs:
-			if err != nil {
-				log.Errorf("error during shutdown: %s", err)
-				// You can either collect all errors or just return the first one.
-				// Here, we're setting finalErr to the last error we received.
-				allErrors = append(allErrors, err)
-			}
-		case <-time.After(5 * time.Second):
-			err := errors.New("timeout during shutdown")
-			log.Warnf("error: %s", err)
-			allErrors = append(allErrors, err)
-		}
-	}
-	close(errs)
-	if len(allErrors) > 0 {
-		return errors.Errorf("errors during shutdown: %v", allErrors)
-	} else {
-		return nil
-	}
+	p.ps = psMgr
+	return nil
 }

@@ -18,8 +18,6 @@ type KadDHT struct {
 
 func (k *KadDHT) Initialize(ctx context.Context, node host.Host, opts ...kadht.Option) error {
 	// create a new DHT with the given options
-	serverModeOpt := kadht.Mode(kadht.ModeServer)
-	opts = append(opts, serverModeOpt)
 	dht, err := kadht.New(ctx, node, opts...)
 	if err != nil {
 		return errors.Wrap(err, "error creating DHT")
@@ -28,11 +26,15 @@ func (k *KadDHT) Initialize(ctx context.Context, node host.Host, opts ...kadht.O
 	return nil
 }
 
+// Bootstraps the DHT with the given bootstrap peers.
+// If no bootstrap peers are given, the default bootstrap peers are used.
 func (k *KadDHT) Bootstrap(ctx context.Context, node host.Host, bootstrapPeers ...string) error {
 	var bootStrapPeersAddrInfo []peer.AddrInfo
 	if len(bootstrapPeers) == 0 {
 		// if no bootstrap peers are given, bootstrap with the default bootstrap peers
 		log.Warnf("no bootstrap peers given, using default public bootstrap peers")
+		//! ONLY FOR TESTING
+		// TODO: replace with actual bootstrap peers
 		bootStrapPeersAddrInfo = kadht.GetDefaultBootstrapPeerAddrInfos()
 	} else {
 		for _, peerAddr := range bootstrapPeers {

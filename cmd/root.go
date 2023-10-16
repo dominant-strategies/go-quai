@@ -37,6 +37,14 @@ func init() {
 
 	viper.BindPFlag("keystore", rootCmd.PersistentFlags().Lookup("keystore"))
 
+	// flag to load node's ip address
+	rootCmd.PersistentFlags().StringP("ipaddr", "i", "0.0.0.0", "ip address to listen on")
+	viper.BindPFlag("ipaddr", rootCmd.PersistentFlags().Lookup("ipaddr"))
+
+	// flag to load node's p2p port
+	rootCmd.PersistentFlags().StringP("port", "p", "4001", "p2p port to listen on")
+	viper.BindPFlag("port", rootCmd.PersistentFlags().Lookup("port"))
+
 	// flag to load node's private key
 	rootCmd.PersistentFlags().StringP("privkey", "k", "private.key", "private key file")
 	viper.BindPFlag("privkey", rootCmd.PersistentFlags().Lookup("privkey"))
@@ -63,7 +71,7 @@ func runPersistenPreRunE(cmd *cobra.Command, args []string) error {
 
 }
 
-// loads go-quai configuration from a yaml file
+// Loads go-quai configuration from a yaml file
 func loadConfigFromFile() error {
 	cfgFile := viper.GetString("config")
 	var configFilePath string
