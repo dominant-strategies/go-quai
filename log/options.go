@@ -3,16 +3,24 @@ package log
 import (
 	"fmt"
 	"io"
+	"os"
 	"runtime"
 	"strings"
 	"time"
 
+	"github.com/natefinch/lumberjack"
 	"github.com/sirupsen/logrus"
 )
+
+// type of log format
+type LogFormat string
 
 const (
 	// skip is the number of stack frames to skip when reporting caller
 	skip = 10
+
+	JSONFormat LogFormat = "json"
+	TextFormat LogFormat = "text"
 )
 
 // Options is a function type that can be used to configure the logger
@@ -37,41 +45,12 @@ func WithLevel(level string) Options {
 		}
 
 		if l == logrus.DebugLevel || l == logrus.TraceLevel {
-			formatter = &logrus.TextFormatter{
-				TimestampFormat: time.RFC3339,
-				FullTimestamp:   true,
-				CallerPrettyfier: func(f *runtime.Frame) (string, string) {
-					if pc, file, line, ok := runtime.Caller(skip); ok {
-						fName := runtime.FuncForPC(pc).Name()
-						return fmt.Sprintf("func: %s : ", formatFilePath(fName, 1)), fmt.Sprintf(" src: %s:%d -", formatFilePath(file, 2), line)
-					}
-					return fmt.Sprintf("func: %s : ", formatFilePath(f.Function, 1)), fmt.Sprintf(" src: %s:%d -", formatFilePath(f.File, 2), f.Line)
-				},
-			}
+			formatter.TimestampFormat = time.RFC3339
+			formatter.FullTimestamp = true
+			formatter.CallerPrettyfier = callerPrettyfier
 			lw.entry.Logger.SetReportCaller(true)
 		}
 		lw.entry.Logger.SetFormatter(formatter)
-	}
-}
-
-// WithOutput configures the output destination
-func WithOutput(output io.Writer) Options {
-	return func(lw *LogWrapper) {
-		lw.entry.Logger.SetOutput(output)
-	}
-}
-
-// WithFormatter configures the log formatter
-func WithFormatter(formatter logrus.Formatter) Options {
-	return func(lw *LogWrapper) {
-		lw.entry.Logger.SetFormatter(formatter)
-	}
-}
-
-// WithReportCaller configures the log to report caller
-func WithReportCaller(reportCaller bool) Options {
-	return func(lw *LogWrapper) {
-		lw.entry.Logger.SetReportCaller(reportCaller)
 	}
 }
 
@@ -80,6 +59,94 @@ func WithNullLogger() Options {
 	return func(lw *LogWrapper) {
 		lw.entry.Logger.SetOutput(io.Discard)
 	}
+}
+
+// WithOutput configures the output destination
+func WithOutput(outputs ...io.Writer) Options {
+	return func(lw *LogWrapper) {
+		for _, output := range outputs {
+			switch v := output.(type) {
+			// if output is a lumberjack logger, add a hook to write to file
+			case *lumberjack.Logger:
+				hook := FileLogHook{
+					Writer: v,
+					Formatter: &logrus.TextFormatter{
+						TimestampFormat:  time.RFC3339,
+						CallerPrettyfier: callerPrettyfier,
+						DisableTimestamp: false,
+						FullTimestamp:    true,
+					},
+				}
+				lw.entry.Logger.AddHook(&hook)
+			default:
+				lw.entry.Logger.SetOutput(output)
+			}
+		}
+	}
+}
+
+// ToStdOut returns an io.Writer to configure WithOutput() option to write to standard out.
+func ToStdOut() io.Writer {
+	return os.Stdout
+}
+
+// ToLogFile returns an io.Writer to configure WithOutput() option to write to a file and manage log rotation using lumberjack.
+func ToLogFile(filename string) io.Writer {
+	return &lumberjack.Logger{
+		Filename:   filename,
+		MaxSize:    defaultLogMaxSize,    // maximum file size before rotation, in MB
+		MaxBackups: defaultLogMaxBackups, // maximum number of old log files to keep
+		MaxAge:     defaultLogMaxAge,     // maximum number of days to retain old log files
+		Compress:   defaultLogCompress,   // whether to compress the rotated log files using gzip
+	}
+}
+
+// ToNull returns an io.Writer to configure WithOutput() option to discard all output.
+func ToNull() io.Writer {
+	return io.Discard
+}
+
+// logrus hook to write log to file
+type FileLogHook struct {
+	Writer    io.Writer
+	Formatter logrus.Formatter
+}
+
+func (hook *FileLogHook) Fire(entry *logrus.Entry) error {
+	line, err := hook.Formatter.Format(entry)
+	if err != nil {
+		return err
+	}
+	_, err = hook.Writer.Write(line)
+	return err
+}
+
+func (hook *FileLogHook) Levels() []logrus.Level {
+	return logrus.AllLevels
+}
+
+// callerPrettyfier formats the caller function, file path and line number
+func callerPrettyfier(f *runtime.Frame) (string, string) {
+	// Start with the current call stack frame.
+	pcs := make([]uintptr, 10)
+	n := runtime.Callers(skip, pcs)
+	frames := runtime.CallersFrames(pcs[:n])
+
+	// Traverse frames to find the first frame outside the logger package.
+	for {
+		frame, more := frames.Next()
+		if !strings.Contains(frame.File, "/log/") && !strings.Contains(frame.File, "logrus") {
+			// This frame is outside the logger package. Use it.
+			return fmt.Sprintf("func: %s : ", formatFilePath(frame.Function, 1)), fmt.Sprintf(" src: %s:%d -", formatFilePath(frame.File, 2), frame.Line)
+		}
+
+		if !more {
+			break
+		}
+	}
+
+	// If we can't find a suitable frame, fall back to the provided frame.
+	return fmt.Sprintf("func: %s : ", formatFilePath(f.Function, 1)), fmt.Sprintf(" src: %s:%d -", formatFilePath(f.File, 2), f.Line)
 }
 
 // formatFilePath receives a string representing a path and returns the last part of it
