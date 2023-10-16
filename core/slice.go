@@ -217,7 +217,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	if !domOrigin && nodeCtx != common.ZONE_CTX {
 		newInboundEtxs, _, err = sl.CollectNewlyConfirmedEtxs(block, block.Location())
 		if err != nil {
-			log.Error("Error collecting newly confirmed etxs: ", "err", err)
+			log.Trace("Error collecting newly confirmed etxs: ", "err", err)
 			// Keeping track of the number of times pending etx fails and if it crossed the retry threshold
 			// ask the sub for the pending etx/rollup data
 			val, exist := sl.pEtxRetryCache.Get(block.Hash())

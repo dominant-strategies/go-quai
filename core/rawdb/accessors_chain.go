@@ -545,7 +545,7 @@ func ReadPendingHeader(db ethdb.Reader, hash common.Hash) *types.PendingHeader {
 	key := pendingHeaderKey(hash)
 	data, _ := db.Get(key)
 	if len(data) == 0 {
-		log.Error("Pending Header is nil", "Key", key)
+		log.Debug("Pending Header is nil", "Key", key)
 		return nil
 	}
 

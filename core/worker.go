@@ -45,6 +45,10 @@ const (
 
 	// pendingBlockBodyLimit is maximum number of pending block bodies to be kept in cache.
 	pendingBlockBodyLimit = 320
+
+	// c_headerPrintsExpiryTime is how long a header hash is kept in the cache, so that currentInfo
+	// is not printed on a Proc frequency
+	c_headerPrintsExpiryTime = 2 * time.Minute
 )
 
 // environment is the worker's current environment and holds all
@@ -287,7 +291,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 		recommit = minRecommitInterval
 	}
 
-	headerPrints, _ := expireLru.NewWithExpire(1, 60*time.Second)
+	headerPrints, _ := expireLru.NewWithExpire(1, c_headerPrintsExpiryTime)
 	worker.headerPrints = headerPrints
 
 	nodeCtx := common.NodeLocation.Context()
