@@ -217,7 +217,7 @@ func (hc *HeaderChain) GetBloom(hash common.Hash) (*types.Bloom, error) {
 	return &bloom, nil
 }
 
-// Collect all emmitted ETXs since the last coincident block, but excluding
+// Collect all emitted ETXs since the last coincident block, but excluding
 // those emitted in this block
 func (hc *HeaderChain) CollectEtxRollup(b *types.Block) (types.Transactions, error) {
 	if b.NumberU64() == 0 && b.Hash() == hc.config.GenesisHash {

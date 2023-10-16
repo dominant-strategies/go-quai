@@ -455,7 +455,7 @@ func (w *worker) asyncStateLoop() {
 	}
 }
 
-// GeneratePendingBlock generates pending block given a commited block.
+// GeneratePendingBlock generates pending block given a committed block.
 func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.Header, error) {
 	nodeCtx := common.NodeLocation.Context()
 
