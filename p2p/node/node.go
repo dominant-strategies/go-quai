@@ -11,6 +11,7 @@ import (
 	"github.com/dominant-strategies/go-quai/p2p/discovery"
 	quaips "github.com/dominant-strategies/go-quai/p2p/pubsub"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	routedhost "github.com/libp2p/go-libp2p/p2p/host/routed"
 
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
@@ -34,6 +35,10 @@ type P2PNode struct {
 
 // returns a new libp2p node setup with the given IP address, address and private key
 func NewNode(ctx context.Context, ipaddr string, port string, privKeyFile string) (*P2PNode, error) {
+
+	p2pNode := &P2PNode{
+		ctx: ctx,
+	}
 
 	// list of options to instantiate the libp2p node
 	nodeOptions := []libp2p.Option{}
@@ -69,14 +74,27 @@ func NewNode(ctx context.Context, ipaddr string, port string, privKeyFile string
 		log.Errorf("error creating node: %s", err)
 		return nil, err
 	}
+	p2pNode.Host = node
 
-	p2pNode := &P2PNode{
-		Host: node,
-		ctx:  ctx,
+	// Initialize the DHT
+	if err := p2pNode.InitializeDHT(); err != nil {
+		log.Errorf("error initializing DHT: %s", err)
+		return nil, err
+	}
+
+	// wrap the node with the routed host
+	rnode := routedhost.Wrap(node, p2pNode.dht)
+	p2pNode.Host = rnode
+	log.Debugf("Routed node created")
+
+	// Initialize mDNS discovery
+	if err := p2pNode.InitializeMDNS(); err != nil {
+		log.Errorf("error initializing mDNS discovery: %s", err)
+		return nil, err
 	}
 
 	// Initialize the PubSub manager with default options
-	psMgr, err := quaips.NewPubSubManager(ctx, node, nil)
+	psMgr, err := quaips.NewPubSubManager(ctx, rnode, nil)
 	if err != nil {
 		log.Errorf("error initializing PubSub manager: %s", err)
 		return nil, err

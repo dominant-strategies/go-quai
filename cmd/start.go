@@ -49,28 +49,22 @@ func runStart(cmd *cobra.Command, args []string) error {
 	ipaddr := "0.0.0.0"
 	p2pPort := viper.GetString("p2p-port")
 	privKeyFile := viper.GetString("privkey")
-	node, err := p2pnode.NewNode(ctx, ipaddr, p2pPort, privKeyFile)
+	p2pNode, err := p2pnode.NewNode(ctx, ipaddr, p2pPort, privKeyFile)
 	if err != nil {
 		log.Fatalf("error creating node: %s", err)
 	}
 
 	// log the p2p node's ID
-	log.Infof("node created: %s", node.ID().Pretty())
+	log.Infof("node created: %s", p2pNode.ID().Pretty())
 	// log the p2p node's listening addresses
-	for _, addr := range node.Addrs() {
+	for _, addr := range p2pNode.Addrs() {
 		log.Infof("listening on: %s", addr)
-	}
-
-	// initialize the DHT
-	if err := node.InitializeDHT(); err != nil {
-		log.Fatalf("error initializing DHT: %s", err)
-		os.Exit(1)
 	}
 
 	// if the node is not a bootstrap server, bootstrap the DHT
 	if !viper.GetBool("server") {
 		log.Infof("bootstrapping DHT...")
-		if err := node.BootstrapDHT(); err != nil {
+		if err := p2pNode.BootstrapDHT(); err != nil {
 			log.Fatalf("error bootstrapping DHT: %s", err)
 			os.Exit(1)
 		}
@@ -78,13 +72,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 		log.Infof("starting node as bootstrap server")
 	}
 
-	// initialize mDNS discovery
-	if err := node.InitializeMDNS(); err != nil {
-		log.Fatalf("error initializing mDNS discovery: %s", err)
-		os.Exit(1)
-	}
-
-	client := client.NewClient(ctx, node)
+	client := client.NewClient(ctx, p2pNode)
 
 	// start the http server
 	go func() {
@@ -104,7 +92,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 	<-ch
 	log.Warnf("Received 'stop' signal, shutting down gracefully...")
 	cancel()
-	if err := node.Shutdown(); err != nil {
+	if err := p2pNode.Shutdown(); err != nil {
 		panic(err)
 	}
 	log.Warnf("Node is offline")
