@@ -32,7 +32,7 @@ const (
 	c_maxAppendQueue                           = 1000000 // Maximum number of future headers we can store in cache
 	c_maxFutureTime                            = 30      // Max time into the future (in seconds) we will accept a block
 	c_appendQueueRetryPeriod                   = 1       // Time (in seconds) before retrying to append from AppendQueue
-	c_appendQueueThreshold                     = 1000    // Number of blocks to load from the disk to ram on every proc of append queue
+	c_appendQueueThreshold                     = 200     // Number of blocks to load from the disk to ram on every proc of append queue
 	c_processingCache                          = 10      // Number of block hashes held to prevent multi simultaneous appends on a single block hash
 	c_primeRetryThreshold                      = 1800    // Number of times a block is retry to be appended before eviction from append queue in Prime
 	c_regionRetryThreshold                     = 1200    // Number of times a block is retry to be appended before eviction from append queue in Region
@@ -45,6 +45,8 @@ const (
 	c_normalListProcCounter                    = 5  // Ratio of Number of times the PriorityList is serviced over the NormalList
 	c_statsPrintPeriod                         = 60 // Time between stats prints
 	c_appendQueuePrintSize                     = 10
+	c_badSyncTargetsSize                       = 20 // List of bad sync target hashes
+	c_badSyncTargetCheckTime                   = 15 * time.Minute
 )
 
 type blockNumberAndRetryCounter struct {
@@ -59,9 +61,14 @@ type Core struct {
 	appendQueue     *lru.Cache
 	processingCache *lru.Cache
 
+	badSyncTargets *lru.Cache
+	prevSyncTarget common.Hash
+
 	writeBlockLock sync.RWMutex
 
 	procCounter int
+
+	syncTarget *types.Header // sync target header decided based on Best Prime Block as the target to sync to
 
 	quit chan struct{} // core quit channel
 }
@@ -79,14 +86,21 @@ func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.H
 		procCounter: 0,
 	}
 
+	// Initialize the sync target to current header parent entropy
+	c.syncTarget = c.CurrentHeader()
+
 	appendQueue, _ := lru.New(c_maxAppendQueue)
 	c.appendQueue = appendQueue
 
 	proccesingCache, _ := lru.NewWithExpire(c_processingCache, time.Second*60)
 	c.processingCache = proccesingCache
 
+	badSyncTargetsCache, _ := lru.New(c_badSyncTargetsSize)
+	c.badSyncTargets = badSyncTargetsCache
+
 	go c.updateAppendQueue()
 	go c.startStatsTimer()
+	go c.checkSyncTarget()
 	return c, nil
 }
 
@@ -303,6 +317,42 @@ func (c *Core) addToQueueIfNotAppended(block *types.Block) {
 	}
 }
 
+// SetSyncTarget sets the sync target entropy based on the prime blocks
+func (c *Core) SetSyncTarget(header *types.Header) {
+	if c.sl.subClients == nil || header.Hash() == c.sl.config.GenesisHash {
+		return
+	}
+
+	// Check if the header is in the badSyncTargets cache
+	_, ok := c.badSyncTargets.Get(header.Hash())
+	if ok {
+		return
+	}
+
+	nodeCtx := common.NodeLocation.Context()
+	// Set Sync Target for subs
+	if nodeCtx != common.ZONE_CTX {
+		if header != nil {
+			for i := range c.sl.subClients {
+				if c.sl.subClients[i] != nil {
+					c.sl.subClients[i].SetSyncTarget(context.Background(), header)
+				}
+			}
+		}
+	}
+	c.syncTarget = header
+}
+
+// SyncTargetEntropy returns the syncTargetEntropy if its not nil, otherwise
+// returns the current header parent entropy
+func (c *Core) SyncTargetEntropy() *big.Int {
+	if c.syncTarget != nil {
+		return c.syncTarget.ParentEntropy()
+	} else {
+		return c.CurrentHeader().ParentEntropy()
+	}
+}
+
 // addToAppendQueue adds a block to the append queue
 func (c *Core) addToAppendQueue(block *types.Block) error {
 	nodeCtx := common.NodeLocation.Context()
@@ -329,6 +379,26 @@ func (c *Core) updateAppendQueue() {
 		select {
 		case <-futureTimer.C:
 			c.procAppendQueue()
+		case <-c.quit:
+			return
+		}
+	}
+}
+
+func (c *Core) checkSyncTarget() {
+	badSyncTimer := time.NewTicker(c_badSyncTargetCheckTime)
+	defer badSyncTimer.Stop()
+	for {
+		select {
+		case <-badSyncTimer.C:
+			// If the prevSyncTarget hasn't changed in the c_badSyncTargetCheckTime
+			// we add it to the badSyncTargets List
+			if c.prevSyncTarget != c.syncTarget.Hash() {
+				c.prevSyncTarget = c.syncTarget.Hash()
+			} else {
+				c.badSyncTargets.Add(c.syncTarget.Hash(), true)
+				c.syncTarget = c.CurrentHeader()
+			}
 		case <-c.quit:
 			return
 		}
@@ -433,6 +503,7 @@ func (c *Core) Stop() {
 func (c *Core) WriteBlock(block *types.Block) {
 	c.writeBlockLock.Lock()
 	defer c.writeBlockLock.Unlock()
+	nodeCtx := common.NodeLocation.Context()
 
 	if c.sl.IsBlockHashABadHash(block.Hash()) {
 		return
@@ -443,7 +514,6 @@ func (c *Core) WriteBlock(block *types.Block) {
 		if err != nil {
 			return
 		}
-		nodeCtx := common.NodeLocation.Context()
 		if order == nodeCtx {
 			parentHeader := c.GetHeader(block.ParentHash(), block.NumberU64()-1)
 			if parentHeader != nil {
@@ -460,6 +530,12 @@ func (c *Core) WriteBlock(block *types.Block) {
 	}
 	if c.GetHeaderOrCandidateByHash(block.Hash()) == nil {
 		c.sl.WriteBlock(block)
+	}
+
+	if nodeCtx == common.PRIME_CTX {
+		if c.syncTarget == nil || c.syncTarget.ParentEntropy().Cmp(block.ParentEntropy()) < 0 {
+			c.SetSyncTarget(block.Header())
+		}
 	}
 }
 

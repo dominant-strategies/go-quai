@@ -253,3 +253,9 @@ func (ec *Client) HeaderByNumber(ctx context.Context, number string) *types.Head
 	}
 	return header
 }
+
+func (ec *Client) SetSyncTarget(ctx context.Context, header *types.Header) {
+	fields := make(map[string]interface{})
+	fields["header"] = header.RPCMarshalHeader()
+	ec.c.CallContext(ctx, nil, "quai_setSyncTarget", fields)
+}

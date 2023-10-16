@@ -178,14 +178,8 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		return h.core.Engine().IntrinsicLogS(h.core.CurrentHeader().Hash())
 	}
 	currentS := func() *big.Int {
-		// This is not the TotalLogS of the current header and instead the parent
-		// entropy. Calculating the TotalLogS is very expensive as it requires
-		// multiple floating point additions and multiplications and also few
-		// logarithmic calculations for IntrinsicLogS. Instead we can use the
-		// ParentEntropy which is only off by one block in most cases and also
-		// since the use of this currentS is for approximations of the stale
-		// broadcast distance only, ParentEntropy should suffice
-		return h.core.CurrentHeader().ParentEntropy()
+		// This is the sync target entropy which updates based on the block broadcasts
+		return h.core.SyncTargetEntropy()
 	}
 	currentDifficulty := func() *big.Int {
 		return h.core.CurrentHeader().Difficulty()

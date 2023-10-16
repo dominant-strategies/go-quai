@@ -527,3 +527,7 @@ func (b *QuaiAPIBackend) GetPendingEtxsRollupFromSub(hash common.Hash, location 
 func (b *QuaiAPIBackend) GetPendingEtxsFromSub(hash common.Hash, location common.Location) (types.PendingEtxs, error) {
 	return b.eth.core.GetPendingEtxsFromSub(hash, location)
 }
+
+func (b *QuaiAPIBackend) SetSyncTarget(header *types.Header) {
+	b.eth.core.SetSyncTarget(header)
+}

@@ -90,6 +90,7 @@ type Backend interface {
 	GenerateRecoveryPendingHeader(pendingHeader *types.Header, checkpointHashes types.Termini) error
 	GetPendingEtxsRollupFromSub(hash common.Hash, location common.Location) (types.PendingEtxsRollup, error)
 	GetPendingEtxsFromSub(hash common.Hash, location common.Location) (types.PendingEtxs, error)
+	SetSyncTarget(header *types.Header)
 	ProcessingState() bool
 
 	// Transaction pool API
