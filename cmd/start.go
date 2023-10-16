@@ -23,15 +23,12 @@ To bootstrap to a private node, use the --bootstrap flag.`,
 	RunE:                       runStart,
 	SilenceUsage:               true,
 	SuggestionsMinimumDistance: 2,
-	Args:                       cobra.RangeArgs(0, 2),
 	Example:                    `go-quai start -loglevel=debug`,
 }
 
 func init() {
 	rootCmd.AddCommand(startCmd)
-	// configure flag for p2p port
-	startCmd.Flags().StringP("p2p-port", "p", "4001", "p2p port to listen on")
-	viper.BindPFlag("p2p-port", startCmd.Flags().Lookup("p2p-port"))
+
 	// configure flag for http port
 	startCmd.Flags().StringP("http-port", "t", "8080", "http port to listen on")
 	viper.BindPFlag("http-port", startCmd.Flags().Lookup("http-port"))
@@ -43,33 +40,21 @@ func runStart(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	ipaddr := "0.0.0.0"
-	p2pPort := viper.GetString("p2p-port")
-	privKeyFile := viper.GetString("privkey")
-	p2pNode, err := p2pnode.NewNode(ctx, ipaddr, p2pPort, privKeyFile)
+	// create a new p2p node
+	node, err := p2pnode.NewNode(ctx)
 	if err != nil {
 		log.Fatalf("error creating node: %s", err)
 	}
 
-	// log the p2p node's ID
-	log.Infof("node created: %s", p2pNode.ID().Pretty())
-	// log the p2p node's listening addresses
-	for _, addr := range p2pNode.Addrs() {
-		log.Infof("listening on: %s", addr)
+	// Start discovery services
+	if err := node.Start(); err != nil {
+		log.Fatalf("error starting node: %s", err)
 	}
 
-	// if the node is not a bootstrap server, bootstrap the DHT
-	if !viper.GetBool("server") {
-		log.Infof("bootstrapping DHT...")
-		if err := p2pNode.BootstrapDHT(); err != nil {
-			log.Fatalf("error bootstrapping DHT: %s", err)
-			os.Exit(1)
-		}
-	} else {
-		log.Infof("starting node as bootstrap server")
-	}
+	// Start listening for events
+	go node.ListenForEvents()
 
-	client := client.NewClient(ctx, p2pNode)
+	client := client.NewClient(ctx, node)
 
 	// start the http server
 	go func() {
@@ -80,16 +65,13 @@ func runStart(cmd *cobra.Command, args []string) error {
 		}
 	}()
 
-	// Start listening for events
-	go client.ListenForEvents()
-
 	// wait for a SIGINT or SIGTERM signal
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
 	<-ch
 	log.Warnf("Received 'stop' signal, shutting down gracefully...")
 	cancel()
-	if err := p2pNode.Shutdown(); err != nil {
+	if err := node.Shutdown(); err != nil {
 		panic(err)
 	}
 	log.Warnf("Node is offline")

@@ -80,7 +80,7 @@ func (manager *PubSubManager) close() {
 	}
 }
 
-// wrapper for the close method that returns an error type (nil)
+// Wrapper for the close method that returns an error type (nil)
 func (manager *PubSubManager) Stop() error {
 	manager.close()
 	return nil

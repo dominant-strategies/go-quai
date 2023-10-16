@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"os"
 
 	"github.com/dominant-strategies/go-quai/log"
 	p2pnode "github.com/dominant-strategies/go-quai/p2p/node"
@@ -34,6 +33,7 @@ func init() {
 	// Configure flag for nickname to use in chat
 	chatCmd.Flags().StringP("nickname", "n", "anonymous", "nickname to use in chat")
 	viper.BindPFlag("nickname", chatCmd.Flags().Lookup("nickname"))
+	chatCmd.MarkFlagRequired("nickname")
 }
 
 func runChat(cmd *cobra.Command, args []string) {
@@ -44,42 +44,18 @@ func runChat(cmd *cobra.Command, args []string) {
 	nickname := viper.GetString("nickname")
 	log.Infof("Joining chat room %s with nickname %s", room, nickname)
 
-	ipaddr := "0.0.0.0"
-	port := "0"
-	privKeyFile := viper.GetString("privkey")
-	node, err := p2pnode.NewNode(ctx, ipaddr, port, privKeyFile)
+	node, err := p2pnode.NewNode(ctx)
 	if err != nil {
 		log.Fatalf("error creating node: %s", err)
 	}
 
-	// log the p2p node's ID
-	log.Infof("node created: %s", node.ID().Pretty())
-	// log the p2p node's listening addresses
-	for _, addr := range node.Addrs() {
-		log.Infof("listening on: %s", addr)
-	}
-	// initialize the DHT
-	if err := node.InitializeDHT(); err != nil {
-		log.Fatalf("error initializing DHT: %s", err)
-		os.Exit(1)
+	// Start discovery services
+	if err := node.Start(); err != nil {
+		log.Fatalf("error starting node: %s", err)
 	}
 
-	// if the node is not a bootstrap server, bootstrap the DHT
-	if !viper.GetBool("server") {
-		log.Infof("bootstrapping DHT...")
-		if err := node.BootstrapDHT(); err != nil {
-			log.Fatalf("error bootstrapping DHT: %s", err)
-			os.Exit(1)
-		}
-	} else {
-		log.Infof("starting node as bootstrap server")
-	}
-	// initialize mDNS discovery
-	if err := node.InitializeMDNS(); err != nil {
-		log.Fatalf("error initializing mDNS discovery: %s", err)
-		os.Exit(1)
-	}
-	log.Infof("mDNS discovery initialized")
+	// subscribe to events
+	go node.ListenForEvents()
 
 	// join the chat room
 	cr, err := chatroom.JoinChatRoom(ctx, node, node.ID(), nickname, room)
@@ -89,6 +65,8 @@ func runChat(cmd *cobra.Command, args []string) {
 
 	// draw the UI
 	ui := chatroom.NewChatUI(cr)
+	// set logger to null logger (only log to file)
+	log.ConfigureLogger(log.WithOutput(log.ToNull()))
 	if err = ui.Run(); err != nil {
 		log.Errorf("error running text UI: %s", err)
 	}
