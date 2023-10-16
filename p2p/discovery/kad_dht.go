@@ -45,6 +45,10 @@ func (k *KadDHT) Bootstrap(ctx context.Context, node host.Host, bootstrapPeers .
 		}
 	}
 
+	if len(bootStrapPeersAddrInfo) == 0 {
+		return errors.Errorf("no valid bootstrap peers given: %v", bootstrapPeers)
+	}
+
 	for _, peerInfo := range bootStrapPeersAddrInfo {
 		log.Debugf("adding bootstraping node: %s", peerInfo.ID.Pretty())
 		err := node.Connect(ctx, peerInfo)

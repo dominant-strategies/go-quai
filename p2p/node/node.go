@@ -55,7 +55,7 @@ func NewNode(ctx context.Context, ipaddr string, port string, privKeyFile string
 	// check if there is a host IP we can use to replace Docker's internal IP
 	hostIP, err := readHostIPFromFile(hostIPFile)
 	if err != nil || hostIP == "" {
-		log.Warnf("error reading host IP from file: %s. Skiping...", err)
+		log.Warnf("error reading host IP from file: %s. Skipping...", err)
 	} else {
 		log.Infof("found host IP: %s", hostIP)
 		addrsFactory := makeAddrsFactory(hostIP)

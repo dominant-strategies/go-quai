@@ -36,9 +36,6 @@ func init() {
 	startCmd.Flags().StringP("http-port", "t", "8080", "http port to listen on")
 	viper.BindPFlag("http-port", startCmd.Flags().Lookup("http-port"))
 
-	// configure flag to start as a boostrap server
-	startCmd.Flags().BoolP("server", "s", false, "start as a bootstrap server")
-	viper.BindPFlag("server", startCmd.Flags().Lookup("server"))
 }
 
 func runStart(cmd *cobra.Command, args []string) error {

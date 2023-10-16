@@ -18,11 +18,6 @@ var rootCmd = &cobra.Command{
 	PersistentPreRunE: runPersistenPreRunE,
 }
 
-var (
-	cfgFile  string
-	logLevel string
-)
-
 func Execute() error {
 	err := rootCmd.Execute()
 	if err != nil {
@@ -32,10 +27,8 @@ func Execute() error {
 }
 
 func init() {
-	viper.SetDefault("loglevel", "info")
-
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file")
-	rootCmd.PersistentFlags().StringVarP(&logLevel, "loglevel", "l", "", "log level (trace, debug, info, warn, error, fatal, panic")
+	rootCmd.PersistentFlags().StringP("config", "c", "", "config file")
+	rootCmd.PersistentFlags().StringP("loglevel", "l", "info", "log level (trace, debug, info, warn, error, fatal, panic")
 
 	viper.BindPFlag("loglevel", rootCmd.PersistentFlags().Lookup("loglevel"))
 
@@ -44,9 +37,17 @@ func init() {
 
 	viper.BindPFlag("keystore", rootCmd.PersistentFlags().Lookup("keystore"))
 
-	// config flag to load node's private key
+	// flag to load node's private key
 	rootCmd.PersistentFlags().StringP("privkey", "k", "private.key", "private key file")
 	viper.BindPFlag("privkey", rootCmd.PersistentFlags().Lookup("privkey"))
+
+	// flag to load list of bootstrap peers
+	rootCmd.PersistentFlags().StringSliceP("bootstrap", "b", []string{}, "list of bootstrap peers. Syntax: <multiaddress1>,<multiaddress2>,...")
+	viper.BindPFlag("bootstrap", rootCmd.PersistentFlags().Lookup("bootstrap"))
+
+	// boolean flag to start p2p node as a DHT boostrap server
+	rootCmd.PersistentFlags().BoolP("server", "s", false, "start as a bootstrap server")
+	viper.BindPFlag("server", rootCmd.PersistentFlags().Lookup("server"))
 
 }
 
@@ -64,6 +65,7 @@ func runPersistenPreRunE(cmd *cobra.Command, args []string) error {
 
 // loads go-quai configuration from a yaml file
 func loadConfigFromFile() error {
+	cfgFile := viper.GetString("config")
 	var configFilePath string
 	if cfgFile != "" {
 		configFilePath = cfgFile
