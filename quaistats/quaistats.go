@@ -93,7 +93,6 @@ type fullNodeBackend interface {
 	backend
 	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
 	CurrentBlock() *types.Block
-	SuggestGasTipCap(ctx context.Context) (*big.Int, error)
 }
 
 // Service implements an Quai netstats reporting daemon that pushes local
@@ -1094,7 +1093,6 @@ type nodeStats struct {
 	Mining           bool    `json:"mining"`
 	Hashrate         int     `json:"hashrate"`
 	Peers            int     `json:"peers"`
-	GasPrice         int     `json:"gasPrice"`
 	Uptime           int     `json:"uptime"`
 	Chain            string  `json:"chain"`
 	ChainID          uint64  `json:"chainId"`
@@ -1112,13 +1110,11 @@ type nodeStats struct {
 // reportStats retrieves various stats about the node at the networking and
 // mining layer and reports it to the stats server.
 func (s *Service) reportStats(conn *connWrapper) error {
-	nodeCtx := common.NodeLocation.Context()
 	// Gather the syncing and mining infos from the local miner instance
 	var (
 		mining   bool
 		hashrate int
 		syncing  bool
-		gasprice int
 	)
 	// check if backend is a full node
 	fullBackend, ok := s.backend.(fullNodeBackend)
@@ -1126,14 +1122,6 @@ func (s *Service) reportStats(conn *connWrapper) error {
 	if ok {
 		sync := fullBackend.Downloader().Progress()
 		syncing = fullBackend.CurrentHeader().Number().Uint64() >= sync.HighestBlock
-
-		if nodeCtx == common.ZONE_CTX && s.backend.ProcessingState() {
-			price, _ := fullBackend.SuggestGasTipCap(context.Background())
-			gasprice = int(price.Uint64())
-			if basefee := fullBackend.CurrentHeader().BaseFee(); basefee != nil {
-				gasprice += int(basefee.Uint64())
-			}
-		}
 	} else {
 		sync := s.backend.Downloader().Progress()
 		syncing = header.Number().Uint64() >= sync.HighestBlock
@@ -1198,7 +1186,6 @@ func (s *Service) reportStats(conn *connWrapper) error {
 			Mining:           mining,
 			Hashrate:         hashrate,
 			Peers:            s.server.PeerCount(),
-			GasPrice:         gasprice,
 			Syncing:          syncing,
 			Uptime:           100,
 			Chain:            common.NodeLocation.Name(),
