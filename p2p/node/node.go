@@ -65,11 +65,8 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 		nodeOptions = append(nodeOptions, libp2p.AddrsFactory(addrsFactory))
 	}
 
-	// enable NAT traversal
-	nodeOptions = append(nodeOptions, libp2p.EnableNATService())
-
-	// enable NAT port mapping
-	nodeOptions = append(nodeOptions, libp2p.NATPortMap())
+	// get NAT related options
+	nodeOptions = append(nodeOptions, getNATOptions()...)
 
 	// create the libp2p node
 	node, err := libp2p.New(nodeOptions...)
