@@ -104,8 +104,9 @@ func (p *P2PNode) ListenForEvents() {
 		case evt := <-subAddrUpdated.Out():
 			if e, ok := evt.(event.EvtLocalAddressesUpdated); ok {
 				for _, addr := range e.Current {
-					fullAddr := fmt.Sprintf("%+v/p2p/%s", addr, p.ID().Pretty())
+					fullAddr := fmt.Sprintf("%+v/p2p/%s", addr.Address.String(), p.ID().Pretty())
 					log.Debugf("Advertised Address changed: %s", fullAddr)
+					saveNodeInfo("Advertised address: " + fullAddr)
 				}
 			}
 		case evt := <-subPeerConnected.Out():

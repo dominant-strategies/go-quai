@@ -10,7 +10,6 @@ import (
 	routedhost "github.com/libp2p/go-libp2p/p2p/host/routed"
 
 	"github.com/libp2p/go-libp2p"
-	dht "github.com/libp2p/go-libp2p-kad-dht"
 	kadht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/host"
 
@@ -51,12 +50,11 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 
 	// list of options to instantiate the libp2p node
 	nodeOptions := []libp2p.Option{}
-
+	// use a private key for persistent identity
 	nodeOptions = append(nodeOptions, libp2p.Identity(privateKey))
-
+	// pass the ip address and port to listen on
 	sourceMultiAddr, _ := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%s", ipAddr, port))
 	nodeOptions = append(nodeOptions, libp2p.ListenAddrs(sourceMultiAddr))
-
 	// check if there is a host IP we can use to replace Docker's internal IP
 	hostIP, err := readHostIPFromFile(hostIPFile)
 	if err != nil || hostIP == "" {
@@ -87,7 +85,7 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 		return nil, err
 	}
 
-	// wrap the node with the routed host
+	// wrap the node with the routed host to improve network performance
 	rnode := routedhost.Wrap(node, p2pNode.dht)
 	p2pNode.Host = rnode
 	log.Debugf("Routed node created")
@@ -101,11 +99,26 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 		return nil, err
 	}
 
+	err = deleteNodeInfoFile()
+	if err != nil {
+		log.Errorf("error deleting node info file: %s", err)
+		return nil, err
+	}
+
+	// log the p2p node's ID
+	log.Infof("node created: %s", p2pNode.ID().Pretty())
+	saveNodeInfo("Node ID: " + p2pNode.ID().Pretty())
+
+	// log the p2p node's listening addresses
+	for _, addr := range p2pNode.Addrs() {
+		log.Infof("listening on: %s", addr.String())
+	}
+
 	return p2pNode, nil
 }
 
 // Initializes the DHT for the libp2p node in server mode.
-func (p *P2PNode) initializeDHT(opts ...dht.Option) error {
+func (p *P2PNode) initializeDHT(opts ...kadht.Option) error {
 	serverModeOpt := kadht.Mode(kadht.ModeServer)
 	opts = append(opts, serverModeOpt)
 	p.dht = &discovery.KadDHT{}
