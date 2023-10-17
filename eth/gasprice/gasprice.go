@@ -124,6 +124,13 @@ func (oracle *Oracle) SuggestTipCap(ctx context.Context) (*big.Int, error) {
 		return nil, errors.New("suggestTipCap can only be called in zone chains")
 	}
 	head, _ := oracle.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
+	if head == nil {
+		// Try checking the cache again, maybe the last fetch fetched what we need
+		oracle.cacheLock.RLock()
+		lastPrice := oracle.lastPrice
+		oracle.cacheLock.RUnlock()
+		return new(big.Int).Set(lastPrice), nil
+	}
 	headHash := head.Hash()
 
 	// If the latest gasprice is still available, return it.
