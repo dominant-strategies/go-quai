@@ -11,7 +11,7 @@ import (
 
 const (
 	// location for default config file
-	defaultConfigFilePath = "../config.yaml"
+	defaultConfigFilePath = "config/config.yaml"
 )
 
 var rootCmd = &cobra.Command{
@@ -67,6 +67,7 @@ func runPersistenPreRunE(cmd *cobra.Command, args []string) error {
 	viper.AutomaticEnv()
 	// set log level
 	log.ConfigureLogger(log.WithLevel(viper.GetString("loglevel")))
+	log.Tracef("config options loaded: %+v", viper.AllSettings())
 	return nil
 
 }
@@ -80,8 +81,10 @@ func loadConfigFromFile() error {
 	} else {
 		configFilePath = defaultConfigFilePath
 	}
+	log.Debugf("loading config from file: %s", configFilePath)
 	if _, err := os.Stat(configFilePath); os.IsNotExist(err) {
-		return nil
+		log.Errorf("config file %s does not exist", configFilePath)
+		return errors.Wrap(err, "config file does not exist")
 	}
 	viper.SetConfigFile(configFilePath)
 	viper.SetConfigType("yaml")
