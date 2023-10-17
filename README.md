@@ -8,18 +8,20 @@ https://camo.githubusercontent.com/915b7be44ada53c290eb157634330494ebe3e30a/6874
 [![Go Report Card](https://goreportcard.com/badge/github.com/dominant-strategies/go-quai)](https://goreportcard.com/report/github.com/dominant-strategies/go-quai)
 [![Discord](https://img.shields.io/badge/discord-join%20chat-blue.svg)](https://discord.gg/s8y8asPwNC)
 
-* [Prerequisites](#prerequisites)
-* [Building The Source](#building-the-source)
-* [Executables](#executables)
-  * [go-quai](#go-quai)
-  * [test](#test)
-* [Running go-quai](#running-go-quai)
-  * [Configuration](#configuration)
-  * [Starting and stopping a node](#starting-and-stopping-a-node)
-  * [Viewing logs](#viewing-logs)
-  * [Garden test network](#garden-test-network)
-* [Contribution](#contribution)
-* [License](#license)
+- [Go Quai](#go-quai)
+  - [Prerequisites](#prerequisites)
+  - [Building the source](#building-the-source)
+  - [Executables](#executables)
+    - [go-quai](#go-quai-1)
+    - [test](#test)
+  - [Running `go-quai`](#running-go-quai)
+    - [Configuration](#configuration)
+    - [Starting and stopping a node](#starting-and-stopping-a-node)
+    - [Viewing logs](#viewing-logs)
+    - [Garden test network](#garden-test-network)
+  - [Developer notes](#developer-notes)
+  - [Contribution](#contribution)
+  - [License](#license)
 
 ## Prerequisites
 
@@ -123,6 +125,10 @@ X and Y should be replaced with values between 0-2 to define which slice's logs 
 The Garden test network is based on the Blake3 proof-of-work consensus algorithm. As such, it has certain extra overhead and is more susceptible to reorganization attacks due to the network's low difficulty/security.
 
 To run on the Garden test network, modify the `network.env` configuration file to reflect `NETWORK=garden`. You should also set `ENABLE_ARCHIVE=true` to make sure to save the trie-nodes after you stop your node. Then [build](#building-the-source) and [run](#starting-and-stopping-a-node) with the same commands as mainnet.
+
+## Developer notes
+
+See [dev-notes.md](dev-notes.md) for more information on the development of go-quai.
 
 ## Contribution
 
