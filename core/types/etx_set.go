@@ -2,6 +2,7 @@ package types
 
 import (
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 )
 
@@ -36,6 +37,7 @@ func (set *EtxSet) Update(newInboundEtxs Transactions, currentHeight uint64) {
 		availableAtBlock := entry.Height
 		etxExpirationHeight := availableAtBlock + params.EtxExpirationAge
 		if currentHeight > etxExpirationHeight {
+			log.Warn("ETX expired", "hash", txHash, "gasTipCap", entry.ETX.GasTipCap(), "gasFeeCap", entry.ETX.GasFeeCap(), "gasLimit", entry.ETX.Gas(), "availableAtBlock", availableAtBlock, "etxExpirationHeight", etxExpirationHeight, "currentHeight", currentHeight)
 			delete(*set, txHash)
 		}
 	}
