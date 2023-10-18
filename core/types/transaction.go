@@ -312,7 +312,10 @@ func (tx *Transaction) GasTipCapIntCmp(other *big.Int) int {
 // EffectiveGasTip returns the effective miner gasTipCap for the given base fee.
 // Note: if the effective gasTipCap is negative, this method returns both error
 // the actual negative value, _and_ ErrGasFeeCapTooLow
-func (tx *Transaction) EffectiveGasTip(baseFee *big.Int) (*big.Int, error) {
+func (tx *Transaction) EffectiveGasTip(baseFee *big.Int, gasTipCap bool) (*big.Int, error) {
+	if gasTipCap {
+		return tx.GasTipCap(), nil
+	}
 	if baseFee == nil {
 		return tx.GasTipCap(), nil
 	}
@@ -327,7 +330,7 @@ func (tx *Transaction) EffectiveGasTip(baseFee *big.Int) (*big.Int, error) {
 // EffectiveGasTipValue is identical to EffectiveGasTip, but does not return an
 // error in case the effective gasTipCap is negative
 func (tx *Transaction) EffectiveGasTipValue(baseFee *big.Int) *big.Int {
-	effectiveTip, _ := tx.EffectiveGasTip(baseFee)
+	effectiveTip, _ := tx.EffectiveGasTip(baseFee, true)
 	return effectiveTip
 }
 
@@ -507,7 +510,7 @@ type TxWithMinerFee struct {
 // miner gasTipCap if a base fee is provided.
 // Returns error in case of a negative effective miner gasTipCap.
 func NewTxWithMinerFee(tx *Transaction, baseFee *big.Int) (*TxWithMinerFee, error) {
-	minerFee, err := tx.EffectiveGasTip(baseFee)
+	minerFee, err := tx.EffectiveGasTip(baseFee, true)
 	if err != nil {
 		return nil, err
 	}

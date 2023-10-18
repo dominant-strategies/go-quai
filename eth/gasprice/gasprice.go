@@ -228,8 +228,8 @@ func (s *txSorter) Swap(i, j int) {
 func (s *txSorter) Less(i, j int) bool {
 	// It's okay to discard the error because a tx would never be
 	// accepted into a block with an invalid effective tip.
-	tip1, _ := s.txs[i].EffectiveGasTip(s.baseFee)
-	tip2, _ := s.txs[j].EffectiveGasTip(s.baseFee)
+	tip1, _ := s.txs[i].EffectiveGasTip(s.baseFee, true)
+	tip2, _ := s.txs[j].EffectiveGasTip(s.baseFee, true)
 	return tip1.Cmp(tip2) < 0
 }
 
@@ -254,7 +254,7 @@ func (oracle *Oracle) getBlockValues(ctx context.Context, signer types.Signer, b
 
 	var prices []*big.Int
 	for _, tx := range sorter.txs {
-		tip, _ := tx.EffectiveGasTip(block.BaseFee())
+		tip, _ := tx.EffectiveGasTip(block.BaseFee(), true)
 		if ignoreUnder != nil && tip.Cmp(ignoreUnder) == -1 {
 			continue
 		}
