@@ -325,9 +325,8 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 			return nil, false, false, err
 		}
 
-		time9 = common.PrettyDuration(time.Since(start))
-
 	}
+	time9 = common.PrettyDuration(time.Since(start))
 	sl.updatePhCache(pendingHeaderWithTermini, true, nil, subReorg, common.NodeLocation)
 
 	var updateDom bool
