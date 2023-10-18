@@ -128,7 +128,7 @@ To run on the Garden test network, modify the `network.env` configuration file t
 
 ## Developer notes
 
-See [dev-notes.md](dev-notes.md) for more information on the development of go-quai.
+See [dev-notes.md](doc/dev-notes.md) for more information on the development of go-quai.
 
 ## Contribution
 
