@@ -20,11 +20,14 @@ package quaistats
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/big"
+	"net"
 	"net/http"
 	"runtime"
 	"strconv"
@@ -37,6 +40,7 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/mem"
+	"github.com/shirou/gopsutil/process"
 
 	"os/exec"
 
@@ -52,14 +56,9 @@ import (
 	"github.com/dominant-strategies/go-quai/p2p"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rpc"
-	"github.com/gorilla/websocket"
 )
 
 const (
-	// historyUpdateRange is the number of blocks a node should report upon login or
-	// history request.
-	historyUpdateRange = 50
-
 	// chainHeadChanSize is the size of channel listening to ChainHeadEvent.
 	chainHeadChanSize = 10
 	chainSideChanSize = 10
@@ -67,10 +66,25 @@ const (
 	// reportInterval is the time interval between two reports.
 	reportInterval = 15
 
-	c_alpha               = 8
-	c_tpsLookupCacheLimit = 100
-	c_gasLookupCacheLimit = 100
-	c_statsErrorValue     = int64(-1)
+	c_alpha           = 8
+	c_statsErrorValue = int64(-1)
+
+	// Max number of stats objects to send in one batch
+	c_queueBatchSize uint64 = 5
+	// Number of blocks to include in one batch of transactions
+	c_txBatchSize uint64 = 20
+)
+
+var (
+	c_blocksPerMinute         uint64
+	c_blocksPerHour           uint64
+	c_txLookupCacheLimit      uint64
+	c_txLookupCacheEvictLimit uint64
+	chainID9000               = big.NewInt(9000)
+	chainID12000              = big.NewInt(12000)
+	chainID15000              = big.NewInt(15000)
+	chainID17000              = big.NewInt(17000)
+	chainID1337               = big.NewInt(1337)
 )
 
 // backend encompasses the bare-minimum functionality needed for quaistats reporting
@@ -102,67 +116,84 @@ type Service struct {
 	backend backend
 	engine  consensus.Engine // Consensus engine to retrieve variadic block fields
 
-	node string // Name of the node to display on the monitoring page
-	pass string // Password to authorize access to the monitoring page
-	host string // Remote address of the monitoring service
+	node    string // Name of the node to display on the monitoring page
+	pass    string // Password to authorize access to the monitoring page
+	host    string // Remote address of the monitoring service
+	trusted bool   // Whether the node is trusted or not
 
 	pongCh  chan struct{} // Pong notifications are fed into this channel
-	histCh  chan []uint64 // History request block numbers are fed into this channel
 	headSub event.Subscription
 	sideSub event.Subscription
 
-	tpsLookupCache *lru.Cache
-	gasLookupCache *lru.Cache
+	transactionStatsQueue *StatsQueue
+	detailStatsQueue      *StatsQueue
+	appendTimeStatsQueue  *StatsQueue
+	statsReadyCh          chan struct{}
+
+	txLookupCache *lru.Cache
 
 	chainID *big.Int
 
 	instanceDir string // Path to the node's instance directory
 }
 
-// connWrapper is a wrapper to prevent concurrent-write or concurrent-read on the
-// websocket.
+// StatsQueue is a thread-safe queue designed for managing and processing stats data.
 //
-// From Gorilla websocket docs:
+// The primary objective of the StatsQueue is to provide a safe mechanism for enqueuing,
+// dequeuing, and requeuing stats objects concurrently across multiple goroutines.
 //
-//	Connections support one concurrent reader and one concurrent writer.
-//	Applications are responsible for ensuring that no more than one goroutine calls the write methods
-//	  - NextWriter, SetWriteDeadline, WriteMessage, WriteJSON, EnableWriteCompression, SetCompressionLevel
-//	concurrently and that no more than one goroutine calls the read methods
-//	  - NextReader, SetReadDeadline, ReadMessage, ReadJSON, SetPongHandler, SetPingHandler
-//	concurrently.
-//	The Close and WriteControl methods can be called concurrently with all other methods.
-type connWrapper struct {
-	conn *websocket.Conn
-
-	rlock sync.Mutex
-	wlock sync.Mutex
+// Key Features:
+//   - Enqueue: Allows adding an item to the end of the queue.
+//   - Dequeue: Removes and returns the item from the front of the queue.
+//   - RequeueFront: Adds an item back to the front of the queue, useful for failed processing attempts.
+//
+// Concurrent Access:
+//   - The internal state of the queue is protected by a mutex to prevent data races and ensure
+//     that the operations are atomic. As a result, it's safe to use across multiple goroutines
+//     without external synchronization.
+type StatsQueue struct {
+	data  []interface{}
+	mutex sync.Mutex
 }
 
-func newConnectionWrapper(conn *websocket.Conn) *connWrapper {
-	return &connWrapper{conn: conn}
+func NewStatsQueue() *StatsQueue {
+	return &StatsQueue{
+		data: make([]interface{}, 0),
+	}
 }
 
-// WriteJSON wraps corresponding method on the websocket but is safe for concurrent calling
-func (w *connWrapper) WriteJSON(v interface{}) error {
-	w.wlock.Lock()
-	defer w.wlock.Unlock()
+func (q *StatsQueue) Enqueue(item interface{}) {
+	q.mutex.Lock()
+	defer q.mutex.Unlock()
 
-	return w.conn.WriteJSON(v)
+	q.data = append(q.data, item)
 }
 
-// ReadJSON wraps corresponding method on the websocket but is safe for concurrent calling
-func (w *connWrapper) ReadJSON(v interface{}) error {
-	w.rlock.Lock()
-	defer w.rlock.Unlock()
+func (q *StatsQueue) Dequeue() interface{} {
+	q.mutex.Lock()
+	defer q.mutex.Unlock()
 
-	return w.conn.ReadJSON(v)
+	if len(q.data) == 0 {
+		return nil
+	}
+
+	item := q.data[0]
+	q.data = q.data[1:]
+	return item
 }
 
-// Close wraps corresponding method on the websocket but is safe for concurrent calling
-func (w *connWrapper) Close() error {
-	// The Close and WriteControl methods can be called concurrently with all other methods,
-	// so the mutex is not used here
-	return w.conn.Close()
+func (q *StatsQueue) EnqueueFront(item interface{}) {
+	q.mutex.Lock()
+	defer q.mutex.Unlock()
+
+	q.data = append([]interface{}{item}, q.data...)
+}
+
+func (q *StatsQueue) Size() int {
+	q.mutex.Lock()
+	defer q.mutex.Unlock()
+
+	return len(q.data)
 }
 
 // parseEthstatsURL parses the netstats connection url.
@@ -190,28 +221,55 @@ func parseEthstatsURL(url string) (parts []string, err error) {
 }
 
 // New returns a monitoring service ready for stats reporting.
-func New(node *node.Node, backend backend, engine consensus.Engine, url string) error {
+func New(node *node.Node, backend backend, engine consensus.Engine, url string, trustedstatsprovider bool) error {
 	parts, err := parseEthstatsURL(url)
 	if err != nil {
 		return err
 	}
 
-	tpsLookupCache, _ := lru.New(c_tpsLookupCacheLimit)
-	gasLookupCache, _ := lru.New(c_gasLookupCacheLimit)
+	chainID := backend.ChainConfig().ChainID
+	var durationLimit *big.Int
+
+	switch {
+	case chainID.Cmp(chainID9000) == 0:
+		durationLimit = params.DurationLimit
+	case chainID.Cmp(chainID12000) == 0:
+		durationLimit = params.GardenDurationLimit
+	case chainID.Cmp(chainID15000) == 0:
+		durationLimit = params.OrchardDurationLimit
+	case chainID.Cmp(chainID17000) == 0:
+		durationLimit = params.LighthouseDurationLimit
+	case chainID.Cmp(chainID1337) == 0:
+		durationLimit = params.LocalDurationLimit
+	default:
+		durationLimit = params.DurationLimit
+	}
+
+	durationLimitInt := durationLimit.Uint64()
+
+	c_blocksPerMinute = 60 / durationLimitInt
+	c_blocksPerHour = 60 * c_blocksPerMinute
+	c_txLookupCacheEvictLimit = c_blocksPerHour / c_txBatchSize
+	c_txLookupCacheLimit = 2 * c_txLookupCacheEvictLimit
+
+	txLookupCache, _ := lru.New(int(c_txLookupCacheLimit * 2))
 
 	quaistats := &Service{
-		backend:        backend,
-		engine:         engine,
-		server:         node.Server(),
-		node:           parts[0],
-		pass:           parts[1],
-		host:           parts[2],
-		pongCh:         make(chan struct{}),
-		histCh:         make(chan []uint64, 1),
-		chainID:        backend.ChainConfig().ChainID,
-		tpsLookupCache: tpsLookupCache,
-		gasLookupCache: gasLookupCache,
-		instanceDir:    node.InstanceDir(),
+		backend:               backend,
+		engine:                engine,
+		server:                node.Server(),
+		node:                  parts[0],
+		pass:                  parts[1],
+		host:                  parts[2],
+		pongCh:                make(chan struct{}),
+		chainID:               backend.ChainConfig().ChainID,
+		transactionStatsQueue: NewStatsQueue(),
+		detailStatsQueue:      NewStatsQueue(),
+		appendTimeStatsQueue:  NewStatsQueue(),
+		statsReadyCh:          make(chan struct{}),
+		trusted:               trustedstatsprovider,
+		txLookupCache:         txLookupCache,
+		instanceDir:           node.InstanceDir(),
 	}
 
 	node.RegisterLifecycle(quaistats)
@@ -227,7 +285,8 @@ func (s *Service) Start() error {
 	s.headSub = s.backend.SubscribeChainHeadEvent(chainHeadCh)
 	s.sideSub = s.backend.SubscribeChainSideEvent(chainSideCh)
 
-	go s.loop(chainHeadCh, chainSideCh)
+	go s.loopBlocks(chainHeadCh, chainSideCh)
+	go s.loopSender(s.initializeURLMap())
 
 	log.Info("Stats daemon started")
 	return nil
@@ -241,16 +300,18 @@ func (s *Service) Stop() error {
 	return nil
 }
 
-// loop keeps trying to connect to the netstats server, reporting chain events
-// until termination.
-func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, chainSideCh chan core.ChainSideEvent) {
-	nodeCtx := common.NodeLocation.Context()
-	// Start a goroutine that exhausts the subscriptions to avoid events piling up
-	var (
-		quitCh = make(chan struct{})
-		headCh = make(chan *types.Block, 1)
-		sideCh = make(chan *types.Block, 1)
-	)
+func (s *Service) loopBlocks(chainHeadCh chan core.ChainHeadEvent, chainSideCh chan core.ChainSideEvent) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Error("Stats process crashed", "error", r)
+			go s.loopBlocks(chainHeadCh, chainSideCh)
+		}
+	}()
+
+	quitCh := make(chan struct{})
+	headCh := make(chan *types.Block, chainHeadChanSize)
+	sideCh := make(chan *types.Block, chainSideChanSize)
+
 	go func() {
 	HandleLoop:
 		for {
@@ -274,31 +335,32 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, chainSideCh chan co
 		close(quitCh)
 	}()
 
-	// Resolve the URL, defaulting to TLS, but falling back to none too
-	paths := map[string]string{
-		"block":        fmt.Sprintf("%s/block", s.host),
-		"peerStats":    fmt.Sprintf("%s/peerStats", s.host),
-		"transactions": fmt.Sprintf("%s/transactions", s.host),
-		"nodeStats":    fmt.Sprintf("%s/nodeStats", s.host),
-		"pendStats":    fmt.Sprintf("%s/pendStats", s.host),
-		"login":        fmt.Sprintf("%s/auth/login", s.host),
-	}
-
-	urlMap := make(map[string][]string)
-
-	for key, path := range paths {
-		// url.Parse and url.IsAbs is unsuitable (https://github.com/golang/go/issues/19779)
-		if !strings.Contains(path, "://") {
-			// Append both secure (wss) and non-secure (ws) URLs
-			if key == "login" {
-				urlMap[key] = []string{"http://" + path}
-			} else {
-				urlMap[key] = []string{"wss://" + path, "ws://" + path}
-			}
-		} else {
-			urlMap[key] = []string{path}
+	for {
+		select {
+		case <-quitCh:
+			return
+		default:
+			s.handleBlock(headCh)
 		}
 	}
+}
+
+// loop keeps trying to connect to the netstats server, reporting chain events
+// until termination.
+func (s *Service) loopSender(urlMap map[string]string) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("Stats process crashed with error:", r)
+			go s.loopSender(urlMap)
+		}
+	}()
+
+	// Start a goroutine that exhausts the subscriptions to avoid events piling up
+	var (
+		quitCh = make(chan struct{})
+	)
+
+	nodeStatsMod := 0
 
 	errTimer := time.NewTimer(0)
 	defer errTimer.Stop()
@@ -310,56 +372,50 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, chainSideCh chan co
 			return
 		case <-errTimer.C:
 			// If we don't have a JWT or it's expired, get a new one
-
 			isJwtExpiredResult, jwtIsExpiredErr := s.isJwtExpired(authJwt)
 			if authJwt == "" || isJwtExpiredResult || jwtIsExpiredErr != nil {
+				log.Info("Trying to login to quaistats")
 				var err error
-				authJwt, err = s.login2(urlMap["login"][0])
+				authJwt, err = s.login2(urlMap["login"])
 				if err != nil {
 					log.Warn("Stats login failed", "err", err)
 					errTimer.Reset(10 * time.Second)
 					continue
 				}
 			}
-			// Establish a websocket connection to the server on any supported URL
-			dialer := websocket.Dialer{HandshakeTimeout: 5 * time.Second}
-			header := make(http.Header)
-			header.Set("origin", "http://localhost")
-			header.Set("sec-websocket-protocol", authJwt)
 
-			conns := make(map[string]*connWrapper)
 			errs := make(map[string]error)
 
-			for key, urls := range urlMap {
-				if key == "login" {
+			// Authenticate the client with the server
+			for key, url := range urlMap {
+				switch key {
+				case "login":
 					continue
-				}
-				for _, url := range urls {
-					c, _, e := dialer.Dial(url, header)
-					err := e
-					if err == nil {
-						conns[key] = newConnectionWrapper(c)
-						break
-					}
-					if err != nil {
-						log.Warn(key+" stats server unreachable", "err", err)
-						errs[key] = err
-						errTimer.Reset(10 * time.Second)
+				case "nodeStats":
+					if errs[key] = s.reportNodeStats(url, 0, authJwt); errs[key] != nil {
+						log.Warn("Initial stats report failed for "+key, "err", errs[key])
+						errTimer.Reset(0)
 						continue
 					}
-					go s.readLoop(conns[key])
+				case "blockTransactionStats":
+					if errs[key] = s.sendTransactionStats(url, authJwt); errs[key] != nil {
+						log.Warn("Initial stats report failed for "+key, "err", errs[key])
+						errTimer.Reset(0)
+						continue
+					}
+				case "blockDetailStats":
+					if errs[key] = s.sendDetailStats(url, authJwt); errs[key] != nil {
+						log.Warn("Initial stats report failed for "+key, "err", errs[key])
+						errTimer.Reset(0)
+						continue
+					}
+				case "blockAppendTime":
+					if errs[key] = s.sendAppendTimeStats(url, authJwt); errs[key] != nil {
+						log.Warn("Initial stats report failed for "+key, "err", errs[key])
+						errTimer.Reset(0)
+						continue
+					}
 				}
-			}
-
-			// Authenticate the client with the server
-			for key, conn := range conns {
-				if errs[key] = s.report(key, conn); errs[key] != nil {
-					log.Warn("Initial stats report failed", "err", errs[key])
-					conn.Close()
-					errTimer.Reset(0)
-					continue
-				}
-
 			}
 
 			// Keep sending status updates until the connection breaks
@@ -371,148 +427,382 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, chainSideCh chan co
 				select {
 				case <-quitCh:
 					fullReport.Stop()
-					// Make sure the connection is closed
-					for _, conn := range conns {
-						conn.Close()
-					}
-
 					return
 
 				case <-fullReport.C:
-					if err = s.report("nodeStats", conns["nodeStats"]); err != nil {
+					nodeStatsMod ^= 1
+					if err = s.reportNodeStats(urlMap["nodeStats"], nodeStatsMod, authJwt); err != nil {
 						noErrs = false
 						log.Warn("nodeStats full stats report failed", "err", err)
 					}
-					if err = s.report("peerStats", conns["peerStats"]); err != nil {
-						noErrs = false
-						log.Warn("peerStats full stats report failed", "err", err)
+				case <-s.statsReadyCh:
+					if url, ok := urlMap["blockTransactionStats"]; ok {
+						s.sendTransactionStats(url, authJwt)
 					}
-					if err = s.report("transactions", conns["transactions"]); err != nil {
-						noErrs = false
-						log.Warn("transactions full stats report failed", "err", err)
+					if url, ok := urlMap["blockDetailStats"]; ok {
+						s.sendDetailStats(url, authJwt)
 					}
-				case list := <-s.histCh:
-					if err = s.reportHistory(conns["block"], list); err != nil {
-						noErrs = false
-						log.Warn("Requested history report failed", "err", err)
-					}
-				case head := <-headCh:
-					if err = s.reportBlock(conns["block"], head); err != nil {
-						noErrs = false
-						log.Warn("Block stats report failed", "err", err)
-					}
-					if nodeCtx == common.ZONE_CTX && s.backend.ProcessingState() {
-						if err = s.reportPending(conns["pendStats"]); err != nil {
-							noErrs = false
-							log.Warn("Post-block transaction stats report failed", "err", err)
-						}
-					}
-				case sideEvent := <-sideCh:
-					if err = s.reportSideBlock(conns["block"], sideEvent); err != nil {
-						noErrs = false
-						log.Warn("Block stats report failed", "err", err)
+					if url, ok := urlMap["blockAppendTime"]; ok {
+						s.sendAppendTimeStats(url, authJwt)
 					}
 				}
+				errTimer.Reset(0)
 			}
 			fullReport.Stop()
-			// Close the current connection and establish a new one
-			for _, conn := range conns {
-				conn.Close()
-			}
-
-			errTimer.Reset(0)
 		}
 	}
 }
 
-// readLoop loops as long as the connection is alive and retrieves data packets
-// from the network socket. If any of them match an active request, it forwards
-// it, if they themselves are requests it initiates a reply, and lastly it drops
-// unknown packets.
-func (s *Service) readLoop(conn *connWrapper) {
-	// If the read loop exits, close the connection
-	defer conn.Close()
-
-	for {
-		// Retrieve the next generic network packet and bail out on error
-		var blob json.RawMessage
-		if err := conn.ReadJSON(&blob); err != nil {
-			log.Warn("Failed to retrieve stats server message", "err", err)
-			return
-		}
-		// If the network packet is a system ping, respond to it directly
-		var ping string
-		if err := json.Unmarshal(blob, &ping); err == nil && strings.HasPrefix(ping, "primus::ping::") {
-			if err := conn.WriteJSON(strings.Replace(ping, "ping", "pong", -1)); err != nil {
-				log.Warn("Failed to respond to system ping message", "err", err)
-				return
-			}
-			continue
-		}
-		// Not a system ping, try to decode an actual state message
-		var msg map[string][]interface{}
-		if err := json.Unmarshal(blob, &msg); err != nil {
-			log.Warn("Failed to decode stats server message", "err", err)
-			return
-		}
-		log.Trace("Received message from stats server", "msg", msg)
-		if len(msg["emit"]) == 0 {
-			log.Warn("Stats server sent non-broadcast", "msg", msg)
-			return
-		}
-		command, ok := msg["emit"][0].(string)
-		if !ok {
-			log.Warn("Invalid stats server message type", "type", msg["emit"][0])
-			return
-		}
-		// If the message is a ping reply, deliver (someone must be listening!)
-		if len(msg["emit"]) == 2 && command == "node-pong" {
-			select {
-			case s.pongCh <- struct{}{}:
-				// Pong delivered, continue listening
-				continue
-			default:
-				// Ping routine dead, abort
-				log.Warn("Stats server pinger seems to have died")
-				return
-			}
-		}
-		// If the message is a history request, forward to the event processor
-		if len(msg["emit"]) == 2 && command == "history" {
-			// Make sure the request is valid and doesn't crash us
-			request, ok := msg["emit"][1].(map[string]interface{})
-			if !ok {
-				log.Warn("Invalid stats history request", "msg", msg["emit"][1])
-				select {
-				case s.histCh <- nil: // Treat it as an no indexes request
-				default:
-				}
-				continue
-			}
-			list, ok := request["list"].([]interface{})
-			if !ok {
-				log.Warn("Invalid stats history block list", "list", request["list"])
-				return
-			}
-			// Convert the block number list to an integer list
-			numbers := make([]uint64, len(list))
-			for i, num := range list {
-				n, ok := num.(float64)
-				if !ok {
-					log.Warn("Invalid stats history block number", "number", num)
-					return
-				}
-				numbers[i] = uint64(n)
-			}
-			select {
-			case s.histCh <- numbers:
-				continue
-			default:
-			}
-		}
-		// Report anything else and continue
-		log.Info("Unknown stats message", "msg", msg)
+func (s *Service) initializeURLMap() map[string]string {
+	return map[string]string{
+		"blockTransactionStats": fmt.Sprintf("http://%s/stats/blockTransactionStats", s.host),
+		"blockAppendTime":       fmt.Sprintf("http://%s/stats/blockAppendTime", s.host),
+		"blockDetailStats":      fmt.Sprintf("http://%s/stats/blockDetailStats", s.host),
+		"nodeStats":             fmt.Sprintf("http://%s/stats/nodeStats", s.host),
+		"login":                 fmt.Sprintf("http://%s/auth/login", s.host),
 	}
+}
+
+func (s *Service) handleBlock(headCh chan *types.Block) {
+	for head := range headCh {
+		if s.trusted {
+			dtlStats := s.assembleBlockDetailStats(head)
+			s.detailStatsQueue.Enqueue(dtlStats)
+		}
+
+		appStats := s.assembleBlockAppendTimeStats(head)
+		s.appendTimeStatsQueue.Enqueue(appStats)
+
+		if head.NumberU64()%c_txBatchSize == 0 && s.trusted {
+			txStats := s.assembleBlockTransactionStats(head)
+			s.transactionStatsQueue.Enqueue(txStats)
+		}
+
+		// After handling a block and potentially adding to the queues, notify the sendStats goroutine
+		// that stats are ready to be sent
+		s.statsReadyCh <- struct{}{}
+	}
+}
+
+func (s *Service) reportNodeStats(url string, mod int, authJwt string) error {
+	if url == "" {
+		log.Warn("node stats url is empty")
+		return errors.New("node stats connection is empty")
+	}
+
+	isRegion := strings.Contains(s.instanceDir, "region")
+	isPrime := strings.Contains(s.instanceDir, "prime")
+
+	if isRegion || isPrime {
+		log.Debug("Skipping node stats for region or prime. Filtered out on backend")
+		return nil
+	}
+
+	log.Trace("Quai Stats Instance Dir", "path", s.instanceDir+"/../..")
+
+	// Don't send if dirSize < 1
+	// Get disk usage (as a percentage)
+	diskUsage, err := dirSize(s.instanceDir + "/../..")
+	if err != nil {
+		log.Warn("Error calculating directory sizes:", "error", err)
+		diskUsage = c_statsErrorValue
+	}
+
+	diskSize, err := diskTotalSize()
+	if err != nil {
+		log.Warn("Error calculating disk size:", "error", err)
+		diskUsage = c_statsErrorValue
+	}
+
+	diskUsagePercent := float64(c_statsErrorValue)
+	if diskSize > 0 {
+		diskUsagePercent = float64(diskUsage) / float64(diskSize)
+	} else {
+		log.Warn("Error calculating disk usage percent: disk size is 0")
+	}
+
+	// Usage in your main function
+	ramUsage, err := getQuaiRAMUsage()
+	if err != nil {
+		log.Warn("Error getting Quai RAM usage:", "error", err)
+		return err
+	}
+	var ramUsagePercent, ramFreePercent, ramAvailablePercent float64
+	if vmStat, err := mem.VirtualMemory(); err == nil {
+		ramUsagePercent = float64(ramUsage) / float64(vmStat.Total)
+		ramFreePercent = float64(vmStat.Free) / float64(vmStat.Total)
+		ramAvailablePercent = float64(vmStat.Available) / float64(vmStat.Total)
+	} else {
+		log.Warn("Error getting RAM stats:", "error", err)
+		return err
+	}
+
+	// Get CPU usage
+	cpuUsageQuai, err := getQuaiCPUUsage()
+	if err != nil {
+		log.Warn("Error getting Quai CPU percent usage:", "error", err)
+		return err
+	} else {
+		cpuUsageQuai /= float64(100)
+	}
+
+	var cpuFree float32
+	if cpuUsageTotal, err := cpu.Percent(0, false); err == nil {
+		cpuFree = 1 - float32(cpuUsageTotal[0]/float64(100))
+	} else {
+		log.Warn("Error getting CPU free:", "error", err)
+		return err
+	}
+
+	currentHeader := s.backend.CurrentHeader()
+
+	if currentHeader == nil {
+		log.Warn("Current header is nil")
+		return errors.New("current header is nil")
+	}
+	// Get current block number
+	currentBlockHeight := currentHeader.NumberArray()
+
+	// Get location
+	location := currentHeader.Location()
+
+	// Get the first non-loopback MAC address
+	var macAddress string
+	interfaces, err := net.Interfaces()
+	if err == nil {
+		for _, interf := range interfaces {
+			if interf.HardwareAddr != nil && len(interf.HardwareAddr.String()) > 0 && (interf.Flags&net.FlagLoopback) == 0 {
+				macAddress = interf.HardwareAddr.String()
+				break
+			}
+		}
+	} else {
+		log.Warn("Error getting MAC address:", err)
+		return err
+	}
+
+	// Hash the MAC address
+	var hashedMAC string
+	if macAddress != "" {
+		hash := sha256.Sum256([]byte(macAddress))
+		hashedMAC = hex.EncodeToString(hash[:])
+	}
+
+	// Assemble the new node stats
+	log.Trace("Sending node details to quaistats")
+
+	document := map[string]interface{}{
+		"id": s.node,
+		"nodeStats": &nodeStats{
+			Name:                s.node,
+			Timestamp:           big.NewInt(time.Now().Unix()), // Current timestamp
+			RAMUsage:            int64(ramUsage),
+			RAMUsagePercent:     float32(ramUsagePercent),
+			RAMFreePercent:      float32(ramFreePercent),
+			RAMAvailablePercent: float32(ramAvailablePercent),
+			CPUUsagePercent:     float32(cpuUsageQuai),
+			CPUFree:             float32(cpuFree),
+			DiskUsageValue:      int64(diskUsage),
+			DiskUsagePercent:    float32(diskUsagePercent),
+			CurrentBlockNumber:  currentBlockHeight,
+			RegionLocation:      location.Region(),
+			ZoneLocation:        location.Zone(),
+			NodeStatsMod:        mod,
+			HashedMAC:           hashedMAC,
+		},
+	}
+
+	jsonData, err := json.Marshal(document)
+	if err != nil {
+		log.Error("Failed to marshal node stats", "err", err)
+		return err
+	}
+
+	// Create a new HTTP request
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		log.Error("Failed to create new HTTP request", "err", err)
+		return err
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+authJwt)
+
+	// Send the request using the default HTTP client
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Error("Failed to send node stats", "err", err)
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			log.Error("Failed to response body", "err", err)
+			return err
+		}
+		log.Error("Received non-OK response", "status", resp.Status, "body", string(body))
+		return errors.New("Received non-OK response: " + resp.Status)
+	}
+	log.Trace("Successfully sent node stats to quaistats")
+	return nil
+}
+
+func (s *Service) sendTransactionStats(url string, authJwt string) error {
+	if len(s.transactionStatsQueue.data) == 0 {
+		return nil
+	}
+	statsBatch := make([]*blockTransactionStats, 0, c_queueBatchSize)
+
+	for i := 0; i < int(c_queueBatchSize) && len(s.transactionStatsQueue.data) > 0; i++ {
+		stat := s.transactionStatsQueue.Dequeue()
+		if stat == nil {
+			break
+		}
+		statsBatch = append(statsBatch, stat.(*blockTransactionStats))
+	}
+
+	if len(statsBatch) == 0 {
+		return nil
+	}
+
+	err := s.report(url, "blockTransactionStats", statsBatch, authJwt)
+	if err != nil && strings.Contains(err.Error(), "Received non-OK response") {
+		log.Warn("Failed to send transaction stats, requeuing stats", "err", err)
+		// Re-enqueue the failed stats from end to beginning
+		for i := len(statsBatch) - 1; i >= 0; i-- {
+			s.transactionStatsQueue.EnqueueFront(statsBatch[i])
+		}
+		return err
+	} else if err != nil {
+		log.Warn("Failed to send transaction stats", "err", err)
+		return err
+	}
+	return nil
+}
+
+func (s *Service) sendDetailStats(url string, authJwt string) error {
+	if len(s.detailStatsQueue.data) == 0 {
+		return nil
+	}
+	statsBatch := make([]*blockDetailStats, 0, c_queueBatchSize)
+
+	for i := 0; i < int(c_queueBatchSize) && s.detailStatsQueue.Size() > 0; i++ {
+		stat := s.detailStatsQueue.Dequeue()
+		if stat == nil {
+			break
+		}
+		statsBatch = append(statsBatch, stat.(*blockDetailStats))
+	}
+
+	if len(statsBatch) == 0 {
+		return nil
+	}
+
+	err := s.report(url, "blockDetailStats", statsBatch, authJwt)
+	if err != nil && strings.Contains(err.Error(), "Received non-OK response") {
+		log.Warn("Failed to send detail stats, requeuing stats", "err", err)
+		// Re-enqueue the failed stats from end to beginning
+		for i := len(statsBatch) - 1; i >= 0; i-- {
+			s.detailStatsQueue.EnqueueFront(statsBatch[i])
+		}
+		return err
+	} else if err != nil {
+		log.Warn("Failed to send detail stats", "err", err)
+		return err
+	}
+	return nil
+}
+
+func (s *Service) sendAppendTimeStats(url string, authJwt string) error {
+	if len(s.appendTimeStatsQueue.data) == 0 {
+		return nil
+	}
+
+	statsBatch := make([]*blockAppendTime, 0, c_queueBatchSize)
+
+	for i := 0; i < int(c_queueBatchSize) && s.appendTimeStatsQueue.Size() > 0; i++ {
+		stat := s.appendTimeStatsQueue.Dequeue()
+		if stat == nil {
+			break
+		}
+		statsBatch = append(statsBatch, stat.(*blockAppendTime))
+	}
+
+	if len(statsBatch) == 0 {
+		return nil
+	}
+
+	err := s.report(url, "blockAppendTime", statsBatch, authJwt)
+	if err != nil && strings.Contains(err.Error(), "Received non-OK response") {
+		log.Warn("Failed to send append time stats, requeuing stats", "err", err)
+		// Re-enqueue the failed stats from end to beginning
+		for i := len(statsBatch) - 1; i >= 0; i-- {
+			s.appendTimeStatsQueue.EnqueueFront(statsBatch[i])
+		}
+		return err
+	} else if err != nil {
+		log.Warn("Failed to send append time stats", "err", err)
+		return err
+	}
+	return nil
+}
+
+func (s *Service) report(url string, dataType string, stats interface{}, authJwt string) error {
+	if url == "" {
+		log.Warn(dataType + " url is empty")
+		return errors.New(dataType + " url is empty")
+	}
+
+	if stats == nil {
+		log.Warn(dataType + " stats are nil")
+		return errors.New(dataType + " stats are nil")
+	}
+
+	log.Trace("Sending " + dataType + " stats to quaistats")
+
+	document := map[string]interface{}{
+		"id":     s.node,
+		dataType: stats,
+	}
+
+	jsonData, err := json.Marshal(document)
+	if err != nil {
+		log.Error("Failed to marshal "+dataType+" stats", "err", err)
+		return err
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		log.Error("Failed to create new request for "+dataType+" stats", "err", err)
+		return err
+	}
+
+	// Add headers
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+authJwt) // Add this line for the Authorization header
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Error("Failed to send "+dataType+" stats", "err", err)
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			log.Error("Failed to response body", "err", err)
+			return err
+		}
+		log.Error("Received non-OK response", "status", resp.Status, "body", string(body))
+		return errors.New("Received non-OK response: " + resp.Status)
+	}
+	log.Trace("Successfully sent " + dataType + " stats to quaistats")
+	return nil
 }
 
 // nodeInfo is the collection of meta information about a node that is displayed
@@ -544,54 +834,6 @@ type loginSecret struct {
 	Password string `json:"password"`
 }
 
-// login tries to authorize the client at the remote server.
-func (s *Service) login(conn *connWrapper) error {
-	// Construct and send the login authentication
-	infos := s.server.NodeInfo()
-
-	var protocols []string
-	for _, proto := range s.server.Protocols {
-		protocols = append(protocols, fmt.Sprintf("%s/%d", proto.Name, proto.Version))
-	}
-	var network string
-	if info := infos.Protocols["eth"]; info != nil {
-		network = fmt.Sprintf("%d", info.(*ethproto.NodeInfo).Network)
-	}
-	auth := &authMsg{
-		ID: s.node,
-		Info: nodeInfo{
-			Name:     s.node,
-			Node:     infos.Name,
-			Port:     infos.Ports.Listener,
-			Network:  network,
-			Protocol: strings.Join(protocols, ", "),
-			API:      "No",
-			Os:       runtime.GOOS,
-			OsVer:    runtime.GOARCH,
-			Client:   "0.1.1",
-			History:  true,
-			Chain:    common.NodeLocation.Name(),
-			ChainID:  s.chainID.Uint64(),
-		},
-		Secret: loginSecret{
-			Name:     "admin",
-			Password: s.pass,
-		},
-	}
-	login := map[string][]interface{}{
-		"emit": {"hello", auth},
-	}
-	if err := conn.WriteJSON(login); err != nil {
-		return err
-	}
-	// Retrieve the remote ack or connection termination
-	var ack map[string][]string
-	if err := conn.ReadJSON(&ack); err != nil || len(ack["emit"]) != 1 || ack["emit"][0] != "ready" {
-		return errors.New("unauthorized")
-	}
-	return nil
-}
-
 type Credentials struct {
 	Name     string `json:"name"`
 	Password string `json:"password"`
@@ -616,6 +858,13 @@ func (s *Service) login2(url string) (string, error) {
 		network = fmt.Sprintf("%d", info.(*ethproto.NodeInfo).Network)
 	}
 
+	var secretUser string
+	if s.trusted {
+		secretUser = "admin"
+	} else {
+		secretUser = s.node
+	}
+
 	auth := &authMsg{
 		ID: s.node,
 		Info: nodeInfo{
@@ -633,7 +882,7 @@ func (s *Service) login2(url string) (string, error) {
 			ChainID:  s.chainID.Uint64(),
 		},
 		Secret: loginSecret{
-			Name:     "admin",
+			Name:     secretUser,
 			Password: s.pass,
 		},
 	}
@@ -649,7 +898,11 @@ func (s *Service) login2(url string) (string, error) {
 	}
 	defer resp.Body.Close()
 
-	body, _ := ioutil.ReadAll(resp.Body)
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Error("Failed to response body", "err", err)
+		return "", err
+	}
 
 	var authResponse AuthResponse
 	err = json.Unmarshal(body, &authResponse)
@@ -688,610 +941,422 @@ func (s *Service) isJwtExpired(authJwt string) (bool, error) {
 	return false, errors.New("exp claim not found in token")
 }
 
-// report collects all possible data to report and send it to the stats server.
-// This should only be used on reconnects or rarely to avoid overloading the
-// server. Use the individual methods for reporting subscribed events.
-func (s *Service) report(dataType string, conn *connWrapper) error {
-	if conn == nil || conn.conn == nil {
-		log.Warn(dataType + " connection is nil")
-		return errors.New(dataType + " connection is nil")
-	}
+// Trusted Only
+type blockTransactionStats struct {
+	Timestamp             *big.Int `json:"timestamp"`
+	TotalNoTransactions1h uint64   `json:"totalNoTransactions1h"`
+	TPS1m                 uint64   `json:"tps1m"`
+	TPS1hr                uint64   `json:"tps1hr"`
+	Chain                 string   `json:"chain"`
+}
 
-	switch dataType {
-	case "nodeStats":
-		if err := s.reportStats(conn); err != nil {
-			return err
+// Trusted Only
+type blockDetailStats struct {
+	Timestamp    *big.Int `json:"timestamp"`
+	ZoneHeight   uint64   `json:"zoneHeight"`
+	RegionHeight uint64   `json:"regionHeight"`
+	PrimeHeight  uint64   `json:"primeHeight"`
+	Chain        string   `json:"chain"`
+	Entropy      string   `json:"entropy"`
+	Difficulty   string   `json:"difficulty"`
+}
+
+// Everyone sends every block
+type blockAppendTime struct {
+	AppendTime  time.Duration `json:"appendTime"`
+	BlockNumber *big.Int      `json:"number"`
+	Chain       string        `json:"chain"`
+}
+
+type nodeStats struct {
+	Name                string     `json:"name"`
+	Timestamp           *big.Int   `json:"timestamp"`
+	RAMUsage            int64      `json:"ramUsage"`
+	RAMUsagePercent     float32    `json:"ramUsagePercent"`
+	RAMFreePercent      float32    `json:"ramFreePercent"`
+	RAMAvailablePercent float32    `json:"ramAvailablePercent"`
+	CPUUsagePercent     float32    `json:"cpuPercent"`
+	CPUFree             float32    `json:"cpuFree"`
+	DiskUsagePercent    float32    `json:"diskUsagePercent"`
+	DiskUsageValue      int64      `json:"diskUsageValue"`
+	CurrentBlockNumber  []*big.Int `json:"currentBlockNumber"`
+	RegionLocation      int        `json:"regionLocation"`
+	ZoneLocation        int        `json:"zoneLocation"`
+	NodeStatsMod        int        `json:"nodeStatsMod"`
+	HashedMAC           string     `json:"hashedMAC"`
+}
+
+type tps struct {
+	TPS1m                     uint64
+	TPS1hr                    uint64
+	TotalNumberTransactions1h uint64
+}
+
+type BatchObject struct {
+	TotalNoTransactions uint64
+	OldestBlockTime     uint64
+}
+
+func (s *Service) evictOutdatedEntries(currentMaxBlock int) {
+	for {
+		key, _, ok := s.txLookupCache.GetOldest()
+		if !ok {
+			break
 		}
-	case "peerStats":
-		if err := s.reportPeers(conn); err != nil {
-			return err
+
+		keyInt, ok := key.(int)
+		if !ok {
+			return
 		}
-	case "transactions":
-		nodeCtx := common.NodeLocation.Context()
-		if nodeCtx == common.ZONE_CTX && s.backend.ProcessingState() {
-			if err := s.reportPending(conn); err != nil {
-				return err
-			}
-		}
-	default:
-		return nil
-	}
-	return nil
-}
 
-type latencyReport struct {
-	Latency int `json:"latency"`
-}
-
-// reportLatency sends a ping request to the server, measures the RTT time and
-// finally sends a latency update.
-func (s *Service) reportLatency(conn *connWrapper) error {
-	// Send the current time to the quaistats server
-	start := time.Now()
-
-	ping := map[string][]interface{}{
-		"emit": {"node-ping", map[string]string{
-			"id":         s.node,
-			"clientTime": start.String(),
-		}},
-	}
-	if err := conn.WriteJSON(ping); err != nil {
-		return err
-	}
-	// Wait for the pong request to arrive back
-	select {
-	case <-s.pongCh:
-		// Pong delivered, report the latency
-	case <-time.After(5 * time.Second):
-		// Ping timeout, abort
-		return errors.New("ping timed out")
-	}
-
-	latency := int((time.Since(start) / time.Duration(2)).Nanoseconds() / 1000000)
-
-	// Send back the measured latency
-	log.Trace("Sending measured latency to ethstats", "latency", strconv.Itoa(latency))
-
-	latencyReport := map[string]interface{}{
-		"id": s.node,
-		"latency": &latencyReport{
-			Latency: latency,
-		},
-	}
-
-	report := map[string][]interface{}{
-		"emit": {"latency", latencyReport},
-	}
-
-	return conn.WriteJSON(report)
-}
-
-// blockStats is the information to report about individual blocks.
-type blockStats struct {
-	Number         *big.Int       `json:"number"`
-	Hash           common.Hash    `json:"hash"`
-	ParentHash     common.Hash    `json:"parentHash"`
-	Timestamp      *big.Int       `json:"timestamp"`
-	Miner          common.Address `json:"miner"`
-	GasUsed        uint64         `json:"gasUsed"`
-	GasLimit       uint64         `json:"gasLimit"`
-	Diff           string         `json:"difficulty"`
-	Entropy        string         `json:"entropy"`
-	NoTransactions int            `json:"noTransactions"`
-	TxHash         common.Hash    `json:"transactionsRoot"`
-	EtxHash        common.Hash    `json:"extTransactionsRoot"`
-	EtxRollupHash  common.Hash    `json:"extRollupRoot"`
-	ManifestHash   common.Hash    `json:"manifestHash"`
-	Root           common.Hash    `json:"stateRoot"`
-	Uncles         uncleStats     `json:"uncles"`
-	Chain          string         `json:"chain"`
-	ChainID        uint64         `json:"chainId"`
-	Tps            int64          `json:"tps"`
-	AppendTime     time.Duration  `json:"appendTime"`
-	AvgGasPerSec   int64          `json:"avgGasPerSec"`
-}
-
-type blockTpsCacheDto struct {
-	Tps  int64 `json:"tps"`
-	Time int64 `json:"time"`
-}
-
-type blockAvgGasPerSecCacheDto struct {
-	AvgGasPerSec int64 `json:"avgGasPerSec"`
-	Time         int64 `json:"time"`
-}
-
-// txStats is the information to report about individual transactions.
-type txStats struct {
-	Hash common.Hash `json:"hash"`
-}
-
-// uncleStats is a custom wrapper around an uncle array to force serializing
-// empty arrays instead of returning null for them.
-type uncleStats []*types.Header
-
-func (s uncleStats) MarshalJSON() ([]byte, error) {
-	if uncles := ([]*types.Header)(s); len(uncles) > 0 {
-		return json.Marshal(uncles)
-	}
-	return []byte("[]"), nil
-}
-
-func (s *Service) computeAvgGasPerSec(block *types.Block) int64 {
-	var parentTime, parentGasPerSec int64
-	if parentCached, ok := s.gasLookupCache.Get(block.ParentHash()); ok {
-		parentTime = parentCached.(blockAvgGasPerSecCacheDto).Time
-		parentGasPerSec = parentCached.(blockAvgGasPerSecCacheDto).AvgGasPerSec
-	} else {
-		log.Warn(fmt.Sprintf("computeGas: block %d's parent not found in cache: %s", block.Number(), block.ParentHash().String()))
-		fullBackend, ok := s.backend.(fullNodeBackend)
-		if ok {
-			parent, err := fullBackend.BlockByNumber(context.Background(), rpc.BlockNumber(block.NumberU64()-1))
-			if err != nil {
-				log.Error("error getting parent block %s: %s", block.ParentHash().String(), err.Error())
-				return c_statsErrorValue
-			}
-			parentTime = int64(parent.Time())
-			parentGasPerSec = c_statsErrorValue
+		if keyInt < currentMaxBlock {
+			s.txLookupCache.Remove(key)
 		} else {
-			log.Error("computeGas: not running fullnode, cannot get parent block")
-			return c_statsErrorValue
+			return
 		}
 	}
-	instantGas := int64(block.GasUsed())
-	if dt := int64(block.Time()) - parentTime; dt != 0 { // this is a hack to avoid dividing by 0
-		instantGas /= dt
-	}
-
-	var blockGasPerSec int64
-	if parentGasPerSec == c_statsErrorValue {
-		blockGasPerSec = instantGas
-	} else {
-		blockGasPerSec = ((c_alpha-1)*parentGasPerSec + instantGas) / c_alpha
-	}
-
-	s.gasLookupCache.Add(block.Hash(), blockAvgGasPerSecCacheDto{
-		AvgGasPerSec: blockGasPerSec,
-		Time:         int64(block.Time()),
-	})
-
-	return blockGasPerSec
 }
 
-func (s *Service) computeTps(block *types.Block) int64 {
-	var parentTime, parentTps int64
+func (s *Service) calculateTPS(block *types.Block) *tps {
+	var totalTransactions1h uint64
+	var totalTransactions1m uint64
 
-	if parentCached, ok := s.tpsLookupCache.Get(block.ParentHash()); ok {
-		parentTime = parentCached.(blockTpsCacheDto).Time
-		parentTps = parentCached.(blockTpsCacheDto).Tps
-	} else {
-		log.Warn(fmt.Sprintf("block %d's parent not found in cache: %s", block.Number(), block.ParentHash().String()))
-		fullBackend, ok := s.backend.(fullNodeBackend)
-		if ok {
-			parent, err := fullBackend.BlockByNumber(context.Background(), rpc.BlockNumber(block.NumberU64()-1))
-			if err != nil {
-				log.Error("error getting parent block %s: %s", block.ParentHash().String(), err.Error())
-				return c_statsErrorValue
+	currentBlock := block
+	startBlockTime := block.Time()
+	var batchesNeeded uint64 = c_blocksPerHour / c_txBatchSize
+	var oldestKeyUsed uint64
+	var withinMinute = true
+	startBlockNum := currentBlock.NumberU64()
+
+	// Get the parent block for the next iteration
+	fullBackend := s.backend.(fullNodeBackend)
+
+	for i := 0; i < int(batchesNeeded); i++ {
+		if currentBlock == nil || currentBlock.NumberU64() == 0 {
+			log.Error("Encountered a nil block, stopping iteration")
+			break
+		}
+
+		if oldestKeyUsed == 0 {
+			oldestKeyUsed = startBlockNum
+		} else {
+			oldestKeyUsed = min(oldestKeyUsed, startBlockNum)
+		}
+
+		// Try to get the data from the LRU cache
+		cachedBatchObject, ok := s.txLookupCache.Get(uint64(startBlockNum))
+		if !ok {
+			// Not in cache, so we need to calculate the transaction count for this batch
+			txCount := uint64(0)
+			oldestBlockTimeInBatch := uint64(0)
+
+			for j := 0; j < int(c_txBatchSize); j++ {
+				currentNumber := currentBlock.NumberU64()
+				if currentNumber == 0 {
+					log.Trace("Current block number is 0, stopping iteration")
+					break
+				}
+
+				// Add the number of transactions in the current block to the total
+				txCount += uint64(len(currentBlock.Transactions()))
+
+				if withinMinute && startBlockTime < currentBlock.Time()+60 {
+					totalTransactions1m += uint64(len(currentBlock.Transactions()))
+				} else {
+					withinMinute = false
+				}
+
+				if oldestBlockTimeInBatch == 0 {
+					oldestBlockTimeInBatch = currentBlock.Time()
+				} else {
+					oldestBlockTimeInBatch = min(oldestBlockTimeInBatch, currentBlock.Time())
+				}
+
+				var err error
+				currentBlock, err = fullBackend.BlockByNumber(context.Background(), rpc.BlockNumber(currentNumber-1))
+				if err != nil {
+					log.Error(fmt.Sprintf("Error getting block number %d: %s", currentNumber-1, err.Error()))
+					break
+				}
+				if currentBlock == nil {
+					log.Error(fmt.Sprintf("No block found at number %d", currentNumber-1))
+					break
+				}
 			}
-			parentTime = int64(parent.Time())
-			parentTps = c_statsErrorValue
-		} else {
-			log.Error("not running fullnode, cannot get parent block")
-			return c_statsErrorValue
+
+			batchObject := &BatchObject{
+				TotalNoTransactions: txCount,
+				OldestBlockTime:     oldestBlockTimeInBatch,
+			}
+
+			// Store the sum in the cache
+			s.txLookupCache.Add(startBlockNum, batchObject)
+
+			cachedBatchObject = batchObject
 		}
-	}
 
-	instantTps := int64(len(block.Transactions()))
-	if dt := int64(block.Time()) - parentTime; dt != 0 { // this is a hack to avoid dividing by 0
-		instantTps /= dt
-	}
-
-	var blockTps int64
-	if parentTps == c_statsErrorValue {
-		blockTps = instantTps
-	} else {
-		blockTps = ((c_alpha-1)*parentTps + instantTps) / c_alpha
-	}
-
-	s.tpsLookupCache.Add(block.Hash(), blockTpsCacheDto{
-		Tps:  blockTps,
-		Time: int64(block.Time()),
-	})
-
-	return blockTps
-}
-
-// reportSideBlock retrieves the current chain side event and reports it to the stats server.
-func (s *Service) reportSideBlock(conn *connWrapper, block *types.Block) error {
-	log.Trace("Sending new side block to quaistats", "number", block.Number(), "hash", block.Hash())
-	if conn == nil || conn.conn == nil {
-		log.Warn("block connection is nil")
-		return errors.New("block connection is nil")
-	}
-
-	stats := map[string]interface{}{
-		"id":        s.node,
-		"sideBlock": block,
-	}
-	report := map[string][]interface{}{
-		"emit": {"sideBlock", stats},
-	}
-	return conn.WriteJSON(report)
-}
-
-// reportBlock retrieves the current chain head and reports it to the stats server.
-func (s *Service) reportBlock(conn *connWrapper, block *types.Block) error {
-	// Gather the block details from the header or block chain
-	details := s.assembleBlockStats(block)
-
-	// Assemble the block report and send it to the server
-	log.Trace("Sending new block to quaistats", "number", details.Number, "hash", details.Hash)
-
-	if conn == nil || conn.conn == nil {
-		log.Warn("block connection is nil")
-		return errors.New("block connection is nil")
-	}
-
-	stats := map[string]interface{}{
-		"id":    s.node,
-		"block": details,
-	}
-	report := map[string][]interface{}{
-		"emit": {"block", stats},
-	}
-	return conn.WriteJSON(report)
-}
-
-// assembleBlockStats retrieves any required metadata to report a single block
-// and assembles the block stats. If block is nil, the current head is processed.
-func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
-	// Gather the block infos from the local blockchain
-	var (
-		header  *types.Header
-		entropy *big.Int
-		txs     []txStats
-		uncles  []*types.Header
-	)
-	header = block.Header()
-	entropy = s.backend.TotalLogS(block.Header())
-
-	txs = make([]txStats, len(block.Transactions()))
-	for i, tx := range block.Transactions() {
-		txs[i].Hash = tx.Hash()
-	}
-	uncles = block.Uncles()
-
-	// Assemble and return the block stats
-	author, _ := s.engine.Author(header)
-
-	tps := s.computeTps(block)
-	avgGasPerSec := s.computeAvgGasPerSec(block)
-
-	appendTime := block.GetAppendTime()
-
-	return &blockStats{
-		Number:         header.Number(),
-		Hash:           header.Hash(),
-		ParentHash:     header.ParentHash(),
-		Timestamp:      new(big.Int).SetUint64(header.Time()),
-		Miner:          author,
-		GasUsed:        header.GasUsed(),
-		GasLimit:       header.GasLimit(),
-		Diff:           header.Difficulty().String(),
-		Entropy:        entropy.String(),
-		NoTransactions: len(block.Transactions()),
-		TxHash:         header.TxHash(),
-		EtxHash:        header.EtxHash(),
-		EtxRollupHash:  header.EtxRollupHash(),
-		ManifestHash:   header.ManifestHash(),
-		Root:           header.Root(),
-		Uncles:         uncles,
-		Chain:          common.NodeLocation.Name(),
-		ChainID:        s.chainID.Uint64(),
-		Tps:            tps,
-		AppendTime:     appendTime,
-		AvgGasPerSec:   avgGasPerSec,
-	}
-}
-
-// reportHistory retrieves the most recent batch of blocks and reports it to the
-// stats server.
-func (s *Service) reportHistory(conn *connWrapper, list []uint64) error {
-	if conn == nil || conn.conn == nil {
-		log.Warn("history connection is nil")
-		return errors.New("history connection is nil")
-	}
-
-	// Figure out the indexes that need reporting
-	indexes := make([]uint64, 0, historyUpdateRange)
-	if len(list) > 0 {
-		// Specific indexes requested, send them back in particular
-		indexes = append(indexes, list...)
-	} else {
-		// No indexes requested, send back the top ones
-		head := s.backend.CurrentHeader().Number().Int64()
-		start := head - historyUpdateRange + 1
-		if start < 0 {
-			start = 0
+		// Add the transactions from this batch
+		totalTransactions1h += cachedBatchObject.(*BatchObject).TotalNoTransactions
+		if startBlockNum == 0 {
+			break
 		}
-		for i := uint64(start); i <= uint64(head); i++ {
-			indexes = append(indexes, i)
-		}
+		startBlockNum -= uint64(c_txBatchSize)
 	}
-	// Gather the batch of blocks to report
-	history := make([]*blockStats, len(indexes))
-	for i, number := range indexes {
-		fullBackend, ok := s.backend.(fullNodeBackend)
-		// Retrieve the next block if it's known to us
-		var block *types.Block
-		if ok {
-			block, _ = fullBackend.BlockByNumber(context.Background(), rpc.BlockNumber(number)) // TODO ignore error here ?
-		} else {
-			if header, _ := s.backend.HeaderByNumber(context.Background(), rpc.BlockNumber(number)); header != nil {
-				block = types.NewBlockWithHeader(header)
+
+	if s.txLookupCache.Len() > int(c_txLookupCacheEvictLimit) {
+		s.evictOutdatedEntries(int(block.NumberU64() - c_blocksPerHour))
+	}
+
+	// Find the oldest batch object in the cache
+	// and use that oldest block time to calculate the TPS
+	found := false
+	notFoundCount := 0
+	var batchObject *BatchObject
+	var ok bool
+
+	for !found {
+		if notFoundCount >= int(c_txBatchSize) {
+			log.Error("Could not find any batch object in cache returning estimations")
+			return &tps{
+				TPS1m:                     totalTransactions1m / 60,
+				TPS1hr:                    totalTransactions1h / 3600,
+				TotalNumberTransactions1h: totalTransactions1h,
 			}
 		}
-		// If we do have the block, add to the history and continue
-		if block != nil {
-			history[len(history)-1-i] = s.assembleBlockStats(block)
+
+		// Retrieve the batch object from the cache
+		value, exists := s.txLookupCache.Get(oldestKeyUsed)
+		if !exists {
+			log.Warn("Could not find batch object in cache")
+			notFoundCount += 1
+			oldestKeyUsed += c_txBatchSize
 			continue
 		}
-		// Ran out of blocks, cut the report short and send
-		history = history[len(history)-i:]
-		break
+
+		found = true
+
+		// Type assert the value to a *BatchObject
+		batchObject, ok = value.(*BatchObject)
+		if !ok {
+			log.Warn("Error casting value to *BatchObject")
+			return &tps{
+				TPS1m:                     totalTransactions1m / 60,
+				TPS1hr:                    totalTransactions1h / 3600,
+				TotalNumberTransactions1h: totalTransactions1h,
+			}
+		}
 	}
-	// Assemble the history report and send it to the server
-	if len(history) > 0 {
-		log.Trace("Sending historical blocks to quaistats", "first", history[0].Number, "last", history[len(history)-1].Number)
-	} else {
-		log.Trace("No history to send to stats server")
+
+	delta1hr := startBlockTime - batchObject.OldestBlockTime
+
+	// Now use the BatchObject to get the oldest block time
+	TPS1hr := totalTransactions1h / delta1hr
+	TPS1m := totalTransactions1m / 60
+
+	log.Trace("Generated tx stats", "tps1m", TPS1m, "tps1hr", TPS1hr, "totalTransactions1h", totalTransactions1h, "totalTransactions1m", totalTransactions1m, "oldest1hBlockTime", batchObject.OldestBlockTime, "startBlockTime", startBlockTime, "difference1h", delta1hr, "difference1m", 60, "startBlockNum", uint64(startBlockNum))
+
+	// Now totalTransactions1h and totalTransactions1m have the transaction counts for the last c_blocksPerHour and c_txBatchSize blocks respectively
+	return &tps{
+		TPS1m:                     TPS1m,
+		TPS1hr:                    TPS1hr,
+		TotalNumberTransactions1h: totalTransactions1h,
 	}
-	stats := map[string]interface{}{
-		"id":      s.node,
-		"history": history,
-	}
-	report := map[string][]interface{}{
-		"emit": {"history", stats},
-	}
-	return conn.WriteJSON(report)
 }
 
-// pendStats is the information to report about pending transactions.
-type pendStats struct {
-	Pending int `json:"pending"`
+func min(a uint64, b uint64) uint64 {
+	if a < b {
+		return a
+	}
+	return b
 }
 
-// reportPending retrieves the current number of pending transactions and reports
-// it to the stats server.
-func (s *Service) reportPending(conn *connWrapper) error {
-	// Retrieve the pending count from the local blockchain
-	pending, _ := s.backend.Stats()
-	// Assemble the transaction stats and send it to the server
-	log.Trace("Sending pending transactions to quaistats", "count", strconv.Itoa(pending))
-	if conn == nil || conn.conn == nil {
-		log.Warn("pending connection is nil")
-		return errors.New("pending connection is nil")
+func (s *Service) assembleBlockDetailStats(block *types.Block) *blockDetailStats {
+	if block == nil {
+		log.Error("Block is nil")
+		return nil
 	}
+	header := block.Header()
+	difficulty := header.Difficulty().String()
 
-	stats := map[string]interface{}{
-		"id": s.node,
-		"pending": &pendStats{
-			Pending: pending,
-		},
+	// Assemble and return the block stats
+	return &blockDetailStats{
+		Timestamp:    new(big.Int).SetUint64(header.Time()),
+		ZoneHeight:   header.NumberU64(2),
+		RegionHeight: header.NumberU64(1),
+		PrimeHeight:  header.NumberU64(0),
+		Chain:        common.NodeLocation.Name(),
+		Entropy:      common.BigBitsToBits(s.backend.TotalLogS(block.Header())).String(),
+		Difficulty:   difficulty,
 	}
-	report := map[string][]interface{}{
-		"emit": {"pending", stats},
-	}
-	return conn.WriteJSON(report)
 }
 
-// nodeStats is the information to report about the local node.
-type nodeStats struct {
-	Name             string  `json:"name"`
-	Active           bool    `json:"active"`
-	Syncing          bool    `json:"syncing"`
-	Mining           bool    `json:"mining"`
-	Hashrate         int     `json:"hashrate"`
-	Peers            int     `json:"peers"`
-	Uptime           int     `json:"uptime"`
-	Chain            string  `json:"chain"`
-	ChainID          uint64  `json:"chainId"`
-	LatestHeight     uint64  `json:"height"`
-	LatestHash       string  `json:"hash"`
-	CPUPercentUsage  float32 `json:"cpuPercentUsage"`
-	CPUUsage         float32 `json:"cpuUsage"`
-	RAMPercentUsage  float32 `json:"ramPercentUsage"`
-	RAMUsage         int64   `json:"ramUsage"` // in bytes
-	SwapPercentUsage float32 `json:"swapPercentUsage"`
-	SwapUsage        int64   `json:"swapUsage"`
-	DiskUsage        int64   `json:"diskUsage"` // in bytes
+func (s *Service) assembleBlockAppendTimeStats(block *types.Block) *blockAppendTime {
+	if block == nil {
+		log.Error("Block is nil")
+		return nil
+	}
+	header := block.Header()
+	appendTime := block.GetAppendTime()
+
+	log.Info("Raw Block Append Time", "appendTime", appendTime.Microseconds())
+
+	// Assemble and return the block stats
+	return &blockAppendTime{
+		AppendTime:  appendTime,
+		BlockNumber: header.Number(),
+		Chain:       common.NodeLocation.Name(),
+	}
 }
 
-// reportStats retrieves various stats about the node at the networking and
-// mining layer and reports it to the stats server.
-func (s *Service) reportStats(conn *connWrapper) error {
-	// Gather the syncing and mining infos from the local miner instance
-	var (
-		mining   bool
-		hashrate int
-		syncing  bool
-	)
-	// check if backend is a full node
-	fullBackend, ok := s.backend.(fullNodeBackend)
-	header := s.backend.CurrentHeader()
-	if ok {
-		sync := fullBackend.Downloader().Progress()
-		syncing = fullBackend.CurrentHeader().Number().Uint64() >= sync.HighestBlock
-	} else {
-		sync := s.backend.Downloader().Progress()
-		syncing = header.Number().Uint64() >= sync.HighestBlock
+func (s *Service) assembleBlockTransactionStats(block *types.Block) *blockTransactionStats {
+	if block == nil {
+		log.Error("Block is nil")
+		return nil
 	}
+	header := block.Header()
+	tps := s.calculateTPS(block)
 
-	var cpuPercentUsed float32
-	if cpuStat, err := cpu.Percent(0, false); err == nil {
-		cpuPercentUsed = float32(cpuStat[0])
-	} else {
-		log.Warn("Error getting CPU percent usage:", err)
-		cpuPercentUsed = float32(c_statsErrorValue)
+	// Assemble and return the block stats
+	return &blockTransactionStats{
+		Timestamp:             new(big.Int).SetUint64(header.Time()),
+		TotalNoTransactions1h: tps.TotalNumberTransactions1h,
+		TPS1m:                 tps.TPS1m,
+		TPS1hr:                tps.TPS1hr,
+		Chain:                 common.NodeLocation.Name(),
 	}
+}
 
-	var cpuUsed float32
-	if cpuStat, err := cpu.Times(false); err == nil {
-		cpuUsed = float32(cpuStat[0].Total())
+func getQuaiCPUUsage() (float64, error) {
+	// 'ps' command options might vary depending on your OS
+	cmd := exec.Command("ps", "aux")
+	numCores := runtime.NumCPU()
 
-	} else {
-		log.Warn("Error getting CPU times:", err)
-		cpuUsed = float32(c_statsErrorValue)
-	}
-
-	var ramUsed int64
-	var ramPercentUsed float32
-	// Get RAM usage
-	if vmStat, err := mem.VirtualMemory(); err == nil {
-		ramUsed = int64(vmStat.Used)
-		ramPercentUsed = float32(vmStat.UsedPercent)
-	} else {
-		log.Warn("Error getting RAM usage:", err)
-		ramUsed = c_statsErrorValue
-		ramPercentUsed = float32(c_statsErrorValue)
-	}
-
-	var swapUsed int64
-	var swapPercentUsed float32
-	// Get swap usage
-	if swapStat, err := mem.SwapMemory(); err == nil {
-		swapUsed = int64(swapStat.Used)
-		swapPercentUsed = float32(swapStat.UsedPercent)
-	} else {
-		log.Warn("Error getting swap usage:", err)
-		swapUsed = c_statsErrorValue
-		swapPercentUsed = float32(c_statsErrorValue)
-	}
-
-	// Get disk usage
-	diskUsage, err := dirSize(s.instanceDir)
+	output, err := cmd.Output()
 	if err != nil {
-		log.Warn("Error calculating directory sizes:", err)
-		diskUsage = c_statsErrorValue
+		return 0, err
 	}
 
-	// Assemble the node stats and send it to the server
-	log.Trace("Sending node details to quaistats")
-
-	stats := map[string]interface{}{
-		"id": s.node,
-		"stats": &nodeStats{
-			Name:             s.node,
-			Active:           true,
-			Mining:           mining,
-			Hashrate:         hashrate,
-			Peers:            s.server.PeerCount(),
-			Syncing:          syncing,
-			Uptime:           100,
-			Chain:            common.NodeLocation.Name(),
-			ChainID:          s.chainID.Uint64(),
-			LatestHeight:     header.Number().Uint64(),
-			LatestHash:       header.Hash().String(),
-			CPUPercentUsage:  cpuPercentUsed,
-			CPUUsage:         cpuUsed,
-			RAMPercentUsage:  ramPercentUsed,
-			RAMUsage:         ramUsed, // in bytes
-			SwapPercentUsage: swapPercentUsed,
-			SwapUsage:        swapUsed,
-			DiskUsage:        diskUsage, // in bytes
-		},
-	}
-
-	report := map[string][]interface{}{
-		"emit": {"stats", stats},
-	}
-	return conn.WriteJSON(report)
-}
-
-// peerStats is the information to report about peers.
-type peerStats struct {
-	Chain    string      `json:"chain"`
-	ChainID  uint64      `json:"chainId"`
-	Count    int         `json:"count"`
-	PeerData []*peerData `json:"peerData"`
-}
-
-// peerStat is the information to report about peers.
-type peerData struct {
-	Chain             string        `json:"chain"`
-	Enode             string        `json:"enode"`        // Unique node identifier (enode URL)
-	SoftwareName      string        `json:"softwareName"` // Node software version
-	LocalAddress      string        `json:"localAddress"`
-	RemoteAddress     string        `json:"remoteAddress"`
-	RTT               string        `json:"rtt"`
-	LatestHeight      uint64        `json:"latestHeight"`
-	LatestEntropy     string        `json:"latestEntropy"`
-	LatestHash        string        `json:"latestHash"`
-	RecvLastBlockTime time.Time     `json:"recvLastBlockTime"`
-	ConnectedTime     time.Duration `json:"uptime"`
-	PeerUptime        string        `json:"peerUptime"` // TODO: add peer uptime
-}
-
-// reportPeers retrieves various stats about the peers for a node.
-func (s *Service) reportPeers(conn *connWrapper) error {
-	// Assemble the node stats and send it to the server
-	log.Trace("Sending peer details to quaistats")
-
-	peerInfo := s.backend.Downloader().PeerSet()
-
-	allPeerData := make([]*peerData, 0)
-
-	srvPeers := s.server.Peers()
-
-	for _, peer := range srvPeers {
-		peerStat := &peerData{
-			Enode:         peer.ID().String(),
-			SoftwareName:  peer.Fullname(),
-			LocalAddress:  peer.LocalAddr().String(),
-			RemoteAddress: peer.RemoteAddr().String(),
-			Chain:         common.NodeLocation.Name(),
-			ConnectedTime: peer.ConnectedTime(),
-		}
-
-		downloaderPeer := peerInfo.Peer(peer.ID().String())
-		if downloaderPeer != nil {
-			hash, number, entropy, receivedAt := downloaderPeer.Peer().Head()
-			if number == nil {
-				number = big.NewInt(0)
-			}
-			peerStat.RTT = downloaderPeer.Tracker().Roundtrip().String()
-			peerStat.LatestHeight = number.Uint64()
-			peerStat.LatestEntropy = entropy.String()
-			peerStat.LatestHash = hash.String()
-			if receivedAt != *new(time.Time) {
-				peerStat.RecvLastBlockTime = receivedAt.UTC()
+	lines := strings.Split(string(output), "\n")
+	var totalCpuUsage float64
+	var cpuUsage float64
+	for _, line := range lines {
+		if strings.Contains(line, "go-quai") {
+			fields := strings.Fields(line)
+			if len(fields) > 2 {
+				// Assuming %CPU is the third column, command is the eleventh
+				cpuUsage, err = strconv.ParseFloat(fields[2], 64)
+				if err != nil {
+					return 0, err
+				}
+				totalCpuUsage += cpuUsage
 			}
 		}
-		allPeerData = append(allPeerData, peerStat)
 	}
 
-	peers := map[string]interface{}{
-		"id": s.node,
-		"peers": &peerStats{
-			Chain:    common.NodeLocation.Name(),
-			ChainID:  s.chainID.Uint64(),
-			Count:    len(srvPeers),
-			PeerData: allPeerData,
-		},
+	if totalCpuUsage == 0 {
+		return 0, errors.New("quai process not found")
 	}
-	report := map[string][]interface{}{
-		"emit": {"peers", peers},
+
+	return totalCpuUsage / float64(numCores), nil
+}
+
+func getQuaiRAMUsage() (uint64, error) {
+	// Get a list of all running processes
+	processes, err := process.Processes()
+	if err != nil {
+		return 0, err
 	}
-	return conn.WriteJSON(report)
+
+	var totalRam uint64
+
+	// Debug: log number of processes
+	log.Trace("Number of processes", "number", len(processes))
+
+	for _, p := range processes {
+		cmdline, err := p.Cmdline()
+		if err != nil {
+			// Debug: log error
+			log.Trace("Error getting process cmdline", "error", err)
+			continue
+		}
+
+		if strings.Contains(cmdline, "go-quai") {
+			memInfo, err := p.MemoryInfo()
+			if err != nil {
+				return 0, err
+			}
+			totalRam += memInfo.RSS
+		}
+	}
+
+	if totalRam == 0 {
+		return 0, errors.New("go-quai process not found")
+	}
+
+	return totalRam, nil
 }
 
 // dirSize returns the size of a directory in bytes.
 func dirSize(path string) (int64, error) {
-	cmd := exec.Command("du", "-bs", path)
-	if output, err := cmd.Output(); err != nil {
-		return -1, err
+	var cmd *exec.Cmd
+	if runtime.GOOS == "darwin" {
+		cmd = exec.Command("du", "-sk", path)
+	} else if runtime.GOOS == "linux" {
+		cmd = exec.Command("du", "-bs", path)
 	} else {
-		size, _ := strconv.ParseInt(strings.Split(string(output), "\t")[0], 10, 64)
-		return size, nil
+		return -1, errors.New("unsupported OS")
 	}
+	// Execute command
+	output, err := cmd.Output()
+	if err != nil {
+		return -1, err
+	}
+
+	// Split the output and parse the size.
+	sizeStr := strings.Split(string(output), "\t")[0]
+	size, err := strconv.ParseInt(sizeStr, 10, 64)
+	if err != nil {
+		return -1, err
+	}
+
+	// If on macOS, convert size from kilobytes to bytes.
+	if runtime.GOOS == "darwin" {
+		size *= 1024
+	}
+
+	return size, nil
+}
+
+// diskTotalSize returns the total size of the disk in bytes.
+func diskTotalSize() (int64, error) {
+	var cmd *exec.Cmd
+	if runtime.GOOS == "darwin" {
+		cmd = exec.Command("df", "-k", "/")
+	} else if runtime.GOOS == "linux" {
+		cmd = exec.Command("df", "--block-size=1K", "/")
+	} else {
+		return 0, errors.New("unsupported OS")
+	}
+
+	output, err := cmd.Output()
+	if err != nil {
+		return 0, err
+	}
+
+	lines := strings.Split(string(output), "\n")
+	if len(lines) < 2 {
+		return 0, errors.New("unexpected output from df command")
+	}
+
+	fields := strings.Fields(lines[1])
+	if len(fields) < 2 {
+		return 0, errors.New("unexpected output from df command")
+	}
+
+	totalSize, err := strconv.ParseInt(fields[1], 10, 64)
+	if err != nil {
+		return 0, err
+	}
+
+	return totalSize * 1024, nil // convert from kilobytes to bytes
 }
