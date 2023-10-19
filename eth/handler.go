@@ -384,7 +384,11 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 		}
 		transfer := peers[:peerThreshold]
 		for _, peer := range transfer {
-			entropy := h.core.Engine().TotalLogS(block.Header())
+			currentHead := h.core.CurrentHeader()
+			entropy := big.NewInt(0)
+			if currentHead != nil {
+				entropy = h.core.Engine().TotalLogS(h.core.CurrentHeader())
+			}
 			peer.AsyncSendNewBlock(block, entropy)
 		}
 		log.Trace("Propagated block", "hash", hash, "recipients", len(transfer), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))

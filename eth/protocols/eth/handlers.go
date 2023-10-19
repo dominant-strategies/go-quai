@@ -19,6 +19,7 @@ package eth
 import (
 	"errors"
 	"fmt"
+	"math/big"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
@@ -147,7 +148,11 @@ func handleGetBlock66(backend Backend, msg Decoder, peer *Peer) error {
 	// check if we have the requested block in the database.
 	response := backend.Core().GetBlockOrCandidateByHash(query.Hash)
 	if response != nil {
-		entropy := backend.Core().Engine().TotalLogS(response.Header())
+		currentHead := backend.Core().CurrentHeader()
+		entropy := big.NewInt(0)
+		if currentHead != nil {
+			entropy = backend.Core().Engine().TotalLogS(currentHead)
+		}
 		return peer.SendNewBlock(response, entropy, false)
 	}
 	return nil
