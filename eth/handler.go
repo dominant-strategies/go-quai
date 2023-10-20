@@ -179,7 +179,8 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	}
 	currentS := func() *big.Int {
 		// This is the sync target entropy which updates based on the block broadcasts
-		return h.core.SyncTargetEntropy()
+		entropy, _ := h.core.SyncTargetEntropy()
+		return entropy
 	}
 	currentDifficulty := func() *big.Int {
 		return h.core.CurrentHeader().Difficulty()

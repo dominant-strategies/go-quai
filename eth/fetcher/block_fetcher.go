@@ -40,11 +40,11 @@ const (
 )
 
 const (
-	maxUncleDist            = 100  // Maximum allowed backward distance from the chain head
-	maxQueueDist            = 32   // Maximum allowed distance from the chain head to queue
-	hashLimit               = 256  // Maximum number of unique blocks or headers a peer may have announced
-	blockLimit              = 64   // Maximum number of unique blocks a peer may have delivered
-	maxAllowableEntropyDist = 3500 // Maximum multiple of zone intrinsic S distance allowed from the current Entropy
+	maxUncleDist            = 100 // Maximum allowed backward distance from the chain head
+	maxQueueDist            = 32  // Maximum allowed distance from the chain head to queue
+	hashLimit               = 256 // Maximum number of unique blocks or headers a peer may have announced
+	blockLimit              = 64  // Maximum number of unique blocks a peer may have delivered
+	MaxAllowableEntropyDist = 50  // Maximum multiple of zone intrinsic S distance allowed from the current Entropy
 )
 
 var (
@@ -729,12 +729,12 @@ func (f *BlockFetcher) ImportBlocks(peer string, block *types.Block, relay bool)
 	}
 
 	currentIntrinsicS := f.currentIntrinsicS()
-	maxAllowableEntropyDist := new(big.Int).Mul(currentIntrinsicS, big.NewInt(maxAllowableEntropyDist))
+	MaxAllowableEntropyDist := new(big.Int).Mul(currentIntrinsicS, big.NewInt(MaxAllowableEntropyDist))
 
 	broadCastEntropy := block.ParentEntropy()
 
-	// If someone is mining not within maxAllowableEntropyDist*currentIntrinsicS
-	if relay && f.currentS().Cmp(new(big.Int).Add(broadCastEntropy, maxAllowableEntropyDist)) > 0 {
+	// If someone is mining not within MaxAllowableEntropyDist*currentIntrinsicS
+	if relay && f.currentS().Cmp(new(big.Int).Add(broadCastEntropy, MaxAllowableEntropyDist)) > 0 {
 		return
 	}
 

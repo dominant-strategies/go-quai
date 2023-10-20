@@ -188,6 +188,15 @@ func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block, en
 		return nil
 	}
 
+	syncEntropy, threshold := h.core.SyncTargetEntropy()
+	// If the block was relayed and we are not attempting to sync the fray
+	if relay {
+		err := h.downloader.ValidateEntropyBroadcast(block, syncEntropy, threshold, peer)
+		if err != nil {
+			return err
+		}
+	}
+
 	h.blockFetcher.ImportBlocks(peer.ID(), block, relay)
 
 	if block != nil && !h.broadcastCache.Contains(block.Hash()) {

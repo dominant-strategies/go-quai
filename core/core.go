@@ -360,11 +360,13 @@ func (c *Core) SetSyncTarget(header *types.Header) {
 
 // SyncTargetEntropy returns the syncTargetEntropy if its not nil, otherwise
 // returns the current header parent entropy
-func (c *Core) SyncTargetEntropy() *big.Int {
+func (c *Core) SyncTargetEntropy() (*big.Int, *big.Int) {
 	if c.syncTarget != nil {
-		return c.syncTarget.ParentEntropy()
+		target := new(big.Int).Div(common.Big2e256, c.syncTarget.Difficulty())
+		return c.syncTarget.ParentEntropy(), target
 	} else {
-		return c.CurrentHeader().ParentEntropy()
+		target := new(big.Int).Div(common.Big2e256, c.CurrentHeader().Difficulty())
+		return c.CurrentHeader().ParentEntropy(), target
 	}
 }
 

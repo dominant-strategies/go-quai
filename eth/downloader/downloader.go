@@ -20,20 +20,22 @@ package downloader
 import (
 	"errors"
 	"fmt"
+	"math/big"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	quai "github.com/dominant-strategies/go-quai"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/core/state/snapshot"
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/eth/fetcher"
 	"github.com/dominant-strategies/go-quai/eth/protocols/eth"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/metrics"
-	"math/big"
-	"sync"
-	"sync/atomic"
-	"time"
 )
 
 var (
@@ -1200,4 +1202,15 @@ func (d *Downloader) deliver(destCh chan dataPack, packet dataPack, inMeter, dro
 	case <-cancel:
 		return errNoSyncActive
 	}
+}
+
+// ValidateEntropyBroadcast validates the entropy broadcast of a block.
+func (d *Downloader) ValidateEntropyBroadcast(block *types.Block, syncEntropy *big.Int, threshold *big.Int, peer *eth.Peer) error {
+	window := new(big.Int).Mul(threshold, big.NewInt(fetcher.MaxAllowableEntropyDist))
+	depth := new(big.Int).Add(block.ParentEntropy(), window)
+	if depth.Cmp(syncEntropy) < 0 {
+		d.dropPeer(peer.ID())
+		return fmt.Errorf("entropy broadcast is too old")
+	}
+	return nil
 }
