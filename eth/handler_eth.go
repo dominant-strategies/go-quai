@@ -189,10 +189,10 @@ func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block, en
 	}
 
 	syncEntropy, threshold := h.core.SyncTargetEntropy()
-	//window := new(big.Int).Mul(threshold, big.NewInt(5))
-	// syncThreshold := new(big.Int).Add(block.ParentEntropy(), window)
+	window := new(big.Int).Mul(threshold, big.NewInt(5))
+	syncThreshold := new(big.Int).Add(block.ParentEntropy(), window)
 	requestBlock := h.subSyncQueue.Contains(block.Hash())
-	beyondSyncPoint := syncEntropy.Cmp(block.ParentEntropy()) < 0
+	beyondSyncPoint := syncEntropy.Cmp(syncThreshold) < 0
 	atFray := syncEntropy.Cmp(h.core.CurrentHeader().ParentEntropy()) == 0
 
 	// If block is greater than sync entropy, or its manifest cache, handle it
