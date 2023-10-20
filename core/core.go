@@ -182,11 +182,22 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 // procAppendQueue sorts the append queue and attempts to append
 func (c *Core) procAppendQueue() {
 	nodeCtx := common.NodeLocation.Context()
+
 	maxFutureBlocks := c_maxFutureBlocksPrime
-	if nodeCtx == common.REGION_CTX {
-		maxFutureBlocks = c_maxFutureBlocksRegion
-	} else if nodeCtx == common.ZONE_CTX {
-		maxFutureBlocks = c_maxFutureBlocksZone
+	// If sync point is reached increase the maxFutureBlocks
+	// we can increse scope when we are near, so added 6 to the prime height
+	if c.CurrentHeader() != nil && c.syncTarget != nil && c.CurrentHeader().NumberU64() >= c.syncTarget.NumberU64() {
+		if nodeCtx == common.REGION_CTX {
+			maxFutureBlocks = c_maxFutureBlocksRegion * 50
+		} else if nodeCtx == common.ZONE_CTX {
+			maxFutureBlocks = c_maxFutureBlocksZone * 10
+		}
+	} else {
+		if nodeCtx == common.REGION_CTX {
+			maxFutureBlocks = c_maxFutureBlocksRegion
+		} else if nodeCtx == common.ZONE_CTX {
+			maxFutureBlocks = c_maxFutureBlocksZone
+		}
 	}
 
 	// Sort the blocks by number and retry attempts and try to insert them
