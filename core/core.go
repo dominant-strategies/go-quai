@@ -39,7 +39,9 @@ const (
 	c_zoneRetryThreshold                       = 600     // Number of times a block is retry to be appended before eviction from append queue in Zone
 	c_maxFutureBlocksPrime              uint64 = 3       // Number of blocks ahead of the current block to be put in the hashNumberList
 	c_maxFutureBlocksRegion             uint64 = 3
+	c_maxFutureBlocksRegionAtFray       uint64 = 150
 	c_maxFutureBlocksZone               uint64 = 200
+	c_maxFutureBlocksZoneAtFray         uint64 = 2000
 	c_appendQueueRetryPriorityThreshold        = 5  // If retry counter for a block is less than this number,  then its put in the special list that is tried first to be appended
 	c_appendQueueRemoveThreshold               = 10 // Number of blocks behind the block should be from the current header to be eligble for removal from the append queue
 	c_normalListProcCounter                    = 1  // Ratio of Number of times the PriorityList is serviced over the NormalList
@@ -182,11 +184,22 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 // procAppendQueue sorts the append queue and attempts to append
 func (c *Core) procAppendQueue() {
 	nodeCtx := common.NodeLocation.Context()
+
 	maxFutureBlocks := c_maxFutureBlocksPrime
-	if nodeCtx == common.REGION_CTX {
-		maxFutureBlocks = c_maxFutureBlocksRegion
-	} else if nodeCtx == common.ZONE_CTX {
-		maxFutureBlocks = c_maxFutureBlocksZone
+	// If sync point is reached increase the maxFutureBlocks
+	// we can increse scope when we are near, region future blocks is increased to sync the fray fast
+	if c.CurrentHeader() != nil && c.syncTarget != nil && c.CurrentHeader().NumberU64() >= c.syncTarget.NumberU64() {
+		if nodeCtx == common.REGION_CTX {
+			maxFutureBlocks = c_maxFutureBlocksRegionAtFray
+		} else if nodeCtx == common.ZONE_CTX {
+			maxFutureBlocks = c_maxFutureBlocksZoneAtFray
+		}
+	} else {
+		if nodeCtx == common.REGION_CTX {
+			maxFutureBlocks = c_maxFutureBlocksRegion
+		} else if nodeCtx == common.ZONE_CTX {
+			maxFutureBlocks = c_maxFutureBlocksZone
+		}
 	}
 
 	// Sort the blocks by number and retry attempts and try to insert them
