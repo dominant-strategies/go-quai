@@ -1215,3 +1215,7 @@ func (d *Downloader) ValidateEntropyBroadcast(block *types.Block, syncEntropy *b
 	}
 	return nil
 }
+
+func (d *Downloader) DropPeer(peer *eth.Peer) {
+	d.dropPeer(peer.ID())
+}

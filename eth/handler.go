@@ -124,6 +124,7 @@ type handler struct {
 	minedBlockSub   *event.TypeMuxSubscription
 	missingBlockCh  chan types.BlockRequest
 	missingBlockSub event.Subscription
+	subSyncQueue    *lru.Cache
 
 	whitelist map[uint64]common.Hash
 
@@ -145,6 +146,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	if config.EventMux == nil {
 		config.EventMux = new(event.TypeMux) // Nicety initialization for tests
 	}
+
 	h := &handler{
 		networkID:     config.Network,
 		slicesRunning: config.SlicesRunning,
@@ -161,6 +163,9 @@ func newHandler(config *handlerConfig) (*handler, error) {
 
 	broadcastCache, _ := lru.New(c_broadcastCacheSize)
 	h.broadcastCache = broadcastCache
+
+	subSyncQueue, _ := lru.New(100000)
+	h.subSyncQueue = subSyncQueue
 
 	h.downloader = downloader.New(h.eventMux, h.core, h.removePeer)
 
@@ -507,6 +512,9 @@ func (h *handler) missingBlockLoop() {
 					break
 				}
 			}
+
+			h.subSyncQueue.ContainsOrAdd(blockRequest.Hash, blockRequest)
+
 		case <-h.missingBlockSub.Err():
 			return
 		}
