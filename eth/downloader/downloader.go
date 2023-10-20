@@ -1208,6 +1208,7 @@ func (d *Downloader) deliver(destCh chan dataPack, packet dataPack, inMeter, dro
 func (d *Downloader) ValidateEntropyBroadcast(block *types.Block, syncEntropy *big.Int, threshold *big.Int, peer *eth.Peer) error {
 	window := new(big.Int).Mul(threshold, big.NewInt(fetcher.MaxAllowableEntropyDist))
 	depth := new(big.Int).Add(block.ParentEntropy(), window)
+	log.Info("Validating entropy broadcast", "block", block.Hash(), "peer", peer.ID(), "depth", depth, "syncEntropy", syncEntropy)
 	if depth.Cmp(syncEntropy) < 0 {
 		d.dropPeer(peer.ID())
 		return fmt.Errorf("entropy broadcast is too old")
