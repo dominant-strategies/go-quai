@@ -445,7 +445,7 @@ func (progpow *Progpow) verifySeal(header *types.Header) (common.Hash, error) {
 	}
 	target := new(big.Int).Div(big2e256, header.Difficulty())
 	if new(big.Int).SetBytes(powHash.(common.Hash).Bytes()).Cmp(target) > 0 {
-		return common.Hash{}, errInvalidPoW
+		return powHash.(common.Hash), errInvalidPoW
 	}
 	return powHash.(common.Hash), nil
 }
