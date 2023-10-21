@@ -831,10 +831,11 @@ func (s *PublicBlockChainQuaiAPI) GetPendingEtxsFromSub(ctx context.Context, raw
 	return fields, nil
 }
 
-func (s *PublicBlockChainQuaiAPI) SetSyncTarget(ctx context.Context, raw json.RawMessage) {
+func (s *PublicBlockChainQuaiAPI) SetSyncTarget(ctx context.Context, raw json.RawMessage) error {
 	var header *types.Header
 	if err := json.Unmarshal(raw, &header); err != nil {
-		return
+		return err
 	}
 	s.b.SetSyncTarget(header)
+	return nil
 }

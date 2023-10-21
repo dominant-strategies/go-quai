@@ -353,6 +353,7 @@ func (c *Core) SetSyncTarget(header *types.Header) {
 				}
 			}
 		}
+		return
 	}
 	c.syncTarget = header
 }
