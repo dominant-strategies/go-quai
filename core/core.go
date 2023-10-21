@@ -351,9 +351,10 @@ func (c *Core) SetSyncTarget(header *types.Header) {
 				c.sl.subClients[header.Location().SubIndex()].SetSyncTarget(context.Background(), header)
 			}
 		}
-		return
 	}
-	c.syncTarget = header
+	if c.syncTarget == nil || c.syncTarget.ParentEntropy().Cmp(header.ParentEntropy()) < 0 {
+		c.syncTarget = header
+	}
 }
 
 // SyncTargetEntropy returns the syncTargetEntropy if its not nil, otherwise
@@ -550,7 +551,7 @@ func (c *Core) WriteBlock(block *types.Block) {
 	}
 
 	if nodeCtx == common.PRIME_CTX {
-		if c.syncTarget == nil || c.syncTarget.ParentEntropy().Cmp(block.ParentEntropy()) < 0 {
+		if block != nil {
 			c.SetSyncTarget(block.Header())
 		}
 	}
