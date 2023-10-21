@@ -198,7 +198,7 @@ func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block, en
 	// If block is greater than sync entropy, or its manifest cache, handle it
 	// If block if its in manifest cache, relay is set to true, set relay to false and handle
 	// !atFray checked because when "synced" we want to be able to check entropy against later window
-	// log.Info("handle block", "requestBlock", requestBlock, "atFray", atFray, "relay", relay, "beyondSync", beyondSyncPoint)
+	log.Info("handle block", "requestBlock", requestBlock, "atFray", atFray, "relay", relay, "beyondSync", beyondSyncPoint)
 	if relay && !atFray {
 		if !beyondSyncPoint {
 			if !requestBlock {

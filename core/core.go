@@ -363,10 +363,12 @@ func (c *Core) SetSyncTarget(header *types.Header) {
 func (c *Core) SyncTargetEntropy() (*big.Int, *big.Int) {
 	if c.syncTarget != nil {
 		target := new(big.Int).Div(common.Big2e256, c.syncTarget.Difficulty())
-		return c.syncTarget.ParentEntropy(), target
+		zoneThresholdS := c.sl.engine.IntrinsicLogS(common.BytesToHash(target.Bytes()))
+		return c.syncTarget.ParentEntropy(), zoneThresholdS
 	} else {
 		target := new(big.Int).Div(common.Big2e256, c.CurrentHeader().Difficulty())
-		return c.CurrentHeader().ParentEntropy(), target
+		zoneThresholdS := c.sl.engine.IntrinsicLogS(common.BytesToHash(target.Bytes()))
+		return c.CurrentHeader().ParentEntropy(), zoneThresholdS
 	}
 }
 
