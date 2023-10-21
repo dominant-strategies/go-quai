@@ -49,7 +49,6 @@ const (
 	NumRegionsInPrime = 3
 	NumZonesInRegion  = 3
 	HierarchyDepth    = 3
-	NumChains         = 1 + NumRegionsInPrime*(1+NumZonesInRegion) // Prime + R regions + RxZ zones
 )
 
 var (
