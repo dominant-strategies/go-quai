@@ -20,6 +20,11 @@ package downloader
 import (
 	"errors"
 	"fmt"
+	"math/big"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	quai "github.com/dominant-strategies/go-quai"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
@@ -30,10 +35,6 @@ import (
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/metrics"
-	"math/big"
-	"sync"
-	"sync/atomic"
-	"time"
 )
 
 var (
@@ -1200,4 +1201,8 @@ func (d *Downloader) deliver(destCh chan dataPack, packet dataPack, inMeter, dro
 	case <-cancel:
 		return errNoSyncActive
 	}
+}
+
+func (d *Downloader) DropPeer(peer *eth.Peer) {
+	d.dropPeer(peer.ID())
 }
