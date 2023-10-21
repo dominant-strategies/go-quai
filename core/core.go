@@ -347,23 +347,26 @@ func (c *Core) SetSyncTarget(header *types.Header) {
 	// Set Sync Target for subs
 	if nodeCtx != common.ZONE_CTX {
 		if header != nil {
-			for i := range c.sl.subClients {
-				if c.sl.subClients[i] != nil {
-					c.sl.subClients[i].SetSyncTarget(context.Background(), header)
-				}
+			if c.sl.subClients[header.Location().SubIndex()] != nil {
+				c.sl.subClients[header.Location().SubIndex()].SetSyncTarget(context.Background(), header)
 			}
 		}
+		return
 	}
 	c.syncTarget = header
 }
 
 // SyncTargetEntropy returns the syncTargetEntropy if its not nil, otherwise
 // returns the current header parent entropy
-func (c *Core) SyncTargetEntropy() *big.Int {
+func (c *Core) SyncTargetEntropy() (*big.Int, *big.Int) {
 	if c.syncTarget != nil {
-		return c.syncTarget.ParentEntropy()
+		target := new(big.Int).Div(common.Big2e256, c.syncTarget.Difficulty())
+		zoneThresholdS := c.sl.engine.IntrinsicLogS(common.BytesToHash(target.Bytes()))
+		return c.syncTarget.ParentEntropy(), zoneThresholdS
 	} else {
-		return c.CurrentHeader().ParentEntropy()
+		target := new(big.Int).Div(common.Big2e256, c.CurrentHeader().Difficulty())
+		zoneThresholdS := c.sl.engine.IntrinsicLogS(common.BytesToHash(target.Bytes()))
+		return c.CurrentHeader().ParentEntropy(), zoneThresholdS
 	}
 }
 
