@@ -1,9 +1,14 @@
 package vm
 
 import (
+	"bytes"
+	"encoding/binary"
 	"fmt"
+	"log"
+	"math/big"
 
 	"github.com/bytecodealliance/wasmtime-go"
+	"github.com/dominant-strategies/go-quai/common"
 )
 
 var qeiFunctionList = []string{
@@ -102,6 +107,21 @@ func (vm *WasmVM) LinkHost(in *WASMInterpreter) (err error) {
 		return err
 	}
 
+	err = vm.linker.DefineFunc(vm.store, "", "getExternalBalance", in.getExternalBalance)
+	if err != nil {
+		return err
+	}
+
+	err = vm.linker.DefineFunc(vm.store, "", "getBlockNumber", in.getBlockNumber)
+	if err != nil {
+		return err
+	}
+
+	err = vm.linker.DefineFunc(vm.store, "", "getBlockHash", in.getBlockHash)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -176,5 +196,70 @@ func (in *WASMInterpreter) getAddress(resultOffset int32) (error, error) {
 	memoryData := in.vm.memory.UnsafeData(in.vm.store)
 	copy(memoryData[resultOffset:], addr)
 
+	return nil, nil
+}
+
+func swapEndian(src []byte) []byte {
+	ret := make([]byte, len(src))
+	for i, v := range src {
+		ret[len(src)-i-1] = v
+	}
+	return ret
+}
+
+func (in *WASMInterpreter) getExternalBalance(addressOffset uint32, resultOffset int32) (error, error) {
+	_, err := in.vm.store.ConsumeFuel(100)
+	if err != nil {
+		in.vm.panicErr = err
+		return wasmtime.NewTrap("out of gas"), err
+	}
+	memoryData := in.vm.memory.UnsafeData(in.vm.store)
+	addr := common.BytesToAddress(memoryData[addressOffset : addressOffset+common.AddressLength])
+	internal, err := addr.InternalAddress()
+	if err != nil {
+		log.Panicf("🟥 Memory.Write(%d, %d) out of range", resultOffset, len(internal))
+	}
+	balance := swapEndian(in.StateDB.GetBalance(internal).Bytes())
+	copy(memoryData[resultOffset:], balance)
+	return nil, nil
+
+}
+
+func (in *WASMInterpreter) getBlockNumber(resultOffset int32) (error, error) {
+	_, err := in.vm.store.ConsumeFuel(100)
+	if err != nil {
+		in.vm.panicErr = err
+		return wasmtime.NewTrap("out of gas"), err
+	}
+	blockNumber := in.evm.Context.BlockNumber.Int64()
+	memoryData := in.vm.memory.UnsafeData(in.vm.store)
+	copy(memoryData[resultOffset:], int64ToBytes(blockNumber))
+	return nil, nil
+}
+
+// Helper function to convert int64 to []byte
+func int64ToBytes(i int64) []byte {
+	buf := new(bytes.Buffer)
+	binary.Write(buf, binary.LittleEndian, i)
+	return buf.Bytes()
+}
+
+func (in *WASMInterpreter) getBlockHash(number int64, resultOffset int32) (error, error) {
+	_, err := in.vm.store.ConsumeFuel(100)
+	if err != nil {
+		in.vm.panicErr = err
+		return wasmtime.NewTrap("out of gas"), err
+	}
+	n := big.NewInt(number)
+	fmt.Println(n)
+	n.Sub(in.evm.Context.BlockNumber, n)
+	fmt.Println(n, n.Cmp(big.NewInt(256)), n.Cmp(big.NewInt(0)))
+	// TODO Fix this error return
+	if n.Cmp(big.NewInt(256)) > 0 || n.Cmp(big.NewInt(0)) <= 0 {
+		return nil, nil
+	}
+	h := in.evm.Context.GetHash(uint64(number))
+	memoryData := in.vm.memory.UnsafeData(in.vm.store)
+	copy(memoryData[resultOffset:], h.Bytes())
 	return nil, nil
 }
