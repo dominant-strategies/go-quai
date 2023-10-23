@@ -81,21 +81,33 @@ func TestGetAddressContract(t *testing.T) {
 	)
 
 	wasmBytes, err := wasmtime.Wat2Wasm(`
-		(module
-			(func $getAddress (import "" "getAddress") (param i32))
-			(func (export "run") 
-				(local i32)
-				(local.set 0 (i32.const 0))  ;; Set memory offset to 0
-				(call $getAddress (local.get 0))  ;; Call getAddress with memory offset
-			)
-		)
-		`)
-
+    (module
+        (func $getAddress (import "" "getAddress") (param i32) (result externref externref))
+        (func (export "run") 
+            (local i32)
+            (local.set 0 (i32.const 0))  ;; Set memory offset to 0
+            (call $getAddress (local.get 0))  ;; Call getAddress with memory offset
+            drop  ;; Discard the first returned value
+            drop  ;; Discard the second returned value
+        )
+    )
+`)
 	if err != nil {
 		t.Errorf("error: %v", err)
 	}
 
-	contract := NewContract(&dummyContractRef{}, &dummyContractRef{}, new(big.Int), 2000)
+	contractOutOfGas := NewContract(&dummyContractRef{}, &dummyContractRef{}, new(big.Int), 50)
+	contractOutOfGas.SetCodeOptionalHash(&common.ZeroAddr, &codeAndHash{
+		code: wasmBytes,
+		hash: crypto.Keccak256Hash(wasmBytes),
+	})
+
+	_, err = wasmInterpreter.Run(contractOutOfGas, nil, false)
+	if err != nil {
+		t.Errorf("error: %v", err)
+	}
+
+	contract := NewContract(&dummyContractRef{}, &dummyContractRef{}, new(big.Int), 10000)
 	contract.SetCodeOptionalHash(&common.ZeroAddr, &codeAndHash{
 		code: wasmBytes,
 		hash: crypto.Keccak256Hash(wasmBytes),
@@ -105,6 +117,30 @@ func TestGetAddressContract(t *testing.T) {
 	if err != nil {
 		t.Errorf("error: %v", err)
 	}
+}
 
-	// Optionally, you can add code to read the memory and verify the address
+func TestFuelConsumption(t *testing.T) {
+	var (
+		env             = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{})
+		wasmInterpreter = NewWASMInterpreter(env, env.Config)
+	)
+
+	wasmBytes, _ := wasmtime.Wat2Wasm(`
+		(module
+			(func (export "run") (loop (br 0))) ;; Infinite loop
+		)
+	`)
+
+	contract := NewContract(&dummyContractRef{}, &dummyContractRef{}, new(big.Int), 2000)
+	contract.SetCodeOptionalHash(&common.ZeroAddr, &codeAndHash{
+		code: wasmBytes,
+		hash: crypto.Keccak256Hash(wasmBytes),
+	})
+
+	_, err := wasmInterpreter.Run(contract, nil, false)
+	if err != nil {
+
+	} else {
+		t.Errorf("expected an error due to fuel exhaustion, got nil")
+	}
 }

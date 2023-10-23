@@ -2,7 +2,6 @@ package vm
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/bytecodealliance/wasmtime-go"
 )
@@ -64,7 +63,7 @@ func InstantiateWASMVM(in *WASMInterpreter) *WasmVM {
 	config := wasmtime.NewConfig()
 	// no need to be interruptable by WasmVMBase
 	// config.SetInterruptable(true)
-	// config.SetConsumeFuel(true)
+	config.SetConsumeFuel(true)
 
 	vm := &WasmVM{engine: wasmtime.NewEngineWithConfig(config)}
 	// prevent WasmVMBase from starting timeout interrupting,
@@ -78,6 +77,7 @@ func InstantiateWASMVM(in *WASMInterpreter) *WasmVM {
 
 func (vm *WasmVM) LinkHost(in *WASMInterpreter) (err error) {
 	vm.store = wasmtime.NewStore(vm.engine)
+	vm.store.AddFuel(in.Contract.Gas)
 	vm.linker = wasmtime.NewLinker(vm.engine)
 
 	// Create a new memory instance.
@@ -135,7 +135,7 @@ func (vm *WasmVM) LoadWasm(wasm []byte) (err error) {
 
 	_, err = run.Call(vm.store)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	return nil
@@ -163,13 +163,18 @@ func (in *WASMInterpreter) useGas(amount int64) {
 	in.gasAccounting(uint64(amount))
 }
 
-func (in *WASMInterpreter) getAddress(resultOffset int32) {
-	//in.gasAccounting(10)
-	fmt.Println("🤖: getAddress, addr", in.Contract.CodeAddr)
-	fmt.Println("🤖: getAddress, offset", resultOffset)
+func (in *WASMInterpreter) getAddress(resultOffset int32) (*wasmtime.Trap, error) {
+	_, err := in.vm.store.ConsumeFuel(100)
+	if err != nil {
+		in.vm.panicErr = err
+		return wasmtime.NewTrap("out of gas"), err
+	}
+
 	addr := []byte(in.Contract.CodeAddr.String())
 
 	// Assume vm is a field in your WASMInterpreter struct referring to your WasmVM instance
 	memoryData := in.vm.memory.UnsafeData(in.vm.store)
 	copy(memoryData[resultOffset:], addr)
+
+	return nil, nil
 }
