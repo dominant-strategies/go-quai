@@ -19,6 +19,7 @@ package eth
 import (
 	"math/big"
 	"math/rand"
+	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
@@ -198,6 +199,7 @@ func (cs *chainSyncer) loop() {
 	defer cs.handler.downloader.Terminate()
 
 	for {
+		time.Sleep(10 * time.Millisecond)
 		if op := cs.nextSyncOp(); op != nil {
 			cs.startSync(op)
 		}
