@@ -163,7 +163,7 @@ func (in *WASMInterpreter) useGas(amount int64) {
 	in.gasAccounting(uint64(amount))
 }
 
-func (in *WASMInterpreter) getAddress(resultOffset int32) (*wasmtime.Trap, error) {
+func (in *WASMInterpreter) getAddress(resultOffset int32) (error, error) {
 	_, err := in.vm.store.ConsumeFuel(100)
 	if err != nil {
 		in.vm.panicErr = err

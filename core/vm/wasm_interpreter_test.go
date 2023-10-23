@@ -2,6 +2,7 @@ package vm
 
 import (
 	"math/big"
+	"strings"
 	"testing"
 
 	"github.com/bytecodealliance/wasmtime-go"
@@ -103,7 +104,7 @@ func TestGetAddressContract(t *testing.T) {
 	})
 
 	_, err = wasmInterpreter.Run(contractOutOfGas, nil, false)
-	if err != nil {
+	if !strings.Contains(err.Error(), "out of gas") {
 		t.Errorf("error: %v", err)
 	}
 
@@ -138,9 +139,7 @@ func TestFuelConsumption(t *testing.T) {
 	})
 
 	_, err := wasmInterpreter.Run(contract, nil, false)
-	if err != nil {
-
-	} else {
-		t.Errorf("expected an error due to fuel exhaustion, got nil")
+	if !strings.Contains(err.Error(), "all fuel consumed by WebAssembly") {
+		t.Errorf("error: %v", err)
 	}
 }
