@@ -2,6 +2,8 @@
 
 # 0.1.1 - 2023-10-19
 
+* Added git hook to disable external loggers (logrus, log, etc) before committing
+* Added git hook to ensure CHANGELOG update before pushing to remote
 * Added libp2p gossipsub protocol
 * Added a chat app for testing libp2p gossipsub
 * Added a routed host wrapper (`rnode := routedhost.Wrap(node, p2pNode.dht)`) to improve node discoverability

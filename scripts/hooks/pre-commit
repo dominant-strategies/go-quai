@@ -1,0 +1,9 @@
+#!/bin/sh
+
+# Check for unwanted log imports
+if git diff --cached --name-only | xargs grep -E 'logrus|"[^"]*log"$'| grep -v "github.com/dominant-strategies/go-quai/log" ; then
+    echo "ERROR: Detected unwanted logging library usage. Use github.com/dominant-strategies/go-quai/log instead."
+    exit 1
+fi
+
+exit 0
