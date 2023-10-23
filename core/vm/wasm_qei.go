@@ -80,12 +80,24 @@ func (vm *WasmVM) LinkHost(in *WASMInterpreter) (err error) {
 	vm.store = wasmtime.NewStore(vm.engine)
 	vm.linker = wasmtime.NewLinker(vm.engine)
 
+	// Create a new memory instance.
+	memoryType := wasmtime.NewMemoryType(1, true, 300)
+	vm.memory, err = wasmtime.NewMemory(vm.store, memoryType)
+	if err != nil {
+		return err
+	}
+
 	err = vm.linker.DefineFunc(vm.store, "", "logHelloWorld", logHelloWorld)
 	if err != nil {
 		return err
 	}
 
 	err = vm.linker.DefineFunc(vm.store, "", "useGas", in.useGas)
+	if err != nil {
+		return err
+	}
+
+	err = vm.linker.DefineFunc(vm.store, "", "getAddress", in.getAddress)
 	if err != nil {
 		return err
 	}
@@ -149,4 +161,15 @@ func (in *WASMInterpreter) gasAccounting(cost uint64) {
 
 func (in *WASMInterpreter) useGas(amount int64) {
 	in.gasAccounting(uint64(amount))
+}
+
+func (in *WASMInterpreter) getAddress(resultOffset int32) {
+	//in.gasAccounting(10)
+	fmt.Println("🤖: getAddress, addr", in.Contract.CodeAddr)
+	fmt.Println("🤖: getAddress, offset", resultOffset)
+	addr := []byte(in.Contract.CodeAddr.String())
+
+	// Assume vm is a field in your WASMInterpreter struct referring to your WasmVM instance
+	memoryData := in.vm.memory.UnsafeData(in.vm.store)
+	copy(memoryData[resultOffset:], addr)
 }
