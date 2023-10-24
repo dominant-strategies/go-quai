@@ -19,6 +19,7 @@ package eth
 import (
 	"math/big"
 	"math/rand"
+	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
@@ -198,8 +199,15 @@ func (cs *chainSyncer) loop() {
 	defer cs.handler.downloader.Terminate()
 
 	for {
-		if op := cs.nextSyncOp(); op != nil {
-			cs.startSync(op)
+		// Checking whether to sync doesn't need to happen so aggressively,
+		// Adding a second of sleep, because Prime chain which is affected by
+		// this change has a block time of 10 Millisecond
+		time.Sleep(10 * time.Millisecond)
+
+		if nodeCtx == common.PRIME_CTX {
+			if op := cs.nextSyncOp(); op != nil {
+				cs.startSync(op)
+			}
 		}
 		select {
 		case <-cs.peerEventCh:
