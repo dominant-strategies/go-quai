@@ -343,12 +343,17 @@ func (h *handler) Start(maxPeers int) {
 	h.minedBlockSub = h.eventMux.Subscribe(core.NewMinedBlockEvent{})
 	go h.minedBroadcastLoop()
 
-	// start sync handlers
 	h.wg.Add(1)
-	go h.chainSync.loop()
-	if nodeCtx == common.ZONE_CTX && h.core.ProcessingState() {
+	go h.chainSync.startFetcher()
+
+	if nodeCtx == common.ZONE_CTX {
+		// start sync handlers
 		h.wg.Add(1)
-		go h.txsyncLoop64() //Legacy initial tx echange, drop with eth/64.
+		go h.chainSync.loop()
+		if h.core.ProcessingState() {
+			h.wg.Add(1)
+			go h.txsyncLoop64() //Legacy initial tx echange, drop with eth/64.
+		}
 	}
 }
 

@@ -184,22 +184,29 @@ func (cs *chainSyncer) handlePeerEvent(peer *eth.Peer) bool {
 	}
 }
 
-// loop runs in its own goroutine and launches the sync when necessary.
-func (cs *chainSyncer) loop() {
+// startFetcher owns the blockFetcher and txFetcher
+func (cs *chainSyncer) startFetcher() {
 	nodeCtx := common.NodeLocation.Context()
-	defer cs.handler.wg.Done()
-
 	cs.handler.blockFetcher.Start()
 	if nodeCtx == common.ZONE_CTX && cs.handler.core.ProcessingState() {
 		cs.handler.txFetcher.Start()
 		defer cs.handler.txFetcher.Stop()
 	}
+	defer cs.handler.wg.Done()
 	defer cs.handler.blockFetcher.Stop()
+}
+
+// loop runs in its own goroutine and launches the sync when necessary.
+func (cs *chainSyncer) loop() {
+	nodeCtx := common.NodeLocation.Context()
+	defer cs.handler.wg.Done()
 	defer cs.handler.downloader.Terminate()
 
 	for {
-		if op := cs.nextSyncOp(); op != nil {
-			cs.startSync(op)
+		if nodeCtx == common.PRIME_CTX {
+			if op := cs.nextSyncOp(); op != nil {
+				cs.startSync(op)
+			}
 		}
 		select {
 		case <-cs.peerEventCh:
