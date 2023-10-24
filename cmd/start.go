@@ -6,11 +6,11 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/dominant-strategies/go-quai/consensus/quai"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/dominant-strategies/go-quai/client"
 	p2pnode "github.com/dominant-strategies/go-quai/p2p/node"
 )
 
@@ -36,7 +36,7 @@ func init() {
 }
 
 func runStart(cmd *cobra.Command, args []string) error {
-	log.Infof("Starting go-quai daemon")
+	log.Infof("Starting go-quai")
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -46,24 +46,23 @@ func runStart(cmd *cobra.Command, args []string) error {
 		log.Fatalf("error creating node: %s", err)
 	}
 
-	// Start discovery services
+	// create instance of consensus backend
+	consensus, err := quai.NewQuaiBackend()
+	if err != nil {
+		log.Fatalf("error creating consensus backend: %s", err)
+	}
+
+	// start the consensus backend
+	consensus.SetP2PClient(node)
+	if err := consensus.Start(); err != nil {
+		log.Fatalf("error starting consensus backend: %s", err)
+	}
+
+	// start the p2p node
+	node.SetConsensusBackend(consensus)
 	if err := node.Start(); err != nil {
 		log.Fatalf("error starting node: %s", err)
 	}
-
-	// Start listening for events
-	go node.ListenForEvents()
-
-	client := client.NewClient(ctx, node)
-
-	// start the http server
-	go func() {
-		httpPort := viper.GetString("http-port")
-		if err := client.StartServer(httpPort); err != nil {
-			log.Fatalf("error starting http server: %s", err)
-			os.Exit(1)
-		}
-	}()
 
 	// wait for a SIGINT or SIGTERM signal
 	ch := make(chan os.Signal, 1)

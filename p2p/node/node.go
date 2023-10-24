@@ -4,17 +4,19 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/dominant-strategies/go-quai/log"
-	"github.com/dominant-strategies/go-quai/p2p/discovery"
-	quaips "github.com/dominant-strategies/go-quai/p2p/pubsub"
-	routedhost "github.com/libp2p/go-libp2p/p2p/host/routed"
-
 	"github.com/libp2p/go-libp2p"
 	kadht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/host"
-
+	routedhost "github.com/libp2p/go-libp2p/p2p/host/routed"
 	multiaddr "github.com/multiformats/go-multiaddr"
 	"github.com/spf13/viper"
+
+	"github.com/dominant-strategies/go-quai/consensus"
+	"github.com/dominant-strategies/go-quai/consensus/types"
+	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/p2p"
+	"github.com/dominant-strategies/go-quai/p2p/discovery"
+	quaips "github.com/dominant-strategies/go-quai/p2p/pubsub"
 )
 
 // Name of the file that contains the Docker's host IP
@@ -27,6 +29,9 @@ type P2PNode struct {
 	mDNS discovery.MDNSDiscovery
 	ctx  context.Context
 	ps   quaips.PSManager
+
+	// Backend for handling consensus data
+	consensus consensus.ConsensusBackend
 }
 
 // Returns a new libp2p node.
@@ -112,6 +117,30 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 	}
 
 	return p2pNode, nil
+}
+
+func (p *P2PNode) SetConsensusBackend(be consensus.ConsensusBackend) {
+	p.consensus = be
+}
+
+func (p *P2PNode) BroadcastBlock(block types.Block) error {
+	panic("todo")
+}
+
+func (p *P2PNode) BroadcastTransaction(tx types.Transaction) error {
+	panic("todo")
+}
+
+func (p *P2PNode) RequestBlock(hash types.Hash, loc types.Location) chan types.Block {
+	panic("todo")
+}
+
+func (p *P2PNode) RequestTransaction(hash types.Hash, loc types.Location) chan types.Transaction {
+	panic("todo")
+}
+
+func (p *P2PNode) ReportBadPeer(peer p2p.PeerID) {
+	panic("todo")
 }
 
 // Initializes the DHT for the libp2p node in server mode.

@@ -37,6 +37,9 @@ func (p *P2PNode) Start() error {
 		return errors.Wrap(err, "error starting mDNS")
 	}
 
+	// Start the event handler
+	go p.eventLoop()
+
 	return nil
 }
 
@@ -83,10 +86,8 @@ func (p *P2PNode) Shutdown() error {
 	}
 }
 
-// subscribes to the event bus to listen for specific events
-// and logs them to the console.
-// TODO: refactor this to use a dynamic list of events to subscribe to
-func (p *P2PNode) ListenForEvents() {
+// subscribes to the event bus and handles libp2p events as they're received
+func (p *P2PNode) eventLoop() {
 	subAddrUpdated, err := p.EventBus().Subscribe(new(event.EvtLocalAddressesUpdated))
 	if err != nil {
 		log.Fatalf("Failed to subscribe to address change events: %s", err)

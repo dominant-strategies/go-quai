@@ -49,13 +49,10 @@ func runChat(cmd *cobra.Command, args []string) {
 		log.Fatalf("error creating node: %s", err)
 	}
 
-	// Start discovery services
+	// Start the node
 	if err := node.Start(); err != nil {
 		log.Fatalf("error starting node: %s", err)
 	}
-
-	// subscribe to events
-	go node.ListenForEvents()
 
 	// join the chat room
 	cr, err := chatroom.JoinChatRoom(ctx, node, node.ID(), nickname, room)

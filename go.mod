@@ -2,7 +2,11 @@ module github.com/dominant-strategies/go-quai
 
 go 1.21.1
 
-require github.com/sirupsen/logrus v1.9.3
+require (
+	github.com/hashicorp/golang-lru v0.5.4
+	github.com/multiformats/go-multiaddr v0.11.0
+	github.com/sirupsen/logrus v1.9.3
+)
 
 require (
 	github.com/benbjohnson/clock v1.3.5 // indirect
@@ -31,7 +35,6 @@ require (
 	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
-	github.com/hashicorp/golang-lru v0.5.4 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.5 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/huin/goupnp v1.2.0 // indirect
@@ -74,7 +77,6 @@ require (
 	github.com/mr-tron/base58 v1.2.0 // indirect
 	github.com/multiformats/go-base32 v0.1.0 // indirect
 	github.com/multiformats/go-base36 v0.2.0 // indirect
-	github.com/multiformats/go-multiaddr v0.11.0 // indirect
 	github.com/multiformats/go-multiaddr-dns v0.3.1 // indirect
 	github.com/multiformats/go-multiaddr-fmt v0.1.0 // indirect
 	github.com/multiformats/go-multibase v0.2.0 // indirect
@@ -110,7 +112,6 @@ require (
 	go.opentelemetry.io/otel v1.16.0 // indirect
 	go.opentelemetry.io/otel/metric v1.16.0 // indirect
 	go.opentelemetry.io/otel/trace v1.16.0 // indirect
-	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/dig v1.17.0 // indirect
 	go.uber.org/fx v1.20.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
@@ -140,7 +141,7 @@ require (
 	github.com/natefinch/lumberjack v2.0.0+incompatible
 	github.com/pkg/errors v0.9.1
 	github.com/rivo/tview v0.0.0-20231007183732-6c844bdc5f7a
-	github.com/spf13/cobra v1.7.0 // indirect
+	github.com/spf13/cobra v1.7.0
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/spf13/viper v1.17.0
 	golang.org/x/sys v0.12.0 // indirect
