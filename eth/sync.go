@@ -198,8 +198,10 @@ func (cs *chainSyncer) loop() {
 	defer cs.handler.downloader.Terminate()
 
 	for {
-		if op := cs.nextSyncOp(); op != nil {
-			cs.startSync(op)
+		if nodeCtx == common.PRIME_CTX {
+			if op := cs.nextSyncOp(); op != nil {
+				cs.startSync(op)
+			}
 		}
 		select {
 		case <-cs.peerEventCh:
