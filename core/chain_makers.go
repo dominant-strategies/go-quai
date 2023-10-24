@@ -258,19 +258,12 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 		time = parent.Time() + 10 // block time is fixed at 10 seconds
 	}
 
-	// Temporary header values just to calc difficulty
-	diffheader := types.EmptyHeader()
-	diffheader.SetDifficulty(parent.Difficulty())
-	diffheader.SetNumber(parent.Number())
-	diffheader.SetTime(time - 10)
-	diffheader.SetUncleHash(parent.UncleHash())
-
 	// Make new header
 	header := types.EmptyHeader()
 	header.SetRoot(state.IntermediateRoot(true))
 	header.SetParentHash(parent.Hash())
 	header.SetCoinbase(parent.Coinbase())
-	header.SetDifficulty(engine.CalcDifficulty(chain, diffheader))
+	header.SetDifficulty(engine.CalcDifficulty(chain, parent.Header()))
 	header.SetGasLimit(parent.GasLimit())
 	header.SetNumber(new(big.Int).Add(parent.Number(), common.Big1))
 	header.SetTime(time)

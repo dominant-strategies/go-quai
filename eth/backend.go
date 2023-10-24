@@ -26,6 +26,7 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
+	"github.com/dominant-strategies/go-quai/consensus/progpow"
 	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/core/bloombits"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
@@ -183,7 +184,11 @@ func New(stack *node.Node, config *ethconfig.Config) (*Quai, error) {
 		config.TxPool.Journal = stack.ResolvePath(config.TxPool.Journal)
 	}
 
-	eth.core, err = core.NewCore(chainDb, &config.Miner, eth.isLocalBlock, &config.TxPool, &config.TxLookupLimit, chainConfig, eth.config.SlicesRunning, eth.config.DomUrl, eth.config.SubUrls, eth.engine, cacheConfig, vmConfig, config.Genesis)
+	if eth.config.Progpow.PowMode == progpow.ModeFake{
+		eth.core, err = core.NewFakeCore(chainDb, &config.Miner, eth.isLocalBlock, &config.TxPool, &config.TxLookupLimit, chainConfig, eth.config.SlicesRunning, eth.config.DomUrl, eth.config.SubUrls, eth.engine, cacheConfig, vmConfig, config.Genesis)
+	} else {
+		eth.core, err = core.NewCore(chainDb, &config.Miner, eth.isLocalBlock, &config.TxPool, &config.TxLookupLimit, chainConfig, eth.config.SlicesRunning, eth.config.DomUrl, eth.config.SubUrls, eth.engine, cacheConfig, vmConfig, config.Genesis)
+	}
 	if err != nil {
 		return nil, err
 	}

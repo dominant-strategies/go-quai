@@ -423,7 +423,8 @@ func (progpow *Progpow) verifySeal(header *types.Header) (common.Hash, error) {
 		if progpow.fakeFail == header.Number().Uint64() {
 			return common.Hash{}, errInvalidPoW
 		}
-		return common.Hash{}, nil
+			//if hash is empty here, it fails because of div / 0 on poem.go: IntrinsicLogS()
+		return common.HexToHash("0xf5d8c9fb1a61e47c6dd4b5d0a1a0d6c0f7bce9cfae0e2a9d8a9c8d6d6f8f4f7"), nil
 	}
 	// If we're running a shared PoW, delegate verification to it
 	if progpow.shared != nil {
