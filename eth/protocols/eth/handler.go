@@ -24,6 +24,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/metrics"
 	"github.com/dominant-strategies/go-quai/p2p"
 	"github.com/dominant-strategies/go-quai/p2p/enode"
@@ -136,6 +137,10 @@ type NodeInfo struct {
 // nodeInfo retrieves some `quai` protocol metadata about the running host node.
 func nodeInfo(chain *core.Core, network uint64) *NodeInfo {
 	head := chain.CurrentBlock()
+	if head == nil {
+		log.Warn("chain.CurrentBlock() returned nil")
+		return nil
+	}
 	return &NodeInfo{
 		Network: network,
 		Entropy: chain.CurrentLogEntropy(),
