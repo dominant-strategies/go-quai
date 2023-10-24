@@ -35,6 +35,7 @@ import (
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/eth"
 	"github.com/dominant-strategies/go-quai/eth/ethconfig"
+	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/node"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rpc"
@@ -191,7 +192,8 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 	// Set location to ZONE_CTX
 	common.NodeLocation = common.Location{0, 0}
 	// Generate test chain.
-	genesis, blocks := generateTestChain()
+	db := rawdb.NewMemoryDatabase()
+	genesis, blocks := generateTestChain(db)
 	// Create node
 	n, err := node.New(&node.Config{})
 	if err != nil {
@@ -199,10 +201,12 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 	}
 	// Create quai Service
 	config := &ethconfig.Config{Genesis: genesis}
+	config.Zone = 0
 	config.Miner.ExtraData = []byte("test miner")
 	config.Progpow.PowMode = progpow.ModeFake
 	config.DomUrl = "http://localhost:8080"
-	ethservice, err := eth.New(n, config)
+
+	ethservice, err := eth.NewFake(n, config, db)
 	if err != nil {
 		t.Fatalf("can't create new quai service: %v", err)
 	}
@@ -217,8 +221,7 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 	return n, blocks
 }
 
-func generateTestChain() (*core.Genesis, []*types.Block) {
-	db := rawdb.NewMemoryDatabase()
+func generateTestChain(db ethdb.Database) (*core.Genesis, []*types.Block) {
 	config := params.TestChainConfig
 	config.Location = common.Location{0, 0}
 

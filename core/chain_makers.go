@@ -23,11 +23,13 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/consensus/misc"
+	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/params"
+	"github.com/dominant-strategies/go-quai/trie"
 )
 
 // BlockGen creates blocks for testing.
@@ -215,7 +217,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	chainreader := &fakeChainReader{config: config}
 	genblock := func(i int, parent *types.Block, statedb *state.StateDB) (*types.Block, types.Receipts) {
 		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: config, engine: engine}
-		b.header = makeHeader(chainreader, parent, statedb, b.engine)
+		b.header = makeHeader(chainreader, parent, statedb, b.engine, config.GenesisHash)
 
 		// Execute any user modifications to the block
 		if gen != nil {
@@ -243,6 +245,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			panic(err)
 		}
 		block, receipt := genblock(i, parent, statedb)
+		rawdb.WriteBlock(db, block)
 		blocks[i] = block
 		receipts[i] = receipt
 		parent = block
@@ -250,7 +253,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	return blocks, receipts
 }
 
-func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.StateDB, engine consensus.Engine) *types.Header {
+func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.StateDB, engine consensus.Engine, genesisHash common.Hash) *types.Header {
 	var time uint64
 	if parent.Time() == 0 {
 		time = 10
@@ -268,6 +271,13 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 	header.SetNumber(new(big.Int).Add(parent.Number(), common.Big1))
 	header.SetTime(time)
 	header.SetBaseFee(misc.CalcBaseFee(chain.Config(), parent.Header()))
+
+	//new array receive its first value as genesisHash
+	manifest := types.BlockManifest{genesisHash}
+	header.SetManifestHash(types.DeriveSha(manifest, trie.NewStackTrie(nil)))
+
+	header.SetLocation(common.Location{0,0})
+	
 	return header
 }
 
