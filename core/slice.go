@@ -1430,6 +1430,7 @@ func (sl *Slice) cleanCacheAndDatabaseTillBlock(hash common.Hash) {
 	// Set the current header
 	currentHeader = sl.hc.GetHeaderByHash(hash)
 	sl.hc.currentHeader.Store(currentHeader)
+	rawdb.WriteHeadBlockHash(sl.sliceDb, currentHeader.Hash())
 
 	// Recover the snaps
 	if nodeCtx == common.ZONE_CTX && sl.ProcessingState() {
