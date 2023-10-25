@@ -73,6 +73,9 @@ var (
 
 	// ErrPendingHeaderNotInCache is returned when a coord gives an update but the slice has not yet created the referenced ph
 	ErrPendingHeaderNotInCache = errors.New("no pending header found in cache")
+
+	// ErrBlockHashChanged is returned when the block is mutated in the Append
+	ErrBlockHashChanged = errors.New("rejecting the block because block hash changed during append")
 )
 
 // List of evm-call-message pre-checking errors. All state transition messages will
