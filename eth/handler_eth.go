@@ -199,17 +199,17 @@ func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block, en
 	// If block if its in manifest cache, relay is set to true, set relay to false and handle
 	// !atFray checked because when "synced" we want to be able to check entropy against later window
 	log.Debug("Handle Block", "requestBlock", requestBlock, "atFray", atFray, "relay", relay, "beyondSync", beyondSyncPoint)
-	if relay && !atFray {
-		if !beyondSyncPoint {
-			if !requestBlock {
-				// drop peer
-				if common.NodeLocation.Context() != common.PRIME_CTX {
-					log.Info("Peer broadcasting block not in requestQueue or beyond sync target, dropping peer")
+	if common.NodeLocation.Context() == common.ZONE_CTX {
+		if relay && !atFray {
+			if !beyondSyncPoint {
+				if !requestBlock {
+					// drop peer
+					log.Info("Peer broadcasting block not in requestQueue or beyond sync target, dropping peer", "Hash", block.Hash())
 					h.downloader.DropPeer(peer)
+					return nil
+				} else {
+					relay = false
 				}
-				return nil
-			} else {
-				relay = false
 			}
 		}
 	}
