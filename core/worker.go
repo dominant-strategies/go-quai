@@ -512,13 +512,13 @@ func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.He
 	w.current = work
 
 	// Create a local environment copy, avoid the data race with snapshot state.
-	block, err = w.FinalizeAssemble(w.hc, work.header, block, work.state, work.txs, work.unclelist(), work.etxs, work.subManifest, work.receipts)
+	newBlock, err := w.FinalizeAssemble(w.hc, work.header, block, work.state, work.txs, work.unclelist(), work.etxs, work.subManifest, work.receipts)
 	if err != nil {
 		return nil, err
 	}
 
-	work.header = block.Header()
-	w.printPendingHeaderInfo(work, block, start)
+	work.header = newBlock.Header()
+	w.printPendingHeaderInfo(work, newBlock, start)
 
 	return work.header, nil
 }
