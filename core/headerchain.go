@@ -331,7 +331,7 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 
 	//Find a common header
 	commonHeader := hc.findCommonAncestor(head)
-	newHeader := head
+	newHeader := types.CopyHeader(head)
 
 	// Delete each header and rollback state processor until common header
 	// Accumulate the hash slice stack
