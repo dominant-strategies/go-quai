@@ -188,32 +188,6 @@ func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block, en
 		return nil
 	}
 
-	syncEntropy, threshold := h.core.SyncTargetEntropy()
-	window := new(big.Int).Mul(threshold, big.NewInt(5))
-	syncThreshold := new(big.Int).Add(block.ParentEntropy(), window)
-	requestBlock := h.subSyncQueue.Contains(block.Hash())
-	beyondSyncPoint := syncEntropy.Cmp(syncThreshold) < 0
-	atFray := syncEntropy.Cmp(h.core.CurrentHeader().ParentEntropy()) < 0
-
-	// If block is greater than sync entropy, or its manifest cache, handle it
-	// If block if its in manifest cache, relay is set to true, set relay to false and handle
-	// !atFray checked because when "synced" we want to be able to check entropy against later window
-	log.Debug("Handle Block", "requestBlock", requestBlock, "atFray", atFray, "relay", relay, "beyondSync", beyondSyncPoint)
-	if common.NodeLocation.Context() == common.ZONE_CTX {
-		if relay && !atFray {
-			if !beyondSyncPoint {
-				if !requestBlock {
-					// drop peer
-					log.Info("Peer broadcasting block not in requestQueue or beyond sync target, dropping peer", "Hash", block.Hash())
-					h.downloader.DropPeer(peer)
-					return nil
-				} else {
-					relay = false
-				}
-			}
-		}
-	}
-
 	h.blockFetcher.ImportBlocks(peer.ID(), block, relay)
 
 	if block != nil && !h.broadcastCache.Contains(block.Hash()) {
