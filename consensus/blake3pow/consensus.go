@@ -350,7 +350,7 @@ func (blake3pow *Blake3pow) CalcDifficulty(chain consensus.ChainHeaderReader, pa
 	}
 
 	parentOfParent := chain.GetHeaderByHash(parent.ParentHash())
-	if parentOfParent.Hash() == chain.Config().GenesisHash {
+	if parentOfParent == nil || parentOfParent.Hash() == chain.Config().GenesisHash {
 		return parent.Difficulty()
 	}
 

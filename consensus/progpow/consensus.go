@@ -348,7 +348,7 @@ func (progpow *Progpow) CalcDifficulty(chain consensus.ChainHeaderReader, parent
 		return parent.Difficulty()
 	}
 	parentOfParent := chain.GetHeaderByHash(parent.ParentHash())
-	if parentOfParent.Hash() == chain.Config().GenesisHash {
+	if parentOfParent == nil || parentOfParent.Hash() == chain.Config().GenesisHash {
 		return parent.Difficulty()
 	}
 
