@@ -617,7 +617,7 @@ func (p *StateProcessor) ContractCodeWithPrefix(hash common.Hash) ([]byte, error
 //     storing trash persistently
 func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *state.StateDB, checkLive bool) (statedb *state.StateDB, err error) {
 	var (
-		current  *types.Block
+		current  *types.Header
 		database state.Database
 		report   = true
 		origin   = block.NumberU64()
@@ -630,14 +630,14 @@ func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *s
 		}
 	}
 
-	var newHeads []*types.Block
+	var newHeads []*types.Header
 	if base != nil {
 		// The optional base statedb is given, mark the start point as parent block
 		statedb, database, report = base, base.Database(), false
-		current = p.hc.GetBlockOrCandidate(block.ParentHash(), block.NumberU64()-1)
+		current = p.hc.GetHeaderOrCandidate(block.ParentHash(), block.NumberU64()-1)
 	} else {
 		// Otherwise try to reexec blocks until we find a state or reach our limit
-		current = block
+		current = types.CopyHeader(block.Header())
 
 		// Create an ephemeral trie.Database for isolating the live one. Otherwise
 		// the internal junks created by tracing will be persisted into the disk.
@@ -652,17 +652,17 @@ func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *s
 				return statedb, nil
 			}
 		}
-		newHeads = append(newHeads, block)
+		newHeads = append(newHeads, current)
 		// Database does not have the state for the given block, try to regenerate
 		for i := uint64(0); i < reexec; i++ {
 			if current.NumberU64() == 0 {
 				return nil, errors.New("genesis state is missing")
 			}
-			parent := p.hc.GetBlockOrCandidate(current.ParentHash(), current.NumberU64()-1)
+			parent := p.hc.GetHeaderOrCandidate(current.ParentHash(), current.NumberU64()-1)
 			if parent == nil {
 				return nil, fmt.Errorf("missing block %v %d", current.ParentHash(), current.NumberU64()-1)
 			}
-			current = parent
+			current = types.CopyHeader(parent)
 
 			statedb, err = state.New(current.Root(), database, nil)
 			if err == nil {
@@ -700,7 +700,11 @@ func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *s
 		inboundEtxs := rawdb.ReadInboundEtxs(p.hc.bc.db, current.Hash())
 		etxSet.Update(inboundEtxs, current.NumberU64())
 
-		_, _, _, _, err := p.Process(current, etxSet)
+		currentBlock := rawdb.ReadBlock(p.hc.bc.db, current.Hash(), current.NumberU64())
+		if currentBlock == nil {
+			return nil, errors.New("detached block found trying to regenerate state")
+		}
+		_, _, _, _, err := p.Process(currentBlock, etxSet)
 		if err != nil {
 			return nil, fmt.Errorf("processing block %d failed: %v", current.NumberU64(), err)
 		}
