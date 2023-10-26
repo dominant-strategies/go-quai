@@ -141,8 +141,6 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLooku
 func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, bool, bool, error) {
 	start := time.Now()
 
-	blockHash := header.Hash()
-
 	if header.Hash() == sl.config.GenesisHash {
 		return nil, false, false, nil
 	}
@@ -318,15 +316,6 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		time9 = common.PrettyDuration(time.Since(start))
 
 	}
-
-	// If block hash at the beginning of the append is not the same as before
-	// modifying the phCache and Batch write we need to reject the block. This
-	// check can be removed after fixing the block hash mutation bug observed in
-	// testnet
-	if block.Hash() != blockHash {
-		return nil, false, false, ErrBlockHashChanged
-	}
-
 	sl.updatePhCache(pendingHeaderWithTermini, true, nil, subReorg, common.NodeLocation)
 
 	var updateDom bool
