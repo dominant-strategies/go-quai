@@ -202,7 +202,7 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 	var (
 		receipts    types.Receipts
 		usedGas     = new(uint64)
-		header      = block.Header()
+		header      = types.CopyHeader(block.Header())
 		blockHash   = block.Hash()
 		blockNumber = block.Number()
 		allLogs     []*types.Log
@@ -389,6 +389,8 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 	// Update the set of inbound ETXs which may be mined. This adds new inbound
 	// ETXs to the set and removes expired ETXs so they are no longer available
 	start := time.Now()
+	blockHash := block.Hash()
+	header := types.CopyHeader(block.Header())
 	etxSet := rawdb.ReadEtxSet(p.hc.bc.db, block.ParentHash(), block.NumberU64()-1)
 	time1 := common.PrettyDuration(time.Since(start))
 	if etxSet == nil {
@@ -400,6 +402,9 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 	receipts, logs, statedb, usedGas, err := p.Process(block, etxSet)
 	if err != nil {
 		return nil, err
+	}
+	if block.Hash() != blockHash {
+		log.Warn("Block hash changed after Processing the block", "old hash", blockHash, "new hash", block.Hash())
 	}
 	time3 := common.PrettyDuration(time.Since(start))
 	err = p.validator.ValidateState(block, statedb, receipts, usedGas)
@@ -481,7 +486,7 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 			time11 = common.PrettyDuration(time.Since(start))
 		}
 	}
-	rawdb.WriteEtxSet(batch, block.Hash(), block.NumberU64(), etxSet)
+	rawdb.WriteEtxSet(batch, header.Hash(), header.NumberU64(), etxSet)
 	time12 := common.PrettyDuration(time.Since(start))
 
 	log.Debug("times during state processor apply:", "t1:", time1, "t2:", time2, "t3:", time3, "t4:", time4, "t4.5:", time4_5, "t5:", time5, "t6:", time6, "t7:", time7, "t8:", time8, "t9:", time9, "t10:", time10, "t11:", time11, "t12:", time12)

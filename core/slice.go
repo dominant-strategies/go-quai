@@ -887,7 +887,11 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 				if block != nil {
 					// setting the current state will help speed the process of append
 					// after mining this block since the state will already be computed
-					sl.hc.SetCurrentState(block.Header())
+					err := sl.hc.SetCurrentState(block.Header())
+					if err != nil {
+						log.Error("Error setting current state", "err", err, "Hash", block.Hash())
+						return nil
+					}
 					log.Info("Choosing phHeader pickPhHead:", "NumberArray:", combinedPendingHeader.NumberArray(), "Number:", combinedPendingHeader.Number(), "ParentHash:", combinedPendingHeader.ParentHash(), "Terminus:", localPendingHeader.Termini().DomTerminus())
 					sl.WriteBestPhKey(localPendingHeader.Termini().DomTerminus())
 				} else {
@@ -898,7 +902,11 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 				if block != nil {
 					// setting the current state will help speed the process of append
 					// after mining this block since the state will already be computed
-					sl.hc.SetCurrentState(block.Header())
+					err := sl.hc.SetCurrentState(block.Header())
+					if err != nil {
+						log.Error("Error setting current state", "err", err, "Hash", block.Hash())
+						return nil
+					}
 					newPendingHeader, err := sl.generateSlicePendingHeader(block, localPendingHeader.Termini(), combinedPendingHeader, true, true, false)
 					if err != nil {
 						log.Error("Error generating slice pending header", "err", err)
