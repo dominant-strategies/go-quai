@@ -9,14 +9,13 @@ import (
 	"github.com/dominant-strategies/go-quai/consensus/quai"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 
 	p2pnode "github.com/dominant-strategies/go-quai/p2p/node"
 )
 
 var startCmd = &cobra.Command{
 	Use:   "start",
-	Short: "starts the go-quai daemon",
+	Short: "starts a go-quai p2p node",
 	Long: `starts the go-quai daemon. The daemon will start a libp2p node and a http API.
 By default the node will bootstrap to the public bootstrap nodes and port 4001. 
 To bootstrap to a private node, use the --bootstrap flag.`,
@@ -28,11 +27,6 @@ To bootstrap to a private node, use the --bootstrap flag.`,
 
 func init() {
 	rootCmd.AddCommand(startCmd)
-
-	// configure flag for http port
-	startCmd.Flags().StringP("http-port", "t", "8080", "http port to listen on")
-	viper.BindPFlag("http-port", startCmd.Flags().Lookup("http-port"))
-
 }
 
 func runStart(cmd *cobra.Command, args []string) error {
