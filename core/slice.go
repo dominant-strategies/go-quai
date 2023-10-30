@@ -38,6 +38,7 @@ const (
 	c_asyncPhUpdateChanSize           = 10
 	c_phCacheSize                     = 500
 	c_pEtxRetryThreshold              = 100 // Number of pEtxNotFound return on a dom block before asking for pEtx/Rollup from sub
+	c_currentStateComputeWindow       = 20  // Number of blocks around the current header the state generation is always done
 )
 
 type pEtxRetry struct {
@@ -300,7 +301,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 
 		setHead = sl.poem(sl.engine.TotalLogS(block.Header()), sl.engine.TotalLogS(sl.hc.CurrentHeader()))
 
-		if subReorg {
+		if subReorg || (sl.hc.CurrentHeader().NumberU64() < block.NumberU64()+c_currentStateComputeWindow) {
 			err := sl.hc.SetCurrentState(block.Header())
 			if err != nil {
 				log.Error("Error setting current state", "err", err, "Hash", block.Hash())
