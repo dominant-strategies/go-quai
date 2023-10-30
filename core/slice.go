@@ -831,10 +831,10 @@ func (sl *Slice) computePendingHeader(localPendingHeaderWithTermini types.Pendin
 	var cachedPendingHeaderWithTermini types.PendingHeader
 	hash := localPendingHeaderWithTermini.Termini().DomTerminus()
 	cachedPendingHeaderWithTermini, exists := sl.readPhCache(hash)
-	log.Debug("computePendingHeader:", "hash:", hash, "pendingHeader:", cachedPendingHeaderWithTermini, "termini:", cachedPendingHeaderWithTermini.Termini)
 	var newPh *types.Header
 
 	if exists {
+		log.Debug("computePendingHeader:", "hash:", hash, "pendingHeader:", cachedPendingHeaderWithTermini, "termini:", cachedPendingHeaderWithTermini.Termini())
 		if domOrigin {
 			newPh = sl.combinePendingHeader(localPendingHeaderWithTermini.Header(), domPendingHeader, nodeCtx, true)
 			return types.NewPendingHeader(types.CopyHeader(newPh), localPendingHeaderWithTermini.Termini())
