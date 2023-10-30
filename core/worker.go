@@ -954,7 +954,7 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 		}
 		// Create a local environment copy, avoid the data race with snapshot state.
 		env := env.copy(w.hc.ProcessingState())
-		parent := w.hc.GetBlockOrCandidate(env.header.ParentHash(), env.header.NumberU64()-1)
+		parent := w.hc.GetBlock(env.header.ParentHash(), env.header.NumberU64()-1)
 		block, err := w.FinalizeAssemble(w.hc, env.header, parent, env.state, env.txs, env.unclelist(), env.etxs, env.subManifest, env.receipts)
 		if err != nil {
 			return err

@@ -740,7 +740,7 @@ func (sl *Slice) GetPendingEtxsRollupFromSub(hash common.Hash, location common.L
 			}
 		}
 	} else if nodeCtx == common.REGION_CTX {
-		block := sl.hc.GetBlockOrCandidateByHash(hash)
+		block := sl.hc.GetBlockByHash(hash)
 		if block != nil {
 			return types.PendingEtxsRollup{Header: block.Header(), Manifest: block.SubManifest()}, nil
 		}
@@ -770,7 +770,7 @@ func (sl *Slice) GetPendingEtxsFromSub(hash common.Hash, location common.Locatio
 			}
 		}
 	}
-	block := sl.hc.GetBlockOrCandidateByHash(hash)
+	block := sl.hc.GetBlockByHash(hash)
 	if block != nil {
 		return types.PendingEtxs{Header: block.Header(), Etxs: block.ExtTransactions()}, nil
 	}
@@ -883,22 +883,10 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 		// Pick the head
 		if subReorg {
 			if (localPendingHeader.Header().Root() != types.EmptyRootHash && nodeCtx == common.ZONE_CTX) || nodeCtx == common.REGION_CTX {
-				block := sl.hc.GetBlockOrCandidateByHash(localPendingHeader.Header().ParentHash())
-				if block != nil {
-					// setting the current state will help speed the process of append
-					// after mining this block since the state will already be computed
-					err := sl.hc.SetCurrentState(block.Header())
-					if err != nil {
-						log.Error("Error setting current state", "err", err, "Hash", block.Hash())
-						return nil
-					}
-					log.Info("Choosing phHeader pickPhHead:", "NumberArray:", combinedPendingHeader.NumberArray(), "Number:", combinedPendingHeader.Number(), "ParentHash:", combinedPendingHeader.ParentHash(), "Terminus:", localPendingHeader.Termini().DomTerminus())
-					sl.WriteBestPhKey(localPendingHeader.Termini().DomTerminus())
-				} else {
-					log.Warn("unable to set the current header after the cord update", "Hash", localPendingHeader.Header().ParentHash())
-				}
+				log.Info("Choosing phHeader pickPhHead:", "NumberArray:", combinedPendingHeader.NumberArray(), "Number:", combinedPendingHeader.Number(), "ParentHash:", combinedPendingHeader.ParentHash(), "Terminus:", localPendingHeader.Termini().DomTerminus())
+				sl.WriteBestPhKey(localPendingHeader.Termini().DomTerminus())
 			} else {
-				block := sl.hc.GetBlockOrCandidateByHash(localPendingHeader.Header().ParentHash())
+				block := sl.hc.GetBlockByHash(localPendingHeader.Header().ParentHash())
 				if block != nil {
 					// setting the current state will help speed the process of append
 					// after mining this block since the state will already be computed
