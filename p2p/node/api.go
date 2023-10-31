@@ -2,14 +2,13 @@ package node
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/pkg/errors"
 
+	"github.com/dominant-strategies/go-quai/config"
 	"github.com/dominant-strategies/go-quai/log"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"github.com/libp2p/go-libp2p/core/event"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/spf13/viper"
 )
@@ -18,14 +17,14 @@ import (
 // DHT is bootstrapped if the node is not running as a bootstrap server.
 // mDNS is started
 func (p *P2PNode) Start() error {
-	server := viper.GetBool("server")
+	server := viper.GetBool(config.BOOTNODE)
 	if server {
 		log.Debugf("starting as a bootstrap server. Bypassing DHT bootstrap")
 	} else {
 		// bootstrap the DHT
 		log.Infof("bootstrapping DHT...")
-		bootstrapPeers := viper.GetStringSlice("bootstrap")
-		log.Debugf("bootstrap peers: %v", bootstrapPeers)
+		bootstrapPeers := viper.GetStringSlice(config.BOOTSTRAP_PEERS)
+		log.Debugf("using bootstrap peers: %v", bootstrapPeers)
 		if err := p.bootstrapDHT(bootstrapPeers...); err != nil {
 			return errors.Wrap(err, "error bootstrapping DHT")
 		}
@@ -83,41 +82,6 @@ func (p *P2PNode) Shutdown() error {
 		return errors.Errorf("errors during shutdown: %v", allErrors)
 	} else {
 		return nil
-	}
-}
-
-// subscribes to the event bus and handles libp2p events as they're received
-func (p *P2PNode) eventLoop() {
-	subAddrUpdated, err := p.EventBus().Subscribe(new(event.EvtLocalAddressesUpdated))
-	if err != nil {
-		log.Fatalf("Failed to subscribe to address change events: %s", err)
-	}
-	defer subAddrUpdated.Close()
-
-	subPeerConnected, err := p.EventBus().Subscribe(new(event.EvtPeerConnectednessChanged))
-	if err != nil {
-		log.Fatalf("Failed to subscribe to peer connectedness events: %s", err)
-	}
-	defer subPeerConnected.Close()
-
-	for {
-		select {
-		case evt := <-subAddrUpdated.Out():
-			if e, ok := evt.(event.EvtLocalAddressesUpdated); ok {
-				for _, addr := range e.Current {
-					fullAddr := fmt.Sprintf("%+v/p2p/%s", addr.Address.String(), p.ID().Pretty())
-					log.Debugf("Advertised Address changed: %s", fullAddr)
-					saveNodeInfo("Advertised address: " + fullAddr)
-				}
-			}
-		case evt := <-subPeerConnected.Out():
-			if e, ok := evt.(event.EvtPeerConnectednessChanged); ok {
-				log.Tracef("Peer %s is now %s", e.Peer.String(), e.Connectedness)
-			}
-		case <-p.ctx.Done():
-			log.Warnf("Context cancel received. Stopping event listener")
-			return
-		}
 	}
 }
 

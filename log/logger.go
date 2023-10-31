@@ -1,14 +1,18 @@
 package log
 
 import (
+	"github.com/adrg/xdg"
 	"github.com/sirupsen/logrus"
 )
 
 const (
 	// default log level
 	defaultLogLevel = "info"
-	// default logfile path
-	defaultLogFilePath = "./nodelogs/go-quai.log"
+
+	// log file name
+	logFileName = "go-quai.log"
+	// default log directory
+	logDir = "nodelogs"
 	// default log file params
 	defaultLogMaxSize    = 100  // maximum file size before rotation, in MB
 	defaultLogMaxBackups = 3    // maximum number of old log files to keep
@@ -16,7 +20,14 @@ const (
 	defaultLogCompress   = true // whether to compress the rotated log files using gzip
 )
 
-var logger Logger
+var (
+	// logger instance used by the application
+	logger Logger
+
+	// TODO: consider refactoring to dinamically read the app name (i.e. "go-quai") ?
+	// default logfile path
+	defaultLogFilePath = xdg.DataHome + "/" + "go-quai" + "/" + logDir + "/" + logFileName
+)
 
 func init() {
 	entry := logrus.NewEntry(logrus.StandardLogger())
@@ -27,6 +38,7 @@ func init() {
 		WithLevel(defaultLogLevel),
 		WithOutput(ToStdOut(), ToLogFile(defaultLogFilePath)),
 	)
+	logger.Infof("Logger started. Writing logs to: %s", defaultLogFilePath)
 }
 
 func ConfigureLogger(opts ...Options) {

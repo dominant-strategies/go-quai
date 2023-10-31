@@ -1,4 +1,13 @@
 
+# 0.1.2 - 2023-10-31
+* Added XDG framework to store configuration files
+* Added `config/defaults.go` to load default configuration values
+* Added `config/constants.go` to store configuration constants
+* Moved viper bindings to pre-run hook
+* Removed unused flags
+* Added cmd flag to save/update config file
+* Added `QUAI_` prefix to environment variables
+* Added function to load configuration using precedence: "defaults"->"config file"->"env vars"
 
 # 0.1.1 - 2023-10-19
 

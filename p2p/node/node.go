@@ -11,6 +11,7 @@ import (
 	multiaddr "github.com/multiformats/go-multiaddr"
 	"github.com/spf13/viper"
 
+	"github.com/dominant-strategies/go-quai/config"
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/consensus/types"
 	"github.com/dominant-strategies/go-quai/log"
@@ -18,9 +19,6 @@ import (
 	"github.com/dominant-strategies/go-quai/p2p/discovery"
 	quaips "github.com/dominant-strategies/go-quai/p2p/pubsub"
 )
-
-// Name of the file that contains the Docker's host IP
-const hostIPFile = "hostip"
 
 // P2PNode represents a libp2p node
 type P2PNode struct {
@@ -39,16 +37,14 @@ type P2PNode struct {
 func NewNode(ctx context.Context) (*P2PNode, error) {
 
 	// get parameters from config, flags or environment variables
-	ipAddr := viper.GetString("ipaddr")
-	port := viper.GetString("port")
+	ipAddr := viper.GetString(config.IP_ADDR)
+	port := viper.GetString(config.PORT)
 	log.Debugf("Creating node with IP address: %s and port: %s", ipAddr, port)
 	p2pNode := &P2PNode{
 		ctx: ctx,
 	}
 
-	privKeyFile := viper.GetString("privkey")
-	log.Debugf("Loading private key from file: %s", privKeyFile)
-	privateKey, err := getPrivKey(privKeyFile)
+	privateKey, err := getPrivKey()
 	if err != nil {
 		log.Fatalf("error getting private key: %s", err)
 	}
@@ -61,17 +57,19 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 	sourceMultiAddr, _ := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%s", ipAddr, port))
 	nodeOptions = append(nodeOptions, libp2p.ListenAddrs(sourceMultiAddr))
 	// check if there is a host IP we can use to replace Docker's internal IP
+	dataDir := viper.GetString(config.DATA_DIR)
+	hostIPFile := dataDir + config.HOST_IP_FILE_NAME
 	hostIP, err := readHostIPFromFile(hostIPFile)
 	if err != nil || hostIP == "" {
-		log.Warnf("error reading host IP from file: %s. Skipping...", err)
+		log.Warnf("error reading (docker) host IP from file: %s. Skipping...", err)
 	} else {
 		log.Infof("found host IP: %s", hostIP)
 		addrsFactory := makeAddrsFactory(hostIP)
 		nodeOptions = append(nodeOptions, libp2p.AddrsFactory(addrsFactory))
 	}
 
-	// get NAT related options
-	nodeOptions = append(nodeOptions, getNATOptions()...)
+	// get p2p related options
+	nodeOptions = append(nodeOptions, loadP2PNodeOptions()...)
 
 	// create the libp2p node
 	node, err := libp2p.New(nodeOptions...)

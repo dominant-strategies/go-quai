@@ -48,6 +48,7 @@ func isLoopbackAddr(addr multiaddr.Multiaddr) bool {
 
 // reads the host IP from a file
 func readHostIPFromFile(filename string) (string, error) {
+	log.Debugf("reading host IP from file: %s", filename)
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return "", err

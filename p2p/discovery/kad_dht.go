@@ -31,11 +31,8 @@ func (k *KadDHT) Initialize(ctx context.Context, node host.Host, opts ...kadht.O
 func (k *KadDHT) Bootstrap(ctx context.Context, node host.Host, bootstrapPeers ...string) error {
 	var bootStrapPeersAddrInfo []peer.AddrInfo
 	if len(bootstrapPeers) == 0 {
-		// if no bootstrap peers are given, bootstrap with the default bootstrap peers
-		log.Warnf("no bootstrap peers given, using default public bootstrap peers")
-		//! ONLY FOR TESTING
-		// TODO: replace with actual bootstrap peers
-		bootStrapPeersAddrInfo = kadht.GetDefaultBootstrapPeerAddrInfos()
+		log.Errorf("no bootstrap peers given")
+		return errors.Errorf("no bootstrap peers given")
 	} else {
 		for _, peerAddr := range bootstrapPeers {
 			peerInfo, err := peer.AddrInfoFromString(peerAddr)
@@ -47,12 +44,8 @@ func (k *KadDHT) Bootstrap(ctx context.Context, node host.Host, bootstrapPeers .
 		}
 	}
 
-	if len(bootStrapPeersAddrInfo) == 0 {
-		return errors.Errorf("no valid bootstrap peers given: %v", bootstrapPeers)
-	}
-
 	for _, peerInfo := range bootStrapPeersAddrInfo {
-		log.Debugf("adding bootstraping node: %s", peerInfo.ID.Pretty())
+		log.Debugf("adding DHT bootstraping node: %s", peerInfo.ID.Pretty())
 		err := node.Connect(ctx, peerInfo)
 		if err != nil {
 			log.Errorf("error connecting to bootstrap node: %s", err)
