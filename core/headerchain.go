@@ -77,6 +77,7 @@ type HeaderChain struct {
 func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetcher getPendingEtxsRollup, pEtxsFetcher getPendingEtxs, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, txLookupLimit *uint64, vmConfig vm.Config, slicesRunning []common.Location) (*HeaderChain, error) {
 	headerCache, _ := lru.New(headerCacheLimit)
 	numberCache, _ := lru.New(numberCacheLimit)
+	nodeCtx := common.NodeLocation.Context()
 
 	hc := &HeaderChain{
 		config:          chainConfig,
@@ -92,8 +93,11 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetch
 	pendingEtxsRollup, _ := lru.New(c_maxPendingEtxsRollup)
 	hc.pendingEtxsRollup = pendingEtxsRollup
 
-	pendingEtxs, _ := lru.New(c_maxPendingEtxBatches)
-	hc.pendingEtxs = pendingEtxs
+	if nodeCtx == common.PRIME_CTX {
+		hc.pendingEtxs, _ = lru.New(c_maxPendingEtxBatchesPrime)
+	} else {
+		hc.pendingEtxs, _ = lru.New(c_maxPendingEtxBatchesRegion)
+	}
 
 	blooms, _ := lru.New(c_maxBloomFilters)
 	hc.blooms = blooms
