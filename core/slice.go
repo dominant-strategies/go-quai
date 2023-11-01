@@ -40,6 +40,7 @@ const (
 	c_phCacheSize                     = 500
 	c_pEtxRetryThreshold              = 100 // Number of pEtxNotFound return on a dom block before asking for pEtx/Rollup from sub
 	c_currentStateComputeWindow       = 20  // Number of blocks around the current header the state generation is always done
+	c_inboundEtxCacheSize             = 10  // Number of inboundEtxs to keep in cache so that, we don't recompute it every time dom is processed
 )
 
 type pEtxRetry struct {
@@ -72,8 +73,9 @@ type Slice struct {
 	asyncPhCh      chan *types.Header
 	asyncPhSub     event.Subscription
 
-	bestPhKey common.Hash
-	phCache   *lru.Cache
+	bestPhKey        common.Hash
+	phCache          *lru.Cache
+	inboundEtxsCache *lru.Cache
 
 	validator Validator // Block and state validator interface
 	phCacheMu sync.RWMutex
@@ -110,6 +112,8 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLooku
 	sl.phCache, _ = lru.New(c_phCacheSize)
 
 	sl.pEtxRetryCache, _ = lru.New(c_pEtxRetryThreshold)
+
+	sl.inboundEtxsCache, _ = lru.New(c_inboundEtxCacheSize)
 
 	// only set the subClients if the chain is not Zone
 	sl.subClients = make([]*quaiclient.Client, 3)
@@ -217,22 +221,28 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	// list of confirmed ETXs using the subordinate manifest In either case, if
 	// we are a dominant node, we need to collect the ETX rollup from our sub.
 	if !domOrigin && nodeCtx != common.ZONE_CTX {
-		newInboundEtxs, _, err = sl.CollectNewlyConfirmedEtxs(block, block.Location())
-		if err != nil {
-			log.Trace("Error collecting newly confirmed etxs: ", "err", err)
-			// Keeping track of the number of times pending etx fails and if it crossed the retry threshold
-			// ask the sub for the pending etx/rollup data
-			val, exist := sl.pEtxRetryCache.Get(block.Hash())
-			var retry uint64
-			if exist {
-				pEtxCurrent, ok := val.(pEtxRetry)
-				if ok {
-					retry = pEtxCurrent.retries + 1
+		cachedInboundEtxs, exists := sl.inboundEtxsCache.Get(block.Hash())
+		if exists && cachedInboundEtxs != nil {
+			newInboundEtxs = cachedInboundEtxs.(types.Transactions)
+		} else {
+			newInboundEtxs, _, err = sl.CollectNewlyConfirmedEtxs(block, block.Location())
+			if err != nil {
+				log.Trace("Error collecting newly confirmed etxs: ", "err", err)
+				// Keeping track of the number of times pending etx fails and if it crossed the retry threshold
+				// ask the sub for the pending etx/rollup data
+				val, exist := sl.pEtxRetryCache.Get(block.Hash())
+				var retry uint64
+				if exist {
+					pEtxCurrent, ok := val.(pEtxRetry)
+					if ok {
+						retry = pEtxCurrent.retries + 1
+					}
 				}
+				pEtxNew := pEtxRetry{hash: block.Hash(), retries: retry}
+				sl.pEtxRetryCache.Add(block.Hash(), pEtxNew)
+				return nil, false, false, ErrSubNotSyncedToDom
 			}
-			pEtxNew := pEtxRetry{hash: block.Hash(), retries: retry}
-			sl.pEtxRetryCache.Add(block.Hash(), pEtxNew)
-			return nil, false, false, ErrSubNotSyncedToDom
+			sl.inboundEtxsCache.Add(block.Hash(), newInboundEtxs)
 		}
 	}
 	time5 := common.PrettyDuration(time.Since(start))
