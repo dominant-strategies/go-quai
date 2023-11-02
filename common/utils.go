@@ -1,10 +1,12 @@
-package config
+package common
 
 import (
 	"errors"
 	"io/fs"
 	"os"
 
+	"github.com/dominant-strategies/go-quai/cmd/options"
+	"github.com/dominant-strategies/go-quai/common/constants"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/spf13/viper"
 )
@@ -29,8 +31,8 @@ func InitConfig() {
 		}
 	}
 
-	log.Infof("Loading config from environment variables with prefix: '%s_'", ENV_PREFIX)
-	viper.SetEnvPrefix(ENV_PREFIX)
+	log.Infof("Loading config from environment variables with prefix: '%s_'", constants.ENV_PREFIX)
+	viper.SetEnvPrefix(constants.ENV_PREFIX)
 	viper.AutomaticEnv()
 }
 
@@ -54,13 +56,11 @@ func SaveConfig() error {
 	} else if os.IsNotExist(err) {
 		// config file does not exist, create directory if it does not exist
 		if _, err := os.Stat(configFile); os.IsNotExist(err) {
-			configDir := viper.GetString(CONFIG_DIR)
-			err := os.MkdirAll(configDir, 0755)
-			if err != nil {
+			configDir := viper.GetString(options.CONFIG_DIR)
+			if err := os.MkdirAll(configDir, 0755); err != nil {
 				return err
 			}
 		}
-		// create config file
 		_, err := os.Create(configFile)
 		if err != nil {
 			return err

@@ -1,42 +1,63 @@
 package node
 
 import (
-	"context"
 	"time"
 
 	"github.com/pkg/errors"
-
-	"github.com/dominant-strategies/go-quai/config"
-	"github.com/dominant-strategies/go-quai/log"
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/spf13/viper"
+
+	"github.com/dominant-strategies/go-quai/cmd/options"
+	"github.com/dominant-strategies/go-quai/consensus"
+	"github.com/dominant-strategies/go-quai/consensus/types"
+	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/p2p"
 )
 
-// starts discovery services for the libp2p node.
-// DHT is bootstrapped if the node is not running as a bootstrap server.
-// mDNS is started
+// Api defines an interface which can be used to interact with the node
+type Api interface {
+	// Start the node
+	Start() error
+
+	// Stop the node
+	Stop() error
+
+	// Methods to broadcast data to the network
+	BroadcastBlock(block types.Block) error
+	BroadcastTransaction(tx types.Transaction) error
+
+	// Methods to lookup specific data from the network. Each request method
+	// returns a result channel. If the result is found, it will be put into the
+	// channel. If the result is not found, the channel will be closed.
+	RequestBlock(hash types.Hash, loc types.Location) chan types.Block
+	RequestTransaction(hash types.Hash, loc types.Location) chan types.Transaction
+
+	// Method to report a peer to the P2PClient as behaving maliciously
+	ReportBadPeer(peer p2p.PeerID)
+}
+
+// Starts the node and all of its services
 func (p *P2PNode) Start() error {
-	server := viper.GetBool(config.BOOTNODE)
-	if server {
-		log.Debugf("starting as a bootstrap server. Bypassing DHT bootstrap")
-	} else {
-		// bootstrap the DHT
-		log.Infof("bootstrapping DHT...")
-		bootstrapPeers := viper.GetStringSlice(config.BOOTSTRAP_PEERS)
-		log.Debugf("using bootstrap peers: %v", bootstrapPeers)
-		if err := p.bootstrapDHT(bootstrapPeers...); err != nil {
-			return errors.Wrap(err, "error bootstrapping DHT")
-		}
+	log.Infof("starting P2P node...")
+
+	if !viper.GetBool(options.BOOTNODE) && len(p.bootpeers) == 0 {
+		log.Warnf("no bootpeers provided. Unable to join network.")
 	}
 
-	// start mDNS
-	log.Debugf("starting mDNS discovery...")
-	if err := p.mDNS.Start(); err != nil {
-		return errors.Wrap(err, "error starting mDNS")
+	// Connect to boot peers
+	for _, addr := range p.bootpeers {
+		log.Debugf("dialing boot peer: %s", addr)
+		p.Host.Connect(p.ctx, addr)
+	}
+
+	// Initialize the DHT
+	log.Debugf("bootstrapping DHT...")
+	if err := p.dht.Bootstrap(p.ctx); err != nil {
+		log.Errorf("error initializing DHT: %s", err)
+		return err
 	}
 
 	// Start the event handler
+	log.Debugf("starting event loop...")
 	go p.eventLoop()
 
 	return nil
@@ -45,13 +66,10 @@ func (p *P2PNode) Start() error {
 type stopFunc func() error
 
 // Function to gracefully shtudown all running services
-func (p *P2PNode) Shutdown() error {
-	// TODO: refactor this to use a dynamic list of stop functions
+func (p *P2PNode) Stop() error {
 	// define a list of functions to stop the services the node is running
 	stopFuncs := []stopFunc{
-		p.mDNS.Stop,
 		p.dht.Stop,
-		p.ps.Stop,
 		p.Host.Close,
 	}
 	// create a channel to collect errors
@@ -85,36 +103,26 @@ func (p *P2PNode) Shutdown() error {
 	}
 }
 
-// ******* DHT methods ******* //
-
-// FindPeer finds a peer within the DHT using the given peer ID.
-func (p *P2PNode) FindPeer(ctx context.Context, peerID peer.ID) (peer.AddrInfo, error) {
-	return p.dht.FindPeer(ctx, peerID)
+func (p *P2PNode) SetConsensusBackend(be consensus.ConsensusBackend) {
+	p.consensus = be
 }
 
-// RoutingTable returns the routing table of the DHT.
-func (p *P2PNode) GetPeers() []peer.ID {
-	return p.dht.GetPeers()
+func (p *P2PNode) BroadcastBlock(block types.Block) error {
+	panic("todo")
 }
 
-// ******* PubSub methods ******* //
-
-// Join a PubSub topic
-func (p *P2PNode) Join(topic string) (*pubsub.Topic, error) {
-	return p.ps.Join(topic)
+func (p *P2PNode) BroadcastTransaction(tx types.Transaction) error {
+	panic("todo")
 }
 
-// Subscribe to a PubSub topic
-func (p *P2PNode) Subscribe(topic string) (*pubsub.Subscription, error) {
-	return p.ps.Subscribe(topic)
+func (p *P2PNode) RequestBlock(hash types.Hash, loc types.Location) chan types.Block {
+	panic("todo")
 }
 
-// Publish a message to a PubSub topic
-func (p *P2PNode) Publish(topic string, data []byte) error {
-	return p.ps.Publish(topic, data)
+func (p *P2PNode) RequestTransaction(hash types.Hash, loc types.Location) chan types.Transaction {
+	panic("todo")
 }
 
-// ListPeers lists the peers we are connected to for a given topic
-func (p *P2PNode) ListPeers(topic string) []peer.ID {
-	return p.ps.ListPeers(topic)
+func (p *P2PNode) ReportBadPeer(peer p2p.PeerID) {
+	panic("todo")
 }

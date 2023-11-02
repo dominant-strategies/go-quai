@@ -5,166 +5,163 @@ import (
 	"fmt"
 
 	"github.com/libp2p/go-libp2p"
-	kadht "github.com/libp2p/go-libp2p-kad-dht"
+	"github.com/libp2p/go-libp2p/core/event"
 	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/peer"
 	routedhost "github.com/libp2p/go-libp2p/p2p/host/routed"
-	multiaddr "github.com/multiformats/go-multiaddr"
+	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
+	"github.com/libp2p/go-libp2p/p2p/security/noise"
+	"github.com/multiformats/go-multiaddr"
 	"github.com/spf13/viper"
 
-	"github.com/dominant-strategies/go-quai/config"
+	"github.com/dominant-strategies/go-quai/cmd/options"
 	"github.com/dominant-strategies/go-quai/consensus"
-	"github.com/dominant-strategies/go-quai/consensus/types"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p"
-	"github.com/dominant-strategies/go-quai/p2p/discovery"
-	quaips "github.com/dominant-strategies/go-quai/p2p/pubsub"
 )
 
 // P2PNode represents a libp2p node
 type P2PNode struct {
+	// Host interface
 	host.Host
-	dht  discovery.DHTDiscovery
-	mDNS discovery.MDNSDiscovery
-	ctx  context.Context
-	ps   quaips.PSManager
+
+	// libp2p subprotocol services
+	dht *p2p.DHT
 
 	// Backend for handling consensus data
 	consensus consensus.ConsensusBackend
+
+	// List of peers to introduce us to the network
+	bootpeers []peer.AddrInfo
+
+	// runtime context
+	ctx context.Context
 }
 
 // Returns a new libp2p node.
 // The node is created with the given context and options passed as arguments.
 func NewNode(ctx context.Context) (*P2PNode, error) {
+	ipAddr := viper.GetString(options.IP_ADDR)
+	port := viper.GetString(options.PORT)
+	node := &P2PNode{}
 
-	// get parameters from config, flags or environment variables
-	ipAddr := viper.GetString(config.IP_ADDR)
-	port := viper.GetString(config.PORT)
-	log.Debugf("Creating node with IP address: %s and port: %s", ipAddr, port)
-	p2pNode := &P2PNode{
-		ctx: ctx,
+	// Load bootpeers
+	for _, p := range viper.GetStringSlice(options.BOOTPEERS) {
+		addr, err := multiaddr.NewMultiaddr(p)
+		if err != nil {
+			log.Fatalf("error loading multiaddress for %s in bootpeers: %s", p, err)
+		}
+		info, err := peer.AddrInfoFromP2pAddr(addr)
+		if err != nil {
+			log.Fatalf("error getting address info for %s in bootpeers: %s", addr, err)
+		}
+		node.bootpeers = append(node.bootpeers, *info)
 	}
 
-	privateKey, err := getPrivKey()
+	// Define a connection manager
+	connectionManager, err := connmgr.NewConnManager(
+		100, // Lowwater
+		400, // HighWater,
+	)
 	if err != nil {
-		log.Fatalf("error getting private key: %s", err)
+		log.Fatalf("error creating libp2p connection manager: %s", err)
+		return nil, err
 	}
 
-	// list of options to instantiate the libp2p node
-	nodeOptions := []libp2p.Option{}
-	// use a private key for persistent identity
-	nodeOptions = append(nodeOptions, libp2p.Identity(privateKey))
-	// pass the ip address and port to listen on
-	sourceMultiAddr, _ := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%s", ipAddr, port))
-	nodeOptions = append(nodeOptions, libp2p.ListenAddrs(sourceMultiAddr))
-	// check if there is a host IP we can use to replace Docker's internal IP
-	dataDir := viper.GetString(config.DATA_DIR)
-	hostIPFile := dataDir + config.HOST_IP_FILE_NAME
-	hostIP, err := readHostIPFromFile(hostIPFile)
-	if err != nil || hostIP == "" {
-		log.Warnf("error reading (docker) host IP from file: %s. Skipping...", err)
-	} else {
-		log.Infof("found host IP: %s", hostIP)
-		addrsFactory := makeAddrsFactory(hostIP)
-		nodeOptions = append(nodeOptions, libp2p.AddrsFactory(addrsFactory))
-	}
+	// Create the libp2p host
+	host, err := libp2p.New(
+		// use a private key for persistent identity
+		libp2p.Identity(GetNodeKey()),
 
-	// get p2p related options
-	nodeOptions = append(nodeOptions, loadP2PNodeOptions()...)
+		// pass the ip address and port to listen on
+		libp2p.ListenAddrStrings(
+			fmt.Sprintf("/ip4/%s/tcp/%s", ipAddr, port),
+		),
 
-	// create the libp2p node
-	node, err := libp2p.New(nodeOptions...)
+		// support all transports
+		libp2p.DefaultTransports,
+
+		// support Noise connections
+		libp2p.Security(noise.ID, noise.New),
+
+		// Let's prevent our peer from having too many
+		// connections by attaching a connection manager.
+		libp2p.ConnectionManager(connectionManager),
+
+		// Attempt to open ports using uPNP for NATed hosts.
+		libp2p.NATPortMap(),
+	)
 	if err != nil {
-		log.Errorf("error creating node: %s", err)
-		return nil, err
-	}
-	p2pNode.Host = node
-
-	// Initialize the DHT
-	if err := p2pNode.initializeDHT(); err != nil {
-		log.Errorf("error initializing DHT: %s", err)
+		log.Fatalf("error creating libp2p host: %s", err)
 		return nil, err
 	}
 
-	// wrap the node with the routed host to improve network performance
-	rnode := routedhost.Wrap(node, p2pNode.dht)
-	p2pNode.Host = rnode
-	log.Debugf("Routed node created")
-
-	// initialize mDNS discovery
-	p2pNode.initializeMDNS()
-
-	// initialize PubSub
-	if err := p2pNode.initializePubSub(); err != nil {
-		log.Errorf("error initializing PubSub: %s", err)
+	// Create the DHT service
+	if node.dht, err = p2p.NewDHT(ctx, host); err != nil {
+		log.Fatalf("error creating libp2p dht: %s", err)
 		return nil, err
 	}
+	log.Debugf("dht service created")
 
-	err = deleteNodeInfoFile()
-	if err != nil {
-		log.Errorf("error deleting node info file: %s", err)
-		return nil, err
-	}
+	// Wrap the host with the routed host to improve network performance
+	node.Host = routedhost.Wrap(host, node.dht.Kad)
+	log.Debugf("routed host created")
+
+	// Set the node context
+	node.ctx = ctx
 
 	// log the p2p node's ID
-	log.Infof("node created: %s", p2pNode.ID().Pretty())
-	saveNodeInfo("Node ID: " + p2pNode.ID().Pretty())
+	nodeID := node.ID().Pretty()
+	log.Infof("node created: %s", nodeID)
 
-	// log the p2p node's listening addresses
-	for _, addr := range p2pNode.Addrs() {
-		log.Infof("listening on: %s", addr.String())
-	}
-
-	return p2pNode, nil
+	return node, nil
 }
 
-func (p *P2PNode) SetConsensusBackend(be consensus.ConsensusBackend) {
-	p.consensus = be
+func (p *P2PNode) p2pAddress() (multiaddr.Multiaddr, error) {
+	return multiaddr.NewMultiaddr(fmt.Sprintf("/p2p/%s", p.ID()))
 }
 
-func (p *P2PNode) BroadcastBlock(block types.Block) error {
-	panic("todo")
-}
-
-func (p *P2PNode) BroadcastTransaction(tx types.Transaction) error {
-	panic("todo")
-}
-
-func (p *P2PNode) RequestBlock(hash types.Hash, loc types.Location) chan types.Block {
-	panic("todo")
-}
-
-func (p *P2PNode) RequestTransaction(hash types.Hash, loc types.Location) chan types.Transaction {
-	panic("todo")
-}
-
-func (p *P2PNode) ReportBadPeer(peer p2p.PeerID) {
-	panic("todo")
-}
-
-// Initializes the DHT for the libp2p node in server mode.
-func (p *P2PNode) initializeDHT(opts ...kadht.Option) error {
-	serverModeOpt := kadht.Mode(kadht.ModeServer)
-	opts = append(opts, serverModeOpt)
-	p.dht = &discovery.KadDHT{}
-	return p.dht.Initialize(p.ctx, p.Host, opts...)
-}
-
-// Bootstrap bootstraps the DHT for the libp2p node
-func (p *P2PNode) bootstrapDHT(bootstrapPeers ...string) error {
-	return p.dht.Bootstrap(p.ctx, p.Host, bootstrapPeers...)
-}
-
-// Inialize mDNS discovery service
-func (p *P2PNode) initializeMDNS() {
-	p.mDNS = discovery.NewmDNSDiscovery(p.ctx, p.Host)
-}
-
-// Initialize the PubSub manager with default options
-func (p *P2PNode) initializePubSub() error {
-	psMgr, err := quaips.NewPubSubManager(p.ctx, p.Host, nil)
+// subscribes to the event bus and handles libp2p events as they're received
+func (p *P2PNode) eventLoop() {
+	// Subscribe to any events of interest
+	sub, err := p.EventBus().Subscribe([]interface{}{
+		new(event.EvtLocalProtocolsUpdated),
+		new(event.EvtLocalAddressesUpdated),
+		new(event.EvtLocalReachabilityChanged),
+		new(event.EvtNATDeviceTypeChanged),
+		new(event.EvtPeerProtocolsUpdated),
+		new(event.EvtPeerIdentificationCompleted),
+		new(event.EvtPeerIdentificationFailed),
+		new(event.EvtPeerConnectednessChanged),
+	})
 	if err != nil {
-		return err
+		log.Fatalf("failed to subscribe to peer connectedness events: %s", err)
 	}
-	p.ps = psMgr
-	return nil
+	defer sub.Close()
+
+	// Wait for events
+	for {
+		select {
+		case evt := <-sub.Out():
+			if e, ok := evt.(event.EvtLocalAddressesUpdated); ok {
+				p2pAddr, err := p.p2pAddress()
+				if err != nil {
+					log.Errorf("error computing p2p address: %s", err)
+				} else {
+					for _, addr := range e.Current {
+						addr := addr.Address.Encapsulate(p2pAddr)
+						log.Infof("listening at address: %s", addr)
+					}
+				}
+			} else if e, ok := evt.(event.EvtPeerConnectednessChanged); ok {
+				log.Debugf("peer %s is now %s", e.Peer.String(), e.Connectedness)
+			} else {
+				log.Tracef("unhandled host event: %s", evt)
+			}
+
+		case <-p.ctx.Done():
+			log.Warnf("context cancel received. Stopping event listener")
+			return
+		}
+	}
 }

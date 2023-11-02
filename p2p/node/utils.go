@@ -4,7 +4,8 @@ import (
 	"bufio"
 	"os"
 
-	"github.com/dominant-strategies/go-quai/config"
+	"github.com/dominant-strategies/go-quai/cmd/options"
+	"github.com/dominant-strategies/go-quai/common/constants"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/spf13/viper"
 )
@@ -14,7 +15,7 @@ import (
 func saveNodeInfo(info string) {
 	go func() {
 		// check if data directory exists. If not, create it
-		dataDir := viper.GetString(config.DATA_DIR)
+		dataDir := viper.GetString(options.DATA_DIR)
 		if _, err := os.Stat(dataDir); os.IsNotExist(err) {
 			err := os.MkdirAll(dataDir, 0755)
 			if err != nil {
@@ -22,7 +23,7 @@ func saveNodeInfo(info string) {
 				return
 			}
 		}
-		nodeFile := dataDir + config.NODEINFO_FILE_NAME
+		nodeFile := dataDir + constants.NODEINFO_FILE_NAME
 		// Open file with O_APPEND flag to append data to the file or create the file if it doesn't exist.
 		f, err := os.OpenFile(nodeFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
@@ -43,8 +44,8 @@ func saveNodeInfo(info string) {
 
 // utility function used to delete any existing node info file
 func deleteNodeInfoFile() error {
-	dataDir := viper.GetString(config.DATA_DIR)
-	nodeFile := dataDir + config.NODEINFO_FILE_NAME
+	dataDir := viper.GetString(options.DATA_DIR)
+	nodeFile := dataDir + constants.NODEINFO_FILE_NAME
 	if _, err := os.Stat(nodeFile); !os.IsNotExist(err) {
 		err := os.Remove(nodeFile)
 		if err != nil {
