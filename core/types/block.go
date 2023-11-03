@@ -518,9 +518,6 @@ type sealData struct {
 
 // SealHash returns the hash of a block prior to it being sealed.
 func (h *Header) SealHash() (hash common.Hash) {
-	if hash := h.sealHash.Load(); hash != nil {
-		return hash.(common.Hash)
-	}
 	hasherMu.Lock()
 	defer hasherMu.Unlock()
 	hasher.Reset()
@@ -550,16 +547,12 @@ func (h *Header) SealHash() (hash common.Hash) {
 	}
 	rlp.Encode(hasher, hdata)
 	hash.SetBytes(hasher.Sum(hash[:0]))
-	h.sealHash.Store(hash)
 	return hash
 }
 
 // Hash returns the nonce'd hash of the header. This is just the Blake3 hash of
 // SealHash suffixed with a nonce.
 func (h *Header) Hash() (hash common.Hash) {
-	if hash := h.hash.Load(); hash != nil {
-		return hash.(common.Hash)
-	}
 	sealHash := h.SealHash().Bytes()
 	hasherMu.Lock()
 	defer hasherMu.Unlock()
@@ -569,7 +562,6 @@ func (h *Header) Hash() (hash common.Hash) {
 	copy(hData[len(h.nonce):], sealHash)
 	sum := blake3.Sum256(hData[:])
 	hash.SetBytes(sum[:])
-	h.hash.Store(hash)
 	return hash
 }
 
