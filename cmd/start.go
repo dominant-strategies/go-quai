@@ -56,6 +56,14 @@ func init() {
 	// path to file containing node private key
 	startCmd.PersistentFlags().StringP(options.KEYFILE, "k", "", "file containing node private key"+generateEnvDoc(options.KEYFILE))
 	viper.BindPFlag(options.KEYFILE, startCmd.PersistentFlags().Lookup(options.KEYFILE))
+
+	// look for more peers until we have at least min-peers
+	startCmd.PersistentFlags().StringP(options.MIN_PEERS, "", "5", "minimum number of peers to maintain connectivity with"+generateEnvDoc(options.MIN_PEERS))
+	viper.BindPFlag(options.MIN_PEERS, startCmd.PersistentFlags().Lookup(options.MIN_PEERS))
+
+	// stop looking for more peers once we've reached max-peers
+	startCmd.PersistentFlags().StringP(options.MAX_PEERS, "", "50", "maximum number of peers to maintain connectivity with"+generateEnvDoc(options.MAX_PEERS))
+	viper.BindPFlag(options.MAX_PEERS, startCmd.PersistentFlags().Lookup(options.MAX_PEERS))
 }
 
 func startCmdPreRun(cmd *cobra.Command, args []string) error {

@@ -39,27 +39,20 @@ type Api interface {
 func (p *P2PNode) Start() error {
 	log.Infof("starting P2P node...")
 
+	// Is this node expected to have bootstrap peers to dial?
 	if !viper.GetBool(options.BOOTNODE) && len(p.bootpeers) == 0 {
 		log.Warnf("no bootpeers provided. Unable to join network.")
 	}
 
-	// Connect to boot peers
-	for _, addr := range p.bootpeers {
-		log.Debugf("dialing boot peer: %s", addr)
-		p.Host.Connect(p.ctx, addr)
-	}
-
-	// Initialize the DHT
-	log.Debugf("bootstrapping DHT...")
-	if err := p.dht.Bootstrap(p.ctx); err != nil {
-		log.Errorf("error initializing DHT: %s", err)
-		return err
-	}
-
-	// Start the event handler
-	log.Debugf("starting event loop...")
+	// Start any async processes belonging to this node
+	log.Debugf("starting node processes...")
 	go p.eventLoop()
+	go p.statsLoop()
 
+	// Bootstrap the node
+	if err := p.Bootstrap(); err != nil {
+		log.Warnf("error bootstrapping the node: %s", err)
+	}
 	return nil
 }
 
@@ -69,8 +62,8 @@ type stopFunc func() error
 func (p *P2PNode) Stop() error {
 	// define a list of functions to stop the services the node is running
 	stopFuncs := []stopFunc{
-		p.dht.Stop,
 		p.Host.Close,
+		p.dht.Close,
 	}
 	// create a channel to collect errors
 	errs := make(chan error, len(stopFuncs))
