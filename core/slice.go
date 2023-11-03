@@ -595,9 +595,16 @@ func (sl *Slice) CollectNewlyConfirmedEtxs(block *types.Block, location common.L
 	subRollup := types.Transactions{}
 	var err error
 	if nodeCtx < common.ZONE_CTX {
-		subRollup, err = sl.hc.CollectSubRollup(block)
-		if err != nil {
-			return nil, nil, err
+		rollup, exists := sl.hc.subRollupCache.Get(block.Hash())
+		if exists && rollup != nil {
+			subRollup = rollup.(types.Transactions)
+			log.Info("Found the rollup in cache", "Hash", block.Hash(), "len", len(subRollup))
+		} else {
+			subRollup, err = sl.hc.CollectSubRollup(block)
+			if err != nil {
+				return nil, nil, err
+			}
+			sl.hc.subRollupCache.Add(block.Hash(), subRollup)
 		}
 	}
 

@@ -28,6 +28,7 @@ import (
 const (
 	headerCacheLimit      = 512
 	numberCacheLimit      = 2048
+	c_subRollupCacheSize  = 50
 	primeHorizonThreshold = 20
 )
 
@@ -62,6 +63,7 @@ type HeaderChain struct {
 	pendingEtxsRollup *lru.Cache
 	pendingEtxs       *lru.Cache
 	blooms            *lru.Cache
+	subRollupCache    *lru.Cache
 
 	wg            sync.WaitGroup // chain processing wait group for shutting down
 	running       int32          // 0 if chain is running, 1 when stopped
@@ -101,6 +103,9 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetch
 
 	blooms, _ := lru.New(c_maxBloomFilters)
 	hc.blooms = blooms
+
+	subRollupCache, _ := lru.New(c_subRollupCacheSize)
+	hc.subRollupCache = subRollupCache
 
 	hc.genesisHeader = hc.GetHeaderByNumber(0)
 	if hc.genesisHeader.Hash() != chainConfig.GenesisHash {
