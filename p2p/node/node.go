@@ -88,8 +88,28 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 		// connections by attaching a connection manager.
 		libp2p.ConnectionManager(connectionManager),
 
-		// Attempt to open ports using uPNP for NATed hosts.
-		libp2p.NATPortMap(),
+		// Optionally attempt to configure network port mapping with UPnP
+		func() libp2p.Option {
+			if viper.GetBool(options.PORTMAP) {
+				return libp2p.NATPortMap()
+			} else {
+				return nil
+			}
+		}(),
+
+		// Enable NAT detection service
+		libp2p.EnableNATService(),
+
+		// If publicly reachable, provide a relay service for other peers
+		libp2p.EnableRelayService(),
+
+		// If behind NAT, automatically advertise relay address through relay peers
+		// TODO: today the bootnodes act as static relays. In the future we should dynamically select relays from publicly reachable peers.
+		libp2p.EnableAutoRelayWithStaticRelays(node.bootpeers),
+
+		// Attempt to open a direct connection with relayed peers, using relay
+		// nodes to coordinate the holepunch.
+		libp2p.EnableHolePunching(),
 	)
 	if err != nil {
 		log.Fatalf("error creating libp2p host: %s", err)
