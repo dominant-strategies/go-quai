@@ -72,19 +72,18 @@ const (
 	// Max number of stats objects to send in one batch
 	c_queueBatchSize uint64 = 5
 	// Number of blocks to include in one batch of transactions
-	c_txBatchSize uint64 = 20
+	c_txBatchSize uint64 = 5
+
+	// Seconds that we want to iterate over (3600s = 1 hr)
+	c_windowSize uint64 = 3600
 )
 
 var (
-	c_blocksPerMinute         uint64
-	c_blocksPerHour           uint64
-	c_txLookupCacheLimit      uint64
-	c_txLookupCacheEvictLimit uint64
-	chainID9000               = big.NewInt(9000)
-	chainID12000              = big.NewInt(12000)
-	chainID15000              = big.NewInt(15000)
-	chainID17000              = big.NewInt(17000)
-	chainID1337               = big.NewInt(1337)
+	chainID9000  = big.NewInt(9000)
+	chainID12000 = big.NewInt(12000)
+	chainID15000 = big.NewInt(15000)
+	chainID17000 = big.NewInt(17000)
+	chainID1337  = big.NewInt(1337)
 )
 
 // backend encompasses the bare-minimum functionality needed for quaistats reporting
@@ -106,6 +105,7 @@ type backend interface {
 type fullNodeBackend interface {
 	backend
 	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
+	BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error)
 	CurrentBlock() *types.Block
 }
 
@@ -123,14 +123,16 @@ type Service struct {
 
 	pongCh  chan struct{} // Pong notifications are fed into this channel
 	headSub event.Subscription
-	sideSub event.Subscription
 
 	transactionStatsQueue *StatsQueue
 	detailStatsQueue      *StatsQueue
 	appendTimeStatsQueue  *StatsQueue
-	statsReadyCh          chan struct{}
 
-	txLookupCache *lru.Cache
+	// After handling a block and potentially adding to the queues, it will notify the sendStats goroutine
+	// that stats are ready to be sent
+	statsReadyCh chan struct{}
+
+	blockLookupCache *lru.Cache
 
 	chainID *big.Int
 
@@ -247,12 +249,9 @@ func New(node *node.Node, backend backend, engine consensus.Engine, url string, 
 
 	durationLimitInt := durationLimit.Uint64()
 
-	c_blocksPerMinute = 60 / durationLimitInt
-	c_blocksPerHour = 60 * c_blocksPerMinute
-	c_txLookupCacheEvictLimit = c_blocksPerHour / c_txBatchSize
-	c_txLookupCacheLimit = 2 * c_txLookupCacheEvictLimit
+	c_blocksPerWindow := c_windowSize / durationLimitInt
 
-	txLookupCache, _ := lru.New(int(c_txLookupCacheLimit * 2))
+	blockLookupCache, _ := lru.New(int(c_blocksPerWindow * 2))
 
 	quaistats := &Service{
 		backend:               backend,
@@ -268,7 +267,7 @@ func New(node *node.Node, backend backend, engine consensus.Engine, url string, 
 		appendTimeStatsQueue:  NewStatsQueue(),
 		statsReadyCh:          make(chan struct{}),
 		sendfullstats:         sendfullstats,
-		txLookupCache:         txLookupCache,
+		blockLookupCache:      blockLookupCache,
 		instanceDir:           node.InstanceDir(),
 	}
 
@@ -280,12 +279,10 @@ func New(node *node.Node, backend backend, engine consensus.Engine, url string, 
 func (s *Service) Start() error {
 	// Subscribe to chain events to execute updates on
 	chainHeadCh := make(chan core.ChainHeadEvent, chainHeadChanSize)
-	chainSideCh := make(chan core.ChainSideEvent, chainSideChanSize)
 
 	s.headSub = s.backend.SubscribeChainHeadEvent(chainHeadCh)
-	s.sideSub = s.backend.SubscribeChainSideEvent(chainSideCh)
 
-	go s.loopBlocks(chainHeadCh, chainSideCh)
+	go s.loopBlocks(chainHeadCh)
 	go s.loopSender(s.initializeURLMap())
 
 	log.Info("Stats daemon started")
@@ -295,54 +292,35 @@ func (s *Service) Start() error {
 // Stop implements node.Lifecycle, terminating the monitoring and reporting daemon.
 func (s *Service) Stop() error {
 	s.headSub.Unsubscribe()
-	s.sideSub.Unsubscribe()
 	log.Info("Stats daemon stopped")
 	return nil
 }
 
-func (s *Service) loopBlocks(chainHeadCh chan core.ChainHeadEvent, chainSideCh chan core.ChainSideEvent) {
+func (s *Service) loopBlocks(chainHeadCh chan core.ChainHeadEvent) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Error("Stats process crashed", "error", r)
-			go s.loopBlocks(chainHeadCh, chainSideCh)
+			go s.loopBlocks(chainHeadCh)
 		}
 	}()
 
 	quitCh := make(chan struct{})
-	headCh := make(chan *types.Block, chainHeadChanSize)
-	sideCh := make(chan *types.Block, chainSideChanSize)
 
 	go func() {
-	HandleLoop:
 		for {
 			select {
-			// Notify of chain head events, but drop if too frequent
 			case head := <-chainHeadCh:
-				select {
-				case headCh <- head.Block:
-				default:
-				}
-			// Notify of chain side events, but drop if too frequent
-			case sideEvent := <-chainSideCh:
-				select {
-				case sideCh <- sideEvent.Block:
-				default:
-				}
+				// Directly handle the block
+				go s.handleBlock(head.Block)
 			case <-s.headSub.Err():
-				break HandleLoop
+				close(quitCh)
+				return
 			}
 		}
-		close(quitCh)
 	}()
 
-	for {
-		select {
-		case <-quitCh:
-			return
-		default:
-			s.handleBlock(headCh)
-		}
-	}
+	// Wait for the goroutine to signal completion or error
+	<-quitCh
 }
 
 // loop keeps trying to connect to the netstats server, reporting chain events
@@ -463,25 +441,32 @@ func (s *Service) initializeURLMap() map[string]string {
 	}
 }
 
-func (s *Service) handleBlock(headCh chan *types.Block) {
-	for head := range headCh {
-		if s.sendfullstats {
-			dtlStats := s.assembleBlockDetailStats(head)
+func (s *Service) handleBlock(block *types.Block) {
+	// Cache the block
+	s.cacheBlock(block)
+
+	if s.sendfullstats {
+		dtlStats := s.assembleBlockDetailStats(block)
+		if dtlStats != nil {
 			s.detailStatsQueue.Enqueue(dtlStats)
 		}
+	}
 
-		appStats := s.assembleBlockAppendTimeStats(head)
+	appStats := s.assembleBlockAppendTimeStats(block)
+	if appStats != nil {
 		s.appendTimeStatsQueue.Enqueue(appStats)
+	}
 
-		if head.NumberU64()%c_txBatchSize == 0 && s.sendfullstats {
-			txStats := s.assembleBlockTransactionStats(head)
+	if block.NumberU64()%c_txBatchSize == 0 && s.sendfullstats {
+		txStats := s.assembleBlockTransactionStats(block)
+		if txStats != nil {
 			s.transactionStatsQueue.Enqueue(txStats)
 		}
-
-		// After handling a block and potentially adding to the queues, notify the sendStats goroutine
-		// that stats are ready to be sent
-		s.statsReadyCh <- struct{}{}
 	}
+
+	// After handling a block and potentially adding to the queues, notify the sendStats goroutine
+	// that stats are ready to be sent
+	s.statsReadyCh <- struct{}{}
 }
 
 func (s *Service) reportNodeStats(url string, mod int, authJwt string) error {
@@ -805,6 +790,13 @@ func (s *Service) report(url string, dataType string, stats interface{}, authJwt
 	return nil
 }
 
+type cachedBlock struct {
+	number     uint64
+	parentHash common.Hash
+	txCount    uint64
+	time       uint64
+}
+
 // nodeInfo is the collection of meta information about a node that is displayed
 // on the monitoring page.
 type nodeInfo struct {
@@ -997,182 +989,91 @@ type BatchObject struct {
 	OldestBlockTime     uint64
 }
 
-func (s *Service) evictOutdatedEntries(currentMaxBlock int) {
-	for {
-		key, _, ok := s.txLookupCache.GetOldest()
-		if !ok {
-			break
-		}
-
-		keyInt, ok := key.(int)
-		if !ok {
-			return
-		}
-
-		if keyInt < currentMaxBlock {
-			s.txLookupCache.Remove(key)
-		} else {
-			return
-		}
+func (s *Service) cacheBlock(block *types.Block) cachedBlock {
+	currentBlock := cachedBlock{
+		number:     block.NumberU64(),
+		parentHash: block.ParentHash(),
+		txCount:    uint64(len(block.Transactions())),
+		time:       block.Time(),
 	}
+	s.blockLookupCache.Add(block.Hash(), currentBlock)
+	return currentBlock
 }
 
 func (s *Service) calculateTPS(block *types.Block) *tps {
 	var totalTransactions1h uint64
 	var totalTransactions1m uint64
-
-	currentBlock := block
-	startBlockTime := block.Time()
-	var batchesNeeded uint64 = c_blocksPerHour / c_txBatchSize
-	var oldestKeyUsed uint64
-	var withinMinute = true
-	startBlockNum := currentBlock.NumberU64()
-
-	// Get the parent block for the next iteration
-	fullBackend := s.backend.(fullNodeBackend)
-
-	for i := 0; i < int(batchesNeeded); i++ {
-		if currentBlock == nil || currentBlock.NumberU64() == 0 {
-			log.Error("Encountered a nil block, stopping iteration")
-			break
-		}
-
-		if oldestKeyUsed == 0 {
-			oldestKeyUsed = startBlockNum
-		} else {
-			oldestKeyUsed = min(oldestKeyUsed, startBlockNum)
-		}
-
-		// Try to get the data from the LRU cache
-		cachedBatchObject, ok := s.txLookupCache.Get(uint64(startBlockNum))
-		if !ok {
-			// Not in cache, so we need to calculate the transaction count for this batch
-			txCount := uint64(0)
-			oldestBlockTimeInBatch := uint64(0)
-
-			for j := 0; j < int(c_txBatchSize); j++ {
-				currentNumber := currentBlock.NumberU64()
-				if currentNumber == 0 {
-					log.Trace("Current block number is 0, stopping iteration")
-					break
-				}
-
-				// Add the number of transactions in the current block to the total
-				txCount += uint64(len(currentBlock.Transactions()))
-
-				if withinMinute && startBlockTime < currentBlock.Time()+60 {
-					totalTransactions1m += uint64(len(currentBlock.Transactions()))
-				} else {
-					withinMinute = false
-				}
-
-				if oldestBlockTimeInBatch == 0 {
-					oldestBlockTimeInBatch = currentBlock.Time()
-				} else {
-					oldestBlockTimeInBatch = min(oldestBlockTimeInBatch, currentBlock.Time())
-				}
-
-				var err error
-				currentBlock, err = fullBackend.BlockByNumber(context.Background(), rpc.BlockNumber(currentNumber-1))
-				if err != nil {
-					log.Error(fmt.Sprintf("Error getting block number %d: %s", currentNumber-1, err.Error()))
-					break
-				}
-				if currentBlock == nil {
-					log.Error(fmt.Sprintf("No block found at number %d", currentNumber-1))
-					break
-				}
-			}
-
-			batchObject := &BatchObject{
-				TotalNoTransactions: txCount,
-				OldestBlockTime:     oldestBlockTimeInBatch,
-			}
-
-			// Store the sum in the cache
-			s.txLookupCache.Add(startBlockNum, batchObject)
-
-			cachedBatchObject = batchObject
-		}
-
-		// Add the transactions from this batch
-		totalTransactions1h += cachedBatchObject.(*BatchObject).TotalNoTransactions
-		if startBlockNum == 0 {
-			break
-		}
-		startBlockNum -= uint64(c_txBatchSize)
-	}
-
-	if s.txLookupCache.Len() > int(c_txLookupCacheEvictLimit) {
-		s.evictOutdatedEntries(int(block.NumberU64() - c_blocksPerHour))
-	}
-
-	// Find the oldest batch object in the cache
-	// and use that oldest block time to calculate the TPS
-	found := false
-	notFoundCount := 0
-	var batchObject *BatchObject
+	var currentBlock interface{}
 	var ok bool
 
-	for !found {
-		if notFoundCount >= int(c_txBatchSize) {
-			log.Error("Could not find any batch object in cache returning estimations")
-			return &tps{
-				TPS1m:                     totalTransactions1m / 60,
-				TPS1hr:                    totalTransactions1h / 3600,
-				TotalNumberTransactions1h: totalTransactions1h,
-			}
+	fullNodeBackend := s.backend.(fullNodeBackend)
+	withinMinute := true
+
+	currentBlock, ok = s.blockLookupCache.Get(block.Hash())
+	if !ok {
+		currentBlock = s.cacheBlock(block)
+	}
+
+	for {
+		// If the current block is nil or the block is older than the window size, break
+		if currentBlock == nil || currentBlock.(cachedBlock).time+c_windowSize < block.Time() {
+			break
 		}
 
-		// Retrieve the batch object from the cache
-		value, exists := s.txLookupCache.Get(oldestKeyUsed)
-		if !exists {
-			log.Warn("Could not find batch object in cache")
-			notFoundCount += 1
-			oldestKeyUsed += c_txBatchSize
-			continue
+		// Add the number of transactions in the block to the total
+		totalTransactions1h += currentBlock.(cachedBlock).txCount
+		if withinMinute && currentBlock.(cachedBlock).time+60 > block.Time() {
+			totalTransactions1m += currentBlock.(cachedBlock).txCount
+		} else {
+			withinMinute = false
 		}
 
-		found = true
+		// If the current block is the genesis block, break
+		if currentBlock.(cachedBlock).number == 1 {
+			break
+		}
 
-		// Type assert the value to a *BatchObject
-		batchObject, ok = value.(*BatchObject)
+		// Get the parent block
+		parentHash := currentBlock.(cachedBlock).parentHash
+		currentBlock, ok = s.blockLookupCache.Get(parentHash)
 		if !ok {
-			log.Warn("Error casting value to *BatchObject")
-			return &tps{
-				TPS1m:                     totalTransactions1m / 60,
-				TPS1hr:                    totalTransactions1h / 3600,
-				TotalNumberTransactions1h: totalTransactions1h,
+
+			// If the parent block is not cached, get it from the full node backend and cache it
+			fullBlock, fullBlockOk := fullNodeBackend.BlockByHash(context.Background(), parentHash)
+			if fullBlockOk != nil {
+				log.Error("Error getting block hash", "hash", parentHash.String())
+				return &tps{}
 			}
+			currentBlock = s.cacheBlock(fullBlock)
 		}
 	}
 
-	delta1hr := startBlockTime - batchObject.OldestBlockTime
+	// Catches if we get to genesis block and are still within the window
+	if currentBlock.(cachedBlock).number == 1 && withinMinute {
+		delta := block.Time() - currentBlock.(cachedBlock).time
+		return &tps{
+			TPS1m:                     totalTransactions1m / delta,
+			TPS1hr:                    totalTransactions1h / delta,
+			TotalNumberTransactions1h: totalTransactions1h,
+		}
+	} else if currentBlock.(cachedBlock).number == 1 {
+		delta := block.Time() - currentBlock.(cachedBlock).time
+		return &tps{
+			TPS1m:                     totalTransactions1m / 60,
+			TPS1hr:                    totalTransactions1h / delta,
+			TotalNumberTransactions1h: totalTransactions1h,
+		}
+	}
 
-	// Now use the BatchObject to get the oldest block time
-	TPS1hr := totalTransactions1h / delta1hr
-	TPS1m := totalTransactions1m / 60
-
-	log.Trace("Generated tx stats", "tps1m", TPS1m, "tps1hr", TPS1hr, "totalTransactions1h", totalTransactions1h, "totalTransactions1m", totalTransactions1m, "oldest1hBlockTime", batchObject.OldestBlockTime, "startBlockTime", startBlockTime, "difference1h", delta1hr, "difference1m", 60, "startBlockNum", uint64(startBlockNum))
-
-	// Now totalTransactions1h and totalTransactions1m have the transaction counts for the last c_blocksPerHour and c_txBatchSize blocks respectively
 	return &tps{
-		TPS1m:                     TPS1m,
-		TPS1hr:                    TPS1hr,
+		TPS1m:                     totalTransactions1m / 60,
+		TPS1hr:                    totalTransactions1h / c_windowSize,
 		TotalNumberTransactions1h: totalTransactions1h,
 	}
 }
 
-func min(a uint64, b uint64) uint64 {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 func (s *Service) assembleBlockDetailStats(block *types.Block) *blockDetailStats {
 	if block == nil {
-		log.Error("Block is nil")
 		return nil
 	}
 	header := block.Header()
@@ -1192,7 +1093,6 @@ func (s *Service) assembleBlockDetailStats(block *types.Block) *blockDetailStats
 
 func (s *Service) assembleBlockAppendTimeStats(block *types.Block) *blockAppendTime {
 	if block == nil {
-		log.Error("Block is nil")
 		return nil
 	}
 	header := block.Header()
@@ -1210,11 +1110,13 @@ func (s *Service) assembleBlockAppendTimeStats(block *types.Block) *blockAppendT
 
 func (s *Service) assembleBlockTransactionStats(block *types.Block) *blockTransactionStats {
 	if block == nil {
-		log.Error("Block is nil")
 		return nil
 	}
 	header := block.Header()
 	tps := s.calculateTPS(block)
+	if tps == nil {
+		return nil
+	}
 
 	// Assemble and return the block stats
 	return &blockTransactionStats{
