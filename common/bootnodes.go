@@ -4,10 +4,7 @@ var (
 
 	// ! NOTE: using public bootstrap peers only for testing purposes !
 	BootstrapPeers = []string{
-		"/dnsaddr/bootstrap.libp2p.io/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN",
-		"/dnsaddr/bootstrap.libp2p.io/p2p/QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa",
-		"/dnsaddr/bootstrap.libp2p.io/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb",
-		"/dnsaddr/bootstrap.libp2p.io/p2p/QmcZf59bWwK5XFi76CZX8cbJ4BhTzzA3gU1ZjYZcYW3dwt",
-		"/ip4/104.131.131.82/tcp/4001/p2p/QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ",
+		"/ip4/35.232.36.100/tcp/4001/p2p/12D3KooWBxA6wb6ea87CreaHp6RKAv8MupVBnTxgCyyDJztvyB3h",
+		"/ip4/35.223.198.14/tcp/4001/p2p/12D3KooWDWPz7ghZzBXfygv5Q62ijk3XFZYYjgSXfQkXgQPBGtA8",
 	}
 )
