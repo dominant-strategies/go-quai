@@ -197,21 +197,24 @@ func (dw *dbWrapper) pushObject(vm *duktape.Context) {
 
 	// Push the wrapper for statedb.GetBalance
 	vm.PushGoFunction(func(ctx *duktape.Context) int {
-		pushBigInt(dw.db.GetBalance(common.BytesToAddress(popSlice(ctx))), ctx)
+		addr, _ := common.BytesToAddress(popSlice(ctx)).InternalAddress()
+		pushBigInt(dw.db.GetBalance(addr), ctx)
 		return 1
 	})
 	vm.PutPropString(obj, "getBalance")
 
 	// Push the wrapper for statedb.GetNonce
 	vm.PushGoFunction(func(ctx *duktape.Context) int {
-		ctx.PushInt(int(dw.db.GetNonce(common.BytesToAddress(popSlice(ctx)))))
+		addr, _ := common.BytesToAddress(popSlice(ctx)).InternalAddress()
+		ctx.PushInt(int(dw.db.GetNonce(addr)))
 		return 1
 	})
 	vm.PutPropString(obj, "getNonce")
 
 	// Push the wrapper for statedb.GetCode
 	vm.PushGoFunction(func(ctx *duktape.Context) int {
-		code := dw.db.GetCode(common.BytesToAddress(popSlice(ctx)))
+		addr, _ := common.BytesToAddress(popSlice(ctx)).InternalAddress()
+		code := dw.db.GetCode(addr)
 
 		ptr := ctx.PushFixedBuffer(len(code))
 		copy(makeSlice(ptr, uint(len(code))), code)
@@ -224,7 +227,8 @@ func (dw *dbWrapper) pushObject(vm *duktape.Context) {
 		hash := popSlice(ctx)
 		addr := popSlice(ctx)
 
-		state := dw.db.GetState(common.BytesToAddress(addr), common.BytesToHash(hash))
+		iAddr, _ := common.BytesToAddress(addr).InternalAddress()
+		state := dw.db.GetState(iAddr, common.BytesToHash(hash))
 
 		ptr := ctx.PushFixedBuffer(len(state))
 		copy(makeSlice(ptr, uint(len(state))), state[:])
@@ -234,7 +238,8 @@ func (dw *dbWrapper) pushObject(vm *duktape.Context) {
 
 	// Push the wrapper for statedb.Exists
 	vm.PushGoFunction(func(ctx *duktape.Context) int {
-		ctx.PushBoolean(dw.db.Exist(common.BytesToAddress(popSlice(ctx))))
+		addr, _ := common.BytesToAddress(popSlice(ctx)).InternalAddress()
+		ctx.PushBoolean(dw.db.Exist(addr))
 		return 1
 	})
 	vm.PutPropString(obj, "exists")
@@ -369,11 +374,11 @@ func New(code string, ctx *Context) (*Tracer, error) {
 		return 1
 	})
 	tracer.vm.PushGlobalGoFunction("toAddress", func(ctx *duktape.Context) int {
-		var addr common.Address
+		var addr common.InternalAddress
 		if ptr, size := ctx.GetBuffer(-1); ptr != nil {
-			addr = common.BytesToAddress(makeSlice(ptr, size))
+			addr, _ = common.BytesToAddress(makeSlice(ptr, size)).InternalAddress()
 		} else {
-			addr = common.HexToAddress(ctx.GetString(-1))
+			addr, _ = common.HexToAddress(ctx.GetString(-1)).InternalAddress()
 		}
 		ctx.Pop()
 		copy(makeSlice(ctx.PushFixedBuffer(20), 20), addr[:])
@@ -381,15 +386,22 @@ func New(code string, ctx *Context) (*Tracer, error) {
 	})
 	tracer.vm.PushGlobalGoFunction("toContract", func(ctx *duktape.Context) int {
 		var from common.Address
-		if ptr, size := ctx.GetBuffer(-2); ptr != nil {
+		if ptr, size := ctx.GetBuffer(-3); ptr != nil {
 			from = common.BytesToAddress(makeSlice(ptr, size))
 		} else {
 			from = common.HexToAddress(ctx.GetString(-2))
 		}
-		nonce := uint64(ctx.GetInt(-1))
-		ctx.Pop2()
+		nonce := uint64(ctx.GetInt(-2))
+		// Retrieve code slice from js stack
+		var code []byte
+		if ptr, size := ctx.GetBuffer(-1); ptr != nil {
+			code = common.CopyBytes(makeSlice(ptr, size))
+		} else {
+			code = common.FromHex(ctx.GetString(-1))
+		}
+		ctx.Pop3()
 
-		contract := crypto.CreateAddress(from, nonce)
+		contract, _ := crypto.CreateAddress(from, nonce, code).InternalAddress()
 		copy(makeSlice(ctx.PushFixedBuffer(20), 20), contract[:])
 		return 1
 	})
@@ -411,7 +423,7 @@ func New(code string, ctx *Context) (*Tracer, error) {
 		}
 		codeHash := crypto.Keccak256(code)
 		ctx.Pop3()
-		contract := crypto.CreateAddress2(from, salt, codeHash)
+		contract, _ := crypto.CreateAddress2(from, salt, codeHash).InternalAddress()
 		copy(makeSlice(ctx.PushFixedBuffer(20), 20), contract[:])
 		return 1
 	})
@@ -582,10 +594,7 @@ func (jst *Tracer) CaptureStart(env *vm.EVM, from common.Address, to common.Addr
 	rules := env.ChainConfig().Rules(env.Context.BlockNumber)
 	jst.activePrecompiles = vm.ActivePrecompiles(rules)
 
-	// Compute intrinsic gas
-	isHomestead := env.ChainConfig().IsHomestead(env.Context.BlockNumber)
-	isIstanbul := env.ChainConfig().IsIstanbul(env.Context.BlockNumber)
-	intrinsicGas, err := core.IntrinsicGas(input, nil, jst.ctx["type"] == "CREATE", isHomestead, isIstanbul)
+	intrinsicGas, err := core.IntrinsicGas(input, nil, jst.ctx["type"] == "CREATE")
 	if err != nil {
 		return
 	}
@@ -668,7 +677,8 @@ func (jst *Tracer) GetResult() (json.RawMessage, error) {
 
 		case common.Address:
 			ptr := jst.vm.PushFixedBuffer(20)
-			copy(makeSlice(ptr, 20), val[:])
+			addr, _ := val.InternalAddress()
+			copy(makeSlice(ptr, 20), addr[:])
 
 		case *big.Int:
 			pushBigInt(val, jst.vm)
