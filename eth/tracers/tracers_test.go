@@ -37,7 +37,6 @@ import (
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rlp"
-	"github.com/dominant-strategies/go-quai/tests"
 )
 
 // To generate a new callTracer test, copy paste the makeTest method below into
