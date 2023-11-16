@@ -40,7 +40,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/ethdb"
-	"github.com/dominant-strategies/go-quai/internal/ethapi"
+	"github.com/dominant-strategies/go-quai/internal/quaiapi"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rpc"
 )
@@ -198,7 +198,7 @@ func TestTraceCall(t *testing.T) {
 
 	var testSuite = []struct {
 		blockNumber rpc.BlockNumber
-		call        ethapi.TransactionArgs
+		call        quaiapi.TransactionArgs
 		config      *TraceCallConfig
 		expectErr   error
 		expect      interface{}
@@ -206,41 +206,41 @@ func TestTraceCall(t *testing.T) {
 		// Standard JSON trace upon the genesis, plain transfer.
 		{
 			blockNumber: rpc.BlockNumber(0),
-			call: ethapi.TransactionArgs{
+			call: quaiapi.TransactionArgs{
 				From:  &accounts[0].addr,
 				To:    &accounts[1].addr,
 				Value: (*hexutil.Big)(big.NewInt(1000)),
 			},
 			config:    nil,
 			expectErr: nil,
-			expect: &ethapi.ExecutionResult{
+			expect: &quaiapi.ExecutionResult{
 				Gas:         params.TxGas,
 				Failed:      false,
 				ReturnValue: "",
-				StructLogs:  []ethapi.StructLogRes{},
+				StructLogs:  []quaiapi.StructLogRes{},
 			},
 		},
 		// Standard JSON trace upon the head, plain transfer.
 		{
 			blockNumber: rpc.BlockNumber(genBlocks),
-			call: ethapi.TransactionArgs{
+			call: quaiapi.TransactionArgs{
 				From:  &accounts[0].addr,
 				To:    &accounts[1].addr,
 				Value: (*hexutil.Big)(big.NewInt(1000)),
 			},
 			config:    nil,
 			expectErr: nil,
-			expect: &ethapi.ExecutionResult{
+			expect: &quaiapi.ExecutionResult{
 				Gas:         params.TxGas,
 				Failed:      false,
 				ReturnValue: "",
-				StructLogs:  []ethapi.StructLogRes{},
+				StructLogs:  []quaiapi.StructLogRes{},
 			},
 		},
 		// Standard JSON trace upon the non-existent block, error expects
 		{
 			blockNumber: rpc.BlockNumber(genBlocks + 1),
-			call: ethapi.TransactionArgs{
+			call: quaiapi.TransactionArgs{
 				From:  &accounts[0].addr,
 				To:    &accounts[1].addr,
 				Value: (*hexutil.Big)(big.NewInt(1000)),
@@ -252,35 +252,35 @@ func TestTraceCall(t *testing.T) {
 		// Standard JSON trace upon the latest block
 		{
 			blockNumber: rpc.LatestBlockNumber,
-			call: ethapi.TransactionArgs{
+			call: quaiapi.TransactionArgs{
 				From:  &accounts[0].addr,
 				To:    &accounts[1].addr,
 				Value: (*hexutil.Big)(big.NewInt(1000)),
 			},
 			config:    nil,
 			expectErr: nil,
-			expect: &ethapi.ExecutionResult{
+			expect: &quaiapi.ExecutionResult{
 				Gas:         params.TxGas,
 				Failed:      false,
 				ReturnValue: "",
-				StructLogs:  []ethapi.StructLogRes{},
+				StructLogs:  []quaiapi.StructLogRes{},
 			},
 		},
 		// Standard JSON trace upon the pending block
 		{
 			blockNumber: rpc.PendingBlockNumber,
-			call: ethapi.TransactionArgs{
+			call: quaiapi.TransactionArgs{
 				From:  &accounts[0].addr,
 				To:    &accounts[1].addr,
 				Value: (*hexutil.Big)(big.NewInt(1000)),
 			},
 			config:    nil,
 			expectErr: nil,
-			expect: &ethapi.ExecutionResult{
+			expect: &quaiapi.ExecutionResult{
 				Gas:         params.TxGas,
 				Failed:      false,
 				ReturnValue: "",
-				StructLogs:  []ethapi.StructLogRes{},
+				StructLogs:  []quaiapi.StructLogRes{},
 			},
 		},
 	}
@@ -329,7 +329,7 @@ func TestOverriddenTraceCall(t *testing.T) {
 
 	var testSuite = []struct {
 		blockNumber rpc.BlockNumber
-		call        ethapi.TransactionArgs
+		call        quaiapi.TransactionArgs
 		config      *TraceCallConfig
 		expectErr   error
 		expect      *callTrace
@@ -337,15 +337,15 @@ func TestOverriddenTraceCall(t *testing.T) {
 		// Succcessful call with state overriding
 		{
 			blockNumber: rpc.PendingBlockNumber,
-			call: ethapi.TransactionArgs{
+			call: quaiapi.TransactionArgs{
 				From:  &randomAccounts[0].addr,
 				To:    &randomAccounts[1].addr,
 				Value: (*hexutil.Big)(big.NewInt(1000)),
 			},
 			config: &TraceCallConfig{
 				Tracer: &tracer,
-				StateOverrides: &ethapi.StateOverride{
-					randomAccounts[0].addr: ethapi.OverrideAccount{Balance: newRPCBalance(new(big.Int).Mul(big.NewInt(1), big.NewInt(params.Ether)))},
+				StateOverrides: &quaiapi.StateOverride{
+					randomAccounts[0].addr: quaiapi.OverrideAccount{Balance: newRPCBalance(new(big.Int).Mul(big.NewInt(1), big.NewInt(params.Ether)))},
 				},
 			},
 			expectErr: nil,
@@ -361,7 +361,7 @@ func TestOverriddenTraceCall(t *testing.T) {
 		// Invalid call without state overriding
 		{
 			blockNumber: rpc.PendingBlockNumber,
-			call: ethapi.TransactionArgs{
+			call: quaiapi.TransactionArgs{
 				From:  &randomAccounts[0].addr,
 				To:    &randomAccounts[1].addr,
 				Value: (*hexutil.Big)(big.NewInt(1000)),
@@ -390,15 +390,15 @@ func TestOverriddenTraceCall(t *testing.T) {
 		//  }
 		{
 			blockNumber: rpc.PendingBlockNumber,
-			call: ethapi.TransactionArgs{
+			call: quaiapi.TransactionArgs{
 				From: &randomAccounts[0].addr,
 				To:   &randomAccounts[2].addr,
 				Data: newRPCBytes(common.Hex2Bytes("8381f58a")), // call number()
 			},
 			config: &TraceCallConfig{
 				Tracer: &tracer,
-				StateOverrides: &ethapi.StateOverride{
-					randomAccounts[2].addr: ethapi.OverrideAccount{
+				StateOverrides: &quaiapi.StateOverride{
+					randomAccounts[2].addr: quaiapi.OverrideAccount{
 						Code:      newRPCBytes(common.Hex2Bytes("6080604052348015600f57600080fd5b506004361060285760003560e01c80638381f58a14602d575b600080fd5b60336049565b6040518082815260200191505060405180910390f35b6000548156fea2646970667358221220eab35ffa6ab2adfe380772a48b8ba78e82a1b820a18fcb6f59aa4efb20a5f60064736f6c63430007040033")),
 						StateDiff: newStates([]common.Hash{{}}, []common.Hash{common.BigToHash(big.NewInt(123))}),
 					},
@@ -470,11 +470,11 @@ func TestTraceTransaction(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to trace transaction %v", err)
 	}
-	if !reflect.DeepEqual(result, &ethapi.ExecutionResult{
+	if !reflect.DeepEqual(result, &quaiapi.ExecutionResult{
 		Gas:         params.TxGas,
 		Failed:      false,
 		ReturnValue: "",
-		StructLogs:  []ethapi.StructLogRes{},
+		StructLogs:  []quaiapi.StructLogRes{},
 	}) {
 		t.Error("Transaction tracing result is different")
 	}
@@ -520,11 +520,11 @@ func TestTraceBlock(t *testing.T) {
 			expectErr:   nil,
 			expect: []*txTraceResult{
 				{
-					Result: &ethapi.ExecutionResult{
+					Result: &quaiapi.ExecutionResult{
 						Gas:         params.TxGas,
 						Failed:      false,
 						ReturnValue: "",
-						StructLogs:  []ethapi.StructLogRes{},
+						StructLogs:  []quaiapi.StructLogRes{},
 					},
 				},
 			},
@@ -543,11 +543,11 @@ func TestTraceBlock(t *testing.T) {
 			expectErr:   nil,
 			expect: []*txTraceResult{
 				{
-					Result: &ethapi.ExecutionResult{
+					Result: &quaiapi.ExecutionResult{
 						Gas:         params.TxGas,
 						Failed:      false,
 						ReturnValue: "",
-						StructLogs:  []ethapi.StructLogRes{},
+						StructLogs:  []quaiapi.StructLogRes{},
 					},
 				},
 			},
@@ -559,11 +559,11 @@ func TestTraceBlock(t *testing.T) {
 			expectErr:   nil,
 			expect: []*txTraceResult{
 				{
-					Result: &ethapi.ExecutionResult{
+					Result: &quaiapi.ExecutionResult{
 						Gas:         params.TxGas,
 						Failed:      false,
 						ReturnValue: "",
-						StructLogs:  []ethapi.StructLogRes{},
+						StructLogs:  []quaiapi.StructLogRes{},
 					},
 				},
 			},
