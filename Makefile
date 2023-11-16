@@ -80,6 +80,10 @@ ifeq ($(NO_DISCOVER),true)
 	BASE_CMD += --nodiscover
 endif
 
+ifeq ($(CUSTOM_DATA_DIR), true)
+	BASE_CMD += --datadir $(DATA_DIR)
+endif
+
 # Build suburl strings for slice specific subclient groups
 # WARNING: Only connect to dom/sub clients over a trusted network.
 ifeq ($(REGION),2)
