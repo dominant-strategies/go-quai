@@ -3,7 +3,6 @@ package node
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/libp2p/go-libp2p"
 	kaddht "github.com/libp2p/go-libp2p-kad-dht"
@@ -159,21 +158,4 @@ func (p *P2PNode) Bootstrap() error {
 		return err
 	}
 	return nil
-}
-
-// Returns the number of peers in the routing table, as well as how many active
-// connections we currently have.
-func (p *P2PNode) ConnectionStats() (int, int) {
-	routingTableSize := p.dht.RoutingTable().Size()
-	numConnected := len(p.Host.Network().Peers())
-	return routingTableSize, numConnected
-}
-
-func (p *P2PNode) statsLoop() {
-	// TODO: need close channel on this loop
-	for {
-		time.Sleep(10 * time.Second)
-		numInTable, numConnected := p.ConnectionStats()
-		log.Infof("connected to %d / %d peers", numConnected, numInTable)
-	}
 }
