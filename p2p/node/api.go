@@ -50,7 +50,7 @@ func (p *P2PNode) Start() error {
 	go p.statsLoop()
 
 	// Bootstrap the node
-	if err := p.Bootstrap(); err != nil {
+	if err := p.bootstrap(); err != nil {
 		log.Warnf("error bootstrapping the node: %s", err)
 	}
 	return nil
