@@ -7,7 +7,6 @@ import (
 
 	"github.com/libp2p/go-libp2p"
 	kaddht "github.com/libp2p/go-libp2p-kad-dht"
-	"github.com/libp2p/go-libp2p/core/event"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/routing"
@@ -160,51 +159,6 @@ func (p *P2PNode) Bootstrap() error {
 		return err
 	}
 	return nil
-}
-
-// subscribes to the event bus and handles libp2p events as they're received
-func (p *P2PNode) eventLoop() {
-	// Subscribe to any events of interest
-	sub, err := p.EventBus().Subscribe([]interface{}{
-		new(event.EvtLocalProtocolsUpdated),
-		new(event.EvtLocalAddressesUpdated),
-		new(event.EvtLocalReachabilityChanged),
-		new(event.EvtNATDeviceTypeChanged),
-		new(event.EvtPeerProtocolsUpdated),
-		new(event.EvtPeerIdentificationCompleted),
-		new(event.EvtPeerIdentificationFailed),
-		new(event.EvtPeerConnectednessChanged),
-	})
-	if err != nil {
-		log.Fatalf("failed to subscribe to peer connectedness events: %s", err)
-	}
-	defer sub.Close()
-
-	// Wait for events
-	for {
-		select {
-		case evt := <-sub.Out():
-			if e, ok := evt.(event.EvtLocalAddressesUpdated); ok {
-				p2pAddr, err := p.p2pAddress()
-				if err != nil {
-					log.Errorf("error computing p2p address: %s", err)
-				} else {
-					for _, addr := range e.Current {
-						addr := addr.Address.Encapsulate(p2pAddr)
-						log.Infof("listening at address: %s", addr)
-					}
-				}
-			} else if e, ok := evt.(event.EvtPeerConnectednessChanged); ok {
-				log.Debugf("peer %s is now %s", e.Peer.String(), e.Connectedness)
-			} else {
-				log.Tracef("unhandled host event: %s", evt)
-			}
-
-		case <-p.ctx.Done():
-			log.Warnf("context cancel received. Stopping event listener")
-			return
-		}
-	}
 }
 
 // Returns the number of peers in the routing table, as well as how many active
