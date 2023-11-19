@@ -834,6 +834,12 @@ func opSuicide(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 	balance := interpreter.evm.StateDB.GetBalance(addr)
 	interpreter.evm.StateDB.AddBalance(beneficiaryAddr, balance)
 	interpreter.evm.StateDB.Suicide(addr)
+
+	// VERY important, this check substracts balance from the ERC version of QUAI
+	// This prevents an infinite money glitch
+	// https://medium.com/immunefi/optimism-infinite-money-duplication-bugfix-review-daa6597146a0
+	interpreter.evm.StateDB.SubBalance(addr, balance)
+
 	return nil, nil
 }
 

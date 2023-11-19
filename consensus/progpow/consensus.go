@@ -464,6 +464,23 @@ func (progpow *Progpow) Finalize(chain consensus.ChainHeaderReader, header *type
 	accumulateRewards(chain.Config(), state, header, uncles)
 
 	if common.NodeLocation.Context() == common.ZONE_CTX && header.ParentHash() == chain.Config().GenesisHash {
+		predeploy := core.ReadGenesisAlloc("core/state/predeploy/predeploy_" + common.NodeLocation.Name() + ".json")
+		log.Info("Allocating predeploy state", "num", len(predeploy))
+
+		for addressString, account := range predeploy {
+			addr := common.HexToAddress(addressString)
+			internal, err := addr.InternalAddress()
+			if err != nil {
+				log.Error("Provided address in genesis block is out of scope")
+			}
+			state.AddBalance(internal, account.Balance)
+			state.SetCode(internal, account.Code)
+			state.SetNonce(internal, account.Nonce)
+			for key, value := range account.Storage {
+				state.SetState(internal, key, value)
+			}
+		}
+
 		alloc := core.ReadGenesisAlloc("genallocs/gen_alloc_" + common.NodeLocation.Name() + ".json")
 		log.Info("Allocating genesis accounts", "num", len(alloc))
 

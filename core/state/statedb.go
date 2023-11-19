@@ -26,6 +26,7 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
+	"github.com/dominant-strategies/go-quai/core/state/predeploy"
 	"github.com/dominant-strategies/go-quai/core/state/snapshot"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/crypto"
@@ -33,6 +34,7 @@ import (
 	"github.com/dominant-strategies/go-quai/metrics"
 	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/dominant-strategies/go-quai/trie"
+	"golang.org/x/crypto/sha3"
 )
 
 type revision struct {
@@ -149,6 +151,15 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 	return sdb, nil
 }
 
+func GetQuaiBalanceKey(addr common.InternalAddress) common.Hash {
+	position := common.Big0
+	hasher := sha3.NewLegacyKeccak256()
+	hasher.Write(common.LeftPadBytes(addr.Bytes(), 32))
+	hasher.Write(common.LeftPadBytes(position.Bytes(), 32))
+	digest := hasher.Sum(nil)
+	return common.BytesToHash(digest)
+}
+
 // StartPrefetcher initializes a new trie prefetcher to pull in nodes from the
 // state trie concurrently while the state is mutated so that when we reach the
 // commit phase, most of the needed data is already hot.
@@ -254,11 +265,13 @@ func (s *StateDB) Empty(addr common.InternalAddress) bool {
 
 // GetBalance retrieves the balance from the given address or 0 if object not found
 func (s *StateDB) GetBalance(addr common.InternalAddress) *big.Int {
-	stateObject := s.getStateObject(addr)
-	if stateObject != nil {
-		return stateObject.Balance()
+	quaiAddress, err := common.HexToAddress(predeploy.QuaiTokenAddresses[common.NodeLocation.Name()]).InternalAddress()
+	if err != nil {
+		panic("QuaiTokenAddress is not valid")
 	}
-	return common.Big0
+	key := GetQuaiBalanceKey(addr)
+	bal := s.GetState(quaiAddress, key)
+	return bal.Big()
 }
 
 func (s *StateDB) GetNonce(addr common.InternalAddress) uint64 {
@@ -371,25 +384,37 @@ func (s *StateDB) HasSuicided(addr common.InternalAddress) bool {
 
 // AddBalance adds amount to the account associated with addr.
 func (s *StateDB) AddBalance(addr common.InternalAddress, amount *big.Int) {
-	stateObject := s.GetOrNewStateObject(addr)
-	if stateObject != nil {
-		stateObject.AddBalance(amount)
+	quaiAddress, err := common.HexToAddress(predeploy.QuaiTokenAddresses[common.NodeLocation.Name()]).InternalAddress()
+	if err != nil {
+		panic("QuaiTokenAddress is not valid")
 	}
+	key := GetQuaiBalanceKey(addr)
+	value := s.GetState(quaiAddress, key)
+	bal := value.Big()
+	bal = bal.Add(bal, amount)
+	s.SetState(quaiAddress, key, common.BigToHash(bal))
 }
 
 // SubBalance subtracts amount from the account associated with addr.
 func (s *StateDB) SubBalance(addr common.InternalAddress, amount *big.Int) {
-	stateObject := s.GetOrNewStateObject(addr)
-	if stateObject != nil {
-		stateObject.SubBalance(amount)
+	quaiAddress, err := common.HexToAddress(predeploy.QuaiTokenAddresses[common.NodeLocation.Name()]).InternalAddress()
+	if err != nil {
+		panic("QuaiTokenAddress is not valid")
 	}
+	key := GetQuaiBalanceKey(addr)
+	value := s.GetState(quaiAddress, key)
+	bal := value.Big()
+	bal = bal.Sub(bal, amount)
+	s.SetState(quaiAddress, key, common.BigToHash(bal))
 }
 
 func (s *StateDB) SetBalance(addr common.InternalAddress, amount *big.Int) {
-	stateObject := s.GetOrNewStateObject(addr)
-	if stateObject != nil {
-		stateObject.SetBalance(amount)
+	quaiAddress, err := common.HexToAddress(predeploy.QuaiTokenAddresses[common.NodeLocation.Name()]).InternalAddress()
+	if err != nil {
+		panic("QuaiTokenAddress is not valid")
 	}
+	key := GetQuaiBalanceKey(addr)
+	s.SetState(quaiAddress, key, common.BigToHash(amount))
 }
 
 func (s *StateDB) SetNonce(addr common.InternalAddress, nonce uint64) {
