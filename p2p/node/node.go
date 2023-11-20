@@ -44,17 +44,10 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 	port := viper.GetString(options.PORT)
 
 	// Load bootpeers
-	var bootpeers []peer.AddrInfo
-	for _, p := range viper.GetStringSlice(options.BOOTPEERS) {
-		addr, err := multiaddr.NewMultiaddr(p)
-		if err != nil {
-			log.Fatalf("error loading multiaddress for %s in bootpeers: %s", p, err)
-		}
-		info, err := peer.AddrInfoFromP2pAddr(addr)
-		if err != nil {
-			log.Fatalf("error getting address info for %s in bootpeers: %s", addr, err)
-		}
-		bootpeers = append(bootpeers, *info)
+	bootpeers, err := loadBootPeers()
+	if err != nil {
+		log.Errorf("error loading bootpeers: %s", err)
+		return nil, err
 	}
 
 	// Define a connection manager

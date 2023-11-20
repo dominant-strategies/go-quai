@@ -7,6 +7,8 @@ import (
 	"github.com/dominant-strategies/go-quai/cmd/options"
 	"github.com/dominant-strategies/go-quai/common/constants"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/multiformats/go-multiaddr"
 	"github.com/spf13/viper"
 )
 
@@ -53,4 +55,21 @@ func deleteNodeInfoFile() error {
 		}
 	}
 	return nil
+}
+
+// Loads bootpeers addresses from the config and returns a list of peer.AddrInfo
+func loadBootPeers() ([]peer.AddrInfo, error) {
+	var bootpeers []peer.AddrInfo
+	for _, p := range viper.GetStringSlice(options.BOOTPEERS) {
+		addr, err := multiaddr.NewMultiaddr(p)
+		if err != nil {
+			return nil, err
+		}
+		info, err := peer.AddrInfoFromP2pAddr(addr)
+		if err != nil {
+			return nil, err
+		}
+		bootpeers = append(bootpeers, *info)
+	}
+	return bootpeers, nil
 }
