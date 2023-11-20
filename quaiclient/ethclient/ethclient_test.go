@@ -224,6 +224,7 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 func generateTestChain(db ethdb.Database) (*core.Genesis, []*types.Block) {
 	config := params.TestChainConfig
 	config.Location = common.Location{0, 0}
+	config.ChainID = big.NewInt(1)
 
 	genesis := &core.Genesis{
 		Config:     config,
@@ -398,7 +399,7 @@ func testChainID(t *testing.T, client *rpc.Client) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if id == nil || id.Cmp(params.AllProgpowProtocolChanges.ChainID) != 0 {
+	if id == nil || id.Cmp(big.NewInt(1)) != 0 {
 		t.Fatalf("ChainID returned wrong number: %+v", id)
 	}
 }
