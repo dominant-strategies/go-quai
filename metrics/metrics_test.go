@@ -2,7 +2,7 @@ package metrics
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"sync"
 	"testing"
@@ -13,7 +13,7 @@ const FANOUT = 128
 
 // Stop the compiler from complaining during debugging.
 var (
-	_ = ioutil.Discard
+	_ = io.Discard
 	_ = log.LstdFlags
 )
 

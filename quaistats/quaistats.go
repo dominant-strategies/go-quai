@@ -25,7 +25,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math/big"
 	"net"
 	"net/http"
@@ -667,7 +667,7 @@ func (s *Service) reportNodeStats(url string, mod int, authJwt string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, err := ioutil.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			log.Error("Failed to response body", "err", err)
 			return err
@@ -828,7 +828,7 @@ func (s *Service) report(url string, dataType string, stats interface{}, authJwt
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, err := ioutil.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			log.Error("Failed to response body", "err", err)
 			return err
@@ -940,7 +940,7 @@ func (s *Service) login2(url string) (string, error) {
 	}
 	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		log.Error("Failed to response body", "err", err)
 		return "", err
