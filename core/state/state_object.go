@@ -94,23 +94,23 @@ type stateObject struct {
 
 // empty returns whether the account is considered empty.
 func (s *stateObject) empty() bool {
-	return s.data.Nonce == 0 && s.data.Balance.Sign() == 0 && bytes.Equal(s.data.CodeHash, emptyCodeHash)
+	return s.data.Nonce == 0 && bytes.Equal(s.data.CodeHash, emptyCodeHash)
 }
 
 // Account is the Quai consensus representation of accounts.
 // These objects are stored in the main account trie.
 type Account struct {
-	Nonce    uint64
-	Balance  *big.Int
+	Nonce uint64
+	// Balance  *big.Int
 	Root     common.Hash // merkle root of the storage trie
 	CodeHash []byte
 }
 
 // newObject creates a state object.
 func newObject(db *StateDB, address common.InternalAddress, data Account) *stateObject {
-	if data.Balance == nil {
-		data.Balance = new(big.Int)
-	}
+	// if data.Balance == nil {
+	// 	data.Balance = new(big.Int)
+	// }
 	if data.CodeHash == nil {
 		data.CodeHash = emptyCodeHash
 	}
@@ -417,38 +417,38 @@ func (s *stateObject) CommitTrie(db Database) error {
 
 // AddBalance adds amount to s's balance.
 // It is used to add funds to the destination account of a transfer.
-func (s *stateObject) AddBalance(amount *big.Int) {
-	// We must check emptiness for the objects such that the account
-	// clearing (0,0,0 objects) can take effect. This may be unnecessary.
-	if amount.Sign() == 0 {
-		if s.empty() {
-			s.touch()
-		}
-		return
-	}
-	s.SetBalance(new(big.Int).Add(s.Balance(), amount))
-}
+// func (s *stateObject) AddBalance(amount *big.Int) {
+// 	// We must check emptiness for the objects such that the account
+// 	// clearing (0,0,0 objects) can take effect. This may be unnecessary.
+// 	if amount.Sign() == 0 {
+// 		if s.empty() {
+// 			s.touch()
+// 		}
+// 		return
+// 	}
+// 	s.SetBalance(new(big.Int).Add(s.Balance(), amount))
+// }
 
 // SubBalance removes amount from s's balance.
 // It is used to remove funds from the origin account of a transfer.
-func (s *stateObject) SubBalance(amount *big.Int) {
-	if amount.Sign() == 0 {
-		return
-	}
-	s.SetBalance(new(big.Int).Sub(s.Balance(), amount))
-}
+// func (s *stateObject) SubBalance(amount *big.Int) {
+// 	if amount.Sign() == 0 {
+// 		return
+// 	}
+// 	s.SetBalance(new(big.Int).Sub(s.Balance(), amount))
+// }
 
-func (s *stateObject) SetBalance(amount *big.Int) {
-	s.db.journal.append(balanceChange{
-		account: &s.address,
-		prev:    new(big.Int).Set(s.data.Balance),
-	})
-	s.setBalance(amount)
-}
+// func (s *stateObject) SetBalance(amount *big.Int) {
+// 	s.db.journal.append(balanceChange{
+// 		account: &s.address,
+// 		prev:    new(big.Int).Set(s.data.Balance),
+// 	})
+// 	s.setBalance(amount)
+// }
 
-func (s *stateObject) setBalance(amount *big.Int) {
-	s.data.Balance = amount
-}
+// func (s *stateObject) setBalance(amount *big.Int) {
+// 	s.data.Balance = amount
+// }
 
 func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 	stateObject := newObject(db, s.address, s.data)
@@ -539,9 +539,9 @@ func (s *stateObject) CodeHash() []byte {
 	return s.data.CodeHash
 }
 
-func (s *stateObject) Balance() *big.Int {
-	return s.data.Balance
-}
+// func (s *stateObject) Balance() *big.Int {
+// 	return s.data.Balance
+// }
 
 func (s *stateObject) Nonce() uint64 {
 	return s.data.Nonce

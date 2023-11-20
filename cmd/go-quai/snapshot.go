@@ -482,7 +482,7 @@ func dumpState(ctx *cli.Context) error {
 			return err
 		}
 		da := &state.DumpAccount{
-			Balance:   account.Balance.String(),
+			// Balance:   account.Balance.String(),
 			Nonce:     account.Nonce,
 			Root:      account.Root,
 			CodeHash:  account.CodeHash,

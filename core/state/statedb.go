@@ -458,12 +458,12 @@ func (s *StateDB) Suicide(addr common.InternalAddress) bool {
 		return false
 	}
 	s.journal.append(suicideChange{
-		account:     &addr,
-		prev:        stateObject.suicided,
-		prevbalance: new(big.Int).Set(stateObject.Balance()),
+		account: &addr,
+		prev:    stateObject.suicided,
+		// prevbalance: new(big.Int).Set(stateObject.Balance()),
 	})
 	stateObject.markSuicided()
-	stateObject.data.Balance = new(big.Int)
+	// stateObject.data.Balance = new(big.Int)
 
 	return true
 }
@@ -494,7 +494,7 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	// enough to track account updates at commit time, deletions need tracking
 	// at transaction boundary level to ensure we capture state clearing.
 	if s.snap != nil {
-		s.snapAccounts[obj.addrHash] = snapshot.SlimAccountRLP(obj.data.Nonce, obj.data.Balance, obj.data.Root, obj.data.CodeHash)
+		s.snapAccounts[obj.addrHash] = snapshot.SlimAccountRLP(obj.data.Nonce, obj.data.Root, obj.data.CodeHash)
 	}
 }
 
@@ -545,8 +545,8 @@ func (s *StateDB) getDeletedStateObject(addr common.InternalAddress) *stateObjec
 				return nil
 			}
 			data = &Account{
-				Nonce:    acc.Nonce,
-				Balance:  acc.Balance,
+				Nonce: acc.Nonce,
+				// Balance:  acc.Balance,
 				CodeHash: acc.CodeHash,
 				Root:     common.BytesToHash(acc.Root),
 			}
@@ -636,10 +636,10 @@ func (s *StateDB) createObject(addr common.InternalAddress) (newobj, prev *state
 //
 // Carrying over the balance ensures that Ether doesn't disappear.
 func (s *StateDB) CreateAccount(addr common.InternalAddress) {
-	newObj, prev := s.createObject(addr)
-	if prev != nil {
-		newObj.setBalance(prev.data.Balance)
-	}
+	s.createObject(addr)
+	// if prev != nil {
+	// 	newObj.setBalance(prev.data.Balance)
+	// }
 }
 
 func (db *StateDB) ForEachStorage(addr common.InternalAddress, cb func(key, value common.Hash) bool) error {
