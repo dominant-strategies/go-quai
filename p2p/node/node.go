@@ -139,14 +139,6 @@ func (p *P2PNode) p2pAddress() (multiaddr.Multiaddr, error) {
 
 // Dial bootpeers and bootstrap the DHT
 func (p *P2PNode) bootstrap() error {
-	// Connect to boot peers
-	for _, addr := range p.bootpeers {
-		log.Debugf("dialing boot peer: %s", addr)
-		if err := p.Host.Connect(p.ctx, addr); err != nil {
-			log.Warnf("error dialing boot peer %s: %s", addr, err)
-		}
-	}
-
 	// Bootstrap the dht
 	if err := p.dht.Bootstrap(p.ctx); err != nil {
 		log.Warnf("error bootstrapping DHT: %s", err)
