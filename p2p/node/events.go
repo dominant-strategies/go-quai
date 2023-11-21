@@ -52,11 +52,11 @@ func (p *P2PNode) eventLoop() {
 			case event.EvtNATDeviceTypeChanged:
 				log.Debugf("Event: 'NAT device type changed' - DeviceType %v, transport: %v", e.NatDeviceType.String(), e.TransportProtocol.String())
 			case event.EvtPeerProtocolsUpdated:
-				log.Debugf("Event: 'Peer protocols updated' - added: %+v, removed: %+v, peer: %+v", e.Added, e.Removed, e.Peer.Pretty())
+				log.Debugf("Event: 'Peer protocols updated' - added: %+v, removed: %+v, peer: %+v", e.Added, e.Removed, e.Peer)
 			case event.EvtPeerIdentificationCompleted:
-				log.Debugf("Event: 'Peer identification completed' - %v", e.Peer.Pretty())
+				log.Debugf("Event: 'Peer identification completed' - %v", e.Peer)
 			case event.EvtPeerIdentificationFailed:
-				log.Debugf("Event 'Peer identification failed' - %v", e.Peer.Pretty())
+				log.Debugf("Event 'Peer identification failed' - %v", e.Peer)
 			case event.EvtPeerConnectednessChanged:
 				// get the peer info
 				peerInfo := p.Peerstore().PeerInfo(e.Peer)

@@ -121,7 +121,7 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 	log.Debugf("host created")
 
 	// log the p2p node's ID
-	nodeID := host.ID().Pretty()
+	nodeID := host.ID()
 	log.Infof("node created: %s", nodeID)
 
 	return &P2PNode{
