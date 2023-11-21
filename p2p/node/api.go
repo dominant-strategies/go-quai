@@ -11,6 +11,7 @@ import (
 	"github.com/dominant-strategies/go-quai/consensus/types"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p"
+	quaiprotocol "github.com/dominant-strategies/go-quai/p2p/protocol"
 )
 
 // Api defines an interface which can be used to interact with the node
@@ -48,6 +49,9 @@ func (p *P2PNode) Start() error {
 	log.Debugf("starting node processes...")
 	go p.eventLoop()
 	go p.statsLoop()
+
+	// Register the Quai protocol handler
+	p.SetStreamHandler(quaiprotocol.ProtocolVersion, quaiprotocol.QuaiProtocolHandler)
 
 	// Bootstrap the node
 	if err := p.bootstrap(); err != nil {

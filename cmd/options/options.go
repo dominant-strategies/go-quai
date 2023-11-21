@@ -14,5 +14,5 @@ const (
 	KEYFILE          = "private.key"
 	MIN_PEERS        = "min-peers"
 	MAX_PEERS        = "max-peers"
-	LOCATION = "LOCATION"
+	LOCATION         = "location"
 )
