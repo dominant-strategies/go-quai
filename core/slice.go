@@ -21,7 +21,6 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/quaiclient"
-	"github.com/dominant-strategies/go-quai/rpc"
 	"github.com/dominant-strategies/go-quai/trie"
 	lru "github.com/hashicorp/golang-lru"
 )
@@ -142,7 +141,7 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLooku
 	return sl, nil
 }
 
-func NewFakeSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLookupLimit *uint64, isLocalBlock func(block *types.Header) bool, chainConfig *params.ChainConfig, slicesRunning []common.Location, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis, client *rpc.Client) (*Slice, error) {
+func NewFakeSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLookupLimit *uint64, isLocalBlock func(block *types.Header) bool, chainConfig *params.ChainConfig, slicesRunning []common.Location, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis) (*Slice, error) {
 	nodeCtx := common.NodeLocation.Context()
 	sl := &Slice{
 		config:         chainConfig,
@@ -179,7 +178,7 @@ func NewFakeSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txL
 	// only set domClient if the chain is not Prime.
 	if nodeCtx != common.PRIME_CTX {
 			go func ()  {
-				sl.domClient = quaiclient.NewClient(client)
+				sl.domClient = quaiclient.NewClient(&quaiclient.TestRpcClient{})
 			}()
 	}
 

@@ -188,7 +188,7 @@ var (
 	testBalance = big.NewInt(2e15)
 )
 
-func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
+func newTestBackend(t *testing.T) (*node.Node, []*types.Block, *rpc.Client) {
 	// Set location to ZONE_CTX
 	common.NodeLocation = common.Location{0, 0}
 	// Generate test chain.
@@ -206,6 +206,8 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 	config.Progpow.PowMode = progpow.ModeFake
 	config.DomUrl = "http://localhost:8080"
 
+	client, _ := n.Attach()
+
 	ethservice, err := eth.NewFake(n, config, db)
 	if err != nil {
 		t.Fatalf("can't create new quai service: %v", err)
@@ -218,7 +220,7 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 	if _, err := ethservice.Core().InsertChain(blocks[1:]); err != nil {
 		t.Fatalf("can't import test blocks: %v", err)
 	}
-	return n, blocks
+	return n, blocks, client
 }
 
 func generateTestChain(db ethdb.Database) (*core.Genesis, []*types.Block) {
@@ -248,8 +250,7 @@ func generateTestChain(db ethdb.Database) (*core.Genesis, []*types.Block) {
 }
 
 func TestEthClient(t *testing.T) {
-	backend, chain := newTestBackend(t)
-	client, _ := backend.Attach()
+	backend, chain, client := newTestBackend(t)
 	defer backend.Close()
 	defer client.Close()
 

@@ -346,8 +346,7 @@ func NewFake(stack *node.Node, config *ethconfig.Config, chainDb ethdb.Database)
 	}
 
 	var err error
-    client, _ := stack.Attach()
-	eth.core, err = core.NewFakeCore(chainDb, &config.Miner, eth.isLocalBlock, &config.TxPool, &config.TxLookupLimit, chainConfig, eth.config.SlicesRunning, eth.config.DomUrl, eth.config.SubUrls, eth.engine, cacheConfig, vmConfig, config.Genesis, client)
+	eth.core, err = core.NewFakeCore(chainDb, &config.Miner, eth.isLocalBlock, &config.TxPool, &config.TxLookupLimit, chainConfig, eth.config.SlicesRunning, eth.config.DomUrl, eth.config.SubUrls, eth.engine, cacheConfig, vmConfig, config.Genesis)
 	if err != nil {
 		return nil, err
 	}
