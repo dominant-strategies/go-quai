@@ -47,7 +47,7 @@ func init() {
 	sendCmd.Flags().StringVarP(&message, "message", "m", "", "Message to send")
 	sendCmd.Flags().DurationVar(&sendInterval, "interval", 0, "Interval between messages, i.e. '5s' (Set to 0 for a one-time send).")
 	// add flag to read the protocol id from the command line
-	sendCmd.Flags().StringVar(&protocolID, "protocol", quaiprotocol.ProtocolVersion, "Protocol ID, i.e. '/quai/1.0.0'")
+	sendCmd.Flags().StringVar(&protocolID, "protocol", string(quaiprotocol.ProtocolVersion), "Protocol ID, i.e. '/quai/1.0.0'")
 
 	sendCmd.MarkFlagRequired("message") // Ensure that message flag is provided
 }
@@ -100,11 +100,6 @@ func runSend(cmd *cobra.Command, args []string) error {
 	if err := node.Host.Connect(ctx, *targetAddrInfo); err != nil {
 		log.Errorf("error connecting to target peer: %+v, error: %s", targetAddrInfo.ID, err)
 		return err
-	}
-
-	// Set the protocol id to use
-	if protocolID == "" {
-		protocolID = quaiprotocol.ProtocolVersion
 	}
 
 	// Function to send a message

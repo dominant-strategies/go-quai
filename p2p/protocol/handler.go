@@ -5,9 +5,10 @@ import (
 
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/protocol"
 )
 
-const ProtocolVersion = "/quai/1.0.0"
+const ProtocolVersion protocol.ID = "/quai/1.0.0"
 
 func QuaiProtocolHandler(stream network.Stream) {
 	defer stream.Close()

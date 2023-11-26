@@ -34,7 +34,7 @@ func TestQuaiProtocolHandler(t *testing.T) {
 
 	tests := []struct {
 		name            string
-		ProtocolVersion string
+		ProtocolVersion protocol.ID
 		wantErr         bool
 	}{
 		{
