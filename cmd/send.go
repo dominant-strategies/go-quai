@@ -55,7 +55,7 @@ func init() {
 func sendCmdPreRun(cmd *cobra.Command, args []string) error {
 	// duplicated from cmd/start.go
 	// set keyfile path
-	if "" == viper.GetString(options.KEYFILE) {
+	if viper.GetString(options.KEYFILE) == "" {
 		configDir := cmd.Flag(options.CONFIG_DIR).Value.String()
 		viper.Set(options.KEYFILE, configDir+"private.key")
 	}

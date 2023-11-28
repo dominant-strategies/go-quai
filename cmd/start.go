@@ -64,14 +64,14 @@ func init() {
 	// stop looking for more peers once we've reached max-peers
 	startCmd.PersistentFlags().StringP(options.MAX_PEERS, "", "50", "maximum number of peers to maintain connectivity with"+generateEnvDoc(options.MAX_PEERS))
 	viper.BindPFlag(options.MAX_PEERS, startCmd.PersistentFlags().Lookup(options.MAX_PEERS))
-	
+
 	// location ID
 	startCmd.PersistentFlags().StringP(options.LOCATION, "", "", "region and zone location"+generateEnvDoc(options.LOCATION))
 }
 
 func startCmdPreRun(cmd *cobra.Command, args []string) error {
 	// set keyfile path
-	if "" == viper.GetString(options.KEYFILE) {
+	if viper.GetString(options.KEYFILE) == "" {
 		configDir := cmd.Flag(options.CONFIG_DIR).Value.String()
 		viper.Set(options.KEYFILE, configDir+"private.key")
 	}
