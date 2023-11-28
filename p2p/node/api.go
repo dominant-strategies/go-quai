@@ -12,6 +12,9 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p"
 	quaiprotocol "github.com/dominant-strategies/go-quai/p2p/protocol"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
 )
 
 // Api defines an interface which can be used to interact with the node
@@ -40,23 +43,43 @@ type Api interface {
 func (p *P2PNode) Start() error {
 	log.Infof("starting P2P node...")
 
-	// Is this node expected to have bootstrap peers to dial?
-	if !viper.GetBool(options.BOOTNODE) && len(p.bootpeers) == 0 {
-		log.Warnf("no bootpeers provided. Unable to join network.")
-	}
-
 	// Start any async processes belonging to this node
 	log.Debugf("starting node processes...")
 	go p.eventLoop()
 	go p.statsLoop()
 
+	// Is this node expected to have bootstrap peers to dial?
+	if !viper.GetBool(options.BOOTNODE) && len(p.bootpeers) == 0 {
+		err := errors.New("no bootpeers provided. Unable to join network")
+		log.Errorf("%s", err)
+		return err
+	}
+
 	// Register the Quai protocol handler
 	p.SetStreamHandler(quaiprotocol.ProtocolVersion, quaiprotocol.QuaiProtocolHandler)
 
+	// If the node is a bootnode, start the bootnode service
+	if viper.GetBool(options.BOOTNODE) {
+		log.Infof("starting node as a bootnode...")
+		return nil
+	}
+
 	// Bootstrap the node
+	log.Debugf("bootstrapping node...")
 	if err := p.bootstrap(); err != nil {
 		log.Warnf("error bootstrapping the node: %s", err)
 	}
+
+	// Join the node to the quaiprotocol network
+	log.Debugf("joining quaiprotocol network...")
+	if err := quaiprotocol.JoinNetwork(p); err != nil {
+		err = errors.Wrap(err, "error joining quaiprotocol network")
+		log.Errorf("%s", err)
+		return err
+
+	}
+	log.Debugf("joined quaiprotocol network successfully")
+
 	return nil
 }
 
@@ -122,4 +145,19 @@ func (p *P2PNode) RequestTransaction(hash types.Hash, loc types.Location) chan t
 
 func (p *P2PNode) ReportBadPeer(peer p2p.PeerID) {
 	panic("todo")
+}
+
+// Returns the list of bootpeers
+func (p *P2PNode) GetBootPeers() []peer.AddrInfo {
+	return p.bootpeers
+}
+
+// Opens a new stream to the given peer using the given protocol ID
+func (p *P2PNode) NewStream(peerID peer.ID, protocolID protocol.ID) (network.Stream, error) {
+	return p.Host.NewStream(p.ctx, peerID, protocolID)
+}
+
+// Connects to the given peer
+func (p *P2PNode) Connect(pi peer.AddrInfo) error {
+	return p.Host.Connect(p.ctx, pi)
 }
