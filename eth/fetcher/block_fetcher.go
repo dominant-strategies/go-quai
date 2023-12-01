@@ -730,11 +730,17 @@ func (f *BlockFetcher) ImportBlocks(peer string, block *types.Block, relay bool)
 
 	currentIntrinsicS := f.currentIntrinsicS()
 	MaxAllowableEntropyDist := new(big.Int).Mul(currentIntrinsicS, big.NewInt(c_maxAllowableEntropyDist))
+	looseMaxAllowableEntropy := new(big.Int).Div(MaxAllowableEntropyDist, big.NewInt(100))
+	looseSyncEntropyDist := new(big.Int).Add(MaxAllowableEntropyDist, looseMaxAllowableEntropy)
 
 	broadCastEntropy := block.ParentEntropy()
 
-	// If someone is mining not within MaxAllowableEntropyDist*currentIntrinsicS
+	// If someone is mining not within MaxAllowableEntropyDist*currentIntrinsicS dont broadcast
 	if relay && f.currentS().Cmp(new(big.Int).Add(broadCastEntropy, MaxAllowableEntropyDist)) > 0 {
+		return
+	}
+	// But don't drop the peers if within 1% of that distance
+	if relay && f.currentS().Cmp(new(big.Int).Add(broadCastEntropy, looseSyncEntropyDist)) > 0 {
 		if nodeCtx != common.PRIME_CTX {
 			f.dropPeer(peer)
 		}
