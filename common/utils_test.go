@@ -12,34 +12,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// testXDGConfigLoading tests the loading of the config file from the XDG config home
-// and verifies values are correctly set in viper.
-// This test is nested within the TestCobraFlagConfigLoading test.
-func testXDGConfigLoading(t *testing.T) {
-	// set configPath to a mock temporary XDG config folder
-	mockConfigPath := "/tmp/xdg_config_home/"
-	tempFile := createMockXDGConfigFile(t, mockConfigPath)
-	defer tempFile.Close()
-	defer os.RemoveAll(mockConfigPath)
-
-	// write LOG_LEVEL config to mock config.yaml file
-	_, err := tempFile.WriteString(options.LOG_LEVEL + " : " + "debug\n")
-	require.NoError(t, err)
-
-	// Clear viper instance to simulate a fresh start
-	viper.Reset()
-	// Set config path to the temporary config directory
-	viper.SetConfigFile(tempFile.Name())
-
-	InitConfig()
-
-	// Assert log level is set to "debug" as per the mock config file
-	assert.Equal(t, "debug", viper.GetString(options.LOG_LEVEL))
-}
-
 // Verifies that the config file is saved or updated with the current config parameters.
-func TestUpdateConfigFile(t *testing.T) {
-	// set configPath to a mock temporary XDG config folder
+func TestSaveConfig(t *testing.T) {
+	// set configPath to a temporary mocked XDG config folder
 	mockConfigPath := "/tmp/xdg_config_home/"
 	tempFile := createMockXDGConfigFile(t, mockConfigPath)
 	defer tempFile.Close()
@@ -71,52 +46,54 @@ func TestUpdateConfigFile(t *testing.T) {
 	assert.Equal(t, constants.CONFIG_FILE_NAME+".bak", backupFile.Name())
 }
 
-// testEnvironmentVariableConfigLoading tests the setting of log level from
-// the environment variable and verifies the expected order of precedence of config loading
-// (i.e. environment variable overrides config file).
+// testXDGConfigLoading tests the loading of the config file from the XDG config home
+// and verifies values are correctly set in viper.
 // This test is nested within the TestCobraFlagConfigLoading test.
-func testEnvironmentVariableConfigLoading(t *testing.T) {
-	// Load XDG config
-	testXDGConfigLoading(t)
+func testXDGConfigLoading(t *testing.T) {
+	// set configPath to a mock temporary XDG config folder
+	mockConfigPath := "/tmp/xdg_config_home/"
+	tempFile := createMockXDGConfigFile(t, mockConfigPath)
+	defer tempFile.Close()
+	defer os.RemoveAll(mockConfigPath)
 
-	// Mock environment variable
-	err := os.Setenv("GO_QUAI_LOG_LEVEL", "error")
+	// write 'LOG_LEVEL=debug' config to mock config.yaml file
+	_, err := tempFile.WriteString(options.LOG_LEVEL + " : " + "debug\n")
 	require.NoError(t, err)
 
-	// Assert log level is set to "error" from the environment variable
-	assert.Equal(t, "error", viper.GetString(options.LOG_LEVEL))
+	// Set config path to the temporary config directory
+	viper.SetConfigFile(tempFile.Name())
+
+	InitConfig()
+
+	// Assert log level is set to "debug" as per the mock config file
+	assert.Equal(t, "debug", viper.GetString(options.LOG_LEVEL))
 }
 
 // TestCobraFlagConfigLoading tests the loading of the config file from the XDG config home,
 // the loading of the environment variable and the loading of the cobra flag.
 // It verifies the expected order of precedence of config loading.
 func TestCobraFlagConfigLoading(t *testing.T) {
-	// Load XDG config
+
+	// Clear viper instance to simulate a fresh start
+	viper.Reset()
+
+	// Test loading config from XDG config home
 	testXDGConfigLoading(t)
-	// Assert log level is set to "debug" from the mock config file
 	assert.Equal(t, "debug", viper.GetString(options.LOG_LEVEL))
 
-	// Load environment variable config
-	testEnvironmentVariableConfigLoading(t)
-
-	// Assert log level is set to "error" from the environment variable
+	// Test loading config from environment variable
+	err := os.Setenv(constants.ENV_PREFIX+"_"+"LOG-LEVEL", "error")
+	defer os.Unsetenv(constants.ENV_PREFIX + "_" + "LOG-LEVEL")
+	require.NoError(t, err)
 	assert.Equal(t, "error", viper.GetString(options.LOG_LEVEL))
 
-	// Simulate a Cobra flag being set
+	// Test loading config from cobra flag
 	rootCmd := &cobra.Command{}
 	rootCmd.PersistentFlags().StringP(options.LOG_LEVEL, "l", "warn", "log level (trace, debug, info, warn, error, fatal, panic")
-
-	// Set cmd flag to override config file
-	err := rootCmd.PersistentFlags().Set(options.LOG_LEVEL, "trace")
+	err = rootCmd.PersistentFlags().Set(options.LOG_LEVEL, "trace")
 	require.NoError(t, err)
 	viper.BindPFlags(rootCmd.PersistentFlags())
-
-	// assert log level is set to "trace" from the cobra flag
 	assert.Equal(t, "trace", viper.GetString(options.LOG_LEVEL))
-
-	// Clear environment variable
-	err = os.Unsetenv("GO_QUAI_LOG_LEVEL")
-	require.NoError(t, err)
 
 }
 
