@@ -64,7 +64,7 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 	var dht *kaddht.IpfsDHT
 	host, err := libp2p.New(
 		// use a private key for persistent identity
-		libp2p.Identity(GetNodeKey()),
+		libp2p.Identity(getNodeKey()),
 
 		// pass the ip address and port to listen on
 		libp2p.ListenAddrStrings(

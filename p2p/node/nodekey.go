@@ -11,7 +11,9 @@ import (
 	"github.com/spf13/viper"
 )
 
-func GetNodeKey() crypto.PrivKey {
+// Returns the private key of the node. If the key does not exist, it is created and saved to disk.
+// TODO: consider using a key manager to store the key
+func getNodeKey() crypto.PrivKey {
 	file := viper.GetString(options.KEYFILE)
 	log.Debugf("loading node key from file: %s", file)
 
