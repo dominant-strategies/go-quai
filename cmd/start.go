@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/dominant-strategies/go-quai/cmd/options"
+	"github.com/dominant-strategies/go-quai/cmd/utils"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus/quai"
 	"github.com/dominant-strategies/go-quai/log"
@@ -25,65 +25,30 @@ To bootstrap to a private node, use the --bootstrap flag.`,
 	RunE:                       runStart,
 	SilenceUsage:               true,
 	SuggestionsMinimumDistance: 2,
-	Example:                    `go-quai start -loglevel=debug`,
+	Example:                    `go-quai start -log-level=debug`,
 	PreRunE:                    startCmdPreRun,
 }
 
 func init() {
 	rootCmd.AddCommand(startCmd)
 
-	// IP address for p2p networking
-	startCmd.PersistentFlags().StringP(options.IP_ADDR, "i", "0.0.0.0", "ip address to listen on"+generateEnvDoc(options.IP_ADDR))
-	viper.BindPFlag(options.IP_ADDR, startCmd.PersistentFlags().Lookup(options.IP_ADDR))
-
-	// p2p port for networking
-	startCmd.PersistentFlags().StringP(options.PORT, "p", "4001", "p2p port to listen on"+generateEnvDoc(options.PORT))
-	viper.BindPFlag(options.PORT, startCmd.PersistentFlags().Lookup(options.PORT))
-
-	// isBootNode when set to true starts p2p node as a DHT boostrap server (no static peers required).
-	startCmd.PersistentFlags().BoolP(options.BOOTNODE, "b", false, "start the node as a boot node (no static peers required)"+generateEnvDoc(options.BOOTNODE))
-	viper.BindPFlag(options.BOOTNODE, startCmd.PersistentFlags().Lookup(options.BOOTNODE))
-
-	// initial peers to connect to and use for bootstrapping purposes
-	startCmd.PersistentFlags().StringSliceP(options.BOOTPEERS, "", []string{}, "list of bootstrap peers. Syntax: <multiaddress1>,<multiaddress2>,...")
-	viper.BindPFlag(options.BOOTPEERS, startCmd.PersistentFlags().Lookup(options.BOOTPEERS))
-
-	// enableNATPortMap configures libp2p to attempt to open a port in network's firewall using UPnP.
-	// See https://pkg.go.dev/github.com/libp2p/go-libp2p@v0.31.0#NATPortMap
-	startCmd.PersistentFlags().Bool(options.PORTMAP, true, "enable NAT portmap"+generateEnvDoc(options.PORTMAP))
-	viper.BindPFlag(options.PORTMAP, startCmd.PersistentFlags().Lookup(options.PORTMAP))
-
-	// path to file containing node private key
-	startCmd.PersistentFlags().StringP(options.KEYFILE, "k", "", "file containing node private key"+generateEnvDoc(options.KEYFILE))
-	viper.BindPFlag(options.KEYFILE, startCmd.PersistentFlags().Lookup(options.KEYFILE))
-
-	// solo node, will not reach out to bootstrap peers
-	startCmd.PersistentFlags().BoolP(options.SOLO, "s", false, "start the node as a solo node (will not reach out to bootstrap peers)"+generateEnvDoc(options.SOLO))
-	viper.BindPFlag(options.SOLO, startCmd.PersistentFlags().Lookup(options.SOLO))
-
-	// look for more peers until we have at least min-peers
-	startCmd.PersistentFlags().StringP(options.MIN_PEERS, "", "10", "minimum number of peers to maintain connectivity with"+generateEnvDoc(options.MIN_PEERS))
-	viper.BindPFlag(options.MIN_PEERS, startCmd.PersistentFlags().Lookup(options.MIN_PEERS))
-
-	// stop looking for more peers once we've reached max-peers
-	startCmd.PersistentFlags().StringP(options.MAX_PEERS, "", "50", "maximum number of peers to maintain connectivity with"+generateEnvDoc(options.MAX_PEERS))
-	viper.BindPFlag(options.MAX_PEERS, startCmd.PersistentFlags().Lookup(options.MAX_PEERS))
-
-	// location ID
-	startCmd.PersistentFlags().StringP(options.LOCATION, "", "", "region and zone location"+generateEnvDoc(options.LOCATION))
+	// Create and bind all node flags to the start command
+	for _, flag := range utils.NodeFlags {
+		utils.CreateAndBindFlag(flag, startCmd)
+	}
 }
 
 func startCmdPreRun(cmd *cobra.Command, args []string) error {
 	// set keyfile path
-	if viper.GetString(options.KEYFILE) == "" {
-		configDir := cmd.Flag(options.CONFIG_DIR).Value.String()
-		viper.Set(options.KEYFILE, configDir+"private.key")
+	if viper.GetString(utils.KeyFileFlag.Name) == "" {
+		configDir := cmd.Flag(utils.ConfigDirFlag.Name).Value.String()
+		viper.Set(utils.KeyFileFlag.Name, configDir+"private.key")
 	}
 
 	// if no bootstrap peers are provided, use the default ones defined in config/bootnodes.go
-	if bootstrapPeers := viper.GetStringSlice(options.BOOTPEERS); len(bootstrapPeers) == 0 {
+	if bootstrapPeers := viper.GetStringSlice(utils.BootPeersFlag.Name); len(bootstrapPeers) == 0 {
 		log.Debugf("no bootstrap peers provided. Using default ones: %v", common.BootstrapPeers)
-		viper.Set(options.BOOTPEERS, common.BootstrapPeers)
+		viper.Set(utils.BootPeersFlag.Name, common.BootstrapPeers)
 	}
 	return nil
 }

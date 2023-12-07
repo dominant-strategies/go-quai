@@ -4,7 +4,7 @@ import (
 	"crypto/rand"
 	"os"
 
-	"github.com/dominant-strategies/go-quai/cmd/options"
+	"github.com/dominant-strategies/go-quai/cmd/utils"
 	"github.com/dominant-strategies/go-quai/log"
 
 	"github.com/libp2p/go-libp2p/core/crypto"
@@ -14,7 +14,7 @@ import (
 // Returns the private key of the node. If the key does not exist, it is created and saved to disk.
 // TODO: consider using a key manager to store the key
 func getNodeKey() crypto.PrivKey {
-	file := viper.GetString(options.KEYFILE)
+	file := viper.GetString(utils.KeyFileFlag.Name)
 	log.Debugf("loading node key from file: %s", file)
 
 	// If key file does not exist, create one with a random key

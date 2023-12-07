@@ -13,7 +13,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/dominant-strategies/go-quai/cmd/options"
+	"github.com/dominant-strategies/go-quai/cmd/utils"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p/node"
@@ -55,15 +55,15 @@ func init() {
 func sendCmdPreRun(cmd *cobra.Command, args []string) error {
 	// duplicated from cmd/start.go
 	// set keyfile path
-	if viper.GetString(options.KEYFILE) == "" {
-		configDir := cmd.Flag(options.CONFIG_DIR).Value.String()
-		viper.Set(options.KEYFILE, configDir+"private.key")
+	if viper.GetString(utils.KeyFileFlag.Name) == "" {
+		configDir := cmd.Flag(utils.ConfigDirFlag.Name).Value.String()
+		viper.Set(utils.KeyFileFlag.Name, configDir+"private.key")
 	}
 
 	// if no bootstrap peers are provided, use the default ones defined in config/bootnodes.go
-	if bootstrapPeers := viper.GetStringSlice(options.BOOTPEERS); len(bootstrapPeers) == 0 {
+	if bootstrapPeers := viper.GetStringSlice(utils.BootPeersFlag.Name); len(bootstrapPeers) == 0 {
 		log.Debugf("no bootstrap peers provided. Using default ones: %v", common.BootstrapPeers)
-		viper.Set(options.BOOTPEERS, common.BootstrapPeers)
+		viper.Set(utils.BootPeersFlag.Name, common.BootstrapPeers)
 	}
 	return nil
 }

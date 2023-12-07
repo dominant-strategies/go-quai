@@ -2,10 +2,10 @@ package protocol
 
 import (
 	"time"
-	
+
 	"github.com/spf13/viper"
 
-	"github.com/dominant-strategies/go-quai/cmd/options"
+	"github.com/dominant-strategies/go-quai/cmd/utils"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/libp2p/go-libp2p/core/network"
 )
@@ -13,7 +13,7 @@ import (
 // Open streams to start exchanging data with peers
 func OpenPeerStreams(p QuaiP2PNode) {
 	// If this node is a bootnode or solo node, don't keep trying to open streams
-	if viper.GetBool(options.SOLO) {
+	if viper.GetBool(utils.SoloFlag.Name) {
 		return
 	}
 
@@ -46,7 +46,7 @@ func attemptToOpenStreams(p QuaiP2PNode) bool {
 	connectedPeers := p.Network().Peers()
 
 	// Open a stream to each connected peer using the Quai protocol
-	for _, peerID := range(connectedPeers) {
+	for _, peerID := range connectedPeers {
 		stream, err := p.NewStream(peerID, ProtocolVersion)
 		if err != nil {
 			log.Warnf("error opening stream to peer %s: %s", peerID, err)

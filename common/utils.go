@@ -5,7 +5,7 @@ import (
 	"io/fs"
 	"os"
 
-	"github.com/dominant-strategies/go-quai/cmd/options"
+	"github.com/dominant-strategies/go-quai/cmd/utils"
 	"github.com/dominant-strategies/go-quai/common/constants"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/spf13/viper"
@@ -56,7 +56,7 @@ func SaveConfig() error {
 	} else if os.IsNotExist(err) {
 		// config file does not exist, create directory if it does not exist
 		if _, err := os.Stat(configFile); os.IsNotExist(err) {
-			configDir := viper.GetString(options.CONFIG_DIR)
+			configDir := viper.GetString(utils.ConfigDirFlag.Name)
 			if err := os.MkdirAll(configDir, 0755); err != nil {
 				return err
 			}

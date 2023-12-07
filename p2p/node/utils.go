@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"os"
 
-	"github.com/dominant-strategies/go-quai/cmd/options"
+	"github.com/dominant-strategies/go-quai/cmd/utils"
 	"github.com/dominant-strategies/go-quai/common/constants"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -17,7 +17,7 @@ import (
 func saveNodeInfo(info string) {
 	go func() {
 		// check if data directory exists. If not, create it
-		dataDir := viper.GetString(options.DATA_DIR)
+		dataDir := viper.GetString(utils.DataDirFlag.Name)
 		if _, err := os.Stat(dataDir); os.IsNotExist(err) {
 			err := os.MkdirAll(dataDir, 0755)
 			if err != nil {
@@ -46,7 +46,7 @@ func saveNodeInfo(info string) {
 
 // utility function used to delete any existing node info file
 func deleteNodeInfoFile() error {
-	dataDir := viper.GetString(options.DATA_DIR)
+	dataDir := viper.GetString(utils.DataDirFlag.Name)
 	nodeFile := dataDir + constants.NODEINFO_FILE_NAME
 	if _, err := os.Stat(nodeFile); !os.IsNotExist(err) {
 		err := os.Remove(nodeFile)
@@ -59,11 +59,11 @@ func deleteNodeInfoFile() error {
 
 // Loads bootpeers addresses from the config and returns a list of peer.AddrInfo
 func loadBootPeers() ([]peer.AddrInfo, error) {
-	if viper.GetBool(options.SOLO) {
+	if viper.GetBool(utils.SoloFlag.Name) {
 		return nil, nil
 	}
 	var bootpeers []peer.AddrInfo
-	for _, p := range viper.GetStringSlice(options.BOOTPEERS) {
+	for _, p := range viper.GetStringSlice(utils.BootPeersFlag.Name) {
 		addr, err := multiaddr.NewMultiaddr(p)
 		if err != nil {
 			return nil, err

@@ -6,7 +6,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 
-	"github.com/dominant-strategies/go-quai/cmd/options"
+	"github.com/dominant-strategies/go-quai/cmd/utils"
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/consensus/types"
 	"github.com/dominant-strategies/go-quai/log"
@@ -49,7 +49,7 @@ func (p *P2PNode) Start() error {
 	go p.statsLoop()
 
 	// Is this node expected to have bootstrap peers to dial?
-	if !viper.GetBool(options.BOOTNODE) && !viper.GetBool(options.SOLO) && len(p.bootpeers) == 0 {
+	if !viper.GetBool(utils.BootNodeFlag.Name) && !viper.GetBool(utils.SoloFlag.Name) && len(p.bootpeers) == 0 {
 		err := errors.New("no bootpeers provided. Unable to join network")
 		log.Errorf("%s", err)
 		return err
@@ -59,7 +59,7 @@ func (p *P2PNode) Start() error {
 	p.SetStreamHandler(quaiprotocol.ProtocolVersion, quaiprotocol.QuaiProtocolHandler)
 
 	// If the node is a bootnode, start the bootnode service
-	if viper.GetBool(options.BOOTNODE) {
+	if viper.GetBool(utils.BootNodeFlag.Name) {
 		log.Infof("starting node as a bootnode...")
 		return nil
 	}

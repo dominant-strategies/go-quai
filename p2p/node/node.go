@@ -17,7 +17,7 @@ import (
 	"github.com/multiformats/go-multiaddr"
 	"github.com/spf13/viper"
 
-	"github.com/dominant-strategies/go-quai/cmd/options"
+	"github.com/dominant-strategies/go-quai/cmd/utils"
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p/protocol"
@@ -44,8 +44,8 @@ type P2PNode struct {
 // Returns a new libp2p node.
 // The node is created with the given context and options passed as arguments.
 func NewNode(ctx context.Context) (*P2PNode, error) {
-	ipAddr := viper.GetString(options.IP_ADDR)
-	port := viper.GetString(options.PORT)
+	ipAddr := viper.GetString(utils.IPAddrFlag.Name)
+	port := viper.GetString(utils.P2PPortFlag.Name)
 
 	// Load bootpeers
 	bootpeers, err := loadBootPeers()
@@ -56,8 +56,8 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 
 	// Define a connection manager
 	connectionManager, err := connmgr.NewConnManager(
-		viper.GetInt(options.MAX_PEERS),   // LowWater
-		2*viper.GetInt(options.MAX_PEERS), // HighWater
+		viper.GetInt(utils.MaxPeersFlag.Name),   // LowWater
+		2*viper.GetInt(utils.MaxPeersFlag.Name), // HighWater
 	)
 	if err != nil {
 		log.Fatalf("error creating libp2p connection manager: %s", err)
@@ -87,7 +87,7 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 
 		// Optionally attempt to configure network port mapping with UPnP
 		func() libp2p.Option {
-			if viper.GetBool(options.PORTMAP) {
+			if viper.GetBool(utils.PortMapFlag.Name) {
 				return libp2p.NATPortMap()
 			} else {
 				return nil
