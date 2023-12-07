@@ -70,12 +70,16 @@ const (
 	c_statsErrorValue = int64(-1)
 
 	// Max number of stats objects to send in one batch
-	c_queueBatchSize uint64 = 5
+	c_queueBatchSize uint64 = 10
+
 	// Number of blocks to include in one batch of transactions
-	c_txBatchSize uint64 = 5
+	c_txBatchSize uint64 = 10
 
 	// Seconds that we want to iterate over (3600s = 1 hr)
 	c_windowSize uint64 = 3600
+
+	// Max number of objects to keep in queue
+	c_maxQueueSize int = 100
 )
 
 var (
@@ -168,6 +172,10 @@ func (q *StatsQueue) Enqueue(item interface{}) {
 	q.mutex.Lock()
 	defer q.mutex.Unlock()
 
+	if len(q.data) >= c_maxQueueSize {
+		q.Dequeue()
+	}
+
 	q.data = append(q.data, item)
 }
 
@@ -188,7 +196,26 @@ func (q *StatsQueue) EnqueueFront(item interface{}) {
 	q.mutex.Lock()
 	defer q.mutex.Unlock()
 
+	if len(q.data) >= c_maxQueueSize {
+		// Remove one item from the front (oldest item)
+		q.data = q.data[1:]
+	}
+
 	q.data = append([]interface{}{item}, q.data...)
+}
+
+func (q *StatsQueue) EnqueueFrontBatch(items []interface{}) {
+	q.mutex.Lock()
+	defer q.mutex.Unlock()
+
+	// Iterate backwards through the items and add them to the front of the queue
+	// Going backwards means oldest items are not added in case of overflow
+	for i := len(items) - 1; i >= 0; i-- {
+		if len(q.data) >= c_maxQueueSize {
+			break
+		}
+		q.data = append([]interface{}{items[i]}, q.data...)
+	}
 }
 
 func (q *StatsQueue) Size() int {
@@ -442,7 +469,9 @@ func (s *Service) initializeURLMap() map[string]string {
 }
 
 func (s *Service) handleBlock(block *types.Block) {
-	// Cache the block
+	// Cache Block
+	log.Trace("Handling block", "detailsQueueSize", s.detailStatsQueue.Size(), "appendTimeQueueSize", s.appendTimeStatsQueue.Size(), "transactionQueueSize", s.transactionStatsQueue.Size(), "blockNumber", block.NumberU64())
+
 	s.cacheBlock(block)
 
 	if s.sendfullstats {
@@ -457,7 +486,7 @@ func (s *Service) handleBlock(block *types.Block) {
 		s.appendTimeStatsQueue.Enqueue(appStats)
 	}
 
-	if block.NumberU64()%c_txBatchSize == 0 && s.sendfullstats {
+	if block.NumberU64()%c_txBatchSize == 0 && s.sendfullstats && block.Header().Location().Context() == common.ZONE_CTX {
 		txStats := s.assembleBlockTransactionStats(block)
 		if txStats != nil {
 			s.transactionStatsQueue.Enqueue(txStats)
@@ -657,9 +686,11 @@ func (s *Service) sendTransactionStats(url string, authJwt string) error {
 	if err != nil && strings.Contains(err.Error(), "Received non-OK response") {
 		log.Warn("Failed to send transaction stats, requeuing stats", "err", err)
 		// Re-enqueue the failed stats from end to beginning
-		for i := len(statsBatch) - 1; i >= 0; i-- {
-			s.transactionStatsQueue.EnqueueFront(statsBatch[i])
+		tempSlice := make([]interface{}, len(statsBatch))
+		for i, item := range statsBatch {
+			tempSlice[len(statsBatch)-1-i] = item
 		}
+		s.transactionStatsQueue.EnqueueFrontBatch(tempSlice)
 		return err
 	} else if err != nil {
 		log.Warn("Failed to send transaction stats", "err", err)
@@ -690,9 +721,11 @@ func (s *Service) sendDetailStats(url string, authJwt string) error {
 	if err != nil && strings.Contains(err.Error(), "Received non-OK response") {
 		log.Warn("Failed to send detail stats, requeuing stats", "err", err)
 		// Re-enqueue the failed stats from end to beginning
-		for i := len(statsBatch) - 1; i >= 0; i-- {
-			s.detailStatsQueue.EnqueueFront(statsBatch[i])
+		tempSlice := make([]interface{}, len(statsBatch))
+		for i, item := range statsBatch {
+			tempSlice[len(statsBatch)-1-i] = item
 		}
+		s.detailStatsQueue.EnqueueFrontBatch(tempSlice)
 		return err
 	} else if err != nil {
 		log.Warn("Failed to send detail stats", "err", err)
@@ -724,9 +757,11 @@ func (s *Service) sendAppendTimeStats(url string, authJwt string) error {
 	if err != nil && strings.Contains(err.Error(), "Received non-OK response") {
 		log.Warn("Failed to send append time stats, requeuing stats", "err", err)
 		// Re-enqueue the failed stats from end to beginning
-		for i := len(statsBatch) - 1; i >= 0; i-- {
-			s.appendTimeStatsQueue.EnqueueFront(statsBatch[i])
+		tempSlice := make([]interface{}, len(statsBatch))
+		for i, item := range statsBatch {
+			tempSlice[len(statsBatch)-1-i] = item
 		}
+		s.appendTimeStatsQueue.EnqueueFrontBatch(tempSlice)
 		return err
 	} else if err != nil {
 		log.Warn("Failed to send append time stats", "err", err)
