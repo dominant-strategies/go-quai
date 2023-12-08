@@ -22,3 +22,14 @@ help:
 mocks:
 	@echo "Generating mocks"
 	@ mockgen -package mocks -destination p2p/protocol/mocks/mockedQuaiP2PNode.go -source=p2p/protocol/interface.go QuaiP2PNode
+
+## generate protobuf files
+protogen:
+	@echo "Generating protobuf files"
+	@protoc --go_out=. --go_opt=paths=source_relative \
+	./p2p/pb/*.proto 
+
+## build the go-quai binary
+build:
+	@echo "Building go-quai"
+	@go build -o go-quai ./cmd/go-quai/main.go
