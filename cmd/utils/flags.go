@@ -47,7 +47,6 @@ import (
 	"github.com/dominant-strategies/go-quai/eth/downloader"
 	"github.com/dominant-strategies/go-quai/eth/ethconfig"
 	"github.com/dominant-strategies/go-quai/eth/gasprice"
-	"github.com/dominant-strategies/go-quai/eth/tracers"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/internal/flags"
 	"github.com/dominant-strategies/go-quai/internal/quaiapi"
@@ -1633,7 +1632,6 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (quaiapi.Backen
 	if err != nil {
 		Fatalf("Failed to register the Quai service: %v", err)
 	}
-	stack.RegisterAPIs(tracers.APIs(backend.APIBackend))
 	return backend.APIBackend, backend
 }
 
