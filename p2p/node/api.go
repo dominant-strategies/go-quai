@@ -64,12 +64,6 @@ func (p *P2PNode) Start() error {
 		return nil
 	}
 
-	// Bootstrap the node
-	log.Debugf("bootstrapping node...")
-	if err := p.bootstrap(); err != nil {
-		log.Warnf("error bootstrapping the node: %s", err)
-	}
-
 	// Join the node to the quaiprotocol network
 	log.Debugf("joining quaiprotocol network...")
 	if err := quaiprotocol.JoinNetwork(p); err != nil {
@@ -78,7 +72,6 @@ func (p *P2PNode) Start() error {
 		return err
 
 	}
-	log.Debugf("joined quaiprotocol network successfully")
 
 	return nil
 }

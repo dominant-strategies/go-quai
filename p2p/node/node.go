@@ -136,13 +136,3 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 func (p *P2PNode) p2pAddress() (multiaddr.Multiaddr, error) {
 	return multiaddr.NewMultiaddr(fmt.Sprintf("/p2p/%s", p.ID()))
 }
-
-// Dial bootpeers and bootstrap the DHT
-func (p *P2PNode) bootstrap() error {
-	// Bootstrap the dht
-	if err := p.dht.Bootstrap(p.ctx); err != nil {
-		log.Warnf("error bootstrapping DHT: %s", err)
-		return err
-	}
-	return nil
-}
