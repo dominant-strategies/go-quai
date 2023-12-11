@@ -128,7 +128,21 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 		log.Fatalf("error creating libp2p host: %s", err)
 		return nil, err
 	}
-	log.Debugf("host created")
+
+	idOpts := []identify.Option{
+		// TODO: Add version number + commit hash
+		identify.UserAgent("go-quai"),
+		identify.ProtocolVersion(string(protocol.ProtocolVersion)),
+	}
+
+	// Create the identity service
+	idServ, err := identify.NewIDService(host, idOpts...)
+	if err != nil {
+		log.Fatalf("error creating libp2p identity service: %s", err)
+		return nil, err
+	}
+	// Register the identity service with the host
+	idServ.Start()
 
 	// log the p2p node's ID
 	nodeID := host.ID()
