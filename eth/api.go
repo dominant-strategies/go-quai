@@ -141,7 +141,7 @@ func (api *PrivateAdminAPI) ExportChain(file string, first *uint64, last *uint64
 		return false, errors.New("last cannot be specified without first")
 	}
 	if first != nil && last == nil {
-		head := api.eth.Core().CurrentHeader().Number().Uint64()
+		head := api.eth.Core().CurrentHeader().NumberU64(api.eth.core.NodeCtx())
 		last = &head
 	}
 	if _, err := os.Stat(file); err == nil {
@@ -175,7 +175,7 @@ func (api *PrivateAdminAPI) ExportChain(file string, first *uint64, last *uint64
 
 func hasAllBlocks(chain *core.Core, bs []*types.Block) bool {
 	for _, b := range bs {
-		if !chain.HasBlock(b.Hash(), b.NumberU64()) {
+		if !chain.HasBlock(b.Hash(), b.NumberU64(chain.NodeCtx())) {
 			return false
 		}
 	}
@@ -313,7 +313,7 @@ func (api *PrivateDebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, 
 		} else {
 			blockRlp = fmt.Sprintf("0x%x", rlpBytes)
 		}
-		if blockJSON, err = quaiapi.RPCMarshalBlock(block, true, true); err != nil {
+		if blockJSON, err = quaiapi.RPCMarshalBlock(block, true, true, api.eth.core.NodeLocation()); err != nil {
 			blockJSON = map[string]interface{}{"error": err.Error()}
 		}
 		results = append(results, &BadBlockArgs{
@@ -451,11 +451,12 @@ func (api *PrivateDebugAPI) GetModifiedAccountsByNumber(startNum uint64, endNum 
 		return nil, fmt.Errorf("start block %x not found", startNum)
 	}
 
+	nodeCtx := api.eth.core.NodeCtx()
 	if endNum == nil {
 		endBlock = startBlock
-		startBlock = api.eth.core.GetBlockByHash(startBlock.ParentHash())
+		startBlock = api.eth.core.GetBlockByHash(startBlock.ParentHash(nodeCtx))
 		if startBlock == nil {
-			return nil, fmt.Errorf("block %x has no parent", endBlock.Number())
+			return nil, fmt.Errorf("block %x has no parent", endBlock.Number(nodeCtx))
 		}
 	} else {
 		endBlock = api.eth.core.GetBlockByNumber(*endNum)
@@ -478,11 +479,12 @@ func (api *PrivateDebugAPI) GetModifiedAccountsByHash(startHash common.Hash, end
 		return nil, fmt.Errorf("start block %x not found", startHash)
 	}
 
+	nodeCtx := api.eth.core.NodeCtx()
 	if endHash == nil {
 		endBlock = startBlock
-		startBlock = api.eth.core.GetBlockByHash(startBlock.ParentHash())
+		startBlock = api.eth.core.GetBlockByHash(startBlock.ParentHash(nodeCtx))
 		if startBlock == nil {
-			return nil, fmt.Errorf("block %x has no parent", endBlock.Number())
+			return nil, fmt.Errorf("block %x has no parent", endBlock.Number(nodeCtx))
 		}
 	} else {
 		endBlock = api.eth.core.GetBlockByHash(*endHash)
@@ -494,8 +496,10 @@ func (api *PrivateDebugAPI) GetModifiedAccountsByHash(startHash common.Hash, end
 }
 
 func (api *PrivateDebugAPI) getModifiedAccounts(startBlock, endBlock *types.Block) ([]common.Address, error) {
-	if startBlock.Number().Uint64() >= endBlock.Number().Uint64() {
-		return nil, fmt.Errorf("start block height (%d) must be less than end block height (%d)", startBlock.Number().Uint64(), endBlock.Number().Uint64())
+	nodeLocation := api.eth.core.NodeLocation()
+	nodeCtx := api.eth.core.NodeCtx()
+	if startBlock.NumberU64(nodeCtx) >= endBlock.NumberU64(nodeCtx) {
+		return nil, fmt.Errorf("start block height (%d) must be less than end block height (%d)", startBlock.NumberU64(nodeCtx), endBlock.NumberU64(nodeCtx))
 	}
 	triedb := api.eth.Core().StateCache().TrieDB()
 
@@ -516,7 +520,7 @@ func (api *PrivateDebugAPI) getModifiedAccounts(startBlock, endBlock *types.Bloc
 		if key == nil {
 			return nil, fmt.Errorf("no preimage found for hash %x", iter.Key)
 		}
-		dirty = append(dirty, common.BytesToAddress(key))
+		dirty = append(dirty, common.BytesToAddress(key, nodeLocation))
 	}
 	return dirty, nil
 }

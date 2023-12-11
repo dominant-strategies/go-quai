@@ -534,7 +534,7 @@ func (pool *TxPool) TxPoolPending(enforceTips bool, etxSet types.EtxSet) (map[co
 	for _, entry := range etxSet {
 		addr := entry.ETX.ETXSender()
 		tx := entry.ETX
-		if tx.ETXSender().Location().Equal(common.NodeLocation) { // Sanity check
+		if tx.ETXSender().Location(pool.chainconfig.Location).Equal(pool.chainconfig.Location) { // Sanity check
 			log.Error("ETX sender is in our location!", "tx", tx.Hash().String(), "sender", tx.ETXSender().String())
 			continue // skip this tx
 		}
@@ -1250,6 +1250,7 @@ func (pool *TxPool) runReorg(done chan struct{}, cancel chan struct{}, reset *tx
 // reset retrieves the current state of the blockchain and ensures the content
 // of the transaction pool is valid with regard to the chain state.
 func (pool *TxPool) reset(oldHead, newHead *types.Header) {
+	nodeCtx := pool.chainconfig.Location.Context()
 	var start time.Time
 	if pool.reOrgCounter == c_reorgCounterThreshold {
 		start = time.Now()
@@ -1257,10 +1258,10 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	// If we're reorging an old state, reinject all dropped transactions
 	var reinject types.Transactions
 
-	if oldHead != nil && oldHead.Hash() != newHead.ParentHash() {
+	if oldHead != nil && oldHead.Hash() != newHead.ParentHash(nodeCtx) {
 		// If the reorg is too deep, avoid doing it (will happen during fast sync)
-		oldNum := oldHead.Number().Uint64()
-		newNum := newHead.Number().Uint64()
+		oldNum := oldHead.NumberU64(nodeCtx)
+		newNum := newHead.NumberU64(nodeCtx)
 
 		if depth := uint64(math.Abs(float64(oldNum) - float64(newNum))); depth > 64 {
 			log.Debug("Skipping deep transaction reorg", "depth", depth)
@@ -1268,8 +1269,8 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 			// Reorg seems shallow enough to pull in all transactions into memory
 			var discarded, included types.Transactions
 			var (
-				rem = pool.chain.GetBlock(oldHead.Hash(), oldHead.Number().Uint64())
-				add = pool.chain.GetBlock(newHead.Hash(), newHead.Number().Uint64())
+				rem = pool.chain.GetBlock(oldHead.Hash(), oldHead.NumberU64(nodeCtx))
+				add = pool.chain.GetBlock(newHead.Hash(), newHead.NumberU64(nodeCtx))
 			)
 			if rem == nil {
 				// This can happen if a setHead is performed, where we simply discard the old
@@ -1291,29 +1292,29 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 					log.Error("Unrooted chain seen by tx pool")
 					return
 				}
-				for rem.NumberU64() > add.NumberU64() {
+				for rem.NumberU64(nodeCtx) > add.NumberU64(nodeCtx) {
 					discarded = append(discarded, rem.Transactions()...)
-					if rem = pool.chain.GetBlock(rem.ParentHash(), rem.NumberU64()-1); rem == nil {
-						log.Error("Unrooted old chain seen by tx pool", "block", oldHead.Number(), "hash", oldHead.Hash())
+					if rem = pool.chain.GetBlock(rem.ParentHash(nodeCtx), rem.NumberU64(nodeCtx)-1); rem == nil {
+						log.Error("Unrooted old chain seen by tx pool", "block", oldHead.Number(nodeCtx), "hash", oldHead.Hash())
 						return
 					}
 				}
-				for add.NumberU64() > rem.NumberU64() {
+				for add.NumberU64(nodeCtx) > rem.NumberU64(nodeCtx) {
 					included = append(included, add.Transactions()...)
-					if add = pool.chain.GetBlock(add.ParentHash(), add.NumberU64()-1); add == nil {
-						log.Error("Unrooted new chain seen by tx pool", "block", newHead.Number(), "hash", newHead.Hash())
+					if add = pool.chain.GetBlock(add.ParentHash(nodeCtx), add.NumberU64(nodeCtx)-1); add == nil {
+						log.Error("Unrooted new chain seen by tx pool", "block", newHead.Number(nodeCtx), "hash", newHead.Hash())
 						return
 					}
 				}
 				for rem.Hash() != add.Hash() {
 					discarded = append(discarded, rem.Transactions()...)
-					if rem = pool.chain.GetBlock(rem.ParentHash(), rem.NumberU64()-1); rem == nil {
-						log.Error("Unrooted old chain seen by tx pool", "block", oldHead.Number(), "hash", oldHead.Hash())
+					if rem = pool.chain.GetBlock(rem.ParentHash(nodeCtx), rem.NumberU64(nodeCtx)-1); rem == nil {
+						log.Error("Unrooted old chain seen by tx pool", "block", oldHead.Number(nodeCtx), "hash", oldHead.Hash())
 						return
 					}
 					included = append(included, add.Transactions()...)
-					if add = pool.chain.GetBlock(add.ParentHash(), add.NumberU64()-1); add == nil {
-						log.Error("Unrooted new chain seen by tx pool", "block", newHead.Number(), "hash", newHead.Hash())
+					if add = pool.chain.GetBlock(add.ParentHash(nodeCtx), add.NumberU64(nodeCtx)-1); add == nil {
+						log.Error("Unrooted new chain seen by tx pool", "block", newHead.Number(nodeCtx), "hash", newHead.Hash())
 						return
 					}
 				}

@@ -114,7 +114,7 @@ func gasExtCodeCopy(evm *EVM, contract *Contract, stack *Stack, mem *Memory, mem
 	if err != nil {
 		return 0, err
 	}
-	addr := common.Bytes20ToAddress(stack.peek().Bytes20())
+	addr := common.Bytes20ToAddress(stack.peek().Bytes20(), evm.chainConfig.Location)
 	// Check slot presence in the access list
 	if !evm.StateDB.AddressInAccessList(addr) {
 		evm.StateDB.AddAddressToAccessList(addr)
@@ -136,7 +136,7 @@ func gasExtCodeCopy(evm *EVM, contract *Contract, stack *Stack, mem *Memory, mem
 // - extcodesize,
 // - (ext) balance
 func gasAccountCheck(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	addr := common.Bytes20ToAddress(stack.peek().Bytes20())
+	addr := common.Bytes20ToAddress(stack.peek().Bytes20(), evm.chainConfig.Location)
 	// Check slot presence in the access list
 	if !evm.StateDB.AddressInAccessList(addr) {
 		// If the caller cannot afford the cost, this change will be rolled back
@@ -149,7 +149,7 @@ func gasAccountCheck(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 
 func makeCallVariantGasCall(oldCalculator gasFunc) gasFunc {
 	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-		addr := common.Bytes20ToAddress(stack.Back(1).Bytes20())
+		addr := common.Bytes20ToAddress(stack.Back(1).Bytes20(), evm.chainConfig.Location)
 		// Check slot presence in the access list
 		warmAccess := evm.StateDB.AddressInAccessList(addr)
 		// The WarmStorageReadCost (100) is already deducted in the form of a constant cost, so
@@ -199,7 +199,7 @@ func makeSelfdestructGasFn(refundsEnabled bool) gasFunc {
 	gasFunc := func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 		var (
 			gas                  uint64
-			address              = common.Bytes20ToAddress(stack.peek().Bytes20())
+			address              = common.Bytes20ToAddress(stack.peek().Bytes20(), evm.chainConfig.Location)
 			internalAddress, err = address.InternalAddress()
 		)
 		if err != nil {

@@ -102,6 +102,8 @@ type backend interface {
 	Downloader() *downloader.Downloader
 	ChainConfig() *params.ChainConfig
 	ProcessingState() bool
+	NodeCtx() int
+	NodeLocation() common.Location
 }
 
 // fullNodeBackend encompasses the functionality necessary for a full node
@@ -470,7 +472,7 @@ func (s *Service) initializeURLMap() map[string]string {
 
 func (s *Service) handleBlock(block *types.Block) {
 	// Cache Block
-	log.Trace("Handling block", "detailsQueueSize", s.detailStatsQueue.Size(), "appendTimeQueueSize", s.appendTimeStatsQueue.Size(), "transactionQueueSize", s.transactionStatsQueue.Size(), "blockNumber", block.NumberU64())
+	log.Trace("Handling block", "detailsQueueSize", s.detailStatsQueue.Size(), "appendTimeQueueSize", s.appendTimeStatsQueue.Size(), "transactionQueueSize", s.transactionStatsQueue.Size(), "blockNumber", block.NumberU64(s.backend.NodeCtx()))
 
 	s.cacheBlock(block)
 
@@ -486,7 +488,7 @@ func (s *Service) handleBlock(block *types.Block) {
 		s.appendTimeStatsQueue.Enqueue(appStats)
 	}
 
-	if block.NumberU64()%c_txBatchSize == 0 && s.sendfullstats && block.Header().Location().Context() == common.ZONE_CTX {
+	if block.NumberU64(s.backend.NodeCtx())%c_txBatchSize == 0 && s.sendfullstats && block.Header().Location().Context() == common.ZONE_CTX {
 		txStats := s.assembleBlockTransactionStats(block)
 		if txStats != nil {
 			s.transactionStatsQueue.Enqueue(txStats)
@@ -905,7 +907,7 @@ func (s *Service) login2(url string) (string, error) {
 			OsVer:    runtime.GOARCH,
 			Client:   "0.1.1",
 			History:  true,
-			Chain:    common.NodeLocation.Name(),
+			Chain:    s.backend.NodeLocation().Name(),
 			ChainID:  s.chainID.Uint64(),
 		},
 		Secret: loginSecret{
@@ -1026,8 +1028,8 @@ type BatchObject struct {
 
 func (s *Service) cacheBlock(block *types.Block) cachedBlock {
 	currentBlock := cachedBlock{
-		number:     block.NumberU64(),
-		parentHash: block.ParentHash(),
+		number:     block.NumberU64(s.backend.NodeCtx()),
+		parentHash: block.ParentHash(s.backend.NodeCtx()),
 		txCount:    uint64(len(block.Transactions())),
 		time:       block.Time(),
 	}
@@ -1120,7 +1122,7 @@ func (s *Service) assembleBlockDetailStats(block *types.Block) *blockDetailStats
 		ZoneHeight:   header.NumberU64(2),
 		RegionHeight: header.NumberU64(1),
 		PrimeHeight:  header.NumberU64(0),
-		Chain:        common.NodeLocation.Name(),
+		Chain:        s.backend.NodeLocation().Name(),
 		Entropy:      common.BigBitsToBits(s.backend.TotalLogS(block.Header())).String(),
 		Difficulty:   difficulty,
 	}
@@ -1138,8 +1140,8 @@ func (s *Service) assembleBlockAppendTimeStats(block *types.Block) *blockAppendT
 	// Assemble and return the block stats
 	return &blockAppendTime{
 		AppendTime:  appendTime,
-		BlockNumber: header.Number(),
-		Chain:       common.NodeLocation.Name(),
+		BlockNumber: header.Number(s.backend.NodeCtx()),
+		Chain:       s.backend.NodeLocation().Name(),
 	}
 }
 
@@ -1159,7 +1161,7 @@ func (s *Service) assembleBlockTransactionStats(block *types.Block) *blockTransa
 		TotalNoTransactions1h: tps.TotalNumberTransactions1h,
 		TPS1m:                 tps.TPS1m,
 		TPS1hr:                tps.TPS1hr,
-		Chain:                 common.NodeLocation.Name(),
+		Chain:                 s.backend.NodeLocation().Name(),
 	}
 }
 

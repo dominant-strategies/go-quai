@@ -276,11 +276,7 @@ func (h *Header) RPCMarshalHeader() map[string]interface{} {
 }
 
 // Localized accessors
-func (h *Header) ParentHash(args ...int) common.Hash {
-	nodeCtx := common.NodeLocation.Context()
-	if len(args) > 0 {
-		nodeCtx = args[0]
-	}
+func (h *Header) ParentHash(nodeCtx int) common.Hash {
 	return h.parentHash[nodeCtx]
 }
 func (h *Header) UncleHash() common.Hash {
@@ -301,25 +297,13 @@ func (h *Header) EtxHash() common.Hash {
 func (h *Header) EtxRollupHash() common.Hash {
 	return h.etxRollupHash
 }
-func (h *Header) ParentEntropy(args ...int) *big.Int {
-	nodeCtx := common.NodeLocation.Context()
-	if len(args) > 0 {
-		nodeCtx = args[0]
-	}
+func (h *Header) ParentEntropy(nodeCtx int) *big.Int {
 	return h.parentEntropy[nodeCtx]
 }
-func (h *Header) ParentDeltaS(args ...int) *big.Int {
-	nodeCtx := common.NodeLocation.Context()
-	if len(args) > 0 {
-		nodeCtx = args[0]
-	}
+func (h *Header) ParentDeltaS(nodeCtx int) *big.Int {
 	return h.parentDeltaS[nodeCtx]
 }
-func (h *Header) ManifestHash(args ...int) common.Hash {
-	nodeCtx := common.NodeLocation.Context()
-	if len(args) > 0 {
-		nodeCtx = args[0]
-	}
+func (h *Header) ManifestHash(nodeCtx int) common.Hash {
 	return h.manifestHash[nodeCtx]
 }
 func (h *Header) ReceiptHash() common.Hash {
@@ -328,18 +312,10 @@ func (h *Header) ReceiptHash() common.Hash {
 func (h *Header) Difficulty() *big.Int {
 	return h.difficulty
 }
-func (h *Header) Number(args ...int) *big.Int {
-	nodeCtx := common.NodeLocation.Context()
-	if len(args) > 0 {
-		nodeCtx = args[0]
-	}
+func (h *Header) Number(nodeCtx int) *big.Int {
 	return h.number[nodeCtx]
 }
-func (h *Header) NumberU64(args ...int) uint64 {
-	nodeCtx := common.NodeLocation.Context()
-	if len(args) > 0 {
-		nodeCtx = args[0]
-	}
+func (h *Header) NumberU64(nodeCtx int) uint64 {
 	return h.number[nodeCtx].Uint64()
 }
 func (h *Header) GasLimit() uint64 {
@@ -358,13 +334,9 @@ func (h *Header) MixHash() common.Hash      { return h.mixHash }
 func (h *Header) Nonce() BlockNonce         { return h.nonce }
 func (h *Header) NonceU64() uint64          { return binary.BigEndian.Uint64(h.nonce[:]) }
 
-func (h *Header) SetParentHash(val common.Hash, args ...int) {
+func (h *Header) SetParentHash(val common.Hash, nodeCtx int) {
 	h.hash = atomic.Value{}     // clear hash cache
 	h.sealHash = atomic.Value{} // clear sealHash cache
-	nodeCtx := common.NodeLocation.Context()
-	if len(args) > 0 {
-		nodeCtx = args[0]
-	}
 	h.parentHash[nodeCtx] = val
 }
 func (h *Header) SetUncleHash(val common.Hash) {
@@ -398,33 +370,21 @@ func (h *Header) SetEtxRollupHash(val common.Hash) {
 	h.etxRollupHash = val
 }
 
-func (h *Header) SetParentEntropy(val *big.Int, args ...int) {
+func (h *Header) SetParentEntropy(val *big.Int, nodeCtx int) {
 	h.hash = atomic.Value{}     // clear hash cache
 	h.sealHash = atomic.Value{} // clear sealHash cache
-	nodeCtx := common.NodeLocation.Context()
-	if len(args) > 0 {
-		nodeCtx = args[0]
-	}
 	h.parentEntropy[nodeCtx] = val
 }
 
-func (h *Header) SetParentDeltaS(val *big.Int, args ...int) {
+func (h *Header) SetParentDeltaS(val *big.Int, nodeCtx int) {
 	h.hash = atomic.Value{}     // clear hash cache
 	h.sealHash = atomic.Value{} // clear sealHash cache
-	nodeCtx := common.NodeLocation.Context()
-	if len(args) > 0 {
-		nodeCtx = args[0]
-	}
 	h.parentDeltaS[nodeCtx] = val
 }
 
-func (h *Header) SetManifestHash(val common.Hash, args ...int) {
+func (h *Header) SetManifestHash(val common.Hash, nodeCtx int) {
 	h.hash = atomic.Value{}     // clear hash cache
 	h.sealHash = atomic.Value{} // clear sealHash cache
-	nodeCtx := common.NodeLocation.Context()
-	if len(args) > 0 {
-		nodeCtx = args[0]
-	}
 	h.manifestHash[nodeCtx] = val
 }
 func (h *Header) SetReceiptHash(val common.Hash) {
@@ -437,13 +397,9 @@ func (h *Header) SetDifficulty(val *big.Int) {
 	h.sealHash = atomic.Value{} // clear sealHash cache
 	h.difficulty = new(big.Int).Set(val)
 }
-func (h *Header) SetNumber(val *big.Int, args ...int) {
+func (h *Header) SetNumber(val *big.Int, nodeCtx int) {
 	h.hash = atomic.Value{}     // clear hash cache
 	h.sealHash = atomic.Value{} // clear sealHash cache
-	nodeCtx := common.NodeLocation.Context()
-	if len(args) > 0 {
-		nodeCtx = args[0]
-	}
 	h.number[nodeCtx] = new(big.Int).Set(val)
 }
 func (h *Header) SetGasLimit(val uint64) {
@@ -632,8 +588,8 @@ func (h *Header) SanityCheck() error {
 
 // EmptyBody returns true if there is no additional 'body' to complete the header
 // that is: no transactions and no uncles.
-func (h *Header) EmptyBody() bool {
-	return h.EmptyTxs() && h.EmptyUncles() && h.EmptyEtxs() && h.EmptyManifest()
+func (h *Header) EmptyBody(nodeCtx int) bool {
+	return h.EmptyTxs() && h.EmptyUncles() && h.EmptyEtxs() && h.EmptyManifest(nodeCtx)
 }
 
 // EmptyTxs returns true if there are no txs for this header/block.
@@ -652,8 +608,8 @@ func (h *Header) EmptyEtxRollup() bool {
 }
 
 // EmptyTxs returns true if there are no txs for this header/block.
-func (h *Header) EmptyManifest() bool {
-	return h.ManifestHash() == EmptyRootHash
+func (h *Header) EmptyManifest(nodeCtx int) bool {
+	return h.ManifestHash(nodeCtx) == EmptyRootHash
 }
 
 // EmptyUncles returns true if there are no uncles for this header/block.
@@ -702,8 +658,7 @@ type extblock struct {
 	SubManifest BlockManifest
 }
 
-func NewBlock(header *Header, txs []*Transaction, uncles []*Header, etxs []*Transaction, subManifest BlockManifest, receipts []*Receipt, hasher TrieHasher) *Block {
-	nodeCtx := common.NodeLocation.Context()
+func NewBlock(header *Header, txs []*Transaction, uncles []*Header, etxs []*Transaction, subManifest BlockManifest, receipts []*Receipt, hasher TrieHasher, nodeCtx int) *Block {
 	b := &Block{header: CopyHeader(header)}
 
 	// TODO: panic if len(txs) != len(receipts)
@@ -824,20 +779,20 @@ func (b *Block) EncodeRLP(w io.Writer) error {
 }
 
 // Wrapped header accessors
-func (b *Block) ParentHash(args ...int) common.Hash   { return b.header.ParentHash(args...) }
+func (b *Block) ParentHash(nodeCtx int) common.Hash   { return b.header.ParentHash(nodeCtx) }
 func (b *Block) UncleHash() common.Hash               { return b.header.UncleHash() }
 func (b *Block) Coinbase() common.Address             { return b.header.Coinbase() }
 func (b *Block) Root() common.Hash                    { return b.header.Root() }
 func (b *Block) TxHash() common.Hash                  { return b.header.TxHash() }
 func (b *Block) EtxHash() common.Hash                 { return b.header.EtxHash() }
 func (b *Block) EtxRollupHash() common.Hash           { return b.header.EtxRollupHash() }
-func (b *Block) ManifestHash(args ...int) common.Hash { return b.header.ManifestHash(args...) }
+func (b *Block) ManifestHash(nodeCtx int) common.Hash { return b.header.ManifestHash(nodeCtx) }
 func (b *Block) ReceiptHash() common.Hash             { return b.header.ReceiptHash() }
-func (b *Block) Difficulty(args ...int) *big.Int      { return b.header.Difficulty() }
-func (b *Block) ParentEntropy(args ...int) *big.Int   { return b.header.ParentEntropy(args...) }
-func (b *Block) ParentDeltaS(args ...int) *big.Int    { return b.header.ParentDeltaS(args...) }
-func (b *Block) Number(args ...int) *big.Int          { return b.header.Number(args...) }
-func (b *Block) NumberU64(args ...int) uint64         { return b.header.NumberU64(args...) }
+func (b *Block) Difficulty(nodeCtx int) *big.Int      { return b.header.Difficulty() }
+func (b *Block) ParentEntropy(nodeCtx int) *big.Int   { return b.header.ParentEntropy(nodeCtx) }
+func (b *Block) ParentDeltaS(nodeCtx int) *big.Int    { return b.header.ParentDeltaS(nodeCtx) }
+func (b *Block) Number(nodeCtx int) *big.Int          { return b.header.Number(nodeCtx) }
+func (b *Block) NumberU64(nodeCtx int) uint64         { return b.header.NumberU64(nodeCtx) }
 func (b *Block) GasLimit() uint64                     { return b.header.GasLimit() }
 func (b *Block) GasUsed() uint64                      { return b.header.GasUsed() }
 func (b *Block) BaseFee() *big.Int                    { return b.header.BaseFee() }
@@ -1068,8 +1023,8 @@ func EmptyTermini() Termini {
 	return termini
 }
 
-func (t Termini) DomTerminus() common.Hash {
-	return t.domTermini[common.NodeLocation.DomIndex()]
+func (t Termini) DomTerminus(nodeLocation common.Location) common.Hash {
+	return t.domTermini[nodeLocation.DomIndex(nodeLocation)]
 }
 
 func (t Termini) DomTermini() []common.Hash {

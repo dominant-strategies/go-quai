@@ -183,24 +183,26 @@ func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine conse
 // transactions failed to execute due to insufficient gas it will return an error.
 func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types.Receipts, []*types.Log, *state.StateDB, uint64, error) {
 	var (
-		receipts    types.Receipts
-		usedGas     = new(uint64)
-		header      = types.CopyHeader(block.Header())
-		blockHash   = block.Hash()
-		blockNumber = block.Number()
-		allLogs     []*types.Log
-		gp          = new(GasPool).AddGas(block.GasLimit())
+		receipts     types.Receipts
+		usedGas      = new(uint64)
+		header       = types.CopyHeader(block.Header())
+		blockHash    = block.Hash()
+		nodeLocation = p.hc.NodeLocation()
+		nodeCtx      = p.hc.NodeCtx()
+		blockNumber  = block.Number(nodeCtx)
+		allLogs      []*types.Log
+		gp           = new(GasPool).AddGas(block.GasLimit())
 	)
 
 	start := time.Now()
-	parent := p.hc.GetBlock(block.Header().ParentHash(), block.NumberU64()-1)
+	parent := p.hc.GetBlock(block.Header().ParentHash(nodeCtx), block.NumberU64(nodeCtx)-1)
 	if parent == nil {
 		return types.Receipts{}, []*types.Log{}, nil, 0, errors.New("parent block is nil for the block given to process")
 	}
 	time1 := common.PrettyDuration(time.Since(start))
 
 	// Initialize a statedb
-	statedb, err := state.New(parent.Header().Root(), p.stateCache, p.snaps)
+	statedb, err := state.New(parent.Header().Root(), p.stateCache, p.snaps, nodeLocation)
 	if err != nil {
 		return types.Receipts{}, []*types.Log{}, nil, 0, err
 	}
@@ -240,7 +242,7 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 	var emittedEtxs types.Transactions
 	for i, tx := range block.Transactions() {
 		startProcess := time.Now()
-		msg, err := tx.AsMessageWithSender(types.MakeSigner(p.config, header.Number()), header.BaseFee(), senders[tx.Hash()])
+		msg, err := tx.AsMessageWithSender(types.MakeSigner(p.config, header.Number(nodeCtx)), header.BaseFee(), senders[tx.Hash()])
 		if err != nil {
 			return nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
@@ -303,6 +305,7 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 }
 
 func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM, etxRLimit, etxPLimit *int) (*types.Receipt, error) {
+	nodeLocation := config.Location
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(msg)
 	evm.Reset(txContext, statedb)
@@ -316,11 +319,11 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	var ETXPCount int
 	for _, tx := range result.Etxs {
 		// Count which ETXs are cross-region
-		if tx.To().Location().CommonDom(common.NodeLocation).Context() == common.REGION_CTX {
+		if tx.To().Location(nodeLocation).CommonDom(nodeLocation).Context() == common.REGION_CTX {
 			ETXRCount++
 		}
 		// Count which ETXs are cross-prime
-		if tx.To().Location().CommonDom(common.NodeLocation).Context() == common.PRIME_CTX {
+		if tx.To().Location(nodeLocation).CommonDom(nodeLocation).Context() == common.PRIME_CTX {
 			ETXPCount++
 		}
 	}
@@ -353,7 +356,7 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 
 	// If the transaction created a contract, store the creation address in the receipt.
 	if msg.To() == nil {
-		receipt.ContractAddress = crypto.CreateAddress(evm.TxContext.Origin, tx.Nonce(), tx.Data())
+		receipt.ContractAddress = crypto.CreateAddress(evm.TxContext.Origin, tx.Nonce(), tx.Data(), nodeLocation)
 	}
 
 	// Set the receipt logs and create the bloom filter.
@@ -369,17 +372,19 @@ var lastWrite uint64
 
 // Apply State
 func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInboundEtxs types.Transactions) ([]*types.Log, error) {
+	nodeLocation := p.hc.NodeLocation()
+	nodeCtx := p.hc.NodeCtx()
 	// Update the set of inbound ETXs which may be mined. This adds new inbound
 	// ETXs to the set and removes expired ETXs so they are no longer available
 	start := time.Now()
 	blockHash := block.Hash()
 	header := types.CopyHeader(block.Header())
-	etxSet := rawdb.ReadEtxSet(p.hc.bc.db, block.ParentHash(), block.NumberU64()-1)
+	etxSet := rawdb.ReadEtxSet(p.hc.bc.db, block.ParentHash(nodeCtx), block.NumberU64(nodeCtx)-1)
 	time1 := common.PrettyDuration(time.Since(start))
 	if etxSet == nil {
 		return nil, errors.New("failed to load etx set")
 	}
-	etxSet.Update(newInboundEtxs, block.NumberU64())
+	etxSet.Update(newInboundEtxs, block.NumberU64(nodeCtx), nodeLocation)
 	time2 := common.PrettyDuration(time.Since(start))
 	// Process our block
 	receipts, logs, statedb, usedGas, err := p.Process(block, etxSet)
@@ -395,7 +400,7 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 		return nil, err
 	}
 	time4 := common.PrettyDuration(time.Since(start))
-	rawdb.WriteReceipts(batch, block.Hash(), block.NumberU64(), receipts)
+	rawdb.WriteReceipts(batch, block.Hash(), block.NumberU64(nodeCtx), receipts)
 	time4_5 := common.PrettyDuration(time.Since(start))
 	// Create bloom filter and write it to cache/db
 	bloom := types.CreateBloom(receipts)
@@ -423,9 +428,9 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 	} else {
 		// Full but not archive node, do proper garbage collection
 		triedb.Reference(root, common.Hash{}) // metadata reference to keep trie alive
-		p.triegc.Push(root, -int64(block.NumberU64()))
+		p.triegc.Push(root, -int64(block.NumberU64(nodeCtx)))
 		time8 = common.PrettyDuration(time.Since(start))
-		if current := block.NumberU64(); current > TriesInMemory {
+		if current := block.NumberU64(nodeCtx); current > TriesInMemory {
 			// If we exceeded our memory allowance, flush matured singleton nodes to disk
 			var (
 				nodes, imgs = triedb.Size()
@@ -469,7 +474,7 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 			time11 = common.PrettyDuration(time.Since(start))
 		}
 	}
-	rawdb.WriteEtxSet(batch, header.Hash(), header.NumberU64(), etxSet)
+	rawdb.WriteEtxSet(batch, header.Hash(), header.NumberU64(nodeCtx), etxSet)
 	time12 := common.PrettyDuration(time.Since(start))
 
 	log.Debug("times during state processor apply:", "t1:", time1, "t2:", time2, "t3:", time3, "t4:", time4, "t4.5:", time4_5, "t5:", time5, "t6:", time6, "t7:", time7, "t8:", time8, "t9:", time9, "t10:", time10, "t11:", time11, "t12:", time12)
@@ -481,7 +486,8 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
 func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config, etxRLimit, etxPLimit *int) (*types.Receipt, error) {
-	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number()), header.BaseFee())
+	nodeCtx := config.Location.Context()
+	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number(nodeCtx)), header.BaseFee())
 	if err != nil {
 		return nil, err
 	}
@@ -490,11 +496,11 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, cfg)
 	if tx.Type() == types.ExternalTxType {
 		prevZeroBal := prepareApplyETX(statedb, tx)
-		receipt, err := applyTransaction(msg, config, bc, author, gp, statedb, header.Number(), header.Hash(), tx, usedGas, vmenv, etxRLimit, etxPLimit)
+		receipt, err := applyTransaction(msg, config, bc, author, gp, statedb, header.Number(nodeCtx), header.Hash(), tx, usedGas, vmenv, etxRLimit, etxPLimit)
 		statedb.SetBalance(common.ZeroInternal, prevZeroBal) // Reset the balance to what it previously was (currently a failed external transaction removes all the sent coins from the supply and any residual balance is gone as well)
 		return receipt, err
 	}
-	return applyTransaction(msg, config, bc, author, gp, statedb, header.Number(), header.Hash(), tx, usedGas, vmenv, etxRLimit, etxPLimit)
+	return applyTransaction(msg, config, bc, author, gp, statedb, header.Number(nodeCtx), header.Hash(), tx, usedGas, vmenv, etxRLimit, etxPLimit)
 }
 
 // GetVMConfig returns the block chain VM config.
@@ -509,7 +515,7 @@ func (p *StateProcessor) State() (*state.StateDB, error) {
 
 // StateAt returns a new mutable state based on a particular point in time.
 func (p *StateProcessor) StateAt(root common.Hash) (*state.StateDB, error) {
-	return state.New(root, p.stateCache, p.snaps)
+	return state.New(root, p.stateCache, p.snaps, p.hc.NodeLocation())
 }
 
 // StateCache returns the caching database underpinning the blockchain instance.
@@ -605,10 +611,12 @@ func (p *StateProcessor) ContractCodeWithPrefix(hash common.Hash) ([]byte, error
 //     storing trash persistently
 func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *state.StateDB, checkLive bool) (statedb *state.StateDB, err error) {
 	var (
-		current  *types.Header
-		database state.Database
-		report   = true
-		origin   = block.NumberU64()
+		current      *types.Header
+		database     state.Database
+		report       = true
+		nodeLocation = p.hc.NodeLocation()
+		nodeCtx      = p.hc.NodeCtx()
+		origin       = block.NumberU64(nodeCtx)
 	)
 	// Check the live database first if we have the state fully available, use that.
 	if checkLive {
@@ -622,7 +630,7 @@ func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *s
 	if base != nil {
 		// The optional base statedb is given, mark the start point as parent block
 		statedb, database, report = base, base.Database(), false
-		current = p.hc.GetHeaderOrCandidate(block.ParentHash(), block.NumberU64()-1)
+		current = p.hc.GetHeaderOrCandidate(block.ParentHash(nodeCtx), block.NumberU64(nodeCtx)-1)
 	} else {
 		// Otherwise try to reexec blocks until we find a state or reach our limit
 		current = types.CopyHeader(block.Header())
@@ -635,7 +643,7 @@ func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *s
 		// we would rewind past a persisted block (specific corner case is chain
 		// tracing from the genesis).
 		if !checkLive {
-			statedb, err = state.New(current.Root(), database, nil)
+			statedb, err = state.New(current.Root(), database, nil, nodeLocation)
 			if err == nil {
 				return statedb, nil
 			}
@@ -643,16 +651,16 @@ func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *s
 		newHeads = append(newHeads, current)
 		// Database does not have the state for the given block, try to regenerate
 		for i := uint64(0); i < reexec; i++ {
-			if current.NumberU64() == 0 {
+			if current.NumberU64(nodeCtx) == 0 {
 				return nil, errors.New("genesis state is missing")
 			}
-			parent := p.hc.GetHeaderOrCandidate(current.ParentHash(), current.NumberU64()-1)
+			parent := p.hc.GetHeaderOrCandidate(current.ParentHash(nodeCtx), current.NumberU64(nodeCtx)-1)
 			if parent == nil {
-				return nil, fmt.Errorf("missing block %v %d", current.ParentHash(), current.NumberU64()-1)
+				return nil, fmt.Errorf("missing block %v %d", current.ParentHash(nodeCtx), current.NumberU64(nodeCtx)-1)
 			}
 			current = types.CopyHeader(parent)
 
-			statedb, err = state.New(current.Root(), database, nil)
+			statedb, err = state.New(current.Root(), database, nil, nodeLocation)
 			if err == nil {
 				break
 			}
@@ -677,34 +685,34 @@ func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *s
 		current := newHeads[i]
 		// Print progress logs if long enough time elapsed
 		if time.Since(logged) > 8*time.Second && report {
-			log.Info("Regenerating historical state", "block", current.NumberU64()+1, "target", origin, "remaining", origin-current.NumberU64()-1, "elapsed", time.Since(start))
+			log.Info("Regenerating historical state", "block", current.NumberU64(nodeCtx)+1, "target", origin, "remaining", origin-current.NumberU64(nodeCtx)-1, "elapsed", time.Since(start))
 			logged = time.Now()
 		}
 
-		etxSet := rawdb.ReadEtxSet(p.hc.bc.db, current.ParentHash(), current.NumberU64()-1)
+		etxSet := rawdb.ReadEtxSet(p.hc.bc.db, current.ParentHash(nodeCtx), current.NumberU64(nodeCtx)-1)
 		if etxSet == nil {
 			return nil, errors.New("etxSet set is nil in StateProcessor")
 		}
 		inboundEtxs := rawdb.ReadInboundEtxs(p.hc.bc.db, current.Hash())
-		etxSet.Update(inboundEtxs, current.NumberU64())
+		etxSet.Update(inboundEtxs, current.NumberU64(nodeCtx), nodeLocation)
 
-		currentBlock := rawdb.ReadBlock(p.hc.bc.db, current.Hash(), current.NumberU64())
+		currentBlock := rawdb.ReadBlock(p.hc.bc.db, current.Hash(), current.NumberU64(nodeCtx))
 		if currentBlock == nil {
 			return nil, errors.New("detached block found trying to regenerate state")
 		}
 		_, _, _, _, err := p.Process(currentBlock, etxSet)
 		if err != nil {
-			return nil, fmt.Errorf("processing block %d failed: %v", current.NumberU64(), err)
+			return nil, fmt.Errorf("processing block %d failed: %v", current.NumberU64(nodeCtx), err)
 		}
 		// Finalize the state so any modifications are written to the trie
 		root, err := statedb.Commit(true)
 		if err != nil {
 			return nil, fmt.Errorf("stateAtBlock commit failed, number %d root %v: %w",
-				current.NumberU64(), current.Root().Hex(), err)
+				current.NumberU64(nodeCtx), current.Root().Hex(), err)
 		}
-		statedb, err = state.New(root, database, nil)
+		statedb, err = state.New(root, database, nil, nodeLocation)
 		if err != nil {
-			return nil, fmt.Errorf("state reset after block %d failed: %v", current.NumberU64(), err)
+			return nil, fmt.Errorf("state reset after block %d failed: %v", current.NumberU64(nodeCtx), err)
 		}
 		database.TrieDB().Reference(root, common.Hash{})
 		if parent != (common.Hash{}) {
@@ -714,21 +722,22 @@ func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *s
 	}
 	if report {
 		nodes, imgs := database.TrieDB().Size()
-		log.Info("Historical state regenerated", "block", current.NumberU64(), "elapsed", time.Since(start), "nodes", nodes, "preimages", imgs)
+		log.Info("Historical state regenerated", "block", current.NumberU64(nodeCtx), "elapsed", time.Since(start), "nodes", nodes, "preimages", imgs)
 	}
 	return statedb, nil
 }
 
 // stateAtTransaction returns the execution environment of a certain transaction.
 func (p *StateProcessor) StateAtTransaction(block *types.Block, txIndex int, reexec uint64) (Message, vm.BlockContext, *state.StateDB, error) {
+	nodeCtx := p.hc.NodeCtx()
 	// Short circuit if it's genesis block.
-	if block.NumberU64() == 0 {
+	if block.NumberU64(nodeCtx) == 0 {
 		return nil, vm.BlockContext{}, nil, errors.New("no transaction in genesis")
 	}
 	// Create the parent state database
-	parent := p.hc.GetBlock(block.ParentHash(), block.NumberU64()-1)
+	parent := p.hc.GetBlock(block.ParentHash(nodeCtx), block.NumberU64(nodeCtx)-1)
 	if parent == nil {
-		return nil, vm.BlockContext{}, nil, fmt.Errorf("parent %#x not found", block.ParentHash())
+		return nil, vm.BlockContext{}, nil, fmt.Errorf("parent %#x not found", block.ParentHash(nodeCtx))
 	}
 	// Lookup the statedb of parent block from the live database,
 	// otherwise regenerate it on the flight.
@@ -740,7 +749,7 @@ func (p *StateProcessor) StateAtTransaction(block *types.Block, txIndex int, ree
 		return nil, vm.BlockContext{}, statedb, nil
 	}
 	// Recompute transactions up to the target index.
-	signer := types.MakeSigner(p.hc.Config(), block.Number())
+	signer := types.MakeSigner(p.hc.Config(), block.Number(nodeCtx))
 	for idx, tx := range block.Transactions() {
 		// Assemble the transaction call message and return if the requested offset
 		msg, _ := tx.AsMessage(signer, block.BaseFee())
@@ -762,6 +771,7 @@ func (p *StateProcessor) StateAtTransaction(block *types.Block, txIndex int, ree
 }
 
 func (p *StateProcessor) Stop() {
+	nodeCtx := p.hc.NodeCtx()
 	// Ensure that the entirety of the state snapshot is journalled to disk.
 	var snapBase common.Hash
 	if p.snaps != nil {
@@ -779,10 +789,10 @@ func (p *StateProcessor) Stop() {
 		triedb := p.stateCache.TrieDB()
 
 		for _, offset := range []uint64{0, 1, TriesInMemory - 1} {
-			if number := p.hc.CurrentBlock().NumberU64(); number > offset {
+			if number := p.hc.CurrentBlock().NumberU64(nodeCtx); number > offset {
 				recent := p.hc.GetBlockByNumber(number - offset)
 
-				log.Info("Writing cached state to disk", "block", recent.Number(), "hash", recent.Hash(), "root", recent.Root())
+				log.Info("Writing cached state to disk", "block", recent.Number(nodeCtx), "hash", recent.Hash(), "root", recent.Root())
 				if err := triedb.Commit(recent.Root(), true, nil); err != nil {
 					log.Error("Failed to commit recent state trie", "err", err)
 				}

@@ -41,7 +41,7 @@ type sigCache struct {
 
 // MakeSigner returns a Signer based on the given chain config and block number.
 func MakeSigner(config *params.ChainConfig, blockNumber *big.Int) Signer {
-	return NewSigner(config.ChainID)
+	return NewSigner(config.ChainID, config.Location)
 }
 
 // LatestSigner returns the 'most permissive' Signer available for the given chain
@@ -49,7 +49,7 @@ func MakeSigner(config *params.ChainConfig, blockNumber *big.Int) Signer {
 // number is unknown. If you have the current block number available, use
 // MakeSigner instead.
 func LatestSigner(config *params.ChainConfig) Signer {
-	return NewSigner(config.ChainID)
+	return NewSigner(config.ChainID, config.Location)
 }
 
 // LatestSigner returns the 'most permissive' Signer available for the given chain
@@ -60,8 +60,8 @@ func LatestSigner(config *params.ChainConfig) Signer {
 // Use this in transaction-handling code where the current block number and fork
 // configuration are unknown. If you have a ChainConfig, use LatestSigner instead.
 // If you have a ChainConfig and know the current block number, use MakeSigner instead.
-func LatestSignerForChainID(chainID *big.Int) Signer {
-	return NewSigner(chainID)
+func LatestSignerForChainID(chainID *big.Int, nodeLocation common.Location) Signer {
+	return NewSigner(chainID, nodeLocation)
 }
 
 // SignTx signs the transaction using the given signer and private key.
@@ -148,16 +148,18 @@ type Signer interface {
 // defined if protocol changes are required
 type SignerV1 struct {
 	chainId, chainIdMul *big.Int
+	nodeLocation        common.Location
 }
 
 // NewSigner instantiates a new signer object
-func NewSigner(chainId *big.Int) Signer {
+func NewSigner(chainId *big.Int, nodeLocation common.Location) Signer {
 	if chainId == nil {
 		chainId = new(big.Int)
 	}
 	return SignerV1{
-		chainId:    chainId,
-		chainIdMul: new(big.Int).Mul(chainId, big.NewInt(2)),
+		chainId:      chainId,
+		chainIdMul:   new(big.Int).Mul(chainId, big.NewInt(2)),
+		nodeLocation: nodeLocation,
 	}
 }
 
@@ -172,7 +174,7 @@ func (s SignerV1) Sender(tx *Transaction) (common.Address, error) {
 	if tx.ChainId().Cmp(s.chainId) != 0 {
 		return common.ZeroAddr, ErrInvalidChainId
 	}
-	return recoverPlain(s.Hash(tx), R, S, V)
+	return recoverPlain(s.Hash(tx), R, S, V, s.nodeLocation)
 }
 
 func (s SignerV1) Equal(s2 Signer) bool {
@@ -255,7 +257,7 @@ func decodeSignature(sig []byte) (r, s, v *big.Int) {
 	return r, s, v
 }
 
-func recoverPlain(sighash common.Hash, R, S, Vb *big.Int) (common.Address, error) {
+func recoverPlain(sighash common.Hash, R, S, Vb *big.Int, nodeLocation common.Location) (common.Address, error) {
 	if Vb.BitLen() > 8 {
 		return common.ZeroAddr, ErrInvalidSig
 	}
@@ -277,6 +279,6 @@ func recoverPlain(sighash common.Hash, R, S, Vb *big.Int) (common.Address, error
 	if len(pub) == 0 || pub[0] != 4 {
 		return common.ZeroAddr, errors.New("invalid public key")
 	}
-	addr := common.BytesToAddress(crypto.Keccak256(pub[1:])[12:])
+	addr := common.BytesToAddress(crypto.Keccak256(pub[1:])[12:], nodeLocation)
 	return addr, nil
 }

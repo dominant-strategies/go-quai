@@ -53,10 +53,10 @@ func NewBlockValidator(config *params.ChainConfig, headerChain *HeaderChain, eng
 // header's transaction and uncle roots. The headers are assumed to be already
 // validated at this point.
 func (v *BlockValidator) ValidateBody(block *types.Block) error {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := v.config.Location.Context()
 	// Check whether the block's known, and if not, that it's linkable
 	if nodeCtx == common.ZONE_CTX && v.hc.ProcessingState() {
-		if v.hc.bc.processor.HasBlockAndState(block.Hash(), block.NumberU64()) {
+		if v.hc.bc.processor.HasBlockAndState(block.Hash(), block.NumberU64(nodeCtx)) {
 			return ErrKnownBlock
 		}
 	}
@@ -154,7 +154,7 @@ func CalcGasLimit(parent *types.Header, gasCeil uint64) uint64 {
 	var desiredLimit uint64
 	percentGasUsed := parent.GasUsed() * 100 / parent.GasLimit()
 	if percentGasUsed > params.PercentGasUsedThreshold {
-		desiredLimit = CalcGasCeil(parent.NumberU64(), gasCeil)
+		desiredLimit = CalcGasCeil(parent.NumberU64(common.ZONE_CTX), gasCeil)
 		if desiredLimit > gasCeil {
 			desiredLimit = gasCeil
 		}

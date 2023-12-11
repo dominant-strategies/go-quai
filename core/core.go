@@ -115,7 +115,8 @@ func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.H
 // the number of blocks which were successfully consumed (either appended, or
 // cached), and an error.
 func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
-	nodeCtx := common.NodeLocation.Context()
+	nodeLocation := c.NodeLocation()
+	nodeCtx := c.NodeCtx()
 	for idx, block := range blocks {
 		// Only attempt to append a block, if it is not coincident with our dominant
 		// chain. If it is dom coincident, then the dom chain node in our slice needs
@@ -157,14 +158,14 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 				err.Error() == ErrSubNotSyncedToDom.Error() ||
 				err.Error() == ErrDomClientNotUp.Error() {
 				if c.sl.CurrentInfo(block.Header()) {
-					log.Info("Cannot append yet.", "loc", common.NodeLocation.Name(), "number", block.Header().NumberArray(), "hash", block.Hash(), "err", err)
+					log.Info("Cannot append yet.", "loc", c.NodeLocation().Name(), "number", block.Header().NumberArray(), "hash", block.Hash(), "err", err)
 				} else {
-					log.Debug("Cannot append yet.", "loc", common.NodeLocation.Name(), "number", block.Header().NumberArray(), "hash", block.Hash(), "err", err)
+					log.Debug("Cannot append yet.", "loc", c.NodeLocation().Name(), "number", block.Header().NumberArray(), "hash", block.Hash(), "err", err)
 				}
 				if err.Error() == ErrSubNotSyncedToDom.Error() ||
 					err.Error() == ErrPendingEtxNotFound.Error() {
-					if nodeCtx != common.ZONE_CTX && c.sl.subClients[block.Location().SubIndex()] != nil {
-						c.sl.subClients[block.Location().SubIndex()].DownloadBlocksInManifest(context.Background(), block.Hash(), block.SubManifest(), block.ParentEntropy())
+					if nodeCtx != common.ZONE_CTX && c.sl.subClients[block.Location().SubIndex(nodeLocation)] != nil {
+						c.sl.subClients[block.Location().SubIndex(nodeLocation)].DownloadBlocksInManifest(context.Background(), block.Hash(), block.SubManifest(), block.ParentEntropy(nodeCtx))
 					}
 				}
 				return idx, ErrPendingBlock
@@ -183,12 +184,12 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 
 // procAppendQueue sorts the append queue and attempts to append
 func (c *Core) procAppendQueue() {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := c.NodeLocation().Context()
 
 	maxFutureBlocks := c_maxFutureBlocksPrime
 	// If sync point is reached increase the maxFutureBlocks
 	// we can increse scope when we are near, region future blocks is increased to sync the fray fast
-	if c.CurrentHeader() != nil && c.syncTarget != nil && c.CurrentHeader().NumberU64() >= c.syncTarget.NumberU64() {
+	if c.CurrentHeader() != nil && c.syncTarget != nil && c.CurrentHeader().NumberU64(nodeCtx) >= c.syncTarget.NumberU64(nodeCtx) {
 		if nodeCtx == common.REGION_CTX {
 			maxFutureBlocks = c_maxFutureBlocksRegionAtFray
 		} else if nodeCtx == common.ZONE_CTX {
@@ -209,7 +210,7 @@ func (c *Core) procAppendQueue() {
 	for _, hash := range c.appendQueue.Keys() {
 		if value, exist := c.appendQueue.Peek(hash); exist {
 			hashNumber := types.HashAndNumber{Hash: hash.(common.Hash), Number: value.(blockNumberAndRetryCounter).number}
-			if hashNumber.Number < c.CurrentHeader().NumberU64()+maxFutureBlocks {
+			if hashNumber.Number < c.CurrentHeader().NumberU64(nodeCtx)+maxFutureBlocks {
 				if value.(blockNumberAndRetryCounter).retry < c_appendQueueRetryPriorityThreshold {
 					hashNumberPriorityList = append(hashNumberPriorityList, hashNumber)
 				} else {
@@ -241,7 +242,7 @@ func (c *Core) serviceBlocks(hashNumberList []types.HashAndNumber) {
 	})
 
 	var retryThreshold uint64
-	switch common.NodeLocation.Context() {
+	switch c.NodeLocation().Context() {
 	case common.PRIME_CTX:
 		retryThreshold = c_primeRetryThreshold
 	case common.REGION_CTX:
@@ -258,13 +259,13 @@ func (c *Core) serviceBlocks(hashNumberList []types.HashAndNumber) {
 			if value, exist := c.appendQueue.Peek(block.Hash()); exist {
 				numberAndRetryCounter = value.(blockNumberAndRetryCounter)
 				numberAndRetryCounter.retry += 1
-				if numberAndRetryCounter.retry > retryThreshold && numberAndRetryCounter.number+c_appendQueueRemoveThreshold < c.CurrentHeader().NumberU64() {
+				if numberAndRetryCounter.retry > retryThreshold && numberAndRetryCounter.number+c_appendQueueRemoveThreshold < c.CurrentHeader().NumberU64(c.NodeCtx()) {
 					c.appendQueue.Remove(block.Hash())
 				} else {
 					c.appendQueue.Add(block.Hash(), numberAndRetryCounter)
 				}
 			}
-			parentBlock := c.sl.hc.GetBlockOrCandidate(block.ParentHash(), block.NumberU64()-1)
+			parentBlock := c.sl.hc.GetBlockOrCandidate(block.ParentHash(c.NodeCtx()), block.NumberU64(c.NodeCtx())-1)
 			if parentBlock != nil {
 				// If parent header is dom, send a signal to dom to request for the block if it doesnt have it
 				_, parentHeaderOrder, err := c.sl.engine.CalcOrder(parentBlock.Header())
@@ -272,12 +273,12 @@ func (c *Core) serviceBlocks(hashNumberList []types.HashAndNumber) {
 					log.Warn("Error calculating the parent block order in serviceBlocks", "Hash", parentBlock.Hash(), "Number", parentBlock.Header().NumberArray())
 					continue
 				}
-				nodeCtx := common.NodeLocation.Context()
+				nodeCtx := c.NodeLocation().Context()
 				if parentHeaderOrder < nodeCtx && c.GetHeaderByHash(parentBlock.Hash()) == nil {
 					log.Info("Requesting the dom to get the block if it doesnt have and try to append", "Hash", parentBlock.Hash(), "Order", parentHeaderOrder)
 					if c.sl.domClient != nil {
 						// send a signal to the required dom to fetch the block if it doesnt have it, or its not in its appendqueue
-						go c.sl.domClient.RequestDomToAppendOrFetch(context.Background(), parentBlock.Hash(), parentBlock.ParentEntropy(), parentHeaderOrder)
+						go c.sl.domClient.RequestDomToAppendOrFetch(context.Background(), parentBlock.Hash(), parentBlock.ParentEntropy(c.NodeCtx()), parentHeaderOrder)
 					}
 				}
 				c.addToQueueIfNotAppended(parentBlock)
@@ -292,7 +293,7 @@ func (c *Core) serviceBlocks(hashNumberList []types.HashAndNumber) {
 					c.normalListBackoff = 1
 				}
 			} else {
-				c.sl.missingBlockFeed.Send(types.BlockRequest{Hash: block.ParentHash(), Entropy: block.ParentEntropy()})
+				c.sl.missingBlockFeed.Send(types.BlockRequest{Hash: block.ParentHash(c.NodeCtx()), Entropy: block.ParentEntropy(c.NodeCtx())})
 			}
 		} else {
 			log.Warn("Entry in the FH cache without being in the db: ", "Hash: ", hashAndNumber.Hash)
@@ -303,7 +304,7 @@ func (c *Core) serviceBlocks(hashNumberList []types.HashAndNumber) {
 func (c *Core) RequestDomToAppendOrFetch(hash common.Hash, entropy *big.Int, order int) {
 	// TODO: optimize to check if the block is in the appendqueue or already
 	// appended to reduce the network bandwidth utilization
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := c.NodeLocation().Context()
 	if nodeCtx == common.PRIME_CTX {
 		// If prime all you can do it to ask for the block
 		_, exists := c.appendQueue.Get(hash)
@@ -356,16 +357,17 @@ func (c *Core) SetSyncTarget(header *types.Header) {
 		return
 	}
 
-	nodeCtx := common.NodeLocation.Context()
+	nodeLocation := c.NodeLocation()
+	nodeCtx := c.NodeLocation().Context()
 	// Set Sync Target for subs
 	if nodeCtx != common.ZONE_CTX {
 		if header != nil {
-			if c.sl.subClients[header.Location().SubIndex()] != nil {
-				c.sl.subClients[header.Location().SubIndex()].SetSyncTarget(context.Background(), header)
+			if c.sl.subClients[header.Location().SubIndex(nodeLocation)] != nil {
+				c.sl.subClients[header.Location().SubIndex(nodeLocation)].SetSyncTarget(context.Background(), header)
 			}
 		}
 	}
-	if c.syncTarget == nil || c.syncTarget.ParentEntropy().Cmp(header.ParentEntropy()) < 0 {
+	if c.syncTarget == nil || c.syncTarget.ParentEntropy(nodeCtx).Cmp(header.ParentEntropy(nodeCtx)) < 0 {
 		c.syncTarget = header
 	}
 }
@@ -376,23 +378,23 @@ func (c *Core) SyncTargetEntropy() (*big.Int, *big.Int) {
 	if c.syncTarget != nil {
 		target := new(big.Int).Div(common.Big2e256, c.syncTarget.Difficulty())
 		zoneThresholdS := c.sl.engine.IntrinsicLogS(common.BytesToHash(target.Bytes()))
-		return c.syncTarget.ParentEntropy(), zoneThresholdS
+		return c.syncTarget.ParentEntropy(c.NodeCtx()), zoneThresholdS
 	} else {
 		target := new(big.Int).Div(common.Big2e256, c.CurrentHeader().Difficulty())
 		zoneThresholdS := c.sl.engine.IntrinsicLogS(common.BytesToHash(target.Bytes()))
-		return c.CurrentHeader().ParentEntropy(), zoneThresholdS
+		return c.CurrentHeader().ParentEntropy(c.NodeCtx()), zoneThresholdS
 	}
 }
 
 // addToAppendQueue adds a block to the append queue
 func (c *Core) addToAppendQueue(block *types.Block) error {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := c.NodeLocation().Context()
 	_, order, err := c.engine.CalcOrder(block.Header())
 	if err != nil {
 		return err
 	}
 	if order == nodeCtx {
-		c.appendQueue.ContainsOrAdd(block.Hash(), blockNumberAndRetryCounter{block.NumberU64(), 0})
+		c.appendQueue.ContainsOrAdd(block.Hash(), blockNumberAndRetryCounter{block.NumberU64(c.NodeCtx()), 0})
 	}
 	return nil
 }
@@ -451,7 +453,7 @@ func (c *Core) startStatsTimer() {
 
 // printStats displays stats on syncing, latestHeight, etc.
 func (c *Core) printStats() {
-	log.Info("Blocks waiting to be appended", "loc", common.NodeLocation.Name(), "len(appendQueue)", len(c.appendQueue.Keys()))
+	log.Info("Blocks waiting to be appended", "loc", c.NodeLocation().Name(), "len(appendQueue)", len(c.appendQueue.Keys()))
 
 	// Print hashes & heights of all queue entries.
 	for _, hash := range c.appendQueue.Keys()[:math.Min(len(c.appendQueue.Keys()), c_appendQueuePrintSize)] {
@@ -466,7 +468,7 @@ func (c *Core) printStats() {
 }
 
 func (c *Core) BadHashExistsInChain() bool {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := c.NodeLocation().Context()
 	// Lookup the bad hashes list to see if we have it in the database
 	for _, fork := range BadHashes {
 		switch nodeCtx {
@@ -475,11 +477,11 @@ func (c *Core) BadHashExistsInChain() bool {
 				return true
 			}
 		case common.REGION_CTX:
-			if c.GetBlockByHash(fork.RegionContext[common.NodeLocation.Region()]) != nil {
+			if c.GetBlockByHash(fork.RegionContext[c.NodeLocation().Region()]) != nil {
 				return true
 			}
 		case common.ZONE_CTX:
-			if c.GetBlockByHash(fork.ZoneContext[common.NodeLocation.Region()][common.NodeLocation.Zone()]) != nil {
+			if c.GetBlockByHash(fork.ZoneContext[c.NodeLocation().Region()][c.NodeLocation().Zone()]) != nil {
 				return true
 			}
 		}
@@ -534,7 +536,7 @@ func (c *Core) Stop() {
 func (c *Core) WriteBlock(block *types.Block) {
 	c.writeBlockLock.Lock()
 	defer c.writeBlockLock.Unlock()
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := c.NodeCtx()
 
 	if c.sl.IsBlockHashABadHash(block.Hash()) {
 		return
@@ -546,7 +548,7 @@ func (c *Core) WriteBlock(block *types.Block) {
 			return
 		}
 		if order == nodeCtx {
-			parentHeader := c.GetHeader(block.ParentHash(), block.NumberU64()-1)
+			parentHeader := c.GetHeader(block.ParentHash(nodeCtx), block.NumberU64(nodeCtx)-1)
 			if parentHeader != nil {
 				c.sl.WriteBlock(block)
 				c.InsertChain([]*types.Block{block})
@@ -555,7 +557,7 @@ func (c *Core) WriteBlock(block *types.Block) {
 			// If a dom block comes in and we havent appended it yet
 		} else if order < nodeCtx && c.GetHeaderByHash(block.Hash()) == nil {
 			if c.sl.domClient != nil {
-				go c.sl.domClient.RequestDomToAppendOrFetch(context.Background(), block.Hash(), block.ParentEntropy(), order)
+				go c.sl.domClient.RequestDomToAppendOrFetch(context.Background(), block.Hash(), block.ParentEntropy(nodeCtx), order)
 			}
 		}
 	}
@@ -571,27 +573,28 @@ func (c *Core) WriteBlock(block *types.Block) {
 }
 
 func (c *Core) Append(header *types.Header, manifest types.BlockManifest, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, bool, bool, error) {
+	nodeCtx := c.NodeCtx()
 	newPendingEtxs, subReorg, setHead, err := c.sl.Append(header, domPendingHeader, domTerminus, domOrigin, newInboundEtxs)
 	if err != nil {
 		if err.Error() == ErrBodyNotFound.Error() || err.Error() == consensus.ErrUnknownAncestor.Error() || err.Error() == ErrSubNotSyncedToDom.Error() {
 			// Fetch the blocks for each hash in the manifest
 			block := c.GetBlockOrCandidateByHash(header.Hash())
 			if block == nil {
-				c.sl.missingBlockFeed.Send(types.BlockRequest{Hash: header.Hash(), Entropy: header.ParentEntropy()})
+				c.sl.missingBlockFeed.Send(types.BlockRequest{Hash: header.Hash(), Entropy: header.ParentEntropy(nodeCtx)})
 			} else {
 				c.addToQueueIfNotAppended(block)
 			}
 			for _, m := range manifest {
 				block := c.GetBlockOrCandidateByHash(m)
 				if block == nil {
-					c.sl.missingBlockFeed.Send(types.BlockRequest{Hash: m, Entropy: header.ParentEntropy()})
+					c.sl.missingBlockFeed.Send(types.BlockRequest{Hash: m, Entropy: header.ParentEntropy(nodeCtx)})
 				} else {
 					c.addToQueueIfNotAppended(block)
 				}
 			}
-			block = c.GetBlockOrCandidateByHash(header.ParentHash())
+			block = c.GetBlockOrCandidateByHash(header.ParentHash(nodeCtx))
 			if block == nil {
-				c.sl.missingBlockFeed.Send(types.BlockRequest{Hash: header.ParentHash(), Entropy: header.ParentEntropy()})
+				c.sl.missingBlockFeed.Send(types.BlockRequest{Hash: header.ParentHash(nodeCtx), Entropy: header.ParentEntropy(nodeCtx)})
 			} else {
 				c.addToQueueIfNotAppended(block)
 			}
@@ -610,12 +613,12 @@ func (c *Core) DownloadBlocksInManifest(blockHash common.Hash, manifest types.Bl
 			c.addToQueueIfNotAppended(block)
 		}
 	}
-	if common.NodeLocation.Context() == common.REGION_CTX {
+	if c.NodeLocation().Context() == common.REGION_CTX {
 		block := c.GetBlockOrCandidateByHash(blockHash)
 		if block != nil {
 			// If a prime block comes in
-			if c.sl.subClients[block.Location().SubIndex()] != nil {
-				c.sl.subClients[block.Location().SubIndex()].DownloadBlocksInManifest(context.Background(), block.Hash(), block.SubManifest(), block.ParentEntropy())
+			if c.sl.subClients[block.Location().SubIndex(c.NodeLocation())] != nil {
+				c.sl.subClients[block.Location().SubIndex(c.NodeLocation())].DownloadBlocksInManifest(context.Background(), block.Hash(), block.SubManifest(), block.ParentEntropy(c.NodeCtx()))
 			}
 		}
 	}
@@ -692,6 +695,14 @@ func (c *Core) IsBlockHashABadHash(hash common.Hash) bool {
 
 func (c *Core) ProcessingState() bool {
 	return c.sl.ProcessingState()
+}
+
+func (c *Core) NodeLocation() common.Location {
+	return c.sl.NodeLocation()
+}
+
+func (c *Core) NodeCtx() int {
+	return c.sl.NodeCtx()
 }
 
 //---------------------//

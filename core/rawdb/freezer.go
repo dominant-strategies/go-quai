@@ -273,7 +273,7 @@ func (f *freezer) Sync() error {
 //
 // This functionality is deliberately broken off from block importing to avoid
 // incurring additional data shuffling delays on block propagation.
-func (f *freezer) freeze(db ethdb.KeyValueStore) {
+func (f *freezer) freeze(db ethdb.KeyValueStore, nodeCtx int) {
 	nfdb := &nofreezedb{KeyValueStore: db}
 
 	var (
@@ -430,13 +430,13 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 						log.Error("Missing dangling header", "number", tip, "hash", children[i])
 						continue
 					}
-					if _, ok := drop[child.ParentHash()]; !ok {
+					if _, ok := drop[child.ParentHash(nodeCtx)]; !ok {
 						children = append(children[:i], children[i+1:]...)
 						i--
 						continue
 					}
 					// Delete all block data associated with the child
-					log.Debug("Deleting dangling block", "number", tip, "hash", children[i], "parent", child.ParentHash())
+					log.Debug("Deleting dangling block", "number", tip, "hash", children[i], "parent", child.ParentHash(nodeCtx))
 					DeleteBlock(batch, children[i], tip)
 				}
 				dangling = children

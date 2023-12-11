@@ -67,6 +67,8 @@ type StateDB struct {
 	trie         Trie
 	hasher       crypto.KeccakState
 
+	nodeLocation common.Location
+
 	snaps         *snapshot.Tree
 	snap          snapshot.Snapshot
 	snapDestructs map[common.Hash]struct{}
@@ -119,7 +121,7 @@ type StateDB struct {
 }
 
 // New creates a new state from a given trie.
-func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) {
+func New(root common.Hash, db Database, snaps *snapshot.Tree, nodeLocation common.Location) (*StateDB, error) {
 	tr, err := db.OpenTrie(root)
 	if err != nil {
 		return nil, err
@@ -137,6 +139,7 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		journal:             newJournal(),
 		accessList:          newAccessList(),
 		hasher:              crypto.NewKeccakState(),
+		nodeLocation:        nodeLocation,
 	}
 	if sdb.snaps != nil {
 		if sdb.snap = sdb.snaps.Snapshot(root); sdb.snap != nil {
@@ -372,7 +375,7 @@ func (s *StateDB) HasSuicided(addr common.InternalAddress) bool {
 func (s *StateDB) AddBalance(addr common.InternalAddress, amount *big.Int) {
 	stateObject := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
-		stateObject.AddBalance(amount)
+		stateObject.AddBalance(amount, s.nodeLocation)
 	}
 }
 
@@ -559,7 +562,7 @@ func (s *StateDB) GetOrNewStateObject(addr common.InternalAddress) *stateObject 
 // createObject creates a new state object. If there is an existing account with
 // the given address, it is overwritten and returned as the second return value.
 func (s *StateDB) createObject(addr common.InternalAddress) (newobj, prev *stateObject) {
-	if !common.IsInChainScope(addr.Bytes()) {
+	if !common.IsInChainScope(addr.Bytes(), s.nodeLocation) {
 		s.setError(fmt.Errorf("createObject (%x) error: %v", addr.Bytes(), common.ErrInvalidScope))
 		return nil, nil
 	}

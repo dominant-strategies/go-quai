@@ -33,7 +33,7 @@ type AddressData interface {
 	UnmarshalJSON(input []byte) error
 	Scan(src interface{}) error
 	Value() (driver.Value, error)
-	Location() *Location
+	Location(nodeLocation Location) *Location
 	setBytes(b []byte)
 }
 
@@ -59,8 +59,8 @@ func (a Address) Equal(b Address) bool {
 
 // BytesToAddress returns Address with value b.
 // If b is larger than len(h), b will be cropped from the left.
-func BytesToAddress(b []byte) Address {
-	if IsInChainScope(b) {
+func BytesToAddress(b []byte, nodeLocation Location) Address {
+	if IsInChainScope(b, nodeLocation) {
 		var i InternalAddress
 		i.setBytes(b)
 		return Address{&i}
@@ -71,8 +71,8 @@ func BytesToAddress(b []byte) Address {
 	}
 }
 
-func Bytes20ToAddress(b [20]byte) Address {
-	return BytesToAddress(b[:])
+func Bytes20ToAddress(b [20]byte, nodeLocation Location) Address {
+	return BytesToAddress(b[:], nodeLocation)
 }
 
 func NewAddressFromData(inner AddressData) Address {
@@ -93,7 +93,7 @@ func (a *Address) DecodeRLP(s *rlp.Stream) error {
 	if err := s.Decode(&temp); err != nil {
 		return err
 	}
-	*a = BytesToAddress(temp)
+	*a = BytesToAddress(temp, Location{0, 0})
 	return nil
 }
 
@@ -160,7 +160,7 @@ func (a *Address) UnmarshalText(input []byte) error {
 	if err := hexutil.UnmarshalFixedText("Address", input, temp[:]); err != nil {
 		return err
 	}
-	a.inner = Bytes20ToAddress(temp).inner
+	a.inner = Bytes20ToAddress(temp, Location{0, 0}).inner
 	return nil
 }
 
@@ -177,17 +177,17 @@ func (a *Address) UnmarshalJSON(input []byte) error {
 	var temp [AddressLength]byte
 	if err := hexutil.UnmarshalFixedJSON(reflect.TypeOf(InternalAddress{}), input, temp[:]); err != nil {
 		if len(input) == 0 {
-			a.inner = Bytes20ToAddress(ZeroInternal).inner
+			a.inner = Bytes20ToAddress(ZeroInternal, Location{0, 0}).inner
 			return nil
 		}
 		return err
 	}
-	a.inner = Bytes20ToAddress(temp).inner
+	a.inner = Bytes20ToAddress(temp, Location{0, 0}).inner
 	return nil
 }
 
 // Scan implements Scanner for database/sql.
-func (a *Address) Scan(src interface{}) error {
+func (a *Address) Scan(src interface{}, args ...Location) error {
 	var temp [20]byte
 	srcB, ok := src.([]byte)
 	if !ok {
@@ -197,7 +197,7 @@ func (a *Address) Scan(src interface{}) error {
 		return fmt.Errorf("can't scan []byte of len %d into Address, want %d", len(srcB), AddressLength)
 	}
 	copy(temp[:], srcB)
-	a.inner = Bytes20ToAddress(temp).inner
+	a.inner = Bytes20ToAddress(temp, args[0]).inner
 	return nil
 }
 
@@ -210,20 +210,24 @@ func (a Address) Value() (driver.Value, error) {
 }
 
 // Location looks up the chain location which contains this address
-func (a Address) Location() *Location {
+func (a Address) Location(nodeLocation Location) *Location {
 	if a.inner == nil {
-		return &NodeLocation
+		return &nodeLocation
 	}
-	return a.inner.Location()
+	return a.inner.Location(nodeLocation)
 }
 
 // BigToAddress returns Address with byte values of b.
 // If b is larger than len(h), b will be cropped from the left.
-func BigToAddress(b *big.Int) Address { return BytesToAddress(b.Bytes()) }
+func BigToAddress(b *big.Int, nodeLocation Location) Address {
+	return BytesToAddress(b.Bytes(), nodeLocation)
+}
 
 // HexToAddress returns Address with byte values of s.
 // If s is larger than len(h), s will be cropped from the left.
-func HexToAddress(s string) Address { return BytesToAddress(FromHex(s)) }
+func HexToAddress(s string, nodeLocation Location) Address {
+	return BytesToAddress(FromHex(s), nodeLocation)
+}
 
 // IsHexAddress verifies whether a string can represent a valid hex-encoded
 // Quai address or not.

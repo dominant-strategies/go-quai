@@ -112,20 +112,20 @@ func genIntType(rule int64, size uint) []byte {
 }
 
 // ParseTopics converts the indexed topic fields into actual log field values.
-func ParseTopics(out interface{}, fields Arguments, topics []common.Hash) error {
+func ParseTopics(out interface{}, fields Arguments, topics []common.Hash, nodeLocation common.Location) error {
 	return parseTopicWithSetter(fields, topics,
 		func(arg Argument, reconstr interface{}) {
 			field := reflect.ValueOf(out).Elem().FieldByName(ToCamelCase(arg.Name))
 			field.Set(reflect.ValueOf(reconstr))
-		})
+		}, nodeLocation)
 }
 
 // ParseTopicsIntoMap converts the indexed topic field-value pairs into map key-value pairs.
-func ParseTopicsIntoMap(out map[string]interface{}, fields Arguments, topics []common.Hash) error {
+func ParseTopicsIntoMap(out map[string]interface{}, fields Arguments, topics []common.Hash, nodeLocation common.Location) error {
 	return parseTopicWithSetter(fields, topics,
 		func(arg Argument, reconstr interface{}) {
 			out[arg.Name] = reconstr
-		})
+		}, nodeLocation)
 }
 
 // parseTopicWithSetter converts the indexed topic field-value pairs and stores them using the
@@ -133,7 +133,7 @@ func ParseTopicsIntoMap(out map[string]interface{}, fields Arguments, topics []c
 //
 // Note, dynamic types cannot be reconstructed since they get mapped to Keccak256
 // hashes as the topic value!
-func parseTopicWithSetter(fields Arguments, topics []common.Hash, setter func(Argument, interface{})) error {
+func parseTopicWithSetter(fields Arguments, topics []common.Hash, setter func(Argument, interface{}), nodeLocation common.Location) error {
 	// Sanity check that the fields and topics match up
 	if len(fields) != len(topics) {
 		return errors.New("topic/field count mismatch")
@@ -160,7 +160,7 @@ func parseTopicWithSetter(fields Arguments, topics []common.Hash, setter func(Ar
 			reconstr = tmp
 		default:
 			var err error
-			reconstr, err = toGoType(0, arg.Type, topics[i].Bytes())
+			reconstr, err = toGoType(0, arg.Type, topics[i].Bytes(), nodeLocation)
 			if err != nil {
 				return err
 			}

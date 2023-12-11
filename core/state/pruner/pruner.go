@@ -295,7 +295,7 @@ func (p *Pruner) Prune(root common.Hash) error {
 		}
 	} else {
 		if len(layers) > 0 {
-			log.Info("Selecting bottom-most difflayer as the pruning target", "root", root, "height", p.headHeader.NumberU64()-127)
+			log.Info("Selecting bottom-most difflayer as the pruning target", "root", root, "height", p.headHeader.NumberU64(common.ZONE_CTX)-127)
 		} else {
 			log.Info("Selecting user-specified state as the pruning target", "root", root)
 		}

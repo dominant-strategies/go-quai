@@ -45,7 +45,7 @@ type BodyDb struct {
 }
 
 func NewBodyDb(db ethdb.Database, engine consensus.Engine, hc *HeaderChain, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, txLookupLimit *uint64, vmConfig vm.Config, slicesRunning []common.Location) (*BodyDb, error) {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := chainConfig.Location.Context()
 
 	bc := &BodyDb{
 		chainConfig:   chainConfig,
@@ -88,7 +88,7 @@ func (bc *BodyDb) Append(block *types.Block, newInboundEtxs types.Transactions) 
 
 	batch := bc.db.NewBatch()
 	stateApply := time.Now()
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := bc.NodeCtx()
 	var logs []*types.Log
 	var err error
 	if nodeCtx == common.ZONE_CTX && bc.ProcessingState() {
@@ -97,7 +97,7 @@ func (bc *BodyDb) Append(block *types.Block, newInboundEtxs types.Transactions) 
 		if err != nil {
 			return nil, err
 		}
-		rawdb.WriteTxLookupEntriesByBlock(batch, block)
+		rawdb.WriteTxLookupEntriesByBlock(batch, block, nodeCtx)
 	}
 	log.Debug("Time taken to", "apply state:", common.PrettyDuration(time.Since(stateApply)))
 	if err = batch.Write(); err != nil {
@@ -107,17 +107,17 @@ func (bc *BodyDb) Append(block *types.Block, newInboundEtxs types.Transactions) 
 }
 
 func (bc *BodyDb) ProcessingState() bool {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := bc.NodeCtx()
 	for _, slice := range bc.slicesRunning {
 		switch nodeCtx {
 		case common.PRIME_CTX:
 			return true
 		case common.REGION_CTX:
-			if slice.Region() == common.NodeLocation.Region() {
+			if slice.Region() == bc.NodeLocation().Region() {
 				return true
 			}
 		case common.ZONE_CTX:
-			if slice.Equal(common.NodeLocation) {
+			if slice.Equal(bc.NodeLocation()) {
 				return true
 			}
 		}
@@ -129,7 +129,7 @@ func (bc *BodyDb) ProcessingState() bool {
 func (bc *BodyDb) WriteBlock(block *types.Block) {
 	// add the block to the cache as well
 	bc.blockCache.Add(block.Hash(), block)
-	rawdb.WriteBlock(bc.db, block)
+	rawdb.WriteBlock(bc.db, block, bc.NodeCtx())
 }
 
 // HasBlock checks if a block is fully present in the database or not.
@@ -177,6 +177,14 @@ func (bc *BodyDb) GetBlockOrCandidate(hash common.Hash, number uint64) *types.Bl
 
 func (bc *BodyDb) Processor() *StateProcessor {
 	return bc.processor
+}
+
+func (bc *BodyDb) NodeLocation() common.Location {
+	return bc.chainConfig.Location
+}
+
+func (bc *BodyDb) NodeCtx() int {
+	return bc.chainConfig.Location.Context()
 }
 
 // Config retrieves the chain's fork configuration.

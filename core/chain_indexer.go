@@ -59,6 +59,8 @@ type ChainIndexerChain interface {
 	GetBloom(blockhash common.Hash) (*types.Bloom, error)
 	// SubscribeChainHeadEvent subscribes to new head header notifications.
 	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
+	// NodeCtx returns the context of the chain
+	NodeCtx() int
 }
 
 // ChainIndexer does a post-processing job for equally sized sections of the
@@ -98,7 +100,7 @@ type ChainIndexer struct {
 // NewChainIndexer creates a new chain indexer to do background processing on
 // chain segments of a given size after certain number of confirmations passed.
 // The throttling parameter might be used to prevent database thrashing.
-func NewChainIndexer(chainDb ethdb.Database, indexDb ethdb.Database, backend ChainIndexerBackend, section, confirm uint64, throttling time.Duration, kind string) *ChainIndexer {
+func NewChainIndexer(chainDb ethdb.Database, indexDb ethdb.Database, backend ChainIndexerBackend, section, confirm uint64, throttling time.Duration, kind string, nodeCtx int) *ChainIndexer {
 	c := &ChainIndexer{
 		chainDb:     chainDb,
 		indexDb:     indexDb,
@@ -114,7 +116,7 @@ func NewChainIndexer(chainDb ethdb.Database, indexDb ethdb.Database, backend Cha
 	c.loadValidSections()
 	c.ctx, c.ctxCancel = context.WithCancel(context.Background())
 
-	go c.updateLoop()
+	go c.updateLoop(nodeCtx)
 
 	return c
 }
@@ -126,7 +128,7 @@ func (c *ChainIndexer) Start(chain ChainIndexerChain) {
 	events := make(chan ChainHeadEvent, 10)
 	sub := chain.SubscribeChainHeadEvent(events)
 	c.GetBloom = chain.GetBloom
-	go c.eventLoop(chain.CurrentHeader(), events, sub)
+	go c.eventLoop(chain.CurrentHeader(), events, sub, chain.NodeCtx())
 }
 
 // Close tears down all goroutines belonging to the indexer and returns any error
@@ -171,14 +173,14 @@ func (c *ChainIndexer) Close() error {
 // eventLoop is a secondary - optional - event loop of the indexer which is only
 // started for the outermost indexer to push chain head events into a processing
 // queue.
-func (c *ChainIndexer) eventLoop(currentHeader *types.Header, events chan ChainHeadEvent, sub event.Subscription) {
+func (c *ChainIndexer) eventLoop(currentHeader *types.Header, events chan ChainHeadEvent, sub event.Subscription, nodeCtx int) {
 	// Mark the chain indexer as active, requiring an additional teardown
 	atomic.StoreUint32(&c.active, 1)
 
 	defer sub.Unsubscribe()
 
 	// Fire the initial new head event to start any outstanding processing
-	c.newHead(currentHeader.Number().Uint64(), false)
+	c.newHead(currentHeader.NumberU64(nodeCtx), false)
 
 	var (
 		prevHeader = currentHeader
@@ -199,17 +201,17 @@ func (c *ChainIndexer) eventLoop(currentHeader *types.Header, events chan ChainH
 				return
 			}
 			header := ev.Block.Header()
-			if header.ParentHash() != prevHash {
+			if header.ParentHash(nodeCtx) != prevHash {
 				// Reorg to the common ancestor if needed (might not exist in light sync mode, skip reorg then)
 				// TODO: This seems a bit brittle, can we detect this case explicitly?
 
-				if rawdb.ReadCanonicalHash(c.chainDb, prevHeader.Number().Uint64()) != prevHash {
-					if h := rawdb.FindCommonAncestor(c.chainDb, prevHeader, header); h != nil {
-						c.newHead(h.Number().Uint64(), true)
+				if rawdb.ReadCanonicalHash(c.chainDb, prevHeader.NumberU64(nodeCtx)) != prevHash {
+					if h := rawdb.FindCommonAncestor(c.chainDb, prevHeader, header, nodeCtx); h != nil {
+						c.newHead(h.NumberU64(nodeCtx), true)
 					}
 				}
 			}
-			c.newHead(header.Number().Uint64(), false)
+			c.newHead(header.NumberU64(nodeCtx), false)
 
 			prevHeader, prevHash = header, header.Hash()
 		}
@@ -262,7 +264,7 @@ func (c *ChainIndexer) newHead(head uint64, reorg bool) {
 
 // updateLoop is the main event loop of the indexer which pushes chain segments
 // down into the processing backend.
-func (c *ChainIndexer) updateLoop() {
+func (c *ChainIndexer) updateLoop(nodeCtx int) {
 	var (
 		updating bool
 		updated  time.Time
@@ -295,7 +297,7 @@ func (c *ChainIndexer) updateLoop() {
 				}
 				// Process the newly defined section in the background
 				c.lock.Unlock()
-				newHead, err := c.processSection(section, oldHead)
+				newHead, err := c.processSection(section, oldHead, nodeCtx)
 				if err != nil {
 					select {
 					case <-c.ctx.Done():
@@ -344,7 +346,7 @@ func (c *ChainIndexer) updateLoop() {
 // ensuring the continuity of the passed headers. Since the chain mutex is not
 // held while processing, the continuity can be broken by a long reorg, in which
 // case the function returns with an error.
-func (c *ChainIndexer) processSection(section uint64, lastHead common.Hash) (common.Hash, error) {
+func (c *ChainIndexer) processSection(section uint64, lastHead common.Hash, nodeCtx int) (common.Hash, error) {
 	c.log.Trace("Processing new chain section", "section", section)
 
 	// Reset and partial processing
@@ -361,7 +363,7 @@ func (c *ChainIndexer) processSection(section uint64, lastHead common.Hash) (com
 		header := rawdb.ReadHeader(c.chainDb, hash, number)
 		if header == nil {
 			return common.Hash{}, fmt.Errorf("block #%d [%x..] not found", number, hash[:4])
-		} else if header.ParentHash() != lastHead {
+		} else if header.ParentHash(nodeCtx) != lastHead {
 			return common.Hash{}, fmt.Errorf("chain reorged during section processing")
 		}
 		bloom, err := c.GetBloom(header.Hash())

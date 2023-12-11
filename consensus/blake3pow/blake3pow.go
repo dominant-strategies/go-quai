@@ -44,6 +44,8 @@ type Config struct {
 
 	GasCeil uint64
 
+	NodeLocation common.Location
+
 	MinDifficulty *big.Int
 
 	// When set, notifications sent by the remote sealer will

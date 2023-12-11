@@ -75,8 +75,7 @@ type environment struct {
 }
 
 // copy creates a deep copy of environment.
-func (env *environment) copy(processingState bool) *environment {
-	nodeCtx := common.NodeLocation.Context()
+func (env *environment) copy(processingState bool, nodeCtx int) *environment {
 	if nodeCtx == common.ZONE_CTX && processingState {
 		cpy := &environment{
 			signer:    env.signer,
@@ -294,7 +293,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 	headerPrints, _ := expireLru.NewWithExpire(1, c_headerPrintsExpiryTime)
 	worker.headerPrints = headerPrints
 
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := headerchain.NodeCtx()
 	if headerchain.ProcessingState() && nodeCtx == common.ZONE_CTX {
 		worker.chainHeadSub = worker.hc.SubscribeChainHeadEvent(worker.chainHeadCh)
 		worker.wg.Add(1)
@@ -374,7 +373,7 @@ func (w *worker) start() {
 
 // stop sets the running status as 0.
 func (w *worker) stop() {
-	if w.hc.ProcessingState() && common.NodeLocation.Context() == common.ZONE_CTX {
+	if w.hc.ProcessingState() && w.hc.NodeCtx() == common.ZONE_CTX {
 		w.chainHeadSub.Unsubscribe()
 	}
 	atomic.StoreInt32(&w.running, 0)
@@ -461,7 +460,7 @@ func (w *worker) asyncStateLoop() {
 
 // GeneratePendingBlock generates pending block given a commited block.
 func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.Header, error) {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := w.hc.NodeCtx()
 
 	w.interruptAsyncPhGen()
 
@@ -527,12 +526,12 @@ func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.He
 func (w *worker) printPendingHeaderInfo(work *environment, block *types.Block, start time.Time) {
 	work.uncleMu.RLock()
 	if w.CurrentInfo(block.Header()) {
-		log.Info("Commit new sealing work", "number", block.Number(), "sealhash", block.Header().SealHash(),
+		log.Info("Commit new sealing work", "number", block.Number(w.hc.NodeCtx()), "sealhash", block.Header().SealHash(),
 			"uncles", len(work.uncles), "txs", work.tcount, "etxs", len(block.ExtTransactions()),
 			"gas", block.GasUsed(), "fees", totalFees(block, work.receipts),
 			"elapsed", common.PrettyDuration(time.Since(start)))
 	} else {
-		log.Debug("Commit new sealing work", "number", block.Number(), "sealhash", block.Header().SealHash(),
+		log.Debug("Commit new sealing work", "number", block.Number(w.hc.NodeCtx()), "sealhash", block.Header().SealHash(),
 			"uncles", len(work.uncles), "txs", work.tcount, "etxs", len(block.ExtTransactions()),
 			"gas", block.GasUsed(), "fees", totalFees(block, work.receipts),
 			"elapsed", common.PrettyDuration(time.Since(start)))
@@ -576,7 +575,7 @@ func (w *worker) makeEnv(parent *types.Block, header *types.Header, coinbase com
 	}
 	// Note the passed coinbase may be different with header.Coinbase.
 	env := &environment{
-		signer:    types.MakeSigner(w.chainConfig, header.Number()),
+		signer:    types.MakeSigner(w.chainConfig, header.Number(w.hc.NodeCtx())),
 		state:     state,
 		coinbase:  coinbase,
 		ancestors: mapset.NewSet(),
@@ -607,10 +606,10 @@ func (w *worker) commitUncle(env *environment, uncle *types.Header) error {
 	if _, exist := env.uncles[hash]; exist {
 		return errors.New("uncle not unique")
 	}
-	if env.header.ParentHash() == uncle.ParentHash() {
+	if env.header.ParentHash(w.hc.NodeCtx()) == uncle.ParentHash(w.hc.NodeCtx()) {
 		return errors.New("uncle is sibling")
 	}
-	if !env.ancestors.Contains(uncle.ParentHash()) {
+	if !env.ancestors.Contains(uncle.ParentHash(w.hc.NodeCtx())) {
 		return errors.New("uncle's parent unknown")
 	}
 	if env.family.Contains(hash) {
@@ -768,7 +767,7 @@ type generateParams struct {
 func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*environment, error) {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := w.hc.NodeCtx()
 
 	// Find the parent block for sealing task
 	parent := block
@@ -782,10 +781,10 @@ func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*en
 		timestamp = parent.Time() + 1
 	}
 	// Construct the sealing block header, set the extra field if it's allowed
-	num := parent.Number()
+	num := parent.Number(nodeCtx)
 	header := types.EmptyHeader()
-	header.SetParentHash(block.Header().Hash())
-	header.SetNumber(big.NewInt(int64(num.Uint64()) + 1))
+	header.SetParentHash(block.Header().Hash(), nodeCtx)
+	header.SetNumber(big.NewInt(int64(num.Uint64())+1), nodeCtx)
 	header.SetTime(timestamp)
 
 	// Only calculate entropy if the parent is not the genesis block
@@ -802,7 +801,7 @@ func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*en
 				header.SetParentDeltaS(w.engine.DeltaLogS(parent.Header()), nodeCtx)
 			}
 		}
-		header.SetParentEntropy(w.engine.TotalLogS(parent.Header()))
+		header.SetParentEntropy(w.engine.TotalLogS(parent.Header()), nodeCtx)
 	}
 
 	// Only zone should calculate state
@@ -861,11 +860,11 @@ func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*en
 func (w *worker) fillTransactions(interrupt *int32, env *environment, block *types.Block) {
 	// Split the pending transactions into locals and remotes
 	// Fill the block with all available pending transactions.
-	etxSet := rawdb.ReadEtxSet(w.hc.bc.db, block.Hash(), block.NumberU64())
+	etxSet := rawdb.ReadEtxSet(w.hc.bc.db, block.Hash(), block.NumberU64(w.hc.NodeCtx()))
 	if etxSet == nil {
 		return
 	}
-	etxSet.Update(types.Transactions{}, block.NumberU64()+1) // Prune any expired ETXs
+	etxSet.Update(types.Transactions{}, block.NumberU64(w.hc.NodeCtx())+1, w.hc.NodeLocation()) // Prune any expired ETXs
 	pending, err := w.txPool.TxPoolPending(true, etxSet)
 	if err != nil {
 		return
@@ -890,7 +889,7 @@ func (w *worker) adjustGasLimit(interrupt *int32, env *environment, parent *type
 func (w *worker) ComputeManifestHash(header *types.Header) common.Hash {
 	manifest := rawdb.ReadManifest(w.workerDb, header.Hash())
 	if manifest == nil {
-		nodeCtx := common.NodeLocation.Context()
+		nodeCtx := w.hc.NodeCtx()
 		// Compute and set manifest hash
 		manifest = types.BlockManifest{}
 		if nodeCtx == common.PRIME_CTX {
@@ -899,7 +898,7 @@ func (w *worker) ComputeManifestHash(header *types.Header) common.Hash {
 		} else if w.engine.IsDomCoincident(w.hc, header) {
 			manifest = types.BlockManifest{header.Hash()}
 		} else {
-			parentManifest := rawdb.ReadManifest(w.workerDb, header.ParentHash())
+			parentManifest := rawdb.ReadManifest(w.workerDb, header.ParentHash(nodeCtx))
 			manifest = append(parentManifest, header.Hash())
 		}
 		// write the manifest into the disk
@@ -911,7 +910,7 @@ func (w *worker) ComputeManifestHash(header *types.Header) common.Hash {
 }
 
 func (w *worker) FinalizeAssemble(chain consensus.ChainHeaderReader, header *types.Header, parent *types.Block, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, etxs []*types.Transaction, subManifest types.BlockManifest, receipts []*types.Receipt) (*types.Block, error) {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := w.hc.NodeCtx()
 	block, err := w.engine.FinalizeAndAssemble(chain, header, state, txs, uncles, etxs, subManifest, receipts)
 	if err != nil {
 		return nil, err
@@ -920,7 +919,7 @@ func (w *worker) FinalizeAssemble(chain consensus.ChainHeaderReader, header *typ
 	manifestHash := w.ComputeManifestHash(parent.Header())
 
 	if w.hc.ProcessingState() {
-		block.Header().SetManifestHash(manifestHash)
+		block.Header().SetManifestHash(manifestHash, nodeCtx)
 		if nodeCtx == common.ZONE_CTX {
 			// Compute and set etx rollup hash
 			var etxRollup types.Transactions
@@ -952,9 +951,10 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 		if interval != nil {
 			interval()
 		}
+		nodeCtx := w.chainConfig.Location.Context()
 		// Create a local environment copy, avoid the data race with snapshot state.
-		env := env.copy(w.hc.ProcessingState())
-		parent := w.hc.GetBlock(env.header.ParentHash(), env.header.NumberU64()-1)
+		env := env.copy(w.hc.ProcessingState(), nodeCtx)
+		parent := w.hc.GetBlock(env.header.ParentHash(nodeCtx), env.header.NumberU64(nodeCtx)-1)
 		block, err := w.FinalizeAssemble(w.hc, env.header, parent, env.state, env.txs, env.unclelist(), env.etxs, env.subManifest, env.receipts)
 		if err != nil {
 			return err
@@ -963,7 +963,7 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 		select {
 		case w.taskCh <- &task{receipts: env.receipts, state: env.state, block: block, createdAt: time.Now()}:
 			env.uncleMu.RLock()
-			log.Info("Commit new sealing work", "number", block.Number(), "sealhash", block.Header().SealHash(),
+			log.Info("Commit new sealing work", "number", block.Number(nodeCtx), "sealhash", block.Header().SealHash(),
 				"uncles", len(env.uncles), "txs", env.tcount, "etxs", len(block.ExtTransactions()),
 				"gas", block.GasUsed(), "fees", totalFees(block, env.receipts),
 				"elapsed", common.PrettyDuration(time.Since(start)))
@@ -1034,5 +1034,5 @@ func (w *worker) CurrentInfo(header *types.Header) bool {
 	}
 
 	w.headerPrints.Add(header.Hash(), nil)
-	return header.NumberU64()+c_startingPrintLimit > w.hc.CurrentHeader().NumberU64()
+	return header.NumberU64(w.hc.NodeCtx())+c_startingPrintLimit > w.hc.CurrentHeader().NumberU64(w.hc.NodeCtx())
 }

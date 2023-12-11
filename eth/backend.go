@@ -88,8 +88,7 @@ type Quai struct {
 
 // New creates a new Quai object (including the
 // initialisation of the common Quai object)
-func New(stack *node.Node, config *ethconfig.Config) (*Quai, error) {
-	nodeCtx := common.NodeLocation.Context()
+func New(stack *node.Node, config *ethconfig.Config, nodeCtx int) (*Quai, error) {
 	// Ensure configuration values are compatible and sane
 	if !config.SyncMode.IsValid() {
 		return nil, fmt.Errorf("invalid sync mode %d", config.SyncMode)
@@ -114,7 +113,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Quai, error) {
 	if err != nil {
 		return nil, err
 	}
-	chainConfig, _, genesisErr := core.SetupGenesisBlockWithOverride(chainDb, config.Genesis)
+	chainConfig, _, genesisErr := core.SetupGenesisBlockWithOverride(chainDb, config.Genesis, config.NodeLocation)
 	if genesisErr != nil {
 		return nil, genesisErr
 	}
@@ -137,10 +136,12 @@ func New(stack *node.Node, config *ethconfig.Config) (*Quai, error) {
 	if config.ConsensusEngine == "blake3" {
 		blake3Config := config.Blake3Pow
 		blake3Config.NotifyFull = config.Miner.NotifyFull
+		blake3Config.NodeLocation = chainConfig.Location
 		eth.engine = ethconfig.CreateBlake3ConsensusEngine(stack, chainConfig, &blake3Config, config.Miner.Notify, config.Miner.Noverify, chainDb)
 	} else {
 		// Transfer mining-related config to the progpow config.
 		progpowConfig := config.Progpow
+		progpowConfig.NodeLocation = chainConfig.Location
 		progpowConfig.NotifyFull = config.Miner.NotifyFull
 		eth.engine = ethconfig.CreateProgpowConsensusEngine(stack, chainConfig, &progpowConfig, config.Miner.Notify, config.Miner.Noverify, chainDb)
 	}
@@ -191,7 +192,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Quai, error) {
 
 	// Only index bloom if processing state
 	if eth.core.ProcessingState() && nodeCtx == common.ZONE_CTX {
-		eth.bloomIndexer = core.NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms)
+		eth.bloomIndexer = core.NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms, chainConfig.Location.Context())
 		eth.bloomIndexer.Start(eth.Core().Slice().HeaderChain())
 	}
 
@@ -328,7 +329,7 @@ func (s *Quai) Etherbase() (eb common.Address, err error) {
 func (s *Quai) isLocalBlock(header *types.Header) bool {
 	author, err := s.engine.Author(header)
 	if err != nil {
-		log.Warn("Failed to retrieve block author", "number", header.NumberU64(), "hash", header.Hash(), "err", err)
+		log.Warn("Failed to retrieve block author", "number", header.NumberU64(s.core.NodeCtx()), "hash", header.Hash(), "err", err)
 		return false
 	}
 	// Check whether the given address is etherbase.
@@ -381,7 +382,7 @@ func (s *Quai) Protocols() []p2p.Protocol {
 func (s *Quai) Start() error {
 	eth.StartENRUpdater(s.core, s.p2pServer.LocalNode())
 
-	if s.core.ProcessingState() && common.NodeLocation.Context() == common.ZONE_CTX {
+	if s.core.ProcessingState() && s.core.NodeCtx() == common.ZONE_CTX {
 		// Start the bloom bits servicing goroutines
 		s.startBloomHandlers(params.BloomBitsBlocks)
 	}
@@ -400,7 +401,7 @@ func (s *Quai) Stop() error {
 	s.ethDialCandidates.Close()
 	s.handler.Stop()
 
-	if s.core.ProcessingState() && common.NodeLocation.Context() == common.ZONE_CTX {
+	if s.core.ProcessingState() && s.core.NodeCtx() == common.ZONE_CTX {
 		// Then stop everything else.
 		s.bloomIndexer.Close()
 		close(s.closeBloomHandler)

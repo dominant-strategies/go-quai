@@ -256,7 +256,7 @@ func (api *PublicBlockChainAPI) ChainId() (*hexutil.Big, error) {
 // BlockNumber returns the block number of the chain head.
 func (s *PublicBlockChainAPI) BlockNumber() hexutil.Uint64 {
 	header, _ := s.b.HeaderByNumber(context.Background(), rpc.LatestBlockNumber) // latest header should always be available
-	return hexutil.Uint64(header.NumberU64())
+	return hexutil.Uint64(header.NumberU64(s.b.NodeCtx()))
 }
 
 // GetBalance returns the amount of wei for the given address in the state of the
@@ -293,7 +293,7 @@ type StorageResult struct {
 
 // GetProof returns the Merkle-proof for a given account and optionally some storage keys.
 func (s *PublicBlockChainAPI) GetProof(ctx context.Context, address common.Address, storageKeys []string, blockNrOrHash rpc.BlockNumberOrHash) (*AccountResult, error) {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := s.b.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("getProof can only be called in zone chain")
 	}
@@ -431,7 +431,7 @@ func (s *PublicBlockChainAPI) GetUncleByBlockHashAndIndex(ctx context.Context, b
 	if block != nil {
 		uncles := block.Uncles()
 		if index >= hexutil.Uint(len(uncles)) {
-			log.Debug("Requested uncle not found", "number", block.Number(), "hash", blockHash, "index", index)
+			log.Debug("Requested uncle not found", "number", block.Number(s.b.NodeCtx()), "hash", blockHash, "index", index)
 			return nil, nil
 		}
 		block = types.NewBlockWithHeader(uncles[index])
@@ -460,7 +460,7 @@ func (s *PublicBlockChainAPI) GetUncleCountByBlockHash(ctx context.Context, bloc
 
 // GetCode returns the code stored at the given address in the state for the given block number.
 func (s *PublicBlockChainAPI) GetCode(ctx context.Context, address common.Address, blockNrOrHash rpc.BlockNumberOrHash) (hexutil.Bytes, error) {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := s.b.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("getCode can only be called in zone chain")
 	}
@@ -483,7 +483,7 @@ func (s *PublicBlockChainAPI) GetCode(ctx context.Context, address common.Addres
 // block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta block
 // numbers are also allowed.
 func (s *PublicBlockChainAPI) GetStorageAt(ctx context.Context, address common.Address, key string, blockNrOrHash rpc.BlockNumberOrHash) (hexutil.Bytes, error) {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := s.b.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("getStorageAt can only be called in zone chain")
 	}
@@ -520,8 +520,8 @@ type OverrideAccount struct {
 type StateOverride map[common.AddressBytes]OverrideAccount
 
 // Apply overrides the fields of specified accounts into the given state.
-func (diff *StateOverride) Apply(state *state.StateDB) error {
-	nodeCtx := common.NodeLocation.Context()
+func (diff *StateOverride) Apply(state *state.StateDB, nodeLocation common.Location) error {
+	nodeCtx := nodeLocation.Context()
 	if nodeCtx != common.ZONE_CTX {
 		return errors.New("stateOverride Apply can only be called in zone chain")
 	}
@@ -529,7 +529,7 @@ func (diff *StateOverride) Apply(state *state.StateDB) error {
 		return nil
 	}
 	for addr, account := range *diff {
-		internal, err := common.Bytes20ToAddress(addr).InternalAddress()
+		internal, err := common.Bytes20ToAddress(addr, nodeLocation).InternalAddress()
 		if err != nil {
 			return err
 		}
@@ -564,7 +564,7 @@ func (diff *StateOverride) Apply(state *state.StateDB) error {
 
 func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, timeout time.Duration, globalGasCap uint64) (*core.ExecutionResult, error) {
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := b.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("doCall can only be called in zone chain")
 	}
@@ -575,7 +575,7 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	if state == nil || err != nil {
 		return nil, err
 	}
-	if err := overrides.Apply(state); err != nil {
+	if err := overrides.Apply(state, b.NodeLocation()); err != nil {
 		return nil, err
 	}
 	// Setup context so it may be cancelled the call has completed
@@ -591,7 +591,7 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	defer cancel()
 
 	// Get a new instance of the EVM.
-	msg, err := args.ToMessage(globalGasCap, header.BaseFee())
+	msg, err := args.ToMessage(globalGasCap, header.BaseFee(), b.NodeCtx())
 	if err != nil {
 		return nil, err
 	}
@@ -623,8 +623,8 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	return result, nil
 }
 
-func newRevertError(result *core.ExecutionResult) *revertError {
-	reason, errUnpack := abi.UnpackRevert(result.Revert())
+func newRevertError(result *core.ExecutionResult, nodeLocation common.Location) *revertError {
+	reason, errUnpack := abi.UnpackRevert(result.Revert(), nodeLocation)
 	err := errors.New("execution reverted")
 	if errUnpack == nil {
 		err = fmt.Errorf("execution reverted: %v", reason)
@@ -659,7 +659,7 @@ func (e *revertError) ErrorData() interface{} {
 // Note, this function doesn't make and changes in the state/blockchain and is
 // useful to execute and retrieve values.
 func (s *PublicBlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride) (hexutil.Bytes, error) {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := s.b.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("call can only called in zone chain")
 	}
@@ -672,13 +672,13 @@ func (s *PublicBlockChainAPI) Call(ctx context.Context, args TransactionArgs, bl
 	}
 	// If the result contains a revert reason, try to unpack and return it.
 	if len(result.Revert()) > 0 {
-		return nil, newRevertError(result)
+		return nil, newRevertError(result, s.b.NodeLocation())
 	}
 	return result.Return(), result.Err
 }
 
 func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, gasCap uint64) (hexutil.Uint64, error) {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := b.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return 0, errors.New("doEstimateGas can only be called in zone chain")
 	}
@@ -797,7 +797,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		if failed {
 			if result != nil && result.Err != vm.ErrOutOfGas {
 				if len(result.Revert()) > 0 {
-					return 0, newRevertError(result)
+					return 0, newRevertError(result, b.NodeLocation())
 				}
 				return 0, result.Err
 			}
@@ -811,7 +811,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 // EstimateGas returns an estimate of the amount of gas needed to execute the
 // given transaction against the current pending block.
 func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args TransactionArgs, blockNrOrHash *rpc.BlockNumberOrHash) (hexutil.Uint64, error) {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := s.b.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return 0, errors.New("estimateGas can only be called in zone chain")
 	}
@@ -889,7 +889,7 @@ func FormatLogs(logs []vm.StructLog) []StructLogRes {
 // RPCMarshalHeader converts the given header to the RPC output .
 func RPCMarshalETHHeader(head *types.Header) map[string]interface{} {
 	result := map[string]interface{}{
-		"number":           (*hexutil.Big)(head.Number()),
+		"number":           (*hexutil.Big)(head.Number(common.ZONE_CTX)),
 		"hash":             head.Hash(),
 		"parentHash":       head.ParentHash,
 		"nonce":            head.Nonce,
@@ -914,7 +914,7 @@ func RPCMarshalETHHeader(head *types.Header) map[string]interface{} {
 // RPCMarshalBlock converts the given block to the RPC output which depends on fullTx. If inclTx is true transactions are
 // returned. When fullTx is true the returned block contains full transaction details, otherwise it will only contain
 // transaction hashes.
-func RPCMarshalETHBlock(block *types.Block, inclTx bool, fullTx bool) (map[string]interface{}, error) {
+func RPCMarshalETHBlock(block *types.Block, inclTx bool, fullTx bool, nodeLocation common.Location) (map[string]interface{}, error) {
 	fields := RPCMarshalETHHeader(block.Header())
 	fields["size"] = hexutil.Uint64(block.Size())
 
@@ -924,7 +924,7 @@ func RPCMarshalETHBlock(block *types.Block, inclTx bool, fullTx bool) (map[strin
 		}
 		if fullTx {
 			formatTx = func(tx *types.Transaction) (interface{}, error) {
-				return newRPCTransactionFromBlockHash(block, tx.Hash(), false), nil
+				return newRPCTransactionFromBlockHash(block, tx.Hash(), false, nodeLocation), nil
 			}
 		}
 		txs := block.Transactions()
@@ -958,7 +958,7 @@ func (s *PublicBlockChainAPI) rpcMarshalHeader(ctx context.Context, header *type
 // rpcMarshalBlock uses the generalized output filler, then adds the total difficulty field, which requires
 // a `PublicBlockchainAPI`.
 func (s *PublicBlockChainAPI) rpcMarshalBlock(ctx context.Context, b *types.Block, inclTx bool, fullTx bool) (map[string]interface{}, error) {
-	fields, err := RPCMarshalBlock(b, inclTx, fullTx)
+	fields, err := RPCMarshalBlock(b, inclTx, fullTx, s.b.NodeLocation())
 	if err != nil {
 		return nil, err
 	}
@@ -998,8 +998,8 @@ type RPCTransaction struct {
 
 // newRPCTransaction returns a transaction that will serialize to the RPC
 // representation, with the given location metadata set (if available).
-func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber uint64, index uint64, baseFee *big.Int) *RPCTransaction {
-	nodeCtx := common.NodeLocation.Context()
+func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber uint64, index uint64, baseFee *big.Int, nodeLocation common.Location) *RPCTransaction {
+	nodeCtx := nodeLocation.Context()
 	if nodeCtx != common.ZONE_CTX {
 		return nil
 	}
@@ -1008,7 +1008,7 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 	// transactions. For non-protected transactions, the signer is used
 	// because the return value of ChainId is zero for those transactions.
 	var signer types.Signer
-	signer = types.LatestSignerForChainID(tx.ChainId())
+	signer = types.LatestSignerForChainID(tx.ChainId(), nodeLocation)
 	from, _ := types.Sender(signer, tx)
 	var result *RPCTransaction
 	switch tx.Type() {
@@ -1085,11 +1085,12 @@ func newRPCPendingTransaction(tx *types.Transaction, current *types.Header, conf
 	if current != nil {
 		baseFee = misc.CalcBaseFee(config, current)
 	}
-	return newRPCTransaction(tx, common.Hash{}, 0, 0, baseFee)
+	return newRPCTransaction(tx, common.Hash{}, 0, 0, baseFee, config.Location)
 }
 
 // newRPCTransactionFromBlockIndex returns a transaction that will serialize to the RPC representation.
-func newRPCTransactionFromBlockIndex(b *types.Block, index uint64, etxs bool) *RPCTransaction {
+func newRPCTransactionFromBlockIndex(b *types.Block, index uint64, etxs bool, nodeLocation common.Location) *RPCTransaction {
+	nodeCtx := nodeLocation.Context()
 	var txs types.Transactions
 	if etxs {
 		txs = b.ExtTransactions()
@@ -1099,7 +1100,7 @@ func newRPCTransactionFromBlockIndex(b *types.Block, index uint64, etxs bool) *R
 	if index >= uint64(len(txs)) {
 		return nil
 	}
-	return newRPCTransaction(txs[index], b.Hash(), b.NumberU64(), index, b.BaseFee())
+	return newRPCTransaction(txs[index], b.Hash(), b.NumberU64(nodeCtx), index, b.BaseFee(), nodeLocation)
 }
 
 // newRPCRawTransactionFromBlockIndex returns the bytes of a transaction given a block and a transaction index.
@@ -1113,17 +1114,17 @@ func newRPCRawTransactionFromBlockIndex(b *types.Block, index uint64) hexutil.By
 }
 
 // newRPCTransactionFromBlockHash returns a transaction that will serialize to the RPC representation.
-func newRPCTransactionFromBlockHash(b *types.Block, hash common.Hash, etxs bool) *RPCTransaction {
+func newRPCTransactionFromBlockHash(b *types.Block, hash common.Hash, etxs bool, nodeLocation common.Location) *RPCTransaction {
 	if etxs {
 		for idx, tx := range b.ExtTransactions() {
 			if tx.Hash() == hash {
-				return newRPCTransactionFromBlockIndex(b, uint64(idx), true)
+				return newRPCTransactionFromBlockIndex(b, uint64(idx), true, nodeLocation)
 			}
 		}
 	}
 	for idx, tx := range b.Transactions() {
 		if tx.Hash() == hash {
-			return newRPCTransactionFromBlockIndex(b, uint64(idx), false)
+			return newRPCTransactionFromBlockIndex(b, uint64(idx), false, nodeLocation)
 		}
 	}
 	return nil
@@ -1141,7 +1142,7 @@ type accessListResult struct {
 // CreateAccessList creates an AccessList for the given transaction.
 // Reexec and BlockNrOrHash can be specified to create the accessList on top of a certain state.
 func (s *PublicBlockChainAPI) CreateAccessList(ctx context.Context, args TransactionArgs, blockNrOrHash *rpc.BlockNumberOrHash) (*accessListResult, error) {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := s.b.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("createAccessList can only be called in zone chain")
 	}
@@ -1167,7 +1168,8 @@ func (s *PublicBlockChainAPI) CreateAccessList(ctx context.Context, args Transac
 // If the accesslist creation fails an error is returned.
 // If the transaction itself fails, an vmErr is returned.
 func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrHash, args TransactionArgs) (acl types.AccessList, gasUsed uint64, vmErr error, err error) {
-	nodeCtx := common.NodeLocation.Context()
+	nodeLocation := b.NodeLocation()
+	nodeCtx := b.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, 0, nil, errors.New("AccessList can only be called in zone chain")
 	}
@@ -1191,10 +1193,10 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	if args.To != nil {
 		to = *args.To
 	} else {
-		to = crypto.CreateAddress(args.from(), uint64(*args.Nonce), *args.Data)
+		to = crypto.CreateAddress(args.from(), uint64(*args.Nonce), *args.Data, nodeLocation)
 	}
 	// Retrieve the precompiles since they don't need to be added to the access list
-	precompiles := vm.ActivePrecompiles(b.ChainConfig().Rules(header.Number()))
+	precompiles := vm.ActivePrecompiles(b.ChainConfig().Rules(header.Number(nodeCtx)), nodeLocation)
 
 	// Create an initial tracer
 	prevTracer := vm.NewAccessListTracer(nil, args.from(), to, precompiles)
@@ -1203,7 +1205,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	}
 	for {
 		// Retrieve the current access list to expand
-		accessList := prevTracer.AccessList()
+		accessList := prevTracer.AccessList(nodeLocation)
 		log.Trace("Creating access list", "input", accessList)
 
 		// If no gas amount was specified, each unique access list needs it's own
@@ -1219,7 +1221,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		statedb := db.Copy()
 		// Set the accesslist to the last al
 		args.AccessList = &accessList
-		msg, err := args.ToMessage(b.RPCGasCap(), header.BaseFee())
+		msg, err := args.ToMessage(b.RPCGasCap(), header.BaseFee(), b.NodeCtx())
 		if err != nil {
 			return nil, 0, nil, err
 		}
@@ -1276,17 +1278,17 @@ func (s *PublicTransactionPoolAPI) GetBlockTransactionCountByHash(ctx context.Co
 }
 
 // GetTransactionByBlockNumberAndIndex returns the transaction for the given block number and index.
-func (s *PublicTransactionPoolAPI) GetTransactionByBlockNumberAndIndex(ctx context.Context, blockNr rpc.BlockNumber, index hexutil.Uint) *RPCTransaction {
+func (s *PublicTransactionPoolAPI) GetTransactionByBlockNumberAndIndex(ctx context.Context, blockNr rpc.BlockNumber, index hexutil.Uint, nodeLocation common.Location) *RPCTransaction {
 	if block, _ := s.b.BlockByNumber(ctx, blockNr); block != nil {
-		return newRPCTransactionFromBlockIndex(block, uint64(index), false)
+		return newRPCTransactionFromBlockIndex(block, uint64(index), false, nodeLocation)
 	}
 	return nil
 }
 
 // GetTransactionByBlockHashAndIndex returns the transaction for the given block hash and index.
-func (s *PublicTransactionPoolAPI) GetTransactionByBlockHashAndIndex(ctx context.Context, blockHash common.Hash, index hexutil.Uint) *RPCTransaction {
+func (s *PublicTransactionPoolAPI) GetTransactionByBlockHashAndIndex(ctx context.Context, blockHash common.Hash, index hexutil.Uint, nodeLocation common.Location) *RPCTransaction {
 	if block, _ := s.b.BlockByHash(ctx, blockHash); block != nil {
-		return newRPCTransactionFromBlockIndex(block, uint64(index), false)
+		return newRPCTransactionFromBlockIndex(block, uint64(index), false, nodeLocation)
 	}
 	return nil
 }
@@ -1342,7 +1344,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionByHash(ctx context.Context, has
 		if err != nil {
 			return nil, err
 		}
-		return newRPCTransaction(tx, blockHash, blockNumber, index, header.BaseFee()), nil
+		return newRPCTransaction(tx, blockHash, blockNumber, index, header.BaseFee(), s.b.NodeLocation()), nil
 	}
 	// No finalized transaction, try to retrieve it from the pool
 	if tx := s.b.GetPoolTransaction(hash); tx != nil {
@@ -1431,7 +1433,8 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 
 // SubmitTransaction is a helper function that submits tx to txPool and logs a message.
 func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (common.Hash, error) {
-	nodeCtx := common.NodeLocation.Context()
+	nodeLocation := b.NodeLocation()
+	nodeCtx := b.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return common.Hash{}, errors.New("submitTransaction can only be called in zone chain")
 	}
@@ -1447,14 +1450,14 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 		return common.Hash{}, err
 	}
 	// Print a log with full tx details for manual investigations and interventions
-	signer := types.MakeSigner(b.ChainConfig(), b.CurrentHeader().Number())
+	signer := types.MakeSigner(b.ChainConfig(), b.CurrentHeader().Number(nodeCtx))
 	from, err := types.Sender(signer, tx)
 	if err != nil {
 		return common.Hash{}, err
 	}
 
 	if tx.To() == nil {
-		addr := crypto.CreateAddress(from, tx.Nonce(), tx.Data())
+		addr := crypto.CreateAddress(from, tx.Nonce(), tx.Data(), nodeLocation)
 		log.Debug("Submitted contract creation", "hash", tx.Hash().Hex(), "from", from, "nonce", tx.Nonce(), "contract", addr.Hex(), "value", tx.Value())
 	} else {
 		log.Debug("Submitted transaction", "hash", tx.Hash().Hex(), "from", from, "nonce", tx.Nonce(), "recipient", tx.To(), "value", tx.Value())

@@ -105,16 +105,16 @@ func Keccak512(data ...[]byte) []byte {
 }
 
 // CreateAddress creates an quai address given the bytes and the nonce
-func CreateAddress(b common.Address, nonce uint64, code []byte) common.Address {
+func CreateAddress(b common.Address, nonce uint64, code []byte, nodeLocation common.Location) common.Address {
 	nonceBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(nonceBytes, uint64(nonce))
-	return common.BytesToAddress(Keccak256(b.Bytes(), nonceBytes, code)[12:])
+	return common.BytesToAddress(Keccak256(b.Bytes(), nonceBytes, code)[12:], nodeLocation)
 }
 
 // CreateAddress2 creates an quai address given the address bytes, initial
 // contract code hash and a salt.
-func CreateAddress2(b common.Address, salt [32]byte, inithash []byte) common.Address {
-	return common.BytesToAddress(Keccak256([]byte{0xff}, b.Bytes(), salt[:], inithash)[12:])
+func CreateAddress2(b common.Address, salt [32]byte, inithash []byte, nodeLocation common.Location) common.Address {
+	return common.BytesToAddress(Keccak256([]byte{0xff}, b.Bytes(), salt[:], inithash)[12:], nodeLocation)
 }
 
 // ToECDSA creates a private key with the given D value.
@@ -274,9 +274,9 @@ func ValidateSignatureValues(v byte, r, s *big.Int) bool {
 	return r.Cmp(secp256k1N) < 0 && s.Cmp(secp256k1N) < 0 && (v == 0 || v == 1)
 }
 
-func PubkeyToAddress(p ecdsa.PublicKey) common.Address {
+func PubkeyToAddress(p ecdsa.PublicKey, nodeLocation common.Location) common.Address {
 	pubBytes := FromECDSAPub(&p)
-	return common.BytesToAddress(Keccak256(pubBytes[1:])[12:])
+	return common.BytesToAddress(Keccak256(pubBytes[1:])[12:], nodeLocation)
 }
 
 func zeroBytes(bytes []byte) {

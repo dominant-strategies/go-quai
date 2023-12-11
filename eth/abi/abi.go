@@ -100,23 +100,23 @@ func (abi ABI) getArguments(name string, data []byte) (Arguments, error) {
 }
 
 // Unpack unpacks the output according to the abi specification.
-func (abi ABI) Unpack(name string, data []byte) ([]interface{}, error) {
+func (abi ABI) Unpack(name string, data []byte, nodeLocation common.Location) ([]interface{}, error) {
 	args, err := abi.getArguments(name, data)
 	if err != nil {
 		return nil, err
 	}
-	return args.Unpack(data)
+	return args.Unpack(data, nodeLocation)
 }
 
 // UnpackIntoInterface unpacks the output in v according to the abi specification.
 // It performs an additional copy. Please only use, if you want to unpack into a
 // structure that does not strictly conform to the abi structure (e.g. has additional arguments)
-func (abi ABI) UnpackIntoInterface(v interface{}, name string, data []byte) error {
+func (abi ABI) UnpackIntoInterface(v interface{}, name string, data []byte, nodeLocation common.Location) error {
 	args, err := abi.getArguments(name, data)
 	if err != nil {
 		return err
 	}
-	unpacked, err := args.Unpack(data)
+	unpacked, err := args.Unpack(data, nodeLocation)
 	if err != nil {
 		return err
 	}
@@ -124,12 +124,12 @@ func (abi ABI) UnpackIntoInterface(v interface{}, name string, data []byte) erro
 }
 
 // UnpackIntoMap unpacks a log into the provided map[string]interface{}.
-func (abi ABI) UnpackIntoMap(v map[string]interface{}, name string, data []byte) (err error) {
+func (abi ABI) UnpackIntoMap(v map[string]interface{}, name string, data []byte, nodeLocation common.Location) (err error) {
 	args, err := abi.getArguments(name, data)
 	if err != nil {
 		return err
 	}
-	return args.UnpackIntoMap(v, data)
+	return args.UnpackIntoMap(v, data, nodeLocation)
 }
 
 // UnmarshalJSON implements json.Unmarshaler interface.
@@ -263,7 +263,7 @@ var revertSelector = crypto.Keccak256([]byte("Error(string)"))[:4]
 // spec https://solidity.readthedocs.io/en/latest/control-structures.html#revert,
 // the provided revert reason is abi-encoded as if it were a call to a function
 // `Error(string)`. So it's a special tool for it.
-func UnpackRevert(data []byte) (string, error) {
+func UnpackRevert(data []byte, nodeLocation common.Location) (string, error) {
 	if len(data) < 4 {
 		return "", errors.New("invalid data for unpacking")
 	}
@@ -271,7 +271,7 @@ func UnpackRevert(data []byte) (string, error) {
 		return "", errors.New("invalid data for unpacking")
 	}
 	typ, _ := NewType("string", "", nil)
-	unpacked, err := (Arguments{{Type: typ}}).Unpack(data[4:])
+	unpacked, err := (Arguments{{Type: typ}}).Unpack(data[4:], nodeLocation)
 	if err != nil {
 		return "", err
 	}

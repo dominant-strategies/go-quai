@@ -134,13 +134,13 @@ func (api *PublicBlockChainQuaiAPI) ChainId() (*hexutil.Big, error) {
 
 // NodeLocation is the access call to the location of the node.
 func (api *PublicBlockChainQuaiAPI) NodeLocation() []hexutil.Uint64 {
-	return common.NodeLocation.RPCMarshal()
+	return api.b.NodeLocation().RPCMarshal()
 }
 
 // BlockNumber returns the block number of the chain head.
 func (s *PublicBlockChainQuaiAPI) BlockNumber() hexutil.Uint64 {
 	header, _ := s.b.HeaderByNumber(context.Background(), rpc.LatestBlockNumber) // latest header should always be available
-	return hexutil.Uint64(header.NumberU64())
+	return hexutil.Uint64(header.NumberU64(s.b.NodeCtx()))
 
 }
 
@@ -148,7 +148,7 @@ func (s *PublicBlockChainQuaiAPI) BlockNumber() hexutil.Uint64 {
 // given block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta
 // block numbers are also allowed.
 func (s *PublicBlockChainQuaiAPI) GetBalance(ctx context.Context, address common.Address, blockNrOrHash rpc.BlockNumberOrHash) (*hexutil.Big, error) {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := s.b.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("getBalance call can only be made in zone chain")
 	}
@@ -168,7 +168,7 @@ func (s *PublicBlockChainQuaiAPI) GetBalance(ctx context.Context, address common
 
 // GetProof returns the Merkle-proof for a given account and optionally some storage keys.
 func (s *PublicBlockChainQuaiAPI) GetProof(ctx context.Context, address common.Address, storageKeys []string, blockNrOrHash rpc.BlockNumberOrHash) (*AccountResult, error) {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := s.b.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("getProof call can only be made in zone chain")
 	}
@@ -316,7 +316,7 @@ func (s *PublicBlockChainQuaiAPI) GetUncleByBlockHashAndIndex(ctx context.Contex
 	if block != nil {
 		uncles := block.Uncles()
 		if index >= hexutil.Uint(len(uncles)) {
-			log.Debug("Requested uncle not found", "number", block.Number(), "hash", blockHash, "index", index)
+			log.Debug("Requested uncle not found", "number", block.Number(s.b.NodeCtx()), "hash", blockHash, "index", index)
 			return nil, nil
 		}
 		block = types.NewBlockWithHeader(uncles[index])
@@ -326,7 +326,7 @@ func (s *PublicBlockChainQuaiAPI) GetUncleByBlockHashAndIndex(ctx context.Contex
 	if pendBlock != nil && pendBlock.Hash() == blockHash {
 		uncles := pendBlock.Uncles()
 		if index >= hexutil.Uint(len(uncles)) {
-			log.Debug("Requested uncle not found in pending block", "number", block.Number(), "hash", blockHash, "index", index)
+			log.Debug("Requested uncle not found in pending block", "number", block.Number(s.b.NodeCtx()), "hash", blockHash, "index", index)
 			return nil, nil
 		}
 		block = types.NewBlockWithHeader(uncles[index])
@@ -355,7 +355,7 @@ func (s *PublicBlockChainQuaiAPI) GetUncleCountByBlockHash(ctx context.Context, 
 
 // GetCode returns the code stored at the given address in the state for the given block number.
 func (s *PublicBlockChainQuaiAPI) GetCode(ctx context.Context, address common.Address, blockNrOrHash rpc.BlockNumberOrHash) (hexutil.Bytes, error) {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := s.b.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("getCode can only called in a zone chain")
 	}
@@ -378,7 +378,7 @@ func (s *PublicBlockChainQuaiAPI) GetCode(ctx context.Context, address common.Ad
 // block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta block
 // numbers are also allowed.
 func (s *PublicBlockChainQuaiAPI) GetStorageAt(ctx context.Context, address common.Address, key string, blockNrOrHash rpc.BlockNumberOrHash) (hexutil.Bytes, error) {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := s.b.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("getStorageAt can only called in a zone chain")
 	}
@@ -410,7 +410,7 @@ func (s *PublicBlockChainQuaiAPI) Call(ctx context.Context, args TransactionArgs
 	}
 	// If the result contains a revert reason, try to unpack and return it.
 	if len(result.Revert()) > 0 {
-		return nil, newRevertError(result)
+		return nil, newRevertError(result, s.b.NodeLocation())
 	}
 	return result.Return(), result.Err
 }
@@ -418,7 +418,7 @@ func (s *PublicBlockChainQuaiAPI) Call(ctx context.Context, args TransactionArgs
 // EstimateGas returns an estimate of the amount of gas needed to execute the
 // given transaction against the current pending block.
 func (s *PublicBlockChainQuaiAPI) EstimateGas(ctx context.Context, args TransactionArgs, blockNrOrHash *rpc.BlockNumberOrHash) (hexutil.Uint64, error) {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := s.b.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return 0, errors.New("estimateGas can only called in a zone chain")
 	}
@@ -435,7 +435,7 @@ func (s *PublicBlockChainQuaiAPI) EstimateGas(ctx context.Context, args Transact
 // RPCMarshalBlock converts the given block to the RPC output which depends on fullTx. If inclTx is true transactions are
 // returned. When fullTx is true the returned block contains full transaction details, otherwise it will only contain
 // transaction hashes.
-func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool) (map[string]interface{}, error) {
+func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, nodeLocation common.Location) (map[string]interface{}, error) {
 	fields := block.Header().RPCMarshalHeader()
 	fields["size"] = hexutil.Uint64(block.Size())
 
@@ -446,10 +446,10 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool) (map[string]i
 		formatEtx := formatTx
 		if fullTx {
 			formatTx = func(tx *types.Transaction) (interface{}, error) {
-				return newRPCTransactionFromBlockHash(block, tx.Hash(), false), nil
+				return newRPCTransactionFromBlockHash(block, tx.Hash(), false, nodeLocation), nil
 			}
 			formatEtx = func(tx *types.Transaction) (interface{}, error) {
-				return newRPCTransactionFromBlockHash(block, tx.Hash(), true), nil
+				return newRPCTransactionFromBlockHash(block, tx.Hash(), true, nodeLocation), nil
 			}
 		}
 		txs := block.Transactions()
@@ -513,7 +513,7 @@ func (s *PublicBlockChainQuaiAPI) rpcMarshalHeader(ctx context.Context, header *
 // rpcMarshalBlock uses the generalized output filler, then adds the total difficulty field, which requires
 // a `PublicBlockchainAPI`.
 func (s *PublicBlockChainQuaiAPI) rpcMarshalBlock(ctx context.Context, b *types.Block, inclTx bool, fullTx bool) (map[string]interface{}, error) {
-	fields, err := RPCMarshalBlock(b, inclTx, fullTx)
+	fields, err := RPCMarshalBlock(b, inclTx, fullTx, s.b.NodeLocation())
 	if err != nil {
 		return nil, err
 	}
@@ -529,7 +529,7 @@ func (s *PublicBlockChainQuaiAPI) rpcMarshalBlock(ctx context.Context, b *types.
 // CreateAccessList creates an AccessList for the given transaction.
 // Reexec and BlockNrOrHash can be specified to create the accessList on top of a certain state.
 func (s *PublicBlockChainQuaiAPI) CreateAccessList(ctx context.Context, args TransactionArgs, blockNrOrHash *rpc.BlockNumberOrHash) (*accessListResult, error) {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := s.b.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("createAccessList can only be called in zone chain")
 	}
@@ -552,7 +552,7 @@ func (s *PublicBlockChainQuaiAPI) CreateAccessList(ctx context.Context, args Tra
 }
 
 func (s *PublicBlockChainQuaiAPI) fillSubordinateManifest(b *types.Block) (*types.Block, error) {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := s.b.NodeCtx()
 	if b.ManifestHash(nodeCtx+1) == types.EmptyRootHash {
 		return nil, errors.New("cannot fill empty subordinate manifest")
 	} else if subManifestHash := types.DeriveSha(b.SubManifest(), trie.NewStackTrie(nil)); subManifestHash == b.ManifestHash(nodeCtx+1) {
@@ -586,7 +586,7 @@ func (s *PublicBlockChainQuaiAPI) fillSubordinateManifest(b *types.Block) (*type
 
 // ReceiveMinedHeader will run checks on the block and add to canonical chain if valid.
 func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw json.RawMessage) error {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := s.b.NodeCtx()
 	// Decode header and transactions.
 	var header *types.Header
 	if err := json.Unmarshal(raw, &header); err != nil {
@@ -611,7 +611,7 @@ func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw js
 	if block.Header() != nil {
 		s.b.EventMux().Post(core.NewMinedBlockEvent{Block: block})
 	}
-	log.Info("Retrieved mined block", "number", header.Number(), "location", header.Location())
+	log.Info("Retrieved mined block", "number", header.Number(s.b.NodeCtx()), "location", header.Location())
 
 	return nil
 }
@@ -720,7 +720,7 @@ func (s *PublicBlockChainQuaiAPI) NewGenesisPendingHeader(ctx context.Context, r
 }
 
 func (s *PublicBlockChainQuaiAPI) GetPendingHeader(ctx context.Context) (map[string]interface{}, error) {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := s.b.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("getPendingHeader can only be called in zone chain")
 	}

@@ -47,7 +47,7 @@ func (l *JSONLogger) CaptureStart(env *EVM, from, to common.Address, create bool
 func (l *JSONLogger) CaptureFault(*EVM, uint64, OpCode, uint64, uint64, *ScopeContext, int, error) {}
 
 // CaptureState outputs state information on the logger.
-func (l *JSONLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, rData []byte, depth int, err error) {
+func (l *JSONLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, rData []byte, depth int, err error, nodeLocation common.Location) {
 	memory := scope.Memory
 	stack := scope.Stack
 

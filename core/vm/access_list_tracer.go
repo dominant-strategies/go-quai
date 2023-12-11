@@ -93,10 +93,10 @@ func (al accessList) equal(other accessList) bool {
 }
 
 // accesslist converts the accesslist to a types.AccessList.
-func (al accessList) accessList() types.AccessList {
+func (al accessList) accessList(nodeLocation common.Location) types.AccessList {
 	acl := make(types.AccessList, 0, len(al))
 	for addr, slots := range al {
-		tuple := types.AccessTuple{Address: common.Bytes20ToAddress(addr), StorageKeys: []common.Hash{}}
+		tuple := types.AccessTuple{Address: common.Bytes20ToAddress(addr, nodeLocation), StorageKeys: []common.Hash{}}
 		for slot := range slots {
 			tuple.StorageKeys = append(tuple.StorageKeys, slot)
 		}
@@ -141,20 +141,20 @@ func (a *AccessListTracer) CaptureStart(env *EVM, from common.Address, to common
 }
 
 // CaptureState captures all opcodes that touch storage or addresses and adds them to the accesslist.
-func (a *AccessListTracer) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, rData []byte, depth int, err error) {
+func (a *AccessListTracer) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, rData []byte, depth int, err error, nodeLocation common.Location) {
 	stack := scope.Stack
 	if (op == SLOAD || op == SSTORE) && stack.len() >= 1 {
 		slot := common.Hash(stack.data[stack.len()-1].Bytes32())
 		a.list.addSlot(scope.Contract.Address(), slot)
 	}
 	if (op == EXTCODECOPY || op == EXTCODEHASH || op == EXTCODESIZE || op == BALANCE || op == SELFDESTRUCT) && stack.len() >= 1 {
-		addr := common.Bytes20ToAddress(stack.data[stack.len()-1].Bytes20())
+		addr := common.Bytes20ToAddress(stack.data[stack.len()-1].Bytes20(), nodeLocation)
 		if _, ok := a.excl[addr.Bytes20()]; !ok {
 			a.list.addAddress(addr)
 		}
 	}
 	if (op == DELEGATECALL || op == CALL || op == STATICCALL || op == CALLCODE) && stack.len() >= 5 {
-		addr := common.Bytes20ToAddress(stack.data[stack.len()-2].Bytes20())
+		addr := common.Bytes20ToAddress(stack.data[stack.len()-2].Bytes20(), nodeLocation)
 		if _, ok := a.excl[addr.Bytes20()]; !ok {
 			a.list.addAddress(addr)
 		}
@@ -167,8 +167,8 @@ func (*AccessListTracer) CaptureFault(env *EVM, pc uint64, op OpCode, gas, cost 
 func (*AccessListTracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) {}
 
 // AccessList returns the current accesslist maintained by the tracer.
-func (a *AccessListTracer) AccessList() types.AccessList {
-	return a.list.accessList()
+func (a *AccessListTracer) AccessList(nodeLocation common.Location) types.AccessList {
+	return a.list.accessList(nodeLocation)
 }
 
 // Equal returns if the content of two access list traces are equal.

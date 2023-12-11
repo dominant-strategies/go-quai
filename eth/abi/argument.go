@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+
+	"github.com/dominant-strategies/go-quai/common"
 )
 
 // Argument holds the name of the argument and the corresponding type.
@@ -76,7 +78,7 @@ func (arguments Arguments) isTuple() bool {
 }
 
 // Unpack performs the operation hexdata -> Go format.
-func (arguments Arguments) Unpack(data []byte) ([]interface{}, error) {
+func (arguments Arguments) Unpack(data []byte, nodeLocation common.Location) ([]interface{}, error) {
 	if len(data) == 0 {
 		if len(arguments) != 0 {
 			return nil, fmt.Errorf("abi: attempting to unmarshall an empty string while arguments are expected")
@@ -89,11 +91,11 @@ func (arguments Arguments) Unpack(data []byte) ([]interface{}, error) {
 		}
 		return defaultVars, nil
 	}
-	return arguments.UnpackValues(data)
+	return arguments.UnpackValues(data, nodeLocation)
 }
 
 // UnpackIntoMap performs the operation hexdata -> mapping of argument name to argument value.
-func (arguments Arguments) UnpackIntoMap(v map[string]interface{}, data []byte) error {
+func (arguments Arguments) UnpackIntoMap(v map[string]interface{}, data []byte, nodeLocation common.Location) error {
 	// Make sure map is not nil
 	if v == nil {
 		return fmt.Errorf("abi: cannot unpack into a nil map")
@@ -104,7 +106,7 @@ func (arguments Arguments) UnpackIntoMap(v map[string]interface{}, data []byte) 
 		}
 		return nil // Nothing to unmarshal, return
 	}
-	marshalledValues, err := arguments.UnpackValues(data)
+	marshalledValues, err := arguments.UnpackValues(data, nodeLocation)
 	if err != nil {
 		return err
 	}
@@ -186,12 +188,12 @@ func (arguments Arguments) copyTuple(v interface{}, marshalledValues []interface
 // UnpackValues can be used to unpack ABI-encoded hexdata according to the ABI-specification,
 // without supplying a struct to unpack into. Instead, this method returns a list containing the
 // values. An atomic argument will be a list with one element.
-func (arguments Arguments) UnpackValues(data []byte) ([]interface{}, error) {
+func (arguments Arguments) UnpackValues(data []byte, nodeLocation common.Location) ([]interface{}, error) {
 	nonIndexedArgs := arguments.NonIndexed()
 	retval := make([]interface{}, 0, len(nonIndexedArgs))
 	virtualArgs := 0
 	for index, arg := range nonIndexedArgs {
-		marshalledValue, err := toGoType((index+virtualArgs)*32, arg.Type, data)
+		marshalledValue, err := toGoType((index+virtualArgs)*32, arg.Type, data, nodeLocation)
 		if arg.Type.T == ArrayTy && !isDynamicType(arg.Type) {
 			// If we have a static array, like [3]uint256, these are coded as
 			// just like uint256,uint256,uint256.

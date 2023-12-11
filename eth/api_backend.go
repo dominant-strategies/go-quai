@@ -52,11 +52,19 @@ func (b *QuaiAPIBackend) ChainConfig() *params.ChainConfig {
 }
 
 func (b *QuaiAPIBackend) TxPool() *core.TxPool {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := b.eth.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil
 	}
 	return b.eth.core.TxPool()
+}
+
+func (b *QuaiAPIBackend) NodeLocation() common.Location {
+	return b.eth.core.NodeLocation()
+}
+
+func (b *QuaiAPIBackend) NodeCtx() int {
+	return b.eth.core.NodeCtx()
 }
 
 func (b *QuaiAPIBackend) CurrentBlock() *types.Block {
@@ -100,7 +108,7 @@ func (b *QuaiAPIBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash
 		if header == nil {
 			return nil, errors.New("header for hash not found")
 		}
-		if blockNrOrHash.RequireCanonical && b.eth.core.GetCanonicalHash(header.Number().Uint64()) != hash {
+		if blockNrOrHash.RequireCanonical && b.eth.core.GetCanonicalHash(header.NumberU64(b.NodeCtx())) != hash {
 			return nil, errors.New("hash is not currently canonical")
 		}
 		return header, nil
@@ -120,7 +128,7 @@ func (b *QuaiAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumb
 	}
 	// Otherwise resolve and return the block
 	if number == rpc.LatestBlockNumber {
-		number = rpc.BlockNumber(b.eth.core.CurrentHeader().NumberU64())
+		number = rpc.BlockNumber(b.eth.core.CurrentHeader().NumberU64(b.NodeCtx()))
 	}
 	block := b.eth.core.GetBlockByNumber(uint64(number))
 	if block != nil {
@@ -142,10 +150,10 @@ func (b *QuaiAPIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash 
 		if header == nil {
 			return nil, errors.New("header for hash not found")
 		}
-		if blockNrOrHash.RequireCanonical && b.eth.core.GetCanonicalHash(header.Number().Uint64()) != hash {
+		if blockNrOrHash.RequireCanonical && b.eth.core.GetCanonicalHash(header.NumberU64(b.NodeCtx())) != hash {
 			return nil, errors.New("hash is not currently canonical")
 		}
-		block := b.eth.core.GetBlock(hash, header.Number().Uint64())
+		block := b.eth.core.GetBlock(hash, header.NumberU64(b.NodeCtx()))
 		if block == nil {
 			return nil, errors.New("header found, but block body is missing")
 		}
@@ -159,7 +167,7 @@ func (b *QuaiAPIBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts
 }
 
 func (b *QuaiAPIBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.Header, error) {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := b.eth.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, nil, errors.New("stateAndHeaderByNumber can only be called in zone chain")
 	}
@@ -181,7 +189,7 @@ func (b *QuaiAPIBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.
 }
 
 func (b *QuaiAPIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error) {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := b.eth.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, nil, errors.New("stateAndHeaderByNumberOrHash can only be called in zone chain")
 	}
@@ -196,7 +204,7 @@ func (b *QuaiAPIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, block
 		if header == nil {
 			return nil, nil, errors.New("header for hash not found")
 		}
-		if blockNrOrHash.RequireCanonical && b.eth.core.GetCanonicalHash(header.Number().Uint64()) != hash {
+		if blockNrOrHash.RequireCanonical && b.eth.core.GetCanonicalHash(header.NumberU64(b.NodeCtx())) != hash {
 			return nil, nil, errors.New("hash is not currently canonical")
 		}
 		stateDb, err := b.eth.Core().StateAt(header.Root())
@@ -206,7 +214,7 @@ func (b *QuaiAPIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, block
 }
 
 func (b *QuaiAPIBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := b.eth.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("getReceipts can only be called in zone chain")
 	}
@@ -215,7 +223,7 @@ func (b *QuaiAPIBackend) GetReceipts(ctx context.Context, hash common.Hash) (typ
 
 // GetBloom returns the bloom for the given block hash
 func (b *QuaiAPIBackend) GetBloom(hash common.Hash) (*types.Bloom, error) {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := b.eth.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("getBloom can only be called in zone chain")
 	}
@@ -223,7 +231,7 @@ func (b *QuaiAPIBackend) GetBloom(hash common.Hash) (*types.Bloom, error) {
 }
 
 func (b *QuaiAPIBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*types.Log, error) {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := b.eth.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("getLogs can only be called in zone chain")
 	}
@@ -240,7 +248,7 @@ func (b *QuaiAPIBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*ty
 
 func (b *QuaiAPIBackend) GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config) (*vm.EVM, func() error, error) {
 	vmError := func() error { return nil }
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := b.eth.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, vmError, errors.New("getEvm can only be called in zone chain")
 	}
@@ -253,7 +261,7 @@ func (b *QuaiAPIBackend) GetEVM(ctx context.Context, msg core.Message, state *st
 }
 
 func (b *QuaiAPIBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := b.eth.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil
 	}
@@ -261,7 +269,7 @@ func (b *QuaiAPIBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEve
 }
 
 func (b *QuaiAPIBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := b.eth.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil
 	}
@@ -281,7 +289,7 @@ func (b *QuaiAPIBackend) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) 
 }
 
 func (b *QuaiAPIBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := b.eth.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil
 	}
@@ -289,7 +297,7 @@ func (b *QuaiAPIBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscr
 }
 
 func (b *QuaiAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := b.eth.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return errors.New("sendTx can only be called in zone chain")
 	}
@@ -297,7 +305,7 @@ func (b *QuaiAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction
 }
 
 func (b *QuaiAPIBackend) GetPoolTransactions() (types.Transactions, error) {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := b.eth.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("getPoolTransactions can only be called in zone chain")
 	}
@@ -313,7 +321,7 @@ func (b *QuaiAPIBackend) GetPoolTransactions() (types.Transactions, error) {
 }
 
 func (b *QuaiAPIBackend) GetPoolTransaction(hash common.Hash) *types.Transaction {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := b.eth.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil
 	}
@@ -321,7 +329,7 @@ func (b *QuaiAPIBackend) GetPoolTransaction(hash common.Hash) *types.Transaction
 }
 
 func (b *QuaiAPIBackend) GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := b.eth.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, common.Hash{}, 0, 0, errors.New("getTransaction can only be called in zone chain")
 	}
@@ -330,7 +338,7 @@ func (b *QuaiAPIBackend) GetTransaction(ctx context.Context, txHash common.Hash)
 }
 
 func (b *QuaiAPIBackend) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := b.eth.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return 0, errors.New("getPoolNonce can only be called in zone chain")
 	}
@@ -342,7 +350,7 @@ func (b *QuaiAPIBackend) Stats() (pending int, queued int) {
 }
 
 func (b *QuaiAPIBackend) TxPoolContent() (map[common.InternalAddress]types.Transactions, map[common.InternalAddress]types.Transactions) {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := b.eth.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, nil
 	}
@@ -350,7 +358,7 @@ func (b *QuaiAPIBackend) TxPoolContent() (map[common.InternalAddress]types.Trans
 }
 
 func (b *QuaiAPIBackend) TxPoolContentFrom(addr common.Address) (types.Transactions, types.Transactions) {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := b.eth.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, nil
 	}
@@ -358,7 +366,7 @@ func (b *QuaiAPIBackend) TxPoolContentFrom(addr common.Address) (types.Transacti
 }
 
 func (b *QuaiAPIBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := b.eth.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil
 	}
@@ -370,7 +378,7 @@ func (b *QuaiAPIBackend) Downloader() *downloader.Downloader {
 }
 
 func (b *QuaiAPIBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := b.eth.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("suggestTipCap can only be called in zone chain")
 	}
@@ -394,7 +402,7 @@ func (b *QuaiAPIBackend) ExtRPCEnabled() bool {
 }
 
 func (b *QuaiAPIBackend) RPCGasCap() uint64 {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := b.eth.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return 0
 	}
@@ -402,7 +410,7 @@ func (b *QuaiAPIBackend) RPCGasCap() uint64 {
 }
 
 func (b *QuaiAPIBackend) RPCTxFeeCap() float64 {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := b.eth.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return 0
 	}
@@ -429,7 +437,7 @@ func (b *QuaiAPIBackend) CurrentHeader() *types.Header {
 }
 
 func (b *QuaiAPIBackend) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, checkLive bool) (*state.StateDB, error) {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := b.eth.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("stateAtBlock can only be called in zone chain")
 	}
@@ -437,7 +445,7 @@ func (b *QuaiAPIBackend) StateAtBlock(ctx context.Context, block *types.Block, r
 }
 
 func (b *QuaiAPIBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, error) {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := b.eth.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, vm.BlockContext{}, nil, errors.New("stateAtTransaction can only be called in zone chain")
 	}

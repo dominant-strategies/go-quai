@@ -53,11 +53,6 @@ const (
 )
 
 var (
-	// Default to prime node, but changed at startup by config.
-	NodeLocation = Location{}
-)
-
-var (
 	hashT = reflect.TypeOf(Hash{})
 	// The zero address (0x0)
 	ZeroInternal    = InternalAddress{}
@@ -256,12 +251,12 @@ func NewMixedcaseAddress(addr Address) MixedcaseAddress {
 }
 
 // NewMixedcaseAddressFromString is mainly meant for unit-testing
-func NewMixedcaseAddressFromString(hexaddr string) (*MixedcaseAddress, error) {
+func NewMixedcaseAddressFromString(hexaddr string, nodeLocation Location) (*MixedcaseAddress, error) {
 	if !IsHexAddress(hexaddr) {
 		return nil, errors.New("invalid address")
 	}
 	a := FromHex(hexaddr)
-	return &MixedcaseAddress{addr: BytesToAddress(a), original: hexaddr}, nil
+	return &MixedcaseAddress{addr: BytesToAddress(a, nodeLocation), original: hexaddr}, nil
 }
 
 // UnmarshalJSON parses MixedcaseAddress
@@ -272,7 +267,7 @@ func (ma *MixedcaseAddress) UnmarshalJSON(input []byte) error {
 		return err
 	}
 
-	ma.addr.inner = Bytes20ToAddress(temp).inner
+	ma.addr.inner = Bytes20ToAddress(temp, Location{}).inner
 
 	return json.Unmarshal(input, &ma.original)
 }
@@ -364,8 +359,8 @@ func (loc Location) Context() int {
 }
 
 // DomLocation returns the location of your dominant chain
-func (loc Location) DomIndex() int {
-	switch NodeLocation.Context() {
+func (loc Location) DomIndex(nodeLocation Location) int {
+	switch nodeLocation.Context() {
 	case PRIME_CTX:
 		return 0
 	case REGION_CTX:
@@ -376,8 +371,8 @@ func (loc Location) DomIndex() int {
 }
 
 // SubIndex returns the index of the subordinate chain for a given location
-func (loc Location) SubIndex() int {
-	switch NodeLocation.Context() {
+func (loc Location) SubIndex(nodeLocation Location) int {
+	switch nodeLocation.Context() {
 	case PRIME_CTX:
 		return loc.Region()
 	case REGION_CTX:
@@ -488,8 +483,8 @@ func (l Location) RPCMarshal() []hexutil.Uint64 {
 	return res
 }
 
-func IsInChainScope(b []byte) bool {
-	nodeCtx := NodeLocation.Context()
+func IsInChainScope(b []byte, nodeLocation Location) bool {
+	nodeCtx := nodeLocation.Context()
 	// IsInChainScope only be called for a zone chain
 	if nodeCtx != ZONE_CTX {
 		return false
@@ -498,7 +493,7 @@ func IsInChainScope(b []byte) bool {
 		return true
 	}
 	prefix := b[0]
-	prefixRange, ok := locationToPrefixRange[NodeLocation.Name()]
+	prefixRange, ok := locationToPrefixRange[nodeLocation.Name()]
 	if !ok {
 		log.Fatal("unable to get address prefix range for location")
 	}

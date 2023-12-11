@@ -119,7 +119,7 @@ func ReadFixedBytes(t Type, word []byte) (interface{}, error) {
 }
 
 // forEachUnpack iteratively unpack elements.
-func forEachUnpack(t Type, output []byte, start, size int) (interface{}, error) {
+func forEachUnpack(t Type, output []byte, start, size int, nodeLocation common.Location) (interface{}, error) {
 	if size < 0 {
 		return nil, fmt.Errorf("cannot marshal input to array, size is negative (%d)", size)
 	}
@@ -145,7 +145,7 @@ func forEachUnpack(t Type, output []byte, start, size int) (interface{}, error) 
 	elemSize := getTypeSize(*t.Elem)
 
 	for i, j := start, 0; j < size; i, j = i+elemSize, j+1 {
-		inter, err := toGoType(i, *t.Elem, output)
+		inter, err := toGoType(i, *t.Elem, output, nodeLocation)
 		if err != nil {
 			return nil, err
 		}
@@ -158,11 +158,11 @@ func forEachUnpack(t Type, output []byte, start, size int) (interface{}, error) 
 	return refSlice.Interface(), nil
 }
 
-func forTupleUnpack(t Type, output []byte) (interface{}, error) {
+func forTupleUnpack(t Type, output []byte, nodeLocation common.Location) (interface{}, error) {
 	retval := reflect.New(t.GetType()).Elem()
 	virtualArgs := 0
 	for index, elem := range t.TupleElems {
-		marshalledValue, err := toGoType((index+virtualArgs)*32, *elem, output)
+		marshalledValue, err := toGoType((index+virtualArgs)*32, *elem, output, nodeLocation)
 		if elem.T == ArrayTy && !isDynamicType(*elem) {
 			// If we have a static array, like [3]uint256, these are coded as
 			// just like uint256,uint256,uint256.
@@ -190,7 +190,7 @@ func forTupleUnpack(t Type, output []byte) (interface{}, error) {
 
 // toGoType parses the output bytes and recursively assigns the value of these bytes
 // into a go type with accordance with the ABI spec.
-func toGoType(index int, t Type, output []byte) (interface{}, error) {
+func toGoType(index int, t Type, output []byte, nodeLocation common.Location) (interface{}, error) {
 	if index+32 > len(output) {
 		return nil, fmt.Errorf("abi: cannot marshal in to go type: length insufficient %d require %d", len(output), index+32)
 	}
@@ -218,20 +218,20 @@ func toGoType(index int, t Type, output []byte) (interface{}, error) {
 			if err != nil {
 				return nil, err
 			}
-			return forTupleUnpack(t, output[begin:])
+			return forTupleUnpack(t, output[begin:], nodeLocation)
 		}
-		return forTupleUnpack(t, output[index:])
+		return forTupleUnpack(t, output[index:], nodeLocation)
 	case SliceTy:
-		return forEachUnpack(t, output[begin:], 0, length)
+		return forEachUnpack(t, output[begin:], 0, length, nodeLocation)
 	case ArrayTy:
 		if isDynamicType(*t.Elem) {
 			offset := binary.BigEndian.Uint64(returnOutput[len(returnOutput)-8:])
 			if offset > uint64(len(output)) {
 				return nil, fmt.Errorf("abi: toGoType offset greater than output length: offset: %d, len(output): %d", offset, len(output))
 			}
-			return forEachUnpack(t, output[offset:], 0, t.Size)
+			return forEachUnpack(t, output[offset:], 0, t.Size, nodeLocation)
 		}
-		return forEachUnpack(t, output[index:], 0, t.Size)
+		return forEachUnpack(t, output[index:], 0, t.Size, nodeLocation)
 	case StringTy: // variable arrays are written at the end of the return bytes
 		return string(output[begin : begin+length]), nil
 	case IntTy, UintTy:
@@ -239,7 +239,7 @@ func toGoType(index int, t Type, output []byte) (interface{}, error) {
 	case BoolTy:
 		return readBool(returnOutput)
 	case AddressTy:
-		return common.BytesToAddress(returnOutput), nil
+		return common.BytesToAddress(returnOutput, nodeLocation), nil
 	case HashTy:
 		return common.BytesToHash(returnOutput), nil
 	case BytesTy:

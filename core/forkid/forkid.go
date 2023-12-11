@@ -88,7 +88,7 @@ func NewIDWithChain(chain Blockchain) ID {
 	return NewID(
 		chain.Config(),
 		chain.Genesis().Hash(),
-		chain.CurrentHeader().Number().Uint64(),
+		chain.CurrentHeader().Number(chain.Config().Location.Context()).Uint64(),
 	)
 }
 
@@ -99,7 +99,7 @@ func NewFilter(chain Blockchain) Filter {
 		chain.Config(),
 		chain.Genesis().Hash(),
 		func() uint64 {
-			return chain.CurrentHeader().Number().Uint64()
+			return chain.CurrentHeader().Number(chain.Config().Location.Context()).Uint64()
 		},
 	)
 }

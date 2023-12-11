@@ -128,13 +128,13 @@ func (a ExternalAddress) Value() (driver.Value, error) {
 }
 
 // Location looks up the chain location which contains this address
-func (a ExternalAddress) Location() *Location {
+func (a ExternalAddress) Location(nodeLocation Location) *Location {
 	R, Z, D := 0, 0, HierarchyDepth
-	if NodeLocation.HasRegion() {
-		R = NodeLocation.Region()
+	if nodeLocation.HasRegion() {
+		R = nodeLocation.Region()
 	}
-	if NodeLocation.HasZone() {
-		Z = NodeLocation.Zone()
+	if nodeLocation.HasZone() {
+		Z = nodeLocation.Zone()
 	}
 
 	// Search zone->region->prime address spaces in-slice first, and then search

@@ -121,7 +121,7 @@ func NewEventSystem(backend Backend) *EventSystem {
 		chainCh:       make(chan core.ChainEvent, chainEvChanSize),
 	}
 
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := backend.NodeCtx()
 	// Subscribe events
 	if nodeCtx == common.ZONE_CTX && backend.ProcessingState() {
 		m.txsSub = m.backend.SubscribeNewTxsEvent(m.txsCh)
@@ -366,7 +366,7 @@ func (es *EventSystem) handleChainEvent(filters filterIndex, ev core.ChainEvent)
 
 // eventLoop (un)installs filters and processes mux events.
 func (es *EventSystem) eventLoop() {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := es.backend.NodeCtx()
 	// Ensure all subscriptions get cleaned up
 	defer func() {
 		if nodeCtx == common.ZONE_CTX && es.backend.ProcessingState() {

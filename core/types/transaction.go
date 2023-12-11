@@ -358,7 +358,7 @@ func (tx *Transaction) Hash() common.Hash {
 }
 
 // FromChain returns the chain location this transaction originated from
-func (tx *Transaction) FromChain() common.Location {
+func (tx *Transaction) FromChain(nodeLocation common.Location) common.Location {
 	if loc := tx.fromChain.Load(); loc != nil {
 		return loc.(common.Location)
 	}
@@ -367,16 +367,16 @@ func (tx *Transaction) FromChain() common.Location {
 	case ExternalTxType:
 		// External transactions do not have a signature, but instead store the
 		// sender explicitly. Use that sender to get the location.
-		loc = *tx.inner.(*ExternalTx).Sender.Location()
+		loc = *tx.inner.(*ExternalTx).Sender.Location(nodeLocation)
 	default:
 		// All other TX types are signed, and should use the signature to determine
 		// the sender location
-		signer := NewSigner(tx.ChainId())
+		signer := NewSigner(tx.ChainId(), nodeLocation)
 		from, err := Sender(signer, tx)
 		if err != nil {
 			panic("failed to get transaction sender!")
 		}
-		loc = *from.Location()
+		loc = *from.Location(nodeLocation)
 	}
 	tx.fromChain.Store(loc)
 	return loc
@@ -384,12 +384,12 @@ func (tx *Transaction) FromChain() common.Location {
 
 // ConfirmationCtx indicates the chain context at which this ETX becomes
 // confirmed and referencable to the destination chain
-func (tx *Transaction) ConfirmationCtx() int {
+func (tx *Transaction) ConfirmationCtx(nodeLocation common.Location) int {
 	if ctx := tx.confirmCtx.Load(); ctx != nil {
 		return ctx.(int)
 	}
 
-	ctx := tx.To().Location().CommonDom(tx.FromChain()).Context()
+	ctx := tx.To().Location(nodeLocation).CommonDom(tx.FromChain(nodeLocation)).Context()
 	tx.confirmCtx.Store(ctx)
 	return ctx
 }
@@ -434,10 +434,10 @@ func (s Transactions) EncodeIndex(i int, w *bytes.Buffer) {
 
 // FilterByLocation returns the subset of transactions with a 'to' address which
 // belongs the given chain location
-func (s Transactions) FilterToLocation(l common.Location) Transactions {
+func (s Transactions) FilterToLocation(l common.Location, nodeLocation common.Location) Transactions {
 	filteredList := Transactions{}
 	for _, tx := range s {
-		toChain := *tx.To().Location()
+		toChain := *tx.To().Location(nodeLocation)
 		if l.Equal(toChain) {
 			filteredList = append(filteredList, tx)
 		}
@@ -447,10 +447,10 @@ func (s Transactions) FilterToLocation(l common.Location) Transactions {
 
 // FilterToSlice returns the subset of transactions with a 'to' address which
 // belongs to the given slice location, at or above the given minimum context
-func (s Transactions) FilterToSlice(slice common.Location, minCtx int) Transactions {
+func (s Transactions) FilterToSlice(slice common.Location, minCtx int, nodeLocation common.Location) Transactions {
 	filteredList := Transactions{}
 	for _, tx := range s {
-		toChain := tx.To().Location()
+		toChain := tx.To().Location(nodeLocation)
 		if toChain.InSameSliceAs(slice) {
 			filteredList = append(filteredList, tx)
 		}
@@ -460,10 +460,10 @@ func (s Transactions) FilterToSlice(slice common.Location, minCtx int) Transacti
 
 // FilterConfirmationCtx returns the subset of transactions who can be confirmed
 // at the given context
-func (s Transactions) FilterConfirmationCtx(ctx int) Transactions {
+func (s Transactions) FilterConfirmationCtx(ctx int, nodeLocation common.Location) Transactions {
 	filteredList := Transactions{}
 	for _, tx := range s {
-		if tx.ConfirmationCtx() == ctx {
+		if tx.ConfirmationCtx(nodeLocation) == ctx {
 			filteredList = append(filteredList, tx)
 		}
 	}

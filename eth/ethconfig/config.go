@@ -164,6 +164,9 @@ type Config struct {
 
 	// Slices running on the node
 	SlicesRunning []common.Location
+
+	// NodeLocation of the node
+	NodeLocation common.Location
 }
 
 // CreateProgpowConsensusEngine creates a progpow consensus engine for the given chain configuration.
@@ -181,6 +184,7 @@ func CreateProgpowConsensusEngine(stack *node.Node, chainConfig *params.ChainCon
 		PowMode:       config.PowMode,
 		NotifyFull:    config.NotifyFull,
 		DurationLimit: config.DurationLimit,
+		NodeLocation:  chainConfig.Location,
 		GasCeil:       config.GasCeil,
 		MinDifficulty: config.MinDifficulty,
 	}, notify, noverify)
@@ -203,6 +207,7 @@ func CreateBlake3ConsensusEngine(stack *node.Node, chainConfig *params.ChainConf
 		PowMode:       config.PowMode,
 		NotifyFull:    config.NotifyFull,
 		DurationLimit: config.DurationLimit,
+		NodeLocation:  chainConfig.Location,
 		GasCeil:       config.GasCeil,
 		MinDifficulty: config.MinDifficulty,
 	}, notify, noverify)

@@ -46,7 +46,7 @@ type (
 
 func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool, common.Address) {
 	if index, ok := TranslatedAddresses[addr.Bytes20()]; ok {
-		addr = PrecompiledAddresses[common.NodeLocation.Name()][index]
+		addr = PrecompiledAddresses[evm.chainConfig.Location.Name()][index]
 	}
 	p, ok := PrecompiledContracts[addr.Bytes20()]
 	return p, ok, addr
@@ -502,7 +502,7 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 	if err != nil {
 		return nil, common.ZeroAddr, 0, err
 	}
-	contractAddr = crypto.CreateAddress(caller.Address(), evm.StateDB.GetNonce(internalAddr), code)
+	contractAddr = crypto.CreateAddress(caller.Address(), evm.StateDB.GetNonce(internalAddr), code, evm.chainConfig.Location)
 	return evm.create(caller, &codeAndHash{code: code}, gas, value, contractAddr)
 }
 
@@ -512,14 +512,14 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 // instead of the usual sender-and-nonce-hash as the address where the contract is initialized at.
 func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *big.Int, salt *uint256.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
 	codeAndHash := &codeAndHash{code: code}
-	contractAddr = crypto.CreateAddress2(caller.Address(), salt.Bytes32(), codeAndHash.Hash().Bytes())
+	contractAddr = crypto.CreateAddress2(caller.Address(), salt.Bytes32(), codeAndHash.Hash().Bytes(), evm.chainConfig.Location)
 	return evm.create(caller, codeAndHash, gas, endowment, contractAddr)
 }
 
 func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, etxGasLimit uint64, etxGasPrice *big.Int, etxGasTip *big.Int, etxData []byte, etxAccessList types.AccessList, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
 
 	// Verify address is not in context
-	if common.IsInChainScope(toAddr.Bytes()) {
+	if common.IsInChainScope(toAddr.Bytes(), evm.chainConfig.Location) {
 		return []byte{}, 0, fmt.Errorf("%x is in chain scope, but CreateETX was called", toAddr)
 	}
 	if gas < params.ETXGas {
@@ -561,8 +561,8 @@ func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, etxGas
 
 // Emitted ETXs must include some multiple of BaseFee as miner tip, to
 // encourage processing at the destination.
-func calcEtxFeeMultiplier(fromAddr, toAddr common.Address) *big.Int {
-	confirmationCtx := fromAddr.Location().CommonDom(*toAddr.Location()).Context()
+func calcEtxFeeMultiplier(fromAddr, toAddr common.Address, nodeLocation common.Location) *big.Int {
+	confirmationCtx := fromAddr.Location(nodeLocation).CommonDom(*toAddr.Location(nodeLocation)).Context()
 	multiplier := big.NewInt(common.NumZonesInRegion)
 	if confirmationCtx == common.PRIME_CTX {
 		multiplier = big.NewInt(0).Mul(multiplier, big.NewInt(common.NumRegionsInPrime))
@@ -586,7 +586,7 @@ func (evm *EVM) ValidateETXGasPriceAndTip(fromAddr, toAddr common.Address, etxGa
 	}
 	// This will panic if baseFee is nil, but basefee presence is verified
 	// as part of header validation.
-	feeMul := calcEtxFeeMultiplier(fromAddr, toAddr)
+	feeMul := calcEtxFeeMultiplier(fromAddr, toAddr, evm.chainConfig.Location)
 	mulBaseFee := new(big.Int).Mul(evm.Context.BaseFee, feeMul)
 	if etxGasPrice.Cmp(mulBaseFee) < 0 {
 		return fmt.Errorf("etx max fee per gas less than %dx block base fee: address %v, maxFeePerGas: %s baseFee: %s",

@@ -22,10 +22,10 @@ func NewEtxSet() EtxSet {
 // updateInboundEtxs updates the set of inbound ETXs available to be mined into
 // a block in this location. This method adds any new ETXs to the set and
 // removes expired ETXs.
-func (set *EtxSet) Update(newInboundEtxs Transactions, currentHeight uint64) {
+func (set *EtxSet) Update(newInboundEtxs Transactions, currentHeight uint64, nodeLocation common.Location) {
 	// Add new ETX entries to the inbound set
 	for _, etx := range newInboundEtxs {
-		if etx.To().Location().Equal(common.NodeLocation) {
+		if etx.To().Location(nodeLocation).Equal(nodeLocation) {
 			(*set)[etx.Hash()] = EtxSetEntry{currentHeight, *etx}
 		} else {
 			panic("cannot add ETX destined to other chain to our ETX set")

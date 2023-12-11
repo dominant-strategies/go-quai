@@ -11,7 +11,8 @@ import (
 
 // CalcOrder returns the order of the block within the hierarchy of chains
 func (blake3pow *Blake3pow) CalcOrder(header *types.Header) (*big.Int, int, error) {
-	if header.NumberU64() == 0 {
+	nodeCtx := blake3pow.config.NodeLocation.Context()
+	if header.NumberU64(nodeCtx) == 0 {
 		return common.Big0, common.PRIME_CTX, nil
 	}
 
@@ -87,7 +88,7 @@ func (blake3pow *Blake3pow) TotalLogS(header *types.Header) *big.Int {
 }
 
 func (blake3pow *Blake3pow) TotalLogPhS(header *types.Header) *big.Int {
-	switch common.NodeLocation.Context() {
+	switch blake3pow.config.NodeLocation.Context() {
 	case common.PRIME_CTX:
 		totalS := header.ParentEntropy(common.PRIME_CTX)
 		return totalS

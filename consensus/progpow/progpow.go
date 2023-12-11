@@ -159,6 +159,8 @@ type Config struct {
 	GasCeil        uint64
 	MinDifficulty  *big.Int
 
+	NodeLocation common.Location
+
 	// When set, notifications sent by the remote sealer will
 	// be block header JSON objects instead of work package arrays.
 	NotifyFull bool

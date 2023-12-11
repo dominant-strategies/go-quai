@@ -523,7 +523,7 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string, r
 			Cache:     cache,
 			Handles:   handles,
 			ReadOnly:  readonly,
-		})
+		}, n.config.NodeLocation.Context())
 	}
 
 	if err == nil {
@@ -556,7 +556,7 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient,
 			Cache:             cache,
 			Handles:           handles,
 			ReadOnly:          readonly,
-		})
+		}, n.config.NodeLocation.Context())
 	}
 
 	if err == nil {

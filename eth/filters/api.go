@@ -258,6 +258,8 @@ func (api *PublicFilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc
 		matchedLogs = make(chan []*types.Log)
 	)
 
+	// Add the node location information into the filter query
+	crit.NodeLocation = api.backend.NodeLocation()
 	logsSub, err := api.events.SubscribeLogs(quai.FilterQuery(crit), matchedLogs)
 	if err != nil {
 		return nil, err
@@ -303,6 +305,8 @@ type FilterCriteria quai.FilterQuery
 // https://eth.wiki/json-rpc/API#eth_newfilter
 func (api *PublicFilterAPI) NewFilter(crit FilterCriteria) (rpc.ID, error) {
 	logs := make(chan []*types.Log)
+	// add the node location information to the filter
+	crit.NodeLocation = api.backend.NodeLocation()
 	logsSub, err := api.events.SubscribeLogs(quai.FilterQuery(crit), logs)
 	if err != nil {
 		return "", err
@@ -472,11 +476,12 @@ func returnLogs(logs []*types.Log) []*types.Log {
 // UnmarshalJSON sets *args fields with given data.
 func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 	type input struct {
-		BlockHash *common.Hash     `json:"blockHash"`
-		FromBlock *rpc.BlockNumber `json:"fromBlock"`
-		ToBlock   *rpc.BlockNumber `json:"toBlock"`
-		Addresses interface{}      `json:"address"`
-		Topics    []interface{}    `json:"topics"`
+		BlockHash    *common.Hash     `json:"blockHash"`
+		FromBlock    *rpc.BlockNumber `json:"fromBlock"`
+		ToBlock      *rpc.BlockNumber `json:"toBlock"`
+		Addresses    interface{}      `json:"address"`
+		Topics       []interface{}    `json:"topics"`
+		NodeLocation *common.Location `json:"nodeLocation"`
 	}
 
 	var raw input
@@ -508,7 +513,7 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 		case []interface{}:
 			for i, addr := range rawAddr {
 				if strAddr, ok := addr.(string); ok {
-					addr, err := decodeAddress(strAddr)
+					addr, err := decodeAddress(strAddr, *raw.NodeLocation)
 					if err != nil {
 						return fmt.Errorf("invalid address at index %d: %v", i, err)
 					}
@@ -518,7 +523,7 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 				}
 			}
 		case string:
-			addr, err := decodeAddress(rawAddr)
+			addr, err := decodeAddress(rawAddr, *raw.NodeLocation)
 			if err != nil {
 				return fmt.Errorf("invalid address: %v", err)
 			}
@@ -572,12 +577,12 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func decodeAddress(s string) (common.Address, error) {
+func decodeAddress(s string, nodeLocation common.Location) (common.Address, error) {
 	b, err := hexutil.Decode(s)
 	if err == nil && len(b) != common.AddressLength {
 		err = fmt.Errorf("hex has invalid length %d after decoding; expected %d for address", len(b), common.AddressLength)
 	}
-	return common.BytesToAddress(b), err
+	return common.BytesToAddress(b, nodeLocation), err
 }
 
 func decodeTopic(s string) (common.Hash, error) {

@@ -46,14 +46,14 @@ type BloomIndexer struct {
 
 // NewBloomIndexer returns a chain indexer that generates bloom bits data for the
 // canonical chain for fast logs filtering.
-func NewBloomIndexer(db ethdb.Database, size, confirms uint64) *ChainIndexer {
+func NewBloomIndexer(db ethdb.Database, size, confirms uint64, nodeCtx int) *ChainIndexer {
 	backend := &BloomIndexer{
 		db:   db,
 		size: size,
 	}
 	table := rawdb.NewTable(db, string(rawdb.BloomBitsIndexPrefix))
 
-	return NewChainIndexer(db, table, backend, size, confirms, bloomThrottling, "bloombits")
+	return NewChainIndexer(db, table, backend, size, confirms, bloomThrottling, "bloombits", nodeCtx)
 }
 
 // Reset implements core.ChainIndexerBackend, starting a new bloombits index
@@ -67,7 +67,7 @@ func (b *BloomIndexer) Reset(ctx context.Context, section uint64, lastSectionHea
 // Process implements core.ChainIndexerBackend, adding a new header's bloom into
 // the index.
 func (b *BloomIndexer) Process(ctx context.Context, header *types.Header, bloom types.Bloom) error {
-	b.gen.AddBloom(uint(header.Number().Uint64()-b.section*b.size), bloom)
+	b.gen.AddBloom(uint(header.NumberU64(common.ZONE_CTX)-b.section*b.size), bloom)
 	b.head = header.Hash()
 	return nil
 }

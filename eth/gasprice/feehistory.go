@@ -137,11 +137,12 @@ func (oracle *Oracle) resolveBlockRange(ctx context.Context, lastBlock rpc.Block
 		headBlock       rpc.BlockNumber
 		pendingBlock    *types.Block
 		pendingReceipts types.Receipts
+		nodeCtx         = oracle.backend.ChainConfig().Location.Context()
 	)
 	// query either pending block or head header and set headBlock
 	if lastBlock == rpc.PendingBlockNumber {
 		if pendingBlock, pendingReceipts = oracle.backend.PendingBlockAndReceipts(); pendingBlock != nil {
-			lastBlock = rpc.BlockNumber(pendingBlock.NumberU64())
+			lastBlock = rpc.BlockNumber(pendingBlock.NumberU64(nodeCtx))
 			headBlock = lastBlock - 1
 		} else {
 			// pending block not supported by backend, process until latest block
@@ -155,7 +156,7 @@ func (oracle *Oracle) resolveBlockRange(ctx context.Context, lastBlock rpc.Block
 	if pendingBlock == nil {
 		// if pending block is not fetched then we retrieve the head header to get the head block number
 		if latestHeader, err := oracle.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber); err == nil {
-			headBlock = rpc.BlockNumber(latestHeader.Number().Uint64())
+			headBlock = rpc.BlockNumber(latestHeader.NumberU64(nodeCtx))
 		} else {
 			return nil, nil, 0, 0, err
 		}
@@ -198,7 +199,7 @@ func (oracle *Oracle) resolveBlockRange(ctx context.Context, lastBlock rpc.Block
 // Note: baseFee includes the next block after the newest of the returned range, because this
 // value can be derived from the newest block.
 func (oracle *Oracle) FeeHistory(ctx context.Context, blocks int, unresolvedLastBlock rpc.BlockNumber, rewardPercentiles []float64) (*big.Int, [][]*big.Int, []*big.Int, []float64, error) {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := oracle.backend.ChainConfig().Location.Context()
 	if nodeCtx != common.ZONE_CTX {
 		return common.Big0, nil, nil, nil, errors.New("feeHistory can only be called in zone chain")
 	}
@@ -247,7 +248,7 @@ func (oracle *Oracle) FeeHistory(ctx context.Context, blocks int, unresolvedLast
 				}
 
 				fees := &blockFees{blockNumber: blockNumber}
-				if pendingBlock != nil && blockNumber >= pendingBlock.NumberU64() {
+				if pendingBlock != nil && blockNumber >= pendingBlock.NumberU64(nodeCtx) {
 					fees.block, fees.receipts = pendingBlock, pendingReceipts
 				} else {
 					if len(rewardPercentiles) != 0 {

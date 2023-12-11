@@ -44,6 +44,8 @@ type Backend interface {
 	SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription
 	SubscribePendingHeaderEvent(ch chan<- *types.Header) event.Subscription
 	ProcessingState() bool
+	NodeLocation() common.Location
+	NodeCtx() int
 
 	BloomStatus() (uint64, uint64)
 	ServiceFilter(ctx context.Context, session *bloombits.MatcherSession)

@@ -130,6 +130,6 @@ func (a InternalAddress) Value() (driver.Value, error) {
 	return a[:], nil
 }
 
-func (a InternalAddress) Location() *Location {
-	return &NodeLocation
+func (a InternalAddress) Location(nodeLocation Location) *Location {
+	return &nodeLocation
 }

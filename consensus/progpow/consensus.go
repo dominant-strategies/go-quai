@@ -73,16 +73,17 @@ func (progpow *Progpow) Author(header *types.Header) (common.Address, error) {
 // VerifyHeader checks whether a header conforms to the consensus rules of the
 // stock Quai progpow engine.
 func (progpow *Progpow) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Header) error {
+	nodeCtx := progpow.NodeLocation().Context()
 	// If we're running a full engine faking, accept any input as valid
 	if progpow.config.PowMode == ModeFullFake {
 		return nil
 	}
 	// Short circuit if the header is known, or its parent not
-	number := header.NumberU64()
+	number := header.NumberU64(nodeCtx)
 	if chain.GetHeader(header.Hash(), number) != nil {
 		return nil
 	}
-	parent := chain.GetHeader(header.ParentHash(), number-1)
+	parent := chain.GetHeader(header.ParentHash(nodeCtx), number-1)
 	if parent == nil {
 		return consensus.ErrUnknownAncestor
 	}
@@ -157,10 +158,11 @@ func (progpow *Progpow) VerifyHeaders(chain consensus.ChainHeaderReader, headers
 }
 
 func (progpow *Progpow) verifyHeaderWorker(chain consensus.ChainHeaderReader, headers []*types.Header, index int, unixNow int64) error {
+	nodeCtx := progpow.NodeLocation().Context()
 	var parent *types.Header
 	if index == 0 {
-		parent = chain.GetHeader(headers[0].ParentHash(), headers[0].NumberU64()-1)
-	} else if headers[index-1].Hash() == headers[index].ParentHash() {
+		parent = chain.GetHeader(headers[0].ParentHash(nodeCtx), headers[0].NumberU64(nodeCtx)-1)
+	} else if headers[index-1].Hash() == headers[index].ParentHash(nodeCtx) {
 		parent = headers[index-1]
 	}
 	if parent == nil {
@@ -172,6 +174,7 @@ func (progpow *Progpow) verifyHeaderWorker(chain consensus.ChainHeaderReader, he
 // VerifyUncles verifies that the given block's uncles conform to the consensus
 // rules of the stock Quai progpow engine.
 func (progpow *Progpow) VerifyUncles(chain consensus.ChainReader, block *types.Block) error {
+	nodeCtx := progpow.NodeLocation().Context()
 	// If we're running a full engine faking, accept any input as valid
 	if progpow.config.PowMode == ModeFullFake {
 		return nil
@@ -186,7 +189,7 @@ func (progpow *Progpow) VerifyUncles(chain consensus.ChainReader, block *types.B
 	// Gather the set of past uncles and ancestors
 	uncles, ancestors := mapset.NewSet(), make(map[common.Hash]*types.Header)
 
-	number, parent := block.NumberU64()-1, block.ParentHash()
+	number, parent := block.NumberU64(nodeCtx)-1, block.ParentHash(nodeCtx)
 	for i := 0; i < 7; i++ {
 		ancestorHeader := chain.GetHeader(parent, number)
 		if ancestorHeader == nil {
@@ -204,7 +207,7 @@ func (progpow *Progpow) VerifyUncles(chain consensus.ChainReader, block *types.B
 				uncles.Add(uncle.Hash())
 			}
 		}
-		parent, number = ancestorHeader.ParentHash(), number-1
+		parent, number = ancestorHeader.ParentHash(nodeCtx), number-1
 	}
 	ancestors[block.Hash()] = block.Header()
 	uncles.Add(block.Hash())
@@ -222,10 +225,10 @@ func (progpow *Progpow) VerifyUncles(chain consensus.ChainReader, block *types.B
 		if ancestors[hash] != nil {
 			return errUncleIsAncestor
 		}
-		if ancestors[uncle.ParentHash()] == nil || uncle.ParentHash() == block.ParentHash() {
+		if ancestors[uncle.ParentHash(nodeCtx)] == nil || uncle.ParentHash(nodeCtx) == block.ParentHash(nodeCtx) {
 			return errDanglingUncle
 		}
-		if err := progpow.verifyHeader(chain, uncle, ancestors[uncle.ParentHash()], true, time.Now().Unix()); err != nil {
+		if err := progpow.verifyHeader(chain, uncle, ancestors[uncle.ParentHash(nodeCtx)], true, time.Now().Unix()); err != nil {
 			return err
 		}
 	}
@@ -234,7 +237,7 @@ func (progpow *Progpow) VerifyUncles(chain consensus.ChainReader, block *types.B
 
 // verifyHeader checks whether a header conforms to the consensus rules
 func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, parent *types.Header, uncle bool, unixNow int64) error {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := progpow.NodeLocation().Context()
 	// Ensure that the header's extra-data section is of a reasonable size
 	if uint64(len(header.Extra())) > params.MaximumExtraDataSize {
 		return fmt.Errorf("extra-data too long: %d > %d", len(header.Extra()), params.MaximumExtraDataSize)
@@ -265,26 +268,26 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 		return fmt.Errorf("order of the block is greater than the context")
 	}
 
-	if !common.NodeLocation.InSameSliceAs(header.Location()) {
+	if !chain.Config().Location.InSameSliceAs(header.Location()) {
 		return fmt.Errorf("block location is not in the same slice as the node location")
 	}
 	// Verify that the parent entropy is calculated correctly on the header
 	parentEntropy := progpow.TotalLogS(parent)
-	if parentEntropy.Cmp(header.ParentEntropy()) != 0 {
-		return fmt.Errorf("invalid parent entropy: have %v, want %v", header.ParentEntropy(), parentEntropy)
+	if parentEntropy.Cmp(header.ParentEntropy(nodeCtx)) != 0 {
+		return fmt.Errorf("invalid parent entropy: have %v, want %v", header.ParentEntropy(nodeCtx), parentEntropy)
 	}
 	// If not prime, verify the parentDeltaS field as well
 	if nodeCtx > common.PRIME_CTX {
 		_, parentOrder, _ := progpow.CalcOrder(parent)
 		// If parent was dom, deltaS is zero and otherwise should be the calc delta s on the parent
 		if parentOrder < nodeCtx {
-			if common.Big0.Cmp(header.ParentDeltaS()) != 0 {
-				return fmt.Errorf("invalid parent delta s: have %v, want %v", header.ParentDeltaS(), common.Big0)
+			if common.Big0.Cmp(header.ParentDeltaS(nodeCtx)) != 0 {
+				return fmt.Errorf("invalid parent delta s: have %v, want %v", header.ParentDeltaS(nodeCtx), common.Big0)
 			}
 		} else {
 			parentDeltaS := progpow.DeltaLogS(parent)
-			if parentDeltaS.Cmp(header.ParentDeltaS()) != 0 {
-				return fmt.Errorf("invalid parent delta s: have %v, want %v", header.ParentDeltaS(), parentDeltaS)
+			if parentDeltaS.Cmp(header.ParentDeltaS(nodeCtx)) != 0 {
+				return fmt.Errorf("invalid parent delta s: have %v, want %v", header.ParentDeltaS(nodeCtx), parentDeltaS)
 			}
 		}
 	}
@@ -322,7 +325,7 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 		}
 	}
 	// Verify that the block number is parent's +1
-	if diff := new(big.Int).Sub(header.Number(), parent.Number()); diff.Cmp(big.NewInt(1)) != 0 {
+	if diff := new(big.Int).Sub(header.Number(nodeCtx), parent.Number(nodeCtx)); diff.Cmp(big.NewInt(1)) != 0 {
 		return consensus.ErrInvalidNumber
 	}
 	return nil
@@ -332,7 +335,7 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 // the difficulty that a new block should have when created at time
 // given the parent block's time and difficulty.
 func (progpow *Progpow) CalcDifficulty(chain consensus.ChainHeaderReader, parent *types.Header) *big.Int {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := progpow.NodeLocation().Context()
 
 	if nodeCtx != common.ZONE_CTX {
 		log.Error("Cannot CalcDifficulty for", "context", nodeCtx)
@@ -347,7 +350,7 @@ func (progpow *Progpow) CalcDifficulty(chain consensus.ChainHeaderReader, parent
 	if parent.Hash() == chain.Config().GenesisHash {
 		return parent.Difficulty()
 	}
-	parentOfParent := chain.GetHeaderByHash(parent.ParentHash())
+	parentOfParent := chain.GetHeaderByHash(parent.ParentHash(nodeCtx))
 	if parentOfParent == nil || parentOfParent.Hash() == chain.Config().GenesisHash {
 		return parent.Difficulty()
 	}
@@ -380,10 +383,11 @@ func (progpow *Progpow) IsDomCoincident(chain consensus.ChainHeaderReader, heade
 	if err != nil {
 		return false
 	}
-	return order < common.NodeLocation.Context()
+	return order < chain.Config().Location.Context()
 }
 
 func (progpow *Progpow) ComputePowLight(header *types.Header) (mixHash, powHash common.Hash) {
+	nodeCtx := progpow.config.NodeLocation.Context()
 	powLight := func(size uint64, cache []uint32, hash []byte, nonce uint64, blockNumber uint64) ([]byte, []byte) {
 		ethashCache := progpow.cache(blockNumber)
 		if ethashCache.cDag == nil {
@@ -393,8 +397,8 @@ func (progpow *Progpow) ComputePowLight(header *types.Header) (mixHash, powHash 
 		}
 		return progpowLight(size, cache, hash, nonce, blockNumber, ethashCache.cDag)
 	}
-	cache := progpow.cache(header.NumberU64())
-	size := datasetSize(header.NumberU64())
+	cache := progpow.cache(header.NumberU64(nodeCtx))
+	size := datasetSize(header.NumberU64(nodeCtx))
 	digest, result := powLight(size, cache.cache, header.SealHash().Bytes(), header.NonceU64(), header.NumberU64(common.ZONE_CTX))
 	mixHash = common.BytesToHash(digest)
 	powHash = common.BytesToHash(result)
@@ -417,10 +421,11 @@ func (progpow *Progpow) VerifySeal(header *types.Header) (common.Hash, error) {
 // either using the usual progpow cache for it, or alternatively using a full DAG
 // to make remote mining fast.
 func (progpow *Progpow) verifySeal(header *types.Header) (common.Hash, error) {
+	nodeCtx := progpow.NodeLocation().Context()
 	// If we're running a fake PoW, accept any seal as valid
 	if progpow.config.PowMode == ModeFake || progpow.config.PowMode == ModeFullFake {
 		time.Sleep(progpow.fakeDelay)
-		if progpow.fakeFail == header.Number().Uint64() {
+		if progpow.fakeFail == header.NumberU64(nodeCtx) {
 			return common.Hash{}, errInvalidPoW
 		}
 		return common.Hash{}, nil
@@ -462,13 +467,15 @@ func (progpow *Progpow) Prepare(chain consensus.ChainHeaderReader, header *types
 func (progpow *Progpow) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
 	// Accumulate any block and uncle rewards and commit the final state root
 	accumulateRewards(chain.Config(), state, header, uncles)
+	nodeLocation := progpow.NodeLocation()
+	nodeCtx := progpow.NodeLocation().Context()
 
-	if common.NodeLocation.Context() == common.ZONE_CTX && header.ParentHash() == chain.Config().GenesisHash {
-		alloc := core.ReadGenesisAlloc("genallocs/gen_alloc_" + common.NodeLocation.Name() + ".json")
+	if nodeCtx == common.ZONE_CTX && header.ParentHash(nodeCtx) == chain.Config().GenesisHash {
+		alloc := core.ReadGenesisAlloc("genallocs/gen_alloc_" + nodeLocation.Name() + ".json")
 		log.Info("Allocating genesis accounts", "num", len(alloc))
 
 		for addressString, account := range alloc {
-			addr := common.HexToAddress(addressString)
+			addr := common.HexToAddress(addressString, nodeLocation)
 			internal, err := addr.InternalAddress()
 			if err != nil {
 				log.Error("Provided address in genesis block is out of scope")
@@ -488,14 +495,18 @@ func (progpow *Progpow) Finalize(chain consensus.ChainHeaderReader, header *type
 // FinalizeAndAssemble implements consensus.Engine, accumulating the block and
 // uncle rewards, setting the final state and assembling the block.
 func (progpow *Progpow) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, etxs []*types.Transaction, subManifest types.BlockManifest, receipts []*types.Receipt) (*types.Block, error) {
-	nodeCtx := common.NodeLocation.Context()
+	nodeCtx := progpow.NodeLocation().Context()
 	if nodeCtx == common.ZONE_CTX && chain.ProcessingState() {
 		// Finalize block
 		progpow.Finalize(chain, header, state, txs, uncles)
 	}
 
 	// Header seems complete, assemble into a block and return
-	return types.NewBlock(header, txs, uncles, etxs, subManifest, receipts, trie.NewStackTrie(nil)), nil
+	return types.NewBlock(header, txs, uncles, etxs, subManifest, receipts, trie.NewStackTrie(nil), nodeCtx), nil
+}
+
+func (progpow *Progpow) NodeLocation() common.Location {
+	return progpow.config.NodeLocation
 }
 
 // AccumulateRewards credits the coinbase of the given block with the mining
@@ -504,6 +515,7 @@ func (progpow *Progpow) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
 	// Select the correct block reward based on chain progression
 	blockReward := misc.CalculateReward(header)
+	nodeCtx := config.Location.Context()
 
 	coinbase, err := header.Coinbase().InternalAddress()
 	if err != nil {
@@ -520,8 +532,8 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 			log.Error("Found uncle with out-of-scope coinbase, skipping reward: " + uncle.Hash().String())
 			continue
 		}
-		r.Add(uncle.Number(), big8)
-		r.Sub(r, header.Number())
+		r.Add(uncle.Number(nodeCtx), big8)
+		r.Sub(r, header.Number(nodeCtx))
 		r.Mul(r, blockReward)
 		r.Div(r, big8)
 		state.AddBalance(coinbase, r)

@@ -143,11 +143,11 @@ func (s *stateObject) markSuicided() {
 	s.suicided = true
 }
 
-func (s *stateObject) touch() {
+func (s *stateObject) touch(nodeLocation common.Location) {
 	s.db.journal.append(touchChange{
 		account: &s.address,
 	})
-	if bytes.Equal(s.address.Bytes(), ripemd.Bytes()) {
+	if bytes.Equal(s.address.Bytes(), common.HexToAddress("0000000000000000000000000000000000000003", nodeLocation).Bytes()) {
 		// Explicitly put it in the dirty-cache, which is otherwise generated from
 		// flattened journals.
 		s.db.journal.dirty(s.address)
@@ -388,12 +388,12 @@ func (s *stateObject) CommitTrie(db Database) error {
 
 // AddBalance adds amount to s's balance.
 // It is used to add funds to the destination account of a transfer.
-func (s *stateObject) AddBalance(amount *big.Int) {
+func (s *stateObject) AddBalance(amount *big.Int, nodeLocation common.Location) {
 	// We must check emptiness for the objects such that the account
 	// clearing (0,0,0 objects) can take effect. This may be unnecessary.
 	if amount.Sign() == 0 {
 		if s.empty() {
-			s.touch()
+			s.touch(nodeLocation)
 		}
 		return
 	}

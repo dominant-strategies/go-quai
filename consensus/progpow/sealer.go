@@ -115,7 +115,8 @@ func (progpow *Progpow) Seal(header *types.Header, results chan<- *types.Header,
 func (progpow *Progpow) mine(header *types.Header, id int, seed uint64, abort chan struct{}, found chan *types.Header) {
 	// Extract some data from the header
 	var (
-		target = new(big.Int).Div(big2e256, header.Difficulty())
+		target  = new(big.Int).Div(big2e256, header.Difficulty())
+		nodeCtx = progpow.config.NodeLocation.Context()
 	)
 	// Start generating random nonces until we abort or find a good one
 	var (
@@ -144,8 +145,8 @@ search:
 				}
 				return progpowLight(size, cache, hash, nonce, blockNumber, ethashCache.cDag)
 			}
-			cache := progpow.cache(header.NumberU64())
-			size := datasetSize(header.NumberU64())
+			cache := progpow.cache(header.NumberU64(nodeCtx))
+			size := datasetSize(header.NumberU64(nodeCtx))
 			// Compute the PoW value of this nonce
 			digest, result := powLight(size, cache.cache, header.SealHash().Bytes(), nonce, header.NumberU64(common.ZONE_CTX))
 			if new(big.Int).SetBytes(result).Cmp(target) <= 0 {
@@ -246,6 +247,8 @@ func (s *remoteSealer) loop() {
 		close(s.exitCh)
 	}()
 
+	nodeCtx := s.progpow.config.NodeLocation.Context()
+
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
@@ -298,7 +301,7 @@ func (s *remoteSealer) loop() {
 			// Clear stale pending blocks
 			if s.currentHeader != nil {
 				for hash, header := range s.works {
-					if header.NumberU64()+staleThreshold <= s.currentHeader.NumberU64() {
+					if header.NumberU64(nodeCtx)+staleThreshold <= s.currentHeader.NumberU64(nodeCtx) {
 						delete(s.works, hash)
 					}
 				}
@@ -319,9 +322,10 @@ func (s *remoteSealer) loop() {
 //	result[2], 32 bytes hex encoded boundary condition ("target"), 2^256/difficulty
 //	result[3], hex encoded header number
 func (s *remoteSealer) makeWork(header *types.Header) {
+	nodeCtx := s.progpow.config.NodeLocation.Context()
 	hash := header.SealHash()
 	s.currentWork[0] = hash.Hex()
-	s.currentWork[1] = hexutil.EncodeBig(header.Number())
+	s.currentWork[1] = hexutil.EncodeBig(header.Number(nodeCtx))
 	s.currentWork[2] = common.BytesToHash(new(big.Int).Div(big2e256, header.Difficulty()).Bytes()).Hex()
 
 	// Trace the seal work fetched by remote sealer.
@@ -379,10 +383,11 @@ func (s *remoteSealer) submitWork(nonce types.BlockNonce, sealhash common.Hash) 
 		s.progpow.config.Log.Error("Pending work without block", "sealhash", sealhash)
 		return false
 	}
+	nodeCtx := s.progpow.config.NodeLocation.Context()
 	// Make sure the work submitted is present
 	header := s.works[sealhash]
 	if header == nil {
-		s.progpow.config.Log.Warn("Work submitted but none pending", "sealhash", sealhash, "curnumber", s.currentHeader.NumberU64())
+		s.progpow.config.Log.Warn("Work submitted but none pending", "sealhash", sealhash, "curnumber", s.currentHeader.NumberU64(nodeCtx))
 		return false
 	}
 	// Verify the correctness of submitted result.
@@ -403,10 +408,10 @@ func (s *remoteSealer) submitWork(nonce types.BlockNonce, sealhash common.Hash) 
 	solution := header
 
 	// The submitted solution is within the scope of acceptance.
-	if solution.NumberU64()+staleThreshold > s.currentHeader.NumberU64() {
+	if solution.NumberU64(nodeCtx)+staleThreshold > s.currentHeader.NumberU64(nodeCtx) {
 		select {
 		case s.results <- solution:
-			s.progpow.config.Log.Debug("Work submitted is acceptable", "number", solution.NumberU64(), "sealhash", sealhash, "hash", solution.Hash())
+			s.progpow.config.Log.Debug("Work submitted is acceptable", "number", solution.NumberU64(nodeCtx), "sealhash", sealhash, "hash", solution.Hash())
 			return true
 		default:
 			s.progpow.config.Log.Warn("Sealing result is not read by miner", "mode", "remote", "sealhash", sealhash)
@@ -414,6 +419,6 @@ func (s *remoteSealer) submitWork(nonce types.BlockNonce, sealhash common.Hash) 
 		}
 	}
 	// The submitted block is too old to accept, drop it.
-	s.progpow.config.Log.Warn("Work submitted is too old", "number", solution.NumberU64(), "sealhash", sealhash, "hash", solution.Hash())
+	s.progpow.config.Log.Warn("Work submitted is too old", "number", solution.NumberU64(nodeCtx), "sealhash", sealhash, "hash", solution.Hash())
 	return false
 }

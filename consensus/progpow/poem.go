@@ -11,7 +11,8 @@ import (
 
 // CalcOrder returns the order of the block within the hierarchy of chains
 func (progpow *Progpow) CalcOrder(header *types.Header) (*big.Int, int, error) {
-	if header.NumberU64() == 0 {
+	nodeCtx := progpow.config.NodeLocation.Context()
+	if header.NumberU64(nodeCtx) == 0 {
 		return big0, common.PRIME_CTX, nil
 	}
 
@@ -87,7 +88,7 @@ func (progpow *Progpow) TotalLogS(header *types.Header) *big.Int {
 }
 
 func (progpow *Progpow) TotalLogPhS(header *types.Header) *big.Int {
-	switch common.NodeLocation.Context() {
+	switch progpow.config.NodeLocation.Context() {
 	case common.PRIME_CTX:
 		totalS := header.ParentEntropy(common.PRIME_CTX)
 		return totalS

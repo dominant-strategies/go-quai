@@ -154,11 +154,11 @@ func (e *GenesisMismatchError) Error() string {
 // error is a *params.ConfigCompatError and the new, unwritten config is returned.
 //
 // The returned chain configuration is never nil.
-func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig, common.Hash, error) {
-	return SetupGenesisBlockWithOverride(db, genesis)
+func SetupGenesisBlock(db ethdb.Database, genesis *Genesis, nodeLocation common.Location) (*params.ChainConfig, common.Hash, error) {
+	return SetupGenesisBlockWithOverride(db, genesis, nodeLocation)
 }
 
-func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis) (*params.ChainConfig, common.Hash, error) {
+func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, nodeLocation common.Location) (*params.ChainConfig, common.Hash, error) {
 	if genesis != nil && genesis.Config == nil {
 		return params.AllProgpowProtocolChanges, common.Hash{}, errGenesisNoConfig
 	}
@@ -171,7 +171,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis) (*params
 		} else {
 			log.Info("Writing custom genesis block")
 		}
-		block, err := genesis.Commit(db)
+		block, err := genesis.Commit(db, nodeLocation)
 		if err != nil {
 			return genesis.Config, common.Hash{}, err
 		}
@@ -180,7 +180,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis) (*params
 	// We have the genesis block in database(perhaps in ancient database)
 	// but the corresponding state is missing.
 	header := rawdb.ReadHeader(db, stored, 0)
-	if _, err := state.New(header.Root(), state.NewDatabaseWithConfig(db, nil), nil); err != nil {
+	if _, err := state.New(header.Root(), state.NewDatabaseWithConfig(db, nil), nil, nodeLocation); err != nil {
 		if genesis == nil {
 			genesis = DefaultGenesisBlock()
 		}
@@ -189,7 +189,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis) (*params
 		if hash != stored {
 			return genesis.Config, hash, &GenesisMismatchError{stored, hash}
 		}
-		block, err := genesis.Commit(db)
+		block, err := genesis.Commit(db, nodeLocation)
 		if err != nil {
 			return genesis.Config, hash, err
 		}
@@ -278,14 +278,15 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		head.SetParentHash(common.Hash{}, i)
 	}
 
-	return types.NewBlock(head, nil, nil, nil, nil, nil, trie.NewStackTrie(nil))
+	return types.NewBlock(head, nil, nil, nil, nil, nil, trie.NewStackTrie(nil), g.Config.Location.Context())
 }
 
 // Commit writes the block and state of a genesis specification to the database.
 // The block is committed as the canonical head block.
-func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
+func (g *Genesis) Commit(db ethdb.Database, nodeLocation common.Location) (*types.Block, error) {
+	nodeCtx := nodeLocation.Context()
 	block := g.ToBlock(db)
-	if block.Number().Sign() != 0 {
+	if block.Number(nodeCtx).Sign() != 0 {
 		return nil, fmt.Errorf("can't commit genesis block with number > 0")
 	}
 	config := g.Config
@@ -293,9 +294,9 @@ func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
 		config = params.AllProgpowProtocolChanges
 	}
 	rawdb.WriteTermini(db, block.Hash(), types.EmptyTermini())
-	rawdb.WriteBlock(db, block)
-	rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), nil)
-	rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())
+	rawdb.WriteBlock(db, block, nodeCtx)
+	rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(nodeCtx), nil)
+	rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64(nodeCtx))
 	rawdb.WriteHeadBlockHash(db, block.Hash())
 	rawdb.WriteHeadHeaderHash(db, block.Hash())
 	rawdb.WriteChainConfig(db, block.Hash(), config)
@@ -304,8 +305,8 @@ func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
 
 // MustCommit writes the genesis block and state to db, panicking on error.
 // The block is committed as the canonical head block.
-func (g *Genesis) MustCommit(db ethdb.Database) *types.Block {
-	block, err := g.Commit(db)
+func (g *Genesis) MustCommit(db ethdb.Database, nodeLocation common.Location) *types.Block {
+	block, err := g.Commit(db, nodeLocation)
 	if err != nil {
 		panic(err)
 	}
@@ -313,11 +314,11 @@ func (g *Genesis) MustCommit(db ethdb.Database) *types.Block {
 }
 
 // GenesisBlockForTesting creates and writes a block in which addr has the given wei balance.
-func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big.Int) *types.Block {
+func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big.Int, nodeLocation common.Location) *types.Block {
 	g := Genesis{
 		BaseFee: big.NewInt(params.InitialBaseFee),
 	}
-	return g.MustCommit(db)
+	return g.MustCommit(db, nodeLocation)
 }
 
 // DefaultGenesisBlock returns the Latest default Genesis block.

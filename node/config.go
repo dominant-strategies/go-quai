@@ -173,6 +173,9 @@ type Config struct {
 	EnablePersonal bool `toml:"-"`
 
 	DBEngine string `toml:",omitempty"`
+
+	// NodeLocation is the location value for a particular chain
+	NodeLocation common.Location
 }
 
 // NodeDB returns the path to the discovery node database.

@@ -171,8 +171,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 // ToMessage converts th transaction arguments to the Message type used by the
 // core evm. This method is used in calls and traces that do not require a real
 // live transaction.
-func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (types.Message, error) {
-	nodeCtx := common.NodeLocation.Context()
+func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int, nodeCtx int) (types.Message, error) {
 	if nodeCtx != common.ZONE_CTX {
 		return types.Message{}, errors.New("toMessage can only called in zone chain")
 	}

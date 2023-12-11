@@ -250,7 +250,7 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 	var (
 		gas            uint64
 		transfersValue = !stack.Back(2).IsZero()
-		address, err   = common.Bytes20ToAddress(stack.Back(1).Bytes20()).InternalAddress()
+		address, err   = common.Bytes20ToAddress(stack.Back(1).Bytes20(), evm.chainConfig.Location).InternalAddress()
 	)
 	if err != nil {
 		return 0, err
@@ -344,7 +344,7 @@ func gasSelfdestruct(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 		return 0, err
 	}
 	gas = params.SelfdestructGas
-	address, err := common.Bytes20ToAddress(stack.Back(0).Bytes20()).InternalAddress()
+	address, err := common.Bytes20ToAddress(stack.Back(0).Bytes20(), evm.chainConfig.Location).InternalAddress()
 	if err != nil {
 		return 0, err
 	}
