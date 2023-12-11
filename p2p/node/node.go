@@ -3,13 +3,16 @@ package node
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/libp2p/go-libp2p"
 	kaddht "github.com/libp2p/go-libp2p-kad-dht"
+	dual "github.com/libp2p/go-libp2p-kad-dht/dual"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/routing"
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
+	"github.com/libp2p/go-libp2p/p2p/protocol/identify"
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/spf13/viper"
@@ -17,6 +20,7 @@ import (
 	"github.com/dominant-strategies/go-quai/cmd/options"
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/p2p/protocol"
 )
 
 // P2PNode represents a libp2p node
@@ -31,7 +35,7 @@ type P2PNode struct {
 	bootpeers []peer.AddrInfo
 
 	// DHT instance
-	dht *kaddht.IpfsDHT
+	dht *dual.DHT
 
 	// runtime context
 	ctx context.Context
@@ -61,7 +65,7 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 	}
 
 	// Create the libp2p host
-	var dht *kaddht.IpfsDHT
+	var dht *dual.DHT
 	host, err := libp2p.New(
 		// use a private key for persistent identity
 		libp2p.Identity(getNodeKey()),
@@ -106,10 +110,16 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 
 		// Let this host use the DHT to find other hosts
 		libp2p.Routing(func(h host.Host) (routing.PeerRouting, error) {
-			dht, err = kaddht.New(ctx, h,
-				kaddht.Mode(kaddht.ModeServer),
-				kaddht.BootstrapPeers(bootpeers...),
-				kaddht.BootstrapPeersFunc(func() []peer.AddrInfo { return bootpeers }),
+			dht, err = dual.New(ctx, h,
+				dual.WanDHTOption(
+					kaddht.Mode(kaddht.ModeServer),
+					kaddht.BootstrapPeersFunc(func() []peer.AddrInfo {
+						log.Debugf("Bootstrapping to the following peers", bootpeers)
+						return bootpeers
+					}),
+					kaddht.ProtocolPrefix("/quai"),
+					kaddht.RoutingTableRefreshPeriod(1 * time.Minute),
+				),
 			)
 			return dht, err
 		}),
