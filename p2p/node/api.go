@@ -65,8 +65,6 @@ func (p *P2PNode) Start() error {
 	}
 
 	// Join the node to the quaiprotocol network
-	log.Debugf("joining quaiprotocol network...")
-	
 	go quaiprotocol.JoinNetwork(p)
 
 	return nil

@@ -114,7 +114,7 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 				dual.WanDHTOption(
 					kaddht.Mode(kaddht.ModeServer),
 					kaddht.BootstrapPeersFunc(func() []peer.AddrInfo {
-						log.Debugf("Bootstrapping to the following peers", bootpeers)
+						log.Debugf("Bootstrapping to the following peers: %v", bootpeers)
 						return bootpeers
 					}),
 					kaddht.ProtocolPrefix("/quai"),

@@ -11,6 +11,7 @@ import (
 
 // Join the node to the quai p2p network
 func JoinNetwork(p QuaiP2PNode) {
+	log.Debugf("joining quaiprotocol network...")
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
