@@ -1,6 +1,8 @@
 package protocol
 
 import (
+	"time"
+
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/libp2p/go-libp2p/core/network"
 
@@ -8,7 +10,27 @@ import (
 )
 
 // Join the node to the quai p2p network
-func JoinNetwork(p QuaiP2PNode) error {
+func JoinNetwork(p QuaiP2PNode) {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	err := attemptToJoinNetwork(p)
+	if err != nil {
+		log.Infof("Initial attempt failed: %s. Trying to join again...", err)
+	}
+
+	// Start retrying
+	for range ticker.C {
+		err := attemptToJoinNetwork(p)
+		if err != nil {
+			log.Infof("Attempt failed: %s. Retrying in 5 seconds...", err)
+			continue
+		}
+		return
+	}
+}
+
+func attemptToJoinNetwork(p QuaiP2PNode) error {
 	// bool to indicate if the node has been validated by at least one bootnode
 	var validated bool
 
