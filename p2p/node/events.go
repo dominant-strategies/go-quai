@@ -70,6 +70,8 @@ func (p *P2PNode) eventLoop() {
 				// get the peer addresses
 				peerAddresses := p.Peerstore().Addrs(peerID)
 				log.Debugf("Event: 'Peer connectedness change' - Peer %s (peerInfo: %+v) is now %s, protocols: %v, addresses: %v", peerID.String(), peerInfo, e.Connectedness, peerProtocols, peerAddresses)
+			case *event.EvtNATDeviceTypeChanged:
+				log.Debugf("Event `NAT device type changed` - DeviceType %v, transport: %v", e.NatDeviceType.String(), e.TransportProtocol.String())
 			default:
 				log.Debugf("Received unknown event (type: %T): %+v", e, e)
 			}
