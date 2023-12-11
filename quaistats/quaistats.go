@@ -439,13 +439,25 @@ func (s *Service) loopSender(urlMap map[string]string) {
 					}
 				case <-s.statsReadyCh:
 					if url, ok := urlMap["blockTransactionStats"]; ok {
-						s.sendTransactionStats(url, authJwt)
+						if err := s.sendTransactionStats(url, authJwt); err != nil {
+							noErrs = false
+							errTimer.Reset(0)
+							log.Warn("blockTransactionStats stats report failed", "err", err)
+						}
 					}
 					if url, ok := urlMap["blockDetailStats"]; ok {
-						s.sendDetailStats(url, authJwt)
+						if err := s.sendDetailStats(url, authJwt); err != nil {
+							noErrs = false
+							errTimer.Reset(0)
+							log.Warn("blockDetailStats stats report failed", "err", err)
+						}
 					}
 					if url, ok := urlMap["blockAppendTime"]; ok {
-						s.sendAppendTimeStats(url, authJwt)
+						if err := s.sendAppendTimeStats(url, authJwt); err != nil {
+							noErrs = false
+							errTimer.Reset(0)
+							log.Warn("blockAppendTime stats report failed", "err", err)
+						}
 					}
 				}
 				errTimer.Reset(0)
