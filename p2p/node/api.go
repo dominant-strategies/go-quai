@@ -64,8 +64,8 @@ func (p *P2PNode) Start() error {
 		return nil
 	}
 
-	// Join the node to the quaiprotocol network
-	go quaiprotocol.JoinNetwork(p)
+	// Open data streams with connected Quai peers
+	go quaiprotocol.OpenPeerStreams(p)
 
 	return nil
 }

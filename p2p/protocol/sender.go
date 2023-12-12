@@ -5,35 +5,34 @@ import (
 
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/libp2p/go-libp2p/core/network"
-
-	"github.com/pkg/errors"
 )
 
-// Join the node to the quai p2p network
-func JoinNetwork(p QuaiP2PNode) {
+// Open streams to start exchanging data with peers
+func OpenPeerStreams(p QuaiP2PNode) {
 	log.Debugf("joining quaiprotocol network...")
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
-	err := attemptToJoinNetwork(p)
-	if err != nil {
-		log.Infof("Initial attempt failed: %s. Trying to join again...", err)
-	}
+	logMsg := "Unable to open any streams with peers. Retrying in 5 seconds..."
 
-	// Start retrying
-	for range ticker.C {
-		err := attemptToJoinNetwork(p)
-		if err != nil {
-			log.Infof("Attempt failed: %s. Retrying in 5 seconds...", err)
-			continue
+	// attempt to open streams until successful
+	for {
+		select {
+		case <-ticker.C:
+			if attemptToOpenStreams(p) {
+				log.Debugf("successfully opened streams with peers")
+				return
+			}
+			log.Warnf(logMsg)
 		}
-		return
 	}
 }
 
-func attemptToJoinNetwork(p QuaiP2PNode) error {
-	// bool to indicate if the node has been validated by at least one bootnode
-	var validated bool
+// Attempt to open a stream with every connected peer
+// Returns true only if this peer has opened streams with at least 2 peers
+func attemptToOpenStreams(p QuaiP2PNode) bool {
+	// Indicate how many peers have validated this peers join request
+	streamCount := 0
 
 	// Open a stream to each connected peer using the Quai protocol
 	for _, peerID := range p.Network().Peers() {
@@ -49,15 +48,14 @@ func attemptToJoinNetwork(p QuaiP2PNode) error {
 			log.Warnf("error sending join request to peer %s: %s", peerID, err)
 			continue
 		}
-		// TODO: being validated by only one bootnode is enough?
-		if !validated {
-			validated = true
+
+		streamCount += 1
+		// We should connect to at least 2 peers to minimize the chance of partition upon restart
+		if streamCount >= 2 {
+			return true
 		}
 	}
-	if !validated {
-		return errors.New("have not established a quai handshake with any other node")
-	}
-	return nil
+	return false
 }
 
 // Send a request to join the Quai network to the bootstrap peer using a stream
