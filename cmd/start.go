@@ -57,6 +57,10 @@ func init() {
 	startCmd.PersistentFlags().StringP(options.KEYFILE, "k", "", "file containing node private key"+generateEnvDoc(options.KEYFILE))
 	viper.BindPFlag(options.KEYFILE, startCmd.PersistentFlags().Lookup(options.KEYFILE))
 
+	// solo node, will not reach out to bootstrap peers
+	startCmd.PersistentFlags().BoolP(options.SOLO, "s", false, "start the node as a solo node (will not reach out to bootstrap peers)"+generateEnvDoc(options.SOLO))
+	viper.BindPFlag(options.SOLO, startCmd.PersistentFlags().Lookup(options.SOLO))
+
 	// look for more peers until we have at least min-peers
 	startCmd.PersistentFlags().StringP(options.MIN_PEERS, "", "10", "minimum number of peers to maintain connectivity with"+generateEnvDoc(options.MIN_PEERS))
 	viper.BindPFlag(options.MIN_PEERS, startCmd.PersistentFlags().Lookup(options.MIN_PEERS))

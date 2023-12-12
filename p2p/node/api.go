@@ -49,7 +49,7 @@ func (p *P2PNode) Start() error {
 	go p.statsLoop()
 
 	// Is this node expected to have bootstrap peers to dial?
-	if !viper.GetBool(options.BOOTNODE) && len(p.bootpeers) == 0 {
+	if !viper.GetBool(options.BOOTNODE) && !viper.GetBool(options.SOLO) && len(p.bootpeers) == 0 {
 		err := errors.New("no bootpeers provided. Unable to join network")
 		log.Errorf("%s", err)
 		return err

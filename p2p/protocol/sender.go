@@ -2,13 +2,21 @@ package protocol
 
 import (
 	"time"
+	
+	"github.com/spf13/viper"
 
+	"github.com/dominant-strategies/go-quai/cmd/options"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/libp2p/go-libp2p/core/network"
 )
 
 // Open streams to start exchanging data with peers
 func OpenPeerStreams(p QuaiP2PNode) {
+	// If this node is a bootnode or solo node, don't keep trying to open streams
+	if viper.GetBool(options.SOLO) {
+		return
+	}
+
 	log.Debugf("joining quaiprotocol network...")
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()

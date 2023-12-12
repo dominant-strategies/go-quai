@@ -59,6 +59,9 @@ func deleteNodeInfoFile() error {
 
 // Loads bootpeers addresses from the config and returns a list of peer.AddrInfo
 func loadBootPeers() ([]peer.AddrInfo, error) {
+	if viper.GetBool(options.SOLO) {
+		return nil, nil
+	}
 	var bootpeers []peer.AddrInfo
 	for _, p := range viper.GetStringSlice(options.BOOTPEERS) {
 		addr, err := multiaddr.NewMultiaddr(p)

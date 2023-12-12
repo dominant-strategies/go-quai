@@ -12,6 +12,7 @@ const (
 	PORTMAP          = "portmap"
 	BOOTPEERS        = "bootpeers"
 	KEYFILE          = "private.key"
+	SOLO             = "solo"
 	MIN_PEERS        = "min-peers"
 	MAX_PEERS        = "max-peers"
 	LOCATION         = "location"
