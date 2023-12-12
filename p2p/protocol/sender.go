@@ -34,8 +34,11 @@ func attemptToOpenStreams(p QuaiP2PNode) bool {
 	// Indicate how many peers have validated this peers join request
 	streamCount := 0
 
+	// Cache the list of connected peers so it doesn't change while iterating
+	connectedPeers := p.Network().Peers()
+
 	// Open a stream to each connected peer using the Quai protocol
-	for _, peerID := range p.Network().Peers() {
+	for _, peerID := range(connectedPeers) {
 		stream, err := p.NewStream(peerID, ProtocolVersion)
 		if err != nil {
 			log.Warnf("error opening stream to peer %s: %s", peerID, err)
