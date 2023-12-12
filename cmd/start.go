@@ -58,7 +58,7 @@ func init() {
 	viper.BindPFlag(options.KEYFILE, startCmd.PersistentFlags().Lookup(options.KEYFILE))
 
 	// look for more peers until we have at least min-peers
-	startCmd.PersistentFlags().StringP(options.MIN_PEERS, "", "5", "minimum number of peers to maintain connectivity with"+generateEnvDoc(options.MIN_PEERS))
+	startCmd.PersistentFlags().StringP(options.MIN_PEERS, "", "10", "minimum number of peers to maintain connectivity with"+generateEnvDoc(options.MIN_PEERS))
 	viper.BindPFlag(options.MIN_PEERS, startCmd.PersistentFlags().Lookup(options.MIN_PEERS))
 
 	// stop looking for more peers once we've reached max-peers
