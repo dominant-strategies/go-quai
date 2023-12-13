@@ -1,3 +1,5 @@
 package types
 
-type Block struct{}
+type Block struct {
+	Hash Hash
+}
