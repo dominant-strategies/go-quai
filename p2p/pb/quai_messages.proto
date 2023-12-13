@@ -1,0 +1,67 @@
+syntax = "proto3";
+
+package quaiprotocol;
+option go_package = "github.com/dominant-strategies/go-quai/p2p/pb";
+
+// GossipSub messages for broadcasting blocks and transactions
+message GossipBlock {
+    Block block = 1;
+}
+
+message GossipTransaction {
+    Transaction transaction = 1;
+}
+
+// Stream-based request-response messages
+message QuaiProtocolMessage {
+    enum ActionType {
+        REQUEST_BLOCK = 0;
+        REQUEST_TRANSACTION = 1;
+    }
+
+    ActionType action = 1;
+    bytes data = 2; // Encoded payload specific to the action
+}
+
+
+// Define a block structure
+message Block {
+    string hash = 1;               // Unique identifier of the block
+    string parentHash = 2;         // Hash of the parent block
+    uint64 number = 3;             // Block number
+    string stateRoot = 4;          // Root of the state trie
+    string transactionsRoot = 5;   // Root of the transactions trie
+    string receiptsRoot = 6;       // Root of the receipts trie
+    repeated Transaction transactions = 7; // Transactions in the block
+    // TODO: evaluate adding additional fields like miner, difficulty, totalDifficulty, extraData, size, gasLimit, gasUsed, timestamp, etc.
+}
+
+// Define a transaction structure
+message Transaction {
+    string hash = 1;         // Unique identifier of the transaction
+    string from = 2;         // Sender address
+    string to = 3;           // Recipient address (empty for contract creation)
+    uint64 nonce = 4;        // Nonce of the sender
+    string value = 5;        // Value transferred in Wei
+    string gasPrice = 6;     // Gas price in Wei
+    uint64 gas = 7;          // Gas limit
+    bytes input = 8;         // Input data (for contract calls)
+    // TODO: evaluate adding additional fields for signature components (v, r, s) and chainID for EIP-155 compliance
+}
+
+// Request and response messages for block and transaction queries
+message BlockRequest {
+    string hash = 1;
+}
+
+message BlockResponse {
+    Block block = 1;
+}
+
+message TransactionRequest {
+    string hash = 1;
+}
+
+message TransactionResponse {
+    Transaction transaction = 1;
+}
