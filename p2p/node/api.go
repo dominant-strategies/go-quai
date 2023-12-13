@@ -15,6 +15,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
+	"google.golang.org/protobuf/proto"
 )
 
 // Api defines an interface which can be used to interact with the node
@@ -115,7 +116,17 @@ func (p *P2PNode) SetConsensusBackend(be consensus.ConsensusBackend) {
 }
 
 func (p *P2PNode) BroadcastBlock(block types.Block) error {
-	panic("todo")
+	// Convert block to protobuf format
+	protoBlock := convertToProtoBlock(block)
+
+	// Serialize the protobuf block
+	data, err := proto.Marshal(protoBlock)
+	if err != nil {
+		return err
+	}
+
+	// Use the pubsub package to publish the block
+	return p.gossipSub.PublishBlock(data)
 }
 
 func (p *P2PNode) BroadcastTransaction(tx types.Transaction) error {
