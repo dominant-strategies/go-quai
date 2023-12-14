@@ -23,6 +23,8 @@ import (
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/core/vm"
+	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/params"
 )
 
 // ChainContext supports retrieving headers and consensus parameters from the
@@ -51,13 +53,24 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 	if header.BaseFee() != nil {
 		baseFee = new(big.Int).Set(header.BaseFee())
 	}
+
+	timestamp := header.Time() // base case, should only be the case in genesis block or before forkBlock (in testnet)
+	if header.Number().Uint64() != 0 && header.Number().Uint64() > params.CarbonForkBlockNumber {
+		parent := chain.GetHeader(header.ParentHash(), header.Number().Uint64()-1)
+		if parent != nil {
+			timestamp = parent.Time()
+		} else {
+			log.Fatal("Parent is nil, panic", "headerHash", header.Hash(), "parentHash", header.ParentHash(), "number", header.Number().Uint64())
+		}
+	}
+
 	return vm.BlockContext{
 		CanTransfer: CanTransfer,
 		Transfer:    Transfer,
 		GetHash:     GetHashFn(header, chain),
 		Coinbase:    beneficiary,
 		BlockNumber: new(big.Int).Set(header.Number()),
-		Time:        new(big.Int).SetUint64(header.Time()),
+		Time:        new(big.Int).SetUint64(timestamp),
 		Difficulty:  new(big.Int).Set(header.Difficulty()),
 		BaseFee:     baseFee,
 		GasLimit:    header.GasLimit(),
