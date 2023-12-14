@@ -243,7 +243,6 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 		etxPLimit = params.ETXPLimitMin
 	}
 
-	var emittedEtxs types.Transactions
 	for i, tx := range block.Transactions() {
 		startProcess := time.Now()
 		msg, err := tx.AsMessageWithSender(types.MakeSigner(p.config, header.Number(nodeCtx)), header.BaseFee(), senders[tx.Hash()])
@@ -284,7 +283,6 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 			if err != nil {
 				return nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 			}
-			emittedEtxs = append(emittedEtxs, receipt.Etxs...)
 			timeTxDelta := time.Since(startTimeTx)
 			timeTx += timeTxDelta
 		} else {

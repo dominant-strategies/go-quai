@@ -126,9 +126,7 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	var emittedEtxs types.Transactions
 	for _, receipt := range receipts {
 		if receipt.Status == types.ReceiptStatusSuccessful {
-			for _, etx := range receipt.Etxs {
-				emittedEtxs = append(emittedEtxs, etx)
-			}
+			emittedEtxs = append(emittedEtxs, receipt.Etxs...)
 		}
 	}
 	time6 := common.PrettyDuration(time.Since(start))
