@@ -135,7 +135,7 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	if header == nil {
 		return nil, nil
 	}
-	head := header.Number().Uint64()
+	head := header.NumberU64(common.ZONE_CTX)
 
 	if f.begin == -1 {
 		f.begin = int64(head)
