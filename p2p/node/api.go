@@ -1,6 +1,7 @@
 package node
 
 import (
+	"context"
 	"time"
 
 	"github.com/pkg/errors"
@@ -12,10 +13,12 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p"
 	quaiprotocol "github.com/dominant-strategies/go-quai/p2p/protocol"
+
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"google.golang.org/protobuf/proto"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 )
 
 // Api defines an interface which can be used to interact with the node
@@ -27,7 +30,7 @@ type Api interface {
 	Stop() error
 
 	// Methods to broadcast data to the network
-	BroadcastBlock(block types.Block) error
+	BroadcastBlock(types.SliceID, types.Block) error
 	BroadcastTransaction(tx types.Transaction) error
 
 	// Methods to lookup specific data from the network. Each request method
@@ -115,18 +118,20 @@ func (p *P2PNode) SetConsensusBackend(be consensus.ConsensusBackend) {
 	p.consensus = be
 }
 
-func (p *P2PNode) BroadcastBlock(block types.Block) error {
+func (p *P2PNode) BroadcastBlock(slice types.SliceID, block types.Block) error {
 	// Convert block to protobuf format
 	protoBlock := convertToProtoBlock(block)
 
 	// Serialize the protobuf block
-	data, err := proto.Marshal(protoBlock)
+	blockData, err := proto.Marshal(protoBlock)
 	if err != nil {
 		return err
 	}
 
 	// Use the pubsub package to publish the block
-	return p.gossipSub.PublishBlock(data)
+	p.topics[slice][p2p.C_blockTopicName].Publish(p.ctx, blockData)
+
+	return nil
 }
 
 func (p *P2PNode) BroadcastTransaction(tx types.Transaction) error {
@@ -158,4 +163,26 @@ func (p *P2PNode) NewStream(peerID peer.ID, protocolID protocol.ID) (network.Str
 // Connects to the given peer
 func (p *P2PNode) Connect(pi peer.AddrInfo) error {
 	return p.Host.Connect(p.ctx, pi)
+}
+
+// Start gossipsub protocol
+func (p *P2PNode) StartGossipSub(ctx context.Context) error {
+	for _, slice := range p.consensus.GetRunningSlices() {
+		blockTopic, err := p.pubsub.Join(slice.String() + "/" + p2p.C_blockTopicName)
+		if err != nil {
+			return err
+		}
+		_, err = blockTopic.Subscribe()
+		if err != nil {
+			return err
+		}
+
+		sliceTopics, exists := p.topics[slice]
+		if !exists {
+			sliceTopics = make(map[string]*pubsub.Topic)
+		}
+		sliceTopics[p2p.C_blockTopicName] = blockTopic
+		p.topics[slice] = sliceTopics
+	}
+	return nil
 }

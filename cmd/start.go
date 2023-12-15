@@ -82,6 +82,11 @@ func runStart(cmd *cobra.Command, args []string) error {
 		log.Fatalf("error starting node: %s", err)
 	}
 
+	// subscribe to necessary protocol events
+	if err := node.StartGossipSub(ctx); err != nil {
+		log.Fatalf("error starting gossipsub: %s", err)
+	}
+
 	// wait for a SIGINT or SIGTERM signal
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
