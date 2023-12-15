@@ -9,6 +9,8 @@ import (
 // QuaiBackend implements the quai consensus protocol
 type QuaiBackend struct {
 	p2p node.Api
+
+	runningSlices	[]types.SliceID
 }
 
 // Create a new instance of the QuaiBackend consensus service
@@ -34,4 +36,19 @@ func (qbe *QuaiBackend) OnNewBlock(sourcePeer p2p.PeerID, block types.Block) boo
 // Handle transactions received from the P2P client
 func (qbe *QuaiBackend) OnNewTransaction(sourcePeer p2p.PeerID, tx types.Transaction) bool {
 	panic("todo")
+}
+
+func (qbe *QuaiBackend) GetRunningSlices() []types.SliceID {
+	// Example/mock implementation
+	return []types.SliceID{
+		{
+			Region: 0,
+			Zone: 0,
+		},
+	}
+}
+
+func (qbe *QuaiBackend) SetRunningSlices(slices []types.SliceID) {
+	// Example/mock implementation
+	qbe.runningSlices = slices
 }
