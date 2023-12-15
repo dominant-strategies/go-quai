@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"encoding/binary"
 	"fmt"
 	"math/big"
 	"sync"
@@ -505,8 +506,76 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 	if err != nil {
 		return nil, common.ZeroAddr, 0, err
 	}
-	contractAddr = crypto.CreateAddress(caller.Address(), evm.StateDB.GetNonce(internalAddr), code, evm.chainConfig.Location)
+
+	nonce := evm.StateDB.GetNonce(internalAddr)
+
+	contractAddr = crypto.CreateAddress(caller.Address(), nonce, code, evm.chainConfig.Location)
+	if _, err := contractAddr.InternalAddress(); err == nil {
+		return evm.create(caller, &codeAndHash{code: code}, gas, value, contractAddr)
+	} else if evm.Context.BlockNumber.Uint64() <= params.CarbonForkBlockNumber {
+		return evm.create(caller, &codeAndHash{code: code}, gas, value, contractAddr)
+	}
+
+	// Calculate the gas required for the keccak256 computation of the input data.
+	gasCost, err := calculateKeccakGas(code)
+	if err != nil {
+		return nil, common.ZeroAddr, 0, err
+	}
+
+	// attempt to grind the address
+	contractAddr, remainingGas, err := evm.attemptGrindContractCreation(caller, nonce, gas, gasCost, code)
+	if err != nil {
+		return nil, common.ZeroAddr, 0, err
+	}
+
+	gas = remainingGas
+
 	return evm.create(caller, &codeAndHash{code: code}, gas, value, contractAddr)
+}
+
+// calculateKeccakGas calculates the gas required for performing a keccak256 hash on the given data.
+// It returns the total gas cost and any error that may occur during the calculation.
+func calculateKeccakGas(data []byte) (int64, error) {
+	// Base gas for keccak256 computation.
+	keccakBaseGas := int64(params.Sha3Gas)
+	// Calculate the number of words (rounded up) in the data for gas calculation.
+	wordCount := (len(data) + 31) / 32 // Round up to the nearest word
+	return keccakBaseGas + int64(wordCount)*int64(params.Sha3WordGas), nil
+}
+
+// attemptContractCreation tries to create a contract address by iterating through possible nonce values.
+// It returns the modified data for contract creation and any error encountered.
+func (evm *EVM) attemptGrindContractCreation(caller ContractRef, nonce uint64, gas uint64, gasCost int64, code []byte) (common.Address, uint64, error) {
+	senderAddress := caller.Address()
+
+	codeAndHash := &codeAndHash{code: code}
+	var salt [32]byte
+	binary.BigEndian.PutUint64(salt[24:], nonce)
+
+	// Iterate through possible nonce values to find a suitable contract address.
+	for i := 0; i < params.MaxAddressGrindAttempts; i++ {
+
+		// Check if there is enough gas left to continue.
+		if gas < uint64(gasCost) {
+			return common.ZeroAddr, 0, fmt.Errorf("out of gas grinding contract address for %v", caller.Address().Hex())
+		}
+
+		// Subtract the gas cost for each attempt.
+		gas -= uint64(gasCost)
+
+		// Place i in the [32]byte array.
+		binary.BigEndian.PutUint64(salt[16:24], uint64(i))
+
+		// Generate a potential contract address.
+		contractAddr := crypto.CreateAddress2(senderAddress, salt, codeAndHash.Hash().Bytes(), evm.chainConfig.Location)
+
+		// Check if the generated address is valid.
+		if _, err := contractAddr.InternalAddress(); err == nil {
+			return contractAddr, gas, nil
+		}
+	}
+	// Return an error if a valid address could not be found after the maximum number of attempts.
+	return common.ZeroAddr, 0, fmt.Errorf("exceeded number of attempts grinding address %v", caller.Address().Hex())
 }
 
 // Create2 creates a new contract using code as deployment code.
