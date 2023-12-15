@@ -138,6 +138,8 @@ const (
 
 	// The Refund Quotient is the cap on how much of the used gas can be refunded
 	RefundQuotient uint64 = 5
+
+	MaxAddressGrindAttempts int = 1000 // Maximum number of attempts to grind an address to a valid one
 )
 
 var (
