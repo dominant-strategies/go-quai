@@ -9,6 +9,7 @@ import (
 	kaddht "github.com/libp2p/go-libp2p-kad-dht"
 	dual "github.com/libp2p/go-libp2p-kad-dht/dual"
 
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/routing"
@@ -21,8 +22,8 @@ import (
 	"github.com/dominant-strategies/go-quai/cmd/utils"
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/consensus/types"
 	"github.com/dominant-strategies/go-quai/p2p/protocol"
-	"github.com/dominant-strategies/go-quai/p2p/pubsub"
 )
 
 // P2PNode represents a libp2p node
@@ -36,14 +37,21 @@ type P2PNode struct {
 	// List of peers to introduce us to the network
 	bootpeers []peer.AddrInfo
 
+	// TODO: Consolidate into network interface, and consensus interface
 	// DHT instance
 	dht *dual.DHT
 
+	// Gossipsub instance
+	pubsub *pubsub.PubSub
+
+	// Gossipsub subscriptions
+	// Each sliceID will have a topic for each data type
+	// - C_blockTopicName
+	// - C_transactionTopicName
+	topics map[types.SliceID]map[string]*pubsub.Topic
+
 	// runtime context
 	ctx context.Context
-
-	// gossipsub subscription
-	gossipSub *pubsub.GossipSubManager
 }
 
 // Returns a new libp2p node.
@@ -153,19 +161,19 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 	nodeID := host.ID()
 	log.Infof("node created: %s", nodeID)
 
-	// Create a GossipSub router
-	gm, err := pubsub.NewGossipSubManager(ctx, host)
+	ps, err := pubsub.NewGossipSub(ctx, host)
+
 	if err != nil {
-		log.Fatalf("Failed to create GossipSub Manager: %s", err)
 		return nil, err
 	}
 
 	return &P2PNode{
-		ctx:       ctx,
-		Host:      host,
-		bootpeers: bootpeers,
-		dht:       dht,
-		gossipSub: gm,
+		ctx:           ctx,
+		Host:          host,
+		bootpeers:     bootpeers,
+		dht:           dht,
+		pubsub:        ps,
+		topics: make(map[types.SliceID]map[string]*pubsub.Topic),
 	}, nil
 }
 

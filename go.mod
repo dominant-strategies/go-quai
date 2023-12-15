@@ -5,6 +5,8 @@ go 1.21.1
 require (
 	github.com/adrg/xdg v0.4.0
 	github.com/golang/mock v1.6.0
+	github.com/libp2p/go-libp2p-kad-dht v0.25.2
+	github.com/libp2p/go-libp2p-pubsub v0.10.0
 	github.com/multiformats/go-multiaddr v0.12.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.8.4
@@ -135,8 +137,6 @@ require (
 require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/libp2p/go-libp2p v0.32.1
-	github.com/libp2p/go-libp2p-kad-dht v0.25.1
-	github.com/libp2p/go-libp2p-pubsub v0.10.0
 	github.com/natefinch/lumberjack v2.0.0+incompatible
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/cobra v1.7.0
