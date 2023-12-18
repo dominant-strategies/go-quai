@@ -44,9 +44,6 @@ BASE_CMD += --ws --ws.addr $(WS_ADDR) --ws.api $(WS_API)
 BASE_CMD += --slices $(SLICES)
 BASE_CMD += --db.engine $(DB_ENGINE)
 BASE_CMD += $(if $(MAX_PEERS),--maxpeers $(MAX_PEERS))
-ifeq ($(ENABLE_ARCHIVE),true)
-	BASE_CMD += --gcmode archive
-endif
 ifeq ($(ENABLE_NAT),true)
 	BASE_CMD += --nat extip:$(EXT_IP)
 endif

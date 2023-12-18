@@ -75,7 +75,6 @@ var (
 		utils.ExitWhenSyncedFlag,
 		utils.ExternalSignerFlag,
 		utils.FakePoWFlag,
-		utils.GCModeFlag,
 		utils.LighthouseFlag,
 		utils.GardenFlag,
 		utils.GenesisNonceFlag,

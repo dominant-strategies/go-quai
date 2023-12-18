@@ -48,7 +48,6 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.GenesisNonceFlag,
 			utils.SyncModeFlag,
 			utils.ExitWhenSyncedFlag,
-			utils.GCModeFlag,
 			utils.TxLookupLimitFlag,
 			utils.QuaiStatsURLFlag,
 			utils.SendFullStatsFlag,
