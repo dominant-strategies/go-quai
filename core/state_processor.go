@@ -79,7 +79,6 @@ type CacheConfig struct {
 	TrieCleanRejournal  time.Duration // Time interval to dump clean cache to disk periodically
 	TrieCleanNoPrefetch bool          // Whether to disable heuristic state prefetching for followup blocks
 	TrieDirtyLimit      int           // Memory limit (MB) at which to start flushing dirty trie nodes to disk
-	TrieDirtyDisabled   bool          // Whether to disable trie write caching and GC altogether (archive node)
 	TrieTimeLimit       time.Duration // Time limit after which to flush the current in-memory trie to disk
 	SnapshotLimit       int           // Memory allowance (MB) to use for caching snapshot entries in memory
 	Preimages           bool          // Whether to store preimage of trie key to the disk
@@ -446,65 +445,10 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 	var time9 common.PrettyDuration
 	var time10 common.PrettyDuration
 	var time11 common.PrettyDuration
-	// If we're running an archive node, always flush
-	if p.cacheConfig.TrieDirtyDisabled {
-		if err := triedb.Commit(root, false, nil); err != nil {
-			return nil, err
-		}
-		time8 = common.PrettyDuration(time.Since(start))
-	} else {
-		// Full but not archive node, do proper garbage collection
-		triedb.Reference(root, common.Hash{}) // metadata reference to keep trie alive
-		p.triegc.Push(root, -int64(block.NumberU64(nodeCtx)))
-		time8 = common.PrettyDuration(time.Since(start))
-		if current := block.NumberU64(nodeCtx); current > TriesInMemory {
-			// If we exceeded our memory allowance, flush matured singleton nodes to disk
-			var (
-				nodes, imgs = triedb.Size()
-				limit       = common.StorageSize(p.cacheConfig.TrieDirtyLimit) * 1024 * 1024
-			)
-			if nodes > limit || imgs > 4*1024*1024 {
-				triedb.Cap(limit - ethdb.IdealBatchSize)
-			}
-			// Find the next state trie we need to commit
-			chosen := current - TriesInMemory
-			time9 = common.PrettyDuration(time.Since(start))
-			// If we exceeded out time allowance, flush an entire trie to disk
-			if p.gcproc > p.cacheConfig.TrieTimeLimit {
-				// If the header is missing (canonical chain behind), we're reorging a low
-				// diff sidechain. Suspend committing until this operation is completed.
-				header := p.hc.GetHeaderByNumber(chosen)
-				if header == nil {
-					p.logger.WithField("number", chosen).Warn("Reorg in progress, trie commit postponed")
-				} else {
-					// If we're exceeding limits but haven't reached a large enough memory gap,
-					// warn the user that the system is becoming unstable.
-					if chosen < lastWrite+TriesInMemory && p.gcproc >= 2*p.cacheConfig.TrieTimeLimit {
-						p.logger.WithFields(logrus.Fields{
-							"time":      p.gcproc,
-							"allowance": p.cacheConfig.TrieTimeLimit,
-							"optimum":   float64(chosen-lastWrite) / TriesInMemory,
-						}).Warn("State in memory for too long, committing")
-					}
-					// Flush an entire trie and restart the counters
-					triedb.Commit(header.Root(), true, nil)
-					lastWrite = chosen
-					p.gcproc = 0
-				}
-			}
-			time10 = common.PrettyDuration(time.Since(start))
-			// Garbage collect anything below our required write retention
-			for !p.triegc.Empty() {
-				root, number := p.triegc.Pop()
-				if uint64(-number) > chosen {
-					p.triegc.Push(root, number)
-					break
-				}
-				triedb.Dereference(root.(common.Hash))
-			}
-			time11 = common.PrettyDuration(time.Since(start))
-		}
+	if err := triedb.Commit(root, false, nil); err != nil {
+		return nil, err
 	}
+	time8 = common.PrettyDuration(time.Since(start))
 	rawdb.WriteEtxSet(batch, header.Hash(), header.NumberU64(nodeCtx), etxSet)
 	time12 := common.PrettyDuration(time.Since(start))
 
@@ -826,51 +770,6 @@ func (p *StateProcessor) StateAtTransaction(block *types.Block, txIndex int, ree
 }
 
 func (p *StateProcessor) Stop() {
-	nodeCtx := p.hc.NodeCtx()
-	// Ensure that the entirety of the state snapshot is journalled to disk.
-	var snapBase common.Hash
-	if p.snaps != nil {
-		var err error
-		if snapBase, err = p.snaps.Journal(p.hc.CurrentBlock().Root()); err != nil {
-			p.logger.WithField("err", err).Error("Failed to journal state snapshot")
-		}
-	}
-	// Ensure the state of a recent block is also stored to disk before exiting.
-	// We're writing three different states to catch different restart scenarios:
-	//  - HEAD:     So we don't need to reprocess any blocks in the general case
-	//  - HEAD-1:   So we don't do large reorgs if our HEAD becomes an uncle
-	//  - HEAD-127: So we have a hard limit on the number of blocks reexecuted
-	if !p.cacheConfig.TrieDirtyDisabled {
-		triedb := p.stateCache.TrieDB()
-
-		for _, offset := range []uint64{0, 1, TriesInMemory - 1} {
-			if number := p.hc.CurrentBlock().NumberU64(nodeCtx); number > offset {
-				recent := p.hc.GetBlockByNumber(number - offset)
-
-				p.logger.WithFields(logrus.Fields{
-					"block": recent.NumberU64(nodeCtx),
-					"hash":  recent.Hash(),
-					"root":  recent.Root(),
-				}).Info("Writing cached state to disk")
-
-				if err := triedb.Commit(recent.Root(), true, nil); err != nil {
-					p.logger.WithField("err", err).Error("Failed to commit recent state trie")
-				}
-			}
-		}
-		if snapBase != (common.Hash{}) {
-			p.logger.WithField("root", snapBase).Info("Writing snapshot state to disk")
-			if err := triedb.Commit(snapBase, true, nil); err != nil {
-				p.logger.WithField("err", err).Error("Failed to commit snapshot state trie")
-			}
-		}
-		for !p.triegc.Empty() {
-			triedb.Dereference(p.triegc.PopItem().(common.Hash))
-		}
-		if size, _ := triedb.Size(); size != 0 {
-			p.logger.Error("Dangling trie nodes after full cleanup")
-		}
-	}
 	// Ensure all live cached entries be saved into disk, so that we can skip
 	// cache warmup when node restarts.
 	if p.cacheConfig.TrieCleanJournal != "" {

@@ -69,7 +69,6 @@ var NodeFlags = []Flag{
 	DevPeriodFlag,
 	IdentityFlag,
 	DocRootFlag,
-	GCModeFlag,
 	SnapshotFlag,
 	TxLookupLimitFlag,
 	WhitelistFlag,
@@ -284,12 +283,6 @@ var (
 		Name:  c_NodeFlagPrefix + "docroot",
 		Value: xdg.DataHome,
 		Usage: "Document Root for HTTPClient file scheme" + generateEnvDoc(c_NodeFlagPrefix+"docroot"),
-	}
-
-	GCModeFlag = Flag{
-		Name:  c_NodeFlagPrefix + "gcmode",
-		Value: "full",
-		Usage: `Blockchain garbage collection mode ("full", "archive")` + generateEnvDoc(c_NodeFlagPrefix+"gcmode"),
 	}
 
 	SnapshotFlag = Flag{
@@ -1209,12 +1202,6 @@ func CheckExclusive(args ...interface{}) {
 
 // SetQuaiConfig applies quai-related command line flags to the config.
 func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, nodeLocation common.Location, logger *logrus.Logger) {
-	if viper.GetString(GCModeFlag.Name) == "archive" && viper.GetUint64(TxLookupLimitFlag.Name) != 0 {
-		// TODO: see what this is supposed to do
-		viper.IsSet(TxLookupLimitFlag.Name)
-		logger.Warn("Disable transaction unindexing for archive node")
-	}
-
 	cfg.NodeLocation = nodeLocation
 	// only set etherbase if its a zone chain
 	if len(nodeLocation) == 2 {
@@ -1282,12 +1269,6 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, nodeLocation common
 		cfg.DatabaseFreezer = viper.GetString(AncientDirFlag.Name)
 	}
 
-	if gcmode := viper.GetString(GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {
-		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)
-	}
-	if viper.IsSet(GCModeFlag.Name) {
-		cfg.NoPruning = viper.GetString(GCModeFlag.Name) == "archive"
-	}
 	if viper.IsSet(CacheNoPrefetchFlag.Name) {
 		cfg.NoPrefetch = viper.GetBool(CacheNoPrefetchFlag.Name)
 	}
