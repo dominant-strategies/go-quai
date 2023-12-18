@@ -411,7 +411,7 @@ func (ec *Client) FilterLogs(ctx context.Context, q quai.FilterQuery) ([]types.L
 	if err != nil {
 		return nil, err
 	}
-	err = ec.c.CallContext(ctx, &result, "eth_getLogs", arg)
+	err = ec.c.CallContext(ctx, &result, "quai_getLogs", arg)
 	return result, err
 }
 
