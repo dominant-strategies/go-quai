@@ -45,6 +45,9 @@ type (
 )
 
 func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool, common.Address) {
+	if evm.Context.BlockNumber.Uint64() <= params.CarbonForkBlockNumber { // no precompiles before the fork
+		return nil, false, addr
+	}
 	if index, ok := TranslatedAddresses[addr.Bytes20()]; ok {
 		addr = PrecompiledAddresses[evm.chainConfig.Location.Name()][index]
 	}

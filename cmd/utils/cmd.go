@@ -9,7 +9,6 @@ import (
 	"sync"
 
 	"github.com/dominant-strategies/go-quai/common"
-	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/internal/quaiapi"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/metrics_config"
@@ -95,11 +94,6 @@ func makeConfigNode(nodeLocation common.Location, logger *logrus.Logger) (*node.
 		cfg.Quaistats.URL = viper.GetString(QuaiStatsURLFlag.Name)
 	}
 
-	nodeCtx := nodeLocation.Context()
-	// Onlt initialize the precompile for the zone chain
-	if nodeCtx == common.ZONE_CTX {
-		vm.InitializePrecompiles(nodeLocation)
-	}
 	return stack, cfg
 }
 

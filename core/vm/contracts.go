@@ -42,15 +42,15 @@ type PrecompiledContract interface {
 }
 
 var TranslatedAddresses = map[common.AddressBytes]int{
-	common.AddressBytes([20]byte{1}): 0,
-	common.AddressBytes([20]byte{2}): 1,
-	common.AddressBytes([20]byte{3}): 2,
-	common.AddressBytes([20]byte{4}): 3,
-	common.AddressBytes([20]byte{5}): 4,
-	common.AddressBytes([20]byte{6}): 5,
-	common.AddressBytes([20]byte{7}): 6,
-	common.AddressBytes([20]byte{8}): 7,
-	common.AddressBytes([20]byte{9}): 8,
+	common.AddressBytes(intToByteArray20(1)): 0,
+	common.AddressBytes(intToByteArray20(2)): 1,
+	common.AddressBytes(intToByteArray20(3)): 2,
+	common.AddressBytes(intToByteArray20(4)): 3,
+	common.AddressBytes(intToByteArray20(5)): 4,
+	common.AddressBytes(intToByteArray20(6)): 5,
+	common.AddressBytes(intToByteArray20(7)): 6,
+	common.AddressBytes(intToByteArray20(8)): 7,
+	common.AddressBytes(intToByteArray20(9)): 8,
 }
 
 var (
@@ -593,4 +593,10 @@ func (c *blake2F) Run(input []byte) ([]byte, error) {
 		binary.LittleEndian.PutUint64(output[offset:offset+8], h[i])
 	}
 	return output, nil
+}
+
+func intToByteArray20(n uint8) [20]byte {
+	var byteArray [20]byte
+	byteArray[19] = byte(n) // Use the last byte for the integer
+	return byteArray
 }
