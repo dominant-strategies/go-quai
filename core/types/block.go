@@ -109,6 +109,65 @@ type Header struct {
 	PowDigest atomic.Value
 }
 
+func (h1 *Header) Compare(h2 *Header) error{
+	if h1 == nil || h2 == nil {
+		if h1 == h2{
+			return nil
+		}
+		return fmt.Errorf("Headers are not equal expected %v, got %v", h1, h2)
+	}
+
+	fields := map[string][]interface{}{
+        "parentHash": {h1.parentHash, h2.parentHash},
+        "uncleHash": {h1.uncleHash, h2.uncleHash},
+        "coinbase": {h1.coinbase, h2.coinbase},
+		"root": {h1.root, h2.root},
+		"txHash": {h1.txHash, h2.txHash},
+		"etxHash": {h1.etxHash, h2.etxHash},
+		"etxRollupHash": {h1.etxRollupHash, h2.etxRollupHash},
+		"manifestHash": {h1.manifestHash, h2.manifestHash},
+		"receiptHash": {h1.receiptHash, h2.receiptHash},
+		"difficulty": {h1.difficulty, h2.difficulty},
+		"number": {h1.number, h2.number},
+		"gasLimit": {h1.gasLimit, h2.gasLimit},
+		"gasUsed": {h1.gasUsed, h2.gasUsed},
+		"baseFee": {h1.baseFee, h2.baseFee},
+		"location": {h1.location, h2.location},
+		"time": {h1.time, h2.time},
+		"extra": {h1.extra, h2.extra},
+		"mixHash": {h1.mixHash, h2.mixHash},
+		"nonce": {h1.nonce, h2.nonce},
+		"hash": {h1.hash, h2.hash},
+		"sealHash": {h1.sealHash, h2.sealHash},
+		"PowHash": {h1.PowHash, h2.PowHash},
+		"PowDigest": {h1.PowDigest, h2.PowDigest},
+    }
+
+    for fieldName, values := range fields {
+        if !reflect.DeepEqual(values[0], values[1]) {
+            return fmt.Errorf("Field %s is not equal expected %v, got %v", fieldName, values[0], values[1])
+        }
+    }
+
+	if len(h1.parentEntropy) != len(h2.parentEntropy) {
+		return fmt.Errorf("Field parentEntropy is not equal expected %v, got %v", h1.parentEntropy, h2.parentEntropy)
+	}
+	for i := range h1.parentEntropy {
+		if h1.parentEntropy[i].Cmp(h2.parentEntropy[i]) != 0 {
+			return fmt.Errorf("Field parentEntropy at index %d is not equal expected %v, got %v", i, h1.parentEntropy[i], h2.parentEntropy[i])
+		}
+	}
+	if len(h1.parentDeltaS) != len(h2.parentDeltaS) {
+		return fmt.Errorf("Field parentEntropy is not equal expected %v, got %v", h1.parentEntropy, h2.parentEntropy)
+	}
+	for i := range h1.parentDeltaS {
+		if h1.parentEntropy[i].Cmp(h2.parentDeltaS[i]) != 0 {
+			return fmt.Errorf("Field parentDeltaS at index %d is not equal expected %v, got %v", i, h1.parentDeltaS[i], h2.parentDeltaS[i])
+		}
+	}
+    return nil
+}
+
 // field type overrides for gencodec
 type headerMarshaling struct {
 	Difficulty    *hexutil.Big

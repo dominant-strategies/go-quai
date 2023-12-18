@@ -21,7 +21,6 @@ import (
 	"context"
 	"errors"
 	"math/big"
-	"reflect"
 	"testing"
 	"time"
 
@@ -37,6 +36,7 @@ import (
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/node"
 	"github.com/dominant-strategies/go-quai/params"
+	"github.com/dominant-strategies/go-quai/quaiclient"
 	"github.com/dominant-strategies/go-quai/rpc"
 )
 
@@ -164,39 +164,34 @@ func TestEthClient(t *testing.T) {
 
 func testHeader(t *testing.T, chain []*types.Block, client *rpc.Client) {
 	tests := map[string]struct {
-		block   *big.Int
+		block   string
 		want    *types.Header
 		wantErr error
 	}{
 		"genesis": {
-			block: big.NewInt(0),
+			block: "0x0",
 			want:  chain[0].Header(),
 		},
 		"first_block": {
-			block: big.NewInt(1),
+			block: "0x1",
 			want:  chain[1].Header(),
 		},
 		"future_block": {
-			block:   big.NewInt(1000000000),
+			block:   "0xffffff",
 			want:    nil,
-			wantErr: quai.NotFound,
 		},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			ec := NewClient(client)
+			ec := quaiclient.NewClient(&quaiclient.TestRpcClient{Chain: chain})
 			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 			defer cancel()
 
-			got, err := ec.HeaderByNumber(ctx, tt.block)
-			if !errors.Is(err, tt.wantErr) {
-				t.Fatalf("HeaderByNumber(%v) error = %q, want %q", tt.block, err, tt.wantErr)
-			}
-			if got != nil && got.Number() != nil && got.Number().Sign() == 0 {
-				got.SetNumber(big.NewInt(0)) // hack to make DeepEqual work
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Fatalf("HeaderByNumber(%v)\n   = %v\nwant %v", tt.block, got, tt.want)
+			got := ec.HeaderByNumber(ctx, tt.block)
+
+			err := got.Compare(tt.want)
+			if err != nil {
+				t.Fatalf("deepEqual failed %v", err)
 			}
 		})
 	}

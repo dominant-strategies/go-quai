@@ -42,16 +42,31 @@ type IClient interface {
 
 // Used on unit tests
 type TestRpcClient struct {
-
+	Chain []*types.Block
 }
 
 func (trc *TestRpcClient) CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error {
 	if method == "quai_updateDom" {
 		return nil
 	}
-	if method == "eth_getBlockByNumber" {
-		return nil
+
+	if method == "quai_getHeaderByNumber" {
+		blockNumber, err := hexutil.DecodeUint64(args[0].(string))
+		if err != nil {
+            return err
+        }
+		if blockNumber >= uint64(len(trc.Chain)) {
+			return nil;
+		}
+        test := trc.Chain[blockNumber].Header().RPCMarshalHeader()
+        jsonTest, err := json.Marshal(test)
+        if err != nil {
+            return err
+        }
+        *result.(*json.RawMessage) = jsonTest
+        return nil
 	}
+
 	if method == "quai_sendPendingEtxsToDom" {
 		return nil
 	}
