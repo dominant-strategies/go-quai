@@ -20,10 +20,13 @@ package quaiclient
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"time"
 
+	quai "github.com/dominant-strategies/go-quai"
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rpc"
@@ -87,6 +90,11 @@ type appendReturns struct {
 	Etxs     types.Transactions `json:"pendingEtxs"`
 	SubReorg bool               `json:"subReorg"`
 	SetHead  bool               `json:"setHead"`
+}
+
+// SubscribePendingHeader subscribes to notifications about the current pending block on the node.
+func (ec *Client) SubscribePendingHeader(ctx context.Context, ch chan<- *types.Header) (quai.Subscription, error) {
+	return ec.c.QuaiSubscribe(ctx, ch, "pendingHeader")
 }
 
 func (ec *Client) Append(ctx context.Context, header *types.Header, manifest types.BlockManifest, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, bool, bool, error) {
@@ -257,4 +265,96 @@ func (ec *Client) HeaderByNumber(ctx context.Context, number string) *types.Head
 func (ec *Client) SetSyncTarget(ctx context.Context, header *types.Header) {
 	fields := header.RPCMarshalHeader()
 	ec.c.CallContext(ctx, nil, "quai_setSyncTarget", fields)
+}
+
+//// Miner APIS
+
+// GetPendingHeader gets the latest pending header from the chain.
+func (ec *Client) GetPendingHeader(ctx context.Context) (*types.Header, error) {
+	var pendingHeader *types.Header
+	err := ec.c.CallContext(ctx, &pendingHeader, "quai_getPendingHeader")
+	if err != nil {
+		return nil, err
+	}
+	return pendingHeader, nil
+}
+
+// ReceiveMinedHeader sends a mined block back to the node
+func (ec *Client) ReceiveMinedHeader(ctx context.Context, header *types.Header) error {
+	data := header.RPCMarshalHeader()
+	return ec.c.CallContext(ctx, nil, "quai_receiveMinedHeader", data)
+}
+
+// Filters
+
+// SubscribeFilterLogs subscribes to the results of a streaming filter query.
+func (ec *Client) SubscribeFilterLogs(ctx context.Context, q quai.FilterQuery, ch chan<- types.Log) (quai.Subscription, error) {
+	arg, err := toFilterArg(q)
+	if err != nil {
+		return nil, err
+	}
+	return ec.c.QuaiSubscribe(ctx, ch, "logs", arg)
+}
+
+func toFilterArg(q quai.FilterQuery) (interface{}, error) {
+	arg := map[string]interface{}{
+		"address": q.Addresses,
+		"topics":  q.Topics,
+	}
+	if q.BlockHash != nil {
+		arg["blockHash"] = *q.BlockHash
+		if q.FromBlock != nil || q.ToBlock != nil {
+			return nil, fmt.Errorf("cannot specify both BlockHash and FromBlock/ToBlock")
+		}
+	} else {
+		if q.FromBlock == nil {
+			arg["fromBlock"] = "0x0"
+		} else {
+			arg["fromBlock"] = toBlockNumArg(q.FromBlock)
+		}
+		arg["toBlock"] = toBlockNumArg(q.ToBlock)
+	}
+	return arg, nil
+}
+
+func toBlockNumArg(number *big.Int) string {
+	if number == nil {
+		return "latest"
+	}
+	pending := big.NewInt(-1)
+	if number.Cmp(pending) == 0 {
+		return "pending"
+	}
+	return hexutil.EncodeBig(number)
+}
+
+func toCallArg(msg quai.CallMsg) interface{} {
+	arg := map[string]interface{}{
+		"from": msg.From,
+		"to":   msg.To,
+	}
+	if len(msg.Data) > 0 {
+		arg["data"] = hexutil.Bytes(msg.Data)
+	}
+	if msg.Value != nil {
+		arg["value"] = (*hexutil.Big)(msg.Value)
+	}
+	if msg.Gas != 0 {
+		arg["gas"] = hexutil.Uint64(msg.Gas)
+	}
+	if msg.GasPrice != nil {
+		arg["gasPrice"] = (*hexutil.Big)(msg.GasPrice)
+	}
+	return arg
+}
+
+// FilterLogs executes a filter query.
+func (ec *Client) FilterLogs(ctx context.Context, q quai.FilterQuery) ([]types.Log, error) {
+	var result []types.Log
+	arg, err := toFilterArg(q)
+	if err != nil {
+		return nil, err
+	}
+	err = ec.c.CallContext(ctx, &result, "quai_getLogs", arg)
+	return result, err
 }

@@ -411,6 +411,11 @@ func (c *Client) EthSubscribe(ctx context.Context, channel interface{}, args ...
 	return c.Subscribe(ctx, "eth", channel, args...)
 }
 
+// QuaiSubscribe registers a subscripion under the "eth" namespace.
+func (c *Client) QuaiSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (*ClientSubscription, error) {
+	return c.Subscribe(ctx, "quai", channel, args...)
+}
+
 // ShhSubscribe registers a subscripion under the "shh" namespace.
 // Deprecated: use Subscribe(ctx, "shh", ...).
 func (c *Client) ShhSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (*ClientSubscription, error) {

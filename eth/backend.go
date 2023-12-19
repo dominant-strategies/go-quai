@@ -281,6 +281,11 @@ func (s *Quai) APIs() []rpc.API {
 			Service:   NewPrivateMinerAPI(s),
 			Public:    false,
 		}, {
+			Namespace: "eth",
+			Version:   "1.0",
+			Service:   filters.NewPublicFilterAPI(s.APIBackend, false, 5*time.Minute),
+			Public:    true,
+		}, {
 			Namespace: "quai",
 			Version:   "1.0",
 			Service:   filters.NewPublicFilterAPI(s.APIBackend, false, 5*time.Minute),
