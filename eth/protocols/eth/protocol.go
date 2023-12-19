@@ -30,7 +30,7 @@ import (
 
 // Constants to match up protocol versions and messages
 const (
-	QUAI1 = 102
+	QUAI1, QUAI2 = 102, 103
 )
 
 // ProtocolName is the official short name of the `quai` protocol used during
@@ -39,11 +39,11 @@ const c_ProtocolName = "quai"
 
 // ProtocolVersions are the supported versions of the `eth` protocol (first
 // is primary).
-var ProtocolVersions = []uint{QUAI1}
+var ProtocolVersions = []uint{QUAI1, QUAI2}
 
 // protocolLengths are the number of implemented message corresponding to
 // different protocol versions.
-var protocolLengths = map[uint]uint64{QUAI1: 12}
+var protocolLengths = map[uint]uint64{QUAI1: 12, QUAI2: 12}
 
 // maxMessageSize is the maximum cap on the size of a protocol message.
 const maxMessageSize = 10 * 1024 * 1024

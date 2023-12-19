@@ -336,7 +336,7 @@ func (ps *peerSet) HeaderIdlePeers() ([]*peerConnection, int) {
 	throughput := func(p *peerConnection) int {
 		return p.rates.Capacity(eth.BlockHeadersMsg, time.Second)
 	}
-	return ps.idlePeers(eth.QUAI1, eth.QUAI1, idle, throughput)
+	return ps.idlePeers(eth.QUAI1, eth.QUAI2, idle, throughput)
 }
 
 // BodyIdlePeers retrieves a flat list of all the currently body-idle peers within
@@ -348,7 +348,7 @@ func (ps *peerSet) BodyIdlePeers() ([]*peerConnection, int) {
 	throughput := func(p *peerConnection) int {
 		return p.rates.Capacity(eth.BlockBodiesMsg, time.Second)
 	}
-	return ps.idlePeers(eth.QUAI1, eth.QUAI1, idle, throughput)
+	return ps.idlePeers(eth.QUAI1, eth.QUAI2, idle, throughput)
 }
 
 // idlePeers retrieves a flat list of all currently idle peers satisfying the

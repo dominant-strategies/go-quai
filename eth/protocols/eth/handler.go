@@ -99,6 +99,13 @@ func MakeProtocols(backend Backend, network uint64, dnsdisc enode.Iterator) []p2
 	for i, version := range ProtocolVersions {
 		version := version // Closure
 
+		currentHeight := backend.Core().CurrentHeader().NumberU64()
+
+		// Don't handshake with nodes running QUAI1 after the fork point
+		if currentHeight > params.CarbonForkBlockNumber && version < QUAI2 {
+			continue
+		}
+
 		protocols[i] = p2p.Protocol{
 			Name:    c_ProtocolName,
 			Version: version,
@@ -197,11 +204,22 @@ func handleMessage(backend Backend, peer *Peer) error {
 	defer msg.Discard()
 
 	var handlers map[uint64]msgHandler
+	currentHeight := backend.Core().CurrentHeader().NumberU64()
+
+	// For already connected peers, give 100 block time to become consistent and upgrade the node
+	// If not updated to the new protocol, drop the peer
+	if currentHeight > params.CarbonForkBlockNumber+params.CarbonForkSyncThreshold {
+		if peer.Version() < QUAI2 {
+			return fmt.Errorf("protocol version is from before fork")
+		}
+	}
+	// If below the fork block number retain the same behavior
 	if peer.Version() >= QUAI1 {
 		handlers = quai1
 	} else {
 		return fmt.Errorf("protocol version not supported")
 	}
+
 	// Track the amount of time it takes to serve the request and run the handler
 	if metrics.Enabled {
 		h := fmt.Sprintf("%s/%s/%d/%#02x", p2p.HandleHistName, c_ProtocolName, peer.Version(), msg.Code)

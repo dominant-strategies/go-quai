@@ -30,6 +30,8 @@ const (
 	GasLimitStepThreeBlockThreshold uint64 = 450000
 	MinGasLimit                     uint64 = 5000000 // Minimum the gas limit may ever be.
 	GenesisGasLimit                 uint64 = 5000000 // Gas limit of the Genesis block.
+	CarbonForkBlockNumber           uint64 = 690000
+	CarbonForkSyncThreshold         uint64 = 100
 
 	MaximumExtraDataSize  uint64 = 32                                                       // Maximum size extra data may be after Genesis.
 	ExpByteGas            uint64 = 10                                                       // Times ceil(log256(exponent)) for the EXP instruction.
