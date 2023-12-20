@@ -20,6 +20,7 @@ import (
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/quai"
 	"github.com/dominant-strategies/go-quai/quai/quaiconfig"
+	"github.com/dominant-strategies/go-quai/quai/tracers"
 	"github.com/dominant-strategies/go-quai/quaistats"
 	"github.com/syndtr/goleveldb/leveldb"
 )
@@ -128,6 +129,8 @@ func makeFullNode(p2p quai.NetworkingAPI, nodeLocation common.Location, slicesRu
 	if cfg.Quaistats.URL != "" && backend.ProcessingState() {
 		RegisterQuaiStatsService(stack, backend, cfg.Quaistats.URL, sendfullstats)
 	}
+
+	stack.RegisterAPIs(tracers.APIs(backend))
 	return stack, backend
 }
 

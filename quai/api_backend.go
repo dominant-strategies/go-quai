@@ -138,6 +138,10 @@ func (b *QuaiAPIBackend) BlockOrCandidateByHash(hash common.Hash) *types.WorkObj
 	return b.quai.core.GetBlockOrCandidateByHash(hash)
 }
 
+func (b *QuaiAPIBackend) GetHeaderOrCandidateByHash(hash common.Hash) *types.WorkObject {
+	return b.quai.core.GetHeaderOrCandidateByHash(hash)
+}
+
 func (b *QuaiAPIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.WorkObject, error) {
 	if blockNr, ok := blockNrOrHash.Number(); ok {
 		return b.BlockByNumber(ctx, blockNr)
@@ -687,6 +691,10 @@ func (b *QuaiAPIBackend) GetHeaderByNumber(number uint64) *types.WorkObject {
 
 func (b *QuaiAPIBackend) GetTerminiByHash(hash common.Hash) *types.Termini {
 	return b.quai.core.GetTerminiByHash(hash)
+}
+
+func (b *QuaiAPIBackend) CheckIfEtxIsEligible(hash common.Hash, location common.Location) bool {
+	return b.quai.core.CheckIfEtxIsEligible(hash, location)
 }
 
 func (b *QuaiAPIBackend) IsGenesisHash(hash common.Hash) bool {
