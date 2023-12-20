@@ -21,28 +21,6 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 )
 
-// Api defines an interface which can be used to interact with the node
-type Api interface {
-	// Start the node
-	Start() error
-
-	// Stop the node
-	Stop() error
-
-	// Methods to broadcast data to the network
-	BroadcastBlock(types.SliceID, types.Block) error
-	BroadcastTransaction(tx types.Transaction) error
-
-	// Methods to lookup specific data from the network. Each request method
-	// returns a result channel. If the result is found, it will be put into the
-	// channel. If the result is not found, the channel will be closed.
-	RequestBlock(hash types.Hash, loc types.Location) chan types.Block
-	RequestTransaction(hash types.Hash, loc types.Location) chan types.Transaction
-
-	// Method to report a peer to the P2PClient as behaving maliciously
-	ReportBadPeer(peer p2p.PeerID)
-}
-
 // Starts the node and all of its services
 func (p *P2PNode) Start() error {
 	log.Infof("starting P2P node...")
