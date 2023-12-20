@@ -14,13 +14,13 @@ Once you have the necessary [prerequisites](#prerequisites), clone the `go-quai`
 ```shell
 git clone https://github.com/dominant-strategies/go-quai.git
 cd go-quai
-go build -o ./build/go-quai main.go
+make go-quai
 ```
 
 ### Running a node
 To run a node with default options, simply execute:
 ```shell
-./build/go-quai start
+make run
 ```
 
 There are several options and subcommands available when running the go-quai client. See the help menu for a complete list:
