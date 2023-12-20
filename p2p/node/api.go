@@ -116,11 +116,11 @@ func (p *P2PNode) BroadcastTransaction(tx types.Transaction) error {
 	panic("todo")
 }
 
-func (p *P2PNode) RequestBlock(hash types.Hash, loc types.Location) chan types.Block {
+func (p *P2PNode) RequestBlock(hash types.Hash, loc types.SliceID) chan types.Block {
 	panic("todo")
 }
 
-func (p *P2PNode) RequestTransaction(hash types.Hash, loc types.Location) chan types.Transaction {
+func (p *P2PNode) RequestTransaction(hash types.Hash, loc types.SliceID) chan types.Transaction {
 	panic("todo")
 }
 
