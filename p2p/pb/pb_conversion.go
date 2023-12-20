@@ -14,3 +14,21 @@ func ConvertToProtoBlock(block types.Block) *Block {
 	}
 
 }
+
+// Converts a protocol buffer Block type (pb.Block) to a custom go Block type (types.Block)
+func ConvertFromProtoBlock(block *Block) types.Block {
+	var hash types.Hash
+	copy(hash[:], block.Hash)
+	// ... map other fields
+	return types.Block{
+		Hash: hash,
+		// ... map other fields
+	}
+}
+
+// Creates a BlockRequest protocol buffer message
+func CreateProtoBlockRequest(hash types.Hash) *BlockRequest {
+	return &BlockRequest{
+		Hash: hex.EncodeToString(hash[:]),
+	}
+}

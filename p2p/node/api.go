@@ -8,10 +8,10 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/dominant-strategies/go-quai/cmd/utils"
+	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus/types"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p"
-	"github.com/dominant-strategies/go-quai/common"
 	quaiprotocol "github.com/dominant-strategies/go-quai/p2p/protocol"
 
 	"github.com/libp2p/go-libp2p/core/network"
@@ -103,6 +103,7 @@ func (p *P2PNode) BroadcastTransaction(tx types.Transaction) error {
 	panic("todo")
 }
 
+// Request a block from the network for the specified slice
 func (p *P2PNode) RequestBlock(hash types.Hash, loc types.SliceID) chan types.Block {
 	panic("todo")
 }
@@ -137,10 +138,12 @@ func (p *P2PNode) StartGossipSub(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		_, err = blockTopic.Subscribe()
+		sub, err := blockTopic.Subscribe()
 		if err != nil {
 			return err
 		}
+
+		go p.handleBlocksSubscription(sub)
 
 		sliceTopics, exists := p.topics[slice]
 		if !exists {
