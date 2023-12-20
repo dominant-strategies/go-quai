@@ -25,6 +25,7 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p/protocol"
 	"github.com/dominant-strategies/go-quai/p2p/pubsubManager"
+	lru "github.com/hashicorp/golang-lru/v2"
 )
 
 // P2PNode represents a libp2p node
@@ -50,6 +51,11 @@ type P2PNode struct {
 	// - C_blockTopicName
 	// - C_transactionTopicName
 	topics map[types.SliceID]map[string]*pubsub.Topic
+
+	// cache of received blocks
+	blockCache *lru.Cache[types.Hash, *types.Block]
+	// cache of received transactions
+	txCache *lru.Cache[types.Hash, *types.Transaction]
 
 	// runtime context
 	ctx context.Context
@@ -169,13 +175,27 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 		return nil, err
 	}
 
+	// Create a new LRU cache for blocks and transactions
+	const cacheSize = 10
+	blockCache, err := lru.New[types.Hash, *types.Block](cacheSize)
+	if err != nil {
+		return nil, err
+	}
+
+	txCache, err := lru.New[types.Hash, *types.Transaction](cacheSize)
+	if err != nil {
+		return nil, err
+	}
+
 	return &P2PNode{
-		ctx:       ctx,
-		Host:      host,
-		bootpeers: bootpeers,
-		dht:       dht,
-		pubsub:    ps,
-		topics:    make(map[types.SliceID]map[string]*pubsub.Topic),
+		ctx:        ctx,
+		Host:       host,
+		bootpeers:  bootpeers,
+		dht:        dht,
+		pubsub:     ps,
+		topics:     make(map[types.SliceID]map[string]*pubsub.Topic),
+		blockCache: blockCache,
+		txCache:    txCache,
 	}, nil
 }
 
