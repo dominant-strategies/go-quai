@@ -8,6 +8,8 @@ import (
 
 // The consensus backend will implement the following interface to provide information to the networking backend.
 type ConsensusAPI interface {
+	// Returns the current block height for the given sliceID
+	GetHeight(types.SliceID) uint64
 
 	// Returns the slices this node is processing
 	GetRunningSlices() []types.SliceID

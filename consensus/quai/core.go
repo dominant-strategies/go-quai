@@ -38,6 +38,12 @@ func (qbe *QuaiBackend) OnNewTransaction(sourcePeer p2p.PeerID, tx types.Transac
 	panic("todo")
 }
 
+// Returns the current block height for the given sliceID
+func (qbe *QuaiBackend) GetHeight(slice types.SliceID) uint64 {
+	// Example/mock implementation
+	panic("todo")
+}
+
 func (qbe *QuaiBackend) GetRunningSlices() []types.SliceID {
 	// Example/mock implementation
 	return []types.SliceID{
