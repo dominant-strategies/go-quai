@@ -2238,12 +2238,30 @@ func (p *StateProcessor) StateAtTransaction(block *types.WorkObject, txIndex int
 	if err != nil {
 		return nil, vm.BlockContext{}, nil, err
 	}
+
+	blockContext, err := NewEVMBlockContext(block, parent, p.hc, nil)
+	if err != nil {
+		return nil, vm.BlockContext{}, nil, err
+	}
+
+	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, p.vmConfig, nil)
+
+	// Redeem all Quai for the different lock up periods
+	_, err = RedeemLockedQuai(p.hc, block, parent, statedb, vmenv)
+	if err != nil {
+		return nil, vm.BlockContext{}, nil, fmt.Errorf("error redeeming locked quai: %w", err)
+	}
+
 	if txIndex == 0 && len(block.Transactions()) == 0 {
 		return nil, vm.BlockContext{}, statedb, nil
 	}
+
 	// Recompute transactions up to the target index.
 	signer := types.MakeSigner(p.hc.Config(), block.Number(nodeCtx))
 	for idx, tx := range block.Transactions() {
+		if types.IsCoinBaseTx(tx) || tx.Type() != types.QuaiTxType {
+			continue
+		}
 		// Assemble the transaction call message and return if the requested offset
 		msg, _ := tx.AsMessage(signer, block.BaseFee())
 		txContext := NewEVMTxContext(msg)
