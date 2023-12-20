@@ -8,10 +8,10 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/dominant-strategies/go-quai/cmd/utils"
-	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/consensus/types"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p"
+	"github.com/dominant-strategies/go-quai/common"
 	quaiprotocol "github.com/dominant-strategies/go-quai/p2p/protocol"
 
 	"github.com/libp2p/go-libp2p/core/network"
@@ -92,7 +92,7 @@ func (p *P2PNode) Stop() error {
 	}
 }
 
-func (p *P2PNode) SetConsensusBackend(be consensus.ConsensusBackend) {
+func (p *P2PNode) SetConsensusBackend(be common.ConsensusAPI) {
 	p.consensus = be
 }
 

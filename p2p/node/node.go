@@ -20,10 +20,10 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/dominant-strategies/go-quai/cmd/utils"
-	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/consensus/types"
 	"github.com/dominant-strategies/go-quai/p2p/protocol"
+	"github.com/dominant-strategies/go-quai/common"
 )
 
 // P2PNode represents a libp2p node
@@ -32,7 +32,7 @@ type P2PNode struct {
 	host.Host
 
 	// Backend for handling consensus data
-	consensus consensus.ConsensusBackend
+	consensus common.ConsensusAPI
 
 	// List of peers to introduce us to the network
 	bootpeers []peer.AddrInfo

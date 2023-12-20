@@ -1,14 +1,14 @@
 package quai
 
 import (
+	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus/types"
 	"github.com/dominant-strategies/go-quai/p2p"
-	"github.com/dominant-strategies/go-quai/p2p/node"
 )
 
 // QuaiBackend implements the quai consensus protocol
 type QuaiBackend struct {
-	p2p node.Api
+	p2p common.NetworkingAPI
 
 	runningSlices	[]types.SliceID
 }
@@ -19,7 +19,7 @@ func NewQuaiBackend() (*QuaiBackend, error) {
 }
 
 // Assign the p2p client interface to use for interacting with the p2p network
-func (qbe *QuaiBackend) SetP2PNode(api node.Api) {
+func (qbe *QuaiBackend) SetP2PNode(api common.NetworkingAPI) {
 	qbe.p2p = api
 }
 
