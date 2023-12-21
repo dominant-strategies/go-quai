@@ -8,8 +8,8 @@ import (
 	"github.com/libp2p/go-libp2p"
 	kaddht "github.com/libp2p/go-libp2p-kad-dht"
 	dual "github.com/libp2p/go-libp2p-kad-dht/dual"
-
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/routing"
@@ -20,10 +20,11 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/dominant-strategies/go-quai/cmd/utils"
-	"github.com/dominant-strategies/go-quai/log"
-	"github.com/dominant-strategies/go-quai/consensus/types"
-	"github.com/dominant-strategies/go-quai/p2p/protocol"
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/consensus/types"
+	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/p2p/protocol"
+	"github.com/dominant-strategies/go-quai/p2p/pubsubManager"
 )
 
 // P2PNode represents a libp2p node
@@ -42,7 +43,7 @@ type P2PNode struct {
 	dht *dual.DHT
 
 	// Gossipsub instance
-	pubsub *pubsub.PubSub
+	pubsub *pubsubManager.PubsubManager
 
 	// Gossipsub subscriptions
 	// Each sliceID will have a topic for each data type
@@ -161,19 +162,20 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 	nodeID := host.ID()
 	log.Infof("node created: %s", nodeID)
 
-	ps, err := pubsub.NewGossipSub(ctx, host)
+	// Create a gossipsub instance with helper functions
+	ps, err := pubsubManager.NewGossipSubManager(ctx, host)
 
 	if err != nil {
 		return nil, err
 	}
 
 	return &P2PNode{
-		ctx:           ctx,
-		Host:          host,
-		bootpeers:     bootpeers,
-		dht:           dht,
-		pubsub:        ps,
-		topics: make(map[types.SliceID]map[string]*pubsub.Topic),
+		ctx:       ctx,
+		Host:      host,
+		bootpeers: bootpeers,
+		dht:       dht,
+		pubsub:    ps,
+		topics:    make(map[types.SliceID]map[string]*pubsub.Topic),
 	}, nil
 }
 
