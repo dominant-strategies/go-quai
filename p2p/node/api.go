@@ -161,7 +161,7 @@ func (p *P2PNode) RequestBlock(hash types.Hash, slice types.SliceID) chan *types
 	return resultChan
 }
 
-func (p *P2PNode) RequestTransaction(hash types.Hash, loc types.SliceID) chan types.Transaction {
+func (p *P2PNode) RequestTransaction(hash types.Hash, loc types.SliceID) chan *types.Transaction {
 	panic("todo")
 }
 

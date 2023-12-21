@@ -37,8 +37,8 @@ type NetworkingAPI interface {
 	// Methods to lookup specific data from the network. Each request method
 	// returns a result channel. If the result is found, it will be put into the
 	// channel. If the result is not found, the channel will be closed.
-	RequestBlock(hash types.Hash, loc types.SliceID) chan types.Block
-	RequestTransaction(hash types.Hash, loc types.SliceID) chan types.Transaction
+	RequestBlock(hash types.Hash, loc types.SliceID) chan *types.Block
+	RequestTransaction(hash types.Hash, loc types.SliceID) chan *types.Transaction
 
 	// Method to report a peer to the P2PClient as behaving maliciously
 	ReportBadPeer(peer core.PeerID)
