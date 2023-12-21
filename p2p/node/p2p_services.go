@@ -5,12 +5,12 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus/types"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p/pb"
 	"github.com/dominant-strategies/go-quai/p2p/protocol"
 	"github.com/ipfs/go-cid"
 	"github.com/multiformats/go-multihash"
 	"github.com/pkg/errors"
-	"google.golang.org/protobuf/proto"
 )
 
 // Opens a stream to the given peer and requests a block for the given hash.
@@ -28,7 +28,7 @@ func (p *P2PNode) requestBlockFromPeer(hash types.Hash, peerID peer.ID) (*types.
 	blockReq := pb.CreateProtoBlockRequest(hash)
 
 	// Marshal the block request into a byte array
-	blockReqBytes, err := proto.Marshal(blockReq)
+	blockReqBytes, err := pb.MarshalProtoMessage(blockReq)
 	if err != nil {
 		return nil, err
 	}
@@ -45,12 +45,11 @@ func (p *P2PNode) requestBlockFromPeer(hash types.Hash, peerID peer.ID) (*types.
 		return nil, err
 	}
 
-	// If the res
-
 	// Unmarshal the response into a block
 	var pbBlockResponse pb.BlockResponse
-	err = proto.Unmarshal(blockResponseBytes, &pbBlockResponse)
+	err = pb.UnmarshalProtoMessage(blockResponseBytes, &pbBlockResponse)
 	if err != nil {
+		log.Errorf("error unmarshalling block response: %s", err)
 		return nil, err
 	}
 
