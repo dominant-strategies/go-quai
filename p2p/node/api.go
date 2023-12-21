@@ -17,7 +17,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
-	"google.golang.org/protobuf/proto"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 )
 
@@ -97,19 +96,7 @@ func (p *P2PNode) SetConsensusBackend(be common.ConsensusAPI) {
 }
 
 func (p *P2PNode) BroadcastBlock(slice types.SliceID, block types.Block) error {
-	// Convert block to protobuf format
-	protoBlock := convertToProtoBlock(block)
-
-	// Serialize the protobuf block
-	blockData, err := proto.Marshal(protoBlock)
-	if err != nil {
-		return err
-	}
-
-	// Use the pubsub package to publish the block
-	p.topics[slice][p2p.C_blockTopicName].Publish(p.ctx, blockData)
-
-	return nil
+	return p.pubsub.BroadcastBlock(p.topics[slice][p2p.C_blockTopicName], block)
 }
 
 func (p *P2PNode) BroadcastTransaction(tx types.Transaction) error {

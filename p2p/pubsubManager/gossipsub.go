@@ -1,10 +1,13 @@
-package pubsub
+package pubsubManager
 
 import (
 	"context"
 
+	"github.com/dominant-strategies/go-quai/consensus/types"
+	"github.com/dominant-strategies/go-quai/p2p/pb"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/host"
+	"google.golang.org/protobuf/proto"
 )
 
 const BlockTopicName = "quai-blocks"
@@ -22,23 +25,22 @@ func NewGossipSubManager(ctx context.Context, h host.Host) (*PubsubManager, erro
 	if err != nil {
 		return nil, err
 	}
-	return &PubsubManager{PubSub: ps, ctx: ctx}, nil
+	return &PubsubManager{ps, ctx}, nil
 }
 
 // Broadcast a block to the network by publishing it to the block pubsub topic
-func (g *PubsubManager) PublishBlock(data []byte) error {
-	// join the block topic
-	blockTopic, err := g.Join(BlockTopicName)
+func (g *PubsubManager) BroadcastBlock(topic *pubsub.Topic, block types.Block) error {
+	// Convert block to protobuf format
+	protoBlock := pb.ConvertToProtoBlock(block)
+
+	// Serialize the protobuf block
+	blockData, err := proto.Marshal(protoBlock)
 	if err != nil {
 		return err
 	}
 
-	// publish the block
-	if err := blockTopic.Publish(g.ctx, data); err != nil {
-		return err
-	}
-
-	return nil
+	// Use the pubsub package to publish the block
+	return topic.Publish(g.ctx, blockData)
 }
 
 // Subscribe to the block pubsub topic
