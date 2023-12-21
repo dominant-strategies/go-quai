@@ -55,7 +55,8 @@ message BlockRequest {
 }
 
 message BlockResponse {
-    Block block = 1;
+    bool found = 1;
+    Block block = 2;
 }
 
 message TransactionRequest {
@@ -63,5 +64,6 @@ message TransactionRequest {
 }
 
 message TransactionResponse {
-    Transaction transaction = 1;
+    bool found = 1;
+    Transaction transaction = 2;
 }
