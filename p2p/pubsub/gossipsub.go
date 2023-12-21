@@ -9,24 +9,24 @@ import (
 
 const BlockTopicName = "quai-blocks"
 
-type GossipSubManager struct {
+type PubsubManager struct {
 	*pubsub.PubSub
 	ctx context.Context
 }
 
-// creates a new pubsub instance
+// creates a new gossipsub instance
 // TODO: what options do we need for quai network? See:
 // See https://pkg.go.dev/github.com/libp2p/go-libp2p-pubsub@v0.10.0#Option
-func NewGossipSubManager(ctx context.Context, h host.Host) (*GossipSubManager, error) {
+func NewGossipSubManager(ctx context.Context, h host.Host) (*PubsubManager, error) {
 	ps, err := pubsub.NewGossipSub(ctx, h)
 	if err != nil {
 		return nil, err
 	}
-	return &GossipSubManager{PubSub: ps, ctx: ctx}, nil
+	return &PubsubManager{PubSub: ps, ctx: ctx}, nil
 }
 
 // Broadcast a block to the network by publishing it to the block pubsub topic
-func (g *GossipSubManager) PublishBlock(data []byte) error {
+func (g *PubsubManager) PublishBlock(data []byte) error {
 	// join the block topic
 	blockTopic, err := g.Join(BlockTopicName)
 	if err != nil {
@@ -42,7 +42,7 @@ func (g *GossipSubManager) PublishBlock(data []byte) error {
 }
 
 // Subscribe to the block pubsub topic
-func (g *GossipSubManager) SubscribeBlock() (*pubsub.Subscription, error) {
+func (g *PubsubManager) SubscribeBlock() (*pubsub.Subscription, error) {
 	// join the block topic
 	blockTopic, err := g.Join(BlockTopicName)
 	if err != nil {
