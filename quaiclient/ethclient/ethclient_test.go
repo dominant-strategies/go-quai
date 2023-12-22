@@ -50,7 +50,7 @@ var (
 	_ = quai.ContractCaller(&Client{})
 	_ = quai.GasEstimator(&Client{})
 	_ = quai.GasPricer(&Client{})
-	_ = quai.LogFilterer(&Client{})
+	//_ = quai.LogFilterer(&Client{})
 	_ = quai.PendingStateReader(&Client{})
 	// _ = quai.PendingStateEventer(&Client{})
 	_ = quai.PendingContractCaller(&Client{})

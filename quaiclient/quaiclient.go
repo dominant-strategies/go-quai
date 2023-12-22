@@ -37,6 +37,7 @@ var exponentialBackoffCeilingSecs int64 = 60 // 1 minute
 type IClient interface {
 	CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error
 	Close()
+	QuaiSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (*rpc.ClientSubscription, error)
 }
 
 // Used on unit tests
