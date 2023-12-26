@@ -12,9 +12,9 @@ type ConsensusAPI interface {
 	GetHeight(types.SliceID) uint64
 
 	// Returns the slices this node is processing
-	GetRunningSlices() []types.SliceID
+	GetRunningSlices() map[types.SliceID]*types.Slice
 	// Sets the slices this node is processing
-	SetRunningSlices([]types.SliceID)
+	SetRunningSlices(slices []types.Slice)
 
 	// Handle new data propagated from the gossip network. Should return quickly.
 	// Return true if this data should be relayed to peers. False if it should be ignored.
