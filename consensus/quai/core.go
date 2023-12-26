@@ -10,7 +10,7 @@ import (
 type QuaiBackend struct {
 	p2p common.NetworkingAPI
 
-	runningSlices	[]types.SliceID
+	runningSlices map[types.SliceID]*types.Slice
 }
 
 // Create a new instance of the QuaiBackend consensus service
@@ -44,17 +44,17 @@ func (qbe *QuaiBackend) GetHeight(slice types.SliceID) uint64 {
 	panic("todo")
 }
 
-func (qbe *QuaiBackend) GetRunningSlices() []types.SliceID {
-	// Example/mock implementation
-	return []types.SliceID{
-		{
-			Region: 0,
-			Zone: 0,
-		},
-	}
+func (qbe *QuaiBackend) GetSlice(slice types.SliceID) *types.Slice {
+	return qbe.runningSlices[slice]
 }
 
-func (qbe *QuaiBackend) SetRunningSlices(slices []types.SliceID) {
-	// Example/mock implementation
-	qbe.runningSlices = slices
+func (qbe *QuaiBackend) GetRunningSlices() map[types.SliceID]*types.Slice {
+	return qbe.runningSlices
+}
+
+func (qbe *QuaiBackend) SetRunningSlices(slices []types.Slice) {
+	qbe.runningSlices = make(map[types.SliceID]*types.Slice)
+	for _, slice := range slices {
+		qbe.runningSlices[slice.SliceID] = &slice
+	}
 }

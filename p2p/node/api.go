@@ -187,7 +187,7 @@ func (p *P2PNode) Connect(pi peer.AddrInfo) error {
 // Start gossipsub protocol
 func (p *P2PNode) StartGossipSub(ctx context.Context) error {
 	for _, slice := range p.consensus.GetRunningSlices() {
-		blockTopic, err := p.pubsub.Join(slice.String() + "/" + p2p.C_blockTopicName)
+		blockTopic, err := p.pubsub.Join(slice.SliceID.String() + "/" + p2p.C_blockTopicName)
 		if err != nil {
 			return err
 		}
@@ -198,12 +198,12 @@ func (p *P2PNode) StartGossipSub(ctx context.Context) error {
 
 		go p.handleBlocksSubscription(sub)
 
-		sliceTopics, exists := p.topics[slice]
+		sliceTopics, exists := p.topics[slice.SliceID]
 		if !exists {
 			sliceTopics = make(map[string]*pubsub.Topic)
 		}
 		sliceTopics[p2p.C_blockTopicName] = blockTopic
-		p.topics[slice] = sliceTopics
+		p.topics[slice.SliceID] = sliceTopics
 	}
 	return nil
 }
