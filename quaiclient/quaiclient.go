@@ -47,21 +47,22 @@ type TestRpcClient struct {
 
 func (trc *TestRpcClient) CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error {
 	if method == "quai_updateDom" {
-		println("UpdateDom called")
 		return nil
 	}
 	if method == "eth_getBlockByNumber" {
 		return nil
 	}
 	if method == "quai_sendPendingEtxsToDom" {
-		println("SendPendingEtxsToDom called")
 		return nil
 	}
 	return fmt.Errorf("method %s is not implemented", method)
 }
 
 func (trc *TestRpcClient) Close() {
-	println("Close called")
+}
+
+func (trc *TestRpcClient) QuaiSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (*rpc.ClientSubscription, error) {
+	return &rpc.ClientSubscription{}, nil
 }
 
 // Client defines typed wrappers for the Quai RPC API.
