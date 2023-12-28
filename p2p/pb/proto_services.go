@@ -44,7 +44,7 @@ func ConvertFromProtoBlock(pbBlock *Block) types.Block {
 	}
 }
 
-// Unmarshals a serialized protobuf slice of bytes into a custom *types.Block type
+// Unmarshals a received serialized protobuf slice of bytes into a custom *types.Block type
 func UnmarshalBlock(data []byte) (*types.Block, error) {
 	var pbBlock Block
 	err := UnmarshalProtoMessage(data, &pbBlock)
@@ -53,6 +53,17 @@ func UnmarshalBlock(data []byte) (*types.Block, error) {
 	}
 	block := ConvertFromProtoBlock(&pbBlock)
 	return &block, nil
+}
+
+// Marshals a custom *types.Block type into a serialized protobuf slice of bytes
+// to be sent over the wire
+func MarshalBlock(block *types.Block) ([]byte, error) {
+	pbBlock := ConvertToProtoBlock(*block)
+	data, err := MarshalProtoMessage(pbBlock)
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
 }
 
 // Creates a BlockRequest protocol buffer message
