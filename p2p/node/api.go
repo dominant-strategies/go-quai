@@ -209,3 +209,12 @@ func (p *P2PNode) StartGossipSub(ctx context.Context) error {
 	}
 	return nil
 }
+
+// Checks if the cache has a block with the given hash. If the block is not found, returns nil.
+func (p *P2PNode) GetBlock(hash types.Hash) *types.Block {
+	block, ok := p.blockCache.Get(hash)
+	if !ok {
+		return nil
+	}
+	return block
+}
