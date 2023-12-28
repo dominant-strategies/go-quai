@@ -1,15 +1,31 @@
 package types
 
 import (
+	"encoding/hex"
 	"strconv"
+
+	"github.com/pkg/errors"
 )
 
 // Hash represents a 256 bit hash
 type Hash [32]byte
 
+func NewHashFromString(s string) (Hash, error) {
+	if len(s) != 64 { // 2 hex chars per byte
+		return Hash{}, errors.New("invalid string length for hash")
+	}
+	hashSlice, err := hex.DecodeString(s)
+	if err != nil {
+		return Hash{}, err
+	}
+	var hash Hash
+	copy(hash[:], hashSlice)
+	return hash, nil
+}
+
 type Context struct {
-	location string
-	level    int
+	Location string
+	Level    uint32
 }
 
 var (
@@ -20,10 +36,10 @@ var (
 
 type SliceID struct {
 	Context Context
-	Region  int
-	Zone    int
+	Region  uint32
+	Zone    uint32
 }
 
 func (sliceID SliceID) String() string {
-	return strconv.Itoa(sliceID.Region) + "." + strconv.Itoa(sliceID.Zone)
+	return strconv.Itoa(int(sliceID.Region)) + "." + strconv.Itoa(int(sliceID.Zone))
 }
