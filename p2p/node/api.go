@@ -37,7 +37,9 @@ func (p *P2PNode) Start() error {
 	}
 
 	// Register the Quai protocol handler
-	p.SetStreamHandler(quaiprotocol.ProtocolVersion, quaiprotocol.QuaiProtocolHandler)
+	p.SetStreamHandler(quaiprotocol.ProtocolVersion, func(s network.Stream) {
+		quaiprotocol.QuaiProtocolHandler(s, p)
+	})
 
 	// If the node is a bootnode, start the bootnode service
 	if viper.GetBool(utils.BootNodeFlag.Name) {

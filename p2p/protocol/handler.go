@@ -5,7 +5,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 )
 
-func QuaiProtocolHandler(stream network.Stream) {
+func QuaiProtocolHandler(stream network.Stream, node QuaiP2PNode) {
 	defer stream.Close()
 
 	log.Debugf("Received a new stream from %s", stream.Conn().RemotePeer())
