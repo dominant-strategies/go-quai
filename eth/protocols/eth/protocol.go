@@ -39,7 +39,7 @@ const c_ProtocolName = "quai"
 
 // ProtocolVersions are the supported versions of the `eth` protocol (first
 // is primary).
-var ProtocolVersions = []uint{QUAI1, QUAI2}
+var ProtocolVersions = []uint{QUAI2}
 
 // protocolLengths are the number of implemented message corresponding to
 // different protocol versions.
