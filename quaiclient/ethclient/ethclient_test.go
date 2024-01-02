@@ -61,7 +61,7 @@ var (
 	testBalance = big.NewInt(2e15)
 )
 
-func newTestBackend(t *testing.T) (*node.Node, []*types.Block, *rpc.Client) {
+func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 	// Set location to ZONE_CTX
 	common.NodeLocation = common.Location{0, 0}
 	// Generate test chain.
@@ -77,9 +77,6 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block, *rpc.Client) {
 	config.Zone = 0
 	config.Miner.ExtraData = []byte("test miner")
 	config.Progpow.PowMode = progpow.ModeFake
-	config.DomUrl = "http://localhost:8080"
-
-	client, _ := n.Attach()
 
 	ethservice, err := eth.NewFake(n, config, db)
 	if err != nil {
@@ -93,7 +90,7 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block, *rpc.Client) {
 	if _, err := ethservice.Core().InsertChain(blocks[1:]); err != nil {
 		t.Fatalf("can't import test blocks: %v", err)
 	}
-	return n, blocks, client
+	return n, blocks
 }
 
 func generateTestChain(db ethdb.Database) (*core.Genesis, []*types.Block) {
@@ -123,7 +120,8 @@ func generateTestChain(db ethdb.Database) (*core.Genesis, []*types.Block) {
 }
 
 func TestEthClient(t *testing.T) {
-	backend, chain, client := newTestBackend(t)
+	backend, chain := newTestBackend(t)
+	client, _ := backend.Attach()
 	defer backend.Close()
 	defer client.Close()
 
